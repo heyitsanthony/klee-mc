@@ -1,0 +1,224 @@
+#!/usr/bin/perl
+
+#0. ('Instructions',
+#1. 'FullBranches',
+#2. 'PartialBranches','
+#3. NumBranches',
+#4. 'UserTime',
+#5. 'NumStates',
+#6. 'MallocUsage','
+#7. NumQueries',
+#8. 'NumQueryConstructs',
+#9. 'NumObjects',
+#10. 'WallTime',
+#11. 'CoveredInstructions','
+#12. UncoveredInstructions','
+#13. QueryTime',
+#14. 'SolverTime','
+#15. CexCacheTime',
+#16. 'ForkTime',
+#17. 'ResolveTime',
+#18. 'Forks')
+
+
+use Cwd;
+use IO::Handle;
+
+my $cwd = getcwd();
+
+$cfile = "";
+$argcount = $#ARGV + 1;
+
+if ($argcount > 0) {
+	$cfile = $ARGV[0];
+}
+
+my @data = (  	#  		time,		cov		inst		states
+		"true.bc", 	"3.4",		"100.0",	"28627",	"19",
+                "sync.bc", 	"17.7",		"100.0",	"35566",	"64",
+                "hostid.bc", 	"30.9",		"100.0",	"102342",	"64",
+                "pwd.bc",	"18.4",		"14.6",		"137318",	"183",
+#		"yes.bc",    	"0",    	"0",    	"0",		"0",
+		
+		"logname.bc",   "22.3",    	"95.7",    	"140578",	"183",
+                "unlink.bc",	"25.2",    	"98.3",    	"145922",	"213",
+                "whoami.bc", 	"68.6",    	"94.1",    	"139915",	"80",
+                "link.bc", 	"18.1",    	"98.5",    	"151295",	"183",
+  #              "tty.bc", 	"0",    	"0",    	"0",		"0",
+                "dirname.bc", 	"19.2",    	"100.0",    	"77742",	"86",
+                 "printenv.bc",	"9.7",    	"100.0",    	"50048",	"58",
+                "chroot.bc",	"12.1",    	"95.1",    	"141207",	"181",
+                 "basename.bc",	"12.8",    	"100.0",    	"40539",	"59",
+#                "sleep.bc",
+                 "env.bc",	"7.7",		"100.0",	"87013",	"242",
+#                "mkfifo.bc",
+#                "readlink.bc", (good coverage, but doesn't terminate)
+                "users.bc", 	"59.3",         "100.0",        "179299",       "112",
+#                "nice.bc",	(memory) 
+#                "cksum.bc",	(keeps querying)
+#                "rmdir.bc",	(stuck) 
+#                "mkdir.bc", 	(stuck)	
+#                "tee.bc", 	(stuck)
+#                "factor.bc", 
+                "nohup.bc",	"13.3",         "67.3",         "156964",	"196",
+#                "setuidgid.bc", 
+#                "mknod.bc",
+#                "uptime.bc", 
+#                "uname.bc", 
+                #"chgrp.bc",
+                #"chown.bc",
+                #"comm.bc",
+                #"sum.bc",
+                #"mktemp.bc",
+                #"runcon.bc", 
+                #"echo.bc",
+                #"rm.bc", 
+               #"base64.bc", 
+               # "fold.bc", 
+               # "pwd.bc",
+               # "kill.bc", 
+               # "pathchk.bc", 
+               # "touch.bc",
+               # "date.bc",
+               # "expand.bc", 
+#                "id.bc", 
+#                "seq.bc",
+#                "mv.bc",
+#                "chmod.bc",
+#                "shuf.bc",
+#                "ln.bc",
+#                "uniq.bc",
+               # "paste.bc",
+               # "dircolors.bc", 
+               # "chcon.bc",
+               # "unexpand.bc",
+               # "nl.bc",
+               # "tsort.bc",
+               # "split.bc", 
+               # "tac.bc", 
+               # "md5sum.bc", 
+               # "pinky.bc", 
+               # "printf.bc", 
+#                "wc.bc", 
+#		"who.bc",
+#                "test.bc",
+#                "cut.bc",
+#                "du.bc",
+#                "fmt.bc", 
+#                "expr.bc",
+#                "df.bc",
+#                "stat.bc",
+#                "cp.bc",
+#                "shred.bc",
+#                "join.bc",
+#                "head.bc",
+#                "stty.bc",
+#                "dd.bc",
+#                "csplit.bc",
+#                "tail.bc",
+#                "tr.bc",
+#                "ptx.bc",
+#                "od.bc",
+#                "pr.bc",
+#                "sort.bc",
+#                "ls.bc",
+#		"tac-2.bc"
+);
+
+$output =	"
+<style>
+     td { border:1px solid black; text-align: center; }
+</style>
+        
+<html>
+		  	<body>
+		    		<table border='1'>
+		    			<tr>
+						<th></th>
+						<th colspan='4'>base</th>
+						<th colspan='4'>rwset</th>
+					</tr>
+					<tr>
+						<th>prog</th>
+						<th>time (s) </th>
+						<th>cov (%)</th>
+						<th>inst</th>
+						<th>states</th>
+                                                <th>time (s) </th>
+                                                <th>cov (%)</th>
+						<th>inst</th>
+						<th>states</th>
+					</tr>";
+		
+							
+		    
+open(OUT,">out.html");
+OUT->autoflush(1);
+
+print OUT $output;
+
+$curdir = getcwd;
+
+$maxtime = 120;
+$maxmem = 1000;
+
+$maincmd = "setarch `uname -m` -R /home/suhabe/klee-open/Release/bin/klee --strip-debug --simplify-sym-indices --max-sym-array-size=100000 --max-memory=$maxmem --max-time=$maxtime --disable-inlining --allow-external-sym-calls --exclude-libc-cov --only-output-states-covering-new --environ=test.env --exclude-cov-file=functions.txt --libc=uclibc --posix-runtime --init-env --optimize ";
+
+$symargs = "--sym-args 0 1 10 --sym-args 0 2 2 --sym-files 1 8 --sym-stdout";
+
+$maincmd2 = "setarch `uname -m` -R /home/suhabe/klee-open/Release/bin/klee --strip-debug --max-time=$maxtime --simplify-sym-indices --max-sym-array-size=100000 --max-memory=$maxmem --disable-inlining --allow-external-sym-calls --exclude-libc-cov --randomize-fork --use-random-path --use-interleaved-covnew-NURS --use-batching-search --batch-instructions=10000 --only-output-states-covering-new --environ=test.env --exclude-cov-file=functions.txt --libc=uclibc --posix-runtime --init-env --optimize";
+		
+$datasize = @data;
+
+
+
+#foreach my $tar (@targets) {
+for ($i = 0; $i < $datasize; $i+=5) {
+	prun("rm -rf klee-*");
+	$tar = $data[$i];
+	print "$tar: \n";	
+	
+	$usertime2 = $data[$i+1];
+	$cov2 = $data[$i+2];
+	$inst2 = $data[$i+3];
+	$states2 = $data[$i+4];
+
+	prun($maincmd2 . " --use-equiv-state-elim " . $tar . " " . $symargs . " >/dev/null 2>/dev/null");
+
+	$stats = `tail -n 1 klee-last/run.stats` || die "failed";
+	$stats = substr($stats,1,length($stats) - 3);
+	@tokens = split(/,/, $stats);
+	$usertime = sprintf("%.1f", $tokens[4]);
+	$cov = sprintf("%.1f", 100 * $tokens[11]/($tokens[11] + $tokens[12]));
+	$inst =  $tokens[0];
+	$states = ($tokens[18] + 1);		
+
+	$output = "<tr>
+				<td>$tar</td>
+				<td>$usertime2</td>
+				<td>$cov2</td>
+				<td>$inst2</td>
+				<td>$states2</td>
+				<td>$usertime</td>
+				<td>$cov</td>
+				<td>$inst</td>
+				<td>$states</td>
+			     </tr>";
+
+	print OUT $output;
+}
+
+$output = "</table>
+		</body>
+	</html>";
+
+print OUT $output;
+
+close(OUT);
+
+sub prun {
+	$cmd = $_[0];
+       	print "$cmd\n";
+        system($cmd);
+}
+               

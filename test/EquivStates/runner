@@ -1,0 +1,56 @@
+#!/usr/bin/perl
+
+use Cwd;
+
+my $cwd = getcwd();
+
+$cfile = "";
+$argcount = $#ARGV + 1;
+
+if ($argcount > 0) {
+	$cfile = $ARGV[0];
+}
+
+my @targets = (  
+		"test1",
+		"test2",
+		"test3",
+		"test4",
+		"test5",
+		#"test6",
+		"test7",
+		#"test8",
+		#"test9",
+		"test10",
+		"test11",
+		"test12"
+		);
+
+$curdir = getcwd;
+		
+foreach my $tar (@targets) {
+	if ($cfile ne "" && $tar ne $cfile) {
+		next;
+	}
+	chdir $curdir;	
+	print "$tar: ";	
+	prun("llvm-gcc $tar.c -emit-llvm -c -o $tar.bc");
+	prun("klee --ese-debug --strip-debug --use-equiv-state-elim $tar.bc 2>/dev/null | grep PRUNING | wc -l >tmp.txt");
+	prun("cat $tar.c | grep PRUNECOUNT | awk '{print \$2}' >tmp2.txt");
+	prun("diff tmp.txt tmp2.txt > diff.txt");
+#	prun("klee-stats --print-all klee-last");
+	if (-z "diff.txt") {
+		print "SUCCESS\n";				
+	}
+	else {
+		print "FAILURE\n";
+	}
+}
+
+
+sub prun {
+        $cmd = $_[0];
+       print "$cmd\n";
+               system($cmd);
+               }
+               

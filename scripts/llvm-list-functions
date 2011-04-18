@@ -1,0 +1,9 @@
+#!/bin/bash
+if [ $# -ne 1 ]
+   then
+      echo "Usage llvm-list-functions <llvm-library>"
+      exit 1
+fi
+
+set -o pipefail
+llvm-nm --defined-only $1 | grep -i "[wt] " | sort | uniq | cut -d " " -f 11

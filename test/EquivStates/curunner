@@ -1,0 +1,211 @@
+#!/usr/bin/perl
+
+#0. ('Instructions',
+#1. 'FullBranches',
+#2. 'PartialBranches','
+#3. NumBranches',
+#4. 'UserTime',
+#5. 'NumStates',
+#6. 'MallocUsage','
+#7. NumQueries',
+#8. 'NumQueryConstructs',
+#9. 'NumObjects',
+#10. 'WallTime',
+#11. 'CoveredInstructions','
+#12. UncoveredInstructions','
+#13. QueryTime',
+#14. 'SolverTime','
+#15. CexCacheTime',
+#16. 'ForkTime',
+#17. 'ResolveTime',)
+
+
+use Cwd;
+use IO::Handle;
+
+my $cwd = getcwd();
+
+$cfile = "";
+$argcount = $#ARGV + 1;
+
+if ($argcount > 0) {
+	$cfile = $ARGV[0];
+}
+
+my @targets = (  
+		"true.bc",
+                "sync.bc",
+                "hostid.bc", 
+               "yes.bc",
+		"logname.bc", 
+                "unlink.bc",
+                "whoami.bc", 
+                "link.bc", 
+                "tty.bc", 
+                "dirname.bc", 
+                "printenv.bc",
+                "chroot.bc",
+                "basename.bc",
+#                "sleep.bc",
+#                "env.bc",
+#                "mkfifo.bc",
+#                "readlink.bc",
+#                "users.bc", 
+#                "nice.bc", 
+#                "cksum.bc",
+#                "rmdir.bc", 
+#                "mkdir.bc", 
+#                "tee.bc", 
+#                "factor.bc", 
+#                "nohup.bc", 
+#                "setuidgid.bc", 
+#                "mknod.bc",
+#                "uptime.bc", 
+#                "uname.bc", 
+                #"chgrp.bc",
+                #"chown.bc",
+                #"comm.bc",
+                #"sum.bc",
+                #"mktemp.bc",
+                #"runcon.bc", 
+                #"echo.bc",
+                #"rm.bc", 
+               #"base64.bc", 
+               # "fold.bc", 
+               # "pwd.bc",
+               # "kill.bc", 
+               # "pathchk.bc", 
+               # "touch.bc",
+               # "date.bc",
+               # "expand.bc", 
+#                "id.bc", 
+#                "seq.bc",
+#                "mv.bc",
+#                "chmod.bc",
+#                "shuf.bc",
+#                "ln.bc",
+#                "uniq.bc",
+               # "paste.bc",
+               # "dircolors.bc", 
+               # "chcon.bc",
+               # "unexpand.bc",
+               # "nl.bc",
+               # "tsort.bc",
+               # "split.bc", 
+               # "tac.bc", 
+               # "md5sum.bc", 
+               # "pinky.bc", 
+               # "printf.bc", 
+#                "wc.bc", 
+#		"who.bc",
+#                "test.bc",
+#                "cut.bc",
+#                "du.bc",
+#                "fmt.bc", 
+#                "expr.bc",
+#                "df.bc",
+#                "stat.bc",
+#                "cp.bc",
+#                "shred.bc",
+#                "join.bc",
+#                "head.bc",
+#                "stty.bc",
+#                "dd.bc",
+#                "csplit.bc",
+#                "tail.bc",
+#                "tr.bc",
+#                "ptx.bc",
+#                "od.bc",
+#                "pr.bc",
+#                "sort.bc",
+#                "ls.bc",
+#		"tac-2.bc"
+);
+
+$output =	"
+<style>
+     td { border:1px solid black; text-align: center; }
+</style>
+        
+<html>
+		  	<body>
+		    		<table border='1'>
+		    			<tr>
+						<th></th>
+						<th colspan='2'>base</th>
+						<th colspan='2'>rwset</th>
+					</tr>
+					<tr>
+						<th>prog</th>
+						<th>time (s) </th>
+						<th>cov (%)</th>
+                                                <th>time (s) </th>
+                                                <th>cov (%)</th>
+					</tr>";
+		
+							
+		    
+open(OUT,">>out.html");
+OUT->autoflush(1);
+
+print OUT $output;
+
+$curdir = getcwd;
+
+$maxtime = 120;
+$maxmem = 1000;
+
+$maincmd = "setarch `uname -m` -R /home/suhabe/klee-open/Release/bin/klee --strip-debug --simplify-sym-indices --max-sym-array-size=100000 --max-memory=$maxmem --max-time=$maxtime --disable-inlining --allow-external-sym-calls --exclude-libc-cov --only-output-states-covering-new --environ=test.env --exclude-cov-file=functions.txt --libc=uclibc --posix-runtime --init-env --optimize ";
+
+$symargs = "--sym-args 0 1 10 --sym-args 0 2 2 --sym-files 1 8 --sym-stdout";
+
+$maincmd2 = "setarch `uname -m` -R /home/suhabe/klee-open/Release/bin/klee --strip-debug --max-time=$maxtime --simplify-sym-indices --max-sym-array-size=100000 --max-memory=$maxmem --disable-inlining --allow-external-sym-calls --exclude-libc-cov --randomize-fork --use-random-path --use-interleaved-covnew-NURS --use-batching-search --batch-instructions=10000 --only-output-states-covering-new --environ=test.env --exclude-cov-file=functions.txt --libc=uclibc --posix-runtime --init-env --optimize";
+		
+foreach my $tar (@targets) {
+	if ($cfile ne "" && $tar ne $cfile) {
+		next;
+	}
+	chdir $curdir;	
+	print "$tar: \n";	
+#	prun($maincmd2 . " " . $tar . " " . $symargs . " >/dev/null 2>/dev/null");	
+
+#	$stats = `tail -n 1 klee-last/run.stats` || die "failed";
+ #       $stats = substr($stats,1,length($stats) - 3);
+  #      @tokens = split(/,/, $stats);
+#	$usertime2 = sprintf("%.1f", $tokens[4]);
+ #       $cov2 = sprintf("%.1f", 100 * $tokens[11]/($tokens[11] + $tokens[12]));
+
+	prun($maincmd . " --use-equiv-state-elim " . $tar . " " . $symargs . " >/dev/null 2>/dev/null");
+
+	$stats = `tail -n 1 klee-last/run.stats` || die "failed";
+	$stats = substr($stats,1,length($stats) - 3);
+	@tokens = split(/,/, $stats);
+	$usertime = sprintf("%.1f", $tokens[4]);
+	$cov = sprintf("%.1f", 100 * $tokens[11]/($tokens[11] + $tokens[12]));
+#	print "$usertime $cov\n";
+
+	$output = "<tr>
+				<td>$tar</td>
+				<td>$usertime2</td>
+				<td>$cov2</td>
+				<td>$usertime</td>
+				<td>$cov</td>
+			     </tr>";
+
+	print OUT $output;
+}
+
+$output = "</table>
+		</body>
+	</html>";
+
+print OUT $output;
+
+close(OUT);
+
+sub prun {
+	$cmd = $_[0];
+       	print "$cmd\n";
+        system($cmd);
+}
+               

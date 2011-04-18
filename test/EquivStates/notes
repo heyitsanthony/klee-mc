@@ -1,0 +1,45 @@
+IMPRECISIONS
+------------
+X 1. byte level tracking of reads/writes
+X 2. restrict live sets to those reads that affect branch decisions
+3. comparisons of update lists of objects shouldn't depend on order of updates
+4. use a more precise definition of equivalence where two states are equivalent
+	iff there does not exist some branch at which different paths would
+	be taken. this is more general than item 2 above.
+
+	a = mk_symbolic;
+	b = a ? 1 : 2;
+	if (b == 3) return;
+
+	item 2 restricts the set of live variables to consider to be
+	ones involved in branch decisions, but item 4 considers the
+	the predicate used in that branch decision and whether the two
+	different states results in a different decision, rather on
+	just whether they read different values.
+X 5. kill memory reads as soon as possible for both precision and scalability
+6. concretization/randomization of initiali values of expression interferes		with rwset analysis.
+7. make sure all state records terminate
+X 8. fix arrayalloc node prop for dynamic branch tracking, in copylivereads
+X 9. intersection of livereads with constraints needs to take the byte offsets into account (make test case)
+X 10. arrayalloc needs to take byte offsets into account (make test case)
+11. as dependence nodes are stripped out because of relevant branch tracking, records maybe become equivalent
+	deallocate these paths to save memory/time
+12. iterate over a pp's records and find the differences between them
+X 13. copy over dependence node control information when doing a copyLiveReads
+14. dead code elimination by propagation back conditions of uncovered blocks. if conditions are unsat on all paths going back up to the meets, then it's dead code.
+15. find a better way to name mallockeys for the rwset anly
+16. dynamic information flow with symbolic execution
+17. function pointer control dependencies
+18. context sensitive static control dependence? find examples of how this
+	extra precision will help.
+19. which subtree to prune against matters. how should it decide which one?
+20. remove annotations on exit and __error(unlink)
+21. unsoundness because of system calls
+22. unsoundness because ?
+
+TODO
+----
+1. find a better way to name mallockeys for the rwset anly--find examples of where this would help
+4. as dependence nodes are stripped out because of relevant branch tracking, records maybe become equivalent
+        deallocate these paths to save memory/time
+8. context sensitive static cover control dependence graph
