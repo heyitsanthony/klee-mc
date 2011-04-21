@@ -267,6 +267,23 @@ private:
                     bool zeroMemory=false,
                     const ObjectState *reallocFrom=0);
 
+  void executeAllocSymbolic(
+    ExecutionState &state,
+    ref<Expr> size,
+    bool isLocal,
+    KInstruction *target,
+    bool zeroMemory,
+    const ObjectState *reallocFrom);
+
+  void executeAllocConst(
+    ExecutionState &state,
+    ConstantExpr* CE,
+    bool isLocal,
+    KInstruction *target,
+    bool zeroMemory,
+    const ObjectState *reallocFrom);
+
+
   /// Free the given address with checking for errors. If target is
   /// given it will be bound to 0 in the resulting states (this is a
   /// convenience for realloc). Note that this function can cause the
@@ -288,8 +305,29 @@ private:
                               ref<Expr> address,
                               ref<Expr> value /* undef if read */,
                               KInstruction *target /* undef if write */);
+  bool memOpFast(
+    ExecutionState& state,
+    bool isWrite,
+    ref<Expr> address,
+    ref<Expr> value,
+    KInstruction* target);
+
+  void memOpError(
+    ExecutionState& state,
+    bool isWrite,
+    ref<Expr> address,
+    ref<Expr> value,
+    KInstruction* target);
+
+
 
   void executeMakeSymbolic(ExecutionState &state, const MemoryObject *mo);
+  void executeMakeSymbolic(
+    ExecutionState& state, const MemoryObject* mo, ref<Expr> len);
+  void makeSymbolicReplay(
+    ExecutionState& state, const MemoryObject* mo, ref<Expr> len);
+  void makeSymbolic(
+    ExecutionState& state, const MemoryObject* mo, ref<Expr> len);
 
   StatePair fork(ExecutionState &current, ref<Expr> condition, bool isInternal);
   StateVector fork(ExecutionState &current,
@@ -399,7 +437,13 @@ private:
   void initTimers();
   void processTimers(ExecutionState *current,
                      double maxInstTime);
-                
+   
+  void getSymbolicSolutionCex(const ExecutionState& state, ExecutionState& t);
+
+  bool seedObject(
+    ExecutionState& state, SeedInfo& si,
+    const MemoryObject* mo, const Array* array);
+
 public:
   Executor(const InterpreterOptions &opts, InterpreterHandler *ie);
   virtual ~Executor();

@@ -671,6 +671,9 @@ void SpecialFunctionHandler::handleDefineFixedObject(ExecutionState &state,
   mo->isUserSpecified = true; // XXX hack;
 }
 
+#define MAKESYM_ARGIDX_ADDR   0
+#define MAKESYM_ARGIDX_LEN    1
+#define MAKESYM_ARGIDX_NAME   2
 void SpecialFunctionHandler::handleMakeSymbolic(ExecutionState &state,
                                                 KInstruction *target,
                                                 std::vector<ref<Expr> > &arguments) {
@@ -684,43 +687,44 @@ void SpecialFunctionHandler::handleMakeSymbolic(ExecutionState &state,
     // FIXME: Should be a user.err, not an assert.
     assert(arguments.size()==3 &&
            "invalid number of arguments to klee_make_symbolic");  
-    name = readStringAtAddress(state, arguments[2]);
+    name = readStringAtAddress(state, arguments[MAKESYM_ARGIDX_NAME]);
   }
 
   Executor::ExactResolutionList rl;
-  executor.resolveExact(state, arguments[0], rl, "make_symbolic");
+  executor.resolveExact(state, arguments[MAKESYM_ARGIDX_ADDR], rl, "make_symbolic");
   
   for (Executor::ExactResolutionList::iterator it = rl.begin(), 
          ie = rl.end(); it != ie; ++it) {
     MemoryObject *mo = (MemoryObject*) it->first.first;
-    mo->setName(name);
-    
     const ObjectState *old = it->first.second;
     ExecutionState *s = it->second;
+    bool res, success;
+ 
+    mo->setName(name);
     
     if (old->readOnly) {
-      executor.terminateStateOnError(*s, 
-                                     "cannot make readonly object symbolic", 
-                                     "user.err");
+      executor.terminateStateOnError(
+        *s, "cannot make readonly object symbolic", "user.err");
       return;
     } 
 
     // FIXME: Type coercion should be done consistently somewhere.
-    bool res;
-    bool success =
-      executor.solver->mustBeTrue(*s, 
-                                  EqExpr::create(ZExtExpr::create(arguments[1],
-                                                                  Context::get().getPointerWidth()),
-                                                 mo->getSizeExpr()),
-                                  res);
+    // UleExpr instead of EqExpr to make a symbol partially symbolic.
+    success = executor.solver->mustBeTrue(
+      *s, 
+      UleExpr::create(
+        ZExtExpr::create(
+          arguments[MAKESYM_ARGIDX_LEN],
+          Context::get().getPointerWidth()),
+        mo->getSizeExpr()),
+      res);
     assert(success && "FIXME: Unhandled solver failure");
     
     if (res) {
       executor.executeMakeSymbolic(*s, mo);
     } else {      
-      executor.terminateStateOnError(*s, 
-                                     "wrong size given to klee_make_symbolic[_name]", 
-                                     "user.err");
+      executor.terminateStateOnError(
+        *s, "size given to klee_make_symbolic[_name] too big", "user.err");
     }
   }
 }

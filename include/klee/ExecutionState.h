@@ -99,6 +99,27 @@ private:
   std::vector<ExecutionTraceEvent*> events;
 };
 
+/* Represents a memory array, its materialization, and ... */
+class SymbolicArray
+{
+public:
+  SymbolicArray(const MemoryObject* in_mo, const Array* in_array, ref<Expr> in_len)
+  : mo(in_mo), array(in_array), len(in_len) {}
+  virtual ~SymbolicArray() {}
+  bool operator ==(const SymbolicArray& sa) const 
+  { 
+#warning DWEEB ALERT
+  	/* XXX ignore len for now XXX  XXX */
+  	return (mo == sa.mo && array == sa.array);
+  }
+  const Array *getArray(void) const { return array; }
+  const MemoryObject *getMemoryObject(void) const { return mo; }
+private:
+  const MemoryObject *mo;
+  const Array *array;
+  ref<Expr> len;
+};
+
 
 class ExecutionState {
 public:
@@ -172,7 +193,7 @@ public:
   /// ordered list of symbolics: used to generate test cases. 
   //
   // FIXME: Move to a shared list structure (not critical).
-  std::vector< std::pair<const MemoryObject*, const Array*> > symbolics;
+  std::vector< SymbolicArray > symbolics;
 
   // Used by the checkpoint/rollback methods for fake objects.
   // FIXME: not freeing things on branch deletion.
@@ -222,8 +243,9 @@ public:
   void pushFrame(KInstIterator caller, KFunction *kf);
   void popFrame();
 
-  void addSymbolic(const MemoryObject *mo, const Array *array) {    
-    symbolics.push_back(std::make_pair(mo, array));
+  void addSymbolic(
+    const MemoryObject *mo, const Array *array, ref<Expr> len) {
+    symbolics.push_back(SymbolicArray(mo, array, len));
   }
 
   void addConstraint(ref<Expr> constraint) {
