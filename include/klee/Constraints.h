@@ -64,7 +64,8 @@ public:
   bool operator==(const ConstraintManager &other) const {
     return constraints == other.constraints;
   }
-  
+ 
+  void print(std::ostream& os) const;
 private:
   std::vector< ref<Expr> > constraints;
 

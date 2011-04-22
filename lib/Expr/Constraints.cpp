@@ -154,3 +154,11 @@ void ConstraintManager::addConstraint(ref<Expr> e) {
   e = simplifyExpr(e);
   addConstraintInternal(e);
 }
+
+void ConstraintManager::print(std::ostream& os) const
+{
+  for (unsigned int i = 0; i < constraints.size(); i++) {
+    constraints[i]->print(os);
+    os << "\n";
+  }
+}

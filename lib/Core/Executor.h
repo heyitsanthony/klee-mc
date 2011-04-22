@@ -107,25 +107,25 @@ private:
   ExternalDispatcher *externalDispatcher;
   TimingSolver *solver;
   MemoryManager *memory;
-  std::set<ExecutionState*> states;
-  std::set<ExecutionState*>::size_type nonCompactStateCount;
+  ExeStateSet states;
+  ExeStateSet::size_type nonCompactStateCount;
   StatsTracker *statsTracker;
   TreeStreamWriter *symPathWriter;
   SpecialFunctionHandler *specialFunctionHandler;
   std::vector<TimerInfo*> timers;
   PTree *processTree;
 
-  std::set<ExecutionState*> ignoreStates, unignoreStates;
+  ExeStateSet ignoreStates, unignoreStates;
   /// Used to track states that have been added during the current
   /// instructions step. 
   /// \invariant \ref addedStates is a subset of \ref states. 
   /// \invariant \ref addedStates and \ref removedStates are disjoint.
-  std::set<ExecutionState*> addedStates;
+  ExeStateSet addedStates;
   /// Used to track states that have been removed during the current
   /// instructions step. 
   /// \invariant \ref removedStates is a subset of \ref states. 
   /// \invariant \ref addedStates and \ref removedStates are disjoint.
-  std::set<ExecutionState*> removedStates;
+  ExeStateSet removedStates;
   /// Used to track states that have been replaced during the current
   /// instructions step. 
   /// \invariant \ref replacedStates is a subset of \ref states U addedStates. 
@@ -197,10 +197,19 @@ private:
   llvm::Function* getCalledFunction(llvm::CallSite &cs, ExecutionState &state);
   
   void executeInstruction(ExecutionState &state, KInstruction *ki);
+  void instRet(ExecutionState& state, KInstruction* ki);
+  void instBranch(ExecutionState& state, KInstruction* ki);
+  void instCmp(ExecutionState& state, KInstruction* ki);
+  void instCall(ExecutionState& state, KInstruction* ki);
+  void instSwitch(ExecutionState& state, KInstruction* ki);
 
   void printFileLine(ExecutionState &state, KInstruction *ki);
 
   void run(ExecutionState &initialState);
+  void runState(ExecutionState* &state);
+  void killStates(ExecutionState* &state);
+  void compactStates(ExecutionState* &state);
+  bool seedRun(ExecutionState& initialState);
 
   // Given a concrete object in our [klee's] address space, add it to 
   // objects checked code can reference.
@@ -297,6 +306,11 @@ private:
                    KInstruction *ki,
                    llvm::Function *f,
                    std::vector< ref<Expr> > &arguments);
+  void executeCallNonDecl(
+    ExecutionState &state, 
+    KInstruction *ki,
+    Function *f,
+    std::vector< ref<Expr> > &arguments);
                    
   // do address resolution / object binding / out of bounds checking
   // and perform the operation
@@ -320,6 +334,19 @@ private:
     KInstruction* target);
 
 
+  void getArrayStates(unsigned int idx, const std::string& arrName, ExeStateSet&);
+  bool hasScanStringState(
+    ExeStateSet& ss,
+    unsigned int idx, const std::string& arrName);
+  void removeStringStates(
+    ExeStateSet& ss,
+    unsigned int idx, const std::string& arrName);
+  void mergeStringStates(ref<Expr>& readExpr);
+  bool isStrcmpMatch(
+    const Expr  *expr,
+    unsigned int idx, const std::string& arrName,
+    unsigned int& re_idx, unsigned int& cmp_val);
+
 
   void executeMakeSymbolic(ExecutionState &state, const MemoryObject *mo);
   void executeMakeSymbolic(
@@ -333,6 +360,19 @@ private:
   StateVector fork(ExecutionState &current,
                    unsigned N, ref<Expr> conditions[], bool isInternal,
                    bool isBranch = false);
+  bool forkSetupNoSeeding(
+    ExecutionState& current,
+    unsigned N, std::vector<bool>& res,
+    bool isInternal,
+    unsigned& validTargets, bool& forkCompact, bool& wasReplayed);
+  void forkSetupSeeding( 
+    ExecutionState& current,
+    unsigned N, ref<Expr> conditions[],
+    std::vector<bool>& res,
+    std::vector<std::list<SeedInfo> >& resSeeds,
+    unsigned& validTargets);
+
+
 #if 0
   /// Create a new state where each input condition has been added as
   /// a constraint and return the results. The input state is included

@@ -121,6 +121,8 @@ private:
 };
 
 
+typedef std::set<ExecutionState*> ExeStateSet;
+
 class ExecutionState {
 public:
   typedef std::vector<StackFrame> stack_ty;    

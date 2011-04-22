@@ -83,6 +83,34 @@ using namespace klee;
 // omg really hard to share cl opts across files ...
 bool WriteTraces = false;
 
+static std::string expr2str(const Expr* e)
+{
+  std::ostringstream info;
+  e->print(info);
+  return info.str();
+}
+
+static std::string state2str(ExecutionState* state)
+{
+  std::ostringstream info;
+  state->constraints.print(info);
+  return info.str();
+}
+
+static std::string states2str(const ExeStateSet& ess)
+{
+  std::ostringstream s;
+  unsigned int i = 0;
+  for (ExeStateSet::const_iterator it = ess.begin(); 
+      it != ess.end(); it++, i++)
+  {
+    s << "State " << i << ":\n";
+    s << state2str(*it);
+    s << "\n";
+  }
+  return s.str();
+}
+
 namespace llvm
 {
   namespace cl
@@ -287,6 +315,10 @@ namespace {
   cl::opt<bool>
   ReplayInhibitedForks("replay-inhibited-forks",
             cl::desc("When forking is inhibited, replay the inhibited path as a new state"));
+  cl::opt<bool>
+  StringPrune("string-prune",
+    cl::desc("Prune intermediate scan states on strings"),
+     cl::init(false));
 }
 
 
@@ -762,6 +794,148 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal) {
   return std::make_pair(results[1], results[0]);
 }
 
+bool Executor::forkSetupNoSeeding(
+  ExecutionState& current,
+  unsigned N, std::vector<bool>& res,
+  bool isInternal,
+  unsigned& validTargets, bool& forkCompact, bool& wasReplayed)
+{
+  if (!isInternal && current.isCompactForm) {
+    // Can't fork compact states; sanity check
+    assert(false && "invalid state");
+  } else if (!isInternal && ReplayPathOnly && current.isReplay
+    && current.replayBranchIterator == current.branchDecisionsSequence.end())
+  {
+    // Done replaying this state, so kill it (if -replay-path-only)
+    terminateStateEarly(current, "replay path exhausted");
+    return false;
+  } else if (!isInternal
+    && current.replayBranchIterator != current.branchDecisionsSequence.end())
+  {
+    // Replaying non-internal fork; read value from replayBranchIterator
+#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
+    assert(current.prevPC->info->assemblyLine
+      == (*current.replayBranchIterator).second &&
+      "branch instruction IDs do not match");
+#endif
+    unsigned targetIndex = (*current.replayBranchIterator).first;
+    ++current.replayBranchIterator;
+    wasReplayed = true;
+    // Verify that replay target matches current path constraints
+    assert(targetIndex <= N && "replay target out of range");
+    if (!res[targetIndex]) {
+      std::stringstream ss;
+      ss << "hit invalid branch in replay path mode (line="
+         << current.prevPC->info->assemblyLine << ", expected target="
+         << targetIndex << ", actual targets=";
+      bool first = true;
+      for(unsigned i = 0; i < N; i++) {
+        if (!res[i]) continue;
+        if (!first) ss << ",";
+        ss << i;
+        first = false;
+      }
+      ss << ")";
+      terminateStateOnError(current, ss.str().c_str(), "branch.err");
+      klee_warning("hit invalid branch in replay path mode");
+      return false;
+    }
+    else {
+      // Suppress forking; constraint will be added to path below
+      res.assign(N, false);
+      res[targetIndex] = true;
+    }
+  } // if (!isInternal && current.replayBranchIterator != end)
+  else if (validTargets > 1) {
+    // Multiple branch directions are possible; check for flags that
+    // prevent us from forking here
+    assert(!replayOut && "in replay mode, only one branch can be true.");
+
+    if (isInternal) return true;
+
+    const char* reason = 0;
+    if (MaxMemoryInhibit && atMemoryLimit) reason = "memory cap exceeded";
+    if (current.forkDisabled) reason = "fork disabled on current path";
+    if (inhibitForking) reason = "fork disabled globally";
+    if (MaxForks!=~0u && stats::forks >= MaxForks) reason = "max-forks reached";
+
+    // Skipping this fork for one of the above reasons; randomly pick target
+    if (!reason) return true;
+    if (ReplayInhibitedForks) {
+      klee_warning_once(reason, "forking into compact forms (%s)", reason);
+      forkCompact = true;
+      return true;
+    }
+
+    klee_warning_once(reason, "skipping fork and pruning randomly (%s)", reason);
+    TimerStatIncrementer timer(stats::forkTime);
+    unsigned randIndex = (theRNG.getInt32() % validTargets) + 1;
+    unsigned condIndex;
+    for(condIndex = 0; condIndex < N; condIndex++) {
+      if (res[condIndex]) randIndex--;
+      if (!randIndex) break;
+    }
+    assert(condIndex < N);
+    validTargets = 1;
+    res.assign(N, false);
+    res[condIndex] = true;
+  } // if (validTargets > 1)
+  return true;
+}
+
+
+void Executor::forkSetupSeeding( 
+  ExecutionState& current,
+  unsigned N, ref<Expr> conditions[],
+  std::vector<bool>& res,
+  std::vector<std::list<SeedInfo> >& resSeeds,
+  unsigned& validTargets)
+{
+  SeedMapType::iterator it = seedMap.find(&current);
+  assert (it != seedMap.end());
+
+  // Fix branch in only-replay-seed mode, if we don't have both true
+  // and false seeds.
+
+  // Assume each seed only satisfies one condition (necessarily true
+  // when conditions are mutually exclusive and their conjunction is
+  // a tautology).
+  // This partitions the seed set for the current state
+  for (std::vector<SeedInfo>::iterator siit = it->second.begin(), 
+         siie = it->second.end(); siit != siie; ++siit) {
+    unsigned i;
+    for (i = 0; i < N; ++i) {
+      ref<ConstantExpr> seedCondRes;
+      bool success = solver->getValue(current,
+        siit->assignment.evaluate(conditions[i]), seedCondRes);
+      assert(success && "FIXME: Unhandled solver failure");
+      if (seedCondRes->isTrue()) break;
+    }
+
+    // If we didn't find a satisfying condition, randomly pick one
+    // (the seed will be patched).
+    if (i == N) i = theRNG.getInt32() % N;
+
+    resSeeds[i].push_back(*siit);
+  }
+
+  // Clear any valid conditions that seeding rejects
+  if ((current.forkDisabled || OnlyReplaySeeds) && validTargets > 1) {
+    validTargets = 0;
+    for (unsigned i = 0; i < N; i++) {
+      if (resSeeds[i].empty()) res[i] = false;
+      if (res[i]) validTargets++;
+    }
+    assert(validTargets && "seed must result in at least one valid target");
+  }
+
+  // Remove seeds corresponding to current state
+  seedMap.erase(it);
+  
+  // !!! it's possible for the current state to end up with no seeds. Does
+  // this matter? Old fork() used to handle it but branch() didn't.
+}
+
 // !!! for normal branch, conditions = {false,true} so that replay 0,1 reflects
 // index
 Executor::StateVector
@@ -770,15 +944,15 @@ Executor::fork(ExecutionState &current,
                bool isInternal, bool isBranch) {
   std::vector<bool> res(N, false);
   StateVector resStates(N, NULL);
-  SeedMapType::iterator it = seedMap.find(&current);
-  bool isSeeding = it != seedMap.end();
   std::vector<std::list<SeedInfo> > resSeeds(N);
 
   // Evaluate fork conditions
   double timeout = stpTimeout;
-  if (isSeeding)
-    timeout *= it->second.size();
   unsigned condIndex, validTargets = 0, feasibleTargets = 0;
+
+  SeedMapType::iterator it = seedMap.find(&current);
+  bool isSeeding = it != seedMap.end();
+  if (isSeeding) timeout *= it->second.size();
 
   if (isBranch) {
     Solver::Validity result;
@@ -794,8 +968,7 @@ Executor::fork(ExecutionState &current,
     validTargets = (result == Solver::Unknown ? 2 : 1);
     if (validTargets > 1 || isSeeding)
       conditions[0] = Expr::createIsZero(conditions[1]);
-  }
-  else {
+  } else {
     for(condIndex = 0; condIndex < N; condIndex++) {
       bool result;
       // If condition is a constant (e.g., from constant switch statement), don't
@@ -833,144 +1006,11 @@ Executor::fork(ExecutionState &current,
   bool forkCompact = false;
   bool wasReplayed = false;
   if (!isSeeding) {
-    if (!isInternal && current.isCompactForm) {
-      // Can't fork compact states; sanity check
-      assert(false && "invalid state");
-    } else if (!isInternal && ReplayPathOnly && current.isReplay
-      && current.replayBranchIterator == current.branchDecisionsSequence.end())
-    {
-      // Done replaying this state, so kill it (if -replay-path-only)
-      terminateStateEarly(current, "replay path exhausted");
+    if (!forkSetupNoSeeding(current, N, res, isInternal, 
+      validTargets, forkCompact, wasReplayed)) 
       return StateVector(N, NULL);
-    } else if (!isInternal
-      && current.replayBranchIterator != current.branchDecisionsSequence.end())
-    {
-      // Replaying non-internal fork; read value from replayBranchIterator
-#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
-      assert(current.prevPC->info->assemblyLine
-        == (*current.replayBranchIterator).second &&
-        "branch instruction IDs do not match");
-#endif
-      unsigned targetIndex = (*current.replayBranchIterator).first;
-      ++current.replayBranchIterator;
-      wasReplayed = true;
-      // Verify that replay target matches current path constraints
-      assert(targetIndex <= N && "replay target out of range");
-      if (!res[targetIndex]) {
-        std::stringstream ss;
-        ss << "hit invalid branch in replay path mode (line="
-           << current.prevPC->info->assemblyLine << ", expected target="
-           << targetIndex << ", actual targets=";
-        bool first = true;
-        for(unsigned i = 0; i < N; i++) {
-          if (res[i]) {
-            if (!first)
-              ss << ",";
-            ss << i;
-            first = false;
-          }
-        }
-        ss << ")";
-        terminateStateOnError(current, ss.str().c_str(), "branch.err");
-        klee_warning("hit invalid branch in replay path mode");
-        return StateVector(N, NULL);
-      }
-      else {
-        // Suppress forking; constraint will be added to path below
-        res.assign(N, false);
-        res[targetIndex] = true;
-      }
-    } // if (!isInternal && current.replayBranchIterator != end)
-    else if (validTargets > 1) {
-      // Multiple branch directions are possible; check for flags that
-      // prevent us from forking here
-      assert(!replayOut && "in replay mode, only one branch can be true.");
-
-      if (!isInternal) {
-        const char* reason = 0;
-        if (MaxMemoryInhibit && atMemoryLimit)
-          reason = "memory cap exceeded";
-        if (current.forkDisabled)
-          reason = "fork disabled on current path";
-        if (inhibitForking)
-          reason = "fork disabled globally";
-        if (MaxForks!=~0u && stats::forks >= MaxForks)
-          reason = "max-forks reached";
-
-        // Skipping this fork for one of the above reasons; randomly pick target
-        if (reason) {
-          if (!ReplayInhibitedForks) {
-            klee_warning_once(reason, "skipping fork and pruning randomly (%s)",
-              reason);
-            TimerStatIncrementer timer(stats::forkTime);
-            unsigned randIndex = (theRNG.getInt32() % validTargets) + 1;
-            for(condIndex = 0; condIndex < N; condIndex++) {
-              if (res[condIndex])
-                randIndex--;
-              if (!randIndex)
-                break;
-            }
-            assert(condIndex < N);
-            validTargets = 1;
-            res.assign(N, false);
-            res[condIndex] = true;
-          }
-          else {
-            klee_warning_once(reason, "forking into compact forms (%s)",
-              reason);
-            forkCompact = true;
-          }
-        } // if (reason)
-      } // if (!isInternal)
-    } // if (validTargets > 1)
-  } // if (!isSeeding)
-
-  // Fix branch in only-replay-seed mode, if we don't have both true
-  // and false seeds.
-
-  else if (isSeeding)
-  {
-    // Assume each seed only satisfies one condition (necessarily true
-    // when conditions are mutually exclusive and their conjunction is
-    // a tautology).
-    // This partitions the seed set for the current state
-    for (std::vector<SeedInfo>::iterator siit = it->second.begin(), 
-           siie = it->second.end(); siit != siie; ++siit) {
-      unsigned i;
-      for (i = 0; i < N; ++i) {
-        ref<ConstantExpr> res;
-        bool success = solver->getValue(current,
-          siit->assignment.evaluate(conditions[i]), res);
-        assert(success && "FIXME: Unhandled solver failure");
-        if (res->isTrue())
-          break;
-      }
-
-      // If we didn't find a satisfying condition, randomly pick one
-      // (the seed will be patched).
-      if (i == N)
-        i = theRNG.getInt32() % N;
-
-      resSeeds[i].push_back(*siit);
-    }
-
-    // Clear any valid conditions that seeding rejects
-    if ((current.forkDisabled || OnlyReplaySeeds) && validTargets > 1) {
-      validTargets = 0;
-      for (unsigned i = 0; i < N; i++) {
-        if (resSeeds[i].empty())
-          res[i] = false;
-        if (res[i])
-          validTargets++;
-      }
-      assert(validTargets && "seed must result in at least one valid target");
-    }
-
-    // Remove seeds corresponding to current state
-    seedMap.erase(it);
-    
-    // !!! it's possible for the current state to end up with no seeds. Does
-    // this matter? Old fork() used to handle it but branch() didn't.
+  } else {
+    forkSetupSeeding(current, N, conditions, res, resSeeds, validTargets);
   }
 
   bool curStateUsed = false;
@@ -978,93 +1018,92 @@ Executor::fork(ExecutionState &current,
   for(condIndex = 0; condIndex < N; condIndex++) {
     ExecutionState *baseState = &current;
     // Process each valid target and generate a state
-    if (res[condIndex]) {
-      ExecutionState *newState;
-      if (!curStateUsed) {
-        resStates[condIndex] = baseState;
-        curStateUsed = true;
+    if (!res[condIndex]) continue;
+
+    ExecutionState *newState;
+    if (!curStateUsed) {
+      resStates[condIndex] = baseState;
+      curStateUsed = true;
+    }
+    else {
+      assert(!forkCompact || ReplayInhibitedForks);
+
+      // Update stats
+      TimerStatIncrementer timer(stats::forkTime);
+      ++stats::forks;
+      
+      // Do actual state forking
+      newState = forkCompact ? current.branchForReplay()
+                             : current.branch();
+      /*thread->*/addedStates.insert(newState);
+      resStates[condIndex] = newState;
+
+      // Split pathWriter stream
+      if (!isInternal) {
+        if (symPathWriter && newState != &current)
+          newState->symPathOS = symPathWriter->open(current.symPathOS);
       }
-      else {
-        assert(!forkCompact || ReplayInhibitedForks);
 
-        // Update stats
-        TimerStatIncrementer timer(stats::forkTime);
-        ++stats::forks;
-        
-        // Do actual state forking
-        newState = forkCompact ? current.branchForReplay()
-                               : current.branch();
-        /*thread->*/addedStates.insert(newState);
-        resStates[condIndex] = newState;
-
-        // Split pathWriter stream
-        if (!isInternal) {
-          if (symPathWriter && newState != &current)
-            newState->symPathOS = symPathWriter->open(current.symPathOS);
-        }
-
-        // Randomize path tree layout
-        if (RandomizeFork && theRNG.getBool()) {
-          std::swap(baseState, newState);
-        }
-
-        // Update path tree with new states
-        current.ptreeNode->data = 0;
-        splitProcessTree(current.ptreeNode, baseState, newState);
+      // Randomize path tree layout
+      if (RandomizeFork && theRNG.getBool()) {
+        std::swap(baseState, newState);
       }
-    } // if (res[valIndex])
+
+      // Update path tree with new states
+      current.ptreeNode->data = 0;
+      splitProcessTree(current.ptreeNode, baseState, newState);
+    }
   } // for
 
   // Loop for bookkeeping (loops must be separate since states are forked from
   // each other)
   for(condIndex = 0; condIndex < N; condIndex++) {
-    if (res[condIndex]) {
-      ExecutionState *curState = resStates[condIndex];
-      assert(curState);
+    if (!res[condIndex]) continue;
 
-      // Add path constraint
-      if (!curState->isCompactForm && feasibleTargets > 1)
-        addConstraint(*curState, conditions[condIndex]);
-      // XXX - even if the constraint is provable one way or the other we
-      // can probably benefit by adding this constraint and allowing it to
-      // reduce the other constraints. For example, if we do a binary
-      // search on a particular value, and then see a comparison against
-      // the value it has been fixed at, we should take this as a nice
-      // hint to just use the single constraint instead of all the binary
-      // search ones. If that makes sense.
+    ExecutionState *curState = resStates[condIndex];
+    assert(curState);
 
-      // Kinda gross, do we even really still want this option?
-      if (MaxDepth && MaxDepth<=curState->depth) {
-        terminateStateEarly(*curState, "max-depth exceeded");
-        resStates[condIndex] = NULL;
-        continue;
+    // Add path constraint
+    if (!curState->isCompactForm && feasibleTargets > 1)
+      addConstraint(*curState, conditions[condIndex]);
+    // XXX - even if the constraint is provable one way or the other we
+    // can probably benefit by adding this constraint and allowing it to
+    // reduce the other constraints. For example, if we do a binary
+    // search on a particular value, and then see a comparison against
+    // the value it has been fixed at, we should take this as a nice
+    // hint to just use the single constraint instead of all the binary
+    // search ones. If that makes sense.
+
+    // Kinda gross, do we even really still want this option?
+    if (MaxDepth && MaxDepth<=curState->depth) {
+      terminateStateEarly(*curState, "max-depth exceeded");
+      resStates[condIndex] = NULL;
+      continue;
+    }
+
+    // Auxiliary bookkeeping
+    if (!isInternal) {
+      if (symPathWriter && validTargets > 1) {
+        std::stringstream ssPath;
+        ssPath << condIndex << "\n";
+        curState->symPathOS << ssPath.str();
       }
 
-      // Auxiliary bookkeeping
-      if (!isInternal) {
-        if (symPathWriter && validTargets > 1) {
-          std::stringstream ssPath;
-          ssPath << condIndex << "\n";
-          curState->symPathOS << ssPath.str();
-        }
-
-        // only track NON-internal branches
-        if (!wasReplayed
-            && curState->replayBranchIterator ==
-            curState->branchDecisionsSequence.end()) {
-          curState->branchDecisionsSequence.push_back(condIndex,
-            current.prevPC->info->assemblyLine);
-          curState->replayBranchIterator =
-            curState->branchDecisionsSequence.end();
-        }
-      } // if (!isInternal)
-
-      if (isSeeding) {
-        seedMap[curState].insert(seedMap[curState].end(),
-          resSeeds[condIndex].begin(), resSeeds[condIndex].end());
+      // only track NON-internal branches
+      if (!wasReplayed
+          && curState->replayBranchIterator ==
+          curState->branchDecisionsSequence.end()) {
+        curState->branchDecisionsSequence.push_back(condIndex,
+          current.prevPC->info->assemblyLine);
+        curState->replayBranchIterator =
+          curState->branchDecisionsSequence.end();
       }
+    } // if (!isInternal)
 
-    } // if (res[valIndex])
+    if (isSeeding) {
+      seedMap[curState].insert(seedMap[curState].end(),
+        resSeeds[condIndex].begin(), resSeeds[condIndex].end());
+    }
   } // for
 
   return resStates;
@@ -1176,7 +1215,6 @@ ref<Expr> Executor::toUnique(const ExecutionState &state,
   return result;
 }
 
-
 /* Concretize the given expression, and return a possible constant value. 
    'reason' is just a documentation string stating the reason for concretization. */
 ref<klee::ConstantExpr> 
@@ -1268,16 +1306,102 @@ void Executor::stepInstruction(ExecutionState &state) {
     haltExecution = true;
 }
 
+void Executor::executeCallNonDecl(
+  ExecutionState &state, 
+  KInstruction *ki,
+  Function *f,
+  std::vector< ref<Expr> > &arguments)
+{
+  // FIXME: I'm not really happy about this reliance on prevPC but it is ok, I
+  // guess. This just done to avoid having to pass KInstIterator everywhere
+  // instead of the actual instruction, since we can't make a KInstIterator
+  // from just an instruction (unlike LLVM).
+  KFunction *kf = kmodule->functionMap[f];
+  state.pushFrame(state.prevPC, kf);
+  state.pc = kf->instructions;
+      
+  if (statsTracker)
+    statsTracker->framePushed(state, &state.stack[state.stack.size()-2]);
+
+   // TODO: support "byval" parameter attribute
+   // TODO: support zeroext, signext, sret attributes
+      
+  unsigned callingArgs = arguments.size();
+  unsigned funcArgs = f->arg_size();
+  if (!f->isVarArg()) {
+    if (callingArgs > funcArgs) {
+      klee_warning_once(f, "calling %s with extra arguments.", 
+                        f->getName().data());
+    } else if (callingArgs < funcArgs) {
+      terminateStateOnError(state, "calling function with too few arguments", 
+                            "user.err");
+      return;
+    }
+  } else {
+    if (callingArgs < funcArgs) {
+      terminateStateOnError(state, "calling function with too few arguments", 
+                            "user.err");
+      return;
+    }
+          
+    StackFrame &sf = state.stack.back();
+    unsigned size = 0;
+    for (unsigned i = funcArgs; i < callingArgs; i++) {
+      // FIXME: This is really specific to the architecture, not the pointer
+      // size. This happens to work fir x86-32 and x86-64, however.
+      Expr::Width WordSize = Context::get().getPointerWidth();
+      if (WordSize == Expr::Int32) {
+        size += Expr::getMinBytesForWidth(arguments[i]->getWidth());
+      } else {
+        size += llvm::RoundUpToAlignment(arguments[i]->getWidth(), 
+                                         WordSize) / 8;
+      }
+    }
+
+    MemoryObject *mo = sf.varargs = memory->allocate(
+      size, true, false, state.prevPC->inst, &state);
+    if (!mo) {
+      terminateStateOnExecError(state, "out of memory (varargs)");
+      return;
+    }
+    ObjectState *os = bindObjectInState(state, mo, true);
+    unsigned offset = 0;
+    for (unsigned i = funcArgs; i < callingArgs; i++) {
+      // FIXME: This is really specific to the architecture, not the pointer
+      // size. This happens to work fir x86-32 and x86-64, however.
+      Expr::Width WordSize = Context::get().getPointerWidth();
+      if (WordSize == Expr::Int32) {
+        //os->write(offset, arguments[i]);
+        state.write(os, offset, arguments[i]);
+        offset += Expr::getMinBytesForWidth(arguments[i]->getWidth());
+      } else {
+        assert(WordSize == Expr::Int64 && "Unknown word size!");
+        //os->write(offset, arguments[i]);
+        state.write(os, offset, arguments[i]);
+        offset += llvm::RoundUpToAlignment(arguments[i]->getWidth(), 
+                                           WordSize) / 8;
+      }
+    }
+  }
+
+  unsigned numFormals = f->arg_size();
+  for (unsigned i=0; i<numFormals; ++i) 
+    bindArgument(kf, i, state, arguments[i]);
+}
+
 void Executor::executeCall(ExecutionState &state, 
                            KInstruction *ki,
                            Function *f,
-                           std::vector< ref<Expr> > &arguments) {
+                           std::vector< ref<Expr> > &arguments)
+{
+  assert (f);
+
   if (WriteTraces)
-    state.exeTraceMgr.addEvent(new FunctionCallTraceEvent(state, ki,
-                                                          f->getName()));
+    state.exeTraceMgr.addEvent(
+      new FunctionCallTraceEvent(state, ki, f->getName()));
 
   Instruction *i = ki->inst;
-  if (f && f->isDeclaration()) {
+  if (f->isDeclaration()) {
     switch(f->getIntrinsicID()) {
     case Intrinsic::not_intrinsic:
       // state may be destroyed by this call, cannot touch
@@ -1339,82 +1463,7 @@ void Executor::executeCall(ExecutionState &state,
     if (InvokeInst *ii = dyn_cast<InvokeInst>(i))
       transferToBasicBlock(ii->getNormalDest(), i->getParent(), state);
   } else {
-    // FIXME: I'm not really happy about this reliance on prevPC but it is ok, I
-    // guess. This just done to avoid having to pass KInstIterator everywhere
-    // instead of the actual instruction, since we can't make a KInstIterator
-    // from just an instruction (unlike LLVM).
-    KFunction *kf = kmodule->functionMap[f];
-    state.pushFrame(state.prevPC, kf);
-    state.pc = kf->instructions;
-        
-    if (statsTracker)
-      statsTracker->framePushed(state, &state.stack[state.stack.size()-2]);
- 
-     // TODO: support "byval" parameter attribute
-     // TODO: support zeroext, signext, sret attributes
-        
-    unsigned callingArgs = arguments.size();
-    unsigned funcArgs = f->arg_size();
-    if (!f->isVarArg()) {
-      if (callingArgs > funcArgs) {
-        klee_warning_once(f, "calling %s with extra arguments.", 
-                          f->getName().data());
-      } else if (callingArgs < funcArgs) {
-        terminateStateOnError(state, "calling function with too few arguments", 
-                              "user.err");
-        return;
-      }
-    } else {
-      if (callingArgs < funcArgs) {
-        terminateStateOnError(state, "calling function with too few arguments", 
-                              "user.err");
-        return;
-      }
-            
-      StackFrame &sf = state.stack.back();
-      unsigned size = 0;
-      for (unsigned i = funcArgs; i < callingArgs; i++) {
-        // FIXME: This is really specific to the architecture, not the pointer
-        // size. This happens to work fir x86-32 and x86-64, however.
-        Expr::Width WordSize = Context::get().getPointerWidth();
-        if (WordSize == Expr::Int32) {
-          size += Expr::getMinBytesForWidth(arguments[i]->getWidth());
-        } else {
-          size += llvm::RoundUpToAlignment(arguments[i]->getWidth(), 
-                                           WordSize) / 8;
-        }
-      }
-
-      MemoryObject *mo = sf.varargs = memory->allocate(size, true, false, 
-                                                       state.prevPC->inst,
-                                                       &state);
-      if (!mo) {
-        terminateStateOnExecError(state, "out of memory (varargs)");
-        return;
-      }
-      ObjectState *os = bindObjectInState(state, mo, true);
-      unsigned offset = 0;
-      for (unsigned i = funcArgs; i < callingArgs; i++) {
-        // FIXME: This is really specific to the architecture, not the pointer
-        // size. This happens to work fir x86-32 and x86-64, however.
-        Expr::Width WordSize = Context::get().getPointerWidth();
-        if (WordSize == Expr::Int32) {
-          //os->write(offset, arguments[i]);
-          state.write(os, offset, arguments[i]);
-          offset += Expr::getMinBytesForWidth(arguments[i]->getWidth());
-        } else {
-          assert(WordSize == Expr::Int64 && "Unknown word size!");
-          //os->write(offset, arguments[i]);
-          state.write(os, offset, arguments[i]);
-          offset += llvm::RoundUpToAlignment(arguments[i]->getWidth(), 
-                                             WordSize) / 8;
-        }
-      }
-    }
-
-    unsigned numFormals = f->arg_size();
-    for (unsigned i=0; i<numFormals; ++i) 
-      bindArgument(kf, i, state, arguments[i]);
+    executeCallNonDecl(state, ki, f, arguments);
   }
 }
 
@@ -1451,21 +1500,21 @@ void Executor::printFileLine(ExecutionState &state, KInstruction *ki) {
 }
 
 
-Function* Executor::getCalledFunction(CallSite &cs, ExecutionState &state) {
+Function* Executor::getCalledFunction(CallSite &cs, ExecutionState &state)
+{
   Function *f = cs.getCalledFunction();
-  
-  if (f) {
-    std::string alias = state.getFnAlias(f->getName());
-    if (alias != "") {
-      llvm::Module* currModule = kmodule->module;
-      Function* old_f = f;
-      f = currModule->getFunction(alias);
-      if (!f) {
-	llvm::errs() << "Function " << alias << "(), alias for " 
-                     << old_f->getName() << " not found!\n";
-	assert(f && "function alias not found");
-      }
-    }
+
+  if (!f) return f; 
+  std::string alias = state.getFnAlias(f->getName());
+  if (alias == "") return f;
+
+  llvm::Module* currModule = kmodule->module;
+  Function* old_f = f;
+  f = currModule->getFunction(alias);
+  if (!f) {
+    llvm::errs() << "Function " << alias << "(), alias for " 
+                 << old_f->getName() << " not found!\n";
+    assert(f && "function alias not found");
   }
   
   return f;
@@ -1502,73 +1551,401 @@ static inline const llvm::fltSemantics * fpWidthToSemantics(unsigned width) {
   }
 }
 
+void Executor::instRet(ExecutionState &state, KInstruction *ki)
+{
+  ReturnInst *ri = cast<ReturnInst>(ki->inst);
+  KInstIterator kcaller = state.stack.back().caller;
+  Instruction *caller = kcaller ? kcaller->inst : 0;
+  bool isVoidReturn = (ri->getNumOperands() == 0);
+  ref<Expr> result = ConstantExpr::alloc(0, Expr::Bool);
+
+  if (WriteTraces) {
+    state.exeTraceMgr.addEvent(new FunctionReturnTraceEvent(state, ki));
+  }
+  
+  if (!isVoidReturn) {
+    result = eval(ki, 0, state).value;
+  }
+  
+  if (state.stack.size() <= 1) {
+    assert(!caller && "caller set on initial stack frame");
+    terminateStateOnExit(state);
+    return;
+  }
+  
+  state.popFrame();
+
+  if (statsTracker)
+    statsTracker->framePopped(state);
+
+  if (InvokeInst *ii = dyn_cast<InvokeInst>(caller)) {
+    transferToBasicBlock(ii->getNormalDest(), caller->getParent(), state);
+  } else {
+    state.pc = kcaller;
+    ++state.pc;
+  }
+
+  if (!isVoidReturn) {
+    const Type *t = caller->getType();
+    if (t != Type::getVoidTy(getGlobalContext())) {
+      // may need to do coercion due to bitcasts
+      Expr::Width from = result->getWidth();
+      Expr::Width to = Expr::getWidthForLLVMType(t);
+        
+      if (from != to) {
+        CallSite cs = (isa<InvokeInst>(caller) ? CallSite(cast<InvokeInst>(caller)) : 
+                       CallSite(cast<CallInst>(caller)));
+
+        // XXX need to check other param attrs ?
+        if (cs.paramHasAttr(0, llvm::Attribute::SExt)) {
+          result = SExtExpr::create(result, to);
+        } else {
+          result = ZExtExpr::create(result, to);
+        }
+      }
+
+      bindLocal(kcaller, state, result);
+    }
+  } else {
+    // We check that the return value has no users instead of
+    // checking the type, since C defaults to returning int for
+    // undeclared functions.
+    if (!caller->use_empty()) {
+      terminateStateOnExecError(state, "return void when caller expected a result");
+    }
+  }
+}
+
+void Executor::instBranch(ExecutionState& state, KInstruction* ki)
+{
+  BranchInst *bi = cast<BranchInst>(ki->inst);
+  if (bi->isUnconditional()) {
+    transferToBasicBlock(bi->getSuccessor(0), bi->getParent(), state);
+    return;
+  }
+
+  // FIXME: Find a way that we don't have this hidden dependency.
+  assert(bi->getCondition() == bi->getOperand(0) &&
+         "Wrong operand index!");
+  const Cell &cond = eval(ki, 0, state);
+  StatePair branches = fork(state, cond.value, false);
+
+  if (WriteTraces) {
+    bool isTwoWay = (branches.first && branches.second);
+
+    if (branches.first) {
+      branches.first->exeTraceMgr.addEvent(
+        new BranchTraceEvent(state, ki, true, isTwoWay));
+    }
+
+    if (branches.second) {
+      branches.second->exeTraceMgr.addEvent(
+        new BranchTraceEvent(state, ki, false, isTwoWay));
+    }
+  }
+
+  KFunction *kf = state.stack.back().kf;
+//      ExecutorThread *thread = ExecutorThread::getThread();
+
+  // NOTE: There is a hidden dependency here, markBranchVisited
+  // requires that we still be in the context of the branch
+  // instruction (it reuses its statistic id). Should be cleaned
+  // up with convenient instruction specific data.
+  if (statsTracker && state.stack.back().kf->trackCoverage)
+    statsTracker->markBranchVisited(branches.first, branches.second);
+
+  /* FIXME: Refactor */
+  if (branches.first) {
+    // reconstitute the state if it was forked into compact form but will
+    // immediately cover a new instruction
+    // !!! this can be done more efficiently by simply forking a regular
+    // state inside fork() but that will change the fork() semantics
+    if (branches.first->isCompactForm && kf->trackCoverage &&
+        theStatisticManager->getIndexedValue(stats::uncoveredInstructions,
+        kf->instructions[kf->basicBlockEntry[bi->getSuccessor(0)]]->info->
+        id)) {
+      ExecutionState *newState = branches.first->
+        reconstitute(*initialStateCopy);
+      replaceStateImmForked(branches.first, newState);
+      branches.first = newState;
+    }
+    if (!branches.first->isCompactForm)
+      transferToBasicBlock(bi->getSuccessor(0), bi->getParent(),
+        *branches.first);
+  }
+
+  if (branches.second) {
+    // reconstitute the state if it was forked into compact form but will
+    // immediately cover a new instruction
+    // !!! this can be done more efficiently by simply forking a regular
+    // state inside fork() but that will change the fork() semantics
+    if (branches.second->isCompactForm && kf->trackCoverage &&
+        theStatisticManager->getIndexedValue(stats::uncoveredInstructions,
+        kf->instructions[kf->basicBlockEntry[bi->getSuccessor(1)]]->info->
+        id)) {
+      ExecutionState *newState = branches.second->
+        reconstitute(*initialStateCopy);
+      replaceStateImmForked(branches.second, newState);
+      branches.second = newState;
+    }
+    if (!branches.second->isCompactForm)
+      transferToBasicBlock(bi->getSuccessor(1), bi->getParent(),
+        *branches.second);
+  }
+}
+
+void Executor::instCall(ExecutionState& state, KInstruction *ki)
+{
+  CallSite cs;
+  unsigned argStart;
+  if (ki->inst->getOpcode()==Instruction::Call) {
+    cs = CallSite(cast<CallInst>(ki->inst));
+    argStart = 1;
+  } else {
+    cs = CallSite(cast<InvokeInst>(ki->inst));
+    argStart = 3;
+  }
+
+  unsigned numArgs = cs.arg_size();
+  Function *f = getCalledFunction(cs, state);
+
+  // Skip debug intrinsics, we can't evaluate their metadata arguments.
+  if (f && isDebugIntrinsic(f, kmodule)) return;
+
+  // evaluate arguments
+  std::vector< ref<Expr> > arguments;
+  arguments.reserve(numArgs);
+
+  for (unsigned j=0; j<numArgs; ++j)
+    arguments.push_back(eval(ki, argStart+j, state).value);
+
+  if (!f) {
+    // special case the call with a bitcast case
+    Value *fp = cs.getCalledValue();
+    llvm::ConstantExpr *ce = dyn_cast<llvm::ConstantExpr>(fp);
+      
+    if (ce && ce->getOpcode()==Instruction::BitCast) {
+      f = dyn_cast<Function>(ce->getOperand(0));
+      assert(f && "XXX unrecognized constant expression in call");
+      const FunctionType *fType = 
+        dyn_cast<FunctionType>(cast<PointerType>(f->getType())->getElementType());
+      const FunctionType *ceType =
+        dyn_cast<FunctionType>(cast<PointerType>(ce->getType())->getElementType());
+      assert(fType && ceType && "unable to get function type");
+
+      // XXX check result coercion
+
+      // XXX this really needs thought and validation
+      unsigned i=0;
+      for (std::vector< ref<Expr> >::iterator
+           ai = arguments.begin(), ie = arguments.end();
+           ai != ie; ++ai, i++) {
+        Expr::Width to, from;
+          
+        if (i >= fType->getNumParams()) continue;
+
+        from = (*ai)->getWidth();
+        to = Expr::getWidthForLLVMType(fType->getParamType(i));
+        if (from == to) continue;
+
+        // XXX need to check other param attrs ?
+        if (cs.paramHasAttr(i+1, llvm::Attribute::SExt)) {
+          arguments[i] = SExtExpr::create(arguments[i], to);
+        } else {
+          arguments[i] = ZExtExpr::create(arguments[i], to);
+        }
+      }
+    } else if (isa<InlineAsm>(fp)) {
+      terminateStateOnExecError(state, "inline assembly is unsupported");
+      return;
+    }
+  }
+
+  if (f) {
+    executeCall(state, ki, f, arguments);
+  } else {
+    ref<Expr> v = eval(ki, 0, state).value;
+
+    ExecutionState *free = &state;
+    bool hasInvalid = false, first = true;
+
+    /* XXX This is wasteful, no need to do a full evaluate since we
+       have already got a value. But in the end the caches should
+       handle it for us, albeit with some overhead. */
+    do {
+      ref<ConstantExpr> value;
+      bool success = solver->getValue(*free, v, value);
+      assert(success && "FIXME: Unhandled solver failure");
+      (void) success;
+      StatePair res = fork(*free, EqExpr::create(v, value), true);
+      if (res.first) {
+        uint64_t addr = value->getZExtValue();
+        if (legalFunctions.count(addr)) {
+          f = (Function*) addr;
+
+         // Don't give warning on unique resolution
+          if (res.second || !first)
+            klee_warning_once((void*) (unsigned long) addr, 
+                              "resolved symbolic function pointer to: %s",
+                              f->getName().data());
+
+          executeCall(*res.first, ki, f, arguments);
+        } else {
+          if (!hasInvalid) {
+            terminateStateOnExecError(state, "invalid function pointer");
+            hasInvalid = true;
+          }
+        }
+      }
+
+      first = false;
+      free = res.second;
+    } while (free);
+  }
+}
+
+void Executor::instCmp(ExecutionState& state, KInstruction *ki)
+{
+  CmpInst *ci = cast<CmpInst>(ki->inst);
+  ICmpInst *ii = cast<ICmpInst>(ci);
+  ICmpInst::Predicate pred;
+
+  ref<Expr> left = eval(ki, 0, state).value;
+  ref<Expr> right = eval(ki, 1, state).value;
+  ref<Expr> result;
+
+  pred = ii->getPredicate();
+  switch(pred) {
+  case ICmpInst::ICMP_EQ: result = EqExpr::create(left, right); break;
+  case ICmpInst::ICMP_NE: result = NeExpr::create(left, right); break;
+  case ICmpInst::ICMP_UGT: result = UgtExpr::create(left, right); break;
+  case ICmpInst::ICMP_UGE: result = UgeExpr::create(left, right); break;
+  case ICmpInst::ICMP_ULT: result = UltExpr::create(left, right); break;
+  case ICmpInst::ICMP_ULE: result = UleExpr::create(left, right); break;
+  case ICmpInst::ICMP_SGT: result = SgtExpr::create(left, right); break;
+  case ICmpInst::ICMP_SGE: result = SgeExpr::create(left, right); break;
+  case ICmpInst::ICMP_SLT: result = SltExpr::create(left, right); break;
+  case ICmpInst::ICMP_SLE: result = SleExpr::create(left, right); break;
+  default:
+    terminateStateOnExecError(state, "invalid ICmp predicate");
+    return;
+  }
+
+
+  bindLocal(ki, state, result);
+//  klee_message("Updated to: %s\n", states2str(states).c_str());
+  if (StringPrune) {
+    ConstantExpr* ce;
+    if (pred == ICmpInst::ICMP_EQ && 
+        (ce = dyn_cast<ConstantExpr>(right)) &&
+        ce->isZero())
+    {
+      mergeStringStates(left);
+    }
+  }
+}
+
+void Executor::instSwitch(ExecutionState& state, KInstruction *ki)
+{
+  SwitchInst *si = cast<SwitchInst>(ki->inst);
+  ref<Expr> cond = eval(ki, 0, state).value;
+  unsigned cases = si->getNumCases();
+  BasicBlock *bb = si->getParent();
+
+  std::map<BasicBlock*, ref<Expr> > targets;
+  std::vector<ref<Expr> > caseConds;
+  std::vector<BasicBlock*> caseDests;
+  StateVector resultStates;
+
+  cond = toUnique(state, cond);
+  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(cond)) {
+    // Somewhat gross to create these all the time, but fine till we
+    // switch to an internal rep.
+    const llvm::IntegerType *Ty = 
+      cast<IntegerType>(si->getCondition()->getType());
+    ConstantInt *ci = ConstantInt::get(Ty, CE->getZExtValue());
+    unsigned index = si->findCaseValue(ci);
+
+    // We need to have the same set of targets to pass to fork() in case
+    // toUnique fails/times out on replay (it's happened before...)
+    for(unsigned i = 0; i < cases; ++i) {
+      // default to infeasible target
+      std::map<BasicBlock*, ref<Expr> >::iterator it =
+        targets.insert(std::make_pair(si->getSuccessor(i),
+        ConstantExpr::alloc(0, Expr::Bool))).first;
+      // set unique target as feasible
+      if (i == index)
+        it->second = ConstantExpr::alloc(1, Expr::Bool);
+    }
+  } else {
+    ref<Expr> isDefault = ConstantExpr::alloc(1, Expr::Bool);
+    for (unsigned i=1; i<cases; ++i) {
+      ref<Expr> value = evalConstant(si->getCaseValue(i));
+      ref<Expr> match = EqExpr::create(cond, value);
+
+      // default case is the AND of all the complements
+      isDefault = AndExpr::create(isDefault, Expr::createIsZero(match));
+
+      // multiple values may lead to same BasicBlock; only fork these once
+      std::pair<std::map<BasicBlock*, ref<Expr> >::iterator,bool> ins =
+        targets.insert(std::make_pair(si->getSuccessor(i), match));
+      if (!ins.second)
+        ins.first->second = OrExpr::create(match, ins.first->second);
+    }
+    // include default case
+    targets.insert(std::make_pair(si->getSuccessor(0), isDefault));
+  }
+
+  // prepare vectors for fork call
+  caseConds.resize(targets.size());
+  caseDests.resize(targets.size());
+  unsigned index = 0;
+  for (std::map<BasicBlock*, ref<Expr> >::iterator mit = targets.begin();
+       mit != targets.end(); ++mit) {
+    caseDests[index] = (*mit).first;
+    caseConds[index] = (*mit).second;
+    index++;
+  }
+
+  resultStates = fork(state, caseConds.size(), caseConds.data(), false);
+  assert(resultStates.size() == caseConds.size());
+
+  for(index = 0; index < resultStates.size(); index++) {
+    ExecutionState *es = resultStates[index];
+    if (!es) continue;
+
+    BasicBlock *destBlock = caseDests[index];
+    KFunction *kf = state.stack.back().kf;
+    unsigned entry = kf->basicBlockEntry[destBlock];
+
+    if (es->isCompactForm && kf->trackCoverage &&
+        theStatisticManager->getIndexedValue(stats::uncoveredInstructions,
+        kf->instructions[entry]->info->id)) {
+      ExecutionState *newState = es->reconstitute(*initialStateCopy);
+//          ExecutorThread *thread = ExecutorThread::getThread();
+      replaceStateImmForked(es, newState);
+      es = newState;
+    }
+
+    if (!es->isCompactForm)
+      transferToBasicBlock(destBlock, bb, *es);
+    
+    // Update coverage stats
+    if (kf->trackCoverage &&
+        theStatisticManager->getIndexedValue(stats::uncoveredInstructions,
+        kf->instructions[entry]->info->id)) {
+      es->coveredNew = true;
+      es->instsSinceCovNew = 1;
+    }
+  }
+}
+
 void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
   Instruction *i = ki->inst;
   switch (i->getOpcode()) {
     // Control flow
-  case Instruction::Ret: {
-    ReturnInst *ri = cast<ReturnInst>(i);
-    KInstIterator kcaller = state.stack.back().caller;
-    Instruction *caller = kcaller ? kcaller->inst : 0;
-    bool isVoidReturn = (ri->getNumOperands() == 0);
-    ref<Expr> result = ConstantExpr::alloc(0, Expr::Bool);
+  case Instruction::Ret: instRet(state, ki); break;
 
-    if (WriteTraces) {
-      state.exeTraceMgr.addEvent(new FunctionReturnTraceEvent(state, ki));
-    }
-    
-    if (!isVoidReturn) {
-      result = eval(ki, 0, state).value;
-    }
-    
-    if (state.stack.size() <= 1) {
-      assert(!caller && "caller set on initial stack frame");
-      terminateStateOnExit(state);
-    } else {
-      state.popFrame();
-
-      if (statsTracker)
-        statsTracker->framePopped(state);
-
-      if (InvokeInst *ii = dyn_cast<InvokeInst>(caller)) {
-        transferToBasicBlock(ii->getNormalDest(), caller->getParent(), state);
-      } else {
-        state.pc = kcaller;
-        ++state.pc;
-      }
-
-      if (!isVoidReturn) {
-        const Type *t = caller->getType();
-        if (t != Type::getVoidTy(getGlobalContext())) {
-          // may need to do coercion due to bitcasts
-          Expr::Width from = result->getWidth();
-          Expr::Width to = Expr::getWidthForLLVMType(t);
-            
-          if (from != to) {
-            CallSite cs = (isa<InvokeInst>(caller) ? CallSite(cast<InvokeInst>(caller)) : 
-                           CallSite(cast<CallInst>(caller)));
-
-            // XXX need to check other param attrs ?
-            if (cs.paramHasAttr(0, llvm::Attribute::SExt)) {
-              result = SExtExpr::create(result, to);
-            } else {
-              result = ZExtExpr::create(result, to);
-            }
-          }
-
-          bindLocal(kcaller, state, result);
-        }
-      } else {
-        // We check that the return value has no users instead of
-        // checking the type, since C defaults to returning int for
-        // undeclared functions.
-        if (!caller->use_empty()) {
-          terminateStateOnExecError(state, "return void when caller expected a result");
-        }
-      }
-    }      
-    break;
-  }
   case Instruction::Unwind: {
     for (;;) {
       KInstruction *kcaller = state.stack.back().caller;
@@ -1590,175 +1967,8 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     }
     break;
   }
-  case Instruction::Br: {
-    BranchInst *bi = cast<BranchInst>(i);
-    if (bi->isUnconditional()) {
-      transferToBasicBlock(bi->getSuccessor(0), bi->getParent(), state);
-    } else {
-      // FIXME: Find a way that we don't have this hidden dependency.
-      assert(bi->getCondition() == bi->getOperand(0) &&
-             "Wrong operand index!");
-      const Cell &cond = eval(ki, 0, state);
-      StatePair branches = fork(state, cond.value, false);
-
-      if (WriteTraces) {
-        bool isTwoWay = (branches.first && branches.second);
-
-        if (branches.first) {
-          branches.first->exeTraceMgr.addEvent(
-            new BranchTraceEvent(state, ki, true, isTwoWay));
-        }
-
-        if (branches.second) {
-          branches.second->exeTraceMgr.addEvent(
-            new BranchTraceEvent(state, ki, false, isTwoWay));
-        }
-      }
-
-      KFunction *kf = state.stack.back().kf;
-//      ExecutorThread *thread = ExecutorThread::getThread();
-
-      // NOTE: There is a hidden dependency here, markBranchVisited
-      // requires that we still be in the context of the branch
-      // instruction (it reuses its statistic id). Should be cleaned
-      // up with convenient instruction specific data.
-      if (statsTracker && state.stack.back().kf->trackCoverage)
-        statsTracker->markBranchVisited(branches.first, branches.second);
-
-      if (branches.first) {
-        // reconstitute the state if it was forked into compact form but will
-        // immediately cover a new instruction
-        // !!! this can be done more efficiently by simply forking a regular
-        // state inside fork() but that will change the fork() semantics
-        if (branches.first->isCompactForm && kf->trackCoverage &&
-            theStatisticManager->getIndexedValue(stats::uncoveredInstructions,
-            kf->instructions[kf->basicBlockEntry[bi->getSuccessor(0)]]->info->
-            id)) {
-          ExecutionState *newState = branches.first->
-            reconstitute(*initialStateCopy);
-          replaceStateImmForked(branches.first, newState);
-          branches.first = newState;
-        }
-        if (!branches.first->isCompactForm)
-          transferToBasicBlock(bi->getSuccessor(0), bi->getParent(),
-            *branches.first);
-      }
-
-      if (branches.second) {
-        // reconstitute the state if it was forked into compact form but will
-        // immediately cover a new instruction
-        // !!! this can be done more efficiently by simply forking a regular
-        // state inside fork() but that will change the fork() semantics
-        if (branches.second->isCompactForm && kf->trackCoverage &&
-            theStatisticManager->getIndexedValue(stats::uncoveredInstructions,
-            kf->instructions[kf->basicBlockEntry[bi->getSuccessor(1)]]->info->
-            id)) {
-          ExecutionState *newState = branches.second->
-            reconstitute(*initialStateCopy);
-          replaceStateImmForked(branches.second, newState);
-          branches.second = newState;
-        }
-        if (!branches.second->isCompactForm)
-          transferToBasicBlock(bi->getSuccessor(1), bi->getParent(),
-            *branches.second);
-      }
-    }
-    break;
-  }
-  case Instruction::Switch: {
-    SwitchInst *si = cast<SwitchInst>(i);
-    ref<Expr> cond = eval(ki, 0, state).value;
-    unsigned cases = si->getNumCases();
-    BasicBlock *bb = si->getParent();
-
-    std::map<BasicBlock*, ref<Expr> > targets;
-    std::vector<ref<Expr> > caseConds;
-    std::vector<BasicBlock*> caseDests;
-    StateVector resultStates;
-
-    cond = toUnique(state, cond);
-    if (ConstantExpr *CE = dyn_cast<ConstantExpr>(cond)) {
-      // Somewhat gross to create these all the time, but fine till we
-      // switch to an internal rep.
-      const llvm::IntegerType *Ty = 
-        cast<IntegerType>(si->getCondition()->getType());
-      ConstantInt *ci = ConstantInt::get(Ty, CE->getZExtValue());
-      unsigned index = si->findCaseValue(ci);
-
-      // We need to have the same set of targets to pass to fork() in case
-      // toUnique fails/times out on replay (it's happened before...)
-      for(unsigned i = 0; i < cases; ++i) {
-        // default to infeasible target
-        std::map<BasicBlock*, ref<Expr> >::iterator it =
-          targets.insert(std::make_pair(si->getSuccessor(i),
-          ConstantExpr::alloc(0, Expr::Bool))).first;
-        // set unique target as feasible
-        if (i == index)
-          it->second = ConstantExpr::alloc(1, Expr::Bool);
-      }
-    } else {
-      ref<Expr> isDefault = ConstantExpr::alloc(1, Expr::Bool);
-      for (unsigned i=1; i<cases; ++i) {
-        ref<Expr> value = evalConstant(si->getCaseValue(i));
-        ref<Expr> match = EqExpr::create(cond, value);
-
-        // default case is the AND of all the complements
-        isDefault = AndExpr::create(isDefault, Expr::createIsZero(match));
-
-        // multiple values may lead to same BasicBlock; only fork these once
-        std::pair<std::map<BasicBlock*, ref<Expr> >::iterator,bool> ins =
-          targets.insert(std::make_pair(si->getSuccessor(i), match));
-        if (!ins.second)
-          ins.first->second = OrExpr::create(match, ins.first->second);
-      }
-      // include default case
-      targets.insert(std::make_pair(si->getSuccessor(0), isDefault));
-    }
-
-    // prepare vectors for fork call
-    caseConds.resize(targets.size());
-    caseDests.resize(targets.size());
-    unsigned index = 0;
-    for (std::map<BasicBlock*, ref<Expr> >::iterator mit = targets.begin();
-         mit != targets.end(); ++mit) {
-      caseDests[index] = (*mit).first;
-      caseConds[index] = (*mit).second;
-      index++;
-    }
-
-    resultStates = fork(state, caseConds.size(), caseConds.data(), false);
-    assert(resultStates.size() == caseConds.size());
-
-    for(index = 0; index < resultStates.size(); index++) {
-      ExecutionState *es = resultStates[index];
-      if (es) {
-        BasicBlock *destBlock = caseDests[index];
-        KFunction *kf = state.stack.back().kf;
-        unsigned entry = kf->basicBlockEntry[destBlock];
-
-        if (es->isCompactForm && kf->trackCoverage &&
-            theStatisticManager->getIndexedValue(stats::uncoveredInstructions,
-            kf->instructions[entry]->info->id)) {
-          ExecutionState *newState = es->reconstitute(*initialStateCopy);
-//          ExecutorThread *thread = ExecutorThread::getThread();
-          replaceStateImmForked(es, newState);
-          es = newState;
-        }
-
-        if (!es->isCompactForm)
-          transferToBasicBlock(destBlock, bb, *es);
-        
-        // Update coverage stats
-        if (kf->trackCoverage &&
-            theStatisticManager->getIndexedValue(stats::uncoveredInstructions,
-            kf->instructions[entry]->info->id)) {
-          es->coveredNew = true;
-          es->instsSinceCovNew = 1;
-        }
-      }
-    }
-    break;
- }
+  case Instruction::Br: instBranch(state, ki); break;
+  case Instruction::Switch: instSwitch(state, ki); break;
   case Instruction::Unreachable:
     // Note that this is not necessarily an internal bug, llvm will
     // generate unreachable instructions in cases where it knows the
@@ -1768,118 +1978,9 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     break;
 
   case Instruction::Invoke:
-  case Instruction::Call: {
-    CallSite cs;
-    unsigned argStart;
-    if (i->getOpcode()==Instruction::Call) {
-      cs = CallSite(cast<CallInst>(i));
-      argStart = 1;
-    } else {
-      cs = CallSite(cast<InvokeInst>(i));
-      argStart = 3;
-    }
-
-    unsigned numArgs = cs.arg_size();
-    Function *f = getCalledFunction(cs, state);
-
-    // Skip debug intrinsics, we can't evaluate their metadata arguments.
-    if (f && isDebugIntrinsic(f, kmodule))
-      break;
-
-    // evaluate arguments
-    std::vector< ref<Expr> > arguments;
-    arguments.reserve(numArgs);
-
-    for (unsigned j=0; j<numArgs; ++j)
-      arguments.push_back(eval(ki, argStart+j, state).value);
-
-    if (!f) {
-      // special case the call with a bitcast case
-      Value *fp = cs.getCalledValue();
-      llvm::ConstantExpr *ce = dyn_cast<llvm::ConstantExpr>(fp);
-        
-      if (ce && ce->getOpcode()==Instruction::BitCast) {
-        f = dyn_cast<Function>(ce->getOperand(0));
-        assert(f && "XXX unrecognized constant expression in call");
-        const FunctionType *fType = 
-          dyn_cast<FunctionType>(cast<PointerType>(f->getType())->getElementType());
-        const FunctionType *ceType =
-          dyn_cast<FunctionType>(cast<PointerType>(ce->getType())->getElementType());
-        assert(fType && ceType && "unable to get function type");
-
-        // XXX check result coercion
-
-        // XXX this really needs thought and validation
-        unsigned i=0;
-        for (std::vector< ref<Expr> >::iterator
-               ai = arguments.begin(), ie = arguments.end();
-             ai != ie; ++ai) {
-          Expr::Width to, from = (*ai)->getWidth();
-            
-          if (i<fType->getNumParams()) {
-            to = Expr::getWidthForLLVMType(fType->getParamType(i));
-
-            if (from != to) {
-              // XXX need to check other param attrs ?
-              if (cs.paramHasAttr(i+1, llvm::Attribute::SExt)) {
-                arguments[i] = SExtExpr::create(arguments[i], to);
-              } else {
-                arguments[i] = ZExtExpr::create(arguments[i], to);
-              }
-            }
-          }
-            
-          i++;
-        }
-      } else if (isa<InlineAsm>(fp)) {
-        terminateStateOnExecError(state, "inline assembly is unsupported");
-        break;
-      }
-    }
-
-    if (f) {
-      executeCall(state, ki, f, arguments);
-    } else {
-      ref<Expr> v = eval(ki, 0, state).value;
-
-      ExecutionState *free = &state;
-      bool hasInvalid = false, first = true;
-
-      /* XXX This is wasteful, no need to do a full evaluate since we
-         have already got a value. But in the end the caches should
-         handle it for us, albeit with some overhead. */
-      do {
-        ref<ConstantExpr> value;
-        bool success = solver->getValue(*free, v, value);
-        assert(success && "FIXME: Unhandled solver failure");
-        (void) success;
-        StatePair res = fork(*free, EqExpr::create(v, value), true);
-        if (res.first) {
-          uint64_t addr = value->getZExtValue();
-          if (legalFunctions.count(addr)) {
-            f = (Function*) addr;
-
-           // Don't give warning on unique resolution
-            if (res.second || !first)
-              klee_warning_once((void*) (unsigned long) addr, 
-                                "resolved symbolic function pointer to: %s",
-                                f->getName().data());
-
-            executeCall(*res.first, ki, f, arguments);
-          } else {
-            if (!hasInvalid) {
-              terminateStateOnExecError(state, "invalid function pointer");
-              hasInvalid = true;
-            }
-          }
-        }
-
-        first = false;
-        free = res.second;
-      } while (free);
-    }
+  case Instruction::Call:
+    instCall(state, ki);
     break;
-  }
   case Instruction::PHI: {
     ref<Expr> result = eval(ki, state.incomingBBIndex * 2, state).value;
     bindLocal(ki, state, result);
@@ -1903,201 +2004,31 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     terminateStateOnExecError(state, "unexpected VAArg instruction");
     break;
 
-    // Arithmetic / logical
-
-  case Instruction::Add: {
-    ref<Expr> left = eval(ki, 0, state).value;
-    ref<Expr> right = eval(ki, 1, state).value;
-    bindLocal(ki, state, AddExpr::create(left, right));
-    break;
+  // Arithmetic / logical
+#define INST_ARITHOP(x,y)                             \
+  case Instruction::x : {                             \
+    ref<Expr> left = eval(ki, 0, state).value;        \
+    ref<Expr> right = eval(ki, 1, state).value;       \
+    bindLocal(ki, state, y::create(left, right));     \
+    break; \
   }
 
-  case Instruction::Sub: {
-    ref<Expr> left = eval(ki, 0, state).value;
-    ref<Expr> right = eval(ki, 1, state).value;
-    bindLocal(ki, state, SubExpr::create(left, right));
-    break;
-  }
- 
-  case Instruction::Mul: {
-    ref<Expr> left = eval(ki, 0, state).value;
-    ref<Expr> right = eval(ki, 1, state).value;
-    bindLocal(ki, state, MulExpr::create(left, right));
-    break;
-  }
+  INST_ARITHOP(Add,AddExpr)
+  INST_ARITHOP(Sub,SubExpr)
+  INST_ARITHOP(Mul,MulExpr)
+  INST_ARITHOP(UDiv,UDivExpr)
+  INST_ARITHOP(SDiv,SDivExpr)
+  INST_ARITHOP(URem,URemExpr)
+  INST_ARITHOP(SRem,SRemExpr)
+  INST_ARITHOP(And,AndExpr)
+  INST_ARITHOP(Or,OrExpr)
+  INST_ARITHOP(Xor,XorExpr)
+  INST_ARITHOP(Shl,ShlExpr)
+  INST_ARITHOP(LShr,LShrExpr)
+  INST_ARITHOP(AShr,AShrExpr)
 
-  case Instruction::UDiv: {
-    ref<Expr> left = eval(ki, 0, state).value;
-    ref<Expr> right = eval(ki, 1, state).value;
-    ref<Expr> result = UDivExpr::create(left, right);
-    bindLocal(ki, state, result);
-    break;
-  }
 
-  case Instruction::SDiv: {
-    ref<Expr> left = eval(ki, 0, state).value;
-    ref<Expr> right = eval(ki, 1, state).value;
-    ref<Expr> result = SDivExpr::create(left, right);
-    bindLocal(ki, state, result);
-    break;
-  }
-
-  case Instruction::URem: {
-    ref<Expr> left = eval(ki, 0, state).value;
-    ref<Expr> right = eval(ki, 1, state).value;
-    ref<Expr> result = URemExpr::create(left, right);
-    bindLocal(ki, state, result);
-    break;
-  }
- 
-  case Instruction::SRem: {
-    ref<Expr> left = eval(ki, 0, state).value;
-    ref<Expr> right = eval(ki, 1, state).value;
-    ref<Expr> result = SRemExpr::create(left, right);
-    bindLocal(ki, state, result);
-    break;
-  }
-
-  case Instruction::And: {
-    ref<Expr> left = eval(ki, 0, state).value;
-    ref<Expr> right = eval(ki, 1, state).value;
-    ref<Expr> result = AndExpr::create(left, right);
-    bindLocal(ki, state, result);
-    break;
-  }
-
-  case Instruction::Or: {
-    ref<Expr> left = eval(ki, 0, state).value;
-    ref<Expr> right = eval(ki, 1, state).value;
-    ref<Expr> result = OrExpr::create(left, right);
-    bindLocal(ki, state, result);
-    break;
-  }
-
-  case Instruction::Xor: {
-    ref<Expr> left = eval(ki, 0, state).value;
-    ref<Expr> right = eval(ki, 1, state).value;
-    ref<Expr> result = XorExpr::create(left, right);
-    bindLocal(ki, state, result);
-    break;
-  }
-
-  case Instruction::Shl: {
-    ref<Expr> left = eval(ki, 0, state).value;
-    ref<Expr> right = eval(ki, 1, state).value;
-    ref<Expr> result = ShlExpr::create(left, right);
-    bindLocal(ki, state, result);
-    break;
-  }
-
-  case Instruction::LShr: {
-    ref<Expr> left = eval(ki, 0, state).value;
-    ref<Expr> right = eval(ki, 1, state).value;
-    ref<Expr> result = LShrExpr::create(left, right);
-    bindLocal(ki, state, result);
-    break;
-  }
-
-  case Instruction::AShr: {
-    ref<Expr> left = eval(ki, 0, state).value;
-    ref<Expr> right = eval(ki, 1, state).value;
-    ref<Expr> result = AShrExpr::create(left, right);
-    bindLocal(ki, state, result);
-    break;
-  }
-
-    // Compare
-
-  case Instruction::ICmp: {
-    CmpInst *ci = cast<CmpInst>(i);
-    ICmpInst *ii = cast<ICmpInst>(ci);
- 
-    switch(ii->getPredicate()) {
-    case ICmpInst::ICMP_EQ: {
-      ref<Expr> left = eval(ki, 0, state).value;
-      ref<Expr> right = eval(ki, 1, state).value;
-      ref<Expr> result = EqExpr::create(left, right);
-      bindLocal(ki, state, result);
-      break;
-    }
-
-    case ICmpInst::ICMP_NE: {
-      ref<Expr> left = eval(ki, 0, state).value;
-      ref<Expr> right = eval(ki, 1, state).value;
-      ref<Expr> result = NeExpr::create(left, right);
-      bindLocal(ki, state, result);
-      break;
-    }
-
-    case ICmpInst::ICMP_UGT: {
-      ref<Expr> left = eval(ki, 0, state).value;
-      ref<Expr> right = eval(ki, 1, state).value;
-      ref<Expr> result = UgtExpr::create(left, right);
-      bindLocal(ki, state,result);
-      break;
-    }
-
-    case ICmpInst::ICMP_UGE: {
-      ref<Expr> left = eval(ki, 0, state).value;
-      ref<Expr> right = eval(ki, 1, state).value;
-      ref<Expr> result = UgeExpr::create(left, right);
-      bindLocal(ki, state, result);
-      break;
-    }
-
-    case ICmpInst::ICMP_ULT: {
-      ref<Expr> left = eval(ki, 0, state).value;
-      ref<Expr> right = eval(ki, 1, state).value;
-      ref<Expr> result = UltExpr::create(left, right);
-      bindLocal(ki, state, result);
-      break;
-    }
-
-    case ICmpInst::ICMP_ULE: {
-      ref<Expr> left = eval(ki, 0, state).value;
-      ref<Expr> right = eval(ki, 1, state).value;
-      ref<Expr> result = UleExpr::create(left, right);
-      bindLocal(ki, state, result);
-      break;
-    }
-
-    case ICmpInst::ICMP_SGT: {
-      ref<Expr> left = eval(ki, 0, state).value;
-      ref<Expr> right = eval(ki, 1, state).value;
-      ref<Expr> result = SgtExpr::create(left, right);
-      bindLocal(ki, state, result);
-      break;
-    }
-
-    case ICmpInst::ICMP_SGE: {
-      ref<Expr> left = eval(ki, 0, state).value;
-      ref<Expr> right = eval(ki, 1, state).value;
-      ref<Expr> result = SgeExpr::create(left, right);
-      bindLocal(ki, state, result);
-      break;
-    }
-
-    case ICmpInst::ICMP_SLT: {
-      ref<Expr> left = eval(ki, 0, state).value;
-      ref<Expr> right = eval(ki, 1, state).value;
-      ref<Expr> result = SltExpr::create(left, right);
-      bindLocal(ki, state, result);
-      break;
-    }
-
-    case ICmpInst::ICMP_SLE: {
-      ref<Expr> left = eval(ki, 0, state).value;
-      ref<Expr> right = eval(ki, 1, state).value;
-      ref<Expr> result = SleExpr::create(left, right);
-      bindLocal(ki, state, result);
-      break;
-    }
-
-    default:
-      terminateStateOnExecError(state, "invalid ICmp predicate");
-    }
-    break;
-  }
+  case Instruction::ICmp: instCmp(state, ki); break;
  
     // Memory instructions...
   case Instruction::Alloca:
@@ -2402,46 +2333,38 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
       // Ordered comparisons return false if either operand is NaN.  Unordered
       // comparisons return true if either operand is NaN.
     case FCmpInst::FCMP_UEQ:
-      if (CmpRes == APFloat::cmpUnordered) {
-        Result = true;
-        break;
-      }
+      Result = CmpRes == APFloat::cmpUnordered;
+      break;
     case FCmpInst::FCMP_OEQ:
       Result = CmpRes == APFloat::cmpEqual;
       break;
 
     case FCmpInst::FCMP_UGT:
-      if (CmpRes == APFloat::cmpUnordered) {
-        Result = true;
-        break;
-      }
+      Result = CmpRes == APFloat::cmpUnordered;
+      break;
+
     case FCmpInst::FCMP_OGT:
       Result = CmpRes == APFloat::cmpGreaterThan;
       break;
 
     case FCmpInst::FCMP_UGE:
-      if (CmpRes == APFloat::cmpUnordered) {
-        Result = true;
-        break;
-      }
+      Result = CmpRes == APFloat::cmpUnordered;
+      break;
     case FCmpInst::FCMP_OGE:
       Result = CmpRes == APFloat::cmpGreaterThan || CmpRes == APFloat::cmpEqual;
       break;
 
     case FCmpInst::FCMP_ULT:
-      if (CmpRes == APFloat::cmpUnordered) {
-        Result = true;
-        break;
-      }
+      Result = CmpRes == APFloat::cmpUnordered;
+      break;
     case FCmpInst::FCMP_OLT:
       Result = CmpRes == APFloat::cmpLessThan;
       break;
 
     case FCmpInst::FCMP_ULE:
-      if (CmpRes == APFloat::cmpUnordered) {
-        Result = true;
-        break;
-      }
+      Result = CmpRes == APFloat::cmpUnordered;
+      break;
+
     case FCmpInst::FCMP_OLE:
       Result = CmpRes == APFloat::cmpLessThan || CmpRes == APFloat::cmpEqual;
       break;
@@ -2482,11 +2405,11 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
   }
 }
 
-void Executor::removeStateInternal(ExecutionState* es, ExecutionState** root_to_be_removed) {
-  std::map<ExecutionState*, std::vector<SeedInfo> >::iterator it3 =
-    seedMap.find(es);
-  if (it3 != seedMap.end())
-    seedMap.erase(it3);
+void Executor::removeStateInternal(
+  ExecutionState* es, ExecutionState** root_to_be_removed)
+{
+  std::map<ExecutionState*, std::vector<SeedInfo> >::iterator it3 = seedMap.find(es);
+  if (it3 != seedMap.end()) seedMap.erase(it3);
 
   if (es->ptreeNode == processTree->root) {
     assert(root_to_be_removed);
@@ -2494,8 +2417,7 @@ void Executor::removeStateInternal(ExecutionState* es, ExecutionState** root_to_
   }
   else {
     assert(es->ptreeNode->data == es);
-    std::map<ExecutionState*, ExecutionState*>::iterator it4 =
-      replacedStates.find(es);
+    std::map<ExecutionState*, ExecutionState*>::iterator it4 = replacedStates.find(es);
     if (it4 == replacedStates.end())
       processTree->remove(es->ptreeNode);
     else {
@@ -2506,14 +2428,182 @@ void Executor::removeStateInternal(ExecutionState* es, ExecutionState** root_to_
 
       processTree->update(ns->ptreeNode, PTree::WeightCompact,
         !ns->isCompactForm);
-    //processTree->update(ns->ptreeNode, PTree::WeightRunning,
-    //  !ns->isRunning);
     }
     delete es;
   }
 }
 
-void Executor::updateStates(ExecutionState *current) {
+#define MERGE_STRMAX  1024
+/* want expressions of form
+ * (Eq <constant> (Read w8 <constant <= idx> arrName)) */
+bool Executor::isStrcmpMatch(
+  const Expr  *expr,
+  unsigned int idx, const std::string& arrName,
+  unsigned int& re_idx, unsigned int& cmp_val)
+{
+  const EqExpr  *eq_expr;
+  const ReadExpr *re;
+  const ConstantExpr *idx_expr, *cmp_expr;
+  uint64_t  arr_read_idx;
+
+  if (!(eq_expr = dyn_cast<const EqExpr>(expr))) return false;
+  if (!(cmp_expr = dyn_cast<const ConstantExpr>(eq_expr->left))) return false;
+  if (!(re = dyn_cast<const ReadExpr>(eq_expr->right))) return false;
+  if (!(idx_expr = dyn_cast<const ConstantExpr>(re->index))) return false;
+
+  arr_read_idx = idx_expr->getLimitedValue(MERGE_STRMAX);
+  if (arr_read_idx > idx) return false; /* out of bounds constraint */
+  if (re->updates.root->name != arrName) return false;
+
+  re_idx = arr_read_idx;
+  cmp_val = cmp_expr->getLimitedValue(0xffff);  /* 8 bit cmp, should not OF */
+
+  return true;
+}
+
+void Executor::getArrayStates(
+  unsigned int idx, const std::string& arrName, ExeStateSet& ss)
+{
+  for (ExeStateSet::iterator it = states.begin(), ite = states.end();
+   it != ite; ++it)
+  {
+    ExecutionState* s = *it;
+    ConstraintManager* cons_man = &s->constraints;
+    std::set<unsigned int>  indices;
+
+    if (s->isCompactForm) continue;
+
+    for (ConstraintManager::constraint_iterator 
+      it = cons_man->begin(), ite = cons_man->end(); 
+      it != ite; ++it)
+    {
+      unsigned int re_idx, cmp_val;
+      if (isStrcmpMatch((*it).get(), idx, arrName, re_idx, cmp_val))
+        ss.insert(s);
+    }
+  }
+}
+
+bool Executor::hasScanStringState(
+  ExeStateSet& ss,
+  unsigned int idx, const std::string& arrName)
+{
+  for (ExeStateSet::iterator it = ss.begin(), ite = ss.end();
+    it != ite; ++it)
+  {
+    ExecutionState* s = *it;
+    ConstraintManager* cons_man = &s->constraints;
+    std::set<unsigned int>  indices;
+
+    if (s->isCompactForm) continue;
+
+    for (ConstraintManager::constraint_iterator 
+      it = cons_man->begin(), ite = cons_man->end(); 
+      it != ite; ++it)
+    {
+      unsigned int re_idx, cmp_val;
+      if (!isStrcmpMatch((*it).get(), idx, arrName, re_idx, cmp_val)) continue;
+      /* TODO: cmp_val should be permitted to be values besides zero */
+      if (re_idx == idx  && cmp_val != 0 ) break; /* no null terminal */
+      indices.insert(re_idx);
+    }
+
+    if (indices.size() == (idx+1)) return true;
+  }
+  return false;
+}
+
+void Executor::removeStringStates(
+  ExeStateSet& ss,
+  unsigned int idx, const std::string& arrName)
+{
+  for (ExeStateSet::iterator it = ss.begin(), ite = ss.end();
+    it != ite; ++it)
+  {
+    ExecutionState* s = *it;
+    ConstraintManager* cons_man = &s->constraints;
+    std::set<unsigned int>  indices;
+    unsigned int run_length;
+
+    if (s->isCompactForm) continue;
+
+    for (ConstraintManager::constraint_iterator 
+      it = cons_man->begin(), ite = cons_man->end(); 
+      it != ite; ++it)
+    {
+      unsigned int re_arr_idx, cmp_val;
+      if (!isStrcmpMatch((*it).get(), idx, arrName, re_arr_idx, cmp_val))
+        continue;
+      indices.insert(re_arr_idx);
+    }
+
+    /* verify that the whole thing is filled out */
+    for (run_length = 0; run_length < indices.size(); run_length++) {
+      if (indices.count(run_length) == 0) break;
+    }
+
+    /* there's a gap. don't bother */
+    if (run_length < indices.size())  continue;
+    /* if there's no elements, don't bother */
+    if (run_length == 0) continue;
+
+    /* search again, want to find (Eq false (Eq n (Read w8 run_length))) */
+    for (ConstraintManager::constraint_iterator 
+      it = cons_man->begin(), ite = cons_man->end(); 
+      it != ite; ++it)
+    {
+      const EqExpr  *eq_expr_outer;
+      const Expr* expr_inner;
+      unsigned int re_arr_idx, cmp_val;
+      if (!(eq_expr_outer = dyn_cast<const EqExpr>(*it))) continue;
+      expr_inner = (eq_expr_outer->right).get();
+      if (!isStrcmpMatch(expr_inner, idx, arrName, re_arr_idx, cmp_val))
+        continue;
+      /* remove if the tail is a false comparison, but keep 
+       * anything that tests the end of the string */
+      if (re_arr_idx == run_length && re_arr_idx != idx) {
+        removedStates.insert(s);
+        break;
+      }
+    }
+  }
+
+}
+
+/* FIXME this is really slow. */
+void Executor::mergeStringStates(ref<Expr>& readExpr)
+{
+  const ReadExpr      *re;
+  const ConstantExpr  *ce_idx;
+  std::string   arr_name;
+  uint64_t      idx;
+
+  /* Make sure incoming comparison has a symbolic byte read */
+  if (!(re = dyn_cast<const ReadExpr>(readExpr))) return;
+
+  /* Only handle constant indices for now. Use solver for general expressions. */
+  ce_idx = dyn_cast<const ConstantExpr>(re->index);
+  if (ce_idx == NULL) return;
+  
+  /* Only bother with strings with more than one character */
+  idx = ce_idx->getLimitedValue(MERGE_STRMAX);
+  if (idx <= 1 || idx == MERGE_STRMAX) return;
+  
+  arr_name = re->updates.root->name;
+
+  ExeStateSet ss;
+  getArrayStates(idx, arr_name, ss);
+
+  /* kekekekeke */
+  /* find expressions of form (Eq x (Read w8 y arr_name)) */
+  if (hasScanStringState(ss, idx, arr_name)) {
+    removeStringStates(ss, idx, arr_name);
+  }
+
+}
+
+void Executor::updateStates(ExecutionState *current)
+{
   if (searcher) {
     searcher->update(current, addedStates, removedStates, ignoreStates, unignoreStates);
     ignoreStates.clear();
@@ -2524,17 +2614,18 @@ void Executor::updateStates(ExecutionState *current) {
   }
 
   states.insert(addedStates.begin(), addedStates.end());
-  nonCompactStateCount += std::count_if(/*thread->*/addedStates.begin(),
-    /*thread->*/addedStates.end(),
+  nonCompactStateCount += std::count_if(
+    addedStates.begin(),
+    addedStates.end(),
     std::mem_fun(&ExecutionState::isNonCompactForm_f));
   addedStates.clear();
 
   ExecutionState* root_to_be_removed = 0;
-  for (std::set<ExecutionState*>::iterator it = removedStates.begin();
+  for (ExeStateSet::iterator it = removedStates.begin();
        it != removedStates.end(); ++it) {
     ExecutionState *es = *it;
 
-    std::set<ExecutionState*>::iterator it2 = states.find(es);
+    ExeStateSet::iterator it2 = states.find(es);
     assert(it2!=states.end());
     states.erase(it2);
 
@@ -2543,14 +2634,14 @@ void Executor::updateStates(ExecutionState *current) {
 
     removeStateInternal(es, &root_to_be_removed);
   }
+
   if (ExecutionState* es = root_to_be_removed) {
     std::map<ExecutionState*, ExecutionState*>::iterator it4 =
       replacedStates.find(es);
     if (it4 == replacedStates.end()) {
       delete processTree->root->data;
       processTree->root->data = 0;
-    }
-    else {
+    } else {
       ExecutionState* ns = it4->second;
       // replace the placeholder state in the process tree
       ns->ptreeNode = es->ptreeNode;
@@ -2558,8 +2649,6 @@ void Executor::updateStates(ExecutionState *current) {
 
       processTree->update(ns->ptreeNode, PTree::WeightCompact,
         !ns->isCompactForm);
-//      processTree->update(ns->ptreeNode, PTree::WeightRunning,
-//        !ns->isRunning);
 
       delete es;
     }
@@ -2567,8 +2656,9 @@ void Executor::updateStates(ExecutionState *current) {
   removedStates.clear();
   replacedStates.clear();
 
-  if (nonCompactStateCount == 0 && !states.empty())
-    onlyNonCompact = false;
+  if (nonCompactStateCount == 0 && !states.empty()) onlyNonCompact = false;
+
+//  klee_message("Updated to: %s\n", states2str(states).c_str());
 }
 
 void Executor::bindInstructionConstants(KInstruction *KI) {
@@ -2586,8 +2676,8 @@ void Executor::bindInstructionConstants(KInstruction *KI) {
       const StructLayout *sl = kmodule->targetData->getStructLayout(st);
       const ConstantInt *ci = cast<ConstantInt>(ii.getOperand());
       uint64_t addend = sl->getElementOffset((unsigned) ci->getZExtValue());
-      constantOffset = constantOffset->Add(ConstantExpr::alloc(addend,
-                                                               Context::get().getPointerWidth()));
+      constantOffset = constantOffset->Add(
+        ConstantExpr::alloc(addend, Context::get().getPointerWidth()));
     } else {
       const SequentialType *st = cast<SequentialType>(*ii);
       uint64_t elementSize = 
@@ -2624,7 +2714,172 @@ void Executor::bindModuleConstants() {
   }
 }
 
-std::set<Function*> funcs;
+void Executor::killStates(ExecutionState* &state)
+{
+  // just guess at how many to kill
+  unsigned numStates = states.size();
+  unsigned mbs = sys::Process::GetTotalMemoryUsage() >> 20;
+  unsigned toKill = std::max(1U, numStates - numStates * MaxMemory / mbs);
+  klee_warning("killing %u states (over memory cap)", toKill);
+
+  std::vector<ExecutionState*> arr(states.begin(), states.end());
+
+  // use priority ordering for selecting which states to kill
+  std::partial_sort(
+    arr.begin(), arr.begin() + toKill, arr.end(), KillOrCompactOrdering());
+  for (unsigned i = 0; i < toKill; ++i) {
+    terminateStateEarly(*arr[i], "memory limit");
+    if (state == arr[i]) state = NULL;
+    if ((i % 101) == 100) klee_message("Killed %d states...", i);
+  }
+  klee_message("Killed everything");
+}
+
+void Executor::compactStates(ExecutionState* &state)
+{
+  // compact instead of killing
+  std::vector<ExecutionState*> arr(nonCompactStateCount);
+  unsigned i = 0;
+  for (ExeStateSet::iterator si = states.begin();
+       si != states.end(); ++si) {
+    if((*si)->isCompactForm) continue;
+    arr[i++] = *si;
+  }
+
+  unsigned numStates = states.size();
+  unsigned s = nonCompactStateCount +
+    ((numStates - nonCompactStateCount) / 16); // a rough measure
+  unsigned mbs = sys::Process::GetTotalMemoryUsage() >> 20;
+  unsigned toCompact = std::max(1U, s - s * MaxMemory / mbs);
+  toCompact = std::min(toCompact, (unsigned) nonCompactStateCount);
+  klee_warning("compacting %u states (over memory cap)", toCompact);
+
+  std::partial_sort(
+    arr.begin(), arr.begin() + toCompact, arr.end(), KillOrCompactOrdering());
+
+  for (i = 0; i < toCompact; ++i) {
+    ExecutionState* original = arr[i];
+    ExecutionState* compacted = original->compact();
+    compacted->coveredNew = false;
+    compacted->coveredLines.clear();
+    compacted->ptreeNode = original->ptreeNode;
+    replaceState(original, compacted);
+    if (state == original) state = compacted;
+  }
+}
+
+void Executor::runState(ExecutionState* &state)
+{
+  state->lastChosen = stats::instructions;
+
+  KInstruction *ki = state->pc;
+  assert(ki);
+
+  if (state->rec) state->rec->curinst = ki->inst;
+
+  stepInstruction(*state);
+  executeInstruction(*state, ki);
+  processTimers(state, MaxInstructionTime);
+
+  if (!(MaxMemory && (stats::instructions & 0xFFFF) == 0))
+    return;
+
+  // We need to avoid calling GetMallocUsage() often because it
+  // is O(elts on freelist). This is really bad since we start
+  // to pummel the freelist once we hit the memory cap.
+  unsigned mbs = sys::Process::GetTotalMemoryUsage() >> 20;
+  
+  if (mbs < 0.9*MaxMemory) {
+    atMemoryLimit = false;
+    return;
+  }
+
+  if (mbs <= MaxMemory) return;
+
+  /*  (mbs > MaxMemory) */
+  atMemoryLimit = true;
+  onlyNonCompact = true;
+
+  if (mbs <= MaxMemory + 100) return;
+
+  /* Ran memory to the roof. FLIP OUT. */
+  if (!ReplayInhibitedForks ||
+      /* resort to killing states if the recent compacting
+         didn't help to reduce the memory usage */
+      stats::instructions-lastMemoryLimitOperationInstructions <= 0x20000)
+  {
+    killStates(state);
+  } else {
+    compactStates(state);
+  }
+  lastMemoryLimitOperationInstructions = stats::instructions;
+}
+
+bool Executor::seedRun(ExecutionState& initialState)
+{
+  ExecutionState *lastState = 0;
+  double lastTime, startTime = lastTime = util::estWallTime();
+  std::vector<SeedInfo> &v = seedMap[&initialState];
+  
+  for (std::vector<KTest*>::const_iterator it = usingSeeds->begin(), 
+         ie = usingSeeds->end(); it != ie; ++it)
+    v.push_back(SeedInfo(*it));
+
+  int lastNumSeeds = usingSeeds->size()+10;
+  while (!seedMap.empty()) {
+    if (haltExecution) return false;
+
+    std::map<ExecutionState*, std::vector<SeedInfo> >::iterator it = 
+      seedMap.upper_bound(lastState);
+    if (it == seedMap.end())
+      it = seedMap.begin();
+    lastState = it->first;
+    unsigned numSeeds = it->second.size();
+    ExecutionState &state = *lastState;
+    KInstruction *ki = state.pc;
+    stepInstruction(state);
+
+    executeInstruction(state, ki);
+    processTimers(&state, MaxInstructionTime * numSeeds);
+    updateStates(&state);
+
+    if ((stats::instructions % 1000) != 0) continue;
+
+    /* every 1000 instructions, check timeouts, seed counts */
+    numSeeds = 0;
+    int numStates = 0;
+    for (std::map<ExecutionState*, std::vector<SeedInfo> >::iterator
+           it = seedMap.begin(), ie = seedMap.end();
+         it != ie; ++it) {
+      numSeeds += it->second.size();
+      numStates++;
+    }
+    double time = util::estWallTime();
+    if (SeedTime>0. && time > startTime + SeedTime) {
+      klee_warning("seed time expired, %d seeds remain over %d states",
+                   numSeeds, numStates);
+      break;
+    } else if ((int)numSeeds<=lastNumSeeds-10 ||
+               time >= lastTime+10) {
+      lastTime = time;
+      lastNumSeeds = numSeeds;          
+      klee_message("%d seeds remaining over: %d states", 
+                   numSeeds, numStates);
+    }
+  }
+
+  klee_message("seeding done (%d states remain)", (int) states.size());
+
+  // XXX total hack, just because I like non uniform better but want
+  // seed results to be equally weighted.
+  for (ExeStateSet::iterator
+         it = states.begin(), ie = states.end();
+       it != ie; ++it) {
+    (*it)->weight = 1.;
+  }
+
+  return true;
+}
 
 void Executor::run(ExecutionState &initialState) {
   bindModuleConstants();
@@ -2637,7 +2892,7 @@ void Executor::run(ExecutionState &initialState) {
     initialStateCopy = new ExecutionState(initialState);
   }
 
-  if(replayPaths) {
+  if (replayPaths) {
     for(std::list<ReplayPathType>::const_iterator it = replayPaths->begin();
         it != replayPaths->end(); ++it) {
       ExecutionState *newState = new ExecutionState(initialState);
@@ -2645,123 +2900,35 @@ void Executor::run(ExecutionState &initialState) {
           it2 != (*it).end(); ++it2) {
         newState->branchDecisionsSequence.push_back(*it2);
       }
-      newState->replayBranchIterator =
-        newState->branchDecisionsSequence.begin();
+      newState->replayBranchIterator = newState->branchDecisionsSequence.begin();
       newState->ptreeNode->data = 0;
       newState->isReplay = true;
       splitProcessTree(newState->ptreeNode, &initialState, newState);
-      /*ExecutorThread::getThread()->*/addedStates.insert(newState);
+      addedStates.insert(newState);
       ++nonCompactStateCount;
     }
     // remove initial state from ptree
     states.insert(&initialState);
-    /*ExecutorThread::getThread()->*/removedStates.insert(&initialState);
-    updateStates(NULL/*, ExecutorThread::getThread()*/);
+    removedStates.insert(&initialState);
+    updateStates(NULL);
   } else {
     states.insert(&initialState);
     ++nonCompactStateCount;
   }
 
   if (usingSeeds) {
-    std::vector<SeedInfo> &v = seedMap[&initialState];
-    
-    for (std::vector<KTest*>::const_iterator it = usingSeeds->begin(), 
-           ie = usingSeeds->end(); it != ie; ++it)
-      v.push_back(SeedInfo(*it));
-
-    int lastNumSeeds = usingSeeds->size()+10;
-    double lastTime, startTime = lastTime = util::estWallTime();
-    ExecutionState *lastState = 0;
-    while (!seedMap.empty()) {
-      if (haltExecution) goto dump;
-
-      std::map<ExecutionState*, std::vector<SeedInfo> >::iterator it = 
-        seedMap.upper_bound(lastState);
-      if (it == seedMap.end())
-        it = seedMap.begin();
-      lastState = it->first;
-      unsigned numSeeds = it->second.size();
-      ExecutionState &state = *lastState;
-      KInstruction *ki = state.pc;
-      stepInstruction(state);
-
-      executeInstruction(state, ki);
-      processTimers(&state, MaxInstructionTime * numSeeds);
-      updateStates(&state);
-
-      if ((stats::instructions % 1000) == 0) {
-        int numSeeds = 0, numStates = 0;
-        for (std::map<ExecutionState*, std::vector<SeedInfo> >::iterator
-               it = seedMap.begin(), ie = seedMap.end();
-             it != ie; ++it) {
-          numSeeds += it->second.size();
-          numStates++;
-        }
-        double time = util::estWallTime();
-        if (SeedTime>0. && time > startTime + SeedTime) {
-          klee_warning("seed time expired, %d seeds remain over %d states",
-                       numSeeds, numStates);
-          break;
-        } else if (numSeeds<=lastNumSeeds-10 ||
-                   time >= lastTime+10) {
-          lastTime = time;
-          lastNumSeeds = numSeeds;          
-          klee_message("%d seeds remaining over: %d states", 
-                       numSeeds, numStates);
-        }
-      }
-    }
-
-    klee_message("seeding done (%d states remain)", (int) states.size());
-
-    // XXX total hack, just because I like non uniform better but want
-    // seed results to be equally weighted.
-    for (std::set<ExecutionState*>::iterator
-           it = states.begin(), ie = states.end();
-         it != ie; ++it) {
-      (*it)->weight = 1.;
-    }
-
-    if (OnlySeed)
-      goto dump;
+    if (!seedRun(initialState)) goto dump;
+    if (OnlySeed) goto dump;
   }
 
   searcher = constructUserSearcher(*this);
   
-  searcher->update(0, states, std::set<ExecutionState*>(),std::set<ExecutionState*>(),std::set<ExecutionState*>());
+  searcher->update(0, states, ExeStateSet(), ExeStateSet(), ExeStateSet());
 
   while (!states.empty() && !haltExecution) {
     ExecutionState *state = &searcher->selectState(!onlyNonCompact);
     assert((!onlyNonCompact || !state->isCompactForm)
       && "compact state chosen");
-
-    /*if (CallInst* ci = dyn_cast<CallInst>(state->pc->inst)) {
-      if (Function* f = ci->getCalledFunction()) {
-        if (funcs.find(f) == funcs.end()) {
-          funcs.insert(f);
-          std::cout << "CALL " << f->getNameStr() << std::endl;
-        }
-      }
-    }*/
-
-    /*if (state->rec) {
-    if (CallInst* ci = dyn_cast<CallInst>(state->pc->inst)) {
-      if (Function* f = ci->getCalledFunction()) {
-        if (f->getNameStr() == "version_etc_va") {
-          StateRecord* rec = state->rec;
-          if (state->prunepoint) {
-            std::list<StateRecord*> term;
-            equivStateElim->terminate(rec, term);
-          while (rec != state->prunepoint) {
-            rec->print();
-            rec = rec->parent;
-          }
-          }
-          exit(1);
-        }
-      }
-    }
-    }*/
 
     if (state->isCompactForm) {
       ExecutionState* newState = state->reconstitute(*initialStateCopy);
@@ -2770,120 +2937,31 @@ void Executor::run(ExecutionState &initialState) {
       state = newState;
     }
 
-    state->lastChosen = stats::instructions;
-
-    KInstruction *ki = state->pc;
-    assert(ki);
-
-    if (state->rec) {
-        state->rec->curinst = ki->inst;
-    }
-
-    stepInstruction(*state);
-
-    executeInstruction(*state, ki);
-
-    processTimers(state, MaxInstructionTime);
-
-    if (MaxMemory) {
-      if ((stats::instructions & 0xFFFF) == 0) {
-        // We need to avoid calling GetMallocUsage() often because it
-        // is O(elts on freelist). This is really bad since we start
-        // to pummel the freelist once we hit the memory cap.
-        unsigned mbs = sys::Process::GetTotalMemoryUsage() >> 20;
-        
-        if (mbs > MaxMemory) {
-          atMemoryLimit = true;
-          onlyNonCompact = true;
-
-          if (mbs > MaxMemory + 100) {
-            unsigned numStates = states.size();
-
-            if (!ReplayInhibitedForks ||
-                /* resort to killing states if the recent compacting
-                   didn't help to reduce the memory usage */
-                stats::instructions
-                  - lastMemoryLimitOperationInstructions <= 0x20000)
-            {
-              // just guess at how many to kill
-              unsigned toKill =
-                std::max(1U, numStates - numStates * MaxMemory / mbs);
-              klee_warning("killing %u states (over memory cap)", toKill);
-
-              std::vector<ExecutionState*> arr(states.begin(), states.end());
-
-              // use priority ordering for selecting which states to kill
-              std::partial_sort(arr.begin(), arr.begin() + toKill, arr.end(),
-                KillOrCompactOrdering());
-              for (unsigned i = 0; i < toKill; ++i) {
-                terminateStateEarly(*arr[i], "memory limit");
-		if (state == arr[i]) state = NULL;
-              }
-            } else {
-              // compact instead of killing
-              std::vector<ExecutionState*> arr(nonCompactStateCount);
-              unsigned i = 0;
-              for (std::set<ExecutionState*>::iterator si = states.begin();
-                   si != states.end(); ++si) {
-                if(!(*si)->isCompactForm) {
-                  arr[i] = *si;
-                  i++;
-                }
-              }
-
-              unsigned s = nonCompactStateCount +
-                ((numStates - nonCompactStateCount) / 16); // a rough measure
-              unsigned toCompact =
-                std::max(1U, s - s * MaxMemory / mbs);
-              toCompact = std::min(toCompact, (unsigned) nonCompactStateCount);
-              klee_warning("compacting %u states (over memory cap)", toCompact);
-
-              std::partial_sort(arr.begin(), arr.begin() + toCompact, arr.end(),
-                KillOrCompactOrdering());
-              for (unsigned i = 0; i < toCompact; ++i) {
-                ExecutionState* original = arr[i];
-                ExecutionState* compacted = original->compact();
-                compacted->coveredNew = false;
-                compacted->coveredLines.clear();
-                compacted->ptreeNode = original->ptreeNode;
-                replaceState(original, compacted);
-		if (state == original) state = compacted;
-              }
-            }
-            lastMemoryLimitOperationInstructions = stats::instructions;
-          } // if (mbs > MaxMemory + 100)
-        } else if (mbs < 0.9*MaxMemory) { // if (MaxMemory)
-          atMemoryLimit = false;
-        }
-      }
-    }
-
+    runState(state);
     updateStates(state);
   }
 
-  if (equivStateElim) {
-      equivStateElim->complete();
-  }
+  if (equivStateElim) equivStateElim->complete();
 
   delete searcher;
   searcher = 0;
   
- dump:
-  if (!states.empty()) {
-    std::cerr << "KLEE: halting execution, dumping remaining states\n";
-    for (std::set<ExecutionState*>::iterator
-           it = states.begin(), ie = states.end();
-         it != ie; ++it) {
-      ExecutionState &state = **it;
-      stepInstruction(state); // keep stats rolling
-      if (DumpStatesOnHalt)
-        terminateStateEarly(state, "execution halting");
-      else
-        terminateState(state);
-    }
-    updateStates(0);
+dump:
+  if (states.empty()) goto done;
+  std::cerr << "KLEE: halting execution, dumping remaining states\n";
+  for (ExeStateSet::iterator
+         it = states.begin(), ie = states.end();
+       it != ie; ++it) {
+    ExecutionState &state = **it;
+    stepInstruction(state); // keep stats rolling
+    if (DumpStatesOnHalt)
+      terminateStateEarly(state, "execution halting");
+    else
+      terminateState(state);
   }
+  updateStates(0);
 
+done:
   delete initialStateCopy;
 }
 
@@ -2944,10 +3022,9 @@ void Executor::terminateState(ExecutionState &state) {
 
   interpreterHandler->incPathsExplored();
 
-  std::set<ExecutionState*>::iterator it = addedStates.find(&state);
+  ExeStateSet::iterator it = addedStates.find(&state);
   if (it==addedStates.end()) {
     state.pc = state.prevPC;
-
     removedStates.insert(&state);
   } else {
     // never reached searcher, just delete immediately
@@ -3165,11 +3242,17 @@ ref<Expr> Executor::replaceReadWithSymbolic(ExecutionState &state,
   return res;
 }
 
-ObjectState *Executor::bindObjectInState(ExecutionState &state, 
-                                         const MemoryObject *mo,
-                                         bool isLocal,
-                                         const Array *array) {
-  ObjectState *os = array ? new ObjectState(mo, array) : new ObjectState(mo, state.rec);
+ObjectState *Executor::bindObjectInState(
+  ExecutionState &state, 
+  const MemoryObject *mo,
+  bool isLocal,
+  const Array *array)
+{
+  ObjectState *os;
+  
+  if (array) os = new ObjectState(mo, array);
+  else os = new ObjectState(mo, state.rec);
+
   state.bindObject(mo, os);
 
   // Its possible that multiple bindings of the same mo in the state
@@ -3190,31 +3273,30 @@ void Executor::executeAllocConst(
   bool zeroMemory,
   const ObjectState *reallocFrom) 
 {
-
+  ObjectState *os;
   MemoryObject *mo = memory->allocate(CE->getZExtValue(), isLocal, false, 
                                       state.prevPC->inst, &state);
   if (!mo) {
     bindLocal(target, state, 
               ConstantExpr::alloc(0, Context::get().getPointerWidth()));
-  } else {
-    ObjectState *os = bindObjectInState(state, mo, isLocal);
-    if (zeroMemory) {
-      os->initializeToZero();
-    } else {
-      os->initializeToRandom();
-    }
-    bindLocal(target, state, mo->getBaseExpr());
-    
-    if (reallocFrom) {
-      unsigned count = std::min(reallocFrom->size, os->size);
+    return;
+  }
 
-      state.copy(os, reallocFrom, count);
-      /*(for (unsigned i=0; i<count; i++) {
-        //os->write(i, reallocFrom->read8(i));          
-        //state.write(os, i, state.read8(reallocFrom, i));
-      }*/
-      state.addressSpace.unbindObject(reallocFrom->getObject());
-    }
+  os = bindObjectInState(state, mo, isLocal);
+  if (zeroMemory) os->initializeToZero();
+  else os->initializeToRandom();
+
+  bindLocal(target, state, mo->getBaseExpr());
+  
+  if (reallocFrom) {
+    unsigned count = std::min(reallocFrom->size, os->size);
+
+    state.copy(os, reallocFrom, count);
+    /*(for (unsigned i=0; i<count; i++) {
+      //os->write(i, reallocFrom->read8(i));          
+      //state.write(os, i, state.read8(reallocFrom, i));
+    }*/
+    state.addressSpace.unbindObject(reallocFrom->getObject());
   }
 }
 
@@ -3386,6 +3468,7 @@ void Executor::resolveExact(ExecutionState &state,
   }
 }
 
+/* handles a memop that can be immediately resolved */
 bool Executor::memOpFast(
   ExecutionState& state,
   bool isWrite,
@@ -3400,6 +3483,7 @@ bool Executor::memOpFast(
   ref<Expr> offset;
   bool inBounds, success;
 
+  /* can op be resolved to a single value? */
   solver->setTimeout(stpTimeout);
   if (!state.addressSpace.resolveOne(state, solver, address, op, success)) {
     address = toConstant(state, address, "resolveOne failure");
@@ -3407,11 +3491,11 @@ bool Executor::memOpFast(
   }
   solver->setTimeout(0);
 
+  if (!success) return false;
+
+  // fast path: single in-bounds resolution.
   const MemoryObject *mo = op.first;
   const ObjectState *os = op.second;
-
-  if (!success) return false;
-  // fast path: single in-bounds resolution
 
   if (MaxSymArraySize && mo->size>=MaxSymArraySize) {
     address = toConstant(state, address, "max-sym-array-size");
@@ -3419,6 +3503,7 @@ bool Executor::memOpFast(
   
   offset = mo->getOffsetExpr(address);
 
+  /* verify access is in bounds */
   solver->setTimeout(stpTimeout);
   success = solver->mustBeTrue(
     state, mo->getBoundsCheckOffset(offset, bytes), inBounds);
@@ -3438,22 +3523,11 @@ bool Executor::memOpFast(
                             "readonly.err");
     } else {
       ObjectState *wos = state.addressSpace.getWriteable(mo, os);
-      //wos->write(offset, value);
       state.write(wos, offset, value);
     }          
   } else {
-    //ref<Expr> result = os->read(offset, type);
     ref<Expr> result = state.read(os, offset, type);
 
-  /* XXX AJR */
-    std::ostringstream info;
-    result->print(info);
-    std::string res = info.str();    
-
-    std::ostringstream inf;
-    offset->print(inf);
-    std::string res_addr = inf.str();    
-    klee_message("Read: off=%s result=%s %d.", res_addr.c_str(), res.c_str(), bytes);
     if (interpreterOpts.MakeConcreteSymbolic)
       result = replaceReadWithSymbolic(state, result);
     
@@ -3686,7 +3760,7 @@ void Executor::runFunctionAsMain(Function *f,
   ExecutionState *state = new ExecutionState(kmodule->functionMap[f]);
   if (UseEquivalentStateEliminator) {
     equivStateElim = new EquivalentStateEliminator(this, kmodule, states);
-    std::set<ExecutionState*> tmp;
+    ExeStateSet tmp;
     equivStateElim->setup(state, tmp);
     assert(tmp.empty());
   }
@@ -3766,8 +3840,7 @@ void Executor::runFunctionAsMain(Function *f,
   globalObjects.clear();
   globalAddresses.clear();
 
-  if (statsTracker)
-    statsTracker->done();
+  if (statsTracker) statsTracker->done();
 
   if (theMMap) {
     munmap(theMMap, theMMapSize);
