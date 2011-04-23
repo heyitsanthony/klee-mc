@@ -48,6 +48,7 @@ namespace klee {
   class Cell;
   class EquivalentStateEliminator;
   class ExecutionState;
+  class ExeStateManager;
   class ExternalDispatcher;
   class Expr;
   class InstructionInfoTable;
@@ -73,6 +74,8 @@ namespace klee {
   /// removedStates, and haltExecution, among others.
 
 class Executor : public Interpreter {
+  /* FIXME The executor shouldn't have friends. */
+  friend class ExeStateManager;
   friend class BumpMergingSearcher;
   friend class MergingSearcher;
   friend class RandomPathSearcher;
@@ -98,38 +101,18 @@ private:
   class TimerInfo;
   static void deleteTimerInfo(TimerInfo*&);
 
-  EquivalentStateEliminator* equivStateElim;
   KModule *kmodule;
   InterpreterHandler *interpreterHandler;
-public:
-  Searcher *searcher;
 private:
   ExternalDispatcher *externalDispatcher;
   TimingSolver *solver;
   MemoryManager *memory;
-  ExeStateSet states;
-  ExeStateSet::size_type nonCompactStateCount;
+  ExeStateManager* stateManager;
   StatsTracker *statsTracker;
   TreeStreamWriter *symPathWriter;
   SpecialFunctionHandler *specialFunctionHandler;
   std::vector<TimerInfo*> timers;
   PTree *processTree;
-
-  ExeStateSet ignoreStates, unignoreStates;
-  /// Used to track states that have been added during the current
-  /// instructions step. 
-  /// \invariant \ref addedStates is a subset of \ref states. 
-  /// \invariant \ref addedStates and \ref removedStates are disjoint.
-  ExeStateSet addedStates;
-  /// Used to track states that have been removed during the current
-  /// instructions step. 
-  /// \invariant \ref removedStates is a subset of \ref states. 
-  /// \invariant \ref addedStates and \ref removedStates are disjoint.
-  ExeStateSet removedStates;
-  /// Used to track states that have been replaced during the current
-  /// instructions step. 
-  /// \invariant \ref replacedStates is a subset of \ref states U addedStates. 
-  std::map<ExecutionState*, ExecutionState*> replacedStates;
 
   /// When non-empty the Executor is running in "seed" mode. The
   /// states in this map will be executed in an arbitrary order
@@ -210,6 +193,7 @@ private:
   void killStates(ExecutionState* &state);
   void compactStates(ExecutionState* &state);
   bool seedRun(ExecutionState& initialState);
+  void updateStates(ExecutionState *current);
 
   // Given a concrete object in our [klee's] address space, add it to 
   // objects checked code can reference.
@@ -223,9 +207,9 @@ private:
   void initializeGlobals(ExecutionState &state);
 
   void stepInstruction(ExecutionState &state);
-  void updateStates(ExecutionState *current);
-  void removeStateInternal(ExecutionState* es, ExecutionState** root_to_be_removed = 0);
-  void replaceState(ExecutionState* os, ExecutionState* ns);
+  void removePTreeState(
+  	ExecutionState* es, ExecutionState** root_to_be_removed = 0);
+  void removeRoot(ExecutionState* es);
   void replaceStateImmForked(ExecutionState* os, ExecutionState* ns);
   void transferToBasicBlock(llvm::BasicBlock *dst, 
 			    llvm::BasicBlock *src,
@@ -334,13 +318,6 @@ private:
     KInstruction* target);
 
 
-  void getArrayStates(unsigned int idx, const std::string& arrName, ExeStateSet&);
-  bool hasScanStringState(
-    ExeStateSet& ss,
-    unsigned int idx, const std::string& arrName);
-  void removeStringStates(
-    ExeStateSet& ss,
-    unsigned int idx, const std::string& arrName);
   void mergeStringStates(ref<Expr>& readExpr);
   bool isStrcmpMatch(
     const Expr  *expr,
@@ -477,7 +454,8 @@ private:
   void initTimers();
   void processTimers(ExecutionState *current,
                      double maxInstTime);
-   
+  void processTimersDumpStates(void);
+  
   void getSymbolicSolutionCex(const ExecutionState& state, ExecutionState& t);
 
   bool seedObject(

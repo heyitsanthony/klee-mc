@@ -11,6 +11,7 @@
 
 #include "CoreStats.h"
 #include "Executor.h"
+#include "ExeStateManager.h"
 #include "PTree.h"
 #include "StatsTracker.h"
 
@@ -69,28 +70,29 @@ void DFSSearcher::update(ExecutionState *current,
         const std::set<ExecutionState*> &addedStates,
         const std::set<ExecutionState*> &removedStates,
         const std::set<ExecutionState*> &ignoreStates,
-        const std::set<ExecutionState*> &unignoreStates) {
+        const std::set<ExecutionState*> &unignoreStates)
+{
   states.insert(states.end(),
           addedStates.begin(),
           addedStates.end());
 
-  if (!removedStates.empty()) {
-    if (removedStates.count(states.back())) {
-      states.pop_back();
-      if (removedStates.size() == 1)
-        return;
-    }
-    for (std::list<ExecutionState*>::iterator it = states.begin(),
-            ie = states.end(); it != ie;) {
-      ExecutionState* es = *it;
-      if (removedStates.count(es)) {
-        it = states.erase(it);
-      } else {
-        ++it;
-      }
-    }
+  if (removedStates.empty()) return;
+
+  if (removedStates.count(states.back())) {
+    states.pop_back();
+    if (removedStates.size() == 1)
+      return;
   }
 
+  for (std::list<ExecutionState*>::iterator it = states.begin(),
+          ie = states.end(); it != ie;) {
+    ExecutionState* es = *it;
+    if (removedStates.count(es)) {
+      it = states.erase(it);
+    } else {
+      ++it;
+    }
+  }
 }
 
 ///
@@ -242,7 +244,6 @@ void WeightedRandomSearcher::update(ExecutionState *current,
 bool WeightedRandomSearcher::empty() {
   return states->empty();
 }
-
 ///
 
 RandomPathSearcher::RandomPathSearcher(Executor &_executor)
@@ -339,7 +340,7 @@ void RandomPathSearcher::update(ExecutionState *current,
 }
 
 bool RandomPathSearcher::empty() {
-  return executor.states.empty();
+  return executor.stateManager->empty();
 }
 
 ///
@@ -370,8 +371,11 @@ Instruction *BumpMergingSearcher::getMergePoint(ExecutionState &es) {
   return 0;
 }
 
+/* FIXME Backwards goto? Yeah, right. */
 ExecutionState &BumpMergingSearcher::selectState(bool allowCompact) {
 entry:
+  Instruction *mp;
+
   // out of base states, pick one to pop
   if (baseSearcher->empty()) {
     std::map<llvm::Instruction*, ExecutionState*>::iterator it =
@@ -384,34 +388,31 @@ entry:
   }
 
   ExecutionState &es = baseSearcher->selectState(allowCompact);
+  mp = getMergePoint(es);
+  if (!mp) return es;
+  std::map<llvm::Instruction*, ExecutionState*>::iterator it =
+          statesAtMerge.find(mp);
 
-  if (Instruction * mp = getMergePoint(es)) {
-    std::map<llvm::Instruction*, ExecutionState*>::iterator it =
-            statesAtMerge.find(mp);
+  baseSearcher->removeState(&es);
 
-    baseSearcher->removeState(&es);
-
-    if (it == statesAtMerge.end()) {
-      statesAtMerge.insert(std::make_pair(mp, &es));
-    } else {
-      ExecutionState *mergeWith = it->second;
-      if (mergeWith->merge(es)) {
-        // hack, because we are terminating the state we need to let
-        // the baseSearcher know about it again
-        baseSearcher->addState(&es);
-        executor.terminateState(es);
-      } else {
-        it->second = &es; // the bump
-        ++mergeWith->pc;
-
-        baseSearcher->addState(mergeWith);
-      }
-    }
-
-    goto entry;
+  if (it == statesAtMerge.end()) {
+    statesAtMerge.insert(std::make_pair(mp, &es));
   } else {
-    return es;
+    ExecutionState *mergeWith = it->second;
+    if (mergeWith->merge(es)) {
+      // hack, because we are terminating the state we need to let
+      // the baseSearcher know about it again
+      baseSearcher->addState(&es);
+      executor.terminateState(es);
+    } else {
+      it->second = &es; // the bump
+      ++mergeWith->pc;
+
+      baseSearcher->addState(mergeWith);
+    }
   }
+
+  goto entry;
 }
 
 void BumpMergingSearcher::update(ExecutionState *current,
@@ -437,16 +438,15 @@ MergingSearcher::~MergingSearcher() {
 ///
 
 Instruction *MergingSearcher::getMergePoint(ExecutionState &es) {
-  if (mergeFunction) {
-    Instruction *i = es.pc->inst;
+  if (!mergeFunction) return 0;
 
-    if (i->getOpcode() == Instruction::Call) {
-      CallSite cs(cast<CallInst > (i));
-      if (mergeFunction == cs.getCalledFunction())
-        return i;
-    }
+  Instruction *i = es.pc->inst;
+
+  if (i->getOpcode() == Instruction::Call) {
+    CallSite cs(cast<CallInst > (i));
+    if (mergeFunction == cs.getCalledFunction())
+      return i;
   }
-
   return 0;
 }
 

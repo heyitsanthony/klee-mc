@@ -9,6 +9,7 @@
 
 
 #include "Executor.h"
+#include "ExeStateManager.h"
  
 #include "Context.h"
 #include "CoreStats.h"
@@ -362,31 +363,23 @@ Solver *constructSolverChain(STPSolver *stpSolver,
                              std::string queryLogPath,
                              std::string stpQueryLogPath,
                              std::string queryPCLogPath,
-                             std::string stpQueryPCLogPath) {
+                             std::string stpQueryPCLogPath)
+{
   Solver *solver = stpSolver;
 
   if (UseSTPQueryPCLog)
-    solver = createPCLoggingSolver(solver, 
-                                   stpQueryPCLogPath);
+    solver = createPCLoggingSolver(solver, stpQueryPCLogPath);
 
-  if (UseFastCexSolver)
-    solver = createFastCexSolver(solver);
+  if (UseFastCexSolver) solver = createFastCexSolver(solver);
+  if (UseCexCache) solver = createCexCachingSolver(solver);
+  if (UseCache) solver = createCachingSolver(solver);
 
-  if (UseCexCache)
-    solver = createCexCachingSolver(solver);
-
-  if (UseCache)
-    solver = createCachingSolver(solver);
-
-  if (UseIndependentSolver)
-    solver = createIndependentSolver(solver);
+  if (UseIndependentSolver) solver = createIndependentSolver(solver);
 
   if (DebugValidateSolver)
     solver = createValidatingSolver(solver, stpSolver);
 
-  if (UseQueryPCLog)
-    solver = createPCLoggingSolver(solver, 
-                                   queryPCLogPath);
+  if (UseQueryPCLog) solver = createPCLoggingSolver(solver, queryPCLogPath);
 
   klee_message("BEGIN solver description");
   solver->printName();
@@ -395,32 +388,13 @@ Solver *constructSolverChain(STPSolver *stpSolver,
   return solver;
 }
 
-namespace {
-  struct KillOrCompactOrdering
-  // the least important state (the first to kill or compact) first
-  {
-    // Ordering:
-    // 1. States with coveredNew has greater importance
-    // 2. States with more recent use has greater importance
-    bool operator()(const ExecutionState* a, const ExecutionState* b) const
-    // returns true if a is less important than b
-    {
-      if (!a->coveredNew &&  b->coveredNew) return true;
-      if ( a->coveredNew && !b->coveredNew) return false;
-      return a->lastChosen < b->lastChosen;
-    }
-  };
-}
 
 Executor::Executor(const InterpreterOptions &opts,
                    InterpreterHandler *ih) 
   : Interpreter(opts),
-    equivStateElim(0),
     kmodule(0),
     interpreterHandler(ih),
-    searcher(0),
     externalDispatcher(new ExternalDispatcher()),
-    nonCompactStateCount(0),
     statsTracker(0),
     symPathWriter(0),
     specialFunctionHandler(0),
@@ -445,8 +419,8 @@ Executor::Executor(const InterpreterOptions &opts,
                          interpreterHandler->getOutputFilename("stp-queries.pc"));
   
   this->solver = new TimingSolver(solver, stpSolver);
-
   memory = new MemoryManager();
+  stateManager = new ExeStateManager();
 }
 
 
@@ -480,14 +454,12 @@ const Module *Executor::setModule(llvm::Module *module,
 
 Executor::~Executor() {
   std::for_each(timers.begin(), timers.end(), deleteTimerInfo);
+  delete stateManager;
   delete memory;
   delete externalDispatcher;
-  if (processTree)
-    delete processTree;
-  if (specialFunctionHandler)
-    delete specialFunctionHandler;
-  if (statsTracker)
-    delete statsTracker;
+  if (processTree) delete processTree;
+  if (specialFunctionHandler) delete specialFunctionHandler;
+  if (statsTracker) delete statsTracker;
   delete solver;
   delete kmodule;
 }
@@ -507,21 +479,10 @@ inline void Executor::splitProcessTree(PTreeNode* n, ExecutionState* a, Executio
 //  processTree->update(b->ptreeNode, PTree::WeightRunning, !b->isRunning);
 }
 
-inline void Executor::replaceState(ExecutionState* os, ExecutionState* ns)
-{
-  addedStates.insert(ns);
-  removedStates.insert(os);
-  replacedStates[os] = ns;
-}
-
 inline void Executor::replaceStateImmForked(ExecutionState* os, ExecutionState* ns)
 {
-//assert(removedStates.find(ns) == removedStates.end());
-  /*thread->*/addedStates.insert(ns);
-//assert(addedStates.find(os) != addedStates.end());
-  /*thread->*/addedStates.erase(os);
-  /*thread->*/replacedStates[os] = ns;
-  removeStateInternal(os);
+  stateManager->replaceStateImmediate(os, ns);
+  removePTreeState(os);
 }
   
 void Executor::initializeGlobalObject(ExecutionState &state, ObjectState *os,
@@ -1024,8 +985,7 @@ Executor::fork(ExecutionState &current,
     if (!curStateUsed) {
       resStates[condIndex] = baseState;
       curStateUsed = true;
-    }
-    else {
+    } else {
       assert(!forkCompact || ReplayInhibitedForks);
 
       // Update stats
@@ -1035,7 +995,7 @@ Executor::fork(ExecutionState &current,
       // Do actual state forking
       newState = forkCompact ? current.branchForReplay()
                              : current.branch();
-      /*thread->*/addedStates.insert(newState);
+      stateManager->add(newState);
       resStates[condIndex] = newState;
 
       // Split pathWriter stream
@@ -1922,13 +1882,11 @@ void Executor::instSwitch(ExecutionState& state, KInstruction *ki)
         theStatisticManager->getIndexedValue(stats::uncoveredInstructions,
         kf->instructions[entry]->info->id)) {
       ExecutionState *newState = es->reconstitute(*initialStateCopy);
-//          ExecutorThread *thread = ExecutorThread::getThread();
       replaceStateImmForked(es, newState);
       es = newState;
     }
 
-    if (!es->isCompactForm)
-      transferToBasicBlock(destBlock, bb, *es);
+    if (!es->isCompactForm) transferToBasicBlock(destBlock, bb, *es);
     
     // Update coverage stats
     if (kf->trackCoverage &&
@@ -2405,169 +2363,49 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
   }
 }
 
-void Executor::removeStateInternal(
+void Executor::removePTreeState(
   ExecutionState* es, ExecutionState** root_to_be_removed)
 {
-  std::map<ExecutionState*, std::vector<SeedInfo> >::iterator it3 = seedMap.find(es);
+  ExecutionState* ns;
+  std::map<ExecutionState*, std::vector<SeedInfo> >::iterator it3;
+  it3 = seedMap.find(es);
   if (it3 != seedMap.end()) seedMap.erase(it3);
 
   if (es->ptreeNode == processTree->root) {
     assert(root_to_be_removed);
     *root_to_be_removed = es;
+    return;
   }
-  else {
-    assert(es->ptreeNode->data == es);
-    std::map<ExecutionState*, ExecutionState*>::iterator it4 = replacedStates.find(es);
-    if (it4 == replacedStates.end())
-      processTree->remove(es->ptreeNode);
-    else {
-      ExecutionState* ns = it4->second;
-      // replace the placeholder state in the process tree
-      ns->ptreeNode = es->ptreeNode;
-      ns->ptreeNode->data = ns;
+  assert(es->ptreeNode->data == es);
 
-      processTree->update(ns->ptreeNode, PTree::WeightCompact,
-        !ns->isCompactForm);
-    }
-    delete es;
+  ns = stateManager->getReplacedState(es);
+  if (!ns) {
+    processTree->remove(es->ptreeNode);
+  } else {
+    // replace the placeholder state in the process tree
+    ns->ptreeNode = es->ptreeNode;
+    ns->ptreeNode->data = ns;
+    processTree->update(ns->ptreeNode, PTree::WeightCompact, !ns->isCompactForm);
   }
+  delete es;
 }
 
-#define MERGE_STRMAX  1024
-/* want expressions of form
- * (Eq <constant> (Read w8 <constant <= idx> arrName)) */
-bool Executor::isStrcmpMatch(
-  const Expr  *expr,
-  unsigned int idx, const std::string& arrName,
-  unsigned int& re_idx, unsigned int& cmp_val)
+void Executor::removeRoot(ExecutionState* es)
 {
-  const EqExpr  *eq_expr;
-  const ReadExpr *re;
-  const ConstantExpr *idx_expr, *cmp_expr;
-  uint64_t  arr_read_idx;
+  ExecutionState* ns = stateManager->getReplacedState(es);
 
-  if (!(eq_expr = dyn_cast<const EqExpr>(expr))) return false;
-  if (!(cmp_expr = dyn_cast<const ConstantExpr>(eq_expr->left))) return false;
-  if (!(re = dyn_cast<const ReadExpr>(eq_expr->right))) return false;
-  if (!(idx_expr = dyn_cast<const ConstantExpr>(re->index))) return false;
-
-  arr_read_idx = idx_expr->getLimitedValue(MERGE_STRMAX);
-  if (arr_read_idx > idx) return false; /* out of bounds constraint */
-  if (re->updates.root->name != arrName) return false;
-
-  re_idx = arr_read_idx;
-  cmp_val = cmp_expr->getLimitedValue(0xffff);  /* 8 bit cmp, should not OF */
-
-  return true;
-}
-
-void Executor::getArrayStates(
-  unsigned int idx, const std::string& arrName, ExeStateSet& ss)
-{
-  for (ExeStateSet::iterator it = states.begin(), ite = states.end();
-   it != ite; ++it)
-  {
-    ExecutionState* s = *it;
-    ConstraintManager* cons_man = &s->constraints;
-    std::set<unsigned int>  indices;
-
-    if (s->isCompactForm) continue;
-
-    for (ConstraintManager::constraint_iterator 
-      it = cons_man->begin(), ite = cons_man->end(); 
-      it != ite; ++it)
-    {
-      unsigned int re_idx, cmp_val;
-      if (isStrcmpMatch((*it).get(), idx, arrName, re_idx, cmp_val))
-        ss.insert(s);
-    }
-  }
-}
-
-bool Executor::hasScanStringState(
-  ExeStateSet& ss,
-  unsigned int idx, const std::string& arrName)
-{
-  for (ExeStateSet::iterator it = ss.begin(), ite = ss.end();
-    it != ite; ++it)
-  {
-    ExecutionState* s = *it;
-    ConstraintManager* cons_man = &s->constraints;
-    std::set<unsigned int>  indices;
-
-    if (s->isCompactForm) continue;
-
-    for (ConstraintManager::constraint_iterator 
-      it = cons_man->begin(), ite = cons_man->end(); 
-      it != ite; ++it)
-    {
-      unsigned int re_idx, cmp_val;
-      if (!isStrcmpMatch((*it).get(), idx, arrName, re_idx, cmp_val)) continue;
-      /* TODO: cmp_val should be permitted to be values besides zero */
-      if (re_idx == idx  && cmp_val != 0 ) break; /* no null terminal */
-      indices.insert(re_idx);
-    }
-
-    if (indices.size() == (idx+1)) return true;
-  }
-  return false;
-}
-
-void Executor::removeStringStates(
-  ExeStateSet& ss,
-  unsigned int idx, const std::string& arrName)
-{
-  for (ExeStateSet::iterator it = ss.begin(), ite = ss.end();
-    it != ite; ++it)
-  {
-    ExecutionState* s = *it;
-    ConstraintManager* cons_man = &s->constraints;
-    std::set<unsigned int>  indices;
-    unsigned int run_length;
-
-    if (s->isCompactForm) continue;
-
-    for (ConstraintManager::constraint_iterator 
-      it = cons_man->begin(), ite = cons_man->end(); 
-      it != ite; ++it)
-    {
-      unsigned int re_arr_idx, cmp_val;
-      if (!isStrcmpMatch((*it).get(), idx, arrName, re_arr_idx, cmp_val))
-        continue;
-      indices.insert(re_arr_idx);
-    }
-
-    /* verify that the whole thing is filled out */
-    for (run_length = 0; run_length < indices.size(); run_length++) {
-      if (indices.count(run_length) == 0) break;
-    }
-
-    /* there's a gap. don't bother */
-    if (run_length < indices.size())  continue;
-    /* if there's no elements, don't bother */
-    if (run_length == 0) continue;
-
-    /* search again, want to find (Eq false (Eq n (Read w8 run_length))) */
-    for (ConstraintManager::constraint_iterator 
-      it = cons_man->begin(), ite = cons_man->end(); 
-      it != ite; ++it)
-    {
-      const EqExpr  *eq_expr_outer;
-      const Expr* expr_inner;
-      unsigned int re_arr_idx, cmp_val;
-      if (!(eq_expr_outer = dyn_cast<const EqExpr>(*it))) continue;
-      expr_inner = (eq_expr_outer->right).get();
-      if (!isStrcmpMatch(expr_inner, idx, arrName, re_arr_idx, cmp_val))
-        continue;
-      /* remove if the tail is a false comparison, but keep 
-       * anything that tests the end of the string */
-      if (re_arr_idx == run_length && re_arr_idx != idx) {
-        removedStates.insert(s);
-        break;
-      }
-    }
+  if (!ns) {
+    delete processTree->root->data;
+    processTree->root->data = 0;
+    return;
   }
 
+  // replace the placeholder state in the process tree
+  ns->ptreeNode = es->ptreeNode;
+  ns->ptreeNode->data = ns;
+
+  processTree->update(ns->ptreeNode, PTree::WeightCompact, !ns->isCompactForm);
+  delete es;
 }
 
 /* FIXME this is really slow. */
@@ -2592,73 +2430,14 @@ void Executor::mergeStringStates(ref<Expr>& readExpr)
   arr_name = re->updates.root->name;
 
   ExeStateSet ss;
-  getArrayStates(idx, arr_name, ss);
+  stateManager->getArrayStates(idx, arr_name, ss);
 
   /* kekekekeke */
   /* find expressions of form (Eq x (Read w8 y arr_name)) */
-  if (hasScanStringState(ss, idx, arr_name)) {
-    removeStringStates(ss, idx, arr_name);
+  if (stateManager->hasScanStringState(ss, idx, arr_name)) {
+    stateManager->removeStringStates(ss, idx, arr_name);
   }
 
-}
-
-void Executor::updateStates(ExecutionState *current)
-{
-  if (searcher) {
-    searcher->update(current, addedStates, removedStates, ignoreStates, unignoreStates);
-    ignoreStates.clear();
-    unignoreStates.clear();
-  }
-  if (equivStateElim) {      
-    equivStateElim->update(current, addedStates, removedStates, ignoreStates, unignoreStates);      
-  }
-
-  states.insert(addedStates.begin(), addedStates.end());
-  nonCompactStateCount += std::count_if(
-    addedStates.begin(),
-    addedStates.end(),
-    std::mem_fun(&ExecutionState::isNonCompactForm_f));
-  addedStates.clear();
-
-  ExecutionState* root_to_be_removed = 0;
-  for (ExeStateSet::iterator it = removedStates.begin();
-       it != removedStates.end(); ++it) {
-    ExecutionState *es = *it;
-
-    ExeStateSet::iterator it2 = states.find(es);
-    assert(it2!=states.end());
-    states.erase(it2);
-
-    // this deref must happen before delete
-    if (!es->isCompactForm) --nonCompactStateCount;
-
-    removeStateInternal(es, &root_to_be_removed);
-  }
-
-  if (ExecutionState* es = root_to_be_removed) {
-    std::map<ExecutionState*, ExecutionState*>::iterator it4 =
-      replacedStates.find(es);
-    if (it4 == replacedStates.end()) {
-      delete processTree->root->data;
-      processTree->root->data = 0;
-    } else {
-      ExecutionState* ns = it4->second;
-      // replace the placeholder state in the process tree
-      ns->ptreeNode = es->ptreeNode;
-      ns->ptreeNode->data = ns;
-
-      processTree->update(ns->ptreeNode, PTree::WeightCompact,
-        !ns->isCompactForm);
-
-      delete es;
-    }
-  }
-  removedStates.clear();
-  replacedStates.clear();
-
-  if (nonCompactStateCount == 0 && !states.empty()) onlyNonCompact = false;
-
-//  klee_message("Updated to: %s\n", states2str(states).c_str());
 }
 
 void Executor::bindInstructionConstants(KInstruction *KI) {
@@ -2717,12 +2496,14 @@ void Executor::bindModuleConstants() {
 void Executor::killStates(ExecutionState* &state)
 {
   // just guess at how many to kill
-  unsigned numStates = states.size();
+  unsigned numStates = stateManager->size();
   unsigned mbs = sys::Process::GetTotalMemoryUsage() >> 20;
   unsigned toKill = std::max(1U, numStates - numStates * MaxMemory / mbs);
   klee_warning("killing %u states (over memory cap)", toKill);
 
-  std::vector<ExecutionState*> arr(states.begin(), states.end());
+  std::vector<ExecutionState*> arr(
+    stateManager->begin(),
+    stateManager->end());
 
   // use priority ordering for selecting which states to kill
   std::partial_sort(
@@ -2733,39 +2514,6 @@ void Executor::killStates(ExecutionState* &state)
     if ((i % 101) == 100) klee_message("Killed %d states...", i);
   }
   klee_message("Killed everything");
-}
-
-void Executor::compactStates(ExecutionState* &state)
-{
-  // compact instead of killing
-  std::vector<ExecutionState*> arr(nonCompactStateCount);
-  unsigned i = 0;
-  for (ExeStateSet::iterator si = states.begin();
-       si != states.end(); ++si) {
-    if((*si)->isCompactForm) continue;
-    arr[i++] = *si;
-  }
-
-  unsigned numStates = states.size();
-  unsigned s = nonCompactStateCount +
-    ((numStates - nonCompactStateCount) / 16); // a rough measure
-  unsigned mbs = sys::Process::GetTotalMemoryUsage() >> 20;
-  unsigned toCompact = std::max(1U, s - s * MaxMemory / mbs);
-  toCompact = std::min(toCompact, (unsigned) nonCompactStateCount);
-  klee_warning("compacting %u states (over memory cap)", toCompact);
-
-  std::partial_sort(
-    arr.begin(), arr.begin() + toCompact, arr.end(), KillOrCompactOrdering());
-
-  for (i = 0; i < toCompact; ++i) {
-    ExecutionState* original = arr[i];
-    ExecutionState* compacted = original->compact();
-    compacted->coveredNew = false;
-    compacted->coveredLines.clear();
-    compacted->ptreeNode = original->ptreeNode;
-    replaceState(original, compacted);
-    if (state == original) state = compacted;
-  }
 }
 
 void Executor::runState(ExecutionState* &state)
@@ -2810,7 +2558,7 @@ void Executor::runState(ExecutionState* &state)
   {
     killStates(state);
   } else {
-    compactStates(state);
+    stateManager->compactStates(state, MaxMemory);
   }
   lastMemoryLimitOperationInstructions = stats::instructions;
 }
@@ -2868,16 +2616,11 @@ bool Executor::seedRun(ExecutionState& initialState)
     }
   }
 
-  klee_message("seeding done (%d states remain)", (int) states.size());
+  klee_message("seeding done (%d states remain)", (int) stateManager->size());
 
   // XXX total hack, just because I like non uniform better but want
   // seed results to be equally weighted.
-  for (ExeStateSet::iterator
-         it = states.begin(), ie = states.end();
-       it != ie; ++it) {
-    (*it)->weight = 1.;
-  }
-
+  stateManager->setWeights(1.0);
   return true;
 }
 
@@ -2904,35 +2647,24 @@ void Executor::run(ExecutionState &initialState) {
       newState->ptreeNode->data = 0;
       newState->isReplay = true;
       splitProcessTree(newState->ptreeNode, &initialState, newState);
-      addedStates.insert(newState);
-      ++nonCompactStateCount;
+      stateManager->add(newState);
     }
-    // remove initial state from ptree
-    states.insert(&initialState);
-    removedStates.insert(&initialState);
-    updateStates(NULL);
-  } else {
-    states.insert(&initialState);
-    ++nonCompactStateCount;
   }
+  stateManager->setInitialState(this, &initialState, replayPaths);
 
   if (usingSeeds) {
     if (!seedRun(initialState)) goto dump;
     if (OnlySeed) goto dump;
   }
 
-  searcher = constructUserSearcher(*this);
-  
-  searcher->update(0, states, ExeStateSet(), ExeStateSet(), ExeStateSet());
+  stateManager->setupSearcher(this);
 
-  while (!states.empty() && !haltExecution) {
-    ExecutionState *state = &searcher->selectState(!onlyNonCompact);
-    assert((!onlyNonCompact || !state->isCompactForm)
-      && "compact state chosen");
+  while (!stateManager->empty() && !haltExecution) {
+    ExecutionState *state = stateManager->selectState(!onlyNonCompact);
 
     if (state->isCompactForm) {
       ExecutionState* newState = state->reconstitute(*initialStateCopy);
-      replaceState(state, newState);
+      stateManager->replaceState(state, newState);
       updateStates(state);
       state = newState;
     }
@@ -2941,17 +2673,15 @@ void Executor::run(ExecutionState &initialState) {
     updateStates(state);
   }
 
-  if (equivStateElim) equivStateElim->complete();
-
-  delete searcher;
-  searcher = 0;
-  
+  stateManager->teardownUserSearcher();
+ 
 dump:
-  if (states.empty()) goto done;
+  if (stateManager->empty()) goto done;
   std::cerr << "KLEE: halting execution, dumping remaining states\n";
-  for (ExeStateSet::iterator
-         it = states.begin(), ie = states.end();
-       it != ie; ++it) {
+  for (ExeStateSet::const_iterator
+         it = stateManager->begin(), ie = stateManager->end();
+       it != ie; ++it)
+  {
     ExecutionState &state = **it;
     stepInstruction(state); // keep stats rolling
     if (DumpStatesOnHalt)
@@ -2963,6 +2693,16 @@ dump:
 
 done:
   delete initialStateCopy;
+}
+
+void Executor::updateStates(ExecutionState* current)
+{
+  stateManager->updateStates(this, current);
+  if (stateManager->getNonCompactStateCount() == 0 
+    && !stateManager->empty())
+  {
+    onlyNonCompact = false;
+  }
 }
 
 std::string Executor::getAddressInfo(ExecutionState &state, 
@@ -3022,17 +2762,15 @@ void Executor::terminateState(ExecutionState &state) {
 
   interpreterHandler->incPathsExplored();
 
-  ExeStateSet::iterator it = addedStates.find(&state);
-  if (it==addedStates.end()) {
+  if (!stateManager->isAddedState(&state)) {
     state.pc = state.prevPC;
-    removedStates.insert(&state);
+    stateManager->remove(&state); /* put on remove list */
   } else {
     // never reached searcher, just delete immediately
-    std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it3 = 
-      seedMap.find(&state);
-    if (it3 != seedMap.end())
-      seedMap.erase(it3);
-    addedStates.erase(it);
+    std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it3;
+    it3 = seedMap.find(&state);
+    if (it3 != seedMap.end()) seedMap.erase(it3);
+    stateManager->dropAdded(&state);
     processTree->remove(state.ptreeNode);
     delete &state;
   }
@@ -3758,12 +3496,8 @@ void Executor::runFunctionAsMain(Function *f,
   assert(kf);
 
   ExecutionState *state = new ExecutionState(kmodule->functionMap[f]);
-  if (UseEquivalentStateEliminator) {
-    equivStateElim = new EquivalentStateEliminator(this, kmodule, states);
-    ExeStateSet tmp;
-    equivStateElim->setup(state, tmp);
-    assert(tmp.empty());
-  }
+  if (UseEquivalentStateEliminator)
+    stateManager->setupESE(this, kmodule, state);
 
   Function::arg_iterator ai = f->arg_begin(), ae = f->arg_end();
   if (ai!=ae) {

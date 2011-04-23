@@ -9,11 +9,11 @@
 
 #include "CoreStats.h"
 #include "Executor.h"
+#include "ExeStateManager.h"
 #include "PTree.h"
 #include "StatsTracker.h"
 
 #include "klee/Common.h"
-#include "klee/ExecutionState.h"
 #include "klee/Internal/Module/InstructionInfoTable.h"
 #include "klee/Internal/Module/KInstruction.h"
 #include "klee/Internal/Module/KModule.h"
@@ -92,9 +92,61 @@ void Executor::addTimer(Timer *timer, double rate) {
   timers.push_back(new TimerInfo(timer, rate));
 }
 
-void Executor::processTimers(ExecutionState *current,
-                             double maxInstTime) {
+void Executor::processTimersDumpStates(void)
+{
+  std::ostream *os = interpreterHandler->openOutputFile("states.txt");
+  
+  if (!os) goto done;
 
+  for (ExeStateSet::const_iterator it = stateManager->begin(), 
+    ie = stateManager->end(); it != ie; ++it)
+  {
+    ExecutionState *es = *it;
+    *os << "(" << es << ",";
+    *os << "[";
+    ExecutionState::stack_ty::iterator next = es->stack.begin();
+    ++next;
+    for (ExecutionState::stack_ty::iterator sfIt = es->stack.begin(),
+           sf_ie = es->stack.end(); sfIt != sf_ie; ++sfIt) {
+      *os << "('" << sfIt->kf->function->getNameStr() << "',";
+      if (next == es->stack.end()) {
+        *os << es->prevPC->info->line << "), ";
+      } else {
+        *os << next->caller->info->line << "), ";
+        ++next;
+      }
+    }
+    *os << "], ";
+
+    StackFrame &sf = es->stack.back();
+    uint64_t md2u = computeMinDistToUncovered(es->pc,
+                sf.minDistToUncoveredOnReturn);
+    uint64_t icnt = theStatisticManager->getIndexedValue(stats::instructions,
+                     es->pc->info->id);
+    uint64_t cpicnt = sf.callPathNode->statistics.getValue(stats::instructions);
+
+    *os << "{";
+    *os << "'depth' : " << es->depth << ", ";
+    *os << "'weight' : " << es->weight << ", ";
+    *os << "'queryCost' : " << es->queryCost << ", ";
+    *os << "'coveredNew' : " << es->coveredNew << ", ";
+    *os << "'instsSinceCovNew' : " << es->instsSinceCovNew << ", ";
+    *os << "'md2u' : " << md2u << ", ";
+    *os << "'icnt' : " << icnt << ", ";
+    *os << "'CPicnt' : " << cpicnt << ", ";
+    *os << "}";
+    *os << ")\n";
+  }
+
+  delete os;
+
+done:
+  dumpStates = 0;
+}
+
+void Executor::processTimers(ExecutionState *current,
+                             double maxInstTime)
+{
   static double lastCall = 0., lastCheck = 0.;
   double now = util::estWallTime();
 
@@ -110,77 +162,30 @@ void Executor::processTimers(ExecutionState *current,
     dumpPTree = 0;
   }
 
-  if (dumpStates) {
-    std::ostream *os = interpreterHandler->openOutputFile("states.txt");
-    
-    if (os) {
-      for (std::set<ExecutionState*>::const_iterator it = states.begin(), 
-             ie = states.end(); it != ie; ++it) {
-        ExecutionState *es = *it;
-        *os << "(" << es << ",";
-        *os << "[";
-        ExecutionState::stack_ty::iterator next = es->stack.begin();
-        ++next;
-        for (ExecutionState::stack_ty::iterator sfIt = es->stack.begin(),
-               sf_ie = es->stack.end(); sfIt != sf_ie; ++sfIt) {
-          *os << "('" << sfIt->kf->function->getNameStr() << "',";
-          if (next == es->stack.end()) {
-            *os << es->prevPC->info->line << "), ";
-          } else {
-            *os << next->caller->info->line << "), ";
-            ++next;
-          }
-        }
-        *os << "], ";
+  if (dumpStates) processTimersDumpStates();
 
-        StackFrame &sf = es->stack.back();
-        uint64_t md2u = computeMinDistToUncovered(es->pc,
-                                                  sf.minDistToUncoveredOnReturn);
-        uint64_t icnt = theStatisticManager->getIndexedValue(stats::instructions,
-                                                             es->pc->info->id);
-        uint64_t cpicnt = sf.callPathNode->statistics.getValue(stats::instructions);
+  if (now - lastCheck <= kSecondsPerCheck) goto done;
 
-        *os << "{";
-        *os << "'depth' : " << es->depth << ", ";
-        *os << "'weight' : " << es->weight << ", ";
-        *os << "'queryCost' : " << es->queryCost << ", ";
-        *os << "'coveredNew' : " << es->coveredNew << ", ";
-        *os << "'instsSinceCovNew' : " << es->instsSinceCovNew << ", ";
-        *os << "'md2u' : " << md2u << ", ";
-        *os << "'icnt' : " << icnt << ", ";
-        *os << "'CPicnt' : " << cpicnt << ", ";
-        *os << "}";
-        *os << ")\n";
-      }
-      
-      delete os;
-    }
-
-    dumpStates = 0;
+  if (maxInstTime>0 && current && !stateManager->isRemovedState(current)
+      && lastCall != 0. && (now - lastCall) > maxInstTime) {
+    klee_warning("max-instruction-time exceeded: %.2fs",
+                 now - lastCall);
+    terminateStateEarly(*current, "max-instruction-time exceeded");
   }
 
-  if (now - lastCheck > kSecondsPerCheck) {
-    if (maxInstTime>0 && current && !removedStates.count(current)
-        && lastCall != 0. && (now - lastCall) > maxInstTime) {
-      klee_warning("max-instruction-time exceeded: %.2fs",
-                   now - lastCall);
-      terminateStateEarly(*current, "max-instruction-time exceeded");
-    }
+  if (timers.empty()) goto done;
 
-    if (!timers.empty()) {
-      for (std::vector<TimerInfo*>::iterator it = timers.begin(), 
-             ie = timers.end(); it != ie; ++it) {
-        TimerInfo *ti = *it;
-      
-        if (now >= ti->nextFireTime) {
-          ti->timer->run();
-          ti->nextFireTime = now + ti->rate;
-        }
-      }
+  for (std::vector<TimerInfo*>::iterator it = timers.begin(), 
+         ie = timers.end(); it != ie; ++it) {
+    TimerInfo *ti = *it;
+  
+    if (now >= ti->nextFireTime) {
+      ti->timer->run();
+      ti->nextFireTime = now + ti->rate;
     }
-    lastCheck = now;
   }
 
+done:
   lastCall = now;
 }
 

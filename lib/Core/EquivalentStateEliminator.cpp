@@ -47,7 +47,7 @@ cl::opt<bool>
 ESEDebugVerbose("ese-debug-verbose",
         cl::init(false));
 
-void EquivalentStateEliminator::setup(ExecutionState* state, std::set<ExecutionState*>& holds) {
+void EquivalentStateEliminator::setup(ExecutionState* state, ExeStateSet& holds) {
   ESEStats::copyTimer.start();
 
   StateRecord* prevrec = state->rec;

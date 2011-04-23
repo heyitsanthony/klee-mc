@@ -23,6 +23,7 @@
 #include "CallPathManager.h"
 #include "CoreStats.h"
 #include "Executor.h"
+#include "ExeStateManager.h"
 #include "MemoryManager.h"
 #include "UserSearcher.h"
 
@@ -415,8 +416,8 @@ void StatsTracker::writeStatsLine() {
              << "," << partialBranches
              << "," << numBranches
              << "," << TimeAmountFormat(util::getUserTime())
-             << "," << executor.states.size()
-             << "," << executor.nonCompactStateCount
+             << "," << executor.stateManager->size()
+             << "," << executor.stateManager->getNonCompactStateCount()
              << "," << sys::Process::GetTotalMemoryUsage()
              << "," << stats::queries
              << "," << stats::queryConstructs
@@ -435,14 +436,16 @@ void StatsTracker::writeStatsLine() {
 }
 
 void StatsTracker::updateStateStatistics(uint64_t addend) {
-  for (std::set<ExecutionState*>::iterator it = executor.states.begin(),
-         ie = executor.states.end(); it != ie; ++it) {
+  for (ExeStateSet::const_iterator it = 
+  	executor.stateManager->begin(),
+    ie = executor.stateManager->end(); it != ie; ++it)
+  {
     ExecutionState &state = **it;
     const InstructionInfo &ii = *state.pc->info;
     theStatisticManager->incrementIndexedValue(stats::states, ii.id, addend);
-    if (UseCallPaths)
-      if (!state.stack.empty())
-        state.stack.back().callPathNode->statistics.incrementValue(stats::states, addend);
+    if (!UseCallPaths) continue;
+    if (state.stack.empty()) continue;
+    state.stack.back().callPathNode->statistics.incrementValue(stats::states, addend);
   }
 }
 
@@ -641,6 +644,7 @@ uint64_t klee::computeMinDistToUncovered(const KInstruction *ki,
   }
 }
 
+/* FIXME -- AJR */
 void StatsTracker::computeReachableUncovered() {
   KModule *km = executor.kmodule;
   Module *m = km->module;
@@ -847,8 +851,9 @@ void StatsTracker::computeReachableUncovered() {
     }
   } while (changed);
 
-  for (std::set<ExecutionState*>::iterator it = executor.states.begin(),
-         ie = executor.states.end(); it != ie; ++it) {
+  for (ExeStateSet::const_iterator it = executor.stateManager->begin(),
+    ie = executor.stateManager->end(); it != ie; ++it)
+  {
     ExecutionState *es = *it;
     uint64_t currentFrameMinDist = 0;
     for (ExecutionState::stack_ty::iterator sfIt = es->stack.begin(),

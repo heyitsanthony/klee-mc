@@ -120,9 +120,7 @@ private:
   ref<Expr> len;
 };
 
-
 typedef std::set<ExecutionState*> ExeStateSet;
-
 class ExecutionState {
 public:
   typedef std::vector<StackFrame> stack_ty;    
@@ -206,7 +204,7 @@ public:
   typedef std::map<MallocKey, const MemoryObject*> MallocKeyMap;
  
   MallocKeyMap mallocKeyMap;
- std::map<MallocKey, StateRecord*> mallocKeyAlloc;
+  std::map<MallocKey, StateRecord*> mallocKeyAlloc;
  
   std::string getFnAlias(std::string fn);
   void addFnAlias(std::string old_fn, std::string new_fn);
