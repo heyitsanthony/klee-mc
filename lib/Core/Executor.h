@@ -188,12 +188,22 @@ private:
 
   void printFileLine(ExecutionState &state, KInstruction *ki);
 
+  void replayPathsIntoStates(ExecutionState& initialState);
   void run(ExecutionState &initialState);
   void runState(ExecutionState* &state);
   void killStates(ExecutionState* &state);
   void compactStates(ExecutionState* &state);
   bool seedRun(ExecutionState& initialState);
+  void seedRunOne(ExecutionState* &lastState);
   void updateStates(ExecutionState *current);
+
+  typedef std::vector<SeedInfo>::iterator SeedInfoIterator;
+  bool getSeedInfoIterRange(
+    ExecutionState* s, SeedInfoIterator &b, SeedInfoIterator& e);
+
+  void setupArgv(
+    ExecutionState* state,
+    Function *f, int argc, char **argv, char **envp);
 
   // Given a concrete object in our [klee's] address space, add it to 
   // objects checked code can reference.
@@ -324,7 +334,6 @@ private:
     unsigned int idx, const std::string& arrName,
     unsigned int& re_idx, unsigned int& cmp_val);
 
-
   void executeMakeSymbolic(ExecutionState &state, const MemoryObject *mo);
   void executeMakeSymbolic(
     ExecutionState& state, const MemoryObject* mo, ref<Expr> len);
@@ -333,6 +342,8 @@ private:
   void makeSymbolic(
     ExecutionState& state, const MemoryObject* mo, ref<Expr> len);
 
+  bool isForkingCondition(ExecutionState& current, ref<Expr> condition);
+  bool isForkingCallPath(CallPathNode* cpn);
   StatePair fork(ExecutionState &current, ref<Expr> condition, bool isInternal);
   StateVector fork(ExecutionState &current,
                    unsigned N, ref<Expr> conditions[], bool isInternal,

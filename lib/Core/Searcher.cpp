@@ -67,10 +67,10 @@ ExecutionState &DFSSearcher::selectState(bool allowCompact) {
 }
 
 void DFSSearcher::update(ExecutionState *current,
-        const std::set<ExecutionState*> &addedStates,
-        const std::set<ExecutionState*> &removedStates,
-        const std::set<ExecutionState*> &ignoreStates,
-        const std::set<ExecutionState*> &unignoreStates)
+        const ExeStateSet &addedStates,
+        const ExeStateSet &removedStates,
+        const ExeStateSet &ignoreStates,
+        const ExeStateSet &unignoreStates)
 {
   states.insert(states.end(),
           addedStates.begin(),
@@ -104,19 +104,19 @@ ExecutionState &RandomSearcher::selectState(bool allowCompact) {
 }
 
 void RandomSearcher::update(ExecutionState *current,
-        const std::set<ExecutionState*> &addedStates,
-        const std::set<ExecutionState*> &removedStates,
-        const std::set<ExecutionState*> &ignoreStates,
-        const std::set<ExecutionState*> &unignoreStates) {
+        const ExeStateSet &addedStates,
+        const ExeStateSet &removedStates,
+        const ExeStateSet &ignoreStates,
+        const ExeStateSet &unignoreStates) {
   states.insert(states.end(),
           addedStates.begin(),
           addedStates.end());
-  for (std::set<ExecutionState*>::const_iterator it = addedStates.begin();
+  for (ExeStateSet::const_iterator it = addedStates.begin();
           it != addedStates.end(); ++it) {
     if (!(*it)->isCompactForm)
       statesNonCompact.push_back(*it);
   }
-  for (std::set<ExecutionState*>::const_iterator it = removedStates.begin(),
+  for (ExeStateSet::const_iterator it = removedStates.begin(),
           ie = removedStates.end(); it != ie; ++it) {
     ExecutionState *es = *it;
 
@@ -209,32 +209,32 @@ double WeightedRandomSearcher::getWeight(ExecutionState *es) {
 }
 
 void WeightedRandomSearcher::update(ExecutionState *current,
-        const std::set<ExecutionState*> &addedStates,
-        const std::set<ExecutionState*> &removedStates,
-        const std::set<ExecutionState*> &ignoreStates,
-        const std::set<ExecutionState*> &unignoreStates) {
+        const ExeStateSet &addedStates,
+        const ExeStateSet &removedStates,
+        const ExeStateSet &ignoreStates,
+        const ExeStateSet &unignoreStates) {
   if (current && updateWeights && !removedStates.count(current) && !ignoreStates.count(current))
     states->update(current, getWeight(current));
 
-  for (std::set<ExecutionState*>::const_iterator it = addedStates.begin(),
+  for (ExeStateSet::const_iterator it = addedStates.begin(),
           ie = addedStates.end(); it != ie; ++it) {
     ExecutionState *es = *it;
     states->insert(es, getWeight(es), es->isCompactForm);
   }
 
-  for (std::set<ExecutionState*>::const_iterator it = ignoreStates.begin(),
+  for (ExeStateSet::const_iterator it = ignoreStates.begin(),
           ie = ignoreStates.end(); it != ie; ++it) {
     ExecutionState *es = *it;
     states->remove(es);
   }
 
-  for (std::set<ExecutionState*>::const_iterator it = unignoreStates.begin(),
+  for (ExeStateSet::const_iterator it = unignoreStates.begin(),
           ie = unignoreStates.end(); it != ie; ++it) {
     ExecutionState *es = *it;
     states->insert(es, getWeight(es), es->isCompactForm);
   }
 
-  for (std::set<ExecutionState*>::const_iterator it = removedStates.begin(),
+  for (ExeStateSet::const_iterator it = removedStates.begin(),
           ie = removedStates.end(); it != ie; ++it) {
     ExecutionState* es = *it;
     states->remove(es);
@@ -302,12 +302,12 @@ ExecutionState &RandomPathSearcher::selectState(bool allowCompact) {
 }
 
 void RandomPathSearcher::update(ExecutionState *current,
-        const std::set<ExecutionState*> &addedStates,
-        const std::set<ExecutionState*> &removedStates,
-        const std::set<ExecutionState*> &ignoreStates,
-        const std::set<ExecutionState*> &unignoreStates) {
+        const ExeStateSet &addedStates,
+        const ExeStateSet &removedStates,
+        const ExeStateSet &ignoreStates,
+        const ExeStateSet &unignoreStates) {
 
-  for (std::set<ExecutionState*>::const_iterator it = ignoreStates.begin(),
+  for (ExeStateSet::const_iterator it = ignoreStates.begin(),
           ie = ignoreStates.end(); it != ie; ++it) {
 
     ExecutionState *state = *it;
@@ -323,7 +323,7 @@ void RandomPathSearcher::update(ExecutionState *current,
     executor.processTree->checkRep();
   }
 
-  for (std::set<ExecutionState*>::const_iterator it = unignoreStates.begin(),
+  for (ExeStateSet::const_iterator it = unignoreStates.begin(),
           ie = unignoreStates.end(); it != ie; ++it) {
 
     ExecutionState *state = *it;
@@ -416,10 +416,10 @@ entry:
 }
 
 void BumpMergingSearcher::update(ExecutionState *current,
-        const std::set<ExecutionState*> &addedStates,
-        const std::set<ExecutionState*> &removedStates,
-        const std::set<ExecutionState*> &ignoreStates,
-        const std::set<ExecutionState*> &unignoreStates) {
+        const ExeStateSet &addedStates,
+        const ExeStateSet &removedStates,
+        const ExeStateSet &ignoreStates,
+        const ExeStateSet &unignoreStates) {
   baseSearcher->update(current, addedStates, removedStates, ignoreStates, unignoreStates);
 }
 
@@ -463,7 +463,7 @@ ExecutionState &MergingSearcher::selectState(bool allowCompact) {
 
   // build map of merge point -> state list
   std::map<Instruction*, std::vector<ExecutionState*> > merges;
-  for (std::set<ExecutionState*>::const_iterator it = statesAtMerge.begin(),
+  for (ExeStateSet::const_iterator it = statesAtMerge.begin(),
           ie = statesAtMerge.end(); it != ie; ++it) {
     ExecutionState &state = **it;
     Instruction *mp = getMergePoint(state);
@@ -486,13 +486,13 @@ ExecutionState &MergingSearcher::selectState(bool allowCompact) {
     }
 
     // merge states
-    std::set<ExecutionState*> toMerge(it->second.begin(), it->second.end());
+    ExeStateSet toMerge(it->second.begin(), it->second.end());
     while (!toMerge.empty()) {
       ExecutionState *base = *toMerge.begin();
       toMerge.erase(toMerge.begin());
 
-      std::set<ExecutionState*> toErase;
-      for (std::set<ExecutionState*>::iterator it = toMerge.begin(),
+      ExeStateSet toErase;
+      for (ExeStateSet::iterator it = toMerge.begin(),
               ie = toMerge.end(); it != ie; ++it) {
         ExecutionState *mergeWith = *it;
 
@@ -502,16 +502,16 @@ ExecutionState &MergingSearcher::selectState(bool allowCompact) {
       }
       if (DebugLogMerge && !toErase.empty()) {
         std::cerr << "\t\tmerged: " << base << " with [";
-        for (std::set<ExecutionState*>::iterator it = toErase.begin(),
+        for (ExeStateSet::iterator it = toErase.begin(),
                 ie = toErase.end(); it != ie; ++it) {
           if (it != toErase.begin()) std::cerr << ", ";
           std::cerr << *it;
         }
         std::cerr << "]\n";
       }
-      for (std::set<ExecutionState*>::iterator it = toErase.begin(),
+      for (ExeStateSet::iterator it = toErase.begin(),
               ie = toErase.end(); it != ie; ++it) {
-        std::set<ExecutionState*>::iterator it2 = toMerge.find(*it);
+        ExeStateSet::iterator it2 = toMerge.find(*it);
         assert(it2 != toMerge.end());
         executor.terminateState(**it);
         toMerge.erase(it2);
@@ -531,16 +531,16 @@ ExecutionState &MergingSearcher::selectState(bool allowCompact) {
 }
 
 void MergingSearcher::update(ExecutionState *current,
-        const std::set<ExecutionState*> &addedStates,
-        const std::set<ExecutionState*> &removedStates,
-        const std::set<ExecutionState*> &ignoreStates,
-        const std::set<ExecutionState*> &unignoreStates) {
+        const ExeStateSet &addedStates,
+        const ExeStateSet &removedStates,
+        const ExeStateSet &ignoreStates,
+        const ExeStateSet &unignoreStates) {
   if (!removedStates.empty()) {
     std::set<ExecutionState *> alt = removedStates;
-    for (std::set<ExecutionState*>::const_iterator it = removedStates.begin(),
+    for (ExeStateSet::const_iterator it = removedStates.begin(),
             ie = removedStates.end(); it != ie; ++it) {
       ExecutionState *es = *it;
-      std::set<ExecutionState*>::const_iterator it = statesAtMerge.find(es);
+      ExeStateSet::const_iterator it = statesAtMerge.find(es);
       if (it != statesAtMerge.end()) {
         statesAtMerge.erase(it);
         alt.erase(alt.find(es));
@@ -613,10 +613,10 @@ bool is_disjoint(const C1& a, const C2& b)
 }
 
 void BatchingSearcher::update(ExecutionState *current,
-        const std::set<ExecutionState*> &addedStates_,
-        const std::set<ExecutionState*> &removedStates_,
-        const std::set<ExecutionState*> &ignoreStates_,
-        const std::set<ExecutionState*> &unignoreStates_) {
+        const ExeStateSet &addedStates_,
+        const ExeStateSet &removedStates_,
+        const ExeStateSet &ignoreStates_,
+        const ExeStateSet &unignoreStates_) {
   assert(is_disjoint(addedStates_, removedStates_));
 
   // If there are pending additions before removals, or pending removals before additions,
@@ -664,18 +664,18 @@ ExecutionState &IterativeDeepeningTimeSearcher::selectState(bool allowCompact) {
 }
 
 void IterativeDeepeningTimeSearcher::update(ExecutionState *current,
-        const std::set<ExecutionState*> &addedStates,
-        const std::set<ExecutionState*> &removedStates,
-        const std::set<ExecutionState*> &ignoreStates,
-        const std::set<ExecutionState*> &unignoreStates) {
+        const ExeStateSet &addedStates,
+        const ExeStateSet &removedStates,
+        const ExeStateSet &ignoreStates,
+        const ExeStateSet &unignoreStates) {
   double elapsed = util::estWallTime() - startTime;
 
   if (!removedStates.empty()) {
     std::set<ExecutionState *> alt = removedStates;
-    for (std::set<ExecutionState*>::const_iterator it = removedStates.begin(),
+    for (ExeStateSet::const_iterator it = removedStates.begin(),
             ie = removedStates.end(); it != ie; ++it) {
       ExecutionState *es = *it;
-      std::set<ExecutionState*>::const_iterator it = pausedStates.find(es);
+      ExeStateSet::const_iterator it = pausedStates.find(es);
       if (it != pausedStates.end()) {
         pausedStates.erase(it);
         alt.erase(alt.find(es));
@@ -694,7 +694,7 @@ void IterativeDeepeningTimeSearcher::update(ExecutionState *current,
   if (baseSearcher->empty()) {
     time *= 2;
     std::cerr << "KLEE: increasing time budget to: " << time << "\n";
-    baseSearcher->update(0, pausedStates, std::set<ExecutionState*>(), ignoreStates, unignoreStates);
+    baseSearcher->update(0, pausedStates, ExeStateSet(), ignoreStates, unignoreStates);
     pausedStates.clear();
   }
 }
@@ -720,10 +720,10 @@ ExecutionState &InterleavedSearcher::selectState(bool allowCompact) {
 }
 
 void InterleavedSearcher::update(ExecutionState *current,
-        const std::set<ExecutionState*> &addedStates,
-        const std::set<ExecutionState*> &removedStates,
-        const std::set<ExecutionState*> &ignoreStates,
-        const std::set<ExecutionState*> &unignoreStates) {
+        const ExeStateSet &addedStates,
+        const ExeStateSet &removedStates,
+        const ExeStateSet &ignoreStates,
+        const ExeStateSet &unignoreStates) {
   for (std::vector<Searcher*>::const_iterator it = searchers.begin(),
           ie = searchers.end(); it != ie; ++it)
     (*it)->update(current, addedStates, removedStates, ignoreStates, unignoreStates);

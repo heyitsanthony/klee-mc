@@ -36,7 +36,7 @@ ExecutionState* ExeStateManager::selectState(bool allowCompact)
 
 void ExeStateManager::setupSearcher(Executor* exe)
 {
-  assert (!searcher && !equivStateElim && "Searcher already inited");
+  assert (!searcher && "Searcher already inited");
   searcher = constructUserSearcher(*exe);
   searcher->update(0, states, ExeStateSet(), ExeStateSet(), ExeStateSet());
 }
@@ -144,6 +144,7 @@ void ExeStateManager::removeStringStates(
 
     if (s->isCompactForm) continue;
 
+    /* find indices that are compared on arrName */
     for (ConstraintManager::constraint_iterator 
       it = cons_man->begin(), ite = cons_man->end(); 
       it != ite; ++it)
@@ -164,7 +165,8 @@ void ExeStateManager::removeStringStates(
     /* if there's no elements, don't bother */
     if (run_length == 0) continue;
 
-    /* search again, want to find (Eq false (Eq n (Read w8 run_length))) */
+    /* Search again, want to find (Eq false (Eq n (Read w8 run_length))).
+     * This expression terminates the string comparison. */
     for (ConstraintManager::constraint_iterator 
       it = cons_man->begin(), ite = cons_man->end(); 
       it != ite; ++it)
@@ -176,12 +178,12 @@ void ExeStateManager::removeStringStates(
       expr_inner = (eq_expr_outer->right).get();
       if (!isStrcmpMatch(expr_inner, idx, arrName, re_arr_idx, cmp_val))
         continue;
+      /* Found match. done. */
       /* remove if the tail is a false comparison, but keep 
        * anything that tests the end of the string */
-      if (re_arr_idx == run_length && re_arr_idx != idx) {
+      if (re_arr_idx == run_length && re_arr_idx != idx && re_arr_idx != 0)
         removedStates.insert(s);
-        break;
-      }
+      break;
     }
   }
 
