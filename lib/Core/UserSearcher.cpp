@@ -102,8 +102,50 @@ bool klee::userSearcherRequiresBranchSequences() {
   return false;
 }
 
-Searcher *klee::constructUserSearcher(Executor &executor) {
-  Searcher *searcher = 0;
+/* Research quality */
+Searcher* klee::setupInterleavedSearcher(
+  Executor& executor, Searcher* searcher)
+{
+  std::vector<Searcher *> s;
+
+  s.push_back(searcher);
+    
+  if (UseInterleavedNURS)
+    s.push_back(new WeightedRandomSearcher(
+      executor, WeightedRandomSearcher::Depth));
+  
+  if (UseInterleavedMD2UNURS)
+    s.push_back(new WeightedRandomSearcher(
+      executor, WeightedRandomSearcher::MinDistToUncovered));
+  
+  if (UseInterleavedCovNewNURS)
+    s.push_back(new WeightedRandomSearcher(
+      executor, WeightedRandomSearcher::CoveringNew));
+  
+  if (UseInterleavedInstCountNURS)
+    s.push_back(new WeightedRandomSearcher(
+      executor, WeightedRandomSearcher::InstCount));
+  
+  if (UseInterleavedCPInstCountNURS)
+    s.push_back(new WeightedRandomSearcher(
+      executor, WeightedRandomSearcher::CPInstCount));
+  
+  if (UseInterleavedQueryCostNURS)
+    s.push_back(new WeightedRandomSearcher(
+      executor, WeightedRandomSearcher::QueryCost));
+
+  if (UseInterleavedRS) 
+    s.push_back(new RandomSearcher());
+
+  /* No interleaved searchers defined. Don't bother with interleave obj */
+  if (s.size() == 1) return searcher;
+
+  return new InterleavedSearcher(s);
+}
+
+Searcher* klee::setupBaseSearcher(Executor& executor)
+{
+  Searcher* searcher;
 
   if (UseRandomPathSearch) {
     searcher = new RandomPathSearcher(executor);
@@ -115,51 +157,33 @@ Searcher *klee::constructUserSearcher(Executor &executor) {
     searcher = new DFSSearcher();
   }
 
-  if (UseInterleavedNURS || UseInterleavedMD2UNURS || UseInterleavedRS ||
-      UseInterleavedCovNewNURS || UseInterleavedInstCountNURS ||
-      UseInterleavedCPInstCountNURS || UseInterleavedQueryCostNURS) {
-    std::vector<Searcher *> s;
-    s.push_back(searcher);
-    
-    if (UseInterleavedNURS)
-      s.push_back(new WeightedRandomSearcher(executor, 
-                                             WeightedRandomSearcher::Depth));
-    if (UseInterleavedMD2UNURS)
-      s.push_back(new WeightedRandomSearcher(executor, 
-                                             WeightedRandomSearcher::MinDistToUncovered));
+  return searcher;
+}
 
-    if (UseInterleavedCovNewNURS)
-      s.push_back(new WeightedRandomSearcher(executor, 
-                                             WeightedRandomSearcher::CoveringNew));
-   
-    if (UseInterleavedInstCountNURS)
-      s.push_back(new WeightedRandomSearcher(executor, 
-                                             WeightedRandomSearcher::InstCount));
-    
-    if (UseInterleavedCPInstCountNURS)
-      s.push_back(new WeightedRandomSearcher(executor, 
-                                             WeightedRandomSearcher::CPInstCount));
-    
-    if (UseInterleavedQueryCostNURS)
-      s.push_back(new WeightedRandomSearcher(executor, 
-                                             WeightedRandomSearcher::QueryCost));
-
-    if (UseInterleavedRS) 
-      s.push_back(new RandomSearcher());
-
-    searcher = new InterleavedSearcher(s);
-  }
-
-  if (UseBatchingSearch) {
-    searcher = new BatchingSearcher(searcher, BatchTime, BatchInstructions);
-  }
-
+Searcher* klee::setupMergeSearcher(Executor& executor, Searcher* searcher)
+{
   if (UseMerge) {
     assert(!UseBumpMerge);
     searcher = new MergingSearcher(executor, searcher);
   } else if (UseBumpMerge) {    
     searcher = new BumpMergingSearcher(executor, searcher);
   }
+
+  return searcher;
+}
+
+Searcher *klee::constructUserSearcher(Executor &executor)
+{
+  Searcher *searcher;
+
+  searcher = setupBaseSearcher(executor);
+  searcher = setupInterleavedSearcher(executor, searcher);
+
+  if (UseBatchingSearch) {
+    searcher = new BatchingSearcher(searcher, BatchTime, BatchInstructions);
+  }
+
+  searcher = setupMergeSearcher(executor, searcher);
   
   if (UseIterativeDeepeningTimeSearch) {
     searcher = new IterativeDeepeningTimeSearcher(searcher);

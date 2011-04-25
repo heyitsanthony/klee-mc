@@ -19,6 +19,11 @@ namespace klee {
 
   bool userSearcherRequiresBranchSequences();
 
+  /* MAKE PRIVATE in facade */
+  Searcher* setupInterleavedSearcher(Executor& executor, Searcher* s);
+  Searcher* setupBaseSearcher(Executor& executor);
+  Searcher* setupMergeSearcher(Executor& executor, Searcher* searcher);
+
   Searcher *constructUserSearcher(Executor &executor);
 }
 
