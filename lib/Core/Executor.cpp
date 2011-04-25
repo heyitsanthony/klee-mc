@@ -25,6 +25,7 @@
 #include "StatsTracker.h"
 #include "TimingSolver.h"
 #include "UserSearcher.h"
+#include "MemUsage.h"
 
 #include "klee/Common.h"
 #include "klee/ExecutionState.h"
@@ -58,7 +59,6 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/GetElementPtrTypeIterator.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/System/Process.h"
 #include "llvm/Target/TargetData.h"
 
 #include <cassert>
@@ -2521,10 +2521,14 @@ void Executor::bindModuleConstants() {
 void Executor::killStates(ExecutionState* &state)
 {
   // just guess at how many to kill
-  unsigned numStates = stateManager->size();
-  unsigned mbs = sys::Process::GetTotalMemoryUsage() >> 20;
-  unsigned toKill = std::max(1U, numStates - numStates * MaxMemory / mbs);
-  klee_warning("killing %u states (over memory cap)", toKill);
+  uint64_t numStates = stateManager->size();
+  uint64_t mbs = getMemUsageMB();
+  unsigned toKill = std::max((uint64_t)1, numStates - (numStates*MaxMemory)/mbs);
+  assert (mbs > MaxMemory);
+
+  klee_warning(
+    "killing %u states (over memory cap). Total states = %ld.",
+    toKill, numStates);
 
   std::vector<ExecutionState*> arr(
     stateManager->begin(),
@@ -2536,9 +2540,8 @@ void Executor::killStates(ExecutionState* &state)
   for (unsigned i = 0; i < toKill; ++i) {
     terminateStateEarly(*arr[i], "memory limit");
     if (state == arr[i]) state = NULL;
-    if ((i % 101) == 100) klee_message("Killed %d states...", i);
   }
-  klee_message("Killed everything");
+  klee_message("Killed %u states.", toKill);
 }
 
 void Executor::runState(ExecutionState* &state)
@@ -2560,7 +2563,7 @@ void Executor::runState(ExecutionState* &state)
   // We need to avoid calling GetMallocUsage() often because it
   // is O(elts on freelist). This is really bad since we start
   // to pummel the freelist once we hit the memory cap.
-  unsigned mbs = sys::Process::GetTotalMemoryUsage() >> 20;
+  uint64_t mbs = getMemUsageMB();
   
   if (mbs < 0.9*MaxMemory) {
     atMemoryLimit = false;
@@ -2647,7 +2650,6 @@ bool Executor::seedRun(ExecutionState& initialState)
 
   if (haltExecution) return false;
 
-
   klee_message("seeding done (%d states remain)", (int) stateManager->size());
 
   // XXX total hack, just because I like non uniform better but want
@@ -2711,6 +2713,9 @@ void Executor::run(ExecutionState &initialState)
     updateStates(state);
   }
 
+  klee_message("OK. We're out. empty=%s. halt=%s",
+  	(stateManager->empty()) ? "true" : "false",
+	(haltExecution) ? "true" : "false");
   stateManager->teardownUserSearcher();
  
 dump:

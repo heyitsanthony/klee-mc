@@ -26,6 +26,7 @@
 #include "ExeStateManager.h"
 #include "MemoryManager.h"
 #include "UserSearcher.h"
+#include "MemUsage.h"
 
 #include "llvm/BasicBlock.h"
 #include "llvm/Function.h"
@@ -418,7 +419,7 @@ void StatsTracker::writeStatsLine() {
              << "," << TimeAmountFormat(util::getUserTime())
              << "," << executor.stateManager->size()
              << "," << executor.stateManager->getNonCompactStateCount()
-             << "," << sys::Process::GetTotalMemoryUsage()
+             << "," << getMemUsageKB()
              << "," << stats::queries
              << "," << stats::queryConstructs
              << "," << 0 // was numObjects
@@ -514,76 +515,75 @@ void StatsTracker::writeIStats() {
 
   for (Module::iterator fnIt = m->begin(), fn_ie = m->end(); 
        fnIt != fn_ie; ++fnIt) {
-    if (!fnIt->isDeclaration()) {
-      for (Function::iterator bbIt = fnIt->begin(), bb_ie = fnIt->end(); 
-           bbIt != bb_ie; ++bbIt) {
-        for (BasicBlock::iterator it = bbIt->begin(), ie = bbIt->end(); 
-             it != ie; ++it) {
-          Instruction *instr = &*it;
-          const InstructionInfo &ii = executor.kmodule->infos->getInfo(instr);
-          unsigned index = ii.id;
-          if (ii.file!=sourceFile) {
-            if(ii.file.empty())
-              of << "fl=[klee]\n";
+    if (fnIt->isDeclaration()) continue;
+    for (Function::iterator bbIt = fnIt->begin(), bb_ie = fnIt->end(); 
+         bbIt != bb_ie; ++bbIt) {
+      for (BasicBlock::iterator it = bbIt->begin(), ie = bbIt->end(); 
+           it != ie; ++it) {
+        Instruction *instr = &*it;
+        const InstructionInfo &ii = executor.kmodule->infos->getInfo(instr);
+        unsigned index = ii.id;
+        if (ii.file!=sourceFile) {
+          if(ii.file.empty())
+            of << "fl=[klee]\n";
+          else
+            of << "fl=" << ii.file << "\n";
+          sourceFile = ii.file;
+        }
+        if (bbIt == fnIt->begin() && it == bbIt->begin()) {
+          of << "fn=" << fnIt->getNameStr() << "\n";
+        }
+        of << ii.assemblyLine << " ";
+        of << ii.line << " ";
+        for (unsigned i=0; i<nStats; i++)
+          if (istatsMask&(1<<i))
+            of << sm.getIndexedValue(sm.getStatistic(i), index) << " ";
+        of << "\n";
+
+        if (!(UseCallPaths && 
+            (isa<CallInst>(instr) || isa<InvokeInst>(instr))))
+            continue;
+
+        CallSiteSummaryTable::iterator it = callSiteStats.find(instr);
+        if (it == callSiteStats.end()) continue;
+
+        for (std::map<llvm::Function*, CallSiteInfo>::iterator
+               fit = it->second.begin(), fie = it->second.end(); 
+             fit != fie; ++fit) {
+          Function *f = fit->first;
+          CallSiteInfo &csi = fit->second;
+          const InstructionInfo &fii = 
+            executor.kmodule->infos->getFunctionInfo(f);
+
+          if (fii.file!=sourceFile) {
+            if(fii.file.empty())
+              of << "cfl=[klee]\n";
             else
-              of << "fl=" << ii.file << "\n";
-            sourceFile = ii.file;
+              of << "cfl=" << fii.file << "\n";
           }
-          if (bbIt == fnIt->begin() && it == bbIt->begin()) {
-            of << "fn=" << fnIt->getNameStr() << "\n";
-          }
+          of << "cfn=" << f->getNameStr() << "\n";
+          of << "calls=" << csi.count << " ";
+          of << fii.assemblyLine << " ";
+          of << fii.line << "\n";
+
           of << ii.assemblyLine << " ";
           of << ii.line << " ";
-          for (unsigned i=0; i<nStats; i++)
-            if (istatsMask&(1<<i))
-              of << sm.getIndexedValue(sm.getStatistic(i), index) << " ";
-          of << "\n";
+          for (unsigned i=0; i<nStats; i++) {
+            if (!(istatsMask&(1<<i))) continue;
+            Statistic &s = sm.getStatistic(i);
+            uint64_t value;
 
-          if (UseCallPaths && 
-              (isa<CallInst>(instr) || isa<InvokeInst>(instr))) {
-            CallSiteSummaryTable::iterator it = callSiteStats.find(instr);
-            if (it!=callSiteStats.end()) {
-              for (std::map<llvm::Function*, CallSiteInfo>::iterator
-                     fit = it->second.begin(), fie = it->second.end(); 
-                   fit != fie; ++fit) {
-                Function *f = fit->first;
-                CallSiteInfo &csi = fit->second;
-                const InstructionInfo &fii = 
-                  executor.kmodule->infos->getFunctionInfo(f);
-  
-                if (fii.file!=sourceFile) {
-                  if(fii.file.empty())
-                    of << "cfl=[klee]\n";
-                  else
-                    of << "cfl=" << fii.file << "\n";
-                }
-                of << "cfn=" << f->getNameStr() << "\n";
-                of << "calls=" << csi.count << " ";
-                of << fii.assemblyLine << " ";
-                of << fii.line << "\n";
-
-                of << ii.assemblyLine << " ";
-                of << ii.line << " ";
-                for (unsigned i=0; i<nStats; i++) {
-                  if (istatsMask&(1<<i)) {
-                    Statistic &s = sm.getStatistic(i);
-                    uint64_t value;
-
-                    // Hack, ignore things that don't make sense on
-                    // call paths.
-                    if (&s == &stats::uncoveredInstructions) {
-                      value = 0;
-                    } else {
-                      value = csi.statistics.getValue(s);
-                    }
-
-                    of << value << " ";
-                  }
-                }
-                of << "\n";
-              }
+            // Hack, ignore things that don't make sense on
+            // call paths.
+            if (&s == &stats::uncoveredInstructions) {
+              value = 0;
+            } else {
+              value = csi.statistics.getValue(s);
             }
+
+            of << value << " ";
           }
+          of << "\n";
         }
       }
     }

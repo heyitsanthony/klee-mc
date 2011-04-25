@@ -3,7 +3,7 @@
 #include "EquivalentStateEliminator.h"
 #include "Searcher.h"
 #include "UserSearcher.h"
-#include "llvm/System/Process.h"
+#include "MemUsage.h"
 #include "klee/Common.h"
 
 #include <algorithm>
@@ -241,7 +241,7 @@ void ExeStateManager::updateStates(Executor* exe, ExecutionState *current)
     unignoreStates.clear();
   }
   if (equivStateElim) {      
-    equivStateElim->update(current, addedStates, removedStates, ignoreStates, unignoreStates);      
+    equivStateElim->update(current, addedStates, removedStates, ignoreStates, unignoreStates);
   }
 
   states.insert(addedStates.begin(), addedStates.end());
@@ -321,7 +321,7 @@ void ExeStateManager::compactStates(ExecutionState* &state, uint64_t maxMem)
 
    // a rough measure
   unsigned s = nonCompactStateCount + ((size()-nonCompactStateCount)/16);
-  unsigned mbs = sys::Process::GetTotalMemoryUsage() >> 20;
+  uint64_t mbs = getMemUsageMB();
   unsigned toCompact = std::max(
     (uint64_t)1, (uint64_t)s - s * maxMem / mbs);
   toCompact = std::min(toCompact, (unsigned) nonCompactStateCount);
