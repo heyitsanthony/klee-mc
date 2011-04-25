@@ -37,6 +37,7 @@ namespace llvm {
   class ConstantExpr;
   class Function;
   class GlobalValue;
+  class GlobalVariable;
   class Instruction;
   class TargetData;
   class Twine;
@@ -185,6 +186,11 @@ private:
   void instCmp(ExecutionState& state, KInstruction* ki);
   void instCall(ExecutionState& state, KInstruction* ki);
   void instSwitch(ExecutionState& state, KInstruction* ki);
+  void instUnwind(ExecutionState& state);
+
+  bool isFPPredicateMatched(
+    APFloat::cmpResult CmpRes, CmpInst::Predicate pred);
+
 
   void printFileLine(ExecutionState &state, KInstruction *ki);
 
@@ -212,9 +218,10 @@ private:
   inline void splitProcessTree(PTreeNode* n, ExecutionState* a,
                                ExecutionState* b);
   void initializeGlobalObject(ExecutionState &state, ObjectState *os, 
-			      llvm::Constant *c,
-			      unsigned offset);
+    llvm::Constant *c, unsigned offset);
   void initializeGlobals(ExecutionState &state);
+	void allocGlobalVariableDecl(ExecutionState& s, const GlobalVariable& gv);
+	void allocGlobalVariableNoDecl(ExecutionState& s, const GlobalVariable& gv);
 
   void stepInstruction(ExecutionState &state);
   void removePTreeState(

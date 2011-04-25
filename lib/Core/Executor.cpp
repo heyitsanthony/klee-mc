@@ -537,9 +537,104 @@ MemoryObject * Executor::addExternalObject(ExecutionState &state,
     //os->write8(i, ((uint8_t*)addr)[i]);
     state.write8(os, i, ((uint8_t*)addr)[i]);
   }
-  if (isReadOnly)
-    os->setReadOnly(true);  
+
+  if (isReadOnly) os->setReadOnly(true);  
   return mo;
+}
+
+
+/* XXX needs a better name */
+void Executor::allocGlobalVariableNoDecl(
+  ExecutionState& state, const GlobalVariable& gv)
+{
+  const Type *ty = gv.getType()->getElementType();
+  uint64_t size = kmodule->targetData->getTypeStoreSize(ty);
+  MemoryObject *mo = 0;
+  ObjectState *os;
+
+  if (UseAsmAddresses && gv.getName()[0]=='\01') {
+    char *end;
+    uint64_t address = ::strtoll(gv.getNameStr().c_str()+1, &end, 0);
+
+    if (end && *end == '\0') {
+      // We can't use the PRIu64 macro here for some reason, so we have to
+      // cast to long long unsigned int to avoid compiler warnings.
+      klee_message("NOTE: allocated global at asm specified address: %#08llx"
+                   " (%llu bytes)",
+                   (long long unsigned int) address,
+                   (long long unsigned int) size);
+//      mo = memory->allocateFixed(address, size, &*i, &state);
+      mo = memory->allocateFixed(address, size, &gv, &state);
+      mo->isUserSpecified = true; // XXX hack;
+    }
+  }
+
+  //if (!mo) mo = memory->allocate(size, false, true, &*i, &state);
+  if (!mo) mo = memory->allocate(size, false, true, &gv, &state);
+  assert(mo && "out of memory");
+
+  os = bindObjectInState(state, mo, false);
+  globalObjects.insert(std::make_pair(&gv, mo));
+  globalAddresses.insert(std::make_pair(&gv, mo->getBaseExpr()));
+
+  if (!gv.hasInitializer()) os->initializeToRandom();
+}
+
+void Executor::allocGlobalVariableDecl(
+  ExecutionState& state, const GlobalVariable& gv)
+{
+  MemoryObject *mo;
+  ObjectState *os;
+  assert (gv.isDeclaration());
+  // FIXME: We have no general way of handling unknown external
+  // symbols. If we really cared about making external stuff work
+  // better we could support user definition, or use the EXE style
+  // hack where we check the object file information.
+
+  const Type *ty = gv.getType()->getElementType();
+  uint64_t size = kmodule->targetData->getTypeStoreSize(ty);
+
+  // XXX - DWD - hardcode some things until we decide how to fix.
+#ifndef WINDOWS
+  if (gv.getName() == "_ZTVN10__cxxabiv117__class_type_infoE") {
+    size = 0x2C;
+  } else if (gv.getName() == "_ZTVN10__cxxabiv120__si_class_type_infoE") {
+    size = 0x2C;
+  } else if (gv.getName() == "_ZTVN10__cxxabiv121__vmi_class_type_infoE") {
+    size = 0x2C;
+  }
+#endif
+
+  if (size == 0) {
+    llvm::errs() << "Unable to find size for global variable: " 
+                 << gv.getName() 
+                 << " (use will result in out of bounds access)\n";
+  }
+
+  mo = memory->allocate(size, false, true, &gv, &state);
+  os = bindObjectInState(state, mo, false);
+  globalObjects.insert(std::make_pair(&gv, mo));
+  globalAddresses.insert(std::make_pair(&gv, mo->getBaseExpr()));
+
+  // Program already running = object already initialized.  Read
+  // concrete value and write it to our copy.
+  if (size == 0) return;
+
+  void *addr;
+  if (gv.getName() == "__dso_handle") {
+    extern void *__dso_handle __attribute__ ((__weak__));
+    addr = &__dso_handle; // wtf ?
+  } else {
+    addr = externalDispatcher->resolveSymbol(gv.getNameStr());
+  }
+  if (!addr)
+    klee_error("unable to load symbol(%s) while initializing globals.", 
+               gv.getName().data());
+
+  for (unsigned offset=0; offset < mo->size; offset++) {
+    //os->write8(offset, ((unsigned char*)addr)[offset]);
+    state.write8(os, offset, ((unsigned char*)addr)[offset]);
+  }
 }
 
 void Executor::initializeGlobals(ExecutionState &state) {
@@ -610,87 +705,8 @@ void Executor::initializeGlobals(ExecutionState &state) {
   for (Module::const_global_iterator i = m->global_begin(),
          e = m->global_end();
        i != e; ++i) {
-    if (i->isDeclaration()) {
-      // FIXME: We have no general way of handling unknown external
-      // symbols. If we really cared about making external stuff work
-      // better we could support user definition, or use the EXE style
-      // hack where we check the object file information.
-
-      const Type *ty = i->getType()->getElementType();
-      uint64_t size = kmodule->targetData->getTypeStoreSize(ty);
-
-      // XXX - DWD - hardcode some things until we decide how to fix.
-#ifndef WINDOWS
-      if (i->getName() == "_ZTVN10__cxxabiv117__class_type_infoE") {
-        size = 0x2C;
-      } else if (i->getName() == "_ZTVN10__cxxabiv120__si_class_type_infoE") {
-        size = 0x2C;
-      } else if (i->getName() == "_ZTVN10__cxxabiv121__vmi_class_type_infoE") {
-        size = 0x2C;
-      }
-#endif
-
-      if (size == 0) {
-        llvm::errs() << "Unable to find size for global variable: " 
-                     << i->getName() 
-                     << " (use will result in out of bounds access)\n";
-      }
-
-      MemoryObject *mo = memory->allocate(size, false, true, i, &state);
-      ObjectState *os = bindObjectInState(state, mo, false);
-      globalObjects.insert(std::make_pair(i, mo));
-      globalAddresses.insert(std::make_pair(i, mo->getBaseExpr()));
-
-      // Program already running = object already initialized.  Read
-      // concrete value and write it to our copy.
-      if (size) {
-        void *addr;
-        if (i->getName() == "__dso_handle") {
-          extern void *__dso_handle __attribute__ ((__weak__));
-          addr = &__dso_handle; // wtf ?
-        } else {
-          addr = externalDispatcher->resolveSymbol(i->getNameStr());
-        }
-        if (!addr)
-          klee_error("unable to load symbol(%s) while initializing globals.", 
-                     i->getName().data());
-
-        for (unsigned offset=0; offset<mo->size; offset++) {
-          //os->write8(offset, ((unsigned char*)addr)[offset]);
-          state.write8(os, offset, ((unsigned char*)addr)[offset]);
-        }
-      }
-    } else {
-      const Type *ty = i->getType()->getElementType();
-      uint64_t size = kmodule->targetData->getTypeStoreSize(ty);
-      MemoryObject *mo = 0;
-
-      if (UseAsmAddresses && i->getName()[0]=='\01') {
-        char *end;
-        uint64_t address = ::strtoll(i->getNameStr().c_str()+1, &end, 0);
-
-        if (end && *end == '\0') {
-          // We can't use the PRIu64 macro here for some reason, so we have to
-          // cast to long long unsigned int to avoid compiler warnings.
-          klee_message("NOTE: allocated global at asm specified address: %#08llx"
-                       " (%llu bytes)",
-                       (long long unsigned int) address,
-                       (long long unsigned int) size);
-          mo = memory->allocateFixed(address, size, &*i, &state);
-          mo->isUserSpecified = true; // XXX hack;
-        }
-      }
-
-      if (!mo)
-        mo = memory->allocate(size, false, true, &*i, &state);
-      assert(mo && "out of memory");
-      ObjectState *os = bindObjectInState(state, mo, false);
-      globalObjects.insert(std::make_pair(i, mo));
-      globalAddresses.insert(std::make_pair(i, mo->getBaseExpr()));
-
-      if (!i->hasInitializer())
-          os->initializeToRandom();
-    }
+    if (i->isDeclaration()) allocGlobalVariableDecl(state, *i);
+    else allocGlobalVariableNoDecl(state, *i);
   }
   
   // link aliases to their definitions (if bound)
@@ -778,7 +794,7 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal)
     }
   }
 
-/* XXX XXX what is condition[0], then!? */
+/* XXX what is condition[0], then!? - AJR */
 //  conditions[0] = Expr::createIsZero(condition);
   conditions[1] = condition;
 
@@ -1936,33 +1952,70 @@ void Executor::instSwitch(ExecutionState& state, KInstruction *ki)
   }
 }
 
+void Executor::instUnwind(ExecutionState& state)
+{
+  while (1) {
+    KInstruction *kcaller = state.stack.back().caller;
+    state.popFrame();
+
+    if (statsTracker) statsTracker->framePopped(state);
+
+    if (state.stack.empty()) {
+      terminateStateOnExecError(state, "unwind from initial stack frame");
+      return;
+    } 
+
+    Instruction *caller = kcaller->inst;
+    if (InvokeInst *ii = dyn_cast<InvokeInst>(caller)) {
+      transferToBasicBlock(ii->getUnwindDest(), caller->getParent(), state);
+      return;
+    }
+  }
+}
+
+bool Executor::isFPPredicateMatched(
+  APFloat::cmpResult CmpRes, CmpInst::Predicate pred)
+{
+  switch(pred) {
+  // Predicates which only care about whether or not the operands are NaNs.
+  case FCmpInst::FCMP_ORD: return CmpRes != APFloat::cmpUnordered;
+  case FCmpInst::FCMP_UNO: return CmpRes == APFloat::cmpUnordered;
+  // Ordered comparisons return false if either operand is NaN.  Unordered
+  // comparisons return true if either operand is NaN.
+  case FCmpInst::FCMP_UEQ: return CmpRes == APFloat::cmpUnordered;
+  case FCmpInst::FCMP_OEQ: return CmpRes == APFloat::cmpEqual;
+  case FCmpInst::FCMP_UGT: return CmpRes == APFloat::cmpUnordered;
+  case FCmpInst::FCMP_OGT: return CmpRes == APFloat::cmpGreaterThan;
+  case FCmpInst::FCMP_UGE: return CmpRes == APFloat::cmpUnordered;
+  case FCmpInst::FCMP_OGE: 
+    return CmpRes == APFloat::cmpGreaterThan || CmpRes == APFloat::cmpEqual;
+  case FCmpInst::FCMP_ULT: return CmpRes == APFloat::cmpUnordered;
+  case FCmpInst::FCMP_OLT: return CmpRes == APFloat::cmpLessThan;
+  case FCmpInst::FCMP_ULE: return CmpRes == APFloat::cmpUnordered;
+  case FCmpInst::FCMP_OLE: 
+    return CmpRes == APFloat::cmpLessThan || CmpRes == APFloat::cmpEqual;
+  case FCmpInst::FCMP_UNE: 
+    return CmpRes == APFloat::cmpUnordered || CmpRes != APFloat::cmpEqual;
+  case FCmpInst::FCMP_ONE:
+    return CmpRes != APFloat::cmpUnordered && CmpRes != APFloat::cmpEqual;
+  default: assert(0 && "Invalid FCMP predicate!");
+  case FCmpInst::FCMP_FALSE: return false;
+  case FCmpInst::FCMP_TRUE: return true;
+  }
+  return false;
+}
+
+
 void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
   Instruction *i = ki->inst;
   switch (i->getOpcode()) {
     // Control flow
   case Instruction::Ret: instRet(state, ki); break;
 
-  case Instruction::Unwind: {
-    for (;;) {
-      KInstruction *kcaller = state.stack.back().caller;
-      state.popFrame();
-
-      if (statsTracker)
-        statsTracker->framePopped(state);
-
-      if (state.stack.empty()) {
-        terminateStateOnExecError(state, "unwind from initial stack frame");
-        break;
-      } else {
-        Instruction *caller = kcaller->inst;
-        if (InvokeInst *ii = dyn_cast<InvokeInst>(caller)) {
-          transferToBasicBlock(ii->getUnwindDest(), caller->getParent(), state);
-          break;
-        }
-      }
-    }
+  case Instruction::Unwind: 
+    instUnwind(state);
     break;
-  }
+
   case Instruction::Br: instBranch(state, ki); break;
   case Instruction::Switch: instSwitch(state, ki); break;
   case Instruction::Unreachable:
@@ -2314,74 +2367,10 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
     APFloat RHS(right->getAPValue());
     APFloat::cmpResult CmpRes = LHS.compare(RHS);
 
-    bool Result = false;
-    switch( fi->getPredicate() ) {
-      // Predicates which only care about whether or not the operands are NaNs.
-    case FCmpInst::FCMP_ORD:
-      Result = CmpRes != APFloat::cmpUnordered;
-      break;
-
-    case FCmpInst::FCMP_UNO:
-      Result = CmpRes == APFloat::cmpUnordered;
-      break;
-
-      // Ordered comparisons return false if either operand is NaN.  Unordered
-      // comparisons return true if either operand is NaN.
-    case FCmpInst::FCMP_UEQ:
-      Result = CmpRes == APFloat::cmpUnordered;
-      break;
-    case FCmpInst::FCMP_OEQ:
-      Result = CmpRes == APFloat::cmpEqual;
-      break;
-
-    case FCmpInst::FCMP_UGT:
-      Result = CmpRes == APFloat::cmpUnordered;
-      break;
-
-    case FCmpInst::FCMP_OGT:
-      Result = CmpRes == APFloat::cmpGreaterThan;
-      break;
-
-    case FCmpInst::FCMP_UGE:
-      Result = CmpRes == APFloat::cmpUnordered;
-      break;
-    case FCmpInst::FCMP_OGE:
-      Result = CmpRes == APFloat::cmpGreaterThan || CmpRes == APFloat::cmpEqual;
-      break;
-
-    case FCmpInst::FCMP_ULT:
-      Result = CmpRes == APFloat::cmpUnordered;
-      break;
-    case FCmpInst::FCMP_OLT:
-      Result = CmpRes == APFloat::cmpLessThan;
-      break;
-
-    case FCmpInst::FCMP_ULE:
-      Result = CmpRes == APFloat::cmpUnordered;
-      break;
-
-    case FCmpInst::FCMP_OLE:
-      Result = CmpRes == APFloat::cmpLessThan || CmpRes == APFloat::cmpEqual;
-      break;
-
-    case FCmpInst::FCMP_UNE:
-      Result = CmpRes == APFloat::cmpUnordered || CmpRes != APFloat::cmpEqual;
-      break;
-    case FCmpInst::FCMP_ONE:
-      Result = CmpRes != APFloat::cmpUnordered && CmpRes != APFloat::cmpEqual;
-      break;
-
-    default:
-      assert(0 && "Invalid FCMP predicate!");
-    case FCmpInst::FCMP_FALSE:
-      Result = false;
-      break;
-    case FCmpInst::FCMP_TRUE:
-      Result = true;
-      break;
-    }
-
-    bindLocal(ki, state, ConstantExpr::alloc(Result, Expr::Bool));
+    bindLocal(ki, state, 
+      ConstantExpr::alloc(
+        isFPPredicateMatched(CmpRes, fi->getPredicate()),
+        Expr::Bool));
     break;
   }
  
@@ -2390,8 +2379,8 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
   case Instruction::ExtractElement:
   case Instruction::InsertElement:
   case Instruction::ShuffleVector:
-    terminateStateOnError(state, "XXX vector instructions unhandled",
-                          "xxx.err");
+    terminateStateOnError(
+      state, "XXX vector instructions unhandled", "xxx.err");
     break;
  
   default:
@@ -3573,6 +3562,7 @@ void Executor::setupArgv(
 
   for (int i=0; i<argc+1+envc+1+1; i++) {
     MemoryObject *arg;
+    ObjectState	*os;
     
     if (i==argc || i>=argc+1+envc) {
       state->write(argvOS, i * NumPtrBytes, Expr::createPointer(0));
@@ -3584,7 +3574,7 @@ void Executor::setupArgv(
     
     arg = memory->allocate(len+1, false, true, state->pc->inst, state);
     assert (arg != NULL);
-    ObjectState *os = bindObjectInState(*state, arg, false);
+    os = bindObjectInState(*state, arg, false);
     for (j=0; j<len+1; j++) state->write8(os, j, s[j]);
 
     state->write(argvOS, i * NumPtrBytes, arg->getBaseExpr());
