@@ -16,6 +16,16 @@
 
 #include "llvm/Support/CommandLine.h"
 
+#include "BatchingSearcher.h"
+#include "BumpingMergeSearcher.h"
+#include "DFSSearcher.h"
+#include "InterleavedSearcher.h"
+#include "IterativeDeepeningTimeSearcher.h"
+#include "MergingSearcher.h"
+#include "RandomPathSearcher.h"
+#include "RandomSearcher.h"
+#include "WeightedRandomSearcher.h"
+
 using namespace llvm;
 using namespace klee;
 

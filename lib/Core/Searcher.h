@@ -25,15 +25,15 @@ namespace llvm {
   class Instruction;
 }
 
-namespace klee {
-  template<class T> class DiscretePDF;
+namespace klee
+{
   class ExecutionState;
   class Executor;
 
-  class Searcher {
+  class Searcher
+  {
   public:
-    virtual ~Searcher();
-
+    virtual ~Searcher() {}
     virtual ExecutionState &selectState(bool allowCompact) = 0;
 
     virtual void update(ExecutionState *current,
@@ -42,11 +42,11 @@ namespace klee {
                         const std::set<ExecutionState*> &ignoreStates,
                         const std::set<ExecutionState*> &unignoreStates) = 0;
 
-    virtual bool empty() = 0;
+    virtual bool empty() const = 0;
 
     // prints name of searcher as a klee_message()
     // TODO: could probably make prettier or more flexible
-    virtual void printName(std::ostream &os) { 
+    virtual void printName(std::ostream &os) const {
       os << "<unnamed searcher>\n";
     }
 
@@ -69,236 +69,6 @@ namespace klee {
       update(current, std::set<ExecutionState*>(), tmp,std::set<ExecutionState*>(),std::set<ExecutionState*>());
     }
   };
-
-  class DFSSearcher : public Searcher {
-    std::list<ExecutionState*> states;
-
-  public:
-    ExecutionState &selectState(bool allowCompact);
-
-    void update(ExecutionState *current,
-                const std::set<ExecutionState*> &addedStates,
-                const std::set<ExecutionState*> &removedStates,
-                const std::set<ExecutionState*> &ignoreStates,
-                const std::set<ExecutionState*> &unignoreStates);
-    bool empty() { return states.empty(); }
-    void printName(std::ostream &os) {
-      os << "DFSSearcher\n";
-    }
-  };
-
-  class RandomSearcher : public Searcher {
-    std::vector<ExecutionState*> states;
-    std::vector<ExecutionState*> statesNonCompact;
-
-  public:
-    ExecutionState &selectState(bool allowCompact);
-    void update(ExecutionState *current,
-                const std::set<ExecutionState*> &addedStates,
-                const std::set<ExecutionState*> &removedStates,
-                const std::set<ExecutionState*> &ignoreStates,
-                const std::set<ExecutionState*> &unignoreStates);
-    bool empty() { return states.empty(); }
-    void printName(std::ostream &os) {
-      os << "RandomSearcher\n";
-    }
-  };
-
-  class WeightedRandomSearcher : public Searcher {
-  public:
-    enum WeightType {
-      Depth,
-      QueryCost,
-      InstCount,
-      CPInstCount,
-      MinDistToUncovered,
-      CoveringNew
-    };
-
-  private:
-    Executor &executor;
-    DiscretePDF<ExecutionState*> *states;
-    WeightType type;
-    bool updateWeights;        
-    double getWeight(ExecutionState*);
-
-  public:
-    WeightedRandomSearcher(Executor &executor, WeightType type);
-    ~WeightedRandomSearcher();
-    ExecutionState &selectState(bool allowCompact);
-    void update(ExecutionState *current,
-                const std::set<ExecutionState*> &addedStates,
-                const std::set<ExecutionState*> &removedStates,
-                const std::set<ExecutionState*> &ignoreStates,
-                const std::set<ExecutionState*> &unignoreStates);
-    bool empty();
-    void printName(std::ostream &os) {
-      os << "WeightedRandomSearcher::";
-      switch(type) {
-      case Depth              : os << "Depth\n"; return;
-      case QueryCost          : os << "QueryCost\n"; return;
-      case InstCount          : os << "InstCount\n"; return;
-      case CPInstCount        : os << "CPInstCount\n"; return;
-      case MinDistToUncovered : os << "MinDistToUncovered\n"; return;
-      case CoveringNew        : os << "CoveringNew\n"; return;
-      default                 : os << "<unknown type>\n"; return;
-      }
-    }
-  };
-
-  class RandomPathSearcher : public Searcher {
-    Executor &executor;
-    
-  public:
-    RandomPathSearcher(Executor &_executor);
-    ~RandomPathSearcher();
-    
-    ExecutionState &selectState(bool allowCompact);
-    void update(ExecutionState *current,
-                const std::set<ExecutionState*> &addedStates,
-                const std::set<ExecutionState*> &removedStates,
-                const std::set<ExecutionState*> &ignoreStates,
-                const std::set<ExecutionState*> &unignoreStates);
-    bool empty();
-    void printName(std::ostream &os) {
-      os << "RandomPathSearcher\n";
-    }
-  };
-
-  class MergingSearcher : public Searcher {
-    Executor &executor;
-    std::set<ExecutionState*> statesAtMerge;
-    Searcher *baseSearcher;
-    llvm::Function *mergeFunction;
-
-  private:
-    llvm::Instruction *getMergePoint(ExecutionState &es);
-
-  public:
-    MergingSearcher(Executor &executor, Searcher *baseSearcher);
-    ~MergingSearcher();
-
-    ExecutionState &selectState(bool allowCompact);
-    void update(ExecutionState *current,
-                const std::set<ExecutionState*> &addedStates,
-                const std::set<ExecutionState*> &removedStates,
-                const std::set<ExecutionState*> &ignoreStates,
-                const std::set<ExecutionState*> &unignoreStates);
-    bool empty() { return baseSearcher->empty() && statesAtMerge.empty(); }
-    void printName(std::ostream &os) {
-      os << "MergingSearcher\n";
-    }
-  };
-
-  class BumpMergingSearcher : public Searcher {
-    Executor &executor;
-    std::map<llvm::Instruction*, ExecutionState*> statesAtMerge;
-    Searcher *baseSearcher;
-    llvm::Function *mergeFunction;
-
-  private:
-    llvm::Instruction *getMergePoint(ExecutionState &es);
-
-  public:
-    BumpMergingSearcher(Executor &executor, Searcher *baseSearcher);
-    ~BumpMergingSearcher();
-
-    ExecutionState &selectState(bool allowCompact);
-    void update(ExecutionState *current,
-                const std::set<ExecutionState*> &addedStates,
-                const std::set<ExecutionState*> &removedStates,
-                const std::set<ExecutionState*> &ignoreStates,
-                const std::set<ExecutionState*> &unignoreStates);
-    bool empty() { return baseSearcher->empty() && statesAtMerge.empty(); }
-    void printName(std::ostream &os) {
-      os << "BumpMergingSearcher\n";
-    }
-  };
-
-  class BatchingSearcher : public Searcher {
-    Searcher *baseSearcher;
-    double timeBudget;
-    unsigned instructionBudget;
-
-    ExecutionState *lastState;
-    double lastStartTime;
-    uint64_t lastStartInstructions;
-    
-    std::set<ExecutionState*> addedStates;
-    std::set<ExecutionState*> removedStates;
-    std::set<ExecutionState*> ignoreStates;
-    std::set<ExecutionState*> unignoreStates;
-
-  public:
-    BatchingSearcher(Searcher *baseSearcher, 
-                     double _timeBudget,
-                     unsigned _instructionBudget);
-    ~BatchingSearcher();
-    
-    ExecutionState &selectState(bool allowCompact);
-    void update(ExecutionState *current,
-                const std::set<ExecutionState*> &addedStates_,
-                const std::set<ExecutionState*> &removedStates_,
-                const std::set<ExecutionState*> &ignoreStates_,
-                const std::set<ExecutionState*> &unignoreStates_);
-    bool empty() { return baseSearcher->empty(); }
-    void printName(std::ostream &os) {
-      os << "<BatchingSearcher> timeBudget: " << timeBudget
-         << ", instructionBudget: " << instructionBudget
-         << ", baseSearcher:\n";
-      baseSearcher->printName(os);
-      os << "</BatchingSearcher>\n";
-    }
-  };
-
-  class IterativeDeepeningTimeSearcher : public Searcher {
-    Searcher *baseSearcher;
-    double time, startTime;
-    std::set<ExecutionState*> pausedStates;
-
-  public:
-    IterativeDeepeningTimeSearcher(Searcher *baseSearcher);
-    ~IterativeDeepeningTimeSearcher();
-
-    ExecutionState &selectState(bool allowCompact);
-    void update(ExecutionState *current,
-                const std::set<ExecutionState*> &addedStates,
-                const std::set<ExecutionState*> &removedStates,
-                const std::set<ExecutionState*> &ignoreStates,
-                const std::set<ExecutionState*> &unignoreStates);
-    bool empty() { return baseSearcher->empty() && pausedStates.empty(); }
-    void printName(std::ostream &os) {
-      os << "IterativeDeepeningTimeSearcher\n";
-    }
-  };
-
-  class InterleavedSearcher : public Searcher {
-    typedef std::vector<Searcher*> searchers_ty;
-
-    searchers_ty searchers;
-    unsigned index;
-    
-  public:
-    explicit InterleavedSearcher(const searchers_ty &_searchers);
-    ~InterleavedSearcher();
-
-    ExecutionState &selectState(bool allowCompact);
-    void update(ExecutionState *current,
-                const std::set<ExecutionState*> &addedStates,
-                const std::set<ExecutionState*> &removedStates,
-                const std::set<ExecutionState*> &ignoreStates,
-                const std::set<ExecutionState*> &unignoreStates);
-    bool empty() { return searchers[0]->empty(); }
-    void printName(std::ostream &os) {
-      os << "<InterleavedSearcher> containing "
-         << searchers.size() << " searchers:\n";
-      for (searchers_ty::iterator it = searchers.begin(), ie = searchers.end();
-           it != ie; ++it)
-        (*it)->printName(os);
-      os << "</InterleavedSearcher>\n";
-    }
-  };
-
 }
 
 #endif
