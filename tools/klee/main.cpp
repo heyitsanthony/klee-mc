@@ -13,7 +13,7 @@
 
 #include "llvm/Constants.h"
 #include "llvm/Module.h"
-#include "llvm/ModuleProvider.h"
+#include "llvm/ModuleProvider.h" // XXX
 #include "llvm/Type.h"
 #include "llvm/InstrTypes.h"
 #include "llvm/Instruction.h"
@@ -22,6 +22,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/MemoryBuffer.h"
+//#include "llvm/Support/system_error.h"
 #include "llvm/Support/TypeBuilder.h"
 
 // FIXME: Ugh, this is gross. But otherwise our config.h conflicts with LLVMs.
@@ -31,6 +32,7 @@
 #undef PACKAGE_TARNAME
 #undef PACKAGE_VERSION
 #include "llvm/Target/TargetSelect.h"
+//#include "llvm/Support/Signals.h"
 #include "llvm/System/Signals.h"
 #include <iostream>
 #include <fstream>
@@ -545,6 +547,7 @@ void KleeHandler::getPathFiles(std::string path,
 
   for(std::set<llvm::sys::Path>::iterator it = contents.begin();
       it != contents.end(); ++it) {
+//    std::string f = it->str();
     std::string f = it->toString();
     if (f.substr(f.size() - 5, f.size()) == ".path") {
       results.push_back(f);
@@ -1035,16 +1038,9 @@ static llvm::Module *linkWithUclibc(llvm::Module *mainModule) {
   return 0;
 }
 #else
-static llvm::Module *linkWithUclibc(llvm::Module *mainModule) {
-  Function *f;
-  // force import of __uClibc_main
-  mainModule->getOrInsertFunction("__uClibc_main",
-                                  FunctionType::get(Type::getVoidTy(getGlobalContext()),
-                                                    std::vector<const Type*>(),
-                                                    true));
-  
-  // force various imports
-  if (WithPOSIXRuntime) {
+
+static void uclibc_forceImports(llvm::Module* mainModule)
+{
     const llvm::Type *i8Ty = Type::getInt8Ty(getGlobalContext());
     mainModule->getOrInsertFunction("realpath",
                                     PointerType::getUnqual(i8Ty),
@@ -1063,48 +1059,39 @@ static llvm::Module *linkWithUclibc(llvm::Module *mainModule) {
                                     Type::getInt32Ty(getGlobalContext()),
                                     PointerType::getUnqual(i8Ty),
                                     NULL);
-  }
+}
 
-  f = mainModule->getFunction("__ctype_get_mb_cur_max");
-  if (f) f->setName("_stdlib_mb_cur_max");
-
-  // Strip of asm prefixes for 64 bit versions because they are not
-  // present in uclibc and we want to make sure stuff will get
-  // linked. In the off chance that both prefixed and unprefixed
-  // versions are present in the module, make sure we don't create a
-  // naming conflict.
+static void uclibc_stripPrefixes(llvm::Module* mainModule)
+{
   for (Module::iterator fi = mainModule->begin(), fe = mainModule->end();
-       fi != fe;) {
+       fi != fe; fi++) {
     Function *f = fi;
-    ++fi;
     const std::string &name = f->getName();
-    if (name[0]=='\01') {
-      unsigned size = name.size();
-      if (name[size-2]=='6' && name[size-1]=='4') {
-        std::string unprefixed = name.substr(1);
+    unsigned size = name.size();
 
-        // See if the unprefixed version exists.
-        if (Function *f2 = mainModule->getFunction(unprefixed)) {
-          f->replaceAllUsesWith(f2);
-          f->eraseFromParent();
-        } else {
-          f->setName(unprefixed);
-        }
-      }
+    if (name[0] !='\01') continue;
+    if (name[size-2] !='6' || name[size-1] !='4') continue;
+    std::string unprefixed = name.substr(1);
+
+    // See if the unprefixed version exists.
+    if (Function *f2 = mainModule->getFunction(unprefixed)) {
+       f->replaceAllUsesWith(f2);
+       f->eraseFromParent();
+    } else {
+      f->setName(unprefixed);
     }
   }
-  
-  mainModule = klee::linkWithLibrary(mainModule, 
-                                     KLEE_UCLIBC "/lib/libc.a");
-  assert(mainModule && "unable to link with uclibc");
+}
 
+static void uclibc_fixups(llvm::Module* mainModule)
+{
   // more sighs, this is horrible but just a temp hack
   //    f = mainModule->getFunction("__fputc_unlocked");
   //    if (f) f->setName("fputc_unlocked");
   //    f = mainModule->getFunction("__fgetc_unlocked");
   //    if (f) f->setName("fgetc_unlocked");
   
-  Function *f2;
+  Function *f, *f2;
   f = mainModule->getFunction("open");
   f2 = mainModule->getFunction("__libc_open");
   if (f2) {
@@ -1128,17 +1115,20 @@ static llvm::Module *linkWithUclibc(llvm::Module *mainModule) {
       assert(f2->getName() == "fcntl");
     }
   }
+}
 
-  // XXX we need to rearchitect so this can also be used with
-  // programs externally linked with uclibc.
+static void dumpMainModule(Module* mainModule)
+{
+  for (Module::iterator fi = mainModule->begin(), fe = mainModule->end();
+       fi != fe; fi++) {
+    Function *f = fi;
+    const std::string& name = f->getName();
+    std::cout << "WE HAVE: " << name << std::endl;
+  }
+}
 
-  // We now need to swap things so that __uClibc_main is the entry
-  // point, in such a way that the arguments are passed to
-  // __uClibc_main correctly. We do this by renaming the user main
-  // and generating a stub function to call __uClibc_main. There is
-  // also an implicit cooperation in that runFunctionAsMain sets up
-  // the environment arguments to what uclibc expects (following
-  // argv), since it does not explicitly take an envp argument.
+static void uclibc_setEntry(llvm::Module* mainModule)
+{
   Function *userMainFn = mainModule->getFunction("main");
   assert(userMainFn && "unable to get user main");    
   Function *uclibcMainFn = mainModule->getFunction("__uClibc_main");
@@ -1151,15 +1141,17 @@ static llvm::Module *linkWithUclibc(llvm::Module *mainModule) {
   std::vector<const Type*> fArgs;
   fArgs.push_back(ft->getParamType(1)); // argc
   fArgs.push_back(ft->getParamType(2)); // argv
-  Function *stub = Function::Create(FunctionType::get(Type::getInt32Ty(getGlobalContext()), fArgs, false),
-      			      GlobalVariable::ExternalLinkage,
-      			      "main",
-      			      mainModule);
+  Function *stub = Function::Create(
+    FunctionType::get(
+      Type::getInt32Ty(getGlobalContext()), fArgs, false),
+      GlobalVariable::ExternalLinkage,
+      "main",
+      mainModule);
   BasicBlock *bb = BasicBlock::Create(getGlobalContext(), "entry", stub);
 
   std::vector<llvm::Value*> args;
-  args.push_back(llvm::ConstantExpr::getBitCast(userMainFn, 
-                                                ft->getParamType(0)));
+  args.push_back(llvm::ConstantExpr::getBitCast(
+    userMainFn, ft->getParamType(0)));
   args.push_back(stub->arg_begin()); // argc
   args.push_back(++stub->arg_begin()); // argv    
   args.push_back(Constant::getNullValue(ft->getParamType(3))); // app_init
@@ -1169,7 +1161,48 @@ static llvm::Module *linkWithUclibc(llvm::Module *mainModule) {
   CallInst::Create(uclibcMainFn, args.begin(), args.end(), "", bb);
   
   new UnreachableInst(getGlobalContext(), bb);
+}
 
+static llvm::Module *linkWithUclibc(llvm::Module *mainModule)
+{
+  Function *f;
+  // force import of __uClibc_main
+  mainModule->getOrInsertFunction(
+    "__uClibc_main",
+    FunctionType::get(Type::getVoidTy(getGlobalContext()),
+    std::vector<const Type*>(),
+    true));
+  
+  // force various imports
+  if (WithPOSIXRuntime) uclibc_forceImports(mainModule);
+
+  f = mainModule->getFunction("__ctype_get_mb_cur_max");
+  if (f) f->setName("_stdlib_mb_cur_max");
+
+  // Strip of asm prefixes for 64 bit versions because they are not
+  // present in uclibc and we want to make sure stuff will get
+  // linked. In the off chance that both prefixed and unprefixed
+  // versions are present in the module, make sure we don't create a
+  // naming conflict.
+  uclibc_stripPrefixes(mainModule);
+
+
+  mainModule = klee::linkWithLibrary(mainModule, KLEE_UCLIBC "/lib/libc.a");
+  assert(mainModule && "unable to link with uclibc");
+
+  uclibc_fixups(mainModule);
+
+  // XXX we need to rearchitect so this can also be used with
+  // programs externally linked with uclibc.
+
+  // We now need to swap things so that __uClibc_main is the entry
+  // point, in such a way that the arguments are passed to
+  // __uClibc_main correctly. We do this by renaming the user main
+  // and generating a stub function to call __uClibc_main. There is
+  // also an implicit cooperation in that runFunctionAsMain sets up
+  // the environment arguments to what uclibc expects (following
+  // argv), since it does not explicitly take an envp argument.
+  uclibc_setEntry(mainModule);
   return mainModule;
 }
 #endif
@@ -1219,117 +1252,169 @@ public:
     }
 };
 
-int main(int argc, char **argv, char **envp) {  
-#if ENABLE_STPLOG == 1
-  STPLOG_init("stplog.c");
-#endif
+static void printTimes(PrefixWriter& info, struct tms* tms, clock_t* tm, time_t* t)
+{
+  char buf[256], *pbuf;
+  bool tms_valid = true;
 
-  atexit(llvm_shutdown);  // Call llvm_shutdown() on exit.
+  t[1] = time(NULL);
+  tm[1] = times(&tms[1]);
+  if (tm[1] == (clock_t) -1) {
+      perror("times");
+      tms_valid = false;
+  }
+  strftime(buf, sizeof(buf), "Finished: %Y-%m-%d %H:%M:%S\n", localtime(&t[1]));
+  info << buf;
 
-  llvm::InitializeNativeTarget();
+  pbuf += sprintf(pbuf = buf, "Elapsed: ");
+  if (tms_valid) {
+      const long clk_tck = sysconf(_SC_CLK_TCK);
+      pbuf = format_tdiff(pbuf, (tm[1] - tm[0]) / (double) clk_tck);
+      pbuf += sprintf(pbuf, " (user ");
+      pbuf = format_tdiff(pbuf, (tms[1].tms_utime - tms[0].tms_utime) / (double) clk_tck);
+      *pbuf++ = '+';
+      pbuf = format_tdiff(pbuf, (tms[1].tms_cutime - tms[0].tms_cutime) / (double) clk_tck);
+      pbuf += sprintf(pbuf, ", sys ");
+      pbuf = format_tdiff(pbuf, (tms[1].tms_stime - tms[0].tms_stime) / (double) clk_tck);
+      *pbuf++ = '+';
+      pbuf = format_tdiff(pbuf, (tms[1].tms_cstime - tms[0].tms_cstime) / (double) clk_tck);
+      pbuf += sprintf(pbuf, ")");
+  } else
+      pbuf = format_tdiff(pbuf, t[1] - t[0]);
+  strcpy(pbuf, "\n");
+  info << buf;
+}
 
-  parseArguments(argc, argv);
-  sys::PrintStackTraceOnErrorSignal();
 
-  if (Watchdog) {
-    if (MaxTime==0) {
-      klee_error("--watchdog used without --max-time");
-    }
+static void printStats(PrefixWriter& info, KleeHandler* handler)
+{
+  uint64_t queries = 
+    *theStatisticManager->getStatisticByName("Queries");
+  uint64_t queriesValid = 
+    *theStatisticManager->getStatisticByName("QueriesValid");
+  uint64_t queriesInvalid = 
+    *theStatisticManager->getStatisticByName("QueriesInvalid");
+  uint64_t queryCounterexamples = 
+    *theStatisticManager->getStatisticByName("QueriesCEX");
+  uint64_t queryConstructs = 
+    *theStatisticManager->getStatisticByName("QueriesConstructs");
+  uint64_t queryCacheHits =
+    *theStatisticManager->getStatisticByName("QueryCacheHits");
+  uint64_t queryCacheMisses =
+    *theStatisticManager->getStatisticByName("QueryCacheMisses");
+  uint64_t instructions = 
+    *theStatisticManager->getStatisticByName("Instructions");
+  uint64_t forks = 
+    *theStatisticManager->getStatisticByName("Forks");
 
-    int pid = fork();
-    if (pid<0) {
-      klee_error("unable to fork watchdog");
-    } else if (pid) {
-      fprintf(stderr, "KLEE: WATCHDOG: watching %d\n", pid);
-      fflush(stderr);
+  info << "done: total queries = " << queries << " ("
+       << "valid: " << queriesValid << ", "
+       << "invalid: " << queriesInvalid << ", "
+       << "cex: " << queryCounterexamples << ")\n";
+  if (queries)
+    info << "done: avg. constructs per query = " 
+         << queryConstructs / queries << "\n";  
 
-      double nextStep = util::getWallTime() + MaxTime*1.1;
-      int level = 0;
+  info << "done: query cache hits = " << queryCacheHits << ", "
+       << "query cache misses = " << queryCacheMisses << "\n";
 
-      // Simple stupid code...
-      while (1) {
-        sleep(1);
+  info << "done: total instructions = " << instructions << "\n";
+  info << "done: explored paths = " << 1 + forks << "\n";
+  info << "done: completed paths = " << handler->getNumPathsExplored() << "\n";
+  info << "done: generated tests = " << handler->getNumTestCases() << "\n";
+}
 
-        int status, res = waitpid(pid, &status, WNOHANG);
 
-        if (res < 0) {
-          if (errno==ECHILD) { // No child, no need to watch but
-                               // return error since we didn't catch
-                               // the exit.
-            fprintf(stderr, "KLEE: watchdog exiting (no child)\n");
-            return 1;
-          } else if (errno!=EINTR) {
-            perror("watchdog waitpid");
-            exit(1);
-          }
-        } else if (res==pid && WIFEXITED(status)) {
-          return WEXITSTATUS(status);
-        } else {
-          double time = util::getWallTime();
 
-          if (time > nextStep) {
-            ++level;
-            
-            if (level==1) {
-              fprintf(stderr, "KLEE: WATCHDOG: time expired, attempting halt via INT\n");
-              kill(pid, SIGINT);
-            } else if (level==2) {
-              fprintf(stderr, "KLEE: WATCHDOG: time expired, attempting halt via gdb\n");
-              halt_via_gdb(pid);
-            } else {
-              fprintf(stderr, "KLEE: WATCHDOG: kill(9)ing child (I tried to be nice)\n");
-              kill(pid, SIGKILL);
-              return 1; // what more can we do
-            }
+static int runWatchdog(void)
+{
+  if (MaxTime==0)  klee_error("--watchdog used without --max-time");
 
-            // Ideally this triggers a dump, which may take a while,
-            // so try and give the process extra time to clean up.
-            nextStep = util::getWallTime() + std::max(15., MaxTime*.1);
-          }
-        }
+  int pid = fork();
+  if (pid<0) klee_error("unable to fork watchdog");
+  fprintf(stderr, "KLEE: WATCHDOG: watching %d\n", pid);
+  fflush(stderr);
+
+  double nextStep = util::getWallTime() + MaxTime*1.1;
+  int level = 0;
+
+  // Simple stupid code...
+  while (1) {
+    sleep(1);
+
+    int status, res = waitpid(pid, &status, WNOHANG);
+
+    if (res < 0) {
+      if (errno==ECHILD) { // No child, no need to watch but
+                       // return error since we didn't catch
+                       // the exit.
+        fprintf(stderr, "KLEE: watchdog exiting (no child)\n");
+        return 1;
+      } else if (errno!=EINTR) {
+        perror("watchdog waitpid");
+        exit(1);
       }
+    } else if (res==pid && WIFEXITED(status)) {
+      return WEXITSTATUS(status);
+    } else {
+      double time = util::getWallTime();
 
-      return 0;
+      if (time > nextStep) {
+        ++level;
+    
+        if (level==1) {
+          fprintf(stderr, "KLEE: WATCHDOG: time expired, attempting halt via INT\n");
+          kill(pid, SIGINT);
+        } else if (level==2) {
+          fprintf(stderr, "KLEE: WATCHDOG: time expired, attempting halt via gdb\n");
+          halt_via_gdb(pid);
+        } else {
+          fprintf(stderr, "KLEE: WATCHDOG: kill(9)ing child (I tried to be nice)\n");
+          kill(pid, SIGKILL);
+          return 1; // what more can we do
+        }
+
+        // Ideally this triggers a dump, which may take a while,
+        // so try and give the process extra time to clean up.
+        nextStep = util::getWallTime() + std::max(15., MaxTime*.1);
+      }
     }
   }
 
-  sys::SetInterruptFunction(interrupt_handle);
+  return 0;
+}
 
-  // Load the bytecode...
-  std::string ErrorMsg;
-  ModuleProvider *MP = 0;
-  if (MemoryBuffer *Buffer = MemoryBuffer::getFileOrSTDIN(InputFile, &ErrorMsg)) {
-    MP = getBitcodeModuleProvider(Buffer, getGlobalContext(), &ErrorMsg);
-    if (!MP) delete Buffer;
+static char** getEnvironment(void)
+{
+  char **pEnvp;
+
+  if (Environ == "") return NULL;
+
+  std::vector<std::string> items;
+  std::ifstream f(Environ.c_str());
+
+  if (!f.good())
+    klee_error("unable to open --environ file: %s", Environ.c_str());
+
+  while (!f.eof()) {
+    std::string line;
+    std::getline(f, line);
+    line = strip(line);
+    if (!line.empty())
+      items.push_back(line);
   }
-  
-  if (!MP)
-    klee_error("error loading program '%s': %s", InputFile.c_str(), ErrorMsg.c_str());
+  f.close();
 
-  Module *mainModule = MP->materializeModule();
-  MP->releaseModule();
-  delete MP;
+  pEnvp = new char *[items.size()+1];
+  unsigned i=0;
+  for (; i != items.size(); ++i) pEnvp[i] = strdup(items[i].c_str());
+  pEnvp[i] = NULL;
 
-  assert(mainModule && "unable to materialize");
+  return pEnvp;
+}
 
-  // Remove '\x01' prefix sentinels before linking
-  runRemoveSentinelsPass(*mainModule);
-  
-  if (WithPOSIXRuntime)
-    InitEnv = true;
-
-  if (InitEnv) {
-    int r = initEnv(mainModule);
-    if (r != 0)
-      return r;
-  }
-
-  llvm::sys::Path LibraryDir(KLEE_DIR "/" RUNTIME_CONFIGURATION "/lib");
-  Interpreter::ModuleOptions Opts(LibraryDir.c_str(),
-                                  /*Optimize=*/OptimizeModule, 
-                                  /*CheckDivZero=*/CheckDivZero,
-                                  ExcludeCovFiles);
-  
+static Module* setupLibc(Module* mainModule, Interpreter::ModuleOptions& Opts)
+{
   switch (Libc) {
   case NoLibc: /* silence compiler warning */
     break;
@@ -1357,6 +1442,84 @@ int main(int argc, char **argv, char **envp) {
     }
     break;
   }
+
+  return mainModule;
+}
+
+int main(int argc, char **argv, char **envp) {  
+#if ENABLE_STPLOG == 1
+  STPLOG_init("stplog.c");
+#endif
+
+  atexit(llvm_shutdown);  // Call llvm_shutdown() on exit.
+
+  llvm::InitializeNativeTarget();
+
+  parseArguments(argc, argv);
+  sys::PrintStackTraceOnErrorSignal();
+
+  if (Watchdog) return runWatchdog();
+
+  sys::SetInterruptFunction(interrupt_handle);
+
+  // Load the bytecode...
+  std::string ErrorMsg;
+#if 0  
+  Module *mainModule = 0;
+  OwningPtr<MemoryBuffer> Buffer;
+  MemoryBuffer::getFileOrSTDIN(InputFile, Buffer);
+  if (Buffer) {
+    mainModule = getLazyBitcodeModule(Buffer.get(), getGlobalContext(), &ErrorMsg);
+    if (!mainModule) Buffer.reset();
+  }
+  if (mainModule) {
+    if (mainModule->MaterializeAllPermanently(&ErrorMsg)) {
+      delete mainModule;
+      mainModule = 0;
+   }
+  }            
+
+  if (!mainModule)
+    klee_error("error loading program '%s': %s",
+    	InputFile.c_str(), ErrorMsg.c_str());
+
+  assert(mainModule && "unable to materialize");
+#else
+  ModuleProvider *MP = 0;
+  if (MemoryBuffer *Buffer = MemoryBuffer::getFileOrSTDIN(InputFile, &ErrorMsg)) {
+    MP = getBitcodeModuleProvider(Buffer, getGlobalContext(), &ErrorMsg);
+    if (!MP) delete Buffer;
+  }
+  
+  if (!MP)
+    klee_error("error loading program '%s': %s", InputFile.c_str(), ErrorMsg.c_str());
+
+  Module *mainModule = MP->materializeModule();
+  MP->releaseModule();
+  delete MP;
+
+  assert(mainModule && "unable to materialize");
+
+
+#endif
+  // Remove '\x01' prefix sentinels before linking
+  runRemoveSentinelsPass(*mainModule);
+  
+  if (WithPOSIXRuntime) InitEnv = true;
+
+  if (InitEnv) {
+    int r = initEnv(mainModule);
+    if (r != 0)
+      return r;
+  }
+
+  llvm::sys::Path LibraryDir(KLEE_DIR "/" RUNTIME_CONFIGURATION "/lib");
+  Interpreter::ModuleOptions Opts(LibraryDir.c_str(),
+                                  /*Optimize=*/OptimizeModule, 
+                                  /*CheckDivZero=*/CheckDivZero,
+                                  ExcludeCovFiles);
+  
+  mainModule = setupLibc(mainModule, Opts);
 
   if(ExcludeLibcCov) {
     llvm::sys::Path ExcludePath(Opts.LibraryDir);
@@ -1386,33 +1549,11 @@ int main(int argc, char **argv, char **envp) {
   }
 
   // FIXME: Change me to std types.
-  int pArgc;
-  char **pArgv;
-  char **pEnvp;
-  if (Environ != "") {
-    std::vector<std::string> items;
-    std::ifstream f(Environ.c_str());
-    if (!f.good())
-      klee_error("unable to open --environ file: %s", Environ.c_str());
-    while (!f.eof()) {
-      std::string line;
-      std::getline(f, line);
-      line = strip(line);
-      if (!line.empty())
-        items.push_back(line);
-    }
-    f.close();
-    pEnvp = new char *[items.size()+1];
-    unsigned i=0;
-    for (; i != items.size(); ++i)
-      pEnvp[i] = strdup(items[i].c_str());
-    pEnvp[i] = 0;
-  } else {
-    pEnvp = envp;
-  }
+  char **pEnvp = getEnvironment();
+  if (pEnvp == NULL) pEnvp = envp;
 
-  pArgc = InputArgv.size() + 1; 
-  pArgv = new char *[pArgc];
+  int pArgc = InputArgv.size() + 1; 
+  char** pArgv = new char *[pArgc];
   for (unsigned i=0; i<InputArgv.size()+1; i++) {
     std::string &arg = (i==0 ? InputFile : InputArgv[i-1]);
     unsigned size = arg.size() + 1;
@@ -1456,14 +1597,20 @@ int main(int argc, char **argv, char **envp) {
   PrefixWriter info(info2s, "KLEE: ");
   info << "PID: " << getpid() << "\n";
 
-  const Module *finalModule = 
-    interpreter->setModule(mainModule, Opts);
+  std::cout << "START IT UP" << std::endl;
+  dumpMainModule(mainModule);
+
+  std::cout << "SET MAIN MODULE" << std::endl;
+  const Module *finalModule = interpreter->setModule(mainModule, Opts);
+  std::cout << "GLOBAL CHECK " << std::endl;
   externalsAndGlobalsCheck(finalModule);
+  std::cout << "DOING CHECKING GLOBALS." << std::endl;
 
   if (!replayPaths.empty()) {
     interpreter->setReplayPaths(&replayPaths);
   }
 
+  std::cout << "OK.." << std::endl;
   char buf[256], *pbuf;
   time_t t[2];
   clock_t tm[2];
@@ -1575,33 +1722,8 @@ int main(int argc, char **argv, char **envp) {
       seeds.pop_back();
     }
   }
-      
-  t[1] = time(NULL);
-  tm[1] = times(&tms[1]);
-  if (tm[1] == (clock_t) -1) {
-      perror("times");
-      tms_valid = false;
-  }
-  strftime(buf, sizeof(buf), "Finished: %Y-%m-%d %H:%M:%S\n", localtime(&t[1]));
-  info << buf;
-
-  pbuf += sprintf(pbuf = buf, "Elapsed: ");
-  if (tms_valid) {
-      const long clk_tck = sysconf(_SC_CLK_TCK);
-      pbuf = format_tdiff(pbuf, (tm[1] - tm[0]) / (double) clk_tck);
-      pbuf += sprintf(pbuf, " (user ");
-      pbuf = format_tdiff(pbuf, (tms[1].tms_utime - tms[0].tms_utime) / (double) clk_tck);
-      *pbuf++ = '+';
-      pbuf = format_tdiff(pbuf, (tms[1].tms_cutime - tms[0].tms_cutime) / (double) clk_tck);
-      pbuf += sprintf(pbuf, ", sys ");
-      pbuf = format_tdiff(pbuf, (tms[1].tms_stime - tms[0].tms_stime) / (double) clk_tck);
-      *pbuf++ = '+';
-      pbuf = format_tdiff(pbuf, (tms[1].tms_cstime - tms[0].tms_cstime) / (double) clk_tck);
-      pbuf += sprintf(pbuf, ")");
-  } else
-      pbuf = format_tdiff(pbuf, t[1] - t[0]);
-  strcpy(pbuf, "\n");
-  info << buf;
+ 
+  printTimes(info, tms, tm, t);
 
   // Free all the args.
   for (unsigned i=0; i<InputArgv.size()+1; i++)
@@ -1610,40 +1732,7 @@ int main(int argc, char **argv, char **envp) {
 
   delete interpreter;
 
-  uint64_t queries = 
-    *theStatisticManager->getStatisticByName("Queries");
-  uint64_t queriesValid = 
-    *theStatisticManager->getStatisticByName("QueriesValid");
-  uint64_t queriesInvalid = 
-    *theStatisticManager->getStatisticByName("QueriesInvalid");
-  uint64_t queryCounterexamples = 
-    *theStatisticManager->getStatisticByName("QueriesCEX");
-  uint64_t queryConstructs = 
-    *theStatisticManager->getStatisticByName("QueriesConstructs");
-  uint64_t queryCacheHits =
-    *theStatisticManager->getStatisticByName("QueryCacheHits");
-  uint64_t queryCacheMisses =
-    *theStatisticManager->getStatisticByName("QueryCacheMisses");
-  uint64_t instructions = 
-    *theStatisticManager->getStatisticByName("Instructions");
-  uint64_t forks = 
-    *theStatisticManager->getStatisticByName("Forks");
-
-  info << "done: total queries = " << queries << " ("
-       << "valid: " << queriesValid << ", "
-       << "invalid: " << queriesInvalid << ", "
-       << "cex: " << queryCounterexamples << ")\n";
-  if (queries)
-    info << "done: avg. constructs per query = " 
-         << queryConstructs / queries << "\n";  
-
-  info << "done: query cache hits = " << queryCacheHits << ", "
-       << "query cache misses = " << queryCacheMisses << "\n";
-
-  info << "done: total instructions = " << instructions << "\n";
-  info << "done: explored paths = " << 1 + forks << "\n";
-  info << "done: completed paths = " << handler->getNumPathsExplored() << "\n";
-  info << "done: generated tests = " << handler->getNumTestCases() << "\n";
+  printStats(info, handler);
 
   delete handler;
 
