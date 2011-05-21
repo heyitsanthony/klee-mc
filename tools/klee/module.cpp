@@ -623,8 +623,8 @@ Interpreter::ModuleOptions getMainModule(Module* &mainModule)
   llvm::sys::Path LibraryDir(KLEE_DIR "/" RUNTIME_CONFIGURATION "/lib");
   Interpreter::ModuleOptions Opts(
     LibraryDir.c_str(),
-    /OptimizeModule, 
-    /CheckDivZero,
+    OptimizeModule, 
+    CheckDivZero,
     ExcludeCovFiles);
 
   mainModule = setupLibc(mainModule, Opts);

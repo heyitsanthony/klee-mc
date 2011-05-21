@@ -25,6 +25,7 @@
 #include "RandomPathSearcher.h"
 #include "RandomSearcher.h"
 #include "WeightedRandomSearcher.h"
+#include "StringMerger.h"
 
 using namespace llvm;
 using namespace klee;
@@ -95,6 +96,11 @@ namespace {
   BatchTime("batch-time",
             cl::desc("Amount of time to batch when using --use-batching-search"),
             cl::init(5.0));
+
+  cl::opt<bool>
+  UseStringPrune("string-prune",
+    cl::desc("Prune intermediate scan states on strings"),
+     cl::init(false));
 }
 
 bool klee::userSearcherRequiresMD2U() {
@@ -198,6 +204,8 @@ Searcher *klee::constructUserSearcher(Executor &executor)
   if (UseIterativeDeepeningTimeSearch) {
     searcher = new IterativeDeepeningTimeSearcher(searcher);
   }
+
+  if (UseStringPrune) searcher = new StringMerger(searcher);
 
   std::ostream &os = executor.getHandler().getInfoStream();
 

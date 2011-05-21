@@ -14,7 +14,7 @@
 #include "StateRecord.h"
 #include "klee/Expr.h"
 #include "klee/TimerStatIncrementer.h"
-
+#include <stdint.h>
 #include <stack>
 
 using namespace klee;
@@ -312,18 +312,17 @@ bool AddressSpace::resolve(ExecutionState &state,
 // transparently avoid screwing up symbolics (if the byte is symbolic
 // then its concrete cache byte isn't being used) but is just a hack.
 
-void AddressSpace::copyOutConcretes() {
-  for (MemoryMap::iterator it = objects.begin(), ie = objects.end();
-          it != ie; ++it) {
+void AddressSpace::copyOutConcretes(void)
+{
+  foreach (it, objects.begin(), objects.end()) {
     const MemoryObject *mo = it->first;
 
-    if (!mo->isUserSpecified) {
-      ObjectState *os = it->second;
-      uint8_t *address = (uint8_t*) (unsigned long) mo->address;
+    if (mo->isUserSpecified) continue;
+    ObjectState *os = it->second;
+    uint8_t *address = (uint8_t*) (uintptr_t) mo->address;
 
-      if (!os->readOnly)
-        memcpy(address, os->concreteStore, mo->size);
-    }
+    if (!os->readOnly)
+      memcpy(address, os->concreteStore, mo->size);
   }
 }
 
@@ -335,7 +334,7 @@ bool AddressSpace::copyInConcretes(StateRecord* rec) {
     if (mo->isUserSpecified) continue;
 
     const ObjectState *os = it->second;
-    uint8_t *address = (uint8_t*) (unsigned long) mo->address;
+    uint8_t *address = (uint8_t*) (uintptr_t) mo->address;
 
     if (memcmp(address, os->concreteStore, mo->size) == 0) continue;
 

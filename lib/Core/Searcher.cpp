@@ -42,6 +42,8 @@ void DFSSearcher::update(ExecutionState *current,
 
   if (removedStates.empty()) return;
 
+  /* hack for common case of removing only one state...
+   * no need to scan the entire state list */
   if (removedStates.count(states.back())) {
     states.pop_back();
     if (removedStates.size() == 1)
@@ -72,4 +74,3 @@ mergeFunction(executor.kmodule->kleeMergeFn) {
 BumpMergingSearcher::~BumpMergingSearcher() {
   delete baseSearcher;
 }
-

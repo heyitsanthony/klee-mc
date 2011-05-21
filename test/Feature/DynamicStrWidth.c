@@ -1,11 +1,13 @@
 /* OH THE HUMANITY */
 // RUN: %llvmgcc %s -emit-llvm -DSYMSTR_LEN=12 -O0 -c -o %t1.bc
-// RUN: %klee %t1.bc >%t2.log 2>%t2.errlog
-// RUN: %klee -string-prune %t1.bc 
-// RUN: test ! -f klee-last/test000010.user.err
-// RUN: klee-stats klee-last >stats10
-// RUN: cp klee-last/info run10
-// RUN: cp klee-last/messages.txt mess10
+
+// RUN: %klee %t1.bc
+// RUN: rm -rf klee-dynstr-base
+// RUN: cp -r klee-last klee-dynstr-base
+
+// RUN: %klee -string-prune %t1.bc
+// RUN: rm -rf klee-dynstr-prune
+// RUN: cp -r klee-last klee-dynstr-prune
 
 
 /* XXX: grep "total queries = 2" klee-last/info */

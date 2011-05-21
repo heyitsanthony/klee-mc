@@ -5,9 +5,6 @@
 #define EXESTATEMANAGER_H
 #include "klee/ExecutionState.h"
 
-/* TODO: Remove me */
-#define MERGE_STRMAX  1024
-
 namespace klee
 {
 class Searcher;
@@ -70,20 +67,6 @@ public:
   void teardownUserSearcher(void);
   void setupESE(Executor* exe, KModule* kmodule, ExecutionState* state);
   void setupSearcher(Executor* exe);
-
-  /* stupid stuff here. Move out eventually. */
-  void getArrayStates(
-    unsigned int idx, const std::string& arrName, ExeStateSet& ss);
-  bool hasScanStringState(
-    ExeStateSet& ss,
-    unsigned int idx, const std::string& arrName);
-  bool isStrcmpMatch(
-    const Expr  *expr,
-    unsigned int idx, const std::string& arrName,
-    unsigned int& re_idx, unsigned int& cmp_val);
-  void removeStringStates(
-    ExeStateSet& ss,
-    unsigned int idx, const std::string& arrName);
 
   unsigned int getNonCompactStateCount(void) const { return nonCompactStateCount; }
 };

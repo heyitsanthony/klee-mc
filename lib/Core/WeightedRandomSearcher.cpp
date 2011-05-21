@@ -115,4 +115,3 @@ void WeightedRandomSearcher::update(ExecutionState *current,
 }
 
 bool WeightedRandomSearcher::empty() const { return states->empty(); }
-

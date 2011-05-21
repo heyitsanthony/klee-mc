@@ -316,10 +316,6 @@ namespace {
   cl::opt<bool>
   ReplayInhibitedForks("replay-inhibited-forks",
             cl::desc("When forking is inhibited, replay the inhibited path as a new state"));
-  cl::opt<bool>
-  StringPrune("string-prune",
-    cl::desc("Prune intermediate scan states on strings"),
-     cl::init(false));
 }
 
 
@@ -1848,15 +1844,6 @@ void Executor::instCmp(ExecutionState& state, KInstruction *ki)
 
   bindLocal(ki, state, result);
 //  klee_message("Updated to: %s\n", states2str(states).c_str());
-  if (StringPrune) {
-    ConstantExpr* ce;
-    if (pred == ICmpInst::ICMP_EQ && 
-        (ce = dyn_cast<ConstantExpr>(right)) &&
-        ce->isZero())
-    {
-      mergeStringStates(left);
-    }
-  }
 }
 
 void Executor::instSwitch(ExecutionState& state, KInstruction *ki)
@@ -2434,37 +2421,6 @@ void Executor::removeRoot(ExecutionState* es)
   delete es;
 }
 
-/* FIXME this is really slow. */
-void Executor::mergeStringStates(ref<Expr>& readExpr)
-{
-  const ReadExpr      *re;
-  const ConstantExpr  *ce_idx;
-  std::string   arr_name;
-  uint64_t      idx;
-
-  /* Make sure incoming comparison has a symbolic byte read */
-  if (!(re = dyn_cast<const ReadExpr>(readExpr))) return;
-
-  /* Only handle constant indices for now. Use solver for general expressions. */
-  ce_idx = dyn_cast<const ConstantExpr>(re->index);
-  if (ce_idx == NULL) return;
-  
-  /* Only bother with strings with more than one character */
-  idx = ce_idx->getLimitedValue(MERGE_STRMAX);
-  if (idx <= 1 || idx == MERGE_STRMAX) return;
-  
-  arr_name = re->updates.root->name;
-
-  ExeStateSet ss;
-  stateManager->getArrayStates(idx, arr_name, ss);
-
-  /* kekekekeke */
-  /* find expressions of form (Eq x (Read w8 y arr_name)) */
-  if (stateManager->hasScanStringState(ss, idx, arr_name)) {
-    stateManager->removeStringStates(ss, idx, arr_name);
-  }
-}
-
 void Executor::bindInstructionConstants(KInstruction *KI) {
   GetElementPtrInst *gepi = dyn_cast<GetElementPtrInst>(KI->inst);
   if (!gepi)
@@ -2700,7 +2656,7 @@ void Executor::run(ExecutionState &initialState)
 
   while (!stateManager->empty() && !haltExecution) {
     ExecutionState *state = stateManager->selectState(!onlyNonCompact);
-
+    assert (state != NULL && "State man not empty, but selectState is?");
     /* decompress state if compact */
     if (state->isCompactForm) {
       ExecutionState* newState = state->reconstitute(*initialStateCopy);
