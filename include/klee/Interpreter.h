@@ -46,7 +46,8 @@ public:
                                const char *suffix) = 0;
 };
 
-class Interpreter {
+class Interpreter
+{
 public:
   /// ModuleOptions - Module level options which can be set when
   /// registering a module with the interpreter.
@@ -86,8 +87,9 @@ protected:
 public:
   virtual ~Interpreter() {};
 
-  static Interpreter *create(const InterpreterOptions &_interpreterOpts,
-                             InterpreterHandler *ih);
+  static Interpreter* create(
+  	const InterpreterOptions &_interpreterOpts,
+	InterpreterHandler *ih);
 
   /// Register the module to be executed.  
   ///

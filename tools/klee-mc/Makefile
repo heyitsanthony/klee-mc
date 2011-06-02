@@ -18,5 +18,8 @@ ifeq ($(ENABLE_STPLOG), 1)
 	LIBS += -lstplog
 endif
 
+CFLAGS += -I/home/chz/src/vex/src/
+CXXFLAGS += -I/home/chz/src/vex/src/
 LIBS += -lstp 
+LIBS += /home/chz/src/vex/bin/vexllvm.a /usr/lib/valgrind/libvex-amd64-linux.a
 #-ltcmalloc

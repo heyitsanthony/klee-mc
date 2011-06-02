@@ -1,26 +1,18 @@
 /* -*- mode: c++; c-basic-offset: 2; -*- */
 
 #include "klee/Common.h"
-#include "klee/ExecutionState.h"
-#include "klee/Expr.h"
 #include "klee/Interpreter.h"
 #include "klee/Statistics.h"
-#include "klee/Internal/ADT/KTest.h"
-#include "klee/Internal/ADT/TreeStream.h"
 #include "klee/Internal/System/Time.h"
 #include "static/Sugar.h"
 
 #include "KleeHandler.h"
 #include "cmdargs.h"
 
-#include "llvm/Constants.h"
-#include "llvm/Module.h"
-#include "llvm/Type.h"
-#include "llvm/InstrTypes.h"
-#include "llvm/Instruction.h"
-#include "llvm/Instructions.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ManagedStatic.h"
+
+#include "ExecutorVex.h"
 
 //#include "llvm/Support/system_error.h"
 
@@ -220,28 +212,6 @@ static void halt_via_gdb(int pid)
     perror("system");
 }
 
-// returns the end of the string put in buf
-static char *format_tdiff(char *buf, long seconds)
-{
-  assert(seconds >= 0);
-
-  long minutes = seconds / 60;  seconds %= 60;
-  long hours   = minutes / 60;  minutes %= 60;
-  long days    = hours   / 24;  hours   %= 24;
-
-  if (days > 0) buf += sprintf(buf, "%ld days, ", days);
-  buf += sprintf(buf, "%02ld:%02ld:%02ld", hours, minutes, seconds);
-  return buf;
-}
-
-static char *format_tdiff(char *buf, double seconds)
-{
-    long int_seconds = static_cast<long> (seconds);
-    buf = format_tdiff(buf, int_seconds);
-    buf += sprintf(buf, ".%02d", static_cast<int> (100 * (seconds - int_seconds)));
-    return buf;
-}
-
 struct TwoOStreams
 {
     std::ostream* s[2];
@@ -287,40 +257,17 @@ public:
     }
 };
 
-static void printTimes(PrefixWriter& info, struct tms* tms, clock_t* tm, time_t* t)
+void run(ExecutorVex* exe)
 {
-  char buf[256], *pbuf;
-  bool tms_valid = true;
+	if (RunInDir != "") {
+		int res = chdir(RunInDir.c_str());
+		if (res < 0) {
+			klee_error("Unable to change directory to: %s", RunInDir.c_str());
+		}
+	}
 
-  t[1] = time(NULL);
-  tm[1] = times(&tms[1]);
-  if (tm[1] == (clock_t) -1) {
-      perror("times");
-      tms_valid = false;
-  }
-  strftime(buf, sizeof(buf), "Finished: %Y-%m-%d %H:%M:%S\n", localtime(&t[1]));
-  info << buf;
-
-  pbuf = buf;
-  pbuf += sprintf(buf, "Elapsed: ");
-  if (tms_valid) {
-      const long clk_tck = sysconf(_SC_CLK_TCK);
-      pbuf = format_tdiff(pbuf, (tm[1] - tm[0]) / (double) clk_tck);
-      pbuf += sprintf(pbuf, " (user ");
-      pbuf = format_tdiff(pbuf, (tms[1].tms_utime - tms[0].tms_utime) / (double) clk_tck);
-      *pbuf++ = '+';
-      pbuf = format_tdiff(pbuf, (tms[1].tms_cutime - tms[0].tms_cutime) / (double) clk_tck);
-      pbuf += sprintf(pbuf, ", sys ");
-      pbuf = format_tdiff(pbuf, (tms[1].tms_stime - tms[0].tms_stime) / (double) clk_tck);
-      *pbuf++ = '+';
-      pbuf = format_tdiff(pbuf, (tms[1].tms_cstime - tms[0].tms_cstime) / (double) clk_tck);
-      pbuf += sprintf(pbuf, ")");
-  } else
-      pbuf = format_tdiff(pbuf, t[1] - t[0]);
-  strcpy(pbuf, "\n");
-  info << buf;
+	exe->runImage();	
 }
-
 
 static void printStats(PrefixWriter& info, KleeHandler* handler)
 {
@@ -417,164 +364,13 @@ static int runWatchdog(void)
   return 0;
 }
 
-static void runReplay(Interpreter* interpreter, Function* mainFn, char** pEnvp)
-{
-  std::vector<std::string> outFiles = ReplayOutFile;
-
-  foreach (it, ReplayOutDir.begin(),  ReplayOutDir.end())
-    KleeHandler::getOutFiles(*it, outFiles);    
-
-  std::vector<KTest*> kTests;
-  foreach (it, outFiles.begin(), outFiles.end()) {
-    KTest *out = kTest_fromFile(it->c_str());
-    if (out) {
-      kTests.push_back(out);
-    } else {
-      std::cerr << "KLEE: unable to open: " << *it << "\n";
-    }
-  }
-
-  if (RunInDir != "") {
-    int res = chdir(RunInDir.c_str());
-    if (res < 0) {
-      klee_error("Unable to change directory to: %s", RunInDir.c_str());
-    }
-  }
-
-  unsigned i = 0;
-  foreach (it, kTests.begin(), kTests.end()) {
-    KTest *out = *it;
-    interpreter->setReplayOut(out);
-    std::cerr
-      << "KLEE: replaying: "
-      << *it << " (" << kTest_numBytes(out) << " bytes)"
-      << " (" << ++i << "/" << outFiles.size() << ")\n";
-    // XXX should put envp in .ktest ?
-    interpreter->runFunctionAsMain(mainFn, out->numArgs, out->args, pEnvp);
-    if (interrupted) break;
-  }
-
-  interpreter->setReplayOut(0);
-
-  while (!kTests.empty()) {
-    kTest_free(kTests.back());
-    kTests.pop_back();
-  }
-}
-
-static void runSeeds(Interpreter* interpreter, CmdArgs* cmdargs)
-{
-  std::vector<KTest *> seeds;
-  foreach (it, SeedOutFile.begin(), SeedOutFile.end()) {
-    KTest *out = kTest_fromFile(it->c_str());
-    if (!out) {
-      std::cerr << "KLEE: unable to open: " << *it << "\n";
-      exit(1);
-    }
-    seeds.push_back(out);
-  }
-
-  foreach (it, SeedOutDir.begin(), SeedOutDir.end()) {
-    std::vector<std::string> outFiles;
-    KleeHandler::getOutFiles(*it, outFiles);
-    foreach (it2, outFiles.begin(), outFiles.end()) {
-      KTest *out = kTest_fromFile(it2->c_str());
-      if (!out) {
-        std::cerr << "KLEE: unable to open: " << *it2 << "\n";
-        exit(1);
-      }
-      seeds.push_back(out);
-    }
-    if (outFiles.empty()) {
-      std::cerr << "KLEE: seeds directory is empty: " << *it << "\n";
-      exit(1);
-    }
-  }
-     
-  if (!seeds.empty()) {
-    std::cerr << "KLEE: using " << seeds.size() << " seeds\n";
-    interpreter->useSeeds(&seeds);
-  }
-  if (RunInDir != "") {
-    int res = chdir(RunInDir.c_str());
-    if (res < 0) {
-      klee_error("Unable to change directory to: %s", RunInDir.c_str());
-    }
-  }
-
-  assert (0 == 1);
-#if 0
-  interpreter->runFunctionAsMain(
-  	mainFn,
-	cmdargs->getArgc(), 
-	cmdargs->getArgv(), 
-	cmdargs->getEnvp());
-#endif
-  while (!seeds.empty()) {
-    kTest_free(seeds.back());
-    seeds.pop_back();
-  }
-}
-
-void runIt(
-  PrefixWriter& info, 
-  std::ostream& infoFile)
-{
-  char buf[256];
-  time_t t[2];
-  clock_t tm[2];
-  struct tms tms[2];
-  bool tms_valid = true;
-
-  t[0] = time(NULL);
-  tm[0] = times(&tms[0]);
-  if (tm[0] == (clock_t) -1) {
-    perror("times");
-    tms_valid = false;
-  }
-  strftime(buf, sizeof(buf), "Started: %Y-%m-%d %H:%M:%S\n", localtime(&t[0]));
-  info << buf;
-  infoFile.flush();
-
-  if (!ReplayOutDir.empty() || !ReplayOutFile.empty()) {
-    assert(SeedOutFile.empty());
-    assert(SeedOutDir.empty());
-//    runReplay(interpreter, mainFn, pEnvp);
-    assert (0 == 1 && "RUNREPLAY");
-  } else {
-    assert (0 == 1 && "RUNSEEDS");
-//    runSeeds(interpreter, mainFn, pArgc, pArgv, pEnvp);
-  }
- 
-  printTimes(info, tms, tm, t);
-}
-
-
-std::list<Interpreter::ReplayPathType> getReplayPaths(void)
-{
-  std::list<Interpreter::ReplayPathType>  replayPaths;
-  Interpreter::ReplayPathType             replayPath;
-
-  std::vector<std::string> pathFiles;
-  if (ReplayPathDir != "") KleeHandler::getPathFiles(ReplayPathDir, pathFiles);
-  if (ReplayPathFile != "") pathFiles.push_back(ReplayPathFile);
-
-  foreach (it, pathFiles.begin(), pathFiles.end()) {
-    KleeHandler::loadPathFile(*it, replayPath);
-    replayPaths.push_back(replayPath);
-    replayPath.clear();
-  }
-
-  return replayPaths;
-}
-
 int main(int argc, char **argv, char **envp)
 {
   Interpreter::InterpreterOptions IOpts;
   KleeHandler	*handler;
   Interpreter	*interpreter;
   CmdArgs	*cmdargs;
-  std::list<Interpreter::ReplayPathType> replayPaths;
+//  std::list<Interpreter::ReplayPathType> replayPaths;
 
 #if ENABLE_STPLOG == 1
   STPLOG_init("stplog.c");
@@ -591,7 +387,7 @@ int main(int argc, char **argv, char **envp)
 
   sys::SetInterruptFunction(interrupt_handle);
 
-  replayPaths = getReplayPaths();
+//  replayPaths = getReplayPaths();
 
   std::list<std::string>	input_args;
   const std::string		env_path(Environ);
@@ -602,7 +398,7 @@ int main(int argc, char **argv, char **envp)
   IOpts.MakeConcreteSymbolic = MakeConcreteSymbolic;
   handler = new KleeHandler(cmdargs);
 
-  interpreter = Interpreter::create(IOpts, handler);
+  interpreter = new ExecutorVex(IOpts, handler, NULL);
   theInterpreter = interpreter;
   handler->setInterpreter(interpreter);
   
@@ -615,16 +411,17 @@ int main(int argc, char **argv, char **envp)
   PrefixWriter info(info2s, "KLEE: ");
   info << "PID: " << getpid() << "\n";
 
-  const Module *finalModule;
 //  finalModule = interpreter->setModule(mainModule, Opts);
 //  externalsAndGlobalsCheck(finalModule);
-  assert (0 == 1 && "NEED TO SET INTERPRETER MODULE");
 
+
+#if 0
   if (!replayPaths.empty()) {
     interpreter->setReplayPaths(&replayPaths);
   }
+#endif
 
-  runIt(info, infoFile);
+  run(dynamic_cast<ExecutorVex*>(interpreter));
 
   delete interpreter;
 

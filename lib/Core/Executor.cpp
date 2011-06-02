@@ -1991,7 +1991,8 @@ void Executor::removeRoot(ExecutionState* es)
   delete es;
 }
 
-void Executor::bindInstructionConstants(KInstruction *KI) {
+void Executor::bindInstructionConstants(KInstruction *KI)
+{
   GetElementPtrInst *gepi = dyn_cast<GetElementPtrInst>(KI->inst);
   if (!gepi)
     return;
@@ -2821,11 +2822,11 @@ void Executor::getSymbolicSolutionCex(
   }
 }
 
-bool Executor::getSymbolicSolution(const ExecutionState &state,
-                                   std::vector< 
-                                   std::pair<std::string,
-                                   std::vector<unsigned char> > >
-                                   &res)
+bool Executor::getSymbolicSolution(
+	const ExecutionState &state,
+	std::vector< 
+		std::pair<std::string,
+			std::vector<unsigned char> > > &res)
 {
   ExecutionState tmp(state);
   if (!NoPreferCex) getSymbolicSolutionCex(state, tmp);
@@ -2888,16 +2889,6 @@ void Executor::doImpliedValueConcretization(ExecutionState &state,
     state.write(wos, CE, it->second);
   }
 }
-
-///
-
-Interpreter *Interpreter::create(
-	const InterpreterOptions &opts,
-	InterpreterHandler *ih)
-{
-  return new ExecutorBC(opts, ih);
-}
-
 
 void Executor::initializeGlobalObject(
 	ExecutionState &state,
