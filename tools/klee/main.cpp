@@ -668,8 +668,9 @@ int main(int argc, char **argv, char **envp) {
     assert(SeedOutFile.empty());
     assert(SeedOutDir.empty());
     runReplay(interpreter, mainFn, pEnvp);
-  } else
+  } else {
     runSeeds(interpreter, mainFn, pArgc, pArgv, pEnvp);
+  }
  
   printTimes(info, tms, tm, t);
 
@@ -681,7 +682,6 @@ int main(int argc, char **argv, char **envp) {
   delete interpreter;
 
   printStats(info, handler);
-
   delete handler;
 
   return 0;

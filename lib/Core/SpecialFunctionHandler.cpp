@@ -18,7 +18,7 @@
 #include "klee/Internal/Module/KInstruction.h"
 #include "klee/Internal/Module/KModule.h"
 
-#include "Executor.h"
+#include "ExecutorBC.h"
 #include "MemoryManager.h"
 
 #include "llvm/Module.h"
@@ -112,7 +112,7 @@ HandlerInfo handlerInfo[] = {
 #undef add  
 };
 
-SpecialFunctionHandler::SpecialFunctionHandler(Executor &_executor) 
+SpecialFunctionHandler::SpecialFunctionHandler(ExecutorBC &_executor) 
   : executor(_executor) {}
 
 
@@ -121,7 +121,7 @@ void SpecialFunctionHandler::prepare() {
 
   for (unsigned i=0; i<N; ++i) {
     HandlerInfo &hi = handlerInfo[i];
-    Function *f = executor.kmodule->module->getFunction(hi.name);
+    Function *f = executor.getKModule()->module->getFunction(hi.name);
     
     // No need to create if the function doesn't exist, since it cannot
     // be called in that case.
@@ -145,7 +145,7 @@ void SpecialFunctionHandler::bind() {
 
   for (unsigned i=0; i<N; ++i) {
     HandlerInfo &hi = handlerInfo[i];
-    Function *f = executor.kmodule->module->getFunction(hi.name);
+    Function *f = executor.getKModule()->module->getFunction(hi.name);
     
     if (f && (!hi.doNotOverride || f->isDeclaration()))
       handlers[f] = std::make_pair(hi.handler, hi.hasReturnValue);

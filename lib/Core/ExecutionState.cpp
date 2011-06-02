@@ -212,9 +212,14 @@ std::ostream &klee::operator<<(std::ostream &os, const MemoryMap &mm) {
   MemoryMap::iterator it = mm.begin();
   MemoryMap::iterator ie = mm.end();
   if (it!=ie) {
-    os << "MO" << it->first->id << ":" << it->second;
-    for (++it; it!=ie; ++it)
-      os << ", MO" << it->first->id << ":" << it->second;
+    os << "MO" << it->first->id << ": (";
+    it->first->print(os);
+    os << ") " << it->second;
+    for (++it; it!=ie; ++it) {
+      os << ", \nMO" << it->first->id << ": (";
+      it->first->print(os);
+      os << ") " << it->second;
+    }
   }
   os << "}";
   return os;

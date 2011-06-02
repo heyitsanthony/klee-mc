@@ -65,10 +65,11 @@ void DFSSearcher::update(ExecutionState *current,
 ///
 ///
 
-BumpMergingSearcher::BumpMergingSearcher(Executor &_executor, Searcher *_baseSearcher)
+BumpMergingSearcher::BumpMergingSearcher(
+	ExecutorBC &_executor, Searcher *_baseSearcher)
 : executor(_executor),
-baseSearcher(_baseSearcher),
-mergeFunction(executor.kmodule->kleeMergeFn) {
+  baseSearcher(_baseSearcher),
+  mergeFunction(executor.getKModule()->kleeMergeFn) {
 }
 
 BumpMergingSearcher::~BumpMergingSearcher() {

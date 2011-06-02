@@ -9,11 +9,11 @@
 
 
 #include "Executor.h"
+#include "ExecutorBC.h"	/* for 'interpreter::create()' */
 #include "ExeStateManager.h"
  
 #include "Context.h"
 #include "CoreStats.h"
-#include "ExternalDispatcher.h"
 #include "ImpliedValue.h"
 #include "Memory.h"
 #include "MemoryManager.h"
@@ -21,11 +21,10 @@
 #include "PTree.h"
 #include "Searcher.h"
 #include "SeedInfo.h"
-#include "SpecialFunctionHandler.h"
-#include "StatsTracker.h"
 #include "TimingSolver.h"
 #include "UserSearcher.h"
 #include "MemUsage.h"
+#include "StatsTracker.h"
 
 #include "klee/Common.h"
 #include "klee/ExecutionState.h"
@@ -53,7 +52,6 @@
 #include "llvm/Function.h"
 #include "llvm/Instructions.h"
 #include "llvm/IntrinsicInst.h"
-#include "llvm/Module.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/CallSite.h"
 #include "llvm/Support/CommandLine.h"
@@ -134,22 +132,11 @@ namespace {
   NoPreferCex("no-prefer-cex",
               cl::init(false));
 
-  cl::opt<bool>
-  UseEquivalentStateEliminator("use-equiv-state-elim",
-                cl::init(false));
-   
-  cl::opt<bool>
-  UseAsmAddresses("use-asm-addresses",
-                  cl::init(false));
- 
+
   cl::opt<bool>
   RandomizeFork("randomize-fork",
                 cl::init(false));
  
-  cl::opt<bool>
-  AllowExternalSymCalls("allow-external-sym-calls",
-                        cl::init(false));
-
   cl::opt<bool>
   DebugPrintInstructions("debug-print-instructions", 
                          cl::desc("Print instructions during execution."));
@@ -169,12 +156,6 @@ namespace {
   cl::opt<bool>
   DebugValidateSolver("debug-validate-solver",
 		      cl::init(false));
-
-  cl::opt<bool>
-  SuppressExternalWarnings("suppress-external-warnings");
-
-  cl::opt<bool>
-  AllExternalWarnings("all-external-warnings");
 
   cl::opt<bool>
   OnlyOutputStatesCoveringNew("only-output-states-covering-new",
@@ -211,10 +192,6 @@ namespace {
   cl::opt<bool>
   UseSTPQueryPCLog("use-stp-query-pc-log",
                    cl::init(false));
-
-  cl::opt<bool>
-  NoExternals("no-externals", 
-           cl::desc("Do not allow external functin calls"));
 
   cl::opt<bool>
   UseCache("use-cache",
@@ -316,11 +293,11 @@ namespace {
   cl::opt<bool>
   ReplayInhibitedForks("replay-inhibited-forks",
             cl::desc("When forking is inhibited, replay the inhibited path as a new state"));
+
+  cl::opt<bool>
+  AllExternalWarnings("all-external-warnings");
 }
 
-
-static void *theMMap = 0;
-static unsigned theMMapSize = 0;
 
 namespace klee {
   RNG theRNG;
@@ -388,13 +365,12 @@ Solver *constructSolverChain(STPSolver *stpSolver,
 Executor::Executor(const InterpreterOptions &opts,
                    InterpreterHandler *ih) 
   : Interpreter(opts),
-    kmodule(0),
     interpreterHandler(ih),
-    externalDispatcher(new ExternalDispatcher()),
+    target_data(0),
+    dbgStopPointFn(0),
     statsTracker(0),
-    symPathWriter(0),
-    specialFunctionHandler(0),
     processTree(0),
+    symPathWriter(0),
     replayOut(0),
     replayPaths(0),    
     usingSeeds(0),
@@ -415,49 +391,21 @@ Executor::Executor(const InterpreterOptions &opts,
                          interpreterHandler->getOutputFilename("stp-queries.pc"));
   
   this->solver = new TimingSolver(solver, stpSolver);
+  stpSolver->setTimeout(stpTimeout);
+
   memory = new MemoryManager();
   stateManager = new ExeStateManager();
 }
 
 
-const Module *Executor::setModule(llvm::Module *module, 
-                                  const ModuleOptions &opts) {
-  assert(!kmodule && module && "can only register one module"); // XXX gross
-  
-  kmodule = new KModule(module);
-
-  // Initialize the context.
-  TargetData *TD = kmodule->targetData;
-  Context::initialize(TD->isLittleEndian(),
-                      (Expr::Width) TD->getPointerSizeInBits());
-
-  specialFunctionHandler = new SpecialFunctionHandler(*this);
-
-  specialFunctionHandler->prepare();
-  kmodule->prepare(opts, interpreterHandler);
-  specialFunctionHandler->bind();
-
-  if (StatsTracker::useStatistics()) {
-    statsTracker = 
-      new StatsTracker(*this,
-                       interpreterHandler->getOutputFilename("assembly.ll"),
-                       opts.ExcludeCovFiles,
-                       userSearcherRequiresMD2U());
-  }
-  
-  return module;
-}
-
-Executor::~Executor() {
+Executor::~Executor()
+{
   std::for_each(timers.begin(), timers.end(), deleteTimerInfo);
   delete stateManager;
   delete memory;
-  delete externalDispatcher;
   if (processTree) delete processTree;
-  if (specialFunctionHandler) delete specialFunctionHandler;
   if (statsTracker) delete statsTracker;
   delete solver;
-  delete kmodule;
 }
 
 /***/
@@ -481,48 +429,6 @@ inline void Executor::replaceStateImmForked(ExecutionState* os, ExecutionState* 
   removePTreeState(os);
 }
   
-void Executor::initializeGlobalObject(ExecutionState &state, ObjectState *os,
-                                      Constant *c, 
-                                      unsigned offset) {
-  TargetData *targetData = kmodule->targetData;
-  if (ConstantVector *cp = dyn_cast<ConstantVector>(c)) {
-    unsigned elementSize =
-      targetData->getTypeStoreSize(cp->getType()->getElementType());
-    for (unsigned i=0, e=cp->getNumOperands(); i != e; ++i)
-      initializeGlobalObject(state, os, cp->getOperand(i), 
-			     offset + i*elementSize);
-  } else if (isa<ConstantAggregateZero>(c)) {
-    unsigned i, size = targetData->getTypeStoreSize(c->getType());
-    for (i=0; i<size; i++) {
-      //os->write8(offset+i, (uint8_t) 0);
-      state.write8(os, offset+i, (uint8_t) 0);
-    }
-  } else if (ConstantArray *ca = dyn_cast<ConstantArray>(c)) {
-    unsigned elementSize =
-      targetData->getTypeStoreSize(ca->getType()->getElementType());
-    for (unsigned i=0, e=ca->getNumOperands(); i != e; ++i)
-      initializeGlobalObject(state, os, ca->getOperand(i), 
-			     offset + i*elementSize);
-  } else if (ConstantStruct *cs = dyn_cast<ConstantStruct>(c)) {
-    const StructLayout *sl =
-      targetData->getStructLayout(cast<StructType>(cs->getType()));
-    for (unsigned i=0, e=cs->getNumOperands(); i != e; ++i)
-      initializeGlobalObject(state, os, cs->getOperand(i), 
-			     offset + sl->getElementOffset(i));
-  } else {
-    unsigned StoreBits = targetData->getTypeStoreSizeInBits(c->getType());
-    ref<ConstantExpr> C = evalConstant(c);
-
-    // Extend the constant if necessary;
-    assert(StoreBits >= C->getWidth() && "Invalid store size!");
-    if (StoreBits > C->getWidth())
-      C = C->ZExt(StoreBits);
-
-    //os->write(offset, C);
-    state.write(os, offset, C);
-  }
-}
-
 MemoryObject * Executor::addExternalObject(ExecutionState &state, 
                                            void *addr, unsigned size, 
                                            bool isReadOnly) {
@@ -538,196 +444,6 @@ MemoryObject * Executor::addExternalObject(ExecutionState &state,
   return mo;
 }
 
-
-/* XXX needs a better name */
-void Executor::allocGlobalVariableNoDecl(
-  ExecutionState& state, const GlobalVariable& gv)
-{
-  const Type *ty = gv.getType()->getElementType();
-  uint64_t size = kmodule->targetData->getTypeStoreSize(ty);
-  MemoryObject *mo = 0;
-  ObjectState *os;
-
-  if (UseAsmAddresses && gv.getName()[0]=='\01') {
-    char *end;
-    uint64_t address = ::strtoll(gv.getNameStr().c_str()+1, &end, 0);
-
-    if (end && *end == '\0') {
-      // We can't use the PRIu64 macro here for some reason, so we have to
-      // cast to long long unsigned int to avoid compiler warnings.
-      klee_message("NOTE: allocated global at asm specified address: %#08llx"
-                   " (%llu bytes)",
-                   (long long unsigned int) address,
-                   (long long unsigned int) size);
-//      mo = memory->allocateFixed(address, size, &*i, &state);
-      mo = memory->allocateFixed(address, size, &gv, &state);
-      mo->isUserSpecified = true; // XXX hack;
-    }
-  }
-
-  //if (!mo) mo = memory->allocate(size, false, true, &*i, &state);
-  if (!mo) mo = memory->allocate(size, false, true, &gv, &state);
-  assert(mo && "out of memory");
-
-  os = bindObjectInState(state, mo, false);
-  globalObjects.insert(std::make_pair(&gv, mo));
-  globalAddresses.insert(std::make_pair(&gv, mo->getBaseExpr()));
-
-  if (!gv.hasInitializer()) os->initializeToRandom();
-}
-
-void Executor::allocGlobalVariableDecl(
-  ExecutionState& state, const GlobalVariable& gv)
-{
-  MemoryObject *mo;
-  ObjectState *os;
-  assert (gv.isDeclaration());
-  // FIXME: We have no general way of handling unknown external
-  // symbols. If we really cared about making external stuff work
-  // better we could support user definition, or use the EXE style
-  // hack where we check the object file information.
-
-  const Type *ty = gv.getType()->getElementType();
-  uint64_t size = kmodule->targetData->getTypeStoreSize(ty);
-
-  // XXX - DWD - hardcode some things until we decide how to fix.
-#ifndef WINDOWS
-  if (gv.getName() == "_ZTVN10__cxxabiv117__class_type_infoE") {
-    size = 0x2C;
-  } else if (gv.getName() == "_ZTVN10__cxxabiv120__si_class_type_infoE") {
-    size = 0x2C;
-  } else if (gv.getName() == "_ZTVN10__cxxabiv121__vmi_class_type_infoE") {
-    size = 0x2C;
-  }
-#endif
-
-  if (size == 0) {
-    llvm::errs() << "Unable to find size for global variable: " 
-                 << gv.getName() 
-                 << " (use will result in out of bounds access)\n";
-  }
-
-  mo = memory->allocate(size, false, true, &gv, &state);
-  os = bindObjectInState(state, mo, false);
-  globalObjects.insert(std::make_pair(&gv, mo));
-  globalAddresses.insert(std::make_pair(&gv, mo->getBaseExpr()));
-
-  // Program already running = object already initialized.  Read
-  // concrete value and write it to our copy.
-  if (size == 0) return;
-
-  void *addr;
-  if (gv.getName() == "__dso_handle") {
-    extern void *__dso_handle __attribute__ ((__weak__));
-    addr = &__dso_handle; // wtf ?
-  } else {
-    addr = externalDispatcher->resolveSymbol(gv.getNameStr());
-  }
-  if (!addr)
-    klee_error("unable to load symbol(%s) while initializing globals.", 
-               gv.getName().data());
-
-  for (unsigned offset=0; offset < mo->size; offset++) {
-    //os->write8(offset, ((unsigned char*)addr)[offset]);
-    state.write8(os, offset, ((unsigned char*)addr)[offset]);
-  }
-}
-
-void Executor::initializeGlobals(ExecutionState &state) {
-  Module *m = kmodule->module;
-
-  if (m->getModuleInlineAsm() != "")
-    klee_warning("executable has module level assembly (ignoring)");
-
-  assert(m->lib_begin() == m->lib_end() &&
-         "XXX do not support dependent libraries");
-
-  // represent function globals using the address of the actual llvm function
-  // object. given that we use malloc to allocate memory in states this also
-  // ensures that we won't conflict. we don't need to allocate a memory object
-  // since reading/writing via a function pointer is unsupported anyway.
-  for (Module::iterator i = m->begin(), ie = m->end(); i != ie; ++i) {
-    Function *f = i;
-    ref<ConstantExpr> addr(0);
-
-    // If the symbol has external weak linkage then it is implicitly
-    // not defined in this module; if it isn't resolvable then it
-    // should be null.
-    if (f->hasExternalWeakLinkage() && 
-        !externalDispatcher->resolveSymbol(f->getNameStr())) {
-      addr = Expr::createPointer(0);
-    } else {
-      addr = Expr::createPointer((unsigned long) (void*) f);
-      legalFunctions.insert((uint64_t) (unsigned long) (void*) f);
-    }
-    
-    globalAddresses.insert(std::make_pair(f, addr));
-  }
-
-  // Disabled, we don't want to promote use of live externals.
-#ifdef HAVE_CTYPE_EXTERNALS
-#ifndef WINDOWS
-#ifndef DARWIN
-  /* From /usr/include/errno.h: it [errno] is a per-thread variable. */
-  int *errno_addr = __errno_location();
-  addExternalObject(state, (void *)errno_addr, sizeof *errno_addr, false);
-
-  /* from /usr/include/ctype.h:
-       These point into arrays of 384, so they can be indexed by any `unsigned
-       char' value [0,255]; by EOF (-1); or by any `signed char' value
-       [-128,-1).  ISO C requires that the ctype functions work for `unsigned */
-  const uint16_t **addr = __ctype_b_loc();
-  addExternalObject(state, (void *)(*addr-128), 
-                    384 * sizeof **addr, true);
-  addExternalObject(state, addr, sizeof(*addr), true);
-    
-  const int32_t **lower_addr = __ctype_tolower_loc();
-  addExternalObject(state, (void *)(*lower_addr-128), 
-                    384 * sizeof **lower_addr, true);
-  addExternalObject(state, lower_addr, sizeof(*lower_addr), true);
-  
-  const int32_t **upper_addr = __ctype_toupper_loc();
-  addExternalObject(state, (void *)(*upper_addr-128), 
-                    384 * sizeof **upper_addr, true);
-  addExternalObject(state, upper_addr, sizeof(*upper_addr), true);
-#endif
-#endif
-#endif
-
-  // allocate and initialize globals, done in two passes since we may
-  // need address of a global in order to initialize some other one.
-
-  // allocate memory objects for all globals
-  for (Module::const_global_iterator i = m->global_begin(),
-         e = m->global_end();
-       i != e; ++i) {
-    if (i->isDeclaration()) allocGlobalVariableDecl(state, *i);
-    else allocGlobalVariableNoDecl(state, *i);
-  }
-  
-  // link aliases to their definitions (if bound)
-  for (Module::alias_iterator i = m->alias_begin(), ie = m->alias_end(); 
-       i != ie; ++i) {
-    // Map the alias to its aliasee's address. This works because we have
-    // addresses for everything, even undefined functions. 
-    globalAddresses.insert(std::make_pair(i, evalConstant(i->getAliasee())));
-  }
-
-  // once all objects are allocated, do the actual initialization
-  for (Module::const_global_iterator i = m->global_begin(),
-         e = m->global_end();
-       i != e; ++i) {
-    if (i->hasInitializer()) {
-      MemoryObject *mo = globalObjects.find(i)->second;
-      const ObjectState *os = state.addressSpace.findObject(mo);
-      assert(os);
-      ObjectState *wos = state.addressSpace.getWriteable(mo, os);
-      
-      initializeGlobalObject(state, wos, i->getInitializer(), 0);
-      // if (i->isConstant()) os->setReadOnly(true);
-    }
-  }
-}
 
 bool Executor::isForkingCondition(ExecutionState& current, ref<Expr> condition)
 {
@@ -962,7 +678,7 @@ Executor::fork(ExecutionState &current,
     Solver::Validity result;
     solver->setTimeout(timeout);
     bool success = solver->evaluate(current, conditions[1], result);
-    solver->setTimeout(0);
+    solver->setTimeout(stpTimeout);
     if (!success) {
       terminateStateEarly(current, "query timed out");
       return StateVector(N, NULL);
@@ -986,7 +702,7 @@ Executor::fork(ExecutionState &current,
       else {
         solver->setTimeout(timeout);
         bool success = solver->mayBeTrue(current, conditions[condIndex], result);
-        solver->setTimeout(0);
+        solver->setTimeout(stpTimeout);
         if (!success) {
           terminateStateEarly(current, "query timed out");
           return StateVector(N, NULL);
@@ -1164,26 +880,6 @@ ref<klee::ConstantExpr> Executor::evalConstant(Constant *c) {
   }
 }
 
-const Cell& Executor::eval(KInstruction *ki, unsigned index, 
-                           ExecutionState &state) const {
-  assert(index < ki->inst->getNumOperands());
-  int vnumber = ki->operands[index];
-
-  assert(vnumber != -1 &&
-         "Invalid operand to eval(), not a value or constant!");
-
-  // Determine if this is a constant or not.
-  if (vnumber < 0) {
-    unsigned index = -vnumber - 2;
-    return kmodule->constantTable[index];
-  } else {
-    unsigned index = vnumber;
-    //StackFrame &sf = state.stack.back();
-    //return sf.locals[index];
-    return state.readLocalCell(state.stack.size() - 1, index);
-  }
-}
-
 void Executor::bindLocal(KInstruction *target, ExecutionState &state, 
                          ref<Expr> value) {
   //getDestCell(state, target).value = value;
@@ -1205,12 +901,10 @@ ref<Expr> Executor::toUnique(const ExecutionState &state,
     ref<ConstantExpr> value;
     bool isTrue = false;
 
-    solver->setTimeout(stpTimeout);      
     if (solver->getValue(state, e, value) &&
         solver->mustBeTrue(state, EqExpr::create(e, value), isTrue) &&
         isTrue)
       result = value;
-    solver->setTimeout(0);
   }
   
   return result;
@@ -1320,88 +1014,6 @@ void Executor::stepInstruction(ExecutionState &state) {
     haltExecution = true;
 }
 
-void Executor::executeCallNonDecl(
-  ExecutionState &state, 
-  KInstruction *ki,
-  Function *f,
-  std::vector< ref<Expr> > &arguments)
-{
-  // FIXME: I'm not really happy about this reliance on prevPC but it is ok, I
-  // guess. This just done to avoid having to pass KInstIterator everywhere
-  // instead of the actual instruction, since we can't make a KInstIterator
-  // from just an instruction (unlike LLVM).
-  KFunction *kf = kmodule->functionMap[f];
-  state.pushFrame(state.prevPC, kf);
-  state.pc = kf->instructions;
-      
-  if (statsTracker)
-    statsTracker->framePushed(state, &state.stack[state.stack.size()-2]);
-
-   // TODO: support "byval" parameter attribute
-   // TODO: support zeroext, signext, sret attributes
-      
-  unsigned callingArgs = arguments.size();
-  unsigned funcArgs = f->arg_size();
-  if (!f->isVarArg()) {
-    if (callingArgs > funcArgs) {
-      klee_warning_once(f, "calling %s with extra arguments.", 
-                        f->getName().data());
-    } else if (callingArgs < funcArgs) {
-      terminateStateOnError(state, "calling function with too few arguments", 
-                            "user.err");
-      return;
-    }
-  } else {
-    if (callingArgs < funcArgs) {
-      terminateStateOnError(state, "calling function with too few arguments", 
-                            "user.err");
-      return;
-    }
-          
-    StackFrame &sf = state.stack.back();
-    unsigned size = 0;
-    for (unsigned i = funcArgs; i < callingArgs; i++) {
-      // FIXME: This is really specific to the architecture, not the pointer
-      // size. This happens to work fir x86-32 and x86-64, however.
-      Expr::Width WordSize = Context::get().getPointerWidth();
-      if (WordSize == Expr::Int32) {
-        size += Expr::getMinBytesForWidth(arguments[i]->getWidth());
-      } else {
-        size += llvm::RoundUpToAlignment(arguments[i]->getWidth(), WordSize)/8;
-      }
-    }
-
-    MemoryObject *mo = sf.varargs = memory->allocate(
-      size, true, false, state.prevPC->inst, &state);
-    if (!mo) {
-      terminateStateOnExecError(state, "out of memory (varargs)");
-      return;
-    }
-    ObjectState *os = bindObjectInState(state, mo, true);
-    unsigned offset = 0;
-    for (unsigned i = funcArgs; i < callingArgs; i++) {
-      // FIXME: This is really specific to the architecture, not the pointer
-      // size. This happens to work fir x86-32 and x86-64, however.
-      Expr::Width WordSize = Context::get().getPointerWidth();
-      if (WordSize == Expr::Int32) {
-        //os->write(offset, arguments[i]);
-        state.write(os, offset, arguments[i]);
-        offset += Expr::getMinBytesForWidth(arguments[i]->getWidth());
-      } else {
-        assert(WordSize == Expr::Int64 && "Unknown word size!");
-        //os->write(offset, arguments[i]);
-        state.write(os, offset, arguments[i]);
-        offset += llvm::RoundUpToAlignment(arguments[i]->getWidth(), 
-                                           WordSize) / 8;
-      }
-    }
-  }
-
-  unsigned numFormals = f->arg_size();
-  for (unsigned i=0; i<numFormals; ++i) 
-    bindArgument(kf, i, state, arguments[i]);
-}
-
 void Executor::executeCall(ExecutionState &state, 
                            KInstruction *ki,
                            Function *f,
@@ -1414,70 +1026,69 @@ void Executor::executeCall(ExecutionState &state,
       new FunctionCallTraceEvent(state, ki, f->getName()));
 
   Instruction *i = ki->inst;
-  if (f->isDeclaration()) {
-    switch(f->getIntrinsicID()) {
-    case Intrinsic::not_intrinsic:
-      // state may be destroyed by this call, cannot touch
-      callExternalFunction(state, ki, f, arguments);
-      break;
-        
-      // va_arg is handled by caller and intrinsic lowering, see comment for
-      // ExecutionState::varargs
-    case Intrinsic::vastart:  {
-      StackFrame &sf = state.stack.back();
-      assert(sf.varargs && 
-             "vastart called in function with no vararg object");
 
-      // FIXME: This is really specific to the architecture, not the pointer
-      // size. This happens to work fir x86-32 and x86-64, however.
-      Expr::Width WordSize = Context::get().getPointerWidth();
-      if (WordSize == Expr::Int32) {
-        executeMemoryOperation(state, true, arguments[0], 
-                               sf.varargs->getBaseExpr(), 0);
-      } else {
-        assert(WordSize == Expr::Int64 && "Unknown word size!");
-
-        // X86-64 has quite complicated calling convention. However,
-        // instead of implementing it, we can do a simple hack: just
-        // make a function believe that all varargs are on stack.
-        executeMemoryOperation(state, true, arguments[0],
-                               ConstantExpr::create(48, 32), 0); // gp_offset
-        executeMemoryOperation(state, true,
-                               AddExpr::create(arguments[0], 
-                                               ConstantExpr::create(4, 64)),
-                               ConstantExpr::create(304, 32), 0); // fp_offset
-        executeMemoryOperation(state, true,
-                               AddExpr::create(arguments[0], 
-                                               ConstantExpr::create(8, 64)),
-                               sf.varargs->getBaseExpr(), 0); // overflow_arg_area
-        executeMemoryOperation(state, true,
-                               AddExpr::create(arguments[0], 
-                                               ConstantExpr::create(16, 64)),
-                               ConstantExpr::create(0, 64), 0); // reg_save_area
-      }
-      break;
-    }
-    case Intrinsic::vaend:
-      // va_end is a noop for the interpreter.
-      //
-      // FIXME: We should validate that the target didn't do something bad
-      // with vaeend, however (like call it twice).
-      break;
-        
-    case Intrinsic::vacopy:
-      // va_copy should have been lowered.
-      //
-      // FIXME: It would be nice to check for errors in the usage of this as
-      // well.
-    default:
-      klee_error("unknown intrinsic: %s", f->getName().data());
-    }
-
-    if (InvokeInst *ii = dyn_cast<InvokeInst>(i))
-      transferToBasicBlock(ii->getNormalDest(), i->getParent(), state);
-  } else {
+  if (!f->isDeclaration()) {
     executeCallNonDecl(state, ki, f, arguments);
+    return;
   }
+  
+  switch(f->getIntrinsicID()) {
+  case Intrinsic::not_intrinsic:
+    // state may be destroyed by this call, cannot touch
+    callExternalFunction(state, ki, f, arguments);
+    break;
+        
+    // va_arg is handled by caller and intrinsic lowering, see comment for
+    // ExecutionState::varargs
+  case Intrinsic::vastart:  {
+    StackFrame &sf = state.stack.back();
+    assert(sf.varargs && 
+           "vastart called in function with no vararg object");
+     // FIXME: This is really specific to the architecture, not the pointer
+    // size. This happens to work fir x86-32 and x86-64, however.
+    Expr::Width WordSize = Context::get().getPointerWidth();
+    if (WordSize == Expr::Int32) {
+      executeMemoryOperation(state, true, arguments[0], 
+                             sf.varargs->getBaseExpr(), 0);
+    } else {
+      assert(WordSize == Expr::Int64 && "Unknown word size!");
+       // X86-64 has quite complicated calling convention. However,
+      // instead of implementing it, we can do a simple hack: just
+      // make a function believe that all varargs are on stack.
+      executeMemoryOperation(state, true, arguments[0],
+                             ConstantExpr::create(48, 32), 0); // gp_offset
+      executeMemoryOperation(state, true,
+                             AddExpr::create(arguments[0], 
+                                             ConstantExpr::create(4, 64)),
+                             ConstantExpr::create(304, 32), 0); // fp_offset
+      executeMemoryOperation(state, true,
+                             AddExpr::create(arguments[0], 
+                                             ConstantExpr::create(8, 64)),
+                             sf.varargs->getBaseExpr(), 0); // overflow_arg_area
+      executeMemoryOperation(state, true,
+                             AddExpr::create(arguments[0], 
+                                             ConstantExpr::create(16, 64)),
+                             ConstantExpr::create(0, 64), 0); // reg_save_area
+    }
+    break;
+  }
+  case Intrinsic::vaend:
+    // va_end is a noop for the interpreter.
+    //
+    // FIXME: We should validate that the target didn't do something bad
+    // with vaeend, however (like call it twice).
+    break;
+      
+  case Intrinsic::vacopy:
+    // va_copy should have been lowered.
+    //
+    // FIXME: It would be nice to check for errors in the usage of this as
+    // well.
+  default:
+    klee_error("unknown intrinsic: %s", f->getName().data());
+  }
+  if (InvokeInst *ii = dyn_cast<InvokeInst>(i))
+    transferToBasicBlock(ii->getNormalDest(), i->getParent(), state);
 }
 
 void Executor::transferToBasicBlock(BasicBlock *dst, BasicBlock *src, 
@@ -1512,31 +1123,10 @@ void Executor::printFileLine(ExecutionState &state, KInstruction *ki) {
     std::cerr << "     [no debug info]:";
 }
 
-
-Function* Executor::getCalledFunction(CallSite &cs, ExecutionState &state)
+bool Executor::isDebugIntrinsic(const Function *f)
 {
-  Function *f = cs.getCalledFunction();
-
-  if (!f) return f; 
-  std::string alias = state.getFnAlias(f->getName());
-  if (alias == "") return f;
-
-  llvm::Module* currModule = kmodule->module;
-  Function* old_f = f;
-  f = currModule->getFunction(alias);
-  if (!f) {
-    llvm::errs() << "Function " << alias << "(), alias for " 
-                 << old_f->getName() << " not found!\n";
-    assert(f && "function alias not found");
-  }
-  
-  return f;
-}
-
-static bool isDebugIntrinsic(const Function *f, KModule *KM) {
   // Fast path, getIntrinsicID is slow.
-  if (f == KM->dbgStopPointFn)
-    return true;
+  if (f == dbgStopPointFn) return true;
 
   switch (f->getIntrinsicID()) {
   case Intrinsic::dbg_stoppoint:
@@ -1720,7 +1310,7 @@ void Executor::instCall(ExecutionState& state, KInstruction *ki)
   Function *f = getCalledFunction(cs, state);
 
   // Skip debug intrinsics, we can't evaluate their metadata arguments.
-  if (f && isDebugIntrinsic(f, kmodule)) return;
+  if (f && isDebugIntrinsic(f)) return;
 
   // evaluate arguments
   std::vector< ref<Expr> > arguments;
@@ -1993,7 +1583,8 @@ bool Executor::isFPPredicateMatched(
 }
 
 
-void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
+void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
+{
   Instruction *i = ki->inst;
   switch (i->getOpcode()) {
     // Control flow
@@ -2066,27 +1657,6 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki) {
 
   case Instruction::ICmp: instCmp(state, ki); break;
  
-    // Memory instructions...
-  case Instruction::Alloca:
-  case Instruction::Malloc: {
-    AllocationInst *ai = cast<AllocationInst>(i);
-    unsigned elementSize = 
-      kmodule->targetData->getTypeStoreSize(ai->getAllocatedType());
-    ref<Expr> size = Expr::createPointer(elementSize);
-    if (ai->isArrayAllocation()) {
-      ref<Expr> count = eval(ki, 0, state).value;
-      count = Expr::createCoerceToPointerType(count);
-      size = MulExpr::create(size, count);
-    }
-    bool isLocal = i->getOpcode()==Instruction::Alloca;
-    executeAlloc(state, size, isLocal, ki);
-    break;
-  }
-  case Instruction::Free: {
-    executeFree(state, eval(ki, 0, state).value);
-    break;
-  }
-
   case Instruction::Load: {
     ref<Expr> base = eval(ki, 0, state).value;
     executeMemoryOperation(state, false, base, 0, ki);
@@ -2433,7 +2003,7 @@ void Executor::bindInstructionConstants(KInstruction *KI) {
   for (gep_type_iterator ii = gep_type_begin(gepi), ie = gep_type_end(gepi);
        ii != ie; ++ii) {
     if (const StructType *st = dyn_cast<StructType>(*ii)) {
-      const StructLayout *sl = kmodule->targetData->getStructLayout(st);
+      const StructLayout *sl = target_data->getStructLayout(st);
       const ConstantInt *ci = cast<ConstantInt>(ii.getOperand());
       uint64_t addend = sl->getElementOffset((unsigned) ci->getZExtValue());
       constantOffset = constantOffset->Add(
@@ -2441,7 +2011,7 @@ void Executor::bindInstructionConstants(KInstruction *KI) {
     } else {
       const SequentialType *st = cast<SequentialType>(*ii);
       uint64_t elementSize = 
-        kmodule->targetData->getTypeStoreSize(st->getElementType());
+        target_data->getTypeStoreSize(st->getElementType());
       Value *operand = ii.getOperand();
       if (Constant *c = dyn_cast<Constant>(operand)) {
         ref<ConstantExpr> index = 
@@ -2457,21 +2027,6 @@ void Executor::bindInstructionConstants(KInstruction *KI) {
     index++;
   }
   kgepi->offset = constantOffset->getZExtValue();
-}
-
-void Executor::bindModuleConstants() {
-  for (std::vector<KFunction*>::iterator it = kmodule->functions.begin(), 
-         ie = kmodule->functions.end(); it != ie; ++it) {
-    KFunction *kf = *it;
-    for (unsigned i=0; i<kf->numInstructions; ++i)
-      bindInstructionConstants(kf->instructions[i]);
-  }
-
-  kmodule->constantTable = new Cell[kmodule->constants.size()];
-  for (unsigned i=0; i<kmodule->constants.size(); ++i) {
-    Cell &c = kmodule->constantTable[i];
-    c.value = evalConstant(kmodule->constants[i]);
-  }
 }
 
 void Executor::killStates(ExecutionState* &state)
@@ -2634,8 +2189,6 @@ void Executor::replayPathsIntoStates(ExecutionState& initialState)
 
 void Executor::run(ExecutionState &initialState)
 {
-  bindModuleConstants();
-
   // Delay init till now so that ticks don't accrue during
   // optimization and such.
   initTimers();
@@ -2669,9 +2222,6 @@ void Executor::run(ExecutionState &initialState)
     updateStates(state);
   }
 
-  klee_message("OK. We're out. empty=%s. halt=%s",
-  	(stateManager->empty()) ? "true" : "false",
-	(haltExecution) ? "true" : "false");
   stateManager->teardownUserSearcher();
  
 dump:
@@ -2862,99 +2412,6 @@ void Executor::terminateStateOnError(ExecutionState &state,
   terminateState(state);
 }
 
-// XXX shoot me
-static const char *okExternalsList[] = { "printf", 
-                                         "fprintf", 
-                                         "puts",
-                                         "getpid" };
-static std::set<std::string> okExternals(okExternalsList,
-                                         okExternalsList + 
-                                         (sizeof(okExternalsList)/sizeof(okExternalsList[0])));
-
-void Executor::callExternalFunction(ExecutionState &state,
-                                    KInstruction *target,
-                                    Function *function,
-                                    std::vector< ref<Expr> > &arguments) {  
-  // check if specialFunctionHandler wants it
-  if (specialFunctionHandler->handle(state, function, target, arguments))
-    return;
-  
-  if (NoExternals && !okExternals.count(function->getName())) {
-    std::cerr << "KLEE:ERROR: Calling not-OK external function : " 
-               << function->getNameStr() << "\n";
-    terminateStateOnError(state, "externals disallowed", "user.err");
-    return;
-  }
-
-  // normal external function handling path
-  // allocate 128 bits for each argument (+return value) to support fp80's;
-  // we could iterate through all the arguments first and determine the exact
-  // size we need, but this is faster, and the memory usage isn't significant.
-  uint64_t *args = (uint64_t*) alloca(2*sizeof(*args) * (arguments.size() + 1));
-  memset(args, 0, 2 * sizeof(*args) * (arguments.size() + 1));
-  unsigned wordIndex = 2;
-  for (std::vector<ref<Expr> >::iterator ai = arguments.begin(), 
-       ae = arguments.end(); ai!=ae; ++ai) {
-    if (AllowExternalSymCalls) { // don't bother checking uniqueness
-      ref<ConstantExpr> ce;
-      bool success = solver->getValue(state, *ai, ce);
-      assert(success && "FIXME: Unhandled solver failure");
-      (void) success;
-      ce->toMemory(&args[wordIndex]);
-      wordIndex += (ce->getWidth()+63)/64;
-    } else {
-      ref<Expr> arg = toUnique(state, *ai);
-      if (ConstantExpr *ce = dyn_cast<ConstantExpr>(arg)) {
-        // XXX kick toMemory functions from here
-        ce->toMemory(&args[wordIndex]);
-        wordIndex += (ce->getWidth()+63)/64;
-      } else {
-        terminateStateOnExecError(state, 
-                                  "external call with symbolic argument: " + 
-                                  function->getName());
-        return;
-      }
-    }
-  }
-
-  state.addressSpace.copyOutConcretes();
-
-  if (!SuppressExternalWarnings) {
-    std::ostringstream os;
-    os << "calling external: " << function->getNameStr() << "(";
-    for (unsigned i=0; i<arguments.size(); i++) {
-      os << arguments[i];
-      if (i != arguments.size()-1) os << ", ";
-    }
-    os << ")";
-    
-    if (AllExternalWarnings)
-      klee_warning("%s", os.str().c_str());
-    else
-      klee_warning_once(function, "%s", os.str().c_str());
-  }
-  
-  bool success = externalDispatcher->executeCall(function, target->inst, args);
-  if (!success) {
-    terminateStateOnError(state, "failed external call: " + function->getName(),
-                          "external.err");
-    return;
-  }
-
-  if (!state.addressSpace.copyInConcretes(state.rec)) {
-    terminateStateOnError(
-      state, "external modified read-only object", "external.err");
-    return;
-  }
-
-  const Type *resultType = target->inst->getType();
-  if (resultType != Type::getVoidTy(getGlobalContext())) {
-    ref<Expr> e = ConstantExpr::fromMemory(
-      (void*) args, Expr::getWidthForLLVMType(resultType));
-    bindLocal(target, state, e);
-  }
-}
-
 /***/
 
 ref<Expr> Executor::replaceReadWithSymbolic(
@@ -3006,178 +2463,6 @@ ObjectState *Executor::bindObjectInState(
   return os;
 }
 
-void Executor::executeAllocConst(
-  ExecutionState &state,
-  ConstantExpr* CE,
-  bool isLocal,
-  KInstruction *target,
-  bool zeroMemory,
-  const ObjectState *reallocFrom) 
-{
-  ObjectState *os;
-  MemoryObject *mo = memory->allocate(CE->getZExtValue(), isLocal, false, 
-                                      state.prevPC->inst, &state);
-  if (!mo) {
-    bindLocal(target, state, 
-              ConstantExpr::alloc(0, Context::get().getPointerWidth()));
-    return;
-  }
-
-  os = bindObjectInState(state, mo, isLocal);
-  if (zeroMemory) os->initializeToZero();
-  else os->initializeToRandom();
-
-  bindLocal(target, state, mo->getBaseExpr());
-  
-  if (reallocFrom) {
-    unsigned count = std::min(reallocFrom->size, os->size);
-
-    state.copy(os, reallocFrom, count);
-    /*(for (unsigned i=0; i<count; i++) {
-      //os->write(i, reallocFrom->read8(i));          
-      //state.write(os, i, state.read8(reallocFrom, i));
-    }*/
-    state.addressSpace.unbindObject(reallocFrom->getObject());
-  }
-}
-
-
-void Executor::executeAllocSymbolic(
-  ExecutionState &state,
-  ref<Expr> size,
-  bool isLocal,
-  KInstruction *target,
-  bool zeroMemory,
-  const ObjectState *reallocFrom)
-{
-  // XXX For now we just pick a size. Ideally we would support
-  // symbolic sizes fully but even if we don't it would be better to
-  // "smartly" pick a value, for example we could fork and pick the
-  // min and max values and perhaps some intermediate (reasonable
-  // value).
-  // 
-  // It would also be nice to recognize the case when size has
-  // exactly two values and just fork (but we need to get rid of
-  // return argument first). This shows up in pcre when llvm
-  // collapses the size expression with a select.
-
-  ref<ConstantExpr> example;
-  bool success = solver->getValue(state, size, example);
-  assert(success && "FIXME: Unhandled solver failure");
-  (void) success;
-  
-  // Try and start with a small example.
-  Expr::Width W = example->getWidth();
-  while (example->Ugt(ConstantExpr::alloc(128, W))->isTrue()) {
-    ref<ConstantExpr> tmp = example->LShr(ConstantExpr::alloc(1, W));
-    bool res;
-    bool success = solver->mayBeTrue(state, EqExpr::create(tmp, size), res);
-    assert(success && "FIXME: Unhandled solver failure");      
-    (void) success;
-    if (!res)
-      break;
-    example = tmp;
-  }
-
-  StatePair fixedSize = fork(state, EqExpr::create(example, size), true);
-  
-  if (fixedSize.second) { 
-    // Check for exactly two values
-    ref<ConstantExpr> tmp;
-    bool success = solver->getValue(*fixedSize.second, size, tmp);
-    assert(success && "FIXME: Unhandled solver failure");      
-    (void) success;
-    bool res;
-    success = solver->mustBeTrue(*fixedSize.second, 
-                                 EqExpr::create(tmp, size),
-                                 res);
-    assert(success && "FIXME: Unhandled solver failure");      
-    (void) success;
-    if (res) {
-      executeAlloc(*fixedSize.second, tmp, isLocal,
-                   target, zeroMemory, reallocFrom);
-    } else {
-      // See if a *really* big value is possible. If so assume
-      // malloc will fail for it, so lets fork and return 0.
-      StatePair hugeSize = 
-        fork(*fixedSize.second, 
-             UltExpr::create(ConstantExpr::alloc(1<<31, W), size), 
-             true);
-      if (hugeSize.first) {
-        klee_message("NOTE: found huge malloc, returing 0");
-        bindLocal(target, *hugeSize.first, 
-                  ConstantExpr::alloc(0, Context::get().getPointerWidth()));
-      }
-      
-      if (hugeSize.second) {
-        std::ostringstream info;
-        ExprPPrinter::printOne(info, "  size expr", size);
-        info << "  concretization : " << example << "\n";
-        info << "  unbound example: " << tmp << "\n";
-        terminateStateOnError(*hugeSize.second, 
-                              "concretized symbolic size", 
-                              "model.err", 
-                              info.str());
-      }
-    }
-  }
-
-  if (fixedSize.first) // can be zero when fork fails
-    executeAlloc(*fixedSize.first, example, isLocal, 
-                 target, zeroMemory, reallocFrom);
-}
-
-void Executor::executeAlloc(
-  ExecutionState &state,
-  ref<Expr> size,
-  bool isLocal,
-  KInstruction *target,
-  bool zeroMemory,
-  const ObjectState *reallocFrom) 
-{
-  size = toUnique(state, size);
-  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(size)) {
-    executeAllocConst(state, CE, isLocal, target, zeroMemory, reallocFrom);
-  } else {
-    executeAllocSymbolic(state, size, isLocal, target, zeroMemory, reallocFrom);
-  }
-}
-
-void Executor::executeFree(ExecutionState &state,
-                           ref<Expr> address,
-                           KInstruction *target) {
-  StatePair zeroPointer = fork(state, Expr::createIsZero(address), true);
-  if (zeroPointer.first) {
-    if (target)
-      bindLocal(target, *zeroPointer.first, Expr::createPointer(0));
-  }
-  if (!zeroPointer.second) return;
-  
-  // address != 0
-  ExactResolutionList rl;
-  resolveExact(*zeroPointer.second, address, rl, "free");
-  
-  for (Executor::ExactResolutionList::iterator it = rl.begin(), 
-         ie = rl.end(); it != ie; ++it) {
-    const MemoryObject *mo = it->first.first;
-    if (mo->isLocal()) {
-      terminateStateOnError(*it->second, 
-                            "free of alloca", 
-                            "free.err",
-                            getAddressInfo(*it->second, address));
-    } else if (mo->isGlobal()) {
-      terminateStateOnError(*it->second, 
-                            "free of global", 
-                            "free.err",
-                            getAddressInfo(*it->second, address));
-    } else {
-      it->second->addressSpace.unbindObject(mo);
-      if (target)
-        bindLocal(target, *it->second, Expr::createPointer(0));
-    }
-  }
-}
-
 void Executor::resolveExact(ExecutionState &state,
                             ref<Expr> p,
                             ExactResolutionList &results, 
@@ -3225,12 +2510,10 @@ bool Executor::memOpFast(
   bool inBounds, success;
 
   /* can op be resolved to a single value? */
-  solver->setTimeout(stpTimeout);
   if (!state.addressSpace.resolveOne(state, solver, address, op, success)) {
     address = toConstant(state, address, "resolveOne failure");
     success = state.addressSpace.resolveOne(cast<ConstantExpr>(address), op);
   }
-  solver->setTimeout(0);
 
   if (!success) return false;
 
@@ -3245,10 +2528,8 @@ bool Executor::memOpFast(
   offset = mo->getOffsetExpr(address);
 
   /* verify access is in bounds */
-  solver->setTimeout(stpTimeout);
   success = solver->mustBeTrue(
     state, mo->getBoundsCheckOffset(offset, bytes), inBounds);
-  solver->setTimeout(0);
   if (!success) {
     state.pc = state.prevPC;
     terminateStateEarly(state, "query timed out");
@@ -3278,6 +2559,53 @@ bool Executor::memOpFast(
   return true;
 }
 
+ExecutionState* Executor::getUnboundState(
+  ExecutionState* unbound,
+  ObjectPair& resolution,
+  bool isWrite,
+  ref<Expr> address,
+  unsigned bytes,
+  Expr::Width& type,
+  ref<Expr> value,
+  KInstruction* target)
+{
+  const MemoryObject *mo;
+  const ObjectState *os;
+
+  mo = resolution.first;
+  os = resolution.second;
+  ref<Expr> inBounds = mo->getBoundsCheckPointer(address, bytes);
+
+  fprintf(stderr, "GETTING UNBOUND STATE\n");
+  mo->print(std::cerr);
+  
+  StatePair branches = fork(*unbound, inBounds, true);
+  ExecutionState *bound = branches.first;
+
+  // bound can be 0 on failure or overlapped 
+  if (bound) {
+    fprintf(stderr, "BOUND IS NOT NULL! %p\n", bound);
+    if (isWrite) {
+      if (os->readOnly) {
+        terminateStateOnError(*bound,
+                              "memory error: object read only",
+                              "readonly.err");
+      } else {
+        ObjectState *wos = bound->addressSpace.getWriteable(mo, os);
+        //wos->write(mo->getOffsetExpr(address), value);
+        bound->write(wos, mo->getOffsetExpr(address), value);
+      }
+    } else {
+      //ref<Expr> result = os->read(mo->getOffsetExpr(address), type);
+      ref<Expr> result = bound->read(os, mo->getOffsetExpr(address), type);
+      bindLocal(target, *bound, result);
+    }
+  }
+
+  fprintf(stderr, "whatever... return branch\n");
+  return branches.second;
+}
+
 void Executor::memOpError(
   ExecutionState& state,
   bool isWrite,
@@ -3292,47 +2620,27 @@ void Executor::memOpError(
   ExecutionState *unbound;
   bool incomplete;
 
-  solver->setTimeout(stpTimeout);
   incomplete = state.addressSpace.resolve(state, solver, address, rl, 0, stpTimeout);
-  solver->setTimeout(0);
+
+  fprintf(stderr, "WOO MEMOPERROR\n");
   
   // XXX there is some query wasteage here. who cares?
   unbound = &state;
-  for (ResolutionList::iterator it = rl.begin(), ie = rl.end(); it != ie; ++it) {
-    const MemoryObject *mo;
-    const ObjectState *os;
-
-    mo = it->first;
-    os = it->second;
-    ref<Expr> inBounds = mo->getBoundsCheckPointer(address, bytes);
-    
-    StatePair branches = fork(*unbound, inBounds, true);
-    ExecutionState *bound = branches.first;
-
-    // bound can be 0 on failure or overlapped 
-    if (bound) {
-      if (isWrite) {
-        if (os->readOnly) {
-          terminateStateOnError(*bound,
-                                "memory error: object read only",
-                                "readonly.err");
-        } else {
-          ObjectState *wos = bound->addressSpace.getWriteable(mo, os);
-          //wos->write(mo->getOffsetExpr(address), value);
-          bound->write(wos, mo->getOffsetExpr(address), value);
-        }
-      } else {
-        //ref<Expr> result = os->read(mo->getOffsetExpr(address), type);
-        ref<Expr> result = bound->read(os, mo->getOffsetExpr(address), type);
-        bindLocal(target, *bound, result);
-      }
-    }
-
-    unbound = branches.second;
+  foreach (it, rl.begin(), rl.end()) {
+    unbound = getUnboundState(
+      unbound, *it, isWrite, address, bytes, type, value, target);
     if (!unbound) break;
   }
   
   if (!unbound) return;
+
+  if (rl.begin() == rl.end()) {
+    fprintf(stderr, "EMPTY RESOLUTIONI LIST\n");
+  }
+
+  fprintf(stderr, "UNBOUND! addr=");
+  address->print(std::cerr);
+  fprintf(stderr, "\n");
 
   // XXX should we distinguish out of bounds and overlapped cases?
   if (incomplete) {
@@ -3472,117 +2780,8 @@ void Executor::makeSymbolic(
   }
 }
 
-void Executor::setupArgv(
-  ExecutionState* state,
-  Function *f, int argc, char **argv, char **envp)
-{
-  std::vector<ref<Expr> > arguments;
-  int envc;
-  MemoryObject *argvMO = 0;
-  unsigned NumPtrBytes = Context::get().getPointerWidth() / 8;
-
-  // In order to make uclibc happy and be closer to what the system is
-  // doing we lay out the environments at the end of the argv array
-  // (both are terminated by a null). There is also a final terminating
-  // null that uclibc seems to expect, possibly the ELF header?
-
-  for (envc=0; envp[envc]; ++envc) ;
-
-  Function::arg_iterator ai = f->arg_begin(), ae = f->arg_end();
-  if (ai!=ae) {
-    arguments.push_back(ConstantExpr::alloc(argc, Expr::Int32));
-
-    if (++ai!=ae) {
-      argvMO = memory->allocate((argc+1+envc+1+1) * NumPtrBytes, false, true,
-                                f->begin()->begin(), state);
-      
-      arguments.push_back(argvMO->getBaseExpr());
-
-      if (++ai!=ae) {
-        uint64_t envp_start = argvMO->address + (argc+1)*NumPtrBytes;
-        arguments.push_back(Expr::createPointer(envp_start));
-
-        if (++ai!=ae)
-          klee_error("invalid main function (expect 0-3 arguments)");
-      }
-    }
-  }
-
-  if (symPathWriter) state->symPathOS = symPathWriter->open();
-  if (statsTracker) statsTracker->framePushed(*state, 0);
-
-  assert(arguments.size() == f->arg_size() && "wrong number of arguments");
-
-  KFunction* kf = kmodule->functionMap[f];
-  for (unsigned i = 0, e = f->arg_size(); i != e; ++i)
-    bindArgument(kf, i, *state, arguments[i]);
-
-  if (!argvMO) return;
-
-  ObjectState *argvOS = bindObjectInState(*state, argvMO, false);
-
-  for (int i=0; i<argc+1+envc+1+1; i++) {
-    MemoryObject *arg;
-    ObjectState	*os;
-    
-    if (i==argc || i>=argc+1+envc) {
-      state->write(argvOS, i * NumPtrBytes, Expr::createPointer(0));
-      continue;
-    }
-
-    char *s = i<argc ? argv[i] : envp[i-(argc+1)];
-    int j, len = strlen(s);
-    
-    arg = memory->allocate(len+1, false, true, state->pc->inst, state);
-    assert (arg != NULL);
-    os = bindObjectInState(*state, arg, false);
-    for (j=0; j<len+1; j++) state->write8(os, j, s[j]);
-
-    state->write(argvOS, i * NumPtrBytes, arg->getBaseExpr());
-  }
-}
 
 /***/
-
-void Executor::runFunctionAsMain(
-  Function *f, int argc, char **argv, char **envp)
-{
-  KFunction *kf = kmodule->functionMap[f];
- 
-  assert(kf && "No KFunction for LLVM function??");
-
-  // force deterministic initialization of memory objects
-  srand(1);
-  srandom(1);
- 
-  ExecutionState *state = new ExecutionState(kmodule->functionMap[f]);
-  if (UseEquivalentStateEliminator)
-    stateManager->setupESE(this, kmodule, state);
-
-  setupArgv(state, f, argc, argv, envp);
-
-  initializeGlobals(*state);
-
-  processTree = new PTree(state);
-  state->ptreeNode = processTree->root;
-  run(*state);
-  delete processTree;
-  processTree = 0;
-
-  // hack to clear memory objects
-  delete memory;
-  memory = new MemoryManager();
-  
-  globalObjects.clear();
-  globalAddresses.clear();
-
-  if (statsTracker) statsTracker->done();
-
-  if (theMMap) {
-    munmap(theMMap, theMMapSize);
-    theMMap = 0;
-  }
-}
 
 unsigned Executor::getSymbolicPathStreamID(const ExecutionState &state) {
   assert(symPathWriter);
@@ -3626,9 +2825,8 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
                                    std::vector< 
                                    std::pair<std::string,
                                    std::vector<unsigned char> > >
-                                   &res) {
-  solver->setTimeout(stpTimeout);
-
+                                   &res)
+{
   ExecutionState tmp(state);
   if (!NoPreferCex) getSymbolicSolutionCex(state, tmp);
 
@@ -3637,7 +2835,6 @@ bool Executor::getSymbolicSolution(const ExecutionState &state,
   for (unsigned i = 0; i != state.symbolics.size(); ++i)
     objects.push_back(state.symbolics[i].getArray());
   bool success = solver->getInitialValues(tmp, objects, values);
-  solver->setTimeout(0);
   if (!success) {
     klee_warning("unable to compute initial values (invalid constraints?)!");
     ExprPPrinter::printQuery(std::cerr,
@@ -3669,8 +2866,8 @@ void Executor::doImpliedValueConcretization(ExecutionState &state,
 
   ImpliedValueList results;
   ImpliedValue::getImpliedValues(e, value, results);
-  for (ImpliedValueList::iterator it = results.begin(), ie = results.end();
-       it != ie; ++it) {
+
+  foreach (it, results.begin(), results.end()) {
     ReadExpr *re = it->first.get();
     ConstantExpr *CE = dyn_cast<ConstantExpr>(re->index);
     
@@ -3694,7 +2891,71 @@ void Executor::doImpliedValueConcretization(ExecutionState &state,
 
 ///
 
-Interpreter *Interpreter::create(const InterpreterOptions &opts,
-                                 InterpreterHandler *ih) {
-  return new Executor(opts, ih);
+Interpreter *Interpreter::create(
+	const InterpreterOptions &opts,
+	InterpreterHandler *ih)
+{
+  return new ExecutorBC(opts, ih);
+}
+
+
+void Executor::initializeGlobalObject(
+	ExecutionState &state,
+	ObjectState *os,
+	Constant *c, 
+ 	unsigned offset)
+{
+	if (ConstantVector *cp = dyn_cast<ConstantVector>(c)) {
+		unsigned elementSize;
+		
+		elementSize = target_data->getTypeStoreSize(
+			cp->getType()->getElementType());
+		for (unsigned i=0, e=cp->getNumOperands(); i != e; ++i)
+			initializeGlobalObject(
+				state,
+				os,
+				cp->getOperand(i), 
+				offset + i*elementSize);
+	} else if (isa<ConstantAggregateZero>(c)) {
+		unsigned size;
+		size = target_data->getTypeStoreSize(c->getType());
+		for (unsigned i=0; i<size; i++) {
+			//os->write8(offset+i, (uint8_t) 0);
+			state.write8(os, offset+i, (uint8_t) 0);
+		}
+	} else if (ConstantArray *ca = dyn_cast<ConstantArray>(c)) {
+		unsigned elementSize;
+		elementSize = target_data->getTypeStoreSize(
+			ca->getType()->getElementType());
+		for (unsigned i=0, e=ca->getNumOperands(); i != e; ++i)
+			initializeGlobalObject(
+				state,
+				os,
+				ca->getOperand(i), 
+				offset + i*elementSize);
+	} else if (ConstantStruct *cs = dyn_cast<ConstantStruct>(c)) {
+		const StructLayout *sl;
+		sl = target_data->getStructLayout(
+			cast<StructType>(cs->getType()));
+		for (unsigned i=0, e=cs->getNumOperands(); i != e; ++i)
+			initializeGlobalObject(
+				state,
+				os,
+				cs->getOperand(i), 
+				offset + sl->getElementOffset(i));
+	} else {
+		unsigned StoreBits;
+		ref<ConstantExpr> C;
+
+		C = evalConstant(c);
+		StoreBits = target_data->getTypeStoreSizeInBits(c->getType());
+
+		// Extend the constant if necessary;
+		assert(StoreBits >= C->getWidth() && "Invalid store size!");
+		if (StoreBits > C->getWidth())
+			C = C->ZExt(StoreBits);
+
+		//os->write(offset, C);
+		state.write(os, offset, C);
+	}
 }

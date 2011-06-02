@@ -29,6 +29,7 @@ namespace klee {
   class InterpreterHandler;
   class KInstruction;
   class StackFrame;
+  class KModule;
 
   class StatsTracker {
     friend class WriteStatsTimer;
@@ -56,11 +57,14 @@ namespace klee {
     void writeStatsHeader();
     void writeStatsLine();
     void writeIStats();
+    const KModule *km;
 
   public:
-    StatsTracker(Executor &_executor, std::string _objectFilename,
-                 const std::vector<std::string> &excludeCovFiles,
-                 bool _updateMinDistToUncovered);
+    StatsTracker(Executor &_executor, 
+    		const KModule* km,
+		std::string _objectFilename,
+                const std::vector<std::string> &excludeCovFiles,
+                bool _updateMinDistToUncovered);
     ~StatsTracker();
 
     // called after a new StackFrame has been pushed (for callpath tracing)

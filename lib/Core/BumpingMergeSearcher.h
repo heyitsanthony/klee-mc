@@ -1,13 +1,14 @@
 #ifndef BUMPINGMERGESEARCHER_H
 #define BUMPINGMERGESEARCHER_H
 
+#include "ExecutorBC.h"
 #include "Searcher.h"
 
 namespace klee
 {
   class BumpMergingSearcher : public Searcher
   {
-    Executor &executor;
+    ExecutorBC &executor;
     std::map<llvm::Instruction*, ExecutionState*> statesAtMerge;
     Searcher *baseSearcher;
     llvm::Function *mergeFunction;
@@ -16,7 +17,7 @@ namespace klee
     llvm::Instruction *getMergePoint(ExecutionState &es);
 
   public:
-    BumpMergingSearcher(Executor &executor, Searcher *baseSearcher);
+    BumpMergingSearcher(ExecutorBC &executor, Searcher *baseSearcher);
     virtual ~BumpMergingSearcher();
 
     ExecutionState &selectState(bool allowCompact);

@@ -1,13 +1,14 @@
 #ifndef MERGINGSEARCHER_H
 #define MERGINGSEARCHER_H
 
+#include "ExecutorBC.h"
 #include "Searcher.h"
 
 namespace klee
 {
   class MergingSearcher : public Searcher
   {
-    Executor &executor;
+    ExecutorBC &executor;
     std::set<ExecutionState*> statesAtMerge;
     Searcher *baseSearcher;
     llvm::Function *mergeFunction;
@@ -16,7 +17,7 @@ namespace klee
     llvm::Instruction *getMergePoint(ExecutionState &es);
 
   public:
-    MergingSearcher(Executor &executor, Searcher *baseSearcher);
+    MergingSearcher(ExecutorBC &executor, Searcher *baseSearcher);
     virtual ~MergingSearcher();
 
     ExecutionState &selectState(bool allowCompact);

@@ -43,25 +43,30 @@ namespace {
 MemoryManager* HeapObject::memoryManager = NULL;
 
 HeapObject::HeapObject(unsigned _size)
-  : size(_size), refCount(0) {
-  address = (uint64_t) (unsigned long) malloc((unsigned) size);
+  : size(_size), refCount(0)
+{
+	address = (uint64_t) (unsigned long) malloc((unsigned) size);
+	memset((void*)address, 0, size); // so valgrind doesn't complain
 }
 
-HeapObject::~HeapObject() {
-  // remove from heapObjects multimap
-  if(memoryManager) {
-    for(MemoryManager::HeapMap::iterator hit =
-        memoryManager->heapObjects.begin();
-        hit != memoryManager->heapObjects.end(); hit++) {
-      HeapObject *heapObj = hit->second;
-      if(heapObj == this) {
-        memoryManager->heapObjects.erase(hit);
-        break;
-      }
-    }
-  }
-  // free heap storage
-  free((void*)(unsigned long)address);
+HeapObject::~HeapObject()
+{
+	if(!memoryManager) goto done;
+
+	// remove from heapObjects multimap
+	foreach (hit,
+		memoryManager->heapObjects.begin(),
+		memoryManager->heapObjects.end())
+	{
+		HeapObject *heapObj = hit->second;
+		if(heapObj == this) {
+			memoryManager->heapObjects.erase(hit);
+			break;
+		}
+	}
+done:
+	// free heap storage
+	free((void*)(unsigned long)address);
 }
 
 /***/
@@ -87,40 +92,6 @@ ObjectHolder &ObjectHolder::operator=(const ObjectHolder &b) {
 
 /***/
 
-MemoryManager* MemoryObject::memoryManager = NULL;
-
-int MemoryObject::counter = 0;
-
-void MemoryObject::remove() {
-  assert(memoryManager);
-  memoryManager->objects.erase(this);
-}
-
-void MemoryObject::getAllocInfo(std::string &result) const {
-  llvm::raw_string_ostream info(result);
-
-  info << "MO" << id << "[" << size << "]";
-
-  if (mallocKey.allocSite) {
-    info << " allocated at ";
-    if (const Instruction *i = dyn_cast<Instruction>(mallocKey.allocSite)) {
-      info << i->getParent()->getParent()->getNameStr() << "():";
-      info << *i;
-    } else if (const GlobalValue *gv =
-               dyn_cast<GlobalValue>(mallocKey.allocSite)) {
-      info << "global:" << gv->getNameStr();
-    } else {
-      info << "value:" << *mallocKey.allocSite;
-    }
-  } else {
-    info << " (no allocation info)";
-  }
-  
-  info.flush();
-}
-
-/***/
-
 ObjectState::ObjectState(const MemoryObject *mo, StateRecord* _allocRec)
   : copyOnWriteOwner(0),
     refCount(0),
@@ -132,14 +103,21 @@ ObjectState::ObjectState(const MemoryObject *mo, StateRecord* _allocRec)
     updates(0, 0),
     size(mo->size),
     readOnly(false),
-    allocRec(_allocRec), wrseqno(0), wasSymOffObjectWrite(false) {
-  if (!UseConstantArrays) {
-    // FIXME: Leaked.
-    static unsigned id = 0;
-    const Array *array = new Array("tmp_arr" + llvm::utostr(++id),
-                                   mo->mallocKey, 0, 0, allocRec);
-    updates = UpdateList(array, 0);
-  }
+    allocRec(_allocRec), wrseqno(0), wasSymOffObjectWrite(false)
+{
+	memset(concreteStore, 0, mo->size);
+
+	if (UseConstantArrays) return;
+
+	// FIXME: Leaked.
+	static unsigned id = 0;
+	const Array *array = new Array(
+		"tmp_arr" + llvm::utostr(++id),
+		mo->mallocKey,
+		0,
+		0,
+		allocRec);
+	updates = UpdateList(array, 0);
 }
 
 
@@ -154,8 +132,10 @@ ObjectState::ObjectState(const MemoryObject *mo, const Array *array)
     updates(array, 0),
     size(mo->size),
     readOnly(false),
-    allocRec(array->rec), wrseqno(0), wasSymOffObjectWrite(false) {
-  makeSymbolic();
+    allocRec(array->rec), wrseqno(0), wasSymOffObjectWrite(false)
+{
+	memset(concreteStore, 0, mo->size);
+	makeSymbolic();
 }
 
 ObjectState::ObjectState(const ObjectState &os) 
@@ -172,7 +152,8 @@ ObjectState::ObjectState(const ObjectState &os)
     allocRec(os.allocRec),
         conOffObjectWrites(os.conOffObjectWrites),
         symOffObjectWrites(os.symOffObjectWrites),
-        wrseqno(os.wrseqno), wasSymOffObjectWrite(os.wasSymOffObjectWrite) {
+        wrseqno(os.wrseqno), wasSymOffObjectWrite(os.wasSymOffObjectWrite)
+{
   assert(!os.readOnly && "no need to copy read only object?");
 
   if (os.knownSymbolics) {
@@ -184,7 +165,8 @@ ObjectState::ObjectState(const ObjectState &os)
   memcpy(concreteStore, os.concreteStore, size*sizeof(*concreteStore));
 }
 
-ObjectState::~ObjectState() {
+ObjectState::~ObjectState()
+{
   if (concreteMask) delete concreteMask;
   if (flushMask) delete flushMask;
   if (knownSymbolics) delete[] knownSymbolics;
@@ -275,12 +257,14 @@ void ObjectState::makeSymbolic() {
   }
 }
 
-void ObjectState::initializeToZero() {
+void ObjectState::initializeToZero()
+{
   makeConcrete();
   memset(concreteStore, 0, size);
 }
 
-void ObjectState::initializeToRandom() {  
+void ObjectState::initializeToRandom()
+{
   makeConcrete();
   for (unsigned i=0; i<size; i++) {
     // randomly selected by 256 sided die

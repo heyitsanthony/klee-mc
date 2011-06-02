@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "klee/ExecutionState.h"
 #include "AddressSpace.h"
 #include "CoreStats.h"
 #include "Memory.h"
@@ -51,128 +52,216 @@ ObjectState *AddressSpace::getWriteable(const MemoryObject *mo,
   }
 }
 
-/// 
-
-bool AddressSpace::resolveOne(const ref<ConstantExpr> &addr,
-        ObjectPair &result) {
+/// fucking hell fix this
+bool AddressSpace::resolveOne(
+	const ref<ConstantExpr> &addr,
+        ObjectPair &result)
+{
   uint64_t address = addr->getZExtValue();
-  MemoryObject hack(address);
+  MemoryObject _hack(address);
 
-  if (const MemoryMap::value_type * res = objects.lookup_previous(&hack)) {
-    const MemoryObject *mo = res->first;
-    if ((mo->size == 0 && address == mo->address) ||
-            (address - mo->address < mo->size)) {
-      result = *res;
-      return true;
-    }
+  //if (!hack) hack = &_hack;
+  hack = &_hack;
+
+  const MemoryMap::value_type * res = objects.lookup_previous(hack);
+  
+  if (!res) {
+  	fprintf(stderr, "resolveOne. addr: %p. res=%p\n", address, res);
+  	return false;
   }
 
+  const MemoryObject *mo = res->first;
+  if ((mo->size == 0 && address == mo->address) ||
+          (address - mo->address < mo->size)) 
+  {
+    result = *res;
+    return true;
+  }
+
+
+  fprintf(stderr, "resolveOne. addr: %p. OUT OF BOUNDS (%p,%p)\n", 
+  	address, mo->address, mo->address + mo->size);
+ std::cerr << objects;
+ std::cerr << "\n";
   return false;
 }
 
-bool AddressSpace::resolveOne(ExecutionState &state,
-        TimingSolver *solver,
-        ref<Expr> address,
-        ObjectPair &result,
-        bool &success) {
-  if (ConstantExpr * CE = dyn_cast<ConstantExpr > (address)) {
-    success = resolveOne(CE, result);
-    return true;
-  } else {
-    TimerStatIncrementer timer(stats::resolveTime);
+MemoryMap::iterator AddressSpace::getMidPoint(
+	MemoryMap::iterator& range_begin,
+	MemoryMap::iterator& range_end)
+{
+	// find the midpoint between ei and bi
+	MemoryMap::iterator mid = range_begin;
+	bool even = true;
+	foreach(it, range_begin, range_end) {
+		even = !even;
+		if (even) ++mid;
+	}
 
-    // try cheap search, will succeed for any inbounds pointer
+	return mid;
+}
 
-    ref<ConstantExpr> cex;
-    if (!solver->getValue(state, address, cex))
-      return false;
-    uint64_t example = cex->getZExtValue();
-    MemoryObject hack(example);
-    const MemoryMap::value_type *res = objects.lookup_previous(&hack);
+ref<Expr> AddressSpace::getFeasibilityExpr(
+	ref<Expr> address, 
+	const MemoryObject* lo,
+	const MemoryObject* hi) const
+{
+	/* address >= low->base && 
+	 * address < high->base+high->size) */
+	ref<Expr> inRange =
+	AndExpr::create(
+		UgeExpr::create(
+			address,
+			lo->getBaseExpr()),
+		UltExpr::create(
+			address,
+			AddExpr::create(
+				hi->getBaseExpr(),
+				hi->getSizeExpr())));
+	return inRange;
+}
 
-    if (res) {
-      const MemoryObject *mo = res->first;
-      if (example - mo->address < mo->size) {
-        result = *res;
-        success = true;
-        return true;
-      }
-    }
 
-    // didn't work, now we have to search
+bool AddressSpace::isFeasibleRange(
+	ExecutionState &state,
+	TimingSolver *solver,
+	ref<Expr> address,
+	const MemoryObject* lo, const MemoryObject* hi)
+{
+	bool mayBeTrue;
 
-    MemoryMap::iterator oi = objects.upper_bound(&hack);
-    MemoryMap::iterator gt = oi;
-    if (gt == objects.end())
-      --gt;
-    else
-      ++gt;
-    MemoryMap::iterator lt = oi;
-    if (lt != objects.begin())
-      --lt;
+	ref<Expr> inRange = getFeasibilityExpr(address, lo, hi);
+	if (!solver->mayBeTrue(state, inRange, mayBeTrue)) {
+		assert (0 == 1 && "Solver broke down");
+		return false; // query error
+	}
 
-    MemoryMap::iterator begin = objects.begin();
-    MemoryMap::iterator end = objects.end();
-    --end;
+	if (!mayBeTrue) return false;
 
-    std::pair<MemoryMap::iterator, MemoryMap::iterator> left(begin,lt);
-    std::pair<MemoryMap::iterator, MemoryMap::iterator> right(gt,end);
+	return true;
+}
 
-    while (true) {
-      // Check whether current range of MemoryObjects is feasible
-      unsigned i = 0;
-      for (; i < 2; i++) {
-        std::pair<MemoryMap::iterator, MemoryMap::iterator> cur =
-          i ? right : left;
-        const MemoryObject *low = cur.first->first;
-        const MemoryObject *high = cur.second->first;
-        bool mayBeTrue;
-        ref<Expr> inRange =
-          AndExpr::create(UgeExpr::create(address, low->getBaseExpr()),
-                          UltExpr::create(address,
-                                          AddExpr::create(high->getBaseExpr(),
-                                                          high->getSizeExpr())));
-        if (!solver->mayBeTrue(state, inRange, mayBeTrue))
-          return false;
-        if (mayBeTrue) {
-          // range is feasible
+// try cheap search, will succeed for any inbounds pointer
+bool AddressSpace::cheapSearch(
+	ExecutionState &state,
+	TimingSolver *solver,
+	ref<Expr> address,
+	ObjectPair &result,
+	bool &success,
+	bool& not_failure)
+{
+	const MemoryMap::value_type *res;
+	ref<ConstantExpr> cex;
+	uint64_t example;
 
-          // range only contains one MemoryObject, which was proven feasible, so
-          // return it
-          if (low == high) {
-            result = *cur.first;
-            success = true;
-            return true;
-          }
+	if (!solver->getValue(state, address, cex)) {
+		not_failure = false;
+		return true;
+	}
 
-          // range contains more than one object, so divide in half and continue
-          // search
+	example = cex->getZExtValue();
+	MemoryObject _hack(example);
+	hack = &_hack;
+	res = objects.lookup_previous(hack);
 
-          // find the midpoint between ei and bi
-          MemoryMap::iterator mid = cur.first;
-          bool even = true;
-          for (MemoryMap::iterator it = cur.first; it != cur.second; ++it) {
-            even = !even;
-            if (even)
-              ++mid;
-          }
+	if (!res) return false;
 
-          left = std::make_pair(cur.first, mid);
-          right = std::make_pair(++mid, cur.second);
-          break; // out of for loop
-        }
-      }
+	const MemoryObject *mo = res->first;
+	if (example - mo->address < mo->size) {
+		result = *res;
+		success = true;
+		not_failure = true;
+		return true;
+	}
 
-      // neither range was feasible
-      if (i == 2) {
-        success = false;
-        return true;
-      }
-    }
+	return false;
+}
 
-    success = false;
-    return true;
-  }
+bool AddressSpace::resolveOne(
+	ExecutionState &state,
+	TimingSolver *solver,
+	ref<Expr> address,
+	ObjectPair &result,
+	bool &success)
+{
+	bool	not_failure = false;
+
+	if (ConstantExpr * CE = dyn_cast<ConstantExpr > (address)) {
+		success = resolveOne(CE, result);
+		return true;
+	}
+
+	TimerStatIncrementer timer(stats::resolveTime);
+
+	if (cheapSearch(state, solver, address, result, success, not_failure))
+		return not_failure;
+
+	// cheap search didn't work, now we have to search
+
+	MemoryMap::iterator oi = objects.upper_bound(hack);
+	MemoryMap::iterator gt = oi;
+	if (gt == objects.end())
+		--gt;
+	else
+		++gt;
+
+	MemoryMap::iterator lt = oi;
+	if (lt != objects.begin()) --lt;
+
+	MemoryMap::iterator begin = objects.begin();
+	MemoryMap::iterator end = objects.end();
+	--end;
+
+	std::pair<MemoryMap::iterator, MemoryMap::iterator> left(begin,lt);
+	std::pair<MemoryMap::iterator, MemoryMap::iterator> right(gt,end);
+
+	while (true) {
+		// Check whether current range of MemoryObjects is feasible
+		unsigned i = 0;
+		for (; i < 2; i++) {
+			std::pair<MemoryMap::iterator, MemoryMap::iterator> cur =
+			i ? right : left;
+			const MemoryObject *low;
+			const MemoryObject *high;
+	
+			low = cur.first->first;
+			high = cur.second->first;
+			    fprintf(stderr, "CHECKING2 lo=%p... hi=%p...\n", 
+				low->address, high->address);
+
+			if (!isFeasibleRange(state, solver, address, low, high))
+				continue;
+
+			// range is feasible
+			// it only contains one MemoryObject (proven feasible), so
+			// return it
+			if (low == high) {
+				result = *cur.first;
+				success = true;
+				return true;
+			}
+
+			// range contains >1 object, 
+			// divide in half and continue search
+
+			// find the midpoint between ei and bi
+			MemoryMap::iterator mid = getMidPoint(
+				cur.first, cur.second);
+
+			left = std::make_pair(cur.first, mid);
+			right = std::make_pair(++mid, cur.second);
+			break; // out of for loop
+		}
+
+		// neither range was feasible
+		if (i == 2) {
+			success = false;
+			return true;
+		}
+	}
+
+	success = false;
+	return true;
 }
 
 bool AddressSpace::resolve(ExecutionState &state,
@@ -218,9 +307,10 @@ bool AddressSpace::resolve(ExecutionState &state,
   if (!solver->getValue(state, p, cex))
     return true;
   uint64_t example = cex->getZExtValue();
-  MemoryObject hack(example);
+  MemoryObject _hack(example);
+  hack = &_hack;
 
-  MemoryMap::iterator oi = objects.find(&hack);
+  MemoryMap::iterator oi = objects.find(hack);
   MemoryMap::iterator gt = oi;
   if (gt != objects.end())
     ++gt;
@@ -258,15 +348,10 @@ bool AddressSpace::resolve(ExecutionState &state,
     tryRanges.pop();
 
     // Check whether current range of MemoryObjects is feasible
-    bool mayBeTrue;
-    ref<Expr> inRange =
-      AndExpr::create(UgeExpr::create(p, low->getBaseExpr()),
-                      UltExpr::create(p,
-                                      AddExpr::create(high->getBaseExpr(),
-                                                      high->getSizeExpr())));
-    if (!solver->mayBeTrue(state, inRange, mayBeTrue))
-      return true; // query error
-    if (!mayBeTrue) continue;
+    fprintf(stderr, "CHECKING lo=%p... hi=%p...\n", 
+    	low->address, high->address);
+    if (!isFeasibleRange(state, solver, p, low, high))
+    	continue; // XXX return true on query error
 
     // range is feasible
     if (low == high) {
@@ -278,7 +363,8 @@ bool AddressSpace::resolve(ExecutionState &state,
       unsigned size = rl.size();
       if (size == 1) {
         bool mustBeTrue;
-        if (!solver->mustBeTrue(state, inRange, mustBeTrue))
+        if (!solver->mustBeTrue(
+		state, getFeasibilityExpr(p, low, high), mustBeTrue))
           return true;
         if (mustBeTrue)
           return false;
@@ -290,13 +376,7 @@ bool AddressSpace::resolve(ExecutionState &state,
       // halves onto stack
 
       // find the midpoint between ei and bi
-      MemoryMap::iterator mid = bi;
-      bool even = true;
-      for (MemoryMap::iterator it = bi; it != ei; ++it) {
-        even = !even;
-        if (even)
-          ++mid;
-      }
+      MemoryMap::iterator mid = getMidPoint(bi, ei);
       tryRanges.push(std::make_pair(bi, mid));
       tryRanges.push(std::make_pair(++mid, ei));
     }
@@ -311,7 +391,6 @@ bool AddressSpace::resolve(ExecutionState &state,
 // store inside of the object states, which allows them to
 // transparently avoid screwing up symbolics (if the byte is symbolic
 // then its concrete cache byte isn't being used) but is just a hack.
-
 void AddressSpace::copyOutConcretes(void)
 {
   foreach (it, objects.begin(), objects.end()) {
@@ -326,26 +405,31 @@ void AddressSpace::copyOutConcretes(void)
   }
 }
 
-bool AddressSpace::copyInConcretes(StateRecord* rec) {
-  for (MemoryMap::iterator it = objects.begin(), ie = objects.end();
-          it != ie; ++it) {
-    const MemoryObject *mo = it->first;
+bool AddressSpace::copyInConcretes(StateRecord* rec)
+{
+  foreach (it, objects.begin(), objects.end()) {
+    const MemoryObject *mo;
+    const ObjectState *os;
+    ObjectState *wos;
+    uint8_t *address;
 
+    mo = it->first;
     if (mo->isUserSpecified) continue;
 
-    const ObjectState *os = it->second;
-    uint8_t *address = (uint8_t*) (uintptr_t) mo->address;
+    os = it->second;
+    address = (uint8_t*) (uintptr_t) mo->address;
 
-    if (memcmp(address, os->concreteStore, mo->size) == 0) continue;
+    if (memcmp(
+          address,
+          os->concreteStore,
+          mo->size) == 0) continue;
 
-    ObjectState *wos = getWriteable(mo, os);
+    wos = getWriteable(mo, os);
     if (rec) {            
       for (unsigned i = 0; i < wos->size; ++i) {
-        if (wos->isByteConcrete(i)) {
-          if (address[i] != wos->concreteStore[i]) {
-            rec->conOffObjectWrite(wos, i, ConstantExpr::create(address[i],Expr::Int8));
-          }
-        }
+        if (!wos->isByteConcrete(i)) continue;
+        if (address[i] == wos->concreteStore[i]) continue;
+        rec->conOffObjectWrite(wos, i, ConstantExpr::create(address[i],Expr::Int8));
       }
     }
 
@@ -357,7 +441,8 @@ bool AddressSpace::copyInConcretes(StateRecord* rec) {
 
 /***/
 
-bool MemoryObjectLT::operator()(const MemoryObject *a, const MemoryObject *b) const {
+bool MemoryObjectLT::operator()(const MemoryObject *a, const MemoryObject *b) const
+{
+  assert (a && b);
   return a->address < b->address;
 }
-

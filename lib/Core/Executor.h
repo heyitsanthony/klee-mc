@@ -19,7 +19,6 @@
 #include "klee/Interpreter.h"
 #include "klee/Internal/Module/Cell.h"
 #include "klee/Internal/Module/KInstruction.h"
-#include "klee/Internal/Module/KModule.h"
 #include "llvm/Support/CallSite.h"
 #include <vector>
 #include <string>
@@ -56,7 +55,6 @@ namespace klee {
   class KFunction;
   class KInstruction;
   class KInstIterator;
-  class KModule;
   class MemoryManager;
   class MemoryObject;
   class ObjectState;
@@ -102,18 +100,121 @@ private:
   class TimerInfo;
   static void deleteTimerInfo(TimerInfo*&);
 
-  KModule *kmodule;
+protected:
+
+  void initializeGlobalObject(
+    ExecutionState &state,
+    ObjectState *os, 
+    llvm::Constant *c,
+    unsigned offset);
+
+  virtual void executeInstruction(ExecutionState &state, KInstruction *ki);
+  virtual void executeCallNonDecl(
+    ExecutionState &state, 
+    KInstruction *ki,
+    Function *f,
+    std::vector< ref<Expr> > &arguments) = 0;
+  virtual void run(ExecutionState &initialState);
+
+  /// bindInstructionConstants - Initialize any necessary per instruction
+  /// constant values.
+  void bindInstructionConstants(KInstruction *KI);
+  void bindArgument(KFunction *kf, 
+                    unsigned index,
+                    ExecutionState &state,
+                    ref<Expr> value);
+  ObjectState *bindObjectInState(ExecutionState &state, const MemoryObject *mo,
+                                 bool isLocal, const Array *array = 0);
+  void bindLocal(KInstruction *target, 
+                 ExecutionState &state, 
+                 ref<Expr> value);
+
+  StatePair fork(ExecutionState &current, ref<Expr> condition, bool isInternal);
+
+  // remove state from queue and delete
+  void terminateState(ExecutionState &state);
+  // call exit handler and terminate state
+  void terminateStateEarly(ExecutionState &state, const llvm::Twine &message);
+  // call exit handler and terminate state
+  void terminateStateOnExit(ExecutionState &state);
+  // call error handler and terminate state
+  void terminateStateOnError(ExecutionState &state, 
+                             const llvm::Twine &message,
+                             const char *suffix,
+                             const llvm::Twine &longMessage="");
+
+  // call error handler and terminate state, for execution errors
+  // (things that should not be possible, like illegal instruction or
+  // unlowered instrinsic, or are unsupported, like inline assembly)
+  void terminateStateOnExecError(ExecutionState &state, 
+                                 const llvm::Twine &message,
+                                 const llvm::Twine &info="") {
+    terminateStateOnError(state, message, "exec.err", info);
+  }
+
+  /// Return a unique constant value for the given expression in the
+  /// given state, if it has one (i.e. it provably only has a single
+  /// value). Otherwise return the original expression.
+  ref<Expr> toUnique(const ExecutionState &state, ref<Expr> &e);
+
+  /// Resolve a pointer to the memory objects it could point to the
+  /// start of, forking execution when necessary and generating errors
+  /// for pointers to invalid locations (either out of bounds or
+  /// address inside the middle of objects).
+  ///
+  /// \param results[out] A list of ((MemoryObject,ObjectState),
+  /// state) pairs for each object the given address can point to the
+  /// beginning of.
+  typedef std::vector< std::pair<std::pair<const MemoryObject*, const ObjectState*>, 
+                                 ExecutionState*> > ExactResolutionList;
+  void resolveExact(ExecutionState &state,
+                    ref<Expr> p,
+                    ExactResolutionList &results,
+                    const std::string &name);
+
+  /// Get textual information regarding a memory address.
+  std::string getAddressInfo(ExecutionState &state, ref<Expr> address) const;
+
+
+  virtual const Cell& eval(
+    KInstruction *ki,
+    unsigned index,
+    ExecutionState &state) const = 0;
+
+  virtual llvm::Function* getCalledFunction(
+    llvm::CallSite &cs, ExecutionState &state) = 0;
+
+  virtual void callExternalFunction(ExecutionState &state,
+                            KInstruction *target,
+                            llvm::Function *function,
+                            std::vector< ref<Expr> > &arguments) = 0;
+
+
+
   InterpreterHandler *interpreterHandler;
-private:
-  ExternalDispatcher *externalDispatcher;
+  TargetData* target_data;
+  llvm::Function* dbgStopPointFn; 
+  StatsTracker *statsTracker;
+  PTree *processTree;
+  TreeStreamWriter *symPathWriter;
   TimingSolver *solver;
+
+
   MemoryManager *memory;
   ExeStateManager* stateManager;
-  StatsTracker *statsTracker;
-  TreeStreamWriter *symPathWriter;
-  SpecialFunctionHandler *specialFunctionHandler;
+
+  /// Map of globals to their representative memory object.
+  std::map<const llvm::GlobalValue*, MemoryObject*> globalObjects;
+  /// Map of globals to their bound address. This also includes
+  /// globals that have no representative object (i.e. functions).
+  std::map<const llvm::GlobalValue*, ref<ConstantExpr> > globalAddresses;
+
+  /// The set of legal function addresses, used to validate function
+  /// pointers. We use the actual Function* address as the function address.
+  std::set<uint64_t> legalFunctions;
+
+private:
   std::vector<TimerInfo*> timers;
-  PTree *processTree;
 
   /// When non-empty the Executor is running in "seed" mode. The
   /// states in this map will be executed in an arbitrary order
@@ -125,17 +226,6 @@ private:
   typedef  std::map<ExecutionState*, std::vector<SeedInfo> > SeedMapType;
   SeedMapType seedMap;
   
-  /// Map of globals to their representative memory object.
-  std::map<const llvm::GlobalValue*, MemoryObject*> globalObjects;
-
-  /// Map of globals to their bound address. This also includes
-  /// globals that have no representative object (i.e. functions).
-  std::map<const llvm::GlobalValue*, ref<ConstantExpr> > globalAddresses;
-
-  /// The set of legal function addresses, used to validate function
-  /// pointers. We use the actual Function* address as the function address.
-  std::set<uint64_t> legalFunctions;
-
   /// When non-null the bindings that will be used for calls to
   /// klee_make_symbolic in order replay.
   const struct KTest *replayOut;
@@ -178,9 +268,8 @@ private:
   /// The maximum time to allow for a single stp query.
   double stpTimeout;  
 
-  llvm::Function* getCalledFunction(llvm::CallSite &cs, ExecutionState &state);
-  
-  void executeInstruction(ExecutionState &state, KInstruction *ki);
+  bool isDebugIntrinsic(const Function *f);
+
   void instRet(ExecutionState& state, KInstruction* ki);
   void instBranch(ExecutionState& state, KInstruction* ki);
   void instCmp(ExecutionState& state, KInstruction* ki);
@@ -195,7 +284,6 @@ private:
   void printFileLine(ExecutionState &state, KInstruction *ki);
 
   void replayPathsIntoStates(ExecutionState& initialState);
-  void run(ExecutionState &initialState);
   void runState(ExecutionState* &state);
   void killStates(ExecutionState* &state);
   void compactStates(ExecutionState* &state);
@@ -207,21 +295,12 @@ private:
   bool getSeedInfoIterRange(
     ExecutionState* s, SeedInfoIterator &b, SeedInfoIterator& e);
 
-  void setupArgv(
-    ExecutionState* state,
-    Function *f, int argc, char **argv, char **envp);
-
   // Given a concrete object in our [klee's] address space, add it to 
   // objects checked code can reference.
   MemoryObject *addExternalObject(ExecutionState &state, void *addr, 
                                   unsigned size, bool isReadOnly);
   inline void splitProcessTree(PTreeNode* n, ExecutionState* a,
                                ExecutionState* b);
-  void initializeGlobalObject(ExecutionState &state, ObjectState *os, 
-    llvm::Constant *c, unsigned offset);
-  void initializeGlobals(ExecutionState &state);
-	void allocGlobalVariableDecl(ExecutionState& s, const GlobalVariable& gv);
-	void allocGlobalVariableNoDecl(ExecutionState& s, const GlobalVariable& gv);
 
   void stepInstruction(ExecutionState &state);
   void removePTreeState(
@@ -232,86 +311,10 @@ private:
 			    llvm::BasicBlock *src,
 			    ExecutionState &state);
 
-  void callExternalFunction(ExecutionState &state,
-                            KInstruction *target,
-                            llvm::Function *function,
-                            std::vector< ref<Expr> > &arguments);
-
-  ObjectState *bindObjectInState(ExecutionState &state, const MemoryObject *mo,
-                                 bool isLocal, const Array *array = 0);
-
-  /// Resolve a pointer to the memory objects it could point to the
-  /// start of, forking execution when necessary and generating errors
-  /// for pointers to invalid locations (either out of bounds or
-  /// address inside the middle of objects).
-  ///
-  /// \param results[out] A list of ((MemoryObject,ObjectState),
-  /// state) pairs for each object the given address can point to the
-  /// beginning of.
-  typedef std::vector< std::pair<std::pair<const MemoryObject*, const ObjectState*>, 
-                                 ExecutionState*> > ExactResolutionList;
-  void resolveExact(ExecutionState &state,
-                    ref<Expr> p,
-                    ExactResolutionList &results,
-                    const std::string &name);
-
-  /// Allocate and bind a new object in a particular state. NOTE: This
-  /// function may fork.
-  ///
-  /// \param isLocal Flag to indicate if the object should be
-  /// automatically deallocated on function return (this also makes it
-  /// illegal to free directly).
-  ///
-  /// \param target Value at which to bind the base address of the new
-  /// object.
-  ///
-  /// \param reallocFrom If non-zero and the allocation succeeds,
-  /// initialize the new object from the given one and unbind it when
-  /// done (realloc semantics). The initialized bytes will be the
-  /// minimum of the size of the old and new objects, with remaining
-  /// bytes initialized as specified by zeroMemory.
-  void executeAlloc(ExecutionState &state,
-                    ref<Expr> size,
-                    bool isLocal,
-                    KInstruction *target,
-                    bool zeroMemory=false,
-                    const ObjectState *reallocFrom=0);
-
-  void executeAllocSymbolic(
-    ExecutionState &state,
-    ref<Expr> size,
-    bool isLocal,
-    KInstruction *target,
-    bool zeroMemory,
-    const ObjectState *reallocFrom);
-
-  void executeAllocConst(
-    ExecutionState &state,
-    ConstantExpr* CE,
-    bool isLocal,
-    KInstruction *target,
-    bool zeroMemory,
-    const ObjectState *reallocFrom);
-
-
-  /// Free the given address with checking for errors. If target is
-  /// given it will be bound to 0 in the resulting states (this is a
-  /// convenience for realloc). Note that this function can cause the
-  /// state to fork and that \ref state cannot be safely accessed
-  /// afterwards.
-  void executeFree(ExecutionState &state,
-                   ref<Expr> address,
-                   KInstruction *target = 0);
-  
   void executeCall(ExecutionState &state, 
                    KInstruction *ki,
                    llvm::Function *f,
                    std::vector< ref<Expr> > &arguments);
-  void executeCallNonDecl(
-    ExecutionState &state, 
-    KInstruction *ki,
-    Function *f,
-    std::vector< ref<Expr> > &arguments);
                    
   // do address resolution / object binding / out of bounds checking
   // and perform the operation
@@ -324,6 +327,16 @@ private:
     ExecutionState& state,
     bool isWrite,
     ref<Expr> address,
+    ref<Expr> value,
+    KInstruction* target);
+
+  ExecutionState* getUnboundState(
+    ExecutionState* unbound,
+    ObjectPair& resolution,
+    bool isWrite,
+    ref<Expr> address,
+    unsigned bytes,
+    Expr::Width& type,
     ref<Expr> value,
     KInstruction* target);
 
@@ -351,7 +364,6 @@ private:
 
   bool isForkingCondition(ExecutionState& current, ref<Expr> condition);
   bool isForkingCallPath(CallPathNode* cpn);
-  StatePair fork(ExecutionState &current, ref<Expr> condition, bool isInternal);
   StateVector fork(ExecutionState &current,
                    unsigned N, ref<Expr> conditions[], bool isInternal,
                    bool isBranch = false);
@@ -393,23 +405,7 @@ private:
   // Used for testing.
   ref<Expr> replaceReadWithSymbolic(ExecutionState &state, ref<Expr> e);
 
-  const Cell& eval(KInstruction *ki, unsigned index, 
-                   ExecutionState &state) const;
-
-  void bindLocal(KInstruction *target, 
-                 ExecutionState &state, 
-                 ref<Expr> value);
-  void bindArgument(KFunction *kf, 
-                    unsigned index,
-                    ExecutionState &state,
-                    ref<Expr> value);
-
   ref<klee::ConstantExpr> evalConstantExpr(llvm::ConstantExpr *ce);
-
-  /// Return a unique constant value for the given expression in the
-  /// given state, if it has one (i.e. it provably only has a single
-  /// value). Otherwise return the original expression.
-  ref<Expr> toUnique(const ExecutionState &state, ref<Expr> &e);
 
   /// Return a constant value for the given expression, forcing it to
   /// be constant in the given state by adding a constraint if
@@ -423,37 +419,6 @@ private:
   /// Bind a constant value for e to the given target. NOTE: This
   /// function may fork state if the state has multiple seeds.
   void executeGetValue(ExecutionState &state, ref<Expr> e, KInstruction *target);
-
-  /// Get textual information regarding a memory address.
-  std::string getAddressInfo(ExecutionState &state, ref<Expr> address) const;
-
-  // remove state from queue and delete
-  void terminateState(ExecutionState &state);
-  // call exit handler and terminate state
-  void terminateStateEarly(ExecutionState &state, const llvm::Twine &message);
-  // call exit handler and terminate state
-  void terminateStateOnExit(ExecutionState &state);
-  // call error handler and terminate state
-  void terminateStateOnError(ExecutionState &state, 
-                             const llvm::Twine &message,
-                             const char *suffix,
-                             const llvm::Twine &longMessage="");
-
-  // call error handler and terminate state, for execution errors
-  // (things that should not be possible, like illegal instruction or
-  // unlowered instrinsic, or are unsupported, like inline assembly)
-  void terminateStateOnExecError(ExecutionState &state, 
-                                 const llvm::Twine &message,
-                                 const llvm::Twine &info="") {
-    terminateStateOnError(state, message, "exec.err", info);
-  }
-
-  /// bindModuleConstants - Initialize the module constant table.
-  void bindModuleConstants();
-
-  /// bindInstructionConstants - Initialize any necessary per instruction
-  /// constant values.
-  void bindInstructionConstants(KInstruction *KI);
 
   void handlePointsToObj(ExecutionState &state, 
                          KInstruction *target, 
@@ -484,9 +449,7 @@ public:
   Executor(const InterpreterOptions &opts, InterpreterHandler *ie);
   virtual ~Executor();
 
-  const InterpreterHandler& getHandler() {
-    return *interpreterHandler;
-  }
+  const InterpreterHandler& getHandler() { return *interpreterHandler; }
 
   // XXX should just be moved out to utility module
   ref<klee::ConstantExpr> evalConstant(llvm::Constant *c);
@@ -506,17 +469,9 @@ public:
     replayPaths = paths;
   }
 
-  virtual const llvm::Module *
-  setModule(llvm::Module *module, const ModuleOptions &opts);
-
   virtual void useSeeds(const std::vector<struct KTest *> *seeds) { 
     usingSeeds = seeds;
   }
-
-  virtual void runFunctionAsMain(llvm::Function *f,
-                                 int argc,
-                                 char **argv,
-                                 char **envp);
 
   /*** Runtime options ***/
   

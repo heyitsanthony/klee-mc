@@ -156,9 +156,12 @@ static bool instructionIsCoverable(Instruction *i) {
   return true;
 }
 
-StatsTracker::StatsTracker(Executor &_executor, std::string _objectFilename,
-                           const std::vector<std::string> &excludeCovFiles,
-                           bool _updateMinDistToUncovered)
+StatsTracker::StatsTracker(
+	Executor &_executor,
+	const KModule	*in_km,
+	std::string _objectFilename,
+	const std::vector<std::string> &excludeCovFiles,
+	bool _updateMinDistToUncovered)
   : executor(_executor),
     objectFilename(_objectFilename),
     statsFile(0),
@@ -167,10 +170,10 @@ StatsTracker::StatsTracker(Executor &_executor, std::string _objectFilename,
     numBranches(0),
     fullBranches(0),
     partialBranches(0),
-    updateMinDistToUncovered(_updateMinDistToUncovered) {
-  KModule *km = executor.kmodule;
-
+    updateMinDistToUncovered(_updateMinDistToUncovered)
+{
   sys::Path module(objectFilename);
+  km = in_km;
   if (!sys::Path(objectFilename).isAbsolute()) {
     sys::Path current = sys::Path::GetCurrentDirectory();
     current.appendComponent(objectFilename);
@@ -179,9 +182,7 @@ StatsTracker::StatsTracker(Executor &_executor, std::string _objectFilename,
   }
 
   std::set<std::string> excludeNames;
-  for (std::vector<std::string>::const_iterator fit = excludeCovFiles.begin();
-       fit != excludeCovFiles.end(); ++fit) {
-
+  foreach (fit, excludeCovFiles.begin(), excludeCovFiles.end()) {
     std::ifstream ifs(fit->c_str());
     if (!ifs.good())
       klee_error("file not found: %s", fit->c_str());
@@ -199,8 +200,7 @@ StatsTracker::StatsTracker(Executor &_executor, std::string _objectFilename,
   if (OutputIStats)
     theStatisticManager->useIndexedStats(km->infos->getMaxID());
 
-  for (std::vector<KFunction*>::iterator it = km->functions.begin(), 
-         ie = km->functions.end(); it != ie; ++it) {
+  foreach (it, km->functions.begin(), km->functions.end()) {
     KFunction *kf = *it;
 
     const std::string &name = kf->function->getName();
@@ -451,7 +451,7 @@ void StatsTracker::updateStateStatistics(uint64_t addend) {
 }
 
 void StatsTracker::writeIStats() {
-  Module *m = executor.kmodule->module;
+  Module *m = km->module;
   uint64_t istatsMask = 0;
   std::ostream &of = *istatsFile;
   
@@ -521,7 +521,7 @@ void StatsTracker::writeIStats() {
       for (BasicBlock::iterator it = bbIt->begin(), ie = bbIt->end(); 
            it != ie; ++it) {
         Instruction *instr = &*it;
-        const InstructionInfo &ii = executor.kmodule->infos->getInfo(instr);
+        const InstructionInfo &ii = km->infos->getInfo(instr);
         unsigned index = ii.id;
         if (ii.file!=sourceFile) {
           if(ii.file.empty())
@@ -552,8 +552,7 @@ void StatsTracker::writeIStats() {
              fit != fie; ++fit) {
           Function *f = fit->first;
           CallSiteInfo &csi = fit->second;
-          const InstructionInfo &fii = 
-            executor.kmodule->infos->getFunctionInfo(f);
+          const InstructionInfo &fii = km->infos->getFunctionInfo(f);
 
           if (fii.file!=sourceFile) {
             if(fii.file.empty())
@@ -646,7 +645,6 @@ uint64_t klee::computeMinDistToUncovered(const KInstruction *ki,
 
 /* FIXME -- AJR */
 void StatsTracker::computeReachableUncovered() {
-  KModule *km = executor.kmodule;
   Module *m = km->module;
   static bool init = true;
   const InstructionInfoTable &infos = *km->infos;

@@ -28,11 +28,15 @@ MemoryManager::~MemoryManager() {
   MemoryObject::memoryManager = NULL;
 }
 
-MemoryObject *MemoryManager::allocate(uint64_t size, bool isLocal, 
-                                      bool isGlobal,
-                                      const llvm::Value *allocSite,
-                                      ExecutionState *state) {
-  if (size>10*1024*1024) {
+#define MAX_ALLOC_BYTES	(10*1024*1024)
+
+MemoryObject *MemoryManager::allocate(
+  uint64_t size, bool isLocal, 
+  bool isGlobal,
+  const llvm::Value *allocSite,
+  ExecutionState *state)
+{
+  if (size > MAX_ALLOC_BYTES) {
     klee_warning_once(0, "failing large alloc: %u bytes", (unsigned) size);
     return 0;
   }
@@ -71,7 +75,6 @@ MemoryObject *MemoryManager::allocate(uint64_t size, bool isLocal,
       || state->replayBranchIterator == state->branchDecisionsSequence.end())
       &&
       "on reconstitution, existing heap object must be chosen");
-
     // if we used to have an object with this mallocKey, reuse the same size
     // so we can get hits in the cache and RWset
     MallocKey::seensizes_ty::iterator it;

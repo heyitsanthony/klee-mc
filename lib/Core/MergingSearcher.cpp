@@ -15,10 +15,10 @@ namespace {
   DebugLogMerge("debug-log-merge");
 }
 
-MergingSearcher::MergingSearcher(Executor &_executor, Searcher *_baseSearcher)
+MergingSearcher::MergingSearcher(ExecutorBC &_executor, Searcher *_baseSearcher)
 : executor(_executor),
 baseSearcher(_baseSearcher),
-mergeFunction(executor.kmodule->kleeMergeFn) {
+mergeFunction(executor.getKModule()->kleeMergeFn) {
 }
 
 MergingSearcher::~MergingSearcher() {

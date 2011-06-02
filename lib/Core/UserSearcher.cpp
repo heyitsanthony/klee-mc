@@ -10,7 +10,7 @@
 #include "UserSearcher.h"
 
 #include "Searcher.h"
-#include "Executor.h"
+#include "ExecutorBC.h"
 
 #include "klee/Common.h"
 
@@ -180,9 +180,9 @@ Searcher* klee::setupMergeSearcher(Executor& executor, Searcher* searcher)
 {
   if (UseMerge) {
     assert(!UseBumpMerge);
-    searcher = new MergingSearcher(executor, searcher);
+    searcher = new MergingSearcher(dynamic_cast<ExecutorBC&>(executor), searcher);
   } else if (UseBumpMerge) {    
-    searcher = new BumpMergingSearcher(executor, searcher);
+    searcher = new BumpMergingSearcher(dynamic_cast<ExecutorBC&>(executor), searcher);
   }
 
   return searcher;

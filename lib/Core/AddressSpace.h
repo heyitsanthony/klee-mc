@@ -43,7 +43,7 @@ namespace klee {
 
     /// Unsupported, use copy constructor
     AddressSpace &operator=(const AddressSpace&); 
-    
+    MemoryObject *hack;
   public:      
     /// The MemoryObject -> ObjectState map that constitutes the
     /// address space.
@@ -55,8 +55,9 @@ namespace klee {
     MemoryMap objects;
     
   public:
-    AddressSpace() : cowKey(1) {}
-    AddressSpace(const AddressSpace &b) : cowKey(++b.cowKey), objects(b.objects) { }
+    AddressSpace() : cowKey(1), hack(0) {}
+    AddressSpace(const AddressSpace &b) : 
+      cowKey(++b.cowKey),  hack(b.hack), objects(b.objects) { }
     ~AddressSpace() {}
 
     /// Resolve address to an ObjectPair in result.
@@ -94,8 +95,33 @@ namespace klee {
 
     /***/
   private:
-    /// Add a binding to the address space.
-    void bindObject(const MemoryObject *mo, ObjectState *os);
+	/// Add a binding to the address space.
+	void bindObject(const MemoryObject *mo, ObjectState *os);
+
+	bool cheapSearch(
+		ExecutionState &state,
+		TimingSolver *solver,
+		ref<Expr> address,
+		ObjectPair &result,
+		bool &success,
+		bool& not_failure);
+
+	bool isFeasibleRange(
+		ExecutionState &state,
+		TimingSolver *solver,
+		ref<Expr> address,
+		const MemoryObject* lo,
+		const MemoryObject* hi);
+	
+	MemoryMap::iterator getMidPoint(
+		MemoryMap::iterator& begin,
+		MemoryMap::iterator& end);
+
+	ref<Expr> getFeasibilityExpr(
+		ref<Expr> address, 
+		const MemoryObject* lo,
+		const MemoryObject* hi) const;
+
   public:
     /// Remove a binding from the address space.
     void unbindObject(const MemoryObject *mo);

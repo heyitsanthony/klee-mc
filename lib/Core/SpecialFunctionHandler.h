@@ -19,7 +19,7 @@ namespace llvm {
 }
 
 namespace klee {
-  class Executor;
+  class ExecutorBC;
   class Expr;
   class ExecutionState;
   class KInstruction;
@@ -35,10 +35,10 @@ namespace klee {
                      std::pair<Handler,bool> > handlers_ty;
 
     handlers_ty handlers;
-    class Executor &executor;
+    class ExecutorBC &executor;
 
   public:
-    SpecialFunctionHandler(Executor &_executor);
+    SpecialFunctionHandler(ExecutorBC &_executor);
 
     /// Perform any modifications on the LLVM module before it is
     /// prepared for execution. At the moment this involves deleting

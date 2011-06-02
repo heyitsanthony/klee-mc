@@ -11,6 +11,7 @@
 
 #include "Context.h"
 
+#include "static/Sugar.h"
 #include "klee/Expr.h"
 #include "klee/Interpreter.h"
 #include "klee/Solver.h"
@@ -78,28 +79,29 @@ namespace klee {
     case Instruction::GetElementPtr: {
       ref<ConstantExpr> base = op1->ZExt(Context::get().getPointerWidth());
 
-      for (gep_type_iterator ii = gep_type_begin(ce), ie = gep_type_end(ce);
-           ii != ie; ++ii) {
+      foreach (ii, gep_type_begin(ce), gep_type_end(ce)) {
         ref<ConstantExpr> addend = 
           ConstantExpr::alloc(0, Context::get().getPointerWidth());
 
         if (const StructType *st = dyn_cast<StructType>(*ii)) {
-          const StructLayout *sl = kmodule->targetData->getStructLayout(st);
+          const StructLayout *sl = target_data->getStructLayout(st);
           const ConstantInt *ci = cast<ConstantInt>(ii.getOperand());
 
-          addend = ConstantExpr::alloc(sl->getElementOffset((unsigned)
-                                                            ci->getZExtValue()),
-                                       Context::get().getPointerWidth());
+          addend = ConstantExpr::alloc(
+	    sl->getElementOffset(
+	      (unsigned)ci->getZExtValue()),
+              Context::get().getPointerWidth());
         } else {
           const SequentialType *st = cast<SequentialType>(*ii);
           ref<ConstantExpr> index = 
             evalConstant(cast<Constant>(ii.getOperand()));
-          unsigned elementSize = 
-            kmodule->targetData->getTypeStoreSize(st->getElementType());
+          unsigned elementSize = target_data->getTypeStoreSize(
+	  	st->getElementType());
 
           index = index->ZExt(Context::get().getPointerWidth());
-          addend = index->Mul(ConstantExpr::alloc(elementSize, 
-                                                  Context::get().getPointerWidth()));
+          addend = index->Mul(ConstantExpr::alloc(
+	    elementSize, 
+            Context::get().getPointerWidth()));
         }
 
         base = base->Add(addend);

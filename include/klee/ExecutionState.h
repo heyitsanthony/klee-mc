@@ -108,7 +108,6 @@ public:
   virtual ~SymbolicArray() {}
   bool operator ==(const SymbolicArray& sa) const 
   { 
-#warning DWEEB ALERT
   	/* XXX ignore len for now XXX  XXX */
   	return (mo == sa.mo && array == sa.array);
   }
