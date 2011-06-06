@@ -117,6 +117,13 @@ namespace klee {
 
     /// Return an id for the given constant, creating a new one if necessary.
     unsigned getConstantID(llvm::Constant *c, KInstruction* ki);
+
+    void addFunction(llvm::Function *f);
+  private:
+    void prepareMerge(
+      const Interpreter::ModuleOptions &opts,
+      InterpreterHandler *ih);
+    void outputSource(InterpreterHandler* ih);
   };
 } // End klee namespace
 

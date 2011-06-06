@@ -6,7 +6,7 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-
+#include <stdio.h>
 #include "klee/Expr.h"
 
 #include "llvm/Support/CommandLine.h"
@@ -575,7 +575,8 @@ ref<Expr> SelectExpr::create(ref<Expr> c, ref<Expr> t, ref<Expr> f) {
 
 /***/
 
-ref<Expr> ConcatExpr::create(const ref<Expr> &l, const ref<Expr> &r) {
+ref<Expr> ConcatExpr::create(const ref<Expr> &l, const ref<Expr> &r)
+{
   Expr::Width w = l->getWidth() + r->getWidth();
   
   // Fold concatenation of constants.

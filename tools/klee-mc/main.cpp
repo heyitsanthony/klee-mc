@@ -12,6 +12,8 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ManagedStatic.h"
 
+#include "gueststate.h"
+#include "gueststateptimg.h"
 #include "ExecutorVex.h"
 
 //#include "llvm/Support/system_error.h"
@@ -257,6 +259,12 @@ public:
     }
 };
 
+void dumpIRSBs(void)
+{
+	std::cerr << "DUMPING LOGS" << std::endl;
+	std::cerr << "(NO DUMPING IN TEST JIT)" << std::endl;
+}
+
 void run(ExecutorVex* exe)
 {
 	if (RunInDir != "") {
@@ -364,71 +372,85 @@ static int runWatchdog(void)
   return 0;
 }
 
+static CmdArgs* getCmdArgs(char** envp)
+{
+	std::list<std::string>	input_args;
+	const std::string	env_path(Environ);
+
+	foreach (it, InputArgv.begin(), InputArgv.end())
+		input_args.push_back(*it);
+
+	return new CmdArgs(InputFile, env_path, envp, input_args);
+}
+
 int main(int argc, char **argv, char **envp)
 {
-  Interpreter::InterpreterOptions IOpts;
-  KleeHandler	*handler;
-  Interpreter	*interpreter;
-  CmdArgs	*cmdargs;
-//  std::list<Interpreter::ReplayPathType> replayPaths;
+	Interpreter::InterpreterOptions IOpts;
+	KleeHandler	*handler;
+	CmdArgs		*cmdargs;
+	GuestState	*gs;
+	Interpreter	*interpreter;
 
-#if ENABLE_STPLOG == 1
-  STPLOG_init("stplog.c");
-#endif
+	//  std::list<Interpreter::ReplayPathType> replayPaths;
 
-  atexit(llvm_shutdown);  // Call llvm_shutdown() on exit.
+	#if ENABLE_STPLOG == 1
+	STPLOG_init("stplog.c");
+	#endif
 
-  llvm::InitializeNativeTarget();
+	atexit(llvm_shutdown);  // Call llvm_shutdown() on exit.
 
-  parseArguments(argc, argv);
-  sys::PrintStackTraceOnErrorSignal();
+	llvm::InitializeNativeTarget();
 
-  if (Watchdog) return runWatchdog();
+	parseArguments(argc, argv);
+	sys::PrintStackTraceOnErrorSignal();
 
-  sys::SetInterruptFunction(interrupt_handle);
+	if (Watchdog) return runWatchdog();
 
-//  replayPaths = getReplayPaths();
+	sys::SetInterruptFunction(interrupt_handle);
 
-  std::list<std::string>	input_args;
-  const std::string		env_path(Environ);
-  foreach (it, InputArgv.begin(), InputArgv.end())
-  	input_args.push_back(*it);
-  cmdargs = new CmdArgs(InputFile, env_path, envp, input_args);
+	//  replayPaths = getReplayPaths();
+	cmdargs = getCmdArgs(envp);
 
-  IOpts.MakeConcreteSymbolic = MakeConcreteSymbolic;
-  handler = new KleeHandler(cmdargs);
-
-  interpreter = new ExecutorVex(IOpts, handler, NULL);
-  theInterpreter = interpreter;
-  handler->setInterpreter(interpreter);
-  
-  std::ostream &infoFile = handler->getInfoStream();
-  for (int i=0; i < argc; i++) {
-    infoFile << argv[i] << (i+1<argc ? " ":"\n");
-  }
-
-  TwoOStreams info2s(&std::cerr, &infoFile);
-  PrefixWriter info(info2s, "KLEE: ");
-  info << "PID: " << getpid() << "\n";
-
-//  finalModule = interpreter->setModule(mainModule, Opts);
-//  externalsAndGlobalsCheck(finalModule);
+	IOpts.MakeConcreteSymbolic = MakeConcreteSymbolic;
+	handler = new KleeHandler(cmdargs);
 
 
-#if 0
-  if (!replayPaths.empty()) {
-    interpreter->setReplayPaths(&replayPaths);
-  }
-#endif
+	gs = GuestStatePTImg::create<GuestStatePTImg>(
+		cmdargs->getArgc(),
+		cmdargs->getArgv(),
+		cmdargs->getEnvp());
+	
+	interpreter = new ExecutorVex(IOpts, handler, gs);
+	theInterpreter = interpreter;
+	handler->setInterpreter(interpreter);
 
-  run(dynamic_cast<ExecutorVex*>(interpreter));
+	std::ostream &infoFile = handler->getInfoStream();
+	for (int i=0; i < argc; i++) {
+		infoFile << argv[i] << (i+1<argc ? " ":"\n");
+	}
 
-  delete interpreter;
+	TwoOStreams info2s(&std::cerr, &infoFile);
+	PrefixWriter info(info2s, "KLEE: ");
+	info << "PID: " << getpid() << "\n";
 
-  printStats(info, handler);
-  delete handler;
+	//  finalModule = interpreter->setModule(mainModule, Opts);
+	//  externalsAndGlobalsCheck(finalModule);
 
-  delete cmdargs;
 
-  return 0;
+	#if 0
+	if (!replayPaths.empty()) {
+	interpreter->setReplayPaths(&replayPaths);
+	}
+	#endif
+
+	run(dynamic_cast<ExecutorVex*>(interpreter));
+
+	delete interpreter;
+
+	printStats(info, handler);
+	delete handler;
+
+	delete cmdargs;
+
+	return 0;
 }

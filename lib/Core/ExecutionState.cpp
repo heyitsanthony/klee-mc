@@ -15,6 +15,7 @@
 #include "klee/Internal/Module/KModule.h"
 
 #include "klee/Expr.h"
+#include "static/Sugar.h"
 
 #include "StateRecord.h"
 #include "Memory.h"
@@ -41,7 +42,8 @@ namespace {
 
 StackFrame::StackFrame(KInstIterator _caller, KFunction *_kf)
   : call(_kf->callcount++), caller(_caller), kf(_kf), callPathNode(0),
-    minDistToUncoveredOnReturn(0), varargs(0) {
+    minDistToUncoveredOnReturn(0), varargs(0)
+{
   locals = new Cell[kf->numRegisters];
 }
 
@@ -52,7 +54,8 @@ StackFrame::StackFrame(const StackFrame &s)
     callPathNode(s.callPathNode),
     allocas(s.allocas),
     minDistToUncoveredOnReturn(s.minDistToUncoveredOnReturn),
-    varargs(s.varargs) {
+    varargs(s.varargs)
+{
   locals = new Cell[s.kf->numRegisters];
   for (unsigned i=0; i<s.kf->numRegisters; i++)
     locals[i] = s.locals[i];
@@ -86,6 +89,7 @@ StackFrame& StackFrame::operator=(const StackFrame &s)
 
 /***/
 
+/** XXX XXX XXX REFACTOR PLEASEEE **/
 ExecutionState::ExecutionState(KFunction *kf) 
   : symOffArrayAlloc(0), prunepoint(0), pruned(false), rec(0),
     fakeState(false),
@@ -102,7 +106,8 @@ ExecutionState::ExecutionState(KFunction *kf)
     isCompactForm(false),
     isReplay(false),
     forkDisabled(false),
-    ptreeNode(0) {
+    ptreeNode(0)
+{
   pushFrame(0, kf);
   replayBranchIterator = branchDecisionsSequence.end();
 }
@@ -117,7 +122,8 @@ ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
     lastChosen(0),
     isCompactForm(false),
     isReplay(false),
-    ptreeNode(0) {
+    ptreeNode(0)
+{
   replayBranchIterator = branchDecisionsSequence.end();
 }
 
@@ -176,14 +182,14 @@ ExecutionState
   return newState;
 }
 
-void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf) {
+void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf)
+{
   stack.push_back(StackFrame(caller,kf));
 }
 
 void ExecutionState::popFrame() {
   StackFrame &sf = stack.back();
-  for (std::vector<const MemoryObject*>::iterator it = sf.allocas.begin(), 
-         ie = sf.allocas.end(); it != ie; ++it)
+  foreach (it, sf.allocas.begin(), sf.allocas.end())
     addressSpace.unbindObject(*it);
   stack.pop_back();
 }
@@ -266,9 +272,9 @@ bool ExecutionState::merge(const ExecutionState &b) {
                       std::inserter(bSuffix, bSuffix.end()));
   if (DebugLogStateMerge) {
     std::cerr << "\tconstraint prefix: [";
-    for (std::set< ref<Expr> >::iterator it = commonConstraints.begin(), 
-           ie = commonConstraints.end(); it != ie; ++it)
-      std::cerr << *it << ", ";
+    foreach (it, commonConstraints.begin(), commonConstraints.end()) {
+	  std::cerr << *it << ", ";
+    }
     std::cerr << "]\n";
     std::cerr << "\tA suffix: [";
     for (std::set< ref<Expr> >::iterator it = aSuffix.begin(), 
@@ -329,12 +335,12 @@ bool ExecutionState::merge(const ExecutionState &b) {
 
   ref<Expr> inA = ConstantExpr::alloc(1, Expr::Bool);
   ref<Expr> inB = ConstantExpr::alloc(1, Expr::Bool);
-  for (std::set< ref<Expr> >::iterator it = aSuffix.begin(), 
-         ie = aSuffix.end(); it != ie; ++it)
+  foreach (it, aSuffix.begin(), aSuffix.end()) {
     inA = AndExpr::create(inA, *it);
-  for (std::set< ref<Expr> >::iterator it = bSuffix.begin(), 
-         ie = bSuffix.end(); it != ie; ++it)
+  }
+  foreach (it, bSuffix.begin(), bSuffix.end()) {
     inB = AndExpr::create(inB, *it);
+  }
 
   // XXX should we have a preference as to which predicate to use?
   // it seems like it can make a difference, even though logically
@@ -353,8 +359,7 @@ bool ExecutionState::merge(const ExecutionState &b) {
     }
   }
 
-  for (std::set<const MemoryObject*>::iterator it = mutated.begin(), 
-         ie = mutated.end(); it != ie; ++it) {
+  foreach (it, mutated.begin(), mutated.end()) {
     const MemoryObject *mo = *it;
     const ObjectState *os = addressSpace.findObject(mo);
     const ObjectState *otherOS = b.addressSpace.findObject(mo);
@@ -374,9 +379,9 @@ bool ExecutionState::merge(const ExecutionState &b) {
   }
 
   constraints = ConstraintManager();
-  for (std::set< ref<Expr> >::iterator it = commonConstraints.begin(), 
-         ie = commonConstraints.end(); it != ie; ++it)
+  foreach (it, commonConstraints.begin(), commonConstraints.end()) {
     constraints.addConstraint(*it);
+  }
   constraints.addConstraint(OrExpr::create(inA, inB));
 
   return true;

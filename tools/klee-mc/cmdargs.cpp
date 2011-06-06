@@ -70,6 +70,14 @@ char** CmdArgs::envFromString(const string& in_env_path)
 	return pEnvp;
 }
 
+void CmdArgs::print(std::ostream& os) const
+{
+	os << "cmdargs: " << std::endl;
+	for (unsigned int i = 0; i < argc; i++) {
+		os << "arg[" << i << "]: " << argv[i] << std::endl;
+	}
+}
+
 void CmdArgs::loadArgv(const list<string>& in_argv)
 {
 	unsigned int	i;

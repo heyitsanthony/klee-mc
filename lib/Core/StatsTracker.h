@@ -30,6 +30,7 @@ namespace klee {
   class KInstruction;
   class StackFrame;
   class KModule;
+  class KFunction;
 
   class StatsTracker {
     friend class WriteStatsTimer;
@@ -53,11 +54,15 @@ namespace klee {
 
   private:
     class TimeAmountFormat;
+    void addKFunction(KFunction*);
+    void trackInstTime(ExecutionState& es);
+    void stepInstUpdateFrame(ExecutionState &es);
     void updateStateStatistics(uint64_t addend);
     void writeStatsHeader();
     void writeStatsLine();
     void writeIStats();
     const KModule *km;
+    std::set<std::string> excludeNames;
 
   public:
     StatsTracker(Executor &_executor, 

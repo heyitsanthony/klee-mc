@@ -58,6 +58,7 @@ public:
 private:
 	void setupOutputFiles(void);
 	std::string setupOutputDir(void);
+	bool scanForOutputDir(const std::string& path, std::string& theDir);
 };
 
 }

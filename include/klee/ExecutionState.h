@@ -354,28 +354,29 @@ public:
     return sf.locals[i];
   }
 
-  Cell& readLocalCell(unsigned sfi, unsigned i) const {
+  Cell& readLocalCell(unsigned sfi, unsigned i) const
+  {
     assert(sfi < stack.size());
     const StackFrame& sf = stack[sfi];
     KFunction* kf = sf.kf;
     assert(i < kf->numRegisters);
-    if (rec) {
-      ref<Expr> e = sf.locals[i].value;
-      StackWrite* sw = sf.locals[i].stackWrite;
-      rec->stackRead(sw);
+    if (!rec) return sf.locals[i];
 
-      if (!isa<ConstantExpr > (e )) {
-        std::vector<ref<ReadExpr> > usedReadExprs;
+    ref<Expr> e = sf.locals[i].value;
+    StackWrite* sw = sf.locals[i].stackWrite;
+    rec->stackRead(sw);
 
-        findReads(e, true, usedReadExprs);
+    if (isa<ConstantExpr > (e )) return sf.locals[i];
+    std::vector<ref<ReadExpr> > usedReadExprs;
 
-        for (std::vector<ref<ReadExpr> >::iterator it = usedReadExprs.begin();
-              it != usedReadExprs.end(); ++it) {
-          ref<ReadExpr> re = *it;
-          rec->arrayRead(this, re);
-        }
-      }
+    findReads(e, true, usedReadExprs);
+
+    for (std::vector<ref<ReadExpr> >::iterator it = usedReadExprs.begin();
+          it != usedReadExprs.end(); ++it) {
+      ref<ReadExpr> re = *it;
+      rec->arrayRead(this, re);
     }
+
     return sf.locals[i];
   }
 

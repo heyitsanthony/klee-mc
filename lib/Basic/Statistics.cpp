@@ -9,6 +9,7 @@
 
 #include "klee/Statistics.h"
 
+#include <assert.h>
 #include <vector>
 
 using namespace klee;
@@ -74,8 +75,10 @@ Statistic::Statistic(const std::string &_name,
 Statistic::~Statistic() {
 }
 
-Statistic &Statistic::operator +=(const uint64_t addend) {
-  theStatisticManager->incrementStatistic(*this, addend);
+Statistic &Statistic::operator +=(const uint64_t addend)
+{
+  assert (this != NULL);
+  getStatisticManager().incrementStatistic(*this, addend);
   return *this;
 }
 

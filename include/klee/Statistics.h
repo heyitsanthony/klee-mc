@@ -73,16 +73,17 @@ namespace klee {
 
   extern StatisticManager *theStatisticManager;
 
-  inline void StatisticManager::incrementStatistic(Statistic &s, 
-                                                   uint64_t addend) {
-    if (enabled) {
-      globalStats[s.id] += addend;
-      if (indexedStats) {
-        indexedStats[index*stats.size() + s.id] += addend;
-        if (contextStats)
-          contextStats->data[s.id] += addend;
-      }
-    }
+  inline void StatisticManager::incrementStatistic(
+    Statistic &s, uint64_t addend)
+  {
+    if (!enabled) return;
+    globalStats[s.id] += addend;
+
+    if (!indexedStats) return;
+    indexedStats[index*stats.size() + s.id] += addend;
+
+    if (!contextStats) return;
+    contextStats->data[s.id] += addend;
   }
 
   inline StatisticRecord *StatisticManager::getContext() {

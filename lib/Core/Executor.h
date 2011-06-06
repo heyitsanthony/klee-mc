@@ -99,6 +99,8 @@ public:
 private:
   class TimerInfo;
   static void deleteTimerInfo(TimerInfo*&);
+  void runLoop(void);
+  void handleMemoryUtilization(ExecutionState* &state);
 
 protected:
 
@@ -115,6 +117,7 @@ protected:
     Function *f,
     std::vector< ref<Expr> > &arguments) = 0;
   virtual void run(ExecutionState &initialState);
+  virtual void instRet(ExecutionState& state, KInstruction* ki);
 
   /// bindInstructionConstants - Initialize any necessary per instruction
   /// constant values.
@@ -189,6 +192,10 @@ protected:
                             llvm::Function *function,
                             std::vector< ref<Expr> > &arguments) = 0;
 
+  void transferToBasicBlock(
+    llvm::BasicBlock *dst, 
+    llvm::BasicBlock *src,
+    ExecutionState &state);
 
 
   InterpreterHandler *interpreterHandler;
@@ -270,7 +277,6 @@ private:
 
   bool isDebugIntrinsic(const Function *f);
 
-  void instRet(ExecutionState& state, KInstruction* ki);
   void instBranch(ExecutionState& state, KInstruction* ki);
   void instCmp(ExecutionState& state, KInstruction* ki);
   void instCall(ExecutionState& state, KInstruction* ki);
@@ -307,9 +313,6 @@ private:
   	ExecutionState* es, ExecutionState** root_to_be_removed = 0);
   void removeRoot(ExecutionState* es);
   void replaceStateImmForked(ExecutionState* os, ExecutionState* ns);
-  void transferToBasicBlock(llvm::BasicBlock *dst, 
-			    llvm::BasicBlock *src,
-			    ExecutionState &state);
 
   void executeCall(ExecutionState &state, 
                    KInstruction *ki,

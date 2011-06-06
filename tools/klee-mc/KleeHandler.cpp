@@ -73,6 +73,7 @@ KleeHandler::KleeHandler(const CmdArgs* in_args)
 	std::string theDir;
 
 	theDir = setupOutputDir();
+	std::cerr << "KLEE: output directory = \"" << theDir << "\"\n";
 
 	sys::Path p(theDir);
 	if (!p.isAbsolute()) {
@@ -94,19 +95,14 @@ KleeHandler::KleeHandler(const CmdArgs* in_args)
 	setupOutputFiles();
 }
 
-std::string KleeHandler::setupOutputDir(void)
+bool KleeHandler::scanForOutputDir(const std::string& p, std::string& theDir)
 {
-	std::string theDir;
+	llvm::sys::Path	directory(p);
+	int		err;
 
-	if (OutputDir != "") 
-  		return OutputDir;
-
-	llvm::sys::Path directory(cmdargs->getBinaryPath());
 	std::string dirname = "";
 	directory.eraseComponent();
-
-	if (directory.isEmpty())
-		directory.set(".");
+	if (directory.isEmpty()) directory.set(".");
 
 	for (int i = 0; ; i++) {
 		char buf[256], tmp[64];
@@ -122,22 +118,34 @@ std::string KleeHandler::setupOutputDir(void)
 		}
 	}    
 
-	std::cerr << "KLEE: output directory = \"" << dirname << "\"\n";
-
 	llvm::sys::Path klee_last(directory);
 	klee_last.appendComponent("klee-last");
 
-	if ((unlink(klee_last.c_str()) < 0) && (errno != ENOENT)) {
-		perror("Cannot unlink klee-last");
-		assert(0 && "exiting.");
-	}
+	err = unlink(klee_last.c_str());
+	if (err < 0 && (errno != ENOENT))
+		return false;
 
-	if (symlink(dirname.c_str(), klee_last.c_str()) < 0) {
-		perror("Cannot make symlink");
-		assert(0 && "exiting.");
-	}
+	if (symlink(dirname.c_str(), klee_last.c_str()) < 0)
+		return false;
 
-	return theDir;
+	return true;
+}
+
+std::string KleeHandler::setupOutputDir(void)
+{
+	std::string	theDir;
+
+	if (OutputDir != "") 
+  		return OutputDir;
+
+	if (scanForOutputDir(cmdargs->getBinaryPath(), theDir))
+		return theDir;
+
+	if (scanForOutputDir("", theDir))
+		return theDir;
+
+	assert (0 == 1 && "failed to grab output dir");
+	return "";
 }
 
 void KleeHandler::setupOutputFiles(void)
