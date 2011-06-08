@@ -33,71 +33,25 @@
 using namespace llvm;
 using namespace klee;
 
-namespace { 
+namespace {
   cl::opt<bool>
   DebugLogStateMerge("debug-log-state-merge");
 }
 
 /***/
 
-StackFrame::StackFrame(KInstIterator _caller, KFunction *_kf)
-  : call(_kf->callcount++), caller(_caller), kf(_kf), callPathNode(0),
-    minDistToUncoveredOnReturn(0), varargs(0)
-{
-  locals = new Cell[kf->numRegisters];
-}
-
-StackFrame::StackFrame(const StackFrame &s) 
-  : call(s.call),
-    caller(s.caller),
-    kf(s.kf),
-    callPathNode(s.callPathNode),
-    allocas(s.allocas),
-    minDistToUncoveredOnReturn(s.minDistToUncoveredOnReturn),
-    varargs(s.varargs)
-{
-  locals = new Cell[s.kf->numRegisters];
-  for (unsigned i=0; i<s.kf->numRegisters; i++)
-    locals[i] = s.locals[i];
-}
-
-StackFrame::~StackFrame() { 
-  delete[] locals; 
-}
-
-StackFrame& StackFrame::operator=(const StackFrame &s)
-{
-  // Copy locals first because it might throw
-  Cell* new_locals = new Cell[s.kf->numRegisters];
-  for (unsigned i=0; i<s.kf->numRegisters; i++)
-    new_locals[i] = s.locals[i];
-
-  // The rest is exception-free.
-  delete[] locals;
-  locals = new_locals;
-
-  call = s.call;
-  caller = s.caller;
-  kf = s.kf;
-  callPathNode = s.callPathNode;
-  allocas = s.allocas;
-  minDistToUncoveredOnReturn = s.minDistToUncoveredOnReturn;
-  varargs = s.varargs;
-
-  return *this;
-}
-
-/***/
-
 /** XXX XXX XXX REFACTOR PLEASEEE **/
-ExecutionState::ExecutionState(KFunction *kf) 
-  : symOffArrayAlloc(0), prunepoint(0), pruned(false), rec(0),
+ExecutionState::ExecutionState(KFunction *kf)
+  : symOffArrayAlloc(0),
+    prunepoint(0),
+    pruned(false),
+    rec(0),
     fakeState(false),
     underConstrained(false),
     depth(0),
     pc(kf->instructions),
     prevPC(pc),
-    queryCost(0.), 
+    queryCost(0.),
     weight(1),
     addressSpace(),
     instsSinceCovNew(0),
@@ -112,8 +66,11 @@ ExecutionState::ExecutionState(KFunction *kf)
   replayBranchIterator = branchDecisionsSequence.end();
 }
 
-ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions) 
-  : symOffArrayAlloc(0), prunepoint(0), pruned(false), rec(0),
+ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
+  : symOffArrayAlloc(0),
+    prunepoint(0),
+    pruned(false),
+    rec(0),
     fakeState(true),
     underConstrained(false),
     constraints(assumptions),
@@ -132,32 +89,60 @@ ExecutionState::~ExecutionState() {
   while (!stack.empty()) popFrame();
 }
 
-ExecutionState *ExecutionState::branch() {
-  depth++;
-  weight *= .5;
+ExecutionState *ExecutionState::branch()
+{
+	ExecutionState *newState;
 
-  ExecutionState *newState = new ExecutionState(*this);
-  newState->coveredNew = false;
-  newState->coveredLines.clear();
-  newState->replayBranchIterator = newState->branchDecisionsSequence.end();
-  if (rec)
-    rec->split(this, newState);
+	depth++;
+	weight *= .5;
 
-  return newState;
+	newState = new ExecutionState(*this);
+	newState->coveredNew = false;
+	newState->coveredLines.clear();
+	newState->replayBranchIterator = newState->branchDecisionsSequence.end();
+
+	if (rec) rec->split(this, newState);
+
+	return newState;
 }
 
-ExecutionState *ExecutionState::branchForReplay() {
-  depth++;
-  weight *= .5;
+void ExecutionState::bindObject(const MemoryObject *mo, ObjectState *os)
+{
+	if (!rec) {
+		addressSpace.bindObject(mo, os);
+		return ;
+	}
 
-  ExecutionState* newState = compact();
-  newState->coveredNew = false;
-  newState->coveredLines.clear();
+	if (mo->mallocKey.allocSite) {
+		assert (
+		(mallocKeyMap.find(mo->mallocKey) == mallocKeyMap.end()) ||
+		(mallocKeyMap[mo->mallocKey] == mo));
+		mallocKeyMap[mo->mallocKey] = mo;
+	}
 
-  return newState;
+	//StateRecord* existing = mallocKeyAlloc[mo->mallocKey];
+	//assert(!existing);
+	mallocKeyAlloc[mo->mallocKey] = os->allocRec;
+	addressSpace.bindObject(mo, os);
 }
 
-ExecutionState *ExecutionState::compact() const {
+
+ExecutionState *ExecutionState::branchForReplay(void)
+{
+	ExecutionState* newState;
+
+	depth++;
+	weight *= .5;
+
+	newState = compact();
+	newState->coveredNew = false;
+	newState->coveredLines.clear();
+
+	return newState;
+}
+
+ExecutionState *ExecutionState::compact() const
+{
   ExecutionState *newState = new ExecutionState();
 
   newState->isCompactForm = true;
@@ -170,24 +155,27 @@ ExecutionState *ExecutionState::compact() const {
   return newState;
 }
 
-ExecutionState
-*ExecutionState::reconstitute(ExecutionState &initialStateCopy) const {
-  ExecutionState* newState = new ExecutionState(initialStateCopy);
+ExecutionState* ExecutionState::reconstitute(
+	ExecutionState &initialStateCopy) const
+{
+	ExecutionState* newState;
 
-  newState->branchDecisionsSequence = branchDecisionsSequence;
-  newState->replayBranchIterator =
-    newState->branchDecisionsSequence.begin();
-  newState->weight = weight;
+	newState = new ExecutionState(initialStateCopy);
+	newState->branchDecisionsSequence = branchDecisionsSequence;
+	newState->replayBranchIterator = newState->branchDecisionsSequence.begin();
+	newState->weight = weight;
 
-  return newState;
+	return newState;
 }
 
 void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf)
 {
-  stack.push_back(StackFrame(caller,kf));
+	assert (kf != NULL);
+	stack.push_back(StackFrame(caller,kf));
 }
 
-void ExecutionState::popFrame() {
+void ExecutionState::popFrame()
+{
   StackFrame &sf = stack.back();
   foreach (it, sf.allocas.begin(), sf.allocas.end())
     addressSpace.unbindObject(*it);
@@ -196,11 +184,10 @@ void ExecutionState::popFrame() {
 
 ///
 
-std::string ExecutionState::getFnAlias(std::string fn) {
-  std::map < std::string, std::string >::iterator it = fnAliases.find(fn);
-  if (it != fnAliases.end())
-    return it->second;
-  else return "";
+std::string ExecutionState::getFnAlias(std::string fn)
+{
+	std::map < std::string, std::string >::iterator it = fnAliases.find(fn);
+	return (it != fnAliases.end()) ? it->second : "";
 }
 
 void ExecutionState::addFnAlias(std::string old_fn, std::string new_fn) {
@@ -210,6 +197,139 @@ void ExecutionState::addFnAlias(std::string old_fn, std::string new_fn) {
 void ExecutionState::removeFnAlias(std::string fn) {
   fnAliases.erase(fn);
 }
+
+Cell& ExecutionState::readLocalCell(unsigned sfi, unsigned i) const
+{
+	assert(sfi < stack.size());
+	const StackFrame& sf = stack[sfi];
+
+	KFunction* kf = sf.kf;
+	assert(i < kf->numRegisters);
+
+	if (!rec) return sf.locals[i];
+
+	ref<Expr> e = sf.locals[i].value;
+	StackWrite* sw = sf.locals[i].stackWrite;
+	rec->stackRead(sw);
+
+	if (isa<ConstantExpr > (e ))
+		return sf.locals[i];
+
+	std::vector<ref<ReadExpr> > usedReadExprs;
+
+	findReads(e, true, usedReadExprs);
+
+	foreach (it, usedReadExprs.begin(), usedReadExprs.end()) {
+		ref<ReadExpr> re = *it;
+		rec->arrayRead(this, re);
+	}
+
+	return sf.locals[i];
+}
+
+void ExecutionState::addConstraint(ref<Expr> constraint)
+{
+  /*  if (rec) {
+      std::vector<ref<ReadExpr> > usedReadExprs;
+
+      findReads(constraint, true, usedReadExprs);
+
+      for (std::vector<ref<ReadExpr> >::iterator it = usedReadExprs.begin();
+              it != usedReadExprs.end(); ++it) {
+        ref<ReadExpr> re = *it;
+        if (ConstantExpr* ce = dyn_cast<ConstantExpr > (re->index)) {
+          unsigned offset = (uint8_t) ce->getZExtValue();
+          como2cn[MallocKeyOffset(re->updates.root->mallocKey, offset)].insert(constraint);
+        }
+        else {
+          somo2cn[re->updates.root->mallocKey].insert(constraint);
+        }
+      }
+    }*/
+
+    constraints.addConstraint(constraint);
+}
+
+Cell& ExecutionState::getLocalCell(unsigned sfi, unsigned i) const
+{
+#if 0
+	if (sfi >= stack.size()) {
+	  std::cout << "sfi=" << sfi << " i=" <<  i << std::endl;
+	  for (unsigned i = 0; i < stack.size(); i++) {
+	      std::cout << " " << stack[i].kf->function->getNameStr() << std::endl;
+
+	  }
+	  exit(1);
+	}
+#endif
+	assert(sfi < stack.size());
+	const StackFrame& sf = stack[sfi];
+	assert(i < sf.kf->numRegisters);
+	return sf.locals[i];
+}
+
+void ExecutionState::write(
+	ObjectState* object, ref<Expr> offset, ref<Expr> value)
+{
+	object->write(offset, value, rec);
+	if (!rec) return;
+	if (!object->wasSymOffObjectWrite) return;
+	object->wasSymOffObjectWrite = false;
+	rec->symOffObjectWrite(object);        
+}
+
+void ExecutionState::writeLocalCell(unsigned sfi, unsigned i, ref<Expr> value)
+{
+	assert(sfi < stack.size());
+	const StackFrame& sf = stack[sfi];
+	KFunction* kf = sf.kf;
+	assert(i < kf->numRegisters);
+
+	if (rec) {
+		sf.locals[i].stackWrite = rec->stackWrite(
+			kf, sf.call, sfi, i, value);
+	}
+	sf.locals[i].value = value;
+}
+
+const ObjectState* ExecutionState::getObjectState(const MallocKey& mk)
+{
+      MallocKeyMap::iterator it = mallocKeyMap.find(mk);
+      if (it == mallocKeyMap.end()) return NULL;
+
+      const MemoryObject* mo = it->second;
+      return addressSpace.findObject(mo);
+}
+
+void ExecutionState::copy(
+	ObjectState* os, const ObjectState* reallocFrom, unsigned count)
+{
+	std::set<DependenceNode*> allReads;
+	std::set<DependenceNode*> initialReads;
+	if (rec) {
+		allReads.insert(rec->curreads.begin(), rec->curreads.end());
+		initialReads.insert(rec->curreads.begin(), rec->curreads.end());
+	}
+
+	for (unsigned i=0; i<count; i++) {
+		if (rec) {
+			rec->curreads.clear();
+			rec->curreads.insert(
+				initialReads.begin(), initialReads.end());
+		}
+		write(os, i, read8(reallocFrom, i));
+		if (rec) {
+			allReads.insert(
+				rec->curreads.begin(), rec->curreads.end());
+		}
+	}
+
+	if (rec) {
+		rec->curreads.clear();
+		rec->curreads.insert(allReads.begin(), allReads.end());
+	}
+}
+
 
 /**/
 
@@ -233,7 +353,7 @@ std::ostream &klee::operator<<(std::ostream &os, const MemoryMap &mm) {
 
 bool ExecutionState::merge(const ExecutionState &b) {
   if (DebugLogStateMerge)
-    std::cerr << "-- attempting merge of A:" 
+    std::cerr << "-- attempting merge of A:"
                << this << " with B:" << &b << "--\n";
   if (pc != b.pc)
     return false;
@@ -258,7 +378,7 @@ bool ExecutionState::merge(const ExecutionState &b) {
   }
 
   std::set< ref<Expr> > aConstraints(constraints.begin(), constraints.end());
-  std::set< ref<Expr> > bConstraints(b.constraints.begin(), 
+  std::set< ref<Expr> > bConstraints(b.constraints.begin(),
                                      b.constraints.end());
   std::set< ref<Expr> > commonConstraints, aSuffix, bSuffix;
   std::set_intersection(aConstraints.begin(), aConstraints.end(),
@@ -277,12 +397,12 @@ bool ExecutionState::merge(const ExecutionState &b) {
     }
     std::cerr << "]\n";
     std::cerr << "\tA suffix: [";
-    for (std::set< ref<Expr> >::iterator it = aSuffix.begin(), 
+    for (std::set< ref<Expr> >::iterator it = aSuffix.begin(),
            ie = aSuffix.end(); it != ie; ++it)
       std::cerr << *it << ", ";
     std::cerr << "]\n";
     std::cerr << "\tB suffix: [";
-    for (std::set< ref<Expr> >::iterator it = bSuffix.begin(), 
+    for (std::set< ref<Expr> >::iterator it = bSuffix.begin(),
            ie = bSuffix.end(); it != ie; ++it)
       std::cerr << *it << ", ";
     std::cerr << "]\n";
@@ -290,7 +410,7 @@ bool ExecutionState::merge(const ExecutionState &b) {
 
   // We cannot merge if addresses would resolve differently in the
   // states. This means:
-  // 
+  //
   // 1. Any objects created since the branch in either object must
   // have been free'd.
   //
@@ -302,7 +422,7 @@ bool ExecutionState::merge(const ExecutionState &b) {
     std::cerr << "A: " << addressSpace.objects << "\n";
     std::cerr << "B: " << b.addressSpace.objects << "\n";
   }
-    
+
   std::set<const MemoryObject*> mutated;
   MemoryMap::iterator ai = addressSpace.objects.begin();
   MemoryMap::iterator bi = b.addressSpace.objects.begin();
@@ -330,7 +450,7 @@ bool ExecutionState::merge(const ExecutionState &b) {
       std::cerr << "\t\tmappings differ\n";
     return false;
   }
-  
+
   // merge stack
 
   ref<Expr> inA = ConstantExpr::alloc(1, Expr::Bool);
@@ -345,7 +465,7 @@ bool ExecutionState::merge(const ExecutionState &b) {
   // XXX should we have a preference as to which predicate to use?
   // it seems like it can make a difference, even though logically
   // they must contradict each other and so inA => !inB
-  
+
   for (unsigned sfi=0; sfi < stack.size(); sfi++) {
     for (unsigned i=0; i< stack[sfi].kf->numRegisters; i++) {
       ref<Expr> &av = getLocalCell(sfi, i).value;
@@ -363,7 +483,7 @@ bool ExecutionState::merge(const ExecutionState &b) {
     const MemoryObject *mo = *it;
     const ObjectState *os = addressSpace.findObject(mo);
     const ObjectState *otherOS = b.addressSpace.findObject(mo);
-    assert(os && !os->readOnly && 
+    assert(os && !os->readOnly &&
            "objects mutated but not writable in merging state");
     assert(otherOS);
 
@@ -389,9 +509,9 @@ bool ExecutionState::merge(const ExecutionState &b) {
 
 /***/
 
-ExecutionTraceEvent::ExecutionTraceEvent(ExecutionState& state, 
+ExecutionTraceEvent::ExecutionTraceEvent(ExecutionState& state,
                                          KInstruction* ki)
-  : consecutiveCount(1) 
+  : consecutiveCount(1)
 {
   file = ki->info->file;
   line = ki->info->line;

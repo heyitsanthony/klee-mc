@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "klee/Internal/Module/KModule.h"
+#include "../lib/Core/Context.h"
 
 #include "Passes.h"
 
@@ -18,6 +19,7 @@
 #include "klee/Internal/Module/InstructionInfoTable.h"
 #include "klee/Internal/Support/ModuleUtil.h"
 
+#include "llvm/Linker.h"
 #include "llvm/Bitcode/ReaderWriter.h"
 #include "llvm/Instructions.h"
 #include "llvm/Module.h"
@@ -36,7 +38,6 @@
 
 #include <sstream>
 
-using namespace llvm;
 using namespace klee;
 
 namespace {
@@ -91,15 +92,15 @@ KModule::KModule(Module *_module)
 
 KModule::~KModule()
 {
-  delete[] constantTable;
-  delete infos;
+	delete[] constantTable;
+	delete infos;
 
-  foreach (it, functions.begin(), functions.end()) {
-    delete *it;
-  }
+	foreach (it, functions.begin(), functions.end()) {
+		delete *it;
+	}
 
-  delete targetData;
-  delete module;
+	delete targetData;
+	delete module;
 }
 
 /***/
@@ -336,6 +337,22 @@ void KModule::outputSource(InterpreterHandler* ih)
     delete os;
 }
 
+void KModule::addModule(Module* in_mod)
+{
+	std::string	err;
+	bool		isLinked;
+
+	isLinked = Linker::LinkModules(module, in_mod, &err);
+	foreach (it, in_mod->begin(), in_mod->end()) {
+		Function	*kmod_f;
+		kmod_f = module->getFunction(it->getNameStr());
+		assert (kmod_f != NULL);
+		addFunction(kmod_f);
+	}
+
+//	assert (isLinked);
+}
+
 void KModule::prepare(
 	const Interpreter::ModuleOptions &opts,
 	InterpreterHandler *ih)
@@ -443,6 +460,7 @@ void KModule::prepare(
   infos = new InstructionInfoTable(module);
 
   foreach (it, module->begin(), module->end()) {
+    fprintf(stderr, "adding: %s\n", it->getNameStr().c_str());
     addFunction(it);
   }
 
@@ -455,11 +473,11 @@ void KModule::prepare(
   }
 }
 
-void KModule::addFunction(Function* f)
+KFunction* KModule::addFunction(Function* f)
 {
 	KFunction	*kf;
 
-	if (f->isDeclaration()) return;
+	if (f->isDeclaration()) return NULL;
 
 	kf = new KFunction(f, this);
 	for (unsigned i=0; i<kf->numInstructions; ++i) {
@@ -469,31 +487,33 @@ void KModule::addFunction(Function* f)
 
 	functions.push_back(kf);
 	functionMap.insert(std::make_pair(f, kf));
-
 	/* Compute various interesting properties */
 	if (functionEscapes(kf->function))
 		escapingFunctions.insert(kf->function);
+
+	fprintf(stderr, "KF=%p\n", kf);
+	return kf;
 }
 
 KConstant* KModule::getKConstant(Constant *c)
 {
-  std::map<llvm::Constant*, KConstant*>::iterator it = constantMap.find(c);
-  if (it != constantMap.end())
-    return it->second;
-  return NULL;
+	std::map<llvm::Constant*, KConstant*>::iterator it = constantMap.find(c);
+	if (it == constantMap.end()) return NULL;
+	return NULL;
+	return it->second;
 }
 
 unsigned KModule::getConstantID(Constant *c, KInstruction* ki)
 {
-  KConstant *kc = getKConstant(c);
-  if (kc)
-    return kc->id;
+	KConstant *kc = getKConstant(c);
 
-  unsigned id = constants.size();
-  kc = new KConstant(c, id, ki);
-  constantMap.insert(std::make_pair(c, kc));
-  constants.push_back(c);
-  return id;
+	if (kc) return kc->id;
+
+	unsigned id = constants.size();
+	kc = new KConstant(c, id, ki);
+	constantMap.insert(std::make_pair(c, kc));
+	constants.push_back(c);
+	return id;
 }
 
 /***/
@@ -506,91 +526,12 @@ KConstant::KConstant(llvm::Constant* _ct, unsigned _id, KInstruction* _ki)
 }
 
 /***/
-
-KFunction::KFunction(llvm::Function *_function,
-                     KModule *km)
-  : function(_function),
-    numArgs(function->arg_size()),
-    numInstructions(0),
-    callcount(0),
-    trackCoverage(true)
+KFunction* KModule::getKFunction(llvm::Function* f) const
 {
-  foreach (bbit, function->begin(), function->end()) {
-    BasicBlock *bb = bbit;
-    basicBlockEntry[bb] = numInstructions;
-    numInstructions += bb->size();
-  }
+	std::map<llvm::Function*, KFunction*>::const_iterator it;
 
-  instructions = new KInstruction*[numInstructions];
-  arguments = new Value*[numArgs];
+	it = functionMap.find(f);
+	if (it == functionMap.end()) return NULL;
 
-  std::map<Instruction*, unsigned> registerMap;
-
-  unsigned c = 0;
-  foreach (it, function->arg_begin(), function->arg_end()) {
-        Value* v = &*it;
-        arguments[c++] = v;
-  }
-
-  // The first arg_size() registers are reserved for formals.
-  unsigned rnum = numArgs;
-  foreach (bbit, function->begin(), function->end()) {
-    foreach (it, bbit->begin(), bbit->end()) {
-      registerMap[it] = rnum++;
-    }
-  }
-  numRegisters = rnum;
-
-  unsigned i = 0;
-  foreach (bbit, function->begin(), function->end()) {
-    foreach(it, bbit->begin(), bbit->end()) {
-      KInstruction *ki;
-
-      switch(it->getOpcode()) {
-      case Instruction::GetElementPtr:
-        ki = new KGEPInstruction(); break;
-      default:
-        ki = new KInstruction(); break;
-      }
-
-      unsigned numOperands = it->getNumOperands();
-      ki->inst = it;
-      ki->operands = new int[numOperands];
-      ki->dest = registerMap[it];
-      for (unsigned j=0; j<numOperands; j++) {
-        Value *v = it->getOperand(j);
-
-        if (Instruction *inst = dyn_cast<Instruction>(v)) {
-          ki->operands[j] = registerMap[inst];
-        } else if (Argument *a = dyn_cast<Argument>(v)) {
-          ki->operands[j] = a->getArgNo();
-        } else if (isa<BasicBlock>(v) || isa<InlineAsm>(v) ||
-                   isa<MDNode>(v)) {
-          ki->operands[j] = -1;
-        } else {
-          assert(isa<Constant>(v));
-          Constant *c = cast<Constant>(v);
-          ki->operands[j] = -(km->getConstantID(c, ki) + 2);
-        }
-      }
-
-      instructions[i++] = ki;
-    }
-  }
-}
-
-llvm::Value* KFunction::getValueForRegister(unsigned reg) {
-    if (reg < numArgs) {
-        return arguments[reg];
-    } else {
-        return instructions[reg - numArgs]->inst;
-    }
-}
-
-KFunction::~KFunction()
-{
-  delete[] arguments;
-  for (unsigned i=0; i<numInstructions; ++i)
-    delete instructions[i];
-  delete[] instructions;
+	return it->second;
 }

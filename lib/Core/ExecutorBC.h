@@ -23,8 +23,6 @@ public:
 		char **argv,
 		char **envp);
 
-	const KModule* getKModule(void) const { return kmodule; }
-
 	/// Allocate and bind a new object in a particular state. NOTE: This
 	/// function may fork.
 	///
@@ -76,11 +74,6 @@ public:
 protected:
   	virtual void executeInstruction(
 		ExecutionState &state, KInstruction *ki);
-	virtual void executeCallNonDecl(
-		ExecutionState &state, 
-		KInstruction *ki,
-		Function *f,
-		std::vector< ref<Expr> > &arguments);
 
   	virtual void run(ExecutionState &initialState);
 
@@ -88,9 +81,6 @@ protected:
 		KInstruction *ki,
 		unsigned index,
 		ExecutionState &state) const;
-
-	virtual llvm::Function* getCalledFunction(
-		llvm::CallSite &cs, ExecutionState &state);
 
 	virtual void callExternalFunction(
 		ExecutionState &state,
@@ -115,7 +105,6 @@ private:
 		Function *f,
 		int argc, char **argv, char **envp);
 
-	KModule *kmodule;
 	SpecialFunctionHandler *specialFunctionHandler;
  	ExternalDispatcher *externalDispatcher;
 

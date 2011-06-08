@@ -263,7 +263,7 @@ StaticRecordManager::StaticRecordManager(KModule * _kmodule) : kmodule(_kmodule)
   std::map<BasicBlock*, StaticRecord*> first;
   std::map<BasicBlock*, StaticRecord*> last;
 
-  foreach(it, kmodule->functions.begin(), kmodule->functions.end()) {
+  foreach(it, kmodule->kfuncsBegin(), kmodule->kfuncsEnd()) {
     KFunction* kf = *it;
     Function* f = kf->function;
     if (f->isDeclaration()) continue;

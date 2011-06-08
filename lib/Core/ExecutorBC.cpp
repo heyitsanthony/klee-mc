@@ -17,10 +17,9 @@
 
 using namespace klee;
 
+extern bool UseEquivalentStateEliminator;
+
 namespace {
-  cl::opt<bool>
-  UseEquivalentStateEliminator("use-equiv-state-elim",
-                cl::init(false));
   cl::opt<bool>
   UseAsmAddresses("use-asm-addresses",
                   cl::init(false));
@@ -39,10 +38,10 @@ namespace {
 
 ExecutorBC::ExecutorBC(const InterpreterOptions &opts, InterpreterHandler *ie)
 :	Executor(opts, ie),
-	kmodule(0),
 	specialFunctionHandler(0),
 	externalDispatcher(new ExternalDispatcher())
 {
+	assert (kmodule == NULL);
 }
 
 ExecutorBC::~ExecutorBC(void)
@@ -88,7 +87,7 @@ const Module* ExecutorBC::setModule(llvm::Module *module,
 
 void ExecutorBC::bindModuleConstants(void)
 {
-	foreach (it, kmodule->functions.begin(), kmodule->functions.end()) {
+	foreach (it, kmodule->kfuncsBegin(), kmodule->kfuncsEnd()) {
 		KFunction *kf = *it;
 		for (unsigned i=0; i<kf->numInstructions; ++i)
 			bindInstructionConstants(kf->instructions[i]);
@@ -107,14 +106,14 @@ void ExecutorBC::runFunctionAsMain(
 	ExecutionState *state;
 	KFunction *kf;
 	
-	kf = kmodule->functionMap[f];
+	kf = kmodule->getKFunction(f);
 	assert(kf && "No KFunction for LLVM function??");
 
 	// force deterministic initialization of memory objects
 	srand(1);
 	srandom(1);
 
-	state = new ExecutionState(kmodule->functionMap[f]);
+	state = new ExecutionState(kf);
 	if (UseEquivalentStateEliminator)
 		stateManager->setupESE(this, kmodule, state);
 
@@ -243,29 +242,6 @@ void ExecutorBC::initializeGlobals(ExecutionState &state)
 	}
 }
 
-Function* ExecutorBC::getCalledFunction(CallSite &cs, ExecutionState &state)
-{
-	Function *f;
-	
-	f = cs.getCalledFunction();
-
-	if (!f) return f;
-	std::string alias = state.getFnAlias(f->getName());
-	if (alias == "") return f;
-
-	llvm::Module* currModule = kmodule->module;
-	Function* old_f = f;
-	f = currModule->getFunction(alias);
-	if (!f) {
-		llvm::errs() << 
-			"Function " << alias << "(), alias for " << 
-			old_f->getName() << " not found!\n";
-		assert(f && "function alias not found");
-	}
-
-	return f;
-}
-
 void ExecutorBC::setupArgv(
 	ExecutionState* state,
 	Function *f,
@@ -313,7 +289,7 @@ done_ai:
 
 	assert(arguments.size() == f->arg_size() && "wrong number of arguments");
 
-	KFunction* kf = kmodule->functionMap[f];
+	KFunction* kf = kmodule->getKFunction(f);
 	for (unsigned i = 0, e = f->arg_size(); i != e; ++i)
 		bindArgument(kf, i, *state, arguments[i]);
 
@@ -372,109 +348,6 @@ const Cell& ExecutorBC::eval(
 	//StackFrame &sf = state.stack.back();
 	//return sf.locals[vnumber];
 	return state.readLocalCell(state.stack.size() - 1, vnumber);
-}
-
-void ExecutorBC::executeCallNonDecl(
-	ExecutionState &state, 
-	KInstruction *ki,
-	Function *f,
-	std::vector< ref<Expr> > &arguments)
-{
-	// FIXME: I'm not really happy about this reliance on prevPC but it is ok, I
-	// guess. This just done to avoid having to pass KInstIterator everywhere
-	// instead of the actual instruction, since we can't make a KInstIterator
-	// from just an instruction (unlike LLVM).
-	KFunction	*kf;
-	unsigned	callingArgs, funcArgs, numFormals;
-	
-	kf = kmodule->functionMap[f];
-	state.pushFrame(state.prevPC, kf);
-	state.pc = kf->instructions;
-
-	if (statsTracker)
-		statsTracker->framePushed(
-			state, &state.stack[state.stack.size()-2]);
-
-	// TODO: support "byval" parameter attribute
-	// TODO: support zeroext, signext, sret attributes
-
-	callingArgs = arguments.size();
-	funcArgs = f->arg_size();
-	if (!f->isVarArg()) {
-		if (callingArgs > funcArgs) {
-			klee_warning_once(f, "calling %s with extra arguments.", 
-			f->getName().data());
-		} else if (callingArgs < funcArgs) {
-			terminateStateOnError(
-				state,
-				"calling function with too few arguments", 
-				"user.err");
-			return;
-		}
-	} else {
-		MemoryObject	*mo;
-		ObjectState	*os;
-		unsigned	size, offset;
-
-		if (callingArgs < funcArgs) {
-			terminateStateOnError(
-				state,
-				"calling function with too few arguments",
-				"user.err");
-			return;
-		}
-
-		StackFrame &sf = state.stack.back();
-
-		size = 0;
-		for (unsigned i = funcArgs; i < callingArgs; i++) {
-	// FIXME: This is really specific to the architecture, not the pointer
-	// size. This happens to work fir x86-32 and x86-64, however.
-			Expr::Width WordSize = Context::get().getPointerWidth();
-			if (WordSize == Expr::Int32) {
-				size += Expr::getMinBytesForWidth(
-					arguments[i]->getWidth());
-			} else {
-				size += llvm::RoundUpToAlignment(
-					arguments[i]->getWidth(), WordSize)/8;
-			}
-		}
-
-		mo = memory->allocate(
-			size, true, false, state.prevPC->inst, &state);
-		sf.varargs = mo;
-		if (!mo) {
-			terminateStateOnExecError(state, "out of memory (varargs)");
-			return;
-		}
-
-		os = bindObjectInState(state, mo, true);
-		offset = 0;
-		for (unsigned i = funcArgs; i < callingArgs; i++) {
-	// FIXME: This is really specific to the architecture, not the pointer
-	// size. This happens to work fir x86-32 and x86-64, however.
-			Expr::Width WordSize = Context::get().getPointerWidth();
-			if (WordSize == Expr::Int32) {
-				//os->write(offset, arguments[i]);
-				state.write(os, offset, arguments[i]);
-				offset += Expr::getMinBytesForWidth(
-					arguments[i]->getWidth());
-			} else {
-				assert(	WordSize == Expr::Int64 && 
-					"Unknown word size!");
-
-				//os->write(offset, arguments[i]);
-				state.write(os, offset, arguments[i]);
-				offset += llvm::RoundUpToAlignment(
-						arguments[i]->getWidth(), 
-						WordSize) / 8;
-			}
-		}
-	}
-
-	numFormals = f->arg_size();
-	for (unsigned i=0; i<numFormals; ++i) 
-		bindArgument(kf, i, state, arguments[i]);
 }
 
 void ExecutorBC::executeAllocConst(

@@ -52,6 +52,7 @@
 #include "llvm/Function.h"
 #include "llvm/Instructions.h"
 #include "llvm/IntrinsicInst.h"
+#include "llvm/Module.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/CallSite.h"
 #include "llvm/Support/CommandLine.h"
@@ -81,6 +82,7 @@ using namespace klee;
 
 // omg really hard to share cl opts across files ...
 bool WriteTraces = false;
+bool UseEquivalentStateEliminator = false;
 
 static std::string expr2str(const Expr* e)
 {
@@ -277,6 +279,13 @@ namespace {
            cl::location(WriteTraces),
            cl::init(false));
 
+  cl::opt<bool, true>
+  UseESEProxy(
+  	"use-equiv-state-elim",
+  	cl::desc("Use Equivalent State Elimination"),
+	cl::location(UseEquivalentStateEliminator),
+	cl::init(false));
+
   cl::opt<bool>
   UseForkedSTP("use-forked-stp",
                  cl::desc("Run STP in forked process"));
@@ -362,9 +371,11 @@ Solver *constructSolverChain(STPSolver *stpSolver,
 }
 
 
-Executor::Executor(const InterpreterOptions &opts,
-                   InterpreterHandler *ih)
+Executor::Executor(
+	const InterpreterOptions &opts,
+	InterpreterHandler *ih)
   : Interpreter(opts),
+    kmodule(0),
     interpreterHandler(ih),
     target_data(0),
     dbgStopPointFn(0),
@@ -859,24 +870,25 @@ void Executor::addConstraint(ExecutionState &state, ref<Expr> condition) {
                                  ConstantExpr::alloc(1, Expr::Bool));
 }
 
-ref<klee::ConstantExpr> Executor::evalConstant(Constant *c) {
+ref<klee::ConstantExpr> Executor::evalConstant(Constant *c)
+{
   if (llvm::ConstantExpr *ce = dyn_cast<llvm::ConstantExpr>(c)) {
     return evalConstantExpr(ce);
+  } else if (const ConstantInt *ci = dyn_cast<ConstantInt>(c)) {
+    return ConstantExpr::alloc(ci->getValue());
+  } else if (const ConstantFP *cf = dyn_cast<ConstantFP>(c)) {     
+    return ConstantExpr::alloc(cf->getValueAPF().bitcastToAPInt());
+  } else if (const GlobalValue *gv = dyn_cast<GlobalValue>(c)) {
+    globaladdr_map::iterator it = globalAddresses.find(gv);
+    assert (it != globalAddresses.end() && "No global address!");
+    return it->second;
+  } else if (isa<ConstantPointerNull>(c)) {
+    return Expr::createPointer(0);
+  } else if (isa<UndefValue>(c)) {
+    return ConstantExpr::create(0, Expr::getWidthForLLVMType(c->getType()));
   } else {
-    if (const ConstantInt *ci = dyn_cast<ConstantInt>(c)) {
-      return ConstantExpr::alloc(ci->getValue());
-    } else if (const ConstantFP *cf = dyn_cast<ConstantFP>(c)) {     
-      return ConstantExpr::alloc(cf->getValueAPF().bitcastToAPInt());
-    } else if (const GlobalValue *gv = dyn_cast<GlobalValue>(c)) {
-      return globalAddresses.find(gv)->second;
-    } else if (isa<ConstantPointerNull>(c)) {
-      return Expr::createPointer(0);
-    } else if (isa<UndefValue>(c)) {
-      return ConstantExpr::create(0, Expr::getWidthForLLVMType(c->getType()));
-    } else {
-      // Constant{AggregateZero,Array,Struct,Vector}
-      assert(0 && "invalid argument to evalConstant()");
-    }
+    // Constant{AggregateZero,Array,Struct,Vector}
+    assert(0 && "invalid argument to evalConstant()");
   }
 }
 
@@ -1014,6 +1026,121 @@ void Executor::stepInstruction(ExecutionState &state)
     haltExecution = true;
 }
 
+void Executor::executeCallNonDecl(
+	ExecutionState &state, 
+	KInstruction *ki,
+	Function *f,
+	std::vector< ref<Expr> > &arguments)
+{
+	// FIXME: I'm not really happy about this reliance on prevPC but it is ok, I
+	// guess. This just done to avoid having to pass KInstIterator everywhere
+	// instead of the actual instruction, since we can't make a KInstIterator
+	// from just an instruction (unlike LLVM).
+	KFunction	*kf;
+	unsigned	callingArgs, funcArgs, numFormals;
+
+	fprintf(stderr, "gimme %s\n", f->getNameStr().c_str());
+	kf = kmodule->getKFunction(f);
+	assert (kf != NULL && "Executing non-shadowed function");
+
+	state.pushFrame(state.prevPC, kf);
+	state.pc = kf->instructions;
+
+	if (statsTracker)
+		statsTracker->framePushed(
+			state,
+			&state.stack[state.stack.size()-2]);
+
+	// TODO: support "byval" parameter attribute
+	// TODO: support zeroext, signext, sret attributes
+	//
+	//
+
+	callingArgs = arguments.size();
+	funcArgs = f->arg_size();
+	if (callingArgs < funcArgs) {
+		terminateStateOnError(
+			state,
+			"calling function with too few arguments",
+			"user.err");
+		return;
+	}
+
+	if (!f->isVarArg()) {
+		if (callingArgs > funcArgs) {
+			klee_warning_once(f, "calling %s with extra arguments.", 
+			f->getName().data());
+		}
+	} else {
+		if (!setupCallVarArgs(state, funcArgs, arguments))
+			return;
+	}
+
+	numFormals = f->arg_size();
+	for (unsigned i=0; i<numFormals; ++i) 
+		bindArgument(kf, i, state, arguments[i]);
+}
+
+
+bool Executor::setupCallVarArgs(
+	ExecutionState& state,
+	unsigned funcArgs,
+	std::vector<ref<Expr> >& arguments)
+{
+	MemoryObject	*mo;
+	ObjectState	*os;
+	unsigned	size, offset, callingArgs;
+
+	StackFrame &sf = state.stack.back();
+
+	callingArgs = arguments.size();
+	size = 0;
+	for (unsigned i = funcArgs; i < callingArgs; i++) {
+	// FIXME: This is really specific to the architecture, not the pointer
+	// size. This happens to work fir x86-32 and x86-64, however.
+		Expr::Width WordSize = Context::get().getPointerWidth();
+		if (WordSize == Expr::Int32) {
+			size += Expr::getMinBytesForWidth(
+				arguments[i]->getWidth());
+		} else {
+			size += llvm::RoundUpToAlignment(
+				arguments[i]->getWidth(), WordSize)/8;
+		}
+	}
+
+	mo = memory->allocate(size, true, false, state.prevPC->inst, &state);
+	sf.varargs = mo;
+	if (!mo) {
+		terminateStateOnExecError(state, "out of memory (varargs)");
+		return false;
+	}
+
+	os = bindObjectInState(state, mo, true);
+	offset = 0;
+	for (unsigned i = funcArgs; i < callingArgs; i++) {
+	// FIXME: This is really specific to the architecture, not the pointer
+	// size. This happens to work fir x86-32 and x86-64, however.
+		Expr::Width WordSize = Context::get().getPointerWidth();
+		if (WordSize == Expr::Int32) {
+			//os->write(offset, arguments[i]);
+			state.write(os, offset, arguments[i]);
+			offset += Expr::getMinBytesForWidth(
+				arguments[i]->getWidth());
+		} else {
+			assert (WordSize==Expr::Int64 && "Unknown word size!");
+
+			//os->write(offset, arguments[i]);
+			state.write(os, offset, arguments[i]);
+			offset += llvm::RoundUpToAlignment(
+					arguments[i]->getWidth(), 
+					WordSize) / 8;
+		}
+	}
+
+	return true;
+}
+
+
 void Executor::executeCall(ExecutionState &state,
                            KInstruction *ki,
                            Function *f,
@@ -1028,7 +1155,9 @@ void Executor::executeCall(ExecutionState &state,
   Instruction *i = ki->inst;
 
   if (!f->isDeclaration()) {
-    executeCallNonDecl(state, ki, f, arguments);
+    Function *f2 = kmodule->module->getFunction(f->getNameStr());
+    if (f2 == NULL) f2 = f;
+    executeCallNonDecl(state, ki, f2, arguments);
     return;
   }
  
@@ -1154,7 +1283,7 @@ static inline const llvm::fltSemantics * fpWidthToSemantics(unsigned width) {
   }
 }
 
-void Executor::instRet(ExecutionState &state, KInstruction *ki)
+void Executor::instRetFromNested(ExecutionState &state, KInstruction *ki)
 {
   ReturnInst *ri = cast<ReturnInst>(ki->inst);
   KInstIterator kcaller = state.stack.back().caller;
@@ -1162,18 +1291,10 @@ void Executor::instRet(ExecutionState &state, KInstruction *ki)
   bool isVoidReturn = (ri->getNumOperands() == 0);
   ref<Expr> result = ConstantExpr::alloc(0, Expr::Bool);
 
-  if (WriteTraces) {
-    state.exeTraceMgr.addEvent(new FunctionReturnTraceEvent(state, ki));
-  }
- 
+  assert (state.stack.size() > 1);
+
   if (!isVoidReturn) result = eval(ki, 0, state).value;
  
-  if (state.stack.size() <= 1) {
-    assert(!caller && "caller set on initial stack frame");
-    terminateStateOnExit(state);
-    return;
-  }
-
   state.popFrame();
 
   if (statsTracker) statsTracker->framePopped(state);
@@ -1184,7 +1305,6 @@ void Executor::instRet(ExecutionState &state, KInstruction *ki)
     state.pc = kcaller;
     ++state.pc;
   }
-
 
   if (isVoidReturn) {
     // We check that the return value has no users instead of
@@ -1216,6 +1336,19 @@ void Executor::instRet(ExecutionState &state, KInstruction *ki)
     }
   }
   bindLocal(kcaller, state, result);
+
+}
+
+void Executor::instRet(ExecutionState &state, KInstruction *ki)
+{
+  if (state.stack.size() <= 1) {
+    assert (	!(state.stack.back().caller) && 
+    		"caller set on initial stack frame");
+    terminateStateOnExit(state);
+    return;
+  }
+
+  instRetFromNested(state, ki);
 }
 
 void Executor::instBranch(ExecutionState& state, KInstruction* ki)
@@ -1325,47 +1458,74 @@ void Executor::instCall(ExecutionState& state, KInstruction *ki)
     // special case the call with a bitcast case
     Value *fp = cs.getCalledValue();
     llvm::ConstantExpr *ce = dyn_cast<llvm::ConstantExpr>(fp);
-     
-    if (ce && ce->getOpcode()==Instruction::BitCast) {
-      f = dyn_cast<Function>(ce->getOperand(0));
-      assert(f && "XXX unrecognized constant expression in call");
-      const FunctionType *fType =
-        dyn_cast<FunctionType>(cast<PointerType>(f->getType())->getElementType());
-      const FunctionType *ceType =
-        dyn_cast<FunctionType>(cast<PointerType>(ce->getType())->getElementType());
-      assert(fType && ceType && "unable to get function type");
 
-      // XXX check result coercion
-
-      // XXX this really needs thought and validation
-      unsigned i=0;
-      for (std::vector< ref<Expr> >::iterator
-           ai = arguments.begin(), ie = arguments.end();
-           ai != ie; ++ai, i++) {
-        Expr::Width to, from;
-         
-        if (i >= fType->getNumParams()) continue;
-
-        from = (*ai)->getWidth();
-        to = Expr::getWidthForLLVMType(fType->getParamType(i));
-        if (from == to) continue;
-
-        // XXX need to check other param attrs ?
-        if (cs.paramHasAttr(i+1, llvm::Attribute::SExt)) {
-          arguments[i] = SExtExpr::create(arguments[i], to);
-        } else {
-          arguments[i] = ZExtExpr::create(arguments[i], to);
-        }
-      }
-    } else if (isa<InlineAsm>(fp)) {
+    if (isa<InlineAsm>(fp)) {
       terminateStateOnExecError(state, "inline assembly is unsupported");
       return;
+    }
+    
+    if (ce && ce->getOpcode()==Instruction::BitCast) {
+	f = dyn_cast<Function>(ce->getOperand(0));
+	executeBitCast(state, cs, ce, arguments);
     }
   }
 
   if (f) {
     executeCall(state, ki, f, arguments);
   } else {
+    executeSymbolicFuncPtr(state, ki, arguments);
+  }
+}
+
+void Executor::executeBitCast(
+	ExecutionState &state, 
+	CallSite&		cs,
+	llvm::ConstantExpr*	ce,
+	std::vector< ref<Expr> > &arguments)
+{
+	llvm::Function		*f;
+	const FunctionType	*fType, *ceType;
+
+	f = dyn_cast<Function>(ce->getOperand(0));
+     	assert(f && "XXX unrecognized constant expression in call");
+
+        fType = dyn_cast<FunctionType>(
+		cast<PointerType>(f->getType())->getElementType());
+	ceType = dyn_cast<FunctionType>(
+		cast<PointerType>(ce->getType())->getElementType());
+
+	assert(fType && ceType && "unable to get function type");
+
+	// XXX check result coercion
+
+	// XXX this really needs thought and validation
+	unsigned i=0;
+	for (	std::vector< ref<Expr> >::iterator
+		ai = arguments.begin(), ie = arguments.end();
+		ai != ie; ++ai, i++)
+	{
+		Expr::Width to, from;
+
+		if (i >= fType->getNumParams()) continue;
+
+		from = (*ai)->getWidth();
+		to = Expr::getWidthForLLVMType(fType->getParamType(i));
+		if (from == to) continue;
+
+		// XXX need to check other param attrs ?
+		if (cs.paramHasAttr(i+1, llvm::Attribute::SExt)) {
+			arguments[i] = SExtExpr::create(arguments[i], to);
+		} else {
+			arguments[i] = ZExtExpr::create(arguments[i], to);
+		}
+	}
+}
+
+void Executor::executeSymbolicFuncPtr(
+	ExecutionState &state,
+        KInstruction *ki,
+        std::vector< ref<Expr> > &arguments)
+{
     ref<Expr> v = eval(ki, 0, state).value;
 
     ExecutionState *free = &state;
@@ -1383,7 +1543,7 @@ void Executor::instCall(ExecutionState& state, KInstruction *ki)
       if (res.first) {
         uint64_t addr = value->getZExtValue();
         if (legalFunctions.count(addr)) {
-          f = (Function*) addr;
+          Function* f = (Function*) addr;
 
          // Don't give warning on unique resolution
           if (res.second || !first)
@@ -1403,7 +1563,6 @@ void Executor::instCall(ExecutionState& state, KInstruction *ki)
       first = false;
       free = res.second;
     } while (free);
-  }
 }
 
 void Executor::instCmp(ExecutionState& state, KInstruction *ki)
@@ -1589,7 +1748,12 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
   Instruction *i = ki->inst;
   switch (i->getOpcode()) {
     // Control flow
-  case Instruction::Ret: instRet(state, ki); break;
+  case Instruction::Ret: 
+    if (WriteTraces) {
+      state.exeTraceMgr.addEvent(new FunctionReturnTraceEvent(state, ki));
+    }
+    instRet(state, ki);
+    break;
 
   case Instruction::Unwind:
     instUnwind(state);
@@ -2933,4 +3097,27 @@ void Executor::initializeGlobalObject(
 		//os->write(offset, C);
 		state.write(os, offset, C);
 	}
+}
+
+Function* Executor::getCalledFunction(CallSite &cs, ExecutionState &state)
+{
+	Function *f;
+	
+	f = cs.getCalledFunction();
+
+	if (!f) return f;
+	std::string alias = state.getFnAlias(f->getName());
+	if (alias == "") return f;
+
+	llvm::Module* currModule = kmodule->module;
+	Function* old_f = f;
+	f = currModule->getFunction(alias);
+	if (!f) {
+		llvm::errs() << 
+			"Function " << alias << "(), alias for " << 
+			old_f->getName() << " not found!\n";
+		assert(f && "function alias not found");
+	}
+
+	return f;
 }

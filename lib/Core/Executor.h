@@ -96,6 +96,9 @@ public:
   typedef std::pair<ExecutionState*,ExecutionState*> StatePair;
   typedef std::vector<ExecutionState*> StateVector;
 
+  const KModule* getKModule(void) const { return kmodule; }
+
+
 private:
   class TimerInfo;
   static void deleteTimerInfo(TimerInfo*&);
@@ -103,6 +106,7 @@ private:
   void handleMemoryUtilization(ExecutionState* &state);
 
 protected:
+  KModule *kmodule;
 
   void initializeGlobalObject(
     ExecutionState &state,
@@ -110,14 +114,13 @@ protected:
     llvm::Constant *c,
     unsigned offset);
 
+  void initializeGlobals(ExecutionState &state);
+
   virtual void executeInstruction(ExecutionState &state, KInstruction *ki);
-  virtual void executeCallNonDecl(
-    ExecutionState &state, 
-    KInstruction *ki,
-    Function *f,
-    std::vector< ref<Expr> > &arguments) = 0;
+
   virtual void run(ExecutionState &initialState);
   virtual void instRet(ExecutionState& state, KInstruction* ki);
+  void instRetFromNested(ExecutionState& state, KInstruction* ki);
 
   /// bindInstructionConstants - Initialize any necessary per instruction
   /// constant values.
@@ -184,8 +187,7 @@ protected:
     unsigned index,
     ExecutionState &state) const = 0;
 
-  virtual llvm::Function* getCalledFunction(
-    llvm::CallSite &cs, ExecutionState &state) = 0;
+  Function* getCalledFunction(CallSite &cs, ExecutionState &state);
 
   virtual void callExternalFunction(ExecutionState &state,
                             KInstruction *target,
@@ -196,6 +198,17 @@ protected:
     llvm::BasicBlock *dst, 
     llvm::BasicBlock *src,
     ExecutionState &state);
+
+  void executeSymbolicFuncPtr(
+	ExecutionState &state, 
+	KInstruction *ki,
+	std::vector< ref<Expr> > &arguments);
+
+  void executeCall(ExecutionState &state, 
+        KInstruction *ki,
+        llvm::Function *f,
+        std::vector< ref<Expr> > &arguments);
+
 
 
   InterpreterHandler *interpreterHandler;
@@ -210,11 +223,13 @@ protected:
   MemoryManager *memory;
   ExeStateManager* stateManager;
 
+  typedef std::map<const llvm::GlobalValue*, ref<ConstantExpr> > globaladdr_map;
+  typedef std::map<const llvm::GlobalValue*, MemoryObject*> globalobj_map;
   /// Map of globals to their representative memory object.
-  std::map<const llvm::GlobalValue*, MemoryObject*> globalObjects;
+  globalobj_map globalObjects;
   /// Map of globals to their bound address. This also includes
   /// globals that have no representative object (i.e. functions).
-  std::map<const llvm::GlobalValue*, ref<ConstantExpr> > globalAddresses;
+  globaladdr_map globalAddresses;
 
   /// The set of legal function addresses, used to validate function
   /// pointers. We use the actual Function* address as the function address.
@@ -314,11 +329,22 @@ private:
   void removeRoot(ExecutionState* es);
   void replaceStateImmForked(ExecutionState* os, ExecutionState* ns);
 
-  void executeCall(ExecutionState &state, 
-                   KInstruction *ki,
-                   llvm::Function *f,
-                   std::vector< ref<Expr> > &arguments);
-                   
+  bool setupCallVarArgs(
+    ExecutionState& state,
+    unsigned funcArgs,
+    std::vector<ref<Expr> >& arguments);
+  void executeCallNonDecl(
+    ExecutionState &state, 
+    KInstruction *ki,
+    Function *f,
+    std::vector< ref<Expr> > &arguments);
+  void executeBitCast(
+	ExecutionState	&state, 
+	CallSite	&cs,
+	llvm::ConstantExpr* ce,
+	std::vector< ref<Expr> > &arguments);
+
+
   // do address resolution / object binding / out of bounds checking
   // and perform the operation
   void executeMemoryOperation(ExecutionState &state,

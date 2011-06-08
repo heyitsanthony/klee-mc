@@ -125,18 +125,18 @@ void SpecialFunctionHandler::prepare() {
     
     // No need to create if the function doesn't exist, since it cannot
     // be called in that case.
-  
-    if (f && (!hi.doNotOverride || f->isDeclaration())) {
-      // Make sure NoReturn attribute is set, for optimization and
-      // coverage counting.
-      if (hi.doesNotReturn)
-        f->addFnAttr(Attribute::NoReturn);
+    if (!f) continue;
+    if (!(!hi.doNotOverride || f->isDeclaration())) continue;
 
-      // Change to a declaration since we handle internally (simplifies
-      // module and allows deleting dead code).
-      if (!f->isDeclaration())
-        f->deleteBody();
-    }
+    // Make sure NoReturn attribute is set, for optimization and
+    // coverage counting.
+    if (hi.doesNotReturn)
+      f->addFnAttr(Attribute::NoReturn);
+
+    // Change to a declaration since we handle internally (simplifies
+    // module and allows deleting dead code).
+    if (!f->isDeclaration())
+      f->deleteBody();
   }
 }
 
@@ -153,10 +153,12 @@ void SpecialFunctionHandler::bind() {
 }
 
 
-bool SpecialFunctionHandler::handle(ExecutionState &state, 
-                                    Function *f,
-                                    KInstruction *target,
-                                    std::vector< ref<Expr> > &arguments) {
+bool SpecialFunctionHandler::handle(
+  ExecutionState &state, 
+  Function *f,
+  KInstruction *target,
+  std::vector< ref<Expr> > &arguments)
+{
   handlers_ty::iterator it = handlers.find(f);
   if (it != handlers.end()) {    
     Handler h = it->second.first;
@@ -178,8 +180,10 @@ bool SpecialFunctionHandler::handle(ExecutionState &state,
 
 // reads a concrete string from memory
 std::string 
-SpecialFunctionHandler::readStringAtAddress(ExecutionState &state, 
-                                            ref<Expr> addressExpr) {
+SpecialFunctionHandler::readStringAtAddress(
+  ExecutionState &state,
+  ref<Expr> addressExpr) 
+{
   ObjectPair op;
   addressExpr = executor.toUnique(state, addressExpr);
   ref<ConstantExpr> address = cast<ConstantExpr>(addressExpr);
@@ -674,9 +678,11 @@ void SpecialFunctionHandler::handleDefineFixedObject(ExecutionState &state,
 #define MAKESYM_ARGIDX_ADDR   0
 #define MAKESYM_ARGIDX_LEN    1
 #define MAKESYM_ARGIDX_NAME   2
-void SpecialFunctionHandler::handleMakeSymbolic(ExecutionState &state,
-                                                KInstruction *target,
-                                                std::vector<ref<Expr> > &arguments) {
+void SpecialFunctionHandler::handleMakeSymbolic(
+  ExecutionState &state,
+  KInstruction *target,
+  std::vector<ref<Expr> > &arguments)
+{
   std::string name;
 
   // FIXME: For backwards compatibility, we should eventually enforce the

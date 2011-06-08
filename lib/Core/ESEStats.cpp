@@ -44,7 +44,7 @@ void EquivalentStateEliminator::coverStats() {
   std::list<KFunction*> worklist;
   Function* main = kmodule->module->getFunction("main");
   assert(main);
-  KFunction* kmain = kmodule->functionMap[main];
+  KFunction* kmain = kmodule->getKFunction(main);
   assert(kmain);
   worklist.push_back(kmain);
   std::set<KFunction*> visited;
@@ -56,23 +56,34 @@ void EquivalentStateEliminator::coverStats() {
 
     if (kf->trackCoverage) {
       for (unsigned i = 0; i < kf->numInstructions; i++) {
-        KInstruction* ki = kf->instructions[i];
+        KInstruction* ki;
+	Instruction* inst;
+
+	ki = kf->instructions[i];
         assert(ki);
         assert(ki->info);
-        Instruction* inst = ki->inst;
+
+        inst = ki->inst;
         assert(inst);
+
         if (isa<UnreachableInst > (inst)) continue;
 
-        if (!theStatisticManager->getIndexedValue(stats::coveredInstructions, ki->info->id)) {
-          BasicBlock* bb = inst->getParent();
-          if (!seenbbs.count(bb)) {
-            seenbbs.insert(bb);
-            std::cout << "UNCOVERED: " << inst->getParent()->getParent()->getNameStr() << " " << inst->getParent()->getNameStr()/* << " " << *inst */ << std::endl;
-            StaticRecord* rec = ki->staticRecord;
-            assert(rec);
-            std::cout << rec << " cover=" << rec->covered << " complete=" << rec->scc->completed << std::endl;
-          }
-        }
+        if (theStatisticManager->getIndexedValue(
+		stats::coveredInstructions, ki->info->id))
+			continue;
+
+        BasicBlock* bb = inst->getParent();
+        if (seenbbs.count(bb)) continue;
+
+        seenbbs.insert(bb);
+        std::cout << "UNCOVERED: " << 
+		inst->getParent()->getParent()->getNameStr() << " " <<
+		inst->getParent()->getNameStr()/* << " " << *inst */ << std::endl;
+
+        StaticRecord* rec = ki->staticRecord;
+        assert(rec);
+        std::cout << rec << " cover=" << rec->covered <<
+		" complete=" << rec->scc->completed << std::endl;
       }
     }
 
@@ -80,10 +91,13 @@ void EquivalentStateEliminator::coverStats() {
       Instruction* inst = &*ciit;
       if (CallInst * ci = dyn_cast<CallInst > (inst)) {
 
-        foreach(it, controlDependence->aliasingRunner->callgraph->callees_begin(ci), controlDependence->aliasingRunner->callgraph->callees_end(ci)) {
+        foreach(it, 
+		controlDependence->aliasingRunner->callgraph->callees_begin(ci),
+		controlDependence->aliasingRunner->callgraph->callees_end(ci))
+	{
           Function* callee = it->second;
           assert(callee);
-          KFunction* kcallee = kmodule->functionMap[callee];
+          KFunction* kcallee = kmodule->getKFunction(callee);
           if (!kcallee) continue;
 
           if (visited.count(kcallee)) continue;

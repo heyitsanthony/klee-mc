@@ -9,6 +9,7 @@
 class GuestState;
 class VexXlate;
 class VexSB;
+class VexFCache;
 
 namespace llvm
 {
@@ -17,19 +18,11 @@ class Function;
 
 namespace klee {  
 class KModule;
-
-class EmittedVexSB
-{
-public: 
-	EmittedVexSB(VexSB* in_vsb, llvm::Function* in_f)
-		: esb_vsb(in_vsb), esb_f(in_f) {}
-	virtual ~EmittedVexSB();
-	VexSB		*esb_vsb;
-	llvm::Function	*esb_f;
-};
+class MemoryObject;
+class ObjectState;
 
 // ugh g++, you delicate garbage
-typedef __gnu_cxx::hash_map<uint64_t, EmittedVexSB*> vexsb_map;
+typedef __gnu_cxx::hash_map<uintptr_t /* Func*/, VexSB*> func2vsb_map;
 
 class ExecutorVex : public Executor
 {
@@ -52,8 +45,6 @@ public:
 
 	void runImage(void);
 
-	const KModule* getKModule(void) const { return kmodule; }
-
 protected:
   	virtual void executeInstruction(
 		ExecutionState &state, KInstruction *ki);
@@ -70,30 +61,42 @@ protected:
 		unsigned index,
 		ExecutionState &state) const;
 
-	virtual llvm::Function* getCalledFunction(
-		llvm::CallSite &cs, ExecutionState &state) { 
-			assert (0 == 1 && "STUB"); }
-
 	virtual void callExternalFunction(
 		ExecutionState &state,
 		KInstruction *target,
 		Function *function,
 		std::vector< ref<Expr> > &arguments) { assert (0 == 1 && "STUB"); }
-
-
 private:
 	void bindModuleConstants(void);
-	void prepArgs(ExecutionState* state, llvm::Function*);
+	void bindKFuncConstants(KFunction *kfunc);
+	void bindModuleConstTable(void);
+	void initializeGlobals(ExecutionState& state);
+	void prepState(ExecutionState* state, llvm::Function*);
 	void setupRegisterContext(ExecutionState* state, llvm::Function* f);
 	void setupProcessMemory(ExecutionState* state, llvm::Function* f);
 	llvm::Function* getFuncFromAddr(uint64_t addr);
-	EmittedVexSB* getEmitted(uint64_t addr);
+	void allocGlobalVariableDecl(
+		ExecutionState& state,
+		const GlobalVariable& gv);
+	void allocGlobalVariableNoDecl(
+		ExecutionState& state,
+		const GlobalVariable& gv);
 
-	KModule		*kmodule;
-	VexXlate	*xlate;
+	void handleXferCall(
+		ExecutionState& state, KInstruction* ki);
+	void handleXferSyscall(
+		ExecutionState& state, KInstruction* ki);
+	void handleXferReturn(
+		ExecutionState& state, KInstruction* ki);
+	void handleXferJmp(
+		ExecutionState& state, KInstruction* ki);
+
+
+
+	func2vsb_map	func2vsb_table;
 	GuestState	*gs;
-
-	vexsb_map 	vsb_cache;
+	VexFCache	*xlate_cache;
+	MemoryObject	*state_regctx_mo;
 };
 
 }

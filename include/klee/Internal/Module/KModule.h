@@ -55,7 +55,11 @@ namespace klee {
   private:
     KFunction(const KFunction&);
     KFunction &operator=(const KFunction&);
-
+    void addInstruction(
+      KModule* km,
+      llvm::Instruction* inst,
+      std::map<llvm::Instruction*, unsigned>& registerMap,
+      unsigned int& i);
   public:
     explicit KFunction(llvm::Function*, KModule *);
     ~KFunction();
@@ -85,13 +89,9 @@ namespace klee {
   public:
     llvm::Module *module;
     llvm::TargetData *targetData;
-    
+
     // Some useful functions to know the address of
     llvm::Function *dbgStopPointFn, *kleeMergeFn;
-
-    // Our shadow versions of LLVM structures.
-    std::vector<KFunction*> functions;
-    std::map<llvm::Function*, KFunction*> functionMap;
 
     // Functions which escape (may be called indirectly)
     // XXX change to KFunction
@@ -103,6 +103,7 @@ namespace klee {
     std::map<llvm::Constant*, KConstant*> constantMap;
     KConstant* getKConstant(llvm::Constant *c);
 
+
     Cell *constantTable;
 
   public:
@@ -112,18 +113,32 @@ namespace klee {
     /// Initialize local data structures.
     //
     // FIXME: ihandler should not be here
-    void prepare(const Interpreter::ModuleOptions &opts, 
+    void prepare(const Interpreter::ModuleOptions &opts,
                  InterpreterHandler *ihandler);
+    // link mod with object's module
+    void addModule(llvm::Module* mod);
 
     /// Return an id for the given constant, creating a new one if necessary.
     unsigned getConstantID(llvm::Constant *c, KInstruction* ki);
 
-    void addFunction(llvm::Function *f);
+    KFunction* addFunction(llvm::Function *f);
+    KFunction* getKFunction(llvm::Function* f) const;
+
+    std::vector<KFunction*>::const_iterator kfuncsBegin() const
+    { return functions.begin(); }
+
+    std::vector<KFunction*>::const_iterator kfuncsEnd() const
+    { return functions.end(); }
+
   private:
     void prepareMerge(
       const Interpreter::ModuleOptions &opts,
       InterpreterHandler *ih);
     void outputSource(InterpreterHandler* ih);
+
+    // Our shadow versions of LLVM structures.
+    std::vector<KFunction*> functions;
+    std::map<llvm::Function*, KFunction*> functionMap;
   };
 } // End klee namespace
 

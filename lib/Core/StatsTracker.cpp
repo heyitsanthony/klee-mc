@@ -200,7 +200,7 @@ StatsTracker::StatsTracker(
   if (OutputIStats)
     theStatisticManager->useIndexedStats(km->infos->getMaxID());
 
-  foreach (it, km->functions.begin(), km->functions.end()) {
+  foreach (it, km->kfuncsBegin(), km->kfuncsEnd()) {
     addKFunction(*it);
   }
 

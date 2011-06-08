@@ -29,6 +29,9 @@
 #include <set>
 #include <vector>
 
+#include "klee/StackFrame.h"
+
+
 namespace klee {
   class Array;
   class CallPathNode;
@@ -42,37 +45,6 @@ namespace klee {
   class StateRecord;
 
 std::ostream &operator<<(std::ostream &os, const MemoryMap &mm);
-
-struct StackFrame {
-  friend class ExecutionState;    
-  unsigned call;
-  KInstIterator caller;
-  KFunction *kf;
-  CallPathNode *callPathNode;
-
-  std::vector<const MemoryObject*> allocas;
-//private:
-  Cell *locals;
-public:
-  /// Minimum distance to an uncovered instruction once the function
-  /// returns. This is not a good place for this but is used to
-  /// quickly compute the context sensitive minimum distance to an
-  /// uncovered instruction. This value is updated by the StatsTracker
-  /// periodically.
-  unsigned minDistToUncoveredOnReturn;
-
-  // For vararg functions: arguments not passed via parameter are
-  // stored (packed tightly) in a local (alloca) memory object. This
-  // is setup to match the way the front-end generates vaarg code (it
-  // does not pass vaarg through as expected). VACopy is lowered inside
-  // of intrinsic lowering.
-  MemoryObject *varargs;
-
-  StackFrame(KInstIterator caller, KFunction *kf);
-  StackFrame(const StackFrame &s);
-  ~StackFrame();
-  StackFrame& operator=(const StackFrame &s);
-};
 
 // FIXME: Redo execution trace stuff to use a TreeStream, there is no
 // need to keep this stuff in memory as far as I can tell.
@@ -120,7 +92,8 @@ private:
 };
 
 typedef std::set<ExecutionState*> ExeStateSet;
-class ExecutionState {
+class ExecutionState
+{
 public:
   typedef std::vector<StackFrame> stack_ty;    
 
@@ -212,10 +185,20 @@ public:
 
 private:
   ExecutionState()
-    : symOffArrayAlloc(0), prunepoint(0), pruned(false), rec(0), fakeState(false), underConstrained(0), coveredNew(false),
-      lastChosen(0), isCompactForm(false), isReplay(false), ptreeNode(0) {
+    : symOffArrayAlloc(0),
+      prunepoint(0),
+      pruned(false),
+      rec(0),
+      fakeState(false),
+      underConstrained(0),
+      coveredNew(false),
+      lastChosen(0),
+      isCompactForm(false),
+      isReplay(false),
+      ptreeNode(0)
+  {
     replayBranchIterator = branchDecisionsSequence.begin();
-  };
+  }
 
 public:
   ExecutionState(KFunction *kf);
@@ -226,14 +209,8 @@ public:
 
   ~ExecutionState();
 
-  const ObjectState* getObjectState(const MallocKey& mk) {
-      MallocKeyMap::iterator it = mallocKeyMap.find(mk);
-      if (it == mallocKeyMap.end())
-          return 0;
-      const MemoryObject* mo = it->second;
-      return addressSpace.findObject(mo);
-  }
-  
+  const ObjectState* getObjectState(const MallocKey& mk); 
+
   ExecutionState *branch();
   ExecutionState *branchForReplay();
   ExecutionState *compact() const;
@@ -243,58 +220,15 @@ public:
   void popFrame();
 
   void addSymbolic(
-    const MemoryObject *mo, const Array *array, ref<Expr> len) {
+    const MemoryObject *mo, const Array *array, ref<Expr> len)
+  {
     symbolics.push_back(SymbolicArray(mo, array, len));
   }
 
-  void addConstraint(ref<Expr> constraint) {
-  /*  if (rec) {
-      std::vector<ref<ReadExpr> > usedReadExprs;
-
-      findReads(constraint, true, usedReadExprs);
-
-      for (std::vector<ref<ReadExpr> >::iterator it = usedReadExprs.begin();
-              it != usedReadExprs.end(); ++it) {
-        ref<ReadExpr> re = *it;
-        if (ConstantExpr* ce = dyn_cast<ConstantExpr > (re->index)) {
-          unsigned offset = (uint8_t) ce->getZExtValue();
-          como2cn[MallocKeyOffset(re->updates.root->mallocKey, offset)].insert(constraint);
-        }
-        else {
-          somo2cn[re->updates.root->mallocKey].insert(constraint);
-        }
-      }
-    }*/
-    
-    constraints.addConstraint(constraint);
-  }
-
+  void addConstraint(ref<Expr> constraint);
   bool merge(const ExecutionState &b);
 
-  void copy(ObjectState* os, const ObjectState* reallocFrom, unsigned count) {
-    std::set<DependenceNode*> allReads;
-    std::set<DependenceNode*> initialReads;
-    if (rec) {
-      allReads.insert(rec->curreads.begin(), rec->curreads.end());
-      initialReads.insert(rec->curreads.begin(), rec->curreads.end());
-    }
-
-    for (unsigned i=0; i<count; i++) {
-      if (rec) {
-        rec->curreads.clear();
-        rec->curreads.insert(initialReads.begin(), initialReads.end());
-      }
-      write(os, i, read8(reallocFrom, i));
-      if (rec) {
-        allReads.insert(rec->curreads.begin(), rec->curreads.end());
-      }
-    }
-
-    if (rec) {
-      rec->curreads.clear();
-      rec->curreads.insert(allReads.begin(), allReads.end());
-    }
-  }
+  void copy(ObjectState* os, const ObjectState* reallocFrom, unsigned count);
 
   ref<Expr>
   read(const ObjectState* object, ref<Expr> offset, Expr::Width width) const {    
@@ -314,93 +248,26 @@ public:
     object->write(offset, value, rec);
   }
 
-  void write(ObjectState* object, ref<Expr> offset, ref<Expr> value) {    
-    object->write(offset, value, rec);
-    if (rec) {
-      if (object->wasSymOffObjectWrite) {
-        object->wasSymOffObjectWrite = false;
-        rec->symOffObjectWrite(object);        
-      }
-    }
-  }
+  void write(ObjectState* object, ref<Expr> offset, ref<Expr> value);
 
   void write8(ObjectState* object, unsigned offset, uint8_t value) {
     object->write8(offset, value, rec);
   }
 
-  void writeLocalCell(unsigned sfi, unsigned i, ref<Expr> value) {        
-    assert(sfi < stack.size());
-    const StackFrame& sf = stack[sfi];
-    KFunction* kf = sf.kf;
-    assert(i < kf->numRegisters);
-    if (rec) {        
-        sf.locals[i].stackWrite = rec->stackWrite(kf, sf.call, sfi, i, value);
-    }
-    sf.locals[i].value = value;
-  }
+  void writeLocalCell(unsigned sfi, unsigned i, ref<Expr> value);
 
-  Cell& getLocalCell(unsigned sfi, unsigned i) const {
-      /*if (sfi >= stack.size()) {
-          std::cout << "sfi=" << sfi << " i=" <<  i << std::endl;
-          for (unsigned i = 0; i < stack.size(); i++) {
-              std::cout << " " << stack[i].kf->function->getNameStr() << std::endl;
+  Cell& getLocalCell(unsigned sfi, unsigned i) const;
+  Cell& readLocalCell(unsigned sfi, unsigned i) const;
 
-          }
-          exit(1);
-      }*/
-    assert(sfi < stack.size());
-    const StackFrame& sf = stack[sfi];
-    assert(i < sf.kf->numRegisters);
-    return sf.locals[i];
-  }
-
-  Cell& readLocalCell(unsigned sfi, unsigned i) const
-  {
-    assert(sfi < stack.size());
-    const StackFrame& sf = stack[sfi];
-    KFunction* kf = sf.kf;
-    assert(i < kf->numRegisters);
-    if (!rec) return sf.locals[i];
-
-    ref<Expr> e = sf.locals[i].value;
-    StackWrite* sw = sf.locals[i].stackWrite;
-    rec->stackRead(sw);
-
-    if (isa<ConstantExpr > (e )) return sf.locals[i];
-    std::vector<ref<ReadExpr> > usedReadExprs;
-
-    findReads(e, true, usedReadExprs);
-
-    for (std::vector<ref<ReadExpr> >::iterator it = usedReadExprs.begin();
-          it != usedReadExprs.end(); ++it) {
-      ref<ReadExpr> re = *it;
-      rec->arrayRead(this, re);
-    }
-
-    return sf.locals[i];
-  }
-
-  void bindObject(const MemoryObject *mo, ObjectState *os) {
-    if (rec) {      
-      if (mo->mallocKey.allocSite) {
-        assert((mallocKeyMap.find(mo->mallocKey) == mallocKeyMap.end()) || (mallocKeyMap[mo->mallocKey] == mo));
-        mallocKeyMap[mo->mallocKey] = mo;
-      }
-
-      //StateRecord* existing = mallocKeyAlloc[mo->mallocKey];
-      
-      //assert(!existing);
-        mallocKeyAlloc[mo->mallocKey] = os->allocRec;      
-    }
-    addressSpace.bindObject(mo, os);
-  }
+  void bindObject(const MemoryObject *mo, ObjectState *os);
 };
 
 
 // for producing abbreviated execution traces to help visualize
 // paths and diagnose bugs
 
-class ExecutionTraceEvent {
+class ExecutionTraceEvent
+{
 public:
   // the location of the instruction:
   std::string file;
