@@ -108,6 +108,7 @@ void ExecutorVex::runImage(void)
 	init_func = getFuncFromAddr((uint64_t)gs->getEntryPoint());
 	state = new ExecutionState(kmodule->getKFunction(init_func));
 
+	/* important to add modules before intializing globals */
 	std::list<Module*> l = theVexHelpers->getModules();
 	foreach (it, l.begin(), l.end()) {
 		kmodule->addModule(*it);
@@ -272,7 +273,7 @@ Function* ExecutorVex::getFuncFromAddr(uint64_t guest_addr)
 void ExecutorVex::executeInstruction(
 	ExecutionState &state, KInstruction *ki)
 {
-	ki->inst->dump();
+	fprintf(stderr, "vex::exeInst: "); ki->inst->dump();
 	Executor::executeInstruction(state, ki);
 }
 
@@ -298,6 +299,12 @@ void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
 	fprintf(stderr, "CURRENTLY ON %s\n", cur_func->getNameStr().c_str());
 
 	vsb = func2vsb_table[(uintptr_t)cur_func];
+	if (vsb == NULL) {
+		/* no VSB => outcall; use default KLEE return handling */
+		assert (state.stack.size() > 1);
+		Executor::instRetFromNested(state, ki);
+		return;
+	}
 	assert (vsb && "Could not translate current function to VSB");
 
 
@@ -317,8 +324,6 @@ void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
 		handleXferSyscall(state, ki);
 		return;
 	} else if (vsb->isReturn()) {
-		fprintf(stderr, "RET!\n");
-		assert (0 == 1);
 		handleXferReturn(state, ki);
 		return;
 	} else {
@@ -336,109 +341,105 @@ void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
 	return;
 }
 
-void ExecutorVex::handleXferJmp(ExecutionState& state, KInstruction* ki)
+void ExecutorVex::xferIterInit(
+	struct XferStateIter& iter,
+	ExecutionState* state,
+	KInstruction* ki)
 {
-	ref<Expr>			v = eval(ki, 0, state).value;
-	ExecutionState			*free = &state;
-	bool				first = true;
-
-	/* this is mostly a copy of Executor's implementation of 
-	 * the symbolic function call; probably should try to merge the two */
-	do {
-		ref<ConstantExpr>	value;
-		uint64_t		addr;
-		Function		*f;
-		StatePair 		res;
-		bool			success;
-		
-		success = solver->getValue(*free, v, value);
-		assert(success && "FIXME: Unhandled solver failure");
-		(void) success;
-
-		res = fork(*free, EqExpr::create(v, value), true);
-		if (!res.first) {
-			first = false;
-			free = res.second;
-			continue;
-		}
-
-		addr = value->getZExtValue();
-		fprintf(stderr, "XXX GOT VALUE: %p\n", addr);
-
-		f = getFuncFromAddr(addr);
-		assert (f != NULL && "BAD FUNCTION TO JUMP TO");
-
-		// Don't give warning on unique resolution
-		if (res.second || !first) {
-			klee_warning_once(
-				(void*) (unsigned long) addr,
-				"resolved symbolic function pointer to: %s",
-				f->getName().data());
-		}
-
-		fprintf(stderr, "AAAAAAAAAAAAAAAA\n");
-		assert (0 == 1);
-//		bindArgument(kf, i, *res.first, state_regctx_mo->getBaseExpr());
-		fprintf(stderr, "DONE WITH AAAAAAAAAAL\n");
-
-		first = false;
-		free = res.second;
-	} while (free);
+	iter.v = eval(ki, 0, *state).value;
+	iter.free = state;
+	iter.first = true;
 }
 
-/* xfers are done with an address in the return value of the next place to 
+/* this is mostly a copy of Executor's implementation of
+ * the symbolic function call; probably should try to merge the two */
+bool ExecutorVex::xferIterNext(struct XferStateIter& iter)
+{
+	ref<ConstantExpr>	value;
+	uint64_t		addr;
+	bool			success;
+
+	if (iter.free == NULL) return false;
+
+	success = solver->getValue(*(iter.free), iter.v, value);
+	assert(success && "FIXME: Unhandled solver failure");
+	(void) success;
+
+	iter.res = fork(*(iter.free), EqExpr::create(iter.v, value), true);
+	if (!iter.res.first) {
+		iter.first = false;
+		iter.free = iter.res.second;
+		return xferIterNext(iter);
+	}
+
+	addr = value->getZExtValue();
+	fprintf(stderr, "XXX GOT VALUE: %p\n", addr);
+
+	iter.f = getFuncFromAddr(addr);
+	assert (iter.f != NULL && "BAD FUNCTION TO JUMP TO");
+
+	// Don't give warning on unique resolution
+	if (iter.res.second || !iter.first) {
+		klee_warning_once(
+			(void*) (unsigned long) addr,
+			"resolved symbolic function pointer to: %s",
+			iter.f->getName().data());
+	}
+
+	iter.first = false;
+	iter.free = iter.res.second;
+
+	return true;
+}
+
+void ExecutorVex::handleXferJmp(ExecutionState& state, KInstruction* ki)
+{
+	struct XferStateIter	iter;
+	xferIterInit(iter, &state, ki);
+	while (xferIterNext(iter)) {
+		jumpToKFunc(*(iter.res.first), kmodule->getKFunction(iter.f));
+	}
+}
+
+void ExecutorVex::jumpToKFunc(ExecutionState& state, KFunction* kf)
+{
+	CallPathNode	*cpn;
+	KInstIterator	ki = state.getCaller();
+
+	assert (kf != NULL);
+	assert (state.stack.size() > 0);
+	/* save, pop off old state */
+	cpn = state.stack.back().callPathNode;
+	state.popFrame();
+
+	/* create new frame to replace old frame;
+	   new frame initialized with target function kf */
+	state.pushFrame(ki, kf);
+	StackFrame	&sf = state.stack.back();
+	sf.callPathNode = cpn;
+
+	/* set new state */
+	state.pc = kf->instructions;
+	bindArgument(kf, 0, state, state_regctx_mo->getBaseExpr());
+
+	/* if this works: LOL */
+	fprintf(stderr, "looooooooooooooooool\n");
+}
+
+/* xfers are done with an address in the return value of the next place to
  * jump.  g=f(x) => g(x) -> f(x). (g directly follows f) */
 void ExecutorVex::handleXferCall(ExecutionState& state, KInstruction* ki)
 {
 	std::vector< ref<Expr> > 	args;
-	ref<Expr>			v = eval(ki, 0, state).value;
-	ExecutionState			*free = &state;
-	bool				first = true;
+	struct XferStateIter		iter;
 
 	args.push_back(state_regctx_mo->getBaseExpr());
-
-	/* this is mostly a copy of Executor's implementation of 
-	 * the symbolic function call; probably should try to merge the two */
-	do {
-		ref<ConstantExpr>	value;
-		uint64_t		addr;
-		Function		*f;
-		StatePair 		res;
-		bool			success;
-		
-		success = solver->getValue(*free, v, value);
-		assert(success && "FIXME: Unhandled solver failure");
-		(void) success;
-
-		res = fork(*free, EqExpr::create(v, value), true);
-		if (!res.first) {
-			first = false;
-			free = res.second;
-			continue;
-		}
-
-		addr = value->getZExtValue();
-		fprintf(stderr, "GOT VALUE: %p\n", addr);
-
-		f = getFuncFromAddr(addr);
-		assert (f != NULL && "BAD FUNCTION TO JUMP TO");
-
-		// Don't give warning on unique resolution
-		if (res.second || !first) {
-			klee_warning_once(
-				(void*) (unsigned long) addr,
-				"resolved symbolic function pointer to: %s",
-				f->getName().data());
-		}
-
+	xferIterInit(iter, &state, ki);
+	while (xferIterNext(iter)) {
 		fprintf(stderr, "EXECUTE THE CALL\n");
-		executeCall(*res.first, ki, f, args);
+		executeCall(*(iter.res.first), ki, iter.f, args);
 		fprintf(stderr, "DONE WITH EXECUTECALL\n");
-
-		first = false;
-		free = res.second;
-	} while (free);
-	fprintf(stderr, "HERE WE GOOOOO\n");
+	}
 }
 
 void ExecutorVex::handleXferSyscall(
@@ -450,18 +451,28 @@ void ExecutorVex::handleXferSyscall(
 void ExecutorVex::handleXferReturn(
 	ExecutionState& state, KInstruction* ki)
 {
-	assert (0 == 1);
+	struct XferStateIter	iter;
+
+	assert (state.stack.size() > 1);
+
+	xferIterInit(iter, &state, ki);
+	while (xferIterNext(iter)) {
+		ExecutionState*	new_state;
+		new_state = iter.res.first;
+		new_state->popFrame();
+		jumpToKFunc(*new_state, kmodule->getKFunction(iter.f));
+	}
 }
 
 void ExecutorVex::initializeGlobals(ExecutionState &state)
 {
 	Module *m;
-	
+
 	m = kmodule->module;
 	fprintf(stderr, "INIT GLOBALS!!!!!!!!!!!!!!!!!!!\n");
 
 	assert (m->getModuleInlineAsm() == "" && "No inline asm!");
-	assert (m->lib_begin() == m->lib_end() && 
+	assert (m->lib_begin() == m->lib_end() &&
 		"XXX do not support dependent libraries");
 
 	// represent function globals using the address of the actual llvm function
@@ -477,6 +488,8 @@ void ExecutorVex::initializeGlobals(ExecutionState &state)
 		// should be null.
 		assert (!f->hasExternalWeakLinkage());
 		addr = Expr::createPointer((unsigned long) (void*) f);
+		fprintf(stderr, "ADDING GLOBAL ADDrESS %s %p\n",
+			f->getNameStr().c_str(), f);
 		globalAddresses.insert(std::make_pair(f, addr));
 	}
 
@@ -491,9 +504,9 @@ void ExecutorVex::initializeGlobals(ExecutionState &state)
 
 	// link aliases to their definitions (if bound)
 	foreach (i, m->alias_begin(), m->alias_end()) {
-		// Map the alias to its aliasee's address. 
-		// This works because we have addresses for everything, 
-		// even undefined functions. 
+		// Map the alias to its aliasee's address.
+		// This works because we have addresses for everything,
+		// even undefined functions.
 		globalAddresses.insert(
 			std::make_pair(i, evalConstant(i->getAliasee())));
 	}

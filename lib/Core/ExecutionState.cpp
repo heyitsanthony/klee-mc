@@ -301,6 +301,11 @@ const ObjectState* ExecutionState::getObjectState(const MallocKey& mk)
       return addressSpace.findObject(mo);
 }
 
+KInstIterator ExecutionState::getCaller(void) const
+{
+	return stack.back().caller;
+}
+
 void ExecutionState::copy(
 	ObjectState* os, const ObjectState* reallocFrom, unsigned count)
 {

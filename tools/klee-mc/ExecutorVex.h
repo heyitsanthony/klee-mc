@@ -90,8 +90,21 @@ private:
 		ExecutionState& state, KInstruction* ki);
 	void handleXferJmp(
 		ExecutionState& state, KInstruction* ki);
+	void jumpToKFunc(ExecutionState& state, KFunction* kf);
 
-
+	struct XferStateIter
+	{
+		ref<Expr>	v;
+		ExecutionState* free;
+		llvm::Function*	f;
+		StatePair 	res;
+		bool		first;
+	};
+	void xferIterInit(
+		struct XferStateIter& iter,
+		ExecutionState* state,
+		KInstruction* ki);
+	bool xferIterNext(struct XferStateIter& iter);
 
 	func2vsb_map	func2vsb_table;
 	GuestState	*gs;

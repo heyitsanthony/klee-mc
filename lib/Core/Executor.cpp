@@ -880,14 +880,29 @@ ref<klee::ConstantExpr> Executor::evalConstant(Constant *c)
     return ConstantExpr::alloc(cf->getValueAPF().bitcastToAPInt());
   } else if (const GlobalValue *gv = dyn_cast<GlobalValue>(c)) {
     globaladdr_map::iterator it = globalAddresses.find(gv);
+
+    if (it == globalAddresses.end()) {
+    	const Function	*f;
+    	f = dynamic_cast<const Function*>(gv);
+	if (f && f->isDeclaration()) {
+		/* stupid stuff to get vexllvm imported functions working */
+		Function	*f2; 
+		f2 = kmodule->module->getFunction(f->getNameStr());
+		it = globalAddresses.find(f2);
+	}
+    }
     assert (it != globalAddresses.end() && "No global address!");
     return it->second;
   } else if (isa<ConstantPointerNull>(c)) {
     return Expr::createPointer(0);
   } else if (isa<UndefValue>(c)) {
     return ConstantExpr::create(0, Expr::getWidthForLLVMType(c->getType()));
+  } else if (isa<ConstantVector>(c)) {
+    return ConstantExpr::createVector(cast<ConstantVector>(c));
   } else {
     // Constant{AggregateZero,Array,Struct,Vector}
+    fprintf(stderr, "AIEEEEEEEE!\n");
+    c->dump();
     assert(0 && "invalid argument to evalConstant()");
   }
 }
@@ -1016,8 +1031,9 @@ void Executor::stepInstruction(ExecutionState &state)
               << *(state.pc->inst) << "\n";
   }
 
-  if (statsTracker)
+  if (statsTracker) {
     statsTracker->stepInstruction(state);
+  }
 
   ++stats::instructions;
   state.prevPC = state.pc;
@@ -1039,7 +1055,7 @@ void Executor::executeCallNonDecl(
 	KFunction	*kf;
 	unsigned	callingArgs, funcArgs, numFormals;
 
-	fprintf(stderr, "gimme %s\n", f->getNameStr().c_str());
+	assert (!f->isDeclaration() && "Expects a non-declaration function!");
 	kf = kmodule->getKFunction(f);
 	assert (kf != NULL && "Executing non-shadowed function");
 
@@ -1154,11 +1170,14 @@ void Executor::executeCall(ExecutionState &state,
 
   Instruction *i = ki->inst;
 
-  if (!f->isDeclaration()) {
+  if (!f->isDeclaration() || kmodule->module->getFunction(f->getNameStr())) {
+    /* this is so that vexllvm linked modules work */
     Function *f2 = kmodule->module->getFunction(f->getNameStr());
     if (f2 == NULL) f2 = f;
-    executeCallNonDecl(state, ki, f2, arguments);
-    return;
+    if (!f2->isDeclaration()) {
+	    executeCallNonDecl(state, ki, f2, arguments);
+	    return;
+    }
   }
  
   switch(f->getIntrinsicID()) {
@@ -1220,8 +1239,10 @@ void Executor::executeCall(ExecutionState &state,
     transferToBasicBlock(ii->getNormalDest(), i->getParent(), state);
 }
 
-void Executor::transferToBasicBlock(BasicBlock *dst, BasicBlock *src,
-                                    ExecutionState &state) {
+void Executor::transferToBasicBlock(
+	BasicBlock *dst, BasicBlock *src,
+        ExecutionState &state)
+{
   // Note that in general phi nodes can reuse phi values from the same
   // block but the incoming value is the eval() result *before* the
   // execution of any phi nodes. this is pathological and doesn't
@@ -1286,7 +1307,7 @@ static inline const llvm::fltSemantics * fpWidthToSemantics(unsigned width) {
 void Executor::instRetFromNested(ExecutionState &state, KInstruction *ki)
 {
   ReturnInst *ri = cast<ReturnInst>(ki->inst);
-  KInstIterator kcaller = state.stack.back().caller;
+  KInstIterator kcaller = state.getCaller();
   Instruction *caller = kcaller ? kcaller->inst : 0;
   bool isVoidReturn = (ri->getNumOperands() == 0);
   ref<Expr> result = ConstantExpr::alloc(0, Expr::Bool);
@@ -1342,7 +1363,7 @@ void Executor::instRetFromNested(ExecutionState &state, KInstruction *ki)
 void Executor::instRet(ExecutionState &state, KInstruction *ki)
 {
   if (state.stack.size() <= 1) {
-    assert (	!(state.stack.back().caller) && 
+    assert (	!(state.getCaller()) && 
     		"caller set on initial stack frame");
     terminateStateOnExit(state);
     return;
@@ -1690,10 +1711,85 @@ void Executor::instSwitch(ExecutionState& state, KInstruction *ki)
   }
 }
 
+void Executor::instExtractElement(ExecutionState& state, KInstruction* ki)
+{
+	/* extract element has two parametres:
+	 * 1. source vector (v)
+	 * 2. extraction index (idx)
+	 * returns v[idx]
+	 */
+	ref<Expr> in_v = eval(ki, 0, state).value;
+	ref<Expr> in_idx = eval(ki, 1, state).value;
+	ConstantExpr* in_idx_ce = dynamic_cast<ConstantExpr*>(in_idx.get());
+	assert (in_idx_ce && "NON-CONSTANT EXTRACT ELEMENT IDX. PUKE");
+	uint64_t idx = in_idx_ce->getZExtValue();
+
+	/* instruction has types of vectors embedded in its operands */
+	ExtractElementInst*	eei = cast<ExtractElementInst>(ki->inst);
+	assert (eei != NULL);
+
+	const VectorType*	vt;
+	vt = dynamic_cast<const VectorType*>(eei->getOperand(0)->getType());
+	unsigned int		v_elem_c = vt->getNumElements();
+	unsigned int		v_elem_sz = vt->getBitWidth() / v_elem_c;
+
+	assert (idx < v_elem_c && "ExtrctElement idx overflow");
+	ref<Expr>		out_val;
+	out_val = ExtractExpr::create(in_v, idx*v_elem_sz, v_elem_sz);
+	bindLocal(ki, state, out_val);
+}
+
+void Executor::instShuffleVector(ExecutionState& state, KInstruction* ki)
+{
+	/* shuffle vector has three parameters:
+	 * 1. < in_vector | 
+	 * 2.             | in_vector >
+	 * 3. < perm vect >
+	 * 	Permutation vector
+	 */
+	ref<Expr> in_v_lo = eval(ki, 0, state).value;
+	ref<Expr> in_v_hi = eval(ki, 1, state).value;
+	ref<Expr> in_v_perm = eval(ki, 2, state).value;
+	ConstantExpr* in_v_perm_ce = dynamic_cast<ConstantExpr*>(in_v_perm.get());
+	assert (in_v_perm_ce != NULL && "WE HAVE NON-CONST SHUFFLES?? UGH.");
+
+	/* instruction has types of vectors embedded in its operands */
+	ShuffleVectorInst*	si = cast<ShuffleVectorInst>(ki->inst);
+	assert (si != NULL);
+	const VectorType*	vt = si->getType();
+	unsigned int		v_elem_c = vt->getNumElements();
+	unsigned int		v_elem_sz = vt->getBitWidth() / v_elem_c;
+
+	ref<Expr>		out_val;
+	for (unsigned int i = 0; i < v_elem_c; i++) {
+		ref<ConstantExpr>	v_idx;
+		ref<Expr>		ext;
+		uint64_t		idx;
+
+		v_idx = in_v_perm_ce->Extract(i*v_elem_sz, v_elem_sz);
+		idx = v_idx->getZExtValue();
+		assert (idx < 2*v_elem_c && "Shuffle permutation out of range");
+		if (idx < v_elem_c) {
+			ext = ExtractExpr::create(
+				in_v_lo, v_elem_sz*idx, v_elem_sz);
+		} else {
+			idx -= v_elem_c;
+			ext = ExtractExpr::create(
+				in_v_hi, v_elem_sz*idx, v_elem_sz);
+		}
+
+		fprintf(stderr, "[%d]: ", i); v_idx->dump();
+		if (i == 0) out_val = ext;
+		else out_val = ConcatExpr::create(out_val, ext);
+	}
+
+	bindLocal(ki, state, out_val);
+}
+
 void Executor::instUnwind(ExecutionState& state)
 {
   while (1) {
-    KInstruction *kcaller = state.stack.back().caller;
+    KInstruction *kcaller = state.getCaller();
     state.popFrame();
 
     if (statsTracker) statsTracker->framePopped(state);
@@ -2097,10 +2193,15 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     // Other instructions...
     // Unhandled
   case Instruction::ExtractElement:
+    instExtractElement(state, ki);
+    break;
   case Instruction::InsertElement:
-  case Instruction::ShuffleVector:
     terminateStateOnError(
       state, "XXX vector instructions unhandled", "xxx.err");
+    break;
+
+  case Instruction::ShuffleVector:
+    instShuffleVector(state, ki);
     break;
 
   default:
@@ -3005,9 +3106,11 @@ void Executor::getCoveredLines(
   res = state.coveredLines;
 }
 
-void Executor::doImpliedValueConcretization(ExecutionState &state,
-                                            ref<Expr> e,
-                                            ref<ConstantExpr> value) {
+void Executor::doImpliedValueConcretization(
+	ExecutionState &state,
+	ref<Expr> e,
+	ref<ConstantExpr> value)
+{
   abort(); // FIXME: Broken until we sort out how to do the write back.
 
   if (DebugCheckForImpliedValues)

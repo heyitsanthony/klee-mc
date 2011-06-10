@@ -12,7 +12,7 @@ TOOLNAME = kleaver
 # FIXME: Ideally we wouldn't have any LLVM dependencies here, which
 # means kicking out klee's Support.
 USEDLIBS = kleaverSolver.a kleaverExpr.a kleeSupport.a kleeBasic.a
-LINK_COMPONENTS = support
+LINK_COMPONENTS = support core
 
 include $(LEVEL)/Makefile.common
 

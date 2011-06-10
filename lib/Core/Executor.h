@@ -292,6 +292,8 @@ private:
 
   bool isDebugIntrinsic(const Function *f);
 
+  void instShuffleVector(ExecutionState& state, KInstruction* ki);
+  void instExtractElement(ExecutionState& state, KInstruction* ki);
   void instBranch(ExecutionState& state, KInstruction* ki);
   void instCmp(ExecutionState& state, KInstruction* ki);
   void instCall(ExecutionState& state, KInstruction* ki);

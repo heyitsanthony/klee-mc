@@ -345,9 +345,12 @@ void KModule::addModule(Module* in_mod)
 	isLinked = Linker::LinkModules(module, in_mod, &err);
 	foreach (it, in_mod->begin(), in_mod->end()) {
 		Function	*kmod_f;
+		KFunction	*kf;
 		kmod_f = module->getFunction(it->getNameStr());
 		assert (kmod_f != NULL);
-		addFunction(kmod_f);
+		fprintf(stderr, "adding: %s\n", it->getNameStr().c_str());
+		kf = addFunction(kmod_f);
+		fprintf(stderr, "added kf=%p\n", kf);
 	}
 
 //	assert (isLinked);

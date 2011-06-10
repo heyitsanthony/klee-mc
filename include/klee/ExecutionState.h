@@ -182,6 +182,7 @@ public:
   void addFnAlias(std::string old_fn, std::string new_fn);
   void removeFnAlias(std::string fn);
 
+  KInstIterator getCaller(void) const;
 
 private:
   ExecutionState()
