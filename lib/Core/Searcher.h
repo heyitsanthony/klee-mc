@@ -13,7 +13,6 @@
 #include <vector>
 #include <set>
 #include <map>
-#include <queue>
 #include <list>
 // FIXME: Move out of header, use llvm streams.
 #include <ostream>

@@ -183,6 +183,7 @@ protected:
   /// Get textual information regarding a memory address.
   std::string getAddressInfo(ExecutionState &state, ref<Expr> address) const;
 
+  Expr::Width getWidthForLLVMType(const llvm::Type *type) const;
 
   virtual const Cell& eval(
     KInstruction *ki,
@@ -534,6 +535,7 @@ public:
                                std::map<const std::string*, std::set<unsigned> > &res);
 };
 
-} // End klee namespace
+}
+// End klee namespace
 
 #endif

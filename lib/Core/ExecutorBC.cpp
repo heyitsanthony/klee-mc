@@ -690,7 +690,7 @@ void ExecutorBC::callExternalFunction(
 	if (resultType != Type::getVoidTy(getGlobalContext())) {
 		ref<Expr> e = ConstantExpr::fromMemory(
 			(void*) args,
-			Expr::getWidthForLLVMType(resultType));
+			getWidthForLLVMType(resultType));
 		bindLocal(target, state, e);
 	}
 }
