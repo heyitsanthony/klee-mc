@@ -1443,16 +1443,7 @@ void Executor::instBranch(ExecutionState& state, KInstruction* ki)
 
 void Executor::instCall(ExecutionState& state, KInstruction *ki)
 {
-  CallSite cs;
-  unsigned argStart;
-  if (ki->inst->getOpcode()==Instruction::Call) {
-    cs = CallSite(cast<CallInst>(ki->inst));
-    argStart = 1;
-  } else {
-    cs = CallSite(cast<InvokeInst>(ki->inst));
-    argStart = 3;
-  }
-
+  CallSite cs(ki->inst);
   unsigned numArgs = cs.arg_size();
   Function *f = getCalledFunction(cs, state);
 
@@ -1464,7 +1455,7 @@ void Executor::instCall(ExecutionState& state, KInstruction *ki)
   arguments.reserve(numArgs);
 
   for (unsigned j=0; j<numArgs; ++j)
-    arguments.push_back(eval(ki, argStart+j, state).value);
+    arguments.push_back(eval(ki, j+1, state).value);
 
   if (!f) {
     // special case the call with a bitcast case

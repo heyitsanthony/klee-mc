@@ -12,6 +12,7 @@
 
 #include "llvm/Linker.h"
 #include "llvm/Bitcode/ReaderWriter.h"
+#include "llvm/Support/CallSite.h"
 #include "llvm/Instructions.h"
 #include "llvm/Module.h"
 #include "llvm/PassManager.h"
@@ -29,6 +30,25 @@
 
 using namespace klee;
 using namespace llvm;
+
+static int getOperandNum(
+	Value *v,
+        std::map<Instruction*, unsigned> &registerMap,
+        KModule *km,
+        KInstruction *ki)
+{
+	if (Instruction *inst = dyn_cast<Instruction>(v)) {
+		return registerMap[inst];
+	} else if (Argument *a = dyn_cast<Argument>(v)) {
+		return a->getArgNo();
+	} else if (isa<BasicBlock>(v) || isa<InlineAsm>(v) || isa<MDNode>(v)) {
+		return -1;
+  	} else {
+	    assert(isa<Constant>(v));
+	    Constant *c = cast<Constant>(v);
+	    return -(km->getConstantID(c, ki) + 2);
+	}
+}
 
 KFunction::KFunction(llvm::Function *_function,
                      KModule *km)
@@ -79,37 +99,39 @@ void KFunction::addInstruction(
 	std::map<llvm::Instruction*, unsigned>& registerMap,
 	unsigned int& i)
 {
-      KInstruction *ki;
+	KInstruction *ki;
+	switch(inst->getOpcode()) {
+	case Instruction::GetElementPtr:
+		ki = new KGEPInstruction();
+		break;
+	default:
+		ki = new KInstruction();
+		break;
+	}
 
-      switch(inst->getOpcode()) {
-      case Instruction::GetElementPtr:
-        ki = new KGEPInstruction(); break;
-      default:
-        ki = new KInstruction(); break;
-      }
+	ki->inst = inst;
+	ki->dest = registerMap[inst];
 
-      unsigned numOperands = inst->getNumOperands();
-      ki->inst = inst;
-      ki->operands = new int[numOperands];
-      ki->dest = registerMap[inst];
-      for (unsigned j=0; j<numOperands; j++) {
-        Value *v = inst->getOperand(j);
+	if (isa<CallInst>(inst) || isa<InvokeInst>(inst)) {
+		CallSite cs(inst);
+		unsigned numArgs = cs.arg_size();
+		ki->operands = new int[numArgs+1];
+		ki->operands[0] = getOperandNum(
+			cs.getCalledValue(), registerMap, km, ki);
+		for (unsigned j=0; j<numArgs; j++) {
+			Value *v = cs.getArgument(j);
+			ki->operands[j+1] = getOperandNum(v, registerMap, km, ki);
+		}
+	} else {
+		unsigned numOperands = inst->getNumOperands();
+		ki->operands = new int[numOperands];
+		for (unsigned j=0; j<numOperands; j++) {
+			Value *v = inst->getOperand(j);
+			ki->operands[j] = getOperandNum(v, registerMap, km, ki);
+		}
+	}
 
-        if (Instruction *new_inst = dyn_cast<Instruction>(v)) {
-          ki->operands[j] = registerMap[new_inst];
-        } else if (Argument *a = dyn_cast<Argument>(v)) {
-          ki->operands[j] = a->getArgNo();
-        } else if (isa<BasicBlock>(v) || isa<InlineAsm>(v) ||
-                   isa<MDNode>(v) /* || isa<Function>(v) */)  {
-          ki->operands[j] = -1;
-        } else {
-          assert(isa<Constant>(v));
-          Constant *c = cast<Constant>(v);
-          ki->operands[j] = -(km->getConstantID(c, ki) + 2);
-        }
-      }
-
-      instructions[i++] = ki;
+	instructions[i++] = ki;
 }
 
 llvm::Value* KFunction::getValueForRegister(unsigned reg) {
