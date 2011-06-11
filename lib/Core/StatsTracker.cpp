@@ -679,7 +679,8 @@ void StatsTracker::computeReachableUncovered() {
         foreach (it, bbIt->begin(), bbIt->end()) {
           if (!isa<CallInst>(it) && !isa<InvokeInst>(it)) continue;
 
-          if (isa<InlineAsm>(it->getOperand(0))) {
+          CallSite cs(it);
+          if (isa<InlineAsm>(cs.getCalledValue())) {
             // We can never call through here so assume no targets
             // (which should be correct anyhow).
             callTargets.insert(
