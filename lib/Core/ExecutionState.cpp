@@ -24,6 +24,7 @@
 #include "llvm/Support/CommandLine.h"
 
 #include <iostream>
+#include <iomanip>
 #include <cassert>
 #include <map>
 #include <set>
@@ -234,6 +235,38 @@ void ExecutionState::copy(
 	}
 }
 
+void ExecutionState::dumpStack(std::ostream& os)
+{
+  unsigned idx = 0;
+  const KInstruction *target = prevPC;
+  foreach (it, stack.rbegin(), stack.rend())
+  {
+    StackFrame &sf = *it;
+    Function *f = sf.kf->function;
+    const InstructionInfo &ii = *target->info;
+    os << "\t#" << idx++
+        << " " << std::setw(8) << std::setfill('0') << ii.assemblyLine
+        << " in " << f->getNameStr() << " (";
+    // Yawn, we could go up and print varargs if we wanted to.
+    unsigned index = 0;
+    foreach (ai, f->arg_begin(), f->arg_end())
+    {
+      if (ai!=f->arg_begin()) os << ", ";
+
+      os << ai->getNameStr();
+      // XXX should go through function
+      //ref<Expr> value = sf.locals[sf.kf->getArgRegister(index++)].value;
+      ref<Expr> value = getLocalCell(stack.size() - idx, sf.kf->getArgRegister(index++)).value;
+      if (isa<ConstantExpr>(value))
+        os << "=" << value;
+    }
+    os << ")";
+    if (ii.file != "")
+      os << " at " << ii.file << ":" << ii.line;
+    os << "\n";
+    target = sf.caller;
+  }
+}
 
 /**/
 

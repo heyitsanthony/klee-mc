@@ -167,6 +167,7 @@ public:
   void removeFnAlias(std::string fn);
 
   KInstIterator getCaller(void) const;
+  void dumpStack(std::ostream &os);
 
 private:
   ExecutionState()

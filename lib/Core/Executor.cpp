@@ -2628,36 +2628,9 @@ void Executor::terminateStateOnError(ExecutionState &state,
     msg << "File: " << ii.file << "\n";
     msg << "Line: " << ii.line << "\n";
   }
-  msg << "Stack: \n";
-  unsigned idx = 0;
-  const KInstruction *target = state.prevPC;
-  foreach (it, state.stack.rbegin(), state.stack.rend())
-  {
-    StackFrame &sf = *it;
-    Function *f = sf.kf->function;
-    const InstructionInfo &ii = *target->info;
-    msg << "\t#" << idx++
-        << " " << std::setw(8) << std::setfill('0') << ii.assemblyLine
-        << " in " << f->getNameStr() << " (";
-    // Yawn, we could go up and print varargs if we wanted to.
-    unsigned index = 0;
-    foreach (ai, f->arg_begin(), f->arg_end())
-    {
-      if (ai!=f->arg_begin()) msg << ", ";
 
-      msg << ai->getNameStr();
-      // XXX should go through function
-      //ref<Expr> value = sf.locals[sf.kf->getArgRegister(index++)].value;
-      ref<Expr> value = state.getLocalCell(state.stack.size() - idx, sf.kf->getArgRegister(index++)).value;
-      if (isa<ConstantExpr>(value))
-        msg << "=" << value;
-    }
-    msg << ")";
-    if (ii.file != "")
-      msg << " at " << ii.file << ":" << ii.line;
-    msg << "\n";
-    target = sf.caller;
-  }
+  msg << "Stack: \n";
+  state.dumpStack(msg);
 
   std::string info_str = info.str();
   if (info_str != "") msg << "Info: \n" << info_str;

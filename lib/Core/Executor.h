@@ -380,8 +380,8 @@ private:
     ref<Expr> value,
     KInstruction* target);
 
-
   void mergeStringStates(ref<Expr>& readExpr);
+
   bool isStrcmpMatch(
     const Expr  *expr,
     unsigned int idx, const std::string& arrName,
