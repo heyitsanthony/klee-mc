@@ -638,22 +638,33 @@ void klee_make_symbolic(void *addr, size_t nbytes, const char *name) {
 }
 
 /* Redefined here so that we can check the value read. */
-int klee_range(int64_t min, int64_t max, const char* name) {
+int klee_range(int64_t start, int64_t end, const char* name) {
   int64_t r;  
-  if (randomize) {
-    r = rand() % (max - min + 1) + min;
-    return r;
-  }
-  klee_make_symbolic(&r, sizeof r, name); 
-
-  if (r < min || r >= max) {
-    fprintf(stderr,
-        "klee_range(%"PRIu64", %"PRIu64", %s) returned invalid result:"
-        "%"PRIu64"\n", min, max, name, r);
+  if (start >= end) {
+    fprintf(stderr, "klee_range: invalid range\n");
     exit(1);
   }
-  return r;
+
+  if (start+1 == end)
+    return start;
+  else {
+    if (randomize) {
+      r = rand() % (end - start + 1) + start;
+      return r;
+    }
+    klee_make_symbolic(&r, sizeof r, name); 
+
+    if (r < start || r >= end) {
+      fprintf(stderr,
+              "klee_range(%"PRIu64", %"PRIu64", %s) returned invalid result:"
+              "%"PRIu64"\n", start, end, name, r);
+      exit(1);
+    }
+    
+    return r;
+  }
 }
+
 
 void klee_report_error(const char *file, int line, 
                        const char *message, const char *suffix) {
