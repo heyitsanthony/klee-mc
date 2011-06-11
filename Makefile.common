@@ -33,7 +33,7 @@ else
   LD.Flags += -L$(PROJ_SRC_ROOT)/stp/lib
   CXX.Flags += -I$(PROJ_SRC_ROOT)/stp/include
 endif
-CXX.Flags += -DKLEE_DIR=\"$(PROJ_SRC_ROOT)\"
+CXX.Flags += -DKLEE_DIR=\"$(PROJ_OBJ_ROOT)\"
 CXX.Flags += -fexceptions -Wno-deprecated
 
 ifeq ($(ENABLE_TCMALLOC),1)

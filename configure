@@ -5149,7 +5149,15 @@ cat >>confdefs.h <<_ACEOF
 #define ENABLE_INSTRUCTION_ID $ENABLE_INSTRUCTION_ID
 _ACEOF
 
-
+ac_config_commands="$ac_config_commands Makefile"
+ac_config_commands="$ac_config_commands Makefile.common"
+ac_config_commands="$ac_config_commands lib/Makefile"
+ac_config_commands="$ac_config_commands runtime/Makefile"
+ac_config_commands="$ac_config_commands stp/Makefile"
+ac_config_commands="$ac_config_commands test/Makefile"
+ac_config_commands="$ac_config_commands test/Makefile.tests"
+ac_config_commands="$ac_config_commands tools/Makefile"
+ac_config_commands="$ac_config_commands unittests/Makefile"
 
 cat >confcache <<\_ACEOF
 # This file is a shell script that caches the results of configure
@@ -5757,6 +5765,15 @@ do
     "Makefile.config") CONFIG_FILES="$CONFIG_FILES Makefile.config" ;;
     "stp/Makefile.common") CONFIG_FILES="$CONFIG_FILES stp/Makefile.common" ;;
     "include/klee/Config/config.h") CONFIG_HEADERS="$CONFIG_HEADERS include/klee/Config/config.h" ;;
+    "Makefile") CONFIG_COMMANDS="$CONFIG_COMMANDS Makefile" ;;
+    "Makefile.common") CONFIG_COMMANDS="$CONFIG_COMMANDS Makefile.common" ;;
+    "lib/Makefile") CONFIG_COMMANDS="$CONFIG_COMMANDS lib/Makefile" ;;
+    "runtime/Makefile") CONFIG_COMMANDS="$CONFIG_COMMANDS runtime/Makefile" ;;
+    "stp/Makefile") CONFIG_COMMANDS="$CONFIG_COMMANDS stp/Makefile" ;;
+    "test/Makefile") CONFIG_COMMANDS="$CONFIG_COMMANDS test/Makefile" ;;
+    "test/Makefile.tests") CONFIG_COMMANDS="$CONFIG_COMMANDS test/Makefile.tests" ;;
+    "tools/Makefile") CONFIG_COMMANDS="$CONFIG_COMMANDS tools/Makefile" ;;
+    "unittests/Makefile") CONFIG_COMMANDS="$CONFIG_COMMANDS unittests/Makefile" ;;
 
   *) { { $as_echo "$as_me:$LINENO: error: invalid argument: $ac_config_target" >&5
 $as_echo "$as_me: error: invalid argument: $ac_config_target" >&2;}
@@ -6364,7 +6381,30 @@ $as_echo "$as_me: executing $ac_file commands" >&6;}
  ;;
   esac
 
+  case $ac_file$ac_mode in
+    "Makefile":C) ${llvm_src}/autoconf/mkinstalldirs `dirname Makefile`
+   ${SHELL} ${llvm_src}/autoconf/install-sh -c ${srcdir}/Makefile Makefile ;;
+    "Makefile.common":C) ${llvm_src}/autoconf/mkinstalldirs `dirname Makefile.common`
+   ${SHELL} ${llvm_src}/autoconf/install-sh -c ${srcdir}/Makefile.common Makefile.common ;;
+    "lib/Makefile":C) ${llvm_src}/autoconf/mkinstalldirs `dirname lib/Makefile`
+   ${SHELL} ${llvm_src}/autoconf/install-sh -c ${srcdir}/lib/Makefile lib/Makefile ;;
+    "runtime/Makefile":C) ${llvm_src}/autoconf/mkinstalldirs `dirname runtime/Makefile`
+   ${SHELL} ${llvm_src}/autoconf/install-sh -c ${srcdir}/runtime/Makefile runtime/Makefile ;;
+    "stp/Makefile":C) ${llvm_src}/autoconf/mkinstalldirs `dirname stp/Makefile`
+   ${SHELL} ${llvm_src}/autoconf/install-sh -c ${srcdir}/stp/Makefile stp/Makefile ;;
+    "test/Makefile":C) ${llvm_src}/autoconf/mkinstalldirs `dirname test/Makefile`
+   ${SHELL} ${llvm_src}/autoconf/install-sh -c ${srcdir}/test/Makefile test/Makefile ;;
+    "test/Makefile.tests":C) ${llvm_src}/autoconf/mkinstalldirs `dirname test/Makefile.tests`
+   ${SHELL} ${llvm_src}/autoconf/install-sh -c ${srcdir}/test/Makefile.tests test/Makefile.tests ;;
+    "tools/Makefile":C) ${llvm_src}/autoconf/mkinstalldirs `dirname tools/Makefile`
+   ${SHELL} ${llvm_src}/autoconf/install-sh -c ${srcdir}/tools/Makefile tools/Makefile ;;
+    "unittests/Makefile":C) ${llvm_src}/autoconf/mkinstalldirs `dirname unittests/Makefile`
+   ${SHELL} ${llvm_src}/autoconf/install-sh -c ${srcdir}/unittests/Makefile unittests/Makefile ;;
+
+  esac
+
 done # for ac_tag
+
 
 
 { (exit 0); exit 0; }
