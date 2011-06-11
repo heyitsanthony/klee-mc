@@ -18,7 +18,6 @@
 // FIXME: We do not want to be exposing these? :(
 #include "../../lib/Core/AddressSpace.h"
 #include "../../lib/Core/BranchTracker.h"
-#include "../../lib/Core/StateRecord.h"
 #include "klee/Internal/Module/KInstIterator.h"
 #include "../../lib/Core/Memory.h"
 #include "llvm/Function.h"
@@ -42,7 +41,6 @@ namespace klee {
   class PTreeNode;
   class InstructionInfo;
   class ExecutionTraceEvent;
-  class StateRecord;
 
 std::ostream &operator<<(std::ostream &os, const MemoryMap &mm);
 
@@ -103,15 +101,6 @@ private:
   std::map< std::string, std::string > fnAliases;
 
 public:
-  mutable SymOffArrayAlloc* symOffArrayAlloc;
-  StateRecord* prunepoint;
-  bool pruned;
-  StateRecord* rec; //for EquivalentStateEliminator
-  std::list<StateRecord*> controlDependenceStack;
-  mutable std::map<MallocKeyOffset, ConOffArrayAlloc*> conOffArrayAllocs;
-  //como2cn_ty como2cn;
-  //somo2cn_ty somo2cn;
-  
   bool fakeState;
   // Are we currently underconstrained?  Hack: value is size to make fake
   // objects.
@@ -173,11 +162,6 @@ public:
 
   unsigned incomingBBIndex;
 
-  typedef std::map<MallocKey, const MemoryObject*> MallocKeyMap;
- 
-  MallocKeyMap mallocKeyMap;
-  std::map<MallocKey, StateRecord*> mallocKeyAlloc;
- 
   std::string getFnAlias(std::string fn);
   void addFnAlias(std::string old_fn, std::string new_fn);
   void removeFnAlias(std::string fn);
@@ -186,11 +170,7 @@ public:
 
 private:
   ExecutionState()
-    : symOffArrayAlloc(0),
-      prunepoint(0),
-      pruned(false),
-      rec(0),
-      fakeState(false),
+    : fakeState(false),
       underConstrained(0),
       coveredNew(false),
       lastChosen(0),
@@ -209,8 +189,6 @@ public:
   ExecutionState(const std::vector<ref<Expr> > &assumptions);
 
   ~ExecutionState();
-
-  const ObjectState* getObjectState(const MallocKey& mk); 
 
   ExecutionState *branch();
   ExecutionState *branchForReplay();
@@ -233,26 +211,26 @@ public:
 
   ref<Expr>
   read(const ObjectState* object, ref<Expr> offset, Expr::Width width) const {    
-    return object->read(offset, width, rec);
+    return object->read(offset, width);
   }
 
   ref<Expr>
   read(const ObjectState* object, unsigned offset, Expr::Width width) const {    
-    return object->read(offset, width, rec);
+    return object->read(offset, width);
   }
 
   ref<Expr> read8(const ObjectState* object, unsigned offset) const {    
-    return object->read8(offset, rec);
+    return object->read8(offset);
   }        
 
   void write(ObjectState* object, unsigned offset, ref<Expr> value) {
-    object->write(offset, value, rec);
+    object->write(offset, value);
   }
 
   void write(ObjectState* object, ref<Expr> offset, ref<Expr> value);
 
   void write8(ObjectState* object, unsigned offset, uint8_t value) {
-    object->write8(offset, value, rec);
+    object->write8(offset, value);
   }
 
   void writeLocalCell(unsigned sfi, unsigned i, ref<Expr> value);
@@ -279,6 +257,13 @@ public:
   unsigned consecutiveCount; // init to 1, increase for CONSECUTIVE
                              // repetitions of the SAME event
 
+  enum Kind {
+    Invalid = -1,
+    FunctionCall = 0,
+    FunctionReturn,
+    Branch
+  };
+
   ExecutionTraceEvent()
     : file("global"), line(0), funcName("global_def"),
       consecutiveCount(1) {}
@@ -287,11 +272,15 @@ public:
 
   virtual ~ExecutionTraceEvent() {}
 
+  virtual Kind getKind(void) const = 0;
+
   void print(std::ostream &os) const;
 
   // return true if it shouldn't be added to ExecutionTraceManager
   //
   virtual bool ignoreMe() const;
+
+  static bool classof(const ExecutionTraceEvent* ) { return true; }
 
 private:
   virtual void printDetails(std::ostream &os) const = 0;
@@ -306,6 +295,14 @@ public:
                          const std::string& _calleeFuncName)
     : ExecutionTraceEvent(state, ki), calleeFuncName(_calleeFuncName) {}
 
+  Kind getKind() const { return FunctionCall; }
+
+  static bool classof(const ExecutionTraceEvent* e) {
+  	return e->getKind() == FunctionCall;
+  }
+
+  static bool classof(const FunctionCallTraceEvent*) { return true; }
+
 private:
   virtual void printDetails(std::ostream &os) const {
     os << "CALL " << calleeFuncName;
@@ -317,6 +314,13 @@ class FunctionReturnTraceEvent : public ExecutionTraceEvent {
 public:
   FunctionReturnTraceEvent(ExecutionState& state, KInstruction* ki)
     : ExecutionTraceEvent(state, ki) {}
+
+  Kind getKind() const { return FunctionReturn; }
+
+  static bool classof(const ExecutionTraceEvent *E) {
+    return E->getKind() == FunctionReturn;
+  }
+  static bool classof(const FunctionReturnTraceEvent *) { return true; }
 
 private:
   virtual void printDetails(std::ostream &os) const {
@@ -334,6 +338,14 @@ public:
     : ExecutionTraceEvent(state, ki),
       trueTaken(_trueTaken),
       canForkGoBothWays(_isTwoWay) {}
+
+  Kind getKind() const { return Branch; }
+
+  static bool classof(const BranchTraceEvent *) { return true; }
+
+  static bool classof(const ExecutionTraceEvent *E) {
+    return E->getKind() == Branch;
+  }
 
 private:
   virtual void printDetails(std::ostream &os) const;

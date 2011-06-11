@@ -11,7 +11,6 @@
 #define KLEE_CELL_H
 
 #include <klee/Expr.h>
-#include "../lib/Core/DependenceNode.h"
 
 namespace klee {
   class MemoryObject;
@@ -19,9 +18,7 @@ namespace klee {
   class Cell {
   public:
     ref<Expr> value;
-    StackWrite* stackWrite;
-
-    Cell(): stackWrite(0) {}
+    Cell() {}
   };
 }
 

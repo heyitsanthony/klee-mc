@@ -11,6 +11,7 @@
 #include "Executor.h"
 #include "ExeStateManager.h"
 
+#include "klee/Internal/Module/KModule.h"
 #include "BumpingMergeSearcher.h"
 #include "DFSSearcher.h"
 

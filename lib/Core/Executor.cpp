@@ -17,7 +17,6 @@
 #include "ImpliedValue.h"
 #include "Memory.h"
 #include "MemoryManager.h"
-#include "StateRecord.h"
 #include "PTree.h"
 #include "Searcher.h"
 #include "SeedInfo.h"
@@ -26,6 +25,7 @@
 #include "MemUsage.h"
 #include "StatsTracker.h"
 
+#include "static/Sugar.h"
 #include "klee/Common.h"
 #include "klee/ExecutionState.h"
 #include "klee/Expr.h"
@@ -44,7 +44,6 @@
 #include "klee/Internal/Module/KModule.h"
 #include "klee/Internal/Support/FloatEvaluation.h"
 #include "klee/Internal/System/Time.h"
-#include "EquivalentStateEliminator.h"
 
 #include "llvm/Attributes.h"
 #include "llvm/BasicBlock.h"
@@ -82,7 +81,6 @@ using namespace klee;
 
 // omg really hard to share cl opts across files ...
 bool WriteTraces = false;
-bool UseEquivalentStateEliminator = false;
 
 static std::string expr2str(const Expr* e)
 {
@@ -278,13 +276,6 @@ namespace {
            cl::desc("Write .trace file for each terminated state"),
            cl::location(WriteTraces),
            cl::init(false));
-
-  cl::opt<bool, true>
-  UseESEProxy(
-  	"use-equiv-state-elim",
-  	cl::desc("Use Equivalent State Elimination"),
-	cl::location(UseEquivalentStateEliminator),
-	cl::init(false));
 
   cl::opt<bool>
   UseForkedSTP("use-forked-stp",
@@ -2326,8 +2317,6 @@ void Executor::runState(ExecutionState* &state)
   KInstruction *ki = state->pc;
   assert(ki);
 
-  if (state->rec) state->rec->curinst = ki->inst;
-
   stepInstruction(*state);
   executeInstruction(*state, ki);
   processTimers(state, MaxInstructionTime);
@@ -2715,7 +2704,7 @@ ObjectState *Executor::bindObjectInState(
   ObjectState *os;
  
   if (array) os = new ObjectState(mo, array);
-  else os = new ObjectState(mo, state.rec);
+  else os = new ObjectState(mo);
 
   state.bindObject(mo, os);
 
@@ -3011,8 +3000,7 @@ void Executor::makeSymbolic(
   ExecutionState& state, const MemoryObject* mo, ref<Expr> len)
 {
   static unsigned id = 0;
-  const Array *array = new Array(
-    "arr" + llvm::utostr(++id), mo->mallocKey, 0, 0, state.rec);
+  const Array *array = new Array("arr" + llvm::utostr(++id), mo->mallocKey, 0, 0);
   array->initRef();
   bindObjectInState(state, mo, false, array);
   state.addSymbolic(mo, array, len);
@@ -3022,9 +3010,7 @@ void Executor::makeSymbolic(
   if (it == seedMap.end()) return;
  
   // In seed mode we need to add this as a binding.
-  for (std::vector<SeedInfo>::iterator siit = it->second.begin(),
-    siie = it->second.end(); siit != siie; ++siit)
-  {
+  foreach (siit, it->second.begin(), it->second.end()) {
     if (!seedObject(state, *siit, mo, array))
       break;
   }

@@ -85,15 +85,15 @@ protected:
 	virtual void callExternalFunction(
 		ExecutionState &state,
 		KInstruction *target,
-		Function *function,
+		llvm::Function *function,
 		std::vector< ref<Expr> > &arguments);
 private:
 	void allocGlobalVariableDecl(
 		ExecutionState& state,
-		const GlobalVariable& gv);
+		const llvm::GlobalVariable& gv);
 	void allocGlobalVariableNoDecl(
 		ExecutionState& s,
-		const GlobalVariable& gv);
+		const llvm::GlobalVariable& gv);
 
 	/// bindModuleConstants - Initialize the module constant table.
 	void bindModuleConstants(void);
@@ -102,7 +102,7 @@ private:
 
 	void setupArgv(
 		ExecutionState* state,
-		Function *f,
+		llvm::Function *f,
 		int argc, char **argv, char **envp);
 
 	SpecialFunctionHandler *specialFunctionHandler;

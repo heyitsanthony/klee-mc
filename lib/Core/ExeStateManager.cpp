@@ -1,6 +1,5 @@
 #include "Executor.h"
 #include "ExeStateManager.h"
-#include "EquivalentStateEliminator.h"
 #include "Searcher.h"
 #include "UserSearcher.h"
 #include "MemUsage.h"
@@ -13,14 +12,13 @@ using namespace llvm;
 using namespace klee;
 
 ExeStateManager::ExeStateManager()
-: nonCompactStateCount(0), searcher(0), equivStateElim(0)
+: nonCompactStateCount(0), searcher(0)
 {
 }
 
 ExeStateManager::~ExeStateManager()
 {
   if (searcher) delete searcher;
-  if (equivStateElim) delete equivStateElim;
 }
 
 ExecutionState* ExeStateManager::selectState(bool allowCompact)
@@ -44,7 +42,6 @@ void ExeStateManager::setupSearcher(Executor* exe)
 void ExeStateManager::teardownUserSearcher(void)
 {
   assert (searcher);
-  if (equivStateElim) equivStateElim->complete();
   delete searcher;
   searcher = 0;
 }
@@ -99,9 +96,6 @@ void ExeStateManager::updateStates(Executor* exe, ExecutionState *current)
     searcher->update(current, addedStates, removedStates, ignoreStates, unignoreStates);
     ignoreStates.clear();
     unignoreStates.clear();
-  }
-  if (equivStateElim) {      
-    equivStateElim->update(current, addedStates, removedStates, ignoreStates, unignoreStates);
   }
 
   states.insert(addedStates.begin(), addedStates.end());
@@ -199,13 +193,4 @@ void ExeStateManager::compactStates(ExecutionState* &state, uint64_t maxMem)
     replaceState(original, compacted);
     if (state == original) state = compacted;
   }
-}
-
-void ExeStateManager::setupESE(
-  Executor* exe, KModule* kmodule, ExecutionState* state)
-{
-  equivStateElim = new EquivalentStateEliminator(exe, kmodule, states);
-  ExeStateSet tmp;
-  equivStateElim->setup(state, tmp);
-  assert(tmp.empty());
 }

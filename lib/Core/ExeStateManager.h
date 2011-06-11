@@ -36,7 +36,6 @@ private:
   ExeStateReplaceMap replacedStates;
 
   Searcher *searcher;
-  EquivalentStateEliminator* equivStateElim;
 
 public:
   ExeStateManager();
@@ -65,7 +64,6 @@ public:
   ExecutionState* selectState(bool allowCompact);
 
   void teardownUserSearcher(void);
-  void setupESE(Executor* exe, KModule* kmodule, ExecutionState* state);
   void setupSearcher(Executor* exe);
 
   unsigned int getNonCompactStateCount(void) const { return nonCompactStateCount; }

@@ -20,6 +20,12 @@ endif
 
 include $(LLVM_SRC_ROOT)/Makefile.rules
 
+# LLVMCC was added in 2.7.
+ifeq ($(LLVMCC),)
+LLVMCC := $(LLVMGCC)
+LLVMCXX := $(LLVMGXX)
+endif
+
 ifeq ($(ENABLE_EXT_STP),1)
   LD.Flags += -L$(STP_ROOT)/lib
   CXX.Flags += -I$(STP_ROOT)/include

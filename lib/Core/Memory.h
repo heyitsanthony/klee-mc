@@ -30,9 +30,6 @@ namespace klee {
 class BitArray;
 class MemoryManager;
 class Solver;
-class StateRecord;
-class ConOffObjectWrite;
-class SymOffObjectWrite;
 
 class HeapObject {
   friend class ref<HeapObject>;
@@ -58,8 +55,6 @@ public:
 class ObjectState {
     friend class AddressSpace;
     friend class ExecutionState;
-    friend class StateRecord;
-    friend class LiveSetCache;
 private:
     
   unsigned copyOnWriteOwner; // exclusively for AddressSpace
@@ -86,9 +81,6 @@ public:
 
   bool readOnly;
 
-  StateRecord* allocRec;
-  std::map<unsigned,ConOffObjectWrite*> conOffObjectWrites;
-  std::list<SymOffObjectWrite*> symOffObjectWrites;
   unsigned wrseqno;
   bool wasSymOffObjectWrite;
 
@@ -96,7 +88,7 @@ public:
   /// Create a new object state for the given memory object with concrete
   /// contents. The initial contents are undefined, it is the callers
   /// responsibility to initialize the object contents appropriately.
-  ObjectState(const MemoryObject *mo, StateRecord* _allocRec);
+  ObjectState(const MemoryObject *mo);
 
   /// Create a new object state for the given memory object with symbolic
   /// contents.
@@ -116,18 +108,18 @@ public:
   void initializeToRandom();  
 
 private:
-  ref<Expr> read(ref<Expr> offset, Expr::Width width, StateRecord* rec) const;
-  ref<Expr> read(unsigned offset, Expr::Width width, StateRecord* rec) const;
-  ref<Expr> read8(unsigned offset, StateRecord* rec) const;
+  ref<Expr> read(ref<Expr> offset, Expr::Width width) const;
+  ref<Expr> read(unsigned offset, Expr::Width width) const;
+  ref<Expr> read8(unsigned offset) const;
 
   // return bytes written.
-  void write(unsigned offset, ref<Expr> value, StateRecord* rec);
-  void write(ref<Expr> offset, ref<Expr> value, StateRecord* rec);
+  void write(unsigned offset, ref<Expr> value);
+  void write(ref<Expr> offset, ref<Expr> value);
 
-  void write8(unsigned offset, uint8_t value, StateRecord* rec);
-  void write16(unsigned offset, uint16_t value, StateRecord* rec);
-  void write32(unsigned offset, uint32_t value, StateRecord* rec);
-  void write64(unsigned offset, uint64_t value, StateRecord* rec);
+  void write8(unsigned offset, uint8_t value);
+  void write16(unsigned offset, uint16_t value);
+  void write32(unsigned offset, uint32_t value);
+  void write64(unsigned offset, uint64_t value);
 
 private:
   const UpdateList &getUpdates() const;
@@ -136,9 +128,9 @@ private:
 
   void makeSymbolic();
 
-  ref<Expr> read8(ref<Expr> offset, StateRecord* rec) const;
-  void write8(unsigned offset, ref<Expr> value, StateRecord* rec);
-  void write8(ref<Expr> offset, ref<Expr> value, StateRecord* rec);
+  ref<Expr> read8(ref<Expr> offset) const;
+  void write8(unsigned offset, ref<Expr> value);
+  void write8(ref<Expr> offset, ref<Expr> value);
 
   void fastRangeCheckOffset(ref<Expr> offset, unsigned *base_r, 
                             unsigned *size_r) const;

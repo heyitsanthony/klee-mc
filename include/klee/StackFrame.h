@@ -9,7 +9,6 @@
 // FIXME: We do not want to be exposing these? :(
 #include "../../lib/Core/AddressSpace.h"
 #include "../../lib/Core/BranchTracker.h"
-#include "../../lib/Core/StateRecord.h"
 #include "klee/Internal/Module/KInstIterator.h"
 #include "../../lib/Core/Memory.h"
 #include "llvm/Function.h"

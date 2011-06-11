@@ -1,4 +1,5 @@
 #include "llvm/Target/TargetData.h"
+#include "klee/Internal/Module/KModule.h"
 #include "llvm/System/Path.h"
 #include "klee/Config/config.h"
 #include "../../lib/Core/TimingSolver.h"
@@ -24,7 +25,6 @@ using namespace klee;
 using namespace llvm;
 
 extern bool WriteTraces;
-extern bool UseEquivalentStateEliminator;
 
 ExecutorVex::ExecutorVex(
 	const InterpreterOptions &opts,
@@ -113,9 +113,6 @@ void ExecutorVex::runImage(void)
 	foreach (it, l.begin(), l.end()) {
 		kmodule->addModule(*it);
 	}
-
-	if (UseEquivalentStateEliminator)
-		stateManager->setupESE(this, kmodule, state);
 
 	fprintf(stderr, "RUN IMAGE\n");
 	prepState(state, init_func);

@@ -14,6 +14,7 @@ class VexFCache;
 namespace llvm
 {
 class Function;
+class GlobalVariable;
 }
 
 namespace klee {  
@@ -51,7 +52,7 @@ protected:
 	virtual void executeCallNonDecl(
 		ExecutionState &state, 
 		KInstruction *ki,
-		Function *f,
+		llvm::Function *f,
 		std::vector< ref<Expr> > &arguments) { assert (0 == 1 && "STUB"); }
 	virtual void instRet(ExecutionState &state, KInstruction *ki);
   	virtual void run(ExecutionState &initialState);
@@ -64,7 +65,7 @@ protected:
 	virtual void callExternalFunction(
 		ExecutionState &state,
 		KInstruction *target,
-		Function *function,
+		llvm::Function *function,
 		std::vector< ref<Expr> > &arguments) { assert (0 == 1 && "STUB"); }
 private:
 	void bindModuleConstants(void);
@@ -77,10 +78,10 @@ private:
 	llvm::Function* getFuncFromAddr(uint64_t addr);
 	void allocGlobalVariableDecl(
 		ExecutionState& state,
-		const GlobalVariable& gv);
+		const llvm::GlobalVariable& gv);
 	void allocGlobalVariableNoDecl(
 		ExecutionState& state,
-		const GlobalVariable& gv);
+		const llvm::GlobalVariable& gv);
 
 	void handleXferCall(
 		ExecutionState& state, KInstruction* ki);

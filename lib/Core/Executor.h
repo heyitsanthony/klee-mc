@@ -20,6 +20,7 @@
 #include "klee/Internal/Module/Cell.h"
 #include "klee/Internal/Module/KInstruction.h"
 #include "llvm/Support/CallSite.h"
+#include "llvm/ADT/APFloat.h"
 #include <vector>
 #include <string>
 #include <map>
@@ -32,6 +33,7 @@ namespace llvm {
   class BasicBlock;
   class BranchInst;
   class CallInst;
+  class CallSite;
   class Constant;
   class ConstantExpr;
   class Function;
@@ -187,7 +189,7 @@ protected:
     unsigned index,
     ExecutionState &state) const = 0;
 
-  Function* getCalledFunction(CallSite &cs, ExecutionState &state);
+  llvm::Function* getCalledFunction(llvm::CallSite &cs, ExecutionState &state);
 
   virtual void callExternalFunction(ExecutionState &state,
                             KInstruction *target,
@@ -212,7 +214,7 @@ protected:
 
 
   InterpreterHandler *interpreterHandler;
-  TargetData* target_data;
+  llvm::TargetData* target_data;
   llvm::Function* dbgStopPointFn; 
   StatsTracker *statsTracker;
   PTree *processTree;
@@ -290,7 +292,7 @@ private:
   /// The maximum time to allow for a single stp query.
   double stpTimeout;  
 
-  bool isDebugIntrinsic(const Function *f);
+  bool isDebugIntrinsic(const llvm::Function *f);
 
   void instShuffleVector(ExecutionState& state, KInstruction* ki);
   void instExtractElement(ExecutionState& state, KInstruction* ki);
@@ -301,7 +303,7 @@ private:
   void instUnwind(ExecutionState& state);
 
   bool isFPPredicateMatched(
-    APFloat::cmpResult CmpRes, CmpInst::Predicate pred);
+    llvm::APFloat::cmpResult CmpRes, llvm::CmpInst::Predicate pred);
 
 
   void printFileLine(ExecutionState &state, KInstruction *ki);
@@ -338,11 +340,11 @@ private:
   void executeCallNonDecl(
     ExecutionState &state, 
     KInstruction *ki,
-    Function *f,
+    llvm::Function *f,
     std::vector< ref<Expr> > &arguments);
   void executeBitCast(
 	ExecutionState	&state, 
-	CallSite	&cs,
+	llvm::CallSite	&cs,
 	llvm::ConstantExpr* ce,
 	std::vector< ref<Expr> > &arguments);
 

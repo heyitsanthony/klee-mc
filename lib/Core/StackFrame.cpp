@@ -7,7 +7,6 @@
 #include "klee/Expr.h"
 #include "static/Sugar.h"
 
-#include "StateRecord.h"
 #include "Memory.h"
 #include "OpenfdRegistry.h"
 

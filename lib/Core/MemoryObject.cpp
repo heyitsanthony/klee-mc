@@ -9,9 +9,10 @@
 
 #include <llvm/Instruction.h>
 #include <llvm/Value.h>
+#include "llvm/BasicBlock.h"
+#include "llvm/Function.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
-#include "StateRecord.h"
 
 #include <iostream>
 #include <cassert>

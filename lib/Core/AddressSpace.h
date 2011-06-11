@@ -18,7 +18,6 @@
 namespace klee {
   class ExecutionState;
   class MemoryObject;
-  class StateRecord;
   class ObjectState;
   class TimingSolver;
 
@@ -153,7 +152,7 @@ namespace klee {
     ///
     /// \retval true The copy succeeded. 
     /// \retval false The copy failed because a read-only object was modified.
-    bool copyInConcretes(StateRecord* rec);
+    bool copyInConcretes(void);
   };
 } // End klee namespace
 

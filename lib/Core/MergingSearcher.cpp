@@ -1,6 +1,7 @@
 #include "llvm/Instructions.h"
 #include "llvm/Support/CallSite.h"
 #include "llvm/Support/CommandLine.h"
+#include "klee/Internal/Module/KModule.h"
 #include "Executor.h"
 
 #include "MergingSearcher.h"

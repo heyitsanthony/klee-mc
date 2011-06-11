@@ -23,7 +23,7 @@
 #include <llvm/Value.h>
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
-#include "StateRecord.h"
+#include "static/Sugar.h"
 
 #include <iostream>
 #include <cassert>
@@ -92,7 +92,7 @@ ObjectHolder &ObjectHolder::operator=(const ObjectHolder &b) {
 
 /***/
 
-ObjectState::ObjectState(const MemoryObject *mo, StateRecord* _allocRec)
+ObjectState::ObjectState(const MemoryObject *mo)
   : copyOnWriteOwner(0),
     refCount(0),
     object(mo),
@@ -103,7 +103,7 @@ ObjectState::ObjectState(const MemoryObject *mo, StateRecord* _allocRec)
     updates(0, 0),
     size(mo->size),
     readOnly(false),
-    allocRec(_allocRec), wrseqno(0), wasSymOffObjectWrite(false)
+    wrseqno(0), wasSymOffObjectWrite(false)
 {
 	memset(concreteStore, 0, mo->size);
 
@@ -115,8 +115,7 @@ ObjectState::ObjectState(const MemoryObject *mo, StateRecord* _allocRec)
 		"tmp_arr" + llvm::utostr(++id),
 		mo->mallocKey,
 		0,
-		0,
-		allocRec);
+		0);
 	updates = UpdateList(array, 0);
 }
 
@@ -132,7 +131,7 @@ ObjectState::ObjectState(const MemoryObject *mo, const Array *array)
     updates(array, 0),
     size(mo->size),
     readOnly(false),
-    allocRec(array->rec), wrseqno(0), wasSymOffObjectWrite(false)
+    wrseqno(0), wasSymOffObjectWrite(false)
 {
 	memset(concreteStore, 0, mo->size);
 	makeSymbolic();
@@ -149,10 +148,7 @@ ObjectState::ObjectState(const ObjectState &os)
     updates(os.updates),
     size(os.size),
     readOnly(false),
-    allocRec(os.allocRec),
-        conOffObjectWrites(os.conOffObjectWrites),
-        symOffObjectWrites(os.symOffObjectWrites),
-        wrseqno(os.wrseqno), wasSymOffObjectWrite(os.wasSymOffObjectWrite)
+    wrseqno(os.wrseqno), wasSymOffObjectWrite(os.wasSymOffObjectWrite)
 {
   assert(!os.readOnly && "no need to copy read only object?");
 
@@ -220,7 +216,7 @@ const UpdateList &ObjectState::getUpdates() const {
     static unsigned id = 0;
     const Array *array = new Array("const_arr" + llvm::utostr(++id),
                                    object->mallocKey, &Contents[0],
-                                   &Contents[0] + Contents.size(), allocRec);
+                                   &Contents[0] + Contents.size());
     array->initRef();
     updates = UpdateList(array, 0);
 
@@ -250,10 +246,6 @@ void ObjectState::makeSymbolic() {
     markByteSymbolic(i);
     setKnownSymbolic(i, 0);
     markByteFlushed(i);
-
-    if (allocRec) {
-     allocRec->conOffObjectWrite(this, i, 0);
-    }
   }
 }
 
@@ -420,8 +412,8 @@ assert(o1);
                 return false;
             }
         } else if (o1->isByteKnownSymbolic(i) && o2->isByteKnownSymbolic(i)) {
-            ref<Expr> exp1 = o1->read8(i, NULL);
-            ref<Expr> exp2 = o2->read8(i, NULL);
+            ref<Expr> exp1 = o1->read8(i);
+            ref<Expr> exp2 = o2->read8(i);
 
             if (!expequals(exp1, exp2)) {
                 return false;
@@ -436,18 +428,17 @@ assert(o1);
         return true;
     }
 
-    ref<Expr> exp1 = o1->read(0, o1->size * 8, NULL);
-    ref<Expr> exp2 = o2->read(0, o2->size * 8, NULL);
+    ref<Expr> exp1 = o1->read(0, o1->size * 8);
+    ref<Expr> exp2 = o2->read(0, o2->size * 8);
 
     return expequals(exp1, exp2);
 }
 
 /***/
 
-ref<Expr> ObjectState::read8(unsigned offset, StateRecord* rec) const
+ref<Expr> ObjectState::read8(unsigned offset) const
 {
-  if (rec) rec->conOffObjectRead(this, offset);
- 
+
   if (isByteConcrete(offset)) {
     return ConstantExpr::create(concreteStore[offset], Expr::Int8);
   }
@@ -461,11 +452,9 @@ ref<Expr> ObjectState::read8(unsigned offset, StateRecord* rec) const
     getUpdates(), ConstantExpr::create(offset, Expr::Int32));
 }
 
-ref<Expr> ObjectState::read8(ref<Expr> offset, StateRecord* rec) const
+ref<Expr> ObjectState::read8(ref<Expr> offset) const
 {
   assert(!isa<ConstantExpr>(offset) && "constant offset passed to symbolic read8");
-
-  if (rec) rec->symOffObjectRead(this);
 
   unsigned base, size;
   fastRangeCheckOffset(offset, &base, &size);
@@ -482,7 +471,7 @@ ref<Expr> ObjectState::read8(ref<Expr> offset, StateRecord* rec) const
   return ReadExpr::create(getUpdates(), ZExtExpr::create(offset, Expr::Int32));
 }
 
-void ObjectState::write8(unsigned offset, uint8_t value, StateRecord* rec) {
+void ObjectState::write8(unsigned offset, uint8_t value) {
 
   //assert(read_only == false && "writing to read-only object!");
   concreteStore[offset] = value;
@@ -490,21 +479,12 @@ void ObjectState::write8(unsigned offset, uint8_t value, StateRecord* rec) {
 
   markByteConcrete(offset);
   markByteUnflushed(offset);
- 
-  if (rec) {
-    rec->conOffObjectWrite(this, offset,ConstantExpr::create(value, Expr::Int8));
-  }
 }
 
-void ObjectState::write8(unsigned offset, ref<Expr> value, StateRecord* rec) {
+void ObjectState::write8(unsigned offset, ref<Expr> value) {
   // can happen when ExtractExpr special cases 
-  if (rec) {
-    rec->conOffObjectWrite(this, offset, value);
-  }
-
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(value)) {
-    //rec purposely not passed here
-    write8(offset, (uint8_t) CE->getZExtValue(8), NULL);
+    write8(offset, (uint8_t) CE->getZExtValue(8));
   } else {
     setKnownSymbolic(offset, value.get());
      
@@ -513,7 +493,7 @@ void ObjectState::write8(unsigned offset, ref<Expr> value, StateRecord* rec) {
   }
 }
 
-void ObjectState::write8(ref<Expr> offset, ref<Expr> value, StateRecord* rec) {
+void ObjectState::write8(ref<Expr> offset, ref<Expr> value) {
   assert(!isa<ConstantExpr>(offset) && "constant offset passed to symbolic write8");
   unsigned base, size;
   fastRangeCheckOffset(offset, &base, &size);
@@ -533,18 +513,18 @@ void ObjectState::write8(ref<Expr> offset, ref<Expr> value, StateRecord* rec) {
 
 /***/
 
-ref<Expr> ObjectState::read(ref<Expr> offset, Expr::Width width, StateRecord* rec) const
+ref<Expr> ObjectState::read(ref<Expr> offset, Expr::Width width) const
 {
   // Truncate offset to 32-bits.
   offset = ZExtExpr::create(offset, Expr::Int32);
 
   // Check for reads at constant offsets.
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(offset))
-    return read(CE->getZExtValue(32), width, rec);
+    return read(CE->getZExtValue(32), width);
 
   // Treat bool specially, it is the only non-byte sized write we allow.
   if (width == Expr::Bool)
-    return ExtractExpr::create(read8(offset, rec), 0, Expr::Bool);
+    return ExtractExpr::create(read8(offset), 0, Expr::Bool);
 
   // Otherwise, follow the slow general case.
   unsigned NumBytes = width / 8;
@@ -556,19 +536,18 @@ ref<Expr> ObjectState::read(ref<Expr> offset, Expr::Width width, StateRecord* re
         AddExpr::create(
           offset,
           ConstantExpr::create(
-            idx, Expr::Int32)),
-	rec);
+            idx, Expr::Int32)));
     Res = i ? ConcatExpr::create(Byte, Res) : Byte;
   }
 
   return Res;
 }
 
-ref<Expr> ObjectState::read(unsigned offset, Expr::Width width, StateRecord* rec) const
+ref<Expr> ObjectState::read(unsigned offset, Expr::Width width) const
 {
   // Treat bool specially, it is the only non-byte sized write we allow.
   if (width == Expr::Bool)
-    return ExtractExpr::create(read8(offset, rec), 0, Expr::Bool);
+    return ExtractExpr::create(read8(offset), 0, Expr::Bool);
 
   // Otherwise, follow the slow general case.
   unsigned NumBytes = width / 8;
@@ -576,27 +555,27 @@ ref<Expr> ObjectState::read(unsigned offset, Expr::Width width, StateRecord* rec
   ref<Expr> Res(0);
   for (unsigned i = 0; i != NumBytes; ++i) {
     unsigned idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
-    ref<Expr> Byte = read8(offset + idx, rec);
+    ref<Expr> Byte = read8(offset + idx);
     Res = i ? ConcatExpr::create(Byte, Res) : Byte;
   }
 
   return Res;
 }
 
-void ObjectState::write(ref<Expr> offset, ref<Expr> value, StateRecord* rec) {
+void ObjectState::write(ref<Expr> offset, ref<Expr> value) {
   // Truncate offset to 32-bits.
   offset = ZExtExpr::create(offset, Expr::Int32);
 
   // Check for writes at constant offsets.
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(offset)) {
-    write(CE->getZExtValue(32), value, rec);
+    write(CE->getZExtValue(32), value);
     return;
   }
 
   // Treat bool specially, it is the only non-byte sized write we allow.
   Expr::Width w = value->getWidth();
   if (w == Expr::Bool) {
-    write8(offset, ZExtExpr::create(value, Expr::Int8), rec);
+    write8(offset, ZExtExpr::create(value, Expr::Int8));
     return;
   }
 
@@ -606,11 +585,11 @@ void ObjectState::write(ref<Expr> offset, ref<Expr> value, StateRecord* rec) {
   for (unsigned i = 0; i != NumBytes; ++i) {
     unsigned idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
     write8(AddExpr::create(offset, ConstantExpr::create(idx, Expr::Int32)),
-           ExtractExpr::create(value, 8 * i, Expr::Int8), rec);
+           ExtractExpr::create(value, 8 * i, Expr::Int8));
   }
 }
 
-void ObjectState::write(unsigned offset, ref<Expr> value, StateRecord* rec) {
+void ObjectState::write(unsigned offset, ref<Expr> value) {
   // Check for writes of constant values.
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(value)) {
     Expr::Width w = CE->getWidth();
@@ -619,10 +598,10 @@ void ObjectState::write(unsigned offset, ref<Expr> value, StateRecord* rec) {
       switch (w) {
       default: assert(0 && "Invalid write size!");
       case  Expr::Bool:
-      case  Expr::Int8: write8(offset, val, rec); return;
-      case Expr::Int16: write16(offset, val, rec); return;
-      case Expr::Int32: write32(offset, val, rec); return;
-      case Expr::Int64: write64(offset, val, rec); return;
+      case  Expr::Int8: write8(offset, val); return;
+      case Expr::Int16: write16(offset, val); return;
+      case Expr::Int32: write32(offset, val); return;
+      case Expr::Int64: write64(offset, val); return;
       }
     }
   }
@@ -630,7 +609,7 @@ void ObjectState::write(unsigned offset, ref<Expr> value, StateRecord* rec) {
   // Treat bool specially, it is the only non-byte sized write we allow.
   Expr::Width w = value->getWidth();
   if (w == Expr::Bool) {
-    write8(offset, ZExtExpr::create(value, Expr::Int8), rec);
+    write8(offset, ZExtExpr::create(value, Expr::Int8));
     return;
   }
 
@@ -639,31 +618,31 @@ void ObjectState::write(unsigned offset, ref<Expr> value, StateRecord* rec) {
   assert(w == NumBytes * 8 && "Invalid write size!");
   for (unsigned i = 0; i != NumBytes; ++i) {
     unsigned idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
-    write8(offset + idx, ExtractExpr::create(value, 8 * i, Expr::Int8), rec);
+    write8(offset + idx, ExtractExpr::create(value, 8 * i, Expr::Int8));
   }
 }
 
-void ObjectState::write16(unsigned offset, uint16_t value, StateRecord* rec) {
+void ObjectState::write16(unsigned offset, uint16_t value) {
   unsigned NumBytes = 2;
   for (unsigned i = 0; i != NumBytes; ++i) {
     unsigned idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
-    write8(offset + idx, (uint8_t) (value >> (8 * i)), rec);
+    write8(offset + idx, (uint8_t) (value >> (8 * i)));
   }
 }
 
-void ObjectState::write32(unsigned offset, uint32_t value, StateRecord* rec) {
+void ObjectState::write32(unsigned offset, uint32_t value) {
   unsigned NumBytes = 4;
   for (unsigned i = 0; i != NumBytes; ++i) {
     unsigned idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
-    write8(offset + idx, (uint8_t) (value >> (8 * i)), rec);
+    write8(offset + idx, (uint8_t) (value >> (8 * i)));
   }
 }
 
-void ObjectState::write64(unsigned offset, uint64_t value, StateRecord* rec) {
+void ObjectState::write64(unsigned offset, uint64_t value) {
   unsigned NumBytes = 8;
   for (unsigned i = 0; i != NumBytes; ++i) {
     unsigned idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
-    write8(offset + idx, (uint8_t) (value >> (8 * i)), rec);
+    write8(offset + idx, (uint8_t) (value >> (8 * i)));
   }
 }
 
@@ -679,7 +658,7 @@ void ObjectState::print() {
                << " concrete? " << isByteConcrete(i)
                << " known-sym? " << isByteKnownSymbolic(i)
                << " flushed? " << isByteFlushed(i) << " = ";
-    ref<Expr> e = read8(i, NULL);
+    ref<Expr> e = read8(i);
     std::cerr << e << "\n";
   }
 

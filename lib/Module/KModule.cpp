@@ -39,6 +39,7 @@
 #include <sstream>
 
 using namespace klee;
+using namespace llvm;
 
 namespace {
   enum SwitchImplType {

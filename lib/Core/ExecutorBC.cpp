@@ -12,12 +12,12 @@
 #include "ExternalDispatcher.h"
 #include "PTree.h"
 #include <sstream>
+#include "klee/Internal/Module/KModule.h"
 
 #include "ExecutorBC.h"
 
 using namespace klee;
-
-extern bool UseEquivalentStateEliminator;
+using namespace llvm;
 
 namespace {
   cl::opt<bool>
@@ -114,8 +114,6 @@ void ExecutorBC::runFunctionAsMain(
 	srandom(1);
 
 	state = new ExecutionState(kf);
-	if (UseEquivalentStateEliminator)
-		stateManager->setupESE(this, kmodule, state);
 
 	setupArgv(state, f, argc, argv, envp);
 
@@ -680,7 +678,7 @@ void ExecutorBC::callExternalFunction(
 		return;
 	}
 
-	if (!state.addressSpace.copyInConcretes(state.rec)) {
+	if (!state.addressSpace.copyInConcretes()) {
 		terminateStateOnError(
 			state,
 			"external modified read-only object",
@@ -729,8 +727,8 @@ void ExecutorBC::allocGlobalVariableDecl(
 #endif
 
 	if (size == 0) {
-		llvm::errs() << "Unable to find size for global variable: " 
-		<< gv.getName() 
+		std::cerr << "Unable to find size for global variable: " 
+		<< gv.getName().data()
 		<< " (use will result in out of bounds access)\n";
 	}
 

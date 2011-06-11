@@ -54,6 +54,10 @@ namespace klee {
     std::set<const std::string *, ltstr> internedStrings;
 
   private:
+    bool getInstructionDebugInfo(
+      const llvm::Instruction *I,
+      const std::string *&File, unsigned &Line);
+
     const std::string *internString(std::string s);
 
   public:

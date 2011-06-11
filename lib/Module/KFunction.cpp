@@ -28,6 +28,7 @@
 #include "static/Sugar.h"
 
 using namespace klee;
+using namespace llvm;
 
 KFunction::KFunction(llvm::Function *_function,
                      KModule *km)

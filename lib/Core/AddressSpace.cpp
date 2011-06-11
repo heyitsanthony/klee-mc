@@ -12,11 +12,11 @@
 #include "CoreStats.h"
 #include "Memory.h"
 #include "TimingSolver.h"
-#include "StateRecord.h"
 #include "klee/Expr.h"
 #include "klee/TimerStatIncrementer.h"
 #include <stdint.h>
 #include <stack>
+#include "static/Sugar.h"
 
 using namespace klee;
 
@@ -405,7 +405,7 @@ void AddressSpace::copyOutConcretes(void)
   }
 }
 
-bool AddressSpace::copyInConcretes(StateRecord* rec)
+bool AddressSpace::copyInConcretes(void)
 {
   foreach (it, objects.begin(), objects.end()) {
     const MemoryObject *mo;
@@ -425,14 +425,6 @@ bool AddressSpace::copyInConcretes(StateRecord* rec)
           mo->size) == 0) continue;
 
     wos = getWriteable(mo, os);
-    if (rec) {            
-      for (unsigned i = 0; i < wos->size; ++i) {
-        if (!wos->isByteConcrete(i)) continue;
-        if (address[i] == wos->concreteStore[i]) continue;
-        rec->conOffObjectWrite(wos, i, ConstantExpr::create(address[i],Expr::Int8));
-      }
-    }
-
     memcpy(wos->concreteStore, address, mo->size);
   }
 

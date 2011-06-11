@@ -17,7 +17,6 @@
 #include "klee/Expr.h"
 #include "static/Sugar.h"
 
-#include "StateRecord.h"
 #include "Memory.h"
 #include "OpenfdRegistry.h"
 
@@ -42,11 +41,7 @@ namespace {
 
 /** XXX XXX XXX REFACTOR PLEASEEE **/
 ExecutionState::ExecutionState(KFunction *kf)
-  : symOffArrayAlloc(0),
-    prunepoint(0),
-    pruned(false),
-    rec(0),
-    fakeState(false),
+  : fakeState(false),
     underConstrained(false),
     depth(0),
     pc(kf->instructions),
@@ -67,11 +62,7 @@ ExecutionState::ExecutionState(KFunction *kf)
 }
 
 ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
-  : symOffArrayAlloc(0),
-    prunepoint(0),
-    pruned(false),
-    rec(0),
-    fakeState(true),
+  : fakeState(true),
     underConstrained(false),
     constraints(assumptions),
     queryCost(0.),
@@ -101,31 +92,13 @@ ExecutionState *ExecutionState::branch()
 	newState->coveredLines.clear();
 	newState->replayBranchIterator = newState->branchDecisionsSequence.end();
 
-	if (rec) rec->split(this, newState);
-
 	return newState;
 }
 
 void ExecutionState::bindObject(const MemoryObject *mo, ObjectState *os)
 {
-	if (!rec) {
-		addressSpace.bindObject(mo, os);
-		return ;
-	}
-
-	if (mo->mallocKey.allocSite) {
-		assert (
-		(mallocKeyMap.find(mo->mallocKey) == mallocKeyMap.end()) ||
-		(mallocKeyMap[mo->mallocKey] == mo));
-		mallocKeyMap[mo->mallocKey] = mo;
-	}
-
-	//StateRecord* existing = mallocKeyAlloc[mo->mallocKey];
-	//assert(!existing);
-	mallocKeyAlloc[mo->mallocKey] = os->allocRec;
 	addressSpace.bindObject(mo, os);
 }
-
 
 ExecutionState *ExecutionState::branchForReplay(void)
 {
@@ -206,47 +179,11 @@ Cell& ExecutionState::readLocalCell(unsigned sfi, unsigned i) const
 	KFunction* kf = sf.kf;
 	assert(i < kf->numRegisters);
 
-	if (!rec) return sf.locals[i];
-
-	ref<Expr> e = sf.locals[i].value;
-	StackWrite* sw = sf.locals[i].stackWrite;
-	rec->stackRead(sw);
-
-	if (isa<ConstantExpr > (e ))
-		return sf.locals[i];
-
-	std::vector<ref<ReadExpr> > usedReadExprs;
-
-	findReads(e, true, usedReadExprs);
-
-	foreach (it, usedReadExprs.begin(), usedReadExprs.end()) {
-		ref<ReadExpr> re = *it;
-		rec->arrayRead(this, re);
-	}
-
 	return sf.locals[i];
 }
 
 void ExecutionState::addConstraint(ref<Expr> constraint)
 {
-  /*  if (rec) {
-      std::vector<ref<ReadExpr> > usedReadExprs;
-
-      findReads(constraint, true, usedReadExprs);
-
-      for (std::vector<ref<ReadExpr> >::iterator it = usedReadExprs.begin();
-              it != usedReadExprs.end(); ++it) {
-        ref<ReadExpr> re = *it;
-        if (ConstantExpr* ce = dyn_cast<ConstantExpr > (re->index)) {
-          unsigned offset = (uint8_t) ce->getZExtValue();
-          como2cn[MallocKeyOffset(re->updates.root->mallocKey, offset)].insert(constraint);
-        }
-        else {
-          somo2cn[re->updates.root->mallocKey].insert(constraint);
-        }
-      }
-    }*/
-
     constraints.addConstraint(constraint);
 }
 
@@ -271,11 +208,7 @@ Cell& ExecutionState::getLocalCell(unsigned sfi, unsigned i) const
 void ExecutionState::write(
 	ObjectState* object, ref<Expr> offset, ref<Expr> value)
 {
-	object->write(offset, value, rec);
-	if (!rec) return;
-	if (!object->wasSymOffObjectWrite) return;
-	object->wasSymOffObjectWrite = false;
-	rec->symOffObjectWrite(object);        
+	object->write(offset, value);
 }
 
 void ExecutionState::writeLocalCell(unsigned sfi, unsigned i, ref<Expr> value)
@@ -285,20 +218,7 @@ void ExecutionState::writeLocalCell(unsigned sfi, unsigned i, ref<Expr> value)
 	KFunction* kf = sf.kf;
 	assert(i < kf->numRegisters);
 
-	if (rec) {
-		sf.locals[i].stackWrite = rec->stackWrite(
-			kf, sf.call, sfi, i, value);
-	}
 	sf.locals[i].value = value;
-}
-
-const ObjectState* ExecutionState::getObjectState(const MallocKey& mk)
-{
-      MallocKeyMap::iterator it = mallocKeyMap.find(mk);
-      if (it == mallocKeyMap.end()) return NULL;
-
-      const MemoryObject* mo = it->second;
-      return addressSpace.findObject(mo);
 }
 
 KInstIterator ExecutionState::getCaller(void) const
@@ -309,29 +229,8 @@ KInstIterator ExecutionState::getCaller(void) const
 void ExecutionState::copy(
 	ObjectState* os, const ObjectState* reallocFrom, unsigned count)
 {
-	std::set<DependenceNode*> allReads;
-	std::set<DependenceNode*> initialReads;
-	if (rec) {
-		allReads.insert(rec->curreads.begin(), rec->curreads.end());
-		initialReads.insert(rec->curreads.begin(), rec->curreads.end());
-	}
-
 	for (unsigned i=0; i<count; i++) {
-		if (rec) {
-			rec->curreads.clear();
-			rec->curreads.insert(
-				initialReads.begin(), initialReads.end());
-		}
 		write(os, i, read8(reallocFrom, i));
-		if (rec) {
-			allReads.insert(
-				rec->curreads.begin(), rec->curreads.end());
-		}
-	}
-
-	if (rec) {
-		rec->curreads.clear();
-		rec->curreads.insert(allReads.begin(), allReads.end());
 	}
 }
 
