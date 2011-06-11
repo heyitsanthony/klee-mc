@@ -2314,11 +2314,22 @@ if test X"${withval}" = Xdefault; then
    with_runtime=Release
 fi
 
+if !(test $llvm_version_major == 2 &&
+    test $llvm_version_minor -lt 8 &&
+    test "$with_runtime" == "Release"); then
+  with_runtime=Release+Asserts
+fi
+
 { $as_echo "$as_me:$LINENO: checking runtime configuration" >&5
 $as_echo_n "checking runtime configuration... " >&6; }
 if test X${with_runtime} = XRelease; then
     { $as_echo "$as_me:$LINENO: result: Release" >&5
 $as_echo "Release" >&6; }
+    RUNTIME_ENABLE_OPTIMIZED=1
+
+elif test X${with_runtime} = XRelease+Asserts; then
+    { $as_echo "$as_me:$LINENO: result: Release+Asserts" >&5
+$as_echo "Release+Asserts" >&6; }
     RUNTIME_ENABLE_OPTIMIZED=1
 
 elif test X${with_runtime} = XDebug; then
