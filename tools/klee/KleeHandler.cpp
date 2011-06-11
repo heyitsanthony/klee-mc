@@ -172,10 +172,11 @@ std::ostream *KleeHandler::openOutputFile(const std::string &filename)
   std::string path = getOutputFilename(filename);
   std::ostream* f = new std::ofstream(path.c_str(), io_mode);
   if (!f) {
-    klee_warning("out of memory");
+    klee_error("error opening file \"%s\" (out of memory)", filename.c_str());
   } else if (!f->good()) {
-    int e = errno;  // save errno because c_str() below could overwrite it
-    klee_warning("error opening: %s (errno=%d: %s)", filename.c_str(), e, strerror(e));
+    klee_error("error opening file \"%s\".  KLEE may have run out of file "
+                   "descriptors: try to increase the maximum number of open file "
+                   "descriptors by using ulimit.", filename.c_str());
     delete f;
     f = NULL;
   }
