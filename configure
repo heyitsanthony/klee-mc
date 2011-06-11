@@ -2326,6 +2326,11 @@ elif test X${with_runtime} = XDebug; then
 $as_echo "Debug" >&6; }
    RUNTIME_ENABLE_OPTIMIZED=0
 
+elif test X${with_runtime} = XDebug+Asserts; then
+   { $as_echo "$as_me:$LINENO: result: Debug+Asserts" >&5
+$as_echo "Debug+Asserts" >&6; }
+   RUNTIME_ENABLE_OPTIMIZED=0
+
 else
    { { $as_echo "$as_me:$LINENO: error: invalid configuration: ${with_runtime}" >&5
 $as_echo "$as_me: error: invalid configuration: ${with_runtime}" >&2;}
