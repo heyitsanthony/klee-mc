@@ -38,7 +38,6 @@ namespace klee {
 class Array;
 class ConstantExpr;
 class ObjectState;
-class StateRecord;
 
 template<class T> class ref;
 
@@ -488,7 +487,6 @@ public:
   /// a symbolic array. If non-empty, this size of this array is equivalent to
   /// the array size.
   const std::vector< ref<ConstantExpr> > constantValues;
-  StateRecord* rec;
   // FIXME: This does not belong here.
   mutable void *stpInitialArray;
   mutable unsigned refCount;  // used only for const_arr's
@@ -507,9 +505,9 @@ public:
   /// distinguished once printed.
   Array(const std::string &_name, MallocKey _mallocKey,
         const ref<ConstantExpr> *constantValuesBegin = 0,
-        const ref<ConstantExpr> *constantValuesEnd = 0, StateRecord* _rec = 0)
+        const ref<ConstantExpr> *constantValuesEnd = 0)
     : name(_name), mallocKey(_mallocKey),
-      constantValues(constantValuesBegin, constantValuesEnd), rec(_rec),
+      constantValues(constantValuesBegin, constantValuesEnd),
       stpInitialArray(0), refCount(refCountDontCare) {
     assert((isSymbolicArray() || constantValues.size() == mallocKey.size) &&
            "Invalid size for constant array!");

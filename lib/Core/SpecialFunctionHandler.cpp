@@ -17,6 +17,7 @@
 
 #include "klee/Internal/Module/KInstruction.h"
 #include "klee/Internal/Module/KModule.h"
+#include "static/Sugar.h"
 
 #include "ExecutorBC.h"
 #include "MemoryManager.h"
@@ -706,8 +707,7 @@ void SpecialFunctionHandler::handleMakeSymbolic(
   Executor::ExactResolutionList rl;
   executor.resolveExact(state, arguments[MAKESYM_ARGIDX_ADDR], rl, "make_symbolic");
   
-  for (Executor::ExactResolutionList::iterator it = rl.begin(), 
-         ie = rl.end(); it != ie; ++it) {
+  foreach (it, rl.begin(), rl.end()) {
     MemoryObject *mo = (MemoryObject*) it->first.first;
     const ObjectState *old = it->first.second;
     ExecutionState *s = it->second;

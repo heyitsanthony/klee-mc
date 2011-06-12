@@ -50,32 +50,19 @@ void ConstantExpr::toString(std::string &Res) const {
   Res = value.toString(10, false);
 }
 
+/* N.B. vector is stored *backwards* (i.e. v[0] => cur_v[w - 1]) */
 ref<ConstantExpr> ConstantExpr::createVector(llvm::ConstantVector* v)
 {
-	unsigned int				elem_count;
-	const llvm::Type			*elem_type;
-	llvm::LLVMContext			&ctx = llvm::getGlobalContext();
+	unsigned int	elem_count;
 
-	elem_count = v->getType()->getNumElements();
-
-	llvm::SmallVectorImpl<llvm::Constant*>	elts(elem_count);
-	for (unsigned int i = 0; i < elem_count; i++) {
-		elts.push_back(
-			llvm::ConstantInt::get(
-				llvm::IntegerType::get(ctx, 32),
-				i));
-	}
-	v->getVectorElements(ctx, elts);
-
-	elem_type = (elts.front())->getType();
+	elem_count = v->getNumOperands();
 
 	ref<ConstantExpr>	cur_v;
 	for (unsigned int i = 0; i < elem_count; i++) {
 		llvm::ConstantInt *cur_ci;
 
-		assert (elts[i] && "NO ELTS??");
-		assert (isa<llvm::ConstantInt>(elts[i]));
-		cur_ci = cast<llvm::ConstantInt>(elts[i]);
+		cur_ci = dyn_cast<llvm::ConstantInt>(v->getOperand(i));
+		assert (cur_ci != NULL);
 
 		if (i == 0) cur_v = alloc(cur_ci->getValue());
 		else cur_v = cur_v->Concat(alloc(cur_ci->getValue()));

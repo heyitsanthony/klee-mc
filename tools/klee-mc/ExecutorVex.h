@@ -83,15 +83,29 @@ private:
 		ExecutionState& state,
 		const llvm::GlobalVariable& gv);
 
+	void updateGuestRegs(ExecutionState& s);
+	void dumpRegs(ExecutionState& s);
+
 	void handleXferCall(
 		ExecutionState& state, KInstruction* ki);
-	void handleXferSyscall(
+	bool handleXferSyscall(
 		ExecutionState& state, KInstruction* ki);
 	void handleXferReturn(
 		ExecutionState& state, KInstruction* ki);
 	void handleXferJmp(
 		ExecutionState& state, KInstruction* ki);
 	void jumpToKFunc(ExecutionState& state, KFunction* kf);
+
+	void sc_writev(ExecutionState& state);
+	ObjectState* sc_jiggle(ExecutionState& state);
+	void sc_fail(ExecutionState& state);
+	void sc_mmap(ExecutionState& state, KInstruction* ki);
+
+	void osWrite64(ExecutionState& state,
+		ObjectState* os, 
+		uint64_t addr,
+		uint64_t data);
+
 
 	struct XferStateIter
 	{
@@ -111,6 +125,13 @@ private:
 	GuestState	*gs;
 	VexFCache	*xlate_cache;
 	MemoryObject	*state_regctx_mo;
+
+	bool		exited;
+
+	unsigned int	sc_dispatched;
+	unsigned int	sc_retired;
+
+	bool		dump_funcs;
 };
 
 }

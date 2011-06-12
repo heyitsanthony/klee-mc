@@ -43,6 +43,7 @@ namespace llvm {
   class TargetData;
   class Twine;
   class Value;
+  class VectorType;
 }
 
 namespace klee {  
@@ -122,7 +123,7 @@ protected:
 
   virtual void run(ExecutionState &initialState);
   virtual void instRet(ExecutionState& state, KInstruction* ki);
-  void instRetFromNested(ExecutionState& state, KInstruction* ki);
+  void retFromNested(ExecutionState& state, KInstruction* ki);
 
   /// bindInstructionConstants - Initialize any necessary per instruction
   /// constant values.
@@ -212,6 +213,14 @@ protected:
         llvm::Function *f,
         std::vector< ref<Expr> > &arguments);
 
+  ObjectState* executeMakeSymbolic(ExecutionState &state, const MemoryObject *mo);
+  ObjectState* executeMakeSymbolic(
+    ExecutionState& state, const MemoryObject* mo, ref<Expr> len);
+
+  // Given a concrete object in our [klee's] address space, add it to 
+  // objects checked code can reference.
+  MemoryObject *addExternalObject(ExecutionState &state, void *addr, 
+                                  unsigned size, bool isReadOnly);
 
 
   InterpreterHandler *interpreterHandler;
@@ -299,6 +308,15 @@ private:
   void instExtractElement(ExecutionState& state, KInstruction* ki);
   void instBranch(ExecutionState& state, KInstruction* ki);
   void instCmp(ExecutionState& state, KInstruction* ki);
+  ref<Expr> cmpScalar(
+  	ExecutionState& state,
+  	int pred, ref<Expr> left, ref<Expr> right, bool& ok);
+  ref<Expr> cmpVector(
+  	ExecutionState& state,
+	int pred,
+	const llvm::VectorType* op_type,
+	ref<Expr> left, ref<Expr> right,
+	bool& ok);
   void instCall(ExecutionState& state, KInstruction* ki);
   void instSwitch(ExecutionState& state, KInstruction* ki);
   void instUnwind(ExecutionState& state);
@@ -321,10 +339,7 @@ private:
   bool getSeedInfoIterRange(
     ExecutionState* s, SeedInfoIterator &b, SeedInfoIterator& e);
 
-  // Given a concrete object in our [klee's] address space, add it to 
-  // objects checked code can reference.
-  MemoryObject *addExternalObject(ExecutionState &state, void *addr, 
-                                  unsigned size, bool isReadOnly);
+
   inline void splitProcessTree(PTreeNode* n, ExecutionState* a,
                                ExecutionState* b);
 
@@ -388,12 +403,9 @@ private:
     unsigned int idx, const std::string& arrName,
     unsigned int& re_idx, unsigned int& cmp_val);
 
-  void executeMakeSymbolic(ExecutionState &state, const MemoryObject *mo);
-  void executeMakeSymbolic(
+  ObjectState* makeSymbolicReplay(
     ExecutionState& state, const MemoryObject* mo, ref<Expr> len);
-  void makeSymbolicReplay(
-    ExecutionState& state, const MemoryObject* mo, ref<Expr> len);
-  void makeSymbolic(
+  ObjectState* makeSymbolic(
     ExecutionState& state, const MemoryObject* mo, ref<Expr> len);
 
   bool isForkingCondition(ExecutionState& current, ref<Expr> condition);

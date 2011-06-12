@@ -234,6 +234,8 @@ public:
     object->write8(offset, value);
   }
 
+  void write64(ObjectState* object, unsigned offset, uint64_t value);
+
   void writeLocalCell(unsigned sfi, unsigned i, ref<Expr> value);
 
   Cell& getLocalCell(unsigned sfi, unsigned i) const;

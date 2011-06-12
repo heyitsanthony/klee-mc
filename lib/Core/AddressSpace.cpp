@@ -38,6 +38,11 @@ const ObjectState *AddressSpace::findObject(const MemoryObject *mo) const {
   return res ? res->second : 0;
 }
 
+ObjectState *AddressSpace::findObject(const MemoryObject *mo) {
+  const MemoryMap::value_type *res = objects.lookup(mo);
+  return res ? res->second : 0;
+}
+
 ObjectState *AddressSpace::getWriteable(const MemoryObject *mo,
         const ObjectState *os) {
   assert(!os->readOnly);
@@ -403,6 +408,26 @@ void AddressSpace::copyOutConcretes(void)
     if (!os->readOnly)
       memcpy(address, os->concreteStore, mo->size);
   }
+}
+
+bool AddressSpace::copyToBuf(const MemoryObject* mo, void* buf) const
+{
+	return copyToBuf(mo, buf, (unsigned)0, (unsigned)mo->size);
+}
+
+bool AddressSpace::copyToBuf(
+	const MemoryObject* mo, void* buf,
+	unsigned off, unsigned len) const
+{
+	const ObjectState* os;
+
+	os = findObject(mo);
+	if (os == NULL)
+		return false;
+
+	assert (len <= (mo->size - off) && "LEN+OFF SPANS >1 MO");
+	memcpy(buf, os->concreteStore + off, len);
+	return true;
 }
 
 bool AddressSpace::copyInConcretes(void)

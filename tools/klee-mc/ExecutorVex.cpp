@@ -8,6 +8,8 @@
 #include "../../lib/Core/UserSearcher.h"
 #include "../../lib/Core/PTree.h"
 
+#include <sys/mman.h>
+#include <syscall.h>
 #include <vector>
 
 #include "gueststate.h"
@@ -17,9 +19,15 @@
 #include "vexxlate.h"
 #include "vexsb.h"
 #include "vexfcache.h"
+#include "syscallparams.h"
 #include "static/Sugar.h"
 
 #include "ExecutorVex.h"
+
+extern "C" 
+{
+#include "valgrind/libvex_guest_amd64.h"
+}
 
 using namespace klee;
 using namespace llvm;
@@ -31,7 +39,8 @@ ExecutorVex::ExecutorVex(
 	InterpreterHandler *ih,
 	GuestState	*in_gs)
 : Executor(opts, ih),
-  gs(in_gs)
+  gs(in_gs),
+  exited(false)
 {
 	assert (kmodule == NULL && "KMod already initialized? My contract!");
 
@@ -173,9 +182,13 @@ void ExecutorVex::setupProcessMemory(ExecutionState* state, Function* f)
 
 void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
 {
-	std::vector<ref<Expr> > args;
-	unsigned int state_regctx_sz = gs->getCPUState()->getStateSize();
-
+	ObjectState 			*state_regctx_os;
+	KFunction			*kf;
+	std::vector<ref<Expr> >		args;
+	unsigned int			state_regctx_sz;
+	
+	
+	state_regctx_sz = gs->getCPUState()->getStateSize();
 	state_regctx_mo = memory->allocate(
 		state_regctx_sz,
 		false, true,
@@ -187,13 +200,11 @@ void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
 
 	assert(args.size() == f->arg_size() && "wrong number of arguments");
 
-	KFunction* kf = kmodule->getKFunction(f);
+	kf = kmodule->getKFunction(f);
 	for (unsigned i = 0, e = f->arg_size(); i != e; ++i)
 		bindArgument(kf, i, *state, args[i]);
 
 	if (!state_regctx_mo) return;
-
-	ObjectState *state_regctx_os;
 	state_regctx_os = bindObjectInState(*state, state_regctx_mo, false);
 
 	const char*  state_data = (const char*)gs->getCPUState()->getStateData();
@@ -250,9 +261,6 @@ Function* ExecutorVex::getFuncFromAddr(uint64_t guest_addr)
 	/* !cached => put in cache, alert kmodule, other bookkepping */
 	f = xlate_cache->getFunc((void*)host_addr, guest_addr);
 
-	fprintf(stderr, "NEW FUNC\n");
-	f->dump();
-
 	/* need to know func -> vsb to compute func's guest address */
 	vsb = xlate_cache->getCachedVSB(guest_addr);
 	assert (vsb && "Dropped VSB too early?");
@@ -270,8 +278,14 @@ Function* ExecutorVex::getFuncFromAddr(uint64_t guest_addr)
 void ExecutorVex::executeInstruction(
 	ExecutionState &state, KInstruction *ki)
 {
-	fprintf(stderr, "vex::exeInst: "); ki->inst->dump();
+//	fprintf(stderr, "vex::exeInst: "); ki->inst->dump();
 	Executor::executeInstruction(state, ki);
+}
+
+void ExecutorVex::dumpRegs(ExecutionState& state)
+{
+	updateGuestRegs(state);
+	gs->getCPUState()->print(std::cerr);
 }
 
 /* need to hand roll our own instRet because we want to be able to
@@ -281,44 +295,28 @@ void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
 	Function		*cur_func;
 	VexSB			*vsb;
 
-// no nested ret??
-//	if (state.stack.size() > 1) {
-//		/* if returning from a generated call (e.g. outcalls)  */
-//		fprintf(stderr, "RET FORM NESTED\n");
-//		Executor::instRetFromNested(state, ki);
-//		return;
-//	}
-
 	/* need to trapeze between VSB's; depending on exit type,
 	 * translate VSB exits into LLVM instructions on the fly */
 
 	cur_func = (state.stack.back()).kf->function;
-	fprintf(stderr, "CURRENTLY ON %s\n", cur_func->getNameStr().c_str());
 
 	vsb = func2vsb_table[(uintptr_t)cur_func];
 	if (vsb == NULL) {
 		/* no VSB => outcall; use default KLEE return handling */
 		assert (state.stack.size() > 1);
-		Executor::instRetFromNested(state, ki);
+		Executor::retFromNested(state, ki);
 		return;
 	}
 	assert (vsb && "Could not translate current function to VSB");
 
 
-	fprintf(stderr, "pc: %p\n", vsb->getGuestAddr());
-	fprintf(stderr, "vsb stats %d %d %d\n",
-		vsb->isCall(),
-		vsb->isSyscall(),
-		vsb->isReturn());
-
 	if (vsb->isCall()) {
-		fprintf(stderr, "CALL!\n");
 		handleXferCall(state, ki);
 		return;
 	} else if (vsb->isSyscall()) {
-		fprintf(stderr, "SYSCALL!\n");
-		assert (0 == 1 && "HANDLE SYSCALL");
-		handleXferSyscall(state, ki);
+		if (!handleXferSyscall(state, ki)) {
+			terminateStateOnExit(state);
+		}
 		return;
 	} else if (vsb->isReturn()) {
 		handleXferReturn(state, ki);
@@ -328,6 +326,7 @@ void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
 		return;
 	}
 
+	/* XXX need better bad stack frame handling */
 	ref<Expr> result = ConstantExpr::alloc(0, Expr::Bool);
 	result = eval(ki, 0, state).value;
 
@@ -370,8 +369,6 @@ bool ExecutorVex::xferIterNext(struct XferStateIter& iter)
 	}
 
 	addr = value->getZExtValue();
-	fprintf(stderr, "XXX GOT VALUE: %p\n", addr);
-
 	iter.f = getFuncFromAddr(addr);
 	assert (iter.f != NULL && "BAD FUNCTION TO JUMP TO");
 
@@ -392,9 +389,11 @@ bool ExecutorVex::xferIterNext(struct XferStateIter& iter)
 void ExecutorVex::handleXferJmp(ExecutionState& state, KInstruction* ki)
 {
 	struct XferStateIter	iter;
+	int			k = 0;
 	xferIterInit(iter, &state, ki);
 	while (xferIterNext(iter)) {
 		jumpToKFunc(*(iter.res.first), kmodule->getKFunction(iter.f));
+		k++;
 	}
 }
 
@@ -418,9 +417,6 @@ void ExecutorVex::jumpToKFunc(ExecutionState& state, KFunction* kf)
 	/* set new state */
 	state.pc = kf->instructions;
 	bindArgument(kf, 0, state, state_regctx_mo->getBaseExpr());
-
-	/* if this works: LOL */
-	fprintf(stderr, "looooooooooooooooool\n");
 }
 
 /* xfers are done with an address in the return value of the next place to
@@ -433,16 +429,231 @@ void ExecutorVex::handleXferCall(ExecutionState& state, KInstruction* ki)
 	args.push_back(state_regctx_mo->getBaseExpr());
 	xferIterInit(iter, &state, ki);
 	while (xferIterNext(iter)) {
-		fprintf(stderr, "EXECUTE THE CALL\n");
 		executeCall(*(iter.res.first), ki, iter.f, args);
-		fprintf(stderr, "DONE WITH EXECUTECALL\n");
 	}
 }
 
-void ExecutorVex::handleXferSyscall(
+// XXX HACK. Make klee core worry about this
+static const klee::MemoryObject* findMemObj(MemoryMap* mm, uint64_t addr)
+{
+	foreach (it, mm->begin(), mm->end()) {
+		const MemoryObject* mo;
+		mo = (*it).first;
+		if (mo->address <= addr &&
+		    mo->address+mo->size > addr )
+		    return mo;
+	}
+	return NULL;
+}
+
+void ExecutorVex::sc_writev(ExecutionState& state)
+{
+#if 0
+	SyscallParams		sp(gs->getSyscallParams());
+	uintptr_t		guest_iov = sp.getArg(1);
+	int			guest_iovcnt = sp.getArg(2);
+	const MemoryObject	*cur_mo;
+
+	fprintf(stderr, "IOVPTR: %p count=%d\n",
+		guest_iov, guest_iovcnt);
+
+	cur_mo = findMemObj(&state.addressSpace.objects, guest_iov);
+	fprintf(stderr, "got guest iov-mo: %p (sz=%d)\n", cur_mo, cur_mo->size);
+
+	fprintf(stderr, "WRITEV!!\n");
+	for (int i = 0; i < guest_iovcnt; i++) {
+		struct iovec	iov;
+		unsigned	mo_off;
+		bool		ok_copy;
+
+		mo_off = (guest_iov - cur_mo->address)
+			+ i*sizeof(struct iovec);
+
+		fprintf(stderr, "mo_off = %p\n", mo_off);
+		ok_copy = state.addressSpace.copyToBuf(
+			cur_mo, &iov, mo_off, sizeof(iov));
+		assert (ok_copy);
+
+		fprintf(stderr, "iov[%d] = %p. len=%d\n",
+			i, iov.iov_base, iov.iov_len);
+
+	}
+#endif
+	/* doesn't affect proces state! AIEE */
+	sc_jiggle(state);
+	return;
+}
+
+
+/**
+ * a syscall that modifies the return and clobber registers
+ * rax, rcx, r11
+ * Does not modify any memory.
+ */
+ObjectState* ExecutorVex::sc_jiggle(ExecutionState& state)
+{
+	ObjectState		*state_regctx_os;
+	const ObjectState	*old_regctx_os;
+	unsigned int		sz;
+
+	sz = gs->getCPUState()->getStateSize();
+
+	/* hook into guest state with state_regctx_mo,
+	 * use mo to mark memory as symbolic */
+	old_regctx_os = state.addressSpace.findObject(state_regctx_mo);
+
+	/* 1. make all of symbolic */
+	state_regctx_os = executeMakeSymbolic(state, state_regctx_mo);
+
+	/* 2. set everything that should be initialized */
+	const char*  state_data = (const char*)gs->getCPUState()->getStateData();
+	for (unsigned int i=0; i < sz; i++) {
+		unsigned int	reg_idx;
+
+		reg_idx = i/8;
+		if (	reg_idx == offsetof(VexGuestAMD64State, guest_RAX)/8 ||
+			reg_idx == offsetof(VexGuestAMD64State, guest_RCX)/8 ||
+			reg_idx == offsetof(VexGuestAMD64State, guest_R11)/8)
+		{
+			/* ignore rax, rcx, r11 */
+			continue;
+		}
+
+		state.write8(state_regctx_os, i, state_data[i]);
+	}
+
+	return state_regctx_os;
+}
+
+void ExecutorVex::sc_fail(ExecutionState& state)
+{
+	ObjectState	*state_regctx_os;
+	
+	state_regctx_os = sc_jiggle(state);
+
+	/* set RAX=0xf...f =-1, failing it */
+	for (unsigned int i = 0; i < 8; i++) {
+		state.write8(
+			state_regctx_os,
+			i+offsetof(VexGuestAMD64State, guest_RAX),
+			0xff);
+	}
+}
+
+void ExecutorVex::updateGuestRegs(ExecutionState& state)
+{
+	void	*guest_regs;
+	guest_regs = gs->getCPUState()->getStateData();
+	state.addressSpace.copyToBuf(state_regctx_mo, guest_regs);
+}
+
+void ExecutorVex::sc_mmap(ExecutionState& state, KInstruction* ki)
+{
+	SyscallParams		sp(gs->getSyscallParams());
+	MemoryObject		*new_mo;
+	ObjectState		*new_os;
+	ObjectState		*state_regctx_os;
+	uint64_t		addr = sp.getArg(0);
+	uint64_t		length = sp.getArg(1);
+	uint64_t		prot = sp.getArg(2);
+#if 0
+/* Will be useful sometime? */
+	uint64_t		flags = sp.getArg(3);
+	uint64_t		fd = sp.getArg(4);
+	uint64_t		offset = sp.getArg(5);
+#endif
+
+	if (addr == 0) {
+		/* not requesting an address */
+		new_mo = memory->allocate(
+			length, 
+			true /* local */,
+			false /* global */, 
+			ki->inst,
+			&state);
+		assert (new_mo && "Couldn't allocate on mmap?");
+		addr = new_mo->address;
+	} else {
+		/* requesting an address */
+		new_mo = addExternalObject(
+			state, (void*)addr, length,
+			((prot & PROT_WRITE) == 0) /* isReadOnly */);
+	}
+
+	assert (new_mo != NULL && "Could not create new memory object");
+
+	/* returned data will be symbolic */
+	new_os = executeMakeSymbolic(state, new_mo);
+	assert (new_os != NULL && "Could not make object state");
+	if ((prot & PROT_WRITE) == 0)
+		new_os->setReadOnly(true);
+
+	/* always succeed */
+	/* TODO: should we enable failures here? */
+	state_regctx_os = state.addressSpace.findObject(state_regctx_mo);
+	state.write64(
+		state_regctx_os, 
+		offsetof(VexGuestAMD64State, guest_RAX),
+		addr);
+}
+
+
+/* system calls serve three purposes: 
+ * 1. xfer data
+ * 2. manage state
+ * 3. launch processes
+ *
+ * For 1. klee can cheat 100% and just make things symbolic.
+ * For 2. klee can get away with acting dumb (just emulate mmap)
+ * For 3. bonetown, but we can't handle threads yet anyhow
+ */
+bool ExecutorVex::handleXferSyscall(
 	ExecutionState& state, KInstruction* ki)
 {
-	assert (0 == 1);
+	bool	ret;
+
+	updateGuestRegs(state);
+	SyscallParams   sp(gs->getSyscallParams());
+	int		sys_nr;
+
+	sys_nr = sp.getSyscall();
+
+	fprintf(stderr, "SYSCALL!\n");
+	gs->print(std::cerr);
+
+	sc_dispatched++;
+	switch(sys_nr) {
+	case SYS_writev: {
+		// fd, iov, iovcnt
+		sc_jiggle(state);
+		break;
+	}
+	case SYS_brk:
+		// always fail this, just like in pt_run
+		sc_fail(state);
+		break;
+	case SYS_ioctl:
+		sc_jiggle(state);
+		break;
+	case SYS_mmap:
+		sc_mmap(state, ki);
+		break;
+	case SYS_exit:
+	case SYS_exit_group:
+		fprintf(stderr, "EXITING ON sys_nr=%d\n", sys_nr);
+		ret = false;
+		goto done;
+	default:
+		fprintf(stderr, "UNKNOWN SYSCALL 0x%x\n", sys_nr);
+		assert (0 == 1);
+		break;
+	}
+
+	handleXferJmp(state, ki);
+	ret = true;
+done:
+	sc_retired++;
+	return ret;
 }
 
 void ExecutorVex::handleXferReturn(
@@ -485,8 +696,6 @@ void ExecutorVex::initializeGlobals(ExecutionState &state)
 		// should be null.
 		assert (!f->hasExternalWeakLinkage());
 		addr = Expr::createPointer((unsigned long) (void*) f);
-		fprintf(stderr, "ADDING GLOBAL ADDrESS %s %p\n",
-			f->getNameStr().c_str(), f);
 		globalAddresses.insert(std::make_pair(f, addr));
 	}
 

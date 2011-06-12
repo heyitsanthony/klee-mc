@@ -126,6 +126,7 @@ namespace klee {
     void unbindObject(const MemoryObject *mo);
 
     /// Lookup a binding from a MemoryObject.
+    ObjectState *findObject(const MemoryObject *mo);
     const ObjectState *findObject(const MemoryObject *mo) const;
 
     /// \brief Obtain an ObjectState suitable for writing.
@@ -139,6 +140,11 @@ namespace klee {
     /// \param os The current binding of the MemoryObject.
     /// \return A writeable ObjectState (\a os or a copy).
     ObjectState *getWriteable(const MemoryObject *mo, const ObjectState *os);
+
+    bool copyToBuf(const MemoryObject* mo, void* buf) const;
+    bool copyToBuf(
+    	const MemoryObject* mo, void* buf,
+    	unsigned off, unsigned len) const;
 
     /// Copy the concrete values of all managed ObjectStates into the
     /// actual system memory location they were allocated at.

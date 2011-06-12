@@ -156,7 +156,15 @@ void ExecutionState::popFrame()
   stack.pop_back();
 }
 
-///
+void ExecutionState::write64(ObjectState* object, unsigned offset, uint64_t value)
+{
+	uint64_t	v = value;
+	/* XXX: probably not endian friendly */
+	for (int i = 0; i < 8; i++) {
+		write8(object, offset+i, v & 0xff);
+		v >>= 8;
+	}
+}
 
 std::string ExecutionState::getFnAlias(std::string fn)
 {

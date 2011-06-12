@@ -438,7 +438,6 @@ MemoryObject * Executor::addExternalObject(ExecutionState &state,
                                            size, 0, &state);
   ObjectState *os = bindObjectInState(state, mo, false);
   for(unsigned i = 0; i < size; i++) {
-    //os->write8(i, ((uint8_t*)addr)[i]);
     state.write8(os, i, ((uint8_t*)addr)[i]);
   }
 
@@ -1174,6 +1173,7 @@ void Executor::executeCall(ExecutionState &state,
   switch(f->getIntrinsicID()) {
   case Intrinsic::not_intrinsic:
     // state may be destroyed by this call, cannot touch
+    fprintf(stderr, "CALLING EXTERNAL FUNCTION %s\n", f->getNameStr().c_str());
     callExternalFunction(state, ki, f, arguments);
     break;
        
@@ -1295,7 +1295,7 @@ static inline const llvm::fltSemantics * fpWidthToSemantics(unsigned width) {
   }
 }
 
-void Executor::instRetFromNested(ExecutionState &state, KInstruction *ki)
+void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 {
   ReturnInst *ri = cast<ReturnInst>(ki->inst);
   KInstIterator kcaller = state.getCaller();
@@ -1360,7 +1360,7 @@ void Executor::instRet(ExecutionState &state, KInstruction *ki)
     return;
   }
 
-  instRetFromNested(state, ki);
+  retFromNested(state, ki);
 }
 
 void Executor::instBranch(ExecutionState& state, KInstruction* ki)
@@ -1570,15 +1570,89 @@ void Executor::executeSymbolicFuncPtr(
 
 void Executor::instCmp(ExecutionState& state, KInstruction *ki)
 {
-  CmpInst *ci = cast<CmpInst>(ki->inst);
-  ICmpInst *ii = cast<ICmpInst>(ci);
-  ICmpInst::Predicate pred;
+	CmpInst*		ci = cast<CmpInst>(ki->inst);
+	const Type*		op_type = ci->getOperand(1)->getType();
+	ICmpInst*		ii = cast<ICmpInst>(ci);
+	ICmpInst::Predicate	pred;
+	const VectorType*	vt;
 
-  ref<Expr> left = eval(ki, 0, state).value;
-  ref<Expr> right = eval(ki, 1, state).value;
+	ref<Expr> left = eval(ki, 0, state).value;
+	ref<Expr> right = eval(ki, 1, state).value;
+	ref<Expr> result;
+
+	pred = ii->getPredicate();
+	if ((vt = dyn_cast<const VectorType>(op_type))) {
+		bool ok;
+		result = cmpVector(state, pred, vt, left, right, ok);
+		if (!ok) return;
+	} else {
+		bool ok;
+		result = cmpScalar(state, pred, left, right, ok);
+		if (!ok) return;
+	}
+
+	bindLocal(ki, state, result);
+}
+
+ref<Expr> Executor::cmpVector(
+	ExecutionState& state,
+	int pred,
+	const llvm::VectorType* vt,
+	ref<Expr> left, ref<Expr> right,
+	bool& ok)
+{
+	ref<Expr>	result;
+	unsigned int	v_elem_c;
+	unsigned int	v_elem_w;
+
+	v_elem_c = vt->getNumElements();
+	v_elem_w = vt->getBitWidth() / v_elem_c;
+
+	ok = false;
+	assert (left->getWidth() > 0);
+	assert (right->getWidth() > 0);
+
+	switch(pred) {
+/* FIXME: cheaper way to do this (e.g. left == right => spit out constant expr?) */
+#define VCMP_OP(x, y)							\
+	case ICmpInst::x: 						\
+		for (unsigned int i = 0; i < v_elem_c; i++) {		\
+			ref<Expr>	left_i, right_i;		\
+			ref<Expr>	cmp_i;				\
+			left_i = ExtractExpr::create(			\
+				left, i*v_elem_w, v_elem_w);		\
+			right_i = ExtractExpr::create(			\
+				right, i*v_elem_w, v_elem_w);		\
+			cmp_i = y##Expr::create(left_i, right_i);		\
+			if (i == 0) result = cmp_i;				\
+			else result = ConcatExpr::create(result, cmp_i);	\
+		}								\
+		break;
+
+	VCMP_OP(ICMP_EQ, Eq)
+	VCMP_OP(ICMP_NE, Ne)
+	VCMP_OP(ICMP_UGT, Ugt)
+	VCMP_OP(ICMP_UGE, Uge)
+	VCMP_OP(ICMP_ULT, Ult)
+	VCMP_OP(ICMP_ULE, Ule)
+	VCMP_OP(ICMP_SGT, Sgt)
+	VCMP_OP(ICMP_SGE, Sge)
+	VCMP_OP(ICMP_SLT, Slt)
+	VCMP_OP(ICMP_SLE, Sle)
+	default:
+	terminateStateOnExecError(state, "invalid vector ICmp predicate");
+	return result;
+	}
+	ok = true;
+	return result;
+}
+
+ref<Expr> Executor::cmpScalar(
+	ExecutionState& state,
+	int pred, ref<Expr> left, ref<Expr> right, bool& ok)
+{
   ref<Expr> result;
-
-  pred = ii->getPredicate();
+  ok = false;
   switch(pred) {
   case ICmpInst::ICMP_EQ: result = EqExpr::create(left, right); break;
   case ICmpInst::ICMP_NE: result = NeExpr::create(left, right); break;
@@ -1591,14 +1665,13 @@ void Executor::instCmp(ExecutionState& state, KInstruction *ki)
   case ICmpInst::ICMP_SLT: result = SltExpr::create(left, right); break;
   case ICmpInst::ICMP_SLE: result = SleExpr::create(left, right); break;
   default:
-    terminateStateOnExecError(state, "invalid ICmp predicate");
-    return;
+    terminateStateOnExecError(state, "invalid scalar ICmp predicate");
+    return result;
   }
-
-
-  bindLocal(ki, state, result);
-//  klee_message("Updated to: %s\n", states2str(states).c_str());
+  ok = true;
+  return result;
 }
+
 
 void Executor::instSwitch(ExecutionState& state, KInstruction *ki)
 {
@@ -1741,14 +1814,15 @@ void Executor::instShuffleVector(ExecutionState& state, KInstruction* ki)
 	const VectorType*	vt = si->getType();
 	unsigned int		v_elem_c = vt->getNumElements();
 	unsigned int		v_elem_sz = vt->getBitWidth() / v_elem_c;
-
+	unsigned int		perm_sz = in_v_perm_ce->getWidth() / v_elem_c;
 	ref<Expr>		out_val;
+
 	for (unsigned int i = 0; i < v_elem_c; i++) {
 		ref<ConstantExpr>	v_idx;
 		ref<Expr>		ext;
-		uint64_t		idx;
+		unsigned int		idx;
 
-		v_idx = in_v_perm_ce->Extract(i*v_elem_sz, v_elem_sz);
+		v_idx = in_v_perm_ce->Extract(i*perm_sz, perm_sz);
 		idx = v_idx->getZExtValue();
 		assert (idx < 2*v_elem_c && "Shuffle permutation out of range");
 		if (idx < v_elem_c) {
@@ -1760,7 +1834,6 @@ void Executor::instShuffleVector(ExecutionState& state, KInstruction* ki)
 				in_v_hi, v_elem_sz*idx, v_elem_sz);
 		}
 
-		fprintf(stderr, "[%d]: ", i); v_idx->dump();
 		if (i == 0) out_val = ext;
 		else out_val = ConcatExpr::create(out_val, ext);
 	}
@@ -2684,7 +2757,8 @@ ObjectState *Executor::bindObjectInState(
 void Executor::resolveExact(ExecutionState &state,
                             ref<Expr> p,
                             ExactResolutionList &results,
-                            const std::string &name) {
+                            const std::string &name)
+{
   // XXX we may want to be capping this?
   ResolutionList rl;
   state.addressSpace.resolve(state, solver, p, rl);
@@ -2877,23 +2951,21 @@ void Executor::executeMemoryOperation(ExecutionState &state,
   memOpError(state, isWrite, address, value, target);
 }
 
-void Executor::executeMakeSymbolic(
+ObjectState* Executor::executeMakeSymbolic(
   ExecutionState &state, const MemoryObject *mo)
 {
-  executeMakeSymbolic(state, mo, mo->getSizeExpr());
+  return executeMakeSymbolic(state, mo, mo->getSizeExpr());
 }
 
-void Executor::executeMakeSymbolic(
+ObjectState* Executor::executeMakeSymbolic(
   ExecutionState &state, const MemoryObject *mo, ref<Expr> len)
 {
-  if (!replayOut)
-    makeSymbolic(state, mo, len);
-  else
-    makeSymbolicReplay(state, mo, len);
+  if (!replayOut) return makeSymbolic(state, mo, len);
+  else return makeSymbolicReplay(state, mo, len);
 }
 
 // Create a new object state for the memory object (instead of a copy).
-void Executor::makeSymbolicReplay(
+ObjectState* Executor::makeSymbolicReplay(
     ExecutionState& state, const MemoryObject* mo, ref<Expr> len)
 {
   ObjectState *os = bindObjectInState(state, mo, false);
@@ -2910,6 +2982,7 @@ void Executor::makeSymbolicReplay(
       }
     }
   }
+  return os;
 }
 
 bool Executor::seedObject(
@@ -2960,24 +3033,31 @@ bool Executor::seedObject(
   return true;
 }
 
-void Executor::makeSymbolic(
-  ExecutionState& state, const MemoryObject* mo, ref<Expr> len)
+ObjectState* Executor::makeSymbolic(
+  ExecutionState& state,
+  const MemoryObject* mo,
+  ref<Expr> len)
 {
-  static unsigned id = 0;
-  const Array *array = new Array("arr" + llvm::utostr(++id), mo->mallocKey, 0, 0);
+  static unsigned	id = 0;
+  ObjectState*		os;
+  const Array*		array;
+  
+  array = new Array("arr" + llvm::utostr(++id), mo->mallocKey, 0, 0);
   array->initRef();
-  bindObjectInState(state, mo, false, array);
+  os = bindObjectInState(state, mo, false, array);
   state.addSymbolic(mo, array, len);
  
   std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it =
     seedMap.find(&state);
-  if (it == seedMap.end()) return;
+  if (it == seedMap.end()) return os;
  
   // In seed mode we need to add this as a binding.
   foreach (siit, it->second.begin(), it->second.end()) {
     if (!seedObject(state, *siit, mo, array))
       break;
   }
+
+  return os;
 }
 
 
@@ -3112,7 +3192,6 @@ void Executor::initializeGlobalObject(
 		unsigned size;
 		size = target_data->getTypeStoreSize(c->getType());
 		for (unsigned i=0; i<size; i++) {
-			//os->write8(offset+i, (uint8_t) 0);
 			state.write8(os, offset+i, (uint8_t) 0);
 		}
 	} else if (ConstantArray *ca = dyn_cast<ConstantArray>(c)) {

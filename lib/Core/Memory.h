@@ -107,10 +107,14 @@ public:
   // make contents all concrete and random
   void initializeToRandom();  
 
-private:
+  bool isByteConcrete(unsigned offset) const;
+  bool isByteFlushed(unsigned offset) const;
+  bool isByteKnownSymbolic(unsigned offset) const;
+
   ref<Expr> read(ref<Expr> offset, Expr::Width width) const;
   ref<Expr> read(unsigned offset, Expr::Width width) const;
   ref<Expr> read8(unsigned offset) const;
+private:
 
   // return bytes written.
   void write(unsigned offset, ref<Expr> value);
@@ -136,10 +140,6 @@ private:
                             unsigned *size_r) const;
   void flushRangeForRead(unsigned rangeBase, unsigned rangeSize) const;
   void flushRangeForWrite(unsigned rangeBase, unsigned rangeSize);
-
-  bool isByteConcrete(unsigned offset) const;
-  bool isByteFlushed(unsigned offset) const;
-  bool isByteKnownSymbolic(unsigned offset) const;
 
   void markByteConcrete(unsigned offset);
   void markByteSymbolic(unsigned offset);

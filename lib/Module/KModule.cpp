@@ -349,9 +349,7 @@ void KModule::addModule(Module* in_mod)
 		KFunction	*kf;
 		kmod_f = module->getFunction(it->getNameStr());
 		assert (kmod_f != NULL);
-		fprintf(stderr, "adding: %s\n", it->getNameStr().c_str());
 		kf = addFunction(kmod_f);
-		fprintf(stderr, "added kf=%p\n", kf);
 	}
 
 //	assert (isLinked);
@@ -464,7 +462,6 @@ void KModule::prepare(
   infos = new InstructionInfoTable(module);
 
   foreach (it, module->begin(), module->end()) {
-    fprintf(stderr, "adding: %s\n", it->getNameStr().c_str());
     addFunction(it);
   }
 
@@ -495,7 +492,6 @@ KFunction* KModule::addFunction(Function* f)
 	if (functionEscapes(kf->function))
 		escapingFunctions.insert(kf->function);
 
-	fprintf(stderr, "KF=%p\n", kf);
 	return kf;
 }
 
