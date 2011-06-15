@@ -12,6 +12,8 @@
 
 #include "llvm/Support/CommandLine.h"
 
+#include <iostream>
+
 namespace {
   llvm::cl::opt<bool>
   UseVisitorHash("use-visitor-hash", 
@@ -26,7 +28,6 @@ ref<Expr> ExprVisitor::visit(const ref<Expr> &e) {
     return visitActual(e);
   } else {
     visited_ty::iterator it = visited.find(e);
-
     if (it!=visited.end()) {
       return it->second;
     } else {
@@ -38,9 +39,8 @@ ref<Expr> ExprVisitor::visit(const ref<Expr> &e) {
 }
 
 ref<Expr> ExprVisitor::visitActual(const ref<Expr> &e) {
-  if (isa<ConstantExpr>(e)) {    
-    return e;
-  } else {
+  if (isa<ConstantExpr>(e)) return e;
+
     Expr &ep = *e.get();
 
     Action res = visitExpr(ep);
@@ -94,165 +94,80 @@ ref<Expr> ExprVisitor::visitActual(const ref<Expr> &e) {
     switch(res.kind) {
     default:
       assert(0 && "invalid kind");
-    case Action::DoChildren: {  
-      bool rebuild = false;
-      ref<Expr> e(&ep), kids[8];
-      unsigned count = ep.getNumKids();
-      for (unsigned i=0; i<count; i++) {
-        ref<Expr> kid = ep.getKid(i);
-        kids[i] = visit(kid);
-        if (kids[i] != kid)
-          rebuild = true;
-      }
-      if (rebuild) {
-        e = ep.rebuild(kids);
-        if (recursive)
-          e = visit(e);
-      }
-      if (!isa<ConstantExpr>(e)) {
-        res = visitExprPost(*e.get());
-        if (res.kind==Action::ChangeTo)
-          e = res.argument;
-      }
-      return e;
-    }
+    case Action::DoChildren:
+    	return handleActionDoChildren(ep);
     case Action::SkipChildren:
-      return e;
+    	return e;
     case Action::ChangeTo:
-      return res.argument;
+    	return res.argument;
     }
-  }
 }
 
-ExprVisitor::Action ExprVisitor::visitExpr(const Expr&) {
-  return Action::doChildren();
+ref<Expr> ExprVisitor::handleActionDoChildren(Expr& ep)
+{
+	bool rebuild = false;
+	ref<Expr> e(&ep), kids[8];
+	unsigned count = ep.getNumKids();
+
+	assert (count < 8);
+	for (unsigned i = 0; i < count; i++) {
+		ref<Expr> kid = ep.getKid(i);
+		kids[i] = visit(kid);
+		if (kids[i] != kid)
+			rebuild = true;
+	}
+
+	if (rebuild) {
+		e = ep.rebuild(kids);
+		if (recursive)
+			e = visit(e);
+	}
+
+	if (!isa<ConstantExpr>(e)) {
+		Action res = visitExprPost(*e.get());
+		if (res.kind == Action::ChangeTo)
+			e = res.argument;
+	}
+	return e;
 }
 
 ExprVisitor::Action ExprVisitor::visitExprPost(const Expr&) {
   return Action::skipChildren();
 }
 
-ExprVisitor::Action ExprVisitor::visitNotOptimized(const NotOptimizedExpr&) {
-  return Action::doChildren(); 
-}
+#define DO_CHILDREN_ACTION(x,y)					\
+ExprVisitor::Action ExprVisitor::visit##x(const y&) { 		\
+	return Action::doChildren(); }				\
 
-ExprVisitor::Action ExprVisitor::visitRead(const ReadExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitSelect(const SelectExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitConcat(const ConcatExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitExtract(const ExtractExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitZExt(const ZExtExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitSExt(const SExtExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitAdd(const AddExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitSub(const SubExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitMul(const MulExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitUDiv(const UDivExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitSDiv(const SDivExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitURem(const URemExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitSRem(const SRemExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitNot(const NotExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitAnd(const AndExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitOr(const OrExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitXor(const XorExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitShl(const ShlExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitLShr(const LShrExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitAShr(const AShrExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitEq(const EqExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitNe(const NeExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitUlt(const UltExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitUle(const UleExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitUgt(const UgtExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitUge(const UgeExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitSlt(const SltExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitSle(const SleExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitSgt(const SgtExpr&) {
-  return Action::doChildren(); 
-}
-
-ExprVisitor::Action ExprVisitor::visitSge(const SgeExpr&) {
-  return Action::doChildren(); 
-}
-
+DO_CHILDREN_ACTION(Expr, Expr)
+DO_CHILDREN_ACTION(NotOptimized, NotOptimizedExpr)
+DO_CHILDREN_ACTION(Read, ReadExpr)
+DO_CHILDREN_ACTION(Select, SelectExpr)
+DO_CHILDREN_ACTION(Concat, ConcatExpr)
+DO_CHILDREN_ACTION(Extract, ExtractExpr)
+DO_CHILDREN_ACTION(ZExt, ZExtExpr)
+DO_CHILDREN_ACTION(SExt, SExtExpr)
+DO_CHILDREN_ACTION(Add, AddExpr)
+DO_CHILDREN_ACTION(Sub, SubExpr)
+DO_CHILDREN_ACTION(Mul, MulExpr)
+DO_CHILDREN_ACTION(UDiv, UDivExpr)
+DO_CHILDREN_ACTION(SDiv, SDivExpr)
+DO_CHILDREN_ACTION(URem, URemExpr)
+DO_CHILDREN_ACTION(SRem, SRemExpr)
+DO_CHILDREN_ACTION(Not, NotExpr)
+DO_CHILDREN_ACTION(And, AndExpr)
+DO_CHILDREN_ACTION(Or, OrExpr)
+DO_CHILDREN_ACTION(Xor, XorExpr)
+DO_CHILDREN_ACTION(Shl, ShlExpr)
+DO_CHILDREN_ACTION(LShr, LShrExpr)
+DO_CHILDREN_ACTION(AShr, AShrExpr)
+DO_CHILDREN_ACTION(Eq, EqExpr)
+DO_CHILDREN_ACTION(Ne, NeExpr)
+DO_CHILDREN_ACTION(Ult, UltExpr)
+DO_CHILDREN_ACTION(Ule, UleExpr)
+DO_CHILDREN_ACTION(Ugt, UgtExpr)
+DO_CHILDREN_ACTION(Uge, UgeExpr)
+DO_CHILDREN_ACTION(Slt, SltExpr)
+DO_CHILDREN_ACTION(Sle, SleExpr)
+DO_CHILDREN_ACTION(Sgt, SgtExpr)
+DO_CHILDREN_ACTION(Sge, SgeExpr)

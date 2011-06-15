@@ -82,34 +82,6 @@ using namespace klee;
 // omg really hard to share cl opts across files ...
 bool WriteTraces = false;
 
-static std::string expr2str(const Expr* e)
-{
-  std::ostringstream info;
-  e->print(info);
-  return info.str();
-}
-
-static std::string state2str(ExecutionState* state)
-{
-  std::ostringstream info;
-  state->constraints.print(info);
-  return info.str();
-}
-
-static std::string states2str(const ExeStateSet& ess)
-{
-  std::ostringstream s;
-  unsigned int i = 0;
-  for (ExeStateSet::const_iterator it = ess.begin();
-      it != ess.end(); it++, i++)
-  {
-    s << "State " << i << ":\n";
-    s << state2str(*it);
-    s << "\n";
-  }
-  return s.str();
-}
-
 namespace llvm
 {
   namespace cl
@@ -660,9 +632,13 @@ void Executor::forkSetupSeeding(
 // !!! for normal branch, conditions = {false,true} so that replay 0,1 reflects
 // index
 Executor::StateVector
-Executor::fork(ExecutionState &current,
-               unsigned N, ref<Expr> conditions[],
-               bool isInternal, bool isBranch) {
+Executor::fork(
+	ExecutionState &current,
+        unsigned N,
+	ref<Expr> conditions[],
+        bool isInternal,
+	bool isBranch)
+{
   std::vector<bool> res(N, false);
   StateVector resStates(N, NULL);
   std::vector<std::list<SeedInfo> > resSeeds(N);
@@ -684,6 +660,9 @@ Executor::fork(ExecutionState &current,
       terminateStateEarly(current, "query timed out");
       return StateVector(N, NULL);
     }
+    
+    // known => [0] when false, [1] when true
+    // unknown => take both routes
     res[0] = (result == Solver::False || result == Solver::Unknown);
     res[1] = (result == Solver::True || result == Solver::Unknown);
     validTargets = (result == Solver::Unknown ? 2 : 1);
@@ -780,8 +759,13 @@ Executor::fork(ExecutionState &current,
     assert(curState);
 
     // Add path constraint
-    if (!curState->isCompactForm && feasibleTargets > 1)
-      addConstraint(*curState, conditions[condIndex]);
+    if (!curState->isCompactForm && feasibleTargets > 1) {
+      if (!addConstraint(*curState, conditions[condIndex])) {
+      	terminateStateEarly(*curState, "contradiction on unknown");
+	resStates[condIndex] = NULL;
+	continue;
+      }
+    }
     // XXX - even if the constraint is provable one way or the other we
     // can probably benefit by adding this constraint and allowing it to
     // reduce the other constraints. For example, if we do a binary
@@ -827,19 +811,19 @@ Executor::fork(ExecutionState &current,
   return resStates;
 }
 
-void Executor::addConstraint(ExecutionState &state, ref<Expr> condition) {
+bool Executor::addConstraint(ExecutionState &state, ref<Expr> condition)
+{
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(condition)) {
     assert(CE->isTrue() && "attempt to add invalid constraint");
-    return;
+    return true;
   }
 
   // Check to see if this constraint violates seeds.
   std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it =
-    seedMap.find(&state);
+  	seedMap.find(&state);
   if (it != seedMap.end()) {
     bool warn = false;
-    for (std::vector<SeedInfo>::iterator siit = it->second.begin(),
-           siie = it->second.end(); siit != siie; ++siit) {
+    foreach (siit, it->second.begin(), it->second.end()) {
       bool res;
       bool success =
         solver->mustBeFalse(state, siit->assignment.evaluate(condition), res);
@@ -854,10 +838,17 @@ void Executor::addConstraint(ExecutionState &state, ref<Expr> condition) {
       klee_warning("seeds patched for violating constraint");
   }
 
-  state.addConstraint(condition);
-  if (ivcEnabled)
-    doImpliedValueConcretization(state, condition,
-                                 ConstantExpr::alloc(1, Expr::Bool));
+  if (!state.addConstraint(condition))
+  	return false;
+
+  if (ivcEnabled) {
+    doImpliedValueConcretization(
+    	state,
+	condition,
+        ConstantExpr::alloc(1, Expr::Bool));
+  }
+
+  return true;
 }
 
 ref<klee::ConstantExpr> Executor::evalConstant(Constant *c)
@@ -997,16 +988,14 @@ void Executor::executeGetValue(ExecutionState &state,
   }
  
   std::vector< ref<Expr> > conditions;
-  for (std::set< ref<Expr> >::iterator vit = values.begin(),
-         vie = values.end(); vit != vie; ++vit)
+  foreach (vit, values.begin(), values.end())
     conditions.push_back(EqExpr::create(e, *vit));
 
   StateVector branches;
   branches = fork(state, conditions.size(), conditions.data(), true);
  
   StateVector::iterator bit = branches.begin();
-  for (std::set< ref<Expr> >::iterator vit = values.begin(),
-         vie = values.end(); vit != vie; ++vit) {
+  foreach (vit, values.begin(), values.end()) {
     ExecutionState *es = *bit;
     if (es) bindLocal(target, *es, *vit);
     ++bit;
@@ -1180,6 +1169,9 @@ void Executor::executeCall(ExecutionState &state,
     // va_arg is handled by caller and intrinsic lowering, see comment for
     // ExecutionState::varargs
   case Intrinsic::vastart:  {
+    fprintf(stderr, "VASTART!!! ");
+    std::cerr << *i << std::endl;
+
     StackFrame &sf = state.stack.back();
     assert(sf.varargs &&
            "vastart called in function with no vararg object");
@@ -1375,6 +1367,14 @@ void Executor::instBranch(ExecutionState& state, KInstruction* ki)
   assert(bi->getCondition() == bi->getOperand(0) &&
          "Wrong operand index!");
   const Cell &cond = eval(ki, 0, state);
+#if 0
+  std::cerr << "BRANCHING: "
+	  << ki->inst->getParent()->getParent()->getNameStr()  << "::";
+  ki->inst->print(std::cerr);
+  std::cerr << "\nFORK VALUE = ";
+  cond.value->print(std::cerr);
+  std::cerr << "\n";
+#endif
   StatePair branches = fork(state, cond.value, false);
 
   if (WriteTraces) {
@@ -1975,6 +1975,10 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
 
   case Instruction::Load: {
     ref<Expr> base = eval(ki, 0, state).value;
+//    std::cerr << "LOADOP: " << *ki->inst << std::endl;
+//    fprintf(stderr, "HEY MAN ");
+//    base->dump();
+//    fprintf(stderr, "\n");
     executeMemoryOperation(state, false, base, 0, ki);
     break;
   }
@@ -2764,8 +2768,7 @@ void Executor::resolveExact(ExecutionState &state,
   state.addressSpace.resolve(state, solver, p, rl);
  
   ExecutionState *unbound = &state;
-  for (ResolutionList::iterator it = rl.begin(), ie = rl.end();
-       it != ie; ++it) {
+  foreach (it, rl.begin(), rl.end()) {
     ref<Expr> inBounds = EqExpr::create(p, it->first->getBaseExpr());
    
     StatePair branches = fork(*unbound, inBounds, true);
@@ -2917,12 +2920,17 @@ void Executor::memOpError(
  
   if (!unbound) return;
 
-  address->print(std::cerr);
-
   // XXX should we distinguish out of bounds and overlapped cases?
   if (incomplete) {
     terminateStateEarly(*unbound, "query timed out (resolve)");
   } else {
+  #if 0
+    Instruction	*inst;
+    inst = target->inst;
+    std::cerr
+    	<< inst->getParent()->getParent()->getNameStr()
+    	<< ": " <<  *inst << std::endl;
+  #endif
     terminateStateOnError(*unbound,
                           "memory error: out of bound pointer",
                           "ptr.err",
@@ -2952,15 +2960,18 @@ void Executor::executeMemoryOperation(ExecutionState &state,
 }
 
 ObjectState* Executor::executeMakeSymbolic(
-  ExecutionState &state, const MemoryObject *mo)
+  ExecutionState &state, const MemoryObject *mo, const char* arrName)
 {
-  return executeMakeSymbolic(state, mo, mo->getSizeExpr());
+  return executeMakeSymbolic(state, mo, mo->getSizeExpr(), arrName);
 }
 
 ObjectState* Executor::executeMakeSymbolic(
-  ExecutionState &state, const MemoryObject *mo, ref<Expr> len)
+  ExecutionState &state,
+  const MemoryObject *mo,
+  ref<Expr> len,
+  const char* arrName)
 {
-  if (!replayOut) return makeSymbolic(state, mo, len);
+  if (!replayOut) return makeSymbolic(state, mo, len, arrName);
   else return makeSymbolicReplay(state, mo, len);
 }
 
@@ -3036,13 +3047,14 @@ bool Executor::seedObject(
 ObjectState* Executor::makeSymbolic(
   ExecutionState& state,
   const MemoryObject* mo,
-  ref<Expr> len)
+  ref<Expr> len,
+  const char* arrPrefix)
 {
   static unsigned	id = 0;
   ObjectState*		os;
   const Array*		array;
   
-  array = new Array("arr" + llvm::utostr(++id), mo->mallocKey, 0, 0);
+  array = new Array(arrPrefix + llvm::utostr(++id), mo->mallocKey, 0, 0);
   array->initRef();
   os = bindObjectInState(state, mo, false, array);
   state.addSymbolic(mo, array, len);

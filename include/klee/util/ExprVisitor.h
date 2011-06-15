@@ -86,6 +86,7 @@ namespace klee {
     bool recursive;
 
     ref<Expr> visitActual(const ref<Expr> &e);
+    ref<Expr> handleActionDoChildren(Expr& ep);
     
   public:
     // apply the visitor to the expression and return a possibly

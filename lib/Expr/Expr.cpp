@@ -815,11 +815,12 @@ BCREATE(LShrExpr, LShr)
 BCREATE(AShrExpr, AShr)
 
 #define CMPCREATE(_e_op, _op) \
-ref<Expr>  _e_op ::create(const ref<Expr> &l, const ref<Expr> &r) { \
+ref<Expr>  _e_op ::create(const ref<Expr> &l, const ref<Expr> &r) {	\
   assert(l->getWidth()==r->getWidth() && "type mismatch");              \
   if (ConstantExpr *cl = dyn_cast<ConstantExpr>(l))                     \
-    if (ConstantExpr *cr = dyn_cast<ConstantExpr>(r))                   \
+    if (ConstantExpr *cr = dyn_cast<ConstantExpr>(r)) {                 \
       return cl->_op(cr);                                               \
+     }									\
   return _e_op ## _create(l, r);                                        \
 }
 

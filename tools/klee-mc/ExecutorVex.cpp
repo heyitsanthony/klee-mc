@@ -8,8 +8,11 @@
 #include "../../lib/Core/UserSearcher.h"
 #include "../../lib/Core/PTree.h"
 
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/mman.h>
 #include <syscall.h>
+#include <unistd.h>
 #include <vector>
 
 #include "gueststate.h"
@@ -123,16 +126,20 @@ void ExecutorVex::runImage(void)
 		kmodule->addModule(*it);
 	}
 
-	fprintf(stderr, "RUN IMAGE\n");
 	prepState(state, init_func);
 	initializeGlobals(*state);
 
 	processTree = new PTree(state);
 	state->ptreeNode = processTree->root;
 
+	std::cerr << "BEGIN INITIAL MAP_-------------------------\n";
+	std::cerr << state->addressSpace.objects;
+	std::cerr << "END INITIAL MAP-------------------------\n";
+
 	fprintf(stderr, "COMMENCE THE RUN!!!!!!\n");
 	run(*state);
-	assert (0 == 1 && "PPPPPPPPP");
+	fprintf(stderr, "DONE RUNNING.\n");
+
 	delete processTree;
 	processTree = 0;
 
@@ -143,7 +150,10 @@ void ExecutorVex::runImage(void)
 	globalObjects.clear();
 	globalAddresses.clear();
 
+	fprintf(stderr, "STIL LCLEANING\n");
 	if (statsTracker) statsTracker->done();
+
+	fprintf(stderr, "OK.\n");
 }
 
 
@@ -153,6 +163,7 @@ void ExecutorVex::prepState(ExecutionState* state, Function* f)
 	setupProcessMemory(state, f);
 }
 
+#define STACK_EXTEND 0x100000
 void ExecutorVex::setupProcessMemory(ExecutionState* state, Function* f)
 {
 	std::list<GuestMemoryRange*> memmap(gs->getMemoryMap());
@@ -161,20 +172,33 @@ void ExecutorVex::setupProcessMemory(ExecutionState* state, Function* f)
 		MemoryObject		*mmap_mo;
 		ObjectState		*mmap_os;
 		unsigned int		len;
+		unsigned int		copy_offset;
 		const char		*data;
 
 		gmr = *it;
+
 		len = gmr->getBytes();
-		mmap_mo = memory->allocateFixed(
-			(uint64_t)gmr->getGuestAddr(),
-			len,
-			f->begin()->begin(),
-			state);
+		if (gmr->isStack()) {
+			mmap_mo = memory->allocateFixed(
+				((uint64_t)gmr->getGuestAddr())-STACK_EXTEND,
+				len+STACK_EXTEND,
+				f->begin()->begin(),
+				state);
+			copy_offset = STACK_EXTEND;
+			mmap_mo->setName("stack");
+		} else {
+			mmap_mo = memory->allocateFixed(
+				((uint64_t)gmr->getGuestAddr()),
+				len,
+				f->begin()->begin(),
+				state);
+			copy_offset = 0;
+		}
 
 		data = (const char*)gmr->getData();
 		mmap_os = bindObjectInState(*state, mmap_mo, false);
 		for (unsigned int i = 0; i < len; i++) {
-			state->write8(mmap_os, i, data[i]);
+			state->write8(mmap_os, i+copy_offset, data[i]);
 		}
 		delete gmr;
 	}
@@ -193,6 +217,7 @@ void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
 		state_regctx_sz,
 		false, true,
 		f->begin()->begin(), state);
+	state_regctx_mo->setName("regctx");
 	args.push_back(state_regctx_mo->getBaseExpr());
 
 	if (symPathWriter) state->symPathOS = symPathWriter->open();
@@ -260,6 +285,7 @@ Function* ExecutorVex::getFuncFromAddr(uint64_t guest_addr)
 
 	/* !cached => put in cache, alert kmodule, other bookkepping */
 	f = xlate_cache->getFunc((void*)host_addr, guest_addr);
+	if (f == NULL) return NULL;
 
 	/* need to know func -> vsb to compute func's guest address */
 	vsb = xlate_cache->getCachedVSB(guest_addr);
@@ -269,6 +295,7 @@ Function* ExecutorVex::getFuncFromAddr(uint64_t guest_addr)
 
 	/* stupid kmodule stuff */
 	kf = kmodule->addFunction(f);
+	statsTracker->addKFunction(kf);
 	bindKFuncConstants(kf);
 	bindModuleConstTable(); /* XXX slow */
 
@@ -362,26 +389,33 @@ bool ExecutorVex::xferIterNext(struct XferStateIter& iter)
 	(void) success;
 
 	iter.res = fork(*(iter.free), EqExpr::create(iter.v, value), true);
-	if (!iter.res.first) {
-		iter.first = false;
-		iter.free = iter.res.second;
+	iter.first = false;
+	iter.free = iter.res.second;
+
+	if (!iter.res.first) return xferIterNext(iter);
+
+	addr = value->getZExtValue();
+	if (addr == 0 || addr > 0x7fffffffffffULL) {
+		terminateStateOnError(
+			*(iter.res.first),
+			"fork error: jumping to bad pointer",
+			"badjmp.err");
 		return xferIterNext(iter);
 	}
 
-	addr = value->getZExtValue();
 	iter.f = getFuncFromAddr(addr);
 	assert (iter.f != NULL && "BAD FUNCTION TO JUMP TO");
 
 	// Don't give warning on unique resolution
 	if (iter.res.second || !iter.first) {
+	// don't warn here since symbolic jumps are so frequent in MC.. 
+	#if 0
 		klee_warning_once(
 			(void*) (unsigned long) addr,
 			"resolved symbolic function pointer to: %s",
 			iter.f->getName().data());
+	#endif
 	}
-
-	iter.first = false;
-	iter.free = iter.res.second;
 
 	return true;
 }
@@ -433,64 +467,14 @@ void ExecutorVex::handleXferCall(ExecutionState& state, KInstruction* ki)
 	}
 }
 
-// XXX HACK. Make klee core worry about this
-static const klee::MemoryObject* findMemObj(MemoryMap* mm, uint64_t addr)
-{
-	foreach (it, mm->begin(), mm->end()) {
-		const MemoryObject* mo;
-		mo = (*it).first;
-		if (mo->address <= addr &&
-		    mo->address+mo->size > addr )
-		    return mo;
-	}
-	return NULL;
-}
-
 void ExecutorVex::sc_writev(ExecutionState& state)
 {
-#if 0
-	SyscallParams		sp(gs->getSyscallParams());
-	uintptr_t		guest_iov = sp.getArg(1);
-	int			guest_iovcnt = sp.getArg(2);
-	const MemoryObject	*cur_mo;
-
-	fprintf(stderr, "IOVPTR: %p count=%d\n",
-		guest_iov, guest_iovcnt);
-
-	cur_mo = findMemObj(&state.addressSpace.objects, guest_iov);
-	fprintf(stderr, "got guest iov-mo: %p (sz=%d)\n", cur_mo, cur_mo->size);
-
-	fprintf(stderr, "WRITEV!!\n");
-	for (int i = 0; i < guest_iovcnt; i++) {
-		struct iovec	iov;
-		unsigned	mo_off;
-		bool		ok_copy;
-
-		mo_off = (guest_iov - cur_mo->address)
-			+ i*sizeof(struct iovec);
-
-		fprintf(stderr, "mo_off = %p\n", mo_off);
-		ok_copy = state.addressSpace.copyToBuf(
-			cur_mo, &iov, mo_off, sizeof(iov));
-		assert (ok_copy);
-
-		fprintf(stderr, "iov[%d] = %p. len=%d\n",
-			i, iov.iov_base, iov.iov_len);
-
-	}
-#endif
 	/* doesn't affect proces state! AIEE */
-	sc_jiggle(state);
+	sc_ret_ge0(state);
 	return;
 }
 
-
-/**
- * a syscall that modifies the return and clobber registers
- * rax, rcx, r11
- * Does not modify any memory.
- */
-ObjectState* ExecutorVex::sc_jiggle(ExecutionState& state)
+ObjectState* ExecutorVex::makeSCRegsSymbolic(ExecutionState& state)
 {
 	ObjectState		*state_regctx_os;
 	const ObjectState	*old_regctx_os;
@@ -503,7 +487,8 @@ ObjectState* ExecutorVex::sc_jiggle(ExecutionState& state)
 	old_regctx_os = state.addressSpace.findObject(state_regctx_mo);
 
 	/* 1. make all of symbolic */
-	state_regctx_os = executeMakeSymbolic(state, state_regctx_mo);
+	state.constraints.removeConstraintsPrefix("reg");
+	state_regctx_os = executeMakeSymbolic(state, state_regctx_mo, "reg");
 
 	/* 2. set everything that should be initialized */
 	const char*  state_data = (const char*)gs->getCPUState()->getStateData();
@@ -525,19 +510,129 @@ ObjectState* ExecutorVex::sc_jiggle(ExecutionState& state)
 	return state_regctx_os;
 }
 
+ObjectState* ExecutorVex::sc_ret_ge0(ExecutionState& state)
+{
+	ObjectState		*state_regctx_os;
+	bool			constrained;
+	ref<Expr>		success_constraint;
+
+	state_regctx_os = makeSCRegsSymbolic(state);
+
+	/* 3. force zero <= sysret; sysret >= 0; no errors */
+	success_constraint = SleExpr::create(
+		ConstantExpr::create(0, 64),
+		state.read(
+			state_regctx_os,
+			offsetof(VexGuestAMD64State, guest_RAX),
+			64));
+
+	constrained = addConstraint(state, success_constraint);
+	assert (constrained); // symbolic, should always succeed..
+	
+	return state_regctx_os;
+}
+
+
+ObjectState* ExecutorVex::sc_ret_le0(ExecutionState& state)
+{
+	ObjectState		*state_regctx_os;
+	bool			constrained;
+	ref<Expr>		success_constraint;
+
+	state_regctx_os = makeSCRegsSymbolic(state);
+
+	/* 3. force zero >= sysret;  sysret <= zero; sometimes errors */
+	success_constraint = SgeExpr::create(
+		ConstantExpr::create(0, 64),
+		state.read(
+			state_regctx_os,
+			offsetof(VexGuestAMD64State, guest_RAX),
+			64));
+
+	constrained = addConstraint(state, success_constraint);
+	assert (constrained); // symbolic, should always succeed..
+	
+	return state_regctx_os;
+}
+
+
+ObjectState* ExecutorVex::sc_ret_range(
+	ExecutionState& state,
+	uint64_t lo, uint64_t hi)
+{
+	ObjectState		*state_regctx_os;
+	bool			constrained;
+	ref<Expr>		success_constraint;
+
+	state_regctx_os = makeSCRegsSymbolic(state);
+
+	success_constraint = SleExpr::create(
+		ConstantExpr::create(lo, 64),
+		state.read(
+			state_regctx_os,
+			offsetof(VexGuestAMD64State, guest_RAX),
+			64));
+
+	constrained = addConstraint(state, success_constraint);
+	assert (constrained); // symbolic, should always succeed..
+
+	success_constraint = SgeExpr::create(
+		ConstantExpr::create(hi, 64),
+		state.read(
+			state_regctx_os,
+			offsetof(VexGuestAMD64State, guest_RAX),
+			64));
+
+	constrained = addConstraint(state, success_constraint);
+	assert (constrained); // symbolic, should always succeed..
+
+	return state_regctx_os;
+}
+
+
+
+void ExecutorVex::sc_munmap(ExecutionState& state)
+{
+	SyscallParams		sp(gs->getSyscallParams());
+	uint64_t		addr;
+	uint64_t		len;
+	const MemoryObject	*mo;
+
+	addr = sp.getArg(0);
+	len = sp.getArg(1);
+	mo = state.addressSpace.resolveOneMO(addr);
+	assert (mo);
+	fprintf(stderr, "FREEING %p-%p, mo=%p-%p\n",
+		addr, addr+len, mo->address, mo->address+mo->size);
+	assert (mo->size == len && mo->address == addr);
+	state.addressSpace.unbindObject(mo);
+	sc_ret_le0(state);
+}
+
 void ExecutorVex::sc_fail(ExecutionState& state)
 {
-	ObjectState	*state_regctx_os;
-	
-	state_regctx_os = sc_jiggle(state);
+	sc_ret_v(state, -1);
+}
 
-	/* set RAX=0xf...f =-1, failing it */
-	for (unsigned int i = 0; i < 8; i++) {
-		state.write8(
-			state_regctx_os,
-			i+offsetof(VexGuestAMD64State, guest_RAX),
-			0xff);
-	}
+void ExecutorVex::sc_stat(ExecutionState& state)
+{
+	SyscallParams		sp(gs->getSyscallParams());
+	ObjectState		*os_statbuf;
+	uint64_t		statbuf_addr;
+	const MemoryObject	*mo_statbuf;
+
+	statbuf_addr = sp.getArg(1);
+	mo_statbuf = state.addressSpace.resolveOneMO(statbuf_addr);
+	
+	/* set stat structure as symbolic */
+	os_statbuf = executeMakeSymbolic(
+		state,
+		mo_statbuf,
+		ConstantExpr::alloc(sizeof(struct stat), 32),
+		"statbuf");
+
+	/* fail or success */
+	sc_ret_le0(state);
 }
 
 void ExecutorVex::updateGuestRegs(ExecutionState& state)
@@ -547,12 +642,60 @@ void ExecutorVex::updateGuestRegs(ExecutionState& state)
 	state.addressSpace.copyToBuf(state_regctx_mo, guest_regs);
 }
 
+
+void ExecutorVex::sc_read(ExecutionState& state)
+{
+	SyscallParams		sp(gs->getSyscallParams());
+	uint64_t		buf_sz, buf_addr;
+	ObjectState		*os;
+	const MemoryObject	*mo;
+
+	buf_addr = sp.getArg(1);
+	buf_sz = sp.getArg(2);
+	mo = state.addressSpace.resolveOneMO(buf_addr);
+
+	os = executeMakeSymbolic(
+		state,
+		mo,
+		ConstantExpr::alloc(buf_sz, 32),
+		"readbuf");
+
+	sc_ret_v(state, buf_sz);
+}
+
+void ExecutorVex::sc_getcwd(ExecutionState& state)
+{
+	SyscallParams		sp(gs->getSyscallParams());
+	uint64_t		buf_sz, buf_addr;
+	ObjectState		*os_cwdbuf;
+	const MemoryObject	*mo_cwdbuf;
+
+	buf_addr = sp.getArg(0);
+	buf_sz = sp.getArg(1);
+	mo_cwdbuf = state.addressSpace.resolveOneMO(buf_addr);
+	
+	/* return symbolic path name */
+	os_cwdbuf = executeMakeSymbolic(
+		state,
+		mo_cwdbuf,
+		ConstantExpr::alloc(buf_sz, 32),
+		"cwdbuf");
+
+	/* ensure buffer is null-terminated */
+	state.write8(
+		os_cwdbuf, 
+		(buf_addr - mo_cwdbuf->address) + (buf_sz-1),
+		0);
+
+	/* TODO: simulate errors */
+	sc_ret_v(state, buf_addr);
+}
+
 void ExecutorVex::sc_mmap(ExecutionState& state, KInstruction* ki)
 {
 	SyscallParams		sp(gs->getSyscallParams());
 	MemoryObject		*new_mo;
 	ObjectState		*new_os;
-	ObjectState		*state_regctx_os;
 	uint64_t		addr = sp.getArg(0);
 	uint64_t		length = sp.getArg(1);
 	uint64_t		prot = sp.getArg(2);
@@ -571,8 +714,7 @@ void ExecutorVex::sc_mmap(ExecutionState& state, KInstruction* ki)
 			false /* global */, 
 			ki->inst,
 			&state);
-		assert (new_mo && "Couldn't allocate on mmap?");
-		addr = new_mo->address;
+		if (new_mo) addr = new_mo->address;
 	} else {
 		/* requesting an address */
 		new_mo = addExternalObject(
@@ -580,23 +722,36 @@ void ExecutorVex::sc_mmap(ExecutionState& state, KInstruction* ki)
 			((prot & PROT_WRITE) == 0) /* isReadOnly */);
 	}
 
-	assert (new_mo != NULL && "Could not create new memory object");
+	if (new_mo == NULL) {
+		/* Couldn't create memory object, 
+		 * most likely because size was too big */
+		sc_fail(state);
+		return;
+	}
 
 	/* returned data will be symbolic */
-	new_os = executeMakeSymbolic(state, new_mo);
+	new_mo->setName("mmaped");
+	new_os = executeMakeSymbolic(state, new_mo, "mmap");
 	assert (new_os != NULL && "Could not make object state");
 	if ((prot & PROT_WRITE) == 0)
 		new_os->setReadOnly(true);
 
 	/* always succeed */
 	/* TODO: should we enable failures here? */
+	sc_ret_v(state, addr);
+
+	fprintf(stderr, "MMAP ADDR=%p-%p\n", addr, addr + length);
+}
+
+void ExecutorVex::sc_ret_v(ExecutionState& state, uint64_t v)
+{
+	ObjectState* state_regctx_os;
 	state_regctx_os = state.addressSpace.findObject(state_regctx_mo);
 	state.write64(
 		state_regctx_os, 
 		offsetof(VexGuestAMD64State, guest_RAX),
-		addr);
+		v);
 }
-
 
 /* system calls serve three purposes: 
  * 1. xfer data
@@ -618,22 +773,56 @@ bool ExecutorVex::handleXferSyscall(
 
 	sys_nr = sp.getSyscall();
 
-	fprintf(stderr, "SYSCALL!\n");
-	gs->print(std::cerr);
+	fprintf(stderr, "SYSCALL %d! sm=%d\n", 
+		sys_nr,
+		stateManager->size());
 
 	sc_dispatched++;
 	switch(sys_nr) {
+	case SYS_sched_setaffinity:
+	case SYS_sched_getaffinity:
+		sc_fail(state);
+		break;
+	case SYS_fadvise64:
+		sc_ret_v(state, 0);
+		break;
+	case SYS_read:
+		if (rand() % 2) 
+			sc_fail(state);
+		else 
+			sc_read(state);
+		break;
+	case SYS_open:
+		/* what kind of checks do we care about here? */
+		sc_ret_ge0(state);
+		break;
+	case SYS_write:
+		sc_ret_ge0(state);
+		break;
 	case SYS_writev: {
 		// fd, iov, iovcnt
-		sc_jiggle(state);
+		sc_ret_ge0(state);
 		break;
 	}
+	case SYS_fstat:
+	case SYS_stat:
+		sc_stat(state);
+		break;
+	case SYS_getcwd:
+		sc_getcwd(state);
+		break;
 	case SYS_brk:
 		// always fail this, just like in pt_run
 		sc_fail(state);
 		break;
 	case SYS_ioctl:
-		sc_jiggle(state);
+		sc_ret_ge0(state);
+		break;
+	case SYS_mremap:
+		sc_fail(state);
+		break;
+	case SYS_munmap:
+		sc_munmap(state);
 		break;
 	case SYS_mmap:
 		sc_mmap(state, ki);
@@ -643,8 +832,13 @@ bool ExecutorVex::handleXferSyscall(
 		fprintf(stderr, "EXITING ON sys_nr=%d\n", sys_nr);
 		ret = false;
 		goto done;
+	case SYS_rt_sigaction:
+		/* TODO: fake sigaction struct? */
+		sc_ret_v(state, 0);
+		break;
 	default:
 		fprintf(stderr, "UNKNOWN SYSCALL 0x%x\n", sys_nr);
+		gs->print(std::cerr);
 		assert (0 == 1);
 		break;
 	}

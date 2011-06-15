@@ -96,16 +96,21 @@ private:
 		ExecutionState& state, KInstruction* ki);
 	void jumpToKFunc(ExecutionState& state, KFunction* kf);
 
-	void sc_writev(ExecutionState& state);
-	ObjectState* sc_jiggle(ExecutionState& state);
+	ObjectState* sc_ret_ge0(ExecutionState& state);
+	ObjectState* sc_ret_le0(ExecutionState& state);
+	ObjectState* sc_ret_range(
+		ExecutionState& state, uint64_t lo, uint64_t hi);
+	void sc_ret_v(ExecutionState& state, uint64_t v);
 	void sc_fail(ExecutionState& state);
+
+	void sc_writev(ExecutionState& state);
+	void sc_getcwd(ExecutionState& state);
+	void sc_read(ExecutionState& state);
 	void sc_mmap(ExecutionState& state, KInstruction* ki);
-
-	void osWrite64(ExecutionState& state,
-		ObjectState* os, 
-		uint64_t addr,
-		uint64_t data);
-
+	void sc_munmap(ExecutionState& state);
+	void sc_stat(ExecutionState& state);
+	
+	ObjectState* makeSCRegsSymbolic(ExecutionState& state);
 
 	struct XferStateIter
 	{

@@ -11,7 +11,9 @@
 
 #include "klee/util/ExprPPrinter.h"
 #include "klee/util/ExprVisitor.h"
+#include "static/Sugar.h"
 
+#include <string.h>
 #include <iostream>
 #include <map>
 
@@ -46,7 +48,7 @@ private:
   const std::map< ref<Expr>, ref<Expr> > &replacements;
 
 public:
-  ExprReplaceVisitor2(const std::map< ref<Expr>, ref<Expr> > &_replacements) 
+  ExprReplaceVisitor2(const std::map< ref<Expr>, ref<Expr> > &_replacements)
     : ExprVisitor(true),
       replacements(_replacements) {}
 
@@ -61,17 +63,53 @@ public:
   }
 };
 
-bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor) {
+class ExprPrefixMatchVisitor : public ExprVisitor
+{
+private:
+	int		len;
+	const char*	prefix;
+	bool		matched;
+
+public:
+	ExprPrefixMatchVisitor(int in_len, const char* in_prefix)
+	: ExprVisitor(true),
+	  len(in_len),
+	  prefix(in_prefix),
+	  matched(false) {}
+
+	Action visitExpr(const Expr &e)
+	{
+		const ReadExpr* re;
+
+		if (matched) return Action::skipChildren();
+
+		re = dyn_cast<const ReadExpr>(&e);
+		if (!re) return Action::doChildren();
+
+		if (re->updates.root->name.size() < len)
+			return Action::doChildren();
+
+		if (memcmp(re->updates.root->name.c_str(), prefix, len))
+			return Action::doChildren();
+
+		matched = true;
+		return Action::skipChildren();
+	}
+
+	bool isMatched(void) const { return matched; }
+};
+
+bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor)
+{
   ConstraintManager::constraints_ty old;
   bool changed = false;
 
   constraints.swap(old);
-  for (ConstraintManager::constraints_ty::iterator 
-         it = old.begin(), ie = old.end(); it != ie; ++it) {
+  foreach (it, old.begin(), old.end()) {
     ref<Expr> &ce = *it;
     ref<Expr> e = visitor.visit(ce);
 
-    if (e!=ce) {
+    if (e != ce) {
       addConstraintInternal(e); // enable further reductions
       changed = true;
     } else {
@@ -82,77 +120,84 @@ bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor) {
   return changed;
 }
 
-void ConstraintManager::simplifyForValidConstraint(ref<Expr> e) {
-  // XXX 
+void ConstraintManager::simplifyForValidConstraint(ref<Expr> e)
+{
+	assert (0 == 1 && "STUB");
 }
 
-ref<Expr> ConstraintManager::simplifyExpr(ref<Expr> e) const {
-  if (isa<ConstantExpr>(e))
-    return e;
+ref<Expr> ConstraintManager::simplifyExpr(ref<Expr> e) const
+{
+  if (isa<ConstantExpr>(e)) return e;
 
   std::map< ref<Expr>, ref<Expr> > equalities;
-  
-  for (ConstraintManager::constraints_ty::const_iterator 
-         it = constraints.begin(), ie = constraints.end(); it != ie; ++it) {
+
+  foreach(it, constraints.begin(), constraints.end()) {
     if (const EqExpr *ee = dyn_cast<EqExpr>(*it)) {
       if (isa<ConstantExpr>(ee->left)) {
-        equalities.insert(std::make_pair(ee->right,
-                                         ee->left));
+        equalities.insert(std::make_pair(ee->right, ee->left));
       } else {
-        equalities.insert(std::make_pair(*it,
-                                         ConstantExpr::alloc(1, Expr::Bool)));
+        equalities.insert(std::make_pair(
+          *it, ConstantExpr::alloc(1, Expr::Bool)));
       }
     } else {
-      equalities.insert(std::make_pair(*it,
-                                       ConstantExpr::alloc(1, Expr::Bool)));
+      equalities.insert(std::make_pair(
+        *it, ConstantExpr::alloc(1, Expr::Bool)));
     }
   }
 
   return ExprReplaceVisitor2(equalities).visit(e);
 }
 
-void ConstraintManager::addConstraintInternal(ref<Expr> e) {
-  // rewrite any known equalities 
+bool ConstraintManager::addConstraintInternal(ref<Expr> e)
+{
+	// rewrite any known equalities, return false if
+	// we find ourselves with a contradiction. This means that
+	// the constraint we're adding can't happen!
 
-  // XXX should profile the effects of this and the overhead.
-  // traversing the constraints looking for equalities is hardly the
-  // slowest thing we do, but it is probably nicer to have a
-  // ConstraintSet ADT which efficiently remembers obvious patterns
-  // (byte-constant comparison).
+	// XXX should profile the effects of this and the overhead.
+	// traversing the constraints looking for equalities is hardly the
+	// slowest thing we do, but it is probably nicer to have a
+	// ConstraintSet ADT which efficiently remembers obvious patterns
+	// (byte-constant comparison).
+	switch (e->getKind()) {
+	case Expr::Constant:
+	//	assert(cast<ConstantExpr>(e)->isTrue() &&
+	//	"attempt to add invalid (false) constraint");
 
-  switch (e->getKind()) {
-  case Expr::Constant:
-    assert(cast<ConstantExpr>(e)->isTrue() && 
-           "attempt to add invalid (false) constraint");
-    break;
-    
-    // split to enable finer grained independence and other optimizations
-  case Expr::And: {
-    BinaryExpr *be = cast<BinaryExpr>(e);
-    addConstraintInternal(be->left);
-    addConstraintInternal(be->right);
-    break;
-  }
+		if (!cast<ConstantExpr>(e)->isTrue())
+			return false;
+		return true;
 
-  case Expr::Eq: {
-    BinaryExpr *be = cast<BinaryExpr>(e);
-    if (isa<ConstantExpr>(be->left)) {
-      ExprReplaceVisitor visitor(be->right, be->left);
-      rewriteConstraints(visitor);
-    }
-    constraints.push_back(e);
-    break;
-  }
-    
-  default:
-    constraints.push_back(e);
-    break;
-  }
+	// split to enable finer grained independence and other optimizations
+	case Expr::And: {
+		BinaryExpr *be = cast<BinaryExpr>(e);
+		if (!addConstraintInternal(be->left)) return false;
+		if (!addConstraintInternal(be->right)) return false;
+		return true;
+	}
+
+	case Expr::Eq: {
+		BinaryExpr *be = cast<BinaryExpr>(e);
+		if (isa<ConstantExpr>(be->left)) {
+			ExprReplaceVisitor visitor(be->right, be->left);
+			rewriteConstraints(visitor);
+		}
+		constraints.push_back(e);
+		return true;
+	}
+
+	default:
+		constraints.push_back(e);
+		return true;
+	}
+
+	return true;
 }
 
-void ConstraintManager::addConstraint(ref<Expr> e) {
+bool ConstraintManager::addConstraint(ref<Expr> e)
+{
   e = simplifyExpr(e);
-  addConstraintInternal(e);
+  return addConstraintInternal(e);
 }
 
 void ConstraintManager::print(std::ostream& os) const
@@ -161,4 +206,17 @@ void ConstraintManager::print(std::ostream& os) const
     constraints[i]->print(os);
     os << "\n";
   }
+}
+
+void ConstraintManager::removeConstraintsPrefix(const char* prefix)
+{
+	int	prefix_len = strlen(prefix);
+
+	foreach (it, constraints.begin(), constraints.end()) {
+		ExprPrefixMatchVisitor	visitor(prefix_len, prefix);
+		ref<Expr>		e = *it;
+		visitor.visit(e);
+		if (visitor.isMatched())
+			constraints.erase(it);
+	}
 }

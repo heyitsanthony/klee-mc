@@ -205,7 +205,7 @@ public:
     symbolics.push_back(SymbolicArray(mo, array, len));
   }
 
-  void addConstraint(ref<Expr> constraint);
+  bool addConstraint(ref<Expr> constraint);
   bool merge(const ExecutionState &b);
 
   void copy(ObjectState* os, const ObjectState* reallocFrom, unsigned count);

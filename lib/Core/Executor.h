@@ -213,9 +213,21 @@ protected:
         llvm::Function *f,
         std::vector< ref<Expr> > &arguments);
 
-  ObjectState* executeMakeSymbolic(ExecutionState &state, const MemoryObject *mo);
+  /// Add the given (boolean) condition as a constraint on state. This
+  /// function is a wrapper around the state's addConstraint function
+  /// which also manages manages propogation of implied values,
+  /// validity checks, and seed patching.
+  bool addConstraint(ExecutionState &state, ref<Expr> condition);
+
   ObjectState* executeMakeSymbolic(
-    ExecutionState& state, const MemoryObject* mo, ref<Expr> len);
+  	ExecutionState &state,
+	const MemoryObject *mo,
+	const char* arrPrefix = "arr");
+  ObjectState* executeMakeSymbolic(
+    ExecutionState& state,
+    const MemoryObject* mo,
+    ref<Expr> len,
+    const char* arrPrefix = "arr");
 
   // Given a concrete object in our [klee's] address space, add it to 
   // objects checked code can reference.
@@ -396,17 +408,14 @@ private:
     ref<Expr> value,
     KInstruction* target);
 
-  void mergeStringStates(ref<Expr>& readExpr);
-
-  bool isStrcmpMatch(
-    const Expr  *expr,
-    unsigned int idx, const std::string& arrName,
-    unsigned int& re_idx, unsigned int& cmp_val);
-
   ObjectState* makeSymbolicReplay(
     ExecutionState& state, const MemoryObject* mo, ref<Expr> len);
+
   ObjectState* makeSymbolic(
-    ExecutionState& state, const MemoryObject* mo, ref<Expr> len);
+    ExecutionState& state,
+    const MemoryObject* mo,
+    ref<Expr> len,
+    const char* arrPrefix = "arr");
 
   bool isForkingCondition(ExecutionState& current, ref<Expr> condition);
   bool isForkingCallPath(CallPathNode* cpn);
@@ -440,12 +449,6 @@ private:
   // current state, and one of the states may be null.
   StatePair fork(ExecutionState &current, ref<Expr> condition, bool isInternal);
 #endif
-
-  /// Add the given (boolean) condition as a constraint on state. This
-  /// function is a wrapper around the state's addConstraint function
-  /// which also manages manages propogation of implied values,
-  /// validity checks, and seed patching.
-  void addConstraint(ExecutionState &state, ref<Expr> condition);
 
   // Called on [for now] concrete reads, replaces constant with a symbolic
   // Used for testing.

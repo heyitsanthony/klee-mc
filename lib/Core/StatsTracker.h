@@ -54,7 +54,6 @@ namespace klee {
 
   private:
     class TimeAmountFormat;
-    void addKFunction(KFunction*);
     void trackInstTime(ExecutionState& es);
     void stepInstUpdateFrame(ExecutionState &es);
     void updateStateStatistics(uint64_t addend);
@@ -71,6 +70,8 @@ namespace klee {
                 const std::vector<std::string> &excludeCovFiles,
                 bool _updateMinDistToUncovered);
     ~StatsTracker();
+
+    void addKFunction(KFunction*);
 
     // called after a new StackFrame has been pushed (for callpath tracing)
     void framePushed(ExecutionState &es, StackFrame *parentFrame);

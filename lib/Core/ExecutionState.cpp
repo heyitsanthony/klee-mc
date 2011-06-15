@@ -191,9 +191,9 @@ Cell& ExecutionState::readLocalCell(unsigned sfi, unsigned i) const
 	return sf.locals[i];
 }
 
-void ExecutionState::addConstraint(ref<Expr> constraint)
+bool ExecutionState::addConstraint(ref<Expr> constraint)
 {
-    constraints.addConstraint(constraint);
+	return constraints.addConstraint(constraint);
 }
 
 Cell& ExecutionState::getLocalCell(unsigned sfi, unsigned i) const

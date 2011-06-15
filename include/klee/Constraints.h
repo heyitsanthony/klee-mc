@@ -43,28 +43,20 @@ public:
 
   ref<Expr> simplifyExpr(ref<Expr> e) const;
 
-  void addConstraint(ref<Expr> e);
+  bool addConstraint(ref<Expr> e);
   
-  bool empty() const {
-    return constraints.empty();
-  }
-  ref<Expr> back() const {
-    return constraints.back();
-  }
-  constraint_iterator begin() const {
-    return constraints.begin();
-  }
-  constraint_iterator end() const {
-    return constraints.end();
-  }
-  size_t size() const {
-    return constraints.size();
-  }
+  bool empty() const { return constraints.empty(); }
+  ref<Expr> back() const { return constraints.back(); }
+  constraint_iterator begin() const { return constraints.begin(); }
+  constraint_iterator end() const { return constraints.end(); }
+  size_t size() const { return constraints.size(); }
 
   bool operator==(const ConstraintManager &other) const {
     return constraints == other.constraints;
   }
  
+  void removeConstraintsPrefix(const char* prefix);
+
   void print(std::ostream& os) const;
 private:
   std::vector< ref<Expr> > constraints;
@@ -72,7 +64,7 @@ private:
   // returns true iff the constraints were modified
   bool rewriteConstraints(ExprVisitor &visitor);
 
-  void addConstraintInternal(ref<Expr> e);
+  bool addConstraintInternal(ref<Expr> e);
 };
 
 }

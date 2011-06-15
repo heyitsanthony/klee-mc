@@ -57,12 +57,9 @@ ObjectState *AddressSpace::getWriteable(const MemoryObject *mo,
   }
 }
 
-/// fucking hell fix this
-bool AddressSpace::resolveOne(
-	const ref<ConstantExpr> &addr,
-        ObjectPair &result)
+
+bool AddressSpace::resolveOne(uint64_t address, ObjectPair &result)
 {
-  uint64_t address = addr->getZExtValue();
   MemoryObject _hack(address);
 
   //if (!hack) hack = &_hack;
@@ -83,12 +80,21 @@ bool AddressSpace::resolveOne(
     return true;
   }
 
-
-  fprintf(stderr, "resolveOne. addr: %p. OUT OF BOUNDS (%p,%p)\n", 
-  	address, mo->address, mo->address + mo->size);
- std::cerr << objects;
- std::cerr << "\n";
   return false;
+}
+
+const MemoryObject* AddressSpace::resolveOneMO(uint64_t address)
+{
+	ObjectPair	result;
+	if (!resolveOne(address, result))
+		return NULL;
+	return result.first;
+}
+
+/// fucking hell fix this
+bool AddressSpace::resolveOne(const ref<ConstantExpr> &addr, ObjectPair &result)
+{
+	return resolveOne(addr->getZExtValue(), result);
 }
 
 MemoryMap::iterator AddressSpace::getMidPoint(
@@ -231,8 +237,6 @@ bool AddressSpace::resolveOne(
 	
 			low = cur.first->first;
 			high = cur.second->first;
-			    fprintf(stderr, "CHECKING2 lo=%p... hi=%p...\n", 
-				low->address, high->address);
 
 			if (!isFeasibleRange(state, solver, address, low, high))
 				continue;
@@ -353,8 +357,6 @@ bool AddressSpace::resolve(ExecutionState &state,
     tryRanges.pop();
 
     // Check whether current range of MemoryObjects is feasible
-    fprintf(stderr, "CHECKING lo=%p... hi=%p...\n", 
-    	low->address, high->address);
     if (!isFeasibleRange(state, solver, p, low, high))
     	continue; // XXX return true on query error
 

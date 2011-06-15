@@ -60,6 +60,8 @@ void MemoryObject::print(std::ostream& out) const
   out << 
     "MO. Name=" << name << 
     ". Addr=" << (void*)address <<
+    "-" << (void*)(address+size) <<
+    ". Size=" << size <<
     ". ID=" << id;
 }
 
