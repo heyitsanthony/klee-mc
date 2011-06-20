@@ -9,7 +9,11 @@
 
 #include "KleeHandler.h"
 
+#include <zlib.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <dirent.h>
 #include <cerrno>
 #include <iostream>
@@ -222,6 +226,84 @@ std::ostream *KleeHandler::openTestFile(const std::string &suffix, unsigned id)
 }
 
 
+void KleeHandler::processSuccessfulTest(unsigned id, out_objs& out)
+{
+	KTest		b;
+	bool		ktest_ok;
+	std::string	fname;
+
+	b.numArgs = cmdargs->getArgc();
+	b.args = cmdargs->getArgv();
+	b.symArgvs = 0;
+	b.symArgvLen = 0;
+	b.numObjects = out.size();
+	b.objects = new KTestObject[b.numObjects];
+	assert(b.objects);
+	for (unsigned i=0; i<b.numObjects; i++) {
+		KTestObject *o = &b.objects[i];
+		o->name = const_cast<char*>(out[i].first.c_str());
+		o->numBytes = out[i].second.size();
+		o->bytes = new unsigned char[o->numBytes];
+		assert(o->bytes);
+		std::copy(out[i].second.begin(), out[i].second.end(), o->bytes);
+	}
+
+	errno = 0;
+	fname = getTestFilename("ktest", id);
+	ktest_ok = kTest_toFile(&b, fname.c_str());
+	if (!ktest_ok) {
+		klee_warning(
+		"unable to write output test case, losing it (errno=%d: %s)",
+		errno,
+		strerror(errno));
+	}
+
+	for (unsigned i=0; i<b.numObjects; i++)
+		delete[] b.objects[i].bytes;
+	delete[] b.objects;
+
+	gzipKTest(fname);
+}
+
+bool KleeHandler::gzipKTest(const std::string& fname)
+{
+	char 	buf[4096];
+	ssize_t	br;
+	int	ktest_fd, err;
+	gzFile	gzF;
+
+	/* create fresh gz file */
+	gzF = gzopen((fname + ".gz").c_str(), "w");
+	if (gzF == NULL) {
+		klee_warning(
+			"unable to gz output test case, derp (errno=%d: %s)",
+			errno,
+			strerror(errno));
+		return false;
+	}
+
+	/* copy file to gz file */
+	ktest_fd  = open(fname.c_str(), O_RDONLY);
+	if (ktest_fd < 0) {
+		gzclose(gzF);
+		return false;
+	}
+
+	while ((br = read(ktest_fd, buf, 4096)) > 0) {
+		gzwrite(gzF, buf, br);
+		if (br < 4096)
+			break;
+	}
+	close(ktest_fd);
+	gzclose(gzF);
+
+	/* get rid of old file */
+	err = unlink(fname.c_str());
+	if (err != 0) return false;
+
+	return true;
+}
+
 /* Outputs all files (.ktest, .pc, .cov etc.) describing a test case */
 void KleeHandler::processTestCase(const ExecutionState &state,
                                   const char *errorMessage, 
@@ -234,7 +316,7 @@ void KleeHandler::processTestCase(const ExecutionState &state,
 
   if (NoOutput) return;
 
-  std::vector< std::pair<std::string, std::vector<unsigned char> > > out;
+  out_objs out;
   bool success;
 
   fprintf(stderr,  "PROCESS TEST CASE %s. Get symsolution\n", errorMessage);
@@ -247,34 +329,7 @@ void KleeHandler::processTestCase(const ExecutionState &state,
 
   unsigned id = ++m_testIndex;
 
-
-  if (success) {
-    KTest b;      
-    b.numArgs = cmdargs->getArgc();
-    b.args = cmdargs->getArgv();
-    b.symArgvs = 0;
-    b.symArgvLen = 0;
-    b.numObjects = out.size();
-    b.objects = new KTestObject[b.numObjects];
-    assert(b.objects);
-    for (unsigned i=0; i<b.numObjects; i++) {
-      KTestObject *o = &b.objects[i];
-      o->name = const_cast<char*>(out[i].first.c_str());
-      o->numBytes = out[i].second.size();
-      o->bytes = new unsigned char[o->numBytes];
-      assert(o->bytes);
-      std::copy(out[i].second.begin(), out[i].second.end(), o->bytes);
-    }
-
-    errno = 0;
-    if (!kTest_toFile(&b, getTestFilename("ktest", id).c_str())) {
-      klee_warning("unable to write output test case, losing it (errno=%d: %s)", errno, strerror(errno));
-    }
-    
-    for (unsigned i=0; i<b.numObjects; i++)
-      delete[] b.objects[i].bytes;
-    delete[] b.objects;
-  }
+  if (success) processSuccessfulTest(id, out);
 
   if (errorMessage) {
     if (std::ostream* f = openTestFile(errorSuffix, id)) {

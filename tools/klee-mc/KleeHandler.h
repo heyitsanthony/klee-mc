@@ -56,9 +56,15 @@ public:
   static void getOutFiles(std::string path,
 			  std::vector<std::string> &results);
 private:
+typedef 
+	std::vector< std::pair<std::string, std::vector<unsigned char> > >
+	out_objs;
+
 	void setupOutputFiles(void);
 	std::string setupOutputDir(void);
 	bool scanForOutputDir(const std::string& path, std::string& theDir);
+	void processSuccessfulTest(unsigned id, out_objs&);
+	bool gzipKTest(const std::string& test_name);
 };
 
 }
