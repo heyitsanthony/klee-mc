@@ -29,6 +29,10 @@ StatisticManager::~StatisticManager() {
 
 void StatisticManager::useIndexedStats(unsigned totalIndices) {  
   if (indexedStats) delete[] indexedStats;
+  indexedStats = NULL;
+
+  if (totalIndices == 0) return;
+
   indexedStats = new uint64_t[totalIndices * stats.size()];
   memset(indexedStats, 0, sizeof(*indexedStats) * totalIndices * stats.size());
 }

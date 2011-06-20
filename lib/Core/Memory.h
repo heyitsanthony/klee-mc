@@ -56,7 +56,7 @@ class ObjectState {
     friend class AddressSpace;
     friend class ExecutionState;
 private:
-    
+  const Array* src_array;
   unsigned copyOnWriteOwner; // exclusively for AddressSpace
 
   friend class ObjectHolder;
@@ -110,10 +110,14 @@ public:
   bool isByteConcrete(unsigned offset) const;
   bool isByteFlushed(unsigned offset) const;
   bool isByteKnownSymbolic(unsigned offset) const;
+  void markRangeSymbolic(unsigned offset, unsigned len);
+
 
   ref<Expr> read(ref<Expr> offset, Expr::Width width) const;
   ref<Expr> read(unsigned offset, Expr::Width width) const;
   ref<Expr> read8(unsigned offset) const;
+
+  const Array* getArray(void) const { return src_array; }
 private:
 
   // return bytes written.
@@ -124,7 +128,6 @@ private:
   void write16(unsigned offset, uint16_t value);
   void write32(unsigned offset, uint32_t value);
   void write64(unsigned offset, uint64_t value);
-
 private:
   const UpdateList &getUpdates() const;
 

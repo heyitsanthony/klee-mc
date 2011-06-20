@@ -313,6 +313,7 @@ Array::~Array() {
     ::vc_DeleteExpr(stpInitialArray);
     stpInitialArray = 0;
   }
+  chk_val = ~0;
 }
 
 /***/

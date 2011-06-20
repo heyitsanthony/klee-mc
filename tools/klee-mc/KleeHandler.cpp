@@ -235,14 +235,18 @@ void KleeHandler::processTestCase(const ExecutionState &state,
   if (NoOutput) return;
 
   std::vector< std::pair<std::string, std::vector<unsigned char> > > out;
-  bool success = m_interpreter->getSymbolicSolution(state, out);
+  bool success;
 
+  fprintf(stderr,  "PROCESS TEST CASE %s. Get symsolution\n", errorMessage);
+  success = m_interpreter->getSymbolicSolution(state, out);
+  fprintf(stderr,  "PROCESS TEST CASE %s. Got symsolution\n", errorMessage);
   if (!success)
     klee_warning("unable to get symbolic solution, losing test case");
 
   double start_time = util::estWallTime();
 
   unsigned id = ++m_testIndex;
+
 
   if (success) {
     KTest b;      

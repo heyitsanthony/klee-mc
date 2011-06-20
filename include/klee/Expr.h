@@ -17,6 +17,7 @@
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/SmallVector.h"
 
+#include <stdio.h>
 #include <set>
 #include <vector>
 #include <map>
@@ -479,6 +480,8 @@ public:
 };
 
 class Array {
+private:
+  unsigned int chk_val;
 public:
   const std::string name;
   MallocKey mallocKey;
@@ -503,12 +506,15 @@ public:
   /// when printing expressions. When expressions are printed the output will
   /// not parse correctly since two arrays with the same name cannot be
   /// distinguished once printed.
-  Array(const std::string &_name, MallocKey _mallocKey,
+  Array(const std::string &_name,
+        MallocKey _mallocKey,
         const ref<ConstantExpr> *constantValuesBegin = 0,
         const ref<ConstantExpr> *constantValuesEnd = 0)
     : name(_name), mallocKey(_mallocKey),
       constantValues(constantValuesBegin, constantValuesEnd),
-      stpInitialArray(0), refCount(refCountDontCare) {
+      stpInitialArray(0), refCount(refCountDontCare)
+  {
+    chk_val = 0x12345678;
     assert((isSymbolicArray() || constantValues.size() == mallocKey.size) &&
            "Invalid size for constant array!");
 #ifdef NDEBUG
@@ -520,7 +526,7 @@ public:
   }
   ~Array();
 
-  bool isSymbolicArray() const { return constantValues.empty(); }
+  bool isSymbolicArray() const { assert (chk_val == 0x12345678); return constantValues.empty(); }
   bool isConstantArray() const { return !isSymbolicArray(); }
 
   Expr::Width getDomain() const { return Expr::Int32; }
@@ -537,9 +543,9 @@ public:
   // returns true if a < b
   bool operator< (const Array &b) const
   {
-    if (isConstantArray() != b.isConstantArray())
+    if (isConstantArray() != b.isConstantArray()) {
       return isConstantArray() < b.isConstantArray();
-    else if (isConstantArray() && b.isConstantArray()) {
+    } else if (isConstantArray() && b.isConstantArray()) {
       // disregard mallocKey for constant arrays; mallocKey matches are 
       // not a sufficient condition for constant arrays, but value matches are
       if (constantValues.size() != b.constantValues.size())
@@ -552,8 +558,9 @@ public:
       return false; // equal, so NOT less than
     } else if (mallocKey.allocSite && b.mallocKey.allocSite) {
       return mallocKey.compare(b.mallocKey) == -1;
-    } else
+    } else {
       return name < b.name;
+    }
   }
 
   struct Compare

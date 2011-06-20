@@ -132,8 +132,16 @@ protected:
                     unsigned index,
                     ExecutionState &state,
                     ref<Expr> value);
-  ObjectState *bindObjectInState(ExecutionState &state, const MemoryObject *mo,
-                                 bool isLocal, const Array *array = 0);
+  ObjectState *bindObjectInState(
+    ExecutionState &state,
+    const MemoryObject *mo,
+    const Array *array = 0);
+
+  ObjectState *bindObjectInStateStack(
+    ExecutionState &state,
+    const MemoryObject *mo,
+    const Array *array = 0);
+
   void bindLocal(KInstruction *target, 
                  ExecutionState &state, 
                  ref<Expr> value);
@@ -315,6 +323,11 @@ private:
   double stpTimeout;  
 
   bool isDebugIntrinsic(const llvm::Function *f);
+
+  void addSymbolicToSeeds(
+    ExecutionState& state,
+    const MemoryObject* mo,
+    const  Array* array);
 
   void instShuffleVector(ExecutionState& state, KInstruction* ki);
   void instExtractElement(ExecutionState& state, KInstruction* ki);

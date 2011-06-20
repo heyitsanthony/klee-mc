@@ -35,9 +35,10 @@ struct StackFrame {
   KFunction *kf;
   CallPathNode *callPathNode;
 
-  std::vector<const MemoryObject*> allocas;
 //private:
   Cell *locals;
+private:
+  std::vector<const MemoryObject*> allocas;
 public:
   /// Minimum distance to an uncovered instruction once the function
   /// returns. This is not a good place for this but is used to
@@ -57,6 +58,7 @@ public:
   StackFrame(const StackFrame &s);
   ~StackFrame();
   StackFrame& operator=(const StackFrame &s);
+  void addAlloca(const MemoryObject*);
 };
 
 }

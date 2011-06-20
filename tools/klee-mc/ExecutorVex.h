@@ -6,7 +6,7 @@
 #include <hash_map>
 #include <assert.h>
 
-class GuestState;
+class Guest;
 class VexXlate;
 class VexSB;
 class VexFCache;
@@ -31,7 +31,7 @@ public:
 	ExecutorVex(
 		const InterpreterOptions &opts,
 		InterpreterHandler *ie,
-		GuestState* gs);
+		Guest* gs);
 	virtual ~ExecutorVex(void);
 
 	const llvm::Module * setModule(
@@ -68,6 +68,31 @@ protected:
 		llvm::Function *function,
 		std::vector< ref<Expr> > &arguments) { assert (0 == 1 && "STUB"); }
 private:
+	void makeRangeSymbolic(
+		ExecutionState& state, void* addr, unsigned sz,
+		const char* name = NULL);
+
+	void makeSymbolicTail(
+		ExecutionState& state,
+		const MemoryObject* mo,
+		unsigned taken,
+		const char* name);
+	void makeSymbolicHead(
+		ExecutionState& state,
+		const MemoryObject* mo,
+		unsigned taken,
+		const char* name);
+	void makeSymbolicMiddle(
+		ExecutionState& state,
+		const MemoryObject* mo,
+		unsigned mo_off,
+		unsigned taken,
+		const char* name);
+
+	void bindMapping(
+		ExecutionState* state,
+		llvm::Function* f,
+		GuestMem::Mapping m);
 	void bindModuleConstants(void);
 	void bindKFuncConstants(KFunction *kfunc);
 	void bindModuleConstTable(void);
@@ -127,7 +152,7 @@ private:
 	bool xferIterNext(struct XferStateIter& iter);
 
 	func2vsb_map	func2vsb_table;
-	GuestState	*gs;
+	Guest		*gs;
 	VexFCache	*xlate_cache;
 	MemoryObject	*state_regctx_mo;
 

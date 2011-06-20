@@ -15,6 +15,7 @@
 
 #include <string.h>
 #include <iostream>
+#include <list>
 #include <map>
 
 using namespace klee;
@@ -66,12 +67,12 @@ public:
 class ExprPrefixMatchVisitor : public ExprVisitor
 {
 private:
-	int		len;
+	unsigned int	len;
 	const char*	prefix;
 	bool		matched;
 
 public:
-	ExprPrefixMatchVisitor(int in_len, const char* in_prefix)
+	ExprPrefixMatchVisitor(unsigned int in_len, const char* in_prefix)
 	: ExprVisitor(true),
 	  len(in_len),
 	  prefix(in_prefix),
@@ -196,27 +197,32 @@ bool ConstraintManager::addConstraintInternal(ref<Expr> e)
 
 bool ConstraintManager::addConstraint(ref<Expr> e)
 {
-  e = simplifyExpr(e);
-  return addConstraintInternal(e);
+	e = simplifyExpr(e);
+	return addConstraintInternal(e);
 }
 
 void ConstraintManager::print(std::ostream& os) const
 {
-  for (unsigned int i = 0; i < constraints.size(); i++) {
-    constraints[i]->print(os);
-    os << "\n";
-  }
+	for (unsigned int i = 0; i < constraints.size(); i++) {
+		constraints[i]->print(os);
+		os << "\n";
+	}
 }
 
 void ConstraintManager::removeConstraintsPrefix(const char* prefix)
 {
-	int	prefix_len = strlen(prefix);
+	std::list<iterator>	it_list;
+	int			prefix_len = strlen(prefix);
 
 	foreach (it, constraints.begin(), constraints.end()) {
 		ExprPrefixMatchVisitor	visitor(prefix_len, prefix);
 		ref<Expr>		e = *it;
 		visitor.visit(e);
-		if (visitor.isMatched())
-			constraints.erase(it);
+		if (visitor.isMatched()) {
+			it_list.push_back(it);
+		}
 	}
+
+	foreach (it, it_list.begin(), it_list.end())
+		constraints.erase(*it);
 }

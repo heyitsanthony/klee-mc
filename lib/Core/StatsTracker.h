@@ -96,6 +96,14 @@ namespace klee {
     double elapsed();
 
     void computeReachableUncovered();
+
+  private:
+    void computeReachableUncoveredInit(void);
+    void computeCallTargets(llvm::Function* f);
+    void initMinDistToReturn(
+	llvm::Function* fnIt,
+	std::vector<llvm::Instruction* >& instructions);
+    static bool init;
   };
 
   uint64_t computeMinDistToUncovered(const KInstruction *ki,

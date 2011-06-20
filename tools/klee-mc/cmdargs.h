@@ -15,6 +15,7 @@ public:
 		const std::list<std::string>& argv);
 	virtual ~CmdArgs();
 	unsigned int getArgc(void) const { return argc; }
+	unsigned int getEnvc(void) const { return env_c; }
 	char** getArgv(void) const { return argv; }
 	char** getEnvp(void) const { return (envp) ? envp : envp_native; }
 	const std::string& getBinaryPath(void) const { return in_bin_path; }
@@ -27,6 +28,7 @@ private:
 	char		**argv;
 	char		**envp;
 	char		**envp_native;
+	unsigned int	env_c;
 };
 
 #endif

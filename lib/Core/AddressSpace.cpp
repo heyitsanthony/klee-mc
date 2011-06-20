@@ -67,10 +67,7 @@ bool AddressSpace::resolveOne(uint64_t address, ObjectPair &result)
 
   const MemoryMap::value_type * res = objects.lookup_previous(hack);
   
-  if (!res) {
-  	fprintf(stderr, "resolveOne. addr: %p. res=%p\n", address, res);
-  	return false;
-  }
+  if (!res) return false;
 
   const MemoryObject *mo = res->first;
   if ((mo->size == 0 && address == mo->address) ||

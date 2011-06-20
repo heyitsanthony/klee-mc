@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "klee/Solver.h"
-
+#include "static/Sugar.h"
 #include "klee/Constraints.h"
 #include "klee/Expr.h"
 #include "klee/SolverImpl.h"
@@ -201,7 +201,8 @@ bool CexCachingSolver::lookupAssignment(const Query &query,
   return searchForAssignment(key, result);
 }
 
-bool CexCachingSolver::getAssignment(const Query& query, Assignment *&result) {
+bool CexCachingSolver::getAssignment(const Query& query, Assignment *&result)
+{
   KeyType key;
   if (lookupAssignment(query, key, result))
     return true;
@@ -211,10 +212,10 @@ bool CexCachingSolver::getAssignment(const Query& query, Assignment *&result) {
 
   std::vector< std::vector<unsigned char> > values;
   bool hasSolution;
-  if (!solver->impl->computeInitialValues(query, objects, values, 
-                                          hasSolution))
+  if (!solver->impl->computeInitialValues(
+  	query, objects, values, hasSolution))
     return false;
-    
+   
   Assignment *binding;
   if (hasSolution) {
     binding = new Assignment(objects, values);
@@ -252,26 +253,31 @@ CexCachingSolver::~CexCachingSolver() {
 bool CexCachingSolver::computeValidity(const Query& query,
                                        Solver::Validity &result) {
   TimerStatIncrementer t(stats::cexCacheTime);
-  Assignment *a;
-  if (!getAssignment(query.withFalse(), a))
-    return false;
+  bool		ok_assignment;
+  Assignment	*a;
+
+  ok_assignment = getAssignment(query.withFalse(), a);
+  if (!ok_assignment) return false;
 
   assert(a && "computeValidity() must have assignment");
   ref<Expr> q = a->evaluate(query.expr);
 
   if (!isa<ConstantExpr>(q)) {
-    if (!getAssignment(query, a))
+    if (!getAssignment(query, a)) {
       return false;
+    }
     if (a) {
-      if (!getAssignment(query.negateExpr(), a))
+      if (!getAssignment(query.negateExpr(), a)) {
         return false;
+      }
       result = !a ? Solver::False : Solver::Unknown;
     } else {
       result = Solver::True;
     }
   } else if (cast<ConstantExpr>(q)->isTrue()) {
-    if (!getAssignment(query, a))
+    if (!getAssignment(query, a)) {
       return false;
+    }
     result = !a ? Solver::True : Solver::Unknown;
   } else {
     if (!getAssignment(query.negateExpr(), a))
@@ -329,9 +335,11 @@ CexCachingSolver::computeInitialValues(const Query& query,
                                          &objects,
                                        std::vector< std::vector<unsigned char> >
                                          &values,
-                                       bool &hasSolution) {
+                                       bool &hasSolution)
+{
   TimerStatIncrementer t(stats::cexCacheTime);
   Assignment *a;
+
   if (!getAssignment(query, a))
     return false;
   hasSolution = !!a;
@@ -345,7 +353,6 @@ CexCachingSolver::computeInitialValues(const Query& query,
   for (unsigned i=0; i < objects.size(); ++i) {
     const Array *arr = objects[i];
     Assignment::bindings_ty::iterator it = a->bindings.find(arr);
-    
     if (it == a->bindings.end()) {
       values[i] = std::vector<unsigned char>(arr->mallocKey.size, 0);
     } else {

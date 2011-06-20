@@ -15,6 +15,8 @@
 
 #include "klee/util/ExprUtil.h"
 
+#include "static/Sugar.h"
+
 #include <map>
 #include <vector>
 #include <ostream>
@@ -127,8 +129,7 @@ public:
   void print(std::ostream &os) const {
     os << "{";
     bool first = true;
-    for (std::set<const Array*>::iterator it = wholeObjects.begin(), 
-           ie = wholeObjects.end(); it != ie; ++it) {
+    foreach (it, wholeObjects.begin(), wholeObjects.end()) {
       const Array *array = *it;
 
       if (first) {
@@ -139,8 +140,7 @@ public:
 
       os << "MO" << array->name;
     }
-    for (elements_ty::const_iterator it = elements.begin(), ie = elements.end();
-         it != ie; ++it) {
+    foreach (it, elements.begin(), elements.end()) {
       const Array *array = it->first;
       const DenseSet<unsigned> &dis = it->second;
 
@@ -157,15 +157,13 @@ public:
 
   // more efficient when this is the smaller set
   bool intersects(const IndependentElementSet &b) {
-    for (std::set<const Array*>::iterator it = wholeObjects.begin(), 
-           ie = wholeObjects.end(); it != ie; ++it) {
+    foreach (it, wholeObjects.begin(), wholeObjects.end()) {
       const Array *array = *it;
       if (b.wholeObjects.count(array) || 
           b.elements.find(array) != b.elements.end())
         return true;
     }
-    for (elements_ty::iterator it = elements.begin(), ie = elements.end();
-         it != ie; ++it) {
+    foreach (it, elements.begin(), elements.end()) {
       const Array *array = it->first;
       if (b.wholeObjects.count(array))
         return true;
@@ -181,8 +179,7 @@ public:
   // returns true iff set is changed by addition
   bool add(const IndependentElementSet &b) {
     bool modified = false;
-    for (std::set<const Array*>::const_iterator it = b.wholeObjects.begin(), 
-           ie = b.wholeObjects.end(); it != ie; ++it) {
+    foreach (it, b.wholeObjects.begin(), b.wholeObjects.end()) {
       const Array *array = *it;
       elements_ty::iterator it2 = elements.find(array);
       if (it2!=elements.end()) {
@@ -196,18 +193,16 @@ public:
         }
       }
     }
-    for (elements_ty::const_iterator it = b.elements.begin(), 
-           ie = b.elements.end(); it != ie; ++it) {
+    foreach (it, b.elements.begin(), b.elements.end()) {
       const Array *array = it->first;
-      if (!wholeObjects.count(array)) {
-        elements_ty::iterator it2 = elements.find(array);
-        if (it2==elements.end()) {
+      if (wholeObjects.count(array)) continue;
+      elements_ty::iterator it2 = elements.find(array);
+      if (it2==elements.end()) {
+        modified = true;
+        elements.insert(*it);
+      } else {
+        if (it2->second.add(it->second))
           modified = true;
-          elements.insert(*it);
-        } else {
-          if (it2->second.add(it->second))
-            modified = true;
-        }
       }
     }
     return modified;

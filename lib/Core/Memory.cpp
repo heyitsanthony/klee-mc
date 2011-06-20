@@ -116,12 +116,14 @@ ObjectState::ObjectState(const MemoryObject *mo)
 		mo->mallocKey,
 		0,
 		0);
+	src_array = array;
 	updates = UpdateList(array, 0);
 }
 
 
 ObjectState::ObjectState(const MemoryObject *mo, const Array *array)
-  : copyOnWriteOwner(0),
+  : src_array(array),
+    copyOnWriteOwner(0),
     refCount(0),
     object(mo),
     concreteStore(new uint8_t[mo->size]),
@@ -235,6 +237,16 @@ void ObjectState::makeConcrete() {
   concreteMask = 0;
   flushMask = 0;
   knownSymbolics = 0;
+}
+
+void ObjectState::markRangeSymbolic(unsigned offset, unsigned len)
+{
+  assert (len+offset < size && "Bad range");
+  for (unsigned i=0; i<len; i++) {
+    markByteSymbolic(i+offset);
+    setKnownSymbolic(i+offset, 0);
+    markByteFlushed(i+offset);
+  }
 }
 
 void ObjectState::makeSymbolic() {

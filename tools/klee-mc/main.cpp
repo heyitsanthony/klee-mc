@@ -12,8 +12,10 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ManagedStatic.h"
 
-#include "gueststate.h"
-#include "gueststateptimg.h"
+#include "guest.h"
+#include "guestptimg.h"
+#include "elfimg.h"
+#include "guestelf.h"
 #include "ExecutorVex.h"
 
 //#include "llvm/Support/system_error.h"
@@ -388,7 +390,7 @@ int main(int argc, char **argv, char **envp)
 	Interpreter::InterpreterOptions IOpts;
 	KleeHandler	*handler;
 	CmdArgs		*cmdargs;
-	GuestState	*gs;
+	Guest		*gs;
 	Interpreter	*interpreter;
 
 	//  std::list<Interpreter::ReplayPathType> replayPaths;
@@ -415,11 +417,33 @@ int main(int argc, char **argv, char **envp)
 	handler = new KleeHandler(cmdargs);
 
 
-	gs = GuestStatePTImg::create<GuestStatePTImg>(
+#if 0
+	gs = GuestPTImg::create<GuestPTImg>(
 		cmdargs->getArgc(),
 		cmdargs->getArgv(),
 		cmdargs->getEnvp());
-	
+#elif 0
+	ElfImg		*img;
+	GuestELF	*ge;
+
+	img = ElfImg::create(cmdargs->getArgv()[0]);
+	if (img == NULL) {
+		fprintf(stderr, "%s: Could not open ELF %s\n", 
+		argv[0], argv[1]);
+		return -2;
+	}
+
+	ge = new GuestELF(img);
+	ge->setArgv(
+		cmdargs->getArgc(),
+		const_cast<const char**>(cmdargs->getArgv()),
+		(int)cmdargs->getEnvc(),
+		const_cast<const char**>(cmdargs->getEnvp()));
+	gs = ge;
+#else
+	gs = Guest::load();
+	assert (gs && "Could not load guest snapshot");
+#endif
 	interpreter = new ExecutorVex(IOpts, handler, gs);
 	theInterpreter = interpreter;
 	handler->setInterpreter(interpreter);

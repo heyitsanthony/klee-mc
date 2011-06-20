@@ -59,7 +59,7 @@ public:
 
   void print(std::ostream& os) const;
 private:
-  std::vector< ref<Expr> > constraints;
+  constraints_ty constraints;
 
   // returns true iff the constraints were modified
   bool rewriteConstraints(ExprVisitor &visitor);

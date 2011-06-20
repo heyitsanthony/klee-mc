@@ -10,6 +10,7 @@
 #ifndef KLEE_SOLVERIMPL_H
 #define KLEE_SOLVERIMPL_H
 
+#include <iostream>
 #include <vector>
 
 namespace klee {
@@ -59,6 +60,14 @@ namespace klee {
 
     /// printName - Recursively print name of solver class
     virtual void printName(int level = 0) const = 0;
+  protected:
+    void printDebugQueries(
+	std::ostream& os,
+	double t_check,
+	const std::vector<const Array*> &objects,
+	std::vector< std::vector<unsigned char> > &values,
+	bool hasSolution) const;
+
 };
 
 }

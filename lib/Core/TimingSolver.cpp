@@ -117,7 +117,8 @@ TimingSolver::getInitialValues(const ExecutionState& state,
                                const std::vector<const Array*>
                                  &objects,
                                std::vector< std::vector<unsigned char> >
-                                 &result) {
+                                 &result)
+{
   if (objects.empty())
     return true;
 

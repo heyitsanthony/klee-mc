@@ -72,3 +72,8 @@ StackFrame& StackFrame::operator=(const StackFrame &s)
 
 	return *this;
 }
+
+void StackFrame::addAlloca(const MemoryObject* mo)
+{
+	allocas.push_back(mo);
+}

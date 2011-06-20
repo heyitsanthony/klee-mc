@@ -11,6 +11,7 @@
 #include "Memory.h"
 #include "MemoryManager.h"
 
+#include "static/Sugar.h"
 #include "klee/Common.h"
 #include "klee/ExecutionState.h"
 #include "klee/Expr.h"
@@ -55,7 +56,7 @@ MemoryObject *MemoryManager::allocate(
   if (state && size) {
     std::pair<HeapMap::iterator,HeapMap::iterator> hitPair = 
       heapObjects.equal_range(mallocKey);
-    for(HeapMap::iterator hit = hitPair.first; hit != hitPair.second; ++hit) {
+    foreach (hit, hitPair.first, hitPair.second) {
       HeapObject *curObj = hit->second;
       MallocKey sigh = hit->first;
 
@@ -97,8 +98,10 @@ MemoryObject *MemoryManager::allocate(
   }
 
   bool anonymous = !state;
-  MemoryObject *res = new MemoryObject(size ? heapObj->address : 0, size,
-                                       mallocKey, heapObj);
+  MemoryObject *res;
+
+  res = new MemoryObject(
+    size ? heapObj->address : 0, size, mallocKey, heapObj);
 
   // if not replaying state, add reference to heap object
   if (state && (state->isReplay
@@ -121,12 +124,13 @@ MemoryObject *MemoryManager::allocate(
   return res;
 }
 
-MemoryObject *MemoryManager::allocateFixed(uint64_t address, uint64_t size,
-                                           const llvm::Value *allocSite,
-                                           ExecutionState *state) {
+MemoryObject *MemoryManager::allocateFixed(
+	uint64_t address, uint64_t size,
+	const llvm::Value *allocSite,
+	ExecutionState *state)
+{
 #ifndef NDEBUG
-  for (objects_ty::iterator it = objects.begin(), ie = objects.end();
-       it != ie; ++it) {
+  foreach (it, objects.begin(), objects.end()) {
     MemoryObject *mo = *it;
     assert(!(address+size > mo->address && address < mo->address+mo->size) &&
            "allocated an overlapping object");
@@ -148,7 +152,8 @@ MemoryObject *MemoryManager::allocateFixed(uint64_t address, uint64_t size,
   return res;
 }
 
-void MemoryManager::deallocate(const MemoryObject *mo) {
+void MemoryManager::deallocate(const MemoryObject *mo)
+{
   objects.erase(std::find(objects.begin(), objects.end(), mo));
   // delete the MemoryObjects, but don't free the underlying heap storage;
   // we have heap object reference counting for that

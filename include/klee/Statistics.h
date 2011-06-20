@@ -15,7 +15,7 @@
 #include <vector>
 #include <string>
 #include <string.h>
-
+#include <stdio.h>
 namespace klee {
   class Statistic;
   class StatisticRecord {
@@ -136,18 +136,23 @@ namespace klee {
 
   inline void StatisticManager::incrementIndexedValue(const Statistic &s, 
                                                       unsigned index,
-                                                      uint64_t addend) const {
+                                                      uint64_t addend) const
+  {
+    if (indexedStats == NULL) return;
     indexedStats[index*stats.size() + s.id] += addend;
   }
 
   inline uint64_t StatisticManager::getIndexedValue(const Statistic &s, 
-                                                    unsigned index) const {
+                                                    unsigned index) const
+  {
+    if (indexedStats == NULL) return 0;
     return indexedStats[index*stats.size() + s.id];
   }
 
   inline void StatisticManager::setIndexedValue(const Statistic &s, 
                                                 unsigned index,
                                                 uint64_t value) {
+    if (indexedStats == NULL) return;
     indexedStats[index*stats.size() + s.id] = value;
   }
 }

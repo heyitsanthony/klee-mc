@@ -39,8 +39,12 @@ char** CmdArgs::envFromString(const string& in_env_path)
 {
 	char **pEnvp;
 
-	if (in_env_path == "")
+	if (in_env_path == "") {
+		env_c = 0;
+		if (envp_native == NULL) return NULL;
+		while (envp_native[env_c]) env_c++;
 		return NULL;
+	}
 
 	vector<string> items;
 	ifstream f(in_env_path.c_str());
@@ -66,6 +70,7 @@ char** CmdArgs::envFromString(const string& in_env_path)
 	for (; i != items.size(); ++i)
 		pEnvp[i] = strdup(items[i].c_str());
 	pEnvp[i] = NULL;
+	env_c = i-1;
 
 	return pEnvp;
 }
