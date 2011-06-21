@@ -475,7 +475,6 @@ void StatsTracker::writeStatsLine() {
 
 void StatsTracker::updateStateStatistics(uint64_t addend)
 {
-  fprintf(stderr, "AH HA HA HA\n");
   foreach (
   	it,
 	executor.stateManager->begin(),
@@ -485,16 +484,12 @@ void StatsTracker::updateStateStatistics(uint64_t addend)
     const InstructionInfo &ii = *state.pc->info;
     theStatisticManager->incrementIndexedValue(
     	stats::states, ii.id, addend);
-    fprintf(stderr, "BWAHAHA AHA\n");
-    if (!UseCallPaths)
-    	continue;
-    if (state.stack.empty())
-    	continue;
+    if (!UseCallPaths) continue;
+    if (state.stack.empty()) continue;
     state.stack.back().callPathNode->statistics.incrementValue(
     	stats::states, addend);
 
   }
-  fprintf(stderr, "HA AH AH AH\n");
 }
 
 void StatsTracker::writeIStats() {

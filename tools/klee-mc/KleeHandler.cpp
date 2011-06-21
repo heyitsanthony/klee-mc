@@ -319,9 +319,7 @@ void KleeHandler::processTestCase(const ExecutionState &state,
   out_objs out;
   bool success;
 
-  fprintf(stderr,  "PROCESS TEST CASE %s. Get symsolution\n", errorMessage);
   success = m_interpreter->getSymbolicSolution(state, out);
-  fprintf(stderr,  "PROCESS TEST CASE %s. Got symsolution\n", errorMessage);
   if (!success)
     klee_warning("unable to get symbolic solution, losing test case");
 

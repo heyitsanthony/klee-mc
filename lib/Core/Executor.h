@@ -342,6 +342,11 @@ private:
 	const llvm::VectorType* op_type,
 	ref<Expr> left, ref<Expr> right,
 	bool& ok);
+  ref<Expr> sextVector(
+	ExecutionState& state,
+	ref<Expr> v,
+	const llvm::VectorType* srcTy,
+	const llvm::VectorType* dstTy);
   void instCall(ExecutionState& state, KInstruction* ki);
   void instSwitch(ExecutionState& state, KInstruction* ki);
   void instUnwind(ExecutionState& state);

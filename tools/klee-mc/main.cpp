@@ -17,6 +17,7 @@
 #include "elfimg.h"
 #include "guestelf.h"
 #include "ExecutorVex.h"
+#include "ExeChk.h"
 
 //#include "llvm/Support/system_error.h"
 
@@ -385,6 +386,41 @@ static CmdArgs* getCmdArgs(char** envp)
 	return new CmdArgs(InputFile, env_path, envp, input_args);
 }
 
+
+Guest* getGuest(CmdArgs* cmdargs)
+{
+	Guest	*gs;
+#if 1
+	gs = GuestPTImg::create<GuestPTImg>(
+		cmdargs->getArgc(),
+		cmdargs->getArgv(),
+		cmdargs->getEnvp());
+#elif 0
+	ElfImg		*img;
+	GuestELF	*ge;
+
+	img = ElfImg::create(cmdargs->getArgv()[0]);
+	if (img == NULL) {
+		fprintf(stderr, "%s: Could not open ELF %s\n", 
+		argv[0], argv[1]);
+		return -2;
+	}
+
+	ge = new GuestELF(img);
+	ge->setArgv(
+		cmdargs->getArgc(),
+		const_cast<const char**>(cmdargs->getArgv()),
+		(int)cmdargs->getEnvc(),
+		const_cast<const char**>(cmdargs->getEnvp()));
+	gs = ge;
+#else
+	fprintf(stderr, "[klee-mc] LOADING SNAPSHOT\n");
+	gs = Guest::load();
+	assert (gs && "Could not load guest snapshot");
+#endif
+	return gs;
+}
+
 int main(int argc, char **argv, char **envp)
 {
 	Interpreter::InterpreterOptions IOpts;
@@ -416,35 +452,12 @@ int main(int argc, char **argv, char **envp)
 	IOpts.MakeConcreteSymbolic = MakeConcreteSymbolic;
 	handler = new KleeHandler(cmdargs);
 
-
-#if 0
-	gs = GuestPTImg::create<GuestPTImg>(
-		cmdargs->getArgc(),
-		cmdargs->getArgv(),
-		cmdargs->getEnvp());
-#elif 0
-	ElfImg		*img;
-	GuestELF	*ge;
-
-	img = ElfImg::create(cmdargs->getArgv()[0]);
-	if (img == NULL) {
-		fprintf(stderr, "%s: Could not open ELF %s\n", 
-		argv[0], argv[1]);
-		return -2;
-	}
-
-	ge = new GuestELF(img);
-	ge->setArgv(
-		cmdargs->getArgc(),
-		const_cast<const char**>(cmdargs->getArgv()),
-		(int)cmdargs->getEnvc(),
-		const_cast<const char**>(cmdargs->getEnvp()));
-	gs = ge;
-#else
-	gs = Guest::load();
-	assert (gs && "Could not load guest snapshot");
-#endif
+	gs = getGuest(cmdargs);
+#if 1
 	interpreter = new ExecutorVex(IOpts, handler, gs);
+#else
+	interpreter = new ExeChk(IOpts, handler, gs);
+#endif
 	theInterpreter = interpreter;
 	handler->setInterpreter(interpreter);
 

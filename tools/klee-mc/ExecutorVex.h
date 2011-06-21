@@ -1,12 +1,12 @@
 #ifndef KLEE_EXECUTOR_VEX_H
 #define KLEE_EXECUTOR_VEX_H
 
+#include "guest.h"
 #include "../../lib/Core/Executor.h"
 
 #include <hash_map>
 #include <assert.h>
 
-class Guest;
 class VexXlate;
 class VexSB;
 class VexFCache;
@@ -44,7 +44,7 @@ public:
 		char **argv,
 		char **envp) { assert (0 == 1 && "LOL"); }
 
-	void runImage(void);
+	virtual void runImage(void);
 
 protected:
   	virtual void executeInstruction(
@@ -67,7 +67,20 @@ protected:
 		KInstruction *target,
 		llvm::Function *function,
 		std::vector< ref<Expr> > &arguments) { assert (0 == 1 && "STUB"); }
+
+	virtual bool handleXferSyscall(
+		ExecutionState& state, KInstruction* ki);
+	void handleXferJmp(
+		ExecutionState& state, KInstruction* ki);
+
+	virtual void handleXfer(ExecutionState& state, KInstruction *ki);
+	void updateGuestRegs(ExecutionState& s);
+	void sc_ret_v(ExecutionState& state, uint64_t v);
+
+	VexXlate	*xlate;
+	Guest		*gs;
 private:
+	void markExitIgnore(ExecutionState& state);
 	void makeRangeSymbolic(
 		ExecutionState& state, void* addr, unsigned sz,
 		const char* name = NULL);
@@ -108,24 +121,19 @@ private:
 		ExecutionState& state,
 		const llvm::GlobalVariable& gv);
 
-	void updateGuestRegs(ExecutionState& s);
 	void dumpRegs(ExecutionState& s);
 
 	void handleXferCall(
 		ExecutionState& state, KInstruction* ki);
-	bool handleXferSyscall(
-		ExecutionState& state, KInstruction* ki);
 	void handleXferReturn(
-		ExecutionState& state, KInstruction* ki);
-	void handleXferJmp(
 		ExecutionState& state, KInstruction* ki);
 	void jumpToKFunc(ExecutionState& state, KFunction* kf);
 
 	ObjectState* sc_ret_ge0(ExecutionState& state);
 	ObjectState* sc_ret_le0(ExecutionState& state);
+	ObjectState* sc_ret_or(ExecutionState& state, uint64_t o1, uint64_t o2);
 	ObjectState* sc_ret_range(
 		ExecutionState& state, uint64_t lo, uint64_t hi);
-	void sc_ret_v(ExecutionState& state, uint64_t v);
 	void sc_fail(ExecutionState& state);
 
 	void sc_writev(ExecutionState& state);
@@ -152,16 +160,15 @@ private:
 	bool xferIterNext(struct XferStateIter& iter);
 
 	func2vsb_map	func2vsb_table;
-	Guest		*gs;
 	VexFCache	*xlate_cache;
 	MemoryObject	*state_regctx_mo;
-
-	bool		exited;
 
 	unsigned int	sc_dispatched;
 	unsigned int	sc_retired;
 
 	bool		dump_funcs;
+
+	unsigned int	syscall_c[512];
 };
 
 }

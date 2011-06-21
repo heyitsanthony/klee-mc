@@ -1596,6 +1596,37 @@ void Executor::instCmp(ExecutionState& state, KInstruction *ki)
 	bindLocal(ki, state, result);
 }
 
+#define SETUP_VOP(x)					\
+	ref<Expr>	result;				\
+	unsigned int	v_elem_c;			\
+	unsigned int	v_elem_w;			\
+	v_elem_c = (x)->getNumElements();		\
+	v_elem_w = (x)->getBitWidth() / v_elem_c;
+
+/* FIXME: cheaper way to do this (e.g. left == right => spit out constant expr?) */
+#define V_OP(y)							\
+	for (unsigned int i = 0; i < v_elem_c; i++) {		\
+		ref<Expr>	left_i, right_i;		\
+		ref<Expr>	op_i;				\
+		left_i = ExtractExpr::create(			\
+			left, i*v_elem_w, v_elem_w);		\
+		right_i = ExtractExpr::create(			\
+			right, i*v_elem_w, v_elem_w);		\
+		op_i = y##Expr::create(left_i, right_i);		\
+		if (i == 0) result = op_i;				\
+		else result = ConcatExpr::create(result, op_i);		\
+	}
+
+#define SETUP_VOP_CAST(x,y)					\
+	ref<Expr>	result;					\
+	unsigned int	v_elem_c;				\
+	unsigned int	v_elem_w_src, v_elem_w_dst;		\
+	v_elem_c = (x)->getNumElements();			\
+	assert (v_elem_c == (y)->getNumElements());		\
+	v_elem_w_src = (x)->getBitWidth() / v_elem_c;		\
+	v_elem_w_dst = (y)->getBitWidth() / v_elem_c;		\
+
+
 ref<Expr> Executor::cmpVector(
 	ExecutionState& state,
 	int pred,
@@ -1603,33 +1634,15 @@ ref<Expr> Executor::cmpVector(
 	ref<Expr> left, ref<Expr> right,
 	bool& ok)
 {
-	ref<Expr>	result;
-	unsigned int	v_elem_c;
-	unsigned int	v_elem_w;
-
-	v_elem_c = vt->getNumElements();
-	v_elem_w = vt->getBitWidth() / v_elem_c;
+	SETUP_VOP(vt)
 
 	ok = false;
 	assert (left->getWidth() > 0);
 	assert (right->getWidth() > 0);
 
 	switch(pred) {
-/* FIXME: cheaper way to do this (e.g. left == right => spit out constant expr?) */
-#define VCMP_OP(x, y)							\
-	case ICmpInst::x: 						\
-		for (unsigned int i = 0; i < v_elem_c; i++) {		\
-			ref<Expr>	left_i, right_i;		\
-			ref<Expr>	cmp_i;				\
-			left_i = ExtractExpr::create(			\
-				left, i*v_elem_w, v_elem_w);		\
-			right_i = ExtractExpr::create(			\
-				right, i*v_elem_w, v_elem_w);		\
-			cmp_i = y##Expr::create(left_i, right_i);		\
-			if (i == 0) result = cmp_i;				\
-			else result = ConcatExpr::create(result, cmp_i);	\
-		}								\
-		break;
+#define VCMP_OP(x, y) \
+	case ICmpInst::x: V_OP(y); break;
 
 	VCMP_OP(ICMP_EQ, Eq)
 	VCMP_OP(ICMP_NE, Ne)
@@ -1646,6 +1659,27 @@ ref<Expr> Executor::cmpVector(
 	return result;
 	}
 	ok = true;
+	return result;
+}
+
+ref<Expr> Executor::sextVector(
+	ExecutionState& state,
+	ref<Expr> v,
+	const VectorType* srcTy,
+	const VectorType* dstTy)
+{
+	SETUP_VOP_CAST(srcTy, dstTy);
+	for (unsigned int i = 0; i < v_elem_c; i++) {
+		ref<Expr>	cur_elem;
+		cur_elem = ExtractExpr::create(
+			v, i*v_elem_w_src, v_elem_w_src);
+		cur_elem = SExtExpr::create(cur_elem, v_elem_w_dst);
+		if (i == 0)
+			result = cur_elem;
+		else
+			result = ConcatExpr::create(result, cur_elem);
+	}
+
 	return result;
 }
 
@@ -1730,8 +1764,7 @@ void Executor::instSwitch(ExecutionState& state, KInstruction *ki)
   caseConds.resize(targets.size());
   caseDests.resize(targets.size());
   unsigned index = 0;
-  for (std::map<BasicBlock*, ref<Expr> >::iterator mit = targets.begin();
-       mit != targets.end(); ++mit) {
+  foreach (mit, targets.begin(), targets.end()) {
     caseDests[index] = (*mit).first;
     caseConds[index] = (*mit).second;
     index++;
@@ -2021,9 +2054,20 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     break;
   }
   case Instruction::SExt: {
-    CastInst *ci = cast<CastInst>(i);
-    ref<Expr> result = SExtExpr::create(eval(ki, 0, state).value,
-                                        getWidthForLLVMType(ci->getType()));
+    CastInst 		*ci = cast<CastInst>(i);
+    const VectorType	*vt_src, *vt_dst;
+    ref<Expr>		result, evaled;
+    
+    vt_src = dyn_cast<const VectorType>(ci->getSrcTy());
+    vt_dst = dyn_cast<const VectorType>(ci->getDestTy());
+    evaled =  eval(ki, 0, state).value;
+    if (vt_src) {
+      result = sextVector(state, evaled, vt_src, vt_dst);
+    } else {
+      result = SExtExpr::create(
+        evaled,
+        getWidthForLLVMType(ci->getType()));
+    }
     bindLocal(ki, state, result);
     break;
   }

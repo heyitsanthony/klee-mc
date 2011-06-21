@@ -44,11 +44,12 @@ ExecutorVex::ExecutorVex(
 	Guest	*in_gs)
 : Executor(opts, ih),
   gs(in_gs),
-  exited(false),
   sc_dispatched(0),
   sc_retired(0)
 {
 	assert (kmodule == NULL && "KMod already initialized? My contract!");
+
+	memset(syscall_c, 0, sizeof(syscall_c));
 
 	/* XXX TODO: module flags */
 	llvm::sys::Path LibraryDir(KLEE_DIR "/" RUNTIME_CONFIGURATION "/lib");
@@ -63,7 +64,8 @@ ExecutorVex::ExecutorVex(
 	if (!theGenLLVM) theGenLLVM = new GenLLVM(in_gs);
 	if (!theVexHelpers) theVexHelpers = new VexHelpers(Arch::X86_64);
 
-	xlate_cache = new VexFCache(new VexXlate(Arch::X86_64));
+	xlate = new VexXlate(Arch::X86_64);
+	xlate_cache = new VexFCache(xlate);
 	kmodule = new KModule(theGenLLVM->getModule());
 
 	target_data = kmodule->targetData;
@@ -89,8 +91,9 @@ ExecutorVex::ExecutorVex(
 
 ExecutorVex::~ExecutorVex(void)
 {
-	if (kmodule) delete kmodule;
 	delete xlate_cache;
+	delete xlate;
+	if (kmodule) delete kmodule;
 }
 
 const Cell& ExecutorVex::eval(
@@ -337,9 +340,7 @@ Function* ExecutorVex::getFuncFromAddr(uint64_t guest_addr)
 
 	/* stupid kmodule stuff */
 	kf = kmodule->addFunction(f);
-	fprintf(stderr, "ADDING KFUNC!!!\n");
 	statsTracker->addKFunction(kf);
-	fprintf(stderr, "DONG ADDING\n");
 	bindKFuncConstants(kf);
 	bindModuleConstTable(); /* XXX slow */
 
@@ -368,33 +369,60 @@ void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
 
 	/* need to trapeze between VSB's; depending on exit type,
 	 * translate VSB exits into LLVM instructions on the fly */
-
 	cur_func = (state.stack.back()).kf->function;
 
 	vsb = func2vsb_table[(uintptr_t)cur_func];
 	if (vsb == NULL) {
-		/* no VSB => outcall; use default KLEE return handling */
+		/* no VSB => outcall to externa LLVM bitcode; 
+		 * use default KLEE return handling */
 		assert (state.stack.size() > 1);
 		Executor::retFromNested(state, ki);
 		return;
 	}
+
 	assert (vsb && "Could not translate current function to VSB");
+	handleXfer(state, ki);
+}
 
+void ExecutorVex::markExitIgnore(ExecutionState& state)
+{
+	ObjectState		*state_regctx_os;
 
-	if (vsb->isCall()) {
+	gs->getCPUState()->setExitType(GE_IGNORE);
+	state_regctx_os = state.addressSpace.findObject(state_regctx_mo);
+	state.write8(
+		state_regctx_os, 
+		gs->getCPUState()->getExitTypeOffset(),
+		GE_IGNORE);
+}
+
+/* handle transfering between VSB's */
+void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
+{
+	GuestExitType		exit_type;
+
+	updateGuestRegs(state);
+	exit_type = gs->getCPUState()->getExitType();
+	markExitIgnore(state);
+
+	switch(exit_type) {
+	case GE_CALL:
 		handleXferCall(state, ki);
 		return;
-	} else if (vsb->isSyscall()) {
-		if (!handleXferSyscall(state, ki)) {
-			terminateStateOnExit(state);
-		}
-		return;
-	} else if (vsb->isReturn()) {
+	case GE_RETURN:
 		handleXferReturn(state, ki);
 		return;
-	} else {
+	case GE_SYSCALL:
+		if (!handleXferSyscall(state, ki))
+			terminateStateOnExit(state);
+		return;
+	case GE_EMWARN:
+		std::cerr << "[VEXLLVM] VEX Emulation warning!?" << std::endl;
+	case GE_IGNORE:
 		handleXferJmp(state, ki);
 		return;
+	default:
+		assert (0 == 1 && "SPECIAL EXIT TYPE");
 	}
 
 	/* XXX need better bad stack frame handling */
@@ -405,7 +433,6 @@ void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
 	fprintf(stderr, "result: ");
 	result->dump();
 	terminateStateOnExit(state);
-	return;
 }
 
 void ExecutorVex::xferIterInit(
@@ -503,7 +530,7 @@ void ExecutorVex::handleXferCall(ExecutionState& state, KInstruction* ki)
 
 	args.push_back(state_regctx_mo->getBaseExpr());
 	xferIterInit(iter, &state, ki);
-	while (xferIterNext(iter)) {
+	while (xferIterNext(iter)) { 
 		executeCall(*(iter.res.first), ki, iter.f, args);
 	}
 }
@@ -594,6 +621,36 @@ ObjectState* ExecutorVex::sc_ret_le0(ExecutionState& state)
 	constrained = addConstraint(state, success_constraint);
 	assert (constrained); // symbolic, should always succeed..
 	
+	return state_regctx_os;
+}
+
+
+ObjectState* ExecutorVex::sc_ret_or(
+	ExecutionState& state, uint64_t o1, uint64_t o2)
+{
+	ObjectState		*state_regctx_os;
+	bool			constrained;
+	ref<Expr>		success_constraint;
+
+	state_regctx_os = makeSCRegsSymbolic(state);
+
+	success_constraint = OrExpr::create(
+		EqExpr::create(
+			ConstantExpr::create(o1, 64),
+			state.read(
+				state_regctx_os,
+				offsetof(VexGuestAMD64State, guest_RAX),
+				64)),
+		EqExpr::create(
+			ConstantExpr::create(o2, 64),
+			state.read(
+				state_regctx_os,
+				offsetof(VexGuestAMD64State, guest_RAX),
+				64)));
+
+	constrained = addConstraint(state, success_constraint);
+	assert (constrained); // symbolic, should always succeed..
+
 	return state_regctx_os;
 }
 
@@ -792,16 +849,17 @@ void ExecutorVex::sc_ret_v(ExecutionState& state, uint64_t v)
 bool ExecutorVex::handleXferSyscall(
 	ExecutionState& state, KInstruction* ki)
 {
-	bool	ret;
-
-	updateGuestRegs(state);
+	bool		ret;
 	SyscallParams   sp(gs->getSyscallParams());
 	int		sys_nr;
 
 	sys_nr = sp.getSyscall();
 
-	fprintf(stderr, "SYSCALL %d! sm=%d\n", 
+	assert (sys_nr < 512 && "SYSCALL OVERFLOW!!");
+	syscall_c[sys_nr]++;
+	fprintf(stderr, "SYSCALL %d (%d total)! sm=%d\n", 
 		sys_nr,
+		syscall_c[sys_nr],
 		stateManager->size());
 
 	sc_dispatched++;
@@ -814,23 +872,41 @@ bool ExecutorVex::handleXferSyscall(
 		sc_ret_v(state, 0);
 		break;
 	case SYS_read:
-		if (rand() % 2) 
-			sc_fail(state);
-		else 
-			sc_read(state);
+		sc_read(state);
 		break;
 	case SYS_open:
 		/* what kind of checks do we care about here? */
 		sc_ret_ge0(state);
 		break;
 	case SYS_write:
-		sc_ret_ge0(state);
+		/* just return the length, later return -1 too? */
+		/* ret >= 0 IS BAD NEWS. -- don't do it or you'll loop */
+	//	sc_ret_v(state, sp.getArg(2));
+#if 0	
+		fprintf(stderr, ">>>>>>>>>>>>>WRITING %d bytes (0=%d, 1=%p)\n",
+			sp.getArg(2), sp.getArg(0), sp.getArg(1));
+		if ((0x00000f00000 & sp.getArg(1)) == 0x400000) {
+			for (int i = 0; i < sp.getArg(2); i++)
+				fprintf(stderr, "[%d]=%c\n",
+					i,
+					((char*)sp.getArg(1))[i]);
+		}
+#endif
+		sc_ret_or(state, -1, sp.getArg(2));
 		break;
 	case SYS_writev: {
 		// fd, iov, iovcnt
 		sc_ret_ge0(state);
 		break;
 	}
+	case SYS_uname:
+		/* ugh, handle later */
+		fprintf(stderr, "WARNING: failing uname\n");
+		sc_ret_v(state, -1);
+		break;
+	case SYS_close:
+		sc_ret_v(state, 0);
+		break;
 	case SYS_fstat:
 	case SYS_stat:
 		sc_stat(state);
@@ -856,7 +932,9 @@ bool ExecutorVex::handleXferSyscall(
 		break;
 	case SYS_exit:
 	case SYS_exit_group:
-		fprintf(stderr, "EXITING ON sys_nr=%d\n", sys_nr);
+		fprintf(stderr, "EXITING ON sys_nr=%d. exitcode=%d\n", 
+			sys_nr,
+			sp.getArg(0));
 		ret = false;
 		goto done;
 	case SYS_rt_sigaction:
@@ -870,12 +948,11 @@ bool ExecutorVex::handleXferSyscall(
 		break;
 	}
 
-	fprintf(stderr, "HANDLING XFER JUMP FROM SYSCALL\n");
 	handleXferJmp(state, ki);
 	ret = true;
 done:
-	fprintf(stderr, "DONE DONE DONE\n");
-	fprintf(stderr, "RETIRED %d\n", sc_retired);
+	fprintf(stderr, "RETIRED %d. blocks=%d\n",
+		sc_retired, xlate_cache->size());
 	sc_retired++;
 	return ret;
 }
