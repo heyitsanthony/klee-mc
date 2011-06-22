@@ -182,31 +182,6 @@ void ExecutorVex::bindMapping(
 	const char		*data;
 
 	len = m.getBytes();
-	if (m.isStack()) {
-		mmap_mo = memory->allocateFixed(
-			((uint64_t)m.getGuestAddr())-STACK_EXTEND,
-			len+STACK_EXTEND,
-			f->begin()->begin(),
-			state);
-		copy_offset = STACK_EXTEND;
-		mmap_mo->setName("stack");
-	} else {
-		mmap_mo = memory->allocateFixed(
-			((uint64_t)m.getGuestAddr()),
-			len,
-			f->begin()->begin(),
-			state);
-		copy_offset = 0;
-	}
-
-	data = (const char*)m.getData();
-	mmap_os = bindObjectInState(*state, mmap_mo);
-	for (unsigned int i = 0; i < len; i++) {
-		state->write8(mmap_os, i+copy_offset, data[i]);
-	}
-}
-
-/* hack to reduce churn on symbolic data */
 #if 0
 #define PAGE_SIZE	4096
 	assert (len % PAGE_SIZE == 0 && "NOT PAGE ALIGNED");
@@ -237,8 +212,35 @@ void ExecutorVex::bindMapping(
 			state->write8(mmap_os, i+copy_offset, data[i]);
 		}
 	}
-#endif
+#else
 
+
+	if (m.isStack()) {
+		mmap_mo = memory->allocateFixed(
+			((uint64_t)m.getGuestAddr())-STACK_EXTEND,
+			len+STACK_EXTEND,
+			f->begin()->begin(),
+			state);
+		copy_offset = STACK_EXTEND;
+		mmap_mo->setName("stack");
+	} else {
+		mmap_mo = memory->allocateFixed(
+			((uint64_t)m.getGuestAddr()),
+			len,
+			f->begin()->begin(),
+			state);
+		copy_offset = 0;
+	}
+
+	data = (const char*)m.getData();
+	mmap_os = bindObjectInState(*state, mmap_mo);
+	for (unsigned int i = 0; i < len; i++) {
+		state->write8(mmap_os, i+copy_offset, data[i]);
+	}
+#endif
+}
+
+/* hack to reduce churn on symbolic data */
 void ExecutorVex::setupProcessMemory(ExecutionState* state, Function* f)
 {
 	std::list<GuestMem::Mapping> memmap(gs->getMem()->getMaps());
@@ -654,7 +656,6 @@ ObjectState* ExecutorVex::sc_ret_or(
 	return state_regctx_os;
 }
 
-
 ObjectState* ExecutorVex::sc_ret_range(
 	ExecutionState& state,
 	uint64_t lo, uint64_t hi)
@@ -687,8 +688,6 @@ ObjectState* ExecutorVex::sc_ret_range(
 
 	return state_regctx_os;
 }
-
-
 
 void ExecutorVex::sc_munmap(ExecutionState& state)
 {
@@ -864,6 +863,25 @@ bool ExecutorVex::handleXferSyscall(
 
 	sc_dispatched++;
 	switch(sys_nr) {
+	case SYS_getgroups:
+
+		assert (0 == 1);
+		break;
+	case SYS_rt_sigaction:
+		/* XXX need to make old action struct symbolic */
+	case SYS_rt_sigprocmask:
+		sc_ret_v(state, 0);
+		break;
+	case SYS_access:
+		sc_ret_range(state, -1, 0);
+		break;
+	case SYS_lseek:
+		sc_ret_range(state, -1, 4096); /* 4096 byte file! */
+		break;
+	case SYS_fcntl:
+		/* this is really complicated, {-1, 0, 1} should be OK. */
+		sc_ret_range(state, -1, 1);
+		break;
 	case SYS_sched_setaffinity:
 	case SYS_sched_getaffinity:
 		sc_fail(state);
@@ -908,6 +926,9 @@ bool ExecutorVex::handleXferSyscall(
 		sc_ret_v(state, 0);
 		break;
 	case SYS_fstat:
+	/* there's a distinction between these two based on whether
+	 * the path is a symlink. should we care? */
+	case SYS_lstat:
 	case SYS_stat:
 		sc_stat(state);
 		break;
@@ -937,10 +958,6 @@ bool ExecutorVex::handleXferSyscall(
 			sp.getArg(0));
 		ret = false;
 		goto done;
-	case SYS_rt_sigaction:
-		/* TODO: fake sigaction struct? */
-		sc_ret_v(state, 0);
-		break;
 	default:
 		fprintf(stderr, "UNKNOWN SYSCALL 0x%x\n", sys_nr);
 		gs->print(std::cerr);
@@ -1076,7 +1093,41 @@ void ExecutorVex::makeSymbolicTail(
 	unsigned taken,
 	const char* name)
 {
-	assert (0 == 1 && "STUB");
+	ObjectState	*os;
+	MemoryObject	*mo_head, *mo_tail;
+	char		*buf_head;
+	uint64_t	mo_addr, mo_size, head_size;
+
+	mo_addr = mo->address;
+	mo_size = mo->size;
+
+	assert (mo_size > taken && "Off+Taken out of range");
+
+	/* copy buffer data */
+	head_size = mo_size - taken;
+	buf_head = new char[head_size];
+	state.addressSpace.copyToBuf(mo, buf_head, 0, head_size);
+	os = state.addressSpace.findObject(mo);
+
+	/* free object from address space */
+	state.addressSpace.unbindObject(mo);
+	memory->deallocate(mo);
+
+	/* mark head concrete */
+	mo_head = memory->allocateFixed(mo_addr, head_size, 0, &state);
+	os = bindObjectInState(state, mo_head);
+	for(unsigned i = 0; i < head_size; i++) state.write8(os, i, buf_head[i]);
+
+	/* mark tail symbolic */
+	mo_tail = memory->allocateFixed(mo_addr+head_size, taken, 0, &state);
+	executeMakeSymbolic(
+		state,
+		mo_tail,
+		ConstantExpr::alloc(taken, 32),
+		name);
+
+
+	delete [] buf_head;
 }
 
 void ExecutorVex::makeSymbolicHead(
@@ -1085,7 +1136,48 @@ void ExecutorVex::makeSymbolicHead(
 	unsigned taken,
 	const char* name)
 {
-	assert (0 == 1 && "STUB");
+	ObjectState	*os;
+	MemoryObject	*mo_head, *mo_tail;
+	char		*buf_tail;
+	uint64_t	mo_addr, mo_size, tail_size;
+
+	mo_addr = mo->address;
+	mo_size = mo->size;
+
+	if (mo_size == taken) {
+		executeMakeSymbolic(
+			state,
+			mo, 
+			ConstantExpr::alloc(mo_size, 32),
+			name);
+		return;
+	}
+
+	assert (mo_size > taken && "Off+Taken out of range");
+
+	/* copy buffer data */
+	tail_size = mo_size - taken;
+	buf_tail = new char[tail_size];
+	state.addressSpace.copyToBuf(mo, buf_tail, taken, tail_size);
+	os = state.addressSpace.findObject(mo);
+
+	/* free object from address space */
+	state.addressSpace.unbindObject(mo);
+	memory->deallocate(mo);
+
+	mo_head = memory->allocateFixed(mo_addr, taken, 0, &state);
+	executeMakeSymbolic(
+		state,
+		mo_head,
+		ConstantExpr::alloc(taken, 32),
+		name);
+
+	mo_tail = memory->allocateFixed(
+		mo_addr+taken, tail_size, 0, &state);
+	os = bindObjectInState(state, mo_tail);
+	for(unsigned i = 0; i < tail_size; i++) state.write8(os, i, buf_tail[i]);
+
+	delete [] buf_tail;
 }
 
 void ExecutorVex::makeSymbolicMiddle(
@@ -1175,7 +1267,6 @@ void ExecutorVex::makeRangeSymbolic(
 				 * Chop off all the tail of the MO */
 				taken = tail_take_bytes;
 				makeSymbolicTail(state, mo, taken, name);
-				assert (0 == 1);
 			} else {
 				taken = take_remaining;
 				makeSymbolicMiddle(
@@ -1191,7 +1282,6 @@ void ExecutorVex::makeRangeSymbolic(
 			else
 				taken = take_remaining;
 			makeSymbolicHead(state, mo, taken, name);
-			assert (0 == 1);
 		}
 
 		fprintf(stderr, "TAKE BYTES %p\n", tail_take_bytes);

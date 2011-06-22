@@ -8,19 +8,27 @@
 // RUN: grep "exitcode" %t1.err
 //
 // It should exit with the string length
-// RUN: grep "exitcode=10" %t1.err
+// RUN: grep "exitcode=0" %t1.err
 //
 // Cross check it too!
 // RUN: klee-mc -xchkjit  - ./%t1 2>%t1.xchk.err >%t1.xchkout
 //
-// RUN: grep "VEXLLVM" %t1.xchk.err | grep "Exitcode=10"
-
-
+// RUN: grep "VEXLLVM" %t1.xchk.err | grep "Exitcode=0"
+#include <stdio.h>
+#include <assert.h>
 #include <string.h>
 
-char *x = "0123456789";	/* 10 characters */
+const char	s1[] = "HELLO COPY THIS STRING";
 
-int main(void)
+int main(int argc, char* argv[])
 {
-  return strlen(x);
+	char	s2[sizeof(s1)];
+	int	i;
+
+	strcpy(s2, s1);
+	for (i = 0; s1[i]; i++) {
+		assert (s2[i] == s1[i] && "CPY MISMATCH");
+	}
+
+	return 0;
 }

@@ -8,19 +8,22 @@
 // RUN: grep "exitcode" %t1.err
 //
 // It should exit with the string length
-// RUN: grep "exitcode=10" %t1.err
+// RUN: grep "exitcode=0" %t1.err
 //
 // Cross check it too!
 // RUN: klee-mc -xchkjit  - ./%t1 2>%t1.xchk.err >%t1.xchkout
 //
-// RUN: grep "VEXLLVM" %t1.xchk.err | grep "Exitcode=10"
-
-
+// RUN: grep "VEXLLVM" %t1.xchk.err | grep "Exitcode=0"
+#include <assert.h>
+#include <stdint.h>
 #include <string.h>
 
-char *x = "0123456789";	/* 10 characters */
+const char test_str[] = {"abcdefabcdef"};
 
-int main(void)
+int main(int argc, char* argv[])
 {
-  return strlen(x);
+	char	*s;
+	s = strstr(test_str, "def");
+	assert (((intptr_t)(s - test_str)) == 3);
+	return 0;
 }

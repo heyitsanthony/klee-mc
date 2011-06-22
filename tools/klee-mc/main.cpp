@@ -105,6 +105,11 @@ namespace {
                        cl::init(0));
 
   cl::opt<bool>
+  XChkJIT("xchkjit",
+  	cl::desc("Cross check concrete / no syscall binary with JIT."),
+	cl::init(false));
+
+  cl::opt<bool>
   Watchdog("watchdog",
            cl::desc("Use a watchdog process to enforce --max-time."),
            cl::init(0));
@@ -386,7 +391,6 @@ static CmdArgs* getCmdArgs(char** envp)
 	return new CmdArgs(InputFile, env_path, envp, input_args);
 }
 
-
 Guest* getGuest(CmdArgs* cmdargs)
 {
 	Guest	*gs;
@@ -453,11 +457,11 @@ int main(int argc, char **argv, char **envp)
 	handler = new KleeHandler(cmdargs);
 
 	gs = getGuest(cmdargs);
-#if 1
-	interpreter = new ExecutorVex(IOpts, handler, gs);
-#else
-	interpreter = new ExeChk(IOpts, handler, gs);
-#endif
+
+	interpreter = (XChkJIT) ?
+		new ExeChk(IOpts, handler, gs) :
+		new ExecutorVex(IOpts, handler, gs);
+
 	theInterpreter = interpreter;
 	handler->setInterpreter(interpreter);
 
