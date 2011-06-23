@@ -1,4 +1,5 @@
 #include "llvm/Target/TargetData.h"
+#include "llvm/IntrinsicInst.h"
 #include "klee/Internal/Module/KModule.h"
 #include "llvm/System/Path.h"
 #include "klee/Config/config.h"
@@ -203,6 +204,7 @@ void ExecutorVex::bindMapping(
 			len,
 			f->begin()->begin(),
 			state);
+		mmap_mo->setName("guestimg");
 		copy_offset = 0;
 	}
 
@@ -308,11 +310,31 @@ Function* ExecutorVex::getFuncFromAddr(uint64_t guest_addr)
 	f = xlate_cache->getFunc((void*)host_addr, guest_addr);
 	if (f == NULL) return NULL;
 
+	/* wipe out intrinsics which make klee puke */
+	/* FIXME: this should be an LLVM function pass done in the cache
+	 * code. */
+	/* go through all basic blocks */
+	foreach (it, f->begin(), f->end()) {
+		/* go through all instructions for BB 'it' */
+		BasicBlock::iterator	ins, ins_end;
+		ins_end = (*it).end();
+		for (ins = (*it).begin(); ins != ins_end; ) {
+			IntrinsicInst	*ii;
+
+			ii = dyn_cast<IntrinsicInst>(&*ins);
+			ins++;
+
+			if (!ii) continue;
+
+			if (ii->getIntrinsicID() == Intrinsic::memory_barrier)
+				ii->eraseFromParent();
+		}
+	}
+
 	/* need to know func -> vsb to compute func's guest address */
 	vsb = xlate_cache->getCachedVSB(guest_addr);
 	assert (vsb && "Dropped VSB too early?");
 	func2vsb_table[(uint64_t)f] = vsb;
-
 
 	/* stupid kmodule stuff */
 	kf = kmodule->addFunction(f);
@@ -444,11 +466,13 @@ bool ExecutorVex::xferIterNext(struct XferStateIter& iter)
 		if (!iter.res.first) continue;
 
 		addr = value->getZExtValue();
-		if (addr == 0 || addr > 0x7fffffffffffULL) {
+		if (	(addr == 0 || addr > 0x7fffffffffffULL) &&
+			((addr & 0xfffffffffffff000) != 0xffffffffff600000))
+		{
 			iter.res.first->constraints.print(std::cerr);
 			updateGuestRegs(*iter.res.first);
 			gs->getCPUState()->print(std::cerr);
-			fprintf(stderr, "god bogus jmp %p!\n", addr);
+			fprintf(stderr, "bogus jmp to %p!\n", addr);
 			terminateStateOnError(
 				*(iter.res.first),
 				"fork error: jumping to bad pointer",

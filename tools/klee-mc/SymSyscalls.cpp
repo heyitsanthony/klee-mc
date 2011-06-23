@@ -391,6 +391,7 @@ bool SymSyscalls::apply(
 	case SYS_tgkill:
 		sc_ret_or(state, -1, 0);
 		break;
+	case SYS_getpid:
 	case SYS_gettid:
 		sc_ret_v(state, 1000); /* FIXME: single threaded*/
 		break;

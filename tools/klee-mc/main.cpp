@@ -399,7 +399,7 @@ static CmdArgs* getCmdArgs(char** envp)
 
 Guest* getGuest(CmdArgs* cmdargs)
 {
-	Guest	*gs;
+	Guest	*gs = NULL;
 
 	if (GuestType == "ptrace") {
 		gs = GuestPTImg::create<GuestPTImg>(
