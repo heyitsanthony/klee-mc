@@ -1345,6 +1345,27 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 
 }
 
+const Cell& Executor::eval(
+	KInstruction *ki,
+	unsigned index, 
+	ExecutionState &state) const
+{
+	int vnumber;
+
+	assert(index < ki->inst->getNumOperands());
+	
+	vnumber = ki->operands[index];
+	assert(	vnumber != -1 &&
+		"Invalid operand to eval(), not a value or constant!");
+
+	// Determine if this is a constant or not.
+	if (vnumber < 0) return kmodule->constantTable[-vnumber - 2];
+
+	//StackFrame &sf = state.stack.back();
+	//return sf.locals[vnumber];
+	return state.readLocalCell(state.stack.size() - 1, vnumber);
+}
+
 void Executor::instRet(ExecutionState &state, KInstruction *ki)
 {
   if (state.stack.size() <= 1) {

@@ -104,6 +104,12 @@ namespace {
                        cl::desc("Rate at which to make concrete reads symbolic (0=off)"),
                        cl::init(0));
 
+  cl::opt<std::string>
+  GuestType(
+  	"guest-type",
+	cl::desc("Type of guest to use. {*ptrace, sshot, elf}"),
+  	cl::init("ptrace"));
+
   cl::opt<bool>
   XChkJIT("xchkjit",
   	cl::desc("Cross check concrete / no syscall binary with JIT."),
@@ -394,34 +400,38 @@ static CmdArgs* getCmdArgs(char** envp)
 Guest* getGuest(CmdArgs* cmdargs)
 {
 	Guest	*gs;
-#if 1
-	gs = GuestPTImg::create<GuestPTImg>(
-		cmdargs->getArgc(),
-		cmdargs->getArgv(),
-		cmdargs->getEnvp());
-#elif 0
-	ElfImg		*img;
-	GuestELF	*ge;
 
-	img = ElfImg::create(cmdargs->getArgv()[0]);
-	if (img == NULL) {
-		fprintf(stderr, "%s: Could not open ELF %s\n", 
-		argv[0], argv[1]);
-		return -2;
+	if (GuestType == "ptrace") {
+		gs = GuestPTImg::create<GuestPTImg>(
+			cmdargs->getArgc(),
+			cmdargs->getArgv(),
+			cmdargs->getEnvp());
+	} else if (GuestType == "elf") {
+		ElfImg		*img;
+		GuestELF	*ge;
+
+		img = ElfImg::create(cmdargs->getArgv()[0]);
+		if (img == NULL) {
+			fprintf(stderr, "Could not open ELF\n");
+			return NULL;
+		}
+
+		ge = new GuestELF(img);
+		ge->setArgv(
+			cmdargs->getArgc(),
+			const_cast<const char**>(cmdargs->getArgv()),
+			(int)cmdargs->getEnvc(),
+			const_cast<const char**>(cmdargs->getEnvp()));
+		
+		gs = ge;
+	} else if (GuestType == "sshot") {
+		fprintf(stderr, "[klee-mc] LOADING SNAPSHOT\n");
+		gs = Guest::load();
+		assert (gs && "Could not load guest snapshot");
+	} else {
+		assert ("unknown guest type");
 	}
 
-	ge = new GuestELF(img);
-	ge->setArgv(
-		cmdargs->getArgc(),
-		const_cast<const char**>(cmdargs->getArgv()),
-		(int)cmdargs->getEnvc(),
-		const_cast<const char**>(cmdargs->getEnvp()));
-	gs = ge;
-#else
-	fprintf(stderr, "[klee-mc] LOADING SNAPSHOT\n");
-	gs = Guest::load();
-	assert (gs && "Could not load guest snapshot");
-#endif
 	return gs;
 }
 

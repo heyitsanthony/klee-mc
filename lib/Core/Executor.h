@@ -101,7 +101,6 @@ public:
 
   const KModule* getKModule(void) const { return kmodule; }
 
-
 private:
   class TimerInfo;
   static void deleteTimerInfo(TimerInfo*&);
@@ -194,10 +193,10 @@ protected:
 
   Expr::Width getWidthForLLVMType(const llvm::Type *type) const;
 
-  virtual const Cell& eval(
+  const Cell& eval(
     KInstruction *ki,
     unsigned index,
-    ExecutionState &state) const = 0;
+    ExecutionState &state) const;
 
   llvm::Function* getCalledFunction(llvm::CallSite &cs, ExecutionState &state);
 
@@ -220,28 +219,6 @@ protected:
         KInstruction *ki,
         llvm::Function *f,
         std::vector< ref<Expr> > &arguments);
-
-  /// Add the given (boolean) condition as a constraint on state. This
-  /// function is a wrapper around the state's addConstraint function
-  /// which also manages manages propogation of implied values,
-  /// validity checks, and seed patching.
-  bool addConstraint(ExecutionState &state, ref<Expr> condition);
-
-  ObjectState* executeMakeSymbolic(
-  	ExecutionState &state,
-	const MemoryObject *mo,
-	const char* arrPrefix = "arr");
-  ObjectState* executeMakeSymbolic(
-    ExecutionState& state,
-    const MemoryObject* mo,
-    ref<Expr> len,
-    const char* arrPrefix = "arr");
-
-  // Given a concrete object in our [klee's] address space, add it to 
-  // objects checked code can reference.
-  MemoryObject *addExternalObject(ExecutionState &state, void *addr, 
-                                  unsigned size, bool isReadOnly);
-
 
   InterpreterHandler *interpreterHandler;
   llvm::TargetData* target_data;
@@ -517,6 +494,29 @@ public:
   virtual ~Executor();
 
   const InterpreterHandler& getHandler() { return *interpreterHandler; }
+
+  /// Add the given (boolean) condition as a constraint on state. This
+  /// function is a wrapper around the state's addConstraint function
+  /// which also manages manages propogation of implied values,
+  /// validity checks, and seed patching.
+  bool addConstraint(ExecutionState &state, ref<Expr> condition);
+
+  ObjectState* executeMakeSymbolic(
+  	ExecutionState &state,
+	const MemoryObject *mo,
+	const char* arrPrefix = "arr");
+
+  ObjectState* executeMakeSymbolic(
+    ExecutionState& state,
+    const MemoryObject* mo,
+    ref<Expr> len,
+    const char* arrPrefix = "arr");
+
+  // Given a concrete object in our [klee's] address space, add it to 
+  // objects checked code can reference.
+  MemoryObject *addExternalObject(
+    ExecutionState &state, void *addr, 
+    unsigned size, bool isReadOnly);
 
   // XXX should just be moved out to utility module
   ref<klee::ConstantExpr> evalConstant(llvm::Constant *c);

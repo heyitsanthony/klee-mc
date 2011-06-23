@@ -77,11 +77,6 @@ protected:
 
   	virtual void run(ExecutionState &initialState);
 
-	virtual const Cell& eval(
-		KInstruction *ki,
-		unsigned index,
-		ExecutionState &state) const;
-
 	virtual void callExternalFunction(
 		ExecutionState &state,
 		KInstruction *target,

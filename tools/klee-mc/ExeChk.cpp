@@ -11,6 +11,8 @@
 #include "static/Sugar.h"
 
 #include <iostream>
+
+#include "SymSyscalls.h"
 #include "ExeChk.h"
 
 using namespace llvm;
@@ -135,7 +137,7 @@ bool ExeChk::handleXferSyscall(ExecutionState& state, KInstruction* ki)
 			sys_nr,
 			(int)sp.getArg(0));
 		ret = false;
-		sc_ret_v(state, sp.getArg(0));
+		sc->sc_ret_v(state, sp.getArg(0));
 		goto done;
 	default:
 		fprintf(stderr, "BAD SYSCALL 0x%x\n", sys_nr);

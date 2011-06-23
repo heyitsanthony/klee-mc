@@ -21,6 +21,7 @@ namespace klee {
 class KModule;
 class MemoryObject;
 class ObjectState;
+class SymSyscalls;
 
 // ugh g++, you delicate garbage
 typedef __gnu_cxx::hash_map<uintptr_t /* Func*/, VexSB*> func2vsb_map;
@@ -46,6 +47,14 @@ public:
 
 	virtual void runImage(void);
 
+	Guest* getGuest(void) { return gs; }
+	const Guest* getGuest(void) const { return gs; }
+	MemoryObject* getCPUMemObj(void) { return state_regctx_mo; }
+
+	void makeRangeSymbolic(
+		ExecutionState& state, void* addr, unsigned sz,
+		const char* name = NULL);
+	MemoryManager* getMM(void) { return memory; }
 protected:
   	virtual void executeInstruction(
 		ExecutionState &state, KInstruction *ki);
@@ -56,11 +65,6 @@ protected:
 		std::vector< ref<Expr> > &arguments) { assert (0 == 1 && "STUB"); }
 	virtual void instRet(ExecutionState &state, KInstruction *ki);
   	virtual void run(ExecutionState &initialState);
-
-	virtual const Cell& eval(
-		KInstruction *ki,
-		unsigned index,
-		ExecutionState &state) const;
 
 	virtual void callExternalFunction(
 		ExecutionState &state,
@@ -75,15 +79,12 @@ protected:
 
 	virtual void handleXfer(ExecutionState& state, KInstruction *ki);
 	void updateGuestRegs(ExecutionState& s);
-	void sc_ret_v(ExecutionState& state, uint64_t v);
 
 	VexXlate	*xlate;
 	Guest		*gs;
+	SymSyscalls	*sc;
 private:
 	void markExitIgnore(ExecutionState& state);
-	void makeRangeSymbolic(
-		ExecutionState& state, void* addr, unsigned sz,
-		const char* name = NULL);
 
 	void makeSymbolicTail(
 		ExecutionState& state,
@@ -129,22 +130,6 @@ private:
 		ExecutionState& state, KInstruction* ki);
 	void jumpToKFunc(ExecutionState& state, KFunction* kf);
 
-	ObjectState* sc_ret_ge0(ExecutionState& state);
-	ObjectState* sc_ret_le0(ExecutionState& state);
-	ObjectState* sc_ret_or(ExecutionState& state, uint64_t o1, uint64_t o2);
-	ObjectState* sc_ret_range(
-		ExecutionState& state, uint64_t lo, uint64_t hi);
-	void sc_fail(ExecutionState& state);
-
-	void sc_writev(ExecutionState& state);
-	void sc_getcwd(ExecutionState& state);
-	void sc_read(ExecutionState& state);
-	void sc_mmap(ExecutionState& state, KInstruction* ki);
-	void sc_munmap(ExecutionState& state);
-	void sc_stat(ExecutionState& state);
-	
-	ObjectState* makeSCRegsSymbolic(ExecutionState& state);
-
 	struct XferStateIter
 	{
 		ref<Expr>	v;
@@ -163,12 +148,7 @@ private:
 	VexFCache	*xlate_cache;
 	MemoryObject	*state_regctx_mo;
 
-	unsigned int	sc_dispatched;
-	unsigned int	sc_retired;
-
 	bool		dump_funcs;
-
-	unsigned int	syscall_c[512];
 };
 
 }
