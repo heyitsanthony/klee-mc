@@ -1309,13 +1309,13 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 
 const Cell& Executor::eval(
 	KInstruction *ki,
-	unsigned index, 
+	unsigned index,
 	ExecutionState &state) const
 {
 	int vnumber;
 
 	assert(index < ki->inst->getNumOperands());
-	
+
 	vnumber = ki->operands[index];
 	assert(	vnumber != -1 &&
 		"Invalid operand to eval(), not a value or constant!");
@@ -2040,7 +2040,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     CastInst 		*ci = cast<CastInst>(i);
     const VectorType	*vt_src, *vt_dst;
     ref<Expr>		result, evaled;
-    
+
     vt_src = dyn_cast<const VectorType>(ci->getSrcTy());
     vt_dst = dyn_cast<const VectorType>(ci->getDestTy());
     evaled =  eval(ki, 0, state).value;
@@ -2777,6 +2777,40 @@ void Executor::resolveExact(ExecutionState &state,
 }
 
 /* handles a memop that can be immediately resolved */
+bool Executor::memOpByByte(
+  ExecutionState& state,
+  bool isWrite,
+  ref<Expr> address,
+  ref<Expr> value,
+  KInstruction* target)
+{
+	Expr::Width	type;
+	unsigned	bytes;
+
+	type = (isWrite ? value->getWidth() :
+		getWidthForLLVMType(target->inst->getType()));
+
+	if ((type % 8) != 0) return false;
+
+	bytes = Expr::getMinBytesForWidth(type);
+	for (unsigned i = 0; i < bytes; i++) {
+		ref<Expr>	byte_addr;
+		ref<Expr>	byte_val;
+
+		byte_addr = AddExpr::create(
+			address,
+			ConstantExpr::create(i, 64));
+
+		if (isWrite) {
+			byte_val = ExtractExpr::create(value, 8*i, 8);
+		}
+		if (!memOpFast(state, isWrite, byte_addr, byte_val, target))
+			return false;
+	}
+	return true;
+}
+
+/* handles a memop that can be immediately resolved */
 bool Executor::memOpFast(
   ExecutionState& state,
   bool isWrite,
@@ -2818,7 +2852,9 @@ bool Executor::memOpFast(
     return true;
   }
 
-  if (!inBounds) return false;
+  if (!inBounds) {
+    return false;
+  }
 
   if (isWrite) {
     if (os->readOnly) {
@@ -2911,13 +2947,6 @@ void Executor::memOpError(
   if (incomplete) {
     terminateStateEarly(*unbound, "query timed out (resolve)");
   } else {
-  #if 0
-    Instruction	*inst;
-    inst = target->inst;
-    std::cerr
-    	<< inst->getParent()->getParent()->getNameStr()
-    	<< ": " <<  *inst << std::endl;
-  #endif
     terminateStateOnError(*unbound,
                           "memory error: out of bound pointer",
                           "ptr.err",
@@ -2940,6 +2969,8 @@ void Executor::executeMemoryOperation(ExecutionState &state,
   }
 
   if (memOpFast(state, isWrite, address, value, target)) return;
+
+  if (memOpByByte(state, isWrite, address, value, target)) return;
 
   // we are on an error path (no resolution, multiple resolution, one
   // resolution with out of bounds)
@@ -3191,7 +3222,7 @@ void Executor::initializeGlobalObject(
 {
 	if (ConstantVector *cp = dyn_cast<ConstantVector>(c)) {
 		unsigned elementSize;
-		
+
 		elementSize = target_data->getTypeStoreSize(
 			cp->getType()->getElementType());
 		for (unsigned i=0, e=cp->getNumOperands(); i != e; ++i)
@@ -3246,7 +3277,7 @@ void Executor::initializeGlobalObject(
 Function* Executor::getCalledFunction(CallSite &cs, ExecutionState &state)
 {
 	Function *f;
-	
+
 	f = cs.getCalledFunction();
 
 	if (!f) return f;

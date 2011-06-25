@@ -382,6 +382,13 @@ private:
     ref<Expr> value,
     KInstruction* target);
 
+  bool memOpByByte(
+    ExecutionState& state,
+    bool isWrite,
+    ref<Expr> address,
+    ref<Expr> value,
+    KInstruction* target);
+
   ExecutionState* getUnboundState(
     ExecutionState* unbound,
     ObjectPair& resolution,

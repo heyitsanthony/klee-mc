@@ -114,10 +114,6 @@ void ExecutorVex::runImage(void)
 	processTree = new PTree(state);
 	state->ptreeNode = processTree->root;
 
-	std::cerr << "BEGIN INITIAL MAP_-------------------------\n";
-	std::cerr << state->addressSpace.objects;
-	std::cerr << "END INITIAL MAP-------------------------\n";
-
 	fprintf(stderr, "COMMENCE THE RUN!!!!!!\n");
 	run(*state);
 	fprintf(stderr, "DONE RUNNING.\n");
@@ -132,7 +128,6 @@ void ExecutorVex::runImage(void)
 	globalObjects.clear();
 	globalAddresses.clear();
 
-	fprintf(stderr, "STIL LCLEANING\n");
 	if (statsTracker) statsTracker->done();
 
 	fprintf(stderr, "OK.\n");
@@ -233,8 +228,8 @@ void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
 	KFunction			*kf;
 	std::vector<ref<Expr> >		args;
 	unsigned int			state_regctx_sz;
-	
-	
+
+
 	state_regctx_sz = gs->getCPUState()->getStateSize();
 	state_regctx_mo = memory->allocate(
 		state_regctx_sz,
@@ -255,7 +250,7 @@ void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
 	if (!state_regctx_mo) return;
 
 	state_regctx_os = bindObjectInState(*state, state_regctx_mo);
-	
+
 	const char*  state_data = (const char*)gs->getCPUState()->getStateData();
 	for (unsigned int i=0; i < state_regctx_sz; i++)
 		state->write8(state_regctx_os, i, state_data[i]);
@@ -346,7 +341,7 @@ void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
 
 	vsb = func2vsb_table[(uintptr_t)cur_func];
 	if (vsb == NULL) {
-		/* no VSB => outcall to externa LLVM bitcode; 
+		/* no VSB => outcall to externa LLVM bitcode;
 		 * use default KLEE return handling */
 		assert (state.stack.size() > 1);
 		Executor::retFromNested(state, ki);
@@ -364,7 +359,7 @@ void ExecutorVex::markExitIgnore(ExecutionState& state)
 	gs->getCPUState()->setExitType(GE_IGNORE);
 	state_regctx_os = state.addressSpace.findObject(state_regctx_mo);
 	state.write8(
-		state_regctx_os, 
+		state_regctx_os,
 		gs->getCPUState()->getExitTypeOffset(),
 		GE_IGNORE);
 }
@@ -509,12 +504,12 @@ void ExecutorVex::handleXferCall(ExecutionState& state, KInstruction* ki)
 
 	args.push_back(state_regctx_mo->getBaseExpr());
 	xferIterInit(iter, &state, ki);
-	while (xferIterNext(iter)) { 
+	while (xferIterNext(iter)) {
 		executeCall(*(iter.res.first), ki, iter.f, args);
 	}
 }
 
-/* system calls serve three purposes: 
+/* system calls serve three purposes:
  * 1. xfer data
  * 2. manage state
  * 3. launch processes
@@ -717,7 +712,7 @@ void ExecutorVex::makeSymbolicHead(
 	if (mo_size == taken) {
 		executeMakeSymbolic(
 			state,
-			mo, 
+			mo,
 			ConstantExpr::alloc(mo_size, 32),
 			name);
 		return;
@@ -764,8 +759,6 @@ void ExecutorVex::makeSymbolicMiddle(
 
 	mo_addr = mo->address;
 	mo_size = mo->size;
-	fprintf(stderr, "STUPID STUPID %s. sz=%d. end=%d\n", 
-		name, mo_size, mo_off+taken);
 	assert (mo_size > (mo_off+taken) && "Off+Taken out of range");
 
 	/* copy buffer data */
@@ -831,9 +824,6 @@ void ExecutorVex::makeRangeSymbolic(
 
 		assert (mo->address <= cur_addr && "BAD SEARCH?");
 		mo_off = cur_addr - mo->address;
-		fprintf(stderr, "CUR ADDR %p. MO_ADDR = %p. off=%p\n",
-			cur_addr, mo->address, mo_off);
-
 		assert (mo_off < mo->size && "Out of range of MO??");
 
 		take_remaining = sz - total_sz;
@@ -860,8 +850,6 @@ void ExecutorVex::makeRangeSymbolic(
 			makeSymbolicHead(state, mo, taken, name);
 		}
 
-		fprintf(stderr, "TAKE BYTES %p\n", tail_take_bytes);
-
 		/* set stat structure as symbolic */
 		cur_addr += taken;
 		total_sz += taken;
@@ -873,11 +861,17 @@ void ExecutorVex::printStateErrorMessage(
 	const std::string& message,
 	std::ostream& os)
 {
+	Function*	top_f;
+
 	/* TODO: get line information for state.prevPC */
 	klee_message("ERROR: %s", message.c_str());
 
 	os << "Error: " << message << "\n";
-	os << "Stack: \n";
+
+	os << "Objects: " << std::endl;
+	os << state.addressSpace.objects;
+
+	os << "\nStack: \n";
 
 	unsigned idx = 0;
 	foreach (it, state.stack.rbegin(), state.stack.rend())
@@ -890,10 +884,35 @@ void ExecutorVex::printStateErrorMessage(
 		os	<< "\t#" << idx++
 			<< " in " << f->getNameStr();
 		if (vsb) {
-			os	<< "("
+			os	<< " ("
 				<< gs->getName((void*)vsb->getGuestAddr())
 				<< ")";
 		}
 		os << "\n";
 	}
+
+
+	if (state.prevPC) {
+		os << "prevPC:\n";
+		state.prevPC->inst->print(os);
+		os << "\n";
+	}
+
+	if (state.pc) {
+		os << "PC:\n";
+		state.pc->inst->print(os);
+		os << "\n";
+	}
+
+
+	top_f = state.stack.back().kf->function;
+	if (top_f) {
+		os << "Func: ";
+		top_f->print(os);
+		os << "\n";
+	}
+
+
+	os << "Constraints: \n";
+	state.constraints.print(os);
 }
