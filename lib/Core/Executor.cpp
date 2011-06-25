@@ -970,7 +970,7 @@ void Executor::executeGetValue(ExecutionState &state,
   }
 
   std::set< ref<Expr> > values;
-  for (SeedInfoIterator siit = si_begin, siie = si_end; siit != siie; ++siit) {
+  foreach (siit, si_begin, si_end) {
     ref<ConstantExpr> value;
     bool success =
       solver->getValue(state, siit->assignment.evaluate(e), value);
