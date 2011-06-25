@@ -212,6 +212,19 @@ void SymSyscalls::sc_stat(ExecutionState& state, const SyscallParams &sp)
 	sc_ret_le0(state);
 }
 
+void SymSyscalls::sc_pread(ExecutionState& state, const SyscallParams& sp)
+{
+	uint64_t		buf_sz, buf_addr;
+
+	buf_addr = sp.getArg(1);
+	buf_sz = sp.getArg(2);
+
+	fprintf(stderr, "MARK %p-%p SYMBOLIC\n", buf_addr, buf_addr+buf_sz);
+	exe_vex->makeRangeSymbolic(state, (void*)buf_addr, buf_sz, "readbuf");
+	if (rand() % 2) sc_ret_v(state, buf_sz);
+	else		sc_ret_v(state, -1);
+}
+
 void SymSyscalls::sc_read(ExecutionState& state, const SyscallParams& sp)
 {
 	uint64_t		buf_sz, buf_addr;
@@ -378,6 +391,9 @@ bool SymSyscalls::apply(
 	case SYS_fadvise64:
 		sc_ret_v(state, 0);
 		break;
+	case SYS_pread64:
+		sc_pread(state, sp);
+		break;
 	case SYS_read:
 		sc_read(state, sp);
 		break;
@@ -462,6 +478,9 @@ bool SymSyscalls::apply(
 		break;
 	case SYS_mmap:
 		sc_mmap(state, sp, ki);
+		break;
+	case SYS_dup:
+		sc_ret_ge0(state);
 		break;
 	case SYS_getrusage:
 		exe_vex->makeRangeSymbolic(

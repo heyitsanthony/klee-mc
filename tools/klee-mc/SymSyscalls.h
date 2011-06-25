@@ -37,6 +37,7 @@ private:
 	DECL_SC(munmap)
 	DECL_SC(stat)
 	DECL_SC(read)
+	DECL_SC(pread)
 	DECL_SC(getdents)
 	void sc_mmap(
 		ExecutionState& state, 

@@ -4,6 +4,7 @@
 #include "guest.h"
 #include "../../lib/Core/Executor.h"
 
+#include <iostream>
 #include <hash_map>
 #include <assert.h>
 
@@ -77,12 +78,18 @@ protected:
 	void handleXferJmp(
 		ExecutionState& state, KInstruction* ki);
 
+	virtual void printStateErrorMessage(
+		ExecutionState& state,
+		const std::string& message,
+		std::ostream& os);
+
 	virtual void handleXfer(ExecutionState& state, KInstruction *ki);
 	void updateGuestRegs(ExecutionState& s);
 
 	VexXlate	*xlate;
 	Guest		*gs;
 	SymSyscalls	*sc;
+
 private:
 	void markExitIgnore(ExecutionState& state);
 
@@ -107,9 +114,6 @@ private:
 		ExecutionState* state,
 		llvm::Function* f,
 		GuestMem::Mapping m);
-	void bindModuleConstants(void);
-	void bindKFuncConstants(KFunction *kfunc);
-	void bindModuleConstTable(void);
 	void initializeGlobals(ExecutionState& state);
 	void prepState(ExecutionState* state, llvm::Function*);
 	void setupRegisterContext(ExecutionState* state, llvm::Function* f);

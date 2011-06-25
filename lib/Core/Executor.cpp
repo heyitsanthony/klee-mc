@@ -491,6 +491,7 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal)
   return std::make_pair(results[1], results[0]);
 }
 
+// XXX this is a bad function and I hate it.
 bool Executor::forkSetupNoSeeding(
   ExecutionState& current,
   unsigned N, std::vector<bool>& res,
@@ -892,19 +893,6 @@ ref<klee::ConstantExpr> Executor::evalConstant(Constant *c)
   }
 }
 
-void Executor::bindLocal(KInstruction *target, ExecutionState &state,
-                         ref<Expr> value) {
-  //getDestCell(state, target).value = value;
-    state.writeLocalCell(state.stack.size() - 1, target->dest, value);
-}
-
-void Executor::bindArgument(KFunction *kf, unsigned index,
-                            ExecutionState &state, ref<Expr> value) {
-  ///getArgumentCell(state, kf, index).value = value;
-    state.writeLocalCell(state.stack.size() - 1, kf->getArgRegister(index), value);
-
-}
-
 ref<Expr> Executor::toUnique(const ExecutionState &state,
                              ref<Expr> &e) {
   ref<Expr> result = e;
@@ -977,7 +965,7 @@ void Executor::executeGetValue(ExecutionState &state,
     bool success = solver->getValue(state, e, value);
     assert(success && "FIXME: Unhandled solver failure");
     (void) success;
-    bindLocal(target, state, value);
+    state.bindLocal(target, value);
     return;
   }
 
@@ -1001,7 +989,7 @@ void Executor::executeGetValue(ExecutionState &state,
   StateVector::iterator bit = branches.begin();
   foreach (vit, values.begin(), values.end()) {
     ExecutionState *es = *bit;
-    if (es) bindLocal(target, *es, *vit);
+    if (es) es->bindLocal(target, *vit);
     ++bit;
   }
 }
@@ -1077,7 +1065,7 @@ void Executor::executeCallNonDecl(
 
 	numFormals = f->arg_size();
 	for (unsigned i=0; i<numFormals; ++i)
-		bindArgument(kf, i, state, arguments[i]);
+		state.bindArgument(kf, i, arguments[i]);
 }
 
 
@@ -1221,33 +1209,7 @@ void Executor::executeCall(ExecutionState &state,
     klee_error("unknown intrinsic: %s", f->getName().data());
   }
   if (InvokeInst *ii = dyn_cast<InvokeInst>(i))
-    transferToBasicBlock(ii->getNormalDest(), i->getParent(), state);
-}
-
-void Executor::transferToBasicBlock(
-	BasicBlock *dst, BasicBlock *src,
-        ExecutionState &state)
-{
-  // Note that in general phi nodes can reuse phi values from the same
-  // block but the incoming value is the eval() result *before* the
-  // execution of any phi nodes. this is pathological and doesn't
-  // really seem to occur, but just in case we run the PhiCleanerPass
-  // which makes sure this cannot happen and so it is safe to just
-  // eval things in order. The PhiCleanerPass also makes sure that all
-  // incoming blocks have the same order for each PHINode so we only
-  // have to compute the index once.
-  //
-  // With that done we simply set an index in the state so that PHI
-  // instructions know which argument to eval, set the pc, and continue.
-
-  // XXX this lookup has to go ?
-  KFunction *kf = state.stack.back().kf;
-  unsigned entry = kf->basicBlockEntry[dst];
-  state.pc = &kf->instructions[entry];
-  if (state.pc->inst->getOpcode() == Instruction::PHI) {
-    PHINode *first = static_cast<PHINode*>(state.pc->inst);
-    state.incomingBBIndex = first->getBasicBlockIndex(src);
-  }
+    state.transferToBasicBlock(ii->getNormalDest(), i->getParent());
 }
 
 void Executor::printFileLine(ExecutionState &state, KInstruction *ki) {
@@ -1306,7 +1268,7 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
   if (statsTracker) statsTracker->framePopped(state);
 
   if (InvokeInst *ii = dyn_cast<InvokeInst>(caller)) {
-    transferToBasicBlock(ii->getNormalDest(), caller->getParent(), state);
+    state.transferToBasicBlock(ii->getNormalDest(), caller->getParent());
   } else {
     state.pc = kcaller;
     ++state.pc;
@@ -1341,8 +1303,8 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
       result = ZExtExpr::create(result, to);
     }
   }
-  bindLocal(kcaller, state, result);
 
+  state.bindLocal(kcaller, result);
 }
 
 const Cell& Executor::eval(
@@ -1382,7 +1344,7 @@ void Executor::instBranch(ExecutionState& state, KInstruction* ki)
 {
   BranchInst *bi = cast<BranchInst>(ki->inst);
   if (bi->isUnconditional()) {
-    transferToBasicBlock(bi->getSuccessor(0), bi->getParent(), state);
+    state.transferToBasicBlock(bi->getSuccessor(0), bi->getParent());
     return;
   }
 
@@ -1440,8 +1402,8 @@ void Executor::instBranch(ExecutionState& state, KInstruction* ki)
       branches.first = newState;
     }
     if (!branches.first->isCompactForm)
-      transferToBasicBlock(bi->getSuccessor(0), bi->getParent(),
-        *branches.first);
+      branches.first->transferToBasicBlock(
+      	bi->getSuccessor(0), bi->getParent());
   }
 
   if (branches.second) {
@@ -1459,8 +1421,8 @@ void Executor::instBranch(ExecutionState& state, KInstruction* ki)
       branches.second = newState;
     }
     if (!branches.second->isCompactForm)
-      transferToBasicBlock(bi->getSuccessor(1), bi->getParent(),
-        *branches.second);
+      branches.second->transferToBasicBlock(
+      	bi->getSuccessor(1), bi->getParent());
   }
 }
 
@@ -1614,7 +1576,7 @@ void Executor::instCmp(ExecutionState& state, KInstruction *ki)
 		if (!ok) return;
 	}
 
-	bindLocal(ki, state, result);
+	state.bindLocal(ki, result);
 }
 
 #define SETUP_VOP(x)					\
@@ -1810,7 +1772,7 @@ void Executor::instSwitch(ExecutionState& state, KInstruction *ki)
       es = newState;
     }
 
-    if (!es->isCompactForm) transferToBasicBlock(destBlock, bb, *es);
+    if (!es->isCompactForm) es->transferToBasicBlock(destBlock, bb);
 
     // Update coverage stats
     if (kf->trackCoverage &&
@@ -1847,7 +1809,7 @@ void Executor::instExtractElement(ExecutionState& state, KInstruction* ki)
 	assert (idx < v_elem_c && "ExtrctElement idx overflow");
 	ref<Expr>		out_val;
 	out_val = ExtractExpr::create(in_v, idx*v_elem_sz, v_elem_sz);
-	bindLocal(ki, state, out_val);
+	state.bindLocal(ki, out_val);
 }
 
 void Executor::instShuffleVector(ExecutionState& state, KInstruction* ki)
@@ -1894,7 +1856,7 @@ void Executor::instShuffleVector(ExecutionState& state, KInstruction* ki)
 		else out_val = ConcatExpr::create(out_val, ext);
 	}
 
-	bindLocal(ki, state, out_val);
+	state.bindLocal(ki, out_val);
 }
 
 void Executor::instUnwind(ExecutionState& state)
@@ -1912,7 +1874,7 @@ void Executor::instUnwind(ExecutionState& state)
 
     Instruction *caller = kcaller->inst;
     if (InvokeInst *ii = dyn_cast<InvokeInst>(caller)) {
-      transferToBasicBlock(ii->getUnwindDest(), caller->getParent(), state);
+      state.transferToBasicBlock(ii->getUnwindDest(), caller->getParent());
       return;
     }
   }
@@ -1982,7 +1944,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     break;
   case Instruction::PHI: {
     ref<Expr> result = eval(ki, state.incomingBBIndex * 2, state).value;
-    bindLocal(ki, state, result);
+    state.bindLocal(ki, result);
     break;
   }
 
@@ -1995,7 +1957,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     ref<Expr> tExpr = eval(ki, 1, state).value;
     ref<Expr> fExpr = eval(ki, 2, state).value;
     ref<Expr> result = SelectExpr::create(cond, tExpr, fExpr);
-    bindLocal(ki, state, result);
+    state.bindLocal(ki, result);
     break;
   }
 
@@ -2008,7 +1970,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
   case Instruction::x : {                             \
     ref<Expr> left = eval(ki, 0, state).value;        \
     ref<Expr> right = eval(ki, 1, state).value;       \
-    bindLocal(ki, state, y::create(left, right));     \
+    state.bindLocal(ki, y::create(left, right));     \
     break; \
   }
 
@@ -2054,7 +2016,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     }
     if (kgepi->offset)
       base = AddExpr::create(base, Expr::createPointer(kgepi->offset));
-    bindLocal(ki, state, base);
+    state.bindLocal(ki, base);
     break;
   }
 
@@ -2064,14 +2026,14 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     ref<Expr> result = ExtractExpr::create(eval(ki, 0, state).value,
                                            0,
                                            getWidthForLLVMType(ci->getType()));
-    bindLocal(ki, state, result);
+    state.bindLocal(ki, result);
     break;
   }
   case Instruction::ZExt: {
     CastInst *ci = cast<CastInst>(i);
     ref<Expr> result = ZExtExpr::create(eval(ki, 0, state).value,
                                         getWidthForLLVMType(ci->getType()));
-    bindLocal(ki, state, result);
+    state.bindLocal(ki, result);
     break;
   }
   case Instruction::SExt: {
@@ -2089,7 +2051,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
         evaled,
         getWidthForLLVMType(ci->getType()));
     }
-    bindLocal(ki, state, result);
+    state.bindLocal(ki, result);
     break;
   }
 
@@ -2097,99 +2059,43 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     CastInst *ci = cast<CastInst>(i);
     Expr::Width pType = getWidthForLLVMType(ci->getType());
     ref<Expr> arg = eval(ki, 0, state).value;
-    bindLocal(ki, state, ZExtExpr::create(arg, pType));
+    state.bindLocal(ki, ZExtExpr::create(arg, pType));
     break;
   }
   case Instruction::PtrToInt: {
     CastInst *ci = cast<CastInst>(i);
     Expr::Width iType = getWidthForLLVMType(ci->getType());
     ref<Expr> arg = eval(ki, 0, state).value;
-    bindLocal(ki, state, ZExtExpr::create(arg, iType));
+    state.bindLocal(ki, ZExtExpr::create(arg, iType));
     break;
   }
 
   case Instruction::BitCast: {
     ref<Expr> result = eval(ki, 0, state).value;
-    bindLocal(ki, state, result);
+    state.bindLocal(ki, result);
     break;
   }
 
-    // Floating point instructions
+    // Floating point arith instructions
+#define INST_FOP_ARITH(x,y)					\
+  case Instruction::x: {					\
+    ref<ConstantExpr> left, right;				\
+    right = toConstant(state, eval(ki, 1, state).value, "floating point");	\
+    left = toConstant(state, eval(ki, 0, state).value, "floating point");	\
+    if (!fpWidthToSemantics(left->getWidth()) ||				\
+        !fpWidthToSemantics(right->getWidth()))					\
+      return terminateStateOnExecError(state, "Unsupported "#x" operation");	\
+	\
+    llvm::APFloat Res(left->getAPValue());					\
+    Res.y(APFloat(right->getAPValue()), APFloat::rmNearestTiesToEven);		\
+    state.bindLocal(ki, ConstantExpr::alloc(Res.bitcastToAPInt()));		\
+    break; }
 
-  case Instruction::FAdd: {
-    ref<ConstantExpr> left = toConstant(state, eval(ki, 0, state).value,
-                                        "floating point");
-    ref<ConstantExpr> right = toConstant(state, eval(ki, 1, state).value,
-                                         "floating point");
-    if (!fpWidthToSemantics(left->getWidth()) ||
-        !fpWidthToSemantics(right->getWidth()))
-      return terminateStateOnExecError(state, "Unsupported FAdd operation");
-
-    llvm::APFloat Res(left->getAPValue());
-    Res.add(APFloat(right->getAPValue()), APFloat::rmNearestTiesToEven);
-    bindLocal(ki, state, ConstantExpr::alloc(Res.bitcastToAPInt()));
-    break;
-  }
-
-  case Instruction::FSub: {
-    ref<ConstantExpr> left = toConstant(state, eval(ki, 0, state).value,
-                                        "floating point");
-    ref<ConstantExpr> right = toConstant(state, eval(ki, 1, state).value,
-                                         "floating point");
-    if (!fpWidthToSemantics(left->getWidth()) ||
-        !fpWidthToSemantics(right->getWidth()))
-      return terminateStateOnExecError(state, "Unsupported FSub operation");
-
-    llvm::APFloat Res(left->getAPValue());
-    Res.subtract(APFloat(right->getAPValue()), APFloat::rmNearestTiesToEven);
-    bindLocal(ki, state, ConstantExpr::alloc(Res.bitcastToAPInt()));
-    break;
-  }
-
-  case Instruction::FMul: {
-    ref<ConstantExpr> left = toConstant(state, eval(ki, 0, state).value,
-                                        "floating point");
-    ref<ConstantExpr> right = toConstant(state, eval(ki, 1, state).value,
-                                         "floating point");
-    if (!fpWidthToSemantics(left->getWidth()) ||
-        !fpWidthToSemantics(right->getWidth()))
-      return terminateStateOnExecError(state, "Unsupported FMul operation");
-
-    llvm::APFloat Res(left->getAPValue());
-    Res.multiply(APFloat(right->getAPValue()), APFloat::rmNearestTiesToEven);
-    bindLocal(ki, state, ConstantExpr::alloc(Res.bitcastToAPInt()));
-    break;
-  }
-
-  case Instruction::FDiv: {
-    ref<ConstantExpr> left = toConstant(state, eval(ki, 0, state).value,
-                                        "floating point");
-    ref<ConstantExpr> right = toConstant(state, eval(ki, 1, state).value,
-                                         "floating point");
-    if (!fpWidthToSemantics(left->getWidth()) ||
-        !fpWidthToSemantics(right->getWidth()))
-      return terminateStateOnExecError(state, "Unsupported FDiv operation");
-
-    llvm::APFloat Res(left->getAPValue());
-    Res.divide(APFloat(right->getAPValue()), APFloat::rmNearestTiesToEven);
-    bindLocal(ki, state, ConstantExpr::alloc(Res.bitcastToAPInt()));
-    break;
-  }
-
-  case Instruction::FRem: {
-    ref<ConstantExpr> left = toConstant(state, eval(ki, 0, state).value,
-                                        "floating point");
-    ref<ConstantExpr> right = toConstant(state, eval(ki, 1, state).value,
-                                         "floating point");
-    if (!fpWidthToSemantics(left->getWidth()) ||
-        !fpWidthToSemantics(right->getWidth()))
-      return terminateStateOnExecError(state, "Unsupported FRem operation");
-
-    llvm::APFloat Res(left->getAPValue());
-    Res.mod(APFloat(right->getAPValue()), APFloat::rmNearestTiesToEven);
-    bindLocal(ki, state, ConstantExpr::alloc(Res.bitcastToAPInt()));
-    break;
-  }
+INST_FOP_ARITH(FAdd, add)
+INST_FOP_ARITH(FSub, subtract)
+INST_FOP_ARITH(FMul, multiply)
+INST_FOP_ARITH(FDiv, divide)
+INST_FOP_ARITH(FRem, mod)
 
   case Instruction::FPTrunc: {
     FPTruncInst *fi = cast<FPTruncInst>(i);
@@ -2204,7 +2110,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     Res.convert(*fpWidthToSemantics(resultType),
                 llvm::APFloat::rmNearestTiesToEven,
                 &losesInfo);
-    bindLocal(ki, state, ConstantExpr::alloc(Res));
+    state.bindLocal(ki, ConstantExpr::alloc(Res));
     break;
   }
 
@@ -2221,7 +2127,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     Res.convert(*fpWidthToSemantics(resultType),
                 llvm::APFloat::rmNearestTiesToEven,
                 &losesInfo);
-    bindLocal(ki, state, ConstantExpr::alloc(Res));
+    state.bindLocal(ki, ConstantExpr::alloc(Res));
     break;
   }
 
@@ -2238,7 +2144,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     bool isExact = true;
     Arg.convertToInteger(&value, resultType, false,
                          llvm::APFloat::rmTowardZero, &isExact);
-    bindLocal(ki, state, ConstantExpr::alloc(value, resultType));
+    state.bindLocal(ki, ConstantExpr::alloc(value, resultType));
     break;
   }
 
@@ -2255,7 +2161,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     bool isExact = true;
     Arg.convertToInteger(&value, resultType, false,
                          llvm::APFloat::rmTowardZero, &isExact);
-    bindLocal(ki, state, ConstantExpr::alloc(value, resultType));
+    state.bindLocal(ki, ConstantExpr::alloc(value, resultType));
     break;
   }
 
@@ -2271,7 +2177,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     f.convertFromAPInt(arg->getAPValue(), false,
                        llvm::APFloat::rmNearestTiesToEven);
 
-    bindLocal(ki, state, ConstantExpr::alloc(f));
+    state.bindLocal(ki, ConstantExpr::alloc(f));
     break;
   }
 
@@ -2287,7 +2193,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     f.convertFromAPInt(arg->getAPValue(), true,
                        llvm::APFloat::rmNearestTiesToEven);
 
-    bindLocal(ki, state, ConstantExpr::alloc(f));
+    state.bindLocal(ki, ConstantExpr::alloc(f));
     break;
   }
 
@@ -2305,7 +2211,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     APFloat RHS(right->getAPValue());
     APFloat::cmpResult CmpRes = LHS.compare(RHS);
 
-    bindLocal(ki, state,
+    state.bindLocal(ki,
       ConstantExpr::alloc(
         isFPPredicateMatched(CmpRes, fi->getPredicate()),
         Expr::Bool));
@@ -2729,13 +2635,14 @@ void Executor::terminateStateOnExit(ExecutionState &state) {
   terminateState(state);
 }
 
-void Executor::terminateStateOnError(ExecutionState &state,
-                                     const llvm::Twine &messaget,
-                                     const char *suffix,
-                                     const llvm::Twine &info) {
+void Executor::terminateStateOnError(
+	ExecutionState &state,
+	const llvm::Twine &messaget,
+	const char *suffix,
+	const llvm::Twine &info)
+{
   std::string message = messaget.str();
   static std::set< std::pair<Instruction*, std::string> > emittedErrors;
-  const InstructionInfo &ii = *state.prevPC->info;
 
   if (!(EmitAllErrors ||
       emittedErrors.insert(std::make_pair(state.prevPC->inst, message)).second))
@@ -2744,30 +2651,40 @@ void Executor::terminateStateOnError(ExecutionState &state,
     return;
   }
 
-
-  if (ii.file != "") {
-    klee_message("ERROR: %s:%d: %s", ii.file.c_str(), ii.line, message.c_str());
-  } else {
-    klee_message("ERROR: %s", message.c_str());
-  }
-  if (!EmitAllErrors)
-    klee_message("NOTE: now ignoring this error at this location");
-
   std::ostringstream msg;
-  msg << "Error: " << message << "\n";
-  if (ii.file != "") {
-    msg << "File: " << ii.file << "\n";
-    msg << "Line: " << ii.line << "\n";
-  }
-
-  msg << "Stack: \n";
-  state.dumpStack(msg);
+  printStateErrorMessage(state, message, msg);
 
   std::string info_str = info.str();
   if (info_str != "") msg << "Info: \n" << info_str;
+
   interpreterHandler->processTestCase(state, msg.str().c_str(), suffix);
 
   terminateState(state);
+}
+
+void Executor::printStateErrorMessage(
+	ExecutionState& state,
+	const std::string& message,
+	std::ostream& os)
+{
+	const InstructionInfo &ii = *state.prevPC->info;
+	if (ii.file != "") {
+		klee_message("ERROR: %s:%d: %s", ii.file.c_str(), ii.line, message.c_str());
+	} else {
+		klee_message("ERROR: %s", message.c_str());
+	}
+
+	if (!EmitAllErrors)
+		klee_message("NOTE: now ignoring this error at this location");
+
+	os << "Error: " << message << "\n";
+	if (ii.file != "") {
+		os << "File: " << ii.file << "\n";
+		os << "Line: " << ii.line << "\n";
+	}
+
+	os << "Stack: \n";
+	state.dumpStack(os);
 }
 
 /***/
@@ -2916,7 +2833,7 @@ bool Executor::memOpFast(
     ref<Expr> result = state.read(os, offset, type);
     if (interpreterOpts.MakeConcreteSymbolic)
       result = replaceReadWithSymbolic(state, result);
-    bindLocal(target, state, result);
+    state.bindLocal(target, result);
   }
 
   return true;
@@ -2957,7 +2874,7 @@ ExecutionState* Executor::getUnboundState(
     } else {
       //ref<Expr> result = os->read(mo->getOffsetExpr(address), type);
       ref<Expr> result = bound->read(os, mo->getOffsetExpr(address), type);
-      bindLocal(target, *bound, result);
+      bound->bindLocal(target, result);
     }
   }
 
@@ -3352,4 +3269,30 @@ Function* Executor::getCalledFunction(CallSite &cs, ExecutionState &state)
 Expr::Width Executor::getWidthForLLVMType(const llvm::Type* type) const
 {
 	return kmodule->targetData->getTypeSizeInBits(type);
+}
+
+void Executor::bindModuleConstants(void)
+{
+	foreach (it, kmodule->kfuncsBegin(), kmodule->kfuncsEnd()) {
+		bindKFuncConstants(*it);
+	}
+
+	bindModuleConstTable();
+}
+
+void Executor::bindModuleConstTable(void)
+{
+	if (kmodule->constantTable) delete [] kmodule->constantTable;
+
+	kmodule->constantTable = new Cell[kmodule->constants.size()];
+	for (unsigned i = 0; i < kmodule->constants.size(); ++i) {
+		Cell &c = kmodule->constantTable[i];
+		c.value = evalConstant(kmodule->constants[i]);
+	}
+}
+
+void Executor::bindKFuncConstants(KFunction* kf)
+{
+	for (unsigned i=0; i<kf->numInstructions; ++i)
+		bindInstructionConstants(kf->instructions[i]);
 }

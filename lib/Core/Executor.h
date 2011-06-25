@@ -127,10 +127,6 @@ protected:
   /// bindInstructionConstants - Initialize any necessary per instruction
   /// constant values.
   void bindInstructionConstants(KInstruction *KI);
-  void bindArgument(KFunction *kf, 
-                    unsigned index,
-                    ExecutionState &state,
-                    ref<Expr> value);
   ObjectState *bindObjectInState(
     ExecutionState &state,
     const MemoryObject *mo,
@@ -140,10 +136,6 @@ protected:
     ExecutionState &state,
     const MemoryObject *mo,
     const Array *array = 0);
-
-  void bindLocal(KInstruction *target, 
-                 ExecutionState &state, 
-                 ref<Expr> value);
 
   StatePair fork(ExecutionState &current, ref<Expr> condition, bool isInternal);
 
@@ -158,6 +150,10 @@ protected:
                              const llvm::Twine &message,
                              const char *suffix,
                              const llvm::Twine &longMessage="");
+  virtual void printStateErrorMessage(
+	ExecutionState& state,
+	const std::string& message,
+	std::ostream& os);
 
   // call error handler and terminate state, for execution errors
   // (things that should not be possible, like illegal instruction or
@@ -205,11 +201,6 @@ protected:
                             llvm::Function *function,
                             std::vector< ref<Expr> > &arguments) = 0;
 
-  void transferToBasicBlock(
-    llvm::BasicBlock *dst, 
-    llvm::BasicBlock *src,
-    ExecutionState &state);
-
   void executeSymbolicFuncPtr(
 	ExecutionState &state, 
 	KInstruction *ki,
@@ -219,6 +210,11 @@ protected:
         KInstruction *ki,
         llvm::Function *f,
         std::vector< ref<Expr> > &arguments);
+
+  void bindModuleConstants(void);
+  void bindKFuncConstants(KFunction *kfunc);
+  void bindModuleConstTable(void);
+
 
   InterpreterHandler *interpreterHandler;
   llvm::TargetData* target_data;

@@ -271,7 +271,7 @@ void SpecialFunctionHandler::handleGetPruneID(ExecutionState &state,
 					      KInstruction *target,
 					      std::vector<ref<Expr> > &arguments) {
   if (!EnablePruning) {
-    executor.bindLocal(target, state, ConstantExpr::create(0, Expr::Int32));
+    state.bindLocal(target, ConstantExpr::create(0, Expr::Int32));
     return;
   }
   
@@ -279,7 +279,7 @@ void SpecialFunctionHandler::handleGetPruneID(ExecutionState &state,
   assert(arguments.size()==1 && "Usage: klee_get_prune_id(count)");
   int count = cast<ConstantExpr>(arguments[0])->getZExtValue();
 
-  executor.bindLocal(target, state, ConstantExpr::create(globalPruneID, Expr::Int32));
+  state.bindLocal(target, ConstantExpr::create(globalPruneID, Expr::Int32));
   pruneMap[globalPruneID] = count;
 
   globalPruneID++;
@@ -431,9 +431,10 @@ void SpecialFunctionHandler::handleIsSymbolic(ExecutionState &state,
                                 std::vector<ref<Expr> > &arguments) {
   assert(arguments.size()==1 && "invalid number of arguments to klee_is_symbolic");
 
-  executor.bindLocal(target, state, 
-                     ConstantExpr::create(!isa<ConstantExpr>(arguments[0]),
-                                          Expr::Int32));
+  state.bindLocal(target,
+  	ConstantExpr::create(
+		!isa<ConstantExpr>(arguments[0]),
+		Expr::Int32));
 }
 
 void SpecialFunctionHandler::handlePreferCex(ExecutionState &state,
@@ -546,10 +547,10 @@ void SpecialFunctionHandler::handleGetObjSize(ExecutionState &state,
          "invalid number of arguments to klee_get_obj_size");
   Executor::ExactResolutionList rl;
   executor.resolveExact(state, arguments[0], rl, "klee_get_obj_size");
-  for (Executor::ExactResolutionList::iterator it = rl.begin(), 
-         ie = rl.end(); it != ie; ++it) {
-    executor.bindLocal(target, *it->second, 
-                       ConstantExpr::create(it->first.first->size, Expr::Int32));
+  foreach (it, rl.begin(), rl.end()) {
+    it->second->bindLocal(
+    	target, 
+        ConstantExpr::create(it->first.first->size, Expr::Int32));
   }
 }
 
@@ -559,8 +560,7 @@ void SpecialFunctionHandler::handleGetErrno(ExecutionState &state,
   // XXX should type check args
   assert(arguments.size()==0 &&
          "invalid number of arguments to klee_get_obj_size");
-  executor.bindLocal(target, state,
-                     ConstantExpr::create(errno, Expr::Int32));
+  state.bindLocal(target, ConstantExpr::create(errno, Expr::Int32));
 }
 
 void SpecialFunctionHandler::handleCalloc(ExecutionState &state,
@@ -749,7 +749,7 @@ void SpecialFunctionHandler::handleAlarm(ExecutionState &state,
          "invalid number of arguments to alarm");  
 
   klee_warning_once(0, "ignoring alarm()");
-  executor.bindLocal(target, state, ConstantExpr::create(0, Expr::Int32));
+  state.bindLocal(target, ConstantExpr::create(0, Expr::Int32));
 }
 
 void SpecialFunctionHandler::handleMarkGlobal(ExecutionState &state,

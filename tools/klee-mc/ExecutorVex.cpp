@@ -10,6 +10,7 @@
 #include "../../lib/Core/PTree.h"
 #include "klee/util/ExprPPrinter.h"
 
+#include <iomanip>
 #include <unistd.h>
 #include <vector>
 
@@ -249,7 +250,7 @@ void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
 
 	kf = kmodule->getKFunction(f);
 	for (unsigned i = 0, e = f->arg_size(); i != e; ++i)
-		bindArgument(kf, i, *state, args[i]);
+		state->bindArgument(kf, i, args[i]);
 
 	if (!state_regctx_mo) return;
 
@@ -264,32 +265,6 @@ void ExecutorVex::run(ExecutionState &initialState)
 {
 	bindModuleConstants();
 	Executor::run(initialState);
-}
-
-void ExecutorVex::bindModuleConstants(void)
-{
-	foreach (it, kmodule->kfuncsBegin(), kmodule->kfuncsEnd()) {
-		bindKFuncConstants(*it);
-	}
-
-	bindModuleConstTable();
-}
-
-void ExecutorVex::bindModuleConstTable(void)
-{
-	if (kmodule->constantTable) delete [] kmodule->constantTable;
-
-	kmodule->constantTable = new Cell[kmodule->constants.size()];
-	for (unsigned i = 0; i < kmodule->constants.size(); ++i) {
-		Cell &c = kmodule->constantTable[i];
-		c.value = evalConstant(kmodule->constants[i]);
-	}
-}
-
-void ExecutorVex::bindKFuncConstants(KFunction* kf)
-{
-	for (unsigned i=0; i<kf->numInstructions; ++i)
-		bindInstructionConstants(kf->instructions[i]);
 }
 
 Function* ExecutorVex::getFuncFromAddr(uint64_t guest_addr)
@@ -522,7 +497,7 @@ void ExecutorVex::jumpToKFunc(ExecutionState& state, KFunction* kf)
 
 	/* set new state */
 	state.pc = kf->instructions;
-	bindArgument(kf, 0, state, state_regctx_mo->getBaseExpr());
+	state.bindArgument(kf, 0, state_regctx_mo->getBaseExpr());
 }
 
 /* xfers are done with an address in the return value of the next place to
@@ -836,6 +811,7 @@ void ExecutorVex::makeRangeSymbolic(
 
 	cur_addr = (uint64_t)addr;
 	total_sz = 0;
+	/* handle disjoint addresses */
 	while (total_sz < sz) {
 		const MemoryObject	*mo;
 		ObjectState		*os;
@@ -889,5 +865,35 @@ void ExecutorVex::makeRangeSymbolic(
 		/* set stat structure as symbolic */
 		cur_addr += taken;
 		total_sz += taken;
+	}
+}
+
+void ExecutorVex::printStateErrorMessage(
+	ExecutionState& state,
+	const std::string& message,
+	std::ostream& os)
+{
+	/* TODO: get line information for state.prevPC */
+	klee_message("ERROR: %s", message.c_str());
+
+	os << "Error: " << message << "\n";
+	os << "Stack: \n";
+
+	unsigned idx = 0;
+	foreach (it, state.stack.rbegin(), state.stack.rend())
+	{
+		StackFrame	&sf = *it;
+		Function	*f = sf.kf->function;
+		VexSB		*vsb;
+
+		vsb = func2vsb_table[(uint64_t)f];
+		os	<< "\t#" << idx++
+			<< " in " << f->getNameStr();
+		if (vsb) {
+			os	<< "("
+				<< gs->getName((void*)vsb->getGuestAddr())
+				<< ")";
+		}
+		os << "\n";
 	}
 }

@@ -90,9 +90,6 @@ private:
 		ExecutionState& s,
 		const llvm::GlobalVariable& gv);
 
-	/// bindModuleConstants - Initialize the module constant table.
-	void bindModuleConstants(void);
-
 	void initializeGlobals(ExecutionState &state);
 
 	void setupArgv(

@@ -85,21 +85,6 @@ const Module* ExecutorBC::setModule(llvm::Module *module,
 	return module;
 }
 
-void ExecutorBC::bindModuleConstants(void)
-{
-	foreach (it, kmodule->kfuncsBegin(), kmodule->kfuncsEnd()) {
-		KFunction *kf = *it;
-		for (unsigned i=0; i<kf->numInstructions; ++i)
-			bindInstructionConstants(kf->instructions[i]);
-	}
-
-	kmodule->constantTable = new Cell[kmodule->constants.size()];
-	for (unsigned i = 0; i < kmodule->constants.size(); ++i) {
-		Cell &c = kmodule->constantTable[i];
-		c.value = evalConstant(kmodule->constants[i]);
-	}
-}
-
 void ExecutorBC::runFunctionAsMain(
 	Function *f, int argc, char **argv, char **envp)
 {
@@ -289,7 +274,7 @@ done_ai:
 
 	KFunction* kf = kmodule->getKFunction(f);
 	for (unsigned i = 0, e = f->arg_size(); i != e; ++i)
-		bindArgument(kf, i, *state, arguments[i]);
+		state->bindArgument(kf, i, arguments[i]);
 
 	if (!argvMO) return;
 
@@ -341,8 +326,10 @@ void ExecutorBC::executeAllocConst(
 	mo = memory->allocate(
 		CE->getZExtValue(), isLocal, false, state.prevPC->inst, &state);
 	if (!mo) {
-		bindLocal(target, state, 
-		ConstantExpr::alloc(0, Context::get().getPointerWidth()));
+		state.bindLocal(
+			target,
+			ConstantExpr::alloc(
+				0, Context::get().getPointerWidth()));
 		return;
 	}
 
@@ -355,7 +342,7 @@ void ExecutorBC::executeAllocConst(
 	else
 		os->initializeToRandom();
 
-	bindLocal(target, state, mo->getBaseExpr());
+	state.bindLocal(target, mo->getBaseExpr());
 
 	if (reallocFrom) {
 		unsigned count = std::min(reallocFrom->size, os->size);
@@ -443,10 +430,9 @@ void ExecutorBC::executeAllocSymbolic(
 				true);
 			if (hugeSize.first) {
 				klee_message("NOTE: found huge malloc, returing 0");
-				bindLocal(
+				hugeSize.first->bindLocal(
 					target,
-					*hugeSize.first, 
-					 ConstantExpr::alloc(
+					ConstantExpr::alloc(
 						0, 
 						Context::get().getPointerWidth()));
 			}
@@ -501,7 +487,7 @@ void ExecutorBC::executeFree(
 	StatePair zeroPointer = fork(state, Expr::createIsZero(address), true);
 
 	if (zeroPointer.first && target) {
-		bindLocal(target, *zeroPointer.first, Expr::createPointer(0));
+		zeroPointer.first->bindLocal(target, Expr::createPointer(0));
 	}
 
 	if (!zeroPointer.second)
@@ -530,9 +516,8 @@ void ExecutorBC::executeFree(
 		} else {
 			it->second->addressSpace.unbindObject(mo);
 			if (target)
-				bindLocal(
+				it->second->bindLocal(
 					target,
-					*it->second, 
 					Expr::createPointer(0));
 		}
 	}
@@ -673,7 +658,7 @@ void ExecutorBC::callExternalFunction(
 		ref<Expr> e = ConstantExpr::fromMemory(
 			(void*) args,
 			getWidthForLLVMType(resultType));
-		bindLocal(target, state, e);
+		state.bindLocal(target, e);
 	}
 }
 

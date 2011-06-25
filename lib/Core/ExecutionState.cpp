@@ -76,9 +76,10 @@ ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
   replayBranchIterator = branchDecisionsSequence.end();
 }
 
-ExecutionState::~ExecutionState() {
-  OpenfdRegistry::stateDestroyed(this);
-  while (!stack.empty()) popFrame();
+ExecutionState::~ExecutionState()
+{
+	OpenfdRegistry::stateDestroyed(this);
+	while (!stack.empty()) popFrame();
 }
 
 ExecutionState *ExecutionState::branch()
@@ -452,95 +453,39 @@ bool ExecutionState::merge(const ExecutionState &b) {
   return true;
 }
 
-/***/
-
-ExecutionTraceEvent::ExecutionTraceEvent(ExecutionState& state,
-                                         KInstruction* ki)
-  : consecutiveCount(1)
+void ExecutionState::bindArgument(
+	KFunction *kf, unsigned index, ref<Expr> value)
 {
-  file = ki->info->file;
-  line = ki->info->line;
-  funcName = state.stack.back().kf->function->getName();
-  stackDepth = state.stack.size();
+    writeLocalCell(stack.size() - 1, kf->getArgRegister(index), value);
 }
 
-bool ExecutionTraceEvent::ignoreMe() const {
-  // ignore all events occurring in certain pesky uclibc files:
-  if (file.find("libc/stdio/") != std::string::npos) {
-    return true;
+void ExecutionState::bindLocal(KInstruction* target, ref<Expr> value)
+{
+    writeLocalCell(stack.size() - 1, target->dest, value);
+}
+
+void ExecutionState::transferToBasicBlock(
+	BasicBlock *dst,
+	BasicBlock *src)
+{
+  // Note that in general phi nodes can reuse phi values from the same
+  // block but the incoming value is the eval() result *before* the
+  // execution of any phi nodes. this is pathological and doesn't
+  // really seem to occur, but just in case we run the PhiCleanerPass
+  // which makes sure this cannot happen and so it is safe to just
+  // eval things in order. The PhiCleanerPass also makes sure that all
+  // incoming blocks have the same order for each PHINode so we only
+  // have to compute the index once.
+  //
+  // With that done we simply set an index in the state so that PHI
+  // instructions know which argument to eval, set the pc, and continue.
+
+  // XXX this lookup has to go ?
+  KFunction *kf = stack.back().kf;
+  unsigned entry = kf->basicBlockEntry[dst];
+  pc = &kf->instructions[entry];
+  if (pc->inst->getOpcode() == Instruction::PHI) {
+    PHINode *first = static_cast<PHINode*>(pc->inst);
+    incomingBBIndex = first->getBasicBlockIndex(src);
   }
-
-  return false;
 }
-
-void ExecutionTraceEvent::print(std::ostream &os) const {
-  os.width(stackDepth);
-  os << ' ';
-  printDetails(os);
-  os << ' ' << file << ':' << line << ':' << funcName;
-  if (consecutiveCount > 1)
-    os << " (" << consecutiveCount << "x)\n";
-  else
-    os << '\n';
-}
-
-
-bool ExecutionTraceEventEquals(ExecutionTraceEvent* e1, ExecutionTraceEvent* e2) {
-  // first see if their base class members are identical:
-  if (!((e1->file == e2->file) &&
-        (e1->line == e2->line) &&
-        (e1->funcName == e2->funcName)))
-    return false;
-
-  // fairly ugly, but i'm no OOP master, so this is the way i'm
-  // doing it for now ... lemme know if there's a cleaner way:
-  BranchTraceEvent* be1 = dynamic_cast<BranchTraceEvent*>(e1);
-  BranchTraceEvent* be2 = dynamic_cast<BranchTraceEvent*>(e2);
-  if (be1 && be2) {
-    return ((be1->trueTaken == be2->trueTaken) &&
-            (be1->canForkGoBothWays == be2->canForkGoBothWays));
-  }
-
-  // don't tolerate duplicates in anything else:
-  return false;
-}
-
-
-void BranchTraceEvent::printDetails(std::ostream &os) const {
-  os << "BRANCH " << (trueTaken ? "T" : "F") << ' ' <<
-        (canForkGoBothWays ? "2-way" : "1-way");
-}
-
-void ExecutionTraceManager::addEvent(ExecutionTraceEvent* evt) {
-  // don't trace anything before __user_main, except for global events
-  if (!hasSeenUserMain) {
-    if (evt->funcName == "__user_main") {
-      hasSeenUserMain = true;
-    }
-    else if (evt->funcName != "global_def") {
-      return;
-    }
-  }
-
-  // custom ignore events:
-  if (evt->ignoreMe())
-    return;
-
-  if (events.size() > 0) {
-    // compress consecutive duplicates:
-    ExecutionTraceEvent* last = events.back();
-    if (ExecutionTraceEventEquals(last, evt)) {
-      last->consecutiveCount++;
-      return;
-    }
-  }
-
-  events.push_back(evt);
-}
-
-void ExecutionTraceManager::printAllEvents(std::ostream &os) const {
-  for (unsigned i = 0; i != events.size(); ++i)
-    events[i]->print(os);
-}
-
-/***/
