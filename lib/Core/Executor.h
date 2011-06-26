@@ -139,17 +139,6 @@ protected:
 
   StatePair fork(ExecutionState &current, ref<Expr> condition, bool isInternal);
 
-  // remove state from queue and delete
-  void terminateState(ExecutionState &state);
-  // call exit handler and terminate state
-  void terminateStateEarly(ExecutionState &state, const llvm::Twine &message);
-  // call exit handler and terminate state
-  void terminateStateOnExit(ExecutionState &state);
-  // call error handler and terminate state
-  void terminateStateOnError(ExecutionState &state, 
-                             const llvm::Twine &message,
-                             const char *suffix,
-                             const llvm::Twine &longMessage="");
   virtual void printStateErrorMessage(
 	ExecutionState& state,
 	const std::string& message,
@@ -515,6 +504,18 @@ public:
     const MemoryObject* mo,
     ref<Expr> len,
     const char* arrPrefix = "arr");
+
+  // remove state from queue and delete
+  void terminateState(ExecutionState &state);
+  // call exit handler and terminate state
+  void terminateStateEarly(ExecutionState &state, const llvm::Twine &message);
+  // call exit handler and terminate state
+  void terminateStateOnExit(ExecutionState &state);
+  // call error handler and terminate state
+  void terminateStateOnError(ExecutionState &state, 
+                             const llvm::Twine &message,
+                             const char *suffix,
+                             const llvm::Twine &longMessage="");
 
   // Given a concrete object in our [klee's] address space, add it to 
   // objects checked code can reference.

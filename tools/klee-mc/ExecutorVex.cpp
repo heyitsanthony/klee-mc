@@ -38,7 +38,8 @@ ExecutorVex::ExecutorVex(
 	InterpreterHandler *ih,
 	Guest	*in_gs)
 : Executor(opts, ih),
-  gs(in_gs)
+  gs(in_gs),
+  in_sc(false)
 {
 	assert (kmodule == NULL && "KMod already initialized? My contract!");
 
@@ -380,10 +381,14 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 	case GE_RETURN:
 		handleXferReturn(state, ki);
 		return;
-	case GE_SYSCALL:
-		if (!handleXferSyscall(state, ki))
-			terminateStateOnExit(state);
+	case GE_SYSCALL: {
+		bool	ok_sc;
+		in_sc = true;
+		ok_sc = handleXferSyscall(state, ki);
+		if (!ok_sc) terminateStateOnExit(state);
+		in_sc = false;
 		return;
+	}
 	case GE_EMWARN:
 		std::cerr << "[VEXLLVM] VEX Emulation warning!?" << std::endl;
 	case GE_IGNORE:
@@ -891,19 +896,17 @@ void ExecutorVex::printStateErrorMessage(
 		os << "\n";
 	}
 
-
-	if (state.prevPC) {
+	if (state.prevPC && state.prevPC->inst) {
 		os << "prevPC:\n";
 		state.prevPC->inst->print(os);
 		os << "\n";
 	}
 
-	if (state.pc) {
+	if (!in_sc && state.pc && state.pc->inst) {
 		os << "PC:\n";
 		state.pc->inst->print(os);
 		os << "\n";
 	}
-
 
 	top_f = state.stack.back().kf->function;
 	if (top_f) {
@@ -911,7 +914,6 @@ void ExecutorVex::printStateErrorMessage(
 		top_f->print(os);
 		os << "\n";
 	}
-
 
 	os << "Constraints: \n";
 	state.constraints.print(os);

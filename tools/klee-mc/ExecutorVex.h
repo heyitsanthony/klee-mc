@@ -153,6 +153,7 @@ private:
 	MemoryObject	*state_regctx_mo;
 
 	bool		dump_funcs;
+	bool		in_sc;
 };
 
 }

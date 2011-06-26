@@ -187,10 +187,17 @@ void SymSyscalls::sc_munmap(
 	addr = sp.getArg(0);
 	len = sp.getArg(1);
 	mo = state.addressSpace.resolveOneMO(addr);
-	assert (mo);
-	fprintf(stderr, "FREEING %p-%p, mo=%p-%p\n",
-		addr, addr+len, mo->address, mo->address+mo->size);
-	assert (mo->size == len && mo->address == addr);
+	if (mo == NULL) {
+		exe_vex->terminateStateOnError(
+			state,
+			"munmap error: munmapping bad address",
+			"munmap.err");
+		return;
+	}
+
+	assert (mo->size == len &&
+		mo->address == addr && "UNHANDLED BAD SIZE");
+
 	state.addressSpace.unbindObject(mo);
 	sc_ret_le0(state);
 }
