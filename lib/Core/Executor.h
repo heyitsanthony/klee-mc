@@ -304,6 +304,7 @@ private:
 
   void instShuffleVector(ExecutionState& state, KInstruction* ki);
   void instExtractElement(ExecutionState& state, KInstruction* ki);
+  void instInsertElement(ExecutionState& state, KInstruction *ki);
   void instBranch(ExecutionState& state, KInstruction* ki);
   void instCmp(ExecutionState& state, KInstruction* ki);
   ref<Expr> cmpScalar(

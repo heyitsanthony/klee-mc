@@ -369,6 +369,17 @@ bool SymSyscalls::apply(
 
 	sc_dispatched++;
 	switch(sys_nr) {
+	case SYS_newfstatat: /* for du */
+		sc_ret_or(state, 0, -1);
+		exe_vex->makeRangeSymbolic(
+			state,
+			(void*)sp.getArg(2),
+			sizeof(struct stat),
+			"newstatbuf");
+		break;
+	case SYS_umask:
+		sc_ret_v(state, 0666);
+		break;
 	case SYS_rt_sigaction:
 		/* XXX need to make old action struct symbolic */
 	case SYS_rt_sigprocmask:
@@ -407,6 +418,9 @@ bool SymSyscalls::apply(
 	case SYS_tgkill:
 		sc_ret_or(state, -1, 0);
 		break;
+	case SYS_getuid:
+		sc_ret_ge0(state);
+		break;
 	case SYS_getpid:
 	case SYS_gettid:
 		sc_ret_v(state, 1000); /* FIXME: single threaded*/
@@ -432,7 +446,8 @@ bool SymSyscalls::apply(
 		if (rand() % 2)
 			sc_ret_or(state, -1, sp.getArg(2));
 		else
-			sc_ret_or(state, sp.getArg(2), -1);
+//			sc_ret_or(state, sp.getArg(2), -1);
+			sc_ret_v(state, -1);
 
 		break;
 	case SYS_getgroups:

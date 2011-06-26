@@ -1784,6 +1784,60 @@ void Executor::instSwitch(ExecutionState& state, KInstruction *ki)
   }
 }
 
+void Executor::instInsertElement(ExecutionState& state, KInstruction* ki)
+{
+	/* insert element has two parametres:
+	 * 1. source vector (v)
+	 * 2. element to insert
+	 * 3. insertion index
+	 * returns v[idx]
+	 */
+	ref<Expr> in_v = eval(ki, 0, state).value;
+	ref<Expr> in_newelem = eval(ki, 1, state).value;
+	ref<Expr> in_idx = eval(ki, 2, state).value;
+
+	ConstantExpr* in_idx_ce = dynamic_cast<ConstantExpr*>(in_idx.get());
+	assert (in_idx_ce && "NON-CONSTANT INSERT ELEMENT IDX. PUKE");
+	uint64_t idx = in_idx_ce->getZExtValue();
+
+	/* instruction has types of vectors embedded in its operands */
+	InsertElementInst*	iei = cast<InsertElementInst>(ki->inst);
+	assert (iei != NULL);
+
+	const VectorType*	vt;
+	vt = dynamic_cast<const VectorType*>(iei->getOperand(0)->getType());
+	unsigned int		v_elem_c = vt->getNumElements();
+	unsigned int		v_elem_sz = vt->getBitWidth() / v_elem_c;
+
+	assert (idx < v_elem_c && "InsertElement idx overflow");
+
+	ref<Expr>	out_val;
+	if (idx == (v_elem_c - 1)) {
+		/* replace tail */
+		out_val = ExtractExpr::create(
+			in_v, 0, v_elem_sz*(v_elem_c - 1));
+		out_val = ConcatExpr::create(out_val, in_newelem);
+	} else if (idx == 0) { 
+		/* replace head */
+		out_val = ExtractExpr::create(
+			in_v, v_elem_sz, v_elem_sz*(v_elem_c - 1));
+		out_val = ConcatExpr::create(in_newelem, out_val);
+	} else {
+		/* replace mid */
+		out_val = ExtractExpr::create(
+			in_v, 0, v_elem_sz*(idx - 1));
+		out_val = ConcatExpr::create(out_val, in_newelem);
+		out_val = ConcatExpr::create(
+			out_val,
+			ExtractExpr::create(
+				in_v,
+				(idx+1)*v_elem_sz,
+				(v_elem_c-(idx+1))*v_elem_sz));
+	}
+
+	state.bindLocal(ki, out_val);
+}
+
 void Executor::instExtractElement(ExecutionState& state, KInstruction* ki)
 {
 	/* extract element has two parametres:
@@ -2218,16 +2272,13 @@ INST_FOP_ARITH(FRem, mod)
     break;
   }
 
-    // Other instructions...
-    // Unhandled
+  // Vector instructions...
   case Instruction::ExtractElement:
     instExtractElement(state, ki);
     break;
   case Instruction::InsertElement:
-    terminateStateOnError(
-      state, "XXX vector instructions unhandled", "xxx.err");
+    instInsertElement(state, ki);
     break;
-
   case Instruction::ShuffleVector:
     instShuffleVector(state, ki);
     break;
@@ -2799,7 +2850,7 @@ bool Executor::memOpByByte(
 
 		byte_addr = AddExpr::create(
 			address,
-			ConstantExpr::create(i, 64));
+			ConstantExpr::create(i, address->getWidth()));
 
 		if (isWrite) {
 			byte_val = ExtractExpr::create(value, 8*i, 8);
