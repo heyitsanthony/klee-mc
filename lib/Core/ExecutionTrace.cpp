@@ -10,7 +10,7 @@ ExecutionTraceEvent::ExecutionTraceEvent(ExecutionState& state,
 {
   file = ki->info->file;
   line = ki->info->line;
-  funcName = state.stack.back().kf->function->getName();
+  funcName = state.getCurrentKFunc()->function->getName();
   stackDepth = state.stack.size();
 }
 

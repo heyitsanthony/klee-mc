@@ -359,8 +359,9 @@ ref<Expr> ReadExpr::create(const UpdateList &ul, ref<Expr> index) {
   // rollback index when possible... 
 
   // sanity check for OoB read
-  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(index))
+  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(index)) {
     assert(CE->getZExtValue() < ul.root->mallocKey.size);
+  }
 
   // XXX this doesn't really belong here... there are basically two
   // cases, one is rebuild, where we want to optimistically try various

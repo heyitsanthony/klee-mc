@@ -32,19 +32,28 @@ ObjectState* SymSyscalls::makeSCRegsSymbolic(ExecutionState& state)
 	Guest			*gs;
 	MemoryObject		*cpu_mo;
 	ObjectState		*state_regctx_os;
+
+	const MemoryObject	*old_mo;
+	uint64_t		old_mo_addr;
 	const ObjectState	*old_regctx_os;
 	unsigned int		sz;
 
 	gs = exe_vex->getGuest();
 	sz = gs->getCPUState()->getStateSize();
 
-	/* hook into guest state with state_regctx_mo,
-	 * use mo to mark memory as symbolic */
-	cpu_mo = exe_vex->getCPUMemObj();
-	old_regctx_os = state.addressSpace.findObject(cpu_mo);
+	old_mo = exe_vex->getRegCtx(state);
+	assert (old_mo);
+
+	old_regctx_os = state.addressSpace.findObject(old_mo);
+	// do not unbind the object, we need to be able to grab it
+	// for replay
+	// state.unbindObject(old_mo);
+	fprintf(stderr, "NOT THROWING OUT %s\n", old_mo->name.c_str());
 
 	/* 1. make all of symbolic */
-//	state.constraints.removeConstraintsPrefix("reg");
+	cpu_mo = exe_vex->allocRegCtx(&state);
+	fprintf(stderr, "NEW MO: %s\n", cpu_mo->name.c_str());
+
 	state_regctx_os = exe_vex->executeMakeSymbolic(state, cpu_mo, "reg");
 	state_regctx_os->getArray()->incRefIfCared();
 
@@ -59,12 +68,16 @@ ObjectState* SymSyscalls::makeSCRegsSymbolic(ExecutionState& state)
 			reg_idx == offsetof(VexGuestAMD64State, guest_R11)/8)
 		{
 			/* ignore rax, rcx, r11 */
+			assert (state_regctx_os->isByteConcrete(i) == false);
 			continue;
 		}
 
 		state.write8(state_regctx_os, i, state_data[i]);
+		assert (state_regctx_os->isByteConcrete(i));
 	}
 
+	/* make state point to right register context on xfer */
+	exe_vex->setRegCtx(state, cpu_mo);
 	return state_regctx_os;
 }
 
@@ -73,19 +86,25 @@ ObjectState* SymSyscalls::sc_ret_ge0(ExecutionState& state)
 	ObjectState		*state_regctx_os;
 	bool			constrained;
 	ref<Expr>		success_constraint;
+	ref<Expr>		rax_expr;
 
 	state_regctx_os = makeSCRegsSymbolic(state);
 
 	/* 3. force zero <= sysret; sysret >= 0; no errors */
-	success_constraint = SleExpr::create(
-		ConstantExpr::create(0, 64),
-		state.read(
+	rax_expr = state.read(
 			state_regctx_os,
 			offsetof(VexGuestAMD64State, guest_RAX),
-			64));
+			64);
+	std::cerr << "RAX: "; rax_expr->print(std::cerr); std::cerr << std::endl;
+	success_constraint = SleExpr::create(
+		ConstantExpr::create(0, 64),
+		rax_expr);
 
+	std::cerr << "BEGIN ADDITION\n";
+	state.constraints.print(std::cerr);
 	constrained = exe_vex->addConstraint(state, success_constraint);
-	assert (constrained); // symbolic, should always succeed..
+	std::cerr << "ADDITION DONE\n";
+	assert (constrained); // newly symbolic, should always succeed..
 	
 	return state_regctx_os;
 }
@@ -108,7 +127,7 @@ ObjectState* SymSyscalls::sc_ret_le0(ExecutionState& state)
 			64));
 
 	constrained = exe_vex->addConstraint(state, success_constraint);
-	assert (constrained); // symbolic, should always succeed..
+	assert (constrained); // newly symbolic, should always succeed..
 	
 	return state_regctx_os;
 }
@@ -198,7 +217,7 @@ void SymSyscalls::sc_munmap(
 	assert (mo->size == len &&
 		mo->address == addr && "UNHANDLED BAD SIZE");
 
-	state.addressSpace.unbindObject(mo);
+	state.unbindObject(mo);
 	sc_ret_le0(state);
 }
 
@@ -213,7 +232,10 @@ void SymSyscalls::sc_stat(ExecutionState& state, const SyscallParams &sp)
 
 	statbuf_addr = sp.getArg(1);
 	exe_vex->makeRangeSymbolic(
-		state, (void*)statbuf_addr, sizeof(struct stat), "statbuf");
+		state,
+		(void*)statbuf_addr,
+		sizeof(struct stat),
+		"statbuf");
 
 	/* fail or success */
 	sc_ret_le0(state);
@@ -270,6 +292,7 @@ void SymSyscalls::sc_getcwd(ExecutionState& state, const SyscallParams& sp)
 	buf_addr = sp.getArg(0);
 	buf_sz = sp.getArg(1);
 	mo_cwdbuf = state.addressSpace.resolveOneMO(buf_addr);
+	state.unbindObject(mo_cwdbuf);
 	
 	/* return symbolic path name */
 	os_cwdbuf = exe_vex->executeMakeSymbolic(
@@ -277,6 +300,7 @@ void SymSyscalls::sc_getcwd(ExecutionState& state, const SyscallParams& sp)
 		mo_cwdbuf,
 		ConstantExpr::alloc(buf_sz, 32),
 		"cwdbuf");
+	os_cwdbuf->getArray()->incRefIfCared();
 
 	/* ensure buffer is null-terminated */
 	state.write8(
@@ -305,7 +329,7 @@ void SymSyscalls::sc_mmap(
 #endif
 
 	if (addr == 0) {
-		/* not requesting an address */
+		/* not requesting a specific address */
 		new_mo = exe_vex->getMM()->allocate(
 			length, 
 			true /* local */,
@@ -332,6 +356,8 @@ void SymSyscalls::sc_mmap(
 	new_mo->setName("mmaped");
 	new_os = exe_vex->executeMakeSymbolic(state, new_mo, "mmap");
 	assert (new_os != NULL && "Could not make object state");
+
+	new_os->getArray()->incRefIfCared();
 	if ((prot & PROT_WRITE) == 0)
 		new_os->setReadOnly(true);
 
@@ -340,13 +366,14 @@ void SymSyscalls::sc_mmap(
 	sc_ret_v(state, addr);
 
 	fprintf(stderr, "MMAP ADDR=%p-%p\n", addr, addr + length);
+	/* note: register context is not made symbolic here */
 }
 
 void SymSyscalls::sc_ret_v(ExecutionState& state, uint64_t v)
 {
 	ObjectState* state_regctx_os;
 	state_regctx_os = state.addressSpace.findObject(
-		exe_vex->getCPUMemObj());
+		exe_vex->getRegCtx(state));
 	state.write64(
 		state_regctx_os, 
 		offsetof(VexGuestAMD64State, guest_RAX),

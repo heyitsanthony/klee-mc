@@ -153,8 +153,13 @@ void ExecutionState::popFrame()
 {
   StackFrame &sf = stack.back();
   foreach (it, sf.allocas.begin(), sf.allocas.end())
-    addressSpace.unbindObject(*it);
+  	unbindObject(*it);
   stack.pop_back();
+}
+
+void ExecutionState::unbindObject(const MemoryObject* mo)
+{
+    addressSpace.unbindObject(mo);
 }
 
 void ExecutionState::write64(ObjectState* object, unsigned offset, uint64_t value)
@@ -488,4 +493,35 @@ void ExecutionState::transferToBasicBlock(
     PHINode *first = static_cast<PHINode*>(pc->inst);
     incomingBBIndex = first->getBasicBlockIndex(src);
   }
+}
+
+ObjectState* ExecutionState::bindMemObj(
+	const MemoryObject *mo,
+	const Array *array)
+{
+	ObjectState *os;
+	os = (array) ? new ObjectState(mo, array) : new ObjectState(mo);
+	bindObject(mo, os);
+	return os;
+}
+
+ObjectState* ExecutionState::bindStackMemObj(
+	const MemoryObject *mo,
+	const Array *array)
+{
+	ObjectState* os;
+
+	os = bindMemObj(mo, array);
+
+	// Its possible that multiple bindings of the same mo in the state
+	// will put multiple copies on this list, but it doesn't really
+	// matter because all we use this list for is to unbind the object
+	// on function return.
+	stack.back().addAlloca(mo);
+	return os;
+}
+
+KFunction* ExecutionState::getCurrentKFunc(void) const
+{
+	return stack.back().kf;
 }

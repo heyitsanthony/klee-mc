@@ -133,10 +133,6 @@ public:
   // FIXME: Move to a shared list structure (not critical).
   std::vector< SymbolicArray > symbolics;
 
-  // Used by the checkpoint/rollback methods for fake objects.
-  // FIXME: not freeing things on branch deletion.
-  MemoryMap shadowObjects;
-
   unsigned incomingBBIndex;
 
   std::string getFnAlias(std::string fn);
@@ -219,12 +215,19 @@ public:
   Cell& readLocalCell(unsigned sfi, unsigned i) const;
 
   void bindObject(const MemoryObject *mo, ObjectState *os);
+  void unbindObject(const MemoryObject* mo);
+
+  ObjectState* bindMemObj(const MemoryObject *mo, const Array *array = 0);
+  ObjectState *bindStackMemObj(
+    const MemoryObject *mo,
+    const Array *array = 0);
 
   void transferToBasicBlock(llvm::BasicBlock* dst, llvm::BasicBlock* src);
   void bindLocal(KInstruction *target, ref<Expr> value);
   void bindArgument(
   	KFunction *kf, unsigned index, ref<Expr> value);
 
+  KFunction* getCurrentKFunc() const;
 };
 
 

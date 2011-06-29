@@ -9,11 +9,12 @@ class CmdArgs;
 
 namespace klee
 {
+class ExecutorVex;
 
 class KleeHandler : public InterpreterHandler
 {
 private:
-  Interpreter *m_interpreter;
+  ExecutorVex	*m_interpreter;
   TreeStreamWriter *m_symPathWriter;
   std::ostream *m_infoFile;
 

@@ -152,6 +152,16 @@ MemoryObject *MemoryManager::allocateFixed(
   return res;
 }
 
+MemoryObject* MemoryManager::findByAddr(uint64_t addr) const
+{
+	foreach (it, objects.begin(), objects.end()) {
+		MemoryObject *mo = *it;
+		if (mo->address == addr) return mo;
+	}
+
+	return NULL;
+}
+
 void MemoryManager::deallocate(const MemoryObject *mo)
 {
   objects.erase(std::find(objects.begin(), objects.end(), mo));

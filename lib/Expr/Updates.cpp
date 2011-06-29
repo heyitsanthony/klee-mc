@@ -44,7 +44,9 @@ UpdateNode::~UpdateNode() {
 int UpdateNode::compare(const UpdateNode &b) const {
   if (int i = index.compare(b.index)) 
     return i;
-  return value.compare(b.value);
+  if (int v = value.compare(b.value))
+    return v;
+  return 0;
 }
 
 unsigned UpdateNode::computeHash() {
@@ -102,6 +104,7 @@ void UpdateList::extend(const ref<Expr> &index, const ref<Expr> &value) {
   ++head->refCount;
 }
 
+#include <stdio.h>
 int UpdateList::compare(const UpdateList &b) const {
   if (*root < *b.root)
     return -1;
@@ -122,11 +125,13 @@ int UpdateList::compare(const UpdateList &b) const {
     }
   }
   assert(!an && !bn);  
+
   return 0;
 }
 
 unsigned UpdateList::hash() const {
   unsigned res = 0;
+  if (root == NULL) return 0;
 
   if (root->mallocKey.allocSite)
     res = root->mallocKey.hash();

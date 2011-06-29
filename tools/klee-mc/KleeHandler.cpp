@@ -7,6 +7,7 @@
 #include "static/Sugar.h"
 #include "cmdargs.h"
 
+#include "ExecutorVex.h"
 #include "KleeHandler.h"
 
 #include <zlib.h>
@@ -176,7 +177,8 @@ KleeHandler::~KleeHandler() {
 
 void KleeHandler::setInterpreter(Interpreter *i)
 {
-  m_interpreter = i;
+  m_interpreter = dynamic_cast<ExecutorVex*>(i);
+  assert (m_interpreter != NULL && "Expected ExecutorVex interpreter");
 
   if (!WriteSymPaths) return;
 
@@ -225,20 +227,21 @@ std::ostream *KleeHandler::openTestFile(const std::string &suffix, unsigned id)
   return openOutputFile(filename);
 }
 
-
 void KleeHandler::processSuccessfulTest(unsigned id, out_objs& out)
 {
 	KTest		b;
 	bool		ktest_ok;
 	std::string	fname;
 
+	fprintf(stderr, "writing out test id=%d\n", id);
 	b.numArgs = cmdargs->getArgc();
 	b.args = cmdargs->getArgv();
 	b.symArgvs = 0;
 	b.symArgvLen = 0;
 	b.numObjects = out.size();
 	b.objects = new KTestObject[b.numObjects];
-	assert(b.objects);
+
+	assert (b.objects);
 	for (unsigned i=0; i<b.numObjects; i++) {
 		KTestObject *o = &b.objects[i];
 		o->name = const_cast<char*>(out[i].first.c_str());
@@ -258,10 +261,13 @@ void KleeHandler::processSuccessfulTest(unsigned id, out_objs& out)
 		strerror(errno));
 	}
 
+	m_interpreter->dumpSCRegs(fname);
+
 	for (unsigned i=0; i<b.numObjects; i++)
 		delete[] b.objects[i].bytes;
 	delete[] b.objects;
 
+	fprintf(stderr, "gzip it\n");
 	gzipKTest(fname);
 }
 

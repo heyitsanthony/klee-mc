@@ -12,6 +12,7 @@
 
 #include <iomanip>
 #include <unistd.h>
+#include <stdio.h>
 #include <vector>
 
 #include "guest.h"
@@ -134,7 +135,6 @@ void ExecutorVex::runImage(void)
 	fprintf(stderr, "OK.\n");
 }
 
-
 void ExecutorVex::prepState(ExecutionState* state, Function* f)
 {
 	setupRegisterContext(state, f);
@@ -154,42 +154,9 @@ void ExecutorVex::bindMapping(
 	const char		*data;
 
 	len = m.getBytes();
-#if 0
-#define PAGE_SIZE	4096
-	assert (len % PAGE_SIZE == 0 && "NOT PAGE ALIGNED");
-	for (int i = 0; i < len/PAGE_SIZE; i++) {
-		uint64_t	off = i*PAGE_SIZE;
-
-		if (m.isStack()) {
-			mmap_mo = memory->allocateFixed(
-				off+((uint64_t)m.getGuestAddr()),
-				PAGE_SIZE,
-				f->begin()->begin(),
-				state);
-			copy_offset = 0;
-			mmap_mo->setName("stack");
-		} else {
-			mmap_mo = memory->allocateFixed(
-				off+((uint64_t)m.getGuestAddr()),
-				PAGE_SIZE,
-				f->begin()->begin(),
-				state);
-			copy_offset = 0;
-		}
-
-		data = (const char*)m.getData();
-		data += off;
-		mmap_os = bindObjectInState(*state, mmap_mo, false);
-		for (unsigned int i = 0; i < PAGE_SIZE; i++) {
-			state->write8(mmap_os, i+copy_offset, data[i]);
-		}
-	}
-#else
-
-
 	if (m.isStack()) {
 		mmap_mo = memory->allocateFixed(
-			((uint64_t)m.getGuestAddr())-STACK_EXTEND,
+			((uint64_t)m.offset.o)-STACK_EXTEND,
 			len+STACK_EXTEND,
 			f->begin()->begin(),
 			state);
@@ -197,7 +164,7 @@ void ExecutorVex::bindMapping(
 		mmap_mo->setName("stack");
 	} else {
 		mmap_mo = memory->allocateFixed(
-			((uint64_t)m.getGuestAddr()),
+			((uint64_t)m.offset.o),
 			len,
 			f->begin()->begin(),
 			state);
@@ -205,15 +172,18 @@ void ExecutorVex::bindMapping(
 		copy_offset = 0;
 	}
 
-	data = (const char*)m.getData();
-	mmap_os = bindObjectInState(*state, mmap_mo);
+	data = (const char*)gs->getMem()->getData(m);
+	mmap_os = state->bindMemObj(mmap_mo);
 	for (unsigned int i = 0; i < len; i++) {
+		/* bug fiend note:
+		 * valgrind will complain on this line because of the 
+		 * data[i] on the syspage. Linux keeps a syscall page at
+		 * 0xf..f600000, but valgrind doesn't know this.
+		 * This is safe, but will need a workaround *eventually* */
 		state->write8(mmap_os, i+copy_offset, data[i]);
 	}
-#endif
 }
 
-/* hack to reduce churn on symbolic data */
 void ExecutorVex::setupProcessMemory(ExecutionState* state, Function* f)
 {
 	std::list<GuestMem::Mapping> memmap(gs->getMem()->getMaps());
@@ -223,34 +193,48 @@ void ExecutorVex::setupProcessMemory(ExecutionState* state, Function* f)
 	}
 }
 
-void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
+MemoryObject* ExecutorVex::allocRegCtx(ExecutionState* state, Function* f)
 {
-	ObjectState 			*state_regctx_os;
-	KFunction			*kf;
-	std::vector<ref<Expr> >		args;
-	unsigned int			state_regctx_sz;
-
-
+	MemoryObject	*mo;
+	unsigned int	state_regctx_sz;
+	static unsigned id = 0;
+	
+	fprintf(stderr, "ALLOCATING NEW REGCTx\n");
 	state_regctx_sz = gs->getCPUState()->getStateSize();
-	state_regctx_mo = memory->allocate(
+
+	if (f == NULL) f = state->getCurrentKFunc()->function;
+	assert (f != NULL);
+
+	mo = memory->allocate(
 		state_regctx_sz,
 		false, true,
-		f->begin()->begin(), state);
-	state_regctx_mo->setName("regctx");
-	args.push_back(state_regctx_mo->getBaseExpr());
+		f->begin()->begin(),
+		state);
+	mo->setName("regctx"+llvm::utostr(++id));
+	assert (mo != NULL);
+
+	return mo;
+}
+
+void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
+{
+	MemoryObject			*state_regctx_mo;
+	ObjectState 			*state_regctx_os;
+	KFunction			*kf;
+	unsigned int			state_regctx_sz;
+
+	state_regctx_mo = allocRegCtx(state, f);
+	state_regctx_sz = gs->getCPUState()->getStateSize();
 
 	if (symPathWriter) state->symPathOS = symPathWriter->open();
 	if (statsTracker) statsTracker->framePushed(*state, 0);
 
-	assert(args.size() == f->arg_size() && "wrong number of arguments");
-
 	kf = kmodule->getKFunction(f);
-	for (unsigned i = 0, e = f->arg_size(); i != e; ++i)
-		state->bindArgument(kf, i, args[i]);
 
-	if (!state_regctx_mo) return;
+	assert (f->arg_size() == 1);
+	state->bindArgument(kf, 0, state_regctx_mo->getBaseExpr());
 
-	state_regctx_os = bindObjectInState(*state, state_regctx_mo);
+	state_regctx_os = state->bindMemObj(state_regctx_mo);
 
 	const char*  state_data = (const char*)gs->getCPUState()->getStateData();
 	for (unsigned int i=0; i < state_regctx_sz; i++)
@@ -274,11 +258,11 @@ Function* ExecutorVex::getFuncFromAddr(uint64_t guest_addr)
 	host_addr = guest_addr;
 
 	/* cached => already seen it */
-	f = xlate_cache->getCachedFunc(guest_addr);
+	f = xlate_cache->getCachedFunc(guest_ptr(guest_addr));
 	if (f != NULL) return f;
 
 	/* !cached => put in cache, alert kmodule, other bookkepping */
-	f = xlate_cache->getFunc((void*)host_addr, guest_addr);
+	f = xlate_cache->getFunc((void*)host_addr, guest_ptr(guest_addr));
 	if (f == NULL) return NULL;
 
 	/* wipe out intrinsics which make klee puke */
@@ -303,7 +287,7 @@ Function* ExecutorVex::getFuncFromAddr(uint64_t guest_addr)
 	}
 
 	/* need to know func -> vsb to compute func's guest address */
-	vsb = xlate_cache->getCachedVSB(guest_addr);
+	vsb = xlate_cache->getCachedVSB(guest_ptr(guest_addr));
 	assert (vsb && "Dropped VSB too early?");
 	func2vsb_table[(uint64_t)f] = vsb;
 
@@ -323,10 +307,10 @@ void ExecutorVex::executeInstruction(
 	Executor::executeInstruction(state, ki);
 }
 
-void ExecutorVex::dumpRegs(ExecutionState& state)
+void ExecutorVex::dumpRegs(ExecutionState& state, std::ostream& os)
 {
 	updateGuestRegs(state);
-	gs->getCPUState()->print(std::cerr);
+	gs->getCPUState()->print(os);
 }
 
 /* need to hand roll our own instRet because we want to be able to
@@ -358,11 +342,29 @@ void ExecutorVex::markExitIgnore(ExecutionState& state)
 	ObjectState		*state_regctx_os;
 
 	gs->getCPUState()->setExitType(GE_IGNORE);
-	state_regctx_os = state.addressSpace.findObject(state_regctx_mo);
+	state_regctx_os = state.addressSpace.findObject(getRegCtx(state));
 	state.write8(
 		state_regctx_os,
 		gs->getCPUState()->getExitTypeOffset(),
 		GE_IGNORE);
+}
+
+MemoryObject* ExecutorVex::getRegCtx(ExecutionState& state)
+{
+	MemoryObject		*mo;
+	ref<Expr>		regctx_v;
+	uint64_t		mo_addr;
+
+	regctx_v = state.readLocalCell(state.stack.size() - 1, 0).value;
+	mo_addr = dyn_cast<ConstantExpr>(regctx_v)->getZExtValue();
+	mo = memory->findByAddr(mo_addr);
+
+	return mo;
+}
+
+void ExecutorVex::setRegCtx(ExecutionState& state, MemoryObject* mo)
+{
+	state.writeLocalCell(state.stack.size() - 1, 0, mo->getBaseExpr());
 }
 
 /* handle transfering between VSB's */
@@ -371,6 +373,9 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 	GuestExitType		exit_type;
 
 	updateGuestRegs(state);
+
+	fprintf(stderr, "XFER FROM %s\n", ki->inst->getParent()->getParent()->getNameStr().c_str());
+
 	exit_type = gs->getCPUState()->getExitType();
 	markExitIgnore(state);
 
@@ -384,7 +389,9 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 	case GE_SYSCALL: {
 		bool	ok_sc;
 		in_sc = true;
+		logSCRegs(state);
 		ok_sc = handleXferSyscall(state, ki);
+		logSCRegs(state);
 		if (!ok_sc) terminateStateOnExit(state);
 		in_sc = false;
 		return;
@@ -406,6 +413,36 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 	fprintf(stderr, "result: ");
 	result->dump();
 	terminateStateOnExit(state);
+}
+
+void ExecutorVex::dumpSCRegs(const std::string& fname)
+{
+	FILE*		f;
+	unsigned int	reg_sz;
+
+	reg_sz = gs->getCPUState()->getStateSize();
+	f = fopen(std::string(fname+".sclog").c_str(), "w");
+	assert (f != NULL);
+	foreach (it, log_sc_regs.begin(), log_sc_regs.end()) {
+		char	*regs = (*it);
+		fwrite(regs, reg_sz, 1, f);
+	}
+
+	fclose(f);
+}
+
+void ExecutorVex::logSCRegs(ExecutionState& state)
+{
+	char		*regs;
+	unsigned int	reg_sz;
+
+	updateGuestRegs(state);
+	reg_sz = gs->getCPUState()->getStateSize();
+	regs = new char[reg_sz];
+	memcpy(	regs,
+		gs->getCPUState()->getStateData(), 
+		reg_sz);
+	log_sc_regs.push_back(regs);
 }
 
 void ExecutorVex::xferIterInit(
@@ -441,17 +478,16 @@ bool ExecutorVex::xferIterNext(struct XferStateIter& iter)
 		if (!iter.res.first) continue;
 
 		addr = value->getZExtValue();
-		if (	(addr == 0 || addr > 0x7fffffffffffULL) &&
-			((addr & 0xfffffffffffff000) != 0xffffffffff600000))
+		if (	((addr == 0 || addr > 0x7fffffffffffULL) &&
+			((addr & 0xfffffffffffff000) != 0xffffffffff600000)) ||
+			addr == 0xffffffff)
 		{
-			iter.res.first->constraints.print(std::cerr);
-			updateGuestRegs(*iter.res.first);
-			gs->getCPUState()->print(std::cerr);
 			fprintf(stderr, "bogus jmp to %p!\n", addr);
 			terminateStateOnError(
 				*(iter.res.first),
 				"fork error: jumping to bad pointer",
 				"badjmp.err");
+			assert (0 == 1);
 			continue;
 		}
 
@@ -481,11 +517,14 @@ void ExecutorVex::handleXferJmp(ExecutionState& state, KInstruction* ki)
 void ExecutorVex::jumpToKFunc(ExecutionState& state, KFunction* kf)
 {
 	CallPathNode	*cpn;
+	MemoryObject	*regctx_mo;
 	KInstIterator	ki = state.getCaller();
 
 	assert (kf != NULL);
 	assert (state.stack.size() > 0);
+
 	/* save, pop off old state */
+	regctx_mo = getRegCtx(state);
 	cpn = state.stack.back().callPathNode;
 	state.popFrame();
 
@@ -497,7 +536,7 @@ void ExecutorVex::jumpToKFunc(ExecutionState& state, KFunction* kf)
 
 	/* set new state */
 	state.pc = kf->instructions;
-	state.bindArgument(kf, 0, state_regctx_mo->getBaseExpr());
+	state.bindArgument(kf, 0, regctx_mo->getBaseExpr());
 }
 
 /* xfers are done with an address in the return value of the next place to
@@ -507,7 +546,7 @@ void ExecutorVex::handleXferCall(ExecutionState& state, KInstruction* ki)
 	std::vector< ref<Expr> > 	args;
 	struct XferStateIter		iter;
 
-	args.push_back(state_regctx_mo->getBaseExpr());
+	args.push_back(getRegCtx(state)->getBaseExpr());
 	xferIterInit(iter, &state, ki);
 	while (xferIterNext(iter)) {
 		executeCall(*(iter.res.first), ki, iter.f, args);
@@ -557,7 +596,7 @@ void ExecutorVex::updateGuestRegs(ExecutionState& state)
 {
 	void	*guest_regs;
 	guest_regs = gs->getCPUState()->getStateData();
-	state.addressSpace.copyToBuf(state_regctx_mo, guest_regs);
+	state.addressSpace.copyToBuf(getRegCtx(state), guest_regs);
 }
 
 void ExecutorVex::initializeGlobals(ExecutionState &state)
@@ -650,7 +689,7 @@ void ExecutorVex::allocGlobalVariableNoDecl(
 	if (!mo) mo = memory->allocate(size, false, true, &gv, &state);
 	assert(mo && "out of memory");
 
-	os = bindObjectInState(state, mo);
+	os = state.bindMemObj(mo);
 	globalObjects.insert(std::make_pair(&gv, mo));
 	globalAddresses.insert(std::make_pair(&gv, mo->getBaseExpr()));
 
@@ -680,12 +719,12 @@ void ExecutorVex::makeSymbolicTail(
 	os = state.addressSpace.findObject(mo);
 
 	/* free object from address space */
-	state.addressSpace.unbindObject(mo);
+	state.unbindObject(mo);
 	memory->deallocate(mo);
 
 	/* mark head concrete */
 	mo_head = memory->allocateFixed(mo_addr, head_size, 0, &state);
-	os = bindObjectInState(state, mo_head);
+	os = state.bindMemObj(mo_head);
 	for(unsigned i = 0; i < head_size; i++) state.write8(os, i, buf_head[i]);
 
 	/* mark tail symbolic */
@@ -732,7 +771,7 @@ void ExecutorVex::makeSymbolicHead(
 	os = state.addressSpace.findObject(mo);
 
 	/* free object from address space */
-	state.addressSpace.unbindObject(mo);
+	state.unbindObject(mo);
 	memory->deallocate(mo);
 
 	mo_head = memory->allocateFixed(mo_addr, taken, 0, &state);
@@ -744,7 +783,7 @@ void ExecutorVex::makeSymbolicHead(
 
 	mo_tail = memory->allocateFixed(
 		mo_addr+taken, tail_size, 0, &state);
-	os = bindObjectInState(state, mo_tail);
+	os = state.bindMemObj(mo_tail);
 	for(unsigned i = 0; i < tail_size; i++) state.write8(os, i, buf_tail[i]);
 
 	delete [] buf_tail;
@@ -775,14 +814,15 @@ void ExecutorVex::makeSymbolicMiddle(
 	os = state.addressSpace.findObject(mo);
 
 	/* free object from address space */
-	state.addressSpace.unbindObject(mo);
+	state.unbindObject(mo);
 	memory->deallocate(mo);
 
 	mo_head = memory->allocateFixed(mo_addr, mo_off, 0, &state);
-	os = bindObjectInState(state, mo_head);
+	os = state.bindMemObj(mo_head);
 	for(unsigned i = 0; i < mo_off; i++) state.write8(os, i, buf_head[i]);
 
 	mo_mid = memory->allocateFixed(mo_addr+mo_off, taken, 0, &state);
+	mo_mid->setName(name);
 	executeMakeSymbolic(
 		state,
 		mo_mid,
@@ -791,7 +831,7 @@ void ExecutorVex::makeSymbolicMiddle(
 
 	mo_tail = memory->allocateFixed(
 		mo_addr+mo_off+taken, tail_size, 0, &state);
-	os = bindObjectInState(state, mo_tail);
+	os = state.bindMemObj(mo_tail);
 	for(unsigned i = 0; i < tail_size; i++) state.write8(os, i, buf_tail[i]);
 
 	delete [] buf_head;
@@ -806,6 +846,8 @@ void ExecutorVex::makeRangeSymbolic(
 {
 	uint64_t	cur_addr;
 	unsigned	total_sz;
+
+	fprintf(stderr, "MAKE RANGE SYMBOLIC: %p-%p\n", addr, (char*)addr+sz);
 
 	cur_addr = (uint64_t)addr;
 	total_sz = 0;
@@ -876,6 +918,9 @@ void ExecutorVex::printStateErrorMessage(
 	os << "Objects: " << std::endl;
 	os << state.addressSpace.objects;
 
+	os << "\nRegisters: \n";
+	dumpRegs(state, os);
+
 	os << "\nStack: \n";
 
 	unsigned idx = 0;
@@ -890,21 +935,15 @@ void ExecutorVex::printStateErrorMessage(
 			<< " in " << f->getNameStr();
 		if (vsb) {
 			os	<< " ("
-				<< gs->getName((void*)vsb->getGuestAddr())
+				<< gs->getName(vsb->getGuestAddr())
 				<< ")";
 		}
 		os << "\n";
 	}
 
 	if (state.prevPC && state.prevPC->inst) {
-		os << "prevPC:\n";
+		os << "problem PC:\n";
 		state.prevPC->inst->print(os);
-		os << "\n";
-	}
-
-	if (!in_sc && state.pc && state.pc->inst) {
-		os << "PC:\n";
-		state.pc->inst->print(os);
 		os << "\n";
 	}
 

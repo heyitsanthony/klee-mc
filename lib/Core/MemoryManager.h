@@ -59,6 +59,8 @@ namespace klee {
     MemoryObject *allocateFixed(uint64_t address, uint64_t size,
                                 const llvm::Value *allocSite,
                                 ExecutionState *state);
+
+    MemoryObject* findByAddr(uint64_t addr) const;
     void deallocate(const MemoryObject *mo);
     template <typename F>
     void deallocateAllExcept(F f)

@@ -73,10 +73,10 @@ private:
 
   ref<Expr> *knownSymbolics;
 
-  // mutable because we may need flush during read of const
-  mutable UpdateList updates;
-
 public:
+  // mutable because we may need flush during read of const
+  mutable UpdateList updates; /* XXX DEBUG, move to private */
+
   unsigned size;
 
   bool readOnly;

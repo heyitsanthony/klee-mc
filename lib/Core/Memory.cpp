@@ -112,7 +112,7 @@ ObjectState::ObjectState(const MemoryObject *mo)
 	// FIXME: Leaked.
 	static unsigned id = 0;
 	const Array *array = new Array(
-		"tmp_arr" + llvm::utostr(++id),
+		"objst_tmp_arr" + llvm::utostr(++id),
 		mo->mallocKey,
 		0,
 		0);
@@ -173,42 +173,44 @@ ObjectState::~ObjectState()
 
 /***/
 
-const UpdateList &ObjectState::getUpdates() const {
+const UpdateList &ObjectState::getUpdates() const
+{
   // Constant arrays are created lazily.
-  if (!updates.root) {
-    // Collect the list of writes, with the oldest writes first.
+  if (updates.root != NULL) return updates;
+
+  // Collect the list of writes, with the oldest writes first.
    
-    // FIXME: We should be able to do this more efficiently, we just need to be
-    // careful to get the interaction with the cache right. In particular we
-    // should avoid creating UpdateNode instances we never use.
-    unsigned NumWrites = updates.head ? updates.head->getSize() : 0;
-    std::vector< std::pair< ref<Expr>, ref<Expr> > > Writes(NumWrites);
-    const UpdateNode *un = updates.head;
-    for (unsigned i = NumWrites; i != 0; un = un->next) {
-      --i;
-      Writes[i] = std::make_pair(un->index, un->value);
-    }
+  // FIXME: We should be able to do this more efficiently, we just need to be
+  // careful to get the interaction with the cache right. In particular we
+  // should avoid creating UpdateNode instances we never use.
+  unsigned NumWrites = updates.head ? updates.head->getSize() : 0;
+  std::vector< std::pair< ref<Expr>, ref<Expr> > > Writes(NumWrites);
+  const UpdateNode *un = updates.head;
+  for (unsigned i = NumWrites; i != 0; un = un->next) {
+    --i;
+    Writes[i] = std::make_pair(un->index, un->value);
+  }
 
-    std::vector< ref<ConstantExpr> > Contents(size);
+  std::vector< ref<ConstantExpr> > Contents(size);
 
-    // Initialize to zeros.
-    for (unsigned i = 0, e = size; i != e; ++i)
-      Contents[i] = ConstantExpr::create(0, Expr::Int8);
+  // Initialize to zeros.
+  for (unsigned i = 0, e = size; i != e; ++i)
+    Contents[i] = ConstantExpr::create(0, Expr::Int8);
 
-    // Pull off as many concrete writes as we can.
-    unsigned Begin = 0, End = Writes.size();
-    for (; Begin != End; ++Begin) {
-      // Push concrete writes into the constant array.
-      ConstantExpr *Index = dyn_cast<ConstantExpr>(Writes[Begin].first);
-      if (!Index)
-        break;
+  // Pull off as many concrete writes as we can.
+  unsigned Begin = 0, End = Writes.size();
+  for (; Begin != End; ++Begin) {
+    // Push concrete writes into the constant array.
+    ConstantExpr *Index = dyn_cast<ConstantExpr>(Writes[Begin].first);
+    if (!Index)
+      break;
 
-      ConstantExpr *Value = dyn_cast<ConstantExpr>(Writes[Begin].second);
-      if (!Value)
-        break;
+    ConstantExpr *Value = dyn_cast<ConstantExpr>(Writes[Begin].second);
+    if (!Value)
+      break;
 
-      Contents[Index->getZExtValue()] = Value;
-    }
+    Contents[Index->getZExtValue()] = Value;
+  }
 
     // FIXME: We should unique these, there is no good reason to create multiple
     // ones.
@@ -225,7 +227,6 @@ const UpdateList &ObjectState::getUpdates() const {
     // Apply the remaining (non-constant) writes.
     for (; Begin != End; ++Begin)
       updates.extend(Writes[Begin].first, Writes[Begin].second);
-  }
 
   return updates;
 }

@@ -3,11 +3,8 @@
 // Don't crash on a bogus unmap
 // RUN: klee-mc - ./%t1 2>%t1.err >%t1.out
 //
-// It should exit nicely
-// RUN: grep "exitcode" %t1.err
-//
 // Don't relay a symbolic, this should be well-defined.
-// RUN: ls klee-last | grep ktest | wc -l | grep 1
+// RUN: ls klee-last | grep munmap.err
 
 #include <sys/mman.h>
 

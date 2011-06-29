@@ -124,6 +124,15 @@ bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b) {
         ii->eraseFromParent();
         dirty = true;
         break;
+
+      /* r534, ignore memory barriers */
+      case Intrinsic::memory_barrier:
+        if (LowerIntrinsics) {
+          ii->eraseFromParent();
+          dirty = true;
+        }
+        break;
+
                     
       default:
         if (LowerIntrinsics)

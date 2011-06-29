@@ -278,7 +278,7 @@ done_ai:
 
 	if (!argvMO) return;
 
-	ObjectState *argvOS = bindObjectInState(*state, argvMO);
+	ObjectState *argvOS = state->bindMemObj(argvMO);
 
 	for (int i=0; i<argc+1+envc+1+1; i++) {
 		MemoryObject	*arg;
@@ -303,7 +303,7 @@ done_ai:
 		assert (arg != NULL);
 
 
-		os = bindObjectInState(*state, arg);
+		os = state->bindMemObj(arg);
 
 		for (j=0; j<len+1; j++)
 			state->write8(os, j, s[j]);
@@ -334,8 +334,8 @@ void ExecutorBC::executeAllocConst(
 	}
 
 	os = (isLocal) ?
-		bindObjectInStateStack(state, mo) :
-		bindObjectInState(state, mo);
+		state.bindStackMemObj(mo) :
+		state.bindMemObj(mo);
 
 	if (zeroMemory)
 		os->initializeToZero();
@@ -352,7 +352,7 @@ void ExecutorBC::executeAllocConst(
 		//os->write(i, reallocFrom->read8(i));          
 		//state.write(os, i, state.read8(reallocFrom, i));
 		}*/
-		state.addressSpace.unbindObject(reallocFrom->getObject());
+		state.unbindObject(reallocFrom->getObject());
 	}
 }
 
@@ -514,7 +514,7 @@ void ExecutorBC::executeFree(
 				"free.err",
 				getAddressInfo(*it->second, address));
 		} else {
-			it->second->addressSpace.unbindObject(mo);
+			it->second->unbindObject(mo);
 			if (target)
 				it->second->bindLocal(
 					target,
@@ -700,7 +700,7 @@ void ExecutorBC::allocGlobalVariableDecl(
 	}
 
 	mo = memory->allocate(size, false, true, &gv, &state);
-	os = bindObjectInState(state, mo);
+	os = state.bindMemObj(mo);
 	globalObjects.insert(std::make_pair(&gv, mo));
 	globalAddresses.insert(std::make_pair(&gv, mo->getBaseExpr()));
 
@@ -758,7 +758,7 @@ void ExecutorBC::allocGlobalVariableNoDecl(
 	if (!mo) mo = memory->allocate(size, false, true, &gv, &state);
 	assert(mo && "out of memory");
 
-	os = bindObjectInState(state, mo);
+	os = state.bindMemObj(mo);
 	globalObjects.insert(std::make_pair(&gv, mo));
 	globalAddresses.insert(std::make_pair(&gv, mo->getBaseExpr()));
 

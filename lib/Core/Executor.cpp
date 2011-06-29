@@ -412,7 +412,7 @@ MemoryObject * Executor::addExternalObject(
 	ObjectState *os;
 
 	mo = memory->allocateFixed((uint64_t) (uintptr_t)addr, size, 0, &state);
-	os = bindObjectInState(state, mo);
+	os = state.bindMemObj(mo);
 
 	for(unsigned i = 0; i < size; i++)
 		state.write8(os, i, ((uint8_t*)addr)[i]);
@@ -1102,7 +1102,7 @@ bool Executor::setupCallVarArgs(
 		return false;
 	}
 
-	os = bindObjectInStateStack(state, mo);
+	os = state.bindMemObj(mo);
 	offset = 0;
 	for (unsigned i = funcArgs; i < callingArgs; i++) {
 	// FIXME: This is really specific to the architecture, not the pointer
@@ -1376,14 +1376,14 @@ void Executor::instBranch(ExecutionState& state, KInstruction* ki)
     }
   }
 
-  KFunction *kf = state.stack.back().kf;
+  KFunction *kf = state.getCurrentKFunc();
 //      ExecutorThread *thread = ExecutorThread::getThread();
 
   // NOTE: There is a hidden dependency here, markBranchVisited
   // requires that we still be in the context of the branch
   // instruction (it reuses its statistic id). Should be cleaned
   // up with convenient instruction specific data.
-  if (statsTracker && state.stack.back().kf->trackCoverage)
+  if (statsTracker && state.getCurrentKFunc()->trackCoverage)
     statsTracker->markBranchVisited(branches.first, branches.second);
 
   /* FIXME: Refactor */
@@ -1761,7 +1761,7 @@ void Executor::instSwitch(ExecutionState& state, KInstruction *ki)
     if (!es) continue;
 
     BasicBlock *destBlock = caseDests[index];
-    KFunction *kf = state.stack.back().kf;
+    KFunction *kf = state.getCurrentKFunc();
     unsigned entry = kf->basicBlockEntry[destBlock];
 
     if (es->isCompactForm && kf->trackCoverage &&
@@ -2767,35 +2767,6 @@ ref<Expr> Executor::replaceReadWithSymbolic(
   return res;
 }
 
-ObjectState *Executor::bindObjectInState(
-	ExecutionState &state,
-	const MemoryObject *mo,
-	const Array *array)
-{
-	ObjectState *os;
-
-	os = (array) ? new ObjectState(mo, array) : new ObjectState(mo);
-	state.bindObject(mo, os);
-	return os;
-}
-
-ObjectState* Executor::bindObjectInStateStack(
-	ExecutionState &state,
-	const MemoryObject *mo,
-	const Array *array)
-{
-	ObjectState* os;
-
-	os = bindObjectInState(state, mo, array);
-
-	// Its possible that multiple bindings of the same mo in the state
-	// will put multiple copies on this list, but it doesn't really
-	// matter because all we use this list for is to unbind the object
-	// on function return.
-	state.stack.back().addAlloca(mo);
-	return os;
-}
-
 void Executor::resolveExact(ExecutionState &state,
                             ref<Expr> p,
                             ExactResolutionList &results,
@@ -3056,7 +3027,7 @@ ObjectState* Executor::makeSymbolic(
 
   array = new Array(arrPrefix + llvm::utostr(++id), mo->mallocKey, 0, 0);
   array->initRef();
-  os = bindObjectInState(state, mo, array);
+  os = state.bindMemObj(mo, array);
   state.addSymbolic(mo, array, len);
 
   addSymbolicToSeeds(state, mo, array);
@@ -3084,7 +3055,7 @@ void Executor::addSymbolicToSeeds(
 ObjectState* Executor::makeSymbolicReplay(
     ExecutionState& state, const MemoryObject* mo, ref<Expr> len)
 {
-	ObjectState *os = bindObjectInState(state, mo);
+	ObjectState *os = state.bindMemObj(mo);
 	if (replayPosition >= replayOut->numObjects) {
 		terminateStateOnError(
 			state, "replay count mismatch", "user.err");
@@ -3202,13 +3173,17 @@ bool Executor::getSymbolicSolution(
 			std::vector<unsigned char> > > &res)
 {
   ExecutionState tmp(state);
+  bool success;
+
   if (!NoPreferCex) getSymbolicSolutionCex(state, tmp);
 
   std::vector< std::vector<unsigned char> > values;
   std::vector<const Array*> objects;
-  for (unsigned i = 0; i != state.symbolics.size(); ++i)
+  for (unsigned i = 0; i != state.symbolics.size(); ++i) {
     objects.push_back(state.symbolics[i].getArray());
-  bool success = solver->getInitialValues(tmp, objects, values);
+  }
+
+  success = solver->getInitialValues(tmp, objects, values);
   if (!success) {
     klee_warning("unable to compute initial values (invalid constraints?)!");
     ExprPPrinter::printQuery(std::cerr,
@@ -3219,7 +3194,9 @@ bool Executor::getSymbolicSolution(
 
   for (unsigned i = 0; i != state.symbolics.size(); ++i)
     res.push_back(
-      std::make_pair(state.symbolics[i].getMemoryObject()->name, values[i]));
+      std::make_pair(
+      	state.symbolics[i].getMemoryObject()->name,
+	values[i]));
   return true;
 }
 

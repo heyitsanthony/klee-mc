@@ -127,15 +127,6 @@ protected:
   /// bindInstructionConstants - Initialize any necessary per instruction
   /// constant values.
   void bindInstructionConstants(KInstruction *KI);
-  ObjectState *bindObjectInState(
-    ExecutionState &state,
-    const MemoryObject *mo,
-    const Array *array = 0);
-
-  ObjectState *bindObjectInStateStack(
-    ExecutionState &state,
-    const MemoryObject *mo,
-    const Array *array = 0);
 
   StatePair fork(ExecutionState &current, ref<Expr> condition, bool isInternal);
 

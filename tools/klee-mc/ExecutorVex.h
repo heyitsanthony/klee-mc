@@ -1,6 +1,7 @@
 #ifndef KLEE_EXECUTOR_VEX_H
 #define KLEE_EXECUTOR_VEX_H
 
+#include "collection.h"
 #include "guest.h"
 #include "../../lib/Core/Executor.h"
 
@@ -50,12 +51,16 @@ public:
 
 	Guest* getGuest(void) { return gs; }
 	const Guest* getGuest(void) const { return gs; }
-	MemoryObject* getCPUMemObj(void) { return state_regctx_mo; }
 
 	void makeRangeSymbolic(
 		ExecutionState& state, void* addr, unsigned sz,
 		const char* name = NULL);
 	MemoryManager* getMM(void) { return memory; }
+	MemoryObject* allocRegCtx(ExecutionState* state, llvm::Function* f = 0);
+
+	void setRegCtx(ExecutionState& state, MemoryObject* mo);
+	MemoryObject* getRegCtx(ExecutionState&);
+	void dumpSCRegs(const std::string& fname);
 protected:
   	virtual void executeInstruction(
 		ExecutionState &state, KInstruction *ki);
@@ -126,7 +131,7 @@ private:
 		ExecutionState& state,
 		const llvm::GlobalVariable& gv);
 
-	void dumpRegs(ExecutionState& s);
+	void dumpRegs(ExecutionState& s, std::ostream& os);
 
 	void handleXferCall(
 		ExecutionState& state, KInstruction* ki);
@@ -148,9 +153,12 @@ private:
 		KInstruction* ki);
 	bool xferIterNext(struct XferStateIter& iter);
 
+	/* registers logged in order */
+	PtrList<char>	log_sc_regs;
+	void logSCRegs(ExecutionState& state);
+
 	func2vsb_map	func2vsb_table;
 	VexFCache	*xlate_cache;
-	MemoryObject	*state_regctx_mo;
 
 	bool		dump_funcs;
 	bool		in_sc;
