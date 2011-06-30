@@ -43,8 +43,7 @@ namespace {
 
 /** XXX XXX XXX REFACTOR PLEASEEE **/
 ExecutionState::ExecutionState(KFunction *kf)
-  : fakeState(false),
-    underConstrained(false),
+  : underConstrained(false),
     depth(0),
     pc(kf->instructions),
     prevPC(pc),
@@ -64,8 +63,7 @@ ExecutionState::ExecutionState(KFunction *kf)
 }
 
 ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
-  : fakeState(true),
-    underConstrained(false),
+  : underConstrained(false),
     constraints(assumptions),
     queryCost(0.),
     addressSpace(),

@@ -1986,7 +1986,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     instCall(state, ki);
     break;
   case Instruction::PHI: {
-    ref<Expr> result = eval(ki, state.incomingBBIndex * 2, state).value;
+    ref<Expr> result = eval(ki, state.getPHISlot(), state).value;
     state.bindLocal(ki, result);
     break;
   }
@@ -3132,11 +3132,11 @@ void Executor::getConstraintLog(const ExecutionState &state,
 void Executor::getSymbolicSolutionCex(
   const ExecutionState& state, ExecutionState& tmp)
 {
-  for (unsigned i = 0; i != state.symbolics.size(); ++i) {
+  foreach (sym_it, state.symbolicsBegin(), state.symbolicsEnd()) {
     const MemoryObject				*mo;
     std::vector< ref<Expr> >::const_iterator	pi, pie;
 
-    mo = state.symbolics[i].getMemoryObject();
+    mo = sym_it->getMemoryObject();
     pi = mo->cexPreferences.begin();
     pie = mo->cexPreferences.end();
 
@@ -3163,8 +3163,8 @@ bool Executor::getSymbolicSolution(
 
   std::vector< std::vector<unsigned char> > values;
   std::vector<const Array*> objects;
-  for (unsigned i = 0; i != state.symbolics.size(); ++i) {
-    objects.push_back(state.symbolics[i].getArray());
+  foreach (it, state.symbolicsBegin(), state.symbolicsEnd()) {
+    objects.push_back(it->getArray());
   }
 
   success = solver->getInitialValues(tmp, objects, values);
@@ -3176,11 +3176,11 @@ bool Executor::getSymbolicSolution(
     return false;
   }
 
-  for (unsigned i = 0; i != state.symbolics.size(); ++i)
-    res.push_back(
-      std::make_pair(
-      	state.symbolics[i].getMemoryObject()->name,
-	values[i]));
+  unsigned i = 0;
+  foreach (it, state.symbolicsBegin(), state.symbolicsEnd()) {
+    res.push_back(std::make_pair(it->getMemoryObject()->name, values[i]));
+    i++;
+  }
   return true;
 }
 

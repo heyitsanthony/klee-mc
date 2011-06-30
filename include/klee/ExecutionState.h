@@ -85,8 +85,13 @@ private:
   // used only if isCompactForm
   BranchTracker::iterator replayBranchIterator;
 
+  unsigned incomingBBIndex;
+
+  /// ordered list of symbolics: used to generate test cases. 
+  //
+  // FIXME: Move to a shared list structure (not critical).
+  std::vector< SymbolicArray > symbolics;
 public:
-  bool fakeState;
   // Are we currently underconstrained?  Hack: value is size to make fake
   // objects.
   unsigned underConstrained;
@@ -128,13 +133,6 @@ public:
   std::map<const std::string*, std::set<unsigned> > coveredLines;
   PTreeNode *ptreeNode;
 
-  /// ordered list of symbolics: used to generate test cases. 
-  //
-  // FIXME: Move to a shared list structure (not critical).
-  std::vector< SymbolicArray > symbolics;
-
-  unsigned incomingBBIndex;
-
   std::string getFnAlias(std::string fn);
   void addFnAlias(std::string old_fn, std::string new_fn);
   void removeFnAlias(std::string fn);
@@ -144,8 +142,7 @@ public:
 
 private:
   ExecutionState()
-    : fakeState(false),
-      underConstrained(0),
+    : underConstrained(0),
       coveredNew(false),
       lastChosen(0),
       isCompactForm(false),
@@ -244,6 +241,18 @@ public:
 
   BranchTracker::iterator branchesEnd(void) const
   { return branchDecisionsSequence.end(); }
+
+  unsigned getPHISlot(void) const { return incomingBBIndex * 2; }
+
+  std::vector< SymbolicArray >::const_iterator symbolicsBegin(void) const
+  {
+  	return symbolics.begin();
+  }
+
+  std::vector< SymbolicArray >::const_iterator symbolicsEnd(void) const
+  {
+  	return symbolics.end();
+  }
 };
 
 
