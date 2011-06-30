@@ -27,6 +27,12 @@ class ExecutionState;
 class Interpreter;
 class TreeStreamWriter;
 
+#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
+  typedef std::vector<std::pair<unsigned,unsigned> > ReplayPathType;
+#else
+  typedef std::vector<unsigned> ReplayPathType;
+#endif
+
 class InterpreterHandler {
 public:
   InterpreterHandler() {}
@@ -110,11 +116,6 @@ public:
   // supply a list of branch decisions specifying which direction to
   // take on forks. this can be used to drive the interpretation down
   // a user specified path. use null to reset.
-#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
-  typedef std::vector<std::pair<unsigned,unsigned> > ReplayPathType;
-#else
-  typedef std::vector<unsigned> ReplayPathType;
-#endif
   virtual void setReplayPaths(const std::list<ReplayPathType>* paths) = 0;
 
   // supply a set of symbolic bindings that will be used as "seeds"

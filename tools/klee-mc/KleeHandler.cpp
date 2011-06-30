@@ -31,43 +31,43 @@ namespace {
     cl::desc("Don't generate test files"));
 
   cl::opt<bool> WriteCov(
-    "write-cov", 
+    "write-cov",
     cl::desc("Write coverage information for each test case"));
   cl::opt<bool> WriteCVCs(
-    "write-cvcs", 
+    "write-cvcs",
     cl::desc("Write .cvc files for each test case"));
 
   cl::opt<bool> WriteTestInfo(
-    "write-test-info", 
+    "write-test-info",
     cl::desc("Write additional test case information"));
- 
+
   cl::opt<bool> WritePCs(
-    "write-pcs", 
+    "write-pcs",
     cl::desc("Write .pc files for each test case"));
- 
+
   cl::opt<bool> WritePaths(
-    "write-paths", 
+    "write-paths",
     cl::desc("Write .path files for each test case"));
   cl::opt<bool> WriteSymPaths(
-    "write-sym-paths", 
+    "write-sym-paths",
     cl::desc("Write .sym.path files for each test case"));
- 
+
   cl::opt<unsigned> StopAfterNTests(
     "stop-after-n-tests",
 	  cl::desc("Stop execution after generating the given number of tests.  Extra tests corresponding to partially explored paths will also be dumped."),
 	  cl::init(0));
 
   cl::opt<std::string> OutputDir(
-    "output-dir", 
+    "output-dir",
     cl::desc("Directory to write results in (defaults to klee-out-N)"),
     cl::init(""));
 
   cl::opt<bool> ExitOnError(
-    "exit-on-error", 
+    "exit-on-error",
     cl::desc("Exit if errors occur"));
 }
 
-KleeHandler::KleeHandler(const CmdArgs* in_args) 
+KleeHandler::KleeHandler(const CmdArgs* in_args)
   : m_interpreter(0),
     m_symPathWriter(0),
     m_infoFile(0),
@@ -90,7 +90,7 @@ KleeHandler::KleeHandler(const CmdArgs* in_args)
 	strcpy(m_outputDirectory, p.c_str());
 
 	if (mkdir(m_outputDirectory, 0775) < 0) {
-		std::cerr << 
+		std::cerr <<
 			"KLEE: ERROR: Unable to make output directory: \"" <<
 			m_outputDirectory  <<
 			"\", refusing to overwrite.\n";
@@ -121,7 +121,7 @@ bool KleeHandler::scanForOutputDir(const std::string& p, std::string& theDir)
 		} else {
 			break;
 		}
-	}    
+	}
 
 	llvm::sys::Path klee_last(directory);
 	klee_last.appendComponent("klee-last");
@@ -140,7 +140,7 @@ std::string KleeHandler::setupOutputDir(void)
 {
 	std::string	theDir;
 
-	if (OutputDir != "") 
+	if (OutputDir != "")
   		return OutputDir;
 
 	if (scanForOutputDir(cmdargs->getBinaryPath(), theDir))
@@ -196,7 +196,7 @@ std::string KleeHandler::getOutputFilename(const std::string &filename)
 
 std::ostream *KleeHandler::openOutputFile(const std::string &filename)
 {
-  std::ios::openmode io_mode = std::ios::out | std::ios::trunc 
+  std::ios::openmode io_mode = std::ios::out | std::ios::trunc
                              | std::ios::binary;
   std::string path = getOutputFilename(filename);
   std::ostream* f = new std::ofstream(path.c_str(), io_mode);
@@ -312,7 +312,7 @@ bool KleeHandler::gzipKTest(const std::string& fname)
 
 /* Outputs all files (.ktest, .pc, .cov etc.) describing a test case */
 void KleeHandler::processTestCase(const ExecutionState &state,
-                                  const char *errorMessage, 
+                                  const char *errorMessage,
                                   const char *errorSuffix)
 {
   if (errorMessage && ExitOnError) {
@@ -346,9 +346,7 @@ void KleeHandler::processTestCase(const ExecutionState &state,
 
   if (WritePaths) {
     if (std::ostream* f = openTestFile("path", id)) {
-      foreach(bit, 
-        state.branchDecisionsSequence.begin(),
-        state.branchDecisionsSequence.end()) {
+      foreach(bit, state.branchesBegin(), state.branchesEnd()) {
 #ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
         (*f) << (*bit).first << "," << (*bit).second << "\n";
 #else
@@ -382,13 +380,13 @@ void KleeHandler::processTestCase(const ExecutionState &state,
     else
       klee_warning("unable to write .cvc file, losing it (errno=%d: %s)", errno, strerror(errno));
   }
-  
+
   if (m_symPathWriter) {
     std::vector<unsigned char> symbolicBranches;
     m_symPathWriter->readStream(m_interpreter->getSymbolicPathStreamID(state),
                                 symbolicBranches);
     if (std::ostream* f = openTestFile("sym.path", id)) {
-      std::copy(symbolicBranches.begin(), symbolicBranches.end(), 
+      std::copy(symbolicBranches.begin(), symbolicBranches.end(),
                 std::ostream_iterator<unsigned char>(*f, "\n"));
       delete f;
     }
@@ -425,7 +423,7 @@ void KleeHandler::processTestCase(const ExecutionState &state,
   if (WriteTestInfo) {
     double elapsed_time = util::estWallTime() - start_time;
     if (std::ostream *f = openTestFile("info", id)) {
-      *f << "Time to generate test case: " 
+      *f << "Time to generate test case: "
          << elapsed_time << "s\n";
       delete f;
     }
@@ -455,8 +453,7 @@ void KleeHandler::getPathFiles(
 }
 
 // load a .path file
-void KleeHandler::loadPathFile(
-	std::string name, Interpreter::ReplayPathType &buffer)
+void KleeHandler::loadPathFile(std::string name, ReplayPathType &buffer)
 {
   std::ifstream f(name.c_str(), std::ios::in | std::ios::binary);
 
@@ -488,7 +485,7 @@ void KleeHandler::getOutFiles(
   std::set<llvm::sys::Path> contents;
   std::string error;
   if (p.getDirectoryContents(contents, &error)) {
-    std::cerr << "ERROR: unable to read output directory: " << path 
+    std::cerr << "ERROR: unable to read output directory: " << path
                << ": " << error << "\n";
     exit(1);
   }

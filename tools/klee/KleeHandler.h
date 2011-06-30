@@ -48,7 +48,7 @@ public:
                           std::vector<unsigned char> &buffer);
 
   // load a .path file
-  static void loadPathFile(std::string name, Interpreter::ReplayPathType &buffer);
+  static void loadPathFile(std::string name, ReplayPathType &buffer);
 
   static void getPathFiles(std::string path,
                            std::vector<std::string> &results);

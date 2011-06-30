@@ -616,8 +616,8 @@ int main(int argc, char **argv, char **envp) {
   if (ReplayPathDir != "") KleeHandler::getPathFiles(ReplayPathDir, pathFiles);
   if (ReplayPathFile != "") pathFiles.push_back(ReplayPathFile);
 
-  std::list<Interpreter::ReplayPathType> replayPaths;
-  Interpreter::ReplayPathType replayPath;
+  std::list<ReplayPathType> replayPaths;
+  ReplayPathType replayPath;
 
   foreach (it, pathFiles.begin(), pathFiles.end()) {
     KleeHandler::loadPathFile(*it, replayPath);

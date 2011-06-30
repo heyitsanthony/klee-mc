@@ -260,9 +260,7 @@ void KleeHandler::processTestCase(const ExecutionState &state,
 
   if (WritePaths) {
     if (std::ostream* f = openTestFile("path", id)) {
-      foreach(bit, 
-        state.branchDecisionsSequence.begin(),
-        state.branchDecisionsSequence.end()) {
+      foreach(bit, state.branchesBegin(), state.branchesEnd()) {
 #ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
         (*f) << (*bit).first << "," << (*bit).second << "\n";
 #else
@@ -369,8 +367,7 @@ void KleeHandler::getPathFiles(
 }
 
 // load a .path file
-void KleeHandler::loadPathFile(
-	std::string name, Interpreter::ReplayPathType &buffer)
+void KleeHandler::loadPathFile(std::string name, ReplayPathType &buffer)
 {
   std::ifstream f(name.c_str(), std::ios::in | std::ios::binary);
 

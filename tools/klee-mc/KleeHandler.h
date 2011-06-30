@@ -36,7 +36,7 @@ public:
   void setInterpreter(Interpreter *i);
 
   void processTestCase(const ExecutionState  &state,
-                       const char *errorMessage, 
+                       const char *errorMessage,
                        const char *errorSuffix);
 
   std::string getOutputFilename(const std::string &filename);
@@ -45,11 +45,11 @@ public:
   std::ostream *openTestFile(const std::string &suffix, unsigned id);
 
   // load a .out file
-  static void loadOutFile(std::string name, 
+  static void loadOutFile(std::string name,
                           std::vector<unsigned char> &buffer);
 
   // load a .path file
-  static void loadPathFile(std::string name, Interpreter::ReplayPathType &buffer);
+  static void loadPathFile(std::string name, ReplayPathType &buffer);
 
   static void getPathFiles(std::string path,
                            std::vector<std::string> &results);
@@ -57,7 +57,7 @@ public:
   static void getOutFiles(std::string path,
 			  std::vector<std::string> &results);
 private:
-typedef 
+typedef
 	std::vector< std::pair<std::string, std::vector<unsigned char> > >
 	out_objs;
 

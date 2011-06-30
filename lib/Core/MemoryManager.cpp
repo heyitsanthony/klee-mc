@@ -73,7 +73,7 @@ MemoryObject *MemoryManager::allocate(
   if (!heapObj && size) {
     assert((!state
       || state->isReplay
-      || state->replayBranchIterator == state->branchDecisionsSequence.end())
+      || state->isReplayDone())
       &&
       "on reconstitution, existing heap object must be chosen");
     // if we used to have an object with this mallocKey, reuse the same size
@@ -104,9 +104,8 @@ MemoryObject *MemoryManager::allocate(
     size ? heapObj->address : 0, size, mallocKey, heapObj);
 
   // if not replaying state, add reference to heap object
-  if (state && (state->isReplay
-      || state->replayBranchIterator == state->branchDecisionsSequence.end()))
-    anonymous |= !state->branchDecisionsSequence.push_heap_ref(heapObj);
+  if (state && (state->isReplay || state->isReplayDone()))
+    anonymous |= !state->pushHeapRef(heapObj);
 
   // add reference to memory object
   if (state)

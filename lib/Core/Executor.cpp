@@ -502,22 +502,15 @@ bool Executor::forkSetupNoSeeding(
     // Can't fork compact states; sanity check
     assert(false && "invalid state");
   } else if (!isInternal && ReplayPathOnly && current.isReplay
-    && current.replayBranchIterator == current.branchDecisionsSequence.end())
+    && current.isReplayDone())
   {
     // Done replaying this state, so kill it (if -replay-path-only)
     terminateStateEarly(current, "replay path exhausted");
     return false;
-  } else if (!isInternal
-    && current.replayBranchIterator != current.branchDecisionsSequence.end())
-  {
+  } else if (!isInternal && current.isReplayDone() == false) {
     // Replaying non-internal fork; read value from replayBranchIterator
-#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
-    assert(current.prevPC->info->assemblyLine
-      == (*current.replayBranchIterator).second &&
-      "branch instruction IDs do not match");
-#endif
-    unsigned targetIndex = (*current.replayBranchIterator).first;
-    ++current.replayBranchIterator;
+    unsigned targetIndex;
+    targetIndex = current.stepReplay();
     wasReplayed = true;
     // Verify that replay target matches current path constraints
     assert(targetIndex <= N && "replay target out of range");
@@ -556,7 +549,7 @@ bool Executor::forkSetupNoSeeding(
     if (current.forkDisabled) reason = "fork disabled on current path";
     if (inhibitForking) reason = "fork disabled globally";
     if (MaxForks!=~0u && stats::forks >= MaxForks) reason = "max-forks reached";
-
+ 
     // Skipping this fork for one of the above reasons; randomly pick target
     if (!reason) return true;
     if (ReplayInhibitedForks) {
@@ -795,21 +788,17 @@ Executor::fork(
       }
 
       // only track NON-internal branches
-      if (!wasReplayed
-          && curState->replayBranchIterator ==
-          curState->branchDecisionsSequence.end())
-      {
-        curState->branchDecisionsSequence.push_back(
-          condIndex,
+      if (!wasReplayed)
+        curState->trackBranch(
+	  condIndex, 
           current.prevPC->info->assemblyLine);
-        curState->replayBranchIterator =
-          curState->branchDecisionsSequence.end();
-      }
-    } // if (!isInternal)
+    }
 
     if (isSeeding) {
-      seedMap[curState].insert(seedMap[curState].end(),
-        resSeeds[condIndex].begin(), resSeeds[condIndex].end());
+      seedMap[curState].insert(
+        seedMap[curState].end(),
+        resSeeds[condIndex].begin(),
+	resSeeds[condIndex].end());
     }
   } // for
 
@@ -2514,18 +2503,13 @@ bool Executor::seedRun(ExecutionState& initialState)
 
 void Executor::replayPathsIntoStates(ExecutionState& initialState)
 {
-  assert (replayPaths);
-  foreach (it, replayPaths->begin(), replayPaths->end()) {
-    ExecutionState *newState = new ExecutionState(initialState);
-    foreach (it2, (*it).begin(), (*it).end()) {
-      newState->branchDecisionsSequence.push_back(*it2);
-    }
-    newState->replayBranchIterator = newState->branchDecisionsSequence.begin();
-    newState->ptreeNode->data = 0;
-    newState->isReplay = true;
-    splitProcessTree(newState->ptreeNode, &initialState, newState);
-    stateManager->add(newState);
-  }
+	assert (replayPaths);
+	foreach (it, replayPaths->begin(), replayPaths->end()) {
+		ExecutionState *newState;
+		newState = ExecutionState::createReplay(initialState, (*it));
+		splitProcessTree(newState->ptreeNode, &initialState, newState);
+		stateManager->add(newState);
+	}
 }
 
 void Executor::run(ExecutionState &initialState)

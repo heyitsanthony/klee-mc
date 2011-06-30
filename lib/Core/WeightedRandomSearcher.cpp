@@ -46,8 +46,7 @@ ExecutionState &WeightedRandomSearcher::selectState(bool allowCompact) {
 }
 
 double WeightedRandomSearcher::getWeight(ExecutionState *es) {
-  if (es->isCompactForm
-          || es->replayBranchIterator != es->branchDecisionsSequence.end())
+  if (es->isCompactForm || es->isReplayDone() == false)
     return es->weight;
 
   switch (type) {

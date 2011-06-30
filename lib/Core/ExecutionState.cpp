@@ -17,6 +17,7 @@
 #include "klee/Expr.h"
 #include "static/Sugar.h"
 
+#include "PTree.h"
 #include "Memory.h"
 #include "OpenfdRegistry.h"
 
@@ -524,4 +525,50 @@ ObjectState* ExecutionState::bindStackMemObj(
 KFunction* ExecutionState::getCurrentKFunc(void) const
 {
 	return stack.back().kf;
+}
+
+void ExecutionState::trackBranch(int condIndex, int asmLine)
+{
+	// only track NON-internal branches
+	if (replayBranchIterator != branchDecisionsSequence.end())
+  		return;
+
+	branchDecisionsSequence.push_back(
+		condIndex,
+		asmLine);
+
+	replayBranchIterator = branchDecisionsSequence.end();
+}
+
+ExecutionState* ExecutionState::createReplay(
+	ExecutionState& initialState,
+	const ReplayPathType& replayPath)
+{
+	ExecutionState* newState;
+	
+	newState = new ExecutionState(initialState);
+	foreach (it2, replayPath.begin(), replayPath.end()) {
+		newState->branchDecisionsSequence.push_back(*it2);
+	}
+	newState->replayBranchIterator = newState->branchDecisionsSequence.begin();
+	newState->ptreeNode->data = 0;
+	newState->isReplay = true;
+
+	return newState;
+}
+
+bool ExecutionState::isReplayDone(void) const
+{
+	return (replayBranchIterator == branchDecisionsSequence.end());
+}
+
+unsigned ExecutionState::stepReplay(void)
+{
+#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
+    assert (prevPC->info->assemblyLine == (*replayBranchIterator).second &&
+      "branch instruction IDs do not match");
+#endif
+    unsigned targetIndex = (*replayBranchIterator).first;
+    ++replayBranchIterator;
+    return targetIndex;
 }

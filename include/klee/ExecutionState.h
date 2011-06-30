@@ -15,6 +15,7 @@
 #include "klee/util/ExprUtil.h"
 #include "klee/Internal/ADT/TreeStream.h"
 #include "klee/Internal/Module/Cell.h"
+#include "klee/Interpreter.h"
 #include "../../lib/Core/AddressSpace.h"
 #include "../../lib/Core/BranchTracker.h"
 #include "../../lib/Core/ExecutionTrace.h"
@@ -77,6 +78,13 @@ private:
   ExecutionState &operator=(const ExecutionState&); 
   std::map< std::string, std::string > fnAliases;
 
+  // An ordered sequence of branches that this state took during execution thus
+  // far:
+  // XXX: ugh mutable for non-const copy constructor
+  BranchTracker branchDecisionsSequence;
+  // used only if isCompactForm
+  BranchTracker::iterator replayBranchIterator;
+
 public:
   bool fakeState;
   // Are we currently underconstrained?  Hack: value is size to make fake
@@ -102,19 +110,11 @@ public:
   // Ref counting for MemoryObject deallocation
   std::vector<ref<MemoryObject> > memObjects;
 
-  // An ordered sequence of branches that this state took during execution thus
-  // far:
-  // XXX: ugh mutable for non-const copy constructor
-  BranchTracker branchDecisionsSequence;
-
   // has true iff this state is a mere placeholder to be replaced by a real state
   bool isCompactForm;
   // for use with std::mem_fun[_ref] since they don't accept data members
   bool isCompactForm_f() const { return isCompactForm; }  
   bool isNonCompactForm_f() const { return !isCompactForm; }
-
-  // used only if isCompactForm
-  BranchTracker::iterator replayBranchIterator;
 
   // did this state start in replay mode?
   bool isReplay;
@@ -161,8 +161,11 @@ public:
   // XXX total hack, just used to make a state so solver can
   // use on structure
   ExecutionState(const std::vector<ref<Expr> > &assumptions);
-
   ~ExecutionState();
+
+  static ExecutionState* createReplay(
+	ExecutionState& initialState,
+	const ReplayPathType& replayPath);
 
   ExecutionState *branch();
   ExecutionState *branchForReplay();
@@ -228,6 +231,19 @@ public:
   	KFunction *kf, unsigned index, ref<Expr> value);
 
   KFunction* getCurrentKFunc() const;
+
+  void trackBranch(int condIndex, int asmLine);
+  bool isReplayDone(void) const;
+  bool pushHeapRef(HeapObject* heapObj) {
+	return branchDecisionsSequence.push_heap_ref(heapObj);
+  }
+  unsigned stepReplay(void);
+
+  BranchTracker::iterator branchesBegin(void) const
+  { return branchDecisionsSequence.begin(); }
+
+  BranchTracker::iterator branchesEnd(void) const
+  { return branchDecisionsSequence.end(); }
 };
 
 
