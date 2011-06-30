@@ -9,10 +9,15 @@
 
 #include "klee/Internal/ADT/KTest.h"
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <assert.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <zlib.h>
 
 #define KTEST_VERSION 3
 #define KTEST_MAGIC_SIZE 5
@@ -92,88 +97,140 @@ int kTest_isKTestFile(const char *path) {
   return res;
 }
 
-KTest *kTest_fromFile(const char *path) {
-  FILE *f = fopen(path, "rb");
+static KTest* kTest_fromUncompressedFile(const char* path)
+{
+  FILE *f;
   KTest *res = 0;
   unsigned i, version;
 
-  if (!f) 
-    goto error;
-  if (!kTest_checkHeader(f)) 
-    goto error;
+  f = fopen(path, "rb");
+  if (!f) goto error;
+  if (!kTest_checkHeader(f)) goto error;
 
   res = (KTest*) calloc(1, sizeof(*res));
-  if (!res) 
-    goto error;
+  if (!res) goto error;
 
-  if (!read_uint32(f, &version)) 
-    goto error;
-  
-  if (version > kTest_getCurrentVersion())
-    goto error;
+  if (!read_uint32(f, &version)) goto error_res;
+  if (version > kTest_getCurrentVersion()) goto error_res;
 
   res->version = version;
 
-  if (!read_uint32(f, &res->numArgs)) 
-    goto error;
+  if (!read_uint32(f, &res->numArgs)) goto error;
+
   res->args = (char**) calloc(res->numArgs, sizeof(*res->args));
-  if (!res->args) 
-    goto error;
+  if (!res->args) goto error_res;
   
   for (i=0; i<res->numArgs; i++)
     if (!read_string(f, &res->args[i]))
-      goto error;
+      goto error_args;
 
   if (version >= 2) {
-    if (!read_uint32(f, &res->symArgvs)) 
-      goto error;
-    if (!read_uint32(f, &res->symArgvLen)) 
-      goto error;
+    if (!read_uint32(f, &res->symArgvs)) goto error_args;
+    if (!read_uint32(f, &res->symArgvLen)) goto error_args;
   }
 
-  if (!read_uint32(f, &res->numObjects))
-    goto error;
+  if (!read_uint32(f, &res->numObjects)) goto error_args;
+
   res->objects = (KTestObject*) calloc(res->numObjects, sizeof(*res->objects));
-  if (!res->objects)
-    goto error;
+  if (!res->objects) goto error_args;
+
   for (i=0; i<res->numObjects; i++) {
     KTestObject *o = &res->objects[i];
-    if (!read_string(f, &o->name))
-      goto error;
-    if (!read_uint32(f, &o->numBytes))
-      goto error;
+    if (!read_string(f, &o->name)) goto error_objs;
+    if (!read_uint32(f, &o->numBytes)) goto error_objs;
+
     o->bytes = (unsigned char*) malloc(o->numBytes);
-    if (fread(o->bytes, o->numBytes, 1, f)!=1)
-      goto error;
+    if (fread(o->bytes, o->numBytes, 1, f)!=1) goto error_objs;
   }
 
   fclose(f);
 
   return res;
- error:
-  if (res) {
-    if (res->args) {
-      for (i=0; i<res->numArgs; i++)
-        if (res->args[i])
-          free(res->args[i]);
-      free(res->args);
-    }
-    if (res->objects) {
-      for (i=0; i<res->numObjects; i++) {
-        KTestObject *bo = &res->objects[i];
-        if (bo->name)
-          free(bo->name);
-        if (bo->bytes)
-          free(bo->bytes);
-      }
-      free(res->objects);
-    }
-    free(res);
-  }
 
+error_objs:
+  assert (res->objects != 0);
+  for (i=0; i<res->numObjects; i++) {
+    KTestObject *bo = &res->objects[i];
+    if (bo->name)  free(bo->name);
+    if (bo->bytes) free(bo->bytes);
+  }
+  free(res->objects);
+
+error_args:
+  assert (res->args != 0);
+  for (i=0; i<res->numArgs; i++) {
+      if (res->args[i])
+        free(res->args[i]);
+  }
+  free(res->args);
+
+error_res:
+  assert (res != 0);
+  free(res);
+  res = 0;
+
+error:
+  assert (res == 0);
   if (f) fclose(f);
 
   return 0;
+
+}
+
+static bool kTest_uncompress(const char* path, const char* new_path)
+{
+	char 	buf[4096];
+	ssize_t	br, bw;
+	int	ktest_fd;
+	gzFile	gzF;
+
+	/* create open gz file */
+	gzF = gzopen(path, "rb");
+	if (gzF == NULL) return false;
+
+	/* copy gz file to normal file  */
+	ktest_fd = open(new_path, O_WRONLY|O_CREAT, 0600);
+	if (ktest_fd < 0) {
+		gzclose(gzF);
+		return false;
+	}
+
+	while ((br = gzread(gzF, buf, 4096)) > 0) {
+		bw = write(ktest_fd, buf, br);
+		assert (bw == br);
+	}
+
+	close(ktest_fd);
+	gzclose(gzF);
+
+	return true;
+}
+
+KTest *kTest_fromFile(const char *path)
+{
+	KTest		*ret;
+	char		*tmp_path = 0;
+	const char	*real_path;
+	int		path_len;
+
+	path_len = strlen(path);
+	if (path_len > 3 && strcmp(path+path_len-3, ".gz") == 0) {
+		/* if it's a gz, unzip it */
+		tmp_path = strdup(path);
+		real_path = tmp_path;
+		tmp_path[path_len-3] = '\0';
+		if (kTest_uncompress(path, tmp_path) == false) {
+			free(tmp_path);
+			return NULL;
+		}
+	} else
+		real_path = path;
+
+	ret = kTest_fromUncompressedFile(real_path);
+
+	if (tmp_path) free(tmp_path);
+
+	return ret;
 }
 
 int kTest_toFile(KTest *bo, const char *path) {
