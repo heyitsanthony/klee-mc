@@ -436,7 +436,7 @@ bool Executor::isForkingCondition(ExecutionState& current, ref<Expr> condition)
   if (isa<ConstantExpr>(condition)) return false;
   if (!(MaxStaticForkPct!=1. || MaxStaticSolvePct != 1. ||
       MaxStaticCPForkPct!=1. || MaxStaticCPSolvePct != 1.)) return false;
-  if (statsTracker->elapsed() <= 60.) return false;
+  if (statsTracker->elapsed() > 60.) return false;
   return true;
 }
 
@@ -1480,7 +1480,7 @@ void Executor::finalizeBranch(
 		st = newState;
 	}
 
-	/* (st->isCompactForm == false)??? */
+//	if (st->isCompactForm == false)
 	st->transferToBasicBlock(
 		bi->getSuccessor(branchIdx),
 		bi->getParent());
