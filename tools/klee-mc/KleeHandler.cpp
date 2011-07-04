@@ -428,15 +428,17 @@ void KleeHandler::processTestCase(const ExecutionState &state,
       klee_warning("unable to write .info file, losing it (errno=%d: %s)", errno, strerror(errno));
   }
 
- if (std::ostream* f = openTestFile("reglog", id)) {
-   foreach (it, state.regsBegin(), state.regsEnd()) {
-      std::vector<unsigned char> cur_regs = *it;
-      std::copy(
-        cur_regs.begin(),
-	cur_regs.end(),
-        std::ostream_iterator<unsigned char>(*f));
+ if (state.regsBegin() != state.regsEnd()) {
+   if (std::ostream* f = openTestFile("reglog", id)) {
+     foreach (it, state.regsBegin(), state.regsEnd()) {
+        std::vector<unsigned char> cur_regs = *it;
+        std::copy(
+          cur_regs.begin(),
+    	  cur_regs.end(),
+          std::ostream_iterator<unsigned char>(*f));
+     }
+     delete f;
    }
-   delete f;
  }
  fprintf(stderr, "=========DONE WRITING OUT TESTID=%d\n", id);
 }

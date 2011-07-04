@@ -119,10 +119,11 @@ uint8_t* ReplayExec::verifyWithRegLog(void)
 void ReplayExec::setRegLog(const char* reglog_fname)
 {
 	f_reglog = fopen(reglog_fname, "rb");
-	if (f_reglog == NULL)
+	if (f_reglog == NULL) {
 		fprintf(stderr,
 			"Could not open reglog \"%s\"\n",
 			reglog_fname);
+	}
 }
 
 uint8_t* ReplayExec::feedRegLog(void)

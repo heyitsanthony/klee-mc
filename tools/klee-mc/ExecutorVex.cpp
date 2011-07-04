@@ -1,5 +1,7 @@
 #include "llvm/Target/TargetData.h"
 #include "llvm/IntrinsicInst.h"
+#include "llvm/Support/CommandLine.h"
+#include "llvm/Support/ManagedStatic.h"
 #include "klee/Internal/Module/KModule.h"
 #include "llvm/System/Path.h"
 #include "klee/Config/config.h"
@@ -33,6 +35,14 @@ using namespace klee;
 using namespace llvm;
 
 extern bool WriteTraces;
+
+namespace 
+{
+  cl::opt<bool>
+  LogRegs("logregs",
+  	cl::desc("Log registers."),
+	cl::init(false));
+}
 
 ExecutorVex::ExecutorVex(
 	const InterpreterOptions &opts,
@@ -366,6 +376,8 @@ void ExecutorVex::logXferRegisters(ExecutionState& state)
 	ObjectState*	state_regctx_os;
 	uint8_t*	concrete_mask;
 	unsigned int	reg_sz;
+
+	if (!LogRegs) return;
 
 	/* XXX: expensive-- lots of storage */
 	reg_sz = gs->getCPUState()->getStateSize();

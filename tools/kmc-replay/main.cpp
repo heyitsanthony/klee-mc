@@ -45,7 +45,7 @@ int main(int argc, char* argv[])
 	re->setSyscallsKTest(skt);
 	re->setRegLog(fname_reglog);
 	re->run();
-	
+
 	delete re;
 	delete gs;
 
