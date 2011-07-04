@@ -81,9 +81,9 @@ def trimZeros(str):
 def main(args):
     from optparse import OptionParser
     op = OptionParser("usage: %prog [options] files")
-    op.add_option('','--trim-zeros', dest='trimZeros', action='store_true',
+    op.add_option('','--notrim-zeros', dest='noTrimZeros', action='store_true',
                   default=False,
-                  help='trim trailing zeros')
+                  help='do not trim trailing zeros')
     op.add_option('','--write-ints', dest='writeInts', action='store_true',
                   default=False,
                   help='convert 4-byte sequences to integers')
@@ -99,10 +99,10 @@ def main(args):
         print 'args       : %r' % b.args
         print 'num objects: %r' % len(b.objects)
         for i,(name,data) in enumerate(b.objects):
-            if opts.trimZeros:
-                str = trimZeros(data)
-            else:
+            if opts.noTrimZeros:
                 str = data
+            else:
+                str = trimZeros(data)
 
             print 'object %4d: name: %r' % (i, name)
             print 'object %4d: size: %r' % (i, len(data))
