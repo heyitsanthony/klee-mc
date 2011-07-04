@@ -404,23 +404,29 @@ void SpecialFunctionHandler::handleMalloc(ExecutionState &state,
   executor.executeAlloc(state, arguments[0], false, target);
 }
 
-void SpecialFunctionHandler::handleAssume(ExecutionState &state,
-                            KInstruction *target,
-                            std::vector<ref<Expr> > &arguments) {
+void SpecialFunctionHandler::handleAssume(
+	ExecutionState &state,
+        KInstruction *target,
+        std::vector<ref<Expr> > &arguments)
+{
+  bool res;
+  bool success;
+ 
   assert(arguments.size()==1 && "invalid number of arguments to klee_assume");
   
   ref<Expr> e = arguments[0];
   
-  if (e->getWidth() != Expr::Bool)
+  if (e->getWidth() != Expr::Bool) {
     e = NeExpr::create(e, ConstantExpr::create(0, e->getWidth()));
-  
-  bool res;
-  bool success = executor.solver->mustBeFalse(state, e, res);
+  }
+ 
+  success = executor.solver->mustBeFalse(state, e, res);
   assert(success && "FIXME: Unhandled solver failure");
   if (res) {
-    executor.terminateStateOnError(state, 
-                                   "invalid klee_assume call (provably false)",
-                                   "user.err");
+    executor.terminateStateOnError(
+      state, 
+      "invalid klee_assume call (provably false)",
+      "user.err");
   } else {
     executor.addConstraint(state, e);
   }
