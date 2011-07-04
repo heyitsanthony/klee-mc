@@ -239,6 +239,8 @@ void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
 	const char*  state_data = (const char*)gs->getCPUState()->getStateData();
 	for (unsigned int i=0; i < state_regctx_sz; i++)
 		state->write8(state_regctx_os, i, state_data[i]);
+
+	state->setRegCtx(state_regctx_mo);
 }
 
 void ExecutorVex::run(ExecutionState &initialState)
@@ -303,7 +305,6 @@ Function* ExecutorVex::getFuncFromAddr(uint64_t guest_addr)
 void ExecutorVex::executeInstruction(
 	ExecutionState &state, KInstruction *ki)
 {
-//	fprintf(stderr, "vex::exeInst: "); ki->inst->dump();
 	Executor::executeInstruction(state, ki);
 }
 
@@ -342,29 +343,47 @@ void ExecutorVex::markExitIgnore(ExecutionState& state)
 	ObjectState		*state_regctx_os;
 
 	gs->getCPUState()->setExitType(GE_IGNORE);
-	state_regctx_os = state.addressSpace.findObject(getRegCtx(state));
+	state_regctx_os = getRegObj(state);
 	state.write8(
 		state_regctx_os,
 		gs->getCPUState()->getExitTypeOffset(),
 		GE_IGNORE);
 }
 
-MemoryObject* ExecutorVex::getRegCtx(ExecutionState& state)
+ObjectState* ExecutorVex::getRegObj(ExecutionState& state)
 {
-	MemoryObject		*mo;
-	ref<Expr>		regctx_v;
-	uint64_t		mo_addr;
-
-	regctx_v = state.readLocalCell(state.stack.size() - 1, 0).value;
-	mo_addr = dyn_cast<ConstantExpr>(regctx_v)->getZExtValue();
-	mo = memory->findByAddr(mo_addr);
-
-	return mo;
+	MemoryObject	*mo;
+	mo = state.getRegCtx();
+	return state.addressSpace.findObject(mo);
 }
 
-void ExecutorVex::setRegCtx(ExecutionState& state, MemoryObject* mo)
+extern "C" {
+#include <valgrind/libvex_guest_amd64.h>
+}
+
+void ExecutorVex::logXferRegisters(ExecutionState& state)
 {
-	state.writeLocalCell(state.stack.size() - 1, 0, mo->getBaseExpr());
+	ObjectState*	state_regctx_os;
+	uint8_t*	concrete_mask;
+	unsigned int	reg_sz;
+
+	/* XXX: expensive-- lots of storage */
+	reg_sz = gs->getCPUState()->getStateSize();
+
+	/* 1. store concrete cache */
+	state.recordRegisters(gs->getCPUState()->getStateData(), reg_sz);
+
+	/* 2. store concrete mask */
+	state_regctx_os = getRegObj(state);
+	concrete_mask = new uint8_t[reg_sz];
+	for (unsigned int i = 0; i < reg_sz; i++) {
+		concrete_mask[i] = 0;
+		if (state_regctx_os->isByteConcrete(i))
+			concrete_mask[i] = 0xff;
+	}
+	state.recordRegisters(concrete_mask, reg_sz);
+
+	delete [] concrete_mask;
 }
 
 /* handle transfering between VSB's */
@@ -373,8 +392,7 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 	GuestExitType		exit_type;
 
 	updateGuestRegs(state);
-
-	fprintf(stderr, "XFER FROM %s\n", ki->inst->getParent()->getParent()->getNameStr().c_str());
+	logXferRegisters(state);
 
 	exit_type = gs->getCPUState()->getExitType();
 	markExitIgnore(state);
@@ -389,9 +407,7 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 	case GE_SYSCALL: {
 		bool	ok_sc;
 		in_sc = true;
-		logSCRegs(state);
 		ok_sc = handleXferSyscall(state, ki);
-		logSCRegs(state);
 		if (!ok_sc) terminateStateOnExit(state);
 		in_sc = false;
 		return;
@@ -413,36 +429,6 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 	fprintf(stderr, "result: ");
 	result->dump();
 	terminateStateOnExit(state);
-}
-
-void ExecutorVex::dumpSCRegs(const std::string& fname)
-{
-	FILE*		f;
-	unsigned int	reg_sz;
-
-	reg_sz = gs->getCPUState()->getStateSize();
-	f = fopen(std::string(fname+".sclog").c_str(), "w");
-	assert (f != NULL);
-	foreach (it, log_sc_regs.begin(), log_sc_regs.end()) {
-		char	*regs = (*it);
-		fwrite(regs, reg_sz, 1, f);
-	}
-
-	fclose(f);
-}
-
-void ExecutorVex::logSCRegs(ExecutionState& state)
-{
-	char		*regs;
-	unsigned int	reg_sz;
-
-	updateGuestRegs(state);
-	reg_sz = gs->getCPUState()->getStateSize();
-	regs = new char[reg_sz];
-	memcpy(	regs,
-		gs->getCPUState()->getStateData(), 
-		reg_sz);
-	log_sc_regs.push_back(regs);
 }
 
 void ExecutorVex::xferIterInit(
@@ -524,7 +510,7 @@ void ExecutorVex::jumpToKFunc(ExecutionState& state, KFunction* kf)
 	assert (state.stack.size() > 0);
 
 	/* save, pop off old state */
-	regctx_mo = getRegCtx(state);
+	regctx_mo = state.getRegCtx();
 	cpn = state.stack.back().callPathNode;
 	state.popFrame();
 
@@ -546,7 +532,7 @@ void ExecutorVex::handleXferCall(ExecutionState& state, KInstruction* ki)
 	std::vector< ref<Expr> > 	args;
 	struct XferStateIter		iter;
 
-	args.push_back(getRegCtx(state)->getBaseExpr());
+	args.push_back(state.getRegCtx()->getBaseExpr());
 	xferIterInit(iter, &state, ki);
 	while (xferIterNext(iter)) {
 		executeCall(*(iter.res.first), ki, iter.f, args);
@@ -596,7 +582,7 @@ void ExecutorVex::updateGuestRegs(ExecutionState& state)
 {
 	void	*guest_regs;
 	guest_regs = gs->getCPUState()->getStateData();
-	state.addressSpace.copyToBuf(getRegCtx(state), guest_regs);
+	state.addressSpace.copyToBuf(state.getRegCtx(), guest_regs);
 }
 
 void ExecutorVex::initializeGlobals(ExecutionState &state)

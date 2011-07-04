@@ -26,6 +26,7 @@ public:
 	ObjectState* sc_ret_range(
 		ExecutionState& state, uint64_t lo, uint64_t hi);
 	void sc_ret_v(ExecutionState& state, uint64_t v);
+	unsigned int getNumRetired(void) const { return sc_retired; }
 private:
 	void sc_fail(ExecutionState& state);
 

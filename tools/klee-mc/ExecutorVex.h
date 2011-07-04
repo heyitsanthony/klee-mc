@@ -59,7 +59,7 @@ public:
 	MemoryObject* allocRegCtx(ExecutionState* state, llvm::Function* f = 0);
 
 	void setRegCtx(ExecutionState& state, MemoryObject* mo);
-	MemoryObject* getRegCtx(ExecutionState&);
+	ObjectState* getRegObj(ExecutionState&);
 	void dumpSCRegs(const std::string& fname);
 protected:
   	virtual void executeInstruction(
@@ -153,8 +153,8 @@ private:
 		KInstruction* ki);
 	bool xferIterNext(struct XferStateIter& iter);
 
-	/* registers logged in order */
-	PtrList<char>	log_sc_regs;
+	void logXferRegisters(ExecutionState& state);
+
 	void logSCRegs(ExecutionState& state);
 
 	func2vsb_map	func2vsb_table;

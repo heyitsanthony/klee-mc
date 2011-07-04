@@ -21,6 +21,7 @@
 #include "klee/Internal/Module/KInstruction.h"
 #include "llvm/Support/CallSite.h"
 #include "llvm/ADT/APFloat.h"
+#include "SeedInfo.h"	/* so forkInfo works */
 #include <vector>
 #include <string>
 #include <map>
@@ -46,7 +47,7 @@ namespace llvm {
   class VectorType;
 }
 
-namespace klee {  
+namespace klee {
   class Array;
   class Cell;
   class EquivalentStateEliminator;
@@ -63,7 +64,6 @@ namespace klee {
   class ObjectState;
   class PTree;
   class Searcher;
-  class SeedInfo;
   class SpecialFunctionHandler;
   class StackFrame;
   class StatsTracker;
@@ -112,7 +112,7 @@ protected:
 
   void initializeGlobalObject(
     ExecutionState &state,
-    ObjectState *os, 
+    ObjectState *os,
     llvm::Constant *c,
     unsigned offset);
 
@@ -138,7 +138,7 @@ protected:
   // call error handler and terminate state, for execution errors
   // (things that should not be possible, like illegal instruction or
   // unlowered instrinsic, or are unsupported, like inline assembly)
-  void terminateStateOnExecError(ExecutionState &state, 
+  void terminateStateOnExecError(ExecutionState &state,
                                  const llvm::Twine &message,
                                  const llvm::Twine &info="") {
     terminateStateOnError(state, message, "exec.err", info);
@@ -157,7 +157,7 @@ protected:
   /// \param results[out] A list of ((MemoryObject,ObjectState),
   /// state) pairs for each object the given address can point to the
   /// beginning of.
-  typedef std::vector< std::pair<std::pair<const MemoryObject*, const ObjectState*>, 
+  typedef std::vector< std::pair<std::pair<const MemoryObject*, const ObjectState*>,
                                  ExecutionState*> > ExactResolutionList;
   void resolveExact(ExecutionState &state,
                     ref<Expr> p,
@@ -182,11 +182,11 @@ protected:
                             std::vector< ref<Expr> > &arguments) = 0;
 
   void executeSymbolicFuncPtr(
-	ExecutionState &state, 
+	ExecutionState &state,
 	KInstruction *ki,
 	std::vector< ref<Expr> > &arguments);
 
-  void executeCall(ExecutionState &state, 
+  void executeCall(ExecutionState &state,
         KInstruction *ki,
         llvm::Function *f,
         std::vector< ref<Expr> > &arguments);
@@ -198,7 +198,7 @@ protected:
 
   InterpreterHandler *interpreterHandler;
   llvm::TargetData* target_data;
-  llvm::Function* dbgStopPointFn; 
+  llvm::Function* dbgStopPointFn;
   StatsTracker *statsTracker;
   PTree *processTree;
   TreeStreamWriter *symPathWriter;
@@ -232,7 +232,7 @@ private:
   /// on as-yet-to-be-determined flags.
   typedef  std::map<ExecutionState*, std::vector<SeedInfo> > SeedMapType;
   SeedMapType seedMap;
-  
+
   /// When non-null the bindings that will be used for calls to
   /// klee_make_symbolic in order replay.
   const struct KTest *replayOut;
@@ -245,7 +245,7 @@ private:
 
   /// When non-null a list of "seed" inputs which will be used to
   /// drive execution.
-  const std::vector<struct KTest *> *usingSeeds;  
+  const std::vector<struct KTest *> *usingSeeds;
 
   /// Disables forking, instead a random path is chosen. Enabled as
   /// needed to control memory usage. \see fork()
@@ -256,8 +256,8 @@ private:
 
   /// Signals the executor to halt execution at the next instruction
   /// step.
-  bool haltExecution;  
- 
+  bool haltExecution;
+
   /// Forces only non-compact states to be chosen. Initially false,
   /// gets true when atMemoryLimit becomes true, and reset to false
   /// when memory has dropped below a certain threshold
@@ -273,7 +273,7 @@ private:
   uint64_t lastMemoryLimitOperationInstructions;
 
   /// The maximum time to allow for a single stp query.
-  double stpTimeout;  
+  double stpTimeout;
 
   bool isDebugIntrinsic(const llvm::Function *f);
 
@@ -286,6 +286,8 @@ private:
   void instExtractElement(ExecutionState& state, KInstruction* ki);
   void instInsertElement(ExecutionState& state, KInstruction *ki);
   void instBranch(ExecutionState& state, KInstruction* ki);
+  void finalizeBranch(ExecutionState* st, llvm::BranchInst* bi, int branchIdx);
+
   void instCmp(ExecutionState& state, KInstruction* ki);
   ref<Expr> cmpScalar(
   	ExecutionState& state,
@@ -338,12 +340,12 @@ private:
     unsigned funcArgs,
     std::vector<ref<Expr> >& arguments);
   void executeCallNonDecl(
-    ExecutionState &state, 
+    ExecutionState &state,
     KInstruction *ki,
     llvm::Function *f,
     std::vector< ref<Expr> > &arguments);
   void executeBitCast(
-	ExecutionState	&state, 
+	ExecutionState	&state,
 	llvm::CallSite	&cs,
 	llvm::ConstantExpr* ce,
 	std::vector< ref<Expr> > &arguments);
@@ -396,30 +398,56 @@ private:
     ref<Expr> len,
     const char* arrPrefix = "arr");
 
+  /* this forking code really should be refactored */
   bool isForkingCondition(ExecutionState& current, ref<Expr> condition);
   bool isForkingCallPath(CallPathNode* cpn);
   StateVector fork(ExecutionState &current,
                    unsigned N, ref<Expr> conditions[], bool isInternal,
                    bool isBranch = false);
-  bool forkSetupNoSeeding(
-    ExecutionState& current,
-    unsigned N, std::vector<bool>& res,
-    bool isInternal,
-    unsigned& validTargets, bool& forkCompact, bool& wasReplayed);
-  void forkSetupSeeding( 
-    ExecutionState& current,
-    unsigned N, ref<Expr> conditions[],
-    std::vector<bool>& res,
-    std::vector<std::list<SeedInfo> >& resSeeds,
-    unsigned& validTargets);
 
+  struct ForkInfo
+  {
+	ForkInfo(
+		ref<Expr>* in_conditions,
+		unsigned int in_N)
+	: resStates(in_N, NULL)
+	, res(in_N, false)
+	, conditions(in_conditions)
+	, N(in_N)
+	, feasibleTargets(0)
+	, validTargets(0)
+	, resSeeds(in_N)
+	, forkCompact(false)
+	{}
 
+	StateVector		resStates;
+	std::vector<bool>	res;
+	ref<Expr>		*conditions;
+	unsigned int		N;
+	unsigned int		feasibleTargets;
+	unsigned int		validTargets;
+	bool			isInternal;
+	bool			isSeeding;
+	bool			isBranch;
+	bool			wasReplayed;
+	std::vector<std::list<SeedInfo> > resSeeds;
+	bool			forkCompact;
+	double			timeout;
+  };
+
+  bool forkSetupNoSeeding(ExecutionState& current, struct ForkInfo& fi);
+  void forkSetupSeeding(ExecutionState& current, struct ForkInfo& fi);
+  bool evalForks(ExecutionState& current, struct ForkInfo& fi);
+  void makeForks(ExecutionState& current, struct ForkInfo& fi);
+  void constrainForks(ExecutionState& current, struct ForkInfo& fi);
+
+  bool isStateSeeding(ExecutionState* s);
 #if 0
   /// Create a new state where each input condition has been added as
   /// a constraint and return the results. The input state is included
   /// as one of the results. Note that the output vector may included
   /// NULL pointers for states which were unable to be created.
-  void branch(ExecutionState &state, 
+  void branch(ExecutionState &state,
               const std::vector< ref<Expr> > &conditions,
               std::vector<ExecutionState*> &result);
 
@@ -441,15 +469,15 @@ private:
   /// should generally be avoided.
   ///
   /// \param purpose An identify string to printed in case of concretization.
-  ref<klee::ConstantExpr> toConstant(ExecutionState &state, ref<Expr> e, 
+  ref<klee::ConstantExpr> toConstant(ExecutionState &state, ref<Expr> e,
                                      const char *purpose);
 
   /// Bind a constant value for e to the given target. NOTE: This
   /// function may fork state if the state has multiple seeds.
   void executeGetValue(ExecutionState &state, ref<Expr> e, KInstruction *target);
 
-  void handlePointsToObj(ExecutionState &state, 
-                         KInstruction *target, 
+  void handlePointsToObj(ExecutionState &state,
+                         KInstruction *target,
                          const std::vector<ref<Expr> > &arguments);
 
   void doImpliedValueConcretization(ExecutionState &state,
@@ -466,7 +494,7 @@ private:
   void processTimers(ExecutionState *current,
                      double maxInstTime);
   void processTimersDumpStates(void);
-  
+
   void getSymbolicSolutionCex(const ExecutionState& state, ExecutionState& t);
 
   bool seedObject(
@@ -503,15 +531,15 @@ public:
   // call exit handler and terminate state
   void terminateStateOnExit(ExecutionState &state);
   // call error handler and terminate state
-  void terminateStateOnError(ExecutionState &state, 
+  void terminateStateOnError(ExecutionState &state,
                              const llvm::Twine &message,
                              const char *suffix,
                              const llvm::Twine &longMessage="");
 
-  // Given a concrete object in our [klee's] address space, add it to 
+  // Given a concrete object in our [klee's] address space, add it to
   // objects checked code can reference.
   MemoryObject *addExternalObject(
-    ExecutionState &state, void *addr, 
+    ExecutionState &state, void *addr,
     unsigned size, bool isReadOnly);
 
   // XXX should just be moved out to utility module
@@ -519,7 +547,7 @@ public:
 
   virtual void setSymbolicPathWriter(TreeStreamWriter *tsw) {
     symPathWriter = tsw;
-  }      
+  }
 
   virtual void setReplayOut(const struct KTest *out) {
     assert(!replayPaths && "cannot replay both buffer and path");
@@ -532,12 +560,12 @@ public:
     replayPaths = paths;
   }
 
-  virtual void useSeeds(const std::vector<struct KTest *> *seeds) { 
+  virtual void useSeeds(const std::vector<struct KTest *> *seeds) {
     usingSeeds = seeds;
   }
 
   /*** Runtime options ***/
-  
+
   virtual void setHaltExecution(bool value) {
     haltExecution = value;
   }
@@ -554,8 +582,8 @@ public:
                                 std::string &res,
                                 bool asCVC = false);
 
-  virtual bool getSymbolicSolution(const ExecutionState &state, 
-                                   std::vector< 
+  virtual bool getSymbolicSolution(const ExecutionState &state,
+                                   std::vector<
                                    std::pair<std::string,
                                    std::vector<unsigned char> > >
                                    &res);

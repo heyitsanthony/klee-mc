@@ -143,14 +143,16 @@ bool Solver::getValue(const Query& query, ref<ConstantExpr> &result) {
   return true;
 }
 
-bool
-Solver::getInitialValues(const Query& query,
-                         const std::vector<const Array*> &objects,
-                         std::vector< std::vector<unsigned char> > &values) {
+bool Solver::getInitialValues(
+  const Query& query,
+  const std::vector<const Array*> &objects,
+  std::vector< std::vector<unsigned char> > &values)
+{
   bool hasSolution;
-  bool success =
-    impl->computeInitialValues(query, objects, values, hasSolution);
+  bool success;
+
   // FIXME: Propogate this out.
+  success = impl->computeInitialValues(query, objects, values, hasSolution);
   if (!hasSolution)
     return false;
 
@@ -352,18 +354,19 @@ bool ValidatingSolver::computeValue(const Query& query,
   return true;
 }
 
-bool
-ValidatingSolver::computeInitialValues(const Query& query,
-                                       const std::vector<const Array*>
-                                         &objects,
-                                       std::vector< std::vector<unsigned char> >
-                                         &values,
-                                       bool &hasSolution) {
+bool ValidatingSolver::computeInitialValues(
+  const Query& query,
+  const std::vector<const Array*> &objects,
+  std::vector< std::vector<unsigned char> > &values,
+  bool &hasSolution)
+{
   bool answer;
+  bool init_values_ok;
 
-  if (!solver->impl->computeInitialValues(query, objects, values,
-                                          hasSolution))
-    return false;
+  init_values_ok = solver->impl->computeInitialValues(
+  	query, objects, values, hasSolution);
+  if (init_values_ok == false)
+  	return false;
 
   if (hasSolution) {
     // Assert the bindings as constraints, and verify that the
@@ -373,9 +376,12 @@ ValidatingSolver::computeInitialValues(const Query& query,
       const Array *array = objects[i];
       for (unsigned j=0; j<array->mallocKey.size; j++) {
         unsigned char value = values[i][j];
-        bindings.push_back(EqExpr::create(ReadExpr::create(UpdateList(array, 0),
-                                                           ConstantExpr::alloc(j, Expr::Int32)),
-                                          ConstantExpr::alloc(value, Expr::Int8)));
+        bindings.push_back(
+	  EqExpr::create(
+	    ReadExpr::create(
+	      UpdateList(array, 0),
+              ConstantExpr::alloc(j, Expr::Int32)),
+            ConstantExpr::alloc(value, Expr::Int8)));
       }
     }
     ConstraintManager tmp(bindings);
@@ -652,10 +658,10 @@ static int runAndGetCex(
 	bool &hasSolution)
 {
 	// XXX I want to be able to timeout here, safely
-	int res;
+	int	res;
+
 	res = vc_query(vc, q);
 	hasSolution = !res;
-
 	if (!hasSolution) return res;
 
 	rh.reserve(objects.size());
@@ -669,12 +675,12 @@ static int runAndGetCex(
 			offset < array->mallocKey.size;
 			offset++)
 		{
-			ExprHandle counter =
-				vc_getCounterExample(
-					vc,
-					builder->getInitialRead(array, offset));
-			unsigned char val = getBVUnsigned(counter);
-
+			ExprHandle counter;
+			unsigned char val;
+			counter = vc_getCounterExample(
+				vc,
+				builder->getInitialRead(array, offset));
+			val = getBVUnsigned(counter);
 			rh.newByte(val);
 		}
 	}
@@ -759,13 +765,13 @@ public:
   }
 };
 
-bool
-STPSolverImpl::computeInitialValues(
+bool STPSolverImpl::computeInitialValues(
 	const Query &query,
 	const std::vector<const Array*> &objects,
 	std::vector< std::vector<unsigned char> > &values,
 	bool &hasSolution)
 {
+  bool success;
   TimerStatIncrementer t(stats::queryTime);
   std::ostream& os = std::clog;
 
@@ -790,8 +796,6 @@ STPSolverImpl::computeInitialValues(
     vc_printQueryStateToBuffer(vc, stp_e, &buf, &len, false);
     fprintf(stderr, "note: STP query: %.*s\n", (unsigned) len, buf);
   }
-
-  bool success;
 
   if (useForkedSTP) {
     success = doForkedComputeInitialValues(objects, values, stp_e, hasSolution);

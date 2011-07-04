@@ -3,6 +3,7 @@
 #include "expr/Lexer.h"
 #include "expr/Parser.h"
 
+#include "static/Sugar.h"
 #include "klee/Constraints.h"
 #include "klee/Expr.h"
 #include "klee/ExprBuilder.h"
@@ -34,7 +35,7 @@ namespace {
     Evaluate
   };
 
-  static llvm::cl::opt<ToolActions> 
+  static llvm::cl::opt<ToolActions>
   ToolAction(llvm::cl::desc("Tool actions:"),
              llvm::cl::init(Evaluate),
              llvm::cl::values(
@@ -52,7 +53,7 @@ namespace {
     SimplifyingBuilder
   };
 
-  static llvm::cl::opt<BuilderKinds> 
+  static llvm::cl::opt<BuilderKinds>
   BuilderKind("builder",
               llvm::cl::desc("Expression builder:"),
               llvm::cl::init(DefaultBuilder),
@@ -72,7 +73,7 @@ namespace {
   cl::opt<bool>
   UseFastCexSolver("use-fast-cex-solver",
 		   cl::init(false));
-  
+
   cl::opt<bool>
   UseSTPQueryPCLog("use-stp-query-pc-log",
                    cl::init(false));
@@ -88,8 +89,8 @@ static std::string escapedString(const char *start, unsigned length) {
     } else if (c == '\n') {
       s << "\\n";
     } else {
-      s << "\\x" 
-        << hexdigit(((unsigned char) c >> 4) & 0xF) 
+      s << "\\x"
+        << hexdigit(((unsigned char) c >> 4) & 0xF)
         << hexdigit((unsigned char) c & 0xF);
     }
   }
@@ -108,161 +109,190 @@ static void PrintInputTokens(const MemoryBuffer *MB) {
   } while (T.kind != Token::EndOfFile);
 }
 
-static bool PrintInputAST(const char *Filename,
-                          const MemoryBuffer *MB,
-                          ExprBuilder *Builder) {
-  std::vector<Decl*> Decls;
-  Parser *P = Parser::Create(Filename, MB, Builder);
-  P->SetMaxErrors(20);
+static bool PrintInputAST(
+	const char *Filename,
+	const MemoryBuffer *MB,
+	ExprBuilder *Builder)
+{
+	std::vector<Decl*>	Decls;
+	Parser			*P;
+	unsigned int		NumQueries;
 
-  unsigned NumQueries = 0;
-  while (Decl *D = P->ParseTopLevelDecl()) {
-    if (!P->GetNumErrors()) {
-      if (isa<QueryCommand>(D))
-        std::cout << "# Query " << ++NumQueries << "\n";
+	P = Parser::Create(Filename, MB, Builder);
+	P->SetMaxErrors(20);
 
-      D->dump();
-    }
-    Decls.push_back(D);
-  }
+	NumQueries  = 0;
+	while (Decl *D = P->ParseTopLevelDecl()) {
+		if (!P->GetNumErrors()) {
+			if (isa<QueryCommand>(D))
+				std::cout << "# Query " << ++NumQueries << "\n";
+			D->dump();
+		}
+		Decls.push_back(D);
+	}
 
-  bool success = true;
-  if (unsigned N = P->GetNumErrors()) {
-    std::cerr << Filename << ": parse failure: "
-               << N << " errors.\n";
-    success = false;
-  }
+	bool success = true;
+	if (unsigned N = P->GetNumErrors()) {
+		std::cerr << Filename << ": parse failure: "
+			<< N << " errors.\n";
+		success = false;
+	}
 
-  for (std::vector<Decl*>::iterator it = Decls.begin(),
-         ie = Decls.end(); it != ie; ++it)
-    delete *it;
+	foreach (it, Decls.begin(), Decls.end()) delete *it;
 
-  delete P;
+	delete P;
 
-  return success;
+	return success;
 }
 
-static bool EvaluateInputAST(const char *Filename,
-                             const MemoryBuffer *MB,
-                             ExprBuilder *Builder) {
-  std::vector<Decl*> Decls;
-  Parser *P = Parser::Create(Filename, MB, Builder);
-  P->SetMaxErrors(20);
-  while (Decl *D = P->ParseTopLevelDecl()) {
-    Decls.push_back(D);
-  }
+static void doQuery(Solver* S, QueryCommand* QC)
+{
+	assert("FIXME: Support counterexample query commands!");
+	if (QC->Values.empty() && QC->Objects.empty()) {
+		bool result;
+		bool query_ok;
 
-  bool success = true;
-  if (unsigned N = P->GetNumErrors()) {
-    std::cerr << Filename << ": parse failure: "
-               << N << " errors.\n";
-    success = false;
-  }  
+		query_ok = S->mustBeTrue(
+			Query(ConstraintManager(QC->Constraints), QC->Query),
+			result);
+		if (query_ok)	std::cout << (result ? "VALID" : "INVALID");
+		else		std::cout << "FAIL";
+	} else if (!QC->Values.empty()) {
+		bool	query_ok;
+		assert(QC->Objects.empty() &&
+		"FIXME: Support counterexamples for values and objects!");
+		assert(QC->Values.size() == 1 &&
+		"FIXME: Support counterexamples for multiple values!");
+		assert(QC->Query->isFalse() &&
+		"FIXME: Support counterexamples with non-trivial query!");
+		ref<ConstantExpr> result;
+		query_ok = S->getValue(
+			Query(	ConstraintManager(QC->Constraints),
+				QC->Values[0]),
+			result);
+		if (query_ok) {
+			std::cout << "INVALID\n";
+			std::cout << "\tExpr 0:\t" << result;
+		} else {
+			std::cout << "FAIL";
+		}
+	} else {
+		bool query_ok;
+		std::vector< std::vector<unsigned char> > result;
 
-  if (!success)
-    return false;
+		query_ok = S->getInitialValues(
+			Query(	ConstraintManager(QC->Constraints),
+				QC->Query),
+			QC->Objects,
+			result);
+		if (query_ok) {
+			std::cout << "INVALID\n";
 
-  // FIXME: Support choice of solver.
-  Solver *S, *STP = S = 
-    UseDummySolver ? createDummySolver() : new STPSolver(true);
-  if (UseSTPQueryPCLog)
-    S = createPCLoggingSolver(S, "stp-queries.pc");
-  if (UseFastCexSolver)
-    S = createFastCexSolver(S);
-  S = createCexCachingSolver(S);
-  S = createCachingSolver(S);
-  S = createIndependentSolver(S);
-  if (0)
-    S = createValidatingSolver(S, STP);
+			for (unsigned i = 0, e = result.size(); i != e; ++i) {
+				std::cout << "\tArray " << i << ":\t"
+				<< QC->Objects[i]->name
+				<< "[";
+				for (	unsigned j = 0;
+					j != QC->Objects[i]->mallocKey.size;
+					++j)
+				{
+					std::cout << (unsigned) result[i][j];
+					if (j + 1 != QC->Objects[i]->mallocKey.size)
+						std::cout << ", ";
+				}
+				std::cout << "]";
+				if (i + 1 != e) std::cout << "\n";
+			}
+		} else {
+			std::cout << "FAIL";
+		}
+	}
 
-  unsigned Index = 0;
-  for (std::vector<Decl*>::iterator it = Decls.begin(),
-         ie = Decls.end(); it != ie; ++it) {
-    Decl *D = *it;
-    if (QueryCommand *QC = dyn_cast<QueryCommand>(D)) {
-      std::cout << "Query " << Index << ":\t";
-
-      assert("FIXME: Support counterexample query commands!");
-      if (QC->Values.empty() && QC->Objects.empty()) {
-        bool result;
-        if (S->mustBeTrue(Query(ConstraintManager(QC->Constraints), QC->Query),
-                          result)) {
-          std::cout << (result ? "VALID" : "INVALID");
-        } else {
-          std::cout << "FAIL";
-        }
-      } else if (!QC->Values.empty()) {
-        assert(QC->Objects.empty() && 
-               "FIXME: Support counterexamples for values and objects!");
-        assert(QC->Values.size() == 1 &&
-               "FIXME: Support counterexamples for multiple values!");
-        assert(QC->Query->isFalse() &&
-               "FIXME: Support counterexamples with non-trivial query!");
-        ref<ConstantExpr> result;
-        if (S->getValue(Query(ConstraintManager(QC->Constraints), 
-                              QC->Values[0]),
-                        result)) {
-          std::cout << "INVALID\n";
-          std::cout << "\tExpr 0:\t" << result;
-        } else {
-          std::cout << "FAIL";
-        }
-      } else {
-        std::vector< std::vector<unsigned char> > result;
-        
-        if (S->getInitialValues(Query(ConstraintManager(QC->Constraints), 
-                                      QC->Query),
-                                QC->Objects, result)) {
-          std::cout << "INVALID\n";
-
-          for (unsigned i = 0, e = result.size(); i != e; ++i) {
-            std::cout << "\tArray " << i << ":\t"
-                       << QC->Objects[i]->name
-                       << "[";
-            for (unsigned j = 0; j != QC->Objects[i]->mallocKey.size; ++j) {
-              std::cout << (unsigned) result[i][j];
-              if (j + 1 != QC->Objects[i]->mallocKey.size)
-                std::cout << ", ";
-            }
-            std::cout << "]";
-            if (i + 1 != e)
-              std::cout << "\n";
-          }
-        } else {
-          std::cout << "FAIL";
-        }
-      }
-
-      std::cout << "\n";
-      ++Index;
-    }
-  }
-
-  for (std::vector<Decl*>::iterator it = Decls.begin(),
-         ie = Decls.end(); it != ie; ++it)
-    delete *it;
-  delete P;
-
-  delete S;
-
-  if (uint64_t queries = *theStatisticManager->getStatisticByName("Queries")) {
-    std::cout 
-      << "--\n"
-      << "total queries = " << queries << "\n"
-      << "total queries constructs = " 
-      << *theStatisticManager->getStatisticByName("QueriesConstructs") << "\n"
-      << "valid queries = " 
-      << *theStatisticManager->getStatisticByName("QueriesValid") << "\n"
-      << "invalid queries = " 
-      << *theStatisticManager->getStatisticByName("QueriesInvalid") << "\n"
-      << "query cex = " 
-      << *theStatisticManager->getStatisticByName("QueriesCEX") << "\n";
-  }
-
-  return success;
+	std::cout << "\n";
 }
 
-int main(int argc, char **argv) {
+static Solver* buildSolver(void)
+{
+	// FIXME: Support choice of solver.
+	Solver *S, *STP = S =
+	UseDummySolver ? createDummySolver() : new STPSolver(true);
+	if (UseSTPQueryPCLog) S = createPCLoggingSolver(S, "stp-queries.pc");
+	if (UseFastCexSolver) S = createFastCexSolver(S);
+	S = createCexCachingSolver(S);
+	S = createCachingSolver(S);
+	S = createIndependentSolver(S);
+	if (0) S = createValidatingSolver(S, STP);
+	return S;
+}
+
+static void printQueries(void)
+{
+	uint64_t queries;
+
+	queries = *theStatisticManager->getStatisticByName("Queries");
+	if (queries == 0) return;
+
+	std::cout
+	<< "--\n"
+	<< "total queries = " << queries << "\n"
+	<< "total queries constructs = "
+	<< *theStatisticManager->getStatisticByName("QueriesConstructs") << "\n"
+	<< "valid queries = "
+	<< *theStatisticManager->getStatisticByName("QueriesValid") << "\n"
+	<< "invalid queries = "
+	<< *theStatisticManager->getStatisticByName("QueriesInvalid") << "\n"
+	<< "query cex = "
+	<< *theStatisticManager->getStatisticByName("QueriesCEX") << "\n";
+}
+
+
+static bool EvaluateInputAST(
+	const char *Filename,
+	const MemoryBuffer *MB,
+	ExprBuilder *Builder)
+{
+	std::vector<Decl*>	Decls;
+	Parser		*P;
+	Solver		*S;
+	unsigned int		Index;
+
+	P = Parser::Create(Filename, MB, Builder);
+	P->SetMaxErrors(20);
+	while (Decl *D = P->ParseTopLevelDecl())
+		Decls.push_back(D);
+
+	if (unsigned N = P->GetNumErrors()) {
+		std::cerr	<< Filename << ": parse failure: "
+				<< N << " errors.\n";
+		return false;
+	}
+
+	S = buildSolver();
+
+	Index = 0;
+	foreach (it, Decls.begin(), Decls.end()) {
+		Decl		*D = *it;
+		QueryCommand	*QC;
+
+		QC = dyn_cast<QueryCommand>(D);
+		if (QC == NULL) continue;
+
+		std::cout << "Query " << Index << ":\t";
+		doQuery(S, QC);
+		++Index;
+	}
+
+	foreach (it, Decls.begin(), Decls.end()) delete *it;
+	delete P;
+
+	delete S;
+
+	printQueries();
+	return true;
+}
+
+int main(int argc, char **argv)
+{
   bool success = true;
 
   llvm::sys::PrintStackTraceOnErrorSignal();

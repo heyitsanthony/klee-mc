@@ -14,18 +14,16 @@ extern "C"
 #include <valgrind/libvex_guest_amd64.h>
 }
 
-
 SyscallsKTest* SyscallsKTest::create(
 	Guest* in_g,
-	const char* fname_ktest,
-	const char* fname_sclog)
+	const char* fname_ktest)
 {
 	SyscallsKTest	*skt;
 
 	assert (in_g->getArch() == Arch::X86_64);
 
-	skt = new SyscallsKTest(in_g, fname_ktest, fname_sclog);
-	if (skt->ktest == NULL || skt->f_sclog == NULL) {
+	skt = new SyscallsKTest(in_g, fname_ktest);
+	if (skt->ktest == NULL) {
 		delete skt;
 		skt = NULL;
 	}
@@ -35,26 +33,19 @@ SyscallsKTest* SyscallsKTest::create(
 
 SyscallsKTest::SyscallsKTest(
 	Guest* in_g, 
-	const char* fname_ktest,
-	const char* fname_sclog)
+	const char* fname_ktest)
 : Syscalls(in_g)
  ,ktest(NULL)
- ,f_sclog(NULL)
  ,sc_retired(0)
 {
-	/* TODO: gzip support */
 	ktest = kTest_fromFile(fname_ktest);
 	if (ktest == NULL) return;
 	next_ktest_obj = 0;
-
-	f_sclog = fopen(fname_sclog,  "r");
-	if (f_sclog == NULL) return;
 }
 
 SyscallsKTest::~SyscallsKTest(void)
 {
 	if (ktest) kTest_free(ktest);
-	if (f_sclog) fclose(f_sclog);
 }
 
 uint64_t SyscallsKTest::apply(SyscallParams& sp)
@@ -65,20 +56,8 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 	ret = 0;
 	sys_nr = sp.getSyscall();
 
-
-	if (!verifyCPURegs()) {
-		fprintf(stderr, 
-			"bad enter: sc=%d (retired %d)\n",
-			sys_nr,
-			sc_retired);
-		exited = true;
-		return -1;
-	}
-
 	switch(sys_nr) {
 	case SYS_read:
-		fprintf(stderr, "A %p %p\n", sp.getArg(0), sp.getArg(1));
-		assert (0 == 1);
 		break;
 	case SYS_fstat:
 	case SYS_stat:
@@ -92,63 +71,13 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 		assert (0 == 1 && "TRICKY SYSCALL");
 	}
 
-	if (!verifyCPURegs()) {
-		fprintf(stderr,
-			"bad leave: sc=%d (retired %d)\n",
-			sys_nr);
-		exited = true;
-		return -1;
-	}
-
-
-	fprintf(stderr, "OK: sys=%d\n", sys_nr);
+retire:
+	fprintf(stderr, "Retired: sys=%d\n", sys_nr);
 	sc_retired++;
+	fprintf(stderr, "FUCK IT ALL\n");
+	guest->getCPUState()->print(std::cerr);
+
 	return ret;
-}
-
-bool SyscallsKTest::verifyCPURegs(void)
-{
-	void	*ktest_regs;
-	int	cmp;
-
-	ktest_regs = feedCPURegs();
-	assert (ktest_regs);
-
-	cmp = memcmp(
-		ktest_regs, 
-		guest->getCPUState()->getStateData(),
-		guest->getCPUState()->getStateSize());
-	if (cmp != 0) {
-		std::cerr << "============Mismatch!============\n";
-		std::cerr << "VEXEXEC: \n";
-		guest->getCPUState()->print(std::cerr);
-		std::cerr << "\nKLEE-MC: \n";
-		guest->getCPUState()->print(std::cerr, ktest_regs);
-		std::cerr << "\n";
-		return false;
-	}
-
-	delete ktest_regs;
-	return true;
-}
-
-/* allocate new register context based on what we read from sclog */
-char* SyscallsKTest::feedCPURegs(void)
-{
-	char*		reg_buf;
-	unsigned int	reg_sz;
-	ssize_t		br;
-	
-	reg_sz = guest->getCPUState()->getStateSize();
-	reg_buf = new char[reg_sz];
-
-	br = fread(reg_buf, reg_sz, 1, f_sclog);
-	if (br <= 0) {
-		delete reg_buf;
-		return NULL;
-	}
-
-	return reg_buf;
 }
 
 /* caller should know the size of the object based on 

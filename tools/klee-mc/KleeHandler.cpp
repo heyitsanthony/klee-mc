@@ -261,13 +261,10 @@ void KleeHandler::processSuccessfulTest(unsigned id, out_objs& out)
 		strerror(errno));
 	}
 
-	m_interpreter->dumpSCRegs(fname);
-
 	for (unsigned i=0; i<b.numObjects; i++)
 		delete[] b.objects[i].bytes;
 	delete[] b.objects;
 
-	fprintf(stderr, "gzip it\n");
 	gzipKTest(fname);
 }
 
@@ -430,6 +427,18 @@ void KleeHandler::processTestCase(const ExecutionState &state,
     else
       klee_warning("unable to write .info file, losing it (errno=%d: %s)", errno, strerror(errno));
   }
+
+ if (std::ostream* f = openTestFile("reglog", id)) {
+   foreach (it, state.regsBegin(), state.regsEnd()) {
+      std::vector<unsigned char> cur_regs = *it;
+      std::copy(
+        cur_regs.begin(),
+	cur_regs.end(),
+        std::ostream_iterator<unsigned char>(*f));
+   }
+   delete f;
+ }
+ fprintf(stderr, "=========DONE WRITING OUT TESTID=%d\n", id);
 }
 
 void KleeHandler::getPathFiles(

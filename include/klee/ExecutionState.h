@@ -49,8 +49,8 @@ public:
   SymbolicArray(const MemoryObject* in_mo, const Array* in_array, ref<Expr> in_len)
   : mo(in_mo), array(in_array), len(in_len) {}
   virtual ~SymbolicArray() {}
-  bool operator ==(const SymbolicArray& sa) const 
-  { 
+  bool operator ==(const SymbolicArray& sa) const
+  {
   	/* XXX ignore len for now XXX  XXX */
   	return (mo == sa.mo && array == sa.array);
   }
@@ -68,14 +68,17 @@ std::ostream &operator<<(std::ostream &os, const MemoryMap &mm);
 // need to keep this stuff in memory as far as I can tell.
 
 typedef std::set<ExecutionState*> ExeStateSet;
+
+typedef std::vector <std::vector<unsigned char> > RegLog;
+
 class ExecutionState
 {
 public:
-  typedef std::vector<StackFrame> stack_ty;    
+  typedef std::vector<StackFrame> stack_ty;
 
 private:
   // unsupported, use copy constructor
-  ExecutionState &operator=(const ExecutionState&); 
+  ExecutionState &operator=(const ExecutionState&);
   std::map< std::string, std::string > fnAliases;
 
   // An ordered sequence of branches that this state took during execution thus
@@ -87,16 +90,20 @@ private:
 
   unsigned incomingBBIndex;
 
-  /// ordered list of symbolics: used to generate test cases. 
+  /// ordered list of symbolics: used to generate test cases.
   //
   // FIXME: Move to a shared list structure (not critical).
   std::vector< SymbolicArray > symbolics;
+
+  RegLog		reg_log;
+  RegLog		sc_log;
+  MemoryObject		*reg_mo;
 public:
   // Are we currently underconstrained?  Hack: value is size to make fake
   // objects.
   unsigned underConstrained;
   unsigned depth;
-  
+
   // pc - pointer to current instruction stream
   KInstIterator pc, prevPC;
   stack_ty stack;
@@ -118,7 +125,7 @@ public:
   // has true iff this state is a mere placeholder to be replaced by a real state
   bool isCompactForm;
   // for use with std::mem_fun[_ref] since they don't accept data members
-  bool isCompactForm_f() const { return isCompactForm; }  
+  bool isCompactForm_f() const { return isCompactForm; }
   bool isNonCompactForm_f() const { return !isCompactForm; }
 
   // did this state start in replay mode?
@@ -184,18 +191,18 @@ public:
   void copy(ObjectState* os, const ObjectState* reallocFrom, unsigned count);
 
   ref<Expr>
-  read(const ObjectState* object, ref<Expr> offset, Expr::Width width) const {    
+  read(const ObjectState* object, ref<Expr> offset, Expr::Width width) const {
     return object->read(offset, width);
   }
 
   ref<Expr>
-  read(const ObjectState* object, unsigned offset, Expr::Width width) const {    
+  read(const ObjectState* object, unsigned offset, Expr::Width width) const {
     return object->read(offset, width);
   }
 
-  ref<Expr> read8(const ObjectState* object, unsigned offset) const {    
+  ref<Expr> read8(const ObjectState* object, unsigned offset) const {
     return object->read8(offset);
-  }        
+  }
 
   void write(ObjectState* object, unsigned offset, ref<Expr> value) {
     object->write(offset, value);
@@ -253,9 +260,21 @@ public:
   {
   	return symbolics.end();
   }
+
+  void recordRegisters(const void* regs, int sz);
+  RegLog::const_iterator regsBegin(void) const { return reg_log.begin(); }
+  RegLog::const_iterator regsEnd(void) const { return reg_log.end(); }
+
+  MemoryObject* setRegCtx(MemoryObject* mo)
+  {
+	MemoryObject	*old_mo;
+	old_mo = reg_mo;
+	reg_mo = mo;
+	return old_mo;
+  }
+
+  MemoryObject* getRegCtx(void) const { return reg_mo; }
 };
-
-
 
 }
 

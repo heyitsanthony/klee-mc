@@ -23,48 +23,69 @@ using namespace llvm;
 
 /***/
 
-bool TimingSolver::evaluate(const ExecutionState& state, ref<Expr> expr,
-                            Solver::Validity &result) {
-  // Fast path, to avoid timer and OS overhead.
-  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(expr)) {
-    result = CE->isTrue() ? Solver::True : Solver::False;
-    return true;
-  }
+#define SOLVER_INIT							\
+	double	start, finish;						\
+	bool	success;						\
+	/* Fast path, to avoid timer and OS overhead. */		\
+	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(expr)) {		\
+		result = CE->isTrue() ? Solver::True : Solver::False;	\
+		return true;						\
+	}								\
+	start = util::estWallTime();					\
+	if (simplifyExprs) expr = state.constraints.simplifyExpr(expr);
 
-  double start = util::estWallTime();
+#define SOLVER_FINI							\
+	finish = util::estWallTime();					\
+	stats::solverTime += (std::max(0.,finish - start)) * 1000000.;	\
+	state.queryCost += (std::max(0.,finish - start));
 
-  if (simplifyExprs)
-    expr = state.constraints.simplifyExpr(expr);
+bool TimingSolver::evaluate(
+	const ExecutionState& state,
+	ref<Expr> expr,
+	Solver::Validity &result)
+{
+	SOLVER_INIT
+	success = solver->evaluate(Query(state.constraints, expr), result);
+	SOLVER_FINI
 
-  bool success = solver->evaluate(Query(state.constraints, expr), result);
-
-  double finish = util::estWallTime();
-  stats::solverTime += (std::max(0.,finish - start)) * 1000000.;
-  state.queryCost += (std::max(0.,finish - start));
-
-  return success;
+	return success;
 }
 
-bool TimingSolver::mustBeTrue(const ExecutionState& state, ref<Expr> expr, 
-                              bool &result) {
-  // Fast path, to avoid timer and OS overhead.
-  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(expr)) {
-    result = CE->isTrue() ? true : false;
-    return true;
-  }
+bool TimingSolver::mustBeTrue(
+	const ExecutionState& state,
+	ref<Expr> expr,
+	bool &result)
+{
+	SOLVER_INIT
+	success = solver->mustBeTrue(Query(state.constraints, expr), result);
+	SOLVER_FINI
 
-  double start = util::estWallTime();
+	return success;
+}
 
-  if (simplifyExprs)
-    expr = state.constraints.simplifyExpr(expr);
+bool TimingSolver::getValue(
+	const ExecutionState& state,
+	ref<Expr> expr,
+	ref<ConstantExpr> &result)
+{
+	double	start, finish;
+	bool	success;
 
-  bool success = solver->mustBeTrue(Query(state.constraints, expr), result);
+	// Fast path, to avoid timer and OS overhead.
+	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(expr)) {
+		result = CE;
+		return true;
+	}
 
-  double finish = util::estWallTime();
-  stats::solverTime += (std::max(0.,finish - start)) * 1000000.;
-  state.queryCost += (std::max(0.,finish - start));
+	start = util::estWallTime();
+	if (simplifyExprs)
+		expr = state.constraints.simplifyExpr(expr);
 
-  return success;
+	success = solver->getValue(Query(state.constraints, expr), result);
+
+	SOLVER_FINI
+
+	return success;
 }
 
 bool TimingSolver::mustBeFalse(const ExecutionState& state, ref<Expr> expr,
@@ -72,7 +93,7 @@ bool TimingSolver::mustBeFalse(const ExecutionState& state, ref<Expr> expr,
   return mustBeTrue(state, Expr::createIsZero(expr), result);
 }
 
-bool TimingSolver::mayBeTrue(const ExecutionState& state, ref<Expr> expr, 
+bool TimingSolver::mayBeTrue(const ExecutionState& state, ref<Expr> expr,
                              bool &result) {
   bool res;
   if (!mustBeFalse(state, expr, res))
@@ -81,7 +102,7 @@ bool TimingSolver::mayBeTrue(const ExecutionState& state, ref<Expr> expr,
   return true;
 }
 
-bool TimingSolver::mayBeFalse(const ExecutionState& state, ref<Expr> expr, 
+bool TimingSolver::mayBeFalse(const ExecutionState& state, ref<Expr> expr,
                               bool &result) {
   bool res;
   if (!mustBeTrue(state, expr, res))
@@ -90,49 +111,27 @@ bool TimingSolver::mayBeFalse(const ExecutionState& state, ref<Expr> expr,
   return true;
 }
 
-bool TimingSolver::getValue(const ExecutionState& state, ref<Expr> expr, 
-                            ref<ConstantExpr> &result) {
-  // Fast path, to avoid timer and OS overhead.
-  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(expr)) {
-    result = CE;
-    return true;
-  }
-  
-  double start = util::estWallTime();
-
-  if (simplifyExprs)
-    expr = state.constraints.simplifyExpr(expr);
-
-  bool success = solver->getValue(Query(state.constraints, expr), result);
-
-  double finish = util::estWallTime();
-  stats::solverTime += (std::max(0.,finish - start)) * 1000000.;
-  state.queryCost += (std::max(0.,finish - start));
-
-  return success;
-}
-
-bool 
-TimingSolver::getInitialValues(const ExecutionState& state, 
-                               const std::vector<const Array*>
-                                 &objects,
-                               std::vector< std::vector<unsigned char> >
-                                 &result)
+bool TimingSolver::getInitialValues(
+	const ExecutionState& state,
+        const std::vector<const Array*> &objects,
+	std::vector< std::vector<unsigned char> > &result)
 {
-  if (objects.empty())
-    return true;
+	double		start, finish;
+	bool		success;
 
-  double start = util::estWallTime();
+	if (objects.empty())
+		return true;
 
-  bool success = solver->getInitialValues(Query(state.constraints,
-                                                ConstantExpr::alloc(0, Expr::Bool)), 
-                                          objects, result);
-  
-  double finish = util::estWallTime();
-  stats::solverTime += (std::max(0.,finish - start)) * 1000000.;
-  state.queryCost += (std::max(0.,finish - start));
-  
-  return success;
+	start = util::estWallTime();
+	success = solver->getInitialValues(
+		Query(	state.constraints,
+			ConstantExpr::alloc(0, Expr::Bool)),
+		objects,
+		result);
+
+	SOLVER_FINI
+
+	return success;
 }
 
 std::pair< ref<Expr>, ref<Expr> >

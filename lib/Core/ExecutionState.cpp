@@ -58,8 +58,8 @@ ExecutionState::ExecutionState(KFunction *kf)
     forkDisabled(false),
     ptreeNode(0)
 {
-  pushFrame(0, kf);
-  replayBranchIterator = branchDecisionsSequence.end();
+	pushFrame(0, kf);
+	replayBranchIterator = branchDecisionsSequence.end();
 }
 
 ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
@@ -72,7 +72,7 @@ ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
     isReplay(false),
     ptreeNode(0)
 {
-  replayBranchIterator = branchDecisionsSequence.end();
+	replayBranchIterator = branchDecisionsSequence.end();
 }
 
 ExecutionState::~ExecutionState()
@@ -485,9 +485,13 @@ void ExecutionState::transferToBasicBlock(
   // instructions know which argument to eval, set the pc, and continue.
 
   // XXX this lookup has to go ?
-  KFunction *kf = stack.back().kf;
-  unsigned entry = kf->basicBlockEntry[dst];
+  KFunction *kf;
+  unsigned entry;
+
+  kf = getCurrentKFunc();
+  entry = kf->basicBlockEntry[dst];
   pc = &kf->instructions[entry];
+
   if (pc->inst->getOpcode() == Instruction::PHI) {
     PHINode *first = static_cast<PHINode*>(pc->inst);
     incomingBBIndex = first->getBasicBlockIndex(src);
@@ -543,7 +547,7 @@ ExecutionState* ExecutionState::createReplay(
 	const ReplayPathType& replayPath)
 {
 	ExecutionState* newState;
-	
+
 	newState = new ExecutionState(initialState);
 	foreach (it2, replayPath.begin(), replayPath.end()) {
 		newState->branchDecisionsSequence.push_back(*it2);
@@ -569,4 +573,12 @@ unsigned ExecutionState::stepReplay(void)
     unsigned targetIndex = (*replayBranchIterator).first;
     ++replayBranchIterator;
     return targetIndex;
+}
+
+// for klee-mc-- get rid of eventually
+void ExecutionState::recordRegisters(const void* reg, int sz)
+{
+	reg_log.push_back(std::vector<unsigned char>(
+		(const unsigned char*)reg,
+		(const unsigned char*)reg+sz));
 }

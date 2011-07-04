@@ -41,8 +41,8 @@ ObjectState* SymSyscalls::makeSCRegsSymbolic(ExecutionState& state)
 	gs = exe_vex->getGuest();
 	sz = gs->getCPUState()->getStateSize();
 
-	old_mo = exe_vex->getRegCtx(state);
-	assert (old_mo);
+	old_mo = state.getRegCtx();
+	assert (old_mo && "No register context ever set?");
 
 	old_regctx_os = state.addressSpace.findObject(old_mo);
 	// do not unbind the object, we need to be able to grab it
@@ -72,12 +72,16 @@ ObjectState* SymSyscalls::makeSCRegsSymbolic(ExecutionState& state)
 			continue;
 		}
 
-		state.write8(state_regctx_os, i, state_data[i]);
-		assert (state_regctx_os->isByteConcrete(i));
+		/* copy it by expression */
+		state.write(
+			state_regctx_os,
+			i,
+			state.read8(old_regctx_os, i));
 	}
 
 	/* make state point to right register context on xfer */
-	exe_vex->setRegCtx(state, cpu_mo);
+	state.setRegCtx(cpu_mo);
+
 	return state_regctx_os;
 }
 
@@ -95,20 +99,16 @@ ObjectState* SymSyscalls::sc_ret_ge0(ExecutionState& state)
 			state_regctx_os,
 			offsetof(VexGuestAMD64State, guest_RAX),
 			64);
-	std::cerr << "RAX: "; rax_expr->print(std::cerr); std::cerr << std::endl;
 	success_constraint = SleExpr::create(
 		ConstantExpr::create(0, 64),
 		rax_expr);
 
-	std::cerr << "BEGIN ADDITION\n";
 	state.constraints.print(std::cerr);
 	constrained = exe_vex->addConstraint(state, success_constraint);
-	std::cerr << "ADDITION DONE\n";
 	assert (constrained); // newly symbolic, should always succeed..
 	
 	return state_regctx_os;
 }
-
 
 ObjectState* SymSyscalls::sc_ret_le0(ExecutionState& state)
 {
@@ -118,17 +118,17 @@ ObjectState* SymSyscalls::sc_ret_le0(ExecutionState& state)
 
 	state_regctx_os = makeSCRegsSymbolic(state);
 
-	/* 3. force zero >= sysret;  sysret <= zero; sometimes errors */
-	success_constraint = SgeExpr::create(
-		ConstantExpr::create(0, 64),
+	/* 3. force sysret <= 0 */
+	success_constraint = SleExpr::create(
 		state.read(
 			state_regctx_os,
 			offsetof(VexGuestAMD64State, guest_RAX),
-			64));
+			64),
+		ConstantExpr::create(0, 64));
 
 	constrained = exe_vex->addConstraint(state, success_constraint);
 	assert (constrained); // newly symbolic, should always succeed..
-	
+
 	return state_regctx_os;
 }
 
@@ -372,8 +372,7 @@ void SymSyscalls::sc_mmap(
 void SymSyscalls::sc_ret_v(ExecutionState& state, uint64_t v)
 {
 	ObjectState* state_regctx_os;
-	state_regctx_os = state.addressSpace.findObject(
-		exe_vex->getRegCtx(state));
+	state_regctx_os = state.addressSpace.findObject(state.getRegCtx());
 	state.write64(
 		state_regctx_os, 
 		offsetof(VexGuestAMD64State, guest_RAX),

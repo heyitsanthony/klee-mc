@@ -293,22 +293,22 @@ void ObjectState::fastRangeCheckOffset(ref<Expr> offset,
 }
 
 void ObjectState::flushRangeForRead(unsigned rangeBase,
-                                    unsigned rangeSize) const {
+                                    unsigned rangeSize) const
+{
   if (!flushMask) flushMask = new BitArray(size, true);
 
   for (unsigned offset=rangeBase; offset<rangeBase+rangeSize; offset++) {
-    if (!isByteFlushed(offset)) {
-      if (isByteConcrete(offset)) {
-        updates.extend(ConstantExpr::create(offset, Expr::Int32),
-                       ConstantExpr::create(concreteStore[offset], Expr::Int8));
-      } else {
-        assert(isByteKnownSymbolic(offset) && "invalid bit set in flushMask");
-        updates.extend(ConstantExpr::create(offset, Expr::Int32),
-                       knownSymbolics[offset]);
-      }
+    if (isByteFlushed(offset)) continue;
 
-      flushMask->unset(offset);
+    if (isByteConcrete(offset)) {
+      updates.extend(ConstantExpr::create(offset, Expr::Int32),
+                     ConstantExpr::create(concreteStore[offset], Expr::Int8));
+    } else {
+      assert(isByteKnownSymbolic(offset) && "invalid bit set in flushMask");
+      updates.extend(ConstantExpr::create(offset, Expr::Int32),
+                     knownSymbolics[offset]);
     }
+    flushMask->unset(offset);
   }
 }
 
@@ -659,14 +659,17 @@ void ObjectState::write64(unsigned offset, uint64_t value) {
   }
 }
 
-void ObjectState::print() {
+void ObjectState::print(unsigned int begin, int end) {
+  unsigned int real_end;
   std::cerr << "-- ObjectState --\n";
   std::cerr << "\tMemoryObject ID: " << object->id << "\n";
   std::cerr << "\tRoot Object: " << updates.root << "\n";
   std::cerr << "\tSize: " << size << "\n";
 
   std::cerr << "\tBytes:\n";
-  for (unsigned i=0; i<size; i++) {
+  real_end = (end >= 0) ? end : size;
+
+  for (unsigned i=begin; i < real_end; i++) {
     std::cerr << "\t\t["<<i<<"]"
                << " concrete? " << isByteConcrete(i)
                << " known-sym? " << isByteKnownSymbolic(i)
@@ -679,4 +682,13 @@ void ObjectState::print() {
   for (const UpdateNode *un=updates.head; un; un=un->next) {
     std::cerr << "\t\t[" << un->index << "] = " << un->value << "\n";
   }
+}
+
+unsigned int ObjectState::getNumConcrete(void) const
+{
+	unsigned int ret = 0;
+	for (unsigned int i = 0; i < size; i++) {
+		if (isByteConcrete(i)) ret++;
+	}
+	return ret;
 }

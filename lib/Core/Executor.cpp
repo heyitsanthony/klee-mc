@@ -422,16 +422,21 @@ MemoryObject * Executor::addExternalObject(
 	return mo;
 }
 
+bool Executor::isStateSeeding(ExecutionState* s)
+{
+	SeedMapType::iterator it = seedMap.find(s);
+	return (it != seedMap.end());
+}
+
 bool Executor::isForkingCondition(ExecutionState& current, ref<Expr> condition)
 {
-  SeedMapType::iterator it = seedMap.find(&current);
-  bool isSeeding = it != seedMap.end();
+  bool isSeeding = isStateSeeding(&current);
 
   if (isSeeding) return false;
   if (isa<ConstantExpr>(condition)) return false;
   if (!(MaxStaticForkPct!=1. || MaxStaticSolvePct != 1. ||
       MaxStaticCPForkPct!=1. || MaxStaticCPSolvePct != 1.)) return false;
-  if (statsTracker->elapsed() > 60.) return false;
+  if (statsTracker->elapsed() <= 60.) return false;
   return true;
 }
 
@@ -452,7 +457,7 @@ bool Executor::isForkingCallPath(CallPathNode* cpn)
   }
 
   /* next conditions require cpn anyway.. */
-  if (!cpn) return false;
+  if (cpn == NULL) return false;
 
   if (MaxStaticCPForkPct<1. &&
     (cpn->statistics.getValue(stats::forks) > stats::forks*MaxStaticCPForkPct))
@@ -483,104 +488,123 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal)
     }
   }
 
-/* XXX what is condition[0], then!? - AJR */
+// set in forkSetupNoSeeding, if possible
 //  conditions[0] = Expr::createIsZero(condition);
   conditions[1] = condition;
 
   StateVector results = fork(current, 2, conditions, isInternal, true);
-  return std::make_pair(results[1], results[0]);
+  return std::make_pair(
+  	results[1] /* first label in br => true */,
+	results[0] /* second label in br => false */);
 }
 
-// XXX this is a bad function and I hate it.
-bool Executor::forkSetupNoSeeding(
-  ExecutionState& current,
-  unsigned N, std::vector<bool>& res,
-  bool isInternal,
-  unsigned& validTargets, bool& forkCompact, bool& wasReplayed)
+bool Executor::forkSetupNoSeeding(ExecutionState& current, struct ForkInfo& fi)
 {
-  if (!isInternal && current.isCompactForm) {
-    // Can't fork compact states; sanity check
-    assert(false && "invalid state");
-  } else if (!isInternal && ReplayPathOnly && current.isReplay
-    && current.isReplayDone())
-  {
-    // Done replaying this state, so kill it (if -replay-path-only)
-    terminateStateEarly(current, "replay path exhausted");
-    return false;
-  } else if (!isInternal && current.isReplayDone() == false) {
-    // Replaying non-internal fork; read value from replayBranchIterator
-    unsigned targetIndex;
-    targetIndex = current.stepReplay();
-    wasReplayed = true;
-    // Verify that replay target matches current path constraints
-    assert(targetIndex <= N && "replay target out of range");
-    if (!res[targetIndex]) {
-      std::stringstream ss;
-      ss << "hit invalid branch in replay path mode (line="
-         << current.prevPC->info->assemblyLine << ", expected target="
-         << targetIndex << ", actual targets=";
-      bool first = true;
-      for(unsigned i = 0; i < N; i++) {
-        if (!res[i]) continue;
-        if (!first) ss << ",";
-        ss << i;
-        first = false;
-      }
-      ss << ")";
-      terminateStateOnError(current, ss.str().c_str(), "branch.err");
-      klee_warning("hit invalid branch in replay path mode");
-      return false;
-    }
-    else {
-      // Suppress forking; constraint will be added to path below
-      res.assign(N, false);
-      res[targetIndex] = true;
-    }
-  } // if (!isInternal && current.replayBranchIterator != end)
-  else if (validTargets > 1) {
-    // Multiple branch directions are possible; check for flags that
-    // prevent us from forking here
-    assert(!replayOut && "in replay mode, only one branch can be true.");
+	if (!fi.isInternal && current.isCompactForm) {
+		// Can't fork compact states; sanity check
+		assert(false && "invalid state");
+	}
 
-    if (isInternal) return true;
+	if (!fi.isInternal && ReplayPathOnly &&
+		current.isReplay && current.isReplayDone())
+	{
+		// Done replaying this state, so kill it (if -replay-path-only)
+		terminateStateEarly(current, "replay path exhausted");
+		return false;
+	}
 
-    const char* reason = 0;
-    if (MaxMemoryInhibit && atMemoryLimit) reason = "memory cap exceeded";
-    if (current.forkDisabled) reason = "fork disabled on current path";
-    if (inhibitForking) reason = "fork disabled globally";
-    if (MaxForks!=~0u && stats::forks >= MaxForks) reason = "max-forks reached";
- 
-    // Skipping this fork for one of the above reasons; randomly pick target
-    if (!reason) return true;
-    if (ReplayInhibitedForks) {
-      klee_warning_once(reason, "forking into compact forms (%s)", reason);
-      forkCompact = true;
-      return true;
-    }
+	if (!fi.isInternal && current.isReplayDone() == false) {
+		// Replaying non-internal fork; read value from replayBranchIterator
+		unsigned targetIndex;
+		targetIndex = current.stepReplay();
+		fi.wasReplayed = true;
+		// Verify that replay target matches current path constraints
+		assert(targetIndex <= fi.N && "replay target out of range");
+		if (!fi.res[targetIndex]) {
+			std::stringstream ss;
+			ss << "hit invalid branch in replay path mode (line="
+			<< current.prevPC->info->assemblyLine
+			<< ", expected target="
+			<< targetIndex << ", actual targets=";
 
-    klee_warning_once(reason, "skipping fork and pruning randomly (%s)", reason);
-    TimerStatIncrementer timer(stats::forkTime);
-    unsigned randIndex = (theRNG.getInt32() % validTargets) + 1;
-    unsigned condIndex;
-    for(condIndex = 0; condIndex < N; condIndex++) {
-      if (res[condIndex]) randIndex--;
-      if (!randIndex) break;
-    }
-    assert(condIndex < N);
-    validTargets = 1;
-    res.assign(N, false);
-    res[condIndex] = true;
-  } // if (validTargets > 1)
-  return true;
+			bool first = true;
+			for(unsigned i = 0; i < fi.N; i++) {
+				if (!fi.res[i]) continue;
+				if (!first) ss << ",";
+				ss << i;
+				first = false;
+			}
+			ss << ")";
+			terminateStateOnError(
+				current, ss.str().c_str(), "branch.err");
+			klee_warning("hit invalid branch in replay path mode");
+			return false;
+		} else {
+			// Suppress forking; constraint will be added to path below
+			fi.res.assign(fi.N, false);
+			fi.res[targetIndex] = true;
+		}
+
+		return true;
+	}
+
+	if (fi.validTargets <= 1)  return true;
+
+
+	// Multiple branch directions are possible; check for flags that
+	// prevent us from forking here
+	assert(	!replayOut &&
+		"in replay mode, only one branch can be true.");
+
+	if (fi.isInternal) return true;
+
+	const char* reason = 0;
+	if (MaxMemoryInhibit && atMemoryLimit)
+		reason = "memory cap exceeded";
+	if (current.forkDisabled)
+		reason = "fork disabled on current path";
+	if (inhibitForking)
+		reason = "fork disabled globally";
+	if (MaxForks!=~0u && stats::forks >= MaxForks)
+		reason = "max-forks reached";
+
+	// Skipping fork for one of above reasons; randomly pick target
+	if (!reason)
+		return true;
+	if (ReplayInhibitedForks) {
+		klee_warning_once(
+			reason,
+			"forking into compact forms (%s)",
+			reason);
+		fi.forkCompact = true;
+		return true;
+	}
+
+	klee_warning_once(
+		reason,
+		"skipping fork and pruning randomly (%s)",
+		reason);
+
+	TimerStatIncrementer timer(stats::forkTime);
+	unsigned randIndex, condIndex;
+
+	randIndex = (theRNG.getInt32() % fi.validTargets) + 1;
+	for (condIndex = 0; condIndex < fi.N; condIndex++) {
+		if (fi.res[condIndex]) randIndex--;
+		if (!randIndex) break;
+	}
+	assert(condIndex < fi.N);
+	fi.validTargets = 1;
+	fi.res.assign(fi.N, false);
+	fi.res[condIndex] = true;
+
+	return true;
 }
 
 
 void Executor::forkSetupSeeding(
   ExecutionState& current,
-  unsigned N, ref<Expr> conditions[],
-  std::vector<bool>& res,
-  std::vector<std::list<SeedInfo> >& resSeeds,
-  unsigned& validTargets)
+  struct ForkInfo& fi)
 {
   SeedMapType::iterator it = seedMap.find(&current);
   assert (it != seedMap.end());
@@ -595,29 +619,29 @@ void Executor::forkSetupSeeding(
   for (std::vector<SeedInfo>::iterator siit = it->second.begin(),
          siie = it->second.end(); siit != siie; ++siit) {
     unsigned i;
-    for (i = 0; i < N; ++i) {
+    for (i = 0; i < fi.N; ++i) {
       ref<ConstantExpr> seedCondRes;
       bool success = solver->getValue(current,
-        siit->assignment.evaluate(conditions[i]), seedCondRes);
+        siit->assignment.evaluate(fi.conditions[i]), seedCondRes);
       assert(success && "FIXME: Unhandled solver failure");
       if (seedCondRes->isTrue()) break;
     }
 
     // If we didn't find a satisfying condition, randomly pick one
     // (the seed will be patched).
-    if (i == N) i = theRNG.getInt32() % N;
+    if (i == fi.N) i = theRNG.getInt32() % fi.N;
 
-    resSeeds[i].push_back(*siit);
+    fi.resSeeds[i].push_back(*siit);
   }
 
   // Clear any valid conditions that seeding rejects
-  if ((current.forkDisabled || OnlyReplaySeeds) && validTargets > 1) {
-    validTargets = 0;
-    for (unsigned i = 0; i < N; i++) {
-      if (resSeeds[i].empty()) res[i] = false;
-      if (res[i]) validTargets++;
+  if ((current.forkDisabled || OnlyReplaySeeds) && fi.validTargets > 1) {
+    fi.validTargets = 0;
+    for (unsigned i = 0; i < fi.N; i++) {
+      if (fi.resSeeds[i].empty()) fi.res[i] = false;
+      if (fi.res[i]) fi.validTargets++;
     }
-    assert(validTargets && "seed must result in at least one valid target");
+    assert(fi.validTargets && "seed must result in at least one valid target");
   }
 
   // Remove seeds corresponding to current state
@@ -637,172 +661,232 @@ Executor::fork(
         bool isInternal,
 	bool isBranch)
 {
-  std::vector<bool> res(N, false);
-  StateVector resStates(N, NULL);
-  std::vector<std::list<SeedInfo> > resSeeds(N);
+  SeedMapType::iterator it;
+  ForkInfo		fi(conditions, N);
 
-  // Evaluate fork conditions
-  double timeout = stpTimeout;
-  unsigned condIndex, validTargets = 0, feasibleTargets = 0;
+  fi.timeout = stpTimeout;
+  fi.isInternal = isInternal;
+  fi.isBranch = isBranch;
 
-  SeedMapType::iterator it = seedMap.find(&current);
-  bool isSeeding = it != seedMap.end();
-  if (isSeeding) timeout *= it->second.size();
+  it = seedMap.find(&current);
+  fi.isSeeding = it != seedMap.end();
+  if (fi.isSeeding) fi.timeout *= it->second.size();
 
-  if (isBranch) {
-    Solver::Validity result;
-    solver->setTimeout(timeout);
-    bool success = solver->evaluate(current, conditions[1], result);
-    solver->setTimeout(stpTimeout);
-    if (!success) {
-      terminateStateEarly(current, "query timed out");
+  if (evalForks(current, fi) == false)
       return StateVector(N, NULL);
-    }
 
-    // known => [0] when false, [1] when true
-    // unknown => take both routes
-    res[0] = (result == Solver::False || result == Solver::Unknown);
-    res[1] = (result == Solver::True || result == Solver::Unknown);
-    validTargets = (result == Solver::Unknown ? 2 : 1);
-    if (validTargets > 1 || isSeeding)
-      conditions[0] = Expr::createIsZero(conditions[1]);
-  } else {
-    for(condIndex = 0; condIndex < N; condIndex++) {
-      ConstantExpr *CE = dyn_cast<ConstantExpr>(conditions[condIndex]);
-      bool result;
-      // If condition is a constant (e.g., from constant switch statement), don't
-      // generate a query
-      if (CE) {
-        if (CE->isFalse()) result = false;
-        else if (CE->isTrue()) result = true;
-        else assert(false && "Invalid constant fork condition");
-      }
-      else {
-        solver->setTimeout(timeout);
-        bool success = solver->mayBeTrue(current, conditions[condIndex], result);
-        solver->setTimeout(stpTimeout);
-        if (!success) {
-          terminateStateEarly(current, "query timed out");
-          return StateVector(N, NULL);
-        }
-      }
-      res[condIndex] = result;
-      if (result)
-        validTargets++;
-    }
-  }
   // need a copy telling us whether or not we need to add constraints later;
   // especially important if we skip a fork for whatever reason
-  feasibleTargets = validTargets;
+  fi.feasibleTargets = fi.validTargets;
 
-  assert(validTargets && "invalid set of fork conditions");
+  assert(fi.validTargets && "invalid set of fork conditions");
 
-  bool forkCompact = false;
-  bool wasReplayed = false;
-  if (!isSeeding) {
-    if (!forkSetupNoSeeding(current, N, res, isInternal,
-      validTargets, forkCompact, wasReplayed))
+  fi.wasReplayed = false;
+  if (fi.isSeeding == false) {
+    if (!forkSetupNoSeeding(current, fi))
       return StateVector(N, NULL);
   } else {
-    forkSetupSeeding(current, N, conditions, res, resSeeds, validTargets);
+    forkSetupSeeding(current, fi);
   }
 
-  bool curStateUsed = false;
-  // Loop for actually forking states
-  for(condIndex = 0; condIndex < N; condIndex++) {
-    ExecutionState *baseState = &current;
-    // Process each valid target and generate a state
-    if (!res[condIndex]) continue;
+  makeForks(current, fi);
+  constrainForks(current, fi);
 
-    ExecutionState *newState;
-    if (!curStateUsed) {
-      resStates[condIndex] = baseState;
-      curStateUsed = true;
-    } else {
-      assert(!forkCompact || ReplayInhibitedForks);
+  return fi.resStates;
+}
 
-      // Update stats
-      TimerStatIncrementer timer(stats::forkTime);
-      ++stats::forks;
+// Evaluate fork conditions
+bool Executor::evalForks(ExecutionState& current, struct ForkInfo& fi)
+{
+	if (fi.isBranch) {
+		Solver::Validity	result;
+		bool			success;
 
-      // Do actual state forking
-      newState = forkCompact ? current.branchForReplay()
-                             : current.branch();
-      stateManager->add(newState);
-      resStates[condIndex] = newState;
+		solver->setTimeout(fi.timeout);
+		success = solver->evaluate(current, fi.conditions[1], result);
+		solver->setTimeout(stpTimeout);
 
-      // Split pathWriter stream
-      if (!isInternal) {
-        if (symPathWriter && newState != &current)
-          newState->symPathOS = symPathWriter->open(current.symPathOS);
-      }
+		if (!success) {
+			terminateStateEarly(current, "query timed out");
+			return false;
+		}
 
-      // Randomize path tree layout
-      if (RandomizeFork && theRNG.getBool()) {
-        std::swap(baseState, newState);
-      }
+		// known => [0] when false, [1] when true
+		// unknown => take both routes
+		fi.res[0] = (
+			result == Solver::False ||
+			result == Solver::Unknown);
+		fi.res[1] = (
+			result == Solver::True ||
+			result == Solver::Unknown);
 
-      // Update path tree with new states
-      current.ptreeNode->data = 0;
-      splitProcessTree(current.ptreeNode, baseState, newState);
-    }
-  } // for
+		fi.validTargets = (result == Solver::Unknown) ? 2 : 1;
+		if (fi.validTargets > 1 || fi.isSeeding) {
+			/* branch on both true and false conditions */
+			fi.conditions[0] = Expr::createIsZero(fi.conditions[1]);
+		}
 
-  // Loop for bookkeeping (loops must be separate since states are forked from
-  // each other)
-  for(condIndex = 0; condIndex < N; condIndex++) {
-    if (!res[condIndex]) continue;
+		return true;
+	}
 
-    ExecutionState *curState = resStates[condIndex];
-    assert(curState);
+	assert (fi.isBranch == false);
 
-    // Add path constraint
-    if (!curState->isCompactForm && feasibleTargets > 1) {
-      if (!addConstraint(*curState, conditions[condIndex])) {
-      	terminateStateEarly(*curState, "contradiction on unknown");
-	resStates[condIndex] = NULL;
-	continue;
-      }
-    }
-    // XXX - even if the constraint is provable one way or the other we
-    // can probably benefit by adding this constraint and allowing it to
-    // reduce the other constraints. For example, if we do a binary
-    // search on a particular value, and then see a comparison against
-    // the value it has been fixed at, we should take this as a nice
-    // hint to just use the single constraint instead of all the binary
-    // search ones. If that makes sense.
+	for (unsigned int condIndex = 0; condIndex < fi.N; condIndex++) {
+		ConstantExpr *CE;
+		bool result;
 
-    // Kinda gross, do we even really still want this option?
-    if (MaxDepth && MaxDepth<=curState->depth) {
-      terminateStateEarly(*curState, "max-depth exceeded");
-      resStates[condIndex] = NULL;
-      continue;
-    }
+		CE = dyn_cast<ConstantExpr>(fi.conditions[condIndex]);
+		// If condition is a constant
+		// (e.g., from constant switch statement),
+		// don't generate a query
+		if (CE != NULL) {
+			if (CE->isFalse()) result = false;
+			else if (CE->isTrue()) result = true;
+			else assert(false && "Invalid constant fork condition");
+		} else {
+			solver->setTimeout(fi.timeout);
+			bool success;
+			success = solver->mayBeTrue(
+				current,
+				fi.conditions[condIndex],
+				result);
+			solver->setTimeout(stpTimeout);
+			if (!success) {
+				terminateStateEarly(current, "query timed out");
+				return false;
+			}
+		}
 
-    // Auxiliary bookkeeping
-    if (!isInternal) {
-      if (symPathWriter && validTargets > 1) {
-        std::stringstream ssPath;
-        ssPath << condIndex << "\n";
-        curState->symPathOS << ssPath.str();
-      }
+		fi.res[condIndex] = result;
+		if (result)
+			fi.validTargets++;
+	}
 
-      // only track NON-internal branches
-      if (!wasReplayed)
-        curState->trackBranch(
-	  condIndex, 
-          current.prevPC->info->assemblyLine);
-    }
+	return true;
+}
 
-    if (isSeeding) {
-      seedMap[curState].insert(
-        seedMap[curState].end(),
-        resSeeds[condIndex].begin(),
-	resSeeds[condIndex].end());
-    }
-  } // for
 
-  return resStates;
+void Executor::makeForks(ExecutionState& current, struct ForkInfo& fi)
+{
+	ExecutionState	*baseState;
+	bool		curStateUsed;
+
+	baseState = &current;
+	curStateUsed = false;
+	for(unsigned int condIndex = 0; condIndex < fi.N; condIndex++) {
+		ExecutionState *newState;
+
+		// Process each valid target and generate a state
+		if (!fi.res[condIndex]) {
+			continue;
+		}
+
+		if (!curStateUsed) {
+			/* reuse current state, when possible */
+			fi.resStates[condIndex] = baseState;
+			curStateUsed = true;
+			continue;
+		}
+
+		assert (!fi.forkCompact || ReplayInhibitedForks);
+
+		// Update stats
+		TimerStatIncrementer timer(stats::forkTime);
+		++stats::forks;
+
+		// Do actual state forking
+		newState = fi.forkCompact
+			? current.branchForReplay()
+			: current.branch();
+
+		stateManager->add(newState);
+		fi.resStates[condIndex] = newState;
+
+		// Split pathWriter stream
+		if (!fi.isInternal) {
+			if (symPathWriter && newState != baseState)
+				newState->symPathOS = symPathWriter->open(
+					current.symPathOS);
+		}
+
+		// Randomize path tree layout
+		if (RandomizeFork && theRNG.getBool()) {
+			std::swap(baseState, newState);
+		}
+
+		// Update path tree with new states
+		current.ptreeNode->data = 0;
+		splitProcessTree(current.ptreeNode, baseState, newState);
+	}
+}
+
+void Executor::constrainForks(ExecutionState& current, struct ForkInfo& fi)
+{
+	// Loop for bookkeeping
+	// (loops must be separate since states are forked from each other)
+	for (unsigned int condIndex = 0; condIndex < fi.N; condIndex++) {
+		ExecutionState* curState;
+
+		if (fi.res[condIndex] == false) {
+			continue;
+		}
+
+		curState = fi.resStates[condIndex];
+		assert(curState);
+
+		// Add path constraint
+		if (!curState->isCompactForm && fi.feasibleTargets > 1) {
+			bool	constraint_added;
+
+			constraint_added = addConstraint(
+				*curState, fi.conditions[condIndex]);
+			if (constraint_added == false) {
+				terminateStateEarly(
+					*curState,
+					"contradiction on branch");
+				fi.resStates[condIndex] = NULL;
+				fi.res[condIndex] = false;
+				continue;
+			}
+		}
+
+	// XXX - even if the constraint is provable one way or the other we
+	// can probably benefit by adding this constraint and allowing it to
+	// reduce the other constraints. For example, if we do a binary
+	// search on a particular value, and then see a comparison against
+	// the value it has been fixed at, we should take this as a nice
+	// hint to just use the single constraint instead of all the binary
+	// search ones. If that makes sense.
+
+		// Kinda gross, do we even really still want this option?
+		if (MaxDepth && MaxDepth <= curState->depth) {
+			terminateStateEarly(*curState, "max-depth exceeded");
+			fi.resStates[condIndex] = NULL;
+			continue;
+		}
+
+		// Auxiliary bookkeeping
+		if (!fi.isInternal) {
+			if (symPathWriter && fi.validTargets > 1) {
+				std::stringstream ssPath;
+				ssPath << condIndex << "\n";
+				curState->symPathOS << ssPath.str();
+			}
+
+			// only track NON-internal branches
+			if (!fi.wasReplayed)
+				curState->trackBranch(
+				condIndex,
+				current.prevPC->info->assemblyLine);
+		}
+
+		if (fi.isSeeding) {
+			seedMap[curState].insert(
+				seedMap[curState].end(),
+				fi.resSeeds[condIndex].begin(),
+				fi.resSeeds[condIndex].end());
+		}
+	}
 }
 
 bool Executor::addConstraint(ExecutionState &state, ref<Expr> condition)
@@ -1338,17 +1422,9 @@ void Executor::instBranch(ExecutionState& state, KInstruction* ki)
   }
 
   // FIXME: Find a way that we don't have this hidden dependency.
-  assert(bi->getCondition() == bi->getOperand(0) &&
-         "Wrong operand index!");
+  assert (bi->getCondition() == bi->getOperand(0) && "Wrong operand index!");
+
   const Cell &cond = eval(ki, 0, state);
-#if 0
-  std::cerr << "BRANCHING: "
-	  << ki->inst->getParent()->getParent()->getNameStr()  << "::";
-  ki->inst->print(std::cerr);
-  std::cerr << "\nFORK VALUE = ";
-  cond.value->print(std::cerr);
-  std::cerr << "\n";
-#endif
   StatePair branches = fork(state, cond.value, false);
 
   if (WriteTraces) {
@@ -1356,7 +1432,7 @@ void Executor::instBranch(ExecutionState& state, KInstruction* ki)
 
     if (branches.first) {
       branches.first->exeTraceMgr.addEvent(
-        new BranchTraceEvent(state, ki, true, isTwoWay));
+      	new BranchTraceEvent(state, ki, true, isTwoWay));
     }
 
     if (branches.second) {
@@ -1365,9 +1441,6 @@ void Executor::instBranch(ExecutionState& state, KInstruction* ki)
     }
   }
 
-  KFunction *kf = state.getCurrentKFunc();
-//      ExecutorThread *thread = ExecutorThread::getThread();
-
   // NOTE: There is a hidden dependency here, markBranchVisited
   // requires that we still be in the context of the branch
   // instruction (it reuses its statistic id). Should be cleaned
@@ -1375,44 +1448,42 @@ void Executor::instBranch(ExecutionState& state, KInstruction* ki)
   if (statsTracker && state.getCurrentKFunc()->trackCoverage)
     statsTracker->markBranchVisited(branches.first, branches.second);
 
-  /* FIXME: Refactor */
-  if (branches.first) {
-    // reconstitute the state if it was forked into compact form but will
-    // immediately cover a new instruction
-    // !!! this can be done more efficiently by simply forking a regular
-    // state inside fork() but that will change the fork() semantics
-    if (branches.first->isCompactForm && kf->trackCoverage &&
-        theStatisticManager->getIndexedValue(stats::uncoveredInstructions,
-        kf->instructions[kf->basicBlockEntry[bi->getSuccessor(0)]]->info->
-        id)) {
-      ExecutionState *newState = branches.first->
-        reconstitute(*initialStateCopy);
-      replaceStateImmForked(branches.first, newState);
-      branches.first = newState;
-    }
-    if (!branches.first->isCompactForm)
-      branches.first->transferToBasicBlock(
-      	bi->getSuccessor(0), bi->getParent());
-  }
+  finalizeBranch(branches.first, bi, 0 /* [0] successor => true */);
+  finalizeBranch(branches.second, bi, 1 /* [1] successor => false */);
+}
 
-  if (branches.second) {
-    // reconstitute the state if it was forked into compact form but will
-    // immediately cover a new instruction
-    // !!! this can be done more efficiently by simply forking a regular
-    // state inside fork() but that will change the fork() semantics
-    if (branches.second->isCompactForm && kf->trackCoverage &&
-        theStatisticManager->getIndexedValue(stats::uncoveredInstructions,
-        kf->instructions[kf->basicBlockEntry[bi->getSuccessor(1)]]->info->
-        id)) {
-      ExecutionState *newState = branches.second->
-        reconstitute(*initialStateCopy);
-      replaceStateImmForked(branches.second, newState);
-      branches.second = newState;
-    }
-    if (!branches.second->isCompactForm)
-      branches.second->transferToBasicBlock(
-      	bi->getSuccessor(1), bi->getParent());
-  }
+void Executor::finalizeBranch(
+	ExecutionState* st,
+	BranchInst*	bi,
+	int branchIdx)
+{
+  	KFunction	*kf;
+
+	if (st == NULL) return;
+
+	kf = st->getCurrentKFunc();
+	// reconstitute the state if it was forked into compact form but will
+	// immediately cover a new instruction
+	// !!! this can be done more efficiently by simply forking a regular
+	// state inside fork() but that will change the fork() semantics
+
+	if (	st->isCompactForm &&
+		kf->trackCoverage &&
+		theStatisticManager->getIndexedValue(
+			stats::uncoveredInstructions,
+			kf->instructions[kf->basicBlockEntry[
+				bi->getSuccessor(branchIdx)]]->info->id))
+	{
+		ExecutionState *newState;
+		newState = st->reconstitute(*initialStateCopy);
+		replaceStateImmForked(st, newState);
+		st = newState;
+	}
+
+	/* (st->isCompactForm == false)??? */
+	st->transferToBasicBlock(
+		bi->getSuccessor(branchIdx),
+		bi->getParent());
 }
 
 void Executor::instCall(ExecutionState& state, KInstruction *ki)
@@ -1806,7 +1877,7 @@ void Executor::instInsertElement(ExecutionState& state, KInstruction* ki)
 		out_val = ExtractExpr::create(
 			in_v, 0, v_elem_sz*(v_elem_c - 1));
 		out_val = ConcatExpr::create(out_val, in_newelem);
-	} else if (idx == 0) { 
+	} else if (idx == 0) {
 		/* replace head */
 		out_val = ExtractExpr::create(
 			in_v, v_elem_sz, v_elem_sz*(v_elem_c - 1));
@@ -3156,8 +3227,9 @@ bool Executor::getSymbolicSolution(
 		std::pair<std::string,
 			std::vector<unsigned char> > > &res)
 {
-  ExecutionState tmp(state);
-  bool success;
+  ExecutionState	tmp(state);
+  bool			success;
+  unsigned int		i;
 
   if (!NoPreferCex) getSymbolicSolutionCex(state, tmp);
 
@@ -3176,7 +3248,7 @@ bool Executor::getSymbolicSolution(
     return false;
   }
 
-  unsigned i = 0;
+  i = 0;
   foreach (it, state.symbolicsBegin(), state.symbolicsEnd()) {
     res.push_back(std::make_pair(it->getMemoryObject()->name, values[i]));
     i++;
