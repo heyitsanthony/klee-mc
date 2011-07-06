@@ -163,6 +163,7 @@ namespace klee {
     /// \retval true The copy succeeded. 
     /// \retval false The copy failed because a read-only object was modified.
     bool copyInConcretes(void);
+    void print(std::ostream& os) const;
   };
 } // End klee namespace
 

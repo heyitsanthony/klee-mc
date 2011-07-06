@@ -60,21 +60,8 @@ namespace klee {
                                 const llvm::Value *allocSite,
                                 ExecutionState *state);
 
-    MemoryObject* findByAddr(uint64_t addr) const;
-    void deallocate(const MemoryObject *mo);
-    template <typename F>
-    void deallocateAllExcept(F f)
-    {
-      std::set<MemoryObject*> od;
-      for (objects_ty::iterator i = objects.begin(); i != objects.end();
-           ++i) {
-        MemoryObject* mo = *i;
-        if (!f(mo))
-          od.insert(mo);
-      }
-      for(std::set<MemoryObject*>::iterator i = od.begin(); i != od.end(); ++i)
-        deallocate(*i);
-    }
+  private:
+    bool isGoodSize(uint64_t) const;
   };
 
 } // End klee namespace

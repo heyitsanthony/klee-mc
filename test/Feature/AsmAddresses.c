@@ -1,7 +1,13 @@
 // RUN: %llvmgcc -g -c -o %t.bc %s
 // RUN: %klee --exit-on-error --use-asm-addresses %t.bc
+//
 // RUN: %llvmgcc -DOVERLAP -g -c -o %t.bc %s
-// RUN: not %klee --exit-on-error --use-asm-addresses %t.bc
+//
+// Previously this was a 'not'. I don't see any issue with permitting
+// overlapping asm entries. Let me know if this is super-critical and
+// I ruined it.
+// -AJR
+// RUN: %klee --exit-on-error --use-asm-addresses %t.bc
 
 #include <assert.h>
 

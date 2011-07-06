@@ -31,16 +31,21 @@ MemoryManager::~MemoryManager() {
 
 #define MAX_ALLOC_BYTES	(10*1024*1024)
 
+bool MemoryManager::isGoodSize(uint64_t size) const
+{
+	if (size <= MAX_ALLOC_BYTES) return true;
+
+	klee_warning_once(0, "failing large alloc: %u bytes", (unsigned) size);
+	return false;
+}
+
 MemoryObject *MemoryManager::allocate(
   uint64_t size, bool isLocal, 
   bool isGlobal,
   const llvm::Value *allocSite,
   ExecutionState *state)
 {
-  if (size > MAX_ALLOC_BYTES) {
-    klee_warning_once(0, "failing large alloc: %u bytes", (unsigned) size);
-    return 0;
-  }
+  if (!isGoodSize(size)) return NULL;
 
   assert((state || allocSite) && "Insufficient MallocKey data");
   MallocKey mallocKey(allocSite,
@@ -63,8 +68,7 @@ MemoryObject *MemoryManager::allocate(
       // we should never have more than one candidate object with the same size
       assert(!heapObj || heapObj->size != curObj->size);
 
-      if (size <= curObj->size
-          && (!heapObj || curObj->size < heapObj->size))
+      if (size <= curObj->size && (!heapObj || curObj->size < heapObj->size))
         heapObj = curObj;
     }
   }
@@ -128,14 +132,6 @@ MemoryObject *MemoryManager::allocateFixed(
 	const llvm::Value *allocSite,
 	ExecutionState *state)
 {
-#ifndef NDEBUG
-  foreach (it, objects.begin(), objects.end()) {
-    MemoryObject *mo = *it;
-    assert(!(address+size > mo->address && address < mo->address+mo->size) &&
-           "allocated an overlapping object");
-  }
-#endif
-
   assert((state || allocSite) && "Insufficient MallocKey data");
   MallocKey mallocKey(allocSite,
                       state ? state->mallocIterations[allocSite]++ : 0,
@@ -144,27 +140,40 @@ MemoryObject *MemoryManager::allocateFixed(
   ++stats::allocations;
   MemoryObject *res = new MemoryObject(address, size, mallocKey);
 
-  anonMemObjs.push_back(ref<MemoryObject>(res));
+  if (state)
+    state->memObjects.push_back(ref<MemoryObject>(res));
+  else
+    anonMemObjs.push_back(ref<MemoryObject>(res));
 
   if(size)
     objects.insert(res);
   return res;
 }
 
-MemoryObject* MemoryManager::findByAddr(uint64_t addr) const
+#if 0
+MemoryObject *MemoryManager::allocFixedHeap(
+	uint64_t address,
+	uint64_t size,
+	const llvm::Value *allocSite,
+	ExecutionState *state)
 {
-	foreach (it, objects.begin(), objects.end()) {
-		MemoryObject *mo = *it;
-		if (mo->address == addr) return mo;
-	}
+	MemoryObject *res;
 
-	return NULL;
-}
+	assert (state && "Insufficient MallocKey data");
+	assert (size != 0);
 
-void MemoryManager::deallocate(const MemoryObject *mo)
-{
-  objects.erase(std::find(objects.begin(), objects.end(), mo));
-  // delete the MemoryObjects, but don't free the underlying heap storage;
-  // we have heap object reference counting for that
-  delete mo;
+	MallocKey mallocKey(
+		allocSite,
+		state->mallocIterations[allocSite]++,
+		size, false, true, true);
+
+	++stats::allocations;
+	res = new MemoryObject(address, size, mallocKey);
+
+	assert ((state->isReplay() || state->isReplayDone()) && "???");
+	state->memObjects.push_back(ref<MemoryObject>(res));
+
+	objects.insert(res);
+	return res;
 }
+#endif

@@ -188,10 +188,13 @@ void ExecutorVex::bindMapping(
 		/* bug fiend note:
 		 * valgrind will complain on this line because of the 
 		 * data[i] on the syspage. Linux keeps a syscall page at
-		 * 0xf..f600000, but valgrind doesn't know this.
+		 * 0xf..f600000 (vsyscall), but valgrind doesn't know this.
 		 * This is safe, but will need a workaround *eventually* */
 		state->write8(mmap_os, i+copy_offset, data[i]);
 	}
+
+	mmap_mo->print(std::cerr);
+	std::cerr << "\n";
 }
 
 void ExecutorVex::setupProcessMemory(ExecutionState* state, Function* f)
@@ -209,7 +212,6 @@ MemoryObject* ExecutorVex::allocRegCtx(ExecutionState* state, Function* f)
 	unsigned int	state_regctx_sz;
 	static unsigned id = 0;
 	
-	fprintf(stderr, "ALLOCATING NEW REGCTx\n");
 	state_regctx_sz = gs->getCPUState()->getStateSize();
 
 	if (f == NULL) f = state->getCurrentKFunc()->function;
@@ -569,7 +571,8 @@ bool ExecutorVex::handleXferSyscall(
 	fprintf(stderr, "before syscall: states=%d\n", stateManager->size());
 	ret = sc->apply(state, ki, sp);
 	if (ret) handleXferJmp(state, ki);
-	fprintf(stderr, "after syscall: states=%d\n", stateManager->size());
+	fprintf(stderr, "after syscall: states=%d. state=%p\n",
+		stateManager->size(), &state);
 
 	return ret;
 }
@@ -718,7 +721,6 @@ void ExecutorVex::makeSymbolicTail(
 
 	/* free object from address space */
 	state.unbindObject(mo);
-	memory->deallocate(mo);
 
 	/* mark head concrete */
 	mo_head = memory->allocateFixed(mo_addr, head_size, 0, &state);
@@ -770,7 +772,6 @@ void ExecutorVex::makeSymbolicHead(
 
 	/* free object from address space */
 	state.unbindObject(mo);
-	memory->deallocate(mo);
 
 	mo_head = memory->allocateFixed(mo_addr, taken, 0, &state);
 	executeMakeSymbolic(
@@ -813,13 +814,13 @@ void ExecutorVex::makeSymbolicMiddle(
 
 	/* free object from address space */
 	state.unbindObject(mo);
-	memory->deallocate(mo);
 
-	mo_head = memory->allocateFixed(mo_addr, mo_off, 0, &state);
+	mo_head = memory->allocateFixed(mo_addr, mo_off, NULL, &state);
+
 	os = state.bindMemObj(mo_head);
 	for(unsigned i = 0; i < mo_off; i++) state.write8(os, i, buf_head[i]);
 
-	mo_mid = memory->allocateFixed(mo_addr+mo_off, taken, 0, &state);
+	mo_mid = memory->allocateFixed(mo_addr+mo_off, taken, NULL, &state);
 	mo_mid->setName(name);
 	executeMakeSymbolic(
 		state,
@@ -860,10 +861,12 @@ void ExecutorVex::makeRangeSymbolic(
 
 		mo = state.addressSpace.resolveOneMO(cur_addr);
 		if (mo == NULL) {
+			state.addressSpace.print(std::cerr);
 			fprintf(stderr,
-				"could not find %p in range %p-%p\n",
+				"couldn't find %p in range %p-%p (state=%p)\n",
 				cur_addr,
-				addr, addr+sz);
+				addr, addr+sz,
+				&state);
 			assert ("TODO: Allocate memory");
 		}
 
@@ -878,9 +881,11 @@ void ExecutorVex::makeRangeSymbolic(
 				/* take is excess of length of MO
 				 * Chop off all the tail of the MO */
 				taken = tail_take_bytes;
+				fprintf(stderr, "a\n");
 				makeSymbolicTail(state, mo, taken, name);
 			} else {
 				taken = take_remaining;
+				fprintf(stderr, "b\n");
 				makeSymbolicMiddle(
 					state,
 					mo,
@@ -889,6 +894,7 @@ void ExecutorVex::makeRangeSymbolic(
 					name);
 			}
 		} else {
+			fprintf(stderr, "cXXXXX\n");
 			taken = (take_remaining >= tail_take_bytes) ?
 					tail_take_bytes :
 					take_remaining;

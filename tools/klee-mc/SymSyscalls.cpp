@@ -48,14 +48,10 @@ ObjectState* SymSyscalls::makeSCRegsSymbolic(ExecutionState& state)
 	// do not unbind the object, we need to be able to grab it
 	// for replay
 	// state.unbindObject(old_mo);
-	fprintf(stderr, "NOT THROWING OUT %s\n", old_mo->name.c_str());
 
 	/* 1. make all of symbolic */
 	cpu_mo = exe_vex->allocRegCtx(&state);
-	fprintf(stderr, "NEW MO: %s\n", cpu_mo->name.c_str());
-
 	state_regctx_os = exe_vex->executeMakeSymbolic(state, cpu_mo, "reg");
-	state_regctx_os->getArray()->incRefIfCared();
 
 	/* 2. set everything that should be initialized */
 	const char*  state_data = (const char*)gs->getCPUState()->getStateData();
@@ -300,7 +296,6 @@ void SymSyscalls::sc_getcwd(ExecutionState& state, const SyscallParams& sp)
 		mo_cwdbuf,
 		ConstantExpr::alloc(buf_sz, 32),
 		"cwdbuf");
-	os_cwdbuf->getArray()->incRefIfCared();
 
 	/* ensure buffer is null-terminated */
 	state.write8(
@@ -357,7 +352,6 @@ void SymSyscalls::sc_mmap(
 	new_os = exe_vex->executeMakeSymbolic(state, new_mo, "mmap");
 	assert (new_os != NULL && "Could not make object state");
 
-	new_os->getArray()->incRefIfCared();
 	if ((prot & PROT_WRITE) == 0)
 		new_os->setReadOnly(true);
 

@@ -46,20 +46,23 @@ namespace klee {
 class SymbolicArray
 {
 public:
-  SymbolicArray(const MemoryObject* in_mo, const Array* in_array, ref<Expr> in_len)
+  SymbolicArray(
+	MemoryObject* in_mo,
+	Array* in_array,
+	ref<Expr> in_len)
   : mo(in_mo), array(in_array), len(in_len) {}
   virtual ~SymbolicArray() {}
   bool operator ==(const SymbolicArray& sa) const
   {
   	/* XXX ignore len for now XXX  XXX */
-  	return (mo == sa.mo && array == sa.array);
+	return (mo.get() == sa.mo.get() && array.get() == sa.array.get());
   }
-  const Array *getArray(void) const { return array; }
-  const MemoryObject *getMemoryObject(void) const { return mo; }
+  const Array *getArray(void) const { return array.get(); }
+  const MemoryObject *getMemoryObject(void) const { return mo.get(); }
 private:
-  const MemoryObject *mo;
-  const Array *array;
-  ref<Expr> len;
+  ref<MemoryObject>	mo;
+  ref<Array>		array;
+  ref<Expr>		len;
 };
 
 std::ostream &operator<<(std::ostream &os, const MemoryMap &mm);
@@ -179,8 +182,7 @@ public:
   void pushFrame(KInstIterator caller, KFunction *kf);
   void popFrame();
 
-  void addSymbolic(
-    const MemoryObject *mo, const Array *array, ref<Expr> len)
+  void addSymbolic(MemoryObject *mo, Array *array, ref<Expr> len)
   {
     symbolics.push_back(SymbolicArray(mo, array, len));
   }

@@ -80,7 +80,9 @@ ObjectHolder::ObjectHolder(ObjectState *_os) : os(_os) {
 }
 
 ObjectHolder::~ObjectHolder() {
-  if (os && --os->refCount==0) delete os;
+  if (!os) return;
+  if ( --os->refCount != 0) return;
+  delete os;
 }
  
 ObjectHolder &ObjectHolder::operator=(const ObjectHolder &b) {

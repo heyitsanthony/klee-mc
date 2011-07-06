@@ -455,6 +455,14 @@ bool AddressSpace::copyInConcretes(void)
   return true;
 }
 
+void AddressSpace::print(std::ostream& os) const
+{
+	foreach (it, objects.begin(), objects.end()) {
+		it->first->print(os);
+		os << std::endl;
+	}
+}
+
 /***/
 
 bool MemoryObjectLT::operator()(const MemoryObject *a, const MemoryObject *b) const

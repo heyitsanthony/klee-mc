@@ -1,6 +1,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 #include "klee/Internal/ADT/KTest.h"
@@ -74,9 +75,6 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 retire:
 	fprintf(stderr, "Retired: sys=%d\n", sys_nr);
 	sc_retired++;
-	fprintf(stderr, "FUCK IT ALL\n");
-	guest->getCPUState()->print(std::cerr);
-
 	return ret;
 }
 
@@ -110,12 +108,18 @@ void SyscallsKTest::sc_stat(SyscallParams& sp)
 	if (!copyInMemObj(sp.getArg(1), sizeof(struct stat))) {
 		fprintf(stderr, "failed to copy in memobj\n");
 		exited = true;
+		fprintf(stderr, 
+			"Do you have the right guest sshot for this ktest?");
+		abort();
 		return;
 	}
 
 	if (!copyInRegMemObj()) {
 		fprintf(stderr, "failed to copy in reg mem obj\n");
 		exited = true;
+		fprintf(stderr, 
+			"Do you have the right guest sshot for this ktest?");
+		abort();
 		return;
 	}
 }

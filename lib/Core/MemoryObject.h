@@ -20,7 +20,6 @@ public:
 
   MallocKey mallocKey;
   ref<HeapObject> heapObj;
-  unsigned refCount;
 
   /// true if created by us.
   bool fake_object;
@@ -35,6 +34,10 @@ public:
   // DO NOT IMPLEMENT
   MemoryObject(const MemoryObject &b);
   MemoryObject &operator=(const MemoryObject &b);
+
+private:
+  friend class ref<MemoryObject>;
+  unsigned refCount;
 
 public:    
   // XXX this is just a temp hack, should be removed
@@ -63,6 +66,8 @@ public:
   void setName(std::string name) {
     this->name = name;
   }
+
+  unsigned int getRefCount(void) const { return refCount; }
 
   ref<ConstantExpr> getBaseExpr() const { 
     return ConstantExpr::create(address, Context::get().getPointerWidth());

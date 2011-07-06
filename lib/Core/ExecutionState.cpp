@@ -158,7 +158,7 @@ void ExecutionState::popFrame()
 
 void ExecutionState::unbindObject(const MemoryObject* mo)
 {
-    addressSpace.unbindObject(mo);
+	addressSpace.unbindObject(mo);
 }
 
 void ExecutionState::write64(ObjectState* object, unsigned offset, uint64_t value)

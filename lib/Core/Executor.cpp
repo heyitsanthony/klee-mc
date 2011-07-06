@@ -2672,6 +2672,7 @@ std::string Executor::getAddressInfo(ExecutionState &state,
     info << "\trange: [" << res.first << ", " << res.second <<"]\n";
   }
 
+  /* XXX move into addressSpace */
   MemoryObject hack((unsigned) example);
   MemoryMap::iterator lower = state.addressSpace.objects.upper_bound(&hack);
   info << "\tnext: ";
@@ -3078,12 +3079,15 @@ ObjectState* Executor::makeSymbolic(
 {
   static unsigned	id = 0;
   ObjectState*		os;
-  const Array*		array;
+  Array*		array;
 
   array = new Array(arrPrefix + llvm::utostr(++id), mo->mallocKey, 0, 0);
   array->initRef();
   os = state.bindMemObj(mo, array);
-  state.addSymbolic(mo, array, len);
+  state.addSymbolic(
+  	const_cast<MemoryObject*>(mo) /* yuck */,
+  	array,
+	len);
 
   addSymbolicToSeeds(state, mo, array);
 

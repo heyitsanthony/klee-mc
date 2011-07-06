@@ -443,13 +443,11 @@ int main(int argc, char **argv, char **envp)
 	Guest		*gs;
 	Interpreter	*interpreter;
 
-	//  std::list<Interpreter::ReplayPathType> replayPaths;
-
-	#if ENABLE_STPLOG == 1
+#if ENABLE_STPLOG == 1
 	STPLOG_init("stplog.c");
-	#endif
+#endif
 
-	atexit(llvm_shutdown);  // Call llvm_shutdown() on exit.
+	atexit(llvm_shutdown);
 
 	llvm::InitializeNativeTarget();
 
@@ -486,13 +484,6 @@ int main(int argc, char **argv, char **envp)
 
 	//  finalModule = interpreter->setModule(mainModule, Opts);
 	//  externalsAndGlobalsCheck(finalModule);
-
-
-	#if 0
-	if (!replayPaths.empty()) {
-	interpreter->setReplayPaths(&replayPaths);
-	}
-	#endif
 
 	run(dynamic_cast<ExecutorVex*>(interpreter));
 
