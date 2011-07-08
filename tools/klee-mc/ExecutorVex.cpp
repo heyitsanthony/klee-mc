@@ -487,7 +487,6 @@ bool ExecutorVex::xferIterNext(struct XferStateIter& iter)
 				*(iter.res.first),
 				"fork error: jumping to bad pointer",
 				"badjmp.err");
-			assert (0 == 1);
 			continue;
 		}
 

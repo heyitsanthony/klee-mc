@@ -153,6 +153,7 @@ Tfork:   Time spent forking (%)""")
                   help='sort in ascending order (default is descending)')
     op.add_option('','--compare-by', dest='compBy',
                   help="key value on which to compare runs to the reference one (which is the first one).  E.g., --compare-by=Instrs shows how each run compares to the reference run after executing the same number of instructions as the reference run.  If a run hasn't executed as many instructions as the reference one, we simply print the statistics at the end of that run.")
+    op.add_option('', '--xml', dest='printXML', action='store_true', help='Use XML format', default=False)
     opts,dirs = op.parse_args()
     
     if not dirs:
@@ -172,6 +173,7 @@ Tfork:   Time spent forking (%)""")
     
     summary = []
     
+    tags = ['path', 'instrs', 'time', 'icov', 'bcov', 'icount', 'solver', 'states', 'statesnc', 'mem', 'queries', 'avgqc', 'tcex', 'tfork']
     if (opts.printAll):
         labels = ('Path','Instrs','Time(s)','ICov(%)','BCov(%)','ICount','Solver(%)', 'States', 'StatesNC', 'Mem(MB)', 'Queries', 'AvgQC', 'Tcex(%)', 'Tfork(%)')
     elif (opts.printMore):
@@ -223,6 +225,21 @@ Tfork:   Time spent forking (%)""")
             continue
 
     stripCommonPathPrefix(table, 0)
+
+    if opts.printXML:
+        for r in table:
+		print "<kstats>"
+		i = 0
+		while i < len(r):
+			print "<" + tags[i] + ">"
+			print r[i]
+			print "</" + tags[i] + ">"
+			i = i + 1
+			
+		print "</kstats>"
+	return
+
+
     if opts.sortBy:
         sortTable(table, labels, opts.sortBy, opts.ascending)
     if not table:
@@ -230,10 +247,11 @@ Tfork:   Time spent forking (%)""")
     elif len(table)>1:
         table.append(None)
         addRecord('Total (%d)'%(len(table)-1,),summary)
+
     table[0:0] = [None,labels,None]
     table.append(None)
     printTable(table)
-        
+
         
 if __name__=='__main__':
     main(sys.argv)

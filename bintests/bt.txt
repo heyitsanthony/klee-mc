@@ -1,0 +1,122 @@
+/bin/awk
+/bin/ls
+/bin/df
+/bin/du
+/bin/pwd
+/bin/ed
+/bin/nano
+/usr/bin/vim
+/bin/bzip2 -d asd
+/bin/tar cvf asd.tar asd
+/usr/bin/as asd.s
+/usr/bin/nm -a -C -D -l asd
+/usr/bin/objdump -x asd
+/usr/bin/strip -s asd
+/usr/bin/sox asd.mp3 asd.wav
+/usr/bin/mp4info asd.mp4
+/usr/bin/mp4file --dump asd.mp4
+/usr/bin/readelf -eWs asd
+/usr/bin/cal
+/usr/bin/ar x asd.a
+/usr/bin/addr2line asd
+/usr/bin/nasm asd
+/usr/bin/ndisasm asd
+/usr/bin/yasm asd
+/usr/bin/bmp2tiff asd.bmp out.tiff
+/usr/bin/bzz asd dsa
+/usr/bin/cjpeg asd
+/usr/bin/compress asd
+/usr/bin/ctorrent -x asd.torrent
+/usr/bin/cvs log
+/usr/bin/svn log
+/usr/bin/dumpelf asd
+/usr/bin/scanelf asd
+/usr/bin/dis86 asd
+/usr/bin/elinks asd
+/usr/bin/file asd
+/usr/bin/gdtopng asd.gd asd.png
+/usr/bin/gif2epsn asd.gif
+/usr/bin/gif2ps asd.gif
+/usr/bin/gifasm 1.gif 2.gif
+/usr/bin/gif2swf asd.gif
+/usr/bin/git add asd
+/usr/bin/git log
+/usr/bin/gnuplot
+/usr/bin/gpg2 --decrypt asd
+/usr/bin/guile
+/usr/bin/id3 asd.mp3
+/usr/bin/id3info asd.mp3
+/usr/bin/id3tool asd.mp3
+/usr/bin/iso-info --input=asd.iso
+/usr/bin/iso-read --image=asd.img --extract=asd.out --output-file=asd.ugh
+/usr/bin/isodump asd.img
+/usr/bin/isoinfo -i a asd.img
+/usr/bin/isosize asd.img
+/usr/bin/jpeg2ktopam 
+/usr/bin/json_verify
+/usr/bin/json_reformat
+/usr/bin/lame in out
+/usr/bin/llvm-dis asd
+/usr/bin/llvm-mc asd
+/usr/bin/llvm-objdump -a asd
+/usr/bin/lzmainfo asd
+/usr/bin/mpck asd.mp3
+/usr/bin/mpg123 asd.mp3
+/usr/bin/mplayer asd
+/usr/bin/mutt
+/usr/bin/nslookup asd.com
+/usr/bin/ntfsinfo asd
+/usr/bin/ogg123 asd.ogg
+/usr/bin/ogginfo asd.ogg
+/usr/bin/opt asd.ll
+/usr/bin/pbmclean
+/usr/bin/pdf2pdf asd.pdf
+/usr/bin/pdf2swf asd.pdf
+/usr/bin/pdftohtml asd.pdf
+/usr/bin/pngtopam asd.pnm
+/usr/bin/rdesktop asd.com:12345
+/usr/bin/rdfdump asd
+/usr/bin/lsusb
+/usr/bin/stat asd
+/usr/bin/swfc asd.sc
+/usr/bin/swfdump --full asd.swf
+/usr/bin/swfextract asd.swf
+/usr/bin/t1disasm
+/usr/bin/tiff2pdf asd.tiff
+/usr/bin/tidy
+/usr/bin/udisks --enumerate
+/usr/bin/unrar x asd.rar
+/usr/bin/ytasm asd
+/usr/bin/madplay asd
+/usr/bin/lavplay asd
+/usr/bin/ld asd
+/usr/bin/whois asd
+/usr/bin/nmap asd.com
+/usr/bin/dc
+/usr/bin/bc
+/usr/bin/bc -l
+/usr/bin/oggdec asd.ogg
+/usr/bin/audacious -p
+/usr/lib64/p7zip/7z l asd.7z
+/usr/bin/mpcdec asd
+/usr/bin/mpcenc asd
+/usr/bin/pdfinfo asd.pdf
+/usr/bin/otfinfo -sfzpg asd
+/usr/bin/gifinfo
+/usr/bin/tiffinfo -s -w -z -D -c asd.tiff
+/usr/bin/convert asd asd.jpg
+/usr/bin/lynx asd.html
+/usr/bin/links asd.html
+/usr/bin/elinks asd.html
+/sbin/fsck.ext3 asd
+/sbin/fsck.vfat asd
+/sbin/fsck.ntfs asd
+/sbin/fsck.cramfs asd
+/sbin/xfs_check asd
+/sbin/fsck.jfs asd
+/sbin/fsck.hfsplus asd
+/sbin/fsck.minix asd
+/sbin/btrfsck asd
+/sbin/xfs_repair asd
+/sbin/reiserfsck asd
+/usr/bin/dig asd

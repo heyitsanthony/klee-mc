@@ -1,3 +1,4 @@
+#include <sys/resource.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <sys/types.h>
@@ -404,6 +405,8 @@ bool SymSyscalls::apply(
 			sizeof(struct stat),
 			"newstatbuf");
 		break;
+	case SYS_sync:
+		break;
 	case SYS_umask:
 		sc_ret_v(state, 0666);
 		break;
@@ -445,12 +448,17 @@ bool SymSyscalls::apply(
 	case SYS_tgkill:
 		sc_ret_or(state, -1, 0);
 		break;
+	case SYS_getgid:
 	case SYS_getuid:
 		sc_ret_ge0(state);
 		break;
 	case SYS_getpid:
 	case SYS_gettid:
 		sc_ret_v(state, 1000); /* FIXME: single threaded*/
+		break;
+	case SYS_setgid:
+	case SYS_setuid:
+		sc_ret_or(state, -1, 0);
 		break;
 	case SYS_geteuid:
 	case SYS_getegid:
@@ -523,6 +531,14 @@ bool SymSyscalls::apply(
 		break;
 	case SYS_dup:
 		sc_ret_ge0(state);
+		break;
+	case SYS_getrlimit:
+		exe_vex->makeRangeSymbolic(
+			state,
+			(void*)sp.getArg(1),
+			sizeof(struct rlimit),
+			"getrlimit");
+		sc_ret_v(state, 0);
 		break;
 	case SYS_getrusage:
 		exe_vex->makeRangeSymbolic(
