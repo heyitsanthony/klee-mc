@@ -20,6 +20,8 @@ private:
 	bool copyInMemObj(uint64_t user_addr, unsigned int sz);
 
 	void sc_stat(SyscallParams& sp);
+	void sc_mmap(SyscallParams& sp);
+	void sc_munmap(SyscallParams& sp);
 
 	struct KTest	*ktest;
 	unsigned int	next_ktest_obj;

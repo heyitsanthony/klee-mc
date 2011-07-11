@@ -39,7 +39,7 @@ private:
   friend class ref<MemoryObject>;
   unsigned refCount;
 
-public:    
+public:
   // XXX this is just a temp hack, should be removed
   explicit MemoryObject(uint64_t _address);
 
@@ -69,10 +69,10 @@ public:
 
   unsigned int getRefCount(void) const { return refCount; }
 
-  ref<ConstantExpr> getBaseExpr() const { 
+  ref<ConstantExpr> getBaseExpr() const {
     return ConstantExpr::create(address, Context::get().getPointerWidth());
   }
-  ref<ConstantExpr> getSizeExpr() const { 
+  ref<ConstantExpr> getSizeExpr() const {
     return ConstantExpr::create(size, Context::get().getPointerWidth());
   }
   ref<Expr> getOffsetExpr(ref<Expr> pointer) const {
@@ -87,7 +87,7 @@ public:
 
   ref<Expr> getBoundsCheckOffset(ref<Expr> offset) const {
     if (size==0) {
-      return EqExpr::create(offset, 
+      return EqExpr::create(offset,
                             ConstantExpr::alloc(0, Context::get().getPointerWidth()));
     } else {
       return UltExpr::create(offset, getSizeExpr());
@@ -95,14 +95,14 @@ public:
   }
   ref<Expr> getBoundsCheckOffset(ref<Expr> offset, unsigned bytes) const {
     if (bytes<=size) {
-      return UltExpr::create(offset, 
-                             ConstantExpr::alloc(size - bytes + 1, 
+      return UltExpr::create(offset,
+                             ConstantExpr::alloc(size - bytes + 1,
                                                  Context::get().getPointerWidth()));
     } else {
       return ConstantExpr::alloc(0, Expr::Bool);
     }
   }
-  
+
   inline bool isLocal() const { return mallocKey.isLocal; }
   inline bool isGlobal() const { return mallocKey.isGlobal; }
   inline void setGlobal(bool _isGlobal) { mallocKey.isGlobal = _isGlobal; }

@@ -67,7 +67,7 @@ const Module* ExecutorBC::setModule(llvm::Module *module,
 		target_data->isLittleEndian(),
 		(Expr::Width) target_data->getPointerSizeInBits());
 
-	specialFunctionHandler = new SpecialFunctionHandler(*this);
+	specialFunctionHandler = new SpecialFunctionHandler(this);
 
 	specialFunctionHandler->prepare();
 	kmodule->prepare(opts, interpreterHandler);
@@ -312,217 +312,6 @@ done_ai:
 	}
 }
 
-void ExecutorBC::executeAllocConst(
-	ExecutionState &state,
-	ConstantExpr* CE,
-	bool isLocal,
-	KInstruction *target,
-	bool zeroMemory,
-	const ObjectState *reallocFrom) 
-{
-	ObjectState *os;
-	MemoryObject *mo;
-	
-	mo = memory->allocate(
-		CE->getZExtValue(), isLocal, false, state.prevPC->inst, &state);
-	if (!mo) {
-		state.bindLocal(
-			target,
-			ConstantExpr::alloc(
-				0, Context::get().getPointerWidth()));
-		return;
-	}
-
-	os = (isLocal) ?
-		state.bindStackMemObj(mo) :
-		state.bindMemObj(mo);
-
-	if (zeroMemory)
-		os->initializeToZero();
-	else
-		os->initializeToRandom();
-
-	state.bindLocal(target, mo->getBaseExpr());
-
-	if (reallocFrom) {
-		unsigned count = std::min(reallocFrom->size, os->size);
-
-		state.copy(os, reallocFrom, count);
-		/*(for (unsigned i=0; i<count; i++) {
-		//os->write(i, reallocFrom->read8(i));          
-		//state.write(os, i, state.read8(reallocFrom, i));
-		}*/
-		state.unbindObject(reallocFrom->getObject());
-	}
-}
-
-
-void ExecutorBC::executeAllocSymbolic(
-	ExecutionState &state,
-	ref<Expr> size,
-	bool isLocal,
-	KInstruction *target,
-	bool zeroMemory,
-	const ObjectState *reallocFrom)
-{
-	// XXX For now we just pick a size. Ideally we would support
-	// symbolic sizes fully but even if we don't it would be better to
-	// "smartly" pick a value, for example we could fork and pick the
-	// min and max values and perhaps some intermediate (reasonable
-	// value).
-	// 
-	// It would also be nice to recognize the case when size has
-	// exactly two values and just fork (but we need to get rid of
-	// return argument first). This shows up in pcre when llvm
-	// collapses the size expression with a select.
-	ref<ConstantExpr> example;
-	bool success;
-	
-	success = solver->getValue(state, size, example);
-	assert(success && "FIXME: Unhandled solver failure");
-	(void) success;
-
-	// Try and start with a small example.
-	Expr::Width W = example->getWidth();
-	while (example->Ugt(ConstantExpr::alloc(128, W))->isTrue()) {
-		ref<ConstantExpr> tmp;
-		bool res;
-		bool success;
-
-		tmp = example->LShr(ConstantExpr::alloc(1, W));
-		success = solver->mayBeTrue(state, EqExpr::create(tmp, size), res);
-		assert(success && "FIXME: Unhandled solver failure");      
-		(void) success;
-		if (!res)
-			break;
-		example = tmp;
-	}
-
-	StatePair fixedSize = fork(state, EqExpr::create(example, size), true);
-
-	if (fixedSize.second) { 
-		// Check for exactly two values
-		ref<ConstantExpr> tmp;
-		bool success;
-		bool res;
-		
-		success = solver->getValue(*fixedSize.second, size, tmp);
-		assert(success && "FIXME: Unhandled solver failure");      
-		(void) success;
-		success = solver->mustBeTrue(*fixedSize.second, 
-					 EqExpr::create(tmp, size),
-					 res);
-		assert(success && "FIXME: Unhandled solver failure");      
-		(void) success;
-
-		if (res) {
-			executeAlloc(
-				*fixedSize.second,
-				tmp,
-				isLocal,
-				target, zeroMemory, reallocFrom);
-		} else {
-		// See if a *really* big value is possible. If so assume
-		// malloc will fail for it, so lets fork and return 0.
-			StatePair hugeSize = fork(
-				*fixedSize.second, 
-				UltExpr::create(ConstantExpr::alloc(1<<31, W), size), 
-				true);
-			if (hugeSize.first) {
-				klee_message("NOTE: found huge malloc, returing 0");
-				hugeSize.first->bindLocal(
-					target,
-					ConstantExpr::alloc(
-						0, 
-						Context::get().getPointerWidth()));
-			}
-
-			if (hugeSize.second) {
-				std::ostringstream info;
-				ExprPPrinter::printOne(info, "  size expr", size);
-				info << "  concretization : " << example << "\n";
-				info << "  unbound example: " << tmp << "\n";
-				terminateStateOnError(
-					*hugeSize.second, 
-					"concretized symbolic size", 
-					"model.err", 
-					info.str());
-			}
-		}
-	}
-
-	// can be zero when fork fails
-	if (fixedSize.first) {
-		executeAlloc(
-			*fixedSize.first,
-			example,
-			isLocal, 
-			target, zeroMemory, reallocFrom);
-	}
-}
-
-void ExecutorBC::executeAlloc(
-	ExecutionState &state,
-	ref<Expr> size,
-	bool isLocal,
-	KInstruction *target,
-	bool zeroMemory,
-	const ObjectState *reallocFrom) 
-{
-	size = toUnique(state, size);
-	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(size)) {
-		executeAllocConst(
-			state, CE, isLocal, target, zeroMemory, reallocFrom);
-	} else {
-		executeAllocSymbolic(
-			state, size, isLocal, target, zeroMemory, reallocFrom);
-	}
-}
-
-void ExecutorBC::executeFree(
-	ExecutionState &state,
-	ref<Expr> address,
-	KInstruction *target)
-{
-	StatePair zeroPointer = fork(state, Expr::createIsZero(address), true);
-
-	if (zeroPointer.first && target) {
-		zeroPointer.first->bindLocal(target, Expr::createPointer(0));
-	}
-
-	if (!zeroPointer.second)
-		return;
-
-	// address != 0
-	ExactResolutionList rl;
-	resolveExact(*zeroPointer.second, address, rl, "free");
-
-	foreach (it, rl.begin(), rl.end()) {
-		const MemoryObject *mo;
-		
-		mo = it->first.first;
-		if (mo->isLocal()) {
-			terminateStateOnError(
-				*it->second, 
-				"free of alloca", 
-				"free.err",
-				getAddressInfo(*it->second, address));
-		} else if (mo->isGlobal()) {
-			terminateStateOnError(
-				*it->second, 
-				"free of global", 
-				"free.err",
-				getAddressInfo(*it->second, address));
-		} else {
-			it->second->unbindObject(mo);
-			if (target)
-				it->second->bindLocal(
-					target,
-					Expr::createPointer(0));
-		}
-	}
-}
-
 void ExecutorBC::executeInstruction(
 	ExecutionState &state,
 	KInstruction *ki)
@@ -763,4 +552,13 @@ void ExecutorBC::allocGlobalVariableNoDecl(
 	globalAddresses.insert(std::make_pair(&gv, mo->getBaseExpr()));
 
 	if (!gv.hasInitializer()) os->initializeToRandom();
+}
+
+Function* ExecutorBC::getFuncByAddr(uint64_t addr)
+{
+	if (legalFunctions.count(addr) == 0)
+		return NULL;
+
+	/* hurr */
+	return (Function*) addr;
 }

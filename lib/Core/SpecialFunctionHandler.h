@@ -18,39 +18,59 @@ namespace llvm {
   class Function;
 }
 
+#define SFH_CHK_ARGS(x,y)	\
+	assert (arguments.size()==x && "invalid number of arguments to "y)
+#define SFH_DEF_HANDLER(x)		\
+void Handler##x::handle(		\
+	ExecutionState	&state,		\
+	KInstruction	*target,	\
+	std::vector<ref<Expr> >& arguments)
+
 namespace klee {
   class ExecutorBC;
   class Expr;
   class ExecutionState;
   class KInstruction;
+  class Handler;
   template<typename T> class ref;
-  
+
   class SpecialFunctionHandler {
   public:
-    typedef void (SpecialFunctionHandler::*Handler)(ExecutionState &state,
-                                                    KInstruction *target, 
-                                                    std::vector<ref<Expr> > 
-                                                      &arguments);
-    typedef std::map<const llvm::Function*, 
-                     std::pair<Handler,bool> > handlers_ty;
+    typedef std::map<const llvm::Function*, std::pair<Handler*,bool> >
+    	handlers_ty;
+
+	typedef Handler*(HandlerInit)(SpecialFunctionHandler*);
+	struct HandlerInfo {
+	  const char *name;
+	  HandlerInit* handler_init;
+	  bool doesNotReturn; /// Intrinsic terminates the process
+	  bool hasReturnValue; /// Intrinsic has a return value
+	  bool doNotOverride; /// Intrinsic should not be used if already defined
+	};
+
 
     handlers_ty handlers;
-    class ExecutorBC &executor;
+    class Executor* executor;
+
+  protected:
+	void bind(SpecialFunctionHandler::HandlerInfo* hinfo, unsigned int N);
+	void prepare(SpecialFunctionHandler::HandlerInfo* hinfo, unsigned int N);
 
   public:
-    SpecialFunctionHandler(ExecutorBC &_executor);
+    SpecialFunctionHandler(Executor* _executor);
+    virtual ~SpecialFunctionHandler();
 
     /// Perform any modifications on the LLVM module before it is
     /// prepared for execution. At the moment this involves deleting
     /// unused function bodies and marking intrinsics with appropriate
     /// flags for use in optimizations.
-    void prepare();
+    virtual void prepare();
 
     /// Initialize the internal handler map after the module has been
     /// prepared for execution.
-    void bind();
+    virtual void bind();
 
-    bool handle(ExecutionState &state, 
+    bool handle(ExecutionState &state,
                 llvm::Function *f,
                 KInstruction *target,
                 std::vector< ref<Expr> > &arguments);
@@ -58,53 +78,77 @@ namespace klee {
     /* Convenience routines */
 
     std::string readStringAtAddress(ExecutionState &state, ref<Expr> address);
-    
+
+  };
+
+  class Handler
+  {
+  public:
+  	virtual void handle(
+		ExecutionState &state,
+		KInstruction* target,
+		std::vector<ref<Expr> > &arguments) = 0;
+  	virtual ~Handler(void) {}
+  protected:
+  	Handler(SpecialFunctionHandler* _sfh) : sfh(_sfh) {}
+	SpecialFunctionHandler	*sfh;
+  };
     /* Handlers */
 
-#define HANDLER(name) void name(ExecutionState &state, \
-                                KInstruction *target, \
-                                std::vector< ref<Expr> > &arguments)
-    HANDLER(handleAbort);
-    HANDLER(handleAlarm);
-    HANDLER(handleAssert);
-    HANDLER(handleAssertFail);
-    HANDLER(handleAssume);
-    HANDLER(handleCalloc);
-    HANDLER(handleCheckMemoryAccess);
-    HANDLER(handleDefineFixedObject);
-    HANDLER(handleDelete);    
-    HANDLER(handleDeleteArray);
-    HANDLER(handleExit);
-    HANDLER(handleAliasFunction);
-    HANDLER(handleFree);
-    HANDLER(handleGetPruneID);
-    HANDLER(handlePrune);
-    HANDLER(handleGetErrno);
-    HANDLER(handleGetObjSize);
-    HANDLER(handleGetValue);
-    HANDLER(handleIsSymbolic);
-    HANDLER(handleMakeSymbolic);
-    HANDLER(handleMalloc);
-    HANDLER(handleMarkGlobal);
-    HANDLER(handleMarkOpenfd);
-    HANDLER(handleMerge);
-    HANDLER(handleNew);
-    HANDLER(handleNewArray);
-    HANDLER(handlePreferCex);
-    HANDLER(handlePrintExpr);
-    HANDLER(handlePrintRange);
-    HANDLER(handleRange);
-    HANDLER(handleRealloc);
-    HANDLER(handleReportError);
-    HANDLER(handleRevirtObjects);
-    HANDLER(handleSetForking);
-    HANDLER(handleSilentExit);
-    HANDLER(handleStackTrace);
-    HANDLER(handleUnderConstrained);
-    HANDLER(handleWarning);
-    HANDLER(handleWarningOnce);
-#undef HANDLER
-  };
+#define SFH_HANDLER(name) 				\
+	class Handler##name : public Handler {	\
+	public:	\
+		Handler##name(SpecialFunctionHandler* sfh) : 	\
+			Handler(sfh) {}	\
+		virtual ~Handler##name() {}	\
+		static Handler* create(SpecialFunctionHandler* sfh) { 	\
+			return new Handler##name(sfh);		\
+		}						\
+	  	virtual void handle(	\
+		ExecutionState &state,	\
+		KInstruction* target,	\
+		std::vector<ref<Expr> > &arguments);	\
+	};
+
+    SFH_HANDLER(Abort)
+    SFH_HANDLER(Alarm)
+    SFH_HANDLER(Assert)
+    SFH_HANDLER(AssertFail)
+    SFH_HANDLER(Assume)
+    SFH_HANDLER(Calloc)
+    SFH_HANDLER(CheckMemoryAccess)
+    SFH_HANDLER(DefineFixedObject)
+    SFH_HANDLER(Delete)
+    SFH_HANDLER(DeleteArray)
+    SFH_HANDLER(Exit)
+    SFH_HANDLER(AliasFunction)
+    SFH_HANDLER(Free)
+    SFH_HANDLER(GetPruneID)
+    SFH_HANDLER(Prune)
+    SFH_HANDLER(GetErrno)
+    SFH_HANDLER(GetObjSize)
+    SFH_HANDLER(GetValue)
+    SFH_HANDLER(IsSymbolic)
+    SFH_HANDLER(MakeSymbolic)
+    SFH_HANDLER(Malloc)
+    SFH_HANDLER(MarkGlobal)
+    SFH_HANDLER(MarkOpenfd)
+    SFH_HANDLER(Merge)
+    SFH_HANDLER(New)
+    SFH_HANDLER(NewArray)
+    SFH_HANDLER(PreferCex)
+    SFH_HANDLER(PrintExpr)
+    SFH_HANDLER(PrintRange)
+    SFH_HANDLER(Range)
+    SFH_HANDLER(Realloc)
+    SFH_HANDLER(ReportError)
+    SFH_HANDLER(RevirtObjects)
+    SFH_HANDLER(SetForking)
+    SFH_HANDLER(SilentExit)
+    SFH_HANDLER(StackTrace)
+    SFH_HANDLER(UnderConstrained)
+    SFH_HANDLER(Warning)
+    SFH_HANDLER(WarningOnce)
 } // End klee namespace
 
 #endif

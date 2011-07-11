@@ -98,9 +98,39 @@ public:
 
   typedef std::pair<ExecutionState*,ExecutionState*> StatePair;
   typedef std::vector<ExecutionState*> StateVector;
+  typedef std::vector<
+  	std::pair<
+		std::pair<const MemoryObject*, const ObjectState*>,
+		ExecutionState*> > ExactResolutionList;
+  /// Resolve a pointer to the memory objects it could point to the
+  /// start of, forking execution when necessary and generating errors
+  /// for pointers to invalid locations (either out of bounds or
+  /// address inside the middle of objects).
+  ///
+  /// \param results[out] A list of ((MemoryObject,ObjectState),
+  /// state) pairs for each object the given address can point to the
+  /// beginning of.
+  void resolveExact(ExecutionState &state,
+                    ref<Expr> p,
+                    ExactResolutionList &results,
+                    const std::string &name);
+
+  /// Return a unique constant value for the given expression in the
+  /// given state, if it has one (i.e. it provably only has a single
+  /// value). Otherwise return the original expression.
+  ref<Expr> toUnique(const ExecutionState &state, ref<Expr> &e);
+
+  StatePair fork(ExecutionState &current, ref<Expr> condition, bool isInternal);
+  /// Get textual information regarding a memory address.
+  std::string getAddressInfo(ExecutionState &state, ref<Expr> address) const;
+
+  /// Bind a constant value for e to the given target. NOTE: This
+  /// function may fork state if the state has multiple seeds.
+  void executeGetValue(ExecutionState &state, ref<Expr> e, KInstruction *target);
 
   const KModule* getKModule(void) const { return kmodule; }
 
+  MemoryManager *memory;
 private:
   class TimerInfo;
   static void deleteTimerInfo(TimerInfo*&);
@@ -128,8 +158,6 @@ protected:
   /// constant values.
   void bindInstructionConstants(KInstruction *KI);
 
-  StatePair fork(ExecutionState &current, ref<Expr> condition, bool isInternal);
-
   virtual void printStateErrorMessage(
 	ExecutionState& state,
 	const std::string& message,
@@ -144,29 +172,6 @@ protected:
     terminateStateOnError(state, message, "exec.err", info);
   }
 
-  /// Return a unique constant value for the given expression in the
-  /// given state, if it has one (i.e. it provably only has a single
-  /// value). Otherwise return the original expression.
-  ref<Expr> toUnique(const ExecutionState &state, ref<Expr> &e);
-
-  /// Resolve a pointer to the memory objects it could point to the
-  /// start of, forking execution when necessary and generating errors
-  /// for pointers to invalid locations (either out of bounds or
-  /// address inside the middle of objects).
-  ///
-  /// \param results[out] A list of ((MemoryObject,ObjectState),
-  /// state) pairs for each object the given address can point to the
-  /// beginning of.
-  typedef std::vector< std::pair<std::pair<const MemoryObject*, const ObjectState*>,
-                                 ExecutionState*> > ExactResolutionList;
-  void resolveExact(ExecutionState &state,
-                    ref<Expr> p,
-                    ExactResolutionList &results,
-                    const std::string &name);
-
-  /// Get textual information regarding a memory address.
-  std::string getAddressInfo(ExecutionState &state, ref<Expr> address) const;
-
   Expr::Width getWidthForLLVMType(const llvm::Type *type) const;
 
   const Cell& eval(
@@ -175,6 +180,8 @@ protected:
     ExecutionState &state) const;
 
   llvm::Function* getCalledFunction(llvm::CallSite &cs, ExecutionState &state);
+
+  virtual llvm::Function* getFuncByAddr(uint64_t addr) = 0;
 
   virtual void callExternalFunction(ExecutionState &state,
                             KInstruction *target,
@@ -205,7 +212,6 @@ protected:
   TimingSolver *solver;
 
 
-  MemoryManager *memory;
   ExeStateManager* stateManager;
 
   typedef std::map<const llvm::GlobalValue*, ref<ConstantExpr> > globaladdr_map;
@@ -215,10 +221,6 @@ protected:
   /// Map of globals to their bound address. This also includes
   /// globals that have no representative object (i.e. functions).
   globaladdr_map globalAddresses;
-
-  /// The set of legal function addresses, used to validate function
-  /// pointers. We use the actual Function* address as the function address.
-  std::set<uint64_t> legalFunctions;
 
 private:
   std::vector<TimerInfo*> timers;
@@ -472,10 +474,6 @@ private:
   ref<klee::ConstantExpr> toConstant(ExecutionState &state, ref<Expr> e,
                                      const char *purpose);
 
-  /// Bind a constant value for e to the given target. NOTE: This
-  /// function may fork state if the state has multiple seeds.
-  void executeGetValue(ExecutionState &state, ref<Expr> e, KInstruction *target);
-
   void handlePointsToObj(ExecutionState &state,
                          KInstruction *target,
                          const std::vector<ref<Expr> > &arguments);
@@ -506,6 +504,7 @@ public:
   virtual ~Executor();
 
   const InterpreterHandler& getHandler() { return *interpreterHandler; }
+  TimingSolver* getSolver(void) { return solver; }
 
   /// Add the given (boolean) condition as a constraint on state. This
   /// function is a wrapper around the state's addConstraint function
@@ -544,6 +543,56 @@ public:
 
   // XXX should just be moved out to utility module
   ref<klee::ConstantExpr> evalConstant(llvm::Constant *c);
+
+	/// Allocate and bind a new object in a particular state. NOTE: This
+	/// function may fork.
+	///
+	/// \param isLocal Flag to indicate if the object should be
+	/// automatically deallocated on function return (this also makes it
+	/// illegal to free directly).
+	///
+	/// \param target Value at which to bind the base address of the new
+	/// object.
+	///
+	/// \param reallocFrom If non-zero and the allocation succeeds,
+	/// initialize the new object from the given one and unbind it when
+	/// done (realloc semantics). The initialized bytes will be the
+	/// minimum of the size of the old and new objects, with remaining
+	/// bytes initialized as specified by zeroMemory.
+	void executeAlloc(
+		ExecutionState &state,
+		ref<Expr> size,
+		bool isLocal,
+		KInstruction *target,
+		bool zeroMemory=false,
+		const ObjectState *reallocFrom=0);
+
+	void executeAllocSymbolic(
+		ExecutionState &state,
+		ref<Expr> size,
+		bool isLocal,
+		KInstruction *target,
+		bool zeroMemory,
+		const ObjectState *reallocFrom);
+
+	void executeAllocConst(
+		ExecutionState &state,
+		ConstantExpr* CE,
+		bool isLocal,
+		KInstruction *target,
+		bool zeroMemory,
+		const ObjectState *reallocFrom);
+
+	/// Free the given address with checking for errors. If target is
+	/// given it will be bound to 0 in the resulting states (this is a
+	/// convenience for realloc). Note that this function can cause the
+	/// state to fork and that \ref state cannot be safely accessed
+	/// afterwards.
+	void executeFree(
+		ExecutionState &state,
+		ref<Expr> address,
+		KInstruction *target = 0);
+
 
   virtual void setSymbolicPathWriter(TreeStreamWriter *tsw) {
     symPathWriter = tsw;

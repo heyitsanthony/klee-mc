@@ -255,7 +255,6 @@ void StatsTracker::addKFunction(KFunction* kf)
 
   if (!init) {
 /* hack to get dynamic adding kfuncs. Slightly wrong. */
-    fprintf(stderr, "DO THE HACK\n");
     if (OutputIStats)
       theStatisticManager->useIndexedStats(km->infos->getMaxID());
 

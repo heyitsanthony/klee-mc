@@ -51,42 +51,42 @@ void MemoryObject::getAllocInfo(std::string &result) const
   } else {
     info << " (no allocation info)";
   }
-  
+
   info.flush();
 }
 
 void MemoryObject::print(std::ostream& out) const
 {
-  out << 
-    "MO. Name=" << name << 
+  out <<
+    "MO. Name=" << name <<
     ". Addr=" << (void*)address <<
     "-" << (void*)(address+size) <<
     ". Size=" << size <<
     ". ID=" << id;
 }
 
-MemoryObject::MemoryObject(uint64_t _address) 
+MemoryObject::MemoryObject(uint64_t _address)
     : id(counter++),
       address(_address),
       size(0),
       mallocKey(0, 0, 0, false, false, true),
-      refCount(0) 
+      refCount(0)
 {
 }
 
 MemoryObject::MemoryObject(
   uint64_t _address,
-  unsigned _size, 
+  unsigned _size,
   const MallocKey &_mallocKey,
-  HeapObject* _heapObj) 
-    : id(counter++),
-      address(_address),
-      size(_size),
-      name("unnamed"),
-      mallocKey(_mallocKey),
-      heapObj(ref<HeapObject>(_heapObj)),
-      refCount(_mallocKey.isFixed ? 1 : 0),
-      fake_object(false),
-      isUserSpecified(false) 
+  HeapObject* _heapObj)
+: id(counter++)
+, address(_address)
+, size(_size)
+, name("unnamed")
+, mallocKey(_mallocKey)
+, heapObj(ref<HeapObject>(_heapObj))
+, fake_object(false)
+, isUserSpecified(false)
+, refCount(_mallocKey.isFixed ? 1 : 0)
 {
 }

@@ -12,7 +12,6 @@
 
 #include <iostream>
 
-#include "SymSyscalls.h"
 #include "ExeChk.h"
 
 using namespace llvm;
@@ -22,7 +21,7 @@ ExeChk::ExeChk(
 	const InterpreterOptions &opts,
 	InterpreterHandler *ie,
 	Guest* gs)
-: ExecutorVex(opts, ie, gs)
+: ExecutorVex(opts, ie, gs), exited(false)
 {
 	/* This is a really silly hack to get two genllvm's running
 	 * at once. Fortunately the code doesn't change much, so 
@@ -86,18 +85,18 @@ void ExeChk::handleXfer(ExecutionState& state, KInstruction *ki)
 	Function	*cur_func;
 	cur_func = (state.stack.back()).kf->function;
 
-	/* finish up rest of VSB in KLEE */
+	/* 1. Finish KLEE's VSB by setting up xfer to next VSB*/
 	ExecutorVex::handleXfer(state, ki);
 	updateGuestRegs(state);
 	saveCPU(saved_klee_cpustate);
 
-	/* do VSB in VexExec's JITer */
+	/* 2. Do VSB in VexExec's JITer */
 	setJITGen();
 	loadCPU(saved_jit_cpustate);
 	ok_step = vex_exe->stepVSB();
 	saveCPU(saved_jit_cpustate);
 
-	/* cross-check */
+	/* Cross-check. Both should be in same state */
 	if (memcmp(
 		saved_jit_cpustate,
 		saved_klee_cpustate, 
@@ -115,30 +114,35 @@ void ExeChk::handleXfer(ExecutionState& state, KInstruction *ki)
 		assert (0 == 1  && "MISMATCH OOPS!");
 	}
 
-	/* now, restore everything */
+	if (exited) terminateStateOnExit(state);
+
+	/* Now, restore everything to KLEE state */
 	loadCPU(saved_klee_cpustate);
 	setKLEEGen();
 }
 
 /* catch syscalls so that we don't make things symbolic-- 
  * that would ruin the cross checking! */
-bool ExeChk::handleXferSyscall(ExecutionState& state, KInstruction* ki)
+void ExeChk::handleXferSyscall(ExecutionState& state, KInstruction* ki)
 {
-	bool		ret;
 	SyscallParams   sp(gs->getSyscallParams());
 	int		sys_nr;
 
 	sys_nr = sp.getSyscall();
-
 	switch(sys_nr) {
 	case SYS_exit:
-	case SYS_exit_group:
+	case SYS_exit_group: {
+		ObjectState	*reg_os;
 		fprintf(stderr, "EXITING ON sys_nr=%d. exitcode=%d\n", 
 			sys_nr,
 			(int)sp.getArg(0));
-		ret = false;
-		sc->sc_ret_v(state, sp.getArg(0));
-		goto done;
+		reg_os = getRegObj(state);
+		assert (reg_os != NULL);
+		state.write64(reg_os, 0 /* RAX */, sp.getArg(0));
+		gs->setSyscallResult(sp.getArg(0));
+		exited = true;
+		return;
+	}
 	default:
 		fprintf(stderr, "BAD SYSCALL 0x%x\n", sys_nr);
 		fprintf(stderr, 
@@ -147,11 +151,7 @@ bool ExeChk::handleXferSyscall(ExecutionState& state, KInstruction* ki)
 		assert (0 == 1);
 		break;
 	}
-
 	handleXferJmp(state, ki);
-	ret = true;
-done:
-	return ret;
 }
 
 void ExeChk::setJITGen(void)

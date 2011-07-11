@@ -23,54 +23,6 @@ public:
 		char **argv,
 		char **envp);
 
-	/// Allocate and bind a new object in a particular state. NOTE: This
-	/// function may fork.
-	///
-	/// \param isLocal Flag to indicate if the object should be
-	/// automatically deallocated on function return (this also makes it
-	/// illegal to free directly).
-	///
-	/// \param target Value at which to bind the base address of the new
-	/// object.
-	///
-	/// \param reallocFrom If non-zero and the allocation succeeds,
-	/// initialize the new object from the given one and unbind it when
-	/// done (realloc semantics). The initialized bytes will be the
-	/// minimum of the size of the old and new objects, with remaining
-	/// bytes initialized as specified by zeroMemory.
-	void executeAlloc(
-		ExecutionState &state,
-		ref<Expr> size,
-		bool isLocal,
-		KInstruction *target,
-		bool zeroMemory=false,
-		const ObjectState *reallocFrom=0);
-
-	void executeAllocSymbolic(
-		ExecutionState &state,
-		ref<Expr> size,
-		bool isLocal,
-		KInstruction *target,
-		bool zeroMemory,
-		const ObjectState *reallocFrom);
-
-	void executeAllocConst(
-		ExecutionState &state,
-		ConstantExpr* CE,
-		bool isLocal,
-		KInstruction *target,
-		bool zeroMemory,
-		const ObjectState *reallocFrom);
-
-	/// Free the given address with checking for errors. If target is
-	/// given it will be bound to 0 in the resulting states (this is a
-	/// convenience for realloc). Note that this function can cause the
-	/// state to fork and that \ref state cannot be safely accessed
-	/// afterwards.
-	void executeFree(
-		ExecutionState &state,
-		ref<Expr> address,
-		KInstruction *target = 0);
 protected:
   	virtual void executeInstruction(
 		ExecutionState &state, KInstruction *ki);
@@ -82,6 +34,8 @@ protected:
 		KInstruction *target,
 		llvm::Function *function,
 		std::vector< ref<Expr> > &arguments);
+
+  	virtual llvm::Function* getFuncByAddr(uint64_t addr);
 private:
 	void allocGlobalVariableDecl(
 		ExecutionState& state,
@@ -100,6 +54,9 @@ private:
 	SpecialFunctionHandler *specialFunctionHandler;
  	ExternalDispatcher *externalDispatcher;
 
+	/// The set of legal function addresses, used to validate function
+	/// pointers. We use the actual Function* address as the function address.
+	std::set<uint64_t> legalFunctions;
 };
 
 }

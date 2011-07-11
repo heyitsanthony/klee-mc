@@ -1,16 +1,15 @@
 #include "llvm/Target/TargetData.h"
 #include "llvm/IntrinsicInst.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Support/ManagedStatic.h"
 #include "klee/Internal/Module/KModule.h"
 #include "llvm/System/Path.h"
 #include "klee/Config/config.h"
+#include "../../lib/Core/SpecialFunctionHandler.h"
 #include "../../lib/Core/TimingSolver.h"
 #include "../../lib/Core/StatsTracker.h"
 #include "../../lib/Core/ExeStateManager.h"
 #include "../../lib/Core/UserSearcher.h"
 #include "../../lib/Core/PTree.h"
-#include "klee/util/ExprPPrinter.h"
 
 #include <iomanip>
 #include <unistd.h>
@@ -28,15 +27,22 @@
 #include "syscall/syscallparams.h"
 #include "static/Sugar.h"
 
-#include "SymSyscalls.h"
+#include "SyscallSFH.h"
 #include "ExecutorVex.h"
+
+/* CHEAT */
+extern "C"
+{
+#include "valgrind/libvex_guest_amd64.h"
+}
+
 
 using namespace klee;
 using namespace llvm;
 
 extern bool WriteTraces;
 
-namespace 
+namespace
 {
   cl::opt<bool>
   LogRegs("logregs",
@@ -48,9 +54,8 @@ ExecutorVex::ExecutorVex(
 	const InterpreterOptions &opts,
 	InterpreterHandler *ih,
 	Guest	*in_gs)
-: Executor(opts, ih),
-  gs(in_gs),
-  in_sc(false)
+: Executor(opts, ih)
+, gs(in_gs)
 {
 	assert (kmodule == NULL && "KMod already initialized? My contract!");
 
@@ -67,6 +72,8 @@ ExecutorVex::ExecutorVex(
 	if (!theGenLLVM) theGenLLVM = new GenLLVM(in_gs);
 	if (!theVexHelpers) theVexHelpers = new VexHelpers(Arch::X86_64);
 
+	theVexHelpers->loadUserMod("libkleeRuntimeMC.bc");
+
 	xlate = new VexXlate(Arch::X86_64);
 	xlate_cache = new VexFCache(xlate);
 	kmodule = new KModule(theGenLLVM->getModule());
@@ -81,6 +88,9 @@ ExecutorVex::ExecutorVex(
 		target_data->isLittleEndian(),
 		(Expr::Width) target_data->getPointerSizeInBits());
 
+	sfh = new SyscallSFH(this);
+
+	sfh->prepare();
 	kmodule->prepare(mod_opts, ih);
 
 	if (StatsTracker::useStatistics())
@@ -90,16 +100,16 @@ ExecutorVex::ExecutorVex(
 			interpreterHandler->getOutputFilename("assembly.ll"),
 			mod_opts.ExcludeCovFiles,
 			userSearcherRequiresMD2U());
-
-	sc = new SymSyscalls(this);
 }
 
 ExecutorVex::~ExecutorVex(void)
 {
 	delete xlate_cache;
 	delete xlate;
-	delete sc;
+	if (sfh) delete sfh;
+	sfh = NULL;
 	if (kmodule) delete kmodule;
+	kmodule = NULL;
 }
 
 void ExecutorVex::runImage(void)
@@ -111,7 +121,7 @@ void ExecutorVex::runImage(void)
 	srand(1);
 	srandom(1);
 
-	init_func = getFuncFromAddr((uint64_t)gs->getEntryPoint());
+	init_func = getFuncByAddr((uint64_t)gs->getEntryPoint());
 	state = new ExecutionState(kmodule->getKFunction(init_func));
 
 	/* important to add modules before intializing globals */
@@ -122,6 +132,10 @@ void ExecutorVex::runImage(void)
 
 	prepState(state, init_func);
 	initializeGlobals(*state);
+
+	sfh->bind();
+	kf_scenter = kmodule->getKFunction("sc_enter");
+	assert (kf_scenter && "Could not load sc_enter from runtime library");
 
 	processTree = new PTree(state);
 	state->ptreeNode = processTree->root;
@@ -186,7 +200,7 @@ void ExecutorVex::bindMapping(
 	mmap_os = state->bindMemObj(mmap_mo);
 	for (unsigned int i = 0; i < len; i++) {
 		/* bug fiend note:
-		 * valgrind will complain on this line because of the 
+		 * valgrind will complain on this line because of the
 		 * data[i] on the syspage. Linux keeps a syscall page at
 		 * 0xf..f600000 (vsyscall), but valgrind doesn't know this.
 		 * This is safe, but will need a workaround *eventually* */
@@ -211,7 +225,7 @@ MemoryObject* ExecutorVex::allocRegCtx(ExecutionState* state, Function* f)
 	MemoryObject	*mo;
 	unsigned int	state_regctx_sz;
 	static unsigned id = 0;
-	
+
 	state_regctx_sz = gs->getCPUState()->getStateSize();
 
 	if (f == NULL) f = state->getCurrentKFunc()->function;
@@ -261,12 +275,22 @@ void ExecutorVex::run(ExecutionState &initialState)
 	Executor::run(initialState);
 }
 
-Function* ExecutorVex::getFuncFromAddr(uint64_t guest_addr)
+Function* ExecutorVex::getFuncByAddr(uint64_t guest_addr)
 {
 	uint64_t	host_addr;
 	KFunction	*kf;
 	Function	*f;
 	VexSB		*vsb;
+
+
+	if (	guest_addr == 0 ||
+		((guest_addr > 0x7fffffffffffULL) &&
+		((guest_addr & 0xfffffffffffff000) != 0xffffffffff600000)) ||
+		guest_addr == 0xffffffff)
+	{
+		/* short circuit obviously bad addresses */
+		return NULL;
+	}
 
 	/* XXX */
 	host_addr = guest_addr;
@@ -320,12 +344,6 @@ void ExecutorVex::executeInstruction(
 	Executor::executeInstruction(state, ki);
 }
 
-void ExecutorVex::dumpRegs(ExecutionState& state, std::ostream& os)
-{
-	updateGuestRegs(state);
-	gs->getCPUState()->print(os);
-}
-
 /* need to hand roll our own instRet because we want to be able to
  * jump between super blocks based on ret values */
 void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
@@ -337,8 +355,9 @@ void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
 	 * translate VSB exits into LLVM instructions on the fly */
 	cur_func = (state.stack.back()).kf->function;
 
+
 	vsb = func2vsb_table[(uintptr_t)cur_func];
-	if (vsb == NULL) {
+	if (vsb == NULL && cur_func != kf_scenter->function) {
 		/* no VSB => outcall to externa LLVM bitcode;
 		 * use default KLEE return handling */
 		assert (state.stack.size() > 1);
@@ -346,7 +365,6 @@ void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
 		return;
 	}
 
-	assert (vsb && "Could not translate current function to VSB");
 	handleXfer(state, ki);
 }
 
@@ -419,11 +437,7 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 		handleXferReturn(state, ki);
 		return;
 	case GE_SYSCALL: {
-		bool	ok_sc;
-		in_sc = true;
-		ok_sc = handleXferSyscall(state, ki);
-		if (!ok_sc) terminateStateOnExit(state);
-		in_sc = false;
+		handleXferSyscall(state, ki);
 		return;
 	}
 	case GE_EMWARN:
@@ -459,11 +473,12 @@ void ExecutorVex::xferIterInit(
  * the symbolic function call; probably should try to merge the two */
 bool ExecutorVex::xferIterNext(struct XferStateIter& iter)
 {
+	Function		*iter_f;
 	ref<ConstantExpr>	value;
 	uint64_t		addr;
 	bool			success;
 
-	/* something fucks up tail recursion here. whoops! */
+	iter_f = NULL;
 	while (1) {
 		if (iter.free == NULL) return false;
 
@@ -478,10 +493,8 @@ bool ExecutorVex::xferIterNext(struct XferStateIter& iter)
 		if (!iter.res.first) continue;
 
 		addr = value->getZExtValue();
-		if (	((addr == 0 || addr > 0x7fffffffffffULL) &&
-			((addr & 0xfffffffffffff000) != 0xffffffffff600000)) ||
-			addr == 0xffffffff)
-		{
+		iter_f = getFuncByAddr(addr);
+		if (iter_f == NULL) {
 			fprintf(stderr, "bogus jmp to %p!\n", addr);
 			terminateStateOnError(
 				*(iter.res.first),
@@ -493,8 +506,9 @@ bool ExecutorVex::xferIterNext(struct XferStateIter& iter)
 		break;
 	}
 
-	iter.f = getFuncFromAddr(addr);
-	assert (iter.f != NULL && "BAD FUNCTION TO JUMP TO");
+	assert (iter_f != NULL && "BAD FUNCTION TO JUMP TO");
+	iter.f = iter_f;
+	iter.f_addr = addr;
 
 	// (iter.res.second || !iter.first) => non-unique resolution
 	// normal klee cares about this, we don't
@@ -552,28 +566,28 @@ void ExecutorVex::handleXferCall(ExecutionState& state, KInstruction* ki)
 	}
 }
 
-/* system calls serve three purposes:
- * 1. xfer data
- * 2. manage state
- * 3. launch processes
- *
- * For 1. klee can cheat 100% and just make things symbolic.
- * For 2. klee can get away with acting dumb (just emulate mmap)
- * For 3. bonetown, but we can't handle threads yet anyhow
+/**
+ * Pass return address and register context to sc handler.
+ * SC handler has additional special funcs for manipulating
+ * the register context.
  */
-bool ExecutorVex::handleXferSyscall(
+void ExecutorVex::handleXferSyscall(
 	ExecutionState& state, KInstruction* ki)
 {
-	bool		ret;
-	SyscallParams   sp(gs->getSyscallParams());
+	std::vector< ref<Expr> > 	args;
+	struct XferStateIter		iter;
 
 	fprintf(stderr, "before syscall: states=%d\n", stateManager->size());
-	ret = sc->apply(state, ki, sp);
-	if (ret) handleXferJmp(state, ki);
+
+	/* arg0 = regctx */
+	args.push_back(state.getRegCtx()->getBaseExpr());
+	/* arg1 = jmpptr */
+	args.push_back(eval(ki, 0, state).value);
+
+	executeCall(state, ki, kf_scenter->function, args);
+
 	fprintf(stderr, "after syscall: states=%d. state=%p\n",
 		stateManager->size(), &state);
-
-	return ret;
 }
 
 void ExecutorVex::handleXferReturn(
@@ -592,9 +606,31 @@ void ExecutorVex::handleXferReturn(
 	}
 }
 
+/* this is when the llvm code has a
+ * 'call' which resolves to code we can't link in directly.  */
+void ExecutorVex::callExternalFunction(
+	ExecutionState &state,
+	KInstruction *target,
+	llvm::Function *function,
+	std::vector< ref<Expr> > &arguments)
+{
+	// check if specialFunctionHandler wants it
+	if (sfh->handle(state, function, target, arguments)) {
+		return;
+	}
+
+	std::cerr
+		<< "KLEE:ERROR: Calling non-special external function : "
+		<< function->getNameStr() << "\n";
+	terminateStateOnError(state, "externals disallowed", "user.err");
+}
+
+
+/* copy concrete parts into guest regs. */
 void ExecutorVex::updateGuestRegs(ExecutionState& state)
 {
-	void	*guest_regs;
+	void		*guest_regs;
+
 	guest_regs = gs->getCPUState()->getStateData();
 	state.addressSpace.copyToBuf(state.getRegCtx(), guest_regs);
 }
@@ -880,11 +916,9 @@ void ExecutorVex::makeRangeSymbolic(
 				/* take is excess of length of MO
 				 * Chop off all the tail of the MO */
 				taken = tail_take_bytes;
-				fprintf(stderr, "a\n");
 				makeSymbolicTail(state, mo, taken, name);
 			} else {
 				taken = take_remaining;
-				fprintf(stderr, "b\n");
 				makeSymbolicMiddle(
 					state,
 					mo,
@@ -893,7 +927,6 @@ void ExecutorVex::makeRangeSymbolic(
 					name);
 			}
 		} else {
-			fprintf(stderr, "cXXXXX\n");
 			taken = (take_remaining >= tail_take_bytes) ?
 					tail_take_bytes :
 					take_remaining;
@@ -922,7 +955,7 @@ void ExecutorVex::printStateErrorMessage(
 	os << state.addressSpace.objects;
 
 	os << "\nRegisters: \n";
-	dumpRegs(state, os);
+	gs->getCPUState()->print(os);
 
 	os << "\nStack: \n";
 

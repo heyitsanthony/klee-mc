@@ -1,3 +1,4 @@
+#include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
@@ -56,9 +57,19 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 
 	ret = 0;
 	sys_nr = sp.getSyscall();
+	fprintf(stderr, "Applying: sys=%d\n", sys_nr);
 
 	switch(sys_nr) {
+	case SYS_open:
+		copyInRegMemObj();
+		break;
 	case SYS_read:
+		break;
+	case SYS_munmap:
+		sc_munmap(sp);
+		break;
+	case SYS_mmap:
+		sc_mmap(sp);
 		break;
 	case SYS_fstat:
 	case SYS_stat:
@@ -78,6 +89,37 @@ retire:
 	return ret;
 }
 
+void SyscallsKTest::sc_mmap(SyscallParams& sp)
+{
+	char			*obj_buf;
+	VexGuestAMD64State	*guest_cpu;
+	void			*ret;
+	bool			copied_in;
+
+	copied_in = copyInRegMemObj();
+	assert (copied_in);
+
+	guest_cpu = (VexGuestAMD64State*)guest->getCPUState()->getStateData();
+	ret = mmap(
+		(void*)guest_cpu->guest_RAX,
+		sp.getArg(1),
+		PROT_READ | PROT_WRITE,
+		MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS,
+		-1,
+		0);
+	assert (ret != MAP_FAILED);
+
+	guest->getCPUState()->print(std::cerr);
+	fprintf(stderr, "DESIRED SZ=%d\n", sp.getArg(1));
+	copied_in = copyInMemObj(guest_cpu->guest_RAX, sp.getArg(1));
+	assert (copied_in && "BAD MMAP MEMOBJ");
+}
+
+void SyscallsKTest::sc_munmap(SyscallParams& sp)
+{
+	assert (0 ==1 && "STUB");
+}
+
 /* caller should know the size of the object based on 
  * the syscall's context */
 char* SyscallsKTest::feedMemObj(unsigned int sz)
@@ -85,14 +127,17 @@ char* SyscallsKTest::feedMemObj(unsigned int sz)
 	char			*obj_buf;
 	struct KTestObject	*cur_obj;
 	
+	fprintf(stderr, "feeed me %d\n", sz);
 	if (next_ktest_obj >= ktest->numObjects) {
 		/* request overflow */
+		fprintf(stderr, "OF\n");
 		return NULL;
 	}
 
 	cur_obj = &ktest->objects[next_ktest_obj++];
 	if (cur_obj->numBytes != sz) {
 		/* out of sync-- how to handle? */
+		fprintf(stderr, "CUROBJ: %d\n", cur_obj->numBytes);
 		return NULL;
 	}
 
@@ -105,8 +150,8 @@ char* SyscallsKTest::feedMemObj(unsigned int sz)
 /* XXX the vexguest stuff needs to be pulled into guestcpustate */
 void SyscallsKTest::sc_stat(SyscallParams& sp)
 {
-	if (!copyInMemObj(sp.getArg(1), sizeof(struct stat))) {
-		fprintf(stderr, "failed to copy in memobj\n");
+	if (!copyInRegMemObj()) {
+		fprintf(stderr, "failed to copy in reg mem obj\n");
 		exited = true;
 		fprintf(stderr, 
 			"Do you have the right guest sshot for this ktest?");
@@ -114,8 +159,8 @@ void SyscallsKTest::sc_stat(SyscallParams& sp)
 		return;
 	}
 
-	if (!copyInRegMemObj()) {
-		fprintf(stderr, "failed to copy in reg mem obj\n");
+	if (!copyInMemObj(sp.getArg(1), sizeof(struct stat))) {
+		fprintf(stderr, "failed to copy in memobj\n");
 		exited = true;
 		fprintf(stderr, 
 			"Do you have the right guest sshot for this ktest?");

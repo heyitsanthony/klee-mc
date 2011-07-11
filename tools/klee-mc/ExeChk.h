@@ -19,8 +19,7 @@ public:
 
 	virtual void runImage(void);
 protected:
-	virtual bool handleXferSyscall(
-		ExecutionState& state, KInstruction* ki);
+	virtual void handleXferSyscall(ExecutionState& state, KInstruction* ki);
 
 	virtual void handleXfer(ExecutionState& state, KInstruction *ki);
 private:
@@ -39,6 +38,7 @@ private:
 
 	char		*saved_klee_cpustate;
 	char		*saved_jit_cpustate;
+	bool		exited;
 };
 
 }

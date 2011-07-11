@@ -535,3 +535,13 @@ KFunction* KModule::getKFunction(llvm::Function* f) const
 
 	return it->second;
 }
+
+KFunction* KModule::getKFunction(const char* fname) const
+{
+	Function	*f;
+
+	f = module->getFunction(fname);
+	if (f == NULL) return NULL;
+
+	return getKFunction(f);
+}

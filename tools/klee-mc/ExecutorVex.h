@@ -19,11 +19,12 @@ class Function;
 class GlobalVariable;
 }
 
-namespace klee {  
+namespace klee {
 class KModule;
+class KFunction;
 class MemoryObject;
 class ObjectState;
-class SymSyscalls;
+class SyscallSFH;
 
 // ugh g++, you delicate garbage
 typedef __gnu_cxx::hash_map<uintptr_t /* Func*/, VexSB*> func2vsb_map;
@@ -62,10 +63,11 @@ public:
 	ObjectState* getRegObj(ExecutionState&);
 	void dumpSCRegs(const std::string& fname);
 protected:
+	virtual llvm::Function* getFuncByAddr(uint64_t addr);
   	virtual void executeInstruction(
 		ExecutionState &state, KInstruction *ki);
 	virtual void executeCallNonDecl(
-		ExecutionState &state, 
+		ExecutionState &state,
 		KInstruction *ki,
 		llvm::Function *f,
 		std::vector< ref<Expr> > &arguments) { assert (0 == 1 && "STUB"); }
@@ -76,9 +78,9 @@ protected:
 		ExecutionState &state,
 		KInstruction *target,
 		llvm::Function *function,
-		std::vector< ref<Expr> > &arguments) { assert (0 == 1 && "STUB"); }
+		std::vector< ref<Expr> > &arguments);
 
-	virtual bool handleXferSyscall(
+	virtual void handleXferSyscall(
 		ExecutionState& state, KInstruction* ki);
 	void handleXferJmp(
 		ExecutionState& state, KInstruction* ki);
@@ -93,7 +95,6 @@ protected:
 
 	VexXlate	*xlate;
 	Guest		*gs;
-	SymSyscalls	*sc;
 
 private:
 	void markExitIgnore(ExecutionState& state);
@@ -123,15 +124,12 @@ private:
 	void prepState(ExecutionState* state, llvm::Function*);
 	void setupRegisterContext(ExecutionState* state, llvm::Function* f);
 	void setupProcessMemory(ExecutionState* state, llvm::Function* f);
-	llvm::Function* getFuncFromAddr(uint64_t addr);
 	void allocGlobalVariableDecl(
 		ExecutionState& state,
 		const llvm::GlobalVariable& gv);
 	void allocGlobalVariableNoDecl(
 		ExecutionState& state,
 		const llvm::GlobalVariable& gv);
-
-	void dumpRegs(ExecutionState& s, std::ostream& os);
 
 	void handleXferCall(
 		ExecutionState& state, KInstruction* ki);
@@ -144,6 +142,7 @@ private:
 		ref<Expr>	v;
 		ExecutionState* free;
 		llvm::Function*	f;
+		uint64_t	f_addr;
 		StatePair 	res;
 		bool		first;
 	};
@@ -162,6 +161,9 @@ private:
 
 	bool		dump_funcs;
 	bool		in_sc;
+
+	KFunction		*kf_scenter;
+	SyscallSFH		*sfh;
 };
 
 }

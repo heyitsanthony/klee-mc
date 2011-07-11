@@ -150,30 +150,72 @@ MemoryObject *MemoryManager::allocateFixed(
   return res;
 }
 
-#if 0
-MemoryObject *MemoryManager::allocFixedHeap(
-	uint64_t address,
-	uint64_t size,
-	const llvm::Value *allocSite,
-	ExecutionState *state)
+MemoryObject *MemoryManager::allocateAligned(
+  uint64_t size,
+  unsigned pow2,
+  const llvm::Value *allocSite,
+  ExecutionState *state)
 {
-	MemoryObject *res;
+  if (!isGoodSize(size)) return NULL;
+  if (size == 0) return NULL;
 
-	assert (state && "Insufficient MallocKey data");
-	assert (size != 0);
+  assert(state  && "Insufficient MallocKey data");
+  MallocKey mallocKey(allocSite,
+                      state->mallocIterations[allocSite]++,
+                      size, true, false, false);
+  HeapObject *heapObj = NULL;
 
-	MallocKey mallocKey(
-		allocSite,
-		state->mallocIterations[allocSite]++,
-		size, false, true, true);
+  // if we used to have an object with this mallocKey, reuse the same size
+  // so we can get hits in the cache and RWset
+  MallocKey::seensizes_ty::iterator it;
+  if (allocSite &&
+      (it = MallocKey::seenSizes.find(mallocKey)) !=
+        MallocKey::seenSizes.end()) {
+    std::set<uint64_t> &sizes = it->second;
+    std::set<uint64_t>::iterator it2 = sizes.lower_bound(size);
+    if(it2 != sizes.end() && *it2 > size)
+      mallocKey.size = *it2;
+  }
 
-	++stats::allocations;
-	res = new MemoryObject(address, size, mallocKey);
+  heapObj = new HeapObject(size, 12);
+  ++stats::allocations;
 
-	assert ((state->isReplay() || state->isReplayDone()) && "???");
-	state->memObjects.push_back(ref<MemoryObject>(res));
+  if(allocSite) MallocKey::seenSizes[mallocKey].insert(mallocKey.size);
 
-	objects.insert(res);
-	return res;
+  heapObjects.insert(std::make_pair(mallocKey, heapObj));
+
+  bool anonymous = !state;
+  MemoryObject *res;
+
+  res = new MemoryObject(heapObj->address, size, mallocKey, heapObj);
+
+  // if not replaying state, add reference to heap object
+  if (state->isReplay || state->isReplayDone())
+    anonymous |= !state->pushHeapRef(heapObj);
+
+  // add reference to memory object
+  state->memObjects.push_back(ref<MemoryObject>(res));
+
+  // heap object anonymously allocated; keep references to such objects so
+  // they're freed on exit. These include globals, etc.
+  if(anonymous)
+    anonHeapObjs.push_back(ref<HeapObject>(heapObj));
+
+  objects.insert(res);
+  return res;
 }
-#endif
+
+void MemoryManager::dropHeapObj(HeapObject* ho)
+{
+	// remove from heapObjects multimap
+	foreach (hit,
+		heapObjects.begin(),
+		heapObjects.end())
+	{
+		HeapObject *heapObj = hit->second;
+		if(heapObj == ho) {
+			heapObjects.erase(hit);
+			break;
+		}
+	}
+}

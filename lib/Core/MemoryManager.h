@@ -56,11 +56,15 @@ namespace klee {
 
     MemoryObject *allocate(uint64_t size, bool isLocal, bool isGlobal,
                            const llvm::Value *allocSite, ExecutionState *state);
+
+    MemoryObject *allocateAligned(
+    	uint64_t size, unsigned pow2,
+	const llvm::Value *allocSite, ExecutionState *state);
     MemoryObject *allocateFixed(uint64_t address, uint64_t size,
                                 const llvm::Value *allocSite,
                                 ExecutionState *state);
-
   private:
+    void dropHeapObj(HeapObject* ho);
     bool isGoodSize(uint64_t) const;
   };
 

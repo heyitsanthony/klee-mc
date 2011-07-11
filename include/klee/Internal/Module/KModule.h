@@ -123,6 +123,7 @@ namespace klee {
 
     KFunction* addFunction(llvm::Function *f);
     KFunction* getKFunction(llvm::Function* f) const;
+    KFunction* getKFunction(const char* name) const;
 
     std::vector<KFunction*>::const_iterator kfuncsBegin() const
     { return functions.begin(); }

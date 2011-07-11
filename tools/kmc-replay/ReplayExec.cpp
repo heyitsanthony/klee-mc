@@ -111,6 +111,7 @@ uint8_t* ReplayExec::verifyWithRegLog(void)
 		
 	}
 
+	fprintf(stderr, "REGLOGOK\n");
 	delete [] mask_buf;
 	delete [] reg_buf;
 	return NULL;
