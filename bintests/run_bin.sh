@@ -30,7 +30,7 @@ do
 	klee-mc --guest-type=sshot - $line >stdout 2>stderr &
 	kmcpid="$!"
 
-	export TIMEOUT=60
+	export TIMEOUT=120
 	( sleep $TIMEOUT && kill -s SIGUSR1 $kmcpid >/dev/null 2>&1 && echo "TIMEDOUT">>timeout.txt && echo "KABOOM. " && sleep $TIMEOUT && kill -9 $kmcpid ) &
 
 	wait $kmcpid && echo "Done."
