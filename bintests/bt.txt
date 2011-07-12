@@ -101,7 +101,7 @@
 /usr/bin/mpcdec asd
 /usr/bin/mpcenc asd
 /usr/bin/pdfinfo asd.pdf
-/usr/bin/otfinfo -sfzpg asd
+/usr/bin/otfinfo -t asd
 /usr/bin/gifinfo
 /usr/bin/tiffinfo -s -w -z -D -c asd.tiff
 /usr/bin/convert asd asd.jpg

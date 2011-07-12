@@ -1,7 +1,11 @@
 #define _LARGEFILE64_SOURCE
 
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <sys/mman.h>
 #include <sys/time.h>
+#include <sys/times.h>
 #include <sys/resource.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -66,15 +70,16 @@ static void sc_mmap(void* regfile)
 	uint64_t	addr;
 	uint64_t	len;
 	void		*new_regs;
-	
+
 	len = klee_get_value(GET_ARG1(regfile));
 	new_regs = kmc_sc_regs(regfile);
+
 	if (GET_ARG0(regfile) == 0) {
-		addr = kmc_alloc_aligned(len, "mmap");
+		addr = (uint64_t)kmc_alloc_aligned(len, "mmap");
 		if (addr == 0) addr = (uint64_t)MAP_FAILED;
 	} else {
 		addr = klee_get_value(GET_ARG0(regfile));
-		klee_define_fixed_object(addr, len);
+		klee_define_fixed_object((void*)addr, len);
 	}
 
 	sc_ret_v(new_regs, addr);
@@ -92,19 +97,19 @@ static void sc_munmap(void* regfile)
 	sc_ret_v(regfile, 0);
 }
 
-#define UNIMPL_SC(x)					\
-	case	SYS_##x:				\
-		klee_report_error(			\
-			__FILE__, __LINE__,		\
+#define UNIMPL_SC(x)						\
+	case SYS_##x:						\
+		klee_report_error(				\
+			__FILE__, __LINE__,			\
 			"Unimplemented syscall "#x, "sc.err");	\
 		break;
-#define FAKE_SC(x)					\
-	case	SYS_##x:				\
+#define FAKE_SC(x)							\
+	case SYS_##x:							\
 		klee_warning_once("Faking successful syscall "#x);	\
-		sc_ret_v(regfile, 0);			\
+		sc_ret_v(regfile, 0);					\
 		break;
 #define FAKE_SC_RANGE(x,y,z)						\
-	case	SYS_##x:						\
+	case SYS_##x:							\
 		klee_warning_once("Faking range syscall "#x);		\
 		sc_ret_range(kmc_sc_regs(regfile), y, z);		\
 		break;
@@ -122,6 +127,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 	unsigned int		sys_nr;
 
 	sys_nr = GET_SYSNR(regfile);
+	if (klee_is_symbolic(sys_nr)) {
+		klee_warning_once("Resolving symbolic syscall nr");
+		sys_nr = klee_get_value(sys_nr);
+	}
 
 	switch (sys_nr) {
 	case SYS_open:
@@ -139,12 +148,13 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	case SYS_exit:
 	case SYS_exit_group: {
-		uint64_t exit_code; 
+		uint64_t exit_code;
 		exit_code = klee_get_value(GET_ARG0(regfile));
 		sc_ret_v(regfile, exit_code);
 		kmc_exit(exit_code);
-		break;
 	}
+	break;
+
 	case SYS_getgroups:
 		sc_ret_range(kmc_sc_regs(regfile), -1, 2);
 		make_sym(GET_ARG1(regfile), GET_ARG0(regfile), "getgroups");
@@ -181,10 +191,11 @@ void* sc_enter(void* regfile, void* jmpptr)
 		if ((int64_t)GET_RAX(new_regs) == -1) {
 			break;
 		}
-		klee_assume(GET_RAX(new_regs) == len);
+		sc_ret_v(new_regs, len);
 		make_sym(GET_ARG1(regfile), len, "readbuf");
-		break;
 	}
+	break;
+
 	case SYS_sched_setaffinity:
 	case SYS_sched_getaffinity:
 		sc_ret_v(regfile, -1);
@@ -195,21 +206,11 @@ void* sc_enter(void* regfile, void* jmpptr)
 		if ((int64_t)GET_RAX(new_regs) == -1) {
 			break;
 		}
-		klee_assume(GET_RAX(new_regs) == 0);
+		sc_ret_v(new_regs, 0);
 		make_sym(GET_ARG2(regfile), sizeof(struct stat), "newstatbuf");
-		break;
 	}
-	case SYS_readlink: {
-		/* keep the string short since we're pure symbolic now */
-		/* In the future, use system information to satisfy this */
-		uint64_t	addr = klee_get_value(GET_ARG0(new_regs));
-		klee_warning_once("bogus readlink");
-		new_regs = kmc_sc_regs(regfile);
-		sc_ret_range(new_regs, 1, 2);
-		make_sym(addr, GET_ARG2(regfile), "readlink");
-		((char*)addr)[GET_ARG0(new_regs)] = '\0';
-		break;
-	}
+	break;
+
 	case SYS_lseek:
 		klee_warning_once("lseek [-1, 4096]");
 		sc_ret_range(kmc_sc_regs(regfile), -1, 4096);
@@ -227,7 +228,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		if ((int64_t)GET_RAX(new_regs) == -1) {
 			break;
 		}
-		klee_assume(GET_RAX(new_regs) == 0);
+		sc_ret_v(new_regs, 0);
 		make_sym(GET_ARG1(regfile), sizeof(struct stat), "statbuf");
 		break;
 	}
@@ -243,21 +244,32 @@ void* sc_enter(void* regfile, void* jmpptr)
 		uint64_t addr = klee_get_value(GET_ARG0(regfile));
 
 		new_regs = kmc_sc_regs(regfile);
-		if ((int64_t)GET_RAX(new_regs) == -1) 
-			break;
-
-		make_sym(GET_ARG0(regfile), GET_ARG1(regfile), "cwdbuf");
-		klee_assume(
-			GET_RAX(new_regs) >= 1 &&
-			GET_RAX(new_regs) < GET_ARG1(regfile));
-		((char*)addr)[GET_RAX(new_regs)] = '\0';
+		if (	GET_RAX(new_regs) >= 1 &&
+			GET_RAX(new_regs) < GET_ARG1(regfile))
+		{
+			make_sym(GET_ARG0(regfile), GET_ARG1(regfile), "cwdbuf");
+			((char*)addr)[GET_RAX(new_regs)] = '\0';
+		} else {
+			sc_ret_v(new_regs, -1);
+		}
 		break;
 	}
+	case SYS_sched_getscheduler:
+		klee_warning_once("Pure symbolic on sched_getscheduler");
+		kmc_sc_regs(regfile);
+		break;
+	case SYS_sched_getparam:
+		klee_warning_once("Blindly OK'd sched_getparam");
+		sc_ret_v(regfile, 0);
+		break;
 	case SYS_close:
 		sc_ret_v(regfile, 0);
 		break;
 	case SYS_dup:
 		sc_ret_ge0(kmc_sc_regs(regfile));
+		break;
+	case SYS_setrlimit:
+		sc_ret_or(kmc_sc_regs(regfile), -1, 0);
 		break;
 	case SYS_getrlimit:
 		make_sym(GET_ARG1(regfile), sizeof(struct rlimit), "getrlimit");
@@ -278,20 +290,114 @@ void* sc_enter(void* regfile, void* jmpptr)
 	FAKE_SC(fchmod)
 	FAKE_SC(fchown)
 	FAKE_SC(utimensat)
+	case SYS_nanosleep: {
+		uint64_t	dst_addr = klee_get_value(GET_ARG1(regfile));
+		if (dst_addr != 0) {
+			make_sym(
+				dst_addr,
+				sizeof(struct timespec),
+				"nanosleep");
+		}
+		sc_ret_v(regfile, 0);
+		break;
+	}
+	UNIMPL_SC(select);
+	UNIMPL_SC(poll)
+	UNIMPL_SC(clone)
+	case SYS_setsockopt:
+		sc_ret_v(regfile, 0);
+		break;
+	case SYS_sendto:
+		sc_ret_or(kmc_sc_regs(regfile), -1, GET_ARG2(regfile));
+		break;
+	case SYS_bind:
+		sc_ret_or(kmc_sc_regs(regfile), 0, -1);
+		break;
+	case SYS_chmod:
+		klee_warning_once("phony chmod");
+		sc_ret_v(regfile, 0);
+		break;
+	case SYS_mkdir:
+		klee_warning_once("phony mkdir");
+		sc_ret_v(regfile, 0);
+		break;
+	case SYS_connect:
+		sc_ret_or(kmc_sc_regs(regfile), -1, 0);
+		break;
+	case SYS_epoll_create:
+		klee_warning_once("phony epoll_creat call");
+		new_regs = kmc_sc_regs(regfile);
+		if (GET_RAX(new_regs) == -1)
+			break;
+		klee_assume(new_regs > 3 && new_regs < 4096);
+		break;
+
+	case SYS_getsockname:
+		new_regs = kmc_sc_regs(regfile);
+		if ((int64_t)GET_RAX(new_regs) == -1)
+			break;
+
+		klee_assume(GET_RAX(new_regs) == 0);
+		make_sym(GET_ARG1(regfile),
+			sizeof(struct sockaddr_in),
+			"getsockname");
+		*((socklen_t*)GET_ARG2(regfile)) = sizeof(struct sockaddr_in);
+		break;
+
+	case SYS_pipe2:
+	case SYS_pipe:
+		klee_warning_once("phony pipe");
+		sc_ret_or(kmc_sc_regs(regfile), -1, 0);
+		break;
 
 	case SYS_mmap:
 		sc_mmap(regfile);
 		break;
+	case SYS_socket:
+		klee_warning_once("phony socket call");
+		sc_ret_range(kmc_sc_regs(regfile), -1, 4096);
+		break;
+	case SYS_chdir:
+		klee_warning_once("phony chdir");
+		sc_ret_v(regfile, 0);
+		break;
+	UNIMPL_SC(readlinkat)
 	UNIMPL_SC(mremap)
-	default: {
-		kmc_sc_bad(klee_get_value(sys_nr));
+	case SYS_creat:
+		klee_warning_once("phony creat call");
+		new_regs = kmc_sc_regs(regfile);
+		if (GET_RAX(new_regs) == -1)
+			break;
+		klee_assume(new_regs > 3 && new_regs < 4096);
+	break;
+	case SYS_readlink:
+	{
+		/* keep the string short since we're pure symbolic now */
+		/* In the future, use system information to satisfy this */
+		uint64_t	addr  = klee_get_value(GET_ARG1(regfile));
+		klee_warning_once("bogus readlink");
+		new_regs = kmc_sc_regs(regfile);
+		klee_assume(GET_ARG2(regfile) >= 2);
+		sc_ret_range(new_regs, 1, 2);
+		make_sym(addr, GET_ARG2(regfile), "readlink");
+		((char*)addr)[GET_ARG2(new_regs)] = '\0';
+	}
+	break;
+
+	case SYS_times:
+		kmc_sc_regs(regfile);
+		make_sym((void*)klee_get_value(GET_ARG0(regfile)), sizeof(struct tms), "times");
+	break;
+
+	default:
+		kmc_sc_bad(sys_nr);
+		kmc_sc_bad(SYS_readlink);
 		klee_report_error(
 			__FILE__,
-			__LINE__, 
+			__LINE__,
 			"Unknown Syscall",
-			"sys.err");
-		return jmpptr;
-	}
+			"sc.err");
+		break;
 	}
 
 	return jmpptr;

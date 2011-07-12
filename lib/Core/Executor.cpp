@@ -678,7 +678,6 @@ Executor::fork(
   // need a copy telling us whether or not we need to add constraints later;
   // especially important if we skip a fork for whatever reason
   fi.feasibleTargets = fi.validTargets;
-
   assert(fi.validTargets && "invalid set of fork conditions");
 
   fi.wasReplayed = false;
@@ -1784,11 +1783,14 @@ void Executor::instSwitch(ExecutionState& state, KInstruction *ki)
     for(unsigned i = 0; i < cases; ++i) {
       // default to infeasible target
       std::map<BasicBlock*, ref<Expr> >::iterator it =
-        targets.insert(std::make_pair(si->getSuccessor(i),
-        ConstantExpr::alloc(0, Expr::Bool))).first;
+        targets.insert(
+          std::make_pair(
+            si->getSuccessor(i),
+            ConstantExpr::alloc(0, Expr::Bool))).first;
       // set unique target as feasible
-      if (i == index)
+      if (i == index) {
         it->second = ConstantExpr::alloc(1, Expr::Bool);
+      }
     }
   } else {
     ref<Expr> isDefault = ConstantExpr::alloc(1, Expr::Bool);
@@ -1824,6 +1826,7 @@ void Executor::instSwitch(ExecutionState& state, KInstruction *ki)
 
   for(index = 0; index < resultStates.size(); index++) {
     ExecutionState *es = resultStates[index];
+
     if (!es) continue;
 
     BasicBlock *destBlock = caseDests[index];
@@ -1831,8 +1834,10 @@ void Executor::instSwitch(ExecutionState& state, KInstruction *ki)
     unsigned entry = kf->basicBlockEntry[destBlock];
 
     if (es->isCompactForm && kf->trackCoverage &&
-        theStatisticManager->getIndexedValue(stats::uncoveredInstructions,
-        kf->instructions[entry]->info->id)) {
+        theStatisticManager->getIndexedValue(
+          stats::uncoveredInstructions,
+          kf->instructions[entry]->info->id))
+    {
       ExecutionState *newState = es->reconstitute(*initialStateCopy);
       replaceStateImmForked(es, newState);
       es = newState;
@@ -1842,8 +1847,10 @@ void Executor::instSwitch(ExecutionState& state, KInstruction *ki)
 
     // Update coverage stats
     if (kf->trackCoverage &&
-        theStatisticManager->getIndexedValue(stats::uncoveredInstructions,
-        kf->instructions[entry]->info->id)) {
+        theStatisticManager->getIndexedValue(
+          stats::uncoveredInstructions,
+          kf->instructions[entry]->info->id))
+    {
       es->coveredNew = true;
       es->instsSinceCovNew = 1;
     }
