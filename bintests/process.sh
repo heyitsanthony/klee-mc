@@ -13,7 +13,7 @@ for a in bintests/out/*/klee-last/*err; do
 	cat bintests/out/$base/line
 	echo "</cmdline>"
 	echo "<frames>"
-	grep Stack -A5 $a | tail -n4 | awk ' { print "<frame>"$0"</frame>" } '
+	grep Stack -A30 $a | grep "^[[:space:]]*#" | awk ' { print "<frame>"$0"</frame>" } '
 	echo "</frames>"
 
 	consline=`grep -n "^Constraints" $a | cut -f1 -d':'`
