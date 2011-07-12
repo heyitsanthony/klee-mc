@@ -39,6 +39,8 @@
 /usr/bin/gif2ps asd.gif
 /usr/bin/gifasm 1.gif 2.gif
 /usr/bin/gif2swf asd.gif
+/usr/bin/gifflip asd.gif
+/usr/bin/gifwedge asd.gif
 /usr/bin/git add asd
 /usr/bin/git log
 /usr/bin/gnuplot
@@ -52,7 +54,7 @@
 /usr/bin/isodump asd.img
 /usr/bin/isoinfo -i a asd.img
 /usr/bin/isosize asd.img
-/usr/bin/jpeg2ktopam 
+/usr/bin/jpeg2ktopam
 /usr/bin/json_verify
 /usr/bin/json_reformat
 /usr/bin/lame in out
@@ -74,6 +76,10 @@
 /usr/bin/pdf2swf asd.pdf
 /usr/bin/pdftohtml asd.pdf
 /usr/bin/pngtopam asd.pnm
+/usr/bin/png2swf asd.png
+/usr/bin/pngtopnm
+/usr/bin/as86 asd.s
+/usr/sbin/lspci -vvv
 /usr/bin/rdesktop asd.com:12345
 /usr/bin/rdfdump asd
 /usr/bin/lsusb
@@ -120,3 +126,15 @@
 /sbin/xfs_repair asd
 /sbin/reiserfsck asd
 /usr/bin/dig asd
+/usr/sbin/iscsi-iname
+/usr/sbin/arpd
+/usr/sbin/avahi-daemon
+/usr/sbin/rarpd
+/usr/sbin/fingerd
+/usr/sbin/metalog
+/usr/sbin/nginx
+/usr/sbin/smartd
+/usr/sbin/tracepath asd.com
+/usr/sbin/tftpd
+/sbin/dhcpcd asd
+/sbin/udevd

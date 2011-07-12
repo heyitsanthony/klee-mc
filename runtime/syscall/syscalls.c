@@ -28,6 +28,9 @@ void* kmc_alloc_aligned(uint64_t, const char* name);
 #define GET_ARG0(x)	((VexGuestAMD64State*)x)->guest_RDI
 #define GET_ARG1(x)	((VexGuestAMD64State*)x)->guest_RSI
 #define GET_ARG2(x)	((VexGuestAMD64State*)x)->guest_RDX
+#define GET_ARG3(x)	((VexGuestAMD64State*)x)->guest_R10
+#define GET_ARG4(x)	((VexGuestAMD64State*)x)->guest_R8
+#define GET_ARG5(x)	((VexGuestAMD64State*)x)->guest_R9
 #define GET_SYSNR(x)	GET_RAX(x)
 
 static void sc_ret_le0(void* regfile)
@@ -306,6 +309,18 @@ void* sc_enter(void* regfile, void* jmpptr)
 	UNIMPL_SC(clone)
 	case SYS_setsockopt:
 		sc_ret_v(regfile, 0);
+		break;
+	case SYS_recvfrom:
+		make_sym(GET_ARG1(regfile), GET_ARG2(regfile), "recvfrom_buf");
+		if (GET_ARG4(regfile))
+			make_sym(
+				GET_ARG4(regfile),
+				sizeof(struct sockaddr_in),
+				"recvfrom_sa");
+		if (GET_ARG5(regfile) != 0) {
+			*((socklen_t*)GET_ARG5(regfile)) = sizeof(struct sockaddr_in);
+		}
+		sc_ret_v(regfile, GET_ARG2(regfile));
 		break;
 	case SYS_sendto:
 		sc_ret_or(kmc_sc_regs(regfile), -1, GET_ARG2(regfile));
