@@ -21,7 +21,8 @@ namespace klee {
   class Expr;
   class SolverImpl;
 
-  struct Query {
+  class Query
+  {
   public:
     const ConstraintManager &constraints;
     ref<Expr> expr;
@@ -30,10 +31,10 @@ namespace klee {
       : constraints(_constraints), expr(_expr) {
     }
 
+    virtual ~Query() {}
+
     /// withExpr - Return a copy of the query with the given expression.
-    Query withExpr(ref<Expr> _expr) const {
-      return Query(constraints, _expr);
-    }
+    Query withExpr(ref<Expr> _expr) const { return Query(constraints, _expr); }
 
     /// withFalse - Return a copy of the query with a false expression.
     Query withFalse() const {
@@ -41,9 +42,9 @@ namespace klee {
     }
 
     /// negateExpr - Return a copy of the query with the expression negated.
-    Query negateExpr() const {
-      return withExpr(Expr::createIsZero(expr));
-    }
+    Query negateExpr() const { return withExpr(Expr::createIsZero(expr)); }
+
+    unsigned hash(void) const;
   };
 
   struct sockaddr_in_opt
@@ -55,6 +56,7 @@ namespace klee {
     bool null() const { return str.empty(); }
   };
 
+  class TimingSolver;
   class Solver {
     // DO NOT IMPLEMENT.
     Solver(const Solver&);
@@ -70,7 +72,12 @@ namespace klee {
   public:
     /// validity_to_str - Return the name of given Validity enum value.
     static const char *validity_to_str(Validity v);
-
+    static TimingSolver* createChain(
+	double timeout,
+	std::string queryLogPath,
+	std::string stpQueryLogPath,
+	std::string queryPCLogPath,
+	std::string stpQueryPCLogPath);
   public:
     SolverImpl *impl;
 

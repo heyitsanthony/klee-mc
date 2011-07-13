@@ -133,10 +133,10 @@ unsigned UpdateList::hash() const {
   unsigned res = 0;
   if (root == NULL) return 0;
 
-  if (root->mallocKey.allocSite)
+  if (root->mallocKey.allocSite) {
     res = root->mallocKey.hash();
-  else {
-    for (unsigned i = 0, res = 0, e = root->name.size(); i != e; ++i)
+  } else {
+    for (unsigned i = 0, e = root->name.size(); i != e; ++i)
       res = (res * Expr::MAGIC_HASH_CONSTANT) + root->name[i];
   }
 

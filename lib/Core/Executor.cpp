@@ -126,10 +126,6 @@ namespace {
                   cl::init(0));
 
   cl::opt<bool>
-  DebugValidateSolver("debug-validate-solver",
-		      cl::init(false));
-
-  cl::opt<bool>
   OnlyOutputStatesCoveringNew("only-output-states-covering-new",
                               cl::init(false));
 
@@ -138,37 +134,10 @@ namespace {
                               cl::init(true));
 
   cl::opt<bool>
-  UseFastCexSolver("use-fast-cex-solver",
-		   cl::init(false));
-
-  cl::opt<bool>
-  UseIndependentSolver("use-independent-solver",
-                       cl::init(true),
-		       cl::desc("Use constraint independence"));
-
-  cl::opt<bool>
   EmitAllErrors("emit-all-errors",
                 cl::init(false),
                 cl::desc("Generate tests cases for all errors "
                          "(default=one per (error,instruction) pair)"));
-
-  cl::opt<bool>
-  UseCexCache("use-cex-cache",
-              cl::init(true),
-	      cl::desc("Use counterexample caching"));
-
-  cl::opt<bool>
-  UseQueryPCLog("use-query-pc-log",
-                cl::init(false));
-
-  cl::opt<bool>
-  UseSTPQueryPCLog("use-stp-query-pc-log",
-                   cl::init(false));
-
-  cl::opt<bool>
-  UseCache("use-cache",
-	   cl::init(true),
-	   cl::desc("Use validity caching"));
 
   cl::opt<bool>
   OnlyReplaySeeds("only-replay-seeds",
@@ -250,14 +219,6 @@ namespace {
            cl::init(false));
 
   cl::opt<bool>
-  UseForkedSTP("use-forked-stp",
-                 cl::desc("Run STP in forked process"));
-
-  cl::opt<sockaddr_in_opt>
-  STPServer("stp-server",
-                 cl::value_desc("host:port"));
-
-  cl::opt<bool>
   ReplayPathOnly("replay-path-only",
             cl::desc("On replay, terminate states when branch decisions have been exhausted"),
             cl::init(true));
@@ -304,36 +265,6 @@ bool llvm::cl::parser<sockaddr_in_opt>::parse(llvm::cl::Option &O,
   return false;
 }
 
-Solver *constructSolverChain(STPSolver *stpSolver,
-                             std::string queryLogPath,
-                             std::string stpQueryLogPath,
-                             std::string queryPCLogPath,
-                             std::string stpQueryPCLogPath)
-{
-  Solver *solver = stpSolver;
-
-  if (UseSTPQueryPCLog)
-    solver = createPCLoggingSolver(solver, stpQueryPCLogPath);
-
-  if (UseFastCexSolver) solver = createFastCexSolver(solver);
-  if (UseCexCache) solver = createCexCachingSolver(solver);
-  if (UseCache) solver = createCachingSolver(solver);
-
-  if (UseIndependentSolver) solver = createIndependentSolver(solver);
-
-  if (DebugValidateSolver)
-    solver = createValidatingSolver(solver, stpSolver);
-
-  if (UseQueryPCLog) solver = createPCLoggingSolver(solver, queryPCLogPath);
-
-  klee_message("BEGIN solver description");
-  solver->printName();
-  klee_message("END solver description");
-
-  return solver;
-}
-
-
 Executor::Executor(
 	const InterpreterOptions &opts,
 	InterpreterHandler *ih)
@@ -355,17 +286,15 @@ Executor::Executor(
     initialStateCopy(0),
     ivcEnabled(false),
     lastMemoryLimitOperationInstructions(0),
-    stpTimeout(MaxInstructionTime ? std::min(MaxSTPTime,MaxInstructionTime) : MaxSTPTime) {
-  STPSolver *stpSolver = new STPSolver(UseForkedSTP, STPServer);
-  Solver *solver =
-    constructSolverChain(stpSolver,
-                         interpreterHandler->getOutputFilename("queries.qlog"),
-                         interpreterHandler->getOutputFilename("stp-queries.qlog"),
-                         interpreterHandler->getOutputFilename("queries.pc"),
-                         interpreterHandler->getOutputFilename("stp-queries.pc"));
-
-  this->solver = new TimingSolver(solver, stpSolver);
-  stpSolver->setTimeout(stpTimeout);
+    stpTimeout(MaxInstructionTime ? 
+      std::min(MaxSTPTime,MaxInstructionTime) : MaxSTPTime)
+{
+  this->solver = Solver::createChain(
+  	stpTimeout,
+	interpreterHandler->getOutputFilename("queries.qlog"),
+	interpreterHandler->getOutputFilename("stp-queries.qlog"),
+	interpreterHandler->getOutputFilename("queries.pc"),
+	interpreterHandler->getOutputFilename("stp-queries.pc"));
 
   memory = new MemoryManager();
   stateManager = new ExeStateManager();
@@ -3639,5 +3568,3 @@ void Executor::executeFree(
 		}
 	}
 }
-
-

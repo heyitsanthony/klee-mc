@@ -12,6 +12,7 @@
 #include "klee/SolverStats.h"
 #include "klee/SolverFormat.h"
 
+#include "../Core/TimingSolver.h"
 #include "STPBuilder.h"
 
 #include "klee/Constraints.h"
@@ -24,7 +25,7 @@
 #include "static/Sugar.h"
 #include "llvm/Support/CommandLine.h"
 
-#define vc_bvBoolExtract IAMTHESPAWNOFSATAN
+#include "PoisonCache.h"
 
 #include <cassert>
 #include <cstdio>
@@ -50,6 +51,91 @@ namespace {
   cl::opt<bool>
   DebugPrintQueries("debug-print-queries",
                     cl::desc("Print queries during execution."));
+
+  cl::opt<bool>
+  DebugValidateSolver("debug-validate-solver",
+		      cl::init(false));
+
+  cl::opt<bool>
+  UseForkedSTP("use-forked-stp",
+                 cl::desc("Run STP in forked process"));
+
+  cl::opt<sockaddr_in_opt>
+  STPServer("stp-server",
+                 cl::value_desc("host:port"));
+
+  cl::opt<bool>
+  UseSTPQueryPCLog("use-stp-query-pc-log",
+                   cl::init(false));
+
+  cl::opt<bool>
+  UseFastCexSolver("use-fast-cex-solver",
+		   cl::init(false));
+
+  cl::opt<bool>
+  UseCexCache("use-cex-cache",
+              cl::init(true),
+	      cl::desc("Use counterexample caching"));
+
+  cl::opt<bool>
+  UseCache("use-cache",
+	   cl::init(true),
+	   cl::desc("Use validity caching"));
+
+  cl::opt<bool>
+  UsePoisonCache("use-poison-cache",
+  	cl::init(false),
+	cl::desc("Cache poisonous queries to disk. Fail on hit."));
+
+  cl::opt<bool>
+  UseIndependentSolver("use-independent-solver",
+                       cl::init(true),
+		       cl::desc("Use constraint independence"));
+
+  cl::opt<bool>
+  UseQueryPCLog("use-query-pc-log",
+                cl::init(false));
+
+}
+
+TimingSolver* Solver::createChain(
+	double timeout,
+	std::string queryLogPath,
+	std::string stpQueryLogPath,
+	std::string queryPCLogPath,
+	std::string stpQueryPCLogPath)
+{
+	STPSolver	*stpSolver;
+	TimingSolver	*ts;
+
+	stpSolver = new STPSolver(UseForkedSTP, STPServer);
+
+	Solver *solver = stpSolver;
+
+	if (UseSTPQueryPCLog) 
+		solver = createPCLoggingSolver(solver, stpQueryPCLogPath);
+
+	if (UsePoisonCache) solver = new Solver(new PoisonCache(solver));
+
+	if (UseFastCexSolver) solver = createFastCexSolver(solver);
+	if (UseCexCache) solver = createCexCachingSolver(solver);
+	if (UseCache) solver = createCachingSolver(solver);
+
+	if (UseIndependentSolver) solver = createIndependentSolver(solver);
+
+	if (DebugValidateSolver)
+		solver = createValidatingSolver(solver, stpSolver);
+
+	if (UseQueryPCLog) solver = createPCLoggingSolver(solver, queryPCLogPath);
+
+	klee_message("BEGIN solver description");
+	solver->printName();
+	klee_message("END solver description");
+
+	ts = new TimingSolver(solver, stpSolver);
+	stpSolver->setTimeout(timeout);
+
+	return ts;
 }
 
 /***/
@@ -1168,4 +1254,17 @@ bool ServerSTPSolverImpl::computeInitialValues(
     printDebugQueries(os, t.check(), objects, values, hasSolution);
 
   return true;
+}
+
+unsigned Query::hash(void) const
+{
+	unsigned	ret;
+
+	ret = expr->hash();
+	foreach (it, constraints.begin(), constraints.end()) {
+		ref<Expr>	e = *it;
+		ret ^= e->hash();
+	}
+
+	return ret;
 }

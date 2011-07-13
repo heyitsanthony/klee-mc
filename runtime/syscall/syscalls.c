@@ -372,6 +372,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		klee_warning_once("phony socket call");
 		sc_ret_range(kmc_sc_regs(regfile), -1, 4096);
 		break;
+	case SYS_fchdir:
 	case SYS_chdir:
 		klee_warning_once("phony chdir");
 		sc_ret_v(regfile, 0);
