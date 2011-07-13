@@ -365,10 +365,22 @@ void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
 		return;
 	}
 
+	if (cur_func == kf_scenter->function) {
+		/* If leaving the sc_enter function, we need to 
+		 * know to pop the stack. Otherwies, it might
+		 * look like a jump and keep stale entries on board */
+		markExit(state, GE_RETURN);
+	}
+
 	handleXfer(state, ki);
 }
 
 void ExecutorVex::markExitIgnore(ExecutionState& state)
+{
+	markExit(state, GE_IGNORE);
+}
+
+void ExecutorVex::markExit(ExecutionState& state, uint8_t v)
 {
 	ObjectState		*state_regctx_os;
 
@@ -377,7 +389,7 @@ void ExecutorVex::markExitIgnore(ExecutionState& state)
 	state.write8(
 		state_regctx_os,
 		gs->getCPUState()->getExitTypeOffset(),
-		GE_IGNORE);
+		v);
 }
 
 ObjectState* ExecutorVex::getRegObj(ExecutionState& state)

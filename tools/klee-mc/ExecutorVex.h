@@ -98,6 +98,7 @@ protected:
 
 private:
 	void markExitIgnore(ExecutionState& state);
+	void markExit(ExecutionState& state, uint8_t);
 
 	void makeSymbolicTail(
 		ExecutionState& state,
