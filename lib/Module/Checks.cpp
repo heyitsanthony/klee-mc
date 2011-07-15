@@ -22,48 +22,75 @@
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Target/TargetData.h"
+#include "static/Sugar.h"
 
 using namespace llvm;
 using namespace klee;
 
 char DivCheckPass::ID;
 
-bool DivCheckPass::runOnModule(Module &M) { 
-  Function *divZeroCheckFunction = 0;
+bool DivCheckPass::runOnModule(llvm::Module &M)
+{
+	bool	changed = false;
+	foreach (f, M.begin(), M.end()) {
+		changed |= runOnFunction(f);
+	}
+	return changed;
+}
 
-  bool moduleChanged = false;
-  
-  for (Module::iterator f = M.begin(), fe = M.end(); f != fe; ++f) {
-    for (Function::iterator b = f->begin(), be = f->end(); b != be; ++b) {
-      for (BasicBlock::iterator i = b->begin(), ie = b->end(); i != ie; ++i) {     
-          if (BinaryOperator* binOp = dyn_cast<BinaryOperator>(i)) {
-          // find all [s|u][div|mod] instructions
-          Instruction::BinaryOps opcode = binOp->getOpcode();
-          if (opcode == Instruction::SDiv || opcode == Instruction::UDiv ||
-              opcode == Instruction::SRem || opcode == Instruction::URem) {
-            
-            CastInst *denominator =
-              CastInst::CreateIntegerCast(i->getOperand(1),
-                                          Type::getInt64Ty(getGlobalContext()),
-                                          false,  /* sign doesn't matter */
-                                          "int_cast_to_i64",
-                                          i);
-            
-            // Lazily bind the function to avoid always importing it.
-            if (!divZeroCheckFunction) {
-              Constant *fc = M.getOrInsertFunction("klee_div_zero_check", 
-                                                   Type::getVoidTy(getGlobalContext()), 
-                                                   Type::getInt64Ty(getGlobalContext()), 
-                                                   NULL);
-              divZeroCheckFunction = cast<Function>(fc);
-            }
+bool DivCheckPass::runOnFunction(Function* f)
+{
+	Module	*M;
+	bool changed = false;
 
-	    CallInst::Create(divZeroCheckFunction, denominator, "", &*i);
-            moduleChanged = true;
-          }
-        }
-      }
-    }
-  }
-  return moduleChanged;
+	M = f->getParent();
+	assert (M != NULL && "Orphaned functoin on function pass");
+
+	foreach (b, f->begin(), f->end()) {
+	foreach (i, b->begin(), b->end()) {
+		BinaryOperator		*binOp;
+		CastInst		*denominator;
+		Instruction::BinaryOps	opcode;
+
+		binOp = dyn_cast<BinaryOperator>(i);
+		if (binOp == NULL) continue;
+
+		// find all [s|u][div|mod] instructions
+		opcode = binOp->getOpcode();
+		if (	opcode != Instruction::SDiv &&
+			opcode != Instruction::UDiv &&
+			opcode != Instruction::SRem &&
+			opcode != Instruction::URem)
+		{
+			continue;
+		}
+
+		denominator = CastInst::CreateIntegerCast(
+			i->getOperand(1),
+			Type::getInt64Ty(getGlobalContext()),
+			false,  /* sign doesn't matter */
+			"int_cast_to_i64",
+			i);
+
+		// Lazily bind the function to avoid always importing it.
+		if (!divZeroCheckFunction) {
+			Constant *fc;
+			fc = M->getOrInsertFunction(
+				"klee_div_zero_check",
+				Type::getVoidTy(getGlobalContext()),
+				Type::getInt64Ty(getGlobalContext()),
+				NULL);
+			divZeroCheckFunction = cast<Function>(fc);
+		}
+
+		CallInst::Create(
+			divZeroCheckFunction,
+			denominator,
+			"",
+			&*i);
+		changed = true;
+	}
+	}
+
+	return changed;
 }

@@ -28,6 +28,8 @@
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/System/Path.h"
 
+#include "static/Sugar.h"
+
 #include <map>
 #include <iostream>
 #include <fstream>
@@ -48,8 +50,10 @@ using namespace klee;
 /// don't allow us to load the archive and run passes prior to linking. Thus,
 /// we've duplicated some of the functionality from
 /// llvm/lib/Linker/LinkArchives.cpp here.
-Module *klee::linkWithLibrary(Module *module, 
-                              const std::string &libraryName) {
+Module *klee::linkWithLibrary(
+	Module *module,
+        const std::string &libraryName)
+{
 
   std::string errMsg;
   llvm::sys::Path libraryPath(libraryName);
@@ -68,8 +72,7 @@ Module *klee::linkWithLibrary(Module *module,
   std::set<ModuleProvider*> modulesToLoad;
   // Walk the symbol table and assemble a list of modules that need to loaded,
   // processed, and linked
-  for (llvm::Archive::SymTabType::const_iterator si = symbols.begin();
-       si != symbols.end(); ++si) {
+  foreach (si, symbols.begin(), symbols.end()) {
     const std::string &symName = si->first;
     // check for \1 sentinel
     if(symName[0] == 1) {
@@ -85,8 +88,7 @@ Module *klee::linkWithLibrary(Module *module,
   Linker linker("klee", module, false);
 
   // Run passes on relevant modules and then link against them
-  for (std::set<ModuleProvider*>::iterator mi = modulesToLoad.begin();
-       mi != modulesToLoad.end(); ++mi) {
+  foreach (mi, modulesToLoad.begin(), modulesToLoad.end()) {
     Module *m = (*mi)->releaseModule(&errMsg);
     if (!m)
       klee_error("failed to release module: %s", errMsg.c_str());
@@ -105,7 +107,7 @@ Module *klee::linkWithLibrary(Module *module,
   // Now link against an unmodified version of the library archive for
   // the common case when no sentinels are found. This avoids code duplication
   // from llvm/lib/Linker/LinkArchives.cpp.
-  bool native = false;    
+  bool native = false;
   if (linker.LinkInFile(libraryPath, native)) {
     assert(0 && "linking in library failed!");
   }
@@ -113,12 +115,15 @@ Module *klee::linkWithLibrary(Module *module,
   return linker.releaseModule();
 }
 
-Function *klee::getDirectCallTarget(CallSite cs) {
+Function *klee::getDirectCallTarget(CallSite cs)
+{
   Value *v = cs.getCalledValue();
 
   if (Function *f = dyn_cast<Function>(v)) {
     return f;
-  } else if (llvm::ConstantExpr *ce = dyn_cast<llvm::ConstantExpr>(v)) {
+  }
+
+  if (llvm::ConstantExpr *ce = dyn_cast<llvm::ConstantExpr>(v)) {
     if (ce->getOpcode()==Instruction::BitCast)
       if (Function *f = dyn_cast<Function>(ce->getOperand(0)))
         return f;
@@ -127,23 +132,22 @@ Function *klee::getDirectCallTarget(CallSite cs) {
     // can be disabled, I just wanted to know when and if it happened.
     assert(0 && "FIXME: Unresolved direct target for a constant expression.");
   }
-  
+
   return 0;
 }
 
 static bool valueIsOnlyCalled(const Value *v) {
-  for (Value::use_const_iterator it = v->use_begin(), ie = v->use_end();
-       it != ie; ++it) {
+  foreach(it, v->use_begin(), v->use_end()) {
     if (const Instruction *instr = dyn_cast<Instruction>(*it)) {
       if (instr->getOpcode()==0) continue; // XXX function numbering inst
       if (!isa<CallInst>(instr) && !isa<InvokeInst>(instr)) return false;
-      
+
       // Make sure that the value is only the target of this call and
       // not an argument.
       for (unsigned i=1,e=instr->getNumOperands(); i!=e; ++i)
         if (instr->getOperand(i)==v)
           return false;
-    } else if (const llvm::ConstantExpr *ce = 
+    } else if (const llvm::ConstantExpr *ce =
                dyn_cast<llvm::ConstantExpr>(*it)) {
       if (ce->getOpcode()==Instruction::BitCast)
         if (valueIsOnlyCalled(ce))

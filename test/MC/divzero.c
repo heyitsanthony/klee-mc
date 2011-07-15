@@ -16,5 +16,5 @@ int z=0;
 
 int main(void)
 {
-	return 1.0 / z;
+	return 10 / z;
 }

@@ -1,8 +1,12 @@
 // RUN: gcc %s -O0 -o %t1
 // RUN: klee-mc - ./%t1 2>%t1.err >%t1.out
 //
-// There should be no pointer errors.
-// RUN: ls klee-last | not grep "ptr.err"
+// There should be some pointer errors since we're giving invalid 
+// syscall parameters.
+// RUN: ls klee-last | grep "ptr.err"
+//
+// Should have a few ktests.
+// RUN: ls klee-last | grep ktest
 //
 #include <sys/types.h>
 #include <sys/syscall.h>
@@ -21,7 +25,8 @@ int main(void)
 	if (r <= 0) return -1;
 
 	/* limit buf[0] to < 5
-	 * (don't try *every* possible syscall [0,255]) */
+	 * (don't try *every* possible syscall [0,255] for now) */
+	/* TODO: try every possible syscall */
 	if (buf[0] > 5) {
 		return -1;
 	}

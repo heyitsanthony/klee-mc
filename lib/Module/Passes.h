@@ -26,44 +26,48 @@ namespace llvm {
 
 namespace klee {
 
-  /// RaiseAsmPass - This pass raises some common occurences of inline
-  /// asm which are used by glibc into normal LLVM IR.
-class RaiseAsmPass : public llvm::ModulePass {
-  static char ID;
+/// RaiseAsmPass - This pass raises some common occurences of inline
+/// asm which are used by glibc into normal LLVM IR.
+class RaiseAsmPass : public llvm::ModulePass
+{
+	static char ID;
 
-  llvm::Function *getIntrinsic(llvm::Module &M,
-                               unsigned IID,
-                               const llvm::Type **Tys,
-                               unsigned NumTys);
-  llvm::Function *getIntrinsic(llvm::Module &M,
-                               unsigned IID, 
-                               const llvm::Type *Ty0) {
-    return getIntrinsic(M, IID, &Ty0, 1);
-  }
-
-  bool runOnInstruction(llvm::Module &M, llvm::Instruction *I);
-
+	static llvm::Function *getIntrinsic(
+		llvm::Module *M,
+		unsigned IID,
+		const llvm::Type **Tys,
+		unsigned NumTys);
+	static llvm::Function *getIntrinsic(
+		llvm::Module *M,
+		unsigned IID,
+		const llvm::Type *Ty0)
+	{
+		return getIntrinsic(M, IID, &Ty0, 1);
+	}
+	static bool runOnInstruction(llvm::Module* M, llvm::Instruction *I);
+	static bool runOnFunction(llvm::Module* M, llvm::Function& F);
 public:
-  RaiseAsmPass() : llvm::ModulePass((intptr_t) &ID) {}
-  
-  virtual bool runOnModule(llvm::Module &M);
+	RaiseAsmPass() : llvm::ModulePass((intptr_t) &ID) {}
+	virtual ~RaiseAsmPass() {}
+	virtual bool runOnModule(llvm::Module &M);
+	bool runOnFunction(llvm::Function* f);
 };
 
-  /// RemoveSentinelsPass - This pass removes '\01' prefix sentinels added by
-  /// llvm-gcc when functions are renamed using __asm__
-class RemoveSentinelsPass : public llvm::ModulePass {
+/// RemoveSentinelsPass - This pass removes '\01' prefix sentinels added by
+/// llvm-gcc when functions are renamed using __asm__
+class RemoveSentinelsPass : public llvm::ModulePass
+{
   static char ID;
-
   bool runOnFunction(llvm::Module &M, llvm::Function *F);
 public:
   RemoveSentinelsPass() : llvm::ModulePass((intptr_t) &ID) {}
-  
   virtual bool runOnModule(llvm::Module &M);
 };
 
   // This is a module pass because it can add and delete module
   // variables (via intrinsic lowering).
-class IntrinsicCleanerPass : public llvm::ModulePass {
+class IntrinsicCleanerPass : public llvm::ModulePass
+{
   static char ID;
   const llvm::TargetData &TargetData;
   llvm::IntrinsicLowering *IL;
@@ -77,37 +81,42 @@ public:
       TargetData(TD),
       IL(new llvm::IntrinsicLowering(TD)),
       LowerIntrinsics(LI) {}
-  ~IntrinsicCleanerPass() { delete IL; } 
-  
+  ~IntrinsicCleanerPass() { delete IL; }
+
   virtual bool runOnModule(llvm::Module &M);
+  bool runOnFunction(llvm::Function* f);
 };
-  
-  // performs two transformations which make interpretation
-  // easier and faster.
-  //
-  // 1) Ensure that all the PHI nodes in a basic block have
-  //    the incoming block list in the same order. Thus the
-  //    incoming block index only needs to be computed once
-  //    for each transfer.
-  // 
-  // 2) Ensure that no PHI node result is used as an argument to
-  //    a subsequent PHI node in the same basic block. This allows
-  //    the transfer to execute the instructions in order instead
-  //    of in two passes.
+
+// performs two transformations which make interpretation
+// easier and faster.
+//
+// 1) Ensure that all the PHI nodes in a basic block have
+//    the incoming block list in the same order. Thus the
+//    incoming block index only needs to be computed once
+//    for each transfer.
+//
+// 2) Ensure that no PHI node result is used as an argument to
+//    a subsequent PHI node in the same basic block. This allows
+//    the transfer to execute the instructions in order instead
+//    of in two passes.
 class PhiCleanerPass : public llvm::FunctionPass {
   static char ID;
 
 public:
   PhiCleanerPass() : llvm::FunctionPass((intptr_t) &ID) {}
-  
+
   virtual bool runOnFunction(llvm::Function &f);
 };
-  
-class DivCheckPass : public llvm::ModulePass {
+
+class DivCheckPass : public llvm::ModulePass
+{
   static char ID;
 public:
-  DivCheckPass(): ModulePass((intptr_t) &ID) {}
-  virtual bool runOnModule(llvm::Module &M);
+  DivCheckPass(): ModulePass((intptr_t) &ID), divZeroCheckFunction(0) {}
+  virtual bool runOnModule(llvm::Module& M);
+  bool runOnFunction(llvm::Function *f);
+private:
+  llvm::Function *divZeroCheckFunction;
 };
 
 /// LowerSwitchPass - Replace all SwitchInst instructions with chained branch
@@ -116,22 +125,22 @@ public:
 class LowerSwitchPass : public llvm::FunctionPass {
 public:
   static char ID; // Pass identification, replacement for typeid
-  LowerSwitchPass() : FunctionPass((intptr_t) &ID) {} 
-  
+  LowerSwitchPass() : FunctionPass((intptr_t) &ID) {}
+
   virtual bool runOnFunction(llvm::Function &F);
-  
+
   struct SwitchCase {
     llvm ::Constant *value;
     llvm::BasicBlock *block;
-    
+
     SwitchCase() : value(0), block(0) { }
     SwitchCase(llvm::Constant *v, llvm::BasicBlock *b) :
       value(v), block(b) { }
   };
-  
+
   typedef std::vector<SwitchCase>           CaseVector;
   typedef std::vector<SwitchCase>::iterator CaseItr;
-  
+
 private:
   void processSwitchInst(llvm::SwitchInst *SI);
   void switchConvert(CaseItr begin,

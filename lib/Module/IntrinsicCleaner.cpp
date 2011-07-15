@@ -23,6 +23,7 @@
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Target/TargetData.h"
 
+#include "static/Sugar.h"
 using namespace llvm;
 
 namespace klee {
@@ -30,14 +31,25 @@ namespace klee {
 char IntrinsicCleanerPass::ID;
 
 bool IntrinsicCleanerPass::runOnModule(Module &M) {
-  bool dirty = false;
-  for (Module::iterator f = M.begin(), fe = M.end(); f != fe; ++f)
-    for (Function::iterator b = f->begin(), be = f->end(); b != be; ++b)
-      dirty |= runOnBasicBlock(*b);
-  return dirty;
+	bool dirty = false;
+	foreach (f, M.begin(), M.end()) {
+		dirty |= runOnFunction(f);
+	}
+	return dirty;
 }
 
-bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b) { 
+bool IntrinsicCleanerPass::runOnFunction(llvm::Function* f)
+{
+	bool dirty = false;
+	foreach(b, f->begin(), f->end()) {
+		dirty |= runOnBasicBlock(*b);
+	}
+	return dirty;
+}
+
+
+bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b)
+{
   bool dirty = false;
   
   unsigned WordSize = TargetData.getPointerSizeInBits() / 8;
@@ -45,7 +57,8 @@ bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b) {
     IntrinsicInst *ii = dyn_cast<IntrinsicInst>(&*i);
     // increment now since LowerIntrinsic deletion makes iterator invalid.
     ++i;  
-    if(ii) {
+    if(!ii) continue;
+
       switch (ii->getIntrinsicID()) {
       case Intrinsic::vastart:
       case Intrinsic::vaend:
@@ -140,7 +153,6 @@ bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b) {
         dirty = true;
         break;
       }
-    }
   }
 
   return dirty;

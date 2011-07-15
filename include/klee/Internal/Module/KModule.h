@@ -24,6 +24,7 @@ namespace llvm {
   class Module;
   class TargetData;
   class Value;
+  class FunctionPassManager;
 }
 
 namespace klee {
@@ -85,6 +86,11 @@ namespace klee {
   };
 
 
+  class RaiseAsmPass;
+  class IntrinsicCleanerPass;
+  class DivCheckPass;
+  class PhiCleanerPass;
+
   class KModule {
   public:
     llvm::Module *module;
@@ -132,14 +138,24 @@ namespace klee {
     { return functions.end(); }
 
   private:
-    void prepareMerge(
-      const Interpreter::ModuleOptions &opts,
-      InterpreterHandler *ih);
-    void outputSource(InterpreterHandler* ih);
+	KFunction* addFunctionProcessed(llvm::Function *f);
+	void prepareMerge(
+		const Interpreter::ModuleOptions &opts,
+		InterpreterHandler *ih);
+	void outputSource(InterpreterHandler* ih);
+	void addMergeExit(llvm::Function* mergeFn, const std::string& name);
+	void passEnforceInvariants(void);
+	void injectRawChecks(const Interpreter::ModuleOptions &opts);
+	void loadIntrinsicsLib(const Interpreter::ModuleOptions &opts);
 
     // Our shadow versions of LLVM structures.
     std::vector<KFunction*> functions;
     std::map<llvm::Function*, KFunction*> functionMap;
+
+    RaiseAsmPass		*fpm_raiseasm;
+    IntrinsicCleanerPass	*fpm_cleaner;
+    DivCheckPass		*fpm_checkdiv;
+    PhiCleanerPass		*fpm_phi;
   };
 } // End klee namespace
 

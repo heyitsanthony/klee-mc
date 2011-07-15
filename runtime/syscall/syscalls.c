@@ -119,9 +119,33 @@ static void sc_munmap(void* regfile)
 
 void make_sym(uint64_t addr, uint64_t len, const char* name)
 {
+	klee_check_memory_access((void*)addr, 1);
 	addr = klee_get_value(addr);
 	len = klee_get_value(len);
 	kmc_make_range_symbolic(addr, len, name);
+}
+
+static void sc_klee(void* regfile)
+{
+	unsigned int	sys_klee_nr;
+
+	sys_klee_nr = GET_ARG0(regfile);
+	switch(sys_klee_nr) {
+	case KLEE_SYS_REPORT_ERROR:
+		klee_report_error(
+			(const char*)GET_ARG1(regfile),
+			GET_ARG2(regfile),
+			(const char*)klee_get_value(GET_ARG3(regfile)),
+			(const char*)klee_get_value(GET_ARG4(regfile)));
+		break;
+	default:
+		klee_report_error(
+			__FILE__,
+			__LINE__,
+			"Unsupported SYS_klee syscall",
+			"kleesc.err");
+		break;
+	}
 }
 
 void* sc_enter(void* regfile, void* jmpptr)
@@ -190,6 +214,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_pread64:
 	case SYS_read: {
 		uint64_t len = klee_get_value(GET_ARG2(regfile));
+
 		new_regs = kmc_sc_regs(regfile);
 		if ((int64_t)GET_RAX(new_regs) == -1) {
 			break;
@@ -342,9 +367,9 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_epoll_create:
 		klee_warning_once("phony epoll_creat call");
 		new_regs = kmc_sc_regs(regfile);
-		if (GET_RAX(new_regs) == -1)
+		if ((int64_t)GET_RAX(new_regs) == -1)
 			break;
-		klee_assume(new_regs > 3 && new_regs < 4096);
+		klee_assume(GET_RAX(new_regs) > 3 && GET_RAX(new_regs) < 4096);
 		break;
 
 	case SYS_getsockname:
@@ -377,14 +402,17 @@ void* sc_enter(void* regfile, void* jmpptr)
 		klee_warning_once("phony chdir");
 		sc_ret_v(regfile, 0);
 		break;
+	case SYS_klee:
+		sc_klee(regfile);
+		break;
 	UNIMPL_SC(readlinkat)
 	UNIMPL_SC(mremap)
 	case SYS_creat:
 		klee_warning_once("phony creat call");
 		new_regs = kmc_sc_regs(regfile);
-		if (GET_RAX(new_regs) == -1)
+		if ((int64_t)GET_RAX(new_regs) == -1)
 			break;
-		klee_assume(new_regs > 3 && new_regs < 4096);
+		klee_assume(GET_RAX(new_regs) > 3 && GET_RAX(new_regs) < 4096);
 	break;
 	case SYS_readlink:
 	{
@@ -402,12 +430,14 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 	case SYS_times:
 		kmc_sc_regs(regfile);
-		make_sym((void*)klee_get_value(GET_ARG0(regfile)), sizeof(struct tms), "times");
+		make_sym(
+			klee_get_value(GET_ARG0(regfile)),
+			sizeof(struct tms),
+			"times");
 	break;
 
 	default:
 		kmc_sc_bad(sys_nr);
-		kmc_sc_bad(SYS_readlink);
 		klee_report_error(
 			__FILE__,
 			__LINE__,

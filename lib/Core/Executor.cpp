@@ -32,36 +32,23 @@
 #include "klee/Interpreter.h"
 #include "klee/SolverStats.h"
 #include "klee/TimerStatIncrementer.h"
-#include "klee/util/Assignment.h"
 #include "klee/util/ExprPPrinter.h"
-#include "klee/util/ExprUtil.h"
-#include "klee/Config/config.h"
 #include "klee/Internal/ADT/KTest.h"
 #include "klee/Internal/ADT/RNG.h"
 #include "klee/Internal/Module/Cell.h"
 #include "klee/Internal/Module/InstructionInfoTable.h"
 #include "klee/Internal/Module/KInstruction.h"
 #include "klee/Internal/Module/KModule.h"
-#include "klee/Internal/Support/FloatEvaluation.h"
 #include "klee/Internal/System/Time.h"
 
-#include "llvm/Attributes.h"
-#include "llvm/BasicBlock.h"
-#include "llvm/Constants.h"
-#include "llvm/Function.h"
-#include "llvm/Instructions.h"
 #include "llvm/IntrinsicInst.h"
 #include "llvm/Module.h"
-#include "llvm/ADT/StringExtras.h"
-#include "llvm/Support/CallSite.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/GetElementPtrTypeIterator.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetData.h"
 
 #include <cassert>
-#include <cstdio>
-#include <cstring>
 #include <algorithm>
 #include <iostream>
 #include <iomanip>
@@ -70,11 +57,9 @@
 #include <vector>
 #include <string>
 
-#include <sys/mman.h>
 #include <netdb.h>
 
 #include <errno.h>
-#include <cxxabi.h>
 
 using namespace llvm;
 using namespace klee;
@@ -286,7 +271,7 @@ Executor::Executor(
     initialStateCopy(0),
     ivcEnabled(false),
     lastMemoryLimitOperationInstructions(0),
-    stpTimeout(MaxInstructionTime ? 
+    stpTimeout(MaxInstructionTime ?
       std::min(MaxSTPTime,MaxInstructionTime) : MaxSTPTime)
 {
   this->solver = Solver::createChain(
@@ -1145,7 +1130,7 @@ void Executor::executeCall(
       new FunctionCallTraceEvent(state, ki, f->getName()));
 
   Instruction *i = ki->inst;
-  Function* f2;
+  Function* f2 = NULL;
   if (!f->isDeclaration() || (f2 = kmodule->module->getFunction(f->getNameStr())))
   {
     /* this is so that vexllvm linked modules work */
@@ -1243,17 +1228,14 @@ bool Executor::isDebugIntrinsic(const Function *f)
   }
 }
 
-static inline const llvm::fltSemantics * fpWidthToSemantics(unsigned width) {
-  switch(width) {
-  case Expr::Int32:
-    return &llvm::APFloat::IEEEsingle;
-  case Expr::Int64:
-    return &llvm::APFloat::IEEEdouble;
-  case Expr::Fl80:
-    return &llvm::APFloat::x87DoubleExtended;
-  default:
-    return 0;
-  }
+static inline const llvm::fltSemantics * fpWidthToSemantics(unsigned width)
+{
+	switch(width) {
+	case Expr::Int32:	return &llvm::APFloat::IEEEsingle;
+	case Expr::Int64:	return &llvm::APFloat::IEEEdouble;
+	case Expr::Fl80:	return &llvm::APFloat::x87DoubleExtended;
+	default:		return 0;
+	}
 }
 
 void Executor::retFromNested(ExecutionState &state, KInstruction *ki)

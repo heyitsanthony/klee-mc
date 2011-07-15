@@ -82,12 +82,16 @@ namespace {
 }
 
 KModule::KModule(Module *_module)
-: module(_module),
-  targetData(new TargetData(module)),
-  dbgStopPointFn(0),
-  kleeMergeFn(0),
-  infos(0),
-  constantTable(0)
+: module(_module)
+, targetData(new TargetData(module))
+, dbgStopPointFn(0)
+, kleeMergeFn(0)
+, infos(0)
+, constantTable(0)
+, fpm_raiseasm(NULL)
+, fpm_cleaner(NULL)
+, fpm_checkdiv(NULL)
+, fpm_phi(NULL)
 {
 }
 
@@ -95,6 +99,11 @@ KModule::~KModule()
 {
 	delete[] constantTable;
 	delete infos;
+
+	if (fpm_raiseasm) delete fpm_raiseasm;
+	if (fpm_cleaner) delete fpm_cleaner;
+	if (fpm_checkdiv) delete fpm_checkdiv;
+	if (fpm_phi) delete fpm_phi;
 
 	foreach (it, functions.begin(), functions.end()) {
 		delete *it;
@@ -211,7 +220,9 @@ void KModule::prepareMerge(
 	const Interpreter::ModuleOptions &opts,
 	InterpreterHandler *ih)
 {
-	Function *mergeFn = module->getFunction("klee_merge");
+	Function *mergeFn;
+
+	mergeFn = module->getFunction("klee_merge");
 	if (!mergeFn) {
 		const llvm::FunctionType *Ty ;
 		Ty =  FunctionType::get(
@@ -224,42 +235,53 @@ void KModule::prepareMerge(
 			module);
 	}
 
+
 	foreach (it, MergeAtExit.begin(), MergeAtExit.end()) {
-		std::string &name = *it;
-		Function *f = module->getFunction(name);
+		addMergeExit(mergeFn, *it);
+	}
+}
 
-		if (!f) {
-			klee_error("can't insert merge-at-exit for: %s (can't find)",
-			name.c_str());
-		} else if (f->isDeclaration()) {
-			klee_error("can't insert merge-at-exit for: %s (external)",
-			name.c_str());
+void KModule::addMergeExit(Function* mergeFn, const std::string& name)
+{
+	Function *f;
+
+	f = module->getFunction(name);
+	if (!f) {
+		klee_error("can't insert merge-at-exit for: %s (can't find)",
+		name.c_str());
+	} else if (f->isDeclaration()) {
+		klee_error("can't insert merge-at-exit for: %s (external)",
+		name.c_str());
+	}
+
+	BasicBlock	*exit;
+	PHINode		*result;
+
+	exit = BasicBlock::Create(getGlobalContext(), "exit", f);
+	result = NULL;
+	if (f->getReturnType() != Type::getVoidTy(getGlobalContext()))
+		result = PHINode::Create(f->getReturnType(), "retval", exit);
+
+	CallInst::Create(mergeFn, "", exit);
+	ReturnInst::Create(getGlobalContext(), result, exit);
+
+	llvm::errs() << "KLEE: adding klee_merge at exit of: " << name << "\n";
+	foreach (bbit, f->begin(), f->end()) {
+		Instruction *i;
+
+		if (&*bbit == exit)
+			continue;
+
+		i = bbit->getTerminator();
+
+		if (i->getOpcode() != Instruction::Ret)
+			continue;
+
+		if (result) {
+			result->addIncoming(i->getOperand(0), bbit);
 		}
-
-		BasicBlock *exit = BasicBlock::Create(getGlobalContext(), "exit", f);
-		PHINode *result = 0;
-
-		if (f->getReturnType() != Type::getVoidTy(getGlobalContext()))
-			result = PHINode::Create(f->getReturnType(), "retval", exit);
-
-		CallInst::Create(mergeFn, "", exit);
-		ReturnInst::Create(getGlobalContext(), result, exit);
-
-		llvm::errs() << "KLEE: adding klee_merge at exit of: " <<
-			name << "\n";
-		foreach (bbit, f->begin(), f->end()) {
-			if (&*bbit == exit) continue;
-
-			Instruction *i = bbit->getTerminator();
-
-			if (i->getOpcode() != Instruction::Ret) continue;
-
-			if (result) {
-				result->addIncoming(i->getOperand(0), bbit);
-			}
-			i->eraseFromParent();
-			BranchInst::Create(exit, bbit);
-		}
+		i->eraseFromParent();
+		BranchInst::Create(exit, bbit);
 	}
 }
 
@@ -355,6 +377,72 @@ void KModule::addModule(Module* in_mod)
 //	assert (isLinked);
 }
 
+// Inject checks prior to optimization... we also perform the
+// invariant transformations that we will end up doing later so that
+// optimize is seeing what is as close as possible to the final
+// module.
+void KModule::injectRawChecks(const Interpreter::ModuleOptions &opts)
+{
+	PassManager pm;
+	pm.add(new RaiseAsmPass());
+	if (opts.CheckDivZero) pm.add(new DivCheckPass());
+
+	// There was a bug in IntrinsicLowering which caches values which
+	// may eventually  deleted (via RAUW).
+	// This should now be fixed in LLVM
+	pm.add(new IntrinsicCleanerPass(*targetData, false));
+	pm.run(*module);
+
+	// Force importing functions required by intrinsic lowering. Kind of
+	// unfortunate clutter when we don't need them but we won't know
+	// that until after all linking and intrinsic lowering is
+	// done. After linking and passes we just try to manually trim these
+	// by name. We only add them if such a function doesn't exist to
+	// avoid creating stale uses.
+
+	const llvm::Type *i8Ty = Type::getInt8Ty(getGlobalContext());
+
+	forceImport(
+		module, "memcpy", PointerType::getUnqual(i8Ty),
+		PointerType::getUnqual(i8Ty),
+		PointerType::getUnqual(i8Ty),
+		targetData->getIntPtrType(getGlobalContext()), (Type*) 0);
+	forceImport(
+		module, "memmove", PointerType::getUnqual(i8Ty),
+		PointerType::getUnqual(i8Ty),
+		PointerType::getUnqual(i8Ty),
+		targetData->getIntPtrType(getGlobalContext()), (Type*) 0);
+	forceImport(
+		module, "memset", PointerType::getUnqual(i8Ty),
+		PointerType::getUnqual(i8Ty),
+		Type::getInt32Ty(getGlobalContext()),
+		targetData->getIntPtrType(getGlobalContext()), (Type*) 0);
+
+	// FIXME: Missing force import for various math functions.
+}
+
+// Finally, run the passes that maintain invariants we expect during
+// interpretation. We run the intrinsic cleaner just in case we
+// linked in something with intrinsics but any external calls are
+// going to be unresolved. We really need to handle the intrinsics
+// directly I think?
+void KModule::passEnforceInvariants(void)
+{
+	PassManager pm;
+
+	pm.add(createCFGSimplificationPass());
+	switch(SwitchType) {
+	case eSwitchTypeInternal: break;
+	case eSwitchTypeSimple: pm.add(new LowerSwitchPass()); break;
+	case eSwitchTypeLLVM:  pm.add(createLowerSwitchPass()); break;
+	default: klee_error("invalid --switch-type");
+	}
+
+	pm.add(new IntrinsicCleanerPass(*targetData));
+	pm.add(new PhiCleanerPass());
+	pm.run(*module);
+}
+
 void KModule::prepare(
 	const Interpreter::ModuleOptions &opts,
 	InterpreterHandler *ih)
@@ -362,73 +450,17 @@ void KModule::prepare(
   if (!MergeAtExit.empty())
   	prepareMerge(opts, ih);
 
-  // Inject checks prior to optimization... we also perform the
-  // invariant transformations that we will end up doing later so that
-  // optimize is seeing what is as close as possible to the final
-  // module.
-  PassManager pm;
-  pm.add(new RaiseAsmPass());
-  if (opts.CheckDivZero) pm.add(new DivCheckPass());
-  // FIXME: This false here is to work around a bug in
-  // IntrinsicLowering which caches values which may eventually be
-  // deleted (via RAUW). This can be removed once LLVM fixes this
-  // issue.
-  pm.add(new IntrinsicCleanerPass(*targetData, false));
-  pm.run(*module);
+  injectRawChecks(opts);
 
-  if (opts.Optimize)
-    Optimize(module);
+  if (opts.Optimize) Optimize(module);
 
-  // Force importing functions required by intrinsic lowering. Kind of
-  // unfortunate clutter when we don't need them but we won't know
-  // that until after all linking and intrinsic lowering is
-  // done. After linking and passes we just try to manually trim these
-  // by name. We only add them if such a function doesn't exist to
-  // avoid creating stale uses.
-
-  const llvm::Type *i8Ty = Type::getInt8Ty(getGlobalContext());
-  forceImport(module, "memcpy", PointerType::getUnqual(i8Ty),
-              PointerType::getUnqual(i8Ty),
-              PointerType::getUnqual(i8Ty),
-              targetData->getIntPtrType(getGlobalContext()), (Type*) 0);
-  forceImport(module, "memmove", PointerType::getUnqual(i8Ty),
-              PointerType::getUnqual(i8Ty),
-              PointerType::getUnqual(i8Ty),
-              targetData->getIntPtrType(getGlobalContext()), (Type*) 0);
-  forceImport(module, "memset", PointerType::getUnqual(i8Ty),
-              PointerType::getUnqual(i8Ty),
-              Type::getInt32Ty(getGlobalContext()),
-              targetData->getIntPtrType(getGlobalContext()), (Type*) 0);
-
-  // FIXME: Missing force import for various math functions.
-
-  // FIXME: Find a way that we can test programs without requiring
-  // this to be linked in, it makes low level debugging much more
-  // annoying.
-  llvm::sys::Path path(opts.LibraryDir);
-  path.appendComponent("libkleeRuntimeIntrinsic.bca");
-  module = linkWithLibrary(module, path.c_str());
+  loadIntrinsicsLib(opts);
 
   // Needs to happen after linking (since ctors/dtors can be modified)
   // and optimization (since global optimization can rewrite lists).
   injectStaticConstructorsAndDestructors(module);
 
-  // Finally, run the passes that maintain invariants we expect during
-  // interpretation. We run the intrinsic cleaner just in case we
-  // linked in something with intrinsics but any external calls are
-  // going to be unresolved. We really need to handle the intrinsics
-  // directly I think?
-  PassManager pm3;
-  pm3.add(createCFGSimplificationPass());
-  switch(SwitchType) {
-  case eSwitchTypeInternal: break;
-  case eSwitchTypeSimple: pm3.add(new LowerSwitchPass()); break;
-  case eSwitchTypeLLVM:  pm3.add(createLowerSwitchPass()); break;
-  default: klee_error("invalid --switch-type");
-  }
-  pm3.add(new IntrinsicCleanerPass(*targetData));
-  pm3.add(new PhiCleanerPass());
-  pm3.run(*module);
+  passEnforceInvariants();
 
   // For cleanliness see if we can discard any of the functions we
   // forced to import.
@@ -462,7 +494,7 @@ void KModule::prepare(
   infos = new InstructionInfoTable(module);
 
   foreach (it, module->begin(), module->end()) {
-    addFunction(it);
+    addFunctionProcessed(it);
   }
 
   if (DebugPrintEscapingFunctions && !escapingFunctions.empty()) {
@@ -472,9 +504,27 @@ void KModule::prepare(
     }
     llvm::errs() << "]\n";
   }
+
+  fpm_raiseasm = new RaiseAsmPass();
+  if (opts.CheckDivZero) fpm_checkdiv = new DivCheckPass();
+  fpm_cleaner = new IntrinsicCleanerPass(*targetData, false);
+  fpm_phi = new PhiCleanerPass();
 }
 
+/* add a function that hasn't been cleaned up by any of our passes */
 KFunction* KModule::addFunction(Function* f)
+{
+	if (f->isDeclaration()) return NULL;
+
+	fpm_raiseasm->runOnFunction(f);
+	if (fpm_checkdiv) fpm_checkdiv->runOnFunction(f);
+	fpm_cleaner->runOnFunction(f);
+	fpm_phi->runOnFunction(*f);
+
+	return addFunctionProcessed(f);
+}
+
+KFunction* KModule::addFunctionProcessed(Function* f)
 {
 	KFunction	*kf;
 
@@ -544,4 +594,14 @@ KFunction* KModule::getKFunction(const char* fname) const
 	if (f == NULL) return NULL;
 
 	return getKFunction(f);
+}
+
+void KModule::loadIntrinsicsLib(const Interpreter::ModuleOptions &opts)
+{
+	// FIXME: Find a way that we can test programs without requiring
+	// this to be linked in, it makes low level debugging much more
+	// annoying.
+	llvm::sys::Path path(opts.LibraryDir);
+	path.appendComponent("libkleeRuntimeIntrinsic.bca");
+	module = linkWithLibrary(module, path.c_str());
 }

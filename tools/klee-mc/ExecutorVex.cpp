@@ -44,10 +44,20 @@ extern bool WriteTraces;
 
 namespace
 {
-  cl::opt<bool>
-  LogRegs("logregs",
-  	cl::desc("Log registers."),
-	cl::init(false));
+	cl::opt<bool> LogRegs(
+		"logregs",
+		cl::desc("Log registers."),
+		cl::init(false));
+
+	cl::opt<bool> OptimizeModule(
+		"optimize",
+		cl::desc("Optimize before execution"),
+		cl::init(false));
+
+	cl::opt<bool> CheckDivZero(
+		"check-div-zero",
+		cl::desc("Inject checks for division-by-zero"),
+		cl::init(false));
 }
 
 ExecutorVex::ExecutorVex(
@@ -63,8 +73,8 @@ ExecutorVex::ExecutorVex(
 	llvm::sys::Path LibraryDir(KLEE_DIR "/" RUNTIME_CONFIGURATION "/lib");
 	Interpreter::ModuleOptions mod_opts(
 		LibraryDir.c_str(),
-		false,
-		false,
+		OptimizeModule,
+		CheckDivZero,
 		std::vector<std::string>());
 
 	assert (gs);
@@ -303,27 +313,6 @@ Function* ExecutorVex::getFuncByAddr(uint64_t guest_addr)
 	f = xlate_cache->getFunc((void*)host_addr, guest_ptr(guest_addr));
 	if (f == NULL) return NULL;
 
-	/* wipe out intrinsics which make klee puke */
-	/* FIXME: this should be an LLVM function pass done in the cache
-	 * code. */
-	/* go through all basic blocks */
-	foreach (it, f->begin(), f->end()) {
-		/* go through all instructions for BB 'it' */
-		BasicBlock::iterator	ins, ins_end;
-		ins_end = (*it).end();
-		for (ins = (*it).begin(); ins != ins_end; ) {
-			IntrinsicInst	*ii;
-
-			ii = dyn_cast<IntrinsicInst>(&*ins);
-			ins++;
-
-			if (!ii) continue;
-
-			if (ii->getIntrinsicID() == Intrinsic::memory_barrier)
-				ii->eraseFromParent();
-		}
-	}
-
 	/* need to know func -> vsb to compute func's guest address */
 	vsb = xlate_cache->getCachedVSB(guest_ptr(guest_addr));
 	assert (vsb && "Dropped VSB too early?");
@@ -333,7 +322,7 @@ Function* ExecutorVex::getFuncByAddr(uint64_t guest_addr)
 	kf = kmodule->addFunction(f);
 	statsTracker->addKFunction(kf);
 	bindKFuncConstants(kf);
-	bindModuleConstTable(); /* XXX slow */
+	bindModuleConstTable(); /* XXX *really* slow */
 
 	return f;
 }
@@ -366,7 +355,7 @@ void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
 	}
 
 	if (cur_func == kf_scenter->function) {
-		/* If leaving the sc_enter function, we need to 
+		/* If leaving the sc_enter function, we need to
 		 * know to pop the stack. Otherwies, it might
 		 * look like a jump and keep stale entries on board */
 		markExit(state, GE_RETURN);

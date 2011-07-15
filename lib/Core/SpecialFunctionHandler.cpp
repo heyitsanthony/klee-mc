@@ -203,33 +203,41 @@ SpecialFunctionHandler::readStringAtAddress(
   ref<Expr> addressExpr)
 {
   ObjectPair op;
-  addressExpr = executor->toUnique(state, addressExpr);
-  ref<ConstantExpr> address = cast<ConstantExpr>(addressExpr);
-  if (!state.addressSpace.resolveOne(address, op))
-    assert(0 && "XXX out of bounds / multiple resolution unhandled");
-  bool res;
-  assert(executor->getSolver()->mustBeTrue(
-  	state,
-        EqExpr::create(address, op.first->getBaseExpr()),
-        res) &&
-         res &&
-         "XXX interior pointer unhandled");
-  const MemoryObject *mo = op.first;
-  const ObjectState *os = op.second;
+  ref<ConstantExpr> address;
 
-  char *buf = new char[mo->size];
+  addressExpr = executor->toUnique(state, addressExpr);
+  address = cast<ConstantExpr>(addressExpr);
+
+  assert (address.get() && "Expected constant address");
+  if (!state.addressSpace.resolveOne(address, op)) {
+    assert(0 && "XXX out of bounds / multiple resolution unhandled");
+  }
+
+  const MemoryObject	*mo;
+  const ObjectState	*os;
+  char			*buf;
+  uint64_t		offset;
+
+  mo = op.first;
+  os = op.second;
+
+  offset = address->getZExtValue() - op.first->getBaseExpr()->getZExtValue();
+  assert (offset < mo->size);
+
+  buf = new char[(mo->size-offset)+1];
 
   unsigned i;
-  for (i = 0; i < mo->size - 1; i++) {
-    //ref<Expr> cur = os->read8(i);
-    ref<Expr> cur = state.read8(os, i);
+  for (i = offset; i < mo->size - 1; i++) {
+    ref<Expr> cur;
+
+    cur = state.read8(os, i);
     cur = executor->toUnique(state, cur);
     assert(isa<ConstantExpr>(cur) &&
            "hit symbolic char while reading concrete string");
-    buf[i] = cast<ConstantExpr>(cur)->getZExtValue(8);
-    if (!buf[i]) break;
+    buf[i-offset] = cast<ConstantExpr>(cur)->getZExtValue(8);
+    if (!buf[i-offset]) break;
   }
-  buf[i] = 0;
+  buf[i-offset] = 0;
 
   std::string result(buf);
   delete[] buf;
@@ -348,18 +356,22 @@ SFH_DEF_HANDLER(ReportError)
 {
   SFH_CHK_ARGS(4, "klee_report_error");
 
-  // arguments[0], arguments[1] are file, line
+  // arg[0] = file
+  // arg[1] = line
+  // arg[2] = message
+  // arg[3] = suffix
+  std::string	message = sfh->readStringAtAddress(state, arguments[2]);
+  std::string	suffix = sfh->readStringAtAddress(state, arguments[3]);
 
   //XXX:DRE:TAINT
   if(state.underConstrained) {
     std::cerr << "TAINT: skipping klee_report_error:"
-               << sfh->readStringAtAddress(state, arguments[2]) << ":"
-               << sfh->readStringAtAddress(state, arguments[3]) << "\n";
+               << message << ":" << suffix << "\n";
     sfh->executor->terminateState(state);
-  } else
-    sfh->executor->terminateStateOnError(state,
-                                   sfh->readStringAtAddress(state, arguments[2]),
-                                   sfh->readStringAtAddress(state, arguments[3]).c_str());
+    return;
+  }
+
+  sfh->executor->terminateStateOnError(state, message, suffix.c_str());
 }
 
 SFH_DEF_HANDLER(Merge)

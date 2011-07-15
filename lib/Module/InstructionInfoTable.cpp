@@ -20,6 +20,8 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Analysis/ValueTracking.h"
 
+#include "static/Sugar.h"
+
 #include <map>
 #include <string>
 
@@ -33,63 +35,72 @@ public:
   }
 };
         
-static void buildInstructionToLineMap(Module *m,
-                                      std::map<const Instruction*, unsigned> &out) {  
-  InstructionToLineAnnotator a;
-  std::string str;
-  llvm::raw_string_ostream os(str);
-  m->print(os, &a);
-  os.flush();
-  const char *s;
+static void buildInstructionToLineMap(
+	Module *m,
+	std::map<const Instruction*, unsigned> &out)
+{
+	InstructionToLineAnnotator	a;
+	std::string			str;
+	llvm::raw_string_ostream	os(str);
 
-  unsigned line = 1;
-  for (s=str.c_str(); *s; s++) {
-    if (*s=='\n') {
-      line++;
-      if (s[1]=='%' && s[2]=='%' && s[3]=='%') {
-        s += 4;
-        char *end;
-        unsigned long long value = strtoull(s, &end, 10);
-        if (end!=s) {
-          out.insert(std::make_pair((const Instruction*) value, line));
-        }
-        s = end;
-      }
-    }
-  }
+
+	m->print(os, &a);
+	os.flush();
+
+	unsigned line = 1;
+	for (const char *s = str.c_str(); *s; s++) {
+		char			*end;
+		unsigned long long	value;
+
+		if (*s != '\n') continue;
+
+		line++;
+		if (strncmp(&s[1], "%%%", 3) != 0)
+			continue;
+
+		s += 4;
+		value = strtoull(s, &end, 10);
+		if (end != s) {
+			out.insert(std::make_pair(
+				(const Instruction*) value, line));
+		}
+		s = end;
+	}
 }
 
-static std::string getDSPIPath(DbgStopPointInst *dspi) {
-  std::string dir, file;
-  bool res = GetConstantStringInfo(dspi->getDirectory(), dir);
-  assert(res && "GetConstantStringInfo failed");
-  res = GetConstantStringInfo(dspi->getFileName(), file);
-  assert(res && "GetConstantStringInfo failed");
-  if (dir.empty()) {
-    return file;
-  } else if (*dir.rbegin() == '/') {
-    return dir + file;
-  } else {
-    return dir + "/" + file;
-  }
+static std::string getDSPIPath(DbgStopPointInst *dspi)
+{
+	std::string	dir, file;
+	bool		res;
+
+	res = GetConstantStringInfo(dspi->getDirectory(), dir);
+	assert(res && "GetConstantStringInfo failed");
+
+	res = GetConstantStringInfo(dspi->getFileName(), file);
+	assert(res && "GetConstantStringInfo failed");
+
+	if (dir.empty()) return file;
+	if (*dir.rbegin() == '/') return dir + file;
+
+	return dir + "/" + file;
 }
 
 InstructionInfoTable::InstructionInfoTable(Module *m) 
-  : dummyString(""), dummyInfo(0, dummyString, 0, 0) {
+: dummyString("")
+, dummyInfo(0, dummyString, 0, 0)
+{
   unsigned id = 0;
   std::map<const Instruction*, unsigned> lineTable;
   buildInstructionToLineMap(m, lineTable);
 
-  for (Module::iterator fnIt = m->begin(), fn_ie = m->end(); 
-       fnIt != fn_ie; ++fnIt) {
+  foreach (fnIt, m->begin(), m->end()) {
     const std::string *initialFile = &dummyString;
     unsigned initialLine = 0;
 
     // It may be better to look for the closest stoppoint to the entry
     // following the CFG, but it is not clear that it ever matters in
     // practice.
-    for (inst_iterator it = inst_begin(fnIt), ie = inst_end(fnIt);
-         it != ie; ++it) {
+    foreach (it, inst_begin(fnIt), inst_end(fnIt)) {
       if (DbgStopPointInst *dspi = dyn_cast<DbgStopPointInst>(&*it)) {
         initialFile = internString(getDSPIPath(dspi));
         initialLine = dspi->getLine();
@@ -100,8 +111,7 @@ InstructionInfoTable::InstructionInfoTable(Module *m)
     typedef std::map<BasicBlock*, std::pair<const std::string*,unsigned> > 
       sourceinfo_ty;
     sourceinfo_ty sourceInfo;
-    for (llvm::Function::iterator bbIt = fnIt->begin(), bbie = fnIt->end(); 
-         bbIt != bbie; ++bbIt) {
+    foreach (bbIt, fnIt->begin(), fnIt->end()) {
       std::pair<sourceinfo_ty::iterator, bool>
         res = sourceInfo.insert(std::make_pair(bbIt,
                                                std::make_pair(initialFile,
@@ -121,12 +131,12 @@ InstructionInfoTable::InstructionInfoTable(Module *m)
         const std::string *file = si->second.first;
         unsigned line = si->second.second;
         
-        for (BasicBlock::iterator it = bb->begin(), ie = bb->end();
-             it != ie; ++it) {
+	foreach (it, bb->begin(), bb->end()) {
           Instruction *instr = it;
           unsigned assemblyLine = 0;
-          std::map<const Instruction*, unsigned>::const_iterator ltit = 
-            lineTable.find(instr);
+          std::map<const Instruction*, unsigned>::const_iterator ltit;
+	  
+	  ltit = lineTable.find(instr);
           if (ltit!=lineTable.end())
             assemblyLine = ltit->second;
           if (DbgStopPointInst *dspi = dyn_cast<DbgStopPointInst>(instr)) {
@@ -140,33 +150,36 @@ InstructionInfoTable::InstructionInfoTable(Module *m)
                                                       assemblyLine)));        
         }
         
-        for (succ_iterator it = succ_begin(bb), ie = succ_end(bb); 
-             it != ie; ++it) {
-          if (sourceInfo.insert(std::make_pair(*it,
-                                               std::make_pair(file, line))).second)
+	foreach (it, succ_begin(bb), succ_end(bb)) {
+          if (sourceInfo.insert(
+	  	std::make_pair(
+			*it,
+			std::make_pair(file, line))).second)
+          {
             worklist.push_back(*it);
+	  }
         }
       } while (!worklist.empty());
     }
   }
 }
 
-InstructionInfoTable::~InstructionInfoTable() {
-  for (std::set<const std::string *, ltstr>::iterator
-         it = internedStrings.begin(), ie = internedStrings.end();
-       it != ie; ++it)
-    delete *it;
+InstructionInfoTable::~InstructionInfoTable()
+{
+	foreach(it, internedStrings.begin(), internedStrings.end()) 
+		delete *it;
 }
 
-const std::string *InstructionInfoTable::internString(std::string s) {
-  std::set<const std::string *, ltstr>::iterator it = internedStrings.find(&s);
-  if (it==internedStrings.end()) {
-    std::string *interned = new std::string(s);
-    internedStrings.insert(interned);
-    return interned;
-  } else {
-    return *it;
-  }
+const std::string *InstructionInfoTable::internString(std::string s) 
+{
+  std::set<const std::string *, ltstr>::iterator it;
+  
+  it = internedStrings.find(&s);
+  if (it!=internedStrings.end()) return *it;
+
+  std::string *interned = new std::string(s);
+  internedStrings.insert(interned);
+  return interned;
 }
 
 unsigned InstructionInfoTable::getMaxID() const {
@@ -174,21 +187,17 @@ unsigned InstructionInfoTable::getMaxID() const {
 }
 
 const InstructionInfo &
-InstructionInfoTable::getInfo(const Instruction *inst) const {
-  std::map<const llvm::Instruction*, InstructionInfo>::const_iterator it = 
-    infos.find(inst);
-  if (it==infos.end()) {
-    return dummyInfo;
-  } else {
-    return it->second;
-  }
+InstructionInfoTable::getInfo(const Instruction *inst) const
+{
+	std::map<const llvm::Instruction*, InstructionInfo>::const_iterator it;
+	it = infos.find(inst);
+	return (it == infos.end()) ? dummyInfo : it->second;
 }
 
-const InstructionInfo &
-InstructionInfoTable::getFunctionInfo(const Function *f) const {
-  if (f->isDeclaration()) {
-    return dummyInfo;
-  } else {
-    return getInfo(f->begin()->begin());
-  }
+const InstructionInfo&
+InstructionInfoTable::getFunctionInfo(const Function *f) const
+{
+	if (f->isDeclaration())
+		return dummyInfo;
+	return getInfo(f->begin()->begin());
 }

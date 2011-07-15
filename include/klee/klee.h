@@ -13,10 +13,13 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#define SYS_klee		0x12345678
+#define KLEE_SYS_REPORT_ERROR	0
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-  
+
   /* Add an accesible memory object at a user specified location. It
      is the users responsibility to make sure that these memory
      objects do not overlap. These memory objects will also
@@ -25,7 +28,7 @@ extern "C" {
   void klee_define_fixed_object(void *addr, size_t nbytes);
 
   /// klee_make_symbolic - Make the contents of the object pointer to by \arg
-  /// addr symbolic. 
+  /// addr symbolic.
   ///
   /// \arg addr - The start of the object.
   /// \arg nbytes - The number of bytes to make symbolic; currently this *must*
@@ -54,7 +57,7 @@ extern "C" {
 
   /// klee_abort - Abort the current KLEE process.
   __attribute__((noreturn))
-  void klee_abort(void);  
+  void klee_abort(void);
 
   /// klee_report_error - Report a user defined error and terminate the current
   /// KLEE process.
@@ -64,22 +67,22 @@ extern "C" {
   /// \arg message - A string to include in the error message.
   /// \arg suffix - The suffix to use for error files.
   __attribute__((noreturn))
-  void klee_report_error(const char *file, 
-			 int line, 
-			 const char *message, 
+  void klee_report_error(const char *file,
+			 int line,
+			 const char *message,
 			 const char *suffix);
-  
+
   /* called by checking code to get size of memory. */
   unsigned klee_get_obj_size(void *ptr);
-  
+
   /* print the tree associated w/ a given expression. */
   void klee_print_expr(const char *msg, ...);
-  
+
   /* NB: this *does not* fork n times and return [0,n) in children.
    * It makes n be symbolic and returns: caller must compare N times.
    */
   unsigned klee_choose(unsigned n);
-  
+
   /* special klee assert macro. this assert should be used when path consistency
    * across platforms is desired (e.g., in tests).
    * NB: __assert_fail is a klee "special" function
@@ -113,8 +116,8 @@ extern "C" {
   /* Ensure that memory in the range [address, address+size) is
      accessible to the program. If some byte in the range is not
      accessible an error will be generated and the state
-     terminated. 
-  
+     terminated.
+
      The current implementation requires both address and size to be
      constants and that the range lie within a single object. */
   void klee_check_memory_access(const void *address, size_t size);
