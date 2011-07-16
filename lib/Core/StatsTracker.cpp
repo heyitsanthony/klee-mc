@@ -315,8 +315,7 @@ void StatsTracker::stepInstUpdateFrame(ExecutionState &es)
   if (!sf.kf->trackCoverage || !instructionIsCoverable(inst))
     return;
 
-  if (!theStatisticManager->getIndexedValue(
-    stats::coveredInstructions, ii.id))
+  if (!theStatisticManager->getIndexedValue(stats::coveredInstructions, ii.id))
   {
       // Checking for actual stoppoints avoids inconsistencies due
       // to line number propogation.

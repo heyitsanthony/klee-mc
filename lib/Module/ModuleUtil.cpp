@@ -54,18 +54,18 @@ Module *klee::linkWithLibrary(
 	Module *module,
         const std::string &libraryName)
 {
+  Archive		*libArchive;
+  std::string		errMsg;
+  llvm::sys::Path	libraryPath(libraryName);
 
-  std::string errMsg;
-  llvm::sys::Path libraryPath(libraryName);
 
   // Load symbol table for library archive
-  Archive *libArchive = Archive::OpenAndLoad(libraryPath,
-                                                    module->getContext(),
-                                                    &errMsg);
-  if (!libArchive)
+  libArchive = Archive::OpenAndLoad(
+  	libraryPath, module->getContext(), &errMsg);
+  if (!libArchive) {
     klee_error("failed to load library archive %s: %s",
                libraryPath.toString().c_str(), errMsg.c_str());
-
+  }
 
   const llvm::Archive::SymTabType& symbols = libArchive->getSymbolTable();
 
@@ -74,10 +74,10 @@ Module *klee::linkWithLibrary(
   // processed, and linked
   foreach (si, symbols.begin(), symbols.end()) {
     const std::string &symName = si->first;
-    // check for \1 sentinel
     if(symName[0] == 1) {
-      ModuleProvider *mp = libArchive->findModuleDefiningSymbol(symName,
-                                                               &errMsg);
+      ModuleProvider *mp;
+
+      mp = libArchive->findModuleDefiningSymbol(symName, &errMsg);
       if (!mp)
         klee_error("failed to find symbol %s: %s", symName.c_str(),
                    errMsg.c_str());
@@ -85,13 +85,15 @@ Module *klee::linkWithLibrary(
     }
   }
 
-  Linker linker("klee", module, false);
+  Linker linker("klee", module, 0 /* Linker::Verbose */);
 
   // Run passes on relevant modules and then link against them
   foreach (mi, modulesToLoad.begin(), modulesToLoad.end()) {
-    Module *m = (*mi)->releaseModule(&errMsg);
-    if (!m)
-      klee_error("failed to release module: %s", errMsg.c_str());
+    Module *m;
+
+    m = (*mi)->releaseModule(&errMsg);
+    if (!m) klee_error("failed to release module: %s", errMsg.c_str());
+
     runRemoveSentinelsPass(*m);
     if (linker.LinkInModule(m, &errMsg)) {
       klee_error("failed to link with module %s->%s: %s",
@@ -117,13 +119,18 @@ Module *klee::linkWithLibrary(
 
 Function *klee::getDirectCallTarget(CallSite cs)
 {
-  Value *v = cs.getCalledValue();
+  llvm::ConstantExpr *ce;
+  Value *v;
 
+
+  v = cs.getCalledValue();
   if (Function *f = dyn_cast<Function>(v)) {
     return f;
   }
 
-  if (llvm::ConstantExpr *ce = dyn_cast<llvm::ConstantExpr>(v)) {
+  ce = dyn_cast<llvm::ConstantExpr>(v);
+
+  if (ce) {
     if (ce->getOpcode()==Instruction::BitCast)
       if (Function *f = dyn_cast<Function>(ce->getOperand(0)))
         return f;
@@ -136,7 +143,8 @@ Function *klee::getDirectCallTarget(CallSite cs)
   return 0;
 }
 
-static bool valueIsOnlyCalled(const Value *v) {
+static bool valueIsOnlyCalled(const Value *v)
+{
   foreach(it, v->use_begin(), v->use_end()) {
     if (const Instruction *instr = dyn_cast<Instruction>(*it)) {
       if (instr->getOpcode()==0) continue; // XXX function numbering inst
@@ -169,7 +177,8 @@ bool klee::functionEscapes(const Function *f) {
   return !valueIsOnlyCalled(f);
 }
 
-void klee::runRemoveSentinelsPass(Module &module) {
+void klee::runRemoveSentinelsPass(Module &module)
+{
   llvm::PassManager pm;
   pm.add(new RemoveSentinelsPass());
   pm.run(module);

@@ -89,7 +89,6 @@ ExecutorVex::ExecutorVex(
 	kmodule = new KModule(theGenLLVM->getModule());
 
 	target_data = kmodule->targetData;
-	dbgStopPointFn = kmodule->dbgStopPointFn;
 
 	// Initialize the context.
 	assert(target_data->isLittleEndian() && "BIGENDIAN??");
@@ -126,15 +125,30 @@ void ExecutorVex::runImage(void)
 {
 	ExecutionState	*state;
 	Function	*init_func;
+	KFunction	*init_kfunc;
+	bool		is_new;
 
 	// force deterministic initialization of memory objects
 	srand(1);
 	srandom(1);
 
-	init_func = getFuncByAddr((uint64_t)gs->getEntryPoint());
+	// acrobatics because we have a fucking circular dependency
+	// on the globaladdress stucture which keeps us from binding 
+	// the module constant table.
+	//
+	// This is mainly a problem for check-div-zero, since it won't
+	// yet have a global address but binding the constant table
+	// requires it!
+	init_func = getFuncByAddrNoKMod((uint64_t)gs->getEntryPoint(), is_new);
+	init_kfunc = kmodule->addFunction(init_func);
+	statsTracker->addKFunction(init_kfunc);
+	bindKFuncConstants(init_kfunc);
+
+
 	state = new ExecutionState(kmodule->getKFunction(init_func));
 
-	/* important to add modules before intializing globals */
+	/* add modules before initializing globals so that everything
+	 * will link in properly */
 	std::list<Module*> l = theVexHelpers->getModules();
 	foreach (it, l.begin(), l.end()) {
 		kmodule->addModule(*it);
@@ -285,13 +299,11 @@ void ExecutorVex::run(ExecutionState &initialState)
 	Executor::run(initialState);
 }
 
-Function* ExecutorVex::getFuncByAddr(uint64_t guest_addr)
+Function* ExecutorVex::getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new)
 {
 	uint64_t	host_addr;
-	KFunction	*kf;
 	Function	*f;
 	VexSB		*vsb;
-
 
 	if (	guest_addr == 0 ||
 		((guest_addr > 0x7fffffffffffULL) &&
@@ -307,7 +319,10 @@ Function* ExecutorVex::getFuncByAddr(uint64_t guest_addr)
 
 	/* cached => already seen it */
 	f = xlate_cache->getCachedFunc(guest_ptr(guest_addr));
-	if (f != NULL) return f;
+	if (f != NULL) {
+		is_new = false;
+		return f;
+	}
 
 	/* !cached => put in cache, alert kmodule, other bookkepping */
 	f = xlate_cache->getFunc((void*)host_addr, guest_ptr(guest_addr));
@@ -317,6 +332,21 @@ Function* ExecutorVex::getFuncByAddr(uint64_t guest_addr)
 	vsb = xlate_cache->getCachedVSB(guest_ptr(guest_addr));
 	assert (vsb && "Dropped VSB too early?");
 	func2vsb_table[(uint64_t)f] = vsb;
+
+	is_new = true;
+	return f;
+}
+
+
+Function* ExecutorVex::getFuncByAddr(uint64_t guest_addr)
+{
+	KFunction	*kf;
+	Function	*f;
+	bool		is_new;
+
+	f = getFuncByAddrNoKMod(guest_addr, is_new);
+	if (f == NULL) return NULL;
+	if (!is_new) return f;
 
 	/* stupid kmodule stuff */
 	kf = kmodule->addFunction(f);
@@ -636,15 +666,9 @@ void ExecutorVex::updateGuestRegs(ExecutionState& state)
 	state.addressSpace.copyToBuf(state.getRegCtx(), guest_regs);
 }
 
-void ExecutorVex::initializeGlobals(ExecutionState &state)
+void ExecutorVex::initGlobalFuncs(void)
 {
-	Module *m;
-
-	m = kmodule->module;
-
-	assert (m->getModuleInlineAsm() == "" && "No inline asm!");
-	assert (m->lib_begin() == m->lib_end() &&
-		"XXX do not support dependent libraries");
+	Module *m = kmodule->module;
 
 	// represent function globals using the address of the actual llvm function
 	// object. given that we use malloc to allocate memory in states this also
@@ -661,6 +685,19 @@ void ExecutorVex::initializeGlobals(ExecutionState &state)
 		addr = Expr::createPointer((unsigned long) (void*) f);
 		globalAddresses.insert(std::make_pair(f, addr));
 	}
+}
+
+void ExecutorVex::initializeGlobals(ExecutionState &state)
+{
+	Module *m;
+
+	m = kmodule->module;
+
+	assert (m->getModuleInlineAsm() == "" && "No inline asm!");
+	assert (m->lib_begin() == m->lib_end() &&
+		"XXX do not support dependent libraries");
+
+	initGlobalFuncs();
 
 	// allocate and initialize globals, done in two passes since we may
 	// need address of a global in order to initialize some other one.

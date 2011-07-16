@@ -1,5 +1,6 @@
 #define _LARGEFILE64_SOURCE
 
+#include <poll.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -123,6 +124,25 @@ void make_sym(uint64_t addr, uint64_t len, const char* name)
 	addr = klee_get_value(addr);
 	len = klee_get_value(len);
 	kmc_make_range_symbolic(addr, len, name);
+}
+
+static void sc_poll(void* regfile)
+{
+	struct pollfd	*fds;
+	uint64_t	poll_addr;
+	unsigned int	i, nfds;
+	int		ret_sum;
+
+	poll_addr = klee_get_value(GET_ARG0(regfile));
+	fds = (struct pollfd*)poll_addr;
+	nfds = klee_get_value(GET_ARG1(regfile));
+
+	for (i = 0; i < nfds; i++) {
+		klee_check_memory_access(&fds[i], sizeof(struct pollfd));
+		fds[i].revents = klee_get_value(fds[i].events);
+	}
+
+	sc_ret_v(regfile, nfds);
 }
 
 static void sc_klee(void* regfile)
@@ -330,8 +350,22 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	}
 	UNIMPL_SC(select);
-	UNIMPL_SC(poll)
-	UNIMPL_SC(clone)
+	UNIMPL_SC(clone);
+
+	case SYS_recvmsg: {
+		struct msghdr	*mhdr;
+
+		mhdr = (void*)klee_get_value(GET_ARG1(regfile));
+		klee_assume(mhdr->msg_iovlen >= 1);
+		make_sym(
+			(uint64_t)(mhdr->msg_iov[0].iov_base),
+			mhdr->msg_iov[0].iov_len,
+			"recvmsg_iov");
+		mhdr->msg_controllen = 0;
+		sc_ret_v(regfile, mhdr->msg_iov[0].iov_len);
+	}
+	break;
+
 	case SYS_setsockopt:
 		sc_ret_v(regfile, 0);
 		break;
@@ -427,6 +461,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 		((char*)addr)[GET_ARG2(new_regs)] = '\0';
 	}
 	break;
+
+	case SYS_poll:
+		sc_poll(regfile);
+		break;
 
 	case SYS_times:
 		kmc_sc_regs(regfile);

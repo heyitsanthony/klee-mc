@@ -47,113 +47,149 @@ bool IntrinsicCleanerPass::runOnFunction(llvm::Function* f)
 	return dirty;
 }
 
+//
+// FIXME: This is much more target dependent than just the word size,
+// however this works for x86-32 and x86-64.
+// (dst, src) -> *((i8**) dst) = *((i8**) src)
+void IntrinsicCleanerPass::clean_vacopy(
+	BasicBlock::iterator& i,
+	IntrinsicInst* ii)
+{
+	Value *dst = ii->getOperand(1);
+	Value *src = ii->getOperand(2);
+
+	unsigned WordSize = TargetData.getPointerSizeInBits() / 8;
+
+	if (WordSize == 4) {
+		Type	*i8pp;
+		Value	*castedDst, *castedSrc, *load;
+		i8pp = PointerType::getUnqual(
+			PointerType::getUnqual(
+				Type::getInt8Ty(getGlobalContext())));
+
+		castedDst = CastInst::CreatePointerCast(
+			dst, i8pp, "vacopy.cast.dst", ii);
+		castedSrc = CastInst::CreatePointerCast(
+			src, i8pp, "vacopy.cast.src", ii);
+
+		load = new LoadInst(castedSrc, "vacopy.read", ii);
+		new StoreInst(load, castedDst, false, ii);
+	} else {
+		assert(WordSize == 8 && "Invalid word size!");
+		Type	*i64p;
+		Value	*pDst, *pSrc, *val, *off;
+
+		i64p = PointerType::getUnqual(
+			Type::getInt64Ty(getGlobalContext()));
+		pDst = CastInst::CreatePointerCast(
+			dst, i64p, "vacopy.cast.dst", ii);
+		pSrc = CastInst::CreatePointerCast(
+			src, i64p, "vacopy.cast.src", ii);
+		val = new LoadInst(pSrc, std::string(), ii);
+		new StoreInst(val, pDst, ii);
+
+		off = ConstantInt::get(Type::getInt64Ty(getGlobalContext()), 1);
+		pDst = GetElementPtrInst::Create(pDst, off, std::string(), ii);
+		pSrc = GetElementPtrInst::Create(pSrc, off, std::string(), ii);
+		val = new LoadInst(pSrc, std::string(), ii);
+		new StoreInst(val, pDst, ii);
+
+		pDst = GetElementPtrInst::Create(pDst, off, std::string(), ii);
+		pSrc = GetElementPtrInst::Create(pSrc, off, std::string(), ii);
+		val = new LoadInst(pSrc, std::string(), ii);
+		new StoreInst(val, pDst, ii);
+	}
+
+	ii->removeFromParent();
+	delete ii;
+}
+
+// We can remove this stoppoint if the next instruction is
+// sure to be another stoppoint. This is nice for cleanliness
+// but also important for switch statements where it can allow
+// the targets to be joined.
+bool IntrinsicCleanerPass::clean_dup_stoppoint(
+	llvm::BasicBlock::iterator& i,
+	llvm::IntrinsicInst* ii)
+{
+	bool erase = false;
+	if (isa<DbgStopPointInst>(i) || isa<UnreachableInst>(i)) {
+		erase = true;
+	} else if (isa<BranchInst>(i) || isa<SwitchInst>(i)) {
+		BasicBlock *bb = i->getParent();
+		erase = true;
+		foreach (it, succ_begin(bb), succ_end(bb)) {
+			if (!isa<DbgStopPointInst>(it->getFirstNonPHI())) {
+				erase = false;
+				break;
+			}
+		}
+	}
+
+	if (erase) {
+		ii->eraseFromParent();
+		return true;
+	}
+
+	return false;
+}
 
 bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b)
 {
-  bool dirty = false;
-  
-  unsigned WordSize = TargetData.getPointerSizeInBits() / 8;
-  for (BasicBlock::iterator i = b.begin(), ie = b.end(); i != ie;) {     
-    IntrinsicInst *ii = dyn_cast<IntrinsicInst>(&*i);
-    // increment now since LowerIntrinsic deletion makes iterator invalid.
-    ++i;  
-    if(!ii) continue;
+	bool dirty = false;
 
-      switch (ii->getIntrinsicID()) {
-      case Intrinsic::vastart:
-      case Intrinsic::vaend:
-        break;
-        
-        // Lower vacopy so that object resolution etc is handled by
-        // normal instructions.
-        //
-        // FIXME: This is much more target dependent than just the word size,
-        // however this works for x86-32 and x86-64.
-      case Intrinsic::vacopy: { // (dst, src) -> *((i8**) dst) = *((i8**) src)
-        Value *dst = ii->getOperand(1);
-        Value *src = ii->getOperand(2);
+	for (BasicBlock::iterator i = b.begin(), ie = b.end(); i != ie;) {
+		IntrinsicInst *ii = dyn_cast<IntrinsicInst>(&*i);
 
-        if (WordSize == 4) {
-          Type *i8pp = PointerType::getUnqual(PointerType::getUnqual(Type::getInt8Ty(getGlobalContext())));
-          Value *castedDst = CastInst::CreatePointerCast(dst, i8pp, "vacopy.cast.dst", ii);
-          Value *castedSrc = CastInst::CreatePointerCast(src, i8pp, "vacopy.cast.src", ii);
-          Value *load = new LoadInst(castedSrc, "vacopy.read", ii);
-          new StoreInst(load, castedDst, false, ii);
-        } else {
-          assert(WordSize == 8 && "Invalid word size!");
-          Type *i64p = PointerType::getUnqual(Type::getInt64Ty(getGlobalContext()));
-          Value *pDst = CastInst::CreatePointerCast(dst, i64p, "vacopy.cast.dst", ii);
-          Value *pSrc = CastInst::CreatePointerCast(src, i64p, "vacopy.cast.src", ii);
-          Value *val = new LoadInst(pSrc, std::string(), ii); new StoreInst(val, pDst, ii);
-          Value *off = ConstantInt::get(Type::getInt64Ty(getGlobalContext()), 1);
-          pDst = GetElementPtrInst::Create(pDst, off, std::string(), ii);
-          pSrc = GetElementPtrInst::Create(pSrc, off, std::string(), ii);
-          val = new LoadInst(pSrc, std::string(), ii); new StoreInst(val, pDst, ii);
-          pDst = GetElementPtrInst::Create(pDst, off, std::string(), ii);
-          pSrc = GetElementPtrInst::Create(pSrc, off, std::string(), ii);
-          val = new LoadInst(pSrc, std::string(), ii); new StoreInst(val, pDst, ii);
-        }
-        ii->removeFromParent();
-        delete ii;
-        break;
-      }
+		// increment now; LowerIntrinsic delete makes iterator invalid.
+		++i;
+		if(!ii) continue;
 
-      case Intrinsic::dbg_stoppoint: {
-        // We can remove this stoppoint if the next instruction is
-        // sure to be another stoppoint. This is nice for cleanliness
-        // but also important for switch statements where it can allow
-        // the targets to be joined.
-        bool erase = false;
-        if (isa<DbgStopPointInst>(i) ||
-            isa<UnreachableInst>(i)) {
-          erase = true;
-        } else if (isa<BranchInst>(i) ||
-                   isa<SwitchInst>(i)) {
-          BasicBlock *bb = i->getParent();
-          erase = true;
-          for (succ_iterator it=succ_begin(bb), ie=succ_end(bb);
-               it!=ie; ++it) {
-            if (!isa<DbgStopPointInst>(it->getFirstNonPHI())) {
-              erase = false;
-              break;
-            }
-          }
-        }
+		switch (ii->getIntrinsicID()) {
+		case Intrinsic::vastart:
+		case Intrinsic::vaend:
+			break;
 
-        if (erase) {
-          ii->eraseFromParent();
-          dirty = true;
-        }
-        break;
-      }
+		// Lower vacopy so that object resolution etc is handled by
+		// normal instructions.
+		case Intrinsic::vacopy:
+			clean_vacopy(i, ii);
+			break;
 
-      case Intrinsic::dbg_region_start:
-      case Intrinsic::dbg_region_end:
-      case Intrinsic::dbg_func_start:
-      case Intrinsic::dbg_declare:
-        // Remove these regardless of lower intrinsics flag. This can
-        // be removed once IntrinsicLowering is fixed to not have bad
-        // caches.
-        ii->eraseFromParent();
-        dirty = true;
-        break;
+		/* for the time being, we need *some* stoppoints because
+		 * KLEE is retarded and uses it to figure out line numbers */
+		case Intrinsic::dbg_stoppoint:
+		dirty |= clean_dup_stoppoint(i, ii);
+		break;
 
-      /* r534, ignore memory barriers */
-      case Intrinsic::memory_barrier:
-        if (LowerIntrinsics) {
-          ii->eraseFromParent();
-          dirty = true;
-        }
-        break;
+//		case Intrinsic::dbg_stoppoint:
+		case Intrinsic::dbg_region_start:
+		case Intrinsic::dbg_region_end:
+		case Intrinsic::dbg_func_start:
+		case Intrinsic::dbg_declare:
+			// Remove these regardless of lower intrinsics flag.
+			// This can be removed once IntrinsicLowering is fixed to
+			// not have bad caches.
+			ii->eraseFromParent();
+			dirty = true;
+			break;
 
-                    
-      default:
-        if (LowerIntrinsics)
-          IL->LowerIntrinsicCall(ii);
-        dirty = true;
-        break;
-      }
-  }
+		/* r534, ignore memory barriers */
+		case Intrinsic::memory_barrier:
+			if (LowerIntrinsics) {
+				ii->eraseFromParent();
+				dirty = true;
+			}
+			break;
+
+
+		default:
+			if (LowerIntrinsics)
+				IL->LowerIntrinsicCall(ii);
+			dirty = true;
+			break;
+		}
+	}
 
   return dirty;
 }

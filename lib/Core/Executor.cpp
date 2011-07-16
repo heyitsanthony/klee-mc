@@ -257,7 +257,6 @@ Executor::Executor(
     kmodule(0),
     interpreterHandler(ih),
     target_data(0),
-    dbgStopPointFn(0),
     statsTracker(0),
     processTree(0),
     symPathWriter(0),
@@ -844,39 +843,54 @@ bool Executor::addConstraint(ExecutionState &state, ref<Expr> condition)
 
 ref<klee::ConstantExpr> Executor::evalConstant(Constant *c)
 {
-  if (llvm::ConstantExpr *ce = dyn_cast<llvm::ConstantExpr>(c)) {
-    return evalConstantExpr(ce);
-  } else if (const ConstantInt *ci = dyn_cast<ConstantInt>(c)) {
-    return ConstantExpr::alloc(ci->getValue());
-  } else if (const ConstantFP *cf = dyn_cast<ConstantFP>(c)) {
-    return ConstantExpr::alloc(cf->getValueAPF().bitcastToAPInt());
-  } else if (const GlobalValue *gv = dyn_cast<GlobalValue>(c)) {
-    globaladdr_map::iterator it = globalAddresses.find(gv);
+	if (llvm::ConstantExpr *ce = dyn_cast<llvm::ConstantExpr>(c))
+		return evalConstantExpr(ce);
 
-    if (it == globalAddresses.end()) {
-    	const Function	*f;
-    	f = dynamic_cast<const Function*>(gv);
-	if (f && f->isDeclaration()) {
-		/* stupid stuff to get vexllvm imported functions working */
-		Function	*f2;
-		f2 = kmodule->module->getFunction(f->getNameStr());
-		it = globalAddresses.find(f2);
+	else if (const ConstantInt *ci = dyn_cast<ConstantInt>(c))
+		return ConstantExpr::alloc(ci->getValue());
+
+	else if (const ConstantFP *cf = dyn_cast<ConstantFP>(c))
+		return ConstantExpr::alloc(cf->getValueAPF().bitcastToAPInt());
+
+	else if (const GlobalValue *gv = dyn_cast<GlobalValue>(c)) {
+		globaladdr_map::iterator it = globalAddresses.find(gv);
+
+		if (it == globalAddresses.end()) {
+			const Function	*f;
+			f = dynamic_cast<const Function*>(gv);
+			if (f && f->isDeclaration()) {
+				/* gets vexllvm imported functions working */
+				Function	*f2;
+				f2 = kmodule->module->getFunction(f->getNameStr());
+				it = globalAddresses.find(f2);
+			}
+
+			if (it == globalAddresses.end()) {
+				std::cerr << "WHOOPS: ";
+				gv->dump();
+			}
+		}
+		assert (it != globalAddresses.end() && "No global address!");
+		return it->second;
 	}
-    }
-    assert (it != globalAddresses.end() && "No global address!");
-    return it->second;
-  } else if (isa<ConstantPointerNull>(c)) {
-    return Expr::createPointer(0);
-  } else if (isa<UndefValue>(c) || isa<ConstantAggregateZero>(c)) {
-    return ConstantExpr::create(0, getWidthForLLVMType(c->getType()));
-  } else if (isa<ConstantVector>(c)) {
-    return ConstantExpr::createVector(cast<ConstantVector>(c));
-  } else {
-    // Constant{AggregateZero,Array,Struct,Vector}
-    fprintf(stderr, "AIEEEEEEEE!\n");
-    c->dump();
-    assert(0 && "invalid argument to evalConstant()");
-  }
+
+	else if (isa<ConstantPointerNull>(c)) {
+		return Expr::createPointer(0);
+	}
+
+	else if (isa<UndefValue>(c) || isa<ConstantAggregateZero>(c)) {
+		return ConstantExpr::create(
+			0, getWidthForLLVMType(c->getType()));
+	}
+
+	else if (isa<ConstantVector>(c)) {
+		return ConstantExpr::createVector(cast<ConstantVector>(c));
+	}
+
+	// Constant{AggregateZero,Array,Struct,Vector}
+	fprintf(stderr, "AIEEEEEEEE!\n");
+	c->dump();
+	assert(0 && "invalid argument to evalConstant()");
 }
 
 ref<Expr> Executor::toUnique(const ExecutionState &state,
@@ -1212,9 +1226,6 @@ void Executor::printFileLine(ExecutionState &state, KInstruction *ki) {
 
 bool Executor::isDebugIntrinsic(const Function *f)
 {
-  // Fast path, getIntrinsicID is slow.
-  if (f == dbgStopPointFn) return true;
-
   switch (f->getIntrinsicID()) {
   case Intrinsic::dbg_stoppoint:
   case Intrinsic::dbg_region_start:
@@ -2320,40 +2331,58 @@ void Executor::removeRoot(ExecutionState* es)
 
 void Executor::bindInstructionConstants(KInstruction *KI)
 {
-  GetElementPtrInst *gepi = dyn_cast<GetElementPtrInst>(KI->inst);
-  if (!gepi)
-    return;
+	GetElementPtrInst	*gepi;
+	KGEPInstruction		*kgepi;
+	ref<ConstantExpr>	constantOffset;
+	uint64_t		index;
 
-  KGEPInstruction *kgepi = static_cast<KGEPInstruction*>(KI);
-  ref<ConstantExpr> constantOffset =
-    ConstantExpr::alloc(0, Context::get().getPointerWidth());
-  uint64_t index = 1;
-  foreach (ii, gep_type_begin(gepi), gep_type_end(gepi)) {
-    if (const StructType *st = dyn_cast<StructType>(*ii)) {
-      const StructLayout *sl = target_data->getStructLayout(st);
-      const ConstantInt *ci = cast<ConstantInt>(ii.getOperand());
-      uint64_t addend = sl->getElementOffset((unsigned) ci->getZExtValue());
-      constantOffset = constantOffset->Add(
-        ConstantExpr::alloc(addend, Context::get().getPointerWidth()));
-    } else {
-      const SequentialType *st = cast<SequentialType>(*ii);
-      uint64_t elementSize =
-        target_data->getTypeStoreSize(st->getElementType());
-      Value *operand = ii.getOperand();
-      if (Constant *c = dyn_cast<Constant>(operand)) {
-        ref<ConstantExpr> index =
-          evalConstant(c)->ZExt(Context::get().getPointerWidth());
-        ref<ConstantExpr> addend =
-          index->Mul(ConstantExpr::alloc(elementSize,
-                                         Context::get().getPointerWidth()));
-        constantOffset = constantOffset->Add(addend);
-      } else {
-        kgepi->indices.push_back(std::make_pair(index, elementSize));
-      }
-    }
-    index++;
-  }
-  kgepi->offset = constantOffset->getZExtValue();
+	gepi = dyn_cast<GetElementPtrInst>(KI->inst);
+	if (!gepi) return;
+
+	kgepi = static_cast<KGEPInstruction*>(KI);
+	constantOffset = ConstantExpr::alloc(0, Context::get().getPointerWidth());
+	index = 1;
+
+	foreach (ii, gep_type_begin(gepi), gep_type_end(gepi)) {
+	const StructType *st = dyn_cast<StructType>(*ii);
+	if (st) {
+		const StructLayout	*sl;
+		const ConstantInt	*ci;
+		uint64_t		addend;
+
+		sl = target_data->getStructLayout(st);
+		ci = cast<ConstantInt>(ii.getOperand());
+		addend =  sl->getElementOffset((unsigned) ci->getZExtValue());
+		constantOffset = constantOffset->Add(
+		ConstantExpr::alloc(addend, Context::get().getPointerWidth()));
+	} else {
+		Constant		*c;
+		const SequentialType	*seqty;
+		uint64_t		elemSize;
+
+		seqty = cast<SequentialType>(*ii);
+		elemSize = target_data->getTypeStoreSize(seqty->getElementType());
+		c = dyn_cast<Constant>(ii.getOperand());
+		if (c) {
+			ref<ConstantExpr> index;
+			ref<ConstantExpr> addend;
+
+			index = evalConstant(c)->ZExt(
+				Context::get().getPointerWidth());
+			addend = index->Mul(
+				ConstantExpr::alloc(
+					elemSize,
+					Context::get().getPointerWidth()));
+			constantOffset = constantOffset->Add(addend);
+		} else {
+			kgepi->indices.push_back(
+				std::make_pair(index, elemSize));
+		}
+	}
+	index++;
+	}
+
+	kgepi->offset = constantOffset->getZExtValue();
 }
 
 void Executor::killStates(ExecutionState* &state)

@@ -60,7 +60,6 @@ const Module* ExecutorBC::setModule(llvm::Module *module,
 	kmodule = new KModule(module);
 
 	target_data = kmodule->targetData;
-	dbgStopPointFn = kmodule->dbgStopPointFn; 
 
 	// Initialize the context.
 	Context::initialize(

@@ -84,7 +84,6 @@ namespace {
 KModule::KModule(Module *_module)
 : module(_module)
 , targetData(new TargetData(module))
-, dbgStopPointFn(0)
 , kleeMergeFn(0)
 , infos(0)
 , constantTable(0)
@@ -393,32 +392,6 @@ void KModule::injectRawChecks(const Interpreter::ModuleOptions &opts)
 	pm.add(new IntrinsicCleanerPass(*targetData, false));
 	pm.run(*module);
 
-	// Force importing functions required by intrinsic lowering. Kind of
-	// unfortunate clutter when we don't need them but we won't know
-	// that until after all linking and intrinsic lowering is
-	// done. After linking and passes we just try to manually trim these
-	// by name. We only add them if such a function doesn't exist to
-	// avoid creating stale uses.
-
-	const llvm::Type *i8Ty = Type::getInt8Ty(getGlobalContext());
-
-	forceImport(
-		module, "memcpy", PointerType::getUnqual(i8Ty),
-		PointerType::getUnqual(i8Ty),
-		PointerType::getUnqual(i8Ty),
-		targetData->getIntPtrType(getGlobalContext()), (Type*) 0);
-	forceImport(
-		module, "memmove", PointerType::getUnqual(i8Ty),
-		PointerType::getUnqual(i8Ty),
-		PointerType::getUnqual(i8Ty),
-		targetData->getIntPtrType(getGlobalContext()), (Type*) 0);
-	forceImport(
-		module, "memset", PointerType::getUnqual(i8Ty),
-		PointerType::getUnqual(i8Ty),
-		Type::getInt32Ty(getGlobalContext()),
-		targetData->getIntPtrType(getGlobalContext()), (Type*) 0);
-
-	// FIXME: Missing force import for various math functions.
 }
 
 // Finally, run the passes that maintain invariants we expect during
@@ -450,11 +423,10 @@ void KModule::prepare(
   if (!MergeAtExit.empty())
   	prepareMerge(opts, ih);
 
+  loadIntrinsicsLib(opts);
   injectRawChecks(opts);
 
   if (opts.Optimize) Optimize(module);
-
-  loadIntrinsicsLib(opts);
 
   // Needs to happen after linking (since ctors/dtors can be modified)
   // and optimization (since global optimization can rewrite lists).
@@ -486,7 +458,6 @@ void KModule::prepare(
     delete f;
   }
 
-  dbgStopPointFn = module->getFunction("llvm.dbg.stoppoint");
   kleeMergeFn = module->getFunction("klee_merge");
 
   /* Build shadow structures */
@@ -507,7 +478,7 @@ void KModule::prepare(
 
   fpm_raiseasm = new RaiseAsmPass();
   if (opts.CheckDivZero) fpm_checkdiv = new DivCheckPass();
-  fpm_cleaner = new IntrinsicCleanerPass(*targetData, false);
+  fpm_cleaner = new IntrinsicCleanerPass(*targetData);
   fpm_phi = new PhiCleanerPass();
 }
 
@@ -596,12 +567,49 @@ KFunction* KModule::getKFunction(const char* fname) const
 	return getKFunction(f);
 }
 
+#include <iostream>
+
 void KModule::loadIntrinsicsLib(const Interpreter::ModuleOptions &opts)
 {
+	// Force importing functions required by intrinsic lowering. Kind of
+	// unfortunate clutter when we don't need them but we won't know
+	// that until after all linking and intrinsic lowering is
+	// done. After linking and passes we just try to manually trim these
+	// by name. We only add them if such a function doesn't exist to
+	// avoid creating stale uses.
+
+	const llvm::Type *i8Ty = Type::getInt8Ty(getGlobalContext());
+
+	forceImport(
+		module, "memcpy", PointerType::getUnqual(i8Ty),
+		PointerType::getUnqual(i8Ty),
+		PointerType::getUnqual(i8Ty),
+		targetData->getIntPtrType(getGlobalContext()), (Type*) 0);
+	forceImport(
+		module, "memmove", PointerType::getUnqual(i8Ty),
+		PointerType::getUnqual(i8Ty),
+		PointerType::getUnqual(i8Ty),
+		targetData->getIntPtrType(getGlobalContext()), (Type*) 0);
+	forceImport(
+		module, "memset", PointerType::getUnqual(i8Ty),
+		PointerType::getUnqual(i8Ty),
+		Type::getInt32Ty(getGlobalContext()),
+		targetData->getIntPtrType(getGlobalContext()), (Type*) 0);
+
+	if (opts.CheckDivZero) {
+		forceImport(module, "klee_div_zero_check",
+			Type::getVoidTy(getGlobalContext()),
+			Type::getInt64Ty(getGlobalContext()),
+			NULL);
+	}
+
+	// FIXME: Missing force import for various math functions.
+
 	// FIXME: Find a way that we can test programs without requiring
 	// this to be linked in, it makes low level debugging much more
 	// annoying.
 	llvm::sys::Path path(opts.LibraryDir);
+
 	path.appendComponent("libkleeRuntimeIntrinsic.bca");
 	module = linkWithLibrary(module, path.c_str());
 }

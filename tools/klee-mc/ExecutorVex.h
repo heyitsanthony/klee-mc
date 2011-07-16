@@ -97,6 +97,8 @@ protected:
 	Guest		*gs;
 
 private:
+	llvm::Function* getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new);
+
 	void markExitIgnore(ExecutionState& state);
 	void markExit(ExecutionState& state, uint8_t);
 
@@ -122,6 +124,8 @@ private:
 		llvm::Function* f,
 		GuestMem::Mapping m);
 	void initializeGlobals(ExecutionState& state);
+	void initGlobalFuncs(void);
+
 	void prepState(ExecutionState* state, llvm::Function*);
 	void setupRegisterContext(ExecutionState* state, llvm::Function* f);
 	void setupProcessMemory(ExecutionState* state, llvm::Function* f);

@@ -138,3 +138,10 @@
 /usr/sbin/tftpd
 /sbin/dhcpcd asd
 /sbin/udevd
+/usr/bin/w3m asd
+/usr/bin/irssi
+/usr/bin/finch
+/usr/bin/mp3blaster
+/usr/bin/newsbeuter
+/usr/sbin/tcpdump -r asd
+/usr/sbin/asterisk -f

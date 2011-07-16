@@ -10,6 +10,7 @@
 #ifndef KLEE_PASSES_H
 #define KLEE_PASSES_H
 
+#include "llvm/BasicBlock.h"
 #include "llvm/Constants.h"
 #include "llvm/Instructions.h"
 #include "llvm/Module.h"
@@ -22,6 +23,7 @@ namespace llvm {
   class Module;
   class TargetData;
   class Type;
+  class IntrinsicInst;
 }
 
 namespace klee {
@@ -85,6 +87,10 @@ public:
 
   virtual bool runOnModule(llvm::Module &M);
   bool runOnFunction(llvm::Function* f);
+private:
+  void clean_vacopy(llvm::BasicBlock::iterator& i, llvm::IntrinsicInst* ii);
+  bool clean_dup_stoppoint(
+  	llvm::BasicBlock::iterator& i, llvm::IntrinsicInst* ii);
 };
 
 // performs two transformations which make interpretation
