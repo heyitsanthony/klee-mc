@@ -126,6 +126,7 @@
 /sbin/xfs_repair asd
 /sbin/reiserfsck asd
 /usr/bin/dig asd
+/usr/bin/diffstat asd dsa
 /usr/sbin/iscsi-iname
 /usr/sbin/arpd
 /usr/sbin/avahi-daemon
@@ -145,3 +146,6 @@
 /usr/bin/newsbeuter
 /usr/sbin/tcpdump -r asd
 /usr/sbin/asterisk -f
+/usr/bin/w
+/bin/ps aux
+/usr/bin/pmap -x 123

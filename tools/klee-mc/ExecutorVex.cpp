@@ -352,7 +352,7 @@ Function* ExecutorVex::getFuncByAddr(uint64_t guest_addr)
 	kf = kmodule->addFunction(f);
 	statsTracker->addKFunction(kf);
 	bindKFuncConstants(kf);
-	bindModuleConstTable(); /* XXX *really* slow */
+	kmodule->bindModuleConstTable(this);
 
 	return f;
 }

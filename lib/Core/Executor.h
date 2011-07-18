@@ -200,8 +200,6 @@ protected:
 
   void bindModuleConstants(void);
   void bindKFuncConstants(KFunction *kfunc);
-  void bindModuleConstTable(void);
-
 
   InterpreterHandler *interpreterHandler;
   llvm::TargetData* target_data;

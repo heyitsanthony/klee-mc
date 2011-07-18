@@ -9,6 +9,7 @@
 
 #include "klee/Internal/Module/KModule.h"
 #include "../lib/Core/Context.h"
+#include "../lib/Core/Executor.h"
 
 #include "Passes.h"
 
@@ -96,7 +97,6 @@ KModule::KModule(Module *_module)
 
 KModule::~KModule()
 {
-	delete[] constantTable;
 	delete infos;
 
 	if (fpm_raiseasm) delete fpm_raiseasm;
@@ -194,10 +194,13 @@ static void injectStaticConstructorsAndDestructors(Module *m)
 
 static void forceImport(Module *m, const char *name, const Type *retType, ...)
 {
-// If module lacks an externally visible symbol for the name then we
-// need to create one. We have to look in the symbol table because
-// we want to check everything (global variables, functions, and
-// aliases).
+	// If module lacks an externally visible symbol for the name then we
+	// need to create one. We have to look in the symbol table because
+	// we want to check everything (global variables, functions, and
+	// aliases).
+	//
+	// Note that the function will stay a declaration without 
+	// linking in the library after calling forceImport.
 
 	Value *v = m->getValueSymbolTable().lookup(name);
 	GlobalValue *gv = dyn_cast_or_null<GlobalValue>(v);
@@ -612,4 +615,16 @@ void KModule::loadIntrinsicsLib(const Interpreter::ModuleOptions &opts)
 
 	path.appendComponent("libkleeRuntimeIntrinsic.bca");
 	module = linkWithLibrary(module, path.c_str());
+}
+
+void KModule::bindModuleConstTable(Executor* exe)
+{
+	unsigned int	old_ct_sz;
+
+	old_ct_sz = constantTable.size();
+	for (unsigned i = old_ct_sz; i < constants.size(); i++) {
+		Cell	c;
+		c.value = exe->evalConstant(constants[i]);
+		constantTable.push_back(c);
+	}
 }

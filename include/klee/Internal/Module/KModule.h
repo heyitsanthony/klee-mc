@@ -110,7 +110,7 @@ namespace klee {
     KConstant* getKConstant(llvm::Constant *c);
 
 
-    Cell *constantTable;
+    std::vector<Cell>	constantTable;
 
   public:
     KModule(llvm::Module *_module);
@@ -137,6 +137,8 @@ namespace klee {
     std::vector<KFunction*>::const_iterator kfuncsEnd() const
     { return functions.end(); }
 
+
+    void bindModuleConstTable(Executor* exe);
   private:
 	KFunction* addFunctionProcessed(llvm::Function *f);
 	void prepareMerge(

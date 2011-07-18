@@ -2329,62 +2329,6 @@ void Executor::removeRoot(ExecutionState* es)
   delete es;
 }
 
-void Executor::bindInstructionConstants(KInstruction *KI)
-{
-	GetElementPtrInst	*gepi;
-	KGEPInstruction		*kgepi;
-	ref<ConstantExpr>	constantOffset;
-	uint64_t		index;
-
-	gepi = dyn_cast<GetElementPtrInst>(KI->inst);
-	if (!gepi) return;
-
-	kgepi = static_cast<KGEPInstruction*>(KI);
-	constantOffset = ConstantExpr::alloc(0, Context::get().getPointerWidth());
-	index = 1;
-
-	foreach (ii, gep_type_begin(gepi), gep_type_end(gepi)) {
-	const StructType *st = dyn_cast<StructType>(*ii);
-	if (st) {
-		const StructLayout	*sl;
-		const ConstantInt	*ci;
-		uint64_t		addend;
-
-		sl = target_data->getStructLayout(st);
-		ci = cast<ConstantInt>(ii.getOperand());
-		addend =  sl->getElementOffset((unsigned) ci->getZExtValue());
-		constantOffset = constantOffset->Add(
-		ConstantExpr::alloc(addend, Context::get().getPointerWidth()));
-	} else {
-		Constant		*c;
-		const SequentialType	*seqty;
-		uint64_t		elemSize;
-
-		seqty = cast<SequentialType>(*ii);
-		elemSize = target_data->getTypeStoreSize(seqty->getElementType());
-		c = dyn_cast<Constant>(ii.getOperand());
-		if (c) {
-			ref<ConstantExpr> index;
-			ref<ConstantExpr> addend;
-
-			index = evalConstant(c)->ZExt(
-				Context::get().getPointerWidth());
-			addend = index->Mul(
-				ConstantExpr::alloc(
-					elemSize,
-					Context::get().getPointerWidth()));
-			constantOffset = constantOffset->Add(addend);
-		} else {
-			kgepi->indices.push_back(
-				std::make_pair(index, elemSize));
-		}
-	}
-	index++;
-	}
-
-	kgepi->offset = constantOffset->getZExtValue();
-}
-
 void Executor::killStates(ExecutionState* &state)
 {
   // just guess at how many to kill
@@ -3349,18 +3293,7 @@ void Executor::bindModuleConstants(void)
 		bindKFuncConstants(*it);
 	}
 
-	bindModuleConstTable();
-}
-
-void Executor::bindModuleConstTable(void)
-{
-	if (kmodule->constantTable) delete [] kmodule->constantTable;
-
-	kmodule->constantTable = new Cell[kmodule->constants.size()];
-	for (unsigned i = 0; i < kmodule->constants.size(); ++i) {
-		Cell &c = kmodule->constantTable[i];
-		c.value = evalConstant(kmodule->constants[i]);
-	}
+	kmodule->bindModuleConstTable(this);
 }
 
 void Executor::bindKFuncConstants(KFunction* kf)
@@ -3368,6 +3301,64 @@ void Executor::bindKFuncConstants(KFunction* kf)
 	for (unsigned i=0; i<kf->numInstructions; ++i)
 		bindInstructionConstants(kf->instructions[i]);
 }
+
+void Executor::bindInstructionConstants(KInstruction *KI)
+{
+	GetElementPtrInst	*gepi;
+	KGEPInstruction		*kgepi;
+	ref<ConstantExpr>	constantOffset;
+	uint64_t		index;
+
+	gepi = dyn_cast<GetElementPtrInst>(KI->inst);
+	if (!gepi) return;
+
+	kgepi = static_cast<KGEPInstruction*>(KI);
+	constantOffset = ConstantExpr::alloc(0, Context::get().getPointerWidth());
+	index = 1;
+
+	foreach (ii, gep_type_begin(gepi), gep_type_end(gepi)) {
+	const StructType *st = dyn_cast<StructType>(*ii);
+	if (st) {
+		const StructLayout	*sl;
+		const ConstantInt	*ci;
+		uint64_t		addend;
+
+		sl = target_data->getStructLayout(st);
+		ci = cast<ConstantInt>(ii.getOperand());
+		addend =  sl->getElementOffset((unsigned) ci->getZExtValue());
+		constantOffset = constantOffset->Add(
+		ConstantExpr::alloc(addend, Context::get().getPointerWidth()));
+	} else {
+		Constant		*c;
+		const SequentialType	*seqty;
+		uint64_t		elemSize;
+
+		seqty = cast<SequentialType>(*ii);
+		elemSize = target_data->getTypeStoreSize(seqty->getElementType());
+		c = dyn_cast<Constant>(ii.getOperand());
+		if (c) {
+			ref<ConstantExpr> index;
+			ref<ConstantExpr> addend;
+
+			index = evalConstant(c)->ZExt(
+				Context::get().getPointerWidth());
+			addend = index->Mul(
+				ConstantExpr::alloc(
+					elemSize,
+					Context::get().getPointerWidth()));
+			constantOffset = constantOffset->Add(addend);
+		} else {
+			kgepi->indices.push_back(
+				std::make_pair(index, elemSize));
+		}
+	}
+	index++;
+	}
+
+	kgepi->offset = constantOffset->getZExtValue();
+}
+
+
 
 void Executor::executeAllocConst(
 	ExecutionState &state,
