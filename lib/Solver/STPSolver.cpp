@@ -27,11 +27,16 @@ namespace
   cl::opt<bool>
   DebugPrintQueries("debug-print-queries",
                     cl::desc("Print queries during execution."));
+  cl::opt<unsigned>
+  SharedMemorySize(
+  	"shared-mem-bytes",
+	cl::init(1 << 20),
+	cl::desc("Bytes of Shared Memory for forked STP"));
+  	
 }
 
 
 static unsigned char	*shared_memory_ptr;
-static const unsigned	shared_memory_size = 1<<20;
 static int		shared_memory_id;
 
 static bool sendall(int fd, const void* vp, size_t sz);
@@ -165,7 +170,7 @@ STPSolverImpl::STPSolverImpl(STPSolver *_solver, bool _useForkedSTP)
   vc_registerErrorHandler(::stp_error_handler);
 
   if (useForkedSTP) {
-    shared_memory_id = shmget(IPC_PRIVATE, shared_memory_size, IPC_CREAT | 0700);
+    shared_memory_id = shmget(IPC_PRIVATE, SharedMemorySize, IPC_CREAT | 0700);
     assert(shared_memory_id>=0 && "shmget failed");
     shared_memory_ptr = (unsigned char*) shmat(shared_memory_id, NULL, 0);
     assert(shared_memory_ptr!=(void*)-1 && "shmat failed");
@@ -263,7 +268,7 @@ bool STPSolverImpl::doForkedComputeInitialValues(
 
 	foreach (it, objects.begin(), objects.end())
 		sum += (*it)->mallocKey.size;
-	assert (sum < shared_memory_size
+	assert (sum < SharedMemorySize
 		&& "not enough shared memory for counterexample");
 
 	unsigned char* pos = shared_memory_ptr;
