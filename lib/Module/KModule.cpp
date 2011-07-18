@@ -199,7 +199,7 @@ static void forceImport(Module *m, const char *name, const Type *retType, ...)
 	// we want to check everything (global variables, functions, and
 	// aliases).
 	//
-	// Note that the function will stay a declaration without 
+	// Note that the function will stay a declaration without
 	// linking in the library after calling forceImport.
 
 	Value *v = m->getValueSymbolTable().lookup(name);
@@ -374,6 +374,9 @@ void KModule::addModule(Module* in_mod)
 		kmod_f = module->getFunction(it->getNameStr());
 		assert (kmod_f != NULL);
 		kf = addFunction(kmod_f);
+		/* do not track coverage of modules (maybe do it in the future
+		 * when I figure out a nice way to manage stats) */
+		if (kf) kf->trackCoverage = false;
 	}
 
 //	assert (isLinked);

@@ -15,29 +15,19 @@
 using namespace klee;
 
 StatisticManager::StatisticManager()
-  : enabled(true),
-    globalStats(0),
-    indexedStats(0),
-    contextStats(0),
-    index(0) {
+: enabled(true)
+, globalStats(0)
+, contextStats(0)
+, index(0)
+{
 }
 
 StatisticManager::~StatisticManager() {
   if (globalStats) delete[] globalStats;
-  if (indexedStats) delete[] indexedStats;
 }
 
-void StatisticManager::useIndexedStats(unsigned totalIndices) {  
-  if (indexedStats) delete[] indexedStats;
-  indexedStats = NULL;
-
-  if (totalIndices == 0) return;
-
-  indexedStats = new uint64_t[totalIndices * stats.size()];
-  memset(indexedStats, 0, sizeof(*indexedStats) * totalIndices * stats.size());
-}
-
-void StatisticManager::registerStatistic(Statistic &s) {
+void StatisticManager::registerStatistic(Statistic &s)
+{
   if (globalStats) delete[] globalStats;
   s.id = stats.size();
   stats.push_back(&s);

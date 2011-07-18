@@ -12,6 +12,7 @@
 
 #include "llvm/Support/DataTypes.h"
 #include <string>
+#include <vector>
 
 namespace klee {
   class Statistic;
@@ -21,17 +22,16 @@ namespace klee {
   /// Statistic - A named statistic instance.
   ///
   /// The Statistic class holds information about the statistic, but
-  /// not the actual values. Values are managed by the global
-  /// StatisticManager to enable transparent support for instruction
-  /// level and call path level statistics.
+  /// not the actual values.
   class Statistic {
     friend class StatisticManager;
     friend class StatisticRecord;
 
   private:
-    unsigned id;
-    const std::string name;
-    const std::string shortName;
+    unsigned			id;
+    const std::string		name;
+    const std::string		shortName;
+    std::vector<uint64_t>	indexedStats;
 
   public:
     Statistic(const std::string &_name, 
@@ -59,6 +59,24 @@ namespace klee {
 
     /// operator+= - Increment the statistic by \arg addend.
     Statistic &operator +=(const uint64_t addend);
+    
+    inline void incIndexedValue(unsigned index, uint64_t addend)
+    {
+	if (indexedStats.size() <= index) indexedStats.resize(index+1);
+	indexedStats[index] += addend;
+    }
+
+    inline void setIndexedValue(unsigned index, uint64_t v)
+    {
+	if (indexedStats.size() <= index) indexedStats.resize(index+1);
+	indexedStats[index] = v;
+    }
+
+   inline uint64_t getIndexedValue(unsigned index) const
+   {
+     return (indexedStats.size() <= index) ? 0 : indexedStats[index];
+   }
+
   };
 }
 

@@ -50,47 +50,48 @@ using namespace llvm;
 ///
 
 namespace {
-  cl::opt<bool>
-  TrackInstructionTime("track-instruction-time",
-                       cl::desc("Enable tracking of time for individual instructions"),
-                       cl::init(false));
+	cl::opt<bool> TrackInstructionTime(
+		"track-instruction-time",
+		cl::desc("Enable tracking of time for individual instructions"),
+		cl::init(false));
 
-  cl::opt<bool>
-  OutputStats("output-stats",
-              cl::desc("Write running stats trace file"),
-              cl::init(true));
+	cl::opt<bool> OutputStats(
+		"output-stats",
+		cl::desc("Write running stats trace file"),
+		cl::init(true));
 
-  cl::opt<bool>
-  OutputIStats("output-istats",
-               cl::desc("Write instruction level statistics (in callgrind format)"),
-               cl::init(true));
+	cl::opt<bool> OutputIStats(
+		"output-istats",
+		cl::desc("Write instruction level statistics (in callgrind format)"),
+		cl::init(true));
 
-  cl::opt<double>
-  StatsWriteInterval("stats-write-interval",
-                     cl::desc("Approximate number of seconds between stats writes (default: 1.0)"),
-                     cl::init(1.));
+	cl::opt<double> StatsWriteInterval(
+		"stats-write-interval",
+		cl::desc("Approximate number of seconds between stats writes (default: 1.0)"),
+		cl::init(1.));
 
-  cl::opt<double>
-  IStatsWriteInterval("istats-write-interval",
-                      cl::desc("Approximate number of seconds between istats writes (default: 10.0)"),
-                      cl::init(10.));
+	cl::opt<double> IStatsWriteInterval(
+		"istats-write-interval",
+		cl::desc("Approximate number of seconds between istats writes (default: 10.0)"),
+		cl::init(10.));
 
-  /*
-  cl::opt<double>
-  BranchCovCountsWriteInterval("branch-cov-counts-write-interval",
-                     cl::desc("Approximate number of seconds between run.branches writes (default: 5.0)"),
-                     cl::init(5.));
-  */
+	/*
+	cl::opt<double>
+	BranchCovCountsWriteInterval("branch-cov-counts-write-interval",
+	cl::desc("Approximate number of seconds between run.branches writes (default: 5.0)"),
+	cl::init(5.));
+	*/
 
-  // XXX I really would like to have dynamic rate control for something like this.
-  cl::opt<double>
-  UncoveredUpdateInterval("uncovered-update-interval",
-                          cl::init(30.));
+	// XXX I really would like to have dynamic rate control for something like this.
+	cl::opt<double>
+	UncoveredUpdateInterval(
+		"uncovered-update-interval",
+		cl::init(30.));
 
-  cl::opt<bool>
-  UseCallPaths("use-call-paths",
-               cl::desc("Enable calltree tracking for instruction level statistics"),
-               cl::init(true));
+	cl::opt<bool> UseCallPaths(
+		"use-call-paths",
+		cl::desc("Enable calltree tracking for instruction level statistics"),
+		cl::init(true));
 
 }
 
@@ -197,9 +198,6 @@ StatsTracker::StatsTracker(
     }
   }
 
-  if (OutputIStats)
-    theStatisticManager->useIndexedStats(km->infos->getMaxID());
-
   foreach (it, km->kfuncsBegin(), km->kfuncsEnd()) {
     addKFunction(*it);
   }
@@ -232,20 +230,16 @@ void StatsTracker::addKFunction(KFunction* kf)
   kf->trackCoverage = !(excludeNames.count(name) ||
                           excludeNames.count(name.substr(0, lastNondigit+1)));
 
-  // stupid hack to get rid of trackCoverage triggering uncoveredInstructions
-  // triggering busted stats
-  kf->trackCoverage = kf->trackCoverage && (name.substr(0, 3) != "sb_");
-
   for (unsigned i=0; i<kf->numInstructions; ++i) {
     KInstruction *ki = kf->instructions[i];
     if (OutputIStats) {
       unsigned id = ki->info->id;
       theStatisticManager->setIndex(id);
-      if (kf->trackCoverage && instructionIsCoverable(ki->inst))
-        ++stats::uncoveredInstructions;
     }
 
     if (kf->trackCoverage) {
+      if (instructionIsCoverable(ki->inst))
+        ++stats::uncoveredInstructions;
       if (BranchInst *bi = dyn_cast<BranchInst>(ki->inst))
         if (!bi->isUnconditional())
           numBranches++;
@@ -254,9 +248,6 @@ void StatsTracker::addKFunction(KFunction* kf)
 
   if (!init) {
 /* hack to get dynamic adding kfuncs. Slightly wrong. */
-    if (OutputIStats)
-      theStatisticManager->useIndexedStats(km->infos->getMaxID());
-
     std::vector<Instruction*>	iv;
     computeCallTargets(kf->function);
     initMinDistToReturn(kf->function, iv);
@@ -314,7 +305,8 @@ void StatsTracker::stepInstUpdateFrame(ExecutionState &es)
   if (!sf.kf->trackCoverage || !instructionIsCoverable(inst))
     return;
 
-  if (!theStatisticManager->getIndexedValue(stats::coveredInstructions, ii.id))
+  if (!theStatisticManager->getIndexedValue(
+  	stats::coveredInstructions, ii.id))
   {
       // Checking for actual stoppoints avoids inconsistencies due
       // to line number propogation.
@@ -323,7 +315,8 @@ void StatsTracker::stepInstUpdateFrame(ExecutionState &es)
       es.coveredNew = true;
       es.instsSinceCovNew = 1;
       ++stats::coveredInstructions;
-      stats::uncoveredInstructions += (uint64_t)-1;
+      stats::uncoveredInstructions += (int64_t)-1;
+      assert ((int64_t)stats::uncoveredInstructions >= 0);
   }
 }
 
@@ -418,7 +411,7 @@ public:
 
 double StatsTracker::elapsed() { return util::estWallTime() - startWallTime; }
 
-static const char* stat_labels[] = 
+static const char* stat_labels[] =
 {
 	"Instructions",
 	"FullBranches",
@@ -643,7 +636,8 @@ static calltargets_ty callTargets;
 static std::map<Function*, std::vector<Instruction*> > functionCallers;
 static std::map<Function*, unsigned> functionShortestPath;
 
-static std::vector<Instruction*> getSuccs(Instruction *i) {
+static std::vector<Instruction*> getSuccs(Instruction *i)
+{
   BasicBlock *bb = i->getParent();
   std::vector<Instruction*> res;
 
@@ -657,26 +651,34 @@ static std::vector<Instruction*> getSuccs(Instruction *i) {
   return res;
 }
 
-uint64_t klee::computeMinDistToUncovered(const KInstruction *ki,
-                                         uint64_t minDistAtRA) {
-  StatisticManager &sm = *theStatisticManager;
-  if (minDistAtRA==0) { // unreachable on return, best is local
-    return sm.getIndexedValue(stats::minDistToUncovered,
-                              ki->info->id);
-  } else {
-    uint64_t minDistLocal = sm.getIndexedValue(stats::minDistToUncovered,
-                                               ki->info->id);
-    uint64_t distToReturn = sm.getIndexedValue(stats::minDistToReturn,
-                                               ki->info->id);
+uint64_t klee::computeMinDistToUncovered(
+  const KInstruction *ki, uint64_t minDistAtRA)
+{
+	StatisticManager &sm = *theStatisticManager;
 
-    if (distToReturn==0) { // return unreachable, best is local
-      return minDistLocal;
-    } else if (!minDistLocal) { // no local reachable
-      return distToReturn + minDistAtRA;
-    } else {
-      return std::min(minDistLocal, distToReturn + minDistAtRA);
-    }
-  }
+	assert (ki != NULL && "BAD KI ON COMPUTE MIN DIST");
+
+	// unreachable on return, best is local
+	if (minDistAtRA==0)
+		return sm.getIndexedValue(
+			stats::minDistToUncovered, ki->info->id);
+
+	uint64_t minDistLocal, distToReturn;
+
+	minDistLocal = sm.getIndexedValue(
+		stats::minDistToUncovered, ki->info->id);
+	distToReturn = sm.getIndexedValue(
+		stats::minDistToReturn, ki->info->id);
+
+
+	// return unreachable, best is local
+	if (distToReturn==0) return minDistLocal;
+
+	// no local reachable
+	if (!minDistLocal) return distToReturn + minDistAtRA;
+
+
+	return std::min(minDistLocal, distToReturn + minDistAtRA);
 }
 
 bool StatsTracker::init = true;
@@ -746,7 +748,7 @@ void StatsTracker::computeReachableUncoveredInit(void)
   init = false;
 
   foreach (fnIt, m->begin(), m->end()) {
-    computeCallTargets(fnIt); 
+    computeCallTargets(fnIt);
   }
 
   // Compute function callers as reflexion of callTargets.
@@ -901,14 +903,22 @@ void StatsTracker::computeReachableUncovered()
       ExecutionState::stack_ty::iterator next = sfIt + 1;
       KInstIterator kii;
 
+      sfIt->minDistToUncoveredOnReturn = currentFrameMinDist;
+
       if (next==es->stack.end()) {
         kii = es->pc;
       } else {
         kii = next->caller;
         ++kii;
+	/* XXX this is to get vexllvm working,
+	 * the problem here is that we want to figure out where
+	 * we jump to after a call the caller function terminates with a return
+	 * jumping to the current state (e.g. kii+1 is after the caller's retrn)
+	 * Going to have to try something different for DBT */
+        if ((const KInstruction*)kii == NULL) {
+	  continue;
+        }
       }
-
-      sfIt->minDistToUncoveredOnReturn = currentFrameMinDist;
 
       currentFrameMinDist = computeMinDistToUncovered(kii, currentFrameMinDist);
     }

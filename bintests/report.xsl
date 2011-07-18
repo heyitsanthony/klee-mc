@@ -18,7 +18,9 @@ KLEE-MC Command Tests
 	<td alt="Aborted">A</td>
 	<td alt="Solver Died">S</td>
 	<td>Time</td>
-	<td>Instructions</td>
+	<td>MB</td>
+	<td>DynInst</td>
+	<td>DBTInst</td>
 </tr>
 <xsl:for-each select="testruns/testrun">
 <xsl:sort select="command" />
@@ -63,10 +65,19 @@ KLEE-MC Command Tests
 		<xsl:value-of select="kstats/WallTime"/>
 	</td>
 
+	<td style="margin-left:20px;margin-bottom:1em;font-size:10pt; text-align: right; font-family: monospace">
+		<xsl:value-of select="kstats/MemUsedKB / 1024" />
+	</td>
+
 
 	<td style="margin-left:20px;margin-bottom:1em;font-size:10pt; text-align: right; font-family: monospace">
 		<xsl:value-of select="kstats/Instructions"/>
 	</td>
+
+	<td style="margin-left:20px;margin-bottom:1em;font-size:10pt; text-align: right; font-family: monospace">
+		<xsl:value-of select="kstats/CoveredInstructions + kstats/UncoveredInstructions"/>
+	</td>
+
 </tr>
 </xsl:for-each>
 </table>

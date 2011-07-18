@@ -144,7 +144,7 @@ ExecutionState* ExecutionState::reconstitute(
 
 void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf)
 {
-	assert (kf != NULL);
+	assert (kf != NULL && "Bad function pushed on stack");
 	stack.push_back(StackFrame(caller,kf));
 }
 

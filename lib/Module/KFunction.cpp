@@ -64,7 +64,9 @@ KFunction::KFunction(llvm::Function *_function,
     numInstructions += bb->size();
   }
 
-  instructions = new KInstruction*[numInstructions];
+  instructions = new KInstruction*[numInstructions+1];
+  instructions[numInstructions] = NULL;
+
   arguments = new Value*[numArgs];
 
   std::map<Instruction*, unsigned> registerMap;

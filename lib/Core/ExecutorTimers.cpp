@@ -12,6 +12,7 @@
 #include "ExeStateManager.h"
 #include "PTree.h"
 #include "StatsTracker.h"
+#include "static/Sugar.h"
 
 #include "klee/Common.h"
 #include "klee/Internal/Module/InstructionInfoTable.h"
@@ -98,16 +99,13 @@ void Executor::processTimersDumpStates(void)
   
   if (!os) goto done;
 
-  for (ExeStateSet::const_iterator it = stateManager->begin(), 
-    ie = stateManager->end(); it != ie; ++it)
-  {
+  foreach (it,  stateManager->begin(), stateManager->end()) {
     ExecutionState *es = *it;
     *os << "(" << es << ",";
     *os << "[";
     ExecutionState::stack_ty::iterator next = es->stack.begin();
     ++next;
-    for (ExecutionState::stack_ty::iterator sfIt = es->stack.begin(),
-           sf_ie = es->stack.end(); sfIt != sf_ie; ++sfIt) {
+    foreach (sfIt,  es->stack.begin(), es->stack.end()) {
       *os << "('" << sfIt->kf->function->getNameStr() << "',";
       if (next == es->stack.end()) {
         *os << es->prevPC->info->line << "), ";
@@ -119,12 +117,12 @@ void Executor::processTimersDumpStates(void)
     *os << "], ";
 
     StackFrame &sf = es->stack.back();
-    uint64_t md2u = computeMinDistToUncovered(es->pc,
-                sf.minDistToUncoveredOnReturn);
-    uint64_t icnt = theStatisticManager->getIndexedValue(stats::instructions,
-                     es->pc->info->id);
-    uint64_t cpicnt = sf.callPathNode->statistics.getValue(stats::instructions);
+    uint64_t md2u, icnt, cpicnt;
 
+    md2u = computeMinDistToUncovered(es->pc, sf.minDistToUncoveredOnReturn);
+    icnt = theStatisticManager->getIndexedValue(
+    	stats::instructions, es->pc->info->id);
+    cpicnt = sf.callPathNode->statistics.getValue(stats::instructions);
     *os << "{";
     *os << "'depth' : " << es->depth << ", ";
     *os << "'weight' : " << es->weight << ", ";
@@ -175,8 +173,7 @@ void Executor::processTimers(ExecutionState *current,
 
   if (timers.empty()) goto done;
 
-  for (std::vector<TimerInfo*>::iterator it = timers.begin(), 
-         ie = timers.end(); it != ie; ++it) {
+  foreach (it, timers.begin(), timers.end()) {
     TimerInfo *ti = *it;
   
     if (now >= ti->nextFireTime) {
