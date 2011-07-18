@@ -617,8 +617,7 @@ void ExecutorVex::handleXferSyscall(
 
 	executeCall(state, ki, kf_scenter->function, args);
 
-	fprintf(stderr, "after syscall: states=%d. state=%p\n",
-		stateManager->size(), &state);
+	fprintf(stderr, "after syscall: states=%d.\n", stateManager->size());
 }
 
 void ExecutorVex::handleXferReturn(
@@ -926,7 +925,6 @@ void ExecutorVex::makeRangeSymbolic(
 	/* handle disjoint addresses */
 	while (total_sz < sz) {
 		const MemoryObject	*mo;
-		ObjectState		*os;
 		unsigned int		mo_off;
 		unsigned int		tail_take_bytes;
 		unsigned int		take_remaining;

@@ -149,3 +149,4 @@
 /usr/bin/w
 /bin/ps aux
 /usr/bin/pmap -x 123
+/usr/bin/mc
