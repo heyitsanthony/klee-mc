@@ -60,12 +60,12 @@ KLEE-MC Command Tests
 	</xsl:choose>
 
 	<td style="margin-left:20px;margin-bottom:1em;font-size:10pt; text-align: right; font-family: monospace">
-		<xsl:value-of select="kstats/time"/>
+		<xsl:value-of select="kstats/WallTime"/>
 	</td>
 
 
 	<td style="margin-left:20px;margin-bottom:1em;font-size:10pt; text-align: right; font-family: monospace">
-		<xsl:value-of select="kstats/instrs"/>
+		<xsl:value-of select="kstats/Instructions"/>
 	</td>
 </tr>
 </xsl:for-each>

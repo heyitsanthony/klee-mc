@@ -57,7 +57,6 @@ namespace klee {
     void trackInstTime(ExecutionState& es);
     void stepInstUpdateFrame(ExecutionState &es);
     void updateStateStatistics(uint64_t addend);
-    void writeStatsHeader();
     void writeStatsLine();
     void writeIStats();
     const KModule *km;

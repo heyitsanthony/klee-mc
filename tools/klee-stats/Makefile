@@ -9,6 +9,9 @@
 
 LEVEL = ../..
 
+SCRIPTFILES := klee-stats KleeStat.py
+SCRIPTPATHS=$(SCRIPTFILES:%=$(PROJ_SRC_DIR)/%)
+
 TOOLSCRIPTNAME := klee-stats
 
 include $(LEVEL)/Makefile.common
@@ -23,7 +26,7 @@ $(ToolBuildPath): $(ToolDir)/.dir
 
 $(ToolBuildPath): $(TOOLSCRIPTNAME)
 	$(Echo) Copying $(BuildMode) script $(TOOLSCRIPTNAME)
-	$(Verb) $(CP) -f $(PROJ_SRC_DIR)/$(TOOLSCRIPTNAME) "$@"
+	$(Verb) $(CP) -f $(SCRIPTPATHS) "$(ToolDir)"
 	$(Verb) chmod 0755 "$@"
 
 ifdef NO_INSTALL

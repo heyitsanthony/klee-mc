@@ -207,7 +207,6 @@ StatsTracker::StatsTracker(
   if (OutputStats) {
     statsFile = executor.interpreterHandler->openOutputFile("run.stats");
     assert(statsFile && "unable to open statistics trace file");
-    writeStatsHeader();
     writeStatsLine();
 
     executor.addTimer(new WriteStatsTimer(this), StatsWriteInterval);
@@ -417,58 +416,60 @@ public:
   }
 };
 
-void StatsTracker::writeStatsHeader() {
-  *statsFile << "('Instructions',"
-             << "'FullBranches',"
-             << "'PartialBranches',"
-             << "'NumBranches',"
-             << "'UserTime',"
-             << "'NumStates',"
-             << "'NumStatesNC',"
-             << "'MallocUsage',"
-             << "'NumQueries',"
-             << "'NumQueryConstructs',"
-             << "'NumObjects',"
-             << "'WallTime',"
-             << "'CoveredInstructions',"
-             << "'UncoveredInstructions',"
-             << "'QueryTime',"
-             << "'SolverTime',"
-             << "'CexCacheTime',"
-             << "'ForkTime',"
-             << "'ResolveTime',"
-             << "'Forks'"
-             << ")\n";
-  statsFile->flush();
-}
+double StatsTracker::elapsed() { return util::estWallTime() - startWallTime; }
 
-double StatsTracker::elapsed() {
-  return util::estWallTime() - startWallTime;
-}
+static const char* stat_labels[] = 
+{
+	"Instructions",
+	"FullBranches",
+	"PartialBranches",
+	"NumBranches",
+	"UserTime",
+	"NumStates",
+	"NumStatesNC",
+	"MemUsedKB",
+	"NumQueries",
+	"NumQueryConstructs",
+	"NumObjects",
+	"WallTime",
+	"CoveredInstructions",
+	"UncoveredInstructions",
+	"QueryTime",
+	"SolverTime",
+	"CexCacheTime",
+	"ForkTime",
+	"ResolveTime",
+	"Forks",
+};
 
-void StatsTracker::writeStatsLine() {
-  *statsFile << "(" << stats::instructions
-             << "," << fullBranches
-             << "," << partialBranches
-             << "," << numBranches
-             << "," << TimeAmountFormat(util::getUserTime())
-             << "," << executor.stateManager->size()
-             << "," << executor.stateManager->getNonCompactStateCount()
-             << "," << getMemUsageKB()
-             << "," << stats::queries
-             << "," << stats::queryConstructs
-             << "," << 0 // was numObjects
-             << "," << TimeAmountFormat(elapsed())
-             << "," << stats::coveredInstructions
-             << "," << stats::uncoveredInstructions
-             << "," << TimeAmountFormat(stats::queryTime / 1000000.)
-             << "," << TimeAmountFormat(stats::solverTime / 1000000.)
-             << "," << TimeAmountFormat(stats::cexCacheTime / 1000000.)
-             << "," << TimeAmountFormat(stats::forkTime / 1000000.)
-             << "," << TimeAmountFormat(stats::resolveTime / 1000000.)
-             << "," << stats::forks
-             << ")\n";
-  statsFile->flush();
+void StatsTracker::writeStatsLine()
+{
+#define WRITE_LABEL(x)	*statsFile << "'" << stat_labels[i++] << "' : " << x << ", ";
+	int	i = 0;
+	*statsFile << "{ ";
+	WRITE_LABEL(stats::instructions)
+	WRITE_LABEL(fullBranches)
+	WRITE_LABEL(partialBranches)
+	WRITE_LABEL(numBranches)
+	WRITE_LABEL(TimeAmountFormat(util::getUserTime()))
+	WRITE_LABEL(executor.stateManager->size())
+	WRITE_LABEL(executor.stateManager->getNonCompactStateCount())
+	WRITE_LABEL(getMemUsageKB())
+	WRITE_LABEL(stats::queries)
+	WRITE_LABEL(stats::queryConstructs)
+	WRITE_LABEL(0 /* NumObjects */)
+	WRITE_LABEL(TimeAmountFormat(elapsed()))
+	WRITE_LABEL(stats::coveredInstructions)
+	WRITE_LABEL(stats::uncoveredInstructions)
+	WRITE_LABEL(TimeAmountFormat(stats::queryTime / 1000000.))
+	WRITE_LABEL(TimeAmountFormat(stats::solverTime / 1000000.))
+	WRITE_LABEL(TimeAmountFormat(stats::cexCacheTime / 1000000.))
+	WRITE_LABEL(TimeAmountFormat(stats::forkTime / 1000000.))
+	WRITE_LABEL(TimeAmountFormat(stats::resolveTime / 1000000.))
+	WRITE_LABEL(stats::forks)
+
+	*statsFile << "}\n";
+	statsFile->flush();
 }
 
 void StatsTracker::updateStateStatistics(uint64_t addend)

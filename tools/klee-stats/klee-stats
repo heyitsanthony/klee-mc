@@ -4,25 +4,10 @@ from __future__ import division
 
 import sys
 import os
-    
+from KleeStat import KleeStat
+
 def getFile(dir):
     return os.path.join(dir,'run.stats')
-
-def getLastRecord(dir):
-    f = open(getFile(dir))
-    try:
-        f.seek(-1024, 2)
-    except IOError:
-        pass # at beginning?
-    for ln in f.read(1024).split('\n')[::-1]:
-        ln = ln.strip()
-        if ln.startswith('(') and ln.endswith(')'):
-            if '(' in ln[1:]:
-                print >>sys.stderr, 'WARNING: corrupted line in file, out of disk space?'
-                ln = ln[ln.index('(',1):]
-            return eval(ln)
-    raise IOError
-
 
 class LazyEvalList:
     def __init__(self, lines):
@@ -30,8 +15,14 @@ class LazyEvalList:
 
     def __getitem__(self, index):
         item = self.lines[index]
+	if isinstance(item, list):
+	    item = item[0]
         if isinstance(item,str):
-            item = self.lines[index] = eval(item)
+            item = KleeStat(item)
+
+	if not isinstance(item,KleeStat):
+		print "Ugh. This is worse than retards"
+		print str(item)
         return item
 
     def __len__(self):
@@ -80,7 +71,7 @@ def getKeyIndex(keyName,labels):
     return keyIndex
 
 
-def sortTable(table, labels, keyName, ascending=False):   
+def sortTable(table, labels, keyName, ascending=False):
     indices = range(len(table))
     keyIndex = getKeyIndex(keyName,labels)
     indices.sort(key = lambda n: table[n][keyIndex])
@@ -119,9 +110,9 @@ def printTable(table):
     out = sys.stdout
     header = '-'*(sum(widths) + maxLen*3 + 1)
     map(printRow, table)
-        
 
-def main(args):
+
+def getOpts():
     from optparse import OptionParser
     op = OptionParser(usage="usage: %prog [options] directories",
                       epilog="""\
@@ -154,11 +145,9 @@ Tfork:   Time spent forking (%)""")
     op.add_option('','--compare-by', dest='compBy',
                   help="key value on which to compare runs to the reference one (which is the first one).  E.g., --compare-by=Instrs shows how each run compares to the reference run after executing the same number of instructions as the reference run.  If a run hasn't executed as many instructions as the reference one, we simply print the statistics at the end of that run.")
     op.add_option('', '--xml', dest='printXML', action='store_true', help='Use XML format', default=False)
-    opts,dirs = op.parse_args()
-    
-    if not dirs:
-        op.error("no directories given.")
+    return op
 
+def getActualDirs(dirs):
     actualDirs = []
     for dir in dirs:
         if os.path.exists(os.path.join(dir,'info')):
@@ -169,57 +158,50 @@ Tfork:   Time spent forking (%)""")
                     p = os.path.join(root,d)
                     if os.path.exists(os.path.join(p,'info')):
                         actualDirs.append(p)
-    dirs = actualDirs
-    
+    return actualDirs
+
+def main(args):
+    op = getOpts()
+    opts,dirs = op.parse_args()
+    if not dirs:
+        op.error("no directories given.")
+
+    dirs = getActualDirs(dirs)
+
     summary = []
-    
-    tags = ['path', 'instrs', 'time', 'icov', 'bcov', 'icount', 'solver', 'states', 'statesnc', 'mem', 'queries', 'avgqc', 'tcex', 'tfork']
+
+    full_labels = ('Path','Instrs','Time(s)','ICov(%)','BCov(%)','ICount','Solver(%)', 'States', 'StatesNC', 'Mem(MB)', 'Queries', 'AvgQC', 'Tcex(%)', 'Tfork(%)')
     if (opts.printAll):
-        labels = ('Path','Instrs','Time(s)','ICov(%)','BCov(%)','ICount','Solver(%)', 'States', 'StatesNC', 'Mem(MB)', 'Queries', 'AvgQC', 'Tcex(%)', 'Tfork(%)')
+    	labels = full_labels
     elif (opts.printMore):
-        labels = ('Path','Instrs','Time(s)','ICov(%)','BCov(%)','ICount','Solver(%)', 'States', 'StatesNC', 'Mem(MB)')
+        labels = full_labels[:10]
     else:
-        labels = ('Path','Instrs','Time(s)','ICov(%)','BCov(%)','ICount','Solver(%)')
+        labels = full_labels[:7]
 
-
-    def addRecord(Path,rec):
-        (I,BFull,BPart,BTot,T,St,StNC,Mem,QTot,QCon,NObjs,Treal,SCov,SUnc,QT,Ts,Tcex,Tf) = rec
-
-        # special case for straight-line code: report 100% branch coverage
-        if BTot == 0:
-            BFull = BTot = 1
-
-        Mem=Mem/1024./1024.
-        AvgQC = int(QCon/max(1,QTot))
-        if (opts.printAll):
-            table.append((Path, I, Treal, 100.*SCov/(SCov+SUnc), 100.*(2*BFull+BPart)/(2.*BTot),
-                          SCov+SUnc, 100.*Ts/Treal, St, StNC, Mem, QTot, AvgQC, 100.*Tcex/Treal, 100.*Tf/Treal))
-        elif (opts.printMore):
-            table.append((Path, I, Treal, 100.*SCov/(SCov+SUnc), 100.*(2*BFull+BPart)/(2.*BTot),
-                          SCov+SUnc, 100.*Ts/Treal, St, StNC, Mem))
-        else:
-            table.append((Path, I, Treal, 100.*SCov/(SCov+SUnc), 100.*(2*BFull+BPart)/(2.*BTot),
-                          SCov+SUnc, 100.*Ts/Treal))
-        
     def addRow(Path,data):
-        data = tuple(data[:18]) + (None,)*(18-len(data))
-        addRecord(Path,data)
+	tableRec = data.getTableRec(Path)[:len(labels)]
+	table.append(tableRec)
         if not summary:
-            summary[:] = list(data)
+            summary[:] = list(tableRec)
         else:
             summary[:] = [(a+b) for a,b in zip(summary,data)]
 
     datas = [(dir,LazyEvalList(list(open(getFile(dir))))) for dir in dirs]
-    reference = datas[0][1][-1]
+    if opts.compBy:
+        reference = datas[0][1][-1]
+	addOptRow = lambda dir,data : addRow(dir, \
+		getMatchedRecord(	\
+			data,		\
+			reference, 	\
+			lambda f: f[getKeyIndex(opts.compBy,labels)-1]))
+    else:
+        addOptRow = lambda dir,data : addRow(dir, data[-1:])
 
-    table = []    
 
+    table = []
     for dir,data in datas:
         try:
-            if opts.compBy:
-                addRow(dir,getMatchedRecord(data,reference,lambda f: f[getKeyIndex(opts.compBy,labels)-1]))
-            else: 
-                addRow(dir, data[len(data)-1])  #getLastRecord(dir))
+	    addOptRow(dir, data)
         except IOError:
             print 'Unable to open: ',dir
             continue
@@ -227,31 +209,24 @@ Tfork:   Time spent forking (%)""")
     stripCommonPathPrefix(table, 0)
 
     if opts.printXML:
-        for r in table:
-		print "<kstats>"
-		i = 0
-		while i < len(r):
-			print "<" + tags[i] + ">"
-			print r[i]
-			print "</" + tags[i] + ">"
-			i = i + 1
-			
-		print "</kstats>"
-	return
-
+    	for dir,data in datas:
+		data[-1:].dumpXML()
+	sys.exit(0)
 
     if opts.sortBy:
         sortTable(table, labels, opts.sortBy, opts.ascending)
+
     if not table:
         sys.exit(1)
-    elif len(table)>1:
+
+    if len(table)>1:
         table.append(None)
-        addRecord('Total (%d)'%(len(table)-1,),summary)
+	table.append(('Total (%d)'%(len(table)-1,),)+summary)
 
     table[0:0] = [None,labels,None]
     table.append(None)
     printTable(table)
 
-        
+
 if __name__=='__main__':
     main(sys.argv)
