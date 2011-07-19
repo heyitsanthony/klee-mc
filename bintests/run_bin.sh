@@ -18,6 +18,8 @@ do
 	# save guest so we can do replays
 	if [ ! -x guest-last ]; then
 		VEXLLVM_SAVE=1 pt_run $line
+		echo Saved snapshot "$line"
+		ls -l guest-last
 	fi
 
 	# Hard limits:

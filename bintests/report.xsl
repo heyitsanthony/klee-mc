@@ -66,7 +66,7 @@ KLEE-MC Command Tests
 	</td>
 
 	<td style="margin-left:20px;margin-bottom:1em;font-size:10pt; text-align: right; font-family: monospace">
-		<xsl:value-of select="kstats/MemUsedKB / 1024" />
+		<xsl:value-of select="kstats/MemUsedKB div 1024" />
 	</td>
 
 

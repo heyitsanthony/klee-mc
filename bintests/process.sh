@@ -82,9 +82,8 @@ for a in bintests/out/*/stderr; do
 	cat bintests/out/`echo $a | cut -f3 -d'/'`/line
 done >bintests/out/"abort.txt"
 
-# output this stuff as python format. fuck all
+# xmlized stats
 for a in bintests/out/*/klee-last; do
 	FDIR=bintests/out/`echo $a | cut -f3 -d'/'`
-	klee-stats --print-all --xml $a >$FDIR/last.stats
-	cat $FDIR/last.stats
+	klee-stats --xml $a >$FDIR/last.stats
 done
