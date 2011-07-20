@@ -62,11 +62,11 @@ KLEE-MC Command Tests
 	</xsl:choose>
 
 	<td style="margin-left:20px;margin-bottom:1em;font-size:10pt; text-align: right; font-family: monospace">
-		<xsl:value-of select="kstats/WallTime"/>
+		<xsl:value-of select="round(kstats/WallTime)"/>
 	</td>
 
 	<td style="margin-left:20px;margin-bottom:1em;font-size:10pt; text-align: right; font-family: monospace">
-		<xsl:value-of select="kstats/MemUsedKB div 1024" />
+		<xsl:value-of select="round(kstats/MemUsedKB div 1024)" />
 	</td>
 
 

@@ -329,13 +329,11 @@ bool CexCachingSolver::computeValue(const Query& query,
   return true;
 }
 
-bool 
-CexCachingSolver::computeInitialValues(const Query& query,
-                                       const std::vector<const Array*> 
-                                         &objects,
-                                       std::vector< std::vector<unsigned char> >
-                                         &values,
-                                       bool &hasSolution)
+bool CexCachingSolver::computeInitialValues(
+	const Query& query,
+	const std::vector<const Array*> &objects,
+	std::vector< std::vector<unsigned char> > &values,
+	bool &hasSolution)
 {
   TimerStatIncrementer t(stats::cexCacheTime);
   Assignment *a;

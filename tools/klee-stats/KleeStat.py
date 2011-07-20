@@ -20,17 +20,18 @@ class KleeStat:
 	def __rd2row(self, Path):
 		rd = self.drec
 		Mem=rd['MemUsedKB']/1024.
+		InsSum = rd['CoveredInstructions']+rd['UncoveredInstructions']
+		if InsSum == 0:
+			InsSum = 1
 		AvgQC = int(rd['NumQueryConstructs']/max(1,rd['NumQueries']))
 		return (
 			Path,
 			rd['Instructions'],
 			rd['WallTime'],
-			100.*rd['CoveredInstructions']/
-				(rd['CoveredInstructions']+
-				rd['UncoveredInstructions']), 
+			100.*rd['CoveredInstructions']/InsSum, 
 			100.*(2*rd['FullBranches']+rd['PartialBranches'])/
 				(2.*rd['NumBranches']),
-			rd['CoveredInstructions']+rd['UncoveredInstructions'],
+			InsSum,
 			100.*rd['SolverTime']/rd['UserTime'],
 			rd['NumStates'],
 			rd['NumStatesNC'],

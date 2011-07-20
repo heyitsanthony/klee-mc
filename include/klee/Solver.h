@@ -44,6 +44,8 @@ namespace klee {
     /// negateExpr - Return a copy of the query with the expression negated.
     Query negateExpr() const { return withExpr(Expr::createIsZero(expr)); }
 
+    void print(std::ostream& os) const;
+
     unsigned hash(void) const;
   };
 
@@ -68,6 +70,12 @@ namespace klee {
       False = -1,
       Unknown = 0
     };
+
+    static const char* getValidityStr(Validity v)
+    {
+    	const char*	strs[3] = {"False", "Unknown", "True"};
+	return strs[((int)v+1)];
+    }
   
   public:
     /// validity_to_str - Return the name of given Validity enum value.
@@ -110,7 +118,7 @@ namespace klee {
     /// \return True on success.
     bool mustBeFalse(const Query&, bool &result);
 
-    /// mayBeTrue - Determine if there is a valid assignment for the given state
+    /// mayBeTrue - Determine if there is a assignment for the given state
     /// in which the expression evaluates to false.
     ///
     /// \param [out] result - On success, true iff the expresssion is true for
@@ -119,7 +127,7 @@ namespace klee {
     /// \return True on success.
     bool mayBeTrue(const Query&, bool &result);
 
-    /// mayBeFalse - Determine if there is a valid assignment for the given
+    /// mayBeFalse - Determine if there is a assignment for the given
     /// state in which the expression evaluates to false.
     ///
     /// \param [out] result - On success, true iff the expresssion is false for
@@ -168,10 +176,21 @@ namespace klee {
     virtual std::pair< ref<Expr>, ref<Expr> > getRange(const Query&);
 
     void printName(int level = 0) const;
+    virtual bool failed(void) const;
+  };
+
+  class TimedSolver : public Solver
+  {
+  public:
+    TimedSolver(SolverImpl *_impl) : Solver(_impl) {}
+    virtual ~TimedSolver(void) {}
+    /// setTimeout - Set constraint solver timeout delay to the given value; 0
+    /// is off.
+    virtual void setTimeout(double timeout) {}
   };
 
   /// STPSolver - A complete solver based on STP.
-  class STPSolver : public Solver {
+  class STPSolver : public TimedSolver {
   public:
     /// STPSolver - Construct a new STPSolver.
     ///
@@ -185,7 +204,7 @@ namespace klee {
     
     /// setTimeout - Set constraint solver timeout delay to the given value; 0
     /// is off.
-    void setTimeout(double timeout);
+    virtual void setTimeout(double timeout);
   };
 
   /* *** */

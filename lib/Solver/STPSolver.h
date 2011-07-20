@@ -31,7 +31,6 @@ public:
   void setTimeout(double _timeout) { timeout = _timeout; }
 
   bool computeTruth(const Query&, bool &isValid);
-  bool computeValue(const Query&, ref<Expr> &result);
   bool computeInitialValues(const Query&,
                             const std::vector<const Array*> &objects,
                             std::vector< std::vector<unsigned char> > &values,

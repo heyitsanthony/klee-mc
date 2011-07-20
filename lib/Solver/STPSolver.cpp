@@ -5,9 +5,7 @@
 
 #include "llvm/Support/CommandLine.h"
 #include "static/Sugar.h"
-#include "klee/util/Assignment.h"
 #include "klee/util/ExprPPrinter.h"
-#include "klee/util/ExprUtil.h"
 #include "klee/Constraints.h"
 #include "klee/TimerStatIncrementer.h"
 
@@ -85,6 +83,11 @@ public:
   void newByte(uint8_t val) { *pos++ = val; }
 };
 
+#define STP_QUERY_INVALID	0
+#define STP_QUERY_VALID		1
+#define STP_QUERY_ERROR		2
+
+/* UGH. We call this for computeTruth. WHYYYyyy */
 static int runAndGetCex(
 	::VC vc,
 	STPBuilder *builder,
@@ -97,7 +100,7 @@ static int runAndGetCex(
 	int	res;
 
 	res = vc_query(vc, q);
-	hasSolution = !res;
+	hasSolution = (res == STP_QUERY_INVALID);	/* !res */
 	if (!hasSolution) return res;
 
 	rh.reserve(objects.size());
@@ -187,7 +190,7 @@ STPSolverImpl::~STPSolverImpl()
 /***/
 
 STPSolver::STPSolver(bool useForkedSTP, sockaddr_in_opt stpServer)
-  : Solver(stpServer.null()
+  : TimedSolver(stpServer.null()
       ? new STPSolverImpl(this, useForkedSTP)
       : new ServerSTPSolverImpl(this, useForkedSTP, stpServer))
 {
@@ -205,19 +208,21 @@ void STPSolver::setTimeout(double timeout) {
 
 char *STPSolverImpl::getConstraintLog(const Query &query)
 {
-  vc_push(vc);
-  foreach (it, query.constraints.begin(), query.constraints.end())
-    vc_assertFormula(vc, builder->construct(*it));
-  assert(query.expr == ConstantExpr::alloc(0, Expr::Bool) &&
-         "Unexpected expression in query!");
+	char		*buffer;
+	unsigned long	length;
 
-  char *buffer;
-  unsigned long length;
-  vc_printQueryStateToBuffer(vc, builder->getFalse(),
-                             &buffer, &length, false);
-  vc_pop(vc);
+	vc_push(vc);
+	foreach (it, query.constraints.begin(), query.constraints.end())
+		vc_assertFormula(vc, builder->construct(*it));
 
-  return buffer;
+	assert(	query.expr == ConstantExpr::alloc(0, Expr::Bool) &&
+		"Unexpected expression in query!");
+
+	vc_printQueryStateToBuffer(
+		vc, builder->getFalse(), &buffer, &length, false);
+	vc_pop(vc);
+
+	return buffer;
 }
 
 bool STPSolverImpl::computeTruth(
@@ -232,28 +237,6 @@ bool STPSolverImpl::computeTruth(
     return false;
 
   isValid = !hasSolution;
-  return true;
-}
-
-bool STPSolverImpl::computeValue(
-	const Query& query,
-	ref<Expr> &result)
-{
-  std::vector<const Array*> objects;
-  std::vector< std::vector<unsigned char> > values;
-  bool hasSolution;
-
-  // Find the object used in the expression, and compute an assignment
-  // for them.
-  findSymbolicObjects(query.expr, objects);
-  if (!computeInitialValues(query.withFalse(), objects, values, hasSolution))
-    return false;
-  assert(hasSolution && "state has invalid constraint set");
-
-  // Evaluate the expression with the computed assignment.
-  Assignment a(objects, values);
-  result = a.evaluate(query.expr);
-
   return true;
 }
 
@@ -609,9 +592,10 @@ bool STPSolverImpl::computeInitialValues(
   if (useForkedSTP) {
     success = doForkedComputeInitialValues(objects, values, stp_e, hasSolution);
   } else {
+    int res;
     ResultHolder_Vector rh(values);
-    runAndGetCex(vc, builder, stp_e, objects, rh, hasSolution);
-    success = true;
+    res = runAndGetCex(vc, builder, stp_e, objects, rh, hasSolution);
+    success = (res != STP_QUERY_ERROR);
   }
 
   if (success) {

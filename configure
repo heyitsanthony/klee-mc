@@ -643,6 +643,7 @@ ENABLE_INSTRUCTION_ID
 ENABLE_TCMALLOC
 ENABLE_STPLOG
 STP_ROOT
+BOOLECTOR_ROOT
 ENABLE_EXT_STP
 CXXCPP
 ac_ct_CXX
@@ -728,6 +729,7 @@ with_uclibc
 enable_posix_runtime
 with_runtime
 with_stp
+with_boolector
 enable_stplog
 enable_tcmalloc
 enable_instruction_id
@@ -1387,6 +1389,7 @@ Optional Packages:
   --with-runtime          Select build configuration for runtime libraries
                           (default Release)
   --with-stp              Location of STP installation directory
+  --with-boolector        Location of boolector directory
 
 Some influential environment variables:
   CC          C compiler command
@@ -4850,6 +4853,18 @@ fi
 done
 
 
+# Check whether --with-boolector was given.
+if test "${with_boolector+set}" = set; then
+  withval=$with_boolector;
+  echo "WE GOT IT"
+fi
+
+if [ ! -z "$with_boolector" ]; then
+  boolector_root=`cd $with_boolector 2>/dev/null; pwd`
+  BOOLECTOR_ROOT="$boolector_root"
+else
+  BOOLECTOR_ROOT=""
+fi
 
 # Check whether --with-stp was given.
 if test "${with_stp+set}" = set; then
@@ -4859,9 +4874,11 @@ fi
 
 if test X$with_stp = X ; then
   ENABLE_EXT_STP=0
-
+  echo INTERNAL STP
 else
+  echo EXTERNAL STP-----------
   stp_root=`cd $with_stp 2> /dev/null; pwd`
+  echo "WOOO $stp_root"
 
   old_CPPFLAGS="$CPPFLAGS"
   CPPFLAGS="$CPPFLAGS -I$stp_root/include"

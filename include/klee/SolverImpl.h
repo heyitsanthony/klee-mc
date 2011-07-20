@@ -26,7 +26,7 @@ namespace klee {
     void operator=(const SolverImpl&);
     
   public:
-    SolverImpl() {}
+    SolverImpl() : has_failed(false) {}
     virtual ~SolverImpl();
 
     /// computeValidity - Compute a full validity result for the
@@ -44,12 +44,12 @@ namespace klee {
     ///
     /// The query expression is guaranteed to be non-constant and have
     /// bool type.
-    virtual bool computeTruth(const Query& query, bool &isValid) = 0;
+    virtual bool computeTruth(const Query& query, bool &isSAT) = 0;
 
     /// computeValue - Compute a feasible value for the expression.
-    ///
+    /// Assumes that there is a solution to the given query.
     /// The query expression is guaranteed to be non-constant.
-    virtual bool computeValue(const Query& query, ref<Expr> &result) = 0;
+    virtual bool computeValue(const Query& query, ref<Expr> &result);
     
     virtual bool computeInitialValues(const Query& query,
                                       const std::vector<const Array*> 
@@ -60,6 +60,8 @@ namespace klee {
 
     /// printName - Recursively print name of solver class
     virtual void printName(int level = 0) const = 0;
+    virtual bool failed(void) const { return has_failed; }
+
   protected:
     void printDebugQueries(
 	std::ostream& os,
@@ -67,7 +69,8 @@ namespace klee {
 	const std::vector<const Array*> &objects,
 	std::vector< std::vector<unsigned char> > &values,
 	bool hasSolution) const;
-
+    void failQuery(void) { has_failed = true; }
+    bool has_failed;
 };
 
 }

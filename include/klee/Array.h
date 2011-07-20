@@ -22,6 +22,7 @@ public:
   const std::vector< ref<ConstantExpr> > constantValues;
   // FIXME: This does not belong here.
   mutable void *stpInitialArray;
+  mutable void *btorInitialArray;
   mutable unsigned refCount;  // used only for const_arr's
   static const unsigned refCountDontCare = unsigned(-1);
   void initRef() const { refCount = 0; }
@@ -42,7 +43,7 @@ public:
         const ref<ConstantExpr> *constantValuesEnd = 0)
     : name(_name), mallocKey(_mallocKey),
       constantValues(constantValuesBegin, constantValuesEnd),
-      stpInitialArray(0), refCount(refCountDontCare)
+      stpInitialArray(0), btorInitialArray(0), refCount(refCountDontCare)
   {
     chk_val = 0x12345678;
     assert((isSymbolicArray() || constantValues.size() == mallocKey.size) &&

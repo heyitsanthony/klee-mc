@@ -689,9 +689,7 @@ void Executor::makeForks(ExecutionState& current, struct ForkInfo& fi)
 		ExecutionState *newState;
 
 		// Process each valid target and generate a state
-		if (!fi.res[condIndex]) {
-			continue;
-		}
+		if (!fi.res[condIndex]) continue;
 
 		if (!curStateUsed) {
 			/* reuse current state, when possible */
@@ -913,19 +911,22 @@ ref<Expr> Executor::toUnique(const ExecutionState &state,
 /* Concretize the given expression, and return a possible constant value.
    'reason' is just a documentation string stating the reason for concretization. */
 ref<klee::ConstantExpr>
-Executor::toConstant(ExecutionState &state,
-                     ref<Expr> e,
-                     const char *reason) {
+Executor::toConstant(
+	ExecutionState &state,
+	ref<Expr> e,
+	const char *reason)
+{
+  ref<ConstantExpr>	value;
+  bool			success;
+
   e = state.constraints.simplifyExpr(e);
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(e))
     return CE;
 
-  ref<ConstantExpr> value;
-  bool success = solver->getValue(state, e, value);
+  success = solver->getValue(state, e, value);
   assert(success && "FIXME: Unhandled solver failure");
-  (void) success;
 
-  std::ostringstream os;
+  std::ostringstream	os;
   os << "silently concretizing (reason: " << reason << ") expression " << e
      << " to value " << value
      << " (" << (*(state.pc)).info->file << ":" << (*(state.pc)).info->line << ")";
@@ -951,9 +952,10 @@ bool Executor::getSeedInfoIterRange(
   return false;
 }
 
-void Executor::executeGetValue(ExecutionState &state,
-                               ref<Expr> e,
-                               KInstruction *target)
+void Executor::executeGetValue(
+	ExecutionState &state,
+	ref<Expr> e,
+	KInstruction *target)
 {
   bool              isSeeding;
   SeedInfoIterator  si_begin, si_end;
@@ -986,14 +988,14 @@ void Executor::executeGetValue(ExecutionState &state,
 
   StateVector branches;
   branches = fork(state, conditions.size(), conditions.data(), true);
+  if (!target) return;
 
   StateVector::iterator bit = branches.begin();
-  if (target) {
-	  foreach (vit, values.begin(), values.end()) {
-	    ExecutionState *es = *bit;
-	    if (es) es->bindLocal(target, *vit);
-	    ++bit;
-	  }
+
+  foreach (vit, values.begin(), values.end()) {
+    ExecutionState *es = *bit;
+    if (es) es->bindLocal(target, *vit);
+    ++bit;
   }
 }
 
@@ -1005,9 +1007,7 @@ void Executor::stepInstruction(ExecutionState &state)
               << *(state.pc->inst) << "\n";
   }
 
-  if (statsTracker) {
-    statsTracker->stepInstruction(state);
-  }
+  if (statsTracker) statsTracker->stepInstruction(state);
 
   ++stats::instructions;
   state.prevPC = state.pc;
@@ -2623,13 +2623,17 @@ void Executor::terminateState(ExecutionState &state) {
   }
 }
 
-void Executor::terminateStateEarly(ExecutionState &state,
-                                   const Twine &message) {
-  if (!OnlyOutputStatesCoveringNew || state.coveredNew ||
-      (AlwaysOutputSeeds && seedMap.count(&state)))
-    interpreterHandler->processTestCase(state, (message + "\n").str().c_str(),
-                                        "early");
-  terminateState(state);
+void Executor::terminateStateEarly(
+	ExecutionState &state,
+	const Twine &message)
+{
+	if (	!OnlyOutputStatesCoveringNew || state.coveredNew ||
+		(AlwaysOutputSeeds && seedMap.count(&state)))
+	{
+	    interpreterHandler->processTestCase(
+	    	state, (message + "\n").str().c_str(), "early");
+	}
+	terminateState(state);
 }
 
 void Executor::terminateStateOnExit(ExecutionState &state) {
@@ -2827,9 +2831,7 @@ bool Executor::memOpFast(
     return true;
   }
 
-  if (!inBounds) {
-    return false;
-  }
+  if (!inBounds) return false;
 
   if (isWrite) {
     if (os->readOnly) {
@@ -2871,22 +2873,22 @@ ExecutionState* Executor::getUnboundState(
   ExecutionState *bound = branches.first;
 
   // bound can be 0 on failure or overlapped
-  if (bound) {
-    if (isWrite) {
-      if (os->readOnly) {
-        terminateStateOnError(*bound,
-                              "memory error: object read only",
-                              "readonly.err");
-      } else {
-        ObjectState *wos = bound->addressSpace.getWriteable(mo, os);
-        //wos->write(mo->getOffsetExpr(address), value);
-        bound->write(wos, mo->getOffsetExpr(address), value);
-      }
+  if (!bound) return branches.second;
+
+  if (isWrite) {
+    if (os->readOnly) {
+      terminateStateOnError(*bound,
+                            "memory error: object read only",
+                            "readonly.err");
     } else {
-      //ref<Expr> result = os->read(mo->getOffsetExpr(address), type);
-      ref<Expr> result = bound->read(os, mo->getOffsetExpr(address), type);
-      bound->bindLocal(target, result);
+      ObjectState *wos = bound->addressSpace.getWriteable(mo, os);
+      //wos->write(mo->getOffsetExpr(address), value);
+      bound->write(wos, mo->getOffsetExpr(address), value);
     }
+  } else {
+    //ref<Expr> result = os->read(mo->getOffsetExpr(address), type);
+    ref<Expr> result = bound->read(os, mo->getOffsetExpr(address), type);
+    bound->bindLocal(target, result);
   }
 
   return branches.second;
@@ -3086,19 +3088,38 @@ unsigned Executor::getSymbolicPathStreamID(const ExecutionState &state) {
   return state.symPathOS.getID();
 }
 
+void Executor::getConstraintLogCVC(
+	const ExecutionState &state, std::string &res)
+{
+	Query		query(
+		state.constraints,
+		ConstantExpr::alloc(0, Expr::Bool));
+	STPSolver	*stpSolver;
+	char		*log;
+	
+	stpSolver = dynamic_cast<STPSolver*>(solver->timedSolver);
+	if (stpSolver == NULL) {
+		res = "Timed solver is not STP! Can't get CVC Log";
+		return;
+	}
+
+	log = stpSolver->getConstraintLog(query);
+	res = std::string(log);
+	free(log);
+}
+
 void Executor::getConstraintLog(const ExecutionState &state,
                                 std::string &res,
-                                bool asCVC) {
-  if (asCVC) {
-    Query query(state.constraints, ConstantExpr::alloc(0, Expr::Bool));
-    char *log = solver->stpSolver->getConstraintLog(query);
-    res = std::string(log);
-    free(log);
-  } else {
-    std::ostringstream info;
-    ExprPPrinter::printConstraints(info, state.constraints);
-    res = info.str();
-  }
+                                bool asCVC)
+{
+	if (asCVC) {
+		getConstraintLogCVC(state, res);
+		return;
+	}
+
+	std::ostringstream info;
+	ExprPPrinter::printConstraints(info, state.constraints);
+	res = info.str();
 }
 
 void Executor::getSymbolicSolutionCex(

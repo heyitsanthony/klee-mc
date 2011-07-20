@@ -401,7 +401,8 @@ class UpdateNode {
 public:
   const UpdateNode *next;
   ref<Expr> index, value;
-  
+
+  mutable void *btorArray;
 private:
   /// size of this update sequence, including this update
   unsigned size;

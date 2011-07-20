@@ -497,6 +497,8 @@ private:
     ExecutionState& state, SeedInfo& si,
     const MemoryObject* mo, const Array* array);
 
+  void getConstraintLogCVC(const ExecutionState& state, std::string& res);
+
 public:
   Executor(const InterpreterOptions &opts, InterpreterHandler *ie);
   virtual ~Executor();

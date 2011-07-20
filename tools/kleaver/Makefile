@@ -16,4 +16,4 @@ LINK_COMPONENTS = support core
 
 include $(LEVEL)/Makefile.common
 
-LIBS += -lstp
+LIBS += -lstp -lboolector

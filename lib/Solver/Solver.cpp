@@ -17,9 +17,14 @@
 
 #include "klee/Expr.h"
 #include "klee/Internal/Support/Timer.h"
+#include "klee/util/Assignment.h"
+#include "klee/util/ExprUtil.h"
+
 #include "static/Sugar.h"
 #include "llvm/Support/CommandLine.h"
 
+#include "ValidatingSolver.h"
+#include "BoolectorSolver.h"
 #include "PoisonCache.h"
 
 #include <cassert>
@@ -73,6 +78,12 @@ namespace {
 	cl::desc("Cache poisonous queries to disk. Fail on hit."));
 
   cl::opt<bool>
+  UseBoolector(
+  	"use-boolector",
+	cl::init(false),
+	cl::desc("Use boolector solver"));
+
+  cl::opt<bool>
   UseIndependentSolver("use-independent-solver",
                        cl::init(true),
 		       cl::desc("Use constraint independence"));
@@ -90,12 +101,15 @@ TimingSolver* Solver::createChain(
 	std::string queryPCLogPath,
 	std::string stpQueryPCLogPath)
 {
-	STPSolver	*stpSolver;
+	TimedSolver	*timedSolver;
 	TimingSolver	*ts;
+	Solver		*solver;
 
-	stpSolver = new STPSolver(UseForkedSTP, STPServer);
-
-	Solver *solver = stpSolver;
+	if (UseBoolector)
+		timedSolver = new BoolectorSolver();
+	else
+		timedSolver = new STPSolver(UseForkedSTP, STPServer);
+	solver = timedSolver;
 
 	if (UseSTPQueryPCLog) 
 		solver = createPCLoggingSolver(solver, stpQueryPCLogPath);
@@ -105,11 +119,17 @@ TimingSolver* Solver::createChain(
 	if (UseFastCexSolver) solver = createFastCexSolver(solver);
 	if (UseCexCache) solver = createCexCachingSolver(solver);
 	if (UseCache) solver = createCachingSolver(solver);
-
 	if (UseIndependentSolver) solver = createIndependentSolver(solver);
 
-	if (DebugValidateSolver)
-		solver = createValidatingSolver(solver, stpSolver);
+	if (DebugValidateSolver) {
+		/* oracle is another QF_BV solver */
+		if (UseBoolector)
+			solver = createValidatingSolver(
+				solver,
+				new STPSolver(UseForkedSTP, STPServer));
+		else
+			solver = createValidatingSolver(solver, timedSolver);
+	}
 
 	if (UseQueryPCLog) solver = createPCLoggingSolver(solver, queryPCLogPath);
 
@@ -117,8 +137,8 @@ TimingSolver* Solver::createChain(
 	solver->printName();
 	klee_message("END solver description");
 
-	ts = new TimingSolver(solver, stpSolver);
-	stpSolver->setTimeout(timeout);
+	ts = new TimingSolver(solver, timedSolver);
+	timedSolver->setTimeout(timeout);
 
 	return ts;
 }
@@ -139,6 +159,31 @@ Solver::~Solver() {
 
 SolverImpl::~SolverImpl() { }
 
+bool Solver::failed(void) const { return impl->failed(); }
+
+bool SolverImpl::computeValue(const Query& query, ref<Expr> &result)
+{
+  std::vector<const Array*> objects;
+  std::vector< std::vector<unsigned char> > values;
+  bool hasSolution;
+
+  // Find the object used in the expression, and compute an assignment
+  // for them.
+  findSymbolicObjects(query.expr, objects);
+  if (!computeInitialValues(query.withFalse(), objects, values, hasSolution))
+    return false;
+
+  if (!hasSolution) query.print(std::cerr);
+
+  assert(hasSolution && "state has invalid constraint set");
+
+  // Evaluate the expression with the computed assignment.
+  Assignment a(objects, values);
+  result = a.evaluate(query.expr);
+
+  return true;
+}
+
 bool Solver::evaluate(const Query& query, Validity &result) {
   assert(query.expr->getWidth() == Expr::Bool && "Invalid expression type!");
 
@@ -151,18 +196,23 @@ bool Solver::evaluate(const Query& query, Validity &result) {
   return impl->computeValidity(query, result);
 }
 
-bool SolverImpl::computeValidity(const Query& query, Solver::Validity &result) {
-  bool isTrue, isFalse;
-  if (!computeTruth(query, isTrue))
-    return false;
-  if (isTrue) {
-    result = Solver::True;
-  } else {
-    if (!computeTruth(query.negateExpr(), isFalse))
-      return false;
-    result = isFalse ? Solver::False : Solver::Unknown;
-  }
-  return true;
+bool SolverImpl::computeValidity(const Query& query, Solver::Validity &result)
+{
+	bool ok, isValid, isInvalid;
+
+	ok = computeTruth(query, isValid);
+	if (!ok) return false;
+
+	if (isValid) {
+		result = Solver::True;
+		return true;
+	}
+
+	ok = computeTruth(query.negateExpr(), isInvalid);
+	if (!ok) return false;
+
+	result = isInvalid ? Solver::False : Solver::Unknown;
+	return true;
 }
 
 bool Solver::mustBeTrue(const Query& query, bool &result) {
@@ -238,15 +288,13 @@ std::pair< ref<Expr>, ref<Expr> > Solver::getRange(const Query& query)
 
   if (width==1) {
     Solver::Validity result;
-    if (!evaluate(query, result))
-      assert(0 && "computeValidity failed");
+    bool	eval_ok;
+    eval_ok = evaluate(query, result);
+    assert(eval_ok && "computeValidity failed");
     switch (result) {
-    case Solver::True:
-      min = max = 1; break;
-    case Solver::False:
-      min = max = 0; break;
-    default:
-      min = 0, max = 1; break;
+    case Solver::True:	min = max = 1; break;
+    case Solver::False:	min = max = 0; break;
+    default:		min = 0, max = 1; break;
     }
   } else if (ConstantExpr *CE = dyn_cast<ConstantExpr>(e)) {
     min = max = CE->getZExtValue();
@@ -348,131 +396,6 @@ void Solver::printName(int level) const {
   impl->printName(level);
 }
 
-
-/***/
-
-class ValidatingSolver : public SolverImpl {
-private:
-  Solver *solver, *oracle;
-
-public:
-  ValidatingSolver(Solver *_solver, Solver *_oracle)
-    : solver(_solver), oracle(_oracle) {}
-  ~ValidatingSolver() { delete solver; }
-
-  bool computeValidity(const Query&, Solver::Validity &result);
-  bool computeTruth(const Query&, bool &isValid);
-  bool computeValue(const Query&, ref<Expr> &result);
-  bool computeInitialValues(const Query&,
-                            const std::vector<const Array*> &objects,
-                            std::vector< std::vector<unsigned char> > &values,
-                            bool &hasSolution);
-
-  void printName(int level = 0) const {
-    klee_message("%*s" "ValidatingSolver containing:", 2*level, "");
-    solver->printName(level + 1);
-    oracle->printName(level + 1);
-  }
-};
-
-bool ValidatingSolver::computeTruth(const Query& query,
-                                    bool &isValid) {
-  bool answer;
-
-  if (!solver->impl->computeTruth(query, isValid))
-    return false;
-  if (!oracle->impl->computeTruth(query, answer))
-    return false;
-
-  if (isValid != answer)
-    assert(0 && "invalid solver result (computeTruth)");
-
-  return true;
-}
-
-bool ValidatingSolver::computeValidity(const Query& query,
-                                       Solver::Validity &result) {
-  Solver::Validity answer;
-
-  if (!solver->impl->computeValidity(query, result))
-    return false;
-  if (!oracle->impl->computeValidity(query, answer))
-    return false;
-
-  if (result != answer)
-    assert(0 && "invalid solver result (computeValidity)");
-
-  return true;
-}
-
-bool ValidatingSolver::computeValue(const Query& query,
-                                    ref<Expr> &result) {
-  bool answer;
-
-  if (!solver->impl->computeValue(query, result))
-    return false;
-  // We don't want to compare, but just make sure this is a legal
-  // solution.
-  if (!oracle->impl->computeTruth(query.withExpr(NeExpr::create(query.expr,
-                                                                result)),
-                                  answer))
-    return false;
-
-  if (answer)
-    assert(0 && "invalid solver result (computeValue)");
-
-  return true;
-}
-
-bool ValidatingSolver::computeInitialValues(
-  const Query& query,
-  const std::vector<const Array*> &objects,
-  std::vector< std::vector<unsigned char> > &values,
-  bool &hasSolution)
-{
-  bool answer;
-  bool init_values_ok;
-
-  init_values_ok = solver->impl->computeInitialValues(
-  	query, objects, values, hasSolution);
-  if (init_values_ok == false)
-  	return false;
-
-  if (hasSolution) {
-    // Assert the bindings as constraints, and verify that the
-    // conjunction of the actual constraints is satisfiable.
-    std::vector< ref<Expr> > bindings;
-    for (unsigned i = 0; i != values.size(); ++i) {
-      const Array *array = objects[i];
-      for (unsigned j=0; j<array->mallocKey.size; j++) {
-        unsigned char value = values[i][j];
-        bindings.push_back(
-	  EqExpr::create(
-	    ReadExpr::create(
-	      UpdateList(array, 0),
-              ConstantExpr::alloc(j, Expr::Int32)),
-            ConstantExpr::alloc(value, Expr::Int8)));
-      }
-    }
-    ConstraintManager tmp(bindings);
-    ref<Expr> constraints = Expr::createIsZero(query.expr);
-    foreach (it, query.constraints.begin(), query.constraints.end())
-      constraints = AndExpr::create(constraints, *it);
-
-    if (!oracle->impl->computeTruth(Query(tmp, constraints), answer))
-      return false;
-    if (!answer)
-      assert(0 && "invalid solver result (computeInitialValues)");
-  } else {
-    if (!oracle->impl->computeTruth(query, answer))
-      return false;
-    if (!answer)
-      assert(0 && "invalid solver result (computeInitialValues)");
-  }
-
-  return true;
-}
-
 Solver *klee::createValidatingSolver(Solver *s, Solver *oracle) {
   return new Solver(new ValidatingSolver(s, oracle));
 }
@@ -560,4 +483,16 @@ unsigned Query::hash(void) const
 	}
 
 	return ret;
+}
+
+void Query::print(std::ostream& os) const
+{
+	os << "Constraints {\n";
+	foreach (it, constraints.begin(), constraints.end()) {
+		(*it)->print(os);
+		os << std::endl;
+	}
+	os << "}\n";
+	expr->print(os);
+	os << std::endl;
 }
