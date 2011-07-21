@@ -3,7 +3,7 @@
 LLVMDIR=/home/chz/src/llvm/llvm-2.6/
 #STPDIR=/home/chz/src/stp_inst/
 STPDIR=/home/chz/src/stp-fast/stp/
-BOOLECTORDIR=/home/chz/src/boolector
+BOOLECTORDIR=/home/chz/src/boolector/
 UCLIBDIR=/home/chz/src/klee-2.6-uclibc
 
 CFLAGS="-g -O3 -I${STPDIR}/include"	\

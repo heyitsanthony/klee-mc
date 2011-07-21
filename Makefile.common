@@ -31,8 +31,7 @@ C.Flags += -std=gnu89
 
 ifeq ($(ENABLE_EXT_STP),1)
   LD.Flags += -L$(STP_ROOT)/lib -L$(BOOLECTOR_ROOT)/
-  CXX.Flags += -I$(STP_ROOT)/include -I$(BOOLECTOR_ROOT)/include
-  
+  CXX.Flags += -I$(STP_ROOT)/include -I$(BOOLECTOR_ROOT)/
 else
   LD.Flags += -L$(PROJ_SRC_ROOT)/stp/lib
   CXX.Flags += -I$(PROJ_SRC_ROOT)/stp/include
