@@ -4,96 +4,110 @@
 
 using namespace klee;
 
-bool ValidatingSolver::computeTruth(
-	const Query& query,
-	bool &isValidSolver) 
+bool ValidatingSolver::computeSat(const Query& query)
 {
-	bool	isValidOracle;
+	bool	isSatOracle, isSatSolver;
 
-	if (!solver->impl->computeTruth(query, isValidSolver))
-		return false;
-	if (!oracle->impl->computeTruth(query, isValidOracle))
-		return false;
+	isSatSolver = solver->impl->computeSat(query);
+	if (solver->impl->failed()) goto failed;
 
-	assert(	isValidSolver == isValidOracle && 
-		"invalid solver result (computeTruth)");
+	isSatOracle = oracle->impl->computeSat(query);
+	if (oracle->impl->failed()) goto failed;
 
-	return true;
+	assert(	isSatSolver == isSatOracle &&
+		"computeSat mismatch");
+
+	return isSatSolver;
+
+failed:
+	failQuery();
+	return false;
 }
 
-bool ValidatingSolver::computeValidity(
-	const Query		&query,
-	Solver::Validity	&validity)
+void ValidatingSolver::failQuery(void)
 {
-	Solver::Validity	oracleValidity;
-	bool			ok;
+	solver->impl->ackFail();
+	oracle->impl->ackFail();
+	SolverImpl::failQuery();
+}
 
-	ok = solver->impl->computeValidity(query, validity);
-	if (!ok) return false;
+Solver::Validity ValidatingSolver::computeValidity(const Query &query)
+{
+	Solver::Validity	oracleValidity, solverValidity;
 
-	ok = oracle->impl->computeValidity(query, oracleValidity);
-	if (!ok) return false;
+	solverValidity = solver->impl->computeValidity(query);
+	if (solver->impl->failed()) goto failed;
 
-	if (oracleValidity < validity) {
-		std::cerr 
-			<< "Validity mismatch: " 
+	oracleValidity = oracle->impl->computeValidity(query);
+	if (oracle->impl->failed()) goto failed;
+
+	if (oracleValidity != solverValidity) {
+		std::cerr
+			<< "Validity mismatch: "
 			<< "oracle = "
 			<< Solver::getValidityStr(oracleValidity) << " vs "
-			<< Solver::getValidityStr(validity) << " = solver.\n";
+			<< Solver::getValidityStr(solverValidity) << " = solver.\n";
 		query.print(std::cerr);
 	}
 
-	assert ((oracleValidity >= validity) && 
-		"bad solver: validity promotion");
+	assert ((oracleValidity == solverValidity) &&
+		"bad solver:  mismatched validity");
 
-	return ok;
+	return solverValidity;
+
+failed:
+	failQuery();
+	return Solver::Unknown;
 }
 
-bool ValidatingSolver::computeValue(
-	const Query& query,
-	ref<Expr> &result)
+ref<Expr> ValidatingSolver::computeValue(const Query& query)
 {
-	bool	ok;
-	bool	isValid;
+	bool		isSat;
+	ref<Expr>	ret;
 
-	ok = solver->impl->computeValue(query, result);
-	if (!ok) return false;
+	ret = solver->impl->computeValue(query);
+	if (solver->impl->failed()) goto failed;
 
 	// We don't want to compare, but just make sure this is a legal
 	// solution.
-	ok = oracle->impl->computeTruth(
-		query.withExpr(NeExpr::create(query.expr, result)),
-		isValid);
-	if (!ok) return false;
+	isSat = oracle->impl->computeSat(
+		query.withExpr(EqExpr::create(query.expr, ret)));
+	if (oracle->impl->failed()) goto failed;
 
-//	assert(isSAT && "bad solver: solver says SAT, oracle says unSAT");
-	return true;
+	assert(isSat && "bad solver: solver says SAT, oracle says unSAT");
+	return ret;
+
+failed:
+	failQuery();
+	return ret;
 }
 
 bool ValidatingSolver::computeInitialValues(
 	const Query& query,
 	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values,
-	bool &hasSolution)
+	std::vector< std::vector<unsigned char> > &values)
 {
-	bool	init_values_ok;
+	bool	hasSolution;
 
-	init_values_ok = solver->impl->computeInitialValues(
-		query, objects, values, hasSolution);
-	if (init_values_ok == false)
-		return false;
+
+	hasSolution = solver->impl->computeInitialValues(query, objects, values);
+	if (solver->impl->failed()) goto failed;
 
 	if (hasSolution) {
 		checkIVSolution(query, objects, values);
 	} else {
-		bool	isValid;
-		if (!oracle->impl->computeTruth(query, isValid))
-			return false;
-		assert(	!isValid && 
-			"bad solver: solver says unsat, oracle says valid");
+		bool	isSat;
+		isSat = oracle->impl->computeSat(query);
+		if (oracle->impl->failed()) goto failed;
+
+		assert(	!isSat &&
+			"bad solver: solver says unsat, oracle says sat");
 	}
 
-	return true;
+	return hasSolution;
+failed:
+	failQuery();
+	return false;
 }
 
 // Assert the bindings as constraints, and verify that the
@@ -104,7 +118,7 @@ void ValidatingSolver::checkIVSolution(
 	std::vector< std::vector<unsigned char> > &values)
 {
 	std::vector< ref<Expr> >	bindings;
-	bool				isValid;//, isSAT;
+	bool				isSat;
 
 	for (unsigned i = 0; i != values.size(); ++i) {
 		const Array *array = objects[i];
@@ -121,23 +135,24 @@ void ValidatingSolver::checkIVSolution(
 
 	ConstraintManager	tmp(bindings);
 	ref<Expr>		constraints;
-	
+
 	constraints = Expr::createIsZero(query.expr);
 	foreach (it, query.constraints.begin(), query.constraints.end())
 		constraints = AndExpr::create(constraints, *it);
 
-	if (!oracle->impl->computeTruth(Query(tmp, constraints), isValid))
+	isSat = oracle->impl->computeSat(Query(tmp, constraints));
+	if (oracle->impl->failed()) {
+		failQuery();
 		return;
+	}
 
-#if 0
 	/* validity has no bearing on solution, so don't check it */
 	/* however, we do expect the query set to be satisfiable... */
-	if (!isSAT) {
+	if (!isSat) {
 		std::cerr << "Solver says yes. Oracle says no. Query:\n";
 		query.print(std::cerr);
 	}
 
-	assert(	isSAT && 
+	assert(	isSat &&
 		"bad solver: solver says sat, oracle says unsat!");
-#endif
 }

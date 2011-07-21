@@ -2,7 +2,7 @@
 #define BOOLECTORSOLVERIMPL_H
 
 #include "klee/Solver.h"
-#include "klee/SolverImpl.h"
+#include "SolverImpl.h"
 #include <list>
 #include <set>
 
@@ -26,12 +26,11 @@ public:
 	BoolectorSolverImpl();
 	~BoolectorSolverImpl();
 
-	virtual bool computeTruth(const Query&, bool &isValid);
+	virtual bool computeSat(const Query&);
 	virtual bool computeInitialValues(
 		const Query&,
 		const std::vector<const Array*> &objects,
-		std::vector< std::vector<unsigned char> > &values,
-		bool &hasSolution);
+		std::vector< std::vector<unsigned char> > &values);
 
 	virtual void printName(int level = 0) const
 	{

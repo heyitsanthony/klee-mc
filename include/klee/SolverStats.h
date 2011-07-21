@@ -19,6 +19,7 @@ namespace stats {
   extern Statistic queries;
   extern Statistic queriesInvalid;
   extern Statistic queriesValid;
+  extern Statistic queriesFailed;
   extern Statistic queryCacheHits;
   extern Statistic queryCacheMisses;
   extern Statistic queryConstructTime;

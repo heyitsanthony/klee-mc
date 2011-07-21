@@ -48,7 +48,7 @@ void PoisonCache::sig_poison(int signum, siginfo_t *si, void *p)
 }
 
 PoisonCache::PoisonCache(Solver* s)
-: solver(s)
+: SolverImplWrapper(s)
 , in_solver(false)
 {
 	struct sigaction	sa;
@@ -79,47 +79,48 @@ PoisonCache::~PoisonCache()
 	g_pc = NULL;
 }
 
-#define BEGIN_SOLVER			\
-	bool	ret;			\
-	if (badQuery(q)) return false;	\
+#define BEGIN_SOLVER(x,y,z)		\
+	x	y;			\
+	if (badQuery(q)) {		\
+		failQuery();		\
+		return z;		\
+	}				\
 	in_solver = true;
 
-#define END_SOLVER				\
-	in_solver = false;			\
-	return ret;
+#define END_SOLVER(x)					\
+	in_solver = false;				\
+	return x;
 
 
-bool PoisonCache::computeTruth(const Query& q, bool &isValid)
+bool PoisonCache::computeSat(const Query& q)
 {
-	BEGIN_SOLVER
-	ret = solver->impl->computeTruth(q, isValid);
-	END_SOLVER
+	BEGIN_SOLVER(bool, isSat, false)
+	isSat = doComputeSat(q);
+	END_SOLVER(isSat)
 }
 
-bool PoisonCache::computeValidity(const Query& q, Solver::Validity &result)
+Solver::Validity PoisonCache::computeValidity(const Query& q)
 {
-	BEGIN_SOLVER
-	ret = solver->impl->computeValidity(q, result);
-	END_SOLVER
+	BEGIN_SOLVER(Solver::Validity, validity, Solver::Unknown)
+	validity = doComputeValidity(q);
+	END_SOLVER(validity)
 }
 
-bool PoisonCache::computeValue(const Query& q, ref<Expr> &result)
+ref<Expr> PoisonCache::computeValue(const Query& q)
 {
-	BEGIN_SOLVER
-	ret = solver->impl->computeValue(q, result);
-	END_SOLVER
+	BEGIN_SOLVER(ref<Expr>, ret, NULL)
+	ret = doComputeValue(q);
+	END_SOLVER(ret)
 }
 
 bool PoisonCache::computeInitialValues(
 	const Query& q,
 	const std::vector<const Array*> &objects,
-        std::vector< std::vector<unsigned char> > &values,
-        bool &hasSolution)
+        std::vector< std::vector<unsigned char> > &values)
 {
-	BEGIN_SOLVER
-	ret = solver->impl->computeInitialValues(
-		q, objects, values, hasSolution);
-	END_SOLVER
+	BEGIN_SOLVER(bool, hasSolution, false)
+	hasSolution = doComputeInitialValues(q, objects, values);
+	END_SOLVER(hasSolution)
 }
 
 bool PoisonCache::badQuery(const Query& q)
@@ -128,7 +129,7 @@ bool PoisonCache::badQuery(const Query& q)
 	if (poison_hashes.count(hash_last) == 0) {
 		return false;
 	}
-	
+
 	fprintf(stderr, "GOOD BYE POISON QUERY\n");
 	klee_warning("Skipping poisoned query.");
 	return true;
@@ -146,5 +147,5 @@ void PoisonCache::loadCacheFromDisk(const char* fname)
 		poison_hashes.insert(cur_hash);
 	}
 
-	fclose(f);	
+	fclose(f);
 }

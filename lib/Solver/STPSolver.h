@@ -2,11 +2,12 @@
 #define STPSOLVERIMPL_H
 
 #include "klee/Solver.h"
-#include "klee/SolverImpl.h"
+#include "SolverImpl.h"
 #include "STPBuilder.h"
 
 namespace klee
 {
+class ExprHandle;
 
 class STPSolverImpl : public SolverImpl {
 private:
@@ -22,7 +23,7 @@ protected:
   STPBuilder *builder;
   double timeout;
   bool useForkedSTP;
-
+  void setupVCQuery(const Query& query, ExprHandle& stp_e, std::ostream& os);
 public:
   STPSolverImpl(STPSolver *_solver, bool _useForkedSTP);
   ~STPSolverImpl();
@@ -30,11 +31,10 @@ public:
   char *getConstraintLog(const Query&);
   void setTimeout(double _timeout) { timeout = _timeout; }
 
-  bool computeTruth(const Query&, bool &isValid);
+  bool computeSat(const Query&);
   bool computeInitialValues(const Query&,
                             const std::vector<const Array*> &objects,
-                            std::vector< std::vector<unsigned char> > &values,
-                            bool &hasSolution);
+                            std::vector< std::vector<unsigned char> > &values);
   void printName(int level = 0) const {
     klee_message("%*s" "STPSolverImpl", 2*level, "");
   }
@@ -51,8 +51,7 @@ public:
 
   bool computeInitialValues(const Query&,
                             const std::vector<const Array*> &objects,
-                            std::vector< std::vector<unsigned char> > &values,
-                            bool &hasSolution);
+                            std::vector< std::vector<unsigned char> > &values);
   void printName(int level = 0) const {
     klee_message("%*s" "ServerSTPSolverImpl", 2*level, "");
   }

@@ -15,6 +15,7 @@ Statistic stats::cexCacheTime("CexCacheTime", "CCtime");
 Statistic stats::queries("Queries", "Q");
 Statistic stats::queriesInvalid("QueriesInvalid", "Qiv");
 Statistic stats::queriesValid("QueriesValid", "Qv");
+Statistic stats::queriesFailed("QueriesFailed", "Qf");
 Statistic stats::queryCacheHits("QueryCacheHits", "QChits") ;
 Statistic stats::queryCacheMisses("QueryCacheMisses", "QCmisses");
 Statistic stats::queryConstructTime("QueryConstructTime", "QBtime") ;

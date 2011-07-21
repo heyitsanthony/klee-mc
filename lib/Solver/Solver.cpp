@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "klee/Solver.h"
-#include "klee/SolverImpl.h"
+#include "SolverImpl.h"
 #include "klee/SolverStats.h"
 #include "klee/Constraints.h"
 
@@ -26,6 +26,7 @@
 #include "ValidatingSolver.h"
 #include "BoolectorSolver.h"
 #include "PoisonCache.h"
+#include "DummySolver.h"
 
 #include <cassert>
 #include <cstdio>
@@ -111,7 +112,7 @@ TimingSolver* Solver::createChain(
 		timedSolver = new STPSolver(UseForkedSTP, STPServer);
 	solver = timedSolver;
 
-	if (UseSTPQueryPCLog) 
+	if (UseSTPQueryPCLog)
 		solver = createPCLoggingSolver(solver, stpQueryPCLogPath);
 
 	if (UsePoisonCache) solver = new Solver(new PoisonCache(solver));
@@ -153,35 +154,30 @@ const char *Solver::validity_to_str(Validity v) {
   }
 }
 
-Solver::~Solver() {
-  delete impl;
-}
-
+Solver::~Solver() { delete impl; }
 SolverImpl::~SolverImpl() { }
 
 bool Solver::failed(void) const { return impl->failed(); }
 
-bool SolverImpl::computeValue(const Query& query, ref<Expr> &result)
+ref<Expr> SolverImpl::computeValue(const Query& query)
 {
-  std::vector<const Array*> objects;
-  std::vector< std::vector<unsigned char> > values;
-  bool hasSolution;
+	std::vector<const Array*> objects;
+	std::vector< std::vector<unsigned char> > values;
+	bool	hasSolution;
 
-  // Find the object used in the expression, and compute an assignment
-  // for them.
-  findSymbolicObjects(query.expr, objects);
-  if (!computeInitialValues(query.withFalse(), objects, values, hasSolution))
-    return false;
+	// Find the object used in the expression, and compute an assignment
+	// for them.
+	findSymbolicObjects(query.expr, objects);
+	hasSolution = computeInitialValues(query.withFalse(), objects, values);
+	if (failed()) return NULL;
 
-  if (!hasSolution) query.print(std::cerr);
+	if (!hasSolution) query.print(std::cerr);
 
-  assert(hasSolution && "state has invalid constraint set");
+	assert(hasSolution && "state has invalid constraint set");
 
-  // Evaluate the expression with the computed assignment.
-  Assignment a(objects, values);
-  result = a.evaluate(query.expr);
-
-  return true;
+	// Evaluate the expression with the computed assignment.
+	Assignment a(objects, values);
+	return a.evaluate(query.expr);
 }
 
 bool Solver::evaluate(const Query& query, Validity &result) {
@@ -193,61 +189,71 @@ bool Solver::evaluate(const Query& query, Validity &result) {
     return true;
   }
 
-  return impl->computeValidity(query, result);
+  result = impl->computeValidity(query);
+  return (impl->failed() == false);
 }
 
-bool SolverImpl::computeValidity(const Query& query, Solver::Validity &result)
+Solver::Validity SolverImpl::computeValidity(const Query& query)
 {
-	bool ok, isValid, isInvalid;
+	bool isSat, isNegSat;
 
-	ok = computeTruth(query, isValid);
-	if (!ok) return false;
+	isSat = computeSat(query);
+	if (failed()) return Solver::Unknown;
 
-	if (isValid) {
-		result = Solver::True;
+	isNegSat = computeSat(query.negateExpr());
+	if (failed()) return Solver::Unknown;
+
+	assert ((isNegSat || isSat) && "Inconsistent model");
+
+	if (isNegSat && !isSat) return Solver::False;
+	if (!isNegSat && isSat) return Solver::True;
+
+	assert (isNegSat == isSat);
+	return Solver::Unknown;
+}
+
+bool Solver::mustBeTrue(const Query& query, bool &result)
+{
+	Solver::Validity	validity;
+
+	assert(	query.expr->getWidth() == Expr::Bool &&
+		"Invalid expression type!");
+
+	// Maintain invariants implementations expect.
+	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(query.expr)) {
+		result = CE->isTrue() ? true : false;
 		return true;
 	}
 
-	ok = computeTruth(query.negateExpr(), isInvalid);
-	if (!ok) return false;
-
-	result = isInvalid ? Solver::False : Solver::Unknown;
-	return true;
-}
-
-bool Solver::mustBeTrue(const Query& query, bool &result) {
-  assert(query.expr->getWidth() == Expr::Bool && "Invalid expression type!");
-
-  // Maintain invariants implementations expect.
-  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(query.expr)) {
-    result = CE->isTrue() ? true : false;
-    return true;
-  }
-
-  return impl->computeTruth(query, result);
+	validity = impl->computeValidity(query);
+	result = (validity == Solver::True);
+	return (impl->failed() == false);
 }
 
 bool Solver::mustBeFalse(const Query& query, bool &result) {
   return mustBeTrue(query.negateExpr(), result);
 }
 
-bool Solver::mayBeTrue(const Query& query, bool &result) {
-  bool res;
-  if (!mustBeFalse(query, res))
-    return false;
-  result = !res;
-  return true;
+bool Solver::mayBeTrue(const Query& query, bool &result)
+{
+	bool res;
+	if (!mustBeFalse(query, res))
+		return false;
+	result = !res;
+	return true;
 }
 
-bool Solver::mayBeFalse(const Query& query, bool &result) {
-  bool res;
-  if (!mustBeTrue(query, res))
-    return false;
-  result = !res;
-  return true;
+bool Solver::mayBeFalse(const Query& query, bool &result)
+{
+	bool res;
+	if (!mustBeTrue(query, res))
+		return false;
+	result = !res;
+	return true;
 }
 
-bool Solver::getValue(const Query& query, ref<ConstantExpr> &result) {
+bool Solver::getValue(const Query& query, ref<ConstantExpr> &result)
+{
   // Maintain invariants implementation expect.
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(query.expr)) {
     result = CE;
@@ -256,8 +262,8 @@ bool Solver::getValue(const Query& query, ref<ConstantExpr> &result) {
 
   // FIXME: Push ConstantExpr requirement down.
   ref<Expr> tmp;
-  if (!impl->computeValue(query, tmp))
-    return false;
+  tmp = impl->computeValue(query);
+  if (impl->failed()) return false;
 
   result = cast<ConstantExpr>(tmp);
   return true;
@@ -269,14 +275,11 @@ bool Solver::getInitialValues(
   std::vector< std::vector<unsigned char> > &values)
 {
   bool hasSolution;
-  bool success;
 
   // FIXME: Propogate this out.
-  success = impl->computeInitialValues(query, objects, values, hasSolution);
-  if (!hasSolution)
-    return false;
-
-  return success;
+  hasSolution = impl->computeInitialValues(query, objects, values);
+  if (impl->failed()) return false;
+  return hasSolution;
 }
 
 // FIXME: REFACTOR REFACTOR REFACTOR REFACTOR
@@ -400,40 +403,6 @@ Solver *klee::createValidatingSolver(Solver *s, Solver *oracle) {
   return new Solver(new ValidatingSolver(s, oracle));
 }
 
-/***/
-
-class DummySolverImpl : public SolverImpl {
-public:
-  DummySolverImpl() {}
-
-  bool computeValidity(const Query&, Solver::Validity &result) {
-    ++stats::queries;
-    // FIXME: We should have stats::queriesFail;
-    return false;
-  }
-  bool computeTruth(const Query&, bool &isValid) {
-    ++stats::queries;
-    // FIXME: We should have stats::queriesFail;
-    return false;
-  }
-  bool computeValue(const Query&, ref<Expr> &result) {
-    ++stats::queries;
-    ++stats::queryCounterexamples;
-    return false;
-  }
-  bool computeInitialValues(const Query&,
-                            const std::vector<const Array*> &objects,
-                            std::vector< std::vector<unsigned char> > &values,
-                            bool &hasSolution) {
-    ++stats::queries;
-    ++stats::queryCounterexamples;
-    return false;
-  }
-  void printName(int level = 0) const {
-    klee_message("%*s" "DummySolverImpl", 2*level, "");
-  }
-};
-
 Solver *klee::createDummySolver() {
   return new Solver(new DummySolverImpl());
 }
@@ -470,8 +439,6 @@ flush:
 	os.flush();
 }
 
-/***/
-
 unsigned Query::hash(void) const
 {
 	unsigned	ret;
@@ -495,4 +462,10 @@ void Query::print(std::ostream& os) const
 	os << "}\n";
 	expr->print(os);
 	os << std::endl;
+}
+
+void SolverImpl::failQuery(void)
+{
+	++stats::queriesFailed;
+	has_failed = true;
 }

@@ -42,28 +42,11 @@ void BoolectorSolverImpl::assumeConstraints(const Query& q)
 	}
 }
 
-bool BoolectorSolverImpl::computeTruth(const Query& q, bool &isSat)
+bool BoolectorSolverImpl::computeSat(const Query& q)
 {
-//	bool isSat, isNegSat;
-
-	isSat = isSatisfiable(q);
-#if 0
-	if (!isSat) {
-		/* valid => sat; not sat => not valid */
-		isValid = false;
-		goto done;
-	}
-
+	bool isSat = isSatisfiable(q);
 	freeBtorExps();
-	isNegSat = isSatisfiable(q.negateExpr());
-
-	/* M |= e /\  M |= ~e => ~valid(e) */
-	isValid = (isNegSat) ? false : true;
-
-done:
-#endif
-	freeBtorExps();
-	return true;
+	return isSat;
 }
 
 bool BoolectorSolverImpl::isSatisfiable(const Query& q)
@@ -94,9 +77,10 @@ bool BoolectorSolverImpl::isSatisfiable(const Query& q)
 bool BoolectorSolverImpl::computeInitialValues(
 	const Query& query,
 	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values,
-	bool &hasSolution)
+	std::vector< std::vector<unsigned char> > &values)
 {
+	bool	hasSolution;
+
 	/*
 	 * The query.expr is meant to contradict the model since
 	 * STP works by building counter examples.
@@ -107,8 +91,10 @@ bool BoolectorSolverImpl::computeInitialValues(
 	 *
 	 * Very confusing semantics here. Thanks a lot guys.
 	 */
+	//hasSolution = isSatisfiable(query.negateExpr());
 	hasSolution = isSatisfiable(query.negateExpr());
-	if (!hasSolution) goto done;
+	if (!hasSolution)
+		goto done;
 
 	/* build the results */
 	foreach (it, objects.begin(), objects.end()) {
@@ -126,7 +112,7 @@ bool BoolectorSolverImpl::computeInitialValues(
 
 done:
 	freeBtorExps();
-	return true;
+	return hasSolution;
 }
 
 uint8_t BoolectorSolverImpl::getArrayValue(const Array *root, unsigned index)
@@ -144,7 +130,7 @@ uint8_t BoolectorSolverImpl::getArrayValue(const Array *root, unsigned index)
 	boolector_release(btor, idx);
 
 	ret = 0;
-	for (int i = 7; i >= 0; i--) {
+	for (int i = 0; i < 8; i++) {
 		ret <<= 1;
 		if (assignment[i] == '1') ret |= 1;
 	}
@@ -455,8 +441,6 @@ BtorExp* BoolectorSolverImpl::getArrayForUpdate(
 
 	array_list.push_back(&un->btorArray);
 	un->btorArray = ret;
-
-	fprintf(stderr, "getARrayForUpdate %p\n", ret);
 
 	return ret;
 }

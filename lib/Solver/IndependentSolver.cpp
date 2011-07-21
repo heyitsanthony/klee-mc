@@ -11,7 +11,7 @@
 
 #include "klee/Expr.h"
 #include "klee/Constraints.h"
-#include "klee/SolverImpl.h"
+#include "SolverImplWrapper.h"
 
 #include "klee/util/ExprUtil.h"
 
@@ -44,7 +44,7 @@ public:
   // returns true iff set is changed by addition
   bool add(const DenseSet &b) {
     bool modified = false;
-    for (typename set_ty::const_iterator it = b.s.begin(), ie = b.s.end(); 
+    for (typename set_ty::const_iterator it = b.s.begin(), ie = b.s.end();
          it != ie; ++it) {
       if (modified || !s.count(*it)) {
         modified = true;
@@ -55,7 +55,7 @@ public:
   }
 
   bool intersects(const DenseSet &b) {
-    for (typename set_ty::iterator it = s.begin(), ie = s.end(); 
+    for (typename set_ty::iterator it = s.begin(), ie = s.end();
          it != ie; ++it)
       if (b.s.count(*it))
         return true;
@@ -65,7 +65,7 @@ public:
   void print(std::ostream &os) const {
     bool first = true;
     os << "{";
-    for (typename set_ty::iterator it = s.begin(), ie = s.end(); 
+    for (typename set_ty::iterator it = s.begin(), ie = s.end();
          it != ie; ++it) {
       if (first) {
         first = false;
@@ -97,7 +97,7 @@ public:
     for (unsigned i = 0; i != reads.size(); ++i) {
       ReadExpr *re = reads[i].get();
       const Array *array = re->updates.root;
-      
+
       // Reads of a constant array don't alias.
       if (re->updates.root->isConstantArray() &&
           !re->updates.head)
@@ -116,9 +116,9 @@ public:
       }
     }
   }
-  IndependentElementSet(const IndependentElementSet &ies) : 
+  IndependentElementSet(const IndependentElementSet &ies) :
     elements(ies.elements),
-    wholeObjects(ies.wholeObjects) {}    
+    wholeObjects(ies.wholeObjects) {}
 
   IndependentElementSet &operator=(const IndependentElementSet &ies) {
     elements = ies.elements;
@@ -159,7 +159,7 @@ public:
   bool intersects(const IndependentElementSet &b) {
     foreach (it, wholeObjects.begin(), wholeObjects.end()) {
       const Array *array = *it;
-      if (b.wholeObjects.count(array) || 
+      if (b.wholeObjects.count(array) ||
           b.elements.find(array) != b.elements.end())
         return true;
     }
@@ -214,14 +214,14 @@ inline std::ostream &operator<<(std::ostream &os, const IndependentElementSet &i
   return os;
 }
 
-static 
-IndependentElementSet getIndependentConstraints(const Query& query,
-                                                std::vector< ref<Expr> > &result) {
+static IndependentElementSet getIndependentConstraints(
+	const Query& query,
+	std::vector< ref<Expr> > &result)
+{
   IndependentElementSet eltsClosure(query.expr);
   std::vector< std::pair<ref<Expr>, IndependentElementSet> > worklist;
 
-  for (ConstraintManager::const_iterator it = query.constraints.begin(), 
-         ie = query.constraints.end(); it != ie; ++it)
+  foreach (it, query.constraints.begin(), query.constraints.end())
     worklist.push_back(std::make_pair(*it, IndependentElementSet(*it)));
 
   // XXX This should be more efficient (in terms of low level copy stuff).
@@ -229,8 +229,7 @@ IndependentElementSet getIndependentConstraints(const Query& query,
   do {
     done = true;
     std::vector< std::pair<ref<Expr>, IndependentElementSet> > newWorklist;
-    for (std::vector< std::pair<ref<Expr>, IndependentElementSet> >::iterator
-           it = worklist.begin(), ie = worklist.end(); it != ie; ++it) {
+    foreach (it, worklist.begin(), worklist.end()) {
       if (it->second.intersects(eltsClosure)) {
         if (eltsClosure.add(it->second))
           done = false;
@@ -248,8 +247,7 @@ IndependentElementSet getIndependentConstraints(const Query& query,
     std::cerr << "Q: " << query.expr << "\n";
     std::cerr << "\telts: " << IndependentElementSet(query.expr) << "\n";
     int i = 0;
-  for (ConstraintManager::const_iterator it = query.constraints.begin(), 
-         ie = query.constraints.end(); it != ie; ++it) {
+  foreach (it, query.constraints.begin(), query.constraints.end()) {
       std::cerr << "C" << i++ << ": " << *it;
       std::cerr << " " << (reqset.count(*it) ? "(required)" : "(independent)") << "\n";
       std::cerr << "\telts: " << IndependentElementSet(*it) << "\n";
@@ -260,57 +258,52 @@ IndependentElementSet getIndependentConstraints(const Query& query,
   return eltsClosure;
 }
 
-class IndependentSolver : public SolverImpl {
-private:
-  Solver *solver;
-
+class IndependentSolver : public SolverImplWrapper
+{
 public:
-  IndependentSolver(Solver *_solver) 
-    : solver(_solver) {}
-  ~IndependentSolver() { delete solver; }
+  IndependentSolver(Solver *_solver)
+    : SolverImplWrapper(_solver) {}
+  virtual ~IndependentSolver() { }
 
-  bool computeTruth(const Query&, bool &isValid);
-  bool computeValidity(const Query&, Solver::Validity &result);
-  bool computeValue(const Query&, ref<Expr> &result);
-  bool computeInitialValues(const Query& query,
-                            const std::vector<const Array*> &objects,
-                            std::vector< std::vector<unsigned char> > &values,
-                            bool &hasSolution) {
-    return solver->impl->computeInitialValues(query, objects, values,
-                                              hasSolution);
+  bool computeSat(const Query&);
+  Solver::Validity computeValidity(const Query&);
+  ref<Expr> computeValue(const Query&);
+  bool computeInitialValues(
+  	const Query& query,
+	const std::vector<const Array*> &objects,
+	std::vector< std::vector<unsigned char> > &values)
+  {
+    return doComputeInitialValues(query, objects, values);
   }
 
   void printName(int level = 0) const {
     klee_message("%*s" "IndependentSolver containing:", 2*level, "");
-    solver->printName(level + 1);
+    wrappedSolver->printName(level + 1);
   }
 };
-  
-bool IndependentSolver::computeValidity(const Query& query,
-                                        Solver::Validity &result) {
-  std::vector< ref<Expr> > required;
-  IndependentElementSet eltsClosure =
-    getIndependentConstraints(query, required);
-  ConstraintManager tmp(required);
-  return solver->impl->computeValidity(Query(tmp, query.expr), 
-                                       result);
+
+#define SETUP_CONSTRAINTS			\
+	std::vector< ref<Expr> > required;	\
+	IndependentElementSet eltsClosure;	\
+	eltsClosure = getIndependentConstraints(query, required);	\
+	ConstraintManager tmp(required);
+
+Solver::Validity IndependentSolver::computeValidity(const Query& query)
+{
+	SETUP_CONSTRAINTS
+	return doComputeValidity(Query(tmp, query.expr));
 }
 
-bool IndependentSolver::computeTruth(const Query& query, bool &isValid) {
-  std::vector< ref<Expr> > required;
-  IndependentElementSet eltsClosure = 
-    getIndependentConstraints(query, required);
-  ConstraintManager tmp(required);
-  return solver->impl->computeTruth(Query(tmp, query.expr), 
-                                    isValid);
+bool IndependentSolver::computeSat(const Query& query)
+{
+	SETUP_CONSTRAINTS
+	return doComputeSat(Query(tmp, query.expr));
 }
 
-bool IndependentSolver::computeValue(const Query& query, ref<Expr> &result) {
-  std::vector< ref<Expr> > required;
-  IndependentElementSet eltsClosure = 
-    getIndependentConstraints(query, required);
-  ConstraintManager tmp(required);
-  return solver->impl->computeValue(Query(tmp, query.expr), result);
+ref<Expr> IndependentSolver::computeValue(const Query& query)
+{
+	SETUP_CONSTRAINTS
+	return doComputeValue(Query(tmp, query.expr));
 }
 
 Solver *klee::createIndependentSolver(Solver *s) {

@@ -291,42 +291,39 @@ void run(ExecutorVex* exe)
 	exe->runImage();	
 }
 
+#define GET_STAT(x,y)	\
+	uint64_t x = *theStatisticManager->getStatisticByName(y);
+
 static void printStats(PrefixWriter& info, KleeHandler* handler)
 {
-  uint64_t queries = 
-    *theStatisticManager->getStatisticByName("Queries");
-  uint64_t queriesValid = 
-    *theStatisticManager->getStatisticByName("QueriesValid");
-  uint64_t queriesInvalid = 
-    *theStatisticManager->getStatisticByName("QueriesInvalid");
-  uint64_t queryCounterexamples = 
-    *theStatisticManager->getStatisticByName("QueriesCEX");
-  uint64_t queryConstructs = 
-    *theStatisticManager->getStatisticByName("QueriesConstructs");
-  uint64_t queryCacheHits =
-    *theStatisticManager->getStatisticByName("QueryCacheHits");
-  uint64_t queryCacheMisses =
-    *theStatisticManager->getStatisticByName("QueryCacheMisses");
-  uint64_t instructions = 
-    *theStatisticManager->getStatisticByName("Instructions");
-  uint64_t forks = 
-    *theStatisticManager->getStatisticByName("Forks");
+	GET_STAT(queries, "Queries")
+	GET_STAT(queriesValid, "QueriesValid")
+	GET_STAT(queriesInvalid, "QueriesInvalid")
+	GET_STAT(queryCounterexamples, "QueriesCEX")
+	GET_STAT(queriesFailed, "QueriesFailed")
+	GET_STAT(queryConstructs, "QueriesConstructs")
+	GET_STAT(queryCacheHits, "QueryCacheHits")
+	GET_STAT(queryCacheMisses, "QueryCacheMisses")
+	GET_STAT(instructions, "Instructions")
+	GET_STAT(forks, "Forks")
 
-  info << "done: total queries = " << queries << " ("
-       << "valid: " << queriesValid << ", "
-       << "invalid: " << queriesInvalid << ", "
-       << "cex: " << queryCounterexamples << ")\n";
-  if (queries)
-    info << "done: avg. constructs per query = " 
-         << queryConstructs / queries << "\n";  
+	info << "done: total queries = " 
+		<< queries << " ("
+		<< "valid: " << queriesValid << ", "
+		<< "invalid: " << queriesInvalid << ", "
+		<< "cex: " << queryCounterexamples << ", "
+		<< "failed: " << queriesFailed << ")\n";
+	if (queries)
+		info	<< "done: avg. constructs per query = " 
+			<< queryConstructs / queries << "\n";  
 
-  info << "done: query cache hits = " << queryCacheHits << ", "
-       << "query cache misses = " << queryCacheMisses << "\n";
+	info	<< "done: query cache hits = " << queryCacheHits << ", "
+		<< "query cache misses = " << queryCacheMisses << "\n";
 
-  info << "done: total instructions = " << instructions << "\n";
-  info << "done: explored paths = " << 1 + forks << "\n";
-  info << "done: completed paths = " << handler->getNumPathsExplored() << "\n";
-  info << "done: generated tests = " << handler->getNumTestCases() << "\n";
+	info << "done: total instructions = " << instructions << "\n";
+	info << "done: explored paths = " << 1 + forks << "\n";
+	info << "done: completed paths = " << handler->getNumPathsExplored() << "\n";
+	info << "done: generated tests = " << handler->getNumTestCases() << "\n";
 }
 
 static int runWatchdog(void)

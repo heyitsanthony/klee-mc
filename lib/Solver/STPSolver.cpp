@@ -30,7 +30,6 @@ namespace
   	"shared-mem-bytes",
 	cl::init(1 << 20),
 	cl::desc("Bytes of Shared Memory for forked STP"));
-  	
 }
 
 
@@ -87,7 +86,6 @@ public:
 #define STP_QUERY_VALID		1
 #define STP_QUERY_ERROR		2
 
-/* UGH. We call this for computeTruth. WHYYYyyy */
 static int runAndGetCex(
 	::VC vc,
 	STPBuilder *builder,
@@ -101,7 +99,8 @@ static int runAndGetCex(
 
 	res = vc_query(vc, q);
 	hasSolution = (res == STP_QUERY_INVALID);	/* !res */
-	if (!hasSolution) return res;
+	if (!hasSolution || res == STP_QUERY_ERROR)
+		return res;
 
 	rh.reserve(objects.size());
 
@@ -225,19 +224,17 @@ char *STPSolverImpl::getConstraintLog(const Query &query)
 	return buffer;
 }
 
-bool STPSolverImpl::computeTruth(
-	const Query& query,
-	bool &isValid)
+bool STPSolverImpl::computeSat(const Query& query)
 {
-  std::vector<const Array*> objects;
-  std::vector< std::vector<unsigned char> > values;
-  bool hasSolution;
+	std::vector<const Array*> objects;
+	std::vector< std::vector<unsigned char> > values;
+	bool hasCex;
 
-  if (!computeInitialValues(query, objects, values, hasSolution))
-    return false;
+	hasCex = computeInitialValues(query.negateExpr(), objects, values);
+	if (failed()) return false;
 
-  isValid = !hasSolution;
-  return true;
+	// counter example to negated query exists => normal query is SAT (sol = cex)
+	return hasCex;
 }
 
 bool STPSolverImpl::doForkedComputeInitialValues(
@@ -408,26 +405,13 @@ bool ServerSTPSolverImpl::talkToServer(
 bool ServerSTPSolverImpl::computeInitialValues(
 	const Query& query,
 	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values,
-	bool &hasSolution)
+	std::vector< std::vector<unsigned char> > &values)
 {
-  TimerStatIncrementer t(stats::queryTime);
-  std::ostream& os = std::clog;
+  TimerStatIncrementer	t(stats::queryTime);
+  std::ostream&	os = std::clog;
+  ExprHandle	stp_e;
 
-  vc_push(vc);
-
-  foreach (it, query.constraints.begin(), query.constraints.end())
-    vc_assertFormula(vc, builder->construct(*it));
-
-  ++stats::queries;
-  ++stats::queryCounterexamples;
-
-  ExprHandle stp_e = builder->construct(query.expr);
-  if (DebugPrintQueries) {
-    os << "\n-- STP CounterExample --\n";
-    ExprPPrinter::printQuery(os, query.constraints, query.expr);
-    os.flush();
-  }
+  setupVCQuery(query, stp_e, os);
 
   // get CVC representation for STP query
   char* qstr;
@@ -440,12 +424,15 @@ bool ServerSTPSolverImpl::computeInitialValues(
   // don't send null terminator (STP's yacc rejects it)
   qlen--;
 
-  bool success = talkToServer(timeout, qstr, qlen, objects, values, hasSolution);
+  bool success, hasSolution;
 
+  success = talkToServer(timeout, qstr, qlen, objects, values, hasSolution);
   free(qstr);
 
-  if (!success)
+  if (!success) {
+    failQuery();
     return false;
+  }
 
   // update stats
   if (!hasSolution) /* cexHeader.cResult == 'V' */
@@ -456,7 +443,7 @@ bool ServerSTPSolverImpl::computeInitialValues(
   if (DebugPrintQueries)
     printDebugQueries(os, t.check(), objects, values, hasSolution);
 
-  return true;
+  return hasSolution;
 }
 
 #if INT_MAX <= UCHAR_MAX
@@ -557,37 +544,38 @@ static bool recvall(int fd, void* vp, size_t sz, bool timeout, timeval& tExpire)
   return nl == 0;
 }
 
+
+void STPSolverImpl::setupVCQuery(
+	const Query& query, ExprHandle& stp_e, std::ostream& os)
+{
+	vc_push(vc);
+
+	foreach (it, query.constraints.begin(), query.constraints.end())
+		vc_assertFormula(vc, builder->construct(*it));
+
+	++stats::queries;
+	++stats::queryCounterexamples;
+
+	stp_e = builder->construct(query.expr);
+	if (DebugPrintQueries) {
+		os << "\n-- STP CounterExample --\n";
+		ExprPPrinter::printQuery(os, query.constraints, query.expr);
+		os.flush();
+	}
+}
+
+
 bool STPSolverImpl::computeInitialValues(
 	const Query &query,
 	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values,
-	bool &hasSolution)
+	std::vector< std::vector<unsigned char> > &values)
 {
-  bool success;
-  TimerStatIncrementer t(stats::queryTime);
-  std::ostream& os = std::clog;
+  TimerStatIncrementer	t(stats::queryTime);
+  std::ostream&		os = std::clog;
+  bool			success, hasSolution;
+  ExprHandle		stp_e;
 
-  vc_push(vc);
-
-  foreach (it, query.constraints.begin(), query.constraints.end())
-    vc_assertFormula(vc, builder->construct(*it));
-
-  ++stats::queries;
-  ++stats::queryCounterexamples;
-
-  ExprHandle stp_e = builder->construct(query.expr);
-  if (DebugPrintQueries) {
-    os << "\n-- STP CounterExample --\n";
-    ExprPPrinter::printQuery(os, query.constraints, query.expr);
-    os.flush();
-  }
-
-  if (0) {
-    char *buf;
-    unsigned long len;
-    vc_printQueryStateToBuffer(vc, stp_e, &buf, &len, false);
-    fprintf(stderr, "note: STP query: %.*s\n", (unsigned) len, buf);
-  }
+  setupVCQuery(query, stp_e, os);
 
   if (useForkedSTP) {
     success = doForkedComputeInitialValues(objects, values, stp_e, hasSolution);
@@ -603,6 +591,8 @@ bool STPSolverImpl::computeInitialValues(
       ++stats::queriesInvalid;
     else
       ++stats::queriesValid;
+  } else {
+  	failQuery();
   }
 
   vc_pop(vc);
@@ -610,7 +600,7 @@ bool STPSolverImpl::computeInitialValues(
   if (DebugPrintQueries)
   	printDebugQueries(os, t.check(), objects, values, hasSolution);
 
-  return success;
+  return hasSolution;
 }
 
 // Returns -1 if failed to complete the child process,

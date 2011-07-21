@@ -10,28 +10,31 @@
 #include "klee/Solver.h"
 
 #include "klee/Expr.h"
-#include "klee/SolverImpl.h"
+#include "SolverImplWrapper.h"
 #include "klee/Statistics.h"
 #include "klee/util/ExprPPrinter.h"
 #include "klee/Internal/Support/QueryLog.h"
 #include "klee/Internal/System/Time.h"
 
 #include "llvm/Support/CommandLine.h"
+#include "static/Sugar.h"
 
 #include <fstream>
 
 using namespace klee;
-using namespace llvm;
 using namespace klee::util;
 
-///
-
-class PCLoggingSolver : public SolverImpl {
-  Solver *solver;
+class PCLoggingSolver : public SolverImplWrapper
+{
+private:
   std::ofstream os;
   ExprPPrinter *printer;
   unsigned queryCount;
   double startTime;
+  void dumpSolution(
+  	const std::vector<const Array*> &objects,
+        std::vector< std::vector<unsigned char> > &values,
+  	bool hasSolution);
 
   void startQuery(const Query& query, const char *typeName,
                   const ref<Expr> *evalExprsBegin = 0,
@@ -47,105 +50,123 @@ class PCLoggingSolver : public SolverImpl {
                         evalExprsBegin, evalExprsEnd,
                         evalArraysBegin, evalArraysEnd);
     os.flush();
-    
+
     startTime = estWallTime();
   }
 
-  void finishQuery(bool success) {
+  void finishQuery() {
     double delta = estWallTime() - startTime;
-    os << "#   " << (success ? "OK" : "FAIL") << " -- "
+    os << "#   " << (failed() ? "FAIL" : "OK") << " -- "
        << "Elapsed: " << delta << "\n";
     os.flush();
   }
-  
+
 public:
-  PCLoggingSolver(Solver *_solver, std::string path) 
-  : solver(_solver),
+  PCLoggingSolver(Solver *_solver, std::string path)
+  : SolverImplWrapper(_solver),
     os(path.c_str(), std::ios::trunc),
     printer(ExprPPrinter::create(os)),
     queryCount(0) {
-  }                                                      
-  ~PCLoggingSolver() {
-    delete printer;
-    delete solver;
   }
-  
-  bool computeTruth(const Query& query, bool &isValid) {
-    startQuery(query, "Truth");
-    bool success = solver->impl->computeTruth(query, isValid);
-    finishQuery(success);
-    if (success)
-      os << "#   Is Valid: " << (isValid ? "true" : "false") << "\n";
-    os << "\n";
-    return success;
-  }
+  virtual ~PCLoggingSolver() { delete printer; }
 
-  bool computeValidity(const Query& query, Solver::Validity &result) {
-    startQuery(query, "Validity");
-    bool success = solver->impl->computeValidity(query, result);
-    finishQuery(success);
-    if (success)
-      os << "#   Validity: " << result << "\n";
-    os << "\n";
-    return success;
-  }
-
-  bool computeValue(const Query& query, ref<Expr> &result) {
-    startQuery(query.withFalse(), "Value", 
-               &query.expr, &query.expr + 1);
-    bool success = solver->impl->computeValue(query, result);
-    finishQuery(success);
-    if (success)
-      os << "#   Result: " << result << "\n";
-    os << "\n";
-    return success;
-  }
-
-  bool computeInitialValues(const Query& query,
-                            const std::vector<const Array*> &objects,
-                            std::vector< std::vector<unsigned char> > &values,
-                            bool &hasSolution) {
-    if (objects.empty()) {
-      startQuery(query, "InitialValues",
-                 0, 0);
-    } else {
-      startQuery(query, "InitialValues",
-                 0, 0,
-                 &objects[0], &objects[0] + objects.size());
-    }
-    bool success = solver->impl->computeInitialValues(query, objects, 
-                                                      values, hasSolution);
-    finishQuery(success);
-    if (success) {
-      os << "#   Solvable: " << (hasSolution ? "true" : "false") << "\n";
-      if (hasSolution) {
-        std::vector< std::vector<unsigned char> >::iterator
-          values_it = values.begin();
-        for (std::vector<const Array*>::const_iterator i = objects.begin(),
-               e = objects.end(); i != e; ++i, ++values_it) {
-          const Array *array = *i;
-          std::vector<unsigned char> &data = *values_it;
-          os << "#     " << array->name << " = [";
-          for (unsigned j = 0; j < array->mallocKey.size; j++) {
-            os << (int) data[j];
-            if (j+1 < array->mallocKey.size)
-              os << ",";
-          }
-          os << "]\n";
-        }
-      }
-    }
-    os << "\n";
-    return success;
-  }
+  bool computeSat(const Query& query);
+  Solver::Validity computeValidity(const Query& query);
+  ref<Expr> computeValue(const Query& query);
+  bool computeInitialValues(
+	const Query& query,
+        const std::vector<const Array*> &objects,
+        std::vector< std::vector<unsigned char> > &values);
 
   void printName(int level = 0) const {
     klee_message("%*s" "PCLoggingSolver containing:", 2*level, "");
-    solver->printName(level + 1);
+    wrappedSolver->printName(level + 1);
   }
 };
 
-///
+bool PCLoggingSolver::computeSat(const Query& query)
+{
+	bool isSat;
+	startQuery(query, "Truth");
+	isSat = doComputeSat(query);
+	finishQuery();
+	if (!failed())
+		os << "#   Is Sat: " << (isSat ? "true" : "false") << "\n";
+	os << "\n";
+	return isSat;
+}
+
+ref<Expr> PCLoggingSolver::computeValue(const Query& query)
+{
+	ref<Expr> ret;
+
+	startQuery(query.withFalse(), "Value", &query.expr, &query.expr + 1);
+	ret = doComputeValue(query);
+	finishQuery();
+
+	if (!failed()) os << "#   Result: " << ret << "\n";
+	os << "\n";
+	return ret;
+}
+
+Solver::Validity PCLoggingSolver::computeValidity(const Query& query)
+{
+	startQuery(query, "Validity");
+	Solver::Validity ret = doComputeValidity(query);
+	finishQuery();
+	if (!failed()) os << "#   Validity: " << ret << "\n";
+	os << "\n";
+	return ret;
+}
+
+void PCLoggingSolver::dumpSolution(
+	const std::vector<const Array*> &objects,
+        std::vector< std::vector<unsigned char> > &values,
+  	bool hasSolution)
+{
+	os << "#   Solvable: " << (hasSolution ? "true" : "false") << "\n";
+	if (!hasSolution) return;
+
+	std::vector< std::vector<unsigned char> >::iterator
+	values_it = values.begin();
+	foreach (i, objects.begin(), objects.end()) {
+		const Array *array = *i;
+		std::vector<unsigned char> &data = *values_it;
+
+		os << "#     " << array->name << " = [";
+		for (unsigned j = 0; j < array->mallocKey.size; j++) {
+			os << (int) data[j];
+			if (j+1 < array->mallocKey.size)
+			os << ",";
+		}
+		os << "]\n";
+		++values_it;
+	}
+}
+
+bool PCLoggingSolver::computeInitialValues(
+	const Query& query,
+        const std::vector<const Array*> &objects,
+        std::vector< std::vector<unsigned char> > &values)
+{
+	bool	hasSol;
+	if (objects.empty()) {
+		startQuery(query, "InitialValues", 0, 0);
+	} else {
+		startQuery(
+			query, "InitialValues",
+			0, 0,
+			&objects[0], &objects[0] + objects.size());
+	}
+
+	hasSol = doComputeInitialValues(query, objects, values);
+	finishQuery();
+
+	if (!failed()) dumpSolution(objects, values, hasSol);
+	os << "\n";
+
+	return hasSol;
+}
 
 Solver *klee::createPCLoggingSolver(Solver *_solver, std::string path) {
   return new Solver(new PCLoggingSolver(_solver, path));

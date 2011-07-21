@@ -11,7 +11,7 @@
 #define KLEE_INCOMPLETESOLVER_H
 
 #include "klee/Solver.h"
-#include "klee/SolverImpl.h"
+#include "SolverImpl.h"
 
 namespace klee {
 
@@ -29,21 +29,14 @@ public:
   enum PartialValidity {
     /// The query is provably true.
     MustBeTrue = 1,
-
     /// The query is provably false.
     MustBeFalse = -1,
-
-    /// The query is not provably false (a true assignment is known to
-    /// exist).
+    /// The query is not provably false (a true assignment is known to exist).
     MayBeTrue = 2,
-
-    /// The query is not provably true (a false assignment is known to
-    /// exist).
+    /// The query is not provably true (a false assignment is known to exist).
     MayBeFalse = -2,
-
     /// The query is known to have both true and false assignments.
     TrueOrFalse = 0,
-
     /// The validity of the query is unknown.
     None = 3
   };
@@ -51,8 +44,8 @@ public:
   static PartialValidity negatePartialValidity(PartialValidity pv);
 
 public:
-  IncompleteSolver() {};
-  virtual ~IncompleteSolver() {};
+  IncompleteSolver() : has_failed(false) {}
+  virtual ~IncompleteSolver() {}
 
   /// computeValidity - Compute a partial validity for the given query.
   ///
@@ -67,44 +60,49 @@ public:
   ///
   /// The passed expression is non-constant with bool type.
   virtual IncompleteSolver::PartialValidity computeTruth(const Query&) = 0;
-  
+
   /// computeValue - Attempt to compute a value for the given expression.
-  virtual bool computeValue(const Query&, ref<Expr> &result) = 0;
+  virtual ref<Expr> computeValue(const Query&) = 0;
 
   /// computeInitialValues - Attempt to compute the constant values
   /// for the initial state of each given object. If a correct result
   /// is not found, then the values array must be unmodified.
-  virtual bool computeInitialValues(const Query&,
-                                    const std::vector<const Array*> 
-                                      &objects,
-                                    std::vector< std::vector<unsigned char> > 
-                                      &values,
-                                    bool &hasSolution) = 0;
+  virtual bool computeInitialValues(
+  	const Query&,
+        const std::vector<const Array*> &objects,
+	std::vector< std::vector<unsigned char> > &values) = 0;
 
   virtual void printName(int level = 0) const {
     klee_message("%*s" "IncompleteSolver", 2*level, "");
   }
+
+  bool failed(void) const { return has_failed; }
+protected:
+  virtual void failQuery(void) { has_failed = true; }
+private:
+  bool has_failed;
 };
 
 /// StagedSolver - Adapter class for staging an incomplete solver with
 /// a complete secondary solver, to form an (optimized) complete
 /// solver.
-class StagedSolverImpl : public SolverImpl {
+class StagedSolverImpl : public SolverImpl
+{
 private:
   IncompleteSolver *primary;
   Solver *secondary;
-  
+
 public:
   StagedSolverImpl(IncompleteSolver *_primary, Solver *_secondary);
   ~StagedSolverImpl();
-    
-  bool computeTruth(const Query&, bool &isValid);
-  bool computeValidity(const Query&, Solver::Validity &result);
-  bool computeValue(const Query&, ref<Expr> &result);
-  bool computeInitialValues(const Query&,
-                            const std::vector<const Array*> &objects,
-                            std::vector< std::vector<unsigned char> > &values,
-                            bool &hasSolution);
+
+  bool computeSat(const Query&);
+  Solver::Validity computeValidity(const Query&);
+  ref<Expr> computeValue(const Query&);
+  bool computeInitialValues(
+  	const Query&,
+        const std::vector<const Array*> &objects,
+        std::vector< std::vector<unsigned char> > &values);
 
   void printName(int level = 0) const {
     klee_message("%*s" "StagedSolver containing:", 2*level, "");
