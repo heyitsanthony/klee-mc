@@ -163,6 +163,7 @@ private:
 
 	func2vsb_map	func2vsb_table;
 	VexFCache	*xlate_cache;
+	unsigned int	native_code_bytes;
 
 	bool		dump_funcs;
 	bool		in_sc;

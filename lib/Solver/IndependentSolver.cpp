@@ -44,8 +44,7 @@ public:
   // returns true iff set is changed by addition
   bool add(const DenseSet &b) {
     bool modified = false;
-    for (typename set_ty::const_iterator it = b.s.begin(), ie = b.s.end();
-         it != ie; ++it) {
+    foreach (it, b.s.begin(), b.s.end()) {
       if (modified || !s.count(*it)) {
         modified = true;
         s.insert(*it);
@@ -55,18 +54,17 @@ public:
   }
 
   bool intersects(const DenseSet &b) {
-    for (typename set_ty::iterator it = s.begin(), ie = s.end();
-         it != ie; ++it)
+    foreach (it, s.begin(), s.end()) {
       if (b.s.count(*it))
         return true;
+    }
     return false;
   }
 
   void print(std::ostream &os) const {
     bool first = true;
     os << "{";
-    for (typename set_ty::iterator it = s.begin(), ie = s.end();
-         it != ie; ++it) {
+    foreach (it, s.begin(), s.end()) {
       if (first) {
         first = false;
       } else {

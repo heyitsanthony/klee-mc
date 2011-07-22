@@ -157,7 +157,12 @@ const char *Solver::validity_to_str(Validity v) {
 Solver::~Solver() { delete impl; }
 SolverImpl::~SolverImpl() { }
 
-bool Solver::failed(void) const { return impl->failed(); }
+bool Solver::failed(void) const
+{
+	bool	failure = impl->failed();
+	impl->ackFail();
+	return failure;
+}
 
 ref<Expr> SolverImpl::computeValue(const Query& query)
 {
@@ -227,7 +232,7 @@ bool Solver::mustBeTrue(const Query& query, bool &result)
 
 	validity = impl->computeValidity(query);
 	result = (validity == Solver::True);
-	return (impl->failed() == false);
+	return (failed() == false);
 }
 
 bool Solver::mustBeFalse(const Query& query, bool &result) {
@@ -263,7 +268,7 @@ bool Solver::getValue(const Query& query, ref<ConstantExpr> &result)
   // FIXME: Push ConstantExpr requirement down.
   ref<Expr> tmp;
   tmp = impl->computeValue(query);
-  if (impl->failed()) return false;
+  if (failed()) return false;
 
   result = cast<ConstantExpr>(tmp);
   return true;
@@ -278,7 +283,7 @@ bool Solver::getInitialValues(
 
   // FIXME: Propogate this out.
   hasSolution = impl->computeInitialValues(query, objects, values);
-  if (impl->failed()) return false;
+  if (failed()) return false;
   return hasSolution;
 }
 

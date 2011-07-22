@@ -66,6 +66,7 @@ ExecutorVex::ExecutorVex(
 	Guest	*in_gs)
 : Executor(opts, ih)
 , gs(in_gs)
+, native_code_bytes(0)
 {
 	assert (kmodule == NULL && "KMod already initialized? My contract!");
 
@@ -143,7 +144,6 @@ void ExecutorVex::runImage(void)
 	init_kfunc = kmodule->addFunction(init_func);
 	statsTracker->addKFunction(init_kfunc);
 	bindKFuncConstants(init_kfunc);
-
 
 	state = new ExecutionState(kmodule->getKFunction(init_func));
 
@@ -334,6 +334,8 @@ Function* ExecutorVex::getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new)
 	func2vsb_table[(uint64_t)f] = vsb;
 
 	is_new = true;
+	native_code_bytes += vsb->getEndAddr() - vsb->getGuestAddr();
+
 	return f;
 }
 
