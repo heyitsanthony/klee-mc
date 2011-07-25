@@ -20,6 +20,7 @@ endif
 
 CFLAGS += -I/home/chz/src/vex/src/
 CXXFLAGS += -I/home/chz/src/vex/src/ -Wl,-Ttext-segment=0xa000000
-LIBS += -lstp  -lrt -lboolector
+LIBS += $(SOLVERLIBS)
+LIBS += -lrt
 LIBS += /home/chz/src/vex/bin/vexllvm.a /usr/lib/valgrind/libvex-amd64-linux.a
 #-ltcmalloc

@@ -23,6 +23,7 @@ public:
   // FIXME: This does not belong here.
   mutable void *stpInitialArray;
   mutable void *btorInitialArray;
+  mutable void *z3InitialArray;
   mutable unsigned refCount;  // used only for const_arr's
   static const unsigned refCountDontCare = unsigned(-1);
   void initRef() const { refCount = 0; }
@@ -42,8 +43,9 @@ public:
         const ref<ConstantExpr> *constantValuesBegin = 0,
         const ref<ConstantExpr> *constantValuesEnd = 0)
     : name(_name), mallocKey(_mallocKey),
-      constantValues(constantValuesBegin, constantValuesEnd),
-      stpInitialArray(0), btorInitialArray(0), refCount(refCountDontCare)
+      constantValues(constantValuesBegin, constantValuesEnd)
+      , stpInitialArray(0), btorInitialArray(0), z3InitialArray(0)
+      , refCount(refCountDontCare)
   {
     chk_val = 0x12345678;
     assert((isSymbolicArray() || constantValues.size() == mallocKey.size) &&

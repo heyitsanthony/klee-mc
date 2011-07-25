@@ -30,8 +30,8 @@ endif
 C.Flags += -std=gnu89
 
 ifeq ($(ENABLE_EXT_STP),1)
-  LD.Flags += -L$(STP_ROOT)/lib -L$(BOOLECTOR_ROOT)/
-  CXX.Flags += -I$(STP_ROOT)/include -I$(BOOLECTOR_ROOT)/
+  LD.Flags += -L$(STP_ROOT)/lib -L$(BOOLECTOR_ROOT)/ -L$(Z3_ROOT)/lib
+  CXX.Flags += -I$(STP_ROOT)/include -I$(BOOLECTOR_ROOT)/ -I$(Z3_ROOT)/include
 else
   LD.Flags += -L$(PROJ_SRC_ROOT)/stp/lib
   CXX.Flags += -I$(PROJ_SRC_ROOT)/stp/include
@@ -47,3 +47,4 @@ ifeq ($(ENABLE_INSTRUCTION_ID),1)
   CXXFLAGS += -DINCLUDE_INSTR_ID_IN_PATH_INFO
 endif
 
+SOLVERLIBS= -lstp -lboolector -lz3

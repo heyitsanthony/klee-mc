@@ -644,6 +644,7 @@ ENABLE_TCMALLOC
 ENABLE_STPLOG
 STP_ROOT
 BOOLECTOR_ROOT
+Z3_ROOT
 ENABLE_EXT_STP
 CXXCPP
 ac_ct_CXX
@@ -730,6 +731,7 @@ enable_posix_runtime
 with_runtime
 with_stp
 with_boolector
+with_z3
 enable_stplog
 enable_tcmalloc
 enable_instruction_id
@@ -1389,7 +1391,8 @@ Optional Packages:
   --with-runtime          Select build configuration for runtime libraries
                           (default Release)
   --with-stp              Location of STP installation directory
-  --with-boolector        Location of boolector directory
+  --with-boolector        Location of boolector installation directory
+  --with-z3               Location of z3 installation directory
 
 Some influential environment variables:
   CC          C compiler command
@@ -4865,6 +4868,20 @@ if [ ! -z "$with_boolector" ]; then
 else
   BOOLECTOR_ROOT=""
 fi
+
+# Check whether --with-z3 was given.
+if test "${with_z3+set}" = set; then
+  withval=$with_z3;
+  echo "WE GOT IT"
+fi
+
+if [ ! -z "$with_z3" ]; then
+  z3_root=`cd $with_z3 2>/dev/null; pwd`
+  Z3_ROOT="$z3_root"
+else
+  Z3_ROOT=""
+fi
+
 
 # Check whether --with-stp was given.
 if test "${with_stp+set}" = set; then

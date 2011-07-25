@@ -25,6 +25,7 @@
 
 #include "ValidatingSolver.h"
 #include "BoolectorSolver.h"
+#include "Z3Solver.h"
 #include "PoisonCache.h"
 #include "DummySolver.h"
 
@@ -85,6 +86,11 @@ namespace {
 	cl::desc("Use boolector solver"));
 
   cl::opt<bool>
+  UseZ3("use-z3",
+  	cl::init(false),
+	cl::desc("Use z3 solver"));
+
+  cl::opt<bool>
   UseIndependentSolver("use-independent-solver",
                        cl::init(true),
 		       cl::desc("Use constraint independence"));
@@ -108,6 +114,8 @@ TimingSolver* Solver::createChain(
 
 	if (UseBoolector)
 		timedSolver = new BoolectorSolver();
+	else if (UseZ3)
+		timedSolver = new Z3Solver();
 	else
 		timedSolver = new STPSolver(UseForkedSTP, STPServer);
 	solver = timedSolver;
@@ -124,7 +132,7 @@ TimingSolver* Solver::createChain(
 
 	if (DebugValidateSolver) {
 		/* oracle is another QF_BV solver */
-		if (UseBoolector)
+		if (UseBoolector || UseZ3)
 			solver = createValidatingSolver(
 				solver,
 				new STPSolver(UseForkedSTP, STPServer));

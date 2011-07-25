@@ -18,5 +18,5 @@ ifeq ($(ENABLE_STPLOG), 1)
 	LIBS += -lstplog
 endif
 
-LIBS += -lstp  -lboolector
+LIBS += $(SOLVERLIBS)
 #-ltcmalloc

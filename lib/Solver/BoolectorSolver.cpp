@@ -250,10 +250,6 @@ BtorExp* BoolectorSolverImpl::klee2btor(const ref<Expr>& e)
 
 		src = klee2btor(ee->expr);
 		width = ee->getWidth();
-		if (width==1) {
-			ret = boolector_slice(btor, src, ee->offset, ee->offset);
-			goto done;
-		}
 		ret = boolector_slice(btor, src, ee->offset+width-1, ee->offset);
 		goto done;
 	}

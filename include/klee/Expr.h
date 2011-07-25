@@ -403,6 +403,7 @@ public:
   ref<Expr> index, value;
 
   mutable void *btorArray;
+  mutable void *z3Array;
 private:
   /// size of this update sequence, including this update
   unsigned size;
@@ -418,7 +419,7 @@ public:
   unsigned hash() const { return hashValue; }
 
 private:
-  UpdateNode() : refCount(0), stpArray(0) {}
+  UpdateNode() : refCount(0), stpArray(0) , btorArray(0), z3Array(0) {}
   ~UpdateNode();
 
   unsigned computeHash();
