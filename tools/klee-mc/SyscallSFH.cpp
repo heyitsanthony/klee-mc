@@ -1,5 +1,6 @@
 #include "klee/Expr.h"
 #include "ExecutorVex.h"
+#include "ExeStateVex.h"
 #include "SyscallSFH.h"
 #include "guestcpustate.h"
 
@@ -66,7 +67,7 @@ SFH_DEF_HANDLER(SCRegs)
 	gs = exe_vex->getGuest();
 	sz = gs->getCPUState()->getStateSize();
 
-	old_mo = state.getRegCtx();
+	old_mo = static_cast<ExeStateVex&>(state).getRegCtx();
 	assert (old_mo && "No register context ever set?");
 
 	old_regctx_os = state.addressSpace.findObject(old_mo);
@@ -100,7 +101,7 @@ SFH_DEF_HANDLER(SCRegs)
 	}
 
 	/* make state point to right register context on xfer */
-	state.setRegCtx(cpu_mo);
+	static_cast<ExeStateVex&>(state).setRegCtx(cpu_mo);
 
 	state.bindLocal(target, ConstantExpr::create(cpu_mo->address, 64));
 }
@@ -157,7 +158,7 @@ SFH_DEF_HANDLER(KMCExit)
 	SFH_CHK_ARGS(1, "kmc_exit");
 
 	ce = dyn_cast<ConstantExpr>(arguments[0]);
-	if (ce)  fprintf(stderr, "exitcode=%d\n", ce->getZExtValue());
+	if (ce)  fprintf(stderr, "exitcode=%lu\n", ce->getZExtValue());
 	else fprintf(stderr, "exitcode=?\n");
 
 	sfh->executor->terminateStateOnExit(state);
@@ -166,11 +167,14 @@ SFH_DEF_HANDLER(KMCExit)
 SFH_DEF_HANDLER(MakeRangeSymbolic)
 {
 	SFH_CHK_ARGS(3, "kmc_make_range_symbolic");
+	SyscallSFH	*sc_sfh = static_cast<SyscallSFH*>(sfh);
+	ExecutorVex	*exe_vex = static_cast<ExecutorVex*>(sc_sfh->executor);
+	ConstantExpr	*addr, *len;
+	uint64_t	addr_v, len_v;
+	std::string	name_str;
 
-	ExecutorVex	*exe_vex = dynamic_cast<ExecutorVex*>(sfh->executor);
-	ConstantExpr		*addr, *len;
-	uint64_t		addr_v, len_v;
-	std::string		name_str;
+	assert (sfh != NULL);
+	assert (exe_vex != NULL);
 
 	addr = dyn_cast<ConstantExpr>(arguments[0]);
 	len = dyn_cast<ConstantExpr>(arguments[1]);
@@ -186,7 +190,7 @@ SFH_DEF_HANDLER(MakeRangeSymbolic)
 	len_v = len->getZExtValue();
 	name_str = sfh->readStringAtAddress(state, arguments[2]);
 
-	exe_vex->makeRangeSymbolic(state, (void*)addr_v, len_v, name_str.c_str());
+	sc_sfh->makeRangeSymbolic(state, (void*)addr_v, len_v, name_str.c_str());
 }
 
 SFH_DEF_HANDLER(AllocAligned)
@@ -228,4 +232,211 @@ SFH_DEF_HANDLER(AllocAligned)
 	exe_vex->executeMakeSymbolic(state, new_mo, name_str.c_str());
 
 	state.bindLocal(target, ConstantExpr::create(addr, 64));
+}
+
+
+void SyscallSFH::makeSymbolicTail(
+	ExecutionState& state,
+	const MemoryObject* mo,
+	unsigned taken,
+	const char* name)
+{
+	ObjectState	*os;
+	MemoryObject	*mo_head, *mo_tail;
+	char		*buf_head;
+	uint64_t	mo_addr, mo_size, head_size;
+
+	mo_addr = mo->address;
+	mo_size = mo->size;
+
+	assert (mo_size > taken && "Off+Taken out of range");
+
+	/* copy buffer data */
+	head_size = mo_size - taken;
+	buf_head = new char[head_size];
+	state.addressSpace.copyToBuf(mo, buf_head, 0, head_size);
+	os = state.addressSpace.findObject(mo);
+
+	/* free object from address space */
+	state.unbindObject(mo);
+
+	/* mark head concrete */
+	mo_head = exe_vex->memory->allocateFixed(mo_addr, head_size, 0, &state);
+	os = state.bindMemObj(mo_head);
+	for(unsigned i = 0; i < head_size; i++) state.write8(os, i, buf_head[i]);
+
+	/* mark tail symbolic */
+	mo_tail = exe_vex->memory->allocateFixed(
+		mo_addr+head_size, taken, 0, &state);
+	exe_vex->executeMakeSymbolic(
+		state,
+		mo_tail,
+		ConstantExpr::alloc(taken, 32),
+		name);
+
+
+	delete [] buf_head;
+}
+
+void SyscallSFH::makeSymbolicHead(
+	ExecutionState& state,
+	const MemoryObject* mo,
+	unsigned taken,
+	const char* name)
+{
+	ObjectState	*os;
+	MemoryObject	*mo_head, *mo_tail;
+	char		*buf_tail;
+	uint64_t	mo_addr, mo_size, tail_size;
+
+	mo_addr = mo->address;
+	mo_size = mo->size;
+
+	if (mo_size == taken) {
+		exe_vex->executeMakeSymbolic(
+			state,
+			mo,
+			ConstantExpr::alloc(mo_size, 32),
+			name);
+		return;
+	}
+
+	assert (mo_size > taken && "Off+Taken out of range");
+
+	/* copy buffer data */
+	tail_size = mo_size - taken;
+	buf_tail = new char[tail_size];
+	state.addressSpace.copyToBuf(mo, buf_tail, taken, tail_size);
+	os = state.addressSpace.findObject(mo);
+
+	/* free object from address space */
+	state.unbindObject(mo);
+
+	mo_head = exe_vex->memory->allocateFixed(mo_addr, taken, 0, &state);
+	exe_vex->executeMakeSymbolic(
+		state,
+		mo_head,
+		ConstantExpr::alloc(taken, 32),
+		name);
+
+	mo_tail = exe_vex->memory->allocateFixed(
+		mo_addr+taken, tail_size, 0, &state);
+	os = state.bindMemObj(mo_tail);
+	for(unsigned i = 0; i < tail_size; i++) state.write8(os, i, buf_tail[i]);
+
+	delete [] buf_tail;
+}
+
+void SyscallSFH::makeSymbolicMiddle(
+	ExecutionState& state,
+	const MemoryObject* mo,
+	unsigned mo_off,
+	unsigned taken,
+	const char* name)
+{
+	ObjectState	*os;
+	MemoryObject	*mo_head, *mo_tail, *mo_mid;
+	char		*buf_head, *buf_tail;
+	uint64_t	mo_addr, mo_size, tail_size;
+
+	mo_addr = mo->address;
+	mo_size = mo->size;
+	assert (mo_size > (mo_off+taken) && "Off+Taken out of range");
+
+	/* copy buffer data */
+	buf_head = new char[mo_off];
+	tail_size = mo_size - (mo_off + taken);
+	buf_tail = new char[tail_size];
+	state.addressSpace.copyToBuf(mo, buf_head, 0, mo_off);
+	state.addressSpace.copyToBuf(mo, buf_tail, mo_off+taken, tail_size);
+	os = state.addressSpace.findObject(mo);
+
+	/* free object from address space */
+	state.unbindObject(mo);
+
+	mo_head = exe_vex->memory->allocateFixed(mo_addr, mo_off, NULL, &state);
+
+	os = state.bindMemObj(mo_head);
+	for(unsigned i = 0; i < mo_off; i++) state.write8(os, i, buf_head[i]);
+
+	mo_mid = exe_vex->memory->allocateFixed(
+		mo_addr+mo_off, taken, NULL, &state);
+	mo_mid->setName(name);
+	exe_vex->executeMakeSymbolic(
+		state,
+		mo_mid,
+		ConstantExpr::alloc(taken, 32),
+		name);
+
+	mo_tail = exe_vex->memory->allocateFixed(
+		mo_addr+mo_off+taken, tail_size, 0, &state);
+	os = state.bindMemObj(mo_tail);
+	for(unsigned i = 0; i < tail_size; i++) state.write8(os, i, buf_tail[i]);
+
+	delete [] buf_head;
+	delete [] buf_tail;
+}
+
+void SyscallSFH::makeRangeSymbolic(
+	ExecutionState& state,
+	void* addr,
+	unsigned sz,
+	const char* name)
+{
+	uint64_t	cur_addr;
+	unsigned	total_sz;
+
+	cur_addr = (uint64_t)addr;
+	total_sz = 0;
+	/* handle disjoint addresses */
+	while (total_sz < sz) {
+		const MemoryObject	*mo;
+		unsigned int		mo_off;
+		unsigned int		tail_take_bytes;
+		unsigned int		take_remaining;
+		unsigned int		taken;
+
+		mo = state.addressSpace.resolveOneMO(cur_addr);
+		if (mo == NULL) {
+			state.addressSpace.print(std::cerr);
+			fprintf(stderr,
+				"couldn't find %p in range %p-%p (state=%p)\n",
+				cur_addr,
+				addr, addr+sz,
+				&state);
+			assert ("TODO: Allocate memory");
+		}
+
+		assert (mo->address <= cur_addr && "BAD SEARCH?");
+		mo_off = cur_addr - mo->address;
+		assert (mo_off < mo->size && "Out of range of MO??");
+
+		take_remaining = sz - total_sz;
+		tail_take_bytes = mo->size - mo_off;
+		if (mo_off > 0) {
+			if (tail_take_bytes <= take_remaining) {
+				/* take is excess of length of MO
+				 * Chop off all the tail of the MO */
+				taken = tail_take_bytes;
+				makeSymbolicTail(state, mo, taken, name);
+			} else {
+				taken = take_remaining;
+				makeSymbolicMiddle(
+					state,
+					mo,
+					mo_off,
+					taken,
+					name);
+			}
+		} else {
+			taken = (take_remaining >= tail_take_bytes) ?
+					tail_take_bytes :
+					take_remaining;
+			makeSymbolicHead(state, mo, taken, name);
+		}
+
+		/* set stat structure as symbolic */
+		cur_addr += taken;
+		total_sz += taken;
+	}
 }

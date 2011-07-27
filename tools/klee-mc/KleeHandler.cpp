@@ -8,6 +8,7 @@
 #include "cmdargs.h"
 
 #include "ExecutorVex.h"
+#include "ExeStateVex.h"
 #include "KleeHandler.h"
 
 #include <zlib.h>
@@ -140,14 +141,9 @@ std::string KleeHandler::setupOutputDir(void)
 {
 	std::string	theDir;
 
-	if (OutputDir != "")
-  		return OutputDir;
-
-	if (scanForOutputDir(cmdargs->getBinaryPath(), theDir))
-		return theDir;
-
-	if (scanForOutputDir("", theDir))
-		return theDir;
+	if (OutputDir != "") return OutputDir;
+	if (scanForOutputDir(cmdargs->getBinaryPath(), theDir)) return theDir;
+	if (scanForOutputDir("", theDir)) return theDir;
 
 	assert (0 == 1 && "failed to grab output dir");
 	return "";
@@ -167,7 +163,8 @@ void KleeHandler::setupOutputFiles(void)
 	m_infoFile = openOutputFile("info");
 }
 
-KleeHandler::~KleeHandler() {
+KleeHandler::~KleeHandler()
+{
   if (m_symPathWriter) delete m_symPathWriter;
   delete m_infoFile;
 
@@ -308,9 +305,10 @@ bool KleeHandler::gzipKTest(const std::string& fname)
 }
 
 /* Outputs all files (.ktest, .pc, .cov etc.) describing a test case */
-void KleeHandler::processTestCase(const ExecutionState &state,
-                                  const char *errorMessage,
-                                  const char *errorSuffix)
+void KleeHandler::processTestCase(
+	const ExecutionState &state,
+	const char *errorMessage,
+	const char *errorSuffix)
 {
   if (errorMessage && ExitOnError) {
     std::cerr << "EXITING ON ERROR:\n" << errorMessage << "\n";
@@ -428,9 +426,11 @@ void KleeHandler::processTestCase(const ExecutionState &state,
       klee_warning("unable to write .info file, losing it (errno=%d: %s)", errno, strerror(errno));
   }
 
- if (state.regsBegin() != state.regsEnd()) {
+ const ExeStateVex	*esv = dynamic_cast<const ExeStateVex*>(&state);
+ assert (esv != NULL);
+ if (esv->regsBegin() != esv->regsEnd()) {
    if (std::ostream* f = openTestFile("reglog", id)) {
-     foreach (it, state.regsBegin(), state.regsEnd()) {
+     foreach (it, esv->regsBegin(), esv->regsEnd()) {
         std::vector<unsigned char> cur_regs = *it;
         std::copy(
           cur_regs.begin(),

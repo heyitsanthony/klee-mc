@@ -2486,10 +2486,7 @@ void Executor::run(ExecutionState &initialState)
   // optimization and such.
   initTimers();
 
-  if (ReplayInhibitedForks) {
-    initialStateCopy = new ExecutionState(initialState);
-  } else
-    initialStateCopy = NULL;
+  initialStateCopy = (ReplayInhibitedForks) ? initialState.copy() : NULL;
 
   if (replayPaths) replayPathsIntoStates(initialState);
   stateManager->setInitialState(this, &initialState, replayPaths);
@@ -2983,10 +2980,7 @@ ObjectState* Executor::makeSymbolic(
   array = new Array(arrPrefix + llvm::utostr(++id), mo->mallocKey, 0, 0);
   array->initRef();
   os = state.bindMemObj(mo, array);
-  state.addSymbolic(
-  	const_cast<MemoryObject*>(mo) /* yuck */,
-  	array,
-	len);
+  state.addSymbolic(const_cast<MemoryObject*>(mo) /* yuck */, array);
 
   addSymbolicToSeeds(state, mo, array);
 

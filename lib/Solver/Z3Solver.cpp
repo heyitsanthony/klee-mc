@@ -116,6 +116,7 @@ bool Z3SolverImpl::computeInitialValues(
 	isSat = wasSat(rc);
 	if (!isSat) goto done;
 
+	/* load up the objects */
 	foreach (it, objects.begin(), objects.end()) {
 		const Array			*arr = *it;
 		std::vector<unsigned char>	obj_vals(arr->mallocKey.size);
@@ -129,7 +130,6 @@ bool Z3SolverImpl::computeInitialValues(
 		values.push_back(obj_vals);
 	}
 
-	//assert (0 == 1 && "STUBxxxxx");
 	Z3_del_model(z3_ctx, model);
 
 done:
@@ -196,7 +196,7 @@ Z3_ast Z3SolverImpl::klee2z3(const ref<Expr>& e)
 			break;
 		}
 
-		/* concat at 16 bits a pop */
+		/* concat at 32 bits a pop */
 		ref<ConstantExpr> Tmp = CE;
 		ret = Z3_INT_CONST(Tmp->Extract(0, 32)->getZExtValue(), 32);
 		for (unsigned i = (width / 32) - 1; i; --i) {

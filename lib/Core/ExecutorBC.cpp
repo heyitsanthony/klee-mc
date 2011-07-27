@@ -97,7 +97,7 @@ void ExecutorBC::runFunctionAsMain(
 	srand(1);
 	srandom(1);
 
-	state = new ExecutionState(kf);
+	state = ExecutionState::make(kf);
 
 	setupArgv(state, f, argc, argv, envp);
 

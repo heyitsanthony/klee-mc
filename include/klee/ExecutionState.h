@@ -46,23 +46,19 @@ namespace klee {
 class SymbolicArray
 {
 public:
-  SymbolicArray(
-	MemoryObject* in_mo,
-	Array* in_array,
-	ref<Expr> in_len)
-  : mo(in_mo), array(in_array), len(in_len) {}
-  virtual ~SymbolicArray() {}
-  bool operator ==(const SymbolicArray& sa) const
-  {
-  	/* XXX ignore len for now XXX  XXX */
-	return (mo.get() == sa.mo.get() && array.get() == sa.array.get());
-  }
-  const Array *getArray(void) const { return array.get(); }
-  const MemoryObject *getMemoryObject(void) const { return mo.get(); }
+	SymbolicArray(MemoryObject* in_mo, Array* in_array)
+	: mo(in_mo), array(in_array) {}
+	virtual ~SymbolicArray() {}
+	bool operator ==(const SymbolicArray& sa) const
+	{
+		return (mo.get() == sa.mo.get() &&
+			array.get() == sa.array.get());
+	}
+	const Array *getArray(void) const { return array.get(); }
+	const MemoryObject *getMemoryObject(void) const { return mo.get(); }
 private:
-  ref<MemoryObject>	mo;
-  ref<Array>		array;
-  ref<Expr>		len;
+	ref<MemoryObject>	mo;
+	ref<Array>		array;
 };
 
 std::ostream &operator<<(std::ostream &os, const MemoryMap &mm);
@@ -72,120 +68,124 @@ std::ostream &operator<<(std::ostream &os, const MemoryMap &mm);
 
 typedef std::set<ExecutionState*> ExeStateSet;
 
-typedef std::vector <std::vector<unsigned char> > RegLog;
-
 class ExecutionState
 {
 public:
   typedef std::vector<StackFrame> stack_ty;
 
 private:
-  // unsupported, use copy constructor
-  ExecutionState &operator=(const ExecutionState&);
-  std::map< std::string, std::string > fnAliases;
+	// unsupported, use copy constructor
+	ExecutionState &operator=(const ExecutionState&);
+	std::map< std::string, std::string > fnAliases;
 
-  // An ordered sequence of branches that this state took during execution thus
-  // far:
-  // XXX: ugh mutable for non-const copy constructor
-  BranchTracker branchDecisionsSequence;
-  // used only if isCompactForm
-  BranchTracker::iterator replayBranchIterator;
+	// An ordered sequence of branches this state took thus far:
+	// XXX: ugh mutable for non-const copy constructor
+	BranchTracker branchDecisionsSequence;
+	// used only if isCompactForm
+	BranchTracker::iterator replayBranchIterator;
 
-  unsigned incomingBBIndex;
+	unsigned incomingBBIndex;
 
-  /// ordered list of symbolics: used to generate test cases.
-  //
-  // FIXME: Move to a shared list structure (not critical).
-  std::vector< SymbolicArray > symbolics;
-
-  RegLog		reg_log;
-  RegLog		sc_log;
-  MemoryObject		*reg_mo;
-public:
-  // Are we currently underconstrained?  Hack: value is size to make fake
-  // objects.
-  unsigned underConstrained;
-  unsigned depth;
-
-  // pc - pointer to current instruction stream
-  KInstIterator pc, prevPC;
-  stack_ty stack;
-  ConstraintManager constraints;
-  mutable double queryCost;
-  double weight;
-  AddressSpace addressSpace;
-  TreeOStream symPathOS;
-  unsigned instsSinceCovNew;
-  bool coveredNew;
-  uint64_t lastChosen;
-
-  // Number of malloc calls per callsite
-  std::map<const llvm::Value*,unsigned> mallocIterations;
-
-  // Ref counting for MemoryObject deallocation
-  std::vector<ref<MemoryObject> > memObjects;
-
-  // has true iff this state is a mere placeholder to be replaced by a real state
-  bool isCompactForm;
-  // for use with std::mem_fun[_ref] since they don't accept data members
-  bool isCompactForm_f() const { return isCompactForm; }
-  bool isNonCompactForm_f() const { return !isCompactForm; }
-
-  // did this state start in replay mode?
-  bool isReplay;
-
-  // for printing execution traces when this state terminates
-  ExecutionTraceManager exeTraceMgr;
-
-  /// Disables forking, set by user code.
-  bool forkDisabled;
-
-  std::map<const std::string*, std::set<unsigned> > coveredLines;
-  PTreeNode *ptreeNode;
-
-  std::string getFnAlias(std::string fn);
-  void addFnAlias(std::string old_fn, std::string new_fn);
-  void removeFnAlias(std::string fn);
-
-  KInstIterator getCaller(void) const;
-  void dumpStack(std::ostream &os);
-
-private:
-  ExecutionState()
-    : underConstrained(0),
-      coveredNew(false),
-      lastChosen(0),
-      isCompactForm(false),
-      isReplay(false),
-      ptreeNode(0)
-  {
-    replayBranchIterator = branchDecisionsSequence.begin();
-  }
+	/// ordered list of symbolics: used to generate test cases.
+	//
+	// FIXME: Move to a shared list structure (not critical).
+	std::vector< SymbolicArray > symbolics;
 
 public:
-  ExecutionState(KFunction *kf);
+	// Are we currently underconstrained?  Hack: value is size to make fake
+	// objects.
+	unsigned underConstrained;
+	unsigned depth;
 
-  // XXX total hack, just used to make a state so solver can
-  // use on structure
-  ExecutionState(const std::vector<ref<Expr> > &assumptions);
-  ~ExecutionState();
+	// pc - pointer to current instruction stream
+	KInstIterator		pc, prevPC;
+	stack_ty		stack;
+	ConstraintManager	constraints;
+	mutable double		queryCost;
+	double			weight;
+	AddressSpace		addressSpace;
+	TreeOStream		symPathOS;
+	unsigned		instsSinceCovNew;
+	bool			coveredNew;
+	uint64_t		lastChosen;
 
-  static ExecutionState* createReplay(
-	ExecutionState& initialState,
-	const ReplayPathType& replayPath);
+	// Number of malloc calls per callsite
+	std::map<const llvm::Value*,unsigned> mallocIterations;
 
-  ExecutionState *branch();
-  ExecutionState *branchForReplay();
-  ExecutionState *compact() const;
-  ExecutionState *reconstitute(ExecutionState &initialStateCopy) const;
+	// Ref counting for MemoryObject deallocation
+	std::vector<ref<MemoryObject> > memObjects;
 
-  void pushFrame(KInstIterator caller, KFunction *kf);
-  void popFrame();
+	// true iff this state is a mere placeholder to be replaced by a real state
+	bool isCompactForm;
+	// for use with std::mem_fun[_ref] since they don't accept data members
+	bool isCompactForm_f() const { return isCompactForm; }
+	bool isNonCompactForm_f() const { return !isCompactForm; }
 
-  void addSymbolic(MemoryObject *mo, Array *array, ref<Expr> len)
-  {
-    symbolics.push_back(SymbolicArray(mo, array, len));
-  }
+	// did this state start in replay mode?
+	bool isReplay;
+
+	// for printing execution traces when this state terminates
+	ExecutionTraceManager exeTraceMgr;
+
+	/// Disables forking, set by user code.
+	bool forkDisabled;
+
+	std::map<const std::string*, std::set<unsigned> > coveredLines;
+	PTreeNode *ptreeNode;
+protected:
+	ExecutionState();
+	ExecutionState(KFunction *kf);
+	// XXX total hack, just used to make a state so solver can
+	// use on structure
+	ExecutionState(const std::vector<ref<Expr> > &assumptions);
+	void compact(ExecutionState* es) const;
+
+	virtual ExecutionState* create(void) const { return new ExecutionState(); }
+	virtual ExecutionState* create(KFunction* kf) const
+	{ return new ExecutionState(kf); }
+	virtual ExecutionState* create(
+		const std::vector<ref<Expr> >& assumptions) const
+	{ return new ExecutionState(assumptions); }
+
+
+public:
+	static ExecutionState* make(KFunction* kf)
+	{ return new ExecutionState(kf); }
+	static ExecutionState* make(const std::vector<ref<Expr> >& assumptions)
+	{ return new ExecutionState(assumptions); }
+
+
+	virtual ExecutionState* copy(void) const { return copy(this); }
+	virtual ExecutionState* copy(const ExecutionState* es) const
+	{ return new ExecutionState(*es); }
+
+	virtual ~ExecutionState();
+
+	static ExecutionState* createReplay(
+		ExecutionState& initialState,
+		const ReplayPathType& replayPath);
+
+	ExecutionState *branch();
+	ExecutionState *branchForReplay();
+	ExecutionState *compact() const;
+	ExecutionState *reconstitute(ExecutionState &initialStateCopy) const;
+
+
+	std::string getFnAlias(std::string fn);
+	void addFnAlias(std::string old_fn, std::string new_fn);
+	void removeFnAlias(std::string fn);
+
+	KInstIterator getCaller(void) const;
+	void dumpStack(std::ostream &os);
+
+
+	void pushFrame(KInstIterator caller, KFunction *kf);
+	void popFrame();
+
+	void addSymbolic(MemoryObject *mo, Array *array)
+	{
+		symbolics.push_back(SymbolicArray(mo, array));
+	}
 
   bool addConstraint(ref<Expr> constraint);
   bool merge(const ExecutionState &b);
@@ -193,30 +193,26 @@ public:
   void copy(ObjectState* os, const ObjectState* reallocFrom, unsigned count);
 
   ref<Expr>
-  read(const ObjectState* object, ref<Expr> offset, Expr::Width width) const {
-    return object->read(offset, width);
-  }
+  read(const ObjectState* obj, ref<Expr> offset, Expr::Width w) const
+  { return obj->read(offset, w); }
 
   ref<Expr>
-  read(const ObjectState* object, unsigned offset, Expr::Width width) const {
-    return object->read(offset, width);
-  }
+  read(const ObjectState* obj, unsigned offset, Expr::Width w) const
+  { return obj->read(offset, w); }
 
-  ref<Expr> read8(const ObjectState* object, unsigned offset) const {
-    return object->read8(offset);
-  }
+  ref<Expr> read8(const ObjectState* obj, unsigned offset) const
+  { return obj->read8(offset); }
 
-  void write(ObjectState* object, unsigned offset, ref<Expr> value) {
-    object->write(offset, value);
-  }
+  void write(ObjectState* obj, unsigned offset, ref<Expr> value)
+  { obj->write(offset, value); }
 
-  void write(ObjectState* object, ref<Expr> offset, ref<Expr> value);
+  void write(ObjectState* obj, ref<Expr> offset, ref<Expr> value)
+  { obj->write(offset, value); }
 
-  void write8(ObjectState* object, unsigned offset, uint8_t value) {
-    object->write8(offset, value);
-  }
+  void write8(ObjectState* obj, unsigned offset, uint8_t value)
+  { obj->write8(offset, value); }
 
-  void write64(ObjectState* object, unsigned offset, uint64_t value);
+  void write64(ObjectState* obj, unsigned offset, uint64_t value);
 
   void writeLocalCell(unsigned sfi, unsigned i, ref<Expr> value);
 
@@ -227,22 +223,19 @@ public:
   void unbindObject(const MemoryObject* mo);
 
   ObjectState* bindMemObj(const MemoryObject *mo, const Array *array = 0);
-  ObjectState *bindStackMemObj(
-    const MemoryObject *mo,
-    const Array *array = 0);
+  ObjectState *bindStackMemObj(const MemoryObject *mo, const Array *array = 0);
 
   void transferToBasicBlock(llvm::BasicBlock* dst, llvm::BasicBlock* src);
   void bindLocal(KInstruction *target, ref<Expr> value);
-  void bindArgument(
-  	KFunction *kf, unsigned index, ref<Expr> value);
+  void bindArgument(KFunction *kf, unsigned index, ref<Expr> value);
 
   KFunction* getCurrentKFunc() const;
 
   void trackBranch(int condIndex, int asmLine);
   bool isReplayDone(void) const;
-  bool pushHeapRef(HeapObject* heapObj) {
-	return branchDecisionsSequence.push_heap_ref(heapObj);
-  }
+  bool pushHeapRef(HeapObject* heapObj)
+  { return branchDecisionsSequence.push_heap_ref(heapObj); }
+
   unsigned stepReplay(void);
 
   BranchTracker::iterator branchesBegin(void) const
@@ -254,28 +247,10 @@ public:
   unsigned getPHISlot(void) const { return incomingBBIndex * 2; }
 
   std::vector< SymbolicArray >::const_iterator symbolicsBegin(void) const
-  {
-  	return symbolics.begin();
-  }
+  { return symbolics.begin(); }
 
   std::vector< SymbolicArray >::const_iterator symbolicsEnd(void) const
-  {
-  	return symbolics.end();
-  }
-
-  void recordRegisters(const void* regs, int sz);
-  RegLog::const_iterator regsBegin(void) const { return reg_log.begin(); }
-  RegLog::const_iterator regsEnd(void) const { return reg_log.end(); }
-
-  MemoryObject* setRegCtx(MemoryObject* mo)
-  {
-	MemoryObject	*old_mo;
-	old_mo = reg_mo;
-	reg_mo = mo;
-	return old_mo;
-  }
-
-  MemoryObject* getRegCtx(void) const { return reg_mo; }
+  { return symbolics.end(); }
 };
 
 }

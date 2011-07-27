@@ -29,18 +29,14 @@
 
 #include "SyscallSFH.h"
 #include "ExecutorVex.h"
-
-/* CHEAT */
-extern "C"
-{
-#include "valgrind/libvex_guest_amd64.h"
-}
-
+#include "ExeStateVex.h"
 
 using namespace klee;
 using namespace llvm;
 
 extern bool WriteTraces;
+
+#define es2esv(x)	static_cast<ExeStateVex&>(x)
 
 namespace
 {
@@ -145,7 +141,7 @@ void ExecutorVex::runImage(void)
 	statsTracker->addKFunction(init_kfunc);
 	bindKFuncConstants(init_kfunc);
 
-	state = new ExecutionState(kmodule->getKFunction(init_func));
+	state = ExeStateVex::make(kmodule->getKFunction(init_func));
 
 	/* add modules before initializing globals so that everything
 	 * will link in properly */
@@ -290,7 +286,7 @@ void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
 	for (unsigned int i=0; i < state_regctx_sz; i++)
 		state->write8(state_regctx_os, i, state_data[i]);
 
-	state->setRegCtx(state_regctx_mo);
+	es2esv(*state).setRegCtx(state_regctx_mo);
 }
 
 void ExecutorVex::run(ExecutionState &initialState)
@@ -396,11 +392,6 @@ void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
 	handleXfer(state, ki);
 }
 
-void ExecutorVex::markExitIgnore(ExecutionState& state)
-{
-	markExit(state, GE_IGNORE);
-}
-
 void ExecutorVex::markExit(ExecutionState& state, uint8_t v)
 {
 	ObjectState		*state_regctx_os;
@@ -416,12 +407,8 @@ void ExecutorVex::markExit(ExecutionState& state, uint8_t v)
 ObjectState* ExecutorVex::getRegObj(ExecutionState& state)
 {
 	MemoryObject	*mo;
-	mo = state.getRegCtx();
+	mo = es2esv(state).getRegCtx();
 	return state.addressSpace.findObject(mo);
-}
-
-extern "C" {
-#include <valgrind/libvex_guest_amd64.h>
 }
 
 void ExecutorVex::logXferRegisters(ExecutionState& state)
@@ -436,7 +423,8 @@ void ExecutorVex::logXferRegisters(ExecutionState& state)
 	reg_sz = gs->getCPUState()->getStateSize();
 
 	/* 1. store concrete cache */
-	state.recordRegisters(gs->getCPUState()->getStateData(), reg_sz);
+	es2esv(state).recordRegisters(
+		gs->getCPUState()->getStateData(), reg_sz);
 
 	/* 2. store concrete mask */
 	state_regctx_os = getRegObj(state);
@@ -446,7 +434,7 @@ void ExecutorVex::logXferRegisters(ExecutionState& state)
 		if (state_regctx_os->isByteConcrete(i))
 			concrete_mask[i] = 0xff;
 	}
-	state.recordRegisters(concrete_mask, reg_sz);
+	es2esv(state).recordRegisters(concrete_mask, reg_sz);
 
 	delete [] concrete_mask;
 }
@@ -460,7 +448,7 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 	logXferRegisters(state);
 
 	exit_type = gs->getCPUState()->getExitType();
-	markExitIgnore(state);
+	markExit(state, GE_IGNORE);
 
 	switch(exit_type) {
 	case GE_CALL:
@@ -469,10 +457,9 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 	case GE_RETURN:
 		handleXferReturn(state, ki);
 		return;
-	case GE_SYSCALL: {
+	case GE_SYSCALL:
 		handleXferSyscall(state, ki);
 		return;
-	}
 	case GE_EMWARN:
 		std::cerr << "[VEXLLVM] VEX Emulation warning!?" << std::endl;
 	case GE_IGNORE:
@@ -528,7 +515,7 @@ bool ExecutorVex::xferIterNext(struct XferStateIter& iter)
 		addr = value->getZExtValue();
 		iter_f = getFuncByAddr(addr);
 		if (iter_f == NULL) {
-			fprintf(stderr, "bogus jmp to %p!\n", addr);
+			fprintf(stderr, "bogus jmp to %p!\n", (void*)addr);
 			terminateStateOnError(
 				*(iter.res.first),
 				"fork error: jumping to bad pointer",
@@ -552,11 +539,9 @@ bool ExecutorVex::xferIterNext(struct XferStateIter& iter)
 void ExecutorVex::handleXferJmp(ExecutionState& state, KInstruction* ki)
 {
 	struct XferStateIter	iter;
-	int			k = 0;
 	xferIterInit(iter, &state, ki);
 	while (xferIterNext(iter)) {
 		jumpToKFunc(*(iter.res.first), kmodule->getKFunction(iter.f));
-		k++;
 	}
 }
 
@@ -570,7 +555,7 @@ void ExecutorVex::jumpToKFunc(ExecutionState& state, KFunction* kf)
 	assert (state.stack.size() > 0);
 
 	/* save, pop off old state */
-	regctx_mo = state.getRegCtx();
+	regctx_mo = es2esv(state).getRegCtx();
 	cpn = state.stack.back().callPathNode;
 	state.popFrame();
 
@@ -586,13 +571,13 @@ void ExecutorVex::jumpToKFunc(ExecutionState& state, KFunction* kf)
 }
 
 /* xfers are done with an address in the return value of the next place to
- * jump.  g=f(x) => g(x) -> f(x). (g directly follows f) */
+ * jump.  f(x) returns g => g(x) -> f(x). (g directly follows f) */
 void ExecutorVex::handleXferCall(ExecutionState& state, KInstruction* ki)
 {
 	std::vector< ref<Expr> > 	args;
 	struct XferStateIter		iter;
 
-	args.push_back(state.getRegCtx()->getBaseExpr());
+	args.push_back(es2esv(state).getRegCtx()->getBaseExpr());
 	xferIterInit(iter, &state, ki);
 	while (xferIterNext(iter)) {
 		executeCall(*(iter.res.first), ki, iter.f, args);
@@ -612,9 +597,8 @@ void ExecutorVex::handleXferSyscall(
 
 	fprintf(stderr, "before syscall: states=%d\n", stateManager->size());
 
-	/* arg0 = regctx */
-	args.push_back(state.getRegCtx()->getBaseExpr());
-	/* arg1 = jmpptr */
+	/* arg0 = regctx, arg1 = jmpptr */
+	args.push_back(es2esv(state).getRegCtx()->getBaseExpr());
 	args.push_back(eval(ki, 0, state).value);
 
 	executeCall(state, ki, kf_scenter->function, args);
@@ -664,7 +648,7 @@ void ExecutorVex::updateGuestRegs(ExecutionState& state)
 	void		*guest_regs;
 
 	guest_regs = gs->getCPUState()->getStateData();
-	state.addressSpace.copyToBuf(state.getRegCtx(), guest_regs);
+	state.addressSpace.copyToBuf(es2esv(state).getRegCtx(), guest_regs);
 }
 
 void ExecutorVex::initGlobalFuncs(void)
@@ -737,14 +721,7 @@ void ExecutorVex::initializeGlobals(ExecutionState &state)
 		// if (i->isConstant()) os->setReadOnly(true);
 	}
 
-	fprintf(stderr, "GLOBAL ADDRESSES size=%d\n", globalAddresses.size());
-}
-
-void ExecutorVex::allocGlobalVariableDecl(
-	ExecutionState& state,
-	const GlobalVariable& gv)
-{
-	assert(0 == 1 && "STUB");
+	std::cerr << "GLOBAL ADDRESSES size=" << globalAddresses.size() << '\n';
 }
 
 void ExecutorVex::allocGlobalVariableNoDecl(
@@ -769,212 +746,6 @@ void ExecutorVex::allocGlobalVariableNoDecl(
 	globalAddresses.insert(std::make_pair(&gv, mo->getBaseExpr()));
 
 	if (!gv.hasInitializer()) os->initializeToRandom();
-}
-
-void ExecutorVex::makeSymbolicTail(
-	ExecutionState& state,
-	const MemoryObject* mo,
-	unsigned taken,
-	const char* name)
-{
-	ObjectState	*os;
-	MemoryObject	*mo_head, *mo_tail;
-	char		*buf_head;
-	uint64_t	mo_addr, mo_size, head_size;
-
-	mo_addr = mo->address;
-	mo_size = mo->size;
-
-	assert (mo_size > taken && "Off+Taken out of range");
-
-	/* copy buffer data */
-	head_size = mo_size - taken;
-	buf_head = new char[head_size];
-	state.addressSpace.copyToBuf(mo, buf_head, 0, head_size);
-	os = state.addressSpace.findObject(mo);
-
-	/* free object from address space */
-	state.unbindObject(mo);
-
-	/* mark head concrete */
-	mo_head = memory->allocateFixed(mo_addr, head_size, 0, &state);
-	os = state.bindMemObj(mo_head);
-	for(unsigned i = 0; i < head_size; i++) state.write8(os, i, buf_head[i]);
-
-	/* mark tail symbolic */
-	mo_tail = memory->allocateFixed(mo_addr+head_size, taken, 0, &state);
-	executeMakeSymbolic(
-		state,
-		mo_tail,
-		ConstantExpr::alloc(taken, 32),
-		name);
-
-
-	delete [] buf_head;
-}
-
-void ExecutorVex::makeSymbolicHead(
-	ExecutionState& state,
-	const MemoryObject* mo,
-	unsigned taken,
-	const char* name)
-{
-	ObjectState	*os;
-	MemoryObject	*mo_head, *mo_tail;
-	char		*buf_tail;
-	uint64_t	mo_addr, mo_size, tail_size;
-
-	mo_addr = mo->address;
-	mo_size = mo->size;
-
-	if (mo_size == taken) {
-		executeMakeSymbolic(
-			state,
-			mo,
-			ConstantExpr::alloc(mo_size, 32),
-			name);
-		return;
-	}
-
-	assert (mo_size > taken && "Off+Taken out of range");
-
-	/* copy buffer data */
-	tail_size = mo_size - taken;
-	buf_tail = new char[tail_size];
-	state.addressSpace.copyToBuf(mo, buf_tail, taken, tail_size);
-	os = state.addressSpace.findObject(mo);
-
-	/* free object from address space */
-	state.unbindObject(mo);
-
-	mo_head = memory->allocateFixed(mo_addr, taken, 0, &state);
-	executeMakeSymbolic(
-		state,
-		mo_head,
-		ConstantExpr::alloc(taken, 32),
-		name);
-
-	mo_tail = memory->allocateFixed(
-		mo_addr+taken, tail_size, 0, &state);
-	os = state.bindMemObj(mo_tail);
-	for(unsigned i = 0; i < tail_size; i++) state.write8(os, i, buf_tail[i]);
-
-	delete [] buf_tail;
-}
-
-void ExecutorVex::makeSymbolicMiddle(
-	ExecutionState& state,
-	const MemoryObject* mo,
-	unsigned mo_off,
-	unsigned taken,
-	const char* name)
-{
-	ObjectState	*os;
-	MemoryObject	*mo_head, *mo_tail, *mo_mid;
-	char		*buf_head, *buf_tail;
-	uint64_t	mo_addr, mo_size, tail_size;
-
-	mo_addr = mo->address;
-	mo_size = mo->size;
-	assert (mo_size > (mo_off+taken) && "Off+Taken out of range");
-
-	/* copy buffer data */
-	buf_head = new char[mo_off];
-	tail_size = mo_size - (mo_off + taken);
-	buf_tail = new char[tail_size];
-	state.addressSpace.copyToBuf(mo, buf_head, 0, mo_off);
-	state.addressSpace.copyToBuf(mo, buf_tail, mo_off+taken, tail_size);
-	os = state.addressSpace.findObject(mo);
-
-	/* free object from address space */
-	state.unbindObject(mo);
-
-	mo_head = memory->allocateFixed(mo_addr, mo_off, NULL, &state);
-
-	os = state.bindMemObj(mo_head);
-	for(unsigned i = 0; i < mo_off; i++) state.write8(os, i, buf_head[i]);
-
-	mo_mid = memory->allocateFixed(mo_addr+mo_off, taken, NULL, &state);
-	mo_mid->setName(name);
-	executeMakeSymbolic(
-		state,
-		mo_mid,
-		ConstantExpr::alloc(taken, 32),
-		name);
-
-	mo_tail = memory->allocateFixed(
-		mo_addr+mo_off+taken, tail_size, 0, &state);
-	os = state.bindMemObj(mo_tail);
-	for(unsigned i = 0; i < tail_size; i++) state.write8(os, i, buf_tail[i]);
-
-	delete [] buf_head;
-	delete [] buf_tail;
-}
-
-void ExecutorVex::makeRangeSymbolic(
-	ExecutionState& state,
-	void* addr,
-	unsigned sz,
-	const char* name)
-{
-	uint64_t	cur_addr;
-	unsigned	total_sz;
-
-	fprintf(stderr, "MAKE RANGE SYMBOLIC: %p-%p\n", addr, (char*)addr+sz);
-
-	cur_addr = (uint64_t)addr;
-	total_sz = 0;
-	/* handle disjoint addresses */
-	while (total_sz < sz) {
-		const MemoryObject	*mo;
-		unsigned int		mo_off;
-		unsigned int		tail_take_bytes;
-		unsigned int		take_remaining;
-		unsigned int		taken;
-
-		mo = state.addressSpace.resolveOneMO(cur_addr);
-		if (mo == NULL) {
-			state.addressSpace.print(std::cerr);
-			fprintf(stderr,
-				"couldn't find %p in range %p-%p (state=%p)\n",
-				cur_addr,
-				addr, addr+sz,
-				&state);
-			assert ("TODO: Allocate memory");
-		}
-
-		assert (mo->address <= cur_addr && "BAD SEARCH?");
-		mo_off = cur_addr - mo->address;
-		assert (mo_off < mo->size && "Out of range of MO??");
-
-		take_remaining = sz - total_sz;
-		tail_take_bytes = mo->size - mo_off;
-		if (mo_off > 0) {
-			if (tail_take_bytes <= take_remaining) {
-				/* take is excess of length of MO
-				 * Chop off all the tail of the MO */
-				taken = tail_take_bytes;
-				makeSymbolicTail(state, mo, taken, name);
-			} else {
-				taken = take_remaining;
-				makeSymbolicMiddle(
-					state,
-					mo,
-					mo_off,
-					taken,
-					name);
-			}
-		} else {
-			taken = (take_remaining >= tail_take_bytes) ?
-					tail_take_bytes :
-					take_remaining;
-			makeSymbolicHead(state, mo, taken, name);
-		}
-
-		/* set stat structure as symbolic */
-		cur_addr += taken;
-		total_sz += taken;
-	}
 }
 
 void ExecutorVex::printStateErrorMessage(
@@ -1005,12 +776,9 @@ void ExecutorVex::printStateErrorMessage(
 		VexSB		*vsb;
 
 		vsb = func2vsb_table[(uint64_t)f];
-		os	<< "\t#" << idx++
-			<< " in " << f->getNameStr();
+		os << "\t#" << idx++ << " in " << f->getNameStr();
 		if (vsb) {
-			os	<< " ("
-				<< gs->getName(vsb->getGuestAddr())
-				<< ")";
+			os << " (" << gs->getName(vsb->getGuestAddr()) << ")";
 		}
 		os << "\n";
 	}

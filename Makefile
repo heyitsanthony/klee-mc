@@ -71,5 +71,7 @@ klee-cov:
 clean::
 	$(MAKE) -C test clean 
 	$(MAKE) -C unittests clean
+	rm -rf klee-out-*
+	rm -rf guest-*
 	rm -rf docs/doxygen
 	rm -rf bintests/out/*

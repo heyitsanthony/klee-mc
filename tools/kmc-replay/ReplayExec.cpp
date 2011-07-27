@@ -122,7 +122,7 @@ void ReplayExec::setRegLog(const char* reglog_fname)
 	f_reglog = fopen(reglog_fname, "rb");
 	if (f_reglog == NULL) {
 		fprintf(stderr,
-			"Could not open reglog \"%s\"\n",
+			"Could not open reglog \"%s\". ~~~~UNVERIFIED RUN~~~~\n",
 			reglog_fname);
 	}
 }

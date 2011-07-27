@@ -53,9 +53,6 @@ public:
 	Guest* getGuest(void) { return gs; }
 	const Guest* getGuest(void) const { return gs; }
 
-	void makeRangeSymbolic(
-		ExecutionState& state, void* addr, unsigned sz,
-		const char* name = NULL);
 	MemoryManager* getMM(void) { return memory; }
 	MemoryObject* allocRegCtx(ExecutionState* state, llvm::Function* f = 0);
 
@@ -99,25 +96,7 @@ protected:
 private:
 	llvm::Function* getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new);
 
-	void markExitIgnore(ExecutionState& state);
 	void markExit(ExecutionState& state, uint8_t);
-
-	void makeSymbolicTail(
-		ExecutionState& state,
-		const MemoryObject* mo,
-		unsigned taken,
-		const char* name);
-	void makeSymbolicHead(
-		ExecutionState& state,
-		const MemoryObject* mo,
-		unsigned taken,
-		const char* name);
-	void makeSymbolicMiddle(
-		ExecutionState& state,
-		const MemoryObject* mo,
-		unsigned mo_off,
-		unsigned taken,
-		const char* name);
 
 	void bindMapping(
 		ExecutionState* state,
@@ -131,7 +110,7 @@ private:
 	void setupProcessMemory(ExecutionState* state, llvm::Function* f);
 	void allocGlobalVariableDecl(
 		ExecutionState& state,
-		const llvm::GlobalVariable& gv);
+		const llvm::GlobalVariable& gv) { assert (0 == 1 && "STUB"); }
 	void allocGlobalVariableNoDecl(
 		ExecutionState& state,
 		const llvm::GlobalVariable& gv);

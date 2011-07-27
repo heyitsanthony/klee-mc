@@ -43,36 +43,45 @@ namespace {
 
 /** XXX XXX XXX REFACTOR PLEASEEE **/
 ExecutionState::ExecutionState(KFunction *kf)
-  : underConstrained(false),
-    depth(0),
-    pc(kf->instructions),
-    prevPC(pc),
-    queryCost(0.),
-    weight(1),
-    addressSpace(),
-    instsSinceCovNew(0),
-    coveredNew(false),
-    lastChosen(0),
-    isCompactForm(false),
-    isReplay(false),
-    forkDisabled(false),
-    ptreeNode(0)
+: underConstrained(false)
+, depth(0)
+, pc(kf->instructions)
+, prevPC(pc)
+, queryCost(0.)
+, weight(1)
+, instsSinceCovNew(0)
+, coveredNew(false)
+, lastChosen(0)
+, isCompactForm(false)
+, isReplay(false)
+, forkDisabled(false)
+, ptreeNode(0)
 {
 	pushFrame(0, kf);
 	replayBranchIterator = branchDecisionsSequence.end();
 }
 
 ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
-  : underConstrained(false),
-    constraints(assumptions),
-    queryCost(0.),
-    addressSpace(),
-    lastChosen(0),
-    isCompactForm(false),
-    isReplay(false),
-    ptreeNode(0)
+: underConstrained(false)
+, constraints(assumptions)
+, queryCost(0.)
+, lastChosen(0)
+, isCompactForm(false)
+, isReplay(false)
+, ptreeNode(0)
 {
 	replayBranchIterator = branchDecisionsSequence.end();
+}
+
+ExecutionState::ExecutionState(void)
+: underConstrained(0)
+, coveredNew(false)
+, lastChosen(0)
+, isCompactForm(false)
+, isReplay(false)
+, ptreeNode(0)
+{
+	replayBranchIterator = branchDecisionsSequence.begin();
 }
 
 ExecutionState::~ExecutionState()
@@ -88,7 +97,7 @@ ExecutionState *ExecutionState::branch()
 	depth++;
 	weight *= .5;
 
-	newState = new ExecutionState(*this);
+	newState = copy();
 	newState->coveredNew = false;
 	newState->coveredLines.clear();
 	newState->replayBranchIterator = newState->branchDecisionsSequence.end();
@@ -117,16 +126,19 @@ ExecutionState *ExecutionState::branchForReplay(void)
 
 ExecutionState *ExecutionState::compact() const
 {
-  ExecutionState *newState = new ExecutionState();
+	ExecutionState *newState = create();
+	compact(newState);
+	return newState;
+}
 
-  newState->isCompactForm = true;
-  newState->branchDecisionsSequence = branchDecisionsSequence;
-  newState->weight = weight;
+void ExecutionState::compact(ExecutionState* newState) const
+{
+	newState->isCompactForm = true;
+	newState->branchDecisionsSequence = branchDecisionsSequence;
+	newState->weight = weight;
 
-  // necessary for WeightedRandomSearcher?
-  newState->pc = pc;
-
-  return newState;
+	// necessary for WeightedRandomSearcher?
+	newState->pc = pc;
 }
 
 ExecutionState* ExecutionState::reconstitute(
@@ -134,7 +146,7 @@ ExecutionState* ExecutionState::reconstitute(
 {
 	ExecutionState* newState;
 
-	newState = new ExecutionState(initialStateCopy);
+	newState = copy(&initialStateCopy);
 	newState->branchDecisionsSequence = branchDecisionsSequence;
 	newState->replayBranchIterator = newState->branchDecisionsSequence.begin();
 	newState->weight = weight;
@@ -150,10 +162,10 @@ void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf)
 
 void ExecutionState::popFrame()
 {
-  StackFrame &sf = stack.back();
-  foreach (it, sf.allocas.begin(), sf.allocas.end())
-  	unbindObject(*it);
-  stack.pop_back();
+	StackFrame &sf = stack.back();
+	foreach (it, sf.allocas.begin(), sf.allocas.end())
+		unbindObject(*it);
+	stack.pop_back();
 }
 
 void ExecutionState::unbindObject(const MemoryObject* mo)
@@ -181,9 +193,7 @@ void ExecutionState::addFnAlias(std::string old_fn, std::string new_fn) {
   fnAliases[old_fn] = new_fn;
 }
 
-void ExecutionState::removeFnAlias(std::string fn) {
-  fnAliases.erase(fn);
-}
+void ExecutionState::removeFnAlias(std::string fn) { fnAliases.erase(fn); }
 
 Cell& ExecutionState::readLocalCell(unsigned sfi, unsigned i) const
 {
@@ -203,26 +213,10 @@ bool ExecutionState::addConstraint(ref<Expr> constraint)
 
 Cell& ExecutionState::getLocalCell(unsigned sfi, unsigned i) const
 {
-#if 0
-	if (sfi >= stack.size()) {
-	  std::cout << "sfi=" << sfi << " i=" <<  i << std::endl;
-	  for (unsigned i = 0; i < stack.size(); i++) {
-	      std::cout << " " << stack[i].kf->function->getNameStr() << std::endl;
-
-	  }
-	  exit(1);
-	}
-#endif
 	assert(sfi < stack.size());
 	const StackFrame& sf = stack[sfi];
 	assert(i < sf.kf->numRegisters);
 	return sf.locals[i];
-}
-
-void ExecutionState::write(
-	ObjectState* object, ref<Expr> offset, ref<Expr> value)
-{
-	object->write(offset, value);
 }
 
 void ExecutionState::writeLocalCell(unsigned sfi, unsigned i, ref<Expr> value)
@@ -260,7 +254,7 @@ void ExecutionState::dumpStack(std::ostream& os)
     os << "\t#" << idx++
         << " " << std::setw(8) << std::setfill('0') << ii.assemblyLine
         << " in " << f->getNameStr() << " (";
-    // Yawn, we could go up and print varargs if we wanted to.
+    // we could go up and print varargs if we wanted to.
     unsigned index = 0;
     foreach (ai, f->arg_begin(), f->arg_end())
     {
@@ -268,8 +262,9 @@ void ExecutionState::dumpStack(std::ostream& os)
 
       os << ai->getNameStr();
       // XXX should go through function
-      //ref<Expr> value = sf.locals[sf.kf->getArgRegister(index++)].value;
-      ref<Expr> value = getLocalCell(stack.size() - idx, sf.kf->getArgRegister(index++)).value;
+      ref<Expr> value;
+      value = getLocalCell(
+     stack.size() - idx, sf.kf->getArgRegister(index++)).value;
       if (isa<ConstantExpr>(value))
         os << "=" << value;
     }
@@ -468,34 +463,32 @@ void ExecutionState::bindLocal(KInstruction* target, ref<Expr> value)
     writeLocalCell(stack.size() - 1, target->dest, value);
 }
 
-void ExecutionState::transferToBasicBlock(
-	BasicBlock *dst,
-	BasicBlock *src)
+void ExecutionState::transferToBasicBlock(BasicBlock *dst, BasicBlock *src)
 {
-  // Note that in general phi nodes can reuse phi values from the same
-  // block but the incoming value is the eval() result *before* the
-  // execution of any phi nodes. this is pathological and doesn't
-  // really seem to occur, but just in case we run the PhiCleanerPass
-  // which makes sure this cannot happen and so it is safe to just
-  // eval things in order. The PhiCleanerPass also makes sure that all
-  // incoming blocks have the same order for each PHINode so we only
-  // have to compute the index once.
-  //
-  // With that done we simply set an index in the state so that PHI
-  // instructions know which argument to eval, set the pc, and continue.
+	// Note that in general phi nodes can reuse phi values from the same
+	// block but the incoming value is the eval() result *before* the
+	// execution of any phi nodes. this is pathological and doesn't
+	// really seem to occur, but just in case we run the PhiCleanerPass
+	// which makes sure this cannot happen and so it is safe to just
+	// eval things in order. The PhiCleanerPass also makes sure that all
+	// incoming blocks have the same order for each PHINode so we only
+	// have to compute the index once.
+	//
+	// With that done we simply set an index in the state so that PHI
+	// instructions know which argument to eval, set the pc, and continue.
 
-  // XXX this lookup has to go ?
-  KFunction *kf;
-  unsigned entry;
+	// XXX this lookup has to go ?
+	KFunction	*kf;
+	unsigned	entry;
 
-  kf = getCurrentKFunc();
-  entry = kf->basicBlockEntry[dst];
-  pc = &kf->instructions[entry];
+	kf = getCurrentKFunc();
+	entry = kf->basicBlockEntry[dst];
+	pc = &kf->instructions[entry];
 
-  if (pc->inst->getOpcode() == Instruction::PHI) {
-    PHINode *first = static_cast<PHINode*>(pc->inst);
-    incomingBBIndex = first->getBasicBlockIndex(src);
-  }
+	if (pc->inst->getOpcode() == Instruction::PHI) {
+		PHINode *first = static_cast<PHINode*>(pc->inst);
+		incomingBBIndex = first->getBasicBlockIndex(src);
+	}
 }
 
 ObjectState* ExecutionState::bindMemObj(
@@ -516,7 +509,7 @@ ObjectState* ExecutionState::bindStackMemObj(
 
 	os = bindMemObj(mo, array);
 
-	// Its possible that multiple bindings of the same mo in the state
+	// It's possible that multiple bindings of the same mo in the state
 	// will put multiple copies on this list, but it doesn't really
 	// matter because all we use this list for is to unbind the object
 	// on function return.
@@ -533,12 +526,9 @@ void ExecutionState::trackBranch(int condIndex, int asmLine)
 {
 	// only track NON-internal branches
 	if (replayBranchIterator != branchDecisionsSequence.end())
-  		return;
+		return;
 
-	branchDecisionsSequence.push_back(
-		condIndex,
-		asmLine);
-
+	branchDecisionsSequence.push_back(condIndex, asmLine);
 	replayBranchIterator = branchDecisionsSequence.end();
 }
 
@@ -548,10 +538,11 @@ ExecutionState* ExecutionState::createReplay(
 {
 	ExecutionState* newState;
 
-	newState = new ExecutionState(initialState);
+	newState = initialState.copy();
 	foreach (it2, replayPath.begin(), replayPath.end()) {
 		newState->branchDecisionsSequence.push_back(*it2);
 	}
+
 	newState->replayBranchIterator = newState->branchDecisionsSequence.begin();
 	newState->ptreeNode->data = 0;
 	newState->isReplay = true;
@@ -573,12 +564,4 @@ unsigned ExecutionState::stepReplay(void)
     unsigned targetIndex = (*replayBranchIterator).first;
     ++replayBranchIterator;
     return targetIndex;
-}
-
-// for klee-mc-- get rid of eventually
-void ExecutionState::recordRegisters(const void* reg, int sz)
-{
-	reg_log.push_back(std::vector<unsigned char>(
-		(const unsigned char*)reg,
-		(const unsigned char*)reg+sz));
 }

@@ -21,7 +21,29 @@ public:
 	virtual ~SyscallSFH() {}
 	virtual void prepare(void);
 	virtual void bind(void);
+
+	/* for use by handlers */
+	void makeRangeSymbolic(
+		ExecutionState& state, void* addr, unsigned sz,
+		const char* name = NULL);
 private:
+	void makeSymbolicTail(
+		ExecutionState& state,
+		const MemoryObject* mo,
+		unsigned taken,
+		const char* name);
+	void makeSymbolicHead(
+		ExecutionState& state,
+		const MemoryObject* mo,
+		unsigned taken,
+		const char* name);
+	void makeSymbolicMiddle(
+		ExecutionState& state,
+		const MemoryObject* mo,
+		unsigned mo_off,
+		unsigned taken,
+		const char* name);
+
 	ExecutorVex	*exe_vex;	
 };
 

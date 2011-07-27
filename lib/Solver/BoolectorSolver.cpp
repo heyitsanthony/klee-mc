@@ -326,8 +326,6 @@ BtorExp* BoolectorSolverImpl::klee2btor(const ref<Expr>& e)
 			int	old_width = width;			\
 			w_l_log2++;					\
 			width = 1ULL << w_l_log2;			\
-			std::cerr << "EXTENDING to " << 		\
-				(1UL << w_l_log2) << std::endl;		\
 			left = w(btor, left, width - old_width);	\
 			exp_set.insert(left);				\
 			std::cerr << 					\
