@@ -11,7 +11,7 @@ extern "C"
 
 using namespace klee;
 
-static const unsigned int NUM_HANDLERS = 6;
+static const unsigned int NUM_HANDLERS = 7;
 static SpecialFunctionHandler::HandlerInfo hInfo[NUM_HANDLERS] =
 {
 #define add(name, h, ret) {	\
@@ -22,12 +22,13 @@ static SpecialFunctionHandler::HandlerInfo hInfo[NUM_HANDLERS] =
 	name, 			\
 	&Handler##h::create,	\
 	true, false, false }
-  add("kmc_sc_regs", SCRegs, true),
-  add("kmc_sc_bad", SCBad, false),
-  add("kmc_free_run", FreeRun, false),
-  addDNR("kmc_exit", KMCExit),
-  add("kmc_make_range_symbolic", MakeRangeSymbolic, false),
-  add("kmc_alloc_aligned", AllocAligned, true)
+	add("kmc_sc_regs", SCRegs, true),
+	add("kmc_sc_bad", SCBad, false),
+	add("kmc_free_run", FreeRun, false),
+	addDNR("kmc_exit", KMCExit),
+	add("kmc_make_range_symbolic", MakeRangeSymbolic, false),
+	add("kmc_alloc_aligned", AllocAligned, true),
+	add("kmc_sc_log", LogSysCall, false)
 #undef addDNR
 #undef add
 };
@@ -234,6 +235,34 @@ SFH_DEF_HANDLER(AllocAligned)
 	state.bindLocal(target, ConstantExpr::create(addr, 64));
 }
 
+SFH_DEF_HANDLER(LogSysCall)
+{
+	SFH_CHK_ARGS(3, "kmc_log_sc");
+	ConstantExpr*	ce;
+	uint64_t	sysnr, ret_aux, flags;
+
+	ce = dyn_cast<ConstantExpr>(arguments[0]);
+	if (ce == NULL) goto err;
+	sysnr = ce->getZExtValue();
+
+	ce = dyn_cast<ConstantExpr>(arguments[1]);
+	if (ce == NULL) goto err;
+	ret_aux = ce->getZExtValue();
+
+	ce = dyn_cast<ConstantExpr>(arguments[2]);
+	if (ce == NULL) goto err;
+	flags = ce->getZExtValue();
+
+
+	(static_cast<ExeStateVex&>(state)).recordSyscall(sysnr, ret_aux, flags);
+	return;
+
+err:
+	sfh->executor->terminateStateOnError(
+		state,
+		"kmc_log_sc error: non-CE exprs.",
+		"mrs.err");
+}
 
 void SyscallSFH::makeSymbolicTail(
 	ExecutionState& state,

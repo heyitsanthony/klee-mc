@@ -20,6 +20,7 @@ int main(int argc, char* argv[])
 	const char	*dirname;
 	char		fname_ktest[256];
 	char		fname_reglog[256];
+	char		fname_sclog[256];
 
 	llvm::InitializeNativeTarget();
 
@@ -34,12 +35,13 @@ int main(int argc, char* argv[])
 	dirname = (argc == 3) ? argv[2] : "klee-last";
 	snprintf(fname_ktest, 256, "%s/test%06d.ktest.gz", dirname, test_num);
 	snprintf(fname_reglog, 256, "%s/test%06d.reglog", dirname, test_num);
+	snprintf(fname_sclog, 256, "%s/test%06d.sclog", dirname, test_num);
 
 	gs = Guest::load();
 	assert (gs != NULL && "Expects a guest snapshot");
 
 	re = VexExec::create<ReplayExec, Guest>(gs);
-	skt = SyscallsKTest::create(gs, fname_ktest);
+	skt = SyscallsKTest::create(gs, fname_ktest, fname_sclog);
 	assert (skt != NULL && "Couldn't create ktest harness");
 
 	re->setSyscallsKTest(skt);

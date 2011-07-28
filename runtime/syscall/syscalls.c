@@ -16,6 +16,7 @@
 #include <valgrind/libvex_guest_amd64.h>
 
 void* kmc_sc_regs(void*);
+void kmc_sc_log(uint64_t req_sysnr, uint64_t ret_val, uint64_t flags);
 void kmc_sc_bad(unsigned int);
 void kmc_free_run(uint64_t addr, uint64_t num_bytes);
 void kmc_exit(uint64_t);
@@ -33,6 +34,17 @@ void* kmc_alloc_aligned(uint64_t, const char* name);
 #define GET_ARG4(x)	((VexGuestAMD64State*)x)->guest_R8
 #define GET_ARG5(x)	((VexGuestAMD64State*)x)->guest_R9
 #define GET_SYSNR(x)	GET_RAX(x)
+
+#define SC_FL_NEWREGS	1
+
+static uint64_t sc_flags;
+
+static void* sc_new_regs(void* r)
+{
+	void	*ret = kmc_sc_regs(r);
+	sc_flags |= SC_FL_NEWREGS;
+	return ret;
+}
 
 static void sc_ret_le0(void* regfile)
 {
@@ -69,14 +81,14 @@ static void sc_ret_range(void* regfile, int64_t lo, int64_t hi)
 	klee_assume(rax >= lo && rax <= hi);
 }
 
-static void sc_mmap(void* regfile)
+static void* sc_mmap(void* regfile)
 {
 	uint64_t	addr;
 	uint64_t	len;
 	void		*new_regs;
 
 	len = klee_get_value(GET_ARG1(regfile));
-	new_regs = kmc_sc_regs(regfile);
+	new_regs = sc_new_regs(regfile);
 
 	if (GET_ARG0(regfile) == 0) {
 		addr = (uint64_t)kmc_alloc_aligned(len, "mmap");
@@ -86,7 +98,9 @@ static void sc_mmap(void* regfile)
 		klee_define_fixed_object((void*)addr, len);
 	}
 
+	klee_assume(addr == addr);
 	sc_ret_v(new_regs, addr);
+	return new_regs;
 }
 
 static void sc_munmap(void* regfile)
@@ -115,7 +129,7 @@ static void sc_munmap(void* regfile)
 #define FAKE_SC_RANGE(x,y,z)						\
 	case SYS_##x:							\
 		klee_warning_once("Faking range syscall "#x);		\
-		sc_ret_range(kmc_sc_regs(regfile), y, z);		\
+		sc_ret_range(sc_new_regs(regfile), y, z);		\
 		break;
 
 void make_sym(uint64_t addr, uint64_t len, const char* name)
@@ -173,6 +187,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	void			*new_regs;
 	unsigned int		sys_nr;
 
+	sc_flags = 0;
 	sys_nr = GET_SYSNR(regfile);
 	if (klee_is_symbolic(sys_nr)) {
 		klee_warning_once("Resolving symbolic syscall nr");
@@ -181,7 +196,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 	switch (sys_nr) {
 	case SYS_open:
-		sc_ret_ge0(kmc_sc_regs(regfile));
+		sc_ret_ge0(sc_new_regs(regfile));
 		break;
 	case SYS_brk:
 		klee_warning_once("failing brk");
@@ -191,7 +206,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_munmap(regfile);
 		break;
 	case SYS_write:
-		sc_ret_or(kmc_sc_regs(regfile), -1, GET_ARG2(regfile));
+		sc_ret_or(sc_new_regs(regfile), -1, GET_ARG2(regfile));
 		break;
 	case SYS_exit:
 	case SYS_exit_group: {
@@ -203,7 +218,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	break;
 
 	case SYS_getgroups:
-		sc_ret_range(kmc_sc_regs(regfile), -1, 2);
+		sc_ret_range(sc_new_regs(regfile), -1, 2);
 		make_sym(GET_ARG1(regfile), GET_ARG0(regfile), "getgroups");
 		break;
 	case SYS_sync:
@@ -214,7 +229,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	FAKE_SC_RANGE(tgkill, -1, 0)
 	case SYS_getgid:
 	case SYS_getuid:
-		sc_ret_ge0(kmc_sc_regs(regfile));
+		sc_ret_ge0(sc_new_regs(regfile));
 		break;
 	case SYS_getpid:
 	case SYS_gettid:
@@ -222,7 +237,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	case SYS_setgid:
 	case SYS_setuid:
-		sc_ret_or(kmc_sc_regs(regfile), -1, 0);
+		sc_ret_or(sc_new_regs(regfile), -1, 0);
 		break;
 	FAKE_SC_RANGE(geteuid, 0, 1)
 	FAKE_SC_RANGE(getegid, 0, 1)
@@ -235,7 +250,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_read: {
 		uint64_t len = klee_get_value(GET_ARG2(regfile));
 
-		new_regs = kmc_sc_regs(regfile);
+		new_regs = sc_new_regs(regfile);
 		if ((int64_t)GET_RAX(new_regs) == -1) {
 			break;
 		}
@@ -250,7 +265,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	FAKE_SC_RANGE(access, -1, 0)
 	case SYS_newfstatat: { /* for du */
-		new_regs = kmc_sc_regs(regfile);
+		new_regs = sc_new_regs(regfile);
 		if ((int64_t)GET_RAX(new_regs) == -1) {
 			break;
 		}
@@ -261,18 +276,18 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 	case SYS_lseek:
 		klee_warning_once("lseek [-1, 4096]");
-		sc_ret_range(kmc_sc_regs(regfile), -1, 4096);
+		sc_ret_range(sc_new_regs(regfile), -1, 4096);
 		break;
 	case SYS_prctl:
 		sc_ret_v(regfile, -1);
 		break;
 	case SYS_ioctl:
-		sc_ret_ge0(kmc_sc_regs(regfile));
+		sc_ret_ge0(sc_new_regs(regfile));
 		break;
 	case SYS_fstat:
 	case SYS_lstat:
 	case SYS_stat: {
-		new_regs = kmc_sc_regs(regfile);
+		new_regs = sc_new_regs(regfile);
 		if ((int64_t)GET_RAX(new_regs) == -1) {
 			break;
 		}
@@ -285,13 +300,13 @@ void* sc_enter(void* regfile, void* jmpptr)
 		klee_warning_once("failing uname");
 		break;
 	case SYS_writev:
-		sc_ret_ge0(kmc_sc_regs(regfile));
+		sc_ret_ge0(sc_new_regs(regfile));
 		break;
 
 	case SYS_getcwd: {
 		uint64_t addr = klee_get_value(GET_ARG0(regfile));
 
-		new_regs = kmc_sc_regs(regfile);
+		new_regs = sc_new_regs(regfile);
 		if (	GET_RAX(new_regs) >= 1 &&
 			GET_RAX(new_regs) < GET_ARG1(regfile))
 		{
@@ -304,7 +319,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	}
 	case SYS_sched_getscheduler:
 		klee_warning_once("Pure symbolic on sched_getscheduler");
-		kmc_sc_regs(regfile);
+		sc_new_regs(regfile);
 		break;
 	case SYS_sched_getparam:
 		klee_warning_once("Blindly OK'd sched_getparam");
@@ -314,10 +329,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(regfile, 0);
 		break;
 	case SYS_dup:
-		sc_ret_ge0(kmc_sc_regs(regfile));
+		sc_ret_ge0(sc_new_regs(regfile));
 		break;
 	case SYS_setrlimit:
-		sc_ret_or(kmc_sc_regs(regfile), -1, 0);
+		sc_ret_or(sc_new_regs(regfile), -1, 0);
 		break;
 	case SYS_getrlimit:
 		make_sym(GET_ARG1(regfile), sizeof(struct rlimit), "getrlimit");
@@ -328,7 +343,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		make_sym(GET_ARG1(regfile), sizeof(struct rusage), "getrusage");
 		break;
 	case SYS_getdents:
-		new_regs = kmc_sc_regs(regfile);
+		new_regs = sc_new_regs(regfile);
 		sc_ret_or(new_regs, 0, -1);
 		if ((int64_t)GET_RAX(new_regs) == -1)
 			break;
@@ -382,10 +397,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(regfile, GET_ARG2(regfile));
 		break;
 	case SYS_sendto:
-		sc_ret_or(kmc_sc_regs(regfile), -1, GET_ARG2(regfile));
+		sc_ret_or(sc_new_regs(regfile), -1, GET_ARG2(regfile));
 		break;
 	case SYS_bind:
-		sc_ret_or(kmc_sc_regs(regfile), 0, -1);
+		sc_ret_or(sc_new_regs(regfile), 0, -1);
 		break;
 	case SYS_chmod:
 		klee_warning_once("phony chmod");
@@ -396,18 +411,18 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(regfile, 0);
 		break;
 	case SYS_connect:
-		sc_ret_or(kmc_sc_regs(regfile), -1, 0);
+		sc_ret_or(sc_new_regs(regfile), -1, 0);
 		break;
 	case SYS_epoll_create:
 		klee_warning_once("phony epoll_creat call");
-		new_regs = kmc_sc_regs(regfile);
+		new_regs = sc_new_regs(regfile);
 		if ((int64_t)GET_RAX(new_regs) == -1)
 			break;
 		klee_assume(GET_RAX(new_regs) > 3 && GET_RAX(new_regs) < 4096);
 		break;
 
 	case SYS_getsockname:
-		new_regs = kmc_sc_regs(regfile);
+		new_regs = sc_new_regs(regfile);
 		if ((int64_t)GET_RAX(new_regs) == -1)
 			break;
 
@@ -421,15 +436,16 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_pipe2:
 	case SYS_pipe:
 		klee_warning_once("phony pipe");
-		sc_ret_or(kmc_sc_regs(regfile), -1, 0);
+		sc_ret_or(sc_new_regs(regfile), -1, 0);
 		break;
 
 	case SYS_mmap:
-		sc_mmap(regfile);
-		break;
+		new_regs = sc_mmap(regfile);
+		kmc_sc_log(SYS_mmap, GET_RAX(new_regs), sc_flags);
+		goto already_logged;
 	case SYS_socket:
 		klee_warning_once("phony socket call");
-		sc_ret_range(kmc_sc_regs(regfile), -1, 4096);
+		sc_ret_range(sc_new_regs(regfile), -1, 4096);
 		break;
 	case SYS_fchdir:
 	case SYS_chdir:
@@ -443,7 +459,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	UNIMPL_SC(mremap)
 	case SYS_creat:
 		klee_warning_once("phony creat call");
-		new_regs = kmc_sc_regs(regfile);
+		new_regs = sc_new_regs(regfile);
 		if ((int64_t)GET_RAX(new_regs) == -1)
 			break;
 		klee_assume(GET_RAX(new_regs) > 3 && GET_RAX(new_regs) < 4096);
@@ -454,7 +470,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		/* In the future, use system information to satisfy this */
 		uint64_t	addr  = klee_get_value(GET_ARG1(regfile));
 		klee_warning_once("bogus readlink");
-		new_regs = kmc_sc_regs(regfile);
+		new_regs = sc_new_regs(regfile);
 		klee_assume(GET_ARG2(regfile) >= 2);
 		sc_ret_range(new_regs, 1, 2);
 		make_sym(addr, GET_ARG2(regfile), "readlink");
@@ -467,7 +483,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 
 	case SYS_times:
-		kmc_sc_regs(regfile);
+		sc_new_regs(regfile);
 		make_sym(
 			klee_get_value(GET_ARG0(regfile)),
 			sizeof(struct tms),
@@ -484,5 +500,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	}
 
+	kmc_sc_log(sys_nr, 0, sc_flags);
+already_logged:
 	return jmpptr;
 }

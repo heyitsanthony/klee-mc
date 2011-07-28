@@ -47,6 +47,11 @@ public:
 	RegLog::const_iterator regsBegin(void) const { return reg_log.begin(); }
 	RegLog::const_iterator regsEnd(void) const { return reg_log.end(); }
 
+	void recordSyscall(uint64_t sysnr, uint64_t ret, uint64_t flags);
+	RegLog::const_iterator scBegin(void) const { return sc_log.begin(); }
+	RegLog::const_iterator scEnd(void) const { return sc_log.end(); }
+
+
 	MemoryObject* setRegCtx(MemoryObject* mo)
 	{
 		MemoryObject	*old_mo;

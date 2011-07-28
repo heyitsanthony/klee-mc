@@ -9,6 +9,16 @@ void ExeStateVex::recordRegisters(const void* reg, int sz)
 		(const unsigned char*)reg+sz));
 }
 
+
+void ExeStateVex::recordSyscall(uint64_t sysnr, uint64_t aux, uint64_t flags)
+{
+	uint64_t	buf[3];
+	buf[0] = sysnr; buf[1] = aux; buf[2] = flags;
+	sc_log.push_back(std::vector<unsigned char>(
+		(const unsigned char*)buf,
+		(const unsigned char*)(buf+3)));
+}
+
 ExeStateVex::ExeStateVex(const ExeStateVex& src)
 : ExecutionState(src)
 {

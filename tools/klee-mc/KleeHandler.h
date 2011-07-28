@@ -1,7 +1,7 @@
 #ifndef KLEEHANDLER_H
 #define KLEEHANDLER_H
 
-#include "klee/ExecutionState.h"
+#include "ExeStateVex.h"
 #include "klee/Internal/ADT/TreeStream.h"
 #include "klee/Interpreter.h"
 
@@ -66,6 +66,10 @@ typedef
 	bool scanForOutputDir(const std::string& path, std::string& theDir);
 	void processSuccessfulTest(unsigned id, out_objs&);
 	bool gzipKTest(const std::string& test_name);
+	void dumpLog(
+		const char* name,
+		unsigned id,
+		RegLog::const_iterator begin, RegLog::const_iterator end);
 };
 
 }

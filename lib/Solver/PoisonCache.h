@@ -21,10 +21,38 @@
 
 namespace klee
 {
+
+class PoisonHash
+{
+public:
+	PoisonHash(const char* in_name) : name(in_name) {}
+	virtual ~PoisonHash() {}
+	virtual unsigned hash(const Query& q) const = 0;
+	const char* getName(void) const { return name; }
+private:
+	const char* name;
+};
+
+
+/* default class declaration-- hash declared in cpp file */
+#define DECL_PHASH(x,y)					\
+class PH##x : public PoisonHash				\
+{							\
+public:							\
+	PH##x() : PoisonHash(y) {}			\
+	virtual ~PH##x() {}				\
+	virtual unsigned hash(const Query &q) const;	\
+private: };
+
+
+DECL_PHASH(ExprStrSHA, "strsha")
+DECL_PHASH(Expr, "expr")
+DECL_PHASH(RewritePtr, "rewriteptr")
+
 class PoisonCache : public SolverImplWrapper
 {
 public:
-	PoisonCache(Solver* s);
+	PoisonCache(Solver* s, PoisonHash* phash);
 	virtual ~PoisonCache();
 
 	static void sig_poison(int signum, siginfo_t*, void*);
@@ -32,6 +60,7 @@ private:
 	bool			in_solver;
 	unsigned		hash_last;
 	std::set<unsigned>	poison_hashes;
+	PoisonHash		*phash;
 
 	bool badQuery(const Query& q);
 	void loadCacheFromDisk(const char* fname = POISON_DEFAULT_PATH);
@@ -46,10 +75,13 @@ public:
 		std::vector< std::vector<unsigned char> > &values);
 
 	void printName(int level = 0) const {
-		klee_message("%*s" "PoisonCache containing:", 2*level, "");
+		klee_message(
+			((std::string("%*s PoisonCache (")+
+				phash->getName())+
+				") containing: ").c_str(), 
+			2*level,  "");
 		wrappedSolver->printName(level + 1);
 	}
 };
 }
-
 #endif

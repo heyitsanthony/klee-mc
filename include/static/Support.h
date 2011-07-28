@@ -17,6 +17,21 @@ namespace klee {
 
     class Support {
     public:
+	template <class T>
+	static std::string printStr(T& t)
+	{
+		std::stringstream ss;
+		t.print(ss);
+		return ss.str();
+	}
+
+	template <class T>
+	static std::string printStr(const T& t)
+	{
+		std::stringstream ss;
+		t.print(ss);
+		return ss.str();
+	}
 
         template <class T>
         static void eraseAll(std::set<T>& s, const std::vector<T>& rm) {

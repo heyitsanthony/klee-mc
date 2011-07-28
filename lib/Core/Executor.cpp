@@ -3158,9 +3158,10 @@ bool Executor::getSymbolicSolution(
   success = solver->getInitialValues(tmp, objects, values);
   if (!success) {
     klee_warning("unable to compute initial values (invalid constraints?)!");
-    ExprPPrinter::printQuery(std::cerr,
-                             state.constraints,
-                             ConstantExpr::alloc(0, Expr::Bool));
+    ExprPPrinter::printQuery(
+      std::cerr,
+      state.constraints,
+      ConstantExpr::alloc(0, Expr::Bool));
     return false;
   }
 

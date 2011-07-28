@@ -384,7 +384,8 @@ unsigned MallocKey::hash() const
 
 /***/
 
-ref<Expr> ReadExpr::create(const UpdateList &ul, ref<Expr> index) {
+ref<Expr> ReadExpr::create(const UpdateList &ul, ref<Expr> index)
+{
   // rollback index when possible...
 
   // sanity check for OoB read

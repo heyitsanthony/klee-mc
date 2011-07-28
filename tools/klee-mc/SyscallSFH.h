@@ -53,5 +53,6 @@ SFH_HANDLER(FreeRun)
 SFH_HANDLER(KMCExit)
 SFH_HANDLER(MakeRangeSymbolic)
 SFH_HANDLER(AllocAligned)
+SFH_HANDLER(LogSysCall)
 }
 #endif

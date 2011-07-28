@@ -10,7 +10,6 @@
 #define foreach(_i, _b, _e) \
 	  for(typeof(_b) _i = _b, _i ## end = _e; _i != _i ## end;  ++ _i)
 
-
 struct ltstr
 {
     bool operator()(const char* str1, const char* str2) const

@@ -88,6 +88,8 @@ void Z3SolverImpl::cleanup(void)
 static void puke(Z3_error_code e)
 {
 	fprintf(stderr, "ARGHHHH %d %d\n", e, Z3_OK);
+	/* trigger segfault handler for poison cache */
+	*((char*)1) = 0;
 }
 
 bool Z3SolverImpl::computeInitialValues(

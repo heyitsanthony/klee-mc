@@ -1,4 +1,5 @@
 #include "klee/Constraints.h"
+#include "static/Support.h"
 #include <iostream>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -7,6 +8,8 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <signal.h>
+#include <openssl/sha.h>
+
 #include "PoisonCache.h"
 
 using namespace klee;
@@ -15,20 +18,27 @@ static PoisonCache* g_pc = NULL;
 
 static char altstack[SIGSTKSZ];
 
+
 void PoisonCache::sig_poison(int signum, siginfo_t *si, void *p)
 {
 	ssize_t bw;
 
-	/* crashed at a weird time..? */
+	/* crashed before poison cache init..? */
 	if (g_pc == NULL) return;
 
 	if (g_pc->in_solver) {
 		/* save to cache */
 		int	fd;
-		fd = open(
-			POISON_DEFAULT_PATH,
-			O_WRONLY | O_APPEND | O_CREAT,
-			0600);
+		char	path[128];
+		snprintf(
+			path,
+			128,
+			POISON_DEFAULT_PATH".%s", 
+			g_pc->phash->getName());
+		write(STDERR_FILENO, "saving ", 7);
+		write(STDERR_FILENO, path, strlen(path));
+		write(STDERR_FILENO, "\n", 1);
+		fd = open(path, O_WRONLY | O_APPEND | O_CREAT, 0600);
 		bw = write(fd, &g_pc->hash_last, sizeof(g_pc->hash_last));
 		close(fd);
 	}
@@ -37,7 +47,7 @@ void PoisonCache::sig_poison(int signum, siginfo_t *si, void *p)
 	assert (bw == 4);
 
 	/* die. */
-	kill(0, 9);
+	kill(0, SIGKILL);
 
 	bw = write(STDERR_FILENO, "die!\n", 5);
 	assert (bw == 5);
@@ -47,15 +57,18 @@ void PoisonCache::sig_poison(int signum, siginfo_t *si, void *p)
 	assert (bw == 5);
 }
 
-PoisonCache::PoisonCache(Solver* s)
+
+
+PoisonCache::PoisonCache(Solver* s, PoisonHash* in_phash)
 : SolverImplWrapper(s)
 , in_solver(false)
+, phash(in_phash)
 {
 	struct sigaction	sa;
 	stack_t			stk;
 	int			err;
 
-	assert (g_pc == NULL && "Only one PoisonCache at a time");
+	assert (g_pc == NULL && "Only one PoisonCache at a time. FIXME");
 	g_pc = this;
 
 	/* hook into sigsegv so can catch crashing STP */
@@ -71,11 +84,13 @@ PoisonCache::PoisonCache(Solver* s)
 	stk.ss_size = SIGSTKSZ;
 	err = sigaltstack(&stk, NULL);
 
-	loadCacheFromDisk();
+	loadCacheFromDisk(
+		(std::string(POISON_DEFAULT_PATH".")+phash->getName()).c_str());
 }
 
 PoisonCache::~PoisonCache()
 {
+	delete phash;
 	g_pc = NULL;
 }
 
@@ -125,7 +140,7 @@ bool PoisonCache::computeInitialValues(
 
 bool PoisonCache::badQuery(const Query& q)
 {
-	hash_last = q.hash();
+	hash_last = phash->hash(q);
 	if (poison_hashes.count(hash_last) == 0) {
 		return false;
 	}
@@ -148,4 +163,81 @@ void PoisonCache::loadCacheFromDisk(const char* fname)
 	}
 
 	fclose(f);
+}
+
+/* The naive version. WE WERE SUCH FOOLS. Blindly use the default hash
+ * circa epoch. We assume it's OK. */
+unsigned PHExpr::hash(const Query& q) const { return q.hash(); }
+
+
+#include "klee/util/ExprVisitor.h"
+class RewriteVisitor : public ExprVisitor
+{
+private:
+	unsigned	const_counter;
+public:
+	RewriteVisitor()
+	: ExprVisitor(true, true), const_counter(0) {}
+
+	virtual Action visitExpr(const Expr &e)
+	{
+		const ConstantExpr*	ce;
+		uint64_t		v;
+		ref<Expr>		new_ce;
+	
+		ce = dyn_cast<const ConstantExpr>(&e);
+		if (!ce || ce->getWidth() > 64) return Action::doChildren();
+
+		v = ce->getZExtValue();
+		if (v < 0x100000) return Action::doChildren();
+
+		if (v != ~0) v++;
+		new_ce = ConstantExpr::alloc(
+			(++const_counter) % v,
+			ce->getWidth());
+		return Action::changeTo(new_ce);
+	}
+};
+
+/* I noticed that we weren't seeing much results across runs. We assume that
+ * this is from nondeterministic pointers gunking up the query.
+ *
+ * So, rewrite expressions that look like pointers into deterministic values. 
+ * NOTE: We need to use several patterns here to test whether the SMT can be 
+ * smart about partitioning with low-value constants.
+ *
+ * (XXX is this true? test with experiments, follow up with literature eval)
+ */
+unsigned PHRewritePtr::hash(const Query& q) const
+{
+	ConstraintManager	cm;
+	ref<Expr>		new_expr;
+
+	foreach (it, q.constraints.begin(), q.constraints.end()) {
+		RewriteVisitor	rw;
+		ref<Expr>	it_e = *it;
+    		ref<Expr>	e = rw.visit(it_e);
+
+		cm.addConstraint(e);
+	}
+
+	RewriteVisitor rw;
+	new_expr = rw.visit(q.expr);
+	Query	new_q(cm, new_expr);
+
+	return new_q.hash();
+}
+
+/* Just to be sure that the hash Daniel gave us didn't have a lot of 
+ * bad collisions, we're using a cryptographic hash on the string. */
+unsigned PHExprStrSHA::hash(const Query& q) const
+{
+	std::string	s;
+	unsigned char	md[SHA_DIGEST_LENGTH];
+	unsigned	ret;
+
+	s = Support::printStr(q);
+	SHA1((const unsigned char*)s.c_str(), s.size(), md);
+
+	return *((unsigned*)md); // XXX stupid
 }

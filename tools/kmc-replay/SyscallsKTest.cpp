@@ -18,14 +18,15 @@ extern "C"
 
 SyscallsKTest* SyscallsKTest::create(
 	Guest* in_g,
-	const char* fname_ktest)
+	const char* fname_ktest,
+	const char* fname_sclog)
 {
 	SyscallsKTest	*skt;
 
 	assert (in_g->getArch() == Arch::X86_64);
 
-	skt = new SyscallsKTest(in_g, fname_ktest);
-	if (skt->ktest == NULL) {
+	skt = new SyscallsKTest(in_g, fname_ktest, fname_sclog);
+	if (skt->ktest == NULL || skt->sclog == NULL) {
 		delete skt;
 		skt = NULL;
 	}
@@ -34,21 +35,75 @@ SyscallsKTest* SyscallsKTest::create(
 }
 
 SyscallsKTest::SyscallsKTest(
-	Guest* in_g, 
-	const char* fname_ktest)
+	Guest* in_g,
+	const char* fname_ktest,
+	const char* fname_sclog)
 : Syscalls(in_g)
- ,ktest(NULL)
- ,sc_retired(0)
+, ktest(NULL)
+, sc_retired(0)
+, sclog(NULL)
 {
 	ktest = kTest_fromFile(fname_ktest);
 	if (ktest == NULL) return;
+
+	sclog = fopen(fname_sclog, "rb");
+	if (sclog == NULL) return;
+
 	next_ktest_obj = 0;
 }
 
 SyscallsKTest::~SyscallsKTest(void)
 {
 	if (ktest) kTest_free(ktest);
+	if (sclog) fclose(sclog);
 }
+
+void SyscallsKTest::loadSyscallEntry(SyscallParams& sp)
+{
+	uint64_t sys_nr = sp.getSyscall();
+
+	if (!copyInSCEntry()) {
+		fprintf(stderr,
+			"Could not read sclog entry #%d. %p %p %p\n",
+			sc_retired,
+			sp.getArg(0),
+			sp.getArg(1),
+			sp.getArg(2));
+		abort();
+	}
+
+	if (sce.sce_sysnr != sys_nr) {
+		fprintf(stderr,
+			"Mismatched: Got sysnr=%d. Expected sysnr=%d\n",
+			sys_nr, sce.sce_sysnr);
+	}
+
+	assert (sce.sce_sysnr == sys_nr && "sysnr mismatch with log");
+	if (sce.sce_flags & SC_FL_NEWREGS) {
+		bool	reg_ok;
+
+		reg_ok = copyInRegMemObj();
+		if (!reg_ok) {
+			fprintf(stderr, "Could not copy in regmemobj\n");
+			exited = true;
+			fprintf(stderr,
+				"Wrong guest sshot for this ktest?\n");
+			abort();
+			return;
+		}
+	}
+
+}
+
+//fprintf(stderr, "Faking syscall "#x" (%p,%p,%p)\n",	\
+//	sp.getArg(0), sp.getArg(1), sp.getArg(2));	\
+
+
+#define FAKE_SC(x) 		\
+	case SYS_##x:		\
+	setRet(0);		\
+	break;
+
 
 uint64_t SyscallsKTest::apply(SyscallParams& sp)
 {
@@ -57,14 +112,31 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 
 	ret = 0;
 	sys_nr = sp.getSyscall();
+
 	fprintf(stderr, "Applying: sys=%d\n", sys_nr);
+	loadSyscallEntry(sp);
 
 	switch(sys_nr) {
-	case SYS_open:
-		copyInRegMemObj();
-		break;
+	case SYS_close: break;
 	case SYS_read:
+		if (getRet() != -1) {
+			bool	ok;
+			ok = copyInMemObj(sp.getArg(1), sp.getArg(2));
+			assert (ok && "OOPS BAD READ");
+		}
 		break;
+	case SYS_brk:
+		setRet(-1);
+		break;
+	case SYS_open:
+		fprintf(stderr, "OPEN: \"%s\" ret=%p\n",
+			sp.getArg(0), getRet());
+		break;
+	case SYS_write:
+		fprintf(stderr, "WRITING %d bytes to fd=%d \"%s\"\n",
+			sp.getArg(2), sp.getArg(0), sp.getArg(1));
+		break;
+	FAKE_SC(rt_sigaction)
 	case SYS_munmap:
 		sc_munmap(sp);
 		break;
@@ -96,21 +168,21 @@ void SyscallsKTest::sc_mmap(SyscallParams& sp)
 	void			*ret;
 	bool			copied_in;
 
-	copied_in = copyInRegMemObj();
-	assert (copied_in);
+	if ((void*)sce.sce_ret != MAP_FAILED) {
+		ret = mmap(
+			(void*)sce.sce_ret,
+			sp.getArg(1),
+			PROT_READ | PROT_WRITE,
+			MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS,
+			-1,
+			0);
+		assert (ret != MAP_FAILED);
+	} else {
+		ret = (void*)sce.sce_ret;
+	}
 
 	guest_cpu = (VexGuestAMD64State*)guest->getCPUState()->getStateData();
-	ret = mmap(
-		(void*)guest_cpu->guest_RAX,
-		sp.getArg(1),
-		PROT_READ | PROT_WRITE,
-		MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS,
-		-1,
-		0);
-	assert (ret != MAP_FAILED);
-
-	guest->getCPUState()->print(std::cerr);
-	fprintf(stderr, "DESIRED SZ=%d\n", sp.getArg(1));
+	guest_cpu->guest_RAX = (uint64_t)ret;
 	copied_in = copyInMemObj(guest_cpu->guest_RAX, sp.getArg(1));
 	assert (copied_in && "BAD MMAP MEMOBJ");
 }
@@ -120,14 +192,13 @@ void SyscallsKTest::sc_munmap(SyscallParams& sp)
 	assert (0 ==1 && "STUB");
 }
 
-/* caller should know the size of the object based on 
+/* caller should know the size of the object based on
  * the syscall's context */
 char* SyscallsKTest::feedMemObj(unsigned int sz)
 {
 	char			*obj_buf;
 	struct KTestObject	*cur_obj;
 	
-	fprintf(stderr, "feeed me %d\n", sz);
 	if (next_ktest_obj >= ktest->numObjects) {
 		/* request overflow */
 		fprintf(stderr, "OF\n");
@@ -137,7 +208,9 @@ char* SyscallsKTest::feedMemObj(unsigned int sz)
 	cur_obj = &ktest->objects[next_ktest_obj++];
 	if (cur_obj->numBytes != sz) {
 		/* out of sync-- how to handle? */
-		fprintf(stderr, "CUROBJ: %d\n", cur_obj->numBytes);
+		fprintf(stderr, "OOSYNC: Expected: %d. Got: %d\n",
+			sz,
+			cur_obj->numBytes);
 		return NULL;
 	}
 
@@ -150,23 +223,23 @@ char* SyscallsKTest::feedMemObj(unsigned int sz)
 /* XXX the vexguest stuff needs to be pulled into guestcpustate */
 void SyscallsKTest::sc_stat(SyscallParams& sp)
 {
-	if (!copyInRegMemObj()) {
-		fprintf(stderr, "failed to copy in reg mem obj\n");
-		exited = true;
-		fprintf(stderr, 
-			"Do you have the right guest sshot for this ktest?");
-		abort();
-		return;
-	}
+	if (getRet() != 0) return;
 
 	if (!copyInMemObj(sp.getArg(1), sizeof(struct stat))) {
 		fprintf(stderr, "failed to copy in memobj\n");
 		exited = true;
-		fprintf(stderr, 
+		fprintf(stderr,
 			"Do you have the right guest sshot for this ktest?");
 		abort();
 		return;
 	}
+}
+
+bool SyscallsKTest::copyInSCEntry(void)
+{
+	size_t	br;
+	br = fread(&sce, sizeof(sce), 1, sclog);
+	return (br == 1);
 }
 
 bool SyscallsKTest::copyInMemObj(uint64_t guest_addr, unsigned int sz)
@@ -181,6 +254,20 @@ bool SyscallsKTest::copyInMemObj(uint64_t guest_addr, unsigned int sz)
 
 	delete [] buf;
 	return true;
+}
+
+void SyscallsKTest::setRet(uint64_t r)
+{
+	VexGuestAMD64State	*guest_cpu;
+	guest_cpu = (VexGuestAMD64State*)guest->getCPUState()->getStateData();
+	guest_cpu->guest_RAX = r;
+}
+
+uint64_t SyscallsKTest::getRet(void) const
+{
+	VexGuestAMD64State	*guest_cpu;
+	guest_cpu = (VexGuestAMD64State*)guest->getCPUState()->getStateData();
+	return guest_cpu->guest_RAX;
 }
 
 bool SyscallsKTest::copyInRegMemObj(void)

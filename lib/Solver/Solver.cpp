@@ -34,6 +34,7 @@
 #include <map>
 #include <vector>
 #include <iostream>
+#include <string>
 
 #include <errno.h>
 #include <sys/types.h>
@@ -49,12 +50,10 @@ namespace {
 		      cl::init(false));
 
   cl::opt<bool>
-  UseForkedSTP("use-forked-stp",
-                 cl::desc("Run STP in forked process"));
+  UseForkedSTP("use-forked-stp", cl::desc("Run STP in forked process"));
 
   cl::opt<sockaddr_in_opt>
-  STPServer("stp-server",
-                 cl::value_desc("host:port"));
+  STPServer("stp-server", cl::value_desc("host:port"));
 
   cl::opt<bool>
   UseSTPQueryPCLog("use-stp-query-pc-log",
@@ -75,9 +74,19 @@ namespace {
 	   cl::desc("Use validity caching"));
 
   cl::opt<bool>
-  UsePoisonCache("use-poison-cache",
+  UsePoisonCacheExpr("use-pcache-expr",
   	cl::init(false),
-	cl::desc("Cache poisonous queries to disk. Fail on hit."));
+	cl::desc("Cache/Reject poisonous query hashes."));
+
+  cl::opt<bool>
+  UsePoisonCacheExprSHAStr("use-pcache-shastr",
+  	cl::init(false),
+	cl::desc("Cache/Reject poisonous query SHA'd strings."));
+
+  cl::opt<bool>
+  UsePoisonCacheRewritePtr("use-pcache-rewriteptr",
+  	cl::init(false),
+	cl::desc("Cache/Reject poisonous query with pointers rewritten."));
 
   cl::opt<bool>
   UseBoolector(
@@ -123,7 +132,15 @@ TimingSolver* Solver::createChain(
 	if (UseSTPQueryPCLog)
 		solver = createPCLoggingSolver(solver, stpQueryPCLogPath);
 
-	if (UsePoisonCache) solver = new Solver(new PoisonCache(solver));
+	if (UsePoisonCacheExpr)
+		solver = new Solver(
+			new PoisonCache(solver, new PHExpr()));
+	if (UsePoisonCacheExprSHAStr)
+		solver = new Solver(
+			new PoisonCache(solver, new PHExprStrSHA()));
+	if (UsePoisonCacheRewritePtr)
+		solver = new Solver(
+			new PoisonCache(solver, new PHRewritePtr()));
 
 	if (UseFastCexSolver) solver = createFastCexSolver(solver);
 	if (UseCexCache) solver = createCexCachingSolver(solver);
@@ -169,6 +186,7 @@ bool Solver::failed(void) const
 {
 	bool	failure = impl->failed();
 	impl->ackFail();
+	assert (impl->failed() == false);
 	return failure;
 }
 
@@ -292,6 +310,7 @@ bool Solver::getInitialValues(
   // FIXME: Propogate this out.
   hasSolution = impl->computeInitialValues(query, objects, values);
   if (failed()) return false;
+  assert (hasSolution == true && "SHOULD HAVE A SOLUTION");
   return hasSolution;
 }
 
@@ -320,13 +339,16 @@ std::pair< ref<Expr>, ref<Expr> > Solver::getRange(const Query& query)
     while (lo<hi) {
       mid = lo + (hi - lo)/2;
       bool res;
-      bool success =
-        mustBeTrue(query.withExpr(
-                     EqExpr::create(LShrExpr::create(e,
-                                                     ConstantExpr::create(mid,
-                                                                          width)),
-                                    ConstantExpr::create(0, width))),
-                   res);
+      bool success;
+      
+      success = mustBeTrue(
+        query.withExpr(
+          EqExpr::create(
+	    LShrExpr::create(e,
+              ConstantExpr::create(
+                mid, width)),
+            ConstantExpr::create(0, width))),
+        res);
 
       assert(success && "FIXME: Unhandled solver failure");
       (void) success;
@@ -345,10 +367,11 @@ std::pair< ref<Expr>, ref<Expr> > Solver::getRange(const Query& query)
 
     // check common case
     bool res = false;
-    bool success =
-      mayBeTrue(query.withExpr(EqExpr::create(e, ConstantExpr::create(0,
-                                                                      width))),
-                res);
+    bool success;
+    success = mayBeTrue(
+      query.withExpr(
+        EqExpr::create(e, ConstantExpr::create(0, width))),
+        res);
 
     assert(success && "FIXME: Unhandled solver failure");
     (void) success;
@@ -361,11 +384,11 @@ std::pair< ref<Expr>, ref<Expr> > Solver::getRange(const Query& query)
       while (lo<hi) {
         mid = lo + (hi - lo)/2;
         bool res = false;
-        bool success =
-          mayBeTrue(query.withExpr(UleExpr::create(e,
-                                                   ConstantExpr::create(mid,
-                                                                        width))),
-                    res);
+        bool success;
+	success = mayBeTrue(
+	  query.withExpr(
+	    UleExpr::create(e, ConstantExpr::create(mid, width))),
+            res);
 
         assert(success && "FIXME: Unhandled solver failure");
         (void) success;
@@ -385,11 +408,11 @@ std::pair< ref<Expr>, ref<Expr> > Solver::getRange(const Query& query)
     while (lo<hi) {
       mid = lo + (hi - lo)/2;
       bool res;
-      bool success =
-        mustBeTrue(query.withExpr(UleExpr::create(e,
-                                                  ConstantExpr::create(mid,
-                                                                       width))),
-                   res);
+      bool success;
+      success = mustBeTrue(
+        query.withExpr(
+	  UleExpr::create(e, ConstantExpr::create(mid, width))),
+          res);
 
       assert(success && "FIXME: Unhandled solver failure");
       (void) success;

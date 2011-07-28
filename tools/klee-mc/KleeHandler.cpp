@@ -426,21 +426,33 @@ void KleeHandler::processTestCase(
       klee_warning("unable to write .info file, losing it (errno=%d: %s)", errno, strerror(errno));
   }
 
- const ExeStateVex	*esv = dynamic_cast<const ExeStateVex*>(&state);
- assert (esv != NULL);
- if (esv->regsBegin() != esv->regsEnd()) {
-   if (std::ostream* f = openTestFile("reglog", id)) {
-     foreach (it, esv->regsBegin(), esv->regsEnd()) {
-        std::vector<unsigned char> cur_regs = *it;
-        std::copy(
-          cur_regs.begin(),
-    	  cur_regs.end(),
-          std::ostream_iterator<unsigned char>(*f));
-     }
-     delete f;
-   }
- }
- fprintf(stderr, "=========DONE WRITING OUT TESTID=%d\n", id);
+  const ExeStateVex	*esv = dynamic_cast<const ExeStateVex*>(&state);
+  assert (esv != NULL);
+  dumpLog("reglog", id, esv->regsBegin(), esv->regsEnd());
+  dumpLog("sclog", id, esv->scBegin(), esv->scEnd());
+  fprintf(stderr, "=========DONE WRITING OUT TESTID=%d\n", id);
+}
+
+
+void KleeHandler::dumpLog(
+	const char* name,
+	unsigned id,
+	RegLog::const_iterator begin, RegLog::const_iterator end)
+{
+	if (begin == end) return;
+
+	std::ostream* f = openTestFile(name, id);
+	if (f == NULL) return;
+
+
+	foreach (it, begin, end) {
+		std::vector<unsigned char> r = *it;
+		std::copy(
+			r.begin(), r.end(),
+			std::ostream_iterator<unsigned char>(*f));
+	}
+
+	delete f;
 }
 
 void KleeHandler::getPathFiles(
