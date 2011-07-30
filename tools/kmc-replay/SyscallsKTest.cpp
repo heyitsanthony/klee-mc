@@ -1,4 +1,5 @@
 #include <poll.h>
+#include <signal.h>
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -160,7 +161,10 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 	FAKE_SC(rt_sigaction)
 	FAKE_SC(rt_sigprocmask)
 	FAKE_SC(fadvise64)
-	case SYS_tgkill: break;
+	case SYS_tgkill:
+		if (sp.getArg(2) == SIGABRT)
+			exited = true;
+		break;
 	case SYS_lseek:
 		assert ((int64_t)getRet() >= -1 &&
 			(int64_t)getRet() <= 4096 && "mismatches model");

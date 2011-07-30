@@ -1,6 +1,7 @@
 #define _LARGEFILE64_SOURCE
 
 #include <poll.h>
+#include <signal.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -243,6 +244,17 @@ void* sc_enter(void* regfile, void* jmpptr)
 	}
 	break;
 
+	case SYS_tgkill:
+		if (GET_ARG2(regfile) == SIGABRT) {
+			sc_ret_v(regfile, SIGABRT);
+			SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
+			sc_breadcrumb_commit(sys_nr, SIGABRT);
+			kmc_exit(SIGABRT);
+		} else {
+			sc_ret_or(sc_new_regs(regfile), 0, -1);
+		}
+		break;
+
 	case SYS_getgroups:
 		sc_ret_range(sc_new_regs(regfile), -1, 2);
 		make_sym_by_arg(
@@ -255,7 +267,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_umask:
 		sc_ret_v(regfile, 0666);
 		break;
-	FAKE_SC_RANGE(tgkill, -1, 0)
 	case SYS_getgid:
 	case SYS_getuid:
 		sc_ret_ge0(sc_new_regs(regfile));
