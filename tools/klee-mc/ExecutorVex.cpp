@@ -419,6 +419,8 @@ void ExecutorVex::logXferRegisters(ExecutionState& state)
 
 	if (!LogRegs) return;
 
+	assert (0 == 1 && "STUB");
+
 	/* XXX: expensive-- lots of storage */
 	reg_sz = gs->getCPUState()->getStateSize();
 

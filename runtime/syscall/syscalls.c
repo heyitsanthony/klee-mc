@@ -15,8 +15,9 @@
 #include <klee/klee.h>
 #include <valgrind/libvex_guest_amd64.h>
 
+#include "breadcrumb.h"
+
 void* kmc_sc_regs(void*);
-void kmc_sc_log(uint64_t req_sysnr, uint64_t ret_val, uint64_t flags);
 void kmc_sc_bad(unsigned int);
 void kmc_free_run(uint64_t addr, uint64_t num_bytes);
 void kmc_exit(uint64_t);
@@ -34,15 +35,23 @@ void* kmc_alloc_aligned(uint64_t, const char* name);
 #define GET_ARG4(x)	((VexGuestAMD64State*)x)->guest_R8
 #define GET_ARG5(x)	((VexGuestAMD64State*)x)->guest_R9
 #define GET_SYSNR(x)	GET_RAX(x)
-
-#define SC_FL_NEWREGS	1
-
-static uint64_t sc_flags;
+static uint64_t GET_ARG(void* x, int y)
+{
+	switch (y) {
+	case 0: return GET_ARG0(x);
+	case 1: return GET_ARG1(x);
+	case 2: return GET_ARG2(x);
+	case 3: return GET_ARG3(x);
+	case 4: return GET_ARG4(x);
+	case 5: return GET_ARG5(x);
+	}
+	return -1;
+}
 
 static void* sc_new_regs(void* r)
 {
 	void	*ret = kmc_sc_regs(r);
-	sc_flags |= SC_FL_NEWREGS;
+	SC_BREADCRUMB_FL_OR(BC_FL_SC_NEWREGS);
 	return ret;
 }
 
@@ -138,6 +147,21 @@ void make_sym(uint64_t addr, uint64_t len, const char* name)
 	addr = klee_get_value(addr);
 	len = klee_get_value(len);
 	kmc_make_range_symbolic(addr, len, name);
+	sc_breadcrumb_add_ptr(addr, len);
+}
+
+void make_sym_by_arg(
+	void	*regfile,
+	uint64_t arg_num,
+	uint64_t len, const char* name)
+{
+	uint64_t	addr;
+
+	addr = klee_get_value(GET_ARG(regfile, arg_num));
+	klee_check_memory_access((void*)addr, 1);
+	len = klee_get_value(len);
+	kmc_make_range_symbolic(addr, len, name);
+	sc_breadcrumb_add_argptr(arg_num, 0, len);
 }
 
 static void sc_poll(void* regfile)
@@ -145,7 +169,6 @@ static void sc_poll(void* regfile)
 	struct pollfd	*fds;
 	uint64_t	poll_addr;
 	unsigned int	i, nfds;
-	int		ret_sum;
 
 	poll_addr = klee_get_value(GET_ARG0(regfile));
 	fds = (struct pollfd*)poll_addr;
@@ -187,12 +210,13 @@ void* sc_enter(void* regfile, void* jmpptr)
 	void			*new_regs;
 	unsigned int		sys_nr;
 
-	sc_flags = 0;
 	sys_nr = GET_SYSNR(regfile);
 	if (klee_is_symbolic(sys_nr)) {
 		klee_warning_once("Resolving symbolic syscall nr");
 		sys_nr = klee_get_value(sys_nr);
 	}
+
+	sc_breadcrumb_reset();
 
 	switch (sys_nr) {
 	case SYS_open:
@@ -213,13 +237,18 @@ void* sc_enter(void* regfile, void* jmpptr)
 		uint64_t exit_code;
 		exit_code = klee_get_value(GET_ARG0(regfile));
 		sc_ret_v(regfile, exit_code);
+		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
+		sc_breadcrumb_commit(sys_nr, exit_code);
 		kmc_exit(exit_code);
 	}
 	break;
 
 	case SYS_getgroups:
 		sc_ret_range(sc_new_regs(regfile), -1, 2);
-		make_sym(GET_ARG1(regfile), GET_ARG0(regfile), "getgroups");
+		make_sym_by_arg(
+			regfile,
+			1,
+			klee_get_value(GET_ARG0(regfile)), "getgroups");
 		break;
 	case SYS_sync:
 		break;
@@ -255,7 +284,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			break;
 		}
 		sc_ret_v(new_regs, len);
-		make_sym(GET_ARG1(regfile), len, "readbuf");
+		make_sym_by_arg(regfile, 1, len, "readbuf");
 	}
 	break;
 
@@ -270,7 +299,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			break;
 		}
 		sc_ret_v(new_regs, 0);
-		make_sym(GET_ARG2(regfile), sizeof(struct stat), "newstatbuf");
+		make_sym_by_arg(regfile, 2, sizeof(struct stat), "newstatbuf");
 	}
 	break;
 
@@ -292,7 +321,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			break;
 		}
 		sc_ret_v(new_regs, 0);
-		make_sym(GET_ARG1(regfile), sizeof(struct stat), "statbuf");
+		make_sym_by_arg(regfile, 1, sizeof(struct stat), "statbuf");
 		break;
 	}
 	case SYS_uname:
@@ -310,7 +339,11 @@ void* sc_enter(void* regfile, void* jmpptr)
 		if (	GET_RAX(new_regs) >= 1 &&
 			GET_RAX(new_regs) < GET_ARG1(regfile))
 		{
-			make_sym(GET_ARG0(regfile), GET_ARG1(regfile), "cwdbuf");
+			make_sym_by_arg(
+				regfile,
+				0,
+				klee_get_value(GET_ARG1(regfile)),
+				"cwdbuf");
 			((char*)addr)[GET_RAX(new_regs)] = '\0';
 		} else {
 			sc_ret_v(new_regs, -1);
@@ -335,19 +368,19 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_or(sc_new_regs(regfile), -1, 0);
 		break;
 	case SYS_getrlimit:
-		make_sym(GET_ARG1(regfile), sizeof(struct rlimit), "getrlimit");
+		make_sym_by_arg(regfile, 1,sizeof(struct rlimit), "getrlimit");
 		sc_ret_v(regfile, 0);
 		break;
 	case SYS_getrusage:
 		sc_ret_v(regfile, 0);
-		make_sym(GET_ARG1(regfile), sizeof(struct rusage), "getrusage");
+		make_sym_by_arg(regfile, 1, sizeof(struct rusage), "getrusage");
 		break;
 	case SYS_getdents:
 		new_regs = sc_new_regs(regfile);
 		sc_ret_or(new_regs, 0, -1);
 		if ((int64_t)GET_RAX(new_regs) == -1)
 			break;
-		make_sym(GET_ARG1(regfile), GET_ARG2(regfile), "getdents");
+		make_sym_by_arg(regfile, 1, GET_ARG2(regfile), "getdents");
 		break;
 	FAKE_SC(unlink)
 	FAKE_SC(fchmod)
@@ -376,8 +409,9 @@ void* sc_enter(void* regfile, void* jmpptr)
 			(uint64_t)(mhdr->msg_iov[0].iov_base),
 			mhdr->msg_iov[0].iov_len,
 			"recvmsg_iov");
-		mhdr->msg_controllen = 0;
+		mhdr->msg_controllen = 0;	/* XXX update? */
 		sc_ret_v(regfile, mhdr->msg_iov[0].iov_len);
+		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
 	}
 	break;
 
@@ -395,6 +429,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			*((socklen_t*)GET_ARG5(regfile)) = sizeof(struct sockaddr_in);
 		}
 		sc_ret_v(regfile, GET_ARG2(regfile));
+		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
 		break;
 	case SYS_sendto:
 		sc_ret_or(sc_new_regs(regfile), -1, GET_ARG2(regfile));
@@ -431,6 +466,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			sizeof(struct sockaddr_in),
 			"getsockname");
 		*((socklen_t*)GET_ARG2(regfile)) = sizeof(struct sockaddr_in);
+		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
 		break;
 
 	case SYS_pipe2:
@@ -441,7 +477,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 	case SYS_mmap:
 		new_regs = sc_mmap(regfile);
-		kmc_sc_log(SYS_mmap, GET_RAX(new_regs), sc_flags);
+		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
+		sc_breadcrumb_commit(sys_nr, GET_RAX(new_regs));
 		goto already_logged;
 	case SYS_socket:
 		klee_warning_once("phony socket call");
@@ -474,6 +511,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		klee_assume(GET_ARG2(regfile) >= 2);
 		sc_ret_range(new_regs, 1, 2);
 		make_sym(addr, GET_ARG2(regfile), "readlink");
+		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
 		((char*)addr)[GET_ARG2(new_regs)] = '\0';
 	}
 	break;
@@ -500,7 +538,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	}
 
-	kmc_sc_log(sys_nr, 0, sc_flags);
+	sc_breadcrumb_commit(sys_nr, 0);
 already_logged:
 	return jmpptr;
 }

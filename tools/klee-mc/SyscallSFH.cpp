@@ -3,6 +3,7 @@
 #include "ExeStateVex.h"
 #include "SyscallSFH.h"
 #include "guestcpustate.h"
+#include "klee/breadcrumb.h"
 
 extern "C"
 {
@@ -28,7 +29,7 @@ static SpecialFunctionHandler::HandlerInfo hInfo[NUM_HANDLERS] =
 	addDNR("kmc_exit", KMCExit),
 	add("kmc_make_range_symbolic", MakeRangeSymbolic, false),
 	add("kmc_alloc_aligned", AllocAligned, true),
-	add("kmc_sc_log", LogSysCall, false)
+	add("kmc_breadcrumb", Breadcrumb, false)
 #undef addDNR
 #undef add
 };
@@ -194,6 +195,33 @@ SFH_DEF_HANDLER(MakeRangeSymbolic)
 	sc_sfh->makeRangeSymbolic(state, (void*)addr_v, len_v, name_str.c_str());
 }
 
+SFH_DEF_HANDLER(Breadcrumb)
+{
+	SFH_CHK_ARGS(2, "kmc_breadcrumb");
+	ConstantExpr		*len_expected_ce;
+	struct breadcrumb	*bc;
+	unsigned char		*buf;
+	unsigned int		len_in, len_expected;
+
+	len_expected_ce = dyn_cast<ConstantExpr>(arguments[1]);
+	len_expected = (unsigned int)len_expected_ce->getZExtValue();
+	buf = sfh->readBytesAtAddress(state, arguments[0], len_expected, len_in, -1);
+	bc = (struct breadcrumb*)buf;
+	if (len_in < sizeof(struct breadcrumb) || bc->bc_sz != len_in) {
+		fprintf(stderr, "GOT LENGTH %d. Expected %d\n", len_in, bc->bc_sz);
+		assert (0 == 1);
+		sfh->executor->terminateStateOnError(
+			state,
+			"Breadcrumb error: Bad length",
+			"breadcrumb.err");
+		goto done;
+	}
+
+	(static_cast<ExeStateVex&>(state)).recordBreadcrumb(bc);
+done:
+	delete [] buf;
+}
+
 SFH_DEF_HANDLER(AllocAligned)
 {
 	MemoryObject	*new_mo;
@@ -233,35 +261,6 @@ SFH_DEF_HANDLER(AllocAligned)
 	exe_vex->executeMakeSymbolic(state, new_mo, name_str.c_str());
 
 	state.bindLocal(target, ConstantExpr::create(addr, 64));
-}
-
-SFH_DEF_HANDLER(LogSysCall)
-{
-	SFH_CHK_ARGS(3, "kmc_log_sc");
-	ConstantExpr*	ce;
-	uint64_t	sysnr, ret_aux, flags;
-
-	ce = dyn_cast<ConstantExpr>(arguments[0]);
-	if (ce == NULL) goto err;
-	sysnr = ce->getZExtValue();
-
-	ce = dyn_cast<ConstantExpr>(arguments[1]);
-	if (ce == NULL) goto err;
-	ret_aux = ce->getZExtValue();
-
-	ce = dyn_cast<ConstantExpr>(arguments[2]);
-	if (ce == NULL) goto err;
-	flags = ce->getZExtValue();
-
-
-	(static_cast<ExeStateVex&>(state)).recordSyscall(sysnr, ret_aux, flags);
-	return;
-
-err:
-	sfh->executor->terminateStateOnError(
-		state,
-		"kmc_log_sc error: non-CE exprs.",
-		"mrs.err");
 }
 
 void SyscallSFH::makeSymbolicTail(

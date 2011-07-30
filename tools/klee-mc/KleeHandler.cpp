@@ -428,8 +428,7 @@ void KleeHandler::processTestCase(
 
   const ExeStateVex	*esv = dynamic_cast<const ExeStateVex*>(&state);
   assert (esv != NULL);
-  dumpLog("reglog", id, esv->regsBegin(), esv->regsEnd());
-  dumpLog("sclog", id, esv->scBegin(), esv->scEnd());
+  dumpLog("crumbs", id, esv->crumbBegin(), esv->crumbEnd());
   fprintf(stderr, "=========DONE WRITING OUT TESTID=%d\n", id);
 }
 
@@ -437,7 +436,7 @@ void KleeHandler::processTestCase(
 void KleeHandler::dumpLog(
 	const char* name,
 	unsigned id,
-	RegLog::const_iterator begin, RegLog::const_iterator end)
+	RecordLog::const_iterator begin, RecordLog::const_iterator end)
 {
 	if (begin == end) return;
 

@@ -33,11 +33,11 @@ void PoisonCache::sig_poison(int signum, siginfo_t *si, void *p)
 		snprintf(
 			path,
 			128,
-			POISON_DEFAULT_PATH".%s", 
+			POISON_DEFAULT_PATH".%s",
 			g_pc->phash->getName());
-		write(STDERR_FILENO, "saving ", 7);
-		write(STDERR_FILENO, path, strlen(path));
-		write(STDERR_FILENO, "\n", 1);
+		bw = write(STDERR_FILENO, "saving ", 7);
+		bw = write(STDERR_FILENO, path, strlen(path));
+		bw = write(STDERR_FILENO, "\n", 1);
 		fd = open(path, O_WRONLY | O_APPEND | O_CREAT, 0600);
 		bw = write(fd, &g_pc->hash_last, sizeof(g_pc->hash_last));
 		close(fd);
@@ -191,7 +191,7 @@ public:
 		v = ce->getZExtValue();
 		if (v < 0x100000) return Action::doChildren();
 
-		if (v != ~0) v++;
+		if (v != ~0ULL) v++;
 		new_ce = ConstantExpr::alloc(
 			(++const_counter) % v,
 			ce->getWidth());
@@ -202,8 +202,8 @@ public:
 /* I noticed that we weren't seeing much results across runs. We assume that
  * this is from nondeterministic pointers gunking up the query.
  *
- * So, rewrite expressions that look like pointers into deterministic values. 
- * NOTE: We need to use several patterns here to test whether the SMT can be 
+ * So, rewrite expressions that look like pointers into deterministic values.
+ * NOTE: We need to use several patterns here to test whether the SMT can be
  * smart about partitioning with low-value constants.
  *
  * (XXX is this true? test with experiments, follow up with literature eval)
@@ -228,16 +228,15 @@ unsigned PHRewritePtr::hash(const Query& q) const
 	return new_q.hash();
 }
 
-/* Just to be sure that the hash Daniel gave us didn't have a lot of 
+/* Just to be sure that the hash Daniel gave us didn't have a lot of
  * bad collisions, we're using a cryptographic hash on the string. */
 unsigned PHExprStrSHA::hash(const Query& q) const
 {
 	std::string	s;
 	unsigned char	md[SHA_DIGEST_LENGTH];
-	unsigned	ret;
 
 	s = Support::printStr(q);
 	SHA1((const unsigned char*)s.c_str(), s.size(), md);
 
-	return *((unsigned*)md); // XXX stupid
+	return *reinterpret_cast<unsigned*>(md); // XXX stupid
 }

@@ -1,0 +1,17 @@
+#!/bin/bash
+
+TIMEOUT=240
+if [ -z "$1" ]; then
+	echo "Please provide command argument"
+	exit -1
+fi
+rm -rf guest-*
+rm -rf klee-out-*
+VEXLLVM_SAVE=1 pt_run $1
+ulimit -v 2200000
+klee-mc -max-memory=2048  -use-pcache-rewriteptr  -guest-type=sshot - $1 &
+kmcpid="$!"
+( sleep $TIMEOUT &&  kill -s SIGUSR1 $kmcpid 2>/dev/null && kill -9 $kmcpid 2>/dev/null ) &
+wait $kmcpid && echo DONE
+
+echo woooooooooo

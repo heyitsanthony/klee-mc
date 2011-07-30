@@ -6,6 +6,7 @@
 #include "vexexec.h"
 
 class SyscallsKTest;
+class Crumbs;
 
 class ReplayExec : public VexExec
 {
@@ -13,12 +14,10 @@ public:
 	virtual ~ReplayExec();
 
 	void setSyscallsKTest(SyscallsKTest* in_skt);
-	void setRegLog(const char* reglog_fname);
-
+	void setCrumbs(Crumbs* in_c) { crumbs = in_c; }
 	ReplayExec(Guest* gs, VexXlate* vx = NULL)
-	: VexExec(gs, vx),
-	  skt(NULL),
-	  f_reglog(NULL)
+	: VexExec(gs, vx)
+	, skt(NULL)
 	{ }
 
 protected:
@@ -30,8 +29,8 @@ private:
 	uint8_t*	feedRegLog(void);
 	void		dumpRegBuf(const uint8_t*);
 
-	SyscallsKTest	*skt;
-	FILE		*f_reglog;
+	SyscallsKTest	*skt;		/* destroyed by superclass dtor */
+	Crumbs		*crumbs;	/* not owner */
 };
 
 #endif

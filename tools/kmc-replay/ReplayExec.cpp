@@ -75,19 +75,15 @@ guest_ptr ReplayExec::doVexSB(VexSB* sb)
 	return next_pc;
 }
 
-ReplayExec::~ReplayExec()
-{
-	if (f_reglog) fclose(f_reglog);
-}
+ReplayExec::~ReplayExec() {}
 
 uint8_t* ReplayExec::verifyWithRegLog(void)
 {
+	return NULL;
+#if 0
 	uint8_t		*mask_buf, *reg_buf;
 	const uint8_t	*guest_buf;
 	unsigned int	reg_sz;
-
-	if (f_reglog == NULL) return NULL;
-
 	reg_buf = feedRegLog();
 	if (reg_buf == NULL) return NULL;
 
@@ -115,20 +111,12 @@ uint8_t* ReplayExec::verifyWithRegLog(void)
 	delete [] mask_buf;
 	delete [] reg_buf;
 	return NULL;
-}
-
-void ReplayExec::setRegLog(const char* reglog_fname)
-{
-	f_reglog = fopen(reglog_fname, "rb");
-	if (f_reglog == NULL) {
-		fprintf(stderr,
-			"Could not open reglog \"%s\". ~~~~UNVERIFIED RUN~~~~\n",
-			reglog_fname);
-	}
+#endif
 }
 
 uint8_t* ReplayExec::feedRegLog(void)
 {
+#if 0
 	uint8_t		*ret;
 	unsigned int	reg_sz;
 	ssize_t		br;
@@ -144,4 +132,6 @@ uint8_t* ReplayExec::feedRegLog(void)
 	}
 
 	return ret;
+#endif
+	return NULL;
 }

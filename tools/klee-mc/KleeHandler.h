@@ -69,7 +69,7 @@ typedef
 	void dumpLog(
 		const char* name,
 		unsigned id,
-		RegLog::const_iterator begin, RegLog::const_iterator end);
+		RecordLog::const_iterator begin, RecordLog::const_iterator end);
 };
 
 }

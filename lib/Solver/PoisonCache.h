@@ -78,7 +78,7 @@ public:
 		klee_message(
 			((std::string("%*s PoisonCache (")+
 				phash->getName())+
-				") containing: ").c_str(), 
+				") containing: ").c_str(),
 			2*level,  "");
 		wrappedSolver->printName(level + 1);
 	}

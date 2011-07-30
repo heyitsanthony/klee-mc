@@ -62,6 +62,14 @@ cscope.files:
 test::
 	-(cd test/ && make)
 
+.PHONY: mc
+mc:
+	mkdir -p mc_tmp
+	cd mc_tmp && ar x ../Release/lib/libkleeRuntimeMC.bca && cd ..
+	which llvm-link
+	llvm-link -f -o Release/lib/libkleeRuntimeMC.bc mc_tmp/*.bc
+	rm -rf mc_tmp
+
 .PHONY: klee-cov
 klee-cov:
 	rm -rf klee-cov

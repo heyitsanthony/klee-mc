@@ -3,17 +3,18 @@
 
 #include "klee/ExecutionState.h"
 
+struct breadcrumb;
+
 namespace klee
 {
 
-typedef std::vector <std::vector<unsigned char> > RegLog;
+typedef std::vector <std::vector<unsigned char> > RecordLog;
 class ExeStateVex : public ExecutionState
 {
 private:
 	ExeStateVex &operator=(const ExeStateVex&);
 
-	RegLog		reg_log;
-	RegLog		sc_log;
+	RecordLog	bc_log;
 	MemoryObject	*reg_mo;
 
 protected:
@@ -43,14 +44,11 @@ public:
 
 	virtual ~ExeStateVex() {}
 
+	void recordBreadcrumb(const struct breadcrumb* );
+	RecordLog::const_iterator crumbBegin(void) const { return bc_log.begin(); }
+	RecordLog::const_iterator crumbEnd(void) const { return bc_log.end(); }
+
 	void recordRegisters(const void* regs, int sz);
-	RegLog::const_iterator regsBegin(void) const { return reg_log.begin(); }
-	RegLog::const_iterator regsEnd(void) const { return reg_log.end(); }
-
-	void recordSyscall(uint64_t sysnr, uint64_t ret, uint64_t flags);
-	RegLog::const_iterator scBegin(void) const { return sc_log.begin(); }
-	RegLog::const_iterator scEnd(void) const { return sc_log.end(); }
-
 
 	MemoryObject* setRegCtx(MemoryObject* mo)
 	{

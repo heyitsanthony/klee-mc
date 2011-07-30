@@ -196,52 +196,81 @@ bool SpecialFunctionHandler::handle(
 
 /****/
 
+unsigned char* SpecialFunctionHandler::readBytesAtAddressNoBound(
+	ExecutionState &state,
+	ref<Expr> addressExpr,
+	unsigned int& len,
+	int terminator)
+{
+	return readBytesAtAddress(state, addressExpr, ~0, len, terminator);
+}
+
+unsigned char* SpecialFunctionHandler::readBytesAtAddress(
+	ExecutionState &state,
+	ref<Expr> addressExpr,
+	unsigned int maxlen,
+	unsigned int& len,
+	int terminator)
+{
+	const MemoryObject	*mo;
+	const ObjectState	*os;
+	unsigned char		*buf;
+	uint64_t		offset;
+	ObjectPair		op;
+	ref<ConstantExpr>	address;
+
+	addressExpr = executor->toUnique(state, addressExpr);
+	address = cast<ConstantExpr>(addressExpr);
+
+	assert (address.get() && "Expected constant address");
+	if (!state.addressSpace.resolveOne(address, op)) {
+		assert(	0 &&
+			"XXX out of bounds / multiple resolution unhandled");
+	}
+
+	mo = op.first;
+	os = op.second;
+
+	offset = address->getZExtValue() - op.first->getBaseExpr()->getZExtValue();
+	assert (offset < mo->size);
+
+	buf = new unsigned char[(mo->size-offset)+1];
+
+	len = 0;
+	for (	unsigned i = offset;
+		i < mo->size && (i-offset < maxlen);
+		i++)
+	{
+		ref<Expr> cur;
+
+		cur = state.read8(os, i);
+		cur = executor->toUnique(state, cur);
+		assert(	isa<ConstantExpr>(cur) &&
+			"hit symbolic char while reading concrete string");
+		buf[i-offset] = cast<ConstantExpr>(cur)->getZExtValue(8);
+		if ((int)buf[i-offset] == terminator) {
+			buf[i-offset] = '\0';
+			break;
+		}
+		len++;
+	}
+
+	return buf;
+}
+
+
 // reads a concrete string from memory
 std::string
 SpecialFunctionHandler::readStringAtAddress(
   ExecutionState &state,
   ref<Expr> addressExpr)
 {
-  ObjectPair op;
-  ref<ConstantExpr> address;
-
-  addressExpr = executor->toUnique(state, addressExpr);
-  address = cast<ConstantExpr>(addressExpr);
-
-  assert (address.get() && "Expected constant address");
-  if (!state.addressSpace.resolveOne(address, op)) {
-    assert(0 && "XXX out of bounds / multiple resolution unhandled");
-  }
-
-  const MemoryObject	*mo;
-  const ObjectState	*os;
-  char			*buf;
-  uint64_t		offset;
-
-  mo = op.first;
-  os = op.second;
-
-  offset = address->getZExtValue() - op.first->getBaseExpr()->getZExtValue();
-  assert (offset < mo->size);
-
-  buf = new char[(mo->size-offset)+1];
-
-  unsigned i;
-  for (i = offset; i < mo->size - 1; i++) {
-    ref<Expr> cur;
-
-    cur = state.read8(os, i);
-    cur = executor->toUnique(state, cur);
-    assert(isa<ConstantExpr>(cur) &&
-           "hit symbolic char while reading concrete string");
-    buf[i-offset] = cast<ConstantExpr>(cur)->getZExtValue(8);
-    if (!buf[i-offset]) break;
-  }
-  buf[i-offset] = 0;
-
-  std::string result(buf);
-  delete[] buf;
-  return result;
+	unsigned char*	buf;
+	unsigned int	out_len;
+	buf = readBytesAtAddressNoBound(state, addressExpr, out_len, 0);
+	std::string result((const char*)buf);
+	delete[] buf;
+	return result;
 }
 
 /****/
