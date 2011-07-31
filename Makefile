@@ -70,6 +70,12 @@ mc:
 	llvm-link -f -o Release/lib/libkleeRuntimeMC.bc mc_tmp/*.bc
 	rm -rf mc_tmp
 
+.PHONY: kmc-bintests
+kmc-bintests: all
+	bintests/run_bin.sh
+	bintests/process.sh
+	bintests/mkreport.py
+
 .PHONY: klee-cov
 klee-cov:
 	rm -rf klee-cov
