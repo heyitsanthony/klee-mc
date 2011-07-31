@@ -18,3 +18,9 @@ CFLAGS="-g -O3 -I${STPDIR}/include"	\
 		--with-runtime=Release 
 
 make -j6 REQUIRES_RTTI=1
+make mc
+if [ -z "$VEXLLVM_HELPER_PATH" ]; then
+	echo "Can't find vex bitcode path. Not copying libkleeRuntimeMC.bc"
+else
+	cp Release/lib/libkleeRuntimeMC.bc "$VEXLLVM_HELPER_PATH"/
+fi
