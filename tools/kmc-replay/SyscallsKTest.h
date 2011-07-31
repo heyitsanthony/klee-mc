@@ -18,6 +18,9 @@ private:
 		const char* fname_ktest,
 		Crumbs* in_crumbs);
 
+	void badCopyBail(void);
+	void feedSyscallOp(SyscallParams& sp);
+
 	char* feedMemObj(unsigned int sz);
 	bool copyInRegMemObj(void);
 	bool copyInMemObj(uint64_t user_addr, unsigned int sz);

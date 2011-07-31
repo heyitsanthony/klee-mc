@@ -25,6 +25,14 @@ void kmc_exit(uint64_t);
 void kmc_make_range_symbolic(uint64_t, uint64_t, const char*);
 void* kmc_alloc_aligned(uint64_t, const char* name);
 
+#define FAILURE_RATE	4
+struct fail_counters
+{
+	unsigned int	fc_read;
+	unsigned int	fc_stat;
+	unsigned int	fc_write;
+} fail_c;
+
 // arg0, arg1, ...
 // %rdi, %rsi, %rdx, %r10, %r8 and %r9a
 
@@ -148,7 +156,7 @@ void make_sym(uint64_t addr, uint64_t len, const char* name)
 	addr = klee_get_value(addr);
 	len = klee_get_value(len);
 	kmc_make_range_symbolic(addr, len, name);
-	sc_breadcrumb_add_ptr(addr, len);
+	sc_breadcrumb_add_ptr((void*)addr, len);
 }
 
 void make_sym_by_arg(
@@ -229,9 +237,18 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	case SYS_munmap:
 		sc_munmap(regfile);
+		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
 		break;
 	case SYS_write:
-		sc_ret_or(sc_new_regs(regfile), -1, GET_ARG2(regfile));
+		if (fail_c.fc_write % (2*FAILURE_RATE)) {
+			new_regs = sc_new_regs(regfile);
+			if ((++fail_c.fc_write % (2*FAILURE_RATE)) == 0 &&
+			    (int64_t)GET_RAX(new_regs) == -1) {
+				break;
+			}
+			sc_ret_v(new_regs, GET_ARG2(regfile));
+		} else
+			sc_ret_v(regfile, GET_ARG2(regfile));
 		break;
 	case SYS_exit:
 	case SYS_exit_group: {
@@ -290,8 +307,13 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_read: {
 		uint64_t len = klee_get_value(GET_ARG2(regfile));
 
+//		This is an error case that we should probably make optional
+//		since this causes the state space to explode into really useless
+//		code.
+//
 		new_regs = sc_new_regs(regfile);
-		if ((int64_t)GET_RAX(new_regs) == -1) {
+		if ((++fail_c.fc_read % FAILURE_RATE) == 0 &&
+		    (int64_t)GET_RAX(new_regs) == -1) {
 			break;
 		}
 		sc_ret_v(new_regs, len);
@@ -328,7 +350,9 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_lstat:
 	case SYS_stat: {
 		new_regs = sc_new_regs(regfile);
-		if ((int64_t)GET_RAX(new_regs) == -1) {
+		if (	(++fail_c.fc_stat % FAILURE_RATE) == 0 &&
+			(int64_t)GET_RAX(new_regs) == -1)
+		{
 			break;
 		}
 		sc_ret_v(new_regs, 0);
@@ -549,7 +573,14 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	}
 
-	sc_breadcrumb_commit(sys_nr, 0);
+	if (sc_breadcrumb_is_newregs()) {
+		/* ret value is stored in ktest regctx */
+		sc_breadcrumb_commit(sys_nr, 0);
+	} else {
+		/* ret value was written concretely */
+		sc_breadcrumb_commit(sys_nr, GET_RAX(regfile));
+	}
+
 already_logged:
 	return jmpptr;
 }

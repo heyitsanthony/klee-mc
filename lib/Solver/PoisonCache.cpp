@@ -43,11 +43,16 @@ void PoisonCache::sig_poison(int signum, siginfo_t *si, void *p)
 		close(fd);
 	}
 
-	bw = write(STDERR_FILENO, "die\n", 4);
-	assert (bw == 4);
-
-	/* die. */
-	kill(0, SIGKILL);
+	bw = write(STDERR_FILENO, "die!\n", 5);
+	assert (bw == 5);
+	kill(getpid(), SIGHUP);
+	kill(getpid(), SIGABRT);
+	raise(SIGHUP);
+	raise(SIGCHLD);
+	raise(SIGTERM);
+	kill(getpid(), SIGCHLD);
+	kill(getpid(), SIGTERM);
+	kill(getpid(), SIGKILL);
 
 	bw = write(STDERR_FILENO, "die!\n", 5);
 	assert (bw == 5);
@@ -55,6 +60,12 @@ void PoisonCache::sig_poison(int signum, siginfo_t *si, void *p)
 
 	bw = write(STDERR_FILENO, "die!!\n", 6);
 	assert (bw == 5);
+	abort();
+
+	raise(SIGTERM);
+	kill(0, SIGHUP);
+	kill(0, SIGTERM);
+	kill(0, SIGKILL);
 }
 
 

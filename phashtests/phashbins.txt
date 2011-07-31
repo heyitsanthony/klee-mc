@@ -1,0 +1,10 @@
+/sbin/fsck.ntfs asd
+/usr/bin/pngtopnm
+/usr/bin/pdftohtml asd.pdf
+/usr/bin/dig asd
+/usr/bin/opt asd.ll
+/usr/bin/swfdump --full asd.swf
+/usr/bin/gifflip asd.gif
+/usr/bin/unrar x asd.rar
+/usr/bin/nasm asd
+/usr/bin/bc -l

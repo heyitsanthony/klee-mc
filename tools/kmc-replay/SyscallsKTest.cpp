@@ -66,6 +66,18 @@ SyscallsKTest::~SyscallsKTest(void)
 	if (bcs_crumb) delete bcs_crumb;
 }
 
+void SyscallsKTest::badCopyBail(void)
+{
+	fprintf(stderr,
+		KREPLAY_NOTE
+		"Could not copy in memobj\n");
+	exited = true;
+	fprintf(stderr,
+		KREPLAY_NOTE
+		"Wrong guest sshot for this ktest?\n");
+	abort();
+}
+
 void SyscallsKTest::loadSyscallEntry(SyscallParams& sp)
 {
 	uint64_t sys_nr = sp.getSyscall();
@@ -95,33 +107,53 @@ void SyscallsKTest::loadSyscallEntry(SyscallParams& sp)
 	}
 
 	assert (bcs_crumb->bcs_sysnr == sys_nr && "sysnr mismatch with log");
-	if (bc_sc_is_newregs(bcs_crumb)) {
-		bool	reg_ok;
 
-		reg_ok = copyInRegMemObj();
-		if (!reg_ok) {
-			fprintf(stderr,
-				KREPLAY_NOTE
-				"Could not copy in regmemobj\n");
-			exited = true;
-			fprintf(stderr,
-				KREPLAY_NOTE
-				"Wrong guest sshot for this ktest?\n");
-			abort();
-			return;
-		}
+	/* setup new register context */
+	if (bc_sc_is_newregs(bcs_crumb)) {
+		if (!copyInRegMemObj())
+			badCopyBail();
+	} else {
+		setRet(bcs_crumb->bcs_ret);
 	}
 
+	/* read in any objects written out */
+	/* note that thunked calls need to manage mem objects specially */
+	if (!bc_sc_is_thunk(bcs_crumb)) {
+		for (unsigned int i = 0; i < bcs_crumb->bcs_op_c; i++) {
+			feedSyscallOp(sp);
+		}
+	}
 }
+
+void SyscallsKTest::feedSyscallOp(SyscallParams& sp)
+{
+	struct bc_sc_memop	*sop;
+	uint64_t		dst_ptr;
+	unsigned int		flags;
+	bool			ok;
+
+	sop = reinterpret_cast<struct bc_sc_memop*>(crumbs->next());
+	assert (sop != NULL && "Too few memops?");
+	assert (sop->sop_hdr.bc_type == BC_TYPE_SCOP);
+
+	flags = sop->sop_hdr.bc_type_flags;
+	if (flags & BC_FL_SCOP_USERPTR) {
+		dst_ptr = (uint64_t)sop->sop_baseptr.ptr;
+	} else if (flags & BC_FL_SCOP_ARGPTR) {
+		dst_ptr = sp.getArg(sop->sop_baseptr.ptr_sysarg);
+	} else {
+		assert (0 == 1 && "Bad syscall op flags");
+	}
+
+	if (!copyInMemObj((uint64_t)dst_ptr + sop->sop_off, sop->sop_sz))
+		badCopyBail();
+
+	delete sop;
+}
+
 
 //fprintf(stderr, "Faking syscall "#x" (%p,%p,%p)\n",
 //	sp.getArg(0), sp.getArg(1), sp.getArg(2));
-
-
-#define FAKE_SC(x) 		\
-	case SYS_##x:		\
-	setRet(0);		\
-	break;
 
 
 uint64_t SyscallsKTest::apply(SyscallParams& sp)
@@ -134,94 +166,30 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 
 	fprintf(stderr, KREPLAY_NOTE"Applying: sys=%d\n", sys_nr);
 	loadSyscallEntry(sp);
-	/* load in extras */
-
 
 	/* extra thunks */
 	switch(sys_nr) {
-	case SYS_close: break;
-	case SYS_read:
-		if (getRet() != -1) {
-			bool	ok;
-			ok = copyInMemObj(sp.getArg(1), sp.getArg(2));
-			assert (ok && "OOPS BAD READ");
-		}
-		break;
-	case SYS_brk:
-		setRet(-1);
-		break;
 	case SYS_open:
 		fprintf(stderr, KREPLAY_SC "OPEN \"%s\" ret=%p\n",
 			sp.getArg(0), getRet());
 		break;
 	case SYS_write:
-		fprintf(stderr, KREPLAY_SC "WRITING %d bytes to fd=%d \"%s\"\n",
-			sp.getArg(2), sp.getArg(0), sp.getArg(1));
+		fprintf(stderr,
+			KREPLAY_SC "WRITING %d bytes to fd=%d :\"\n",
+			sp.getArg(2), sp.getArg(0));
+		write(STDERR_FILENO, (void*)sp.getArg(1), sp.getArg(2));
+		fprintf(stderr, "\n" KREPLAY_SC "\".\n");
+
 		break;
-	FAKE_SC(rt_sigaction)
-	FAKE_SC(rt_sigprocmask)
-	FAKE_SC(fadvise64)
 	case SYS_tgkill:
 		if (sp.getArg(2) == SIGABRT)
 			exited = true;
-		break;
-	case SYS_lseek:
-		assert ((int64_t)getRet() >= -1 &&
-			(int64_t)getRet() <= 4096 && "mismatches model");
-		break;
-
-	case SYS_readlink: {
-		bool ok;
-		ok = copyInMemObj(sp.getArg(1), sp.getArg(2));
-		assert (ok && "OOPS BAD READ");
-	}
-
-	case SYS_recvmsg: {
-		struct msghdr	*mhdr;
-		bool		ok;
-
-		mhdr = (struct msghdr*)sp.getArg(1);
-		ok = copyInMemObj(
-			(intptr_t)(&mhdr->msg_iov[0].iov_base),
-			mhdr->msg_iov[0].iov_len);
-		assert (ok && "BAD RECVMSG");
-		mhdr->msg_controllen = 0;
-	}
-	break;
-
-	case SYS_poll: {
-		struct pollfd	*fds;
-		uint64_t	poll_addr;
-		unsigned int	i, nfds;
-
-		poll_addr = sp.getArg(0);
-		fds = (struct pollfd*)poll_addr;
-		nfds = sp.getArg(1);
-
-		for (i = 0; i < nfds; i++) fds[i].revents = fds[i].events;
-		break;
-	}
-	case SYS_sendto:
-	case SYS_connect:
-	case SYS_socket:
-	case SYS_getgid:
-	case SYS_getuid:
-	case SYS_geteuid:
-	case SYS_getpid:
-	case SYS_gettid:
-	case SYS_ioctl:
-	case SYS_setgid:
-	case SYS_setuid:
 		break;
 	case SYS_munmap:
 		sc_munmap(sp);
 		break;
 	case SYS_mmap:
 		sc_mmap(sp);
-		break;
-	case SYS_fstat:
-	case SYS_stat:
-		sc_stat(sp);
 		break;
 	case SYS_exit_group:
 	case SYS_exit:
@@ -302,21 +270,6 @@ char* SyscallsKTest::feedMemObj(unsigned int sz)
 	memcpy(obj_buf, cur_obj->bytes, sz);
 
 	return obj_buf;
-}
-
-/* XXX the vexguest stuff needs to be pulled into guestcpustate */
-void SyscallsKTest::sc_stat(SyscallParams& sp)
-{
-	if (getRet() != 0) return;
-
-	if (!copyInMemObj(sp.getArg(1), sizeof(struct stat))) {
-		fprintf(stderr, KREPLAY_NOTE"failed to copy in memobj\n");
-		exited = true;
-		fprintf(stderr,
-			"Do you have the right guest sshot for this ktest?");
-		abort();
-		return;
-	}
 }
 
 bool SyscallsKTest::copyInMemObj(uint64_t guest_addr, unsigned int sz)

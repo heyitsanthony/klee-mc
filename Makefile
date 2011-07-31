@@ -76,6 +76,10 @@ kmc-bintests: all
 	bintests/process.sh
 	bintests/mkreport.py
 
+.PHONY: phash-analyze
+phash-analyze:
+	phashtests/kmc-phash-convergence
+
 .PHONY: klee-cov
 klee-cov:
 	rm -rf klee-cov

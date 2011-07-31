@@ -5,13 +5,19 @@ if [ -z "$1" ]; then
 	echo "Please provide command argument"
 	exit -1
 fi
-rm -rf guest-*
-rm -rf klee-out-*
+
+if [ -z "$KMC_RNR_NOCLOBBER" ]; then
+	echo "WARNING: Clobbering your guest and klee-out files. "
+	echo "INFO: Big spenders set env var KMC_RNR_NOCLOBBER=1"
+	rm -rf guest-*
+	rm -rf klee-out-*
+fi
+
+echo "INFO: Uses a new guest every time. Slow?"
+
 VEXLLVM_SAVE=1 pt_run $1
 ulimit -v 2200000
 klee-mc -max-memory=2048  -use-pcache-rewriteptr  -guest-type=sshot - $1 &
 kmcpid="$!"
 ( sleep $TIMEOUT &&  kill -s SIGUSR1 $kmcpid 2>/dev/null && kill -9 $kmcpid 2>/dev/null ) &
 wait $kmcpid && echo DONE
-
-echo woooooooooo

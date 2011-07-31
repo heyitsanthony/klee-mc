@@ -1,16 +1,22 @@
 #!/bin/bash
 
 # Stack traces of potential bugs
-ERRXML="bintests/out/err.xml"
+if [ -z "$KMC_RUN_OUTPUTPATH" ]; then
+	KMC_RUN_OUTPUTPATH="bintests/out/"
+fi
+
+ls "$KMC_RUN_OUTPUTPATH"/*/klee-last/*.err
+
+ERRXML="$KMC_RUN_OUTPUTPATH/err.xml"
 echo '<?xml version="1.0" encoding="ISO-8859-1"?>' >$ERRXML
 echo '<?xml-stylesheet type="text/xsl" href="err.xsl"?>' >>$ERRXML
 echo "<errors>" >>$ERRXML
-for a in bintests/out/*/klee-last/*err; do
+for a in "$KMC_RUN_OUTPUTPATH"/*/klee-last/*err; do
 	base=`echo $a | cut -f3 -d'/'`
 	echo "<error>"
 	echo "<errfile>"`echo "$a" | sed 's/\//\n/g' | tail -n1`"</errfile>"
 	echo -n "<cmdline>"
-	cat bintests/out/$base/line
+	cat "$KMC_RUN_OUTPUTPATH"/$base/line 2>/dev/null
 	echo "</cmdline>"
 	echo "<frames>"
 	grep Stack -A30 $a | grep "^[[:space:]]*#" | awk ' { print "<frame>"$0"</frame>" } '
@@ -36,54 +42,56 @@ for a in bintests/out/*/klee-last/*err; do
 done >>$ERRXML
 echo "</errors>" >>$ERRXML
 
+echo asdasd
 # get runs that timed out
-for a in bintests/out/*/timeout.txt; do
-	cat bintests/out/`echo $a | cut -f3 -d'/'`/line
-done >bintests/out/timeouts.txt
+
+for a in "$KMC_RUN_OUTPUTPATH"/*/timeout.txt; do
+	cat "$KMC_RUN_OUTPUTPATH"/`echo $a | cut -f3 -d'/'`/line 2>/dev/null
+done >"$KMC_RUN_OUTPUTPATH"/timeouts.txt
 
 # runs that died from the crappy solver
-for a in bintests/out/*/klee-last/warnings.txt; do
+for a in "$KMC_RUN_OUTPUTPATH"/*/klee-last/warnings.txt; do
 	x=`tail -n1 $a | egrep -i "(flushing|ministat)"`
 	if [ -z "$x" ]; then
 		continue
 	fi
-	cat bintests/out/`echo $a | cut -f3 -d'/'`/line
-done >bintests/out/"badsolver.txt"
+	cat "$KMC_RUN_OUTPUTPATH"/`echo $a | cut -f3 -d'/'`/line 2>/dev/null
+done >"$KMC_RUN_OUTPUTPATH"/"badsolver.txt"
 
-for a in bintests/out/*/stderr; do
+for a in "$KMC_RUN_OUTPUTPATH"/*/stderr; do
 	x=`tail -n1 $a | grep -i "KLEE: done:"`
 	if [ -z "$x" ]; then
 		continue
 	fi
-	cat bintests/out/`echo $a | cut -f3 -d'/'`/line
-done >bintests/out/"done.txt"
+	cat "$KMC_RUN_OUTPUTPATH"/`echo $a | cut -f3 -d'/'`/line 2>/dev/null
+done >"$KMC_RUN_OUTPUTPATH"/"done.txt"
 
-for a in bintests/out/*/stderr; do
+for a in "$KMC_RUN_OUTPUTPATH"/*/stderr; do
 	x=`grep -i "Error" $a`
 	if [ -z "$x" ]; then
 		continue
 	fi
-	cat bintests/out/`echo $a | cut -f3 -d'/'`/line
-done >bintests/out/"error.txt"
+	cat "$KMC_RUN_OUTPUTPATH"/`echo $a | cut -f3 -d'/'`/line 2>/dev/null
+done >"$KMC_RUN_OUTPUTPATH"/"error.txt"
 
-for a in bintests/out/*/stderr; do
+for a in "$KMC_RUN_OUTPUTPATH"/*/stderr; do
 	x=`grep -i "UNKNOWN SYSCALL" $a`
 	if [ -z "$x" ]; then
 		continue
 	fi
-	cat bintests/out/`echo $a | cut -f3 -d'/'`/line
-done >bintests/out/"syscall.txt"
+	cat "$KMC_RUN_OUTPUTPATH"/`echo $a | cut -f3 -d'/'`/line 2>/dev/null
+done >"$KMC_RUN_OUTPUTPATH"/"syscall.txt"
 
-for a in bintests/out/*/stderr; do
+for a in "$KMC_RUN_OUTPUTPATH"/*/stderr; do
 	x=`grep -i "assert_fail" $a`
 	if [ -z "$x" ]; then
 		continue
 	fi
-	cat bintests/out/`echo $a | cut -f3 -d'/'`/line
-done >bintests/out/"abort.txt"
+	cat "$KMC_RUN_OUTPUTPATH"/`echo $a | cut -f3 -d'/'`/line 2>/dev/null
+done >"$KMC_RUN_OUTPUTPATH"/"abort.txt"
 
 # xmlized stats
-for a in bintests/out/*/klee-last; do
-	FDIR=bintests/out/`echo $a | cut -f3 -d'/'`
+for a in "$KMC_RUN_OUTPUTPATH"/*/klee-last; do
+	FDIR="$KMC_RUN_OUTPUTPATH"/`echo $a | cut -f3 -d'/'`
 	klee-stats --xml $a >$FDIR/last.stats
 done

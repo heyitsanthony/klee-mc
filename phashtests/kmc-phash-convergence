@@ -1,0 +1,61 @@
+#!/bin/bash
+
+# Measure the convergence of phashing.
+# 1. Collect apps that suffer from solver blow-ups
+# 2. For each app start with fresh hashtable
+# 3. 	Run for 10 runs (or until poison hash stops appending, whichever comes first)
+# 4.	**SAVE EACH HASH FILE FOR EACH COMMAND**
+mkdir -p phashtests/out
+
+
+function run_phash_line
+{
+	line="$1"
+	md5line=`echo $line | md5sum | cut -f1 -d' '`
+	rm -rf phashtests/out/$md5line/guest-*
+	KMC_RUN_KLEEFLAGS="--guest-type=sshot -use-pcache-rewriteptr " \
+	KMC_RUN_OUTPUTPATH="phashtests/out"	\
+	KMC_MEMLIMIT="2297152"			\
+	KMC_CMDLINE="$line"			\
+	KMC_RUN_TIMEOUT="120"			\
+		bintests/run_bin.sh 
+	killall -9 "$!"
+}
+
+
+while read line
+do
+	md5line=`echo $line | md5sum | cut -f1 -d' '`
+	LINEBASE="phashtests/out/$md5line/"
+	echo $LINEBASE
+	rm -rf $LINEBASE
+	mkdir -p $LINEBASE/caches
+	old_sz="0"
+	for i in `seq 1 10`; do
+		CACHFILE="$LINEBASE/poison.cache.rewriteptr"
+		echo RUNNING "$line" \#$i
+		run_phash_line "$line"
+		cp stdout stderr $LINEBASE/klee-last/
+		if [ ! -e "$CACHFILE" ]; then
+			echo "$line " other problems:
+			cat stderr
+			echo "-----------------BREAKING-----------"
+			break
+		fi
+
+		new_sz=`wc -c "$CACHEFILE" 2>/dev/null | cut -f1 -d' '`
+		if [ -z "$new_sz" ]; then
+			echo "----------Bad length cachefile------------"
+			break
+		fi
+
+		if [ "$new_sz" -lt "$old_sz" ]; then
+			echo "-----------------No bump.-------------"
+			break
+		fi
+		old_sz="$new_sz"
+
+		cp 	$LINEBASE/poison.cache.rewriteptr	\
+			$LINEBASE/caches/`readlink $LINEBASE/klee-last`.rewriteptr
+	done
+done < "phashtests/phashbins.txt"

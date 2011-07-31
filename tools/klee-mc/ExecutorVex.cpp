@@ -597,7 +597,11 @@ void ExecutorVex::handleXferSyscall(
 	std::vector< ref<Expr> > 	args;
 	struct XferStateIter		iter;
 
-	fprintf(stderr, "before syscall: states=%d\n", stateManager->size());
+	uint64_t	sysnr;
+	state.addressSpace.copyToBuf(es2esv(state).getRegCtx(), &sysnr, 0, 8);
+	fprintf(stderr, "before syscall %d(?): states=%d\n",
+		sysnr,
+		stateManager->size());
 
 	/* arg0 = regctx, arg1 = jmpptr */
 	args.push_back(es2esv(state).getRegCtx()->getBaseExpr());
