@@ -6,7 +6,7 @@ if [ -z "$KMC_RUN_OUTPUTPATH" ]; then
 fi
 
 if [ -z "$KMC_RUN_KLEEFLAGS" ]; then
-	KMC_RUN_KLEEFLAGS="--guest-type=sshot --use-pcache-rewriteptr"
+	KMC_RUN_KLEEFLAGS="--guest-type=sshot --use-pcache-rewriteptr -pcache-dir=../../../"
 fi
 
 if [ -z "$KMC_RUN_TIMEOUT" ]; then
@@ -27,11 +27,14 @@ trap "exit 0" 1 2 3 6 11
 function run_line
 {
 	line="$1"
-	echo Doing command... "$line"
 
 	line_md5=`echo $line | md5sum | cut -f1 -d' '`
 	mkdir -p "$KMC_RUN_OUTPUTPATH"/$line_md5
 	cd "$KMC_RUN_OUTPUTPATH"/$line_md5
+
+	echo Doing command... "$line"
+	echo Command dir... "$KMC_RUN_OUTPUTPATH"/$line_md5
+
 
 	# save guest so we can do replays
 	if [ ! -x guest-last ]; then
