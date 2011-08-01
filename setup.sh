@@ -1,11 +1,10 @@
 #!/bin/bash
 
-LLVMDIR=/home/chz/src/llvm/llvm-2.6/
-#STPDIR=/home/chz/src/stp_inst/
-STPDIR=/home/chz/src/stp-fast/stp/
-BOOLECTORDIR=/home/chz/src/boolector/
-Z3DIR=/home/chz/src/z3/
-UCLIBDIR=/home/chz/src/klee-2.6-uclibc
+LLVMDIR=${LLVMDIR:-"/home/chz/src/llvm/llvm-2.6/"}
+STPDIR=${STPDIR:-"/home/chz/src/stp-fast/stp/"}
+BOOLECTORDIR=${BOOLECTORDIR:-"/home/chz/src/boolector/"}
+Z3DIR=${Z3DIR:-"/home/chz/src/z3/"}
+UCLIBDIR=${UCLIBDIR:-"/home/chz/src/klee-2.6-uclibc"}
 
 CFLAGS="-g -O3 -I${STPDIR}/include"	\
 	./configure			\
