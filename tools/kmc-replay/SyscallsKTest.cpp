@@ -83,8 +83,7 @@ void SyscallsKTest::loadSyscallEntry(SyscallParams& sp)
 	uint64_t sys_nr = sp.getSyscall();
 	
 	assert (bcs_crumb == NULL && "Last crumb should be freed before load");
-	bcs_crumb = reinterpret_cast<struct bc_syscall*>(
-		crumbs->next(BC_TYPE_SC));
+	bcs_crumb = reinterpret_cast<struct bc_syscall*>(crumbs->next());
 	if (!bcs_crumb) {
 		fprintf(stderr,
 			KREPLAY_NOTE
@@ -98,6 +97,8 @@ void SyscallsKTest::loadSyscallEntry(SyscallParams& sp)
 			sp.getArg(2));
 		abort();
 	}
+
+	assert (bcs_crumb->bcs_hdr.bc_type == BC_TYPE_SC);
 
 	if (bcs_crumb->bcs_sysnr != sys_nr) {
 		fprintf(stderr,
@@ -169,6 +170,14 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 
 	/* extra thunks */
 	switch(sys_nr) {
+	case SYS_recvmsg:
+		feedSyscallOp(sp);
+		(((struct msghdr*)sp.getArg(1)))->msg_controllen = 0;
+		break;
+	case SYS_read:
+		fprintf(stderr, KREPLAY_SC "READ ret=%p\n",getRet());
+		break;
+
 	case SYS_open:
 		fprintf(stderr, KREPLAY_SC "OPEN \"%s\" ret=%p\n",
 			sp.getArg(0), getRet());
@@ -268,6 +277,9 @@ char* SyscallsKTest::feedMemObj(unsigned int sz)
 
 	obj_buf = new char[sz];
 	memcpy(obj_buf, cur_obj->bytes, sz);
+	fprintf(stderr, "NOM NOM %s (%d bytes)\n", 
+		cur_obj->name,
+		cur_obj->numBytes);
 
 	return obj_buf;
 }

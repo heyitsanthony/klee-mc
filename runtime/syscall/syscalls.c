@@ -12,6 +12,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <ustat.h>
 #include <sys/syscall.h>
 #include <klee/klee.h>
 #include <valgrind/libvex_guest_amd64.h>
@@ -79,6 +80,7 @@ static void sc_ret_ge0(void* regfile)
 static void sc_ret_v(void* regfile, uint64_t v1)
 {
 	GET_RAX(regfile) = v1;
+	klee_assume(GET_RAX(regfile) == v1);
 }
 
 static void sc_ret_or(void* regfile, uint64_t v1, uint64_t v2)
@@ -228,6 +230,30 @@ void* sc_enter(void* regfile, void* jmpptr)
 	sc_breadcrumb_reset();
 
 	switch (sys_nr) {
+	case SYS_getpeername:
+		new_regs = sc_new_regs(regfile);
+		if (GET_RAX(new_regs) == -1) {
+			break;
+		} 
+
+		klee_assume(GET_RAX(new_regs) == 0);
+		make_sym_by_arg(
+			regfile,
+			1,
+			klee_get_value(*((socklen_t*)GET_ARG2(regfile))),
+			"getpeeraddr");
+
+		break;
+	case SYS_listen:
+		sc_ret_v(regfile, 0);
+		break;
+	case SYS_mlock:
+		sc_ret_v(regfile, 0);
+		break;
+	case SYS_munlock:
+		sc_ret_v(regfile, 0);
+		break;
+	case SYS_openat:
 	case SYS_open:
 		sc_ret_ge0(sc_new_regs(regfile));
 		break;
@@ -242,8 +268,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_write:
 		if (fail_c.fc_write % (2*FAILURE_RATE)) {
 			new_regs = sc_new_regs(regfile);
-			if ((++fail_c.fc_write % (2*FAILURE_RATE)) == 0 &&
-			    (int64_t)GET_RAX(new_regs) == -1) {
+			if ((int64_t)GET_RAX(new_regs) == -1) {
 				break;
 			}
 			sc_ret_v(new_regs, GET_ARG2(regfile));
@@ -316,8 +341,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 		    (int64_t)GET_RAX(new_regs) == -1) {
 			break;
 		}
+		klee_assume(GET_RAX(new_regs) == len);
 		sc_ret_v(new_regs, len);
 		make_sym_by_arg(regfile, 1, len, "readbuf");
+		goto already_logged;
 	}
 	break;
 
@@ -331,6 +358,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		if ((int64_t)GET_RAX(new_regs) == -1) {
 			break;
 		}
+		klee_assume(GET_RAX(new_regs) == 0);
 		sc_ret_v(new_regs, 0);
 		make_sym_by_arg(regfile, 2, sizeof(struct stat), "newstatbuf");
 	}
@@ -562,6 +590,20 @@ void* sc_enter(void* regfile, void* jmpptr)
 			sizeof(struct tms),
 			"times");
 	break;
+
+	case SYS_ustat:
+		/* int ustat(dev, ubuf) */
+		new_regs = sc_new_regs(regfile);
+		if (GET_RAX(new_regs) == -1)
+			break;
+
+		klee_assume(GET_RAX(new_regs) == 0);
+		make_sym_by_arg(
+			regfile,
+			1,
+			sizeof(struct ustat),
+			"ustatbuf");
+		break;
 
 	default:
 		kmc_sc_bad(sys_nr);
