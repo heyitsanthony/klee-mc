@@ -77,7 +77,7 @@ bool Z3SolverImpl::wasSat(Z3_lbool rc)
 }
 
 void Z3SolverImpl::cleanup(void)
-{	
+{
 	z3_sort_cache.clear();
 	foreach (it, z3_array_ptrs.begin(), z3_array_ptrs.end())
 		*(*it) = NULL;
@@ -170,7 +170,7 @@ Z3_sort Z3SolverImpl::getSort(unsigned w)
 
 	s = z3_sort_cache[w];
 	if (s == NULL) {
-		s = (w == 1) ? 
+		s = (w == 1) ?
 			Z3_mk_bool_sort(z3_ctx) :
 			Z3_mk_bv_sort(z3_ctx, w);
 		z3_sort_cache[w] = s;
@@ -291,21 +291,6 @@ Z3_ast Z3SolverImpl::klee2z3(const ref<Expr>& e)
 		assert (width == width_right && "uncanonicalized "#x);	\
 		ret = z(z3_ctx, klee2z3(ae->left), klee2z3(ae->right));	\
 		break; }
-
-#define BIT_EXPR(x,y,z)							\
-	case Expr::x: {							\
-		y*		ae = cast<y>(e);			\
-		ret = z(z3_ctx, klee2z3(ae->left), klee2z3(ae->right));	\
-		break; }
-
-#define SHIFT_EXPR(x, y, z)						\
-	case Expr::x: {							\
-		y*		ae = cast<y>(e);			\
-		assert (ae->left->getWidth() == ae->right->getWidth());	\
-		ret = z(z3_ctx, klee2z3(ae->left), klee2z3(ae->right));	\
-		break; }
-
-
 	ARITH_EXPR(Add, AddExpr, Z3_mk_bvadd)
 	ARITH_EXPR(Sub, SubExpr, Z3_mk_bvsub)
 	ARITH_EXPR(Mul, MulExpr, Z3_mk_bvmul)
@@ -314,16 +299,38 @@ Z3_ast Z3SolverImpl::klee2z3(const ref<Expr>& e)
 	ARITH_EXPR(URem, URemExpr, Z3_mk_bvurem)
 	ARITH_EXPR(SRem, SRemExpr, Z3_mk_bvsrem)
 
+#define BIT_EXPR(x,y,z)							\
+	case Expr::x: {							\
+		y*		ae = cast<y>(e);			\
+		ret = z(z3_ctx, klee2z3(ae->left), klee2z3(ae->right));	\
+		break; }
 	// Bitwise
 	case Expr::Not: {
 		NotExpr *ne = cast<NotExpr>(e);
-		ret = Z3_mk_bvnot(z3_ctx, klee2z3(ne->expr));
+		ret = (e->getWidth() == Expr::Bool) ?
+			Z3_mk_not(z3_ctx, klee2z3(ne->expr)) :
+			Z3_mk_bvnot(z3_ctx, klee2z3(ne->expr));
+		break;
+	}
+	BIT_EXPR(And, AndExpr, Z3_mk_bvand)
+	BIT_EXPR(Or, OrExpr, Z3_mk_bvor)
+	case Expr::Xor: {
+		XorExpr*	ae = cast<XorExpr>(e);
+		Z3_ast		ast_l, ast_r;
+		ast_l = klee2z3(ae->left);
+		ast_r = klee2z3(ae->right);
+		ret = (e->getWidth() == Expr::Bool) ?
+			Z3_mk_xor(z3_ctx, ast_l, ast_r) :
+			Z3_mk_bvxor(z3_ctx, ast_l, ast_r);
 		break;
 	}
 
-	BIT_EXPR(And, AndExpr, Z3_mk_bvand)
-	BIT_EXPR(Or, OrExpr, Z3_mk_bvor)
-	BIT_EXPR(Xor, XorExpr, Z3_mk_bvxor)
+#define SHIFT_EXPR(x, y, z)						\
+	case Expr::x: {							\
+		y*		ae = cast<y>(e);			\
+		assert (ae->left->getWidth() == ae->right->getWidth());	\
+		ret = z(z3_ctx, klee2z3(ae->left), klee2z3(ae->right));	\
+		break; }
 	SHIFT_EXPR(Shl, ShlExpr, Z3_mk_bvshl)
 	SHIFT_EXPR(LShr, LShrExpr, Z3_mk_bvlshr)
 	SHIFT_EXPR(AShr, AShrExpr, Z3_mk_bvashr)
@@ -337,7 +344,7 @@ Z3_ast Z3SolverImpl::klee2z3(const ref<Expr>& e)
 	case Expr::Eq: {
 		EqExpr	*ee = cast<EqExpr>(e);
 		ret = Z3_mk_eq(z3_ctx,
-			boolify(klee2z3(ee->left)), 
+			boolify(klee2z3(ee->left)),
 			boolify(klee2z3(ee->right)));
 		break;
 	}
@@ -372,7 +379,7 @@ Z3_ast Z3SolverImpl::boolify(Z3_ast ast)
 	kind = Z3_get_sort_kind(z3_ctx, sort);
 	if (kind != Z3_BOOL_SORT) {
 		assert (kind == Z3_BV_SORT && "IF NOT BV OR BOOL, THEN WHAT?");
-		if (Z3_get_bv_sort_size(z3_ctx, sort) == 1) 
+		if (Z3_get_bv_sort_size(z3_ctx, sort) == 1)
 			ast = Z3_mk_eq(z3_ctx, ast, Z3_1BIT_CONST(1));
 	}
 
@@ -380,7 +387,7 @@ Z3_ast Z3SolverImpl::boolify(Z3_ast ast)
 	return ast;
 }
 
-static Z3_ast mk_var(Z3_context ctx, const char * name, Z3_sort ty) 
+static Z3_ast mk_var(Z3_context ctx, const char * name, Z3_sort ty)
 {
 	Z3_symbol   s  = Z3_mk_string_symbol(ctx, name);
 	return Z3_mk_const(ctx, s, ty);
@@ -441,7 +448,7 @@ done:
 
 uint8_t Z3SolverImpl::getArrayValue(
 	Z3_model m,
-	const Array *root, 
+	const Array *root,
 	unsigned index)
 {
 	Z3_bool		rc;
