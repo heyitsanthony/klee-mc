@@ -47,7 +47,6 @@ for a in "$KMC_RUN_OUTPUTPATH"/*/klee-last/*err; do
 done >>$ERRXML
 echo "</errors>" >>$ERRXML
 
-echo asdasd
 # get runs that timed out
 
 for a in "$KMC_RUN_OUTPUTPATH"/*/timeout.txt; do
@@ -56,11 +55,17 @@ done >"$KMC_RUN_OUTPUTPATH"/timeouts.txt
 
 # runs that died from the crappy solver
 for a in "$KMC_RUN_OUTPUTPATH"/*/klee-last/warnings.txt; do
+	testdir=`path2testdir "$a"`
 	x=`tail -n1 $a | egrep -i "(flushing|ministat)"`
-	if [ -z "$x" ]; then
+	if [ ! -z "$x" ]; then
+		cat "$testdir"/line
 		continue
 	fi
-	cat `path2testdir "$a"`/line
+	x=`grep "die\!" "$testdir"/stderr`
+	if [ ! -z "$x" ]; then
+		cat "$testdir"/line
+		continue
+	fi
 done >"$KMC_RUN_OUTPUTPATH"/"badsolver.txt"
 
 for a in "$KMC_RUN_OUTPUTPATH"/*/stderr; do
@@ -88,11 +93,17 @@ for a in "$KMC_RUN_OUTPUTPATH"/*/stderr; do
 done >"$KMC_RUN_OUTPUTPATH"/"syscall.txt"
 
 for a in "$KMC_RUN_OUTPUTPATH"/*/stderr; do
-	x=`grep -i "assert_fail" $a`
-	if [ -z "$x" ]; then
+	x=`grep -i "assert_fail" "$a"`
+	if [ ! -z "$x" ]; then
+		cat `path2testdir "$a"`/line
 		continue
 	fi
-	cat `path2testdir "$a"`/line
+
+	x=`grep "failed\." "$a"`
+	if [ ! -z "$x" ]; then
+		cat `path2testdir "$a"`/line
+		continue
+	fi
 done >"$KMC_RUN_OUTPUTPATH"/"abort.txt"
 
 # xmlized stats
