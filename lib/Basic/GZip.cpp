@@ -44,5 +44,31 @@ bool GZip::gzipFile(const char* src, const char* dst)
 
 bool GZip::gunzipFile(const char* src, const char* dst)
 {
-	assert (0 == 1 && "UNZIP: NOT YET SUPPORTED");
+	char 	buf[4096];
+	ssize_t	br;
+	int	ktest_fd;
+	gzFile	gzF;
+
+	/* create fresh gz file */
+	gzF = gzopen(src, "r");
+	if (gzF == NULL) return false;
+
+	ktest_fd  = open(dst, O_WRONLY | O_CREAT, 0660);
+	if (ktest_fd < 0) {
+		gzclose(gzF);
+		return false;
+	}
+
+	while ((br = gzread(gzF, buf, 4096)) > 0) {
+		write(ktest_fd, buf, br);
+		if (br < 4096)
+			break;
+	}
+	close(ktest_fd);
+	gzclose(gzF);
+
+	if (br < 0) return false;
+
+	/* don't remove src file! */
+	return true;
 }

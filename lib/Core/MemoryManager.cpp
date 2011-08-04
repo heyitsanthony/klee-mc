@@ -49,8 +49,8 @@ MemoryObject *MemoryManager::allocate(
 
   assert((state || allocSite) && "Insufficient MallocKey data");
   MallocKey mallocKey(allocSite,
-                      state ? state->mallocIterations[allocSite]++ : 0,
-                      size, isLocal, isGlobal, false);
+	state ? state->mallocIterations[allocSite]++ : 0,
+	size, isLocal, isGlobal, false);
   HeapObject *heapObj = NULL;
 
   // find smallest suitable existing heap object to satisfy request
@@ -160,13 +160,18 @@ MemoryObject *MemoryManager::allocateAligned(
   if (size == 0) return NULL;
 
   assert(state  && "Insufficient MallocKey data");
-  MallocKey mallocKey(allocSite,
-                      state->mallocIterations[allocSite]++,
-                      size, true, false, false);
+  MallocKey mallocKey(
+	allocSite,
+	state->mallocIterations[allocSite]++,
+	size, true, false, false);
+
   HeapObject *heapObj = NULL;
 
   // if we used to have an object with this mallocKey, reuse the same size
   // so we can get hits in the cache and RWset
+/* ajr: I don't trust this code. It has already caused things to blow up and
+ * I don't know what it does (especially since rwset isn't working..) */
+#if 0
   MallocKey::seensizes_ty::iterator it;
   if (allocSite &&
       (it = MallocKey::seenSizes.find(mallocKey)) !=
@@ -176,11 +181,12 @@ MemoryObject *MemoryManager::allocateAligned(
     if(it2 != sizes.end() && *it2 > size)
       mallocKey.size = *it2;
   }
+#endif
 
   heapObj = new HeapObject(size, 12);
   ++stats::allocations;
 
-  if(allocSite) MallocKey::seenSizes[mallocKey].insert(mallocKey.size);
+  if (allocSite) MallocKey::seenSizes[mallocKey].insert(mallocKey.size);
 
   heapObjects.insert(std::make_pair(mallocKey, heapObj));
 

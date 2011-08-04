@@ -226,28 +226,32 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 void SyscallsKTest::sc_mmap(SyscallParams& sp)
 {
 	VexGuestAMD64State	*guest_cpu;
-	void			*ret;
+	void			*ret, *bcs_ret;
 	bool			copied_in;
 
-	if ((void*)bcs_crumb->bcs_ret != MAP_FAILED) {
-		ret = mmap(
-			(void*)bcs_crumb->bcs_ret,
-			sp.getArg(1),
-			PROT_READ | PROT_WRITE,
-			MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS,
-			-1,
-			0);
-		if (ret == MAP_FAILED) {
-			fprintf(stderr,
-				"MAP FAILED ON FIXED ADDR %p\n",
-				sp.getArg(1));
-		}
-		assert (ret != MAP_FAILED);
-	} else {
-		ret = (void*)bcs_crumb->bcs_ret;
+	bcs_ret = (void*)bcs_crumb->bcs_ret;
+	guest_cpu = (VexGuestAMD64State*)guest->getCPUState()->getStateData();
+	if (bcs_ret == MAP_FAILED) {
+		guest_cpu->guest_RAX = (uint64_t)bcs_ret;
+		return;
 	}
 
-	guest_cpu = (VexGuestAMD64State*)guest->getCPUState()->getStateData();
+	ret = mmap(
+		bcs_ret,
+		sp.getArg(1),
+		PROT_READ | PROT_WRITE,
+		((bcs_ret) ? MAP_FIXED : 0)
+			| MAP_PRIVATE
+			| MAP_ANONYMOUS,
+		-1,
+		0);
+	if (ret == MAP_FAILED) {
+		fprintf(stderr,
+			"MAP FAILED ON FIXED ADDR %p bytes=%p\n",
+			bcs_ret, sp.getArg(1));
+	}
+	assert (ret != MAP_FAILED);
+
 	guest_cpu->guest_RAX = (uint64_t)ret;
 	copied_in = copyInMemObj(guest_cpu->guest_RAX, sp.getArg(1));
 	assert (copied_in && "BAD MMAP MEMOBJ");
