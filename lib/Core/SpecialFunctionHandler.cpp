@@ -692,8 +692,9 @@ SFH_DEF_HANDLER(DefineFixedObject)
 
   uint64_t address = cast<ConstantExpr>(arguments[0])->getZExtValue();
   uint64_t size = cast<ConstantExpr>(arguments[1])->getZExtValue();
-  MemoryObject *mo = sfh->executor->memory->allocateFixed(address, size,
-                                                    state.prevPC->inst, &state);
+  MemoryObject *mo;
+  mo = sfh->executor->memory->allocateFixed(
+	address, size, state.prevPC->inst, &state);
   state.bindMemObj(mo);
   mo->isUserSpecified = true; // XXX hack;
 }

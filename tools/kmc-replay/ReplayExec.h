@@ -14,11 +14,8 @@ public:
 	virtual ~ReplayExec();
 
 	void setSyscallsKTest(SyscallsKTest* in_skt);
-	void setCrumbs(Crumbs* in_c) { crumbs = in_c; }
-	ReplayExec(Guest* gs, VexXlate* vx = NULL)
-	: VexExec(gs, vx)
-	, skt(NULL)
-	{ }
+	void setCrumbs(Crumbs* in_c);
+	ReplayExec(Guest* gs, VexXlate* vx = NULL);
 
 protected:
 	virtual guest_ptr doVexSB(VexSB* sb);
@@ -26,11 +23,14 @@ protected:
 
 private:
 	uint8_t*	verifyWithRegLog(void);
-	uint8_t*	feedRegLog(void);
+	void		verifyOrPanic(void);
 	void		dumpRegBuf(const uint8_t*);
 
 	SyscallsKTest	*skt;		/* destroyed by superclass dtor */
+	bool		has_reglog;
+	bool		ign_reglog;
 	Crumbs		*crumbs;	/* not owner */
+	bool		ignored_last;
 };
 
 #endif

@@ -11,12 +11,13 @@ static int			bc_opbufidx;
 
 /** XXX NEED TO FIX LINKER BUG IN KLEEMC SO WE CAN USE
  * INTRINSIC LIBRARY!! */
-static void memset(void* x, uint8_t y, unsigned int z)
+static void* memset(void* x, int y, size_t z)
 {
 	unsigned int i;
 	for (i = 0; i < z; i++) {
 		((uint8_t*)x)[i] = y;
 	}
+	return x;
 }
 
 static struct bc_sc_memop* next_opbuf(void)

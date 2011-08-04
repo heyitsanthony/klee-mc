@@ -4,6 +4,7 @@
 #include "klee/Internal/Module/KModule.h"
 #include "llvm/System/Path.h"
 #include "klee/Config/config.h"
+#include "klee/breadcrumb.h"
 #include "../../lib/Core/SpecialFunctionHandler.h"
 #include "../../lib/Core/TimingSolver.h"
 #include "../../lib/Core/StatsTracker.h"
@@ -130,7 +131,7 @@ void ExecutorVex::runImage(void)
 	srandom(1);
 
 	// acrobatics because we have a fucking circular dependency
-	// on the globaladdress stucture which keeps us from binding 
+	// on the globaladdress stucture which keeps us from binding
 	// the module constant table.
 	//
 	// This is mainly a problem for check-div-zero, since it won't
@@ -336,6 +337,8 @@ Function* ExecutorVex::getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new)
 }
 
 
+static bool xxx_debug = false;
+
 Function* ExecutorVex::getFuncByAddr(uint64_t guest_addr)
 {
 	KFunction	*kf;
@@ -344,6 +347,9 @@ Function* ExecutorVex::getFuncByAddr(uint64_t guest_addr)
 
 	f = getFuncByAddrNoKMod(guest_addr, is_new);
 	if (f == NULL) return NULL;
+	assert (!xxx_debug && "DONE");
+//	xxx_debug = (guest_addr == 0x7f360fd8b856);
+//	xxx_debug = ((guest_addr & 0xffff) == 0xb960);
 	if (!is_new) return f;
 
 	/* stupid kmodule stuff */
@@ -355,10 +361,22 @@ Function* ExecutorVex::getFuncByAddr(uint64_t guest_addr)
 	return f;
 }
 
+static int counter = 0;
+
 void ExecutorVex::executeInstruction(
 	ExecutionState &state, KInstruction *ki)
 {
 	Executor::executeInstruction(state, ki);
+	if (xxx_debug) {
+		ref<Expr>	e;
+		counter++;
+		if (counter == 1) return;
+		e = state.readLocalCell(state.stack.size()-1, ki->dest).value;
+		ki->inst->dump(); std::cerr << "=>";
+		if (!e.isNull()) e->print(std::cerr);
+		else std::cerr << "???";
+		std::cerr << "\n";
+	}
 }
 
 /* need to hand roll our own instRet because we want to be able to
@@ -413,32 +431,40 @@ ObjectState* ExecutorVex::getRegObj(ExecutionState& state)
 
 void ExecutorVex::logXferRegisters(ExecutionState& state)
 {
-	ObjectState*	state_regctx_os;
-	uint8_t*	concrete_mask;
-	unsigned int	reg_sz;
+	ObjectState*		state_regctx_os;
+	unsigned int		reg_sz;
+	uint8_t			*crumb_buf, *crumb_base;
+	struct breadcrumb	*bc;
 
+	updateGuestRegs(state);
 	if (!LogRegs) return;
-
-	assert (0 == 1 && "STUB");
 
 	/* XXX: expensive-- lots of storage */
 	reg_sz = gs->getCPUState()->getStateSize();
+	crumb_base = new uint8_t[sizeof(struct breadcrumb)+(reg_sz*2)];
+	crumb_buf = crumb_base;
+	bc = reinterpret_cast<struct breadcrumb*>(crumb_base);
+
+	bc_mkhdr(bc, BC_TYPE_VEXREG, 0, reg_sz*2);
+	crumb_buf += sizeof(struct breadcrumb);
 
 	/* 1. store concrete cache */
-	es2esv(state).recordRegisters(
-		gs->getCPUState()->getStateData(), reg_sz);
+	memcpy(	crumb_buf,
+		gs->getCPUState()->getStateData(),
+		reg_sz);
+	crumb_buf += reg_sz;
 
 	/* 2. store concrete mask */
 	state_regctx_os = getRegObj(state);
-	concrete_mask = new uint8_t[reg_sz];
 	for (unsigned int i = 0; i < reg_sz; i++) {
-		concrete_mask[i] = 0;
-		if (state_regctx_os->isByteConcrete(i))
-			concrete_mask[i] = 0xff;
+		crumb_buf[i] =(state_regctx_os->isByteConcrete(i))
+			? 0xff
+			: 0;
 	}
-	es2esv(state).recordRegisters(concrete_mask, reg_sz);
 
-	delete [] concrete_mask;
+	es2esv(state).recordBreadcrumb(bc);
+
+	delete [] crumb_base;
 }
 
 /* handle transfering between VSB's */
@@ -446,7 +472,6 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 {
 	GuestExitType		exit_type;
 
-	updateGuestRegs(state);
 	logXferRegisters(state);
 
 	exit_type = gs->getCPUState()->getExitType();
@@ -588,7 +613,7 @@ void ExecutorVex::handleXferCall(ExecutionState& state, KInstruction* ki)
 
 /**
  * Pass return address and register context to sc handler.
- * SC handler has additional special funcs for manipulating
+ * SC handler has additional special funcs for manipulating (see SFH)
  * the register context.
  */
 void ExecutorVex::handleXferSyscall(
@@ -772,9 +797,8 @@ void ExecutorVex::printStateErrorMessage(
 	os << "\nRegisters: \n";
 	gs->getCPUState()->print(os);
 
-	os << "\nStack: \n";
-
 	unsigned idx = 0;
+	os << "\nStack: \n";
 	foreach (it, state.stack.rbegin(), state.stack.rend())
 	{
 		StackFrame	&sf = *it;
@@ -796,11 +820,12 @@ void ExecutorVex::printStateErrorMessage(
 	}
 
 	top_f = state.stack.back().kf->function;
-	if (top_f) {
-		os << "Func: ";
+	os << "Func: ";
+	if (top_f)
 		top_f->print(os);
-		os << "\n";
-	}
+	else
+		os << "???";
+	os << "\n";
 
 	os << "Constraints: \n";
 	state.constraints.print(os);

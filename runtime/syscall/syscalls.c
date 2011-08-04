@@ -15,6 +15,7 @@
 #include <ustat.h>
 #include <sys/syscall.h>
 #include <klee/klee.h>
+#include <grp.h>
 #include <valgrind/libvex_guest_amd64.h>
 
 #include "breadcrumb.h"
@@ -114,10 +115,24 @@ static void* sc_mmap(void* regfile)
 		addr = (uint64_t)kmc_alloc_aligned(len, "mmap");
 		if (addr == 0) addr = (uint64_t)MAP_FAILED;
 	} else {
+		int	is_himem;
+
 		addr = klee_get_value(GET_ARG0(regfile));
+		is_himem = ((addr & ~0x7fffffffffff) != 0);
+		if (is_himem) {
+			if (GET_ARG2(regfile) & MAP_FIXED) {
+				addr = (uint64_t)MAP_FAILED;
+				goto done;
+			}
+
+			addr = (uint64_t)kmc_alloc_aligned(len, "mmap");
+			if (addr == 0) addr = (uint64_t)MAP_FAILED;
+			goto done;
+		}
 		klee_define_fixed_object((void*)addr, len);
 	}
 
+done:
 	klee_assume(addr == addr);
 	sc_ret_v(new_regs, addr);
 	return new_regs;
@@ -232,9 +247,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 	switch (sys_nr) {
 	case SYS_getpeername:
 		new_regs = sc_new_regs(regfile);
-		if (GET_RAX(new_regs) == -1) {
+		if ((intptr_t)GET_RAX(new_regs) == -1)
 			break;
-		} 
 
 		klee_assume(GET_RAX(new_regs) == 0);
 		make_sym_by_arg(
@@ -255,7 +269,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	case SYS_openat:
 	case SYS_open:
-		sc_ret_ge0(sc_new_regs(regfile));
+		new_regs = sc_new_regs(regfile);
+		if ((intptr_t)GET_RAX(new_regs) == -1)
+			break;
+		sc_ret_range(new_regs, 3, 4096);
 		break;
 	case SYS_brk:
 		klee_warning_once("failing brk");
@@ -297,13 +314,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 		}
 		break;
 
-	case SYS_getgroups:
-		sc_ret_range(sc_new_regs(regfile), -1, 2);
-		make_sym_by_arg(
-			regfile,
-			1,
-			klee_get_value(GET_ARG0(regfile)), "getgroups");
-		break;
 	case SYS_sync:
 		break;
 	case SYS_umask:
@@ -344,10 +354,25 @@ void* sc_enter(void* regfile, void* jmpptr)
 		klee_assume(GET_RAX(new_regs) == len);
 		sc_ret_v(new_regs, len);
 		make_sym_by_arg(regfile, 1, len, "readbuf");
+		sc_breadcrumb_commit(sys_nr, GET_RAX(new_regs));
 		goto already_logged;
 	}
 	break;
 
+	case SYS_getgroups:
+		if ((intptr_t)GET_ARG0(regfile) < 0) {
+			sc_ret_v(regfile, -1);
+			break;
+		}
+
+		if ((intptr_t)GET_ARG0(regfile) == 0) {
+			sc_ret_v(regfile, 2);
+			break;
+		}
+
+		make_sym_by_arg(regfile, 1, GET_ARG0(regfile), "getgroups");
+		sc_ret_v(regfile, GET_ARG0(regfile));
+		break;
 	case SYS_sched_setaffinity:
 	case SYS_sched_getaffinity:
 		sc_ret_v(regfile, -1);
@@ -581,6 +606,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 	case SYS_poll:
 		sc_poll(regfile);
+		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
 		break;
 
 	case SYS_times:

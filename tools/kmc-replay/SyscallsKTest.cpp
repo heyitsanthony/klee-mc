@@ -98,7 +98,7 @@ void SyscallsKTest::loadSyscallEntry(SyscallParams& sp)
 		abort();
 	}
 
-	assert (bcs_crumb->bcs_hdr.bc_type == BC_TYPE_SC);
+	assert (bc_is_type(bcs_crumb, BC_TYPE_SC));
 
 	if (bcs_crumb->bcs_sysnr != sys_nr) {
 		fprintf(stderr,
@@ -135,7 +135,7 @@ void SyscallsKTest::feedSyscallOp(SyscallParams& sp)
 
 	sop = reinterpret_cast<struct bc_sc_memop*>(crumbs->next());
 	assert (sop != NULL && "Too few memops?");
-	assert (sop->sop_hdr.bc_type == BC_TYPE_SCOP);
+	assert (bc_is_type(sop, BC_TYPE_SCOP));
 
 	flags = sop->sop_hdr.bc_type_flags;
 	if (flags & BC_FL_SCOP_USERPTR) {
@@ -149,7 +149,7 @@ void SyscallsKTest::feedSyscallOp(SyscallParams& sp)
 	if (!copyInMemObj((uint64_t)dst_ptr + sop->sop_off, sop->sop_sz))
 		badCopyBail();
 
-	delete sop;
+	Crumbs::freeCrumb(&sop->sop_hdr);
 }
 
 
@@ -217,7 +217,7 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 		sys_nr, getRet());
 	
 	sc_retired++;
-	delete bcs_crumb;
+	Crumbs::freeCrumb(&bcs_crumb->bcs_hdr);
 	bcs_crumb = NULL;
 
 	return ret;
@@ -237,6 +237,11 @@ void SyscallsKTest::sc_mmap(SyscallParams& sp)
 			MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS,
 			-1,
 			0);
+		if (ret == MAP_FAILED) {
+			fprintf(stderr,
+				"MAP FAILED ON FIXED ADDR %p\n",
+				sp.getArg(1));
+		}
 		assert (ret != MAP_FAILED);
 	} else {
 		ret = (void*)bcs_crumb->bcs_ret;

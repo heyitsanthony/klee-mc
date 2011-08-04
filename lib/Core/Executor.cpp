@@ -1574,7 +1574,9 @@ void Executor::instCmp(ExecutionState& state, KInstruction *ki)
 	v_elem_w = (x)->getBitWidth() / v_elem_c;
 
 /* FIXME: cheaper way to do this (e.g. left == right => spit out constant expr?) */
-#define V_OP(y)							\
+#define V_OP_APPEND(y)		V_OP(y, ConcatExpr::create(result, op_i))
+#define V_OP_PREPEND(y)		V_OP(y, ConcatExpr::create(op_i, result))
+#define V_OP(y,z)						\
 	for (unsigned int i = 0; i < v_elem_c; i++) {		\
 		ref<Expr>	left_i, right_i;		\
 		ref<Expr>	op_i;				\
@@ -1582,9 +1584,9 @@ void Executor::instCmp(ExecutionState& state, KInstruction *ki)
 			left, i*v_elem_w, v_elem_w);		\
 		right_i = ExtractExpr::create(			\
 			right, i*v_elem_w, v_elem_w);		\
-		op_i = y##Expr::create(left_i, right_i);		\
-		if (i == 0) result = op_i;				\
-		else result = ConcatExpr::create(result, op_i);		\
+		op_i = y##Expr::create(left_i, right_i);	\
+		if (i == 0) result = op_i;			\
+		else result = z;				\
 	}
 
 #define SETUP_VOP_CAST(x,y)					\
@@ -1612,7 +1614,7 @@ ref<Expr> Executor::cmpVector(
 
 	switch(pred) {
 #define VCMP_OP(x, y) \
-	case ICmpInst::x: V_OP(y); break;
+	case ICmpInst::x: V_OP_APPEND(y); break;
 
 	VCMP_OP(ICMP_EQ, Eq)
 	VCMP_OP(ICMP_NE, Ne)
@@ -1857,7 +1859,10 @@ void Executor::instExtractElement(ExecutionState& state, KInstruction* ki)
 
 	assert (idx < v_elem_c && "ExtrctElement idx overflow");
 	ref<Expr>		out_val;
-	out_val = ExtractExpr::create(in_v, idx*v_elem_sz, v_elem_sz);
+	out_val = ExtractExpr::create(
+		in_v,
+		idx * v_elem_sz,
+		v_elem_sz);
 	state.bindLocal(ki, out_val);
 }
 
@@ -2015,13 +2020,20 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     break;
 
   // Arithmetic / logical
-#define INST_ARITHOP(x,y)                             \
-  case Instruction::x : {                             \
-    ref<Expr> left = eval(ki, 0, state).value;        \
-    ref<Expr> right = eval(ki, 1, state).value;       \
+#define INST_ARITHOP(x,y)				\
+  case Instruction::x : {				\
+    const VectorType*	vt;				\
+    ref<Expr> left = eval(ki, 0, state).value;		\
+    ref<Expr> right = eval(ki, 1, state).value;		\
+    vt = dynamic_cast<const VectorType*>(ki->inst->getOperand(0)->getType()); \
+    if (vt) { 				\
+	SETUP_VOP(vt);			\
+	V_OP_PREPEND(x);		\
+	state.bindLocal(ki, result);	\
+	break;				\
+    }					\
     state.bindLocal(ki, y::create(left, right));     \
-    break; \
-  }
+    break; }
 
   INST_ARITHOP(Add,AddExpr)
   INST_ARITHOP(Sub,SubExpr)
@@ -2929,11 +2941,12 @@ void Executor::memOpError(
 }
 
 
-void Executor::executeMemoryOperation(ExecutionState &state,
-                                      bool isWrite,
-                                      ref<Expr> address,
-                                      ref<Expr> value /* undef if read */,
-                                      KInstruction *target /* undef if write */)
+void Executor::executeMemoryOperation(
+	ExecutionState &state,
+	bool isWrite,
+	ref<Expr> address,
+	ref<Expr> value /* undef if read */,
+	KInstruction *target /* undef if write */)
 {
   if (SimplifySymIndices) {
     if (!isa<ConstantExpr>(address))
