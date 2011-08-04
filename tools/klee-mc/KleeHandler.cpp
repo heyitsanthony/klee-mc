@@ -4,6 +4,7 @@
 #include "klee/Common.h"
 #include "klee/Internal/ADT/KTest.h"
 #include "klee/Internal/System/Time.h"
+#include "klee/util/gzip.h"
 #include "static/Sugar.h"
 #include "cmdargs.h"
 
@@ -11,7 +12,6 @@
 #include "ExeStateVex.h"
 #include "KleeHandler.h"
 
-#include <zlib.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -262,46 +262,9 @@ void KleeHandler::processSuccessfulTest(unsigned id, out_objs& out)
 		delete[] b.objects[i].bytes;
 	delete[] b.objects;
 
-	gzipKTest(fname);
-}
-
-bool KleeHandler::gzipKTest(const std::string& fname)
-{
-	char 	buf[4096];
-	ssize_t	br;
-	int	ktest_fd, err;
-	gzFile	gzF;
-
-	/* create fresh gz file */
-	gzF = gzopen((fname + ".gz").c_str(), "w");
-	if (gzF == NULL) {
-		klee_warning(
-			"unable to gz output test case, derp (errno=%d: %s)",
-			errno,
-			strerror(errno));
-		return false;
-	}
-
-	/* copy file to gz file */
-	ktest_fd  = open(fname.c_str(), O_RDONLY);
-	if (ktest_fd < 0) {
-		gzclose(gzF);
-		return false;
-	}
-
-	while ((br = read(ktest_fd, buf, 4096)) > 0) {
-		gzwrite(gzF, buf, br);
-		if (br < 4096)
-			break;
-	}
-	close(ktest_fd);
-	gzclose(gzF);
-
-	/* get rid of old file */
-	err = unlink(fname.c_str());
-	if (err != 0) return false;
-
-	return true;
+	GZip::gzipFile(
+		fname.c_str(),
+		(fname + ".gz").c_str());
 }
 
 /* Outputs all files (.ktest, .pc, .cov etc.) describing a test case */

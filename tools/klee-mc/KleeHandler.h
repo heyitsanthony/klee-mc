@@ -65,7 +65,6 @@ typedef
 	std::string setupOutputDir(void);
 	bool scanForOutputDir(const std::string& path, std::string& theDir);
 	void processSuccessfulTest(unsigned id, out_objs&);
-	bool gzipKTest(const std::string& test_name);
 	void dumpLog(
 		const char* name,
 		unsigned id,
