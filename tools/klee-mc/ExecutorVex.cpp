@@ -41,6 +41,11 @@ extern bool WriteTraces;
 
 namespace
 {
+	cl::opt<bool> SymArgs(
+		"symargs",
+		cl::desc("Make argument strings symbolic"),
+		cl::init(false));
+
 	cl::opt<bool> LogRegs(
 		"logregs",
 		cl::desc("Log registers."),
@@ -158,6 +163,8 @@ void ExecutorVex::runImage(void)
 	kf_scenter = kmodule->getKFunction("sc_enter");
 	assert (kf_scenter && "Could not load sc_enter from runtime library");
 
+	if (SymArgs) makeArgsSymbolic(state);
+
 	processTree = new PTree(state);
 	state->ptreeNode = processTree->root;
 
@@ -178,6 +185,25 @@ void ExecutorVex::runImage(void)
 	if (statsTracker) statsTracker->done();
 
 	fprintf(stderr, "OK.\n");
+}
+
+void ExecutorVex::makeArgsSymbolic(ExecutionState* state)
+{
+	std::vector<guest_ptr>	argv;
+
+	argv = gs->getArgvPtrs();
+	if (argv.size() == 0) return;
+
+	fprintf(stderr,
+		"[klee-mc] Making %u arguments symbolic\n",
+		argv.size()-1);
+	foreach (it, argv.begin()+1, argv.end()) {
+		guest_ptr	p = *it;
+		fprintf(stderr, "MAKE IT HAPPEN %p, sz=%d\n",
+			p.o, gs->getMem()->strlen(p));
+		sfh->makeRangeSymbolic(
+			*state, (void*)p.o, gs->getMem()->strlen(p), "argv");
+	}
 }
 
 void ExecutorVex::prepState(ExecutionState* state, Function* f)

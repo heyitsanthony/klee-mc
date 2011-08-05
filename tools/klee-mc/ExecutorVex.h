@@ -106,6 +106,7 @@ private:
 	void initGlobalFuncs(void);
 
 	void prepState(ExecutionState* state, llvm::Function*);
+	void makeArgsSymbolic(ExecutionState* state);
 	void setupRegisterContext(ExecutionState* state, llvm::Function* f);
 	void setupProcessMemory(ExecutionState* state, llvm::Function* f);
 	void allocGlobalVariableDecl(

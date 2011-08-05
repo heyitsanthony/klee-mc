@@ -430,8 +430,8 @@ void SyscallSFH::makeRangeSymbolic(
 			state.addressSpace.print(std::cerr);
 			fprintf(stderr,
 				"couldn't find %p in range %p-%p (state=%p)\n",
-				cur_addr,
-				addr, addr+sz,
+				(void*)cur_addr,
+				addr, ((char*)addr)+sz,
 				&state);
 			assert ("TODO: Allocate memory");
 		}
