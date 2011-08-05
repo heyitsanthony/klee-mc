@@ -59,6 +59,13 @@ static uint64_t GET_ARG(void* x, int y)
 	return -1;
 }
 
+uint64_t concretize_u64(uint64_t s)
+{
+  uint64_t sc = klee_get_value(s);
+  klee_assume(sc == s);
+  return sc;
+}
+
 static void* sc_new_regs(void* r)
 {
 	void	*ret = kmc_sc_regs(r);
@@ -102,38 +109,52 @@ static void sc_ret_range(void* regfile, int64_t lo, int64_t hi)
 	klee_assume(rax >= lo && rax <= hi);
 }
 
+static void* sc_mmap_addr(
+	void* regfile,
+	void* addr, uint64_t len)
+{
+	int	is_himem;
+
+	is_himem = (((intptr_t)addr & ~0x7fffffffffffULL) != 0);
+	if (!is_himem) {
+		/* not highmem, use if we've got it.. */
+		addr = concretize_u64(GET_ARG0(regfile));
+		klee_define_fixed_object(addr, len);
+		return addr;
+	}
+
+	/* can never satisfy a hi-mem request */
+	if (GET_ARG2(regfile) & MAP_FIXED) {
+		/* can never fixed map hi-mem */
+		return (uint64_t)MAP_FAILED;
+	}
+
+	/* toss back whatever */
+	addr = kmc_alloc_aligned(len, "mmap");
+	if (addr == NULL) addr = (uint64_t)MAP_FAILED;
+	return addr;
+}
+
 static void* sc_mmap(void* regfile)
 {
 	uint64_t	addr;
 	uint64_t	len;
 	void		*new_regs;
 
-	len = klee_get_value(GET_ARG1(regfile));
+	len = GET_ARG1(regfile);
 	new_regs = sc_new_regs(regfile);
 
-	if (GET_ARG0(regfile) == 0) {
+	if (len >= (uintptr_t)0x10000000 || len < 0) {
+		addr = (uint64_t)MAP_FAILED;
+	} else if (GET_ARG0(regfile) == 0) {
+		len = concretize_u64(GET_ARG1(regfile));
 		addr = (uint64_t)kmc_alloc_aligned(len, "mmap");
 		if (addr == 0) addr = (uint64_t)MAP_FAILED;
 	} else {
-		int	is_himem;
-
-		addr = klee_get_value(GET_ARG0(regfile));
-		is_himem = ((addr & ~0x7fffffffffff) != 0);
-		if (is_himem) {
-			if (GET_ARG2(regfile) & MAP_FIXED) {
-				addr = (uint64_t)MAP_FAILED;
-				goto done;
-			}
-
-			addr = (uint64_t)kmc_alloc_aligned(len, "mmap");
-			if (addr == 0) addr = (uint64_t)MAP_FAILED;
-			goto done;
-		}
-		klee_define_fixed_object((void*)addr, len);
+		len = concretize_u64(GET_ARG1(regfile));
+		addr = (uint64_t)sc_mmap_addr(regfile, addr, len);
 	}
 
-done:
-	klee_assume(addr == addr);
 	sc_ret_v(new_regs, addr);
 	return new_regs;
 }
@@ -170,8 +191,10 @@ static void sc_munmap(void* regfile)
 void make_sym(uint64_t addr, uint64_t len, const char* name)
 {
 	klee_check_memory_access((void*)addr, 1);
-	addr = klee_get_value(addr);
-	len = klee_get_value(len);
+
+	klee_assume(addr == klee_get_value(addr));
+	klee_assume(len == klee_get_value(len));
+
 	kmc_make_range_symbolic(addr, len, name);
 	sc_breadcrumb_add_ptr((void*)addr, len);
 }
@@ -183,9 +206,12 @@ void make_sym_by_arg(
 {
 	uint64_t	addr;
 
-	addr = klee_get_value(GET_ARG(regfile, arg_num));
+	addr = GET_ARG(regfile, arg_num);
+	klee_assume (addr == klee_get_value(addr));
+	klee_assume (len == klee_get_value(len));
+
 	klee_check_memory_access((void*)addr, 1);
-	len = klee_get_value(len);
+
 	kmc_make_range_symbolic(addr, len, name);
 	sc_breadcrumb_add_argptr(arg_num, 0, len);
 }
@@ -477,6 +503,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_nanosleep: {
 		uint64_t	dst_addr = klee_get_value(GET_ARG1(regfile));
 		if (dst_addr != 0) {
+			klee_assume(GET_ARG1(regfile) == dst_addr);
 			make_sym(
 				dst_addr,
 				sizeof(struct timespec),
@@ -620,7 +647,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_ustat:
 		/* int ustat(dev, ubuf) */
 		new_regs = sc_new_regs(regfile);
-		if (GET_RAX(new_regs) == -1)
+		if ((intptr_t)GET_RAX(new_regs) == -1)
 			break;
 
 		klee_assume(GET_RAX(new_regs) == 0);

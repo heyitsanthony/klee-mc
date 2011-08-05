@@ -145,7 +145,6 @@ uint8_t* ReplayExec::verifyWithRegLog(void)
 	sym_reg = buf;
 	sym_mask = buf + reg_sz;
 
-
 	/* XXX HACK HACK HACK. There's something in the syspage that changes
 	 * from process to process. Since we can't write to the syspage with
 	 * the guest snapshot's old syspage, all we can do is 'bless' the region

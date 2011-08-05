@@ -1,7 +1,11 @@
 #include <klee/breadcrumb.h>
+#include <klee/util/gzip.h>
+#include <string>
 #include <string.h>
 #include <assert.h>
 #include "Crumbs.h"
+
+using namespace klee;
 
 Crumbs* Crumbs::create(const char* fname)
 {
@@ -18,8 +22,24 @@ Crumbs::Crumbs(const char* fname)
 : f(NULL)
 , crumbs_processed(0)
 {
-	f = fopen(fname, "rb");
-	if (f == NULL) return;
+	const char* gzSuffix;
+
+	gzSuffix = strstr(fname, ".gz");
+	if (gzSuffix && strlen(gzSuffix) == 3) {
+		std::string	dst(
+			std::string(fname).substr(0, gzSuffix - fname));
+
+		if (!GZip::gunzipFile(fname, dst.c_str())) {
+			fprintf(stderr, "Could not gunzip %s\n", dst.c_str());
+			return;
+		}
+
+		f = fopen(dst.c_str(), "rb");
+		if (f == NULL) return;
+	} else {
+		f = fopen(fname, "rb");
+		if (f == NULL) return;
+	}
 
 	/* XXX: load on demand */
 	loadTypeList();

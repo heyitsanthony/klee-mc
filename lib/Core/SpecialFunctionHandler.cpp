@@ -466,9 +466,10 @@ SFH_DEF_HANDLER(Assume)
       state,
       "invalid klee_assume call (provably false)",
       "user.err");
-  } else {
-    sfh->executor->addConstraint(state, e);
+    return;
   }
+
+  sfh->executor->addConstraint(state, e);
 }
 
 SFH_DEF_HANDLER(IsSymbolic)
@@ -645,41 +646,46 @@ SFH_DEF_HANDLER(Free)
 
 SFH_DEF_HANDLER(CheckMemoryAccess)
 {
-  SFH_CHK_ARGS(2, "klee_check_memory_access");
+	SFH_CHK_ARGS(2, "klee_check_memory_access");
 
-  ref<Expr> address = sfh->executor->toUnique(state, arguments[0]);
-  ref<Expr> size = sfh->executor->toUnique(state, arguments[1]);
-  if (!isa<ConstantExpr>(address) || !isa<ConstantExpr>(size)) {
-    sfh->executor->terminateStateOnError(state,
-                                   "check_memory_access requires constant args",
-                                   "user.err");
-  } else {
-    ObjectPair op;
+	ref<Expr> address = sfh->executor->toUnique(state, arguments[0]);
+	ref<Expr> size = sfh->executor->toUnique(state, arguments[1]);
+	if (!isa<ConstantExpr>(address) || !isa<ConstantExpr>(size)) {
+		sfh->executor->terminateStateOnError(
+			state,
+			"check_memory_access requires constant args",
+			"user.err");
+		return;
+	}
 
-    if (!state.addressSpace.resolveOne(cast<ConstantExpr>(address), op)) {
-      sfh->executor->terminateStateOnError(state,
-                                     "check_memory_access: memory error",
-                                     "ptr.err",
-                                     sfh->executor->getAddressInfo(state, address));
-    } else {
-      ref<Expr> chk =
-        op.first->getBoundsCheckPointer(address,
-                                        cast<ConstantExpr>(size)->getZExtValue());
-      if (!chk->isTrue()) {
-        sfh->executor->terminateStateOnError(state,
-                                       "check_memory_access: memory error",
-                                       "ptr.err",
-                                       sfh->executor->getAddressInfo(state, address));
-      }
-    }
-  }
+	ObjectPair op;
+
+	if (!state.addressSpace.resolveOne(cast<ConstantExpr>(address), op)) {
+		sfh->executor->terminateStateOnError(state,
+		"check_memory_access: memory error",
+		"ptr.err",
+		sfh->executor->getAddressInfo(state, address));
+		return;
+	}
+
+
+	ref<Expr> chk = op.first->getBoundsCheckPointer(
+		address,
+		cast<ConstantExpr>(size)->getZExtValue());
+
+	if (!chk->isTrue()) {
+		sfh->executor->terminateStateOnError(
+			state,
+			"check_memory_access: memory error",
+			"ptr.err",
+			sfh->executor->getAddressInfo(state, address));
+	}
 }
 
 SFH_DEF_HANDLER(GetValue)
 {
-  SFH_CHK_ARGS(1, "klee_get_value");
-
-  sfh->executor->executeGetValue(state, arguments[0], target);
+	SFH_CHK_ARGS(1, "klee_get_value");
+	sfh->executor->executeGetValue(state, arguments[0], target);
 }
 
 SFH_DEF_HANDLER(DefineFixedObject)

@@ -165,11 +165,11 @@ void KleeHandler::setupOutputFiles(void)
 
 KleeHandler::~KleeHandler()
 {
-  if (m_symPathWriter) delete m_symPathWriter;
-  delete m_infoFile;
+	if (m_symPathWriter) delete m_symPathWriter;
+	delete m_infoFile;
 
-  fclose(klee_message_file);
-  fclose(klee_warning_file);
+	fclose(klee_message_file);
+	fclose(klee_warning_file);
 }
 
 void KleeHandler::setInterpreter(Interpreter *i)
@@ -231,6 +231,7 @@ void KleeHandler::processSuccessfulTest(unsigned id, out_objs& out)
 	std::string	fname;
 
 	fprintf(stderr, "writing out test id=%d\n", id);
+
 	b.numArgs = cmdargs->getArgc();
 	b.args = cmdargs->getArgv();
 	b.symArgvs = 0;
@@ -392,7 +393,7 @@ void KleeHandler::processTestCase(
   const ExeStateVex	*esv = dynamic_cast<const ExeStateVex*>(&state);
   assert (esv != NULL);
   dumpLog("crumbs", id, esv->crumbBegin(), esv->crumbEnd());
-  fprintf(stderr, "=========DONE WRITING OUT TESTID=%d\n", id);
+  fprintf(stderr, "=========DONE WRITING OUT TESTID=%d (s=%p)\n", id, &state);
 }
 
 
@@ -406,7 +407,6 @@ void KleeHandler::dumpLog(
 	std::ostream* f = openTestFile(name, id);
 	if (f == NULL) return;
 
-
 	foreach (it, begin, end) {
 		std::vector<unsigned char> r = *it;
 		std::copy(
@@ -415,26 +415,31 @@ void KleeHandler::dumpLog(
 	}
 
 	delete f;
+
+	GZip::gzipFile(
+		getTestFilename(name, id).c_str(),
+		(getTestFilename(name, id) + ".gz").c_str());
 }
 
 void KleeHandler::getPathFiles(
 	std::string path, std::vector<std::string> &results)
 {
-  llvm::sys::Path p(path);
-  std::set<llvm::sys::Path> contents;
-  std::string error;
-  if (p.getDirectoryContents(contents, &error)) {
-      std::cerr << "ERROR: unable to read path directory: " << path << ": " << error << "\n";
-      exit(1);
-  }
+	llvm::sys::Path p(path);
+	std::set<llvm::sys::Path> contents;
+	std::string error;
 
-  foreach (it, contents.begin(), contents.end()) {
-//    std::string f = it->str();
-    std::string f = it->toString();
-    if (f.substr(f.size() - 5, f.size()) == ".path") {
-      results.push_back(f);
-    }
-  }
+	if (p.getDirectoryContents(contents, &error)) {
+		std::cerr << "ERROR: unable to read path directory: "
+			<< path << ": " << error << "\n";
+		exit(1);
+	}
+
+	foreach (it, contents.begin(), contents.end()) {
+		//std::string f = it->str();
+		std::string f = it->toString();
+		if (f.substr(f.size() - 5, f.size()) == ".path")
+			results.push_back(f);
+	}
 }
 
 // load a .path file

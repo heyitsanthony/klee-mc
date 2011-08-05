@@ -183,7 +183,7 @@ SFH_DEF_HANDLER(MakeRangeSymbolic)
 	if (addr == NULL || len == NULL) {
 		exe_vex->terminateStateOnError(
 			state,
-			"makerangesymolic error: non-CE exprs. Smash runtime",
+			"makerangesymbolic error: Addr or len not CE exprs. Smash runtime",
 			"mrs.err");
 		return;
 	}
@@ -236,7 +236,7 @@ SFH_DEF_HANDLER(AllocAligned)
 	if (len == NULL) {
 		exe_vex->terminateStateOnError(
 			state,
-			"makerangesymolic error: non-CE exprs. Smash runtime",
+			"kmc_alloc_aligned error: len not constant.",
 			"mrs.err");
 		return;
 	}
@@ -256,11 +256,12 @@ SFH_DEF_HANDLER(AllocAligned)
 		return;
 	}
 	
+	state.bindMemObj(new_mo);
 	addr = new_mo->address;
 	new_mo->setName(name_str.c_str());
 	exe_vex->executeMakeSymbolic(state, new_mo, name_str.c_str());
 
-	state.bindLocal(target, ConstantExpr::create(addr, 64));
+	state.bindLocal(target, new_mo->getBaseExpr());
 }
 
 void SyscallSFH::makeSymbolicTail(
