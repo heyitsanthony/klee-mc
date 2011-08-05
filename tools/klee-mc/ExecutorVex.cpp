@@ -364,9 +364,39 @@ Function* ExecutorVex::getFuncByAddr(uint64_t guest_addr)
 static int counter = 0;
 
 void ExecutorVex::executeInstruction(
-	ExecutionState &state, KInstruction *ki)
+        ExecutionState &state,
+        KInstruction *ki)
 {
-	Executor::executeInstruction(state, ki);
+        Instruction *i = ki->inst;
+        switch (i->getOpcode()) {
+        // Memory instructions...
+        case Instruction::Alloca:
+        case Instruction::Malloc: {
+                AllocationInst *ai;
+                unsigned        elementSize;
+                bool            isLocal;
+
+                ai = cast<AllocationInst>(i);
+                elementSize = target_data->getTypeStoreSize(
+                        ai->getAllocatedType());
+
+                ref<Expr> size = Expr::createPointer(elementSize);
+                if (ai->isArrayAllocation()) {
+                        ref<Expr> count = eval(ki, 0, state).value;
+                        count = Expr::createCoerceToPointerType(count);
+                        size = MulExpr::create(size, count);
+                }
+                isLocal = i->getOpcode()==Instruction::Alloca;
+
+                executeAlloc(state, size, isLocal, ki);
+                return;
+        }
+        case Instruction::Free:
+                executeFree(state, eval(ki, 0, state).value);
+                return;
+        }
+
+        Executor::executeInstruction(state, ki);
 	if (xxx_debug) {
 		ref<Expr>	e;
 		counter++;
