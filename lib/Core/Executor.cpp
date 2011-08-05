@@ -1970,6 +1970,28 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
 {
   Instruction *i = ki->inst;
   switch (i->getOpcode()) {
+  // Memory instructions...
+  case Instruction::Alloca:
+  case Instruction::Malloc: {
+    AllocationInst *ai;
+    unsigned	elementSize;
+    bool		isLocal;
+    ai = cast<AllocationInst>(i);
+    elementSize = target_data->getTypeStoreSize(ai->getAllocatedType());
+    ref<Expr> size = Expr::createPointer(elementSize);
+    if (ai->isArrayAllocation()) {
+      ref<Expr> count = eval(ki, 0, state).value;
+      count = Expr::createCoerceToPointerType(count);
+      size = MulExpr::create(size, count);
+    }
+    isLocal = i->getOpcode()==Instruction::Alloca;
+    executeAlloc(state, size, isLocal, ki);
+    break;
+  }
+  case Instruction::Free:
+    executeFree(state, eval(ki, 0, state).value);
+    break;;
+
     // Control flow
   case Instruction::Ret:
     if (WriteTraces) {
