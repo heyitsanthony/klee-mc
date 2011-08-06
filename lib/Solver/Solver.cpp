@@ -44,6 +44,8 @@
 using namespace klee;
 using namespace llvm;
 
+bool UseFastCexSolver;
+
 namespace {
   cl::opt<bool>
   DebugValidateSolver("debug-validate-solver",
@@ -59,9 +61,12 @@ namespace {
   UseSTPQueryPCLog("use-stp-query-pc-log",
                    cl::init(false));
 
-  cl::opt<bool>
-  UseFastCexSolver("use-fast-cex-solver",
-		   cl::init(false));
+  cl::opt<bool, true>
+  ProxyUseFastCexSolver(
+  	"use-fast-cex-solver",
+  	cl::desc("Use the fast CEX solver, whatever that is."),
+  	cl::location(UseFastCexSolver),
+	cl::init(false));
 
   cl::opt<bool>
   UseCexCache("use-cex-cache",
@@ -110,15 +115,11 @@ namespace {
 
 }
 
-TimingSolver* Solver::createChain(
-	double timeout,
-	std::string queryLogPath,
-	std::string stpQueryLogPath,
+static Solver* createChainWithTimedSolver(
 	std::string queryPCLogPath,
-	std::string stpQueryPCLogPath)
+	std::string stpQueryPCLogPath,
+	TimedSolver* &timedSolver)
 {
-	TimedSolver	*timedSolver;
-	TimingSolver	*ts;
 	Solver		*solver;
 
 	if (UseBoolector)
@@ -129,7 +130,7 @@ TimingSolver* Solver::createChain(
 		timedSolver = new STPSolver(UseForkedSTP, STPServer);
 	solver = timedSolver;
 
-	if (UseSTPQueryPCLog)
+	if (UseSTPQueryPCLog && stpQueryPCLogPath.size())
 		solver = createPCLoggingSolver(solver, stpQueryPCLogPath);
 
 	if (UsePoisonCacheExpr)
@@ -157,12 +158,40 @@ TimingSolver* Solver::createChain(
 			solver = createValidatingSolver(solver, timedSolver);
 	}
 
-	if (UseQueryPCLog) solver = createPCLoggingSolver(solver, queryPCLogPath);
+	if (UseQueryPCLog && queryPCLogPath.size())
+		solver = createPCLoggingSolver(solver, queryPCLogPath);
 
 	klee_message("BEGIN solver description");
 	solver->printName();
 	klee_message("END solver description");
 
+	return solver;
+}
+
+
+
+Solver* Solver::createChain(
+	std::string queryPCLogPath,
+	std::string stpQueryPCLogPath)
+{
+	TimedSolver	*timedSolver;
+	return createChainWithTimedSolver(
+		queryPCLogPath,
+		stpQueryPCLogPath,
+		timedSolver);
+}
+
+TimingSolver* Solver::createTimerChain(
+	double timeout,
+	std::string queryPCLogPath,
+	std::string stpQueryPCLogPath)
+{
+	Solver		*solver;
+	TimedSolver	*timedSolver;
+	TimingSolver	*ts;
+
+	solver = createChainWithTimedSolver(
+		queryPCLogPath, stpQueryPCLogPath, timedSolver);
 	ts = new TimingSolver(solver, timedSolver);
 	timedSolver->setTimeout(timeout);
 

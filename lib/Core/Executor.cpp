@@ -273,10 +273,8 @@ Executor::Executor(
     stpTimeout(MaxInstructionTime ?
       std::min(MaxSTPTime,MaxInstructionTime) : MaxSTPTime)
 {
-  this->solver = Solver::createChain(
+  this->solver = Solver::createTimerChain(
   	stpTimeout,
-	interpreterHandler->getOutputFilename("queries.qlog"),
-	interpreterHandler->getOutputFilename("stp-queries.qlog"),
 	interpreterHandler->getOutputFilename("queries.pc"),
 	interpreterHandler->getOutputFilename("stp-queries.pc"));
 

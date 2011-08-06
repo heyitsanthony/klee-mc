@@ -322,12 +322,17 @@ namespace {
   public:
     ParserImpl(const std::string _Filename,
                const MemoryBuffer *MB,
-               ExprBuilder *_Builder) : Filename(_Filename),
-                                        TheMemoryBuffer(MB),
-                                        Builder(_Builder),
-                                        TheLexer(MB),
-                                        MaxErrors(~0u),
-                                        NumErrors(0) {}
+               ExprBuilder *_Builder)
+    : Filename(_Filename)
+    , TheMemoryBuffer(MB)
+    , Builder(_Builder)
+    , TheLexer(MB)
+    , MaxErrors(~0u)
+    , NumErrors(0)
+    {
+      memset(&Tok, 0, sizeof(Tok));
+      Tok.kind = Token::Comment;
+    }
 
     /// Initialize - Initialize the parsing state. This must be called
     /// prior to the start of parsing.
@@ -1609,8 +1614,9 @@ Parser::~Parser() {
 
 Parser *Parser::Create(const std::string Filename,
                        const MemoryBuffer *MB,
-                       ExprBuilder *Builder) {
-  ParserImpl *P = new ParserImpl(Filename, MB, Builder);
-  P->Initialize();
-  return P;
+                       ExprBuilder *Builder)
+{
+	ParserImpl *P = new ParserImpl(Filename, MB, Builder);
+	P->Initialize();
+	return P;
 }

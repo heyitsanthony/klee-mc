@@ -80,11 +80,12 @@ namespace klee {
   public:
     /// validity_to_str - Return the name of given Validity enum value.
     static const char *validity_to_str(Validity v);
-    static TimingSolver* createChain(
+    static TimingSolver* createTimerChain(
 	double timeout,
-	std::string queryLogPath,
-	std::string stpQueryLogPath,
 	std::string queryPCLogPath,
+	std::string stpQueryPCLogPath);
+    static Solver* createChain(
+    	std::string queryPCLogPath,
 	std::string stpQueryPCLogPath);
   public:
     SolverImpl *impl;

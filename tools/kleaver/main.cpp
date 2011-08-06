@@ -11,6 +11,7 @@
 #include "klee/Statistics.h"
 #include "klee/util/ExprPPrinter.h"
 #include "klee/util/ExprVisitor.h"
+#include "../../lib/Core/TimingSolver.h"
 
 #include "llvm/ADT/OwningPtr.h"
 #include "llvm/ADT/StringExtras.h"
@@ -69,15 +70,9 @@ namespace {
   cl::opt<bool>
   UseDummySolver("use-dummy-solver",
 		   cl::init(false));
-
-  cl::opt<bool>
-  UseFastCexSolver("use-fast-cex-solver",
-		   cl::init(false));
-
-  cl::opt<bool>
-  UseSTPQueryPCLog("use-stp-query-pc-log",
-                   cl::init(false));
 }
+
+extern bool UseFastCexSolver;
 
 static std::string escapedString(const char *start, unsigned length) {
   std::string Str;
@@ -148,17 +143,27 @@ static bool PrintInputAST(
 static void doQuery(Solver* S, QueryCommand* QC)
 {
 	assert("FIXME: Support counterexample query commands!");
+
 	if (QC->Values.empty() && QC->Objects.empty()) {
 		bool result;
 		bool query_ok;
+		Query	q(ConstraintManager(QC->Constraints), QC->Query);
+		q.print(std::cerr);
 
 		query_ok = S->mustBeTrue(
-			Query(ConstraintManager(QC->Constraints), QC->Query),
+			Query(	ConstraintManager(QC->Constraints),
+				QC->Query),
 			result);
 		if (query_ok)	std::cout << (result ? "VALID" : "INVALID");
 		else		std::cout << "FAIL";
-	} else if (!QC->Values.empty()) {
+
+		std::cout << "\n";
+		return;
+	}
+
+	if (!QC->Values.empty()) {
 		bool	query_ok;
+		std::cout << "BBBBBBB\n";
 		assert(QC->Objects.empty() &&
 		"FIXME: Support counterexamples for values and objects!");
 		assert(QC->Values.size() == 1 &&
@@ -176,36 +181,39 @@ static void doQuery(Solver* S, QueryCommand* QC)
 		} else {
 			std::cout << "FAIL";
 		}
-	} else {
-		bool query_ok;
-		std::vector< std::vector<unsigned char> > result;
+		std::cout << "\n";
+		return;
+	}
 
-		query_ok = S->getInitialValues(
-			Query(	ConstraintManager(QC->Constraints),
-				QC->Query),
-			QC->Objects,
-			result);
-		if (query_ok) {
-			std::cout << "INVALID\n";
+	bool query_ok;
+	std::vector< std::vector<unsigned char> > result;
 
-			for (unsigned i = 0, e = result.size(); i != e; ++i) {
-				std::cout << "\tArray " << i << ":\t"
-				<< QC->Objects[i]->name
-				<< "[";
-				for (	unsigned j = 0;
-					j != QC->Objects[i]->mallocKey.size;
-					++j)
-				{
-					std::cout << (unsigned) result[i][j];
-					if (j + 1 != QC->Objects[i]->mallocKey.size)
-						std::cout << ", ";
-				}
-				std::cout << "]";
-				if (i + 1 != e) std::cout << "\n";
+	std::cout << "CCCCCCC\n";
+	query_ok = S->getInitialValues(
+		Query(	ConstraintManager(QC->Constraints),
+			QC->Query),
+		QC->Objects,
+		result);
+	if (query_ok) {
+		std::cout << "INVALID\n";
+
+		for (unsigned i = 0, e = result.size(); i != e; ++i) {
+			std::cout << "\tArray " << i << ":\t"
+			<< QC->Objects[i]->name
+			<< "[";
+			for (	unsigned j = 0;
+				j != QC->Objects[i]->mallocKey.size;
+				++j)
+			{
+				std::cout << (unsigned) result[i][j];
+				if (j + 1 != QC->Objects[i]->mallocKey.size)
+					std::cout << ", ";
 			}
-		} else {
-			std::cout << "FAIL";
+			std::cout << "]";
+			if (i + 1 != e) std::cout << "\n";
 		}
+	} else {
+		std::cout << "FAIL";
 	}
 
 	std::cout << "\n";
@@ -213,16 +221,7 @@ static void doQuery(Solver* S, QueryCommand* QC)
 
 static Solver* buildSolver(void)
 {
-	// FIXME: Support choice of solver.
-	Solver *S, *STP = S =
-	UseDummySolver ? createDummySolver() : new STPSolver(true);
-	if (UseSTPQueryPCLog) S = createPCLoggingSolver(S, "stp-queries.pc");
-	if (UseFastCexSolver) S = createFastCexSolver(S);
-	S = createCexCachingSolver(S);
-	S = createCachingSolver(S);
-	S = createIndependentSolver(S);
-	if (0) S = createValidatingSolver(S, STP);
-	return S;
+	return Solver::createChain("", "");
 }
 
 static void printQueries(void)
@@ -252,8 +251,8 @@ static bool EvaluateInputAST(
 	ExprBuilder *Builder)
 {
 	std::vector<Decl*>	Decls;
-	Parser		*P;
-	Solver		*S;
+	Parser			*P;
+	Solver			*S;
 	unsigned int		Index;
 
 	P = Parser::Create(Filename, MB, Builder);
@@ -282,7 +281,9 @@ static bool EvaluateInputAST(
 		++Index;
 	}
 
-	foreach (it, Decls.begin(), Decls.end()) delete *it;
+	foreach (it, Decls.begin(), Decls.end())
+		delete *it;
+
 	delete P;
 
 	delete S;
@@ -293,53 +294,55 @@ static bool EvaluateInputAST(
 
 int main(int argc, char **argv)
 {
-  bool success = true;
+	bool success = true;
 
-  llvm::sys::PrintStackTraceOnErrorSignal();
-  llvm::cl::ParseCommandLineOptions(argc, argv);
+	llvm::sys::PrintStackTraceOnErrorSignal();
+	llvm::cl::ParseCommandLineOptions(argc, argv);
 
-  std::string ErrorStr;
-  MemoryBuffer *MB = MemoryBuffer::getFileOrSTDIN(InputFile.c_str(), &ErrorStr);
-  if (!MB) {
-    std::cerr << argv[0] << ": error: " << ErrorStr << "\n";
-    return 1;
-  }
+	std::string ErrorStr;
+	MemoryBuffer *MB;
+	MB = MemoryBuffer::getFileOrSTDIN(InputFile.c_str(), &ErrorStr);
+	if (!MB) {
+		std::cerr << argv[0] << ": error: " << ErrorStr << "\n";
+		return 1;
+	}
 
-  ExprBuilder *Builder = 0;
-  switch (BuilderKind) {
-  case DefaultBuilder:
-    Builder = createDefaultExprBuilder();
-    break;
-  case ConstantFoldingBuilder:
-    Builder = createDefaultExprBuilder();
-    Builder = createConstantFoldingExprBuilder(Builder);
-    break;
-  case SimplifyingBuilder:
-    Builder = createDefaultExprBuilder();
-    Builder = createConstantFoldingExprBuilder(Builder);
-    Builder = createSimplifyingExprBuilder(Builder);
-    break;
-  }
+	ExprBuilder *Builder = createDefaultExprBuilder();
+	switch (BuilderKind) {
+	case DefaultBuilder:
+		break;
+	case ConstantFoldingBuilder:
+		Builder = createConstantFoldingExprBuilder(Builder);
+		break;
+	case SimplifyingBuilder:
+		Builder = createConstantFoldingExprBuilder(Builder);
+		Builder = createSimplifyingExprBuilder(Builder);
+		break;
+	}
 
-  switch (ToolAction) {
-  case PrintTokens:
-    PrintInputTokens(MB);
-    break;
-  case PrintAST:
-    success = PrintInputAST(InputFile=="-" ? "<stdin>" : InputFile.c_str(), MB,
-                            Builder);
-    break;
-  case Evaluate:
-    success = EvaluateInputAST(InputFile=="-" ? "<stdin>" : InputFile.c_str(),
-                               MB, Builder);
-    break;
-  default:
-    std::cerr << argv[0] << ": error: Unknown program action!\n";
-  }
+	switch (ToolAction) {
+	case PrintTokens:
+		PrintInputTokens(MB);
+		break;
+	case PrintAST:
+		success = PrintInputAST(
+			InputFile=="-" ? "<stdin>" : InputFile.c_str(),
+			MB,
+			Builder);
+		break;
+	case Evaluate:
+		success = EvaluateInputAST(
+			InputFile=="-" ? "<stdin>" : InputFile.c_str(),
+			MB,
+			Builder);
+		break;
+	default:
+		std::cerr << argv[0] << ": error: Unknown program action!\n";
+	}
 
-  delete Builder;
-  delete MB;
+	delete Builder;
+	delete MB;
 
-  llvm::llvm_shutdown();
-  return success ? 0 : 1;
+	llvm::llvm_shutdown();
+	return success ? 0 : 1;
 }
