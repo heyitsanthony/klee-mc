@@ -718,7 +718,7 @@ static ref<Expr> AndExpr_create(Expr *l, Expr *r) {
   if (*l == *r)
     return l;
   else if (l->getWidth() == Expr::Bool) {
-    if (*l == *NotExpr::create(r).get()) // a && !a = false
+    if (*l == *Expr::createIsZero(r).get()) // a && !a = false
       return ConstantExpr::create(0, Expr::Bool);
   }
   return AndExpr::alloc(l, r);
@@ -740,7 +740,7 @@ static ref<Expr> OrExpr_create(Expr *l, Expr *r) {
   if (*l == *r)
     return l;
   else if (l->getWidth() == Expr::Bool) {
-    if (*l == *NotExpr::create(r).get()) // a || !a = true
+    if (*l == *Expr::createIsZero(r).get()) // a || !a = true
       return ConstantExpr::create(1, Expr::Bool);
   }
   return OrExpr::alloc(l, r);
