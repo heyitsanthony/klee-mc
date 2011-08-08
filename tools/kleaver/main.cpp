@@ -148,7 +148,7 @@ static void doQuery(Solver* S, QueryCommand* QC)
 		bool result;
 		bool query_ok;
 		Query	q(ConstraintManager(QC->Constraints), QC->Query);
-		q.print(std::cerr);
+//		q.print(std::cerr);
 
 		query_ok = S->mustBeTrue(
 			Query(	ConstraintManager(QC->Constraints),
@@ -163,7 +163,6 @@ static void doQuery(Solver* S, QueryCommand* QC)
 
 	if (!QC->Values.empty()) {
 		bool	query_ok;
-		std::cout << "BBBBBBB\n";
 		assert(QC->Objects.empty() &&
 		"FIXME: Support counterexamples for values and objects!");
 		assert(QC->Values.size() == 1 &&
@@ -188,7 +187,6 @@ static void doQuery(Solver* S, QueryCommand* QC)
 	bool query_ok;
 	std::vector< std::vector<unsigned char> > result;
 
-	std::cout << "CCCCCCC\n";
 	query_ok = S->getInitialValues(
 		Query(	ConstraintManager(QC->Constraints),
 			QC->Query),

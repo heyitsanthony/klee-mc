@@ -32,6 +32,7 @@ Z3SolverImpl::Z3SolverImpl(void)
 	Z3_set_param_value(z3_cfg, "MODEL", "true");
 	Z3_set_param_value(z3_cfg, "MODEL_PARTIAL", "false");
 	Z3_set_param_value(z3_cfg, "MODEL_COMPLETION", "true");
+	Z3_set_param_value(z3_cfg, "ELIM_TERM_ITE", "true");
 }
 
 Z3SolverImpl::~Z3SolverImpl(void)

@@ -309,14 +309,16 @@ void* sc_enter(void* regfile, void* jmpptr)
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
 		break;
 	case SYS_write:
-		if (fail_c.fc_write % (2*FAILURE_RATE)) {
+		if (fail_c.fc_write % (4*FAILURE_RATE)) {
 			new_regs = sc_new_regs(regfile);
 			if ((int64_t)GET_RAX(new_regs) == -1) {
 				break;
 			}
+//			sc_ret_v(new_regs, concretize_u64(GET_ARG2(regfile)));
 			sc_ret_v(new_regs, GET_ARG2(regfile));
 		} else
 			sc_ret_v(regfile, GET_ARG2(regfile));
+//			sc_ret_v(regfile, concretize_u64(GET_ARG2(regfile)));
 		break;
 	case SYS_exit:
 	case SYS_exit_group: {

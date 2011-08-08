@@ -16,7 +16,7 @@
 
 namespace {
   llvm::cl::opt<bool>
-  UseVisitorHash("use-visitor-hash", 
+  UseVisitorHash("use-visitor-hash",
                  llvm::cl::desc("Use hash-consing during expr visitation."),
                  llvm::cl::init(true));
 }
@@ -38,8 +38,9 @@ ref<Expr> ExprVisitor::visit(const ref<Expr> &e) {
   }
 }
 
-ref<Expr> ExprVisitor::visitActual(const ref<Expr> &e) {
-  if (isa<ConstantExpr>(e) && !visitConstants) return e;
+ref<Expr> ExprVisitor::visitActual(const ref<Expr> &e)
+{
+    if (isa<ConstantExpr>(e) && !visitConstants) return e;
 
     Expr &ep = *e.get();
 
@@ -87,7 +88,10 @@ ref<Expr> ExprVisitor::visitActual(const ref<Expr> &e) {
     case Expr::Sgt: res = visitSgt(static_cast<SgtExpr&>(ep)); break;
     case Expr::Sge: res = visitSge(static_cast<SgeExpr&>(ep)); break;
     case Expr::Constant:
-      if (visitConstants) break;
+    if (visitConstants) {
+      res = visitConstant(static_cast<ConstantExpr&>(ep));
+      break;
+    }
     default:
       assert(0 && "invalid expression kind");
     }
@@ -172,3 +176,4 @@ DO_CHILDREN_ACTION(Slt, SltExpr)
 DO_CHILDREN_ACTION(Sle, SleExpr)
 DO_CHILDREN_ACTION(Sgt, SgtExpr)
 DO_CHILDREN_ACTION(Sge, SgeExpr)
+DO_CHILDREN_ACTION(Constant, ConstantExpr)

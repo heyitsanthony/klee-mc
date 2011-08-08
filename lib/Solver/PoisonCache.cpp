@@ -1,6 +1,7 @@
 #include "klee/Constraints.h"
 #include "static/Support.h"
 #include <iostream>
+#include <fstream>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -21,11 +22,11 @@ static PoisonCache* g_pc = NULL;
 static char altstack[SIGSTKSZ];
 
 namespace {
-  cl::opt<std::string>
-  PCacheDir(
-	"pcache-dir",
-	cl::init(""),
-	cl::desc("Run STP in forked process"));
+	cl::opt<std::string>
+	PCacheDir(
+		"pcache-dir",
+		cl::init(""),
+		cl::desc("Run STP in forked process"));
 }
 
 
@@ -56,6 +57,8 @@ void PoisonCache::sig_poison(int signum, siginfo_t *si, void *p)
 
 	bw = write(STDERR_FILENO, "die!\n", 5);
 	assert (bw == 5);
+
+	/* had some problems getting this to work... */
 	kill(getpid(), SIGHUP);
 	kill(getpid(), SIGABRT);
 	raise(SIGHUP);
@@ -197,7 +200,6 @@ void PoisonCache::loadCacheFromDisk(const char* fname)
 /* The naive version. WE WERE SUCH FOOLS. Blindly use the default hash
  * circa epoch. We assume it's OK. */
 unsigned PHExpr::hash(const Query& q) const { return q.hash(); }
-
 
 #include "klee/util/ExprVisitor.h"
 class RewriteVisitor : public ExprVisitor
