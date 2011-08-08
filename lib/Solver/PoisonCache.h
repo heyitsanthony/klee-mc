@@ -22,6 +22,8 @@
 namespace klee
 {
 
+class Query;
+
 class PoisonHash
 {
 public:
@@ -56,6 +58,7 @@ public:
 	virtual ~PoisonCache();
 
 	static void sig_poison(int signum, siginfo_t*, void*);
+	static void sigpoison_save(void);
 private:
 	bool			in_solver;
 	unsigned		hash_last;

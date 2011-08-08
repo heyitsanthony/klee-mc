@@ -5,6 +5,8 @@
 #include "klee/Internal/ADT/KTest.h"
 #include "klee/Internal/System/Time.h"
 #include "klee/util/gzip.h"
+#include "klee/Solver.h"
+#include "../../lib/Solver/SMTPrinter.h"
 #include "static/Sugar.h"
 #include "cmdargs.h"
 
@@ -45,6 +47,11 @@ namespace {
   cl::opt<bool> WritePCs(
     "write-pcs",
     cl::desc("Write .pc files for each test case"));
+
+  cl::opt<bool> WriteSMT(
+  	"write-smt",
+	cl::desc("Write .smt files for each test case"),
+	cl::init(false));
 
   cl::opt<bool> WritePaths(
     "write-paths",
@@ -319,14 +326,7 @@ void KleeHandler::processTestCase(
   }
 
   if (errorMessage || WritePCs) {
-    std::string constraints;
-    m_interpreter->getConstraintLog(state, constraints);
-    if (std::ostream* f = openTestFile("pc", id)) {
-      *f << constraints;
-      delete f;
-    }
-    else
-      klee_warning("unable to write .pc file, losing it (errno=%d: %s)", errno, strerror(errno));
+    dumpPCs(state, id);
   }
 
   if (WriteCVCs) {
@@ -396,7 +396,34 @@ void KleeHandler::processTestCase(
   fprintf(stderr, "=========DONE WRITING OUT TESTID=%d (s=%p)\n", id, &state);
 }
 
+void KleeHandler::dumpPCs(const ExecutionState& state, unsigned id)
+{
+	std::string constraints;
 
+	m_interpreter->getConstraintLog(state, constraints);
+	if (std::ostream* f = openTestFile("pc", id)) {
+		*f << constraints;
+		delete f;
+	} else
+		klee_warning(
+			"unable to write .pc file, losing it (errno=%d: %s)",
+			errno, strerror(errno));
+
+	if (WriteSMT) {
+		Query		query(
+			state.constraints,
+			ConstantExpr::alloc(0, Expr::Bool));
+		std::ostream	*f;
+
+		f = openTestFile("smt", id);
+		SMTPrinter::print(*f, query);
+		delete f;
+		/* these things are pretty big */
+		GZip::gzipFile(
+			getTestFilename("smt", id).c_str(),
+			(getTestFilename("smt", id) + ".gz").c_str());
+	}
+}
 void KleeHandler::dumpLog(
 	const char* name,
 	unsigned id,

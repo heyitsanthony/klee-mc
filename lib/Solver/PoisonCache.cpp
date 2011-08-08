@@ -1,5 +1,7 @@
 #include "klee/Constraints.h"
 #include "static/Support.h"
+#include "klee/Solver.h"
+#include "SMTPrinter.h"
 #include <iostream>
 #include <fstream>
 #include <sys/types.h>
@@ -27,6 +29,31 @@ namespace {
 		"pcache-dir",
 		cl::init(""),
 		cl::desc("Run STP in forked process"));
+	cl::opt<bool>
+	PCacheSMTLog(
+		"pcache-smtlog",
+		cl::desc("Print SMT test for new poisonous input."),
+		cl::init(false));
+}
+
+void PoisonCache::sigpoison_save(void)
+{
+	ssize_t bw;
+	int	fd;
+	char	path[128];
+
+	snprintf(
+		path,
+		128,
+		"%s/"POISON_DEFAULT_PATH".%s",
+		(PCacheDir.size()) ? PCacheDir.c_str() : ".",
+		g_pc->phash->getName());
+	bw = write(STDERR_FILENO, "saving ", 7);
+	bw = write(STDERR_FILENO, path, strlen(path));
+	bw = write(STDERR_FILENO, "\n", 1);
+	fd = open(path, O_WRONLY | O_APPEND | O_CREAT, 0600);
+	bw = write(fd, &g_pc->hash_last, sizeof(g_pc->hash_last));
+	close(fd);
 }
 
 
@@ -37,23 +64,7 @@ void PoisonCache::sig_poison(int signum, siginfo_t *si, void *p)
 	/* crashed before poison cache init..? */
 	if (g_pc == NULL) return;
 
-	if (g_pc->in_solver) {
-		/* save to cache */
-		int	fd;
-		char	path[128];
-		snprintf(
-			path,
-			128,
-			"%s/"POISON_DEFAULT_PATH".%s",
-			(PCacheDir.size()) ? PCacheDir.c_str() : ".",
-			g_pc->phash->getName());
-		bw = write(STDERR_FILENO, "saving ", 7);
-		bw = write(STDERR_FILENO, path, strlen(path));
-		bw = write(STDERR_FILENO, "\n", 1);
-		fd = open(path, O_WRONLY | O_APPEND | O_CREAT, 0600);
-		bw = write(fd, &g_pc->hash_last, sizeof(g_pc->hash_last));
-		close(fd);
-	}
+	if (g_pc->in_solver) sigpoison_save();
 
 	bw = write(STDERR_FILENO, "die!\n", 5);
 	assert (bw == 5);
@@ -175,6 +186,22 @@ bool PoisonCache::badQuery(const Query& q)
 	hash_last = phash->hash(q);
 	if (poison_hashes.count(hash_last) == 0) {
 		return false;
+	}
+
+	if (PCacheSMTLog) {
+		char		path[128];
+		struct stat	st;
+		snprintf(
+			path,
+			128,
+			"%s/poison.%s.%x.smt",
+			(PCacheDir.size()) ? PCacheDir.c_str() : ".",
+			g_pc->phash->getName(),
+			g_pc->hash_last);
+		if (stat(path, &st) == -1) {
+			std::ofstream	of(path);
+			SMTPrinter::print(of, q);
+		}
 	}
 
 	fprintf(stderr, "GOOD BYE POISON QUERY\n");

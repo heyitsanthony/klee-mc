@@ -29,7 +29,6 @@ SMTPrinter::Action SMTPrinter::visitExprPost(const Expr &e)
 		break;
 	case Expr::Ne: os << "))\n"; break;
 	case Expr::Add:
-		std::cerr << "WHAT THE FUCK."<< (void*)this << "\n";
 	default:
 		os << ")\n";
 	}
@@ -50,11 +49,6 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr &e)
 	case Expr::x: 		\
 		os << "(ite ("#y" "; break;	\
 
-
-	std::cerr << "VISITING EXPR(" << (void*)this << ") " <<
-		e.getNumKids() << "\n";
-	e.print(std::cerr);
-	std::cerr << "\n";
 
 	switch (e.getKind()) {
 	case Expr::NotOptimized: break;
@@ -128,7 +122,6 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr &e)
 		std::cerr << std::endl;
 		assert("WHoops");
 	}
-	std::cerr << "DOING CHILDREN\n";
 	return Action::doChildren();
 }
 

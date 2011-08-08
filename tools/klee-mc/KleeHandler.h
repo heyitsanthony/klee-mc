@@ -65,6 +65,7 @@ typedef
 	std::string setupOutputDir(void);
 	bool scanForOutputDir(const std::string& path, std::string& theDir);
 	void processSuccessfulTest(unsigned id, out_objs&);
+	void dumpPCs(const ExecutionState& state, unsigned id);
 	void dumpLog(
 		const char* name,
 		unsigned id,
