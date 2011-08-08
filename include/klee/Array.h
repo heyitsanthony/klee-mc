@@ -16,10 +16,6 @@ public:
   const std::string name;
   MallocKey mallocKey;
 
-  /// constantValues - The constant initial values for this array, or empty for
-  /// a symbolic array. If non-empty, this size of this array is equivalent to
-  /// the array size.
-  const std::vector< ref<ConstantExpr> > constantValues;
   // FIXME: This does not belong here.
   mutable void *stpInitialArray;
   mutable void *btorInitialArray;
@@ -41,27 +37,16 @@ public:
   Array(const std::string &_name,
         MallocKey _mallocKey,
         const ref<ConstantExpr> *constantValuesBegin = 0,
-        const ref<ConstantExpr> *constantValuesEnd = 0)
-    : name(_name), mallocKey(_mallocKey),
-      constantValues(constantValuesBegin, constantValuesEnd)
-      , stpInitialArray(0), btorInitialArray(0), z3InitialArray(0)
-      , refCount(refCountDontCare)
-  {
-    chk_val = 0x12345678;
-    assert((isSymbolicArray() || constantValues.size() == mallocKey.size) &&
-           "Invalid size for constant array!");
-#ifdef NDEBUG
-    for (const ref<ConstantExpr> *it = constantValuesBegin;
-         it != constantValuesEnd; ++it)
-      assert(it->getWidth() == getRange() &&
-             "Invalid initial constant value!");
-#endif
-  }
+        const ref<ConstantExpr> *constantValuesEnd = 0);
   ~Array();
 
-  bool isSymbolicArray() const { assert (chk_val == 0x12345678); return constantValues.empty(); }
+  bool isSymbolicArray() const {
+  	assert (chk_val == 0x12345678);
+	return (constant_count == 0);
+  }
   bool isConstantArray() const { return !isSymbolicArray(); }
 
+  const ref<ConstantExpr> getValue(unsigned int k) const;
   Expr::Width getDomain() const { return Expr::Int32; }
   Expr::Width getRange() const { return Expr::Int8; }
 
@@ -74,27 +59,7 @@ public:
   }
 
   // returns true if a < b
-  bool operator< (const Array &b) const
-  {
-    if (isConstantArray() != b.isConstantArray()) {
-      return isConstantArray() < b.isConstantArray();
-    } else if (isConstantArray() && b.isConstantArray()) {
-      // disregard mallocKey for constant arrays; mallocKey matches are 
-      // not a sufficient condition for constant arrays, but value matches are
-      if (constantValues.size() != b.constantValues.size())
-        return constantValues.size() < b.constantValues.size();
-
-      for (unsigned i = 0; i < constantValues.size(); i++) {
-        if (constantValues[i] != b.constantValues[i])
-          return constantValues[i] < b.constantValues[i];
-      }
-      return false; // equal, so NOT less than
-    } else if (mallocKey.allocSite && b.mallocKey.allocSite) {
-      return mallocKey.compare(b.mallocKey) == -1;
-    } else {
-      return name < b.name;
-    }
-  }
+  bool operator< (const Array &b) const;
 
   struct Compare
   {
@@ -104,4 +69,12 @@ public:
       return (*a < *b);
     }
   };
+
+private:
+  /// constantValues - The constant initial values for this array, or empty for
+  /// a symbolic array. If non-empty, this size of this array is equivalent to
+  /// the array size.
+  std::vector< ref<ConstantExpr> >	constantValues_expr;
+  uint8_t*				constantValues_u8;
+  unsigned int				constant_count;
 };

@@ -352,7 +352,7 @@ public:
     if (array.isConstantArray() &&
         index.isFixed() &&
         index.min() < array.mallocKey.size)
-      return ValueRange(array.constantValues[index.min()]->getZExtValue(8));
+      return ValueRange(array.getValue(index.min())->getZExtValue(8));
 
     return ValueRange(0, 255);
   }
@@ -818,8 +818,7 @@ public:
       if (index.isFixed()) {
         if (array->isConstantArray()) {
           // Verify the range.
-          propogateExactValues(array->constantValues[index.min()],
-                               range);
+          propogateExactValues(array->getValue(index.min()), range);
         } else {
           CexValueData cvd = cod.getExactValues(index.min());
           if (range.min() > cvd.min()) {

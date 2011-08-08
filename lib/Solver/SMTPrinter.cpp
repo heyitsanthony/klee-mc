@@ -145,8 +145,8 @@ void SMTPrinter::print(std::ostream& os, const Query& q)
 		":logic QF_AUFBV\n"
 		":category {industrial}\n";
 
-	/* buffer formulas and assumptions so we know which 
-	 * arrays we're going to need to load before committing 
+	/* buffer formulas and assumptions so we know which
+	 * arrays we're going to need to load before committing
 	 * assumptions and formulas to the ostream */
 	foreach (it, q.constraints.begin(), q.constraints.end()) {
 		ss << ":assumption\n";
@@ -191,9 +191,9 @@ const std::string& SMTPrinter::getArrayForUpdate(
 
 	// FIXME: This really needs to be non-recursive.
 	mid = getArrayForUpdate(root, un->next);
-	ret =	"(store " + 
+	ret =	"(store " +
 		mid + " " +
-		expr2str(un->index) + " " + 
+		expr2str(un->index) + " " +
 		expr2str(un->value) + ")\n";
 	
 
@@ -228,7 +228,7 @@ const std::string& SMTPrinter::getInitialArray(const Array *root)
 	arr_name = arr2name(root);
 	if (!root->isConstantArray()) goto done;
 
-	/* format: 
+	/* format:
 	 * 	(and	(= (select A 0) bvconst[8])
 	 * 		(= (select A 1) bvconst2[8])
 	 * 		...)
@@ -238,10 +238,9 @@ const std::string& SMTPrinter::getInitialArray(const Array *root)
 	assert (root->mallocKey.size);
 	for (unsigned i = 0, e = root->mallocKey.size; i != e; ++i) {
 		char	idxbuf[64];
-		sprintf(idxbuf,
-			" bv%d[32]) bv%d[8] )\n",
+		sprintf(idxbuf, " bv%d[32]) bv%d[8])\n",
 			i,
-			((uint8_t)root->constantValues[i]->getZExtValue()));
+			(uint8_t)root->getValue(i)->getZExtValue(8));
 		assump_str += "(= (select " + arr_name + idxbuf;
 	}
 
@@ -274,9 +273,9 @@ std::string SMTPrinter::expr2str(const ref<Expr>& e)
 	std::stringstream	ss;
 	std::string		fff;
 	SMTPrinter		smt_pr(ss, arr);
-	const ConstantExpr	*ce;
+	ConstantExpr		*ce;
 
-	if (ce = dyn_cast<const ConstantExpr>(e)) {
+	if (ce = dyn_cast<ConstantExpr>(e)) {
 		ss << "bv" << ce->getZExtValue() << "[" << e->getWidth() << "]";
 		return ss.str();
 	}

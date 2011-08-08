@@ -25,7 +25,7 @@ using namespace llvm;
 namespace {
   cl::opt<bool>
   ConstArrayOpt("const-array-opt",
-	 cl::init(false),
+	 cl::init(true),
 	 cl::desc("Enable various optimizations involving all-constant arrays."));
 }
 
@@ -298,26 +298,9 @@ void Expr::dump() const {
   std::cerr << std::endl;
 }
 
-/***/
-
-
 ref<Expr>  NotOptimizedExpr::create(ref<Expr> src) {
   return NotOptimizedExpr::alloc(src);
 }
-
-/***/
-
-extern "C" void vc_DeleteExpr(void*);
-
-Array::~Array() {
-  // FIXME: This shouldn't be necessary.
-  if (stpInitialArray) {
-    ::vc_DeleteExpr(stpInitialArray);
-    stpInitialArray = 0;
-  }
-  chk_val = ~0;
-}
-
 /***/
 
 MallocKey::seensizes_ty MallocKey::seenSizes;
@@ -908,7 +891,7 @@ static ref<Expr> TryConstArrayOpt(const ref<ConstantExpr> &cl,
   // where the concrete array has one update for each index, in order
   ref<Expr> res = ConstantExpr::alloc(0, Expr::Bool);
   for (unsigned i = 0, e = rd->updates.root->mallocKey.size; i != e; ++i) {
-    if (cl == rd->updates.root->constantValues[i]) {
+    if (cl == rd->updates.root->getValue(i)) {
       // Arbitrary maximum on the size of disjunction.
       if (++numMatches > 100)
         return EqExpr_create(cl, rd);

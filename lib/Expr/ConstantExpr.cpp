@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "klee/Expr.h"
 
+#include "llvm/ADT/APInt.h"
 #include "llvm/Constants.h"
 #include "llvm/DerivedTypes.h"
 #include "llvm/Support/CommandLine.h"
@@ -9,11 +10,29 @@
 #include "klee/Internal/Support/IntEvaluation.h"
 
 #include "klee/util/ExprPPrinter.h"
+#include <hash_map>
 
 #include <iostream>
 #include <sstream>
 
 using namespace klee;
+
+struct ltapint
+{
+bool operator()(const llvm::APInt& a, const llvm::APInt& b)
+{
+	if (a.getBitWidth() < b.getBitWidth()) return true;
+	if (a.getBitWidth() > b.getBitWidth()) return false;
+	return a.ult(b);
+}
+};
+
+typedef std::map<
+	llvm::APInt,
+	ref<ConstantExpr>,
+	struct ltapint> ConstantExprTab;
+	
+ConstantExprTab const_hashtab;
 
 ref<Expr> ConstantExpr::fromMemory(void *address, Width width) {
   switch (width) {
@@ -44,6 +63,22 @@ void ConstantExpr::toMemory(void *address) {
     *((long double*) address) = *(long double*) value.getRawData();
     break;
   }
+}
+
+ref<ConstantExpr> ConstantExpr::alloc(const llvm::APInt &v)
+{
+	ConstantExprTab::iterator	it;
+
+	it = const_hashtab.find(v);
+	if (it != const_hashtab.end()) {
+		return it->second;
+	}
+
+	ref<ConstantExpr> r(new ConstantExpr(v));
+	r->computeHash();
+	const_hashtab.insert(std::make_pair(v, r));
+
+	return r;
 }
 
 void ConstantExpr::toString(std::string &Res) const {

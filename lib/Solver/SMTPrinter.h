@@ -42,7 +42,6 @@ private:
 	// allocated/freed by print. 
 	// Used to pass array data for nested expr2str calls.
 	SMTArrays	*arr;
-
 };
 
 }

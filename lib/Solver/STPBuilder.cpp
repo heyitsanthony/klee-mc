@@ -403,7 +403,7 @@ ExprHandle STPBuilder::constructSDivByConstant(ExprHandle expr_n, unsigned width
         root->stpInitialArray = 
           vc_writeExpr(vc, prev,
                        construct(ConstantExpr::alloc(i, root->getDomain()), 0),
-                       construct(root->constantValues[i], 0));
+                       construct(root->getValue(i), 0));
         vc_DeleteExpr(prev);
       }
     }

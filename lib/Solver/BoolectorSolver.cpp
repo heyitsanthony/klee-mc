@@ -459,7 +459,7 @@ BtorExp* BoolectorSolverImpl::getInitialArray(const Array *root)
 			btor,
 			ret,
 			klee2btor(ConstantExpr::alloc(i, root->getDomain())),
-			klee2btor(root->constantValues[i]));
+			klee2btor(root->getValue(i)));
 
 		exp_set.insert(ret);
 	}

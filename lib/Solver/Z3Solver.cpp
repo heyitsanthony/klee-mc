@@ -437,7 +437,7 @@ Z3_ast Z3SolverImpl::getInitialArray(const Array *root)
 			z3_ctx,
 			ret,
 			klee2z3(ConstantExpr::alloc(i, root->getDomain())),
-			klee2z3(root->constantValues[i]));
+			klee2z3(root->getValue(i)));
 	}
 
 done:

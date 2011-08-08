@@ -93,11 +93,7 @@ public:
   static ref<Expr> fromMemory(void *address, Width w);
   void toMemory(void *address);
 
-  static ref<ConstantExpr> alloc(const llvm::APInt &v) {
-    ref<ConstantExpr> r(new ConstantExpr(v));
-    r->computeHash();
-    return r;
-  }
+  static ref<ConstantExpr> alloc(const llvm::APInt &v);
 
   static ref<ConstantExpr> alloc(const llvm::APFloat &f) {
     return alloc(f.bitcastToAPInt());

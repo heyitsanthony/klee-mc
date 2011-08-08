@@ -1581,7 +1581,7 @@ void ArrayDecl::dump() {
     for (unsigned i = 0, e = Root->mallocKey.size; i != e; ++i) {
       if (i)
         std::cout << " ";
-      std::cout << Root->constantValues[i];
+      std::cout << Root->getValue(i);
     }
     std::cout << "]\n";
   }

@@ -533,7 +533,7 @@ void ExprPPrinter::printQuery(std::ostream &os,
         for (unsigned i = 0, e = A->mallocKey.size; i != e; ++i) {
           if (i)
             PC << " ";
-          PC << A->constantValues[i];
+          PC << A->getValue(i);
         }
         PC << "]";
       }
