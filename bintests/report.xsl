@@ -86,7 +86,8 @@ KLEE-MC Command Tests
 <li>Total Timeouts: <xsl:value-of select="count(//timeout)"/></li>
 <li>Total Solver Explosions: <xsl:value-of select="count(//badsolve)"/></li>
 <li>Total Unimplemented Syscall: <xsl:value-of select="count(//newsyscall)"/></li>
-<li>Total Native Bytes Executed: <xsl:value-of select="sum(//kstats/UncoveredInstructions) + sum(//kstats/CoveredInstructions)"/></li>
+<li>Total LLVM Instructions from VEXLLVM: <xsl:value-of select="sum(//kstats/UncoveredInstructions) + sum(//kstats/CoveredInstructions)"/></li>
+<li>Total LLVM Instructions dispatched: <xsl:value-of select="sum(//kstats/Instructions)"/></li>
 </ul>
 
 </body>
