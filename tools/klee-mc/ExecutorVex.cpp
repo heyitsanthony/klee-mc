@@ -212,50 +212,61 @@ void ExecutorVex::prepState(ExecutionState* state, Function* f)
 	setupProcessMemory(state, f);
 }
 
-#define STACK_EXTEND 0x100000
-void ExecutorVex::bindMapping(
+/* Argh, really need to stop macroing the page size all the time */
+#define PAGE_SIZE	4096
+void ExecutorVex::bindMappingPage(
 	ExecutionState* state,
 	Function* f,
-	GuestMem::Mapping m)
+	const GuestMem::Mapping& m,
+	unsigned int pgnum)
 {
+	const char		*data;
 	MemoryObject		*mmap_mo;
 	ObjectState		*mmap_os;
-	unsigned int		len;
-	unsigned int		copy_offset;
-	const char		*data;
 
-	len = m.getBytes();
+	assert (m.getBytes() > pgnum*PAGE_SIZE);
+	assert ((m.getBytes() % PAGE_SIZE) == 0);
+	assert ((m.offset.o & (PAGE_SIZE-1)) == 0);
+
+	mmap_mo = memory->allocateFixed(
+		((uint64_t)m.offset.o)+PAGE_SIZE*pgnum,
+		PAGE_SIZE,
+		f->begin()->begin(),
+		state);
+
 	if (m.isStack()) {
-		mmap_mo = memory->allocateFixed(
-			((uint64_t)m.offset.o)-STACK_EXTEND,
-			len+STACK_EXTEND,
-			f->begin()->begin(),
-			state);
-		copy_offset = STACK_EXTEND;
 		mmap_mo->setName("stack");
 	} else {
-		mmap_mo = memory->allocateFixed(
-			((uint64_t)m.offset.o),
-			len,
-			f->begin()->begin(),
-			state);
 		mmap_mo->setName("guestimg");
-		copy_offset = 0;
 	}
 
-	data = (const char*)gs->getMem()->getData(m);
+	data = (const char*)gs->getMem()->getData(m) + pgnum*PAGE_SIZE;
 	mmap_os = state->bindMemObj(mmap_mo);
-	for (unsigned int i = 0; i < len; i++) {
+	for (unsigned int i = 0; i < PAGE_SIZE; i++) {
 		/* bug fiend note:
 		 * valgrind will complain on this line because of the
 		 * data[i] on the syspage. Linux keeps a syscall page at
 		 * 0xf..f600000 (vsyscall), but valgrind doesn't know this.
 		 * This is safe, but will need a workaround *eventually* */
-		state->write8(mmap_os, i+copy_offset, data[i]);
+		state->write8(mmap_os, i, data[i]);
 	}
 
 	mmap_mo->print(std::cerr);
 	std::cerr << "\n";
+}
+
+void ExecutorVex::bindMapping(
+	ExecutionState* state,
+	Function* f,
+	GuestMem::Mapping m)
+{
+	unsigned int		len;
+
+	len = m.getBytes();
+	assert ((len % PAGE_SIZE) == 0);
+	for (unsigned int i = 0; i < len/PAGE_SIZE; i++) {
+		bindMappingPage(state, f, m, i);
+	}
 }
 
 void ExecutorVex::setupProcessMemory(ExecutionState* state, Function* f)

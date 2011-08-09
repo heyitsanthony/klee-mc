@@ -32,6 +32,7 @@ private:
 	, arr(in_arr) {}
 
 	void printArrayDecls(void) const;
+	void printConstant(const ConstantExpr* ce);
 	static std::string arr2name(const Array* arr);
 
 	const std::string& getArrayForUpdate(

@@ -102,6 +102,12 @@ private:
 		ExecutionState* state,
 		llvm::Function* f,
 		GuestMem::Mapping m);
+	void bindMappingPage(
+		ExecutionState* state,
+		llvm::Function* f,
+		const GuestMem::Mapping& m,
+		unsigned int pgnum);
+
 	void initializeGlobals(ExecutionState& state);
 	void initGlobalFuncs(void);
 

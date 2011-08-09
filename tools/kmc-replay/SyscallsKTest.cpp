@@ -194,6 +194,14 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 		if (sp.getArg(2) == SIGABRT)
 			exited = true;
 		break;
+	case SYS_poll: {
+		struct pollfd*	fds = (struct pollfd*)(sp.getArg(0));
+		unsigned int	nfds = sp.getArg(1);
+		for (unsigned int i = 0; i < nfds; i++)
+			fds[i].revents = fds[i].events;
+		break;
+	}
+
 	case SYS_munmap:
 		sc_munmap(sp);
 		break;

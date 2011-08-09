@@ -4,7 +4,7 @@
 #include "SMTPrinter.h"
 
 #include <assert.h>
-#include <ext/rope>
+#include <algorithm>
 #include <iostream>
 #include <sstream>
 #include <utility>
@@ -111,10 +111,7 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr &e)
 	VISIT_OP(AShr, bvashr)
 	case Expr::Ne: os << "( not (="; break;
 	case Expr::Constant:
-		assert (e.getWidth() <= 64);
-		os	<< "bv"
-			<< static_cast<const ConstantExpr&>(e).getZExtValue()
-			<< "[" << e.getWidth() << "] ";
+		printConstant(dynamic_cast<const ConstantExpr*>(&e));
 		break;
 	default:
 		std::cerr << "Could not handle unknown kind for: ";
@@ -124,6 +121,42 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr &e)
 	}
 	return Action::doChildren();
 }
+
+void SMTPrinter::printConstant(const ConstantExpr* ce)
+{
+	unsigned int width;
+
+	assert (ce != NULL);
+
+	width = ce->getWidth();
+	assert (width <= 64);
+
+	if (width <= 64) {
+		os	<< "bv"
+			<< ce->getZExtValue()
+			<< "[" << width << "] ";
+		return;
+	}
+
+	ref<ConstantExpr> Tmp(ConstantExpr::alloc(ce->getAPValue()));
+	os << "(concat ";
+	os << "bv" << Tmp->Extract(0, 64)->getZExtValue() << "[64] \n";
+	for (unsigned i = (width / 64) - 1; i; --i) {
+		Tmp = Tmp->LShr(ConstantExpr::alloc(64, Tmp->getWidth()));
+
+		if (i != 1) os << "(concat ";
+		os	<< "bv"
+			<< Tmp->Extract(0, 64)->getZExtValue()
+			<< "[" << std::min(64, (int)Tmp->getWidth()) << "] ";
+	}
+
+	for (unsigned i = (width /64) - 1; i; --i) {
+		if (i != 1) os << ")";
+	}
+	os << ")";
+}
+
+
 
 /**
  * Prints queries in SMT form.
@@ -207,9 +240,6 @@ and so on.
 
 -Chris
 */
-
-#define str2rope(x)	__gnu_cxx::rope<char>(x)
-
 const std::string& SMTPrinter::getInitialArray(const Array *root)
 {
 	std::string		arr_name;
@@ -268,7 +298,8 @@ std::string SMTPrinter::expr2str(const ref<Expr>& e)
 	SMTPrinter		smt_pr(ss, arr);
 	ConstantExpr		*ce;
 
-	if (ce = dyn_cast<ConstantExpr>(e)) {
+	if ((ce = dyn_cast<ConstantExpr>(e)) != NULL) {
+		assert (e->getWidth() <= 64);
 		ss << "bv" << ce->getZExtValue() << "[" << e->getWidth() << "]";
 		return ss.str();
 	}
