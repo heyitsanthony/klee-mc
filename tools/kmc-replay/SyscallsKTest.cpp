@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include "klee/klee.h"
 #include "klee/breadcrumb.h"
 #include "klee/Internal/ADT/KTest.h"
 #include "guestcpustate.h"
@@ -91,10 +92,10 @@ void SyscallsKTest::loadSyscallEntry(SyscallParams& sp)
 			KREPLAY_NOTE
 			"sys_nr=%d. arg[0]=%p arg[1]=%p arg[2]=%p\n",
 			sc_retired,
-			sys_nr,
-			sp.getArg(0),
-			sp.getArg(1),
-			sp.getArg(2));
+			(int)sys_nr,
+			sp.getArgPtr(0),
+			sp.getArgPtr(1),
+			sp.getArgPtr(2));
 		abort();
 	}
 
@@ -104,7 +105,7 @@ void SyscallsKTest::loadSyscallEntry(SyscallParams& sp)
 		fprintf(stderr,
 			KREPLAY_NOTE
 			"Mismatched: Got sysnr=%d. Expected sysnr=%d\n",
-			sys_nr, bcs_crumb->bcs_sysnr);
+			(int)sys_nr, (int)bcs_crumb->bcs_sysnr);
 	}
 
 	assert (bcs_crumb->bcs_sysnr == sys_nr && "sysnr mismatch with log");
@@ -131,7 +132,6 @@ void SyscallsKTest::feedSyscallOp(SyscallParams& sp)
 	struct bc_sc_memop	*sop;
 	uint64_t		dst_ptr;
 	unsigned int		flags;
-	bool			ok;
 
 	sop = reinterpret_cast<struct bc_sc_memop*>(crumbs->next());
 	assert (sop != NULL && "Too few memops?");
@@ -165,7 +165,11 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 	ret = 0;
 	sys_nr = sp.getSyscall();
 
-	fprintf(stderr, KREPLAY_NOTE"Applying: sys=%d\n", sys_nr);
+	if (sys_nr != SYS_klee)
+		fprintf(stderr, KREPLAY_NOTE"Applying: sys=%d\n", (int)sys_nr);
+	else
+		fprintf(stderr, KREPLAY_NOTE"Applying: sys=SYS_klee\n");
+
 	loadSyscallEntry(sp);
 
 	/* extra thunks */
@@ -186,7 +190,7 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 		fprintf(stderr,
 			KREPLAY_SC "WRITING %d bytes to fd=%d :\"\n",
 			sp.getArg(2), sp.getArg(0));
-		write(STDERR_FILENO, (void*)sp.getArg(1), sp.getArg(2));
+		write(STDERR_FILENO, sp.getArgPtr(1), sp.getArg(2));
 		fprintf(stderr, "\n" KREPLAY_SC "\".\n");
 
 		break;
@@ -199,6 +203,27 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 		unsigned int	nfds = sp.getArg(1);
 		for (unsigned int i = 0; i < nfds; i++)
 			fds[i].revents = fds[i].events;
+		break;
+	}
+
+	case SYS_getcwd: {
+		if (!bc_sc_is_thunk(bcs_crumb)) break;
+
+		uint64_t addr = bcs_crumb->bcs_ret;
+		assert (addr != 0 && "Tricky getcwd with a NULL return?");
+
+		uint64_t len = sp.getArg(1);
+		if (len > 10) len = 10;
+
+		feedSyscallOp(sp);
+		fprintf(stderr, "ADDR=%p LEN=%d ARG0=%p. ARG1=%p\n",
+			addr, len, sp.getArgPtr(0), sp.getArgPtr(1));
+		if (addr != sp.getArg(0)) {
+			fprintf(stderr, "LOOOOOOOOOOOOOOOOL\n");
+		}
+		((char*)addr)[len-1] = '\0';
+
+		setRet(addr);
 		break;
 	}
 
@@ -233,14 +258,12 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 
 void SyscallsKTest::sc_mmap(SyscallParams& sp)
 {
-	VexGuestAMD64State	*guest_cpu;
 	void			*ret, *bcs_ret;
 	bool			copied_in;
 
 	bcs_ret = (void*)bcs_crumb->bcs_ret;
-	guest_cpu = (VexGuestAMD64State*)guest->getCPUState()->getStateData();
 	if (bcs_ret == MAP_FAILED) {
-		guest_cpu->guest_RAX = (uint64_t)bcs_ret;
+		setRet((uint64_t)bcs_ret);
 		return;
 	}
 
@@ -256,12 +279,12 @@ void SyscallsKTest::sc_mmap(SyscallParams& sp)
 	if (ret == MAP_FAILED) {
 		fprintf(stderr,
 			"MAP FAILED ON FIXED ADDR %p bytes=%p\n",
-			bcs_ret, sp.getArg(1));
+			bcs_ret, sp.getArgPtr(1));
 	}
 	assert (ret != MAP_FAILED);
 
-	guest_cpu->guest_RAX = (uint64_t)ret;
-	copied_in = copyInMemObj(guest_cpu->guest_RAX, sp.getArg(1));
+	setRet((uint64_t)ret);
+	copied_in = copyInMemObj((uint64_t)ret, sp.getArg(1));
 	assert (copied_in && "BAD MMAP MEMOBJ");
 }
 
@@ -294,7 +317,7 @@ char* SyscallsKTest::feedMemObj(unsigned int sz)
 
 	obj_buf = new char[sz];
 	memcpy(obj_buf, cur_obj->bytes, sz);
-	fprintf(stderr, "NOM NOM %s (%d bytes)\n", 
+	fprintf(stderr, "NOM NOM MemObj %s (%d bytes)\n",
 		cur_obj->name,
 		cur_obj->numBytes);
 
@@ -309,6 +332,7 @@ bool SyscallsKTest::copyInMemObj(uint64_t guest_addr, unsigned int sz)
 	if ((buf = feedMemObj(sz)) == NULL)
 		return false;
 
+	fprintf(stderr, "COPY %d bytes INTO addr=%p\n", sz, buf);
 	guest->getMem()->memcpy(guest_ptr(guest_addr), buf, sz);
 
 	delete [] buf;

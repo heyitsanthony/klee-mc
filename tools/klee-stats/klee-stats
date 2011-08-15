@@ -164,7 +164,8 @@ def main(args):
     op = getOpts()
     opts,dirs = op.parse_args()
     if not dirs:
-        op.error("no directories given.")
+        print "No directories given. Defaulting to klee-last."
+        dirs = ["klee-last"]
 
     dirs = getActualDirs(dirs)
 

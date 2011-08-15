@@ -33,6 +33,9 @@ namespace {
 
 unsigned Expr::count = 0;
 
+bool ArrayLT::operator()(const Array *a, const Array *b) const
+{ return *a < *b; }
+
 ref<Expr> Expr::createTempRead(const Array *array, Expr::Width w) {
   UpdateList ul(array, 0);
 

@@ -208,7 +208,8 @@ SFH_DEF_HANDLER(Breadcrumb)
 	buf = sfh->readBytesAtAddress(state, arguments[0], len_expected, len_in, -1);
 	bc = (struct breadcrumb*)buf;
 	if (len_in < sizeof(struct breadcrumb) || bc->bc_sz != len_in) {
-		fprintf(stderr, "GOT LENGTH %d. Expected %d\n", len_in, bc->bc_sz);
+		fprintf(stderr,
+			"GOT LENGTH %d. Expected %d\n", len_in, bc->bc_sz);
 		assert (0 == 1);
 		sfh->executor->terminateStateOnError(
 			state,

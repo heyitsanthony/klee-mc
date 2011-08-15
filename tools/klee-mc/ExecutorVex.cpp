@@ -83,7 +83,7 @@ ExecutorVex::ExecutorVex(
 	assert (gs);
 
 	if (!theGenLLVM) theGenLLVM = new GenLLVM(in_gs);
-	if (!theVexHelpers) theVexHelpers = new VexHelpers(Arch::X86_64);
+	if (!theVexHelpers) theVexHelpers = VexHelpers::create(Arch::X86_64);
 
 	theVexHelpers->loadUserMod("libkleeRuntimeMC.bc");
 

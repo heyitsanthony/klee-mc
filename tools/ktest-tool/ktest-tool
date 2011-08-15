@@ -78,23 +78,8 @@ def trimZeros(str):
             return str[:i+1]
     return ''
 
-def main(args):
-    from optparse import OptionParser
-    op = OptionParser("usage: %prog [options] files")
-    op.add_option('','--notrim-zeros', dest='noTrimZeros', action='store_true',
-                  default=False,
-                  help='do not trim trailing zeros')
-    op.add_option('','--write-ints', dest='writeInts', action='store_true',
-                  default=False,
-                  help='convert 4-byte sequences to integers')
-
-    opts,args = op.parse_args()
-    if not args:
-        op.error("incorrect number of arguments")
-
-    for file in args:
+def printFile(opts, file):
         b = KTest.fromfile(file)
-        pos = 0
         print 'ktest file : %r' % file
         print 'args       : %r' % b.args
         print 'num objects: %r' % len(b.objects)
@@ -110,8 +95,52 @@ def main(args):
                 print 'object %4d: data: %r' % (i, struct.unpack('i',str)[0])
             else:
                 print 'object %4d: data: %r' % (i, str)
-        if file != args[-1]:
-            print
+
+def printFiles(opts, args):
+	for file in args:
+		printFile(opts, file)
+		if file != args[-1]:
+			print
+
+def dumpFile(opts, file):
+	fbase=(file.split('/')[-1:])[0].split('.')[0]
+	dirname='kdump-'+fbase
+	os.mkdir(dirname)
+	b = KTest.fromfile(file)
+	print 'ktest file : %r' % file
+	print 'args       : %r' % b.args
+	print 'num objects: %r' % len(b.objects)
+	for i,(name,data) in enumerate(b.objects):
+		str = data
+		f = open(dirname + '/' + name, 'w')
+		f.write(str)
+		f.close()
+
+def dumpData(opts, args):
+	for file in args:
+		dumpFile(opts, file)
+
+def main(args):
+    from optparse import OptionParser
+    op = OptionParser("usage: %prog [options] files")
+    op.add_option('','--notrim-zeros', dest='noTrimZeros', action='store_true',
+                  default=False,
+                  help='do not trim trailing zeros')
+    op.add_option('','--write-ints', dest='writeInts', action='store_true',
+                  default=False,
+                  help='convert 4-byte sequences to integers')
+    op.add_option('','--dump', dest='dumpData', action='store_true',
+        default=False, help='Dump objects to files')
+
+    opts,args = op.parse_args()
+    if not args:
+        op.error("incorrect number of arguments")
+
+    if opts.dumpData:
+        dumpData(opts, args)
+        return
+
+    printFiles(opts, args)
 
 if __name__=='__main__':
     main(sys.argv)

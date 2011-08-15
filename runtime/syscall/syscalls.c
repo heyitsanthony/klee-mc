@@ -73,11 +73,13 @@ static void* sc_new_regs(void* r)
 	return ret;
 }
 
+#if 0
 static void sc_ret_le0(void* regfile)
 {
 	int64_t	rax = GET_RAX(regfile);
 	klee_assume(rax <= 0);
 }
+#endif
 
 static void sc_ret_ge0(void* regfile)
 {
@@ -118,7 +120,7 @@ static void* sc_mmap_addr(
 	is_himem = (((intptr_t)addr & ~0x7fffffffffffULL) != 0);
 	if (!is_himem) {
 		/* not highmem, use if we've got it.. */
-		addr = concretize_u64(GET_ARG0(regfile));
+		addr = (void*)concretize_u64(GET_ARG0(regfile));
 		klee_define_fixed_object(addr, len);
 		return addr;
 	}
@@ -126,12 +128,12 @@ static void* sc_mmap_addr(
 	/* can never satisfy a hi-mem request */
 	if (GET_ARG2(regfile) & MAP_FIXED) {
 		/* can never fixed map hi-mem */
-		return (uint64_t)MAP_FAILED;
+		return MAP_FAILED;
 	}
 
 	/* toss back whatever */
 	addr = kmc_alloc_aligned(len, "mmap");
-	if (addr == NULL) addr = (uint64_t)MAP_FAILED;
+	if (addr == NULL) addr = MAP_FAILED;
 	return addr;
 }
 
@@ -144,7 +146,7 @@ static void* sc_mmap(void* regfile)
 	len = GET_ARG1(regfile);
 	new_regs = sc_new_regs(regfile);
 
-	if (len >= (uintptr_t)0x10000000 || len < 0) {
+	if (len >= (uintptr_t)0x10000000 || (int64_t)len < 0) {
 		addr = (uint64_t)MAP_FAILED;
 	} else if (GET_ARG0(regfile) == 0) {
 		len = concretize_u64(GET_ARG1(regfile));
@@ -152,7 +154,7 @@ static void* sc_mmap(void* regfile)
 		if (addr == 0) addr = (uint64_t)MAP_FAILED;
 	} else {
 		len = concretize_u64(GET_ARG1(regfile));
-		addr = (uint64_t)sc_mmap_addr(regfile, addr, len);
+		addr = (uint64_t)sc_mmap_addr(regfile, (void*)addr, len);
 	}
 
 	sc_ret_v(new_regs, addr);
@@ -206,9 +208,8 @@ void make_sym_by_arg(
 {
 	uint64_t	addr;
 
-	addr = GET_ARG(regfile, arg_num);
-	klee_assume (addr == klee_get_value(addr));
-	klee_assume (len == klee_get_value(len));
+	addr = concretize_u64(GET_ARG(regfile, arg_num));
+	len = concretize_u64(len);
 
 	klee_check_memory_access((void*)addr, 1);
 
@@ -247,6 +248,13 @@ static void sc_klee(void* regfile)
 			(const char*)klee_get_value(GET_ARG3(regfile)),
 			(const char*)klee_get_value(GET_ARG4(regfile)));
 		break;
+	case KLEE_SYS_KMC_SYMRANGE:
+		make_sym(
+			GET_ARG1(regfile),	/* addr */
+			GET_ARG2(regfile),	/* len */
+			(const char*)GET_ARG3(regfile) /* name */);
+		sc_ret_v(regfile, 0);
+		break;
 	default:
 		klee_report_error(
 			__FILE__,
@@ -263,9 +271,17 @@ void* sc_enter(void* regfile, void* jmpptr)
 	unsigned int		sys_nr;
 
 	sys_nr = GET_SYSNR(regfile);
+
+	/* quick note here: sys_nr can be any syscall number OR
+	 * SYS_klee. Checking for bogus sysnr's by bounding sys_nr by
+	 * 0x1000 would lead to false positives on SYS_klee. */
+	// if (sys_nr > 1000 && sys_nr != SYS_klee) {
+	//	klee_warning("loooooool bogus sysnr");
+	// }
+
 	if (klee_is_symbolic(sys_nr)) {
 		klee_warning_once("Resolving symbolic syscall nr");
-		sys_nr = klee_get_value(sys_nr);
+		sys_nr = concretize_u64(sys_nr);
 	}
 
 	sc_breadcrumb_reset();
@@ -449,23 +465,39 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 
 	case SYS_getcwd: {
-		uint64_t addr = klee_get_value(GET_ARG0(regfile));
+		uint64_t addr = GET_ARG0(regfile);
+		uint64_t len = GET_ARG1(regfile);
 
-		new_regs = sc_new_regs(regfile);
-		if (	GET_RAX(new_regs) >= 1 &&
-			GET_RAX(new_regs) < GET_ARG1(regfile))
-		{
-			make_sym_by_arg(
-				regfile,
-				0,
-				klee_get_value(GET_ARG1(regfile)),
-				"cwdbuf");
-			((char*)addr)[GET_RAX(new_regs)] = '\0';
-		} else {
-			sc_ret_v(new_regs, -1);
+		if (len == 0 || addr == 0) {
+			sc_ret_v(regfile, 0);
+			break;
 		}
-		break;
+
+		addr = concretize_u64(GET_ARG0(regfile));
+
+		klee_assume(addr != 0);
+		sc_ret_v(regfile, addr);
+
+		/* use managably-sized string */
+		if (len > 10) len = 10;
+		make_sym_by_arg(regfile, 0, len, "cwdbuf");
+
+		// XXX remember to do this on the other side!!
+		((char*)addr)[len-1] = '\0';
+
+		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
+		if (addr != GET_ARG0(regfile)) {
+			klee_report_error(
+				__FILE__,__LINE__,
+				"getcwd retmismatch. ARHGHGGHGHGHG",
+				"badcwd.err");
+		}
+
+		sc_breadcrumb_commit(sys_nr, addr);
+		goto already_logged;
 	}
+	break;
+
 	case SYS_sched_getscheduler:
 		klee_warning_once("Pure symbolic on sched_getscheduler");
 		sc_new_regs(regfile);

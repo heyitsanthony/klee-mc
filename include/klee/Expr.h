@@ -42,6 +42,8 @@ class ObjectState;
 
 template<class T> class ref;
 
+struct ArrayLT { bool operator()(const Array *a, const Array *b) const; };
+
 /// Class representing symbolic expressions.
 /**
 

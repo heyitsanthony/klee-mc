@@ -170,6 +170,9 @@ uint8_t* ReplayExec::verifyWithRegLog(void)
 	 * OK to skip sym log until we hit a non-vsyspage in symbolic. */
 	crumbs->skip();
 	if (is_next_sym_vsys) {
+		fprintf(stderr,
+			"Skipping crumb #%d\n",
+			crumbs->getNumProcessed());
 		Crumbs::freeCrumb(bc);
 		return verifyWithRegLog();
 	}
@@ -177,7 +180,7 @@ uint8_t* ReplayExec::verifyWithRegLog(void)
 
 	fprintf(stderr, "-------CHKLOG %d. LastAddr=%p------\n",
 		crumbs->getNumProcessed(),
-		next_addr.o);
+		(void*)next_addr.o);
 	for (unsigned int i = 0; i < reg_sz; i++) {
 		if (!sym_mask[i]) continue;
 		if (sym_reg[i] == guest_reg[i]) continue;

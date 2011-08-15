@@ -45,7 +45,7 @@ bool GZip::gzipFile(const char* src, const char* dst)
 bool GZip::gunzipFile(const char* src, const char* dst)
 {
 	char 	buf[4096];
-	ssize_t	br;
+	ssize_t	br, bw;
 	int	ktest_fd;
 	gzFile	gzF;
 
@@ -60,7 +60,8 @@ bool GZip::gunzipFile(const char* src, const char* dst)
 	}
 
 	while ((br = gzread(gzF, buf, 4096)) > 0) {
-		write(ktest_fd, buf, br);
+		bw = write(ktest_fd, buf, br);
+		assert (bw == br && "Leaky pen");
 		if (br < 4096)
 			break;
 	}

@@ -15,6 +15,12 @@
 
 #define SYS_klee		0x12345678
 #define KLEE_SYS_REPORT_ERROR	0
+#define KLEE_SYS_KMC_SYMRANGE	1	/* kmc_make_range_symbolic(addr, len, name) */
+
+#define ksys_report_error(x,y,z,w)	\
+	syscall(SYS_klee, KLEE_SYS_REPORT_ERROR, x, y, z, w)
+#define ksys_kmc_symrange(x,y,z)	\
+	syscall(SYS_klee, KLEE_SYS_KMC_SYMRANGE, x, y, z)
 
 #ifdef __cplusplus
 extern "C" {
