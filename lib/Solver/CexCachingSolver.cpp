@@ -85,6 +85,8 @@ public:
     klee_message("%*s" "CexCachingSolver containing:", 2*level, "");
     wrappedSolver->printName(level + 1);
   }
+private:
+  Assignment* createBinding(const Query& query, KeyType& key);
 };
 
 ///
@@ -200,42 +202,47 @@ bool CexCachingSolver::lookupAssignment(
   return searchForAssignment(key, result);
 }
 
+Assignment* CexCachingSolver::createBinding(const Query& query, KeyType& key)
+{
+	std::vector<const Array*> objects;
+	std::vector< std::vector<unsigned char> > values;
+	Assignment *binding;
+	bool hasSolution;
+
+	findSymbolicObjects(key.begin(), key.end(), objects);
+
+	hasSolution = doComputeInitialValues(query, objects, values);
+	if (failed()) return NULL;
+
+	if (!hasSolution) return NULL;
+
+	binding = new Assignment(objects, values);
+
+	// Memoize the result.
+	std::pair<assignmentsTable_ty::iterator, bool>
+	res = assignmentsTable.insert(binding);
+	if (!res.second) {
+		delete binding;
+		binding = *res.first;
+	}
+
+	if (DebugCexCacheCheckBinding)
+		assert (binding->satisfies(key.begin(), key.end()));
+
+	return binding;
+}
+
 bool CexCachingSolver::getAssignment(const Query& query, Assignment *&result)
 {
-  KeyType key;
-  if (lookupAssignment(query, key, result))
-    return true;
+	KeyType key;
+	if (lookupAssignment(query, key, result))
+		return true;
 
-  std::vector<const Array*> objects;
-  findSymbolicObjects(key.begin(), key.end(), objects);
+	result = createBinding(query, key);
+	if (failed()) return false;
 
-  std::vector< std::vector<unsigned char> > values;
-  bool hasSolution;
-  hasSolution = doComputeInitialValues(query, objects, values);
-  if (failed()) return false;
-
-  Assignment *binding;
-  if (hasSolution) {
-    binding = new Assignment(objects, values);
-
-    // Memoize the result.
-    std::pair<assignmentsTable_ty::iterator, bool>
-      res = assignmentsTable.insert(binding);
-    if (!res.second) {
-      delete binding;
-      binding = *res.first;
-    }
-
-    if (DebugCexCacheCheckBinding)
-      assert(binding->satisfies(key.begin(), key.end()));
-  } else {
-    binding = (Assignment*) 0;
-  }
-
-  result = binding;
-  cache.insert(key, binding);
-
-  return true;
+	cache.insert(key, result);
+	return true;
 }
 
 CexCachingSolver::~CexCachingSolver()
