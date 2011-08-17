@@ -289,7 +289,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	case SYS_open:
 		new_regs = sc_new_regs(regfile);
-		sc_ret_v(new_regs, vfs.open((char*)GET_ARG0(regfile), (int)GET_ARG1(regfile), (int)GET_ARG2(regfile)));
+		sc_ret_v(new_regs, vfs.open((char*)GET_ARG0(regfile),
+		 	(int)GET_ARG1(regfile), (int)GET_ARG2(regfile)));
 		break;
 	case SYS_brk:
 		klee_warning_once("failing brk");
@@ -402,7 +403,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	case SYS_access:
 		new_regs = sc_new_regs(regfile);
-		sc_ret_v(new_regs, vfs.access((char*)GET_ARG0(regfile), (int)GET_ARG1(regfile)));
+		sc_ret_v(new_regs, 
+			vfs.access(
+				(char*)GET_ARG0(regfile), 
+				(int)GET_ARG1(regfile)));
 		break;
 	case SYS_newfstatat: { /* for du */
 		new_regs = sc_new_regs(regfile);
@@ -411,7 +415,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 		}
 		klee_assume(GET_RAX(new_regs) == 0);
 		sc_ret_v(new_regs, 0);
-		make_sym_by_arg(regfile, 2, sizeof(struct stat), "newstatbuf");
+		make_sym_by_arg(regfile, 2, sizeof(struct stat),
+			"newstatbuf");
 	}
 	break;
 
@@ -485,18 +490,22 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	case SYS_dup2:
 		new_regs = sc_new_regs(regfile);
-		sc_ret_v(new_regs, fdt.dupFile((long)GET_ARG0(regfile), (long)GET_ARG1(regfile)));
+		sc_ret_v(new_regs, 
+			fdt.dupFile((long)GET_ARG0(regfile),
+			(long)GET_ARG1(regfile)));
 		break;
 	case SYS_setrlimit:
 		sc_ret_or(sc_new_regs(regfile), -1, 0);
 		break;
 	case SYS_getrlimit:
-		make_sym_by_arg(regfile, 1,sizeof(struct rlimit), "getrlimit");
+		make_sym_by_arg(regfile, 1,sizeof(struct rlimit),
+			"getrlimit");
 		sc_ret_v(regfile, 0);
 		break;
 	case SYS_getrusage:
 		sc_ret_v(regfile, 0);
-		make_sym_by_arg(regfile, 1, sizeof(struct rusage), "getrusage");
+		make_sym_by_arg(regfile, 1, sizeof(struct rusage),
+			"getrusage");
 		break;
 	case SYS_getdents:
 		new_regs = sc_new_regs(regfile);
@@ -574,7 +583,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 		new_regs = sc_new_regs(regfile);
 		if ((int64_t)GET_RAX(new_regs) == -1)
 			break;
-		sc_ret_v(new_regs, fdt.newFile(new SymbolicFD("epoll_create")));
+		sc_ret_v(new_regs, 
+			fdt.newFile(new SymbolicFD("epoll_create")));
 		break;
 
 	case SYS_getsockname:
@@ -658,7 +668,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_creat:
 		klee_warning_once("phony creat call");
 		new_regs = sc_new_regs(regfile);
-		sc_ret_v(new_regs, vfs.open((char*)GET_ARG0(regfile), O_CREAT|O_WRONLY|O_TRUNC, (int)GET_ARG1(regfile)));
+		sc_ret_v(new_regs, vfs.open((char*)GET_ARG0(regfile),
+			O_CREAT|O_WRONLY|O_TRUNC, (int)GET_ARG1(regfile)));
 	break;
 	case SYS_readlink:
 	{

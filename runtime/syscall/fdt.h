@@ -5,8 +5,7 @@
 #include <sys/socket.h>
 #include <klee/klee.h>
 
-//#define METHOD_UNIMPLEMENTED { std::ostringstream o; o << __PRETTY_FUNCTION__ << " unimplemented for file " << identifier_; throw std::runtime_error(o.str()); }
-#define METHOD_UNIMPLEMENTED { klee_warning("VIRTUALDEATH"); return -1; }
+#define ME_UNI { klee_warning("VIRTUALDEATH"); return -1; }
 
 class FDT;
 class FD {
@@ -16,25 +15,28 @@ public:
 	virtual ~FD() {}
 	const std::string identifier_;
 	//core file ops
-	virtual long read(void* buf, size_t sz) METHOD_UNIMPLEMENTED;
-	virtual long pread(void* buf, size_t sz, off_t off) METHOD_UNIMPLEMENTED;
-	virtual long readv(const struct iovec *iov, int iovcnt) METHOD_UNIMPLEMENTED;
-	virtual long write(const void* buf, size_t sz) METHOD_UNIMPLEMENTED;
-	virtual long pwrite(const void* buf, size_t sz, off_t off) METHOD_UNIMPLEMENTED;
-	virtual long writev(const struct iovec *iov, int iovcnt) METHOD_UNIMPLEMENTED;
-	virtual long mmap(void* addr, size_t len, int prot, int flags, off_t offset) METHOD_UNIMPLEMENTED;
-	virtual long stat(struct stat *buf) METHOD_UNIMPLEMENTED;
-	virtual long truncate(off_t len) METHOD_UNIMPLEMENTED;
+	virtual long read(void* buf, size_t sz) ME_UNI;
+	virtual long pread(void* buf, size_t sz, off_t off) ME_UNI;
+	virtual long readv(const struct iovec *iov, int iovcnt) ME_UNI;
+	virtual long write(const void* buf, size_t sz) ME_UNI;
+	virtual long pwrite(const void* buf, size_t sz, off_t off) ME_UNI;
+	virtual long writev(const struct iovec *iov, int iovcnt) ME_UNI;
+	virtual long mmap(void* addr, size_t len, int prot, int flags, 
+		off_t offset) ME_UNI;
+	virtual long stat(struct stat *buf) ME_UNI;
+	virtual long truncate(off_t len) ME_UNI;
 		
 	//core socket ops
-	virtual long recvfrom(void *buffer, size_t length, int flags, struct sockaddr *address, socklen_t *address_len) METHOD_UNIMPLEMENTED;
-	virtual long recvmsg(struct msghdr *message, int flags) METHOD_UNIMPLEMENTED;
-	virtual long sendmsg(const struct msghdr *message, int flags) METHOD_UNIMPLEMENTED;
-	virtual long sendto(const void *buffer, size_t length, int flags, const struct sockaddr *dest_addr, socklen_t dest_len) METHOD_UNIMPLEMENTED;
+	virtual long recvfrom(void *buffer, size_t length, int flags, 
+		struct sockaddr *address, socklen_t *address_len) ME_UNI;
+	virtual long recvmsg(struct msghdr *message, int flags) ME_UNI;
+	virtual long sendmsg(const struct msghdr *message, int flags) ME_UNI;
+	virtual long sendto(const void *buffer, size_t length, int flags,
+		const struct sockaddr *dest_addr, socklen_t dest_len) ME_UNI;
 	
 	//generic fd ops
-	virtual long fcntl(int cmd, long data) METHOD_UNIMPLEMENTED;
-	virtual long ioctl(unsigned long request, long data) METHOD_UNIMPLEMENTED;
+	virtual long fcntl(int cmd, long data) ME_UNI;
+	virtual long ioctl(unsigned long request, long data) ME_UNI;
 	
 protected:
 	long references_;
@@ -59,7 +61,8 @@ public:
 	long stat(struct stat *buf);
 	long truncate(off_t len);
 	
-	long recvfrom(void *buffer, size_t length, int flags, struct sockaddr *address, socklen_t *address_len);
+	long recvfrom(void *buffer, size_t length, int flags, 
+		struct sockaddr *address, socklen_t *address_len);
 	long recvmsg(struct msghdr *message, int flags);
 	long sendmsg(const struct msghdr *message, int flags);
 	long sendto(const void *buffer, size_t length, int flags, const struct sockaddr *dest_addr, socklen_t dest_len);
@@ -81,14 +84,18 @@ public:
 	virtual long pwrite(const void* buf, size_t sz, off_t off);
 	//implemented in terms of write
 	virtual long writev(const struct iovec *iov, int iovcnt);
-	virtual long mmap(void* addr, size_t len, int prot, int flags, off_t offset);
+	virtual long mmap(void* addr, size_t len, int prot, int flags, 
+		off_t offset);
 	virtual long stat(struct stat *buf);
 	virtual long truncate(off_t len);
 	
-	virtual long recvfrom(void *buffer, size_t length, int flags, struct sockaddr *address, socklen_t *address_len);
+	virtual long recvfrom(void *buffer, size_t length, int flags, 
+		struct sockaddr *address, socklen_t *address_len);
 	virtual long recvmsg(struct msghdr *message, int flags);
 	virtual long sendmsg(const struct msghdr *message, int flags);
-	virtual long sendto(const void *buffer, size_t length, int flags, const struct sockaddr *dest_addr, socklen_t dest_len);
+	virtual long sendto(const void *buffer, size_t length, 
+		int flags, const struct sockaddr *dest_addr, 
+		socklen_t dest_len);
 
 	virtual long fcntl(int cmd, long data);
 	virtual long ioctl(unsigned long request, long data);
@@ -97,10 +104,12 @@ public:
 class SymbolicFile : public SymbolicFD {
 public:
 	SymbolicFile(const std::string& identifier);
-	virtual long recvfrom(void *buffer, size_t length, int flags, struct sockaddr *address, socklen_t *address_len);
+	virtual long recvfrom(void *buffer, size_t length, int flags, 
+		struct sockaddr *address, socklen_t *address_len);
 	virtual long recvmsg(struct msghdr *message, int flags);
 	virtual long sendmsg(const struct msghdr *message, int flags);
-	virtual long sendto(const void *buffer, size_t length, int flags, const struct sockaddr *dest_addr, socklen_t dest_len);
+	virtual long sendto(const void *buffer, size_t length, int flags,
+		const struct sockaddr *dest_addr, socklen_t dest_len);
 	virtual long stat(struct stat *buf);
 };
 
@@ -109,7 +118,8 @@ public:
 	SymbolicSocket();
 	virtual long pread(void* buf, size_t sz, off_t off);
 	virtual long pwrite(const void* buf, size_t sz, off_t off);
-	virtual long mmap(void* addr, size_t len, int prot, int flags, off_t offset);
+	virtual long mmap(void* addr, size_t len, int prot, int flags, 
+		off_t offset);
 	virtual long stat(struct stat *buf);
 	virtual long truncate(off_t len);
 };
@@ -117,10 +127,13 @@ public:
 class SymbolicPipe : public SymbolicSocket {
 public:
 	SymbolicPipe();
-	virtual long recvfrom(void *buffer, size_t length, int flags, struct sockaddr *address, socklen_t *address_len);
+	virtual long recvfrom(void *buffer, size_t length, int flags, 
+		struct sockaddr *address, socklen_t *address_len);
 	virtual long recvmsg(struct msghdr *message, int flags);
 	virtual long sendmsg(const struct msghdr *message, int flags);
-	virtual long sendto(const void *buffer, size_t length, int flags, const struct sockaddr *dest_addr, socklen_t dest_len);
+	virtual long sendto(const void *buffer, size_t length, 
+		int flags, const struct sockaddr *dest_addr, 
+		socklen_t dest_len);
 	virtual long read(void* buf, size_t sz);
 	virtual long write(const void* buf, size_t sz);
 private:
@@ -198,7 +211,8 @@ public:
 	virtual long pread(void* buf, size_t sz, off_t off);
 	virtual long write(const void* buf, size_t sz);
 	virtual long pwrite(const void* buf, size_t sz, off_t off);
-	virtual long mmap(void* addr, size_t len, int prot, int flags, off_t offset);
+	virtual long mmap(void* addr, size_t len, int prot, int flags, 
+		off_t offset);
 	virtual long stat(struct stat *buf);
 	virtual long truncate(off_t len);
 	virtual long fcntl(int cmd, long data);
@@ -227,5 +241,6 @@ protected:
 	std::string cwd_;
 };
 extern FDT fdt;
+// to get something closer to the old behavior switch to this one
 // extern VFS vfs;
 extern ConcreteVFS vfs;
