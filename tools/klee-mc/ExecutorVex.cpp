@@ -282,7 +282,7 @@ void ExecutorVex::bindMappingPage(
 		state->write8(mmap_os, i, data[i]);
 	}
 
-	mmap_mo->print(std::cerr);
+	//mmap_mo->print(std::cerr);
 	std::cerr << "\n";
 }
 

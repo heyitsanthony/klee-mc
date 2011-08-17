@@ -616,8 +616,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 	}
 
 	case SYS_mmap: {
-		FD* file = fdt.getFile((long)GET_ARG4(regfile));
-		if(file) {
+		if(!(GET_ARG3(regfile) & MAP_ANONYMOUS)) {
+			FD* file = fdt.getFile((long)GET_ARG4(regfile));
 			new_regs = sc_new_regs(regfile);
 			sc_ret_v(new_regs, file->mmap(
 				(void *)GET_ARG0(regfile), 

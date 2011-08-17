@@ -229,4 +229,5 @@ protected:
 	std::string cwd_;
 };
 extern FDT fdt;
+// extern VFS vfs;
 extern ConcreteVFS vfs;

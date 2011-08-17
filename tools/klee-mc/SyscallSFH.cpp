@@ -185,6 +185,7 @@ SFH_DEF_HANDLER(SCConcreteFileSnapshot) {
 		}
 		MemoryObject* mo = sfh->executor->addExternalObject(state, addr, st.st_size, true);
 		i = g_snapshots.insert(std::make_pair(path, mo)).first;
+		std::cerr << "new file fork " << path << std::endl;
 	}
 	state.bindLocal(target, ConstantExpr::create((intptr_t)i->second->address, 64));
 	std::cerr << "loaded " << path << std::endl;

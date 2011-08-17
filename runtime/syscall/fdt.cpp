@@ -29,9 +29,6 @@ bool FD::freeRef() {
 GarbageFD::GarbageFD() 
 : FD("BAD file descriptor")
 {
-	klee_warning("waaaaa!");
-	stat(NULL);
-	klee_warning("ham");
 }
 
 long GarbageFD::read(void* buf, size_t sz) { return -EBADF; }
@@ -52,7 +49,6 @@ long GarbageFD::stat(struct stat *buf) { return -EBADF; }
 SymbolicFD::SymbolicFD(const std::string& id) 
 : FD(id)
 {
-	klee_warning("x-fd");
 }
 
 long SymbolicFD::read(void* buf, size_t sz) {
@@ -201,7 +197,6 @@ long SymbolicFD::ioctl(unsigned long request, long data) {
 SymbolicFile::SymbolicFile(const std::string& id) 
 : SymbolicFD(id)
 {
-	klee_warning("x-sym");
 }
 
 long SymbolicFile::recvfrom(void *buffer, size_t length, int flags, struct sockaddr *address, socklen_t *address_len) { return -ENOTSOCK; }
@@ -261,7 +256,6 @@ ConcreteFile::ConcreteFile(DataFork* fork)
 , fork_(fork)
 , offset_(0)
 {
-	klee_warning("x-crete");
 }
 long ConcreteFile::read(void* buf, size_t sz) {	
 	long result = ConcreteFile::pread(buf, sz, offset_);
@@ -331,16 +325,13 @@ FDT::FDT()
 	stdin.addRef();
 	files_[1] = &stdout;
 	stdout.addRef();
-	stdout.write("abc\n", 4);
 	files_[2] = &stderr;
 	stderr.addRef();
-	klee_print_expr("fs", files_.size());
 }
 FDT::~FDT() {
 	klee_warning("destructors! fuck off");
 }
 long FDT::newFile(FD* file) {
-	klee_warning("making fd");
 	int hole = 0;
 	for(; hole < files_.size(); ++hole)
 		if(!files_[hole])
@@ -358,13 +349,10 @@ long FDT::newFile(FD* file) {
 }
 GarbageFD g_garbage_bag;
 FD* FDT::alwaysGetFile(long fd) {
-	klee_warning("always getting fd");
 	FD* i = getFile(fd);
 	if(!i) {
-		klee_warning("always getting fd no found");
 		return new GarbageFD;//&g_garbage_bag;
 	} else {
-		klee_warning("always getting fd got it");
 		return i;
 	}
 }
@@ -457,16 +445,28 @@ size_t DataFork::read(void* buf, size_t sz, off_t off) {
 	if(off + sz > size_) {
 		sz = size_ - off;
 	}
+	klee_print_expr("original:", originalSize_);
+	klee_check_memory_access(original_, originalSize_);
+	klee_print_expr("fixed sz", sz);
+	klee_check_memory_access(buf, sz);
 	if(originalSize_ < off + sz) {
 		klee_warning("clearing data");
 		memset(buf, 0, sz);
 	}
 	if(originalSize_ > off) {
-		klee_warning("old data");
-		klee_print_expr("original:", originalSize_);
+		klee_warning("OLD DATA");
 		klee_print_expr("size:", size_);
-		memcpy(buf, (char*)original_ + off, 
-			std::min(originalSize_ - off, (long)sz));
+		klee_print_expr("off:", off);
+		klee_print_expr("sz:", originalSize_);
+		klee_print_expr("originalSize_ - off:", originalSize_ - off);
+		klee_print_expr("buf:", buf);
+		const char* from = (char*)original_ + off;
+		char* to = (char*)buf;
+		size_t partial = std::min(originalSize_ - off, (long)sz);
+		klee_print_expr("partial:", partial);
+		while(to - (char*)buf < partial) {
+			*(to++) = *(from++);
+		}
 	}
 	klee_warning("applying deltas");
 	delta_map::iterator i = differences_.lower_bound(off);
@@ -496,12 +496,10 @@ void DataFork::truncate(off_t len) {
 	differences_.erase(i, differences_.end());
 }
 void DataFork::stat(struct stat* buf) {
-	klee_warning("stat fork");
-	memset(buf, 0, sizeof(*buf));
 	kmc_make_range_symbolic((uintptr_t)buf, sizeof(*buf), "Data::stat buf ");
 	buf->st_size = size_;
-	buf->st_blksize = 512;
 	buf->st_blocks = (size_ + 511) >> 9;
+	buf->st_blksize = 512;
 }
 
 DataFork::DataFork(const std::string& id, const void* data, off_t size)
@@ -510,7 +508,6 @@ DataFork::DataFork(const std::string& id, const void* data, off_t size)
 , originalSize_(size)
 , size_(size)
 {
-	klee_warning("new fork");
 }
 off_t DataFork::length() const {
 	return size_;
@@ -646,16 +643,12 @@ long ConcreteVFS::open(const char* p, int flags, int access) {
 	}
 	DataFork* fork;
 	long result = getFork(path, fork);
-	klee_warning("got fork");
 	if(!fork) {
-		klee_warning("actually... BO!");
 		if(!(flags & O_CREAT) || result != -ENOENT)
 			return result;
-		klee_warning("creating it");
 		//make a new virtual file
 		forks_[path] = fork = new DataFork(path, NULL, 0);
 	}
-	klee_warning("and returned");
 	return fdt.newFile(new ConcreteFile(fork));
 }
 long ConcreteVFS::unlink(const char* p) {
@@ -767,21 +760,15 @@ long ConcreteVFS::getFork(const std::string& path, DataFork*& fork) {
 		return result;
 	}
 	long sz = sc_concrete_file_size(path.c_str(), path.size());
-	klee_warning("as");
 	if(result < 0) {
 		return sz;
 	}
-	klee_warning("ps");
 	{
 		std::map<std::string, int> a;
-		klee_warning("hs");
 		a.insert(std::make_pair(path,1));	
 	}
-	klee_warning("rs");
 	fork = new DataFork(path, (void*)result, sz);
-	klee_warning("ts");
 	forks_[path] = fork;
-	klee_warning("qs");
 	return 0;
 }
 
@@ -792,4 +779,5 @@ struct ctor {
 } _ctor;
 
 FDT fdt;
+// VFS vfs;
 ConcreteVFS vfs;
