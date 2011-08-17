@@ -10,28 +10,34 @@
 #include "klee/Internal/Support/IntEvaluation.h"
 
 #include "klee/util/ExprPPrinter.h"
-#include <hash_map>
+#include <tr1/unordered_map>
 
 #include <iostream>
 #include <sstream>
 
 using namespace klee;
 
-struct ltapint
+struct hashapint
 {
-bool operator()(const llvm::APInt& a, const llvm::APInt& b)
+unsigned operator()(const llvm::APInt& a) const { return a.getHashValue(); }
+};
+
+struct apinteq
 {
-	if (a.getBitWidth() < b.getBitWidth()) return true;
-	if (a.getBitWidth() > b.getBitWidth()) return false;
-	return a.ult(b);
+bool operator()(const llvm::APInt& a, const llvm::APInt& b) const
+{
+	if (a.getBitWidth() != b.getBitWidth()) return false;
+	return a == b;
 }
 };
 
-typedef std::map<
+/* important to use an unordered_map instead of a map so we get O(1) access. */
+typedef std::tr1::unordered_map<
 	llvm::APInt,
 	ref<ConstantExpr>,
-	struct ltapint> ConstantExprTab;
-	
+	hashapint,
+	apinteq> ConstantExprTab;
+
 ConstantExprTab const_hashtab;
 
 ref<Expr> ConstantExpr::fromMemory(void *address, Width width) {

@@ -11,6 +11,7 @@
 #include "llvm/Support/raw_ostream.h"
 
 #include "IncompleteSolver.h"
+#include "StagedSolver.h"
 
 #include <set>
 #include <stack>
@@ -105,7 +106,7 @@ public:
 	virtual bool computeSat(const Query& query);
 	virtual ref<Expr> computeValue(const Query&);
 	virtual Solver::Validity computeValidity(const Query& query) {
-		assert(0 && "STUB: should never be called!");
+		failQuery();
 		return Solver::Unknown;
 	}
 	virtual bool computeInitialValues(
@@ -1240,11 +1241,15 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 						}
 					}
 				}
-				IF_CHANGE(offsetRange.monoSet(ValueSet(APInt(re->index->getWidth(), idxMin),
-																			APInt(re->index->getWidth(), idxMax))),
-									re->index, hasChanged)
-				hasChanged |= range.monoSet(ValueSet(APInt(re->getWidth(), valMin),
-																						 APInt(re->getWidth(), valMax)));
+				IF_CHANGE(offsetRange.monoSet(
+					ValueSet(
+						APInt(re->index->getWidth(), idxMin),
+						APInt(re->index->getWidth(), idxMax))),
+						re->index, hasChanged)
+				hasChanged |= range.monoSet(
+					ValueSet(
+						APInt(re->getWidth(), valMin),
+						APInt(re->getWidth(), valMax)));
 			}
 	
 			break;
@@ -2008,26 +2013,19 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 		return hasEverChanged;
 }
 
-#if 0
-bool FastRangeSolver::computeTruth(const Query& query, bool &isValid)
-{
-	RangeSimplifier rs;
-	bool hasSolution;
-
-	bool success = rs.run(query, hasSolution);
-
-	if (!success)
-		return false;
-
-	isValid = !hasSolution;
-	return true;
-}
-#endif
-
 bool FastRangeSolver::computeSat(const Query& q)
 {
-	assert (0 == 1 && "STUB");
-	return false;
+	RangeSimplifier	rs;
+	bool		hasSolution, ok;
+
+	ok = rs.run(q.negateExpr(), hasSolution);
+	if (!ok) {
+		failQuery();
+		return false;
+	}
+
+	/* run(query, hasSolution); isValid = !hasSolution */
+	return hasSolution;
 }
 
 ref<Expr> FastRangeSolver::computeValue(const Query& query)
@@ -2057,27 +2055,31 @@ bool FastRangeSolver::computeInitialValues(
 	std::vector< std::vector<unsigned char> > &values)
 {
 	RangeSimplifier	rs;
-	bool		hasSolution, satisfies, guess;
+	bool		hasSolution, satisfies, guess, success;
 
 	numQueries++;
 
-	bool success = rs.run(query, hasSolution);
+	success = rs.run(query, hasSolution);
 	if (!success) {
 		failQuery();
 		numUnsupported++;
-		return hasSolution;
+		return false;
 	}
 
 	if (!hasSolution) {
 #ifdef FRS_DEBUG
 		std::cerr << "\nFastRangeSolver VALID\n";
+		query.print(std::cerr);
 #endif
-		goto done;
+		numSuccess++;
+		return false;	/* valid => no cex exists */
 	}
 
 	assert (hasSolution && success);
 #ifdef FRS_DEBUG
 	std::cerr << "\nFastRangeSolver INVALID:\n";
+	query.print(std::cerr);
+	std::cerr << "OBJSIZE = " << objects.size() << "\n";
 #endif
 
 #ifdef FRS_DEBUG
@@ -2086,12 +2088,21 @@ bool FastRangeSolver::computeInitialValues(
 #endif
 
 	guess = !rs.findCex(query, objects, values);
-	if (objects.empty()) goto done;
+#ifdef FRS_DEBUG
+	std::cerr << "GUESS ON FINDCEX: " << guess << std::endl;
+#endif
+	if (objects.empty()) {
+		values.clear();
+		numSuccess++;
+		return true;
+	}
 
 	success &= !values.empty();
 #ifdef FRS_DEBUG
 	for (unsigned i = 0; i < values.size(); i++)
 		rs.printCex(objects[i], values[i]);
+	std::cerr << "SUCCESS = " << success << std::endl;
+	std::cerr << values.size() << " = size\n";
 #endif
 	satisfies = false;
 	if (success) {
@@ -2120,14 +2131,14 @@ bool FastRangeSolver::computeInitialValues(
 		return false;
 	}
 
-done:
 	numSuccess++;
-	return !hasSolution;
+	return true;
 }
 
-#if 0
-Solver *klee::createFastRangeSolver(void)
+Solver *klee::createFastRangeSolver(Solver* complete_solver)
 {
-	return new Solver(new FastRangeSolver());
+	return new Solver(
+		new StagedSolverImpl(
+			new Solver(new FastRangeSolver()),
+			complete_solver));
 }
-#endif

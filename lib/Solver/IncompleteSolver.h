@@ -83,34 +83,6 @@ private:
   bool has_failed;
 };
 
-/// StagedSolver - Adapter class for staging an incomplete solver with
-/// a complete secondary solver, to form an (optimized) complete
-/// solver.
-class StagedSolverImpl : public SolverImpl
-{
-private:
-  IncompleteSolver *primary;
-  Solver *secondary;
-
-public:
-  StagedSolverImpl(IncompleteSolver *_primary, Solver *_secondary);
-  ~StagedSolverImpl();
-
-  bool computeSat(const Query&);
-  Solver::Validity computeValidity(const Query&);
-  ref<Expr> computeValue(const Query&);
-  bool computeInitialValues(
-  	const Query&,
-        const std::vector<const Array*> &objects,
-        std::vector< std::vector<unsigned char> > &values);
-
-  void printName(int level = 0) const {
-    klee_message("%*s" "StagedSolver containing:", 2*level, "");
-    primary->printName(level + 1);
-    secondary->printName(level + 1);
-  }
-};
-
 }
 
 #endif

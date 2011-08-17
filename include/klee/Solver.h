@@ -254,6 +254,8 @@ namespace klee {
   /// createDummySolver - Create a dummy solver implementation which always
   /// fails.
   Solver *createDummySolver();
+
+  Solver *createFastRangeSolver(Solver *complete_solver);
 }
 
 #endif

@@ -20,6 +20,8 @@
 
 
 #include "IncompleteSolver.h"
+#include "StagedSolver.h"
+
 #include <iostream>
 #include <sstream>
 #include <cassert>
@@ -967,10 +969,11 @@ public:
 /* *** */
 
 
-class FastCexSolver : public IncompleteSolver {
+class FastCexSolver : public IncompleteSolver
+{
 public:
-  FastCexSolver();
-  ~FastCexSolver();
+  FastCexSolver() {}
+  virtual ~FastCexSolver() {}
 
   IncompleteSolver::PartialValidity computeTruth(const Query&);
   ref<Expr> computeValue(const Query&);
@@ -981,10 +984,6 @@ public:
     klee_message("%*s" "FastCexSolver", 2*level, "");
   }
 };
-
-FastCexSolver::FastCexSolver() { }
-
-FastCexSolver::~FastCexSolver() { }
 
 /// propogateValues - Propogate value ranges for the given query and return the
 /// propogation results.
@@ -1138,7 +1137,7 @@ bool FastCexSolver::computeInitialValues(
   return true;
 }
 
-
 Solver *klee::createFastCexSolver(Solver *s) {
-  return new Solver(new StagedSolverImpl(new FastCexSolver(), s));
+  return new Solver(
+  	new StagedIncompleteSolverImpl(new FastCexSolver(), s));
 }

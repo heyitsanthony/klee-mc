@@ -69,6 +69,12 @@ namespace {
 	cl::init(false));
 
   cl::opt<bool>
+  UseFastRangeSolver(
+	"use-fast-range-solver",
+	cl::desc("Use the fast range solver."),
+	cl::init(false));
+
+  cl::opt<bool>
   UseCexCache("use-cex-cache",
               cl::init(true),
 	      cl::desc("Use counterexample caching"));
@@ -144,6 +150,7 @@ static Solver* createChainWithTimedSolver(
 			new PoisonCache(solver, new PHRewritePtr()));
 
 	if (UseFastCexSolver) solver = createFastCexSolver(solver);
+	if (UseFastRangeSolver) solver = createFastRangeSolver(solver);
 	if (UseCexCache) solver = createCexCachingSolver(solver);
 	if (UseCache) solver = createCachingSolver(solver);
 	if (UseIndependentSolver) solver = createIndependentSolver(solver);
@@ -167,8 +174,6 @@ static Solver* createChainWithTimedSolver(
 
 	return solver;
 }
-
-
 
 Solver* Solver::createChain(
 	std::string queryPCLogPath,

@@ -14,6 +14,7 @@
 
 #include "guest.h"
 #include "guestptimg.h"
+#include "guestfragment.h"
 #include "elfimg.h"
 #include "guestelf.h"
 #include "ExecutorVex.h"
@@ -106,9 +107,21 @@ namespace {
 
   cl::opt<std::string>
   GuestType(
-  	"guest-type",
-	cl::desc("Type of guest to use. {*ptrace, sshot, elf}"),
-  	cl::init("ptrace"));
+	"guest-type",
+	cl::desc("Type of guest to use. {*ptrace, sshot, elf, frag}"),
+	cl::init("ptrace"));
+
+  cl::opt<std::string>
+  GuestFragmentFile(
+	"guestfrag-file",
+	cl::desc("File containing fragment data."),
+	cl::init("default.frag"));
+
+  cl::opt<unsigned>
+  GuestFragmentBase(
+	"guestfrag-base",
+	cl::desc("Base of the fragment"),
+	cl::init(0x400000));
 
   cl::opt<bool>
   XChkJIT("xchkjit",
@@ -425,6 +438,14 @@ Guest* getGuest(CmdArgs* cmdargs)
 		fprintf(stderr, "[klee-mc] LOADING SNAPSHOT\n");
 		gs = Guest::load();
 		assert (gs && "Could not load guest snapshot");
+	} else if (GuestType == "frag") {
+		GuestFragment	*gf;
+
+		gf = GuestFragment::fromFile(
+			GuestFragmentFile.c_str(),
+			Arch::X86_64,
+			guest_ptr(GuestFragmentBase));
+		gs = gf;
 	} else {
 		assert ("unknown guest type");
 	}
@@ -462,6 +483,10 @@ int main(int argc, char **argv, char **envp)
 	handler = new KleeHandler(cmdargs);
 
 	gs = getGuest(cmdargs);
+	if (gs == NULL) {
+		fprintf(stderr, "[klee-mc] Could not get guest.\n");
+		return 2;
+	}
 
 	interpreter = (XChkJIT) ?
 		new ExeChk(IOpts, handler, gs) :
