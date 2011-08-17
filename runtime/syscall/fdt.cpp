@@ -221,11 +221,40 @@ long SymbolicSocket::truncate(off_t len) { return -EINVAL; }
 
 SymbolicPipe::SymbolicPipe() 
 : SymbolicSocket()
+, done(false)
 {}
 long SymbolicPipe::recvfrom(void *buffer, size_t length, int flags, struct sockaddr *address, socklen_t *address_len) { return -ENOTSOCK; }
 long SymbolicPipe::recvmsg(struct msghdr *message, int flags) { return -ENOTSOCK; }
 long SymbolicPipe::sendmsg(const struct msghdr *message, int flags) { return -ENOTSOCK; }
 long SymbolicPipe::sendto(const void *buffer, size_t length, int flags, const struct sockaddr *dest_addr, socklen_t dest_len) { return -ENOTSOCK; }
+long SymbolicPipe::read(void* buf, size_t sz) {
+	if(done)
+		return 0;
+	long result;
+	kmc_make_range_symbolic((uintptr_t)&result, sizeof(result), "SFD::read res");
+	if(result >= 0) {
+		kmc_make_range_symbolic((uintptr_t)buf, sz, "SFD::read data");
+		return sz;
+	} else {
+		done = true;
+		return 0;
+	}
+}
+long SymbolicPipe::write(const void* buf, size_t sz) {
+	return sz;
+}
+
+NoisyPipe::NoisyPipe() 
+: SymbolicPipe()
+{}
+long NoisyPipe::write(const void* buf, size_t sz) {
+	klee_warning("noisypipe");
+	char* mbuf = new char[sz + 1];
+	memcpy(mbuf, buf, sz);
+	mbuf[sz] = 0;
+	klee_warning(mbuf);
+	return SymbolicPipe::write(buf, sz);
+}
 
 ConcreteFile::ConcreteFile(DataFork* fork) 
 : SymbolicFile(fork->identifier_)
@@ -295,59 +324,63 @@ long ConcreteFile::ioctl(unsigned long request, long data) {
 }
 
 
-FDT::FDT() {
+FDT::FDT() 
+: files_(4096)
+{
 	files_[0] = &stdin;
 	stdin.addRef();
 	files_[1] = &stdout;
 	stdout.addRef();
+	stdout.write("abc\n", 4);
 	files_[2] = &stderr;
 	stderr.addRef();
+	klee_print_expr("fs", files_.size());
 }
 FDT::~FDT() {
-	
+	klee_warning("destructors! fuck off");
 }
 long FDT::newFile(FD* file) {
 	klee_warning("making fd");
-	int hole = 3;
-	for(fdmap::iterator i = files_.lower_bound(hole); i != files_.end(); ++i, ++hole) {
-		if(hole != i->first)
+	int hole = 0;
+	for(; hole < files_.size(); ++hole)
+		if(!files_[hole])
 			break;
-	}
 	klee_print_expr("will be", hole);
-	files_[hole] = file;
 	file->addRef();
-	return hole;
-}
-FD* FDT::getFile(long fd) {
-	klee_warning("1");
-	fdmap::iterator i = files_.find(fd);
-	klee_warning("2");
-	if(i == files_.end()) {
-		klee_warning("3");
-		return NULL;
+	if(hole < files_.size()) {
+		files_[hole] = file;
+		return hole;
+	} else {
+		if(file->freeRef())
+			delete file;
+		return -EMFILE;
 	}
-	klee_warning("4");
-	return i->second;
 }
 GarbageFD g_garbage_bag;
 FD* FDT::alwaysGetFile(long fd) {
 	klee_warning("always getting fd");
-	fdmap::iterator i = files_.find(fd);
-	if(i == files_.end()) {
+	FD* i = getFile(fd);
+	if(!i) {
 		klee_warning("always getting fd no found");
 		return new GarbageFD;//&g_garbage_bag;
+	} else {
+		klee_warning("always getting fd got it");
+		return i;
 	}
-	klee_warning("always getting fd got it");
-	return i->second;
+}
+FD* FDT::getFile(long fd) {
+	if(fd >= files_.size())
+		return NULL;
+	return files_[fd];
 }
 long FDT::closeFile(long fd) {
-	fdmap::iterator i = files_.find(fd);
-	if(i == files_.end()) {
+	FD* i = getFile(fd);;
+	if(!i) {
 		return -EBADF;
 	}
-	if(i->second->freeRef())
-		delete i->second;
-	files_.erase(i);
+	if(i->freeRef())
+		delete i;
+	files_[fd] = NULL;
 	return 0;
 }
 long FDT::dupFile(long fd) {
@@ -362,6 +395,8 @@ long FDT::dupFile(long fd) {
 
 long FDT::dupFile(long from, long to) {
 	klee_warning("dup2?");
+	klee_print_expr("dup2 from", from);
+	klee_print_expr("dup2 to", to);
 	FD* f = getFile(from);
 	klee_warning("dup2 f");
 	if(!f) {
@@ -376,7 +411,7 @@ long FDT::dupFile(long from, long to) {
 	f->addRef();
 	files_[to] = f;
 	klee_warning("dup2 ok");
-	return 0;
+	return to;
 }
 
 // typedef std::vector<char> data_block;

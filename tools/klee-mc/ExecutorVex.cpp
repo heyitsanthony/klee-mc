@@ -166,16 +166,18 @@ void ExecutorVex::runImage(void)
 			ctorStub,
 			"",
 			init_func->begin()->begin());
-	if (dtors) {
-		std::cerr << "installing dtors" << std::endl;
-		Function *dtorStub;
-		dtorStub = getStubFunctionForCtorList(kmodule->module, dtors, "klee.dtor_stub");
-		kmodule->addFunction(dtorStub);
-		foreach (it, init_func->begin(), init_func->end()) {
-			if (!isa<ReturnInst>(it->getTerminator())) continue;
-			CallInst::Create(dtorStub, "", it->getTerminator());
-		}
-	}
+	// can't install detours because this function returns almost immediately... todo
+	// do them later
+	// if (dtors) {
+	// 	std::cerr << "installing dtors" << std::endl;
+	// 	Function *dtorStub;
+	// 	dtorStub = getStubFunctionForCtorList(kmodule->module, dtors, "klee.dtor_stub");
+	// 	kmodule->addFunction(dtorStub);
+	// 	foreach (it, init_func->begin(), init_func->end()) {
+	// 		if (!isa<ReturnInst>(it->getTerminator())) continue;
+	// 		CallInst::Create(dtorStub, "", it->getTerminator());
+	// 	}
+	// }
 
 	
 	init_kfunc = kmodule->addFunction(init_func);

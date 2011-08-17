@@ -112,6 +112,7 @@ public:
 	virtual long stat(struct stat *buf);
 	virtual long truncate(off_t len);
 };
+//either takes it all or errors, once it errors it keeps erroring
 class SymbolicPipe : public SymbolicSocket {
 public:
 	SymbolicPipe();
@@ -119,10 +120,19 @@ public:
 	virtual long recvmsg(struct msghdr *message, int flags);
 	virtual long sendmsg(const struct msghdr *message, int flags);
 	virtual long sendto(const void *buffer, size_t length, int flags, const struct sockaddr *dest_addr, socklen_t dest_len);
+	virtual long read(void* buf, size_t sz);
+	virtual long write(const void* buf, size_t sz);
+private:
+	bool done;
+};
+class NoisyPipe : public SymbolicPipe {
+public:
+	NoisyPipe();
+	virtual long write(const void* buf, size_t sz);
 };
 
 class FDT {
-	typedef std::map<long, FD*> fdmap;
+	typedef std::vector<FD*> fdmap;
 public:
 	FDT();
 	~FDT();
@@ -134,8 +144,8 @@ public:
 	long closeFile(long fd);
 private:
 	SymbolicPipe stdin;
-	SymbolicPipe stdout;
-	SymbolicPipe stderr;
+	NoisyPipe stdout;
+	NoisyPipe stderr;
 	fdmap files_;
 };
 
