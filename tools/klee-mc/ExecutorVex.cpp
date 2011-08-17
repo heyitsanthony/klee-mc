@@ -65,6 +65,11 @@ namespace
 		"check-div-zero",
 		cl::desc("Inject checks for division-by-zero"),
 		cl::init(false));
+
+	cl::opt<bool> ConcreteVfs(
+		"concrete-vfs",
+		cl::desc("Treat absolute path opens as concrete"),
+		cl::init(false));
 }
 
 ExecutorVex::ExecutorVex(
@@ -184,7 +189,16 @@ void ExecutorVex::runImage(void)
 	// 	}
 	// }
 
-	
+	const IntegerType* boolType = IntegerType::get(getGlobalContext(), 1);
+	GlobalVariable* concrete_vfs =
+		static_cast<GlobalVariable*>(kmodule->module->
+			getGlobalVariable("concrete_vfs", boolType));
+	 
+	concrete_vfs->setInitializer(ConcreteVfs ?
+		ConstantInt::getTrue(getGlobalContext()) :
+		ConstantInt::getFalse(getGlobalContext()));
+	concrete_vfs->setConstant(true);
+
 	init_kfunc = kmodule->addFunction(init_func);
 	statsTracker->addKFunction(init_kfunc);
 	bindKFuncConstants(init_kfunc);

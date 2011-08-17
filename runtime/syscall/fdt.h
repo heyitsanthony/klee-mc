@@ -240,7 +240,7 @@ protected:
 	fork_map forks_;
 	std::string cwd_;
 };
-extern FDT fdt;
+extern FDT* fdt;
 // to get something closer to the old behavior switch to this one
 // extern VFS vfs;
-extern ConcreteVFS vfs;
+extern VFS* vfs;

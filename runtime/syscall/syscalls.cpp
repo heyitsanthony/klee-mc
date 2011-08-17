@@ -293,7 +293,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	case SYS_open:
 		new_regs = sc_new_regs(regfile);
-		sc_ret_v(new_regs, vfs.open((char*)GET_ARG0(regfile),
+		sc_ret_v(new_regs, vfs->open((char*)GET_ARG0(regfile),
 		 	(int)GET_ARG1(regfile), (int)GET_ARG2(regfile)));
 		break;
 	case SYS_brk:
@@ -307,7 +307,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_pwrite64:
 		new_regs = sc_new_regs(regfile);
 		sc_ret_v(new_regs, 	
-			fdt.alwaysGetFile((long)GET_ARG0(regfile))->pwrite(
+			fdt->alwaysGetFile((long)GET_ARG0(regfile))->pwrite(
 				(void*)GET_ARG1(regfile), 
 				(size_t)GET_ARG2(regfile),
 				(off_t)GET_ARG2(regfile)));
@@ -316,7 +316,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_write: {
 		new_regs = sc_new_regs(regfile);
 		sc_ret_v(new_regs, 	
-			fdt.alwaysGetFile((long)GET_ARG0(regfile))->write(
+			fdt->alwaysGetFile((long)GET_ARG0(regfile))->write(
 				(void*)GET_ARG1(regfile), 
 				(size_t)GET_ARG2(regfile)));
 		break;
@@ -371,7 +371,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_pread64:
 		new_regs = sc_new_regs(regfile);
 		sc_ret_v(new_regs, 	
-			fdt.alwaysGetFile((long)GET_ARG0(regfile))->pread(
+			fdt->alwaysGetFile((long)GET_ARG0(regfile))->pread(
 				(void*)GET_ARG1(regfile), 
 				(size_t)GET_ARG2(regfile),
 				(off_t)GET_ARG3(regfile)));
@@ -380,7 +380,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_read: {
 		new_regs = sc_new_regs(regfile);
 		sc_ret_v(new_regs, 	
-			fdt.alwaysGetFile((long)GET_ARG0(regfile))->read(
+			fdt->alwaysGetFile((long)GET_ARG0(regfile))->read(
 				(void*)GET_ARG1(regfile), 
 				(size_t)GET_ARG2(regfile)));
 		break;
@@ -408,7 +408,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_access:
 		new_regs = sc_new_regs(regfile);
 		sc_ret_v(new_regs, 
-			vfs.access(
+			vfs->access(
 				(char*)GET_ARG0(regfile), 
 				(int)GET_ARG1(regfile)));
 		break;
@@ -437,7 +437,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_fstat:
 		new_regs = sc_new_regs(regfile);
 		sc_ret_v(new_regs, 	
-			fdt.alwaysGetFile((long)GET_ARG0(regfile))->stat(
+			fdt->alwaysGetFile((long)GET_ARG0(regfile))->stat(
 				(struct stat*)GET_ARG1(regfile)));
 		klee_warning("garl");
 		break;
@@ -445,7 +445,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_stat:
 		new_regs = sc_new_regs(regfile);
 		sc_ret_v(new_regs, 	
-			vfs.stat((char*)GET_ARG0(regfile),
+			vfs->stat((char*)GET_ARG0(regfile),
 				(struct stat*)GET_ARG1(regfile)));
 		break;
 	case SYS_uname:
@@ -485,17 +485,17 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_close:
 		new_regs = sc_new_regs(regfile);
 		//TODO: should return this result
-		fdt.closeFile((long)GET_ARG0(regfile));
+		fdt->closeFile((long)GET_ARG0(regfile));
 		sc_ret_v(new_regs, 0);
 		break;
 	case SYS_dup:
 		new_regs = sc_new_regs(regfile);
-		sc_ret_v(new_regs, fdt.dupFile((long)GET_ARG0(regfile)));
+		sc_ret_v(new_regs, fdt->dupFile((long)GET_ARG0(regfile)));
 		break;
 	case SYS_dup2:
 		new_regs = sc_new_regs(regfile);
 		sc_ret_v(new_regs, 
-			fdt.dupFile((long)GET_ARG0(regfile),
+			fdt->dupFile((long)GET_ARG0(regfile),
 			(long)GET_ARG1(regfile)));
 		break;
 	case SYS_setrlimit:
@@ -540,7 +540,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_recvmsg:
 		new_regs = sc_new_regs(regfile);
 		sc_ret_v(new_regs, 	
-			fdt.alwaysGetFile((long)GET_ARG0(regfile))->recvmsg(
+			fdt->alwaysGetFile((long)GET_ARG0(regfile))->recvmsg(
 				(struct msghdr *)GET_ARG1(regfile), 
 				(int)GET_ARG2(regfile)));
 		break;
@@ -551,7 +551,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_recvfrom:
 		new_regs = sc_new_regs(regfile);
 		sc_ret_v(new_regs, 	
-			fdt.alwaysGetFile((long)GET_ARG0(regfile))->recvfrom(
+			fdt->alwaysGetFile((long)GET_ARG0(regfile))->recvfrom(
 				(void *)GET_ARG1(regfile), 
 				(size_t)GET_ARG2(regfile),
 				(int)GET_ARG3(regfile),
@@ -561,7 +561,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_sendto:
 		new_regs = sc_new_regs(regfile);
 		sc_ret_v(new_regs, 	
-			fdt.alwaysGetFile((long)GET_ARG0(regfile))->sendto(
+			fdt->alwaysGetFile((long)GET_ARG0(regfile))->sendto(
 				(void *)GET_ARG1(regfile), 
 				(size_t)GET_ARG2(regfile),
 				(int)GET_ARG3(regfile),
@@ -588,7 +588,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		if ((int64_t)GET_RAX(new_regs) == -1)
 			break;
 		sc_ret_v(new_regs, 
-			fdt.newFile(new SymbolicFD("epoll_create")));
+			fdt->newFile(new SymbolicFD("epoll_create")));
 		break;
 
 	case SYS_getsockname:
@@ -609,15 +609,15 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_pipe:{
 		klee_warning_once("phony pipe");
 		new_regs = sc_new_regs(regfile);
-		long socket0 = fdt.newFile(new SymbolicSocket());
-		long socket1 = fdt.newFile(new SymbolicSocket());
+		long socket0 = fdt->newFile(new SymbolicSocket());
+		long socket1 = fdt->newFile(new SymbolicSocket());
 		if(socket0 < 0) {
-			fdt.closeFile(socket1);
+			fdt->closeFile(socket1);
 			sc_ret_v(new_regs, socket0);
 			break;
 		}
 		if(socket1 < 0) {
-			fdt.closeFile(socket0);
+			fdt->closeFile(socket0);
 			sc_ret_v(new_regs, socket1);
 			break;
 		}
@@ -630,7 +630,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 	case SYS_mmap: {
 		if(!(GET_ARG3(regfile) & MAP_ANONYMOUS)) {
-			FD* file = fdt.getFile((long)GET_ARG4(regfile));
+			FD* file = fdt->getFile((long)GET_ARG4(regfile));
 			new_regs = sc_new_regs(regfile);
 			sc_ret_v(new_regs, file->mmap(
 				(void *)GET_ARG0(regfile), 
@@ -651,18 +651,18 @@ void* sc_enter(void* regfile, void* jmpptr)
 		new_regs = sc_new_regs(regfile);
 		if ((int64_t)GET_RAX(new_regs) == -1)
 			break;
-		sc_ret_v(new_regs, fdt.newFile(new SymbolicSocket()));
+		sc_ret_v(new_regs, fdt->newFile(new SymbolicSocket()));
 		break;
 	case SYS_fchdir:
 		klee_warning_once("phony chdir");
 		new_regs = sc_new_regs(regfile);
-		sc_ret_v(regfile, vfs.chdir(fdt.alwaysGetFile(
+		sc_ret_v(regfile, vfs->chdir(fdt->alwaysGetFile(
 			(long)GET_ARG0(regfile))->identifier_.c_str()));
 		break;
 	case SYS_chdir:
 		klee_warning_once("phony chdir");
 		new_regs = sc_new_regs(regfile);
-		sc_ret_v(regfile, vfs.chdir((char *)GET_ARG0(regfile)));
+		sc_ret_v(regfile, vfs->chdir((char *)GET_ARG0(regfile)));
 		break;
 	case SYS_klee:
 		sc_klee(regfile);
@@ -672,7 +672,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_creat:
 		klee_warning_once("phony creat call");
 		new_regs = sc_new_regs(regfile);
-		sc_ret_v(new_regs, vfs.open((char*)GET_ARG0(regfile),
+		sc_ret_v(new_regs, vfs->open((char*)GET_ARG0(regfile),
 			O_CREAT|O_WRONLY|O_TRUNC, (int)GET_ARG1(regfile)));
 	break;
 	case SYS_readlink:

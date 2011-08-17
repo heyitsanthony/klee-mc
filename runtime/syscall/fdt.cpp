@@ -563,7 +563,7 @@ long VFS::open(const char* path, int flags, int access) {
 	long result;
 	kmc_make_range_symbolic((uintptr_t)&result, sizeof(result), "VFS::open res");
 	if(result >= 0) {
-		result = fdt.newFile(new SymbolicFile(path));
+		result = fdt->newFile(new SymbolicFile(path));
 	} else if(result < MIN_ERRNO) {
 		result = MIN_ERRNO;
 	}
@@ -658,7 +658,7 @@ long ConcreteVFS::open(const char* p, int flags, int access) {
 		//make a new virtual file
 		forks_[path] = fork = new DataFork(path, NULL, 0);
 	}
-	return fdt.newFile(new ConcreteFile(fork));
+	return fdt->newFile(new ConcreteFile(fork));
 }
 long ConcreteVFS::unlink(const char* p) {
 	std::string path;
@@ -785,8 +785,9 @@ struct ctor {
 		klee_warning("XXXXXXXXXXXX global ctors");
 	}
 } _ctor;
-
-FDT fdt;
+extern "C" bool concrete_vfs;
+bool concrete_vfs;
+FDT* fdt = new FDT();
 // VFS vfs;
-ConcreteVFS vfs;
+VFS* vfs = concrete_vfs ? new ConcreteVFS() : new VFS();
 #endif
