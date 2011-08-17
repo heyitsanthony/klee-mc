@@ -1,3 +1,7 @@
+// i don't know how to do this with the makefiles... they try to build
+// a native library which fails on libcxx... so this makes it build cleanly
+#ifdef __llvm__
+
 #define _LARGEFILE64_SOURCE
 #include <poll.h>
 #include <signal.h>
@@ -734,3 +738,4 @@ void* sc_enter(void* regfile, void* jmpptr)
 already_logged:
 	return jmpptr;
 }
+#endif

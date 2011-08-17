@@ -1,3 +1,6 @@
+// i don't know how to do this with the makefiles... they try to build
+// a native library which fails on libcxx... so this makes it build cleanly
+#ifdef __llvm__
 #include "fdt.h"
 #include "kmc.h"
 #include <sys/errno.h>
@@ -786,3 +789,4 @@ struct ctor {
 FDT fdt;
 // VFS vfs;
 ConcreteVFS vfs;
+#endif

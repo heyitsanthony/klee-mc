@@ -1,3 +1,6 @@
+// i don't know how to do this with the makefiles... they try to build
+// a native library which fails on libcxx... so this makes it build cleanly
+#ifdef __llvm__
 #include <klee/klee.h>
 #include <klee/breadcrumb.h>
 #include "breadcrumb.h"
@@ -87,3 +90,4 @@ void sc_breadcrumb_commit(unsigned int sysnr, uint64_t aux_ret)
 		kmc_breadcrumb((breadcrumb*)&bc_opbuf[i], bc_opbuf[i].sop_hdr.bc_sz);
 	}
 }
+#endif
