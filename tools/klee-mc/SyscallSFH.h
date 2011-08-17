@@ -2,6 +2,7 @@
 #define SYSCALLSSFH_H
 
 #include "../../lib/Core/SpecialFunctionHandler.h"
+#include <map>
 
 namespace klee
 {
@@ -44,9 +45,12 @@ private:
 		unsigned taken,
 		const char* name);
 
-	ExecutorVex	*exe_vex;	
+	ExecutorVex	*exe_vex;
 };
 
+SFH_HANDLER(SCGetCwd)
+SFH_HANDLER(SCConcreteFileSize)
+SFH_HANDLER(SCConcreteFileSnapshot)
 SFH_HANDLER(SCRegs)
 SFH_HANDLER(SCBad)
 SFH_HANDLER(FreeRun)
@@ -54,5 +58,7 @@ SFH_HANDLER(KMCExit)
 SFH_HANDLER(MakeRangeSymbolic)
 SFH_HANDLER(AllocAligned)
 SFH_HANDLER(Breadcrumb)
+// boo, why can't libcxx have a non-threaded define!
+SFH_HANDLER(DummyThread)
 }
 #endif

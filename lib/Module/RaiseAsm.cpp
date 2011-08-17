@@ -17,17 +17,16 @@ using namespace klee;
 char RaiseAsmPass::ID = 0;
 
 Function* RaiseAsmPass::getIntrinsic(
-	llvm::Module *M,
 	unsigned IID,
 	const Type **Tys,
 	unsigned NumTys)
 {
-  return Intrinsic::getDeclaration(M, (llvm::Intrinsic::ID) IID, Tys, NumTys);
+  return Intrinsic::getDeclaration(module_, (llvm::Intrinsic::ID) IID, Tys, NumTys);
 }
 
 // FIXME: This should just be implemented as a patch to
 // X86TargetAsmInfo.cpp, then everyone will benefit.
-bool RaiseAsmPass::runOnInstruction(Module *M, Instruction *I)
+bool RaiseAsmPass::runOnInstruction(Instruction *I)
 {
   CallInst *ci = dyn_cast<CallInst>(I);
 
@@ -50,7 +49,7 @@ bool RaiseAsmPass::runOnInstruction(Module *M, Instruction *I)
         as == "rorw $$8, ${0:w};rorl $$16, $0;rorw $$8, ${0:w}" &&
         cs == "=r,0,~{dirflag},~{fpsr},~{flags},~{cc}"))) {
     llvm::Value *Arg0 = ci->getOperand(1);
-    Function *F = getIntrinsic(M, Intrinsic::bswap, Arg0->getType());
+    Function *F = getIntrinsic(Intrinsic::bswap, Arg0->getType());
     ci->setOperand(0, F);
     return true;
   }
@@ -58,28 +57,13 @@ bool RaiseAsmPass::runOnInstruction(Module *M, Instruction *I)
   return false;
 }
 
-bool RaiseAsmPass::runOnModule(Module &M)
-{
-	bool changed = false;
-
-	foreach (fi, M.begin(), M.end())
-		changed |= runOnFunction(&M, *fi);
-
-	return changed;
-}
-
-bool RaiseAsmPass::runOnFunction(Function* F)
-{
-	return runOnFunction(F->getParent(), *F);
-}
-
-bool RaiseAsmPass::runOnFunction(Module* M, Function& F)
+bool RaiseAsmPass::runOnFunction(Function& F)
 {
 	bool changed = false;
 	foreach (bi, F.begin(), F.end()) {
 		foreach (ii, bi->begin(), bi->end()) {
 			Instruction *i = ii;
-			changed |= runOnInstruction(M, i);
+			changed |= runOnInstruction(i);
 		}
 	}
 	return changed;

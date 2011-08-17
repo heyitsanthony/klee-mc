@@ -145,6 +145,8 @@ void ExecutorBC::initializeGlobals(ExecutionState &state)
 		if (	f->hasExternalWeakLinkage() && 
 			!externalDispatcher->resolveSymbol(f->getNameStr())) {
 			addr = Expr::createPointer(0);
+			std::cerr << "KLEE:ERROR: couldn't find symbol for weak linkage of " 
+				"global function: " << f->getNameStr() << std::endl;
 		} else {
 			addr = Expr::createPointer((unsigned long) (void*) f);
 			legalFunctions.insert(
@@ -467,14 +469,15 @@ void ExecutorBC::allocGlobalVariableDecl(
 	} else {
 		addr = externalDispatcher->resolveSymbol(gv.getNameStr());
 	}
-	if (!addr)
-		klee_error(
-			"unable to load symbol(%s) while initializing globals.", 
+	if (!addr) {
+		klee_warning(
+			"ERROR: unable to load symbol(%s) while initializing globals.", 
 			gv.getName().data());
-
-	for (unsigned offset=0; offset < mo->size; offset++) {
-		//os->write8(offset, ((unsigned char*)addr)[offset]);
-		state.write8(os, offset, ((unsigned char*)addr)[offset]);
+	} else {
+		for (unsigned offset=0; offset < mo->size; offset++) {
+			//os->write8(offset, ((unsigned char*)addr)[offset]);
+			state.write8(os, offset, ((unsigned char*)addr)[offset]);
+		}
 	}
 }
 

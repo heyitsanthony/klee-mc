@@ -1527,6 +1527,8 @@ void Executor::executeSymbolicFuncPtr(
           executeCall(*res.first, ki, f, arguments);
         } else {
           if (!hasInvalid) {
+            klee_warning_once((void*) (unsigned long) addr,
+                              "invalid function pointer: %p", addr);
             terminateStateOnExecError(state, "invalid function pointer");
             hasInvalid = true;
           }

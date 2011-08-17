@@ -22,6 +22,8 @@ include $(LEVEL)/Makefile.common
 LIBBCA:=$(LibDir)/lib$(LIBRARYNAME).bca
 LIBTXT:=$(LibDir)/$(LIBRARYNAME)-fns.txt
 
+CXXFLAGS=-I$(LEVEL)/runtime/libcxx/include  -fno-threadsafe-statics 
+
 all:: $(LIBTXT)
 
 $(LIBTXT): $(LIBBCA) $(LEVEL)/scripts/llvm-list-functions

@@ -154,10 +154,7 @@ namespace klee {
     std::vector<KFunction*> functions;
     std::map<llvm::Function*, KFunction*> functionMap;
 
-    RaiseAsmPass		*fpm_raiseasm;
-    IntrinsicCleanerPass	*fpm_cleaner;
-    DivCheckPass		*fpm_checkdiv;
-    PhiCleanerPass		*fpm_phi;
+    llvm::FunctionPassManager* fpm;
   };
 } // End klee namespace
 
