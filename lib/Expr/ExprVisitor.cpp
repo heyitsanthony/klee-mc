@@ -23,6 +23,8 @@ namespace {
 
 using namespace klee;
 
+ref<Expr> ExprVisitor::Action::constantZero;
+
 ref<Expr> ExprVisitor::visit(const ref<Expr> &e) {
   if (!UseVisitorHash || isa<ConstantExpr>(e)) {
     return visitActual(e);
