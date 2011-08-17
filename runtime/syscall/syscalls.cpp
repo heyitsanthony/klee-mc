@@ -290,7 +290,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_open:
 		new_regs = sc_new_regs(regfile);
 		sc_ret_v(new_regs, vfs.open((char*)GET_ARG0(regfile), (int)GET_ARG1(regfile), (int)GET_ARG2(regfile)));
-		klee_warning("bam");
 		break;
 	case SYS_brk:
 		klee_warning_once("failing brk");

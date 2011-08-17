@@ -101,6 +101,7 @@ public:
 	virtual long recvmsg(struct msghdr *message, int flags);
 	virtual long sendmsg(const struct msghdr *message, int flags);
 	virtual long sendto(const void *buffer, size_t length, int flags, const struct sockaddr *dest_addr, socklen_t dest_len);
+	virtual long stat(struct stat *buf);
 };
 
 class SymbolicSocket : public SymbolicFD {
@@ -143,9 +144,6 @@ public:
 	FD* alwaysGetFile(long fd);
 	long closeFile(long fd);
 private:
-	SymbolicPipe stdin;
-	NoisyPipe stdout;
-	NoisyPipe stderr;
 	fdmap files_;
 };
 

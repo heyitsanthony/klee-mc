@@ -203,6 +203,15 @@ long SymbolicFile::recvfrom(void *buffer, size_t length, int flags, struct socka
 long SymbolicFile::recvmsg(struct msghdr *message, int flags) { return -ENOTSOCK; }
 long SymbolicFile::sendmsg(const struct msghdr *message, int flags) { return -ENOTSOCK; }
 long SymbolicFile::sendto(const void *buffer, size_t length, int flags, const struct sockaddr *dest_addr, socklen_t dest_len) { return -ENOTSOCK; }
+long SymbolicFile::stat(struct stat* buf) {
+	kmc_make_range_symbolic((uintptr_t)buf, sizeof(*buf), "Data::stat buf ");
+	klee_assume(buf->st_nlink > 0);
+	buf->st_mode &= ~S_IFSOCK;
+	buf->st_mode |= S_IFREG;
+	buf->st_blocks = (buf->st_size + 511) >> 9;
+	buf->st_blksize = 512;
+	return 0;
+}
 
 SymbolicSocket::SymbolicSocket() 
 : SymbolicFD("Symbolic Socket")
@@ -211,7 +220,12 @@ SymbolicSocket::SymbolicSocket()
 long SymbolicSocket::pread(void* buf, size_t sz, off_t off) { return -ESPIPE; }
 long SymbolicSocket::pwrite(const void* buf, size_t sz, off_t off) { return -ESPIPE; }
 long SymbolicSocket::mmap(void* addr, size_t len, int prot, int flags, off_t offset) { return -EINVAL; }
-long SymbolicSocket::stat(struct stat *buf) { return -EINVAL; }
+long SymbolicSocket::stat(struct stat *buf) { 
+	kmc_make_range_symbolic((uintptr_t)buf, sizeof(*buf), "Data::stat buf ");
+	buf->st_mode &= ~S_IFREG;
+	buf->st_mode |= S_IFSOCK;
+	return 0;
+}
 long SymbolicSocket::truncate(off_t len) { return -EINVAL; }
 
 SymbolicPipe::SymbolicPipe() 
@@ -275,7 +289,7 @@ long ConcreteFile::pwrite(const void* buf, size_t sz, off_t off) {
 }
 long ConcreteFile::mmap(void* addr, size_t len, int prot, int flags, off_t offset) {
 	if(flags & MAP_SHARED) {
-		klee_warning_once("trying to memmap data shared, just mapping private");
+		klee_warning("trying to memmap data shared, just mapping private");
 	}
 	klee_warning("concrete memory mapped");
 	klee_warning(identifier_.c_str());
@@ -295,7 +309,6 @@ long ConcreteFile::mmap(void* addr, size_t len, int prot, int flags, off_t offse
 	if (addr == NULL) 
 		return -ENOMEM;
 		
-	klee_warning("about to copy");
 	fork_->read(addr, len, offset);
 	klee_warning("copied");
 	return (uint64_t)addr;
@@ -320,12 +333,17 @@ long ConcreteFile::ioctl(unsigned long request, long data) {
 FDT::FDT() 
 : files_(4096)
 {
-	files_[0] = &stdin;
-	stdin.addRef();
-	files_[1] = &stdout;
-	stdout.addRef();
-	files_[2] = &stderr;
-	stderr.addRef();
+	SymbolicPipe* stdin = new SymbolicPipe();
+	files_[0] = stdin;
+	stdin->addRef();
+
+	NoisyPipe* stdout = new NoisyPipe();
+	files_[1] = stdout;
+	stdout->addRef();
+
+	NoisyPipe* stderr = new NoisyPipe();
+	files_[2] = stderr;
+	stderr->addRef();
 }
 FDT::~FDT() {
 	klee_warning("destructors! fuck off");
@@ -361,7 +379,7 @@ FD* FDT::getFile(long fd) {
 	return files_[fd];
 }
 long FDT::closeFile(long fd) {
-	FD* i = getFile(fd);;
+	FD* i = getFile(fd);
 	if(!i) {
 		return -EBADF;
 	}
@@ -381,23 +399,16 @@ long FDT::dupFile(long fd) {
 }
 
 long FDT::dupFile(long from, long to) {
-	klee_warning("dup2?");
-	klee_print_expr("dup2 from", from);
-	klee_print_expr("dup2 to", to);
 	FD* f = getFile(from);
-	klee_warning("dup2 f");
 	if(!f) {
-		klee_warning("dup2 bad f");
 		return -EBADF;
 	}
 	FD* t = getFile(to);
 	if(t && t->freeRef()) {
-		klee_warning("dup2 free old t");
 		delete t;
 	}
 	f->addRef();
 	files_[to] = f;
-	klee_warning("dup2 ok");
 	return to;
 }
 
@@ -444,12 +455,12 @@ size_t DataFork::read(void* buf, size_t sz, off_t off) {
 	if(off + sz > size_) {
 		sz = size_ - off;
 	}
-	klee_print_expr("original:", originalSize_);
-	klee_print_expr("originalsz:", original_);
-	klee_check_memory_access(original_, originalSize_);
-	klee_print_expr("buf:", buf);
-	klee_print_expr("sz", sz);
-	klee_check_memory_access(buf, sz);
+	// klee_print_expr("original:", originalSize_);
+	// klee_print_expr("originalsz:", original_);
+	// klee_check_memory_access(original_, originalSize_);
+	// klee_print_expr("buf:", buf);
+	// klee_print_expr("sz", sz);
+	// klee_check_memory_access(buf, sz);
 	if(originalSize_ < off + sz) {
 		klee_warning("clearing data");
 		memset(buf, 0, sz);
@@ -490,6 +501,8 @@ void DataFork::truncate(off_t len) {
 }
 void DataFork::stat(struct stat* buf) {
 	kmc_make_range_symbolic((uintptr_t)buf, sizeof(*buf), "Data::stat buf ");
+	klee_assume(buf->st_nlink > 0);
+	buf->st_mode |= S_IFREG;
 	buf->st_size = size_;
 	buf->st_blocks = (size_ + 511) >> 9;
 	buf->st_blksize = 512;
@@ -749,7 +762,6 @@ long ConcreteVFS::getFork(const std::string& path, DataFork*& fork) {
 	klee_warning(path.c_str());
 	long result = sc_concrete_file_snapshot(path.c_str(), path.size());
 	if(result < 0) {
-		klee_print_expr("failed snapshot: ", -result);
 		return result;
 	}
 	long sz = sc_concrete_file_size(path.c_str(), path.size());
