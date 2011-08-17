@@ -80,6 +80,12 @@ namespace {
   cl::opt<bool>
   DebugPrintEscapingFunctions("debug-print-escaping-functions",
                               cl::desc("Print functions whose address is taken."));
+  cl::opt<bool>
+  CountModuleCoverage(
+	"count-mod-cov",
+	cl::desc("Include module instructoins in uncovered count"),
+	cl::init(false));
+
 }
 
 KModule::KModule(Module *_module)
@@ -373,10 +379,9 @@ void KModule::addModule(Module* in_mod)
 		KFunction	*kf;
 		kmod_f = module->getFunction(it->getNameStr());
 		assert (kmod_f != NULL);
+
 		kf = addFunction(kmod_f);
-		/* do not track coverage of modules (maybe do it in the future
-		 * when I figure out a nice way to manage stats) */
-		if (kf) kf->trackCoverage = false;
+		if (kf) kf->trackCoverage = CountModuleCoverage;
 	}
 
 //	assert (isLinked);

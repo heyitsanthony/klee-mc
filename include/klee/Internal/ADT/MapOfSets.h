@@ -10,6 +10,7 @@
 #ifndef __UTIL_MAPOFSETS_H__
 #define __UTIL_MAPOFSETS_H__
 
+#include "static/Sugar.h"
 #include <cassert>
 #include <vector>
 #include <set>
@@ -159,8 +160,7 @@ namespace klee {
     const std::pair<const std::set<K>, const V> operator*() {
       assert(onEntry || !stack.empty());
       std::set<K> s;
-      for (typename stack_ty::iterator it = stack.begin(), ie = stack.end();
-           it != ie; ++it)
+      foreach (it, stack.begin(), stack.end())
         s.insert((*it)->first);
       Node *n = stack.empty() ? root : &stack.back()->second;
       return std::make_pair(s, n->value);
@@ -187,8 +187,7 @@ namespace klee {
   template<class K, class V>
   void MapOfSets<K,V>::insert(const std::set<K> &set, const V &value) {
     Node *n = &root;
-    for (typename std::set<K>::const_iterator it = set.begin(), ie = set.end();
-         it != ie; ++it)
+    foreach (it, set.begin(), set.end())
       n = &n->children.insert(std::make_pair(*it, Node())).first->second;
     n->isEndOfSet = true;
     n->value = value;
@@ -197,8 +196,7 @@ namespace klee {
   template<class K, class V>
   V *MapOfSets<K,V>::lookup(const std::set<K> &set) {
     Node *n = &root;
-    for (typename std::set<K>::const_iterator it = set.begin(), ie = set.end();
-         it != ie; ++it) {
+    foreach (it, set.begin(), set.end()) {
       typename Node::children_ty::iterator kit = n->children.find(*it);
       if (kit==n->children.end()) {
         return 0;
@@ -271,8 +269,7 @@ namespace klee {
       K elt = *begin;
       Iterator next = begin;
       ++next;
-      for (typename Node::children_ty::iterator it = n->children.begin(),
-             ie = n->children.end(); it != ie; ++it) {
+      foreach (it, n->children.begin(), n->children.end()) {
         std::set<K> nacc = accum;
         nacc.insert(it->first);
         if (elt==it->first) {
@@ -339,8 +336,7 @@ namespace klee {
     if (begin==end) {
       if (n->isEndOfSet && p(n->value))
         return &n->value;
-      for (typename Node::children_ty::iterator it = n->children.begin(),
-             ie = n->children.end(); it != ie; ++it) {
+      foreach (it,  n->children.begin(), n->children.end()) {
         V *res = findSuperset(&it->second, begin, end, p);
         if (res) return res;
       }
@@ -348,8 +344,7 @@ namespace klee {
       typename Node::children_ty::iterator kbegin = n->children.begin();
       typename Node::children_ty::iterator kmid = 
         n->children.lower_bound(*begin);
-      for (typename Node::children_ty::iterator it = n->children.begin(),
-             ie = n->children.end(); it != ie; ++it) {
+      foreach(it, n->children.begin(), n->children.end()) {
         V *res = findSuperset(&it->second, begin, end, p);
         if (res) return res;
       }

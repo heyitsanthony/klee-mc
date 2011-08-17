@@ -46,6 +46,11 @@ namespace
 		cl::desc("Make argument strings symbolic"),
 		cl::init(false));
 
+	cl::opt<bool> SymRegs(
+		"symregs",
+		cl::desc("Mark initial register file as symbolic"),
+		cl::init(false));
+
 	cl::opt<bool> LogRegs(
 		"logregs",
 		cl::desc("Log registers."),
@@ -305,6 +310,10 @@ void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
 	unsigned int			state_regctx_sz;
 
 	state_regctx_mo = allocRegCtx(state, f);
+	es2esv(*state).setRegCtx(state_regctx_mo);
+
+	if (SymRegs) executeMakeSymbolic(*state, state_regctx_mo, "reg");
+
 	state_regctx_sz = gs->getCPUState()->getStateSize();
 
 	if (symPathWriter) state->symPathOS = symPathWriter->open();
@@ -315,13 +324,14 @@ void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
 	assert (f->arg_size() == 1);
 	state->bindArgument(kf, 0, state_regctx_mo->getBaseExpr());
 
+	if (SymRegs) return;
+
 	state_regctx_os = state->bindMemObj(state_regctx_mo);
 
 	const char*  state_data = (const char*)gs->getCPUState()->getStateData();
 	for (unsigned int i=0; i < state_regctx_sz; i++)
 		state->write8(state_regctx_os, i, state_data[i]);
 
-	es2esv(*state).setRegCtx(state_regctx_mo);
 }
 
 void ExecutorVex::run(ExecutionState &initialState)
@@ -527,7 +537,12 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 	case GE_IGNORE:
 		handleXferJmp(state, ki);
 		return;
+	case GE_SIGTRAP:
+		std::cerr << "[VEXLLVM] Caught SigTrap. Exiting\n";
+		terminateStateOnExit(state);
+		return;
 	default:
+		fprintf(stderr, "WTF: EXIT_TYPE=%d\n", exit_type);
 		assert (0 == 1 && "SPECIAL EXIT TYPE");
 	}
 
