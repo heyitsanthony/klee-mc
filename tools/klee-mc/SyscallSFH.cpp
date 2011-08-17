@@ -117,7 +117,7 @@ SFH_DEF_HANDLER(SCRegs)
 	state.bindLocal(target, ConstantExpr::create(cpu_mo->address, 64));
 }
 
-typedef	std::map<std::string, MemoryObject*> snapshot_map;
+typedef	std::map<std::string, off_t> snapshot_map;
 snapshot_map g_snapshots;
 
 SFH_DEF_HANDLER(SCGetCwd) {
@@ -144,11 +144,12 @@ SFH_DEF_HANDLER(SCConcreteFileSize) {
 		state.bindLocal(target, ConstantExpr::create(-1, 64));
 		return;
 	}
-	state.bindLocal(target, ConstantExpr::create(i->second->size, 64));
+	state.bindLocal(target, ConstantExpr::create(i->second, 64));
 	std::cerr << "sized " << path << std::endl;
 }
 SFH_DEF_HANDLER(SCConcreteFileSnapshot) {
 	//TODO: CHK something?
+	//TODO: nice to be able to add it to all state in some safe location?
 	
 	ConstantExpr	*path_ce, *size_ce;
 	unsigned char		*buf;
@@ -160,35 +161,31 @@ SFH_DEF_HANDLER(SCConcreteFileSnapshot) {
 	buf = sfh->readBytesAtAddress(state, path_ce, size_ce->getZExtValue() + 1, len_in, -1);
 	std::string path = (char*)buf;
 	
-	snapshot_map::iterator i = g_snapshots.find(path);
-	if(i == g_snapshots.end()) {
-		long result = open(path.c_str(), O_RDONLY);
-		if(result < 0) {
-			state.bindLocal(target, ConstantExpr::create(-errno, 64));
-			return;
-		}
-		int fd = result;
-
-		struct stat st;
-		result = fstat(fd, &st);
-		if(result < 0) {
-			close(fd);
-			state.bindLocal(target, ConstantExpr::create(-errno, 64));
-			return;
-		}
-	
-		void* addr = mmap(NULL, st.st_size, PROT_READ, MAP_FILE | MAP_PRIVATE, fd, 0);
-		close(fd);
-		if(addr == MAP_FAILED) {
-			state.bindLocal(target, ConstantExpr::create(-errno, 64));
-			return;
-		}
-		MemoryObject* mo = sfh->executor->addExternalObject(state, addr, st.st_size, true);
-		i = g_snapshots.insert(std::make_pair(path, mo)).first;
-		std::cerr << "new file fork " << path << std::endl;
+	long result = open(path.c_str(), O_RDONLY);
+	if(result < 0) {
+		state.bindLocal(target, ConstantExpr::create(-errno, 64));
+		return;
 	}
-	state.bindLocal(target, ConstantExpr::create((intptr_t)i->second->address, 64));
-	std::cerr << "loaded " << path << std::endl;
+	int fd = result;
+
+	struct stat st;
+	result = fstat(fd, &st);
+	if(result < 0) {
+		close(fd);
+		state.bindLocal(target, ConstantExpr::create(-errno, 64));
+		return;
+	}
+
+	void* addr = mmap(NULL, st.st_size, PROT_READ, MAP_FILE | MAP_PRIVATE, fd, 0);
+	close(fd);
+	if(addr == MAP_FAILED) {
+		state.bindLocal(target, ConstantExpr::create(-errno, 64));
+		return;
+	}
+	MemoryObject* mo = sfh->executor->addExternalObject(state, addr, st.st_size, true);
+	g_snapshots.insert(std::make_pair(path, st.st_size)).first;
+	std::cerr << "new file fork " << path << std::endl;
+	state.bindLocal(target, ConstantExpr::create((intptr_t)mo->address, 64));
 }
 
 SFH_DEF_HANDLER(SCBad)

@@ -297,11 +297,10 @@ long ConcreteFile::mmap(void* addr, size_t len, int prot, int flags, off_t offse
 		
 	klee_warning("about to copy");
 	fork_->read(addr, len, offset);
-	klee_warning("copying");
+	klee_warning("copied");
 	return (uint64_t)addr;
 }
 long ConcreteFile::stat(struct stat *buf) { 
-	klee_warning("cf stat");
 	fork_->stat(buf);
 	return 0;
 }
@@ -446,27 +445,21 @@ size_t DataFork::read(void* buf, size_t sz, off_t off) {
 		sz = size_ - off;
 	}
 	klee_print_expr("original:", originalSize_);
+	klee_print_expr("originalsz:", original_);
 	klee_check_memory_access(original_, originalSize_);
-	klee_print_expr("fixed sz", sz);
+	klee_print_expr("buf:", buf);
+	klee_print_expr("sz", sz);
 	klee_check_memory_access(buf, sz);
 	if(originalSize_ < off + sz) {
 		klee_warning("clearing data");
 		memset(buf, 0, sz);
 	}
 	if(originalSize_ > off) {
-		klee_warning("OLD DATA");
-		klee_print_expr("size:", size_);
-		klee_print_expr("off:", off);
-		klee_print_expr("sz:", originalSize_);
-		klee_print_expr("originalSize_ - off:", originalSize_ - off);
-		klee_print_expr("buf:", buf);
+		klee_warning("copying original data");
 		const char* from = (char*)original_ + off;
 		char* to = (char*)buf;
 		size_t partial = std::min(originalSize_ - off, (long)sz);
-		klee_print_expr("partial:", partial);
-		while(to - (char*)buf < partial) {
-			*(to++) = *(from++);
-		}
+		memcpy(to, from, partial);
 	}
 	klee_warning("applying deltas");
 	delta_map::iterator i = differences_.lower_bound(off);

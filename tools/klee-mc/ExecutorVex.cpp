@@ -286,12 +286,6 @@ void ExecutorVex::bindMappingPage(
 		 * This is safe, but will need a workaround *eventually* */
 		state->write8(mmap_os, i, data[i]);
 	}
-<<<<<<< HEAD
-
-	//mmap_mo->print(std::cerr);
-	std::cerr << "\n";
-=======
->>>>>>> 6116d8e5cd8ae73435d22e7d9990ce8c70316610
 }
 
 void ExecutorVex::bindMapping(
