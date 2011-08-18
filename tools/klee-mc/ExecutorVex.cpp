@@ -65,18 +65,13 @@ namespace
 		"check-div-zero",
 		cl::desc("Inject checks for division-by-zero"),
 		cl::init(false));
-
-	cl::opt<bool> ConcreteVfs(
-		"concrete-vfs",
-		cl::desc("Treat absolute path opens as concrete"),
-		cl::init(false));
 }
 
 ExecutorVex::ExecutorVex(
 	const InterpreterOptions &opts,
 	InterpreterHandler *ih,
 	Guest	*in_gs)
-: ExecutorBC(opts, ih)
+: Executor(opts, ih)
 , gs(in_gs)
 , native_code_bytes(0)
 {
@@ -133,11 +128,7 @@ ExecutorVex::~ExecutorVex(void)
 	if (kmodule) delete kmodule;
 	kmodule = NULL;
 }
-//TODO: declare in kmodule h
-Function *getStubFunctionForCtorList(
-	Module *m,
-	GlobalVariable *gv,
-	std::string name);
+
 void ExecutorVex::runImage(void)
 {
 	ExecutionState	*state;
@@ -157,7 +148,12 @@ void ExecutorVex::runImage(void)
 	// yet have a global address but binding the constant table
 	// requires it!
 	init_func = getFuncByAddrNoKMod((uint64_t)gs->getEntryPoint(), is_new);
-	
+	init_kfunc = kmodule->addFunction(init_func);
+	statsTracker->addKFunction(init_kfunc);
+	bindKFuncConstants(init_kfunc);
+
+	state = ExeStateVex::make(kmodule->getKFunction(init_func));
+
 	/* add modules before initializing globals so that everything
 	 * will link in properly */
 	std::list<Module*> l = theVexHelpers->getModules();
@@ -165,53 +161,12 @@ void ExecutorVex::runImage(void)
 		kmodule->addModule(*it);
 	}
 
-	GlobalVariable *ctors = kmodule->module->getNamedGlobal("llvm.global_ctors");
-	GlobalVariable *dtors = kmodule->module->getNamedGlobal("llvm.global_dtors");
-	std::cerr << "checking for global ctors and dtors" << std::endl;
-	if (ctors)
-		std::cerr << "installing ctors" << std::endl;
-		Function* ctorStub = getStubFunctionForCtorList(kmodule->module, ctors, "klee.ctor_stub");
-		kmodule->addFunction(ctorStub);
-		CallInst::Create(
-			ctorStub,
-			"",
-			init_func->begin()->begin());
-	// can't install detours because this function returns almost immediately... todo
-	// do them later
-	// if (dtors) {
-	// 	std::cerr << "installing dtors" << std::endl;
-	// 	Function *dtorStub;
-	// 	dtorStub = getStubFunctionForCtorList(kmodule->module, dtors, "klee.dtor_stub");
-	// 	kmodule->addFunction(dtorStub);
-	// 	foreach (it, init_func->begin(), init_func->end()) {
-	// 		if (!isa<ReturnInst>(it->getTerminator())) continue;
-	// 		CallInst::Create(dtorStub, "", it->getTerminator());
-	// 	}
-	// }
-
-	const IntegerType* boolType = IntegerType::get(getGlobalContext(), 1);
-	GlobalVariable* concrete_vfs =
-		static_cast<GlobalVariable*>(kmodule->module->
-			getGlobalVariable("concrete_vfs", boolType));
-	 
-	concrete_vfs->setInitializer(ConcreteVfs ?
-		ConstantInt::getTrue(getGlobalContext()) :
-		ConstantInt::getFalse(getGlobalContext()));
-	concrete_vfs->setConstant(true);
-
-	init_kfunc = kmodule->addFunction(init_func);
-	statsTracker->addKFunction(init_kfunc);
-	bindKFuncConstants(init_kfunc);
-
-	state = ExeStateVex::make(kmodule->getKFunction(init_func));
-
-	initializeGlobals(*state);
 	prepState(state, init_func);
+	initializeGlobals(*state);
 
 	sfh->bind();
 	kf_scenter = kmodule->getKFunction("sc_enter");
 	assert (kf_scenter && "Could not load sc_enter from runtime library");
-
 
 	if (SymArgs) makeArgsSymbolic(state);
 
@@ -430,14 +385,10 @@ static bool xxx_debug = false;
 
 Function* ExecutorVex::getFuncByAddr(uint64_t guest_addr)
 {
-	Function	*ef;
 	KFunction	*kf;
 	Function	*f;
 	bool		is_new;
 
-	ef = ExecutorBC::getFuncByAddr(guest_addr);
-	if(ef) 
-		return ef;
 	f = getFuncByAddrNoKMod(guest_addr, is_new);
 	if (f == NULL) return NULL;
 	assert (!xxx_debug && "DONE");
@@ -779,6 +730,103 @@ void ExecutorVex::updateGuestRegs(ExecutionState& state)
 
 	guest_regs = gs->getCPUState()->getStateData();
 	state.addressSpace.copyToBuf(es2esv(state).getRegCtx(), guest_regs);
+}
+
+void ExecutorVex::initGlobalFuncs(void)
+{
+	Module *m = kmodule->module;
+
+	// represent function globals using the address of the actual llvm function
+	// object. given that we use malloc to allocate memory in states this also
+	// ensures that we won't conflict. we don't need to allocate a memory object
+	// since reading/writing via a function pointer is unsupported anyway.
+	foreach (i, m->begin(), m->end()) {
+		Function *f = i;
+		ref<ConstantExpr> addr(0);
+
+		// If the symbol has external weak linkage then it is implicitly
+		// not defined in this module; if it isn't resolvable then it
+		// should be null.
+		assert (!f->hasExternalWeakLinkage());
+		addr = Expr::createPointer((unsigned long) (void*) f);
+		globalAddresses.insert(std::make_pair(f, addr));
+	}
+}
+
+void ExecutorVex::initializeGlobals(ExecutionState &state)
+{
+	Module *m;
+
+	m = kmodule->module;
+
+	assert (m->getModuleInlineAsm() == "" && "No inline asm!");
+	assert (m->lib_begin() == m->lib_end() &&
+		"XXX do not support dependent libraries");
+
+	initGlobalFuncs();
+
+	// allocate and initialize globals, done in two passes since we may
+	// need address of a global in order to initialize some other one.
+
+	// allocate memory objects for all globals
+	foreach (i, m->global_begin(), m->global_end()) {
+		if (i->isDeclaration()) allocGlobalVariableDecl(state, *i);
+		else allocGlobalVariableNoDecl(state, *i);
+	}
+
+	// link aliases to their definitions (if bound)
+	foreach (i, m->alias_begin(), m->alias_end()) {
+		// Map the alias to its aliasee's address.
+		// This works because we have addresses for everything,
+		// even undefined functions.
+		globalAddresses.insert(
+			std::make_pair(i, evalConstant(i->getAliasee())));
+	}
+
+	// once all objects are allocated, do the actual initialization
+	foreach (i, m->global_begin(), m->global_end()) {
+		MemoryObject		*mo;
+		const ObjectState	*os;
+		ObjectState		*wos;
+
+		if (!i->hasInitializer()) continue;
+
+		mo = globalObjects.find(i)->second;
+		os = state.addressSpace.findObject(mo);
+
+		assert(os);
+
+		wos = state.addressSpace.getWriteable(mo, os);
+
+		initializeGlobalObject(state, wos, i->getInitializer(), 0);
+		// if (i->isConstant()) os->setReadOnly(true);
+	}
+
+	std::cerr << "GLOBAL ADDRESSES size=" << globalAddresses.size() << '\n';
+}
+
+void ExecutorVex::allocGlobalVariableNoDecl(
+	ExecutionState& state,
+	const GlobalVariable& gv)
+{
+	const Type	*ty;
+	uint64_t	size;
+	MemoryObject	*mo = 0;
+	ObjectState	*os;
+
+	ty = gv.getType()->getElementType();
+	size = target_data->getTypeStoreSize(ty);
+
+	assert (gv.getName()[0] !='\01');
+
+	if (!mo) mo = memory->allocate(size, false, true, &gv, &state);
+	assert(mo && "out of memory");
+
+	os = state.bindMemObj(mo);
+	globalObjects.insert(std::make_pair(&gv, mo));
+	globalAddresses.insert(std::make_pair(&gv, mo->getBaseExpr()));
+
+	if (!gv.hasInitializer()) os->initializeToRandom();
 }
 
 void ExecutorVex::printStateErrorMessage(

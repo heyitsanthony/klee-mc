@@ -30,42 +30,45 @@ namespace klee {
 
 /// RaiseAsmPass - This pass raises some common occurences of inline
 /// asm which are used by glibc into normal LLVM IR.
-class RaiseAsmPass : public llvm::FunctionPass
+class RaiseAsmPass : public llvm::ModulePass
 {
 	static char ID;
 
-	llvm::Function *getIntrinsic(
+	static llvm::Function *getIntrinsic(
+		llvm::Module *M,
 		unsigned IID,
 		const llvm::Type **Tys,
 		unsigned NumTys);
-	llvm::Function *getIntrinsic(
+	static llvm::Function *getIntrinsic(
+		llvm::Module *M,
 		unsigned IID,
 		const llvm::Type *Ty0)
 	{
-		return getIntrinsic(IID, &Ty0, 1);
+		return getIntrinsic(M, IID, &Ty0, 1);
 	}
-	bool runOnInstruction(llvm::Instruction *I);
-	llvm::Module* module_;
+	static bool runOnInstruction(llvm::Module* M, llvm::Instruction *I);
+	static bool runOnFunction(llvm::Module* M, llvm::Function& F);
 public:
-	RaiseAsmPass(llvm::Module* module) 
-	: llvm::FunctionPass((intptr_t) &ID), module_(module) {}
+	RaiseAsmPass() : llvm::ModulePass((intptr_t) &ID) {}
 	virtual ~RaiseAsmPass() {}
-	virtual bool runOnFunction(llvm::Function& f);
+	virtual bool runOnModule(llvm::Module &M);
+	bool runOnFunction(llvm::Function* f);
 };
 
 /// RemoveSentinelsPass - This pass removes '\01' prefix sentinels added by
 /// llvm-gcc when functions are renamed using __asm__
-class RemoveSentinelsPass : public llvm::FunctionPass
+class RemoveSentinelsPass : public llvm::ModulePass
 {
   static char ID;
-  virtual bool runOnFunction(llvm::Function &F);
+  bool runOnFunction(llvm::Module &M, llvm::Function *F);
 public:
-  RemoveSentinelsPass() : llvm::FunctionPass((intptr_t) &ID) {}
+  RemoveSentinelsPass() : llvm::ModulePass((intptr_t) &ID) {}
+  virtual bool runOnModule(llvm::Module &M);
 };
 
   // This is a module pass because it can add and delete module
   // variables (via intrinsic lowering).
-class IntrinsicCleanerPass : public llvm::FunctionPass
+class IntrinsicCleanerPass : public llvm::ModulePass
 {
   static char ID;
   const llvm::TargetData &TargetData;
@@ -76,13 +79,14 @@ class IntrinsicCleanerPass : public llvm::FunctionPass
 public:
   IntrinsicCleanerPass(const llvm::TargetData &TD,
                        bool LI=true)
-    : llvm::FunctionPass((intptr_t) &ID),
+    : llvm::ModulePass((intptr_t) &ID),
       TargetData(TD),
       IL(new llvm::IntrinsicLowering(TD)),
       LowerIntrinsics(LI) {}
   ~IntrinsicCleanerPass() { delete IL; }
 
-  virtual bool runOnFunction(llvm::Function& f);
+  virtual bool runOnModule(llvm::Module &M);
+  bool runOnFunction(llvm::Function* f);
 private:
   void clean_vacopy(llvm::BasicBlock::iterator& i, llvm::IntrinsicInst* ii);
   bool clean_dup_stoppoint(
@@ -110,12 +114,13 @@ public:
   virtual bool runOnFunction(llvm::Function &f);
 };
 
-class DivCheckPass : public llvm::FunctionPass
+class DivCheckPass : public llvm::ModulePass
 {
   static char ID;
 public:
-  DivCheckPass(): FunctionPass((intptr_t) &ID), divZeroCheckFunction(0) {}
-  virtual bool runOnFunction(llvm::Function &f);
+  DivCheckPass(): ModulePass((intptr_t) &ID), divZeroCheckFunction(0) {}
+  virtual bool runOnModule(llvm::Module& M);
+  bool runOnFunction(llvm::Function *f);
 private:
   llvm::Function *divZeroCheckFunction;
 };
@@ -149,14 +154,6 @@ private:
                      llvm::Value *value,
                      llvm::BasicBlock *origBlock,
                      llvm::BasicBlock *defaultBlock);
-};
-
-/// LowerAtomic - get rid of llvm.atomic.xxx
-class LowerAtomic : public llvm::BasicBlockPass {
-public:
-  static char ID;
-  LowerAtomic() : BasicBlockPass((intptr_t)&ID) {}
-  bool runOnBasicBlock(llvm::BasicBlock &BB);
 };
 
 }

@@ -22,5 +22,4 @@ if [ -z "$VEXLLVM_HELPER_PATH" ]; then
 	echo "Can't find vex bitcode path. Not copying libkleeRuntimeMC.bc"
 else
 	cp Release/lib/libkleeRuntimeMC.bc "$VEXLLVM_HELPER_PATH"/
-	llvm-ld Release/lib/libkleeRuntimeMC.bc runtime/klee-libc/Release/*.bc -o ../vexllvm/bitcode/libkleeRuntimeMC.bc -link-as-library
 fi

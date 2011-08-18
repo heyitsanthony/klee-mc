@@ -34,7 +34,6 @@
 #include "llvm/System/Path.h"
 #include "llvm/Target/TargetData.h"
 #include "llvm/Transforms/Scalar.h"
-#include "llvm/ModuleProvider.h"
 
 #include "static/Sugar.h"
 
@@ -42,10 +41,6 @@
 
 using namespace klee;
 using namespace llvm;
-
-namespace llvm {
-	Pass *createLowerAtomicPass();
-}
 
 namespace {
   enum SwitchImplType {
@@ -99,7 +94,10 @@ KModule::KModule(Module *_module)
 , kleeMergeFn(0)
 , infos(0)
 , constantTable(0)
-, fpm(new FunctionPassManager(new ExistingModuleProvider(_module)))
+, fpm_raiseasm(NULL)
+, fpm_cleaner(NULL)
+, fpm_checkdiv(NULL)
+, fpm_phi(NULL)
 {
 }
 
@@ -107,7 +105,10 @@ KModule::~KModule()
 {
 	delete infos;
 
-	delete fpm;
+	if (fpm_raiseasm) delete fpm_raiseasm;
+	if (fpm_cleaner) delete fpm_cleaner;
+	if (fpm_checkdiv) delete fpm_checkdiv;
+	if (fpm_phi) delete fpm_phi;
 
 	foreach (it, functions.begin(), functions.end()) {
 		delete *it;
@@ -124,7 +125,7 @@ extern void Optimize(Module*);
 }
 
 // what a hack
-Function *getStubFunctionForCtorList(
+static Function *getStubFunctionForCtorList(
 	Module *m,
 	GlobalVariable *gv,
 	std::string name)
@@ -390,14 +391,12 @@ void KModule::addModule(Module* in_mod)
 // invariant transformations that we will end up doing later so that
 // optimize is seeing what is as close as possible to the final
 // module.
-
 void KModule::injectRawChecks(const Interpreter::ModuleOptions &opts)
 {
 	PassManager pm;
-	pm.add(new RaiseAsmPass(module));
+	pm.add(new RaiseAsmPass());
 	if (opts.CheckDivZero) pm.add(new DivCheckPass());
 
-	pm.add(createLowerAtomicPass());
 	// There was a bug in IntrinsicLowering which caches values which
 	// may eventually  deleted (via RAUW).
 	// This should now be fixed in LLVM
@@ -423,7 +422,6 @@ void KModule::passEnforceInvariants(void)
 	default: klee_error("invalid --switch-type");
 	}
 
-	pm.add(createLowerAtomicPass());
 	pm.add(new IntrinsicCleanerPass(*targetData));
 	pm.add(new PhiCleanerPass());
 	pm.run(*module);
@@ -489,12 +487,10 @@ void KModule::prepare(
     llvm::errs() << "]\n";
   }
 
-  
-  fpm->add(new RaiseAsmPass(module));
-  if (opts.CheckDivZero) fpm->add(new DivCheckPass());
-  fpm->add(createLowerAtomicPass());
-  fpm->add(new IntrinsicCleanerPass(*targetData));
-  fpm->add(new PhiCleanerPass());
+  fpm_raiseasm = new RaiseAsmPass();
+  if (opts.CheckDivZero) fpm_checkdiv = new DivCheckPass();
+  fpm_cleaner = new IntrinsicCleanerPass(*targetData);
+  fpm_phi = new PhiCleanerPass();
 }
 
 /* add a function that hasn't been cleaned up by any of our passes */
@@ -502,9 +498,10 @@ KFunction* KModule::addFunction(Function* f)
 {
 	if (f->isDeclaration()) return NULL;
 
-	fpm->run(*f);
-	fpm->doFinalization();
-	fpm->doInitialization();
+	fpm_raiseasm->runOnFunction(f);
+	if (fpm_checkdiv) fpm_checkdiv->runOnFunction(f);
+	fpm_cleaner->runOnFunction(f);
+	fpm_phi->runOnFunction(*f);
 
 	return addFunctionProcessed(f);
 }
@@ -593,7 +590,6 @@ void KModule::loadIntrinsicsLib(const Interpreter::ModuleOptions &opts)
 	// avoid creating stale uses.
 
 	const llvm::Type *i8Ty = Type::getInt8Ty(getGlobalContext());
-	const llvm::Type *i32Ty = Type::getInt32Ty(getGlobalContext());
 
 	forceImport(
 		module, "memcpy", PointerType::getUnqual(i8Ty),
@@ -610,13 +606,6 @@ void KModule::loadIntrinsicsLib(const Interpreter::ModuleOptions &opts)
 		PointerType::getUnqual(i8Ty),
 		Type::getInt32Ty(getGlobalContext()),
 		targetData->getIntPtrType(getGlobalContext()), (Type*) 0);
-
-	forceImport(
-		module, "atomic.load.add", Type::getInt32Ty(getGlobalContext()),
-		PointerType::getUnqual(i32Ty),
-		Type::getInt32Ty(getGlobalContext()),
-		(Type*) 0);
-
 
 	if (opts.CheckDivZero) {
 		forceImport(module, "klee_div_zero_check",

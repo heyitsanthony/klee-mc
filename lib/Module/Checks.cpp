@@ -29,15 +29,24 @@ using namespace klee;
 
 char DivCheckPass::ID;
 
-bool DivCheckPass::runOnFunction(Function& f)
+bool DivCheckPass::runOnModule(llvm::Module &M)
+{
+	bool	changed = false;
+	foreach (f, M.begin(), M.end()) {
+		changed |= runOnFunction(f);
+	}
+	return changed;
+}
+
+bool DivCheckPass::runOnFunction(Function* f)
 {
 	Module	*M;
 	bool changed = false;
 
-	M = f.getParent();
+	M = f->getParent();
 	assert (M != NULL && "Orphaned functoin on function pass");
 
-	foreach (b, f.begin(), f.end()) {
+	foreach (b, f->begin(), f->end()) {
 	foreach (i, b->begin(), b->end()) {
 		BinaryOperator		*binOp;
 		CastInst		*denominator;

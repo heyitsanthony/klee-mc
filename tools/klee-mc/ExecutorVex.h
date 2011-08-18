@@ -3,7 +3,7 @@
 
 #include "collection.h"
 #include "guest.h"
-#include "../../lib/Core/ExecutorBC.h"
+#include "../../lib/Core/Executor.h"
 
 #include <iostream>
 #include <hash_map>
@@ -29,7 +29,7 @@ class SyscallSFH;
 // ugh g++, you delicate garbage
 typedef __gnu_cxx::hash_map<uintptr_t /* Func*/, VexSB*> func2vsb_map;
 
-class ExecutorVex : public ExecutorBC
+class ExecutorVex : public Executor
 {
 public:
 	ExecutorVex(
@@ -108,10 +108,19 @@ private:
 		const GuestMem::Mapping& m,
 		unsigned int pgnum);
 
+	void initializeGlobals(ExecutionState& state);
+	void initGlobalFuncs(void);
+
 	void prepState(ExecutionState* state, llvm::Function*);
 	void makeArgsSymbolic(ExecutionState* state);
 	void setupRegisterContext(ExecutionState* state, llvm::Function* f);
 	void setupProcessMemory(ExecutionState* state, llvm::Function* f);
+	void allocGlobalVariableDecl(
+		ExecutionState& state,
+		const llvm::GlobalVariable& gv) { assert (0 == 1 && "STUB"); }
+	void allocGlobalVariableNoDecl(
+		ExecutionState& state,
+		const llvm::GlobalVariable& gv);
 
 	void handleXferCall(
 		ExecutionState& state, KInstruction* ki);

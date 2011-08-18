@@ -33,6 +33,7 @@ protected:
 		std::vector< ref<Expr> > &arguments);
 
   	virtual llvm::Function* getFuncByAddr(uint64_t addr);
+private:
 	void allocGlobalVariableDecl(
 		ExecutionState& state,
 		const llvm::GlobalVariable& gv);
@@ -42,7 +43,6 @@ protected:
 
 	void initializeGlobals(ExecutionState &state);
 
-private:
 	void setupArgv(
 		ExecutionState* state,
 		llvm::Function *f,

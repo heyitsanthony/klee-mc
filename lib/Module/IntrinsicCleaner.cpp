@@ -30,10 +30,18 @@ namespace klee {
 
 char IntrinsicCleanerPass::ID;
 
-bool IntrinsicCleanerPass::runOnFunction(llvm::Function& f)
+bool IntrinsicCleanerPass::runOnModule(Module &M) {
+	bool dirty = false;
+	foreach (f, M.begin(), M.end()) {
+		dirty |= runOnFunction(f);
+	}
+	return dirty;
+}
+
+bool IntrinsicCleanerPass::runOnFunction(llvm::Function* f)
 {
 	bool dirty = false;
-	foreach(b, f.begin(), f.end()) {
+	foreach(b, f->begin(), f->end()) {
 		dirty |= runOnBasicBlock(*b);
 	}
 	return dirty;
