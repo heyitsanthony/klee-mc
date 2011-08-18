@@ -15,7 +15,7 @@ LEVEL=..
 #
 # List all of the subdirectories that we will compile.
 #
-PARALLEL_DIRS=Intrinsic klee-libc Runtest syscall
+PARALLEL_DIRS=Intrinsic klee-libc Runtest syscall syscall-fdt
 
 include $(LEVEL)/Makefile.config
 

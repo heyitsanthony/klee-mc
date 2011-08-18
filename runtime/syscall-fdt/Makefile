@@ -9,7 +9,7 @@
 
 LEVEL=../..
 
-LIBRARYNAME=kleeRuntimeMC
+LIBRARYNAME=kleeRuntimeMC-fdt
 DONT_BUILD_RELINKED=1
 BUILD_ARCHIVE=1
 BYTECODE_LIBRARY=1
@@ -21,6 +21,8 @@ include $(LEVEL)/Makefile.common
 
 LIBBCA:=$(LibDir)/lib$(LIBRARYNAME).bca
 LIBTXT:=$(LibDir)/$(LIBRARYNAME)-fns.txt
+
+CXXFLAGS=-I$(LEVEL)/runtime/libcxx/include  -fno-threadsafe-statics 
 
 all:: $(LIBTXT)
 

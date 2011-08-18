@@ -4,10 +4,6 @@
 #include "SyscallSFH.h"
 #include "guestcpustate.h"
 #include "klee/breadcrumb.h"
-#include <fcntl.h>
-#include <errno.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
 extern "C"
 {
 #include "valgrind/libvex_guest_amd64.h"
@@ -15,7 +11,7 @@ extern "C"
 
 using namespace klee;
 
-static const unsigned int NUM_HANDLERS = 13;
+static const unsigned int NUM_HANDLERS = 7;
 static SpecialFunctionHandler::HandlerInfo hInfo[NUM_HANDLERS] =
 {
 #define add(name, h, ret) {	\
@@ -26,9 +22,6 @@ static SpecialFunctionHandler::HandlerInfo hInfo[NUM_HANDLERS] =
 	name, 			\
 	&Handler##h::create,	\
 	true, false, false }
-	add("sc_concrete_file_snapshot", SCConcreteFileSnapshot, true),
-	add("sc_concrete_file_size", SCConcreteFileSize, true),
-	add("sc_get_cwd", SCGetCwd, true),
 	add("kmc_sc_regs", SCRegs, true),
 	add("kmc_sc_bad", SCBad, false),
 	add("kmc_free_run", FreeRun, false),
@@ -36,9 +29,6 @@ static SpecialFunctionHandler::HandlerInfo hInfo[NUM_HANDLERS] =
 	add("kmc_make_range_symbolic", MakeRangeSymbolic, false),
 	add("kmc_alloc_aligned", AllocAligned, true),
 	add("kmc_breadcrumb", Breadcrumb, false),
-	add("pthread_mutex_lock", DummyThread, true),
-	add("pthread_mutex_unlock", DummyThread, true),
-	add("pthread_cond_broadcast", DummyThread, true),
 #undef addDNR
 #undef add
 };
@@ -117,77 +107,6 @@ SFH_DEF_HANDLER(SCRegs)
 	state.bindLocal(target, ConstantExpr::create(cpu_mo->address, 64));
 }
 
-typedef	std::map<std::string, off_t> snapshot_map;
-snapshot_map g_snapshots;
-
-SFH_DEF_HANDLER(SCGetCwd) {
-	//TODO: write something?
-	char buf[PATH_MAX];
-	getcwd(buf, PATH_MAX);
-}
-
-SFH_DEF_HANDLER(SCConcreteFileSize) {
-	//TODO: CHK something?
-
-	ConstantExpr	*path_ce, *size_ce;
-	unsigned char		*buf;
-
-	path_ce = dyn_cast<ConstantExpr>(arguments[0]);
-	size_ce = dyn_cast<ConstantExpr>(arguments[1]);
-
-	unsigned int		len_in;
-	buf = sfh->readBytesAtAddress(state, path_ce, size_ce->getZExtValue() + 1, len_in, -1);
-	std::string path = (char*)buf;
-
-	snapshot_map::iterator i = g_snapshots.find(path);
-	if(i == g_snapshots.end()) {
-		state.bindLocal(target, ConstantExpr::create(-1, 64));
-		return;
-	}
-	state.bindLocal(target, ConstantExpr::create(i->second, 64));
-	std::cerr << "sized " << path << std::endl;
-}
-SFH_DEF_HANDLER(SCConcreteFileSnapshot) {
-	//TODO: CHK something?
-	//TODO: nice to be able to add it to all state in some safe location?
-	
-	ConstantExpr	*path_ce, *size_ce;
-	unsigned char		*buf;
-
-	path_ce = dyn_cast<ConstantExpr>(arguments[0]);
-	size_ce = dyn_cast<ConstantExpr>(arguments[1]);
-	
-	unsigned int		len_in;
-	buf = sfh->readBytesAtAddress(state, path_ce, size_ce->getZExtValue() + 1, len_in, -1);
-	std::string path = (char*)buf;
-	
-	long result = open(path.c_str(), O_RDONLY);
-	if(result < 0) {
-		state.bindLocal(target, ConstantExpr::create(-errno, 64));
-		return;
-	}
-	int fd = result;
-
-	struct stat st;
-	result = fstat(fd, &st);
-	if(result < 0) {
-		close(fd);
-		state.bindLocal(target, ConstantExpr::create(-errno, 64));
-		return;
-	}
-
-	void* addr = mmap(NULL, st.st_size, PROT_READ, MAP_FILE | MAP_PRIVATE, fd, 0);
-	close(fd);
-	if(addr == MAP_FAILED) {
-		state.bindLocal(target, ConstantExpr::create(-errno, 64));
-		return;
-	}
-	MemoryObject* mo = sfh->executor->addExternalObject(state, addr, st.st_size, true);
-	g_snapshots.insert(std::make_pair(path, st.st_size)).first;
-	std::cerr << "new file fork " << path << std::endl;
-	state.bindLocal(target, ConstantExpr::create((intptr_t)mo->address, 64));
-}
-
 SFH_DEF_HANDLER(SCBad)
 {
 	SFH_CHK_ARGS(1, "kmc_sc_bad");
@@ -227,8 +146,11 @@ SFH_DEF_HANDLER(FreeRun)
 			"munmap.err");
 		return;
 	}
-	if(mo->size != len_v) {
-		std::cerr << "size mismatch on munmap " << mo->size << "!=" << len_v << std::endl;
+
+	if (mo->size != len_v) {
+		std::cerr
+			<< "size mismatch on munmap " 
+			<< mo->size << "!=" << len_v << std::endl;
 	}
 	assert (mo->size == len_v &&
 		mo->address == addr_v && "UNHANDLED BAD SIZE");
@@ -276,9 +198,7 @@ SFH_DEF_HANDLER(MakeRangeSymbolic)
 
 	sc_sfh->makeRangeSymbolic(state, (void*)addr_v, len_v, name_str.c_str());
 }
-SFH_DEF_HANDLER(DummyThread) {
-	state.bindLocal(target, ConstantExpr::create(0, 64));
-}
+
 SFH_DEF_HANDLER(Breadcrumb)
 {
 	SFH_CHK_ARGS(2, "kmc_breadcrumb");

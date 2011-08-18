@@ -63,12 +63,19 @@ test::
 	-(cd test/ && make)
 
 .PHONY: mc
-mc:
+mc: mc-std mc-fdt
+
+mc-std: Release/lib/libkleeRuntimeMC.bca
 	mkdir -p mc_tmp
 	cd mc_tmp && ar x ../Release/lib/libkleeRuntimeMC.bca && cd ..
-	which llvm-link
 	llvm-link -f -o Release/lib/libkleeRuntimeMC.bc mc_tmp/*.bc
 	rm -rf mc_tmp
+
+mc-fdt: Release/lib/libkleeRuntimeMC-fdt.bca
+	mkdir -p mcfdt_tmp
+	cd mcfdt_tmp && ar x ../Release/lib/libkleeRuntimeMC-fdt.bca && cd ..
+	llvm-link -f -o Release/lib/libkleeRuntimeMC-fdt.bc mcfdt_tmp/*.bc
+	rm -rf mcfdt_tmp
 
 .PHONY: kmc-bintests
 kmc-bintests: all
