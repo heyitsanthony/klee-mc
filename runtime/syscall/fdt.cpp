@@ -127,7 +127,8 @@ long SymbolicFD::writev(const struct iovec *iov, int iovcnt) {
 	return bytes;
 }
 long SymbolicFD::mmap(void* addr, size_t len, int prot, int flags, off_t offset) {
-	klee_warning("symbolic memory mapped");
+	klee_print_expr("symbolic memory mapped size", len);
+	
 	//hmm we could make this return errors to punish the program 
 	//but that is probably not fruitful
 	bool is_himem;
@@ -259,10 +260,22 @@ NoisyPipe::NoisyPipe()
 {}
 long NoisyPipe::write(const void* buf, size_t sz) {
 	klee_warning("noisypipe");
-	char* mbuf = new char[sz + 1];
-	memcpy(mbuf, buf, sz);
-	mbuf[sz] = 0;
-	klee_warning(mbuf);
+	if(klee_get_value(sz) == sz) {
+		bool sym = false;
+		char* mbuf = new char[sz + 1];
+		for(int i = 0; i < sz; ++i) {
+			char c = klee_get_value(((char*)buf)[i]);
+			if(mbuf[i] != c)
+				sym = true;
+			mbuf[i] = c;
+		}
+		mbuf[sz] = 0;
+		if(sym)
+			klee_warning("partially symbolic write");
+		klee_warning(mbuf);
+	} else {
+		klee_warning("symbolic sized write");
+	}
 	return SymbolicPipe::write(buf, sz);
 }
 
@@ -354,7 +367,7 @@ long FDT::newFile(FD* file) {
 	for(; hole < files_.size(); ++hole)
 		if(!files_[hole])
 			break;
-	klee_print_expr("will be", hole);
+	klee_print_expr("newfd is ", hole);
 	file->addRef();
 	if(hole < files_.size()) {
 		files_[hole] = file;
