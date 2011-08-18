@@ -77,6 +77,9 @@ mc-fdt: Release/lib/libkleeRuntimeMC-fdt.bca
 	llvm-link -f -o Release/lib/libkleeRuntimeMC-fdt.bc mcfdt_tmp/*.bc
 	rm -rf mcfdt_tmp
 
+test-replay:
+	cd tests-replay && ./replaytest.sh
+
 .PHONY: kmc-bintests
 kmc-bintests: all
 	bintests/run_bin.sh
@@ -96,6 +99,7 @@ klee-cov:
 clean::
 	$(MAKE) -C test clean 
 	$(MAKE) -C unittests clean
+	rm -rf tests-replay/klee-out* tests-replay/guest-*
 	rm -rf klee-out-*
 	rm -rf guest-*
 	rm -rf docs/doxygen
