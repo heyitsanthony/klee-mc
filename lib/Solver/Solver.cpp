@@ -344,7 +344,6 @@ bool Solver::getInitialValues(
   // FIXME: Propogate this out.
   hasSolution = impl->computeInitialValues(query, objects, values);
   if (failed()) return false;
-  assert (hasSolution == true && "SHOULD HAVE A SOLUTION");
   return hasSolution;
 }
 

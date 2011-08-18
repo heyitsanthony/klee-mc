@@ -77,6 +77,9 @@ mc-fdt: Release/lib/libkleeRuntimeMC-fdt.bca
 	llvm-link -f -o Release/lib/libkleeRuntimeMC-fdt.bc mcfdt_tmp/*.bc
 	rm -rf mcfdt_tmp
 
+test-all: test test-replay
+
+
 test-replay:
 	cd tests-replay && ./replaytest.sh
 
