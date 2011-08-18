@@ -9,6 +9,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/mman.h>
+#define PAGE_SIZE 4096
 #include <sys/time.h>
 #include <sys/times.h>
 #include <sys/resource.h>
@@ -141,11 +142,11 @@ static void* sc_mmap(void* regfile)
 	if (len >= (uintptr_t)0x10000000 || len < 0) {
 		addr = (uint64_t)MAP_FAILED;
 	} else if (GET_ARG0(regfile) == 0) {
-		len = concretize_u64(GET_ARG1(regfile));
+		len = concretize_u64(len);
 		addr = (uint64_t)kmc_alloc_aligned(len, "mmap", false);
 		if (addr == 0) addr = (uint64_t)MAP_FAILED;
 	} else {
-		len = concretize_u64(GET_ARG1(regfile));
+		len = concretize_u64(len);
 		addr = (uint64_t)sc_mmap_addr(regfile, (void*)addr, len);
 	}
 
@@ -156,7 +157,6 @@ static void* sc_mmap(void* regfile)
 static void sc_munmap(void* regfile)
 {
 	uint64_t	addr, num_bytes;
-
 	addr = klee_get_value(GET_ARG0(regfile));
 	num_bytes = klee_get_value(GET_ARG1(regfile));
 	kmc_free_run(addr, num_bytes);
@@ -368,21 +368,29 @@ void* sc_enter(void* regfile, void* jmpptr)
 	FAKE_SC(fadvise64)
 	FAKE_SC(rt_sigaction)
 	FAKE_SC(rt_sigprocmask)
-	case SYS_pread64:
+	case SYS_pread64: {
+		//assumes too much?
+		size_t length = klee_get_value((size_t)GET_ARG2(regfile));
+		klee_assume(length == (size_t)GET_ARG2(regfile));
+		void* buf = (void*)klee_get_value(GET_ARG1(regfile));
+		klee_assume(buf == (void*)GET_ARG1(regfile));
 		new_regs = sc_new_regs(regfile);
-		sc_ret_v(new_regs, 	
+		sc_ret_v(new_regs,
 			fdt->alwaysGetFile((long)GET_ARG0(regfile))->pread(
-				(void*)GET_ARG1(regfile), 
-				(size_t)GET_ARG2(regfile),
+				buf, length,
 				(off_t)GET_ARG3(regfile)));
 		break;
-	
+	}
 	case SYS_read: {
+		//assumes too much?
+		size_t length = klee_get_value((size_t)GET_ARG2(regfile));
+		klee_assume(length == (size_t)GET_ARG2(regfile));
+		void* buf = (void*)klee_get_value(GET_ARG1(regfile));
+		klee_assume(buf == (void*)GET_ARG1(regfile));
 		new_regs = sc_new_regs(regfile);
-		sc_ret_v(new_regs, 	
+		sc_ret_v(new_regs,
 			fdt->alwaysGetFile((long)GET_ARG0(regfile))->read(
-				(void*)GET_ARG1(regfile), 
-				(size_t)GET_ARG2(regfile)));
+				buf, length));
 		break;
 	}
 	break;
@@ -439,7 +447,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(new_regs, 	
 			fdt->alwaysGetFile((long)GET_ARG0(regfile))->stat(
 				(struct stat*)GET_ARG1(regfile)));
-		klee_warning("garl");
 		break;
 	case SYS_lstat:
 	case SYS_stat:
@@ -630,11 +637,12 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 	case SYS_mmap: {
 		if(!(GET_ARG3(regfile) & MAP_ANONYMOUS)) {
+			size_t length = GET_ARG1(regfile);
 			FD* file = fdt->getFile((long)GET_ARG4(regfile));
 			new_regs = sc_new_regs(regfile);
 			sc_ret_v(new_regs, file->mmap(
 				(void *)GET_ARG0(regfile), 
-				(size_t)GET_ARG1(regfile),
+				length,
 				(int)GET_ARG2(regfile),
 				(int)GET_ARG3(regfile),
 				(off_t)GET_ARG5(regfile)));

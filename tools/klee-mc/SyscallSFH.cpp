@@ -227,7 +227,9 @@ SFH_DEF_HANDLER(FreeRun)
 			"munmap.err");
 		return;
 	}
-
+	if(mo->size != len_v) {
+		std::cerr << "size mismatch on munmap " << mo->size << "!=" << len_v << std::endl;
+	}
 	assert (mo->size == len_v &&
 		mo->address == addr_v && "UNHANDLED BAD SIZE");
 

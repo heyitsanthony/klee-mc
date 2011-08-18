@@ -57,10 +57,8 @@ SymbolicFD::SymbolicFD(const std::string& id)
 long SymbolicFD::read(void* buf, size_t sz) {
 	long result;
 	kmc_make_range_symbolic((uintptr_t)&result, sizeof(result), "SFD::read res");
-	if(result >= sz) {
+	if(result >= 0) {
 		kmc_make_range_symbolic((uintptr_t)buf, sz, "SFD::read data");
-	} else if(result >= 0) {
-		kmc_make_range_symbolic((uintptr_t)buf, result, "SFD::read data");
 	} else if(result < MIN_ERRNO) {
 		result = MIN_ERRNO;
 	}
@@ -211,8 +209,8 @@ long SymbolicFile::stat(struct stat* buf) {
 	klee_assume(buf->st_nlink > 0);
 	buf->st_mode &= ~S_IFSOCK;
 	buf->st_mode |= S_IFREG;
-	buf->st_blocks = (buf->st_size + 511) >> 9;
-	buf->st_blksize = 512;
+	buf->st_blocks = (buf->st_size + 4095) >> 12;
+	buf->st_blksize = 4096;
 	return 0;
 }
 
@@ -507,8 +505,8 @@ void DataFork::stat(struct stat* buf) {
 	klee_assume(buf->st_nlink > 0);
 	buf->st_mode |= S_IFREG;
 	buf->st_size = size_;
-	buf->st_blocks = (size_ + 511) >> 9;
-	buf->st_blksize = 512;
+	buf->st_blocks = (size_ + 4095) >> 12;
+	buf->st_blksize = 4096;
 }
 
 DataFork::DataFork(const std::string& id, const void* data, off_t size)
