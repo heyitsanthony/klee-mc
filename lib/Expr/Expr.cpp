@@ -769,8 +769,8 @@ static ref<Expr> URemExpr_create(const ref<Expr> &l, const ref<Expr> &r) {
   if (l->getWidth() == Expr::Bool) { // r must be 1
     return ConstantExpr::create(0, Expr::Bool);
   } else{
-    if (l->isZero()) // special case: 0 % x = x
-      return r;
+    if (l->isZero()) // special case: 0 % x = 0
+      return l;
     else
       return URemExpr::alloc(l, r);
   }
