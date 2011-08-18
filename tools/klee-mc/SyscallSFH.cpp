@@ -230,7 +230,7 @@ done:
 SFH_DEF_HANDLER(AllocAligned)
 {
 	MemoryObject	*new_mo;
-	SFH_CHK_ARGS(3, "kmc_alloc_aligned");
+	SFH_CHK_ARGS(2, "kmc_alloc_aligned");
 
 	ExecutorVex	*exe_vex = dynamic_cast<ExecutorVex*>(sfh->executor);
 	ConstantExpr	*len;
@@ -264,9 +264,7 @@ SFH_DEF_HANDLER(AllocAligned)
 	state.bindMemObj(new_mo);
 	addr = new_mo->address;
 	new_mo->setName(name_str.c_str());
-	ConstantExpr* init_ce = dyn_cast<ConstantExpr>(arguments[2]);
-	if(!init_ce || init_ce->getZExtValue() != 0)
-		exe_vex->executeMakeSymbolic(state, new_mo, name_str.c_str());
+	exe_vex->executeMakeSymbolic(state, new_mo, name_str.c_str());
 
 	state.bindLocal(target, new_mo->getBaseExpr());
 }
