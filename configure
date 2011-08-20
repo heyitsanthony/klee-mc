@@ -645,6 +645,8 @@ ENABLE_STPLOG
 STP_ROOT
 BOOLECTOR_ROOT
 Z3_ROOT
+VEXLLVM_ROOT
+VEXLIB_ROOT
 ENABLE_EXT_STP
 CXXCPP
 ac_ct_CXX
@@ -660,6 +662,8 @@ ac_ct_CC
 CPPFLAGS
 LDFLAGS
 CFLAGS
+LLVM_CFLAGS_EXTRA
+LLVM_CXXFLAGS_EXTRA
 CC
 RUNTIME_CONFIGURATION
 RUNTIME_ENABLE_OPTIMIZED
@@ -729,6 +733,8 @@ with_llvm
 with_uclibc
 enable_posix_runtime
 with_runtime
+with_libvex
+with_vexllvm
 with_stp
 with_boolector
 with_z3
@@ -741,6 +747,8 @@ host_alias
 target_alias
 CC
 CFLAGS
+LLVM_CXXFLAGS_EXTRA
+LLVM_CFLAGS_EXTRA
 LDFLAGS
 LIBS
 CPPFLAGS
@@ -1390,6 +1398,8 @@ Optional Packages:
   --with-uclibc           Enable use of the klee uclibc at the given path
   --with-runtime          Select build configuration for runtime libraries
                           (default Release)
+  --with-libvex		  Location of VEX library root
+  --with-vexllvm          Location of VEXLLVM installation directory
   --with-stp              Location of STP installation directory
   --with-boolector        Location of boolector installation directory
   --with-z3               Location of z3 installation directory
@@ -1406,6 +1416,8 @@ Some influential environment variables:
   CXX         C++ compiler command
   CXXFLAGS    C++ compiler flags
   CXXCPP      C++ preprocessor
+  LLVM_CFLAGS_EXTRA	Extra flags to pass to llvm-gcc
+  LLVM_CXXFLAGS_EXTRA	Extra flags to pass to llvm-g++
 
 Use these variables to override the choices made by `configure' or to help
 it to find libraries and programs with nonstandard names/locations.
@@ -4855,16 +4867,46 @@ fi
 
 done
 
+# Check whether --with-vexllvm was given.
+if test "${with_libvex+set}" = set; then
+  withval=$with_libvex;
+fi
+
+if [ ! -z "$with_libvex" ]; then
+  libvex_root=`cd $with_libvex 2>/dev/null; pwd`
+  VEXLIB_ROOT="$libvex_root"
+  echo "VEX dir..."$VEXLIB_ROOT
+else
+  echo "No libvex given. Blech"
+  exit 2
+fi
+
+
+
+# Check whether --with-vexllvm was given.
+if test "${with_vexllvm+set}" = set; then
+  withval=$with_vexllvm;
+fi
+
+if [ ! -z "$with_vexllvm" ]; then
+  vexllvm_root=`cd $with_vexllvm 2>/dev/null; pwd`
+  VEXLLVM_ROOT="$vexllvm_root"
+  echo "VEXLLVM dir..."$VEXLLVM_ROOT
+else
+  VEXLLVM_ROOT=""
+fi
+
+
 
 # Check whether --with-boolector was given.
 if test "${with_boolector+set}" = set; then
   withval=$with_boolector;
-  echo "WE GOT IT"
 fi
 
 if [ ! -z "$with_boolector" ]; then
   boolector_root=`cd $with_boolector 2>/dev/null; pwd`
   BOOLECTOR_ROOT="$boolector_root"
+  echo "Boolector dir..."$BOOLECTOR_ROOT
 else
   BOOLECTOR_ROOT=""
 fi
@@ -4872,12 +4914,12 @@ fi
 # Check whether --with-z3 was given.
 if test "${with_z3+set}" = set; then
   withval=$with_z3;
-  echo "WE GOT IT"
 fi
 
 if [ ! -z "$with_z3" ]; then
   z3_root=`cd $with_z3 2>/dev/null; pwd`
   Z3_ROOT="$z3_root"
+  echo "Z3 root..."$z3_root
 else
   Z3_ROOT=""
 fi
@@ -4895,7 +4937,8 @@ if test X$with_stp = X ; then
 else
   echo EXTERNAL STP-----------
   stp_root=`cd $with_stp 2> /dev/null; pwd`
-  echo "WOOO $stp_root"
+
+  echo "STP root..."$stp_root
 
   old_CPPFLAGS="$CPPFLAGS"
   CPPFLAGS="$CPPFLAGS -I$stp_root/include"

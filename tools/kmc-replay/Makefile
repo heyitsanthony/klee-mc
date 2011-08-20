@@ -15,8 +15,9 @@ LINK_COMPONENTS = all
 
 include $(LEVEL)/Makefile.common
 
-CFLAGS += -I/home/chz/src/vex/src/
-CXXFLAGS += -I/home/chz/src/vex/src/ -Wl,-Ttext-segment=0xa000000
+CFLAGS += -I$(VEXLLVM_ROOT)/src/
+CXXFLAGS += -I$(VEXLLVM_ROOT)/src/ -Wl,-Ttext-segment=0xa000000
 LIBS += -lstp -lrt
-ObjectsO += /home/chz/src/vex/bin/vexllvm.a /usr/lib/valgrind/libvex-amd64-linux.a
+ObjectsO += $(VEXLLVM_ROOT)/bin/vexllvm.a $(VEXLIB_ROOT)/libvex-amd64-linux.a
+
 #-ltcmalloc

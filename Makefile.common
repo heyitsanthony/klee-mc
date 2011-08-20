@@ -27,7 +27,8 @@ LLVMCXX := $(LLVMGXX)
 endif
 
 # Needed to build runtime library using clang (gnu89 is the gcc default)
-C.Flags += -std=gnu89
+C.Flags += -std=gnu89 $(LLVM_CFLAGS_EXTRA)
+CXX.Flags += $(LLVM_CXXFLAGS_EXTRA)
 
 ifeq ($(ENABLE_EXT_STP),1)
   LD.Flags += -L$(STP_ROOT)/lib -L$(BOOLECTOR_ROOT)/ -L$(Z3_ROOT)/lib
@@ -42,6 +43,8 @@ CXX.Flags += -fexceptions -Wno-deprecated
 ifeq ($(ENABLE_TCMALLOC),1)
   LD.Flags += -ltcmalloc
 endif
+
+LD.Flags += -lz  -lcrypto
 
 ifeq ($(ENABLE_INSTRUCTION_ID),1)
   CXXFLAGS += -DINCLUDE_INSTR_ID_IN_PATH_INFO
