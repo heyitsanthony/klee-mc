@@ -103,7 +103,7 @@ ExecutorVex::ExecutorVex(
 	if (!theVexHelpers) theVexHelpers = VexHelpers::create(Arch::X86_64);
 
 	theVexHelpers->loadUserMod(
-		(UseFDT) ? 
+		(UseFDT) ?
 			"libkleeRuntimeMC-fdt.bc" :
 			"libkleeRuntimeMC.bc");
 
@@ -163,7 +163,7 @@ void ExecutorVex::runImage(void)
 	// yet have a global address but binding the constant table
 	// requires it!
 	init_func = getFuncByAddrNoKMod((uint64_t)gs->getEntryPoint(), is_new);
-	
+
 	/* add modules before initializing globals so that everything
 	 * will link in properly */
 	std::list<Module*> l = theVexHelpers->getModules();
@@ -317,12 +317,11 @@ Function *getStubFunctionForCtorList(
 void ExecutorVex::prepFDT(Function *init_func)
 {
 	GlobalVariable *ctors = kmodule->module->getNamedGlobal("llvm.global_ctors");
-	GlobalVariable *dtors = kmodule->module->getNamedGlobal("llvm.global_dtors");
 	std::cerr << "checking for global ctors and dtors" << std::endl;
 	if (ctors) {
 		std::cerr << "installing ctors" << std::endl;
 		Function* ctorStub;
-		
+
 		ctorStub = getStubFunctionForCtorList(
 			kmodule->module, ctors, "klee.ctor_stub");
 		kmodule->addFunction(ctorStub);
@@ -332,6 +331,7 @@ void ExecutorVex::prepFDT(Function *init_func)
 			init_func->begin()->begin());
 	}
 	// can't install detours because this function returns almost immediately... todo
+	// GlobalVariable *dtors = kmodule->module->getNamedGlobal("llvm.global_dtors");
 	// do them later
 	// if (dtors) {
 	// 	std::cerr << "installing dtors" << std::endl;
@@ -348,7 +348,7 @@ void ExecutorVex::prepFDT(Function *init_func)
 	GlobalVariable* concrete_vfs =
 		static_cast<GlobalVariable*>(kmodule->module->
 			getGlobalVariable("concrete_vfs", boolType));
-	 
+
 	concrete_vfs->setInitializer(ConcreteVfs ?
 		ConstantInt::getTrue(getGlobalContext()) :
 		ConstantInt::getFalse(getGlobalContext()));
@@ -367,10 +367,11 @@ void ExecutorVex::makeArgsSymbolic(ExecutionState* state)
 		argv.size()-1);
 	foreach (it, argv.begin()+1, argv.end()) {
 		guest_ptr	p = *it;
-		fprintf(stderr, "MAKE IT HAPPEN %p, sz=%d\n",
-			p.o, gs->getMem()->strlen(p));
 		sfh->makeRangeSymbolic(
-			*state, (void*)p.o, gs->getMem()->strlen(p), "argv");
+			*state,
+			gs->getMem()->getHostPtr(p),
+			gs->getMem()->strlen(p),
+			"argv");
 	}
 }
 
@@ -397,7 +398,7 @@ void ExecutorVex::bindMappingPage(
 	assert ((m.offset.o & (PAGE_SIZE-1)) == 0);
 
 	mmap_mo = memory->allocateFixed(
-		((uint64_t)m.offset.o)+PAGE_SIZE*pgnum,
+		((uint64_t)gs->getMem()->getData(m))+(PAGE_SIZE*pgnum),
 		PAGE_SIZE,
 		f->begin()->begin(),
 		state);
@@ -505,7 +506,7 @@ void ExecutorVex::run(ExecutionState &initialState)
 
 Function* ExecutorVex::getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new)
 {
-	uint64_t	host_addr;
+	void		*host_addr;
 	Function	*f;
 	VexSB		*vsb;
 
@@ -519,7 +520,7 @@ Function* ExecutorVex::getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new)
 	}
 
 	/* XXX */
-	host_addr = guest_addr;
+	host_addr = gs->getMem()->getHostPtr(guest_ptr(guest_addr));
 
 	/* cached => already seen it */
 	f = xlate_cache->getCachedFunc(guest_ptr(guest_addr));
@@ -529,7 +530,7 @@ Function* ExecutorVex::getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new)
 	}
 
 	/* !cached => put in cache, alert kmodule, other bookkepping */
-	f = xlate_cache->getFunc((void*)host_addr, guest_ptr(guest_addr));
+	f = xlate_cache->getFunc(host_addr, guest_ptr(guest_addr));
 	if (f == NULL) return NULL;
 
 	/* need to know func -> vsb to compute func's guest address */
