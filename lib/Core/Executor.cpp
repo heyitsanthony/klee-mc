@@ -678,21 +678,18 @@ bool Executor::evalForks(ExecutionState& current, struct ForkInfo& fi)
 
 void Executor::makeForks(ExecutionState& current, struct ForkInfo& fi)
 {
-	ExecutionState	*baseState;
-	bool		curStateUsed;
+	ExecutionState	**curStateUsed = NULL;
 
-	baseState = &current;
-	curStateUsed = false;
 	for(unsigned int condIndex = 0; condIndex < fi.N; condIndex++) {
-		ExecutionState *newState;
+		ExecutionState	*newState, *baseState;
 
 		// Process each valid target and generate a state
 		if (!fi.res[condIndex]) continue;
 
 		if (!curStateUsed) {
 			/* reuse current state, when possible */
-			fi.resStates[condIndex] = baseState;
-			curStateUsed = true;
+			fi.resStates[condIndex] = &current;
+			curStateUsed = &fi.resStates[condIndex];
 			continue;
 		}
 
@@ -703,6 +700,7 @@ void Executor::makeForks(ExecutionState& current, struct ForkInfo& fi)
 		++stats::forks;
 
 		// Do actual state forking
+		baseState = &current;
 		newState = fi.forkCompact
 			? current.branchForReplay()
 			: current.branch();
@@ -720,6 +718,9 @@ void Executor::makeForks(ExecutionState& current, struct ForkInfo& fi)
 		// Randomize path tree layout
 		if (RandomizeFork && theRNG.getBool()) {
 			std::swap(baseState, newState);
+			// Randomize which actual state gets the T/F branch;
+			// Affects which state BatchinSearcher retains.
+			std::swap(*curStateUsed, fi.resStates[condIndex]);
 		}
 
 		// Update path tree with new states
@@ -1528,7 +1529,7 @@ void Executor::executeSymbolicFuncPtr(
         } else {
           if (!hasInvalid) {
             klee_warning_once((void*) (unsigned long) addr,
-                              "invalid function pointer: %p", addr);
+                              "invalid function pointer: %p", (void*)addr);
             terminateStateOnExecError(state, "invalid function pointer");
             hasInvalid = true;
           }
