@@ -402,7 +402,7 @@ void ExecutorVex::bindMappingPage(
 		f->begin()->begin(),
 		state);
 
-	if (m.isStack()) {
+	if (m.type == GuestMem::Mapping::STACK) {
 		mmap_mo->setName("stack");
 	} else {
 		mmap_mo->setName("guestimg");
