@@ -300,6 +300,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 			"getpeeraddr");
 
 		break;
+	case SYS_mprotect:
+		klee_warning_once("ignoring mprotect()");
+		sc_ret_v(regfile, -1);
+		break;
 	case SYS_listen:
 		sc_ret_v(regfile, 0);
 		break;
