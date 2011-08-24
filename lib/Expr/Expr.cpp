@@ -82,26 +82,25 @@ ref<Expr> Expr::createTempRead(const Array *array, Expr::Width w) {
   }
 }
 
-// returns 0 if b is structurally equal to *this
-int Expr::compare(const Expr &b) const {
-  if (this == &b) return 0;
+/* Slow path for comparison. This should only be used by Expr::compare */
+int Expr::compareSlow(const Expr& b) const
+{
+	Kind ak = getKind(), bk = b.getKind();
+	if (ak!=bk)
+		return (ak < bk) ? -1 : 1;
 
-  Kind ak = getKind(), bk = b.getKind();
-  if (ak!=bk)
-    return (ak < bk) ? -1 : 1;
+	if (hashValue != b.hashValue/* && !isa<ConstantExpr>(*this)*/)
+		return (hashValue < b.hashValue) ? -1 : 1;
 
-  if (hashValue != b.hashValue)
-    return (hashValue < b.hashValue) ? -1 : 1;
+	if (int res = compareContents(b))
+		return res;
 
-  if (int res = compareContents(b))
-    return res;
+	unsigned aN = getNumKids();
+	for (unsigned i=0; i<aN; i++)
+		if (int res = getKid(i).compare(b.getKid(i)))
+			return res;
 
-  unsigned aN = getNumKids();
-  for (unsigned i=0; i<aN; i++)
-    if (int res = getKid(i).compare(b.getKid(i)))
-      return res;
-
-  return 0;
+	return 0;
 }
 
 void Expr::printKind(std::ostream &os, Kind k) {

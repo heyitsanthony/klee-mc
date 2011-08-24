@@ -202,8 +202,15 @@ public:
   /// Returns the hash value. 
   virtual unsigned computeHash();
   
-  /// Returns 0 iff b is structuraly equivalent to *this
-  int compare(const Expr &b) const;
+  // Returns 0 iff b is structuraly equivalent to *this
+  // David says this gets called a billion times a second, and
+  // most of the comparisons are equal ptrs.
+  // So, it's probably wise to inline that case.
+  inline int compare(const Expr &b) const
+  {
+	if (this == &b) return 0;
+	return compareSlow(b);
+  }
   virtual int compareContents(const Expr &b) const { return 0; }
 
   // Given an array of new kids return a copy of the expression
@@ -251,6 +258,8 @@ public:
   static bool needsResultType() { return false; }
 
   static bool classof(const Expr *) { return true; }
+private:
+  int compareSlow(const Expr& b) const;
 };
 
 struct Expr::CreateArg {
