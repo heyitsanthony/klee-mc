@@ -118,7 +118,7 @@ private:
 	void setupProcessMemory(ExecutionState* state, llvm::Function* f);
 	void allocGlobalVariableDecl(
 		ExecutionState& state,
-		const llvm::GlobalVariable& gv) { assert (0 == 1 && "STUB"); }
+		const llvm::GlobalVariable& gv);
 	void allocGlobalVariableNoDecl(
 		ExecutionState& state,
 		const llvm::GlobalVariable& gv);
@@ -157,6 +157,8 @@ private:
 
 	KFunction		*kf_scenter;
 	SyscallSFH		*sfh;
+	
+	std::set<uint64_t> legalFunctions;
 };
 
 }

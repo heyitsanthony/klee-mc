@@ -265,9 +265,12 @@ long NoisyPipe::write(const void* buf, size_t sz) {
 		char* mbuf = new char[sz + 1];
 		for(int i = 0; i < sz; ++i) {
 			char c = klee_get_value(((char*)buf)[i]);
-			if(mbuf[i] != c)
+			if(((char*)buf)[i] != c) {
 				sym = true;
-			mbuf[i] = c;
+				mbuf[i] = '%';
+			} else {
+				mbuf[i] = c;
+			}
 		}
 		mbuf[sz] = 0;
 		if(sym)
@@ -571,6 +574,7 @@ long VFS::access(const char* path, int mode) {
 	return result;
 }
 long VFS::open(const char* path, int flags, int access) {
+	klee_warning("opening symbolic");
 	long result;
 	kmc_make_range_symbolic((uintptr_t)&result, sizeof(result), "VFS::open res");
 	if(result >= 0) {
@@ -634,6 +638,7 @@ long VFS::chdir(const char* path) {
 //typedef std::map<std::string, DataFork*> fork_map;
 //fork_map forks_;
 ConcreteVFS::ConcreteVFS() {
+	klee_warning_once("using concrete vfs for files starting with /");
 	char buf[PATH_MAX] = {0};
 	memset(buf, 0, PATH_MAX);
 	sc_get_cwd(&buf[0]);

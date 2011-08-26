@@ -229,13 +229,19 @@ done:
 
 SFH_DEF_HANDLER(AllocAligned)
 {
-	MemoryObject	*new_mo;
-	SFH_CHK_ARGS(2, "kmc_alloc_aligned");
-
 	ExecutorVex	*exe_vex = dynamic_cast<ExecutorVex*>(sfh->executor);
-	ConstantExpr	*len;
+	ConstantExpr	*len, *nonz;
 	uint64_t	len_v, addr;
 	std::string	name_str;
+	MemoryObject	*new_mo;
+	bool		nonzero = true;
+
+	if(arguments.size() == 3) {
+		nonz = dyn_cast<ConstantExpr>(arguments[2]);
+		nonzero = nonz->getZExtValue();
+	} else if(arguments.size() != 2) {
+		assert("need 2 or 3 args for alloc aligned");
+	}
 	
 	len = dyn_cast<ConstantExpr>(arguments[0]);
 	if (len == NULL) {
@@ -264,7 +270,8 @@ SFH_DEF_HANDLER(AllocAligned)
 	state.bindMemObj(new_mo);
 	addr = new_mo->address;
 	new_mo->setName(name_str.c_str());
-	exe_vex->executeMakeSymbolic(state, new_mo, name_str.c_str());
+	if(nonzero)
+		exe_vex->executeMakeSymbolic(state, new_mo, name_str.c_str());
 
 	state.bindLocal(target, new_mo->getBaseExpr());
 }

@@ -1,0 +1,33 @@
+//linking is obnoxious.  llvm-ld doesn't manage to be able to 
+//merge a bca file in properly with this syscall model, so 
+//here is some lame embedding instead.  if only i have more make-fu :-) 
+#include "../klee-libc/strchr.c"
+#include "../klee-libc/strcmp.c"
+#include "../klee-libc/strncmp.c"
+#include "../klee-libc/abort.c"
+#include "../klee-libc/atexit.c"
+#include "../klee-libc/atoi.c"
+#include "../klee-libc/calloc.c"
+#include "../klee-libc/__cxa_atexit.c"
+#include "../klee-libc/htonl.c"
+#include "../klee-libc/klee-choose.c"
+#include "../klee-libc/memchr.c"
+#include "../klee-libc/memcmp.c"
+#include "../klee-libc/memcpy.c"
+#include "../klee-libc/memmove.c"
+#include "../klee-libc/mempcpy.c"
+#include "../klee-libc/memset.c"
+#include "../klee-libc/putchar.c"
+#include "../klee-libc/stpcpy.c"
+#include "../klee-libc/strcat.c"
+#include "../klee-libc/strcoll.c"
+#include "../klee-libc/strcpy.c"
+#include "../klee-libc/strlen.c"
+#include "../klee-libc/strncpy.c"
+#include "../klee-libc/strrchr.c"
+#include "../klee-libc/strtol.c"
+#include "../klee-libc/strtoul.c"
+// #include "../klee-libc/tolower.c"
+// #include "../klee-libc/toupper.c"
+
+#include <klee/klee.h>
