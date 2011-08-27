@@ -12,24 +12,37 @@ BatchingSearcher::BatchingSearcher(Searcher *_baseSearcher,
 : baseSearcher(_baseSearcher),
 timeBudget(_timeBudget),
 instructionBudget(_instructionBudget),
-lastState(0) {
-
-}
+lastState(0),
+lastStartInstructions(0)
+{}
 
 BatchingSearcher::~BatchingSearcher() { delete baseSearcher; }
+
+
+uint64_t BatchingSearcher::getElapsedInstructions(void) const
+{
+	return (stats::instructions - lastStartInstructions);
+}
+
+double BatchingSearcher::getElapsedTime(void) const
+{
+	return util::estWallTime() - lastStartTime;
+}
 
 ExecutionState &BatchingSearcher::selectState(bool allowCompact)
 {
   if (lastState && 
-      (util::estWallTime() - lastStartTime) <= timeBudget &&
-      (stats::instructions - lastStartInstructions) <= instructionBudget)
+      getElapsedTime() <= timeBudget &&
+      getElapsedInstructions() <= instructionBudget)
       return *lastState;
 
   if (lastState) {
-    double delta = util::estWallTime() - lastStartTime;
+    double delta = getElapsedTime();
     if (delta > timeBudget * 1.1) {
-      std::cerr << "KLEE: increased time budget from " << timeBudget << " to " << delta << "\n";
       timeBudget = delta;
+      std::cerr << "KLEE: increased time budget from "
+      		<< timeBudget << " to " << delta << "\n";
+
     }
   }
 
@@ -42,6 +55,7 @@ ExecutionState &BatchingSearcher::selectState(bool allowCompact)
   lastState = &baseSearcher->selectState(allowCompact);
   lastStartTime = util::estWallTime();
   lastStartInstructions = stats::instructions;
+
   return *lastState;
 }
 

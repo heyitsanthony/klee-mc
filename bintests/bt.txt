@@ -127,7 +127,6 @@
 /sbin/reiserfsck asd
 /usr/bin/dig asd
 /usr/bin/diffstat asd dsa
-/usr/sbin/iscsi-iname
 /usr/sbin/arpd
 /usr/sbin/avahi-daemon
 /usr/sbin/rarpd
@@ -151,3 +150,4 @@
 /usr/bin/pmap -x 123
 /usr/bin/mc
 /usr/bin/join asd xyz
+/usr/bin/udcli -64 asd

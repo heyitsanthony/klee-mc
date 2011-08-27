@@ -39,6 +39,10 @@ namespace klee
       baseSearcher->printName(os);
       os << "</BatchingSearcher>\n";
     }
+
+  private:
+    uint64_t getElapsedInstructions(void) const;
+    double getElapsedTime(void) const;
   };
 }
 

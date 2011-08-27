@@ -23,6 +23,7 @@
 #include "IterativeDeepeningTimeSearcher.h"
 #include "MergingSearcher.h"
 #include "RandomPathSearcher.h"
+#include "RRSearcher.h"
 #include "RandomSearcher.h"
 #include "WeightedRandomSearcher.h"
 #include "StringMerger.h"
@@ -59,6 +60,9 @@ namespace {
   UseNonUniformRandomSearch("use-non-uniform-random-search");
 
   cl::opt<bool>
+  UseRRSearch("use-rr-search");
+
+  cl::opt<bool>
   UseRandomPathSearch("use-random-path");
 
   cl::opt<WeightedRandomSearcher::WeightType>
@@ -90,12 +94,12 @@ namespace {
   cl::opt<unsigned>
   BatchInstructions("batch-instructions",
                     cl::desc("Number of instructions to batch when using --use-batching-search"),
-                    cl::init(10000));
+                    cl::init(0));
   
   cl::opt<double>
   BatchTime("batch-time",
             cl::desc("Amount of time to batch when using --use-batching-search"),
-            cl::init(5.0));
+            cl::init(0.0));
 
   cl::opt<bool>
   UseStringPrune("string-prune",
@@ -163,7 +167,9 @@ Searcher* klee::setupBaseSearcher(Executor& executor)
 {
   Searcher* searcher;
 
-  if (UseRandomPathSearch) {
+  if (UseRRSearch) {
+    searcher = new RRSearcher();
+  } else if (UseRandomPathSearch) {
     searcher = new RandomPathSearcher(executor);
   } else if (UseNonUniformRandomSearch) {
     searcher = new WeightedRandomSearcher(executor, WeightType);
