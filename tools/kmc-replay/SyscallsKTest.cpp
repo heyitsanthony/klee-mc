@@ -13,15 +13,17 @@
 
 #include "klee/klee.h"
 #include "klee/breadcrumb.h"
-#include "klee/Internal/ADT/KTest.h"
+#include "klee/Internal/ADT/KTestStream.h"
+#include "klee/Internal/ADT/Crumbs.h"
 #include "guestcpustate.h"
 #include "guest.h"
 
-#include "Crumbs.h"
 #include "SyscallsKTest.h"
 
 #define KREPLAY_NOTE	"[kmc-replay] "
 #define KREPLAY_SC	"[kmc-sc] "
+
+using namespace klee;
 
 extern "C"
 {
@@ -38,7 +40,7 @@ SyscallsKTest* SyscallsKTest::create(
 	assert (in_g->getArch() == Arch::X86_64);
 
 	skt = new SyscallsKTest(in_g, fname_ktest, in_crumbs);
-	if (skt->ktest == NULL || skt->crumbs == NULL) {
+	if (skt->kts == NULL || skt->crumbs == NULL) {
 		delete skt;
 		skt = NULL;
 	}
@@ -51,19 +53,16 @@ SyscallsKTest::SyscallsKTest(
 	const char* fname_ktest,
 	Crumbs* in_crumbs)
 : Syscalls(in_g)
-, ktest(NULL)
 , sc_retired(0)
 , crumbs(in_crumbs)
 , bcs_crumb(NULL)
 {
-	ktest = kTest_fromFile(fname_ktest);
-	if (ktest == NULL) return;
-	next_ktest_obj = 0;
+	kts = KTestStream::create(fname_ktest);
 }
 
 SyscallsKTest::~SyscallsKTest(void)
 {
-	if (ktest) kTest_free(ktest);
+	if (kts) delete kts;
 	if (bcs_crumb) delete bcs_crumb;
 }
 
@@ -124,7 +123,8 @@ void SyscallsKTest::loadSyscallEntry(SyscallParams& sp)
 		for (unsigned int i = 0; i < bcs_crumb->bcs_op_c; i++) {
 			feedSyscallOp(sp);
 		}
-	}
+	} else
+		crumbs->skip(bcs_crumb->bcs_op_c);
 }
 
 void SyscallsKTest::feedSyscallOp(SyscallParams& sp)
@@ -179,12 +179,12 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 		(((struct msghdr*)sp.getArg(1)))->msg_controllen = 0;
 		break;
 	case SYS_read:
-		fprintf(stderr, KREPLAY_SC "READ ret=%p\n",getRet());
+		fprintf(stderr, KREPLAY_SC "READ ret=%p\n", (void*)getRet());
 		break;
 
 	case SYS_open:
 		fprintf(stderr, KREPLAY_SC "OPEN \"%s\" ret=%p\n",
-			sp.getArg(0), getRet());
+			(char*)sp.getArgPtr(0), (void*)getRet());
 		break;
 	case SYS_write:
 		fprintf(stderr,
@@ -293,43 +293,12 @@ void SyscallsKTest::sc_munmap(SyscallParams& sp)
 	munmap((void*)sp.getArg(0), sp.getArg(1));
 }
 
-/* caller should know the size of the object based on
- * the syscall's context */
-char* SyscallsKTest::feedMemObj(unsigned int sz)
-{
-	char			*obj_buf;
-	struct KTestObject	*cur_obj;
-	
-	if (next_ktest_obj >= ktest->numObjects) {
-		/* request overflow */
-		fprintf(stderr, KREPLAY_NOTE"OF\n");
-		return NULL;
-	}
-
-	cur_obj = &ktest->objects[next_ktest_obj++];
-	if (cur_obj->numBytes != sz) {
-		/* out of sync-- how to handle? */
-		fprintf(stderr, KREPLAY_NOTE"OOSYNC: Expected: %d. Got: %d\n",
-			sz,
-			cur_obj->numBytes);
-		return NULL;
-	}
-
-	obj_buf = new char[sz];
-	memcpy(obj_buf, cur_obj->bytes, sz);
-	fprintf(stderr, "NOM NOM MemObj %s (%d bytes)\n",
-		cur_obj->name,
-		cur_obj->numBytes);
-
-	return obj_buf;
-}
-
 bool SyscallsKTest::copyInMemObj(uint64_t guest_addr, unsigned int sz)
 {
 	char	*buf;
 
 	/* first, grab mem obj */
-	if ((buf = feedMemObj(sz)) == NULL)
+	if ((buf = kts->feedObjData(sz)) == NULL)
 		return false;
 
 	fprintf(stderr, "COPY %d bytes INTO addr=%p\n", sz, buf);
@@ -360,7 +329,7 @@ bool SyscallsKTest::copyInRegMemObj(void)
 	unsigned int		reg_sz;
 
 	reg_sz = guest->getCPUState()->getStateSize();
-	if ((partial_reg_buf = feedMemObj(reg_sz)) == NULL) {
+	if ((partial_reg_buf = kts->feedObjData(reg_sz)) == NULL) {
 		return false;
 	}
 	partial_cpu = (VexGuestAMD64State*)partial_reg_buf;

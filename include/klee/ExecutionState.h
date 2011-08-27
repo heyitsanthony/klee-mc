@@ -251,6 +251,8 @@ public:
 
   std::vector< SymbolicArray >::const_iterator symbolicsEnd(void) const
   { return symbolics.end(); }
+
+  unsigned int getNumSymbolics(void) const { return symbolics.size(); }
 };
 
 }

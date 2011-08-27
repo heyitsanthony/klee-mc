@@ -1,9 +1,10 @@
 #include <klee/breadcrumb.h>
+#include <klee/Internal/ADT/Crumbs.h>
+#include <klee/Internal/ADT/KTestStream.h>
 #include <klee/util/gzip.h>
 #include <string>
 #include <string.h>
 #include <assert.h>
-#include "Crumbs.h"
 
 using namespace klee;
 
@@ -52,7 +53,6 @@ Crumbs::~Crumbs()
 
 void Crumbs::skip(unsigned int i)
 {
-	assert (i);
 	while (i) {
 		struct breadcrumb* bc = next();
 		if (!bc) break;
@@ -61,7 +61,7 @@ void Crumbs::skip(unsigned int i)
 	}
 }
 
-struct breadcrumb* Crumbs::peek(void)
+struct breadcrumb* Crumbs::peek(void) const
 {
 	struct breadcrumb	hdr;
 	char			*ret;
@@ -146,4 +146,89 @@ void Crumbs::loadTypeList(void)
 
 	fseek(f, old_off, SEEK_SET);
 	crumbs_processed = old_processed;
+}
+
+void BCrumb::print(std::ostream& os) const
+{
+	os << "BCrumb" << std::endl;
+}
+
+
+BCrumb* Crumbs::toBC(struct breadcrumb* bc)
+{
+	if (bc == NULL) return NULL;
+	switch (bc->bc_type) {
+	case BC_TYPE_SC:
+		return new BCSyscall(bc);
+	case BC_TYPE_VEXREG:
+		return new BCVexReg(bc);
+	case BC_TYPE_SCOP:
+		return new BCSysOp(bc);
+//	case BC_TYPE_BOGUS:
+	default:
+		assert (0 == 1);
+	}
+	return NULL;
+}
+
+void BCVexReg::print(std::ostream& os) const
+{
+	os << "VEXREG\n";
+}
+
+void BCSyscall::consumeOps(KTestStream* kts, Crumbs* crumbs)
+{
+	if (bc_sc_is_newregs(getBCS())) {
+		const KTestObject* kto = kts->nextObject();
+		assert (kto);
+		assert (kto->numBytes == 633);
+	}
+
+	for (unsigned int i = 0; i < getBCS()->bcs_op_c; i++) {
+		const KTestObject* kto;
+		BCrumb	*bcr = crumbs->nextBC();
+		BCSysOp	*sop;
+
+		assert (bcr);
+		sop = dynamic_cast<BCSysOp*>(bcr);
+		assert (sop);
+
+		kto = kts->nextObject();
+		assert (kto);
+
+		if (sop->size() != kto->numBytes) {
+			std::cerr << "Size mismatch on " <<
+				kto->name << ": crumb=" <<
+				sop->size() << " vs " <<
+				kto->numBytes << " =ktest\n";
+			std::cerr << "Failed syscall="
+				<< getSysNr() << std::endl;
+
+		} else
+			std::cerr << "SIZE = " << sop->size() << std::endl;
+		assert (sop->size() == kto->numBytes);
+
+		delete bcr;
+	}
+
+	std::cerr << "GRABED " << getKTestObjs() << std::endl;
+}
+
+unsigned int BCSyscall::getKTestObjs(void) const
+{
+	return getBCS()->bcs_op_c +
+		((bc_sc_is_newregs(getBCS())) ? 1 : 0);
+}
+
+void BCSyscall::print(std::ostream& os) const
+{
+	os << "SYSCALL NR="
+		<< getSysNr() << ". KTO="
+		<< getKTestObjs() << ". RET = " << (void*)getRet()
+		<< std::endl;
+}
+
+void BCSysOp::print(std::ostream& os) const
+{
+	os << "SCOp\n";
 }

@@ -461,6 +461,8 @@ int main(int argc, char **argv, char **envp)
 	Guest		*gs;
 	Interpreter	*interpreter;
 
+	assert (ReplayPathFile.size() == 0 && "Path replay not yet implemented!");
+
 #if ENABLE_STPLOG == 1
 	STPLOG_init("stplog.c");
 #endif

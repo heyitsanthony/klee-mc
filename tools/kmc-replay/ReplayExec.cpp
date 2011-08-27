@@ -5,8 +5,10 @@
 #include "vexsb.h"
 #include <stdlib.h>
 #include <string.h>
-#include "Crumbs.h"
+#include "klee/Internal/ADT/Crumbs.h"
 #include "klee/breadcrumb.h"
+
+using namespace klee;
 
 extern "C"
 {
@@ -163,6 +165,7 @@ uint8_t* ReplayExec::verifyWithRegLog(void)
 			"Ignoring syscall page. #%d\n",
 			crumbs->getNumProcessed());
 		ignored_last = true;
+		skipped_vsys = true;
 		return NULL;
 	}
 
@@ -174,6 +177,7 @@ uint8_t* ReplayExec::verifyWithRegLog(void)
 			"Skipping crumb #%d\n",
 			crumbs->getNumProcessed());
 		Crumbs::freeCrumb(bc);
+		skipped_vsys = true;
 		return verifyWithRegLog();
 	}
 

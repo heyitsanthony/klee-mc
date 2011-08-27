@@ -152,9 +152,12 @@ static void* sc_mmap(void* regfile)
 		len = concretize_u64(GET_ARG1(regfile));
 		addr = (uint64_t)kmc_alloc_aligned(len, "mmap");
 		if (addr == 0) addr = (uint64_t)MAP_FAILED;
+		else sc_breadcrumb_add_ptr(addr, len);
 	} else {
 		len = concretize_u64(GET_ARG1(regfile));
 		addr = (uint64_t)sc_mmap_addr(regfile, (void*)addr, len);
+		if (addr != MAP_FAILED)
+			sc_breadcrumb_add_ptr(addr, len);
 	}
 
 	sc_ret_v(new_regs, addr);

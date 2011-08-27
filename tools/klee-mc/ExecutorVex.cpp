@@ -821,9 +821,11 @@ void ExecutorVex::handleXferSyscall(
 
 	uint64_t	sysnr;
 	state.addressSpace.copyToBuf(es2esv(state).getRegCtx(), &sysnr, 0, 8);
-	fprintf(stderr, "before syscall %d(?): states=%d\n",
+	fprintf(stderr, "before syscall %d(?): states=%d. objs=%d. st=%p\n",
 		sysnr,
-		stateManager->size());
+		stateManager->size(),
+		state.getNumSymbolics(),
+		&state);
 
 	/* arg0 = regctx, arg1 = jmpptr */
 	args.push_back(es2esv(state).getRegCtx()->getBaseExpr());
@@ -831,7 +833,7 @@ void ExecutorVex::handleXferSyscall(
 
 	executeCall(state, ki, kf_scenter->function, args);
 
-	fprintf(stderr, "after syscall: states=%d.\n", stateManager->size());
+	fprintf(stderr, "syscall queued.\n");
 }
 
 void ExecutorVex::handleXferReturn(

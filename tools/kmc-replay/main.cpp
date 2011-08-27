@@ -1,14 +1,16 @@
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include "llvm/Target/TargetSelect.h"
 #include "llvm/ExecutionEngine/JIT.h"
+#include "klee/Internal/ADT/Crumbs.h"
 
 #include "ReplayExec.h"
-#include "Crumbs.h"
 #include "guest.h"
 
 #include "SyscallsKTest.h"
 #include <stdlib.h>
 #include <stdio.h>
+
+using namespace klee;
 
 extern void dumpIRSBs(void) {}
 
