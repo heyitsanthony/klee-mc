@@ -146,15 +146,11 @@ static void* sc_mmap_anon(void* regfile)
 	if (GET_ARG0(regfile) == 0) {
 		addr = kmc_alloc_aligned(len, "mmap");
 		if (addr == NULL) addr = MAP_FAILED;
-		else sc_breadcrumb_add_ptr(addr, len);
 		return addr;
 	}
 
 	/* mapping has a deisred location */
 	addr = sc_mmap_addr(regfile, (void*)addr, len);
-	if (addr != MAP_FAILED)
-		sc_breadcrumb_add_ptr(addr, len);
-
 	return addr;
 }
 
@@ -190,6 +186,8 @@ static void* sc_mmap(void* regfile)
 		addr = MAP_FAILED;
 	} else {
 		addr = sc_mmap_anon(regfile);
+		if (addr != MAP_FAILED)
+			sc_breadcrumb_add_ptr(addr, GET_ARG1(regfile));
 	}
 
 	sc_ret_v(new_regs, (uint64_t)addr);
@@ -423,7 +421,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	FAKE_SC(rt_sigprocmask)
 	case SYS_pread64:
 	case SYS_read: {
-		uint64_t len = klee_get_value(GET_ARG2(regfile));
+		uint64_t len = concretize_u64(GET_ARG2(regfile));
 
 //		This is an error case that we should probably make optional
 //		since this causes the state space to explode into really useless

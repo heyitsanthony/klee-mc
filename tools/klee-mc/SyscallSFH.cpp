@@ -149,7 +149,7 @@ SFH_DEF_HANDLER(FreeRun)
 
 	if (mo->size != len_v) {
 		std::cerr
-			<< "size mismatch on munmap " 
+			<< "size mismatch on munmap "
 			<< mo->size << "!=" << len_v << std::endl;
 	}
 	assert (mo->size == len_v &&
@@ -196,6 +196,7 @@ SFH_DEF_HANDLER(MakeRangeSymbolic)
 	len_v = len->getZExtValue();
 	name_str = sfh->readStringAtAddress(state, arguments[2]);
 
+	fprintf(stderr, "MAKE RANGE SYMBOLIC %s %d\n", name_str.c_str(), (int)len_v);
 	sc_sfh->makeRangeSymbolic(state, (void*)addr_v, len_v, name_str.c_str());
 }
 
@@ -267,14 +268,13 @@ SFH_DEF_HANDLER(AllocAligned)
 	state.bindLocal(target, new_mo->getBaseExpr());
 }
 
-void SyscallSFH::makeSymbolicTail(
+void SyscallSFH::removeTail(
 	ExecutionState& state,
 	const MemoryObject* mo,
-	unsigned taken,
-	const char* name)
+	unsigned taken)
 {
 	ObjectState	*os;
-	MemoryObject	*mo_head, *mo_tail;
+	MemoryObject	*mo_head;
 	char		*buf_head;
 	uint64_t	mo_addr, mo_size, head_size;
 
@@ -297,27 +297,16 @@ void SyscallSFH::makeSymbolicTail(
 	os = state.bindMemObj(mo_head);
 	for(unsigned i = 0; i < head_size; i++) state.write8(os, i, buf_head[i]);
 
-	/* mark tail symbolic */
-	mo_tail = exe_vex->memory->allocateFixed(
-		mo_addr+head_size, taken, 0, &state);
-	exe_vex->executeMakeSymbolic(
-		state,
-		mo_tail,
-		ConstantExpr::alloc(taken, 32),
-		name);
-
-
 	delete [] buf_head;
 }
 
-void SyscallSFH::makeSymbolicHead(
+void SyscallSFH::removeHead(
 	ExecutionState& state,
 	const MemoryObject* mo,
-	unsigned taken,
-	const char* name)
+	unsigned taken)
 {
 	ObjectState	*os;
-	MemoryObject	*mo_head, *mo_tail;
+	MemoryObject	*mo_tail;
 	char		*buf_tail;
 	uint64_t	mo_addr, mo_size, tail_size;
 
@@ -325,11 +314,7 @@ void SyscallSFH::makeSymbolicHead(
 	mo_size = mo->size;
 
 	if (mo_size == taken) {
-		exe_vex->executeMakeSymbolic(
-			state,
-			mo,
-			ConstantExpr::alloc(mo_size, 32),
-			name);
+		state.unbindObject(mo);
 		return;
 	}
 
@@ -344,13 +329,7 @@ void SyscallSFH::makeSymbolicHead(
 	/* free object from address space */
 	state.unbindObject(mo);
 
-	mo_head = exe_vex->memory->allocateFixed(mo_addr, taken, 0, &state);
-	exe_vex->executeMakeSymbolic(
-		state,
-		mo_head,
-		ConstantExpr::alloc(taken, 32),
-		name);
-
+	/* create tail */
 	mo_tail = exe_vex->memory->allocateFixed(
 		mo_addr+taken, tail_size, 0, &state);
 	os = state.bindMemObj(mo_tail);
@@ -359,15 +338,14 @@ void SyscallSFH::makeSymbolicHead(
 	delete [] buf_tail;
 }
 
-void SyscallSFH::makeSymbolicMiddle(
+void SyscallSFH::removeMiddle(
 	ExecutionState& state,
 	const MemoryObject* mo,
 	unsigned mo_off,
-	unsigned taken,
-	const char* name)
+	unsigned taken)
 {
 	ObjectState	*os;
-	MemoryObject	*mo_head, *mo_tail, *mo_mid;
+	MemoryObject	*mo_head, *mo_tail;
 	char		*buf_head, *buf_tail;
 	uint64_t	mo_addr, mo_size, tail_size;
 
@@ -390,15 +368,6 @@ void SyscallSFH::makeSymbolicMiddle(
 
 	os = state.bindMemObj(mo_head);
 	for(unsigned i = 0; i < mo_off; i++) state.write8(os, i, buf_head[i]);
-
-	mo_mid = exe_vex->memory->allocateFixed(
-		mo_addr+mo_off, taken, NULL, &state);
-	mo_mid->setName(name);
-	exe_vex->executeMakeSymbolic(
-		state,
-		mo_mid,
-		ConstantExpr::alloc(taken, 32),
-		name);
 
 	mo_tail = exe_vex->memory->allocateFixed(
 		mo_addr+mo_off+taken, tail_size, 0, &state);
@@ -450,25 +419,30 @@ void SyscallSFH::makeRangeSymbolic(
 				/* take is excess of length of MO
 				 * Chop off all the tail of the MO */
 				taken = tail_take_bytes;
-				makeSymbolicTail(state, mo, taken, name);
+				removeTail(state, mo, taken);
 			} else {
 				taken = take_remaining;
-				makeSymbolicMiddle(
-					state,
-					mo,
-					mo_off,
-					taken,
-					name);
+				removeMiddle(state, mo, mo_off, taken);
 			}
 		} else {
 			taken = (take_remaining >= tail_take_bytes) ?
 					tail_take_bytes :
 					take_remaining;
-			makeSymbolicHead(state, mo, taken, name);
+			removeHead(state, mo, taken);
 		}
 
 		/* set stat structure as symbolic */
 		cur_addr += taken;
 		total_sz += taken;
 	}
+
+	MemoryObject	*sym_mo;
+	ObjectState	*sym_os;
+	sym_mo = exe_vex->memory->allocateFixed((uint64_t)addr, sz, 0, &state);
+	sym_mo->setName(name);
+	sym_os = exe_vex->executeMakeSymbolic(
+		state,
+		sym_mo,
+		ConstantExpr::alloc(sz, 32),
+		name);
 }

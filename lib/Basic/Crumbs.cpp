@@ -193,6 +193,9 @@ void BCSyscall::consumeOps(KTestStream* kts, Crumbs* crumbs)
 		sop = dynamic_cast<BCSysOp*>(bcr);
 		assert (sop);
 
+		std::cerr << "SOP[" << i << "]: ";
+		sop->print(std::cerr);
+
 		kto = kts->nextObject();
 		assert (kto);
 
@@ -204,8 +207,7 @@ void BCSyscall::consumeOps(KTestStream* kts, Crumbs* crumbs)
 			std::cerr << "Failed syscall="
 				<< getSysNr() << std::endl;
 
-		} else
-			std::cerr << "SIZE = " << sop->size() << std::endl;
+		}
 		assert (sop->size() == kto->numBytes);
 
 		delete bcr;
@@ -230,5 +232,5 @@ void BCSyscall::print(std::ostream& os) const
 
 void BCSysOp::print(std::ostream& os) const
 {
-	os << "SCOp\n";
+	os << "SCOp sz=" << getSOP()->sop_sz << "\n";
 }
