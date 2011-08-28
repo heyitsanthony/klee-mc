@@ -206,7 +206,7 @@ namespace {
   cl::opt<bool>
   ReplayPathOnly("replay-path-only",
             cl::desc("On replay, terminate states when branch decisions have been exhausted"),
-            cl::init(true));
+            cl::init(false));
 
   cl::opt<bool>
   ReplayInhibitedForks("replay-inhibited-forks",
@@ -460,7 +460,6 @@ bool Executor::forkSetupNoSeeding(ExecutionState& current, struct ForkInfo& fi)
 	}
 
 	if (fi.validTargets <= 1)  return true;
-
 
 	// Multiple branch directions are possible; check for flags that
 	// prevent us from forking here

@@ -67,11 +67,6 @@ namespace {
   InputArgv(cl::ConsumeAfter, 
             cl::desc("<program arguments>..."));
 
- 
- 
-   
-   
-    
   cl::opt<LibcType> Libc(
     "libc", 
     cl::desc("Choose libc version (none by default)."),

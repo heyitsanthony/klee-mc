@@ -539,8 +539,8 @@ ExecutionState* ExecutionState::createReplay(
 	ExecutionState* newState;
 
 	newState = initialState.copy();
-	foreach (it2, replayPath.begin(), replayPath.end()) {
-		newState->branchDecisionsSequence.push_back(*it2);
+	foreach (it, replayPath.begin(), replayPath.end()) {
+		newState->branchDecisionsSequence.push_back(*it);
 	}
 
 	newState->replayBranchIterator = newState->branchDecisionsSequence.begin();
