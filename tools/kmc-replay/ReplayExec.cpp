@@ -184,9 +184,10 @@ uint8_t* ReplayExec::verifyWithRegLog(void)
 	}
 
 
-	fprintf(stderr, "-------CHKLOG %d. LastAddr=%p------\n",
+	fprintf(stderr, "-------CHKLOG %d. LastAddr=%p (%s)------\n",
 		crumbs->getNumProcessed(),
-		(void*)next_addr.o);
+		(void*)next_addr.o,
+		gs->getName(next_addr).c_str());
 	for (unsigned int i = 0; i < reg_sz; i++) {
 		if (!sym_mask[i]) continue;
 		if (sym_reg[i] == guest_reg[i]) continue;
