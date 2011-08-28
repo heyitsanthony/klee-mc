@@ -54,8 +54,10 @@ void ReplayExec::doSysCall(VexSB* sb)
 		return;
 	}
 
-	fprintf(stderr, "VERIFY AFTER SYSCALL\n");
 	gs->getCPUState()->setExitType(GE_RETURN);
+
+	if (has_reglog)
+		fprintf(stderr, "VERIFY AFTER SYSCALL\n");
 	verifyOrPanic();
 }
 

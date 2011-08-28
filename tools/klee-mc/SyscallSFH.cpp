@@ -28,7 +28,7 @@ static SpecialFunctionHandler::HandlerInfo hInfo[NUM_HANDLERS] =
 	addDNR("kmc_exit", KMCExit),
 	add("kmc_make_range_symbolic", MakeRangeSymbolic, false),
 	add("kmc_alloc_aligned", AllocAligned, true),
-	add("kmc_breadcrumb", Breadcrumb, false),
+	add("kmc_breadcrumb", Breadcrumb, false)
 #undef addDNR
 #undef add
 };
@@ -264,8 +264,6 @@ SFH_DEF_HANDLER(AllocAligned)
 	state.bindMemObj(new_mo);
 	addr = new_mo->address;
 	new_mo->setName(name_str.c_str());
-	exe_vex->executeMakeSymbolic(state, new_mo, name_str.c_str());
-
 	state.bindLocal(target, new_mo->getBaseExpr());
 }
 

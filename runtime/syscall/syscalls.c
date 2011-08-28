@@ -27,6 +27,12 @@ void kmc_exit(uint64_t);
 void kmc_make_range_symbolic(uint64_t, uint64_t, const char*);
 void* kmc_alloc_aligned(uint64_t, const char* name);
 
+static void make_sym_by_arg(
+	void	*regfile,
+	uint64_t arg_num,
+	uint64_t len, const char* name);
+static void make_sym(uint64_t addr, uint64_t len, const char* name);
+
 #define FAILURE_RATE	4
 struct fail_counters
 {
@@ -73,14 +79,6 @@ static void* sc_new_regs(void* r)
 	return ret;
 }
 
-#if 0
-static void sc_ret_le0(void* regfile)
-{
-	int64_t	rax = GET_RAX(regfile);
-	klee_assume(rax <= 0);
-}
-#endif
-
 static void sc_ret_ge0(void* regfile)
 {
 	int64_t	rax = GET_RAX(regfile);
@@ -111,9 +109,9 @@ static void sc_ret_range(void* regfile, int64_t lo, int64_t hi)
 	klee_assume(rax >= lo && rax <= hi);
 }
 
-static void* sc_mmap_addr(
-	void* regfile,
-	void* addr, uint64_t len)
+/* IMPORTANT: this will just *allocate* some data,
+ * if you want symbolic, do it after calling this */
+static void* sc_mmap_addr(void* regfile, void* addr, uint64_t len)
 {
 	int	is_himem;
 
@@ -137,9 +135,45 @@ static void* sc_mmap_addr(
 	return addr;
 }
 
+static void* sc_mmap_anon(void* regfile)
+{
+	void		*addr;
+	uint64_t	len;
+
+	len = concretize_u64(GET_ARG1(regfile));
+
+	/* mapping may be placed anywhere */
+	if (GET_ARG0(regfile) == 0) {
+		addr = kmc_alloc_aligned(len, "mmap");
+		if (addr == NULL) addr = MAP_FAILED;
+		else sc_breadcrumb_add_ptr(addr, len);
+		return addr;
+	}
+
+	/* mapping has a deisred location */
+	addr = sc_mmap_addr(regfile, (void*)addr, len);
+	if (addr != MAP_FAILED)
+		sc_breadcrumb_add_ptr(addr, len);
+
+	return addr;
+}
+
+// return address of mmap
+static void* sc_mmap_fd(void* regfile)
+{
+	void		*ret_addr;
+	uint64_t	len = concretize_u64(GET_ARG1(regfile));
+
+	ret_addr = sc_mmap_anon(regfile);
+	if (ret_addr == MAP_FAILED) return ret_addr;
+
+	make_sym((uint64_t)ret_addr, len, "mmap_fd");
+	return ret_addr;
+}
+
 static void* sc_mmap(void* regfile)
 {
-	uint64_t	addr;
+	void		*addr;
 	uint64_t	len;
 	void		*new_regs;
 
@@ -147,20 +181,18 @@ static void* sc_mmap(void* regfile)
 	new_regs = sc_new_regs(regfile);
 
 	if (len >= (uintptr_t)0x10000000 || (int64_t)len < 0) {
-		addr = (uint64_t)MAP_FAILED;
-	} else if (GET_ARG0(regfile) == 0) {
-		len = concretize_u64(GET_ARG1(regfile));
-		addr = (uint64_t)kmc_alloc_aligned(len, "mmap");
-		if (addr == 0) addr = (uint64_t)MAP_FAILED;
-		else sc_breadcrumb_add_ptr(addr, len);
+		addr = MAP_FAILED;
+	} else if (GET_ARG4(regfile) != ~0ULL) {
+		/* file descriptor mmap-- things need to be symbolic */
+		addr = sc_mmap_fd(regfile);
+	} else if (GET_ARG3(regfile) != MAP_ANONYMOUS) {
+		/* !fd && !anon => WTF */
+		addr = MAP_FAILED;
 	} else {
-		len = concretize_u64(GET_ARG1(regfile));
-		addr = (uint64_t)sc_mmap_addr(regfile, (void*)addr, len);
-		if (addr != MAP_FAILED)
-			sc_breadcrumb_add_ptr(addr, len);
+		addr = sc_mmap_anon(regfile);
 	}
 
-	sc_ret_v(new_regs, addr);
+	sc_ret_v(new_regs, (uint64_t)addr);
 	return new_regs;
 }
 
@@ -193,7 +225,7 @@ static void sc_munmap(void* regfile)
 		sc_ret_range(sc_new_regs(regfile), y, z);		\
 		break;
 
-void make_sym(uint64_t addr, uint64_t len, const char* name)
+static void make_sym(uint64_t addr, uint64_t len, const char* name)
 {
 	klee_check_memory_access((void*)addr, 1);
 
@@ -204,7 +236,7 @@ void make_sym(uint64_t addr, uint64_t len, const char* name)
 	sc_breadcrumb_add_ptr((void*)addr, len);
 }
 
-void make_sym_by_arg(
+static void make_sym_by_arg(
 	void	*regfile,
 	uint64_t arg_num,
 	uint64_t len, const char* name)

@@ -34,7 +34,6 @@ private:
 
 	void sc_stat(SyscallParams& sp);
 	void sc_mmap(SyscallParams& sp);
-	void sc_munmap(SyscallParams& sp);
 
 	klee::KTestStream	*kts;
 	unsigned int		sc_retired;
