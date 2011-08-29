@@ -1,6 +1,6 @@
 #include "klee/Internal/System/Time.h"
 #include "Executor.h"
-#include "Sugar.h"
+#include "static/Sugar.h"
 
 #include "IterativeDeepeningTimeSearcher.h"
 

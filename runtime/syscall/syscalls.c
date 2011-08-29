@@ -178,10 +178,10 @@ static void* sc_mmap(void* regfile)
 
 	if (len >= (uintptr_t)0x10000000 || (int64_t)len < 0) {
 		addr = MAP_FAILED;
-	} else if (GET_ARG4(regfile) != ~0ULL) {
+	} else if (((int)GET_ARG4(regfile)) != -1) {
 		/* file descriptor mmap-- things need to be symbolic */
 		addr = sc_mmap_fd(regfile);
-	} else if (GET_ARG3(regfile) != MAP_ANONYMOUS) {
+	} else if ((GET_ARG3(regfile) & MAP_ANONYMOUS) == 0) {
 		/* !fd && !anon => WTF */
 		addr = MAP_FAILED;
 	} else {

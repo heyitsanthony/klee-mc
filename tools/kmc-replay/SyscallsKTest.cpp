@@ -272,7 +272,10 @@ void SyscallsKTest::sc_mmap(SyscallParams& sp)
 		return;
 	}
 
-	fprintf(stderr, KREPLAY_SC" MMAP TO %p\n", bcs_ret);
+	fprintf(stderr, KREPLAY_SC" MMAP fd=%d flags=%x TO %p\n",
+		(int)sp.getArg(4),
+		(int)sp.getArg(3),
+		bcs_ret);
 	rc = guest->getMem()->mmap(
 		g_ret,
 		guest_ptr((uint64_t)bcs_ret),
@@ -293,7 +296,7 @@ void SyscallsKTest::sc_mmap(SyscallParams& sp)
 
 	setRet((uint64_t)g_ret.o);
 
-	if (sp.getArg(4) != ~0ULL) {
+	if (((int)sp.getArg(4)) != -1) {
 		/* only symbolic if fd is defined (e.g. fd != -1) */
 		bool	copied_in;
 		copied_in = copyInMemObj(g_ret.o, sp.getArg(1));

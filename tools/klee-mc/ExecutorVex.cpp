@@ -522,7 +522,8 @@ Function* ExecutorVex::getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new)
 		return NULL;
 	}
 
-	/* XXX */
+	/* XXX: This is wrong because it doesn't acknowledge write-backs */
+	/* The right way to do it would involve grabbing from the state's MO */
 	host_addr = gs->getMem()->getHostPtr(guest_ptr(guest_addr));
 
 	/* cached => already seen it */

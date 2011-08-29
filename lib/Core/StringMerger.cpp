@@ -2,7 +2,7 @@
 /* */
 #include "klee/Common.h"
 #include "StringMerger.h"
-#include "Sugar.h"
+#include "static/Sugar.h"
 
 using namespace klee;
 

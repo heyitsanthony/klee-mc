@@ -8,7 +8,7 @@
 #include "CoreStats.h"
 #include "StatsTracker.h"
 #include "Executor.h"
-#include "Sugar.h"
+#include "static/Sugar.h"
 
 #include "WeightedRandomSearcher.h"
 

@@ -1,6 +1,6 @@
 #include "Executor.h"
 #include "ExeStateManager.h"
-#include "Sugar.h"
+#include "static/Sugar.h"
 
 #include "InterleavedSearcher.h"
 

@@ -5,7 +5,7 @@
 #include "klee/Internal/Module/KModule.h"
 #include "RRSearcher.h"
 
-#include "Sugar.h"
+#include "static/Sugar.h"
 
 using namespace klee;
 using namespace llvm;

@@ -15,7 +15,7 @@
 #include "BumpingMergeSearcher.h"
 #include "DFSSearcher.h"
 
-#include "Sugar.h"
+#include "static/Sugar.h"
 
 using namespace klee;
 using namespace llvm;

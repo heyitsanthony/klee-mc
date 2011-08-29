@@ -6,7 +6,7 @@
 
 #include "MergingSearcher.h"
 
-#include "Sugar.h"
+#include "static/Sugar.h"
 
 using namespace llvm;
 using namespace klee;

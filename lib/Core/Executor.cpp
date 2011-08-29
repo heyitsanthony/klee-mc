@@ -2895,10 +2895,11 @@ ExecutionState* Executor::getUnboundState(
 {
   const MemoryObject *mo;
   const ObjectState *os;
+  ref<Expr> inBounds;
 
   mo = resolution.first;
   os = resolution.second;
-  ref<Expr> inBounds = mo->getBoundsCheckPointer(address, bytes);
+  inBounds = mo->getBoundsCheckPointer(address, bytes);
 
   StatePair branches = fork(*unbound, inBounds, true);
   ExecutionState *bound = branches.first;
@@ -2913,11 +2914,9 @@ ExecutionState* Executor::getUnboundState(
                             "readonly.err");
     } else {
       ObjectState *wos = bound->addressSpace.getWriteable(mo, os);
-      //wos->write(mo->getOffsetExpr(address), value);
       bound->write(wos, mo->getOffsetExpr(address), value);
     }
   } else {
-    //ref<Expr> result = os->read(mo->getOffsetExpr(address), type);
     ref<Expr> result = bound->read(os, mo->getOffsetExpr(address), type);
     bound->bindLocal(target, result);
   }
@@ -2944,8 +2943,9 @@ void Executor::memOpError(
   // XXX there is some query wasteage here. who cares?
   unbound = &state;
   foreach (it, rl.begin(), rl.end()) {
+    ObjectPair	res(*it);
     unbound = getUnboundState(
-      unbound, *it, isWrite, address, bytes, type, value, target);
+      unbound, res, isWrite, address, bytes, type, value, target);
     if (!unbound) break;
   }
 
