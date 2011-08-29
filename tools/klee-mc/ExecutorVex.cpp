@@ -102,6 +102,9 @@ ExecutorVex::ExecutorVex(
 	if (!theGenLLVM) theGenLLVM = new GenLLVM(in_gs);
 	if (!theVexHelpers) theVexHelpers = VexHelpers::create(Arch::X86_64);
 
+	std::cerr << "[klee-mc] Forcing fake vsyspage reads\n";
+	theGenLLVM->setFakeSysReads();
+
 	theVexHelpers->loadUserMod(
 		(UseFDT) ?
 			"libkleeRuntimeMC-fdt.bc" :
@@ -363,8 +366,8 @@ void ExecutorVex::makeArgsSymbolic(ExecutionState* state)
 	if (argv.size() == 0) return;
 
 	fprintf(stderr,
-		"[klee-mc] Making %u arguments symbolic\n",
-		argv.size()-1);
+		"[klee-mc] Making %d arguments symbolic\n",
+		(int)(argv.size()-1));
 	foreach (it, argv.begin()+1, argv.end()) {
 		guest_ptr	p = *it;
 		sfh->makeRangeSymbolic(
@@ -822,10 +825,10 @@ void ExecutorVex::handleXferSyscall(
 	uint64_t	sysnr;
 	state.addressSpace.copyToBuf(es2esv(state).getRegCtx(), &sysnr, 0, 8);
 	fprintf(stderr, "before syscall %d(?): states=%d. objs=%d. st=%p\n",
-		sysnr,
+		(int)sysnr,
 		stateManager->size(),
 		state.getNumSymbolics(),
-		&state);
+		(void*)&state);
 
 	/* arg0 = regctx, arg1 = jmpptr */
 	args.push_back(es2esv(state).getRegCtx()->getBaseExpr());

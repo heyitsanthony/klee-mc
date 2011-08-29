@@ -17,10 +17,8 @@
 
 static void smashed(void)
 {
-	syscall(SYS_klee,
-		KLEE_SYS_REPORT_ERROR, 
-		__FILE__,
-		__LINE__,
+	ksys_report_error(
+		__FILE__, __LINE__,
 		"Stack illegally smashed!!!",
 		"smash_ignored.err");
 	fprintf(stderr, "Oops. Stack Smashed.\n");
