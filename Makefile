@@ -80,8 +80,10 @@ mc-fdt: Release/lib/libkleeRuntimeMC-fdt.bca
 test-all: test test-replay
 
 
-test-replay:
+test-replay: test-replay-path
 	cd tests-replay && ./replaytest.sh
+test-replay-path:
+	cd tests-replay && ./replaypathtest.sh
 
 .PHONY: kmc-bintests
 kmc-bintests: all
