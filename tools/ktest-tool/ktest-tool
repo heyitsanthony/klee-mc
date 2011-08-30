@@ -65,7 +65,11 @@ class KTest:
 
         # add a field that represents the name of the program used to
         # generate this .ktest file:
-        program_full_path = self.args[0]
+	if len(self.args) > 0:
+	        program_full_path = self.args[0]
+	else:
+		program_full_path = "ANONBIN"
+
         program_name = os.path.basename(program_full_path)
         # sometimes program names end in .bc, so strip them
         if program_name.endswith('.bc'):
