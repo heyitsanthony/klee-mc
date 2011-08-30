@@ -1,2 +1,3 @@
 *Release/
 Makefile.config
+*klee-out*

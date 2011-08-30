@@ -113,6 +113,12 @@ namespace {
 	cl::init("ptrace"));
 
   cl::opt<std::string>
+  GuestSnapshotFName(
+        "guest-sshot",
+	cl::desc("Snapshot file to use."),
+	cl::init(""));
+
+  cl::opt<std::string>
   GuestFragmentFile(
 	"guestfrag-file",
 	cl::desc("File containing fragment data."),
@@ -475,7 +481,10 @@ Guest* getGuest(CmdArgs* cmdargs)
 		gs = ge;
 	} else if (GuestType == "sshot") {
 		fprintf(stderr, "[klee-mc] LOADING SNAPSHOT\n");
-		gs = Guest::load();
+		gs = Guest::load(
+			GuestSnapshotFName.size() == 0
+			?	NULL
+			:	GuestSnapshotFName.c_str());
 		assert (gs && "Could not load guest snapshot");
 	} else if (GuestType == "frag") {
 		GuestFragment	*gf;
