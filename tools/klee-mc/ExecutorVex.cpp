@@ -33,6 +33,7 @@
 
 #include "ExecutorVex.h"
 #include "ExeStateVex.h"
+#include <sys/utsname.h>
 
 using namespace klee;
 using namespace llvm;
@@ -171,7 +172,7 @@ void ExecutorVex::runImage(void)
 		kmodule->addModule(*it);
 	}
 
-	if (UseFDT) prepFDT(init_func);
+	if (UseFDT) installFDTInitializers(init_func);
 
 	init_kfunc = kmodule->addFunction(init_func);
 	statsTracker->addKFunction(init_kfunc);
@@ -181,6 +182,8 @@ void ExecutorVex::runImage(void)
 
 	prepState(state, init_func);
 	initializeGlobals(*state);
+
+	if(UseFDT) installFDTConfig(*state);
 
 	sfh->bind();
 	kf_scenter = kmodule->getKFunction("sc_enter");
@@ -395,7 +398,7 @@ Function *getStubFunctionForCtorList(
 	GlobalVariable *gv,
 	std::string name);
 
-void ExecutorVex::prepFDT(Function *init_func)
+void ExecutorVex::installFDTInitializers(Function *init_func)
 {
 	GlobalVariable *ctors = kmodule->module->getNamedGlobal("llvm.global_ctors");
 	std::cerr << "checking for global ctors and dtors" << std::endl;
@@ -425,15 +428,28 @@ void ExecutorVex::prepFDT(Function *init_func)
 	// 	}
 	// }
 
-	const IntegerType* boolType = IntegerType::get(getGlobalContext(), 1);
 	GlobalVariable* concrete_vfs =
 		static_cast<GlobalVariable*>(kmodule->module->
-			getGlobalVariable("concrete_vfs", boolType));
+			getGlobalVariable("concrete_vfs"));
 
 	concrete_vfs->setInitializer(ConcreteVfs ?
 		ConstantInt::getTrue(getGlobalContext()) :
 		ConstantInt::getFalse(getGlobalContext()));
 	concrete_vfs->setConstant(true);
+
+}
+void ExecutorVex::installFDTConfig(ExecutionState& state) {
+	GlobalVariable* g_utsname =
+		static_cast<GlobalVariable*>(kmodule->module->
+			getGlobalVariable("g_utsname"));
+	MemoryObject* mo = globalObjects[g_utsname];
+	ObjectState* os = state.addressSpace.findObject(mo);
+	assert(os);
+	struct utsname buf;
+	uname(&buf);
+	for (unsigned offset=0; offset < mo->size; offset++) {
+		state.write8(os, offset, ((unsigned char*)&buf)[offset]);
+	}
 }
 
 void ExecutorVex::makeArgsSymbolic(ExecutionState* state)
