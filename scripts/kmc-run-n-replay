@@ -34,3 +34,17 @@ klee-mc -max-memory=2048 $KMC_RNR_LOGREGS  -use-pcache-rewriteptr  -guest-type=s
 kmcpid="$!"
 ( sleep $TIMEOUT &&  kill -s SIGUSR1 $kmcpid 2>/dev/null && kill -9 $kmcpid 2>/dev/null ) &
 wait $kmcpid && echo DONE
+
+VEXLLVM_STORE_FRAGS=1 VEXLLVM_SB_LOG=stderr \
+	kmc-replay 1 2>&1 | grep IMark | cut -f2 -d'(' | cut -f1 -d')' | sed "s/,//g" >con.log
+
+mkdir sym-cov
+"$VEXLLVM_HELPER_PATH"/../scripts/guest_cov.py	\
+	--output-dir=sym-cov			\
+	guest-last klee-last/run.istats >/dev/null
+
+mkdir con-cov
+"$VEXLLVM_HELPER_PATH"/../scripts/guest_cov.py 	\
+	--output-dir=con-cov 			\
+	--visited-file=con.log			\
+	guest-last klee-last/run.istats >/dev/null
