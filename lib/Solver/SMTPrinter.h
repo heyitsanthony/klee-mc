@@ -29,7 +29,10 @@ private:
 	SMTPrinter(std::ostream& in_os, SMTArrays* in_arr) 
 	: ExprVisitor(false, true)
 	, os(in_os)
-	, arr(in_arr) {}
+	, arr(in_arr)
+	{
+		use_hashcons = false;
+	}
 
 	void printArrayDecls(void) const;
 	void printConstant(const ConstantExpr* ce);

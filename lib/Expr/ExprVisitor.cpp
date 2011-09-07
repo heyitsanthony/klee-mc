@@ -25,24 +25,31 @@ using namespace klee;
 
 ref<Expr> ExprVisitor::Action::constantZero;
 
-ref<Expr> ExprVisitor::visit(const ref<Expr> &e) {
-  if (!UseVisitorHash || isa<ConstantExpr>(e)) {
-    return visitActual(e);
-  } else {
-    visited_ty::iterator it = visited.find(e);
-    if (it!=visited.end()) {
-      return it->second;
-    } else {
-      ref<Expr> res = visitActual(e);
-      visited.insert(std::make_pair(e, res));
-      return res;
-    }
-  }
+ExprVisitor::ExprVisitor(bool _recursive, bool in_visitConstants)
+: recursive(_recursive)
+, visitConstants(in_visitConstants)
+{
+	use_hashcons = UseVisitorHash;
+}
+
+ref<Expr> ExprVisitor::visit(const ref<Expr> &e)
+{
+	if (!use_hashcons || isa<ConstantExpr>(e))
+		return visitActual(e);
+
+	visited_ty::iterator it = visited.find(e);
+	if (it != visited.end())
+		return it->second;
+
+	ref<Expr> res = visitActual(e);
+	visited.insert(std::make_pair(e, res));
+	return res;
 }
 
 ref<Expr> ExprVisitor::visitActual(const ref<Expr> &e)
 {
-    if (isa<ConstantExpr>(e) && !visitConstants) return e;
+    if (isa<ConstantExpr>(e) && !visitConstants)
+    	return e;
 
     Expr &ep = *e.get();
 
@@ -130,7 +137,7 @@ ref<Expr> ExprVisitor::handleActionDoChildren(Expr& ep)
 			e = visit(e);
 	}
 
-	if (!isa<ConstantExpr>(e)) {
+	if (visitConstants || !isa<ConstantExpr>(e)) {
 		Action res = visitExprPost(*e.get());
 		if (res.kind == Action::ChangeTo)
 			e = res.argument;

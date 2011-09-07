@@ -328,6 +328,21 @@ void KleeHandler::processTestCase(
       klee_warning("unable to write .path file, losing it (errno=%d: %s)", errno, strerror(errno));
   }
 
+  if (WriteSMT) {
+	Query		query(
+		state.constraints,
+		ConstantExpr::alloc(0, Expr::Bool));
+	std::ostream	*f;
+
+	f = openTestFile("smt", id);
+	SMTPrinter::print(*f, query);
+	delete f;
+	/* these things are pretty big */
+	GZip::gzipFile(
+		getTestFilename("smt", id).c_str(),
+		(getTestFilename("smt", id) + ".gz").c_str());
+  }
+
   if (errorMessage || WritePCs) {
     dumpPCs(state, id);
   }
@@ -407,26 +422,13 @@ void KleeHandler::dumpPCs(const ExecutionState& state, unsigned id)
 	if (std::ostream* f = openTestFile("pc", id)) {
 		*f << constraints;
 		delete f;
-	} else
+	} else {
 		klee_warning(
 			"unable to write .pc file, losing it (errno=%d: %s)",
 			errno, strerror(errno));
-
-	if (WriteSMT) {
-		Query		query(
-			state.constraints,
-			ConstantExpr::alloc(0, Expr::Bool));
-		std::ostream	*f;
-
-		f = openTestFile("smt", id);
-		SMTPrinter::print(*f, query);
-		delete f;
-		/* these things are pretty big */
-		GZip::gzipFile(
-			getTestFilename("smt", id).c_str(),
-			(getTestFilename("smt", id) + ".gz").c_str());
 	}
 }
+
 void KleeHandler::dumpLog(
 	const char* name,
 	unsigned id,
