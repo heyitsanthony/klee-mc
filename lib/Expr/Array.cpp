@@ -94,10 +94,3 @@ bool Array::operator< (const Array &b) const
 
 	return name < b.name;
 }
-
-const ref<ConstantExpr> Array::getValue(unsigned int k) const
-{
-	if (constantValues_u8)
-		return ConstantExpr::create(constantValues_u8[k], 8);;
-	return constantValues_expr[k];
-}

@@ -27,7 +27,6 @@ class StateRecord;
 
 template<class T> class ref;
 
-
 // Terminal Exprs
 class ConstantExpr : public Expr
 {
@@ -40,6 +39,7 @@ private:
 
 protected:
   ConstantExpr(const llvm::APInt &v) : value(v) {}
+  static void initSmallValTab(void);
 
 public:
   ~ConstantExpr() {}
@@ -175,6 +175,11 @@ public:
   ref<ConstantExpr> Neg();
   ref<ConstantExpr> Not();
 };
+
+static inline ref<ConstantExpr> createConstantExpr(uint64_t v, Expr::Width w)
+{
+	return ConstantExpr::create(v, w);
+}
 
 } // End klee namespace
 

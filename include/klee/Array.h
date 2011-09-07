@@ -9,6 +9,10 @@
 
 #define KLEE_ARRAY_H
 
+
+class ConstantExpr;
+static inline ref<ConstantExpr> createConstantExpr(uint64_t v, Expr::Width w);
+
 class Array {
 private:
   unsigned int chk_val;
@@ -46,7 +50,14 @@ public:
   }
   bool isConstantArray() const { return !isSymbolicArray(); }
 
-  const ref<ConstantExpr> getValue(unsigned int k) const;
+  /* this was eating about 5% of exec before */
+  const ref<ConstantExpr> getValue(unsigned int k) const
+  {
+	if (constantValues_u8)
+		return createConstantExpr(constantValues_u8[k], 8);
+	return constantValues_expr[k];
+  }
+
   Expr::Width getDomain() const { return Expr::Int32; }
   Expr::Width getRange() const { return Expr::Int8; }
 
