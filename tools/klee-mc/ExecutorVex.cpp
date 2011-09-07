@@ -166,6 +166,11 @@ void ExecutorVex::runImage(void)
 	// yet have a global address but binding the constant table
 	// requires it!
 	init_func = getFuncByAddrNoKMod((uint64_t)gs->getEntryPoint(), is_new);
+	assert (init_func != NULL && "Could not get init_func. Bad decode?");
+	if (init_func == NULL) {
+		fprintf(stderr, "[klee-mc] COULD NOT GET INIT_FUNC\n");
+		return;
+	}
 
 	/* add modules before initializing globals so that everything
 	 * will link in properly */
@@ -177,6 +182,7 @@ void ExecutorVex::runImage(void)
 	if (UseFDT) prepFDT(init_func);
 
 	init_kfunc = kmodule->addFunction(init_func);
+
 	statsTracker->addKFunction(init_kfunc);
 	bindKFuncConstants(init_kfunc);
 
