@@ -19,8 +19,6 @@
 #include <cassert>
 #include <climits>
 
-#include <iostream>
-
 namespace klee {
 
   struct BranchDecision
@@ -41,12 +39,21 @@ namespace klee {
 
   /// Implements a trie data structure for tracking branch decisions
   class BranchTracker {
+  public:
+    class Segment;
+    typedef ref<Segment> SegmentRef;
 
-  private:
     /// A segment is a decision sequence that forms an edge in the path tree
     struct Segment {
       Segment() : refCount(0) { }
-      ~Segment() { }
+      ~Segment() {
+        if (!parent.isNull()) {
+          std::vector<Segment*>::iterator it =
+            std::find(parent->children.begin(), parent->children.end(), this);
+          assert(it != parent->children.end());
+          parent->children.erase(it);
+        }
+      }
 
       // vectors may not be the ideal data struct here, but STL provides a
       // partial specialization for vector<bool> for optimized bit vector
@@ -59,68 +66,43 @@ namespace klee {
 #endif
       std::list<ref<HeapObject> > heapObjects;
       unsigned refCount;
+      std::vector<Segment*> children; // not ref to avoid circular references
+      SegmentRef parent;
 
       inline size_t size() const { return branches.size(); }
+      inline bool empty() const { return branches.empty(); }
       std::pair<unsigned, unsigned> operator[](unsigned index) const;
+      int compare(Segment &a) const {
+        if (this < &a)
+          return -1;
+        else if (this == &a)
+          return 0;
+        else
+          return 1;
+      }
     }; // class Segment
 
-    class SegmentRef {
-    public:
-      // default constructor: null reference
-      SegmentRef() : content(0) { }
-      // normal constructor: increment refcount
-      SegmentRef(Segment *a) : content(a) {
-        content->refCount++;
-      }
-      // copy constructor: increment refcount
-      SegmentRef(const SegmentRef &a) : content(a.content) {
-        content->refCount++;
-      }
-      ~SegmentRef() {
-        if(content) {
-          assert(content->refCount);
-          content->refCount--;
-          if(!content->refCount)
-            delete content;
-        }
-      } // ~SegmentRef()
-
-    private:
-      Segment *content;
-
-    public:
-      inline Segment& operator*() const { return *content; }
-      inline Segment* operator->() const { return &(*content); }
-      inline bool operator==(const SegmentRef &a) const {
-        return (content == a.content);
-      }
-
-    }; // class SegmentRef
-
-  public:
-
     class iterator {
-    public:
-      iterator() : tracker(0), curSeg(BranchTracker::nullList.end()), curIndex(0) { }
-      iterator(const BranchTracker *_tracker)
-        : tracker(_tracker), curSeg(_tracker->segments.begin()), curIndex(0) { }
-      iterator(const BranchTracker *_tracker,
-               std::list<SegmentRef>::const_iterator _curSeg,
-               unsigned _curIndex = 0)
-        : tracker(_tracker), curSeg(_curSeg), curIndex(_curIndex) { }
-    
-    private:
       friend class BranchTracker;
-      const BranchTracker *tracker;
-      std::list<SegmentRef>::const_iterator curSeg;
-      unsigned curIndex;
+    public:
+      iterator() : curIndex(0) { }
+      iterator(const BranchTracker *tracker)
+        : curSeg(tracker->head), tail(tracker->tail), curIndex(0) { }
+      iterator(const BranchTracker *tracker,
+               SegmentRef _curSeg,
+               unsigned _curIndex = 0)
+        : curSeg(_curSeg), tail(tracker->tail), curIndex(_curIndex) { }
+      ~iterator() { }
 
+    private:
+      SegmentRef curSeg, tail;
+      unsigned curIndex;
     public:
       std::pair<unsigned, unsigned> operator*() const;
       iterator operator++(int notused);
-      iterator& operator++();
+      iterator operator++();
       inline bool operator==(iterator a) const {
-        return (curIndex == a.curIndex && *curSeg == *a.curSeg);
+        return (curSeg.get() == a.curSeg.get() && curIndex == a.curIndex);
       }
       inline bool operator!=(iterator a) const { return !(*this == a); }
     }; // class iterator
@@ -132,17 +114,29 @@ namespace klee {
 
   private:
     friend class iterator;
-    std::list<SegmentRef> segments;
+    SegmentRef head, tail;
     mutable bool needNewSegment;
-    static const std::list<SegmentRef> nullList; // for EOL sentinel
 
   public:
     bool empty() const;
     size_t size() const;
-    iterator begin() const { return iterator(this); }
-    iterator end() const {
-      return iterator(this, BranchTracker::nullList.end());
+    iterator begin() const {
+      if (empty())
+        return end();
+      else
+        return iterator(this);
     }
+    iterator end() const {
+      return iterator(this, tail, tail->size());
+    }
+    /// generates an iterator at the first branch not contained in 'prefix',
+    /// or end() if the two BranchTrackers are identical
+    iterator skip(const BranchTracker &prefix) const;
+
+    iterator translate(iterator it) const {
+      return iterator(this, it.curSeg, it.curIndex);
+    }
+
     // these return (decision,id) pairs; id is undefined ifndef
     // INCLUDE_INSTR_ID_IN_PATH_INFO
     std::pair<unsigned, unsigned> front() const;
@@ -156,9 +150,13 @@ namespace klee {
     }
     
     bool push_heap_ref(HeapObject *a);
-  }; // class BranchTracker
 
+    /// truncates the BranchTracker at the position of the current iterator
+    void truncate(iterator it);
 
+  private:
+    SegmentRef containing(unsigned index) const;
+  };
 }
 
 #endif
