@@ -83,7 +83,14 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr &e)
 			<< e.getWidth() - e.getKid(0)->getWidth() << "] ";
 		break;
 
-	VISIT_OP(Select, ite)
+	case Expr::Select:
+		// logic expressions are converted into bitvectors-- 
+		// convert back
+		os	<< "(ite (= " << expr2str(e.getKid(0)) << " bv1[1] ) "
+			<< expr2str(e.getKid(1)) << " "
+			<< expr2str(e.getKid(2)) << " )\n";
+		return Action::skipChildren();
+
 	VISIT_OP(Concat, concat)
 
 	LOGIC_OP(Eq, =)
@@ -156,8 +163,6 @@ void SMTPrinter::printConstant(const ConstantExpr* ce)
 	os << ")";
 }
 
-
-
 /**
  * Prints queries in SMT form.
  */
@@ -184,7 +189,7 @@ void SMTPrinter::print(std::ostream& os, const Query& q)
 	ss << ":formula\n";
 	ss << "(= ";
 	smt_pr.visit(q.expr);
-	ss << " bv1[1])\n";
+	ss << " bv0[1])\n";	//negated
 
 	/* now have arrays, build extrafuns and constant assumptions */
 	foreach (i,smt_pr.arr->a_initial.begin(),smt_pr.arr->a_initial.end()) {
