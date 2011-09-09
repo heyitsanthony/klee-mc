@@ -17,10 +17,9 @@ namespace {
 }
 
 MergingSearcher::MergingSearcher(ExecutorBC &_executor, Searcher *_baseSearcher)
-: executor(_executor),
-baseSearcher(_baseSearcher),
-mergeFunction(executor.getKModule()->kleeMergeFn) {
-}
+: executor(_executor)
+, baseSearcher(_baseSearcher)
+, mergeFunction(executor.getKModule()->kleeMergeFn) {}
 
 MergingSearcher::~MergingSearcher() {
   delete baseSearcher;
@@ -117,26 +116,24 @@ ExecutionState &MergingSearcher::selectState(bool allowCompact)
   return selectState(allowCompact);
 }
 
-void MergingSearcher::update(
-  ExecutionState *current,
-  const ExeStateSet &addedStates,
-  const ExeStateSet &removedStates,
-  const ExeStateSet &ignoreStates,
-  const ExeStateSet &unignoreStates)
+void MergingSearcher::update(ExecutionState *current, const States s)
 {
-  if (removedStates.empty()) {
-    baseSearcher->update(current, addedStates, removedStates, ignoreStates, unignoreStates);
-    return;
-  }
+	if (s.getRemoved().empty()) {
+		baseSearcher->update(current, s);
+		return;
+	}
 
-  std::set<ExecutionState *> alt = removedStates;
-  foreach (it, removedStates.begin(), removedStates.end()) {
-    ExecutionState *es = *it;
-    ExeStateSet::const_iterator it = statesAtMerge.find(es);
+	std::set<ExecutionState *> alt = s.getRemoved();
+	foreach (it, s.getRemoved().begin(), s.getRemoved().end()) {
+		ExecutionState *es = *it;
+		ExeStateSet::const_iterator it = statesAtMerge.find(es);
 
-    if (it == statesAtMerge.end()) continue;
-    statesAtMerge.erase(it);
-    alt.erase(alt.find(es));
-  }
-  baseSearcher->update(current, addedStates, alt, ignoreStates, unignoreStates);
+		if (it == statesAtMerge.end()) continue;
+		statesAtMerge.erase(it);
+		alt.erase(alt.find(es));
+	}
+
+	baseSearcher->update(
+		current, 
+		States(s.getAdded(), alt, s.getIgnored(), s.getUnignored()));
 }

@@ -17,11 +17,7 @@ namespace klee
     virtual ~InterleavedSearcher();
 
     ExecutionState &selectState(bool allowCompact);
-    void update(ExecutionState *current,
-                const std::set<ExecutionState*> &addedStates,
-                const std::set<ExecutionState*> &removedStates,
-                const std::set<ExecutionState*> &ignoreStates,
-                const std::set<ExecutionState*> &unignoreStates);
+    void update(ExecutionState *current, const States s);
     bool empty() const { return searchers[0]->empty(); }
     void printName(std::ostream &os) const
     {

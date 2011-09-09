@@ -7,32 +7,26 @@
 using namespace klee;
 
 InterleavedSearcher::InterleavedSearcher(const std::vector<Searcher*> &_searchers)
-: searchers(_searchers),
-  index(1)
-{
-}
+: searchers(_searchers)
+, index(1)
+{}
 
 InterleavedSearcher::~InterleavedSearcher()
 {
-  foreach (it, searchers.begin(), searchers.end())
-    delete *it;
+	foreach (it, searchers.begin(), searchers.end())
+		delete *it;
 }
 
 ExecutionState &InterleavedSearcher::selectState(bool allowCompact)
 {
-  Searcher *s = searchers[--index];
-  if (index == 0) index = searchers.size();
-  ExecutionState* es = &s->selectState(allowCompact);
-  return *es;
+	Searcher *s = searchers[--index];
+	if (index == 0) index = searchers.size();
+	ExecutionState* es = &s->selectState(allowCompact);
+	return *es;
 }
 
-void InterleavedSearcher::update(ExecutionState *current,
-        const ExeStateSet &addedStates,
-        const ExeStateSet &removedStates,
-        const ExeStateSet &ignoreStates,
-        const ExeStateSet &unignoreStates)
+void InterleavedSearcher::update(ExecutionState *current, const States s)
 {
-  foreach(it, searchers.begin(), searchers.end()) 
-    (*it)->update(current, 
-      addedStates, removedStates, ignoreStates, unignoreStates);
+	foreach(it, searchers.begin(), searchers.end()) 
+		(*it)->update(current, s);
 }

@@ -205,17 +205,12 @@ void StringMerger::removeAscenders(
   }
 }
 
-void StringMerger::update(
-  ExecutionState *current,
-  const ExeStateSet &addedStates,
-  const ExeStateSet &removedStates,
-  const ExeStateSet &ignoreStates,
-  const ExeStateSet &unignoreStates)
+void StringMerger::update(ExecutionState *current, const States s)
 {
   ExeStateSet removedAscending;
 
-  foreach (it, addedStates.begin(), addedStates.end()) addState(*it);
-  foreach (it, removedStates.begin(), removedStates.end()) removeState(*it);
+  foreach (it, s.getAdded().begin(), s.getAdded().end()) addState(*it);
+  foreach (it, s.getRemoved().begin(), s.getRemoved().end()) removeState(*it);
   
   if (current) removeAscenders(current, removedAscending);
 
@@ -223,8 +218,8 @@ void StringMerger::update(
     /* need to change the removed/added if we removed something */
     ExeStateSet newRemoved, newAdded;
 
-    newRemoved = removedStates;
-    newAdded = addedStates;
+    newRemoved = s.getRemoved();
+    newAdded = s.getAdded();
     foreach(it, removedAscending.begin(), removedAscending.end()) {
       ExecutionState* es = *it;
       if (newAdded.count(es)) newAdded.erase(es);
@@ -232,12 +227,11 @@ void StringMerger::update(
     }
 
     baseSearcher->update(
-      current, newAdded, newRemoved, ignoreStates, unignoreStates);
+      current, States(newAdded, newRemoved, s.getIgnored(), s.getUnignored()));
     return;
   }
 
-  baseSearcher->update(
-    current, addedStates, removedStates, ignoreStates, unignoreStates);
+  baseSearcher->update(current, s);
 }
 
 ExecutionState& StringMerger::selectState(bool allowCompact)

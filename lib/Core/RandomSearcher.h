@@ -5,23 +5,19 @@
 
 namespace klee
 {
-  class RandomSearcher : public Searcher
-  {
-    std::vector<ExecutionState*> states;
-    std::vector<ExecutionState*> statesNonCompact;
+class RandomSearcher : public Searcher
+{
+	std::vector<ExecutionState*> states;
+	std::vector<ExecutionState*> statesNonCompact;
 
-  public:
-    virtual ~RandomSearcher() {}
+public:
+	virtual ~RandomSearcher() {}
 
-    ExecutionState &selectState(bool allowCompact);
-    void update(ExecutionState *current,
-                const std::set<ExecutionState*> &addedStates,
-                const std::set<ExecutionState*> &removedStates,
-                const std::set<ExecutionState*> &ignoreStates,
-                const std::set<ExecutionState*> &unignoreStates);
-    bool empty() const { return states.empty(); }
-    void printName(std::ostream &os) const { os << "RandomSearcher\n"; }
-  };
+	ExecutionState &selectState(bool allowCompact);
+	void update(ExecutionState *current, const States s);
+	bool empty() const { return states.empty(); }
+	void printName(std::ostream &os) const { os << "RandomSearcher\n"; }
+};
 }
 
 #endif

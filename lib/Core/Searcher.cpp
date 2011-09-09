@@ -18,7 +18,8 @@
 #include "static/Sugar.h"
 
 using namespace klee;
-using namespace llvm;
+
+const std::set<ExecutionState*> Searcher::States::emptySet;
 
 ExecutionState &DFSSearcher::selectState(bool allowCompact)
 {
@@ -31,48 +32,41 @@ ExecutionState &DFSSearcher::selectState(bool allowCompact)
   return *states.back();
 }
 
-void DFSSearcher::update(ExecutionState *current,
-        const ExeStateSet &addedStates,
-        const ExeStateSet &removedStates,
-        const ExeStateSet &ignoreStates,
-        const ExeStateSet &unignoreStates)
+void DFSSearcher::update(ExecutionState *current, const States s)
 {
-  states.insert(states.end(),
-          addedStates.begin(),
-          addedStates.end());
+	states.insert(states.end(), s.getAdded().begin(), s.getAdded().end());
 
-  if (removedStates.empty()) return;
+	if (s.getRemoved().empty())
+		return;
 
-  /* hack for common case of removing only one state...
-   * no need to scan the entire state list */
-  if (removedStates.count(states.back())) {
-    states.pop_back();
-    if (removedStates.size() == 1)
-      return;
-  }
+	/* hack for common case of removing only one state...
+	* no need to scan the entire state list */
+	if (s.getRemoved().count(states.back())) {
+		states.pop_back();
+		if (s.getRemoved().size() == 1)
+			return;
+	}
 
-  for (std::list<ExecutionState*>::iterator it = states.begin(),
-    ie = states.end(); it != ie;)
-  {
-    ExecutionState* es = *it;
-    if (removedStates.count(es)) {
-      it = states.erase(it);
-    } else {
-      ++it;
-    }
-  }
+	for (	std::list<ExecutionState*>::iterator it = states.begin(),
+		ie = states.end(); it != ie;)
+	{
+		ExecutionState* es = *it;
+		if (s.getRemoved().count(es)) {
+			it = states.erase(it);
+		} else {
+			++it;
+		}
+	}
 }
-
-///
-///
 
 BumpMergingSearcher::BumpMergingSearcher(
 	ExecutorBC &_executor, Searcher *_baseSearcher)
-: executor(_executor),
-  baseSearcher(_baseSearcher),
-  mergeFunction(executor.getKModule()->kleeMergeFn) {
-}
+: executor(_executor)
+, baseSearcher(_baseSearcher)
+, mergeFunction(executor.getKModule()->kleeMergeFn)
+{}
 
-BumpMergingSearcher::~BumpMergingSearcher() {
-  delete baseSearcher;
-}
+BumpMergingSearcher::~BumpMergingSearcher() { delete baseSearcher; }
+
+Searcher::Searcher() {}
+Searcher::~Searcher() {}

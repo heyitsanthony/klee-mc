@@ -68,12 +68,7 @@ entry:
   goto entry;
 }
 
-void BumpMergingSearcher::update(ExecutionState *current,
-        const ExeStateSet &addedStates,
-        const ExeStateSet &removedStates,
-        const ExeStateSet &ignoreStates,
-        const ExeStateSet &unignoreStates) {
-  baseSearcher->update(current, addedStates, removedStates, ignoreStates, unignoreStates);
+void BumpMergingSearcher::update(ExecutionState *current, States s)
+{
+	baseSearcher->update(current, s);
 }
-
-
