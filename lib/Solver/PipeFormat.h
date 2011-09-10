@@ -11,6 +11,7 @@ class Array;
 
 
 typedef std::map<std::string, std::vector<unsigned char> > PipeArrayMap;
+typedef std::map<std::string, unsigned char > PipeArrayDefaults;
 
 class PipeFormat
 {
@@ -35,7 +36,8 @@ protected:
 	bool parseSAT(const char* s);
 	void addArrayByte(const char* arrNamme, unsigned int off, unsigned char v);
 	bool		is_sat;
-	PipeArrayMap	arrays;
+	PipeArrayMap		arrays;
+	PipeArrayDefaults	defaults;
 private:
 	const char*	name;
 };
@@ -69,6 +71,7 @@ private:
 class PipeZ3 : public PipeFormat {
 DECL_PUB_PIPE_FMT(Z3)
 private:
+	bool readArrayValues(std::istream& is, const std::string& arrname);
 	static const char* exec_cmd;
 	static const char* const sat_args[];
 	static const char* const mod_args[];
