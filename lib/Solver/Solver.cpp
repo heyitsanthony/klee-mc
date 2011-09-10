@@ -116,6 +116,15 @@ namespace {
   	cl::init(false),
 	cl::desc("Use boolector-1.5 solver"));
 
+  cl::opt<bool>
+  UseCVC3("use-cvc3",
+  	cl::init(false),
+	cl::desc("Use CVC3 solver (broken)"));
+
+  cl::opt<bool>
+  UseYices("use-yices",
+  	cl::init(false),
+	cl::desc("Use Yices solver"));
 
   cl::opt<bool>
   UsePipeSolver(
@@ -142,7 +151,11 @@ static Solver* createChainWithTimedSolver(
 	Solver		*solver;
 
 	if (UsePipeSolver) {
-		if (UseB15) {
+		if (UseYices) {
+			timedSolver = new PipeSolver(new PipeYices());
+		} else if (UseCVC3) {
+			timedSolver = new PipeSolver(new PipeCVC3());
+		} else if (UseB15) {
 			timedSolver = new PipeSolver(new PipeBoolector15());
 		} else if (UseBoolector)
 			timedSolver = new PipeSolver(new PipeBoolector());
@@ -152,6 +165,8 @@ static Solver* createChainWithTimedSolver(
 			timedSolver = new PipeSolver(new PipeSTP());
 	} else {
 		assert (UseB15 == false);
+		assert (UseCVC3 == false);
+		assert (UseYices == false);
 		if (UseBoolector)
 			timedSolver = new BoolectorSolver();
 		else if (UseZ3)

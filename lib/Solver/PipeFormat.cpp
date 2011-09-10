@@ -24,6 +24,15 @@ const char* const PipeBoolector15::sat_args[] =
 const char* const PipeBoolector15::mod_args[] =
 {"boolector-1.5", "--smt1", "-fm", NULL};
 
+const char* PipeCVC3::exec_cmd = "cvc3";
+const char* const PipeCVC3::sat_args[] = {
+	"cvc3", "-lang", "smt", NULL};
+const char* const PipeCVC3::mod_args[] = {
+	"cvc3", "-lang", "smt", "-output-lang", "presentation", "+model", NULL};
+
+const char* PipeYices::exec_cmd = "yices";
+const char* const PipeYices::sat_args[] = {"yices",  NULL};
+const char* const PipeYices::mod_args[] = {"yices", "-f", NULL};
 
 void PipeFormat::readArray(
 	const Array* a,
@@ -121,6 +130,123 @@ static uint64_t bitstr2val(const char* bs)
 	return ret;
 }
 
+bool PipeYices::parseModel(std::istream& is)
+{
+	char		line[512];
+	char		cur_arrname[128];
+	unsigned int	cur_max;
+	std::set<int>	cur_used;
+
+	arrays.clear();
+	defaults.clear();
+
+	if (!parseSAT(is)) return false;
+	if (!isSAT()) return true;
+
+	is.getline(line, 512);	/* blank line */
+	is.getline(line, 512);	/* blank, again */
+	is.getline(line, 512);	/* MODEL */
+	if (strcmp(line, "MODEL") != 0) return false;
+
+/*
+	sat
+
+	MODEL
+	--- const_arr1 ---
+	(= (const_arr1 0b00000000000000000000000000001111) 0b00000100)
+	default: 0b00101110
+	--- qemu_buf7 ---
+	(= (qemu_buf7 0b00000000000000000000000000001111) 0b00101110)
+	default: 0b01100100
+	----
+*/
+	cur_arrname[0] = '\0';
+	cur_max = 0;
+	while (is.getline(line, 512)) {
+		char		in_arrname[128];
+		size_t		sz;
+		char		off_bitstr[128], val_bitstr[128];
+		uint64_t	off, val;
+
+		sz = sscanf(line, "--- %s ---", in_arrname);
+		if (sz == 1) {
+			if (defaults.count(cur_arrname)) {
+				unsigned char def = defaults[cur_arrname];
+				for (unsigned i = 0; i < cur_max; i++) {
+					if (cur_used.count(i))
+						continue;
+					addArrayByte(cur_arrname, i, def);
+				}
+			}
+			strcpy(cur_arrname, in_arrname);
+			cur_used.clear();
+			cur_max = 0;
+			continue;
+		}
+
+		sz = sscanf(line, "(= (%s 0b%[01]) 0b%[01])",
+			in_arrname, off_bitstr, val_bitstr);
+		if (sz == 3) {
+			off = bitstr2val(off_bitstr);
+			val = bitstr2val(val_bitstr);
+			cur_used.insert(off);
+			addArrayByte(cur_arrname, off, (unsigned char)val);
+			if (cur_max < off) cur_max = off;
+			continue;
+		}
+
+		sz = sscanf(line, "default: 0b%[01]", val_bitstr);
+		if (sz == 1) {
+			defaults[cur_arrname] = bitstr2val(val_bitstr);
+			continue;
+		}
+	}
+
+	return true;
+}
+
+
+bool PipeCVC3::parseModel(std::istream& is)
+{
+	char	line[512];
+
+	arrays.clear();
+	defaults.clear();
+
+	is.getline(line, 512);
+	if (strcmp(line, "Satisfiable.") != 0) {
+		std::cerr << "Not a SAT model??\n";
+		return false;
+	}
+	is_sat = true;
+
+	while (is.getline(line, 511)) {
+		char		*cur_buf = line;
+		char		arrname[128];
+		char		off_bitstr[128], val_bitstr[128];
+		size_t		sz;
+		uint64_t	off, val;
+
+		if (strlen(line) > 256)
+			continue;
+		// XXX
+		// ARGH. IT HAS A FULL GRAMMAR ALA
+		// ASSERT (reg4 = (ARRAY (arr_var: BITVECTOR(32)): 0bin01111111));
+		// OH WELL.
+		sz = sscanf(line, "ASSERT (%[^[][0bin%[01]] = 0bin%[01]);",
+			arrname, off_bitstr, val_bitstr);
+		if (sz != 3) {
+			continue;
+		}
+
+		off = bitstr2val(off_bitstr);
+		val = bitstr2val(val_bitstr);
+		addArrayByte(arrname, off, (unsigned char)val);
+	}
+
+	return true;
+}
+
 bool PipeBoolector::parseModel(std::istream& is)
 {
 	char	line[512];
@@ -160,7 +286,6 @@ bool PipeZ3::parseModel(std::istream& is)
 
 	arrays.clear();
 	defaults.clear();
-
 
 	//const_arr1 -> as-array[k!0]
 	//k!0 -> {
