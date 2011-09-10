@@ -7,15 +7,23 @@
 using namespace klee;
 
 const char* PipeSTP::exec_cmd = "stp";
-const char* PipeBoolector::exec_cmd = "boolector";
-const char* PipeZ3::exec_cmd = "z3";
-
 const char* const PipeSTP::sat_args[] = {"stp", "--SMTLIB1", NULL};
 const char* const PipeSTP::mod_args[] = {"stp", "--SMTLIB1",  "-p", NULL};
+
+const char* PipeBoolector::exec_cmd = "boolector";
 const char* const PipeBoolector::sat_args[] = {"boolector", NULL};
 const char* const PipeBoolector::mod_args[] = {"boolector", "-fm", NULL};
+
+const char* PipeZ3::exec_cmd = "z3";
 const char* const PipeZ3::sat_args[] = {"z3", "-smt", "-in", NULL};
 const char* const PipeZ3::mod_args[] = {"z3", "-smt", "-in", "-m", NULL};
+
+const char* PipeBoolector15::exec_cmd = "boolector-1.5";
+const char* const PipeBoolector15::sat_args[] =
+{"boolector-1.5", "--smt1", NULL};
+const char* const PipeBoolector15::mod_args[] =
+{"boolector-1.5", "--smt1", "-fm", NULL};
+
 
 void PipeFormat::readArray(
 	const Array* a,

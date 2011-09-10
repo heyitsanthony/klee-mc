@@ -112,6 +112,12 @@ namespace {
 	cl::desc("Use z3 solver"));
 
   cl::opt<bool>
+  UseB15("use-b15",
+  	cl::init(false),
+	cl::desc("Use boolector-1.5 solver"));
+
+
+  cl::opt<bool>
   UsePipeSolver(
   	"pipe-solver",
 	cl::init(false),
@@ -136,13 +142,16 @@ static Solver* createChainWithTimedSolver(
 	Solver		*solver;
 
 	if (UsePipeSolver) {
-		if (UseBoolector)
+		if (UseB15) {
+			timedSolver = new PipeSolver(new PipeBoolector15());
+		} else if (UseBoolector)
 			timedSolver = new PipeSolver(new PipeBoolector());
 		else if (UseZ3)
 			timedSolver = new PipeSolver(new PipeZ3());
 		else
 			timedSolver = new PipeSolver(new PipeSTP());
 	} else {
+		assert (UseB15 == false);
 		if (UseBoolector)
 			timedSolver = new BoolectorSolver();
 		else if (UseZ3)
