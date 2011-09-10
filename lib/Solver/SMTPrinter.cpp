@@ -16,7 +16,10 @@ SMTPrinter::Action SMTPrinter::visitExprPost(const Expr &e)
 	switch (e.getKind()) {
 	case Expr::Eq:
 	case Expr::Ult:
+	case Expr::Ule:
+	case Expr::Ugt:
 	case Expr::Uge:
+
 	case Expr::Slt:
 	case Expr::Sle:
 	case Expr::Sgt:
@@ -86,7 +89,8 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr &e)
 	case Expr::Select:
 		// logic expressions are converted into bitvectors-- 
 		// convert back
-		os	<< "(ite (= " << expr2str(e.getKid(0)) << " bv1[1] ) "
+		os	<< "(ite (= "
+			<< expr2str(e.getKid(0)) << " bv1[1] ) "
 			<< expr2str(e.getKid(1)) << " "
 			<< expr2str(e.getKid(2)) << " )\n";
 		return Action::skipChildren();
@@ -95,8 +99,9 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr &e)
 
 	LOGIC_OP(Eq, =)
 	LOGIC_OP(Ult, bvult)
-	LOGIC_OP(Ule, bvugt)
+	LOGIC_OP(Ule, bvule)
 	LOGIC_OP(Uge, bvuge)
+	LOGIC_OP(Ugt, bvugt)
 	LOGIC_OP(Slt, bvslt)
 	LOGIC_OP(Sle, bvsle)
 	LOGIC_OP(Sgt, bvsgt)
@@ -189,7 +194,7 @@ void SMTPrinter::print(std::ostream& os, const Query& q)
 	ss << ":formula\n";
 	ss << "(= ";
 	smt_pr.visit(q.expr);
-	ss << " bv0[1])\n";	//negated
+	ss << " bv0[1])\n";
 
 	/* now have arrays, build extrafuns and constant assumptions */
 	foreach (i,smt_pr.arr->a_initial.begin(),smt_pr.arr->a_initial.end()) {
@@ -282,9 +287,7 @@ done:
 
 std::string SMTPrinter::arr2name(const Array* arr)
 {
-	char	buf[128];
-	sprintf(buf, "%s_%p", arr->name.c_str(), (const void*)arr);
-	return std::string(buf);
+	return arr->name;
 }
 
 void SMTPrinter::printArrayDecls(void) const

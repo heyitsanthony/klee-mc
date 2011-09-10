@@ -84,10 +84,14 @@ void ConstantExpr::initSmallValTab(void)
 	ce_smallval_tab_1[1] = ref<ConstantExpr>(
 		new ConstantExpr(llvm::APInt(1, 1)));
 
+	ce_smallval_tab_1[0]->computeHash();
+	ce_smallval_tab_1[1]->computeHash();
+
 #define SET_SMALLTAB(w)	\
 	for (unsigned int i = 0; i < 256; i++) {	\
 		ref<ConstantExpr>	r(new ConstantExpr(llvm::APInt(w, i)));	\
 		ce_smallval_tab_##w[i] = r;	\
+		r->computeHash();		\
 	}
 
 	SET_SMALLTAB(8)

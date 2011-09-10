@@ -24,6 +24,7 @@
 #include "llvm/Support/CommandLine.h"
 
 #include "ValidatingSolver.h"
+#include "PipeSolver.h"
 #include "BoolectorSolver.h"
 #include "Z3Solver.h"
 #include "PoisonCache.h"
@@ -111,6 +112,12 @@ namespace {
 	cl::desc("Use z3 solver"));
 
   cl::opt<bool>
+  UsePipeSolver(
+  	"pipe-solver",
+	cl::init(false),
+	cl::desc("Run solver through forked pipe."));
+
+  cl::opt<bool>
   UseIndependentSolver("use-independent-solver",
                        cl::init(true),
 		       cl::desc("Use constraint independence"));
@@ -128,12 +135,21 @@ static Solver* createChainWithTimedSolver(
 {
 	Solver		*solver;
 
-	if (UseBoolector)
-		timedSolver = new BoolectorSolver();
-	else if (UseZ3)
-		timedSolver = new Z3Solver();
-	else
-		timedSolver = new STPSolver(UseForkedSTP, STPServer);
+	if (UsePipeSolver) {
+		if (UseBoolector)
+			timedSolver = new PipeSolver(new PipeBoolector());
+		else if (UseZ3)
+			timedSolver = new PipeSolver(new PipeZ3());
+		else
+			timedSolver = new PipeSolver(new PipeSTP());
+	} else {
+		if (UseBoolector)
+			timedSolver = new BoolectorSolver();
+		else if (UseZ3)
+			timedSolver = new Z3Solver();
+		else
+			timedSolver = new STPSolver(UseForkedSTP, STPServer);
+	}
 	solver = timedSolver;
 
 	if (UseSTPQueryPCLog && stpQueryPCLogPath.size())
@@ -157,7 +173,7 @@ static Solver* createChainWithTimedSolver(
 
 	if (DebugValidateSolver) {
 		/* oracle is another QF_BV solver */
-		if (UseBoolector || UseZ3)
+		if (UsePipeSolver || UseBoolector || UseZ3)
 			solver = createValidatingSolver(
 				solver,
 				new STPSolver(UseForkedSTP, STPServer));
