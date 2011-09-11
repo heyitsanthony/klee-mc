@@ -38,7 +38,7 @@ private:
 	void printConstant(const ConstantExpr* ce);
 	static std::string arr2name(const Array* arr);
 
-	const std::string& getArrayForUpdate(
+	const std::string getArrayForUpdate(
 		const Array* arr, const UpdateNode *un);
 	const std::string& getInitialArray(const Array* root);
 

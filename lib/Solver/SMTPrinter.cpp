@@ -4,6 +4,7 @@
 #include "SMTPrinter.h"
 
 #include <assert.h>
+#include <stack>
 #include <algorithm>
 #include <iostream>
 #include <sstream>
@@ -215,26 +216,56 @@ void SMTPrinter::print(std::ostream& os, const Query& q)
 	delete smt_pr.arr;
 }
 
-const std::string& SMTPrinter::getArrayForUpdate(
+struct update_params
+{
+	update_params(const Array* r, const UpdateNode* u)
+	: root(r), un(u) {}
+	const Array* root;
+	const UpdateNode* un;
+};
+
+const std::string SMTPrinter::getArrayForUpdate(
 	const Array *root, const UpdateNode *un)
 {
-	std::string		ret, mid;
+	std::string			ret;
+	std::stack<update_params>	s;
 
-	if (un == NULL) return getInitialArray(root);
+	/* build stack */
+	s.push(update_params(root, un));
+	while (1) {
+		update_params	p = s.top();
 
-	if (arr->a_updates.count(un))
-		return arr->a_updates.find(un)->second;
+		if (p.un == NULL) break;
+		if (arr->a_updates.count(p.un)) break;
 
-	// FIXME: This really needs to be non-recursive.
-	mid = getArrayForUpdate(root, un->next);
-	ret =	"(store " +
-		mid + " " +
-		expr2str(un->index) + " " +
-		expr2str(un->value) + ")\n";
-	
+		s.push(update_params(p.root, p.un->next));
+	}
 
-	arr->a_updates.insert(make_pair(un, ret));
-	return arr->a_updates[un];
+	/* unwind stack */
+	while (!s.empty()) {
+		update_params	p = s.top();
+
+		s.pop();
+
+		if (p.un == NULL) {
+			ret = getInitialArray(root);
+			continue;
+		}
+
+		if (arr->a_updates.count(p.un)) {
+			ret = arr->a_updates.find(p.un)->second;
+			arr->a_updates.insert(make_pair(p.un, ret));
+			continue;
+		}
+
+		ret =	"(store " + ret + " " +
+			expr2str(p.un->index) + " " +
+			expr2str(p.un->value) + ")\n";
+
+		arr->a_updates.insert(make_pair(p.un, ret));
+	}
+
+	return ret;
 }
 
 /**
