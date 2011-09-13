@@ -88,7 +88,7 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr &e)
 		break;
 
 	case Expr::Select:
-		// logic expressions are converted into bitvectors-- 
+		// logic expressions are converted into bitvectors--
 		// convert back
 		os	<< "(ite (= "
 			<< expr2str(e.getKid(0)) << " bv1[1] ) "
@@ -150,16 +150,21 @@ void SMTPrinter::printConstant(const ConstantExpr* ce)
 		return;
 	}
 
+	/* This code gave me some trouble. STP and others may
+	 * have their API backwards-- the LShr code mixes up endianness.
+	 * I should check this out later. */
 	ref<ConstantExpr> Tmp(ConstantExpr::alloc(ce->getAPValue()));
 	os << "(concat ";
-	os << "bv" << Tmp->Extract(0, 64)->getZExtValue() << "[64] \n";
-	for (unsigned i = (width / 64) - 1; i; --i) {
-		Tmp = Tmp->LShr(ConstantExpr::alloc(64, Tmp->getWidth()));
+	os << "bv" << Tmp->Extract(width-64, 64)->getZExtValue() << "[64] \n";
+	for (unsigned i = 1; i < (width+63)/64; i++) {
+		unsigned int	begin, end;
 
+		end = width-i*64;
+		begin =  (width < (i+1)*64) ? 0 : width-(i+1)*64;
 		if (i != 1) os << "(concat ";
 		os	<< "bv"
-			<< Tmp->Extract(0, 64)->getZExtValue()
-			<< "[" << std::min(64, (int)Tmp->getWidth()) << "] ";
+			<< Tmp->Extract(begin, end - begin)->getZExtValue()
+			<< "[" << (end - begin)  << "] ";
 	}
 
 	for (unsigned i = (width /64) - 1; i; --i) {

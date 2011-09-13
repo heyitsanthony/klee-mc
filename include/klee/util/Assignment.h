@@ -14,87 +14,114 @@
 
 #include "klee/util/ExprEvaluator.h"
 
-// FIXME: Rename?
+#include <iostream> // XXX
 
-namespace klee {
-  class Array;
+namespace klee
+{
+class Array;
+class AssignmentEvaluator;
 
-  class Assignment {
-  public:
-    typedef std::map<const Array*, std::vector<unsigned char>,
-                     Array::Compare> bindings_ty;
+class Assignment {
+public:
+	typedef std::map<
+		const Array*,
+		std::vector<unsigned char>,
+		Array::Compare> bindings_ty;
 
-    bool allowFreeValues;
-    bindings_ty bindings;
+	bindings_ty bindings;
 
-  public:
-    Assignment(bool _allowFreeValues=false)
-      : allowFreeValues(_allowFreeValues) {}
-    Assignment(const std::vector<const Array*> &objects,
-               std::vector< std::vector<unsigned char> > &values,
-               bool _allowFreeValues=false)
-    : allowFreeValues(_allowFreeValues)
-    {
-      std::vector< std::vector<unsigned char> >::iterator valIt =
-        values.begin();
-      for (std::vector<const Array*>::const_iterator it = objects.begin(),
-             ie = objects.end(); it != ie; ++it) {
-        const Array *os = *it;
-        std::vector<unsigned char> &arr = *valIt;
-        bindings.insert(std::make_pair(os, arr));
-        ++valIt;
-      }
-    }
+private:
+	Assignment(void) { assert (0 == 1); }
+public:
+	bool allowFreeValues;
 
-    ref<Expr> evaluate(const Array *mo, unsigned index) const;
-    ref<Expr> evaluate(ref<Expr> e);
+	Assignment(bool _allowFreeValues=false)
+	: allowFreeValues(_allowFreeValues)
+	{}
 
-    template<typename InputIterator>
-    bool satisfies(InputIterator begin, InputIterator end);
-  };
+	Assignment(const Assignment& a)
+	{
+		bindings = a.bindings;
+		allowFreeValues = a.allowFreeValues;
+	}
 
-  class AssignmentEvaluator : public ExprEvaluator {
-    const Assignment &a;
+	Assignment(
+		const std::vector<const Array*> &objects,
+		std::vector< std::vector<unsigned char> > &values,
+		bool _allowFreeValues=false)
+	: allowFreeValues(_allowFreeValues)
+	{
+		std::vector< std::vector<unsigned char> >::iterator valIt;
 
-  protected:
-    ref<Expr> getInitialValue(const Array &mo, unsigned index) {
-      return a.evaluate(&mo, index);
-    }
+		valIt = values.begin();
+		for (std::vector<const Array*>::const_iterator
+			it = objects.begin(),
+			ie = objects.end(); it != ie; ++it)
+		{
+			const Array *os = *it;
+			std::vector<unsigned char> &arr = *valIt;
+			bindings.insert(std::make_pair(os, arr));
+			++valIt;
+		}
+	}
 
-  public:
-    AssignmentEvaluator(const Assignment &_a) : a(_a) {}
-  };
+	virtual ~Assignment(void) {}
 
-  /***/
+	ref<Expr> evaluate(const Array *mo, unsigned index) const;
+	ref<Expr> evaluate(ref<Expr> e);
 
-  inline ref<Expr> Assignment::evaluate(const Array *array,
-                                        unsigned index) const {
-    bindings_ty::const_iterator it = bindings.find(array);
-    if (it!=bindings.end() && index<it->second.size()) {
-      return ConstantExpr::alloc(it->second[index], Expr::Int8);
-    } else {
-      if (allowFreeValues) {
-        return ReadExpr::create(UpdateList(array, 0),
-                                ConstantExpr::alloc(index, Expr::Int32));
-      } else {
-        return ConstantExpr::alloc(0, Expr::Int8);
-      }
-    }
-  }
+	template<typename InputIterator>
+	bool satisfies(InputIterator begin, InputIterator end);
+};
 
-  inline ref<Expr> Assignment::evaluate(ref<Expr> e) {
-    AssignmentEvaluator v(*this);
-    return v.visit(e);
-  }
+class AssignmentEvaluator : public ExprEvaluator
+{
+	const Assignment &a;
+public:
+	virtual ref<Expr> getInitialValue(const Array &mo, unsigned index)
+	{ return a.evaluate(&mo, index); }
+	AssignmentEvaluator(const Assignment &_a) : a(_a)
+	{ }
+	virtual ~AssignmentEvaluator() {}
+};
 
-  template<typename InputIterator>
-  inline bool Assignment::satisfies(InputIterator begin, InputIterator end) {
-    AssignmentEvaluator v(*this);
-    for (; begin!=end; ++begin)
-      if (!v.visit(*begin)->isTrue())
-        return false;
-    return true;
-  }
+/* concretize array read with assignment value */
+inline ref<Expr> Assignment::evaluate(
+	const Array *array, unsigned index) const
+{
+	bindings_ty::const_iterator it = bindings.find(array);
+
+	/* found, can immediately resolve */
+	if (it != bindings.end() && index < it->second.size()) {
+		return ConstantExpr::alloc(it->second[index], Expr::Int8);
+	}
+
+	/* keep the free value (e.g. dump all unassigned arrays) */
+	if (allowFreeValues) {
+		return ReadExpr::create(
+			UpdateList(array, 0),
+			ConstantExpr::alloc(index, Expr::Int32));
+	}
+
+	/* default, 0 value */
+	return ConstantExpr::alloc(0, Expr::Int8);
 }
 
+inline ref<Expr> Assignment::evaluate(ref<Expr> e)
+{
+	AssignmentEvaluator v(*this);
+	return v.visit(e);
+}
+
+template<typename InputIterator>
+inline bool Assignment::satisfies(InputIterator begin, InputIterator end)
+{
+	AssignmentEvaluator v(*this);
+	for (; begin!=end; ++begin)
+		if (!v.visit(*begin)->isTrue())
+			return false;
+	return true;
+}
+
+}
 #endif

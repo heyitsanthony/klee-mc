@@ -3,7 +3,6 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <wait.h>
-#include <ext/stdio_filebuf.h>
 #include "static/Sugar.h"
 #include "klee/Constraints.h"
 #include "klee/SolverStats.h"
@@ -13,12 +12,25 @@
 #include "klee/Solver.h"
 #include "SMTPrinter.h"
 #include "PipeSolver.h"
+#include "llvm/Support/CommandLine.h"
 
 using namespace klee;
 
+
+#if 0
+using namespace llvm; // for cmdline
+namespace {
+	cl::opt<std::string>
+	PipeLog("pipe-smtlog",
+	cl::desc("Log SMT sent over pipe"));
+}
+#endif
+
+
 PipeSolver::PipeSolver(PipeFormat* in_fmt)
 : TimedSolver(new PipeSolverImpl(in_fmt))
-{}
+{
+}
 
 PipeSolver::~PipeSolver(void) {}
 
@@ -28,60 +40,18 @@ PipeSolverImpl::PipeSolverImpl(PipeFormat* in_fmt)
 , fd_child_stdin(-1)
 , fd_child_stdout(-1)
 , child_pid(-1)
-{ assert (fmt); }
+, stdout_buf(NULL)
+{
+	assert (fmt);
+	parent_pid = getpid();
+	setpgid(0, 0);
+}
+
 
 PipeSolverImpl::~PipeSolverImpl(void)
 {
 	finiChild();
 	delete fmt;
-}
-
-bool PipeSolverImpl::computeSat(const Query& q)
-{
-	TimerStatIncrementer	t(stats::queryTime);
-	bool			parse_ok, is_sat;
-
-	if (setupChild(fmt->getExec(),
-		const_cast<char* const*>(fmt->getArgvSAT())) == false) {
-		std::cerr << "FAILED COMPUTE SAT QUERY\n";
-		failQuery();
-		return false;
-	}
-
-	__gnu_cxx::stdio_filebuf<char> stdin_buf(fd_child_stdin, std::ios::out);
-	std::ostream *os = new std::ostream(&stdin_buf);
-
-	/* write it all */
-	SMTPrinter::print(*os, q.negateExpr());
-	if (os->fail()) {
-		std::cerr << "FAILED TO COMPLETELY SEND SMT\n";
-	}
-	os->flush();
-	delete os;
-
-	close(fd_child_stdin);
-	fd_child_stdin = -1;
-
-	/* read response, if any */
-	__gnu_cxx::stdio_filebuf<char> stdout_buf(fd_child_stdout, std::ios::in);
-	std::istream *is = new std::istream(&stdout_buf);
-	parse_ok = fmt->parseSAT(*is);
-	delete is;
-
-	finiChild();
-
-	if (parse_ok == false) {
-		failQuery();
-		return false;
-	}
-
-	is_sat = fmt->isSAT();
-	if (is_sat)
-		++stats::queriesValid;
-	else
-		++stats::queriesInvalid;
-
-	return is_sat;
 }
 
 bool PipeSolverImpl::setupChild(const char* exec_fname, char *const argv[])
@@ -104,6 +74,7 @@ bool PipeSolverImpl::setupChild(const char* exec_fname, char *const argv[])
 	child_pid = fork();
 	if (child_pid == 0) {
 		/* child - stupid unix trivia follows */
+		setpgid(0, parent_pid);
 
 		/* child reads from this */
 		close(STDIN_FILENO);
@@ -143,6 +114,10 @@ bool PipeSolverImpl::setupChild(const char* exec_fname, char *const argv[])
 
 void PipeSolverImpl::finiChild(void)
 {
+	if (stdout_buf) {
+		delete stdout_buf;
+		stdout_buf = NULL;
+	}
 	if (fd_child_stdin != -1) close(fd_child_stdin);
 	if (fd_child_stdout != -1) close(fd_child_stdout);
 	if (child_pid != -1) {
@@ -171,33 +146,20 @@ bool PipeSolverImpl::computeInitialValues(
 		const_cast<char* const*>(fmt->getArgvModel())) == false)
 	{
 		failQuery();
+		std::cerr << "FAILED TO SETUP FCHILD CIV\n";
 		return false;
 	}
 
-	__gnu_cxx::stdio_filebuf<char> stdin_buf(fd_child_stdin, std::ios::out);
-	std::ostream *os = new std::ostream(&stdin_buf);
+	std::istream *is = writeRecvQuery(q);
+	if (!is) return false;
 
-	/* write it all */
-	SMTPrinter::print(*os, q);
-	if (os->fail()) {
-		std::cerr << "FAILED TO COMPLETELY SEND SMT\n";
-	}
-	*os << std::endl;
-	os->flush();
-	delete os;
-
-	close(fd_child_stdin);
-	fd_child_stdin = -1;
-
-	/* read response, if any */
-	__gnu_cxx::stdio_filebuf<char> stdout_buf(fd_child_stdout, std::ios::in);
-	std::istream *is = new std::istream(&stdout_buf);
 	parse_ok = fmt->parseModel(*is);
 	delete is;
 
 	finiChild();
 
 	if (parse_ok == false) {
+		std::cerr << "BAD PARSE CIV\n";
 		failQuery();
 		return false;
 	}
@@ -214,4 +176,67 @@ bool PipeSolverImpl::computeInitialValues(
 		++stats::queriesInvalid;
 
 	return is_sat;
+}
+
+bool PipeSolverImpl::computeSat(const Query& q)
+{
+	TimerStatIncrementer	t(stats::queryTime);
+	bool			parse_ok, is_sat;
+
+	if (setupChild(fmt->getExec(),
+		const_cast<char* const*>(fmt->getArgvSAT())) == false) {
+		std::cerr << "FAILED COMPUTE SAT QUERY\n";
+		failQuery();
+		return false;
+	}
+
+	std::istream	*is = writeRecvQuery(q.negateExpr());
+	if (!is) return false;
+
+	parse_ok = fmt->parseSAT(*is);
+	delete is;
+
+	finiChild();
+
+	if (parse_ok == false) {
+		std::cerr << "BAD PARSE SAT\n";
+		failQuery();
+		return false;
+	}
+
+	is_sat = fmt->isSAT();
+	if (is_sat)
+		++stats::queriesValid;
+	else
+		++stats::queriesInvalid;
+
+	return is_sat;
+}
+
+std::istream* PipeSolverImpl::writeRecvQuery(const Query& q)
+{
+	std::istream *is;
+
+	__gnu_cxx::stdio_filebuf<char> stdin_buf(fd_child_stdin, std::ios::out);
+	std::ostream *os = new std::ostream(&stdin_buf);
+
+	/* write it all */
+	SMTPrinter::print(*os, q);
+	if (os->fail()) {
+		std::cerr << "FAILED TO COMPLETELY SEND SMT\n";
+		return NULL;
+	}
+	os->flush();
+	delete os;
+
+	close(fd_child_stdin);
+	fd_child_stdin = -1;
+
+	/* read response, if any */
+	assert (stdout_buf == NULL);
+	stdout_buf = new __gnu_cxx::stdio_filebuf<char>(
+		fd_child_stdout, std::ios::in);
+	is = new std::istream(stdout_buf);
+
+	return is;
 }

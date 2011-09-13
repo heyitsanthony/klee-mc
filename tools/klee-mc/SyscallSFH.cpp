@@ -4,6 +4,8 @@
 #include "SyscallSFH.h"
 #include "guestcpustate.h"
 #include "klee/breadcrumb.h"
+#include "static/Sugar.h"
+
 extern "C"
 {
 #include "valgrind/libvex_guest_amd64.h"
@@ -110,7 +112,7 @@ SFH_DEF_HANDLER(SCRegs)
 SFH_DEF_HANDLER(SCBad)
 {
 	SFH_CHK_ARGS(1, "kmc_sc_bad");
-	
+
 	ConstantExpr	*ce;
 	ce = dyn_cast<ConstantExpr>(arguments[0]);
 	std::cerr << "OOPS: " << ce->getZExtValue() << std::endl;
@@ -121,8 +123,8 @@ SFH_DEF_HANDLER(FreeRun)
 	SFH_CHK_ARGS(2, "kmc_free_run");
 	ExecutorVex	*exe_vex = dynamic_cast<ExecutorVex*>(sfh->executor);
 	ConstantExpr		*addr, *len;
-	uint64_t		addr_v, len_v;
-
+	uint64_t		addr_v, addr_end, cur_addr;
+	uint64_t		len_v, len_remaining;
 	const MemoryObject	*mo;
 
 	addr = dyn_cast<ConstantExpr>(arguments[0]);
@@ -138,24 +140,37 @@ SFH_DEF_HANDLER(FreeRun)
 	addr_v = addr->getZExtValue();
 	len_v = len->getZExtValue();
 
-	mo = state.addressSpace.resolveOneMO(addr_v);
-	if (mo == NULL) {
-		exe_vex->terminateStateOnError(
-			state,
-			"munmap error: munmapping bad address",
-			"munmap.err");
-		return;
-	}
+	// round to page size
+	len_v = 4096*((len_v + 4095)/4096);
+	len_remaining = len_v;
+	addr_end = len_v + addr_v;
 
-	if (mo->size != len_v) {
-		std::cerr
-			<< "size mismatch on munmap "
-			<< mo->size << "!=" << len_v << std::endl;
-	}
-	assert (mo->size == len_v &&
-		mo->address == addr_v && "UNHANDLED BAD SIZE");
+	cur_addr = addr_v;
+	while (cur_addr < addr_end) {
+		const MemoryObject	*mo;
 
-	state.unbindObject(mo);
+		mo = state.addressSpace.resolveOneMO(cur_addr);
+		if (mo == NULL && len_remaining >= 4096) {
+			exe_vex->terminateStateOnError(
+				state,
+				"munmap error: munmapping bad address",
+				"munmap.err");
+			return;
+		}
+
+		if (mo->size > len_remaining) {
+			std::cerr
+				<< "size mismatch on munmap "
+				<< mo->size << ">" << len_remaining
+				<< std::endl;
+			assert (0 == 1 && "BAD SIZE");
+		}
+
+		len_remaining -= mo->size;
+		cur_addr += mo->size;
+
+		state.unbindObject(mo);
+	}
 }
 
 SFH_DEF_HANDLER(KMCExit)
@@ -233,11 +248,12 @@ SFH_DEF_HANDLER(AllocAligned)
 	MemoryObject	*new_mo;
 	SFH_CHK_ARGS(2, "kmc_alloc_aligned");
 
-	ExecutorVex	*exe_vex = dynamic_cast<ExecutorVex*>(sfh->executor);
-	ConstantExpr	*len;
-	uint64_t	len_v, addr;
-	std::string	name_str;
-	
+	ExecutorVex			*exe_vex;
+	ConstantExpr			*len;
+	uint64_t			len_v;
+	std::string			name_str;
+	std::vector<MemoryObject*>	new_mos;
+
 	len = dyn_cast<ConstantExpr>(arguments[0]);
 	if (len == NULL) {
 		exe_vex->terminateStateOnError(
@@ -251,21 +267,25 @@ SFH_DEF_HANDLER(AllocAligned)
 	name_str = sfh->readStringAtAddress(state, arguments[1]);
 
 	/* not requesting a specific address */
-	new_mo = exe_vex->getMM()->allocateAligned(
+	exe_vex  = dynamic_cast<ExecutorVex*>(sfh->executor);
+	new_mos = exe_vex->getMM()->allocateAlignedChopped(
 		len_v,
 		12 /* aligned on 2^12 */,
 		target->inst,
 		&state);
 
-	if (!new_mo) {
+	if (new_mos.size() == 0) {
+		std::cerr << "COULD NOT ALLOCATE ALIGNED?????\n\n";
+		std::cerr << "LEN_V = " << len_v << std::endl;
 		state.bindLocal(target, ConstantExpr::create(0, 64));
 		return;
 	}
-	
-	state.bindMemObj(new_mo);
-	addr = new_mo->address;
-	new_mo->setName(name_str.c_str());
-	state.bindLocal(target, new_mo->getBaseExpr());
+
+	state.bindLocal(target, new_mos[0]->getBaseExpr());
+	foreach (it, new_mos.begin(), new_mos.end()) {
+		state.bindMemObj(*it);
+		(*it)->setName(name_str.c_str());
+	}
 }
 
 void SyscallSFH::removeTail(

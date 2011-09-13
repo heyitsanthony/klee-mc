@@ -49,6 +49,10 @@ private:
 public:
   HeapObject(unsigned _size, unsigned _align=0);
   ~HeapObject();
+
+  static std::vector<HeapObject*> contiguousPages(unsigned int bytes);
+protected:
+  HeapObject(void* page_addr);	// page constructor
 };
 
 #include "MemoryObject.h"

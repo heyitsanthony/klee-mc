@@ -5,6 +5,7 @@
 #include "klee/Solver.h"
 #include "SolverImpl.h"
 #include "PipeFormat.h"
+#include <ext/stdio_filebuf.h>
 #include <list>
 #include <set>
 
@@ -41,11 +42,14 @@ public:
 private:
 	bool setupChild(const char* exec_fname, char* const argv[]);
 	void finiChild(void);
+	std::istream* writeRecvQuery(const Query& q);
 
 	PipeFormat	*fmt;
 	int		fd_child_stdin;
 	int		fd_child_stdout;
+	pid_t		parent_pid;
 	pid_t		child_pid;
+	__gnu_cxx::stdio_filebuf<char> *stdout_buf;
 };
 }
 #endif

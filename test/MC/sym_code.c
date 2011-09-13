@@ -5,6 +5,7 @@
 // By default everything "works".
 // RUN: ls klee-last/ | grep err
 #include <sys/mman.h>
+#include <unistd.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -14,6 +15,7 @@ char whatever[] = {0xcc, 0xcc, 0xcc, 0xcc};
 int main(int argc, char* argv[])
 {
 	char	buf;
+	ssize_t	sz;
 	w_f	f;
 
 	mprotect(
@@ -21,7 +23,8 @@ int main(int argc, char* argv[])
 		4096, 
 		PROT_EXEC | PROT_WRITE | PROT_READ);
 
-	buf = getc(stdin);
+	sz = read(STDIN_FILENO, &buf, 1);
+	if (sz == 0) buf = '0';
 	buf = (buf > '0') ? 0xcc : 0xf0;
 
 	whatever[0] = buf;

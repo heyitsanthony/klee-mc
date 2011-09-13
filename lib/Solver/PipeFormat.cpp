@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <iostream>
+#include "klee/Common.h"
 #include "klee/Expr.h"
 #include "PipeFormat.h"
 
@@ -41,6 +42,8 @@ void PipeFormat::readArray(
 	PipeArrayMap::const_iterator	it(arrays.find(a->name));
 	unsigned char			default_val;
 
+	assert (a->mallocKey.size < 0x10000000 && "Array too large");
+
 	if (it == arrays.end()) {
 		/* may want values of arrays that aren't present;
 		 * this is ok-- give 0's */
@@ -79,7 +82,10 @@ void PipeFormat::addArrayByte(
 	std::string		arr_s(arrName);
 	PipeArrayMap::iterator	it;
 
-	assert (off < 10000000 && "HUGE OFFSET!!");
+	if (off > 0x10000000) {
+		klee_warning_once(0, "PipeFormat: Huge Index. Buggy Model?");
+		return;
+	}
 
 	it = arrays.find(arrName);
 	if (it == arrays.end()) {
@@ -221,7 +227,6 @@ bool PipeCVC3::parseModel(std::istream& is)
 	is_sat = true;
 
 	while (is.getline(line, 511)) {
-		char		*cur_buf = line;
 		char		arrname[128];
 		char		off_bitstr[128], val_bitstr[128];
 		size_t		sz;
