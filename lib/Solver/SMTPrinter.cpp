@@ -142,7 +142,6 @@ void SMTPrinter::printConstant(const ConstantExpr* ce)
 	assert (ce != NULL);
 
 	width = ce->getWidth();
-	assert (width <= 64);
 
 	if (width <= 64) {
 		os	<< "bv"
