@@ -1,4 +1,6 @@
 #include "klee/SolverStats.h"
+#include <sys/select.h>
+#include <sys/time.h>
 #include <assert.h>
 #include <unistd.h>
 #include <stdio.h>
@@ -19,10 +21,15 @@ using namespace klee;
 PipeSolver::PipeSolver(PipeFormat* in_fmt)
 : TimedSolver(new PipeSolverImpl(in_fmt))
 {
+
 }
 
 PipeSolver::~PipeSolver(void) {}
 
+void PipeSolver::setTimeout(double in_timeout)
+{
+	static_cast<PipeSolverImpl*>(impl)->setTimeout(in_timeout);
+}
 
 PipeSolverImpl::PipeSolverImpl(PipeFormat* in_fmt)
 : fmt(in_fmt)
@@ -30,6 +37,7 @@ PipeSolverImpl::PipeSolverImpl(PipeFormat* in_fmt)
 , fd_child_stdout(-1)
 , child_pid(-1)
 , stdout_buf(NULL)
+, timeout(-1.0)
 {
 	assert (fmt);
 	parent_pid = getpid();
@@ -182,7 +190,10 @@ bool PipeSolverImpl::computeSat(const Query& q)
 	}
 
 	std::istream	*is = writeRecvQuery(q.negateExpr());
-	if (!is) return false;
+	if (!is) {
+		failQuery();
+		return false;
+	}
 
 	parse_ok = fmt->parseSAT(*is);
 	delete is;
@@ -210,6 +221,7 @@ std::istream* PipeSolverImpl::writeRecvQuery(const Query& q)
 
 	__gnu_cxx::stdio_filebuf<char> stdin_buf(fd_child_stdin, std::ios::out);
 	std::ostream *os = new std::ostream(&stdin_buf);
+	os->rdbuf()->pubsetbuf(NULL, 1024*64);
 
 	/* write it all */
 	SMTPrinter::print(*os, q);
@@ -223,11 +235,47 @@ std::istream* PipeSolverImpl::writeRecvQuery(const Query& q)
 	close(fd_child_stdin);
 	fd_child_stdin = -1;
 
-	/* read response, if any */
 	assert (stdout_buf == NULL);
+
+	/* wait for data to become available on the pipe.
+	 * If none becomes available after a certain time, we can timeout. */
+	if (waitOnSolver(q) == false)
+		return NULL;
+
+	/* read response, if any */
 	stdout_buf = new __gnu_cxx::stdio_filebuf<char>(
 		fd_child_stdout, std::ios::in);
 	is = new std::istream(stdout_buf);
 
 	return is;
+}
+
+bool PipeSolverImpl::waitOnSolver(const Query& q) const
+{
+	struct timeval	tv;
+	fd_set		rdset;
+	int		rc;
+
+	if (timeout <= 0.0) return true;
+	tv.tv_sec = (time_t)timeout;
+	tv.tv_usec = (timeout - tv.tv_sec)*1000000;
+
+	FD_ZERO(&rdset);
+	FD_SET(fd_child_stdout, &rdset);
+
+	rc = select(fd_child_stdout+1, &rdset, NULL, NULL, &tv);
+	if (rc == -1)
+		return false;
+
+	if (rc == 0) {
+		/* timeout */
+		char	fname[256];
+		sprintf(fname, "snooze.%x.smt", q.hash());
+		std::ofstream	os(fname, std::ios::out);
+		SMTPrinter::print(os, q);
+		return false;
+	}
+
+	assert (rc == 1);
+	return true;
 }

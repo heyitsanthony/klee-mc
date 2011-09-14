@@ -16,6 +16,7 @@ class PipeSolver : public TimedSolver /* XXX: timing lipservice */
 public:
 	PipeSolver(PipeFormat* fmt);
 	virtual ~PipeSolver(void);
+	virtual void setTimeout(double in_timeout);
 };
 
 /* Pipes query to a SMT compatible printer. */
@@ -39,10 +40,12 @@ public:
 			2*level, "");
 	}
 
+	void setTimeout(double in_timeout) { timeout = in_timeout; }
 private:
 	bool setupChild(const char* exec_fname, char* const argv[]);
 	void finiChild(void);
 	std::istream* writeRecvQuery(const Query& q);
+	bool waitOnSolver(const Query& q) const;
 
 	PipeFormat	*fmt;
 	int		fd_child_stdin;
@@ -50,6 +53,8 @@ private:
 	pid_t		parent_pid;
 	pid_t		child_pid;
 	__gnu_cxx::stdio_filebuf<char> *stdout_buf;
+
+	double		timeout;
 };
 }
 #endif
