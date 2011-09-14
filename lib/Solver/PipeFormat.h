@@ -36,6 +36,7 @@ protected:
 	void setName(const char* in_name) { name = in_name; }
 	bool parseSAT(const char* s);
 	void addArrayByte(const char* arrNamme, unsigned int off, unsigned char v);
+	unsigned char	getDefaultVal(const Array* a) const;
 	bool		is_sat;
 	PipeArrayMap		arrays;
 	PipeArrayDefaults	defaults;

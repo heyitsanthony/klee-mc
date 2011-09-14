@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <wait.h>
+#include <sys/prctl.h>
 #include "static/Sugar.h"
 #include "klee/Constraints.h"
 #include "klee/SolverStats.h"
@@ -12,20 +13,8 @@
 #include "klee/Solver.h"
 #include "SMTPrinter.h"
 #include "PipeSolver.h"
-#include "llvm/Support/CommandLine.h"
 
 using namespace klee;
-
-
-#if 0
-using namespace llvm; // for cmdline
-namespace {
-	cl::opt<std::string>
-	PipeLog("pipe-smtlog",
-	cl::desc("Log SMT sent over pipe"));
-}
-#endif
-
 
 PipeSolver::PipeSolver(PipeFormat* in_fmt)
 : TimedSolver(new PipeSolverImpl(in_fmt))
@@ -44,9 +33,7 @@ PipeSolverImpl::PipeSolverImpl(PipeFormat* in_fmt)
 {
 	assert (fmt);
 	parent_pid = getpid();
-	setpgid(0, 0);
 }
-
 
 PipeSolverImpl::~PipeSolverImpl(void)
 {
@@ -74,7 +61,11 @@ bool PipeSolverImpl::setupChild(const char* exec_fname, char *const argv[])
 	child_pid = fork();
 	if (child_pid == 0) {
 		/* child - stupid unix trivia follows */
-		setpgid(0, parent_pid);
+
+		/* kill externaol solver if we die */
+		/* XXX: would like to do this portably, but it seems like
+		 * the pure-posix solution is a mess */
+		prctl(PR_SET_PDEATHSIG, SIGKILL);
 
 		/* child reads from this */
 		close(STDIN_FILENO);

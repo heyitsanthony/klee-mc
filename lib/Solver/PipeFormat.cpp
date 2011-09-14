@@ -46,14 +46,25 @@ void PipeFormat::readArray(
 
 	if (it == arrays.end()) {
 		/* may want values of arrays that aren't present;
-		 * this is ok-- give 0's */
+		 * this is ok-- give the default */
 		ret.clear();
 	} else {
 		ret = it->second;
 	}
 
-	default_val = (*(defaults.find(a->name))).second;
+	default_val = getDefaultVal(a);
 	ret.resize(a->mallocKey.size, default_val);
+}
+
+unsigned char PipeFormat::getDefaultVal(const Array* a) const
+{
+	PipeArrayDefaults::const_iterator def_it;
+
+	def_it = defaults.find(a->name);
+	if (def_it == defaults.end())
+		return 0;
+
+	return def_it->second;
 }
 
 bool PipeFormat::parseSAT(std::istream& is)
@@ -303,9 +314,11 @@ bool PipeZ3::parseModel(std::istream& is)
 	//sat
 	while (is.getline(line, 512)) {
 		char	arrname[128];
+		int	default_val;
 		int	arrnum;
 		size_t	sz;
 
+		// An array declaration,
 		//qemu_buf7 -> as-array[k!1]
 		sz = sscanf(line, "%s -> as-array[k!%d]", arrname, &arrnum);
 		if (sz == 2) {
@@ -313,6 +326,7 @@ bool PipeZ3::parseModel(std::istream& is)
 			continue;
 		}
 
+		/* beginning of an array model */
 		sz = sscanf(line, "k!%d -> {", &arrnum);
 		if (sz == 1) {
 			// use arrnum to lookup name
@@ -326,6 +340,13 @@ bool PipeZ3::parseModel(std::istream& is)
 
 			if (!readArrayValues(is, idx2name[arrnum]))
 				return false;
+			continue;
+		}
+
+		/* constant array */
+		sz = sscanf(line, "%s -> Array!val!%d", arrname, &default_val);
+		if (sz == 2) {
+			defaults[arrname] = (unsigned char)default_val;
 			continue;
 		}
 
