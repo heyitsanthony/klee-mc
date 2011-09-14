@@ -1,4 +1,3 @@
-#include "klee/Constraints.h"
 #include "static/Support.h"
 #include "klee/Solver.h"
 #include "SMTPrinter.h"
@@ -11,7 +10,6 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <signal.h>
-#include <openssl/sha.h>
 #include "llvm/Support/CommandLine.h"
 
 #include "PoisonCache.h"
@@ -95,7 +93,7 @@ void PoisonCache::sig_poison(int signum, siginfo_t *si, void *p)
 
 
 
-PoisonCache::PoisonCache(Solver* s, PoisonHash* in_phash)
+PoisonCache::PoisonCache(Solver* s, QueryHash* in_phash)
 : SolverImplWrapper(s)
 , in_solver(false)
 , phash(in_phash)
@@ -222,79 +220,4 @@ void PoisonCache::loadCacheFromDisk(const char* fname)
 	}
 
 	fclose(f);
-}
-
-/* The naive version. WE WERE SUCH FOOLS. Blindly use the default hash
- * circa epoch. We assume it's OK. */
-unsigned PHExpr::hash(const Query& q) const { return q.hash(); }
-
-#include "klee/util/ExprVisitor.h"
-class RewriteVisitor : public ExprVisitor
-{
-private:
-	unsigned	const_counter;
-public:
-	RewriteVisitor()
-	: ExprVisitor(true, true), const_counter(0) {}
-
-	virtual Action visitExpr(const Expr &e)
-	{
-		const ConstantExpr*	ce;
-		uint64_t		v;
-		ref<Expr>		new_ce;
-	
-		ce = dyn_cast<const ConstantExpr>(&e);
-		if (!ce || ce->getWidth() > 64) return Action::doChildren();
-
-		v = ce->getZExtValue();
-		if (v < 0x100000) return Action::doChildren();
-
-		if (v != ~0ULL) v++;
-		new_ce = ConstantExpr::alloc(
-			(++const_counter) % v,
-			ce->getWidth());
-		return Action::changeTo(new_ce);
-	}
-};
-
-/* I noticed that we weren't seeing much results across runs. We assume that
- * this is from nondeterministic pointers gunking up the query.
- *
- * So, rewrite expressions that look like pointers into deterministic values.
- * NOTE: We need to use several patterns here to test whether the SMT can be
- * smart about partitioning with low-value constants.
- *
- * (XXX is this true? test with experiments, follow up with literature eval)
- */
-unsigned PHRewritePtr::hash(const Query& q) const
-{
-	ConstraintManager	cm;
-	ref<Expr>		new_expr;
-
-	foreach (it, q.constraints.begin(), q.constraints.end()) {
-		RewriteVisitor	rw;
-		ref<Expr>	it_e = *it;
-    		ref<Expr>	e = rw.visit(it_e);
-
-		cm.addConstraint(e);
-	}
-
-	RewriteVisitor rw;
-	new_expr = rw.visit(q.expr);
-	Query	new_q(cm, new_expr);
-
-	return new_q.hash();
-}
-
-/* Just to be sure that the hash Daniel gave us didn't have a lot of
- * bad collisions, we're using a cryptographic hash on the string. */
-unsigned PHExprStrSHA::hash(const Query& q) const
-{
-	std::string	s;
-	unsigned char	md[SHA_DIGEST_LENGTH];
-
-	s = Support::printStr(q);
-	SHA1((const unsigned char*)s.c_str(), s.size(), md);
-
-	return *reinterpret_cast<unsigned*>(md); // XXX stupid
 }

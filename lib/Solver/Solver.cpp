@@ -192,13 +192,13 @@ static Solver* createChainWithTimedSolver(
 
 	if (UsePoisonCacheExpr)
 		solver = new Solver(
-			new PoisonCache(solver, new PHExpr()));
+			new PoisonCache(solver, new QHDefault()));
 	if (UsePoisonCacheExprSHAStr)
 		solver = new Solver(
-			new PoisonCache(solver, new PHExprStrSHA()));
+			new PoisonCache(solver, new QHExprStrSHA()));
 	if (UsePoisonCacheRewritePtr)
 		solver = new Solver(
-			new PoisonCache(solver, new PHRewritePtr()));
+			new PoisonCache(solver, new QHRewritePtr()));
 
 	if (UseFastCexSolver) solver = createFastCexSolver(solver);
 	if (UseFastRangeSolver) solver = createFastRangeSolver(solver);
@@ -561,15 +561,8 @@ flush:
 
 unsigned Query::hash(void) const
 {
-	unsigned	ret;
-
-	ret = expr->hash();
-	foreach (it, constraints.begin(), constraints.end()) {
-		ref<Expr>	e = *it;
-		ret ^= e->hash();
-	}
-
-	return ret;
+	QHDefault	qh;
+	return qh.hash(*this);
 }
 
 void Query::print(std::ostream& os) const
