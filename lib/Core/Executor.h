@@ -75,6 +75,8 @@ namespace klee {
   /// during an instruction step. Should contain addedStates,
   /// removedStates, and haltExecution, among others.
 
+#define EXE_SWITCH_RLE_LIMIT	4
+
 class Executor : public Interpreter {
   /* FIXME The executor shouldn't have friends. */
   friend class ExeStateManager;
@@ -304,7 +306,30 @@ private:
 	const llvm::VectorType* srcTy,
 	const llvm::VectorType* dstTy);
   void instCall(ExecutionState& state, KInstruction* ki);
+
+  typedef std::pair<llvm::BasicBlock*, ref<Expr> >		TargetTy;
+  typedef std::map<ref<ConstantExpr>, TargetTy >		TargetsTy;
+  typedef std::map<llvm::BasicBlock*, ref<ConstantExpr> >	TargetValsTy;
+  typedef std::pair<ref<ConstantExpr>, llvm::BasicBlock*>	Val2TargetTy;
   void instSwitch(ExecutionState& state, KInstruction* ki);
+  void forkSwitch(
+  	ExecutionState&		state,
+	llvm::BasicBlock	*parent_bb,
+	const TargetTy&		defaultTarget,
+	const TargetsTy&	targets);
+
+  TargetTy getConstCondSwitchTargets(
+	KInstruction	*ki,
+	ConstantExpr	*CE,
+	const std::vector<Val2TargetTy >& cases,
+	const TargetValsTy	&minTargetValues,
+	TargetsTy		&targets);
+  TargetTy getExprCondSwitchTargets(
+	ref<Expr> cond,
+	const std::vector<Val2TargetTy >& cases,
+	const TargetValsTy& minTargetValues,
+	TargetsTy& targets);
+
   void instUnwind(ExecutionState& state);
 
   bool isFPPredicateMatched(

@@ -889,21 +889,25 @@ ref<klee::ConstantExpr> Executor::evalConstant(Constant *c)
 	assert(0 && "invalid argument to evalConstant()");
 }
 
-ref<Expr> Executor::toUnique(const ExecutionState &state,
-                             ref<Expr> &e) {
-  ref<Expr> result = e;
+ref<Expr> Executor::toUnique(
+	const ExecutionState &state,
+	ref<Expr> &e)
+{
+	ref<Expr> result = e;
+	ref<ConstantExpr> value;
+	bool isTrue = false;
 
-  if (!isa<ConstantExpr>(e)) {
-    ref<ConstantExpr> value;
-    bool isTrue = false;
+	if (isa<ConstantExpr>(e))
+		return result;
 
-    if (solver->getValue(state, e, value) &&
-        solver->mustBeTrue(state, EqExpr::create(e, value), isTrue) &&
-        isTrue)
-      result = value;
-  }
+	if (	solver->getValue(state, e, value) &&
+		solver->mustBeTrue(state, EqExpr::create(e, value), isTrue) &&
+		isTrue)
+	{
+		result = value;
+	}
 
-  return result;
+	return result;
 }
 
 /* Concretize the given expression, and return a possible constant value.
@@ -1680,106 +1684,257 @@ ref<Expr> Executor::cmpScalar(
   return result;
 }
 
+void Executor::forkSwitch(
+	ExecutionState& state,
+	BasicBlock*	parent_bb,
+	const TargetTy& defaultTarget,
+	const TargetsTy& targets)
+{
+	StateVector			resultStates;
+	std::vector<ref<Expr> >		caseConds(targets.size()+1);
+	std::vector<BasicBlock*>	caseDests(targets.size()+1);
+	unsigned			index;
+	bool				found;
+
+	// prepare vectors for fork call
+	caseDests[0] = defaultTarget.first;
+	caseConds[0] = defaultTarget.second;
+	index = 1;
+	foreach (mit, targets.begin(), targets.end()) {
+		caseDests[index] = (*mit).second.first;
+		caseConds[index] = (*mit).second.second;
+		index++;
+	}
+
+	resultStates = fork(state, caseConds.size(), caseConds.data(), false);
+	assert(resultStates.size() == caseConds.size());
+
+	found = false;
+	for(index = 0; index < resultStates.size(); index++) {
+		ExecutionState	*es;
+		BasicBlock	*destBlock;
+		KFunction	*kf;
+		unsigned	entry;
+
+		es = resultStates[index];
+		if (!es) continue;
+
+		found = true;
+		destBlock = caseDests[index];
+		kf = state.getCurrentKFunc();
+
+		entry = kf->basicBlockEntry[destBlock];
+		if (	es->isCompactForm &&
+			kf->trackCoverage &&
+			theStatisticManager->getIndexedValue(
+				stats::uncoveredInstructions,
+				kf->instructions[entry]->info->id))
+		{
+			ExecutionState *newState;
+			newState = es->reconstitute(*initialStateCopy);
+			replaceStateImmForked(es, newState);
+			es = newState;
+		}
+
+		if (!es->isCompactForm)
+			es->transferToBasicBlock(destBlock, parent_bb);
+
+		// Update coverage stats
+		if (	kf->trackCoverage &&
+			theStatisticManager->getIndexedValue(
+				stats::uncoveredInstructions,
+				kf->instructions[entry]->info->id))
+		{
+			es->coveredNew = true;
+			es->instsSinceCovNew = 1;
+		}
+	}
+
+	if (!found)
+		terminateState(state);
+}
+
 
 void Executor::instSwitch(ExecutionState& state, KInstruction *ki)
 {
-  SwitchInst *si = cast<SwitchInst>(ki->inst);
-  ref<Expr> cond = eval(ki, 0, state).value;
-  unsigned cases = si->getNumCases();
-  BasicBlock *bb = si->getParent();
+	SwitchInst *si = cast<SwitchInst>(ki->inst);
+	ref<Expr> cond = eval(ki, 0, state).value;
 
-  std::map<BasicBlock*, ref<Expr> > targets;
-  std::vector<ref<Expr> > caseConds;
-  std::vector<BasicBlock*> caseDests;
-  StateVector resultStates;
+	cond = toUnique(state, cond);
 
-  cond = toUnique(state, cond);
-  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(cond)) {
-    // Somewhat gross to create these all the time, but fine till we
-    // switch to an internal rep.
-    const llvm::IntegerType *Ty =
-      cast<IntegerType>(si->getCondition()->getType());
-    ConstantInt *ci = ConstantInt::get(Ty, CE->getZExtValue());
-    unsigned index = si->findCaseValue(ci);
+	/* deterministically order basic blocks by lowest value */
+	std::vector<Val2TargetTy >	cases(si->getNumCases());
+	TargetsTy			targets;
+	TargetTy			defaultTarget;
+	TargetValsTy			minTargetValues; // lowest val -> BB
 
-    // We need to have the same set of targets to pass to fork() in case
-    // toUnique fails/times out on replay (it's happened before...)
-    for(unsigned i = 0; i < cases; ++i) {
-      // default to infeasible target
-      std::map<BasicBlock*, ref<Expr> >::iterator it =
-        targets.insert(
-          std::make_pair(
-            si->getSuccessor(i),
-            ConstantExpr::alloc(0, Expr::Bool))).first;
-      // set unique target as feasible
-      if (i == index) {
-        it->second = ConstantExpr::alloc(1, Expr::Bool);
-      }
-    }
-  } else {
-    ref<Expr> isDefault = ConstantExpr::alloc(1, Expr::Bool);
-    for (unsigned i=1; i<cases; ++i) {
-      ref<Expr> value = evalConstant(si->getCaseValue(i));
-      ref<Expr> match = EqExpr::create(cond, value);
+	assert (cases.size () >= 1);
 
-      // default case is the AND of all the complements
-      isDefault = AndExpr::create(isDefault, Expr::createIsZero(match));
+	/* initialize minTargetValues and cases */
+	cases[0] = Val2TargetTy(ref<ConstantExpr>(), si->getDefaultDest());
+	for (unsigned i = 1; i < cases.size(); i++) {
+		ref<ConstantExpr>	value;
+		BasicBlock		*target;
+		TargetValsTy::iterator	it;
 
-      // multiple values may lead to same BasicBlock; only fork these once
-      std::pair<std::map<BasicBlock*, ref<Expr> >::iterator,bool> ins =
-        targets.insert(std::make_pair(si->getSuccessor(i), match));
-      if (!ins.second)
-        ins.first->second = OrExpr::create(match, ins.first->second);
-    }
-    // include default case
-    targets.insert(std::make_pair(si->getSuccessor(0), isDefault));
-  }
+		value  = evalConstant(si->getCaseValue(i));
+		target = si->getSuccessor(i);
+		cases[i] = Val2TargetTy(value, target);
 
-  // prepare vectors for fork call
-  caseConds.resize(targets.size());
-  caseDests.resize(targets.size());
-  unsigned index = 0;
-  foreach (mit, targets.begin(), targets.end()) {
-    caseDests[index] = (*mit).first;
-    caseConds[index] = (*mit).second;
-    index++;
-  }
+		it = minTargetValues.find(target);
+		if (it == minTargetValues.end())
+			minTargetValues[target] = value;
+		else if (value < it->second)
+			it->second = value;
+	}
 
-  resultStates = fork(state, caseConds.size(), caseConds.data(), false);
-  assert(resultStates.size() == caseConds.size());
+	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(cond)) {
+		defaultTarget = getConstCondSwitchTargets(
+			ki,
+			CE,
+			cases,
+			minTargetValues,
+			targets);
+	} else {
+		defaultTarget = getExprCondSwitchTargets(
+			cond, cases, minTargetValues, targets);
+	}
 
-  for(index = 0; index < resultStates.size(); index++) {
-    ExecutionState *es = resultStates[index];
+	// may not have any targets to jump to!
+	if (targets.empty()) {
+		terminateState(state);
+		return;
+	}
 
-    if (!es) continue;
-
-    BasicBlock *destBlock = caseDests[index];
-    KFunction *kf = state.getCurrentKFunc();
-    unsigned entry = kf->basicBlockEntry[destBlock];
-
-    if (es->isCompactForm && kf->trackCoverage &&
-        theStatisticManager->getIndexedValue(
-          stats::uncoveredInstructions,
-          kf->instructions[entry]->info->id))
-    {
-      ExecutionState *newState = es->reconstitute(*initialStateCopy);
-      replaceStateImmForked(es, newState);
-      es = newState;
-    }
-
-    if (!es->isCompactForm) es->transferToBasicBlock(destBlock, bb);
-
-    // Update coverage stats
-    if (kf->trackCoverage &&
-        theStatisticManager->getIndexedValue(
-          stats::uncoveredInstructions,
-          kf->instructions[entry]->info->id))
-    {
-      es->coveredNew = true;
-      es->instsSinceCovNew = 1;
-    }
-  }
+	forkSwitch(state, si->getParent(), defaultTarget, targets);
 }
+
+Executor::TargetTy Executor::getExprCondSwitchTargets(
+	ref<Expr> cond,
+	const std::vector<Val2TargetTy >& cases,
+	const TargetValsTy& minTargetValues,
+	TargetsTy& targets)
+{
+	std::map<BasicBlock*, std::set<uint64_t> > caseMap;
+	ref<Expr>	defaultCase;
+
+	defaultCase = ConstantExpr::alloc(1, Expr::Bool);
+	// build map from target BasicBlock to value(s) that lead to that block
+	for (unsigned i = 1; i < cases.size(); ++i)
+		caseMap[cases[i].second].insert(cases[i].first->getZExtValue());
+
+	// generate conditions for each block
+	foreach (cit, caseMap.begin(), caseMap.end()) {
+		BasicBlock *target = cit->first;
+		std::set<uint64_t> &values = cit->second;
+		ref<Expr> match = ConstantExpr::alloc(0, Expr::Bool);
+
+		foreach (vit, values.begin(), values.end()) {
+			// try run-length encoding long sequences of consecutive
+			// switch values that map to the same BasicBlock
+			std::set<uint64_t>::iterator vit2 = vit;
+			uint64_t runLen = 1;
+
+			for (++vit2; vit2 != values.end(); ++vit2) {
+				if (*vit2 == *vit + runLen)
+					runLen++;
+				else
+					break;
+			}
+
+			if (runLen < EXE_SWITCH_RLE_LIMIT) {
+				match = OrExpr::create(
+					match,
+					EqExpr::create(
+						cond,
+						ConstantExpr::alloc(*vit,
+						cond->getWidth())));
+				continue;
+			}
+
+			// use run-length encoding
+			ref<Expr>	rle_bounds;
+			rle_bounds = AndExpr::create(
+				UgeExpr::create(
+					cond,
+					ConstantExpr::alloc(
+						*vit, cond->getWidth())),
+				UleExpr::create(
+					cond,
+					ConstantExpr::alloc(
+						*vit + runLen,
+						cond->getWidth())));
+			match = OrExpr::create(match, rle_bounds);
+
+			vit = vit2;
+			--vit;
+		}
+
+		targets.insert(std::make_pair(
+			(minTargetValues.find(target))->second,
+			std::make_pair(target, match)));
+
+		// default case is the AND of all the complements
+		defaultCase = AndExpr::create(
+			defaultCase, Expr::createIsZero(match));
+	}
+
+	// include default case
+	return std::make_pair(cases[0].second, defaultCase);
+}
+
+// Somewhat gross to create these all the time, but fine till we
+// switch to an internal rep.
+Executor::TargetTy Executor::getConstCondSwitchTargets(
+	KInstruction	*ki,
+	ConstantExpr	*CE,
+	const std::vector<Val2TargetTy >& cases,
+	const TargetValsTy	&minTargetValues,
+	TargetsTy		&targets)
+{
+	SwitchInst 		*si;
+	const llvm::IntegerType *Ty;
+	ConstantInt		*ci;
+	unsigned		index;
+	TargetTy		defaultTarget;
+
+	targets.clear();
+
+	si = cast<SwitchInst>(ki->inst);
+	Ty = cast<IntegerType>(si->getCondition()->getType());
+	ci = ConstantInt::get(Ty, CE->getZExtValue());
+	index = si->findCaseValue(ci);
+
+	// We need to have the same set of targets to pass to fork() in case
+	// toUnique fails/times out on replay (it's happened before...)
+	defaultTarget = TargetTy(
+		cases[0].second,
+		ConstantExpr::alloc(0, Expr::Bool));
+	if (index == 0)
+		defaultTarget.second = ConstantExpr::alloc(1, Expr::Bool);
+
+	for (unsigned i = 1; i < cases.size(); ++i) {
+		// default to infeasible target
+		TargetsTy::iterator	it;
+		TargetTy		cur_target;
+
+		cur_target = TargetTy(
+			cases[i].second,
+			ConstantExpr::alloc(0, Expr::Bool));
+		it = targets.insert(
+			std::make_pair(
+				minTargetValues.find(cases[i].second)->second,
+				cur_target)).first;
+
+		// set unique target as feasible
+		if (i == index) {
+			it->second.second = ConstantExpr::alloc(1, Expr::Bool);
+		}
+	}
+
+	return defaultTarget;
+}
+
 
 void Executor::instInsertElement(ExecutionState& state, KInstruction* ki)
 {
@@ -3125,7 +3280,7 @@ void Executor::getConstraintLogCVC(
 		ConstantExpr::alloc(0, Expr::Bool));
 	STPSolver	*stpSolver;
 	char		*log;
-	
+
 	stpSolver = dynamic_cast<STPSolver*>(solver->timedSolver);
 	if (stpSolver == NULL) {
 		res = "Timed solver is not STP! Can't get CVC Log";
