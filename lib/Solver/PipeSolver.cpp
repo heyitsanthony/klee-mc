@@ -121,6 +121,7 @@ void PipeSolverImpl::finiChild(void)
 	if (fd_child_stdout != -1) close(fd_child_stdout);
 	if (child_pid != -1) {
 		int status;
+		kill(child_pid, SIGKILL);
 		waitpid(child_pid, &status, 0);
 	}
 
@@ -150,7 +151,11 @@ bool PipeSolverImpl::computeInitialValues(
 	}
 
 	std::istream *is = writeRecvQuery(q);
-	if (!is) return false;
+	if (!is) {
+		failQuery();
+		finiChild();
+		return false;
+	}
 
 	parse_ok = fmt->parseModel(*is);
 	delete is;
@@ -192,6 +197,7 @@ bool PipeSolverImpl::computeSat(const Query& q)
 	std::istream	*is = writeRecvQuery(q.negateExpr());
 	if (!is) {
 		failQuery();
+		finiChild();
 		return false;
 	}
 
@@ -257,6 +263,7 @@ bool PipeSolverImpl::waitOnSolver(const Query& q) const
 	int		rc;
 
 	if (timeout <= 0.0) return true;
+
 	tv.tv_sec = (time_t)timeout;
 	tv.tv_usec = (timeout - tv.tv_sec)*1000000;
 
