@@ -69,6 +69,7 @@ public:
 
 	ref<Expr> evaluate(const Array *mo, unsigned index) const;
 	ref<Expr> evaluate(ref<Expr> e);
+	ref<Expr> evaluate(ref<Expr> e, bool& wasDivProtected);
 
 	template<typename InputIterator>
 	bool satisfies(InputIterator begin, InputIterator end);
@@ -112,6 +113,18 @@ inline ref<Expr> Assignment::evaluate(ref<Expr> e)
 	AssignmentEvaluator v(*this);
 	return v.visit(e);
 }
+
+inline ref<Expr> Assignment::evaluate(ref<Expr> e, bool &wasZeroDiv)
+{
+	AssignmentEvaluator	v(*this);
+	ref<Expr>		ret;
+
+	ret = v.visit(e);
+	wasZeroDiv = v.wasDivProtected();
+
+	return ret;
+}
+
 
 template<typename InputIterator>
 inline bool Assignment::satisfies(InputIterator begin, InputIterator end)

@@ -337,7 +337,6 @@ void SMTPrinter::printArrayDecls(void) const
 std::string SMTPrinter::expr2str(const ref<Expr>& e)
 {
 	std::stringstream	ss;
-	std::string		fff;
 	SMTPrinter		smt_pr(ss, arr);
 	ConstantExpr		*ce;
 

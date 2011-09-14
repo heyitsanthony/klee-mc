@@ -17,8 +17,8 @@
 #include "klee/util/ExprUtil.h"
 #include "klee/util/ExprVisitor.h"
 #include "klee/Internal/ADT/MapOfSets.h"
+#include "klee/Common.h"
 
-#include <fstream>
 #include "llvm/Support/CommandLine.h"
 #include "SMTPrinter.h"
 
@@ -319,6 +319,7 @@ ref<Expr> CexCachingSolver::computeValue(const Query& query)
 	TimerStatIncrementer	t(stats::cexCacheTime);
 	Assignment		*a;
 	ref<Expr>		ret;
+	bool			zeroDiv;
 
 	if (!getAssignment(query.withFalse(), a)) {
 		failQuery();
@@ -326,7 +327,17 @@ ref<Expr> CexCachingSolver::computeValue(const Query& query)
 	}
 
 	assert(a && "computeValue() must have assignment");
-	ret = a->evaluate(query.expr);
+	ret = a->evaluate(query.expr, zeroDiv);
+
+	if (!isa<ConstantExpr>(ret) ) {
+		if (zeroDiv) {
+			klee_warning_once(0,
+				"Div zero in CexCache. Need richer failures");
+			failQuery();
+			return ret;
+		}
+	}
+
 	assert(	isa<ConstantExpr>(ret) &&
 		"assignment evaluation did not result in constant");
 
