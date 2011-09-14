@@ -288,6 +288,9 @@ static void sc_klee(void* regfile)
 			(const char*)GET_ARG3(regfile) /* name */);
 		sc_ret_v(regfile, 0);
 		break;
+	case KLEE_SYS_ASSUME:
+		klee_assume(GET_ARG1(regfile));
+		break;
 	default:
 		klee_report_error(
 			__FILE__,
