@@ -62,6 +62,10 @@ namespace {
   UseSTPQueryPCLog("use-stp-query-pc-log",
                    cl::init(false));
 
+  cl::opt<bool>
+  UseSMTQueryLog("use-smt-log",
+                   cl::init(false));
+
   cl::opt<bool, true>
   ProxyUseFastCexSolver(
   	"use-fast-cex-solver",
@@ -143,6 +147,11 @@ namespace {
 
 }
 
+namespace klee
+{
+extern Solver *createSMTLoggingSolver(Solver *_solver, std::string path);
+}
+
 static Solver* createChainWithTimedSolver(
 	std::string queryPCLogPath,
 	std::string stpQueryPCLogPath,
@@ -178,6 +187,8 @@ static Solver* createChainWithTimedSolver(
 
 	if (UseSTPQueryPCLog && stpQueryPCLogPath.size())
 		solver = createPCLoggingSolver(solver, stpQueryPCLogPath);
+	else if (UseSMTQueryLog && stpQueryPCLogPath.size())
+		solver = createSMTLoggingSolver(solver, stpQueryPCLogPath);
 
 	if (UsePoisonCacheExpr)
 		solver = new Solver(
