@@ -1965,26 +1965,38 @@ void Executor::instInsertElement(ExecutionState& state, KInstruction* ki)
 
 	ref<Expr>	out_val;
 	if (idx == (v_elem_c - 1)) {
-		/* replace tail */
-		out_val = ExtractExpr::create(
-			in_v, 0, v_elem_sz*(v_elem_c - 1));
-		out_val = ConcatExpr::create(out_val, in_newelem);
-	} else if (idx == 0) {
 		/* replace head */
 		out_val = ExtractExpr::create(
-			in_v, v_elem_sz, v_elem_sz*(v_elem_c - 1));
-		out_val = ConcatExpr::create(in_newelem, out_val);
+			in_v,
+			0,
+			v_elem_sz*(v_elem_c - 1));
+
+		out_val = ConcatExpr::create(
+			in_newelem /* tail */,
+			out_val /* head */);
+	} else if (idx == 0) {
+		/* replace tail */
+		out_val = ExtractExpr::create(
+			in_v,
+			v_elem_sz,
+			v_elem_sz*(v_elem_c - 1));
+		out_val = ConcatExpr::create(
+			out_val /* head */,
+			in_newelem /* tail */);
 	} else {
 		/* replace mid */
+		/* (v, off, width) */
 		out_val = ExtractExpr::create(
 			in_v, 0, v_elem_sz*(idx - 1));
-		out_val = ConcatExpr::create(out_val, in_newelem);
+		out_val = ConcatExpr::create(
+			out_val /* head */,
+			in_newelem /* mid */ );
 		out_val = ConcatExpr::create(
 			out_val,
 			ExtractExpr::create(
 				in_v,
 				(idx+1)*v_elem_sz,
-				(v_elem_c-(idx+1))*v_elem_sz));
+				(v_elem_c-(idx+1))*v_elem_sz) /* tail */);
 	}
 
 	state.bindLocal(ki, out_val);
