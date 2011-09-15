@@ -18,6 +18,7 @@
 
 #include "BatchingSearcher.h"
 #include "BumpingMergeSearcher.h"
+#include "BFSSearcher.h"
 #include "DFSSearcher.h"
 #include "InterleavedSearcher.h"
 #include "IterativeDeepeningTimeSearcher.h"
@@ -34,6 +35,9 @@ using namespace klee;
 namespace {
   cl::opt<bool>
   UseRandomSearch("use-random-search");
+
+  cl::opt<bool>
+  UseBreadthFirst("use-breadth-first");
 
   cl::opt<bool>
   UseInterleavedRS("use-interleaved-RS");
@@ -165,21 +169,23 @@ Searcher* klee::setupInterleavedSearcher(
 
 Searcher* klee::setupBaseSearcher(Executor& executor)
 {
-  Searcher* searcher;
+	Searcher* searcher;
 
-  if (UseRRSearch) {
-    searcher = new RRSearcher();
-  } else if (UseRandomPathSearch) {
-    searcher = new RandomPathSearcher(executor);
-  } else if (UseNonUniformRandomSearch) {
-    searcher = new WeightedRandomSearcher(executor, WeightType);
-  } else if (UseRandomSearch) {
-    searcher = new RandomSearcher();
-  } else {
-    searcher = new DFSSearcher();
-  }
+	if (UseRRSearch) {
+		searcher = new RRSearcher();
+	} else if (UseRandomPathSearch) {
+		searcher = new RandomPathSearcher(executor);
+	} else if (UseNonUniformRandomSearch) {
+		searcher = new WeightedRandomSearcher(executor, WeightType);
+	} else if (UseRandomSearch) {
+		searcher = new RandomSearcher();
+	} else if (UseBreadthFirst) {
+		searcher = new BFSSearcher();
+	} else {
+		searcher = new DFSSearcher();
+	}
 
-  return searcher;
+	return searcher;
 }
 
 Searcher* klee::setupMergeSearcher(Executor& executor, Searcher* searcher)
