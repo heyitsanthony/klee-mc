@@ -60,7 +60,7 @@
 /usr/bin/lame in out
 /usr/bin/llvm-dis asd
 /usr/bin/llvm-mc asd
-/usr/bin/llvm-objdump -a asd
+/usr/bin/llvm-objdump asd
 /usr/bin/lzmainfo asd
 /usr/bin/mpck asd.mp3
 /usr/bin/mpg123 asd.mp3
