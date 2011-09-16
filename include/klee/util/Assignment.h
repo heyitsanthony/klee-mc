@@ -11,10 +11,7 @@
 #define KLEE_UTIL_ASSIGNMENT_H
 
 #include <map>
-
 #include "klee/util/ExprEvaluator.h"
-
-#include <iostream> // XXX
 
 namespace klee
 {
@@ -30,8 +27,6 @@ public:
 
 	bindings_ty bindings;
 
-private:
-	Assignment(void) { assert (0 == 1); }
 public:
 	bool allowFreeValues;
 
@@ -48,22 +43,7 @@ public:
 	Assignment(
 		const std::vector<const Array*> &objects,
 		std::vector< std::vector<unsigned char> > &values,
-		bool _allowFreeValues=false)
-	: allowFreeValues(_allowFreeValues)
-	{
-		std::vector< std::vector<unsigned char> >::iterator valIt;
-
-		valIt = values.begin();
-		for (std::vector<const Array*>::const_iterator
-			it = objects.begin(),
-			ie = objects.end(); it != ie; ++it)
-		{
-			const Array *os = *it;
-			std::vector<unsigned char> &arr = *valIt;
-			bindings.insert(std::make_pair(os, arr));
-			++valIt;
-		}
-	}
+		bool _allowFreeValues=false);
 
 	virtual ~Assignment(void) {}
 
@@ -73,6 +53,25 @@ public:
 
 	template<typename InputIterator>
 	bool satisfies(InputIterator begin, InputIterator end);
+	bool satisfies(ref<Expr> e) { return evaluate(e)->isTrue(); }
+
+	void save(const char* path) const;
+	bool load(
+		const std::vector<const Array*>& objs,
+		const char* path);
+
+	const std::vector<unsigned char>* getBinding(const Array* a)
+	const
+	{
+		bindings_ty::const_iterator	it(bindings.find(a));
+		return ((it == bindings.end()) ? NULL : &it->second);
+	}
+
+private:
+	void addBinding(
+		const Array* a,
+		const std::vector<unsigned char>& v)
+	{ bindings.insert(std::make_pair(a, v)); }
 };
 
 class AssignmentEvaluator : public ExprEvaluator
@@ -85,6 +84,8 @@ public:
 	{ }
 	virtual ~AssignmentEvaluator() {}
 };
+
+/* FIXME: is it worth it to inline this? doubtful. */
 
 /* concretize array read with assignment value */
 inline ref<Expr> Assignment::evaluate(
@@ -124,7 +125,6 @@ inline ref<Expr> Assignment::evaluate(ref<Expr> e, bool &wasZeroDiv)
 
 	return ret;
 }
-
 
 template<typename InputIterator>
 inline bool Assignment::satisfies(InputIterator begin, InputIterator end)

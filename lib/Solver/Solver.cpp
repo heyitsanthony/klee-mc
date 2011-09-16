@@ -27,6 +27,7 @@
 #include "PipeSolver.h"
 #include "BoolectorSolver.h"
 #include "Z3Solver.h"
+#include "HashSolver.h"
 #include "PoisonCache.h"
 #include "DummySolver.h"
 
@@ -103,6 +104,11 @@ namespace {
   UsePoisonCacheRewritePtr("use-pcache-rewriteptr",
   	cl::init(false),
 	cl::desc("Cache/Reject poisonous query with pointers rewritten."));
+
+  cl::opt<bool>
+  UseHashSolver("use-hash-solver",
+  	cl::init(false),
+	cl::desc("Save hashes of queries w/results"));
 
   cl::opt<bool>
   UseBoolector(
@@ -199,6 +205,10 @@ static Solver* createChainWithTimedSolver(
 	if (UsePoisonCacheRewritePtr)
 		solver = new Solver(
 			new PoisonCache(solver, new QHRewritePtr()));
+
+	if (UseHashSolver)
+		solver = new Solver(
+			new HashSolver(solver, new QHRewritePtr()));
 
 	if (UseFastCexSolver) solver = createFastCexSolver(solver);
 	if (UseFastRangeSolver) solver = createFastRangeSolver(solver);
@@ -424,7 +434,7 @@ std::pair< ref<Expr>, ref<Expr> > Solver::getRange(const Query& query)
       mid = lo + (hi - lo)/2;
       bool res;
       bool success;
-      
+
       success = mustBeTrue(
         query.withExpr(
           EqExpr::create(
