@@ -384,6 +384,7 @@ private:
     bool isWrite,
     ref<Expr> address,
     ref<Expr> value,
+    Expr::Width w,
     KInstruction* target);
 
   bool memOpByByte(

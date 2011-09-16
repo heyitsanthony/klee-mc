@@ -2914,6 +2914,8 @@ void Executor::resolveExact(ExecutionState &state,
   }
 }
 
+bool debug_xxx = false;
+
 /* handles a memop that can be immediately resolved */
 bool Executor::memOpByByte(
   ExecutionState& state,
@@ -2942,7 +2944,7 @@ bool Executor::memOpByByte(
 		if (isWrite) {
 			byte_val = ExtractExpr::create(value, 8*i, 8);
 		}
-		if (!memOpFast(state, isWrite, byte_addr, byte_val, target))
+		if (!memOpFast(state, isWrite, byte_addr, byte_val, 8, target))
 			return false;
 	}
 	return true;
@@ -2954,10 +2956,9 @@ bool Executor::memOpFast(
   bool isWrite,
   ref<Expr> address,
   ref<Expr> value,
+  Expr::Width type,
   KInstruction* target)
 {
-  Expr::Width type = (isWrite ? value->getWidth() :
-                     getWidthForLLVMType(target->inst->getType()));
   unsigned bytes = Expr::getMinBytesForWidth(type);
   ObjectPair op;
   ref<Expr> offset;
@@ -3010,6 +3011,7 @@ bool Executor::memOpFast(
 
   return true;
 }
+
 
 ExecutionState* Executor::getUnboundState(
   ExecutionState* unbound,
@@ -3083,13 +3085,14 @@ void Executor::memOpError(
   if (incomplete) {
     terminateStateEarly(*unbound, "query timed out (resolve)");
   } else {
+  	if (debug_xxx)
+		state.addressSpace.print(std::cerr);
     terminateStateOnError(*unbound,
                           "memory error: out of bound pointer",
                           "ptr.err",
                           getAddressInfo(*unbound, address));
   }
 }
-
 
 void Executor::executeMemoryOperation(
 	ExecutionState &state,
@@ -3098,20 +3101,36 @@ void Executor::executeMemoryOperation(
 	ref<Expr> value /* undef if read */,
 	KInstruction *target /* undef if write */)
 {
-  if (SimplifySymIndices) {
-    if (!isa<ConstantExpr>(address))
-      address = state.constraints.simplifyExpr(address);
-    if (isWrite && !isa<ConstantExpr>(value))
-      value = state.constraints.simplifyExpr(value);
-  }
+#if 0 // for debugging fun memory errors
+	Function* cur_func = state.getCurrentKF()->function;
+	if (	strcmp(cur_func->getNameStr().c_str(),
+		"sb_0x7f5663744800") == 0)
+	{
+		debug_xxx = true;
+	}
+#endif
 
-  if (memOpFast(state, isWrite, address, value, target)) return;
+	if (SimplifySymIndices) {
+		if (!isa<ConstantExpr>(address))
+			address = state.constraints.simplifyExpr(address);
+		if (isWrite && !isa<ConstantExpr>(value))
+			value = state.constraints.simplifyExpr(value);
+	}
 
-  if (memOpByByte(state, isWrite, address, value, target)) return;
+	Expr::Width type = ((isWrite)
+		? value->getWidth()
+		: getWidthForLLVMType(target->inst->getType()));
 
-  // we are on an error path (no resolution, multiple resolution, one
-  // resolution with out of bounds)
-  memOpError(state, isWrite, address, value, target);
+	if (memOpFast(state, isWrite, address, value, type, target))
+		return;
+
+	// handle straddled accesses
+	if (memOpByByte(state, isWrite, address, value, target))
+		return;
+
+	// we are on an error path (no resolution, multiple resolution, one
+	// resolution with out of bounds)
+	memOpError(state, isWrite, address, value, target);
 }
 
 ObjectState* Executor::executeMakeSymbolic(

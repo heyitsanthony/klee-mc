@@ -178,6 +178,11 @@ public:
 	KInstIterator getCaller(void) const;
 	void dumpStack(std::ostream &os);
 
+	KFunction* getCurrentKF(void) const
+	{
+		return (stack.back()).kf;
+	}
+
 
 	void pushFrame(KInstIterator caller, KFunction *kf);
 	void popFrame();
