@@ -18,7 +18,7 @@ RandomPathSearcher::RandomPathSearcher(Executor &_executor)
 
 ExecutionState &RandomPathSearcher::selectState(bool allowCompact)
 {
-	PTree::Node	*n;
+	PTreeNode	*n;
 	unsigned	flips = 0, bits = 0;
 
 	executor.processTree->checkRep();
@@ -75,7 +75,7 @@ void RandomPathSearcher::update(ExecutionState *current, const States s)
 		ExecutionState *state = *it;
 
 		executor.processTree->checkRep();
-		PTree::Node *n = state->ptreeNode;
+		PTreeNode *n = state->ptreeNode;
 
 		assert (!n->right && !n->left);
 		while (	n && 
@@ -93,7 +93,7 @@ void RandomPathSearcher::update(ExecutionState *current, const States s)
 		ExecutionState *state = *it;
 
 		executor.processTree->checkRep();
-		PTree::Node *n = state->ptreeNode;
+		PTreeNode *n = state->ptreeNode;
 
 		while (n) {
 			n->ignore = false;

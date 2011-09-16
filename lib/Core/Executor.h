@@ -350,10 +350,6 @@ private:
   bool getSeedInfoIterRange(
     ExecutionState* s, SeedInfoIterator &b, SeedInfoIterator& e);
 
-
-  inline void splitProcessTree(PTreeNode* n, ExecutionState* a,
-                               ExecutionState* b);
-
   void stepInstruction(ExecutionState &state);
   void removePTreeState(
   	ExecutionState* es, ExecutionState** root_to_be_removed = 0);

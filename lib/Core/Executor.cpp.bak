@@ -253,25 +253,25 @@ bool llvm::cl::parser<sockaddr_in_opt>::parse(llvm::cl::Option &O,
 Executor::Executor(
 	const InterpreterOptions &opts,
 	InterpreterHandler *ih)
-: Interpreter(opts)
-, kmodule(0)
-, interpreterHandler(ih)
-, target_data(0)
-, statsTracker(0)
-, processTree(0)
-, symPathWriter(0)
-, replayOut(0)
-, replayPaths(0)
-, usingSeeds(0)
-, atMemoryLimit(false)
-, inhibitForking(false)
-, haltExecution(false)
-, onlyNonCompact(false)
-, initialStateCopy(0)
-, ivcEnabled(false)
-, lastMemoryLimitOperationInstructions(0)
-, stpTimeout(MaxInstructionTime ?
-	std::min(MaxSTPTime,MaxInstructionTime) : MaxSTPTime)
+  : Interpreter(opts),
+    kmodule(0),
+    interpreterHandler(ih),
+    target_data(0),
+    statsTracker(0),
+    processTree(0),
+    symPathWriter(0),
+    replayOut(0),
+    replayPaths(0),
+    usingSeeds(0),
+    atMemoryLimit(false),
+    inhibitForking(false),
+    haltExecution(false),
+    onlyNonCompact(false),
+    initialStateCopy(0),
+    ivcEnabled(false),
+    lastMemoryLimitOperationInstructions(0),
+    stpTimeout(MaxInstructionTime ?
+      std::min(MaxSTPTime,MaxInstructionTime) : MaxSTPTime)
 {
   this->solver = Solver::createTimerChain(
   	stpTimeout,
@@ -285,15 +285,28 @@ Executor::Executor(
 
 Executor::~Executor()
 {
-	std::for_each(timers.begin(), timers.end(), deleteTimerInfo);
-	delete stateManager;
-	delete memory;
-	if (processTree) delete processTree;
-	if (statsTracker) delete statsTracker;
-	delete solver;
+  std::for_each(timers.begin(), timers.end(), deleteTimerInfo);
+  delete stateManager;
+  delete memory;
+  if (processTree) delete processTree;
+  if (statsTracker) delete statsTracker;
+  delete solver;
 }
 
 /***/
+
+inline void Executor::splitProcessTree(PTreeNode* n, ExecutionState* a, ExecutionState* b)
+{
+  assert(!n->data);
+  std::pair<PTreeNode*, PTreeNode*> res = processTree->split(n, a, b);
+
+  a->ptreeNode = res.first;
+  processTree->update(a->ptreeNode, PTree::WeightCompact, !a->isCompactForm);
+//  processTree->update(a->ptreeNode, PTree::WeightRunning, !a->isRunning);
+  b->ptreeNode = res.second;
+  processTree->update(b->ptreeNode, PTree::WeightCompact, !b->isCompactForm);
+//  processTree->update(b->ptreeNode, PTree::WeightRunning, !b->isRunning);
+}
 
 inline void Executor::replaceStateImmForked(ExecutionState* os, ExecutionState* ns)
 {
@@ -513,7 +526,8 @@ void Executor::forkSetupSeeding(
   // when conditions are mutually exclusive and their conjunction is
   // a tautology).
   // This partitions the seed set for the current state
-  foreach (siit, it->second.begin(), it->second.end()) {
+  for (std::vector<SeedInfo>::iterator siit = it->second.begin(),
+         siie = it->second.end(); siit != siie; ++siit) {
     unsigned i;
     for (i = 0; i < fi.N; ++i) {
       ref<ConstantExpr> seedCondRes;
@@ -710,7 +724,7 @@ void Executor::makeForks(ExecutionState& current, struct ForkInfo& fi)
 
 		// Update path tree with new states
 		current.ptreeNode->data = 0;
-		processTree->splitStates(current.ptreeNode, baseState, newState);
+		splitProcessTree(current.ptreeNode, baseState, newState);
 	}
 }
 
@@ -2475,19 +2489,49 @@ void Executor::removePTreeState(
 	ExecutionState* es,
 	ExecutionState** root_to_be_removed)
 {
-	ExecutionState	*root;
-
+	ExecutionState* ns;
 	std::map<ExecutionState*, std::vector<SeedInfo> >::iterator it3;
 	it3 = seedMap.find(es);
 	if (it3 != seedMap.end()) seedMap.erase(it3);
 
-	root = processTree->removeState(stateManager, es);
-	if (root != NULL) *root_to_be_removed = root;
+	if (es->ptreeNode == processTree->root) {
+		assert(root_to_be_removed);
+		*root_to_be_removed = es;
+		return;
+	}
+	assert(es->ptreeNode->data == es);
+
+	ns = stateManager->getReplacedState(es);
+	if (!ns) {
+		processTree->remove(es->ptreeNode);
+	} else {
+		// replace the placeholder state in the process tree
+		ns->ptreeNode = es->ptreeNode;
+		ns->ptreeNode->data = ns;
+		processTree->update(
+			ns->ptreeNode,
+			PTree::WeightCompact,
+			!ns->isCompactForm);
+	}
+	delete es;
 }
 
 void Executor::removeRoot(ExecutionState* es)
 {
-	processTree->removeRoot(stateManager, es);
+	ExecutionState* ns = stateManager->getReplacedState(es);
+
+	if (!ns) {
+		delete processTree->root->data;
+		processTree->root->data = 0;
+		return;
+	}
+
+	// replace the placeholder state in the process tree
+	ns->ptreeNode = es->ptreeNode;
+	ns->ptreeNode->data = ns;
+
+	processTree->update(ns->ptreeNode, PTree::WeightCompact, !ns->isCompactForm);
+	delete es;
 }
 
 void Executor::killStates(ExecutionState* &state)
@@ -2636,8 +2680,7 @@ void Executor::replayPathsIntoStates(ExecutionState& initialState)
 	foreach (it, replayPaths->begin(), replayPaths->end()) {
 		ExecutionState *newState;
 		newState = ExecutionState::createReplay(initialState, (*it));
-		processTree->splitStates(
-			newState->ptreeNode, &initialState, newState);
+		splitProcessTree(newState->ptreeNode, &initialState, newState);
 		stateManager->add(newState);
 	}
 }
@@ -2651,7 +2694,7 @@ void Executor::run(ExecutionState &initialState)
   initialStateCopy = (ReplayInhibitedForks) ? initialState.copy() : NULL;
 
   if (replayPaths) replayPathsIntoStates(initialState);
-  stateManager->setInitialState(this, &initialState, replayPaths);
+  stateManager->setInitialState(&initialState, replayPaths);
 
   if (usingSeeds) {
     if (!seedRun(initialState)) goto dump;
@@ -2702,12 +2745,46 @@ void Executor::runLoop(void)
 
 void Executor::updateStates(ExecutionState* current)
 {
-  stateManager->updateStates(this, current);
-  if (stateManager->getNonCompactStateCount() == 0
-    && !stateManager->empty())
-  {
-    onlyNonCompact = false;
-  }
+	std::list<ExecutionState*>	ptree_rmv_list;
+	ExecutionState			*root_to_be_removed = 0;
+
+	stateManager->updateStates(current, ptree_rmv_list);
+
+#if 1
+	foreach (it,
+		stateManager->removedStates.begin(), 
+		stateManager->removedStates.end())
+	{
+		ExecutionState *es = *it;
+
+		ExeStateSet::iterator it2 = stateManager->states.find(es);
+		assert(it2!= stateManager->states.end());
+		stateManager->states.erase(it2);
+
+		// this deref must happen before delete
+		if (!es->isCompactForm) --stateManager->nonCompactStateCount;
+		removePTreeState(es, &root_to_be_removed);
+	}
+#else
+	foreach (it, ptree_rmv_list.begin(), ptree_rmv_list.end()) {
+		removePTreeState(*it, &root_to_be_removed);
+	}
+#endif
+	if (root_to_be_removed) removeRoot(root_to_be_removed);
+
+	/* Removal relies on the ability to replace states, so 
+	 * don't clear out the states until the removes have
+	 * propagated. Yuck! */
+	stateManager->replacedStates.clear();
+	stateManager->removedStates.clear();
+
+
+
+	if (	stateManager->getNonCompactStateCount() == 0
+		&& !stateManager->empty())
+	{
+		onlyNonCompact = false;
+	}
 }
 
 std::string Executor::getAddressInfo(ExecutionState &state,
@@ -3151,24 +3228,24 @@ ObjectState* Executor::makeSymbolic(
 }
 
 void Executor::addSymbolicToSeeds(
-	ExecutionState& state,
-	const MemoryObject* mo,
-	const  Array* array)
+  ExecutionState& state,
+  const MemoryObject* mo,
+  const  Array* array)
 {
-	std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it;
-	it = seedMap.find(&state);
-	if (it == seedMap.end()) return;
+  std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it;
+  it = seedMap.find(&state);
+  if (it == seedMap.end()) return;
 
-	// In seed mode we need to add this as a binding.
-	foreach (siit, it->second.begin(), it->second.end()) {
-		if (!seedObject(state, *siit, mo, array))
-			break;
-	}
+  // In seed mode we need to add this as a binding.
+  foreach (siit, it->second.begin(), it->second.end()) {
+    if (!seedObject(state, *siit, mo, array))
+      break;
+  }
 }
 
 // Create a new object state for the memory object (instead of a copy).
 ObjectState* Executor::makeSymbolicReplay(
-	ExecutionState& state, const MemoryObject* mo, ref<Expr> len)
+    ExecutionState& state, const MemoryObject* mo, ref<Expr> len)
 {
 	ObjectState *os = state.bindMemObj(mo);
 	if (replayPosition >= replayOut->numObjects) {
