@@ -12,7 +12,8 @@ ExecutionState &BFSSearcher::selectState(bool allowCompact)
 			continue;
 
 		// requeue the state at the back of the queue
-		states.erase(it); // equiv to pop_front, in the absence of compact states
+		// equiv to pop_front, in the absence of compact states
+		states.erase(it);
 		states.push_back(es);
 		return *es;
 	}
@@ -27,13 +28,17 @@ void BFSSearcher::update(ExecutionState *current, const States s)
 
 	foreach (it, s.getRemoved().begin(), s.getRemoved().end()) {
 		ExecutionState *es = *it;
-		if (es == states.front()) {
-			states.pop_front();
+
+		/* cheap check */
+		if (es == states.back()) {
+			states.pop_back();
 			continue;
 		}
+
+		/* full check */
 		bool ok = false;
 		foreach (it, states.begin(), states.end()) {
-			if (es !=*it) {
+			if (es == *it) {
 				states.erase(it);
 				ok = true;
 				break;
