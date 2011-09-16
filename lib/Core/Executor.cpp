@@ -2926,6 +2926,7 @@ bool Executor::memOpByByte(
 {
 	Expr::Width	type;
 	unsigned	bytes;
+	ref<Expr>	read_expr;
 
 	type = (isWrite ? value->getWidth() :
 		getWidthForLLVMType(target->inst->getType()));
@@ -2936,74 +2937,129 @@ bool Executor::memOpByByte(
 	for (unsigned i = 0; i < bytes; i++) {
 		ref<Expr>	byte_addr;
 		ref<Expr>	byte_val;
+		MemOpRes	res;
 
 		byte_addr = AddExpr::create(
 			address,
 			ConstantExpr::create(i, address->getWidth()));
 
+		res = memOpResolve(state, byte_addr, 8);
+		if (!res.usable || res.rc == false)
+			return res.rc;
+
 		if (isWrite) {
 			byte_val = ExtractExpr::create(value, 8*i, 8);
+			writeToMemRes(state, res, byte_val);
+		} else {
+			ref<Expr> result = state.read(res.os, res.offset, 8);
+			if (read_expr.isNull())
+				read_expr = result;
+			else
+				read_expr = ConcatExpr::create(
+					result, read_expr);
 		}
-		if (!memOpFast(state, isWrite, byte_addr, byte_val, 8, target))
-			return false;
 	}
+
+	// we delayed setting the local variable on the read because 
+	// we need to respect the original type width-- result is concatenated
+	if (!isWrite) {
+		state.bindLocal(target, read_expr);
+	}
+
 	return true;
 }
 
+Executor::MemOpRes Executor::memOpResolve(
+	ExecutionState& state,
+	ref<Expr> address,
+	Expr::Width type)
+{
+	MemOpRes	ret;
+	unsigned	bytes = Expr::getMinBytesForWidth(type);
+	bool inBounds, success;
+
+	ret.usable = false;
+	ret.rc = false;
+
+	/* can op be resolved to a single value? */
+	if (!state.addressSpace.resolveOne(
+		state, solver, address, ret.op, success))
+	{
+		address = toConstant(state, address, "resolveOne failure");
+		success = state.addressSpace.resolveOne(
+			cast<ConstantExpr>(address), ret.op);
+	}
+
+	if (!success) return ret;
+
+	// fast path: single in-bounds resolution.
+	ret.mo = ret.op.first;
+	ret.os = ret.op.second;
+
+	if (MaxSymArraySize && ret.mo->size>=MaxSymArraySize) {
+		address = toConstant(state, address, "max-sym-array-size");
+	}
+
+	ret.offset = ret.mo->getOffsetExpr(address);
+
+	/* verify access is in bounds */
+	success = solver->mustBeTrue(
+		state,
+		ret.mo->getBoundsCheckOffset(ret.offset, bytes),
+		inBounds);
+	if (!success) {
+		state.pc = state.prevPC;
+		terminateStateEarly(state, "query timed out");
+		ret.rc = true;
+		return ret;
+	}
+
+	if (!inBounds) return ret;
+
+	ret.rc = true;
+	ret.usable = true;
+	return ret;
+}
+
+void Executor::writeToMemRes(
+  	ExecutionState& state,
+	struct MemOpRes& res,
+	ref<Expr> value)
+{
+	if (res.os->readOnly) {
+		terminateStateOnError(
+			state,
+			"memory error: object read only",
+			"readonly.err");
+	} else {
+		ObjectState *wos;
+		wos = state.addressSpace.getWriteable(res.mo, res.os);
+		state.write(wos, res.offset, value);
+	}
+}
+
+
 /* handles a memop that can be immediately resolved */
 bool Executor::memOpFast(
-  ExecutionState& state,
-  bool isWrite,
-  ref<Expr> address,
-  ref<Expr> value,
-  Expr::Width type,
-  KInstruction* target)
+	ExecutionState& state,
+	bool isWrite,
+	ref<Expr> address,
+	ref<Expr> value,
+	KInstruction* target)
 {
-  unsigned bytes = Expr::getMinBytesForWidth(type);
-  ObjectPair op;
-  ref<Expr> offset;
-  bool inBounds, success;
+  Expr::Width type = (isWrite ? value->getWidth() :
+                     getWidthForLLVMType(target->inst->getType()));
+  MemOpRes	res;
 
-  /* can op be resolved to a single value? */
-  if (!state.addressSpace.resolveOne(state, solver, address, op, success)) {
-    address = toConstant(state, address, "resolveOne failure");
-    success = state.addressSpace.resolveOne(cast<ConstantExpr>(address), op);
-  }
+  res = memOpResolve(state, address, type);
+  if (!res.usable || res.rc == false)
+  	return res.rc;
 
-  if (!success) return false;
-
-  // fast path: single in-bounds resolution.
-  const MemoryObject *mo = op.first;
-  const ObjectState *os = op.second;
-
-  if (MaxSymArraySize && mo->size>=MaxSymArraySize) {
-    address = toConstant(state, address, "max-sym-array-size");
-  }
-
-  offset = mo->getOffsetExpr(address);
-
-  /* verify access is in bounds */
-  success = solver->mustBeTrue(
-    state, mo->getBoundsCheckOffset(offset, bytes), inBounds);
-  if (!success) {
-    state.pc = state.prevPC;
-    terminateStateEarly(state, "query timed out");
-    return true;
-  }
-
-  if (!inBounds) return false;
 
   if (isWrite) {
-    if (os->readOnly) {
-      terminateStateOnError(state,
-                            "memory error: object read only",
-                            "readonly.err");
-    } else {
-      ObjectState *wos = state.addressSpace.getWriteable(mo, os);
-      state.write(wos, offset, value);
-    }
+    writeToMemRes(state, res, value);
   } else {
-    ref<Expr> result = state.read(os, offset, type);
+    ref<Expr> result = state.read(res.os, res.offset, type);
     if (interpreterOpts.MakeConcreteSymbolic)
       result = replaceReadWithSymbolic(state, result);
     state.bindLocal(target, result);
@@ -3011,7 +3067,6 @@ bool Executor::memOpFast(
 
   return true;
 }
-
 
 ExecutionState* Executor::getUnboundState(
   ExecutionState* unbound,
@@ -3117,11 +3172,7 @@ void Executor::executeMemoryOperation(
 			value = state.constraints.simplifyExpr(value);
 	}
 
-	Expr::Width type = ((isWrite)
-		? value->getWidth()
-		: getWidthForLLVMType(target->inst->getType()));
-
-	if (memOpFast(state, isWrite, address, value, type, target))
+	if (memOpFast(state, isWrite, address, value, target))
 		return;
 
 	// handle straddled accesses

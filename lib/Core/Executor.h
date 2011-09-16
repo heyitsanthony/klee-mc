@@ -135,6 +135,17 @@ public:
   MemoryManager *memory;
 private:
   class TimerInfo;
+struct MemOpRes
+{
+	ObjectPair		op;
+	ref<Expr>		offset;
+	const MemoryObject	*mo;
+	const ObjectState	*os;
+	bool			rc;
+	bool			usable;
+};
+
+
   static void deleteTimerInfo(TimerInfo*&);
   void runLoop(void);
   void handleMemoryUtilization(ExecutionState* &state);
@@ -379,13 +390,23 @@ private:
                               ref<Expr> address,
                               ref<Expr> value /* undef if read */,
                               KInstruction *target /* undef if write */);
+
+  MemOpRes memOpResolve(
+	ExecutionState& state,
+	ref<Expr> address,
+	Expr::Width type);
+
   bool memOpFast(
     ExecutionState& state,
     bool isWrite,
     ref<Expr> address,
     ref<Expr> value,
-    Expr::Width w,
     KInstruction* target);
+
+  void writeToMemRes(
+  	ExecutionState& state,
+	struct MemOpRes& res,
+	ref<Expr> value);
 
   bool memOpByByte(
     ExecutionState& state,
