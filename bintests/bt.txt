@@ -151,3 +151,5 @@
 /usr/bin/mc
 /usr/bin/join asd xyz
 /usr/bin/udcli -64 asd
+/sbin/fdisk asd
+/usr/sbin/parted asd
