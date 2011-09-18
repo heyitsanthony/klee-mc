@@ -70,12 +70,15 @@ mc-std: Release/lib/libkleeRuntimeMC.bca
 	cd mc_tmp && ar x ../Release/lib/libkleeRuntimeMC.bca && cd ..
 	llvm-link -f -o Release/lib/libkleeRuntimeMC.bc mc_tmp/*.bc
 	rm -rf mc_tmp
+	cp Release/lib/libkleeRuntimeMC.bc $(VEXLLVM_HELPER_PATH)
 
 mc-fdt: Release/lib/libkleeRuntimeMC-fdt.bca
 	mkdir -p mcfdt_tmp
 	cd mcfdt_tmp && ar x ../Release/lib/libkleeRuntimeMC-fdt.bca && cd ..
 	llvm-link -f -o Release/lib/libkleeRuntimeMC-fdt.bc mcfdt_tmp/*.bc
 	rm -rf mcfdt_tmp
+	cp Release/lib/libkleeRuntimeMC-fdt.bc $(VEXLLVM_HELPER_PATH)
+
 
 test-all: test test-replay
 

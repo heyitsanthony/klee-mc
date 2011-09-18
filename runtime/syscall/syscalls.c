@@ -291,6 +291,12 @@ static void sc_klee(void* regfile)
 	case KLEE_SYS_ASSUME:
 		klee_assume(GET_ARG1(regfile));
 		break;
+	case KLEE_SYS_IS_SYM:
+		sc_ret_v(regfile, klee_is_symbolic(GET_ARG1(regfile)));
+		break;
+	case KLEE_SYS_NE:
+		klee_force_ne(GET_ARG1(regfile), GET_ARG2(regfile));
+		break;
 	default:
 		klee_report_error(
 			__FILE__,

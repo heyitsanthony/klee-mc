@@ -2760,7 +2760,8 @@ std::string Executor::getAddressInfo(ExecutionState &state,
   return info.str();
 }
 
-void Executor::terminateState(ExecutionState &state) {
+void Executor::terminateState(ExecutionState &state)
+{
   if (replayOut && replayPosition!=replayOut->numObjects) {
     klee_warning_once(replayOut,
                       "replay did not consume all objects in test input.");
@@ -3335,9 +3336,10 @@ void Executor::getConstraintLogCVC(
 	free(log);
 }
 
-void Executor::getConstraintLog(const ExecutionState &state,
-                                std::string &res,
-                                bool asCVC)
+void Executor::getConstraintLog(
+	const ExecutionState &state,
+	std::string &res,
+	bool asCVC)
 {
 	if (asCVC) {
 		getConstraintLogCVC(state, res);
@@ -3607,8 +3609,6 @@ void Executor::bindInstructionConstants(KInstruction *KI)
 	kgepi->offset = constantOffset->getZExtValue();
 }
 
-
-
 void Executor::executeAllocConst(
 	ExecutionState &state,
 	ConstantExpr* CE,
@@ -3652,7 +3652,6 @@ void Executor::executeAllocConst(
 		state.unbindObject(reallocFrom->getObject());
 	}
 }
-
 
 void Executor::executeAllocSymbolic(
 	ExecutionState &state,

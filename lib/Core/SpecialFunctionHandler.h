@@ -133,6 +133,7 @@ namespace klee {
     SFH_HANDLER(DeleteArray)
     SFH_HANDLER(Exit)
     SFH_HANDLER(AliasFunction)
+    SFH_HANDLER(ForceNE)
     SFH_HANDLER(Free)
     SFH_HANDLER(GetPruneID)
     SFH_HANDLER(Prune)

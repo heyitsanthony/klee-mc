@@ -37,8 +37,6 @@ ObjectState::ObjectState(const MemoryObject *mo)
 , updates(0, 0)
 , size(mo->size)
 , readOnly(false)
-, wrseqno(0)
-, wasSymOffObjectWrite(false)
 {
 	memset(concreteStore, 0, mo->size);
 
@@ -68,8 +66,6 @@ ObjectState::ObjectState(const MemoryObject *mo, const Array *array)
 , updates(array, 0)
 , size(mo->size)
 , readOnly(false)
-, wrseqno(0)
-, wasSymOffObjectWrite(false)
 {
 	memset(concreteStore, 0, mo->size);
 	makeSymbolic();
@@ -86,86 +82,85 @@ ObjectState::ObjectState(const ObjectState &os)
 , updates(os.updates)
 , size(os.size)
 , readOnly(false)
-, wrseqno(os.wrseqno)
-, wasSymOffObjectWrite(os.wasSymOffObjectWrite)
 {
-  assert(!os.readOnly && "no need to copy read only object?");
+	assert(!os.readOnly && "no need to copy read only object?");
 
-  if (os.knownSymbolics) {
-    knownSymbolics = new ref<Expr>[size];
-    for (unsigned i=0; i<size; i++)
-      knownSymbolics[i] = os.knownSymbolics[i];
-  }
+	if (os.knownSymbolics) {
+		knownSymbolics = new ref<Expr>[size];
+		for (unsigned i=0; i<size; i++)
+			knownSymbolics[i] = os.knownSymbolics[i];
+	}
 
-  memcpy(concreteStore, os.concreteStore, size*sizeof(*concreteStore));
+	memcpy(concreteStore, os.concreteStore, size*sizeof(*concreteStore));
 }
 
 ObjectState::~ObjectState()
 {
-  if (concreteMask) delete concreteMask;
-  if (flushMask) delete flushMask;
-  if (knownSymbolics) delete[] knownSymbolics;
-  delete[] concreteStore;
+	if (concreteMask) delete concreteMask;
+	if (flushMask) delete flushMask;
+	if (knownSymbolics) delete[] knownSymbolics;
+	delete[] concreteStore;
 }
-
-/***/
 
 const UpdateList &ObjectState::getUpdates() const
 {
-  // Constant arrays are created lazily.
-  if (updates.root != NULL) return updates;
+	// Constant arrays are created lazily.
+	if (updates.root != NULL) return updates;
 
-  // Collect the list of writes, with the oldest writes first.
-   
-  // FIXME: We should be able to do this more efficiently, we just need to be
-  // careful to get the interaction with the cache right. In particular we
-  // should avoid creating UpdateNode instances we never use.
-  unsigned NumWrites = updates.head ? updates.head->getSize() : 0;
-  std::vector< std::pair< ref<Expr>, ref<Expr> > > Writes(NumWrites);
-  const UpdateNode *un = updates.head;
-  for (unsigned i = NumWrites; i != 0; un = un->next) {
-    --i;
-    Writes[i] = std::make_pair(un->index, un->value);
-  }
+	// Collect the list of writes, with the oldest writes first.
 
-  std::vector< ref<ConstantExpr> > Contents(size);
+	// FIXME: We should be able to do this more efficiently, we just need to be
+	// careful to get the interaction with the cache right. In particular we
+	// should avoid creating UpdateNode instances we never use.
+	unsigned NumWrites = updates.head ? updates.head->getSize() : 0;
+	std::vector< std::pair< ref<Expr>, ref<Expr> > > Writes(NumWrites);
+	const UpdateNode *un = updates.head;
+	for (unsigned i = NumWrites; i != 0; un = un->next) {
+		--i;
+		Writes[i] = std::make_pair(un->index, un->value);
+	}
 
-  // Initialize to zeros.
-  for (unsigned i = 0, e = size; i != e; ++i)
-    Contents[i] = ConstantExpr::create(0, Expr::Int8);
+	std::vector< ref<ConstantExpr> > Contents(size);
 
-  // Pull off as many concrete writes as we can.
-  unsigned Begin = 0, End = Writes.size();
-  for (; Begin != End; ++Begin) {
-    // Push concrete writes into the constant array.
-    ConstantExpr *Index = dyn_cast<ConstantExpr>(Writes[Begin].first);
-    if (!Index)
-      break;
+	// Initialize to zeros.
+	for (unsigned i = 0, e = size; i != e; ++i)
+		Contents[i] = ConstantExpr::create(0, Expr::Int8);
 
-    ConstantExpr *Value = dyn_cast<ConstantExpr>(Writes[Begin].second);
-    if (!Value)
-      break;
+	// Pull off as many concrete writes as we can.
+	unsigned Begin = 0, End = Writes.size();
+	for (; Begin != End; ++Begin) {
+		// Push concrete writes into the constant array.
+		ConstantExpr *Index, *Value;
 
-    Contents[Index->getZExtValue()] = Value;
-  }
+		Index = dyn_cast<ConstantExpr>(Writes[Begin].first);
+		if (!Index) break;
 
-    // FIXME: We should unique these, there is no good reason to create multiple
-    // ones.
+		Value = dyn_cast<ConstantExpr>(Writes[Begin].second);
+		if (!Value) break;
 
-    // Start a new update list.
-    // FIXME: Leaked.
-    static unsigned id = 0;
-    const Array *array = new Array("const_arr" + llvm::utostr(++id),
-                                   object->mallocKey, &Contents[0],
-                                   &Contents[0] + Contents.size());
-    array->initRef();
-    updates = UpdateList(array, 0);
+		Contents[Index->getZExtValue()] = Value;
+	}
 
-    // Apply the remaining (non-constant) writes.
-    for (; Begin != End; ++Begin)
-      updates.extend(Writes[Begin].first, Writes[Begin].second);
+	// FIXME: We should unique these,
+	// there is no good reason to create multiple ones.
 
-  return updates;
+	// Start a new update list.
+	// FIXME: Leaked.
+	static unsigned id = 0;
+	const Array *array;
+
+	array = new Array(
+		"const_arr" + llvm::utostr(++id),
+		object->mallocKey, &Contents[0],
+		&Contents[0] + Contents.size());
+	array->initRef();
+	updates = UpdateList(array, 0);
+
+	// Apply the remaining (non-constant) writes.
+	for (; Begin != End; ++Begin)
+		updates.extend(Writes[Begin].first, Writes[Begin].second);
+
+	return updates;
 }
 
 void ObjectState::makeConcrete() {
@@ -179,24 +174,25 @@ void ObjectState::makeConcrete() {
 
 void ObjectState::markRangeSymbolic(unsigned offset, unsigned len)
 {
-  assert (len+offset < size && "Bad range");
-  for (unsigned i=0; i<len; i++) {
-    markByteSymbolic(i+offset);
-    setKnownSymbolic(i+offset, 0);
-    markByteFlushed(i+offset);
-  }
+	assert (len+offset < size && "Bad range");
+	for (unsigned i=0; i<len; i++) {
+		markByteSymbolic(i+offset);
+		setKnownSymbolic(i+offset, 0);
+		markByteFlushed(i+offset);
+	}
 }
 
-void ObjectState::makeSymbolic() {
-  assert(!updates.head &&
-         "XXX makeSymbolic of objects with symbolic values is unsupported");
+void ObjectState::makeSymbolic(void)
+{
+	assert(!updates.head &&
+         	"XXX makeSymbolic of objs with symbolic vals is unsupported");
 
-  // XXX simplify this, can just delete various arrays I guess
-  for (unsigned i=0; i<size; i++) {
-    markByteSymbolic(i);
-    setKnownSymbolic(i, 0);
-    markByteFlushed(i);
-  }
+	// XXX simplify this, can just delete various arrays I guess
+	for (unsigned i=0; i<size; i++) {
+		markByteSymbolic(i);
+		setKnownSymbolic(i, 0);
+		markByteFlushed(i);
+	}
 }
 
 void ObjectState::initializeToZero()
@@ -222,9 +218,9 @@ isByteConcrete(i) => !isByteKnownSymbolic(i)
 !isByteFlushed(i) => (isByteConcrete(i) || isByteKnownSymbolic(i))
  */
 
-void ObjectState::fastRangeCheckOffset(ref<Expr> offset,
-                                       unsigned *base_r,
-                                       unsigned *size_r) const {
+void ObjectState::fastRangeCheckOffset(
+	ref<Expr> offset, unsigned *base_r, unsigned *size_r) const
+{
   *base_r = 0;
   *size_r = size;
 }
@@ -315,80 +311,24 @@ void ObjectState::markByteFlushed(unsigned offset) {
   }
 }
 
-void ObjectState::setKnownSymbolic(unsigned offset,
-                                   Expr *value /* can be null */) {
-  if (knownSymbolics) {
-    knownSymbolics[offset] = value;
-  } else {
-    if (value) {
-      knownSymbolics = new ref<Expr>[size];
-      knownSymbolics[offset] = value;
-    }
-  }
+void ObjectState::setKnownSymbolic(
+	unsigned offset,
+	Expr *value /* can be null */)
+{
+	if (knownSymbolics) {
+		knownSymbolics[offset] = value;
+		return;
+	}
+
+	if (value) {
+		knownSymbolics = new ref<Expr>[size];
+		knownSymbolics[offset] = value;
+	}
 }
 
-
-static bool expequals(const ref<Expr>& exp1, const ref<Expr>& exp2) {
-
-    if ((exp1.isNull() && !exp2.isNull()) || (!exp1.isNull() && exp2.isNull())) {
-        return false;
-    }
-
-    if (exp1.isNull() && exp2.isNull()) {
-        return true;
-    }
-
-    return exp1->compare(*exp2.get()) == 0;
-}
-
-bool ObjectState::equals(const ObjectState* o1) const {
-  //TODO: get rid of this function. it's wrong. should only be neccessary when sym offs
-    const ObjectState* o2 = this;
-assert(o1);
-  assert(o2);
-    unsigned o1size = o1->size;
-    unsigned o2size = o2->size;
-    assert(o1size);
-    assert(o2size);
-    if (o1size != o2size) {
-        return false;
-    }
-
-    bool fullcheck = false;
-    unsigned i;
-    for (i = 0; i < o1->size; i++) {
-        if (o1->isByteConcrete(i) && o2->isByteConcrete(i)) {
-            if (o1->concreteStore[i] != o2->concreteStore[i]) {
-                return false;
-            }
-        } else if (o1->isByteKnownSymbolic(i) && o2->isByteKnownSymbolic(i)) {
-            ref<Expr> exp1 = o1->read8(i);
-            ref<Expr> exp2 = o2->read8(i);
-
-            if (!expequals(exp1, exp2)) {
-                return false;
-            }
-        } else {
-            fullcheck = true;
-            break;
-        }
-    }
-
-    if (o1->getUpdates().getSize() == 0 && o2->getUpdates().getSize() == 0 && !fullcheck) {
-        return true;
-    }
-
-    ref<Expr> exp1 = o1->read(0, o1->size * 8);
-    ref<Expr> exp2 = o2->read(0, o2->size * 8);
-
-    return expequals(exp1, exp2);
-}
-
-/***/
 
 ref<Expr> ObjectState::read8(unsigned offset) const
 {
-
   if (isByteConcrete(offset)) {
     return ConstantExpr::create(concreteStore[offset], Expr::Int8);
   }
@@ -417,7 +357,7 @@ ref<Expr> ObjectState::read8(ref<Expr> offset) const
                       size,
                       allocInfo.c_str());
   }
- 
+
   return ReadExpr::create(getUpdates(), ZExtExpr::create(offset, Expr::Int32));
 }
 
@@ -432,33 +372,38 @@ void ObjectState::write8(unsigned offset, uint8_t value) {
 }
 
 void ObjectState::write8(unsigned offset, ref<Expr> value) {
-  // can happen when ExtractExpr special cases 
+  // can happen when ExtractExpr special cases
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(value)) {
     write8(offset, (uint8_t) CE->getZExtValue(8));
   } else {
     setKnownSymbolic(offset, value.get());
-     
+
     markByteSymbolic(offset);
-    markByteUnflushed(offset);   
+    markByteUnflushed(offset);
   }
 }
 
-void ObjectState::write8(ref<Expr> offset, ref<Expr> value) {
-  assert(!isa<ConstantExpr>(offset) && "constant offset passed to symbolic write8");
-  unsigned base, size;
-  fastRangeCheckOffset(offset, &base, &size);
-  flushRangeForWrite(base, size);
+void ObjectState::write8(ref<Expr> offset, ref<Expr> value)
+{
+	unsigned	base, size;
 
-  if (size>4096) {
-    std::string allocInfo;
-    object->getAllocInfo(allocInfo);
-    klee_warning_once(0, "flushing %d bytes on write, may be slow and/or crash: %s",
-                      size,
-                      allocInfo.c_str());
-  }
+	assert(!isa<ConstantExpr>(offset) &&
+		"constant offset passed to symbolic write8");
 
-  wasSymOffObjectWrite = true;
-  updates.extend(ZExtExpr::create(offset, Expr::Int32), value);
+	fastRangeCheckOffset(offset, &base, &size);
+	flushRangeForWrite(base, size);
+
+	if (size > 4096) {
+		std::string allocInfo;
+		object->getAllocInfo(allocInfo);
+		klee_warning_once(
+			0,
+			"flushing %d bytes on write, may be slow and/or crash: %s",
+			size,
+			allocInfo.c_str());
+	}
+
+	updates.extend(ZExtExpr::create(offset, Expr::Int32), value);
 }
 
 /***/
