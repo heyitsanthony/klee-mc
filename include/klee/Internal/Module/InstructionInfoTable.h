@@ -15,59 +15,64 @@
 #include <set>
 
 namespace llvm {
-  class Function;
-  class Instruction;
-  class Module; 
+	class Function;
+	class Instruction;
+	class Module;
 }
 
-namespace klee {
+namespace klee
+{
 
-  /* Stores debug information for a KInstruction */
-  struct InstructionInfo {
-    unsigned id;
-    const std::string &file;
-    unsigned line;
-    unsigned assemblyLine;
+/* Stores debug information for a KInstruction */
+struct InstructionInfo
+{
+	unsigned id;
+	const std::string &file;
+	unsigned line;
+	unsigned assemblyLine;
 
-  public:
-    InstructionInfo(unsigned _id,
-                    const std::string &_file,
-                    unsigned _line,
-                    unsigned _assemblyLine)
-      : id(_id), 
-        file(_file),
-        line(_line),
-        assemblyLine(_assemblyLine) {
-    }
-  };
+public:
+	InstructionInfo(
+		unsigned _id,
+		const std::string &_file,
+		unsigned _line,
+		unsigned _assemblyLine)
+	: id(_id)
+	, file(_file)
+	, line(_line)
+	, assemblyLine(_assemblyLine) {}
+};
 
-  class InstructionInfoTable {
-    struct ltstr { 
-      bool operator()(const std::string *a, const std::string *b) const {
-        return *a<*b;
-      }
-    };
+class InstructionInfoTable
+{
+	struct ltstr {
+		bool operator()(
+			const std::string *a, const std::string *b) const
+		{ return *a<*b; }
+	};
 
-    std::string dummyString;
-    InstructionInfo dummyInfo;
-    std::map<const llvm::Instruction*, InstructionInfo> infos;
-    std::set<const std::string *, ltstr> internedStrings;
+	std::string dummyString;
+	InstructionInfo dummyInfo;
+	std::map<const llvm::Instruction*, InstructionInfo> infos;
+	std::set<const std::string *, ltstr> internedStrings;
 
-  private:
-    bool getInstructionDebugInfo(
-      const llvm::Instruction *I,
-      const std::string *&File, unsigned &Line);
+private:
+	bool getInstructionDebugInfo(
+		const llvm::Instruction *I,
+		const std::string *&File,
+		unsigned &Line);
 
-    const std::string *internString(std::string s);
+	const std::string *internString(std::string s);
+	void addFunction(llvm::Function* fnIt);
 
-  public:
-    InstructionInfoTable(llvm::Module *m);
-    ~InstructionInfoTable();
+public:
+	InstructionInfoTable(llvm::Module *m);
+	~InstructionInfoTable();
 
-    unsigned getMaxID() const;
-    const InstructionInfo &getInfo(const llvm::Instruction*) const;
-    const InstructionInfo &getFunctionInfo(const llvm::Function*) const;
-  };
+	unsigned getMaxID() const;
+	const InstructionInfo &getInfo(const llvm::Instruction*) const;
+	const InstructionInfo &getFunctionInfo(const llvm::Function*) const;
+};
 
 }
 

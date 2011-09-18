@@ -163,7 +163,7 @@ ref<ConstantExpr> ConstantExpr::Concat(const ref<ConstantExpr> &RHS)
 {
   Expr::Width W = getWidth() + RHS->getWidth();
   llvm::APInt Tmp(value);
-  Tmp.zext(W);
+  Tmp = Tmp.zext(W);
   Tmp <<= RHS->getWidth();
   Tmp |= llvm::APInt(RHS->value).zext(W);
 

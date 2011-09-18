@@ -48,7 +48,7 @@ class RaiseAsmPass : public llvm::FunctionPass
 	llvm::Module* module_;
 public:
 	RaiseAsmPass(llvm::Module* module) 
-	: llvm::FunctionPass((intptr_t) &ID), module_(module) {}
+	: llvm::FunctionPass(ID), module_(module) {}
 	virtual ~RaiseAsmPass() {}
 	virtual bool runOnFunction(llvm::Function& f);
 };
@@ -60,7 +60,7 @@ class RemoveSentinelsPass : public llvm::FunctionPass
   static char ID;
   virtual bool runOnFunction(llvm::Function &F);
 public:
-  RemoveSentinelsPass() : llvm::FunctionPass((intptr_t) &ID) {}
+  RemoveSentinelsPass() : llvm::FunctionPass(ID) {}
 };
 
   // This is a module pass because it can add and delete module
@@ -76,7 +76,7 @@ class IntrinsicCleanerPass : public llvm::FunctionPass
 public:
   IntrinsicCleanerPass(const llvm::TargetData &TD,
                        bool LI=true)
-    : llvm::FunctionPass((intptr_t) &ID),
+    : llvm::FunctionPass((ID)),
       TargetData(TD),
       IL(new llvm::IntrinsicLowering(TD)),
       LowerIntrinsics(LI) {}
@@ -105,7 +105,7 @@ class PhiCleanerPass : public llvm::FunctionPass {
   static char ID;
 
 public:
-  PhiCleanerPass() : llvm::FunctionPass((intptr_t) &ID) {}
+  PhiCleanerPass() : llvm::FunctionPass(ID) {}
 
   virtual bool runOnFunction(llvm::Function &f);
 };
@@ -114,7 +114,7 @@ class DivCheckPass : public llvm::FunctionPass
 {
   static char ID;
 public:
-  DivCheckPass(): FunctionPass((intptr_t) &ID), divZeroCheckFunction(0) {}
+  DivCheckPass(): FunctionPass(ID), divZeroCheckFunction(0) {}
   virtual bool runOnFunction(llvm::Function &f);
 private:
   llvm::Function *divZeroCheckFunction;
@@ -126,7 +126,7 @@ private:
 class LowerSwitchPass : public llvm::FunctionPass {
 public:
   static char ID; // Pass identification, replacement for typeid
-  LowerSwitchPass() : FunctionPass((intptr_t) &ID) {}
+  LowerSwitchPass() : FunctionPass(ID) {}
 
   virtual bool runOnFunction(llvm::Function &F);
 
@@ -155,7 +155,7 @@ private:
 class LowerAtomic : public llvm::BasicBlockPass {
 public:
   static char ID;
-  LowerAtomic() : BasicBlockPass((intptr_t)&ID) {}
+  LowerAtomic() : BasicBlockPass(ID) {}
   bool runOnBasicBlock(llvm::BasicBlock &BB);
 };
 

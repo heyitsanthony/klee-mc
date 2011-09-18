@@ -15,6 +15,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "Passes.h"
+#include <llvm/LLVMContext.h>
 #include <algorithm>
 
 using namespace llvm;

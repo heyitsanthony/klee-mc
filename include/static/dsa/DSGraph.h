@@ -421,10 +421,12 @@ public:
 
   /// print - Print a dot graph to the specified ostream...
   ///
-  void print(OStream &O) const {
-    if (O.stream()) print(*O.stream());
+  void print(raw_ostream &O) const;
+  void print(std::ostream &O) const
+  {
+		raw_os_ostream	os(O);
+	print(O);
   }
-  void print(std::ostream &O) const;
 
   /// dump - call print(cerr), for use from the debugger...
   ///
@@ -435,8 +437,13 @@ public:
   ///
   void viewGraph() const;
 
-  void writeGraphToFile(std::ostream &O, const std::string &GraphName) const;
+  void writeGraphToFile(std::ostream &O, const std::string &GraphName) const
+  {
+		raw_os_ostream	ros(O);
+	writeGraphToFile(ros, GraphName);
+  }
 
+  void writeGraphToFile(raw_ostream& O, const std::string& GraphName) const;
   /// maskNodeTypes - Apply a mask to all of the node types in the graph.  This
   /// is useful for clearing out markers like Incomplete.
   ///

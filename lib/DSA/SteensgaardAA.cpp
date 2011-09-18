@@ -28,7 +28,7 @@ namespace {
     DSGraph * ResultGraph;
   public:
     static char ID;
-    Steens() : ModulePass((intptr_t)&ID), ResultGraph(NULL) {}
+    Steens() : ModulePass(ID), ResultGraph(NULL) {}
     ~Steens() {    }
 
     //------------------------------------------------

@@ -9,6 +9,7 @@
 
 LEVEL=../..
 
+DISABLE_ASSERTIONS=1
 LIBRARYNAME=kleeRuntimeMC
 DONT_BUILD_RELINKED=1
 BUILD_ARCHIVE=1
@@ -19,11 +20,9 @@ NO_PEDANTIC=1
 
 include $(LEVEL)/Makefile.common
 
-LIBBCA:=$(LibDir)/lib$(LIBRARYNAME).bca
-LIBTXT:=$(LibDir)/$(LIBRARYNAME)-fns.txt
+LibName.BCA := $(LibDir)/lib$(LIBRARYNAME).bca
 
-all:: $(LIBTXT)
+all:: $(LibName.BCA)
+	echo $<
 
-$(LIBTXT): $(LIBBCA) $(LEVEL)/scripts/llvm-list-functions
-	$(Echo) "Updating $(LIBRARYNAME) function list for $(BuildMode) build"
-	$(Verb) $(LEVEL)/scripts/llvm-list-functions $(LIBBCA) > $@
+

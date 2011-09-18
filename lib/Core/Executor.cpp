@@ -41,6 +41,8 @@
 #include "klee/Internal/Module/KModule.h"
 #include "klee/Internal/System/Time.h"
 
+#include "llvm/Analysis/MemoryBuiltins.h"
+#include "llvm/LLVMContext.h"
 #include "llvm/IntrinsicInst.h"
 #include "llvm/Module.h"
 #include "llvm/Support/CommandLine.h"
@@ -992,7 +994,7 @@ void Executor::stepInstruction(ExecutionState &state)
   if (DebugPrintInstructions) {
     printFileLine(state, state.pc);
     std::cerr << std::setw(10) << stats::instructions << " "
-              << *(state.pc->inst) << "\n";
+              << (state.pc->inst) << "\n";
   }
 
   if (statsTracker) statsTracker->stepInstruction(state);
@@ -1152,8 +1154,6 @@ void Executor::executeCall(
     // va_arg is handled by caller and intrinsic lowering, see comment for
     // ExecutionState::varargs
   case Intrinsic::vastart:  {
-    std::cerr << *i << std::endl;
-
     StackFrame &sf = state.stack.back();
     assert(sf.varargs &&
            "vastart called in function with no vararg object");
@@ -1215,10 +1215,6 @@ void Executor::printFileLine(ExecutionState &state, KInstruction *ki) {
 bool Executor::isDebugIntrinsic(const Function *f)
 {
   switch (f->getIntrinsicID()) {
-  case Intrinsic::dbg_stoppoint:
-  case Intrinsic::dbg_region_start:
-  case Intrinsic::dbg_region_end:
-  case Intrinsic::dbg_func_start:
   case Intrinsic::dbg_declare:
     return true;
 
@@ -2124,27 +2120,9 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
   Instruction *i = ki->inst;
   switch (i->getOpcode()) {
   // Memory instructions...
-  case Instruction::Alloca:
-  case Instruction::Malloc: {
-    AllocationInst *ai;
-    unsigned	elementSize;
-    bool		isLocal;
-    ai = cast<AllocationInst>(i);
-    elementSize = target_data->getTypeStoreSize(ai->getAllocatedType());
-    ref<Expr> size = Expr::createPointer(elementSize);
-    if (ai->isArrayAllocation()) {
-      ref<Expr> count = eval(ki, 0, state).value;
-      count = Expr::createCoerceToPointerType(count);
-      size = MulExpr::create(size, count);
-    }
-    isLocal = i->getOpcode()==Instruction::Alloca;
-    executeAlloc(state, size, isLocal, ki);
-    break;
+//  case Instruction::Malloc:
+  case Instruction::Alloca: {
   }
-  case Instruction::Free:
-    executeFree(state, eval(ki, 0, state).value);
-    break;;
-
     // Control flow
   case Instruction::Ret:
     if (WriteTraces) {
@@ -2466,6 +2444,30 @@ INST_FOP_ARITH(FRem, mod)
     break;
 
   default:
+    assert (!isMalloc(i) && "ANTHONY REIMPLEMENT THIS!");
+    if (Instruction::Alloca == i->getOpcode()) {
+	    AllocaInst	*ai;
+	    unsigned	elementSize;
+	    bool	isLocal;
+
+	    ai = cast<AllocaInst>(i);
+	    elementSize = target_data->getTypeStoreSize(ai->getAllocatedType());
+	    ref<Expr> size = Expr::createPointer(elementSize);
+
+	    if (ai->isArrayAllocation()) {
+	      ref<Expr> count = eval(ki, 0, state).value;
+	      count = Expr::createCoerceToPointerType(count);
+	      size = MulExpr::create(size, count);
+	    }
+
+	    isLocal = i->getOpcode()==Instruction::Alloca;
+	    executeAlloc(state, size, isLocal, ki);
+	    break;
+    } else if (isFreeCall(i)) {
+      executeFree(state, eval(ki, 0, state).value);
+      break;
+    }
+
     terminateStateOnExecError(state, "illegal instruction");
     break;
   }
@@ -2919,11 +2921,11 @@ bool debug_xxx = false;
 
 /* handles a memop that can be immediately resolved */
 bool Executor::memOpByByte(
-  ExecutionState& state,
-  bool isWrite,
-  ref<Expr> address,
-  ref<Expr> value,
-  KInstruction* target)
+	ExecutionState& state,
+	bool isWrite,
+	ref<Expr> address,
+	ref<Expr> value,
+	KInstruction* target)
 {
 	Expr::Width	type;
 	unsigned	bytes;
@@ -2961,7 +2963,7 @@ bool Executor::memOpByByte(
 		}
 	}
 
-	// we delayed setting the local variable on the read because 
+	// we delayed setting the local variable on the read because
 	// we need to respect the original type width-- result is concatenated
 	if (!isWrite) {
 		state.bindLocal(target, read_expr);

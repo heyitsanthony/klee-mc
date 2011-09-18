@@ -2,7 +2,9 @@
 #include "llvm/IntrinsicInst.h"
 #include "llvm/Support/CommandLine.h"
 #include "klee/Internal/Module/KModule.h"
-#include "llvm/System/Path.h"
+#include "llvm/Support/Path.h"
+#include "llvm/Support/raw_os_ostream.h"
+#include "llvm/Analysis/ProfileInfo.h"
 #include "klee/Config/config.h"
 #include "klee/breadcrumb.h"
 #include "../../lib/Core/SpecialFunctionHandler.h"
@@ -926,16 +928,18 @@ void ExecutorVex::printStateErrorMessage(
 	}
 
 	if (state.prevPC && state.prevPC->inst) {
-		os << "problem PC:\n";
-		state.prevPC->inst->print(os);
-		os << "\n";
+		raw_os_ostream	ros(os);
+		ros << "problem PC:\n";
+		ros << *(state.prevPC->inst);
+		ros << "\n";
 	}
 
 	top_f = state.stack.back().kf->function;
 	os << "Func: ";
-	if (top_f)
-		top_f->print(os);
-	else
+	if (top_f) {
+		raw_os_ostream ros(os);
+		ros << top_f;
+	} else
 		os << "???";
 	os << "\n";
 

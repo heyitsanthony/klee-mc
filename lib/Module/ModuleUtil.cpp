@@ -17,16 +17,15 @@
 #include "llvm/IntrinsicInst.h"
 #include "llvm/Linker.h"
 #include "llvm/Module.h"
-#include "llvm/ModuleProvider.h"
 #include "llvm/PassManager.h"
-#include "llvm/Assembly/AsmAnnotationWriter.h"
+#include "llvm/Assembly/AssemblyAnnotationWriter.h"
 #include "llvm/Bitcode/Archive.h"
 #include "llvm/Support/CFG.h"
 #include "llvm/Support/CallSite.h"
 #include "llvm/Support/InstIterator.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Analysis/ValueTracking.h"
-#include "llvm/System/Path.h"
+#include "llvm/Support/Path.h"
 
 #include "static/Sugar.h"
 
@@ -52,69 +51,71 @@ using namespace klee;
 /// llvm/lib/Linker/LinkArchives.cpp here.
 Module *klee::linkWithLibrary(
 	Module *module,
-        const std::string &libraryName)
+	const std::string &libraryName)
 {
-  Archive		*libArchive;
-  std::string		errMsg;
-  llvm::sys::Path	libraryPath(libraryName);
+	Archive		*libArchive;
+	std::string	errMsg;
+	llvm::sys::Path	libraryPath(libraryName);
 
 
-  // Load symbol table for library archive
-  libArchive = Archive::OpenAndLoad(
-  	libraryPath, module->getContext(), &errMsg);
-  if (!libArchive) {
-    klee_error("failed to load library archive %s: %s",
-               libraryPath.toString().c_str(), errMsg.c_str());
-  }
+	// Load symbol table for library archive
+	libArchive = Archive::OpenAndLoad(
+	libraryPath, module->getContext(), &errMsg);
+	if (libArchive == NULL) {
+		klee_error(
+			"failed to load library archive %s: %s",
+			libraryPath.c_str(), errMsg.c_str());
+	}
 
-  const llvm::Archive::SymTabType& symbols = libArchive->getSymbolTable();
+	const llvm::Archive::SymTabType& symbols = libArchive->getSymbolTable();
 
-  std::set<ModuleProvider*> modulesToLoad;
-  // Walk the symbol table and assemble a list of modules that need to loaded,
-  // processed, and linked
-  foreach (si, symbols.begin(), symbols.end()) {
-    const std::string &symName = si->first;
-    if(symName[0] == 1) {
-      ModuleProvider *mp;
+	std::set<Module*> modulesToLoad;
+	// Walk the symbol table and assemble a list of modules that need to loaded,
+	// processed, and linked
+	foreach (si, symbols.begin(), symbols.end()) {
+		const std::string &symName = si->first;
 
-      mp = libArchive->findModuleDefiningSymbol(symName, &errMsg);
-      if (!mp)
-        klee_error("failed to find symbol %s: %s", symName.c_str(),
-                   errMsg.c_str());
-      modulesToLoad.insert(mp);
-    }
-  }
+		if(symName[0] != 1) continue;
 
-  Linker linker("klee", module, 0 /* Linker::Verbose */);
+		Module	*m;
 
-  // Run passes on relevant modules and then link against them
-  foreach (mi, modulesToLoad.begin(), modulesToLoad.end()) {
-    Module *m;
+		m = libArchive->findModuleDefiningSymbol(symName, &errMsg);
+		if (m)
+			klee_error(
+				"failed to find symbol %s: %s",
+				symName.c_str(),
+				errMsg.c_str());
+		modulesToLoad.insert(m);
+	}
 
-    m = (*mi)->releaseModule(&errMsg);
-    if (!m) klee_error("failed to release module: %s", errMsg.c_str());
+	Linker linker("klee", module, 0 /* Linker::Verbose */);
 
-    runRemoveSentinelsPass(*m);
-    if (linker.LinkInModule(m, &errMsg)) {
-      klee_error("failed to link with module %s->%s: %s",
-                 libraryName.c_str(),
-                 m->getModuleIdentifier().c_str(),
-                 errMsg.c_str());
-    }
-    delete m;
-  }
+	// Run passes on relevant modules and then link against them
+	foreach (mi, modulesToLoad.begin(), modulesToLoad.end()) {
+		Module	*m = *mi;
+		runRemoveSentinelsPass(*m);
+		if (linker.LinkInModule(m, &errMsg)) {
+			klee_error(
+				"failed to link with module %s->%s: %s",
+				libraryName.c_str(),
+				m->getModuleIdentifier().c_str(),
+				errMsg.c_str());
+		}
+	}
 
-  delete libArchive;
+	modulesToLoad.clear();
+	/* frees modules from modulesToLoad */
+	delete libArchive;
 
-  // Now link against an unmodified version of the library archive for
-  // the common case when no sentinels are found. This avoids code duplication
-  // from llvm/lib/Linker/LinkArchives.cpp.
-  bool native = false;
-  if (linker.LinkInFile(libraryPath, native)) {
-    assert(0 && "linking in library failed!");
-  }
+	// Now link against an unmodified version of the library archive for
+	// the common case when no sentinels are found.
+	// This avoids code duplication from llvm/lib/Linker/LinkArchives.cpp.
+	bool native = false;
+	if (linker.LinkInFile(libraryPath, native)) {
+		assert(0 && "linking in library failed!");
+	}
 
-  return linker.releaseModule();
+	return linker.releaseModule();
 }
 
 Function *klee::getDirectCallTarget(CallSite cs)
@@ -173,13 +174,11 @@ static bool valueIsOnlyCalled(const Value *v)
   return true;
 }
 
-bool klee::functionEscapes(const Function *f) {
-  return !valueIsOnlyCalled(f);
-}
+bool klee::functionEscapes(const Function *f) { return !valueIsOnlyCalled(f); }
 
 void klee::runRemoveSentinelsPass(Module &module)
 {
-  llvm::PassManager pm;
-  pm.add(new RemoveSentinelsPass());
-  pm.run(module);
+	llvm::PassManager pm;
+	pm.add(new RemoveSentinelsPass());
+	pm.run(module);
 }

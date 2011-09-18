@@ -38,8 +38,8 @@
 #include "llvm/Type.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/CFG.h"
-#include "llvm/System/Process.h"
-#include "llvm/System/Path.h"
+#include "llvm/Support/Process.h"
+#include "llvm/Support/Path.h"
 
 #include <iostream>
 #include <fstream>
@@ -310,8 +310,8 @@ void StatsTracker::stepInstUpdateFrame(ExecutionState &es)
   {
       // Checking for actual stoppoints avoids inconsistencies due
       // to line number propogation.
-      if (isa<DbgStopPointInst>(inst))
-        es.coveredLines[&ii.file].insert(ii.line);
+      //if (isa<DbgStopPointInst>(inst))
+      //  es.coveredLines[&ii.file].insert(ii.line);
       es.coveredNew = true;
       es.instsSinceCovNew = 1;
       ++stats::coveredInstructions;

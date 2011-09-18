@@ -10,8 +10,7 @@
 #include "klee/Internal/Support/Timer.h"
 #include "klee/Internal/System/Time.h"
 
-#include "llvm/System/Process.h"
-
+#include <llvm/Support/Process.h>
 #include <algorithm>
 
 using namespace klee;

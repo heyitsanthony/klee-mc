@@ -4,14 +4,14 @@
 #include "klee/Internal/Support/ModuleUtil.h"
 
 #include "llvm/Module.h"
-#include "llvm/ModuleProvider.h" // XXX
 #include "llvm/Instructions.h"
 
 #include "llvm/Bitcode/ReaderWriter.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/system_error.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/TypeBuilder.h"
-#include "llvm/System/Signals.h"
+#include "llvm/Support/Signals.h"
 
 #include "static/Sugar.h"
 #include "libc.h"
@@ -25,14 +25,14 @@ using namespace llvm;
 
 namespace {
   cl::opt<bool> OptimizeModule(
-    "optimize", 
+    "optimize",
     cl::desc("Optimize before execution"));
 
   cl::opt<bool> CheckDivZero(
-    "check-div-zero", 
+    "check-div-zero",
     cl::desc("Inject checks for division-by-zero"),
     cl::init(true));
-    
+
   cl::opt<bool> InitEnv(
     "init-env",
 	  cl::desc("Create custom environment.  Options that can be passed as arguments to the programs are: --sym-argv <max-len>  --sym-argvs <min-argvs> <max-argvs> <max-len> + file model options"));
@@ -57,7 +57,7 @@ extern bool g_WithPOSIXRuntime;
 namespace
 {
   cl::opt<bool> WarnAllExternals(
-    "warn-all-externals", 
+    "warn-all-externals",
     cl::desc("Give initial warning for all externals."));
 }
 
@@ -69,46 +69,46 @@ static const char *modelledExternals[] =
   "_ZTVN10__cxxabiv121__vmi_class_type_infoE",
 
   // special functions
-  "_assert", 
-  "__assert_fail", 
-  "__assert_rtn", 
-  "calloc", 
-  "_exit", 
-  "exit", 
-  "free", 
-  "abort", 
-  "klee_abort", 
-  "klee_assume", 
+  "_assert",
+  "__assert_fail",
+  "__assert_rtn",
+  "calloc",
+  "_exit",
+  "exit",
+  "free",
+  "abort",
+  "klee_abort",
+  "klee_assume",
   "klee_check_memory_access",
   "klee_define_fixed_object",
-  "klee_get_errno", 
+  "klee_get_errno",
   "klee_get_value",
-  "klee_get_obj_size", 
-  "klee_is_symbolic", 
-  "klee_make_symbolic", 
-  "klee_mark_global", 
-  "klee_merge", 
+  "klee_get_obj_size",
+  "klee_is_symbolic",
+  "klee_make_symbolic",
+  "klee_mark_global",
+  "klee_merge",
   "klee_prefer_cex",
-  "klee_print_expr", 
-  "klee_print_range", 
-  "klee_report_error", 
+  "klee_print_expr",
+  "klee_print_range",
+  "klee_report_error",
   "klee_set_forking",
-  "klee_silent_exit", 
-  "klee_warning", 
-  "klee_warning_once", 
+  "klee_silent_exit",
+  "klee_warning",
+  "klee_warning_once",
   "klee_alias_function",
   "klee_stack_trace",
-  "llvm.dbg.stoppoint", 
-  "llvm.va_start", 
-  "llvm.va_end", 
-  "malloc", 
-  "realloc", 
-  "_ZdaPv", 
-  "_ZdlPv", 
-  "_Znaj", 
-  "_Znwj", 
-  "_Znam", 
-  "_Znwm", 
+  "llvm.dbg.stoppoint",
+  "llvm.va_start",
+  "llvm.va_end",
+  "malloc",
+  "realloc",
+  "_ZdaPv",
+  "_ZdlPv",
+  "_Znaj",
+  "_Znwj",
+  "_Znam",
+  "_Znwm",
 };
 
 // Symbols we aren't going to warn about
@@ -154,7 +154,7 @@ static const char *dontCareExternals[] = {
   "uname",
 
   // fp stuff we just don't worry about yet
-  "frexp",  
+  "frexp",
   "ldexp",
   "__isnan",
   "__signbit",
@@ -195,15 +195,15 @@ static const char *unsafeExternals[] = {
 void externalsAndGlobalsCheck(const Module *m)
 {
   std::map<std::string, bool> externals;
-  std::set<std::string> modelled(modelledExternals, 
+  std::set<std::string> modelled(modelledExternals,
                                  modelledExternals+NELEMS(modelledExternals));
-  std::set<std::string> dontCare(dontCareExternals, 
+  std::set<std::string> dontCare(dontCareExternals,
                                  dontCareExternals+NELEMS(dontCareExternals));
-  std::set<std::string> unsafe(unsafeExternals, 
+  std::set<std::string> unsafe(unsafeExternals,
                                unsafeExternals+NELEMS(unsafeExternals));
 
   switch (g_Libc) {
-  case KleeLibc: 
+  case KleeLibc:
     dontCare.insert(dontCareKlee, dontCareKlee+NELEMS(dontCareKlee));
     break;
   case UcLibc:
@@ -213,7 +213,7 @@ void externalsAndGlobalsCheck(const Module *m)
   case NoLibc: /* silence compiler warning */
     break;
   }
-  
+
 
   if (g_WithPOSIXRuntime) dontCare.insert("syscall");
 
@@ -226,7 +226,7 @@ void externalsAndGlobalsCheck(const Module *m)
         if (!ci) continue;
         if (!isa<InlineAsm>(ci->getCalledValue())) continue;
         klee_warning_once(&*fnIt,
-                          "function \"%s\" has inline asm", 
+                          "function \"%s\" has inline asm",
                           fnIt->getName().data());
       }
     }
@@ -248,7 +248,7 @@ void externalsAndGlobalsCheck(const Module *m)
   std::map<std::string, bool> foundUnsafe;
   foreach (it, externals.begin(), externals.end()) {
     const std::string &ext = it->first;
-    if (!modelled.count(ext) && (WarnAllExternals || 
+    if (!modelled.count(ext) && (WarnAllExternals ||
         !dontCare.count(ext))) {
       if (unsafe.count(ext)) {
         foundUnsafe.insert(*it);
@@ -330,7 +330,7 @@ static void uclibc_fixups(llvm::Module* mainModule)
   //    if (f) f->setName("fputc_unlocked");
   //    f = mainModule->getFunction("__fgetc_unlocked");
   //    if (f) f->setName("fgetc_unlocked");
-  
+
   Function *f, *f2;
   f = mainModule->getFunction("open");
   f2 = mainModule->getFunction("__libc_open");
@@ -360,9 +360,9 @@ static void uclibc_fixups(llvm::Module* mainModule)
 static void uclibc_setEntry(llvm::Module* mainModule)
 {
   Function *userMainFn = mainModule->getFunction("main");
-  assert(userMainFn && "unable to get user main");    
+  assert(userMainFn && "unable to get user main");
   Function *uclibcMainFn = mainModule->getFunction("__uClibc_main");
-  assert(uclibcMainFn && "unable to get uclibc main");    
+  assert(uclibcMainFn && "unable to get uclibc main");
   userMainFn->setName("__user_main");
 
   const FunctionType *ft = uclibcMainFn->getFunctionType();
@@ -383,13 +383,13 @@ static void uclibc_setEntry(llvm::Module* mainModule)
   args.push_back(llvm::ConstantExpr::getBitCast(
     userMainFn, ft->getParamType(0)));
   args.push_back(stub->arg_begin()); // argc
-  args.push_back(++stub->arg_begin()); // argv    
+  args.push_back(++stub->arg_begin()); // argv
   args.push_back(Constant::getNullValue(ft->getParamType(3))); // app_init
   args.push_back(Constant::getNullValue(ft->getParamType(4))); // app_fini
   args.push_back(Constant::getNullValue(ft->getParamType(5))); // rtld_fini
   args.push_back(Constant::getNullValue(ft->getParamType(6))); // stack_end
   CallInst::Create(uclibcMainFn, args.begin(), args.end(), "", bb);
-  
+
   new UnreachableInst(getGlobalContext(), bb);
 }
 
@@ -402,7 +402,7 @@ static llvm::Module *linkWithUclibc(llvm::Module *mainModule)
     FunctionType::get(Type::getVoidTy(getGlobalContext()),
     std::vector<const Type*>(),
     true));
-  
+
   // force various imports
   if (g_WithPOSIXRuntime) uclibc_forceImports(mainModule);
 
@@ -436,7 +436,6 @@ static llvm::Module *linkWithUclibc(llvm::Module *mainModule)
   return mainModule;
 }
 #endif
-
 
 
 static Module* setupLibc(Module* mainModule, Interpreter::ModuleOptions& Opts)
@@ -519,9 +518,9 @@ static int initEnv(Module *mainModule)
 
   BasicBlock *dBB = BasicBlock::Create(getGlobalContext(), "entry", mainFn);
 
-  AllocaInst* argcPtr = 
+  AllocaInst* argcPtr =
     new AllocaInst(oldArgc->getType(), "argcPtr", dBB);
-  AllocaInst* argvPtr = 
+  AllocaInst* argvPtr =
     new AllocaInst(oldArgv->getType(), "argvPtr", dBB);
 
   new StoreInst(oldArgc, argcPtr, dBB);
@@ -531,7 +530,7 @@ static int initEnv(Module *mainModule)
   std::vector<const Type*> params;
   params.push_back(Type::getInt32Ty(getGlobalContext()));
   params.push_back(Type::getInt32Ty(getGlobalContext()));
-  Function* initEnvFn = 
+  Function* initEnvFn =
     cast<Function>(mainModule->getOrInsertFunction(
       "klee_init_env",
       Type::getVoidTy(getGlobalContext()),
@@ -567,87 +566,72 @@ static int initEnv(Module *mainModule)
 }
 
 
-
 Interpreter::ModuleOptions getMainModule(Module* &mainModule)
 {
-  std::string ErrorMsg;
-#if 0  
-  mainModule = 0;
-  OwningPtr<MemoryBuffer> Buffer;
-  MemoryBuffer::getFileOrSTDIN(g_InputFile, Buffer);
-  if (Buffer) {
-    mainModule = getLazyBitcodeModule(Buffer.get(), getGlobalContext(), &ErrorMsg);
-    if (!mainModule) Buffer.reset();
-  }
-  if (mainModule) {
-    if (mainModule->MaterializeAllPermanently(&ErrorMsg)) {
-      delete mainModule;
-      mainModule = 0;
-   }
-  }            
+	std::string ErrorMsg;
+	OwningPtr<MemoryBuffer> Buffer;
+	MemoryBuffer::getFileOrSTDIN(g_InputFile.c_str(), Buffer);
 
-  if (!mainModule)
-    klee_error("error loading program '%s': %s",
-    	InputFile.c_str(), ErrorMsg.c_str());
+	mainModule = 0;
+	if (Buffer) {
+		//mainModule = getLazyBitcodeModule(Buffer.get(), getGlobalContext(), &ErrorMsg);
+		mainModule = ParseBitcodeFile(Buffer.get(), getGlobalContext(), &ErrorMsg);
+		if (!mainModule) Buffer.reset();
+	}
 
-  assert(mainModule && "unable to materialize");
-#else
-  ModuleProvider *MP = 0;
-  if (MemoryBuffer *Buffer = MemoryBuffer::getFileOrSTDIN(g_InputFile, &ErrorMsg)) {
-    MP = getBitcodeModuleProvider(Buffer, getGlobalContext(), &ErrorMsg);
-    if (!MP) delete Buffer;
-  }
-  
-  if (!MP)
-    klee_error("error loading program '%s': %s", 
-      g_InputFile.c_str(), ErrorMsg.c_str());
+	if (mainModule) {
+		if (mainModule->MaterializeAllPermanently(&ErrorMsg)) {
+			delete mainModule;
+			mainModule = 0;
+		}
+	}
 
-  mainModule = MP->materializeModule();
-  MP->releaseModule();
-  delete MP;
+	if (!mainModule)
+		klee_error(
+			"error loading program '%s': %s",
+			g_InputFile.c_str(),
+			ErrorMsg.c_str());
 
-  assert(mainModule && "unable to materialize");
+	assert(mainModule && "unable to materialize");
 
+	// Remove '\x01' prefix sentinels before linking
+	runRemoveSentinelsPass(*mainModule);
 
-#endif
+	if (g_WithPOSIXRuntime) InitEnv = true;
 
-  // Remove '\x01' prefix sentinels before linking
-  runRemoveSentinelsPass(*mainModule);
-  
-  if (g_WithPOSIXRuntime) InitEnv = true;
+	if (InitEnv) {
+		int r = initEnv(mainModule);
+		if (r != 0) exit(r);
+	}
 
-  if (InitEnv) {
-    int r = initEnv(mainModule);
-    if (r != 0) exit(r);
-  }
+	llvm::sys::Path LibraryDir(KLEE_DIR "/" RUNTIME_CONFIGURATION "/lib");
+	Interpreter::ModuleOptions Opts(
+		LibraryDir.c_str(),
+		OptimizeModule,
+		CheckDivZero,
+		ExcludeCovFiles);
 
-  llvm::sys::Path LibraryDir(KLEE_DIR "/" RUNTIME_CONFIGURATION "/lib");
-  Interpreter::ModuleOptions Opts(
-    LibraryDir.c_str(),
-    OptimizeModule, 
-    CheckDivZero,
-    ExcludeCovFiles);
+	mainModule = setupLibc(mainModule, Opts);
 
-  mainModule = setupLibc(mainModule, Opts);
+	if(ExcludeLibcCov) {
+		llvm::sys::Path ExcludePath(Opts.LibraryDir);
+		ExcludePath.appendComponent("kleeRuntimeIntrinsic-fns.txt");
+		Opts.ExcludeCovFiles.push_back(ExcludePath.c_str());
+	}
 
-  if(ExcludeLibcCov) {
-    llvm::sys::Path ExcludePath(Opts.LibraryDir);
-    ExcludePath.appendComponent("kleeRuntimeIntrinsic-fns.txt");
-    Opts.ExcludeCovFiles.push_back(ExcludePath.c_str());
-  }
+	if (g_WithPOSIXRuntime) {
+		llvm::sys::Path Path(Opts.LibraryDir);
+		Path.appendComponent("libkleeRuntimePOSIX.bca");
+		klee_message("NOTE: Using model: %s", Path.c_str());
 
-  if (g_WithPOSIXRuntime) {
-    llvm::sys::Path Path(Opts.LibraryDir);
-    Path.appendComponent("libkleeRuntimePOSIX.bca");
-    klee_message("NOTE: Using model: %s", Path.c_str());
-    mainModule = klee::linkWithLibrary(mainModule, Path.c_str());
-    assert(mainModule && "unable to link with simple model");
-    if(ExcludeLibcCov) {
-      llvm::sys::Path ExcludePath(Opts.LibraryDir);
-      ExcludePath.appendComponent("kleeRuntimePOSIX-fns.txt");
-      Opts.ExcludeCovFiles.push_back(ExcludePath.c_str());
-    }
-  }  
+		mainModule = klee::linkWithLibrary(mainModule, Path.c_str());
+		assert(mainModule && "unable to link with simple model");
+		if(ExcludeLibcCov) {
+			llvm::sys::Path ExcludePath(Opts.LibraryDir);
+			ExcludePath.appendComponent("kleeRuntimePOSIX-fns.txt");
+			Opts.ExcludeCovFiles.push_back(ExcludePath.c_str());
+		}
+	}
 
-  return Opts;
+	return Opts;
 }

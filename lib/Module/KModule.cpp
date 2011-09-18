@@ -21,6 +21,8 @@
 #include "klee/Internal/Support/ModuleUtil.h"
 
 #include "llvm/Linker.h"
+#include "llvm/LLVMContext.h"
+
 #include "llvm/Bitcode/ReaderWriter.h"
 #include "llvm/Instructions.h"
 #include "llvm/Module.h"
@@ -28,13 +30,10 @@
 #include "llvm/ValueSymbolTable.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
-#if (LLVM_VERSION_MAJOR == 2 && LLVM_VERSION_MINOR == 6)
 #include "llvm/Support/raw_os_ostream.h"
-#endif
-#include "llvm/System/Path.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Target/TargetData.h"
 #include "llvm/Transforms/Scalar.h"
-#include "llvm/ModuleProvider.h"
 
 #include "static/Sugar.h"
 
@@ -99,7 +98,7 @@ KModule::KModule(Module *_module)
 , kleeMergeFn(0)
 , infos(0)
 , constantTable(0)
-, fpm(new FunctionPassManager(new ExistingModuleProvider(_module)))
+, fpm(new FunctionPassManager(_module))
 {
 }
 

@@ -9,6 +9,7 @@
 
 #include "Passes.h"
 #include "static/Sugar.h"
+#include "llvm/LLVMContext.h"
 #include "llvm/InlineAsm.h"
 
 using namespace llvm;

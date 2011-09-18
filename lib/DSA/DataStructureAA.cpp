@@ -37,7 +37,7 @@ namespace {
     std::multimap<DSNode*, const DSNode*> CallerCalleeMap;
   public:
     static char ID;
-    DSAA() : ModulePass((intptr_t)&ID), TD(0) {}
+    DSAA() : ModulePass(ID), TD(0) {}
     ~DSAA() {
       InvalidateCache();
     }
@@ -133,10 +133,10 @@ AliasAnalysis::AliasResult DSAA::alias(const Value *V1, unsigned V1Size,
   DSGraph* G = G1 ? G1 : (G2 ? G2 : TD->getGlobalsGraph());
 
   const DSGraph::ScalarMapTy &GSM = G->getScalarMap();
-  DSGraph::ScalarMapTy::const_iterator I = GSM.find((Value*)V1);
+  DSGraph::ScalarMapTy::const_iterator I = GSM.find(V1);
   if (I == GSM.end()) return NoAlias;
 
-  DSGraph::ScalarMapTy::const_iterator J = GSM.find((Value*)V2);
+  DSGraph::ScalarMapTy::const_iterator J = GSM.find(V2);
   if (J == GSM.end()) return NoAlias;
 
   DSNode  *N1 = I->second.getNode(),  *N2 = J->second.getNode();

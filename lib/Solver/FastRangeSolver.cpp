@@ -271,7 +271,7 @@ public:
 	bool restrictMax(uint64_t _max) {
 		APInt _temp(m_max);
 		if (_temp.getBitWidth() < 64)
-			_temp.zext(64);
+			_temp = _temp.zext(64);
 		if (_temp.ugt(APInt(64, _max))) {
 			m_max = _max;
 			return true;
@@ -430,16 +430,16 @@ public:
 		assert(unique());
 		assert(offset + bits <= getWidth() && "out of range");
 		APInt result(m_min.lshr(offset));
-		result.trunc(bits);
+		result = result.trunc(bits);
 		return ValueSet(result, result);
 	}
 	ValueSet concat(const ValueSet &b) const {
 		assert(unique() && b.unique());
 		APInt result(m_min);
-		result.zext(getWidth()+b.getWidth());
+		result = result.zext(getWidth()+b.getWidth());
 		result <<= b.getWidth();
 		APInt right(b.m_min);
-		right.zext(getWidth()+b.getWidth());
+		right = right.zext(getWidth()+b.getWidth());
 		result |= right;
 		return ValueSet(result, result);
 	}
@@ -509,7 +509,7 @@ public:
 			: APInt::getMaxValue(b.m_min.getLimitedValue(64));
 
 		if (lsb.getBitWidth() < getWidth())
-			lsb.zext(getWidth());
+			lsb = lsb.zext(getWidth());
 
 		if (unique()) { // known shift of known value
 			APInt temp(m_min.shl(b.m_min));

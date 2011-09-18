@@ -15,8 +15,10 @@
 #define LLVM_ANALYSIS_DSNODE_H
 
 #include "static/dsa/DSSupport.h"
-#include "llvm/Support/Streams.h"
 #include "static/dsa/HashExtras.h"
+
+#include "llvm/Support/raw_os_ostream.h"
+#include <iostream>
 
 namespace llvm {
 
@@ -207,7 +209,7 @@ public:
   DSNodeHandle &getLink(unsigned Offset) {
 
     if (!((Offset & ((1 << DS::PointerShift)-1)) == 0)) {
-           cout << "Pointer offset not aligned correctly!";
+           std::cout << "Pointer offset not aligned correctly!";
         int *i = 0;
         *i = 0;
     }
@@ -388,10 +390,13 @@ public:
   ///
   void forwardNode(DSNode *To, unsigned Offset);
 
-  void print(OStream &O, const DSGraph *G) const {
-    if (O.stream()) print(*O.stream(), G);
+  void print(raw_ostream &O, const DSGraph *G) const;
+  void print(std::ostream &O, const DSGraph *G) const
+  {
+	raw_os_ostream	os(O);
+	print(O, G);
   }
-  void print(std::ostream &O, const DSGraph *G) const;
+
   void dump() const;
 
   void assertOK() const;

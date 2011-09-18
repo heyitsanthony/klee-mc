@@ -12,6 +12,11 @@
 #
 LEVEL = .
 
+ENABLE_RTTI=1
+REQUIRES_RTTI=1
+export REQUIRES_RTTI=1
+export ENABLE_RTTI=1
+
 include $(LEVEL)/Makefile.config
 
 DIRS = lib
@@ -65,19 +70,19 @@ test::
 .PHONY: mc
 mc: mc-std mc-fdt
 
-mc-std: Release/lib/libkleeRuntimeMC.bca
+mc-std: $(LibDir)/libkleeRuntimeMC.bca
 	mkdir -p mc_tmp
-	cd mc_tmp && ar x ../Release/lib/libkleeRuntimeMC.bca && cd ..
-	llvm-link -f -o Release/lib/libkleeRuntimeMC.bc mc_tmp/*.bc
+	cd mc_tmp && ar x $(LibDir)/libkleeRuntimeMC.bca && cd ..
+	llvm-link -f -o $(LibDir)/libkleeRuntimeMC.bc mc_tmp/*.bc
 	rm -rf mc_tmp
-	cp Release/lib/libkleeRuntimeMC.bc $(VEXLLVM_HELPER_PATH)
+	cp $(LibDir)/libkleeRuntimeMC.bc $(VEXLLVM_HELPER_PATH)
 
-mc-fdt: Release/lib/libkleeRuntimeMC-fdt.bca
+mc-fdt: $(LibDir)/libkleeRuntimeMC-fdt.bca
 	mkdir -p mcfdt_tmp
-	cd mcfdt_tmp && ar x ../Release/lib/libkleeRuntimeMC-fdt.bca && cd ..
-	llvm-link -f -o Release/lib/libkleeRuntimeMC-fdt.bc mcfdt_tmp/*.bc
+	cd mcfdt_tmp && ar x $(LibDir)/libkleeRuntimeMC-fdt.bca && cd ..
+	llvm-link -f -o $(LibDir)/libkleeRuntimeMC-fdt.bc mcfdt_tmp/*.bc
 	rm -rf mcfdt_tmp
-	cp Release/lib/libkleeRuntimeMC-fdt.bc $(VEXLLVM_HELPER_PATH)
+	cp $(LibDir)/libkleeRuntimeMC-fdt.bc $(VEXLLVM_HELPER_PATH)
 
 
 test-all: test test-replay

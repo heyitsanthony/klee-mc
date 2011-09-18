@@ -37,6 +37,8 @@
 
 using namespace llvm;
 
+#define DOUT	llvm::raw_fd_ostream(0, false)
+
 static RegisterPass<LocalDataStructures>
 X("dsa-local", "Local Data Structure Analysis");
 
@@ -88,13 +90,13 @@ namespace {
     // Visitor functions, used to handle each instruction type we encounter...
     friend class InstVisitor<GraphBuilder>;
 
-    void visitMallocInst(MallocInst &MI)
+    void visitMallocInst(CallInst &MI)
     { setDestTo(MI, createNode()->setHeapMarker()); }
 
     void visitAllocaInst(AllocaInst &AI)
     { setDestTo(AI, createNode()->setAllocaMarker()); }
 
-    void visitFreeInst(FreeInst &FI)
+    void visitFreeInst(CallInst &FI)
     { if (DSNode *N = getValueDest(*FI.getOperand(0)).getNode())
         N->setHeapMarker();
     }
@@ -606,10 +608,7 @@ bool GraphBuilder::visitIntrinsic(CallSite CS, Function *F) {
                                                 ->foldNodeCompletely();
     return true;
   case Intrinsic::vaend:
-  case Intrinsic::dbg_func_start:
-  case Intrinsic::dbg_region_end:
-  case Intrinsic::dbg_stoppoint:
-  case Intrinsic::dbg_region_start:
+  case Intrinsic::dbg_value:
   case Intrinsic::dbg_declare:
     return true;  // noop
   case Intrinsic::memcpy: 
@@ -667,10 +666,8 @@ bool GraphBuilder::visitIntrinsic(CallSite CS, Function *F) {
    
               
 
-  case Intrinsic::eh_selector_i32:
-  case Intrinsic::eh_selector_i64:
-  case Intrinsic::eh_typeid_for_i32:
-  case Intrinsic::eh_typeid_for_i64:
+  case Intrinsic::eh_selector:
+  case Intrinsic::eh_typeid_for:
   case Intrinsic::prefetch:
     return true;
 
@@ -785,7 +782,7 @@ void GraphBuilder::MergeConstantInitIntoNode(DSNodeHandle &NH, const Type* Ty, C
     return;
   }
 
-  if (Ty->isIntOrIntVector() || Ty->isFPOrFPVector()) return;
+  if (Ty->isIntOrIntVectorTy() || Ty->isFPOrFPVectorTy()) return;
 
   const TargetData &TD = NH.getNode()->getTargetData();
 

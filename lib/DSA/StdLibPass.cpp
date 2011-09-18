@@ -230,7 +230,7 @@ const struct {
 void StdLibDataStructures::eraseCallsTo(Function* F) {
   for (Value::use_iterator ii = F->use_begin(), ee = F->use_end();
        ii != ee; ++ii)
-    if (CallInst* CI = dyn_cast<CallInst>(ii))
+    if (CallInst* CI = dyn_cast<CallInst>(*ii))
       if (CI->getOperand(0) == F) {
         DSGraph* Graph = getDSGraph(*CI->getParent()->getParent());
         //delete the call
@@ -291,11 +291,11 @@ bool StdLibDataStructures::runOnModule(Module &M) {
   for (Module::iterator I = M.begin(), E = M.end(); I != E; ++I) {
 	  Function* f = &*I;
 	  if (f->isDeclaration() && (summarized.find(f) == summarized.end())) {
-		  cout << "ERROR: Declaration function aliasing effects not summarized: " << f->getNameStr() << "\n";
+		  std::cout << "ERROR: Declaration function aliasing effects not summarized: " << f->getNameStr() << "\n";
 	  }
 	  
 	  if (!f->isDeclaration() && (summarized.find(f) != summarized.end())) {
-		  cout << "ERROR: Non-declaration function aliasing effect summarized " << f->getNameStr() << "\n";
+		  std::cout << "ERROR: Non-declaration function aliasing effect summarized " << f->getNameStr() << "\n";
 	  }
   }
   
@@ -303,8 +303,9 @@ bool StdLibDataStructures::runOnModule(Module &M) {
     if (Function* F = M.getFunction(recFuncs[x].name))
       if (F->isDeclaration()) {
         for (Value::use_iterator ii = F->use_begin(), ee = F->use_end();
-             ii != ee; ++ii)
-          if (CallInst* CI = dyn_cast<CallInst>(ii))
+             ii != ee; ++ii) {
+	  CallInst* CI = dyn_cast<CallInst>(*ii);
+          if (CI != NULL)
             if (CI->getOperand(0) == F) {
               DSGraph* Graph = getDSGraph(*CI->getParent()->getParent());
               if (recFuncs[x].action.read[0])
@@ -349,6 +350,7 @@ bool StdLibDataStructures::runOnModule(Module &M) {
                       Node->foldNodeCompletely();
               }
             }
+	}
         eraseCallsTo(F);
       }
   

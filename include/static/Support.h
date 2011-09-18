@@ -8,6 +8,7 @@
 #include <string>
 #include <algorithm>
 #include <klee/Expr.h>
+#include <llvm/Support/raw_os_ostream.h>
 #include "static/Sugar.h"
 #include <iostream>
 
@@ -99,10 +100,12 @@ namespace klee {
         }
 
         static std::string str(Value * i) {
-            std::stringstream out;
-            out << *i;
-            std::string s(out.str());
-            return trim(s);
+		std::stringstream out;
+		raw_os_ostream	ros(out);
+		i->print(ros);
+		ros.flush();
+		std::string s(out.str());
+		return trim(s);
         }
 
         static std::string str(int i) {

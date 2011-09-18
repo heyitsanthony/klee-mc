@@ -31,8 +31,7 @@
 #undef PACKAGE_TARNAME
 #undef PACKAGE_VERSION
 #include "llvm/Target/TargetSelect.h"
-//#include "llvm/Support/Signals.h"
-#include "llvm/System/Signals.h"
+#include "llvm/Support/Signals.h"
 #include <iostream>
 #include <fstream>
 #include <cerrno>

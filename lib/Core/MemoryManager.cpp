@@ -18,7 +18,6 @@
 #include "klee/Solver.h"
 
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Support/Streams.h"
 
 using namespace klee;
 

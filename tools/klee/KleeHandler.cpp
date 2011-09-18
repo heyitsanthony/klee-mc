@@ -1,4 +1,4 @@
-#include "llvm/System/Signals.h"
+#include "llvm/Support/Signals.h"
 #include "llvm/Support/CommandLine.h"
 
 #include "klee/Common.h"
@@ -358,8 +358,7 @@ void KleeHandler::getPathFiles(
   }
 
   foreach (it, contents.begin(), contents.end()) {
-//    std::string f = it->str();
-    std::string f = it->toString();
+    std::string f = it->str();
     if (f.substr(f.size() - 5, f.size()) == ".path") {
       results.push_back(f);
     }
@@ -404,11 +403,7 @@ void KleeHandler::getOutFiles(
     exit(1);
   }
   foreach (it, contents.begin(), contents.end()) {
-//#if (LLVM_VERSION_MAJOR == 2 && LLVM_VERSION_MINOR == 6)
-    std::string f = it->toString();
-//#else
-//    std::string f = it->str();
-//#endif
+    std::string f = it->str();
     if (f.substr(f.size()-6,f.size()) == ".ktest") {
       results.push_back(f);
     }

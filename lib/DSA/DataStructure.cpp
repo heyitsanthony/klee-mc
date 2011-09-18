@@ -20,6 +20,7 @@
 #include "llvm/GlobalVariable.h"
 #include "llvm/Instructions.h"
 #include "llvm/DerivedTypes.h"
+#include "llvm/LLVMContext.h"
 #include "llvm/Target/TargetData.h"
 #include "llvm/Assembly/Writer.h"
 #include "llvm/Support/CommandLine.h"
@@ -35,6 +36,8 @@
 #include <iostream>
 #include <algorithm>
 using namespace llvm;
+
+#define DOUT	llvm::raw_fd_ostream(0, false)
 
 #define COLLAPSE_ARRAYS_AGGRESSIVELY 0
 namespace {
@@ -136,13 +139,14 @@ DSNodeHandle &DSScalarMap::AddGlobal(const GlobalValue *GV) {
   return ValueMap.insert(std::make_pair(GV, DSNodeHandle())).first->second;
 }
 
-
 //===----------------------------------------------------------------------===//
 // DSNode Implementation
 //===----------------------------------------------------------------------===//
 
 DSNode::DSNode(const Type *T, DSGraph *G)
-  : NumReferrers(0), Size(0), ParentGraph(G), Ty(Type::getVoidTy(getGlobalContext())), NodeType(0), name(-1) {
+  :	NumReferrers(0), Size(0), ParentGraph(G),
+  	Ty(Type::getVoidTy(llvm::getGlobalContext())), NodeType(0), name(-1)
+{
   // Add the type entry if it is specified...
   if (T) mergeTypeInfo(T, 0);
   if (G) G->addNode(this);
@@ -758,8 +762,8 @@ bool DSNode::mergeTypeInfo(const Type *NewTy, unsigned Offset,
     // Check to see if we have a pointer & integer mismatch going on here,
     // loading a pointer as a long, for example.
     //
-    if ((SubType->isInteger() && isa<PointerType>(NewTy)) ||
-        (NewTy->isInteger() && isa<PointerType>(SubType)))
+    if ((SubType->isIntegerTy() && isa<PointerType>(NewTy)) ||
+        (NewTy->isIntegerTy() && isa<PointerType>(SubType)))
       return false;
   } else if (NewTySize > SubTypeSize && NewTySize <= PadSize) {
     // We are accessing the field, plus some structure padding.  Ignore the
@@ -772,7 +776,7 @@ bool DSNode::mergeTypeInfo(const Type *NewTy, unsigned Offset,
     M = getParentGraph()->retnodes_begin()->first->getParent();
 
   DOUT << "MergeTypeInfo Folding OrigTy: ";
-  raw_stderr_ostream stream;
+  raw_os_ostream stream(std::cerr);
   DEBUG(WriteTypeSymbolic(stream, Ty, M);
         stream << "\n due to:";
         WriteTypeSymbolic(stream, NewTy, M);
@@ -1460,7 +1464,7 @@ DSGraph::~DSGraph() {
 }
 
 // dump - Allow inspection of graph in a debugger.
-void DSGraph::dump() const { print(cerr); }
+void DSGraph::dump() const { print(std::cerr); }
 
 
 /// remapLinks - Change all of the Links in the current node according to the
@@ -1493,6 +1497,16 @@ void DSGraph::removeFunctionCalls(Function& F) {
     }
 }
 
+/* MallocInsts were removed in 2010, but we still need to detect them */
+static bool isMallocInst(Value* Ptr)
+{
+	if (Ptr == NULL) return false;
+	if (!isa<CallInst>(Ptr)) return false;
+	if (((CallInst*)Ptr)->getCalledFunction()->getNameStr() == "malloc")
+		return true;
+	return false;
+}
+
 /// addObjectToGraph - This method can be used to add global, stack, and heap
 /// objects to the graph.  This can be used when updating DSGraphs due to the
 /// introduction of new temporary objects.  The new object is not pointed to
@@ -1506,7 +1520,7 @@ DSNode *DSGraph::addObjectToGraph(Value *Ptr, bool UseDeclaredType) {
 
   if (GlobalValue *GV = dyn_cast<GlobalValue>(Ptr)) {
     N->addGlobal(GV);
-  } else if (isa<MallocInst>(Ptr)) {
+  } else if (isMallocInst(Ptr)) {
    N->setHeapMarker();
   } else if (isa<AllocaInst>(Ptr)) {
     N->setAllocaMarker();
@@ -1544,8 +1558,10 @@ void DSGraph::cloneInto( DSGraph* G, unsigned CloneFlags) {
     OldNodeMap[I] = New;
   }
 
+#if 0
 #ifndef NDEBUG
   Timer::addPeakMemoryMeasurement();
+#endif
 #endif
 
   // Rewrite the links in the new nodes to point into the current graph now.
@@ -2760,8 +2776,8 @@ void DataStructures::copyValue(Value *From, Value *To) {
     return;
   }
   
-  cerr << *From;
-  cerr << *To;
+  llvm::errs() << *From;
+  llvm::errs() << *To;
   assert(0 && "Do not know how to copy this yet!");
   abort();
 }

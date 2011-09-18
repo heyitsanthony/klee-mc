@@ -1,5 +1,6 @@
 #include <static/Sugar.h>
 #include "llvm/Module.h"
+#include "llvm/LLVMContext.h"
 #include "llvm/Target/TargetData.h"
 #include "llvm/Support/CommandLine.h"
 #include "klee/Common.h"

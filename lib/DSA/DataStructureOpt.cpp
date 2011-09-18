@@ -31,7 +31,7 @@ namespace {
     TDDataStructures *TD;
   public:
     static char ID;
-    DSOpt() : ModulePass((intptr_t)&ID) {};
+    DSOpt() : ModulePass(ID) {};
 
     bool runOnModule(Module &M) {
       TD = &getAnalysis<TDDataStructures>();

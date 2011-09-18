@@ -19,10 +19,8 @@
 #include "llvm/ValueSymbolTable.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/raw_ostream.h"
-#if (LLVM_VERSION_MAJOR == 2 && LLVM_VERSION_MINOR == 6)
 #include "llvm/Support/raw_os_ostream.h"
-#endif
-#include "llvm/System/Path.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Target/TargetData.h"
 #include "llvm/Transforms/Scalar.h"
 

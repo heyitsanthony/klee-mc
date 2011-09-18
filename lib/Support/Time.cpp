@@ -9,8 +9,7 @@
 
 #include "klee/Internal/System/Time.h"
 #include "klee/SolverStats.h"
-
-#include "llvm/System/Process.h"
+#include <llvm/Support/Process.h>
 
 #include <iostream>
 

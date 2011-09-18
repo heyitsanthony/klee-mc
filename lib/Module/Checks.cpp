@@ -9,6 +9,7 @@
 
 #include "Passes.h"
 
+#include "llvm/LLVMContext.h"
 #include "llvm/Constants.h"
 #include "llvm/DerivedTypes.h"
 #include "llvm/Function.h"

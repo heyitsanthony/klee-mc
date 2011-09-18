@@ -19,7 +19,8 @@
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/System/Signals.h"
+#include "llvm/Support/Signals.h"
+#include "llvm/Support/system_error.h"
 
 using namespace llvm;
 using namespace klee;
@@ -298,8 +299,8 @@ int main(int argc, char **argv)
 	llvm::cl::ParseCommandLineOptions(argc, argv);
 
 	std::string ErrorStr;
-	MemoryBuffer *MB;
-	MB = MemoryBuffer::getFileOrSTDIN(InputFile.c_str(), &ErrorStr);
+	OwningPtr<MemoryBuffer> MB;
+	MemoryBuffer::getFileOrSTDIN(InputFile.c_str(), MB);
 	if (!MB) {
 		std::cerr << argv[0] << ": error: " << ErrorStr << "\n";
 		return 1;
@@ -320,18 +321,18 @@ int main(int argc, char **argv)
 
 	switch (ToolAction) {
 	case PrintTokens:
-		PrintInputTokens(MB);
+		PrintInputTokens(MB.get());
 		break;
 	case PrintAST:
 		success = PrintInputAST(
 			InputFile=="-" ? "<stdin>" : InputFile.c_str(),
-			MB,
+			MB.get(),
 			Builder);
 		break;
 	case Evaluate:
 		success = EvaluateInputAST(
 			InputFile=="-" ? "<stdin>" : InputFile.c_str(),
-			MB,
+			MB.get(),
 			Builder);
 		break;
 	default:
@@ -339,7 +340,7 @@ int main(int argc, char **argv)
 	}
 
 	delete Builder;
-	delete MB;
+	MB.reset();
 
 	llvm::llvm_shutdown();
 	return success ? 0 : 1;

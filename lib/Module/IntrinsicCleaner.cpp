@@ -9,6 +9,7 @@
 
 #include "Passes.h"
 
+#include "llvm/LLVMContext.h"
 #include "llvm/Constants.h"
 #include "llvm/DerivedTypes.h"
 #include "llvm/Function.h"
@@ -104,17 +105,22 @@ bool IntrinsicCleanerPass::clean_dup_stoppoint(
 	llvm::BasicBlock::iterator& i,
 	llvm::IntrinsicInst* ii)
 {
+	if (/* isa<DbgStopPointInst>(i) || */ isa<UnreachableInst>(i)) {
+		ii->eraseFromParent();
+		return true;
+	}
+
+#if 0
 	bool erase = false;
-	if (isa<DbgStopPointInst>(i) || isa<UnreachableInst>(i)) {
-		erase = true;
-	} else if (isa<BranchInst>(i) || isa<SwitchInst>(i)) {
-		BasicBlock *bb = i->getParent();
-		erase = true;
-		foreach (it, succ_begin(bb), succ_end(bb)) {
-			if (!isa<DbgStopPointInst>(it->getFirstNonPHI())) {
-				erase = false;
-				break;
-			}
+	if (!isa<BranchInst>(i) && !isa<SwitchInst>(i)) 
+		return false;
+
+	BasicBlock *bb = i->getParent(a);
+	erase = true;
+	foreach (it, succ_begin(bb), succ_end(bb)) {
+		if (!isa<DbgStopPointInst>(it->getFirstNonPHI())) {
+			erase = false;
+			break;
 		}
 	}
 
@@ -122,7 +128,7 @@ bool IntrinsicCleanerPass::clean_dup_stoppoint(
 		ii->eraseFromParent();
 		return true;
 	}
-
+#endif
 	return false;
 }
 
@@ -135,7 +141,7 @@ bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b)
 
 		// increment now; LowerIntrinsic delete makes iterator invalid.
 		++i;
-		if(!ii) continue;
+		if (!ii) continue;
 
 		switch (ii->getIntrinsicID()) {
 		case Intrinsic::vastart:
@@ -150,21 +156,27 @@ bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b)
 
 		/* for the time being, we need *some* stoppoints because
 		 * KLEE is retarded and uses it to figure out line numbers */
+#if 0
 		case Intrinsic::dbg_stoppoint:
 		dirty |= clean_dup_stoppoint(i, ii);
 		break;
+#endif
 
+
+		case Intrinsic::dbg_declare:
+		case Intrinsic::dbg_value:
 //		case Intrinsic::dbg_stoppoint:
+#if 0
 		case Intrinsic::dbg_region_start:
 		case Intrinsic::dbg_region_end:
 		case Intrinsic::dbg_func_start:
-		case Intrinsic::dbg_declare:
 			// Remove these regardless of lower intrinsics flag.
 			// This can be removed once IntrinsicLowering is fixed to
 			// not have bad caches.
 			ii->eraseFromParent();
 			dirty = true;
 			break;
+#endif
 
 		/* r534, ignore memory barriers */
 		case Intrinsic::memory_barrier:

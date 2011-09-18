@@ -17,7 +17,6 @@
 #include "llvm/Instructions.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/InstVisitor.h"
-#include "llvm/Support/Streams.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/FormattedStream.h"
@@ -46,7 +45,7 @@ namespace {
     bool isNodeForValueCollapsed(Value *V);
   public:
     static char ID;
-    DSGraphStats() : FunctionPass((intptr_t)&ID) {}
+    DSGraphStats() : FunctionPass(ID) {}
 
     /// Driver functions to compute the Load/Store Dep. Graph per function.
     bool runOnFunction(Function& F);

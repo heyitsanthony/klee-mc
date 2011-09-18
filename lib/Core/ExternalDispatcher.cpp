@@ -13,11 +13,11 @@
 #include "llvm/Constants.h"
 #include "llvm/DerivedTypes.h"
 #include "llvm/Instructions.h"
-#include "llvm/ModuleProvider.h"
+#include "llvm/LLVMContext.h"
 #include "llvm/ExecutionEngine/JIT.h"
 #include "llvm/ExecutionEngine/GenericValue.h"
 #include "llvm/Support/CallSite.h"
-#include "llvm/System/DynamicLibrary.h"
+#include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetSelect.h"
 #include <setjmp.h>
@@ -66,12 +66,12 @@ void *ExternalDispatcher::resolveSymbol(const std::string &name) {
   return addr;
 }
 
-ExternalDispatcher::ExternalDispatcher() {
+ExternalDispatcher::ExternalDispatcher()
+{
   dispatchModule = new Module("ExternalDispatcher", getGlobalContext());
-  ExistingModuleProvider* MP = new ExistingModuleProvider(dispatchModule);
   
   std::string error;
-  executionEngine = ExecutionEngine::createJIT(MP, &error);
+  executionEngine = ExecutionEngine::createJIT(dispatchModule, &error);
   if (!executionEngine) {
     std::cerr << "unable to make jit: " << error << "\n";
     abort();

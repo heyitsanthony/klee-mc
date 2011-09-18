@@ -15,9 +15,11 @@
 #define LLVM_ANALYSIS_DATA_STRUCTURE_H
 
 #include "llvm/Pass.h"
+#include "llvm/Support/raw_os_ostream.h"
 #include "llvm/Target/TargetData.h"
 #include "llvm/Support/CallSite.h"
 #include "llvm/ADT/EquivalenceClasses.h"
+#include "llvm/Support/raw_os_ostream.h"
 
 #include "static/dsa/DSGraph.h"
 #include "static/dsa/HashExtras.h"
@@ -42,7 +44,7 @@ class DataStructures : public ModulePass {
   typedef hash_map<const Function*, DSGraph*> DSInfoTy;
 public:
   typedef hash_set<const Function*>::const_iterator callee_iterator;
-  
+
 private:
   /// TargetData, comes in handy
   TargetData* TD;
@@ -92,11 +94,11 @@ protected:
     ActualCallees[I].insert(F);
   }
 
-  DataStructures(intptr_t id, const char* name) 
-    : ModulePass(id), TD(0), GraphSource(0), printname(name), GlobalsGraph(0) {
+  DataStructures(char& pid, const char* name)
+    : ModulePass(pid), TD(0), GraphSource(0), printname(name), GlobalsGraph(0) {
     //a dummy node for empty call sites
     ActualCallees[0];
-    
+
     // For now, the graphs are owned by this pass
     DSGraphsStolen = false;
   }
@@ -104,7 +106,12 @@ protected:
 public:
   /// print - Print out the analysis results...
   ///
-  void print(std::ostream &O, const Module *M) const;
+  void print(llvm::raw_ostream& os, const Module *M) const
+  {
+	assert (0 == 1 && "UGH!");
+  }
+  //void print(std::ostream &O, const Module* M) const;
+
   void dumpCallGraph() const;
 
   callee_iterator callee_begin(const Instruction *I) const {
@@ -177,7 +184,7 @@ public:
 class BasicDataStructures : public DataStructures {
 public:
   static char ID;
-  BasicDataStructures() : DataStructures((intptr_t)&ID, "basic.") {}
+  BasicDataStructures() : DataStructures(ID, "basic.") {}
   ~BasicDataStructures() { releaseMemory(); }
 
   virtual bool runOnModule(Module &M);
@@ -199,7 +206,7 @@ public:
 class LocalDataStructures : public DataStructures {
 public:
   static char ID;
-  LocalDataStructures() : DataStructures((intptr_t)&ID, "local.") {}
+  LocalDataStructures() : DataStructures(ID, "local.") {}
   ~LocalDataStructures() { releaseMemory(); }
 
   virtual bool runOnModule(Module &M);
@@ -218,7 +225,7 @@ class StdLibDataStructures : public DataStructures {
   void eraseCallsTo(Function* F);
 public:
   static char ID;
-  StdLibDataStructures() : DataStructures((intptr_t)&ID, "stdlib.") {}
+  StdLibDataStructures() : DataStructures(ID, "stdlib.") {}
   ~StdLibDataStructures() { releaseMemory(); }
 
   virtual bool runOnModule(Module &M);
@@ -250,12 +257,12 @@ protected:
 public:
   static char ID;
   //Child constructor (CBU)
-  BUDataStructures(intptr_t CID, const char* name, const char* printname)
+  BUDataStructures(char& CID, const char* name, const char* printname)
     : DataStructures(CID, printname), debugname(name), useCallGraph(true),
       ReInlineGlobals(true) {}
   //main constructor
-  BUDataStructures() 
-    : DataStructures((intptr_t)&ID, "bu."), debugname("dsa-bu"),
+  BUDataStructures()
+    : DataStructures(ID, "bu."), debugname("dsa-bu"),
       useCallGraph(false), ReInlineGlobals(false) {}
   ~BUDataStructures() { releaseMemory(); }
 
@@ -275,7 +282,7 @@ private:
 
   void inlineUnresolved(DSGraph* G);
 
-  unsigned calculateGraphs(const Function *F, 
+  unsigned calculateGraphs(const Function *F,
                            std::vector<const Function*> &Stack,
                            unsigned &NextID,
                            hash_map<const Function*, unsigned> &ValMap);
@@ -295,8 +302,8 @@ protected:
   void buildIndirectFunctionSets(Module &M);
 public:
   static char ID;
-  CompleteBUDataStructures(intptr_t CID = (intptr_t)&ID, 
-                           const char* name = "dsa-cbu", 
+  CompleteBUDataStructures (char& CID = ID,
+                           const char* name = "dsa-cbu",
                            const char* printname = "cbu.")
     : BUDataStructures(CID, name, printname) {}
   ~CompleteBUDataStructures() { releaseMemory(); }
@@ -321,7 +328,7 @@ class EquivBUDataStructures : public CompleteBUDataStructures {
 public:
   static char ID;
   EquivBUDataStructures()
-    : CompleteBUDataStructures((intptr_t)&ID, "dsa-eq", "eq.") {}
+    : CompleteBUDataStructures(ID, "dsa-eq", "eq.") {}
   ~EquivBUDataStructures() { releaseMemory(); }
 
   virtual bool runOnModule(Module &M);
@@ -371,7 +378,7 @@ class TDDataStructures : public DataStructures {
 
 public:
   static char ID;
-  TDDataStructures(intptr_t CID = (intptr_t)&ID, const char* printname = "td.", bool useEQ = false)
+  TDDataStructures(char& CID = ID, const char* printname = "td.", bool useEQ = false)
     : DataStructures(CID, printname), useEQBU(useEQ) {}
   ~TDDataStructures() { releaseMemory(); }
 
@@ -407,7 +414,7 @@ class EQTDDataStructures : public TDDataStructures {
 public:
   static char ID;
   EQTDDataStructures()
-    :TDDataStructures((intptr_t)&ID, "eqtd.", false)
+    :TDDataStructures(ID, "eqtd.", false)
   {}
 };
 
@@ -423,8 +430,8 @@ class SteensgaardDataStructures : public DataStructures {
 
 public:
   static char ID;
-  SteensgaardDataStructures() : 
-    DataStructures((intptr_t)&ID, "steensgaard."),
+  SteensgaardDataStructures() :
+    DataStructures(ID, "steensgaard."),
     ResultGraph(NULL) {}
   ~SteensgaardDataStructures();
   virtual bool runOnModule(Module &M);
@@ -435,13 +442,13 @@ public:
     AU.addRequired<StdLibDataStructures>();
     AU.setPreservesAll();
   }
-  
+
   /// getDSGraph - Return the data structure graph for the specified function.
   ///
   virtual DSGraph *getDSGraph(const Function &F) const {
     return getResultGraph();
   }
-  
+
   virtual bool hasDSGraph(const Function &F) const {
     return true;
   }
@@ -452,9 +459,12 @@ public:
     return ResultGraph;
   }
 
-  void print(OStream O, const Module *M) const;
-  void print(std::ostream &O, const Module *M) const;
-
+  void print(raw_ostream& O, const Module *M) const;
+  void print(std::ostream &O, const Module *M) const
+  {
+  	raw_os_ostream	os(O);
+	print(os, M);
+  }
 };
 
 

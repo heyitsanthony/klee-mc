@@ -26,6 +26,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Constants.h"
+#include <static/Sugar.h>
 #include <ostream>
 using namespace llvm;
 
@@ -43,58 +44,62 @@ char CallTargetFinder::ID;
 void CallTargetFinder::findIndTargets(Module &M)
 {
   EQTDDataStructures* T = &getAnalysis<EQTDDataStructures>();
-  for (Module::iterator I = M.begin(), E = M.end(); I != E; ++I)
-    if (!I->isDeclaration())
-      for (Function::iterator F = I->begin(), FE = I->end(); F != FE; ++F)
-        for (BasicBlock::iterator B = F->begin(), BE = F->end(); B != BE; ++B)
-          if (isa<CallInst>(B) || isa<InvokeInst>(B)) {
-            CallSite cs = CallSite::get(B);
-            AllSites.push_back(cs);
-            Function* CF = cs.getCalledFunction();
-            // If the called function is casted from one function type to another, peer
-            // into the cast instruction and pull out the actual function being called.
-            if (ConstantExpr *CE = dyn_cast<ConstantExpr>(cs.getCalledValue()))
-              if (CE->getOpcode() == Instruction::BitCast &&
-                  isa<Function>(CE->getOperand(0)))
-                CF = cast<Function>(CE->getOperand(0));
-            
-            if (!CF) {
-              if (isa<ConstantPointerNull>(cs.getCalledValue())) {
-                ++DirCall;
-                CompleteSites.insert(cs);
-              } else {
-                IndCall++;
-                DSNode* N = T->getDSGraph(*cs.getCaller())
-                  ->getNodeForValue(cs.getCalledValue()).getNode();
-                assert (N && "CallTarget: findIndTargets: No DSNode!\n");
-                N->addFullFunctionList(IndMap[cs]);
-                if (N->isCompleteNode() && IndMap[cs].size()) {
-                  CompleteSites.insert(cs);
-                  ++CompleteInd;
-                } 
-                if (N->isCompleteNode() && !IndMap[cs].size()) {
-                  ++CompleteEmpty;
-                  DEBUG(errs() << "Call site empty: '"
-			<< cs.getInstruction()->getName() 
-			<< "' In '"
-			<< cs.getInstruction()->getParent()->getParent()->getName()
-			<< "'\n");
-                }
-              }
-            } else {
-              ++DirCall;
-              IndMap[cs].push_back(cs.getCalledFunction());
-              CompleteSites.insert(cs);
-            }
+  foreach (I, M.begin(), M.end()) {
+    if (I->isDeclaration()) continue;
+
+    foreach (F, I->begin(), I->end())
+      foreach (B, F->begin(), F->end()) {
+        if (!isa<CallInst>(B) && !isa<InvokeInst>(B)) continue;
+
+        CallSite cs(B);
+        AllSites.push_back(cs);
+        Function* CF = cs.getCalledFunction();
+        // If the called function is casted from one function type to another, peer
+        // into the cast instruction and pull out the actual function being called.
+        if (ConstantExpr *CE = dyn_cast<ConstantExpr>(cs.getCalledValue()))
+          if (CE->getOpcode() == Instruction::BitCast &&
+              isa<Function>(CE->getOperand(0)))
+            CF = cast<Function>(CE->getOperand(0));
+
+        if (CF) {
+          ++DirCall;
+          IndMap[cs].push_back(cs.getCalledFunction());
+          CompleteSites.insert(cs);
+          continue;
+        }
+
+        if (isa<ConstantPointerNull>(cs.getCalledValue())) {
+            ++DirCall;
+            CompleteSites.insert(cs);
+        } else {
+          IndCall++;
+          DSNode* N = T->getDSGraph(*cs.getCaller())
+            ->getNodeForValue(cs.getCalledValue()).getNode();
+          assert (N && "CallTarget: findIndTargets: No DSNode!\n");
+          N->addFullFunctionList(IndMap[cs]);
+          if (N->isCompleteNode() && IndMap[cs].size()) {
+            CompleteSites.insert(cs);
+            ++CompleteInd;
           }
+          if (N->isCompleteNode() && !IndMap[cs].size()) {
+            ++CompleteEmpty;
+#if 0
+            DEBUG(errs() << "Call site empty: '"
+		< cs.getInstruction()->getName()
+		< "' In '"
+		< cs.getInstruction()->getParent()->getParent()->getName()
+		< "'\n");
+#endif
+          }
+        }
+      }
+  }
 }
 
 void CallTargetFinder::print(std::ostream &O, const Module *M) const
 {
   O << "[* = incomplete] CS: func list\n";
-  for (std::map<CallSite, std::vector<const Function*> >::const_iterator ii =
-       IndMap.begin(),
-         ee = IndMap.end(); ii != ee; ++ii) {
+  foreach (ii, IndMap.begin(), IndMap.end()) {
     if (!ii->first.getCalledFunction()) { //only print indirect
       if (!isComplete(ii->first)) {
         O << "* ";

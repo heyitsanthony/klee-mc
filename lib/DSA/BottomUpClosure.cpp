@@ -632,9 +632,9 @@ void BUDataStructures::inlineUnresolved(DSGraph* Graph) {
       ++NumInlines;
     } else {
       DEBUG(errs() << "In Fns: " << Graph->getFunctionNames() << "\n");
-      DEBUG(std::cerr << "  calls " << CalledFuncs.size()
-            << " fns from site: " << CS.getCallSite().getInstruction()
-            << "  " << *CS.getCallSite().getInstruction());
+//      DEBUG(std::cerr << "  calls " << CalledFuncs.size()
+//            << " fns from site: " << CS.getCallSite().getInstruction()
+//            << "  " << *CS.getCallSite().getInstruction());
       DEBUG(errs() << "   Fns =");
       unsigned NumPrinted = 0;
       
