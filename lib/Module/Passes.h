@@ -24,6 +24,7 @@ namespace llvm {
   class TargetData;
   class Type;
   class IntrinsicInst;
+  class TargetLowering;
 }
 
 namespace klee {
@@ -32,8 +33,9 @@ namespace klee {
 /// asm which are used by glibc into normal LLVM IR.
 class RaiseAsmPass : public llvm::FunctionPass
 {
+private:
 	static char ID;
-
+	const llvm::TargetLowering *TLI;
 	llvm::Function *getIntrinsic(
 		unsigned IID,
 		const llvm::Type **Tys,
@@ -47,8 +49,7 @@ class RaiseAsmPass : public llvm::FunctionPass
 	bool runOnInstruction(llvm::Instruction *I);
 	llvm::Module* module_;
 public:
-	RaiseAsmPass(llvm::Module* module) 
-	: llvm::FunctionPass(ID), module_(module) {}
+	RaiseAsmPass(llvm::Module* module);
 	virtual ~RaiseAsmPass() {}
 	virtual bool runOnFunction(llvm::Function& f);
 };
