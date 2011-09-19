@@ -348,7 +348,10 @@ void ExecutorBC::callExternalFunction(
 	memset(args, 0, 2 * sizeof(*args) * (arguments.size() + 1));
 	unsigned wordIndex = 2;
 	foreach (ai, arguments.begin(), arguments.end()) {
-		if (AllowExternalSymCalls) {
+		// DAR: for printf, etc., don't terminate paths on symbolic calls
+		if (	AllowExternalSymCalls
+			|| okExternals.count(function->getName()))
+		{
 			// don't bother checking uniqueness
 			ref<ConstantExpr> ce;
 			bool success = solver->getValue(state, *ai, ce);

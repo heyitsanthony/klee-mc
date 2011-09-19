@@ -29,13 +29,16 @@ private:
 	SMTPrinter(std::ostream& in_os, SMTArrays* in_arr) 
 	: ExprVisitor(false, true)
 	, os(in_os)
-	, arr(in_arr) {}
+	, arr(in_arr)
+	{
+		use_hashcons = false;
+	}
 
 	void printArrayDecls(void) const;
 	void printConstant(const ConstantExpr* ce);
 	static std::string arr2name(const Array* arr);
 
-	const std::string& getArrayForUpdate(
+	const std::string getArrayForUpdate(
 		const Array* arr, const UpdateNode *un);
 	const std::string& getInitialArray(const Array* root);
 

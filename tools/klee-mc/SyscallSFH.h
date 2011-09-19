@@ -28,22 +28,19 @@ public:
 		ExecutionState& state, void* addr, unsigned sz,
 		const char* name = NULL);
 private:
-	void makeSymbolicTail(
+	void removeTail(
 		ExecutionState& state,
 		const MemoryObject* mo,
-		unsigned taken,
-		const char* name);
-	void makeSymbolicHead(
+		unsigned taken);
+	void removeHead(
 		ExecutionState& state,
 		const MemoryObject* mo,
-		unsigned taken,
-		const char* name);
-	void makeSymbolicMiddle(
+		unsigned taken);
+	void removeMiddle(
 		ExecutionState& state,
 		const MemoryObject* mo,
 		unsigned mo_off,
-		unsigned taken,
-		const char* name);
+		unsigned taken);
 
 	ExecutorVex	*exe_vex;
 };

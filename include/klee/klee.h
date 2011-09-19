@@ -16,11 +16,17 @@
 #define SYS_klee		0x12345678
 #define KLEE_SYS_REPORT_ERROR	0
 #define KLEE_SYS_KMC_SYMRANGE	1	/* kmc_make_range_symbolic(addr, len, name) */
+#define KLEE_SYS_ASSUME		2	/* klee_assume(<bool expr>) */
+#define KLEE_SYS_IS_SYM		3	/* klee_is_sym(<expr>)	*/
+#define KLEE_SYS_NE		4	/* klee_force_ne */
 
 #define ksys_report_error(x,y,z,w)	\
 	syscall(SYS_klee, KLEE_SYS_REPORT_ERROR, x, y, z, w)
 #define ksys_kmc_symrange(x,y,z)	\
 	syscall(SYS_klee, KLEE_SYS_KMC_SYMRANGE, x, y, z)
+#define ksys_assume(x)		syscall(SYS_klee, KLEE_SYS_ASSUME, x)
+#define ksys_is_sym(x)		syscall(SYS_klee, KLEE_SYS_IS_SYM, x)
+#define ksys_force_ne(x,y)	syscall(SYS_klee, KLEE_SYS_NE, x, y)
 
 #ifdef __cplusplus
 extern "C" {
@@ -141,6 +147,7 @@ extern "C" {
 
   void klee_stack_trace(void);
 
+  void klee_force_ne(uint64_t expr_lhs, uint64_t expr_rhs);
 #ifdef __cplusplus
 }
 #endif

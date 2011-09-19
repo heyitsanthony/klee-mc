@@ -134,7 +134,7 @@ namespace {
   };
 }
 
-char LowerAtomic::ID = 214;
+char LowerAtomic::ID = 123;
 // INITIALIZE_PASS(LowerAtomic, "loweratomic",
 //                 "Lower atomic intrinsics to non-atomic form",
 //                 false, false)

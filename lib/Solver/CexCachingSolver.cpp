@@ -6,7 +6,6 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-
 #include "klee/Solver.h"
 #include "static/Sugar.h"
 #include "klee/Constraints.h"
@@ -18,11 +17,16 @@
 #include "klee/util/ExprUtil.h"
 #include "klee/util/ExprVisitor.h"
 #include "klee/Internal/ADT/MapOfSets.h"
+#include "klee/Common.h"
 
 #include "llvm/Support/CommandLine.h"
+#include "SMTPrinter.h"
 
 using namespace klee;
 using namespace llvm;
+
+
+extern bool debug_eval;
 
 namespace {
   cl::opt<bool>
@@ -57,11 +61,8 @@ class CexCachingSolver : public SolverImplWrapper
   // memo table
   assignmentsTable_ty assignmentsTable;
 
-  bool searchForAssignment(KeyType &key,
-                           Assignment *&result);
-
+  bool searchForAssignment(KeyType &key, Assignment *&result);
   bool lookupAssignment(const Query& query, KeyType &key, Assignment *&result);
-
   bool lookupAssignment(const Query& query, Assignment *&result) {
     KeyType key;
     return lookupAssignment(query, key, result);
@@ -118,63 +119,53 @@ struct NullOrSatisfyingAssignment {
 /// \return - True if a cached result was found.
 bool CexCachingSolver::searchForAssignment(KeyType &key, Assignment *&result)
 {
-  Assignment * const *lookup = cache.lookup(key);
-  if (lookup) {
-    result = *lookup;
-    return true;
-  }
+	Assignment * const *lookup = cache.lookup(key);
+	Assignment **lookup_super;
 
-  if (CexCacheTryAll) {
-    // Look for a satisfying assignment for a superset, which is trivially an
-    // assignment for any subset.
-    Assignment **lookup = cache.findSuperset(key, NonNullAssignment());
+	if (lookup) {
+		result = *lookup;
+		return true;
+	}
 
-    // Otherwise, look for a subset which is unsatisfiable, see below.
-    if (!lookup)
-      lookup = cache.findSubset(key, NullAssignment());
+	// Look for a satisfying assignment for a superset, which is trivially an
+	// assignment for any subset.
+	lookup_super = cache.findSuperset(key, NonNullAssignment());
 
-    // If either lookup succeeded, then we have a cached solution.
-    if (lookup) {
-      result = *lookup;
-      return true;
-    }
+	// Otherwise, look for a subset which is unsatisfiable -- if the subset is
+	// unsatisfiable then no additional constraints can produce a valid
+	// assignment. While searching subsets, we also explicitly the solutions for
+	// satisfiable subsets to see if they solve the current query and return
+	// them if so. This is cheap and frequently succeeds.
+	if (!lookup_super) {
+		if (CexCacheTryAll)  {
+			lookup_super = cache.findSubset(key, NullAssignment());
+		} else {
+			lookup_super = cache.findSubset(
+				key, NullOrSatisfyingAssignment(key));
+		}
+	}
 
-    // Otherwise, iterate through the set of current assignments to see if one
-    // of them satisfies the query.
-    foreach (it, assignmentsTable.begin(), assignmentsTable.end()) {
-      Assignment *a = *it;
-      if (a->satisfies(key.begin(), key.end())) {
-        result = a;
-        // cache result for deterministic reconstitution
-        cache.insert(key, result);
-        return true;
-      }
-    }
-  } else {
-    // FIXME: Which order? one is sure to be better.
+	// If either lookup succeeded, then we have a cached solution.
+	if (lookup_super) {
+		result = *lookup_super;
+		return true;
+	}
 
-    // Look for a satisfying assignment for a superset, which is trivially an
-    // assignment for any subset.
-    Assignment **lookup = cache.findSuperset(key, NonNullAssignment());
+	if (CexCacheTryAll) {
+		// Otherwise, iterate through the set of current assignments 
+		// to see if one of them satisfies the query.
+		foreach (it, assignmentsTable.begin(), assignmentsTable.end()) {
+			Assignment *a = *it;
+			if (a->satisfies(key.begin(), key.end())) {
+				// cache result for deterministic reconstitution
+				result = a;
+				cache.insert(key, result);
+				return true;
+			}
+		}
+	}
 
-    // Otherwise, look for a subset which is unsatisfiable -- if the subset is
-    // unsatisfiable then no additional constraints can produce a valid
-    // assignment. While searching subsets, we also explicitly the solutions for
-    // satisfiable subsets to see if they solve the current query and return
-    // them if so. This is cheap and frequently succeeds.
-    if (!lookup)
-      lookup = cache.findSubset(key, NullOrSatisfyingAssignment(key));
-
-    // If either lookup succeeded, then we have a cached solution.
-    if (lookup) {
-      result = *lookup;
-      // cache result for deterministic reconstitution
-      cache.insert(key, result);
-      return true;
-    }
-  }
-
-  return false;
+	return false;
 }
 
 /// lookupAssignment - Lookup a cached result for the given \arg query.
@@ -188,46 +179,50 @@ bool CexCachingSolver::searchForAssignment(KeyType &key, Assignment *&result)
 bool CexCachingSolver::lookupAssignment(
   const Query &query, KeyType &key, Assignment *&result)
 {
-  key = KeyType(query.constraints.begin(), query.constraints.end());
-  ref<Expr> neg = Expr::createIsZero(query.expr);
-  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(neg)) {
-    if (CE->isFalse()) {
-      result = (Assignment*) 0;
-      return true;
-    }
-  } else {
-    key.insert(neg);
-  }
+	ref<Expr> neg;
 
-  return searchForAssignment(key, result);
+	key = KeyType(query.constraints.begin(), query.constraints.end());
+	neg = Expr::createIsZero(query.expr);
+	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(neg)) {
+		if (CE->isFalse()) {
+			result = NULL;
+			return true;
+		}
+	} else {
+		key.insert(neg);
+	}
+
+	return searchForAssignment(key, result);
 }
 
 Assignment* CexCachingSolver::createBinding(const Query& query, KeyType& key)
 {
-	std::vector<const Array*> objects;
-	std::vector< std::vector<unsigned char> > values;
-	Assignment *binding;
-	bool hasSolution;
+	std::vector<const Array*>			objects;
+	std::vector< std::vector<unsigned char> >	values;
+	std::pair<assignmentsTable_ty::iterator, bool>	res;
+
+	Assignment	*binding;
+	bool		hasSolution;
 
 	findSymbolicObjects(key.begin(), key.end(), objects);
 
 	hasSolution = doComputeInitialValues(query, objects, values);
 	if (failed()) return NULL;
-
 	if (!hasSolution) return NULL;
 
 	binding = new Assignment(objects, values);
 
 	// Memoize the result.
-	std::pair<assignmentsTable_ty::iterator, bool>
 	res = assignmentsTable.insert(binding);
 	if (!res.second) {
+		assert (binding != *res.first);
 		delete binding;
 		binding = *res.first;
 	}
 
-	if (DebugCexCacheCheckBinding)
+	if (DebugCexCacheCheckBinding) {
 		assert (binding->satisfies(key.begin(), key.end()));
+	}
 
 	return binding;
 }
@@ -235,11 +230,13 @@ Assignment* CexCachingSolver::createBinding(const Query& query, KeyType& key)
 bool CexCachingSolver::getAssignment(const Query& query, Assignment *&result)
 {
 	KeyType key;
+
 	if (lookupAssignment(query, key, result))
 		return true;
 
 	result = createBinding(query, key);
 	if (failed()) return false;
+	if (result == NULL) return true;
 
 	cache.insert(key, result);
 	return true;
@@ -256,29 +253,32 @@ Solver::Validity CexCachingSolver::computeValidity(const Query& query)
 {
 	TimerStatIncrementer t(stats::cexCacheTime);
 	bool		ok_assignment;
-	ref<Expr>	q;
-	Assignment	*a;
+	ref<Expr>	neg_q;
+	Assignment	*neg_a = NULL, *pos_a = NULL;
 
-	ok_assignment = getAssignment(query.withFalse(), a);
+	ok_assignment = getAssignment(query.withFalse(), neg_a);
 	if (!ok_assignment) goto failed;
 
-	assert(a && "computeValidity() must have assignment");
-	q = a->evaluate(query.expr);
+	assert(neg_a && "computeValidity() must have assignment");
+	neg_q = neg_a->evaluate(query.expr);
 
-	if (!isa<ConstantExpr>(q)) {
-		if (!getAssignment(query, a)) goto failed;
-		if (a) {
-			if (!getAssignment(query.negateExpr(), a)) goto failed;
-			return (!a ? Solver::False : Solver::Unknown);
+	if (!isa<ConstantExpr>(neg_q)) {
+		if (!getAssignment(query, pos_a)) goto failed;
+		if (pos_a) {
+			if (!getAssignment(query.negateExpr(), neg_a))
+				goto failed;
+			return (!neg_a ? Solver::False : Solver::Unknown);
 		}
 		return Solver::True;
-	} else if (cast<ConstantExpr>(q)->isTrue()) {
-		if (!getAssignment(query, a)) goto failed;
-		return !a ? Solver::True : Solver::Unknown;
-	} else {
-		if (!getAssignment(query.negateExpr(), a)) goto failed;
-		return !a ? Solver::False : Solver::Unknown;
 	}
+
+	if (cast<ConstantExpr>(neg_q)->isTrue()) {
+		if (!getAssignment(query, pos_a)) goto failed;
+		return !pos_a ? Solver::True : Solver::Unknown;
+	}
+
+	if (!getAssignment(query.negateExpr(), neg_a)) goto failed;
+	return !neg_a ? Solver::False : Solver::Unknown;
 
 failed:
 	failQuery();
@@ -319,6 +319,7 @@ ref<Expr> CexCachingSolver::computeValue(const Query& query)
 	TimerStatIncrementer	t(stats::cexCacheTime);
 	Assignment		*a;
 	ref<Expr>		ret;
+	bool			zeroDiv;
 
 	if (!getAssignment(query.withFalse(), a)) {
 		failQuery();
@@ -326,7 +327,17 @@ ref<Expr> CexCachingSolver::computeValue(const Query& query)
 	}
 
 	assert(a && "computeValue() must have assignment");
-	ret = a->evaluate(query.expr);
+	ret = a->evaluate(query.expr, zeroDiv);
+
+	if (!isa<ConstantExpr>(ret) ) {
+		if (zeroDiv) {
+			klee_warning_once(0,
+				"Div zero in CexCache. Need richer failures");
+			failQuery();
+			return ret;
+		}
+	}
+
 	assert(	isa<ConstantExpr>(ret) &&
 		"assignment evaluation did not result in constant");
 

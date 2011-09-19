@@ -2,7 +2,7 @@
 #define	_CALLSTRINGHASHER_H
 
 #include "klee/ExecutionState.h"
-#include "Sugar.h"
+#include "static/Sugar.h"
 #include "llvm/Instruction.h"
 #include "llvm/Instructions.h"
 

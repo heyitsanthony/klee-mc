@@ -24,8 +24,10 @@
 #include "llvm/Support/CommandLine.h"
 
 #include "ValidatingSolver.h"
+#include "PipeSolver.h"
 #include "BoolectorSolver.h"
 #include "Z3Solver.h"
+#include "HashSolver.h"
 #include "PoisonCache.h"
 #include "DummySolver.h"
 
@@ -59,6 +61,10 @@ namespace {
 
   cl::opt<bool>
   UseSTPQueryPCLog("use-stp-query-pc-log",
+                   cl::init(false));
+
+  cl::opt<bool>
+  UseSMTQueryLog("use-smt-log",
                    cl::init(false));
 
   cl::opt<bool, true>
@@ -100,6 +106,11 @@ namespace {
 	cl::desc("Cache/Reject poisonous query with pointers rewritten."));
 
   cl::opt<bool>
+  UseHashSolver("use-hash-solver",
+  	cl::init(false),
+	cl::desc("Save hashes of queries w/results"));
+
+  cl::opt<bool>
   UseBoolector(
   	"use-boolector",
 	cl::init(false),
@@ -109,6 +120,27 @@ namespace {
   UseZ3("use-z3",
   	cl::init(false),
 	cl::desc("Use z3 solver"));
+
+  cl::opt<bool>
+  UseB15("use-b15",
+  	cl::init(false),
+	cl::desc("Use boolector-1.5 solver"));
+
+  cl::opt<bool>
+  UseCVC3("use-cvc3",
+  	cl::init(false),
+	cl::desc("Use CVC3 solver (broken)"));
+
+  cl::opt<bool>
+  UseYices("use-yices",
+  	cl::init(false),
+	cl::desc("Use Yices solver"));
+
+  cl::opt<bool>
+  UsePipeSolver(
+  	"pipe-solver",
+	cl::init(false),
+	cl::desc("Run solver through forked pipe."));
 
   cl::opt<bool>
   UseIndependentSolver("use-independent-solver",
@@ -121,6 +153,11 @@ namespace {
 
 }
 
+namespace klee
+{
+extern Solver *createSMTLoggingSolver(Solver *_solver, std::string path);
+}
+
 static Solver* createChainWithTimedSolver(
 	std::string queryPCLogPath,
 	std::string stpQueryPCLogPath,
@@ -128,26 +165,50 @@ static Solver* createChainWithTimedSolver(
 {
 	Solver		*solver;
 
-	if (UseBoolector)
-		timedSolver = new BoolectorSolver();
-	else if (UseZ3)
-		timedSolver = new Z3Solver();
-	else
-		timedSolver = new STPSolver(UseForkedSTP, STPServer);
+	if (UsePipeSolver) {
+		if (UseYices) {
+			timedSolver = new PipeSolver(new PipeYices());
+		} else if (UseCVC3) {
+			timedSolver = new PipeSolver(new PipeCVC3());
+		} else if (UseB15) {
+			timedSolver = new PipeSolver(new PipeBoolector15());
+		} else if (UseBoolector)
+			timedSolver = new PipeSolver(new PipeBoolector());
+		else if (UseZ3)
+			timedSolver = new PipeSolver(new PipeZ3());
+		else
+			timedSolver = new PipeSolver(new PipeSTP());
+	} else {
+		assert (UseB15 == false);
+		assert (UseCVC3 == false);
+		assert (UseYices == false);
+		if (UseBoolector)
+			timedSolver = new BoolectorSolver();
+		else if (UseZ3)
+			timedSolver = new Z3Solver();
+		else
+			timedSolver = new STPSolver(UseForkedSTP, STPServer);
+	}
 	solver = timedSolver;
 
 	if (UseSTPQueryPCLog && stpQueryPCLogPath.size())
 		solver = createPCLoggingSolver(solver, stpQueryPCLogPath);
+	else if (UseSMTQueryLog && stpQueryPCLogPath.size())
+		solver = createSMTLoggingSolver(solver, stpQueryPCLogPath);
 
 	if (UsePoisonCacheExpr)
 		solver = new Solver(
-			new PoisonCache(solver, new PHExpr()));
+			new PoisonCache(solver, new QHDefault()));
 	if (UsePoisonCacheExprSHAStr)
 		solver = new Solver(
-			new PoisonCache(solver, new PHExprStrSHA()));
+			new PoisonCache(solver, new QHExprStrSHA()));
 	if (UsePoisonCacheRewritePtr)
 		solver = new Solver(
-			new PoisonCache(solver, new PHRewritePtr()));
+			new PoisonCache(solver, new QHRewritePtr()));
+
+	if (UseHashSolver)
+		solver = new Solver(
+			new HashSolver(solver, new QHRewritePtr()));
 
 	if (UseFastCexSolver) solver = createFastCexSolver(solver);
 	if (UseFastRangeSolver) solver = createFastRangeSolver(solver);
@@ -157,7 +218,7 @@ static Solver* createChainWithTimedSolver(
 
 	if (DebugValidateSolver) {
 		/* oracle is another QF_BV solver */
-		if (UseBoolector || UseZ3)
+		if (UsePipeSolver || UseBoolector || UseZ3)
 			solver = createValidatingSolver(
 				solver,
 				new STPSolver(UseForkedSTP, STPServer));
@@ -373,7 +434,7 @@ std::pair< ref<Expr>, ref<Expr> > Solver::getRange(const Query& query)
       mid = lo + (hi - lo)/2;
       bool res;
       bool success;
-      
+
       success = mustBeTrue(
         query.withExpr(
           EqExpr::create(
@@ -510,15 +571,8 @@ flush:
 
 unsigned Query::hash(void) const
 {
-	unsigned	ret;
-
-	ret = expr->hash();
-	foreach (it, constraints.begin(), constraints.end()) {
-		ref<Expr>	e = *it;
-		ret ^= e->hash();
-	}
-
-	return ret;
+	QHDefault	qh;
+	return qh.hash(*this);
 }
 
 void Query::print(std::ostream& os) const

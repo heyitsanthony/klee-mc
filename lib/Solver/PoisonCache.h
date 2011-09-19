@@ -12,6 +12,7 @@
 #define POISON_CACHE_H
 
 #include "klee/Solver.h"
+#include "QueryHash.h"
 #include "SolverImplWrapper.h"
 
 #include <set>
@@ -22,39 +23,10 @@
 namespace klee
 {
 
-class Query;
-
-class PoisonHash
-{
-public:
-	PoisonHash(const char* in_name) : name(in_name) {}
-	virtual ~PoisonHash() {}
-	virtual unsigned hash(const Query& q) const = 0;
-	const char* getName(void) const { return name; }
-private:
-	const char* name;
-};
-
-
-/* default class declaration-- hash declared in cpp file */
-#define DECL_PHASH(x,y)					\
-class PH##x : public PoisonHash				\
-{							\
-public:							\
-	PH##x() : PoisonHash(y) {}			\
-	virtual ~PH##x() {}				\
-	virtual unsigned hash(const Query &q) const;	\
-private: };
-
-
-DECL_PHASH(ExprStrSHA, "strsha")
-DECL_PHASH(Expr, "expr")
-DECL_PHASH(RewritePtr, "rewriteptr")
-
 class PoisonCache : public SolverImplWrapper
 {
 public:
-	PoisonCache(Solver* s, PoisonHash* phash);
+	PoisonCache(Solver* s, QueryHash* phash);
 	virtual ~PoisonCache();
 
 	static void sig_poison(int signum, siginfo_t*, void*);
@@ -63,7 +35,7 @@ private:
 	bool			in_solver;
 	unsigned		hash_last;
 	std::set<unsigned>	poison_hashes;
-	PoisonHash		*phash;
+	QueryHash		*phash;
 
 	bool badQuery(const Query& q);
 	void loadCacheFromDisk(const char* fname = POISON_DEFAULT_PATH);

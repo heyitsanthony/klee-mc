@@ -1,2 +1,5 @@
 *Release/
 Makefile.config
+*klee-out*
+snooze*
+*pcache*

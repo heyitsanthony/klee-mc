@@ -64,6 +64,7 @@ SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   add("free", Free, false),
   add("klee_assume", Assume, false),
   add("klee_check_memory_access", CheckMemoryAccess, false),
+  add("klee_force_ne", ForceNE, false),
   add("klee_get_value", GetValue, true),
   add("klee_define_fixed_object", DefineFixedObject, false),
   add("klee_get_obj_size", GetObjSize, true),
@@ -448,28 +449,29 @@ SFH_DEF_HANDLER(Malloc)
 
 SFH_DEF_HANDLER(Assume)
 {
-  bool res;
-  bool success;
+	ref<Expr>	e;
+	bool		mustBeFalse, success;
 
-  SFH_CHK_ARGS(1, "klee_assume");
+	SFH_CHK_ARGS(1, "klee_assume");
 
-  ref<Expr> e = arguments[0];
+	e = arguments[0];
+	if (e->getWidth() != Expr::Bool) {
+		e = NeExpr::create(e, ConstantExpr::create(0, e->getWidth()));
+	}
 
-  if (e->getWidth() != Expr::Bool) {
-    e = NeExpr::create(e, ConstantExpr::create(0, e->getWidth()));
-  }
+	success = sfh->executor->getSolver()->mustBeFalse(
+		state, e, mustBeFalse);
+	assert(success && "FIXME: Unhandled solver failure");
+	if (!mustBeFalse) {
+		sfh->executor->addConstraint(state, e);
+		return;
+	}
 
-  success = sfh->executor->getSolver()->mustBeFalse(state, e, res);
-  assert(success && "FIXME: Unhandled solver failure");
-  if (res) {
-    sfh->executor->terminateStateOnError(
-      state,
-      "invalid klee_assume call (provably false)",
-      "user.err");
-    return;
-  }
-
-  sfh->executor->addConstraint(state, e);
+	sfh->executor->terminateStateOnError(
+		state,
+		"invalid klee_assume call (provably false)",
+		"user.err");
+	assert (0 == 1);
 }
 
 SFH_DEF_HANDLER(IsSymbolic)
@@ -770,17 +772,16 @@ SFH_DEF_HANDLER(Alarm)
 
 SFH_DEF_HANDLER(MarkGlobal)
 {
-  SFH_CHK_ARGS(1, "klee_mark_global");
+	SFH_CHK_ARGS(1, "klee_mark_global");
 
-  Executor::ExactResolutionList rl;
-  sfh->executor->resolveExact(state, arguments[0], rl, "mark_global");
+	Executor::ExactResolutionList rl;
+	sfh->executor->resolveExact(state, arguments[0], rl, "mark_global");
 
-  for (Executor::ExactResolutionList::iterator it = rl.begin(),
-         ie = rl.end(); it != ie; ++it) {
-    MemoryObject *mo = (MemoryObject*) it->first.first;
-    assert(!mo->isLocal());
-    mo->setGlobal(true);
-  }
+	foreach (it, rl.begin(), rl.end()) {
+		MemoryObject *mo = (MemoryObject*) it->first.first;
+		assert(!mo->isLocal());
+		mo->setGlobal(true);
+	}
 }
 
 SFH_DEF_HANDLER(MarkOpenfd)
@@ -789,4 +790,28 @@ SFH_DEF_HANDLER(MarkOpenfd)
 
   int fd = cast<ConstantExpr>(arguments[0])->getZExtValue();
   OpenfdRegistry::fdOpened(&state, fd);
+}
+
+SFH_DEF_HANDLER(ForceNE)
+{
+	ref<Expr>	lhs, rhs, cmp_expr;
+	bool		mustBeEqual, success;
+
+	SFH_CHK_ARGS(2, "klee_force_ne");
+
+	lhs = arguments[0];
+	rhs = arguments[1];
+
+	cmp_expr = NeExpr::create(lhs, rhs);
+
+	success = sfh->executor->getSolver()->mustBeFalse(
+		state, cmp_expr, mustBeEqual);
+
+	assert(success && "FIXME: Unhandled solver failure");
+	if (!mustBeEqual) {
+		sfh->executor->addConstraint(state, cmp_expr);
+		return;
+	}
+
+	sfh->executor->terminateState(state);
 }

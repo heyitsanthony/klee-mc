@@ -178,6 +178,11 @@ public:
 	KInstIterator getCaller(void) const;
 	void dumpStack(std::ostream &os);
 
+	KFunction* getCurrentKF(void) const
+	{
+		return (stack.back()).kf;
+	}
+
 
 	void pushFrame(KInstIterator caller, KFunction *kf);
 	void popFrame();
@@ -251,6 +256,8 @@ public:
 
   std::vector< SymbolicArray >::const_iterator symbolicsEnd(void) const
   { return symbolics.end(); }
+
+  unsigned int getNumSymbolics(void) const { return symbolics.size(); }
 };
 
 }

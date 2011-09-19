@@ -4,6 +4,7 @@
 #include "UserSearcher.h"
 #include "MemUsage.h"
 #include "klee/Common.h"
+#include "static/Sugar.h"
 
 #include <algorithm>
 #include <iostream>
@@ -13,8 +14,7 @@ using namespace klee;
 
 ExeStateManager::ExeStateManager()
 : nonCompactStateCount(0), searcher(0)
-{
-}
+{}
 
 ExeStateManager::~ExeStateManager()
 {
@@ -34,9 +34,15 @@ ExecutionState* ExeStateManager::selectState(bool allowCompact)
 
 void ExeStateManager::setupSearcher(Executor* exe)
 {
-  assert (!searcher && "Searcher already inited");
-  searcher = constructUserSearcher(*exe);
-  searcher->update(0, states, ExeStateSet(), ExeStateSet(), ExeStateSet());
+	assert (!searcher && "Searcher already inited");
+	searcher = constructUserSearcher(*exe);
+	searcher->update(
+		NULL,
+		Searcher::States(
+			states,
+			Searcher::States::emptySet,
+			Searcher::States::emptySet,
+			Searcher::States::emptySet));
 }
 
 void ExeStateManager::teardownUserSearcher(void)
@@ -50,26 +56,23 @@ void ExeStateManager::setInitialState(
   Executor* exe,
   ExecutionState* initialState, bool replay)
 {
-  assert (empty());
+	assert (empty());
 
-  if (replay) {
-    // remove initial state from ptree
-    states.insert(initialState);
-    removedStates.insert(initialState);
-    updateStates(exe, NULL); /* XXX ??? */
-  } else {
-    states.insert(initialState);
-    ++nonCompactStateCount;
-  }
+	if (replay) {
+		// remove initial state from ptree
+		states.insert(initialState);
+		removedStates.insert(initialState);
+		updateStates(exe, NULL); /* XXX ??? */
+	} else {
+		states.insert(initialState);
+		++nonCompactStateCount;
+	}
 }
 
 void ExeStateManager::setWeights(double weight)
 {
-  for (ExeStateSet::iterator it = states.begin(), ie = states.end(); 
-    it != ie; ++it)
-  {
-    (*it)->weight = weight;
-  }
+	foreach (it, states.begin(), states.end())
+		(*it)->weight = weight;
 }
 
 void ExeStateManager::add(ExecutionState* es)
@@ -93,7 +96,7 @@ void ExeStateManager::dropAdded(ExecutionState* es)
 void ExeStateManager::updateStates(Executor* exe, ExecutionState *current)
 {
   if (searcher) {
-    searcher->update(current, addedStates, removedStates, ignoreStates, unignoreStates);
+    searcher->update(current, getStates());
     ignoreStates.clear();
     unignoreStates.clear();
   }
@@ -168,7 +171,7 @@ void ExeStateManager::compactStates(ExecutionState* &state, uint64_t maxMem)
   // compact instead of killing
   std::vector<ExecutionState*> arr(nonCompactStateCount);
   unsigned i = 0;
-  for (ExeStateSet::iterator si = states.begin(); si != states.end(); ++si) {
+  foreach (si, states.begin(), states.end()) {
     if((*si)->isCompactForm) continue;
     arr[i++] = *si;
   }
@@ -193,4 +196,13 @@ void ExeStateManager::compactStates(ExecutionState* &state, uint64_t maxMem)
     replaceState(original, compacted);
     if (state == original) state = compacted;
   }
+}
+
+Searcher::States ExeStateManager::getStates(void) const
+{
+	return Searcher::States(
+		addedStates,
+		removedStates,
+		ignoreStates,
+		unignoreStates);
 }

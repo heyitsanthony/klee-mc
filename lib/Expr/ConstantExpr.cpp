@@ -38,7 +38,13 @@ typedef std::tr1::unordered_map<
 	hashapint,
 	apinteq> ConstantExprTab;
 
-ConstantExprTab const_hashtab;
+ConstantExprTab			const_hashtab;
+static ref<ConstantExpr>	ce_smallval_tab_1[2];
+static ref<ConstantExpr>	ce_smallval_tab_8[256];
+static ref<ConstantExpr>	ce_smallval_tab_16[256];
+static ref<ConstantExpr>	ce_smallval_tab_32[256];
+static ref<ConstantExpr>	ce_smallval_tab_64[256];
+
 
 ref<Expr> ConstantExpr::fromMemory(void *address, Width width) {
   switch (width) {
@@ -71,9 +77,50 @@ void ConstantExpr::toMemory(void *address) {
   }
 }
 
+void ConstantExpr::initSmallValTab(void)
+{
+	ce_smallval_tab_1[0] = ref<ConstantExpr>(
+		new ConstantExpr(llvm::APInt(1, 0)));
+	ce_smallval_tab_1[1] = ref<ConstantExpr>(
+		new ConstantExpr(llvm::APInt(1, 1)));
+
+	ce_smallval_tab_1[0]->computeHash();
+	ce_smallval_tab_1[1]->computeHash();
+
+#define SET_SMALLTAB(w)	\
+	for (unsigned int i = 0; i < 256; i++) {	\
+		ref<ConstantExpr>	r(new ConstantExpr(llvm::APInt(w, i)));	\
+		ce_smallval_tab_##w[i] = r;	\
+		r->computeHash();		\
+	}
+
+	SET_SMALLTAB(8)
+	SET_SMALLTAB(16)
+	SET_SMALLTAB(32)
+	SET_SMALLTAB(64)
+}
+
+static bool tab_ok = false;
 ref<ConstantExpr> ConstantExpr::alloc(const llvm::APInt &v)
 {
 	ConstantExprTab::iterator	it;
+	uint64_t			v_64;
+
+	if (v.getBitWidth() <= 64 && (v_64 = v.getLimitedValue()) < 256) {
+		if (tab_ok == false) {
+			initSmallValTab();
+			tab_ok = true;
+		}
+
+		switch (v.getBitWidth()) {
+		case 1: return ce_smallval_tab_1[v_64];
+		case 8: return ce_smallval_tab_8[v_64];
+		case 16: return ce_smallval_tab_16[v_64];
+		case 32: return ce_smallval_tab_32[v_64];
+		case 64: return ce_smallval_tab_64[v_64];
+		default: break;
+		}
+	}
 
 	it = const_hashtab.find(v);
 	if (it != const_hashtab.end()) {

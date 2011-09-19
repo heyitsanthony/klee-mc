@@ -4,10 +4,10 @@
 #ifndef EXESTATEMANAGER_H
 #define EXESTATEMANAGER_H
 #include "klee/ExecutionState.h"
+#include "Searcher.h"
 
 namespace klee
 {
-class Searcher;
 class EquivalentStateEliminator;
 
 typedef std::map<ExecutionState*, ExecutionState*> ExeStateReplaceMap;
@@ -37,6 +37,7 @@ private:
 
   Searcher *searcher;
 
+  Searcher::States getStates(void) const;
 public:
   ExeStateManager();
   virtual ~ExeStateManager();

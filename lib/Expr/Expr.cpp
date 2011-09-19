@@ -1012,6 +1012,8 @@ static ref<Expr> UltExpr_create(const ref<Expr> &l, const ref<Expr> &r) {
   Expr::Width t = l->getWidth();
   if (t == Expr::Bool) { // !l && r
     return AndExpr::create(Expr::createIsZero(l), r);
+  } else if (l == r) {
+    return ConstantExpr::alloc(0, Expr::Bool);
   } else {
     return UltExpr::alloc(l, r);
   }
@@ -1020,6 +1022,8 @@ static ref<Expr> UltExpr_create(const ref<Expr> &l, const ref<Expr> &r) {
 static ref<Expr> UleExpr_create(const ref<Expr> &l, const ref<Expr> &r) {
   if (l->getWidth() == Expr::Bool) { // !(l && !r)
     return OrExpr::create(Expr::createIsZero(l), r);
+  } else if (r->isZero() || l == r) {
+    return EqExpr::create(l, r);
   } else {
     return UleExpr::alloc(l, r);
   }

@@ -1,14 +1,17 @@
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include "llvm/Target/TargetSelect.h"
 #include "llvm/ExecutionEngine/JIT.h"
+#include "klee/Internal/ADT/Crumbs.h"
 
 #include "ReplayExec.h"
-#include "Crumbs.h"
+#include "genllvm.h"
 #include "guest.h"
 
 #include "SyscallsKTest.h"
 #include <stdlib.h>
 #include <stdio.h>
+
+using namespace klee;
 
 extern void dumpIRSBs(void) {}
 
@@ -47,6 +50,11 @@ int main(int argc, char* argv[])
 	}
 
 	re = VexExec::create<ReplayExec, Guest>(gs);
+	assert (theGenLLVM);
+
+	std::cerr << "[kmc-replay] Forcing fake vsyspage reads\n";
+	theGenLLVM->setFakeSysReads();
+
 	re->setCrumbs(crumbs);
 	skt = SyscallsKTest::create(gs, fname_ktest, crumbs);
 	assert (skt != NULL && "Couldn't create ktest harness");

@@ -4,6 +4,7 @@
 #include "SMTPrinter.h"
 
 #include <assert.h>
+#include <stack>
 #include <algorithm>
 #include <iostream>
 #include <sstream>
@@ -16,7 +17,10 @@ SMTPrinter::Action SMTPrinter::visitExprPost(const Expr &e)
 	switch (e.getKind()) {
 	case Expr::Eq:
 	case Expr::Ult:
+	case Expr::Ule:
+	case Expr::Ugt:
 	case Expr::Uge:
+
 	case Expr::Slt:
 	case Expr::Sle:
 	case Expr::Sgt:
@@ -83,13 +87,22 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr &e)
 			<< e.getWidth() - e.getKid(0)->getWidth() << "] ";
 		break;
 
-	VISIT_OP(Select, ite)
+	case Expr::Select:
+		// logic expressions are converted into bitvectors--
+		// convert back
+		os	<< "(ite (= "
+			<< expr2str(e.getKid(0)) << " bv1[1] ) "
+			<< expr2str(e.getKid(1)) << " "
+			<< expr2str(e.getKid(2)) << " )\n";
+		return Action::skipChildren();
+
 	VISIT_OP(Concat, concat)
 
 	LOGIC_OP(Eq, =)
 	LOGIC_OP(Ult, bvult)
-	LOGIC_OP(Ule, bvugt)
+	LOGIC_OP(Ule, bvule)
 	LOGIC_OP(Uge, bvuge)
+	LOGIC_OP(Ugt, bvugt)
 	LOGIC_OP(Slt, bvslt)
 	LOGIC_OP(Sle, bvsle)
 	LOGIC_OP(Sgt, bvsgt)
@@ -129,7 +142,6 @@ void SMTPrinter::printConstant(const ConstantExpr* ce)
 	assert (ce != NULL);
 
 	width = ce->getWidth();
-	assert (width <= 64);
 
 	if (width <= 64) {
 		os	<< "bv"
@@ -138,16 +150,21 @@ void SMTPrinter::printConstant(const ConstantExpr* ce)
 		return;
 	}
 
+	/* This code gave me some trouble. STP and others may
+	 * have their API backwards-- the LShr code mixes up endianness.
+	 * I should check this out later. */
 	ref<ConstantExpr> Tmp(ConstantExpr::alloc(ce->getAPValue()));
 	os << "(concat ";
-	os << "bv" << Tmp->Extract(0, 64)->getZExtValue() << "[64] \n";
-	for (unsigned i = (width / 64) - 1; i; --i) {
-		Tmp = Tmp->LShr(ConstantExpr::alloc(64, Tmp->getWidth()));
+	os << "bv" << Tmp->Extract(width-64, 64)->getZExtValue() << "[64] \n";
+	for (unsigned i = 1; i < (width+63)/64; i++) {
+		unsigned int	begin, end;
 
+		end = width-i*64;
+		begin =  (width < (i+1)*64) ? 0 : width-(i+1)*64;
 		if (i != 1) os << "(concat ";
 		os	<< "bv"
-			<< Tmp->Extract(0, 64)->getZExtValue()
-			<< "[" << std::min(64, (int)Tmp->getWidth()) << "] ";
+			<< Tmp->Extract(begin, end - begin)->getZExtValue()
+			<< "[" << (end - begin)  << "] ";
 	}
 
 	for (unsigned i = (width /64) - 1; i; --i) {
@@ -155,8 +172,6 @@ void SMTPrinter::printConstant(const ConstantExpr* ce)
 	}
 	os << ")";
 }
-
-
 
 /**
  * Prints queries in SMT form.
@@ -184,7 +199,7 @@ void SMTPrinter::print(std::ostream& os, const Query& q)
 	ss << ":formula\n";
 	ss << "(= ";
 	smt_pr.visit(q.expr);
-	ss << " bv1[1])\n";
+	ss << " bv0[1])\n";
 
 	/* now have arrays, build extrafuns and constant assumptions */
 	foreach (i,smt_pr.arr->a_initial.begin(),smt_pr.arr->a_initial.end()) {
@@ -205,26 +220,56 @@ void SMTPrinter::print(std::ostream& os, const Query& q)
 	delete smt_pr.arr;
 }
 
-const std::string& SMTPrinter::getArrayForUpdate(
+struct update_params
+{
+	update_params(const Array* r, const UpdateNode* u)
+	: root(r), un(u) {}
+	const Array* root;
+	const UpdateNode* un;
+};
+
+const std::string SMTPrinter::getArrayForUpdate(
 	const Array *root, const UpdateNode *un)
 {
-	std::string		ret, mid;
+	std::string			ret;
+	std::stack<update_params>	s;
 
-	if (un == NULL) return getInitialArray(root);
+	/* build stack */
+	s.push(update_params(root, un));
+	while (1) {
+		update_params	p = s.top();
 
-	if (arr->a_updates.count(un))
-		return arr->a_updates.find(un)->second;
+		if (p.un == NULL) break;
+		if (arr->a_updates.count(p.un)) break;
 
-	// FIXME: This really needs to be non-recursive.
-	mid = getArrayForUpdate(root, un->next);
-	ret =	"(store " +
-		mid + " " +
-		expr2str(un->index) + " " +
-		expr2str(un->value) + ")\n";
-	
+		s.push(update_params(p.root, p.un->next));
+	}
 
-	arr->a_updates.insert(make_pair(un, ret));
-	return arr->a_updates[un];
+	/* unwind stack */
+	while (!s.empty()) {
+		update_params	p = s.top();
+
+		s.pop();
+
+		if (p.un == NULL) {
+			ret = getInitialArray(root);
+			continue;
+		}
+
+		if (arr->a_updates.count(p.un)) {
+			ret = arr->a_updates.find(p.un)->second;
+			arr->a_updates.insert(make_pair(p.un, ret));
+			continue;
+		}
+
+		ret =	"(store " + ret + " " +
+			expr2str(p.un->index) + " " +
+			expr2str(p.un->value) + ")\n";
+
+		arr->a_updates.insert(make_pair(p.un, ret));
+	}
+
+	return ret;
 }
 
 /**
@@ -277,9 +322,7 @@ done:
 
 std::string SMTPrinter::arr2name(const Array* arr)
 {
-	char	buf[128];
-	sprintf(buf, "%s_%p", arr->name.c_str(), (const void*)arr);
-	return std::string(buf);
+	return arr->name;
 }
 
 void SMTPrinter::printArrayDecls(void) const
@@ -294,7 +337,6 @@ void SMTPrinter::printArrayDecls(void) const
 std::string SMTPrinter::expr2str(const ref<Expr>& e)
 {
 	std::stringstream	ss;
-	std::string		fff;
 	SMTPrinter		smt_pr(ss, arr);
 	ConstantExpr		*ce;
 

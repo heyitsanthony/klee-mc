@@ -103,6 +103,9 @@ ExecutorVex::ExecutorVex(
 	if (!theGenLLVM) theGenLLVM = new GenLLVM(in_gs);
 	if (!theVexHelpers) theVexHelpers = VexHelpers::create(Arch::X86_64);
 
+	std::cerr << "[klee-mc] Forcing fake vsyspage reads\n";
+	theGenLLVM->setFakeSysReads();
+
 	theVexHelpers->loadUserMod(
 		(UseFDT) ?
 			"libkleeRuntimeMC-fdt.bc" :
@@ -164,6 +167,11 @@ void ExecutorVex::runImage(void)
 	// yet have a global address but binding the constant table
 	// requires it!
 	init_func = getFuncByAddrNoKMod((uint64_t)gs->getEntryPoint(), is_new);
+	assert (init_func != NULL && "Could not get init_func. Bad decode?");
+	if (init_func == NULL) {
+		fprintf(stderr, "[klee-mc] COULD NOT GET INIT_FUNC\n");
+		return;
+	}
 
 	/* add modules before initializing globals so that everything
 	 * will link in properly */
@@ -175,6 +183,7 @@ void ExecutorVex::runImage(void)
 	if (UseFDT) installFDTInitializers(init_func);
 
 	init_kfunc = kmodule->addFunction(init_func);
+
 	statsTracker->addKFunction(init_kfunc);
 	bindKFuncConstants(init_kfunc);
 
@@ -460,8 +469,8 @@ void ExecutorVex::makeArgsSymbolic(ExecutionState* state)
 	if (argv.size() == 0) return;
 
 	fprintf(stderr,
-		"[klee-mc] Making %u arguments symbolic\n",
-		argv.size()-1);
+		"[klee-mc] Making %d arguments symbolic\n",
+		(int)(argv.size()-1));
 	foreach (it, argv.begin()+1, argv.end()) {
 		guest_ptr	p = *it;
 		sfh->makeRangeSymbolic(
@@ -616,7 +625,8 @@ Function* ExecutorVex::getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new)
 		return NULL;
 	}
 
-	/* XXX */
+	/* XXX: This is wrong because it doesn't acknowledge write-backs */
+	/* The right way to do it would involve grabbing from the state's MO */
 	host_addr = gs->getMem()->getHostPtr(guest_ptr(guest_addr));
 
 	/* cached => already seen it */
@@ -923,9 +933,11 @@ void ExecutorVex::handleXferSyscall(
 
 	uint64_t	sysnr;
 	state.addressSpace.copyToBuf(es2esv(state).getRegCtx(), &sysnr, 0, 8);
-	fprintf(stderr, "before syscall %d(?): states=%d\n",
-		sysnr,
-		stateManager->size());
+	fprintf(stderr, "before syscall %d(?): states=%d. objs=%d. st=%p\n",
+		(int)sysnr,
+		stateManager->size(),
+		state.getNumSymbolics(),
+		(void*)&state);
 
 	/* arg0 = regctx, arg1 = jmpptr */
 	args.push_back(es2esv(state).getRegCtx()->getBaseExpr());
@@ -933,7 +945,7 @@ void ExecutorVex::handleXferSyscall(
 
 	executeCall(state, ki, kf_scenter->function, args);
 
-	fprintf(stderr, "after syscall: states=%d.\n", stateManager->size());
+	fprintf(stderr, "syscall queued.\n");
 }
 
 void ExecutorVex::handleXferReturn(

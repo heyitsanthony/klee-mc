@@ -2,6 +2,7 @@
 
 #include "klee/Common.h"
 #include "klee/Interpreter.h"
+#include "klee/Internal/ADT/KTest.h"
 #include "klee/Statistics.h"
 #include "klee/Internal/System/Time.h"
 #include "static/Sugar.h"
@@ -61,19 +62,19 @@ namespace {
   Environ("environ", cl::desc("Parse environ from given file (in \"env\" format)"));
 
   cl::list<std::string>
-  InputArgv(cl::ConsumeAfter, 
+  InputArgv(cl::ConsumeAfter,
             cl::desc("<program arguments>..."));
 
   // this is a fake entry, its automagically handled
   cl::list<std::string>
-  ReadArgsFilesFake("read-args", 
+  ReadArgsFilesFake("read-args",
                     cl::desc("File to read arguments from (one arg per line)"));
-    
+
   cl::opt<bool>
-  ReplayKeepSymbolic("replay-keep-symbolic", 
+  ReplayKeepSymbolic("replay-keep-symbolic",
                      cl::desc("Replay the test cases only by asserting"
                               "the bytes, not necessarily making them concrete."));
-    
+
   cl::list<std::string>
   ReplayOutFile("replay-out",
                 cl::desc("Specify an out file to replay"),
@@ -96,10 +97,10 @@ namespace {
 
   cl::list<std::string>
   SeedOutFile("seed-out");
-  
+
   cl::list<std::string>
   SeedOutDir("seed-out-dir");
-  
+
   cl::opt<unsigned>
   MakeConcreteSymbolic("make-concrete-symbolic",
                        cl::desc("Rate at which to make concrete reads symbolic (0=off)"),
@@ -110,6 +111,12 @@ namespace {
 	"guest-type",
 	cl::desc("Type of guest to use. {*ptrace, sshot, elf, frag}"),
 	cl::init("ptrace"));
+
+  cl::opt<std::string>
+  GuestSnapshotFName(
+        "guest-sshot",
+	cl::desc("Snapshot file to use."),
+	cl::init(""));
 
   cl::opt<std::string>
   GuestFragmentFile(
@@ -188,7 +195,7 @@ static void parseArguments(int argc, char **argv)
       arguments.push_back(argv[i]);
     }
   }
-    
+
   int numArgs = arguments.size() + 1;
   const char **argArray = new const char*[numArgs+1];
   argArray[0] = argv[0];
@@ -232,12 +239,12 @@ static void interrupt_handle() {
 static void halt_via_gdb(int pid)
 {
   char buffer[256];
-  sprintf(buffer, 
+  sprintf(buffer,
           "gdb --batch --eval-command=\"p halt_execution()\" "
           "--eval-command=detach --pid=%d &> /dev/null",
           pid);
   //  fprintf(stderr, "KLEE: WATCHDOG: running: %s\n", buffer);
-  if (system(buffer)==-1) 
+  if (system(buffer)==-1)
     perror("system");
 }
 
@@ -301,7 +308,45 @@ void run(ExecutorVex* exe)
 		}
 	}
 
-	exe->runImage();	
+	exe->runImage();
+}
+
+void runReplay(Interpreter* interpreter)
+{
+  std::vector<KTest*> kTests;
+  std::vector<std::string> outFiles;
+
+  outFiles = ReplayOutFile;
+  foreach (it, ReplayOutDir.begin(),  ReplayOutDir.end())
+    KleeHandler::getOutFiles(*it, outFiles);
+
+  foreach (it, outFiles.begin(), outFiles.end()) {
+    KTest *out = kTest_fromFile(it->c_str());
+    if (out) {
+      kTests.push_back(out);
+    } else {
+      std::cerr << "KLEE: unable to open: " << *it << "\n";
+    }
+  }
+
+  unsigned i=0;
+  foreach (it, kTests.begin(), kTests.end()) {
+    KTest *out = *it;
+    interpreter->setReplayOut(out);
+    std::cerr << "KLEE: replaying: " << *it << " ("
+    	<< kTest_numBytes(out) << " bytes)"
+        << " (" << ++i << "/" << outFiles.size() << ")\n";
+    // XXX should put envp in .ktest ?
+    run(dynamic_cast<ExecutorVex*>(interpreter));
+    if (interrupted) break;
+  }
+
+  interpreter->setReplayOut(0);
+
+  while (!kTests.empty()) {
+    kTest_free(kTests.back());
+    kTests.pop_back();
+  }
 }
 
 #define GET_STAT(x,y)	\
@@ -320,15 +365,15 @@ static void printStats(PrefixWriter& info, KleeHandler* handler)
 	GET_STAT(instructions, "Instructions")
 	GET_STAT(forks, "Forks")
 
-	info << "done: total queries = " 
+	info << "done: total queries = "
 		<< queries << " ("
 		<< "valid: " << queriesValid << ", "
 		<< "invalid: " << queriesInvalid << ", "
 		<< "cex: " << queryCounterexamples << ", "
 		<< "failed: " << queriesFailed << ")\n";
 	if (queries)
-		info	<< "done: avg. constructs per query = " 
-			<< queryConstructs / queries << "\n";  
+		info	<< "done: avg. constructs per query = "
+			<< queryConstructs / queries << "\n";
 
 	info	<< "done: query cache hits = " << queryCacheHits << ", "
 		<< "query cache misses = " << queryCacheMisses << "\n";
@@ -373,7 +418,7 @@ static int runWatchdog(void)
 
       if (time > nextStep) {
         ++level;
-    
+
         if (level==1) {
           fprintf(stderr, "KLEE: WATCHDOG: time expired, attempting halt via INT\n");
           kill(pid, SIGINT);
@@ -432,11 +477,14 @@ Guest* getGuest(CmdArgs* cmdargs)
 			const_cast<const char**>(cmdargs->getArgv()),
 			(int)cmdargs->getEnvc(),
 			const_cast<const char**>(cmdargs->getEnvp()));
-		
+
 		gs = ge;
 	} else if (GuestType == "sshot") {
 		fprintf(stderr, "[klee-mc] LOADING SNAPSHOT\n");
-		gs = Guest::load();
+		gs = Guest::load(
+			GuestSnapshotFName.size() == 0
+			?	NULL
+			:	GuestSnapshotFName.c_str());
 		assert (gs && "Could not load guest snapshot");
 	} else if (GuestType == "frag") {
 		GuestFragment	*gf;
@@ -451,6 +499,33 @@ Guest* getGuest(CmdArgs* cmdargs)
 	}
 
 	return gs;
+}
+
+bool isReplaying(void)
+{
+	return (!ReplayOutDir.empty() || !ReplayOutFile.empty());
+}
+
+static std::list<ReplayPathType>	replayPaths;
+void setupReplayPaths(Interpreter* interpreter)
+{
+	ReplayPathType			replayPath;
+	std::vector<std::string>	pathFiles;
+
+	if (ReplayPathDir != "")
+		KleeHandler::getPathFiles(ReplayPathDir, pathFiles);
+	if (ReplayPathFile != "")
+		pathFiles.push_back(ReplayPathFile);
+
+	foreach (it, pathFiles.begin(), pathFiles.end()) {
+		KleeHandler::loadPathFile(*it, replayPath);
+		replayPaths.push_back(replayPath);
+		replayPath.clear();
+	}
+
+	if (!replayPaths.empty()) {
+		interpreter->setReplayPaths(&replayPaths);
+	}
 }
 
 int main(int argc, char **argv, char **envp)
@@ -506,8 +581,11 @@ int main(int argc, char **argv, char **envp)
 
 	//  finalModule = interpreter->setModule(mainModule, Opts);
 	//  externalsAndGlobalsCheck(finalModule);
-
-	run(dynamic_cast<ExecutorVex*>(interpreter));
+	setupReplayPaths(interpreter);
+	if (isReplaying()) {
+		runReplay(interpreter);
+	} else
+		run(dynamic_cast<ExecutorVex*>(interpreter));
 
 	delete interpreter;
 

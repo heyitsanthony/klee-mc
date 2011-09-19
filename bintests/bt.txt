@@ -60,7 +60,7 @@
 /usr/bin/lame in out
 /usr/bin/llvm-dis asd
 /usr/bin/llvm-mc asd
-/usr/bin/llvm-objdump -a asd
+/usr/bin/llvm-objdump asd
 /usr/bin/lzmainfo asd
 /usr/bin/mpck asd.mp3
 /usr/bin/mpg123 asd.mp3
@@ -127,7 +127,6 @@
 /sbin/reiserfsck asd
 /usr/bin/dig asd
 /usr/bin/diffstat asd dsa
-/usr/sbin/iscsi-iname
 /usr/sbin/arpd
 /usr/sbin/avahi-daemon
 /usr/sbin/rarpd
@@ -151,3 +150,6 @@
 /usr/bin/pmap -x 123
 /usr/bin/mc
 /usr/bin/join asd xyz
+/usr/bin/udcli -64 asd
+/sbin/fdisk asd
+/usr/sbin/parted asd

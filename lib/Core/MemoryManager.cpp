@@ -24,12 +24,12 @@ using namespace klee;
 
 /***/
 
-MemoryManager::~MemoryManager() { 
+MemoryManager::~MemoryManager() {
   HeapObject::memoryManager = NULL;
   MemoryObject::memoryManager = NULL;
 }
 
-#define MAX_ALLOC_BYTES	(10*1024*1024)
+#define MAX_ALLOC_BYTES	(16*1024*1024)
 
 bool MemoryManager::isGoodSize(uint64_t size) const
 {
@@ -40,7 +40,7 @@ bool MemoryManager::isGoodSize(uint64_t size) const
 }
 
 MemoryObject *MemoryManager::allocate(
-  uint64_t size, bool isLocal, 
+  uint64_t size, bool isLocal,
   bool isGlobal,
   const llvm::Value *allocSite,
   ExecutionState *state)
@@ -59,7 +59,7 @@ MemoryObject *MemoryManager::allocate(
   //  2) same malloc iteration number (at allocSite) within path
   //  3) size <= size being requested
   if (state && size) {
-    std::pair<HeapMap::iterator,HeapMap::iterator> hitPair = 
+    std::pair<HeapMap::iterator,HeapMap::iterator> hitPair =
       heapObjects.equal_range(mallocKey);
     foreach (hit, hitPair.first, hitPair.second) {
       HeapObject *curObj = hit->second;
@@ -150,65 +150,100 @@ MemoryObject *MemoryManager::allocateFixed(
   return res;
 }
 
+std::vector<MemoryObject*> MemoryManager::allocateAlignedChopped(
+	uint64_t size,
+	unsigned pow2,
+	const llvm::Value *allocSite,
+	ExecutionState *state)
+{
+	std::vector<HeapObject*>	heapObjs;
+	std::vector<MemoryObject*>	ret;
+
+	assert (pow2 == 12 && "Expecting a 4KB page");
+	if (!isGoodSize(size)) return ret;
+	if (size == 0) return ret;
+
+	assert(state  && "Insufficient MallocKey data");
+	MallocKey mallocKey(
+		allocSite,
+		state->mallocIterations[allocSite]++,
+		4096,
+		true,
+		false,
+		false);
+
+	heapObjs = HeapObject::contiguousPages(size);
+	if (heapObjs.size() == 0)
+		return ret;
+
+	++stats::allocations;
+
+	if (allocSite) MallocKey::seenSizes[mallocKey].insert(mallocKey.size);
+
+	for (unsigned i = 0; i < heapObjs.size(); i++) {
+		MemoryObject	*mo;
+		mo = insertHeapObj(state, heapObjs[i], mallocKey, 4096);
+		ret.push_back(mo);
+	}
+
+	return ret;
+}
+
+MemoryObject* MemoryManager::insertHeapObj(
+	ExecutionState* state,
+	HeapObject* heapObj,
+	MallocKey& mk,
+	unsigned size)
+{
+	MemoryObject	*cur_mo;
+	bool		anonymous;
+
+	anonymous = (state == NULL);
+
+	heapObjects.insert(std::make_pair(mk, heapObj));
+	cur_mo = new MemoryObject(heapObj->address, size, mk, heapObj);
+
+	// if not replaying state, add reference to heap object
+	if (state->isReplay || state->isReplayDone())
+		anonymous |= !state->pushHeapRef(heapObj);
+
+	// add reference to memory object
+	state->memObjects.push_back(ref<MemoryObject>(cur_mo));
+
+	// heap object anonymously allocated;
+	// keep references to such objects so
+	// they're freed on exit. These include globals, etc.
+	if (anonymous)
+		anonHeapObjs.push_back(ref<HeapObject>(heapObj));
+
+	objects.insert(cur_mo);
+
+	return cur_mo;
+}
+
 MemoryObject *MemoryManager::allocateAligned(
   uint64_t size,
   unsigned pow2,
   const llvm::Value *allocSite,
   ExecutionState *state)
 {
-  if (!isGoodSize(size)) return NULL;
-  if (size == 0) return NULL;
+	HeapObject *heapObj;
 
-  assert(state  && "Insufficient MallocKey data");
-  MallocKey mallocKey(
-	allocSite,
-	state->mallocIterations[allocSite]++,
-	size, true, false, false);
+	if (!isGoodSize(size)) return NULL;
+	if (size == 0) return NULL;
 
-  HeapObject *heapObj = NULL;
+	assert(state  && "Insufficient MallocKey data");
+	MallocKey mallocKey(
+		allocSite,
+		state->mallocIterations[allocSite]++,
+		size, true, false, false);
 
-  // if we used to have an object with this mallocKey, reuse the same size
-  // so we can get hits in the cache and RWset
-/* ajr: I don't trust this code. It has already caused things to blow up and
- * I don't know what it does (especially since rwset isn't working..) */
-#if 0
-  MallocKey::seensizes_ty::iterator it;
-  if (allocSite &&
-      (it = MallocKey::seenSizes.find(mallocKey)) !=
-        MallocKey::seenSizes.end()) {
-    std::set<uint64_t> &sizes = it->second;
-    std::set<uint64_t>::iterator it2 = sizes.lower_bound(size);
-    if(it2 != sizes.end() && *it2 > size)
-      mallocKey.size = *it2;
-  }
-#endif
+	heapObj = new HeapObject(size, 12);
+	++stats::allocations;
 
-  heapObj = new HeapObject(size, 12);
-  ++stats::allocations;
+	if (allocSite) MallocKey::seenSizes[mallocKey].insert(mallocKey.size);
 
-  if (allocSite) MallocKey::seenSizes[mallocKey].insert(mallocKey.size);
-
-  heapObjects.insert(std::make_pair(mallocKey, heapObj));
-
-  bool anonymous = !state;
-  MemoryObject *res;
-
-  res = new MemoryObject(heapObj->address, size, mallocKey, heapObj);
-
-  // if not replaying state, add reference to heap object
-  if (state->isReplay || state->isReplayDone())
-    anonymous |= !state->pushHeapRef(heapObj);
-
-  // add reference to memory object
-  state->memObjects.push_back(ref<MemoryObject>(res));
-
-  // heap object anonymously allocated; keep references to such objects so
-  // they're freed on exit. These include globals, etc.
-  if(anonymous)
-    anonHeapObjs.push_back(ref<HeapObject>(heapObj));
-
-  objects.insert(res);
-  return res;
+	return insertHeapObj(state, heapObj, mallocKey, size);
 }
 
 void MemoryManager::dropHeapObj(HeapObject* ho)

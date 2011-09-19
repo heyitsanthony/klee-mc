@@ -13,15 +13,17 @@
 
 #include "klee/klee.h"
 #include "klee/breadcrumb.h"
-#include "klee/Internal/ADT/KTest.h"
+#include "klee/Internal/ADT/KTestStream.h"
+#include "klee/Internal/ADT/Crumbs.h"
 #include "guestcpustate.h"
 #include "guest.h"
 
-#include "Crumbs.h"
 #include "SyscallsKTest.h"
 
 #define KREPLAY_NOTE	"[kmc-replay] "
 #define KREPLAY_SC	"[kmc-sc] "
+
+using namespace klee;
 
 extern "C"
 {
@@ -38,7 +40,7 @@ SyscallsKTest* SyscallsKTest::create(
 	assert (in_g->getArch() == Arch::X86_64);
 
 	skt = new SyscallsKTest(in_g, fname_ktest, in_crumbs);
-	if (skt->ktest == NULL || skt->crumbs == NULL) {
+	if (skt->kts == NULL || skt->crumbs == NULL) {
 		delete skt;
 		skt = NULL;
 	}
@@ -51,19 +53,16 @@ SyscallsKTest::SyscallsKTest(
 	const char* fname_ktest,
 	Crumbs* in_crumbs)
 : Syscalls(in_g)
-, ktest(NULL)
 , sc_retired(0)
 , crumbs(in_crumbs)
 , bcs_crumb(NULL)
 {
-	ktest = kTest_fromFile(fname_ktest);
-	if (ktest == NULL) return;
-	next_ktest_obj = 0;
+	kts = KTestStream::create(fname_ktest);
 }
 
 SyscallsKTest::~SyscallsKTest(void)
 {
-	if (ktest) kTest_free(ktest);
+	if (kts) delete kts;
 	if (bcs_crumb) delete bcs_crumb;
 }
 
@@ -82,7 +81,7 @@ void SyscallsKTest::badCopyBail(void)
 void SyscallsKTest::loadSyscallEntry(SyscallParams& sp)
 {
 	uint64_t sys_nr = sp.getSyscall();
-	
+
 	assert (bcs_crumb == NULL && "Last crumb should be freed before load");
 	bcs_crumb = reinterpret_cast<struct bc_syscall*>(crumbs->next());
 	if (!bcs_crumb) {
@@ -124,7 +123,8 @@ void SyscallsKTest::loadSyscallEntry(SyscallParams& sp)
 		for (unsigned int i = 0; i < bcs_crumb->bcs_op_c; i++) {
 			feedSyscallOp(sp);
 		}
-	}
+	} else
+		crumbs->skip(bcs_crumb->bcs_op_c);
 }
 
 void SyscallsKTest::feedSyscallOp(SyscallParams& sp)
@@ -152,15 +152,11 @@ void SyscallsKTest::feedSyscallOp(SyscallParams& sp)
 	Crumbs::freeCrumb(&sop->sop_hdr);
 }
 
-
-//fprintf(stderr, "Faking syscall "#x" (%p,%p,%p)\n",
-//	sp.getArg(0), sp.getArg(1), sp.getArg(2));
-
-
 uint64_t SyscallsKTest::apply(SyscallParams& sp)
 {
 	uint64_t	ret;
 	uint64_t	sys_nr;
+	ssize_t		bw;
 
 	ret = 0;
 	sys_nr = sp.getSyscall();
@@ -179,18 +175,18 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 		(((struct msghdr*)sp.getArg(1)))->msg_controllen = 0;
 		break;
 	case SYS_read:
-		fprintf(stderr, KREPLAY_SC "READ ret=%p\n",getRet());
+		fprintf(stderr, KREPLAY_SC "READ ret=%p\n", (void*)getRet());
 		break;
 
 	case SYS_open:
 		fprintf(stderr, KREPLAY_SC "OPEN \"%s\" ret=%p\n",
-			sp.getArg(0), getRet());
+			(char*)sp.getArgPtr(0), (void*)getRet());
 		break;
 	case SYS_write:
 		fprintf(stderr,
 			KREPLAY_SC "WRITING %d bytes to fd=%d :\"\n",
-			sp.getArg(2), sp.getArg(0));
-		write(STDERR_FILENO, sp.getArgPtr(1), sp.getArg(2));
+			(int)sp.getArg(2), (int)sp.getArg(0));
+		bw = write(STDERR_FILENO, sp.getArgPtr(1), sp.getArg(2));
 		fprintf(stderr, "\n" KREPLAY_SC "\".\n");
 
 		break;
@@ -217,7 +213,7 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 
 		feedSyscallOp(sp);
 		fprintf(stderr, "ADDR=%p LEN=%d ARG0=%p. ARG1=%p\n",
-			addr, len, sp.getArgPtr(0), sp.getArgPtr(1));
+			(void*)addr, (int)len, sp.getArgPtr(0), sp.getArgPtr(1));
 		if (addr != sp.getArg(0)) {
 			fprintf(stderr, "LOOOOOOOOOOOOOOOOL\n");
 		}
@@ -226,9 +222,17 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 		setRet(addr);
 		break;
 	}
-
+	case SYS_mprotect:
+		guest->getMem()->mprotect(
+			guest_ptr(sp.getArg(0)),
+			sp.getArg(1),
+			sp.getArg(2));
+		break;
 	case SYS_munmap:
-		sc_munmap(sp);
+		fprintf(stderr, KREPLAY_SC"MUNMAPPING: %p-%p\n",
+			(void*)sp.getArg(0),
+			(void*)(sp.getArg(0) + sp.getArg(1)));
+		guest->getMem()->munmap(guest_ptr(sp.getArg(0)), sp.getArg(1));
 		break;
 	case SYS_mmap:
 		sc_mmap(sp);
@@ -241,14 +245,14 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 		if (!bc_sc_is_thunk(bcs_crumb)) break;
 		fprintf(stderr,
 			KREPLAY_NOTE "No thunk for syscall %d\n",
-			sys_nr);
+			(int)sys_nr);
 		assert (0 == 1 && "TRICKY SYSCALL");
 	}
 
 	fprintf(stderr,
 		KREPLAY_NOTE "Retired: sys=%d. ret=%p\n",
-		sys_nr, getRet());
-	
+		(int)sys_nr, (void*)getRet());
+
 	sc_retired++;
 	Crumbs::freeCrumb(&bcs_crumb->bcs_hdr);
 	bcs_crumb = NULL;
@@ -258,8 +262,9 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 
 void SyscallsKTest::sc_mmap(SyscallParams& sp)
 {
-	void			*ret, *bcs_ret;
-	bool			copied_in;
+	void		*bcs_ret;
+	guest_ptr	g_ret;
+	int		rc;
 
 	bcs_ret = (void*)bcs_crumb->bcs_ret;
 	if (bcs_ret == MAP_FAILED) {
@@ -267,8 +272,13 @@ void SyscallsKTest::sc_mmap(SyscallParams& sp)
 		return;
 	}
 
-	ret = mmap(
-		bcs_ret,
+	fprintf(stderr, KREPLAY_SC" MMAP fd=%d flags=%x TO %p\n",
+		(int)sp.getArg(4),
+		(int)sp.getArg(3),
+		bcs_ret);
+	rc = guest->getMem()->mmap(
+		g_ret,
+		guest_ptr((uint64_t)bcs_ret),
 		sp.getArg(1),
 		PROT_READ | PROT_WRITE,
 		((bcs_ret) ? MAP_FIXED : 0)
@@ -276,52 +286,22 @@ void SyscallsKTest::sc_mmap(SyscallParams& sp)
 			| MAP_ANONYMOUS,
 		-1,
 		0);
-	if (ret == MAP_FAILED) {
+
+	if (rc != 0 || (void*)g_ret.o == MAP_FAILED) {
 		fprintf(stderr,
-			"MAP FAILED ON FIXED ADDR %p bytes=%p\n",
-			bcs_ret, sp.getArgPtr(1));
+			"MAP FAILED ON FIXED ADDR %p bytes=%p. rc=%d\n",
+			bcs_ret, sp.getArgPtr(1), rc);
 	}
-	assert (ret != MAP_FAILED);
+	assert (rc == 0);
 
-	setRet((uint64_t)ret);
-	copied_in = copyInMemObj((uint64_t)ret, sp.getArg(1));
-	assert (copied_in && "BAD MMAP MEMOBJ");
-}
+	setRet((uint64_t)g_ret.o);
 
-void SyscallsKTest::sc_munmap(SyscallParams& sp)
-{
-	munmap((void*)sp.getArg(0), sp.getArg(1));
-}
-
-/* caller should know the size of the object based on
- * the syscall's context */
-char* SyscallsKTest::feedMemObj(unsigned int sz)
-{
-	char			*obj_buf;
-	struct KTestObject	*cur_obj;
-	
-	if (next_ktest_obj >= ktest->numObjects) {
-		/* request overflow */
-		fprintf(stderr, KREPLAY_NOTE"OF\n");
-		return NULL;
+	if (((int)sp.getArg(4)) != -1) {
+		/* only symbolic if fd is defined (e.g. fd != -1) */
+		bool	copied_in;
+		copied_in = copyInMemObj(g_ret.o, sp.getArg(1));
+		assert (copied_in && "BAD MMAP MEMOBJ");
 	}
-
-	cur_obj = &ktest->objects[next_ktest_obj++];
-	if (cur_obj->numBytes != sz) {
-		/* out of sync-- how to handle? */
-		fprintf(stderr, KREPLAY_NOTE"OOSYNC: Expected: %d. Got: %d\n",
-			sz,
-			cur_obj->numBytes);
-		return NULL;
-	}
-
-	obj_buf = new char[sz];
-	memcpy(obj_buf, cur_obj->bytes, sz);
-	fprintf(stderr, "NOM NOM MemObj %s (%d bytes)\n",
-		cur_obj->name,
-		cur_obj->numBytes);
-
-	return obj_buf;
 }
 
 bool SyscallsKTest::copyInMemObj(uint64_t guest_addr, unsigned int sz)
@@ -329,10 +309,9 @@ bool SyscallsKTest::copyInMemObj(uint64_t guest_addr, unsigned int sz)
 	char	*buf;
 
 	/* first, grab mem obj */
-	if ((buf = feedMemObj(sz)) == NULL)
+	if ((buf = kts->feedObjData(sz)) == NULL)
 		return false;
 
-	fprintf(stderr, "COPY %d bytes INTO addr=%p\n", sz, buf);
 	guest->getMem()->memcpy(guest_ptr(guest_addr), buf, sz);
 
 	delete [] buf;
@@ -360,7 +339,7 @@ bool SyscallsKTest::copyInRegMemObj(void)
 	unsigned int		reg_sz;
 
 	reg_sz = guest->getCPUState()->getStateSize();
-	if ((partial_reg_buf = feedMemObj(reg_sz)) == NULL) {
+	if ((partial_reg_buf = kts->feedObjData(reg_sz)) == NULL) {
 		return false;
 	}
 	partial_cpu = (VexGuestAMD64State*)partial_reg_buf;

@@ -216,30 +216,31 @@ static IndependentElementSet getIndependentConstraints(
 	const Query& query,
 	std::vector< ref<Expr> > &result)
 {
-  IndependentElementSet eltsClosure(query.expr);
-  std::vector< std::pair<ref<Expr>, IndependentElementSet> > worklist;
+	IndependentElementSet eltsClosure(query.expr);
+	std::vector< std::pair<ref<Expr>, IndependentElementSet> > worklist;
 
-  foreach (it, query.constraints.begin(), query.constraints.end())
-    worklist.push_back(std::make_pair(*it, IndependentElementSet(*it)));
+	foreach (it, query.constraints.begin(), query.constraints.end())
+		worklist.push_back(
+			std::make_pair(*it, IndependentElementSet(*it)));
 
-  // XXX This should be more efficient (in terms of low level copy stuff).
-  bool done = false;
-  do {
-    done = true;
-    std::vector< std::pair<ref<Expr>, IndependentElementSet> > newWorklist;
-    foreach (it, worklist.begin(), worklist.end()) {
-      if (it->second.intersects(eltsClosure)) {
-        if (eltsClosure.add(it->second))
-          done = false;
-        result.push_back(it->first);
-      } else {
-        newWorklist.push_back(*it);
-      }
-    }
-    worklist.swap(newWorklist);
-  } while (!done);
+	// XXX This should be more efficient (in terms of low level copy stuff).
+	bool done = false;
+	do {
+		done = true;
+		std::vector< std::pair<ref<Expr>, IndependentElementSet> > newWorklist;
+		foreach (it, worklist.begin(), worklist.end()) {
+			if (it->second.intersects(eltsClosure)) {
+				if (eltsClosure.add(it->second))
+					done = false;
+				result.push_back(it->first);
+			} else {
+				newWorklist.push_back(*it);
+			}
+		}
+		worklist.swap(newWorklist);
+	} while (!done);
 
-  if (0) {
+#if 0
     std::set< ref<Expr> > reqset(result.begin(), result.end());
     std::cerr << "--\n";
     std::cerr << "Q: " << query.expr << "\n";
@@ -251,7 +252,7 @@ static IndependentElementSet getIndependentConstraints(
       std::cerr << "\telts: " << IndependentElementSet(*it) << "\n";
     }
     std::cerr << "elts closure: " << eltsClosure << "\n";
-  }
+#endif
 
   return eltsClosure;
 }

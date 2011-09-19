@@ -1,0 +1,53 @@
+#include <assert.h>
+#include <stdio.h>
+#include <string.h>
+#include "klee/Internal/ADT/KTestStream.h"
+
+using namespace klee;
+
+KTestStream::KTestStream(KTest* in_kt)
+: idx(0)
+, kt(in_kt)
+{ assert (kt != NULL); }
+
+KTestStream::~KTestStream(void)
+{
+	kTest_free(kt);
+}
+
+char* KTestStream::feedObjData(unsigned int sz)
+{
+	char			*obj_buf;
+	const KTestObject	*cur_obj;
+	
+	cur_obj = nextObject();
+	if (cur_obj == NULL) {
+		/* request overflow */
+		fprintf(stderr, "KTestStream: OF\n");
+		return NULL;
+	}
+
+	if (cur_obj->numBytes != sz) {
+		/* out of sync-- how to handle? */
+		fprintf(stderr, "KTestStream: OOSYNC: Expected: %d. Got: %d\n",
+			sz,
+			cur_obj->numBytes);
+		return NULL;
+	}
+
+	obj_buf = new char[sz];
+	memcpy(obj_buf, cur_obj->bytes, sz);
+	fprintf(stderr, "NOM NOM MemObj %s (%d bytes)\n",
+		cur_obj->name,
+		cur_obj->numBytes);
+
+	return obj_buf;
+}
+
+KTestStream* KTestStream::create(const char* file)
+{
+	KTest	*kt = kTest_fromFile(file);
+
+	if (kt == NULL) return NULL;
+	return new KTestStream(kt);
+}

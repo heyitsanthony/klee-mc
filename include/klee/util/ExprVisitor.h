@@ -48,9 +48,7 @@ namespace klee {
 
   protected:
     explicit
-    ExprVisitor(bool _recursive=false, bool in_visitConstants=false)
-    : recursive(_recursive)
-    , visitConstants(in_visitConstants) {}
+    ExprVisitor(bool _recursive=false, bool in_visitConstants=false);
     virtual ~ExprVisitor() {}
 
     virtual Action visitExpr(const Expr&);
@@ -88,6 +86,7 @@ namespace klee {
     virtual Action visitSgt(const SgtExpr&);
     virtual Action visitSge(const SgeExpr&);
     virtual Action visitConstant(const ConstantExpr&);
+    bool use_hashcons;
   private:
     typedef ExprHashMap< ref<Expr> > visited_ty;
     visited_ty visited;

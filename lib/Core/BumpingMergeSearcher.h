@@ -21,11 +21,7 @@ namespace klee
     virtual ~BumpMergingSearcher();
 
     ExecutionState &selectState(bool allowCompact);
-    void update(ExecutionState *current,
-                const std::set<ExecutionState*> &addedStates,
-                const std::set<ExecutionState*> &removedStates,
-                const std::set<ExecutionState*> &ignoreStates,
-                const std::set<ExecutionState*> &unignoreStates);
+    void update(ExecutionState *current, States s);
     bool empty() const { return baseSearcher->empty() && statesAtMerge.empty(); }
     void printName(std::ostream &os) const { os << "BumpMergingSearcher\n"; }
   };

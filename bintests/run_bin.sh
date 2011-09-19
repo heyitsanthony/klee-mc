@@ -6,7 +6,8 @@ if [ -z "$KMC_RUN_OUTPUTPATH" ]; then
 fi
 
 if [ -z "$KMC_RUN_KLEEFLAGS" ]; then
-	KMC_RUN_KLEEFLAGS="--guest-type=sshot --use-pcache-rewriteptr -pcache-dir=../../../"
+#	KMC_RUN_KLEEFLAGS="--guest-type=sshot --use-pcache-rewriteptr -pcache-dir=../../../"
+	KMC_RUN_KLEEFLAGS="-guest-type=sshot -pipe-solver"
 fi
 
 if [ -z "$KMC_RUN_TIMEOUT" ]; then

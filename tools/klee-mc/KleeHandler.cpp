@@ -320,9 +320,27 @@ void KleeHandler::processTestCase(
 #endif
       }
       delete f;
+      GZip::gzipFile(
+      		getTestFilename("path", id).c_str(),
+		(getTestFilename("path", id) + ".gz").c_str());
     }
     else
       klee_warning("unable to write .path file, losing it (errno=%d: %s)", errno, strerror(errno));
+  }
+
+  if (WriteSMT) {
+	Query		query(
+		state.constraints,
+		ConstantExpr::alloc(0, Expr::Bool));
+	std::ostream	*f;
+
+	f = openTestFile("smt", id);
+	SMTPrinter::print(*f, query);
+	delete f;
+	/* these things are pretty big */
+	GZip::gzipFile(
+		getTestFilename("smt", id).c_str(),
+		(getTestFilename("smt", id) + ".gz").c_str());
   }
 
   if (errorMessage || WritePCs) {
@@ -404,26 +422,13 @@ void KleeHandler::dumpPCs(const ExecutionState& state, unsigned id)
 	if (std::ostream* f = openTestFile("pc", id)) {
 		*f << constraints;
 		delete f;
-	} else
+	} else {
 		klee_warning(
 			"unable to write .pc file, losing it (errno=%d: %s)",
 			errno, strerror(errno));
-
-	if (WriteSMT) {
-		Query		query(
-			state.constraints,
-			ConstantExpr::alloc(0, Expr::Bool));
-		std::ostream	*f;
-
-		f = openTestFile("smt", id);
-		SMTPrinter::print(*f, query);
-		delete f;
-		/* these things are pretty big */
-		GZip::gzipFile(
-			getTestFilename("smt", id).c_str(),
-			(getTestFilename("smt", id) + ".gz").c_str());
 	}
 }
+
 void KleeHandler::dumpLog(
 	const char* name,
 	unsigned id,
@@ -472,26 +477,34 @@ void KleeHandler::getPathFiles(
 // load a .path file
 void KleeHandler::loadPathFile(std::string name, ReplayPathType &buffer)
 {
-  std::ifstream f(name.c_str(), std::ios::in | std::ios::binary);
+	if (name.substr(name.size() - 3) == ".gz") {
+		std::string new_name = name.substr(0, name.size() - 3);
+		GZip::gunzipFile(name.c_str(), new_name.c_str());
+		name = new_name;
+	}
 
-  if (!f.good())
-    assert(0 && "unable to open path file");
+	std::ifstream f(name.c_str(), std::ios::in | std::ios::binary);
 
-  while (f.good()) {
-    unsigned value;
-    f >> value;
-    if(!f.good())
-      break;
-    f.get();
-#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
-    unsigned id;
-    f >> id;
-    f.get();
-    buffer.push_back(std::make_pair(value,id));
-#else
-    buffer.push_back(value);
-#endif
-  }
+	if (!f.good()) {
+		assert(0 && "unable to open path file");
+		return;
+	}
+
+	while (f.good()) {
+		unsigned value;
+		f >> value;
+		if(!f.good())
+			break;
+		f.get();
+		#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
+		unsigned id;
+		f >> id;
+		f.get();
+		buffer.push_back(std::make_pair(value,id));
+		#else
+		buffer.push_back(value);
+		#endif
+	}
 }
 
 void KleeHandler::getOutFiles(

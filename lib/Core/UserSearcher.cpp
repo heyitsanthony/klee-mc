@@ -18,11 +18,13 @@
 
 #include "BatchingSearcher.h"
 #include "BumpingMergeSearcher.h"
+#include "BFSSearcher.h"
 #include "DFSSearcher.h"
 #include "InterleavedSearcher.h"
 #include "IterativeDeepeningTimeSearcher.h"
 #include "MergingSearcher.h"
 #include "RandomPathSearcher.h"
+#include "RRSearcher.h"
 #include "RandomSearcher.h"
 #include "WeightedRandomSearcher.h"
 #include "StringMerger.h"
@@ -33,6 +35,9 @@ using namespace klee;
 namespace {
   cl::opt<bool>
   UseRandomSearch("use-random-search");
+
+  cl::opt<bool>
+  UseBreadthFirst("use-breadth-first");
 
   cl::opt<bool>
   UseInterleavedRS("use-interleaved-RS");
@@ -57,6 +62,9 @@ namespace {
 
   cl::opt<bool>
   UseNonUniformRandomSearch("use-non-uniform-random-search");
+
+  cl::opt<bool>
+  UseRRSearch("use-rr-search");
 
   cl::opt<bool>
   UseRandomPathSearch("use-random-path");
@@ -90,12 +98,12 @@ namespace {
   cl::opt<unsigned>
   BatchInstructions("batch-instructions",
                     cl::desc("Number of instructions to batch when using --use-batching-search"),
-                    cl::init(10000));
+                    cl::init(0));
   
   cl::opt<double>
   BatchTime("batch-time",
             cl::desc("Amount of time to batch when using --use-batching-search"),
-            cl::init(5.0));
+            cl::init(0.0));
 
   cl::opt<bool>
   UseStringPrune("string-prune",
@@ -161,19 +169,23 @@ Searcher* klee::setupInterleavedSearcher(
 
 Searcher* klee::setupBaseSearcher(Executor& executor)
 {
-  Searcher* searcher;
+	Searcher* searcher;
 
-  if (UseRandomPathSearch) {
-    searcher = new RandomPathSearcher(executor);
-  } else if (UseNonUniformRandomSearch) {
-    searcher = new WeightedRandomSearcher(executor, WeightType);
-  } else if (UseRandomSearch) {
-    searcher = new RandomSearcher();
-  } else {
-    searcher = new DFSSearcher();
-  }
+	if (UseRRSearch) {
+		searcher = new RRSearcher();
+	} else if (UseRandomPathSearch) {
+		searcher = new RandomPathSearcher(executor);
+	} else if (UseNonUniformRandomSearch) {
+		searcher = new WeightedRandomSearcher(executor, WeightType);
+	} else if (UseRandomSearch) {
+		searcher = new RandomSearcher();
+	} else if (UseBreadthFirst) {
+		searcher = new BFSSearcher();
+	} else {
+		searcher = new DFSSearcher();
+	}
 
-  return searcher;
+	return searcher;
 }
 
 Searcher* klee::setupMergeSearcher(Executor& executor, Searcher* searcher)

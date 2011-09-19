@@ -17,7 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include <zlib.h>
+#include "klee/util/gzip.h"
 
 #define KTEST_VERSION 3
 #define KTEST_MAGIC_SIZE 5
@@ -177,35 +177,6 @@ error:
 
 }
 
-static bool kTest_uncompress(const char* path, const char* new_path)
-{
-	char 	buf[4096];
-	ssize_t	br, bw;
-	int	ktest_fd;
-	gzFile	gzF;
-
-	/* create open gz file */
-	gzF = gzopen(path, "rb");
-	if (gzF == NULL) return false;
-
-	/* copy gz file to normal file  */
-	ktest_fd = open(new_path, O_WRONLY|O_CREAT, 0600);
-	if (ktest_fd < 0) {
-		gzclose(gzF);
-		return false;
-	}
-
-	while ((br = gzread(gzF, buf, 4096)) > 0) {
-		bw = write(ktest_fd, buf, br);
-		assert (bw == br);
-	}
-
-	close(ktest_fd);
-	gzclose(gzF);
-
-	return true;
-}
-
 KTest *kTest_fromFile(const char *path)
 {
 	KTest		*ret;
@@ -219,7 +190,7 @@ KTest *kTest_fromFile(const char *path)
 		tmp_path = strdup(path);
 		real_path = tmp_path;
 		tmp_path[path_len-3] = '\0';
-		if (kTest_uncompress(path, tmp_path) == false) {
+		if (klee::GZip::gunzipFile(path, tmp_path) == false) {
 			free(tmp_path);
 			return NULL;
 		}

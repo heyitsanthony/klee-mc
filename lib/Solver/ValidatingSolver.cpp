@@ -1,6 +1,7 @@
 #include "static/Sugar.h"
 #include "klee/Constraints.h"
 #include "ValidatingSolver.h"
+#include "SMTPrinter.h"
 
 using namespace klee;
 
@@ -47,7 +48,7 @@ Solver::Validity ValidatingSolver::computeValidity(const Query &query)
 			<< "oracle = "
 			<< Solver::getValidityStr(oracleValidity) << " vs "
 			<< Solver::getValidityStr(solverValidity) << " = solver.\n";
-		query.print(std::cerr);
+		SMTPrinter::print(std::cerr, query);
 	}
 
 	assert ((oracleValidity == solverValidity) &&

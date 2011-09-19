@@ -4,24 +4,27 @@
 #include <stdio.h>
 #include "syscall/syscalls.h"
 
+namespace klee
+{
 class Crumbs;
+class KTestStream;
+}
 
 class SyscallsKTest : public Syscalls
 {
 public:
-	static SyscallsKTest* create(Guest*, const char*, Crumbs*);
+	static SyscallsKTest* create(Guest*, const char*, klee::Crumbs*);
 	virtual ~SyscallsKTest();
 	virtual uint64_t apply(SyscallParams& sp);
 private:
 	SyscallsKTest(
 		Guest* in_g,
 		const char* fname_ktest,
-		Crumbs* in_crumbs);
+		klee::Crumbs* in_crumbs);
 
 	void badCopyBail(void);
 	void feedSyscallOp(SyscallParams& sp);
 
-	char* feedMemObj(unsigned int sz);
 	bool copyInRegMemObj(void);
 	bool copyInMemObj(uint64_t user_addr, unsigned int sz);
 	void setRet(uint64_t r);
@@ -31,14 +34,11 @@ private:
 
 	void sc_stat(SyscallParams& sp);
 	void sc_mmap(SyscallParams& sp);
-	void sc_munmap(SyscallParams& sp);
 
-	struct KTest	*ktest;
-	unsigned int	next_ktest_obj;
+	klee::KTestStream	*kts;
+	unsigned int		sc_retired;
 
-	unsigned int	sc_retired;
-
-	Crumbs			*crumbs;	// not owner
+	klee::Crumbs		*crumbs;	// not owner
 	struct bc_syscall	*bcs_crumb;
 };
 

@@ -24,7 +24,6 @@ private:
 
 	// mutable because may need flushed during read of const
 	mutable BitArray *flushMask;
-
 	ref<Expr> *knownSymbolics;
 
 public:
@@ -34,9 +33,6 @@ public:
 	unsigned size;
 
 	bool readOnly;
-
-	unsigned wrseqno;
-	bool wasSymOffObjectWrite;
 
 public:
 	/// Create a new object state for the given memory object with concrete
@@ -51,7 +47,6 @@ public:
 	ObjectState(const ObjectState &os);
 	~ObjectState();
 
-	bool equals(const ObjectState* o1) const;
 	const MemoryObject *getObject() const { return object; }
 
 	void setReadOnly(bool ro) { readOnly = ro; }

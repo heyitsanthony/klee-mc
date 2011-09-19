@@ -70,6 +70,38 @@ HeapObject::~HeapObject()
 		munmap((void*)address, size);
 }
 
+std::vector<HeapObject*> HeapObject::contiguousPages(unsigned int bytes)
+{
+	std::vector<HeapObject*>	ret;
+	void				*addr;
+
+	addr = mmap(
+		NULL,
+		(bytes + 4095) & ~0xfffULL,
+		PROT_READ|PROT_WRITE,
+		MAP_PRIVATE | MAP_ANONYMOUS,
+		-1,
+		0);
+	assert (addr != MAP_FAILED);
+
+	for (unsigned int i = 0; i < (bytes + 4095)/4096; i++) {
+		HeapObject	*cur_page;
+		cur_page = new HeapObject((void*)((intptr_t)addr + i*4096));
+		ret.push_back(cur_page);
+	}
+
+	std::cerr << "GOT " << ret.size() << " CONTIGUOUS PAGES\n";
+	return ret;
+}
+
+HeapObject::HeapObject(void* page_addr)
+: size(4096)
+, address((uint64_t)page_addr)
+, align(12)
+, refCount(0)
+{
+	memset(page_addr, 0, 4096);
+}
 /***/
 
 ObjectHolder::ObjectHolder(const ObjectHolder &b) : os(b.os) {

@@ -128,25 +128,21 @@ void ConstraintManager::simplifyForValidConstraint(ref<Expr> e)
 
 ref<Expr> ConstraintManager::simplifyExpr(ref<Expr> e) const
 {
-  if (isa<ConstantExpr>(e)) return e;
+	if (isa<ConstantExpr>(e)) return e;
 
-  std::map< ref<Expr>, ref<Expr> > equalities;
+	std::map< ref<Expr>, ref<Expr> > equalities;
 
-  foreach(it, constraints.begin(), constraints.end()) {
-    if (const EqExpr *ee = dyn_cast<EqExpr>(*it)) {
-      if (isa<ConstantExpr>(ee->left)) {
-        equalities.insert(std::make_pair(ee->right, ee->left));
-      } else {
-        equalities.insert(std::make_pair(
-          *it, ConstantExpr::alloc(1, Expr::Bool)));
-      }
-    } else {
-      equalities.insert(std::make_pair(
-        *it, ConstantExpr::alloc(1, Expr::Bool)));
-    }
-  }
+	foreach(it, constraints.begin(), constraints.end()) {
+		const EqExpr *ee = dyn_cast<EqExpr>(*it);
+		if (ee && isa<ConstantExpr>(ee->left)) {
+			equalities.insert(std::make_pair(ee->right, ee->left));
+		} else {
+			equalities.insert(std::make_pair(
+				*it, ConstantExpr::alloc(1, Expr::Bool)));
+		}
+	}
 
-  return ExprReplaceVisitor2(equalities).visit(e);
+	return ExprReplaceVisitor2(equalities).visit(e);
 }
 
 bool ConstraintManager::addConstraintInternal(ref<Expr> e)

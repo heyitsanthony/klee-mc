@@ -5,8 +5,10 @@
 #include "vexsb.h"
 #include <stdlib.h>
 #include <string.h>
-#include "Crumbs.h"
+#include "klee/Internal/ADT/Crumbs.h"
 #include "klee/breadcrumb.h"
+
+using namespace klee;
 
 extern "C"
 {
@@ -52,8 +54,10 @@ void ReplayExec::doSysCall(VexSB* sb)
 		return;
 	}
 
-	fprintf(stderr, "VERIFY AFTER SYSCALL\n");
 	gs->getCPUState()->setExitType(GE_RETURN);
+
+	if (has_reglog)
+		fprintf(stderr, "VERIFY AFTER SYSCALL\n");
 	verifyOrPanic();
 }
 
@@ -163,6 +167,7 @@ uint8_t* ReplayExec::verifyWithRegLog(void)
 			"Ignoring syscall page. #%d\n",
 			crumbs->getNumProcessed());
 		ignored_last = true;
+		skipped_vsys = true;
 		return NULL;
 	}
 
@@ -174,13 +179,15 @@ uint8_t* ReplayExec::verifyWithRegLog(void)
 			"Skipping crumb #%d\n",
 			crumbs->getNumProcessed());
 		Crumbs::freeCrumb(bc);
+		skipped_vsys = true;
 		return verifyWithRegLog();
 	}
 
 
-	fprintf(stderr, "-------CHKLOG %d. LastAddr=%p------\n",
+	fprintf(stderr, "-------CHKLOG %d. LastAddr=%p (%s)------\n",
 		crumbs->getNumProcessed(),
-		(void*)next_addr.o);
+		(void*)next_addr.o,
+		gs->getName(next_addr).c_str());
 	for (unsigned int i = 0; i < reg_sz; i++) {
 		if (!sym_mask[i]) continue;
 		if (sym_reg[i] == guest_reg[i]) continue;

@@ -41,16 +41,17 @@ ExprVisitor::Action ExprEvaluator::visitExpr(const Expr &e) {
   // construction. Don't do this for reads though, because we want them to go to
   // the normal rewrite path.
   unsigned N = e.getNumKids();
-  if (!N || isa<ReadExpr>(e))
+  if (!N || isa<ReadExpr>(e)) {
     return Action::doChildren();
+  }
 
   for (unsigned i = 0; i != N; ++i)
     if (!isa<ConstantExpr>(e.getKid(i)))
       return Action::doChildren();
 
   ref<Expr> Kids[3];
+  assert(N < 3);
   for (unsigned i = 0; i != N; ++i) {
-    assert(i < 3);
     Kids[i] = e.getKid(i);
   }
 
@@ -74,9 +75,12 @@ ExprVisitor::Action ExprEvaluator::protectedDivOperation(const BinaryExpr &e) {
   ref<Expr> kids[2] = { visit(e.left),
                         visit(e.right) };
 
-  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(kids[1]))
-    if (CE->isZero())
+  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(kids[1])) {
+    if (CE->isZero()) {
       kids[1] = e.right;
+      protected_div = true;
+    }
+  }
 
   if (kids[0]!=e.left || kids[1]!=e.right) {
     return Action::changeTo(e.rebuild(kids));

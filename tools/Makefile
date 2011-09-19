@@ -16,7 +16,7 @@ LEVEL=..
 # List all of the subdirectories that we will compile.
 #
 PARALLEL_DIRS= 	\
-	klee-mc kmc-replay \
+	klee-mc kmc-replay kcrumb \
 	klee kleaver ktest-tool gen-random-bout klee-stats solverd 
 
 include $(LEVEL)/Makefile.config
