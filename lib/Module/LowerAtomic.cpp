@@ -22,8 +22,9 @@
 #include "llvm/Support/IRBuilder.h"
 using namespace llvm;
 
-static bool LowerAtomicIntrinsic(IntrinsicInst *II) {
-  CallSite* CS = new CallSite(II);
+static bool LowerAtomicIntrinsic(IntrinsicInst *II)
+{
+  CallSite CS(II);
   IRBuilder<> Builder(II->getParent(), II);
   unsigned IID = II->getIntrinsicID();
   switch (IID) {
@@ -40,7 +41,7 @@ static bool LowerAtomicIntrinsic(IntrinsicInst *II) {
   case Intrinsic::atomic_load_min:
   case Intrinsic::atomic_load_umax:
   case Intrinsic::atomic_load_umin: {
-    Value *Ptr = CS->getArgument(0), *Delta = CS->getArgument(1);
+    Value *Ptr = CS.getArgument(0), *Delta = CS.getArgument(1);
 
     LoadInst *Orig = Builder.CreateLoad(Ptr);
     Value *Res = NULL;
@@ -88,7 +89,7 @@ static bool LowerAtomicIntrinsic(IntrinsicInst *II) {
   }
 
   case Intrinsic::atomic_swap: {
-    Value *Ptr = CS->getArgument(0), *Val = CS->getArgument(1);
+    Value *Ptr = CS.getArgument(0), *Val = CS.getArgument(1);
     LoadInst *Orig = Builder.CreateLoad(Ptr);
     Builder.CreateStore(Val, Ptr);
     II->replaceAllUsesWith(Orig);
@@ -96,8 +97,8 @@ static bool LowerAtomicIntrinsic(IntrinsicInst *II) {
   }
 
   case Intrinsic::atomic_cmp_swap: {
-    Value *Ptr = CS->getArgument(0), *Cmp = CS->getArgument(1);
-    Value *Val = CS->getArgument(2);
+    Value *Ptr = CS.getArgument(0), *Cmp = CS.getArgument(1);
+    Value *Val = CS.getArgument(2);
 
     LoadInst *Orig = Builder.CreateLoad(Ptr);
     Value *Equal = Builder.CreateICmpEQ(Orig, Cmp);
@@ -119,19 +120,23 @@ static bool LowerAtomicIntrinsic(IntrinsicInst *II) {
 }
 
 namespace {
-  struct LowerAtomic : public BasicBlockPass {
-    static char ID;
-    LowerAtomic() : BasicBlockPass(ID) {
-      // initializeLowerAtomicPass(*PassRegistry::getPassRegistry());
-    }
-    bool runOnBasicBlock(BasicBlock &BB) {
-      bool Changed = false;
-      for (BasicBlock::iterator DI = BB.begin(), DE = BB.end(); DI != DE; )
-        if (IntrinsicInst *II = dyn_cast<IntrinsicInst>(DI++))
-          Changed |= LowerAtomicIntrinsic(II);
-      return Changed;
-    }
-  };
+class LowerAtomic : public BasicBlockPass
+{
+	static char ID;
+public:
+	LowerAtomic() : BasicBlockPass(ID)
+	{
+	// initializeLowerAtomicPass(*PassRegistry::getPassRegistry());
+	}
+	bool runOnBasicBlock(BasicBlock &BB)
+	{
+		bool Changed = false;
+		for (BasicBlock::iterator DI = BB.begin(), DE = BB.end(); DI != DE; )
+			if (IntrinsicInst *II = dyn_cast<IntrinsicInst>(DI++))
+				Changed |= LowerAtomicIntrinsic(II);
+		return Changed;
+	}
+};
 }
 
 char LowerAtomic::ID = 123;

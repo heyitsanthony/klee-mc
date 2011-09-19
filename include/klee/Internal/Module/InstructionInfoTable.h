@@ -63,7 +63,10 @@ private:
 		unsigned &Line);
 
 	const std::string *internString(std::string s);
-	void addFunction(llvm::Function* fnIt);
+	void addFunction(
+		std::map<const llvm::Instruction*, unsigned>& line_tab,
+		unsigned &id,
+		llvm::Function* fnIt);
 
 public:
 	InstructionInfoTable(llvm::Module *m);

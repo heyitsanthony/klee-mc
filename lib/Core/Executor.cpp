@@ -1140,8 +1140,8 @@ void Executor::executeCall(
     /* this is so that vexllvm linked modules work */
     if (f2 == NULL) f2 = f;
     if (!f2->isDeclaration()) {
-	    executeCallNonDecl(state, ki, f2, arguments);
-	    return;
+      executeCallNonDecl(state, ki, f2, arguments);
+      return;
     }
   }
 
@@ -1200,8 +1200,10 @@ void Executor::executeCall(
   default:
     klee_error("unknown intrinsic: %s", f->getName().data());
   }
-  if (InvokeInst *ii = dyn_cast<InvokeInst>(i))
+
+  if (InvokeInst *ii = dyn_cast<InvokeInst>(i)) {
     state.transferToBasicBlock(ii->getNormalDest(), i->getParent());
+  }
 }
 
 void Executor::printFileLine(ExecutionState &state, KInstruction *ki) {
@@ -1235,58 +1237,68 @@ static inline const llvm::fltSemantics * fpWidthToSemantics(unsigned width)
 
 void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 {
-  ReturnInst *ri = cast<ReturnInst>(ki->inst);
-  KInstIterator kcaller = state.getCaller();
-  Instruction *caller = kcaller ? kcaller->inst : 0;
-  bool isVoidReturn = (ri->getNumOperands() == 0);
-  ref<Expr> result = ConstantExpr::alloc(0, Expr::Bool);
+	ReturnInst	*ri;
+	KInstIterator	kcaller;
+	Instruction	*caller;
+	bool		isVoidReturn;
+	ref<Expr>	result;
 
-  assert (state.stack.size() > 1);
+	assert (isa<ReturnInst>(ki->inst) && "Expected ReturnInst");
 
-  if (!isVoidReturn) result = eval(ki, 0, state).value;
+	ri = cast<ReturnInst>(ki->inst);
+	kcaller = state.getCaller();
+	caller = kcaller ? kcaller->inst : 0;
+	isVoidReturn = (ri->getNumOperands() == 0);
+	result = ConstantExpr::alloc(0, Expr::Bool);
 
-  state.popFrame();
+	assert (state.stack.size() > 1);
 
-  if (statsTracker) statsTracker->framePopped(state);
+	if (!isVoidReturn) result = eval(ki, 0, state).value;
 
-  if (InvokeInst *ii = dyn_cast<InvokeInst>(caller)) {
-    state.transferToBasicBlock(ii->getNormalDest(), caller->getParent());
-  } else {
-    state.pc = kcaller;
-    ++state.pc;
-  }
+	state.popFrame();
 
-  if (isVoidReturn) {
-    // We check that the return value has no users instead of
-    // checking the type, since C defaults to returning int for
-    // undeclared functions.
-    if (!caller->use_empty()) {
-      terminateStateOnExecError(state, "return void when caller expected a result");
-    }
-    return;
-  }
+	if (statsTracker) statsTracker->framePopped(state);
 
-  assert (!isVoidReturn);
-  const Type *t = caller->getType();
-  if (t == Type::getVoidTy(getGlobalContext())) return;
+	if (InvokeInst *ii = dyn_cast<InvokeInst>(caller)) {
+		state.transferToBasicBlock(ii->getNormalDest(), caller->getParent());
+	} else {
+		state.pc = kcaller;
+		++state.pc;
+	}
 
-  // may need to do coercion due to bitcasts
-  Expr::Width from = result->getWidth();
-  Expr::Width to = getWidthForLLVMType(t);
+	if (isVoidReturn) {
+		// We check that the return value has no users instead of
+		// checking the type, since C defaults to returning int for
+		// undeclared functions.
+		if (!caller->use_empty()) {
+			terminateStateOnExecError(state, "return void when caller expected a result");
+		}
+		return;
+	}
 
-  if (from != to) {
-    CallSite cs = (isa<InvokeInst>(caller) ? CallSite(cast<InvokeInst>(caller)) :
-                   CallSite(cast<CallInst>(caller)));
+	assert (!isVoidReturn);
+	const Type *t = caller->getType();
+	if (t == Type::getVoidTy(getGlobalContext()))
+		return;
 
-    // XXX need to check other param attrs ?
-    if (cs.paramHasAttr(0, llvm::Attribute::SExt)) {
-      result = SExtExpr::create(result, to);
-    } else {
-      result = ZExtExpr::create(result, to);
-    }
-  }
+	// may need to do coercion due to bitcasts
+	Expr::Width from = result->getWidth();
+	Expr::Width to = getWidthForLLVMType(t);
 
-  state.bindLocal(kcaller, result);
+	if (from != to) {
+		CallSite cs = (isa<InvokeInst>(caller) ? 
+			CallSite(cast<InvokeInst>(caller)) :
+			CallSite(cast<CallInst>(caller)));
+
+		// XXX need to check other param attrs ?
+		if (cs.paramHasAttr(0, llvm::Attribute::SExt)) {
+			result = SExtExpr::create(result, to);
+		} else {
+			result = ZExtExpr::create(result, to);
+		}
+	}
+
+	state.bindLocal(kcaller, result);
 }
 
 const Cell& Executor::eval(
@@ -1397,41 +1409,41 @@ void Executor::finalizeBranch(
 
 void Executor::instCall(ExecutionState& state, KInstruction *ki)
 {
-  CallSite cs(ki->inst);
-  unsigned numArgs = cs.arg_size();
-  Function *f = getCalledFunction(cs, state);
+	CallSite cs(ki->inst);
+	unsigned numArgs = cs.arg_size();
+	Function *f = getCalledFunction(cs, state);
 
-  // Skip debug intrinsics, we can't evaluate their metadata arguments.
-  if (f && isDebugIntrinsic(f)) return;
+	// Skip debug intrinsics, we can't evaluate their metadata arguments.
+	if (f && isDebugIntrinsic(f)) return;
 
-  // evaluate arguments
-  std::vector< ref<Expr> > arguments;
-  arguments.reserve(numArgs);
+	// evaluate arguments
+	std::vector< ref<Expr> > arguments;
+	arguments.reserve(numArgs);
 
-  for (unsigned j=0; j<numArgs; ++j)
-    arguments.push_back(eval(ki, j+1, state).value);
+	for (unsigned j=0; j<numArgs; ++j)
+		arguments.push_back(eval(ki, j+1, state).value);
 
-  if (!f) {
-    // special case the call with a bitcast case
-    Value *fp = cs.getCalledValue();
-    llvm::ConstantExpr *ce = dyn_cast<llvm::ConstantExpr>(fp);
+	if (!f) {
+		// special case the call with a bitcast case
+		Value *fp = cs.getCalledValue();
+		llvm::ConstantExpr *ce = dyn_cast<llvm::ConstantExpr>(fp);
 
-    if (isa<InlineAsm>(fp)) {
-      terminateStateOnExecError(state, "inline assembly is unsupported");
-      return;
-    }
+		if (isa<InlineAsm>(fp)) {
+			terminateStateOnExecError(state, "inline assembly is unsupported");
+			return;
+		}
 
-    if (ce && ce->getOpcode()==Instruction::BitCast) {
-	f = dyn_cast<Function>(ce->getOperand(0));
-	executeBitCast(state, cs, ce, arguments);
-    }
-  }
+		if (ce && ce->getOpcode()==Instruction::BitCast) {
+			f = dyn_cast<Function>(ce->getOperand(0));
+			executeBitCast(state, cs, ce, arguments);
+		}
+	}
 
-  if (f) {
-    executeCall(state, ki, f, arguments);
-  } else {
-    executeSymbolicFuncPtr(state, ki, arguments);
-  }
+	if (f) {
+		executeCall(state, ki, f, arguments);
+	} else {
+		executeSymbolicFuncPtr(state, ki, arguments);
+	}
 }
 
 void Executor::executeBitCast(
@@ -2115,21 +2127,47 @@ bool Executor::isFPPredicateMatched(
   return false;
 }
 
+void Executor::instAlloc(ExecutionState& state, KInstruction* ki)
+{
+	AllocaInst	*ai;
+	Instruction	*i = ki->inst;
+	unsigned	elementSize;
+	bool		isLocal;
+	ref<Expr>	size;
+   	
+	assert (!isMalloc(ki->inst) && "ANTHONY! FIX THIS");
+
+	ai = cast<AllocaInst>(i);
+	elementSize = target_data->getTypeStoreSize(ai->getAllocatedType());
+	size = Expr::createPointer(elementSize);
+
+	if (ai->isArrayAllocation()) {
+		ref<Expr> count = eval(ki, 0, state).value;
+		count = Expr::createCoerceToPointerType(count);
+		size = MulExpr::create(size, count);
+	}
+
+	isLocal = i->getOpcode() == Instruction::Alloca;
+	executeAlloc(state, size, isLocal, ki);
+}
+
 void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
 {
   Instruction *i = ki->inst;
   switch (i->getOpcode()) {
   // Memory instructions...
-//  case Instruction::Malloc:
-  case Instruction::Alloca: {
-  }
-    // Control flow
+  // case Instruction::Malloc:
+  case Instruction::Alloca:
+  	instAlloc(state, ki);
+  	break;
+   // Control flow
   case Instruction::Ret:
-    if (WriteTraces) {
-      state.exeTraceMgr.addEvent(new FunctionReturnTraceEvent(state, ki));
-    }
-    instRet(state, ki);
-    break;
+	if (WriteTraces) {
+		state.exeTraceMgr.addEvent(
+			new FunctionReturnTraceEvent(state, ki));
+	}
+	instRet(state, ki);
+	break;
 
   case Instruction::Unwind:
     instUnwind(state);
@@ -2444,25 +2482,9 @@ INST_FOP_ARITH(FRem, mod)
     break;
 
   default:
-    assert (!isMalloc(i) && "ANTHONY REIMPLEMENT THIS!");
-    if (Instruction::Alloca == i->getOpcode()) {
-	    AllocaInst	*ai;
-	    unsigned	elementSize;
-	    bool	isLocal;
-
-	    ai = cast<AllocaInst>(i);
-	    elementSize = target_data->getTypeStoreSize(ai->getAllocatedType());
-	    ref<Expr> size = Expr::createPointer(elementSize);
-
-	    if (ai->isArrayAllocation()) {
-	      ref<Expr> count = eval(ki, 0, state).value;
-	      count = Expr::createCoerceToPointerType(count);
-	      size = MulExpr::create(size, count);
-	    }
-
-	    isLocal = i->getOpcode()==Instruction::Alloca;
-	    executeAlloc(state, size, isLocal, ki);
-	    break;
+    if (isMalloc(i)) {
+      instAlloc(state, ki);
+      break;
     } else if (isFreeCall(i)) {
       executeFree(state, eval(ki, 0, state).value);
       break;

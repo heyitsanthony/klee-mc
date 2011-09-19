@@ -165,6 +165,8 @@ protected:
 
   virtual void run(ExecutionState &initialState);
   virtual void instRet(ExecutionState& state, KInstruction* ki);
+  virtual void instAlloc(ExecutionState& state, KInstruction* ki);
+
   void retFromNested(ExecutionState& state, KInstruction* ki);
 
   /// bindInstructionConstants - Initialize any necessary per instruction

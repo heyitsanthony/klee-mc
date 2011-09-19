@@ -108,9 +108,12 @@ KModule::~KModule()
 
 	delete fpm;
 
-	foreach (it, functions.begin(), functions.end()) {
+	foreach (it, functions.begin(), functions.end())
 		delete *it;
-	}
+
+	foreach (it, constantMap.begin(), constantMap.end())
+		delete (*it).second;
+	constantMap.clear();
 
 	delete targetData;
 	delete module;
@@ -447,14 +450,10 @@ void KModule::prepare(
   passEnforceInvariants();
 
   // For cleanliness see if we can discard any of the functions we
-  // forced to import.
-  Function *f;
-  f = module->getFunction("memcpy");
-  if (f && f->use_empty()) f->eraseFromParent();
-  f = module->getFunction("memmove");
-  if (f && f->use_empty()) f->eraseFromParent();
-  f = module->getFunction("memset");
-  if (f && f->use_empty()) f->eraseFromParent();
+  // forced to import during loadIntrinsicsLib.
+  // We used to remove forced functions here. Not any more-- we load 
+  //  f = module->getFunction("memcpy");
+  //  if (f && f->use_empty()) f->eraseFromParent();
 
 
   // Write out the .ll assembly file. We truncate long lines to work
@@ -553,11 +552,10 @@ unsigned KModule::getConstantID(Constant *c, KInstruction* ki)
 /***/
 
 KConstant::KConstant(llvm::Constant* _ct, unsigned _id, KInstruction* _ki)
-{
-  ct = _ct;
-  id = _id;
-  ki = _ki;
-}
+: ct(_ct)
+, id(_id)
+, ki(_ki)
+{}
 
 /***/
 KFunction* KModule::getKFunction(llvm::Function* f) const

@@ -114,6 +114,8 @@ ExecutorVex::ExecutorVex(
 
 	xlate = new VexXlate(Arch::X86_64);
 	xlate_cache = new VexFCache(xlate);
+
+	assert (kmodule == NULL);
 	kmodule = new KModule(theGenLLVM->getModule());
 
 	target_data = kmodule->targetData;
