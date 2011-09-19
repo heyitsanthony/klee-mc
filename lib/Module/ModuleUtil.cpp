@@ -80,7 +80,7 @@ Module *klee::linkWithLibrary(
 		Module	*m;
 
 		m = libArchive->findModuleDefiningSymbol(symName, &errMsg);
-		if (m)
+		if (!m)
 			klee_error(
 				"failed to find symbol %s: %s",
 				symName.c_str(),
