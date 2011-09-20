@@ -28,9 +28,15 @@ pushd runtime
 make -j6
 popd
 make mc
+
+BASEDIR="Release+Asserts"
+if [ ! -x $BASEDIR ]; then
+	BASEDIR="Release"
+fi
+
 if [ -z "$VEXLLVM_HELPER_PATH" ]; then
 	echo "Can't find vex bitcode path. Not copying libkleeRuntimeMC.bc"
 else
-	cp Release/lib/libkleeRuntimeMC.bc "$VEXLLVM_HELPER_PATH"/
-	cp Release/lib/libkleeRuntimeMC-fdt.bc "$VEXLLVM_HELPER_PATH"/
+	cp "$BASEDIR"/lib/libkleeRuntimeMC.bc "$VEXLLVM_HELPER_PATH"/
+	cp "$BASEDIR"/lib/libkleeRuntimeMC-fdt.bc "$VEXLLVM_HELPER_PATH"/
 fi
