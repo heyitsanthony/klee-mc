@@ -13,7 +13,7 @@ public:
   Test() : p(0) {}
   ~Test() { 
     assert(!p); 
-    assert(*p == 10); // crash here
+    assert (__LINE__ == 16); assert(*p == 10); // crash here
   }
 };
 

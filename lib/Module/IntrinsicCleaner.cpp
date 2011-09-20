@@ -48,8 +48,8 @@ void IntrinsicCleanerPass::clean_vacopy(
 	BasicBlock::iterator& i,
 	IntrinsicInst* ii)
 {
-	Value *dst = ii->getOperand(1);
-	Value *src = ii->getOperand(2);
+	Value *dst = ii->getOperand(0);
+	Value *src = ii->getOperand(1);
 
 	unsigned WordSize = TargetData.getPointerSizeInBits() / 8;
 
