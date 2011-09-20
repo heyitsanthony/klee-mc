@@ -23,10 +23,14 @@ CXXFLAGS="-g -O2  $EXTRAHEADERS"		\
 		--with-uclibc="$UCLIBDIR"		\
 		--with-runtime=Release 
 
-make -j6 REQUIRES_RTTI=1
+make -k -j6 REQUIRES_RTTI=1
+pushd runtime
+make -j6
+popd
 make mc
 if [ -z "$VEXLLVM_HELPER_PATH" ]; then
 	echo "Can't find vex bitcode path. Not copying libkleeRuntimeMC.bc"
 else
 	cp Release/lib/libkleeRuntimeMC.bc "$VEXLLVM_HELPER_PATH"/
+	cp Release/lib/libkleeRuntimeMC-fdt.bc "$VEXLLVM_HELPER_PATH"/
 fi

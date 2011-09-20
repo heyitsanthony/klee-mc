@@ -246,13 +246,17 @@ done:
 SFH_DEF_HANDLER(AllocAligned)
 {
 	MemoryObject	*new_mo;
-	SFH_CHK_ARGS(2, "kmc_alloc_aligned");
+	SFH_CHK_ARGS(3, "kmc_alloc_aligned");
 
 	ExecutorVex			*exe_vex;
-	ConstantExpr			*len;
+	ConstantExpr			*len, *nonz;
 	uint64_t			len_v;
 	std::string			name_str;
 	std::vector<MemoryObject*>	new_mos;
+	bool		nonzero = true;
+
+	nonz = dyn_cast<ConstantExpr>(arguments[2]);
+	nonzero = nonz->getZExtValue();
 
 	len = dyn_cast<ConstantExpr>(arguments[0]);
 	if (len == NULL) {
@@ -285,6 +289,8 @@ SFH_DEF_HANDLER(AllocAligned)
 	foreach (it, new_mos.begin(), new_mos.end()) {
 		state.bindMemObj(*it);
 		(*it)->setName(name_str.c_str());
+		if(nonzero)
+			exe_vex->executeMakeSymbolic(state, *it, name_str.c_str());
 	}
 }
 

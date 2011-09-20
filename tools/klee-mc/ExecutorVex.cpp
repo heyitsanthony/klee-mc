@@ -35,6 +35,7 @@
 
 #include "ExecutorVex.h"
 #include "ExeStateVex.h"
+#include <sys/utsname.h>
 
 using namespace klee;
 using namespace llvm;
@@ -183,7 +184,7 @@ void ExecutorVex::runImage(void)
 		kmodule->addModule(*it);
 	}
 
-	if (UseFDT) prepFDT(init_func);
+	if (UseFDT) installFDTInitializers(init_func);
 
 	init_kfunc = kmodule->addFunction(init_func);
 
@@ -194,6 +195,8 @@ void ExecutorVex::runImage(void)
 
 	prepState(state, init_func);
 	initializeGlobals(*state);
+
+	if(UseFDT) installFDTConfig(*state);
 
 	sfh->bind();
 	kf_scenter = kmodule->getKFunction("sc_enter");
@@ -235,6 +238,28 @@ void ExecutorVex::initializeGlobals(ExecutionState &state)
 		"XXX do not support dependent libraries");
 
 	initGlobalFuncs();
+	
+	
+	// represent function globals using the address of the 
+	// actual llvm function object.
+	foreach (i, m->begin(), m->end()) {
+		Function *f = i;
+		ref<ConstantExpr> addr(0);
+
+		// Weak => should be null.  no externals allowed
+		if (	f->hasExternalWeakLinkage() ) {
+			addr = Expr::createPointer(0);
+			std::cerr << "KLEE:ERROR: couldn't find symbol "
+				<< "for weak linkage of global function: " 
+				<< f->getNameStr() << std::endl;
+		} else {
+			addr = Expr::createPointer((unsigned long) (void*) f);
+			legalFunctions.insert(
+				(uint64_t) (unsigned long) (void*) f);
+		}
+
+		globalAddresses.insert(std::make_pair(f, addr));
+	}
 
 	// allocate and initialize globals, done in two passes since we may
 	// need address of a global in order to initialize some other one.
@@ -300,6 +325,65 @@ void ExecutorVex::allocGlobalVariableNoDecl(
 	if (!gv.hasInitializer()) os->initializeToRandom();
 }
 
+void ExecutorVex::allocGlobalVariableDecl(
+  ExecutionState& state, const GlobalVariable& gv)
+{
+	MemoryObject *mo;
+	ObjectState *os;
+	assert (gv.isDeclaration());
+	// FIXME: We have no general way of handling unknown external
+	// symbols. If we really cared about making external stuff work
+	// better we could support user definition, or use the EXE style
+	// hack where we check the object file information.
+
+	const Type *ty = gv.getType()->getElementType();
+	uint64_t size = target_data->getTypeStoreSize(ty);
+
+	// XXX - DWD - hardcode some things until we decide how to fix.
+#ifndef WINDOWS
+	if (gv.getName() == "_ZTVN10__cxxabiv117__class_type_infoE") {
+		size = 0x2C;
+	} else if (gv.getName() == "_ZTVN10__cxxabiv120__si_class_type_infoE") {
+		size = 0x2C;
+	} else if (gv.getName() == "_ZTVN10__cxxabiv121__vmi_class_type_infoE") {
+		size = 0x2C;
+	}
+#endif
+
+	if (size == 0) {
+		std::cerr << "Unable to find size for global variable: " 
+		<< gv.getName().data()
+		<< " (use will result in out of bounds access)\n";
+	}
+
+	mo = memory->allocate(size, false, true, &gv, &state);
+	os = state.bindMemObj(mo);
+	globalObjects.insert(std::make_pair(&gv, mo));
+	globalAddresses.insert(std::make_pair(&gv, mo->getBaseExpr()));
+
+	// Program already running = object already initialized.  Read
+	// concrete value and write it to our copy.
+	if (size == 0) return;
+
+	void *addr;
+	if (gv.getName() == "__dso_handle") {
+		extern void *__dso_handle __attribute__ ((__weak__));
+		addr = &__dso_handle; // wtf ?
+	} else {
+		//addr = externalDispatcher->resolveSymbol(gv.getNameStr());
+	}
+	if (!addr) {
+		klee_warning(
+			"ERROR: unable to load symbol(%s) while initializing globals.", 
+			gv.getName().data());
+	} else {
+		for (unsigned offset=0; offset < mo->size; offset++) {
+			//os->write8(offset, ((unsigned char*)addr)[offset]);
+			state.write8(os, offset, ((unsigned char*)addr)[offset]);
+		}
+	}
+}
+
 void ExecutorVex::initGlobalFuncs(void)
 {
 	Module *m = kmodule->module;
@@ -327,7 +411,7 @@ Function *getStubFunctionForCtorList(
 	GlobalVariable *gv,
 	std::string name);
 
-void ExecutorVex::prepFDT(Function *init_func)
+void ExecutorVex::installFDTInitializers(Function *init_func)
 {
 	GlobalVariable *ctors = kmodule->module->getNamedGlobal("llvm.global_ctors");
 	std::cerr << "checking for global ctors and dtors" << std::endl;
@@ -357,15 +441,28 @@ void ExecutorVex::prepFDT(Function *init_func)
 	// 	}
 	// }
 
-	const IntegerType* boolType = IntegerType::get(getGlobalContext(), 1);
 	GlobalVariable* concrete_vfs =
 		static_cast<GlobalVariable*>(kmodule->module->
-			getGlobalVariable("concrete_vfs", boolType));
+			getGlobalVariable("concrete_vfs"));
 
 	concrete_vfs->setInitializer(ConcreteVfs ?
 		ConstantInt::getTrue(getGlobalContext()) :
 		ConstantInt::getFalse(getGlobalContext()));
 	concrete_vfs->setConstant(true);
+
+}
+void ExecutorVex::installFDTConfig(ExecutionState& state) {
+	GlobalVariable* g_utsname =
+		static_cast<GlobalVariable*>(kmodule->module->
+			getGlobalVariable("g_utsname"));
+	MemoryObject* mo = globalObjects[g_utsname];
+	ObjectState* os = state.addressSpace.findObject(mo);
+	assert(os);
+	struct utsname buf;
+	uname(&buf);
+	for (unsigned offset=0; offset < mo->size; offset++) {
+		state.write8(os, offset, ((unsigned char*)&buf)[offset]);
+	}
 }
 
 void ExecutorVex::makeArgsSymbolic(ExecutionState* state)
@@ -564,6 +661,11 @@ Function* ExecutorVex::getFuncByAddr(uint64_t guest_addr)
 	KFunction	*kf;
 	Function	*f;
 	bool		is_new;
+
+	//let functions inside our bitcode syscall model be called.
+	//there is surely some shitty overlap problem now
+	if (legalFunctions.count(guest_addr))
+		return (Function*)guest_addr;
 
 	f = getFuncByAddrNoKMod(guest_addr, is_new);
 	if (f == NULL) return NULL;

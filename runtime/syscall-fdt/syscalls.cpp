@@ -15,6 +15,7 @@
 #include <sys/resource.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/utsname.h>
 #include <sys/fcntl.h>
 #include <unistd.h>
 #include <ustat.h>
@@ -251,6 +252,8 @@ static void sc_klee(void* regfile)
 	}
 }
 
+struct utsname g_utsname;
+
 void* sc_enter(void* regfile, void* jmpptr)
 {
 	void			*new_regs;
@@ -293,8 +296,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	case SYS_open:
 		new_regs = sc_new_regs(regfile);
+		klee_warning("yum");
 		sc_ret_v(new_regs, vfs->open((char*)GET_ARG0(regfile),
 		 	(int)GET_ARG1(regfile), (int)GET_ARG2(regfile)));
+		klee_warning("yam");
 		break;
 	case SYS_brk:
 		klee_warning_once("failing brk");
@@ -456,8 +461,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 				(struct stat*)GET_ARG1(regfile)));
 		break;
 	case SYS_uname:
-		sc_ret_v(regfile, -1);
-		klee_warning_once("failing uname");
+		memcpy((void*)GET_ARG0(regfile), &g_utsname, sizeof(struct utsname));
+		sc_ret_v(regfile, 0);
 		break;
 	case SYS_writev:
 		sc_ret_ge0(sc_new_regs(regfile));
@@ -634,7 +639,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(new_regs, 0);
 		break;
 	}
-
+	case SYS_mprotect:
+		klee_warning_once("bogus mprotect");
+		sc_ret_v(regfile, 0);
+		break;
 	case SYS_mmap: {
 		if(!(GET_ARG3(regfile) & MAP_ANONYMOUS)) {
 			size_t length = GET_ARG1(regfile);
