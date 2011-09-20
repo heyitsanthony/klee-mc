@@ -125,8 +125,8 @@ static void* sc_mmap_addr(
 		return MAP_FAILED;
 	}
 
-	/* toss back whatever */
-	addr = kmc_alloc_aligned(len, "mmap", false);
+	/* toss back non-symbolic */
+	addr = kmc_alloc_aligned(len, "mmap");
 	if (addr == NULL) addr = MAP_FAILED;
 	return addr;
 }
@@ -144,7 +144,7 @@ static void* sc_mmap(void* regfile)
 		addr = (uint64_t)MAP_FAILED;
 	} else if (GET_ARG0(regfile) == 0) {
 		len = concretize_u64(len);
-		addr = (uint64_t)kmc_alloc_aligned(len, "mmap", false);
+		addr = (uint64_t)kmc_alloc_aligned(len, "mmap");
 		if (addr == 0) addr = (uint64_t)MAP_FAILED;
 	} else {
 		len = concretize_u64(len);

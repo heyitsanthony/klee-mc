@@ -144,6 +144,7 @@ long SymbolicFD::mmap(void* addr, size_t len, int prot, int flags, off_t offset)
 	/* toss back whatever */
 	addr = kmc_alloc_aligned(len, "mmap");
 	if (addr == NULL) addr = MAP_FAILED;
+	kmc_make_range_symbolic((uintptr_t)addr, 4096, "mmap");
 	return (long)addr;
 }
 long SymbolicFD::stat(struct stat *buf) {
@@ -321,8 +322,8 @@ long ConcreteFile::mmap(void* addr, size_t len, int prot, int flags, off_t offse
 	}
 	
 
-	/* toss back whatever */
-	addr = kmc_alloc_aligned(len, "mmap", false);
+	/* toss back concretes */
+	addr = kmc_alloc_aligned(len, "mmap");
 	if (addr == NULL) 
 		return -ENOMEM;
 		

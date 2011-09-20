@@ -8,7 +8,7 @@ extern "C" {
 	void kmc_exit(uint64_t);
 	void klee_stack_trace();
 	void kmc_make_range_symbolic(uint64_t, uint64_t, const char*);
-	void* kmc_alloc_aligned(uint64_t, const char* name, int symbolic = 1);
+	void* kmc_alloc_aligned(uint64_t, const char* name);
 	void kmc_breadcrumb(struct breadcrumb* bc, unsigned int sz);
 	long sc_concrete_file_snapshot(const char* path, size_t path_len);
 	long sc_concrete_file_size(const char* path, size_t path_len);

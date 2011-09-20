@@ -125,7 +125,6 @@ SFH_DEF_HANDLER(FreeRun)
 	ConstantExpr		*addr, *len;
 	uint64_t		addr_v, addr_end, cur_addr;
 	uint64_t		len_v, len_remaining;
-	const MemoryObject	*mo;
 
 	addr = dyn_cast<ConstantExpr>(arguments[0]);
 	len = dyn_cast<ConstantExpr>(arguments[1]);
@@ -245,18 +244,27 @@ done:
 
 SFH_DEF_HANDLER(AllocAligned)
 {
-	MemoryObject	*new_mo;
-	SFH_CHK_ARGS(3, "kmc_alloc_aligned");
+	/* Arguments note:
+	 * TJ, if you want symbolics, use kmc_make_range_symbolic
+	 * after calling kmc_alloc_aligned. Making things symbolic here
+	 * is actually the *less* efficient way to do it-- pages are 
+	 * chopped up to reduce the number of constant array assumptions
+	 * passed to the solver. Since symbolics have no assumptions,
+	 * that optimization doesn't make sense and will result in 
+	 * needless overhead when resolving symbolic reads!
+	 *
+	 * If you don't want me to break your runtime
+	 * (inadvertantly, or otherwise),
+	 * I'm going to need test cases that rely on it working properly!
+	 *
+	 * -AJR */
+	SFH_CHK_ARGS(2, "kmc_alloc_aligned");
 
 	ExecutorVex			*exe_vex;
-	ConstantExpr			*len, *nonz;
+	ConstantExpr			*len;
 	uint64_t			len_v;
 	std::string			name_str;
 	std::vector<MemoryObject*>	new_mos;
-	bool		nonzero = true;
-
-	nonz = dyn_cast<ConstantExpr>(arguments[2]);
-	nonzero = nonz->getZExtValue();
 
 	len = dyn_cast<ConstantExpr>(arguments[0]);
 	if (len == NULL) {
@@ -289,8 +297,6 @@ SFH_DEF_HANDLER(AllocAligned)
 	foreach (it, new_mos.begin(), new_mos.end()) {
 		state.bindMemObj(*it);
 		(*it)->setName(name_str.c_str());
-		if(nonzero)
-			exe_vex->executeMakeSymbolic(state, *it, name_str.c_str());
 	}
 }
 
@@ -430,7 +436,7 @@ void SyscallSFH::makeRangeSymbolic(
 				"couldn't find %p in range %p-%p (state=%p)\n",
 				(void*)cur_addr,
 				addr, ((char*)addr)+sz,
-				&state);
+				(void*)&state);
 			assert ("TODO: Allocate memory");
 		}
 
