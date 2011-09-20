@@ -296,77 +296,55 @@ void KModule::addMergeExit(Function* mergeFn, const std::string& name)
 
 void KModule::outputSource(InterpreterHandler* ih)
 {
-    std::ostream *os = ih->openOutputFile("assembly.ll");
-    assert(os && os->good() && "unable to open source output");
+	std::ostream		*os;
+	llvm::raw_os_ostream	*ros;
 
-#if (LLVM_VERSION_MAJOR == 2 && LLVM_VERSION_MINOR == 6)
-    // We have an option for this in case the user wants a .ll they
-    // can compile.
-    if (NoTruncateSourceLines) {
-      os << *module;
-    } else {
-      bool truncated = false;
-      std::string string;
-      llvm::raw_string_ostream rss(string);
-      rss << *module;
-      rss.flush();
-      const char *position = string.c_str();
+	os = ih->openOutputFile("assembly.ll");
+	assert(os && os->good() && "unable to open source output");
 
-      for (;;) {
-        const char *end = index(position, '\n');
-        if (!end) {
-          os << position;
-          break;
-        } else {
-          unsigned count = (end - position) + 1;
-          if (count<255) {
-            os->write(position, count);
-          } else {
-            os->write(position, 254);
-            os << "\n";
-            truncated = true;
-          }
-          position = end+1;
-        }
-      }
-    }
-#else
-    llvm::raw_os_ostream *ros = new llvm::raw_os_ostream(*os);
 
-    // We have an option for this in case the user wants a .ll they
-    // can compile.
-    if (NoTruncateSourceLines) {
-      *ros << *module;
-    } else {
-      bool truncated = false;
-      std::string string;
-      llvm::raw_string_ostream rss(string);
-      rss << *module;
-      rss.flush();
-      const char *position = string.c_str();
+	ros = new llvm::raw_os_ostream(*os);
 
-      for (;;) {
-        const char *end = index(position, '\n');
-        if (!end) {
-          *ros << position;
-          break;
-        } else {
-          unsigned count = (end - position) + 1;
-          if (count<255) {
-            ros->write(position, count);
-          } else {
-            ros->write(position, 254);
-            *ros << "\n";
-            truncated = true;
-          }
-          position = end+1;
-        }
-      }
-    }
-    delete ros;
-#endif
+	// We have an option for this in case the user wants a .ll they
+	// can compile.
+	if (NoTruncateSourceLines) {
+		*ros << *module;
+		delete ros;
+		delete os;
+		return;
+	}
 
-    delete os;
+	std::string			string;
+	llvm::raw_string_ostream	rss(string);
+	bool				truncated = false;
+	const char			*position;
+
+	rss << *module;
+	rss.flush();
+	position = string.c_str();
+
+	for (;;) {
+		const char *end = index(position, '\n');
+		unsigned count;
+		if (!end) {
+			*ros << position;
+			break;
+		}
+
+		count = (end - position) + 1;
+		if (count<255) {
+			ros->write(position, count);
+		} else {
+			ros->write(position, 254);
+			*ros << "\n";
+			truncated = true;
+		}
+
+		position = end+1;
+	}
+
+	delete ros;
+	delete os;
 }
 
 void KModule::addModule(Module* in_mod)
@@ -375,6 +353,7 @@ void KModule::addModule(Module* in_mod)
 	bool		isLinked;
 
 	isLinked = Linker::LinkModules(module, in_mod, &err);
+
 	foreach (it, in_mod->begin(), in_mod->end()) {
 		Function	*kmod_f;
 		KFunction	*kf;
@@ -435,64 +414,63 @@ void KModule::prepare(
 	const Interpreter::ModuleOptions &opts,
 	InterpreterHandler *ih)
 {
-  if (!MergeAtExit.empty())
-  	prepareMerge(opts, ih);
-
-  loadIntrinsicsLib(opts);
-  injectRawChecks(opts);
-
-  if (opts.Optimize) Optimize(module);
-
-  // Needs to happen after linking (since ctors/dtors can be modified)
-  // and optimization (since global optimization can rewrite lists).
-  injectStaticConstructorsAndDestructors(module);
-
-  passEnforceInvariants();
-
-  // For cleanliness see if we can discard any of the functions we
-  // forced to import during loadIntrinsicsLib.
-  // We used to remove forced functions here. Not any more-- we load 
-  //  f = module->getFunction("memcpy");
-  //  if (f && f->use_empty()) f->eraseFromParent();
+	if (!MergeAtExit.empty())
+		prepareMerge(opts, ih);
 
 
-  // Write out the .ll assembly file. We truncate long lines to work
-  // around a kcachegrind parsing bug (it puts them on new lines), so
-  // that source browsing works.
-  if (OutputSource) outputSource(ih);
+	loadIntrinsicsLib(opts);
+	injectRawChecks(opts);
 
-  if (OutputModule) {
-    std::ostream *f = ih->openOutputFile("final.bc");
-    llvm::raw_os_ostream* rfs = new llvm::raw_os_ostream(*f);
-    WriteBitcodeToFile(module, *rfs);
-    delete rfs;
-    delete f;
-  }
+	infos = new InstructionInfoTable(module);
+	if (opts.Optimize) Optimize(module);
 
-  kleeMergeFn = module->getFunction("klee_merge");
+	// Needs to happen after linking (since ctors/dtors can be modified)
+	// and optimization (since global optimization can rewrite lists).
+	injectStaticConstructorsAndDestructors(module);
 
-  /* Build shadow structures */
+	passEnforceInvariants();
 
-  infos = new InstructionInfoTable(module);
+	// For cleanliness see if we can discard any of the functions we
+	// forced to import during loadIntrinsicsLib.
+	// We used to remove forced functions here. Not any more-- we load
+	//  f = module->getFunction("memcpy");
+	//  if (f && f->use_empty()) f->eraseFromParent();
 
-  foreach (it, module->begin(), module->end()) {
-    addFunctionProcessed(it);
-  }
 
-  if (DebugPrintEscapingFunctions && !escapingFunctions.empty()) {
-    llvm::errs() << "KLEE: escaping functions: [";
-    foreach (it, escapingFunctions.begin(), escapingFunctions.end()) {
-      llvm::errs() << (*it)->getName() << ", ";
-    }
-    llvm::errs() << "]\n";
-  }
+	// Write out the .ll assembly file. We truncate long lines to work
+	// around a kcachegrind parsing bug (it puts them on new lines), so
+	// that source browsing works.
+	if (OutputSource) outputSource(ih);
 
-  
-  fpm->add(new RaiseAsmPass(module));
-  if (opts.CheckDivZero) fpm->add(new DivCheckPass());
-  fpm->add(createLowerAtomicPass());
-  fpm->add(new IntrinsicCleanerPass(*targetData));
-  fpm->add(new PhiCleanerPass());
+	if (OutputModule) {
+		std::ostream *f = ih->openOutputFile("final.bc");
+		llvm::raw_os_ostream* rfs = new llvm::raw_os_ostream(*f);
+		WriteBitcodeToFile(module, *rfs);
+		delete rfs;
+		delete f;
+	}
+
+	kleeMergeFn = module->getFunction("klee_merge");
+
+	/* Build shadow structures */
+	foreach (it, module->begin(), module->end()) {
+		addFunctionProcessed(it);
+	}
+
+	if (DebugPrintEscapingFunctions && !escapingFunctions.empty()) {
+		llvm::errs() << "KLEE: escaping functions: [";
+		foreach (it, escapingFunctions.begin(), escapingFunctions.end())
+		{
+			llvm::errs() << (*it)->getName() << ", ";
+		}
+		llvm::errs() << "]\n";
+	}
+
+	fpm->add(new RaiseAsmPass(module));
+	if (opts.CheckDivZero) fpm->add(new DivCheckPass());
+	fpm->add(createLowerAtomicPass());
+	fpm->add(new IntrinsicCleanerPass(*targetData));
+	fpm->add(new PhiCleanerPass());
 }
 
 /* add a function that hasn't been cleaned up by any of our passes */
@@ -514,7 +492,7 @@ KFunction* KModule::addFunctionProcessed(Function* f)
 	if (f->isDeclaration()) return NULL;
 
 	kf = new KFunction(f, this);
-	for (unsigned i=0; i<kf->numInstructions; ++i) {
+	for (unsigned i=0; i < kf->numInstructions; ++i) {
 		KInstruction *ki = kf->instructions[i];
 		ki->info = &infos->getInfo(ki->inst);
 	}

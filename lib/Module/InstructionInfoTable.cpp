@@ -36,7 +36,8 @@ public:
 	void emitInstructionAnnot(
 		const Instruction *i, llvm::formatted_raw_ostream &os)
 	{
-		os << StringRef("%%%") << (uintptr_t) i;
+		os << "%%%";
+		os << (uintptr_t) i;
 	}
 };
 
@@ -74,14 +75,17 @@ bool InstructionInfoTable::getInstructionDebugInfo(
 	const std::string *&File,
 	unsigned &Line)
 {
-	if (MDNode *N = I->getMetadata("dbg")) {
-		DILocation Loc(N);
-		File = internString(getDSPIPath(Loc));
-		Line = Loc.getLineNumber();
-		return true;
+	MDNode *N;
+
+	if (!(N = I->getMetadata("dbg"))) {
+		return false;
 	}
 
-	return false;
+	DILocation	Loc(N);
+	std::string	s(getDSPIPath(Loc));
+	File = internString(getDSPIPath(Loc));
+	Line = Loc.getLineNumber();
+	return true;
 }
 
 
@@ -208,7 +212,8 @@ InstructionInfoTable::getInfo(const Instruction *inst) const
 const InstructionInfo&
 InstructionInfoTable::getFunctionInfo(const Function *f) const
 {
-	if (f->isDeclaration())
+	if (f->isDeclaration()) {
 		return dummyInfo;
+	}
 	return getInfo(f->begin()->begin());
 }

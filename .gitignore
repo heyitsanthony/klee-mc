@@ -1,4 +1,5 @@
 *Release/
+*Release+Asserts/
 Makefile.config
 *klee-out*
 snooze*

@@ -2861,7 +2861,10 @@ void Executor::printStateErrorMessage(
 {
 	const InstructionInfo &ii = *state.prevPC->info;
 	if (ii.file != "") {
-		klee_message("ERROR: %s:%d: %s", ii.file.c_str(), ii.line, message.c_str());
+		klee_message("ERROR: %s:%d: %s",
+			ii.file.c_str(),
+			ii.line,
+			message.c_str());
 	} else {
 		klee_message("ERROR: %s", message.c_str());
 	}

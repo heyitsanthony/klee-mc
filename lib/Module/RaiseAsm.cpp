@@ -35,7 +35,6 @@ RaiseAsmPass::RaiseAsmPass(llvm::Module* module)
 			<< Err << "\n";
 		TLI = 0;
 	} else {
-		llvm::errs() << "HAVE NATIVE TARGET\n";
 		TargetMachine *TM;
 		TM = NativeTarget->createTargetMachine(HostTriple, "");
 		TLI = TM->getTargetLowering();
@@ -84,8 +83,7 @@ bool RaiseAsmPass::runOnInstruction(Instruction *I)
 		return true;
 	}
 
-	llvm::errs() << ia->getAsmString() << '\n';
-
+	// llvm::errs() << ia->getAsmString() << '\n';
 	return TLI && TLI->ExpandInlineAsm(ci);
 }
 
