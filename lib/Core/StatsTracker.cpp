@@ -310,8 +310,8 @@ void StatsTracker::stepInstUpdateFrame(ExecutionState &es)
   {
       // Checking for actual stoppoints avoids inconsistencies due
       // to line number propogation.
-      //if (isa<DbgStopPointInst>(inst))
-      //  es.coveredLines[&ii.file].insert(ii.line);
+      if (!ii.file.empty())
+        es.coveredLines[&ii.file].insert(ii.line);
       es.coveredNew = true;
       es.instsSinceCovNew = 1;
       ++stats::coveredInstructions;
