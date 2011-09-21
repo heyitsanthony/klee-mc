@@ -510,7 +510,6 @@ KConstant* KModule::getKConstant(Constant *c)
 {
 	std::map<llvm::Constant*, KConstant*>::iterator it = constantMap.find(c);
 	if (it == constantMap.end()) return NULL;
-	return NULL;
 	return it->second;
 }
 
