@@ -587,6 +587,7 @@ int main(int argc, char **argv, char **envp)
 		run(dynamic_cast<ExecutorVex*>(interpreter));
 
 	delete interpreter;
+	delete gs;
 
 	printStats(info, handler);
 	delete handler;
