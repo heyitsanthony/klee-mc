@@ -89,7 +89,7 @@ KleeHandler::KleeHandler(const CmdArgs* in_args)
 	std::cerr << "KLEE: output directory = \"" << theDir << "\"\n";
 
 	sys::Path p(theDir);
-	if (!p.isAbsolute()) {
+	if (!sys::path::is_absolute(p.str())) {
 		sys::Path cwd = sys::Path::GetCurrentDirectory();
 		cwd.appendComponent(theDir);
 		p = cwd;
@@ -411,7 +411,7 @@ void KleeHandler::processTestCase(
   const ExeStateVex	*esv = dynamic_cast<const ExeStateVex*>(&state);
   assert (esv != NULL);
   dumpLog("crumbs", id, esv->crumbBegin(), esv->crumbEnd());
-  fprintf(stderr, "=========DONE WRITING OUT TESTID=%d (s=%p)\n", id, &state);
+  fprintf(stderr, "=========DONE WRITING OUT TESTID=%d =======\n", id);
 }
 
 void KleeHandler::dumpPCs(const ExecutionState& state, unsigned id)

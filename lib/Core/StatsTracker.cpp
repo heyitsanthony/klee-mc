@@ -20,6 +20,9 @@
 #include "klee/Internal/Support/Stream.h"
 #include "klee/Internal/System/Time.h"
 #include "static/Sugar.h"
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "CallPathManager.h"
 #include "CoreStats.h"
@@ -163,23 +166,24 @@ StatsTracker::StatsTracker(
 	std::string _objectFilename,
 	const std::vector<std::string> &excludeCovFiles,
 	bool _updateMinDistToUncovered)
-  : executor(_executor),
-    objectFilename(_objectFilename),
-    statsFile(0),
-    istatsFile(0),
-    startWallTime(util::estWallTime()),
-    numBranches(0),
-    fullBranches(0),
-    partialBranches(0),
-    updateMinDistToUncovered(_updateMinDistToUncovered)
+: executor(_executor)
+, objectFilename(_objectFilename)
+, statsFile(0)
+, istatsFile(0)
+, startWallTime(util::estWallTime())
+, numBranches(0)
+, fullBranches(0)
+, partialBranches(0)
+, updateMinDistToUncovered(_updateMinDistToUncovered)
 {
   sys::Path module(objectFilename);
   km = in_km;
 
-  if (!sys::Path(objectFilename).isAbsolute()) {
+  if (!sys::path::is_absolute(objectFilename)) {
+    struct stat s;
     sys::Path current = sys::Path::GetCurrentDirectory();
     current.appendComponent(objectFilename);
-    if (current.exists())
+    if (stat(current.c_str(), &s) != -1)
       objectFilename = current.c_str();
   }
 

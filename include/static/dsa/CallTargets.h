@@ -24,35 +24,36 @@
 
 namespace llvm {
 
-  class CallTargetFinder : public ModulePass {
-    std::map<CallSite, std::vector<const Function*> > IndMap;
-    std::set<CallSite> CompleteSites;
-    std::list<CallSite> AllSites;
+class CallTargetFinder : public ModulePass
+{
+	std::map<CallSite, std::vector<const Function*> > IndMap;
+	std::set<CallSite> CompleteSites;
+	std::list<CallSite> AllSites;
 
-    void findIndTargets(Module &M);
-  public:
-    static char ID;
-    CallTargetFinder() : ModulePass(ID) {}
+	void findIndTargets(Module &M);
+public:
+	static char ID;
+	CallTargetFinder() : ModulePass(ID) {}
 
-    virtual bool runOnModule(Module &M);
+	virtual bool runOnModule(Module &M);
 
-    virtual void getAnalysisUsage(AnalysisUsage &AU) const;
+	virtual void getAnalysisUsage(AnalysisUsage &AU) const;
 
-    virtual void print(std::ostream &O, const Module *M) const;
+	virtual void print(llvm::raw_ostream &O, const Module *M) const;
 
-    // Given a CallSite, get an iterator of callees
-    std::vector<const Function*>::iterator begin(CallSite cs);
-    std::vector<const Function*>::iterator end(CallSite cs);
+	// Given a CallSite, get an iterator of callees
+	std::vector<const Function*>::iterator begin(CallSite cs);
+	std::vector<const Function*>::iterator end(CallSite cs);
 
-    // Iterate over CallSites in program
-    std::list<CallSite>::iterator cs_begin();
-    std::list<CallSite>::iterator cs_end();
+	// Iterate over CallSites in program
+	std::list<CallSite>::iterator cs_begin();
+	std::list<CallSite>::iterator cs_end();
 
-    // Do we think we have complete knowledge of this site?
-    // That is, do we think there are no missing callees
-    bool isComplete(CallSite cs) const;
-  };
-  
+	// Do we think we have complete knowledge of this site?
+	// That is, do we think there are no missing callees
+	bool isComplete(CallSite cs) const;
+};
+
 }
 
 #endif

@@ -161,31 +161,39 @@ namespace llvm {
 /// the DSNode handle for the callee function (or function pointer), and
 /// the DSNode handles for the function arguments.
 ///
-class DSCallSite {
-  CallSite        Site;               // Actual call site
+class DSCallSite
+{
+  ImmutableCallSite        Site;      // Actual call site
   const Function *CalleeF;            // The function called (direct call)
   DSNodeHandle    CalleeN;            // The function node called (indirect call)
   DSNodeHandle    RetVal;             // Returned value
   std::vector<DSNodeHandle> CallArgs; // The pointer arguments
 
-  static void InitNH(DSNodeHandle &NH, const DSNodeHandle &Src,
-                     const hash_map<const DSNode*, DSNode*> &NodeMap) {
-    if (DSNode *N = Src.getNode()) {
-      hash_map<const DSNode*, DSNode*>::const_iterator I = NodeMap.find(N);
-      assert(I != NodeMap.end() && "Node not in mapping!");
-      NH.setTo(I->second, Src.getOffset());
-    }
+  static void InitNH(
+    DSNodeHandle &NH, const DSNodeHandle &Src,
+    const hash_map<const DSNode*, DSNode*> &NodeMap)
+  {
+    DSNode *N = Src.getNode();
+    if (!N) return;
+
+    hash_map<const DSNode*, DSNode*>::const_iterator I = NodeMap.find(N);
+    assert(I != NodeMap.end() && "Node not in mapping!");
+    NH.setTo(I->second, Src.getOffset());
   }
 
-  static void InitNH(DSNodeHandle &NH, const DSNodeHandle &Src,
-                     const hash_map<const DSNode*, DSNodeHandle> &NodeMap) {
-    if (DSNode *N = Src.getNode()) {
-      hash_map<const DSNode*, DSNodeHandle>::const_iterator I = NodeMap.find(N);
-      assert(I != NodeMap.end() && "Node not in mapping!");
+  static void InitNH(
+    DSNodeHandle &NH, const DSNodeHandle &Src,
+    const hash_map<const DSNode*, DSNodeHandle> &NodeMap)
+  {
+    DSNode *N = Src.getNode();
 
-      DSNode *NN = I->second.getNode(); // Call getNode before getOffset()
-      NH.setTo(NN, Src.getOffset()+I->second.getOffset());
-    }
+    if (!N) return;
+
+    hash_map<const DSNode*, DSNodeHandle>::const_iterator I = NodeMap.find(N);
+    assert(I != NodeMap.end() && "Node not in mapping!");
+
+    DSNode *NN = I->second.getNode(); // Call getNode before getOffset()
+    NH.setTo(NN, Src.getOffset()+I->second.getOffset());
   }
 
   static void InitNH(DSNodeHandle &NH, const DSNodeHandle &Src,
@@ -197,15 +205,17 @@ public:
   /// Constructor.  Note - This ctor destroys the argument vector passed in.  On
   /// exit, the argument vector is empty.
   ///
-  DSCallSite(CallSite CS, const DSNodeHandle &rv, DSNode *Callee,
+  DSCallSite(ImmutableCallSite CS, const DSNodeHandle &rv, DSNode *Callee,
              std::vector<DSNodeHandle> &Args)
-    : Site(CS), CalleeF(0), CalleeN(Callee), RetVal(rv) {
+  : Site(CS), CalleeF(0), CalleeN(Callee), RetVal(rv)
+  {
     assert(Callee && "Null callee node specified for call site!");
     Args.swap(CallArgs);
   }
-  DSCallSite(CallSite CS, const DSNodeHandle &rv, const Function *Callee,
+  DSCallSite(ImmutableCallSite CS, const DSNodeHandle &rv, const Function *Callee,
              std::vector<DSNodeHandle> &Args)
-    : Site(CS), CalleeF(Callee), RetVal(rv) {
+  : Site(CS), CalleeF(Callee), RetVal(rv)
+  {
     assert(Callee && "Null callee function specified for call site!");
     Args.swap(CallArgs);
   }
@@ -219,8 +229,9 @@ public:
   /// This is useful when moving a call site from one graph to another.
   ///
   template<typename MapTy>
-  DSCallSite(const DSCallSite &FromCall, MapTy &NodeMap) {
-    Site = FromCall.Site;
+  DSCallSite(const DSCallSite &FromCall, MapTy &NodeMap)
+  : Site(FromCall.Site)
+  {
     InitNH(RetVal, FromCall.RetVal, NodeMap);
     InitNH(CalleeN, FromCall.CalleeN, NodeMap);
     CalleeF = FromCall.CalleeF;
@@ -248,10 +259,10 @@ public:
 
 
   // Accessor functions...
-  const Function     &getCaller()     const;
-  CallSite            getCallSite()   const { return Site; }
-        DSNodeHandle &getRetVal()           { return RetVal; }
-  const DSNodeHandle &getRetVal()     const { return RetVal; }
+  const Function &getCaller() const;
+  ImmutableCallSite getCallSite() const { return Site; }
+  DSNodeHandle &getRetVal() { return RetVal; }
+  const DSNodeHandle &getRetVal() const { return RetVal; }
 
   DSNode *getCalleeNode() const {
     assert(!CalleeF && CalleeN.getNode()); return CalleeN.getNode();

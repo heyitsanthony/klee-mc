@@ -1,5 +1,4 @@
 #include "klee/Common.h"
-#include "klee/Config/config.h"
 #include "klee/Interpreter.h"
 #include "klee/Internal/Support/ModuleUtil.h"
 
@@ -15,6 +14,13 @@
 
 #include "static/Sugar.h"
 #include "libc.h"
+
+#undef PACKAGE_BUGREPORT
+#undef PACKAGE_NAME
+#undef PACKAGE_STRING
+#undef PACKAGE_TARNAME
+#undef PACKAGE_VERSION
+#include "klee/Config/config.h"
 
 #include <iostream>
 #include <set>

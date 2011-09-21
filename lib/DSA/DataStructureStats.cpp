@@ -13,6 +13,7 @@
 
 #include "static/dsa/DataStructure.h"
 #include "static/dsa/DSGraph.h"
+#include "static/Sugar.h"
 #include "llvm/Function.h"
 #include "llvm/Instructions.h"
 #include "llvm/Pass.h"
@@ -60,7 +61,7 @@ namespace {
     void visitStore(StoreInst &SI);
 
     /// Debugging support methods
-    void print(std::ostream &O, const Module* = 0) const { }
+    void print(raw_ostream &O, const Module* = 0) const { }
   };
 
   static RegisterPass<DSGraphStats> Z("dsstats", "DS Graph Statistics");
@@ -68,39 +69,39 @@ namespace {
 
 char DSGraphStats::ID;
 
-FunctionPass *llvm::createDataStructureStatsPass() { 
+FunctionPass *llvm::createDataStructureStatsPass() {
   return new DSGraphStats();
 }
 
 
-static bool isIndirectCallee(Value *V) {
+static bool isIndirectCallee(const Value *V) {
   if (isa<Function>(V)) return false;
 
-  if (CastInst *CI = dyn_cast<CastInst>(V))
+  if (const CastInst *CI = dyn_cast<CastInst>(V))
     return isIndirectCallee(CI->getOperand(0));
   return true;
 }
 
 
-void DSGraphStats::countCallees(const Function& F) {
+void DSGraphStats::countCallees(const Function& F)
+{
   unsigned numIndirectCalls = 0, totalNumCallees = 0;
 
-  for (DSGraph::fc_iterator I = TDGraph->fc_begin(), E = TDGraph->fc_end();
-       I != E; ++I)
-    if (isIndirectCallee(I->getCallSite().getCalledValue())) {
-      // This is an indirect function call
-      std::vector<const Function*> Callees;
-      I->getCalleeNode()->addFullFunctionList(Callees);
+  foreach (I, TDGraph->fc_begin(), TDGraph->fc_end()) {
+    if (!isIndirectCallee(I->getCallSite().getCalledValue())) continue;
+    // This is an indirect function call
+    std::vector<const Function*> Callees;
+    I->getCalleeNode()->addFullFunctionList(Callees);
 
-      if (Callees.size() > 0) {
-        totalNumCallees  += Callees.size();
-        ++numIndirectCalls;
-      } else {
-        DEBUG(errs() << "WARNING: No callee in Function '" 
-	      << F.getNameStr() << "' at call: \n"
-	      << *I->getCallSite().getInstruction());
-      }
+    if (Callees.size() > 0) {
+      totalNumCallees  += Callees.size();
+      ++numIndirectCalls;
+    } else {
+      DEBUG(errs() << "WARNING: No callee in Function '"
+        << F.getNameStr() << "' at call: \n"
+        << *I->getCallSite().getInstruction());
     }
+  }
 
   TotalNumCallees  += totalNumCallees;
   NumIndirectCalls += numIndirectCalls;

@@ -32,6 +32,7 @@
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/raw_ostream.h"
 #include "static/dsa/HashExtras.h"
+#include "static/Sugar.h"
 
 #include <iostream>
 #include <algorithm>
@@ -188,7 +189,7 @@ const TargetData &DSNode::getTargetData() const {
 }
 
 void DSNode::assertOK() const {
-  const Type * VoidType = Type::getVoidTy(getGlobalContext());  
+  const Type * VoidType = Type::getVoidTy(getGlobalContext());
   assert((Ty != VoidType ||
           (Ty == VoidType && (Size == 0 ||
                                   (NodeType & DSNode::ArrayNode)))) &&
@@ -275,19 +276,19 @@ void DSNode::foldNodeCompletely() {
     DestNode->Ty = Type::getVoidTy(getGlobalContext());
     DestNode->Size = 1;
     DestNode->Globals.swap(Globals);
-    
+
     //    DOUT << "LLVA: foldNode: " << this << " becomes " << DestNode << "\n";
 #ifdef LLVA_KERNEL
     //Again we have created a new DSNode, we need to fill in the
     // pool desc map appropriately
-    assert(ParentGraph && "parent graph is not null \n"); 
+    assert(ParentGraph && "parent graph is not null \n");
     hash_map<const DSNode *, MetaPoolHandle*> &pdm = ParentGraph->getPoolDescriptorsMap();
     if (pdm.count(this) > 0) {
       pdm[DestNode] = pdm[this];
     } else {
-      //do nothing 
+      //do nothing
     }
-#endif    
+#endif
 
     // Start forwarding to the destination node...
     forwardNode(DestNode, 0);
@@ -812,11 +813,11 @@ void DSNode::addEdgeTo(unsigned Offset, const DSNodeHandle &NH) {
 void DSNode::mergeGlobals(const DSNode &RHS) {
   std::vector<const GlobalValue*> Temp;
   std::back_insert_iterator< std::vector<const GlobalValue*> > back_it (Temp);
-  std::set_union(Globals.begin(), Globals.end(), 
-                 RHS.Globals.begin(), RHS.Globals.end(), 
+  std::set_union(Globals.begin(), Globals.end(),
+                 RHS.Globals.begin(), RHS.Globals.end(),
                  back_it);
   DEBUG(
-        for (std::vector<const GlobalValue*>::iterator ii = Temp.begin(), 
+        for (std::vector<const GlobalValue*>::iterator ii = Temp.begin(),
                ee = Temp.end(); ii != ee; ++ii)
           assert(isa<GlobalValue>(*ii) && "Non global merged");
         );
@@ -888,7 +889,7 @@ void DSNode::MergeNodes(DSNodeHandle& CurNodeH, DSNodeHandle& NH) {
            << "(" << NNode << ")\n";
       pdm[NNode] = pdm[currNode];
 #endif
-      //do nothing 
+      //do nothing
     } else {
       if (pdm[currNode] != pdm[NNode]) {
 	//The following is commented because pdm[..] could be null!
@@ -911,7 +912,7 @@ void DSNode::MergeNodes(DSNodeHandle& CurNodeH, DSNodeHandle& NH) {
       }
     }
   }
-#endif  
+#endif
   // Merge the type entries of the two nodes together...
   const Type * VoidType = Type::getVoidTy(getGlobalContext());
   if (NH.getNode()->Ty != VoidType)
@@ -1080,9 +1081,9 @@ DSNodeHandle ReachabilityCloner::getClonedNH(const DSNodeHandle &SrcNH) {
     if (pdm.count(SN) > 0) {
       pdm[DN] = pdm[SN];
     } else {
-      //do nothing 
+      //do nothing
     }
-#endif    
+#endif
 #endif
 
   // Next, recursively clone all outgoing links as necessary.  Note that
@@ -1250,7 +1251,7 @@ void ReachabilityCloner::merge(const DSNodeHandle &NH,
   //I think because of the inplace merging we don't update the pool desc maps
   //This is modification from DSNode::MergeNodes
   //Here DN and SN may belong to different graphs
- DN = NH.getNode(); 
+ DN = NH.getNode();
 #if 0
   DSGraph *destGraph =  DN->getParentGraph();
   DSGraph *srcGraph =  SN->getParentGraph();
@@ -1290,7 +1291,7 @@ void ReachabilityCloner::merge(const DSNodeHandle &NH,
       }
     }
   }
-#endif  
+#endif
   // Next, recursively merge all outgoing links as necessary.  Note that
   // adding these links can cause the destination node to collapse itself at
   // any time, and the current node may be merged with arbitrary other nodes.
@@ -1348,13 +1349,14 @@ DSCallSite ReachabilityCloner::cloneCallSite(const DSCallSite& SrcCS) {
   std::vector<DSNodeHandle> Args;
   for(unsigned x = 0; x < SrcCS.getNumPtrArgs(); ++x)
     Args.push_back(getClonedNH(SrcCS.getPtrArg(x)));
+
   if (SrcCS.isDirectCall())
     return DSCallSite(SrcCS.getCallSite(),
                       getClonedNH(SrcCS.getRetVal()),
                       SrcCS.getCalleeFunc(),
                       Args);
-  else
-    return DSCallSite(SrcCS.getCallSite(),
+
+  return DSCallSite(SrcCS.getCallSite(),
                       getClonedNH(SrcCS.getRetVal()),
                       getClonedNH(SrcCS.getCalleeNode()).getNode(),
                       Args);
@@ -1392,7 +1394,7 @@ void DSCallSite::InitNH(DSNodeHandle &NH, const DSNodeHandle &Src,
   }
   void MetaPoolHandle::merge(MetaPoolHandle *other) {
     //after this operation other points to what this points to .
-    //first replace all uses 
+    //first replace all uses
      Value *dest = getMetaPoolValue();
      Value *curr = other->getMetaPoolValue();
      if (dest != curr) {
@@ -1401,7 +1403,7 @@ void DSCallSite::InitNH(DSNodeHandle &NH, const DSNodeHandle &Src,
                  << "LLVA:   " << *(other->Creator) << "\n";
        curr->replaceAllUsesWith(dest);
      }
-   
+
      //merge the hash sets in to other
      hash_set<MetaPoolHandle *> &otherHandleSet = other->getMetaPool()->getHandleSet();
      hash_set<MetaPoolHandle *>::iterator ohsI = otherHandleSet.begin(), ohsE = otherHandleSet.end();
@@ -1413,9 +1415,9 @@ void DSCallSite::InitNH(DSNodeHandle &NH, const DSNodeHandle &Src,
      }
 
      //now delete others MetaPool
-     //gd     delete other->getMetaPool(); 
+     //gd     delete other->getMetaPool();
 
-     //Assign our metapool to other 
+     //Assign our metapool to other
      other->setMetaPool(Rep);
 }
 
@@ -1893,7 +1895,7 @@ void DSGraph::mergeInGraph(const DSCallSite &CS, const Function &F,
 DSCallSite DSGraph::getCallSiteForArguments(const Function &F) const {
   std::vector<DSNodeHandle> Args;
 
-  for (Function::const_arg_iterator I = F.arg_begin(), E = F.arg_end(); I != E; ++I)
+  foreach (I, F.arg_begin(), F.arg_end())
     if (isa<PointerType>(I->getType()))
       Args.push_back(getNodeForValue(I));
 
@@ -1902,41 +1904,39 @@ DSCallSite DSGraph::getCallSiteForArguments(const Function &F) const {
 
 /// getDSCallSiteForCallSite - Given an LLVM CallSite object that is live in
 /// the context of this graph, return the DSCallSite for it.
-DSCallSite DSGraph::getDSCallSiteForCallSite(CallSite CS) const {
-	
-  DSNodeHandle RetVal;  
-  Instruction *I = CS.getInstruction();  
+DSCallSite DSGraph::getDSCallSiteForCallSite(ImmutableCallSite CS) const
+{
+  DSNodeHandle RetVal;
+  const Instruction *I = CS.getInstruction();
   if (isa<PointerType>(I->getType())) {
-    RetVal = getNodeForValue(I);	
+    RetVal = getNodeForValue(I);
   }
 
   std::vector<DSNodeHandle> Args;
   Args.reserve(CS.arg_end()-CS.arg_begin());
 
   // Calculate the arguments vector...
-  for (CallSite::arg_iterator I = CS.arg_begin(), E = CS.arg_end(); I != E; ++I)
-    if (isa<PointerType>((*I)->getType())) {
-      if (isa<ConstantPointerNull>(*I))
-        Args.push_back(DSNodeHandle());
-      else
-        Args.push_back(getNodeForValue(*I));
-    }
-  
-	//SUHABE: start: bug in pointer analysis: node not created for casts
-  Value *Callee = CS.getCalledValue();
-  if (!isa<Function>(Callee))
-	  if (ConstantExpr* EX = dyn_cast<ConstantExpr>(Callee))
+  foreach (I, CS.arg_begin(), CS.arg_end()) {
+    if (!isa<PointerType>((*I)->getType())) continue;
+    if (isa<ConstantPointerNull>(*I))
+      Args.push_back(DSNodeHandle());
+    else
+      Args.push_back(getNodeForValue(*I));
+  }
+
+  //SUHABE: start: bug in pointer analysis: node not created for casts
+  const Value *Callee = CS.getCalledValue();
+  if (!isa<Function>(Callee)) {
+	  if (const ConstantExpr* EX = dyn_cast<ConstantExpr>(Callee))
 		  if (EX->isCast() && isa<Function>(EX->getOperand(0)))
 			  Callee = cast<Function>(EX->getOperand(0));
-  
-	
+  }
+
   // Add a new function call entry...
   if (isa<Function>(Callee))
     return DSCallSite(CS, RetVal, cast<Function>(Callee), Args);
-  else 
-    return DSCallSite(CS, RetVal,
-                      getNodeForValue(Callee).getNode(), Args);
-	//SUHABE: end
+
+  return DSCallSite(CS, RetVal, getNodeForValue(Callee).getNode(), Args);
 }
 
 
@@ -1955,7 +1955,7 @@ static void markIncompleteNode(DSNode *N) {
   N->setIncompleteMarker();
 
   // Recursively process children...
-  for (DSNode::edge_iterator I = N->edge_begin(),E = N->edge_end(); I != E; ++I)
+  foreach (I, N->edge_begin(), N->edge_end())
     if (DSNode *DSN = I->getNode())
       markIncompleteNode(DSN);
 }
@@ -1981,25 +1981,22 @@ static void markIncomplete(DSCallSite &Call) {
 //
 void DSGraph::markIncompleteNodes(unsigned Flags) {
   // Mark any incoming arguments as incomplete.
-  if (Flags & DSGraph::MarkFormalArgs)
-    for (ReturnNodesTy::iterator FI = ReturnNodes.begin(), E =ReturnNodes.end();
-         FI != E; ++FI) {
+  if (Flags & DSGraph::MarkFormalArgs) {
+    foreach (FI, ReturnNodes.begin(), ReturnNodes.end()) {
       const Function &F = *FI->first;
-      for (Function::const_arg_iterator I = F.arg_begin(), E = F.arg_end();
-           I != E; ++I)
+      foreach (I, F.arg_begin(), F.arg_end())
         if (isa<PointerType>(I->getType()))
           markIncompleteNode(getNodeForValue(I).getNode());
       markIncompleteNode(FI->second.getNode());
     }
+  }
 
   // Mark stuff passed into functions calls as being incomplete.
   if (!shouldPrintAuxCalls())
-    for (std::list<DSCallSite>::iterator I = FunctionCalls.begin(),
-           E = FunctionCalls.end(); I != E; ++I)
+    foreach (I, FunctionCalls.begin(), FunctionCalls.end())
       markIncomplete(*I);
   else
-    for (std::list<DSCallSite>::iterator I = AuxFunctionCalls.begin(),
-           E = AuxFunctionCalls.end(); I != E; ++I)
+    foreach (I, AuxFunctionCalls.begin(), AuxFunctionCalls.end())
       markIncomplete(*I);
 
 #if 0
@@ -2013,8 +2010,7 @@ void DSGraph::markIncompleteNodes(unsigned Flags) {
 #endif
 
   // Mark all global nodes as incomplete.
-  for (DSScalarMap::global_iterator I = ScalarMap.global_begin(),
-         E = ScalarMap.global_end(); I != E; ++I)
+  foreach (I, ScalarMap.global_begin(), ScalarMap.global_end())
     if (const GlobalVariable *GV = dyn_cast<GlobalVariable>(*I))
       if (!GV->hasInitializer() ||    // Always mark external globals incomp.
           (!GV->isConstant() && (Flags & DSGraph::IgnoreGlobals) == 0))
@@ -2022,7 +2018,7 @@ void DSGraph::markIncompleteNodes(unsigned Flags) {
 
   // Mark any node with the VAStart flag as incomplete.
   if (Flags & DSGraph::MarkVAStart) {
-    for (node_iterator i=node_begin(); i != node_end(); ++i) {
+    foreach (i, node_begin(), node_end()) {
       markIncompleteNode(i);
     }
   }
@@ -2210,7 +2206,7 @@ void DSGraph::removeTriviallyDeadNodes(bool updateForwarders) {
   if (updateForwarders) {
     /// NOTE: This code is disabled.  This slows down DSA on 177.mesa
     /// substantially!
-    
+
     // Loop over all of the nodes in the graph, calling getNode on each field.
     // This will cause all nodes to update their forwarding edges, causing
     // forwarded nodes to be delete-able.
@@ -2221,13 +2217,13 @@ void DSGraph::removeTriviallyDeadNodes(bool updateForwarders) {
           N.getLink(l*N.getPointerSize()).getNode();
       }
     }
-    
+
     // NOTE: This code is disabled.  Though it should, in theory, allow us to
     // remove more nodes down below, the scan of the scalar map is incredibly
     // expensive for certain programs (with large SCCs).  In the future, if we can
     // make the scalar map scan more efficient, then we can reenable this.
     { TIME_REGION(X, "removeTriviallyDeadNodes:scalarmap");
-      
+
       // Likewise, forward any edges from the scalar nodes.  While we are at it,
       // clean house a bit.
       for (DSScalarMap::iterator I = ScalarMap.begin(),E = ScalarMap.end();I != E;){
@@ -2269,7 +2265,7 @@ void DSGraph::removeTriviallyDeadNodes(bool updateForwarders) {
         // Make sure NumReferrers still agrees, if so, the node is truly dead.
         if (Node.getNumReferrers() == Node.numGlobals()) {
           for (DSNode::globals_iterator j = Node.globals_begin(), e = Node.globals_end();
-               j != e; ++j) 
+               j != e; ++j)
             ScalarMap.erase(*j);
           Node.makeNodeDead();
           ++NumTrivialGlobalDNE;
@@ -2588,13 +2584,13 @@ void DSGraph::computeNodeMapping(const DSNodeHandle &NH1,
                                  bool StrictChecking) {
   DSNode *N1 = NH1.getNode(), *N2 = NH2.getNode();
   if (N1 == 0 || N2 == 0) return;
-  
+
   //cout << "COMPUTE NODE MAPPING: " << N1->name << " " << N2->name << "\n";
 
   DSNodeHandle &Entry = NodeMap[N1];
-  if (!Entry.isNull()) {	  
+  if (!Entry.isNull()) {
     // Termination of recursion!
-    if (StrictChecking) {      
+    if (StrictChecking) {
 	  assert(Entry.getNode() == N2 && "Inconsistent mapping detected!");
       assert((Entry.getOffset() == (NH2.getOffset()-NH1.getOffset()) ||
               Entry.getNode()->isNodeCompletelyFolded()) &&
@@ -2602,19 +2598,19 @@ void DSGraph::computeNodeMapping(const DSNodeHandle &NH1,
     }
     return;
   }
-  
+
   //cout << "OFFSET DIF=" << (NH2.getOffset()-NH1.getOffset()) << "\n";
   Entry.setTo(N2, NH2.getOffset()-NH1.getOffset());
   //cout << " ENTRYNODE=" << NodeMap[N1].getNode()->name << "\n" << std::flush;
-  
+
   /*
-  for(NodeMapTy::iterator mapit = NodeMap.begin(); mapit != NodeMap.end(); ++mapit) {						
+  for(NodeMapTy::iterator mapit = NodeMap.begin(); mapit != NodeMap.end(); ++mapit) {
 	  DSNode* calleenode = const_cast<DSNode*>(mapit->first);
-	  DSNodeHandle callernodeh = mapit->second;			
-	  DSNode* callernode = callernodeh.getNode();						
-	  cout << calleenode->name << " " << callernode->name + "+" << callernodeh.getOffset()  << "\n";												
+	  DSNodeHandle callernodeh = mapit->second;
+	  DSNode* callernode = callernodeh.getNode();
+	  cout << calleenode->name << " " << callernode->name + "+" << callernodeh.getOffset()  << "\n";
   }*/
-  
+
   // Loop over all of the fields that N1 and N2 have in common, recursively
   // mapping the edges together now.
   int N2Idx = NH2.getOffset()-NH1.getOffset();
@@ -2737,7 +2733,7 @@ void DataStructures::deleteValue(Value *V) {
     getDSGraph(*F)->getScalarMap().eraseIfExists(V);
     return;
   }
-  
+
   if (Function *F = dyn_cast<Function>(V)) {
     assert(getDSGraph(*F)->getReturnNodes().size() == 1 &&
            "cannot handle scc's");
@@ -2745,7 +2741,7 @@ void DataStructures::deleteValue(Value *V) {
     DSInfo.erase(F);
     return;
   }
-  
+
   assert(!isa<GlobalVariable>(V) && "Do not know how to delete GV's yet!");
 }
 
@@ -2756,26 +2752,26 @@ void DataStructures::copyValue(Value *From, Value *To) {
     getDSGraph(*F)->getScalarMap().copyScalarIfExists(From, To);
     return;
   }
-  
+
   if (Function *FromF = dyn_cast<Function>(From)) {
     Function *ToF = cast<Function>(To);
     assert(!DSInfo.count(ToF) && "New Function already exists!");
     DSGraph *NG = new DSGraph(getDSGraph(*FromF), GlobalECs);
     DSInfo[ToF] = NG;
     assert(NG->getReturnNodes().size() == 1 && "Cannot copy SCC's yet!");
-    
+
     // Change the Function* is the returnnodes map to the ToF.
     DSNodeHandle Ret = NG->retnodes_begin()->second;
     NG->getReturnNodes().clear();
     NG->getReturnNodes()[ToF] = Ret;
     return;
   }
-  
+
   if (const Function *F = getFnForValue(To)) {
     getDSGraph(*F)->getScalarMap().copyScalarIfExists(From, To);
     return;
   }
-  
+
   llvm::errs() << *From;
   llvm::errs() << *To;
   assert(0 && "Do not know how to copy this yet!");
@@ -2793,12 +2789,12 @@ DSGraph* DataStructures::getOrCreateGraph(const Function* F) {
     } else {
       G = new DSGraph(GlobalECs, GraphSource->getTargetData());
       G->spliceFrom(BaseGraph);
-      if (resetAuxCalls) 
+      if (resetAuxCalls)
         G->getAuxFunctionCalls() = G->getFunctionCalls();
     }
     G->setPrintAuxCalls();
     G->setGlobalsGraph(GlobalsGraph);
-    
+
     // Note that this graph is the graph for ALL of the function in the SCC, not
     // just F.
     for (DSGraph::retnodes_iterator RI = G->retnodes_begin(),
@@ -2831,13 +2827,13 @@ void DataStructures::formGlobalECs() {
 void DataStructures::buildGlobalECs(std::set<const GlobalValue*> &ECGlobals) {
   DSScalarMap &SM = GlobalsGraph->getScalarMap();
   EquivalenceClasses<const GlobalValue*> &GlobalECs = SM.getGlobalECs();
-  for (DSGraph::node_iterator I = GlobalsGraph->node_begin(), 
+  for (DSGraph::node_iterator I = GlobalsGraph->node_begin(),
          E = GlobalsGraph->node_end();
        I != E; ++I) {
     if (I->numGlobals() <= 1) continue;
 
     // First, build up the equivalence set for this block of globals.
-    DSNode::globals_iterator i = I->globals_begin(); 
+    DSNode::globals_iterator i = I->globals_begin();
     const GlobalValue *First = *i;
     if (GlobalECs.findValue(*i) != GlobalECs.end())
       First = GlobalECs.getLeaderValue(*i);
@@ -2905,7 +2901,7 @@ void DataStructures::eliminateUsesOfECGlobals(DSGraph &G,
   DEBUG(if(MadeChange) G.AssertGraphOK());
 }
 
-void DataStructures::init(DataStructures* D, bool clone, bool printAuxCalls, 
+void DataStructures::init(DataStructures* D, bool clone, bool printAuxCalls,
                           bool copyGlobalAuxCalls, bool resetAux) {
   assert (!GraphSource && "Already init");
   GraphSource = D;
@@ -2914,7 +2910,7 @@ void DataStructures::init(DataStructures* D, bool clone, bool printAuxCalls,
   TD = D->TD;
   ActualCallees = D->ActualCallees;
   GlobalECs = D->getGlobalECs();
-  GlobalsGraph = new DSGraph(D->getGlobalsGraph(), GlobalECs, 
+  GlobalsGraph = new DSGraph(D->getGlobalsGraph(), GlobalECs,
                              copyGlobalAuxCalls?0:DSGraph::DontCloneAuxCallNodes);
   if (printAuxCalls) GlobalsGraph->setPrintAuxCalls();
 

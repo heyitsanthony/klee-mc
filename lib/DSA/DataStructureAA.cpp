@@ -20,6 +20,8 @@
 #include "llvm/Analysis/Passes.h"
 #include "static/dsa/DataStructure.h"
 #include "static/dsa/DSGraph.h"
+#include "static/Sugar.h"
+
 using namespace llvm;
 
 namespace {
@@ -33,14 +35,12 @@ namespace {
     // calculated nodemap for the call site.  Any time DSA info is updated we
     // free this information, and when we move onto a new call site, this
     // information is also freed.
-    CallSite MapCS;
+    ImmutableCallSite MapCS;
     std::multimap<DSNode*, const DSNode*> CallerCalleeMap;
   public:
     static char ID;
-    DSAA() : ModulePass(ID), TD(0) {}
-    ~DSAA() {
-      InvalidateCache();
-    }
+    DSAA() : ModulePass(ID), TD(0), MapCS(CallSite())  {}
+    virtual ~DSAA() { InvalidateCache(); }
 
     void InvalidateCache() {
       MapCS = CallSite();
@@ -72,11 +72,14 @@ namespace {
     // Implement the AliasAnalysis API
     //
 
-    AliasResult alias(const Value *V1, unsigned V1Size,
-                      const Value *V2, unsigned V2Size);
+    AliasResult alias(
+	const llvm::AliasAnalysis::Location& l1,
+	const llvm::AliasAnalysis::Location& l2);
 
-    ModRefResult getModRefInfo(CallSite CS, Value *P, unsigned Size);
-    ModRefResult getModRefInfo(CallSite CS1, CallSite CS2) {
+    ModRefResult getModRefInfo(
+    	ImmutableCallSite CS,
+	const llvm::AliasAnalysis::Location&);
+    ModRefResult getModRefInfo(ImmutableCallSite CS1, ImmutableCallSite CS2) {
       return AliasAnalysis::getModRefInfo(CS1,CS2);
     }
 
@@ -121,9 +124,20 @@ DSGraph *DSAA::getGraphForValue(const Value *V) {
   return 0;
 }
 
-AliasAnalysis::AliasResult DSAA::alias(const Value *V1, unsigned V1Size,
-                                       const Value *V2, unsigned V2Size) {
+AliasAnalysis::AliasResult DSAA::alias(
+	const llvm::AliasAnalysis::Location& l1,
+	const llvm::AliasAnalysis::Location& l2)
+{
+  const llvm::Value	*V1, *V2;
+  uint64_t		V1Size, V2Size;
+
+  V1 = l1.Ptr;
+  V2 = l2.Ptr;
   if (V1 == V2) return MustAlias;
+
+  V1Size = l1.Size;
+  V2Size = l2.Size;
+
 
   DSGraph *G1 = getGraphForValue(V1);
   DSGraph *G2 = getGraphForValue(V2);
@@ -172,7 +186,11 @@ AliasAnalysis::AliasResult DSAA::alias(const Value *V1, unsigned V1Size,
 /// getModRefInfo - does a callsite modify or reference a value?
 ///
 AliasAnalysis::ModRefResult
-DSAA::getModRefInfo(CallSite CS, Value *P, unsigned Size) {
+DSAA::getModRefInfo(
+    	ImmutableCallSite CS,
+	const llvm::AliasAnalysis::Location& Loc)
+{
+  const Value  *P = Loc.Ptr;
   DSNode *N = 0;
   // First step, check our cache.
   if (CS.getInstruction() == MapCS.getInstruction()) {
@@ -185,7 +203,7 @@ DSAA::getModRefInfo(CallSite CS, Value *P, unsigned Size) {
       DSScalarMap::iterator NI = CallerSM.find(P);
       if (NI == CallerSM.end()) {
         InvalidateCache();
-        return DSAA::getModRefInfo(CS, P, Size);
+        return DSAA::getModRefInfo(CS, Loc);
       }
       N = NI->second.getNode();
     }
@@ -205,7 +223,7 @@ DSAA::getModRefInfo(CallSite CS, Value *P, unsigned Size) {
       if (Range.first->second->isReadNode())
         NeverReads = false;
       if (NeverReads == false && NeverWrites == false)
-        return AliasAnalysis::getModRefInfo(CS, P, Size);
+        return AliasAnalysis::getModRefInfo(CS, Loc);
     }
 
     ModRefResult Result = ModRef;
@@ -214,21 +232,22 @@ DSAA::getModRefInfo(CallSite CS, Value *P, unsigned Size) {
     if (NeverReads)       // We proved it was not read.
       Result = ModRefResult(Result & ~Ref);
 
-    return ModRefResult(Result & AliasAnalysis::getModRefInfo(CS, P, Size));
+    return ModRefResult(Result & AliasAnalysis::getModRefInfo(CS, Loc));
   }
 
   // Any cached info we have is for the wrong function.
   InvalidateCache();
 
-  Function *F = CS.getCalledFunction();
+  const Function *F;
+  F = CS.getCalledFunction();
 
-  if (!F) return AliasAnalysis::getModRefInfo(CS, P, Size);
+  if (!F) return AliasAnalysis::getModRefInfo(CS, Loc);
 
   if (F->isDeclaration()) {
     // If we are calling an external function, and if this global doesn't escape
     // the portion of the program we have analyzed, we can draw conclusions
     // based on whether the global escapes the program.
-    Function *Caller = CS.getInstruction()->getParent()->getParent();
+    const Function *Caller = CS.getInstruction()->getParent()->getParent();
     DSGraph *G = TD->getDSGraph(*Caller);
     DSScalarMap::iterator NI = G->getScalarMap().find(P);
     if (NI == G->getScalarMap().end()) {
@@ -238,14 +257,14 @@ DSAA::getModRefInfo(CallSite CS, Value *P, unsigned Size) {
       G = G->getGlobalsGraph();
       NI = G->getScalarMap().find(P);
       if (NI == G->getScalarMap().end())
-        return AliasAnalysis::getModRefInfo(CS, P, Size);
+        return AliasAnalysis::getModRefInfo(CS, Loc);
     }
 
     // If we found a node and it's complete, it cannot be passed out to the
     // called function.
     if (NI->second.getNode()->isCompleteNode())
       return NoModRef;
-    return AliasAnalysis::getModRefInfo(CS, P, Size);
+    return AliasAnalysis::getModRefInfo(CS, Loc);
   }
 
   // Get the graphs for the callee and caller.  Note that we want the BU graph
@@ -261,42 +280,40 @@ DSAA::getModRefInfo(CallSite CS, Value *P, unsigned Size) {
     ModRefResult Result = ModRef;
     if (isa<ConstantPointerNull>(P) || isa<UndefValue>(P))
       return NoModRef;                 // null is never modified :)
-    else {
-      assert(isa<GlobalVariable>(P) &&
+
+    assert(isa<GlobalVariable>(P) &&
     cast<GlobalVariable>(P)->getType()->getElementType()->isFirstClassType() &&
              "This isn't a global that DSA inconsiderately dropped "
              "from the graph?");
 
-      DSGraph* GG = CallerTDGraph->getGlobalsGraph();
-      DSScalarMap::iterator NI = GG->getScalarMap().find(P);
-      if (NI != GG->getScalarMap().end() && !NI->second.isNull()) {
-        // Otherwise, if the node is only M or R, return this.  This can be
-        // useful for globals that should be marked const but are not.
-        DSNode *N = NI->second.getNode();
-        if (!N->isModifiedNode())
-          Result = (ModRefResult)(Result & ~Mod);
-        if (!N->isReadNode())
-          Result = (ModRefResult)(Result & ~Ref);
-      }
+    DSGraph* GG = CallerTDGraph->getGlobalsGraph();
+    DSScalarMap::iterator NI = GG->getScalarMap().find(P);
+    if (NI != GG->getScalarMap().end() && !NI->second.isNull()) {
+      // Otherwise, if the node is only M or R, return this.  This can be
+      // useful for globals that should be marked const but are not.
+      DSNode *N = NI->second.getNode();
+      if (!N->isModifiedNode())
+        Result = (ModRefResult)(Result & ~Mod);
+      if (!N->isReadNode())
+        Result = (ModRefResult)(Result & ~Ref);
     }
 
     if (Result == NoModRef) return Result;
-    return ModRefResult(Result & AliasAnalysis::getModRefInfo(CS, P, Size));
+    return ModRefResult(Result & AliasAnalysis::getModRefInfo(CS, Loc));
   }
 
   // Compute the mapping from nodes in the callee graph to the nodes in the
   // caller graph for this call site.
   DSGraph::NodeMapTy CalleeCallerMap;
   DSCallSite DSCS = CallerTDGraph->getDSCallSiteForCallSite(CS);
-  CallerTDGraph->computeCalleeCallerMapping(DSCS, *F, *CalleeBUGraph,
-                                            CalleeCallerMap);
+  CallerTDGraph->computeCalleeCallerMapping(
+    DSCS, *F, *CalleeBUGraph, CalleeCallerMap);
 
   // Remember the mapping and the call site for future queries.
   MapCS = CS;
 
   // Invert the mapping into CalleeCallerInvMap.
-  for (DSGraph::NodeMapTy::iterator I = CalleeCallerMap.begin(),
-         E = CalleeCallerMap.end(); I != E; ++I)
+  foreach (I, CalleeCallerMap.begin(), CalleeCallerMap.end())
     CallerCalleeMap.insert(std::make_pair(I->second.getNode(), I->first));
 
   N = NI->second.getNode();

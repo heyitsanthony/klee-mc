@@ -291,8 +291,10 @@ ref<Expr> Expr::createIsZero(ref<Expr> e) {
   return EqExpr::create(e, ConstantExpr::create(0, e->getWidth()));
 }
 
-void Expr::print(std::ostream &os) const {
-  ExprPPrinter::printSingleExpr(os, (Expr*)this);
+void Expr::print(std::ostream &os) const
+{
+	ref<Expr>	e(const_cast<Expr*>(this));
+	ExprPPrinter::printSingleExpr(os, e);
 }
 
 void Expr::dump() const {

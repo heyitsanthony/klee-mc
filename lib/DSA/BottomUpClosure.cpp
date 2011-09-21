@@ -17,6 +17,7 @@
 #define DEBUG_TYPE "dsa-bu"
 #include "static/dsa/DataStructure.h"
 #include "static/dsa/DSGraph.h"
+#include "static/Sugar.h"
 #include "llvm/Module.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Support/Debug.h"
@@ -132,7 +133,7 @@ void BUDataStructures::finalizeGlobals(void) {
   // external functions and it is not reachable from any call that does
   // contain external functions
   std::set<DSCallSite> GoodCalls, BadCalls;
-  for (DSGraph::afc_iterator ii = GlobalsGraph->afc_begin(), 
+  for (DSGraph::afc_iterator ii = GlobalsGraph->afc_begin(),
          ee = GlobalsGraph->afc_end(); ii != ee; ++ii)
     if (ii->isDirectCall() ||
         nodeContainsExternalFunction(ii->getCalleeNode()))
@@ -165,7 +166,7 @@ static void GetAllCallees(const DSCallSite &CS,
     // Get all callees.
     unsigned OldSize = Callees.size();
     CS.getCalleeNode()->addFullFunctionList(Callees);
-    
+
     // If any of the callees are unresolvable, remove the whole batch!
     for (unsigned i = OldSize, e = Callees.size(); i != e; ++i)
       if (Callees[i]->isDeclaration()) {
@@ -175,22 +176,26 @@ static void GetAllCallees(const DSCallSite &CS,
   }
 }
 
-static void GetAnyCallees(const DSCallSite &CS,
-                          std::vector<const Function*> &Callees) {
+static void GetAnyCallees(
+  const DSCallSite &CS,
+  std::vector<const Function*> &Callees)
+{
   if (CS.isDirectCall()) {
     if (!CS.getCalleeFunc()->isDeclaration())
       Callees.push_back(CS.getCalleeFunc());
-  } else {
-    // Get all callees.
-    unsigned OldSize = Callees.size();
-    CS.getCalleeNode()->addFullFunctionList(Callees);
-    
-    // If any of the callees are unresolvable, remove them
-    for (unsigned i = OldSize; i != Callees.size(); )
-      if (Callees[i]->isDeclaration()) {
-        Callees.erase(Callees.begin()+i);
-      } else 
-        ++i;
+    return;
+  }
+
+  // Get all callees.
+  unsigned OldSize = Callees.size();
+  CS.getCalleeNode()->addFullFunctionList(Callees);
+
+  // If any of the callees are unresolvable, remove them
+  for (unsigned i = OldSize; i != Callees.size(); ) {
+    if (Callees[i]->isDeclaration())
+      Callees.erase(Callees.begin()+i);
+    else
+      ++i;
   }
 }
 
@@ -243,7 +248,7 @@ unsigned BUDataStructures::calculateGraphs(const Function *F,
   std::sort(PreResolvedFuncs.begin(), PreResolvedFuncs.end());
   uid = std::unique(PreResolvedFuncs.begin(), PreResolvedFuncs.end());
   PreResolvedFuncs.resize(uid - PreResolvedFuncs.begin());
-  
+
   // The edges out of the current node are the call site targets...
   for (unsigned i = 0, e = CalleeFunctions.size(); i != e; ++i) {
     const Function *Callee = CalleeFunctions[i];
@@ -333,7 +338,7 @@ unsigned BUDataStructures::calculateGraphs(const Function *F,
         for (DSGraph::retnodes_iterator I = NFG->retnodes_begin(),
                E = NFG->retnodes_end(); I != E; ++I)
           setDSGraph(*I->first, SCCGraph);
-        
+
         SCCGraph->spliceFrom(NFG);
         delete NFG;
         ++SCCSize;
@@ -439,9 +444,9 @@ void BUDataStructures::calculateGraph(DSGraph* Graph) {
   std::vector<const Function*> CalledFuncs;
   while (!TempFCs.empty()) {
     DEBUG(Graph->AssertGraphOK(); Graph->getGlobalsGraph()->AssertGraphOK());
-    
+
     DSCallSite &CS = *TempFCs.begin();
-    Instruction *TheCall = CS.getCallSite().getInstruction();
+    const Instruction *TheCall = CS.getCallSite().getInstruction();
 
     CalledFuncs.clear();
 
@@ -452,19 +457,23 @@ void BUDataStructures::calculateGraph(DSGraph* Graph) {
       // Remember that we could not resolve this yet!
       isComplete = false;
       GetAnyCallees(CS, CalledFuncs);
-      if (useCallGraph)
-        for (callee_iterator ii = callee_begin(CS.getCallSite().getInstruction()),
-               ee = callee_end(CS.getCallSite().getInstruction()); ii != ee; ++ii)
+      if (useCallGraph) {
+        foreach (ii,
+	  callee_begin(CS.getCallSite().getInstruction()),
+	  callee_end(CS.getCallSite().getInstruction()))
+	{
           CalledFuncs.push_back(*ii);
+	}
+      }
       std::sort(CalledFuncs.begin(), CalledFuncs.end());
-      std::vector<const Function*>::iterator uid = std::unique(CalledFuncs.begin(), CalledFuncs.end());
+      std::vector<const Function*>::iterator uid;
+      uid = std::unique(CalledFuncs.begin(), CalledFuncs.end());
       CalledFuncs.resize(uid - CalledFuncs.begin());
     }
 
     DSGraph *GI;
-    
-    for (std::vector<const Function*>::iterator ii = CalledFuncs.begin(), ee = CalledFuncs.end();
-         ii != ee; ++ii) 
+
+    foreach (ii, CalledFuncs.begin(), CalledFuncs.end())
       callee_add(TheCall, *ii);
 
     if (CalledFuncs.size() == 1 && (isComplete || hasDSGraph(*CalledFuncs[0]))) {
@@ -490,14 +499,14 @@ void BUDataStructures::calculateGraph(DSGraph* Graph) {
             << "  " << *CS.getCallSite().getInstruction());
       DEBUG(errs() << "   Fns =");
       unsigned NumPrinted = 0;
-      
+
       for (std::vector<const Function*>::iterator I = CalledFuncs.begin(),
              E = CalledFuncs.end(); I != E; ++I)
         if (NumPrinted++ < 8) {
 	  DEBUG(errs() << " " << (*I)->getName());
 	}
       DEBUG(errs() << "\n");
-      
+
       if (!isComplete) {
         for (unsigned x = 0; x < CalledFuncs.size(); )
           if (!hasDSGraph(*CalledFuncs[x]))
@@ -510,20 +519,20 @@ void BUDataStructures::calculateGraph(DSGraph* Graph) {
         std::sort(CalledFuncs.begin(), CalledFuncs.end());
         std::pair<DSGraph*, std::vector<DSNodeHandle> > &IndCallGraph =
           IndCallGraphMap[CalledFuncs];
-        
+
         if (IndCallGraph.first == 0) {
           std::vector<const Function*>::iterator I = CalledFuncs.begin(),
             E = CalledFuncs.end();
-          
+
           // Start with a copy of the first graph.
           GI = IndCallGraph.first = new DSGraph(getDSGraph(**I), GlobalECs);
           GI->setGlobalsGraph(Graph->getGlobalsGraph());
           std::vector<DSNodeHandle> &Args = IndCallGraph.second;
-          
+
           // Get the argument nodes for the first callee.  The return value is
           // the 0th index in the vector.
           GI->getFunctionArgumentsForCall(*I, Args);
-          
+
           // Merge all of the other callees into this graph.
           for (++I; I != E; ++I) {
             // If the graph already contains the nodes for the function, don't
@@ -532,7 +541,7 @@ void BUDataStructures::calculateGraph(DSGraph* Graph) {
               GI->cloneInto(getDSGraph(**I));
               ++NumInlines;
             }
-            
+
             std::vector<DSNodeHandle> NextArgs;
             GI->getFunctionArgumentsForCall(*I, NextArgs);
             unsigned i = 0, e = Args.size();
@@ -543,22 +552,22 @@ void BUDataStructures::calculateGraph(DSGraph* Graph) {
             for (e = NextArgs.size(); i != e; ++i)
               Args.push_back(NextArgs[i]);
           }
-          
+
           // Clean up the final graph!
           GI->removeDeadNodes(DSGraph::KeepUnreachableGlobals);
         } else {
           DEBUG(errs() << "***\n*** RECYCLED GRAPH ***\n***\n");
         }
-        
+
         GI = IndCallGraph.first;
-        
+
         // Merge the unified graph into this graph now.
         DEBUG(errs() << "    Inlining multi callee graph "
 	      << "[" << GI->getGraphSize() << "+"
 	      << GI->getAuxFunctionCalls().size() << "] into '"
 	      << Graph->getFunctionNames() << "' [" << Graph->getGraphSize() <<"+"
 	      << Graph->getAuxFunctionCalls().size() << "]\n");
-        
+
         Graph->mergeInGraph(CS, IndCallGraph.second, *GI,
                             DSGraph::StripAllocaBit |
                             DSGraph::DontCloneCallNodes|
@@ -588,8 +597,7 @@ void BUDataStructures::calculateGraph(DSGraph* Graph) {
 
   // Clone everything reachable from globals in the function graph into the
   // globals graph.
-  for (DSScalarMap::global_iterator I = MainSM.global_begin(),
-         E = MainSM.global_end(); I != E; ++I)
+  foreach (I, MainSM.global_begin(), MainSM.global_end())
     RC.getClonedNH(MainSM[*I]);
 
   //Graph.writeGraphToFile(cerr, "bu_" + F.getName());
@@ -601,8 +609,7 @@ void BUDataStructures::inlineUnresolved(DSGraph* Graph) {
   // new call site list and doesn't invalidate our iterators!
   std::list<DSCallSite> TempFCs = Graph->getAuxFunctionCalls();
 
-  for (DSGraph::afc_iterator aii = TempFCs.begin(), aee = TempFCs.end(); 
-       aii != aee; ++aii) {
+  foreach (aii, TempFCs.begin(), TempFCs.end()) {
     std::vector<const Function*> CalledFuncs;
     DSCallSite CS = *aii;
     GetAnyCallees(CS, CalledFuncs);
@@ -610,10 +617,9 @@ void BUDataStructures::inlineUnresolved(DSGraph* Graph) {
       continue;
 
     DSGraph *GI;
-    Instruction *TheCall = CS.getCallSite().getInstruction();  
+    const Instruction *TheCall = CS.getCallSite().getInstruction();
 
-    for (std::vector<const Function*>::iterator ii = CalledFuncs.begin(), ee = CalledFuncs.end();
-         ii != ee; ++ii)
+    foreach (ii, CalledFuncs.begin(), CalledFuncs.end())
       callee_add(TheCall, *ii);
 
     if (CalledFuncs.size() == 1 && hasDSGraph(*CalledFuncs[0])) {
@@ -637,14 +643,14 @@ void BUDataStructures::inlineUnresolved(DSGraph* Graph) {
 //            << "  " << *CS.getCallSite().getInstruction());
       DEBUG(errs() << "   Fns =");
       unsigned NumPrinted = 0;
-      
+
       for (std::vector<const Function*>::iterator I = CalledFuncs.begin(),
              E = CalledFuncs.end(); I != E; ++I)
         if (NumPrinted++ < 8) {
 	  DEBUG(errs() << " " << (*I)->getName());
 	}
       DEBUG(errs() << "\n");
-      
+
       for (unsigned x = 0; x < CalledFuncs.size(); )
         if (!hasDSGraph(*CalledFuncs[x]))
           CalledFuncs.erase(CalledFuncs.begin() + x);
@@ -657,22 +663,22 @@ void BUDataStructures::inlineUnresolved(DSGraph* Graph) {
       std::sort(CalledFuncs.begin(), CalledFuncs.end());
       std::pair<DSGraph*, std::vector<DSNodeHandle> > &IndCallGraph =
         IndCallGraphMap[CalledFuncs];
-      
+
       if (IndCallGraph.first == Graph) continue;
 
       if (IndCallGraph.first == 0) {
         std::vector<const Function*>::iterator I = CalledFuncs.begin(),
           E = CalledFuncs.end();
-        
+
         // Start with a copy of the first graph.
         GI = IndCallGraph.first = new DSGraph(getDSGraph(**I), GlobalECs);
         GI->setGlobalsGraph(Graph->getGlobalsGraph());
         std::vector<DSNodeHandle> &Args = IndCallGraph.second;
-        
+
         // Get the argument nodes for the first callee.  The return value is
         // the 0th index in the vector.
         GI->getFunctionArgumentsForCall(*I, Args);
-        
+
         // Merge all of the other callees into this graph.
         for (++I; I != E; ++I) {
           // If the graph already contains the nodes for the function, don't
@@ -681,7 +687,7 @@ void BUDataStructures::inlineUnresolved(DSGraph* Graph) {
             GI->cloneInto(getDSGraph(**I));
             ++NumInlines;
           }
-          
+
           std::vector<DSNodeHandle> NextArgs;
           GI->getFunctionArgumentsForCall(*I, NextArgs);
           unsigned i = 0, e = Args.size();
@@ -692,22 +698,22 @@ void BUDataStructures::inlineUnresolved(DSGraph* Graph) {
           for (e = NextArgs.size(); i != e; ++i)
             Args.push_back(NextArgs[i]);
         }
-        
+
         // Clean up the final graph!
         GI->removeDeadNodes(DSGraph::KeepUnreachableGlobals);
       } else {
         DEBUG(errs() << "***\n*** RECYCLED GRAPH ***\n***\n");
       }
-      
+
       GI = IndCallGraph.first;
-      
+
       // Merge the unified graph into this graph now.
       DEBUG(errs() << "    Inlining multi callee graph "
             << "[" << GI->getGraphSize() << "+"
             << GI->getAuxFunctionCalls().size() << "] into '"
             << Graph->getFunctionNames() << "' [" << Graph->getGraphSize() <<"+"
             << Graph->getAuxFunctionCalls().size() << "]\n" );
-      
+
       Graph->mergeInGraph(CS, IndCallGraph.second, *GI,
                           DSGraph::StripAllocaBit |
                           DSGraph::DontCloneCallNodes);

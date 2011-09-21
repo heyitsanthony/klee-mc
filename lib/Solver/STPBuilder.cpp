@@ -73,17 +73,19 @@ STPBuilder::~STPBuilder() {
 ::VCExpr STPBuilder::buildVar(const char *name, unsigned width) {
   // XXX don't rebuild if this stuff cons's
   ::Type t = (width==1) ? vc_boolType(vc) : vc_bvType(vc, width);
-  ::VCExpr res = vc_varExpr(vc, (char*) name, t);
+  ::VCExpr res = vc_varExpr(vc, const_cast<char*>(name), t);
   vc_DeleteExpr(t);
   return res;
 }
 
-::VCExpr STPBuilder::buildArray(const char *name, unsigned indexWidth, unsigned valueWidth) {
+::VCExpr STPBuilder::buildArray(
+	const char *name, unsigned indexWidth, unsigned valueWidth)
+{
   // XXX don't rebuild if this stuff cons's
   ::Type t1 = vc_bvType(vc, indexWidth);
   ::Type t2 = vc_bvType(vc, valueWidth);
   ::Type t = vc_arrayType(vc, t1, t2);
-  ::VCExpr res = vc_varExpr(vc, (char*) name, t);
+  ::VCExpr res = vc_varExpr(vc, const_cast<char*>(name), t);
   vc_DeleteExpr(t);
   vc_DeleteExpr(t2);
   vc_DeleteExpr(t1);
@@ -434,26 +436,25 @@ ExprHandle STPBuilder::getInitialRead(const Array *root, unsigned index) {
 
 /** if *width_out!=1 then result is a bitvector,
     otherwise it is a bool */
-ExprHandle STPBuilder::construct(ref<Expr> e, int *width_out) {
-  if (!UseConstructHash || isa<ConstantExpr>(e)) {
-    return constructActual(e, width_out);
-  } else {
-    ExprHashMap< std::pair<ExprHandle, unsigned> >::iterator it = 
-      constructed.find(e);
-    if (it!=constructed.end()) {
-      if (width_out)
-        *width_out = it->second.second;
-      return it->second.first;
-    } else {
-      int width;
-      if (!width_out) width_out = &width;
-      ExprHandle res = constructActual(e, width_out);
-      constructed.insert(std::make_pair(e, std::make_pair(res, *width_out)));
-      return res;
-    }
-  }
-}
+ExprHandle STPBuilder::construct(ref<Expr> e, int *width_out)
+{
+	if (!UseConstructHash || isa<ConstantExpr>(e))
+		return constructActual(e, width_out);
 
+	ExprHashMap< std::pair<ExprHandle, unsigned> >::iterator it;
+	it = constructed.find(e);
+	if (it!=constructed.end()) {
+		if (width_out)
+			*width_out = it->second.second;
+		return it->second.first;
+	}
+
+	int width;
+	if (!width_out) width_out = &width;
+	ExprHandle res = constructActual(e, width_out);
+	constructed.insert(std::make_pair(e, std::make_pair(res, *width_out)));
+	return res;
+}
 
 /** if *width_out!=1 then result is a bitvector,
     otherwise it is a bool */

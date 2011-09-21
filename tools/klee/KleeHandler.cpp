@@ -113,7 +113,7 @@ KleeHandler::KleeHandler(const std::string& in_file, int argc, char **argv)
   }
   
   sys::Path p(theDir);
-  if (!p.isAbsolute()) {
+  if (!sys::path::is_absolute(p.str())) {
     sys::Path cwd = sys::Path::GetCurrentDirectory();
     cwd.appendComponent(theDir);
     p = cwd;

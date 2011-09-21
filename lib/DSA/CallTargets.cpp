@@ -96,25 +96,27 @@ void CallTargetFinder::findIndTargets(Module &M)
   }
 }
 
-void CallTargetFinder::print(std::ostream &O, const Module *M) const
+void CallTargetFinder::print(raw_ostream &O, const Module *M) const
 {
   O << "[* = incomplete] CS: func list\n";
   foreach (ii, IndMap.begin(), IndMap.end()) {
-    if (!ii->first.getCalledFunction()) { //only print indirect
-      if (!isComplete(ii->first)) {
-        O << "* ";
-        CallSite cs = ii->first;
-        cs.getInstruction()->dump();
-        O << cs.getInstruction()->getParent()->getParent()->getNameStr() << " "
-          << cs.getInstruction()->getNameStr() << " ";
-      }
-      O << ii->first.getInstruction() << ":";
-      for (std::vector<const Function*>::const_iterator i = ii->second.begin(),
-             e = ii->second.end(); i != e; ++i) {
-        O << " " << (*i)->getNameStr();
-      }
-      O << "\n";
+    //only print indirect
+    if (ii->first.getCalledFunction())
+      continue;
+
+    if (!isComplete(ii->first)) {
+      O << "* ";
+      CallSite cs = ii->first;
+      cs.getInstruction()->dump();
+      O << cs.getInstruction()->getParent()->getParent()->getNameStr() << " "
+        << cs.getInstruction()->getNameStr() << " ";
     }
+
+    O << ii->first.getInstruction() << ":";
+    foreach (i, ii->second.begin(), ii->second.end()) {
+      O << " " << (*i)->getNameStr();
+    }
+    O << "\n";
   }
 }
 

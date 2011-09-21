@@ -267,8 +267,8 @@ void DSGraph::writeGraphToFile(
 
   if (F.good()) {
     print(F);
-    unsigned NumCalls = shouldPrintAuxCalls() ?
-      getAuxFunctionCalls().size() : getFunctionCalls().size();
+//    unsigned NumCalls = shouldPrintAuxCalls() ?
+//      getAuxFunctionCalls().size() : getFunctionCalls().size();
 //    O << " [" << getGraphSize() << "+" << NumCalls << "]\n";
   } else {
   //  O << "  error opening file for writing!\n";

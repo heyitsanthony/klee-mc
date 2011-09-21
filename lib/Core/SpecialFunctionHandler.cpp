@@ -728,7 +728,7 @@ SFH_DEF_HANDLER(MakeSymbolic)
   sfh->executor->resolveExact(state, arguments[MAKESYM_ARGIDX_ADDR], rl, "make_symbolic");
 
   foreach (it, rl.begin(), rl.end()) {
-    MemoryObject *mo = (MemoryObject*) it->first.first;
+    MemoryObject *mo = const_cast<MemoryObject*>(it->first.first);
     const ObjectState *old = it->first.second;
     ExecutionState *s = it->second;
     bool res, success;
@@ -778,7 +778,7 @@ SFH_DEF_HANDLER(MarkGlobal)
 	sfh->executor->resolveExact(state, arguments[0], rl, "mark_global");
 
 	foreach (it, rl.begin(), rl.end()) {
-		MemoryObject *mo = (MemoryObject*) it->first.first;
+		MemoryObject *mo = const_cast<MemoryObject*>(it->first.first);
 		assert(!mo->isLocal());
 		mo->setGlobal(true);
 	}

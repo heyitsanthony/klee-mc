@@ -50,11 +50,16 @@ namespace {
     // Implement the AliasAnalysis API
     //
 
-    AliasResult alias(const Value *V1, unsigned V1Size,
-                      const Value *V2, unsigned V2Size);
+    AliasResult alias(
+	const llvm::AliasAnalysis::Location&,
+	const llvm::AliasAnalysis::Location&);
 
-    virtual ModRefResult getModRefInfo(CallSite CS, Value *P, unsigned Size);
-    virtual ModRefResult getModRefInfo(CallSite CS1, CallSite CS2);
+    virtual ModRefResult getModRefInfo(
+      ImmutableCallSite CS,
+      const llvm::AliasAnalysis::Location&);
+    virtual ModRefResult getModRefInfo(
+      ImmutableCallSite CS1, ImmutableCallSite CS2)
+    { return AliasAnalysis::getModRefInfo(CS1,CS2); }
 
   };
 
@@ -79,8 +84,19 @@ bool Steens::runOnModule(Module &M) {
   return false;
 }
 
-AliasAnalysis::AliasResult Steens::alias(const Value *V1, unsigned V1Size,
-                                         const Value *V2, unsigned V2Size) {
+AliasAnalysis::AliasResult Steens::alias(
+	const llvm::AliasAnalysis::Location& l1,
+	const llvm::AliasAnalysis::Location& l2)
+{
+  const Value	*V1, *V2;
+  uint64_t	V1Size, V2Size;
+
+  V1 = l1.Ptr;
+  V1Size = l1.Size;
+
+  V2 = l2.Ptr;
+  V2Size = l2.Size;
+
   assert(ResultGraph && "Result graph has not been computed yet!");
 
   DSGraph::ScalarMapTy &GSM = ResultGraph->getScalarMap();
@@ -126,12 +142,15 @@ AliasAnalysis::AliasResult Steens::alias(const Value *V1, unsigned V1Size,
 }
 
 AliasAnalysis::ModRefResult
-Steens::getModRefInfo(CallSite CS, Value *P, unsigned Size) {
+Steens::getModRefInfo(
+  ImmutableCallSite CS,
+  const llvm::AliasAnalysis::Location& Loc)
+{
   AliasAnalysis::ModRefResult Result = ModRef;
 
   // Find the node in question.
   DSGraph::ScalarMapTy &GSM = ResultGraph->getScalarMap();
-  DSGraph::ScalarMapTy::iterator I = GSM.find(P);
+  DSGraph::ScalarMapTy::iterator I = GSM.find(Loc.Ptr);
 
   if (I != GSM.end() && !I->second.isNull()) {
     DSNode *N = I->second.getNode();
@@ -139,7 +158,7 @@ Steens::getModRefInfo(CallSite CS, Value *P, unsigned Size) {
       // If this is a direct call to an external function, and if the pointer
       // points to a complete node, the external function cannot modify or read
       // the value (we know it's not passed out of the program!).
-      if (Function *F = CS.getCalledFunction())
+      if (const Function *F = CS.getCalledFunction())
         if (F->isDeclaration())
           return NoModRef;
 
@@ -152,11 +171,5 @@ Steens::getModRefInfo(CallSite CS, Value *P, unsigned Size) {
     }
   }
 
-  return (ModRefResult)(Result & AliasAnalysis::getModRefInfo(CS, P, Size));
-}
-
-AliasAnalysis::ModRefResult 
-Steens::getModRefInfo(CallSite CS1, CallSite CS2)
-{
-  return AliasAnalysis::getModRefInfo(CS1,CS2);
+  return (ModRefResult)(Result & AliasAnalysis::getModRefInfo(CS, Loc));
 }

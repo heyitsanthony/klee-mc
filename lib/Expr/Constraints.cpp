@@ -54,8 +54,8 @@ public:
       replacements(_replacements) {}
 
   Action visitExprPost(const Expr &e) {
-    std::map< ref<Expr>, ref<Expr> >::const_iterator it =
-      replacements.find(ref<Expr>((Expr*) &e));
+    std::map< ref<Expr>, ref<Expr> >::const_iterator it;
+    it = replacements.find(ref<Expr>(const_cast<Expr*>(&e)));
     if (it!=replacements.end()) {
       return Action::changeTo(it->second);
     } else {
