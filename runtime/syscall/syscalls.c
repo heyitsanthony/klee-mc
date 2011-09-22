@@ -413,6 +413,11 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_getuid:
 		sc_ret_ge0(sc_new_regs(regfile));
 		break;
+
+	case SYS_alarm:
+		sc_ret_ge0(sc_new_regs(regfile));
+		break;
+
 	case SYS_getpid:
 	case SYS_gettid:
 		sc_ret_v(regfile, 1000); /* FIXME: single threaded*/
