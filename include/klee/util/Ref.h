@@ -45,6 +45,12 @@ private:
 public:
   template<class U> friend class ref;
 
+  unsigned int getRefCount(void) const
+  {
+	if (ptr == NULL) return 0;
+	return ptr->refCount;
+  }
+
   // constructor from pointer
   ref(T *p) : ptr(p) {
     inc();

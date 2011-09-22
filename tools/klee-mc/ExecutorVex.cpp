@@ -208,6 +208,8 @@ void ExecutorVex::runImage(void)
 	processTree = new PTree(state);
 	state->ptreeNode = processTree->root;
 
+	std::cerr << "NUMBER OF MEMOBJS INIT: " << state->memObjects.size() << '\n';
+
 	fprintf(stderr, "COMMENCE THE RUN!!!!!!\n");
 	run(*state);
 	fprintf(stderr, "DONE RUNNING.\n");
@@ -238,9 +240,9 @@ void ExecutorVex::initializeGlobals(ExecutionState &state)
 		"XXX do not support dependent libraries");
 
 	initGlobalFuncs();
-	
-	
-	// represent function globals using the address of the 
+
+
+	// represent function globals using the address of the
 	// actual llvm function object.
 	foreach (i, m->begin(), m->end()) {
 		Function *f = i;
@@ -250,7 +252,7 @@ void ExecutorVex::initializeGlobals(ExecutionState &state)
 		if (	f->hasExternalWeakLinkage() ) {
 			addr = Expr::createPointer(0);
 			std::cerr << "KLEE:ERROR: couldn't find symbol "
-				<< "for weak linkage of global function: " 
+				<< "for weak linkage of global function: "
 				<< f->getNameStr() << std::endl;
 		} else {
 			addr = Expr::createPointer((unsigned long) (void*) f);
@@ -351,7 +353,7 @@ void ExecutorVex::allocGlobalVariableDecl(
 #endif
 
 	if (size == 0) {
-		std::cerr << "Unable to find size for global variable: " 
+		std::cerr << "Unable to find size for global variable: "
 		<< gv.getName().data()
 		<< " (use will result in out of bounds access)\n";
 	}
@@ -374,7 +376,7 @@ void ExecutorVex::allocGlobalVariableDecl(
 	}
 	if (!addr) {
 		klee_warning(
-			"ERROR: unable to load symbol(%s) while initializing globals.", 
+			"ERROR: unable to load symbol(%s) while initializing globals.",
 			gv.getName().data());
 	} else {
 		for (unsigned offset=0; offset < mo->size; offset++) {
@@ -507,11 +509,11 @@ void ExecutorVex::bindMappingPage(
 	assert ((m.getBytes() % PAGE_SIZE) == 0);
 	assert ((m.offset.o & (PAGE_SIZE-1)) == 0);
 
-	mmap_mo = memory->allocateFixed(
+	mmap_mo = memory->allocateAt(
+		*state,
 		((uint64_t)gs->getMem()->getData(m))+(PAGE_SIZE*pgnum),
 		PAGE_SIZE,
-		f->begin()->begin(),
-		state);
+		f->begin()->begin());
 
 	if (m.type == GuestMem::Mapping::STACK) {
 		mmap_mo->setName("stack");

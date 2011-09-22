@@ -23,9 +23,17 @@ using namespace klee;
 
 /***/
 
-MemoryManager::~MemoryManager() {
-  HeapObject::memoryManager = NULL;
-  MemoryObject::memoryManager = NULL;
+MemoryManager::~MemoryManager()
+{
+	anonMemObjs.clear();
+	anonHeapObjs.clear();
+	if (objects.size() != 0) {
+		std::cerr 
+			<< "MemoryManager leaking " << objects.size()
+			<< " objects. (mallocKey.isFixed?)\n";
+	}
+	HeapObject::memoryManager = NULL;
+	MemoryObject::memoryManager = NULL;
 }
 
 #define MAX_ALLOC_BYTES	(16*1024*1024)
@@ -148,6 +156,27 @@ MemoryObject *MemoryManager::allocateFixed(
     objects.insert(res);
   return res;
 }
+
+MemoryObject *MemoryManager::allocateAt(
+	ExecutionState& state,
+	uint64_t address, uint64_t size,
+	const llvm::Value *allocSite)
+{
+	MemoryObject *res;
+	assert (size != 0);
+
+	MallocKey mallocKey(allocSite,
+		      state.mallocIterations[allocSite]++,
+		      size, false, true, false);
+
+	++stats::allocations;
+	res = new MemoryObject(address, size, mallocKey);
+
+	state.memObjects.push_back(ref<MemoryObject>(res));
+	objects.insert(res);
+	return res;
+}
+
 
 std::vector<MemoryObject*> MemoryManager::allocateAlignedChopped(
 	uint64_t size,

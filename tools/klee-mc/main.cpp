@@ -594,5 +594,7 @@ int main(int argc, char **argv, char **envp)
 
 	delete cmdargs;
 
+	llvm_shutdown();
+
 	return 0;
 }

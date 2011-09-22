@@ -39,8 +39,6 @@ namespace {
   DebugLogStateMerge("debug-log-state-merge");
 }
 
-/***/
-
 /** XXX XXX XXX REFACTOR PLEASEEE **/
 ExecutionState::ExecutionState(KFunction *kf)
 : underConstrained(false)
@@ -173,7 +171,8 @@ void ExecutionState::unbindObject(const MemoryObject* mo)
 	addressSpace.unbindObject(mo);
 }
 
-void ExecutionState::write64(ObjectState* object, unsigned offset, uint64_t value)
+void ExecutionState::write64(
+	ObjectState* object, unsigned offset, uint64_t value)
 {
 	uint64_t	v = value;
 	/* XXX: probably not endian friendly */

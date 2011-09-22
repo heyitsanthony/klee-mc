@@ -25,6 +25,7 @@ namespace llvm {
   class Type;
   class IntrinsicInst;
   class TargetLowering;
+  class TargetMachine;
 }
 
 namespace klee {
@@ -36,6 +37,8 @@ class RaiseAsmPass : public llvm::FunctionPass
 private:
 	static char ID;
 	const llvm::TargetLowering *TLI;
+	llvm::TargetMachine	*TM;
+
 	llvm::Function *getIntrinsic(
 		unsigned IID,
 		const llvm::Type **Tys,
@@ -50,7 +53,7 @@ private:
 	llvm::Module* module_;
 public:
 	RaiseAsmPass(llvm::Module* module);
-	virtual ~RaiseAsmPass() {}
+	virtual ~RaiseAsmPass();
 	virtual bool runOnFunction(llvm::Function& f);
 };
 

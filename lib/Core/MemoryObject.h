@@ -31,13 +31,13 @@ public:
   /// should sensibly be only at creation time).
   mutable std::vector< ref<Expr> > cexPreferences;
 
+private:
+  friend class ref<MemoryObject>;
+   unsigned refCount;
+
   // DO NOT IMPLEMENT
   MemoryObject(const MemoryObject &b);
   MemoryObject &operator=(const MemoryObject &b);
-
-private:
-  friend class ref<MemoryObject>;
-  unsigned refCount;
 
 public:
   // XXX this is just a temp hack, should be removed
@@ -107,6 +107,13 @@ public:
   inline bool isGlobal() const { return mallocKey.isGlobal; }
   inline void setGlobal(bool _isGlobal) { mallocKey.isGlobal = _isGlobal; }
   inline const llvm::Value* getAllocSite() const { return mallocKey.allocSite; }
+
+  int compare(const MemoryObject& mo) const
+  {
+	if (address < mo.address) return -1;
+	else if (address == mo.address) return 0;
+	return 1;
+  }
 };
 
 #endif

@@ -25,10 +25,36 @@ MemoryManager* MemoryObject::memoryManager = NULL;
 
 int MemoryObject::counter = 0;
 
+MemoryObject::MemoryObject(uint64_t _address)
+    : id(counter++),
+      address(_address),
+      size(0),
+      mallocKey(0, 0, 0, false, false, true),
+      refCount(0)
+{
+}
+
+MemoryObject::MemoryObject(
+  uint64_t _address,
+  unsigned _size,
+  const MallocKey &_mallocKey,
+  HeapObject* _heapObj)
+: id(counter++)
+, address(_address)
+, size(_size)
+, name("unnamed")
+, mallocKey(_mallocKey)
+, heapObj(ref<HeapObject>(_heapObj))
+, fake_object(false)
+, isUserSpecified(false)
+, refCount(_mallocKey.isFixed ? 1 /* immortal */ : 0)
+{
+}
+
 void MemoryObject::remove()
 {
-  assert(memoryManager);
-  memoryManager->objects.erase(this);
+	assert(memoryManager);
+	memoryManager->objects.erase(this);
 }
 
 void MemoryObject::getAllocInfo(std::string &result) const
@@ -62,31 +88,8 @@ void MemoryObject::print(std::ostream& out) const
     ". Addr=" << (void*)address <<
     "-" << (void*)(address+size) <<
     ". Size=" << size <<
-    ". ID=" << id;
+    ". ID=" << id << 
+    ". Refs=" << refCount;
 }
 
-MemoryObject::MemoryObject(uint64_t _address)
-    : id(counter++),
-      address(_address),
-      size(0),
-      mallocKey(0, 0, 0, false, false, true),
-      refCount(0)
-{
-}
 
-MemoryObject::MemoryObject(
-  uint64_t _address,
-  unsigned _size,
-  const MallocKey &_mallocKey,
-  HeapObject* _heapObj)
-: id(counter++)
-, address(_address)
-, size(_size)
-, name("unnamed")
-, mallocKey(_mallocKey)
-, heapObj(ref<HeapObject>(_heapObj))
-, fake_object(false)
-, isUserSpecified(false)
-, refCount(_mallocKey.isFixed ? 1 : 0)
-{
-}

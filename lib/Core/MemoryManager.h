@@ -50,9 +50,10 @@ private:
 	HeapMap heapObjects;
 
 public:
-	MemoryManager() {
-	HeapObject::memoryManager = this;
-	MemoryObject::memoryManager = this;
+	MemoryManager()
+	{
+		HeapObject::memoryManager = this;
+		MemoryObject::memoryManager = this;
 	}
 	~MemoryManager();
 
@@ -67,9 +68,16 @@ public:
 		uint64_t size, unsigned pow2,
 		const llvm::Value *allocSite, ExecutionState *state);
 
-	MemoryObject *allocateFixed(uint64_t address, uint64_t size,
-				const llvm::Value *allocSite,
-				ExecutionState *state);
+	MemoryObject *allocateFixed(
+		uint64_t address, uint64_t size,
+		const llvm::Value *allocSite,
+		ExecutionState *state);
+
+	MemoryObject *allocateAt(
+		ExecutionState& state,
+		uint64_t address, uint64_t size,
+		const llvm::Value *allocSite);
+
 private:
 	MemoryObject* insertHeapObj(
 		ExecutionState* s,

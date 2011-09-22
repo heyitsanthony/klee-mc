@@ -23,6 +23,7 @@ char RaiseAsmPass::ID = 0;
 
 RaiseAsmPass::RaiseAsmPass(llvm::Module* module)
 : llvm::FunctionPass(ID)
+, TM(NULL)
 , module_(module)
 {
 	std::string Err;
@@ -35,7 +36,6 @@ RaiseAsmPass::RaiseAsmPass(llvm::Module* module)
 			<< Err << "\n";
 		TLI = 0;
 	} else {
-		TargetMachine *TM;
 		TM = NativeTarget->createTargetMachine(HostTriple, "");
 		TLI = TM->getTargetLowering();
 	}
@@ -48,6 +48,11 @@ Function* RaiseAsmPass::getIntrinsic(
 {
   return Intrinsic::getDeclaration(
   	module_, (llvm::Intrinsic::ID) IID, Tys, NumTys);
+}
+
+RaiseAsmPass::~RaiseAsmPass(void)
+{
+	if (TM) delete TM;
 }
 
 // FIXME: This should just be implemented as a patch to

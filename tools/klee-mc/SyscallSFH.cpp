@@ -325,7 +325,7 @@ void SyscallSFH::removeTail(
 	state.unbindObject(mo);
 
 	/* mark head concrete */
-	mo_head = exe_vex->memory->allocateFixed(mo_addr, head_size, 0, &state);
+	mo_head = exe_vex->memory->allocateAt(state, mo_addr, head_size, 0);
 	os = state.bindMemObj(mo_head);
 	for(unsigned i = 0; i < head_size; i++) state.write8(os, i, buf_head[i]);
 
@@ -362,8 +362,9 @@ void SyscallSFH::removeHead(
 	state.unbindObject(mo);
 
 	/* create tail */
-	mo_tail = exe_vex->memory->allocateFixed(
-		mo_addr+taken, tail_size, 0, &state);
+	mo_tail = exe_vex->memory->allocateAt(
+		state,
+		mo_addr+taken, tail_size, 0);
 	os = state.bindMemObj(mo_tail);
 	for(unsigned i = 0; i < tail_size; i++) state.write8(os, i, buf_tail[i]);
 
@@ -396,13 +397,13 @@ void SyscallSFH::removeMiddle(
 	/* free object from address space */
 	state.unbindObject(mo);
 
-	mo_head = exe_vex->memory->allocateFixed(mo_addr, mo_off, NULL, &state);
+	mo_head = exe_vex->memory->allocateAt(state, mo_addr, mo_off, NULL);
 
 	os = state.bindMemObj(mo_head);
 	for(unsigned i = 0; i < mo_off; i++) state.write8(os, i, buf_head[i]);
 
-	mo_tail = exe_vex->memory->allocateFixed(
-		mo_addr+mo_off+taken, tail_size, 0, &state);
+	mo_tail = exe_vex->memory->allocateAt(
+		state, mo_addr+mo_off+taken, tail_size, 0);
 	os = state.bindMemObj(mo_tail);
 	for(unsigned i = 0; i < tail_size; i++) state.write8(os, i, buf_tail[i]);
 
@@ -470,7 +471,7 @@ void SyscallSFH::makeRangeSymbolic(
 
 	MemoryObject	*sym_mo;
 	ObjectState	*sym_os;
-	sym_mo = exe_vex->memory->allocateFixed((uint64_t)addr, sz, 0, &state);
+	sym_mo = exe_vex->memory->allocateAt(state, (uint64_t)addr, sz, 0);
 	sym_mo->setName(name);
 	sym_os = exe_vex->executeMakeSymbolic(
 		state,
