@@ -70,7 +70,9 @@ static cl::alias A1("S", cl::desc("Alias for --strip-debug"),
 
 // A utility function that adds a pass to the pass manager but will also add
 // a verifier pass after if we're supposed to verify.
-static inline void addPass(PassManager &PM, Pass *P) {
+static inline void addPass(PassManager &PM, Pass *P)
+{
+  assert (P != NULL);
   // Add the pass to the pass manager...
   PM.add(P);
 
@@ -103,7 +105,8 @@ static void AddStandardCompilePasses(PassManager &PM) {
   addPass(PM, createCFGSimplificationPass());    // Clean up after IPCP & DAE
 
   addPass(PM, createPruneEHPass());              // Remove dead EH info
-  addPass(PM, createFunctionAttrsPass());        // Deduce function attrs
+  // XXX LLVM crashes here
+  // addPass(PM, createFunctionAttrsPass());        // Deduce function attrs
 
   if (!DisableInline)
     addPass(PM, createFunctionInliningPass());   // Inline small functions
