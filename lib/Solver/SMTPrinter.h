@@ -25,6 +25,7 @@ public:
 
 protected:
 	std::string expr2str(const ref<Expr>& expr);
+	void expr2os(const ref<Expr>& expr, std::ostream& os);
 private:
 	SMTPrinter(std::ostream& in_os, SMTArrays* in_arr) 
 	: ExprVisitor(false, true)
@@ -36,9 +37,11 @@ private:
 
 	void printArrayDecls(void) const;
 	void printConstant(const ConstantExpr* ce);
-	static std::string arr2name(const Array* arr);
 
 	const std::string getArrayForUpdate(
+		const Array* arr, const UpdateNode *un);
+	void writeArrayForUpdate(
+		std::ostream& os,
 		const Array* arr, const UpdateNode *un);
 	const std::string& getInitialArray(const Array* root);
 

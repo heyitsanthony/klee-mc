@@ -59,11 +59,11 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr &e)
 	case Expr::Read: {
 		const ReadExpr *re = cast<ReadExpr>(&e);
 		/* (select array index) */
-		os	<< "( select "
-			<< getArrayForUpdate(
-				re->updates.root, re->updates.head)
-			<< " " << expr2str(re->index)
-			<< ")\n";
+		os << "( select ";
+		writeArrayForUpdate(os, re->updates.root, re->updates.head);
+		os << " ";
+		expr2os(re->index, os);
+		os << ")\n";
 		return Action::skipChildren();
 	}
 
@@ -90,10 +90,10 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr &e)
 	case Expr::Select:
 		// logic expressions are converted into bitvectors--
 		// convert back
-		os	<< "(ite (= "
-			<< expr2str(e.getKid(0)) << " bv1[1] ) "
-			<< expr2str(e.getKid(1)) << " "
-			<< expr2str(e.getKid(2)) << " )\n";
+		os	<< "(ite (= ";
+			expr2os(e.getKid(0), os); os << " bv1[1] ) ";
+			expr2os(e.getKid(1), os); os << " ";
+			expr2os(e.getKid(2), os); os << " )\n";
 		return Action::skipChildren();
 
 	VISIT_OP(Concat, concat)
@@ -204,7 +204,7 @@ void SMTPrinter::print(std::ostream& os, const Query& q)
 	/* now have arrays, build extrafuns and constant assumptions */
 	foreach (i,smt_pr.arr->a_initial.begin(),smt_pr.arr->a_initial.end()) {
 		const Array	*arr = i->first;
-		os << ":extrafuns ((" << arr2name(arr) << " Array[32:8]))\n";
+		os << ":extrafuns ((" << arr->name << " Array[32:8]))\n";
 	}
 
 	foreach (it,
@@ -228,48 +228,58 @@ struct update_params
 	const UpdateNode* un;
 };
 
-const std::string SMTPrinter::getArrayForUpdate(
-	const Array *root, const UpdateNode *un)
+/* this is kind of obfuscated, but it's necessary to avoid
+ * some nasty recursion eating al memory */
+void SMTPrinter::writeArrayForUpdate(
+	std::ostream& os,
+	const Array* root, const UpdateNode *un)
 {
 	std::string			ret;
-	std::stack<update_params>	s;
+	std::vector<update_params>	s;
 
 	/* build stack */
-	s.push(update_params(root, un));
+	s.push_back(update_params(root, un));
 	while (1) {
-		update_params	p = s.top();
+		update_params	&p(s.back());
 
 		if (p.un == NULL) break;
 		if (arr->a_updates.count(p.un)) break;
 
-		s.push(update_params(p.root, p.un->next));
+		s.push_back(update_params(p.root, p.un->next));
 	}
 
-	/* unwind stack */
-	while (!s.empty()) {
-		update_params	p = s.top();
+	/**
+	 * ret = "(store " ret " " p.un->index " " p.un->value " )\n"
+	 * Write out all "(store"'s first.
+	 */
+	for (unsigned int i = 0; i < s.size() - 1; i++) {
+		os << "(store ";
+	}
 
-		s.pop();
+	/* dump update params */
+	for (int i = s.size() - 1; i >= 0; i--) {
+		update_params	&p(s[i]);
 
 		if (p.un == NULL) {
-			ret = getInitialArray(root);
+			os << getInitialArray(root);
 			continue;
 		}
 
-		if (arr->a_updates.count(p.un)) {
-			ret = arr->a_updates.find(p.un)->second;
-			arr->a_updates.insert(make_pair(p.un, ret));
-			continue;
-		}
-
-		ret =	"(store " + ret + " " +
-			expr2str(p.un->index) + " " +
-			expr2str(p.un->value) + ")\n";
-
-		arr->a_updates.insert(make_pair(p.un, ret));
+		os << ' ';
+		expr2os(p.un->index, os);
+		os << ' ';
+		expr2os(p.un->value, os);
+		os << ")\n";
 	}
+}
 
-	return ret;
+
+const std::string SMTPrinter::getArrayForUpdate(
+	const Array *root, const UpdateNode *un)
+{
+	std::stringstream	ss;
+	writeArrayForUpdate(ss, root, un);
+	return ss.str();
 }
 
 /**
@@ -287,13 +297,11 @@ and so on.
 */
 const std::string& SMTPrinter::getInitialArray(const Array *root)
 {
-	std::string		arr_name;
 	std::string		assump_str;
 
 	if (arr->a_initial.count(root))
 		return arr->a_initial.find(root)->second;
 
-	arr_name = arr2name(root);
 	if (!root->isConstantArray()) goto done;
 
 	/* format:
@@ -309,27 +317,22 @@ const std::string& SMTPrinter::getInitialArray(const Array *root)
 		sprintf(idxbuf, " bv%d[32]) bv%d[8])\n",
 			i,
 			(uint8_t)root->getValue(i)->getZExtValue(8));
-		assump_str += "(= (select " + arr_name + idxbuf;
+		assump_str += "(= (select " + root->name + idxbuf;
 	}
 
 	if (root->mallocKey.size > 1) assump_str += ")\n";
 
 	arr->a_assumptions.insert(std::make_pair(root, assump_str));
 done:
-	arr->a_initial.insert(std::make_pair(root, arr_name));
+	arr->a_initial.insert(std::make_pair(root, root->name));
 	return arr->a_initial[root];
-}
-
-std::string SMTPrinter::arr2name(const Array* arr)
-{
-	return arr->name;
 }
 
 void SMTPrinter::printArrayDecls(void) const
 {
 	foreach (it, arr->a_initial.begin(), arr->a_initial.end()) {
 		os	<< ":extrafuns (("
-			<< arr2name(it->first)
+			<< (it->first)->name
 			<< " Array[32:8]))\n";
 	}
 }
@@ -337,15 +340,20 @@ void SMTPrinter::printArrayDecls(void) const
 std::string SMTPrinter::expr2str(const ref<Expr>& e)
 {
 	std::stringstream	ss;
-	SMTPrinter		smt_pr(ss, arr);
+	expr2os(e, ss);
+	return ss.str();
+}
+
+void SMTPrinter::expr2os(const ref<Expr>& e, std::ostream& os)
+{
 	ConstantExpr		*ce;
 
 	if ((ce = dyn_cast<ConstantExpr>(e)) != NULL) {
 		assert (e->getWidth() <= 64);
-		ss << "bv" << ce->getZExtValue() << "[" << e->getWidth() << "]";
-		return ss.str();
+		os << "bv" << ce->getZExtValue() << "[" << e->getWidth() << "]";
+		return;
 	}
 
+	SMTPrinter	smt_pr(os, arr);
 	smt_pr.visit(e);
-	return ss.str();
 }
