@@ -10,10 +10,16 @@
 int main() {
   if (klee_range(0,2, "range")) {
     char *x = malloc(8);
+    /* bad accesses: 5
+     * good accesses: 0..4
+     */
     *((int*) &x[klee_range(0,6, "range")]) = 1;
     free(x);
   } else {
     char *x = malloc(8);
+    /* bad accesses: -1
+     * good accesses: 0..4
+     */
     *((int*) &x[klee_range(-1,5, "range")]) = 1;
         free(x);
   }

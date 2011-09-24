@@ -329,13 +329,12 @@ public:
 public:
   unsigned getNumKids() const { return 2; }
   ref<Expr> getKid(unsigned i) const { 
-    if(i == 0)
-      return left;
-    if(i == 1)
-      return right;
+    if(i == 0) return left;
+    if(i == 1) return right;
     return 0;
   }
  
+  static ref<Expr> create(Kind k, const ref<Expr> &l, const ref<Expr> &r);
 protected:
   BinaryExpr(const ref<Expr> &l, const ref<Expr> &r) : left(l), right(r) {}
 

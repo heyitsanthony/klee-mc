@@ -43,41 +43,41 @@ ObjectState *AddressSpace::findObject(const MemoryObject *mo) {
   return res ? res->second : 0;
 }
 
-ObjectState *AddressSpace::getWriteable(const MemoryObject *mo,
-        const ObjectState *os) {
-  assert(!os->readOnly);
+ObjectState *AddressSpace::getWriteable(
+	const MemoryObject *mo,
+	const ObjectState *os)
+{
+	ObjectState	*n;
 
-  if (cowKey == os->copyOnWriteOwner) {
-    return const_cast<ObjectState*> (os);
-  } else {
-    ObjectState *n = new ObjectState(*os);
-    n->copyOnWriteOwner = cowKey;
-    objects = objects.replace(std::make_pair(mo, n));
-    return n;
-  }
+	assert(!os->readOnly);
+
+	if (cowKey == os->copyOnWriteOwner)
+		return const_cast<ObjectState*> (os);
+
+	n = new ObjectState(*os);
+	n->copyOnWriteOwner = cowKey;
+	objects = objects.replace(std::make_pair(mo, n));
+	return n;
 }
-
 
 bool AddressSpace::resolveOne(uint64_t address, ObjectPair &result)
 {
-  MemoryObject _hack(address);
+	MemoryObject			toFind(address);
+	const MemoryMap::value_type 	*res;
+	const MemoryObject		*mo;
 
-  //if (!hack) hack = &_hack;
-  hack = &_hack;
+	res = objects.lookup_previous(&toFind);
+	if (!res) return false;
 
-  const MemoryMap::value_type * res = objects.lookup_previous(hack);
-  
-  if (!res) return false;
+	mo = res->first;
+	if (	(mo->size == 0 && address == mo->address) ||
+		(address - mo->address < mo->size))
+	{
+		result = *res;
+		return true;
+	}
 
-  const MemoryObject *mo = res->first;
-  if ((mo->size == 0 && address == mo->address) ||
-          (address - mo->address < mo->size)) 
-  {
-    result = *res;
-    return true;
-  }
-
-  return false;
+	return false;
 }
 
 const MemoryObject* AddressSpace::resolveOneMO(uint64_t address)
@@ -94,14 +94,14 @@ bool AddressSpace::resolveOne(const ref<ConstantExpr> &addr, ObjectPair &result)
 	return resolveOne(addr->getZExtValue(), result);
 }
 
-MemoryMap::iterator AddressSpace::getMidPoint(
-	MemoryMap::iterator& range_begin,
-	MemoryMap::iterator& range_end)
+MMIter AddressSpace::getMidPoint(
+	MMIter& range_begin,
+	MMIter& range_end)
 {
 	// find the midpoint between ei and bi
-	MemoryMap::iterator mid = range_begin;
+	MMIter mid = range_begin;
 	bool even = true;
-	foreach(it, range_begin, range_end) {
+	foreach (it, range_begin, range_end) {
 		even = !even;
 		if (even) ++mid;
 	}
@@ -110,11 +110,11 @@ MemoryMap::iterator AddressSpace::getMidPoint(
 }
 
 ref<Expr> AddressSpace::getFeasibilityExpr(
-	ref<Expr> address, 
+	ref<Expr> address,
 	const MemoryObject* lo,
 	const MemoryObject* hi) const
 {
-	/* address >= low->base && 
+	/* address >= low->base &&
 	 * address < high->base+high->size) */
 	ref<Expr> inRange =
 	AndExpr::create(
@@ -129,130 +129,140 @@ ref<Expr> AddressSpace::getFeasibilityExpr(
 	return inRange;
 }
 
-
 bool AddressSpace::isFeasibleRange(
 	ExecutionState &state,
 	TimingSolver *solver,
 	ref<Expr> address,
 	const MemoryObject* lo, const MemoryObject* hi)
 {
-	bool mayBeTrue;
+	bool mayBeTrue, ok;
 
 	ref<Expr> inRange = getFeasibilityExpr(address, lo, hi);
-	if (!solver->mayBeTrue(state, inRange, mayBeTrue)) {
+
+	ok = solver->mayBeTrue(state, inRange, mayBeTrue);
+	if (!ok) {
 		assert (0 == 1 && "Solver broke down");
 		return false; // query error
 	}
 
-	if (!mayBeTrue) return false;
+	return mayBeTrue;
+}
 
+// try cheap search, will succeed for *any* inbounds pointer
+// success => mo != NULL
+bool AddressSpace::testInBoundPointer(
+	ExecutionState		&state,
+	TimingSolver		*solver,
+	ref<Expr>		address,
+	ref<ConstantExpr>	&c_addr,
+	const MemoryObject*	&mo)
+{
+	const MemoryMap::value_type	*res;
+	uint64_t			example;
+
+	mo = NULL;
+	if (!solver->getValue(state, address, c_addr)) {
+		c_addr = ConstantExpr::create(~0ULL, address->getWidth());
+		return false;
+	}
+
+	example = c_addr->getZExtValue();
+	MemoryObject toFind(example);
+	res = objects.lookup_previous(&toFind);
+	if (!res) return true;
+
+	mo = res->first;
+	if (example < mo->address + mo->size && example >= mo->address)
+		return true;
+
+	mo = NULL;
+	c_addr = ConstantExpr::create(~0ULL, address->getWidth());
 	return true;
 }
 
-// try cheap search, will succeed for any inbounds pointer
-bool AddressSpace::cheapSearch(
+bool AddressSpace::getFeasibleObject(
 	ExecutionState &state,
 	TimingSolver *solver,
 	ref<Expr> address,
-	ObjectPair &result,
-	bool &success,
-	bool& not_failure)
+	ObjectPair& res)
 {
-	const MemoryMap::value_type *res;
-	ref<ConstantExpr> cex;
-	uint64_t example;
+	bool			found, ok;
+	ref<ConstantExpr>	c_addr;
 
-	if (!solver->getValue(state, address, cex)) {
-		not_failure = false;
-		return true;
-	}
-
-	example = cex->getZExtValue();
-	MemoryObject _hack(example);
-	hack = &_hack;
-	res = objects.lookup_previous(hack);
-
-	if (!res) return false;
-
-	const MemoryObject *mo = res->first;
-	if (example - mo->address < mo->size) {
-		result = *res;
-		success = true;
-		not_failure = true;
-		return true;
-	}
-
-	return false;
-}
-
-bool AddressSpace::resolveOne(
-	ExecutionState &state,
-	TimingSolver *solver,
-	ref<Expr> address,
-	ObjectPair &result,
-	bool &success)
-{
-	bool	not_failure = false;
+	res.first = NULL;
 
 	if (ConstantExpr * CE = dyn_cast<ConstantExpr > (address)) {
-		success = resolveOne(CE, result);
+		found = resolveOne(CE, res);
+		if (!found) res.first = NULL;
 		return true;
 	}
 
 	TimerStatIncrementer timer(stats::resolveTime);
 
-	if (cheapSearch(state, solver, address, result, success, not_failure))
-		return not_failure;
+	ok = testInBoundPointer(state, solver, address, c_addr, res.first);
+	if (!ok) return false;
 
-	// cheap search didn't work, now we have to search
+	if (res.first != NULL) {
+		/* we lucked out and found a feasible address. */
+		if (resolveOne(c_addr, res))
+			return true;
+	}
 
-	MemoryMap::iterator oi = objects.upper_bound(hack);
-	MemoryMap::iterator gt = oi;
+	// We couldn't throw a dart and hit a feasible address.
+	// The next step is to try to find any feasible address.
+	MemoryObject toFind(c_addr->getZExtValue());
+	MMIter oi = objects.upper_bound(&toFind);
+	MMIter gt = oi;
 	if (gt == objects.end())
 		--gt;
 	else
 		++gt;
 
-	MemoryMap::iterator lt = oi;
+	MMIter lt = oi;
 	if (lt != objects.begin()) --lt;
 
-	MemoryMap::iterator begin = objects.begin();
-	MemoryMap::iterator end = objects.end();
+	MMIter begin = objects.begin();
+	MMIter end = objects.end();
 	--end;
 
-	std::pair<MemoryMap::iterator, MemoryMap::iterator> left(begin,lt);
-	std::pair<MemoryMap::iterator, MemoryMap::iterator> right(gt,end);
-
+	std::pair<MMIter, MMIter>
+		left(objects.begin(),lt),
+		right(gt,objects.end());
 	while (true) {
 		// Check whether current range of MemoryObjects is feasible
 		unsigned i = 0;
 		for (; i < 2; i++) {
-			std::pair<MemoryMap::iterator, MemoryMap::iterator> cur =
-			i ? right : left;
+			std::pair<MMIter, MMIter> cur = i ? right : left;
 			const MemoryObject *low;
 			const MemoryObject *high;
-	
+
+			if (cur.first == objects.end() ||
+			    cur.second == objects.end())
+				continue;
+
+
 			low = cur.first->first;
 			high = cur.second->first;
 
-			if (!isFeasibleRange(state, solver, address, low, high))
+			if (!isFeasibleRange(state, solver, address, low, high)) {
+				/* address can not possibly be in
+				 * this range */
 				continue;
+			}
 
-			// range is feasible
-			// it only contains one MemoryObject (proven feasible), so
-			// return it
+			// range is feasible-- address may
+			// it only contains one MemoryObject (proven feasible),
+			// so return it
 			if (low == high) {
-				result = *cur.first;
-				success = true;
+				res = *cur.first;
 				return true;
 			}
 
-			// range contains >1 object, 
+			// feasible range contains >1 object,
 			// divide in half and continue search
 
 			// find the midpoint between ei and bi
-			MemoryMap::iterator mid = getMidPoint(
-				cur.first, cur.second);
+			MMIter mid = getMidPoint(cur.first, cur.second);
 
 			left = std::make_pair(cur.first, mid);
 			right = std::make_pair(++mid, cur.second);
@@ -261,133 +271,153 @@ bool AddressSpace::resolveOne(
 
 		// neither range was feasible
 		if (i == 2) {
-			success = false;
+			res.first = NULL;
 			return true;
 		}
 	}
 
-	success = false;
+	res.first = NULL;
 	return true;
 }
 
-bool AddressSpace::resolve(ExecutionState &state,
-        TimingSolver *solver,
-        ref<Expr> p,
-        ResolutionList &rl,
-        unsigned maxResolutions,
-        double timeout)
+/* ret true => incomplete, ret false => OK */
+// XXX in general this isn't exactly what we want... for
+// a multiple resolution case (or for example, a \in {b,c,0})
+// we want to find the first object, find a cex assuming
+// not the first, find a cex assuming not the second...
+// etc.
+
+// XXX how do we smartly amortize the cost of checking to
+// see if we need to keep searching up/down, in bad cases?
+// maybe we don't care?
+
+// XXX we really just need a smart place to start (although
+// if its a known solution then the code below is guaranteed
+// to hit the fast path with exactly 2 queries). we could also
+// just get this by inspection of the expr.
+
+// DAR: replaced original O(N) lookup with O(log N) binary search strategy
+
+// Iteratively divide set of MemoryObjects into halves and check whether
+// any feasible address exists in each range. If so, continue iterating.
+// Otherwise, abandon that range of addresses.
+bool AddressSpace::resolve(
+	ExecutionState &state,
+	TimingSolver *solver,
+	ref<Expr> p,
+	ResolutionList &rl,
+	unsigned maxResolutions)
 {
-  /* fast path for constant expressions */
-  if (ConstantExpr * CE = dyn_cast<ConstantExpr > (p)) {
-    ObjectPair res;
-    if (resolveOne(CE, res))
-      rl.push_back(res);
-    return false;
-  }
+	/* fast path for constant expressions */
+	if (ConstantExpr * CE = dyn_cast<ConstantExpr > (p)) {
+		ObjectPair res;
+		if (resolveOne(CE, res))
+			rl.push_back(res);
+		return false;
+	}
 
-  TimerStatIncrementer timer(stats::resolveTime);
-  uint64_t timeout_us = (uint64_t) (timeout * 1000000.);
+	TimerStatIncrementer timer(stats::resolveTime);
 
-  // XXX in general this isn't exactly what we want... for
-  // a multiple resolution case (or for example, a \in {b,c,0})
-  // we want to find the first object, find a cex assuming
-  // not the first, find a cex assuming not the second...
-  // etc.
+	ref<ConstantExpr> cex;
+	if (!solver->getValue(state, p, cex))
+		return true;
 
-  // XXX how do we smartly amortize the cost of checking to
-  // see if we need to keep searching up/down, in bad cases?
-  // maybe we don't care?
+	MemoryObject toFind(cex->getZExtValue() /* example */);
 
-  // XXX we really just need a smart place to start (although
-  // if its a known solution then the code below is guaranteed
-  // to hit the fast path with exactly 2 queries). we could also
-  // just get this by inspection of the expr.
+	MMIter	oi = objects.find(&toFind);
+	MMIter	gt = oi;
+	if (gt != objects.end())
+		++gt;
 
-  // DAR: replaced original O(N) lookup with O(log N) binary search strategy
+	MMIter lt = oi;
+	if (lt != objects.begin())
+		--lt;
 
-  // Iteratively divide set of MemoryObjects into halves and check whether
-  // any feasible address exists in each range. If so, continue iterating.
-  // Otherwise, abandon that range of addresses.
+	MMIter end = objects.end();
+	--end;
 
-  ref<ConstantExpr> cex;
-  if (!solver->getValue(state, p, cex))
-    return true;
-  uint64_t example = cex->getZExtValue();
-  MemoryObject _hack(example);
-  hack = &_hack;
+	// Explicit stack to avoid recursion
+	std::stack < std::pair<typeof (oi), typeof (oi)> > tryRanges;
 
-  MemoryMap::iterator oi = objects.find(hack);
-  MemoryMap::iterator gt = oi;
-  if (gt != objects.end())
-    ++gt;
-  MemoryMap::iterator lt = oi;
-  if (lt != objects.begin())
-    --lt;
+	// Search [begin, first object < example] if range is not empty
+	if (lt != objects.begin())
+		tryRanges.push(std::make_pair(objects.begin(), lt));
 
-  MemoryMap::iterator end = objects.end();
-  --end;
+	// Search [first object > example, end-1] if range is not empty
+	if (gt != objects.end())
+		tryRanges.push(std::make_pair(gt, end));
 
-  // Explicit stack to avoid recursion
-  std::stack < std::pair<typeof (oi), typeof (oi)> > tryRanges;
+	// Search [example,example] if exists (may not on weird overlap cases)
+	// NOTE: check the example first in case of fast path,
+	// so push onto stack last
+	if (oi != objects.end())
+		tryRanges.push(std::make_pair(oi, oi));
 
-  // Search [begin, first object < example] if range is not empty
-  if (lt != objects.begin())
-    tryRanges.push(std::make_pair(objects.begin(), lt));
-  // Search [first object > example, end-1] if range is not empty
-  if (gt != objects.end())
-    tryRanges.push(std::make_pair(gt, end));
-  // Search [example,example] if exists (may not on weird overlap cases)
-  // NOTE: check the example first in case of fast path, so push onto stack
-  // last
-  if (oi != objects.end())
-    tryRanges.push(std::make_pair(oi, oi));
+	return binsearchRange(
+		state, p, solver, tryRanges, maxResolutions, rl);
+}
 
-  // Iteratively perform binary search until stack is empty
-  while (!tryRanges.empty()) {
-    if (timeout_us && timeout_us < timer.check())
-      return true;
+/* true => incomplete,
+ * false => complete
+ */
+bool AddressSpace::binsearchRange(
+	ExecutionState& state,
+	ref<Expr>	p,
+	TimingSolver *solver,
+	std::stack<std::pair<MMIter, MMIter> >& tryRanges,
+	unsigned int maxResolutions,
+	ResolutionList& rl)
+{
+	// Iteratively perform binary search until stack is empty
+	while (!tryRanges.empty()) {
+		MMIter bi = tryRanges.top().first;
+		MMIter ei = tryRanges.top().second;
+		const MemoryObject *low = bi->first;
+		const MemoryObject *high = ei->first;
 
-    MemoryMap::iterator bi = tryRanges.top().first;
-    MemoryMap::iterator ei = tryRanges.top().second;
-    const MemoryObject *low = bi->first;
-    const MemoryObject *high = ei->first;
-    tryRanges.pop();
+		tryRanges.pop();
 
-    // Check whether current range of MemoryObjects is feasible
-    if (!isFeasibleRange(state, solver, p, low, high))
-    	continue; // XXX return true on query error
+		// Check whether current range of MemoryObjects is feasible
+		if (!isFeasibleRange(state, solver, p, low, high))
+			continue; // XXX return true on query error
 
-    // range is feasible
-    if (low == high) {
-      // range only contains one MemoryObject, which was proven feasible, so
-      // add to resolution list
-      rl.push_back(*bi);
+		if (low != high) {
+			// range contains more than one object,
+			// so divide in half and push halves onto stack
 
-      // fast path check
-      unsigned size = rl.size();
-      if (size == 1) {
-        bool mustBeTrue;
-        if (!solver->mustBeTrue(
-		state, getFeasibilityExpr(p, low, high), mustBeTrue))
-          return true;
-        if (mustBeTrue)
-          return false;
-      } else if (size == maxResolutions) {
-        return true;
-      }
-    } else {
-      // range contains more than one object, so divide in half and push
-      // halves onto stack
+			// find the midpoint between ei and bi
+			MMIter mid = getMidPoint(bi, ei);
+			tryRanges.push(std::make_pair(bi, mid));
+			tryRanges.push(std::make_pair(++mid, ei));
+			continue;
+		}
 
-      // find the midpoint between ei and bi
-      MemoryMap::iterator mid = getMidPoint(bi, ei);
-      tryRanges.push(std::make_pair(bi, mid));
-      tryRanges.push(std::make_pair(++mid, ei));
-    }
+		// range is feasible
+		// range only contains one MemoryObject,
+		// which was proven feasible, so add to resolution list
+		rl.push_back(*bi);
 
-  }
+		// fast path check
+		unsigned size = rl.size();
+		if (size == 1) {
+			bool mustBeTrue;
+			if (!solver->mustBeTrue(
+				state,
+				getFeasibilityExpr(p, low, high),
+				mustBeTrue))
+			{
+				return true;
+			}
 
-  return false;
+			if (mustBeTrue)
+				return false;
+		}
+
+		if (size == maxResolutions)
+			return true;
+	}
+
+	return false;
 }
 
 // These two are pretty big hack so we can sort of pass memory back
@@ -397,16 +427,19 @@ bool AddressSpace::resolve(ExecutionState &state,
 // then its concrete cache byte isn't being used) but is just a hack.
 void AddressSpace::copyOutConcretes(void)
 {
-  foreach (it, objects.begin(), objects.end()) {
-    const MemoryObject *mo = it->first;
+	foreach (it, objects.begin(), objects.end()) {
+		const MemoryObject	*mo = it->first;
+		ObjectState		*os;
+		uint8_t			*address;
 
-    if (mo->isUserSpecified) continue;
-    ObjectState *os = it->second;
-    uint8_t *address = (uint8_t*) (uintptr_t) mo->address;
+		if (mo->isUserSpecified) continue;
 
-    if (!os->readOnly)
-      memcpy(address, os->concreteStore, mo->size);
-  }
+		os = it->second;
+		address = (uint8_t*) (uintptr_t) mo->address;
+
+		if (!os->readOnly)
+			memcpy(address, os->concreteStore, mo->size);
+	}
 }
 
 bool AddressSpace::copyToBuf(const MemoryObject* mo, void* buf) const
@@ -465,8 +498,9 @@ void AddressSpace::print(std::ostream& os) const
 
 /***/
 
-bool MemoryObjectLT::operator()(const MemoryObject *a, const MemoryObject *b) const
+bool MemoryObjectLT::operator()(
+	const MemoryObject *a, const MemoryObject *b) const
 {
-  assert (a && b);
-  return a->address < b->address;
+	assert (a && b);
+	return a->address < b->address;
 }

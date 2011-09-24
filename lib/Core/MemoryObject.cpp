@@ -26,11 +26,11 @@ MemoryManager* MemoryObject::memoryManager = NULL;
 int MemoryObject::counter = 0;
 
 MemoryObject::MemoryObject(uint64_t _address)
-    : id(counter++),
-      address(_address),
-      size(0),
-      mallocKey(0, 0, 0, false, false, true),
-      refCount(0)
+: id(counter++)
+, address(_address)
+, size(0)
+, mallocKey(0, 0, 0, false, false, true)
+, refCount(0)
 {
 }
 

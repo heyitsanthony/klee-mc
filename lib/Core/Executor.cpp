@@ -1161,27 +1161,40 @@ void Executor::executeCall(
     // size. This happens to work fir x86-32 and x86-64, however.
     Expr::Width WordSize = Context::get().getPointerWidth();
     if (WordSize == Expr::Int32) {
-      executeMemoryOperation(state, true, arguments[0],
-                             sf.varargs->getBaseExpr(), 0);
+      executeMemoryOperation(
+      	state,
+	MemOp(true, arguments[0], sf.varargs->getBaseExpr(), NULL));
     } else {
       assert(WordSize == Expr::Int64 && "Unknown word size!");
        // X86-64 has quite complicated calling convention. However,
       // instead of implementing it, we can do a simple hack: just
       // make a function believe that all varargs are on stack.
-      executeMemoryOperation(state, true, arguments[0],
-                             ConstantExpr::create(48, 32), 0); // gp_offset
-      executeMemoryOperation(state, true,
-                             AddExpr::create(arguments[0],
-                                             ConstantExpr::create(4, 64)),
-                             ConstantExpr::create(304, 32), 0); // fp_offset
-      executeMemoryOperation(state, true,
-                             AddExpr::create(arguments[0],
-                                             ConstantExpr::create(8, 64)),
-                             sf.varargs->getBaseExpr(), 0); // overflow_arg_area
-      executeMemoryOperation(state, true,
-                             AddExpr::create(arguments[0],
-                                             ConstantExpr::create(16, 64)),
-                             ConstantExpr::create(0, 64), 0); // reg_save_area
+
+      // gp offest
+      executeMemoryOperation(
+	state,
+	MemOp(true, arguments[0], ConstantExpr::create(48, 32), NULL));
+
+      // fp_offset
+      executeMemoryOperation(
+      	state,
+	MemOp(	true,
+		AddExpr::create(arguments[0], ConstantExpr::create(4, 64)),
+		ConstantExpr::create(304, 32), NULL));
+
+      // overflow_arg_area
+      executeMemoryOperation(
+      	state,
+	MemOp(	true,
+		AddExpr::create(arguments[0], ConstantExpr::create(8, 64)),
+		sf.varargs->getBaseExpr(), NULL));
+
+      // reg_save_area
+      executeMemoryOperation(
+      	state,
+	MemOp(	true,
+		AddExpr::create(arguments[0], ConstantExpr::create(16, 64)),
+		ConstantExpr::create(0, 64), NULL));
     }
     break;
   }
@@ -1286,7 +1299,7 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 	Expr::Width to = getWidthForLLVMType(t);
 
 	if (from != to) {
-		CallSite cs = (isa<InvokeInst>(caller) ? 
+		CallSite cs = (isa<InvokeInst>(caller) ?
 			CallSite(cast<InvokeInst>(caller)) :
 			CallSite(cast<CallInst>(caller)));
 
@@ -2134,7 +2147,7 @@ void Executor::instAlloc(ExecutionState& state, KInstruction* ki)
 	unsigned	elementSize;
 	bool		isLocal;
 	ref<Expr>	size;
-   	
+
 	assert (!isMalloc(ki->inst) && "ANTHONY! FIX THIS");
 
 	ai = cast<AllocaInst>(i);
@@ -2245,13 +2258,13 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
 
   case Instruction::Load: {
     ref<Expr> base = eval(ki, 0, state).value;
-    executeMemoryOperation(state, false, base, 0, ki);
+    executeMemoryOperation(state, MemOp(false, base, 0, ki));
     break;
   }
   case Instruction::Store: {
     ref<Expr> base = eval(ki, 1, state).value;
     ref<Expr> value = eval(ki, 0, state).value;
-    executeMemoryOperation(state, true, base, value, 0);
+    executeMemoryOperation(state, MemOp(true, base, value, 0));
     break;
   }
 
@@ -2885,30 +2898,34 @@ void Executor::printStateErrorMessage(
 /***/
 
 ref<Expr> Executor::replaceReadWithSymbolic(
-  ExecutionState &state, ref<Expr> e)
+	ExecutionState &state, ref<Expr> e)
 {
-  static unsigned id;
-  unsigned n = interpreterOpts.MakeConcreteSymbolic;
+	static unsigned	id;
+	const Array	*array;
+	unsigned	n;
 
-  if (!n || replayOut || replayPaths) return e;
+	n = interpreterOpts.MakeConcreteSymbolic;
+	if (!n || replayOut || replayPaths) return e;
 
-  // right now, we don't replace symbolics (is there any reason too?)
-  if (!isa<ConstantExpr>(e)) return e;
+	// right now, we don't replace symbolics (is there any reason too?)
+	if (!isa<ConstantExpr>(e)) return e;
 
-  /* XXX why random? */
-  if (n != 1 && random() %  n) return e;
+	/* XXX why random? */
+	if (n != 1 && random() % n) return e;
 
-  // create a new fresh location, assert it is equal to concrete value in e
-  // and return it.
+	// create a new fresh location, assert it is equal to concrete value in e
+	// and return it.
 
-  const Array *array =
-    new Array("rrws_arr" + llvm::utostr(++id),
-              MallocKey(Expr::getMinBytesForWidth(e->getWidth())));
-  ref<Expr> res = Expr::createTempRead(array, e->getWidth());
-  ref<Expr> eq = NotOptimizedExpr::create(EqExpr::create(e, res));
-  std::cerr << "Making symbolic: " << eq << "\n";
-  state.addConstraint(eq);
-  return res;
+
+	array = new Array(
+		"rrws_arr" + llvm::utostr(++id),
+		MallocKey(Expr::getMinBytesForWidth(e->getWidth())));
+
+	ref<Expr> res = Expr::createTempRead(array, e->getWidth());
+	ref<Expr> eq = NotOptimizedExpr::create(EqExpr::create(e, res));
+	std::cerr << "Making symbolic: " << eq << "\n";
+	state.addConstraint(eq);
+	return res;
 }
 
 void Executor::resolveExact(ExecutionState &state,
@@ -2916,49 +2933,44 @@ void Executor::resolveExact(ExecutionState &state,
                             ExactResolutionList &results,
                             const std::string &name)
 {
-  // XXX we may want to be capping this?
-  ResolutionList rl;
-  state.addressSpace.resolve(state, solver, p, rl);
+	// XXX we may want to be capping this?
+	ResolutionList rl;
+	state.addressSpace.resolve(state, solver, p, rl);
 
-  ExecutionState *unbound = &state;
-  foreach (it, rl.begin(), rl.end()) {
-    ref<Expr> inBounds = EqExpr::create(p, it->first->getBaseExpr());
+	ExecutionState *unbound = &state;
+	foreach (it, rl.begin(), rl.end()) {
+		ref<Expr> inBounds;
 
-    StatePair branches = fork(*unbound, inBounds, true);
+		inBounds = EqExpr::create(p, it->first->getBaseExpr());
 
-    if (branches.first)
-      results.push_back(std::make_pair(*it, branches.first));
+		StatePair branches = fork(*unbound, inBounds, true);
 
-    unbound = branches.second;
-    if (!unbound) // Fork failure
-      break;
-  }
+		if (branches.first)
+			results.push_back(
+				std::make_pair(*it, branches.first));
 
-  if (unbound) {
-    terminateStateOnError(*unbound,
-                          "memory error: invalid pointer: " + name,
-                          "ptr.err",
-                          getAddressInfo(*unbound, p));
-  }
+		unbound = branches.second;
+		if (!unbound) // Fork failure
+			break;
+	}
+
+	if (unbound) {
+		terminateStateOnError(
+			*unbound,
+			"memory error: invalid pointer: " + name,
+			"ptr.err",
+			getAddressInfo(*unbound, p));
+	}
 }
 
-bool debug_xxx = false;
-
 /* handles a memop that can be immediately resolved */
-bool Executor::memOpByByte(
-	ExecutionState& state,
-	bool isWrite,
-	ref<Expr> address,
-	ref<Expr> value,
-	KInstruction* target)
+bool Executor::memOpByByte(ExecutionState& state, MemOp& mop)
 {
 	Expr::Width	type;
 	unsigned	bytes;
 	ref<Expr>	read_expr;
 
-	type = (isWrite ? value->getWidth() :
-		getWidthForLLVMType(target->inst->getType()));
-
+	type = mop.getType(kmodule);
 	if ((type % 8) != 0) return false;
 
 	bytes = Expr::getMinBytesForWidth(type);
@@ -2968,15 +2980,15 @@ bool Executor::memOpByByte(
 		MemOpRes	res;
 
 		byte_addr = AddExpr::create(
-			address,
-			ConstantExpr::create(i, address->getWidth()));
+			mop.address,
+			ConstantExpr::create(i, mop.address->getWidth()));
 
 		res = memOpResolve(state, byte_addr, 8);
-		if (!res.usable || res.rc == false)
-			return res.rc;
+		if (!res.usable || !res.rc)
+			return false;
 
-		if (isWrite) {
-			byte_val = ExtractExpr::create(value, 8*i, 8);
+		if (mop.isWrite) {
+			byte_val = ExtractExpr::create(mop.value, 8*i, 8);
 			writeToMemRes(state, res, byte_val);
 		} else {
 			ref<Expr> result = state.read(res.os, res.offset, 8);
@@ -2990,8 +3002,8 @@ bool Executor::memOpByByte(
 
 	// we delayed setting the local variable on the read because
 	// we need to respect the original type width-- result is concatenated
-	if (!isWrite) {
-		state.bindLocal(target, read_expr);
+	if (!mop.isWrite) {
+		state.bindLocal(mop.target, read_expr);
 	}
 
 	return true;
@@ -2999,52 +3011,59 @@ bool Executor::memOpByByte(
 
 Executor::MemOpRes Executor::memOpResolve(
 	ExecutionState& state,
-	ref<Expr> address,
+	ref<Expr> addr,
 	Expr::Width type)
 {
 	MemOpRes	ret;
-	unsigned	bytes = Expr::getMinBytesForWidth(type);
-	bool inBounds, success;
+	unsigned	bytes;
+	bool		alwaysInBounds;
 
+	bytes = Expr::getMinBytesForWidth(type);
 	ret.usable = false;
-	ret.rc = false;
 
-	/* can op be resolved to a single value? */
-	if (!state.addressSpace.resolveOne(
-		state, solver, address, ret.op, success))
-	{
-		address = toConstant(state, address, "resolveOne failure");
-		success = state.addressSpace.resolveOne(
-			cast<ConstantExpr>(address), ret.op);
+	ret.rc = state.addressSpace.getFeasibleObject(
+		state, solver, addr, ret.op);
+	if (!ret.rc) {
+		/* solver failed in GFO, force addr to be concrete */
+		addr = toConstant(state, addr, "resolveOne failure");
+		ret.op.first = NULL;
+		ret.rc = state.addressSpace.resolveOne(
+			cast<ConstantExpr>(addr), ret.op);
+		if (!ret.rc)
+			return ret;
 	}
 
-	if (!success) return ret;
+	if (ret.op.first == NULL) {
+		/* no feasible objects exist */
+		return ret;
+	}
 
 	// fast path: single in-bounds resolution.
+	assert (ret.op.first != NULL);
 	ret.mo = ret.op.first;
 	ret.os = ret.op.second;
 
 	if (MaxSymArraySize && ret.mo->size>=MaxSymArraySize) {
-		address = toConstant(state, address, "max-sym-array-size");
+		addr = toConstant(state, addr, "max-sym-array-size");
 	}
 
-	ret.offset = ret.mo->getOffsetExpr(address);
+	ret.offset = ret.mo->getOffsetExpr(addr);
 
 	/* verify access is in bounds */
-	success = solver->mustBeTrue(
+	ret.rc = solver->mustBeTrue(
 		state,
 		ret.mo->getBoundsCheckOffset(ret.offset, bytes),
-		inBounds);
-	if (!success) {
+		alwaysInBounds);
+	if (!ret.rc) {
 		state.pc = state.prevPC;
 		terminateStateEarly(state, "query timed out");
-		ret.rc = true;
+		ret.rc = false;
 		return ret;
 	}
 
-	if (!inBounds) return ret;
+	if (!alwaysInBounds)
+		return ret;
 
-	ret.rc = true;
 	ret.usable = true;
 	return ret;
 }
@@ -3066,150 +3085,137 @@ void Executor::writeToMemRes(
 	}
 }
 
+Expr::Width Executor::MemOp::getType(KModule* m) const
+{
+	return (isWrite
+		? value->getWidth()
+		: m->targetData->getTypeSizeInBits(target->inst->getType()));
+}
+
+void Executor::MemOp::simplify(ExecutionState& state)
+{
+	if (!isa<ConstantExpr>(address))
+		address = state.constraints.simplifyExpr(address);
+	if (isWrite && !isa<ConstantExpr>(value))
+		value = state.constraints.simplifyExpr(value);
+}
 
 /* handles a memop that can be immediately resolved */
-bool Executor::memOpFast(
-	ExecutionState& state,
-	bool isWrite,
-	ref<Expr> address,
-	ref<Expr> value,
-	KInstruction* target)
+bool Executor::memOpFast(ExecutionState& state, MemOp& mop)
 {
-  Expr::Width type = (isWrite ? value->getWidth() :
-                     getWidthForLLVMType(target->inst->getType()));
-  MemOpRes	res;
+	Expr::Width	type;
+	MemOpRes	res;
 
-  res = memOpResolve(state, address, type);
-  if (!res.usable || res.rc == false)
-  	return res.rc;
+	type = mop.getType(kmodule);
+	res = memOpResolve(state, mop.address, type);
+	if (!res.usable || !res.rc)
+		return false;
 
-
-  if (isWrite) {
-    writeToMemRes(state, res, value);
-  } else {
-    ref<Expr> result = state.read(res.os, res.offset, type);
-    if (interpreterOpts.MakeConcreteSymbolic)
-      result = replaceReadWithSymbolic(state, result);
-    state.bindLocal(target, result);
-  }
-
-  return true;
-}
-
-ExecutionState* Executor::getUnboundState(
-  ExecutionState* unbound,
-  ObjectPair& resolution,
-  bool isWrite,
-  ref<Expr> address,
-  unsigned bytes,
-  Expr::Width& type,
-  ref<Expr> value,
-  KInstruction* target)
-{
-  const MemoryObject *mo;
-  const ObjectState *os;
-  ref<Expr> inBounds;
-
-  mo = resolution.first;
-  os = resolution.second;
-  inBounds = mo->getBoundsCheckPointer(address, bytes);
-
-  StatePair branches = fork(*unbound, inBounds, true);
-  ExecutionState *bound = branches.first;
-
-  // bound can be 0 on failure or overlapped
-  if (!bound) return branches.second;
-
-  if (isWrite) {
-    if (os->readOnly) {
-      terminateStateOnError(*bound,
-                            "memory error: object read only",
-                            "readonly.err");
-    } else {
-      ObjectState *wos = bound->addressSpace.getWriteable(mo, os);
-      bound->write(wos, mo->getOffsetExpr(address), value);
-    }
-  } else {
-    ref<Expr> result = bound->read(os, mo->getOffsetExpr(address), type);
-    bound->bindLocal(target, result);
-  }
-
-  return branches.second;
-}
-
-void Executor::memOpError(
-  ExecutionState& state,
-  bool isWrite,
-  ref<Expr> address,
-  ref<Expr> value,
-  KInstruction* target)
-{
-  Expr::Width type = (isWrite ? value->getWidth() :
-                     getWidthForLLVMType(target->inst->getType()));
-  unsigned bytes = Expr::getMinBytesForWidth(type);
-  ResolutionList rl;
-  ExecutionState *unbound;
-  bool incomplete;
-
-  incomplete = state.addressSpace.resolve(state, solver, address, rl, 0, stpTimeout);
-
-  // XXX there is some query wasteage here. who cares?
-  unbound = &state;
-  foreach (it, rl.begin(), rl.end()) {
-    ObjectPair	res(*it);
-    unbound = getUnboundState(
-      unbound, res, isWrite, address, bytes, type, value, target);
-    if (!unbound) break;
-  }
-
-  if (!unbound) return;
-
-  // XXX should we distinguish out of bounds and overlapped cases?
-  if (incomplete) {
-    terminateStateEarly(*unbound, "query timed out (resolve)");
-  } else {
-  	if (debug_xxx)
-		state.addressSpace.print(std::cerr);
-    terminateStateOnError(*unbound,
-                          "memory error: out of bound pointer",
-                          "ptr.err",
-                          getAddressInfo(*unbound, address));
-  }
-}
-
-void Executor::executeMemoryOperation(
-	ExecutionState &state,
-	bool isWrite,
-	ref<Expr> address,
-	ref<Expr> value /* undef if read */,
-	KInstruction *target /* undef if write */)
-{
-#if 0 // for debugging fun memory errors
-	Function* cur_func = state.getCurrentKF()->function;
-	if (	strcmp(cur_func->getNameStr().c_str(),
-		"sb_0x7f5663744800") == 0)
-	{
-		debug_xxx = true;
-	}
-#endif
-
-	if (SimplifySymIndices) {
-		if (!isa<ConstantExpr>(address))
-			address = state.constraints.simplifyExpr(address);
-		if (isWrite && !isa<ConstantExpr>(value))
-			value = state.constraints.simplifyExpr(value);
+	if (mop.isWrite) {
+		writeToMemRes(state, res, mop.value);
+	} else {
+		ref<Expr> result = state.read(res.os, res.offset, type);
+		if (interpreterOpts.MakeConcreteSymbolic)
+			result = replaceReadWithSymbolic(state, result);
+		state.bindLocal(mop.target, result);
 	}
 
-	if (memOpFast(state, isWrite, address, value, target))
+	return true;
+}
+
+ExecutionState* Executor::getUnboundAddressState(
+	ExecutionState	*unbound,
+	MemOp		&mop,
+	ObjectPair	&resolution,
+	unsigned	bytes,
+	Expr::Width	type)
+{
+	MemOpRes	res;
+	ExecutionState	*bound;
+	ref<Expr>	inBoundPtr;
+
+	res.op = resolution;
+	res.mo = res.op.first;
+	res.os = res.op.second;
+	inBoundPtr = res.mo->getBoundsCheckPointer(mop.address, bytes);
+
+	StatePair branches = fork(*unbound, inBoundPtr, true);
+	bound = branches.first;
+
+	// bound can be 0 on failure or overlapped
+	if (bound == NULL) {
+		return branches.second;
+	}
+
+	res.offset = res.mo->getOffsetExpr(mop.address);
+	if (mop.isWrite) {
+		writeToMemRes(*bound, res, mop.value);
+	} else {
+		ref<Expr> result;
+		result = bound->read(res.os, res.offset, type);
+		bound->bindLocal(mop.target, result);
+	}
+
+	return branches.second;
+}
+
+void Executor::memOpError(ExecutionState& state, MemOp& mop)
+{
+	Expr::Width	type;
+	unsigned	bytes;
+	ResolutionList	rl;
+	ExecutionState	*unbound;
+	bool		incomplete;
+
+	type = mop.getType(kmodule);
+	bytes = Expr::getMinBytesForWidth(type);
+
+	incomplete = state.addressSpace.resolve(
+		state, solver, mop.address, rl, 0);
+
+	// XXX there is some query wasteage here. who cares?
+	unbound = &state;
+	foreach (it, rl.begin(), rl.end()) {
+		ObjectPair	res(*it);
+
+		unbound = getUnboundAddressState(
+			unbound, mop, res, bytes, type);
+
+		/* bad unbound state.. terminate */
+		if (!unbound)
+			return;
+	}
+
+	// XXX should we distinguish out of bounds and overlapped cases?
+	if (incomplete) {
+		terminateStateEarly(*unbound, "query timed out (resolve)");
+		return;
+	}
+
+	terminateStateOnError(
+		*unbound,
+		"memory error: out of bound pointer",
+		"ptr.err",
+		getAddressInfo(*unbound, mop.address));
+}
+
+void Executor::executeMemoryOperation(ExecutionState &state, MemOp mop)
+{
+	if (SimplifySymIndices) mop.simplify(state);
+
+	if (memOpFast(state, mop))
 		return;
 
 	// handle straddled accesses
-	if (memOpByByte(state, isWrite, address, value, target))
+	if (memOpByByte(state, mop))
 		return;
 
-	// we are on an error path (no resolution, multiple resolution, one
-	// resolution with out of bounds)
-	memOpError(state, isWrite, address, value, target);
+	// we are on an error path
+	// Possible reasons:
+	// 	* no resolution
+	// 	* multiple resolution
+	// 	* one resolution with out of bounds
+	memOpError(state, mop);
 }
 
 ObjectState* Executor::executeMakeSymbolic(

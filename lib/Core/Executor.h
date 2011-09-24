@@ -141,8 +141,24 @@ struct MemOpRes
 	ref<Expr>		offset;
 	const MemoryObject	*mo;
 	const ObjectState	*os;
-	bool			rc;
 	bool			usable;
+	bool			rc;	/* false => solver failure */
+};
+
+struct MemOp
+{
+public:
+	Expr::Width getType(KModule* m) const;
+	void simplify(ExecutionState& es);
+	MemOp(	bool _isWrite, ref<Expr> _addr, ref<Expr> _value,
+		KInstruction* _target)
+	: isWrite(_isWrite), address(_addr), value(_value), target(_target)
+	{}
+
+	bool		isWrite;
+	ref<Expr>	address;
+	ref<Expr>	value;		/* undef if read */
+	KInstruction	*target;	/* undef if write */
 };
 
 
@@ -387,52 +403,30 @@ private:
 
   // do address resolution / object binding / out of bounds checking
   // and perform the operation
-  void executeMemoryOperation(ExecutionState &state,
-                              bool isWrite,
-                              ref<Expr> address,
-                              ref<Expr> value /* undef if read */,
-                              KInstruction *target /* undef if write */);
+  void executeMemoryOperation(ExecutionState &state, MemOp mop);
 
   MemOpRes memOpResolve(
 	ExecutionState& state,
 	ref<Expr> address,
 	Expr::Width type);
 
-  bool memOpFast(
-    ExecutionState& state,
-    bool isWrite,
-    ref<Expr> address,
-    ref<Expr> value,
-    KInstruction* target);
+  bool memOpFast(ExecutionState& state, MemOp& mop);
 
   void writeToMemRes(
   	ExecutionState& state,
 	struct MemOpRes& res,
 	ref<Expr> value);
 
-  bool memOpByByte(
-    ExecutionState& state,
-    bool isWrite,
-    ref<Expr> address,
-    ref<Expr> value,
-    KInstruction* target);
+  bool memOpByByte(ExecutionState& state, MemOp& mop);
 
-  ExecutionState* getUnboundState(
-    ExecutionState* unbound,
-    ObjectPair& resolution,
-    bool isWrite,
-    ref<Expr> address,
-    unsigned bytes,
-    Expr::Width& type,
-    ref<Expr> value,
-    KInstruction* target);
+  ExecutionState* getUnboundAddressState(
+    ExecutionState	*unbound,
+    MemOp&		mop,
+    ObjectPair&		resolution,
+    unsigned		bytes,
+    Expr::Width		type);
 
-  void memOpError(
-    ExecutionState& state,
-    bool isWrite,
-    ref<Expr> address,
-    ref<Expr> value,
-    KInstruction* target);
+  void memOpError(ExecutionState& state, MemOp& mop);
 
   ObjectState* makeSymbolicReplay(
     ExecutionState& state, const MemoryObject* mo, ref<Expr> len);
