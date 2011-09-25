@@ -15,8 +15,9 @@
 using namespace klee;
 namespace klee { extern RNG theRNG; }
 
-WeightedRandomSearcher::WeightedRandomSearcher(Executor &_executor,
-        WeightType _type)
+WeightedRandomSearcher::WeightedRandomSearcher(
+	Executor &_executor,
+	WeightType _type)
 : executor(_executor)
 , states(new DiscretePDF<ExecutionState*>())
 , type(_type)

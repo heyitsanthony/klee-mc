@@ -24,7 +24,7 @@ namespace llvm {
 
 namespace klee {
   class ExecutionState;
-  class Executor;  
+  class Executor;
   class InstructionInfoTable;
   class InterpreterHandler;
   class KInstruction;
@@ -41,11 +41,11 @@ namespace klee {
 
     std::ostream *statsFile, *istatsFile;
     double startWallTime;
-    
+
     unsigned numBranches;
     unsigned fullBranches, partialBranches;
 
-    CallPathManager callPathManager;    
+    CallPathManager callPathManager;
 
     bool updateMinDistToUncovered;
 
@@ -63,7 +63,7 @@ namespace klee {
     std::set<std::string> excludeNames;
 
   public:
-    StatsTracker(Executor &_executor, 
+    StatsTracker(Executor &_executor,
     		const KModule* km,
 		std::string _objectFilename,
                 const std::vector<std::string> &excludeCovFiles,
@@ -75,15 +75,15 @@ namespace klee {
     // called after a new StackFrame has been pushed (for callpath tracing)
     void framePushed(ExecutionState &es, StackFrame *parentFrame);
 
-    // called after a StackFrame has been popped 
+    // called after a StackFrame has been popped
     void framePopped(ExecutionState &es);
 
     // called when some side of a branch has been visited. it is
     // imperative that this be called when the statistics index is at
     // the index for the branch itself.
-    void markBranchVisited(ExecutionState *visitedTrue, 
+    void markBranchVisited(ExecutionState *visitedTrue,
                            ExecutionState *visitedFalse);
-    
+
     // called when execution is done and stats files should be flushed
     void done();
 
@@ -102,11 +102,13 @@ namespace klee {
     void initMinDistToReturn(
 	llvm::Function* fnIt,
 	std::vector<llvm::Instruction* >& instructions);
+    bool computePathsInit(std::vector<llvm::Instruction*>& insts);
+    bool computePaths(std::vector<llvm::Instruction*>& insts);
     static bool init;
   };
 
-  uint64_t computeMinDistToUncovered(const KInstruction *ki,
-                                     uint64_t minDistAtRA);
+  uint64_t computeMinDistToUncovered(
+    const KInstruction *ki, uint64_t minDistAtRA);
 
 }
 
