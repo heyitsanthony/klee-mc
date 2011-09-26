@@ -173,7 +173,7 @@ bool PipeSolverImpl::computeInitialValues(
 	finiChild();
 
 	if (parse_ok == false) {
-		std::cerr << "BAD PARSE CIV\n";
+		std::cerr << "BAD PARSE computeInitialValues\n";
 		failQuery();
 		return false;
 	}
@@ -246,16 +246,15 @@ bool PipeSolverImpl::writeQueryToChild(const Query& q) const
 	os->flush();
 	delete os;
 
+	return true;
 }
 
 bool PipeSolverImpl::writeQuery(const Query& q) const
 {
 	pid_t	query_child;
 
-	if (!ForkQueries) {
-		writeQueryToChild(q);
-		return true;
-	}
+	if (!ForkQueries)
+		return writeQueryToChild(q);
 
 	/* fork() if requested. This should get around crashes
 	 * for really big queries with qemu */

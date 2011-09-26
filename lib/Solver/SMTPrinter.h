@@ -13,6 +13,7 @@ class SMTPrinter : public ExprVisitor
 {
 public:
 	struct SMTArrays {
+		const std::string& getInitialArray(const Array* a);
 		std::map<const Array*, std::string>		a_initial;
 		std::map<const Array*, std::string>		a_assumptions;
 		std::map<const UpdateNode*, std::string>	a_updates;

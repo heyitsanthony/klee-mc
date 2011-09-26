@@ -12,6 +12,33 @@
 
 using namespace klee;
 
+/* This figures out which arrays are being used in an
+ * expression. This is important for SMT because it needs array information
+ * up front, before the formula is given.
+ */
+class ArrayFinder : public ExprVisitor
+{
+public:
+	ArrayFinder(SMTPrinter::SMTArrays* in_arr)
+	: ExprVisitor(false, true)
+	, arr(in_arr)
+	{}
+
+	virtual ~ArrayFinder(void) {}
+
+	virtual Action visitExpr(const Expr &e)
+	{
+		if (e.getKind() == Expr::Read)  {
+			const ReadExpr *re = cast<ReadExpr>(&e);
+			arr->getInitialArray(re->updates.root);
+		}
+		return Action::doChildren();
+	}
+
+private:
+	SMTPrinter::SMTArrays	*arr;
+};
+
 SMTPrinter::Action SMTPrinter::visitExprPost(const Expr &e)
 {
 	switch (e.getKind()) {
@@ -178,46 +205,42 @@ void SMTPrinter::printConstant(const ConstantExpr* ce)
  */
 void SMTPrinter::print(std::ostream& os, const Query& q)
 {
-	std::stringstream	ss;
-	SMTPrinter		smt_pr(ss, new SMTArrays());
+	SMTArrays		*smt_arr = new SMTArrays();
+	SMTPrinter		smt_pr(os, smt_arr);
+	ArrayFinder		arr_finder(smt_arr);
 
 	os <<	"(\nbenchmark HAVEABETTERNAME.smt \n"
 		":source { klee-mc (Have better name) } \n"
 		":logic QF_AUFBV\n"
 		":category {industrial}\n";
 
-	/* buffer formulas and assumptions so we know which
-	 * arrays we're going to need to load before committing
+
+	/* do a first pass on expressions so we know
+	 * which arrays we're going to need to load before committing
 	 * assumptions and formulas to the ostream */
+	foreach (it, q.constraints.begin(), q.constraints.end())
+		arr_finder.visit(*it);
+	arr_finder.visit(q.expr);
+
+	/* now have arrays, declare them */
+	smt_pr.printArrayDecls();
+
+	/* print constraints */
 	foreach (it, q.constraints.begin(), q.constraints.end()) {
-		ss << ":assumption\n";
-		ss << "(= ";
+		os << ":assumption\n";
+		os << "(= ";
 		smt_pr.visit(*it);
-		ss << " bv1[1])\n";
+		os << " bv1[1])\n";
 	}
 
-	ss << ":formula\n";
-	ss << "(= ";
+	/* print expr */
+	os << ":formula\n";
+	os << "(= ";
 	smt_pr.visit(q.expr);
-	ss << " bv0[1])\n";
-
-	/* now have arrays, build extrafuns and constant assumptions */
-	foreach (i,smt_pr.arr->a_initial.begin(),smt_pr.arr->a_initial.end()) {
-		const Array	*arr = i->first;
-		os << ":extrafuns ((" << arr->name << " Array[32:8]))\n";
-	}
-
-	foreach (it,
-		smt_pr.arr->a_assumptions.begin(),
-		smt_pr.arr->a_assumptions.end())
-	{
-		os << ":assumption " << it->second << "\n";
-	}
-
-	os << ss.str();
+	os << " bv0[1])\n";
 	os << ")\n";
 
-	delete smt_pr.arr;
+	delete smt_arr;
 }
 
 struct update_params
@@ -297,10 +320,16 @@ and so on.
 */
 const std::string& SMTPrinter::getInitialArray(const Array *root)
 {
+	return arr->getInitialArray(root);
+}
+
+
+const std::string& SMTPrinter::SMTArrays::getInitialArray(const Array* root)
+{
 	std::string		assump_str;
 
-	if (arr->a_initial.count(root))
-		return arr->a_initial.find(root)->second;
+	if (a_initial.count(root))
+		return a_initial.find(root)->second;
 
 	if (!root->isConstantArray()) goto done;
 
@@ -322,18 +351,23 @@ const std::string& SMTPrinter::getInitialArray(const Array *root)
 
 	if (root->mallocKey.size > 1) assump_str += ")\n";
 
-	arr->a_assumptions.insert(std::make_pair(root, assump_str));
+	a_assumptions.insert(std::make_pair(root, assump_str));
 done:
-	arr->a_initial.insert(std::make_pair(root, root->name));
-	return arr->a_initial[root];
+	a_initial.insert(std::make_pair(root, root->name));
+	return a_initial[root];
 }
 
 void SMTPrinter::printArrayDecls(void) const
 {
+	/* declarations */
 	foreach (it, arr->a_initial.begin(), arr->a_initial.end()) {
-		os	<< ":extrafuns (("
-			<< (it->first)->name
-			<< " Array[32:8]))\n";
+		const Array	*a = it->first;
+		os << ":extrafuns ((" << a->name << " Array[32:8]))\n";
+	}
+
+	/* print constant array values */
+	foreach (it, arr->a_assumptions.begin(), arr->a_assumptions.end()) {
+		os << ":assumption " << it->second << "\n";
 	}
 }
 
