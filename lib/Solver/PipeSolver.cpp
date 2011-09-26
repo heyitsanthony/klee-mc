@@ -10,6 +10,7 @@
 #include "klee/Constraints.h"
 #include "klee/SolverStats.h"
 #include "klee/TimerStatIncrementer.h"
+#include "llvm/Support/CommandLine.h"
 #include "klee/klee.h"
 #include <iostream>
 #include "klee/Solver.h"
@@ -17,6 +18,15 @@
 #include "PipeSolver.h"
 
 using namespace klee;
+using namespace llvm;
+
+namespace {
+	cl::opt<bool>
+	ForkQueries(
+		"pipe-fork-queries",
+		cl::desc("Fork query writer before sending to pipe."),
+		cl::init(false));
+}
 
 PipeSolver::PipeSolver(PipeFormat* in_fmt)
 : TimedSolver(new PipeSolverImpl(in_fmt))
@@ -221,10 +231,8 @@ bool PipeSolverImpl::computeSat(const Query& q)
 	return is_sat;
 }
 
-std::istream* PipeSolverImpl::writeRecvQuery(const Query& q)
+bool PipeSolverImpl::writeQueryToChild(const Query& q) const
 {
-	std::istream *is;
-
 	__gnu_cxx::stdio_filebuf<char> stdin_buf(fd_child_stdin, std::ios::out);
 	std::ostream *os = new std::ostream(&stdin_buf);
 	os->rdbuf()->pubsetbuf(NULL, 1024*64);
@@ -233,13 +241,53 @@ std::istream* PipeSolverImpl::writeRecvQuery(const Query& q)
 	SMTPrinter::print(*os, q);
 	if (os->fail()) {
 		std::cerr << "FAILED TO COMPLETELY SEND SMT\n";
-		return NULL;
+		return false;
 	}
 	os->flush();
 	delete os;
 
+}
+
+bool PipeSolverImpl::writeQuery(const Query& q) const
+{
+	pid_t	query_child;
+
+	if (!ForkQueries) {
+		writeQueryToChild(q);
+		return true;
+	}
+
+	/* fork() if requested. This should get around crashes
+	 * for really big queries with qemu */
+	query_child = fork();
+	if (query_child == -1)
+		return false;
+
+	if (query_child == 0) {
+		/* child writes to solver's stdin */
+		prctl(PR_SET_PDEATHSIG, SIGKILL);
+		writeQueryToChild(q);
+		exit(0);
+	}
+
+	assert (query_child > 0 && "Parent with bad pid");
+	if (waitpid(query_child, NULL, 0) != query_child)
+		return false;
+
+	return true;
+}
+
+std::istream* PipeSolverImpl::writeRecvQuery(const Query& q)
+{
+	std::istream	*is;
+	bool		wrote_query;
+
+	wrote_query = writeQuery(q);
 	close(fd_child_stdin);
 	fd_child_stdin = -1;
+
+	if (!wrote_query)
+		return NULL;
 
 	assert (stdout_buf == NULL);
 

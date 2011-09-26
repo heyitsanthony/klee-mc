@@ -45,6 +45,8 @@ private:
 	bool setupChild(const char* exec_fname, char* const argv[]);
 	void finiChild(void);
 	std::istream* writeRecvQuery(const Query& q);
+	bool writeQuery(const Query& q) const;
+	bool writeQueryToChild(const Query& q) const;
 	bool waitOnSolver(const Query& q) const;
 
 	PipeFormat	*fmt;
