@@ -28,6 +28,14 @@ namespace {
 		cl::init(false));
 }
 
+static void dumpBadQuery(const Query& q, const char* prefix)
+{
+	char	fname[256];
+	sprintf(fname, "%s.%x.smt", prefix, q.hash());
+	std::ofstream	os(fname, std::ios::out);
+	SMTPrinter::print(os, q);
+}
+
 PipeSolver::PipeSolver(PipeFormat* in_fmt)
 : TimedSolver(new PipeSolverImpl(in_fmt))
 {
@@ -156,6 +164,7 @@ bool PipeSolverImpl::computeInitialValues(
 		const_cast<char* const*>(fmt->getArgvModel())) == false)
 	{
 		failQuery();
+		dumpBadQuery(q, "badsetup");
 		std::cerr << "FAILED TO SETUP FCHILD CIV\n";
 		return false;
 	}
@@ -164,6 +173,8 @@ bool PipeSolverImpl::computeInitialValues(
 	if (!is) {
 		failQuery();
 		finiChild();
+		dumpBadQuery(q, "badwrite");
+		std::cerr << "FAILED TO WRITERECVQUERY\n";
 		return false;
 	}
 
@@ -174,6 +185,7 @@ bool PipeSolverImpl::computeInitialValues(
 
 	if (parse_ok == false) {
 		std::cerr << "BAD PARSE computeInitialValues\n";
+		dumpBadQuery(q, "badparse");
 		failQuery();
 		return false;
 	}
@@ -197,8 +209,10 @@ bool PipeSolverImpl::computeSat(const Query& q)
 	TimerStatIncrementer	t(stats::queryTime);
 	bool			parse_ok, is_sat;
 
-	if (setupChild(fmt->getExec(),
-		const_cast<char* const*>(fmt->getArgvSAT())) == false) {
+	if (setupChild(
+		fmt->getExec(),
+		const_cast<char* const*>(fmt->getArgvSAT())) == false)
+	{
 		std::cerr << "FAILED COMPUTE SAT QUERY\n";
 		failQuery();
 		return false;
@@ -235,12 +249,14 @@ bool PipeSolverImpl::writeQueryToChild(const Query& q) const
 {
 	__gnu_cxx::stdio_filebuf<char> stdin_buf(fd_child_stdin, std::ios::out);
 	std::ostream *os = new std::ostream(&stdin_buf);
-	os->rdbuf()->pubsetbuf(NULL, 1024*64);
+	os->rdbuf()->pubsetbuf(NULL, 1024*256);
+	assert (os->fail() == false);
 
 	/* write it all */
 	SMTPrinter::print(*os, q);
 	if (os->fail()) {
 		std::cerr << "FAILED TO COMPLETELY SEND SMT\n";
+		dumpBadQuery(q, "badsend");
 		return false;
 	}
 	os->flush();
@@ -323,10 +339,7 @@ bool PipeSolverImpl::waitOnSolver(const Query& q) const
 
 	if (rc == 0) {
 		/* timeout */
-		char	fname[256];
-		sprintf(fname, "snooze.%x.smt", q.hash());
-		std::ofstream	os(fname, std::ios::out);
-		SMTPrinter::print(os, q);
+		dumpBadQuery(q, "snooze");
 		return false;
 	}
 

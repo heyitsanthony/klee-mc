@@ -25,7 +25,6 @@ public:
   	Action visitExprPost(const Expr &e);
 
 protected:
-	std::string expr2str(const ref<Expr>& expr);
 	void expr2os(const ref<Expr>& expr, std::ostream& os);
 private:
 	SMTPrinter(std::ostream& in_os, SMTArrays* in_arr) 
@@ -39,8 +38,6 @@ private:
 	void printArrayDecls(void) const;
 	void printConstant(const ConstantExpr* ce);
 
-	const std::string getArrayForUpdate(
-		const Array* arr, const UpdateNode *un);
 	void writeArrayForUpdate(
 		std::ostream& os,
 		const Array* arr, const UpdateNode *un);

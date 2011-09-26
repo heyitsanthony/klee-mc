@@ -22,16 +22,31 @@ public:
 	ArrayFinder(SMTPrinter::SMTArrays* in_arr)
 	: ExprVisitor(false, true)
 	, arr(in_arr)
-	{}
+	{ }
 
 	virtual ~ArrayFinder(void) {}
 
 	virtual Action visitExpr(const Expr &e)
 	{
-		if (e.getKind() == Expr::Read)  {
-			const ReadExpr *re = cast<ReadExpr>(&e);
-			arr->getInitialArray(re->updates.root);
+		if (e.getKind() != Expr::Read)
+			return Action::doChildren();
+
+		const ReadExpr *re = cast<ReadExpr>(&e);
+		arr->getInitialArray(re->updates.root);
+
+		/* run through updates looking for other arrays--
+		 * sometimes an array reference is hidden in an update */
+		for (	const UpdateNode* un = re->updates.head;
+			un != NULL;
+			un = un->next)
+		{
+			if (!isa<ConstantExpr>(un->index))
+				visit(un->index);
+			if (!isa<ConstantExpr>(un->value))
+				visit(un->value);
 		}
+
+
 		return Action::doChildren();
 	}
 
@@ -237,8 +252,7 @@ void SMTPrinter::print(std::ostream& os, const Query& q)
 	os << ":formula\n";
 	os << "(= ";
 	smt_pr.visit(q.expr);
-	os << " bv0[1])\n";
-	os << ")\n";
+	os << " bv0[1]))\n";
 
 	delete smt_arr;
 }
@@ -297,14 +311,6 @@ void SMTPrinter::writeArrayForUpdate(
 }
 
 
-const std::string SMTPrinter::getArrayForUpdate(
-	const Array *root, const UpdateNode *un)
-{
-	std::stringstream	ss;
-	writeArrayForUpdate(ss, root, un);
-	return ss.str();
-}
-
 /**
 Bill,
 
@@ -322,7 +328,6 @@ const std::string& SMTPrinter::getInitialArray(const Array *root)
 {
 	return arr->getInitialArray(root);
 }
-
 
 const std::string& SMTPrinter::SMTArrays::getInitialArray(const Array* root)
 {
@@ -369,13 +374,6 @@ void SMTPrinter::printArrayDecls(void) const
 	foreach (it, arr->a_assumptions.begin(), arr->a_assumptions.end()) {
 		os << ":assumption " << it->second << "\n";
 	}
-}
-
-std::string SMTPrinter::expr2str(const ref<Expr>& e)
-{
-	std::stringstream	ss;
-	expr2os(e, ss);
-	return ss.str();
 }
 
 void SMTPrinter::expr2os(const ref<Expr>& e, std::ostream& os)
