@@ -67,6 +67,9 @@ PipeSolverImpl::~PipeSolverImpl(void)
 	delete fmt;
 }
 
+/* create solver child process with stdin/stdout pipes
+ * for sending/receiving query expressions/models
+ */
 bool PipeSolverImpl::setupChild(const char* exec_fname, char *const argv[])
 {
 	int	rc;
@@ -265,28 +268,41 @@ bool PipeSolverImpl::writeQueryToChild(const Query& q) const
 	return true;
 }
 
+static void query_writer_alarm(int x) { exit(1); }
+
 bool PipeSolverImpl::writeQuery(const Query& q) const
 {
-	pid_t	query_child;
+	pid_t	query_writer_pid;
+	int	status;
 
 	if (!ForkQueries)
 		return writeQueryToChild(q);
 
 	/* fork() if requested. This should get around crashes
 	 * for really big queries with qemu */
-	query_child = fork();
-	if (query_child == -1)
+	query_writer_pid = fork();
+	if (query_writer_pid == -1)
 		return false;
 
-	if (query_child == 0) {
+	if (query_writer_pid == 0) {
 		/* child writes to solver's stdin */
 		prctl(PR_SET_PDEATHSIG, SIGKILL);
+		if (timeout > 0.0) {
+			signal(SIGALRM, query_writer_alarm);
+			alarm((unsigned int)timeout);
+		}
 		writeQueryToChild(q);
 		exit(0);
 	}
 
-	assert (query_child > 0 && "Parent with bad pid");
-	if (waitpid(query_child, NULL, 0) != query_child)
+	assert (query_writer_pid > 0 && "Parent with bad pid");
+	if (waitpid(query_writer_pid, &status, 0) != query_writer_pid)
+		return false;
+
+	if (!WIFEXITED(status))
+		return false;
+
+	if (WEXITSTATUS(status) != 0)
 		return false;
 
 	return true;
