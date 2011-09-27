@@ -12,6 +12,7 @@
 
 #include "llvm/Support/CommandLine.h"
 
+#include <stack>
 #include <iostream>
 
 namespace {
@@ -186,3 +187,48 @@ DO_CHILDREN_ACTION(Sle, SleExpr)
 DO_CHILDREN_ACTION(Sgt, SgtExpr)
 DO_CHILDREN_ACTION(Sge, SgeExpr)
 DO_CHILDREN_ACTION(Constant, ConstantExpr)
+
+
+void ExprConstVisitor::visit(const ref<Expr>& expr)
+{
+	visit(expr.get());
+}
+
+void ExprConstVisitor::visit(const Expr* expr)
+{
+	std::stack<const Expr*>	expr_stack;
+
+	expr_stack.push(expr);
+	while (!expr_stack.empty()) {
+		const Expr*		cur_expr(expr_stack.top());
+		Action			action;
+		unsigned		num_kids;
+
+		expr_stack.pop();
+		action = visitExpr(cur_expr);
+
+		if (action == Skip)
+			continue;
+		if (action == Stop)
+			break;
+
+		assert (action == Expand);
+
+		num_kids = cur_expr->getNumKids();
+		for (unsigned i = 0; i < num_kids; i++) {
+			expr_stack.push(cur_expr->getKid(i).get());
+		}
+
+		/* update nodes are sepcial but still have
+		 * expressions! */
+		if (const ReadExpr* re = dyn_cast<const ReadExpr>(cur_expr)) {
+			for (	const UpdateNode* un = re->updates.head;
+				un != NULL;
+				un = un->next)
+			{
+				expr_stack.push(un->index.get());
+				expr_stack.push(un->value.get());
+			}
+		}
+	}
+}

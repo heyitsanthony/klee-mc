@@ -16,38 +16,24 @@ using namespace klee;
  * expression. This is important for SMT because it needs array information
  * up front, before the formula is given.
  */
-class ArrayFinder : public ExprVisitor
+class ArrayFinder : public ExprConstVisitor
 {
 public:
 	ArrayFinder(SMTPrinter::SMTArrays* in_arr)
-	: ExprVisitor(false, true)
-	, arr(in_arr)
+	: arr(in_arr)
 	{ }
 
 	virtual ~ArrayFinder(void) {}
 
-	virtual Action visitExpr(const Expr &e)
+	virtual Action visitExpr(const Expr* e)
 	{
-		if (e.getKind() != Expr::Read)
-			return Action::doChildren();
+		if (e->getKind() != Expr::Read)
+			return Expand;
 
-		const ReadExpr *re = cast<ReadExpr>(&e);
+		const ReadExpr *re = static_cast<const ReadExpr*>(e);
 		arr->getInitialArray(re->updates.root);
 
-		/* run through updates looking for other arrays--
-		 * sometimes an array reference is hidden in an update */
-		for (	const UpdateNode* un = re->updates.head;
-			un != NULL;
-			un = un->next)
-		{
-			if (!isa<ConstantExpr>(un->index))
-				visit(un->index);
-			if (!isa<ConstantExpr>(un->value))
-				visit(un->value);
-		}
-
-
-		return Action::doChildren();
+		return Expand;
 	}
 
 private:

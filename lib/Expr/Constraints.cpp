@@ -20,7 +20,8 @@
 
 using namespace klee;
 
-class ExprReplaceVisitor : public ExprVisitor {
+class ExprReplaceVisitor : public ExprVisitor
+{
 private:
   ref<Expr> src, dst;
 
@@ -62,42 +63,6 @@ public:
       return Action::doChildren();
     }
   }
-};
-
-class ExprPrefixMatchVisitor : public ExprVisitor
-{
-private:
-	unsigned int	len;
-	const char*	prefix;
-	bool		matched;
-
-public:
-	ExprPrefixMatchVisitor(unsigned int in_len, const char* in_prefix)
-	: ExprVisitor(true),
-	  len(in_len),
-	  prefix(in_prefix),
-	  matched(false) {}
-
-	Action visitExpr(const Expr &e)
-	{
-		const ReadExpr* re;
-
-		if (matched) return Action::skipChildren();
-
-		re = dyn_cast<const ReadExpr>(&e);
-		if (!re) return Action::doChildren();
-
-		if (re->updates.root->name.size() < len)
-			return Action::doChildren();
-
-		if (memcmp(re->updates.root->name.c_str(), prefix, len))
-			return Action::doChildren();
-
-		matched = true;
-		return Action::skipChildren();
-	}
-
-	bool isMatched(void) const { return matched; }
 };
 
 bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor)
@@ -203,22 +168,4 @@ void ConstraintManager::print(std::ostream& os) const
 		constraints[i]->print(os);
 		os << "\n";
 	}
-}
-
-void ConstraintManager::removeConstraintsPrefix(const char* prefix)
-{
-	std::list<iterator>	it_list;
-	int			prefix_len = strlen(prefix);
-
-	foreach (it, constraints.begin(), constraints.end()) {
-		ExprPrefixMatchVisitor	visitor(prefix_len, prefix);
-		ref<Expr>		e = *it;
-		visitor.visit(e);
-		if (visitor.isMatched()) {
-			it_list.push_back(it);
-		}
-	}
-
-	foreach (it, it_list.begin(), it_list.end())
-		constraints.erase(*it);
 }

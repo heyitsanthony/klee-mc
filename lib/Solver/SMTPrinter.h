@@ -9,7 +9,7 @@
 
 namespace klee {
 
-class SMTPrinter : public ExprVisitor
+class SMTPrinter : public ExprConstVisitor
 {
 public:
 	struct SMTArrays {

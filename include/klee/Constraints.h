@@ -55,8 +55,6 @@ public:
     return constraints == other.constraints;
   }
  
-  void removeConstraintsPrefix(const char* prefix);
-
   void print(std::ostream& os) const;
 private:
   constraints_ty constraints;
