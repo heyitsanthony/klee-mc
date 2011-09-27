@@ -3,6 +3,8 @@
 
 using namespace klee;
 
+Array::ArrayHashCons Array::arrayHashCons;
+
 extern "C" void vc_DeleteExpr(void*);
 
 Array::~Array()
@@ -31,6 +33,7 @@ Array::Array(
 , constantValues_expr(constantValuesBegin, constantValuesEnd)
 , constantValues_u8(NULL)
 , constant_count(constantValues_expr.size())
+, singleValue(0)
 {
 	chk_val = 0x12345678;
 	assert( (isSymbolicArray() || constant_count == mallocKey.size) &&
@@ -54,6 +57,14 @@ Array::Array(
 		constantValues_u8[i] = constantValues_expr[i]->getZExtValue(8);
 	}
 	constantValues_expr.clear();
+
+	for (unsigned int i = 1; i  < constant_count; i++) {
+		if (constantValues_u8[i] != constantValues_u8[i-1]) {
+			return;
+		}
+	}
+
+	singleValue = getValue(0);
 }
 
 bool Array::operator< (const Array &b) const
@@ -93,4 +104,28 @@ bool Array::operator< (const Array &b) const
 	}
 
 	return name < b.name;
+}
+
+
+Array* Array::uniqueArray(Array* arr)
+{
+	std::pair<ArrayHashCons::iterator,bool> ret(arrayHashCons.insert(arr));
+	if (ret.second)
+		return arr;
+
+	assert (*arr == *(*ret.first));
+	delete arr;
+	return *ret.first;
+}
+
+void Array::getConstantValues(std::vector< ref<ConstantExpr> >& v) const
+{
+	if (!constantValues_u8) {
+		v = constantValues_expr;
+		return;
+	}
+
+	v.resize(mallocKey.size);
+	for (unsigned i = 0; i < mallocKey.size; i++)
+		v[i] = getValue(i);
 }

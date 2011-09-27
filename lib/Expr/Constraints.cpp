@@ -6,13 +6,16 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-
+#include "llvm/Support/CommandLine.h"
+#include "llvm/ADT/StringExtras.h"
 #include "klee/Constraints.h"
+#include "klee/Common.h"
 
 #include "klee/util/ExprPPrinter.h"
 #include "klee/util/ExprVisitor.h"
 #include "static/Sugar.h"
 
+#include <stack>
 #include <string.h>
 #include <iostream>
 #include <list>
@@ -20,50 +23,251 @@
 
 using namespace klee;
 
+namespace {
+	llvm::cl::opt<bool>
+	SimplifyUpdates(
+		"simplify-updates",
+		llvm::cl::desc(
+		"Simplifies update list expressions in constraint manager."),
+		llvm::cl::init(true));
+}
+
 class ExprReplaceVisitor : public ExprVisitor
 {
 private:
-  ref<Expr> src, dst;
+	ref<Expr> src, dst;
 
 public:
-  ExprReplaceVisitor(ref<Expr> _src, ref<Expr> _dst) : src(_src), dst(_dst) {}
+	ExprReplaceVisitor(ref<Expr> _src, ref<Expr> _dst)
+	: src(_src), dst(_dst) {}
 
-  Action visitExpr(const Expr &e) {
-    if (e == *src.get()) {
-      return Action::changeTo(dst);
-    } else {
-      return Action::doChildren();
-    }
-  }
+	Action visitExpr(const Expr &e) {
+		return (e == *src.get())
+			? Action::changeTo(dst)
+			: Action::doChildren();
+	}
 
-  Action visitExprPost(const Expr &e) {
-    if (e == *src.get()) {
-      return Action::changeTo(dst);
-    } else {
-      return Action::doChildren();
-    }
-  }
+	Action visitExprPost(const Expr &e) {
+		return (e == *src.get())
+			? Action::changeTo(dst)
+			: Action::doChildren();
+	}
 };
 
-class ExprReplaceVisitor2 : public ExprVisitor {
+class ExprReplaceVisitor2 : public ExprVisitor
+{
+public:
+	ExprReplaceVisitor2(
+		const std::map< ref<Expr>, ref<Expr> > &_replacements)
+	: ExprVisitor(true)
+	, replacements(_replacements) {}
+
+	Action visitExprPost(const Expr &e)
+	{
+		std::map< ref<Expr>, ref<Expr> >::const_iterator it;
+		it = replacements.find(ref<Expr>(const_cast<Expr*>(&e)));
+		return (it != replacements.end())
+			? Action::changeTo(it->second)
+			: Action::doChildren();
+	}
+
+protected:
+	virtual Action visitRead(const ReadExpr &re);
+
 private:
-  const std::map< ref<Expr>, ref<Expr> > &replacements;
+	Action rebuildRead(
+		const ReadExpr& re,
+		ref<Expr>& readIndex,
+		std::stack<std::pair<ref<Expr>, ref<Expr> > >& updateStack);
 
-public:
-  ExprReplaceVisitor2(const std::map< ref<Expr>, ref<Expr> > &_replacements)
-    : ExprVisitor(true),
-      replacements(_replacements) {}
+	ref<Expr> buildUpdateStack(
+		const ReadExpr		&re,
+		ref<Expr>		&readIndex,
+		std::stack<std::pair<ref<Expr>, ref<Expr> > >& updateStack,
+		bool	&rebuild,
+		bool	&rebuildUpdates);
 
-  Action visitExprPost(const Expr &e) {
-    std::map< ref<Expr>, ref<Expr> >::const_iterator it;
-    it = replacements.find(ref<Expr>(const_cast<Expr*>(&e)));
-    if (it!=replacements.end()) {
-      return Action::changeTo(it->second);
-    } else {
-      return Action::doChildren();
-    }
-  }
+	const std::map< ref<Expr>, ref<Expr> > &replacements;
 };
+
+ExprVisitor::Action ExprReplaceVisitor2::rebuildRead(
+	const ReadExpr& re,
+	ref<Expr>&	readIndex,
+	std::stack<std::pair<ref<Expr>, ref<Expr> > >& updateStack)
+{
+	UpdateList				*newUpdates = NULL;
+	std::vector< ref<ConstantExpr> >	constantValues;
+	const UpdateList			&ul(re.updates);
+
+	static unsigned	id = 0;
+
+	ul.root->getConstantValues(constantValues);
+
+	while (!updateStack.empty()) {
+		ref<Expr> index = updateStack.top().first;
+		ref<Expr> value = updateStack.top().second;
+
+		ConstantExpr *cIdx = dyn_cast<ConstantExpr>(index);
+		ConstantExpr *cVal = dyn_cast<ConstantExpr>(value);
+
+		// flush newly constant writes to constant array
+		if (	cIdx && cVal &&
+			newUpdates == NULL &&
+			cIdx->getZExtValue() < constantValues.size())
+		{
+			constantValues[cIdx->getZExtValue()] =
+				ref<ConstantExpr>(cVal);
+			updateStack.pop();
+			continue;
+		}
+
+		if (newUpdates == NULL) {
+			const Array *newRoot = Array::uniqueArray(
+				new Array(
+					"simpl_arr"+llvm::utostr(++id),
+					ul.root->mallocKey,
+					&constantValues[0],
+					&constantValues[0]+constantValues.size()));
+			newUpdates = new UpdateList(newRoot, 0);
+		}
+		newUpdates->extend(index, value);
+
+		updateStack.pop();
+	}
+
+	// all-constant array
+	if (newUpdates == NULL) {
+		const Array *newRoot;
+
+		newRoot = Array::uniqueArray(
+			new Array(
+				"simpl_arr"+llvm::utostr(++id),
+				ul.root->mallocKey,
+				&constantValues[0],
+				&constantValues[0]+constantValues.size()));
+		newUpdates = new UpdateList(newRoot, 0);
+	}
+
+	return Action::changeTo(ReadExpr::create(*newUpdates, readIndex));
+}
+
+// simplify updates and build stack for rebuilding update list;
+// we also want to see if there's a single value that would result from
+// the read expression at this index.
+// (e.g., reading at index X, and all updates following and
+//  including an update to index X hold value Y, then the read X
+//  will always return Y.)
+//
+// NOTE (bug fix): if there's not an update definitively at index X,
+// then the entire Read must be sent to STP,
+// as the index may read from the root array.
+ref<Expr> ExprReplaceVisitor2::buildUpdateStack(
+	const ReadExpr		&re,
+	ref<Expr>		&readIndex,
+	std::stack<std::pair<ref<Expr>, ref<Expr> > >& updateStack,
+	bool	&rebuild,
+	bool	&rebuildUpdates)
+{
+	ref<Expr>	uniformValue(0);
+	bool		uniformUpdates = true;
+
+	for (const UpdateNode *un = re.updates.head; un; un=un->next) {
+		ref<Expr> index = isa<ConstantExpr>(un->index)
+			? un->index
+			: visit(un->index);
+
+		ref<Expr> value = isa<ConstantExpr>(un->value)
+			? un->value
+			: visit(un->value);
+
+		// skip constant updates that cannot match
+		// (!= symbolic updates could match!)
+		if (	isa<ConstantExpr>(readIndex) &&
+			isa<ConstantExpr>(index)
+			&& readIndex != index)
+		{
+			rebuild = rebuildUpdates = true;
+			continue;
+		}
+
+		if (index != un->index || value != un->value) {
+			rebuild = rebuildUpdates = true;
+			uniformUpdates = false;
+		} else if (uniformUpdates && uniformValue.isNull())
+			uniformValue = value;
+		else if (uniformUpdates && value != uniformValue)
+			uniformUpdates = false;
+
+		updateStack.push(std::make_pair(index, value));
+
+		// if we have a satisfying update, terminate update list
+		if (readIndex == index) {
+			if (uniformUpdates && !uniformValue.isNull())
+				return uniformValue;
+			break;
+		}
+	}
+
+	return NULL;
+}
+
+ExprVisitor::Action ExprReplaceVisitor2::visitRead(const ReadExpr &re)
+{
+	if (!SimplifyUpdates)
+		return Action::doChildren();
+
+	std::stack<std::pair<ref<Expr>, ref<Expr> > > updateStack;
+	ref<Expr>		uniformValue(0);
+	bool			rebuild, rebuildUpdates;
+	const UpdateList	&ul(re.updates);
+
+	// fast path: no updates, reading from constant array
+	// with a single value occupying all indices in the array
+	if (!ul.head && ul.root->isSingleValue())
+		return Action::changeTo(ul.root->getValue(0));
+
+	rebuild = rebuildUpdates = false;
+
+	ref<Expr> readIndex = isa<ConstantExpr>(re.index)
+		? re.index
+		: visit(re.index);
+
+	if (readIndex != re.index)
+		rebuild = true;
+
+	uniformValue = buildUpdateStack(
+		re, readIndex, updateStack, rebuild, rebuildUpdates);
+	if (!uniformValue.isNull())
+		return Action::changeTo(uniformValue);
+
+	// at least one update was simplified? rebuild
+	if (rebuild) {
+		if (!rebuildUpdates)
+			return Action::changeTo(
+				ReadExpr::create(re.updates, readIndex));
+
+		return rebuildRead(re, readIndex, updateStack);
+	}
+
+
+	// simplify case of a known read from a constant array
+	if (	isa<ConstantExpr>(re.index) &&
+		!ul.head && ul.root->isConstantArray())
+	{
+		uint64_t idx = cast<ConstantExpr>(re.index)->getZExtValue();
+		if (idx >= ul.root->mallocKey.size) {
+			klee_warning_once(
+			0,
+			"out of bounds constant array read (possibly within "
+			"an infeasible Select path?)");
+			return Action::changeTo(
+				ConstantExpr::alloc(0, re.getWidth()));
+		} else
+			return Action::changeTo(ul.root->getValue(idx));
+	}
+
+	return Action::doChildren();
+}
 
 bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor)
 {

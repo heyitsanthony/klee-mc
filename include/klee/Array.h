@@ -9,13 +9,16 @@
 
 #define KLEE_ARRAY_H
 
-
 class ConstantExpr;
 static inline ref<ConstantExpr> createConstantExpr(uint64_t v, Expr::Width w);
 
 class Array {
 private:
   unsigned int chk_val;
+  // hash cons for Array objects
+  typedef std::set<Array*, ArrayLT> ArrayHashCons;
+  static ArrayHashCons arrayHashCons;
+
 public:
   const std::string name;
   MallocKey mallocKey;
@@ -30,6 +33,7 @@ public:
   void incRefIfCared() const { if (refCount != refCountDontCare) ++refCount; }
   void decRefIfCared() const { if (refCount != refCountDontCare) --refCount; if (refCount == 0) delete this; }
 
+  static Array* uniqueArray(Array* arr);
 public:
   /// Array - Construct a new array object.
   ///
@@ -58,6 +62,8 @@ public:
 	return constantValues_expr[k];
   }
 
+  void getConstantValues(std::vector< ref<ConstantExpr> >& v) const;
+
   Expr::Width getDomain() const { return Expr::Int32; }
   Expr::Width getRange() const { return Expr::Int8; }
 
@@ -71,6 +77,9 @@ public:
 
   // returns true if a < b
   bool operator< (const Array &b) const;
+  bool operator== (const Array &b) const { return !(*this < b || b < *this); }
+
+  bool isSingleValue(void) const { return !singleValue.isNull(); }
 
   struct Compare
   {
@@ -88,4 +97,5 @@ private:
   std::vector< ref<ConstantExpr> >	constantValues_expr;
   uint8_t*				constantValues_u8;
   unsigned int				constant_count;
+  ref<Expr>				singleValue;
 };
