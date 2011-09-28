@@ -19,50 +19,65 @@
 namespace klee {
 
 class ExprVisitor;
-  
-class ConstraintManager {
+class ExprReplaceVisitor2;
+
+class ConstraintManager
+{
 public:
-  typedef std::vector< ref<Expr> > constraints_ty;
-  typedef constraints_ty::iterator iterator;
-  typedef constraints_ty::const_iterator const_iterator;
+	typedef std::vector< ref<Expr> > constraints_ty;
+	typedef constraints_ty::iterator iterator;
+	typedef constraints_ty::const_iterator const_iterator;
+	typedef std::vector< ref<Expr> >::const_iterator constraint_iterator;
 
-  ConstraintManager() {}
 
-  // create from constraints with no optimization
-  explicit
-  ConstraintManager(const std::vector< ref<Expr> > &_constraints) :
-    constraints(_constraints) {}
+	ConstraintManager() : simplifier(NULL) {}
+	virtual ~ConstraintManager();
 
-  ConstraintManager(const ConstraintManager &cs) : constraints(cs.constraints) {}
+	// create from constraints with no optimization
+	explicit
+	ConstraintManager(const std::vector< ref<Expr> > &_constraints)
+	: constraints(_constraints)
+	, simplifier(NULL) {}
 
-  typedef std::vector< ref<Expr> >::const_iterator constraint_iterator;
+	ConstraintManager(const ConstraintManager &cs)
+	: constraints(cs.constraints)
+	, simplifier(NULL) {}
 
-  // given a constraint which is known to be valid, attempt to 
-  // simplify the existing constraint set
-  void simplifyForValidConstraint(ref<Expr> e);
+	ConstraintManager& operator=(const ConstraintManager &cs)
+	{
+		constraints = cs.constraints;
+		invalidateSimplifier();
+		return *this;
+	}
 
-  ref<Expr> simplifyExpr(ref<Expr> e) const;
+	// given a constraint which is known to be valid, attempt to
+	// simplify the existing constraint set
+	void simplifyForValidConstraint(ref<Expr> e);
 
-  bool addConstraint(ref<Expr> e);
-  
-  bool empty() const { return constraints.empty(); }
-  ref<Expr> back() const { return constraints.back(); }
-  constraint_iterator begin() const { return constraints.begin(); }
-  constraint_iterator end() const { return constraints.end(); }
-  size_t size() const { return constraints.size(); }
+	ref<Expr> simplifyExpr(ref<Expr> e) const;
 
-  bool operator==(const ConstraintManager &other) const {
-    return constraints == other.constraints;
-  }
- 
-  void print(std::ostream& os) const;
+	bool addConstraint(ref<Expr> e);
+
+	bool empty() const { return constraints.empty(); }
+	ref<Expr> back() const { return constraints.back(); }
+	constraint_iterator begin() const { return constraints.begin(); }
+	constraint_iterator end() const { return constraints.end(); }
+	size_t size() const { return constraints.size(); }
+
+	bool operator==(const ConstraintManager &other) const
+	{ return constraints == other.constraints; }
+
+	void print(std::ostream& os) const;
+
 private:
-  constraints_ty constraints;
+	constraints_ty constraints;
+	mutable ExprReplaceVisitor2* simplifier;
 
-  // returns true iff the constraints were modified
-  bool rewriteConstraints(ExprVisitor &visitor);
+	// returns true iff the constraints were modified
+	bool rewriteConstraints(ExprVisitor &visitor);
 
-  bool addConstraintInternal(ref<Expr> e);
+	bool addConstraintInternal(ref<Expr> e);
+	void invalidateSimplifier(void) const;
 };
 
 }

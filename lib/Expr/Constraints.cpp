@@ -32,6 +32,8 @@ namespace {
 		llvm::cl::init(true));
 }
 
+namespace klee {
+
 class ExprReplaceVisitor : public ExprVisitor
 {
 private:
@@ -57,8 +59,10 @@ public:
 class ExprReplaceVisitor2 : public ExprVisitor
 {
 public:
+	ExprReplaceVisitor2(void) : ExprVisitor(true) {}
+
 	ExprReplaceVisitor2(
-		const std::map< ref<Expr>, ref<Expr> > &_replacements)
+		const std::map< ref<Expr>, ref<Expr> >& _replacements)
 	: ExprVisitor(true)
 	, replacements(_replacements) {}
 
@@ -69,6 +73,11 @@ public:
 		return (it != replacements.end())
 			? Action::changeTo(it->second)
 			: Action::doChildren();
+	}
+
+	std::map< ref<Expr>, ref<Expr> >& getReplacements(void)
+	{
+		return replacements;
 	}
 
 protected:
@@ -87,8 +96,10 @@ private:
 		bool	&rebuild,
 		bool	&rebuildUpdates);
 
-	const std::map< ref<Expr>, ref<Expr> > &replacements;
+	std::map< ref<Expr>, ref<Expr> > replacements;
 };
+
+}
 
 ExprVisitor::Action ExprReplaceVisitor2::rebuildRead(
 	const ReadExpr& re,
@@ -271,23 +282,37 @@ ExprVisitor::Action ExprReplaceVisitor2::visitRead(const ReadExpr &re)
 
 bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor)
 {
-  ConstraintManager::constraints_ty old;
-  bool changed = false;
+	ConstraintManager::constraints_ty old;
+	bool changed = false;
 
-  constraints.swap(old);
-  foreach (it, old.begin(), old.end()) {
-    ref<Expr> &ce = *it;
-    ref<Expr> e = visitor.visit(ce);
+	constraints.swap(old);
+	invalidateSimplifier();
 
-    if (e != ce) {
-      addConstraintInternal(e); // enable further reductions
-      changed = true;
-    } else {
-      constraints.push_back(ce);
-    }
-  }
+	foreach (it, old.begin(), old.end()) {
+		ref<Expr> &ce = *it;
+		ref<Expr> e = visitor.visit(ce);
 
-  return changed;
+		if (e != ce) {
+			// enable further reductions
+			addConstraintInternal(e);
+			changed = true;
+			continue;
+		}
+
+		if (changed)
+			e = simplifyExpr(ce);
+		constraints.push_back(ce);
+		invalidateSimplifier();
+	}
+
+	return changed;
+}
+
+void ConstraintManager::invalidateSimplifier(void) const
+{
+	if (!simplifier) return;
+	delete simplifier;
+	simplifier = NULL;
 }
 
 void ConstraintManager::simplifyForValidConstraint(ref<Expr> e)
@@ -295,23 +320,67 @@ void ConstraintManager::simplifyForValidConstraint(ref<Expr> e)
 	assert (0 == 1 && "STUB");
 }
 
+#define TRUE_EXPR	ConstantExpr::alloc(1, Expr::Bool)
+#define FALSE_EXPR	ConstantExpr::alloc(0, Expr::Bool)
+
+static void addEquality(
+	std::map< ref<Expr>, ref<Expr> > &equalities,
+	const ref<Expr>& e)
+{
+	if (const EqExpr *ee = dyn_cast<EqExpr>(e)) {
+		if (isa<ConstantExpr>(ee->left)) {
+			equalities.insert(std::make_pair(ee->right, ee->left));
+		} else {
+			equalities.insert(std::make_pair(e, TRUE_EXPR));
+		}
+		return;
+	}
+
+	equalities.insert(std::make_pair(e, TRUE_EXPR));
+
+	// DAR: common simplifications that make referent tracking on symbolics
+	// more efficient. Collapses the constraints created by
+	// compareOpReferents into simpler constraints. This is needed because
+	// expression canonicalization turns everything into < or <=
+	if (const UltExpr *x = dyn_cast<UltExpr>(e)) {
+		equalities.insert(
+			std::make_pair(
+				UleExpr::create(x->getKid(1), x->getKid(0)),
+				FALSE_EXPR));
+		return;
+	}
+	
+	if (const UleExpr *x = dyn_cast<UleExpr>(e)) {
+		equalities.insert(
+			std::make_pair(
+				UltExpr::create(x->getKid(1), x->getKid(0)),
+				FALSE_EXPR));
+
+		// x <= 0 implies x == 0
+		if (x->getKid(1)->isZero())
+			equalities.insert(
+				std::make_pair(x->getKid(0), x->getKid(1)));
+
+		return;
+	}
+}
+
 ref<Expr> ConstraintManager::simplifyExpr(ref<Expr> e) const
 {
 	if (isa<ConstantExpr>(e)) return e;
 
-	std::map< ref<Expr>, ref<Expr> > equalities;
+	if (simplifier != NULL)
+		return simplifier->visit(e);
 
-	foreach(it, constraints.begin(), constraints.end()) {
-		const EqExpr *ee = dyn_cast<EqExpr>(*it);
-		if (ee && isa<ConstantExpr>(ee->left)) {
-			equalities.insert(std::make_pair(ee->right, ee->left));
-		} else {
-			equalities.insert(std::make_pair(
-				*it, ConstantExpr::alloc(1, Expr::Bool)));
-		}
+	simplifier = new ExprReplaceVisitor2();
+	std::map< ref<Expr>, ref<Expr> >& equalities(
+		simplifier->getReplacements());
+
+	foreach (it, constraints.begin(), constraints.end()) {
+		addEquality(equalities, *it);
 	}
 
-	return ExprReplaceVisitor2(equalities).visit(e);
+	return simplifier->visit(e);
 }
 
 bool ConstraintManager::addConstraintInternal(ref<Expr> e)
@@ -349,11 +418,13 @@ bool ConstraintManager::addConstraintInternal(ref<Expr> e)
 			rewriteConstraints(visitor);
 		}
 		constraints.push_back(e);
+		invalidateSimplifier();
 		return true;
 	}
 
 	default:
 		constraints.push_back(e);
+		invalidateSimplifier();
 		return true;
 	}
 
@@ -372,4 +443,9 @@ void ConstraintManager::print(std::ostream& os) const
 		constraints[i]->print(os);
 		os << "\n";
 	}
+}
+
+ConstraintManager::~ConstraintManager(void)
+{
+	if (simplifier) delete simplifier;
 }
