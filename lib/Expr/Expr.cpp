@@ -540,6 +540,7 @@ ref<Expr> ExtractExpr::create(ref<Expr> expr, unsigned off, Width w)
 			return ExtractExpr::create(ce->getRight(), off, w);
 
 		// E(C(x,y)) = C(E(x), E(y))
+		// XXX is this wise? it creates more expressions..
 		return ConcatExpr::create(
 			ExtractExpr::create(
 				ce->getKid(0),
@@ -555,6 +556,10 @@ ref<Expr> ExtractExpr::create(ref<Expr> expr, unsigned off, Width w)
 			if (ce->src->getWidth() >= w) {
 				return ExtractExpr::create(ce->src, off, w);
 			}
+		} else  if (const ZExtExpr* ze = dyn_cast<ZExtExpr>(expr)) {
+			// qemu gave me this gem:
+			// extract[31:0] ( zero_extend[56] (select w8) )
+			return ZExtExpr::create(ze->src, w);
 		} else if (BinaryExpr *be = dyn_cast<BinaryExpr>(expr)) {
 			Kind rk = be->getKind();
 			// E(x + y) = E(x) + E(y)
@@ -568,6 +573,11 @@ ref<Expr> ExtractExpr::create(ref<Expr> expr, unsigned off, Width w)
 					ExtractExpr::create(be->right, off, w));
 			}
 		}
+	}
+
+	/* Extract(Extract) */
+	if (const ExtractExpr* ee = dyn_cast<ExtractExpr>(expr)) {
+		return ExtractExpr::alloc(ee->expr, off+ee->offset, w);
 	}
 
 #if 0
@@ -640,9 +650,8 @@ ref<Expr> ZExtExpr::create(const ref<Expr> &e, Width w)
 	// trunc
 	if (w < kBits) return ExtractExpr::create(e, 0, w);
 
-	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(e)) {
+	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(e))
 		return CE->ZExt(w);
-	}
 
 #if 0
 	/* In David's branch this only happens if 'optimize' is set;
