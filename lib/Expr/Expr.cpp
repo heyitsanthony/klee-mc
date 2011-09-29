@@ -436,17 +436,20 @@ ref<Expr> ConcatExpr::create(const ref<Expr> &l, const ref<Expr> &r)
 	Expr::Width w = l->getWidth() + r->getWidth();
 
 	// Fold concatenation of constants.
-	//
-	// FIXME: concat 0 x -> zext x ?
 	if (ConstantExpr *lCE = dyn_cast<ConstantExpr>(l)) {
 		if (ConstantExpr *rCE = dyn_cast<ConstantExpr>(r))
 			return lCE->Concat(rCE);
-		else if (ConcatExpr *ce_right = dyn_cast<ConcatExpr>(r)) {
+
+		if (ConcatExpr *ce_right = dyn_cast<ConcatExpr>(r)) {
 			ConstantExpr *rCE;
 			rCE = dyn_cast<ConstantExpr>(ce_right->left);
 			if (rCE)
 				return ConcatExpr::create(
 					lCE->Concat(rCE), ce_right->right);
+		}
+
+		if (lCE->isZero()) {
+			return ZExtExpr::create(r, w);
 		}
 	}
 
@@ -556,10 +559,6 @@ ref<Expr> ExtractExpr::create(ref<Expr> expr, unsigned off, Width w)
 			if (ce->src->getWidth() >= w) {
 				return ExtractExpr::create(ce->src, off, w);
 			}
-		} else  if (const ZExtExpr* ze = dyn_cast<ZExtExpr>(expr)) {
-			// qemu gave me this gem:
-			// extract[31:0] ( zero_extend[56] (select w8) )
-			return ZExtExpr::create(ze->src, w);
 		} else if (BinaryExpr *be = dyn_cast<BinaryExpr>(expr)) {
 			Kind rk = be->getKind();
 			// E(x + y) = E(x) + E(y)
@@ -573,12 +572,39 @@ ref<Expr> ExtractExpr::create(ref<Expr> expr, unsigned off, Width w)
 					ExtractExpr::create(be->right, off, w));
 			}
 		}
+
+		if (const ZExtExpr* ze = dyn_cast<ZExtExpr>(expr)) {
+			// qemu gave me this gem:
+			// extract[31:0] ( zero_extend[56] (select w8) )
+			return ZExtExpr::alloc(ze->src, w);
+		}
 	}
 
 	/* Extract(Extract) */
-	if (const ExtractExpr* ee = dyn_cast<ExtractExpr>(expr)) {
+	if (expr->getKind() == Extract) {
+		const ExtractExpr* ee = cast<ExtractExpr>(expr);
 		return ExtractExpr::alloc(ee->expr, off+ee->offset, w);
 	}
+
+	if (expr->getKind() == ZExt) {
+		const ZExtExpr* ze = cast<ZExtExpr>(expr);
+
+		// Another qemu gem:
+		// ( extract[31:8] ( zero_extend[56] ( select qemu_buf7 bv2[32])
+		// So, rewrite extractions of zext 0's as 0
+
+		if (off >= ze->src->getWidth()) {
+			return ConstantExpr::create(0, w);
+		}
+
+
+		// ( extract[31:8] ( zero_extend[32] (bvadd bv4294967292[32]
+		if (off+w <= ze->src->getWidth()) {
+			return ExtractExpr::create(ze->getKid(0), off, w);
+		}
+	}
+
+
 
 #if 0
 	if (const SelectExpr *se = dyn_cast<SelectExpr>(expr)) {
@@ -670,6 +696,15 @@ ref<Expr> ZExtExpr::create(const ref<Expr> &e, Width w)
 			ConstantExpr::alloc(0, w));
 	}
 
+	// NOTE:
+	// ( zero_extend[32] (concat bv0[24] ( select qemu_buf7 bv2[32])
+	// should now be folded concatexpr::create
+
+	// Zext(Zext)
+	if (e->getKind() == ZExt) {
+		return ZExtExpr::alloc(e->getKid(0), w);
+	}
+
 	// there are optimizations elsewhere that deal with concatenations of
 	// constants within their arguments, so we're better off concatenating 0
 	// than using ZExt. ZExt(X, w) = Concat(0, X)
@@ -680,18 +715,44 @@ ref<Expr> ZExtExpr::create(const ref<Expr> &e, Width w)
 	return ZExtExpr::alloc(e, w);
 }
 
-ref<Expr> SExtExpr::create(const ref<Expr> &e, Width w) {
-  unsigned kBits = e->getWidth();
-  if (w == kBits) {
-    return e;
-  } else if (w < kBits) { // trunc
-    return ExtractExpr::create(e, 0, w);
-  } else if (ConstantExpr *CE = dyn_cast<ConstantExpr>(e)) {
-    return CE->SExt(w);
-  } else {
-    return SExtExpr::alloc(e, w);
-  }
+ref<Expr> SExtExpr::create(const ref<Expr> &e, Width w)
+{
+	unsigned kBits = e->getWidth();
+	if (w == kBits)
+		return e;
+
+	// trunc
+	if (w < kBits) return ExtractExpr::create(e, 0, w);
+
+	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(e))
+		return CE->SExt(w);
+
+
+	// via qemu, again:
+	// ( sign_extend[32] (concat bv0[24]  (select qemu_buf7 ...
+	if (e->getKind() == Concat) {
+		/* concat 0s into MSB implies that sign extension
+		 * will always be a zero extension */
+		const ConcatExpr *con = cast<ConcatExpr>(e);
+		const ConstantExpr* CE;
+
+		CE = dyn_cast<ConstantExpr>(con->getKid(0));
+		if (CE && CE->isZero()) {
+			assert (CE->getWidth() > 0);
+			return ZExtExpr::create(con->getKid(1), w);
+		}
+	}
+
+	if (e->getKind() == ZExt) {
+	// sign_extend[32] ( zero_extend[24] ( select qemu_buf7 bv2[32])
+		if (e->getKid(0)->getWidth() < e->getWidth()) {
+			return ZExtExpr::create(e->getKid(0), w);
+		}
+	}
+
+	return SExtExpr::alloc(e, w);
 }
+
 
 /***/
 
@@ -848,11 +909,55 @@ static ref<Expr> AndExpr_createPartial(Expr *l, const ref<ConstantExpr> &cr)
 					cl->getRight()->getWidth())));
 	}
 
+	// Lift extractions for (2^k)-1 bitmasks
+	// (bvand (whatever) bv7[8])
+	// into
+	// zext[5] (extract[2:0] (extractwhatever))
+	if (cr->getWidth() <= 64) {
+		uint64_t	v;
+
+		v = cr->getZExtValue();
+		v++;	// v = 2^k?
+		assert (v != 0 && "but isAllOnes() is false!");
+		// bithack via the stanford bithacks page
+		if ((v & (v - 1)) == 0) {
+			int	bits_set = 0;
+
+			// count number of bits set
+			v--;	// v = 2^k - 1
+			while (v) {
+				assert (v & 1);
+				v >>= 1;
+				bits_set++;
+			}
+
+			return ZExtExpr::create(
+				ExtractExpr::create(l, 0, bits_set),
+				l->getWidth());
+		}
+	}
+
+	// lift zero_extensions
+	// (bvand ( zero_extend[24] ( select qemu_buf7 bv4[32]) ) bv7[32] )
+	// into
+	// zero_extend[24]  (bvand (select) bv7[8]))
+	if (l->getKind() == Expr::ZExt) {
+		ZExtExpr	*ze = static_cast<ZExtExpr*>(l);
+
+		return ZExtExpr::create(
+			AndExpr::create(
+				ze->getKid(0),
+				cr->ZExt(ze->getKid(0)->getWidth())),
+			ze->getWidth());
+	}
+
 	return AndExpr::alloc(l, cr);
 }
-static ref<Expr> AndExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r) {
-  return AndExpr_createPartial(r, cl);
+static ref<Expr> AndExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
+{
+	return AndExpr_createPartial(r, cl);
 }
+
 static ref<Expr> AndExpr_create(Expr *l, Expr *r)
 {
 	if (*l == *r)
@@ -964,28 +1069,79 @@ static ref<Expr> SRemExpr_create(const ref<Expr> &l, const ref<Expr> &r) {
   }
 }
 
-static ref<Expr> ShlExpr_create(const ref<Expr> &l, const ref<Expr> &r) {
-  if (l->getWidth() == Expr::Bool) { // l & !r
-    return AndExpr::create(l, Expr::createIsZero(r));
-  } else{
-    return ShlExpr::alloc(l, r);
-  }
+static ref<Expr> ShlExpr_create(const ref<Expr> &l, const ref<Expr> &r)
+{
+	// l & !r
+	if (l->getWidth() == Expr::Bool)
+		return AndExpr::create(l, Expr::createIsZero(r));
+
+	return ShlExpr::alloc(l, r);
 }
 
-static ref<Expr> LShrExpr_create(const ref<Expr> &l, const ref<Expr> &r) {
-  if (l->getWidth() == Expr::Bool) { // l & !r
-    return AndExpr::create(l, Expr::createIsZero(r));
-  } else{
-    return LShrExpr::alloc(l, r);
-  }
+// Note: ashr (zext x) => lshr (zext x)
+static ref<Expr> ShrExprZExt_create(const ref<Expr> &l, const ref<Expr> &r)
+{
+	ConstantExpr *ce = dyn_cast<ConstantExpr>(r);
+	if (ce == NULL || ce->getWidth() > 64)
+		return NULL;
+
+	const ZExtExpr	*ze = dyn_cast<ZExtExpr>(l);
+	if (ze == NULL)
+		return NULL;
+
+	Expr::Width	new_w = ze->getKid(0)->getWidth();
+	// bvshr
+	//	( zero_extend[56] ( select qemu_buf7 bv6[32]) )
+	//	bv3[64] ))
+	//
+	// into
+	// zext[56] (bvshr (sel qemubuf) bv3[8])
+	assert (ce->getZExtValue() < (1ULL << new_w));
+	return ZExtExpr::create(
+		LShrExpr::create(
+			ze->getKid(0),
+			ce->ZExt(new_w)),
+		ze->width);
 }
 
-static ref<Expr> AShrExpr_create(const ref<Expr> &l, const ref<Expr> &r) {
-  if (l->getWidth() == Expr::Bool) { // l
-    return l;
-  } else{
-    return AShrExpr::alloc(l, r);
-  }
+static ref<Expr> LShrExpr_create(const ref<Expr> &l, const ref<Expr> &r)
+{
+	// l & !r
+	if (l->getWidth() == Expr::Bool)
+		return AndExpr::create(l, Expr::createIsZero(r));
+
+	ref<Expr> ret(ShrExprZExt_create(l, r));
+	if (!ret.isNull())
+		return ret;
+
+	ConstantExpr* ce = dyn_cast<ConstantExpr>(r);
+	if (ce && ce->getWidth() <= 64) {
+		// Constant shifts can be rewritten into Extracts
+		// I assume extracts are more desirable by virtue of
+		// having fewer Expr parameters.
+		uint64_t	off = ce->getZExtValue();
+
+		if (off >= l->getWidth())
+			return ConstantExpr::alloc(0, l->getWidth());
+
+		return ZExtExpr::create(
+			ExtractExpr::create(l, off, l->getWidth() - off),
+			l->getWidth());
+	}
+
+	return LShrExpr::alloc(l, r);
+}
+
+static ref<Expr> AShrExpr_create(const ref<Expr> &l, const ref<Expr> &r)
+{
+	if (l->getWidth() == Expr::Bool)
+		return l;
+
+	ref<Expr> ret(ShrExprZExt_create(l, r));
+	if (!ret.isNull())
+		return ret;
+
+	return AShrExpr::alloc(l, r);
 }
 
 #define BCREATE_R(_e_op, _op, partialL, partialR) \
