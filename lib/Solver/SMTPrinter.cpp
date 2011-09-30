@@ -19,8 +19,14 @@ using namespace klee;
 class ArrayFinder : public ExprConstVisitor
 {
 public:
+	typedef ExprHashMap< unsigned > bindings_ty;
+
+	// let bindings
+	bindings_ty	bindings;
+
 	ArrayFinder(SMTPrinter::SMTArrays* in_arr)
 	: arr(in_arr)
+	, next_binding_id(0)
 	{ }
 
 	virtual ~ArrayFinder(void) {}
@@ -30,14 +36,29 @@ public:
 		if (e->getKind() != Expr::Read)
 			return Expand;
 
+		bindings_ty::iterator it;
+
+		it = bindings.find(ref<Expr>(const_cast<Expr*>(e)));
+		if (it != bindings.end()) {
+			// seen it
+			return Skip;
+		}
+
 		const ReadExpr *re = static_cast<const ReadExpr*>(e);
 		arr->getInitialArray(re->updates.root);
+
+		bindings.insert(std::make_pair(
+			ref<Expr>(const_cast<Expr*>(e)),
+			next_binding_id++));
 
 		return Expand;
 	}
 
+	unsigned int getNumBindings(void) const { return next_binding_id; }
+
 private:
 	SMTPrinter::SMTArrays	*arr;
+	unsigned int		next_binding_id;
 };
 
 SMTPrinter::Action SMTPrinter::visitExprPost(const Expr &e)

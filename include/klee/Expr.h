@@ -165,7 +165,10 @@ public:
     Sgt, /// Not used in canonical form
     Sge, /// Not used in canonical form
 
-    LastKind=Sge,
+    Let,
+    Bind,
+
+    LastKind=Bind,
 
     CastKindFirst=ZExt,
     CastKindLast=SExt,
@@ -247,6 +250,9 @@ public:
 
   /// Create a little endian read of the given type at offset 0 of the
   /// given object.
+  //
+  //XXX are there special semantics to this? Why wouldn't I want to
+  //use ReadExpr::create?
   static ref<Expr> createTempRead(const Array *array, Expr::Width w);
   
   static ref<ConstantExpr> createPointer(uint64_t v);
@@ -509,6 +515,59 @@ public:
 };
 
 
+class LetExpr : public NonConstantExpr
+{
+public:
+	static const Kind kind = Let;
+	static const unsigned numKids = 0;
+	virtual ~LetExpr() {}
+	unsigned getNumKids() const { return 2; }
+
+	ref<Expr> getKid(unsigned i) const
+	{
+		assert (i < 2);
+		return (i == 0) ? binding_expr : scope_expr;
+	}
+
+	static bool classof(const Expr *E) { return E->getKind() == Expr::Let; }
+	static bool classof(const LetExpr *l) { return true; }
+
+	uint64_t	id;
+	ref<Expr>	binding_expr;
+	ref<Expr>	scope_expr;
+
+protected:
+	static uint64_t	next_id;
+
+	LetExpr(const ref<LetExpr> &b_expr, const ref<Expr> &s_expr)
+	: id(++next_id)
+	, binding_expr(b_expr)
+	, scope_expr(s_expr)
+	{}
+};
+
+class BindExpr : public NonConstantExpr
+{
+public:
+	static const Kind kind = Bind;
+	static const unsigned numKids = 0;
+	virtual ~BindExpr() {}
+	unsigned getNumKids() const { return 0; }
+	ref<Expr> getKid(unsigned i) const { return NULL; }
+	static ref<Expr> create(const ref<LetExpr> &l);
+	static bool classof(const Expr *E) { return E->getKind() == Expr::Bind; }
+	static bool classof(const BindExpr *) { return true; }
+
+	Width getWidth(void) const
+	{ return let_expr->binding_expr->getWidth(); }
+
+	ref<LetExpr>	let_expr;
+
+protected:
+	BindExpr(const ref<LetExpr> &l) : let_expr(l) {}
+private:
+};
+
 /// Class representing an if-then-else expression.
 class SelectExpr : public NonConstantExpr {
 public:
@@ -575,6 +634,7 @@ public:
 private:
   Width width;
   ref<Expr> left, right;  
+  static ref<Expr> mergeExtracts(const ref<Expr>& l, const ref<Expr>& r);
 
 public:
   static ref<Expr> alloc(const ref<Expr> &l, const ref<Expr> &r) {

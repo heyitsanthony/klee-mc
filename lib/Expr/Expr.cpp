@@ -29,57 +29,51 @@ namespace {
 	 cl::desc("Enable various optimizations involving all-constant arrays."));
 }
 
-/***/
-
+uint64_t LetExpr::next_id = 0;
 unsigned Expr::count = 0;
 
 bool ArrayLT::operator()(const Array *a, const Array *b) const
 { return *a < *b; }
 
-ref<Expr> Expr::createTempRead(const Array *array, Expr::Width w) {
-  UpdateList ul(array, 0);
+ref<Expr> Expr::createTempRead(const Array *array, Expr::Width w)
+{
+	UpdateList ul(array, 0);
 
-  switch (w) {
-  default: assert(0 && "invalid width");
-  case Expr::Bool:
-    return ZExtExpr::create(ReadExpr::create(ul,
-                                             ConstantExpr::alloc(0, Expr::Int32)),
-                            Expr::Bool);
-  case Expr::Int8:
-    return ReadExpr::create(ul,
-                            ConstantExpr::alloc(0,Expr::Int32));
-  case Expr::Int16:
-    return ConcatExpr::create(ReadExpr::create(ul,
-                                               ConstantExpr::alloc(1,Expr::Int32)),
-                              ReadExpr::create(ul,
-                                               ConstantExpr::alloc(0,Expr::Int32)));
-  case Expr::Int32:
-    return ConcatExpr::create4(ReadExpr::create(ul,
-                                                ConstantExpr::alloc(3,Expr::Int32)),
-                               ReadExpr::create(ul,
-                                                ConstantExpr::alloc(2,Expr::Int32)),
-                               ReadExpr::create(ul,
-                                                ConstantExpr::alloc(1,Expr::Int32)),
-                               ReadExpr::create(ul,
-                                                ConstantExpr::alloc(0,Expr::Int32)));
-  case Expr::Int64:
-    return ConcatExpr::create8(ReadExpr::create(ul,
-                                                ConstantExpr::alloc(7,Expr::Int32)),
-                               ReadExpr::create(ul,
-                                                ConstantExpr::alloc(6,Expr::Int32)),
-                               ReadExpr::create(ul,
-                                                ConstantExpr::alloc(5,Expr::Int32)),
-                               ReadExpr::create(ul,
-                                                ConstantExpr::alloc(4,Expr::Int32)),
-                               ReadExpr::create(ul,
-                                                ConstantExpr::alloc(3,Expr::Int32)),
-                               ReadExpr::create(ul,
-                                                ConstantExpr::alloc(2,Expr::Int32)),
-                               ReadExpr::create(ul,
-                                                ConstantExpr::alloc(1,Expr::Int32)),
-                               ReadExpr::create(ul,
-                                                ConstantExpr::alloc(0,Expr::Int32)));
-  }
+#define READ_BYTE_OFF(x)	\
+	ReadExpr::create(ul, ConstantExpr::alloc(x,Expr::Int32))
+
+	switch (w) {
+	default: assert(0 && "invalid width");
+	case Expr::Bool:
+		return ZExtExpr::create(
+			ReadExpr::create(
+				ul,
+				ConstantExpr::alloc(0, Expr::Int32)),
+				Expr::Bool);
+	case Expr::Int8:
+		return READ_BYTE_OFF(0);
+	case Expr::Int16:
+		return ConcatExpr::create(
+			READ_BYTE_OFF(1),
+			READ_BYTE_OFF(0));
+
+	case Expr::Int32:
+		return ConcatExpr::create4(
+			READ_BYTE_OFF(3),
+			READ_BYTE_OFF(2),
+			READ_BYTE_OFF(1),
+			READ_BYTE_OFF(0));
+	case Expr::Int64:
+		return ConcatExpr::create8(
+			READ_BYTE_OFF(7),
+			READ_BYTE_OFF(6),
+			READ_BYTE_OFF(5),
+			READ_BYTE_OFF(4),
+			READ_BYTE_OFF(3),
+			READ_BYTE_OFF(2),
+			READ_BYTE_OFF(1),
+			READ_BYTE_OFF(0));
+	}
 }
 
 /* Slow path for comparison. This should only be used by Expr::compare */
@@ -181,13 +175,14 @@ unsigned ExtractExpr::computeHash() {
   return hashValue;
 }
 
-unsigned ReadExpr::computeHash() {
-  unsigned h_idx = index->hash();
-  unsigned h_updates = updates.hash();
-  unsigned res = (h_idx * Expr::MAGIC_HASH_CONSTANT);
-  res ^= h_updates;
-  hashValue = res;
-  return hashValue;
+unsigned ReadExpr::computeHash()
+{
+	unsigned h_idx = index->hash();
+	unsigned h_updates = updates.hash();
+	unsigned res = (h_idx * Expr::MAGIC_HASH_CONSTANT);
+	res ^= h_updates;
+	hashValue = res;
+	return hashValue;
 }
 
 unsigned NotExpr::computeHash() {
@@ -431,6 +426,48 @@ ref<Expr> SelectExpr::create(ref<Expr> c, ref<Expr> t, ref<Expr> f) {
 
 /***/
 
+ref<Expr> ConcatExpr::mergeExtracts(const ref<Expr>& l, const ref<Expr>& r)
+{
+	Expr::Width	w = l->getWidth() + r->getWidth();
+	ExtractExpr	*ee_left, *ee_right;
+	ConcatExpr	*ce_right;
+
+	ee_left = dyn_cast<ExtractExpr>(l);
+	if (ee_left == NULL)
+		return NULL;
+
+	ee_right = dyn_cast<ExtractExpr>(r);
+	if (ee_right) {
+		if (	ee_left->expr == ee_right->expr &&
+			ee_right->offset + ee_right->width == ee_left->offset)
+		{
+			return ExtractExpr::create(
+				ee_left->expr, ee_right->offset, w);
+		}
+	}
+
+	// concat(extract(x[j+1]), concat(extract(x[j]), ...)
+	//   => concat(extract(x[j+1:j]), ...)
+	ce_right = dyn_cast<ConcatExpr>(r);
+	if (ce_right != NULL) {
+		ee_right = dyn_cast<ExtractExpr>(ce_right->left);
+		if (	ee_right &&
+			ee_left->expr == ee_right->expr &&
+			ee_left->offset == ee_right->offset + ee_right->width)
+		{
+			return ConcatExpr::create(
+				ExtractExpr::create(
+					ee_left->expr,
+					ee_right->offset,
+					ee_left->width+ee_right->width),
+				ce_right->right);
+		}
+	}
+
+	return NULL;
+}
+
+
 ref<Expr> ConcatExpr::create(const ref<Expr> &l, const ref<Expr> &r)
 {
 	Expr::Width w = l->getWidth() + r->getWidth();
@@ -454,38 +491,10 @@ ref<Expr> ConcatExpr::create(const ref<Expr> &l, const ref<Expr> &r)
 	}
 
 	// Merge contiguous Extracts
-	ExtractExpr	*ee_left;
-
-	ee_left = dyn_cast<ExtractExpr>(l);
-	if (ee_left) {
-		ExtractExpr *ee_right;
-		ee_right = dyn_cast<ExtractExpr>(r);
-		if (ee_right) {
-			if (	ee_left->expr == ee_right->expr &&
-				ee_right->offset + ee_right->width == ee_left->offset)
-			{
-				return ExtractExpr::create(
-					ee_left->expr, ee_right->offset, w);
-			}
-		}
-		// concat(extract(x[j+1]), concat(extract(x[j]), ...)
-		//   => concat(extract(x[j+1:j]), ...)
-		else if (ConcatExpr *ce_right = dyn_cast<ConcatExpr>(r)) {
-			ee_right = dyn_cast<ExtractExpr>(ce_right->left);
-			if (	ee_right &&
-				ee_left->expr == ee_right->expr &&
-				ee_left->offset == ee_right->offset + ee_right->width)
-			{
-				return ConcatExpr::create(
-					ExtractExpr::create(
-						ee_left->expr,
-						ee_right->offset,
-						ee_left->width+ee_right->width),
-					ce_right->right);
-			}
-		}
-
-	}
+	ref<Expr>	ret_merge;
+	ret_merge = mergeExtracts(l, r);
+	if (!ret_merge.isNull())
+		return ret_merge;
 
 	return ConcatExpr::alloc(l, r);
 }
@@ -604,7 +613,32 @@ ref<Expr> ExtractExpr::create(ref<Expr> expr, unsigned off, Width w)
 		}
 	}
 
+	if (expr->getKind() == Shl) {
+		const ShlExpr	*shl_expr = cast<ShlExpr>(expr);
+		const ZExtExpr	*ze;
+		const ConstantExpr *ce;
 
+		// from readelf
+		// ( extract[7:0]
+		//   (bvshl (zext[56] ( sel buf bv33[32])) bv48[64]))
+		// >> works out to 0
+		ze = dyn_cast<ZExtExpr>(shl_expr->getKid(0));
+		ce = dyn_cast<ConstantExpr>(shl_expr->getKid(1));
+		if (ze && ce) {
+			unsigned int	active_begin, active_w;
+
+			active_begin = ce->getZExtValue();
+			active_w = ze->src->getWidth();
+
+			/* active bytes start after extract */
+			if (active_begin >= off+w)
+				return ConstantExpr::alloc(0, w);
+
+			/* active bytes end before start of extract */
+			if (active_begin+active_w <= off)
+				return ConstantExpr::alloc(0, w);
+		}
+	}
 
 #if 0
 	if (const SelectExpr *se = dyn_cast<SelectExpr>(expr)) {
@@ -812,80 +846,98 @@ static ref<Expr> AddExpr_create(Expr *l, Expr *r) {
   }
 }
 
-static ref<Expr> SubExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r) {
-  Expr::Width type = cl->getWidth();
+static ref<Expr> SubExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
+{
+	Expr::Width type = cl->getWidth();
 
-  if (type==Expr::Bool) {
-    return XorExpr_createPartialR(cl, r);
-  } else {
-    Expr::Kind rk = r->getKind();
-    if (rk==Expr::Add && isa<ConstantExpr>(r->getKid(0))) { // A - (B+c) == (A-B) - c
-      return SubExpr::create(SubExpr::create(cl, r->getKid(0)),
-                             r->getKid(1));
-    } else if (rk==Expr::Sub && isa<ConstantExpr>(r->getKid(0))) { // A - (B-c) == (A-B) + c
-      return AddExpr::create(SubExpr::create(cl, r->getKid(0)),
-                             r->getKid(1));
-    } else {
-      return SubExpr::alloc(cl, r);
-    }
-  }
-}
-static ref<Expr> SubExpr_createPartial(Expr *l, const ref<ConstantExpr> &cr) {
-  // l - c => l + (-c)
-  return AddExpr_createPartial(l,
-                               ConstantExpr::alloc(0, cr->getWidth())->Sub(cr));
-}
-static ref<Expr> SubExpr_create(Expr *l, Expr *r) {
-  Expr::Width type = l->getWidth();
+	if (type==Expr::Bool)
+		return XorExpr_createPartialR(cl, r);
 
-  if (type == Expr::Bool) {
-    return XorExpr_create(l, r);
-  } else if (*l==*r) {
-    return ConstantExpr::alloc(0, type);
-  } else {
-    Expr::Kind lk = l->getKind(), rk = r->getKind();
-    if (lk==Expr::Add && isa<ConstantExpr>(l->getKid(0))) { // (k+a)-b = k+(a-b)
-      return AddExpr::create(l->getKid(0),
-                             SubExpr::create(l->getKid(1), r));
-    } else if (lk==Expr::Sub && isa<ConstantExpr>(l->getKid(0))) { // (k-a)-b = k-(a+b)
-      return SubExpr::create(l->getKid(0),
-                             AddExpr::create(l->getKid(1), r));
-    } else if (rk==Expr::Add && isa<ConstantExpr>(r->getKid(0))) { // a - (k+b) = (a-c) - k
-      return SubExpr::create(SubExpr::create(l, r->getKid(1)),
-                             r->getKid(0));
-    } else if (rk==Expr::Sub && isa<ConstantExpr>(r->getKid(0))) { // a - (k-b) = (a+b) - k
-      return SubExpr::create(AddExpr::create(l, r->getKid(1)),
-                             r->getKid(0));
-    } else {
-      return SubExpr::alloc(l, r);
-    }
-  }
+	Expr::Kind rk = r->getKind();
+	// A - (B+c) == (A-B) - c
+	if (rk==Expr::Add && isa<ConstantExpr>(r->getKid(0)))
+		return SubExpr::create(
+			SubExpr::create(cl, r->getKid(0)), r->getKid(1));
+
+	// A - (B-c) == (A-B) + c
+	if (rk==Expr::Sub && isa<ConstantExpr>(r->getKid(0)))
+		return AddExpr::create(
+			SubExpr::create(cl, r->getKid(0)), r->getKid(1));
+
+	return SubExpr::alloc(cl, r);
 }
 
-static ref<Expr> MulExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r) {
-  Expr::Width type = cl->getWidth();
-
-  if (type == Expr::Bool) {
-    return AndExpr_createPartialR(cl, r);
-  } else if (cl->isOne()) {
-    return r;
-  } else if (cl->isZero()) {
-    return cl;
-  } else {
-    return MulExpr::alloc(cl, r);
-  }
+static ref<Expr> SubExpr_createPartial(Expr *l, const ref<ConstantExpr> &cr)
+{
+	// l - c => l + (-c)
+	return AddExpr_createPartial(
+		l,
+		ConstantExpr::alloc(0, cr->getWidth())->Sub(cr));
 }
-static ref<Expr> MulExpr_createPartial(Expr *l, const ref<ConstantExpr> &cr) {
-  return MulExpr_createPartialR(cr, l);
-}
-static ref<Expr> MulExpr_create(Expr *l, Expr *r) {
-  Expr::Width type = l->getWidth();
 
-  if (type == Expr::Bool) {
-    return AndExpr::alloc(l, r);
-  } else {
-    return MulExpr::alloc(l, r);
-  }
+static ref<Expr> SubExpr_create(Expr *l, Expr *r)
+{
+	Expr::Width type = l->getWidth();
+
+	if (type == Expr::Bool)
+		return XorExpr_create(l, r);
+
+	if (*l == *r)
+		return ConstantExpr::alloc(0, type);
+
+	Expr::Kind lk = l->getKind(), rk = r->getKind();
+
+	// (k+a)-b = k+(a-b)
+	if (lk == Expr::Add && isa<ConstantExpr>(l->getKid(0)))
+		return AddExpr::create(
+			l->getKid(0), SubExpr::create(l->getKid(1), r));
+
+	// (k-a)-b = k-(a+b)
+	if (lk == Expr::Sub && isa<ConstantExpr>(l->getKid(0)))
+		return SubExpr::create(
+			l->getKid(0), AddExpr::create(l->getKid(1), r));
+	// a - (k+b) = (a-c) - k
+	if (rk == Expr::Add && isa<ConstantExpr>(r->getKid(0)))
+		return SubExpr::create(
+			SubExpr::create(l, r->getKid(1)), r->getKid(0));
+
+	// a - (k-b) = (a+b) - k
+	if (rk == Expr::Sub && isa<ConstantExpr>(r->getKid(0)))
+		return SubExpr::create(
+			AddExpr::create(l, r->getKid(1)), r->getKid(0));
+
+	return SubExpr::alloc(l, r);
+}
+
+static ref<Expr> MulExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
+{
+	Expr::Width type = cl->getWidth();
+
+	if (type == Expr::Bool)
+		return AndExpr_createPartialR(cl, r);
+
+	if (cl->isOne())
+		return r;
+
+	if (cl->isZero())
+		return cl;
+
+	return MulExpr::alloc(cl, r);
+}
+
+static ref<Expr> MulExpr_createPartial(Expr *l, const ref<ConstantExpr> &cr)
+{
+	return MulExpr_createPartialR(cr, l);
+}
+
+static ref<Expr> MulExpr_create(Expr *l, Expr *r)
+{
+	Expr::Width type = l->getWidth();
+
+	if (type == Expr::Bool)
+		return AndExpr::alloc(l, r);
+
+	return MulExpr::alloc(l, r);
 }
 
 static ref<Expr> AndExpr_createPartial(Expr *l, const ref<ConstantExpr> &cr)
@@ -1074,6 +1126,11 @@ static ref<Expr> ShlExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 	// l & !r
 	if (l->getWidth() == Expr::Bool)
 		return AndExpr::create(l, Expr::createIsZero(r));
+
+	if (const ConstantExpr* ce = dyn_cast<ConstantExpr>(r)) {
+		if (ce->getZExtValue() >= l->getWidth())
+			return ConstantExpr::alloc(0, l->getWidth());
+	}
 
 	return ShlExpr::alloc(l, r);
 }
