@@ -133,9 +133,10 @@ bool AddressSpace::isFeasibleRange(
 	ExecutionState &state,
 	TimingSolver *solver,
 	ref<Expr> address,
-	const MemoryObject* lo, const MemoryObject* hi)
+	const MemoryObject* lo, const MemoryObject* hi,
+	bool& ok)
 {
-	bool mayBeTrue, ok;
+	bool	mayBeTrue;
 
 	ref<Expr> inRange = getFeasibilityExpr(address, lo, hi);
 
@@ -232,6 +233,7 @@ bool AddressSpace::getFeasibleObject(
 		// Check whether current range of MemoryObjects is feasible
 		unsigned i = 0;
 		for (; i < 2; i++) {
+			bool ok, feasible;
 			std::pair<MMIter, MMIter> cur = i ? right : left;
 			const MemoryObject *low;
 			const MemoryObject *high;
@@ -244,7 +246,15 @@ bool AddressSpace::getFeasibleObject(
 			low = cur.first->first;
 			high = cur.second->first;
 
-			if (!isFeasibleRange(state, solver, address, low, high)) {
+			feasible = isFeasibleRange(
+				state, solver, address, low, high, ok);
+
+			if (!ok) {
+				res.first = NULL;
+				return false;
+			}
+
+			if (!feasible) {
 				/* address can not possibly be in
 				 * this range */
 				continue;
@@ -370,6 +380,7 @@ bool AddressSpace::binsearchRange(
 {
 	// Iteratively perform binary search until stack is empty
 	while (!tryRanges.empty()) {
+		bool	ok, feasible;
 		MMIter bi = tryRanges.top().first;
 		MMIter ei = tryRanges.top().second;
 		const MemoryObject *low = bi->first;
@@ -378,8 +389,9 @@ bool AddressSpace::binsearchRange(
 		tryRanges.pop();
 
 		// Check whether current range of MemoryObjects is feasible
-		if (!isFeasibleRange(state, solver, p, low, high))
-			continue; // XXX return true on query error
+		feasible = isFeasibleRange(state, solver, p, low, high, ok);
+		if (!ok) return true;
+		if (!feasible) continue;
 
 		if (low != high) {
 			// range contains more than one object,

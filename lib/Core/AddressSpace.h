@@ -106,7 +106,8 @@ namespace klee {
 		TimingSolver *solver,
 		ref<Expr> address,
 		const MemoryObject* lo,
-		const MemoryObject* hi);
+		const MemoryObject* hi,
+		bool& ok);
 	
 	MMIter getMidPoint(MMIter& begin, MMIter& end);
 

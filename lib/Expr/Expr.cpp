@@ -1178,7 +1178,6 @@ static ref<Expr> ShlExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 		if (ce->getZExtValue() >= l->getWidth())
 			return ConstantExpr::alloc(0, l->getWidth());
 
-		// ( extract[31:0]
 		// ( bvshl
 		//	( zero_extend[56] ( select readbuf6 bv2[32]))
 		//	bv8[64] ))
@@ -1209,18 +1208,27 @@ static ref<Expr> ShrExprZExt_create(const ref<Expr> &l, const ref<Expr> &r)
 	if (ze == NULL)
 		return NULL;
 
-	Expr::Width	new_w = ze->getKid(0)->getWidth();
+	Expr::Width	live_bits = ze->getKid(0)->getWidth();
+	uint64_t	shift_bits = ce->getZExtValue();
+
 	// bvshr
 	//	( zero_extend[56] ( select qemu_buf7 bv6[32]) )
 	//	bv3[64] ))
 	//
 	// into
 	// zext[56] (bvshr (sel qemubuf) bv3[8])
-	assert (ce->getZExtValue() < (1ULL << new_w));
+	// into
+	// zext[64-5] (extract[7:3]  (sel qemubuf))
+
+
+	/* shifting off more bits than live => 0 */
+	if (shift_bits >= live_bits)
+		return ConstantExpr::alloc(0, ze->width);
+
+	assert (shift_bits < live_bits);
 	return ZExtExpr::create(
-		LShrExpr::create(
-			ze->getKid(0),
-			ce->ZExt(new_w)),
+		ExtractExpr::create(
+			ze->getKid(0), shift_bits, live_bits - shift_bits),
 		ze->width);
 }
 
