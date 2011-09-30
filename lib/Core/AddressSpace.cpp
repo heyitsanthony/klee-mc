@@ -142,8 +142,8 @@ bool AddressSpace::isFeasibleRange(
 
 	ok = solver->mayBeTrue(state, inRange, mayBeTrue);
 	if (!ok) {
-		assert (0 == 1 && "Solver broke down");
-		return false; // query error
+		// query error
+		return false;
 	}
 
 	return mayBeTrue;
