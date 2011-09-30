@@ -607,9 +607,36 @@ ref<Expr> ExtractExpr::create(ref<Expr> expr, unsigned off, Width w)
 		}
 
 
-		// ( extract[31:8] ( zero_extend[32] (bvadd bv4294967292[32]
+		// ( extract[31:8] ( zero_extend[32] bv4294967292[32]))
 		if (off+w <= ze->src->getWidth()) {
 			return ExtractExpr::create(ze->getKid(0), off, w);
+		}
+	}
+
+	if (expr->getKind() == SExt) {
+		const SExtExpr* se = cast<SExtExpr>(expr);
+		Width		active_w, sext_w;
+
+		active_w = se->src->getWidth();
+		if (off+w <= active_w) {
+			return ExtractExpr::create(se->getKid(0), off, w);
+		}
+
+		assert (se->getWidth() >= active_w);
+		sext_w = se->getWidth() - active_w;
+
+		// from ntfsfix
+		// extract[63:32] ( sign_extend[32]
+		// (concat ( select reg4 bv3[32])
+		// (concat ( select reg4 bv2[32])
+		// (concat ( select reg4 bv1[32])
+		// ( select reg4 bv0[32])
+		// => (sign_extend[63] (extract[31:31] x))
+		if (off >= active_w) {
+			return SExtExpr::create(
+				ExtractExpr::create(
+					se->src, active_w - 1, 1),
+				w);
 		}
 	}
 
@@ -1047,26 +1074,44 @@ static ref<Expr> AndExpr_create(Expr *l, Expr *r)
 	return AndExpr::alloc(l, r);
 }
 
-static ref<Expr> OrExpr_createPartial(Expr *l, const ref<ConstantExpr> &cr) {
-  if (cr->isAllOnes()) {
-    return cr;
-  } else if (cr->isZero()) {
-    return l;
-  } else {
-    return OrExpr::alloc(l, cr);
-  }
+static ref<Expr> OrExpr_createPartial(Expr *l, const ref<ConstantExpr> &cr)
+{
+	if (cr->isAllOnes())
+		return cr;
+	if (cr->isZero())
+		return l;
+	return OrExpr::alloc(l, cr);
 }
-static ref<Expr> OrExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r) {
-  return OrExpr_createPartial(r, cl);
+
+static ref<Expr> OrExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
+{
+	return OrExpr_createPartial(r, cl);
 }
+
 static ref<Expr> OrExpr_create(Expr *l, Expr *r) {
-  if (*l == *r)
-    return l;
-  else if (l->getWidth() == Expr::Bool) {
-    if (*l == *Expr::createIsZero(r).get()) // a || !a = true
-      return ConstantExpr::create(1, Expr::Bool);
-  }
-  return OrExpr::alloc(l, r);
+	if (*l == *r)
+		return l;
+
+	if (l->getWidth() == Expr::Bool) {
+		// a || !a = true
+		if (*l == *Expr::createIsZero(r).get())
+		      return ConstantExpr::create(1, Expr::Bool);
+	}
+
+	// (bvor (zext[56] x) (zext[56] y))
+	// => zext[56] (bvor x y)
+	const ZExtExpr	*ze[2];
+	if ((ze[0]=dyn_cast<ZExtExpr>(l)) && (ze[1]=dyn_cast<ZExtExpr>(r))) {
+		if (ze[0]->src->getWidth() == ze[1]->src->getWidth()) {
+			return ZExtExpr::create(
+				OrExpr::create(
+					ze[0]->src,
+					ze[1]->src),
+				ze[0]->getWidth());
+		}
+	}
+
+	return OrExpr::alloc(l, r);
 }
 
 static ref<Expr> XorExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r) {
@@ -1128,8 +1173,26 @@ static ref<Expr> ShlExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 		return AndExpr::create(l, Expr::createIsZero(r));
 
 	if (const ConstantExpr* ce = dyn_cast<ConstantExpr>(r)) {
+		const ZExtExpr*	ze;
+
 		if (ce->getZExtValue() >= l->getWidth())
 			return ConstantExpr::alloc(0, l->getWidth());
+
+		// ( extract[31:0]
+		// ( bvshl
+		//	( zero_extend[56] ( select readbuf6 bv2[32]))
+		//	bv8[64] ))
+		// =>
+		// zext[48] (concat (select rbuf) bv0[8])
+		ze = dyn_cast<ZExtExpr>(l);
+		if (ze) {
+			return ZExtExpr::create(
+				ConcatExpr::create(
+					ze->src,
+					ConstantExpr::alloc(
+						0, ce->getZExtValue())),
+				l->getWidth());
+		}
 	}
 
 	return ShlExpr::alloc(l, r);
