@@ -651,7 +651,7 @@ ref<Expr> ExtractExpr::create(ref<Expr> expr, unsigned off, Width w)
 		// >> works out to 0
 		ze = dyn_cast<ZExtExpr>(shl_expr->getKid(0));
 		ce = dyn_cast<ConstantExpr>(shl_expr->getKid(1));
-		if (ze && ce) {
+		if (ze && ce && ce->getWidth() <= 64) {
 			unsigned int	active_begin, active_w;
 
 			active_begin = ce->getZExtValue();
@@ -1174,14 +1174,18 @@ static ref<Expr> ShlExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 
 	if (const ConstantExpr* ce = dyn_cast<ConstantExpr>(r)) {
 		const ZExtExpr*	ze;
+		uint64_t	ce_val;
 
 		/* the same optimizations can be done on large values,
 		 * but it's a pain in the butt */
 		if (ce->getWidth() > 64)
 			return ShlExpr::alloc(l, r);
 
-		if (ce->getZExtValue() >= l->getWidth())
+		ce_val = ce->getZExtValue();
+		if (ce_val >= l->getWidth())
 			return ConstantExpr::alloc(0, l->getWidth());
+
+		if (ce_val == 0) return l;
 
 		// ( bvshl
 		//	( zero_extend[56] ( select readbuf6 bv2[32]))
@@ -1191,6 +1195,7 @@ static ref<Expr> ShlExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 		ze = dyn_cast<ZExtExpr>(l);
 		if (ze) {
 			ref<Expr>	shifted_bits;
+
 			shifted_bits = ConcatExpr::create(
 				ze->src,
 				ConstantExpr::alloc(
