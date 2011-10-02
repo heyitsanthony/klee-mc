@@ -101,6 +101,14 @@ namespace klee {
 		ref<ConstantExpr>& c_addr,
 		const MemoryObject*	&mo);
 
+	bool isInfeasibleRange(
+		ExecutionState &state,
+		TimingSolver *solver,
+		ref<Expr> address,
+		const MemoryObject* lo,
+		const MemoryObject* hi,
+		bool& ok);
+
 	bool isFeasibleRange(
 		ExecutionState &state,
 		TimingSolver *solver,
@@ -108,7 +116,32 @@ namespace klee {
 		const MemoryObject* lo,
 		const MemoryObject* hi,
 		bool& ok);
-	
+
+	bool mustContain(
+		ExecutionState &state,
+		TimingSolver* solver,
+		ref<Expr> address,
+		const MemoryObject* mo,
+		bool& ok)
+	{ return mustContain(state, solver, address, mo, mo, ok); }
+
+	bool mustContain(
+		ExecutionState &state,
+		TimingSolver* solver,
+		ref<Expr> address,
+		const MemoryObject* lo,
+		const MemoryObject* hi,
+		bool& ok);
+
+
+	bool isFeasible(
+		ExecutionState &state,
+		TimingSolver* solver,
+		ref<Expr> address,
+		const MemoryObject* mo,
+		bool& ok)
+	{ return isFeasibleRange(state, solver, address, mo, mo, ok); }
+
 	MMIter getMidPoint(MMIter& begin, MMIter& end);
 
 	ref<Expr> getFeasibilityExpr(
@@ -123,6 +156,13 @@ namespace klee {
 		std::stack<std::pair<MMIter, MMIter> >& tryRanges,
 		unsigned int maxResolutions,
 		ResolutionList& rl);
+
+	bool contigOffsetSearchRange(
+		ExecutionState& state,
+		ref<Expr>	p,
+		TimingSolver *solver,
+		ResolutionList& rl,
+		bool& bad_addr);
 
   public:
     /// Remove a binding from the address space.

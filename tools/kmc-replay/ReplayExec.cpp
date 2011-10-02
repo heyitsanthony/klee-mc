@@ -202,6 +202,7 @@ uint8_t* ReplayExec::verifyWithRegLog(void)
 			continue;
 		}
 
+		fprintf(stderr, ">>>>>> Mismatch on idx=0x%x\n", i);
 		fprintf(stderr, "====MASK:\n");
 		dumpRegBuf(sym_mask);
 

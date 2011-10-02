@@ -20,6 +20,10 @@
 
 using namespace klee;
 
+static bool ContiguousOffsetResolution = true;
+static unsigned ContiguousPrevScanLen = 10;
+static unsigned ContiguousNextScanLen = 20;
+
 ///
 
 void AddressSpace::bindObject(const MemoryObject *mo, ObjectState *os) {
@@ -88,7 +92,6 @@ const MemoryObject* AddressSpace::resolveOneMO(uint64_t address)
 	return result.first;
 }
 
-/// fucking hell fix this
 bool AddressSpace::resolveOne(const ref<ConstantExpr> &addr, ObjectPair &result)
 {
 	return resolveOne(addr->getZExtValue(), result);
@@ -127,6 +130,28 @@ ref<Expr> AddressSpace::getFeasibilityExpr(
 				hi->getBaseExpr(),
 				hi->getSizeExpr())));
 	return inRange;
+}
+
+/* return true if there exists an assignment for the address
+ * such that the address does not fall within the given range */
+bool AddressSpace::isInfeasibleRange(
+	ExecutionState &state,
+	TimingSolver *solver,
+	ref<Expr> address,
+	const MemoryObject* lo, const MemoryObject* hi,
+	bool& ok)
+{
+	bool	mayBeFalse;
+
+	ref<Expr> inRange = getFeasibilityExpr(address, lo, hi);
+
+	ok = solver->mayBeFalse(state, inRange, mayBeFalse);
+	if (!ok) {
+		// query error
+		return false;
+	}
+
+	return mayBeFalse;
 }
 
 bool AddressSpace::isFeasibleRange(
@@ -326,6 +351,12 @@ bool AddressSpace::resolve(
 		return false;
 	}
 
+	if (ContiguousOffsetResolution) {
+		bool	bad_addr;
+		if (contigOffsetSearchRange(state, p, solver, rl, bad_addr))
+			return bad_addr;
+	}
+
 	TimerStatIncrementer timer(stats::resolveTime);
 
 	ref<ConstantExpr> cex;
@@ -367,6 +398,150 @@ bool AddressSpace::resolve(
 		state, p, solver, tryRanges, maxResolutions, rl);
 }
 
+bool AddressSpace::mustContain(
+	ExecutionState &state,
+	TimingSolver* solver,
+	ref<Expr> address,
+	const MemoryObject* lo,
+	const MemoryObject* hi,
+	bool& ok)
+{
+	bool mustBeTrue;
+
+	ok = solver->mustBeTrue(
+		state, getFeasibilityExpr(address, lo, hi), mustBeTrue);
+
+	if (!ok) return false;
+
+	return mustBeTrue;
+}
+
+/**
+ * If the address takes the form
+ * (add <some pointer> (some nasty expresssion))
+ * we can cheat and consider this to be a pointer within
+ * the contiguous neighborhood of <some pointer>
+ */
+bool AddressSpace::contigOffsetSearchRange(
+	ExecutionState& state,
+	ref<Expr>	p,
+	TimingSolver *solver,
+	ResolutionList& rl,
+	bool &bad_addr)
+{
+	AddExpr			*ae = dyn_cast<AddExpr>(p);
+	ConstantExpr		*ce;
+	ObjectPair		cur_obj;
+	const MemoryObject	*mo_lo, *mo_hi;
+	uint64_t		base_ptr;
+	bool			ok, partial_seg;
+	unsigned int		prev_objs, next_objs;
+
+	bad_addr = false;
+
+	if (ae == NULL)
+		return false;
+
+	ce = dyn_cast<ConstantExpr>(ae->left);
+	if (ce == NULL || ce->getWidth() != 64)
+		return false;
+
+	/* confirm pointer */
+	base_ptr = ce->getZExtValue();
+	if (!resolveOne(base_ptr, cur_obj))
+		return false;
+
+	if (isFeasible(state, solver, p, cur_obj.first, ok) == false)
+		return false;
+
+	if (!ok) return false;
+
+	/* pointer is OK; scan contiguous regions */
+	rl.push_back(cur_obj);
+
+	/* fast path check */
+	if (mustContain(state, solver, p, cur_obj.first, ok))
+		return true;
+
+	if (!ok) return false;
+
+	mo_hi = cur_obj.first;
+	mo_lo = cur_obj.first;
+	partial_seg = false;
+
+	/* scan backwards */
+	prev_objs = 0;
+	do {
+		uint64_t	next_base = mo_lo->address - 1;
+
+		if (!resolveOne(next_base, cur_obj))
+			break;
+
+		if (prev_objs < ContiguousPrevScanLen) {
+			if (isFeasible(state, solver, p, cur_obj.first, ok)) {
+				rl.push_back(cur_obj);
+			} else {
+				/* doesn't cover entire contig region */
+				std::cerr << "PARTIAL\n";
+				partial_seg = true;
+				break;
+			}
+		}
+
+		prev_objs++;
+		mo_lo = cur_obj.first;
+	} while (1);
+
+	if (prev_objs >= ContiguousPrevScanLen) {
+		klee_warning("Skipped %d objects in fast scan", prev_objs);
+	}
+
+	/* scan forward */
+	next_objs = 0;
+	do {
+		uint64_t	next_base = mo_hi->address + mo_hi->size;
+
+		if (!resolveOne(next_base, cur_obj))
+			break;
+
+		if (next_objs < ContiguousNextScanLen) {
+			if (isFeasible(state, solver, p, cur_obj.first, ok)) {
+				rl.push_back(cur_obj);
+			} else {
+				/* doesn't cover entire contig region */
+				std::cerr << "PARTIAL\n";
+				partial_seg = true;
+				break;
+			}
+		}
+
+		next_objs++;
+		mo_hi = cur_obj.first;
+	} while (1);
+
+	if (next_objs >= ContiguousNextScanLen) {
+		klee_warning("Skipped %d next objects in fast scan", next_objs);
+	}
+
+
+	if (mustContain(state, solver, p, mo_lo, mo_hi, ok))
+		return true;
+
+	if (ok == false || partial_seg == true) {
+		/* ulp, partially covers a segment and falls outside the
+		 * partial coverage. We'll need a full scan. Ack! */
+		rl.clear();
+		return false;
+	}
+
+
+	/* covers an entire segment and more,
+	 * this pointer has the magic touch */
+	bad_addr = true;
+	return true;
+}
+
+
 /* true => incomplete,
  * false => complete
  */
@@ -378,6 +553,10 @@ bool AddressSpace::binsearchRange(
 	unsigned int maxResolutions,
 	ResolutionList& rl)
 {
+	std::cerr << "BINSEARCH PTR: ";
+	p->print(std::cerr);
+	std::cerr << "\n";
+
 	// Iteratively perform binary search until stack is empty
 	while (!tryRanges.empty()) {
 		bool	ok, feasible;
@@ -388,10 +567,21 @@ bool AddressSpace::binsearchRange(
 
 		tryRanges.pop();
 
+		std::cerr
+			<< "TRYING RANGE: "
+			<< (void*)low->address
+			<< "--"
+			<< (void*)high->address << " ("
+			<< rl.size()
+			<< ")\n";
+
 		// Check whether current range of MemoryObjects is feasible
 		feasible = isFeasibleRange(state, solver, p, low, high, ok);
 		if (!ok) return true;
-		if (!feasible) continue;
+		if (!feasible) {
+			std::cerr << "not feasible\n";
+			continue;
+		}
 
 		if (low != high) {
 			// range contains more than one object,
@@ -399,8 +589,13 @@ bool AddressSpace::binsearchRange(
 
 			// find the midpoint between ei and bi
 			MMIter mid = getMidPoint(bi, ei);
-			tryRanges.push(std::make_pair(bi, mid));
-			tryRanges.push(std::make_pair(++mid, ei));
+			std::pair<MMIter, MMIter>	lo_part(bi, mid);
+			std::pair<MMIter, MMIter>	hi_part(++mid, ei);
+
+			tryRanges.push(hi_part);
+
+			// expand lower half of address range first
+			tryRanges.push(lo_part);
 			continue;
 		}
 
@@ -412,17 +607,9 @@ bool AddressSpace::binsearchRange(
 		// fast path check
 		unsigned size = rl.size();
 		if (size == 1) {
-			bool mustBeTrue;
-			if (!solver->mustBeTrue(
-				state,
-				getFeasibilityExpr(p, low, high),
-				mustBeTrue))
-			{
-				return true;
-			}
-
-			if (mustBeTrue)
-				return false;
+			bool r = mustContain(state, solver, p, low, ok);
+			if (!ok) return true;
+			if (r) return false;
 		}
 
 		if (size == maxResolutions)
