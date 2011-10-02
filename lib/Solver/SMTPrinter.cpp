@@ -2,6 +2,7 @@
 #include "klee/Constraints.h"
 #include "static/Sugar.h"
 #include "SMTPrinter.h"
+#include "ConstantDivision.h"
 
 #include <assert.h>
 #include <stack>
@@ -11,6 +12,8 @@
 #include <utility>
 
 using namespace klee;
+
+bool OptimizeSMTMul = true;
 
 /* This figures out which arrays are being used in an
  * expression. This is important for SMT because it needs array information
@@ -74,7 +77,7 @@ SMTPrinter::Action SMTPrinter::visitExprPost(const Expr &e)
 	case Expr::Sle:
 	case Expr::Sgt:
 	case Expr::Sge:
-		os << ") bv1[1] bv0[1])\n";
+		os << ") bv1[1] bv0[1]) \n";
 		break;
 
 	case Expr::NotOptimized:
@@ -159,7 +162,13 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr &e)
 
 	VISIT_OP(Add, bvadd)
 	VISIT_OP(Sub, bvsub)
-	VISIT_OP(Mul, bvmul)
+	case Expr::Mul:
+		if (OptimizeSMTMul) {
+			if (printOptMul(static_cast<const MulExpr*>(&e)))
+				return Action::skipChildren();
+		}
+		os << "(bvmul ";
+		break;
 	VISIT_OP(UDiv,bvudiv)
 	VISIT_OP(SDiv, bvsdiv)
 	VISIT_OP(URem, bvurem)
@@ -182,6 +191,86 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr &e)
 		assert("WHoops");
 	}
 	return Action::doChildren();
+}
+
+/* returns false if not possible to optimize the multiplication */
+bool SMTPrinter::printOptMul(const MulExpr* me) const
+{
+	const ConstantExpr	*ce;
+
+	ce = dyn_cast<ConstantExpr>(me->left);
+	if (ce == NULL) return false;
+
+	if (ce->getWidth() <= 64) {
+		printOptMul64(me->right, ce->getZExtValue());
+		return true;
+	}
+
+	/* so long as the multiply only has 64 active bits, 
+	 * we can cheat and use the sweet multiply transforms that 
+	 * solvers don't bother to use */
+	if (ce->getWidth() <= 128) {
+		ref<Expr>		e_hi, e_lo;
+		const ConstantExpr	*ce_hi, *ce_lo;
+
+		e_hi = ExtractExpr::create(me->left, 64, ce->getWidth()-64);
+		e_lo = ExtractExpr::create(me->left, 0, 64);
+		ce_hi = dyn_cast<ConstantExpr>(e_hi);
+		ce_lo = dyn_cast<ConstantExpr>(e_lo);
+
+		assert (ce_hi && ce_lo);
+		if (ce_hi->isZero()) {
+			printOptMul64(me->right, ce_lo->getZExtValue());
+			return true;
+		}
+	}
+	
+	return false;
+}
+
+// multiply expr by v
+void SMTPrinter::printOptMul64(const ref<Expr>& expr, uint64_t v) const
+{
+	ref<Expr>	cur_expr;
+	uint64_t	fit_width, width;
+	uint64_t	add, sub;
+
+	width = expr->getWidth();
+	fit_width = width;
+	if (fit_width > 64) fit_width = 64;
+
+	// expr*x == expr*(add-sub) == expr*add - expr*sub
+	ComputeMultConstants64(v, add, sub);
+
+	// legal, these would overflow completely
+	add = bits64::truncateToNBits(add, fit_width);
+	sub = bits64::truncateToNBits(sub, fit_width);
+
+	cur_expr = ConstantExpr::create(0, width);
+
+	for (int j=63; j>=0; j--) {
+		uint64_t bit = 1LL << j;
+
+		if (!((add&bit) || (sub&bit)))
+			continue;
+
+		assert(!((add&bit) && (sub&bit)) && "invalid mult constants");
+
+		ref<Expr>	op(
+			ShlExpr::create(
+				expr,
+				ConstantExpr::create(j, width)));
+
+		if (add & bit) {
+			AddExpr::create(cur_expr, op);
+			continue;
+		}
+
+		assert ((sub & bit) != 0);
+		cur_expr = SubExpr::create(cur_expr, op);
+	}
+
+	expr2os(cur_expr, os);
 }
 
 void SMTPrinter::printConstant(const ConstantExpr* ce)
@@ -217,9 +306,9 @@ void SMTPrinter::printConstant(const ConstantExpr* ce)
 	}
 
 	for (unsigned i = (width /64) - 1; i; --i) {
-		if (i != 1) os << ")";
+		if (i != 1) os << ") ";
 	}
-	os << ")";
+	os << ") ";
 }
 
 /**
@@ -383,7 +472,7 @@ void SMTPrinter::printArrayDecls(void) const
 	}
 }
 
-void SMTPrinter::expr2os(const ref<Expr>& e, std::ostream& os)
+void SMTPrinter::expr2os(const ref<Expr>& e, std::ostream& os) const
 {
 	ConstantExpr		*ce;
 

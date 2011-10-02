@@ -474,6 +474,9 @@ ref<Expr> ConcatExpr::create(const ref<Expr> &l, const ref<Expr> &r)
 
 	// Fold concatenation of constants.
 	if (ConstantExpr *lCE = dyn_cast<ConstantExpr>(l)) {
+		if (lCE->isZero())
+			return ZExtExpr::create(r, w);
+
 		if (ConstantExpr *rCE = dyn_cast<ConstantExpr>(r))
 			return lCE->Concat(rCE);
 
@@ -482,11 +485,8 @@ ref<Expr> ConcatExpr::create(const ref<Expr> &l, const ref<Expr> &r)
 			rCE = dyn_cast<ConstantExpr>(ce_right->left);
 			if (rCE)
 				return ConcatExpr::create(
-					lCE->Concat(rCE), ce_right->right);
-		}
-
-		if (lCE->isZero()) {
-			return ZExtExpr::create(r, w);
+					lCE->Concat(rCE),
+					ce_right->right);
 		}
 	}
 

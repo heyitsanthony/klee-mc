@@ -25,18 +25,23 @@ public:
   	Action visitExprPost(const Expr &e);
 
 protected:
-	void expr2os(const ref<Expr>& expr, std::ostream& os);
+	void expr2os(const ref<Expr>& expr, std::ostream& os) const;
 private:
 	SMTPrinter(std::ostream& in_os, SMTArrays* in_arr) 
 	: ExprVisitor(false, true)
 	, os(in_os)
 	, arr(in_arr)
 	{
+		// enabling hashcons means we wouldn't print
+		// expressions we have already seen!
 		use_hashcons = false;
 	}
 
 	void printArrayDecls(void) const;
 	void printConstant(const ConstantExpr* ce);
+
+	bool printOptMul(const MulExpr* me) const;
+	void printOptMul64(const ref<Expr>& rhs, uint64_t lhs) const;
 
 	void writeArrayForUpdate(
 		std::ostream& os,
