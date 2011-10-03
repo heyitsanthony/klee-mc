@@ -20,7 +20,7 @@
 
 using namespace klee;
 
-static bool ContiguousOffsetResolution = true;
+static bool ContiguousOffsetResolution = false;
 static unsigned ContiguousPrevScanLen = 10;
 static unsigned ContiguousNextScanLen = 20;
 
