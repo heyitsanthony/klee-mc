@@ -1472,6 +1472,14 @@ static ref<Expr> EqExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 		}
 	} else if (rk == Expr::Read && ConstArrayOpt) {
 		return TryConstArrayOpt(cl, static_cast<ReadExpr*>(r));
+	} else if (rk == Expr::Or) {
+		/* constant masking rewrite */
+		const OrExpr *oe = cast<OrExpr>(r);
+		// (A == x | B) ==> (A & B == B)
+		if (ConstantExpr *mask = dyn_cast<ConstantExpr>(oe->right)) {
+			if (mask->And(cl) != mask)
+				return ConstantExpr::alloc(0, Expr::Bool);
+		}
 	} else if (rk == Expr::Concat) {
 		ConcatExpr *ce = cast<ConcatExpr>(r);
 		return AndExpr::create(
