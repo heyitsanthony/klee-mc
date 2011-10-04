@@ -7,7 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 #include "llvm/Support/CommandLine.h"
-#include "llvm/ADT/StringExtras.h"
 #include "klee/Constraints.h"
 #include "klee/Common.h"
 
@@ -84,11 +83,6 @@ protected:
 	virtual Action visitRead(const ReadExpr &re);
 
 private:
-	Action rebuildRead(
-		const ReadExpr& re,
-		ref<Expr>& readIndex,
-		std::stack<std::pair<ref<Expr>, ref<Expr> > >& updateStack);
-
 	ref<Expr> buildUpdateStack(
 		const ReadExpr		&re,
 		ref<Expr>		&readIndex,
@@ -99,67 +93,6 @@ private:
 	std::map< ref<Expr>, ref<Expr> > replacements;
 };
 
-}
-
-ExprVisitor::Action ExprReplaceVisitor2::rebuildRead(
-	const ReadExpr& re,
-	ref<Expr>&	readIndex,
-	std::stack<std::pair<ref<Expr>, ref<Expr> > >& updateStack)
-{
-	UpdateList				*newUpdates = NULL;
-	std::vector< ref<ConstantExpr> >	constantValues;
-	const UpdateList			&ul(re.updates);
-
-	static unsigned	id = 0;
-
-	ul.root->getConstantValues(constantValues);
-
-	while (!updateStack.empty()) {
-		ref<Expr> index = updateStack.top().first;
-		ref<Expr> value = updateStack.top().second;
-
-		ConstantExpr *cIdx = dyn_cast<ConstantExpr>(index);
-		ConstantExpr *cVal = dyn_cast<ConstantExpr>(value);
-
-		// flush newly constant writes to constant array
-		if (	cIdx && cVal &&
-			newUpdates == NULL &&
-			cIdx->getZExtValue() < constantValues.size())
-		{
-			constantValues[cIdx->getZExtValue()] =
-				ref<ConstantExpr>(cVal);
-			updateStack.pop();
-			continue;
-		}
-
-		if (newUpdates == NULL) {
-			const Array *newRoot = Array::uniqueArray(
-				new Array(
-					"simpl_arr"+llvm::utostr(++id),
-					ul.root->mallocKey,
-					&constantValues[0],
-					&constantValues[0]+constantValues.size()));
-			newUpdates = new UpdateList(newRoot, 0);
-		}
-		newUpdates->extend(index, value);
-
-		updateStack.pop();
-	}
-
-	// all-constant array
-	if (newUpdates == NULL) {
-		const Array *newRoot;
-
-		newRoot = Array::uniqueArray(
-			new Array(
-				"simpl_arr"+llvm::utostr(++id),
-				ul.root->mallocKey,
-				&constantValues[0],
-				&constantValues[0]+constantValues.size()));
-		newUpdates = new UpdateList(newRoot, 0);
-	}
-
-	return Action::changeTo(ReadExpr::create(*newUpdates, readIndex));
 }
 
 // simplify updates and build stack for rebuilding update list;
@@ -251,31 +184,38 @@ ExprVisitor::Action ExprReplaceVisitor2::visitRead(const ReadExpr &re)
 	if (!uniformValue.isNull())
 		return Action::changeTo(uniformValue);
 
-	// at least one update was simplified? rebuild
-	if (rebuild) {
-		if (!rebuildUpdates)
-			return Action::changeTo(
-				ReadExpr::create(re.updates, readIndex));
-
-		return rebuildRead(re, readIndex, updateStack);
-	}
-
-
 	// simplify case of a known read from a constant array
 	if (	isa<ConstantExpr>(re.index) &&
 		!ul.head && ul.root->isConstantArray())
 	{
 		uint64_t idx = cast<ConstantExpr>(re.index)->getZExtValue();
-		if (idx >= ul.root->mallocKey.size) {
-			klee_warning_once(
+		if (idx < ul.root->mallocKey.size) 
+			return Action::changeTo(ul.root->getValue(idx));
+
+		klee_warning_once(
 			0,
 			"out of bounds constant array read (possibly within "
 			"an infeasible Select path?)");
-			return Action::changeTo(
-				ConstantExpr::alloc(0, re.getWidth()));
-		} else
-			return Action::changeTo(ul.root->getValue(idx));
+
+		return Action::changeTo(ConstantExpr::alloc(0, re.getWidth()));
 	}
+
+	// at least one update was simplified? rebuild
+	if (rebuild) {
+		UpdateList *newUpdates;
+
+		if (!rebuildUpdates)
+			return Action::changeTo(
+				ReadExpr::create(re.updates, readIndex));
+
+	
+		newUpdates = UpdateList::fromUpdateStack(
+			re.updates.root, updateStack);
+
+		return Action::changeTo(
+			ReadExpr::create(*newUpdates, readIndex));
+	}
+
 
 	return Action::doChildren();
 }

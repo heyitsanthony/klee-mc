@@ -159,6 +159,12 @@ unsigned Expr::computeHash() {
   return hashValue;
 }
 
+unsigned BindExpr::computeHash(void)
+{
+	hashValue = let_expr->hash()^(getKind()*MAGIC_HASH_CONSTANT);
+	return hashValue;
+}
+
 unsigned ConstantExpr::computeHash() {
   hashValue = value.getHashValue() ^ (getWidth() * MAGIC_HASH_CONSTANT);
   return hashValue;

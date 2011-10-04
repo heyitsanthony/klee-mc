@@ -21,6 +21,7 @@
 #include <set>
 #include <vector>
 #include <map>
+#include <stack>
 #include <iosfwd> // FIXME: Remove this!!!
 
 // from stp/c_interface.h, ugly dependency
@@ -402,70 +403,77 @@ public:
 
 
 /// Class representing a byte update of an array.
-class UpdateNode {
-  friend class UpdateList;
-  friend class STPBuilder; // for setting STPArray
+class UpdateNode
+{
+	friend class UpdateList;
+	friend class STPBuilder; // for setting STPArray
 
-  mutable unsigned refCount;
-  // gross
-  mutable void *stpArray;
-  // cache instead of recalc
-  unsigned hashValue;
-
-public:
-  const UpdateNode *next;
-  ref<Expr> index, value;
-
-  mutable void *btorArray;
-  mutable void *z3Array;
-private:
-  /// size of this update sequence, including this update
-  unsigned size;
+	mutable unsigned refCount;
+	// gross
+	mutable void *stpArray;
+	// cache instead of recalc
+	unsigned hashValue;
 
 public:
-  UpdateNode(const UpdateNode *_next,
-             const ref<Expr> &_index,
-             const ref<Expr> &_value);
+	const UpdateNode *next;
+	ref<Expr> index, value;
 
-  unsigned getSize() const { return size; }
+	mutable void *btorArray;
+	mutable void *z3Array;
+private:
+	/// size of this update sequence, including this update
+	unsigned size;
 
-  int compare(const UpdateNode &b) const;
-  unsigned hash() const { return hashValue; }
+public:
+	UpdateNode(const UpdateNode *_next,
+	     const ref<Expr> &_index,
+	     const ref<Expr> &_value);
+
+	unsigned getSize() const { return size; }
+
+	int compare(const UpdateNode &b) const;
+	unsigned hash() const { return hashValue; }
 
 private:
-  UpdateNode() : refCount(0), stpArray(0) , btorArray(0), z3Array(0) {}
-  ~UpdateNode();
+	UpdateNode()
+	: refCount(0), stpArray(0) , btorArray(0), z3Array(0) {}
+	~UpdateNode();
 
-  unsigned computeHash();
+unsigned computeHash();
 };
 
 #include "klee/MallocKey.h"
 #include "klee/Array.h"
 
 /// Class representing a complete list of updates into an array.
-class UpdateList {
-  friend class ReadExpr; // for default constructor
+class UpdateList
+{
+	friend class ReadExpr; // for default constructor
 
 public:
-  const Array *root;
+	const Array *root;
 
-  /// pointer to the most recent update node
-  const UpdateNode *head;
+	/// pointer to the most recent update node
+	const UpdateNode *head;
 
 public:
-  UpdateList(const Array *_root, const UpdateNode *_head);
-  UpdateList(const UpdateList &b);
-  ~UpdateList();
+	UpdateList(const Array *_root, const UpdateNode *_head);
+	UpdateList(const UpdateList &b);
+	~UpdateList();
 
-  UpdateList &operator=(const UpdateList &b);
+	UpdateList &operator=(const UpdateList &b);
 
-  /// size of this update list
-  unsigned getSize() const { return (head ? head->getSize() : 0); }
+	/// size of this update list
+	unsigned getSize() const { return (head ? head->getSize() : 0); }
 
-  void extend(const ref<Expr> &index, const ref<Expr> &value);
+	void extend(const ref<Expr> &index, const ref<Expr> &value);
 
-  int compare(const UpdateList &b) const;
-  unsigned hash() const;
+	int compare(const UpdateList &b) const;
+	unsigned hash() const;
+
+	static UpdateList* fromUpdateStack(
+		const Array* arr,
+		std::stack<std::pair<ref<Expr>, ref<Expr> > >& updateStack);
 };
 
 /// Class representing a one byte read from an array.
@@ -506,9 +514,7 @@ private:
     updates(_updates), index(_index) {}
 
 public:
-  static bool classof(const Expr *E) {
-    return E->getKind() == Expr::Read;
-  }
+  static bool classof(const Expr *E) { return E->getKind() == Expr::Read; }
   static bool classof(const ReadExpr *) { return true; }
 };
 
@@ -561,6 +567,8 @@ public:
 		return alloc(kids[0], kids[1]);
 	}
 
+	uint64_t getId(void) const { return id; }
+
 protected:
 	static uint64_t	next_id;
 
@@ -586,6 +594,7 @@ public:
 	unsigned getNumKids() const { return 0; }
 	ref<Expr> getKid(unsigned i) const { return NULL; }
 	Kind getKind() const { return kind; }
+	unsigned computeHash(void);
 
 	static ref<Expr> alloc(const ref<LetExpr> &l) {
 		ref<Expr> c(new BindExpr(l));
