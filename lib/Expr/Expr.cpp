@@ -132,6 +132,8 @@ void Expr::printKind(std::ostream &os, Kind k) {
     X(Sle);
     X(Sgt);
     X(Sge);
+    X(Bind);
+    X(Let);
 #undef X
   default:
     assert(0 && "invalid kind");
