@@ -1,5 +1,5 @@
 // RUN: %llvmgcc %s -emit-llvm -O0 -c -o %t.bc
-// RUN: %klee --const-array-opt --max-time=10 --only-output-states-covering-new %t.bc >%t.log
+// RUN: %klee -eq-const-read-disjunct  --max-time=10 --only-output-states-covering-new %t.bc >%t.log
 // grep -q "Finished successfully!\n"
 
 /* This is testing the const array optimization.  On my 2.3GHz machine

@@ -1,8 +1,10 @@
 #include "klee/Solver.h"
 #include "klee/Constraints.h"
+#include "klee/util/ExprMinimizer.h"
 #include "static/Sugar.h"
 #include "SMTPrinter.h"
 #include "ConstantDivision.h"
+#include "llvm/Support/CommandLine.h"
 
 #include <assert.h>
 #include <stack>
@@ -12,8 +14,20 @@
 #include <utility>
 
 using namespace klee;
+using namespace llvm;
 
-bool OptimizeSMTMul = true;
+namespace {
+	cl::opt<bool>
+	MinimizeSMT(
+		"-smt-minimize",
+		 cl::init(false), // experimental
+		 cl::desc("Minimize SMT requests with let-exprs"));
+	cl::opt<bool>
+	OptimizeSMTMul(
+		"-smt-optmul",
+		 cl::init(true),
+		 cl::desc("Use shifting multiply for const*sym"));
+}
 
 /* This figures out which arrays are being used in an
  * expression. This is important for SMT because it needs array information
@@ -80,6 +94,7 @@ SMTPrinter::Action SMTPrinter::visitExprPost(const Expr &e)
 		os << ") bv1[1] bv0[1]) \n";
 		break;
 
+	case Expr::Bind:
 	case Expr::NotOptimized:
 	case Expr::Constant:
 		break;
@@ -180,6 +195,11 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr &e)
 	VISIT_OP(Shl, bvshl)
 	VISIT_OP(LShr, bvlshr)
 	VISIT_OP(AShr, bvashr)
+	case Expr::Bind:
+		os	<< "?e"
+			<< static_cast<const BindExpr*>(&e)->let_expr->getId()
+			<< " ";
+		break;
 	case Expr::Ne: os << "( not (="; break;
 	case Expr::Constant:
 		printConstant(dynamic_cast<const ConstantExpr*>(&e));
@@ -206,8 +226,8 @@ bool SMTPrinter::printOptMul(const MulExpr* me) const
 		return true;
 	}
 
-	/* so long as the multiply only has 64 active bits, 
-	 * we can cheat and use the sweet multiply transforms that 
+	/* so long as the multiply only has 64 active bits,
+	 * we can cheat and use the sweet multiply transforms that
 	 * solvers don't bother to use */
 	if (ce->getWidth() <= 128) {
 		ref<Expr>		e_hi, e_lo;
@@ -224,7 +244,7 @@ bool SMTPrinter::printOptMul(const MulExpr* me) const
 			return true;
 		}
 	}
-	
+
 	return false;
 }
 
@@ -338,19 +358,50 @@ void SMTPrinter::print(std::ostream& os, const Query& q)
 
 	/* print constraints */
 	foreach (it, q.constraints.begin(), q.constraints.end()) {
-		os << ":assumption\n";
-		os << "(= ";
-		smt_pr.visit(*it);
-		os << " bv1[1])\n";
+		smt_pr.printConstraint(*it);
 	}
 
 	/* print expr */
-	os << ":formula\n";
-	os << "(= ";
-	smt_pr.visit(q.expr);
-	os << " bv0[1]))\n";
+	smt_pr.printConstraint(q.expr, ":formula", "bv0[1]");
+
+	os << ")\n";
 
 	delete smt_arr;
+}
+
+void SMTPrinter::printConstraint(
+	const ref<Expr>& e, const char* key,  const char* val)
+{
+	unsigned int		let_c;
+	ref<Expr>		min_expr;
+	LetExpr			*le;
+
+	os << key << '\n';
+	if (MinimizeSMT) {
+		min_expr = ExprMinimizer::minimize(e);
+	} else {
+		min_expr = e;
+	}
+
+	/* dump let expressions, if any */
+	let_c = 0;
+	while ((le = dyn_cast<LetExpr>(min_expr)) != NULL) {
+		os << "(let (?e" << le->getId() << ' ';
+		expr2os(le->getBindExpr(), os);
+		os << ")\n";
+		let_c++;
+		min_expr = le->getScopeExpr();
+	}
+
+
+	os << "(= ";
+	visit(min_expr);
+	os << ' ' << val << ')';
+
+	for (unsigned i = 0; i < let_c; i++)
+		os << ')';
+
+	os << "\n";
 }
 
 struct update_params

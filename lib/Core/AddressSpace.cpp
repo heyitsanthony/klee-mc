@@ -482,7 +482,6 @@ bool AddressSpace::contigOffsetSearchRange(
 				rl.push_back(cur_obj);
 			} else {
 				/* doesn't cover entire contig region */
-				std::cerr << "PARTIAL\n";
 				partial_seg = true;
 				break;
 			}
@@ -509,7 +508,6 @@ bool AddressSpace::contigOffsetSearchRange(
 				rl.push_back(cur_obj);
 			} else {
 				/* doesn't cover entire contig region */
-				std::cerr << "PARTIAL\n";
 				partial_seg = true;
 				break;
 			}
@@ -553,10 +551,6 @@ bool AddressSpace::binsearchRange(
 	unsigned int maxResolutions,
 	ResolutionList& rl)
 {
-	std::cerr << "BINSEARCH PTR: ";
-	p->print(std::cerr);
-	std::cerr << "\n";
-
 	// Iteratively perform binary search until stack is empty
 	while (!tryRanges.empty()) {
 		bool	ok, feasible;
@@ -567,19 +561,10 @@ bool AddressSpace::binsearchRange(
 
 		tryRanges.pop();
 
-		std::cerr
-			<< "TRYING RANGE: "
-			<< (void*)low->address
-			<< "--"
-			<< (void*)high->address << " ("
-			<< rl.size()
-			<< ")\n";
-
 		// Check whether current range of MemoryObjects is feasible
 		feasible = isFeasibleRange(state, solver, p, low, high, ok);
 		if (!ok) return true;
 		if (!feasible) {
-			std::cerr << "not feasible\n";
 			continue;
 		}
 

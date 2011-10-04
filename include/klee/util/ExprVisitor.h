@@ -10,6 +10,7 @@
 #ifndef KLEE_EXPRVISITOR_H
 #define KLEE_EXPRVISITOR_H
 
+#include <stack>
 #include "ExprHashMap.h"
 
 namespace klee
@@ -103,6 +104,7 @@ protected:
 	virtual Action visitSle(const SleExpr&);
 	virtual Action visitSgt(const SgtExpr&);
 	virtual Action visitSge(const SgeExpr&);
+	virtual Action visitBind(const BindExpr&);
 	virtual Action visitConstant(const ConstantExpr&);
 	bool use_hashcons;
 
@@ -119,6 +121,12 @@ public:
 	// apply the visitor to the expression and return a possibly
 	// modified new expression.
 	ref<Expr> visit(const ref<Expr> &e);
+
+	ref<Expr> buildUpdateStack(
+		const UpdateList	&ul,
+		ref<Expr>		&readIndex,
+		std::stack<std::pair<ref<Expr>, ref<Expr> > >& updateStack,
+		bool	&rebuildUpdates);
 };
 
 }

@@ -37,6 +37,10 @@ private:
 		use_hashcons = false;
 	}
 
+	void printConstraint(const ref<Expr>& e,
+		const char* key = ":assumption",
+		const char* val = "bv1[1]");
+
 	void printArrayDecls(void) const;
 	void printConstant(const ConstantExpr* ce);
 

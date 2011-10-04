@@ -280,29 +280,28 @@ struct Expr::CreateArg {
 
 // Comparison operators
 
-inline bool operator==(const Expr &lhs, const Expr &rhs) {
-  return lhs.compare(rhs) == 0;
+inline bool operator==(const Expr &lhs, const Expr &rhs)
+{
+	if (lhs.hash() != rhs.hash())
+		return false;
+	return lhs.compare(rhs) == 0;
 }
 
-inline bool operator<(const Expr &lhs, const Expr &rhs) {
-  return lhs.compare(rhs) < 0;
+inline bool operator!=(const Expr &lhs, const Expr &rhs)
+{
+	if (lhs.hash() != rhs.hash())
+		return true;
+	return !(lhs == rhs);
 }
 
-inline bool operator!=(const Expr &lhs, const Expr &rhs) {
-  return !(lhs == rhs);
+inline bool operator<(const Expr &lhs, const Expr &rhs)
+{
+	return lhs.compare(rhs) < 0;
 }
 
-inline bool operator>(const Expr &lhs, const Expr &rhs) {
-  return rhs < lhs;
-}
-
-inline bool operator<=(const Expr &lhs, const Expr &rhs) {
-  return !(lhs > rhs);
-}
-
-inline bool operator>=(const Expr &lhs, const Expr &rhs) {
-  return !(lhs < rhs);
-}
+inline bool operator>(const Expr &lhs, const Expr &rhs) { return rhs < lhs; }
+inline bool operator<=(const Expr &lhs, const Expr &rhs) { return !(lhs > rhs);}
+inline bool operator>=(const Expr &lhs, const Expr &rhs) { return !(lhs < rhs);}
 
 // Printing operators
 
@@ -474,6 +473,9 @@ public:
 	static UpdateList* fromUpdateStack(
 		const Array* arr,
 		std::stack<std::pair<ref<Expr>, ref<Expr> > >& updateStack);
+
+private:
+	void removeDups(const ref<Expr>& index);
 };
 
 /// Class representing a one byte read from an array.
@@ -559,7 +561,9 @@ public:
 
 	ref<Expr> rescope(ref<Expr>& s_expr) const
 	{
-		return alloc(binding_expr, s_expr);
+		ref<Expr> r(new LetExpr(binding_expr, s_expr, id));
+		r->computeHash();
+		return r;
 	}
 
 	ref<Expr> rebuild(ref<Expr> kids[/* getNumKids() */]) const
@@ -577,6 +581,14 @@ protected:
 	, binding_expr(b_expr)
 	, scope_expr(s_expr)
 	{}
+
+	LetExpr(const ref<Expr> &b_expr, const ref<Expr> &s_expr,
+		uint64_t in_id)
+	: id(in_id)
+	, binding_expr(b_expr)
+	, scope_expr(s_expr)
+	{}
+
 
 private:
 	friend class BindExpr;

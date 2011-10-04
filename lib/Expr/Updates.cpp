@@ -7,7 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "static/Sugar.h"
 #include "llvm/ADT/StringExtras.h"
+#include <iostream>
 #include "klee/Expr.h"
 
 #include <cassert>
@@ -175,7 +177,7 @@ UpdateList* UpdateList::fromUpdateStack(
 {
 	UpdateList				*newUpdates = NULL;
 	std::vector< ref<ConstantExpr> >	constantValues;
-	std::set<ref<Expr> >			seen_idx;
+	std::set<ref<Expr> >			seen_idx, dup_idx;
 
 	static unsigned	id = 0;
 
@@ -184,6 +186,12 @@ UpdateList* UpdateList::fromUpdateStack(
 	while (!updateStack.empty()) {
 		ref<Expr> index = updateStack.top().first;
 		ref<Expr> value = updateStack.top().second;
+
+		if (seen_idx.count(index) == 0) {
+			seen_idx.insert(index);
+		} else {
+			dup_idx.insert(index);
+		}
 
 		ConstantExpr *cIdx = dyn_cast<ConstantExpr>(index);
 		ConstantExpr *cVal = dyn_cast<ConstantExpr>(value);
@@ -227,6 +235,54 @@ UpdateList* UpdateList::fromUpdateStack(
 		newUpdates = new UpdateList(newRoot, NULL);
 	}
 
+	foreach (it, dup_idx.begin(), dup_idx.end()) {
+		newUpdates->removeDups(*it);
+	}
+
 	return newUpdates;
 }
 
+
+void UpdateList::removeDups(const ref<Expr>& index)
+{
+	const UpdateNode	*cur_node, *prev_node;
+
+	cur_node = head;
+	while (cur_node != NULL) {
+		if (cur_node->index == index)
+			break;
+		cur_node = cur_node->next;
+	}
+
+	/* couldn't find index to remove */
+	if (cur_node == NULL)
+		return;
+
+	prev_node = cur_node;
+	cur_node = cur_node->next;
+	while (cur_node != NULL) {
+		if (cur_node->index != index) {
+			prev_node = cur_node;
+			cur_node = cur_node->next;
+			continue;
+		}
+
+		const_cast<UpdateNode*>(prev_node)->next = cur_node->next;
+		if (root != NULL)
+			root->decRefIfCared();
+
+		cur_node->refCount--;
+		if (cur_node->refCount == 0)
+			delete cur_node;
+
+		/* update sequence lengths to reflect shortened tail */
+		cur_node = head;
+		while (cur_node != prev_node->next) {
+			const_cast<UpdateNode*>(cur_node)->size--;
+			cur_node = cur_node->next;
+		}
+
+		cur_node = prev_node->next;
+	}
+
+}

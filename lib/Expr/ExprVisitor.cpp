@@ -97,6 +97,7 @@ ref<Expr> ExprVisitor::visitActual(const ref<Expr> &e)
     case Expr::Sle: res = visitSle(static_cast<SleExpr&>(ep)); break;
     case Expr::Sgt: res = visitSgt(static_cast<SgtExpr&>(ep)); break;
     case Expr::Sge: res = visitSge(static_cast<SgeExpr&>(ep)); break;
+    case Expr::Bind: res = visitBind(static_cast<BindExpr&>(ep)); break;
     case Expr::Constant:
     if (visitConstants) {
       res = visitConstant(static_cast<ConstantExpr&>(ep));
@@ -150,6 +151,69 @@ ExprVisitor::Action ExprVisitor::visitExprPost(const Expr&) {
   return Action::skipChildren();
 }
 
+// simplify updates and build stack for rebuilding update list;
+// we also want to see if there's a single value that would result from
+// the read expression at this index.
+// (e.g., reading at index X, and all updates following and
+//  including an update to index X hold value Y, then the read X
+//  will always return Y.)
+//
+// NOTE (bug fix): if there's not an update definitively at index X,
+// then the entire Read must be sent to STP,
+// as the index may read from the root array.
+ref<Expr> ExprVisitor::buildUpdateStack(
+	const UpdateList	&ul,
+	ref<Expr>		&readIndex,
+	std::stack<std::pair<ref<Expr>, ref<Expr> > >& updateStack,
+	bool	&rebuildUpdates)
+{
+	ref<Expr>	uniformValue(0);
+	bool		uniformUpdates = true;
+	bool		readIndex_is_ce;
+
+	readIndex_is_ce = isa<ConstantExpr>(readIndex);
+	for (const UpdateNode *un = ul.head; un != NULL; un=un->next) {
+		ref<Expr> index = isa<ConstantExpr>(un->index)
+			? un->index
+			: visit(un->index);
+
+		ref<Expr> value = isa<ConstantExpr>(un->value)
+			? un->value
+			: visit(un->value);
+
+		// skip constant updates that cannot match
+		// (!= symbolic updates could match!)
+		if (	readIndex_is_ce
+			&& isa<ConstantExpr>(index)
+			&& readIndex != index)
+		{
+			rebuildUpdates = true;
+			continue;
+		}
+
+		if (index != un->index || value != un->value) {
+			rebuildUpdates = true;
+			uniformUpdates = false;
+		} else if (uniformUpdates && uniformValue.isNull())
+			uniformValue = value;
+		else if (uniformUpdates && value != uniformValue)
+			uniformUpdates = false;
+
+		updateStack.push(std::make_pair(index, value));
+
+		// if we have a satisfying update, terminate update list
+		if (readIndex == index) {
+			if (uniformUpdates && !uniformValue.isNull())
+				return uniformValue;
+			break;
+		}
+	}
+
+	return NULL;
+}
+
+
+
 #define DO_CHILDREN_ACTION(x,y)					\
 ExprVisitor::Action ExprVisitor::visit##x(const y&) { 		\
 	return Action::doChildren(); }				\
@@ -186,6 +250,7 @@ DO_CHILDREN_ACTION(Slt, SltExpr)
 DO_CHILDREN_ACTION(Sle, SleExpr)
 DO_CHILDREN_ACTION(Sgt, SgtExpr)
 DO_CHILDREN_ACTION(Sge, SgeExpr)
+DO_CHILDREN_ACTION(Bind, BindExpr)
 DO_CHILDREN_ACTION(Constant, ConstantExpr)
 
 

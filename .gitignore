@@ -4,3 +4,4 @@ Makefile.config
 *klee-out*
 snooze*
 *pcache*
+*.smt

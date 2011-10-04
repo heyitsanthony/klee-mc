@@ -83,76 +83,9 @@ protected:
 	virtual Action visitRead(const ReadExpr &re);
 
 private:
-	ref<Expr> buildUpdateStack(
-		const ReadExpr		&re,
-		ref<Expr>		&readIndex,
-		std::stack<std::pair<ref<Expr>, ref<Expr> > >& updateStack,
-		bool	&rebuild,
-		bool	&rebuildUpdates);
-
 	std::map< ref<Expr>, ref<Expr> > replacements;
 };
 
-}
-
-// simplify updates and build stack for rebuilding update list;
-// we also want to see if there's a single value that would result from
-// the read expression at this index.
-// (e.g., reading at index X, and all updates following and
-//  including an update to index X hold value Y, then the read X
-//  will always return Y.)
-//
-// NOTE (bug fix): if there's not an update definitively at index X,
-// then the entire Read must be sent to STP,
-// as the index may read from the root array.
-ref<Expr> ExprReplaceVisitor2::buildUpdateStack(
-	const ReadExpr		&re,
-	ref<Expr>		&readIndex,
-	std::stack<std::pair<ref<Expr>, ref<Expr> > >& updateStack,
-	bool	&rebuild,
-	bool	&rebuildUpdates)
-{
-	ref<Expr>	uniformValue(0);
-	bool		uniformUpdates = true;
-
-	for (const UpdateNode *un = re.updates.head; un; un=un->next) {
-		ref<Expr> index = isa<ConstantExpr>(un->index)
-			? un->index
-			: visit(un->index);
-
-		ref<Expr> value = isa<ConstantExpr>(un->value)
-			? un->value
-			: visit(un->value);
-
-		// skip constant updates that cannot match
-		// (!= symbolic updates could match!)
-		if (	isa<ConstantExpr>(readIndex) &&
-			isa<ConstantExpr>(index)
-			&& readIndex != index)
-		{
-			rebuild = rebuildUpdates = true;
-			continue;
-		}
-
-		if (index != un->index || value != un->value) {
-			rebuild = rebuildUpdates = true;
-			uniformUpdates = false;
-		} else if (uniformUpdates && uniformValue.isNull())
-			uniformValue = value;
-		else if (uniformUpdates && value != uniformValue)
-			uniformUpdates = false;
-
-		updateStack.push(std::make_pair(index, value));
-
-		// if we have a satisfying update, terminate update list
-		if (readIndex == index) {
-			if (uniformUpdates && !uniformValue.isNull())
-				return uniformValue;
-			break;
-		}
-	}
-
-	return NULL;
 }
 
 ExprVisitor::Action ExprReplaceVisitor2::visitRead(const ReadExpr &re)
@@ -170,26 +103,16 @@ ExprVisitor::Action ExprReplaceVisitor2::visitRead(const ReadExpr &re)
 	if (!ul.head && ul.root->isSingleValue())
 		return Action::changeTo(ul.root->getValue(0));
 
-	rebuild = rebuildUpdates = false;
-
 	ref<Expr> readIndex = isa<ConstantExpr>(re.index)
 		? re.index
 		: visit(re.index);
 
-	if (readIndex != re.index)
-		rebuild = true;
-
-	uniformValue = buildUpdateStack(
-		re, readIndex, updateStack, rebuild, rebuildUpdates);
-	if (!uniformValue.isNull())
-		return Action::changeTo(uniformValue);
-
 	// simplify case of a known read from a constant array
-	if (	isa<ConstantExpr>(re.index) &&
+	if (	isa<ConstantExpr>(readIndex) &&
 		!ul.head && ul.root->isConstantArray())
 	{
-		uint64_t idx = cast<ConstantExpr>(re.index)->getZExtValue();
-		if (idx < ul.root->mallocKey.size) 
+		uint64_t idx = cast<ConstantExpr>(readIndex)->getZExtValue();
+		if (idx < ul.root->mallocKey.size)
 			return Action::changeTo(ul.root->getValue(idx));
 
 		klee_warning_once(
@@ -200,8 +123,17 @@ ExprVisitor::Action ExprReplaceVisitor2::visitRead(const ReadExpr &re)
 		return Action::changeTo(ConstantExpr::alloc(0, re.getWidth()));
 	}
 
+	rebuild = rebuildUpdates = false;
+	if (readIndex != re.index)
+		rebuild = true;
+
+	uniformValue = buildUpdateStack(
+		re.updates, readIndex, updateStack, rebuildUpdates);
+	if (!uniformValue.isNull())
+		return Action::changeTo(uniformValue);
+
 	// at least one update was simplified? rebuild
-	if (rebuild) {
+	if (rebuild || rebuildUpdates) {
 		UpdateList *newUpdates;
 
 		if (!rebuildUpdates)

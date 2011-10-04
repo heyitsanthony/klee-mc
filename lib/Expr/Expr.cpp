@@ -24,9 +24,9 @@ using namespace llvm;
 
 namespace {
   cl::opt<bool>
-  ConstArrayOpt("const-array-opt",
+  ConstArrayOpt("eq-const-read-disjunct",
 	 cl::init(false),
-	 cl::desc("Enable various optimizations involving all-constant arrays."));
+	 cl::desc("Convert (EqExpr cst rd-const-arr) to (Or (=ix) .. (=ix))"));
 }
 
 uint64_t LetExpr::next_id = 0;
@@ -1366,31 +1366,40 @@ static ref<Expr> EqExpr_create(const ref<Expr> &l, const ref<Expr> &r) {
 /// rd a ReadExpr.  If rd is a read into an all-constant array,
 /// returns a disjunction of equalities on the index.  Otherwise,
 /// returns the initial equality expression.
-static ref<Expr> TryConstArrayOpt(const ref<ConstantExpr> &cl,
-				  ReadExpr *rd) {
-  if (rd->updates.root->isSymbolicArray() || rd->updates.getSize())
-    return EqExpr_create(cl, rd);
+//
+// XXX When does this "optimization" ever make sense? It's
+// bounded by 100, but that still can cause some bad blow-up if it's
+// being done all the time.
+//
+static ref<Expr> TryConstArrayOpt(
+	const ref<ConstantExpr> &cl,
+	ReadExpr *rd)
+{
+	if (rd->updates.root->isSymbolicArray() || rd->updates.getSize())
+		return EqExpr_create(cl, rd);
 
-  // Number of positions in the array that contain value ct.
-  unsigned numMatches = 0;
+	// Number of positions in the array that contain value ct.
+	unsigned numMatches = 0;
 
-  // for now, just assume standard "flushing" of a concrete array,
-  // where the concrete array has one update for each index, in order
-  ref<Expr> res = ConstantExpr::alloc(0, Expr::Bool);
-  for (unsigned i = 0, e = rd->updates.root->mallocKey.size; i != e; ++i) {
-    if (cl == rd->updates.root->getValue(i)) {
-      // Arbitrary maximum on the size of disjunction.
-      if (++numMatches > 100)
-        return EqExpr_create(cl, rd);
+	// for now, just assume standard "flushing" of a concrete array,
+	// where the concrete array has one update for each index, in order
+	ref<Expr> res = ConstantExpr::alloc(0, Expr::Bool);
+	for (unsigned i = 0, e = rd->updates.root->mallocKey.size; i != e; ++i){
+		if (cl != rd->updates.root->getValue(i))
+			continue;
 
-      ref<Expr> mayBe =
-        EqExpr::create(rd->index, ConstantExpr::alloc(i,
-                                                      rd->index->getWidth()));
-      res = OrExpr::create(res, mayBe);
-    }
-  }
+		// Arbitrary maximum on the size of disjunction.
+		if (++numMatches > 100)
+			return EqExpr_create(cl, rd);
 
-  return res;
+		ref<Expr> mayBe = EqExpr::create(
+			rd->index,
+			ConstantExpr::alloc(i, rd->index->getWidth()));
+
+		res = OrExpr::create(res, mayBe);
+	}
+
+	return res;
 }
 
 static ref<Expr> EqExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
