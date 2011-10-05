@@ -26,7 +26,7 @@ namespace {
 	cl::opt<bool>
 	SMTLetArrays(
 		"smt-let-arrays",
-		cl::init(true),
+		cl::init(false),
 		cl::desc("Use let expressions for all arrays"));
 
 	cl::opt<bool>

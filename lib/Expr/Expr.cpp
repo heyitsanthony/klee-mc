@@ -403,33 +403,70 @@ int ReadExpr::compareContents(const Expr &b) const {
   return updates.compare(static_cast<const ReadExpr&>(b).updates);
 }
 
-ref<Expr> SelectExpr::create(ref<Expr> c, ref<Expr> t, ref<Expr> f) {
-  Expr::Width kt = t->getWidth();
+ref<Expr> SelectExpr::create(ref<Expr> c, ref<Expr> t, ref<Expr> f)
+{
+	Expr::Width kt = t->getWidth();
 
-  assert(c->getWidth()==Bool && "type mismatch");
-  assert(kt==f->getWidth() && "type mismatch");
+	assert (c->getWidth()==Bool && "type mismatch");
+	assert (kt==f->getWidth() && "type mismatch");
 
-  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(c)) {
-    return CE->isTrue() ? t : f;
-  } else if (t==f) {
-    return t;
-  } else if (kt==Expr::Bool) { // c ? t : f  <=> (c and t) or (not c and f)
-    if (ConstantExpr *CE = dyn_cast<ConstantExpr>(t)) {
-      if (CE->isTrue()) {
-        return OrExpr::create(c, f);
-      } else {
-        return AndExpr::create(Expr::createIsZero(c), f);
-      }
-    } else if (ConstantExpr *CE = dyn_cast<ConstantExpr>(f)) {
-      if (CE->isTrue()) {
-        return OrExpr::create(Expr::createIsZero(c), t);
-      } else {
-        return AndExpr::create(c, t);
-      }
-    }
-  }
+	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(c))
+		return CE->isTrue() ? t : f;
 
-  return SelectExpr::alloc(c, t, f);
+	if (t==f)
+		return t;
+
+	if (kt == Expr::Bool) { // c ? t : f  <=> (c and t) or (not c and f)
+		if (ConstantExpr *CE = dyn_cast<ConstantExpr>(t)) {
+			if (CE->isTrue())
+				return OrExpr::create(c, f);
+			return AndExpr::create(Expr::createIsZero(c), f);
+		} else if (ConstantExpr *CE = dyn_cast<ConstantExpr>(f)) {
+			if (CE->isTrue())
+				return OrExpr::create(Expr::createIsZero(c), t);
+			return AndExpr::create(c, t);
+		}
+	}
+
+	/* try to lift nested select exprs */
+	if (const EqExpr* ee = dyn_cast<EqExpr>(c)) {
+		// (ite (= c0 se:(ite cond t0 f0)) t1 f1)
+		const SelectExpr	*se;
+
+		if ((se = dyn_cast<SelectExpr>(ee->getKid(1)))) {
+			// c0 != c1 != c2
+			// (ite (eq c0 (ite c c1 c2)) t f) =>
+			// (ite (false) t f) =>
+			// f
+			if (	se->getKid(1)->getKind() == Constant &&
+				se->getKid(2)->getKind() == Constant &&
+				ee->getKid(0)->getKind() == Constant)
+			{
+				if (	se->getKid(1) != ee->getKid(0) &&
+					se->getKid(2) != ee->getKid(0))
+				{
+					return f;
+				}
+			}
+
+			// (ite (= v0 (ite (cond) v1 v0) v1 v0)) =>
+			// (ite (cond) v0 v1)
+			if (	ee->getKid(0) == se->getKid(2) &&
+				t == se->getKid(1) &&
+				f == se->getKid(2))
+			{
+				return SelectExpr::create(
+					se->getKid(0),
+					se->getKid(2),
+					se->getKid(1));
+			}
+
+
+		}
+
+	}
+
+	return SelectExpr::alloc(c, t, f);
 }
 
 /***/
@@ -595,6 +632,20 @@ ref<Expr> ExtractExpr::create(ref<Expr> expr, unsigned off, Width w)
 			// extract[31:0] ( zero_extend[56] (select w8) )
 			return ZExtExpr::alloc(ze->src, w);
 		}
+
+		if (w == 1) {
+			XorExpr		*xe;
+			ConstantExpr	*ce;
+			if (	(xe = dyn_cast<XorExpr>(expr)) &&
+				(ce = dyn_cast<ConstantExpr>(xe->getKid(0))) &&
+				ce->getWidth() <= 64 &&
+				(ce->getZExtValue() & 1) == 0)
+			{
+				return ExtractExpr::create(
+					xe->getKid(1), off, w);
+			}
+		}
+
 	}
 
 	/* Extract(Extract) */
@@ -675,14 +726,16 @@ ref<Expr> ExtractExpr::create(ref<Expr> expr, unsigned off, Width w)
 		}
 	}
 
-#if 0
 	if (const SelectExpr *se = dyn_cast<SelectExpr>(expr)) {
-		std::vector<ref<Expr> > values(se->values.size());
-		for (unsigned i = 0; i < se->values.size(); i++)
-			values[i] = ExtractExpr::create(se->values[i], off, w);
-		return SelectExpr::create(se->conds, values);
+		if (	se->getKid(1)->getKind() == Constant &&
+			se->getKid(2)->getKind() == Constant)
+		{
+			return SelectExpr::create(
+				se->getKid(0),
+				ExtractExpr::create(se->getKid(1), off, w),
+				ExtractExpr::create(se->getKid(2), off, w));
+		}
 	}
-#endif
 
 	return ExtractExpr::alloc(expr, off, w);
 }
@@ -816,6 +869,19 @@ ref<Expr> SExtExpr::create(const ref<Expr> &e, Width w)
 	// sign_extend[32] ( zero_extend[24] ( select qemu_buf7 bv2[32])
 		if (e->getKid(0)->getWidth() < e->getWidth()) {
 			return ZExtExpr::create(e->getKid(0), w);
+		}
+	}
+
+	if (e->getKind() == Select) {
+		SelectExpr	*se = cast<SelectExpr>(e);
+
+		if (	se->getKid(1)->getKind() == Constant &&
+			se->getKid(2)->getKind() == Constant)
+		{
+			return SelectExpr::create(
+				se->getKid(0),
+				SExtExpr::create(se->getKid(1), w),
+				SExtExpr::create(se->getKid(2), w));
 		}
 	}
 
@@ -1006,6 +1072,7 @@ static ref<Expr> AndExpr_createPartial(Expr *l, const ref<ConstantExpr> &cr)
 		v = cr->getZExtValue();
 		v++;	// v = 2^k?
 		assert (v != 0 && "but isAllOnes() is false!");
+		// check for lower-bit mask ala 011111
 		// bithack via the stanford bithacks page
 		if ((v & (v - 1)) == 0) {
 			int	bits_set = 0;
@@ -1033,12 +1100,12 @@ static ref<Expr> AndExpr_createPartial(Expr *l, const ref<ConstantExpr> &cr)
 
 		return ZExtExpr::create(
 			AndExpr::create(
-				ze->getKid(0),
-				cr->ZExt(ze->getKid(0)->getWidth())),
+				cr->ZExt(ze->getKid(0)->getWidth()),
+				ze->getKid(0)),
 			ze->getWidth());
 	}
 
-	return AndExpr::alloc(l, cr);
+	return AndExpr::alloc(cr, l);
 }
 static ref<Expr> AndExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 {
@@ -1122,14 +1189,27 @@ static ref<Expr> OrExpr_create(Expr *l, Expr *r) {
 	return OrExpr::alloc(l, r);
 }
 
-static ref<Expr> XorExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r) {
-  if (cl->isZero()) {
-    return r;
-  } else if (cl->getWidth() == Expr::Bool) {
-    return EqExpr_createPartial(r, ConstantExpr::create(0, Expr::Bool));
-  } else {
-    return XorExpr::alloc(cl, r);
-  }
+static ref<Expr> XorExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
+{
+	if (cl->isZero())
+		return r;
+
+	if (cl->getWidth() == Expr::Bool)
+		return EqExpr_createPartial(
+			r, ConstantExpr::create(0, Expr::Bool));
+
+	if (const SelectExpr *se = dyn_cast<SelectExpr>(r)) {
+		if (	se->getKid(1)->getKind() == Expr::Constant &&
+			se->getKid(2)->getKind() == Expr::Constant)
+		{
+			return SelectExpr::create(
+				se->getKid(0),
+				XorExpr::create(cl, se->getKid(1)),
+				XorExpr::create(cl, se->getKid(2)));
+		}
+	}
+
+	return XorExpr::alloc(cl, r);
 }
 
 static ref<Expr> XorExpr_createPartial(Expr *l, const ref<ConstantExpr> &cr) {
@@ -1493,6 +1573,19 @@ static ref<Expr> EqExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 					ce->getRight()->getWidth()),
 					ce->getRight().get()));
 
+	} else if (rk == Expr::Select) {
+		SelectExpr	*se = cast<SelectExpr>(r);
+		if (	se->getKid(1)->getKind() == Expr::Constant &&
+			se->getKid(2)->getKind() == Expr::Constant)
+		{
+			if (se->getKid(1) == cl)
+				return se->getKid(0);
+			if (se->getKid(2) == cl)
+				return NeExpr::create(
+					se->getKid(0),
+					ConstantExpr::alloc(
+						1, se->getKid(0)->getWidth()));
+		}
 	}
 
 	return EqExpr_create(cl, r);
@@ -1521,15 +1614,33 @@ ref<Expr> SgeExpr::create(const ref<Expr> &l, const ref<Expr> &r) {
   return SleExpr::create(r, l);
 }
 
-static ref<Expr> UltExpr_create(const ref<Expr> &l, const ref<Expr> &r) {
-  Expr::Width t = l->getWidth();
-  if (t == Expr::Bool) { // !l && r
-    return AndExpr::create(Expr::createIsZero(l), r);
-  } else if (l == r) {
-    return ConstantExpr::alloc(0, Expr::Bool);
-  } else {
-    return UltExpr::alloc(l, r);
-  }
+static ref<Expr> UltExpr_create(const ref<Expr> &l, const ref<Expr> &r)
+{
+	Expr::Width t = l->getWidth();
+
+	if (t == Expr::Bool)
+		return AndExpr::create(Expr::createIsZero(l), r);
+
+	if (l == r)
+		return ConstantExpr::alloc(0, Expr::Bool);
+
+	if (	l->getKind() == Expr::ZExt &&
+		r->getKind() == Expr::Constant)
+	{
+		ZExtExpr	*ze = cast<ZExtExpr>(l);
+		ConstantExpr	*ce = cast<ConstantExpr>(r);
+
+		if (ce->getWidth() <= 64) {
+			unsigned active_bits;
+			active_bits = ze->src->getWidth();
+			if ((1ULL << active_bits) <= ce->getZExtValue()) {
+				// maximum value of lhs always less than rhs
+				return ConstantExpr::alloc(1, Expr::Bool);
+			}
+		}
+	}
+
+	return UltExpr::alloc(l, r);
 }
 
 static ref<Expr> UleExpr_create(const ref<Expr> &l, const ref<Expr> &r) {
