@@ -10,15 +10,13 @@ ref<Expr> ExprMinimizer::minimize(const ref<Expr>& in)
 	ExprMinimizer	m;
 	ref<Expr>	out(m.visit(in));
 
-	std::cerr << "\n===========[MIN][MIN][MIN]=========================\n";
-	if (m.useful_lets.size() == 0)
+	if (m.useful_lets_list.empty())
 		return out;
 
 	std::reverse(m.useful_lets_list.begin(), m.useful_lets_list.end());
 	foreach (it, m.useful_lets_list.begin(), m.useful_lets_list.end())
 		out = cast<LetExpr>((*it))->rescope(out);
 
-	std::cerr << "\n===========[MIN][MIN][MIN]=========================\n";
 	return out;
 }
 
@@ -37,8 +35,8 @@ ExprVisitor::Action ExprMinimizer::visitExprPost(const Expr &e)
 {
 	bindings_ty::iterator	it;
 	ref<Expr>		let_expr;
-	const ReadExpr		*re;
 	ref<Expr>		cur_e(const_cast<Expr*>(&e));
+	bool			changed_kids;
 
 	if (dyn_cast<BindExpr>(cur_e))
 		return Action::skipChildren();
@@ -47,38 +45,55 @@ ExprVisitor::Action ExprMinimizer::visitExprPost(const Expr &e)
 	if (it != bindings.end()) {
 		ref<Expr>	useful_let((*it).second);
 
-		std::cerr << "[MIN] IN: ";
-		cur_e->print(std::cerr);
-		std::cerr << "\n[MIN] MATCHED EXISTING: ";
-		((*it).first)->print(std::cerr);
-		std::cerr << "\n";
-
-		if (useful_lets.count(useful_let) == 0) {
-			useful_lets.insert(useful_let);
-			useful_lets_list.push_back(useful_let);
-		}
 		return Action::changeTo(
 			BindExpr::alloc(cast<LetExpr>(useful_let)));
-	} else {
-		std::cerr << "[MIN] NOT FOUND: ";
-		cur_e->print(std::cerr);
-		std::cerr << '\n';
 	}
 
+	/* rebuild with bound kids */
+	ref<Expr>	kids[8];
+	changed_kids = false;
+	for (unsigned i = 0; i < cur_e->getNumKids(); i++) {
+		kids[i] = cur_e->getKid(i);
+		it = bindings.find(kids[i]);
+		if (it != bindings.end()) {
+			kids[i] = BindExpr::alloc(cast<LetExpr>((*it).second));
+			changed_kids = true;
+		}
+	}
+
+	if (changed_kids) {
+		cur_e = cur_e->rebuild(kids);
+
+		/* does child-replaced expression already exist? */
+		it = bindings.find(ref<Expr>(cur_e));
+		if (it != bindings.end()) {
+			ref<Expr>	useful_let((*it).second);
+
+			return Action::changeTo(
+				BindExpr::alloc(cast<LetExpr>(useful_let)));
+		}
+	}
+
+/* this is disabled since manipulating the update list may incur
+ * result in a new array, which will confuse the SMT Printer.
+ * XXX fix idiot SMT printer */
 #if 0
+	const ReadExpr		*re;
 	if ((re = dyn_cast<ReadExpr>(cur_e)) != NULL)
 		return handlePostReadExpr(re);
 #endif
 
 	/* we don't know the expression to bind the let
 	 * to yet, so for now we'll have a placeholder */
-	std::cerr << "[MIN] ADDING ";
-	cur_e->print(std::cerr);
-	std::cerr << "\n";
 	let_expr = LetExpr::alloc(cur_e, ConstantExpr::create(0, 1));
 	bindings.insert(std::make_pair(cur_e, let_expr));
+	useful_lets_list.push_back(let_expr);
 
-	return Action::doChildren();
+
+	if (!changed_kids)
+		return Action::doChildren();
+
+	return Action::changeTo(cur_e);
 }
 
 ExprVisitor::Action ExprMinimizer::handlePostReadExpr(const ReadExpr* re)
@@ -90,6 +105,7 @@ ExprVisitor::Action ExprMinimizer::handlePostReadExpr(const ReadExpr* re)
 	bool		rebuildUpdates;
 	UpdateList	*newUpdates;
 
+	/* create new update stack */
 	new_idx = visit(re->index);
 	uniform = buildUpdateStack(
 		re->updates,
@@ -103,11 +119,13 @@ ExprVisitor::Action ExprMinimizer::handlePostReadExpr(const ReadExpr* re)
 	if (!rebuildUpdates) 
 		return Action::doChildren();
 
+	/* make update list from update stack */
 	newUpdates = UpdateList::fromUpdateStack(
 		re->updates.root, updateStack);
 
 	ref<Expr> new_re;
 	
+	/* build new read expr */
 	new_re = ReadExpr::create(*newUpdates, new_idx);
 	let_expr = LetExpr::alloc(
 		new_re,

@@ -34,7 +34,6 @@ private:
 
 	typedef ExprHashMap< ref</*Let*/Expr> > bindings_ty;
 
-	std::set<ref</*Let*/Expr> >	useful_lets;
 	std::list<ref<Expr> >		useful_lets_list;
 
 	// let bindings

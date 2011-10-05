@@ -9,14 +9,16 @@
 
 namespace klee {
 
+typedef std::pair<const Array*, const UpdateNode*> update_pair;
+
 class SMTPrinter : public ExprVisitor
 {
 public:
 	struct SMTArrays {
 		const std::string& getInitialArray(const Array* a);
 		std::map<const Array*, std::string>		a_initial;
-		std::map<const Array*, std::string>		a_assumptions;
-		std::map<const UpdateNode*, std::string>	a_updates;
+		std::map<const Array*, std::string>		a_const_decls;
+		std::map<update_pair, ref<Expr> >		a_updates;
 	};
 
 	virtual ~SMTPrinter() {}
@@ -37,7 +39,9 @@ private:
 		use_hashcons = false;
 	}
 
-	void printConstraint(const ref<Expr>& e,
+	void printConstraint(
+		const ref<Expr>& e,
+		const std::set<update_pair>& updates,
 		const char* key = ":assumption",
 		const char* val = "bv1[1]");
 
@@ -49,7 +53,12 @@ private:
 
 	void writeArrayForUpdate(
 		std::ostream& os,
-		const Array* arr, const UpdateNode *un);
+		const ReadExpr* re);
+
+	void writeExpandedArrayForUpdate(
+		std::ostream& os,
+		const Array* root, const UpdateNode *un);
+
 	const std::string& getInitialArray(const Array* root);
 
 	std::ostream	&os;

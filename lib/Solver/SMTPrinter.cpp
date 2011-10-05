@@ -7,7 +7,7 @@
 #include "llvm/Support/CommandLine.h"
 
 #include <assert.h>
-#include <stack>
+#include <queue>
 #include <algorithm>
 #include <iostream>
 #include <sstream>
@@ -19,12 +19,19 @@ using namespace llvm;
 namespace {
 	cl::opt<bool>
 	MinimizeSMT(
-		"-smt-minimize",
+		"smt-minimize",
 		 cl::init(false), // experimental
 		 cl::desc("Minimize SMT requests with let-exprs"));
+
+	cl::opt<bool>
+	SMTLetArrays(
+		"smt-let-arrays",
+		cl::init(true),
+		cl::desc("Use let expressions for all arrays"));
+
 	cl::opt<bool>
 	OptimizeSMTMul(
-		"-smt-optmul",
+		"smt-optmul",
 		 cl::init(true),
 		 cl::desc("Use shifting multiply for const*sym"));
 }
@@ -32,51 +39,84 @@ namespace {
 /* This figures out which arrays are being used in an
  * expression. This is important for SMT because it needs array information
  * up front, before the formula is given.
+ *
+ * It also keeps track of arrays assigned to expressions.
+ * Every expression pushes a new array set on the exprlog vector
  */
 class ArrayFinder : public ExprConstVisitor
 {
 public:
-	typedef ExprHashMap< unsigned > bindings_ty;
-
-	// let bindings
-	bindings_ty	bindings;
-
 	ArrayFinder(SMTPrinter::SMTArrays* in_arr)
-	: arr(in_arr)
-	, next_binding_id(0)
+	: cur_let_exprlog(NULL)
+	, arr(in_arr)
 	{ }
 
 	virtual ~ArrayFinder(void) {}
 
-	virtual Action visitExpr(const Expr* e)
+	virtual Action visitExpr(const Expr* e);
+
+	void addExprArrays(const ref<Expr>& e)
 	{
-		if (e->getKind() != Expr::Read)
-			return Expand;
-
-		bindings_ty::iterator it;
-
-		it = bindings.find(ref<Expr>(const_cast<Expr*>(e)));
-		if (it != bindings.end()) {
-			// seen it
-			return Skip;
-		}
-
-		const ReadExpr *re = static_cast<const ReadExpr*>(e);
-		arr->getInitialArray(re->updates.root);
-
-		bindings.insert(std::make_pair(
-			ref<Expr>(const_cast<Expr*>(e)),
-			next_binding_id++));
-
-		return Expand;
+		used_let_exprlog.push(expr_updates_ty());
+		cur_let_exprlog = &used_let_exprlog.back();
+		visit(e);
 	}
 
-	unsigned int getNumBindings(void) const { return next_binding_id; }
+	std::set<update_pair> getNextExprLog(void)
+	{
+		expr_updates_ty	ret(used_let_exprlog.front());
+		used_let_exprlog.pop();
+		return ret;
+	}
 
 private:
-	SMTPrinter::SMTArrays	*arr;
-	unsigned int		next_binding_id;
+	// let bindings
+	typedef std::set<update_pair> expr_updates_ty;
+
+	typedef std::map<update_pair, ref<Expr> >
+		bindings_ty;
+
+	bindings_ty			bindings;
+	std::queue<expr_updates_ty>	used_let_exprlog;
+	expr_updates_ty			*cur_let_exprlog;
+
+	SMTPrinter::SMTArrays*		arr;
 };
+
+
+ExprConstVisitor::Action ArrayFinder::visitExpr(const Expr* e)
+{
+	bindings_ty::iterator	it;
+	ref<Expr>		let_expr;
+	const ReadExpr		*re;
+	update_pair		upp;
+
+	if (e->getKind() != Expr::Read)
+		return Expand;
+
+	ref<Expr>	e_ref(const_cast<Expr*>(e));
+	re = static_cast<const ReadExpr*>(e);
+
+	upp = update_pair(re->updates.root, re->updates.head);
+	it = bindings.find(upp);
+	if (it != bindings.end()) {
+		// seen it
+		cur_let_exprlog->insert(upp);
+		return Skip;
+	}
+
+	/* record expression */
+	arr->getInitialArray(re->updates.root);
+
+	let_expr = LetExpr::alloc(e_ref, ConstantExpr::create(0, 1));
+	bindings.insert(std::make_pair(upp, let_expr));
+	cur_let_exprlog->insert(upp);
+
+	arr->a_updates[upp] = let_expr;
+
+	return Expand;
+}
+
 
 SMTPrinter::Action SMTPrinter::visitExprPost(const Expr &e)
 {
@@ -127,7 +167,12 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr &e)
 		const ReadExpr *re = cast<ReadExpr>(&e);
 		/* (select array index) */
 		os << "( select ";
-		writeArrayForUpdate(os, re->updates.root, re->updates.head);
+		if (SMTLetArrays) {
+			writeArrayForUpdate(os, re);
+		} else {
+			writeExpandedArrayForUpdate(
+				os, re->updates.root, re->updates.head);
+		}
 		os << " ";
 		expr2os(re->index, os);
 		os << ")\n";
@@ -340,37 +385,41 @@ void SMTPrinter::print(std::ostream& os, const Query& q)
 	SMTPrinter		smt_pr(os, smt_arr);
 	ArrayFinder		arr_finder(smt_arr);
 
-	os <<	"(\nbenchmark HAVEABETTERNAME.smt \n"
-		":source { klee-mc (Have better name) } \n"
+	os <<	"(\nbenchmark EVERYTHINGISBROKEN.smt \n"
+		":source { klee-mc (Everything is broken) } \n"
 		":logic QF_AUFBV\n"
 		":category {industrial}\n";
-
 
 	/* do a first pass on expressions so we know
 	 * which arrays we're going to need to load before committing
 	 * assumptions and formulas to the ostream */
 	foreach (it, q.constraints.begin(), q.constraints.end())
-		arr_finder.visit(*it);
-	arr_finder.visit(q.expr);
+		arr_finder.addExprArrays(*it);
+	arr_finder.addExprArrays(q.expr);
 
 	/* now have arrays, declare them */
 	smt_pr.printArrayDecls();
 
 	/* print constraints */
 	foreach (it, q.constraints.begin(), q.constraints.end()) {
-		smt_pr.printConstraint(*it);
+		std::set<update_pair> s(arr_finder.getNextExprLog());
+		smt_pr.printConstraint(*it, s);
 	}
 
 	/* print expr */
-	smt_pr.printConstraint(q.expr, ":formula", "bv0[1]");
+	std::set<update_pair> s(arr_finder.getNextExprLog());
+	smt_pr.printConstraint(q.expr, s, ":formula", "bv0[1]");
 
+	// closing parens for (benchmark)
 	os << ")\n";
 
 	delete smt_arr;
 }
 
 void SMTPrinter::printConstraint(
-	const ref<Expr>& e, const char* key,  const char* val)
+	const ref<Expr>& e,
+	const std::set<update_pair>& updates,
+	const char* key,  const char* val)
 {
 	unsigned int		let_c;
 	ref<Expr>		min_expr;
@@ -383,8 +432,27 @@ void SMTPrinter::printConstraint(
 		min_expr = e;
 	}
 
-	/* dump let expressions, if any */
+	/* forge let expressions for updates */
 	let_c = 0;
+	if (SMTLetArrays) {
+	foreach (it, updates.begin(), updates.end()) {
+		update_pair		upp(*it);
+		const ReadExpr		*re;
+
+		le = dyn_cast<LetExpr>((*(arr->a_updates.find(upp))).second);
+		assert (le != NULL);
+		re = dyn_cast<ReadExpr>(le->getBindExpr());
+		assert (re != NULL);
+
+		os << "(let (?e" << le->getId() << ' ';
+		writeExpandedArrayForUpdate(os, upp.first, upp.second);
+		os << ")\n";
+
+		let_c++;
+	}
+	}
+
+	/* dump let expressions, if any */
 	while ((le = dyn_cast<LetExpr>(min_expr)) != NULL) {
 		os << "(let (?e" << le->getId() << ' ';
 		expr2os(le->getBindExpr(), os);
@@ -412,9 +480,43 @@ struct update_params
 	const UpdateNode* un;
 };
 
-/* this is kind of obfuscated, but it's necessary to avoid
- * some nasty recursion eating al memory */
 void SMTPrinter::writeArrayForUpdate(
+	std::ostream& os,
+	const ReadExpr* re)
+{
+	/* this should be a reference to a let */
+	std::map<update_pair, ref<Expr> >::iterator	it;
+	const LetExpr*	le;
+
+	it = arr->a_updates.find(
+		update_pair(re->updates.root, re->updates.head));
+	if (it == arr->a_updates.end()) {
+		assert (0 == 1 && "Expected update node to exist!");
+		return;
+	}
+
+	le = dyn_cast<LetExpr>((*it).second);
+	assert (le != NULL && "Expected let expr");
+
+	os << "?e" << le->getId() << " ";
+}
+
+/**
+Bill,
+
+Chaining store operations in this way creates an intermediate array
+value for every element of the array, which is likely to slow down
+reasoning in the solver. I think you'd be better off generating a set
+of assertions of the form
+(= (select A 0) bvhex11[8])
+(= (select A 1) bvhex22[8])
+and so on.
+
+-Chris
+*/
+/* this is kind of obfuscated, but it's necessary to avoid
+ * some nasty recursion eating all memory */
+void SMTPrinter::writeExpandedArrayForUpdate(
 	std::ostream& os,
 	const Array* root, const UpdateNode *un)
 {
@@ -427,7 +529,6 @@ void SMTPrinter::writeArrayForUpdate(
 		update_params	&p(s.back());
 
 		if (p.un == NULL) break;
-		if (arr->a_updates.count(p.un)) break;
 
 		s.push_back(update_params(p.root, p.un->next));
 	}
@@ -457,20 +558,6 @@ void SMTPrinter::writeArrayForUpdate(
 	}
 }
 
-
-/**
-Bill,
-
-Chaining store operations in this way creates an intermediate array
-value for every element of the array, which is likely to slow down
-reasoning in the solver. I think you'd be better off generating a set
-of assertions of the form
-(= (select A 0) bvhex11[8])
-(= (select A 1) bvhex22[8])
-and so on.
-
--Chris
-*/
 const std::string& SMTPrinter::getInitialArray(const Array *root)
 {
 	return arr->getInitialArray(root);
@@ -503,7 +590,7 @@ const std::string& SMTPrinter::SMTArrays::getInitialArray(const Array* root)
 
 	if (root->mallocKey.size > 1) assump_str += ")\n";
 
-	a_assumptions.insert(std::make_pair(root, assump_str));
+	a_const_decls.insert(std::make_pair(root, assump_str));
 done:
 	a_initial.insert(std::make_pair(root, root->name));
 	return a_initial[root];
@@ -518,7 +605,7 @@ void SMTPrinter::printArrayDecls(void) const
 	}
 
 	/* print constant array values */
-	foreach (it, arr->a_assumptions.begin(), arr->a_assumptions.end()) {
+	foreach (it, arr->a_const_decls.begin(), arr->a_const_decls.end()) {
 		os << ":assumption " << it->second << "\n";
 	}
 }
