@@ -199,7 +199,6 @@ bool PipeSolverImpl::computeInitialValues(
 		std::cerr << "BAD PARSE computeInitialValues\n";
 		dumpBadQuery(q, "badparse");
 		failQuery();
-		assert (0 == 1 && "BYEBYE");
 		return false;
 	}
 

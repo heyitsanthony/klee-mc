@@ -1097,12 +1097,21 @@ static ref<Expr> AndExpr_createPartial(Expr *l, const ref<ConstantExpr> &cr)
 	// zero_extend[24]  (bvand (select) bv7[8]))
 	if (l->getKind() == Expr::ZExt) {
 		ZExtExpr	*ze = static_cast<ZExtExpr*>(l);
+		Expr::Width	cr_w, src_w;
 
-		return ZExtExpr::create(
-			AndExpr::create(
-				cr->ZExt(ze->getKid(0)->getWidth()),
-				ze->getKid(0)),
-			ze->getWidth());
+		// BUG FIEND NOTE:
+		// It's important to verify that the truncated constant
+		// is equal to the normal constant!
+		cr_w = cr->getWidth();
+		src_w = ze->getKid(0)->getWidth();
+		if (	cr_w <= 64 && src_w <= 64 &&
+			cr->ZExt(src_w)->getZExtValue() == cr->getZExtValue())
+		{
+			return ZExtExpr::create(
+				AndExpr::create(
+					cr->ZExt(src_w), ze->getKid(0)),
+				ze->getWidth());
+		}
 	}
 
 	return AndExpr::alloc(cr, l);
