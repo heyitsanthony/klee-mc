@@ -59,6 +59,15 @@ PipeSolverImpl::PipeSolverImpl(PipeFormat* in_fmt)
 {
 	assert (fmt);
 	parent_pid = getpid();
+
+	/* if solver gets stops accepting our input /
+	 * dies, we'll be left writing to a dead pipe which will
+	 * raise SIGPIPE. For some reason the interruption code
+	 * includes SIGPIPE, so we'll ignore it. In the future
+	 * it might be worth it to flip some flag to determine whether
+	 * we should ignore (e.g. failure in pipe solver) or should
+	 * terminate (e.g. error outside pipe solver) */
+	signal(SIGPIPE, SIG_IGN);
 }
 
 PipeSolverImpl::~PipeSolverImpl(void)
@@ -190,6 +199,7 @@ bool PipeSolverImpl::computeInitialValues(
 		std::cerr << "BAD PARSE computeInitialValues\n";
 		dumpBadQuery(q, "badparse");
 		failQuery();
+		assert (0 == 1 && "BYEBYE");
 		return false;
 	}
 

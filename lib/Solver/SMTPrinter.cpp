@@ -21,19 +21,20 @@ namespace {
 	MinimizeSMT(
 		"smt-minimize",
 		 cl::init(false), // experimental
-		 cl::desc("Minimize SMT requests with let-exprs"));
+		 cl::desc(
+		"Minimize SMT requests with let-exprs (default: off)"));
 
 	cl::opt<bool>
 	SMTLetArrays(
 		"smt-let-arrays",
-		cl::init(false),
-		cl::desc("Use let expressions for all arrays"));
+		cl::init(true),
+		cl::desc("Use let expressions for all arrays (default: on)"));
 
 	cl::opt<bool>
 	OptimizeSMTMul(
 		"smt-optmul",
 		 cl::init(true),
-		 cl::desc("Use shifting multiply for const*sym"));
+		 cl::desc("Shifting multiply for const*sym (default: on)"));
 }
 
 /* This figures out which arrays are being used in an
@@ -49,29 +50,35 @@ public:
 	ArrayFinder(SMTPrinter::SMTArrays* in_arr)
 	: cur_let_exprlog(NULL)
 	, arr(in_arr)
-	{ }
+	{}
 
 	virtual ~ArrayFinder(void) {}
 
-	virtual Action visitExpr(const Expr* e);
-
 	void addExprArrays(const ref<Expr>& e)
 	{
-		used_let_exprlog.push(expr_updates_ty());
-		cur_let_exprlog = &used_let_exprlog.back();
+		expr_updates_ty	eu;
+		cur_let_exprlog = &eu;
 		visit(e);
+
+		used_let_exprlog.push(eu);
+		cur_let_exprset.clear();
+		cur_let_exprlog = NULL;
 	}
 
-	std::set<update_pair> getNextExprLog(void)
+	std::list<update_pair> getNextExprLog(void)
 	{
 		expr_updates_ty	ret(used_let_exprlog.front());
 		used_let_exprlog.pop();
 		return ret;
 	}
 
+protected:
+	virtual Action visitExpr(const Expr* e);
+	virtual void visitExprPost(const Expr* expr);
+
 private:
 	// let bindings
-	typedef std::set<update_pair> expr_updates_ty;
+	typedef std::list<update_pair> expr_updates_ty;
 
 	typedef std::map<update_pair, ref<Expr> >
 		bindings_ty;
@@ -79,10 +86,26 @@ private:
 	bindings_ty			bindings;
 	std::queue<expr_updates_ty>	used_let_exprlog;
 	expr_updates_ty			*cur_let_exprlog;
+	std::set<update_pair>		cur_let_exprset;
 
 	SMTPrinter::SMTArrays*		arr;
 };
 
+void ArrayFinder::visitExprPost(const Expr* e)
+{
+	const ReadExpr		*re;
+	update_pair		upp;
+
+	if (e->getKind() != Expr::Read)
+		return;
+
+	re = static_cast<const ReadExpr*>(e);
+	upp = update_pair(re->updates.root, re->updates.head);
+
+	if (cur_let_exprset.insert(upp).second == true) {
+		cur_let_exprlog->push_back(upp);
+	}
+}
 
 ExprConstVisitor::Action ArrayFinder::visitExpr(const Expr* e)
 {
@@ -95,13 +118,23 @@ ExprConstVisitor::Action ArrayFinder::visitExpr(const Expr* e)
 		return Expand;
 
 	ref<Expr>	e_ref(const_cast<Expr*>(e));
-	re = static_cast<const ReadExpr*>(e);
+	re = cast<ReadExpr>(e_ref);
 
 	upp = update_pair(re->updates.root, re->updates.head);
 	it = bindings.find(upp);
 	if (it != bindings.end()) {
-		// seen it
-		cur_let_exprlog->insert(upp);
+		// seen it elsewhere
+
+		// have we inserted it into this expr log?
+		if (!cur_let_exprset.count(upp)) {
+			/* nope-- there might be
+			 * interesting stuff in the index we haven't
+			 * seen yet */
+			return Expand;
+		}
+
+		// seen both globally and locally, no need to
+		// look at any further
 		return Skip;
 	}
 
@@ -110,7 +143,6 @@ ExprConstVisitor::Action ArrayFinder::visitExpr(const Expr* e)
 
 	let_expr = LetExpr::alloc(e_ref, ConstantExpr::create(0, 1));
 	bindings.insert(std::make_pair(upp, let_expr));
-	cur_let_exprlog->insert(upp);
 
 	arr->a_updates[upp] = let_expr;
 
@@ -402,12 +434,12 @@ void SMTPrinter::print(std::ostream& os, const Query& q)
 
 	/* print constraints */
 	foreach (it, q.constraints.begin(), q.constraints.end()) {
-		std::set<update_pair> s(arr_finder.getNextExprLog());
+		std::list<update_pair> s(arr_finder.getNextExprLog());
 		smt_pr.printConstraint(*it, s);
 	}
 
 	/* print expr */
-	std::set<update_pair> s(arr_finder.getNextExprLog());
+	std::list<update_pair> s(arr_finder.getNextExprLog());
 	smt_pr.printConstraint(q.expr, s, ":formula", "bv0[1]");
 
 	// closing parens for (benchmark)
@@ -418,7 +450,7 @@ void SMTPrinter::print(std::ostream& os, const Query& q)
 
 void SMTPrinter::printConstraint(
 	const ref<Expr>& e,
-	const std::set<update_pair>& updates,
+	const std::list<update_pair>& updates,
 	const char* key,  const char* val)
 {
 	unsigned int		let_c;

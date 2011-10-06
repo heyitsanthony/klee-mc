@@ -2,7 +2,7 @@
 
 #include <string>
 #include <map>
-#include <set>
+#include <list>
 
 #include "klee/Expr.h"
 #include "klee/util/ExprVisitor.h"
@@ -41,7 +41,7 @@ private:
 
 	void printConstraint(
 		const ref<Expr>& e,
-		const std::set<update_pair>& updates,
+		const std::list<update_pair>& updates,
 		const char* key = ":assumption",
 		const char* val = "bv1[1]");
 

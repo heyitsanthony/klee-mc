@@ -259,41 +259,66 @@ void ExprConstVisitor::visit(const ref<Expr>& expr)
 	visit(expr.get());
 }
 
+#define OPEN_EXPR(x)	exprvis_ty(x, true)
+#define CLOSE_EXPR(x)	exprvis_ty(x, false)
+#define IS_OPEN_EXPR(x)		(x.second == true)
+#define IS_CLOSE_EXPR(x)	(x.second == false)
+
 void ExprConstVisitor::visit(const Expr* expr)
 {
-	std::stack<const Expr*>	expr_stack;
+	std::stack<exprvis_ty>	expr_stack;
 
-	expr_stack.push(expr);
+	expr_stack.push(OPEN_EXPR(expr));
 	while (!expr_stack.empty()) {
-		const Expr*		cur_expr(expr_stack.top());
-		Action			action;
-		unsigned		num_kids;
-
-		expr_stack.pop();
-		action = visitExpr(cur_expr);
-
-		if (action == Skip)
-			continue;
-		if (action == Stop)
+		if (!processHead(expr_stack))
 			break;
+	}
+}
 
-		assert (action == Expand);
+bool ExprConstVisitor::processHead(std::stack<exprvis_ty>& expr_stack)
+{
+	exprvis_ty		cur_vis(expr_stack.top());
+	const Expr*		cur_expr(cur_vis.first);
+	Action			action;
+	unsigned		num_kids;
 
-		num_kids = cur_expr->getNumKids();
-		for (unsigned i = 0; i < num_kids; i++) {
-			expr_stack.push(cur_expr->getKid(i).get());
-		}
+	expr_stack.pop();
 
-		/* update nodes are sepcial but still have
-		 * expressions! */
-		if (const ReadExpr* re = dyn_cast<const ReadExpr>(cur_expr)) {
-			for (	const UpdateNode* un = re->updates.head;
-				un != NULL;
-				un = un->next)
-			{
-				expr_stack.push(un->index.get());
-				expr_stack.push(un->value.get());
-			}
+	if (IS_CLOSE_EXPR(cur_vis)) {
+		visitExprPost(cur_expr);
+		return true;
+	}
+
+	action = visitExpr(cur_expr);
+	expr_stack.push(CLOSE_EXPR(cur_expr));
+
+	if (action == Skip)
+		return true;
+
+	if (action == Stop)
+		return false;
+
+	assert (action == Expand);
+
+	num_kids = cur_expr->getNumKids();
+	for (int i = num_kids-1; i >= 0; i--) {
+		/* preference to left side-- since we 
+		 * prefer const-left linear exprs, we want to handle the
+		 * left branch first; it's likely to be a leaf */
+		expr_stack.push(OPEN_EXPR(cur_expr->getKid(i).get()));
+	}
+
+	/* Update nodes are special but still have
+	 * expressions! Normal ExprVisitor ignores these. YucK!!! */
+	if (const ReadExpr* re = dyn_cast<const ReadExpr>(cur_expr)) {
+		for (	const UpdateNode* un = re->updates.head;
+			un != NULL;
+			un = un->next)
+		{
+			expr_stack.push(OPEN_EXPR(un->index.get()));
+			expr_stack.push(OPEN_EXPR(un->value.get()));
 		}
 	}
+
+	return true;
 }

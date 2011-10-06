@@ -19,14 +19,18 @@ namespace klee
 class ExprConstVisitor
 {
 public:
+	typedef std::pair<
+		const Expr*, bool /* t=to open/to close=f */> exprvis_ty;
 	enum Action { Skip, Stop, Expand };
 	virtual ~ExprConstVisitor() {}
 	void visit(const Expr* expr);
 	void visit(const ref<Expr>& expr);
 protected:
 	virtual Action visitExpr(const Expr* expr) = 0;
+	virtual void visitExprPost(const Expr* expr) {}
 	ExprConstVisitor() {}
 private:
+	bool processHead(std::stack<exprvis_ty>& );
 };
 
 class ExprVisitor
