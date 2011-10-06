@@ -150,9 +150,9 @@ ExprConstVisitor::Action ArrayFinder::visitExpr(const Expr* e)
 }
 
 
-SMTPrinter::Action SMTPrinter::visitExprPost(const Expr &e)
+void SMTPrinter::visitExprPost(const Expr *e)
 {
-	switch (e.getKind()) {
+	switch (e->getKind()) {
 	case Expr::Eq:
 	case Expr::Ult:
 	case Expr::Ule:
@@ -175,11 +175,9 @@ SMTPrinter::Action SMTPrinter::visitExprPost(const Expr &e)
 	default:
 		os << ")\n";
 	}
-
-	return Action::doChildren();
 }
 
-SMTPrinter::Action SMTPrinter::visitExpr(const Expr &e)
+SMTPrinter::Action SMTPrinter::visitExpr(const Expr* e)
 {
 #define VISIT_OP(x,y)	\
 	case Expr::x: 		\
@@ -192,11 +190,10 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr &e)
 	case Expr::x: 		\
 		os << "(ite ("#y" "; break;	\
 
-
-	switch (e.getKind()) {
+	switch (e->getKind()) {
 	case Expr::NotOptimized: break;
 	case Expr::Read: {
-		const ReadExpr *re = cast<ReadExpr>(&e);
+		const ReadExpr *re = static_cast<const ReadExpr*>(e);
 		/* (select array index) */
 		os << "( select ";
 		if (SMTLetArrays) {
@@ -208,14 +205,14 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr &e)
 		os << " ";
 		expr2os(re->index, os);
 		os << ")\n";
-		return Action::skipChildren();
+		return Close;
 	}
 
 	case Expr::Extract:
 		const ExtractExpr	*ee;
-		ee = dynamic_cast<const ExtractExpr*>(&e);
+		ee = static_cast<const ExtractExpr*>(e);
 		os	<< "( extract["
-			<< ee->offset + e.getWidth() - 1 << ':'
+			<< ee->offset + e->getWidth() - 1 << ':'
 			<< ee->offset
 			<< "] ";
 		break;
@@ -223,22 +220,22 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr &e)
 	// (zero_extend[12] ?e20)  (add 12 bits)
 	case Expr::ZExt:
 		os	<< "( zero_extend["
-			<< e.getWidth() - e.getKid(0)->getWidth() << "] ";
+			<< e->getWidth() - e->getKid(0)->getWidth() << "] ";
 		break;
 	// (sign_extend[12] ?e20)
 	case Expr::SExt:
 		os	<< "( sign_extend["
-			<< e.getWidth() - e.getKid(0)->getWidth() << "] ";
+			<< e->getWidth() - e->getKid(0)->getWidth() << "] ";
 		break;
 
 	case Expr::Select:
 		// logic expressions are converted into bitvectors--
 		// convert back
 		os	<< "(ite (= ";
-			expr2os(e.getKid(0), os); os << " bv1[1] ) ";
-			expr2os(e.getKid(1), os); os << " ";
-			expr2os(e.getKid(2), os); os << " )\n";
-		return Action::skipChildren();
+			expr2os(e->getKid(0), os); os << " bv1[1] ) ";
+			expr2os(e->getKid(1), os); os << " ";
+			expr2os(e->getKid(2), os); os << " )\n";
+		return Close;
 
 	VISIT_OP(Concat, concat)
 
@@ -256,8 +253,8 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr &e)
 	VISIT_OP(Sub, bvsub)
 	case Expr::Mul:
 		if (OptimizeSMTMul) {
-			if (printOptMul(static_cast<const MulExpr*>(&e)))
-				return Action::skipChildren();
+			if (printOptMul(static_cast<const MulExpr*>(e)))
+				return Close;
 		}
 		os << "(bvmul ";
 		break;
@@ -274,20 +271,20 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr &e)
 	VISIT_OP(AShr, bvashr)
 	case Expr::Bind:
 		os	<< "?e"
-			<< static_cast<const BindExpr*>(&e)->let_expr->getId()
+			<< static_cast<const BindExpr*>(e)->let_expr->getId()
 			<< " ";
 		break;
 	case Expr::Ne: os << "( not (="; break;
 	case Expr::Constant:
-		printConstant(dynamic_cast<const ConstantExpr*>(&e));
+		printConstant(static_cast<const ConstantExpr*>(e));
 		break;
 	default:
 		std::cerr << "Could not handle unknown kind for: ";
-		e.print(std::cerr);
+		e->print(std::cerr);
 		std::cerr << std::endl;
 		assert("WHoops");
 	}
-	return Action::doChildren();
+	return Expand;
 }
 
 /* returns false if not possible to optimize the multiplication */
@@ -370,7 +367,7 @@ void SMTPrinter::printOptMul64(const ref<Expr>& expr, uint64_t v) const
 	expr2os(cur_expr, os);
 }
 
-void SMTPrinter::printConstant(const ConstantExpr* ce)
+void SMTPrinter::printConstant(const ConstantExpr* ce) const
 {
 	unsigned int width;
 
@@ -647,8 +644,7 @@ void SMTPrinter::expr2os(const ref<Expr>& e, std::ostream& os) const
 	ConstantExpr		*ce;
 
 	if ((ce = dyn_cast<ConstantExpr>(e)) != NULL) {
-		assert (e->getWidth() <= 64);
-		os << "bv" << ce->getZExtValue() << "[" << e->getWidth() << "]";
+		printConstant(ce);
 		return;
 	}
 

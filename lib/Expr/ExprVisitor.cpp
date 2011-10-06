@@ -290,6 +290,11 @@ bool ExprConstVisitor::processHead(std::stack<exprvis_ty>& expr_stack)
 	}
 
 	action = visitExpr(cur_expr);
+
+	/* like skip, but no post expr */
+	if (action == Close)
+		return true;
+
 	expr_stack.push(CLOSE_EXPR(cur_expr));
 
 	if (action == Skip)
@@ -310,7 +315,10 @@ bool ExprConstVisitor::processHead(std::stack<exprvis_ty>& expr_stack)
 
 	/* Update nodes are special but still have
 	 * expressions! Normal ExprVisitor ignores these. YucK!!! */
-	if (const ReadExpr* re = dyn_cast<const ReadExpr>(cur_expr)) {
+	const ReadExpr* re;
+	if (	visit_update_lists &&
+		(re = dyn_cast<const ReadExpr>(cur_expr)))
+	{
 		for (	const UpdateNode* un = re->updates.head;
 			un != NULL;
 			un = un->next)

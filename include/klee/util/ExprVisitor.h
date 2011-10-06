@@ -21,16 +21,18 @@ class ExprConstVisitor
 public:
 	typedef std::pair<
 		const Expr*, bool /* t=to open/to close=f */> exprvis_ty;
-	enum Action { Skip, Stop, Expand };
+	enum Action { Skip, Stop, Expand, Close };
 	virtual ~ExprConstVisitor() {}
 	void visit(const Expr* expr);
 	void visit(const ref<Expr>& expr);
 protected:
 	virtual Action visitExpr(const Expr* expr) = 0;
 	virtual void visitExprPost(const Expr* expr) {}
-	ExprConstVisitor() {}
+	ExprConstVisitor(bool visit_ul=true)
+	: visit_update_lists(visit_ul) {}
 private:
 	bool processHead(std::stack<exprvis_ty>& );
+	bool visit_update_lists;
 };
 
 class ExprVisitor
@@ -43,7 +45,7 @@ protected:
 
 	private:
 		//      Action() {}
-		Action(Kind _kind) 
+		Action(Kind _kind)
 		: kind(_kind), argument()
 		{
 			if (constantZero.isNull())
@@ -52,7 +54,7 @@ protected:
 			argument = constantZero;
 		}
 
-		Action(Kind _kind, const ref<Expr> &_argument) 
+		Action(Kind _kind, const ref<Expr> &_argument)
 		: kind(_kind), argument(_argument) {}
 
 		static ref<Expr> constantZero;
