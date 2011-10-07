@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <wait.h>
+#include <fcntl.h> // for F_{SET,GET}PIPE_SZ
 #include <sys/prctl.h>
 #include "static/Sugar.h"
 #include "klee/Constraints.h"
@@ -13,6 +14,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "klee/klee.h"
 #include <iostream>
+
 #include "klee/Solver.h"
 #include "SMTPrinter.h"
 #include "PipeSolver.h"
@@ -26,6 +28,12 @@ namespace {
 		"pipe-fork-queries",
 		cl::desc("Fork query writer before sending to pipe."),
 		cl::init(false));
+
+	cl::opt<bool>
+	LargePipes(
+		"large-pipes",
+		cl::desc("Force pipe buffers larger than the default 64KB."),
+		cl::init(true));
 }
 
 PipeSolver::PipeSolver(PipeFormat* in_fmt)
@@ -86,6 +94,13 @@ bool PipeSolverImpl::setupChild(const char* exec_fname, char *const argv[])
 		klee_warning_once(0, "Bad pipes in PipeSolver");
 		failQuery();
 		return false;
+	}
+
+	if (LargePipes) {
+		rc = fcntl(parent2child[1], F_SETPIPE_SZ, 1024*1024);
+		assert (rc == 1024*1024 && "Could not force large pipes");
+		rc = fcntl(child2parent[1], F_SETPIPE_SZ, 1024*1024);
+		assert (rc == 1024*1024 && "Could not force large pipes");
 	}
 
 	child_pid = fork();
