@@ -261,6 +261,8 @@ void UpdateList::removeDups(const ref<Expr>& index)
 	prev_node = cur_node;
 	cur_node = cur_node->next;
 	while (cur_node != NULL) {
+		std::stack<const UpdateNode*>	backward_to_head;
+
 		if (cur_node->index != index) {
 			prev_node = cur_node;
 			cur_node = cur_node->next;
@@ -276,10 +278,24 @@ void UpdateList::removeDups(const ref<Expr>& index)
 			delete cur_node;
 
 		/* update sequence lengths to reflect shortened tail */
+		/* using a stack probably isn't the smartest way to do this
+		 * but I don't think it'll be a performance bottleneck--
+		 * this operation is already pretty heavy. */
 		cur_node = head;
 		while (cur_node != prev_node->next) {
 			const_cast<UpdateNode*>(cur_node)->size--;
+			backward_to_head.push(cur_node);
 			cur_node = cur_node->next;
+		}
+
+		/* and compute the hashes again, starting from the tail
+		 * of the first part and working up to the head.
+		 * (otherwise we'll be computing the hash based on
+		 *  outdated values!) */
+		while (!backward_to_head.empty()) {
+			cur_node = backward_to_head.top();
+			const_cast<UpdateNode*>(cur_node)->computeHash();
+			backward_to_head.pop();
 		}
 
 		cur_node = prev_node->next;

@@ -206,13 +206,20 @@ public:
   /// Returns the hash value.
   virtual unsigned computeHash();
 
-  // Returns 0 iff b is structuraly equivalent to *this
+  // Returns
+  // 0 iff b is structuraly equivalent to *this
+  // -1 if this < b
+  // 1 if this > b
   // David says this gets called a billion times a second, and
   // most of the comparisons are equal ptrs.
   // So, it's probably wise to inline that case.
   inline int compare(const Expr &b) const
   {
 	if (this == &b) return 0;
+	if (hashValue < b.hashValue)
+		return -1;
+	if (hashValue > b.hashValue)
+		return 1;
 	return compareSlow(b);
   }
   virtual int compareContents(const Expr &b) const { return 0; }
@@ -550,14 +557,6 @@ public:
 
 	ref<Expr> getBindExpr(void) const { return binding_expr; }
 	ref<Expr> getScopeExpr(void) const { return scope_expr; }
-
-	int compare(const Expr &b) const
-	{
-		if (this == &b) return 0;
-		return compareSlow(b);
-	}
-
-	int compareSlow(const Expr& b) const;
 
 	ref<Expr> rescope(ref<Expr>& s_expr) const
 	{
