@@ -23,6 +23,8 @@ public:
 
 	virtual ~SMTPrinter() {}
 	static void print(std::ostream& os, const Query& q);
+	static void dump(const Query& q, const char* prefix);
+
 protected:
 	virtual Action visitExpr(const Expr *e);
 	virtual void visitExprPost(const Expr* expr);

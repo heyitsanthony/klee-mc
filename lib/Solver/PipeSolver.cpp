@@ -28,14 +28,6 @@ namespace {
 		cl::init(false));
 }
 
-static void dumpBadQuery(const Query& q, const char* prefix)
-{
-	char	fname[256];
-	sprintf(fname, "%s.%x.smt", prefix, q.hash());
-	std::ofstream	os(fname, std::ios::out);
-	SMTPrinter::print(os, q);
-}
-
 PipeSolver::PipeSolver(PipeFormat* in_fmt)
 : TimedSolver(new PipeSolverImpl(in_fmt))
 {
@@ -176,7 +168,7 @@ bool PipeSolverImpl::computeInitialValues(
 		const_cast<char* const*>(fmt->getArgvModel())) == false)
 	{
 		failQuery();
-		dumpBadQuery(q, "badsetup");
+		SMTPrinter::dump(q, "badsetup");
 		std::cerr << "FAILED TO SETUP FCHILD CIV\n";
 		return false;
 	}
@@ -185,7 +177,7 @@ bool PipeSolverImpl::computeInitialValues(
 	if (!is) {
 		failQuery();
 		finiChild();
-		dumpBadQuery(q, "badwrite");
+		SMTPrinter::dump(q, "badwrite");
 		std::cerr << "FAILED TO WRITERECVQUERY\n";
 		return false;
 	}
@@ -197,7 +189,7 @@ bool PipeSolverImpl::computeInitialValues(
 
 	if (parse_ok == false) {
 		std::cerr << "BAD PARSE computeInitialValues\n";
-		dumpBadQuery(q, "badparse");
+		SMTPrinter::dump(q, "badparse");
 		failQuery();
 		return false;
 	}
@@ -268,7 +260,7 @@ bool PipeSolverImpl::writeQueryToChild(const Query& q) const
 	SMTPrinter::print(*os, q);
 	if (os->fail()) {
 		std::cerr << "FAILED TO COMPLETELY SEND SMT\n";
-		dumpBadQuery(q, "badsend");
+		SMTPrinter::dump(q, "badsend");
 		return false;
 	}
 	os->flush();
@@ -364,7 +356,7 @@ bool PipeSolverImpl::waitOnSolver(const Query& q) const
 
 	if (rc == 0) {
 		/* timeout */
-		dumpBadQuery(q, "snooze");
+		SMTPrinter::dump(q, "snooze");
 		return false;
 	}
 

@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <iostream>
 #include <sstream>
+#include <fstream>
 #include <utility>
 
 using namespace klee;
@@ -650,4 +651,13 @@ void SMTPrinter::expr2os(const ref<Expr>& e, std::ostream& os) const
 
 	SMTPrinter	smt_pr(os, arr);
 	smt_pr.visit(e);
+}
+
+
+void SMTPrinter::dump(const Query& q, const char* prefix)
+{
+	char	fname[256];
+	sprintf(fname, "%s.%x.smt", prefix, q.hash());
+	std::ofstream	os(fname, std::ios::out);
+	print(os, q);
 }
