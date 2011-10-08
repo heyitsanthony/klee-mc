@@ -37,6 +37,7 @@ namespace llvm {
 
 namespace klee {
 
+class ExprBuilder;
 class Array;
 class ConstantExpr;
 class ObjectState;
@@ -182,11 +183,16 @@ public:
   unsigned refCount;
 
 protected:
-  unsigned hashValue;
+  static ExprBuilder	*theExprBuilder;
+  unsigned		hashValue;
+
+  Expr() : refCount(0) { }
 
 public:
-  Expr() : refCount(0) { Expr::count++; }
-  virtual ~Expr() { Expr::count--; }
+  virtual ~Expr() { }
+  static ExprBuilder* setBuilder(ExprBuilder* builder);
+  static ExprBuilder* getBuilder(void) {return theExprBuilder;}
+
 
   virtual Kind getKind() const = 0;
   virtual Width getWidth() const = 0;
@@ -228,8 +234,6 @@ public:
   // but using those children.
   virtual ref<Expr> rebuild(ref<Expr> kids[/* getNumKids() */]) const = 0;
 
-  //
-
   /// isZero - Is this a constant zero.
   bool isZero() const;
 
@@ -267,7 +271,6 @@ public:
   static ref<Expr> createFromKind(Kind k, std::vector<CreateArg> args);
 
   static bool isValidKidWidth(unsigned kid, Width w) { return true; }
-  static bool needsResultType() { return false; }
 
   static bool classof(const Expr *) { return true; }
 private:
@@ -860,8 +863,6 @@ public:
 
   unsigned getNumKids() const { return 1; }
   ref<Expr> getKid(unsigned i) const { return (i==0) ? src : 0; }
-
-  static bool needsResultType() { return true; }
 
   int compareContents(const Expr &b) const {
     const CastExpr &eb = static_cast<const CastExpr&>(b);

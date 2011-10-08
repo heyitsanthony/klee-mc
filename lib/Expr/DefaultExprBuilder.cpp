@@ -84,5 +84,3 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS) \
 
 ExprBuilder *klee::createDefaultExprBuilder()
 { return new DefaultExprBuilder(); }
-
-

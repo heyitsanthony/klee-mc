@@ -10,7 +10,7 @@ public:
 		: ChainedBuilder(Builder, Base) {}
 
 	ref<Expr> Eq(
-		const ref<ConstantExpr> &LHS, 
+		const ref<ConstantExpr> &LHS,
 		const ref<NonConstantExpr> &RHS)
 	{
 		Expr::Width Width = LHS->getWidth();
@@ -28,11 +28,11 @@ public:
 	}
 
 	ref<Expr> Eq(
-		const ref<NonConstantExpr> &LHS, 
+		const ref<NonConstantExpr> &LHS,
 		const ref<ConstantExpr> &RHS) { return Eq(RHS, LHS); }
 
 	ref<Expr> Eq(
-		const ref<NonConstantExpr> &LHS, 
+		const ref<NonConstantExpr> &LHS,
 		const ref<NonConstantExpr> &RHS)
 	{
 		// X == X ==> true

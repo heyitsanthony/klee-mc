@@ -23,14 +23,36 @@
 using namespace klee;
 using namespace llvm;
 
-OptBuilder	optBuilder;
-ExprBuilder	*theExprBuilder = &optBuilder;
-
+ExprBuilder* Expr::theExprBuilder = NULL;
 uint64_t LetExpr::next_id = 0;
-unsigned Expr::count = 0;
 
 bool ArrayLT::operator()(const Array *a, const Array *b) const
 { return *a < *b; }
+
+// silly expr factory singleton used to initialize builder on
+// program startup
+class ExprFactory
+{
+public:
+	ExprFactory(void);
+	virtual ~ExprFactory(void) { delete Expr::setBuilder(NULL); }
+private:
+};
+ExprFactory	theExprFactory;
+ExprFactory::ExprFactory(void)
+{
+	Expr::setBuilder(new OptBuilder());
+//	Expr::setBuilder(
+//		createSimplifyingExprBuilder(
+//			createDefaultExprBuilder()));
+}
+
+ExprBuilder* Expr::setBuilder(ExprBuilder* builder)
+{
+	ExprBuilder	*oldBuilder = theExprBuilder;
+	theExprBuilder = builder;
+	return oldBuilder;
+}
 
 ref<Expr> Expr::createTempRead(const Array *array, Expr::Width w)
 {

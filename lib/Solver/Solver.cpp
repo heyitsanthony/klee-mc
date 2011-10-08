@@ -19,6 +19,7 @@
 #include "klee/Internal/Support/Timer.h"
 #include "klee/util/Assignment.h"
 #include "klee/util/ExprUtil.h"
+#include "klee/ExprBuilder.h"
 
 #include "static/Sugar.h"
 #include "llvm/Support/CommandLine.h"
@@ -158,12 +159,21 @@ namespace {
   UseQueryPCLog("use-query-pc-log",
                 cl::init(false));
 
+  cl::opt<bool>
+  XChkExprBuilder(
+  	"xchk-expr-builder",
+  	cl::desc("Cross check expression builder with oracle builder."),
+	cl::init(false));
 }
 
 namespace klee
 {
 extern Solver *createSMTLoggingSolver(Solver *_solver, std::string path);
 }
+
+extern ExprBuilder *createXChkBuilder(
+	Solver& solver,
+	ExprBuilder* oracle, ExprBuilder* test);
 
 static Solver* createChainWithTimedSolver(
 	std::string queryPCLogPath,
@@ -251,6 +261,17 @@ static Solver* createChainWithTimedSolver(
 	// reoccurring queries
 	if (taut_checker != NULL) {
 		taut_checker->setTopLevelSolver(solver);
+	}
+
+	if (XChkExprBuilder) {
+		ExprBuilder *xchkBuilder;
+		xchkBuilder = createDefaultExprBuilder();
+		xchkBuilder = createConstantFoldingExprBuilder(xchkBuilder);
+		xchkBuilder = createSimplifyingExprBuilder(xchkBuilder);
+		xchkBuilder = createXChkBuilder(
+			*solver, xchkBuilder, Expr::getBuilder());
+
+		Expr::setBuilder(xchkBuilder);
 	}
 
 	return solver;
