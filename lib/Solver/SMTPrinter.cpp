@@ -164,6 +164,7 @@ void SMTPrinter::visitExprPost(const Expr *e)
 	case Expr::Sle:
 	case Expr::Sgt:
 	case Expr::Sge:
+	case Expr::Not:
 		os << ") bv1[1] bv0[1]) \n";
 		break;
 
@@ -219,14 +220,25 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr* e)
 		break;
 
 	// (zero_extend[12] ?e20)  (add 12 bits)
-	case Expr::ZExt:
-		os	<< "( zero_extend["
-			<< e->getWidth() - e->getKid(0)->getWidth() << "] ";
+	case Expr::ZExt: {
+		int	ext_bits;
+		ext_bits = e->getWidth() - e->getKid(0)->getWidth();
+		if (ext_bits >= 0) {
+			os << "( zero_extend[" << ext_bits << "] ";
+		} else {
+			os << "( extract [" << e->getWidth()-1 << ":0] ";
+		}
 		break;
+	}
 	// (sign_extend[12] ?e20)
 	case Expr::SExt:
-		os	<< "( sign_extend["
-			<< e->getWidth() - e->getKid(0)->getWidth() << "] ";
+		int	ext_bits;
+		ext_bits = e->getWidth() - e->getKid(0)->getWidth();
+		if (ext_bits >= 0) {
+			os << "( sign_extend[" << ext_bits  << "] ";
+		} else {
+			os << "( extract [" << e->getWidth()-1 << ":0] ";
+		}
 		break;
 
 	case Expr::Select:
@@ -263,13 +275,16 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr* e)
 	VISIT_OP(SDiv, bvsdiv)
 	VISIT_OP(URem, bvurem)
 	VISIT_OP(SRem, bvsrem)
-	VISIT_OP(Not, not)
 	VISIT_OP(And, bvand)
 	VISIT_OP(Or, bvor)
 	VISIT_OP(Xor, bvxor)
 	VISIT_OP(Shl, bvshl)
 	VISIT_OP(LShr, bvlshr)
 	VISIT_OP(AShr, bvashr)
+	case Expr::Not:
+		os << "(ite (= bv0[1] ";
+		break;
+
 	case Expr::Bind:
 		os	<< "?e"
 			<< static_cast<const BindExpr*>(e)->let_expr->getId()

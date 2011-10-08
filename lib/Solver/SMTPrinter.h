@@ -37,7 +37,7 @@ private:
 	, os(in_os)
 	, arr(in_arr)
 	{
-		// enabling hashcons means we wouldn't print
+		// remember: enabling hashcons means we wouldn't print
 		// expressions we have already seen!
 		// use_hashcons = false;
 	}
