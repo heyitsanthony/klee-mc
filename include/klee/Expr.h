@@ -695,8 +695,6 @@ public:
 private:
   Width width;
   ref<Expr> left, right;
-  static ref<Expr> mergeExtracts(const ref<Expr>& l, const ref<Expr>& r);
-
 public:
   static ref<Expr> alloc(const ref<Expr> &l, const ref<Expr> &r) {
     ref<Expr> c(new ConcatExpr(l, r));
@@ -710,6 +708,8 @@ public:
   Kind getKind() const { return kind; }
   ref<Expr> getLeft() const { return left; }
   ref<Expr> getRight() const { return right; }
+  static ref<Expr> mergeExtracts(const ref<Expr>& l, const ref<Expr>& r);
+
 
   unsigned getNumKids() const { return numKids; }
   ref<Expr> getKid(unsigned i) const {
