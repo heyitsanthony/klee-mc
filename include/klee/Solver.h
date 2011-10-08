@@ -91,8 +91,10 @@ namespace klee {
     SolverImpl *impl;
 
   public:
-    Solver(SolverImpl *_impl) : impl(_impl) {};
+    Solver(SolverImpl *_impl) : impl(_impl), in_solver(false) {}
     virtual ~Solver();
+
+    bool inSolver(void) const { return in_solver; }
 
     /// evaluate - Determine the full validity of an expression in particular
     /// state.
@@ -178,6 +180,8 @@ namespace klee {
 
     void printName(int level = 0) const;
     virtual bool failed(void) const;
+  private:
+    bool in_solver;
   };
 
   class TimedSolver : public Solver

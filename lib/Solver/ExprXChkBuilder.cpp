@@ -2,6 +2,7 @@
 #include "klee/Solver.h"
 #include "klee/Constraints.h"
 #include "klee/ExprBuilder.h"
+#include <queue>
 
 using namespace klee;
 
@@ -158,20 +159,26 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS) \
 	DECL_BIN_REF(Sge)
 #undef DECL_BIN_REF
 private:
-	void		xchk(
+	void xchk(
 		const ref<Expr>& oracle_expr,
 		const ref<Expr>& test_expr);
+	void xchkWithSolver(
+		const ref<Expr>& oracle_expr,
+		const ref<Expr>& test_expr);
+
 	Solver		&solver;
 	ExprBuilder	*oracle_builder, *test_builder;
 	bool		in_xchker;
+	std::queue<
+		std::pair<
+			ref<Expr> /* oracle */,
+			ref<Expr> /* test */ > > deferred_exprs;
 };
 
 void ExprXChkBuilder::xchk(
 	const ref<Expr>& oracle_expr,
 	const ref<Expr>& test_expr)
 {
-	bool			ok, res;
-	ConstraintManager	cm;
 	const ConstantExpr	*ce_o, *ce_t;
 
 	assert (in_xchker);
@@ -188,12 +195,37 @@ void ExprXChkBuilder::xchk(
 		return;
 	}
 
+	if (solver.inSolver()) {
+		/* can't xchk while already in the solver...
+		 * nasty recursion issues pop up */
+		deferred_exprs.push(std::make_pair(oracle_expr, test_expr));
+		in_xchker = false;
+		return;
+	} 
+	
+	/* xchk all deferred expressions */
+	while (!deferred_exprs.empty()) {
+		std::pair<ref<Expr>, ref<Expr> > p(deferred_exprs.front());
+		deferred_exprs.pop();
+		xchkWithSolver(p.first, p.second);
+	}
+
+	xchkWithSolver(oracle_expr, test_expr);
+	in_xchker = false;
+}
+
+void ExprXChkBuilder::xchkWithSolver(
+	const ref<Expr>& oracle_expr,
+	const ref<Expr>& test_expr)
+{
+	bool			ok, res;
+	ConstraintManager	cm;
 	Query			q(cm, EqExpr::alloc(oracle_expr, test_expr));
+
 	std::cerr << "XCHKING: ";
 	q.expr->print(std::cerr);
 	std::cerr << '\n';
 	ok = solver.mustBeTrue(q, res);
-	in_xchker = false;
 	if (!ok)
 		return;
 

@@ -331,13 +331,14 @@ ref<Expr> SolverImpl::computeValue(const Query& query)
 {
 	std::vector<const Array*> objects;
 	std::vector< std::vector<unsigned char> > values;
-	bool	hasSolution;
+	bool		hasSolution;
 
 	// Find the object used in the expression, and compute an assignment
 	// for them.
 	findSymbolicObjects(query.expr, objects);
 	hasSolution = computeInitialValues(query.withFalse(), objects, values);
-	if (failed()) return NULL;
+	if (failed())
+		return NULL;
 
 	if (!hasSolution) query.print(std::cerr);
 
@@ -353,13 +354,17 @@ bool Solver::evaluate(const Query& query, Validity &result)
 	assert(	query.expr->getWidth() == Expr::Bool &&
 		"Invalid expression type!");
 
+	in_solver = true;
+
 	// Maintain invariants implementations expect.
 	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(query.expr)) {
 		result = CE->isTrue() ? True : False;
+		in_solver = false;
 		return true;
 	}
 
 	result = impl->computeValidity(query);
+	in_solver = false;
 	return (impl->failed() == false);
 }
 
@@ -390,14 +395,19 @@ bool Solver::mustBeTrue(const Query& query, bool &result)
 	assert(	query.expr->getWidth() == Expr::Bool &&
 		"Invalid expression type!");
 
+	in_solver = true;
+
 	// Maintain invariants implementations expect.
 	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(query.expr)) {
 		result = CE->isTrue() ? true : false;
+		in_solver = false;
 		return true;
 	}
 
 	validity = impl->computeValidity(query);
 	result = (validity == Solver::True);
+
+	in_solver = false;
 	return (failed() == false);
 }
 
@@ -408,8 +418,12 @@ bool Solver::mustBeFalse(const Query& query, bool &result)
 
 bool Solver::mayBeTrue(const Query& query, bool &result)
 {
-	bool res;
-	if (!mustBeFalse(query, res))
+	bool res, ok;
+
+	in_solver = true;
+	ok = mustBeFalse(query, res);
+	in_solver = false;
+	if (!ok)
 		return false;
 	result = !res;
 	return true;
@@ -417,8 +431,13 @@ bool Solver::mayBeTrue(const Query& query, bool &result)
 
 bool Solver::mayBeFalse(const Query& query, bool &result)
 {
-	bool res;
-	if (!mustBeTrue(query, res))
+	bool res, ok;
+
+	in_solver = true;
+	ok = mustBeTrue(query, res);
+	in_solver = false;
+
+	if (!ok)
 		return false;
 	result = !res;
 	return true;
@@ -434,7 +453,9 @@ bool Solver::getValue(const Query& query, ref<ConstantExpr> &result)
 
 	// FIXME: Push ConstantExpr requirement down.
 	ref<Expr> tmp;
+	in_solver = true;
 	tmp = impl->computeValue(query);
+	in_solver = false;
 	if (failed()) return false;
 
 	result = cast<ConstantExpr>(tmp);
@@ -449,7 +470,9 @@ bool Solver::getInitialValues(
 	bool hasSolution;
 
 	// FIXME: Propogate this out.
+	in_solver = true;
 	hasSolution = impl->computeInitialValues(query, objects, values);
+	in_solver = false;
 	if (failed()) return false;
 	return hasSolution;
 }
