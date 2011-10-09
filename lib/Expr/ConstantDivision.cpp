@@ -7,8 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "ConstantDivision.h"
-
+#include "klee/util/ConstantDivision.h"
 #include "klee/util/Bits.h"
 
 #include <algorithm>

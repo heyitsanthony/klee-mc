@@ -9,17 +9,37 @@ using namespace klee;
 class ExprXChkBuilder : public ExprBuilder
 {
 public:
+	static ExprXChkBuilder	*theXChkBuilder;
+
 	ExprXChkBuilder(Solver& s, ExprBuilder* oracle, ExprBuilder* test)
 	: solver(s)
 	, oracle_builder(oracle)
 	, test_builder(test)
 	, in_xchker(false)
-	{}
+	{
+		theXChkBuilder = this;
+	}
 
 	virtual ~ExprXChkBuilder(void)
 	{
+		theXChkBuilder = NULL;
 		delete oracle_builder;
 		delete test_builder;
+	}
+
+	// for debugging convenience
+	static void xchkExpr(
+		const ref<Expr>& oracle,
+		const ref<Expr>& test)
+	{
+		assert (theXChkBuilder != NULL);
+		if (theXChkBuilder->in_xchker) {
+			theXChkBuilder->deferred_exprs.push(
+				std::make_pair(oracle, test));
+			return;	
+		}
+		theXChkBuilder->in_xchker = true;
+		theXChkBuilder->xchk(oracle, test);
 	}
 
 	virtual ref<Expr> Constant(const llvm::APInt &Value)
@@ -232,7 +252,14 @@ void ExprXChkBuilder::xchkWithSolver(
 	assert (res == true && "XCHK FAILED! MUST BE EQUAL!");
 }
 
+ExprXChkBuilder* ExprXChkBuilder::theXChkBuilder = NULL;
+
 ExprBuilder *createXChkBuilder(
 	Solver& solver,
 	ExprBuilder* oracle, ExprBuilder* test)
 { return new ExprXChkBuilder(solver, oracle, test); }
+
+void xchkExpr(const ref<Expr>& oracle, const ref<Expr>& test)
+{
+	ExprXChkBuilder::xchkExpr(oracle, test);
+}

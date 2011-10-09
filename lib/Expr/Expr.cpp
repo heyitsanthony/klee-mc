@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include "klee/Expr.h"
 #include "klee/ExprBuilder.h"
+#include "klee/util/ConstantDivision.h"
 #include "OptBuilder.h"
 
 // FIXME: We shouldn't need this once fast constant support moves into
@@ -448,24 +449,77 @@ ref<Expr> ConcatExpr::createN(unsigned n_kids, const ref<Expr> kids[]) {
 }
 
 /// Shortcut to concat 4 kids.  The chain returned is unbalanced to the right
-ref<Expr> ConcatExpr::create4(const ref<Expr> &kid1, const ref<Expr> &kid2,
-                              const ref<Expr> &kid3, const ref<Expr> &kid4) {
-  return ConcatExpr::create(kid1, ConcatExpr::create(kid2, ConcatExpr::create(kid3, kid4)));
+ref<Expr> ConcatExpr::create4(
+	const ref<Expr> &kid1, const ref<Expr> &kid2,
+	const ref<Expr> &kid3, const ref<Expr> &kid4)
+{
+	return ConcatExpr::create(
+		kid1,
+		ConcatExpr::create(kid2, ConcatExpr::create(kid3, kid4)));
 }
 
 /// Shortcut to concat 8 kids.  The chain returned is unbalanced to the right
-ref<Expr> ConcatExpr::create8(const ref<Expr> &kid1, const ref<Expr> &kid2,
-			      const ref<Expr> &kid3, const ref<Expr> &kid4,
-			      const ref<Expr> &kid5, const ref<Expr> &kid6,
-			      const ref<Expr> &kid7, const ref<Expr> &kid8) {
-  return ConcatExpr::create(kid1, ConcatExpr::create(kid2, ConcatExpr::create(kid3,
-			      ConcatExpr::create(kid4, ConcatExpr::create4(kid5, kid6, kid7, kid8)))));
+ref<Expr> ConcatExpr::create8(
+	const ref<Expr> &kid1, const ref<Expr> &kid2,
+	const ref<Expr> &kid3, const ref<Expr> &kid4,
+	const ref<Expr> &kid5, const ref<Expr> &kid6,
+	const ref<Expr> &kid7, const ref<Expr> &kid8)
+{
+	return ConcatExpr::create(
+		kid1,
+		ConcatExpr::create(
+			kid2,
+			ConcatExpr::create(
+				kid3,
+				ConcatExpr::create(
+					kid4,
+					ConcatExpr::create4(
+					kid5, kid6, kid7, kid8)))));
 }
 
+ref<Expr> Expr::createShiftAddMul(const ref<Expr>& expr, uint64_t v)
+{
+	ref<Expr>	cur_expr;
+	uint64_t	fit_width, width;
+	uint64_t	add, sub;
 
-/***/
+	width = expr->getWidth();
+	fit_width = width;
+	if (fit_width > 64) fit_width = 64;
 
-/***/
+	// expr*x == expr*(add-sub) == expr*add - expr*sub
+	ComputeMultConstants64(v, add, sub);
+
+	// legal, these would overflow completely
+	add = bits64::truncateToNBits(add, fit_width);
+	sub = bits64::truncateToNBits(sub, fit_width);
+
+	cur_expr = ConstantExpr::create(0, width);
+
+	for (int j=63; j>=0; j--) {
+		uint64_t bit = 1LL << j;
+
+		if (!((add&bit) || (sub&bit)))
+			continue;
+
+		assert(!((add&bit) && (sub&bit)) && "invalid mult constants");
+
+		ref<Expr>	op(
+			ShlExpr::create(
+				expr,
+				ConstantExpr::create(j, width)));
+
+		if (add & bit) {
+			AddExpr::create(cur_expr, op);
+			continue;
+		}
+
+		assert ((sub & bit) != 0);
+		cur_expr = SubExpr::create(cur_expr, op);
+	}
+
+	return cur_expr;
+}
 
 ref<Expr> BinaryExpr::create(Kind k, const ref<Expr> &l, const ref<Expr> &r)
 {

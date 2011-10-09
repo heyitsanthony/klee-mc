@@ -3,7 +3,7 @@
 #include "klee/util/ExprMinimizer.h"
 #include "static/Sugar.h"
 #include "SMTPrinter.h"
-#include "ConstantDivision.h"
+#include "klee/util/ConstantDivision.h"
 #include "llvm/Support/CommandLine.h"
 
 #include <assert.h>
@@ -341,45 +341,7 @@ bool SMTPrinter::printOptMul(const MulExpr* me) const
 // multiply expr by v
 void SMTPrinter::printOptMul64(const ref<Expr>& expr, uint64_t v) const
 {
-	ref<Expr>	cur_expr;
-	uint64_t	fit_width, width;
-	uint64_t	add, sub;
-
-	width = expr->getWidth();
-	fit_width = width;
-	if (fit_width > 64) fit_width = 64;
-
-	// expr*x == expr*(add-sub) == expr*add - expr*sub
-	ComputeMultConstants64(v, add, sub);
-
-	// legal, these would overflow completely
-	add = bits64::truncateToNBits(add, fit_width);
-	sub = bits64::truncateToNBits(sub, fit_width);
-
-	cur_expr = ConstantExpr::create(0, width);
-
-	for (int j=63; j>=0; j--) {
-		uint64_t bit = 1LL << j;
-
-		if (!((add&bit) || (sub&bit)))
-			continue;
-
-		assert(!((add&bit) && (sub&bit)) && "invalid mult constants");
-
-		ref<Expr>	op(
-			ShlExpr::create(
-				expr,
-				ConstantExpr::create(j, width)));
-
-		if (add & bit) {
-			AddExpr::create(cur_expr, op);
-			continue;
-		}
-
-		assert ((sub & bit) != 0);
-		cur_expr = SubExpr::create(cur_expr, op);
-	}
-
+	ref<Expr>	cur_expr(Expr::createShiftAddMul(expr, v));
 	expr2os(cur_expr, os);
 }
 
