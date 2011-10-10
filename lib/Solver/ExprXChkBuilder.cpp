@@ -32,7 +32,8 @@ public:
 		const ref<Expr>& oracle,
 		const ref<Expr>& test)
 	{
-		assert (theXChkBuilder != NULL);
+		assert (theXChkBuilder != NULL &&
+			"Did you remember to enable -xchk-expr-builder?");
 		if (theXChkBuilder->in_xchker) {
 			theXChkBuilder->deferred_exprs.push(
 				std::make_pair(oracle, test));

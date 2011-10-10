@@ -36,6 +36,12 @@ namespace {
 		"smt-optmul",
 		 cl::init(true),
 		 cl::desc("Shifting multiply for const*sym (default: on)"));
+
+	cl::opt<bool>
+	XChkSMTMul(
+		"smt-xchkmul",
+		 cl::init(false),
+		 cl::desc("Test multiplying optimizations (default: off)"));
 }
 
 /* This figures out which arrays are being used in an
@@ -193,7 +199,16 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr* e)
 		os << "(ite ("#y" "; break;	\
 
 	switch (e->getKind()) {
-	case Expr::NotOptimized: break;
+	case Expr::NotOptimized:
+		if (OptimizeSMTMul && e->getKid(0)->getKind() == Expr::Mul) {
+			os << "(bvmul ";
+			expr2os(e->getKid(0)->getKid(0), os);
+			os << " ";
+			expr2os(e->getKid(0)->getKid(1), os);
+			os << ")\n";
+			return Close;
+		}
+		break;
 	case Expr::Read: {
 		const ReadExpr *re = static_cast<const ReadExpr*>(e);
 		/* (select array index) */
@@ -303,15 +318,22 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr* e)
 	return Expand;
 }
 
+extern void xchkExpr(const ref<Expr>& oracle, const ref<Expr>& test);
+
 /* returns false if not possible to optimize the multiplication */
 bool SMTPrinter::printOptMul(const MulExpr* me) const
 {
 	const ConstantExpr	*ce;
+	ref<Expr>		mul_ref(const_cast<Expr*>((Expr*)me));
 
 	ce = dyn_cast<ConstantExpr>(me->left);
 	if (ce == NULL) return false;
 
 	if (ce->getWidth() <= 64) {
+		if (XChkSMTMul)
+		xchkExpr(
+			NotOptimizedExpr::create(mul_ref),
+			Expr::createShiftAddMul(me->right, ce->getZExtValue()));
 		printOptMul64(me->right, ce->getZExtValue());
 		return true;
 	}
@@ -330,6 +352,11 @@ bool SMTPrinter::printOptMul(const MulExpr* me) const
 
 		assert (ce_hi && ce_lo);
 		if (ce_hi->isZero()) {
+			if (XChkSMTMul)
+			xchkExpr(
+				NotOptimizedExpr::create(mul_ref),
+				Expr::createShiftAddMul(
+					me->right, ce_lo->getZExtValue()));
 			printOptMul64(me->right, ce_lo->getZExtValue());
 			return true;
 		}
