@@ -477,6 +477,63 @@ ref<Expr> ConcatExpr::create8(
 					kid5, kid6, kid7, kid8)))));
 }
 
+#define BOOTH_ONES_BEGIN	0
+#define BOOTH_ONES_END		1
+#define BOOTH_CONTINUE		2
+
+/* quick and dirty implementation of the dumbest Booth multiplication
+ * possible -- works for e->getWidth() > 64, unlike shiftaddmul. */
+ref<Expr> Expr::createBoothMul(const ref<Expr>& e, uint64_t v)
+{
+	ref<Expr>	cur_expr;
+	uint64_t	e_w;
+	int		last_bit, bit_run_state;
+
+	e_w = e->getWidth();
+	last_bit = 0;
+
+	cur_expr = ConstantExpr::create(0, e_w);
+	for (uint64_t k = 0; k < 64; k++) {
+		ref<Expr>	cur_mul;
+		int		cur_bit;
+
+		cur_bit = (v & (((uint64_t)1) << k)) ? 1 : 0;
+		if (last_bit != cur_bit) {
+			bit_run_state = (cur_bit)
+				? BOOTH_ONES_BEGIN
+				: BOOTH_ONES_END;
+		} else {
+			bit_run_state = BOOTH_CONTINUE;
+		}
+
+		last_bit = cur_bit;
+		if (bit_run_state == BOOTH_CONTINUE)
+			continue;
+
+		cur_mul = ShlExpr::create(
+			e,
+			ConstantExpr::create(k, e_w));
+
+		if (bit_run_state == BOOTH_ONES_END) {
+			cur_expr = AddExpr::create(cur_expr, cur_mul);
+		} else if (bit_run_state == BOOTH_ONES_BEGIN) {
+			cur_expr = SubExpr::create(cur_expr, cur_mul);
+		} else {
+			assert (0 == 1 && "WTF");
+		}
+	}
+
+	/* cut off sign extension */
+	if (e_w > 64 && last_bit) {
+		cur_expr = AddExpr::create(
+			cur_expr,
+			ShlExpr::create(e, ConstantExpr::create(64, e_w)));
+
+	}
+
+	return cur_expr;
+}
+
 ref<Expr> Expr::createShiftAddMul(const ref<Expr>& expr, uint64_t v)
 {
 	ref<Expr>	cur_expr;

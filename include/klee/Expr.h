@@ -193,6 +193,7 @@ public:
   static ExprBuilder* setBuilder(ExprBuilder* builder);
   static ExprBuilder* getBuilder(void) {return theExprBuilder;}
 
+  static ref<Expr> createBoothMul(const ref<Expr>& expr, uint64_t v);
   static ref<Expr> createShiftAddMul(const ref<Expr>& expr, uint64_t v);
 
   virtual Kind getKind() const = 0;

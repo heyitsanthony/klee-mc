@@ -2,6 +2,10 @@
 #include "klee/Solver.h"
 #include "klee/Constraints.h"
 #include "klee/ExprBuilder.h"
+#include "klee/util/ExprUtil.h"
+#include "klee/util/Assignment.h"
+#include "SMTPrinter.h"
+#include "static/Sugar.h"
 #include <queue>
 
 using namespace klee;
@@ -186,6 +190,10 @@ private:
 	void xchkWithSolver(
 		const ref<Expr>& oracle_expr,
 		const ref<Expr>& test_expr);
+	void dumpCounterExample(
+		std::ostream& os,
+		const ref<Expr>& oracle_expr,
+		const ref<Expr>& test_expr);
 
 	Solver		&solver;
 	ExprBuilder	*oracle_builder, *test_builder;
@@ -216,6 +224,12 @@ void ExprXChkBuilder::xchk(
 		return;
 	}
 
+	// structural equivalence => semantic equivalence
+	if (oracle_expr == test_expr) {
+		in_xchker = false;
+		return;
+	}
+
 	if (solver.inSolver()) {
 		/* can't xchk while already in the solver...
 		 * nasty recursion issues pop up */
@@ -235,6 +249,47 @@ void ExprXChkBuilder::xchk(
 	in_xchker = false;
 }
 
+void ExprXChkBuilder::dumpCounterExample(
+	std::ostream& os,
+	const ref<Expr>& oracle_expr,
+	const ref<Expr>& test_expr)
+{
+	std::vector<const Array*>			objects;
+	std::vector< std::vector<unsigned char> >	values;
+	bool			ok;
+	ConstraintManager	cm;
+	Query			q(cm, EqExpr::alloc(oracle_expr, test_expr));
+	Assignment		*bindings;
+
+
+	findSymbolicObjects(q.expr, objects);
+	ok = solver.getInitialValues(q, objects, values);
+
+	if (!ok) {
+		os << "Could not find counter example! Buggy solver?!\n";
+		return;
+	}
+
+	os << "Counter example:\n";
+	for (unsigned i = 0; i < objects.size(); i++) {
+		os << objects[i]->name << ": ";
+		foreach (it, values[i].begin(), values[i].end())
+			os << ((void*)(*it)) << ' ';
+		os << '\n';
+	}
+
+	bindings = new Assignment(objects, values);
+	os << "Oracle expr: ";
+	bindings->evaluate(oracle_expr)->print(os);
+	os << '\n';
+
+	os << "Test expr: ";
+	bindings->evaluate(test_expr)->print(os);
+	os << '\n';
+
+	delete bindings;
+}
+
 void ExprXChkBuilder::xchkWithSolver(
 	const ref<Expr>& oracle_expr,
 	const ref<Expr>& test_expr)
@@ -243,13 +298,18 @@ void ExprXChkBuilder::xchkWithSolver(
 	ConstraintManager	cm;
 	Query			q(cm, EqExpr::alloc(oracle_expr, test_expr));
 
-	std::cerr << "XCHKING: ";
-	q.expr->print(std::cerr);
-	std::cerr << '\n';
 	ok = solver.mustBeTrue(q, res);
 	if (!ok)
 		return;
 
+	if (res != true) {
+		std::cerr << "BAD XCHK: ";
+		q.expr->print(std::cerr);
+		std::cerr << '\n';
+
+		dumpCounterExample(std::cerr, oracle_expr, test_expr);
+		SMTPrinter::dump(q, "exprxchk");
+	}
 	assert (res == true && "XCHK FAILED! MUST BE EQUAL!");
 }
 

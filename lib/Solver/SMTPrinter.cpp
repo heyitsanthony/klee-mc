@@ -42,6 +42,14 @@ namespace {
 		"smt-xchkmul",
 		 cl::init(false),
 		 cl::desc("Test multiplying optimizations (default: off)"));
+
+	cl::opt<bool>
+	UseBrokenOptMul(
+		"smt-brokenoptmul",
+		cl::init(false),
+		// "/sbin/fsck.cramfs asd"; source of the old cuserid bug.
+		// run with -xchk-exprbuilder to get explosions
+		cl::desc("Use broken optimized multiply to test exprxchk."));
 }
 
 /* This figures out which arrays are being used in an
@@ -320,6 +328,13 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr* e)
 
 extern void xchkExpr(const ref<Expr>& oracle, const ref<Expr>& test);
 
+#define CREATE_OPTMUL_EV(e,v)	\
+	((!UseBrokenOptMul) 	\
+		? Expr::createBoothMul(e, v)	\
+		: Expr::createShiftAddMul(e, v))
+
+#define CREATE_OPTMUL(e,ce)	CREATE_OPTMUL_EV(e, ce->getZExtValue())
+
 /* returns false if not possible to optimize the multiplication */
 bool SMTPrinter::printOptMul(const MulExpr* me) const
 {
@@ -333,7 +348,7 @@ bool SMTPrinter::printOptMul(const MulExpr* me) const
 		if (XChkSMTMul)
 		xchkExpr(
 			NotOptimizedExpr::create(mul_ref),
-			Expr::createShiftAddMul(me->right, ce->getZExtValue()));
+			CREATE_OPTMUL(me->right, ce));
 		printOptMul64(me->right, ce->getZExtValue());
 		return true;
 	}
@@ -355,8 +370,7 @@ bool SMTPrinter::printOptMul(const MulExpr* me) const
 			if (XChkSMTMul)
 			xchkExpr(
 				NotOptimizedExpr::create(mul_ref),
-				Expr::createShiftAddMul(
-					me->right, ce_lo->getZExtValue()));
+				CREATE_OPTMUL(me->right, ce_lo));
 			printOptMul64(me->right, ce_lo->getZExtValue());
 			return true;
 		}
@@ -368,7 +382,7 @@ bool SMTPrinter::printOptMul(const MulExpr* me) const
 // multiply expr by v
 void SMTPrinter::printOptMul64(const ref<Expr>& expr, uint64_t v) const
 {
-	ref<Expr>	cur_expr(Expr::createShiftAddMul(expr, v));
+	ref<Expr>	cur_expr(CREATE_OPTMUL_EV(expr, v));
 	expr2os(cur_expr, os);
 }
 
