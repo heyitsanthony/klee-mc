@@ -32,14 +32,14 @@ extern "C"
 
 SyscallsKTest* SyscallsKTest::create(
 	Guest* in_g,
-	const char* fname_ktest,
+	KTestStream* kts,
 	Crumbs* in_crumbs)
 {
 	SyscallsKTest	*skt;
 
 	assert (in_g->getArch() == Arch::X86_64);
 
-	skt = new SyscallsKTest(in_g, fname_ktest, in_crumbs);
+	skt = new SyscallsKTest(in_g, kts, in_crumbs);
 	if (skt->kts == NULL || skt->crumbs == NULL) {
 		delete skt;
 		skt = NULL;
@@ -50,14 +50,14 @@ SyscallsKTest* SyscallsKTest::create(
 
 SyscallsKTest::SyscallsKTest(
 	Guest* in_g,
-	const char* fname_ktest,
+	KTestStream* in_kts,
 	Crumbs* in_crumbs)
 : Syscalls(in_g)
+, kts(in_kts)
 , sc_retired(0)
 , crumbs(in_crumbs)
 , bcs_crumb(NULL)
 {
-	kts = KTestStream::create(fname_ktest);
 }
 
 SyscallsKTest::~SyscallsKTest(void)

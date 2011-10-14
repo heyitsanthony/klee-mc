@@ -44,13 +44,10 @@ extern bool WriteTraces;
 
 #define es2esv(x)	static_cast<ExeStateVex&>(x)
 
+extern bool SymArgs;
+
 namespace
 {
-	cl::opt<bool> SymArgs(
-		"symargs",
-		cl::desc("Make argument strings symbolic"),
-		cl::init(false));
-
 	cl::opt<bool> SymRegs(
 		"symregs",
 		cl::desc("Mark initial register file as symbolic"),

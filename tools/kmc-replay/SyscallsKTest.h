@@ -13,13 +13,13 @@ class KTestStream;
 class SyscallsKTest : public Syscalls
 {
 public:
-	static SyscallsKTest* create(Guest*, const char*, klee::Crumbs*);
+	static SyscallsKTest* create(Guest*, klee::KTestStream*, klee::Crumbs*);
 	virtual ~SyscallsKTest();
 	virtual uint64_t apply(SyscallParams& sp);
 private:
 	SyscallsKTest(
 		Guest* in_g,
-		const char* fname_ktest,
+		klee::KTestStream* ,
 		klee::Crumbs* in_crumbs);
 
 	void badCopyBail(void);

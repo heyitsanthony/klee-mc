@@ -73,8 +73,6 @@ namespace {
 		   cl::init(false));
 }
 
-extern bool UseFastCexSolver;
-
 static std::string escapedString(const char *start, unsigned length) {
   std::string Str;
   llvm::raw_string_ostream s(Str);

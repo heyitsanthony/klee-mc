@@ -49,8 +49,16 @@ using namespace llvm;
 using namespace klee;
 
 extern Interpreter::ModuleOptions getMainModule(Module* &m);
+bool SymArgs;
 
 namespace {
+	cl::opt<bool, true> SymArgsProxy(
+		"symargs",
+		cl::desc("Make argument strings symbolic"),
+		cl::location(SymArgs),
+		cl::init(false));
+
+
   cl::opt<std::string>
   InputFile(cl::desc("<input executable>"), cl::Positional, cl::init("-"));
 
@@ -443,12 +451,16 @@ static int runWatchdog(void)
 static CmdArgs* getCmdArgs(char** envp)
 {
 	std::list<std::string>	input_args;
+	CmdArgs			*ret;
 	const std::string	env_path(Environ);
 
 	foreach (it, InputArgv.begin(), InputArgv.end())
 		input_args.push_back(*it);
 
-	return new CmdArgs(InputFile, env_path, envp, input_args);
+	ret = new CmdArgs(InputFile, env_path, envp, input_args);
+	if (SymArgs)
+		ret->setSymbolic();
+	return ret;
 }
 
 Guest* getGuest(CmdArgs* cmdargs)

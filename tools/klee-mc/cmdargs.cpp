@@ -15,8 +15,9 @@ CmdArgs::CmdArgs(
 	const string& in_env_path, 
 	char** in_env,
 	const list<string>& in_argv)
-: 	in_bin_path(in_binary_path),
-	envp_native(in_env)
+: in_bin_path(in_binary_path)
+, envp_native(in_env)
+, symbolic(false)
 {
 	envp = envFromString(in_env_path);
 	loadArgv(in_argv);

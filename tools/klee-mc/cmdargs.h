@@ -20,6 +20,9 @@ public:
 	char** getEnvp(void) const { return (envp) ? envp : envp_native; }
 	const std::string& getBinaryPath(void) const { return in_bin_path; }
 	void print(std::ostream& os) const;
+
+	bool isSymbolic(void) const { return symbolic; }
+	void setSymbolic(void) { symbolic = true; }
 private:
 	char** envFromString(const std::string& e_path);
 	void loadArgv(const std::list<std::string>& argv);
@@ -29,6 +32,7 @@ private:
 	char		**envp;
 	char		**envp_native;
 	unsigned int	env_c;
+	bool		symbolic;
 };
 
 #endif

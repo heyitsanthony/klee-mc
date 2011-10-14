@@ -241,7 +241,11 @@ void KleeHandler::processSuccessfulTest(unsigned id, out_objs& out)
 
 	b.numArgs = cmdargs->getArgc();
 	b.args = cmdargs->getArgv();
-	b.symArgvs = 0;
+
+	b.symArgvs = (cmdargs->isSymbolic())
+		? cmdargs->getArgc()
+		: 0;
+
 	b.symArgvLen = 0;
 	b.numObjects = out.size();
 	b.objects = new KTestObject[b.numObjects];
