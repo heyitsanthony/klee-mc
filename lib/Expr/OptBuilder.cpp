@@ -34,13 +34,48 @@ ref<Expr> OptBuilder::Concat(const ref<Expr> &l, const ref<Expr> &r)
 		}
 	}
 
-	// Merge contiguous Extracts
 	ref<Expr>	ret_merge;
+	ret_merge = mergeConcatSExt(l, r);
+	if (!ret_merge.isNull())
+		return ret_merge;
+
+	// Merge contiguous Extracts
 	ret_merge = ConcatExpr::mergeExtracts(l, r);
 	if (!ret_merge.isNull())
 		return ret_merge;
 
 	return ConcatExpr::alloc(l, r);
+}
+
+// create concat:
+//  LHS = (sign_extend[7] ( extract[7:7] ( select ?e51  bv7[32] )))
+//  RHS = (concat ( sign_extend[7] ( extract[7:7] ( select ?e51  bv7[32] ))) x)
+//
+//  RESULT: (concat (sign_extend[15] ...) x)
+//
+ref<Expr> OptBuilder::mergeConcatSExt(
+	const ref<Expr>& l, const ref<Expr>& r) const
+{
+	const SExtExpr*		se_lhs;
+	const ConcatExpr*	con_rhs;
+
+	se_lhs = dyn_cast<SExtExpr>(l);
+	if (se_lhs == NULL)
+		return NULL;
+
+	if (se_lhs->getKid(0)->getWidth() != 1)
+		return NULL;
+
+	con_rhs = dyn_cast<ConcatExpr>(r);
+	if (con_rhs == NULL)
+		return NULL;
+
+	if (con_rhs->getKid(0) != l)
+		return NULL;
+
+	return ConcatExpr::create(
+		SExtExpr::create(se_lhs->getKid(0), se_lhs->getWidth()*2),
+		con_rhs->getKid(1));
 }
 
 ref<Expr> OptBuilder::Extract(const ref<Expr>& expr, unsigned off, Expr::Width w)
@@ -100,8 +135,15 @@ ref<Expr> OptBuilder::Extract(const ref<Expr>& expr, unsigned off, Expr::Width w
 		if (const ZExtExpr* ze = dyn_cast<ZExtExpr>(expr)) {
 			// qemu gave me this gem:
 			// extract[31:0] ( zero_extend[56] (select w8) )
-			return ZExtExpr::alloc(ze->src, w);
+			return ZExtExpr::create(ze->src, w);
 		}
+
+		// extract[7:0]
+		// ( sign_extend[31] ( extract[7:7] ( select ?e41  bv7[32] )
+		// =>
+		// sext[7] (extract[7:7] ...)
+		if (const SExtExpr* se = dyn_cast<SExtExpr>(expr))
+			return SExtExpr::create(se->getKid(0), w);
 
 		if (w == 1) {
 			XorExpr		*xe;
@@ -1148,6 +1190,23 @@ static ref<Expr> UleExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 		return OrExpr::create(Expr::createIsZero(l), r);
 	if (r->isZero() || l == r)
 		return EqExpr::create(l, r);
+
+	if (	l->getKind() == Expr::ZExt &&
+		r->getKind() == Expr::Constant)
+	{
+		ZExtExpr	*ze = cast<ZExtExpr>(l);
+		ConstantExpr	*ce = cast<ConstantExpr>(r);
+
+		if (ce->getWidth() <= 64) {
+			unsigned active_bits;
+			active_bits = ze->src->getWidth();
+			if ((1ULL << active_bits) < ce->getZExtValue()) {
+				// maximum value of lhs always less than rhs
+				return ConstantExpr::alloc(1, Expr::Bool);
+			}
+		}
+	}
+
 
 	return UleExpr::alloc(l, r);
 }

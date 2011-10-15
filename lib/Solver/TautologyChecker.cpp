@@ -25,7 +25,7 @@ namespace {
 	DumpTautologies(
 		"dump-tautologies",
 		cl::desc("Write tautologies found by checker to SMT files"),
-		cl::init(false));
+		cl::init(true));
 }
 
 #define SPLIT_QUERY	\

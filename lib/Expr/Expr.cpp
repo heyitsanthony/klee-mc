@@ -357,55 +357,52 @@ int MallocKey::compare(const MallocKey &a) const {
 #include "llvm/Value.h"
 
 
-unsigned MallocKey::hash() const
+unsigned MallocKey::hash(void) const
 {
-  unsigned	res = 0;
-  unsigned long	alloc_v;
+	unsigned		res = 0;
+	unsigned long		alloc_v;
+	const Instruction	*ins;
 
-  const Instruction	*ins;
-  ins = dyn_cast<Instruction>(allocSite);
-  if (ins == NULL) {
-  	alloc_v = 1;
-  } else {
-  	/* before we were using the pointer value from allocSite.
-	 * this broke stuff horribly, so use bb+func names. */
-	std::string	s_bb, s_f;
-	s_bb = ins->getParent()->getNameStr();
-	s_f = ins->getParent()->getParent()->getNameStr();
-	alloc_v = 0;
-	for (unsigned int i = 0; i < s_bb.size(); i++)
-		alloc_v = alloc_v*33+s_bb[i];
-	for (unsigned int i = 0; i < s_f.size(); i++)
-		alloc_v = alloc_v*33+s_f[i];
-  }
+	ins = dyn_cast<Instruction>(allocSite);
+	if (ins == NULL) {
+		alloc_v = 1;
+	} else {
+		/* before we were using the pointer value from allocSite.
+		 * this broke stuff horribly, so use bb+func names. */
+		std::string	s_bb, s_f;
 
-  res = alloc_v * Expr::MAGIC_HASH_CONSTANT;
+		s_bb = ins->getParent()->getNameStr();
+		s_f = ins->getParent()->getParent()->getNameStr();
+		alloc_v = 0;
+		for (unsigned int i = 0; i < s_bb.size(); i++)
+			alloc_v = alloc_v*33+s_bb[i];
+		for (unsigned int i = 0; i < s_f.size(); i++)
+			alloc_v = alloc_v*33+s_f[i];
+	}
 
-  res ^= iteration * Expr::MAGIC_HASH_CONSTANT;
-  return res;
+	res = alloc_v * Expr::MAGIC_HASH_CONSTANT;
+	res ^= iteration * Expr::MAGIC_HASH_CONSTANT;
+
+	return res;
 }
-
-/***/
 
 int ReadExpr::compareContents(const Expr &b) const
 {
 	return updates.compare(static_cast<const ReadExpr&>(b).updates);
 }
 
-/***/
-
 ref<Expr> ConcatExpr::mergeExtracts(const ref<Expr>& l, const ref<Expr>& r)
 {
 	Expr::Width	w = l->getWidth() + r->getWidth();
 	ExtractExpr	*ee_left, *ee_right;
-	ConcatExpr	*ce_right;
+	ConcatExpr	*con_right;
 
 	ee_left = dyn_cast<ExtractExpr>(l);
 	if (ee_left == NULL)
 		return NULL;
 
 	ee_right = dyn_cast<ExtractExpr>(r);
-	if (ee_right) {
+	if (ee_right != NULL) {
 		if (	ee_left->expr == ee_right->expr &&
 			ee_right->offset + ee_right->width == ee_left->offset)
 		{
@@ -416,9 +413,9 @@ ref<Expr> ConcatExpr::mergeExtracts(const ref<Expr>& l, const ref<Expr>& r)
 
 	// concat(extract(x[j+1]), concat(extract(x[j]), ...)
 	//   => concat(extract(x[j+1:j]), ...)
-	ce_right = dyn_cast<ConcatExpr>(r);
-	if (ce_right != NULL) {
-		ee_right = dyn_cast<ExtractExpr>(ce_right->left);
+	con_right = dyn_cast<ConcatExpr>(r);
+	if (con_right != NULL) {
+		ee_right = dyn_cast<ExtractExpr>(con_right->left);
 		if (	ee_right &&
 			ee_left->expr == ee_right->expr &&
 			ee_left->offset == ee_right->offset + ee_right->width)
@@ -428,13 +425,12 @@ ref<Expr> ConcatExpr::mergeExtracts(const ref<Expr>& l, const ref<Expr>& r)
 					ee_left->expr,
 					ee_right->offset,
 					ee_left->width+ee_right->width),
-				ce_right->right);
+				con_right->right);
 		}
 	}
 
 	return NULL;
 }
-
 
 /// Shortcut to concat N kids.  The chain returned is unbalanced to the right
 ref<Expr> ConcatExpr::createN(unsigned n_kids, const ref<Expr> kids[]) {

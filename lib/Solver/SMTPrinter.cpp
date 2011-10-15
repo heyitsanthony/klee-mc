@@ -249,7 +249,7 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr* e)
 		if (ext_bits >= 0) {
 			os << "( zero_extend[" << ext_bits << "] ";
 		} else {
-			os << "( extract [" << e->getWidth()-1 << ":0] ";
+			os << "( extract[" << e->getWidth()-1 << ":0] ";
 		}
 		break;
 	}
@@ -260,7 +260,7 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr* e)
 		if (ext_bits >= 0) {
 			os << "( sign_extend[" << ext_bits  << "] ";
 		} else {
-			os << "( extract [" << e->getWidth()-1 << ":0] ";
+			os << "( extract[" << e->getWidth()-1 << ":0] ";
 		}
 		break;
 
