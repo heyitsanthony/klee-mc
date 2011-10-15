@@ -743,6 +743,11 @@ void* sc_enter(void* regfile, void* jmpptr)
 			"ustatbuf");
 		break;
 
+	case SYS_setresgid:
+	case SYS_setresuid:
+		sc_ret_v(regfile, 0);
+		break;
+
 	default:
 		kmc_sc_bad(sys_nr);
 		klee_report_error(
