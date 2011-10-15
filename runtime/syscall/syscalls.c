@@ -441,12 +441,18 @@ void* sc_enter(void* regfile, void* jmpptr)
 //		since this causes the state space to explode into really useless
 //		code.
 //
+		if (len == 0) {
+			sc_ret_v(regfile, 0);
+			break;
+		}
+
 		new_regs = sc_new_regs(regfile);
 		if ((++fail_c.fc_read % FAILURE_RATE) == 0 &&
 		    (int64_t)GET_RAX(new_regs) == -1) {
 			break;
 		}
 		klee_assume(GET_RAX(new_regs) == len);
+
 		sc_ret_v(new_regs, len);
 		make_sym_by_arg(regfile, 1, len, "readbuf");
 		sc_breadcrumb_commit(sys_nr, GET_RAX(new_regs));

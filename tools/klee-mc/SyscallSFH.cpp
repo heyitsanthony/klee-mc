@@ -420,6 +420,9 @@ void SyscallSFH::makeRangeSymbolic(
 	uint64_t	cur_addr;
 	unsigned	total_sz;
 
+	if (sz == 0)
+		return;
+
 	cur_addr = (uint64_t)addr;
 	total_sz = 0;
 	/* handle disjoint addresses */
@@ -469,6 +472,7 @@ void SyscallSFH::makeRangeSymbolic(
 		total_sz += taken;
 	}
 
+	/* finally, allocate entire symbolic length */
 	MemoryObject	*sym_mo;
 	ObjectState	*sym_os;
 	sym_mo = exe_vex->memory->allocateAt(state, (uint64_t)addr, sz, 0);

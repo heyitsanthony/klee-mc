@@ -7,6 +7,8 @@
 #include "llvm/Analysis/ProfileInfo.h"
 #include "klee/Config/config.h"
 #include "klee/breadcrumb.h"
+#include "klee/Solver.h"
+#include "../../lib/Solver/SMTPrinter.h"
 #include "../../lib/Core/SpecialFunctionHandler.h"
 #include "../../lib/Core/TimingSolver.h"
 #include "../../lib/Core/StatsTracker.h"
@@ -77,6 +79,12 @@ namespace
 		"use-fdt",
 		cl::desc("Use TJ's FDT model"),
 		cl::init(false));
+
+	cl::opt<bool> DumpSyscallStates(
+		"dump-syscall-state",
+		cl::desc("Dump state constraints before a syscall"),
+		cl::init(false));
+
 }
 
 ExecutorVex::ExecutorVex(
@@ -933,8 +941,20 @@ void ExecutorVex::handleXferSyscall(
 {
 	std::vector< ref<Expr> > 	args;
 	struct XferStateIter		iter;
+	uint64_t			sysnr;
 
-	uint64_t	sysnr;
+	if (DumpSyscallStates) {
+		static int	n = 0;
+		char		prefix[32];
+		Query		q(
+			state.constraints,
+			ConstantExpr::create(1, 1));
+
+		n++;
+		sprintf(prefix, "sc.%d", n);
+		SMTPrinter::dump(q, prefix);
+	}
+
 	state.addressSpace.copyToBuf(es2esv(state).getRegCtx(), &sysnr, 0, 8);
 	fprintf(stderr, "before syscall %d(?): states=%d. objs=%d. st=%p\n",
 		(int)sysnr,
