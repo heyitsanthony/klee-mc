@@ -103,7 +103,6 @@ namespace {
   cl::opt<bool>
   DebugCheckForImpliedValues("debug-check-for-implied-values");
 
-
   cl::opt<bool>
   SimplifySymIndices("simplify-sym-indices",
                      cl::init(false));
@@ -216,6 +215,12 @@ namespace {
 
   cl::opt<bool>
   AllExternalWarnings("all-external-warnings");
+
+  cl::opt<bool>
+  UseIVC(
+  	"use-ivc",
+	cl::desc("Implied Value Concretization"),
+	cl::init(false));
 }
 
 
@@ -270,7 +275,7 @@ Executor::Executor(
 , haltExecution(false)
 , onlyNonCompact(false)
 , initialStateCopy(0)
-, ivcEnabled(false)
+, ivcEnabled(UseIVC)
 , lastMemoryLimitOperationInstructions(0)
 , stpTimeout(MaxInstructionTime ?
 	std::min(MaxSTPTime,MaxInstructionTime) : MaxSTPTime)
@@ -787,42 +792,46 @@ void Executor::constrainForks(ExecutionState& current, struct ForkInfo& fi)
 
 bool Executor::addConstraint(ExecutionState &state, ref<Expr> condition)
 {
-  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(condition)) {
-    assert(CE->isTrue() && "attempt to add invalid constraint");
-    return true;
-  }
+	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(condition)) {
+		assert(CE->isTrue() && "attempt to add invalid constraint");
+		return true;
+	}
 
-  // Check to see if this constraint violates seeds.
-  std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it =
-  	seedMap.find(&state);
-  if (it != seedMap.end()) {
-    bool warn = false;
-    foreach (siit, it->second.begin(), it->second.end()) {
-      bool res;
-      bool success =
-        solver->mustBeFalse(state, siit->assignment.evaluate(condition), res);
-      assert(success && "FIXME: Unhandled solver failure");
-      (void) success;
-      if (res) {
-        siit->patchSeed(state, condition, solver);
-        warn = true;
-      }
-    }
-    if (warn)
-      klee_warning("seeds patched for violating constraint");
-  }
+	// Check to see if this constraint violates seeds.
+	std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it;
 
-  if (!state.addConstraint(condition))
-  	return false;
+	it = seedMap.find(&state);
+	if (it != seedMap.end()) {
+		bool warn = false;
+		foreach (siit, it->second.begin(), it->second.end()) {
+			bool res, success;
 
-  if (ivcEnabled) {
-    doImpliedValueConcretization(
-    	state,
-	condition,
-        ConstantExpr::alloc(1, Expr::Bool));
-  }
+			success = solver->mustBeFalse(
+				state,
+				siit->assignment.evaluate(condition),
+				res);
+			assert(success && "FIXME: Unhandled solver failure");
+			if (res) {
+				siit->patchSeed(state, condition, solver);
+				warn = true;
+			}
+		}
 
-  return true;
+		if (warn)
+			klee_warning("seeds patched for violating constraint");
+	}
+
+	if (!state.addConstraint(condition))
+		return false;
+
+	if (ivcEnabled) {
+		doImpliedValueConcretization(
+			state,
+			condition,
+			ConstantExpr::alloc(1, Expr::Bool));
+	}
+
+	return true;
 }
 
 ref<klee::ConstantExpr> Executor::evalConstant(Constant *c)
@@ -2568,38 +2577,40 @@ void Executor::runState(ExecutionState* &state)
 
 void Executor::handleMemoryUtilization(ExecutionState* &state)
 {
-  if (!(MaxMemory && (stats::instructions & 0xFFFF) == 0))
-    return;
+	if (!(MaxMemory && (stats::instructions & 0xFFFF) == 0))
+		return;
 
-  // We need to avoid calling GetMallocUsage() often because it
-  // is O(elts on freelist). This is really bad since we start
-  // to pummel the freelist once we hit the memory cap.
-  uint64_t mbs = getMemUsageMB();
+	// We need to avoid calling GetMallocUsage() often because it
+	// is O(elts on freelist). This is really bad since we start
+	// to pummel the freelist once we hit the memory cap.
+	uint64_t mbs = getMemUsageMB();
 
-  if (mbs < 0.9*MaxMemory) {
-    atMemoryLimit = false;
-    return;
-  }
+	if (mbs < 0.9*MaxMemory) {
+		atMemoryLimit = false;
+		return;
+	}
 
-  if (mbs <= MaxMemory) return;
+	if (mbs <= MaxMemory) return;
 
-  /*  (mbs > MaxMemory) */
-  atMemoryLimit = true;
-  onlyNonCompact = true;
+	/*  (mbs > MaxMemory) */
+	atMemoryLimit = true;
+	onlyNonCompact = true;
 
-  if (mbs <= MaxMemory + 100) return;
+	if (mbs <= MaxMemory + 100) return;
 
-  /* Ran memory to the roof. FLIP OUT. */
-  if (!ReplayInhibitedForks ||
-      /* resort to killing states if the recent compacting
-         didn't help to reduce the memory usage */
-      stats::instructions-lastMemoryLimitOperationInstructions <= 0x20000)
-  {
-    killStates(state);
-  } else {
-    stateManager->compactStates(state, MaxMemory);
-  }
-  lastMemoryLimitOperationInstructions = stats::instructions;
+	/* Ran memory to the roof. FLIP OUT. */
+	if 	(!ReplayInhibitedForks ||
+		/* resort to killing states if the recent compacting
+		didn't help to reduce the memory usage */
+		stats::instructions-
+		lastMemoryLimitOperationInstructions <= 0x20000)
+	{
+		killStates(state);
+	} else {
+		stateManager->compactStates(state, MaxMemory);
+	}
+
+	lastMemoryLimitOperationInstructions = stats::instructions;
 }
 
 void Executor::seedRunOne(ExecutionState* &lastState)
@@ -2799,45 +2810,54 @@ std::string Executor::getAddressInfo(ExecutionState &state,
 
 void Executor::terminateState(ExecutionState &state)
 {
-  if (replayOut && replayPosition!=replayOut->numObjects) {
-    klee_warning_once(replayOut,
-                      "replay did not consume all objects in test input.");
-  }
+	if (replayOut && replayPosition!=replayOut->numObjects) {
+		klee_warning_once(
+			replayOut,
+			"replay did not consume all objects in test input.");
+	}
 
-  interpreterHandler->incPathsExplored();
+	interpreterHandler->incPathsExplored();
 
-  if (!stateManager->isAddedState(&state)) {
-    state.pc = state.prevPC;
-    stateManager->remove(&state); /* put on remove list */
-  } else {
-    // never reached searcher, just delete immediately
-    std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it3;
-    it3 = seedMap.find(&state);
-    if (it3 != seedMap.end()) seedMap.erase(it3);
-    stateManager->dropAdded(&state);
-    processTree->remove(state.ptreeNode);
-    delete &state;
-  }
+	if (!stateManager->isAddedState(&state)) {
+		state.pc = state.prevPC;
+		stateManager->remove(&state); /* put on remove list */
+		return;
+	}
+
+	// never reached searcher, just delete immediately
+	std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it3;
+	it3 = seedMap.find(&state);
+	if (it3 != seedMap.end()) seedMap.erase(it3);
+	stateManager->dropAdded(&state);
+	processTree->remove(state.ptreeNode);
+	delete &state;
 }
 
 void Executor::terminateStateEarly(
 	ExecutionState &state,
 	const Twine &message)
 {
-	if (	!OnlyOutputStatesCoveringNew || state.coveredNew ||
+	if (	!OnlyOutputStatesCoveringNew ||
+		state.coveredNew ||
 		(AlwaysOutputSeeds && seedMap.count(&state)))
 	{
 	    interpreterHandler->processTestCase(
 	    	state, (message + "\n").str().c_str(), "early");
 	}
+
 	terminateState(state);
 }
 
-void Executor::terminateStateOnExit(ExecutionState &state) {
-  if (!OnlyOutputStatesCoveringNew || state.coveredNew ||
-      (AlwaysOutputSeeds && seedMap.count(&state)))
-    interpreterHandler->processTestCase(state, 0, 0);
-  terminateState(state);
+void Executor::terminateStateOnExit(ExecutionState &state)
+{
+	if (	!OnlyOutputStatesCoveringNew ||
+		state.coveredNew ||
+		(AlwaysOutputSeeds && seedMap.count(&state)))
+	{
+		interpreterHandler->processTestCase(state, 0, 0);
+	}
+
+	terminateState(state);
 }
 
 void Executor::terminateStateOnError(
@@ -3442,10 +3462,10 @@ bool Executor::getSymbolicSolution(
 }
 
 void Executor::getCoveredLines(
-  const ExecutionState &state,
-  std::map<const std::string*, std::set<unsigned> > &res)
+	const ExecutionState &state,
+	std::map<const std::string*, std::set<unsigned> > &res)
 {
-  res = state.coveredLines;
+	res = state.coveredLines;
 }
 
 void Executor::doImpliedValueConcretization(
@@ -3453,34 +3473,38 @@ void Executor::doImpliedValueConcretization(
 	ref<Expr> e,
 	ref<ConstantExpr> value)
 {
-  abort(); // FIXME: Broken until we sort out how to do the write back.
+	if (DebugCheckForImpliedValues)
+		ImpliedValue::checkForImpliedValues(
+			solver->solver, e, value);
 
-  if (DebugCheckForImpliedValues)
-    ImpliedValue::checkForImpliedValues(solver->solver, e, value);
+	ImpliedValueList results;
+	ImpliedValue::getImpliedValues(e, value, results);
 
-  ImpliedValueList results;
-  ImpliedValue::getImpliedValues(e, value, results);
+	foreach (it, results.begin(), results.end()) {
+		const MemoryObject	*mo;
+		const ObjectState	*os;
+		ReadExpr		*re = it->first.get();
+		ConstantExpr		*CE = dyn_cast<ConstantExpr>(re->index);
 
-  foreach (it, results.begin(), results.end()) {
-    ReadExpr *re = it->first.get();
-    ConstantExpr *CE = dyn_cast<ConstantExpr>(re->index);
+		if (CE == NULL) continue;
 
-    if (!CE) continue;
+		mo = state.findMemoryObject(re->updates.root);
+		assert (mo != NULL && "Could not find MO?");
 
-    const MemoryObject *mo = 0; //re->updates.root->object;
-    const ObjectState *os = state.addressSpace.findObject(mo);
+		os = state.addressSpace.findObject(mo);
 
-    // os = 0 => obj has been free'd, no need to concretize (although as
-    // in other cases we would like to concretize the outstanding
-    // reads, but we have no facility for that yet)
-    if (!os) continue;
+		// os = 0 => obj has been free'd,
+		// no need to concretize (although as in other cases we 
+		// would like to concretize the outstanding
+		// reads, but we have no facility for that yet)
+		if (os == NULL) continue;
 
-    assert(!os->readOnly &&
-           "not possible? read only object with static read?");
-    ObjectState *wos = state.addressSpace.getWriteable(mo, os);
-    //wos->write(CE, it->second);
-    state.write(wos, CE, it->second);
-  }
+		assert(	!os->readOnly &&
+			"not possible? read only object with static read?");
+
+		ObjectState *wos = state.addressSpace.getWriteable(mo, os);
+		state.write(wos, CE, it->second);
+	}
 }
 
 void Executor::initializeGlobalObject(

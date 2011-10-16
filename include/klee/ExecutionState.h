@@ -90,6 +90,8 @@ private:
 	//
 	// FIXME: Move to a shared list structure (not critical).
 	std::vector< SymbolicArray > symbolics;
+	typedef std::map<const Array*, const MemoryObject*> arr2sym_map;
+	arr2sym_map	arr2sym;
 
 public:
 	// Are we currently underconstrained?  Hack: value is size to make fake
@@ -178,10 +180,7 @@ public:
 	KInstIterator getCaller(void) const;
 	void dumpStack(std::ostream &os);
 
-	KFunction* getCurrentKF(void) const
-	{
-		return (stack.back()).kf;
-	}
+	KFunction* getCurrentKF(void) const { return (stack.back()).kf; }
 
 
 	void pushFrame(KInstIterator caller, KFunction *kf);
@@ -190,6 +189,13 @@ public:
 	void addSymbolic(MemoryObject *mo, Array *array)
 	{
 		symbolics.push_back(SymbolicArray(mo, array));
+		arr2sym[array] = mo;
+	}
+
+	const MemoryObject* findMemoryObject(const Array* a) const
+	{
+		arr2sym_map::const_iterator	it(arr2sym.find(a));
+		return (it == arr2sym.end()) ? NULL : (*it).second;
 	}
 
   bool addConstraint(ref<Expr> constraint);

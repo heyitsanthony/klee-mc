@@ -74,6 +74,7 @@ public:
 		expr_updates_ty	eu;
 		cur_let_exprlog = &eu;
 		visit(e);
+		visited_exprs.clear();
 
 		used_let_exprlog.push(eu);
 		cur_let_exprset.clear();
@@ -102,6 +103,7 @@ private:
 	std::queue<expr_updates_ty>	used_let_exprlog;
 	expr_updates_ty			*cur_let_exprlog;
 	std::set<update_pair>		cur_let_exprset;
+	std::set<const Expr*>		visited_exprs;
 
 	SMTPrinter::SMTArrays*		arr;
 };
@@ -128,6 +130,10 @@ ExprConstVisitor::Action ArrayFinder::visitExpr(const Expr* e)
 	ref<Expr>		let_expr;
 	const ReadExpr		*re;
 	update_pair		upp;
+
+	if (visited_exprs.find(e) != visited_exprs.end())
+		return Close;
+	visited_exprs.insert(e);
 
 	if (e->getKind() != Expr::Read)
 		return Expand;
@@ -473,7 +479,7 @@ void SMTPrinter::printConstraint(
 	ref<Expr>		min_expr;
 	LetExpr			*le;
 
-	os << key << '\n';
+	os << '\n' << key << '\n';
 	if (MinimizeSMT) {
 		min_expr = ExprMinimizer::minimize(e);
 	} else {
@@ -649,12 +655,12 @@ void SMTPrinter::printArrayDecls(void) const
 	/* declarations */
 	foreach (it, arr->a_initial.begin(), arr->a_initial.end()) {
 		const Array	*a = it->first;
-		os << ":extrafuns ((" << a->name << " Array[32:8]))\n";
+		os << ":extrafuns\n((" << a->name << " Array[32:8]))\n";
 	}
 
 	/* print constant array values */
 	foreach (it, arr->a_const_decls.begin(), arr->a_const_decls.end()) {
-		os << ":assumption " << it->second << "\n";
+		os << ":assumption\n" << it->second << "\n";
 	}
 }
 
