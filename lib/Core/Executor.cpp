@@ -220,7 +220,7 @@ namespace {
   UseIVC(
   	"use-ivc",
 	cl::desc("Implied Value Concretization"),
-	cl::init(false));
+	cl::init(true));
 }
 
 
