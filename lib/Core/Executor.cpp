@@ -3483,6 +3483,7 @@ void Executor::doImpliedValueConcretization(
 	foreach (it, results.begin(), results.end()) {
 		const MemoryObject	*mo;
 		const ObjectState	*os;
+		ObjectState		*wos;
 		ReadExpr		*re = it->first.get();
 		ConstantExpr		*CE = dyn_cast<ConstantExpr>(re->index);
 
@@ -3502,7 +3503,8 @@ void Executor::doImpliedValueConcretization(
 		assert(	!os->readOnly &&
 			"not possible? read only object with static read?");
 
-		ObjectState *wos = state.addressSpace.getWriteable(mo, os);
+		wos = state.addressSpace.getWriteable(mo, os);
+		assert (wos != NULL && "Could not get writable ObjectState?");
 		state.write(wos, CE, it->second);
 	}
 }

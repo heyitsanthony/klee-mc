@@ -166,8 +166,11 @@ void ImpliedValue::getImpliedValues(
 		BinaryExpr *be = cast<BinaryExpr>(e);
 
 		if (value->isZero()) {
-			getImpliedValues(be->left, 0, results);
-			getImpliedValues(be->right, 0, results);
+			ref<ConstantExpr>	z(
+				ConstantExpr::create(0, e->getWidth()));
+
+			getImpliedValues(be->left, z, results);
+			getImpliedValues(be->right, z, results);
 			break;
 		}
 

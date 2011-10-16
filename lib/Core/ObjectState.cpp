@@ -19,12 +19,6 @@
 using namespace klee;
 using namespace llvm;
 
-namespace {
-  cl::opt<bool>
-  UseConstantArrays("use-constant-arrays",
-                    cl::init(true));
-}
-
 ObjectState::ObjectState(const MemoryObject *mo)
 : copyOnWriteOwner(0)
 , refCount(0)
@@ -38,18 +32,6 @@ ObjectState::ObjectState(const MemoryObject *mo)
 , readOnly(false)
 {
 	memset(concreteStore, 0, mo->size);
-
-	if (UseConstantArrays) return;
-
-	// FIXME: Leaked.
-	static unsigned id = 0;
-	const Array *array = new Array(
-		"objst_tmp_arr" + llvm::utostr(++id),
-		mo->mallocKey,
-		0,
-		0);
-	src_array = array;
-	updates = UpdateList(array, 0);
 }
 
 
@@ -98,7 +80,12 @@ ObjectState::~ObjectState()
 	if (concreteMask) delete concreteMask;
 	if (flushMask) delete flushMask;
 	if (knownSymbolics) delete[] knownSymbolics;
-	delete[] concreteStore;
+	if (concreteStore) delete[] concreteStore;
+
+	concreteMask = NULL;
+	flushMask = NULL;
+	knownSymbolics = NULL;
+	concreteStore = NULL;
 }
 
 const UpdateList &ObjectState::getUpdates() const
@@ -162,13 +149,14 @@ const UpdateList &ObjectState::getUpdates() const
 	return updates;
 }
 
-void ObjectState::makeConcrete() {
-  if (concreteMask) delete concreteMask;
-  if (flushMask) delete flushMask;
-  if (knownSymbolics) delete[] knownSymbolics;
-  concreteMask = 0;
-  flushMask = 0;
-  knownSymbolics = 0;
+void ObjectState::makeConcrete()
+{
+	if (concreteMask) delete concreteMask;
+	if (flushMask) delete flushMask;
+	if (knownSymbolics) delete[] knownSymbolics;
+	concreteMask = NULL;
+	flushMask = NULL;
+	knownSymbolics = NULL;
 }
 
 void ObjectState::markRangeSymbolic(unsigned offset, unsigned len)
@@ -343,21 +331,26 @@ ref<Expr> ObjectState::read8(unsigned offset) const
 
 ref<Expr> ObjectState::read8(ref<Expr> offset) const
 {
-  assert(!isa<ConstantExpr>(offset) && "constant offset passed to symbolic read8");
+	unsigned base, size;
 
-  unsigned base, size;
-  fastRangeCheckOffset(offset, &base, &size);
-  flushRangeForRead(base, size);
+	assert(	!isa<ConstantExpr>(offset) &&
+		"constant offset passed to symbolic read8");
 
-  if (size>4096) {
-    std::string allocInfo;
-    object->getAllocInfo(allocInfo);
-    klee_warning_once(0, "flushing %d bytes on read, may be slow and/or crash: %s",
-                      size,
-                      allocInfo.c_str());
-  }
+	fastRangeCheckOffset(offset, &base, &size);
+	flushRangeForRead(base, size);
 
-  return ReadExpr::create(getUpdates(), ZExtExpr::create(offset, Expr::Int32));
+	if (size > 4096) {
+		std::string allocInfo;
+		object->getAllocInfo(allocInfo);
+		klee_warning_once(
+			0,
+			"flushing %d bytes on read, may be slow and/or crash: %s",
+			size,
+			allocInfo.c_str());
+	}
+
+	return ReadExpr::create(
+		getUpdates(), ZExtExpr::create(offset, Expr::Int32));
 }
 
 void ObjectState::write8(unsigned offset, uint8_t value) {
@@ -370,16 +363,18 @@ void ObjectState::write8(unsigned offset, uint8_t value) {
   markByteUnflushed(offset);
 }
 
-void ObjectState::write8(unsigned offset, ref<Expr> value) {
-  // can happen when ExtractExpr special cases
-  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(value)) {
-    write8(offset, (uint8_t) CE->getZExtValue(8));
-  } else {
-    setKnownSymbolic(offset, value.get());
+void ObjectState::write8(unsigned offset, ref<Expr> value)
+{
+	// can happen when ExtractExpr special cases
+	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(value)) {
+		write8(offset, (uint8_t) CE->getZExtValue(8));
+		return;
+	}
 
-    markByteSymbolic(offset);
-    markByteUnflushed(offset);
-  }
+	setKnownSymbolic(offset, value.get());
+
+	markByteSymbolic(offset);
+	markByteUnflushed(offset);
 }
 
 void ObjectState::write8(ref<Expr> offset, ref<Expr> value)
@@ -405,55 +400,60 @@ void ObjectState::write8(ref<Expr> offset, ref<Expr> value)
 	updates.extend(ZExtExpr::create(offset, Expr::Int32), value);
 }
 
-/***/
-
 ref<Expr> ObjectState::read(ref<Expr> offset, Expr::Width width) const
 {
-  // Truncate offset to 32-bits.
-  offset = ZExtExpr::create(offset, Expr::Int32);
+	// Truncate offset to 32-bits.
+	offset = ZExtExpr::create(offset, Expr::Int32);
 
-  // Check for reads at constant offsets.
-  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(offset))
-    return read(CE->getZExtValue(32), width);
+	// Check for reads at constant offsets.
+	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(offset))
+		return read(CE->getZExtValue(32), width);
 
-  // Treat bool specially, it is the only non-byte sized write we allow.
-  if (width == Expr::Bool)
-    return ExtractExpr::create(read8(offset), 0, Expr::Bool);
+	// Treat bool specially,
+	// it is the only non-byte sized write we allow.
+	if (width == Expr::Bool)
+		return ExtractExpr::create(read8(offset), 0, Expr::Bool);
 
-  // Otherwise, follow the slow general case.
-  unsigned NumBytes = width / 8;
-  assert(width == NumBytes * 8 && "Invalid write size!");
-  ref<Expr> Res(0);
-  for (unsigned i = 0; i != NumBytes; ++i) {
-    unsigned idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
-    ref<Expr> Byte = read8(
-        AddExpr::create(
-          offset,
-          ConstantExpr::create(
-            idx, Expr::Int32)));
-    Res = i ? ConcatExpr::create(Byte, Res) : Byte;
-  }
+	// Otherwise, follow the slow general case.
+	unsigned NumBytes = width / 8;
+	assert(width == NumBytes * 8 && "Invalid write size!");
+	ref<Expr> Res(0);
+	for (unsigned i = 0; i != NumBytes; ++i) {
+		ref<Expr>	Byte(0);
+		unsigned	idx;
 
-  return Res;
+		idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
+		Byte = read8(
+			AddExpr::create(
+				offset,
+				ConstantExpr::create(idx, Expr::Int32)));
+
+		Res = i ? ConcatExpr::create(Byte, Res) : Byte;
+	}
+
+	return Res;
 }
 
 ref<Expr> ObjectState::read(unsigned offset, Expr::Width width) const
 {
-  // Treat bool specially, it is the only non-byte sized write we allow.
-  if (width == Expr::Bool)
-    return ExtractExpr::create(read8(offset), 0, Expr::Bool);
+	// Treat bool specially, it is the only non-byte sized write we allow.
+	if (width == Expr::Bool)
+		return ExtractExpr::create(read8(offset), 0, Expr::Bool);
 
-  // Otherwise, follow the slow general case.
-  unsigned NumBytes = width / 8;
-  assert(width == NumBytes * 8 && "Invalid write size!");
-  ref<Expr> Res(0);
-  for (unsigned i = 0; i != NumBytes; ++i) {
-    unsigned idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
-    ref<Expr> Byte = read8(offset + idx);
-    Res = i ? ConcatExpr::create(Byte, Res) : Byte;
-  }
+	// Otherwise, follow the slow general case.
+	unsigned NumBytes = width / 8;
+	assert(width == NumBytes * 8 && "Invalid write size!");
+	ref<Expr> Res(0);
+	for (unsigned i = 0; i != NumBytes; ++i) {
+		ref<Expr>	Byte(0);
+		unsigned	idx;
 
-  return Res;
+		idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
+		Byte = read8(offset + idx);
+		Res = i ? ConcatExpr::create(Byte, Res) : Byte;
+	}
+
+	return Res;
 }
 
 void ObjectState::write(ref<Expr> offset, ref<Expr> value) {
@@ -485,35 +485,37 @@ void ObjectState::write(ref<Expr> offset, ref<Expr> value) {
 
 void ObjectState::write(unsigned offset, ref<Expr> value) {
   // Check for writes of constant values.
-  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(value)) {
-    Expr::Width w = CE->getWidth();
-    if (w <= 64) {
-      uint64_t val = CE->getZExtValue();
-      switch (w) {
-      default: assert(0 && "Invalid write size!");
-      case  Expr::Bool:
-      case  Expr::Int8: write8(offset, val); return;
-      case Expr::Int16: write16(offset, val); return;
-      case Expr::Int32: write32(offset, val); return;
-      case Expr::Int64: write64(offset, val); return;
-      }
-    }
-  }
+	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(value)) {
+		Expr::Width w = CE->getWidth();
+		if (w <= 64) {
+			uint64_t val = CE->getZExtValue();
+			switch (w) {
+			default: assert(0 && "Invalid write size!");
+			case Expr::Bool:
+			case Expr::Int8:  write8(offset, val); return;
+			case Expr::Int16: write16(offset, val); return;
+			case Expr::Int32: write32(offset, val); return;
+			case Expr::Int64: write64(offset, val); return;
+			}
+		}
+	}
 
-  // Treat bool specially, it is the only non-byte sized write we allow.
-  Expr::Width w = value->getWidth();
-  if (w == Expr::Bool) {
-    write8(offset, ZExtExpr::create(value, Expr::Int8));
-    return;
-  }
+	// Treat bool specially, it is the only non-byte sized write we allow.
+	Expr::Width w = value->getWidth();
+	if (w == Expr::Bool) {
+		write8(offset, ZExtExpr::create(value, Expr::Int8));
+		return;
+	}
 
-  // Otherwise, follow the slow general case.
-  unsigned NumBytes = w / 8;
-  assert(w == NumBytes * 8 && "Invalid write size!");
-  for (unsigned i = 0; i != NumBytes; ++i) {
-    unsigned idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
-    write8(offset + idx, ExtractExpr::create(value, 8 * i, Expr::Int8));
-  }
+	// Otherwise, follow the slow general case.
+	unsigned NumBytes = w / 8;
+	assert(w == NumBytes * 8 && "Invalid write size!");
+	for (unsigned i = 0; i != NumBytes; ++i) {
+		unsigned idx;
+		idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
+		write8(	offset + idx,
+			ExtractExpr::create(value, 8 * i, Expr::Int8));
+	}
 }
 
 void ObjectState::write16(unsigned offset, uint16_t value) {
