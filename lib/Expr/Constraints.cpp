@@ -134,7 +134,8 @@ ExprVisitor::Action ExprReplaceVisitor2::visitRead(const ReadExpr &re)
 
 	// at least one update was simplified? rebuild
 	if (rebuild || rebuildUpdates) {
-		UpdateList *newUpdates;
+		UpdateList	*newUpdates;
+		ref<Expr>	new_re;
 
 		if (!rebuildUpdates)
 			return Action::changeTo(
@@ -144,8 +145,10 @@ ExprVisitor::Action ExprReplaceVisitor2::visitRead(const ReadExpr &re)
 		newUpdates = UpdateList::fromUpdateStack(
 			re.updates.root, updateStack);
 
-		return Action::changeTo(
-			ReadExpr::create(*newUpdates, readIndex));
+		new_re = ReadExpr::create(*newUpdates, readIndex);
+		delete newUpdates;
+
+		return Action::changeTo(new_re);
 	}
 
 

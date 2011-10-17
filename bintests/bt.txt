@@ -2,6 +2,7 @@
 /bin/ls
 /bin/df
 /bin/du
+/bin/date
 /bin/pwd
 /bin/ed
 /bin/nano

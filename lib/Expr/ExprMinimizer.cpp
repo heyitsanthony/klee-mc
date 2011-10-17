@@ -127,6 +127,8 @@ ExprVisitor::Action ExprMinimizer::handlePostReadExpr(const ReadExpr* re)
 	
 	/* build new read expr */
 	new_re = ReadExpr::create(*newUpdates, new_idx);
+	delete newUpdates;
+
 	let_expr = LetExpr::alloc(
 		new_re,
 		ConstantExpr::create(0, 1));
