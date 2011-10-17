@@ -167,6 +167,7 @@ namespace klee {
     }
 
     bool operator==(const iterator &b) {
+      if (&b == this) return true;
       return onEntry==b.onEntry && stack==b.stack;
     }
     bool operator!=(const iterator &b) {

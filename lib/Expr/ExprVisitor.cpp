@@ -169,9 +169,7 @@ ref<Expr> ExprVisitor::buildUpdateStack(
 {
 	ref<Expr>	uniformValue(0);
 	bool		uniformUpdates = true;
-	bool		readIndex_is_ce;
 
-	readIndex_is_ce = isa<ConstantExpr>(readIndex);
 	for (const UpdateNode *un = ul.head; un != NULL; un=un->next) {
 		ref<Expr> index = isa<ConstantExpr>(un->index)
 			? un->index
@@ -183,10 +181,9 @@ ref<Expr> ExprVisitor::buildUpdateStack(
 
 		// skip constant updates that cannot match
 		// (!= symbolic updates could match!)
-		if (	readIndex_is_ce
-			&& isa<ConstantExpr>(index)
-			&& readIndex != index)
-		{
+		// use EqExpr::create to utilize expr rewrite
+		// rules for Selects, etc.
+		if (EqExpr::create(readIndex, index)->isFalse()) {
 			rebuildUpdates = true;
 			continue;
 		}

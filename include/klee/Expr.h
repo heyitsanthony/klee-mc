@@ -294,6 +294,8 @@ struct Expr::CreateArg {
 
 inline bool operator==(const Expr &lhs, const Expr &rhs)
 {
+	if (&lhs == &rhs)
+		return true;
 	if (lhs.hash() != rhs.hash())
 		return false;
 	return lhs.compare(rhs) == 0;
@@ -301,6 +303,8 @@ inline bool operator==(const Expr &lhs, const Expr &rhs)
 
 inline bool operator!=(const Expr &lhs, const Expr &rhs)
 {
+	if (&lhs == &rhs)
+		return false;
 	if (lhs.hash() != rhs.hash())
 		return true;
 	return !(lhs == rhs);
@@ -308,6 +312,7 @@ inline bool operator!=(const Expr &lhs, const Expr &rhs)
 
 inline bool operator<(const Expr &lhs, const Expr &rhs)
 {
+	if (&lhs == &rhs) return false;
 	return lhs.compare(rhs) < 0;
 }
 

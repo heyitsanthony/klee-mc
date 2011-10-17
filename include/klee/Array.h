@@ -77,7 +77,11 @@ public:
 
   // returns true if a < b
   bool operator< (const Array &b) const;
-  bool operator== (const Array &b) const { return !(*this < b || b < *this); }
+  bool operator== (const Array &b) const
+  {
+  	if (&b == this) return true;
+  	return !(*this < b || b < *this);
+  }
 
   bool isSingleValue(void) const { return !singleValue.isNull(); }
 

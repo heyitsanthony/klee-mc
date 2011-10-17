@@ -53,6 +53,8 @@ StackFrame::~StackFrame()
 
 StackFrame& StackFrame::operator=(const StackFrame &s)
 {
+	if (&s == this) return *this;
+
 	// Copy locals first because it might throw
 	Cell* new_locals = new Cell[s.kf->numRegisters];
 	for (unsigned i=0; i<s.kf->numRegisters; i++)

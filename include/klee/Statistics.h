@@ -103,7 +103,10 @@ namespace klee {
              sizeof(*data)*theStatisticManager->getNumStatistics());
   }
 
-  inline StatisticRecord &StatisticRecord::operator=(const StatisticRecord &s) {
+  inline StatisticRecord &StatisticRecord::operator=(const StatisticRecord &s)
+  {
+    if (&s == this) return *this;
+
     ::memcpy(data, s.data,
              sizeof(*data)*theStatisticManager->getNumStatistics());
     return *this;

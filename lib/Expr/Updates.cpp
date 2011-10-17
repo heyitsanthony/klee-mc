@@ -99,6 +99,8 @@ UpdateList::~UpdateList()
 
 UpdateList &UpdateList::operator=(const UpdateList &b)
 {
+	if (&b == this) return *this;
+
 	if (b.head) ++b.head->refCount;
 
 	while (head && --head->refCount==0) {

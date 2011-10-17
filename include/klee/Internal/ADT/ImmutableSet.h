@@ -40,7 +40,8 @@ namespace klee {
     ImmutableSet(const ImmutableSet &b) : elts(b.elts) {}
     ~ImmutableSet() {}
 
-    ImmutableSet &operator=(const ImmutableSet &b) { elts = b.elts; return *this; }
+    ImmutableSet &operator=(const ImmutableSet &b)
+    { if (&b == this) return *this; elts = b.elts; return *this; }
     
     bool empty() const { 
       return elts.empty(); 

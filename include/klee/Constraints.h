@@ -45,6 +45,9 @@ public:
 
 	ConstraintManager& operator=(const ConstraintManager &cs)
 	{
+		if (&cs == this)
+			return *this;
+
 		constraints = cs.constraints;
 		invalidateSimplifier();
 		return *this;

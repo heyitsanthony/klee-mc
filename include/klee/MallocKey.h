@@ -44,6 +44,7 @@ public:
            (allocSite == a.allocSite && iteration < a.iteration);
   }
   bool operator==(const MallocKey &a) const {
+    if (&a == this) return true;
     return !(a < *this) && !(*this < a);
   }
   bool operator!=(const MallocKey &a) const { return !(*this == a); }

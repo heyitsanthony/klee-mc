@@ -69,9 +69,10 @@ Array::Array(
 
 bool Array::operator< (const Array &b) const
 {
-	if (isConstantArray() != b.isConstantArray()) {
+	if (&b == this) return false;
+
+	if (isConstantArray() != b.isConstantArray())
 		return isConstantArray() < b.isConstantArray();
-	}
 	
 	if (isConstantArray() && b.isConstantArray()) {
 	// disregard mallocKey for constant arrays; mallocKey matches are 
