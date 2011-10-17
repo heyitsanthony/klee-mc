@@ -34,8 +34,8 @@ namespace {
 	cl::opt<bool>
 	OptimizeSMTMul(
 		"smt-optmul",
-		 cl::init(true),
-		 cl::desc("Shifting multiply for const*sym (default: on)"));
+		 cl::init(false),
+		 cl::desc("Shifting multiply for const*sym (default: false)"));
 
 	cl::opt<bool>
 	XChkSMTMul(

@@ -1,4 +1,6 @@
 #include "llvm/Support/CommandLine.h"
+#include <iostream>
+
 
 #include "OptBuilder.h"
 
@@ -158,6 +160,35 @@ ref<Expr> OptBuilder::Extract(const ref<Expr>& expr, unsigned off, Expr::Width w
 			}
 		}
 
+	}
+
+	// scumbag div with multiply
+	// Unfortunately, 128 bit ops are EXPENSIVE so it's faster to do
+	// a normal div!
+	// ( extract[127:67]
+	// 	(bvmul (concat bv0[64]  bv14757395258967641293[64] ) x) )
+	if (off >= 67 && expr->getKind() == Expr::Mul) {
+		ConstantExpr		*ce;
+
+		if ((ce = dyn_cast<ConstantExpr>(expr->getKid(0)))) {
+			ref<ConstantExpr>	ce_lo, ce_hi;
+
+			ce_lo = ce->Extract(0, 64);
+			ce_hi = ce->Extract(64, ce->getWidth()-64);
+			if (	ce_hi->isZero() &&
+				ce_lo->getZExtValue() == 0xcccccccccccccccd)
+			{
+				return ExtractExpr::create(
+					UDivExpr::create(
+						ExtractExpr::create(
+							expr->getKid(1),
+							0,
+							64),
+						ConstantExpr::create(10, 64)),
+					off - (64 + 3),
+					w);
+			}
+		}
 	}
 
 	/* Extract(Extract) */
@@ -642,7 +673,7 @@ static ref<Expr> AndExpr_createPartial(Expr *l, const ref<ConstantExpr> &cr)
 		uint64_t	v;
 
 		v = cr->getZExtValue();
-		v++;	// v = 2^k?
+		v++;	// v = 1...1 => v+1 = 2^k
 		assert (v != 0 && "but isAllOnes() is false!");
 		// check for lower-bit mask ala 011111
 		// bithack via the stanford bithacks page
@@ -661,6 +692,7 @@ static ref<Expr> AndExpr_createPartial(Expr *l, const ref<ConstantExpr> &cr)
 				ExtractExpr::create(l, 0, bits_set),
 				l->getWidth());
 		}
+
 	}
 
 	// lift zero_extensions
