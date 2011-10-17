@@ -162,6 +162,7 @@ ref<Expr> OptBuilder::Extract(const ref<Expr>& expr, unsigned off, Expr::Width w
 
 	}
 
+
 	// scumbag div with multiply
 	// Unfortunately, 128 bit ops are EXPENSIVE so it's faster to do
 	// a normal div!
@@ -194,7 +195,7 @@ ref<Expr> OptBuilder::Extract(const ref<Expr>& expr, unsigned off, Expr::Width w
 	/* Extract(Extract) */
 	if (expr->getKind() == Expr::Extract) {
 		const ExtractExpr* ee = cast<ExtractExpr>(expr);
-		return ExtractExpr::alloc(ee->expr, off+ee->offset, w);
+		return ExtractExpr::create(ee->expr, off+ee->offset, w);
 	}
 
 	if (expr->getKind() == Expr::ZExt) {
@@ -258,11 +259,11 @@ ref<Expr> OptBuilder::Extract(const ref<Expr>& expr, unsigned off, Expr::Width w
 
 			/* active bytes start after extract */
 			if (active_begin >= off+w)
-				return ConstantExpr::alloc(0, w);
+				return ConstantExpr::create(0, w);
 
 			/* active bytes end before start of extract */
 			if (active_begin+active_w <= off)
-				return ConstantExpr::alloc(0, w);
+				return ConstantExpr::create(0, w);
 		}
 	}
 
