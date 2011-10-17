@@ -14,8 +14,9 @@ class ExeStateVex : public ExecutionState
 private:
 	ExeStateVex &operator=(const ExeStateVex&);
 
-	RecordLog	bc_log;
+	RecordLog	bc_log;	/* list of uninterpreted breadcrumbs */
 	MemoryObject	*reg_mo;
+	unsigned int	syscall_c;
 
 protected:
 	ExeStateVex() {}
@@ -59,6 +60,9 @@ public:
 	}
 
 	MemoryObject* getRegCtx(void) const { return reg_mo; }
+
+	void incSyscallCount(void) { syscall_c++; }
+	unsigned int getSyscallCount(void) const { return syscall_c; }
 };
 }
 

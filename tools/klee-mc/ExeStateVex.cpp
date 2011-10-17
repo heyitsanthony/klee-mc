@@ -11,6 +11,7 @@ void ExeStateVex::recordRegisters(const void* reg, int sz)
 
 ExeStateVex::ExeStateVex(const ExeStateVex& src)
 : ExecutionState(src)
+, syscall_c(0)
 {
 	const ExeStateVex	*esv;
 	

@@ -951,9 +951,13 @@ void ExecutorVex::handleXferSyscall(
 			ConstantExpr::create(1, 1));
 
 		n++;
-		sprintf(prefix, "sc.%d", n);
+		sprintf(prefix, "sc-%d.%d",
+			es2esv(state).getSyscallCount(),
+			n);
 		SMTPrinter::dump(q, prefix);
 	}
+
+	es2esv(state).incSyscallCount();
 
 	state.addressSpace.copyToBuf(es2esv(state).getRegCtx(), &sysnr, 0, 8);
 	fprintf(stderr, "before syscall %d(?): states=%d. objs=%d. st=%p\n",
