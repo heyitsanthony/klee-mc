@@ -12,6 +12,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <limits.h>
 #include <ustat.h>
 #include <sys/syscall.h>
 #include <klee/klee.h>
@@ -443,6 +444,12 @@ void* sc_enter(void* regfile, void* jmpptr)
 //
 		if (len == 0) {
 			sc_ret_v(regfile, 0);
+			break;
+		}
+
+		if (len > SSIZE_MAX) {
+			/* "result is unspecified"-- -1 for an error */
+			sc_ret_v(regfile, -1);
 			break;
 		}
 

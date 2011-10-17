@@ -154,3 +154,4 @@
 /usr/bin/udcli -64 asd
 /sbin/fdisk asd
 /usr/sbin/parted asd
+/usr/bin/lefty asd
