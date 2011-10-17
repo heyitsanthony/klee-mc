@@ -979,12 +979,27 @@ static ref<Expr> LShrExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 
 static ref<Expr> AShrExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 {
-	if (l->getWidth() == Expr::Bool)
+	uint64_t	w;
+
+	w = l->getWidth();
+	if (w == Expr::Bool)
 		return l;
 
 	ref<Expr> ret(ShrExprZExt_create(l, r));
 	if (!ret.isNull())
 		return ret;
+
+	if (const ExtractExpr* ee = dyn_cast<ExtractExpr>(l)) {
+		if (const ConstantExpr* ce = dyn_cast<ConstantExpr>(r)) {
+			uint64_t	shift_v = ce->getZExtValue();;
+			return SExtExpr::create(
+				ExtractExpr::create(
+					l->getKid(0),
+					shift_v+ee->offset,
+					w - shift_v),
+				l->getWidth());
+		}
+	}
 
 	return AShrExpr::alloc(l, r);
 }
