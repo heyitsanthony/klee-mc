@@ -77,10 +77,7 @@ public:
   bool computeSat(const Query&);
   Solver::Validity computeValidity(const Query&);
   ref<Expr> computeValue(const Query&);
-  bool computeInitialValues(
-  	const Query&,
-	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values);
+  bool computeInitialValues(const Query&, Assignment& a);
 
   void printName(int level = 0) const {
     klee_message("%*s" "CexCachingSolver containing:", 2*level, "");
@@ -198,23 +195,24 @@ bool CexCachingSolver::lookupAssignment(
 Assignment* CexCachingSolver::createBinding(const Query& query, KeyType& key)
 {
 	std::vector<const Array*>			objects;
-	std::vector< std::vector<unsigned char> >	values;
 	std::pair<assignmentsTable_ty::iterator, bool>	res;
 
 	Assignment	*binding;
 	bool		hasSolution;
 
 	findSymbolicObjects(key.begin(), key.end(), objects);
+	binding = new Assignment(objects);
 
-	hasSolution = doComputeInitialValues(query, objects, values);
-	if (failed()) return NULL;
-	if (!hasSolution) return NULL;
-
-	binding = new Assignment(objects, values);
+	hasSolution = doComputeInitialValues(query, *binding);
+	if (failed() || !hasSolution) {
+		delete binding;
+		return NULL;
+	}
 
 	// Memoize the result.
 	res = assignmentsTable.insert(binding);
-	if (!res.second) {
+	if (res.second == false) {
+		/* binding already exists */
 		assert (binding != *res.first);
 		delete binding;
 		binding = *res.first;
@@ -227,18 +225,20 @@ Assignment* CexCachingSolver::createBinding(const Query& query, KeyType& key)
 	return binding;
 }
 
-bool CexCachingSolver::getAssignment(const Query& query, Assignment *&result)
+bool CexCachingSolver::getAssignment(const Query& query, Assignment* &result)
 {
 	KeyType key;
 
-	if (lookupAssignment(query, key, result))
+	if (lookupAssignment(query, key, result)) {
 		return true;
+	}
 
 	result = createBinding(query, key);
 	if (failed()) return false;
 	if (result == NULL) return true;
 
 	cache.insert(key, result);
+
 	return true;
 }
 
@@ -267,6 +267,7 @@ Solver::Validity CexCachingSolver::computeValidity(const Query& query)
 		if (pos_a) {
 			if (!getAssignment(query.negateExpr(), neg_a))
 				goto failed;
+
 			return (!neg_a ? Solver::False : Solver::Unknown);
 		}
 		return Solver::True;
@@ -278,6 +279,7 @@ Solver::Validity CexCachingSolver::computeValidity(const Query& query)
 	}
 
 	if (!getAssignment(query.negateExpr(), neg_a)) goto failed;
+
 	return !neg_a ? Solver::False : Solver::Unknown;
 
 failed:
@@ -346,41 +348,33 @@ ref<Expr> CexCachingSolver::computeValue(const Query& query)
 
 bool CexCachingSolver::computeInitialValues(
 	const Query& query,
-	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values)
+	Assignment& a_out)
 {
 	TimerStatIncrementer	t(stats::cexCacheTime);
 	Assignment		*a;
 	bool			hasSolution;
 
-	if (!getAssignment(query, a)) {
+	a = NULL;
+	if (getAssignment(query, a) == false) {
 		failQuery();
 		return false;
 	}
 
-	hasSolution = !!a;
-
-	if (!a) return hasSolution;
+	hasSolution = (a != NULL);
+	if (a == NULL) {
+		return hasSolution;
+	}
 
 	// FIXME: We should use smarter assignment for result so we don't
 	// need redundant copy.
-	values = std::vector< std::vector<unsigned char> >(objects.size());
-	for (unsigned i=0; i < objects.size(); ++i) {
-		const Array *arr = objects[i];
-		Assignment::bindings_ty::iterator it = a->bindings.find(arr);
-		if (it == a->bindings.end()) {
-			values[i] = std::vector<unsigned char>(
-				arr->mallocKey.size, 0);
-		} else {
-			values[i] = it->second;
-		}
-	}
+	foreach (it, a->bindingsBegin(), a->bindingsEnd())
+		a_out.bindFree(it->first, it->second);
+
+	/* zero out parts with no assignment */
+	a_out.bindFreeToZero();
 
 	return hasSolution;
 }
 
-///
-
-Solver *klee::createCexCachingSolver(Solver *_solver) {
-  return new Solver(new CexCachingSolver(_solver));
-}
+Solver *klee::createCexCachingSolver(Solver *_solver)
+{ return new Solver(new CexCachingSolver(_solver)); }

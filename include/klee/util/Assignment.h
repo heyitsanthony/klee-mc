@@ -25,6 +25,9 @@ public:
 		std::vector<unsigned char>,
 		Array::Compare> bindings_ty;
 
+	typedef std::set<const Array*>
+		free_bindings_ty;
+
 	bindings_ty bindings;
 
 public:
@@ -36,9 +39,26 @@ public:
 
 	Assignment(const Assignment& a)
 	{
+		if (&a == this) return;
 		bindings = a.bindings;
+		free_bindings = a.free_bindings;
 		allowFreeValues = a.allowFreeValues;
 	}
+
+	Assignment& operator =(const Assignment& a)
+	{
+		if (&a == this) return *this;
+		bindings = a.bindings;
+		free_bindings = a.free_bindings;
+		allowFreeValues = a.allowFreeValues;
+		return *this;
+	}
+
+	Assignment(const ref<Expr>& e, bool _allowFreeValues=false);
+
+	Assignment(
+		const std::vector<const Array*>& objects,
+		bool _allowFreeValues=false);
 
 	Assignment(
 		const std::vector<const Array*> &objects,
@@ -67,11 +87,34 @@ public:
 		return ((it == bindings.end()) ? NULL : &it->second);
 	}
 
+	std::vector<const Array*> getObjectVector(void) const;
+
+	free_bindings_ty::const_iterator freeBegin(void) const
+	{ return free_bindings.begin(); }
+
+	free_bindings_ty::const_iterator freeEnd(void) const
+	{ return free_bindings.end(); }
+
+	void bindFree(const Array* a, const std::vector<unsigned char>& v);
+	void bindFreeToZero(void);
+
+	bindings_ty::const_iterator bindingsBegin(void) const
+	{ return bindings.begin(); }
+
+	bindings_ty::const_iterator bindingsEnd(void) const
+	{ return bindings.end(); }
+
+	unsigned int getNumBindings(void) const { return bindings.size(); }
+	unsigned int getNumFree(void) const { return free_bindings.size(); }
+	void resetBindings(void);
+
 private:
 	void addBinding(
 		const Array* a,
 		const std::vector<unsigned char>& v)
 	{ bindings.insert(std::make_pair(a, v)); }
+
+	free_bindings_ty	free_bindings;
 };
 
 class AssignmentEvaluator : public ExprEvaluator

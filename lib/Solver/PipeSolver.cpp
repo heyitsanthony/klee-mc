@@ -11,6 +11,7 @@
 #include "klee/Constraints.h"
 #include "klee/SolverStats.h"
 #include "klee/TimerStatIncrementer.h"
+#include "klee/util/Assignment.h"
 #include "llvm/Support/CommandLine.h"
 #include "klee/klee.h"
 #include <iostream>
@@ -167,16 +168,10 @@ void PipeSolverImpl::finiChild(void)
 	fd_child_stdout = -1;
 }
 
-bool PipeSolverImpl::computeInitialValues(
-	const Query& q,
-	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values)
+bool PipeSolverImpl::computeInitialValues(const Query& q, Assignment& a)
 {
 	TimerStatIncrementer	t(stats::queryTime);
 	bool			parse_ok, is_sat;
-
-	values.clear();
-	values.resize(objects.size());
 
 	if (setupChild(
 		fmt->getExec(),
@@ -209,9 +204,10 @@ bool PipeSolverImpl::computeInitialValues(
 		return false;
 	}
 
-	unsigned int i = 0;
-	foreach (it, objects.begin(), objects.end()) {
-		fmt->readArray(*it, values[i++]);
+	forall_drain (it, a.freeBegin(), a.freeEnd()) {
+		std::vector<unsigned char>	v;
+		fmt->readArray(*it, v);
+		a.bindFree(*it, v);
 	}
 
 	is_sat = fmt->isSAT();

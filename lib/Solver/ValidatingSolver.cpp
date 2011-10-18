@@ -1,6 +1,7 @@
 #include "static/Sugar.h"
 #include "klee/Constraints.h"
 #include "ValidatingSolver.h"
+#include "klee/util/Assignment.h"
 #include "SMTPrinter.h"
 
 using namespace klee;
@@ -84,18 +85,16 @@ failed:
 }
 
 bool ValidatingSolver::computeInitialValues(
-	const Query& query,
-	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values)
+	const Query& query, Assignment& a)
 {
 	bool	hasSolution;
 
 
-	hasSolution = solver->impl->computeInitialValues(query, objects, values);
+	hasSolution = solver->impl->computeInitialValues(query, a);
 	if (solver->impl->failed()) goto failed;
 
 	if (hasSolution) {
-		checkIVSolution(query, objects, values);
+		checkIVSolution(query, a);
 	} else {
 		bool	isSat;
 		isSat = oracle->impl->computeSat(query);
@@ -113,24 +112,24 @@ failed:
 
 // Assert the bindings as constraints, and verify that the
 // conjunction of the actual constraints is satisfiable.
-void ValidatingSolver::checkIVSolution(
-	const Query& query,
-	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values)
+void ValidatingSolver::checkIVSolution(const Query& query, Assignment &a)
 {
 	std::vector< ref<Expr> >	bindings;
 	bool				isSat;
 
-	for (unsigned i = 0; i != values.size(); ++i) {
-		const Array *array = objects[i];
-		for (unsigned j=0; j<array->mallocKey.size; j++) {
-			unsigned char value = values[i][j];
+	foreach (it, a.bindingsBegin(), a.bindingsEnd()) {
+		const Array				*array = it->first;
+		const std::vector<unsigned char>	&values(it->second);
+
+		for (unsigned j=0; j < array->mallocKey.size; j++) {
+			unsigned char v = values[j];
+
 			bindings.push_back(
 			EqExpr::create(
-			ReadExpr::create(
-				UpdateList(array, 0),
-				ConstantExpr::alloc(j, Expr::Int32)),
-				ConstantExpr::alloc(value, Expr::Int8)));
+				ReadExpr::create(
+					UpdateList(array, 0),
+					ConstantExpr::alloc(j, Expr::Int32)),
+				ConstantExpr::alloc(v, Expr::Int8)));
 		}
 	}
 

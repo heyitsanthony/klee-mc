@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "static/Sugar.h"
+#include "klee/util/ExprUtil.h"
 #include "klee/util/Assignment.h"
 
 using namespace klee;
@@ -20,6 +21,45 @@ Assignment::Assignment(
 		addBinding(*it, *valIt);
 		++valIt;
 	}
+}
+
+Assignment::Assignment(const ref<Expr>& e, bool _allowFreeValues)
+: allowFreeValues(_allowFreeValues)
+{
+	std::vector<const Array*> objects;
+
+	findSymbolicObjects(e, objects);
+	foreach (it, objects.begin(), objects.end())
+		free_bindings.insert(*it);
+}
+
+Assignment::Assignment(
+	const std::vector<const Array*>& objects,
+	bool _allowFreeValues)
+: allowFreeValues(_allowFreeValues)
+{
+	foreach (it, objects.begin(), objects.end())
+		free_bindings.insert(*it);
+}
+
+void Assignment::bindFree(const Array* a, const std::vector<unsigned char>& v)
+{
+	if (!free_bindings.erase(a))
+		return;
+
+	addBinding(a, v);
+}
+
+void Assignment::bindFreeToZero(void)
+{
+	foreach (it, free_bindings.begin(), free_bindings.end()) {
+		const Array	*arr = *it;
+		addBinding(
+			arr,
+			std::vector<unsigned char>(arr->mallocKey.size, 0));
+	}
+
+	free_bindings.clear();
 }
 
 void Assignment::save(const char* path) const
@@ -45,6 +85,20 @@ void Assignment::save(const char* path) const
 	/* TODO: GZIP? */
 	fclose(f);
 }
+
+std::vector<const Array*> Assignment::getObjectVector(void) const
+{
+	std::vector<const Array*>	ret;
+
+	foreach (it, bindings.begin(), bindings.end())
+		ret.push_back(it->first);
+
+	foreach (it, free_bindings.begin(), free_bindings.end())
+		ret.push_back(*it);
+
+	return ret;
+}
+
 
 bool Assignment::load(
 	const std::vector<const Array*>& objects,
@@ -98,4 +152,11 @@ bool Assignment::load(
 
 	fclose(f);
 	return true;
+}
+
+void Assignment::resetBindings(void)
+{
+	foreach (it, bindings.begin(), bindings.end())
+		free_bindings.insert((*it).first);
+	bindings.clear();
 }

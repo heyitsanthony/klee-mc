@@ -18,10 +18,7 @@ protected:
 	bool doComputeSat(const Query& q);
 	ref<Expr> doComputeValue(const Query& q);
 	Solver::Validity doComputeValidity(const Query& q);
-	bool doComputeInitialValues(
-		const Query& query,
-		const std::vector<const Array*> &objects,
-		std::vector< std::vector<unsigned char> > &values);
+	bool doComputeInitialValues(const Query& query, Assignment&);
 
 	Solver*	wrappedSolver;
 private:

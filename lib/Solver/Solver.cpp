@@ -329,14 +329,12 @@ bool Solver::failed(void) const
 
 ref<Expr> SolverImpl::computeValue(const Query& query)
 {
-	std::vector<const Array*> objects;
-	std::vector< std::vector<unsigned char> > values;
 	bool		hasSolution;
+	Assignment	a(query.expr);
 
 	// Find the object used in the expression, and compute an assignment
 	// for them.
-	findSymbolicObjects(query.expr, objects);
-	hasSolution = computeInitialValues(query.withFalse(), objects, values);
+	hasSolution = computeInitialValues(query.withFalse(), a);
 	if (failed())
 		return NULL;
 
@@ -345,7 +343,6 @@ ref<Expr> SolverImpl::computeValue(const Query& query)
 	assert(hasSolution && "state has invalid constraint set");
 
 	// Evaluate the expression with the computed assignment.
-	Assignment a(objects, values);
 	return a.evaluate(query.expr);
 }
 
@@ -462,16 +459,13 @@ bool Solver::getValue(const Query& query, ref<ConstantExpr> &result)
 	return true;
 }
 
-bool Solver::getInitialValues(
-	const Query& query,
-	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values)
+bool Solver::getInitialValues(const Query& query, Assignment& a)
 {
 	bool hasSolution;
 
-	// FIXME: Propogate this out.
+	// FIXME: Propagate this out.
 	in_solver = true;
-	hasSolution = impl->computeInitialValues(query, objects, values);
+	hasSolution = impl->computeInitialValues(query, a);
 	in_solver = false;
 	if (failed()) return false;
 	return hasSolution;
@@ -617,12 +611,9 @@ Solver *klee::createDummySolver() { return new Solver(new DummySolverImpl()); }
 void SolverImpl::printDebugQueries(
 	std::ostream& os,
 	double t_check,
-	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values,
+	const Assignment& a,
 	bool hasSolution) const
 {
-	unsigned i=0;
-
 	os	<< "STP CounterExample -- Has Solution: "
 		<< hasSolution << " ("
 		<< t_check/1000000.
@@ -630,9 +621,10 @@ void SolverImpl::printDebugQueries(
 
 	if (!hasSolution) goto flush;
 
-	foreach (oi, objects.begin(), objects.end()) {
-		const Array *obj = *oi;
-		std::vector<unsigned char> &data = values[i++];
+	foreach (it, a.bindingsBegin(), a.bindingsEnd()) {
+		const Array			*obj = it->first;
+		const std::vector<unsigned char> &data(it->second);
+
 		os << " " << obj->name << " = [";
 		for (unsigned j=0; j<obj->mallocKey.size; j++) {
 			os << (int) data[j];

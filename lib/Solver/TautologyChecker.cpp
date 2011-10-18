@@ -68,13 +68,10 @@ ref<Expr> TautologyChecker::computeValue(const Query& q)
 	return doComputeValue(q);
 }
 
-bool TautologyChecker::computeInitialValues(
-	const Query& q,
-	const std::vector<const Array*> &objs,
-	std::vector< std::vector<unsigned char> > &vals)
+bool TautologyChecker::computeInitialValues(const Query& q, Assignment& a)
 {
 	SPLIT_QUERY
-	return doComputeInitialValues(q, objs, vals);
+	return doComputeInitialValues(q, a);
 }
 
 void TautologyChecker::splitQuery(const Query& q)

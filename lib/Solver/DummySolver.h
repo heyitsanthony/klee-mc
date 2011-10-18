@@ -34,10 +34,7 @@ public:
     return NULL;
   }
 
-  bool computeInitialValues(
-    const Query&,
-    const std::vector<const Array*> &objects,
-    std::vector< std::vector<unsigned char> > &values)
+  bool computeInitialValues(const Query&, Assignment& a)
   {
     ++stats::queries;
     ++stats::queryCounterexamples;

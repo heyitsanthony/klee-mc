@@ -267,13 +267,8 @@ public:
   bool computeSat(const Query&);
   Solver::Validity computeValidity(const Query&);
   ref<Expr> computeValue(const Query&);
-  bool computeInitialValues(
-  	const Query& query,
-	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values)
-  {
-    return doComputeInitialValues(query, objects, values);
-  }
+  bool computeInitialValues(const Query& query, Assignment& a)
+  { return doComputeInitialValues(query, a); }
 
   void printName(int level = 0) const {
     klee_message("%*s" "IndependentSolver containing:", 2*level, "");

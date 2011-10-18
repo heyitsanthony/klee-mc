@@ -24,15 +24,10 @@ public:
 	~Z3SolverImpl();
 
 	virtual bool computeSat(const Query&);
-	virtual bool computeInitialValues(
-		const Query&,
-		const std::vector<const Array*> &objects,
-		std::vector< std::vector<unsigned char> > &values);
+	virtual bool computeInitialValues(const Query&, Assignment& a);
 
 	virtual void printName(int level = 0) const
-	{
-		klee_message("%*s" "Z3SolverImpl", 2*level, "");
-	}
+	{ klee_message("%*s" "Z3SolverImpl", 2*level, ""); }
 
 private:
 	Z3_ast klee2z3(const ref<Expr>& klee_expr);

@@ -17,7 +17,7 @@
 #include "klee/util/ExprVisitor.h"
 // FIXME: Use APInt.
 #include "klee/Internal/Support/IntEvaluation.h"
-
+#include "klee/util/Assignment.h"
 
 #include "IncompleteSolver.h"
 #include "StagedSolver.h"
@@ -977,9 +977,7 @@ public:
 
   IncompleteSolver::PartialValidity computeTruth(const Query&);
   ref<Expr> computeValue(const Query&);
-  bool computeInitialValues(const Query&,
-                            const std::vector<const Array*> &objects,
-                            std::vector< std::vector<unsigned char> > &values);
+  bool computeInitialValues(const Query&, Assignment& a);
   void printName(int level = 0) const {
     klee_message("%*s" "FastCexSolver", 2*level, "");
   }
@@ -1091,50 +1089,47 @@ ref<Expr> FastCexSolver::computeValue(const Query& query)
   return NULL;
 }
 
-bool FastCexSolver::computeInitialValues(
-	const Query& query,
-	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values)
+bool FastCexSolver::computeInitialValues(const Query& query, Assignment& a)
 {
-  CexData cd;
+	CexData	cd;
+	bool	isValid, hasSolution;
+	bool	success;
 
-  bool isValid, hasSolution;
-  bool success = propogateValues(query, cd, true, isValid);
+	success = propogateValues(query, cd, true, isValid);
 
-  // Check if propogation wasn't able to determine anything.
-  if (!success) {
-    failQuery();
-    return false;
-  }
+	// Check if propogation wasn't able to determine anything.
+	if (!success) {
+		failQuery();
+		return false;
+	}
 
-  hasSolution = !isValid;
-  if (!hasSolution) return false;
+	hasSolution = !isValid;
+	if (!hasSolution) return false;
 
-  // Propogation found a satisfying assignment, compute the initial values.
-  for (unsigned i = 0; i != objects.size(); ++i) {
-    const Array *array = objects[i];
-    std::vector<unsigned char> data;
-    data.reserve(array->mallocKey.size);
+	// Propagation found a satisfying assignment, compute the initial values.
+	forall_drain (it, a.freeBegin(), a.freeEnd()) {
+		const Array *array = *it;
+		std::vector<unsigned char> data;
+		data.reserve(array->mallocKey.size);
 
-    for (unsigned i=0; i < array->mallocKey.size; i++) {
-      ref<Expr> read =
-        ReadExpr::create(UpdateList(array, 0),
-                         ConstantExpr::create(i, Expr::Int32));
-      ref<Expr> value = cd.evaluatePossible(read);
+		for (unsigned i=0; i < array->mallocKey.size; i++) {
+			ref<Expr> read =
+			ReadExpr::create(UpdateList(array, 0),
+					 ConstantExpr::create(i, Expr::Int32));
+			ref<Expr> value = cd.evaluatePossible(read);
 
-      if (ConstantExpr *CE = dyn_cast<ConstantExpr>(value)) {
-        data.push_back((unsigned char) CE->getZExtValue(8));
-      } else {
-        // FIXME: When does this happen?
-	failQuery();
-        return false;
-      }
-    }
+			if (ConstantExpr *CE = dyn_cast<ConstantExpr>(value)) {
+				data.push_back((uint8_t) CE->getZExtValue(8));
+			} else {
+				// FIXME: When does this happen?
+				failQuery();
+				return false;
+			}
+		}
+		a.bindFree(array, data);
+	}
 
-    values.push_back(data);
-  }
-
-  return true;
+	return true;
 }
 
 Solver *klee::createFastCexSolver(Solver *s) {

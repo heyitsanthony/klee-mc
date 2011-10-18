@@ -1,3 +1,4 @@
+#include "klee/util/Assignment.h"
 #include "IncompleteSolver.h"
 #include "StagedSolver.h"
 
@@ -82,15 +83,15 @@ ref<Expr> StagedIncompleteSolverImpl::computeValue(const Query& query)
 
 bool StagedIncompleteSolverImpl::computeInitialValues(
 	const Query& query,
-	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values)
+	Assignment& a)
 {
 	bool hasSol;
 
-	hasSol = primary->computeInitialValues(query, objects, values);
+	hasSol = primary->computeInitialValues(query, a);
 	if (!primary->failed()) return hasSol;
 
-	hasSol = secondary->impl->computeInitialValues(query, objects, values);
+	a.resetBindings();
+	hasSol = secondary->impl->computeInitialValues(query, a);
 	if (secondary->impl->failed()) failQuery();
 
 	return hasSol;
@@ -152,16 +153,15 @@ ref<Expr> StagedSolverImpl::computeValue(const Query& query)
 
 bool StagedSolverImpl::computeInitialValues(
 	const Query& query,
-	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values)
+	Assignment& a)
 {
 	bool hasSol;
 
-	hasSol = primary->impl->computeInitialValues(query, objects, values);
+	hasSol = primary->impl->computeInitialValues(query, a);
 	if (!primary->failed()) return hasSol;
 	primary->impl->ackFail();
 
-	hasSol = secondary->impl->computeInitialValues(query, objects, values);
+	hasSol = secondary->impl->computeInitialValues(query, a);
 	if (secondary->impl->failed()) failQuery();
 
 	return hasSol;

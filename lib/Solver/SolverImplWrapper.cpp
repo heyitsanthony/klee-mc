@@ -32,13 +32,10 @@ Solver::Validity SolverImplWrapper::doComputeValidity(const Query& query)
 }
 
 bool SolverImplWrapper::doComputeInitialValues(
-	const Query& query,
-	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values)
+	const Query& query, Assignment& a)
 {
 	bool	hasSol;
-	hasSol = wrappedSolver->impl->computeInitialValues(
-		query, objects, values);
+	hasSol = wrappedSolver->impl->computeInitialValues(query, a);
 	if (wrappedSolver->impl->failed())
 		failQuery();
 	return hasSol;

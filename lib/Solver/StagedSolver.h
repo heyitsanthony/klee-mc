@@ -22,10 +22,7 @@ public:
 	bool computeSat(const Query&);
 	Solver::Validity computeValidity(const Query&);
 	ref<Expr> computeValue(const Query&);
-	bool computeInitialValues(
-		const Query&,
-		const std::vector<const Array*> &objects,
-		std::vector< std::vector<unsigned char> > &values);
+	bool computeInitialValues(const Query&, Assignment&);
 
 	void printName(int level = 0) const {
 		klee_message("%*s" "StagedIncompleteSolverImpl containing:", 
@@ -50,10 +47,7 @@ public:
 	bool computeSat(const Query&);
 	Solver::Validity computeValidity(const Query&);
 	ref<Expr> computeValue(const Query&);
-	bool computeInitialValues(
-		const Query&,
-		const std::vector<const Array*> &objects,
-		std::vector< std::vector<unsigned char> > &values);
+	bool computeInitialValues(const Query&, Assignment&);
 
 	void printName(int level = 0) const {
 		klee_message("%*s" "StagedSolverImpl containing:", 2*level, "");

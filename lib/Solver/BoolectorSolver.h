@@ -27,10 +27,7 @@ public:
 	~BoolectorSolverImpl();
 
 	virtual bool computeSat(const Query&);
-	virtual bool computeInitialValues(
-		const Query&,
-		const std::vector<const Array*> &objects,
-		std::vector< std::vector<unsigned char> > &values);
+	virtual bool computeInitialValues(const Query&, Assignment&);
 
 	virtual void printName(int level = 0) const
 	{

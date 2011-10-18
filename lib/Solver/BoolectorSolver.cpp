@@ -1,6 +1,7 @@
 #include <assert.h>
 #include "static/Sugar.h"
 #include "BoolectorSolver.h"
+#include "klee/util/Assignment.h"
 #include "klee/Constraints.h"
 #include "klee/SolverStats.h"
 #include "klee/TimerStatIncrementer.h"
@@ -75,9 +76,7 @@ bool BoolectorSolverImpl::isSatisfiable(const Query& q)
 }
 
 bool BoolectorSolverImpl::computeInitialValues(
-	const Query& query,
-	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values)
+	const Query& query, Assignment& a)
 {
 	bool	hasSolution;
 
@@ -97,7 +96,7 @@ bool BoolectorSolverImpl::computeInitialValues(
 		goto done;
 
 	/* build the results */
-	foreach (it, objects.begin(), objects.end()) {
+	forall_drain (it, a.freeBegin(), a.freeEnd()) {
 		const Array			*arr = *it;
 		std::vector<unsigned char>	obj_vals(arr->mallocKey.size);
 
@@ -107,7 +106,7 @@ bool BoolectorSolverImpl::computeInitialValues(
 		{
 			obj_vals[offset] = getArrayValue(arr, offset);
 		}
-		values.push_back(obj_vals);
+		a.bindFree(arr, obj_vals);
 	}
 
 done:

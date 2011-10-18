@@ -39,10 +39,7 @@ bool HashSolver::isMatch(Assignment* a) const
 	return true;
 }
 
-bool HashSolver::getCachedAssignment(
-	const Query& q,
-	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values)
+bool HashSolver::getCachedAssignment(const Query& q, Assignment& a_out)
 {
 	Assignment	*a;
 
@@ -50,36 +47,23 @@ bool HashSolver::getCachedAssignment(
 	cur_hash = qhash->hash(q);
 	q_loaded = false;
 	
-	a = loadCachedAssignment(objects);
+	a = loadCachedAssignment(a_out.getObjectVector());
 	if (a == NULL) return false;
 
 	if (isMatch(a) == false) goto err;
 	
-	values.clear();
-	foreach (it, objects.begin(), objects.end()) {
-		const std::vector<unsigned char> *cur_v;
-		
-		cur_v = a->getBinding(*it);
-		if (cur_v == NULL) goto err;
-		values.push_back(*cur_v);
-	}
-
+	a_out = *a;
 	delete a;
 	return true;
 err:
 	delete a;
-	values.clear();
 	return false;
 }
 
-void HashSolver::saveCachedAssignment(
-	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values)
+void HashSolver::saveCachedAssignment(const Assignment& a)
 {
-	if (q_loaded == false) {
-		Assignment	a(objects, values);
-		a.save(getHashPath().c_str());
-	}
+	if (q_loaded) return;
+	a.save(getHashPath().c_str());
 }
 
 std::string HashSolver::getHashPath(void) const
@@ -105,23 +89,20 @@ Assignment* HashSolver::loadCachedAssignment(
 	return ret;
 }
 
-bool HashSolver::computeInitialValues(
-	const Query& q,
-	const std::vector<const Array*> &objects,
-        std::vector< std::vector<unsigned char> > &values)
+bool HashSolver::computeInitialValues(const Query& q, Assignment& a)
 {
 	bool hasSolution;
 	Query	neg_q = q.negateExpr();	// XXX stupid
 
-	if (getCachedAssignment(neg_q, objects, values)) {
+	if (getCachedAssignment(neg_q, a)) {
 		hits++;
 		return true;
 	} else
 		misses++;
 
-	hasSolution = doComputeInitialValues(q, objects, values);
+	hasSolution = doComputeInitialValues(q, a);
 	if (hasSolution)
-		saveCachedAssignment(objects, values);
+		saveCachedAssignment(a);
 
 	return hasSolution;
 }

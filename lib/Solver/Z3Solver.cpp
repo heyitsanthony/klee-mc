@@ -3,6 +3,7 @@
 #include "klee/Constraints.h"
 #include "klee/TimerStatIncrementer.h"
 #include "klee/SolverStats.h"
+#include "klee/util/Assignment.h"
 #include <stdio.h>
 #include <iostream>
 
@@ -93,10 +94,7 @@ static void puke(Z3_error_code e)
 	*((char*)1) = 0;
 }
 
-bool Z3SolverImpl::computeInitialValues(
-	const Query& q,
-	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values)
+bool Z3SolverImpl::computeInitialValues(const Query& q, Assignment& a)
 
 {
 	TimerStatIncrementer	t(stats::queryTime);
@@ -120,7 +118,7 @@ bool Z3SolverImpl::computeInitialValues(
 	if (!isSat) goto done;
 
 	/* load up the objects */
-	foreach (it, objects.begin(), objects.end()) {
+	forall_drain (it, a.freeBegin(), a.freeEnd()) {
 		const Array			*arr = *it;
 		std::vector<unsigned char>	obj_vals(arr->mallocKey.size);
 
@@ -130,7 +128,7 @@ bool Z3SolverImpl::computeInitialValues(
 		{
 			obj_vals[offset] = getArrayValue(model, arr, offset);
 		}
-		values.push_back(obj_vals);
+		a.bindFree(arr, obj_vals);
 	}
 
 	Z3_del_model(z3_ctx, model);

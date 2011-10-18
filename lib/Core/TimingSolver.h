@@ -50,9 +50,7 @@ namespace klee {
     bool getValue(const ExecutionState &, ref<Expr> expr, 
                   ref<ConstantExpr> &result);
 
-    bool getInitialValues(const ExecutionState&, 
-                          const std::vector<const Array*> &objects,
-                          std::vector< std::vector<unsigned char> > &result);
+    bool getInitialValues(const ExecutionState&, Assignment&);
 
     std::pair< ref<Expr>, ref<Expr> >
     getRange(const ExecutionState&, ref<Expr> query);

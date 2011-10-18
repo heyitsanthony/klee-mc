@@ -259,35 +259,30 @@ void ExprXChkBuilder::dumpCounterExample(
 	bool			ok;
 	ConstraintManager	cm;
 	Query			q(cm, EqExpr::alloc(oracle_expr, test_expr));
-	Assignment		*bindings;
+	Assignment		a(q.expr);
 
 
-	findSymbolicObjects(q.expr, objects);
-	ok = solver.getInitialValues(q, objects, values);
-
+	ok = solver.getInitialValues(q, a);
 	if (!ok) {
 		os << "Could not find counter example! Buggy solver?!\n";
 		return;
 	}
 
 	os << "Counter example:\n";
-	for (unsigned i = 0; i < objects.size(); i++) {
-		os << objects[i]->name << ": ";
-		foreach (it, values[i].begin(), values[i].end())
-			os << ((void*)(*it)) << ' ';
+	foreach (it, a.bindingsBegin(), a.bindingsEnd()) {
+		os << (*it).first->name << ": ";
+		foreach (it_v, (*it).second.begin(), (*it).second.end())
+			os << ((void*)(*it_v)) << ' ';
 		os << '\n';
 	}
 
-	bindings = new Assignment(objects, values);
 	os << "Oracle expr: ";
-	bindings->evaluate(oracle_expr)->print(os);
+	a.evaluate(oracle_expr)->print(os);
 	os << '\n';
 
 	os << "Test expr: ";
-	bindings->evaluate(test_expr)->print(os);
+	a.evaluate(test_expr)->print(os);
 	os << '\n';
-
-	delete bindings;
 }
 
 void ExprXChkBuilder::xchkWithSolver(

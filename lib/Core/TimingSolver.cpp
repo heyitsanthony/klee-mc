@@ -13,6 +13,7 @@
 #include "klee/Solver.h"
 #include "klee/Statistics.h"
 #include "klee/Internal/System/Time.h"
+#include "klee/util/Assignment.h"
 
 #include "CoreStats.h"
 
@@ -112,14 +113,10 @@ bool TimingSolver::getValue(const ExecutionState& state, ref<Expr> expr,
   return success;
 }
 
-bool
-TimingSolver::getInitialValues(const ExecutionState& state,
-                               const std::vector<const Array*>
-                                 &objects,
-                               std::vector< std::vector<unsigned char> >
-                                 &result)
+bool TimingSolver::getInitialValues(
+	const ExecutionState& state, Assignment& a)
 {
-  if (objects.empty())
+  if (a.getNumFree() == 0)
     return true;
 
   double start = util::estWallTime();
@@ -129,8 +126,7 @@ TimingSolver::getInitialValues(const ExecutionState& state,
   	Query(
 		state.constraints,
                 ConstantExpr::alloc(0, Expr::Bool)),
-	objects,
-	result);
+	a);
 
   double finish = util::estWallTime();
   stats::solverTime += (std::max(0.,finish - start)) * 1000000.;

@@ -29,14 +29,9 @@ private:
 
 	Assignment* loadCachedAssignment(const std::vector<const Array*>& objs);
 
-	bool getCachedAssignment(
-		const Query& q,
-		const std::vector<const Array*> &objects,
-		std::vector< std::vector<unsigned char> > &values);
+	bool getCachedAssignment(const Query& q, Assignment& a);
 
-	void saveCachedAssignment(
-		const std::vector<const Array*> &objects,
-		std::vector< std::vector<unsigned char> > &values);
+	void saveCachedAssignment(const Assignment& a);
 
 	std::string getHashPath(void) const;
 
@@ -45,10 +40,7 @@ private:
 public:
 	bool computeSat(const Query&);
 	Solver::Validity computeValidity(const Query&);
-	bool computeInitialValues(
-		const Query&,
-		const std::vector<const Array*> &objects,
-		std::vector< std::vector<unsigned char> > &values);
+	bool computeInitialValues(const Query&, Assignment&);
 
 	void printName(int level = 0) const {
 		klee_message(

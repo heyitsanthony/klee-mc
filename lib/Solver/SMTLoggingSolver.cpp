@@ -49,10 +49,7 @@ public:
 	bool computeSat(const Query& query);
 	Solver::Validity computeValidity(const Query& query);
 	ref<Expr> computeValue(const Query& query);
-	bool computeInitialValues(
-		const Query& query,
-		const std::vector<const Array*> &objects,
-		std::vector< std::vector<unsigned char> > &values);
+	bool computeInitialValues(const Query& query, Assignment& a);
 
 	void printName(int level = 0) const
 	{
@@ -97,14 +94,12 @@ Solver::Validity SMTLoggingSolver::computeValidity(const Query& query)
 }
 
 bool SMTLoggingSolver::computeInitialValues(
-	const Query& query,
-        const std::vector<const Array*> &objects,
-        std::vector< std::vector<unsigned char> > &values)
+	const Query& query, Assignment& a)
 {
 	bool	hasSol;
 
 	startQuery(query, "InitialValues");
-	hasSol = doComputeInitialValues(query, objects, values);
+	hasSol = doComputeInitialValues(query, a);
 	finishQuery();
 
 	return hasSol;

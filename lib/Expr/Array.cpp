@@ -101,7 +101,7 @@ bool Array::operator< (const Array &b) const
 	}
 
 	if (mallocKey.allocSite && b.mallocKey.allocSite) {
-		return mallocKey.compare(b.mallocKey) == -1;
+		return (mallocKey.compare(b.mallocKey) < 0);
 	}
 
 	return name < b.name;

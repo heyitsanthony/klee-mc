@@ -10,10 +10,7 @@ class ValidatingSolver : public SolverImpl
 {
 private:
   Solver *solver, *oracle;
-  void checkIVSolution(
-    const Query& query,
-    const std::vector<const Array*> &objects,
-    std::vector< std::vector<unsigned char> > &values);
+  void checkIVSolution(const Query& query, Assignment& a);
 
 public:
   ValidatingSolver(Solver *_solver, Solver *_oracle)
@@ -23,10 +20,7 @@ public:
   Solver::Validity computeValidity(const Query&);
   bool computeSat(const Query&);
   ref<Expr> computeValue(const Query&);
-  bool computeInitialValues(
-    const Query&,
-    const std::vector<const Array*> &objects,
-    std::vector< std::vector<unsigned char> > &values);
+  bool computeInitialValues(const Query&, Assignment&);
 
   void printName(int level = 0) const {
     klee_message("%*s" "ValidatingSolver containing:", 2*level, "");

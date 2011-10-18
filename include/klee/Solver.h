@@ -20,6 +20,7 @@ namespace klee {
   class ConstraintManager;
   class Expr;
   class SolverImpl;
+  class Assignment;
 
   class Query
   {
@@ -162,9 +163,7 @@ namespace klee {
     // FIXME: This API is lame. We should probably just provide an API which
     // returns an Assignment object, then clients can get out whatever values
     // they want. This also allows us to optimize the representation.
-    bool getInitialValues(const Query&, 
-                          const std::vector<const Array*> &objects,
-                          std::vector< std::vector<unsigned char> > &result);
+    bool getInitialValues(const Query&, Assignment& a);
 
     /// getRange - Compute a tight range of possible values for a given
     /// expression.

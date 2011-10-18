@@ -67,10 +67,7 @@ public:
   /// computeInitialValues - Attempt to compute the constant values
   /// for the initial state of each given object. If a correct result
   /// is not found, then the values array must be unmodified.
-  virtual bool computeInitialValues(
-  	const Query&,
-        const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values) = 0;
+  virtual bool computeInitialValues(const Query&, Assignment& a) = 0;
 
   virtual void printName(int level = 0) const {
     klee_message("%*s" "IncompleteSolver", 2*level, "");

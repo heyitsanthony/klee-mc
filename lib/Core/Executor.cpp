@@ -3431,34 +3431,39 @@ bool Executor::getSymbolicSolution(
 		std::pair<std::string,
 			std::vector<unsigned char> > > &res)
 {
-  ExecutionState	tmp(state);
-  bool			success;
-  unsigned int		i;
+	ExecutionState		tmp(state);
+	bool			success;
 
-  if (!NoPreferCex) getSymbolicSolutionCex(state, tmp);
+	if (!NoPreferCex) getSymbolicSolutionCex(state, tmp);
 
-  std::vector< std::vector<unsigned char> > values;
-  std::vector<const Array*> objects;
-  foreach (it, state.symbolicsBegin(), state.symbolicsEnd()) {
-    objects.push_back(it->getArray());
-  }
+	std::vector<const Array*> objects;
+	foreach (it, state.symbolicsBegin(), state.symbolicsEnd())
+		objects.push_back(it->getArray());
 
-  success = solver->getInitialValues(tmp, objects, values);
-  if (!success) {
-    klee_warning("unable to compute initial values (invalid constraints?)!");
-    ExprPPrinter::printQuery(
-      std::cerr,
-      state.constraints,
-      ConstantExpr::alloc(0, Expr::Bool));
-    return false;
-  }
+	Assignment a(objects);
 
-  i = 0;
-  foreach (it, state.symbolicsBegin(), state.symbolicsEnd()) {
-    res.push_back(std::make_pair(it->getMemoryObject()->name, values[i]));
-    i++;
-  }
-  return true;
+	success = solver->getInitialValues(tmp, a);
+	if (!success) {
+		klee_warning(
+			"unable to compute initial values "
+			"(invalid constraints?)!");
+		ExprPPrinter::printQuery(
+			std::cerr,
+			state.constraints,
+			ConstantExpr::alloc(0, Expr::Bool));
+		return false;
+	}
+
+	foreach (it, state.symbolicsBegin(), state.symbolicsEnd()) {
+		const std::vector<unsigned char>	*v;
+
+		v = a.getBinding(it->getArray());
+		res.push_back(
+			std::make_pair(
+				it->getMemoryObject()->name, *v));
+	}
+
+	return true;
 }
 
 void Executor::getCoveredLines(

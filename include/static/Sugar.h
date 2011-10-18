@@ -10,6 +10,10 @@
 #define foreach(_i, _b, _e) \
 	  for(typeof(_b) _i = _b, _i ## end = _e; _i != _i ## end;  ++ _i)
 
+#define forall_drain(_i, _b, _e)	\
+	  for(typeof(_b) _i = _b, _i ## end = _e; _i != _i ## end;  _i = _b)
+
+
 struct ltstr
 {
     bool operator()(const char* str1, const char* str2) const

@@ -5,6 +5,7 @@
 
 #include "llvm/Support/CommandLine.h"
 #include "static/Sugar.h"
+#include "klee/util/Assignment.h"
 #include "klee/util/ExprPPrinter.h"
 #include "klee/Constraints.h"
 #include "klee/TimerStatIncrementer.h"
@@ -99,8 +100,9 @@ static int runAndGetCex(
 
 	res = vc_query(vc, q);
 	hasSolution = (res == STP_QUERY_INVALID);	/* !res */
-	if (!hasSolution || res == STP_QUERY_ERROR)
+	if (!hasSolution || res == STP_QUERY_ERROR) {
 		return res;
+	}
 
 	rh.reserve(objects.size());
 
@@ -226,11 +228,10 @@ char *STPSolverImpl::getConstraintLog(const Query &query)
 
 bool STPSolverImpl::computeSat(const Query& query)
 {
-	std::vector<const Array*> objects;
-	std::vector< std::vector<unsigned char> > values;
-	bool hasCex;
+	Assignment	a;
+	bool		hasCex;
 
-	hasCex = computeInitialValues(query.negateExpr(), objects, values);
+	hasCex = computeInitialValues(query.negateExpr(), a);
 	if (failed()) return false;
 
 	// counter example to negated query exists => normal query is SAT (sol = cex)
@@ -238,16 +239,17 @@ bool STPSolverImpl::computeSat(const Query& query)
 }
 
 bool STPSolverImpl::doForkedComputeInitialValues(
-	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values,
+	Assignment& a,
 	ExprHandle& stp_e,
 	bool& hasSolution)
 {
-	bool	success;
-	size_t	sum = 0;
+	bool				success;
+	size_t				sum = 0;
+	std::vector<const Array*>	objects(a.getObjectVector());
 
 	foreach (it, objects.begin(), objects.end())
 		sum += (*it)->mallocKey.size;
+
 	assert (sum < SharedMemorySize
 		&& "not enough shared memory for counterexample");
 
@@ -275,12 +277,13 @@ bool STPSolverImpl::doForkedComputeInitialValues(
 	if (!hasSolution) return success;
 	if (!success) return false;
 
-	values = std::vector< std::vector<unsigned char> >(objects.size());
-	unsigned i=0;
 	foreach (it, objects.begin(), objects.end()) {
-		const Array *array = *it;
-		std::vector<unsigned char> &data = values[i++];
+		const Array			*array = *it;
+		std::vector<unsigned char>	data;
+
 		data.insert(data.begin(), pos, pos + array->mallocKey.size);
+		a.bindFree(array, data);
+
 		pos += array->mallocKey.size;
 	}
 
@@ -289,14 +292,16 @@ bool STPSolverImpl::doForkedComputeInitialValues(
 
 bool ServerSTPSolverImpl::talkToServer(
 	double timeout, const char* qstr, unsigned long qlen,
-	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values,
+	Assignment& a,
 	bool &hasSolution)
 {
   STPReqHdr stpRequest;
   stpRequest.timeout_sec = floor(timeout);
   stpRequest.timeout_usec = floor(1000000 * (timeout - floor(timeout)));
   stpRequest.length = qlen;
+  std::vector< std::vector<unsigned char> >	values;
+  std::vector< const Array* >			objects(a.getObjectVector());
+
 
   // prepare TCP socket
   class FileDescriptor
@@ -399,51 +404,53 @@ bool ServerSTPSolverImpl::talkToServer(
     }
   }
 
+  for (unsigned i = 0; i < objects.size(); i++)
+  	a.bindFree(objects[i], values[i]);
+
   return true;
 }
 
 bool ServerSTPSolverImpl::computeInitialValues(
 	const Query& query,
-	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values)
+	Assignment& a)
 {
-  TimerStatIncrementer	t(stats::queryTime);
-  std::ostream&	os = std::clog;
-  ExprHandle	stp_e;
+	TimerStatIncrementer	t(stats::queryTime);
+	std::ostream		&os = std::clog;
+	ExprHandle		stp_e;
 
-  setupVCQuery(query, stp_e, os);
+	setupVCQuery(query, stp_e, os);
 
-  // get CVC representation for STP query
-  char* qstr;
-  unsigned long qlen;
+	// get CVC representation for STP query
+	char* qstr;
+	unsigned long qlen;
 
-  vc_printQueryStateToBuffer(vc, stp_e, &qstr, &qlen, false);
+	vc_printQueryStateToBuffer(vc, stp_e, &qstr, &qlen, false);
 
-  vc_pop(vc);
+	vc_pop(vc);
 
-  // don't send null terminator (STP's yacc rejects it)
-  qlen--;
+	// don't send null terminator (STP's yacc rejects it)
+	qlen--;
 
-  bool success, hasSolution;
+	bool success, hasSolution;
 
-  success = talkToServer(timeout, qstr, qlen, objects, values, hasSolution);
-  free(qstr);
+	success = talkToServer(timeout, qstr, qlen, a, hasSolution);
+	free(qstr);
 
-  if (!success) {
-    failQuery();
-    return false;
-  }
+	if (!success) {
+		failQuery();
+		return false;
+	}
 
-  // update stats
-  if (!hasSolution) /* cexHeader.cResult == 'V' */
-    ++stats::queriesValid;
-  else /* cexHeader.cResult == 'I' */
-    ++stats::queriesInvalid;
+	// update stats
+	if (!hasSolution) /* cexHeader.cResult == 'V' */
+		++stats::queriesValid;
+	else /* cexHeader.cResult == 'I' */
+		++stats::queriesInvalid;
 
-  if (DebugPrintQueries)
-    printDebugQueries(os, t.check(), objects, values, hasSolution);
+	if (DebugPrintQueries)
+		printDebugQueries(os, t.check(), a, hasSolution);
 
-  return hasSolution;
+	return hasSolution;
 }
 
 #if INT_MAX <= UCHAR_MAX
@@ -566,41 +573,46 @@ void STPSolverImpl::setupVCQuery(
 
 
 bool STPSolverImpl::computeInitialValues(
-	const Query &query,
-	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values)
+	const Query &query, Assignment& a)
 {
-  TimerStatIncrementer	t(stats::queryTime);
-  std::ostream&		os = std::clog;
-  bool			success, hasSolution;
-  ExprHandle		stp_e;
+	TimerStatIncrementer	t(stats::queryTime);
+	std::ostream&		os = std::clog;
+	bool			success, hasSolution;
+	ExprHandle		stp_e;
 
-  setupVCQuery(query, stp_e, os);
+	setupVCQuery(query, stp_e, os);
 
-  if (useForkedSTP) {
-    success = doForkedComputeInitialValues(objects, values, stp_e, hasSolution);
-  } else {
-    int res;
-    ResultHolder_Vector rh(values);
-    res = runAndGetCex(vc, builder, stp_e, objects, rh, hasSolution);
-    success = (res != STP_QUERY_ERROR);
-  }
+	if (useForkedSTP) {
+		success = doForkedComputeInitialValues(a, stp_e, hasSolution);
+	} else {
+		std::vector< std::vector<unsigned char> >	values;
+		std::vector< const Array* >	objects(a.getObjectVector());
+		ResultHolder_Vector		rh(values);
+		int				res;
 
-  if (success) {
-    if (hasSolution)
-      ++stats::queriesInvalid;
-    else
-      ++stats::queriesValid;
-  } else {
-  	failQuery();
-  }
+		res = runAndGetCex(vc, builder, stp_e, objects, rh, hasSolution);
+		success = (res != STP_QUERY_ERROR);
+		if (res == STP_QUERY_INVALID) {
+			for (unsigned i = 0; i < objects.size(); i++)
+				a.bindFree(objects[i], values[i]);
+		}
+	}
 
-  vc_pop(vc);
+	if (success) {
+		if (hasSolution)
+			++stats::queriesInvalid;
+		else
+			++stats::queriesValid;
+	} else {
+		failQuery();
+	}
 
-  if (DebugPrintQueries)
-  	printDebugQueries(os, t.check(), objects, values, hasSolution);
+	vc_pop(vc);
 
-  return hasSolution;
+	if (DebugPrintQueries)
+		printDebugQueries(os, t.check(), a, hasSolution);
+
+	return hasSolution;
 }
 
 // Returns -1 if failed to complete the child process,

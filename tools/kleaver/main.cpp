@@ -11,6 +11,7 @@
 #include "klee/Statistics.h"
 #include "klee/util/ExprPPrinter.h"
 #include "klee/util/ExprVisitor.h"
+#include "klee/util/Assignment.h"
 #include "../../lib/Core/TimingSolver.h"
 
 #include "llvm/ADT/OwningPtr.h"
@@ -183,27 +184,29 @@ static void doQuery(Solver* S, QueryCommand* QC)
 		return;
 	}
 
-	bool query_ok;
-	std::vector< std::vector<unsigned char> > result;
+	bool		query_ok;
+	Assignment	a(QC->Objects);
 
 	query_ok = S->getInitialValues(
 		Query(	ConstraintManager(QC->Constraints),
 			QC->Query),
-		QC->Objects,
-		result);
+		a);
+
 	if (query_ok) {
 		std::cout << "INVALID\n";
+		unsigned int i, e;
 
-		for (unsigned i = 0, e = result.size(); i != e; ++i) {
-			std::cout << "\tArray " << i << ":\t"
-			<< QC->Objects[i]->name
-			<< "[";
-			for (	unsigned j = 0;
-				j != QC->Objects[i]->mallocKey.size;
-				++j)
-			{
-				std::cout << (unsigned) result[i][j];
-				if (j + 1 != QC->Objects[i]->mallocKey.size)
+		i = 0;
+		e = a.getNumBindings();
+		foreach (it, a.bindingsBegin(), a.bindingsEnd()) {
+			const std::vector<unsigned char> &values(it->second);
+			const Array *arr(it->first);
+
+			std::cout	<< "\tArray " << i++ << ":\t"
+					<< arr->name << "[";
+			for (unsigned j = 0; j != arr->mallocKey.size; ++j) {
+				std::cout << (unsigned) values[j];
+				if (j + 1 != arr->mallocKey.size)
 					std::cout << ", ";
 			}
 			std::cout << "]";

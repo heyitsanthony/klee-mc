@@ -42,7 +42,7 @@ static uint64_t minOR(uint64_t a, uint64_t b, uint64_t c, uint64_t d)
 		}
 		m >>= 1;
 	}
-	
+
 	return a | c;
 }
 
@@ -75,7 +75,7 @@ static uint64_t minAND(uint64_t a, uint64_t b, uint64_t c, uint64_t d)
 		}
 		m >>= 1;
 	}
-	
+
 	return a & c;
 }
 static uint64_t maxAND(uint64_t a, uint64_t b, uint64_t c, uint64_t d)
@@ -91,7 +91,7 @@ static uint64_t maxAND(uint64_t a, uint64_t b, uint64_t c, uint64_t d)
 		}
 		m >>= 1;
 	}
-	
+
 	return b & d;
 }
 
@@ -109,10 +109,7 @@ public:
 		failQuery();
 		return Solver::Unknown;
 	}
-	virtual bool computeInitialValues(
-		const Query&,
-		const std::vector<const Array*> &objects,
-		std::vector< std::vector<unsigned char> > &values);
+	virtual bool computeInitialValues(const Query&, Assignment&);
 	virtual void printName(int level = 0) const
 	{
 		klee_message("%*s" "FastRangeSolver", 2*level, "");
@@ -166,7 +163,7 @@ public:
 		assert(unique() && "Value not unique");
 		return m_min.getZExtValue();
 	}
-	
+
 	unsigned getWidth() const {
 		assert(m_min.getBitWidth() == m_max.getBitWidth());
 		return m_min.getBitWidth();
@@ -184,7 +181,7 @@ public:
 		assert(!empty());
 		APFloat fsize(0.0);
 		APFloat::opStatus s;
-		
+
 		s = fsize.convertFromAPInt(
 			m_max - m_min, false, APFloat::rmNearestTiesToEven);
 		assert(s == APFloat::opOK || s == APFloat::opInexact);
@@ -364,8 +361,8 @@ public:
 		APInt _max(m_max * b.m_max);
 		// XXX should this be sdiv or udiv?
 		bool overflow;
-		
-		overflow = m_max != 0 && b.m_max != 0 && 
+
+		overflow = m_max != 0 && b.m_max != 0 &&
 			(_max.udiv(m_max) != b.m_max ||
 			 _max.udiv(b.m_max) != m_max);
 
@@ -383,7 +380,7 @@ public:
 			return ValueSet(result, result);
 		}
 		APInt _min(
-			getWidth(), 
+			getWidth(),
 			minAND(	m_min.getZExtValue(),
 				m_max.getZExtValue(),
 				b.m_min.getZExtValue(),
@@ -491,7 +488,7 @@ public:
 		if (temp.lshr(b.m_min).ult(m_max))
 #if 0
 // !!! FIXME: problems occur when losing high bits on min (e.g., 65-122 << 7)
-// temp = APInt::getMaxValue(getWidth()).shl(b.m_min); 
+// temp = APInt::getMaxValue(getWidth()).shl(b.m_min);
 // if (temp.ult(m_min.shl(b.m_min))) // overflow
 #endif
 			return createFullRange(getWidth());
@@ -573,7 +570,7 @@ private:
 				: (a.first < b.first); // compare depth
 		}
 	};
-	
+
 	typedef std::priority_queue<
 		ExprDepth,
 		std::deque<ExprDepth>,
@@ -584,7 +581,7 @@ private:
 	// exprs (redundant with pendingQueue) indexed by ref, not priority
 	std::set<ref<Expr> > pendingNodes;
 
-	// nodes that haven't changed since they were last visited; 
+	// nodes that haven't changed since they were last visited;
 	// must be disjoint from pendingNodes
 	std::set<ref<Expr> > visitedNodes;
 
@@ -623,10 +620,7 @@ public:
 	bool run(const Query& query, bool &hasSolution);
 
 	/// find counterexample after running simplification algorithm
-	bool findCex(
-		const Query& query,
-		const std::vector<const Array*> &objects,
-		std::vector< std::vector<unsigned char> > &values);
+	bool findCex(const Query& query, Assignment& a);
 
 	/// dump a counter-example to stderr
 	void printCex(
@@ -711,93 +705,118 @@ void RangeSimplifier::initArray(const Array* arr)
 	it = arrayRanges.insert(std::make_pair(arr, av)).first;
 }
 
-bool RangeSimplifier::findCex(
-	const Query& query,
-	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values)
+bool RangeSimplifier::findCex(const Query& query, Assignment& a)
 {
-	bool unknown = false;
-
-	// XXX are we better off assigning all concatenated reads (in prioritized
-	// order) before all singular reads, or should we interleave the two?
-	std::set<ref<Expr> > assignmentQueue;
+	// XXX are we better off assigning all concatenated reads
+	// (in prioritized order) before all singular reads,
+	// or should we interleave the two?
+	std::set<ref<Expr> >				assignmentQueue;
+	std::vector< std::vector<unsigned char> >	values;
+	std::vector< const Array* >			objects;
+	bool						unknown = false;
 	// true = value assigned; false = needs a value
 	std::map<const Array*, std::vector<bool>, ArrayLT> objectStatus;
 
 	// initialize objectStatus and values
-	foreach(it, objects.begin(), objects.end()) {
+	foreach(it, a.freeBegin(), a.freeEnd()) {
 		const Array* arr = *it;
 		objectStatus.insert(
 			std::make_pair(
 				arr,
 				std::vector<bool>(arr->mallocKey.size, false)));
-		values.push_back(std::vector<unsigned char>(arr->mallocKey.size, 0));
+		values.push_back(
+			std::vector<unsigned char>(arr->mallocKey.size, 0));
+		objects.push_back(arr);
 	}
 
 	// initialize assignmentQueue to contain all ordered reads
-	foreach(it, orderedReads.begin(), orderedReads.end()) {
+	foreach(it, orderedReads.begin(), orderedReads.end())
 		assignmentQueue.insert(it->second.begin(), it->second.end());
-	}
 
-	// strategy: loop through all ordered reads and unassigned values and find the
-	// ordered read/unassigned value with the lowest range size (relative to the
-	// max range size for that width). assign in increasing order of possible
-	// ranges. terminate early if we get a contradiction (oops).
-
+	// strategy:
+	// loop through all ordered reads and unassigned values and find the
+	// ordered read/unassigned value with the lowest range size
+	// (relative to the max range size for that width).
+	// Assign in increasing order of possible ranges.
+	// Terminate early if we get a contradiction (oops).
+	//
+	// XXX this code sucks. Refactor it -AJR
 	while(true) {
-		double currentMin = 1.1; // actual range of values will be in [0,1]
+		// actual range of values will be in [0,1]
+		double currentMin = 1.1;
 		bool minIsRead = false;
 		ref<Expr> minRead;
 		const Array* minArray = NULL;
 		unsigned minIdx = 0;
 
 		// find smallest remaining range
-		for (std::set<ref<Expr> >::iterator ait = assignmentQueue.begin(),
-				 aie = assignmentQueue.end(); ait != aie && currentMin != 0.0; ++ait) {
+		foreach (ait,
+			assignmentQueue.begin(),
+			assignmentQueue.end())
+		{
+			double	rs;
+
+			if (currentMin == 0.0)
+				break;
+
 			ref<Expr> curRead = *ait;
-			ValueSet &range = getRange(curRead);
+
+			ValueSet &range(getRange(curRead));
 			assert(!range.empty());
-			double rs = range.rel_size();
+
+			rs = range.rel_size();
 			if (rs < currentMin) {
 				currentMin = rs;
 				minIsRead = true;
 				minRead = curRead;
 			}
 		}
+
 		for (unsigned objIdx = 0; objIdx < objects.size(); objIdx++) {
 			const Array* arr = objects[objIdx];
 
-			if (objectStatus.find(arr) == objectStatus.end()) // array fully assigned
+			// array fully assigned
+			if (objectStatus.find(arr) == objectStatus.end())
 				continue;
 
 			ArrayMap::const_iterator rit = arrayRanges.find(arr);
-			if (rit == arrayRanges.end()) { // array not used
-				values[objIdx].assign(arr->mallocKey.size, 0); // arbitrarily set to zeroes
+			if (rit == arrayRanges.end()) {
+				// array not used
+				// arbitrarily set to zeroes
+				values[objIdx].assign(arr->mallocKey.size, 0);
 				objectStatus.erase(arr);
 				continue;
 			}
+
 			const ArrayValues &av = rit->second;
-			bool arrayDone = true; // is this array fully assigned?
+
+			// is this array fully assigned?
+			bool arrayDone = true;
 			for (unsigned i = 0; i < arr->mallocKey.size; i++) {
-				if (objectStatus[arr][i]) // index already assigned
+				// index already assigned
+				if (objectStatus[arr][i])
 					continue;
 
+				// arbitrarily set "don't care" indexes to 0
 				if (av[i].empty()) {
-					values[objIdx][i] = 0; // arbitrarily set "don't care" indexes to 0
+					values[objIdx][i] = 0;
 					objectStatus[arr][i] = true;
+					continue;
 				}
-				else if (av[i].unique()) {
+
+				if (av[i].unique()) {
 					values[objIdx][i] = av[i].value();
 					objectStatus[arr][i] = true;
-				} else {
-					arrayDone = false;
-					double rs = av[i].rel_size();
-					if (rs < currentMin) {
-						currentMin = rs;
-						minIsRead = false;
-						minArray = arr;
-						minIdx = i;
-					}
+					continue;
+				}
+
+				arrayDone = false;
+				double rs = av[i].rel_size();
+				if (rs < currentMin) {
+					currentMin = rs;
+					minIsRead = false;
+					minArray = arr;
+					minIdx = i;
 				}
 			}
 
@@ -814,12 +833,14 @@ bool RangeSimplifier::findCex(
 
 			if (range.unique())
 				continue;
-			else {
-				range.monoSet(ValueSet(range.getWidth(), range.min())); // guess lowest
-				pushExpr(minRead);
-				pushDependentsOf(minRead); // revisit dependent expressions
-				unknown = true; // we guessed
-			}
+
+			// guess lowest
+			range.monoSet(ValueSet(range.getWidth(), range.min()));
+			pushExpr(minRead);
+
+			// revisit dependent expressions
+			pushDependentsOf(minRead);
+			unknown = true; // we guessed
 		} else {
 			ArrayMap::iterator rit = arrayRanges.find(minArray);
 			assert(rit != arrayRanges.end());
@@ -834,20 +855,29 @@ bool RangeSimplifier::findCex(
 			}
 
 			// guess lowest value
-			unknown |=
-				av[minIdx].monoSet(ValueSet(av[minIdx].getWidth(), av[minIdx].min()));
+			unknown |= av[minIdx].monoSet(
+				ValueSet(av[minIdx].getWidth(),
+				av[minIdx].min()));
+
 			values[arrayIdx][minIdx] = av[minIdx].value();
 			objectStatus[minArray][minIdx] = true;
 
-			pushReadsOf(minArray, minIdx); // revisit reads of this array
+			// revisit reads of this array
+			pushReadsOf(minArray, minIdx);
 		}
 
 		bool hasSolution;
 		bool success = run(query, hasSolution);
-		if (!success || !hasSolution) { // we made a contradiction... damnit
-			values.clear();
+		if (!success || !hasSolution) {
+			// we made a contradiction... damnit
 			return false;
 		}
+	}
+
+	if (unknown == false) {
+		/* success! dump to assignment */
+		for (unsigned i = 0; i < objects.size(); i++)
+			a.bindFree(objects[i], values[i]);
 	}
 
 	return !unknown;
@@ -897,7 +927,7 @@ bool RangeSimplifier::isReadExprAtOffset(
 	if (!re || (re->getWidth() != Expr::Int8))
 		return false;
 
-	// Check if the index follows the stride. 
+	// Check if the index follows the stride.
 	// FIXME: How aggressive should this be simplified. The
 	// canonicalizing builder is probably the right choice, but this
 	// is yet another area where we would really prefer it to be
@@ -921,7 +951,7 @@ const ReadExpr* RangeSimplifier::isOrderedRead(ref<Expr> e, int &stride)
 		stride = i ? 1 : -1;
 
 		ref<Expr> temp = e;
-	
+
 		// Get stride expr in proper index width.
 		Expr::Width idxWidth = base->index->getWidth();
 		ref<Expr> strideExpr = ConstantExpr::alloc(stride, idxWidth);
@@ -1049,7 +1079,7 @@ void RangeSimplifier::prepareConstraint(ref<Expr> e)
 	unsigned &depth = exprDepths[e];
 
 	// by default, make sure we have a higher priority than the query
-	if (!depth) depth = 1; 
+	if (!depth) depth = 1;
 
 	pushExpr(e);
 }
@@ -1109,16 +1139,16 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 
 	while (hasChanged && !contradiction && !unsupported && !timeout) {
 		hasChanged = false;
-	
+
 		switch (e->getKind()) {
 		case Expr::Constant: {
 			ref<ConstantExpr> ce = cast<ConstantExpr>(e);
 			range.monoSet(ValueSet(ce->getWidth(), ce->getZExtValue()));
 			break;
 		}
-	
+
 		// Special
-	
+
 		case Expr::NotOptimized: {
 			ref<NotOptimizedExpr> noe = cast<NotOptimizedExpr>(e);
 			ValueSet &srcRange = getRange(noe->src);
@@ -1129,7 +1159,7 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 			hasChanged |= range.monoSet(srcRange);
 			break;
 		}
-	
+
 		case Expr::Read: {
 			ref<ReadExpr> re = cast<ReadExpr>(e);
 			const Array *arr = re->updates.root;
@@ -1139,15 +1169,15 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 			hasChanged |= processExpr(re->index, e, depth+1);
 
 			initArray(arr);
-	
+
 			ArrayMap::iterator it = arrayRanges.find(arr);
 			assert(it != arrayRanges.end());
-	
+
 			ArrayValues &avRef = it->second;
 			ArrayValues av(avRef); // need a local copy for registering read updates
 
 			std::vector<bool> updated(arr->mallocKey.size, false);
-	
+
 			ArrayDependentMap::iterator adit = arrayDependents.find(arr);
 			if (adit == arrayDependents.end())
 				adit =
@@ -1188,7 +1218,7 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 					}
 				}
 			}
-	
+
 			if (offsetRange.unique()) { // known offset read
 				unsigned i = offsetRange.value();
 				assert(i < arr->mallocKey.size && "out of bounds read");
@@ -1251,10 +1281,10 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 						APInt(re->getWidth(), valMin),
 						APInt(re->getWidth(), valMax)));
 			}
-	
+
 			break;
 		}
-	
+
 		case Expr::Select: {
 			ref<SelectExpr> se = cast<SelectExpr>(e);
 
@@ -1292,13 +1322,13 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 			break;
 		}
 		case Expr::Concat: {
-	
+
 			ref<ConcatExpr> ce = cast<ConcatExpr>(e);
-	
+
 			int stride = 0;
 			if (const ReadExpr *re = isOrderedRead(ce, stride)) {
 				std::set<ref<Expr> > &reads = orderedReads[re->updates.root];
-	
+
 				// check whether this is a subexpression in an ordered read we've already
 				// registered
 				std::set<ref<Expr> >::iterator rit = reads.begin(), rie = reads.end();
@@ -1313,13 +1343,13 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 				if (rit == rie)
 					reads.insert(ce);
 			}
-	
+
 			ValueSet &leftRange = getRange(ce->getLeft());
 			ValueSet &rightRange = getRange(ce->getRight());
 
 			hasChanged |= processExpr(ce->getLeft(), e, depth+1);
-			hasChanged |= processExpr(ce->getRight(), e, depth+1);	
-	
+			hasChanged |= processExpr(ce->getRight(), e, depth+1);
+
 			if (range.unique()) {
 				IF_CHANGE(leftRange.monoSet(range.extract(ce->getWidth()-ce->getLeft()->getWidth(), ce->getLeft()->getWidth())),
 									ce->getLeft(), hasChanged)
@@ -1337,12 +1367,12 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 
 			hasChanged |= range.restrictMin((leftRange.min() << ce->getRight()->getWidth()) + rightRange.min());
 			hasChanged |= range.restrictMax((leftRange.max() << ce->getRight()->getWidth()) + rightRange.max());
-	
+
 			break;
 		}
-	
+
 		case Expr::Extract: {
-	
+
 			ref<ExtractExpr> ee = cast<ExtractExpr>(e);
 
 			ValueSet &exprRange = getRange(ee->expr);
@@ -1361,19 +1391,19 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 			// if we know the expression, just extract the bits we want
 			if (exprRange.unique()) {
 				hasChanged |= range.monoSet(exprRange.extract(ee->offset, ee->width));
-			// if 
+			// if
 			} else if (ee->offset == 0 &&
 								 exprRange.max() <
 									 APInt::getMaxValue(ee->offset+ee->width).getZExtValue())
 				hasChanged |= range.restrictMin(exprRange.min());
 
 			hasChanged |= range.restrictMax(exprRange.max());
-	
+
 			break;
 		}
-	
+
 		// Casting
-	
+
 		case Expr::ZExt: {
 			ref<CastExpr> ce = cast<CastExpr>(e);
 
@@ -1384,16 +1414,16 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 			IF_CHANGE(srcRange.monoSet(range), ce->src, hasChanged)
 			break;
 		}
-	
+
 		case Expr::SExt: {
 			ref<CastExpr> ce = cast<CastExpr>(e);
 
 			ValueSet &srcRange = getRange(ce->src);
 
 			hasChanged |= processExpr(ce->src, e, depth+1);
-	
+
 			hasChanged |= range.monoSet(srcRange.sext(ce->getWidth()));
-	
+
 			if (range.unique()) {
 				IF_CHANGE(srcRange.monoSet(range.extract(0, ce->src->getWidth())),
 									ce->src, hasChanged)
@@ -1401,12 +1431,12 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 
 			break;
 		}
-	
+
 		// Binary
-	
+
 		case Expr::Add: {
 			BinaryExpr *be = cast<BinaryExpr>(e);
-		
+
 			ValueSet &leftRange = getRange(be->left);
 			ValueSet &rightRange = getRange(be->right);
 
@@ -1416,7 +1446,7 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 			hasChanged |= range.monoSet(leftRange.add(rightRange));
 			IF_CHANGE(leftRange.monoSet(range.sub(rightRange)), be->left, hasChanged)
 			IF_CHANGE(rightRange.monoSet(range.sub(leftRange)), be->right, hasChanged)
-	
+
 			break;
 		}
 
@@ -1432,19 +1462,19 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 			hasChanged |= range.monoSet(leftRange.sub(rightRange));
 			IF_CHANGE(leftRange.monoSet(range.add(rightRange)), be->left, hasChanged)
 			IF_CHANGE(rightRange.monoSet(leftRange.sub(range)), be->right, hasChanged)
-			
+
 			break;
 		}
 
 		case Expr::And: {
 			BinaryExpr *be = cast<BinaryExpr>(e);
-	
+
 			ValueSet &leftRange = getRange(be->left);
 			ValueSet &rightRange = getRange(be->right);
 
 			hasChanged |= processExpr(be->left, e, depth+1);
 			hasChanged |= processExpr(be->right, e, depth+1);
-	
+
 			hasChanged |= range.monoSet(leftRange.bit_and(rightRange));
 
 			// special case for boolean AND
@@ -1465,16 +1495,16 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 
 			break;
 		}
-	
+
 		case Expr::Or: {
 			BinaryExpr *be = cast<BinaryExpr>(e);
-	
+
 			ValueSet &leftRange = getRange(be->left);
 			ValueSet &rightRange = getRange(be->right);
 
 			hasChanged |= processExpr(be->left, e, depth+1);
 			hasChanged |= processExpr(be->right, e, depth+1);
-	
+
 			hasChanged |= range.monoSet(leftRange.bit_or(rightRange));
 
 			// special case for boolean OR
@@ -1492,10 +1522,10 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 				IF_CHANGE(rightRange.monoSet(ValueSet(1, false)), be->right,
 									hasChanged)
 			}
-	
+
 			break;
 		}
-	
+
 		case Expr::Xor: {
 			BinaryExpr *be = cast<BinaryExpr>(e);
 
@@ -1504,7 +1534,7 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 
 			hasChanged |= processExpr(be->left, e, depth+1);
 			hasChanged |= processExpr(be->right, e, depth+1);
-	
+
 			if (leftRange.unique() && rightRange.unique())
 				hasChanged |= range.monoSet(leftRange.bit_xor(rightRange));
 			// XOR is symmetric!
@@ -1514,12 +1544,12 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 			else if (range.unique() && rightRange.unique())
 				IF_CHANGE(leftRange.monoSet(range.bit_xor(rightRange)), be->left,
 									hasChanged)
-	
+
 			break;
 		}
-	
+
 		// Comparison
-	
+
 		case Expr::Eq: {
 			BinaryExpr *be = cast<BinaryExpr>(e);
 
@@ -1528,11 +1558,11 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 
 			hasChanged |= processExpr(be->left, e, depth+1);
 			hasChanged |= processExpr(be->right, e, depth+1);
-	
+
 			bool update = hasChanged || leftRange.unique() || rightRange.unique() ||
 											((leftRange.isFullRange() || isa<ConstantExpr>(be->left))
 											 && (rightRange.isFullRange()));
-	
+
 			if (range.unique()) {
 				if (range.value()) { // Eq is true
 					IF_CHANGE(rightRange.monoSet(leftRange), be->right, hasChanged)
@@ -1560,7 +1590,7 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 					}
 				}
 			}
-	
+
 			if (be->left == be->right)
 				hasChanged |= range.monoSet(ValueSet(1, true));
 			else if (leftRange.unique() && rightRange.unique()) {
@@ -1572,26 +1602,26 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 				hasChanged |= range.monoSet(ValueSet(1, false));
 			else // intersecting sets
 				hasChanged |= range.monoSet(ValueSet(APInt(1, false), APInt(1, true)));
-	
+
 			break;
 		}
-	
+
 		case Expr::Not: {
 			ref<NotExpr> ne = cast<NotExpr>(e);
-	
+
 			ValueSet &exprRange = getRange(ne->expr);
 
 			hasChanged |= processExpr(ne->expr, e, depth+1);
 
 			hasChanged |= range.monoSet(exprRange.flip());
 			IF_CHANGE(exprRange.monoSet(range.flip()), ne->expr, hasChanged);
-	
+
 			break;
 		}
-	
+
 		case Expr::Ult: {
 			BinaryExpr *be = cast<BinaryExpr>(e);
-	
+
 			ValueSet &leftRange = getRange(be->left);
 			ValueSet &rightRange = getRange(be->right);
 
@@ -1601,7 +1631,7 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 			bool update = hasChanged || leftRange.unique() || rightRange.unique() ||
 											((leftRange.isFullRange() || isa<ConstantExpr>(be->left))
 											 && (rightRange.isFullRange()));
-	
+
 			if (range.unique()) {
 				if (range.value() && be->left != be->right && update) { // left < right
 					IF_CHANGE(leftRange.restrictMax(rightRange.max() - 1), be->left,
@@ -1615,7 +1645,7 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 										hasChanged)
 				}
 			}
-	
+
 			if (be->left == be->right) // left == right, so !(left < right)
 				hasChanged |= range.monoSet(ValueSet(1, false));
 			else if (leftRange.unique() && rightRange.unique()) {
@@ -1627,22 +1657,22 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 				hasChanged |= range.monoSet(ValueSet(1, false));
 			else if (leftRange.max() < rightRange.min())
 				hasChanged |= range.monoSet(ValueSet(1, true));
-	
+
 			break;
 		}
 		case Expr::Ule: {
 			BinaryExpr *be = cast<BinaryExpr>(e);
-	
+
 			ValueSet &leftRange = getRange(be->left);
 			ValueSet &rightRange = getRange(be->right);
 
 			hasChanged |= processExpr(be->left, e, depth+1);
 			hasChanged |= processExpr(be->right, e, depth+1);
-	
+
 			bool update = hasChanged || leftRange.unique() || rightRange.unique() ||
 											((leftRange.isFullRange() || isa<ConstantExpr>(be->left))
 											 && (rightRange.isFullRange()));
-	
+
 			if (range.unique()) {
 				if (range.value() && be->left != be->right) { // left <= right
 					IF_CHANGE(leftRange.restrictMax(rightRange.max()), be->left,
@@ -1656,7 +1686,7 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 										hasChanged)
 				}
 			}
-	
+
 			if (be->left == be->right) // left == right, so (left <= right)
 				hasChanged |= range.monoSet(ValueSet(1, true));
 			else if (leftRange.unique() && rightRange.unique()) {
@@ -1668,15 +1698,15 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 				hasChanged |= range.monoSet(ValueSet(1, false));
 			else if (leftRange.max() <= rightRange.min())
 				hasChanged |= range.monoSet(ValueSet(1, true));
-	
+
 			break;
 		}
-	
+
 		case Expr::Slt: {
 			// UGH 2's complement causes an annoying range discontinuity that limits
 			// what we can do here without supporting discontinuities
 			BinaryExpr *be = cast<BinaryExpr>(e);
-	
+
 			ValueSet &leftRange = getRange(be->left);
 			ValueSet &rightRange = getRange(be->right);
 
@@ -1729,10 +1759,10 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 
 			break;
 		}
-	
+
 		case Expr::Sle: {
 			BinaryExpr *be = cast<BinaryExpr>(e);
-	
+
 			ValueSet &leftRange = getRange(be->left);
 			ValueSet &rightRange = getRange(be->right);
 
@@ -1937,7 +1967,7 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 
 		case Expr::URem: {
 			BinaryExpr *be = cast<BinaryExpr>(e);
-	
+
 			ValueSet &leftRange = getRange(be->left);
 			ValueSet &rightRange = getRange(be->right);
 
@@ -1973,10 +2003,10 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 
 			if (leftRange.unique() && rightRange.unique())
 				hasChanged |= range.monoSet(leftRange.srem(rightRange));
- 
+
 			break;
 		}
-	
+
 		case Expr::Ne:
 		case Expr::Ugt:
 		case Expr::Uge:
@@ -1992,7 +2022,7 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 			assert(0 && "invalid type");
 			break;
 		}
-	
+
 		hasEverChanged |= hasChanged;
 
 		if (range.empty()) {
@@ -2030,29 +2060,23 @@ bool FastRangeSolver::computeSat(const Query& q)
 
 ref<Expr> FastRangeSolver::computeValue(const Query& query)
 {
-	std::vector<const Array*>			objects;
-	std::vector< std::vector<unsigned char> >	values;
 	ref<Expr>	ret;
 	bool		hasSolution;
+	Assignment	a(query.expr);
 
 	// Find the object used in the expression, and compute an assignment
 	// for them.
-	findSymbolicObjects(query.expr, objects);
-	hasSolution = computeInitialValues(query.withFalse(), objects, values);
+	hasSolution = computeInitialValues(query.withFalse(), a);
 	if (failed()) return ret;
-	
+
 	assert (hasSolution && "state has invalid constraint set");
 
 	// Evaluate the expression with the computed assignment.
-	Assignment a(objects, values);
 	ret = a.evaluate(query.expr);
 	return ret;
 }
 
-bool FastRangeSolver::computeInitialValues(
-	const Query& query,
-	const std::vector<const Array*> &objects,
-	std::vector< std::vector<unsigned char> > &values)
+bool FastRangeSolver::computeInitialValues(const Query& query, Assignment& a)
 {
 	RangeSimplifier	rs;
 	bool		hasSolution, satisfies, guess, success;
@@ -2079,7 +2103,7 @@ bool FastRangeSolver::computeInitialValues(
 #ifdef FRS_DEBUG
 	std::cerr << "\nFastRangeSolver INVALID:\n";
 	query.print(std::cerr);
-	std::cerr << "OBJSIZE = " << objects.size() << "\n";
+	std::cerr << "OBJSIZE = " << a.getNumFree() << "\n";
 #endif
 
 #ifdef FRS_DEBUG
@@ -2087,26 +2111,25 @@ bool FastRangeSolver::computeInitialValues(
 		rs.printCex(objects[i], std::vector<unsigned char>());
 #endif
 
-	guess = !rs.findCex(query, objects, values);
+	guess = !rs.findCex(query, a);
 #ifdef FRS_DEBUG
 	std::cerr << "GUESS ON FINDCEX: " << guess << std::endl;
 #endif
-	if (objects.empty()) {
-		values.clear();
+	if (a.getNumBindings() == 0) {
 		numSuccess++;
 		return true;
 	}
 
-	success &= !values.empty();
+	success &= (a.getNumFree() == 0);
 #ifdef FRS_DEBUG
-	for (unsigned i = 0; i < values.size(); i++)
-		rs.printCex(objects[i], values[i]);
+
+	foreach (it, a.bindingsBegin(), a.bindingsEnd())
+		rs.printCex(*it, a.getBinding(*it));
 	std::cerr << "SUCCESS = " << success << std::endl;
-	std::cerr << values.size() << " = size\n";
+	std::cerr << a.getNumBindings() << " = size\n";
 #endif
 	satisfies = false;
 	if (success) {
-		Assignment		a(objects, values);
 		std::set<ref<Expr> >	exprs(	query.constraints.begin(),
 						query.constraints.end());
 
@@ -2126,7 +2149,7 @@ bool FastRangeSolver::computeInitialValues(
 			assert(0 && "Known satisfying assignment failed");
 		}
 
-		values.clear();
+		a.resetBindings();
 		failQuery();
 		return false;
 	}

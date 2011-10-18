@@ -169,13 +169,10 @@ ref<Expr> PoisonCache::computeValue(const Query& q)
 	END_SOLVER(ret)
 }
 
-bool PoisonCache::computeInitialValues(
-	const Query& q,
-	const std::vector<const Array*> &objects,
-        std::vector< std::vector<unsigned char> > &values)
+bool PoisonCache::computeInitialValues(const Query& q, Assignment& a)
 {
 	BEGIN_SOLVER(bool, hasSolution, false)
-	hasSolution = doComputeInitialValues(q, objects, values);
+	hasSolution = doComputeInitialValues(q, a);
 	END_SOLVER(hasSolution)
 }
 

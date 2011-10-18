@@ -15,6 +15,7 @@
 
 namespace klee {
 class Array;
+class Assignment;
 class ExecutionState;
 class Expr;
 struct Query;
@@ -54,9 +55,7 @@ public:
 	/* finds a counter example for the given query
 	* returns true if cex exists, false otherwise */
 	virtual bool computeInitialValues(
-		const Query& query,
-		const std::vector<const Array*> &objects,
-		std::vector< std::vector<unsigned char> > &values) = 0;
+		const Query& query, Assignment& a) = 0;
 
 	/// printName - Recursively print name of solver class
 	virtual void printName(int level = 0) const = 0;
@@ -67,8 +66,7 @@ protected:
 	void printDebugQueries(
 		std::ostream& os,
 		double t_check,
-		const std::vector<const Array*> &objects,
-		std::vector< std::vector<unsigned char> > &values,
+		const Assignment& a,
 		bool hasSolution) const;
 	virtual void failQuery(void);
 	bool has_failed;
