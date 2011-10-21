@@ -155,3 +155,9 @@
 /sbin/fdisk asd
 /usr/sbin/parted asd
 /usr/bin/lefty asd
+/sbin/mkfs.nilfs2 asd
+/sbin/mkfs.hfsplus asd
+/sbin/mkfs.hfs asd
+/sbin/mkfs.jfs asd
+/sbin/mkfs.xfs asd
+/sbin/mkfs.bfs asd

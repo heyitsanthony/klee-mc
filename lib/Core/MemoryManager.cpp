@@ -28,7 +28,7 @@ MemoryManager::~MemoryManager()
 	anonMemObjs.clear();
 	anonHeapObjs.clear();
 	if (objects.size() != 0) {
-		std::cerr 
+		std::cerr
 			<< "MemoryManager leaking " << objects.size()
 			<< " objects. (mallocKey.isFixed?)\n";
 	}
@@ -47,91 +47,93 @@ bool MemoryManager::isGoodSize(uint64_t size) const
 }
 
 MemoryObject *MemoryManager::allocate(
-  uint64_t size, bool isLocal,
-  bool isGlobal,
-  const llvm::Value *allocSite,
-  ExecutionState *state)
+	uint64_t size, bool isLocal,
+	bool isGlobal,
+	const llvm::Value *allocSite,
+	ExecutionState *state)
 {
-  if (!isGoodSize(size)) return NULL;
+	if (!isGoodSize(size)) return NULL;
 
-  assert((state || allocSite) && "Insufficient MallocKey data");
-  MallocKey mallocKey(allocSite,
-	state ? state->mallocIterations[allocSite]++ : 0,
-	size, isLocal, isGlobal, false);
-  HeapObject *heapObj = NULL;
+	assert((state || allocSite) && "Insufficient MallocKey data");
+	MallocKey mallocKey(allocSite,
+		state ? state->mallocIterations[allocSite]++ : 0,
+		size, isLocal, isGlobal, false);
+	HeapObject *heapObj = NULL;
 
-  // find smallest suitable existing heap object to satisfy request
-  // suitable is defined as:
-  //  1) same allocSite
-  //  2) same malloc iteration number (at allocSite) within path
-  //  3) size <= size being requested
-  if (state && size) {
-    std::pair<HeapMap::iterator,HeapMap::iterator> hitPair =
-      heapObjects.equal_range(mallocKey);
-    foreach (hit, hitPair.first, hitPair.second) {
-      HeapObject *curObj = hit->second;
-      MallocKey sigh = hit->first;
+	// find smallest suitable existing heap object to satisfy request
+	// suitable is defined as:
+	//  1) same allocSite
+	//  2) same malloc iteration number (at allocSite) within path
+	//  3) size <= size being requested
+	if (state && size) {
+		std::pair<HeapMap::iterator,HeapMap::iterator> hitPair;
 
-      // we should never have more than one candidate object with the same size
-      assert(!heapObj || heapObj->size != curObj->size);
+		hitPair = heapObjects.equal_range(mallocKey);
+		foreach (hit, hitPair.first, hitPair.second) {
+			HeapObject *curObj = hit->second;
+			MallocKey sigh = hit->first;
 
-      if (size <= curObj->size && (!heapObj || curObj->size < heapObj->size))
-        heapObj = curObj;
-    }
-  }
+			// we should never have more than
+			// one candidate object with the same size
+			assert(!heapObj || heapObj->size != curObj->size);
 
-  // No match; allocate new heap object
-  if (!heapObj && size) {
-    assert((!state
-      || state->isReplay
-      || state->isReplayDone())
-      &&
-      "on reconstitution, existing heap object must be chosen");
-    // if we used to have an object with this mallocKey, reuse the same size
-    // so we can get hits in the cache and RWset
-    MallocKey::seensizes_ty::iterator it;
-    if (allocSite &&
-        (it = MallocKey::seenSizes.find(mallocKey)) !=
-          MallocKey::seenSizes.end()) {
-      std::set<uint64_t> &sizes = it->second;
-      std::set<uint64_t>::iterator it2 = sizes.lower_bound(size);
-      if(it2 != sizes.end() && *it2 > size)
-        mallocKey.size = *it2;
-    }
+			if (size <= curObj->size && (!heapObj || curObj->size < heapObj->size))
+			heapObj = curObj;
+		}
+	}
 
-    heapObj = new HeapObject(size);
-    ++stats::allocations;
+	// No match; allocate new heap object
+	if (heapObj == NULL && size) {
+		assert (
+		(!state || state->isReplay || state->isReplayDone()) &&
+		"on reconstitution, existing heap object must be chosen");
 
-    if(allocSite)
-      MallocKey::seenSizes[mallocKey].insert(mallocKey.size);
+		// if we used to have an object with this mallocKey, reuse the same size
+		// so we can get hits in the cache and RWset
+		MallocKey::seensizes_ty::iterator it;
+		if (	allocSite &&
+			(it = MallocKey::seenSizes.find(mallocKey)) != MallocKey::seenSizes.end())
+		{
+			std::set<uint64_t> &sizes = it->second;
+			std::set<uint64_t>::iterator it2 = sizes.lower_bound(size);
+			if(it2 != sizes.end() && *it2 > size)
+			mallocKey.size = *it2;
+		}
 
-    heapObjects.insert(std::make_pair(mallocKey, heapObj));
-  }
+		heapObj = new HeapObject(size);
+		++stats::allocations;
 
-  bool anonymous = !state;
-  MemoryObject *res;
+		if (allocSite)
+			MallocKey::seenSizes[mallocKey].insert(mallocKey.size);
 
-  res = new MemoryObject(
-    size ? heapObj->address : 0, size, mallocKey, heapObj);
+		heapObjects.insert(std::make_pair(mallocKey, heapObj));
+	}
 
-  // if not replaying state, add reference to heap object
-  if (state && (state->isReplay || state->isReplayDone()))
-    anonymous |= !state->pushHeapRef(heapObj);
+	bool anonymous = !state;
+	MemoryObject *res;
 
-  // add reference to memory object
-  if (state)
-    state->memObjects.push_back(ref<MemoryObject>(res));
-  else
-    anonMemObjs.push_back(ref<MemoryObject>(res));
+	res = new MemoryObject(
+		size ? heapObj->address : 0, size, mallocKey, heapObj);
 
-  // heap object anonymously allocated; keep references to such objects so
-  // they're freed on exit. These include globals, etc.
-  if(anonymous)
-    anonHeapObjs.push_back(ref<HeapObject>(heapObj));
+	// if not replaying state, add reference to heap object
+	if (state && (state->isReplay || state->isReplayDone()))
+		anonymous |= !state->pushHeapRef(heapObj);
 
-  if(size)
-    objects.insert(res);
-  return res;
+	// add reference to memory object
+	if (state)
+		state->memObjects.push_back(ref<MemoryObject>(res));
+	else
+		anonMemObjs.push_back(ref<MemoryObject>(res));
+
+	// heap object anonymously allocated; keep references to such objects so
+	// they're freed on exit. These include globals, etc.
+	if(anonymous)
+		anonHeapObjs.push_back(ref<HeapObject>(heapObj));
+
+	if(size)
+		objects.insert(res);
+
+	return res;
 }
 
 MemoryObject *MemoryManager::allocateFixed(
@@ -139,22 +141,25 @@ MemoryObject *MemoryManager::allocateFixed(
 	const llvm::Value *allocSite,
 	ExecutionState *state)
 {
-  assert((state || allocSite) && "Insufficient MallocKey data");
-  MallocKey mallocKey(allocSite,
-                      state ? state->mallocIterations[allocSite]++ : 0,
-                      size, false, true, true);
+	assert((state || allocSite) && "Insufficient MallocKey data");
 
-  ++stats::allocations;
-  MemoryObject *res = new MemoryObject(address, size, mallocKey);
+	MallocKey mallocKey(
+		allocSite,
+		state ? state->mallocIterations[allocSite]++ : 0,
+		size, false, true, true);
 
-  if (state)
-    state->memObjects.push_back(ref<MemoryObject>(res));
-  else
-    anonMemObjs.push_back(ref<MemoryObject>(res));
+	++stats::allocations;
+	MemoryObject *res = new MemoryObject(address, size, mallocKey);
 
-  if(size)
-    objects.insert(res);
-  return res;
+	if (state)
+		state->memObjects.push_back(ref<MemoryObject>(res));
+	else
+		anonMemObjs.push_back(ref<MemoryObject>(res));
+
+	if(size)
+		objects.insert(res);
+
+	return res;
 }
 
 MemoryObject *MemoryManager::allocateAt(
@@ -250,10 +255,10 @@ MemoryObject* MemoryManager::insertHeapObj(
 }
 
 MemoryObject *MemoryManager::allocateAligned(
-  uint64_t size,
-  unsigned pow2,
-  const llvm::Value *allocSite,
-  ExecutionState *state)
+	uint64_t size,
+	unsigned pow2,
+	const llvm::Value *allocSite,
+	ExecutionState *state)
 {
 	HeapObject *heapObj;
 

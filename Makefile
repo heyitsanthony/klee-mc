@@ -109,6 +109,10 @@ klee-cov:
 	zcov-scan --look-up-dirs=1 klee.zcov .
 	zcov-genhtml --root $$(pwd) klee.zcov klee-cov
 
+test-broken-optmul:
+	KMC_RNR_FLAGS="-smt-optmul -smt-brokenoptmul -smt-xchkmul  -xchk-expr-builder" ./scripts/kmc-run-n-replay "/usr/bin/unrar x a"
+
+
 clean::
 	$(MAKE) -C test clean 
 	$(MAKE) -C unittests clean

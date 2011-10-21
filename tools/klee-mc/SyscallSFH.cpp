@@ -264,7 +264,7 @@ SFH_DEF_HANDLER(AllocAligned)
 	ConstantExpr			*len;
 	uint64_t			len_v;
 	std::string			name_str;
-	std::vector<MemoryObject*>	new_mos;
+	std::vector<ObjectState*>	new_os;
 
 	len = dyn_cast<ConstantExpr>(arguments[0]);
 	if (len == NULL) {
@@ -280,23 +280,21 @@ SFH_DEF_HANDLER(AllocAligned)
 
 	/* not requesting a specific address */
 	exe_vex  = dynamic_cast<ExecutorVex*>(sfh->executor);
-	new_mos = exe_vex->getMM()->allocateAlignedChopped(
+	new_os = state.allocateAlignedChopped(
 		len_v,
 		12 /* aligned on 2^12 */,
-		target->inst,
-		&state);
+		target->inst);
 
-	if (new_mos.size() == 0) {
+	if (new_os.size() == 0) {
 		std::cerr << "COULD NOT ALLOCATE ALIGNED?????\n\n";
 		std::cerr << "LEN_V = " << len_v << std::endl;
 		state.bindLocal(target, ConstantExpr::create(0, 64));
 		return;
 	}
 
-	state.bindLocal(target, new_mos[0]->getBaseExpr());
-	foreach (it, new_mos.begin(), new_mos.end()) {
-		state.bindMemObj(*it);
-		(*it)->setName(name_str.c_str());
+	state.bindLocal(target, new_os[0]->getObject()->getBaseExpr());
+	foreach (it, new_os.begin(), new_os.end()) {
+		(*it)->getObject()->setName(name_str.c_str());
 	}
 }
 
@@ -306,7 +304,6 @@ void SyscallSFH::removeTail(
 	unsigned taken)
 {
 	ObjectState	*os;
-	MemoryObject	*mo_head;
 	char		*buf_head;
 	uint64_t	mo_addr, mo_size, head_size;
 
@@ -325,8 +322,7 @@ void SyscallSFH::removeTail(
 	state.unbindObject(mo);
 
 	/* mark head concrete */
-	mo_head = exe_vex->memory->allocateAt(state, mo_addr, head_size, 0);
-	os = state.bindMemObj(mo_head);
+	os = state.allocateAt(mo_addr, head_size, 0);
 	for(unsigned i = 0; i < head_size; i++) state.write8(os, i, buf_head[i]);
 
 	delete [] buf_head;
@@ -338,7 +334,6 @@ void SyscallSFH::removeHead(
 	unsigned taken)
 {
 	ObjectState	*os;
-	MemoryObject	*mo_tail;
 	char		*buf_tail;
 	uint64_t	mo_addr, mo_size, tail_size;
 
@@ -362,10 +357,7 @@ void SyscallSFH::removeHead(
 	state.unbindObject(mo);
 
 	/* create tail */
-	mo_tail = exe_vex->memory->allocateAt(
-		state,
-		mo_addr+taken, tail_size, 0);
-	os = state.bindMemObj(mo_tail);
+	os = state.allocateAt(mo_addr+taken, tail_size, 0);
 	for(unsigned i = 0; i < tail_size; i++) state.write8(os, i, buf_tail[i]);
 
 	delete [] buf_tail;
@@ -378,7 +370,6 @@ void SyscallSFH::removeMiddle(
 	unsigned taken)
 {
 	ObjectState	*os;
-	MemoryObject	*mo_head, *mo_tail;
 	char		*buf_head, *buf_tail;
 	uint64_t	mo_addr, mo_size, tail_size;
 
@@ -397,14 +388,10 @@ void SyscallSFH::removeMiddle(
 	/* free object from address space */
 	state.unbindObject(mo);
 
-	mo_head = exe_vex->memory->allocateAt(state, mo_addr, mo_off, NULL);
-
-	os = state.bindMemObj(mo_head);
+	os = state.allocateAt(mo_addr, mo_off, NULL);
 	for(unsigned i = 0; i < mo_off; i++) state.write8(os, i, buf_head[i]);
 
-	mo_tail = exe_vex->memory->allocateAt(
-		state, mo_addr+mo_off+taken, tail_size, 0);
-	os = state.bindMemObj(mo_tail);
+	os = state.allocateAt(mo_addr+mo_off+taken, tail_size, 0);
 	for(unsigned i = 0; i < tail_size; i++) state.write8(os, i, buf_tail[i]);
 
 	delete [] buf_head;

@@ -41,6 +41,7 @@ namespace klee {
   class MemoryObject;
   class PTreeNode;
   class InstructionInfo;
+  class MemoryManager;
 
 /* Represents a memory array, its materialization, and ... */
 class SymbolicArray
@@ -74,6 +75,8 @@ public:
   typedef std::vector<StackFrame> stack_ty;
 
 private:
+	static MemoryManager* mm;
+
 	// unsupported, use copy constructor
 	ExecutionState &operator=(const ExecutionState&);
 	std::map< std::string, std::string > fnAliases;
@@ -151,6 +154,8 @@ protected:
 
 
 public:
+	static void setMemoryManager(MemoryManager* in_mm) { mm = in_mm; }
+
 	static ExecutionState* make(KFunction* kf)
 	{ return new ExecutionState(kf); }
 	static ExecutionState* make(const std::vector<ref<Expr> >& assumptions)
@@ -197,6 +202,23 @@ public:
 		arr2sym_map::const_iterator	it(arr2sym.find(a));
 		return (it == arr2sym.end()) ? NULL : (*it).second;
 	}
+
+
+	ObjectState* allocate(
+		uint64_t size, bool isLocal, bool isGlobal,
+		const llvm::Value *allocSite);
+
+	std::vector<ObjectState*> allocateAlignedChopped(
+		uint64_t size, unsigned pow2,
+		const llvm::Value *allocSite);
+
+	ObjectState *allocateFixed(
+		uint64_t address, uint64_t size,
+		const llvm::Value *allocSite);
+
+	ObjectState *allocateAt(
+		uint64_t address, uint64_t size,
+		const llvm::Value *allocSite);
 
   bool addConstraint(ref<Expr> constraint);
   bool merge(const ExecutionState &b);

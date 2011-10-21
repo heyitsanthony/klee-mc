@@ -287,6 +287,7 @@ Executor::Executor(
 
   memory = new MemoryManager();
   stateManager = new ExeStateManager();
+  ExecutionState::setMemoryManager(memory);
 }
 
 
@@ -313,18 +314,15 @@ MemoryObject * Executor::addExternalObject(
 	void *addr, unsigned size,
 	bool isReadOnly)
 {
-	MemoryObject *mo;
 	ObjectState *os;
 
-	mo = memory->allocateFixed((uint64_t) (uintptr_t)addr, size, 0, &state);
-	os = state.bindMemObj(mo);
-
+	os = state.allocateFixed((uint64_t) (uintptr_t)addr, size, 0);
 	for(unsigned i = 0; i < size; i++)
 		state.write8(os, i, ((uint8_t*)addr)[i]);
 
 	if (isReadOnly) os->setReadOnly(true);
 
-	return mo;
+	return os->getObject();
 }
 
 bool Executor::isStateSeeding(ExecutionState* s)
@@ -403,6 +401,53 @@ Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal)
 	results[0] /* second label in br => false */);
 }
 
+bool Executor::forkFollowReplay(ExecutionState& current, struct ForkInfo& fi)
+{
+	// Replaying non-internal fork; read value from replayBranchIterator
+	unsigned targetIndex;
+
+	targetIndex = current.stepReplay();
+	fi.wasReplayed = true;
+
+	// Verify that replay target matches current path constraints
+	assert(targetIndex <= fi.N && "replay target out of range");
+	if (fi.res[targetIndex]) {
+		// Suppress forking; constraint will be added to path
+		// after forkSetup is complete.
+		fi.res.assign(fi.N, false);
+		fi.res[targetIndex] = true;
+
+		return true;
+	}
+
+	std::stringstream ss;
+	ss	<< "hit invalid branch in replay path mode (line="
+		<< current.prevPC->info->assemblyLine
+		<< ", expected target="
+		<< targetIndex << ", actual targets=";
+
+	bool first = true;
+	for(unsigned i = 0; i < fi.N; i++) {
+		if (!fi.res[i]) continue;
+		if (!first) ss << ",";
+		ss << i;
+		first = false;
+	}
+	ss << ")";
+	terminateStateOnError(current, ss.str().c_str(), "branch.err");
+
+	for (unsigned i = 0; i < fi.N; i++) {
+		if (fi.conditions[i].isNull())
+			continue;
+		std::cerr << "COND-"<<i<<": ";
+		fi.conditions[i]->print(std::cerr);
+		std::cerr << "\n";
+	}
+
+	klee_warning("hit invalid branch in replay path mode");
+	return false;
+}
+
 bool Executor::forkSetupNoSeeding(ExecutionState& current, struct ForkInfo& fi)
 {
 	if (!fi.isInternal && current.isCompactForm) {
@@ -418,40 +463,8 @@ bool Executor::forkSetupNoSeeding(ExecutionState& current, struct ForkInfo& fi)
 		return false;
 	}
 
-	if (!fi.isInternal && current.isReplayDone() == false) {
-		// Replaying non-internal fork; read value from replayBranchIterator
-		unsigned targetIndex;
-		targetIndex = current.stepReplay();
-		fi.wasReplayed = true;
-		// Verify that replay target matches current path constraints
-		assert(targetIndex <= fi.N && "replay target out of range");
-		if (!fi.res[targetIndex]) {
-			std::stringstream ss;
-			ss << "hit invalid branch in replay path mode (line="
-			<< current.prevPC->info->assemblyLine
-			<< ", expected target="
-			<< targetIndex << ", actual targets=";
-
-			bool first = true;
-			for(unsigned i = 0; i < fi.N; i++) {
-				if (!fi.res[i]) continue;
-				if (!first) ss << ",";
-				ss << i;
-				first = false;
-			}
-			ss << ")";
-			terminateStateOnError(
-				current, ss.str().c_str(), "branch.err");
-			klee_warning("hit invalid branch in replay path mode");
-			return false;
-		} else {
-			// Suppress forking; constraint will be added to path below
-			fi.res.assign(fi.N, false);
-			fi.res[targetIndex] = true;
-		}
-
-		return true;
-	}
+	if (!fi.isInternal && current.isReplayDone() == false)
+		return forkFollowReplay(current, fi);
 
 	if (fi.validTargets <= 1)  return true;
 
@@ -484,27 +497,31 @@ bool Executor::forkSetupNoSeeding(ExecutionState& current, struct ForkInfo& fi)
 		return true;
 	}
 
+	skipAndRandomPrune(fi, reason);
+	return true;
+}
+
+void Executor::skipAndRandomPrune(struct ForkInfo& fi, const char* reason)
+{
+	TimerStatIncrementer timer(stats::forkTime);
+	unsigned randIndex, condIndex;
+
 	klee_warning_once(
 		reason,
 		"skipping fork and pruning randomly (%s)",
 		reason);
-
-	TimerStatIncrementer timer(stats::forkTime);
-	unsigned randIndex, condIndex;
 
 	randIndex = (theRNG.getInt32() % fi.validTargets) + 1;
 	for (condIndex = 0; condIndex < fi.N; condIndex++) {
 		if (fi.res[condIndex]) randIndex--;
 		if (!randIndex) break;
 	}
+
 	assert(condIndex < fi.N);
 	fi.validTargets = 1;
 	fi.res.assign(fi.N, false);
 	fi.res[condIndex] = true;
-
-	return true;
 }
-
 
 void Executor::forkSetupSeeding(
   ExecutionState& current,
@@ -564,72 +581,79 @@ Executor::fork(
         bool isInternal,
 	bool isBranch)
 {
-  SeedMapType::iterator it;
-  ForkInfo		fi(conditions, N);
+	SeedMapType::iterator it;
+	ForkInfo		fi(conditions, N);
 
-  fi.timeout = stpTimeout;
-  fi.isInternal = isInternal;
-  fi.isBranch = isBranch;
+	fi.timeout = stpTimeout;
+	fi.isInternal = isInternal;
+	fi.isBranch = isBranch;
 
-  it = seedMap.find(&current);
-  fi.isSeeding = it != seedMap.end();
-  if (fi.isSeeding) fi.timeout *= it->second.size();
+	it = seedMap.find(&current);
+	fi.isSeeding = it != seedMap.end();
+	if (fi.isSeeding) fi.timeout *= it->second.size();
 
-  if (evalForks(current, fi) == false)
-      return StateVector(N, NULL);
+	if (evalForks(current, fi) == false)
+		return StateVector(N, NULL);
 
-  // need a copy telling us whether or not we need to add constraints later;
-  // especially important if we skip a fork for whatever reason
-  fi.feasibleTargets = fi.validTargets;
-  assert(fi.validTargets && "invalid set of fork conditions");
+	// need a copy telling us whether or not we need to add 
+	// constraints later; especially important if we skip a fork for
+	// whatever reason
+	fi.feasibleTargets = fi.validTargets;
+	assert(fi.validTargets && "invalid set of fork conditions");
 
-  fi.wasReplayed = false;
-  if (fi.isSeeding == false) {
-    if (!forkSetupNoSeeding(current, fi))
-      return StateVector(N, NULL);
-  } else {
-    forkSetupSeeding(current, fi);
-  }
+	fi.wasReplayed = false;
+	if (fi.isSeeding == false) {
+		if (!forkSetupNoSeeding(current, fi))
+			return StateVector(N, NULL);
+	} else {
+		forkSetupSeeding(current, fi);
+	}
 
-  makeForks(current, fi);
-  constrainForks(current, fi);
+	makeForks(current, fi);
+	constrainForks(current, fi);
 
-  return fi.resStates;
+	return fi.resStates;
+}
+
+bool Executor::evalForkBranch(ExecutionState& current, struct ForkInfo& fi)
+{
+	Solver::Validity	result;
+	bool			success;
+
+	assert (fi.isBranch);
+
+	solver->setTimeout(fi.timeout);
+	success = solver->evaluate(current, fi.conditions[1], result);
+	solver->setTimeout(stpTimeout);
+
+	if (!success) {
+		terminateStateEarly(current, "query timed out");
+		return false;
+	}
+
+	// known => [0] when false, [1] when true
+	// unknown => take both routes
+	fi.res[0] = (
+		result == Solver::False ||
+		result == Solver::Unknown);
+	fi.res[1] = (
+		result == Solver::True ||
+		result == Solver::Unknown);
+
+	fi.validTargets = (result == Solver::Unknown) ? 2 : 1;
+	if (fi.validTargets > 1 || fi.isSeeding) {
+		/* branch on both true and false conditions */
+		fi.conditions[0] = Expr::createIsZero(fi.conditions[1]);
+	}
+
+	return true;
 }
 
 // Evaluate fork conditions
 bool Executor::evalForks(ExecutionState& current, struct ForkInfo& fi)
 {
-	if (fi.isBranch) {
-		Solver::Validity	result;
-		bool			success;
-
-		solver->setTimeout(fi.timeout);
-		success = solver->evaluate(current, fi.conditions[1], result);
-		solver->setTimeout(stpTimeout);
-
-		if (!success) {
-			terminateStateEarly(current, "query timed out");
-			return false;
-		}
-
-		// known => [0] when false, [1] when true
-		// unknown => take both routes
-		fi.res[0] = (
-			result == Solver::False ||
-			result == Solver::Unknown);
-		fi.res[1] = (
-			result == Solver::True ||
-			result == Solver::Unknown);
-
-		fi.validTargets = (result == Solver::Unknown) ? 2 : 1;
-		if (fi.validTargets > 1 || fi.isSeeding) {
-			/* branch on both true and false conditions */
-			fi.conditions[0] = Expr::createIsZero(fi.conditions[1]);
-		}
-
-		return true;
-	}
+	if (fi.isBranch)
+		return evalForkBranch(current, fi);
 
 	assert (fi.isBranch == false);
 
@@ -1076,7 +1100,6 @@ bool Executor::setupCallVarArgs(
 	unsigned funcArgs,
 	std::vector<ref<Expr> >& arguments)
 {
-	MemoryObject	*mo;
 	ObjectState	*os;
 	unsigned	size, offset, callingArgs;
 
@@ -1097,14 +1120,14 @@ bool Executor::setupCallVarArgs(
 		}
 	}
 
-	mo = memory->allocate(size, true, false, state.prevPC->inst, &state);
-	sf.varargs = mo;
-	if (!mo) {
+	os = state.allocate(size, true, false, state.prevPC->inst);
+	if (os == NULL) {
 		terminateStateOnExecError(state, "out of memory (varargs)");
 		return false;
 	}
 
-	os = state.bindMemObj(mo);
+	sf.varargs = os->getObject();
+
 	offset = 0;
 	for (unsigned i = funcArgs; i < callingArgs; i++) {
 	// FIXME: This is really specific to the architecture, not the pointer
@@ -1368,6 +1391,7 @@ void Executor::instBranch(ExecutionState& state, KInstruction* ki)
   assert (bi->getCondition() == bi->getOperand(0) && "Wrong operand index!");
 
   const Cell &cond = eval(ki, 0, state);
+
   StatePair branches = fork(state, cond.value, false);
 
   if (WriteTraces) {
@@ -2176,6 +2200,7 @@ void Executor::instAlloc(ExecutionState& state, KInstruction* ki)
 void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
 {
   Instruction *i = ki->inst;
+
   switch (i->getOpcode()) {
   // Memory instructions...
   // case Instruction::Malloc:
@@ -3137,6 +3162,7 @@ bool Executor::memOpFast(ExecutionState& state, MemOp& mop)
 		ref<Expr> result = state.read(res.os, res.offset, type);
 		if (interpreterOpts.MakeConcreteSymbolic)
 			result = replaceReadWithSymbolic(state, result);
+
 		state.bindLocal(mop.target, result);
 	}
 
@@ -3682,11 +3708,10 @@ void Executor::executeAllocConst(
 	const ObjectState *reallocFrom)
 {
 	ObjectState *os;
-	MemoryObject *mo;
 
-	mo = memory->allocate(
-		CE->getZExtValue(), isLocal, false, state.prevPC->inst, &state);
-	if (!mo) {
+	os = state.allocate(
+		CE->getZExtValue(), isLocal, false, state.prevPC->inst);
+	if (os == NULL) {
 		state.bindLocal(
 			target,
 			ConstantExpr::alloc(
@@ -3694,16 +3719,12 @@ void Executor::executeAllocConst(
 		return;
 	}
 
-	os = (isLocal) ?
-		state.bindStackMemObj(mo) :
-		state.bindMemObj(mo);
-
 	if (zeroMemory)
 		os->initializeToZero();
 	else
 		os->initializeToRandom();
 
-	state.bindLocal(target, mo->getBaseExpr());
+	state.bindLocal(target, os->getObject()->getBaseExpr());
 
 	if (reallocFrom) {
 		unsigned count = std::min(reallocFrom->size, os->size);

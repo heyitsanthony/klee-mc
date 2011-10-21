@@ -283,7 +283,6 @@ done_ai:
 	ObjectState *argvOS = state->bindMemObj(argvMO);
 
 	for (int i=0; i<argc+1+envc+1+1; i++) {
-		MemoryObject	*arg;
 		ObjectState	*os;
 
 		if (i==argc || i>=argc+1+envc) {
@@ -298,19 +297,15 @@ done_ai:
 		int j, len = strlen(s);
 
 
-		arg = memory->allocate(
-			len+1, false, true,
-			state->pc->inst,
-			state);
-		assert (arg != NULL);
-
-
-		os = state->bindMemObj(arg);
+		os = state->allocate(len+1, false, true, state->pc->inst);
+		assert (os != NULL);
 
 		for (j=0; j<len+1; j++)
 			state->write8(os, j, s[j]);
 
-		state->write(argvOS, i * NumPtrBytes, arg->getBaseExpr());
+		state->write(
+			argvOS, i * NumPtrBytes,
+			os->getObject()->getBaseExpr());
 	}
 }
 
@@ -457,8 +452,8 @@ void ExecutorBC::allocGlobalVariableDecl(
 		<< " (use will result in out of bounds access)\n";
 	}
 
-	mo = memory->allocate(size, false, true, &gv, &state);
-	os = state.bindMemObj(mo);
+	os = state.allocate(size, false, true, &gv);
+	mo = os->getObject();
 	globalObjects.insert(std::make_pair(&gv, mo));
 	globalAddresses.insert(std::make_pair(&gv, mo->getBaseExpr()));
 
@@ -493,7 +488,7 @@ void ExecutorBC::allocGlobalVariableNoDecl(
 	const Type *ty = gv.getType()->getElementType();
 	uint64_t size = target_data->getTypeStoreSize(ty);
 	MemoryObject *mo = 0;
-	ObjectState *os;
+	ObjectState *os = 0;
 
 	if (UseAsmAddresses && gv.getName()[0]=='\01') {
 		char *end;
@@ -508,16 +503,17 @@ void ExecutorBC::allocGlobalVariableNoDecl(
 			(long long unsigned int) address,
 			(long long unsigned int) size);
 		//      mo = memory->allocateFixed(address, size, &*i, &state);
-			mo = memory->allocateFixed(address, size, &gv, &state);
+			os = state.allocateFixed(address, size, &gv);
+			mo = os->getObject();
 			mo->isUserSpecified = true; // XXX hack;
 		}
 	}
 
 	//if (!mo) mo = memory->allocate(size, false, true, &*i, &state);
-	if (!mo) mo = memory->allocate(size, false, true, &gv, &state);
-	assert(mo && "out of memory");
+	if (os == NULL) os = state.allocate(size, false, true, &gv);
+	assert(os && "out of memory");
 
-	os = state.bindMemObj(mo);
+	mo = os->getObject();
 	globalObjects.insert(std::make_pair(&gv, mo));
 	globalAddresses.insert(std::make_pair(&gv, mo->getBaseExpr()));
 

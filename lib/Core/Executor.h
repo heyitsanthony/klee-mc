@@ -474,9 +474,13 @@ private:
 	double			timeout;
   };
 
+  void skipAndRandomPrune(struct ForkInfo& fi, const char* reason);
+
   bool forkSetupNoSeeding(ExecutionState& current, struct ForkInfo& fi);
+  bool forkFollowReplay(ExecutionState& current, struct ForkInfo& fi);
   void forkSetupSeeding(ExecutionState& current, struct ForkInfo& fi);
   bool evalForks(ExecutionState& current, struct ForkInfo& fi);
+  bool evalForkBranch(ExecutionState& current, struct ForkInfo& fi);
   void makeForks(ExecutionState& current, struct ForkInfo& fi);
   void constrainForks(ExecutionState& current, struct ForkInfo& fi);
 

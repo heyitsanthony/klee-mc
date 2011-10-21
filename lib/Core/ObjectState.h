@@ -48,6 +48,8 @@ public:
 	~ObjectState();
 
 	const MemoryObject *getObject() const { return object; }
+	MemoryObject* getObject(void)
+	{ return const_cast<MemoryObject*>(object); }
 
 	void setReadOnly(bool ro) { readOnly = ro; }
 
