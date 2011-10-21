@@ -33,58 +33,41 @@ namespace klee
 
 class MemoryManager
 {
-	friend class HeapObject;
 	friend class MemoryObject;
-public:
-	typedef std::multimap<MallocKey,HeapObject*> HeapMap;
 
-private:
+public:
+	MemoryManager();
+	virtual ~MemoryManager();
+
+	virtual MemoryObject *allocate(
+		uint64_t size, bool isLocal, bool isGlobal,
+		const llvm::Value *allocSite, ExecutionState *state) = 0;
+
+	virtual MemoryObject *allocateAligned(
+		uint64_t size, unsigned pow2,
+		const llvm::Value *allocSite, ExecutionState *state) = 0;
+
+	virtual std::vector<MemoryObject*> allocateAlignedChopped(
+		uint64_t size, unsigned pow2,
+		const llvm::Value *allocSite, ExecutionState *state) = 0;
+
+	virtual MemoryObject *allocateFixed(
+		uint64_t address, uint64_t size,
+		const llvm::Value *allocSite,
+		ExecutionState *state);
+
+	virtual MemoryObject *allocateAt(
+		ExecutionState& state,
+		uint64_t address, uint64_t size,
+		const llvm::Value *allocSite);
+
+protected:
 	typedef std::set<MemoryObject*> objects_ty;
 	// pointers to all allocated MemoryObjects
 	objects_ty objects;
 	// references to anonymous MemoryObjects (ones not tied to a state)
 	std::list<ref<MemoryObject> > anonMemObjs;
-	// references to anonymous HeapObjects (ones not tied to a state)
-	std::list<ref<HeapObject> > anonHeapObjs;
-	// map containing all allocated heap objects
-	HeapMap heapObjects;
 
-public:
-	MemoryManager()
-	{
-		HeapObject::memoryManager = this;
-		MemoryObject::memoryManager = this;
-	}
-	~MemoryManager();
-
-	MemoryObject *allocate(uint64_t size, bool isLocal, bool isGlobal,
-			   const llvm::Value *allocSite, ExecutionState *state);
-
-	MemoryObject *allocateAligned(
-	uint64_t size, unsigned pow2,
-	const llvm::Value *allocSite, ExecutionState *state);
-
-	std::vector<MemoryObject*> allocateAlignedChopped(
-		uint64_t size, unsigned pow2,
-		const llvm::Value *allocSite, ExecutionState *state);
-
-	MemoryObject *allocateFixed(
-		uint64_t address, uint64_t size,
-		const llvm::Value *allocSite,
-		ExecutionState *state);
-
-	MemoryObject *allocateAt(
-		ExecutionState& state,
-		uint64_t address, uint64_t size,
-		const llvm::Value *allocSite);
-
-private:
-	MemoryObject* insertHeapObj(
-		ExecutionState* s,
-		HeapObject* ho,
-		MallocKey& mk,
-		unsigned sz);
-	void dropHeapObj(HeapObject* ho);
 	bool isGoodSize(uint64_t) const;
 };
 

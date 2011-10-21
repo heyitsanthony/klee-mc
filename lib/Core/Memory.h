@@ -30,15 +30,16 @@ namespace klee {
 class BitArray;
 class MemoryManager;
 class Solver;
+class HeapMM;
 
 class HeapObject {
   friend class ref<HeapObject>;
 
 public:
-  static MemoryManager* memoryManager;
+  static HeapMM* memoryManager;
 
 private:
-  friend class MemoryManager;
+  friend class HeapMM;
   friend class UpdateList;
 
   unsigned size;

@@ -15,8 +15,7 @@
 #include "Context.h"
 #include "CoreStats.h"
 #include "ImpliedValue.h"
-#include "Memory.h"
-#include "MemoryManager.h"
+#include "HeapMM.h"
 #include "PTree.h"
 #include "Searcher.h"
 #include "SeedInfo.h"
@@ -285,7 +284,7 @@ Executor::Executor(
 	interpreterHandler->getOutputFilename("queries.pc"),
 	interpreterHandler->getOutputFilename("stp-queries.pc"));
 
-  memory = new MemoryManager();
+  memory = new HeapMM();
   stateManager = new ExeStateManager();
   ExecutionState::setMemoryManager(memory);
 }

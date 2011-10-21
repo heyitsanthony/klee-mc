@@ -12,6 +12,7 @@
 #include "ExeStateManager.h"
 #include "ExternalDispatcher.h"
 #include "PTree.h"
+#include "HeapMM.h"
 #include <sstream>
 #include "klee/Internal/Module/KModule.h"
 
@@ -106,13 +107,15 @@ void ExecutorBC::runFunctionAsMain(
 
 	processTree = new PTree(state);
 	state->ptreeNode = processTree->root;
+
 	run(*state);
+
 	delete processTree;
 	processTree = 0;
 
 	// hack to clear memory objects
 	delete memory;
-	memory = new MemoryManager();
+	memory = new HeapMM();
 
 	globalObjects.clear();
 	globalAddresses.clear();

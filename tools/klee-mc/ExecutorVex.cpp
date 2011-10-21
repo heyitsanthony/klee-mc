@@ -14,6 +14,7 @@
 #include "../../lib/Core/StatsTracker.h"
 #include "../../lib/Core/ExeStateManager.h"
 #include "../../lib/Core/UserSearcher.h"
+#include "../../lib/Core/HeapMM.h"
 #include "../../lib/Core/PTree.h"
 
 #include <iomanip>
@@ -224,7 +225,7 @@ void ExecutorVex::runImage(void)
 
 	// hack to clear memory objects
 	delete memory;
-	memory = new MemoryManager();
+	memory = new HeapMM();
 
 	globalObjects.clear();
 	globalAddresses.clear();

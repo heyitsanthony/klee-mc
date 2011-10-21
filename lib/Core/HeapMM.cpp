@@ -1,4 +1,4 @@
-//===-- MemoryManager.cpp -------------------------------------------------===//
+//===-- HeapMM.cpp -------------------------------------------------===//
 //
 //                     The KLEE Symbolic Virtual Machine
 //
@@ -9,7 +9,7 @@
 
 #include "CoreStats.h"
 #include "Memory.h"
-#include "MemoryManager.h"
+#include "HeapMM.h"
 
 #include "static/Sugar.h"
 #include "klee/Common.h"
@@ -21,32 +21,18 @@
 
 using namespace klee;
 
-/***/
-
-MemoryManager::~MemoryManager()
+HeapMM::HeapMM(void)
 {
-	anonMemObjs.clear();
+	HeapObject::memoryManager = this;
+}
+
+HeapMM::~HeapMM()
+{
 	anonHeapObjs.clear();
-	if (objects.size() != 0) {
-		std::cerr
-			<< "MemoryManager leaking " << objects.size()
-			<< " objects. (mallocKey.isFixed?)\n";
-	}
 	HeapObject::memoryManager = NULL;
-	MemoryObject::memoryManager = NULL;
 }
 
-#define MAX_ALLOC_BYTES	(16*1024*1024)
-
-bool MemoryManager::isGoodSize(uint64_t size) const
-{
-	if (size <= MAX_ALLOC_BYTES) return true;
-
-	klee_warning_once(0, "failing large alloc: %u bytes", (unsigned) size);
-	return false;
-}
-
-MemoryObject *MemoryManager::allocate(
+MemoryObject *HeapMM::allocate(
 	uint64_t size, bool isLocal,
 	bool isGlobal,
 	const llvm::Value *allocSite,
@@ -77,8 +63,11 @@ MemoryObject *MemoryManager::allocate(
 			// one candidate object with the same size
 			assert(!heapObj || heapObj->size != curObj->size);
 
-			if (size <= curObj->size && (!heapObj || curObj->size < heapObj->size))
-			heapObj = curObj;
+			if (	size <= curObj->size &&
+				(!heapObj || curObj->size < heapObj->size))
+			{
+				heapObj = curObj;
+			}
 		}
 	}
 
@@ -94,8 +83,10 @@ MemoryObject *MemoryManager::allocate(
 		if (	allocSite &&
 			(it = MallocKey::seenSizes.find(mallocKey)) != MallocKey::seenSizes.end())
 		{
-			std::set<uint64_t> &sizes = it->second;
-			std::set<uint64_t>::iterator it2 = sizes.lower_bound(size);
+			std::set<uint64_t> &sizes(it->second);
+			std::set<uint64_t>::iterator it2;
+
+			it2 = sizes.lower_bound(size);
 			if(it2 != sizes.end() && *it2 > size)
 			mallocKey.size = *it2;
 		}
@@ -136,54 +127,7 @@ MemoryObject *MemoryManager::allocate(
 	return res;
 }
 
-MemoryObject *MemoryManager::allocateFixed(
-	uint64_t address, uint64_t size,
-	const llvm::Value *allocSite,
-	ExecutionState *state)
-{
-	assert((state || allocSite) && "Insufficient MallocKey data");
-
-	MallocKey mallocKey(
-		allocSite,
-		state ? state->mallocIterations[allocSite]++ : 0,
-		size, false, true, true);
-
-	++stats::allocations;
-	MemoryObject *res = new MemoryObject(address, size, mallocKey);
-
-	if (state)
-		state->memObjects.push_back(ref<MemoryObject>(res));
-	else
-		anonMemObjs.push_back(ref<MemoryObject>(res));
-
-	if(size)
-		objects.insert(res);
-
-	return res;
-}
-
-MemoryObject *MemoryManager::allocateAt(
-	ExecutionState& state,
-	uint64_t address, uint64_t size,
-	const llvm::Value *allocSite)
-{
-	MemoryObject *res;
-	assert (size != 0);
-
-	MallocKey mallocKey(allocSite,
-		      state.mallocIterations[allocSite]++,
-		      size, false, true, false);
-
-	++stats::allocations;
-	res = new MemoryObject(address, size, mallocKey);
-
-	state.memObjects.push_back(ref<MemoryObject>(res));
-	objects.insert(res);
-	return res;
-}
-
-
-std::vector<MemoryObject*> MemoryManager::allocateAlignedChopped(
+std::vector<MemoryObject*> HeapMM::allocateAlignedChopped(
 	uint64_t size,
 	unsigned pow2,
 	const llvm::Value *allocSite,
@@ -222,7 +166,7 @@ std::vector<MemoryObject*> MemoryManager::allocateAlignedChopped(
 	return ret;
 }
 
-MemoryObject* MemoryManager::insertHeapObj(
+MemoryObject* HeapMM::insertHeapObj(
 	ExecutionState* state,
 	HeapObject* heapObj,
 	MallocKey& mk,
@@ -254,7 +198,7 @@ MemoryObject* MemoryManager::insertHeapObj(
 	return cur_mo;
 }
 
-MemoryObject *MemoryManager::allocateAligned(
+MemoryObject *HeapMM::allocateAligned(
 	uint64_t size,
 	unsigned pow2,
 	const llvm::Value *allocSite,
@@ -279,7 +223,7 @@ MemoryObject *MemoryManager::allocateAligned(
 	return insertHeapObj(state, heapObj, mallocKey, size);
 }
 
-void MemoryManager::dropHeapObj(HeapObject* ho)
+void HeapMM::dropHeapObj(HeapObject* ho)
 {
 	// remove from heapObjects multimap
 	foreach (hit,

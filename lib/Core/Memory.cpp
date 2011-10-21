@@ -9,6 +9,7 @@
 
 #include "Memory.h"
 #include "MemoryManager.h"
+#include "HeapMM.h"
 
 #include "Context.h"
 #include "klee/Common.h"
@@ -35,7 +36,7 @@ using namespace klee;
 
 /***/
 
-MemoryManager* HeapObject::memoryManager = NULL;
+HeapMM* HeapObject::memoryManager = NULL;
 
 HeapObject::HeapObject(unsigned _size, unsigned _align)
 : size(_size)
@@ -61,7 +62,9 @@ HeapObject::HeapObject(unsigned _size, unsigned _align)
 
 HeapObject::~HeapObject()
 {
-	if (memoryManager) memoryManager->dropHeapObj(this);
+	if (memoryManager != NULL) {
+		memoryManager->dropHeapObj(this);
+	}
 
 	// free heap storage
 	if (!align)
