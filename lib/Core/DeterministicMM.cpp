@@ -186,6 +186,5 @@ uint64_t DeterministicMM::findFree(
 		first_addr = mo->address + mo->size;
 	} while (1);
 
-	std::cerr << "FOUDN FREE: " << (void*)first_addr << "--" << (void*)(first_addr+sz) << '\n';
 	return first_addr;
 }
