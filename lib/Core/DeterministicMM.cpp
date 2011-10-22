@@ -7,7 +7,7 @@ using namespace klee;
 /** XXX update for 32-bit archs */
 #define ANON_ADDR	(((uint64_t)1) << 41)
 #define MAX_ADDR	(((uint64_t)1) << 40)
-#define MIN_ADDR	0xa00000
+#define MIN_ADDR	0xa000000
 
 
 DeterministicMM::DeterministicMM(void)
@@ -186,5 +186,6 @@ uint64_t DeterministicMM::findFree(
 		first_addr = mo->address + mo->size;
 	} while (1);
 
+	std::cerr << "FOUDN FREE: " << (void*)first_addr << "--" << (void*)(first_addr+sz) << '\n';
 	return first_addr;
 }

@@ -66,6 +66,12 @@ MemoryObject* MemoryManager::allocateAt(
 		      size, false, true, false);
 
 	++stats::allocations;
+
+	if (state.addressSpace.resolveOneMO(address) != NULL) {
+		std::cerr << "ADDRESS ALREADY TAKEN!?\n";
+		return NULL;
+	}
+
 	res = new MemoryObject(address, size, mallocKey);
 
 	state.memObjects.push_back(ref<MemoryObject>(res));

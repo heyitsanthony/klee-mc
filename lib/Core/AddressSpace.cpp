@@ -74,9 +74,13 @@ ObjectState *AddressSpace::getWriteable(
 
 bool AddressSpace::resolveOne(uint64_t address, ObjectPair &result)
 {
-	MemoryObject			toFind(address);
 	const MemoryMap::value_type 	*res;
 	const MemoryObject		*mo;
+
+	if (address == 0)
+		return false;
+
+	MemoryObject			toFind(address);
 
 	res = objects.lookup_previous(&toFind);
 	if (!res) return false;
