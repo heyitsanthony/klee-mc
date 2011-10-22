@@ -284,7 +284,7 @@ Executor::Executor(
 	interpreterHandler->getOutputFilename("queries.pc"),
 	interpreterHandler->getOutputFilename("stp-queries.pc"));
 
-  memory = new HeapMM();
+  memory = MemoryManager::create();
   stateManager = new ExeStateManager();
   ExecutionState::setMemoryManager(memory);
 }
@@ -3559,8 +3559,9 @@ void Executor::initializeGlobalObject(
 	} else if (isa<ConstantAggregateZero>(c)) {
 		unsigned size;
 		size = target_data->getTypeStoreSize(c->getType());
+		assert (size + offset <= os->getObject()->size);
 		for (unsigned i=0; i<size; i++) {
-			state.write8(os, offset+i, (uint8_t) 0);
+			state.write8(os,offset+i, (uint8_t) 0);
 		}
 	} else if (ConstantArray *ca = dyn_cast<ConstantArray>(c)) {
 		unsigned elementSize;

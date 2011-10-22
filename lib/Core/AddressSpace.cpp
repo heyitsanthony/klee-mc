@@ -26,25 +26,33 @@ static unsigned ContiguousNextScanLen = 20;
 
 ///
 
-void AddressSpace::bindObject(const MemoryObject *mo, ObjectState *os) {
-  assert(os->copyOnWriteOwner == 0 && "object already has owner");
-  os->copyOnWriteOwner = cowKey;
-  objects = objects.replace(std::make_pair(mo, os));
+void AddressSpace::bindObject(const MemoryObject *mo, ObjectState *os)
+{
+	assert(os->copyOnWriteOwner == 0 && "object already has owner");
+	os->copyOnWriteOwner = cowKey;
+	objects = objects.replace(std::make_pair(mo, os));
+	if (mo == last_mo)
+		last_mo = NULL;
 }
 
-void AddressSpace::unbindObject(const MemoryObject *mo) {
-  objects = objects.remove(mo);
+void AddressSpace::unbindObject(const MemoryObject *mo)
+{
+	if (mo == last_mo)
+		last_mo = NULL;
+
+	objects = objects.remove(mo);
 }
 
-const ObjectState *AddressSpace::findObject(const MemoryObject *mo) const {
-  const MemoryMap::value_type *res = objects.lookup(mo);
-
-  return res ? res->second : 0;
+const ObjectState *AddressSpace::findObject(const MemoryObject *mo) const
+{
+	const MemoryMap::value_type *res = objects.lookup(mo);
+	return res ? res->second :  NULL;
 }
 
-ObjectState *AddressSpace::findObject(const MemoryObject *mo) {
-  const MemoryMap::value_type *res = objects.lookup(mo);
-  return res ? res->second : 0;
+ObjectState *AddressSpace::findObject(const MemoryObject *mo)
+{
+	const MemoryMap::value_type *res = objects.lookup(mo);
+	return res ? res->second : NULL;
 }
 
 ObjectState *AddressSpace::getWriteable(
@@ -398,6 +406,16 @@ bool AddressSpace::resolve(
 		state, p, solver, tryRanges, maxResolutions, rl);
 }
 
+
+MMIter AddressSpace::lower_bound(uint64_t addr) const
+{
+	if (addr == 0) return begin();
+	if (objects.empty()) return end();
+
+	MemoryObject	toFind(addr);
+	return objects.lower_bound(&toFind);
+}
+
 bool AddressSpace::mustContain(
 	ExecutionState &state,
 	TimingSolver* solver,
@@ -679,8 +697,6 @@ void AddressSpace::print(std::ostream& os) const
 		os << std::endl;
 	}
 }
-
-/***/
 
 bool MemoryObjectLT::operator()(
 	const MemoryObject *a, const MemoryObject *b) const

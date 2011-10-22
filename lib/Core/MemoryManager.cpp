@@ -1,14 +1,33 @@
 #include "CoreStats.h"
 #include "Memory.h"
 #include "MemoryManager.h"
+#include "HeapMM.h"
+#include "DeterministicMM.h"
 #include "klee/Common.h"
 #include "klee/ExecutionState.h"
+#include <llvm/Support/CommandLine.h>
 #include <iostream>
 
 using namespace klee;
+using namespace llvm;
+
+enum MMType { MM_HEAP, MM_DETERMINISTIC };
+
+namespace
+{
+	cl::opt<MMType>
+	UseMM(
+	"mm-type",
+	cl::desc("Set the type of memory manager used"),
+	cl::values(
+		clEnumValN(MM_HEAP, "heap", "Heap based MM"),
+		clEnumValN(
+			MM_DETERMINISTIC, "deterministic", "Deterministic MM"),
+		clEnumValEnd),
+	cl::init(MM_HEAP));
+}
 
 #define MAX_ALLOC_BYTES	(16*1024*1024)
-
 
 MemoryManager::MemoryManager(void)
 {
@@ -78,4 +97,16 @@ MemoryObject *MemoryManager::allocateFixed(
 		objects.insert(res);
 
 	return res;
+}
+
+MemoryManager* MemoryManager::create(void)
+{
+	switch (UseMM) {
+	case MM_DETERMINISTIC:
+		return new DeterministicMM();
+	case MM_HEAP:
+		return new HeapMM();
+	default:
+		return NULL;
+	}
 }

@@ -31,8 +31,7 @@ MemoryObject::MemoryObject(uint64_t _address)
 , size(0)
 , mallocKey(0, 0, 0, false, false, true)
 , refCount(0)
-{
-}
+{}
 
 MemoryObject::MemoryObject(
   uint64_t _address,
@@ -48,8 +47,7 @@ MemoryObject::MemoryObject(
 , fake_object(false)
 , isUserSpecified(false)
 , refCount(_mallocKey.isFixed ? 1 /* immortal */ : 0)
-{
-}
+{}
 
 void MemoryObject::remove()
 {

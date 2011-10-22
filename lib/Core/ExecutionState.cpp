@@ -38,7 +38,8 @@ MemoryManager* ExecutionState::mm = NULL;
 
 /** XXX XXX XXX REFACTOR PLEASEEE **/
 ExecutionState::ExecutionState(KFunction *kf)
-: underConstrained(false)
+: num_allocs(0)
+, underConstrained(false)
 , depth(0)
 , pc(kf->instructions)
 , prevPC(pc)
@@ -57,7 +58,8 @@ ExecutionState::ExecutionState(KFunction *kf)
 }
 
 ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
-: underConstrained(false)
+: num_allocs(0)
+, underConstrained(false)
 , constraints(assumptions)
 , queryCost(0.)
 , lastChosen(0)
@@ -69,7 +71,8 @@ ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
 }
 
 ExecutionState::ExecutionState(void)
-: underConstrained(0)
+: num_allocs(0)
+, underConstrained(0)
 , coveredNew(false)
 , lastChosen(0)
 , isCompactForm(false)
@@ -417,6 +420,7 @@ ObjectState* ExecutionState::allocate(
 	if (mo == NULL)
 		return NULL;
 
+	num_allocs++;
 	os = (isLocal) ? bindStackMemObj(mo) : bindMemObj(mo);
 	return os;
 }
@@ -431,6 +435,7 @@ std::vector<ObjectState*> ExecutionState::allocateAlignedChopped(
 	if (mos.size() == 0)
 		return os;
 
+	num_allocs++;
 	foreach (it, mos.begin(), mos.end()) {
 		ObjectState	*cur_os;
 
@@ -452,6 +457,7 @@ ObjectState* ExecutionState::allocateFixed(
 	if (mo == NULL)
 		return NULL;
 
+	num_allocs++;
 	return bindMemObj(mo);
 }
 
@@ -464,5 +470,6 @@ ObjectState* ExecutionState::allocateAt(
 	if (mo == NULL)
 		return NULL;
 
+	num_allocs++;
 	return bindMemObj(mo);
 }

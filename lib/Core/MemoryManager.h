@@ -36,7 +36,7 @@ class MemoryManager
 	friend class MemoryObject;
 
 public:
-	MemoryManager();
+	static MemoryManager* create(void);
 	virtual ~MemoryManager();
 
 	virtual MemoryObject *allocate(
@@ -62,6 +62,8 @@ public:
 		const llvm::Value *allocSite);
 
 protected:
+	MemoryManager();
+
 	typedef std::set<MemoryObject*> objects_ty;
 	// pointers to all allocated MemoryObjects
 	objects_ty objects;

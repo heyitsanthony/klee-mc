@@ -33,7 +33,7 @@ namespace klee {
   };
 
   typedef ImmutableMap<const MemoryObject*, ObjectHolder, MemoryObjectLT> MemoryMap;
-  typedef MemoryMap::iterator	MMIter;
+  typedef MemoryMap::iterator		MMIter;
 
   class AddressSpace {
       friend class ExecutionState;
@@ -41,6 +41,8 @@ namespace klee {
   private:
     /// Epoch counter used to control ownership of objects.
     mutable unsigned cowKey;
+
+    const MemoryObject* last_mo;
 
     /// Unsupported, use copy constructor
     AddressSpace &operator=(const AddressSpace&);
@@ -55,10 +57,12 @@ namespace klee {
     MemoryMap objects;
 
   public:
-    AddressSpace() : cowKey(1) {}
+    AddressSpace() : cowKey(1), last_mo(NULL) {}
     AddressSpace(const AddressSpace &b)
       : cowKey(++b.cowKey)
-      , objects(b.objects) { }
+      , last_mo(NULL)
+      , objects(b.objects)
+    { }
     ~AddressSpace() {}
 
     /// Resolve address to an ObjectPair in result.
@@ -66,8 +70,7 @@ namespace klee {
     bool resolveOne(const ref<ConstantExpr> &address, ObjectPair &result);
     bool resolveOne(uint64_t address, ObjectPair& result);
     const MemoryObject* resolveOneMO(uint64_t address);
-
-
+    const MemoryObject* getLastBoundHint(void) const { return last_mo; }
 
     // Find a feasible object for 'address'.
     //
@@ -167,6 +170,12 @@ namespace klee {
   public:
     /// Remove a binding from the address space.
     void unbindObject(const MemoryObject *mo);
+
+    MMIter lower_bound(uint64_t addr) const;
+    MMIter end(void) const { return objects.end(); }
+    MMIter begin(void) const { return objects.begin(); }
+
+
 
     /// Lookup a binding from a MemoryObject.
     ObjectState *findObject(const MemoryObject *mo);

@@ -76,6 +76,7 @@ public:
 
 private:
 	static MemoryManager* mm;
+	unsigned int num_allocs;
 
 	// unsupported, use copy constructor
 	ExecutionState &operator=(const ExecutionState&);
@@ -125,6 +126,8 @@ public:
 	// for use with std::mem_fun[_ref] since they don't accept data members
 	bool isCompactForm_f() const { return isCompactForm; }
 	bool isNonCompactForm_f() const { return !isCompactForm; }
+
+	unsigned int getNumAllocs(void) const { return num_allocs; }
 
 	// did this state start in replay mode?
 	bool isReplay;

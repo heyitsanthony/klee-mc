@@ -115,7 +115,7 @@ void ExecutorBC::runFunctionAsMain(
 
 	// hack to clear memory objects
 	delete memory;
-	memory = new HeapMM();
+	memory = MemoryManager::create();
 
 	globalObjects.clear();
 	globalAddresses.clear();
