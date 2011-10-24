@@ -1898,11 +1898,12 @@ Executor::TargetTy Executor::getExprCondSwitchTargets(
 					cond,
 					ConstantExpr::alloc(
 						*vit, cond->getWidth())),
-				UleExpr::create(
+				UltExpr::create(
 					cond,
 					ConstantExpr::alloc(
 						*vit + runLen,
 						cond->getWidth())));
+
 			match = OrExpr::create(match, rle_bounds);
 
 			vit = vit2;
