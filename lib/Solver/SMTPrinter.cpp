@@ -192,7 +192,7 @@ void SMTPrinter::visitExprPost(const Expr *e)
 	case Expr::NotOptimized:
 	case Expr::Constant:
 		break;
-	case Expr::Ne: os << "))\n"; break;
+	case Expr::Ne: os << ") bv0[1] bv1[1])\n"; break;
 	case Expr::Add:
 	default:
 		os << ")\n";
@@ -319,7 +319,7 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr* e)
 			<< static_cast<const BindExpr*>(e)->let_expr->getId()
 			<< " ";
 		break;
-	case Expr::Ne: os << "( not (="; break;
+	case Expr::Ne: os << "(ite ( = "; break;
 	case Expr::Constant:
 		printConstant(static_cast<const ConstantExpr*>(e));
 		break;

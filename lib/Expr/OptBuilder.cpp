@@ -1170,6 +1170,7 @@ static ref<Expr> EqExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 		}
 	} else if (rk == Expr::Concat) {
 		ConcatExpr *ce = cast<ConcatExpr>(r);
+
 		return AndExpr::create(
 			EqExpr_createPartialR(
 				cl->Extract(
@@ -1180,7 +1181,6 @@ static ref<Expr> EqExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 				cl->Extract(0,
 					ce->getRight()->getWidth()),
 					ce->getRight().get()));
-
 	} else if (rk == Expr::Select) {
 		SelectExpr	*se = cast<SelectExpr>(r);
 		if (	se->getKid(1)->getKind() == Expr::Constant &&
@@ -1261,9 +1261,20 @@ static ref<Expr> UleExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 
 static ref<Expr> SltExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 {
+	const ConstantExpr	*ce;
+
 	// l && !r
 	if (l->getWidth() == Expr::Bool)
 		return AndExpr::create(l, Expr::createIsZero(r));
+
+	/* is it a negativity check? l < r = 0 */
+	if (	(ce = dyn_cast<ConstantExpr>(r)) &&
+		ce->isZero())
+	{
+		/* two's complement trick-- negative <=> top bit set */
+		return ExtractExpr::create(l, l->getWidth() - 1, 1);
+	}
+
 	return SltExpr::alloc(l, r);
 }
 

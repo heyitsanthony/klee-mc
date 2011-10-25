@@ -155,7 +155,6 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS) \
 	return e_test;						\
 }
 
-
 	DECL_BIN_REF(Concat)
 	DECL_BIN_REF(Add)
 	DECL_BIN_REF(Sub)
@@ -194,6 +193,10 @@ private:
 		std::ostream& os,
 		const ref<Expr>& oracle_expr,
 		const ref<Expr>& test_expr);
+	void printBadXChk(
+		const Query& q,
+		const ref<Expr>& oracle_expr,
+		const ref<Expr>& test_expr);
 
 	Solver		&solver;
 	ExprBuilder	*oracle_builder, *test_builder;
@@ -219,7 +222,15 @@ void ExprXChkBuilder::xchk(
 	if (	(ce_o = dyn_cast<ConstantExpr>(oracle_expr)) &&
 		(ce_t = dyn_cast<ConstantExpr>(test_expr)))
 	{
-		assert (oracle_expr == test_expr && "XCHK: CE MISMATCH");
+		if (*ce_o != *ce_t) {
+			ConstraintManager	cm;
+			Query	q(cm, EqExpr::alloc(oracle_expr, test_expr));
+
+			printBadXChk(q, oracle_expr, test_expr);
+			assert (oracle_expr == test_expr &&
+				"XCHK: CE MISMATCH");
+		}
+
 		in_xchker = false;
 		return;
 	}
@@ -298,14 +309,22 @@ void ExprXChkBuilder::xchkWithSolver(
 		return;
 
 	if (res != true) {
-		std::cerr << "BAD XCHK: ";
-		q.expr->print(std::cerr);
-		std::cerr << '\n';
-
-		dumpCounterExample(std::cerr, oracle_expr, test_expr);
-		SMTPrinter::dump(q, "exprxchk");
+		printBadXChk(q, oracle_expr, test_expr);
 	}
 	assert (res == true && "XCHK FAILED! MUST BE EQUAL!");
+}
+
+void ExprXChkBuilder::printBadXChk(
+	const Query& q,
+	const ref<Expr>& oracle_expr,
+	const ref<Expr>& test_expr)
+{
+	std::cerr << "BAD XCHK: ";
+	q.expr->print(std::cerr);
+	std::cerr << '\n';
+
+	dumpCounterExample(std::cerr, oracle_expr, test_expr);
+	SMTPrinter::dump(q, "exprxchk");
 }
 
 ExprXChkBuilder* ExprXChkBuilder::theXChkBuilder = NULL;
