@@ -127,6 +127,7 @@ namespace klee {
     /// Return an id for the given constant, creating a new one if necessary.
     unsigned getConstantID(llvm::Constant *c, KInstruction* ki);
 
+    KFunction* addUntrackedFunction(llvm::Function* f);
     KFunction* addFunction(llvm::Function *f);
     KFunction* getKFunction(llvm::Function* f) const;
     KFunction* getKFunction(const char* name) const;

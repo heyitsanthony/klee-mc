@@ -87,7 +87,7 @@ namespace {
   cl::opt<bool>
   CountModuleCoverage(
 	"count-mod-cov",
-	cl::desc("Include module instructoins in uncovered count"),
+	cl::desc("Include module instructions in uncovered count"),
 	cl::init(false));
 
 }
@@ -471,6 +471,18 @@ void KModule::prepare(
 	fpm->add(createLowerAtomicPass());
 	fpm->add(new IntrinsicCleanerPass(*targetData));
 	fpm->add(new PhiCleanerPass());
+}
+
+
+KFunction* KModule::addUntrackedFunction(llvm::Function* f)
+{
+	KFunction	*kf;
+
+	kf = addFunction(f);
+	if (kf != NULL)
+		kf->trackCoverage = false;
+
+	return kf;
 }
 
 /* add a function that hasn't been cleaned up by any of our passes */

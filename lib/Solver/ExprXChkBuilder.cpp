@@ -4,11 +4,20 @@
 #include "klee/ExprBuilder.h"
 #include "klee/util/ExprUtil.h"
 #include "klee/util/Assignment.h"
+#include "llvm/Support/CommandLine.h"
 #include "SMTPrinter.h"
 #include "static/Sugar.h"
 #include <queue>
 
 using namespace klee;
+
+namespace
+{
+	llvm::cl::opt<bool>
+	OnlyCheckTopLevelExpr(
+		"only-toplevel-xchk",
+		llvm::cl::init(true));
+}
 
 class ExprXChkBuilder : public ExprBuilder
 {
@@ -54,6 +63,166 @@ public:
 
 	virtual ref<Expr> NotOptimized(const ref<Expr> &Index)
 	{ return test_builder->NotOptimized(Index); }
+
+protected:
+	void xchk(
+		const ref<Expr>& oracle_expr,
+		const ref<Expr>& test_expr);
+	void xchkWithSolver(
+		const ref<Expr>& oracle_expr,
+		const ref<Expr>& test_expr);
+	void dumpCounterExample(
+		std::ostream& os,
+		const ref<Expr>& oracle_expr,
+		const ref<Expr>& test_expr);
+	void printBadXChk(
+		const Query& q,
+		const ref<Expr>& oracle_expr,
+		const ref<Expr>& test_expr);
+
+	Solver		&solver;
+	ExprBuilder	*oracle_builder, *test_builder;
+	bool		in_xchker;
+	std::queue<
+		std::pair<
+			ref<Expr> /* oracle */,
+			ref<Expr> /* test */ > > deferred_exprs;
+};
+
+class AllExprXChkBuilder : public ExprXChkBuilder
+{
+public:
+	AllExprXChkBuilder(Solver& s, ExprBuilder* oracle, ExprBuilder* test)
+	: ExprXChkBuilder(s, oracle, test)
+	{}
+
+	virtual ~AllExprXChkBuilder() {}
+
+	virtual ref<Expr> Read(
+		const UpdateList &Updates,
+		const ref<Expr> &Index)
+	{
+		ref<Expr>	e_test, e_oracle;
+
+		e_test = test_builder->Read(Updates, Index);
+		e_oracle = oracle_builder->Read(Updates, Index);
+
+		in_xchker = true;
+		xchk(e_oracle, e_test);
+		return e_test;
+	}
+
+	virtual ref<Expr> Select(
+		const ref<Expr> &Cond,
+		const ref<Expr> &LHS,
+		const ref<Expr> &RHS)
+	{
+		ref<Expr>	e_test, e_oracle;
+
+		e_test = test_builder->Select(Cond, LHS, RHS);
+		e_oracle = oracle_builder->Select(Cond, LHS, RHS);
+
+		in_xchker = true;
+		xchk(e_oracle, e_test);
+		return e_test;
+	}
+
+	virtual ref<Expr> Extract(
+		const ref<Expr> &LHS, unsigned Offset, Expr::Width W)
+	{
+		ref<Expr>	e_test, e_oracle;
+
+		e_test = test_builder->Extract(LHS, Offset, W);
+		e_oracle = oracle_builder->Extract(LHS, Offset, W);
+
+		in_xchker = true;
+		xchk(e_oracle, e_test);
+		return e_test;
+	}
+
+	virtual ref<Expr> ZExt(const ref<Expr> &LHS, Expr::Width W)
+	{
+		ref<Expr>	e_test, e_oracle;
+
+		e_test = test_builder->ZExt(LHS, W);
+		e_oracle = oracle_builder->ZExt(LHS, W);
+
+		in_xchker = true;
+		xchk(e_oracle, e_test);
+		return e_test;
+	}
+
+	virtual ref<Expr> SExt(const ref<Expr> &LHS, Expr::Width W)
+	{
+		ref<Expr>	e_test, e_oracle;
+
+		e_test = test_builder->SExt(LHS, W);
+		e_oracle = oracle_builder->SExt(LHS, W);
+
+		in_xchker = true;
+		xchk(e_oracle, e_test);
+		return e_test;
+	}
+
+	virtual ref<Expr> Not(const ref<Expr> &L)
+	{
+		ref<Expr>	e_test, e_oracle;
+
+		e_test = test_builder->Not(L);
+		e_oracle = oracle_builder->Not(L);
+
+		in_xchker = true;
+		xchk(e_oracle, e_test);
+		return e_test;
+	}
+#define DECL_BIN_REF(x)	\
+virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS) \
+{								\
+	ref<Expr>	e_test, e_oracle;			\
+	e_test = test_builder->x(LHS, RHS);			\
+	e_oracle = oracle_builder->x(LHS, RHS);			\
+	in_xchker = true;					\
+	xchk(e_oracle, e_test);					\
+	return e_test;						\
+}
+
+	DECL_BIN_REF(Concat)
+	DECL_BIN_REF(Add)
+	DECL_BIN_REF(Sub)
+	DECL_BIN_REF(Mul)
+	DECL_BIN_REF(UDiv)
+
+	DECL_BIN_REF(SDiv)
+	DECL_BIN_REF(URem)
+	DECL_BIN_REF(SRem)
+	DECL_BIN_REF(And)
+	DECL_BIN_REF(Or)
+	DECL_BIN_REF(Xor)
+	DECL_BIN_REF(Shl)
+	DECL_BIN_REF(LShr)
+	DECL_BIN_REF(AShr)
+	DECL_BIN_REF(Eq)
+	DECL_BIN_REF(Ne)
+	DECL_BIN_REF(Ult)
+	DECL_BIN_REF(Ule)
+
+	DECL_BIN_REF(Ugt)
+	DECL_BIN_REF(Uge)
+	DECL_BIN_REF(Slt)
+	DECL_BIN_REF(Sle)
+	DECL_BIN_REF(Sgt)
+	DECL_BIN_REF(Sge)
+#undef DECL_BIN_REF
+};
+
+class TopExprXChkBuilder : public ExprXChkBuilder
+{
+public:
+	TopExprXChkBuilder(Solver& s, ExprBuilder* oracle, ExprBuilder* test)
+	: ExprXChkBuilder(s, oracle, test)
+	{}
+
+	virtual ~TopExprXChkBuilder() {}
 
 	virtual ref<Expr> Read(
 		const UpdateList &Updates,
@@ -182,29 +351,6 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS) \
 	DECL_BIN_REF(Sgt)
 	DECL_BIN_REF(Sge)
 #undef DECL_BIN_REF
-private:
-	void xchk(
-		const ref<Expr>& oracle_expr,
-		const ref<Expr>& test_expr);
-	void xchkWithSolver(
-		const ref<Expr>& oracle_expr,
-		const ref<Expr>& test_expr);
-	void dumpCounterExample(
-		std::ostream& os,
-		const ref<Expr>& oracle_expr,
-		const ref<Expr>& test_expr);
-	void printBadXChk(
-		const Query& q,
-		const ref<Expr>& oracle_expr,
-		const ref<Expr>& test_expr);
-
-	Solver		&solver;
-	ExprBuilder	*oracle_builder, *test_builder;
-	bool		in_xchker;
-	std::queue<
-		std::pair<
-			ref<Expr> /* oracle */,
-			ref<Expr> /* test */ > > deferred_exprs;
 };
 
 void ExprXChkBuilder::xchk(
@@ -332,7 +478,11 @@ ExprXChkBuilder* ExprXChkBuilder::theXChkBuilder = NULL;
 ExprBuilder *createXChkBuilder(
 	Solver& solver,
 	ExprBuilder* oracle, ExprBuilder* test)
-{ return new ExprXChkBuilder(solver, oracle, test); }
+{
+	if (OnlyCheckTopLevelExpr)
+		return new TopExprXChkBuilder(solver, oracle, test);
+	return new AllExprXChkBuilder(solver, oracle, test);
+}
 
 void xchkExpr(const ref<Expr>& oracle, const ref<Expr>& test)
 {

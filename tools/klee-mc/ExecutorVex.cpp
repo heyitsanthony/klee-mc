@@ -86,6 +86,10 @@ namespace
 		cl::desc("Dump state constraints before a syscall"),
 		cl::init(false));
 
+	cl::opt<bool> CountLibraries(
+		"count-lib-cov",
+		cl::desc("Count library coverage"),
+		cl::init(true));
 }
 
 ExecutorVex::ExecutorVex(
@@ -664,6 +668,8 @@ Function* ExecutorVex::getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new)
 }
 
 
+#define LIBRARY_BASE_GUESTADDR	((uint64_t)0x10000000)
+
 Function* ExecutorVex::getFuncByAddr(uint64_t guest_addr)
 {
 	KFunction	*kf;
@@ -679,8 +685,18 @@ Function* ExecutorVex::getFuncByAddr(uint64_t guest_addr)
 	if (f == NULL) return NULL;
 	if (!is_new) return f;
 
-	/* stupid kmodule stuff */
-	kf = kmodule->addFunction(f);
+	/* insert it into the kmodule */
+
+	if (CountLibraries == false) {
+		/* is library address? */
+		if (guest_addr > LIBRARY_BASE_GUESTADDR) {
+			kf = kmodule->addUntrackedFunction(f);
+		} else {
+			kf = kmodule->addFunction(f);
+		}
+	} else
+		kf = kmodule->addFunction(f);
+
 	statsTracker->addKFunction(kf);
 	bindKFuncConstants(kf);
 	kmodule->bindModuleConstTable(this);

@@ -142,7 +142,7 @@ public:
   /* Constant Operations */
 
   ref<ConstantExpr> Concat(const ref<ConstantExpr> &RHS);
-  ref<ConstantExpr> Extract(unsigned offset, Width W);
+  ref<ConstantExpr> Extract(unsigned offset, Width W) const;
   ref<ConstantExpr> ZExt(Width W);
   ref<ConstantExpr> SExt(Width W);
   ref<ConstantExpr> Add(const ref<ConstantExpr> &RHS);

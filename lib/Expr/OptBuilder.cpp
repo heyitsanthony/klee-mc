@@ -852,6 +852,9 @@ static ref<Expr> SDivExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 
 static ref<Expr> URemExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 {
+	const ZExtExpr	*ze_l, *ze_r;
+	const ConstantExpr	*ce_r;
+
 	// r must be 1
 	if (l->getWidth() == Expr::Bool)
 		return ConstantExpr::create(0, Expr::Bool);
@@ -859,6 +862,41 @@ static ref<Expr> URemExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 	// special case: 0 % x = 0
 	if (l->isZero())
 		return l;
+
+
+	if (	(ze_l = dyn_cast<ZExtExpr>(l)) &&
+		(ze_r = dyn_cast<ZExtExpr>(r)))
+	{
+		int	l_zero_bits, r_zero_bits;
+
+		l_zero_bits = l->getWidth() - l->getKid(0)->getWidth();
+		r_zero_bits = r->getWidth() - r->getKid(0)->getWidth();
+		if (l_zero_bits == r_zero_bits && l_zero_bits > 0) {
+			return 	ZExtExpr::create(
+					URemExpr::create(l->getKid(0), r->getKid(0)),
+					ze_l->getWidth());
+
+		}
+	} else if (ze_l && (ce_r = dyn_cast<ConstantExpr>(r))) {
+		int			l_zero_bits;
+		int			kid_w;
+
+		kid_w = l->getKid(0)->getWidth();
+		l_zero_bits = l->getWidth() - kid_w;
+		if (l_zero_bits > 0) {
+			ref<ConstantExpr>	trunc_ce;
+
+			trunc_ce = ce_r->Extract(l->getWidth()-l_zero_bits, l_zero_bits);
+
+			if (trunc_ce->isZero()) {
+				return 	ZExtExpr::create(
+						URemExpr::create(
+							l->getKid(0),
+							ce_r->Extract(0, kid_w)),
+						ze_l->getWidth());
+			}
+		}
+	}
 
 	return URemExpr::alloc(l, r);
 }

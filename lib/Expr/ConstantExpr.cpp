@@ -170,7 +170,7 @@ ref<ConstantExpr> ConstantExpr::Concat(const ref<ConstantExpr> &RHS)
   return ConstantExpr::alloc(Tmp);
 }
 
-ref<ConstantExpr> ConstantExpr::Extract(unsigned Offset, Width W) {
+ref<ConstantExpr> ConstantExpr::Extract(unsigned Offset, Width W) const {
   return ConstantExpr::alloc(llvm::APInt(value.ashr(Offset)).zextOrTrunc(W));
 }
 

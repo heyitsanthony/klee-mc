@@ -244,9 +244,11 @@ void StatsTracker::addKFunction(KFunction* kf)
 	const std::string &name = kf->function->getName();
 	size_t lastNondigit = name.find_last_not_of("0123456789");
 
-	kf->trackCoverage =
-		!(excludeNames.count(name) ||
-		excludeNames.count(name.substr(0, lastNondigit+1)));
+	if (kf->trackCoverage) {
+		kf->trackCoverage =
+			!(excludeNames.count(name) ||
+			excludeNames.count(name.substr(0, lastNondigit+1)));
+	}
 
 	for (unsigned i=0; i<kf->numInstructions; ++i) {
 		KInstruction *ki = kf->instructions[i];
