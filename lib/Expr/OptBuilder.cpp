@@ -548,6 +548,16 @@ static ref<Expr> AddExpr_create(Expr *l, Expr *r)
 			r->getKid(0),
 			SubExpr::create(l, r->getKid(1)));
 
+/* this never seems to turn up anywhere in real life? */
+#if 0
+	if (*l == *r) {
+		assert (0 == 1 && "ADD->SHL");
+		return ShlExpr::create(
+			l,
+			ConstantExpr::create(1, l->getWidth()));
+	}
+#endif
+
 	return AddExpr::alloc(l, r);
 }
 
@@ -830,7 +840,12 @@ static ref<Expr> XorExpr_createPartial(Expr *l, const ref<ConstantExpr> &cr)
 { return XorExpr_createPartialR(cr, l); }
 
 static ref<Expr> XorExpr_create(Expr *l, Expr *r)
-{ return XorExpr::alloc(l, r); }
+{
+	if (*l == *r) {
+		return ConstantExpr::create(0, l->getWidth());
+	}
+	return XorExpr::alloc(l, r);
+}
 
 static ref<Expr> UDivExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 {
