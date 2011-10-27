@@ -17,6 +17,11 @@ namespace
 	OnlyCheckTopLevelExpr(
 		"only-toplevel-xchk",
 		llvm::cl::init(true));
+
+	llvm::cl::opt<bool>
+	OptimizeConstChecking(
+		"opt-const-xchk",
+		llvm::cl::init(true));
 }
 
 class ExprXChkBuilder : public ExprBuilder
@@ -365,7 +370,8 @@ void ExprXChkBuilder::xchk(
 	// (even though we already skip Constant() calls)--
 	// there's no reason to go out to the solver since
 	// we can check them right here
-	if (	(ce_o = dyn_cast<ConstantExpr>(oracle_expr)) &&
+	if (	OptimizeConstChecking &&
+		(ce_o = dyn_cast<ConstantExpr>(oracle_expr)) &&
 		(ce_t = dyn_cast<ConstantExpr>(test_expr)))
 	{
 		if (*ce_o != *ce_t) {
@@ -382,7 +388,7 @@ void ExprXChkBuilder::xchk(
 	}
 
 	// structural equivalence => semantic equivalence
-	if (oracle_expr == test_expr) {
+	if (OptimizeConstChecking && oracle_expr == test_expr) {
 		in_xchker = false;
 		return;
 	}
