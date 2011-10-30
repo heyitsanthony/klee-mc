@@ -67,6 +67,7 @@ using namespace klee;
 
 // omg really hard to share cl opts across files ...
 bool WriteTraces = false;
+double MaxSTPTime;
 
 namespace llvm
 {
@@ -166,9 +167,10 @@ namespace {
            cl::desc("Amount of time to dedicate to seeds, before normal search (default=0 (off))"),
            cl::init(0));
 
-  cl::opt<double>
-  MaxSTPTime("max-stp-time",
+  cl::opt<double,true>
+  MaxSTPTimeProxy("max-stp-time",
              cl::desc("Maximum amount of time for a single query (default=120s)"),
+	     cl::location(MaxSTPTime),
              cl::init(120.0));
 
   cl::opt<unsigned int>
@@ -277,7 +279,7 @@ Executor::Executor(
 , ivcEnabled(UseIVC)
 , lastMemoryLimitOperationInstructions(0)
 , stpTimeout(MaxInstructionTime ?
-	std::min(MaxSTPTime,MaxInstructionTime) : MaxSTPTime)
+	std::min(MaxSTPTime,(double)MaxInstructionTime) : MaxSTPTime)
 {
   this->solver = Solver::createTimerChain(
   	stpTimeout,

@@ -50,6 +50,7 @@ using namespace klee;
 
 extern Interpreter::ModuleOptions getMainModule(Module* &m);
 bool SymArgs;
+extern double MaxSTPTime;
 
 namespace {
 	cl::opt<bool, true> SymArgsProxy(
@@ -156,7 +157,7 @@ static bool interrupted = false;
 
 
 extern bool WriteTraces;
-extern cl::opt<double> MaxTime;
+extern double MaxTime;
 
 /***/
 //===----------------------------------------------------------------------===//
@@ -391,63 +392,6 @@ static void printStats(PrefixWriter& info, KleeHandler* handler)
 	info << "done: generated tests = " << handler->getNumTestCases() << "\n";
 }
 
-static int runWatchdog(void)
-{
-  if (MaxTime==0)  klee_error("--watchdog used without --max-time");
-
-  int pid = fork();
-  if (pid<0) klee_error("unable to fork watchdog");
-  fprintf(stderr, "KLEE: WATCHDOG: watching %d\n", pid);
-  fflush(stderr);
-
-  double nextStep = util::getWallTime() + MaxTime*1.1;
-  int level = 0;
-
-  // Simple stupid code...
-  while (1) {
-    sleep(1);
-    int status, res = waitpid(pid, &status, WNOHANG);
-
-    if (res < 0) {
-      if (errno==ECHILD) { // No child, no need to watch but
-                       // return error since we didn't catch
-                       // the exit.
-        fprintf(stderr, "KLEE: watchdog exiting (no child)\n");
-        return 1;
-      } else if (errno!=EINTR) {
-        perror("watchdog waitpid");
-        exit(1);
-      }
-    } else if (res==pid && WIFEXITED(status)) {
-      return WEXITSTATUS(status);
-    } else {
-      double time = util::getWallTime();
-
-      if (time > nextStep) {
-        ++level;
-
-        if (level==1) {
-          fprintf(stderr, "KLEE: WATCHDOG: time expired, attempting halt via INT\n");
-          kill(pid, SIGINT);
-        } else if (level==2) {
-          fprintf(stderr, "KLEE: WATCHDOG: time expired, attempting halt via gdb\n");
-          halt_via_gdb(pid);
-        } else {
-          fprintf(stderr, "KLEE: WATCHDOG: kill(9)ing child (I tried to be nice)\n");
-          kill(pid, SIGKILL);
-          return 1; // what more can we do
-        }
-
-        // Ideally this triggers a dump, which may take a while,
-        // so try and give the process extra time to clean up.
-        nextStep = util::getWallTime() + std::max(15., MaxTime*.1);
-      }
-    }
-  }
-
-  return 0;
-}
-
 static CmdArgs* getCmdArgs(char** envp)
 {
 	std::list<std::string>	input_args;
@@ -461,6 +405,12 @@ static CmdArgs* getCmdArgs(char** envp)
 	if (SymArgs)
 		ret->setSymbolic();
 	return ret;
+}
+
+static void watchdog_alarm(int sig)
+{
+	write(2, "watchdog\n", 9);
+	exit(-1);
 }
 
 Guest* getGuest(CmdArgs* cmdargs)
@@ -558,9 +508,14 @@ int main(int argc, char **argv, char **envp)
 	parseArguments(argc, argv);
 	sys::PrintStackTraceOnErrorSignal();
 
-	if (Watchdog) return runWatchdog();
-
 	sys::SetInterruptFunction(interrupt_handle);
+
+	if (Watchdog) {
+		/* XXX, make sure no one else is using alarm() */
+		MaxSTPTime = -1.0;
+		signal(SIGALRM, watchdog_alarm);
+		alarm((unsigned int)MaxTime);
+	}
 
 	//  replayPaths = getReplayPaths();
 	cmdargs = getCmdArgs(envp);
