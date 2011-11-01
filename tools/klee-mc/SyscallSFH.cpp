@@ -115,7 +115,7 @@ SFH_DEF_HANDLER(SCBad)
 
 	ConstantExpr	*ce;
 	ce = dyn_cast<ConstantExpr>(arguments[0]);
-	std::cerr << "OOPS: " << ce->getZExtValue() << std::endl;
+	std::cerr << "OOPS calling kmc_sc_bad: " << ce->getZExtValue() << std::endl;
 }
 
 SFH_DEF_HANDLER(FreeRun)

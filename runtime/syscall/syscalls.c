@@ -34,6 +34,7 @@ static void make_sym_by_arg(
 	uint64_t len, const char* name);
 static void make_sym(uint64_t addr, uint64_t len, const char* name);
 
+#define USE_SYS_FAILURE	1
 #define FAILURE_RATE	4
 struct fail_counters
 {
@@ -372,6 +373,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
 		break;
 	case SYS_write:
+#ifdef USE_SYS_FAILURE
 		if (fail_c.fc_write % (4*FAILURE_RATE)) {
 			new_regs = sc_new_regs(regfile);
 			if ((int64_t)GET_RAX(new_regs) == -1) {
@@ -380,6 +382,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 //			sc_ret_v(new_regs, concretize_u64(GET_ARG2(regfile)));
 			sc_ret_v(new_regs, GET_ARG2(regfile));
 		} else
+#endif
 			sc_ret_v(regfile, GET_ARG2(regfile));
 //			sc_ret_v(regfile, concretize_u64(GET_ARG2(regfile)));
 		break;
@@ -454,10 +457,13 @@ void* sc_enter(void* regfile, void* jmpptr)
 		}
 
 		new_regs = sc_new_regs(regfile);
+
+#ifdef USE_SYS_FAILURE
 		if ((++fail_c.fc_read % FAILURE_RATE) == 0 &&
 		    (int64_t)GET_RAX(new_regs) == -1) {
 			break;
 		}
+#endif
 		klee_assume(GET_RAX(new_regs) == len);
 
 		sc_ret_v(new_regs, len);
@@ -498,8 +504,12 @@ void* sc_enter(void* regfile, void* jmpptr)
 	break;
 
 	case SYS_lseek:
+#ifdef USE_SYS_FAILURE
 		klee_warning_once("lseek [-1, 4096]");
 		sc_ret_range(sc_new_regs(regfile), -1, 4096);
+#else
+		sc_ret_v(regfile, GET_ARG1(regfile));
+#endif
 		break;
 	case SYS_prctl:
 		sc_ret_v(regfile, -1);
@@ -511,11 +521,13 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_lstat:
 	case SYS_stat: {
 		new_regs = sc_new_regs(regfile);
+#ifdef USE_SYS_FAILURE
 		if (	(++fail_c.fc_stat % FAILURE_RATE) == 0 &&
 			(int64_t)GET_RAX(new_regs) == -1)
 		{
 			break;
 		}
+#endif
 		sc_ret_v(new_regs, 0);
 		make_sym_by_arg(regfile, 1, sizeof(struct stat), "statbuf");
 		break;
@@ -527,6 +539,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_writev:
 		sc_ret_ge0(sc_new_regs(regfile));
 		break;
+
+	FAKE_SC_RANGE(sigaltstack, -1, 0);
 
 	case SYS_getcwd: {
 		uint64_t addr = GET_ARG0(regfile);
@@ -719,13 +733,18 @@ void* sc_enter(void* regfile, void* jmpptr)
 		/* keep the string short since we're pure symbolic now */
 		/* In the future, use system information to satisfy this */
 		uint64_t	addr  = klee_get_value(GET_ARG1(regfile));
-		klee_warning_once("bogus readlink");
 		new_regs = sc_new_regs(regfile);
-		klee_assume(GET_ARG2(regfile) >= 2);
-		sc_ret_range(new_regs, 1, 2);
-		make_sym(addr, GET_ARG2(regfile), "readlink");
-		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
-		((char*)addr)[GET_ARG2(new_regs)] = '\0';
+		if (GET_ARG2(regfile) >= 2) {
+			sc_ret_range(new_regs, 1, 2);
+			make_sym(addr, GET_ARG2(regfile), "readlink");
+			// readlink()  does not append a null byte to buf.
+			// No need for this:
+			// ((char*)addr)[GET_ARG2(new_regs)] = '\0';
+			// WOoooo
+
+		} else {
+			sc_ret_v(regfile, -1);
+		}
 	}
 	break;
 
@@ -759,6 +778,12 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_setresgid:
 	case SYS_setresuid:
 		sc_ret_v(regfile, 0);
+		break;
+
+	case SYS_getppid:
+		klee_warning_once("Faking getppid syscall with 0x12345");
+		/* XXX: */
+		sc_ret_v(regfile, 0x12345);
 		break;
 
 	default:
