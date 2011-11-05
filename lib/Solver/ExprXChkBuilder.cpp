@@ -22,6 +22,13 @@ namespace
 	OptimizeConstChecking(
 		"opt-const-xchk",
 		llvm::cl::init(true));
+
+	llvm::cl::opt<bool>
+	RandomValueCheck(
+		"opt-rvc",
+		llvm::cl::desc("Optimize exprxchk with test values (imprecise)"),
+		llvm::cl::init(false));
+
 }
 
 class ExprXChkBuilder : public ExprBuilder
@@ -82,6 +89,9 @@ protected:
 		const ref<Expr>& test_expr);
 	void printBadXChk(
 		const Query& q,
+		const ref<Expr>& oracle_expr,
+		const ref<Expr>& test_expr);
+	void xchkRandomValue(
 		const ref<Expr>& oracle_expr,
 		const ref<Expr>& test_expr);
 
@@ -393,6 +403,13 @@ void ExprXChkBuilder::xchk(
 		return;
 	}
 
+	// one final fast-check: try a few random assignments
+	if (RandomValueCheck) {
+		xchkRandomValue(oracle_expr, test_expr);
+		in_xchker = false;
+		return;
+	}
+
 	if (solver.inSolver()) {
 		/* can't xchk while already in the solver...
 		 * nasty recursion issues pop up */
@@ -410,6 +427,32 @@ void ExprXChkBuilder::xchk(
 
 	xchkWithSolver(oracle_expr, test_expr);
 	in_xchker = false;
+}
+
+void ExprXChkBuilder::xchkRandomValue(
+	const ref<Expr>& oracle_expr,
+	const ref<Expr>& test_expr)
+{
+	ref<Expr>		eval,
+				eq_expr(EqExpr::create(
+					oracle_expr, test_expr));
+	Assignment		a(eq_expr);
+	const ConstantExpr	*ce;
+
+	a.bindFreeToU8(0xa7);
+	eval = a.evaluate(eq_expr);
+	ce = dyn_cast<ConstantExpr>(eq_expr);
+	assert (ce != NULL);
+
+	if (ce->isZero()) {
+		/* failed */
+		ConstraintManager	cm;
+		Query			q(
+			cm, EqExpr::alloc(oracle_expr, test_expr));
+
+		printBadXChk(q, oracle_expr, test_expr);
+		return;
+	}
 }
 
 void ExprXChkBuilder::dumpCounterExample(

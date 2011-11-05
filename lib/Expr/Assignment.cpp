@@ -50,13 +50,13 @@ void Assignment::bindFree(const Array* a, const std::vector<unsigned char>& v)
 	addBinding(a, v);
 }
 
-void Assignment::bindFreeToZero(void)
+void Assignment::bindFreeToU8(uint8_t x)
 {
 	foreach (it, free_bindings.begin(), free_bindings.end()) {
 		const Array	*arr = *it;
 		addBinding(
 			arr,
-			std::vector<unsigned char>(arr->mallocKey.size, 0));
+			std::vector<unsigned char>(arr->mallocKey.size, x));
 	}
 
 	free_bindings.clear();

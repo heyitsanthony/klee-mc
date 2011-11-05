@@ -22,6 +22,7 @@
 
 #define ksys_report_error(x,y,z,w)	\
 	syscall(SYS_klee, KLEE_SYS_REPORT_ERROR, x, y, z, w)
+#define ksys_sym(x,y) ksys_kmc_symrange(x, y, "")
 #define ksys_kmc_symrange(x,y,z)	\
 	syscall(SYS_klee, KLEE_SYS_KMC_SYMRANGE, x, y, z)
 #define ksys_assume(x)		syscall(SYS_klee, KLEE_SYS_ASSUME, x)

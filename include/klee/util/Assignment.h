@@ -96,7 +96,8 @@ public:
 	{ return free_bindings.end(); }
 
 	void bindFree(const Array* a, const std::vector<unsigned char>& v);
-	void bindFreeToZero(void);
+	void bindFreeToU8(uint8_t x);
+	void bindFreeToZero(void) { bindFreeToU8(0); }
 
 	bindings_ty::const_iterator bindingsBegin(void) const
 	{ return bindings.begin(); }

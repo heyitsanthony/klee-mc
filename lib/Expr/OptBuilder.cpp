@@ -1032,11 +1032,24 @@ static ref<Expr> LShrExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 
 static ref<Expr> AShrExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 {
-	uint64_t	w;
+	const ConstantExpr	*ce;
+	uint64_t		w;
 
 	w = l->getWidth();
 	if (w == Expr::Bool)
 		return l;
+
+	ce = dyn_cast<ConstantExpr>(r);
+	if (ce != NULL && ce->getWidth() <= 64) {
+		uint64_t		shr_bits =  ce->getZExtValue();
+
+		return SExtExpr::create(
+			ExtractExpr::create(
+				l,
+				shr_bits,
+				w - shr_bits),
+			l->getWidth());
+	}
 
 	ref<Expr> ret(ShrExprZExt_create(l, r));
 	if (!ret.isNull())
