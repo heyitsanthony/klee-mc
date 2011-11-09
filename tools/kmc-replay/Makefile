@@ -16,7 +16,7 @@ LINK_COMPONENTS = all
 include $(LEVEL)/Makefile.common
 
 CFLAGS += -I$(VEXLLVM_ROOT)/src/
-CXXFLAGS += -I$(VEXLLVM_ROOT)/src/ -Wl,-Ttext-segment=0xa000000
+CXXFLAGS += -I$(VEXLLVM_ROOT)/src/ -Wl,-Ttext-segment=0x30000000
 LIBS += -lstp -lrt
 ObjectsO += $(VEXLLVM_ROOT)/bin/vexllvm.a $(VEXLIB_ROOT)/libvex-amd64-linux.a
 
