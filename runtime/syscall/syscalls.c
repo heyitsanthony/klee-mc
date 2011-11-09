@@ -188,8 +188,6 @@ static void* sc_mmap(void* regfile)
 		addr = MAP_FAILED;
 	} else {
 		addr = sc_mmap_anon(regfile);
-		if (addr != MAP_FAILED)
-			sc_breadcrumb_add_ptr(addr, GET_ARG1(regfile));
 	}
 
 	sc_ret_v(new_regs, (uint64_t)addr);
