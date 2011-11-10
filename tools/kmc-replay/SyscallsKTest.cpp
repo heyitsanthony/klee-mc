@@ -123,8 +123,7 @@ void SyscallsKTest::loadSyscallEntry(SyscallParams& sp)
 		for (unsigned int i = 0; i < bcs_crumb->bcs_op_c; i++) {
 			feedSyscallOp(sp);
 		}
-	} else
-		crumbs->skip(bcs_crumb->bcs_op_c);
+	}
 }
 
 void SyscallsKTest::feedSyscallOp(SyscallParams& sp)
@@ -175,11 +174,17 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 
 	loadSyscallEntry(sp);
 
+	/* GROSS UGLY HACK. OH WELL. */
+	if (bc_sc_is_thunk(bcs_crumb) && sys_nr != SYS_recvmsg)
+		crumbs->skip(bcs_crumb->bcs_op_c);
+
 	/* extra thunks */
 	switch(sys_nr) {
 	case SYS_recvmsg:
+		printf("HELLO RECVMSG!!!\n");
 		feedSyscallOp(sp);
 		(((struct msghdr*)sp.getArg(1)))->msg_controllen = 0;
+		printf("BYEBYE MY MANG\n");
 		break;
 	case SYS_read:
 		fprintf(stderr, KREPLAY_SC "READ ret=%p\n", (void*)getRet());
