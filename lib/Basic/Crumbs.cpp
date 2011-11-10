@@ -176,25 +176,34 @@ void BCVexReg::print(std::ostream& os) const
 	os << "VEXREG\n";
 }
 
+/* Meant to consume a system call op.
+ * System calls have a sequence of associated sysops, which
+ * pull in data to addreses, etc.
+ * This eats them all.
+ * */
 void BCSyscall::consumeOps(KTestStream* kts, Crumbs* crumbs)
 {
+	/* read new register */
 	if (bc_sc_is_newregs(getBCS())) {
 		const KTestObject* kto = kts->nextObject();
 		assert (kto);
+		if (kto->numBytes != 633) {
+			fprintf(stderr, "GOT %d BYTES. WHOOPS!\n", kto->numBytes);
+		}
 		assert (kto->numBytes == 633);
 	}
 
+	/* read in any objects written out */
+	/* go through all attached ops specifically */
 	for (unsigned int i = 0; i < getBCS()->bcs_op_c; i++) {
-		const KTestObject* kto;
-		BCrumb	*bcr = crumbs->nextBC();
-		BCSysOp	*sop;
+		const KTestObject	*kto;
+		BCrumb			*bcr;
+		BCSysOp			*sop;
 
+		bcr = crumbs->nextBC();
 		assert (bcr);
 		sop = dynamic_cast<BCSysOp*>(bcr);
 		assert (sop);
-
-		std::cerr << "SOP[" << i << "]: ";
-		sop->print(std::cerr);
 
 		kto = kts->nextObject();
 		assert (kto);
@@ -212,8 +221,6 @@ void BCSyscall::consumeOps(KTestStream* kts, Crumbs* crumbs)
 
 		delete bcr;
 	}
-
-	std::cerr << "GRABED " << getKTestObjs() << std::endl;
 }
 
 unsigned int BCSyscall::getKTestObjs(void) const
@@ -224,10 +231,12 @@ unsigned int BCSyscall::getKTestObjs(void) const
 
 void BCSyscall::print(std::ostream& os) const
 {
-	os << "SYSCALL NR="
-		<< getSysNr() << ". KTO="
-		<< getKTestObjs() << ". RET = " << (void*)getRet()
-		<< std::endl;
+	os << "<syscall>\n";
+	os << "<nr>" << getSysNr() << "</nr>\n";
+	os << "<flags>" << (void*)getBC()->bc_type_flags << "</flags>\n";
+	os << "<ret>" << (void*)getRet() << "</ret>\n";
+	os << "<testObjs>" << getKTestObjs() << "</testObjs>\n";
+	os << "</syscall>\n";
 }
 
 void BCSysOp::print(std::ostream& os) const

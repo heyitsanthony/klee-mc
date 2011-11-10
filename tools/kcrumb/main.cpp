@@ -11,6 +11,29 @@
 
 using namespace klee;
 
+static void processCrumbs(KTestStream* kts, Crumbs* crumbs)
+{
+	BCrumb		*bc;
+	unsigned int	crumb_c = 0;
+
+	while ((bc = crumbs->nextBC()) != NULL) {
+		BCSyscall	*bcs;
+
+		printf("<breadcrumb seq=\"%d\">\n", crumb_c++);
+
+		bcs = dynamic_cast<BCSyscall*>(bc);
+		if (bcs != NULL) {
+			bcs->print(std::cout);
+			bcs->consumeOps(kts, crumbs);
+		} else {
+			bc->print(std::cout);
+		}
+		delete bc;
+
+		printf("</breadcrumb>\n\n");
+	}
+}
+
 int main(int argc, char* argv[])
 {
 	Crumbs		*crumbs = NULL;
@@ -45,16 +68,9 @@ int main(int argc, char* argv[])
 		goto done;
 	}
 
-	BCrumb	*bc;
-	printf("DUMP CRUMBS\n");
-	while ((bc = crumbs->nextBC()) != NULL) {
-		BCSyscall	*bcs;
-		bc->print(std::cerr);
-		bcs = dynamic_cast<BCSyscall*>(bc);
-		if (bcs) bcs->consumeOps(kts, crumbs);
-		delete bc;
-	}
-	printf("DUMP DONE\n");
+	printf("<breadcrumbs>\n");
+	processCrumbs(kts, crumbs);
+	printf("</breadcrumbs>\n");
 
 	ret = 0;
 done:
