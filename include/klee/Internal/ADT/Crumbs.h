@@ -86,7 +86,8 @@ class BCSysOp : public BCrumb
 public:
 	BCSysOp(struct breadcrumb* b) : BCrumb(b) {}
 	virtual ~BCSysOp(void) {}
-	virtual void print(std::ostream& os) const;
+	virtual void print(std::ostream& os) const { printSeq(os); }
+	void printSeq(std::ostream& os, int seq_num = -1) const;
 	unsigned int size(void) const { return getSOP()->sop_sz; }
 private:
 	const struct bc_sc_memop* getSOP(void) const

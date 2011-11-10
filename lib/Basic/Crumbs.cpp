@@ -1,3 +1,14 @@
+/* lollercycle
+ * PhD time saving trick:
+ * Use macro replacement to generate the table! YES! */
+static const char* sysname_tab[] =
+{
+//#define __SYSCALL(a,b) [a] = #b,
+#define __SYSCALL(a,b) #b ,
+#include <asm/unistd.h>
+};
+#define SYSNAME_MAX	sizeof(sysname_tab)/sizeof(const char*)
+
 #include <klee/breadcrumb.h>
 #include <klee/Internal/ADT/Crumbs.h>
 #include <klee/Internal/ADT/KTestStream.h>
@@ -205,6 +216,8 @@ void BCSyscall::consumeOps(KTestStream* kts, Crumbs* crumbs)
 		sop = dynamic_cast<BCSysOp*>(bcr);
 		assert (sop);
 
+		sop->printSeq(std::cout, i);
+
 		kto = kts->nextObject();
 		assert (kto);
 
@@ -229,17 +242,39 @@ unsigned int BCSyscall::getKTestObjs(void) const
 		((bc_sc_is_newregs(getBCS())) ? 1 : 0);
 }
 
+const char* get_sysnr_str(unsigned int n)
+{
+	if (n < SYSNAME_MAX)
+		return sysname_tab[n];
+	return NULL;
+}
+
 void BCSyscall::print(std::ostream& os) const
 {
+	const char* sysnr_name;
+
 	os << "<syscall>\n";
+	if ((sysnr_name = get_sysnr_str(getSysNr())) != NULL)
+		os << "<name>" << sysnr_name << "</name>\n";
 	os << "<nr>" << getSysNr() << "</nr>\n";
+
 	os << "<flags>" << (void*)getBC()->bc_type_flags << "</flags>\n";
 	os << "<ret>" << (void*)getRet() << "</ret>\n";
 	os << "<testObjs>" << getKTestObjs() << "</testObjs>\n";
 	os << "</syscall>\n";
 }
 
-void BCSysOp::print(std::ostream& os) const
+void BCSysOp::printSeq(std::ostream& os, int seq_num) const
 {
-	os << "SCOp sz=" << getSOP()->sop_sz << "\n";
+	/* print seq number if one given */
+	if (seq_num == -1)
+		os << "<sysop>\n";
+	else
+		os << "<sysop seq=\"" << seq_num << "\">\n";
+
+	os << "<size>" <<  getSOP()->sop_sz << "</size>\n";
+	os << "<base>" << getSOP()->sop_baseptr.ptr << "</base>\n";
+	os << "<offset>" << getSOP()->sop_off << "</offset>\n";
+
+	os << "</sysop>\n";
 }

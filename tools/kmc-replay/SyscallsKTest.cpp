@@ -135,6 +135,13 @@ void SyscallsKTest::feedSyscallOp(SyscallParams& sp)
 
 	sop = reinterpret_cast<struct bc_sc_memop*>(crumbs->next());
 	assert (sop != NULL && "Too few memops?");
+
+	/* dump some convenient debugging info if something fucked up */
+	if (!bc_is_type(sop, BC_TYPE_SCOP)) {
+		BCrumb	*bc = Crumbs::toBC((struct breadcrumb*)sop);
+		std::cerr << "UNEXPECTED BREADCRUMB. EXPECTED SCOP.\n GOT:\n";
+		bc->print(std::cerr);
+	}
 	assert (bc_is_type(sop, BC_TYPE_SCOP));
 
 	flags = sop->sop_hdr.bc_type_flags;
