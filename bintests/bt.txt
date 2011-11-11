@@ -161,3 +161,4 @@
 /sbin/mkfs.jfs asd
 /sbin/mkfs.xfs asd
 /sbin/mkfs.bfs asd
+/usr/bin/xclock

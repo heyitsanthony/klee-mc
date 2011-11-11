@@ -184,7 +184,6 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 		printf("HELLO RECVMSG!!!\n");
 		feedSyscallOp(sp);
 		(((struct msghdr*)sp.getArg(1)))->msg_controllen = 0;
-		printf("BYEBYE MY MANG\n");
 		break;
 	case SYS_read:
 		fprintf(stderr, KREPLAY_SC "READ ret=%p\n", (void*)getRet());
