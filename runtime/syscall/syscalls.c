@@ -1,5 +1,6 @@
 #define _LARGEFILE64_SOURCE
 
+#include <sys/sysinfo.h>
 #include <poll.h>
 #include <signal.h>
 #include <sys/socket.h>
@@ -470,6 +471,11 @@ void* sc_enter(void* regfile, void* jmpptr)
 		goto already_logged;
 	}
 	break;
+
+	case SYS_sysinfo:
+		make_sym_by_arg(regfile, 0, sizeof(struct sysinfo), "sysinfo");
+		sc_ret_v(regfile, 0);
+		break;
 
 	case SYS_getgroups:
 		if ((intptr_t)GET_ARG0(regfile) < 0) {
