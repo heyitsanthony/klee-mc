@@ -308,6 +308,8 @@ static void sc_klee(void* regfile)
 	}
 }
 
+#include <asm/ptrace.h>
+
 void* sc_enter(void* regfile, void* jmpptr)
 {
 	void			*new_regs;
@@ -330,6 +332,29 @@ void* sc_enter(void* regfile, void* jmpptr)
 	sc_breadcrumb_reset();
 
 	switch (sys_nr) {
+#if 0
+/* tricky semantics */
+	case SYS_clone: {
+		// clone(pt_regs); UGH!
+		struct pt_regs	*pt = (void*)GET_ARG0(regfile);
+		klee_warning_once("clone() will give funny semantics");
+
+		new_regs = sc_new_regs(regfile);
+		if (GET_RAX(new_regs) == 0) {
+			jmpptr = pt->rip;
+		} else {
+			klee_assume(GET_RAX(new_regs) == 1001);
+		}
+		break;
+	}
+#endif
+	case SYS_fork:
+		new_regs = sc_new_regs(regfile);
+		sc_ret_or(
+			sc_new_regs(regfile),
+			0 /* child */,
+			1001 /* child's PID, passed to parent */);
+		break;
 	case SYS_getpeername:
 		new_regs = sc_new_regs(regfile);
 		if ((intptr_t)GET_RAX(new_regs) == -1)
@@ -628,7 +653,40 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(regfile, 0);
 		break;
 	}
-	UNIMPL_SC(select);
+
+	case SYS_select: {
+		new_regs = sc_new_regs(regfile);
+
+		/* let one through */
+		if (GET_RAX(new_regs) == 1) {
+			if (GET_ARG1(regfile))
+				make_sym_by_arg(
+					regfile, 1, sizeof(fd_set), "readfds");
+			if (GET_ARG2(regfile))
+				make_sym_by_arg(
+					regfile, 2, sizeof(fd_set), "writefds");
+			if (GET_ARG3(regfile))
+				make_sym_by_arg(
+					regfile, 3, sizeof(fd_set), "exceptfds");
+
+			sc_ret_v(new_regs, 1);
+			break;
+		}
+
+		/* timeout case probably isn't too interesting */
+		if ((void*)GET_ARG4(regfile) != NULL) {
+			if (GET_RAX(new_regs) == 0) {
+				/* timeout */
+				sc_ret_v(new_regs, 0);
+				break;
+			}
+		}
+
+		/* error */
+		sc_ret_v(new_regs, -1);
+		break;
+	}
+
 	UNIMPL_SC(clone);
 
 	case SYS_recvmsg: {

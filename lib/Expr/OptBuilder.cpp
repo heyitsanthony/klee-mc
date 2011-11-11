@@ -148,8 +148,8 @@ ref<Expr> OptBuilder::Extract(const ref<Expr>& expr, unsigned off, Expr::Width w
 			return SExtExpr::create(se->getKid(0), w);
 
 		if (w == 1) {
-			XorExpr		*xe;
-			ConstantExpr	*ce;
+			const XorExpr		*xe;
+			const ConstantExpr	*ce;
 			if (	(xe = dyn_cast<XorExpr>(expr)) &&
 				(ce = dyn_cast<ConstantExpr>(xe->getKid(0))) &&
 				ce->getWidth() <= 64 &&
@@ -169,7 +169,7 @@ ref<Expr> OptBuilder::Extract(const ref<Expr>& expr, unsigned off, Expr::Width w
 	// ( extract[127:67]
 	// 	(bvmul (concat bv0[64]  bv14757395258967641293[64] ) x) )
 	if (off >= 67 && expr->getKind() == Expr::Mul) {
-		ConstantExpr		*ce;
+		const ConstantExpr	*ce;
 
 		if ((ce = dyn_cast<ConstantExpr>(expr->getKid(0)))) {
 			ref<ConstantExpr>	ce_lo, ce_hi;
@@ -179,15 +179,16 @@ ref<Expr> OptBuilder::Extract(const ref<Expr>& expr, unsigned off, Expr::Width w
 			if (	ce_hi->isZero() &&
 				ce_lo->getZExtValue() == 0xcccccccccccccccd)
 			{
+				ref<Expr>	x_div_10_mul8;
+
+				x_div_10_mul8 = UDivExpr::create(
+					ExtractExpr::create(
+						expr->getKid(1),
+						0,
+						64),
+					ConstantExpr::create(10, 64));
 				return ExtractExpr::create(
-					UDivExpr::create(
-						ExtractExpr::create(
-							expr->getKid(1),
-							0,
-							64),
-						ConstantExpr::create(10, 64)),
-					off - (64 + 3),
-					w);
+					x_div_10_mul8, off - (64 + 3), w);
 			}
 		}
 	}
@@ -242,8 +243,8 @@ ref<Expr> OptBuilder::Extract(const ref<Expr>& expr, unsigned off, Expr::Width w
 
 	if (expr->getKind() == Expr::Shl) {
 		const ShlExpr	*shl_expr = cast<ShlExpr>(expr);
-		const ZExtExpr	*ze;
-		const ConstantExpr *ce;
+		ZExtExpr	*ze;
+		ConstantExpr	*ce;
 
 		// from readelf
 		// ( extract[7:0]
@@ -637,6 +638,26 @@ static ref<Expr> MulExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 	if (cl->isZero())
 		return cl;
 
+	if (type <= 64) {
+		uint64_t	mul_c = cl->getZExtValue();
+
+		/* mul_c = 2^k? */
+		assert (mul_c != 0 && mul_c != 1);
+		if ((mul_c & (mul_c - 1)) == 0) {
+			/* find k */
+			int	k = -1;
+			while (mul_c != 0) {
+				mul_c >>= 1;
+				k++;
+			}
+
+			return ShlExpr::create(
+				r,
+				ConstantExpr::create(k, type));
+		}
+	}
+
+
 	return MulExpr::alloc(cl, r);
 }
 
@@ -787,7 +808,59 @@ static ref<Expr> OrExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 	return OrExpr_createPartial(r, cl);
 }
 
-static ref<Expr> OrExpr_create(Expr *l, Expr *r) {
+static ref<Expr> OrExpr_factorZExt(Expr* l, Expr* r)
+{
+	// (bvor (zext[56] x) (zext[56] y))
+	// => zext[56] (bvor x y)
+	const ZExtExpr		*ze[2];
+	ref<Expr>		e[2];
+	const ConcatExpr	*cat;
+
+	ze[0] = dyn_cast<ZExtExpr>(l);
+	if (ze[0] == NULL)
+		return NULL;
+		
+	ze[1] = dyn_cast<ZExtExpr>(r);
+	if (ze[1] == NULL)
+		return NULL;
+
+	e[0] = ze[0]->src;
+	e[1] = ze[1]->src;
+	if (e[0]->getWidth() == e[1]->getWidth()) {
+		return ZExtExpr::create(
+			OrExpr::create(e[0], e[1]),
+			ze[0]->getWidth());
+	}
+
+	/* canonicalize, e[0].w < e[1].w */
+	if (e[0]->getWidth() > e[1]->getWidth()) {
+		ref<Expr>	t(e[0]);
+		e[0] = e[1];
+		e[1] = t;
+	}
+
+	if (e[1]->getKind() != Expr::Concat)
+		return NULL;
+
+	cat = static_cast<const ConcatExpr*>(e[1].get());
+	
+
+	/* ze[0]->src (concat a (y-bits))	*/
+	/* ze[1]->src = ((spare bits) y)	*/
+	/* want to try to swap in x's high part into y's high part */
+	if (	e[1]->getKid(1)->isZero() &&
+		e[0]->getWidth() == e[1]->getKid(1)->getWidth())
+	{
+		return ZExtExpr::create(
+			ConcatExpr::create(e[1]->getKid(0), e[0]),
+			ze[0]->getWidth());
+	}
+
+	return NULL;
+}
+
+static ref<Expr> OrExpr_create(Expr *l, Expr *r)
+{
 	if (*l == *r)
 		return l;
 
@@ -797,18 +870,10 @@ static ref<Expr> OrExpr_create(Expr *l, Expr *r) {
 		      return ConstantExpr::create(1, Expr::Bool);
 	}
 
-	// (bvor (zext[56] x) (zext[56] y))
-	// => zext[56] (bvor x y)
-	const ZExtExpr	*ze[2];
-	if ((ze[0]=dyn_cast<ZExtExpr>(l)) && (ze[1]=dyn_cast<ZExtExpr>(r))) {
-		if (ze[0]->src->getWidth() == ze[1]->src->getWidth()) {
-			return ZExtExpr::create(
-				OrExpr::create(
-					ze[0]->src,
-					ze[1]->src),
-				ze[0]->getWidth());
-		}
-	}
+
+	ref<Expr>	ret(OrExpr_factorZExt(l, r));
+	if (!ret.isNull())
+		return ret;
 
 	return OrExpr::alloc(l, r);
 }
@@ -1012,7 +1077,7 @@ static ref<Expr> LShrExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 	if (!ret.isNull())
 		return ret;
 
-	ConstantExpr* ce = dyn_cast<ConstantExpr>(r);
+	const ConstantExpr* ce = dyn_cast<ConstantExpr>(r);
 	if (ce && ce->getWidth() <= 64) {
 		// Constant shifts can be rewritten into Extracts
 		// I assume extracts are more desirable by virtue of
@@ -1293,6 +1358,22 @@ static ref<Expr> UltExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 			}
 		}
 	}
+
+/* Invalid optimization:  x + c0 < x + c1 => x < c0 - c1 */
+#if 0
+	if (	l->getKind() == Expr::Add &&
+		r->getKind() == Expr::Constant)
+	{
+#error WHAT ARE YOU DOING STOP
+		if (l->getKid(0)->getKind() == Expr::Constant) {
+			return UltExpr::create(
+				l->getKid(1), 
+				SubExpr::create(
+					r,
+					l->getKid(0)));
+		}
+	}
+#endif
 
 	return UltExpr::alloc(l, r);
 }
