@@ -598,7 +598,7 @@ Executor::fork(
 	if (evalForks(current, fi) == false)
 		return StateVector(N, NULL);
 
-	// need a copy telling us whether or not we need to add 
+	// need a copy telling us whether or not we need to add
 	// constraints later; especially important if we skip a fork for
 	// whatever reason
 	fi.feasibleTargets = fi.validTargets;
@@ -2787,54 +2787,30 @@ void Executor::updateStates(ExecutionState* current)
   }
 }
 
-std::string Executor::getAddressInfo(ExecutionState &state,
-                                     ref<Expr> address) const{
-  std::ostringstream info;
-  info << "\taddress: " << address << "\n";
-  uint64_t example;
-  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(address)) {
-    example = CE->getZExtValue();
-  } else {
-    ref<ConstantExpr> value;
-    bool success = solver->getValue(state, address, value);
-    assert(success && "FIXME: Unhandled solver failure");
-    (void) success;
-    example = value->getZExtValue();
-    info << "\texample: " << example << "\n";
-    std::pair< ref<Expr>, ref<Expr> > res = solver->getRange(state, address);
-    info << "\trange: [" << res.first << ", " << res.second <<"]\n";
-  }
+std::string Executor::getAddressInfo(
+	ExecutionState &state,
+	ref<Expr> address) const
+{
+	std::ostringstream	info;
+	uint64_t		example;
 
-  /* XXX move into addressSpace */
-  MemoryObject hack((unsigned) example);
-  MemoryMap::iterator lower = state.addressSpace.objects.upper_bound(&hack);
-  info << "\tnext: ";
-  if (lower==state.addressSpace.objects.end()) {
-    info << "none\n";
-  } else {
-    const MemoryObject *mo = lower->first;
-    std::string alloc_info;
-    mo->getAllocInfo(alloc_info);
-    info << "object at " << mo->address
-         << " of size " << mo->size << "\n"
-         << "\t\t" << alloc_info << "\n";
-  }
-  if (lower!=state.addressSpace.objects.begin()) {
-    --lower;
-    info << "\tprev: ";
-    if (lower==state.addressSpace.objects.end()) {
-      info << "none\n";
-    } else {
-      const MemoryObject *mo = lower->first;
-      std::string alloc_info;
-      mo->getAllocInfo(alloc_info);
-      info << "object at " << mo->address
-           << " of size " << mo->size << "\n"
-           << "\t\t" << alloc_info << "\n";
-    }
-  }
+	info << "\taddress: " << address << "\n";
+	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(address)) {
+		example = CE->getZExtValue();
+	} else {
+		ref<ConstantExpr> value;
+		bool success = solver->getValue(state, address, value);
+		assert(success && "FIXME: Unhandled solver failure");
+		(void) success;
+		example = value->getZExtValue();
+		std::pair< ref<Expr>, ref<Expr> > res = solver->getRange(state, address);
+		info << "\texample: " << example << "\n";
+		info << "\trange: [" << res.first << ", " << res.second <<"]\n";
+	}
 
-  return info.str();
+	state.addressSpace.printAddressInfo(info, example);
+
+	return info.str();
 }
 
 void Executor::terminateState(ExecutionState &state)
@@ -3529,7 +3505,7 @@ void Executor::doImpliedValueConcretization(
 		os = state.addressSpace.findObject(mo);
 
 		// os = 0 => obj has been free'd,
-		// no need to concretize (although as in other cases we 
+		// no need to concretize (although as in other cases we
 		// would like to concretize the outstanding
 		// reads, but we have no facility for that yet)
 		if (os == NULL) continue;

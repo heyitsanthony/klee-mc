@@ -712,3 +712,41 @@ bool MemoryObjectLT::operator()(
 	assert (a && b);
 	return a->address < b->address;
 }
+
+void AddressSpace::printAddressInfo(std::ostream& info, uint64_t addr) const
+{
+	MemoryObject		hack((unsigned) addr);
+	MemoryMap::iterator	lower(objects.upper_bound(&hack));
+
+	info << "\tnext: ";
+	if (lower == objects.end()) {
+		info << "none\n";
+	} else {
+		const MemoryObject	*mo = lower->first;
+		std::string		alloc_info;
+
+		mo->getAllocInfo(alloc_info);
+		info	<< "object at "	<< mo->address
+			<< " of size "	<< mo->size
+			<< "\n\t\t"
+			<< alloc_info << "\n";
+	}
+
+	if (lower == objects.begin())
+		return;
+
+	--lower;
+	info << "\tprev: ";
+	if (lower == objects.end()) {
+		info << "none\n";
+	} else {
+		const MemoryObject *mo = lower->first;
+		std::string alloc_info;
+		mo->getAllocInfo(alloc_info);
+		info << "object at " << mo->address
+			<< " of size " << mo->size << "\n"
+			<< "\t\t" << alloc_info << "\n";
+	}
+}
+
+void AddressSpace::printObjects(std::ostream& os) const { os << objects; }

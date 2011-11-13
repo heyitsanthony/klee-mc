@@ -46,7 +46,7 @@ namespace klee {
 
     /// Unsupported, use copy constructor
     AddressSpace &operator=(const AddressSpace&);
-  public:
+
     /// The MemoryObject -> ObjectState map that constitutes the
     /// address space.
     ///
@@ -175,7 +175,8 @@ namespace klee {
     MMIter end(void) const { return objects.end(); }
     MMIter begin(void) const { return objects.begin(); }
 
-
+    void printAddressInfo(std::ostream& os, uint64_t addr) const;
+    void printObjects(std::ostream& os) const;
 
     /// Lookup a binding from a MemoryObject.
     const ObjectState *findObject(const MemoryObject *mo) const;

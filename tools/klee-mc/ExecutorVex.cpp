@@ -1059,7 +1059,7 @@ void ExecutorVex::printStateErrorMessage(
 	os << "Error: " << message << "\n";
 
 	os << "Objects: " << std::endl;
-	os << state.addressSpace.objects;
+	state.addressSpace.printObjects(os);
 
 	os << "\nRegisters: \n";
 	gs->getCPUState()->print(os);
