@@ -748,35 +748,33 @@ void Executor::makeForks(ExecutionState& current, struct ForkInfo& fi)
 	}
 }
 
-void Executor::constrainForks(ExecutionState& current, struct ForkInfo& fi)
+void Executor::constrainFork(
+	ExecutionState& current,
+	struct ForkInfo& fi,
+	unsigned int condIndex)
 {
-	// Loop for bookkeeping
-	// (loops must be separate since states are forked from each other)
-	for (unsigned int condIndex = 0; condIndex < fi.N; condIndex++) {
-		ExecutionState* curState;
+	ExecutionState* curState;
 
-		if (fi.res[condIndex] == false) {
-			continue;
+	if (fi.res[condIndex] == false)
+		return;
+
+	curState = fi.resStates[condIndex];
+	assert(curState);
+
+	// Add path constraint
+	if (!curState->isCompactForm && fi.feasibleTargets > 1) {
+		bool	constraint_added;
+
+		constraint_added = addConstraint(
+			*curState, fi.conditions[condIndex]);
+		if (constraint_added == false) {
+			terminateStateEarly(
+				*curState, "contradiction on branch");
+			fi.resStates[condIndex] = NULL;
+			fi.res[condIndex] = false;
+			return;
 		}
-
-		curState = fi.resStates[condIndex];
-		assert(curState);
-
-		// Add path constraint
-		if (!curState->isCompactForm && fi.feasibleTargets > 1) {
-			bool	constraint_added;
-
-			constraint_added = addConstraint(
-				*curState, fi.conditions[condIndex]);
-			if (constraint_added == false) {
-				terminateStateEarly(
-					*curState,
-					"contradiction on branch");
-				fi.resStates[condIndex] = NULL;
-				fi.res[condIndex] = false;
-				continue;
-			}
-		}
+	}
 
 	// XXX - even if the constraint is provable one way or the other we
 	// can probably benefit by adding this constraint and allowing it to
@@ -786,34 +784,42 @@ void Executor::constrainForks(ExecutionState& current, struct ForkInfo& fi)
 	// hint to just use the single constraint instead of all the binary
 	// search ones. If that makes sense.
 
-		// Kinda gross, do we even really still want this option?
-		if (MaxDepth && MaxDepth <= curState->depth) {
-			terminateStateEarly(*curState, "max-depth exceeded");
-			fi.resStates[condIndex] = NULL;
-			continue;
+	// Kinda gross, do we even really still want this option?
+	if (MaxDepth && MaxDepth <= curState->depth) {
+		terminateStateEarly(*curState, "max-depth exceeded");
+		fi.resStates[condIndex] = NULL;
+		return;
+	}
+
+	// Auxiliary bookkeeping
+	if (!fi.isInternal) {
+		if (symPathWriter && fi.validTargets > 1) {
+			std::stringstream ssPath;
+			ssPath << condIndex << "\n";
+			curState->symPathOS << ssPath.str();
 		}
 
-		// Auxiliary bookkeeping
-		if (!fi.isInternal) {
-			if (symPathWriter && fi.validTargets > 1) {
-				std::stringstream ssPath;
-				ssPath << condIndex << "\n";
-				curState->symPathOS << ssPath.str();
-			}
-
-			// only track NON-internal branches
-			if (!fi.wasReplayed)
-				curState->trackBranch(
+		// only track NON-internal branches
+		if (!fi.wasReplayed)
+			curState->trackBranch(
 				condIndex,
 				current.prevPC->info->assemblyLine);
-		}
+	}
 
-		if (fi.isSeeding) {
-			seedMap[curState].insert(
-				seedMap[curState].end(),
-				fi.resSeeds[condIndex].begin(),
-				fi.resSeeds[condIndex].end());
-		}
+	if (fi.isSeeding) {
+		seedMap[curState].insert(
+			seedMap[curState].end(),
+			fi.resSeeds[condIndex].begin(),
+			fi.resSeeds[condIndex].end());
+	}
+}
+
+void Executor::constrainForks(ExecutionState& current, struct ForkInfo& fi)
+{
+	// Loop for bookkeeping
+	// (loops must be separate since states are forked from each other)
+	for (unsigned int condIndex = 0; condIndex < fi.N; condIndex++) {
+		constrainFork(current, fi, condIndex);
 	}
 }
 

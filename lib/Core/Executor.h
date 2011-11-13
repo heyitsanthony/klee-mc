@@ -122,6 +122,9 @@ public:
   /// value). Otherwise return the original expression.
   ref<Expr> toUnique(const ExecutionState &state, ref<Expr> &e);
 
+  // Fork current and return states in which condition holds / does
+  // not hold, respectively. One of the states is necessarily the
+  // current state, and one of the states may be null.
   StatePair fork(ExecutionState &current, ref<Expr> condition, bool isInternal);
   /// Get textual information regarding a memory address.
   std::string getAddressInfo(ExecutionState &state, ref<Expr> address) const;
@@ -483,22 +486,11 @@ private:
   bool evalForkBranch(ExecutionState& current, struct ForkInfo& fi);
   void makeForks(ExecutionState& current, struct ForkInfo& fi);
   void constrainForks(ExecutionState& current, struct ForkInfo& fi);
+  void constrainFork(
+  	ExecutionState& current, struct ForkInfo& fi, unsigned int);
+
 
   bool isStateSeeding(ExecutionState* s);
-#if 0
-  /// Create a new state where each input condition has been added as
-  /// a constraint and return the results. The input state is included
-  /// as one of the results. Note that the output vector may included
-  /// NULL pointers for states which were unable to be created.
-  void branch(ExecutionState &state,
-              const std::vector< ref<Expr> > &conditions,
-              std::vector<ExecutionState*> &result);
-
-  // Fork current and return states in which condition holds / does
-  // not hold, respectively. One of the states is necessarily the
-  // current state, and one of the states may be null.
-  StatePair fork(ExecutionState &current, ref<Expr> condition, bool isInternal);
-#endif
 
   // Called on [for now] concrete reads, replaces constant with a symbolic
   // Used for testing.
