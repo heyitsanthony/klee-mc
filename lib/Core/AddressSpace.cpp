@@ -49,12 +49,6 @@ const ObjectState *AddressSpace::findObject(const MemoryObject *mo) const
 	return res ? res->second :  NULL;
 }
 
-ObjectState *AddressSpace::findObject(const MemoryObject *mo)
-{
-	const MemoryMap::value_type *res = objects.lookup(mo);
-	return res ? res->second : NULL;
-}
-
 ObjectState *AddressSpace::getWriteable(
 	const MemoryObject *mo,
 	const ObjectState *os)
@@ -70,6 +64,17 @@ ObjectState *AddressSpace::getWriteable(
 	n->copyOnWriteOwner = cowKey;
 	objects = objects.replace(std::make_pair(mo, n));
 	return n;
+}
+
+ObjectState* AddressSpace::findWriteableObject(const MemoryObject* mo)
+{
+	const ObjectState*	ros;
+
+	ros = findObject(mo);
+	if (ros == NULL)
+		return NULL;
+
+	return getWriteable(mo, ros);
 }
 
 bool AddressSpace::resolveOne(uint64_t address, ObjectPair &result)
@@ -670,28 +675,27 @@ bool AddressSpace::copyToBuf(
 
 bool AddressSpace::copyInConcretes(void)
 {
-  foreach (it, objects.begin(), objects.end()) {
-    const MemoryObject *mo;
-    const ObjectState *os;
-    ObjectState *wos;
-    uint8_t *address;
+	foreach (it, objects.begin(), objects.end()) {
+		const MemoryObject	*mo;
+		const ObjectState	*os;
+		ObjectState		*wos;
+		uint8_t			*address;
 
-    mo = it->first;
-    if (mo->isUserSpecified) continue;
+		mo = it->first;
+		if (mo->isUserSpecified)
+			continue;
 
-    os = it->second;
-    address = (uint8_t*) (uintptr_t) mo->address;
+		os = it->second;
+		address = (uint8_t*)((uintptr_t) mo->address);
 
-    if (memcmp(
-          address,
-          os->concreteStore,
-          mo->size) == 0) continue;
+		if (memcmp(address, os->concreteStore, mo->size) == 0)
+			continue;
 
-    wos = getWriteable(mo, os);
-    memcpy(wos->concreteStore, address, mo->size);
-  }
+		wos = getWriteable(mo, os);
+		memcpy(wos->concreteStore, address, mo->size);
+	}
 
-  return true;
+	return true;
 }
 
 void AddressSpace::print(std::ostream& os) const

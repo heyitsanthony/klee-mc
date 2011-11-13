@@ -91,13 +91,15 @@ ObjectState::~ObjectState()
 const UpdateList &ObjectState::getUpdates() const
 {
 	// Constant arrays are created lazily.
-	if (updates.root != NULL) return updates;
+	if (updates.root != NULL)
+		return updates;
 
 	// Collect the list of writes, with the oldest writes first.
 
-	// FIXME: We should be able to do this more efficiently, we just need to be
-	// careful to get the interaction with the cache right. In particular we
-	// should avoid creating UpdateNode instances we never use.
+	// FIXME: We should be able to do this more efficiently,
+	// we just need to be careful to get the interaction with
+	// the cache right. In particular we should avoid creating
+	// UpdateNode instances we never use.
 	unsigned NumWrites = updates.head ? updates.head->getSize() : 0;
 	std::vector< std::pair< ref<Expr>, ref<Expr> > > Writes(NumWrites);
 	const UpdateNode *un = updates.head;
@@ -137,7 +139,8 @@ const UpdateList &ObjectState::getUpdates() const
 
 	array = new Array(
 		"const_arr" + llvm::utostr(++id),
-		object->mallocKey, &Contents[0],
+		object->mallocKey,
+		&Contents[0],
 		&Contents[0] + Contents.size());
 	array->initRef();
 	updates = UpdateList(array, 0);
@@ -153,7 +156,7 @@ void ObjectState::makeConcrete()
 {
 	if (concreteMask) delete concreteMask;
 	if (flushMask) delete flushMask;
-	if (knownSymbolics) delete[] knownSymbolics;
+	if (knownSymbolics) delete [] knownSymbolics;
 	concreteMask = NULL;
 	flushMask = NULL;
 	knownSymbolics = NULL;
@@ -184,17 +187,17 @@ void ObjectState::makeSymbolic(void)
 
 void ObjectState::initializeToZero()
 {
-  makeConcrete();
-  memset(concreteStore, 0, size);
+	makeConcrete();
+	memset(concreteStore, 0, size);
 }
 
 void ObjectState::initializeToRandom()
 {
-  makeConcrete();
-  for (unsigned i=0; i<size; i++) {
-    // randomly selected by 256 sided die
-    concreteStore[i] = 0xAB;
-  }
+	makeConcrete();
+	for (unsigned i=0; i<size; i++) {
+		// randomly selected by 256 sided die
+		concreteStore[i] = 0xAB;
+	}
 }
 
 /*
@@ -208,58 +211,72 @@ isByteConcrete(i) => !isByteKnownSymbolic(i)
 void ObjectState::fastRangeCheckOffset(
 	ref<Expr> offset, unsigned *base_r, unsigned *size_r) const
 {
-  *base_r = 0;
-  *size_r = size;
+	*base_r = 0;
+	*size_r = size;
 }
 
-void ObjectState::flushRangeForRead(unsigned rangeBase,
-                                    unsigned rangeSize) const
+void ObjectState::flushRangeForRead(
+	unsigned rangeBase, unsigned rangeSize) const
 {
-  if (!flushMask) flushMask = new BitArray(size, true);
+	if (!flushMask) flushMask = new BitArray(size, true);
 
-  for (unsigned offset=rangeBase; offset<rangeBase+rangeSize; offset++) {
-    if (isByteFlushed(offset)) continue;
+	for (unsigned offset=rangeBase; offset<rangeBase+rangeSize; offset++) {
+		if (isByteFlushed(offset)) continue;
 
-    if (isByteConcrete(offset)) {
-      updates.extend(ConstantExpr::create(offset, Expr::Int32),
-                     ConstantExpr::create(concreteStore[offset], Expr::Int8));
-    } else {
-      assert(isByteKnownSymbolic(offset) && "invalid bit set in flushMask");
-      updates.extend(ConstantExpr::create(offset, Expr::Int32),
-                     knownSymbolics[offset]);
-    }
-    flushMask->unset(offset);
-  }
+		if (isByteConcrete(offset)) {
+			updates.extend(
+				ConstantExpr::create(offset, Expr::Int32),
+				ConstantExpr::create(
+					concreteStore[offset], Expr::Int8));
+		} else {
+			assert(	isByteKnownSymbolic(offset) &&
+				"invalid bit set in flushMask");
+			updates.extend(
+				ConstantExpr::create(offset, Expr::Int32),
+				knownSymbolics[offset]);
+		}
+		flushMask->unset(offset);
+	}
 }
 
-void ObjectState::flushRangeForWrite(unsigned rangeBase,
-                                     unsigned rangeSize) {
-  if (!flushMask) flushMask = new BitArray(size, true);
+void ObjectState::flushWriteByte(unsigned offset)
+{
+	assert (isByteFlushed(offset) == false);
 
-  for (unsigned offset=rangeBase; offset<rangeBase+rangeSize; offset++) {
-    if (!isByteFlushed(offset)) {
-      if (isByteConcrete(offset)) {
-        updates.extend(ConstantExpr::create(offset, Expr::Int32),
-                       ConstantExpr::create(concreteStore[offset], Expr::Int8));
-        markByteSymbolic(offset);
-      } else {
-        assert(isByteKnownSymbolic(offset) && "invalid bit set in flushMask");
-        updates.extend(ConstantExpr::create(offset, Expr::Int32),
-                       knownSymbolics[offset]);
-        setKnownSymbolic(offset, 0);
-      }
+	if (isByteConcrete(offset)) {
+		updates.extend(ConstantExpr::create(offset, Expr::Int32),
+		ConstantExpr::create(concreteStore[offset], Expr::Int8));
+		markByteSymbolic(offset);
+	} else {
+		assert(	isByteKnownSymbolic(offset) &&
+			"invalid bit set in flushMask");
+		updates.extend(ConstantExpr::create(offset, Expr::Int32),
+		knownSymbolics[offset]);
+		setKnownSymbolic(offset, 0);
+	}
 
-      flushMask->unset(offset);
-    } else {
-      // flushed bytes that are written over still need
-      // to be marked out
-      if (isByteConcrete(offset)) {
-        markByteSymbolic(offset);
-      } else if (isByteKnownSymbolic(offset)) {
-        setKnownSymbolic(offset, 0);
-      }
-    }
-  }
+	flushMask->unset(offset);
+}
+
+void ObjectState::flushRangeForWrite(
+	unsigned rangeBase, unsigned rangeSize)
+{
+	if (!flushMask)
+		flushMask = new BitArray(size, true);
+
+	for (unsigned offset=rangeBase; offset<rangeBase+rangeSize; offset++) {
+		if (!isByteFlushed(offset)) {
+			flushWriteByte(offset);
+		} else {
+			// flushed bytes that are written over still need
+			// to be marked out
+			if (isByteConcrete(offset)) {
+				markByteSymbolic(offset);
+			} else if (isByteKnownSymbolic(offset)) {
+				setKnownSymbolic(offset, 0);
+			}
+		}
+	}
 }
 
 bool ObjectState::isByteConcrete(unsigned offset) const {
@@ -279,54 +296,58 @@ void ObjectState::markByteConcrete(unsigned offset) {
     concreteMask->set(offset);
 }
 
-void ObjectState::markByteSymbolic(unsigned offset) {
-  if (!concreteMask)
-    concreteMask = new BitArray(size, true);
-  concreteMask->unset(offset);
+void ObjectState::markByteSymbolic(unsigned offset)
+{
+	if (concreteMask == NULL)
+		concreteMask = new BitArray(size, true);
+	concreteMask->unset(offset);
 }
 
-void ObjectState::markByteUnflushed(unsigned offset) {
-  if (flushMask)
-    flushMask->set(offset);
+void ObjectState::markByteUnflushed(unsigned offset)
+{
+	if (flushMask != NULL)
+		flushMask->set(offset);
 }
 
-void ObjectState::markByteFlushed(unsigned offset) {
-  if (!flushMask) {
-    flushMask = new BitArray(size, false);
-  } else {
-    flushMask->unset(offset);
-  }
+void ObjectState::markByteFlushed(unsigned offset)
+{
+	if (flushMask == NULL) {
+		flushMask = new BitArray(size, false);
+	} else {
+		flushMask->unset(offset);
+	}
 }
 
 void ObjectState::setKnownSymbolic(
 	unsigned offset,
 	Expr *value /* can be null */)
 {
-	if (knownSymbolics) {
+	if (knownSymbolics != NULL) {
 		knownSymbolics[offset] = value;
 		return;
 	}
 
-	if (value) {
-		knownSymbolics = new ref<Expr>[size];
-		knownSymbolics[offset] = value;
-	}
-}
+	if (value == NULL)
+		return;
 
+	knownSymbolics = new ref<Expr>[size];
+	knownSymbolics[offset] = value;
+}
 
 ref<Expr> ObjectState::read8(unsigned offset) const
 {
-  if (isByteConcrete(offset)) {
-    return ConstantExpr::create(concreteStore[offset], Expr::Int8);
-  }
-  if (isByteKnownSymbolic(offset)) {
-    return knownSymbolics[offset];
-  }
+	if (isByteConcrete(offset))
+		return ConstantExpr::create(
+			concreteStore[offset], Expr::Int8);
+
+	if (isByteKnownSymbolic(offset))
+		return knownSymbolics[offset];
 
 
-  assert(isByteFlushed(offset) && "unflushed byte without cache value");
-  return ReadExpr::create(
-    getUpdates(), ConstantExpr::create(offset, Expr::Int32));
+	assert(isByteFlushed(offset) && "unflushed byte without cache value");
+	return ReadExpr::create(
+		getUpdates(),
+		ConstantExpr::create(offset, Expr::Int32));
 }
 
 ref<Expr> ObjectState::read8(ref<Expr> offset) const
@@ -350,17 +371,18 @@ ref<Expr> ObjectState::read8(ref<Expr> offset) const
 	}
 
 	return ReadExpr::create(
-		getUpdates(), ZExtExpr::create(offset, Expr::Int32));
+		getUpdates(),
+		ZExtExpr::create(offset, Expr::Int32));
 }
 
-void ObjectState::write8(unsigned offset, uint8_t value) {
+void ObjectState::write8(unsigned offset, uint8_t value)
+{
+	//assert(read_only == false && "writing to read-only object!");
+	concreteStore[offset] = value;
+	setKnownSymbolic(offset, 0);
 
-  //assert(read_only == false && "writing to read-only object!");
-  concreteStore[offset] = value;
-  setKnownSymbolic(offset, 0);
-
-  markByteConcrete(offset);
-  markByteUnflushed(offset);
+	markByteConcrete(offset);
+	markByteUnflushed(offset);
 }
 
 void ObjectState::write8(unsigned offset, ref<Expr> value)
@@ -456,35 +478,41 @@ ref<Expr> ObjectState::read(unsigned offset, Expr::Width width) const
 	return Res;
 }
 
-void ObjectState::write(ref<Expr> offset, ref<Expr> value) {
-  // Truncate offset to 32-bits.
-  offset = ZExtExpr::create(offset, Expr::Int32);
+void ObjectState::write(ref<Expr> offset, ref<Expr> value)
+{
+	// Truncate offset to 32-bits.
+	offset = ZExtExpr::create(offset, Expr::Int32);
 
-  // Check for writes at constant offsets.
-  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(offset)) {
-    write(CE->getZExtValue(32), value);
-    return;
-  }
+	// Check for writes at constant offsets.
+	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(offset)) {
+		write(CE->getZExtValue(32), value);
+		return;
+	}
 
-  // Treat bool specially, it is the only non-byte sized write we allow.
-  Expr::Width w = value->getWidth();
-  if (w == Expr::Bool) {
-    write8(offset, ZExtExpr::create(value, Expr::Int8));
-    return;
-  }
+	// Treat bool specially, it is the only non-byte sized write we allow.
+	Expr::Width w = value->getWidth();
+	if (w == Expr::Bool) {
+		write8(offset, ZExtExpr::create(value, Expr::Int8));
+		return;
+	}
 
-  // Otherwise, follow the slow general case.
-  unsigned NumBytes = w / 8;
-  assert(w == NumBytes * 8 && "Invalid write size!");
-  for (unsigned i = 0; i != NumBytes; ++i) {
-    unsigned idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
-    write8(AddExpr::create(offset, ConstantExpr::create(idx, Expr::Int32)),
-           ExtractExpr::create(value, 8 * i, Expr::Int8));
-  }
+	// Otherwise, follow the slow general case.
+	unsigned NumBytes = w / 8;
+	assert(w == NumBytes * 8 && "Invalid write size!");
+	for (unsigned i = 0; i != NumBytes; ++i) {
+		unsigned idx;
+
+		idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
+		write8(
+			AddExpr::create(
+				offset, ConstantExpr::create(idx, Expr::Int32)),
+			ExtractExpr::create(value, 8 * i, Expr::Int8));
+	}
 }
 
-void ObjectState::write(unsigned offset, ref<Expr> value) {
-  // Check for writes of constant values.
+void ObjectState::write(unsigned offset, ref<Expr> value)
+{
+	// Check for writes of constant values.
 	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(value)) {
 		Expr::Width w = CE->getWidth();
 		if (w <= 64) {
@@ -518,31 +546,23 @@ void ObjectState::write(unsigned offset, ref<Expr> value) {
 	}
 }
 
-void ObjectState::write16(unsigned offset, uint16_t value) {
-  unsigned NumBytes = 2;
-  for (unsigned i = 0; i != NumBytes; ++i) {
-    unsigned idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
-    write8(offset + idx, (uint8_t) (value >> (8 * i)));
-  }
+#define writeN(n)		\
+void ObjectState::write##n(unsigned offset, uint##n##_t value) {	\
+unsigned NumBytes = n/8;	\
+for (unsigned i = 0; i != NumBytes; ++i) {	\
+	unsigned idx;	\
+	idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);	\
+	write8(offset + idx, (uint8_t) (value >> (8 * i)));	\
+}	\
 }
 
-void ObjectState::write32(unsigned offset, uint32_t value) {
-  unsigned NumBytes = 4;
-  for (unsigned i = 0; i != NumBytes; ++i) {
-    unsigned idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
-    write8(offset + idx, (uint8_t) (value >> (8 * i)));
-  }
-}
+writeN(16)
+writeN(32)
+writeN(64)
 
-void ObjectState::write64(unsigned offset, uint64_t value) {
-  unsigned NumBytes = 8;
-  for (unsigned i = 0; i != NumBytes; ++i) {
-    unsigned idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
-    write8(offset + idx, (uint8_t) (value >> (8 * i)));
-  }
-}
 
-void ObjectState::print(unsigned int begin, int end) {
+void ObjectState::print(unsigned int begin, int end)
+{
   unsigned int real_end;
   std::cerr << "-- ObjectState --\n";
   std::cerr << "\tMemoryObject ID: " << object->id << "\n";

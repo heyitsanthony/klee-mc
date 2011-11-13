@@ -1,4 +1,5 @@
 #include <static/Sugar.h>
+#include "klee/ExeStateBuilder.h"
 #include "llvm/Module.h"
 #include "llvm/LLVMContext.h"
 #include "llvm/Target/TargetData.h"
@@ -53,8 +54,9 @@ ExecutorBC::~ExecutorBC(void)
 	if (kmodule) delete kmodule;
 }
 
-const Module* ExecutorBC::setModule(llvm::Module *module, 
-                                  const ModuleOptions &opts)
+const Module* ExecutorBC::setModule(
+	llvm::Module *module,
+	const ModuleOptions &opts)
 {
 	// XXX gross
 	assert(!kmodule && module && "can only register one module");
@@ -99,7 +101,7 @@ void ExecutorBC::runFunctionAsMain(
 	srand(1);
 	srandom(1);
 
-	state = ExecutionState::make(kf);
+	state = ExeStateBuilder::create(kf);
 
 	setupArgv(state, f, argc, argv, envp);
 

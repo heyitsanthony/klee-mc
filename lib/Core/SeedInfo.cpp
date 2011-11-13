@@ -67,7 +67,7 @@ void SeedInfo::patchSeed(const ExecutionState &state,
                                     state.constraints.end());
   ExecutionState *ptmp;
 
-  ptmp = ExecutionState::make(required);
+  ptmp = ExeStateBuilder::create(required);
   ExecutionState &tmp(*ptmp);
 
   tmp.addConstraint(condition);

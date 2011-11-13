@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "klee/ExecutionState.h"
+#include "klee/ExeStateBuilder.h"
 
 #include "klee/Internal/Module/Cell.h"
 #include "klee/Internal/Module/InstructionInfoTable.h"
@@ -34,6 +35,7 @@
 using namespace llvm;
 using namespace klee;
 
+ExeStateBuilder* ExeStateBuilder::theESB = NULL;
 MemoryManager* ExecutionState::mm = NULL;
 
 /** XXX XXX XXX REFACTOR PLEASEEE **/
@@ -103,11 +105,6 @@ ExecutionState *ExecutionState::branch()
 	return newState;
 }
 
-void ExecutionState::bindObject(const MemoryObject *mo, ObjectState *os)
-{
-	addressSpace.bindObject(mo, os);
-}
-
 ExecutionState *ExecutionState::branchForReplay(void)
 {
 	ExecutionState* newState;
@@ -124,7 +121,7 @@ ExecutionState *ExecutionState::branchForReplay(void)
 
 ExecutionState *ExecutionState::compact() const
 {
-	ExecutionState *newState = create();
+	ExecutionState *newState = ExeStateBuilder::create();
 	compact(newState);
 	return newState;
 }
@@ -164,6 +161,11 @@ void ExecutionState::popFrame()
 	foreach (it, sf.allocas.begin(), sf.allocas.end())
 		unbindObject(*it);
 	stack.pop_back();
+}
+
+void ExecutionState::bindObject(const MemoryObject *mo, ObjectState *os)
+{
+	addressSpace.bindObject(mo, os);
 }
 
 void ExecutionState::unbindObject(const MemoryObject* mo)
@@ -473,3 +475,5 @@ ObjectState* ExecutionState::allocateAt(
 	num_allocs++;
 	return bindMemObj(mo);
 }
+
+ExecutionState* ExecutionState::copy(void) const { return copy(this); }

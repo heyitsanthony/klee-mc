@@ -10,25 +10,27 @@ class ObjectState
 	friend class AddressSpace;
 	friend class ExecutionState;
 private:
-	const Array* src_array;
-	unsigned copyOnWriteOwner; // exclusively for AddressSpace
-
 	friend class ObjectHolder;
-	unsigned refCount;
 
-	const MemoryObject *object;
+	const Array*		src_array;
+	// exclusively for AddressSpace
+	unsigned		copyOnWriteOwner;
+	unsigned		refCount;
+	const MemoryObject	*object;
 
-	uint8_t *concreteStore;
-	// XXX cleanup name of flushMask (its backwards or something)
-	BitArray *concreteMask;
-
+	uint8_t			*concreteStore;
+	BitArray		*concreteMask;
 	// mutable because may need flushed during read of const
-	mutable BitArray *flushMask;
-	ref<Expr> *knownSymbolics;
+	// XXX cleanup name of flushMask (its backwards or something)
+	mutable BitArray	*flushMask;
+	ref<Expr>		*knownSymbolics;
+
+	/* XXX DEBUG, move to private */
+	mutable UpdateList	updates;
+
 
 public:
 	// mutable because we may need flush during read of const
-	mutable UpdateList updates; /* XXX DEBUG, move to private */
 
 	unsigned size;
 
@@ -56,7 +58,7 @@ public:
 	// make contents all concrete and zero
 	void initializeToZero();
 	// make contents all concrete and random
-	void initializeToRandom();  
+	void initializeToRandom();
 
 	unsigned int getNumConcrete(void) const;
 	bool isByteConcrete(unsigned offset) const;
@@ -81,7 +83,8 @@ private:
 	void write16(unsigned offset, uint16_t value);
 	void write32(unsigned offset, uint32_t value);
 	void write64(unsigned offset, uint64_t value);
-private:
+
+	void flushWriteByte(unsigned offset);
 	const UpdateList &getUpdates() const;
 
 	void makeConcrete();
@@ -92,8 +95,8 @@ private:
 	void write8(unsigned offset, ref<Expr> value);
 	void write8(ref<Expr> offset, ref<Expr> value);
 
-	void fastRangeCheckOffset(ref<Expr> offset, unsigned *base_r, 
-			    unsigned *size_r) const;
+	void fastRangeCheckOffset(
+		ref<Expr> offset, unsigned *base_r, unsigned *size_r) const;
 	void flushRangeForRead(unsigned rangeBase, unsigned rangeSize) const;
 	void flushRangeForWrite(unsigned rangeBase, unsigned rangeSize);
 	void flushForRead(void) const { flushRangeForRead(0, size); }
@@ -104,5 +107,5 @@ private:
 	void markByteUnflushed(unsigned offset);
 	void setKnownSymbolic(unsigned offset, Expr *value);
 };
-  
+
 #endif

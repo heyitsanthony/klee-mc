@@ -14,7 +14,6 @@
 #include "../../lib/Core/StatsTracker.h"
 #include "../../lib/Core/ExeStateManager.h"
 #include "../../lib/Core/UserSearcher.h"
-#include "../../lib/Core/HeapMM.h"
 #include "../../lib/Core/PTree.h"
 
 #include <iomanip>
@@ -102,6 +101,8 @@ ExecutorVex::ExecutorVex(
 {
 	assert (kmodule == NULL && "KMod already initialized? My contract!");
 
+	ExeStateBuilder::replaceBuilder(new ExeStateVexBuilder());
+
 	/* XXX TODO: module flags */
 	llvm::sys::Path LibraryDir(KLEE_DIR "/" RUNTIME_CONFIGURATION "/lib");
 	Interpreter::ModuleOptions mod_opts(
@@ -150,6 +151,7 @@ ExecutorVex::ExecutorVex(
 			interpreterHandler->getOutputFilename("assembly.ll"),
 			mod_opts.ExcludeCovFiles,
 			userSearcherRequiresMD2U());
+
 }
 
 ExecutorVex::~ExecutorVex(void)
@@ -162,7 +164,7 @@ ExecutorVex::~ExecutorVex(void)
 	kmodule = NULL;
 }
 
-void ExecutorVex::runImage(void)
+ExecutionState* ExecutorVex::setupInitialState(void)
 {
 	ExecutionState	*state;
 	Function	*init_func;
@@ -184,7 +186,7 @@ void ExecutorVex::runImage(void)
 	assert (init_func != NULL && "Could not get init_func. Bad decode?");
 	if (init_func == NULL) {
 		fprintf(stderr, "[klee-mc] COULD NOT GET INIT_FUNC\n");
-		return;
+		return NULL;
 	}
 
 	/* add modules before initializing globals so that everything
@@ -201,31 +203,43 @@ void ExecutorVex::runImage(void)
 	statsTracker->addKFunction(init_kfunc);
 	bindKFuncConstants(init_kfunc);
 
-	state = ExeStateVex::make(kmodule->getKFunction(init_func));
+	state = ExeStateBuilder::create(kmodule->getKFunction(init_func));
 
 	prepState(state, init_func);
 	initializeGlobals(*state);
 
-	if(UseFDT) installFDTConfig(*state);
+	if (UseFDT) installFDTConfig(*state);
 
 	sfh->bind();
 	kf_scenter = kmodule->getKFunction("sc_enter");
 	assert (kf_scenter && "Could not load sc_enter from runtime library");
-
 
 	if (SymArgs) makeArgsSymbolic(state);
 
 	processTree = new PTree(state);
 	state->ptreeNode = processTree->root;
 
-	std::cerr << "NUMBER OF MEMOBJS INIT: " << state->memObjects.size() << '\n';
+	return state;
+}
+
+void ExecutorVex::runImage(void)
+{
+	ExecutionState	*start_state;
+
+	start_state = setupInitialState();
+	if (start_state == NULL)
+		return;
+
+	std::cerr
+		<< "NUMBER OF MEMOBJS INIT: "
+		<< start_state->memObjects.size() << '\n';
 
 	fprintf(stderr, "COMMENCE THE RUN!!!!!!\n");
-	run(*state);
+	run(*start_state);
 	fprintf(stderr, "DONE RUNNING.\n");
 
 	delete processTree;
-	processTree = 0;
+	processTree = NULL;
 
 	// hack to clear memory objects
 	delete memory;
@@ -250,7 +264,6 @@ void ExecutorVex::initializeGlobals(ExecutionState &state)
 		"XXX do not support dependent libraries");
 
 	initGlobalFuncs();
-
 
 	// represent function globals using the address of the
 	// actual llvm function object.
@@ -294,18 +307,14 @@ void ExecutorVex::initializeGlobals(ExecutionState &state)
 	// once all objects are allocated, do the actual initialization
 	foreach (i, m->global_begin(), m->global_end()) {
 		MemoryObject		*mo;
-		const ObjectState	*os;
 		ObjectState		*wos;
 
 		if (!i->hasInitializer()) continue;
 
 		mo = globalObjects.find(i)->second;
-		os = state.addressSpace.findObject(mo);
+		wos = state.addressSpace.findWriteableObject(mo);
 
-		assert(os);
-
-		wos = state.addressSpace.getWriteable(mo, os);
-
+		assert(wos);
 		initializeGlobalObject(state, wos, i->getInitializer(), 0);
 		// if (i->isConstant()) os->setReadOnly(true);
 	}
@@ -468,7 +477,7 @@ void ExecutorVex::installFDTConfig(ExecutionState& state) {
 		static_cast<GlobalVariable*>(kmodule->module->
 			getGlobalVariable("g_utsname"));
 	MemoryObject* mo = globalObjects[g_utsname];
-	ObjectState* os = state.addressSpace.findObject(mo);
+	ObjectState* os = state.addressSpace.findWriteableObject(mo);
 	assert(os);
 	struct utsname buf;
 	uname(&buf);
@@ -758,7 +767,7 @@ ObjectState* ExecutorVex::getRegObj(ExecutionState& state)
 {
 	MemoryObject	*mo;
 	mo = es2esv(state).getRegCtx();
-	return state.addressSpace.findObject(mo);
+	return state.addressSpace.findWriteableObject(mo);
 }
 
 void ExecutorVex::logXferRegisters(ExecutionState& state)
@@ -1090,3 +1099,15 @@ void ExecutorVex::printStateErrorMessage(
 	os << "Constraints: \n";
 	state.constraints.print(os);
 }
+
+ref<Expr> ExecutorVex::getCallArg(ExecutionState& state, unsigned int n)
+{
+	ObjectState	*regobj;
+
+	regobj = getRegObj(state);
+	return state.read(
+		regobj,
+		gs->getCPUState()->getFuncArgOff(0),
+		64);
+}
+

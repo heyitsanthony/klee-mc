@@ -26,7 +26,7 @@
 
 #include "static/Sugar.h"
 #include "klee/Common.h"
-#include "klee/ExecutionState.h"
+#include "klee/ExeStateBuilder.h"
 #include "klee/Expr.h"
 #include "klee/Interpreter.h"
 #include "klee/SolverStats.h"
@@ -281,14 +281,15 @@ Executor::Executor(
 , stpTimeout(MaxInstructionTime ?
 	std::min(MaxSTPTime,(double)MaxInstructionTime) : MaxSTPTime)
 {
-  this->solver = Solver::createTimerChain(
-  	stpTimeout,
-	interpreterHandler->getOutputFilename("queries.pc"),
-	interpreterHandler->getOutputFilename("stp-queries.pc"));
+	this->solver = Solver::createTimerChain(
+		stpTimeout,
+		interpreterHandler->getOutputFilename("queries.pc"),
+		interpreterHandler->getOutputFilename("stp-queries.pc"));
 
-  memory = MemoryManager::create();
-  stateManager = new ExeStateManager();
-  ExecutionState::setMemoryManager(memory);
+	memory = MemoryManager::create();
+	stateManager = new ExeStateManager();
+	ExecutionState::setMemoryManager(memory);
+	ExeStateBuilder::replaceBuilder(new BaseExeStateBuilder());
 }
 
 
@@ -300,6 +301,7 @@ Executor::~Executor()
 	if (processTree) delete processTree;
 	if (statsTracker) delete statsTracker;
 	delete solver;
+	ExeStateBuilder::replaceBuilder(NULL);
 }
 
 /***/
@@ -3033,7 +3035,6 @@ bool Executor::memOpByByte(ExecutionState& state, MemOp& mop)
 		res = memOpResolve(state, byte_addr, 8);
 		if (!res.usable || !res.rc)
 			return false;
-
 		if (mop.isWrite) {
 			byte_val = ExtractExpr::create(mop.value, 8*i, 8);
 			writeToMemRes(state, res, byte_val);

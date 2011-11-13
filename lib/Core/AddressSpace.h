@@ -178,8 +178,8 @@ namespace klee {
 
 
     /// Lookup a binding from a MemoryObject.
-    ObjectState *findObject(const MemoryObject *mo);
     const ObjectState *findObject(const MemoryObject *mo) const;
+    ObjectState* findWriteableObject(const MemoryObject* mo);
 
     /// \brief Obtain an ObjectState suitable for writing.
     ///

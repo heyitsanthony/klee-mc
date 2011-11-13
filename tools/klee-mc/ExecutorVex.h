@@ -60,6 +60,8 @@ public:
 	ObjectState* getRegObj(ExecutionState&);
 	void dumpSCRegs(const std::string& fname);
 protected:
+	virtual ExecutionState* setupInitialState(void);
+
 	virtual llvm::Function* getFuncByAddr(uint64_t addr);
   	virtual void executeInstruction(
 		ExecutionState &state, KInstruction *ki);
@@ -81,6 +83,12 @@ protected:
 		ExecutionState& state, KInstruction* ki);
 	void handleXferJmp(
 		ExecutionState& state, KInstruction* ki);
+	virtual void handleXferCall(
+		ExecutionState& state, KInstruction* ki);
+	virtual void handleXferReturn(
+		ExecutionState& state, KInstruction* ki);
+	virtual void jumpToKFunc(ExecutionState& state, KFunction* kf);
+
 
 	virtual void printStateErrorMessage(
 		ExecutionState& state,
@@ -89,6 +97,8 @@ protected:
 
 	virtual void handleXfer(ExecutionState& state, KInstruction *ki);
 	void updateGuestRegs(ExecutionState& s);
+
+	ref<Expr> getCallArg(ExecutionState& state, unsigned int n);
 
 	VexXlate	*xlate;
 	Guest		*gs;
@@ -123,12 +133,6 @@ private:
 	void allocGlobalVariableNoDecl(
 		ExecutionState& state,
 		const llvm::GlobalVariable& gv);
-
-	void handleXferCall(
-		ExecutionState& state, KInstruction* ki);
-	void handleXferReturn(
-		ExecutionState& state, KInstruction* ki);
-	void jumpToKFunc(ExecutionState& state, KFunction* kf);
 
 	struct XferStateIter
 	{

@@ -29,19 +29,21 @@
 #include <set>
 #include <vector>
 
+#include "klee/ExeStateBuilder.h"
 #include "klee/StackFrame.h"
 
 
-namespace klee {
-  class Array;
-  class CallPathNode;
-  class Cell;
-  class KFunction;
-  class KInstruction;
-  class MemoryObject;
-  class PTreeNode;
-  class InstructionInfo;
-  class MemoryManager;
+namespace klee
+{
+class Array;
+class CallPathNode;
+class Cell;
+class KFunction;
+class KInstruction;
+class MemoryObject;
+class PTreeNode;
+class InstructionInfo;
+class MemoryManager;
 
 /* Represents a memory array, its materialization, and ... */
 class SymbolicArray
@@ -69,11 +71,11 @@ std::ostream &operator<<(std::ostream &os, const MemoryMap &mm);
 
 typedef std::set<ExecutionState*> ExeStateSet;
 
+#define BaseExeStateBuilder	DefaultExeStateBuilder<ExecutionState>
+
 class ExecutionState
 {
-public:
-  typedef std::vector<StackFrame> stack_ty;
-
+friend class BaseExeStateBuilder;
 private:
 	static MemoryManager* mm;
 	unsigned int num_allocs;
@@ -98,6 +100,8 @@ private:
 	arr2sym_map	arr2sym;
 
 public:
+	typedef std::vector<StackFrame> stack_ty;
+
 	// Are we currently underconstrained?  Hack: value is size to make fake
 	// objects.
 	unsigned underConstrained;
@@ -121,8 +125,10 @@ public:
 	// Ref counting for MemoryObject deallocation
 	std::vector<ref<MemoryObject> > memObjects;
 
-	// true iff this state is a mere placeholder to be replaced by a real state
+	// true iff this state is a mere placeholder
+	// to be replaced by a real state
 	bool isCompactForm;
+
 	// for use with std::mem_fun[_ref] since they don't accept data members
 	bool isCompactForm_f() const { return isCompactForm; }
 	bool isNonCompactForm_f() const { return !isCompactForm; }
@@ -148,24 +154,10 @@ protected:
 	ExecutionState(const std::vector<ref<Expr> > &assumptions);
 	void compact(ExecutionState* es) const;
 
-	virtual ExecutionState* create(void) const { return new ExecutionState(); }
-	virtual ExecutionState* create(KFunction* kf) const
-	{ return new ExecutionState(kf); }
-	virtual ExecutionState* create(
-		const std::vector<ref<Expr> >& assumptions) const
-	{ return new ExecutionState(assumptions); }
-
-
 public:
 	static void setMemoryManager(MemoryManager* in_mm) { mm = in_mm; }
+	ExecutionState* copy(void) const;
 
-	static ExecutionState* make(KFunction* kf)
-	{ return new ExecutionState(kf); }
-	static ExecutionState* make(const std::vector<ref<Expr> >& assumptions)
-	{ return new ExecutionState(assumptions); }
-
-
-	virtual ExecutionState* copy(void) const { return copy(this); }
 	virtual ExecutionState* copy(const ExecutionState* es) const
 	{ return new ExecutionState(*es); }
 
@@ -223,6 +215,14 @@ public:
 		uint64_t address, uint64_t size,
 		const llvm::Value *allocSite);
 
+	virtual void bindObject(const MemoryObject *mo, ObjectState *os);
+	virtual void unbindObject(const MemoryObject* mo);
+
+	ObjectState* bindMemObj(const MemoryObject *mo, const Array *array = 0);
+	ObjectState *bindStackMemObj(const MemoryObject *mo, const Array *array = 0);
+
+
+
   bool addConstraint(ref<Expr> constraint);
   bool merge(const ExecutionState &b);
 
@@ -254,12 +254,6 @@ public:
 
   Cell& getLocalCell(unsigned sfi, unsigned i) const;
   Cell& readLocalCell(unsigned sfi, unsigned i) const;
-
-  void bindObject(const MemoryObject *mo, ObjectState *os);
-  void unbindObject(const MemoryObject* mo);
-
-  ObjectState* bindMemObj(const MemoryObject *mo, const Array *array = 0);
-  ObjectState *bindStackMemObj(const MemoryObject *mo, const Array *array = 0);
 
   void transferToBasicBlock(llvm::BasicBlock* dst, llvm::BasicBlock* src);
   void bindLocal(KInstruction *target, ref<Expr> value);

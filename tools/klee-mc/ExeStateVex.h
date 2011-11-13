@@ -7,10 +7,14 @@ struct breadcrumb;
 
 namespace klee
 {
+class MemoryObject;
+
+#define ExeStateVexBuilder DefaultExeStateBuilder<ExeStateVex>
 
 typedef std::vector <std::vector<unsigned char> > RecordLog;
 class ExeStateVex : public ExecutionState
 {
+friend class ExeStateVexBuilder;
 private:
 	ExeStateVex &operator=(const ExeStateVex&);
 
@@ -25,20 +29,7 @@ protected:
 	: ExecutionState(assumptions) {}
 	ExeStateVex(const ExeStateVex& src);
 
-	virtual ExecutionState* create(void) const { return new ExeStateVex(); }
-	virtual ExecutionState* create(KFunction* kf) const
-	{ return new ExeStateVex(kf); }
-	virtual ExecutionState* create(
-		const std::vector<ref<Expr> >& assumptions) const
-	{ return new ExeStateVex(assumptions); }
-
 public:
-	static ExeStateVex* make(KFunction* kf)
-	{ return new ExeStateVex(kf); }
-	static ExeStateVex* make(const std::vector<ref<Expr> >& assumptions)
-	{ return new ExeStateVex(assumptions); }
-
-
 	virtual ExecutionState* copy(void) const { return copy(this); }
 	virtual ExecutionState* copy(const ExecutionState* es) const
 	{ return new ExeStateVex(*(static_cast<const ExeStateVex*>(es))); }
@@ -64,6 +55,7 @@ public:
 	void incSyscallCount(void) { syscall_c++; }
 	unsigned int getSyscallCount(void) const { return syscall_c; }
 };
+
 }
 
 #endif

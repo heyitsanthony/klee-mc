@@ -316,7 +316,7 @@ void SyscallSFH::removeTail(
 	head_size = mo_size - taken;
 	buf_head = new char[head_size];
 	state.addressSpace.copyToBuf(mo, buf_head, 0, head_size);
-	os = state.addressSpace.findObject(mo);
+	os = state.addressSpace.findWriteableObject(mo);
 
 	/* free object from address space */
 	state.unbindObject(mo);
@@ -351,7 +351,7 @@ void SyscallSFH::removeHead(
 	tail_size = mo_size - taken;
 	buf_tail = new char[tail_size];
 	state.addressSpace.copyToBuf(mo, buf_tail, taken, tail_size);
-	os = state.addressSpace.findObject(mo);
+	os = state.addressSpace.findWriteableObject(mo);
 
 	/* free object from address space */
 	state.unbindObject(mo);
@@ -383,7 +383,7 @@ void SyscallSFH::removeMiddle(
 	buf_tail = new char[tail_size];
 	state.addressSpace.copyToBuf(mo, buf_head, 0, mo_off);
 	state.addressSpace.copyToBuf(mo, buf_tail, mo_off+taken, tail_size);
-	os = state.addressSpace.findObject(mo);
+	os = state.addressSpace.findWriteableObject(mo);
 
 	/* free object from address space */
 	state.unbindObject(mo);

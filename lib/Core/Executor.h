@@ -224,7 +224,7 @@ protected:
 	KInstruction *ki,
 	std::vector< ref<Expr> > &arguments);
 
-  void executeCall(ExecutionState &state,
+  virtual void executeCall(ExecutionState &state,
         KInstruction *ki,
         llvm::Function *f,
         std::vector< ref<Expr> > &arguments);
