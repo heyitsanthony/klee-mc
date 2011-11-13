@@ -19,6 +19,7 @@
 #include "elfimg.h"
 #include "guestelf.h"
 #include "ExecutorVex.h"
+#include "ExeSymHook.h"
 #include "ExeChk.h"
 
 //#include "llvm/Support/system_error.h"
@@ -49,8 +50,10 @@ using namespace llvm;
 using namespace klee;
 
 extern Interpreter::ModuleOptions getMainModule(Module* &m);
-bool SymArgs;
-extern double MaxSTPTime;
+bool		SymArgs;
+extern double	MaxSTPTime;
+extern bool	WriteTraces;
+extern double	MaxTime;
 
 namespace {
 	cl::opt<bool, true> SymArgsProxy(
@@ -59,94 +62,116 @@ namespace {
 		cl::location(SymArgs),
 		cl::init(false));
 
+	cl::opt<bool> SymHook(
+		"use-symhooks",
+		cl::desc("Apply additional analysis by tracking library calls"),
+		cl::init(false));
 
-  cl::opt<std::string>
-  InputFile(cl::desc("<input executable>"), cl::Positional, cl::init("-"));
+	cl::opt<std::string>
+	InputFile(
+		cl::desc("<input executable>"),
+		cl::Positional,
+		cl::init("-"));
 
-  cl::opt<std::string>
-  RunInDir("run-in", cl::desc("Change to the given directory prior to executing"));
+	cl::opt<std::string>
+	RunInDir(
+		"run-in",
+		cl::desc("Change to the given directory prior to executing"));
 
-  cl::opt<std::string>
-  Environ("environ", cl::desc("Parse environ from given file (in \"env\" format)"));
+	cl::opt<std::string>
+	Environ(
+		"environ",
+		cl::desc("Parse environ from given file (in \"env\" format)"));
 
-  cl::list<std::string>
-  InputArgv(cl::ConsumeAfter,
-            cl::desc("<program arguments>..."));
+	cl::list<std::string>
+	InputArgv(
+		cl::ConsumeAfter,
+		cl::desc("<program arguments>..."));
 
-  // this is a fake entry, its automagically handled
-  cl::list<std::string>
-  ReadArgsFilesFake("read-args",
-                    cl::desc("File to read arguments from (one arg per line)"));
+	// this is a fake entry, its automagically handled
+	cl::list<std::string>
+	ReadArgsFilesFake(
+		"read-args",
+		cl::desc("File to read arguments from (one arg per line)"));
 
-  cl::opt<bool>
-  ReplayKeepSymbolic("replay-keep-symbolic",
-                     cl::desc("Replay the test cases only by asserting"
-                              "the bytes, not necessarily making them concrete."));
+	cl::opt<bool>
+	ReplayKeepSymbolic(
+		"replay-keep-symbolic",
+		cl::desc("Replay the test cases only by asserting"
+		"the bytes, not necessarily making them concrete."));
 
-  cl::list<std::string>
-  ReplayOutFile("replay-out",
-                cl::desc("Specify an out file to replay"),
-                cl::value_desc("out file"));
+	cl::list<std::string>
+	ReplayOutFile(
+		"replay-out",
+		cl::desc("Specify an out file to replay"),
+		cl::value_desc("out file"));
 
-  cl::list<std::string>
-  ReplayOutDir("replay-out-dir",
-	       cl::desc("Specify a directory to replay .out files from"),
-	       cl::value_desc("out directory"));
+	cl::list<std::string>
+	ReplayOutDir(
+		"replay-out-dir",
+		cl::desc("Specify a directory to replay .out files from"),
+		cl::value_desc("out directory"));
 
-  cl::opt<std::string>
-  ReplayPathFile("replay-path",
-                 cl::desc("Specify a path file to replay"),
-                 cl::value_desc("path file"));
+	cl::opt<std::string>
+	ReplayPathFile(
+		"replay-path",
+		cl::desc("Specify a path file to replay"),
+		cl::value_desc("path file"));
 
-  cl::opt<std::string>
-  ReplayPathDir("replay-path-dir",
-          cl::desc("Specify a directory to replay path files from"),
-          cl::value_desc("path directory"));
+	cl::opt<std::string>
+	ReplayPathDir(
+		"replay-path-dir",
+		cl::desc("Specify a directory to replay path files from"),
+		cl::value_desc("path directory"));
 
-  cl::list<std::string>
-  SeedOutFile("seed-out");
+	cl::list<std::string>
+	SeedOutFile("seed-out");
 
-  cl::list<std::string>
-  SeedOutDir("seed-out-dir");
+	cl::list<std::string>
+	SeedOutDir("seed-out-dir");
 
-  cl::opt<unsigned>
-  MakeConcreteSymbolic("make-concrete-symbolic",
-                       cl::desc("Rate at which to make concrete reads symbolic (0=off)"),
-                       cl::init(0));
+	cl::opt<unsigned>
+	MakeConcreteSymbolic(
+		"make-concrete-symbolic",
+		cl::desc("Rate at which to make concrete reads symbolic (0=off)"),
+		cl::init(0));
 
-  cl::opt<std::string>
-  GuestType(
-	"guest-type",
-	cl::desc("Type of guest to use. {*ptrace, sshot, elf, frag}"),
-	cl::init("ptrace"));
+	cl::opt<std::string>
+	GuestType(
+		"guest-type",
+		cl::desc("Type of guest to use. {*ptrace, sshot, elf, frag}"),
+		cl::init("ptrace"));
 
-  cl::opt<std::string>
-  GuestSnapshotFName(
-        "guest-sshot",
-	cl::desc("Snapshot file to use."),
-	cl::init(""));
+	cl::opt<std::string>
+	GuestSnapshotFName(
+		"guest-sshot",
+		cl::desc("Snapshot file to use."),
+		cl::init(""));
 
-  cl::opt<std::string>
-  GuestFragmentFile(
-	"guestfrag-file",
-	cl::desc("File containing fragment data."),
-	cl::init("default.frag"));
+	cl::opt<std::string>
+	GuestFragmentFile(
+		"guestfrag-file",
+		cl::desc("File containing fragment data."),
+		cl::init("default.frag"));
 
-  cl::opt<unsigned>
-  GuestFragmentBase(
-	"guestfrag-base",
-	cl::desc("Base of the fragment"),
-	cl::init(0x400000));
+	cl::opt<unsigned>
+	GuestFragmentBase(
+		"guestfrag-base",
+		cl::desc("Base of the fragment"),
+		cl::init(0x400000));
 
-  cl::opt<bool>
-  XChkJIT("xchkjit",
-  	cl::desc("Cross check concrete / no syscall binary with JIT."),
-	cl::init(false));
+	cl::opt<bool>
+	XChkJIT(
+		"xchkjit",
+		cl::desc("Cross check concrete / no syscall binary with JIT."),
+		cl::init(false));
 
-  cl::opt<bool>
-  Watchdog("watchdog",
-           cl::desc("Use a watchdog process to enforce --max-time."),
-           cl::init(0));
+	cl::opt<bool>
+	Watchdog(
+		"watchdog",
+		cl::desc("Use a watchdog process to enforce --max-time."),
+		cl::init(0));
+
 }
 
 // This is a terrible hack until we get some real modelling of the
@@ -154,18 +179,6 @@ namespace {
 // any "unrecognized" externals and about any obviously unsafe ones.
 static Interpreter *theInterpreter = 0;
 static bool interrupted = false;
-
-
-extern bool WriteTraces;
-extern double MaxTime;
-
-/***/
-//===----------------------------------------------------------------------===//
-// main Driver function
-//
-#if ENABLE_STPLOG == 1
-extern "C" void STPLOG_init(const char *);
-#endif
 
 std::string stripEdgeSpaces(std::string &in)
 {
@@ -497,10 +510,6 @@ int main(int argc, char **argv, char **envp)
 	Guest		*gs;
 	Interpreter	*interpreter;
 
-#if ENABLE_STPLOG == 1
-	STPLOG_init("stplog.c");
-#endif
-
 	atexit(llvm_shutdown);
 
 	llvm::InitializeNativeTarget();
@@ -517,7 +526,6 @@ int main(int argc, char **argv, char **envp)
 		alarm((unsigned int)MaxTime);
 	}
 
-	//  replayPaths = getReplayPaths();
 	cmdargs = getCmdArgs(envp);
 
 	IOpts.MakeConcreteSymbolic = MakeConcreteSymbolic;
@@ -529,9 +537,13 @@ int main(int argc, char **argv, char **envp)
 		return 2;
 	}
 
-	interpreter = (XChkJIT) ?
-		new ExeChk(IOpts, handler, gs) :
-		new ExecutorVex(IOpts, handler, gs);
+	if (SymHook == false) {
+		interpreter = (XChkJIT)
+			? new ExeChk(IOpts, handler, gs)
+			: new ExecutorVex(IOpts, handler, gs);
+	} else {
+		interpreter = new ExeSymHook(IOpts, handler, gs);
+	}
 
 	theInterpreter = interpreter;
 	handler->setInterpreter(interpreter);
