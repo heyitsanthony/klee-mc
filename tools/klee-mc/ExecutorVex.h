@@ -29,6 +29,10 @@ class SyscallSFH;
 // ugh g++, you delicate garbage
 typedef __gnu_cxx::hash_map<uintptr_t /* Func*/, VexSB*> func2vsb_map;
 
+#define es2esv(x)	static_cast<ExeStateVex&>(x)
+#define GETREGOBJ(x)	es2esv(x).getRegObj()
+#define GETREGOBJRO(x)	es2esv(x).getRegObjRO()
+
 class ExecutorVex : public Executor
 {
 public:
@@ -57,7 +61,6 @@ public:
 	MemoryObject* allocRegCtx(ExecutionState* state, llvm::Function* f = 0);
 
 	void setRegCtx(ExecutionState& state, MemoryObject* mo);
-	ObjectState* getRegObj(ExecutionState&);
 	void dumpSCRegs(const std::string& fname);
 protected:
 	virtual ExecutionState* setupInitialState(void);
@@ -98,7 +101,9 @@ protected:
 	virtual void handleXfer(ExecutionState& state, KInstruction *ki);
 	void updateGuestRegs(ExecutionState& s);
 
-	ref<Expr> getCallArg(ExecutionState& state, unsigned int n);
+	uint64_t getStateStack(ExecutionState& s) const;
+	ref<Expr> getRetArg(ExecutionState& state) const;
+	ref<Expr> getCallArg(ExecutionState& state, unsigned int n) const;
 
 	VexXlate	*xlate;
 	Guest		*gs;
@@ -162,7 +167,7 @@ private:
 
 	KFunction		*kf_scenter;
 	SyscallSFH		*sfh;
-	
+
 	std::set<uint64_t> legalFunctions;
 };
 

@@ -50,7 +50,9 @@ public:
 		return old_mo;
 	}
 
-	MemoryObject* getRegCtx(void) const { return reg_mo; }
+	const MemoryObject* getRegCtx(void) const { return reg_mo; }
+	ObjectState* getRegObj(void);
+	const ObjectState* getRegObjRO(void) const;
 
 	void incSyscallCount(void) { syscall_c++; }
 	unsigned int getSyscallCount(void) const { return syscall_c; }

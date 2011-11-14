@@ -6,6 +6,7 @@
 #include "symbols.h"
 #include "guest.h"
 
+
 using namespace klee;
 
 #define es2esh(x)	static_cast<ESVSymHook&>(x)
@@ -37,51 +38,81 @@ void ExeSymHook::watchEnterXfer(ExecutionState& es, llvm::Function* f)
 {
 	ESVSymHook	&esh(es2esh(es));
 
-	if (esh.isWatched()) {
-		std::cerr << "WUUUUUT\n";
-		esh.incWatchDepth();
+	if (esh.isWatched())
 		return;
-	}
-	std::cerr << "GOT: " << f->getNameStr() << "\n";
 	watchFunc(es, f);
 }
 
 void ExeSymHook::jumpToKFunc(ExecutionState& state, KFunction* kf)
 {
-	watchEnterXfer(state, kf->function);
+	ESVSymHook	&esh(es2esh(state));
+
+	if (!esh.isWatched()) {
+		watchEnterXfer(state, kf->function);
+	} else {
+		// if (esh.isWatched())
+		/* check the water mark, if the stack is greater than
+		 * the watermark (e.g. closer to the beginning of stack mem),
+		 * then we have returned from the watched function */
+		if (getStateStack(state) > esh.getWatermark())
+			unwatch(esh);
+	}
+
 	ExecutorVex::jumpToKFunc(state, kf);
+}
+
+void ExeSymHook::unwatch(ESVSymHook &esh)
+{
+	llvm::Function		*watch_f;
+	const ConstantExpr	*ret_ce;
+	ref<Expr>		ret_arg;
+
+	ret_arg = getRetArg(esh);
+	ret_ce = dyn_cast<ConstantExpr>(ret_arg);
+
+	if (ret_ce == NULL)
+		goto done;
+
+	watch_f = esh.getWatchedFunc();
+	if (watch_f == f_malloc) {
+		heap_ptrs.insert(ret_ce->getZExtValue());
+	} else if (watch_f == f_free) {
+		if (heap_ptrs.count(ret_ce->getZExtValue()) == 0) {
+			terminateStateOnError(
+			esh,
+			"heap error: freeing non-malloced pointer",
+			"heapfree.err");
+		}
+		heap_ptrs.erase(ret_ce->getZExtValue());
+	} else {
+		assert (0 == 1 && "WTF");
+	}
+
+done:
+#if 0
+	std::cerr << "\nUNWATCHED: param=";
+	esh.getWatchParam()->print(std::cerr);
+	std::cerr << "\nRETVAL=";
+	ret_arg->print(std::cerr);
+	std::cerr << "\n";
+#endif
+	esh.unwatch();
 }
 
 void ExeSymHook::watchFunc(ExecutionState& es, llvm::Function* f)
 {
-	ESVSymHook	&esh(es2esh(es));
+	ESVSymHook		&esh(es2esh(es));
+	uint64_t		stack_pos;
 
-	if (f == f_malloc) {
-		std::cerr << "HELLOOOOOO MALLOC\n";
-		esh.setWatchedFunc(f_malloc, getCallArg(es, 0));
+	if (f != f_malloc && f != f_free)
 		return;
-	}
 
-	if (f == f_free) {
-		esh.setWatchedFunc(f_free, getCallArg(es, 0));
+	stack_pos = getStateStack(es);
+	if (!stack_pos)
 		return;
-	}
-}
 
-void ExeSymHook::handleXferReturn(ExecutionState& state, KInstruction* ki)
-{
-	ESVSymHook	&esh(es2esh(state));
-
-	if (esh.isWatched() && esh.decWatchDepth() == 0)
-		unwatchFunc(esh);
-
-	ExecutorVex::handleXferReturn(state, ki);
-}
-
-void ExeSymHook::unwatchFunc(ESVSymHook& esh)
-{
-	esh.getWatchParam()->print(std::cerr);
-	esh.unwatch();
+	std::cerr << "WATCHING: " << f->getNameStr() << "\n";
+	esh.enterWatchedFunc(f, getCallArg(es, 0), stack_pos);
 }
 
 ExecutionState* ExeSymHook::setupInitialState(void)
@@ -95,7 +126,7 @@ ExecutionState* ExeSymHook::setupInitialState(void)
 	ret = ExecutorVex::setupInitialState();
 
 	gs = getGuest();
-	syms = gs->getSymbols();
+	syms = gs->getDynSymbols();
 	assert (syms != NULL && "Can't hook without symbol names");
 
 	sym_malloc = syms->findSym("malloc");

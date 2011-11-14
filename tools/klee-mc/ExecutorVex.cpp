@@ -44,8 +44,6 @@ using namespace llvm;
 
 extern bool WriteTraces;
 
-#define es2esv(x)	static_cast<ExeStateVex&>(x)
-
 extern bool SymArgs;
 
 namespace
@@ -512,8 +510,7 @@ void ExecutorVex::prepState(ExecutionState* state, Function* f)
 	setupProcessMemory(state, f);
 }
 
-/* Argh, really need to stop macroing the page size all the time */
-#define PAGE_SIZE	4096
+// NOTE: PAGE_SIZE is defined un sys/user.h
 void ExecutorVex::bindMappingPage(
 	ExecutionState* state,
 	Function* f,
@@ -756,18 +753,11 @@ void ExecutorVex::markExit(ExecutionState& state, uint8_t v)
 	ObjectState		*state_regctx_os;
 
 	gs->getCPUState()->setExitType(GE_IGNORE);
-	state_regctx_os = getRegObj(state);
+	state_regctx_os = GETREGOBJ(state);
 	state.write8(
 		state_regctx_os,
 		gs->getCPUState()->getExitTypeOffset(),
 		v);
-}
-
-ObjectState* ExecutorVex::getRegObj(ExecutionState& state)
-{
-	MemoryObject	*mo;
-	mo = es2esv(state).getRegCtx();
-	return state.addressSpace.findWriteableObject(mo);
 }
 
 void ExecutorVex::logXferRegisters(ExecutionState& state)
@@ -796,7 +786,7 @@ void ExecutorVex::logXferRegisters(ExecutionState& state)
 	crumb_buf += reg_sz;
 
 	/* 2. store concrete mask */
-	state_regctx_os = getRegObj(state);
+	state_regctx_os = GETREGOBJ(state);
 	for (unsigned int i = 0; i < reg_sz; i++) {
 		crumb_buf[i] =(state_regctx_os->isByteConcrete(i))
 			? 0xff
@@ -920,9 +910,9 @@ void ExecutorVex::handleXferJmp(ExecutionState& state, KInstruction* ki)
 
 void ExecutorVex::jumpToKFunc(ExecutionState& state, KFunction* kf)
 {
-	CallPathNode	*cpn;
-	MemoryObject	*regctx_mo;
-	KInstIterator	ki = state.getCaller();
+	CallPathNode		*cpn;
+	const MemoryObject	*regctx_mo;
+	KInstIterator		ki = state.getCaller();
 
 	assert (kf != NULL);
 	assert (state.stack.size() > 0);
@@ -1100,14 +1090,45 @@ void ExecutorVex::printStateErrorMessage(
 	state.constraints.print(os);
 }
 
-ref<Expr> ExecutorVex::getCallArg(ExecutionState& state, unsigned int n)
+ref<Expr> ExecutorVex::getCallArg(ExecutionState& state, unsigned int n) const
 {
-	ObjectState	*regobj;
+	const ObjectState	*regobj;
 
-	regobj = getRegObj(state);
+	regobj = GETREGOBJRO(state);
 	return state.read(
 		regobj,
-		gs->getCPUState()->getFuncArgOff(0),
+		gs->getCPUState()->getFuncArgOff(n),
 		64);
 }
 
+ref<Expr> ExecutorVex::getRetArg(ExecutionState& state) const
+{
+	const ObjectState	*regobj;
+
+	regobj = GETREGOBJRO(state);
+	return state.read(
+		regobj,
+		gs->getCPUState()->getRetOff(),
+		64);
+}
+
+uint64_t ExecutorVex::getStateStack(ExecutionState& es) const
+{
+	ref<Expr>		stack_e;
+	const ConstantExpr	*stack_ce;
+	const ObjectState	*os;
+
+	/* XXX: not 32-bit clean */
+	os = GETREGOBJRO(es);
+	stack_e = es.read(os, getGuest()->getCPUState()->getStackRegOff(), 64);
+	stack_ce = dyn_cast<ConstantExpr>(stack_e);
+	if (stack_ce == NULL) {
+		std::cerr << "warning: COULD NOT WATCH BY STACK!!!!!!\n";
+		std::cerr << "symbolic stack pointer: ";
+		stack_e->print(std::cerr);
+		std::cerr << '\n';
+		return 0;
+	}
+
+	return stack_ce->getZExtValue();
+}

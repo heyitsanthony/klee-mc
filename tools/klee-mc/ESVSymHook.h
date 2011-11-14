@@ -37,18 +37,13 @@ public:
 
 	virtual ~ESVSymHook() {}
 
-	llvm::Function* getWatchedFunc(void) const { return cur_watched_f; }
-	bool isWatched(void) const { return cur_watched_f; }
-	void setWatchedFunc(llvm::Function* f, ref<Expr> param);
+	void enterWatchedFunc(llvm::Function* f, ref<Expr> p, uint64_t);
 	void unwatch(void) { cur_watched_f = NULL; }
+
+	uint64_t getWatermark(void) const { return enter_stack_watermark; }
+	llvm::Function* getWatchedFunc(void) const { return cur_watched_f; }
+	bool isWatched(void) const { return (cur_watched_f != NULL); }
 	const ref<Expr>& getWatchParam(void) const { return param; }
-	void incWatchDepth(void) { watched_depth++; }
-	unsigned int decWatchDepth(void)
-	{ watched_depth--; return watched_depth; }
-
-	virtual void bindObject(const MemoryObject *mo, ObjectState *os);
-	virtual void unbindObject(const MemoryObject* mo);
-
 
 private:
 	/* need two extra address spaces:
@@ -61,7 +56,7 @@ private:
 
 	llvm::Function*	cur_watched_f;
 	ref<Expr>	param;
-	unsigned int	watched_depth;
+	uint64_t	enter_stack_watermark;
 };
 
 }

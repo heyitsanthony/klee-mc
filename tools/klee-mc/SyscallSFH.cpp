@@ -59,8 +59,6 @@ SFH_DEF_HANDLER(SCRegs)
 	Guest			*gs;
 	MemoryObject		*cpu_mo;
 	ObjectState		*state_regctx_os;
-
-	const MemoryObject	*old_mo;
 	const ObjectState	*old_regctx_os;
 	unsigned int		sz;
 
@@ -70,10 +68,9 @@ SFH_DEF_HANDLER(SCRegs)
 	gs = exe_vex->getGuest();
 	sz = gs->getCPUState()->getStateSize();
 
-	old_mo = static_cast<ExeStateVex&>(state).getRegCtx();
-	assert (old_mo && "No register context ever set?");
+	old_regctx_os = GETREGOBJRO(state);
+	assert (old_regctx_os && "No register context ever set?");
 
-	old_regctx_os = state.addressSpace.findObject(old_mo);
 	// do not unbind the object, we need to be able to grab it
 	// for replay
 	// state.unbindObject(old_mo);
@@ -245,17 +242,13 @@ done:
 SFH_DEF_HANDLER(AllocAligned)
 {
 	/* Arguments note:
-	 * TJ, if you want symbolics, use kmc_make_range_symbolic
+	 * If you want symbolics, use kmc_make_range_symbolic
 	 * after calling kmc_alloc_aligned. Making things symbolic here
-	 * is actually the *less* efficient way to do it-- pages are 
+	 * is actually the *less* efficient way to do it-- pages are
 	 * chopped up to reduce the number of constant array assumptions
 	 * passed to the solver. Since symbolics have no assumptions,
-	 * that optimization doesn't make sense and will result in 
+	 * that optimization doesn't make sense and will result in
 	 * needless overhead when resolving symbolic reads!
-	 *
-	 * If you don't want me to break your runtime
-	 * (inadvertantly, or otherwise),
-	 * I'm going to need test cases that rely on it working properly!
 	 *
 	 * -AJR */
 	SFH_CHK_ARGS(2, "kmc_alloc_aligned");

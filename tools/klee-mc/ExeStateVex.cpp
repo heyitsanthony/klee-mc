@@ -28,3 +28,13 @@ void ExeStateVex::recordBreadcrumb(const struct breadcrumb* bc)
 		(const unsigned char*)bc,
 		((const unsigned char*)bc) + bc->bc_sz));
 }
+
+ObjectState* ExeStateVex::getRegObj()
+{
+	return addressSpace.findWriteableObject(reg_mo);
+}
+
+const ObjectState* ExeStateVex::getRegObjRO() const
+{
+	return addressSpace.findObject(reg_mo);
+}

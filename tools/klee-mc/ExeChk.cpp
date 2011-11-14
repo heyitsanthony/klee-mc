@@ -12,6 +12,7 @@
 
 #include <iostream>
 
+#include "ExeStateVex.h"
 #include "ExeChk.h"
 
 using namespace llvm;
@@ -136,7 +137,7 @@ void ExeChk::handleXferSyscall(ExecutionState& state, KInstruction* ki)
 		fprintf(stderr, "EXITING ON sys_nr=%d. exitcode=%d\n", 
 			sys_nr,
 			(int)sp.getArg(0));
-		reg_os = getRegObj(state);
+		reg_os = GETREGOBJ(state);
 		assert (reg_os != NULL);
 		state.write64(reg_os, 0 /* RAX */, sp.getArg(0));
 		gs->setSyscallResult(sp.getArg(0));
