@@ -130,12 +130,6 @@ namespace {
 	cl::list<std::string>
 	SeedOutDir("seed-out-dir");
 
-	cl::opt<unsigned>
-	MakeConcreteSymbolic(
-		"make-concrete-symbolic",
-		cl::desc("Rate at which to make concrete reads symbolic (0=off)"),
-		cl::init(0));
-
 	cl::opt<std::string>
 	GuestType(
 		"guest-type",
@@ -504,7 +498,6 @@ void setupReplayPaths(Interpreter* interpreter)
 
 int main(int argc, char **argv, char **envp)
 {
-	Interpreter::InterpreterOptions IOpts;
 	KleeHandler	*handler;
 	CmdArgs		*cmdargs;
 	Guest		*gs;
@@ -528,7 +521,6 @@ int main(int argc, char **argv, char **envp)
 
 	cmdargs = getCmdArgs(envp);
 
-	IOpts.MakeConcreteSymbolic = MakeConcreteSymbolic;
 	handler = new KleeHandler(cmdargs);
 
 	gs = getGuest(cmdargs);
@@ -539,10 +531,10 @@ int main(int argc, char **argv, char **envp)
 
 	if (SymHook == false) {
 		interpreter = (XChkJIT)
-			? new ExeChk(IOpts, handler, gs)
-			: new ExecutorVex(IOpts, handler, gs);
+			? new ExeChk(handler, gs)
+			: new ExecutorVex(handler, gs);
 	} else {
-		interpreter = new ExeSymHook(IOpts, handler, gs);
+		interpreter = new ExeSymHook(handler, gs);
 	}
 
 	theInterpreter = interpreter;

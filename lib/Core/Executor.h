@@ -59,6 +59,7 @@ namespace klee {
   class KFunction;
   class KInstruction;
   class KInstIterator;
+  class MMU;
   class MemoryManager;
   class MemoryObject;
   class ObjectState;
@@ -69,6 +70,7 @@ namespace klee {
   class StatsTracker;
   class TimingSolver;
   class TreeStreamWriter;
+
   template<class T> class ref;
 
   /// \todo Add a context object to keep track of data only live
@@ -129,41 +131,24 @@ public:
   /// Get textual information regarding a memory address.
   std::string getAddressInfo(ExecutionState &state, ref<Expr> address) const;
 
+  /// Return a constant value for the given expression, forcing it to
+  /// be constant in the given state by adding a constraint if
+  /// necessary. Note that this function breaks completeness and
+  /// should generally be avoided.
+  ///
+  /// \param purpose An identify string to printed in case of concretization.
+  ref<klee::ConstantExpr> toConstant(
+  	ExecutionState &state, ref<Expr> e, const char *purpose);
   /// Bind a constant value for e to the given target. NOTE: This
   /// function may fork state if the state has multiple seeds.
   void executeGetValue(ExecutionState &state, ref<Expr> e, KInstruction *target);
 
   const KModule* getKModule(void) const { return kmodule; }
 
-  MemoryManager *memory;
+  MemoryManager	*memory;
+  MMU		*mmu;
 private:
   class TimerInfo;
-struct MemOpRes
-{
-	ObjectPair		op;
-	ref<Expr>		offset;
-	const MemoryObject	*mo;
-	const ObjectState	*os;
-	bool			usable;
-	bool			rc;	/* false => solver failure */
-};
-
-struct MemOp
-{
-public:
-	Expr::Width getType(KModule* m) const;
-	void simplify(ExecutionState& es);
-	MemOp(	bool _isWrite, ref<Expr> _addr, ref<Expr> _value,
-		KInstruction* _target)
-	: isWrite(_isWrite), address(_addr), value(_value), target(_target)
-	{}
-
-	bool		isWrite;
-	ref<Expr>	address;
-	ref<Expr>	value;		/* undef if read */
-	KInstruction	*target;	/* undef if write */
-};
-
 
   static void deleteTimerInfo(TimerInfo*&);
   void runLoop(void);
@@ -404,33 +389,6 @@ private:
 	std::vector< ref<Expr> > &arguments);
 
 
-  // do address resolution / object binding / out of bounds checking
-  // and perform the operation
-  void executeMemoryOperation(ExecutionState &state, MemOp mop);
-
-  MemOpRes memOpResolve(
-	ExecutionState& state,
-	ref<Expr> address,
-	Expr::Width type);
-
-  bool memOpFast(ExecutionState& state, MemOp& mop);
-
-  void writeToMemRes(
-  	ExecutionState& state,
-	struct MemOpRes& res,
-	ref<Expr> value);
-
-  bool memOpByByte(ExecutionState& state, MemOp& mop);
-
-  ExecutionState* getUnboundAddressState(
-    ExecutionState	*unbound,
-    MemOp&		mop,
-    ObjectPair&		resolution,
-    unsigned		bytes,
-    Expr::Width		type);
-
-  void memOpError(ExecutionState& state, MemOp& mop);
-
   ObjectState* makeSymbolicReplay(
     ExecutionState& state, const MemoryObject* mo, ref<Expr> len);
 
@@ -492,20 +450,8 @@ private:
 
   bool isStateSeeding(ExecutionState* s);
 
-  // Called on [for now] concrete reads, replaces constant with a symbolic
-  // Used for testing.
-  ref<Expr> replaceReadWithSymbolic(ExecutionState &state, ref<Expr> e);
-
   ref<klee::ConstantExpr> evalConstantExpr(llvm::ConstantExpr *ce);
 
-  /// Return a constant value for the given expression, forcing it to
-  /// be constant in the given state by adding a constraint if
-  /// necessary. Note that this function breaks completeness and
-  /// should generally be avoided.
-  ///
-  /// \param purpose An identify string to printed in case of concretization.
-  ref<klee::ConstantExpr> toConstant(ExecutionState &state, ref<Expr> e,
-                                     const char *purpose);
 
   void handlePointsToObj(ExecutionState &state,
                          KInstruction *target,
@@ -535,7 +481,7 @@ private:
   void getConstraintLogCVC(const ExecutionState& state, std::string& res);
 
 public:
-  Executor(const InterpreterOptions &opts, InterpreterHandler *ie);
+  Executor(InterpreterHandler *ie);
   virtual ~Executor();
 
   const InterpreterHandler& getHandler() { return *interpreterHandler; }
@@ -644,9 +590,11 @@ public:
     replayPaths = paths;
   }
 
-  virtual void useSeeds(const std::vector<struct KTest *> *seeds) {
-    usingSeeds = seeds;
-  }
+  bool isReplayOut(void) const { return (replayOut != NULL); }
+  bool isReplayPaths(void) const { return (replayPaths != NULL); } 
+
+  virtual void useSeeds(const std::vector<struct KTest *> *seeds)
+  {usingSeeds = seeds; }
 
   /*** Runtime options ***/
 

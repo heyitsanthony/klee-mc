@@ -11,11 +11,8 @@ using namespace klee;
 
 #define es2esh(x)	static_cast<ESVSymHook&>(x)
 
-ExeSymHook::ExeSymHook(
-	const InterpreterOptions &opts,
-	InterpreterHandler *ie,
-	Guest* gs)
-: ExecutorVex(opts, ie, gs)
+ExeSymHook::ExeSymHook(InterpreterHandler *ie, Guest* gs)
+: ExecutorVex(ie, gs)
 , f_malloc(NULL)
 , f_free(NULL)
 {

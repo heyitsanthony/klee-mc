@@ -10,7 +10,7 @@ class KModule;
 class ExecutorBC : public Executor
 {
 public:
-	ExecutorBC(const InterpreterOptions &opts, InterpreterHandler *ie);
+	ExecutorBC(InterpreterHandler *ie);
 	virtual ~ExecutorBC(void);
 
 	const llvm::Module * setModule(

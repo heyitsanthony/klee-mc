@@ -12,9 +12,7 @@ namespace klee {
 class ExeChk : public ExecutorVex
 {
 public:
-	ExeChk(	const InterpreterOptions &opts,
-		InterpreterHandler *ie,
-		Guest* gs);
+	ExeChk(InterpreterHandler *ie, Guest* gs);
 	virtual ~ExeChk(void);
 
 	virtual void runImage(void);

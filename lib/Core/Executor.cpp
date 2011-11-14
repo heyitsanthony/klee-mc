@@ -22,6 +22,7 @@
 #include "TimingSolver.h"
 #include "UserSearcher.h"
 #include "MemUsage.h"
+#include "MMU.h"
 #include "StatsTracker.h"
 
 #include "static/Sugar.h"
@@ -82,7 +83,17 @@ namespace llvm
   }
 }
 
+unsigned MakeConcreteSymbolic;
+
 namespace {
+  cl::opt<unsigned,true>
+  MakeConcreteSymbolicProxy(
+  	"make-concrete-symbolic",
+	cl::desc("Rate at which to make concrete reads symbolic (0=off)"),
+	cl::location(MakeConcreteSymbolic),
+	cl::init(0));
+
+
   cl::opt<bool>
   DumpStatesOnHalt("dump-states-on-halt",
                    cl::init(true));
@@ -102,14 +113,6 @@ namespace {
 
   cl::opt<bool>
   DebugCheckForImpliedValues("debug-check-for-implied-values");
-
-  cl::opt<bool>
-  SimplifySymIndices("simplify-sym-indices",
-                     cl::init(false));
-
-  cl::opt<unsigned>
-  MaxSymArraySize("max-sym-array-size",
-                  cl::init(0));
 
   cl::opt<bool>
   OnlyOutputStatesCoveringNew("only-output-states-covering-new",
@@ -258,11 +261,8 @@ bool llvm::cl::parser<sockaddr_in_opt>::parse(llvm::cl::Option &O,
   return false;
 }
 
-Executor::Executor(
-	const InterpreterOptions &opts,
-	InterpreterHandler *ih)
-: Interpreter(opts)
-, kmodule(0)
+Executor::Executor(InterpreterHandler *ih)
+: kmodule(0)
 , interpreterHandler(ih)
 , target_data(0)
 , statsTracker(0)
@@ -287,6 +287,7 @@ Executor::Executor(
 		interpreterHandler->getOutputFilename("stp-queries.pc"));
 
 	memory = MemoryManager::create();
+	mmu = new MMU(*this);
 	stateManager = new ExeStateManager();
 	ExecutionState::setMemoryManager(memory);
 	ExeStateBuilder::replaceBuilder(new BaseExeStateBuilder());
@@ -297,6 +298,7 @@ Executor::~Executor()
 {
 	std::for_each(timers.begin(), timers.end(), deleteTimerInfo);
 	delete stateManager;
+	delete mmu;
 	delete memory;
 	if (processTree) delete processTree;
 	if (statsTracker) delete statsTracker;
@@ -1202,9 +1204,9 @@ void Executor::executeCall(
     // size. This happens to work fir x86-32 and x86-64, however.
     Expr::Width WordSize = Context::get().getPointerWidth();
     if (WordSize == Expr::Int32) {
-      executeMemoryOperation(
+      mmu->exeMemOp(
       	state,
-	MemOp(true, arguments[0], sf.varargs->getBaseExpr(), NULL));
+	MMU::MemOp(true, arguments[0], sf.varargs->getBaseExpr(), NULL));
     } else {
       assert(WordSize == Expr::Int64 && "Unknown word size!");
        // X86-64 has quite complicated calling convention. However,
@@ -1212,28 +1214,31 @@ void Executor::executeCall(
       // make a function believe that all varargs are on stack.
 
       // gp offest
-      executeMemoryOperation(
+      mmu->exeMemOp(
 	state,
-	MemOp(true, arguments[0], ConstantExpr::create(48, 32), NULL));
+	MMU::MemOp(true, arguments[0], ConstantExpr::create(48, 32), NULL));
 
       // fp_offset
-      executeMemoryOperation(
+      mmu->exeMemOp(
       	state,
-	MemOp(	true,
+	MMU::MemOp(
+		true,
 		AddExpr::create(arguments[0], ConstantExpr::create(4, 64)),
 		ConstantExpr::create(304, 32), NULL));
 
       // overflow_arg_area
-      executeMemoryOperation(
+      mmu->exeMemOp(
       	state,
-	MemOp(	true,
+	MMU::MemOp(
+		true,
 		AddExpr::create(arguments[0], ConstantExpr::create(8, 64)),
 		sf.varargs->getBaseExpr(), NULL));
 
       // reg_save_area
-      executeMemoryOperation(
+      mmu->exeMemOp(
       	state,
-	MemOp(	true,
+	MMU::MemOp(
+		true,
 		AddExpr::create(arguments[0], ConstantExpr::create(16, 64)),
 		ConstantExpr::create(0, 64), NULL));
     }
@@ -1484,7 +1489,8 @@ void Executor::instCall(ExecutionState& state, KInstruction *ki)
 		llvm::ConstantExpr *ce = dyn_cast<llvm::ConstantExpr>(fp);
 
 		if (isa<InlineAsm>(fp)) {
-			terminateStateOnExecError(state, "inline assembly is unsupported");
+			terminateStateOnExecError(
+				state, "inline assembly is unsupported");
 			return;
 		}
 
@@ -2302,13 +2308,13 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
 
   case Instruction::Load: {
     ref<Expr> base = eval(ki, 0, state).value;
-    executeMemoryOperation(state, MemOp(false, base, 0, ki));
+    mmu->exeMemOp(state, MMU::MemOp(false, base, 0, ki));
     break;
   }
   case Instruction::Store: {
     ref<Expr> base = eval(ki, 1, state).value;
     ref<Expr> value = eval(ki, 0, state).value;
-    executeMemoryOperation(state, MemOp(true, base, value, 0));
+    mmu->exeMemOp(state, MMU::MemOp(true, base, value, 0));
     break;
   }
 
@@ -2319,9 +2325,11 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     foreach (it, kgepi->indices.begin(), kgepi->indices.end()) {
       uint64_t elementSize = it->second;
       ref<Expr> index = eval(ki, it->first, state).value;
-      base = AddExpr::create(base,
-                             MulExpr::create(Expr::createCoerceToPointerType(index),
-                                             Expr::createPointer(elementSize)));
+      base = AddExpr::create(
+        base,
+        MulExpr::create(
+	  Expr::createCoerceToPointerType(index),
+          Expr::createPointer(elementSize)));
     }
     if (kgepi->offset)
       base = AddExpr::create(base, Expr::createPointer(kgepi->offset));
@@ -2926,39 +2934,6 @@ void Executor::printStateErrorMessage(
 	state.dumpStack(os);
 }
 
-/***/
-
-ref<Expr> Executor::replaceReadWithSymbolic(
-	ExecutionState &state, ref<Expr> e)
-{
-	static unsigned	id;
-	const Array	*array;
-	unsigned	n;
-
-	n = interpreterOpts.MakeConcreteSymbolic;
-	if (!n || replayOut || replayPaths) return e;
-
-	// right now, we don't replace symbolics (is there any reason too?)
-	if (!isa<ConstantExpr>(e)) return e;
-
-	/* XXX why random? */
-	if (n != 1 && random() % n) return e;
-
-	// create a new fresh location, assert it is equal to concrete value in e
-	// and return it.
-
-
-	array = new Array(
-		"rrws_arr" + llvm::utostr(++id),
-		MallocKey(Expr::getMinBytesForWidth(e->getWidth())));
-
-	ref<Expr> res = Expr::createTempRead(array, e->getWidth());
-	ref<Expr> eq = NotOptimizedExpr::create(EqExpr::create(e, res));
-	std::cerr << "Making symbolic: " << eq << "\n";
-	state.addConstraint(eq);
-	return res;
-}
-
 void Executor::resolveExact(ExecutionState &state,
                             ref<Expr> p,
                             ExactResolutionList &results,
@@ -2992,261 +2967,6 @@ void Executor::resolveExact(ExecutionState &state,
 			"ptr.err",
 			getAddressInfo(*unbound, p));
 	}
-}
-
-/* handles a memop that can be immediately resolved */
-bool Executor::memOpByByte(ExecutionState& state, MemOp& mop)
-{
-	Expr::Width	type;
-	unsigned	bytes;
-	ref<Expr>	read_expr;
-
-	type = mop.getType(kmodule);
-	if ((type % 8) != 0) return false;
-
-	bytes = Expr::getMinBytesForWidth(type);
-	for (unsigned i = 0; i < bytes; i++) {
-		ref<Expr>	byte_addr;
-		ref<Expr>	byte_val;
-		MemOpRes	res;
-
-		byte_addr = AddExpr::create(
-			mop.address,
-			ConstantExpr::create(i, mop.address->getWidth()));
-
-		res = memOpResolve(state, byte_addr, 8);
-		if (!res.usable || !res.rc)
-			return false;
-		if (mop.isWrite) {
-			byte_val = ExtractExpr::create(mop.value, 8*i, 8);
-			writeToMemRes(state, res, byte_val);
-		} else {
-			ref<Expr> result = state.read(res.os, res.offset, 8);
-			if (read_expr.isNull())
-				read_expr = result;
-			else
-				read_expr = ConcatExpr::create(
-					result, read_expr);
-		}
-	}
-
-	// we delayed setting the local variable on the read because
-	// we need to respect the original type width-- result is concatenated
-	if (!mop.isWrite) {
-		state.bindLocal(mop.target, read_expr);
-	}
-
-	return true;
-}
-
-Executor::MemOpRes Executor::memOpResolve(
-	ExecutionState& state,
-	ref<Expr> addr,
-	Expr::Width type)
-{
-	MemOpRes	ret;
-	unsigned	bytes;
-	bool		alwaysInBounds;
-
-	bytes = Expr::getMinBytesForWidth(type);
-	ret.usable = false;
-
-	ret.rc = state.addressSpace.getFeasibleObject(
-		state, solver, addr, ret.op);
-	if (!ret.rc) {
-		/* solver failed in GFO, force addr to be concrete */
-		addr = toConstant(state, addr, "resolveOne failure");
-		ret.op.first = NULL;
-		ret.rc = state.addressSpace.resolveOne(
-			cast<ConstantExpr>(addr), ret.op);
-		if (!ret.rc)
-			return ret;
-	}
-
-	if (ret.op.first == NULL) {
-		/* no feasible objects exist */
-		return ret;
-	}
-
-	// fast path: single in-bounds resolution.
-	assert (ret.op.first != NULL);
-	ret.mo = ret.op.first;
-	ret.os = ret.op.second;
-
-	if (MaxSymArraySize && ret.mo->size>=MaxSymArraySize) {
-		addr = toConstant(state, addr, "max-sym-array-size");
-	}
-
-	ret.offset = ret.mo->getOffsetExpr(addr);
-
-	/* verify access is in bounds */
-	ret.rc = solver->mustBeTrue(
-		state,
-		ret.mo->getBoundsCheckOffset(ret.offset, bytes),
-		alwaysInBounds);
-	if (!ret.rc) {
-		state.pc = state.prevPC;
-		terminateStateEarly(state, "query timed out");
-		ret.rc = false;
-		return ret;
-	}
-
-	if (!alwaysInBounds)
-		return ret;
-
-	ret.usable = true;
-	return ret;
-}
-
-void Executor::writeToMemRes(
-  	ExecutionState& state,
-	struct MemOpRes& res,
-	ref<Expr> value)
-{
-	if (res.os->readOnly) {
-		terminateStateOnError(
-			state,
-			"memory error: object read only",
-			"readonly.err");
-	} else {
-		ObjectState *wos;
-		wos = state.addressSpace.getWriteable(res.mo, res.os);
-		state.write(wos, res.offset, value);
-	}
-}
-
-Expr::Width Executor::MemOp::getType(KModule* m) const
-{
-	return (isWrite
-		? value->getWidth()
-		: m->targetData->getTypeSizeInBits(target->inst->getType()));
-}
-
-void Executor::MemOp::simplify(ExecutionState& state)
-{
-	if (!isa<ConstantExpr>(address))
-		address = state.constraints.simplifyExpr(address);
-	if (isWrite && !isa<ConstantExpr>(value))
-		value = state.constraints.simplifyExpr(value);
-}
-
-/* handles a memop that can be immediately resolved */
-bool Executor::memOpFast(ExecutionState& state, MemOp& mop)
-{
-	Expr::Width	type;
-	MemOpRes	res;
-
-	type = mop.getType(kmodule);
-	res = memOpResolve(state, mop.address, type);
-	if (!res.usable || !res.rc)
-		return false;
-
-	if (mop.isWrite) {
-		writeToMemRes(state, res, mop.value);
-	} else {
-		ref<Expr> result = state.read(res.os, res.offset, type);
-		if (interpreterOpts.MakeConcreteSymbolic)
-			result = replaceReadWithSymbolic(state, result);
-
-		state.bindLocal(mop.target, result);
-	}
-
-	return true;
-}
-
-ExecutionState* Executor::getUnboundAddressState(
-	ExecutionState	*unbound,
-	MemOp		&mop,
-	ObjectPair	&resolution,
-	unsigned	bytes,
-	Expr::Width	type)
-{
-	MemOpRes	res;
-	ExecutionState	*bound;
-	ref<Expr>	inBoundPtr;
-
-	res.op = resolution;
-	res.mo = res.op.first;
-	res.os = res.op.second;
-	inBoundPtr = res.mo->getBoundsCheckPointer(mop.address, bytes);
-
-	StatePair branches = fork(*unbound, inBoundPtr, true);
-	bound = branches.first;
-
-	// bound can be 0 on failure or overlapped
-	if (bound == NULL) {
-		return branches.second;
-	}
-
-	res.offset = res.mo->getOffsetExpr(mop.address);
-	if (mop.isWrite) {
-		writeToMemRes(*bound, res, mop.value);
-	} else {
-		ref<Expr> result;
-		result = bound->read(res.os, res.offset, type);
-		bound->bindLocal(mop.target, result);
-	}
-
-	return branches.second;
-}
-
-void Executor::memOpError(ExecutionState& state, MemOp& mop)
-{
-	Expr::Width	type;
-	unsigned	bytes;
-	ResolutionList	rl;
-	ExecutionState	*unbound;
-	bool		incomplete;
-
-	type = mop.getType(kmodule);
-	bytes = Expr::getMinBytesForWidth(type);
-
-	incomplete = state.addressSpace.resolve(
-		state, solver, mop.address, rl, 0);
-
-	// XXX there is some query wasteage here. who cares?
-	unbound = &state;
-	foreach (it, rl.begin(), rl.end()) {
-		ObjectPair	res(*it);
-
-		unbound = getUnboundAddressState(
-			unbound, mop, res, bytes, type);
-
-		/* bad unbound state.. terminate */
-		if (!unbound)
-			return;
-	}
-
-	// XXX should we distinguish out of bounds and overlapped cases?
-	if (incomplete) {
-		terminateStateEarly(*unbound, "query timed out (resolve)");
-		return;
-	}
-
-	terminateStateOnError(
-		*unbound,
-		"memory error: out of bound pointer",
-		"ptr.err",
-		getAddressInfo(*unbound, mop.address));
-}
-
-void Executor::executeMemoryOperation(ExecutionState &state, MemOp mop)
-{
-	if (SimplifySymIndices) mop.simplify(state);
-
-	if (memOpFast(state, mop))
-		return;
-
-	// handle straddled accesses
-	if (memOpByByte(state, mop))
-		return;
-
-	// we are on an error path
-	// Possible reasons:
-	// 	* no resolution
-	// 	* multiple resolution
-	// 	* one resolution with out of bounds
-	memOpError(state, mop);
 }
 
 ObjectState* Executor::executeMakeSymbolic(

@@ -36,10 +36,7 @@ typedef __gnu_cxx::hash_map<uintptr_t /* Func*/, VexSB*> func2vsb_map;
 class ExecutorVex : public Executor
 {
 public:
-	ExecutorVex(
-		const InterpreterOptions &opts,
-		InterpreterHandler *ie,
-		Guest* gs);
+	ExecutorVex(InterpreterHandler *ie, Guest* gs);
 	virtual ~ExecutorVex(void);
 
 	const llvm::Module * setModule(

@@ -20,10 +20,7 @@ class ESVSymHook;
 class ExeSymHook : public ExecutorVex
 {
 public:
-	ExeSymHook(
-		const InterpreterOptions &opts,
-		InterpreterHandler *ie,
-		Guest* gs);
+	ExeSymHook(InterpreterHandler *ie, Guest* gs);
 	virtual ~ExeSymHook(void);
 
 protected:

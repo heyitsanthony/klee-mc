@@ -89,11 +89,8 @@ namespace
 		cl::init(true));
 }
 
-ExecutorVex::ExecutorVex(
-	const InterpreterOptions &opts,
-	InterpreterHandler *ih,
-	Guest	*in_gs)
-: Executor(opts, ih)
+ExecutorVex::ExecutorVex(InterpreterHandler *ih, Guest *in_gs)
+: Executor(ih)
 , gs(in_gs)
 , native_code_bytes(0)
 {

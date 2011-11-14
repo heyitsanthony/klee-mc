@@ -118,11 +118,6 @@ namespace {
   cl::list<std::string>
   SeedOutDir("seed-out-dir");
   
-  cl::opt<unsigned>
-  MakeConcreteSymbolic("make-concrete-symbolic",
-                       cl::desc("Rate at which to make concrete reads symbolic (0=off)"),
-                       cl::init(0));
-
   cl::opt<bool>
   Watchdog("watchdog",
            cl::desc("Use a watchdog process to enforce --max-time."),
@@ -620,10 +615,8 @@ int main(int argc, char **argv, char **envp) {
     replayPath.clear();
   }
 
-  Interpreter::InterpreterOptions IOpts;
-  IOpts.MakeConcreteSymbolic = MakeConcreteSymbolic;
   KleeHandler *handler = new KleeHandler(InputFile, pArgc, pArgv);
-  Interpreter *interpreter = Interpreter::create(IOpts, handler);
+  Interpreter *interpreter = Interpreter::create(handler);
   theInterpreter = interpreter;
   handler->setInterpreter(interpreter);
   

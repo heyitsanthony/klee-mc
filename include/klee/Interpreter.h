@@ -70,32 +70,13 @@ public:
         CheckDivZero(_CheckDivZero), ExcludeCovFiles(_ExcludeCovFiles) {}
   };
 
-  /// InterpreterOptions - Options varying the runtime behavior during
-  /// interpretation.
-  struct InterpreterOptions {
-    /// A frequency at which to make concrete reads return constrained
-    /// symbolic values. This is used to test the correctness of the
-    /// symbolic execution on concrete programs.
-    unsigned MakeConcreteSymbolic;
-
-    InterpreterOptions()
-      : MakeConcreteSymbolic(false)
-    {}
-  };
-
 protected:
-  const InterpreterOptions interpreterOpts;
-
-  Interpreter(const InterpreterOptions &_interpreterOpts)
-    : interpreterOpts(_interpreterOpts)
-  {};
+  Interpreter() {};
 
 public:
   virtual ~Interpreter() {};
 
-  static Interpreter* create(
-  	const InterpreterOptions &_interpreterOpts,
-	InterpreterHandler *ih);
+  static Interpreter* create(InterpreterHandler *ih);
 
   /// Register the module to be executed.  
   ///

@@ -39,10 +39,10 @@ namespace {
   SuppressExternalWarnings("suppress-external-warnings");
 }
 
-ExecutorBC::ExecutorBC(const InterpreterOptions &opts, InterpreterHandler *ie)
-:	Executor(opts, ie),
-	specialFunctionHandler(0),
-	externalDispatcher(new ExternalDispatcher())
+ExecutorBC::ExecutorBC(InterpreterHandler *ie)
+: Executor(ie)
+, specialFunctionHandler(0)
+, externalDispatcher(new ExternalDispatcher())
 {
 	assert (kmodule == NULL);
 }

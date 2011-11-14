@@ -3,9 +3,7 @@
 
 using namespace klee;
 
-Interpreter* Interpreter::create(
-	const InterpreterOptions &opts,
-	InterpreterHandler *ih)
+Interpreter* Interpreter::create(InterpreterHandler *ih)
 {
-	return new ExecutorBC(opts, ih);
+	return new ExecutorBC(ih);
 }
