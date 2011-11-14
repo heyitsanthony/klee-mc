@@ -75,15 +75,15 @@ void ExeSymHook::unwatch(ESVSymHook &esh)
 
 	watch_f = esh.getWatchedFunc();
 	if (watch_f == f_malloc) {
-		heap_ptrs.insert(ret_ce->getZExtValue());
+		esh.addHeapPtr(ret_ce->getZExtValue());
 	} else if (watch_f == f_free) {
-		if (heap_ptrs.count(ret_ce->getZExtValue()) == 0) {
+		if (!esh.hasHeapPtr(ret_ce->getZExtValue())) {
 			terminateStateOnError(
 			esh,
 			"heap error: freeing non-malloced pointer",
 			"heapfree.err");
 		}
-		heap_ptrs.erase(ret_ce->getZExtValue());
+		esh.rmvHeapPtr(ret_ce->getZExtValue());
 	} else {
 		assert (0 == 1 && "WTF");
 	}

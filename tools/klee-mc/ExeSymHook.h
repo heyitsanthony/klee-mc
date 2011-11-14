@@ -1,8 +1,6 @@
 #ifndef EXESYMHOOK_H
 #define EXESYMHOOK_H
 
-#include <tr1/unordered_set>
-
 #include "ExecutorVex.h"
 #include "vexexec.h"
 
@@ -42,8 +40,6 @@ private:
 	void unwatch(ESVSymHook &esh);
 	llvm::Function	*f_malloc;
 	llvm::Function	*f_free;
-	typedef std::tr1::unordered_set<uint64_t> heap_set;
-	heap_set	heap_ptrs;
 };
 
 }

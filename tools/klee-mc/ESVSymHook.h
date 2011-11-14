@@ -1,6 +1,7 @@
 #ifndef EXESTATESYMHOOK_H
 #define EXESTATESYMHOOK_H
 
+#include "klee/Internal/ADT/ImmutableSet.h"
 #include "ExeStateVex.h"
 
 struct breadcrumb;
@@ -45,6 +46,10 @@ public:
 	bool isWatched(void) const { return (cur_watched_f != NULL); }
 	const ref<Expr>& getWatchParam(void) const { return param; }
 
+	void addHeapPtr(uint64_t);
+	void rmvHeapPtr(uint64_t);
+	bool hasHeapPtr(uint64_t) const;
+
 private:
 	/* need two extra address spaces:
 	 * 'blessed' mmap objects-- MO's that were created outside malloc()
@@ -53,6 +58,7 @@ private:
 	 * Inside malloc/free-- may access everything
 	 * Outside malloc/free -- may only access blessed or heap
 	 */
+	ImmutableSet<uint64_t>	heap_set;
 
 	llvm::Function*	cur_watched_f;
 	ref<Expr>	param;

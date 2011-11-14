@@ -16,3 +16,18 @@ void ESVSymHook::enterWatchedFunc(
 	param = in_param;
 	enter_stack_watermark = stack_watermark;
 }
+
+void ESVSymHook::addHeapPtr(uint64_t x)
+{
+	heap_set = heap_set.insert(x);
+}
+
+void ESVSymHook::rmvHeapPtr(uint64_t x)
+{
+	heap_set = heap_set.remove(x);
+}
+
+bool ESVSymHook::hasHeapPtr(uint64_t x) const
+{
+	return (heap_set.count(x) != 0);
+}
