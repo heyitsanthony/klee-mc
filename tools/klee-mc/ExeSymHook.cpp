@@ -157,11 +157,17 @@ void ExeSymHook::unwatchFree(ESVSymHook &esh)
 		return;
 
 	in_ptr = in_ptr_ce->getZExtValue();
+	if (in_ptr == 0) {
+		/* freeing null is a no-op */
+		return;
+	}
+
 	if (!esh.hasHeapPtr(in_ptr)) {
 		terminateStateOnError(
 			esh,
 			"heap error: freeing non-malloced pointer",
 			"heapfree.err");
+		return;
 	}
 
 	esh.rmvHeapPtr(in_ptr);
