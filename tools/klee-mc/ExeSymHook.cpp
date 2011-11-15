@@ -58,9 +58,8 @@ void ExeSymHook::jumpToKFunc(ExecutionState& state, KFunction* kf)
 	ExecutorVex::jumpToKFunc(state, kf);
 }
 
-void ExeSymHook::unwatch(ESVSymHook &esh)
+void ExeSymHook::unwatchMalloc(ESVSymHook &esh)
 {
-	llvm::Function		*watch_f;
 	const ConstantExpr	*ret_ce;
 	ref<Expr>		ret_arg;
 
@@ -68,31 +67,45 @@ void ExeSymHook::unwatch(ESVSymHook &esh)
 	ret_ce = dyn_cast<ConstantExpr>(ret_arg);
 
 	if (ret_ce == NULL)
-		goto done;
+		return;
 
-	watch_f = esh.getWatchedFunc();
-	if (watch_f == f_malloc) {
-		esh.addHeapPtr(ret_ce->getZExtValue());
-	} else if (watch_f == f_free) {
-		if (!esh.hasHeapPtr(ret_ce->getZExtValue())) {
-			terminateStateOnError(
+	std::cerr << "ADDING " << (void*)ret_ce->getZExtValue() << '\n';
+	esh.addHeapPtr(ret_ce->getZExtValue());
+}
+
+void ExeSymHook::unwatchFree(ESVSymHook &esh)
+{
+	const ConstantExpr*	in_ptr_ce;
+	uint64_t		in_ptr;
+
+	in_ptr_ce = dyn_cast<ConstantExpr>(esh.getWatchParam());
+	if (in_ptr_ce == NULL)
+		return;
+
+	in_ptr = in_ptr_ce->getZExtValue();
+	if (!esh.hasHeapPtr(in_ptr)) {
+		terminateStateOnError(
 			esh,
 			"heap error: freeing non-malloced pointer",
 			"heapfree.err");
-		}
-		esh.rmvHeapPtr(ret_ce->getZExtValue());
+	}
+
+	esh.rmvHeapPtr(in_ptr);
+}
+
+void ExeSymHook::unwatch(ESVSymHook &esh)
+{
+	llvm::Function		*watch_f;
+
+	watch_f = esh.getWatchedFunc();
+	if (watch_f == f_malloc) {
+		unwatchMalloc(esh);
+	} else if (watch_f == f_free) {
+		unwatchFree(esh);
 	} else {
 		assert (0 == 1 && "WTF");
 	}
 
-done:
-#if 0
-	std::cerr << "\nUNWATCHED: param=";
-	esh.getWatchParam()->print(std::cerr);
-	std::cerr << "\nRETVAL=";
-	ret_arg->print(std::cerr);
-	std::cerr << "\n";
-#endif
 	esh.unwatch();
 }
 
@@ -108,7 +121,6 @@ void ExeSymHook::watchFunc(ExecutionState& es, llvm::Function* f)
 	if (!stack_pos)
 		return;
 
-	std::cerr << "WATCHING: " << f->getNameStr() << "\n";
 	esh.enterWatchedFunc(f, getCallArg(es, 0), stack_pos);
 }
 
@@ -133,7 +145,6 @@ ExecutionState* ExeSymHook::setupInitialState(void)
 
 	f_malloc = getFuncByAddr(sym_malloc->getBaseAddr());
 	f_free = getFuncByAddr(sym_free->getBaseAddr());
-	std::cerr << "MALLOC = " << f_malloc->getNameStr() << '\n';
 
 	assert (f_malloc && f_free && "Could not decode hooked funcs");
 

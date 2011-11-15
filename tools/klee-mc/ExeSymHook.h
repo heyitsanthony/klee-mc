@@ -35,6 +35,8 @@ private:
 	void watchEnterXfer(ExecutionState& es, llvm::Function* f);
 	void watchFunc(ExecutionState& es, llvm::Function* f);
 	void unwatch(ESVSymHook &esh);
+	void unwatchFree(ESVSymHook &esh);
+	void unwatchMalloc(ESVSymHook &esh);
 	llvm::Function	*f_malloc;
 	llvm::Function	*f_free;
 };
