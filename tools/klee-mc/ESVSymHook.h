@@ -46,9 +46,16 @@ public:
 	bool isWatched(void) const { return (cur_watched_f != NULL); }
 	const ref<Expr>& getWatchParam(void) const { return param; }
 
-	void addHeapPtr(uint64_t);
+	void addHeapPtr(uint64_t, unsigned int);
 	void rmvHeapPtr(uint64_t);
 	bool hasHeapPtr(uint64_t) const;
+	bool heapContains(
+		uint64_t base, unsigned int len = 1) const;
+	bool isBlessed(const MemoryObject* mo) const;
+	void blessAddressSpace(void);
+
+	virtual void bindObject(const MemoryObject *mo, ObjectState *os);
+	virtual void unbindObject(const MemoryObject* mo);
 
 private:
 	/* need two extra address spaces:
@@ -58,7 +65,10 @@ private:
 	 * Inside malloc/free-- may access everything
 	 * Outside malloc/free -- may only access blessed or heap
 	 */
-	ImmutableSet<uint64_t>	heap_set;
+	typedef ImmutableMap<
+		uint64_t, uint64_t, std::greater<uint64_t> > heap_map_ty;
+	heap_map_ty	heap_map;
+	ImmutableSet<const MemoryObject*>	blessed_mo;
 
 	llvm::Function*	cur_watched_f;
 	ref<Expr>	param;

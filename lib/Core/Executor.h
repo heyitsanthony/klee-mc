@@ -146,7 +146,6 @@ public:
   const KModule* getKModule(void) const { return kmodule; }
 
   MemoryManager	*memory;
-  MMU		*mmu;
 private:
   class TimerInfo;
 
@@ -155,7 +154,8 @@ private:
   void handleMemoryUtilization(ExecutionState* &state);
 
 protected:
-  KModule *kmodule;
+  KModule	*kmodule;
+  MMU		*mmu;
 
   void initializeGlobalObject(
     ExecutionState &state,
@@ -284,8 +284,10 @@ private:
 
   ExecutionState* initialStateCopy;
 
-  /// Whether implied-value concretization is enabled. Currently
-  /// false, it is buggy (it needs to validate its writes).
+  /// Whether implied-value concretization is enabled. 
+  /// Currently false, it is buggy (it needs to validate its writes).
+  //  XXX I don't know what it means by validating writes. It 
+  //  looks good to me, so I enable by default --AJR
   bool ivcEnabled;
 
   /// Remembers the instruction count at the last memory limit operation.
@@ -481,49 +483,53 @@ private:
   void getConstraintLogCVC(const ExecutionState& state, std::string& res);
 
 public:
-  Executor(InterpreterHandler *ie);
-  virtual ~Executor();
+	Executor(InterpreterHandler *ie);
+	virtual ~Executor();
 
-  const InterpreterHandler& getHandler() { return *interpreterHandler; }
-  TimingSolver* getSolver(void) { return solver; }
+	const InterpreterHandler& getHandler() { return *interpreterHandler; }
+	TimingSolver* getSolver(void) { return solver; }
 
-  /// Add the given (boolean) condition as a constraint on state. This
-  /// function is a wrapper around the state's addConstraint function
-  /// which also manages manages propogation of implied values,
-  /// validity checks, and seed patching.
-  bool addConstraint(ExecutionState &state, ref<Expr> condition);
+	/// Add the given (boolean) condition as a constraint on state. This
+	/// function is a wrapper around the state's addConstraint function
+	/// which also manages manages propogation of implied values,
+	/// validity checks, and seed patching.
+	bool addConstraint(ExecutionState &state, ref<Expr> condition);
 
-  ObjectState* executeMakeSymbolic(
-  	ExecutionState &state,
-	const MemoryObject *mo,
-	const char* arrPrefix = "arr");
+	ObjectState* executeMakeSymbolic(
+		ExecutionState &state,
+		const MemoryObject *mo,
+		const char* arrPrefix = "arr");
 
-  ObjectState* executeMakeSymbolic(
-    ExecutionState& state,
-    const MemoryObject* mo,
-    ref<Expr> len,
-    const char* arrPrefix = "arr");
+	ObjectState* executeMakeSymbolic(
+		ExecutionState& state,
+		const MemoryObject* mo,
+		ref<Expr> len,
+		const char* arrPrefix = "arr");
 
-  // remove state from queue and delete
-  void terminateState(ExecutionState &state);
-  // call exit handler and terminate state
-  void terminateStateEarly(ExecutionState &state, const llvm::Twine &message);
-  // call exit handler and terminate state
-  void terminateStateOnExit(ExecutionState &state);
-  // call error handler and terminate state
-  void terminateStateOnError(ExecutionState &state,
-                             const llvm::Twine &message,
-                             const char *suffix,
-                             const llvm::Twine &longMessage="");
+	// remove state from queue and delete
+	void terminateState(ExecutionState &state);
+	// call exit handler and terminate state
+	void terminateStateEarly(
+		ExecutionState &state, const llvm::Twine &message);
+	// call exit handler and terminate state
+	void terminateStateOnExit(ExecutionState &state);
+	// call error handler and terminate state
+	void terminateStateOnError(
+		ExecutionState &state,
+		const llvm::Twine &message,
+		const char *suffix,
+		const llvm::Twine &longMessage="");
 
-  // Given a concrete object in our [klee's] address space, add it to
-  // objects checked code can reference.
-  MemoryObject *addExternalObject(
-    ExecutionState &state, void *addr,
-    unsigned size, bool isReadOnly);
+	// Given a concrete object in our [klee's] address space, add it to
+	// objects checked code can reference.
+	MemoryObject *addExternalObject(
+		ExecutionState &state,
+		void *addr,
+		unsigned size,
+		bool isReadOnly);
 
-  // XXX should just be moved out to utility module
-  ref<klee::ConstantExpr> evalConstant(llvm::Constant *c);
+	// XXX should just be moved out to utility module
+	ref<klee::ConstantExpr> evalConstant(llvm::Constant *c);
 
 	/// Allocate and bind a new object in a particular state. NOTE: This
 	/// function may fork.
@@ -575,53 +581,51 @@ public:
 		KInstruction *target = 0);
 
 
-  virtual void setSymbolicPathWriter(TreeStreamWriter *tsw) {
-    symPathWriter = tsw;
-  }
+	virtual void setSymbolicPathWriter(TreeStreamWriter *tsw)
+	{ symPathWriter = tsw; }
 
-  virtual void setReplayOut(const struct KTest *out) {
-    assert(!replayPaths && "cannot replay both buffer and path");
-    replayOut = out;
-    replayPosition = 0;
-  }
+	virtual void setReplayOut(const struct KTest *out)
+	{
+		assert(!replayPaths && "cannot replay both buffer and path");
+		replayOut = out;
+		replayPosition = 0;
+	}
 
-  virtual void setReplayPaths(const std::list<ReplayPathType>* paths) {
-    assert(!replayOut && "cannot replay both buffer and path");
-    replayPaths = paths;
-  }
+	virtual void setReplayPaths(const std::list<ReplayPathType>* paths)
+	{
+		assert(!replayOut && "cannot replay both buffer and path");
+		replayPaths = paths;
+	}
 
-  bool isReplayOut(void) const { return (replayOut != NULL); }
-  bool isReplayPaths(void) const { return (replayPaths != NULL); } 
+	bool isReplayOut(void) const { return (replayOut != NULL); }
+	bool isReplayPaths(void) const { return (replayPaths != NULL); } 
 
-  virtual void useSeeds(const std::vector<struct KTest *> *seeds)
-  {usingSeeds = seeds; }
+	virtual void useSeeds(const std::vector<struct KTest *> *seeds)
+	{usingSeeds = seeds; }
 
-  /*** Runtime options ***/
+	/*** Runtime options ***/
 
-  virtual void setHaltExecution(bool value) {
-    haltExecution = value;
-  }
+	virtual void setHaltExecution(bool value) { haltExecution = value; }
+	virtual void setInhibitForking(bool value) { inhibitForking = value; }
 
-  virtual void setInhibitForking(bool value) {
-    inhibitForking = value;
-  }
+	/*** State accessor methods ***/
 
-  /*** State accessor methods ***/
+	virtual unsigned getSymbolicPathStreamID(const ExecutionState &state);
 
-  virtual unsigned getSymbolicPathStreamID(const ExecutionState &state);
+	virtual void getConstraintLog(
+		const ExecutionState &state,
+		std::string &res,
+		bool asCVC = false);
 
-  virtual void getConstraintLog(const ExecutionState &state,
-                                std::string &res,
-                                bool asCVC = false);
+	virtual bool getSymbolicSolution(
+		const ExecutionState &state,
+		std::vector<
+			std::pair<std::string,
+			std::vector<unsigned char> > > &res);
 
-  virtual bool getSymbolicSolution(const ExecutionState &state,
-                                   std::vector<
-                                   std::pair<std::string,
-                                   std::vector<unsigned char> > >
-                                   &res);
-
-  virtual void getCoveredLines(const ExecutionState &state,
-                               std::map<const std::string*, std::set<unsigned> > &res);
+	virtual void getCoveredLines(
+		const ExecutionState &state,
+		std::map<const std::string*, std::set<unsigned> > &res);
 };
 
 }

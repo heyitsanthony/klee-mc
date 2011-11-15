@@ -9,7 +9,6 @@
 int main(int argc, char* argv[])
 {
 	char* x = malloc(32);
-	memcpy(x+16, x-16, 16);
 	free(x+16);
 	return 0;
 }

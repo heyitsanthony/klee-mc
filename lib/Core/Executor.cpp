@@ -308,7 +308,8 @@ Executor::~Executor()
 
 /***/
 
-inline void Executor::replaceStateImmForked(ExecutionState* os, ExecutionState* ns)
+inline void Executor::replaceStateImmForked(
+	ExecutionState* os, ExecutionState* ns)
 {
 	stateManager->replaceStateImmediate(os, ns);
 	removePTreeState(os);
@@ -1395,42 +1396,48 @@ void Executor::instRet(ExecutionState &state, KInstruction *ki)
 
 void Executor::instBranch(ExecutionState& state, KInstruction* ki)
 {
-  BranchInst *bi = cast<BranchInst>(ki->inst);
-  if (bi->isUnconditional()) {
-    state.transferToBasicBlock(bi->getSuccessor(0), bi->getParent());
-    return;
-  }
+	BranchInst *bi = cast<BranchInst>(ki->inst);
 
-  // FIXME: Find a way that we don't have this hidden dependency.
-  assert (bi->getCondition() == bi->getOperand(0) && "Wrong operand index!");
+	if (bi->isUnconditional()) {
+		state.transferToBasicBlock(
+			bi->getSuccessor(0), bi->getParent());
+		return;
+	}
 
-  const Cell &cond = eval(ki, 0, state);
+	// FIXME: Find a way that we don't have this hidden dependency.
+	assert (bi->getCondition() == bi->getOperand(0) &&
+		"Wrong operand index!");
 
-  StatePair branches = fork(state, cond.value, false);
+	const Cell &cond = eval(ki, 0, state);
 
-  if (WriteTraces) {
-    bool isTwoWay = (branches.first && branches.second);
+	StatePair branches = fork(state, cond.value, false);
 
-    if (branches.first) {
-      branches.first->exeTraceMgr.addEvent(
-      	new BranchTraceEvent(state, ki, true, isTwoWay));
-    }
+	if (WriteTraces) {
+		bool isTwoWay = (branches.first && branches.second);
 
-    if (branches.second) {
-      branches.second->exeTraceMgr.addEvent(
-        new BranchTraceEvent(state, ki, false, isTwoWay));
-    }
-  }
+		if (branches.first) {
+			branches.first->exeTraceMgr.addEvent(
+				new BranchTraceEvent(
+					state, ki, true, isTwoWay));
+		}
 
-  // NOTE: There is a hidden dependency here, markBranchVisited
-  // requires that we still be in the context of the branch
-  // instruction (it reuses its statistic id). Should be cleaned
-  // up with convenient instruction specific data.
-  if (statsTracker && state.getCurrentKFunc()->trackCoverage)
-    statsTracker->markBranchVisited(branches.first, branches.second);
+		if (branches.second) {
+			branches.second->exeTraceMgr.addEvent(
+				new BranchTraceEvent(
+					state, ki, false, isTwoWay));
+		}
+	}
 
-  finalizeBranch(branches.first, bi, 0 /* [0] successor => true */);
-  finalizeBranch(branches.second, bi, 1 /* [1] successor => false */);
+	// NOTE: There is a hidden dependency here, markBranchVisited
+	// requires that we still be in the context of the branch
+	// instruction (it reuses its statistic id). Should be cleaned
+	// up with convenient instruction specific data.
+	if (statsTracker && state.getCurrentKFunc()->trackCoverage)
+		statsTracker->markBranchVisited(
+			branches.first, branches.second);
+
+	finalizeBranch(branches.first, bi, 0 /* [0] successor => true */);
+	finalizeBranch(branches.second, bi, 1 /* [1] successor => false */);
 }
 
 void Executor::finalizeBranch(
@@ -2735,41 +2742,43 @@ void Executor::replayPathsIntoStates(ExecutionState& initialState)
 
 void Executor::run(ExecutionState &initialState)
 {
-  // Delay init till now so that ticks don't accrue during
-  // optimization and such.
-  initTimers();
+	// Delay init till now so that ticks don't accrue during
+	// optimization and such.
+	initTimers();
 
-  initialStateCopy = (ReplayInhibitedForks) ? initialState.copy() : NULL;
+	initialStateCopy = (ReplayInhibitedForks) ? initialState.copy() : NULL;
 
-  if (replayPaths) replayPathsIntoStates(initialState);
-  stateManager->setInitialState(this, &initialState, replayPaths);
+	if (replayPaths != NULL)
+		replayPathsIntoStates(initialState);
 
-  if (usingSeeds) {
-    if (!seedRun(initialState)) goto dump;
-    if (OnlySeed) goto dump;
-  }
+	stateManager->setInitialState(this, &initialState, replayPaths);
 
-  stateManager->setupSearcher(this);
+	if (usingSeeds) {
+		if (!seedRun(initialState)) goto dump;
+		if (OnlySeed) goto dump;
+	}
 
-  runLoop();
+	stateManager->setupSearcher(this);
 
-  stateManager->teardownUserSearcher();
+	runLoop();
+
+	stateManager->teardownUserSearcher();
 
 dump:
-  if (stateManager->empty()) goto done;
-  std::cerr << "KLEE: halting execution, dumping remaining states\n";
-  foreach (it, stateManager->begin(), stateManager->end()) {
-    ExecutionState &state = **it;
-    stepInstruction(state); // keep stats rolling
-    if (DumpStatesOnHalt)
-      terminateStateEarly(state, "execution halting");
-    else
-      terminateState(state);
-  }
-  updateStates(0);
+	if (stateManager->empty()) goto done;
+	std::cerr << "KLEE: halting execution, dumping remaining states\n";
+	foreach (it, stateManager->begin(), stateManager->end()) {
+		ExecutionState &state = **it;
+		stepInstruction(state); // keep stats rolling
+		if (DumpStatesOnHalt)
+			terminateStateEarly(state, "execution halting");
+		else
+			terminateState(state);
+	}
+	updateStates(0);
 
 done:
-  if (initialStateCopy) delete initialStateCopy;
+	if (initialStateCopy) delete initialStateCopy;
 }
 
 void Executor::runLoop(void)
@@ -3093,11 +3102,10 @@ bool Executor::seedObject(
   return true;
 }
 
-/***/
-
-unsigned Executor::getSymbolicPathStreamID(const ExecutionState &state) {
-  assert(symPathWriter);
-  return state.symPathOS.getID();
+unsigned Executor::getSymbolicPathStreamID(const ExecutionState &state)
+{
+	assert(symPathWriter != NULL);
+	return state.symPathOS.getID();
 }
 
 void Executor::getConstraintLogCVC(
@@ -3467,19 +3475,17 @@ void Executor::executeAllocSymbolic(
 
 	success = solver->getValue(state, size, example);
 	assert(success && "FIXME: Unhandled solver failure");
-	(void) success;
 
 	// Try and start with a small example.
 	Expr::Width W = example->getWidth();
 	while (example->Ugt(ConstantExpr::alloc(128, W))->isTrue()) {
 		ref<ConstantExpr> tmp;
 		bool res;
-		bool success;
+		bool ok;
 
 		tmp = example->LShr(ConstantExpr::alloc(1, W));
-		success = solver->mayBeTrue(state, EqExpr::create(tmp, size), res);
-		assert(success && "FIXME: Unhandled solver failure");
-		(void) success;
+		ok = solver->mayBeTrue(state, EqExpr::create(tmp, size), res);
+		assert(ok && "FIXME: Unhandled solver failure");
 		if (!res)
 			break;
 		example = tmp;
@@ -3489,18 +3495,14 @@ void Executor::executeAllocSymbolic(
 
 	if (fixedSize.second) {
 		// Check for exactly two values
-		ref<ConstantExpr> tmp;
-		bool success;
-		bool res;
+		ref<ConstantExpr>	tmp;
+		bool			ok, res;
 
-		success = solver->getValue(*fixedSize.second, size, tmp);
-		assert(success && "FIXME: Unhandled solver failure");
-		(void) success;
-		success = solver->mustBeTrue(*fixedSize.second,
-					 EqExpr::create(tmp, size),
-					 res);
-		assert(success && "FIXME: Unhandled solver failure");
-		(void) success;
+		ok = solver->getValue(*fixedSize.second, size, tmp);
+		assert(ok && "FIXME: Unhandled solver failure");
+		ok = solver->mustBeTrue(
+			*fixedSize.second, EqExpr::create(tmp, size), res);
+		assert(ok && "FIXME: Unhandled solver failure");
 
 		if (res) {
 			executeAlloc(

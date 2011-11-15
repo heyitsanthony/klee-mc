@@ -3,6 +3,7 @@
 #include <llvm/Function.h>
 #include "ExeSymHook.h"
 #include "ESVSymHook.h"
+#include "../../lib/Core/MMU.h"
 #include "symbols.h"
 #include "guest.h"
 
@@ -11,12 +12,79 @@ using namespace klee;
 
 #define es2esh(x)	static_cast<ESVSymHook&>(x)
 
+class MallocMMU : public MMU
+{
+public:
+	MallocMMU(ExeSymHook& esh)
+	: MMU(esh), exe_esh(esh) {}
+
+	virtual ~MallocMMU(void) {}
+
+protected:
+	virtual MemOpRes memOpResolve(
+		ExecutionState& state,
+		ref<Expr> address,
+		Expr::Width type);
+
+private:
+	ExeSymHook	&exe_esh;
+};
+
+MallocMMU::MemOpRes MallocMMU::memOpResolve(
+	ExecutionState& state,
+	ref<Expr> address,
+	Expr::Width type)
+{
+	MemOpRes		ret;
+	const ConstantExpr	*ce_addr;
+	uint64_t		addr, bytes;
+	ESVSymHook		&esh(es2esh(state));
+
+	ret = MMU::memOpResolve(state, address, type);
+
+	/* failed to resolve, no need to do another check */
+	if (!ret.usable || !ret.rc)
+		return ret;
+
+	/* watched functions can touch whatever..
+	 * the heap manager can mess with non-heap memory */
+	if (esh.isWatched())
+		return ret;
+
+	/* right now we only check for concrete heap addresses */
+	ce_addr = dyn_cast<ConstantExpr>(address);
+	if (ce_addr == NULL)
+		return ret;
+	addr = ce_addr->getZExtValue();
+
+	bytes = (type + 7) / 8;
+	if (esh.isBlessed(ret.mo))
+		return ret;
+
+	if (esh.heapContains(addr, bytes))
+		return ret;
+
+	/* neither blessed nor in the heap. bad access! */
+	exe_esh.terminateStateOnError(
+		state,
+		"heap error: pointer neither blessed nor heap",
+		"heap.err",
+		exe_esh.getAddressInfo(state, address));
+
+	ret.usable = false;
+	ret.op.first = NULL;
+	ret.rc = false;
+	return ret;
+}
+
 ExeSymHook::ExeSymHook(InterpreterHandler *ie, Guest* gs)
 : ExecutorVex(ie, gs)
 , f_malloc(NULL)
 , f_free(NULL)
 {
 	ExeStateBuilder::replaceBuilder(new ESVSymHookBuilder());
+	delete mmu;
+	mmu = new MallocMMU(*this);
 }
 
 ExeSymHook::~ExeSymHook(void) {}
@@ -62,15 +130,21 @@ void ExeSymHook::unwatchMalloc(ESVSymHook &esh)
 {
 	const ConstantExpr	*ret_ce;
 	ref<Expr>		ret_arg;
+	const ConstantExpr*	in_len_ce;
+	unsigned int		in_len;
+
 
 	ret_arg = getRetArg(esh);
 	ret_ce = dyn_cast<ConstantExpr>(ret_arg);
+	in_len_ce = dyn_cast<ConstantExpr>(esh.getWatchParam());
 
-	if (ret_ce == NULL)
+	if (ret_ce == NULL || in_len_ce == NULL) {
+		assert (0 == 1 && "Symbolic len/ret not yet supported");
 		return;
+	}
 
-	std::cerr << "ADDING " << (void*)ret_ce->getZExtValue() << '\n';
-	esh.addHeapPtr(ret_ce->getZExtValue());
+	in_len = in_len_ce->getZExtValue();
+	esh.addHeapPtr(ret_ce->getZExtValue(), in_len);
 }
 
 void ExeSymHook::unwatchFree(ESVSymHook &esh)
@@ -127,12 +201,15 @@ void ExeSymHook::watchFunc(ExecutionState& es, llvm::Function* f)
 ExecutionState* ExeSymHook::setupInitialState(void)
 {
 	ExecutionState	*ret;
+	ESVSymHook	*esh;
 	Guest		*gs;
 	const Symbols	*syms;
 	const Symbol	*sym_malloc, *sym_free;
 
 
 	ret = ExecutorVex::setupInitialState();
+	esh = dynamic_cast<ESVSymHook*>(ret);
+	assert (esh != NULL);
 
 	gs = getGuest();
 	syms = gs->getDynSymbols();
@@ -141,12 +218,13 @@ ExecutionState* ExeSymHook::setupInitialState(void)
 	sym_malloc = syms->findSym("malloc");
 	sym_free = syms->findSym("free");
 
-	assert (sym_malloc && sym_free && "Could not finds syms to hook");
+	assert (sym_malloc && "Could not finds syms to hook");
 
 	f_malloc = getFuncByAddr(sym_malloc->getBaseAddr());
-	f_free = getFuncByAddr(sym_free->getBaseAddr());
+	if (sym_free)
+		f_free = getFuncByAddr(sym_free->getBaseAddr());
 
-	assert (f_malloc && f_free && "Could not decode hooked funcs");
+	assert (f_malloc && "Could not decode hooked funcs");
 
 	return ret;
 }

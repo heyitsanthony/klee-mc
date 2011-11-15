@@ -38,7 +38,7 @@ public:
 	// and perform the operation
 	void exeMemOp(ExecutionState &state, MemOp mop);
 
-private:
+protected:
 	struct MemOpRes
 	{
 		ObjectPair		op;
@@ -49,9 +49,7 @@ private:
 		bool			rc;	/* false => solver failure */
 	};
 
-protected:
-
-	MemOpRes memOpResolve(
+	virtual MemOpRes memOpResolve(
 		ExecutionState& state,
 		ref<Expr> address,
 		Expr::Width type);
