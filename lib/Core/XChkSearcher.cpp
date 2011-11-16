@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <sstream>
 #include <iostream>
 
 #include "klee/ExecutionState.h"
@@ -19,10 +20,16 @@ XChkSearcher::~XChkSearcher()
 
 void XChkSearcher::updateHash(ExecutionState* s, unsigned hash)
 {
+	UnschedInfo		ui;
+	std::stringstream	ss;
+
 	if (hash == 0)
 		hash = s->addressSpace.hash();
 
-	as_hashes[s] = hash;
+	ui.hash = hash;
+	s->addressSpace.print(ss);
+	ui.as_dump = ss.str();
+	as_hashes[s] = ui;
 }
 
 void XChkSearcher::xchk(ExecutionState* s)
@@ -34,19 +41,24 @@ void XChkSearcher::xchk(ExecutionState* s)
 	assert (it != as_hashes.end() && "Never seen this state before??");
 
 	h = s->addressSpace.hash();
-	if (h != it->second) {
+	if (h != it->second.hash) {
 		std::cerr << "FAILED XCHK ON RESCHEDULE!! " <<
 			last_selected << "->" << s << "\n";
 		std::cerr
 			<< "NEW HASH=" << h
-			<< " ||| OLD HASH=" << it->second << "\n";
+			<< " ||| OLD HASH=" << it->second.hash << "\n";
 
-		std::cerr << "BAD ADDRSPACE DUMP:\n";
+		std::cerr << "MISMATCHED ADDRSPACE DUMP (then):\n";
+		std::cerr << it->second.as_dump;
+		std::cerr << "\n---\n";
+
+
+		std::cerr << "MISMATCHED ADDRSPACE DUMP (now):\n";
 		s->addressSpace.print(std::cerr);
 		std::cerr << "\n---\n";
 
 		if (last_selected) {
-			std::cerr << "LAST STATE ADDRSPACE DUMP:\n";
+			std::cerr << "LAST SCHEDULED STATE ADDRSPACE DUMP:\n";
 			last_selected->addressSpace.print(std::cerr);
 			std::cerr << "\n";
 		}
@@ -58,7 +70,6 @@ void XChkSearcher::xchk(ExecutionState* s)
 		<< last_selected << " -> " << s
 		<< "\n";
 }
-
 
 ExecutionState& XChkSearcher::selectState(bool allowCompact)
 {
