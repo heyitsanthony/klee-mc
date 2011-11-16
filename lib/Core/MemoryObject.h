@@ -86,21 +86,25 @@ public:
   }
 
   ref<Expr> getBoundsCheckOffset(ref<Expr> offset) const {
-    if (size==0) {
-      return EqExpr::create(offset,
-                            ConstantExpr::alloc(0, Context::get().getPointerWidth()));
-    } else {
-      return UltExpr::create(offset, getSizeExpr());
-    }
+	if (size==0) {
+		return EqExpr::create(
+			offset,
+			ConstantExpr::alloc(
+				0, Context::get().getPointerWidth()));
+	}
+
+	return UltExpr::create(offset, getSizeExpr());
   }
+
   ref<Expr> getBoundsCheckOffset(ref<Expr> offset, unsigned bytes) const {
-    if (bytes<=size) {
-      return UltExpr::create(offset,
-                             ConstantExpr::alloc(size - bytes + 1,
-                                                 Context::get().getPointerWidth()));
-    } else {
-      return ConstantExpr::alloc(0, Expr::Bool);
-    }
+	if (bytes<=size) {
+		return UltExpr::create(
+			offset,
+			ConstantExpr::alloc(
+				size - bytes + 1,
+				Context::get().getPointerWidth()));
+	}
+	return ConstantExpr::alloc(0, Expr::Bool);
   }
 
   inline bool isLocal() const { return mallocKey.isLocal; }

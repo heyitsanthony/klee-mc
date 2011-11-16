@@ -701,8 +701,9 @@ bool AddressSpace::copyInConcretes(void)
 void AddressSpace::print(std::ostream& os) const
 {
 	foreach (it, objects.begin(), objects.end()) {
+		const ObjectState	*ros = it->second;
 		it->first->print(os);
-		os << std::endl;
+		os << ". hash=" << ros->hash() << '\n';
 	}
 }
 
@@ -750,3 +751,17 @@ void AddressSpace::printAddressInfo(std::ostream& info, uint64_t addr) const
 }
 
 void AddressSpace::printObjects(std::ostream& os) const { os << objects; }
+
+unsigned AddressSpace::hash(void) const
+{
+	unsigned hash_ret = 0;
+
+	foreach (it, objects.begin(), objects.end()) {
+		const MemoryObject	*mo = it->first;
+		const ObjectState	*os = it->second;
+
+		hash_ret ^= (mo->address + os->hash());
+	}
+
+	return hash_ret;
+}

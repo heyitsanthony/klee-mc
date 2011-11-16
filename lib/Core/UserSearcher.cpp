@@ -27,6 +27,7 @@
 #include "RRSearcher.h"
 #include "RandomSearcher.h"
 #include "WeightedRandomSearcher.h"
+#include "XChkSearcher.h"
 #include "StringMerger.h"
 
 using namespace llvm;
@@ -70,14 +71,21 @@ namespace {
   UseRandomPathSearch("use-random-path");
 
   cl::opt<WeightedRandomSearcher::WeightType>
-  WeightType("weight-type", cl::desc("Set the weight type for --use-non-uniform-random-search"),
-             cl::values(clEnumValN(WeightedRandomSearcher::Depth, "none", "use (2^depth)"),
-                        clEnumValN(WeightedRandomSearcher::InstCount, "icnt", "use current pc exec count"),
-                        clEnumValN(WeightedRandomSearcher::CPInstCount, "cpicnt", "use current pc exec count"),
-                        clEnumValN(WeightedRandomSearcher::QueryCost, "query-cost", "use query cost"),
-                        clEnumValN(WeightedRandomSearcher::MinDistToUncovered, "md2u", "use min dist to uncovered"),
-                        clEnumValN(WeightedRandomSearcher::CoveringNew, "covnew", "use min dist to uncovered + coveringNew flag"),
-                        clEnumValEnd));
+  WeightType("weight-type",
+    cl::desc("Set the weight type for --use-non-uniform-random-search"),
+    cl::values(
+      clEnumValN(WeightedRandomSearcher::Depth, "none", "use (2^depth)"),
+      clEnumValN(WeightedRandomSearcher::InstCount,
+        "icnt", "use current pc exec count"),
+      clEnumValN(WeightedRandomSearcher::CPInstCount,
+        "cpicnt", "use current pc exec count"),
+      clEnumValN(WeightedRandomSearcher::QueryCost,
+        "query-cost", "use query cost"),
+      clEnumValN(WeightedRandomSearcher::MinDistToUncovered,
+        "md2u", "use min dist to uncovered"),
+      clEnumValN(WeightedRandomSearcher::CoveringNew,
+        "covnew", "use min dist to uncovered + coveringNew flag"),
+      clEnumValEnd));
   
   cl::opt<bool>
   UseMerge("use-merge", 
@@ -107,8 +115,14 @@ namespace {
 
   cl::opt<bool>
   UseStringPrune("string-prune",
-    cl::desc("Prune intermediate scan states on strings"),
+    cl::desc("Prune intermediate scan states on strings (busted)"),
      cl::init(false));
+
+  cl::opt<bool>
+  UseXChkSearcher(
+    "xchk-searcher",
+    cl::desc("On reschedule, reaffirm validate address space is same as before"),
+    cl::init(false));
 }
 
 bool klee::userSearcherRequiresMD2U() {
@@ -121,14 +135,8 @@ bool klee::userSearcherRequiresMD2U() {
           UseInterleavedQueryCostNURS);
 }
 
-// FIXME: Remove.
-bool klee::userSearcherRequiresBranchSequences() {
-  return false;
-}
-
 /* Research quality */
-Searcher* klee::setupInterleavedSearcher(
-  Executor& executor, Searcher* searcher)
+Searcher* klee::setupInterleavedSearcher(Executor& executor, Searcher* searcher)
 {
   std::vector<Searcher *> s;
 
@@ -161,10 +169,11 @@ Searcher* klee::setupInterleavedSearcher(
   if (UseInterleavedRS) 
     s.push_back(new RandomSearcher());
 
-  /* No interleaved searchers defined. Don't bother with interleave obj */
-  if (s.size() == 1) return searcher;
+  if (s.size() != 1)
+    return new InterleavedSearcher(s);
 
-  return new InterleavedSearcher(s);
+  /* No interleaved searchers defined. Don't bother with interleave obj */
+  return searcher;
 }
 
 Searcher* klee::setupBaseSearcher(Executor& executor)
@@ -206,6 +215,10 @@ Searcher *klee::constructUserSearcher(Executor &executor)
 
   searcher = setupBaseSearcher(executor);
   searcher = setupInterleavedSearcher(executor, searcher);
+
+  /* xchk searcher should probably always be at the top */
+  if (UseXChkSearcher)
+    searcher = new XChkSearcher(searcher);
 
   if (UseBatchingSearch) {
     searcher = new BatchingSearcher(searcher, BatchTime, BatchInstructions);

@@ -1,0 +1,32 @@
+#ifndef KLEE_XCHKSEARCHER_H
+#define KLEE_XCHKSEARCHER_H
+
+#include <tr1/unordered_map>
+#include "Searcher.h"
+
+namespace klee
+{
+
+	class XChkSearcher : public Searcher
+	{
+	public:
+		ExecutionState &selectState(bool allowCompact);
+		XChkSearcher(Searcher* in_base);
+		virtual ~XChkSearcher();
+
+		void updateHash(ExecutionState* s, unsigned hash=0);
+		void update(ExecutionState *current, States s);
+		bool empty() const { return base->empty(); }
+		void printName(std::ostream &os) const { os << "XChkSearcher\n"; }
+	private:
+		void xchk(ExecutionState* s);
+		typedef std::tr1::unordered_map<ExecutionState*, unsigned>
+			as_hashes_ty;
+		ExecutionState	*last_selected;
+		as_hashes_ty	as_hashes;
+		Searcher	*base;
+	};
+}
+
+
+#endif

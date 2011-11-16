@@ -25,16 +25,13 @@ private:
 	mutable BitArray	*flushMask;
 	ref<Expr>		*knownSymbolics;
 
-	/* XXX DEBUG, move to private */
+	// mutable because we may need flush during read of const
 	mutable UpdateList	updates;
 
 
 public:
-	// mutable because we may need flush during read of const
-
-	unsigned size;
-
-	bool readOnly;
+	unsigned	size;
+	bool		readOnly;
 
 public:
 	/// Create a new object state for the given memory object with concrete
@@ -73,6 +70,7 @@ public:
 	const Array* getArray(void) const { return src_array; }
 	void print(unsigned int begin = 0, int end = -1);
 
+	unsigned hash(void) const;
 private:
 
 	// return bytes written.
@@ -88,7 +86,6 @@ private:
 	const UpdateList &getUpdates() const;
 
 	void makeConcrete();
-
 	void makeSymbolic();
 
 	ref<Expr> read8(ref<Expr> offset) const;

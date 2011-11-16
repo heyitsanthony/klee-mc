@@ -267,14 +267,14 @@ void ObjectState::flushRangeForWrite(
 	for (unsigned offset=rangeBase; offset<rangeBase+rangeSize; offset++) {
 		if (!isByteFlushed(offset)) {
 			flushWriteByte(offset);
-		} else {
-			// flushed bytes that are written over still need
-			// to be marked out
-			if (isByteConcrete(offset)) {
-				markByteSymbolic(offset);
-			} else if (isByteKnownSymbolic(offset)) {
-				setKnownSymbolic(offset, 0);
-			}
+			continue;
+		}
+		// flushed bytes that are written over still need
+		// to be marked out
+		if (isByteConcrete(offset)) {
+			markByteSymbolic(offset);
+		} else if (isByteKnownSymbolic(offset)) {
+			setKnownSymbolic(offset, 0);
 		}
 	}
 }
@@ -594,4 +594,26 @@ unsigned int ObjectState::getNumConcrete(void) const
 		if (isByteConcrete(i)) ret++;
 	}
 	return ret;
+}
+
+unsigned ObjectState::hash(void) const
+{
+	unsigned hash_ret;
+
+	hash_ret = updates.hash();
+	if (concreteStore) {
+		for (unsigned int i = 0; i < size; i++) {
+			hash_ret += (i+1)*concreteStore[i];
+		}
+	}
+
+	if (knownSymbolics) {
+		for (unsigned i = 0; i < size; i++) {
+			if (knownSymbolics[i].isNull())
+				continue;
+			hash_ret += (i+1)*knownSymbolics[i]->hash();
+		}
+	}
+
+	return hash_ret;
 }

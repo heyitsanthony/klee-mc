@@ -91,7 +91,11 @@ public:
 	{
 		std::set<ExecutionState*> tmp;
 		tmp.insert(es);
-		update(current, States(States::emptySet, tmp, States::emptySet, States::emptySet));
+		update(	current,
+			States(	States::emptySet,
+				tmp,
+				States::emptySet,
+				States::emptySet));
 	}
 };
 }

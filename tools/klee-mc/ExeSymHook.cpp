@@ -157,19 +157,6 @@ void ExeSymHook::unwatchFree(ESVSymHook &esh)
 		return;
 
 	in_ptr = in_ptr_ce->getZExtValue();
-	if (in_ptr == 0) {
-		/* freeing null is a no-op */
-		return;
-	}
-
-	if (!esh.hasHeapPtr(in_ptr)) {
-		terminateStateOnError(
-			esh,
-			"heap error: freeing non-malloced pointer",
-			"heapfree.err");
-		return;
-	}
-
 	esh.rmvHeapPtr(in_ptr);
 }
 
@@ -192,16 +179,39 @@ void ExeSymHook::unwatch(ESVSymHook &esh)
 void ExeSymHook::watchFunc(ExecutionState& es, llvm::Function* f)
 {
 	ESVSymHook		&esh(es2esh(es));
+	ref<Expr>		in_arg;
 	uint64_t		stack_pos;
 
 	if (f != f_malloc && f != f_free)
 		return;
 
+	in_arg = getCallArg(es, 0);
+
+	if (f == f_free) {
+		const ConstantExpr*	in_ptr_ce;
+		uint64_t		in_ptr;
+
+		in_ptr_ce = dyn_cast<ConstantExpr>(in_arg);
+		in_ptr = (in_ptr_ce == NULL)
+			? 0
+			: in_ptr_ce->getZExtValue();
+
+		if (in_ptr && !esh.hasHeapPtr(in_ptr)) {
+			terminateStateOnError(
+				esh,
+				"heap error: freeing non-malloced pointer",
+				"heapfree.err");
+			return;
+		}
+	}
+
+
+
 	stack_pos = getStateStack(es);
 	if (!stack_pos)
 		return;
 
-	esh.enterWatchedFunc(f, getCallArg(es, 0), stack_pos);
+	esh.enterWatchedFunc(f, in_arg, stack_pos);
 }
 
 ExecutionState* ExeSymHook::setupInitialState(void)

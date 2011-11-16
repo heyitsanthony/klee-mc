@@ -57,42 +57,44 @@ namespace klee {
     MemoryMap objects;
 
   public:
-    AddressSpace() : cowKey(1), last_mo(NULL) {}
-    AddressSpace(const AddressSpace &b)
-      : cowKey(++b.cowKey)
-      , last_mo(NULL)
-      , objects(b.objects)
-    { }
-    ~AddressSpace() {}
+	AddressSpace() : cowKey(1), last_mo(NULL) {}
+	AddressSpace(const AddressSpace &b)
+	: cowKey(++b.cowKey)
+	, last_mo(NULL)
+	, objects(b.objects)
+	{ }
+	~AddressSpace() {}
 
-    /// Resolve address to an ObjectPair in result.
-    /// \return true iff an object was found.
-    bool resolveOne(const ref<ConstantExpr> &address, ObjectPair &result);
-    bool resolveOne(uint64_t address, ObjectPair& result);
-    const MemoryObject* resolveOneMO(uint64_t address);
-    const MemoryObject* getLastBoundHint(void) const { return last_mo; }
+	/// Resolve address to an ObjectPair in result.
+	/// \return true iff an object was found.
+	bool resolveOne(const ref<ConstantExpr> &address, ObjectPair &result);
+	bool resolveOne(uint64_t address, ObjectPair& result);
+	const MemoryObject* resolveOneMO(uint64_t address);
+	const MemoryObject* getLastBoundHint(void) const { return last_mo; }
 
-    // Find a feasible object for 'address'.
-    //
-    bool getFeasibleObject(
-    	ExecutionState &state,
-        TimingSolver *solver,
-        ref<Expr> address,
-        ObjectPair &result);
+	// Find a feasible object for 'address'.
+	//
+	bool getFeasibleObject(
+		ExecutionState &state,
+		TimingSolver *solver,
+		ref<Expr> address,
+		ObjectPair &result);
 
-    /// Resolve address to a list of ObjectPairs it can point to. If
-    /// maxResolutions is non-zero then no more than that many pairs
-    /// will be returned.
-    ///
-    /// \return true iff the resolution is incomplete (maxResolutions
-    /// is non-zero and the search terminated early, or a query timed out).
-    bool resolve(ExecutionState &state,
-                 TimingSolver *solver,
-                 ref<Expr> address,
-                 ResolutionList &rl,
-                 unsigned maxResolutions=0);
+	/// Resolve address to a list of ObjectPairs it can point to. If
+	/// maxResolutions is non-zero then no more than that many pairs
+	/// will be returned.
+	///
+	/// \return true iff the resolution is incomplete (maxResolutions
+	/// is non-zero and the search terminated early, or a query timed out).
+	bool resolve(
+		ExecutionState &state,
+		TimingSolver *solver,
+		ref<Expr> address,
+		ResolutionList &rl,
+		unsigned maxResolutions=0);
 
-    /***/
+	unsigned hash(void) const;
+
   private:
 	/// Add a binding to the address space.
 	void bindObject(const MemoryObject *mo, ObjectState *os);
