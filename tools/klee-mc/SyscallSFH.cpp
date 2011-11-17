@@ -35,6 +35,25 @@ static SpecialFunctionHandler::HandlerInfo hInfo[NUM_HANDLERS] =
 #undef add
 };
 
+static void copyIntoObjState(
+	ExecutionState& state,
+	ObjectState* os,
+	ref<Expr>* buf,
+	unsigned int off,
+	unsigned int len)
+{
+	for (unsigned i = 0; i < len; i++) {
+		const ConstantExpr	*ce;
+		ce = dyn_cast<ConstantExpr>(buf[i]);
+		if (ce != NULL) {
+			uint8_t	v = ce->getZExtValue();
+			state.write8(os, i+off, v);
+		} else {
+			state.write(os, i+off, buf[i]);
+		}
+	}
+}
+
 
 SyscallSFH::SyscallSFH(Executor* e) : SpecialFunctionHandler(e)
 {
@@ -207,7 +226,10 @@ SFH_DEF_HANDLER(MakeRangeSymbolic)
 	len_v = len->getZExtValue();
 	name_str = sfh->readStringAtAddress(state, arguments[2]);
 
-	fprintf(stderr, "MAKE RANGE SYMBOLIC %s %d\n", name_str.c_str(), (int)len_v);
+	fprintf(stderr, "MAKE RANGE SYMBOLIC %s %p--%p (%d)\n",
+		name_str.c_str(),
+		(void*)addr_v, (void*)(addr_v + len_v),
+		(int)len_v);
 	sc_sfh->makeRangeSymbolic(state, (void*)addr_v, len_v, name_str.c_str());
 }
 
@@ -297,7 +319,7 @@ void SyscallSFH::removeTail(
 	unsigned taken)
 {
 	ObjectState	*os;
-	char		*buf_head;
+	ref<Expr>	*buf_head;
 	uint64_t	mo_addr, mo_size, head_size;
 
 	mo_addr = mo->address;
@@ -307,8 +329,8 @@ void SyscallSFH::removeTail(
 
 	/* copy buffer data */
 	head_size = mo_size - taken;
-	buf_head = new char[head_size];
-	state.addressSpace.copyToBuf(mo, buf_head, 0, head_size);
+	buf_head = new ref<Expr>[head_size];
+	state.addressSpace.copyToExprBuf(mo, buf_head, 0, head_size);
 	os = state.addressSpace.findWriteableObject(mo);
 
 	/* free object from address space */
@@ -316,7 +338,7 @@ void SyscallSFH::removeTail(
 
 	/* mark head concrete */
 	os = state.allocateAt(mo_addr, head_size, 0);
-	for(unsigned i = 0; i < head_size; i++) state.write8(os, i, buf_head[i]);
+	copyIntoObjState(state, os, buf_head, 0, head_size);
 
 	delete [] buf_head;
 }
@@ -327,7 +349,7 @@ void SyscallSFH::removeHead(
 	unsigned taken)
 {
 	ObjectState	*os;
-	char		*buf_tail;
+	ref<Expr>	*buf_tail;
 	uint64_t	mo_addr, mo_size, tail_size;
 
 	mo_addr = mo->address;
@@ -342,8 +364,8 @@ void SyscallSFH::removeHead(
 
 	/* copy buffer data */
 	tail_size = mo_size - taken;
-	buf_tail = new char[tail_size];
-	state.addressSpace.copyToBuf(mo, buf_tail, taken, tail_size);
+	buf_tail = new ref<Expr>[tail_size];
+	state.addressSpace.copyToExprBuf(mo, buf_tail, taken, tail_size);
 	os = state.addressSpace.findWriteableObject(mo);
 
 	/* free object from address space */
@@ -351,7 +373,7 @@ void SyscallSFH::removeHead(
 
 	/* create tail */
 	os = state.allocateAt(mo_addr+taken, tail_size, 0);
-	for(unsigned i = 0; i < tail_size; i++) state.write8(os, i, buf_tail[i]);
+	copyIntoObjState(state, os, buf_tail, 0, tail_size);
 
 	delete [] buf_tail;
 }
@@ -363,7 +385,7 @@ void SyscallSFH::removeMiddle(
 	unsigned taken)
 {
 	ObjectState	*os;
-	char		*buf_head, *buf_tail;
+	ref<Expr>	*buf_head, *buf_tail;
 	uint64_t	mo_addr, mo_size, tail_size;
 
 	mo_addr = mo->address;
@@ -371,21 +393,21 @@ void SyscallSFH::removeMiddle(
 	assert (mo_size > (mo_off+taken) && "Off+Taken out of range");
 
 	/* copy buffer data */
-	buf_head = new char[mo_off];
+	buf_head = new ref<Expr>[mo_off];
 	tail_size = mo_size - (mo_off + taken);
-	buf_tail = new char[tail_size];
-	state.addressSpace.copyToBuf(mo, buf_head, 0, mo_off);
-	state.addressSpace.copyToBuf(mo, buf_tail, mo_off+taken, tail_size);
+	buf_tail = new ref<Expr>[tail_size];
+	state.addressSpace.copyToExprBuf(mo, buf_head, 0, mo_off);
+	state.addressSpace.copyToExprBuf(mo, buf_tail, mo_off+taken, tail_size);
 	os = state.addressSpace.findWriteableObject(mo);
 
 	/* free object from address space */
 	state.unbindObject(mo);
 
 	os = state.allocateAt(mo_addr, mo_off, NULL);
-	for(unsigned i = 0; i < mo_off; i++) state.write8(os, i, buf_head[i]);
+	copyIntoObjState(state, os, buf_head, 0, mo_off);
 
-	os = state.allocateAt(mo_addr+mo_off+taken, tail_size, 0);
-	for(unsigned i = 0; i < tail_size; i++) state.write8(os, i, buf_tail[i]);
+	os = state.allocateAt(mo_addr+mo_off+taken, tail_size, NULL);
+	copyIntoObjState(state, os, buf_tail, 0, tail_size);
 
 	delete [] buf_head;
 	delete [] buf_tail;

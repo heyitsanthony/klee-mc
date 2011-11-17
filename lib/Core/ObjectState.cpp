@@ -377,7 +377,7 @@ ref<Expr> ObjectState::read8(ref<Expr> offset) const
 
 void ObjectState::write8(unsigned offset, uint8_t value)
 {
-	//assert(read_only == false && "writing to read-only object!");
+	assert(!readOnly  && "writing to read-only object!");
 	concreteStore[offset] = value;
 	setKnownSymbolic(offset, 0);
 
@@ -403,6 +403,7 @@ void ObjectState::write8(ref<Expr> offset, ref<Expr> value)
 {
 	unsigned	base, size;
 
+	assert (!readOnly);
 	assert(!isa<ConstantExpr>(offset) &&
 		"constant offset passed to symbolic write8");
 
@@ -480,6 +481,8 @@ ref<Expr> ObjectState::read(unsigned offset, Expr::Width width) const
 
 void ObjectState::write(ref<Expr> offset, ref<Expr> value)
 {
+	assert (!readOnly);
+
 	// Truncate offset to 32-bits.
 	offset = ZExtExpr::create(offset, Expr::Int32);
 
@@ -561,7 +564,7 @@ writeN(32)
 writeN(64)
 
 
-void ObjectState::print(unsigned int begin, int end)
+void ObjectState::print(unsigned int begin, int end) const
 {
   unsigned int real_end;
   std::cerr << "-- ObjectState --\n";
@@ -600,7 +603,13 @@ unsigned ObjectState::hash(void) const
 {
 	unsigned hash_ret;
 
-	hash_ret = updates.hash();
+	hash_ret = 0;
+	if (getNumConcrete() != size) {
+		getUpdates();
+		flushRangeForRead(0, size);
+		hash_ret = getUpdates().hash();
+	}
+
 	if (concreteStore) {
 		for (unsigned int i = 0; i < size; i++) {
 			hash_ret += (i+1)*concreteStore[i];

@@ -68,7 +68,7 @@ public:
 	ref<Expr> read8(unsigned offset) const;
 
 	const Array* getArray(void) const { return src_array; }
-	void print(unsigned int begin = 0, int end = -1);
+	void print(unsigned int begin = 0, int end = -1) const;
 
 	unsigned hash(void) const;
 private:

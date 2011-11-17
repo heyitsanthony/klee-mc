@@ -36,7 +36,6 @@ namespace llvm {
   class CallInst;
   class CallSite;
   class Constant;
-  class ConstantExpr;
   class Function;
   class GlobalValue;
   class GlobalVariable;

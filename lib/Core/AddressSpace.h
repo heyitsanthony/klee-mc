@@ -35,28 +35,28 @@ namespace klee {
   typedef ImmutableMap<const MemoryObject*, ObjectHolder, MemoryObjectLT> MemoryMap;
   typedef MemoryMap::iterator		MMIter;
 
-  class AddressSpace {
-      friend class ExecutionState;
-      friend class ObjectState;
-  private:
-    /// Epoch counter used to control ownership of objects.
-    mutable unsigned cowKey;
+class AddressSpace {
+	friend class ExecutionState;
+	friend class ObjectState;
+private:
+	/// Epoch counter used to control ownership of objects.
+	mutable unsigned cowKey;
 
-    const MemoryObject* last_mo;
+	const MemoryObject* last_mo;
 
-    /// Unsupported, use copy constructor
-    AddressSpace &operator=(const AddressSpace&);
+	/// Unsupported, use copy constructor
+	AddressSpace &operator=(const AddressSpace&);
 
-    /// The MemoryObject -> ObjectState map that constitutes the
-    /// address space.
-    ///
-    /// The set of objects where o->copyOnWriteOwner == cowKey are the
-    /// objects that we own.
-    ///
-    /// \invariant forall o in objects, o->copyOnWriteOwner <= cowKey
-    MemoryMap objects;
+	/// The MemoryObject -> ObjectState map that constitutes the
+	/// address space.
+	///
+	/// The set of objects where o->copyOnWriteOwner == cowKey are the
+	/// objects that we own.
+	///
+	/// \invariant forall o in objects, o->copyOnWriteOwner <= cowKey
+	MemoryMap objects;
 
-  public:
+public:
 	AddressSpace() : cowKey(1), last_mo(NULL) {}
 	AddressSpace(const AddressSpace &b)
 	: cowKey(++b.cowKey)
@@ -95,7 +95,7 @@ namespace klee {
 
 	unsigned hash(void) const;
 
-  private:
+private:
 	/// Add a binding to the address space.
 	void bindObject(const MemoryObject *mo, ObjectState *os);
 
@@ -169,53 +169,58 @@ namespace klee {
 		ResolutionList& rl,
 		bool& bad_addr);
 
-  public:
-    /// Remove a binding from the address space.
-    void unbindObject(const MemoryObject *mo);
+public:
+	/// Remove a binding from the address space.
+	void unbindObject(const MemoryObject *mo);
 
-    MMIter lower_bound(uint64_t addr) const;
-    MMIter end(void) const { return objects.end(); }
-    MMIter begin(void) const { return objects.begin(); }
+	MMIter lower_bound(uint64_t addr) const;
+	MMIter end(void) const { return objects.end(); }
+	MMIter begin(void) const { return objects.begin(); }
 
-    void printAddressInfo(std::ostream& os, uint64_t addr) const;
-    void printObjects(std::ostream& os) const;
+	void printAddressInfo(std::ostream& os, uint64_t addr) const;
+	void printObjects(std::ostream& os) const;
 
-    /// Lookup a binding from a MemoryObject.
-    const ObjectState *findObject(const MemoryObject *mo) const;
-    ObjectState* findWriteableObject(const MemoryObject* mo);
+	/// Lookup a binding from a MemoryObject.
+	const ObjectState *findObject(const MemoryObject *mo) const;
+	ObjectState* findWriteableObject(const MemoryObject* mo);
 
-    /// \brief Obtain an ObjectState suitable for writing.
-    ///
-    /// This returns a writeable object state, creating a new copy of
-    /// the given ObjectState if necessary. If the address space owns
-    /// the ObjectState then this routine effectively just strips the
-    /// const qualifier it.
-    ///
-    /// \param mo The MemoryObject to get a writeable ObjectState for.
-    /// \param os The current binding of the MemoryObject.
-    /// \return A writeable ObjectState (\a os or a copy).
-    ObjectState *getWriteable(const MemoryObject *mo, const ObjectState *os);
+	/// \brief Obtain an ObjectState suitable for writing.
+	///
+	/// This returns a writeable object state, creating a new copy of
+	/// the given ObjectState if necessary. If the address space owns
+	/// the ObjectState then this routine effectively just strips the
+	/// const qualifier it.
+	///
+	/// \param mo The MemoryObject to get a writeable ObjectState for.
+	/// \param os The current binding of the MemoryObject.
+	/// \return A writeable ObjectState (\a os or a copy).
+	ObjectState *getWriteable(const MemoryObject *mo, const ObjectState *os);
 
-    bool copyToBuf(const MemoryObject* mo, void* buf) const;
-    bool copyToBuf(
-    	const MemoryObject* mo, void* buf,
-    	unsigned off, unsigned len) const;
+	bool copyToBuf(const MemoryObject* mo, void* buf) const;
+	bool copyToBuf(
+	const MemoryObject* mo, void* buf,
+	unsigned off, unsigned len) const;
 
-    /// Copy the concrete values of all managed ObjectStates into the
-    /// actual system memory location they were allocated at.
-    void copyOutConcretes();
+	void copyToExprBuf(
+	const MemoryObject* mo, ref<Expr>* buf,
+	unsigned off, unsigned len) const;
 
-    /// Copy the concrete values of all managed ObjectStates back from
-    /// the actual system memory location they were allocated
-    /// at. ObjectStates will only be written to (and thus,
-    /// potentially copied) if the memory values are different from
-    /// the current concrete values.
-    ///
-    /// \retval true The copy succeeded.
-    /// \retval false The copy failed because a read-only object was modified.
-    bool copyInConcretes(void);
-    void print(std::ostream& os) const;
-  };
+
+	/// Copy the concrete values of all managed ObjectStates into the
+	/// actual system memory location they were allocated at.
+	void copyOutConcretes();
+
+	/// Copy the concrete values of all managed ObjectStates back from
+	/// the actual system memory location they were allocated
+	/// at. ObjectStates will only be written to (and thus,
+	/// potentially copied) if the memory values are different from
+	/// the current concrete values.
+	///
+	/// \retval true The copy succeeded.
+	/// \retval false The copy failed because a read-only object was modified.
+	bool copyInConcretes(void);
+	void print(std::ostream& os) const;
+};
 } // End klee namespace
 
 #endif

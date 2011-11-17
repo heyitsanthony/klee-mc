@@ -30,7 +30,6 @@
 #include "klee/ExeStateBuilder.h"
 #include "klee/Expr.h"
 #include "klee/Interpreter.h"
-#include "klee/SolverStats.h"
 #include "klee/TimerStatIncrementer.h"
 #include "klee/util/ExprPPrinter.h"
 #include "klee/Internal/ADT/KTest.h"
@@ -1889,7 +1888,7 @@ Executor::TargetTy Executor::getExprCondSwitchTargets(
 	foreach (cit, caseMap.begin(), caseMap.end()) {
 		BasicBlock *target = cit->first;
 		std::set<uint64_t> &values = cit->second;
-		ref<Expr> match = ConstantExpr::alloc(0, Expr::Bool);
+		ref<Expr> match = ConstantExpr::create(0, Expr::Bool);
 
 		foreach (vit, values.begin(), values.end()) {
 			// try run-length encoding long sequences of consecutive
@@ -2321,6 +2320,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
   case Instruction::Store: {
     ref<Expr> base = eval(ki, 1, state).value;
     ref<Expr> value = eval(ki, 0, state).value;
+
     mmu->exeMemOp(state, MMU::MemOp(true, base, value, 0));
     break;
   }

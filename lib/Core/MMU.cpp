@@ -24,6 +24,7 @@ namespace {
 	cl::opt<unsigned>
 	MaxSymArraySize(
 		"max-sym-array-size",
+		cl::desc("Concretize accesses to large symbolic arrays"),
 		cl::init(0));
 }
 
@@ -83,6 +84,20 @@ bool MMU::memOpFast(ExecutionState& state, MemOp& mop)
 	}
 
 	return true;
+}
+
+ref<Expr> MMU::readDebug(ExecutionState& state, uint64_t addr)
+{
+	ObjectPair	op;
+	uint64_t	off;
+	bool		found;
+
+	found = state.addressSpace.resolveOne(addr, op);
+	if (found == false)
+		return NULL;
+
+	off = addr - op.first->address;
+	return state.read(op.second, off, 64);
 }
 
 ExecutionState* MMU::getUnboundAddressState(

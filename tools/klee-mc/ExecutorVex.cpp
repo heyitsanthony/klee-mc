@@ -311,7 +311,7 @@ void ExecutorVex::initializeGlobals(ExecutionState &state)
 
 		assert(wos);
 		initializeGlobalObject(state, wos, i->getInitializer(), 0);
-		// if (i->isConstant()) os->setReadOnly(true);
+		if (i->isConstant()) wos->setReadOnly(true);
 	}
 
 	std::cerr << "GLOBAL ADDRESSES size=" << globalAddresses.size() << '\n';

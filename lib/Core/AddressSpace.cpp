@@ -653,6 +653,19 @@ void AddressSpace::copyOutConcretes(void)
 	}
 }
 
+void AddressSpace::copyToExprBuf(
+	const MemoryObject* mo, ref<Expr>* buf,
+	unsigned off, unsigned len) const
+{
+	const ObjectState	*os;
+
+	os = findObject(mo);
+	assert (os != NULL && "ObjectState not found, but expected!?");
+	for (unsigned int i = 0; i < len; i++) {
+		buf[i] = os->read8(off + i);
+	}
+}
+
 bool AddressSpace::copyToBuf(const MemoryObject* mo, void* buf) const
 {
 	return copyToBuf(mo, buf, (unsigned)0, (unsigned)mo->size);
