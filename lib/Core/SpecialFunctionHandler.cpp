@@ -10,7 +10,6 @@
 #include "Memory.h"
 #include "SpecialFunctionHandler.h"
 #include "TimingSolver.h"
-#include "OpenfdRegistry.h"
 
 #include "klee/Common.h"
 #include "klee/ExecutionState.h"
@@ -72,7 +71,6 @@ SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   add("klee_is_symbolic", IsSymbolic, true),
   add("klee_make_symbolic", MakeSymbolic, false),
   add("klee_mark_global", MarkGlobal, false),
-  add("klee_mark_openfd", MarkOpenfd, false),
   add("klee_merge", Merge, false),
   add("klee_prefer_cex", PreferCex, false),
   add("klee_print_expr", PrintExpr, false),
@@ -780,14 +778,6 @@ SFH_DEF_HANDLER(MarkGlobal)
 		assert(!mo->isLocal());
 		mo->setGlobal(true);
 	}
-}
-
-SFH_DEF_HANDLER(MarkOpenfd)
-{
-  SFH_CHK_ARGS(1, "klee_mark_openfd");
-
-  int fd = cast<ConstantExpr>(arguments[0])->getZExtValue();
-  OpenfdRegistry::fdOpened(&state, fd);
 }
 
 SFH_DEF_HANDLER(ForceNE)

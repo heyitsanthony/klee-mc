@@ -8,7 +8,6 @@
 #include "static/Sugar.h"
 
 #include "Memory.h"
-#include "OpenfdRegistry.h"
 
 #include "llvm/Function.h"
 #include "llvm/Support/CommandLine.h"

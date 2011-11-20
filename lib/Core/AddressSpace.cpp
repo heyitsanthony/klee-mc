@@ -20,11 +20,9 @@
 
 using namespace klee;
 
-static bool ContiguousOffsetResolution = false;
-static unsigned ContiguousPrevScanLen = 10;
-static unsigned ContiguousNextScanLen = 20;
-
-///
+static bool	ContiguousOffsetResolution = false;
+static unsigned	ContiguousPrevScanLen = 10;
+static unsigned	ContiguousNextScanLen = 20;
 
 void AddressSpace::bindObject(const MemoryObject *mo, ObjectState *os)
 {
@@ -777,4 +775,41 @@ unsigned AddressSpace::hash(void) const
 	}
 
 	return hash_ret;
+}
+
+unsigned int AddressSpace::copyOutBuf(
+	uint64_t	addr,
+	const char	*bytes,
+	unsigned int	len)
+{
+	unsigned int	bw = 0;
+
+	while (bw < len) {
+		const MemoryObject	*mo;
+		ObjectState		*os;
+		unsigned int		to_write;
+		unsigned int		bytes_avail, off;
+
+		mo = resolveOneMO(addr + bw);
+		if (mo == NULL)
+			break;
+
+		os = findWriteableObject(mo);
+		if (os == NULL)
+			break;
+
+		off = (addr+bw)-mo->address;
+		bytes_avail = mo->size - off;
+
+		to_write = (bytes_avail < (len - bw))
+			? bytes_avail
+			: len-bw;
+
+		for (unsigned i = 0; i < to_write; i++)
+			os->write8(off+i, bytes[bw+i]);
+
+		bw += to_write;
+	}
+
+	return bw;
 }

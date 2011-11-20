@@ -18,8 +18,9 @@
 #include <sys/syscall.h>
 #include <klee/klee.h>
 #include <grp.h>
-#include <valgrind/libvex_guest_amd64.h>
 
+#include "syscalls.h"
+#include "concrete_fd.h"
 #include "breadcrumb.h"
 
 void* kmc_sc_regs(void*);
@@ -29,32 +30,9 @@ void kmc_exit(uint64_t);
 void kmc_make_range_symbolic(uint64_t, uint64_t, const char*);
 void* kmc_alloc_aligned(uint64_t, const char* name);
 
-static void make_sym_by_arg(
-	void	*regfile,
-	uint64_t arg_num,
-	uint64_t len, const char* name);
-static void make_sym(uint64_t addr, uint64_t len, const char* name);
-
-#define USE_SYS_FAILURE	1
-#define FAILURE_RATE	4
-struct fail_counters
-{
-	unsigned int	fc_read;
-	unsigned int	fc_stat;
-	unsigned int	fc_write;
-} fail_c;
-
 // arg0, arg1, ...
 // %rdi, %rsi, %rdx, %r10, %r8 and %r9a
 
-#define GET_RAX(x)	((VexGuestAMD64State*)x)->guest_RAX
-#define GET_ARG0(x)	((VexGuestAMD64State*)x)->guest_RDI
-#define GET_ARG1(x)	((VexGuestAMD64State*)x)->guest_RSI
-#define GET_ARG2(x)	((VexGuestAMD64State*)x)->guest_RDX
-#define GET_ARG3(x)	((VexGuestAMD64State*)x)->guest_R10
-#define GET_ARG4(x)	((VexGuestAMD64State*)x)->guest_R8
-#define GET_ARG5(x)	((VexGuestAMD64State*)x)->guest_R9
-#define GET_SYSNR(x)	GET_RAX(x)
 static uint64_t GET_ARG(void* x, int y)
 {
 	switch (y) {
@@ -68,30 +46,10 @@ static uint64_t GET_ARG(void* x, int y)
 	return -1;
 }
 
-uint64_t concretize_u64(uint64_t s)
-{
-  uint64_t sc = klee_get_value(s);
-  klee_assume(sc == s);
-  return sc;
-}
-
-static void* sc_new_regs(void* r)
-{
-	void	*ret = kmc_sc_regs(r);
-	SC_BREADCRUMB_FL_OR(BC_FL_SC_NEWREGS);
-	return ret;
-}
-
 static void sc_ret_ge0(void* regfile)
 {
 	int64_t	rax = GET_RAX(regfile);
 	klee_assume(rax >= 0);
-}
-
-static void sc_ret_v(void* regfile, uint64_t v1)
-{
-	GET_RAX(regfile) = v1;
-	klee_assume(GET_RAX(regfile) == v1);
 }
 
 static void sc_ret_or(void* regfile, uint64_t v1, uint64_t v2)
@@ -101,7 +59,7 @@ static void sc_ret_or(void* regfile, uint64_t v1, uint64_t v2)
 }
 
 /* inclusive */
-static void sc_ret_range(void* regfile, int64_t lo, int64_t hi)
+void sc_ret_range(void* regfile, int64_t lo, int64_t hi)
 {
 	int64_t	rax;
 	if ((hi - lo) == 1) {
@@ -224,7 +182,7 @@ static void sc_munmap(void* regfile)
 		sc_ret_range(sc_new_regs(regfile), y, z);		\
 		break;
 
-static void make_sym(uint64_t addr, uint64_t len, const char* name)
+void make_sym(uint64_t addr, uint64_t len, const char* name)
 {
 	klee_check_memory_access((void*)addr, 1);
 
@@ -235,7 +193,7 @@ static void make_sym(uint64_t addr, uint64_t len, const char* name)
 	sc_breadcrumb_add_ptr((void*)addr, len);
 }
 
-static void make_sym_by_arg(
+void make_sym_by_arg(
 	void	*regfile,
 	uint64_t arg_num,
 	uint64_t len, const char* name)
@@ -381,13 +339,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_munlock:
 		sc_ret_v(regfile, 0);
 		break;
-	case SYS_openat:
-	case SYS_open:
-		new_regs = sc_new_regs(regfile);
-		if ((intptr_t)GET_RAX(new_regs) == -1)
-			break;
-		sc_ret_range(new_regs, 3, 4096);
-		break;
 	case SYS_brk:
 		klee_warning_once("failing brk");
 		sc_ret_v(regfile, -1);
@@ -461,41 +412,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 	FAKE_SC(fadvise64)
 	FAKE_SC(rt_sigaction)
 	FAKE_SC(rt_sigprocmask)
-	case SYS_pread64:
-	case SYS_read: {
-		uint64_t len = concretize_u64(GET_ARG2(regfile));
-
-//		This is an error case that we should probably make optional
-//		since this causes the state space to explode into really useless
-//		code.
-//
-		if (len == 0) {
-			sc_ret_v(regfile, 0);
-			break;
-		}
-
-		if (len > SSIZE_MAX) {
-			/* "result is unspecified"-- -1 for an error */
-			sc_ret_v(regfile, -1);
-			break;
-		}
-
-		new_regs = sc_new_regs(regfile);
-
-#ifdef USE_SYS_FAILURE
-		if ((++fail_c.fc_read % FAILURE_RATE) == 0 &&
-		    (int64_t)GET_RAX(new_regs) == -1) {
-			break;
-		}
-#endif
-		klee_assume(GET_RAX(new_regs) == len);
-
-		sc_ret_v(new_regs, len);
-		make_sym_by_arg(regfile, 1, len, "readbuf");
-		sc_breadcrumb_commit(sys_nr, GET_RAX(new_regs));
-		goto already_logged;
-	}
-	break;
 
 	case SYS_sysinfo:
 		make_sym_by_arg(regfile, 0, sizeof(struct sysinfo), "sysinfo");
@@ -532,13 +448,21 @@ void* sc_enter(void* regfile, void* jmpptr)
 	}
 	break;
 
+
+	UNIMPL_SC(readlinkat)
+	case SYS_pread64:
+	case SYS_read: 
+	case SYS_fstat:
+	case SYS_lstat:
+	case SYS_creat:
+	case SYS_readlink:
 	case SYS_lseek:
-#ifdef USE_SYS_FAILURE
-		klee_warning_once("lseek [-1, 4096]");
-		sc_ret_range(sc_new_regs(regfile), -1, 4096);
-#else
-		sc_ret_v(regfile, GET_ARG1(regfile));
-#endif
+	case SYS_stat: 
+	case SYS_openat:
+	case SYS_open:
+	case SYS_close:
+		if (!file_sc(sys_nr, regfile))
+			goto already_logged;
 		break;
 	case SYS_prctl:
 		sc_ret_v(regfile, -1);
@@ -546,21 +470,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_ioctl:
 		sc_ret_ge0(sc_new_regs(regfile));
 		break;
-	case SYS_fstat:
-	case SYS_lstat:
-	case SYS_stat: {
-		new_regs = sc_new_regs(regfile);
-#ifdef USE_SYS_FAILURE
-		if (	(++fail_c.fc_stat % FAILURE_RATE) == 0 &&
-			(int64_t)GET_RAX(new_regs) == -1)
-		{
-			break;
-		}
-#endif
-		sc_ret_v(new_regs, 0);
-		make_sym_by_arg(regfile, 1, sizeof(struct stat), "statbuf");
-		break;
-	}
+
 	case SYS_uname:
 		sc_ret_v(regfile, -1);
 		klee_warning_once("failing uname");
@@ -611,9 +521,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	case SYS_sched_getparam:
 		klee_warning_once("Blindly OK'd sched_getparam");
-		sc_ret_v(regfile, 0);
-		break;
-	case SYS_close:
 		sc_ret_v(regfile, 0);
 		break;
 	case SYS_dup:
@@ -781,35 +688,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_klee:
 		sc_klee(regfile);
 		break;
-	UNIMPL_SC(readlinkat)
 	UNIMPL_SC(mremap)
-	case SYS_creat:
-		klee_warning_once("phony creat call");
-		new_regs = sc_new_regs(regfile);
-		if ((int64_t)GET_RAX(new_regs) == -1)
-			break;
-		klee_assume(GET_RAX(new_regs) > 3 && GET_RAX(new_regs) < 4096);
-	break;
-	case SYS_readlink:
-	{
-		/* keep the string short since we're pure symbolic now */
-		/* In the future, use system information to satisfy this */
-		uint64_t	addr  = klee_get_value(GET_ARG1(regfile));
-		new_regs = sc_new_regs(regfile);
-		if (GET_ARG2(regfile) >= 2) {
-			sc_ret_range(new_regs, 1, 2);
-			make_sym(addr, GET_ARG2(regfile), "readlink");
-			// readlink()  does not append a null byte to buf.
-			// No need for this:
-			// ((char*)addr)[GET_ARG2(new_regs)] = '\0';
-			// WOoooo
-
-		} else {
-			sc_ret_v(regfile, -1);
-		}
-	}
-	break;
-
 	case SYS_poll:
 		sc_poll(regfile);
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
@@ -869,3 +748,26 @@ void* sc_enter(void* regfile, void* jmpptr)
 already_logged:
 	return jmpptr;
 }
+
+
+uint64_t concretize_u64(uint64_t s)
+{
+	uint64_t sc = klee_get_value(s);
+	klee_assume(sc == s);
+	return sc;
+}
+
+void* sc_new_regs(void* r)
+{
+	void	*ret = kmc_sc_regs(r);
+	SC_BREADCRUMB_FL_OR(BC_FL_SC_NEWREGS);
+	return ret;
+}
+
+void sc_ret_v(void* regfile, uint64_t v1)
+{
+	GET_RAX(regfile) = v1;
+	klee_assume(GET_RAX(regfile) == v1);
+}
+
+

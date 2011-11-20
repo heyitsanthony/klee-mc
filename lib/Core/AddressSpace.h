@@ -206,6 +206,13 @@ public:
 	unsigned off, unsigned len) const;
 
 
+	/* returns number of bytes copied into address space */
+	unsigned int copyOutBuf(
+		uint64_t	addr,
+		const char	*bytes,
+		unsigned int	len);
+
+
 	/// Copy the concrete values of all managed ObjectStates into the
 	/// actual system memory location they were allocated at.
 	void copyOutConcretes();

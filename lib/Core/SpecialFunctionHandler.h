@@ -144,7 +144,6 @@ namespace klee {
     SFH_HANDLER(MakeSymbolic)
     SFH_HANDLER(Malloc)
     SFH_HANDLER(MarkGlobal)
-    SFH_HANDLER(MarkOpenfd)
     SFH_HANDLER(Merge)
     SFH_HANDLER(New)
     SFH_HANDLER(NewArray)

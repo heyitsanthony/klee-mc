@@ -4,7 +4,9 @@
 #include "SyscallSFH.h"
 #include "guestcpustate.h"
 #include "klee/breadcrumb.h"
+#include <sys/syscall.h>
 #include "static/Sugar.h"
+#include <sys/stat.h>
 
 extern "C"
 {
@@ -13,7 +15,7 @@ extern "C"
 
 using namespace klee;
 
-static const unsigned int NUM_HANDLERS = 7;
+static const unsigned int NUM_HANDLERS = 8;
 static SpecialFunctionHandler::HandlerInfo hInfo[NUM_HANDLERS] =
 {
 #define add(name, h, ret) {	\
@@ -26,6 +28,7 @@ static SpecialFunctionHandler::HandlerInfo hInfo[NUM_HANDLERS] =
 	true, false, false }
 	add("kmc_sc_regs", SCRegs, true),
 	add("kmc_sc_bad", SCBad, false),
+	add("kmc_io", IO, true),
 	add("kmc_free_run", FreeRun, false),
 	addDNR("kmc_exit", KMCExit),
 	add("kmc_make_range_symbolic", MakeRangeSymbolic, false),
@@ -123,6 +126,146 @@ SFH_DEF_HANDLER(SCRegs)
 	static_cast<ExeStateVex&>(state).setRegCtx(cpu_mo);
 
 	state.bindLocal(target, ConstantExpr::create(cpu_mo->address, 64));
+}
+
+
+static uint64_t arg2u64(const ref<Expr>& ref)
+{
+	const ConstantExpr	*ce;
+
+	ce = dyn_cast<ConstantExpr>(ref);
+	if (ce == NULL)
+		return ~0ULL;
+
+	return ce->getZExtValue();
+}
+static vfd_t arg2vfd(const ref<Expr>& ref) { return arg2u64(ref); }
+
+static ssize_t do_pread(
+	ExecutionState& state,
+	int fd, uint64_t buf_base, size_t count, off_t offset)
+{
+	char	*buf;
+	size_t	br;
+
+	buf = new char[4096];
+	br = 0;
+	while (br < count) {
+		ssize_t	ret, to_read;
+
+		to_read = ((br + 4096) > count) ? count - br : 4096;
+		ret = pread(fd, buf, br + offset, to_read);
+		if (ret == -1) {
+			br = -1;
+			break;
+		}
+
+		assert (ret == to_read && "PARTIAL READ? PUKE!");
+		state.addressSpace.copyOutBuf(buf_base + br, buf, to_read);
+		br += ret;
+	}
+	delete [] buf;
+
+	return br;
+}
+
+
+SFH_DEF_HANDLER(IO)
+{
+	SyscallSFH		*sc_sfh = static_cast<SyscallSFH*>(sfh);
+	const ConstantExpr	*ce_sysnr;
+	int			sysnr;
+
+	SFH_CHK_ARGS(5, "kmc_sc_bad");
+
+	ce_sysnr = dyn_cast<ConstantExpr>(arguments[0]);
+	assert (ce_sysnr);
+	sysnr = ce_sysnr->getZExtValue();
+
+	switch (sysnr) {
+	case SYS_open: {
+		/* expects a path */
+		std::string path(sfh->readStringAtAddress(state, arguments[1]));
+		vfd_t	vfd;
+
+		vfd = sc_sfh->vfds.addPath(path);
+		if (vfd != ~0ULL) {
+			int base_fd = sc_sfh->vfds.xlateVFD(vfd);
+			if (base_fd == -1)
+				vfd = ~0ULL;
+		}
+
+		state.bindLocal(target, ConstantExpr::create(vfd, 64));
+		break;
+	}
+	case SYS_close: {
+		vfd_t			vfd;
+
+		vfd = arg2vfd(arguments[1]);
+		if (vfd == ~0ULL) {
+			state.bindLocal(target, ConstantExpr::create(-1, 64));
+			break;
+		}
+
+		sc_sfh->vfds.close(vfd);
+		state.bindLocal(target, ConstantExpr::create(0, 64));
+		break;
+	}
+
+	case SYS_pread64: {
+		int		fd;
+		ssize_t		ret;
+		uint64_t	buf_base;
+		size_t		count;
+		off_t		offset;
+
+		fd = sc_sfh->vfds.xlateVFD(arg2vfd(arguments[1]));
+		buf_base = arg2u64(arguments[2]);
+		count = arg2u64(arguments[3]);
+		offset = arg2u64(arguments[4]);
+		if (	fd == -1 || buf_base == ~0ULL ||
+			count == ~0ULL || offset == -1)
+		{
+			state.bindLocal(target, ConstantExpr::create(-1, 64));
+			break;
+		}
+
+		ret = do_pread(state, fd, buf_base, count, offset);
+		state.bindLocal(target, ConstantExpr::create(ret, 64));
+		break;
+	}
+
+	case SYS_fstat: {
+		struct stat	s;
+		int		fd;
+		int		rc;
+		unsigned int	bw;
+
+		fd = sc_sfh->vfds.xlateVFD(arg2vfd(arguments[1]));
+		if (fd == -1) {
+			state.bindLocal(target, ConstantExpr::create(-1, 64));
+			break;
+		}
+
+		rc = fstat(fd, &s);
+		if (rc == -1) {
+			state.bindLocal(target, ConstantExpr::create(-1, 64));
+			break;
+		}
+
+		bw = state.addressSpace.copyOutBuf(
+			arg2u64(arguments[2]),
+			(const char*)&s,
+			sizeof(struct stat));
+
+		state.bindLocal(
+			target,
+			ConstantExpr::create(
+				(bw == sizeof(struct stat)) ? 0 : -1, 64));
+		break;
+	}
+
+	}
 }
 
 SFH_DEF_HANDLER(SCBad)
@@ -312,6 +455,8 @@ SFH_DEF_HANDLER(AllocAligned)
 		(*it)->getObject()->setName(name_str.c_str());
 	}
 }
+
+
 
 void SyscallSFH::removeTail(
 	ExecutionState& state,

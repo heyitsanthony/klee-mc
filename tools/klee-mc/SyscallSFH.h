@@ -2,6 +2,8 @@
 #define SYSCALLSSFH_H
 
 #include "../../lib/Core/SpecialFunctionHandler.h"
+#include "VFD.h"
+
 #include <map>
 
 namespace klee
@@ -27,6 +29,8 @@ public:
 	void makeRangeSymbolic(
 		ExecutionState& state, void* addr, unsigned sz,
 		const char* name = NULL);
+
+	VFD		vfds;
 private:
 	void removeTail(
 		ExecutionState& state,
@@ -52,5 +56,6 @@ SFH_HANDLER(KMCExit)
 SFH_HANDLER(MakeRangeSymbolic)
 SFH_HANDLER(AllocAligned)
 SFH_HANDLER(Breadcrumb)
+SFH_HANDLER(IO)
 }
 #endif

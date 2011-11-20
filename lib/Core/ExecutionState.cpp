@@ -20,7 +20,6 @@
 
 #include "PTree.h"
 #include "Memory.h"
-#include "OpenfdRegistry.h"
 
 #include "llvm/Function.h"
 #include "llvm/Support/CommandLine.h"
@@ -86,7 +85,6 @@ ExecutionState::ExecutionState(void)
 
 ExecutionState::~ExecutionState()
 {
-	OpenfdRegistry::stateDestroyed(this);
 	while (!stack.empty()) popFrame();
 }
 
