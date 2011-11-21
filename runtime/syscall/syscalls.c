@@ -19,6 +19,7 @@
 #include <klee/klee.h>
 #include <grp.h>
 
+#include "file.h"
 #include "syscalls.h"
 #include "concrete_fd.h"
 #include "breadcrumb.h"

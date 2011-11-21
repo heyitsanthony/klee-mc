@@ -13,7 +13,7 @@
 #define USE_SYS_FAILURE	1
 #define FAILURE_RATE	4
 
-static bool use_concretes = false;
+bool concrete_vfs = false;
 
 struct fail_counters
 {
@@ -77,7 +77,7 @@ int str_is_sym(const char* s)
 {
 	int	i;
 
-	for (i = 0; i < 256; i++) { 
+	for (i = 0; i < 256; i++) {
 		if (klee_is_symbolic(s[i]))
 			return 1;
 		if (s[i] == '\0')
@@ -128,11 +128,12 @@ int file_sc(unsigned int sys_nr, void* regfile)
 	void	*new_regs;
 
 	switch (sys_nr) {
-	case SYS_lseek:
-		if (fd_is_concrete(GET_ARG0(regfile))) {
+	case SYS_lseek: {
+		int fd = GET_ARG0(regfile);
+		if (fd_is_concrete(fd)) {
 			ssize_t br;
 			br = fd_lseek(
-				GET_ARG0(regfile),
+				fd,
 				(off_t)GET_ARG1(regfile),
 				(size_t)GET_ARG2(regfile));
 			sc_ret_v(regfile, br);
@@ -145,36 +146,36 @@ int file_sc(unsigned int sys_nr, void* regfile)
 #endif
 		}
 		break;
-
+	}
 	case SYS_openat:
 	case SYS_open: {
-		int	ret_fd;
+		const char*	path;
+		int		ret_fd;
 
+		path = (const char*)GET_ARG0(regfile);
 		new_regs = sc_new_regs(regfile);
+		if (concrete_vfs && !str_is_sym(path)) {
+			ret_fd = fd_open(path);
+			if (ret_fd != -1) {
+				sc_ret_v(new_regs, ret_fd);
+				break;
+			}
+		}
+
 		if ((intptr_t)GET_RAX(new_regs) == -1)
 			break;
 
-		if (str_is_sym((const char*)GET_ARG0(regfile))) {
-			sc_ret_v(new_regs, fd_open_sym());
-			break;
-		}
-
-		ret_fd = fd_open((const char*)GET_ARG0(regfile));
-		if (ret_fd == -1) {
-			sc_ret_v(new_regs, fd_open_sym());
-			break;
-		}
-
-		sc_ret_v(new_regs, ret_fd);
-		break;
+		sc_ret_v(new_regs, fd_open_sym());
 	}
+	break;
 
 	case SYS_pread64:
-	case SYS_read: 
+	case SYS_read:
 	{
-		uint64_t len = concretize_u64(GET_ARG2(regfile));
+		int		fd = GET_ARG0(regfile);
+		uint64_t	len = concretize_u64(GET_ARG2(regfile));
 
-		if (use_concretes && fd_is_concrete(GET_ARG0(regfile))) {
+		if (concrete_vfs && fd_is_concrete(fd)) {
 			ssize_t	sz;
 			sz = fd_read(
 				GET_ARG0(regfile),
@@ -192,7 +193,7 @@ int file_sc(unsigned int sys_nr, void* regfile)
 	case SYS_fstat:
 	case SYS_lstat:
 	case SYS_stat:
-		if (!use_concretes)
+		if (!concrete_vfs)
 			sc_stat_sym(regfile);
 		else
 			sc_stat(sys_nr, regfile);
@@ -212,7 +213,7 @@ int file_sc(unsigned int sys_nr, void* regfile)
 		break;
 	case SYS_readlink:
 	{
-		if (use_concretes) {
+		if (concrete_vfs) {
 			klee_warning_once(
 				"readlink() should work with concretes, "
 				"but Anthony is dying.");

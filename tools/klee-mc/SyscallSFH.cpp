@@ -154,15 +154,17 @@ static ssize_t do_pread(
 		ssize_t	ret, to_read;
 
 		to_read = ((br + 4096) > count) ? count - br : 4096;
-		ret = pread(fd, buf, br + offset, to_read);
+		ret = pread(fd, buf, to_read, br + offset);
 		if (ret == -1) {
 			br = -1;
 			break;
 		}
 
-		assert (ret == to_read && "PARTIAL READ? PUKE!");
-		state.addressSpace.copyOutBuf(buf_base + br, buf, to_read);
+		state.addressSpace.copyOutBuf(buf_base + br, buf, ret);
 		br += ret;
+
+		if (ret < to_read)
+			break;
 	}
 	delete [] buf;
 
@@ -176,7 +178,7 @@ SFH_DEF_HANDLER(IO)
 	const ConstantExpr	*ce_sysnr;
 	int			sysnr;
 
-	SFH_CHK_ARGS(5, "kmc_sc_bad");
+	SFH_CHK_ARGS(5, "kmc_io");
 
 	ce_sysnr = dyn_cast<ConstantExpr>(arguments[0]);
 	assert (ce_sysnr);
@@ -195,6 +197,7 @@ SFH_DEF_HANDLER(IO)
 				vfd = ~0ULL;
 		}
 
+		std::cerr << "OPENED '" << path << "'. VFD=" << vfd << '\n';
 		state.bindLocal(target, ConstantExpr::create(vfd, 64));
 		break;
 	}
@@ -223,6 +226,7 @@ SFH_DEF_HANDLER(IO)
 		buf_base = arg2u64(arguments[2]);
 		count = arg2u64(arguments[3]);
 		offset = arg2u64(arguments[4]);
+
 		if (	fd == -1 || buf_base == ~0ULL ||
 			count == ~0ULL || offset == -1)
 		{

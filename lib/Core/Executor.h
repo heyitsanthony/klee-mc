@@ -143,6 +143,7 @@ public:
   void executeGetValue(ExecutionState &state, ref<Expr> e, KInstruction *target);
 
   const KModule* getKModule(void) const { return kmodule; }
+  KModule* getKModule(void) { return kmodule; }
 
   MemoryManager	*memory;
 private:
@@ -493,6 +494,8 @@ public:
 	/// which also manages manages propogation of implied values,
 	/// validity checks, and seed patching.
 	bool addConstraint(ExecutionState &state, ref<Expr> condition);
+
+	MemoryObject* findGlobalObject(const llvm::GlobalValue*) const;
 
 	ObjectState* executeMakeSymbolic(
 		ExecutionState &state,

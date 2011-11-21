@@ -49,8 +49,9 @@ SFH_DEF_HANDLER(DummyThread)
 SFH_DEF_HANDLER(SCGetCwd)
 {
 	//TODO: write something?
-	char buf[PATH_MAX];
-	getcwd(buf, PATH_MAX);
+	char buf[PATH_MAX], *ret;
+	ret = getcwd(buf, PATH_MAX);
+	assert (0 == 1 && "TODO");
 }
 
 SFH_DEF_HANDLER(SCConcreteFileSize)

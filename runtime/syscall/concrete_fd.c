@@ -20,7 +20,7 @@ long kmc_io(int sys_nr, long p1, long p2, long p3, long p4);
 #define KMC_IO_PREAD(x,y,z,w)	kmc_io(SYS_pread64, x, (long)y, z, w)
 #define KMC_IO_FSTAT(x,y)	kmc_io(SYS_fstat, x, (long)y, 0, 0)
 
-/* 
+/*
  * We try to pass everything through when possible.
  */
 struct fd_info
@@ -30,8 +30,6 @@ struct fd_info
 	uint64_t	fi_size;
 	uint64_t	fi_cursor;
 };
-
-static int next_free_fd;
 
 static uint64_t concretize_u64(uint64_t x)
 {
@@ -43,9 +41,16 @@ static uint64_t concretize_u64(uint64_t x)
 #define fd2fi(x)		(&fd_tab[x])
 #define fi_is_concrete(x)	((fd2fi(x)->fi_flags & FD_FL_CONCRETE) != 0)
 #define fi_is_used(x)		((fd2fi(x)->fi_flags & FD_FL_IN_USE) != 0)
+#define fd_valid(x)		(x >= 0 && x < MAX_FD)
 
 #define MAX_FD	1024
-static struct fd_info fd_tab[MAX_FD];
+static struct fd_info fd_tab[MAX_FD] =
+{
+	[0] = {.fi_flags = FD_FL_IN_USE},
+	[1] = {.fi_flags = FD_FL_IN_USE},
+	[2] = {.fi_flags = FD_FL_IN_USE}
+};
+static int next_free_fd = 3;
 
 static void find_next_free(void)
 {
@@ -61,16 +66,7 @@ static void find_next_free(void)
 		klee_report_error(
 			__FILE__, __LINE__,
 			"Ran out of virtual fds", "fd.err");
-	}	
-}
-
-void fd_init(void)
-{
-	memset(fd_tab, 0, sizeof(fd_tab));
-	fd2fi(0)->fi_flags |= FD_FL_IN_USE;
-	fd2fi(1)->fi_flags |= FD_FL_IN_USE;
-	fd2fi(2)->fi_flags |= FD_FL_IN_USE;
-	next_free_fd = 3;
+	}
 }
 
 int fd_open(const char* path)
@@ -116,22 +112,23 @@ int fd_open_sym(void)
 
 void fd_close(int fd)
 {
+	if (!fd_valid(fd))
+		return;
+
 	if (!fi_is_used(fd))
 		return;
 
-	if (fi_is_concrete(fd)) {
+	if (fi_is_concrete(fd))
 		KMC_IO_CLOSE(fd2fi(fd)->fi_vfd);
-	}
 
 	fd2fi(fd)->fi_flags = 0;
-
 	if (fd < next_free_fd)
 		next_free_fd = fd;
 }
 
 int fd_is_concrete(int fd)
 {
-	if (fd < 0 || fd >= MAX_FD)
+	if (!fd_valid(fd))
 		return 0;
 
 	return fi_is_concrete(fd);
@@ -141,6 +138,9 @@ ssize_t fd_read(int fd, char* buf, int c)
 {
 	struct fd_info	*fi;
 	ssize_t		br;
+
+	if (!fd_valid(fd))
+		return -1;
 
 	fi = fd2fi(fd);
 	c = concretize_u64(c);
@@ -172,6 +172,9 @@ off_t fd_lseek(int fd, off_t o, int whence)
 {
 	struct fd_info	*fi;
 
+	if (!fd_valid(fd))
+		return -1;
+
 	if (!fi_is_used(fd))
 		return (off_t)-1;
 
@@ -197,5 +200,5 @@ off_t fd_lseek(int fd, off_t o, int whence)
 	}
 
 	/* some weirdo seek (SEEK_HOLE, SEEK_DATA) no one cares about */
-	return (off_t)-1; 
+	return (off_t)-1;
 }

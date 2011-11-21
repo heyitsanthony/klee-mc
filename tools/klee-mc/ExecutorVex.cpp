@@ -33,11 +33,10 @@
 #include "static/Sugar.h"
 
 #include "SyscallSFH.h"
-#include "FdtSFH.h"
+#include "SysModel.h"
 
 #include "ExecutorVex.h"
 #include "ExeStateVex.h"
-#include <sys/utsname.h>
 
 using namespace klee;
 using namespace llvm;
@@ -45,6 +44,7 @@ using namespace llvm;
 extern bool WriteTraces;
 
 extern bool SymArgs;
+bool UseConcreteVFS;
 
 namespace
 {
@@ -68,9 +68,10 @@ namespace
 		cl::desc("Inject checks for division-by-zero"),
 		cl::init(false));
 
-	cl::opt<bool> ConcreteVfs(
+	cl::opt<bool,true> ConcreteVfsProxy(
 		"concrete-vfs",
 		cl::desc("Treat absolute path opens as concrete"),
+		cl::location(UseConcreteVFS),
 		cl::init(false));
 
 	cl::opt<bool> UseFDT(
@@ -114,10 +115,11 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih, Guest *in_gs)
 	std::cerr << "[klee-mc] Forcing fake vsyspage reads\n";
 	theGenLLVM->setFakeSysReads();
 
-	theVexHelpers->loadUserMod(
-		(UseFDT) ?
-			"libkleeRuntimeMC-fdt.bc" :
-			"libkleeRuntimeMC.bc");
+	if (UseFDT)
+		sys_model = new FDTModel(this);
+	else
+		sys_model = new LinuxModel(this);
+	theVexHelpers->loadUserMod(sys_model->getModelFileName());
 
 	xlate = new VexXlate(Arch::X86_64);
 	xlate_cache = new VexFCache(xlate);
@@ -134,8 +136,7 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih, Guest *in_gs)
 		target_data->isLittleEndian(),
 		(Expr::Width) target_data->getPointerSizeInBits());
 
-	sfh = (UseFDT) ? new FdtSFH(this) : new SyscallSFH(this);
-
+	sfh = sys_model->allocSpecialFuncHandler(this);
 	sfh->prepare();
 	kmodule->prepare(mod_opts, ih);
 
@@ -155,6 +156,7 @@ ExecutorVex::~ExecutorVex(void)
 	delete xlate;
 	if (sfh) delete sfh;
 	sfh = NULL;
+	delete sys_model;
 	if (kmodule) delete kmodule;
 	kmodule = NULL;
 }
@@ -191,7 +193,7 @@ ExecutionState* ExecutorVex::setupInitialState(void)
 		kmodule->addModule(*it);
 	}
 
-	if (UseFDT) installFDTInitializers(init_func);
+	sys_model->installInitializers(init_func);
 
 	init_kfunc = kmodule->addFunction(init_func);
 
@@ -203,7 +205,7 @@ ExecutionState* ExecutorVex::setupInitialState(void)
 	prepState(state, init_func);
 	initializeGlobals(*state);
 
-	if (UseFDT) installFDTConfig(*state);
+	sys_model->installConfig(*state);
 
 	sfh->bind();
 	kf_scenter = kmodule->getKFunction("sc_enter");
@@ -418,66 +420,6 @@ void ExecutorVex::initGlobalFuncs(void)
 		assert (!f->hasExternalWeakLinkage());
 		addr = Expr::createPointer((unsigned long) (void*) f);
 		globalAddresses.insert(std::make_pair(f, addr));
-	}
-}
-
-//TODO: declare in kmodule h
-Function *getStubFunctionForCtorList(
-	Module *m,
-	GlobalVariable *gv,
-	std::string name);
-
-void ExecutorVex::installFDTInitializers(Function *init_func)
-{
-	GlobalVariable *ctors = kmodule->module->getNamedGlobal("llvm.global_ctors");
-	std::cerr << "checking for global ctors and dtors" << std::endl;
-	if (ctors) {
-		std::cerr << "installing ctors" << std::endl;
-		Function* ctorStub;
-
-		ctorStub = getStubFunctionForCtorList(
-			kmodule->module, ctors, "klee.ctor_stub");
-		kmodule->addFunction(ctorStub);
-		CallInst::Create(
-			ctorStub,
-			"",
-			init_func->begin()->begin());
-	}
-	// can't install detours because this function returns almost immediately... todo
-	// GlobalVariable *dtors = kmodule->module->getNamedGlobal("llvm.global_dtors");
-	// do them later
-	// if (dtors) {
-	// 	std::cerr << "installing dtors" << std::endl;
-	// 	Function *dtorStub;
-	// 	dtorStub = getStubFunctionForCtorList(kmodule->module, dtors, "klee.dtor_stub");
-	// 	kmodule->addFunction(dtorStub);
-	// 	foreach (it, init_func->begin(), init_func->end()) {
-	// 		if (!isa<ReturnInst>(it->getTerminator())) continue;
-	// 		CallInst::Create(dtorStub, "", it->getTerminator());
-	// 	}
-	// }
-
-	GlobalVariable* concrete_vfs =
-		static_cast<GlobalVariable*>(kmodule->module->
-			getGlobalVariable("concrete_vfs"));
-
-	concrete_vfs->setInitializer(ConcreteVfs ?
-		ConstantInt::getTrue(getGlobalContext()) :
-		ConstantInt::getFalse(getGlobalContext()));
-	concrete_vfs->setConstant(true);
-
-}
-void ExecutorVex::installFDTConfig(ExecutionState& state) {
-	GlobalVariable* g_utsname =
-		static_cast<GlobalVariable*>(kmodule->module->
-			getGlobalVariable("g_utsname"));
-	MemoryObject* mo = globalObjects[g_utsname];
-	ObjectState* os = state.addressSpace.findWriteableObject(mo);
-	assert(os);
-	struct utsname buf;
-	uname(&buf);
-	for (unsigned offset=0; offset < mo->size; offset++) {
-		state.write8(os, offset, ((unsigned char*)&buf)[offset]);
 	}
 }
 

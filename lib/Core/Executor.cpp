@@ -3611,3 +3611,14 @@ void Executor::executeFree(
 		}
 	}
 }
+
+MemoryObject* Executor::findGlobalObject(const llvm::GlobalValue* gv) const
+{
+	globalobj_map::const_iterator	it;
+
+	it = globalObjects.find(gv);
+	if (it == globalObjects.end())
+		return NULL;
+
+	return it->second;
+}

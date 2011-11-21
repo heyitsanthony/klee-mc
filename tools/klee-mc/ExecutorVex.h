@@ -25,6 +25,7 @@ class KFunction;
 class MemoryObject;
 class ObjectState;
 class SyscallSFH;
+class SysModel;
 
 // ugh g++, you delicate garbage
 typedef __gnu_cxx::hash_map<uintptr_t /* Func*/, VexSB*> func2vsb_map;
@@ -163,6 +164,7 @@ private:
 	bool		in_sc;
 
 	KFunction		*kf_scenter;
+	SysModel		*sys_model;
 	SyscallSFH		*sfh;
 
 	std::set<uint64_t> legalFunctions;
