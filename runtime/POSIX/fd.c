@@ -44,7 +44,6 @@ void klee_warning_once(const char*);
 int klee_get_errno(void);
 unsigned klee_get_prune_id(unsigned);
 void klee_prune(unsigned);
-void klee_mark_openfd(int);
 
 static void *__concretize_ptr(const void *p);
 static size_t __concretize_size(size_t s);
@@ -323,7 +322,6 @@ int __fd_open(const char *pathname, int flags, mode_t mode) {
       return -1;
     }
     f->fd = os_fd;
-    klee_mark_openfd(os_fd);
   }
   
   f->flags = eOpen;
