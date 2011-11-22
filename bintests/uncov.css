@@ -1,0 +1,22 @@
+table.disasm-active { border: solid; width: 100%; }
+table.disasm-inactive { border: dotted; display: none; width: 100%; }
+
+span.funcname-active { border: solid; border-color: #555555; width: 60em;  display: block; }
+span.funcname-inactive { border: dotted;  border-color: #cccccc; width: 60em; display: block; }
+
+div.func-active { margin: 1em; width: 60em; display: block; }
+div.func-inactive { margin: 1em; width: 60em; display: block; }
+
+
+td.addr {
+	text-align: right; 
+	border-right: 1px; border-right-style: solid; }
+td.ins { text-align: left; padding-left: 2em; }
+
+td.addr_visited {
+	text-align: right; font-weight: bold;
+	border-right: 1px; border-right-style: solid; }
+td.ins_visited {
+	font-weight: bold; text-align: left; padding-left: 2em; }
+
+td { font-family: monospace; }

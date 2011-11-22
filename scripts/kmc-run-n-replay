@@ -9,7 +9,6 @@ if [ -z "$1" ]; then
 	exit -1
 fi
 
-
 if [ -z "$KMC_RNR_NOCLOBBER" ]; then
 	echo "WARNING: Clobbering your guest and klee-out files. "
 	echo "INFO: Big spenders set env var KMC_RNR_NOCLOBBER=1"
@@ -29,23 +28,50 @@ if [ -z "$KMC_RNR_FLAGS" ]; then
 	KMC_RNR_FLAGS=""
 fi
 
+
+IO_REDIR=""
+if [ ! -z "$KMC_RNR_COV" ]; then
+	KMC_RNR_FLAGS="$KMC_RNR_FLAGS -print-new-ranges"
+	IO_REDIR="1"
+fi
+
+
 echo "INFO: Uses a new guest every time. Slow?"
 
 VEXLLVM_SAVE=1 pt_run $1
 ulimit -v 2200000
+KMC_RNR_DEFAULT_FLAGS="-pipe-solver -max-memory=2048 -guest-type=sshot"
+
 #-use-pcache-rewriteptr  
-$CMDPREFIX klee-mc -pipe-solver -max-memory=2048 $KMC_RNR_LOGREGS  -guest-type=sshot $KMC_RNR_FLAGS - $1 &
+if [ ! -z "$IO_REDIR" ]; then
+	$CMDPREFIX klee-mc				\
+		$KMC_RNR_DEFAULT_FLAGS			\
+		$KMC_RNR_LOGREGS $KMC_RNR_FLAGS - $1	\
+		>klee-last.stdout 2>klee-last.stderr &
+else
+	$CMDPREFIX klee-mc				\
+		$KMC_RNR_DEFAULT_FLAGS			\
+		$KMC_RNR_LOGREGS $KMC_RNR_FLAGS - $1 &
+fi
+
 kmcpid="$!"
 ( sleep $TIMEOUT &&  kill -s SIGUSR1 $kmcpid 2>/dev/null && kill -9 $kmcpid 2>/dev/null ) &
 wait $kmcpid && echo DONE
 
-VEXLLVM_STORE_FRAGS=1 VEXLLVM_SB_LOG=stderr \
-	kmc-replay 1 2>&1 | grep IMark | cut -f2 -d'(' | cut -f1 -d')' | sed "s/,//g" >con.log
+if [ ! -z "$KMC_RNR_COV" ]; then
+	grep "UNCOV" klee-last.stderr >klee-last.uncov
+	scripts/uncov.py `cat guest-last/binpath` >klee-last.uncov.xml
+fi
+
 
 if [ -z "$KMC_RNR_MRI" ]; then
 	echo "KMC_RNR_MRI for brain "'$'"can"
 	exit 0
 fi
+
+VEXLLVM_STORE_FRAGS=1 \
+VEXLLVM_SB_LOG=stderr \
+	kmc-replay 1 2>&1 | grep IMark | cut -f2 -d'(' | cut -f1 -d')' | sed "s/,//g" >con.log
 
 mkdir sym-cov
 "$VEXLLVM_HELPER_PATH"/../scripts/guest_cov.py	\

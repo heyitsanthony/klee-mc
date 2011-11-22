@@ -88,6 +88,11 @@ namespace
 		"count-lib-cov",
 		cl::desc("Count library coverage"),
 		cl::init(true));
+
+	cl::opt<bool> PrintNewRanges(
+		"print-new-ranges",
+		cl::desc("Print uncovered address ranges"),
+		cl::init(false));
 }
 
 ExecutorVex::ExecutorVex(InterpreterHandler *ih, Guest *in_gs)
@@ -608,6 +613,15 @@ Function* ExecutorVex::getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new)
 
 	is_new = true;
 	native_code_bytes += vsb->getEndAddr() - vsb->getGuestAddr();
+
+	if (PrintNewRanges) {
+		std::cerr << "[UNCOV] "
+			<< (void*)vsb->getGuestAddr().o
+			<< "-"
+			<< (void*)vsb->getEndAddr().o << " : "
+			<< gs->getName(vsb->getGuestAddr())
+			<< '\n';
+	}
 
 	return f;
 }
