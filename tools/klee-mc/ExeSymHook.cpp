@@ -244,3 +244,20 @@ ExecutionState* ExeSymHook::setupInitialState(void)
 
 	return ret;
 }
+
+
+ExeSymHook* ExeSymHook::create(InterpreterHandler *ie, Guest* gs)
+{
+	const Symbols	*syms;
+	const Symbol	*sym_malloc;
+
+	syms = gs->getDynSymbols();
+	if (syms == NULL)
+		return NULL;
+
+	sym_malloc = syms->findSym("malloc");
+	if (sym_malloc == NULL)
+		return NULL;
+
+	return new ExeSymHook(ie, gs);
+}

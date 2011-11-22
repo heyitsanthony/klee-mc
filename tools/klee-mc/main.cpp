@@ -416,7 +416,8 @@ static CmdArgs* getCmdArgs(char** envp)
 
 static void watchdog_alarm(int sig)
 {
-	write(2, "watchdog\n", 9);
+	ssize_t	sz;
+	sz = write(2, "watchdog\n", 9);
 	exit(-1);
 }
 
@@ -529,12 +530,19 @@ int main(int argc, char **argv, char **envp)
 		return 2;
 	}
 
-	if (SymHook == false) {
+	interpreter = NULL;
+	if (SymHook) {
+		interpreter = ExeSymHook::create(handler, gs);
+		if (interpreter == NULL) {
+			fprintf(stderr,
+				"Failed to create SymHook. Missing malloc?\n");
+		}
+	}
+
+	if (interpreter == NULL) {
 		interpreter = (XChkJIT)
 			? new ExeChk(handler, gs)
 			: new ExecutorVex(handler, gs);
-	} else {
-		interpreter = new ExeSymHook(handler, gs);
 	}
 
 	theInterpreter = interpreter;
