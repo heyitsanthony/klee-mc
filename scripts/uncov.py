@@ -17,6 +17,13 @@ op.add_option(
 	action='store',
 	default='klee-last.uncov',
 	type='string')
+op.add_option(
+	'-x',
+	'--xsl',
+	dest='xslPath',
+	action='store',
+	default='uncov.xsl',
+	type='string')
 opts,args = op.parse_args()
 
 binpath=args[0]
@@ -39,7 +46,7 @@ end_addr = 0
 seen_func = False
 
 print '<?xml version="1.0" encoding="ISO-8859-1"?>'
-print '<?xml-stylesheet type="text/xsl" href="uncov.xsl"?>'
+print '<?xml-stylesheet type="text/xsl" href="' + opts.xslPath + '"?>'
 print "<appcov>"
 print "<binary>"+binpath+"</binary>"
 for l in p.stdout:
