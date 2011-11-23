@@ -39,7 +39,7 @@ private:
 	void unwatch(ESVSymHook &esh);
 	void unwatchFree(ESVSymHook &esh);
 	void unwatchMalloc(ESVSymHook &esh);
-	llvm::Function	*f_malloc;
+	llvm::Function	*f_malloc, *f_memalign;
 	llvm::Function	*f_free;
 };
 

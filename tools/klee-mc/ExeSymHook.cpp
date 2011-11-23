@@ -80,6 +80,7 @@ MallocMMU::MemOpRes MallocMMU::memOpResolve(
 ExeSymHook::ExeSymHook(InterpreterHandler *ie, Guest* gs)
 : ExecutorVex(ie, gs)
 , f_malloc(NULL)
+, f_memalign(NULL)
 , f_free(NULL)
 {
 	ExeStateBuilder::replaceBuilder(new ESVSymHookBuilder());
@@ -165,7 +166,7 @@ void ExeSymHook::unwatch(ESVSymHook &esh)
 	llvm::Function		*watch_f;
 
 	watch_f = esh.getWatchedFunc();
-	if (watch_f == f_malloc) {
+	if (watch_f == f_malloc || watch_f == f_memalign) {
 		unwatchMalloc(esh);
 	} else if (watch_f == f_free) {
 		unwatchFree(esh);
@@ -182,7 +183,7 @@ void ExeSymHook::watchFunc(ExecutionState& es, llvm::Function* f)
 	ref<Expr>		in_arg;
 	uint64_t		stack_pos;
 
-	if (f != f_malloc && f != f_free)
+	if (f != f_malloc && f != f_free && f != f_memalign)
 		return;
 
 	in_arg = getCallArg(es, 0);
@@ -205,8 +206,6 @@ void ExeSymHook::watchFunc(ExecutionState& es, llvm::Function* f)
 		}
 	}
 
-
-
 	stack_pos = getStateStack(es);
 	if (!stack_pos)
 		return;
@@ -220,7 +219,7 @@ ExecutionState* ExeSymHook::setupInitialState(void)
 	ESVSymHook	*esh;
 	Guest		*gs;
 	const Symbols	*syms;
-	const Symbol	*sym_malloc, *sym_free;
+	const Symbol	*sym_malloc, *sym_memalign, *sym_free;
 
 
 	ret = ExecutorVex::setupInitialState();
@@ -233,12 +232,15 @@ ExecutionState* ExeSymHook::setupInitialState(void)
 
 	sym_malloc = syms->findSym("malloc");
 	sym_free = syms->findSym("free");
+	sym_memalign = syms->findSym("memalign");
 
 	assert (sym_malloc && "Could not finds syms to hook");
 
 	f_malloc = getFuncByAddr(sym_malloc->getBaseAddr());
 	if (sym_free)
 		f_free = getFuncByAddr(sym_free->getBaseAddr());
+	if (sym_memalign)
+		f_memalign = getFuncByAddr(sym_memalign->getBaseAddr());
 
 	assert (f_malloc && "Could not decode hooked funcs");
 
