@@ -82,6 +82,7 @@ ExeSymHook::ExeSymHook(InterpreterHandler *ie, Guest* gs)
 , f_malloc(NULL)
 , f_memalign(NULL)
 , f_free(NULL)
+, f_vasprintf(NULL), f_asprintf(NULL)
 {
 	ExeStateBuilder::replaceBuilder(new ESVSymHookBuilder());
 	delete mmu;
@@ -186,7 +187,10 @@ void ExeSymHook::watchFunc(ExecutionState& es, llvm::Function* f)
 	if (f != f_malloc && f != f_free && f != f_memalign)
 		return;
 
-	in_arg = getCallArg(es, 0);
+	if (f == f_memalign)
+		in_arg = getCallArg(es, 1);
+	else
+		in_arg = getCallArg(es, 0);
 
 	if (f == f_free) {
 		const ConstantExpr*	in_ptr_ce;
@@ -219,7 +223,7 @@ ExecutionState* ExeSymHook::setupInitialState(void)
 	ESVSymHook	*esh;
 	Guest		*gs;
 	const Symbols	*syms;
-	const Symbol	*sym_malloc, *sym_memalign, *sym_free;
+	const Symbol	*sym_malloc, *sym_memalign, *sym_free, *sym_tmp;
 
 
 	ret = ExecutorVex::setupInitialState();
@@ -241,6 +245,13 @@ ExecutionState* ExeSymHook::setupInitialState(void)
 		f_free = getFuncByAddr(sym_free->getBaseAddr());
 	if (sym_memalign)
 		f_memalign = getFuncByAddr(sym_memalign->getBaseAddr());
+
+	sym_tmp = syms->findSym("vasprintf");
+	if (sym_tmp) f_vasprintf = getFuncByAddr(sym_tmp->getBaseAddr());
+
+	sym_tmp = syms->findSym("asprintf");
+	if (sym_tmp) f_asprintf = getFuncByAddr(sym_tmp->getBaseAddr());
+
 
 	assert (f_malloc && "Could not decode hooked funcs");
 
