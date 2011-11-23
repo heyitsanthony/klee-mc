@@ -1,8 +1,8 @@
 #include <iostream>
 #include <llvm/Target/TargetData.h>
 #include <llvm/Module.h>
-#include <llvm/IntrinsicInst.h>
 #include <llvm/Support/CommandLine.h>
+#include <llvm/IntrinsicInst.h>
 #include <llvm/LLVMContext.h>
 
 #include "klee/Internal/Module/KModule.h"
@@ -18,6 +18,15 @@ using namespace llvm;
 using namespace klee;
 
 extern bool UseConcreteVFS;
+bool DenySysFiles;
+
+namespace {
+	cl::opt<bool,true> DenySysFilesProxy(
+		"deny-sys-files",
+		cl::desc("Fail attempts to open system files."),
+		cl::location(DenySysFiles),
+		cl::init(false));
+}
 
 //TODO: declare in kmodule h
 Function *getStubFunctionForCtorList(
@@ -113,4 +122,5 @@ SyscallSFH* LinuxModel::allocSpecialFuncHandler(Executor* e) const
 void LinuxModel::installInitializers(llvm::Function* f)
 {
 	setModelBool(exe->getKModule()->module, "concrete_vfs", UseConcreteVFS);
+	setModelBool(exe->getKModule()->module, "deny_sys_files", DenySysFiles);
 }

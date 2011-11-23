@@ -15,8 +15,11 @@ td.ins { text-align: left; padding-left: 2em; }
 
 td.addr_visited {
 	text-align: right; font-weight: bold;
+	background-color: #ffdead;
 	border-right: 1px; border-right-style: solid; }
 td.ins_visited {
-	font-weight: bold; text-align: left; padding-left: 2em; }
+	font-weight: bold;
+	background-color: #ffdead;
+	text-align: left; padding-left: 2em; }
 
 td { font-family: monospace; }

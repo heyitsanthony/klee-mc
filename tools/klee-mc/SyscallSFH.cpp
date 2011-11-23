@@ -5,6 +5,7 @@
 #include "guestcpustate.h"
 #include "klee/breadcrumb.h"
 #include <sys/syscall.h>
+#include <llvm/Support/CommandLine.h>
 #include "static/Sugar.h"
 #include <sys/stat.h>
 
@@ -12,6 +13,9 @@ extern "C"
 {
 #include "valgrind/libvex_guest_amd64.h"
 }
+
+
+extern bool DenySysFiles;
 
 using namespace klee;
 
@@ -189,6 +193,15 @@ SFH_DEF_HANDLER(IO)
 		/* expects a path */
 		std::string path(sfh->readStringAtAddress(state, arguments[1]));
 		vfd_t	vfd;
+
+		if (	DenySysFiles &&
+			path.size() > 2 &&
+			path[0] == '/' && (path[1] == 'l' || path[1] == 'u'))
+		{
+			std::cerr << "DENIED '" << path << "'\n";
+			state.bindLocal(target, ConstantExpr::create(-1, 64));
+			break;
+		}
 
 		vfd = sc_sfh->vfds.addPath(path);
 		if (vfd != ~0ULL) {

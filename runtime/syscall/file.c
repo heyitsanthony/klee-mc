@@ -14,6 +14,7 @@
 #define FAILURE_RATE	4
 
 bool concrete_vfs = false;
+bool deny_sys_files = false;
 
 struct fail_counters
 {
@@ -22,6 +23,45 @@ struct fail_counters
 	unsigned int	fc_write;
 } fail_c;
 
+/* XXX, yeah these are stupid. */
+#warning fix strlen so we dont reimplement
+static int strlen(const char* x)
+{
+	int	k = 0;
+	while (x[k]) k++;
+	return k;
+}
+
+static int memcmp(const void* ugh, const void* ugh2, unsigned int len)
+{
+	const char	*ugh_c = ugh, *ugh2_c = ugh2;
+	int		k;
+	k = 0;
+	while (k < len) {
+		int	r;
+		r = ugh_c[k] - ugh2_c[k];
+		if (r != 0)
+			return r;
+		k++;
+	}
+	return 0;
+}
+
+static int str_contains(const char* needle, const char* haystack)
+{
+	int	len_hs, len_n;
+	int	k;
+
+	len_hs = strlen(haystack);
+	len_n = strlen(needle);
+
+	for (k = 0; k < len_hs - len_n; k++) {
+		if (memcmp(&haystack[k], needle, len_n) == 0)
+			return 1;
+	}
+	return 0;
+}
+/* XXX GET RID OF THESE */
 
 /* 0 => early terminate
  * 1 => normal terminate */
@@ -153,15 +193,30 @@ int file_sc(unsigned int sys_nr, void* regfile)
 		int		ret_fd;
 
 		path = (const char*)GET_ARG0(regfile);
-		new_regs = sc_new_regs(regfile);
-		if (concrete_vfs && !str_is_sym(path)) {
-			ret_fd = fd_open(path);
-			if (ret_fd != -1) {
-				sc_ret_v(new_regs, ret_fd);
+		if (!str_is_sym(path)) {
+			if (	deny_sys_files &&
+				(path[0] == '/' &&
+				(path[1] == 'u' || path[1] == 'l')) ||
+				str_contains(".so", path))
+			{
+				sc_ret_v(regfile, -1);
 				break;
+			}
+
+			if (concrete_vfs) {
+				ret_fd = fd_open(path);
+				if (	ret_fd != -1 ||
+					(path[0] == '/' &&
+					(path[1] == 'l' || path[1] == 'u')))
+				{
+					sc_ret_v(regfile, ret_fd);
+					break;
+				}
 			}
 		}
 
+
+		new_regs = sc_new_regs(regfile);
 		if ((intptr_t)GET_RAX(new_regs) == -1)
 			break;
 
