@@ -19,6 +19,7 @@
 #define KLEE_SYS_ASSUME		2	/* klee_assume(<bool expr>) */
 #define KLEE_SYS_IS_SYM		3	/* klee_is_sym(<expr>)	*/
 #define KLEE_SYS_NE		4	/* klee_force_ne */
+#define KLEE_SYS_PRINT_EXPR	5	/* klee_print_expr */
 
 #define ksys_report_error(x,y,z,w)	\
 	syscall(SYS_klee, KLEE_SYS_REPORT_ERROR, x, y, z, w)
@@ -28,6 +29,7 @@
 #define ksys_assume(x)		syscall(SYS_klee, KLEE_SYS_ASSUME, x)
 #define ksys_is_sym(x)		syscall(SYS_klee, KLEE_SYS_IS_SYM, x)
 #define ksys_force_ne(x,y)	syscall(SYS_klee, KLEE_SYS_NE, x, y)
+#define ksys_print_expr(x,y)	syscall(SYS_klee, KLEE_SYS_PRINT_EXPR, (uint64_t)x, y)
 
 #ifdef __cplusplus
 extern "C" {

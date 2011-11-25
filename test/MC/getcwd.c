@@ -6,6 +6,7 @@
 #include <klee/klee.h>
 #include <string.h>
 #include <syscall.h>
+#include <unistd.h>
 
 int main(void)
 {
@@ -15,6 +16,8 @@ int main(void)
 		return 0;
 
 	if (ret != asd) {
+		ksys_print_expr("Given", asd);
+		ksys_print_expr("Returned", ret);
 		ksys_report_error(
 			__FILE__,
 			__LINE__,

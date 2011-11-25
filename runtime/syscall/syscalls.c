@@ -257,6 +257,9 @@ static void sc_klee(void* regfile)
 	case KLEE_SYS_NE:
 		klee_force_ne(GET_ARG1(regfile), GET_ARG2(regfile));
 		break;
+	case KLEE_SYS_PRINT_EXPR:
+		klee_print_expr(GET_ARG1(regfile), GET_ARG2(regfile));
+		break;
 	default:
 		klee_report_error(
 			__FILE__,
@@ -493,12 +496,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 		addr = concretize_u64(GET_ARG0(regfile));
 
-		klee_assume(addr != 0);
-		sc_ret_v(regfile, addr);
-
 		/* use managably-sized string */
 		if (len > 10) len = 10;
-		make_sym_by_arg(regfile, 0, len, "cwdbuf");
+
+		make_sym(addr, len, "cwdbuf");
 
 		// XXX remember to do this on the other side!!
 		((char*)addr)[len-1] = '\0';
@@ -511,6 +512,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 				"badcwd.err");
 		}
 
+		sc_ret_v(regfile, addr);
 		sc_breadcrumb_commit(sys_nr, addr);
 		goto already_logged;
 	}
