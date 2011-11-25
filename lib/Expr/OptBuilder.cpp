@@ -14,6 +14,22 @@ namespace {
 	 cl::desc("Convert (EqExpr cst rd-const-arr) to (Or (=ix) .. (=ix))"));
 }
 
+static int exact_log2(uint64_t x)
+{
+	int	k;
+
+	if ((x & (x - 1)) != 0)
+		return -1;
+
+	k = -1;
+	while (x) {
+		x >>= 1;
+		k++;
+	}
+
+	return k;
+}
+
 ref<Expr> OptBuilder::Concat(const ref<Expr> &l, const ref<Expr> &r)
 {
 	Expr::Width w = l->getWidth() + r->getWidth();
@@ -639,18 +655,11 @@ static ref<Expr> MulExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 		return cl;
 
 	if (type <= 64) {
-		uint64_t	mul_c = cl->getZExtValue();
+		int		k;
 
 		/* mul_c = 2^k? */
-		assert (mul_c != 0 && mul_c != 1);
-		if ((mul_c & (mul_c - 1)) == 0) {
-			/* find k */
-			int	k = -1;
-			while (mul_c != 0) {
-				mul_c >>= 1;
-				k++;
-			}
-
+		k = exact_log2(cl->getZExtValue());
+		if (k != -1) {
 			return ShlExpr::create(
 				r,
 				ConstantExpr::create(k, type));
@@ -685,12 +694,12 @@ static ref<Expr> AndExpr_createPartial(Expr *l, const ref<ConstantExpr> &cr)
 		// AND(	Concat(x,y), N) <==>
 		// 	Concat(And(x, N[...]), And(y, N[...:0]))
 		return ConcatExpr::create(
-			AndExpr_createPartial(
+			AndExpr::create(
 				cl->getLeft().get(),
 				cr->Extract(
 					cl->getRight()->getWidth(),
 					cl->getLeft()->getWidth())),
-			AndExpr_createPartial(
+			AndExpr::create(
 				cl->getRight().get(),
 				cr->Extract(
 					0,
@@ -703,22 +712,22 @@ static ref<Expr> AndExpr_createPartial(Expr *l, const ref<ConstantExpr> &cr)
 	// zext[5] (extract[2:0] (extractwhatever))
 	if (cr->getWidth() <= 64) {
 		uint64_t	v;
+		int		k;
 
 		v = cr->getZExtValue();
 		v++;	// v = 1...1 => v+1 = 2^k
 		assert (v != 0 && "but isAllOnes() is false!");
-		// check for lower-bit mask ala 011111
-		// bithack via the stanford bithacks page
-		if ((v & (v - 1)) == 0) {
+
+		k = exact_log2(v);
+		if (k != -1) {
 			int	bits_set = 0;
 
-			// count number of bits set
-			v--;	// v = 2^k - 1
-			while (v) {
-				assert (v & 1);
-				v >>= 1;
-				bits_set++;
-			}
+			// 2^0 (excluded)
+			// 2^1-1 => 1 bits 001
+			// 2^2-1 => 2 bits 011
+			// ...
+			// 2^k - 1 => k bits
+			bits_set = k;
 
 			return ZExtExpr::create(
 				ExtractExpr::create(l, 0, bits_set),
@@ -819,7 +828,7 @@ static ref<Expr> OrExpr_factorZExt(Expr* l, Expr* r)
 	ze[0] = dyn_cast<ZExtExpr>(l);
 	if (ze[0] == NULL)
 		return NULL;
-		
+
 	ze[1] = dyn_cast<ZExtExpr>(r);
 	if (ze[1] == NULL)
 		return NULL;
@@ -843,7 +852,7 @@ static ref<Expr> OrExpr_factorZExt(Expr* l, Expr* r)
 		return NULL;
 
 	cat = static_cast<const ConcatExpr*>(e[1].get());
-	
+
 
 	/* ze[0]->src (concat a (y-bits))	*/
 	/* ze[1]->src = ((spare bits) y)	*/
@@ -1247,7 +1256,10 @@ static ref<Expr> EqExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 				Expr::createIsZero(roe->left),
 				Expr::createIsZero(roe->right));
 		}
-	} else if (rk == Expr::SExt) {
+	}
+
+	switch (rk) {
+	case Expr::SExt: {
 		// (sext(a,T)==c) == (a==c)
 		const SExtExpr *see = cast<SExtExpr>(r);
 		Expr::Width fromBits = see->src->getWidth();
@@ -1259,7 +1271,9 @@ static ref<Expr> EqExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 			return EqExpr::create(see->src, trunc);
 
 		return ConstantExpr::create(0, Expr::Bool);
-	} else if (rk == Expr::ZExt) {
+	}
+
+	case Expr::ZExt: {
 		// (zext(a,T)==c) == (a==c)
 		const ZExtExpr *zee = cast<ZExtExpr>(r);
 		Expr::Width fromBits = zee->src->getWidth();
@@ -1271,7 +1285,9 @@ static ref<Expr> EqExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 			return EqExpr::create(zee->src, trunc);
 
 		return ConstantExpr::create(0, Expr::Bool);
-	} else if (rk==Expr::Add) {
+	}
+
+	case Expr::Add: {
 		const AddExpr *ae = cast<AddExpr>(r);
 		if (isa<ConstantExpr>(ae->left)) {
 			// c0 = c1 + b => c0 - c1 = b
@@ -1280,7 +1296,42 @@ static ref<Expr> EqExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 					SubExpr::create(cl, ae->left)),
 				ae->right.get());
 		}
-	} else if (rk==Expr::Sub) {
+	}
+	break;
+
+	case Expr::And: {
+		const AndExpr 		*ae = cast<AndExpr>(r);
+		const ConstantExpr	*ae_l;
+		uint64_t		v;
+		int			bit;
+
+		if (!cl->isZero())
+			break;
+
+		if (ae->getWidth() > 64)
+			break;
+
+		ae_l = dyn_cast<ConstantExpr>(ae->left);
+		if (ae_l == NULL)
+			break;
+
+		v = ae_l->getZExtValue();
+		if (v == 0)
+			break;
+
+		bit = exact_log2(v);
+		if (bit == -1)
+			break;
+
+		return EqExpr::create(
+			cl,
+			ZExtExpr::create(
+				ExtractExpr::create(ae->right, bit, 1),
+				width));
+	}
+	break;
+
+	case Expr::Sub: {
 		const SubExpr *se = cast<SubExpr>(r);
 		if (isa<ConstantExpr>(se->left)) {
 			// c0 = c1 - b => c1 - c0 = b
@@ -1289,9 +1340,15 @@ static ref<Expr> EqExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 					SubExpr::create(se->left, cl)),
 					se->right.get());
 		}
-	} else if (rk == Expr::Read && ConstArrayOpt) {
-		return TryConstArrayOpt(cl, static_cast<ReadExpr*>(r));
-	} else if (rk == Expr::Or) {
+	}
+	break;
+
+	case Expr::Read:
+		if (ConstArrayOpt)
+			return TryConstArrayOpt(cl, static_cast<ReadExpr*>(r));
+	break;
+
+	case Expr::Or: {
 		/* constant masking rewrite */
 		const OrExpr *oe = cast<OrExpr>(r);
 		// (A == x | B) ==> (A & B == B)
@@ -1299,7 +1356,10 @@ static ref<Expr> EqExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 			if (mask->And(cl) != mask)
 				return ConstantExpr::alloc(0, Expr::Bool);
 		}
-	} else if (rk == Expr::Concat) {
+	}
+	break;
+
+	case Expr::Concat: {
 		ConcatExpr *ce = cast<ConcatExpr>(r);
 
 		return AndExpr::create(
@@ -1312,7 +1372,9 @@ static ref<Expr> EqExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 				cl->Extract(0,
 					ce->getRight()->getWidth()),
 					ce->getRight().get()));
-	} else if (rk == Expr::Select) {
+	}
+
+	case Expr::Select: {
 		SelectExpr	*se = cast<SelectExpr>(r);
 		if (	se->getKid(1)->getKind() == Expr::Constant &&
 			se->getKid(2)->getKind() == Expr::Constant)
@@ -1325,6 +1387,11 @@ static ref<Expr> EqExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 					ConstantExpr::alloc(
 						1, se->getKid(0)->getWidth()));
 		}
+	}
+	break;
+
+	default:
+		break;
 	}
 
 	return EqExpr_create(cl, r);
@@ -1367,7 +1434,7 @@ static ref<Expr> UltExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 #error WHAT ARE YOU DOING STOP
 		if (l->getKid(0)->getKind() == Expr::Constant) {
 			return UltExpr::create(
-				l->getKid(1), 
+				l->getKid(1),
 				SubExpr::create(
 					r,
 					l->getKid(0)));
