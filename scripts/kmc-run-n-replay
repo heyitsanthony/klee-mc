@@ -42,6 +42,13 @@ VEXLLVM_SAVE=1 pt_run $1
 ulimit -v 2200000
 KMC_RNR_DEFAULT_FLAGS="-pipe-solver -max-memory=2048 -guest-type=sshot"
 
+if [ ! -z "$KMC_RNR_HEAPDEBUG" ]; then
+	export LD_PRELOAD=/home/chz/lib/libtcmalloc.so
+	export HEAPPROFILE=klee.hprof
+	TIMEOUT=9999999
+	#~/bin/pprof `which klee-mc` heapfile
+fi
+
 #-use-pcache-rewriteptr  
 if [ ! -z "$IO_REDIR" ]; then
 	$CMDPREFIX klee-mc				\

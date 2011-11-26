@@ -50,6 +50,19 @@ void Assignment::bindFree(const Array* a, const std::vector<unsigned char>& v)
 	addBinding(a, v);
 }
 
+unsigned int Assignment::getBindingBytes(void) const
+{
+	unsigned int	ret = 0;
+
+	foreach (it, bindings.begin(), bindings.end())
+		ret += it->second.size();
+
+	foreach (it, free_bindings.begin(), free_bindings.end())
+		ret += (*it)->getSize();
+
+	return ret;
+}
+
 void Assignment::bindFreeToU8(uint8_t x)
 {
 	foreach (it, free_bindings.begin(), free_bindings.end()) {

@@ -20,7 +20,6 @@ ExecutionState& PhasedSearcher::selectState(bool allowCompact)
 
 		/* steal state from top of phase list,
 		 * kick to back of list */
-		std::cerr << "PHASE: " << cur_phase << '\n';
 		ret = phases[cur_phase].front();
 		phases[cur_phase].pop_front();
 		phases[cur_phase].push_back(ret);
@@ -37,7 +36,7 @@ void PhasedSearcher::update(ExecutionState *current, States s)
 		unsigned	last_br;
 
 		last_br = es->branchLast().first;
-		if (phases.size() <= last_br)
+		if (last_br >= phases.size())
 			phases.resize(last_br+1);
 
 		phases[last_br].push_front(es);

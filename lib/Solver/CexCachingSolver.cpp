@@ -22,85 +22,90 @@
 #include "llvm/Support/CommandLine.h"
 #include "SMTPrinter.h"
 
+#define MAX_BINDING_BYTES	(32*1024)
+#define MAX_CACHED_BYTES	(256*1024*1024)	/* custom alloc => hugetlb */
+
+
 using namespace klee;
 using namespace llvm;
 
-
-extern bool debug_eval;
-
 namespace {
-  cl::opt<bool>
-  DebugCexCacheCheckBinding("debug-cex-cache-check-binding");
+	cl::opt<bool>
+	DebugCexCacheCheckBinding("debug-cex-cache-check-binding");
 
-  cl::opt<bool>
-  CexCacheTryAll("cex-cache-try-all",
-                 cl::desc("try substituting all counterexamples before asking STP"),
-                 cl::init(false));
+	cl::opt<bool>
+	CexCacheTryAll(
+		"cex-cache-try-all",
+		 cl::desc("try substituting all counterexamples before asking STP"),
+		 cl::init(false));
 
-  cl::opt<bool>
-  CexCacheExperimental("cex-cache-exp", cl::init(false));
-
+	cl::opt<bool>
+	CexCacheExperimental("cex-cache-exp", cl::init(false));
 }
 
-///
-
-typedef std::set< ref<Expr> > KeyType;
+typedef std::set< ref<Expr> > Key;
 
 struct AssignmentLessThan {
-  bool operator()(const Assignment *a, const Assignment *b) {
-    return a->bindings < b->bindings;
-  }
+bool operator()(const Assignment *a, const Assignment *b) {
+	return a->bindings < b->bindings;
+}
 };
 
 
 class CexCachingSolver : public SolverImplWrapper
 {
-  typedef std::set<Assignment*, AssignmentLessThan> assignmentsTable_ty;
-
-  MapOfSets<ref<Expr>, Assignment*> cache;
-  // memo table
-  assignmentsTable_ty assignmentsTable;
-
-  bool searchForAssignment(KeyType &key, Assignment *&result);
-  bool lookupAssignment(const Query& query, KeyType &key, Assignment *&result);
-  bool lookupAssignment(const Query& query, Assignment *&result) {
-    KeyType key;
-    return lookupAssignment(query, key, result);
-  }
-
-  bool getAssignment(const Query& query, Assignment *&result);
-
 public:
-  CexCachingSolver(Solver *_solver) : SolverImplWrapper(_solver) {}
-  virtual ~CexCachingSolver();
+	CexCachingSolver(Solver *_solver)
+	: SolverImplWrapper(_solver)
+	, assignTab_bytes(0)
+	, evicted_bytes(0) {}
+	virtual ~CexCachingSolver();
 
-  bool computeSat(const Query&);
-  Solver::Validity computeValidity(const Query&);
-  ref<Expr> computeValue(const Query&);
-  bool computeInitialValues(const Query&, Assignment& a);
+	bool computeSat(const Query&);
+	Solver::Validity computeValidity(const Query&);
+	ref<Expr> computeValue(const Query&);
+	bool computeInitialValues(const Query&, Assignment& a);
 
-  void printName(int level = 0) const {
-    klee_message("%*s" "CexCachingSolver containing:", 2*level, "");
-    wrappedSolver->printName(level + 1);
-  }
+	void printName(int level = 0) const
+	{
+		klee_message("%*s" "CexCachingSolver containing:", 2*level, "");
+		wrappedSolver->printName(level + 1);
+	}
+
 private:
-  Assignment* createBinding(const Query& query, KeyType& key);
+	Assignment* createBinding(const Query& query, Key& key);
+
+	void evictRandom(void);
+	bool searchForAssignment(Key &key, Assignment *&result);
+	bool lookupAssignment(
+		const Query& query, Key &key, Assignment *&result);
+	bool lookupAssignment(const Query& query, Assignment *&result)
+	{
+		Key key;
+		return lookupAssignment(query, key, result);
+	}
+
+	bool getAssignment(const Query& query, Assignment *&result);
+	Assignment* addToTable(Assignment* binding);
+
+	MapOfSets<ref<Expr>, Assignment*>	cache;
+
+	typedef std::set<Assignment*, AssignmentLessThan> assignTab_ty;
+	assignTab_ty				assignTab; // memo table
+	unsigned int				assignTab_bytes;
+	unsigned int				evicted_bytes;
 };
 
-///
-
-struct NullAssignment {
-  bool operator()(Assignment *a) const { return !a; }
-};
+struct NullAssignment { bool operator()(Assignment *a) const { return !a; } };
 
 struct NonNullAssignment {
   bool operator()(Assignment *a) const { return a!=0; }
 };
 
 struct NullOrSatisfyingAssignment {
-  KeyType &key;
+  Key &key;
 
-  NullOrSatisfyingAssignment(KeyType &_key) : key(_key) {}
+  NullOrSatisfyingAssignment(Key &_key) : key(_key) {}
 
   bool operator()(Assignment *a) const {
     return !a || a->satisfies(key.begin(), key.end());
@@ -114,7 +119,7 @@ struct NullOrSatisfyingAssignment {
 /// either a satisfying assignment (for a satisfiable query), or 0 (for an
 /// unsatisfiable query).
 /// \return - True if a cached result was found.
-bool CexCachingSolver::searchForAssignment(KeyType &key, Assignment *&result)
+bool CexCachingSolver::searchForAssignment(Key &key, Assignment *&result)
 {
 	Assignment * const *lookup = cache.lookup(key);
 	Assignment **lookup_super;
@@ -151,7 +156,7 @@ bool CexCachingSolver::searchForAssignment(KeyType &key, Assignment *&result)
 	if (CexCacheTryAll) {
 		// Otherwise, iterate through the set of current assignments 
 		// to see if one of them satisfies the query.
-		foreach (it, assignmentsTable.begin(), assignmentsTable.end()) {
+		foreach (it, assignTab.begin(), assignTab.end()) {
 			Assignment *a = *it;
 			if (a->satisfies(key.begin(), key.end())) {
 				// cache result for deterministic reconstitution
@@ -174,11 +179,11 @@ bool CexCachingSolver::searchForAssignment(KeyType &key, Assignment *&result)
 /// unsatisfiable query).
 /// \return True if a cached result was found.
 bool CexCachingSolver::lookupAssignment(
-  const Query &query, KeyType &key, Assignment *&result)
+	const Query &query, Key &key, Assignment *&result)
 {
 	ref<Expr> neg;
 
-	key = KeyType(query.constraints.begin(), query.constraints.end());
+	key = Key(query.constraints.begin(), query.constraints.end());
 	neg = Expr::createIsZero(query.expr);
 	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(neg)) {
 		if (CE->isFalse()) {
@@ -192,13 +197,78 @@ bool CexCachingSolver::lookupAssignment(
 	return searchForAssignment(key, result);
 }
 
-Assignment* CexCachingSolver::createBinding(const Query& query, KeyType& key)
+void CexCachingSolver::evictRandom(void)
 {
-	std::vector<const Array*>			objects;
-	std::pair<assignmentsTable_ty::iterator, bool>	res;
+	std::set<Assignment*>				as_to_del;
+	std::vector<std::pair<Key, Assignment*> >	expr_sets;
 
-	Assignment	*binding;
-	bool		hasSolution;
+	/* collect assignments to trash */
+	foreach (it, assignTab.begin(), assignTab.end()) {
+		/* 50% chance of being thrown in bit-bin */
+		if (rand() % 2)
+			as_to_del.insert(*it);
+	}
+
+	/* save non-matching references from ref=>Assignment cache */
+	foreach (it, cache.begin(), cache.end()) {
+		Assignment	*cur_a = (*it).second;
+
+		if (!as_to_del.count(cur_a))
+			expr_sets.push_back(*it);
+	}
+
+	/* clear, rebuild */
+	cache.clear();
+	foreach (it, expr_sets.begin(), expr_sets.end()) {
+		cache.insert((*it).first, (*it).second);
+	}
+	expr_sets.clear();
+
+	/* delete all */
+	foreach (it, as_to_del.begin(), as_to_del.end()) {
+		Assignment	*a(*it);
+		unsigned int	a_bytes;
+
+		a_bytes = a->getBindingBytes();
+		assignTab_bytes -= a_bytes;
+		evicted_bytes += a_bytes;
+		delete a;
+	}
+
+	std::cerr
+		<< "[CexCache] Total Evicted Bytes: "
+		<< evicted_bytes << '\n';
+}
+
+Assignment* CexCachingSolver::addToTable(Assignment* binding)
+{
+	std::pair<assignTab_ty::iterator, bool>	res;
+	unsigned int	new_bytes = 0;
+
+	if ((assignTab_bytes + MAX_BINDING_BYTES) > MAX_CACHED_BYTES) {
+		new_bytes = binding->getBindingBytes();
+		evictRandom();
+	}
+
+	res = assignTab.insert(binding);
+	if (res.second == true) {
+		if (!new_bytes) new_bytes = binding->getBindingBytes();
+		assignTab_bytes += new_bytes;
+		return binding;
+	}
+
+	/* binding already exists */
+	assert (binding != *res.first);
+	delete binding;
+
+	return *res.first;
+}
+
+Assignment* CexCachingSolver::createBinding(const Query& query, Key& key)
+{
+	std::vector<const Array*>	objects;
+	Assignment			*binding;
+	bool				hasSolution;
 
 	findSymbolicObjects(key.begin(), key.end(), objects);
 	binding = new Assignment(objects);
@@ -210,13 +280,7 @@ Assignment* CexCachingSolver::createBinding(const Query& query, KeyType& key)
 	}
 
 	// Memoize the result.
-	res = assignmentsTable.insert(binding);
-	if (res.second == false) {
-		/* binding already exists */
-		assert (binding != *res.first);
-		delete binding;
-		binding = *res.first;
-	}
+	binding = addToTable(binding);
 
 	if (DebugCexCacheCheckBinding) {
 		assert (binding->satisfies(key.begin(), key.end()));
@@ -227,7 +291,7 @@ Assignment* CexCachingSolver::createBinding(const Query& query, KeyType& key)
 
 bool CexCachingSolver::getAssignment(const Query& query, Assignment* &result)
 {
-	KeyType key;
+	Key key;
 
 	if (lookupAssignment(query, key, result)) {
 		return true;
@@ -245,7 +309,7 @@ bool CexCachingSolver::getAssignment(const Query& query, Assignment* &result)
 CexCachingSolver::~CexCachingSolver()
 {
 	cache.clear();
-	foreach (it, assignmentsTable.begin(),assignmentsTable.end())
+	foreach (it, assignTab.begin(),assignTab.end())
 		delete *it;
 }
 
@@ -353,6 +417,13 @@ bool CexCachingSolver::computeInitialValues(
 	TimerStatIncrementer	t(stats::cexCacheTime);
 	Assignment		*a;
 	bool			hasSolution;
+	unsigned int		a_bytes;
+
+	a_bytes = a_out.getBindingBytes();
+	if (a_bytes > MAX_BINDING_BYTES) {
+		/* don't cache large queries */
+		return doComputeInitialValues(query, a_out);
+	}
 
 	a = NULL;
 	if (getAssignment(query, a) == false) {

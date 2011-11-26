@@ -87,6 +87,8 @@ public:
 		return ((it == bindings.end()) ? NULL : &it->second);
 	}
 
+	unsigned int getBindingBytes(void) const;
+
 	std::vector<const Array*> getObjectVector(void) const;
 
 	free_bindings_ty::const_iterator freeBegin(void) const

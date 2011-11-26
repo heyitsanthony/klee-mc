@@ -32,6 +32,7 @@ public:
   void initRef() const { refCount = 0; }
   void incRefIfCared() const { if (refCount != refCountDontCare) ++refCount; }
   void decRefIfCared() const { if (refCount != refCountDontCare) --refCount; if (refCount == 0) delete this; }
+  unsigned int getSize(void) const { return mallocKey.size; }
 
   static Array* uniqueArray(Array* arr);
 public:
