@@ -18,12 +18,6 @@
 #include <ostream>
 #include <stdint.h>
 
-namespace llvm {
-  class BasicBlock;
-  class Function;
-  class Instruction;
-}
-
 namespace klee
 {
 class ExecutionState;

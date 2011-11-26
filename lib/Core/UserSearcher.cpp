@@ -22,6 +22,7 @@
 #include "DFSSearcher.h"
 #include "InterleavedSearcher.h"
 #include "IterativeDeepeningTimeSearcher.h"
+#include "PhasedSearcher.h"
 #include "MergingSearcher.h"
 #include "RandomPathSearcher.h"
 #include "RRSearcher.h"
@@ -63,6 +64,9 @@ namespace {
 
   cl::opt<bool>
   UseNonUniformRandomSearch("use-non-uniform-random-search");
+
+  cl::opt<bool>
+  UsePhasedSearch("use-phased-search", cl::desc("Phased Searcher."));
 
   cl::opt<bool>
   UseRRSearch("use-rr-search");
@@ -180,7 +184,9 @@ Searcher* klee::setupBaseSearcher(Executor& executor)
 {
 	Searcher* searcher;
 
-	if (UseRRSearch) {
+	if (UsePhasedSearch) {
+		searcher = new PhasedSearcher();
+	} else if (UseRRSearch) {
 		searcher = new RRSearcher();
 	} else if (UseRandomPathSearch) {
 		searcher = new RandomPathSearcher(executor);

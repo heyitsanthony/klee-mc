@@ -274,6 +274,8 @@ public:
   BranchTracker::iterator branchesEnd(void) const
   { return branchDecisionsSequence.end(); }
 
+  std::pair<unsigned, unsigned> branchLast(void) const;
+
   unsigned getPHISlot(void) const { return incomingBBIndex * 2; }
 
   std::vector< SymbolicArray >::const_iterator symbolicsBegin(void) const

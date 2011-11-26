@@ -475,3 +475,10 @@ ObjectState* ExecutionState::allocateAt(
 }
 
 ExecutionState* ExecutionState::copy(void) const { return copy(this); }
+
+std::pair<unsigned, unsigned> ExecutionState::branchLast(void) const
+{
+	if (branchDecisionsSequence.empty())
+		return std::pair<unsigned, unsigned>(0,0);
+	return branchDecisionsSequence.back();
+}
