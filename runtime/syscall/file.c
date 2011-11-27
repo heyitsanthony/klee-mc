@@ -195,9 +195,10 @@ int file_sc(unsigned int sys_nr, void* regfile)
 		path = (const char*)GET_ARG0(regfile);
 		if (!str_is_sym(path)) {
 			if (	deny_sys_files &&
+				(path[0] == '\0' ||
 				(path[0] == '/' &&
 				(path[1] == 'u' || path[1] == 'l')) ||
-				str_contains(".so", path))
+				str_contains(".so", path)))
 			{
 				sc_ret_v(regfile, -1);
 				break;
@@ -217,10 +218,14 @@ int file_sc(unsigned int sys_nr, void* regfile)
 
 
 		new_regs = sc_new_regs(regfile);
-		if ((intptr_t)GET_RAX(new_regs) == -1)
+		if ((intptr_t)GET_RAX(new_regs) == -1) {
+			sc_ret_v(new_regs, -1);
 			break;
+		}
 
-		sc_ret_v(new_regs, fd_open_sym());
+		ret_fd = fd_open_sym();
+		klee_assume(GET_RAX(new_regs) == ret_fd);
+		sc_ret_v(new_regs, ret_fd);
 	}
 	break;
 

@@ -102,8 +102,9 @@ int fd_open_sym(void)
 
 	find_next_free();
 	new_fd = next_free_fd;
-	fi = fd2fi(new_fd);
+	assert (!fi_is_used(new_fd));
 
+	fi = fd2fi(new_fd);
 	fi->fi_vfd = -1;
 	fi->fi_flags = FD_FL_IN_USE;
 
