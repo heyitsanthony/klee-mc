@@ -25,6 +25,7 @@ ReplayExec::ReplayExec(Guest* gs, VexXlate* vx)
 , has_reglog(false)
 , ign_reglog(getenv("KMC_REPLAY_IGNLOG") != NULL)
 , crumbs(NULL)
+, print_exec(getenv("KMC_DUMP_EXE") != NULL)
 { }
 
 void ReplayExec::setSyscallsKTest(SyscallsKTest* in_skt)
@@ -103,6 +104,13 @@ guest_ptr ReplayExec::doVexSB(VexSB* sb)
 {
 	guest_ptr	next_pc;
 
+	if (print_exec) {
+		fprintf(stderr, "[EXE] %p-%p %s\n",
+			(void*)sb->getGuestAddr().o,
+			(void*)sb->getEndAddr().o,
+			gs->getName(sb->getGuestAddr()).c_str());
+	}
+
 	next_pc = VexExec::doVexSB(sb);
 	verifyOrPanic();
 
@@ -123,8 +131,8 @@ void ReplayExec::setCrumbs(Crumbs* in_c)
 uint8_t* ReplayExec::verifyWithRegLog(void)
 {
 	struct breadcrumb	*bc;
-	uint8_t			*sym_reg, *guest_reg, *sym_mask, *buf;
-	unsigned int		reg_sz;
+	regchk_t		regchk;
+	uint8_t			*buf;
 	guest_ptr		next_addr;
 	bool			is_next_guest_vsys, is_next_sym_vsys;
 	uint8_t			*reg_ctx = NULL;	/* bad ctx */
@@ -141,13 +149,13 @@ uint8_t* ReplayExec::verifyWithRegLog(void)
 	assert (bc_is_type(bc, BC_TYPE_VEXREG));
 	if (ign_reglog) goto done;
 
-	reg_sz = gs->getCPUState()->getStateSize();
-	assert (bc->bc_sz == reg_sz*2 + sizeof(struct breadcrumb));
+	regchk.reg_sz = gs->getCPUState()->getStateSize();
+	assert (bc->bc_sz == regchk.reg_sz*2 + sizeof(struct breadcrumb));
 
-	guest_reg = (uint8_t*)gs->getCPUState()->getStateData();
+	regchk.guest_reg = (uint8_t*)gs->getCPUState()->getStateData();
 	buf = reinterpret_cast<uint8_t*>(bc) + sizeof(struct breadcrumb);
-	sym_reg = buf;
-	sym_mask = buf + reg_sz;
+	regchk.sym_reg = buf;
+	regchk.sym_mask = buf + regchk.reg_sz;
 
 	/* XXX HACK HACK HACK. There's something in the syspage that changes
 	 * from process to process. Since we can't write to the syspage with
@@ -156,7 +164,7 @@ uint8_t* ReplayExec::verifyWithRegLog(void)
 	next_addr = gs->getCPUState()->getPC();
 	is_next_guest_vsys = is_syspage_addr(next_addr);
 	is_next_sym_vsys = is_syspage_addr(
-		guest_ptr(((VexGuestAMD64State*)sym_reg)->guest_RIP));
+		guest_ptr(((VexGuestAMD64State*)regchk.sym_reg)->guest_RIP));
 
 	if (is_next_guest_vsys) {
 		/* Don't skip() over the klee state.
@@ -188,33 +196,41 @@ uint8_t* ReplayExec::verifyWithRegLog(void)
 		crumbs->getNumProcessed(),
 		(void*)next_addr.o,
 		gs->getName(next_addr).c_str());
-	for (unsigned int i = 0; i < reg_sz; i++) {
-		if (!sym_mask[i]) continue;
-		if (sym_reg[i] == guest_reg[i]) continue;
+
+	reg_ctx = regChk(regchk);
+
+done:
+	Crumbs::freeCrumb(bc);
+	ignored_last = false;
+	return reg_ctx;
+}
+
+uint8_t* ReplayExec::regChk(const struct regchk_t& rc)
+{
+	for (unsigned int i = 0; i < rc.reg_sz; i++) {
+		uint8_t*	new_reg_ctx;
+
+		if (!rc.sym_mask[i]) continue;
+		if (rc.sym_reg[i] == rc.guest_reg[i]) continue;
 
 		/* mismatch */
 
 		/* HACK */
 		if (ignored_last) {
 			fprintf(stderr, "FAKING [0x%x](0x%x) <- 0x%x\n",
-				i, guest_reg[i], sym_reg[i]);
-			guest_reg[i] = sym_reg[i];
+				i, rc.guest_reg[i], rc.sym_reg[i]);
+			rc.guest_reg[i] = rc.sym_reg[i];
 			continue;
 		}
 
 		fprintf(stderr, ">>>>>> Mismatch on idx=0x%x\n", i);
 		fprintf(stderr, "====MASK:\n");
-		dumpRegBuf(sym_mask);
+		dumpRegBuf(rc.sym_mask);
 
-		reg_ctx = new uint8_t[reg_sz];
-		memcpy(reg_ctx, sym_reg, reg_sz);
-		goto done;
+		new_reg_ctx = new uint8_t[rc.reg_sz];
+		memcpy(new_reg_ctx, rc.sym_reg, rc.reg_sz);
+		return new_reg_ctx;
 	}
 
-	reg_ctx = NULL;
-
-done:
-	Crumbs::freeCrumb(bc);
-	ignored_last = false;
-	return reg_ctx;
+	return NULL;
 }

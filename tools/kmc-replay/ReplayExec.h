@@ -26,7 +26,15 @@ protected:
 	virtual void doSysCall(VexSB* sb);
 
 private:
+	struct regchk_t {
+		uint8_t* sym_reg;
+		uint8_t* guest_reg;
+		uint8_t* sym_mask;
+		unsigned reg_sz;
+	};
+
 	uint8_t*	verifyWithRegLog(void);
+	uint8_t*	regChk(const struct regchk_t&);
 	void		verifyOrPanic(void);
 	void		dumpRegBuf(const uint8_t*);
 
@@ -36,6 +44,7 @@ private:
 	klee::Crumbs	*crumbs;	/* not owner */
 	bool		ignored_last;
 	bool		skipped_vsys;
+	bool		print_exec;
 };
 
 #endif

@@ -3234,8 +3234,10 @@ void Executor::doImpliedValueConcretization(
 		if (CE == NULL) continue;
 
 		mo = state.findMemoryObject(re->updates.root);
-		assert (mo != NULL && "Could not find MO?");
+		if (mo == NULL)
+			continue;
 
+		assert (mo != NULL && "Could not find MO?");
 		os = state.addressSpace.findObject(mo);
 
 		// os = 0 => obj has been free'd,
