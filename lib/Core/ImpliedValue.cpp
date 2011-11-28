@@ -219,17 +219,14 @@ void ImpliedValue::getImpliedValues(
 	}
 }
 
-void ImpliedValue::checkForImpliedValues(
-	Solver *S, ref<Expr> e, ref<ConstantExpr> value)
+typedef std::map<ref<ReadExpr>, ref<ConstantExpr> > foundmap_ty;
+
+static void getFoundMap(
+	const ImpliedValueList	&results,
+	foundmap_ty		&found)
 {
-	std::vector<ref<ReadExpr> > reads;
-	std::map<ref<ReadExpr>, ref<ConstantExpr> > found;
-	ImpliedValueList results;
-
-	getImpliedValues(e, value, results);
-
 	foreach (i, results.begin(), results.end()) {
-		std::map<ref<ReadExpr>, ref<ConstantExpr> >::iterator it;
+		foundmap_ty::iterator it;
 
 		it = found.find(i->first);
 		if (it != found.end()) {
@@ -239,12 +236,18 @@ void ImpliedValue::checkForImpliedValues(
 			found.insert(std::make_pair(i->first, i->second));
 		}
 	}
+}
 
-	findReads(e, false, reads);
-	std::set< ref<ReadExpr> > readsSet(reads.begin(), reads.end());
-	reads = std::vector< ref<ReadExpr> >(readsSet.begin(), readsSet.end());
+typedef std::vector<ref<ReadExpr> >	readvec_ty;
+typedef std::set<ref<ReadExpr> >	readset_ty;
 
+ConstraintManager getBoundConstraints(
+	ref<Expr>&		e,
+	ref<ConstantExpr>&	value,
+	const readvec_ty&	reads)
+{
 	std::vector<ref<Expr> > assumption;
+
 	assumption.push_back(EqExpr::create(e, value));
 
 	// obscure... we need to make sure that all the read indices are
@@ -259,25 +262,45 @@ void ImpliedValue::checkForImpliedValues(
 				re->index,
 				ConstantExpr::alloc(
 					re->updates.root->mallocKey.size,
-					Context::get().getPointerWidth())));
+					32)));
 	}
 
-	ConstraintManager assume(assumption);
+	return ConstraintManager(assumption);
+}
+
+
+void ImpliedValue::checkForImpliedValues(
+	Solver *S, ref<Expr> e, ref<ConstantExpr> value)
+{
+	readvec_ty		reads;
+	foundmap_ty		found;
+	ImpliedValueList	results;
+
+	getImpliedValues(e, value, results);
+
+	getFoundMap(results, found);
+
+
+	findReads(e, false, reads);
+	readset_ty readsSet(reads.begin(), reads.end());
+	reads = readvec_ty(readsSet.begin(), readsSet.end());
+
+	ConstraintManager assume(getBoundConstraints(e, value, reads));
+
 	foreach (i, reads.begin(), reads.end()) {
 		std::map<ref<ReadExpr>, ref<ConstantExpr> >::iterator it;
 		ref<ReadExpr>		var = *i;
 		ref<ConstantExpr>	possible;
-		bool			success, res;
+		bool			ok, res;
 
-		success = S->getValue(Query(assume, var), possible);
-		assert(success && "FIXME: Unhandled solver failure");
+		ok = S->getValue(Query(assume, var), possible);
+		assert(ok && "FIXME: Unhandled solver failure");
+
+		ok = S->mustBeTrue(
+			Query(assume, EqExpr::create(var, possible)), res);
+		assert(ok && "FIXME: Unhandled solver failure");
 
 		it = found.find(var);
-
-		success = S->mustBeTrue(
-			Query(assume, EqExpr::create(var, possible)), res);
-		assert(success && "FIXME: Unhandled solver failure");
-
 		if (res) {
 			if (it != found.end()) {
 				assert(	possible == it->second &&

@@ -563,6 +563,38 @@ writeN(16)
 writeN(32)
 writeN(64)
 
+bool ObjectState::writeIVC(unsigned offset, const ref<ConstantExpr>& ce)
+{
+	unsigned	w = ce->getWidth();
+	unsigned	NumBytes = w/8;
+	uint64_t	v;
+	bool		updated;
+
+	assert ((w % 8) == 0 && "Expected byte write");
+
+	v = ce->getZExtValue();
+	updated = false;
+	for (unsigned i = 0; i != NumBytes; ++i) {
+		unsigned	idx, cur_off;
+		uint8_t		v8;
+
+		idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
+		v8 = v >> (8 * i);
+		cur_off = offset+idx;
+
+		if (isByteConcrete(cur_off))
+			continue;
+
+		if (isByteKnownSymbolic(cur_off))
+			continue;
+
+		concreteStore[cur_off] = v8;
+		markByteConcrete(cur_off);
+		updated = true;
+	}
+
+	return updated;
+}
 
 void ObjectState::print(unsigned int begin, int end) const
 {

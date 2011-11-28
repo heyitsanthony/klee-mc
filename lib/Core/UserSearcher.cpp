@@ -115,7 +115,7 @@ namespace {
   cl::opt<double>
   BatchTime("batch-time",
             cl::desc("Amount of time to batch when using --use-batching-search"),
-            cl::init(0.0));
+            cl::init(-1.0));
 
   cl::opt<bool>
   UseStringPrune("string-prune",

@@ -33,18 +33,18 @@ double BatchingSearcher::getElapsedTime(void) const
 ExecutionState &BatchingSearcher::selectState(bool allowCompact)
 {
 	if (	lastState && 
-		getElapsedTime() <= timeBudget &&
+		(timeBudget < 0.0 || getElapsedTime() <= timeBudget) &&
 		getElapsedInstructions() <= instructionBudget)
 	{
 		return *lastState;
 	}
 
-	if (lastState) {
+	if (lastState && timeBudget >= 0.0) {
 		double delta = getElapsedTime();
-		if (delta > timeBudget * 1.1) {
-			timeBudget = delta;
+		if (delta > timeBudget * 1.5) {
 			std::cerr << "KLEE: increased time budget from "
 				<< timeBudget << " to " << delta << "\n";
+			timeBudget = delta;
 		}
 	}
 

@@ -9,6 +9,8 @@ class ObjectState
 {
 	friend class AddressSpace;
 	friend class ExecutionState;
+	friend class Executor;
+
 private:
 	friend class ObjectHolder;
 
@@ -62,6 +64,8 @@ public:
 	bool isByteFlushed(unsigned offset) const;
 	bool isByteKnownSymbolic(unsigned offset) const;
 	void markRangeSymbolic(unsigned offset, unsigned len);
+
+	bool writeIVC(unsigned offset, const ref<ConstantExpr>& ce);
 
 	ref<Expr> read(ref<Expr> offset, Expr::Width width) const;
 	ref<Expr> read(unsigned offset, Expr::Width width) const;

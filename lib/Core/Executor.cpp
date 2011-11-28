@@ -65,9 +65,8 @@
 using namespace llvm;
 using namespace klee;
 
-// omg really hard to share cl opts across files ...
-bool WriteTraces = false;
-double MaxSTPTime;
+bool	WriteTraces = false;
+double	MaxSTPTime;
 
 namespace llvm
 {
@@ -305,8 +304,6 @@ Executor::~Executor()
 	ExeStateBuilder::replaceBuilder(NULL);
 }
 
-/***/
-
 inline void Executor::replaceStateImmForked(
 	ExecutionState* os, ExecutionState* ns)
 {
@@ -338,14 +335,19 @@ bool Executor::isStateSeeding(ExecutionState* s)
 
 bool Executor::isForkingCondition(ExecutionState& current, ref<Expr> condition)
 {
-  bool isSeeding = isStateSeeding(&current);
+	if (isStateSeeding(&current)) return false;
 
-  if (isSeeding) return false;
-  if (isa<ConstantExpr>(condition)) return false;
-  if (!(MaxStaticForkPct!=1. || MaxStaticSolvePct != 1. ||
-      MaxStaticCPForkPct!=1. || MaxStaticCPSolvePct != 1.)) return false;
-  if (statsTracker->elapsed() > 60.) return false;
-  return true;
+	if (isa<ConstantExpr>(condition)) return false;
+
+	if (	!(MaxStaticForkPct!=1. || MaxStaticSolvePct != 1. ||
+		MaxStaticCPForkPct!=1. || MaxStaticCPSolvePct != 1.))
+	{
+		return false;
+	}
+
+	if (statsTracker->elapsed() > 60.) return false;
+
+	return true;
 }
 
 /* TODO: understand this */
@@ -380,30 +382,33 @@ bool Executor::isForkingCallPath(CallPathNode* cpn)
 }
 
 Executor::StatePair
-Executor::fork(ExecutionState &current, ref<Expr> condition, bool isInternal)
+Executor::fork(ExecutionState &current, ref<Expr> cond, bool isInternal)
 {
-  ref<Expr> conditions[2];
+	ref<Expr> conds[2];
 
-  // !!! is this the correct behavior?
-  if (isForkingCondition(current, condition)) {
-    CallPathNode *cpn = current.stack.back().callPathNode;
-    if (isForkingCallPath(cpn)) {
-      ref<ConstantExpr> value;
-      bool success = solver->getValue(current, condition, value);
-      assert(success && "FIXME: Unhandled solver failure");
-      addConstraint(current, EqExpr::create(value, condition));
-      condition = value;
-    }
-  }
+	// !!! is this the correct behavior?
+	if (isForkingCondition(current, cond)) {
+		CallPathNode *cpn = current.stack.back().callPathNode;
+		if (isForkingCallPath(cpn)) {
+			bool			ok;
+			ref<ConstantExpr>	value;
 
-// set in forkSetupNoSeeding, if possible
-//  conditions[0] = Expr::createIsZero(condition);
-  conditions[1] = condition;
+			ok = solver->getValue(current, cond, value);
+			assert(ok && "FIXME: Unhandled solver failure");
 
-  StateVector results = fork(current, 2, conditions, isInternal, true);
-  return std::make_pair(
-  	results[1] /* first label in br => true */,
-	results[0] /* second label in br => false */);
+			addConstraint(current, EqExpr::create(value, cond));
+			cond = value;
+		}
+	}
+
+	// set in forkSetupNoSeeding, if possible
+	//  conditions[0] = Expr::createIsZero(condition);
+	conds[1] = cond;
+
+	StateVector results = fork(current, 2, conds, isInternal, true);
+	return std::make_pair(
+		results[1] /* first label in br => true */,
+		results[0] /* second label in br => false */);
 }
 
 bool Executor::forkFollowReplay(ExecutionState& current, struct ForkInfo& fi)
@@ -586,7 +591,7 @@ Executor::fork(
         bool isInternal,
 	bool isBranch)
 {
-	SeedMapType::iterator it;
+	SeedMapType::iterator	it;
 	ForkInfo		fi(conditions, N);
 
 	fi.timeout = stpTimeout;
@@ -657,8 +662,9 @@ bool Executor::evalForkBranch(ExecutionState& current, struct ForkInfo& fi)
 // Evaluate fork conditions
 bool Executor::evalForks(ExecutionState& current, struct ForkInfo& fi)
 {
-	if (fi.isBranch)
+	if (fi.isBranch) {
 		return evalForkBranch(current, fi);
+	}
 
 	assert (fi.isBranch == false);
 
@@ -1435,8 +1441,8 @@ void Executor::instBranch(ExecutionState& state, KInstruction* ki)
 		statsTracker->markBranchVisited(
 			branches.first, branches.second);
 
-	finalizeBranch(branches.first, bi, 0 /* [0] successor => true */);
-	finalizeBranch(branches.second, bi, 1 /* [1] successor => false */);
+	finalizeBranch(branches.first, bi, 0 /* [0] successor => true/then */);
+	finalizeBranch(branches.second, bi, 1 /* [1] successor => false/else */);
 }
 
 void Executor::finalizeBranch(
@@ -3229,9 +3235,9 @@ void Executor::doImpliedValueConcretization(
 		const ObjectState	*os;
 		ObjectState		*wos;
 		ReadExpr		*re = it->first.get();
-		ConstantExpr		*CE = dyn_cast<ConstantExpr>(re->index);
+		ConstantExpr		*off = dyn_cast<ConstantExpr>(re->index);
 
-		if (CE == NULL) continue;
+		if (off == NULL) continue;
 
 		mo = state.findMemoryObject(re->updates.root);
 		if (mo == NULL)
@@ -3251,7 +3257,8 @@ void Executor::doImpliedValueConcretization(
 
 		wos = state.addressSpace.getWriteable(mo, os);
 		assert (wos != NULL && "Could not get writable ObjectState?");
-		state.write(wos, CE, it->second);
+
+		wos->writeIVC(off->getZExtValue(), it->second);
 	}
 }
 
