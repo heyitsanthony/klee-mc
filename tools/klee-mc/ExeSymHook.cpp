@@ -80,6 +80,7 @@ MallocMMU::MemOpRes MallocMMU::memOpResolve(
 ExeSymHook::ExeSymHook(InterpreterHandler *ie, Guest* gs)
 : ExecutorVex(ie, gs)
 , f_malloc(NULL)
+, f_int_malloc(0)
 , f_memalign(NULL)
 , f_free(NULL)
 , f_vasprintf(NULL), f_asprintf(NULL)
@@ -167,7 +168,9 @@ void ExeSymHook::unwatch(ESVSymHook &esh)
 	llvm::Function		*watch_f;
 
 	watch_f = esh.getWatchedFunc();
-	if (watch_f == f_malloc || watch_f == f_memalign) {
+	if (	watch_f == f_malloc || watch_f == f_memalign
+		|| watch_f == f_int_malloc)
+	{
 		unwatchMalloc(esh);
 	} else if (watch_f == f_free) {
 		unwatchFree(esh);
@@ -184,7 +187,7 @@ void ExeSymHook::watchFunc(ExecutionState& es, llvm::Function* f)
 	ref<Expr>		in_arg;
 	uint64_t		stack_pos;
 
-	if (f != f_malloc && f != f_free && f != f_memalign)
+	if (f != f_malloc && f != f_free && f != f_memalign && f != f_int_malloc)
 		return;
 
 	if (f == f_memalign)
@@ -217,13 +220,35 @@ void ExeSymHook::watchFunc(ExecutionState& es, llvm::Function* f)
 	esh.enterWatchedFunc(f, in_arg, stack_pos);
 }
 
+void ExeSymHook::sym2func(const Symbols* syms, sym2func_t* stab)
+{
+	for (int k = 0; stab[k].sym_name != NULL; k++) {
+		const Symbol	*sym;
+
+		sym = syms->findSym(stab[k].sym_name);
+		if (!sym || *stab[k].f)
+			continue;
+
+		*(stab[k].f) = getFuncByAddr(sym->getBaseAddr());
+	}
+}
+
 ExecutionState* ExeSymHook::setupInitialState(void)
 {
 	ExecutionState	*ret;
 	ESVSymHook	*esh;
 	Guest		*gs;
 	const Symbols	*syms;
-	const Symbol	*sym_malloc, *sym_memalign, *sym_free, *sym_tmp;
+	struct sym2func_t	symtab[] =
+	{
+		{"malloc", &f_malloc},
+		{"_int_malloc", &f_int_malloc},
+		{"free", &f_free},
+		{"memalign", &f_memalign},
+		{"vasprintf", &f_vasprintf},
+		{"asprintf", &f_asprintf},
+		{NULL, NULL},
+	};
 
 
 	ret = ExecutorVex::setupInitialState();
@@ -231,27 +256,14 @@ ExecutionState* ExeSymHook::setupInitialState(void)
 	assert (esh != NULL);
 
 	gs = getGuest();
+
 	syms = gs->getDynSymbols();
 	assert (syms != NULL && "Can't hook without symbol names");
+	sym2func(syms, symtab);
 
-	sym_malloc = syms->findSym("malloc");
-	sym_free = syms->findSym("free");
-	sym_memalign = syms->findSym("memalign");
-
-	assert (sym_malloc && "Could not finds syms to hook");
-
-	f_malloc = getFuncByAddr(sym_malloc->getBaseAddr());
-	if (sym_free)
-		f_free = getFuncByAddr(sym_free->getBaseAddr());
-	if (sym_memalign)
-		f_memalign = getFuncByAddr(sym_memalign->getBaseAddr());
-
-	sym_tmp = syms->findSym("vasprintf");
-	if (sym_tmp) f_vasprintf = getFuncByAddr(sym_tmp->getBaseAddr());
-
-	sym_tmp = syms->findSym("asprintf");
-	if (sym_tmp) f_asprintf = getFuncByAddr(sym_tmp->getBaseAddr());
-
+	syms = gs->getSymbols();
+	assert (syms != NULL && "Can't hook without symbol names");
+	sym2func(syms, symtab);
 
 	assert (f_malloc && "Could not decode hooked funcs");
 

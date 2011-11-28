@@ -7,6 +7,7 @@
 class GenLLVM;
 class VexHelpers;
 class Symbol;
+class Symbols;
 
 namespace llvm
 {
@@ -40,7 +41,13 @@ private:
 	void unwatchFree(ESVSymHook &esh);
 	void unwatchMalloc(ESVSymHook &esh);
 
-	llvm::Function	*f_malloc, *f_memalign;
+	struct sym2func_t {
+		const char	*sym_name;
+		llvm::Function	**f;
+	};
+	void sym2func(const Symbols* syms, struct sym2func_t* stab);
+
+	llvm::Function	*f_malloc, *f_int_malloc, *f_memalign;
 	llvm::Function	*f_free;
 	llvm::Function	*f_vasprintf, *f_asprintf;
 };
