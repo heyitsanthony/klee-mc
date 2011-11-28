@@ -52,9 +52,12 @@ MallocMMU::MemOpRes MallocMMU::memOpResolve(
 		return ret;
 
 	/* right now we only check for concrete heap addresses */
+	/* if it's a symbolic address, pass it through */
 	ce_addr = dyn_cast<ConstantExpr>(address);
 	if (ce_addr == NULL)
 		return ret;
+
+	/* now we're finally checking for whether the address is OK */
 	addr = ce_addr->getZExtValue();
 
 	bytes = (type + 7) / 8;
@@ -184,7 +187,7 @@ void ExeSymHook::watchFunc(ExecutionState& es, llvm::Function* f)
 	ref<Expr>		in_arg;
 	uint64_t		stack_pos;
 
-	if (isWatchable(f))
+	if (!isWatchable(f))
 		return;
 
 	if (f == f_mallocs[FM_MEMALIGN])
@@ -227,11 +230,19 @@ void ExeSymHook::sym2func(const Symbols* syms, sym2func_t* stab)
 			continue;
 
 		*(stab[k].f) = getFuncByAddr(sym->getBaseAddr());
+
+		std::cerr
+			<< "[ExeSymHook]  SETTING "
+			<< stab[k].sym_name
+			<< " TO: "
+			<< (void*)sym->getBaseAddr() << '\n';
 	}
 }
 
 bool ExeSymHook::isFreeFunc(llvm::Function* f) const
 {
+	if (!f) return false;
+
 	for (int i = 0; i < FF_SIZE; i++)
 		if (f_frees[i] == f)
 			return true;
@@ -242,6 +253,8 @@ bool ExeSymHook::isFreeFunc(llvm::Function* f) const
 
 bool ExeSymHook::isMallocFunc(llvm::Function* f) const
 {
+	if (!f) return false;
+
 	for (int i = 0; i < FM_SIZE; i++)
 		if (f_mallocs[i] == f)
 			return true;
@@ -250,9 +263,6 @@ bool ExeSymHook::isMallocFunc(llvm::Function* f) const
 
 bool ExeSymHook::isWatchable(llvm::Function* f) const
 {
-	if (f == NULL)
-		return false;
-
 	if (isMallocFunc(f))
 		return true;
 

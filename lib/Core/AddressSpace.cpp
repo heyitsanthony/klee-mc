@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include <llvm/Support/CommandLine.h>
 #include "klee/ExecutionState.h"
 #include "AddressSpace.h"
 #include "CoreStats.h"
@@ -18,9 +19,18 @@
 #include <stack>
 #include "static/Sugar.h"
 
+using namespace llvm;
 using namespace klee;
 
-static bool	ContiguousOffsetResolution = false;
+namespace {
+	cl::opt<bool>
+	ContiguousOffsetResolution(
+		"contig-off-resolution",
+		cl::desc("Resolve contiguous offsets instead of entire address space."),
+		cl::init(false));
+}
+
+
 static unsigned	ContiguousPrevScanLen = 10;
 static unsigned	ContiguousNextScanLen = 20;
 
