@@ -232,6 +232,8 @@ void CexCachingSolver::evictRandom(void)
 		a_bytes = a->getBindingBytes();
 		assignTab_bytes -= a_bytes;
 		evicted_bytes += a_bytes;
+
+		assignTab.erase(a);
 		delete a;
 	}
 
