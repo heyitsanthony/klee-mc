@@ -35,6 +35,10 @@ protected:
 	virtual ExecutionState* setupInitialState(void);
 
 private:
+	bool isFreeFunc(llvm::Function* f) const;
+	bool isMallocFunc(llvm::Function* f) const;
+	bool isWatchable(llvm::Function* f) const;
+
 	void watchEnterXfer(ExecutionState& es, llvm::Function* f);
 	void watchFunc(ExecutionState& es, llvm::Function* f);
 	void unwatch(ESVSymHook &esh);
@@ -47,8 +51,18 @@ private:
 	};
 	void sym2func(const Symbols* syms, struct sym2func_t* stab);
 
-	llvm::Function	*f_malloc, *f_int_malloc, *f_memalign;
-	llvm::Function	*f_free;
+	#define FM_INT_MALLOC	0
+	#define FM_MALLOC	1
+	#define FM_MEMALIGN	2
+	#define FM_SIZE		3
+	llvm::Function	*f_mallocs[FM_SIZE];
+
+	#define FF_INT_FREE	0
+	#define FF_FREE		1
+	#define FF_GI_LIBC_FREE	2
+	#define FF_SIZE		3
+	llvm::Function	*f_frees[FF_SIZE];
+
 	llvm::Function	*f_vasprintf, *f_asprintf;
 };
 

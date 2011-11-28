@@ -79,15 +79,14 @@ MallocMMU::MemOpRes MallocMMU::memOpResolve(
 
 ExeSymHook::ExeSymHook(InterpreterHandler *ie, Guest* gs)
 : ExecutorVex(ie, gs)
-, f_malloc(NULL)
-, f_int_malloc(0)
-, f_memalign(NULL)
-, f_free(NULL)
 , f_vasprintf(NULL), f_asprintf(NULL)
 {
 	ExeStateBuilder::replaceBuilder(new ESVSymHookBuilder());
 	delete mmu;
 	mmu = new MallocMMU(*this);
+
+	memset(f_mallocs, 0, sizeof(f_mallocs));
+	memset(f_frees, 0, sizeof(f_frees));
 }
 
 ExeSymHook::~ExeSymHook(void) {}
@@ -168,11 +167,9 @@ void ExeSymHook::unwatch(ESVSymHook &esh)
 	llvm::Function		*watch_f;
 
 	watch_f = esh.getWatchedFunc();
-	if (	watch_f == f_malloc || watch_f == f_memalign
-		|| watch_f == f_int_malloc)
-	{
+	if (isMallocFunc(watch_f)) {
 		unwatchMalloc(esh);
-	} else if (watch_f == f_free) {
+	} else if (isFreeFunc(watch_f)) {
 		unwatchFree(esh);
 	} else {
 		assert (0 == 1 && "WTF");
@@ -187,15 +184,15 @@ void ExeSymHook::watchFunc(ExecutionState& es, llvm::Function* f)
 	ref<Expr>		in_arg;
 	uint64_t		stack_pos;
 
-	if (f != f_malloc && f != f_free && f != f_memalign && f != f_int_malloc)
+	if (isWatchable(f))
 		return;
 
-	if (f == f_memalign)
+	if (f == f_mallocs[FM_MEMALIGN])
 		in_arg = getCallArg(es, 1);
 	else
 		in_arg = getCallArg(es, 0);
 
-	if (f == f_free) {
+	if (isFreeFunc(f)) {
 		const ConstantExpr*	in_ptr_ce;
 		uint64_t		in_ptr;
 
@@ -233,6 +230,38 @@ void ExeSymHook::sym2func(const Symbols* syms, sym2func_t* stab)
 	}
 }
 
+bool ExeSymHook::isFreeFunc(llvm::Function* f) const
+{
+	for (int i = 0; i < FF_SIZE; i++)
+		if (f_frees[i] == f)
+			return true;
+
+	return false;
+
+}
+
+bool ExeSymHook::isMallocFunc(llvm::Function* f) const
+{
+	for (int i = 0; i < FM_SIZE; i++)
+		if (f_mallocs[i] == f)
+			return true;
+	return false;
+}
+
+bool ExeSymHook::isWatchable(llvm::Function* f) const
+{
+	if (f == NULL)
+		return false;
+
+	if (isMallocFunc(f))
+		return true;
+
+	if (isFreeFunc(f))
+		return true;
+
+	return false;
+}
+
 ExecutionState* ExeSymHook::setupInitialState(void)
 {
 	ExecutionState	*ret;
@@ -241,10 +270,14 @@ ExecutionState* ExeSymHook::setupInitialState(void)
 	const Symbols	*syms;
 	struct sym2func_t	symtab[] =
 	{
-		{"malloc", &f_malloc},
-		{"_int_malloc", &f_int_malloc},
-		{"free", &f_free},
-		{"memalign", &f_memalign},
+		{"malloc", &f_mallocs[FM_MALLOC]},
+		{"_int_malloc", &f_mallocs[FM_INT_MALLOC]},
+		{"memalign", &f_mallocs[FM_MEMALIGN]},
+
+		{"_int_free", &f_frees[FF_INT_FREE]},
+		{"__GI___libc_free", &f_frees[FF_GI_LIBC_FREE]},
+		{"free", &f_frees[FF_FREE]},
+
 		{"vasprintf", &f_vasprintf},
 		{"asprintf", &f_asprintf},
 		{NULL, NULL},
@@ -265,7 +298,7 @@ ExecutionState* ExeSymHook::setupInitialState(void)
 	assert (syms != NULL && "Can't hook without symbol names");
 	sym2func(syms, symtab);
 
-	assert (f_malloc && "Could not decode hooked funcs");
+	assert (f_mallocs[FM_MALLOC] && "Could not decode hooked funcs");
 
 	return ret;
 }
