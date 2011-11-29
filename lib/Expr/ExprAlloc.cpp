@@ -57,6 +57,9 @@ void initSmallValTab(void)
 
 static bool tab_ok = false;
 
+
+ExprAlloc::~ExprAlloc() {}
+
 ref<Expr> ExprAlloc::Constant(const llvm::APInt &v)
 {
 	ConstantExprTab::iterator	it;
@@ -170,5 +173,4 @@ ref<Expr> ExprAlloc::SExt(const ref<Expr> &e, Expr::Width w)
 	ref<Expr> r(new SExtExpr(e, w));
 	r->computeHash();
 	return r;
-
 }

@@ -91,13 +91,14 @@ The general rules are:
    -# Add to ExprVisitor
    -# Add to IVC (implied value concretization) if possible
 
+
 Todo: Shouldn't bool \c Xor just be written as not equal?
 
 */
 
 class Expr {
 public:
-  static unsigned count;
+  static unsigned long count;
   static const unsigned MAGIC_HASH_CONSTANT = 39;
 
   /// The type of an expression is simply its width, in bits.

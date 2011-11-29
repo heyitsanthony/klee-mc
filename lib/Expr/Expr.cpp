@@ -15,9 +15,10 @@
 // FIXME: We shouldn't need this once fast constant support moves into
 // Core. If we need to do arithmetic, we probably want to use APInt.
 #include "klee/Internal/Support/IntEvaluation.h"
+#include "llvm/Support/CommandLine.h"
 
 #include "klee/util/ExprPPrinter.h"
-#include "ExprAlloc.h"
+#include "ExprAllocUnique.h"
 
 #include <iostream>
 #include <sstream>
@@ -25,29 +26,52 @@
 using namespace klee;
 using namespace llvm;
 
-ExprBuilder* Expr::theExprBuilder = NULL;
-ExprAlloc* Expr::theExprAllocator = NULL;
-
-uint64_t LetExpr::next_id = 0;
-
-bool ArrayLT::operator()(const Array *a, const Array *b) const
-{ return *a < *b; }
-
 // silly expr factory singleton used to initialize builder on
 // program startup
+//
+//
+/* ugh! global ctors are awful! */
+#if 0
+namespace {
+	cl::opt<bool>
+	UseExprConsPtr(
+		"expr-cons-ptr",
+		cl::init(false),
+		cl::desc("Unique expression => unique pointer"));
+
+}
+#endif
+
 class ExprFactory
 {
 public:
 	ExprFactory(void);
-	virtual ~ExprFactory(void) { delete Expr::setBuilder(NULL); }
+	virtual ~ExprFactory(void)
+	{
+		delete Expr::setBuilder(NULL);
+		delete Expr::setAllocator(NULL);
+	}
 private:
 };
 
 ExprFactory	theExprFactory;
+static bool	UseExprConsPtr = false;
+ExprBuilder*	Expr::theExprBuilder = NULL;
+ExprAlloc*	Expr::theExprAllocator = NULL;
+unsigned long	Expr::count = 0;
+uint64_t	LetExpr::next_id = 0;
+
+bool ArrayLT::operator()(const Array *a, const Array *b) const
+{ return *a < *b; }
+
 ExprFactory::ExprFactory(void)
 {
 	Expr::setBuilder(new OptBuilder());
-	Expr::setAllocator(new ExprAlloc());
+	if (UseExprConsPtr) {
+		Expr::setAllocator(new ExprAllocUnique());
+	} else {
+		Expr::setAllocator(new ExprAlloc());
+	}
 //	Expr::setBuilder(
 //		createSimplifyingExprBuilder(
 //			createDefaultExprBuilder()));
@@ -201,11 +225,6 @@ unsigned BindExpr::computeHash(void)
 {
 	hashValue = let_expr->hash()^(getKind()*MAGIC_HASH_CONSTANT);
 	return hashValue;
-}
-
-unsigned ConstantExpr::computeHash() {
-  hashValue = value.getHashValue() ^ (getWidth() * MAGIC_HASH_CONSTANT);
-  return hashValue;
 }
 
 unsigned CastExpr::computeHash() {

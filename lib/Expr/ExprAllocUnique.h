@@ -1,21 +1,20 @@
-#ifndef KLEE_EXPRALLOC_H
-#define KLEE_EXPRALLOC_H
+#ifndef KLEE_EXPRALLOCUNIQUE_H
+#define KLEE_EXPRALLOCUNIQUE_H
 
-#include "klee/ExprBuilder.h"
+#include "ExprAlloc.h"
 
 namespace klee
 {
 /// ExprBuilder - Base expression builder class.
-class ExprAlloc : public ExprBuilder
+class ExprAllocUnique : public ExprAlloc
 {
 public:
-	ExprAlloc() {}
-	virtual ~ExprAlloc();
+	ExprAllocUnique();
+	virtual ~ExprAllocUnique() {}
 
 	virtual int compare(const Expr& lhs, const Expr& rhs)
-	{ return lhs.compareDeep(rhs); }
+	{ return (&lhs == &rhs) ? 0 : ((long)&lhs - (long)&rhs); }
 
-	// Expressions
 	virtual ref<Expr> Constant(const llvm::APInt &Value);
 	virtual ref<Expr> NotOptimized(const ref<Expr> &Index);
 	virtual ref<Expr> Read(const UpdateList &Updates, const ref<Expr> &idx);
@@ -57,6 +56,8 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS);
 	DECL_BIN_REF(Sgt)
 	DECL_BIN_REF(Sge)
 #undef DECL_BIN_REF
+private:
+	ref<Expr> toUnique(ref<Expr>& e);
 };
 }
 
