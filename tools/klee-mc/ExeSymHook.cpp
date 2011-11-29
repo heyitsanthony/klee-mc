@@ -163,8 +163,9 @@ void ExeSymHook::unwatchMalloc(ESVSymHook &esh)
 	{
 		esh.rmvHeapPtr(out_ptr.o);
 	}
-	std::cerr << "GOT DATA: " << (void*)out_ptr.o << "-"
-		<< (void*)(out_ptr.o + in_len) << '\n';
+
+//	std::cerr << "GOT DATA: " << (void*)out_ptr.o << "-"
+//		<< (void*)(out_ptr.o + in_len) << '\n';
 	esh.addHeapPtr(out_ptr.o, in_len);
 }
 
@@ -194,7 +195,7 @@ void ExeSymHook::unwatch(ESVSymHook &esh)
 		assert (0 == 1 && "WTF");
 	}
 
-	std::cerr << "LEAVING: " << watch_f->getNameStr() << "\n";
+//	std::cerr << "LEAVING: " << watch_f->getNameStr() << "\n";
 	esh.unwatch();
 }
 
@@ -212,6 +213,10 @@ void ExeSymHook::watchFunc(ExecutionState& es, llvm::Function* f)
 		f == f_mallocs[FM_REALLOC])
 	{
 		in_arg = getCallArg(es, 1);
+	} else if (f == f_mallocs[FM_CALLOC] || f == f_mallocs[FM_CALLOC2]) {
+		in_arg = MulExpr::create(
+			getCallArg(es, 0),
+			getCallArg(es, 1));
 	} else
 		in_arg = getCallArg(es, 0);
 
@@ -237,7 +242,7 @@ void ExeSymHook::watchFunc(ExecutionState& es, llvm::Function* f)
 	if (!stack_pos)
 		return;
 
-	std::cerr << "WATCHING: " << f->getNameStr() << "\n";
+//	std::cerr << "WATCHING: " << f->getNameStr() << "\n";
 	esh.enterWatchedFunc(f, in_arg, stack_pos);
 }
 
@@ -307,6 +312,8 @@ ExecutionState* ExeSymHook::setupInitialState(void)
 		{"memalign", &f_mallocs[FM_MEMALIGN]},
 		{"__GI___libc_realloc", &f_mallocs[FM_GI_LIBC_REALLOC]},
 		{"realloc", &f_mallocs[FM_REALLOC]},
+		{"__calloc", &f_mallocs[FM_CALLOC2]},
+		{"calloc", &f_mallocs[FM_CALLOC]},
 
 
 		{"_int_free", &f_frees[FF_INT_FREE]},
@@ -329,6 +336,7 @@ ExecutionState* ExeSymHook::setupInitialState(void)
 	assert (syms != NULL && "Can't hook without symbol names");
 	sym2func(syms, symtab);
 
+
 	syms = gs->getSymbols();
 	assert (syms != NULL && "Can't hook without symbol names");
 	sym2func(syms, symtab);
@@ -349,8 +357,11 @@ ExeSymHook* ExeSymHook::create(InterpreterHandler *ie, Guest* gs)
 		return NULL;
 
 	sym_malloc = syms->findSym("malloc");
-	if (sym_malloc == NULL)
+	if (	!syms->findSym("malloc") &&
+		!syms->findSym("calloc"))
+	{
 		return NULL;
+	}
 
 	return new ExeSymHook(ie, gs);
 }

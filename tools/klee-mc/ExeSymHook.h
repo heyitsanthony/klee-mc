@@ -57,7 +57,9 @@ private:
 	#define FM_GI_LIBC_MALLOC	3
 	#define FM_GI_LIBC_REALLOC	4
 	#define FM_REALLOC		5
-	#define FM_SIZE			6
+	#define FM_CALLOC		6
+	#define FM_CALLOC2		7
+	#define FM_SIZE			8
 	llvm::Function	*f_mallocs[FM_SIZE];
 
 	#define FF_INT_FREE	0
