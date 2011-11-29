@@ -137,6 +137,7 @@ void ExeSymHook::unwatchMalloc(ESVSymHook &esh)
 	ref<Expr>		ret_arg;
 	const ConstantExpr*	in_len_ce;
 	unsigned int		in_len;
+	guest_ptr		out_ptr;
 
 
 	ret_arg = getRetArg(esh);
@@ -149,7 +150,22 @@ void ExeSymHook::unwatchMalloc(ESVSymHook &esh)
 	}
 
 	in_len = in_len_ce->getZExtValue();
-	esh.addHeapPtr(ret_ce->getZExtValue(), in_len);
+	if (in_len == 0)
+		return;
+
+	out_ptr = guest_ptr(ret_ce->getZExtValue());
+	if (!out_ptr)
+		return;
+
+	llvm::Function	*f = esh.getWatchedFunc();
+	if (	f == f_mallocs[FM_GI_LIBC_REALLOC] ||
+		f == f_mallocs[FM_REALLOC])
+	{
+		esh.rmvHeapPtr(out_ptr.o);
+	}
+	std::cerr << "GOT DATA: " << (void*)out_ptr.o << "-"
+		<< (void*)(out_ptr.o + in_len) << '\n';
+	esh.addHeapPtr(out_ptr.o, in_len);
 }
 
 void ExeSymHook::unwatchFree(ESVSymHook &esh)
@@ -178,6 +194,7 @@ void ExeSymHook::unwatch(ESVSymHook &esh)
 		assert (0 == 1 && "WTF");
 	}
 
+	std::cerr << "LEAVING: " << watch_f->getNameStr() << "\n";
 	esh.unwatch();
 }
 
@@ -190,9 +207,12 @@ void ExeSymHook::watchFunc(ExecutionState& es, llvm::Function* f)
 	if (!isWatchable(f))
 		return;
 
-	if (f == f_mallocs[FM_MEMALIGN])
+	if (	f == f_mallocs[FM_MEMALIGN] ||
+		f == f_mallocs[FM_GI_LIBC_REALLOC] ||
+		f == f_mallocs[FM_REALLOC])
+	{
 		in_arg = getCallArg(es, 1);
-	else
+	} else
 		in_arg = getCallArg(es, 0);
 
 	if (isFreeFunc(f)) {
@@ -217,6 +237,7 @@ void ExeSymHook::watchFunc(ExecutionState& es, llvm::Function* f)
 	if (!stack_pos)
 		return;
 
+	std::cerr << "WATCHING: " << f->getNameStr() << "\n";
 	esh.enterWatchedFunc(f, in_arg, stack_pos);
 }
 
@@ -282,7 +303,11 @@ ExecutionState* ExeSymHook::setupInitialState(void)
 	{
 		{"malloc", &f_mallocs[FM_MALLOC]},
 		{"_int_malloc", &f_mallocs[FM_INT_MALLOC]},
+		{"__GI___libc_malloc", &f_mallocs[FM_GI_LIBC_MALLOC]},
 		{"memalign", &f_mallocs[FM_MEMALIGN]},
+		{"__GI___libc_realloc", &f_mallocs[FM_GI_LIBC_REALLOC]},
+		{"realloc", &f_mallocs[FM_REALLOC]},
+
 
 		{"_int_free", &f_frees[FF_INT_FREE]},
 		{"__GI___libc_free", &f_frees[FF_GI_LIBC_FREE]},

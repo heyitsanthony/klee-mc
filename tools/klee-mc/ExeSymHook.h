@@ -51,10 +51,13 @@ private:
 	};
 	void sym2func(const Symbols* syms, struct sym2func_t* stab);
 
-	#define FM_INT_MALLOC	0
-	#define FM_MALLOC	1
-	#define FM_MEMALIGN	2
-	#define FM_SIZE		3
+	#define FM_INT_MALLOC		0
+	#define FM_MALLOC		1
+	#define FM_MEMALIGN		2
+	#define FM_GI_LIBC_MALLOC	3
+	#define FM_GI_LIBC_REALLOC	4
+	#define FM_REALLOC		5
+	#define FM_SIZE			6
 	llvm::Function	*f_mallocs[FM_SIZE];
 
 	#define FF_INT_FREE	0
