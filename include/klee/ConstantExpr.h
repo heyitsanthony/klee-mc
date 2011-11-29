@@ -37,12 +37,9 @@ public:
 private:
   llvm::APInt value;
 
-protected:
-  ConstantExpr(const llvm::APInt &v) : value(v) {}
-  static void initSmallValTab(void);
-
 public:
-  ~ConstantExpr() {}
+  ConstantExpr(const llvm::APInt &v) : value(v) {}
+  virtual ~ConstantExpr() {}
   
   Width getWidth() const { return value.getBitWidth(); }
   Kind getKind() const { return Constant; }
@@ -95,13 +92,11 @@ public:
 
   static ref<ConstantExpr> alloc(const llvm::APInt &v);
 
-  static ref<ConstantExpr> alloc(const llvm::APFloat &f) {
-    return alloc(f.bitcastToAPInt());
-  }
+  static ref<ConstantExpr> alloc(const llvm::APFloat &f)
+  { return alloc(f.bitcastToAPInt()); }
 
-  static ref<ConstantExpr> alloc(uint64_t v, Width w) {
-    return alloc(llvm::APInt(w, v));
-  }
+  static ref<ConstantExpr> alloc(uint64_t v, Width w)
+  { return alloc(llvm::APInt(w, v)); }
   
   static ref<ConstantExpr> create(uint64_t v, Width w) {
     assert(v == bits64::truncateToNBits(v, w) &&
@@ -125,19 +120,13 @@ public:
   bool isOne() const { return value == llvm::APInt(value.getBitWidth(), 1); }
   
   /// isTrue - Is this the true expression.
-  bool isTrue() const { 
-    return getZExtValue(1) == 1;
-  }
+  bool isTrue() const { return getZExtValue(1) == 1; }
 
   /// isFalse - Is this the false expression.
-  bool isFalse() const {
-    return getZExtValue(1) == 0;
-  }
+  bool isFalse() const { return getZExtValue(1) == 0; }
 
   /// isAllOnes - Is this constant all ones.
-  bool isAllOnes() const {
-    return value.isAllOnesValue();
-  }
+  bool isAllOnes() const { return value.isAllOnesValue(); }
 
   /* Constant Operations */
 
@@ -177,9 +166,8 @@ public:
 };
 
 static inline ref<ConstantExpr> createConstantExpr(uint64_t v, Expr::Width w)
-{
-	return ConstantExpr::create(v, w);
-}
+{ return ConstantExpr::create(v, w); }
+
 
 } // End klee namespace
 

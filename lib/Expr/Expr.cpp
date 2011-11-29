@@ -17,6 +17,7 @@
 #include "klee/Internal/Support/IntEvaluation.h"
 
 #include "klee/util/ExprPPrinter.h"
+#include "ExprAlloc.h"
 
 #include <iostream>
 #include <sstream>
@@ -25,6 +26,8 @@ using namespace klee;
 using namespace llvm;
 
 ExprBuilder* Expr::theExprBuilder = NULL;
+ExprAlloc* Expr::theExprAllocator = NULL;
+
 uint64_t LetExpr::next_id = 0;
 
 bool ArrayLT::operator()(const Array *a, const Array *b) const
@@ -39,10 +42,12 @@ public:
 	virtual ~ExprFactory(void) { delete Expr::setBuilder(NULL); }
 private:
 };
+
 ExprFactory	theExprFactory;
 ExprFactory::ExprFactory(void)
 {
 	Expr::setBuilder(new OptBuilder());
+	Expr::setAllocator(new ExprAlloc());
 //	Expr::setBuilder(
 //		createSimplifyingExprBuilder(
 //			createDefaultExprBuilder()));
@@ -53,6 +58,13 @@ ExprBuilder* Expr::setBuilder(ExprBuilder* builder)
 	ExprBuilder	*oldBuilder = theExprBuilder;
 	theExprBuilder = builder;
 	return oldBuilder;
+}
+
+ExprAlloc* Expr::setAllocator(ExprAlloc* a)
+{
+	ExprAlloc	*oldAlloc = theExprAllocator;
+	theExprAllocator = a;
+	return oldAlloc;
 }
 
 ref<Expr> Expr::createTempRead(const Array *array, Expr::Width w)
@@ -96,8 +108,13 @@ ref<Expr> Expr::createTempRead(const Array *array, Expr::Width w)
 	}
 }
 
-/* Slow path for comparison. This should only be used by Expr::compare */
 int Expr::compareSlow(const Expr& b) const
+{
+	return theExprAllocator->compare(*this, b);
+}
+
+/* Slow path for comparison. This should only be used by Expr::compare */
+int Expr::compareDeep(const Expr& b) const
 {
 	Kind ak = getKind(), bk = b.getKind();
 	if (ak!=bk)
@@ -632,10 +649,38 @@ ref<Expr> ZExtExpr::create(const ref<Expr> &e, Width w)
 ref<Expr> SExtExpr::create(const ref<Expr> &e, Width w)
 { return theExprBuilder->SExt(e, w); }
 
+/***/
+
+ref<Expr> NotOptimizedExpr::alloc(const ref<Expr>& src)
+{ return theExprAllocator->NotOptimized(src); }
+
+ref<Expr> ReadExpr::alloc(const UpdateList &updates, const ref<Expr>& i)
+{ return theExprAllocator->Read(updates, i); }
+
+ref<Expr> SelectExpr::alloc(
+	const ref<Expr>& c, const ref<Expr>& t, const ref<Expr>& f)
+{ return theExprAllocator->Select(c, t, f); }
+
+ref<Expr> ExtractExpr::alloc(
+	const ref<Expr>& e, unsigned bitOff, Width w)
+{ return theExprAllocator->Extract(e, bitOff, w); }
+
+ref<Expr> NotExpr::alloc(const ref<Expr> &e)
+{ return theExprAllocator->Not(e); }
+
+ref<Expr> ZExtExpr::alloc(const ref<Expr> &e, Width w)
+{ return theExprAllocator->ZExt(e, w); }
+
+ref<Expr> SExtExpr::alloc(const ref<Expr> &e, Width w)
+{ return theExprAllocator->SExt(e, w); }
+
 
 #define DECL_CREATE_BIN_EXPR(x)	\
 ref<Expr> x##Expr::create(const ref<Expr> &l, const ref<Expr> &r) \
-{ return theExprBuilder->x(l,r); }
+{ return theExprBuilder->x(l,r); } \
+\
+ref<Expr> x##Expr::alloc(const ref<Expr> &l, const ref<Expr> &r) \
+{ return theExprAllocator->x(l,r); }
 
 DECL_CREATE_BIN_EXPR(Concat)
 DECL_CREATE_BIN_EXPR(Add)
