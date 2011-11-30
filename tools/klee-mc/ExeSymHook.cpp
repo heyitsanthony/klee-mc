@@ -3,10 +3,12 @@
 #include <llvm/Function.h>
 #include "ExeSymHook.h"
 #include "ESVSymHook.h"
+#include "klee/Common.h"
 #include "../../lib/Core/MMU.h"
 #include "symbols.h"
 #include "guest.h"
 
+//#define DEBUG_ESH	1
 
 using namespace klee;
 
@@ -19,7 +21,11 @@ public:
 	: MMU(esh), exe_esh(esh) {}
 
 	virtual ~MallocMMU(void) {}
-
+	virtual void exeMemOp(ExecutionState &state, MemOp mop)
+	{
+		is_write = mop.isWrite;
+		MMU::exeMemOp(state, mop);
+	}
 protected:
 	virtual MemOpRes memOpResolve(
 		ExecutionState& state,
@@ -28,6 +34,7 @@ protected:
 
 private:
 	ExeSymHook	&exe_esh;
+	bool		is_write;
 };
 
 MallocMMU::MemOpRes MallocMMU::memOpResolve(
@@ -66,6 +73,16 @@ MallocMMU::MemOpRes MallocMMU::memOpResolve(
 
 	if (esh.heapContains(addr, bytes))
 		return ret;
+
+	if (	!is_write &&
+		esh.heapContains(addr & ~0xf, 1) &&
+		esh.heapContains((addr+bytes-1) & ~0xf, 1))
+	{
+		klee_warning(
+		"Permitting non-heap access at %p-%p (%p has 16-byte slack)",
+		(void*)addr, (void*)(addr+bytes), (void*)(addr&~0xf));
+		return ret;
+	}
 
 	/* neither blessed nor in the heap. bad access! */
 	exe_esh.terminateStateOnError(
@@ -164,8 +181,10 @@ void ExeSymHook::unwatchMalloc(ESVSymHook &esh)
 		esh.rmvHeapPtr(out_ptr.o);
 	}
 
-//	std::cerr << "GOT DATA: " << (void*)out_ptr.o << "-"
-//		<< (void*)(out_ptr.o + in_len) << '\n';
+#ifdef DEBUG_ESH
+	std::cerr << "GOT DATA: " << (void*)out_ptr.o << "-"
+		<< (void*)(out_ptr.o + in_len) << '\n';
+#endif
 	esh.addHeapPtr(out_ptr.o, in_len);
 }
 
@@ -195,7 +214,9 @@ void ExeSymHook::unwatch(ESVSymHook &esh)
 		assert (0 == 1 && "WTF");
 	}
 
-//	std::cerr << "LEAVING: " << watch_f->getNameStr() << "\n";
+#ifdef DEBUG_ESH
+	std::cerr << "LEAVING: " << watch_f->getNameStr() << "\n";
+#endif
 	esh.unwatch();
 }
 
@@ -242,7 +263,9 @@ void ExeSymHook::watchFunc(ExecutionState& es, llvm::Function* f)
 	if (!stack_pos)
 		return;
 
-//	std::cerr << "WATCHING: " << f->getNameStr() << "\n";
+#ifdef DEBUG_ESH
+	std::cerr << "WATCHING: " << f->getNameStr() << "\n";
+#endif
 	esh.enterWatchedFunc(f, in_arg, stack_pos);
 }
 

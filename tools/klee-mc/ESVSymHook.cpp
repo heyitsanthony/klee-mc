@@ -48,9 +48,10 @@ bool ESVSymHook::heapContains(uint64_t x, unsigned int len) const
 	uint64_t		found_base;
 	unsigned int		found_len;
 
-	if (it == heap_map.end()) {
+	//std::cerr << "DO WE HAVE " << (void*)x << "--" << (void*)(x+len) << "?\n";
+
+	if (it == heap_map.end())
 		return false;
-	}
 
 	/* it should have the first element that is <= x */
 	found_base = it->first;
@@ -65,6 +66,7 @@ bool ESVSymHook::heapContains(uint64_t x, unsigned int len) const
 		return false;
 
 	/* fits like a glove */
+	//std::cerr << "WE HAVE " << (void*)x << "--" << (void*)(x+len) << "!!!\n";
 	return true;
 }
 
