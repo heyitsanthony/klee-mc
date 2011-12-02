@@ -3404,7 +3404,7 @@ void Executor::bindInstructionConstants(KInstruction *KI)
 			ref<ConstantExpr> index;
 			ref<ConstantExpr> addend;
 
-			index = evalConstant(c)->ZExt(
+			index = evalConstant(c)->SExt(
 				Context::get().getPointerWidth());
 			addend = index->Mul(
 				ConstantExpr::alloc(
