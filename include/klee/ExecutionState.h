@@ -82,7 +82,6 @@ private:
 
 	// unsupported, use copy constructor
 	ExecutionState &operator=(const ExecutionState&);
-	std::map< std::string, std::string > fnAliases;
 
 	// An ordered sequence of branches this state took thus far:
 	// XXX: ugh mutable for non-const copy constructor
@@ -104,19 +103,18 @@ public:
 
 	// Are we currently underconstrained?  Hack: value is size to make fake
 	// objects.
-	unsigned underConstrained;
-	unsigned depth;
+	unsigned	underConstrained;
+	unsigned	depth;
+	double		weight;
 
 	// pc - pointer to current instruction stream
 	KInstIterator		pc, prevPC;
 	stack_ty		stack;
 	ConstraintManager	constraints;
 	mutable double		queryCost;
-	double			weight;
 	AddressSpace		addressSpace;
 	TreeOStream		symPathOS;
 	unsigned		instsSinceCovNew;
-	bool			coveredNew;
 	uint64_t		lastChosen;
 
 	// Number of malloc calls per callsite
@@ -127,7 +125,16 @@ public:
 
 	// true iff this state is a mere placeholder
 	// to be replaced by a real state
-	bool isCompactForm;
+	bool			coveredNew;
+	bool			isCompactForm;
+	bool			isReplay; /* started in replay mode? */
+	ExecutionTraceManager	exeTraceMgr;	/* prints traces on exit */
+
+	bool forkDisabled;	/* Disables forking, set by user code. */
+
+	std::map<const std::string*, std::set<unsigned> > coveredLines;
+	PTreeNode *ptreeNode;
+
 
 	// for use with std::mem_fun[_ref] since they don't accept data members
 	bool isCompactForm_f() const { return isCompactForm; }
@@ -135,17 +142,6 @@ public:
 
 	unsigned int getNumAllocs(void) const { return num_allocs; }
 
-	// did this state start in replay mode?
-	bool isReplay;
-
-	// for printing execution traces when this state terminates
-	ExecutionTraceManager exeTraceMgr;
-
-	/// Disables forking, set by user code.
-	bool forkDisabled;
-
-	std::map<const std::string*, std::set<unsigned> > coveredLines;
-	PTreeNode *ptreeNode;
 protected:
 	ExecutionState();
 	ExecutionState(KFunction *kf);

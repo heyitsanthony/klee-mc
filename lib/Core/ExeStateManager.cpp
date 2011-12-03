@@ -35,7 +35,7 @@ ExecutionState* ExeStateManager::selectState(bool allowCompact)
 void ExeStateManager::setupSearcher(Executor* exe)
 {
 	assert (!searcher && "Searcher already inited");
-	searcher = constructUserSearcher(*exe);
+	searcher = UserSearcher::constructUserSearcher(*exe);
 	searcher->update(
 		NULL,
 		Searcher::States(

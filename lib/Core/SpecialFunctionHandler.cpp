@@ -79,7 +79,6 @@ SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   add("klee_stack_trace", StackTrace, false),
   add("klee_warning", Warning, false),
   add("klee_warning_once", WarningOnce, false),
-  add("klee_alias_function", AliasFunction, false),
   add("klee_get_prune_id", GetPruneID, true),
   add("klee_prune", Prune, false),
   add("malloc", Malloc, true),
@@ -297,17 +296,6 @@ SFH_DEF_HANDLER(SilentExit)
 {
   assert(arguments.size()==1 && "invalid number of arguments to exit");
   sfh->executor->terminateState(state);
-}
-
-SFH_DEF_HANDLER(AliasFunction)
-{
-  SFH_CHK_ARGS(2, "iklee_alias_function");
-  std::string old_fn = sfh->readStringAtAddress(state, arguments[0]);
-  std::string new_fn = sfh->readStringAtAddress(state, arguments[1]);
-  //std::cerr << "Replacing " << old_fn << "() with " << new_fn << "()\n";
-  if (old_fn == new_fn)
-    state.removeFnAlias(old_fn);
-  else state.addFnAlias(old_fn, new_fn);
 }
 
 cl::opt<bool> EnablePruning("enable-pruning", cl::init(true));

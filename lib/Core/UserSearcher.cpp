@@ -129,7 +129,7 @@ namespace {
     cl::init(false));
 }
 
-bool klee::userSearcherRequiresMD2U() {
+bool UserSearcher::userSearcherRequiresMD2U() {
   return (WeightType==WeightedRandomSearcher::MinDistToUncovered ||
           WeightType==WeightedRandomSearcher::CoveringNew ||
           UseInterleavedMD2UNURS ||
@@ -140,7 +140,8 @@ bool klee::userSearcherRequiresMD2U() {
 }
 
 /* Research quality */
-Searcher* klee::setupInterleavedSearcher(Executor& executor, Searcher* searcher)
+Searcher* UserSearcher::setupInterleavedSearcher(
+	Executor& executor, Searcher* searcher)
 {
   std::vector<Searcher *> s;
 
@@ -180,7 +181,7 @@ Searcher* klee::setupInterleavedSearcher(Executor& executor, Searcher* searcher)
   return searcher;
 }
 
-Searcher* klee::setupBaseSearcher(Executor& executor)
+Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 {
 	Searcher* searcher;
 
@@ -203,19 +204,22 @@ Searcher* klee::setupBaseSearcher(Executor& executor)
 	return searcher;
 }
 
-Searcher* klee::setupMergeSearcher(Executor& executor, Searcher* searcher)
+Searcher* UserSearcher::setupMergeSearcher(
+	Executor& executor, Searcher* searcher)
 {
-  if (UseMerge) {
-    assert(!UseBumpMerge);
-    searcher = new MergingSearcher(dynamic_cast<ExecutorBC&>(executor), searcher);
-  } else if (UseBumpMerge) {    
-    searcher = new BumpMergingSearcher(dynamic_cast<ExecutorBC&>(executor), searcher);
-  }
+	if (UseMerge) {
+		assert(!UseBumpMerge);
+		searcher = new MergingSearcher(
+			dynamic_cast<ExecutorBC&>(executor), searcher);
+	} else if (UseBumpMerge) {    
+		searcher = new BumpMergingSearcher(
+		dynamic_cast<ExecutorBC&>(executor), searcher);
+	}
 
-  return searcher;
+	return searcher;
 }
 
-Searcher *klee::constructUserSearcher(Executor &executor)
+Searcher *UserSearcher::constructUserSearcher(Executor &executor)
 {
   Searcher *searcher;
 

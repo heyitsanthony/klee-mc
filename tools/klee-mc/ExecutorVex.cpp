@@ -151,7 +151,7 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih, Guest *in_gs)
 			kmodule,
 			interpreterHandler->getOutputFilename("assembly.ll"),
 			mod_opts.ExcludeCovFiles,
-			userSearcherRequiresMD2U());
+			UserSearcher::userSearcherRequiresMD2U());
 
 }
 
@@ -969,9 +969,8 @@ void ExecutorVex::callExternalFunction(
 	std::vector< ref<Expr> > &arguments)
 {
 	// check if specialFunctionHandler wants it
-	if (sfh->handle(state, function, target, arguments)) {
+	if (sfh->handle(state, function, target, arguments))
 		return;
-	}
 
 	std::cerr
 		<< "KLEE:ERROR: Calling non-special external function : "
@@ -984,7 +983,6 @@ void ExecutorVex::callExternalFunction(
 void ExecutorVex::updateGuestRegs(ExecutionState& state)
 {
 	void		*guest_regs;
-
 	guest_regs = gs->getCPUState()->getStateData();
 	state.addressSpace.copyToBuf(es2esv(state).getRegCtx(), guest_regs);
 }

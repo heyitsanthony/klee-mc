@@ -164,6 +164,12 @@ namespace {
   	"xchk-expr-builder",
   	cl::desc("Cross check expression builder with oracle builder."),
 	cl::init(false));
+
+  cl::opt<bool>
+  EquivExprBuilder(
+  	"equiv-expr-builder",
+	cl::desc("Use solver to find smaller, equivalent expressions."),
+	cl::init(false));
 }
 
 namespace klee
@@ -174,6 +180,9 @@ extern Solver *createSMTLoggingSolver(Solver *_solver, std::string path);
 extern ExprBuilder *createXChkBuilder(
 	Solver& solver,
 	ExprBuilder* oracle, ExprBuilder* test);
+
+extern ExprBuilder *createEquivBuilder(Solver& solver, ExprBuilder* test);
+
 
 static Solver* createChainWithTimedSolver(
 	std::string queryPCLogPath,
@@ -261,6 +270,11 @@ static Solver* createChainWithTimedSolver(
 	// reoccurring queries
 	if (taut_checker != NULL) {
 		taut_checker->setTopLevelSolver(solver);
+	}
+
+	if (EquivExprBuilder) {
+		Expr::setBuilder(
+			createEquivBuilder(*solver, Expr::getBuilder()));
 	}
 
 	if (XChkExprBuilder) {

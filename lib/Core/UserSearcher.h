@@ -11,20 +11,26 @@
 #define KLEE_USERSEARCHER_H
 
 namespace klee {
-  class Executor;
-  class Searcher;
+class Executor;
+class Searcher;
+class Prioritizer;
 
-  // XXX gross, should be on demand?
-  bool userSearcherRequiresMD2U();
+class UserSearcher
+{
+public:
+	// XXX gross, should be on demand?
+	static bool userSearcherRequiresMD2U();
+	static bool userSearcherRequiresBranchSequences();
+	static Searcher *constructUserSearcher(Executor &executor);
+	static void setPrioritizer(Prioritizer*);
 
-  bool userSearcherRequiresBranchSequences();
-
-  /* MAKE PRIVATE in facade */
-  Searcher* setupInterleavedSearcher(Executor& executor, Searcher* s);
-  Searcher* setupBaseSearcher(Executor& executor);
-  Searcher* setupMergeSearcher(Executor& executor, Searcher* searcher);
-
-  Searcher *constructUserSearcher(Executor &executor);
+private:
+	static Searcher* setupInterleavedSearcher(
+		Executor& executor, Searcher* s);
+	static Searcher* setupBaseSearcher(Executor& executor);
+	static Searcher* setupMergeSearcher(
+		Executor& executor, Searcher* searcher);
+};
 }
 
 #endif

@@ -182,18 +182,6 @@ void ExecutionState::write64(
 	}
 }
 
-std::string ExecutionState::getFnAlias(std::string fn)
-{
-	std::map < std::string, std::string >::iterator it = fnAliases.find(fn);
-	return (it != fnAliases.end()) ? it->second : "";
-}
-
-void ExecutionState::addFnAlias(std::string old_fn, std::string new_fn) {
-  fnAliases[old_fn] = new_fn;
-}
-
-void ExecutionState::removeFnAlias(std::string fn) { fnAliases.erase(fn); }
-
 Cell& ExecutionState::readLocalCell(unsigned sfi, unsigned i) const
 {
 	assert(sfi < stack.size());

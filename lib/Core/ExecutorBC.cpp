@@ -82,7 +82,7 @@ const Module* ExecutorBC::setModule(
 		kmodule,
 		interpreterHandler->getOutputFilename("assembly.ll"),
 		opts.ExcludeCovFiles,
-		userSearcherRequiresMD2U());
+		UserSearcher::userSearcherRequiresMD2U());
 	}
 
 	return module;

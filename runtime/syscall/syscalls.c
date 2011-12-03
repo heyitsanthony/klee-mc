@@ -730,6 +730,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(regfile, 0x12345);
 		break;
 
+	case SYS_fsync:
+		new_regs = sc_new_regs(regfile);
+		sc_ret_or(new_regs, 0, -1);
+		break;
 	default:
 		kmc_sc_bad(sys_nr);
 		klee_report_error(

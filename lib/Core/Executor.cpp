@@ -3324,27 +3324,7 @@ void Executor::initializeGlobalObject(
 }
 
 Function* Executor::getCalledFunction(CallSite &cs, ExecutionState &state)
-{
-	Function *f;
-
-	f = cs.getCalledFunction();
-
-	if (!f) return f;
-	std::string alias = state.getFnAlias(f->getName());
-	if (alias == "") return f;
-
-	llvm::Module* currModule = kmodule->module;
-	Function* old_f = f;
-	f = currModule->getFunction(alias);
-	if (!f) {
-		llvm::errs() <<
-			"Function " << alias << "(), alias for " <<
-			old_f->getName() << " not found!\n";
-		assert(f && "function alias not found");
-	}
-
-	return f;
-}
+{ return cs.getCalledFunction(); }
 
 Expr::Width Executor::getWidthForLLVMType(const llvm::Type* type) const
 {
