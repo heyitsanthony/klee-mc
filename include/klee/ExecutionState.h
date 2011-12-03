@@ -123,9 +123,9 @@ public:
 	// Ref counting for MemoryObject deallocation
 	std::vector<ref<MemoryObject> > memObjects;
 
+	bool			coveredNew;
 	// true iff this state is a mere placeholder
 	// to be replaced by a real state
-	bool			coveredNew;
 	bool			isCompactForm;
 	bool			isReplay; /* started in replay mode? */
 	ExecutionTraceManager	exeTraceMgr;	/* prints traces on exit */

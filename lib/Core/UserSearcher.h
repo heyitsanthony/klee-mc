@@ -22,9 +22,11 @@ public:
 	static bool userSearcherRequiresMD2U();
 	static bool userSearcherRequiresBranchSequences();
 	static Searcher *constructUserSearcher(Executor &executor);
-	static void setPrioritizer(Prioritizer*);
+	static void setPrioritizer(Prioritizer* p) { prFunc = p; }
 
 private:
+	static Prioritizer	*prFunc;
+
 	static Searcher* setupInterleavedSearcher(
 		Executor& executor, Searcher* s);
 	static Searcher* setupBaseSearcher(Executor& executor);

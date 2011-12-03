@@ -30,9 +30,13 @@
 #include "WeightedRandomSearcher.h"
 #include "XChkSearcher.h"
 #include "StringMerger.h"
+#include "PrioritySearcher.h"
 
 using namespace llvm;
 using namespace klee;
+
+Prioritizer* UserSearcher::prFunc = NULL;
+bool UsePrioritySearcher;
 
 namespace {
   cl::opt<bool>
@@ -127,6 +131,13 @@ namespace {
     "xchk-searcher",
     cl::desc("On reschedule, reaffirm validate address space is same as before"),
     cl::init(false));
+
+  cl::opt<bool, true>
+  UsePrioritySearcherProxy(
+  	"priority-search",
+	cl::location(UsePrioritySearcher),
+	cl::desc("Search with generic priority searcher"),
+	cl::init(false));
 }
 
 bool UserSearcher::userSearcherRequiresMD2U() {
@@ -185,7 +196,11 @@ Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 {
 	Searcher* searcher;
 
-	if (UsePhasedSearch) {
+	if (UsePrioritySearcher) {
+		assert (prFunc != NULL);
+		searcher = new PrioritySearcher(prFunc);
+		prFunc = NULL;
+	} else if (UsePhasedSearch) {
 		searcher = new PhasedSearcher();
 	} else if (UseRRSearch) {
 		searcher = new RRSearcher();

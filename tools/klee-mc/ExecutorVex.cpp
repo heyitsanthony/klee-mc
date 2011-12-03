@@ -4,11 +4,11 @@
 #include "klee/Internal/Module/KModule.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_os_ostream.h"
-#include "llvm/Analysis/ProfileInfo.h"
 #include "klee/Config/config.h"
 #include "klee/breadcrumb.h"
 #include "klee/Solver.h"
 #include "../../lib/Solver/SMTPrinter.h"
+#include "../../lib/Core/PrioritySearcher.h"
 #include "../../lib/Core/SpecialFunctionHandler.h"
 #include "../../lib/Core/TimingSolver.h"
 #include "../../lib/Core/StatsTracker.h"
@@ -28,8 +28,6 @@
 #include "vexxlate.h"
 #include "vexsb.h"
 #include "vexfcache.h"
-#include "arch.h"
-#include "syscall/syscallparams.h"
 #include "static/Sugar.h"
 
 #include "SyscallSFH.h"
@@ -44,6 +42,8 @@ using namespace llvm;
 extern bool WriteTraces;
 
 extern bool SymArgs;
+extern bool UsePrioritySearcher;
+
 bool UseConcreteVFS;
 
 namespace
@@ -95,6 +95,44 @@ namespace
 		cl::init(false));
 }
 
+class GuestPrioritizer : public Prioritizer
+{
+public:
+	GuestPrioritizer(ExecutorVex& in_exe)
+	: exe(in_exe)
+	, len(0x400000) /* 4MB of code should be enough! */
+	{
+		const Guest	*gs = exe.getGuest();
+		base = gs->getEntryPoint().o & ~((uint64_t)len - 1);
+		end = base + len;
+	}
+
+	virtual ~GuestPrioritizer() {}
+
+	int getPriority(ExecutionState& st)
+	{
+		const VexSB	*vsb;
+		KInstruction	*ki = st.pc;
+
+		if (ki == NULL)
+			return 1;
+
+		vsb = exe.getFuncVSB(ki->inst->getParent()->getParent());
+		if (vsb == NULL)
+			return 1;
+
+		if (	vsb->getGuestAddr().o < base ||
+			vsb->getGuestAddr().o > end)
+			return 0;
+
+		return 1;
+	}
+private:
+	ExecutorVex	&exe;
+	uint64_t	base, end;
+	unsigned int	len;
+};
+
 ExecutorVex::ExecutorVex(InterpreterHandler *ih, Guest *in_gs)
 : Executor(ih)
 , gs(in_gs)
@@ -103,6 +141,10 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih, Guest *in_gs)
 	assert (kmodule == NULL && "KMod already initialized? My contract!");
 
 	ExeStateBuilder::replaceBuilder(new ExeStateVexBuilder());
+
+	if (UsePrioritySearcher)
+		UserSearcher::setPrioritizer(
+			new GuestPrioritizer(*this));
 
 	/* XXX TODO: module flags */
 	llvm::sys::Path LibraryDir(KLEE_DIR "/" RUNTIME_CONFIGURATION "/lib");
@@ -124,6 +166,7 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih, Guest *in_gs)
 		sys_model = new FDTModel(this);
 	else
 		sys_model = new LinuxModel(this);
+
 	theVexHelpers->loadUserMod(sys_model->getModelFileName());
 
 	xlate = new VexXlate(Arch::X86_64);
@@ -624,6 +667,17 @@ Function* ExecutorVex::getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new)
 	}
 
 	return f;
+}
+
+const VexSB* ExecutorVex::getFuncVSB(Function* f) const
+{
+	func2vsb_map::const_iterator	it;
+
+	it = func2vsb_table.find((uint64_t)f);
+	if (it == func2vsb_table.end())
+		return NULL;
+
+	return it->second;
 }
 
 

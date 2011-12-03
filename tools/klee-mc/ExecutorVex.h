@@ -60,6 +60,9 @@ public:
 
 	void setRegCtx(ExecutionState& state, MemoryObject* mo);
 	void dumpSCRegs(const std::string& fname);
+
+	const VexSB* getFuncVSB(llvm::Function*) const;
+
 protected:
 	virtual ExecutionState* setupInitialState(void);
 
