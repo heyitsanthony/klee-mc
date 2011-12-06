@@ -99,7 +99,7 @@ MallocMMU::MemOpRes MallocMMU::memOpResolve(
 
 ExeSymHook::ExeSymHook(InterpreterHandler *ie, Guest* gs)
 : ExecutorVex(ie, gs)
-, f_vasprintf(NULL), f_asprintf(NULL)
+, zero_malloc_ptr(0)
 {
 	ExeStateBuilder::replaceBuilder(new ESVSymHookBuilder());
 	delete mmu;
@@ -166,13 +166,21 @@ void ExeSymHook::unwatchMalloc(ESVSymHook &esh)
 		return;
 	}
 
-	in_len = in_len_ce->getZExtValue();
-	if (in_len == 0)
-		return;
-
 	out_ptr = guest_ptr(ret_ce->getZExtValue());
 	if (!out_ptr)
 		return;
+
+#ifdef DEBUG_ESH
+	std::cerr << "GOT PTR: " << (void*)out_ptr.o << '\n';
+#endif
+
+	in_len = in_len_ce->getZExtValue();
+	if (in_len == 0) {
+		if (zero_malloc_ptr == 0) {
+			zero_malloc_ptr = out_ptr.o;
+		}
+		return;
+	}
 
 	llvm::Function	*f = esh.getWatchedFunc();
 	if (	f == f_mallocs[FM_GI_LIBC_REALLOC] ||
@@ -198,6 +206,9 @@ void ExeSymHook::unwatchFree(ESVSymHook &esh)
 		return;
 
 	in_ptr = in_ptr_ce->getZExtValue();
+	if (in_ptr == zero_malloc_ptr)
+		return;
+
 	esh.rmvHeapPtr(in_ptr);
 }
 
@@ -220,26 +231,11 @@ void ExeSymHook::unwatch(ESVSymHook &esh)
 	esh.unwatch();
 }
 
-void ExeSymHook::watchFunc(ExecutionState& es, llvm::Function* f)
+void ExeSymHook::watchFuncArg(
+	ExecutionState& es, llvm::Function* f, ref<Expr>& in_arg)
 {
 	ESVSymHook		&esh(es2esh(es));
-	ref<Expr>		in_arg;
 	uint64_t		stack_pos;
-
-	if (!isWatchable(f))
-		return;
-
-	if (	f == f_mallocs[FM_MEMALIGN] ||
-		f == f_mallocs[FM_GI_LIBC_REALLOC] ||
-		f == f_mallocs[FM_REALLOC])
-	{
-		in_arg = getCallArg(es, 1);
-	} else if (f == f_mallocs[FM_CALLOC] || f == f_mallocs[FM_CALLOC2]) {
-		in_arg = MulExpr::create(
-			getCallArg(es, 0),
-			getCallArg(es, 1));
-	} else
-		in_arg = getCallArg(es, 0);
 
 	if (isFreeFunc(f)) {
 		const ConstantExpr*	in_ptr_ce;
@@ -250,7 +246,13 @@ void ExeSymHook::watchFunc(ExecutionState& es, llvm::Function* f)
 			? 0
 			: in_ptr_ce->getZExtValue();
 
-		if (in_ptr && !esh.hasHeapPtr(in_ptr)) {
+#ifdef DEBUG_ESH
+		std::cerr << "FREEING PTR: " << in_ptr << '\n';
+#endif
+
+		if (	in_ptr && in_ptr != zero_malloc_ptr && 
+			!esh.hasHeapPtr(in_ptr))
+		{
 			terminateStateOnError(
 				esh,
 				"heap error: freeing non-malloced pointer",
@@ -267,6 +269,35 @@ void ExeSymHook::watchFunc(ExecutionState& es, llvm::Function* f)
 	std::cerr << "WATCHING: " << f->getNameStr() << "\n";
 #endif
 	esh.enterWatchedFunc(f, in_arg, stack_pos);
+}
+
+void ExeSymHook::watchFunc(ExecutionState& es, llvm::Function* f)
+{
+	ref<Expr>		in_arg;
+
+	if (!isWatchable(f))
+		return;
+
+	if (	f == f_mallocs[FM_MEMALIGN] ||
+		f == f_mallocs[FM_GI_LIBC_REALLOC] ||
+		f == f_mallocs[FM_REALLOC])
+	{
+		in_arg = getCallArg(es, 1);
+	} else if (f == f_mallocs[FM_CALLOC] || f == f_mallocs[FM_CALLOC2]) {
+		in_arg = MulExpr::create(
+			getCallArg(es, 0),
+			getCallArg(es, 1));
+	} else
+		in_arg = getCallArg(es, 0);
+
+	if (	dyn_cast<ConstantExpr>(in_arg) == NULL &&
+		isMallocFunc(f))
+	{
+		/* TODO: exercise more malloc paths here */
+		in_arg = toConstant(es, in_arg, "symbolic malloc", false);
+	}
+
+	watchFuncArg(es, f, in_arg);
 }
 
 void ExeSymHook::sym2func(const Symbols* syms, sym2func_t* stab)
@@ -343,8 +374,6 @@ ExecutionState* ExeSymHook::setupInitialState(void)
 		{"__GI___libc_free", &f_frees[FF_GI_LIBC_FREE]},
 		{"free", &f_frees[FF_FREE]},
 
-		{"vasprintf", &f_vasprintf},
-		{"asprintf", &f_asprintf},
 		{NULL, NULL},
 	};
 

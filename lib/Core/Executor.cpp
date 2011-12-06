@@ -952,33 +952,39 @@ ref<Expr> Executor::toUnique(
    'reason' is just a documentation string stating the reason for concretization. */
 ref<klee::ConstantExpr>
 Executor::toConstant(
-	ExecutionState &state,
-	ref<Expr> e,
-	const char *reason)
+	ExecutionState &state, ref<Expr> e, const char *reason,
+	bool showLineInfo)
 {
-  ref<ConstantExpr>	value;
-  bool			success;
+	ref<ConstantExpr>	value;
+	bool			success;
 
-  e = state.constraints.simplifyExpr(e);
-  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(e))
-    return CE;
+	e = state.constraints.simplifyExpr(e);
+	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(e))
+		return CE;
 
-  success = solver->getValue(state, e, value);
-  assert(success && "FIXME: Unhandled solver failure");
+	success = solver->getValue(state, e, value);
+	assert(success && "FIXME: Unhandled solver failure");
 
-  std::ostringstream	os;
-  os << "silently concretizing (reason: " << reason << ") expression " << e
-     << " to value " << value
-     << " (" << (*(state.pc)).info->file << ":" << (*(state.pc)).info->line << ")";
+	std::ostringstream	os;
+	os	<< "silently concretizing (reason: " << reason
+		<< ") expression " << e
+		<< " to value " << value;
 
-  if (AllExternalWarnings)
-    klee_warning(reason, os.str().c_str());
-  else
-    klee_warning_once(reason, "%s", os.str().c_str());
+	if (showLineInfo) {
+		os	<< " (" << (*(state.pc)).info->file << ":"
+			<< (*(state.pc)).info->line << ")";
+	}
 
-  addConstraint(state, EqExpr::create(e, value));
+	os << '\n';
 
-  return value;
+	if (AllExternalWarnings)
+		klee_warning(reason, os.str().c_str());
+	else
+		klee_warning_once(reason, "%s", os.str().c_str());
+
+	addConstraint(state, EqExpr::create(e, value));
+
+	return value;
 }
 
 bool Executor::getSeedInfoIterRange(
@@ -3404,7 +3410,7 @@ void Executor::bindInstructionConstants(KInstruction *KI)
 
 void Executor::executeAllocConst(
 	ExecutionState &state,
-	ConstantExpr* CE,
+	uint64_t sz,
 	bool isLocal,
 	KInstruction *target,
 	bool zeroMemory,
@@ -3412,8 +3418,7 @@ void Executor::executeAllocConst(
 {
 	ObjectState *os;
 
-	os = state.allocate(
-		CE->getZExtValue(), isLocal, false, state.prevPC->inst);
+	os = state.allocate(sz, isLocal, false, state.prevPC->inst);
 	if (os == NULL) {
 		state.bindLocal(
 			target,
@@ -3441,6 +3446,36 @@ void Executor::executeAllocConst(
 	}
 }
 
+klee::ref<klee::ConstantExpr> Executor::getSmallSymAllocSize(
+	ExecutionState &state, ref<Expr>& size)
+{
+	Expr::Width		W;
+	ref<ConstantExpr>	example;
+	ref<ConstantExpr>	ce_128;
+	bool			ok;
+
+	ok = solver->getValue(state, size, example);
+	assert(ok && "FIXME: Unhandled solver failure");
+
+	// start with a small example
+	W = example->getWidth();
+	ce_128 = ConstantExpr::alloc(128, W);
+	while (example->Ugt(ce_128)->isTrue()) {
+		ref<ConstantExpr>	tmp;
+		bool			res;
+
+		tmp = example->LShr(ConstantExpr::alloc(1, W));
+		ok = solver->mayBeTrue(state, EqExpr::create(tmp, size), res);
+		assert(ok && "FIXME: Unhandled solver failure");
+		if (!res)
+			break;
+		example = tmp;
+	}
+
+	return example;
+}
+
+
 void Executor::executeAllocSymbolic(
 	ExecutionState &state,
 	ref<Expr> size,
@@ -3459,43 +3494,27 @@ void Executor::executeAllocSymbolic(
 	// exactly two values and just fork (but we need to get rid of
 	// return argument first). This shows up in pcre when llvm
 	// collapses the size expression with a select.
-	ref<ConstantExpr> example;
-	bool success;
-
-	success = solver->getValue(state, size, example);
-	assert(success && "FIXME: Unhandled solver failure");
-
-	// Try and start with a small example.
-	Expr::Width W = example->getWidth();
-	while (example->Ugt(ConstantExpr::alloc(128, W))->isTrue()) {
-		ref<ConstantExpr> tmp;
-		bool res;
-		bool ok;
-
-		tmp = example->LShr(ConstantExpr::alloc(1, W));
-		ok = solver->mayBeTrue(state, EqExpr::create(tmp, size), res);
-		assert(ok && "FIXME: Unhandled solver failure");
-		if (!res)
-			break;
-		example = tmp;
-	}
+	//
+	ref<ConstantExpr>	example(getSmallSymAllocSize(state, size));
+	Expr::Width		W = example->getWidth();
 
 	StatePair fixedSize = fork(state, EqExpr::create(example, size), true);
 
 	if (fixedSize.second) {
 		// Check for exactly two values
+		ExecutionState		*ne_state;
 		ref<ConstantExpr>	tmp;
 		bool			ok, res;
 
-		ok = solver->getValue(*fixedSize.second, size, tmp);
+		ne_state = fixedSize.second;
+		ok = solver->getValue(*ne_state, size, tmp);
 		assert(ok && "FIXME: Unhandled solver failure");
-		ok = solver->mustBeTrue(
-			*fixedSize.second, EqExpr::create(tmp, size), res);
+		ok = solver->mustBeTrue(*ne_state, EqExpr::create(tmp, size), res);
 		assert(ok && "FIXME: Unhandled solver failure");
 
 		if (res) {
 			executeAlloc(
-				*fixedSize.second,
+				*ne_state,
 				tmp,
 				isLocal,
 				target, zeroMemory, reallocFrom);
@@ -3503,7 +3522,7 @@ void Executor::executeAllocSymbolic(
 		// See if a *really* big value is possible. If so assume
 		// malloc will fail for it, so lets fork and return 0.
 			StatePair hugeSize = fork(
-				*fixedSize.second,
+				*ne_state,
 				UltExpr::create(ConstantExpr::alloc(1<<31, W), size),
 				true);
 			if (hugeSize.first) {
@@ -3550,7 +3569,8 @@ void Executor::executeAlloc(
 	size = toUnique(state, size);
 	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(size)) {
 		executeAllocConst(
-			state, CE, isLocal, target, zeroMemory, reallocFrom);
+			state, CE->getZExtValue(),
+			isLocal, target, zeroMemory, reallocFrom);
 	} else {
 		executeAllocSymbolic(
 			state, size, isLocal, target, zeroMemory, reallocFrom);

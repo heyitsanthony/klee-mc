@@ -41,6 +41,8 @@ private:
 
 	void watchEnterXfer(ExecutionState& es, llvm::Function* f);
 	void watchFunc(ExecutionState& es, llvm::Function* f);
+	void watchFuncArg(
+		ExecutionState& es, llvm::Function* f, ref<Expr>& arg);
 	void unwatch(ESVSymHook &esh);
 	void unwatchFree(ESVSymHook &esh);
 	void unwatchMalloc(ESVSymHook &esh);
@@ -50,6 +52,12 @@ private:
 		llvm::Function	**f;
 	};
 	void sym2func(const Symbols* syms, struct sym2func_t* stab);
+
+	/*  If size is  0,  then malloc() returns either NULL, 
+	 *  or a unique pointer value that can later be successfully
+	 *  passed to free().
+	 * oh libc, you so crazy */
+	uint64_t	zero_malloc_ptr;
 
 	#define FM_INT_MALLOC		0
 	#define FM_MALLOC		1
@@ -67,8 +75,6 @@ private:
 	#define FF_GI_LIBC_FREE	2
 	#define FF_SIZE		3
 	llvm::Function	*f_frees[FF_SIZE];
-
-	llvm::Function	*f_vasprintf, *f_asprintf;
 };
 
 }

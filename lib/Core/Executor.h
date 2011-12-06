@@ -49,11 +49,11 @@ namespace llvm {
 namespace klee {
   class Array;
   class Cell;
-  class EquivalentStateEliminator;
   class ExecutionState;
   class ExeStateManager;
   class ExternalDispatcher;
   class Expr;
+  class ConstantExpr;
   class InstructionInfoTable;
   class KFunction;
   class KInstruction;
@@ -137,7 +137,8 @@ public:
   ///
   /// \param purpose An identify string to printed in case of concretization.
   ref<klee::ConstantExpr> toConstant(
-  	ExecutionState &state, ref<Expr> e, const char *purpose);
+  	ExecutionState &state, ref<Expr> e, const char *purpose,
+	bool showLineInfo = true);
   /// Bind a constant value for e to the given target. NOTE: This
   /// function may fork state if the state has multiple seeds.
   void executeGetValue(ExecutionState &state, ref<Expr> e, KInstruction *target);
@@ -192,6 +193,10 @@ protected:
   }
 
   Expr::Width getWidthForLLVMType(const llvm::Type *type) const;
+
+  ref<ConstantExpr> getSmallSymAllocSize(
+	ExecutionState &state, ref<Expr>& size);
+
 
   const Cell& eval(
     KInstruction *ki,
@@ -566,7 +571,7 @@ public:
 
 	void executeAllocConst(
 		ExecutionState &state,
-		ConstantExpr* CE,
+		uint64_t sz,
 		bool isLocal,
 		KInstruction *target,
 		bool zeroMemory,
