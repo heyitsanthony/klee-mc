@@ -527,6 +527,9 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(regfile, 0);
 		break;
 	case SYS_dup:
+	case SYS_dup2:
+	case SYS_dup3:
+		klee_warning_once("dup is hyper-broken");
 		sc_ret_ge0(sc_new_regs(regfile));
 		break;
 	case SYS_setrlimit:
