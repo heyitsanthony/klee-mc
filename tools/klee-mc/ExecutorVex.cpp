@@ -36,6 +36,9 @@
 #include "ExecutorVex.h"
 #include "ExeStateVex.h"
 
+#include "GuestPrioritizer.h"
+#include "SyscallPrioritizer.h"
+
 using namespace klee;
 using namespace llvm;
 
@@ -93,45 +96,12 @@ namespace
 		"print-new-ranges",
 		cl::desc("Print uncovered address ranges"),
 		cl::init(false));
+
+	cl::opt<bool> UseSyscallPriority(
+		"use-syscall-pr",
+		cl::desc("Use number of syscalls as priority"),
+		cl::init(false));
 }
-
-class GuestPrioritizer : public Prioritizer
-{
-public:
-	GuestPrioritizer(ExecutorVex& in_exe)
-	: exe(in_exe)
-	, len(0x400000) /* 4MB of code should be enough! */
-	{
-		const Guest	*gs = exe.getGuest();
-		base = gs->getEntryPoint().o & ~((uint64_t)len - 1);
-		end = base + len;
-	}
-
-	virtual ~GuestPrioritizer() {}
-
-	int getPriority(ExecutionState& st)
-	{
-		const VexSB	*vsb;
-		KInstruction	*ki = st.pc;
-
-		if (ki == NULL)
-			return 1;
-
-		vsb = exe.getFuncVSB(ki->inst->getParent()->getParent());
-		if (vsb == NULL)
-			return 1;
-
-		if (	vsb->getGuestAddr().o < base ||
-			vsb->getGuestAddr().o > end)
-			return 0;
-
-		return 1;
-	}
-private:
-	ExecutorVex	&exe;
-	uint64_t	base, end;
-	unsigned int	len;
-};
 
 ExecutorVex::ExecutorVex(InterpreterHandler *ih, Guest *in_gs)
 : Executor(ih)
@@ -142,9 +112,15 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih, Guest *in_gs)
 
 	ExeStateBuilder::replaceBuilder(new ExeStateVexBuilder());
 
-	if (UsePrioritySearcher)
-		UserSearcher::setPrioritizer(
-			new GuestPrioritizer(*this));
+	if (UsePrioritySearcher) {
+		Prioritizer	*pr;
+
+		pr = (UseSyscallPriority)
+			? (Prioritizer*)(new SyscallPrioritizer())
+			: (Prioritizer*)(new GuestPrioritizer(*this));
+		
+		UserSearcher::setPrioritizer(pr);
+	}
 
 	/* XXX TODO: module flags */
 	llvm::sys::Path LibraryDir(KLEE_DIR "/" RUNTIME_CONFIGURATION "/lib");
@@ -983,19 +959,18 @@ void ExecutorVex::handleXferSyscall(
 	es2esv(state).incSyscallCount();
 
 	state.addressSpace.copyToBuf(es2esv(state).getRegCtx(), &sysnr, 0, 8);
-	fprintf(stderr, "before syscall %d(?): states=%d. objs=%d. st=%p\n",
+	fprintf(stderr, "before syscall %d(?): states=%d. objs=%d. st=%p. n=%d\n",
 		(int)sysnr,
 		stateManager->size(),
 		state.getNumSymbolics(),
-		(void*)&state);
+		(void*)&state,
+		es2esv(state).getSyscallCount());
 
 	/* arg0 = regctx, arg1 = jmpptr */
 	args.push_back(es2esv(state).getRegCtx()->getBaseExpr());
 	args.push_back(eval(ki, 0, state).value);
 
 	executeCall(state, ki, kf_scenter->function, args);
-
-	fprintf(stderr, "syscall queued.\n");
 }
 
 void ExecutorVex::handleXferReturn(
