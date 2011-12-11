@@ -549,6 +549,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(regfile, 0);
 		make_sym_by_arg(regfile, 1, sizeof(struct rusage), "getrusage");
 		break;
+	case SYS_getdents64:
 	case SYS_getdents:
 		new_regs = sc_new_regs(regfile);
 		sc_ret_or(new_regs, 0, -1);
