@@ -28,12 +28,24 @@ namespace {
 		cl::init(false));
 }
 
+static const char* guest2rtlib(const Guest* g)
+{
+	switch (g->getArch()) {
+	case Arch::X86_64:
+		return "libkleeRuntimeMC-amd64.bc";
+	case Arch::ARM:
+		return "libkleeRuntimeMC-arm.bc";
+	default:
+		assert (0 == 1 && "ULP");
+		break;
+	}
+	return NULL;
+}
+
 LinuxModel::LinuxModel(Executor* e)
 : SysModel(
 	e,
-	(std::string("libkleeRuntimeMC-")
-		+ ((ExecutorVex*)e)->getArchString()
-		+ std::string(".bc")).c_str())
+	guest2rtlib(((ExecutorVex*)e)->getGuest()))
 {}
 
 

@@ -175,20 +175,6 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih, Guest *in_gs)
 
 }
 
-std::string ExecutorVex::getArchString(void) const
-{
-	switch (gs->getArch()) {
-	case Arch::X86_64:
-		return "amd64";
-	case Arch::ARM:
-		return "arm";
-	default:
-		break;
-	}
-
-	return "???";
-}
-
 ExecutorVex::~ExecutorVex(void)
 {
 	delete xlate_cache;

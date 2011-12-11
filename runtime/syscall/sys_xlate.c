@@ -21,7 +21,8 @@ static int sysnr_arm2amd64[512] =
 {
 #define __SYSCALL(x,y)	[ARM##x] = x,	
 #include <asm/unistd_64.h>
-[ARM__NR_fcntl64] = __NR_fcntl
+[ARM__NR_fcntl64] = __NR_fcntl,
+[ARM__NR_fstat64] = __NR_fstat
 };
 
 int syscall_xlate(unsigned int sys_nr)
