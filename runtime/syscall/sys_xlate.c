@@ -31,7 +31,10 @@ int syscall_xlate(unsigned int sys_nr)
 	 	return -1;
 
 	if (sys_nr == ARM__NR_mmap2)
-		return ARM_SYS_mmap2;
+		return __NR_mmap;
+// XXX: we'll need this when we start supporting
+// mmap of concrete files with offsets..
+//		return ARM_SYS_mmap2;
 
 	return sysnr_arm2amd64[sys_nr];
 }

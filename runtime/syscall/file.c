@@ -112,7 +112,12 @@ static void sc_stat_sym(void* regfile)
 	}
 #endif
 	sc_ret_v(new_regs, 0);
+
+#ifdef GUEST_ARCH_ARM
+	make_sym_by_arg(regfile, 1, 88, "statbuf");
+#else
 	make_sym_by_arg(regfile, 1, sizeof(struct stat), "statbuf");
+#endif
 }
 
 int str_is_sym(const char* s)
