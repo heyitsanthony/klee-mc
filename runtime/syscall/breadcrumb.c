@@ -44,6 +44,7 @@ void sc_breadcrumb_reset(void)
 {
 	memset(&bc_sc, 0, sizeof(struct breadcrumb));
 	bc_sc.bcs_sysnr = ~0; /* for debugging uninit value */
+	bc_sc.bcs_xlate_sysnr = ~0;
 	bc_sc.bcs_hdr.bc_type = BC_TYPE_SC;
 	bc_sc.bcs_hdr.bc_sz = sizeof(struct bc_syscall);
 	bc_opbufidx = -1;
@@ -68,21 +69,25 @@ void sc_breadcrumb_add_argptr(
 	op->sop_sz = sz;
 }
 
-void sc_breadcrumb_commit(unsigned int sysnr, uint64_t aux_ret)
+void sc_breadcrumb_commit(
+	unsigned int sysnr,
+	unsigned int xlate_sysnr,
+	uint64_t aux_ret)
 {
 	int i;
 
-	if (bc_sc.bcs_sysnr != (uint64_t)~0) {
+	if (bc_sc.bcs_sysnr != (uint32_t)~0) {
 		klee_report_error(
 			__FILE__, __LINE__,
 			"Reusing already-set breadcrumb for commit",
 			"sc.err");
 	}
 	bc_sc.bcs_sysnr = sysnr;
+	bc_sc.bcs_xlate_sysnr = xlate_sysnr;
 	bc_sc.bcs_op_c = bc_opbufidx+1;
 	bc_sc.bcs_ret = aux_ret;
 
-	/* dumb all breadcrumbs accumulated during syscall */
+	/* dump all breadcrumbs accumulated during syscall */
 	kmc_breadcrumb((void*)&bc_sc, bc_sc.bcs_hdr.bc_sz);
 	for (i = 0; i <= bc_opbufidx; i++) {
 		kmc_breadcrumb((void*)&bc_opbuf[i], bc_opbuf[i].sop_hdr.bc_sz);

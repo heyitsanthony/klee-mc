@@ -37,8 +37,6 @@ SyscallsKTest* SyscallsKTest::create(
 {
 	SyscallsKTest	*skt;
 
-	assert (in_g->getArch() == Arch::X86_64);
-
 	skt = new SyscallsKTest(in_g, kts, in_crumbs);
 	if (skt->kts == NULL || skt->crumbs == NULL) {
 		delete skt;
@@ -78,7 +76,7 @@ void SyscallsKTest::badCopyBail(void)
 	abort();
 }
 
-void SyscallsKTest::loadSyscallEntry(SyscallParams& sp)
+int SyscallsKTest::loadSyscallEntry(SyscallParams& sp)
 {
 	uint64_t sys_nr = sp.getSyscall();
 
@@ -89,7 +87,7 @@ void SyscallsKTest::loadSyscallEntry(SyscallParams& sp)
 			KREPLAY_NOTE
 			"Could not read sclog entry #%d. Out of entries.\n"
 			KREPLAY_NOTE
-			"sys_nr=%d. arg[0]=%p arg[1]=%p arg[2]=%p\n",
+			"sys_nr=%d. xsys=???. arg[0]=%p arg[1]=%p arg[2]=%p\n",
 			sc_retired,
 			(int)sys_nr,
 			sp.getArgPtr(0),
@@ -124,6 +122,8 @@ void SyscallsKTest::loadSyscallEntry(SyscallParams& sp)
 			feedSyscallOp(sp);
 		}
 	}
+
+	return bcs_crumb->bcs_xlate_sysnr;
 }
 
 void SyscallsKTest::feedSyscallOp(SyscallParams& sp)
@@ -162,6 +162,7 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 {
 	uint64_t	ret;
 	uint64_t	sys_nr;
+	int		xlate_sysnr;
 	ssize_t		bw;
 
 	ret = 0;
@@ -172,14 +173,14 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 	else
 		fprintf(stderr, KREPLAY_NOTE"Applying: sys=SYS_klee\n");
 
-	loadSyscallEntry(sp);
+	xlate_sysnr = loadSyscallEntry(sp);
 
 	/* GROSS UGLY HACK. OH WELL. */
-	if (bc_sc_is_thunk(bcs_crumb) && sys_nr != SYS_recvmsg)
+	if (bc_sc_is_thunk(bcs_crumb) && xlate_sysnr != SYS_recvmsg)
 		crumbs->skip(bcs_crumb->bcs_op_c);
 
 	/* extra thunks */
-	switch(sys_nr) {
+	switch(xlate_sysnr) {
 	case SYS_recvmsg:
 		printf("HELLO RECVMSG!!!\n");
 		feedSyscallOp(sp);
@@ -255,14 +256,17 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 	default:
 		if (!bc_sc_is_thunk(bcs_crumb)) break;
 		fprintf(stderr,
-			KREPLAY_NOTE "No thunk for syscall %d\n",
-			(int)sys_nr);
+			KREPLAY_NOTE "No thunk for syscall sys=%d. xsys=%d.\n",
+			(int)sys_nr,
+			(int)xlate_sysnr);
 		assert (0 == 1 && "TRICKY SYSCALL");
 	}
 
 	fprintf(stderr,
-		KREPLAY_NOTE "Retired: sys=%d. ret=%p\n",
-		(int)sys_nr, (void*)getRet());
+		KREPLAY_NOTE "Retired: sys=%d. xsys=%d. ret=%p\n",
+		(int)sys_nr,
+		(int)xlate_sysnr,
+		(void*)getRet());
 
 	sc_retired++;
 	Crumbs::freeCrumb(&bcs_crumb->bcs_hdr);

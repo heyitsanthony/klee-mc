@@ -3,6 +3,6 @@
 
 /* 0 => already_logged,
  * 1 => break */
-int file_sc(unsigned int sys_nr, void* regfile);
+int file_sc(unsigned int pure_sysnr, unsigned int sys_nr, void* regfile);
 
 #endif

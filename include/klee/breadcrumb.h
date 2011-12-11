@@ -45,7 +45,8 @@ do {							\
 struct bc_syscall
 {
 	struct breadcrumb	bcs_hdr;
-	uint64_t		bcs_sysnr;
+	uint32_t		bcs_xlate_sysnr;
+	uint32_t		bcs_sysnr;
 	uint64_t		bcs_ret;	/* retcode */
 	uint8_t			bcs_op_c;	/* # of ops that follow */
 };

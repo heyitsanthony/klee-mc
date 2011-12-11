@@ -65,7 +65,9 @@ static int str_contains(const char* needle, const char* haystack)
 
 /* 0 => early terminate
  * 1 => normal terminate */
-int sc_read_sym(unsigned sys_nr, void* regfile, uint64_t len)
+int sc_read_sym(
+	unsigned pure_sysnr,
+	unsigned sys_nr, void* regfile, uint64_t len)
 {
 	void	*new_regs;
 
@@ -95,7 +97,7 @@ int sc_read_sym(unsigned sys_nr, void* regfile, uint64_t len)
 
 	sc_ret_v(new_regs, len);
 	make_sym_by_arg(regfile, 1, len, "readbuf");
-	sc_breadcrumb_commit(sys_nr, GET_SYSRET(new_regs));
+	sc_breadcrumb_commit(pure_sysnr, sys_nr, GET_SYSRET(new_regs));
 	return 0;
 }
 
@@ -167,7 +169,7 @@ static void sc_stat(unsigned int sys_nr, void* regfile)
 	sc_stat_sym(regfile);
 }
 
-int file_sc(unsigned int sys_nr, void* regfile)
+int file_sc(unsigned int pure_sysnr, unsigned int sys_nr, void* regfile)
 {
 	void	*new_regs;
 
@@ -248,7 +250,7 @@ int file_sc(unsigned int sys_nr, void* regfile)
 			break;
 		}
 
-		if (sc_read_sym(sys_nr, regfile, len) == 0)
+		if (sc_read_sym(pure_sysnr, sys_nr, regfile, len) == 0)
 			return 0;
 	}
 	break;

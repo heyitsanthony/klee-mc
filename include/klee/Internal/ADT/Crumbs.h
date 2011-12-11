@@ -72,6 +72,8 @@ public:
 	virtual void print(std::ostream& os) const;
 	unsigned int getKTestObjs(void) const;
 	unsigned int getSysNr(void) const { return getBCS()->bcs_sysnr; }
+	unsigned int getXlateSysNr(void) const
+	{ return getBCS()->bcs_xlate_sysnr; }
 	uint64_t getRet(void) const { return getBCS()->bcs_ret; }
 	void consumeOps(KTestStream* kts, Crumbs* c);
 private:

@@ -126,11 +126,12 @@ mc-clean:
 	rm -rf runtime/syscall/*/*.{bc,bca,ll,d,o}
 	rm -rf $(LibDir)/*-arm.bc*
 
+#rm -rf guest-*
+
 clean::
 	$(MAKE) -C test clean 
 	$(MAKE) -C unittests clean
 	rm -rf tests-replay/klee-out* tests-replay/guest-*
 	rm -rf klee-out-*
-	rm -rf guest-*
 	rm -rf docs/doxygen
 	rm -rf bintests/out/*

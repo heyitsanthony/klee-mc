@@ -30,7 +30,7 @@ private:
 	void setRet(uint64_t r);
 	uint64_t getRet(void) const;
 
-	void loadSyscallEntry(SyscallParams& sp);
+	int loadSyscallEntry(SyscallParams& sp);
 
 	void sc_stat(SyscallParams& sp);
 	void sc_mmap(SyscallParams& sp);
