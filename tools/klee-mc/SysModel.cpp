@@ -28,6 +28,17 @@ namespace {
 		cl::init(false));
 }
 
+LinuxModel::LinuxModel(Executor* e)
+: SysModel(
+	e,
+	(std::string("libkleeRuntimeMC-")
+		+ ((ExecutorVex*)e)->getArchString()
+		+ std::string(".bc")).c_str())
+{}
+
+
+FDTModel::FDTModel(Executor* e) : SysModel(e, "libkleeRuntimeMC-fdt.bc") {}
+
 //TODO: declare in kmodule h
 Function *getStubFunctionForCtorList(
 	Module *m,

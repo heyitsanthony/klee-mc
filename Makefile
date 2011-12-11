@@ -16,6 +16,9 @@ ENABLE_RTTI=1
 REQUIRES_RTTI=1
 export REQUIRES_RTTI=1
 export ENABLE_RTTI=1
+ifndef GUEST_ARCH
+export GUEST_ARCH=amd64
+endif
 
 include $(LEVEL)/Makefile.config
 
@@ -70,12 +73,19 @@ test::
 .PHONY: mc
 mc: mc-std mc-fdt
 
-mc-std: $(LibDir)/libkleeRuntimeMC.bca
+$(LibDir)/libkleeRuntimeMC-arm.bca:
+	echo heyyyyyyy
+	rm -rf runtime/syscall/*/*.{bc,bca,ll,d,o}
+	export GUEST_ARCH=arm; make
+
+mc-std: mc-std-amd64 mc-std-arm
+mc-std-%: $(LibDir)/libkleeRuntimeMC-%.bca
 	mkdir -p mc_tmp
-	cd mc_tmp && ar x $(LibDir)/libkleeRuntimeMC.bca && cd ..
-	llvm-link -f -o $(LibDir)/libkleeRuntimeMC.bc mc_tmp/*.bc
+	cd mc_tmp && ar x $^ && cd ..
+	llvm-link -f -o `echo $^ | sed "s/\.bca/\.bc/"` mc_tmp/*.bc
 	rm -rf mc_tmp
-	cp $(LibDir)/libkleeRuntimeMC.bc $(VEXLLVM_HELPER_PATH)
+	cp  `echo $^ | sed "s/\.bca/\.bc/"` $(VEXLLVM_HELPER_PATH)
+
 
 mc-fdt: $(LibDir)/libkleeRuntimeMC-fdt.bca
 	mkdir -p mcfdt_tmp
@@ -102,7 +112,6 @@ kmc-bintests: all
 .PHONY: phash-analyze
 phash-analyze:
 	phashtests/kmc-phash-convergence
-
 .PHONY: klee-cov
 klee-cov:
 	rm -rf klee-cov
@@ -112,6 +121,10 @@ klee-cov:
 test-broken-optmul:
 	KMC_RNR_FLAGS="-smt-optmul -smt-brokenoptmul -smt-xchkmul  -xchk-expr-builder" ./scripts/kmc-run-n-replay "/usr/bin/unrar x a"
 
+
+mc-clean:
+	rm -rf runtime/syscall/*/*.{bc,bca,ll,d,o}
+	rm -rf $(LibDir)/*-arm.bc*
 
 clean::
 	$(MAKE) -C test clean 

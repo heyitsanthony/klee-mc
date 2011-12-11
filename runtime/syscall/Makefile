@@ -20,9 +20,24 @@ NO_PEDANTIC=1
 
 include $(LEVEL)/Makefile.common
 
-LibName.BCA := $(LibDir)/lib$(LIBRARYNAME).bca
+ifeq ($(GUEST_ARCH), amd64)
+C.Flags += -DGUEST_ARCH_AMD64=1
+CXX.Flags += -DGUEST_ARCH_AMD64=1
+LibName.BCA := $(LibDir)/lib$(LIBRARYNAME)-amd64.bca
+else
+ifeq ($(GUEST_ARCH), arm)
+C.Flags += -DGUEST_ARCH_ARM=1
+CXX.Flags += -DGUEST_ARCH_ARM=1
+LibName.BCA := $(LibDir)/lib$(LIBRARYNAME)-arm.bca
+else
+$(error Unknown arch-- '$(GUEST_ARCH)')
+endif
+endif
+
+$(LibName.BCA): $(LibDir)/lib$(LIBRARYNAME).bca
+	cp $< $@
+	rm $^
+	touch $^
 
 all:: $(LibName.BCA)
 	echo $<
-
-

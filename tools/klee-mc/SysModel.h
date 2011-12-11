@@ -35,7 +35,7 @@ private:
 class LinuxModel : public SysModel
 {
 public:
-	LinuxModel(Executor* e) : SysModel(e, "libkleeRuntimeMC.bc") {}
+	LinuxModel(Executor* e);
 	virtual ~LinuxModel(void) {}
 	SyscallSFH* allocSpecialFuncHandler(Executor*) const;
 	void installInitializers(llvm::Function* f);
@@ -46,7 +46,7 @@ private:
 class FDTModel : public SysModel
 {
 public:
-	FDTModel(Executor* e) : SysModel(e, "libkleeRuntimeMC-fdt.bc") {}
+	FDTModel(Executor* e);
 	virtual ~FDTModel(void) {}
 	SyscallSFH* allocSpecialFuncHandler(Executor*) const;
 	void installInitializers(llvm::Function* f);

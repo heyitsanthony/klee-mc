@@ -49,26 +49,26 @@ static uint64_t GET_ARG(void* x, int y)
 
 static void sc_ret_ge0(void* regfile)
 {
-	int64_t	rax = GET_RAX(regfile);
+	ARCH_SIGN_CAST rax = GET_SYSRET_S(regfile);
 	klee_assume(rax >= 0);
 }
 
 static void sc_ret_or(void* regfile, uint64_t v1, uint64_t v2)
 {
-	uint64_t	rax = GET_RAX(regfile);
-	klee_assume(rax == v1 || rax == v2);
+	ARCH_SIGN_CAST rax = GET_SYSRET(regfile);
+	klee_assume(rax == (ARCH_SIGN_CAST)v1 || rax == (ARCH_SIGN_CAST)v2);
 }
 
 /* inclusive */
 void sc_ret_range(void* regfile, int64_t lo, int64_t hi)
 {
-	int64_t	rax;
+	ARCH_SIGN_CAST rax;
 	if ((hi - lo) == 1) {
 		sc_ret_or(regfile, lo, hi);
 		return;
 	}
-	rax = GET_RAX(regfile);
-	klee_assume(rax >= lo && rax <= hi);
+	rax = GET_SYSRET_S(regfile);
+	klee_assume(rax >= (ARCH_SIGN_CAST)lo && rax <= (ARCH_SIGN_CAST)hi);
 }
 
 /* IMPORTANT: this will just *allocate* some data,
@@ -236,7 +236,7 @@ static void sc_klee(void* regfile)
 	switch(sys_klee_nr) {
 	case KLEE_SYS_REPORT_ERROR:
 		klee_report_error(
-			(const char*)GET_ARG1(regfile),
+			(const char*)GET_ARG1_PTR(regfile),
 			GET_ARG2(regfile),
 			(const char*)klee_get_value(GET_ARG3(regfile)),
 			(const char*)klee_get_value(GET_ARG4(regfile)));
@@ -245,7 +245,7 @@ static void sc_klee(void* regfile)
 		make_sym(
 			GET_ARG1(regfile),	/* addr */
 			GET_ARG2(regfile),	/* len */
-			(const char*)GET_ARG3(regfile) /* name */);
+			(const char*)GET_ARG3_PTR(regfile) /* name */);
 		sc_ret_v(regfile, 0);
 		break;
 	case KLEE_SYS_ASSUME:
@@ -258,7 +258,7 @@ static void sc_klee(void* regfile)
 		klee_force_ne(GET_ARG1(regfile), GET_ARG2(regfile));
 		break;
 	case KLEE_SYS_PRINT_EXPR:
-		klee_print_expr(GET_ARG1(regfile), GET_ARG2(regfile));
+		klee_print_expr(GET_ARG1_PTR(regfile), GET_ARG2(regfile));
 		break;
 	default:
 		klee_report_error(
@@ -291,6 +291,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sys_nr = concretize_u64(sys_nr);
 	}
 
+#ifdef GUEST_ARCH_ARM
+	sys_nr = syscall_xlate(sys_nr);
+#endif
+
 	sc_breadcrumb_reset();
 
 	switch (sys_nr) {
@@ -302,10 +306,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 		klee_warning_once("clone() will give funny semantics");
 
 		new_regs = sc_new_regs(regfile);
-		if (GET_RAX(new_regs) == 0) {
+		if (GET_SYSRET(new_regs) == 0) {
 			jmpptr = pt->rip;
 		} else {
-			klee_assume(GET_RAX(new_regs) == 1001);
+			klee_assume(GET_SYSRET(new_regs) == 1001);
 		}
 		break;
 	}
@@ -319,14 +323,14 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	case SYS_getpeername:
 		new_regs = sc_new_regs(regfile);
-		if ((intptr_t)GET_RAX(new_regs) == -1)
+		if (GET_SYSRET_S(new_regs) == -1)
 			break;
 
-		klee_assume(GET_RAX(new_regs) == 0);
+		klee_assume(GET_SYSRET(new_regs) == 0);
 		make_sym_by_arg(
 			regfile,
 			1,
-			klee_get_value(*((socklen_t*)GET_ARG2(regfile))),
+			klee_get_value(*((socklen_t*)GET_ARG2_PTR(regfile))),
 			"getpeeraddr");
 
 		break;
@@ -355,7 +359,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 #ifdef USE_SYS_FAILURE
 		if (fail_c.fc_write % (4*FAILURE_RATE)) {
 			new_regs = sc_new_regs(regfile);
-			if ((int64_t)GET_RAX(new_regs) == -1) {
+			if ((int64_t)GET_SYSRET(new_regs) == -1) {
 				break;
 			}
 //			sc_ret_v(new_regs, concretize_u64(GET_ARG2(regfile)));
@@ -423,12 +427,12 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 
 	case SYS_getgroups:
-		if ((intptr_t)GET_ARG0(regfile) < 0) {
+		if (GET_ARG0_S(regfile) < 0) {
 			sc_ret_v(regfile, -1);
 			break;
 		}
 
-		if ((intptr_t)GET_ARG0(regfile) == 0) {
+		if (GET_ARG0(regfile) == 0) {
 			sc_ret_v(regfile, 2);
 			break;
 		}
@@ -443,10 +447,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 	FAKE_SC_RANGE(access, -1, 0)
 	case SYS_newfstatat: { /* for du */
 		new_regs = sc_new_regs(regfile);
-		if ((int64_t)GET_RAX(new_regs) == -1) {
+		if (GET_SYSRET_S(new_regs) == -1) {
 			break;
 		}
-		klee_assume(GET_RAX(new_regs) == 0);
+		klee_assume(GET_SYSRET(new_regs) == 0);
 		sc_ret_v(new_regs, 0);
 		make_sym_by_arg(regfile, 2, sizeof(struct stat), "newstatbuf");
 	}
@@ -546,7 +550,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_getdents:
 		new_regs = sc_new_regs(regfile);
 		sc_ret_or(new_regs, 0, -1);
-		if ((int64_t)GET_RAX(new_regs) == -1)
+		if (GET_SYSRET_S(new_regs) == -1)
 			break;
 		make_sym_by_arg(regfile, 1, GET_ARG2(regfile), "getdents");
 		break;
@@ -571,7 +575,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		new_regs = sc_new_regs(regfile);
 
 		/* let one through */
-		if (GET_RAX(new_regs) == 1) {
+		if (GET_SYSRET(new_regs) == 1) {
 			if (GET_ARG1(regfile))
 				make_sym_by_arg(
 					regfile, 1, sizeof(fd_set), "readfds");
@@ -587,8 +591,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 		}
 
 		/* timeout case probably isn't too interesting */
-		if ((void*)GET_ARG4(regfile) != NULL) {
-			if (GET_RAX(new_regs) == 0) {
+		if ((void*)GET_ARG4_PTR(regfile) != NULL) {
+			if (GET_SYSRET(new_regs) == 0) {
 				/* timeout */
 				sc_ret_v(new_regs, 0);
 				break;
@@ -628,7 +632,9 @@ void* sc_enter(void* regfile, void* jmpptr)
 				sizeof(struct sockaddr_in),
 				"recvfrom_sa");
 		if (GET_ARG5(regfile) != 0) {
-			*((socklen_t*)GET_ARG5(regfile)) = sizeof(struct sockaddr_in);
+			socklen_t	*sl;
+			sl = ((socklen_t*)GET_ARG5_PTR(regfile));
+			*sl = sizeof(struct sockaddr_in);
 		}
 		sc_ret_v(regfile, GET_ARG2(regfile));
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
@@ -653,21 +659,21 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_epoll_create:
 		klee_warning_once("phony epoll_creat call");
 		new_regs = sc_new_regs(regfile);
-		if ((int64_t)GET_RAX(new_regs) == -1)
+		if (GET_SYSRET_S(new_regs) == -1)
 			break;
-		klee_assume(GET_RAX(new_regs) > 3 && GET_RAX(new_regs) < 4096);
+		klee_assume(GET_SYSRET(new_regs) > 3 && GET_SYSRET(new_regs) < 4096);
 		break;
 
 	case SYS_getsockname:
 		new_regs = sc_new_regs(regfile);
-		if ((int64_t)GET_RAX(new_regs) == -1)
+		if (GET_SYSRET_S(new_regs) == -1)
 			break;
 
-		klee_assume(GET_RAX(new_regs) == 0);
+		klee_assume(GET_SYSRET(new_regs) == 0);
 		make_sym(GET_ARG1(regfile),
 			sizeof(struct sockaddr_in),
 			"getsockname");
-		*((socklen_t*)GET_ARG2(regfile)) = sizeof(struct sockaddr_in);
+		*((socklen_t*)GET_ARG2_PTR(regfile)) = sizeof(struct sockaddr_in);
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
 		break;
 
@@ -676,11 +682,14 @@ void* sc_enter(void* regfile, void* jmpptr)
 		klee_warning_once("phony pipe");
 		sc_ret_or(sc_new_regs(regfile), -1, 0);
 		break;
-
+#ifdef GUEST_ARCH_ARM
+	case ARM_SYS_mmap2:
+		GET_ARG5(regfile) *= 4096;
+#endif
 	case SYS_mmap:
 		new_regs = sc_mmap(regfile);
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
-		sc_breadcrumb_commit(sys_nr, GET_RAX(new_regs));
+		sc_breadcrumb_commit(sys_nr, GET_SYSRET(new_regs));
 		goto already_logged;
 	case SYS_socket:
 		klee_warning_once("phony socket call");
@@ -711,10 +720,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_ustat:
 		/* int ustat(dev, ubuf) */
 		new_regs = sc_new_regs(regfile);
-		if ((intptr_t)GET_RAX(new_regs) == -1)
+		if (GET_SYSRET_S(new_regs) == -1)
 			break;
 
-		klee_assume(GET_RAX(new_regs) == 0);
+		klee_assume(GET_SYSRET(new_regs) == 0);
 		make_sym_by_arg(
 			regfile,
 			1,
@@ -752,7 +761,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_breadcrumb_commit(sys_nr, 0);
 	} else {
 		/* ret value was written concretely */
-		sc_breadcrumb_commit(sys_nr, GET_RAX(regfile));
+		sc_breadcrumb_commit(sys_nr, GET_SYSRET(regfile));
 	}
 
 already_logged:
@@ -776,8 +785,8 @@ void* sc_new_regs(void* r)
 
 void sc_ret_v(void* regfile, uint64_t v1)
 {
-	GET_RAX(regfile) = v1;
-	klee_assume(GET_RAX(regfile) == v1);
+	GET_SYSRET(regfile) = v1;
+	klee_assume(GET_SYSRET_S(regfile) == (ARCH_SIGN_CAST)v1);
 }
 
 

@@ -133,7 +133,8 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih, Guest *in_gs)
 	assert (gs);
 
 	if (!theGenLLVM) theGenLLVM = new GenLLVM(in_gs);
-	if (!theVexHelpers) theVexHelpers = VexHelpers::create(Arch::X86_64);
+	if (!theVexHelpers)
+		theVexHelpers = VexHelpers::create(in_gs->getArch());
 
 	std::cerr << "[klee-mc] Forcing fake vsyspage reads\n";
 	theGenLLVM->setFakeSysReads();
@@ -145,7 +146,7 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih, Guest *in_gs)
 
 	theVexHelpers->loadUserMod(sys_model->getModelFileName());
 
-	xlate = new VexXlate(Arch::X86_64);
+	xlate = new VexXlate(in_gs->getArch());
 	xlate_cache = new VexFCache(xlate);
 
 	assert (kmodule == NULL);
@@ -172,6 +173,20 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih, Guest *in_gs)
 			mod_opts.ExcludeCovFiles,
 			UserSearcher::userSearcherRequiresMD2U());
 
+}
+
+std::string ExecutorVex::getArchString(void) const
+{
+	switch (gs->getArch()) {
+	case Arch::X86_64:
+		return "amd64";
+	case Arch::ARM:
+		return "arm";
+	default:
+		break;
+	}
+
+	return "???";
 }
 
 ExecutorVex::~ExecutorVex(void)
@@ -483,16 +498,15 @@ void ExecutorVex::bindMappingPage(
 	const char		*data;
 	MemoryObject		*mmap_mo;
 	ObjectState		*mmap_os;
+	uint64_t		addr_base;
 
 	assert (m.getBytes() > pgnum*PAGE_SIZE);
 	assert ((m.getBytes() % PAGE_SIZE) == 0);
 	assert ((m.offset.o & (PAGE_SIZE-1)) == 0);
 
+	addr_base = ((uint64_t)gs->getMem()->getData(m))+(PAGE_SIZE*pgnum);
 	mmap_mo = memory->allocateAt(
-		*state,
-		((uint64_t)gs->getMem()->getData(m))+(PAGE_SIZE*pgnum),
-		PAGE_SIZE,
-		f->begin()->begin());
+		*state, addr_base, PAGE_SIZE, f->begin()->begin());
 
 	if (m.type == GuestMem::Mapping::STACK) {
 		mmap_mo->setName("stack");
@@ -500,7 +514,7 @@ void ExecutorVex::bindMappingPage(
 		mmap_mo->setName("guestimg");
 	}
 
-	data = (const char*)gs->getMem()->getData(m) + pgnum*PAGE_SIZE;
+	data = (const char*)addr_base;
 	mmap_os = state->bindMemObj(mmap_mo);
 	for (unsigned int i = 0; i < PAGE_SIZE; i++) {
 		/* bug fiend note:
@@ -958,7 +972,14 @@ void ExecutorVex::handleXferSyscall(
 
 	es2esv(state).incSyscallCount();
 
-	state.addressSpace.copyToBuf(es2esv(state).getRegCtx(), &sysnr, 0, 8);
+	sysnr = 0;
+	if (gs->getArch() == Arch::X86_64)
+		state.addressSpace.copyToBuf(
+			es2esv(state).getRegCtx(), &sysnr, 0, 8);
+	else
+		state.addressSpace.copyToBuf(
+			es2esv(state).getRegCtx(), &sysnr, 4*7, 4);
+	
 	fprintf(stderr, "before syscall %d(?): states=%d. objs=%d. st=%p. n=%d\n",
 		(int)sysnr,
 		stateManager->size(),

@@ -35,7 +35,7 @@ static int strlen(const char* x)
 static int memcmp(const void* ugh, const void* ugh2, unsigned int len)
 {
 	const char	*ugh_c = ugh, *ugh2_c = ugh2;
-	int		k;
+	unsigned int	k;
 	k = 0;
 	while (k < len) {
 		int	r;
@@ -87,15 +87,15 @@ int sc_read_sym(unsigned sys_nr, void* regfile, uint64_t len)
 
 #ifdef USE_SYS_FAILURE
 	if ((++fail_c.fc_read % FAILURE_RATE) == 0 &&
-	    (int64_t)GET_RAX(new_regs) == -1) {
+	    (signed)GET_SYSRET(new_regs) == -1) {
 	    return 1;
 	}
 #endif
-	klee_assume(GET_RAX(new_regs) == len);
+	klee_assume(GET_SYSRET(new_regs) == len);
 
 	sc_ret_v(new_regs, len);
 	make_sym_by_arg(regfile, 1, len, "readbuf");
-	sc_breadcrumb_commit(sys_nr, GET_RAX(new_regs));
+	sc_breadcrumb_commit(sys_nr, GET_SYSRET(new_regs));
 	return 0;
 }
 
@@ -104,7 +104,7 @@ static void sc_stat_sym(void* regfile)
 	void* new_regs = sc_new_regs(regfile);
 #ifdef USE_SYS_FAILURE
 	if (	(++fail_c.fc_stat % FAILURE_RATE) == 0 &&
-		(int64_t)GET_RAX(new_regs) == -1)
+		(signed)GET_SYSRET(new_regs) == -1)
 	{
 		return;
 	}
@@ -130,15 +130,17 @@ int str_is_sym(const char* s)
 static void sc_stat(unsigned int sys_nr, void* regfile)
 {
 	if (sys_nr == SYS_lstat || sys_nr == SYS_stat) {
-		const char	*path = (const char*)GET_ARG0(regfile);
+		const char	*path;
+
+		path = (const char*)(GET_ARG0_PTR(regfile));
 		if (!str_is_sym(path)) {
-			int	fd;
+			int		fd;
+
 			fd = fd_open(path);
 			if (fd > 0) {
-				sc_ret_v(
-					regfile,
-					fd_stat(fd,
-						(struct stat*)GET_ARG1(regfile)));
+				struct stat	*s;
+				s = (struct stat*)(GET_ARG1_PTR(regfile));
+				sc_ret_v(regfile, fd_stat(fd, s));
 				fd_close(fd);
 				return;
 			}
@@ -150,9 +152,11 @@ static void sc_stat(unsigned int sys_nr, void* regfile)
 
 		fd = GET_ARG0(regfile);
 		if (fd_is_concrete(fd)) {
-			sc_ret_v(
-				regfile,
-				fd_stat(fd, (struct stat*)GET_ARG1(regfile)));
+			struct stat	*s;
+
+			s = (struct stat*)(GET_ARG1_PTR(regfile));
+			sc_ret_v(regfile, fd_stat(fd, s));
+
 			return;
 		}
 	}
@@ -192,7 +196,7 @@ int file_sc(unsigned int sys_nr, void* regfile)
 		const char*	path;
 		int		ret_fd;
 
-		path = (const char*)GET_ARG0(regfile);
+		path = (const char*)(GET_ARG0_PTR(regfile));
 		if (!str_is_sym(path)) {
 			if (	deny_sys_files &&
 				(path[0] == '\0' ||
@@ -216,15 +220,14 @@ int file_sc(unsigned int sys_nr, void* regfile)
 			}
 		}
 
-
 		new_regs = sc_new_regs(regfile);
-		if ((intptr_t)GET_RAX(new_regs) == -1) {
+		if ((signed)GET_SYSRET(new_regs) == -1) {
 			sc_ret_v(new_regs, -1);
 			break;
 		}
 
 		ret_fd = fd_open_sym();
-		klee_assume(GET_RAX(new_regs) == ret_fd);
+		klee_assume(GET_SYSRET_S(new_regs) == ret_fd);
 		sc_ret_v(new_regs, ret_fd);
 	}
 	break;
@@ -239,7 +242,7 @@ int file_sc(unsigned int sys_nr, void* regfile)
 			ssize_t	sz;
 			sz = fd_read(
 				GET_ARG0(regfile),
-				(void*)GET_ARG1(regfile),
+				(void*)(GET_ARG1_PTR(regfile)),
 				len);
 			sc_ret_v(regfile, sz);
 			break;
@@ -267,9 +270,9 @@ int file_sc(unsigned int sys_nr, void* regfile)
 	case SYS_creat:
 		klee_warning_once("phony creat call");
 		new_regs = sc_new_regs(regfile);
-		if ((int64_t)GET_RAX(new_regs) == -1)
+		if ((signed)GET_SYSRET(new_regs) == -1)
 			break;
-		klee_assume(GET_RAX(new_regs) > 3 && GET_RAX(new_regs) < 4096);
+		klee_assume(GET_SYSRET(new_regs) > 3 && GET_SYSRET(new_regs) < 4096);
 		break;
 	case SYS_readlink:
 	{

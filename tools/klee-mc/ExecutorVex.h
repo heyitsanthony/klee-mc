@@ -62,6 +62,7 @@ public:
 	void dumpSCRegs(const std::string& fname);
 
 	const VexSB* getFuncVSB(llvm::Function*) const;
+	std::string getArchString(void) const;
 
 protected:
 	virtual ExecutionState* setupInitialState(void);

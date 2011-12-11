@@ -1,5 +1,4 @@
 # -*- Makefile -*-
-
 include $(LEVEL)/Makefile.config
 
 # Include LLVM's Master Makefile config and rules.
@@ -31,6 +30,10 @@ endif
 # Needed to build runtime library using clang (gnu89 is the gcc default)
 C.Flags += -std=gnu89 $(LLVM_CFLAGS_EXTRA)
 CXX.Flags += $(LLVM_CXXFLAGS_EXTRA)
+
+ifndef GUEST_ARCH
+	GUEST_ARCH := $(GUEST_ARCH)
+endif
 
 ifeq ($(ENABLE_EXT_STP),1)
   LD.Flags += -L$(STP_ROOT)/lib -L$(BOOLECTOR_ROOT)/ -L$(Z3_ROOT)/lib

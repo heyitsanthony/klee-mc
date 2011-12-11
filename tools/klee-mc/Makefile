@@ -20,7 +20,7 @@ endif
 
 CFLAGS += -I$(VEXLLVM_ROOT)/src/
 #ACK; OCAML HAS HUGE BSS-- we have to link a bit higher up
-CXXFLAGS += -I$(VEXLLVM_ROOT)/src/ -Wl,-Ttext-segment=0x30000000
+CXXFLAGS += -I$(VEXLLVM_ROOT)/src/ -Wl,-Ttext-segment=0x60000000
 LIBS += $(SOLVERLIBS)
 LIBS += -lrt
 LIBS += $(VEXLLVM_ROOT)/bin/vexllvm.a $(VEXLIB_ROOT)/libvex-amd64-linux.a
