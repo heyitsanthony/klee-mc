@@ -7,6 +7,7 @@
 #include "klee/Statistics.h"
 #include "klee/Internal/ADT/KTest.h"
 #include "klee/Internal/ADT/TreeStream.h"
+#include "klee/Internal/ADT/TwoOStreams.h"
 #include "klee/Internal/System/Time.h"
 #include "static/Sugar.h"
 
@@ -253,51 +254,6 @@ static char *format_tdiff(char *buf, double seconds) {
     buf += sprintf(buf, ".%02d", static_cast<int> (100 * (seconds - int_seconds)));
     return buf;
 }
-
-struct TwoOStreams
-{
-    std::ostream* s[2];
-
-    TwoOStreams(std::ostream* s0, std::ostream* s1) { s[0] = s0; s[1] = s1; }
-
-    template <typename T>
-    TwoOStreams& operator<<(const T& t) {
-        *s[0] << t;
-        *s[1] << t;
-        return *this;
-    }
-
-    TwoOStreams& operator<<(std::ostream& (*f)(std::ostream&)) {
-        *s[0] << f;
-        *s[1] << f;
-        return *this;
-    }
-};
-
-class PrefixWriter
-{
-    TwoOStreams* streams;
-    const char* prefix;
-
-public:
-    PrefixWriter(TwoOStreams& s, const char* p) : streams(&s), prefix(p) { }
-
-    operator TwoOStreams&() const {
-        *streams->s[0] << prefix;
-        return *streams;
-    }
-
-    template <typename T>
-    TwoOStreams& operator<<(const T& t) {
-        static_cast<TwoOStreams&>(*this) << t;
-        return *streams;
-    }
-
-    TwoOStreams& operator<<(std::ostream& (*f)(std::ostream&)) {
-        static_cast<TwoOStreams&>(*this) << f;
-        return *streams;
-    }
-};
 
 static void printTimes(PrefixWriter& info, struct tms* tms, clock_t* tm, time_t* t)
 {
