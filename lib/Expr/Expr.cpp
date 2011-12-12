@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 #include <stdio.h>
+#include <llvm/Function.h>
 #include "klee/Expr.h"
 #include "klee/ExprBuilder.h"
 #include "klee/util/ConstantDivision.h"
@@ -68,6 +69,7 @@ ExprFactory::ExprFactory(void)
 {
 	Expr::setBuilder(new OptBuilder());
 	if (UseExprConsPtr) {
+		std::cerr << "USING EXPR CONS PTR!!!!!\n";
 		Expr::setAllocator(new ExprAllocUnique());
 	} else {
 		Expr::setAllocator(new ExprAlloc());
@@ -386,12 +388,6 @@ int MallocKey::compare(const MallocKey &a) const {
   } else
     return (*this < a) ? -1 : 1;
 }
-
-#include "llvm/BasicBlock.h"
-#include "llvm/Function.h"
-#include "llvm/Instruction.h"
-#include "llvm/Value.h"
-
 
 unsigned MallocKey::hash(void) const
 {

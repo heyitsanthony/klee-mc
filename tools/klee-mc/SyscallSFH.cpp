@@ -12,6 +12,7 @@
 extern "C"
 {
 #include "valgrind/libvex_guest_amd64.h"
+#include "valgrind/libvex_guest_arm.h"
 }
 
 
@@ -110,13 +111,21 @@ SFH_DEF_HANDLER(SCRegs)
 		unsigned int	reg_idx;
 
 		reg_idx = i/8;
-		if (	reg_idx == offsetof(VexGuestAMD64State, guest_RAX)/8 ||
-			reg_idx == offsetof(VexGuestAMD64State, guest_RCX)/8 ||
-			reg_idx == offsetof(VexGuestAMD64State, guest_R11)/8)
-		{
-			/* ignore rax, rcx, r11 */
-			assert (state_regctx_os->isByteConcrete(i) == false);
-			continue;
+		if (gs->getArch() == Arch::X86_64) {
+			if (	reg_idx == offsetof(VexGuestAMD64State, guest_RAX)/8 ||
+				reg_idx == offsetof(VexGuestAMD64State, guest_RCX)/8 ||
+				reg_idx == offsetof(VexGuestAMD64State, guest_R11)/8)
+			{
+				/* ignore rax, rcx, r11 */
+				assert (state_regctx_os->isByteConcrete(i) == false);
+				continue;
+			}
+		} else {
+			if (reg_idx == offsetof(VexGuestARMState, guest_R0)/8) {
+				/* ignore r0 and r1 */
+				assert (state_regctx_os->isByteConcrete(i) == false);
+				continue;
+			}
 		}
 
 		/* copy it by expression */
