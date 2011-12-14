@@ -51,7 +51,8 @@ Expr::Width MMU::MemOp::getType(const KModule* m) const
 {
 	return (isWrite
 		? value->getWidth()
-		: m->targetData->getTypeSizeInBits(target->inst->getType()));
+		: m->targetData->getTypeSizeInBits(
+			target->getInst()->getType()));
 }
 
 void MMU::MemOp::simplify(ExecutionState& state)

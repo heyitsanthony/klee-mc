@@ -46,7 +46,7 @@ namespace klee {
     typedef ref<Segment> SegmentRef;
 
     /// A segment is a decision sequence that forms an edge in the path tree
-    struct Segment {
+    class Segment {
     private:
     public:
       Segment() : refCount(0) { }

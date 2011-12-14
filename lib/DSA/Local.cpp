@@ -58,12 +58,12 @@ namespace {
     ////////////////////////////////////////////////////////////////////////////
     // Helper functions used to implement the visitation functions...
 
-    void MergeConstantInitIntoNode(DSNodeHandle &NH, const Type* Ty, Constant *C);
+    void MergeConstantInitIntoNode(DSNodeHandle &NH, Type* Ty, Constant *C);
 
     /// createNode - Create a new DSNode, ensuring that it is properly added to
     /// the graph.
     ///
-    DSNode *createNode(const Type *Ty = 0) 
+    DSNode *createNode(Type *Ty = 0) 
     {   
       DSNode* ret = new DSNode(Ty, &G);
       assert(ret->getParentGraph() && "No parent?");
@@ -334,7 +334,7 @@ void GraphBuilder::visitLoadInst(LoadInst &LI) {
 }
 
 void GraphBuilder::visitStoreInst(StoreInst &SI) {
-  const Type *StoredTy = SI.getOperand(0)->getType();
+  Type *StoredTy = SI.getOperand(0)->getType();
   DSNodeHandle Dest = getValueDest(*SI.getOperand(1));
   if (Dest.isNull()) return;
 
@@ -420,7 +420,7 @@ void GraphBuilder::visitGetElementPtrInst(User &GEP) {
 
 
   const PointerType *PTy = cast<PointerType>(GEP.getOperand(0)->getType());
-  const Type *CurTy = PTy->getElementType();
+  Type *CurTy = PTy->getElementType();
 
   if (Value.getNode()->mergeTypeInfo(CurTy, Value.getOffset())) {
     // If the node had to be folded... exit quickly
@@ -463,7 +463,7 @@ void GraphBuilder::visitGetElementPtrInst(User &GEP) {
   unsigned Offset = 0;
   for (gep_type_iterator I = gep_type_begin(GEP), E = gep_type_end(GEP);
        I != E; ++I)
-    if (const StructType *STy = dyn_cast<StructType>(*I)) {
+    if (StructType *STy = dyn_cast<StructType>(*I)) {
       const ConstantInt* CUI = cast<ConstantInt>(I.getOperand());
 #if 0
       unsigned FieldNo = 
@@ -635,6 +635,7 @@ bool GraphBuilder::visitIntrinsic(CallSite CS, Function *F) {
     return true;
   }
 
+#if 0
   case Intrinsic::atomic_cmp_swap: {
     DSNodeHandle Ptr = getValueDest(**CS.arg_begin());
     Ptr.getNode()->setReadMarker();
@@ -663,7 +664,7 @@ bool GraphBuilder::visitIntrinsic(CallSite CS, Function *F) {
       if (isa<PointerType>(F->getReturnType()))
         setDestTo(*(CS.getInstruction()), getValueDest(**(CS.arg_begin() + 1)));
     }
-   
+#endif
               
 
   case Intrinsic::eh_selector:
@@ -771,7 +772,7 @@ void GraphBuilder::visitInstruction(Instruction &Inst) {
 
 // MergeConstantInitIntoNode - Merge the specified constant into the node
 // pointed to by NH.
-void GraphBuilder::MergeConstantInitIntoNode(DSNodeHandle &NH, const Type* Ty, Constant *C) {
+void GraphBuilder::MergeConstantInitIntoNode(DSNodeHandle &NH, Type* Ty, Constant *C) {
   // Ensure a type-record exists...
   DSNode *NHN = NH.getNode();
   NHN->mergeTypeInfo(Ty, NH.getOffset());

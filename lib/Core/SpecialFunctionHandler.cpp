@@ -182,7 +182,7 @@ bool SpecialFunctionHandler::handle(
   Handler* h = it->second.first;
   bool hasReturnValue = it->second.second;
    // FIXME: Check this... add test?
-  if (!hasReturnValue && !target->inst->use_empty()) {
+  if (!hasReturnValue && !target->getInst()->use_empty()) {
     executor->terminateStateOnExecError(
     	state,
         "expected return value from void special function");
@@ -687,7 +687,7 @@ SFH_DEF_HANDLER(DefineFixedObject)
   uint64_t address = cast<ConstantExpr>(arguments[0])->getZExtValue();
   uint64_t size = cast<ConstantExpr>(arguments[1])->getZExtValue();
   ObjectState *os;
-  os = state.allocateFixed(address, size, state.prevPC->inst);
+  os = state.allocateFixed(address, size, state.prevPC->getInst());
   os->getObject()->isUserSpecified = true; // XXX hack;
 }
 

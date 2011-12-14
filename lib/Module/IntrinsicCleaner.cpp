@@ -9,20 +9,23 @@
 
 #include "Passes.h"
 
-#include "llvm/LLVMContext.h"
-#include "llvm/Constants.h"
-#include "llvm/DerivedTypes.h"
-#include "llvm/Function.h"
-#include "llvm/InstrTypes.h"
-#include "llvm/Instruction.h"
-#include "llvm/Instructions.h"
-#include "llvm/IntrinsicInst.h"
-#include "llvm/Module.h"
-#include "llvm/Pass.h"
-#include "llvm/Type.h"
-#include "llvm/Transforms/Scalar.h"
-#include "llvm/Transforms/Utils/BasicBlockUtils.h"
-#include "llvm/Target/TargetData.h"
+#include <llvm/LLVMContext.h>
+#include <llvm/Constants.h>
+#include <llvm/DerivedTypes.h>
+#include <llvm/Function.h>
+#include <llvm/InstrTypes.h>
+#include <llvm/Instruction.h>
+#include <llvm/Instructions.h>
+#include <llvm/IntrinsicInst.h>
+#include <llvm/Module.h>
+#include <llvm/Pass.h>
+#include <llvm/Type.h>
+#include <llvm/Transforms/Scalar.h>
+#include <llvm/Transforms/Utils/BasicBlockUtils.h>
+#include <llvm/Target/TargetData.h>
+#include "klee/Internal/Module/KModule.h"
+#include <iostream>
+#include <sstream>
 
 #include "static/Sugar.h"
 using namespace llvm;
@@ -105,32 +108,38 @@ bool IntrinsicCleanerPass::clean_dup_stoppoint(
 	llvm::BasicBlock::iterator& i,
 	llvm::IntrinsicInst* ii)
 {
-	if (/* isa<DbgStopPointInst>(i) || */ isa<UnreachableInst>(i)) {
+	if (isa<UnreachableInst>(i)) {
 		ii->eraseFromParent();
 		return true;
 	}
 
-#if 0
-	bool erase = false;
-	if (!isa<BranchInst>(i) && !isa<SwitchInst>(i)) 
-		return false;
-
-	BasicBlock *bb = i->getParent(a);
-	erase = true;
-	foreach (it, succ_begin(bb), succ_end(bb)) {
-		if (!isa<DbgStopPointInst>(it->getFirstNonPHI())) {
-			erase = false;
-			break;
-		}
-	}
-
-	if (erase) {
-		ii->eraseFromParent();
-		return true;
-	}
-#endif
 	return false;
 }
+
+void IntrinsicCleanerPass::createReturnStruct(
+	llvm::Type * retType,
+	Value * value1, Value * value2, BasicBlock * bb)
+{
+	std::vector<Value *>	indicies1(2), indicies2(2);
+	Value			*retVal, *address1, *address2, *finalRet;
+
+	retVal = new AllocaInst(retType,"",bb);
+
+	indicies1[0] = ConstantInt::get(Type::getInt32Ty(getGlobalContext()),0);
+	indicies1[1] = ConstantInt::get(Type::getInt32Ty(getGlobalContext()),0);
+	address1 = GetElementPtrInst::CreateInBounds(retVal, indicies1,"",bb);
+
+	indicies2[0] = ConstantInt::get(Type::getInt32Ty(getGlobalContext()),0);
+	indicies2[1] = ConstantInt::get(Type::getInt32Ty(getGlobalContext()),1);
+	address2 = GetElementPtrInst::CreateInBounds(retVal, indicies2,"",bb);
+
+	new StoreInst(value1,address1,bb);
+	new StoreInst(value2,address2,bb);
+
+	finalRet = new LoadInst(retVal,"",bb);
+	ReturnInst::Create(getGlobalContext(),finalRet,bb);
+}
+
 
 bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b)
 {
@@ -141,12 +150,88 @@ bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b)
 
 		// increment now; LowerIntrinsic delete makes iterator invalid.
 		++i;
-		if (!ii) continue;
+		if (!ii) {
+			if (i->getOpcode() == Instruction::Fence) {
+				i->eraseFromParent();
+				dirty = true;
+			}
+			continue;
+		}
 
 		switch (ii->getIntrinsicID()) {
 		case Intrinsic::vastart:
 		case Intrinsic::vaend:
 			break;
+
+	/* stolen from Ben. So fucking sick of llvm-3.0 right now */
+      case Intrinsic::uadd_with_overflow: {
+        Module * m = b.getParent()->getParent();
+        std::stringstream namestream;
+        namestream << "_uadd_with_overflow_";
+        namestream << cast<StructType>(ii->getType())->getElementType(0)->getPrimitiveSizeInBits();
+        namestream << "bit_impl";
+        const std::string & newname = namestream.str();
+        Function * f = m->getFunction(newname);
+        if (f == NULL) {
+          f = Function::Create(ii->getCalledFunction()->getFunctionType(),
+                              GlobalValue::ExternalLinkage,
+                              newname,m);
+          Function::ArgumentListType::iterator ait=
+                  f->getArgumentList().begin();
+          Argument *a, *b;
+          a = &*ait;
+          b = &*++ait;
+          a->setName("a");
+          b->setName("b");
+          BasicBlock * bb = BasicBlock::Create(getGlobalContext(),"entry",f);
+          Value * Result = BinaryOperator::CreateAdd(a,
+                                b,"",bb);
+          Value * ICMPLarger = new ICmpInst(*bb,CmpInst::ICMP_UGE,a,b);
+          Value * Larger = SelectInst::Create(ICMPLarger, a, b, "", bb);
+          Value * Overflow = new ICmpInst(*bb, CmpInst::ICMP_UGT, Larger, Result);
+
+          Type * retType = f->getReturnType();
+          createReturnStruct(retType,Result,Overflow,bb);
+	  km->addFunctionProcessed(f);
+        }
+        ii->getCalledFunction()->replaceAllUsesWith(f);
+	dirty = true;
+        break;
+      }
+      case Intrinsic::umul_with_overflow: {
+        Module * m = b.getParent()->getParent();
+        std::stringstream namestream;
+        namestream << "_umul_with_overflow_";
+        namestream << cast<StructType>(ii->getType())->getElementType(0)->getPrimitiveSizeInBits();
+        namestream << "bit_impl";
+        const std::string & newname = namestream.str();
+        Function * f = m->getFunction(newname);
+        if (!f) {
+          f = Function::Create(ii->getCalledFunction()->getFunctionType(),
+                              GlobalValue::ExternalLinkage,
+                              newname,m);
+          Function::ArgumentListType::iterator ait=
+                  f->getArgumentList().begin();
+          Argument *a, *b;
+          a = &*ait;
+          b = &*++ait;
+          a->setName("a");
+          b->setName("b");
+          BasicBlock * bb = BasicBlock::Create(getGlobalContext(),"entry",f);
+          Value * Result = BinaryOperator::CreateMul(a,
+                                b,"",bb);
+          Value * aq = BinaryOperator::CreateUDiv(Result,
+                                b,"",bb);
+          Value * ICMPDiff = new ICmpInst(*bb,CmpInst::ICMP_NE,a,aq);
+
+          Type * retType = f->getReturnType();
+          createReturnStruct(retType,Result,ICMPDiff,bb);
+        }
+        ii->getCalledFunction()->replaceAllUsesWith(f);
+	dirty = true;
+        break;
+      }
+
 
 		// Lower vacopy so that object resolution etc is handled by
 		// normal instructions.
@@ -154,17 +239,12 @@ bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b)
 			clean_vacopy(i, ii);
 			break;
 
-		/* for the time being, we need *some* stoppoints because
-		 * KLEE is retarded and uses it to figure out line numbers */
-#if 0
-		case Intrinsic::dbg_stoppoint:
-		dirty |= clean_dup_stoppoint(i, ii);
-		break;
-#endif
-
-
 		case Intrinsic::dbg_declare:
 		case Intrinsic::dbg_value:
+			ii->eraseFromParent();
+			dirty = true;
+			break;
+
 //		case Intrinsic::dbg_stoppoint:
 #if 0
 		case Intrinsic::dbg_region_start:
@@ -173,20 +253,7 @@ bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b)
 			// Remove these regardless of lower intrinsics flag.
 			// This can be removed once IntrinsicLowering is fixed to
 			// not have bad caches.
-			ii->eraseFromParent();
-			dirty = true;
-			break;
 #endif
-
-		/* r534, ignore memory barriers */
-		case Intrinsic::memory_barrier:
-			if (LowerIntrinsics) {
-				ii->eraseFromParent();
-				dirty = true;
-			}
-			break;
-
-
 		default:
 			if (LowerIntrinsics)
 				IL->LowerIntrinsicCall(ii);

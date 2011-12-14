@@ -217,6 +217,7 @@ ExecutionState* ExecutorVex::setupInitialState(void)
 	foreach (it, l.begin(), l.end()) {
 		kmodule->addModule(*it);
 	}
+	theVexHelpers->useExternalMod(kmodule->module);
 
 	sys_model->installInitializers(init_func);
 
@@ -252,13 +253,7 @@ void ExecutorVex::runImage(void)
 	if (start_state == NULL)
 		return;
 
-	std::cerr
-		<< "NUMBER OF MEMOBJS INIT: "
-		<< start_state->memObjects.size() << '\n';
-
-	fprintf(stderr, "COMMENCE THE RUN!!!!!!\n");
 	run(*start_state);
-	fprintf(stderr, "DONE RUNNING.\n");
 
 	delete processTree;
 	processTree = NULL;
@@ -348,7 +343,7 @@ void ExecutorVex::allocGlobalVariableNoDecl(
 	ExecutionState& state,
 	const GlobalVariable& gv)
 {
-	const Type	*ty;
+	Type		*ty;
 	uint64_t	size;
 	MemoryObject	*mo = 0;
 	ObjectState	*os;
@@ -379,7 +374,7 @@ void ExecutorVex::allocGlobalVariableDecl(
 	// better we could support user definition, or use the EXE style
 	// hack where we check the object file information.
 
-	const Type *ty = gv.getType()->getElementType();
+	Type *ty = gv.getType()->getElementType();
 	uint64_t size = target_data->getTypeStoreSize(ty);
 
 	// XXX - DWD - hardcode some things until we decide how to fix.
@@ -1057,10 +1052,10 @@ void ExecutorVex::printStateErrorMessage(
 		os << "\n";
 	}
 
-	if (state.prevPC && state.prevPC->inst) {
+	if (state.prevPC && state.prevPC->getInst()) {
 		raw_os_ostream	ros(os);
 		ros << "problem PC:\n";
-		ros << *(state.prevPC->inst);
+		ros << *(state.prevPC->getInst());
 		ros << "\n";
 	}
 

@@ -254,14 +254,14 @@ void StatsTracker::addKFunction(KFunction* kf)
 		KInstruction *ki = kf->instructions[i];
 
 		if (OutputIStats) {
-			unsigned id = ki->info->id;
+			unsigned id = ki->getInfo()->id;
 			theStatisticManager->setIndex(id);
 		}
 
 		if (kf->trackCoverage) {
-			if (instructionIsCoverable(ki->inst))
+			if (instructionIsCoverable(ki->getInst()))
 				++stats::uncoveredInstructions;
-			if (BranchInst *bi = dyn_cast<BranchInst>(ki->inst))
+			if (BranchInst *bi = dyn_cast<BranchInst>(ki->getInst()))
 				if (!bi->isUnconditional())
 					numBranches++;
 		}
@@ -297,8 +297,8 @@ void StatsTracker::trackInstTime(ExecutionState& es)
 
 void StatsTracker::stepInstUpdateFrame(ExecutionState &es)
 {
-	Instruction *inst = es.pc->inst;
-	const InstructionInfo &ii = *es.pc->info;
+	Instruction *inst = es.pc->getInst();
+	const InstructionInfo &ii = *es.pc->getInfo();
 
 	if (es.stack.empty())
 		return;
@@ -357,10 +357,10 @@ void StatsTracker::framePushed(ExecutionState &es, StackFrame *parentFrame)
 		CallPathNode *parent;
 		CallPathNode *cp;
 
-		parent = parentFrame ? parentFrame->callPathNode : 0;
+		parent = parentFrame ? parentFrame->callPathNode : NULL;
 		cp = callPathManager.getCallPath(
 			parent,
-			sf.caller ? sf.caller->inst : 0,
+			sf.caller ? sf.caller->getInst() : NULL,
 			sf.kf->function);
 
 		sf.callPathNode = cp;
@@ -504,7 +504,7 @@ void StatsTracker::updateStateStatistics(uint64_t addend)
 	executor.stateManager->end())
 	{
 		ExecutionState &state = **it;
-		const InstructionInfo &ii = *state.pc->info;
+		const InstructionInfo &ii = *state.pc->getInfo();
 
 		theStatisticManager->incrementIndexedValue(
 			stats::states, ii.id, addend);
@@ -609,10 +609,10 @@ void StatsTracker::writeIStats(void)
             (isa<CallInst>(instr) || isa<InvokeInst>(instr))))
             continue;
 
-        CallSiteSummaryTable::iterator it = callSiteStats.find(instr);
-        if (it == callSiteStats.end()) continue;
+        CallSiteSummaryTable::iterator cs_it = callSiteStats.find(instr);
+        if (cs_it == callSiteStats.end()) continue;
 
-        foreach (fit, it->second.begin(), it->second.end()) {
+        foreach (fit, cs_it->second.begin(), cs_it->second.end()) {
           Function *f = fit->first;
           CallSiteInfo &csi = fit->second;
           const InstructionInfo &fii = km->infos->getFunctionInfo(f);

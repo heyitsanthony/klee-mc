@@ -669,7 +669,7 @@ private:
 		RangeMap::iterator it = currentRanges.find(e);
 		if (it == currentRanges.end()
 				|| range != it->second) {
-			currentRanges[e] == range;
+			currentRanges[e] = range;
 			return true;
 		} else
 			return false;

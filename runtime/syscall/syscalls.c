@@ -112,7 +112,7 @@ static void* sc_mmap_anon(void* regfile)
 	}
 
 	/* mapping has a deisred location */
-	addr = sc_mmap_addr(regfile, (void*)addr, len);
+	addr = sc_mmap_addr(regfile, (void*)GET_ARG0(regfile), len);
 	return addr;
 }
 

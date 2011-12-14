@@ -33,15 +33,20 @@ using namespace llvm;
 
 namespace klee {
 
-  ref<ConstantExpr> Executor::evalConstantExpr(llvm::ConstantExpr *ce) {
-    const llvm::Type *type = ce->getType();
+  ref<klee::ConstantExpr>
+  Executor::evalConstantExpr(
+	const KModule* km,
+	const globaladdr_map* gm,
+	llvm::ConstantExpr *ce)
+  {
+    llvm::Type *type = ce->getType();
 
     ref<ConstantExpr> op1(0), op2(0), op3(0);
     int numOperands = ce->getNumOperands();
 
-    if (numOperands > 0) op1 = evalConstant(ce->getOperand(0));
-    if (numOperands > 1) op2 = evalConstant(ce->getOperand(1));
-    if (numOperands > 2) op3 = evalConstant(ce->getOperand(2));
+    if (numOperands > 0) op1 = evalConstant(km, gm, ce->getOperand(0));
+    if (numOperands > 1) op2 = evalConstant(km, gm, ce->getOperand(1));
+    if (numOperands > 2) op3 = evalConstant(km, gm, ce->getOperand(2));
 
     switch (ce->getOpcode()) {
     default :
@@ -50,10 +55,10 @@ namespace klee {
                 << "opcode: " << ce->getOpcode() << "\n";
       abort();
 
-    case Instruction::Trunc: 
-      return op1->Extract(0, getWidthForLLVMType(type));
-    case Instruction::ZExt:  return op1->ZExt(getWidthForLLVMType(type));
-    case Instruction::SExt:  return op1->SExt(getWidthForLLVMType(type));
+    case Instruction::Trunc:
+      return op1->Extract(0, km->getWidthForLLVMType(type));
+    case Instruction::ZExt:  return op1->ZExt(km->getWidthForLLVMType(type));
+    case Instruction::SExt:  return op1->SExt(km->getWidthForLLVMType(type));
     case Instruction::Add:   return op1->Add(op2);
     case Instruction::Sub:   return op1->Sub(op2);
     case Instruction::Mul:   return op1->Mul(op2);
@@ -70,36 +75,36 @@ namespace klee {
     case Instruction::BitCast:  return op1;
 
     case Instruction::IntToPtr:
-      return op1->ZExt(getWidthForLLVMType(type));
+      return op1->ZExt(km->getWidthForLLVMType(type));
 
     case Instruction::PtrToInt:
-      return op1->ZExt(getWidthForLLVMType(type));
+      return op1->ZExt(km->getWidthForLLVMType(type));
 
     case Instruction::GetElementPtr: {
       ref<ConstantExpr> base = op1->ZExt(Context::get().getPointerWidth());
 
       foreach (ii, gep_type_begin(ce), gep_type_end(ce)) {
-        ref<ConstantExpr> addend = 
+        ref<ConstantExpr> addend =
           ConstantExpr::alloc(0, Context::get().getPointerWidth());
 
-        if (const StructType *st = dyn_cast<StructType>(*ii)) {
-          const StructLayout *sl = target_data->getStructLayout(st);
-          const ConstantInt *ci = cast<ConstantInt>(ii.getOperand());
+        if (StructType *st = dyn_cast<StructType>(*ii)) {
+          const StructLayout *sl = km->targetData->getStructLayout(st);
+          ConstantInt *ci = cast<ConstantInt>(ii.getOperand());
 
           addend = ConstantExpr::alloc(
 	    sl->getElementOffset(
 	      (unsigned)ci->getZExtValue()),
               Context::get().getPointerWidth());
         } else {
-          const SequentialType *st = cast<SequentialType>(*ii);
-          ref<ConstantExpr> index = 
-            evalConstant(cast<Constant>(ii.getOperand()));
-          unsigned elementSize = target_data->getTypeStoreSize(
-	  	st->getElementType());
+          SequentialType *seq_t = cast<SequentialType>(*ii);
+          ref<ConstantExpr> index =
+            evalConstant(km, gm, cast<Constant>(ii.getOperand()));
+          unsigned elementSize = km->targetData->getTypeStoreSize(
+	  	seq_t->getElementType());
 
           index = index->ZExt(Context::get().getPointerWidth());
           addend = index->Mul(ConstantExpr::alloc(
-	    elementSize, 
+	    elementSize,
             Context::get().getPointerWidth()));
         }
 
@@ -108,7 +113,7 @@ namespace klee {
 
       return base;
     }
-      
+
     case Instruction::ICmp: {
       switch(ce->getPredicate()) {
       default: assert(0 && "unhandled ICmp predicate");

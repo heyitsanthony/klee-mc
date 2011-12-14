@@ -21,12 +21,12 @@
 
 
 namespace klee{
-  class ExecutionState;
-  class Cell;
-  class MemoryObject;
-  class KFunction;
-  class KInstIterator;
-  class CallPathNode;
+class ExecutionState;
+class Cell;
+class MemoryObject;
+class KFunction;
+class KInstIterator;
+class CallPathNode;
 
 struct StackFrame {
   friend class ExecutionState;

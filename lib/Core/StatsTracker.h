@@ -28,7 +28,7 @@ namespace klee {
   class InstructionInfoTable;
   class InterpreterHandler;
   class KInstruction;
-  class StackFrame;
+  struct StackFrame;
   class KModule;
   class KFunction;
 

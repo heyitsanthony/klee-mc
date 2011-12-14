@@ -1311,7 +1311,7 @@ VersionResult ParserImpl::ParseVersionSpecifier() {
     }
   }
 
-  Token Start = Tok;
+  //Token Start = Tok;
   VersionResult Res = ParseVersion();
   // Define update list to avoid use-of-undef errors.
   if (!Res.isValid()) {
@@ -1521,7 +1521,7 @@ TypeResult ParserImpl::ParseTypeSpecifier() {
   assert(Tok.kind == Token::KWWidth && "Unexpected token.");
 
   // FIXME: Need APInt technically.
-  Token TypeTok = Tok;
+  // Token TypeTok = Tok;
   int width = atoi(std::string(Tok.start+1,Tok.length-1).c_str());
   ConsumeToken();
 

@@ -14,7 +14,8 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetLowering.h"
 #include "llvm/Support/Host.h"
-#include "llvm/Target/TargetRegistry.h"
+#include "llvm/Support/TargetRegistry.h"
+#include <llvm/CodeGen/IntrinsicLowering.h>
 
 using namespace llvm;
 using namespace klee;
@@ -36,31 +37,22 @@ RaiseAsmPass::RaiseAsmPass(llvm::Module* module)
 			<< Err << "\n";
 		TLI = 0;
 	} else {
-		TM = NativeTarget->createTargetMachine(HostTriple, "");
+		TM = NativeTarget->createTargetMachine(HostTriple, "", "");
 		TLI = TM->getTargetLowering();
 	}
 }
 
-Function* RaiseAsmPass::getIntrinsic(
-	unsigned IID,
-	const Type **Tys,
-	unsigned NumTys)
-{
-  return Intrinsic::getDeclaration(
-  	module_, (llvm::Intrinsic::ID) IID, Tys, NumTys);
-}
+RaiseAsmPass::~RaiseAsmPass(void) { if (TM) delete TM; }
 
-RaiseAsmPass::~RaiseAsmPass(void)
-{
-	if (TM) delete TM;
-}
-
+#include <iostream>
 // FIXME: This should just be implemented as a patch to
 // X86TargetAsmInfo.cpp, then everyone will benefit.
 bool RaiseAsmPass::runOnInstruction(Instruction *I)
 {
 	CallInst	*ci;
 	InlineAsm	*ia;
+
+	assert (I != NULL);
 
 	if(!(ci = dyn_cast<CallInst>(I)))
 		return false;
@@ -81,11 +73,14 @@ bool RaiseAsmPass::runOnInstruction(Instruction *I)
 		cs == "=r,0,~{dirflag},~{fpsr},~{flags},~{cc}") ||
 		(T == llvm::Type::getInt32Ty(getGlobalContext()) &&
 		as == "rorw $$8, ${0:w};rorl $$16, $0;rorw $$8, ${0:w}" &&
-		cs == "=r,0,~{dirflag},~{fpsr},~{flags},~{cc}")))
+		cs == "=r,0,~{dirflag},~{fpsr},~{flags},~{cc}") ||
+
+		(T == llvm::Type::getInt32Ty(getGlobalContext()) &&
+		as == "bswap $0" &&
+		cs == "=r,0,~{dirflag},~{fpsr},~{flags}"))
+		)
 	{
-		Function *F = getIntrinsic(Intrinsic::bswap, Arg0->getType());
-		ci->setCalledFunction(F);
-		return true;
+		return IntrinsicLowering::LowerToByteSwap(ci);
 	}
 
 	// llvm::errs() << ia->getAsmString() << '\n';
@@ -96,8 +91,11 @@ bool RaiseAsmPass::runOnFunction(Function& F)
 {
 	bool changed = false;
 	foreach (bi, F.begin(), F.end()) {
-		foreach (ii, bi->begin(), bi->end()) {
+		for (	BasicBlock::iterator ii = bi->begin(), ie = bi->end();
+			ii != ie;)
+		{
 			Instruction *i = ii;
+			++ii;
 			changed |= runOnInstruction(i);
 		}
 	}

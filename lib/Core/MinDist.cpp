@@ -57,14 +57,14 @@ uint64_t klee::computeMinDistToUncovered(
 	// unreachable on return, best is local
 	if (minDistAtRA==0)
 		return sm.getIndexedValue(
-			stats::minDistToUncovered, ki->info->id);
+			stats::minDistToUncovered, ki->getInfo()->id);
 
 	uint64_t minDistLocal, distToReturn;
 
 	minDistLocal = sm.getIndexedValue(
-		stats::minDistToUncovered, ki->info->id);
+		stats::minDistToUncovered, ki->getInfo()->id);
 	distToReturn = sm.getIndexedValue(
-		stats::minDistToReturn, ki->info->id);
+		stats::minDistToReturn, ki->getInfo()->id);
 
 
 	// return unreachable, best is local

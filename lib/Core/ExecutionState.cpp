@@ -42,13 +42,13 @@ ExecutionState::ExecutionState(KFunction *kf)
 : num_allocs(0)
 , underConstrained(false)
 , depth(0)
+, weight(1)
 , pc(kf->instructions)
 , prevPC(pc)
 , queryCost(0.)
-, weight(1)
 , instsSinceCovNew(0)
-, coveredNew(false)
 , lastChosen(0)
+, coveredNew(false)
 , isCompactForm(false)
 , isReplay(false)
 , forkDisabled(false)
@@ -74,8 +74,8 @@ ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
 ExecutionState::ExecutionState(void)
 : num_allocs(0)
 , underConstrained(0)
-, coveredNew(false)
 , lastChosen(0)
+, coveredNew(false)
 , isCompactForm(false)
 , isReplay(false)
 , ptreeNode(0)
@@ -217,9 +217,7 @@ void ExecutionState::writeLocalCell(unsigned sfi, unsigned i, ref<Expr> value)
 }
 
 KInstIterator ExecutionState::getCaller(void) const
-{
-	return stack.back().caller;
-}
+{ return stack.back().caller; }
 
 void ExecutionState::copy(
 	ObjectState* os, const ObjectState* reallocFrom, unsigned count)
@@ -237,7 +235,7 @@ void ExecutionState::dumpStack(std::ostream& os)
   {
     StackFrame &sf = *it;
     Function *f = sf.kf->function;
-    const InstructionInfo &ii = *target->info;
+    const InstructionInfo &ii = *target->getInfo();
     os << "\t#" << idx++
         << " " << std::setw(8) << std::setfill('0') << ii.assemblyLine
         << " in " << f->getNameStr() << " (";
@@ -291,7 +289,7 @@ void ExecutionState::bindArgument(
 
 void ExecutionState::bindLocal(KInstruction* target, ref<Expr> value)
 {
-    writeLocalCell(stack.size() - 1, target->dest, value);
+    writeLocalCell(stack.size() - 1, target->getDest(), value);
 }
 
 void ExecutionState::transferToBasicBlock(BasicBlock *dst, BasicBlock *src)
@@ -313,12 +311,12 @@ void ExecutionState::transferToBasicBlock(BasicBlock *dst, BasicBlock *src)
 	unsigned	entry;
 
 	kf = getCurrentKFunc();
-	entry = kf->basicBlockEntry[dst];
+	entry = kf->getBasicBlockEntry(dst);
 	pc = &kf->instructions[entry];
 
-	if (pc->inst->getOpcode() == Instruction::PHI) {
-		PHINode *first = static_cast<PHINode*>(pc->inst);
-		incomingBBIndex = first->getBasicBlockIndex(src);
+	if (pc->getInst()->getOpcode() == Instruction::PHI) {
+		PHINode *phi = static_cast<PHINode*>(pc->getInst());
+		incomingBBIndex = phi->getBasicBlockIndex(src);
 	}
 }
 
@@ -389,7 +387,7 @@ bool ExecutionState::isReplayDone(void) const
 unsigned ExecutionState::stepReplay(void)
 {
 #ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
-    assert (prevPC->info->assemblyLine == (*replayBranchIterator).second &&
+    assert (prevPC->getInfo()->assemblyLine == (*replayBranchIterator).second &&
       "branch instruction IDs do not match");
 #endif
     unsigned targetIndex = (*replayBranchIterator).first;

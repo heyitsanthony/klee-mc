@@ -12,7 +12,7 @@ using namespace klee;
 Instruction *BumpMergingSearcher::getMergePoint(ExecutionState &es)
 {
   if (!mergeFunction) return 0;
-  Instruction *i = es.pc->inst;
+  Instruction *i = es.pc->getInst();
 
   if (i->getOpcode() == Instruction::Call) {
     CallSite cs(cast<CallInst > (i));

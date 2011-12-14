@@ -18,7 +18,7 @@ class Array;
 class Assignment;
 class ExecutionState;
 class Expr;
-struct Query;
+class Query;
 
 /// SolverImpl - Abstract base clase for solver implementations.
 class SolverImpl {

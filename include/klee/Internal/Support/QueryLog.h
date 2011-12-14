@@ -15,7 +15,7 @@
 #include <vector>
 
 namespace klee {
-  struct Query;
+  class Query;
 
   class QueryLogEntry {
   public:

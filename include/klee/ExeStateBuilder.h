@@ -35,6 +35,8 @@ public:
 		theESB = esb;
 	}
 
+	virtual ~ExeStateBuilder() {}
+
 protected:
 	virtual ExecutionState* _create(void) const = 0;
 	virtual ExecutionState* _create(KFunction* kf) const = 0;

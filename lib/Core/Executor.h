@@ -36,6 +36,7 @@ namespace llvm {
   class CallInst;
   class CallSite;
   class Constant;
+  class ConstantExpr;
   class Function;
   class GlobalValue;
   class GlobalVariable;
@@ -56,7 +57,6 @@ namespace klee {
   class ConstantExpr;
   class InstructionInfoTable;
   class KFunction;
-  class KInstruction;
   class KInstIterator;
   class MMU;
   class MemoryManager;
@@ -65,7 +65,7 @@ namespace klee {
   class PTree;
   class Searcher;
   class SpecialFunctionHandler;
-  class StackFrame;
+  struct StackFrame;
   class StatsTracker;
   class TimingSolver;
   class TreeStreamWriter;
@@ -192,8 +192,6 @@ protected:
     terminateStateOnError(state, message, "exec.err", info);
   }
 
-  Expr::Width getWidthForLLVMType(const llvm::Type *type) const;
-
   ref<ConstantExpr> getSmallSymAllocSize(
 	ExecutionState &state, ref<Expr>& size);
 
@@ -289,9 +287,9 @@ private:
 
   ExecutionState* initialStateCopy;
 
-  /// Whether implied-value concretization is enabled. 
+  /// Whether implied-value concretization is enabled.
   /// Currently false, it is buggy (it needs to validate its writes).
-  //  XXX I don't know what it means by validating writes. It 
+  //  XXX I don't know what it means by validating writes. It
   //  looks good to me, so I enable by default --AJR
   bool ivcEnabled;
 
@@ -321,15 +319,16 @@ private:
   ref<Expr> cmpVector(
   	ExecutionState& state,
 	int pred,
-	const llvm::VectorType* op_type,
+	llvm::VectorType* op_type,
 	ref<Expr> left, ref<Expr> right,
 	bool& ok);
   ref<Expr> sextVector(
 	ExecutionState& state,
 	ref<Expr> v,
-	const llvm::VectorType* srcTy,
-	const llvm::VectorType* dstTy);
+	llvm::VectorType* srcTy,
+	llvm::VectorType* dstTy);
   void instCall(ExecutionState& state, KInstruction* ki);
+  void instGetElementPtr(ExecutionState& state, KInstruction *ki);
 
   typedef std::pair<llvm::BasicBlock*, ref<Expr> >		TargetTy;
   typedef std::map<ref<ConstantExpr>, TargetTy >		TargetsTy;
@@ -457,9 +456,6 @@ private:
 
   bool isStateSeeding(ExecutionState* s);
 
-  ref<klee::ConstantExpr> evalConstantExpr(llvm::ConstantExpr *ce);
-
-
   void handlePointsToObj(ExecutionState &state,
                          KInstruction *target,
                          const std::vector<ref<Expr> > &arguments);
@@ -536,7 +532,12 @@ public:
 		bool isReadOnly);
 
 	// XXX should just be moved out to utility module
-	ref<klee::ConstantExpr> evalConstant(llvm::Constant *c);
+	ref<klee::ConstantExpr> evalConstant(llvm::Constant *c)
+	{ return evalConstant(kmodule, &globalAddresses, c); }
+
+	static ref<klee::ConstantExpr> evalConstant(
+		const KModule* km, const globaladdr_map* gm, llvm::Constant *c);
+
 
 	/// Allocate and bind a new object in a particular state. NOTE: This
 	/// function may fork.
@@ -587,6 +588,13 @@ public:
 		ref<Expr> address,
 		KInstruction *target = 0);
 
+	ref<klee::ConstantExpr> evalConstantExpr(llvm::ConstantExpr *ce)
+	{ return evalConstantExpr(kmodule, &globalAddresses, ce); }
+
+	static ref<klee::ConstantExpr> evalConstantExpr(
+		const KModule* km,
+		const globaladdr_map* gm,
+		llvm::ConstantExpr *ce);
 
 	virtual void setSymbolicPathWriter(TreeStreamWriter *tsw)
 	{ symPathWriter = tsw; }
@@ -605,7 +613,7 @@ public:
 	}
 
 	bool isReplayOut(void) const { return (replayOut != NULL); }
-	bool isReplayPaths(void) const { return (replayPaths != NULL); } 
+	bool isReplayPaths(void) const { return (replayPaths != NULL); }
 
 	virtual void useSeeds(const std::vector<struct KTest *> *seeds)
 	{usingSeeds = seeds; }

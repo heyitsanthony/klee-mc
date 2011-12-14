@@ -60,7 +60,7 @@ double WeightedRandomSearcher::getWeight(ExecutionState *es)
 		uint64_t count;
 		count = theStatisticManager->getIndexedValue(
 			stats::instructions,
-			es->pc->info->id);
+			es->pc->getInfo()->id);
 		double inv = 1. / std::max((uint64_t) 1, count);
 		es->weight = inv * inv;
 		break;

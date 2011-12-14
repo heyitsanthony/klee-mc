@@ -29,7 +29,7 @@ Instruction *MergingSearcher::getMergePoint(ExecutionState &es)
 {
   if (!mergeFunction) return 0;
 
-  Instruction *i = es.pc->inst;
+  Instruction *i = es.pc->getInst();
 
   if (i->getOpcode() == Instruction::Call) {
     CallSite cs(cast<CallInst > (i));
@@ -126,10 +126,10 @@ void MergingSearcher::update(ExecutionState *current, const States s)
 	std::set<ExecutionState *> alt = s.getRemoved();
 	foreach (it, s.getRemoved().begin(), s.getRemoved().end()) {
 		ExecutionState *es = *it;
-		ExeStateSet::const_iterator it = statesAtMerge.find(es);
+		ExeStateSet::const_iterator c_it = statesAtMerge.find(es);
 
-		if (it == statesAtMerge.end()) continue;
-		statesAtMerge.erase(it);
+		if (c_it == statesAtMerge.end()) continue;
+		statesAtMerge.erase(c_it);
 		alt.erase(alt.find(es));
 	}
 

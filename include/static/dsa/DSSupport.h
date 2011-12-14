@@ -38,7 +38,7 @@ namespace DS { // FIXME: After the paper, this should get cleaned up
   /// isPointerType - Return true if this first class type is big enough to hold
   /// a pointer.
   ///
-  bool isPointerType(const Type *Ty);
+  bool isPointerType(Type *Ty);
 }
 
 //===----------------------------------------------------------------------===//

@@ -36,8 +36,6 @@ namespace {
   cl::opt<bool> OnlyPrintMain("only-print-main-ds", cl::ReallyHidden);
   cl::opt<bool> DontPrintAnything("dont-print-ds", cl::ReallyHidden);
   cl::opt<bool> LimitPrint("dsa-limit-print", cl::Hidden);
-  STATISTIC (MaxGraphSize   , "Maximum graph size");
-  STATISTIC (NumFoldedNodes , "Number of folded nodes (in final graph)");
 }
 
 void DSNode::dump() const { print(std::cerr, 0); }
@@ -64,7 +62,7 @@ static std::string getCaption(const DSNode *N, const DSGraph *G) {
   if (N->isNodeCompletelyFolded())
     OS << "COLLAPSED";
   else {
-    WriteTypeSymbolic(OS, N->getType(), M);
+    //WriteTypeSymbolic(OS, N->getType(), M);
     if (N->isArray())
       OS << " array";
   }
@@ -283,6 +281,12 @@ void DSGraph::viewGraph() const {
 }
 
 
+#if 0
+namespace {
+  STATISTIC (MaxGraphSize   , "Maximum graph size");
+  STATISTIC (NumFoldedNodes , "Number of folded nodes (in final graph)");
+}
+
 template <typename Collection>
 static void printCollection(const Collection &C, std::ostream &O,
                             const Module *M, const std::string &Prefix) {
@@ -345,7 +349,7 @@ static void printCollection(const Collection &C, std::ostream &O,
   O << "\nGraphs contain [" << TotalNumNodes << "+" << TotalCallNodes
     << "] nodes total" << std::endl;
 }
-
+#endif
 
 void DataStructures::dumpCallGraph() const {
   for(  ActualCalleesTy::const_iterator ii = ActualCallees.begin(), ee = ActualCallees.end();

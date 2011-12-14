@@ -66,7 +66,7 @@ class DSNode {
   /// to whether or not it has been indexed like an array or not.  If the
   /// isArray bit is set, the node cannot grow.
   ///
-  const Type *Ty;                 // The type itself...
+  Type *Ty;                 // The type itself...
 
   /// Links - Contains one entry for every sizeof(void*) bytes in this memory
   /// object.  Note that if the node is not a multiple of size(void*) bytes
@@ -117,7 +117,7 @@ public:
   /// DSNode ctor - Create a node of the specified type, inserting it into the
   /// specified graph.
   ///
-  DSNode(const Type *T, DSGraph *G);
+  DSNode(Type *T, DSGraph *G);
 
   /// DSNode "copy ctor" - Copy the specified node, inserting it into the
   /// specified graph.  If NullLinks is true, then null out all of the links,
@@ -152,7 +152,7 @@ public:
 
   /// getType - Return the node type of this object...
   ///
-  const Type *getType() const { return Ty; }
+  Type *getType() const { return Ty; }
 
   bool isArray() const { return NodeType & ArrayNode; }
 
@@ -253,7 +253,7 @@ public:
   /// This method returns true if the node is completely folded, otherwise
   /// false.
   ///
-  bool mergeTypeInfo(const Type *Ty, unsigned Offset,
+  bool mergeTypeInfo(Type *Ty, unsigned Offset,
                      bool FoldIfIncompatible = true);
 
   /// foldNodeCompletely - If we determine that this node has some funny
@@ -334,13 +334,9 @@ public:
 
   /// maskNodeTypes - Apply a mask to the node types bitfield.
   ///
-  void maskNodeTypes(unsigned Mask) {
-    NodeType &= Mask;
-  }
+  void maskNodeTypes(unsigned Mask) { NodeType &= Mask; }
 
-  void mergeNodeFlags(unsigned RHS) {
-    NodeType |= RHS;
-  }
+  void mergeNodeFlags(unsigned RHS) { NodeType |= RHS; }
 
   /// getNodeFlags - Return all of the flags set on the node.  If the DEAD flag
   /// is set, hide it from the caller.

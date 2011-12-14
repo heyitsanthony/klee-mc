@@ -29,6 +29,7 @@ namespace llvm {
 }
 
 namespace klee {
+class KModule;
 
 /// RaiseAsmPass - This pass raises some common occurences of inline
 /// asm which are used by glibc into normal LLVM IR.
@@ -39,16 +40,9 @@ private:
 	const llvm::TargetLowering *TLI;
 	llvm::TargetMachine	*TM;
 
-	llvm::Function *getIntrinsic(
-		unsigned IID,
-		const llvm::Type **Tys,
-		unsigned NumTys);
-	llvm::Function *getIntrinsic(
-		unsigned IID,
-		const llvm::Type *Ty0)
-	{
-		return getIntrinsic(IID, &Ty0, 1);
-	}
+	llvm::Function *getIntrinsic(unsigned IID, llvm::Type *Ty0)
+	{ return getIntrinsic(IID, Ty0); }
+
 	bool runOnInstruction(llvm::Instruction *I);
 	llvm::Module* module_;
 public:
@@ -78,19 +72,25 @@ class IntrinsicCleanerPass : public llvm::FunctionPass
 
   bool runOnBasicBlock(llvm::BasicBlock &b);
 public:
-  IntrinsicCleanerPass(const llvm::TargetData &TD,
-                       bool LI=true)
+  IntrinsicCleanerPass(
+  	KModule* in_km, const llvm::TargetData &TD, bool LI=true)
     : llvm::FunctionPass((ID)),
       TargetData(TD),
       IL(new llvm::IntrinsicLowering(TD)),
-      LowerIntrinsics(LI) {}
+      LowerIntrinsics(LI),
+      km(in_km) {}
   ~IntrinsicCleanerPass() { delete IL; }
 
   virtual bool runOnFunction(llvm::Function& f);
 private:
+  void createReturnStruct(
+	llvm::Type * retType, llvm::Value * value1,
+	llvm::Value * value2, llvm::BasicBlock * bb);
+
   void clean_vacopy(llvm::BasicBlock::iterator& i, llvm::IntrinsicInst* ii);
   bool clean_dup_stoppoint(
   	llvm::BasicBlock::iterator& i, llvm::IntrinsicInst* ii);
+  KModule* km;
 };
 
 // performs two transformations which make interpretation
@@ -155,6 +155,7 @@ private:
                      llvm::BasicBlock *defaultBlock);
 };
 
+#if 0
 /// LowerAtomic - get rid of llvm.atomic.xxx
 class LowerAtomic : public llvm::BasicBlockPass {
 public:
@@ -162,7 +163,7 @@ public:
   LowerAtomic() : BasicBlockPass(ID) {}
   bool runOnBasicBlock(llvm::BasicBlock &BB);
 };
-
+#endif
 }
 
 #endif

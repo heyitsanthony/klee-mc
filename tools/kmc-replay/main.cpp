@@ -1,6 +1,6 @@
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
-#include "llvm/Target/TargetSelect.h"
-#include "llvm/ExecutionEngine/JIT.h"
+#include <llvm/Support/TargetSelect.h>
+#include <llvm/ExecutionEngine/JIT.h>
 #include "klee/Internal/ADT/Crumbs.h"
 #include "klee/Internal/ADT/KTestStream.h"
 #include "static/Sugar.h"

@@ -1,11 +1,11 @@
 #!/bin/bash
 
 VEXLLVMDIR=${VEXLLVMDIR:-"/home/chz/src/vex/"}
-LLVMDIR=${LLVMDIR:-"/home/chz/src/llvm/llvm-2.9/"}
+LLVMDIR=${LLVMDIR:-"/home/chz/src/llvm/llvm-3.0/"}
 STPDIR=${STPDIR:-"/home/chz/src/stp-fast/stp/"}
 BOOLECTORDIR=${BOOLECTORDIR:-"/home/chz/src/boolector/"}
 Z3DIR=${Z3DIR:-"/home/chz/src/z3/"}
-UCLIBDIR=${UCLIBDIR:-"/home/chz/src/klee-2.6-uclibc"}
+UCLIBDIR=${UCLIBDIR:-"/home/chz/src/klee-pruning"}
 VEXLIBDIR=${VEXLIBDIR:-"/usr/lib/valgrind/"}
 
 LLVM_CFLAGS_EXTRA="$EXTRAHEADERS"			\

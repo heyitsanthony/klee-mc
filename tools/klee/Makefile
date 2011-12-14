@@ -10,7 +10,7 @@
 LEVEL=../..
 TOOLNAME = klee
 USEDLIBS = kleeCore.a kleeModule.a kleaverSolver.a kleaverExpr.a kleeSupport.a kleeBasic.a kleeDSA.a
-LINK_COMPONENTS = jit bitreader bitwriter ipo linker engine
+X_LINK_COMPONENTS = jit bitreader bitwriter ipo linker engine
 
 include $(LEVEL)/Makefile.common
 
@@ -19,4 +19,5 @@ ifeq ($(ENABLE_STPLOG), 1)
 endif
 
 LIBS += $(SOLVERLIBS)
+LIBS += $(shell llvm-config --libfiles $(X_LINK_COMPONENTS))
 #-ltcmalloc

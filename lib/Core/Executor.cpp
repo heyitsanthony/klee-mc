@@ -45,7 +45,6 @@
 #include "llvm/IntrinsicInst.h"
 #include "llvm/Module.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Support/GetElementPtrTypeIterator.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetData.h"
 
@@ -432,7 +431,7 @@ bool Executor::forkFollowReplay(ExecutionState& current, struct ForkInfo& fi)
 
 	std::stringstream ss;
 	ss	<< "hit invalid branch in replay path mode (line="
-		<< current.prevPC->info->assemblyLine
+		<< current.prevPC->getInfo()->assemblyLine
 		<< ", expected target="
 		<< targetIndex << ", actual targets=";
 
@@ -811,7 +810,7 @@ void Executor::constrainFork(
 		if (!fi.wasReplayed)
 			curState->trackBranch(
 				condIndex,
-				current.prevPC->info->assemblyLine);
+				current.prevPC->getInfo()->assemblyLine);
 	}
 
 	if (fi.isSeeding) {
@@ -875,49 +874,35 @@ bool Executor::addConstraint(ExecutionState &state, ref<Expr> condition)
 	return true;
 }
 
-ref<klee::ConstantExpr> Executor::evalConstant(Constant *c)
+ref<klee::ConstantExpr> Executor::evalConstant(
+	const KModule* km, const globaladdr_map* gm, Constant *c)
 {
 	if (llvm::ConstantExpr *ce = dyn_cast<llvm::ConstantExpr>(c))
-		return evalConstantExpr(ce);
+		return evalConstantExpr(km, gm, ce);
 
-	else if (const ConstantInt *ci = dyn_cast<ConstantInt>(c))
+	if (const ConstantInt *ci = dyn_cast<ConstantInt>(c))
 		return ConstantExpr::alloc(ci->getValue());
 
-	else if (const ConstantFP *cf = dyn_cast<ConstantFP>(c))
+	if (const ConstantFP *cf = dyn_cast<ConstantFP>(c))
 		return ConstantExpr::alloc(cf->getValueAPF().bitcastToAPInt());
 
-	else if (const GlobalValue *gv = dyn_cast<GlobalValue>(c)) {
-		globaladdr_map::iterator it = globalAddresses.find(gv);
-
-		if (it == globalAddresses.end()) {
-			const Function	*f;
-			f = dynamic_cast<const Function*>(gv);
-			if (f && f->isDeclaration()) {
-				/* gets vexllvm imported functions working */
-				Function	*f2;
-				f2 = kmodule->module->getFunction(f->getNameStr());
-				it = globalAddresses.find(f2);
-			}
-
-			if (it == globalAddresses.end()) {
-				std::cerr << "WHOOPS: ";
-				gv->dump();
-			}
-		}
-		assert (it != globalAddresses.end() && "No global address!");
+	if (const GlobalValue *gv = dyn_cast<GlobalValue>(c)) {
+		assert (gm != NULL);
+		globaladdr_map::const_iterator it = gm->find(gv);
+		assert (it != gm->end() && "No global address!");
 		return it->second;
 	}
 
-	else if (isa<ConstantPointerNull>(c)) {
+	if (isa<ConstantPointerNull>(c)) {
 		return Expr::createPointer(0);
 	}
 
-	else if (isa<UndefValue>(c) || isa<ConstantAggregateZero>(c)) {
+	if (isa<UndefValue>(c) || isa<ConstantAggregateZero>(c)) {
 		return ConstantExpr::create(
-			0, getWidthForLLVMType(c->getType()));
+			0, km->getWidthForLLVMType(c->getType()));
 	}
 
-	else if (isa<ConstantVector>(c)) {
+	if (isa<ConstantVector>(c)) {
 		return ConstantExpr::createVector(cast<ConstantVector>(c));
 	}
 
@@ -971,8 +956,8 @@ Executor::toConstant(
 		<< " to value " << value;
 
 	if (showLineInfo) {
-		os	<< " (" << (*(state.pc)).info->file << ":"
-			<< (*(state.pc)).info->line << ")";
+		os	<< " (" << (*(state.pc)).getInfo()->file << ":"
+			<< (*(state.pc)).getInfo()->line << ")";
 	}
 
 	os << '\n';
@@ -1050,7 +1035,7 @@ void Executor::stepInstruction(ExecutionState &state)
   if (DebugPrintInstructions) {
     printFileLine(state, state.pc);
     std::cerr << std::setw(10) << stats::instructions << " "
-              << (state.pc->inst) << "\n";
+              << (state.pc->getInst()) << "\n";
   }
 
   if (statsTracker) statsTracker->stepInstruction(state);
@@ -1077,6 +1062,9 @@ void Executor::executeCallNonDecl(
 
 	assert (!f->isDeclaration() && "Expects a non-declaration function!");
 	kf = kmodule->getKFunction(f);
+	if (kf == NULL) {
+		std::cerr << "HEY: " << f->getNameStr() << '\n';
+	}
 	assert (kf != NULL && "Executing non-shadowed function");
 
 	state.pushFrame(state.prevPC, kf);
@@ -1143,7 +1131,7 @@ bool Executor::setupCallVarArgs(
 		}
 	}
 
-	os = state.allocate(size, true, false, state.prevPC->inst);
+	os = state.allocate(size, true, false, state.prevPC->getInst());
 	if (os == NULL) {
 		terminateStateOnExecError(state, "out of memory (varargs)");
 		return false;
@@ -1188,7 +1176,7 @@ void Executor::executeCall(
     state.exeTraceMgr.addEvent(
       new FunctionCallTraceEvent(state, ki, f->getName()));
 
-  Instruction *i = ki->inst;
+  Instruction *i = ki->getInst();
   Function* f2 = NULL;
   if (!f->isDeclaration() || (f2 = kmodule->module->getFunction(f->getNameStr())))
   {
@@ -1278,7 +1266,7 @@ void Executor::executeCall(
 }
 
 void Executor::printFileLine(ExecutionState &state, KInstruction *ki) {
-  const InstructionInfo &ii = *ki->info;
+  const InstructionInfo &ii = *ki->getInfo();
   if (ii.file != "")
     std::cerr << "     " << ii.file << ":" << ii.line << ":";
   else
@@ -1314,17 +1302,18 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 	bool		isVoidReturn;
 	ref<Expr>	result;
 
-	assert (isa<ReturnInst>(ki->inst) && "Expected ReturnInst");
+	assert (isa<ReturnInst>(ki->getInst()) && "Expected ReturnInst");
 
-	ri = cast<ReturnInst>(ki->inst);
+	ri = cast<ReturnInst>(ki->getInst());
 	kcaller = state.getCaller();
-	caller = kcaller ? kcaller->inst : 0;
+	caller = kcaller ? kcaller->getInst() : 0;
 	isVoidReturn = (ri->getNumOperands() == 0);
-	result = ConstantExpr::alloc(0, Expr::Bool);
 
 	assert (state.stack.size() > 1);
 
-	if (!isVoidReturn) result = eval(ki, 0, state).value;
+	if (!isVoidReturn) {
+		result = eval(ki, 0, state).value;
+	}
 
 	state.popFrame();
 
@@ -1342,19 +1331,22 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 		// checking the type, since C defaults to returning int for
 		// undeclared functions.
 		if (!caller->use_empty()) {
-			terminateStateOnExecError(state, "return void when caller expected a result");
+			terminateStateOnExecError(
+				state,
+				"return void when caller expected a result");
 		}
 		return;
 	}
 
 	assert (!isVoidReturn);
-	const Type *t = caller->getType();
-	if (t == Type::getVoidTy(getGlobalContext()))
+	Type *t = caller->getType();
+	if (t->isVoidTy())
 		return;
 
 	// may need to do coercion due to bitcasts
+	assert (result.isNull() == false);
 	Expr::Width from = result->getWidth();
-	Expr::Width to = getWidthForLLVMType(t);
+	Expr::Width to = kmodule->getWidthForLLVMType(t);
 
 	if (from != to) {
 		CallSite cs = (isa<InvokeInst>(caller) ?
@@ -1379,35 +1371,33 @@ const Cell& Executor::eval(
 {
 	int vnumber;
 
-	assert(index < ki->inst->getNumOperands());
+	assert(index < ki->getInst()->getNumOperands());
 
-	vnumber = ki->operands[index];
+	vnumber = ki->getOperand(index);
 	assert(	vnumber != -1 &&
 		"Invalid operand to eval(), not a value or constant!");
 
 	// Determine if this is a constant or not.
 	if (vnumber < 0) return kmodule->constantTable[-vnumber - 2];
 
-	//StackFrame &sf = state.stack.back();
-	//return sf.locals[vnumber];
 	return state.readLocalCell(state.stack.size() - 1, vnumber);
 }
 
 void Executor::instRet(ExecutionState &state, KInstruction *ki)
 {
-  if (state.stack.size() <= 1) {
-    assert (	!(state.getCaller()) &&
-    		"caller set on initial stack frame");
-    terminateStateOnExit(state);
-    return;
-  }
+	if (state.stack.size() <= 1) {
+		assert (!(state.getCaller()) &&
+			"caller set on initial stack frame");
+		terminateStateOnExit(state);
+		return;
+	}
 
-  retFromNested(state, ki);
+	retFromNested(state, ki);
 }
 
 void Executor::instBranch(ExecutionState& state, KInstruction* ki)
 {
-	BranchInst *bi = cast<BranchInst>(ki->inst);
+	BranchInst *bi = cast<BranchInst>(ki->getInst());
 
 	if (bi->isUnconditional()) {
 		state.transferToBasicBlock(
@@ -1470,8 +1460,8 @@ void Executor::finalizeBranch(
 		kf->trackCoverage &&
 		theStatisticManager->getIndexedValue(
 			stats::uncoveredInstructions,
-			kf->instructions[kf->basicBlockEntry[
-				bi->getSuccessor(branchIdx)]]->info->id))
+			kf->instructions[kf->getBasicBlockEntry(
+				bi->getSuccessor(branchIdx))]->getInfo()->id))
 	{
 		ExecutionState *newState;
 		newState = st->reconstitute(*initialStateCopy);
@@ -1487,7 +1477,7 @@ void Executor::finalizeBranch(
 
 void Executor::instCall(ExecutionState& state, KInstruction *ki)
 {
-	CallSite cs(ki->inst);
+	CallSite cs(ki->getInst());
 	unsigned numArgs = cs.arg_size();
 	Function *f = getCalledFunction(cs, state);
 
@@ -1557,7 +1547,7 @@ void Executor::executeBitCast(
 		if (i >= fType->getNumParams()) continue;
 
 		from = (*ai)->getWidth();
-		to = getWidthForLLVMType(fType->getParamType(i));
+		to = kmodule->getWidthForLLVMType(fType->getParamType(i));
 		if (from == to) continue;
 
 		// XXX need to check other param attrs ?
@@ -1619,18 +1609,18 @@ void Executor::executeSymbolicFuncPtr(
 
 void Executor::instCmp(ExecutionState& state, KInstruction *ki)
 {
-	CmpInst*		ci = cast<CmpInst>(ki->inst);
-	const Type*		op_type = ci->getOperand(1)->getType();
+	CmpInst*		ci = cast<CmpInst>(ki->getInst());
+	Type*			op_type = ci->getOperand(1)->getType();
 	ICmpInst*		ii = cast<ICmpInst>(ci);
 	ICmpInst::Predicate	pred;
-	const VectorType*	vt;
+	VectorType*		vt;
 
 	ref<Expr> left = eval(ki, 0, state).value;
 	ref<Expr> right = eval(ki, 1, state).value;
 	ref<Expr> result;
 
 	pred = ii->getPredicate();
-	if ((vt = dyn_cast<const VectorType>(op_type))) {
+	if ((vt = dyn_cast<VectorType>(op_type))) {
 		bool ok;
 		result = cmpVector(state, pred, vt, left, right, ok);
 		if (!ok) return;
@@ -1679,7 +1669,7 @@ void Executor::instCmp(ExecutionState& state, KInstruction *ki)
 ref<Expr> Executor::cmpVector(
 	ExecutionState& state,
 	int pred,
-	const llvm::VectorType* vt,
+	llvm::VectorType* vt,
 	ref<Expr> left, ref<Expr> right,
 	bool& ok)
 {
@@ -1714,8 +1704,8 @@ ref<Expr> Executor::cmpVector(
 ref<Expr> Executor::sextVector(
 	ExecutionState& state,
 	ref<Expr> v,
-	const VectorType* srcTy,
-	const VectorType* dstTy)
+	VectorType* srcTy,
+	VectorType* dstTy)
 {
 	SETUP_VOP_CAST(srcTy, dstTy);
 	for (unsigned int i = 0; i < v_elem_c; i++) {
@@ -1796,12 +1786,12 @@ void Executor::forkSwitch(
 		destBlock = caseDests[index];
 		kf = state.getCurrentKFunc();
 
-		entry = kf->basicBlockEntry[destBlock];
+		entry = kf->getBasicBlockEntry(destBlock);
 		if (	es->isCompactForm &&
 			kf->trackCoverage &&
 			theStatisticManager->getIndexedValue(
 				stats::uncoveredInstructions,
-				kf->instructions[entry]->info->id))
+				kf->instructions[entry]->getInfo()->id))
 		{
 			ExecutionState *newState;
 			newState = es->reconstitute(*initialStateCopy);
@@ -1816,7 +1806,7 @@ void Executor::forkSwitch(
 		if (	kf->trackCoverage &&
 			theStatisticManager->getIndexedValue(
 				stats::uncoveredInstructions,
-				kf->instructions[entry]->info->id))
+				kf->instructions[entry]->getInfo()->id))
 		{
 			es->coveredNew = true;
 			es->instsSinceCovNew = 1;
@@ -1830,7 +1820,7 @@ void Executor::forkSwitch(
 
 void Executor::instSwitch(ExecutionState& state, KInstruction *ki)
 {
-	SwitchInst *si = cast<SwitchInst>(ki->inst);
+	SwitchInst *si = cast<SwitchInst>(ki->getInst());
 	ref<Expr> cond = eval(ki, 0, state).value;
 
 	cond = toUnique(state, cond);
@@ -1966,15 +1956,15 @@ Executor::TargetTy Executor::getConstCondSwitchTargets(
 	const TargetValsTy	&minTargetValues,
 	TargetsTy		&targets)
 {
-	SwitchInst 		*si;
-	const llvm::IntegerType *Ty;
+	SwitchInst		*si;
+	llvm::IntegerType	*Ty;
 	ConstantInt		*ci;
 	unsigned		index;
 	TargetTy		defaultTarget;
 
 	targets.clear();
 
-	si = cast<SwitchInst>(ki->inst);
+	si = cast<SwitchInst>(ki->getInst());
 	Ty = cast<IntegerType>(si->getCondition()->getType());
 	ci = ConstantInt::get(Ty, CE->getZExtValue());
 	index = si->findCaseValue(ci);
@@ -2027,11 +2017,11 @@ void Executor::instInsertElement(ExecutionState& state, KInstruction* ki)
 	uint64_t idx = in_idx_ce->getZExtValue();
 
 	/* instruction has types of vectors embedded in its operands */
-	InsertElementInst*	iei = cast<InsertElementInst>(ki->inst);
+	InsertElementInst*	iei = cast<InsertElementInst>(ki->getInst());
 	assert (iei != NULL);
 
-	const VectorType*	vt;
-	vt = dynamic_cast<const VectorType*>(iei->getOperand(0)->getType());
+	VectorType*	vt;
+	vt = dyn_cast<VectorType>(iei->getOperand(0)->getType());
 	unsigned int		v_elem_c = vt->getNumElements();
 	unsigned int		v_elem_sz = vt->getBitWidth() / v_elem_c;
 
@@ -2090,11 +2080,11 @@ void Executor::instExtractElement(ExecutionState& state, KInstruction* ki)
 	uint64_t idx = in_idx_ce->getZExtValue();
 
 	/* instruction has types of vectors embedded in its operands */
-	ExtractElementInst*	eei = cast<ExtractElementInst>(ki->inst);
+	ExtractElementInst*	eei = cast<ExtractElementInst>(ki->getInst());
 	assert (eei != NULL);
 
-	const VectorType*	vt;
-	vt = dynamic_cast<const VectorType*>(eei->getOperand(0)->getType());
+	VectorType*	vt;
+	vt = dyn_cast<VectorType>(eei->getOperand(0)->getType());
 	unsigned int		v_elem_c = vt->getNumElements();
 	unsigned int		v_elem_sz = vt->getBitWidth() / v_elem_c;
 
@@ -2122,9 +2112,9 @@ void Executor::instShuffleVector(ExecutionState& state, KInstruction* ki)
 	assert (in_v_perm_ce != NULL && "WE HAVE NON-CONST SHUFFLES?? UGH.");
 
 	/* instruction has types of vectors embedded in its operands */
-	ShuffleVectorInst*	si = cast<ShuffleVectorInst>(ki->inst);
+	ShuffleVectorInst*	si = cast<ShuffleVectorInst>(ki->getInst());
 	assert (si != NULL);
-	const VectorType*	vt = si->getType();
+	VectorType*	vt = si->getType();
 	unsigned int		v_elem_c = vt->getNumElements();
 	unsigned int		v_elem_sz = vt->getBitWidth() / v_elem_c;
 	unsigned int		perm_sz = in_v_perm_ce->getWidth() / v_elem_c;
@@ -2167,7 +2157,7 @@ void Executor::instUnwind(ExecutionState& state)
       return;
     }
 
-    Instruction *caller = kcaller->inst;
+    Instruction *caller = kcaller->getInst();
     if (InvokeInst *ii = dyn_cast<InvokeInst>(caller)) {
       state.transferToBasicBlock(ii->getUnwindDest(), caller->getParent());
       return;
@@ -2210,12 +2200,12 @@ bool Executor::isFPPredicateMatched(
 void Executor::instAlloc(ExecutionState& state, KInstruction* ki)
 {
 	AllocaInst	*ai;
-	Instruction	*i = ki->inst;
+	Instruction	*i = ki->getInst();
 	unsigned	elementSize;
 	bool		isLocal;
 	ref<Expr>	size;
 
-	assert (!isMalloc(ki->inst) && "ANTHONY! FIX THIS");
+	assert (!isMalloc(ki->getInst()) && "ANTHONY! FIX THIS");
 
 	ai = cast<AllocaInst>(i);
 	elementSize = target_data->getTypeStoreSize(ai->getAllocatedType());
@@ -2233,7 +2223,7 @@ void Executor::instAlloc(ExecutionState& state, KInstruction* ki)
 
 void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
 {
-  Instruction *i = ki->inst;
+  Instruction *i = ki->getInst();
 
   switch (i->getOpcode()) {
   // Memory instructions...
@@ -2276,7 +2266,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
 
     // Special instructions
   case Instruction::Select: {
-    SelectInst *SI = cast<SelectInst>(ki->inst);
+    SelectInst *SI = cast<SelectInst>(ki->getInst());
     assert(SI->getCondition() == SI->getOperand(0) &&
            "Wrong operand index!");
     ref<Expr> cond = eval(ki, 0, state).value;
@@ -2294,10 +2284,10 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
   // Arithmetic / logical
 #define INST_ARITHOP(x,y)				\
   case Instruction::x : {				\
-    const VectorType*	vt;				\
+    VectorType*	vt;				\
     ref<Expr> left = eval(ki, 0, state).value;		\
     ref<Expr> right = eval(ki, 1, state).value;		\
-    vt = dynamic_cast<const VectorType*>(ki->inst->getOperand(0)->getType()); \
+    vt = dyn_cast<VectorType>(ki->getInst()->getOperand(0)->getType()); \
     if (vt) { 				\
 	SETUP_VOP(vt);			\
 	V_OP_PREPEND(x);		\
@@ -2338,54 +2328,44 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
   }
 
   case Instruction::GetElementPtr: {
-    KGEPInstruction *kgepi = static_cast<KGEPInstruction*>(ki);
-    ref<Expr> base = eval(ki, 0, state).value;
-
-    foreach (it, kgepi->indices.begin(), kgepi->indices.end()) {
-      uint64_t elementSize = it->second;
-      ref<Expr> index = eval(ki, it->first, state).value;
-      base = AddExpr::create(
-        base,
-        MulExpr::create(
-	  Expr::createCoerceToPointerType(index),
-          Expr::createPointer(elementSize)));
-    }
-    if (kgepi->offset)
-      base = AddExpr::create(base, Expr::createPointer(kgepi->offset));
-    state.bindLocal(ki, base);
+    instGetElementPtr(state, ki);
     break;
   }
 
     // Conversion
   case Instruction::Trunc: {
     CastInst *ci = cast<CastInst>(i);
-    ref<Expr> result = ExtractExpr::create(eval(ki, 0, state).value,
-                                           0,
-                                           getWidthForLLVMType(ci->getType()));
+    ref<Expr> result = ExtractExpr::create(
+      eval(ki, 0, state).value,
+      0,
+      kmodule->getWidthForLLVMType(ci->getType()));
+
     state.bindLocal(ki, result);
     break;
   }
   case Instruction::ZExt: {
     CastInst *ci = cast<CastInst>(i);
-    ref<Expr> result = ZExtExpr::create(eval(ki, 0, state).value,
-                                        getWidthForLLVMType(ci->getType()));
+    ref<Expr> result = ZExtExpr::create(
+      eval(ki, 0, state).value,
+      kmodule->getWidthForLLVMType(ci->getType()));
+
     state.bindLocal(ki, result);
     break;
   }
   case Instruction::SExt: {
     CastInst 		*ci = cast<CastInst>(i);
-    const VectorType	*vt_src, *vt_dst;
+    VectorType	*vt_src, *vt_dst;
     ref<Expr>		result, evaled;
 
-    vt_src = dyn_cast<const VectorType>(ci->getSrcTy());
-    vt_dst = dyn_cast<const VectorType>(ci->getDestTy());
+    vt_src = dyn_cast<VectorType>(ci->getSrcTy());
+    vt_dst = dyn_cast<VectorType>(ci->getDestTy());
     evaled =  eval(ki, 0, state).value;
     if (vt_src) {
       result = sextVector(state, evaled, vt_src, vt_dst);
     } else {
       result = SExtExpr::create(
         evaled,
-        getWidthForLLVMType(ci->getType()));
+        kmodule->getWidthForLLVMType(ci->getType()));
     }
     state.bindLocal(ki, result);
     break;
@@ -2393,14 +2373,14 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
 
   case Instruction::IntToPtr: {
     CastInst *ci = cast<CastInst>(i);
-    Expr::Width pType = getWidthForLLVMType(ci->getType());
+    Expr::Width pType = kmodule->getWidthForLLVMType(ci->getType());
     ref<Expr> arg = eval(ki, 0, state).value;
     state.bindLocal(ki, ZExtExpr::create(arg, pType));
     break;
   }
   case Instruction::PtrToInt: {
     CastInst *ci = cast<CastInst>(i);
-    Expr::Width iType = getWidthForLLVMType(ci->getType());
+    Expr::Width iType = kmodule->getWidthForLLVMType(ci->getType());
     ref<Expr> arg = eval(ki, 0, state).value;
     state.bindLocal(ki, ZExtExpr::create(arg, iType));
     break;
@@ -2435,7 +2415,7 @@ INST_FOP_ARITH(FRem, mod)
 
   case Instruction::FPTrunc: {
     FPTruncInst *fi = cast<FPTruncInst>(i);
-    Expr::Width resultType = getWidthForLLVMType(fi->getType());
+    Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());
     ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state).value,
                                         "floating point");
     if (!fpWidthToSemantics(arg->getWidth()) || resultType > arg->getWidth())
@@ -2452,7 +2432,7 @@ INST_FOP_ARITH(FRem, mod)
 
   case Instruction::FPExt: {
     FPExtInst *fi = cast<FPExtInst>(i);
-    Expr::Width resultType = getWidthForLLVMType(fi->getType());
+    Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());
     ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state).value,
                                         "floating point");
     if (!fpWidthToSemantics(arg->getWidth()) || arg->getWidth() > resultType)
@@ -2469,7 +2449,7 @@ INST_FOP_ARITH(FRem, mod)
 
   case Instruction::FPToUI: {
     FPToUIInst *fi = cast<FPToUIInst>(i);
-    Expr::Width resultType = getWidthForLLVMType(fi->getType());
+    Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());
     ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state).value,
                                        "floating point");
     if (!fpWidthToSemantics(arg->getWidth()) || resultType > 64)
@@ -2486,7 +2466,7 @@ INST_FOP_ARITH(FRem, mod)
 
   case Instruction::FPToSI: {
     FPToSIInst *fi = cast<FPToSIInst>(i);
-    Expr::Width resultType = getWidthForLLVMType(fi->getType());
+    Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());
     ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state).value,
                                        "floating point");
     if (!fpWidthToSemantics(arg->getWidth()) || resultType > 64)
@@ -2503,7 +2483,7 @@ INST_FOP_ARITH(FRem, mod)
 
   case Instruction::UIToFP: {
     UIToFPInst *fi = cast<UIToFPInst>(i);
-    Expr::Width resultType = getWidthForLLVMType(fi->getType());
+    Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());
     ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state).value,
                                        "floating point");
     const llvm::fltSemantics *semantics = fpWidthToSemantics(resultType);
@@ -2519,7 +2499,7 @@ INST_FOP_ARITH(FRem, mod)
 
   case Instruction::SIToFP: {
     SIToFPInst *fi = cast<SIToFPInst>(i);
-    Expr::Width resultType = getWidthForLLVMType(fi->getType());
+    Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());
     ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state).value,
                                        "floating point");
     const llvm::fltSemantics *semantics = fpWidthToSemantics(resultType);
@@ -2554,6 +2534,49 @@ INST_FOP_ARITH(FRem, mod)
     break;
   }
 
+  case Instruction::InsertValue: {
+    KGEPInstruction *kgepi = static_cast<KGEPInstruction*>(ki);
+
+    ref<Expr> agg = eval(ki, 0, state).value;
+    ref<Expr> val = eval(ki, 1, state).value;
+
+    ref<Expr> l = NULL, r = NULL;
+    unsigned lOffset, rOffset;
+
+    lOffset = kgepi->getOffsetBits()*8;
+    rOffset = kgepi->getOffsetBits()*8 + val->getWidth();
+
+    if (lOffset > 0)
+      l = ExtractExpr::create(agg, 0, lOffset);
+    if (rOffset < agg->getWidth())
+      r = ExtractExpr::create(agg, rOffset, agg->getWidth() - rOffset);
+
+    ref<Expr> result;
+    if (!l.isNull() && !r.isNull())
+      result = ConcatExpr::create(r, ConcatExpr::create(val, l));
+    else if (!l.isNull())
+      result = ConcatExpr::create(val, l);
+    else if (!r.isNull())
+      result = ConcatExpr::create(r, val);
+    else
+      result = val;
+
+    state.bindLocal(ki, result);
+    break;
+  }
+
+  case Instruction::ExtractValue: {
+    KGEPInstruction *kgepi = static_cast<KGEPInstruction*>(ki);
+    ref<Expr> agg, result;
+    agg = eval(ki, 0, state).value;
+    result = ExtractExpr::create(
+      agg, kgepi->getOffsetBits()*8, kmodule->getWidthForLLVMType(i->getType()));
+
+    state.bindLocal(ki, result);
+    break;
+  }
+
+
   // Vector instructions...
   case Instruction::ExtractElement:
     instExtractElement(state, ki);
@@ -2574,6 +2597,8 @@ INST_FOP_ARITH(FRem, mod)
       break;
     }
 
+    std::cerr << "OOPS! ";
+    i->dump();
     terminateStateOnExecError(state, "illegal instruction");
     break;
   }
@@ -2910,7 +2935,8 @@ void Executor::terminateStateOnError(
   static std::set< std::pair<Instruction*, std::string> > emittedErrors;
 
   if (!(EmitAllErrors ||
-      emittedErrors.insert(std::make_pair(state.prevPC->inst, message)).second))
+	emittedErrors.insert(
+      		std::make_pair(state.prevPC->getInst(), message)).second))
   {
     terminateState(state);
     return;
@@ -2932,7 +2958,7 @@ void Executor::printStateErrorMessage(
 	const std::string& message,
 	std::ostream& os)
 {
-	const InstructionInfo &ii = *state.prevPC->info;
+	const InstructionInfo &ii = *state.prevPC->getInfo();
 	if (ii.file != "") {
 		klee_message("ERROR: %s:%d: %s",
 			ii.file.c_str(),
@@ -3268,6 +3294,33 @@ void Executor::doImpliedValueConcretization(
 	}
 }
 
+void Executor::instGetElementPtr(ExecutionState& state, KInstruction *ki)
+{
+	KGEPInstruction		*kgepi;
+	ref<Expr>		base;
+
+	kgepi = static_cast<KGEPInstruction*>(ki);
+	base = eval(ki, 0, state).value;
+
+	foreach (it, kgepi->indices.begin(), kgepi->indices.end()) {
+		uint64_t elementSize = it->second;
+		ref<Expr> index = eval(ki, it->first, state).value;
+
+		base = AddExpr::create(
+			base,
+			MulExpr::create(
+				Expr::createCoerceToPointerType(index),
+				Expr::createPointer(elementSize)));
+	}
+
+	if (kgepi->getOffsetBits())
+		base = AddExpr::create(
+			base,
+			Expr::createPointer(kgepi->getOffsetBits()));
+
+	state.bindLocal(ki, base);
+}
+
 void Executor::initializeGlobalObject(
 	ExecutionState &state,
 	ObjectState *os,
@@ -3332,80 +3385,24 @@ void Executor::initializeGlobalObject(
 Function* Executor::getCalledFunction(CallSite &cs, ExecutionState &state)
 { return cs.getCalledFunction(); }
 
-Expr::Width Executor::getWidthForLLVMType(const llvm::Type* type) const
-{
-	return kmodule->targetData->getTypeSizeInBits(type);
-}
-
 void Executor::bindModuleConstants(void)
 {
-	foreach (it, kmodule->kfuncsBegin(), kmodule->kfuncsEnd()) {
-		bindKFuncConstants(*it);
-	}
+//	foreach (it, kmodule->kfuncsBegin(), kmodule->kfuncsEnd()) {
+//		bindKFuncConstants(*it);
+//	}
 
 	kmodule->bindModuleConstTable(this);
 }
 
 void Executor::bindKFuncConstants(KFunction* kf)
 {
-	for (unsigned i=0; i<kf->numInstructions; ++i)
-		bindInstructionConstants(kf->instructions[i]);
+//	for (unsigned i=0; i<kf->numInstructions; ++i)
+//		bindInstructionConstants(kf->instructions[i]);
 }
 
 void Executor::bindInstructionConstants(KInstruction *KI)
 {
-	GetElementPtrInst	*gepi;
-	KGEPInstruction		*kgepi;
-	ref<ConstantExpr>	constantOffset;
-	uint64_t		index;
-
-	gepi = dyn_cast<GetElementPtrInst>(KI->inst);
-	if (!gepi) return;
-
-	kgepi = static_cast<KGEPInstruction*>(KI);
-	constantOffset = ConstantExpr::alloc(0, Context::get().getPointerWidth());
-	index = 1;
-
-	foreach (ii, gep_type_begin(gepi), gep_type_end(gepi)) {
-	const StructType *st = dyn_cast<StructType>(*ii);
-	if (st) {
-		const StructLayout	*sl;
-		const ConstantInt	*ci;
-		uint64_t		addend;
-
-		sl = target_data->getStructLayout(st);
-		ci = cast<ConstantInt>(ii.getOperand());
-		addend =  sl->getElementOffset((unsigned) ci->getZExtValue());
-		constantOffset = constantOffset->Add(
-		ConstantExpr::alloc(addend, Context::get().getPointerWidth()));
-	} else {
-		Constant		*c;
-		const SequentialType	*seqty;
-		uint64_t		elemSize;
-
-		seqty = cast<SequentialType>(*ii);
-		elemSize = target_data->getTypeStoreSize(seqty->getElementType());
-		c = dyn_cast<Constant>(ii.getOperand());
-		if (c) {
-			ref<ConstantExpr> index;
-			ref<ConstantExpr> addend;
-
-			index = evalConstant(c)->SExt(
-				Context::get().getPointerWidth());
-			addend = index->Mul(
-				ConstantExpr::alloc(
-					elemSize,
-					Context::get().getPointerWidth()));
-			constantOffset = constantOffset->Add(addend);
-		} else {
-			kgepi->indices.push_back(
-				std::make_pair(index, elemSize));
-		}
-	}
-	index++;
-	}
-
-	kgepi->offset = constantOffset->getZExtValue();
+//	assert (0 == 1 && "STUBBO");
 }
 
 void Executor::executeAllocConst(
@@ -3418,7 +3415,7 @@ void Executor::executeAllocConst(
 {
 	ObjectState *os;
 
-	os = state.allocate(sz, isLocal, false, state.prevPC->inst);
+	os = state.allocate(sz, isLocal, false, state.prevPC->getInst());
 	if (os == NULL) {
 		state.bindLocal(
 			target,

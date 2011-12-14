@@ -25,7 +25,7 @@ public:
 		if (ki == NULL)
 			return 1;
 
-		vsb = exe.getFuncVSB(ki->inst->getParent()->getParent());
+		vsb = exe.getFuncVSB(ki->getInst()->getParent()->getParent());
 		if (vsb == NULL)
 			return 1;
 

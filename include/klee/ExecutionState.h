@@ -39,10 +39,9 @@ class Array;
 class CallPathNode;
 class Cell;
 class KFunction;
-class KInstruction;
 class MemoryObject;
 class PTreeNode;
-class InstructionInfo;
+struct InstructionInfo;
 class MemoryManager;
 
 /* Represents a memory array, its materialization, and ... */
@@ -272,7 +271,7 @@ public:
 
   std::pair<unsigned, unsigned> branchLast(void) const;
 
-  unsigned getPHISlot(void) const { return incomingBBIndex * 2; }
+  unsigned getPHISlot(void) const { return incomingBBIndex; }
 
   std::vector< SymbolicArray >::const_iterator symbolicsBegin(void) const
   { return symbolics.begin(); }

@@ -8,8 +8,8 @@ ExecutionTraceEvent::ExecutionTraceEvent(ExecutionState& state,
                                          KInstruction* ki)
   : consecutiveCount(1)
 {
-  file = ki->info->file;
-  line = ki->info->line;
+  file = ki->getInfo()->file;
+  line = ki->getInfo()->line;
   funcName = state.getCurrentKFunc()->function->getName();
   stackDepth = state.stack.size();
 }

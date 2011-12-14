@@ -40,6 +40,11 @@ using namespace llvm;
 
 #define DOUT	llvm::raw_fd_ostream(0, false)
 
+#ifdef DEBUG
+#undef DEBUG
+#endif
+#define DEBUG(x)
+
 #define COLLAPSE_ARRAYS_AGGRESSIVELY 0
 namespace {
   STATISTIC (NumFolds, "Number of nodes completely folded");
@@ -72,15 +77,11 @@ using namespace DS;
 // Description:
 //  This returns whether the given type is a pointer.
 //
-bool DS::isPointerType(const Type *Ty) {
-  return isa<llvm::PointerType>(Ty);
-}
+bool DS::isPointerType(Type *Ty) { return isa<llvm::PointerType>(Ty); }
 
 /// isForwarding - Return true if this NodeHandle is forwarding to another
 /// one.
-bool DSNodeHandle::isForwarding() const {
-  return N && N->isForwarding();
-}
+bool DSNodeHandle::isForwarding() const { return N && N->isForwarding(); }
 
 DSNode *DSNodeHandle::HandleForwarding() const {
   assert(N->isForwarding() && "Can only be invoked if forwarding!");
@@ -144,7 +145,7 @@ DSNodeHandle &DSScalarMap::AddGlobal(const GlobalValue *GV) {
 // DSNode Implementation
 //===----------------------------------------------------------------------===//
 
-DSNode::DSNode(const Type *T, DSGraph *G)
+DSNode::DSNode(Type *T, DSGraph *G)
   :	NumReferrers(0), Size(0), ParentGraph(G),
   	Ty(Type::getVoidTy(llvm::getGlobalContext())), NodeType(0), name(-1)
 {
@@ -189,7 +190,7 @@ const TargetData &DSNode::getTargetData() const {
 }
 
 void DSNode::assertOK() const {
-  const Type * VoidType = Type::getVoidTy(getGlobalContext());
+  Type * VoidType = Type::getVoidTy(getGlobalContext());
   assert((Ty != VoidType ||
           (Ty == VoidType && (Size == 0 ||
                                   (NodeType & DSNode::ArrayNode)))) &&
@@ -315,7 +316,7 @@ void DSNode::foldNodeCompletely() {
 /// all of the field sensitivity that may be present in the node.
 ///
 bool DSNode::isNodeCompletelyFolded() const {
-  const Type * VoidType = Type::getVoidTy(getGlobalContext());
+  Type * VoidType = Type::getVoidTy(getGlobalContext());
   return getSize() == 1 && Ty == VoidType && isArray();
 }
 
@@ -362,23 +363,23 @@ namespace {
   ///
   class TypeElementWalker {
     struct StackState {
-      const Type *Ty;
+      Type *Ty;
       unsigned Offset;
       unsigned Idx;
-      StackState(const Type *T, unsigned Off = 0)
+      StackState(Type *T, unsigned Off = 0)
         : Ty(T), Offset(Off), Idx(0) {}
     };
 
     std::vector<StackState> Stack;
     const TargetData &TD;
   public:
-    TypeElementWalker(const Type *T, const TargetData &td) : TD(td) {
+    TypeElementWalker(Type *T, const TargetData &td) : TD(td) {
       Stack.push_back(T);
       StepToLeaf();
     }
 
     bool isDone() const { return Stack.empty(); }
-    const Type *getCurrentType()   const { return Stack.back().Ty;     }
+    Type *getCurrentType()   const { return Stack.back().Ty;     }
     unsigned    getCurrentOffset() const { return Stack.back().Offset; }
 
     void StepToNextType() {
@@ -394,7 +395,7 @@ namespace {
       Stack.pop_back();
       while (!Stack.empty()) {
         StackState &SS = Stack.back();
-        if (const StructType *ST = dyn_cast<StructType>(SS.Ty)) {
+        if (StructType *ST = dyn_cast<StructType>(SS.Ty)) {
           ++SS.Idx;
           if (SS.Idx != ST->getNumElements()) {
             const StructLayout *SL = TD.getStructLayout(ST);
@@ -421,7 +422,7 @@ namespace {
       if (Stack.empty()) return;
       while (!Stack.empty() && !Stack.back().Ty->isFirstClassType()) {
         StackState &SS = Stack.back();
-        if (const StructType *ST = dyn_cast<StructType>(SS.Ty)) {
+        if (StructType *ST = dyn_cast<StructType>(SS.Ty)) {
           if (ST->getNumElements() == 0) {
             assert(SS.Idx == 0);
             PopStackAndAdvance();
@@ -455,7 +456,7 @@ namespace {
 /// have to check the fields in T1: T2 may be larger than T1.  If AllowLargerT1
 /// is true, then we also allow a larger T1.
 ///
-static bool ElementTypesAreCompatible(const Type *T1, const Type *T2,
+static bool ElementTypesAreCompatible(Type *T1, Type *T2,
                                       bool AllowLargerT1, const TargetData &TD){
   TypeElementWalker T1W(T1, TD), T2W(T2, TD);
 
@@ -463,8 +464,8 @@ static bool ElementTypesAreCompatible(const Type *T1, const Type *T2,
     if (T1W.getCurrentOffset() != T2W.getCurrentOffset())
       return false;
 
-    const Type *T1 = T1W.getCurrentType();
-    const Type *T2 = T2W.getCurrentType();
+    Type *T1 = T1W.getCurrentType();
+    Type *T2 = T2W.getCurrentType();
     if (T1 != T2 && !T1->canLosslesslyBitCastTo(T2))
       return false;
 
@@ -484,7 +485,7 @@ static bool ElementTypesAreCompatible(const Type *T1, const Type *T2,
 ///
 /// This method returns true if the node is completely folded, otherwise false.
 ///
-bool DSNode::mergeTypeInfo(const Type *NewTy, unsigned Offset,
+bool DSNode::mergeTypeInfo(Type *NewTy, unsigned Offset,
                            bool FoldIfIncompatible) {
   //DOUT << "merging " << *NewTy << " at " << Offset << " with " << *Ty << "\n";
   const TargetData &TD = getTargetData();
@@ -495,7 +496,7 @@ bool DSNode::mergeTypeInfo(const Type *NewTy, unsigned Offset,
   //  Size = 1, Ty = Void, Array = 1: The node is collapsed
   //  Otherwise, sizeof(Ty) = Size
   //
-  const Type * VoidType = Type::getVoidTy(getGlobalContext());
+  Type * VoidType = Type::getVoidTy(getGlobalContext());
   assert(((Size == 0 && Ty == VoidType && !isArray()) ||
           (Size == 0 && !Ty->isSized() && !isArray()) ||
           (Size == 1 && Ty == VoidType && isArray()) ||
@@ -580,7 +581,7 @@ bool DSNode::mergeTypeInfo(const Type *NewTy, unsigned Offset,
       // on a field in Ty
       if (isa<StructType>(NewTy) && isa<StructType>(Ty)) {
         DOUT << "Ty: " << *Ty << "\nNewTy: " << *NewTy << "@" << Offset << "\n";
-        const StructType *STy = cast<StructType>(Ty);
+        StructType *STy = cast<StructType>(Ty);
         const StructLayout &SL = *TD.getStructLayout(STy);
         unsigned i = SL.getElementContainingOffset(Offset);
         //Either we hit it exactly or give up
@@ -588,7 +589,7 @@ bool DSNode::mergeTypeInfo(const Type *NewTy, unsigned Offset,
           if (FoldIfIncompatible) foldNodeCompletely();
           return true;
         }
-        std::vector<const Type*> nt;
+        std::vector<Type*> nt;
         for (unsigned x = 0; x < i; ++x)
           nt.push_back(STy->getElementType(x));
         STy = cast<StructType>(NewTy);
@@ -605,7 +606,7 @@ bool DSNode::mergeTypeInfo(const Type *NewTy, unsigned Offset,
       //in Ty
       if (isa<StructType>(Ty)) {
         DOUT << "Ty: " << *Ty << "\nNewTy: " << *NewTy << "@" << Offset << "\n";
-        const StructType *STy = cast<StructType>(Ty);
+        StructType *STy = cast<StructType>(Ty);
         const StructLayout &SL = *TD.getStructLayout(STy);
         unsigned i = SL.getElementContainingOffset(Offset);
         //Either we hit it exactly or give up
@@ -613,7 +614,7 @@ bool DSNode::mergeTypeInfo(const Type *NewTy, unsigned Offset,
           if (FoldIfIncompatible) foldNodeCompletely();
           return true;
         }
-        std::vector<const Type*> nt;
+        std::vector<Type*> nt;
         for (unsigned x = 0; x < i; ++x)
           nt.push_back(STy->getElementType(x));
         nt.push_back(NewTy);
@@ -640,7 +641,7 @@ bool DSNode::mergeTypeInfo(const Type *NewTy, unsigned Offset,
     // ok, it will collapse the node as appropriate.
     //
 
-    const Type *OldTy = Ty;
+    Type *OldTy = Ty;
     Ty = NewTy;
     NodeType &= ~ArrayNode;
     if (WillBeArray) NodeType |= ArrayNode;
@@ -661,13 +662,13 @@ bool DSNode::mergeTypeInfo(const Type *NewTy, unsigned Offset,
   // type that starts at offset Offset.
   //
   unsigned O = 0;
-  const Type *SubType = Ty;
+  Type *SubType = Ty;
   while (O < Offset) {
     assert(Offset-O < TD.getTypeAllocSize(SubType) && "Offset out of range!");
 
     switch (SubType->getTypeID()) {
     case Type::StructTyID: {
-      const StructType *STy = cast<StructType>(SubType);
+      StructType *STy = cast<StructType>(SubType);
       const StructLayout &SL = *TD.getStructLayout(STy);
       unsigned i = SL.getElementContainingOffset(Offset-O);
 
@@ -716,12 +717,12 @@ bool DSNode::mergeTypeInfo(const Type *NewTy, unsigned Offset,
   //
   unsigned PadSize = SubTypeSize; // Size, including pad memory which is ignored
   while (SubType != NewTy) {
-    const Type *NextSubType = 0;
+    Type *NextSubType = 0;
     unsigned NextSubTypeSize = 0;
     unsigned NextPadSize = 0;
     switch (SubType->getTypeID()) {
     case Type::StructTyID: {
-      const StructType *STy = cast<StructType>(SubType);
+      StructType *STy = cast<StructType>(SubType);
       const StructLayout &SL = *TD.getStructLayout(STy);
       if (STy->getNumElements() > 1)
         NextPadSize = (unsigned)SL.getElementOffset(1);
@@ -914,7 +915,7 @@ void DSNode::MergeNodes(DSNodeHandle& CurNodeH, DSNodeHandle& NH) {
   }
 #endif
   // Merge the type entries of the two nodes together...
-  const Type * VoidType = Type::getVoidTy(getGlobalContext());
+  Type * VoidType = Type::getVoidTy(getGlobalContext());
   if (NH.getNode()->Ty != VoidType)
     CurNodeH.getNode()->mergeTypeInfo(NH.getNode()->Ty, NOffset);
   assert(!CurNodeH.getNode()->isDeadNode());
@@ -1177,7 +1178,7 @@ void ReachabilityCloner::merge(const DSNodeHandle &NH,
       }
 
       // Merge the type entries of the two nodes together...
-      const Type * VoidType = Type::getVoidTy(getGlobalContext());
+      Type * VoidType = Type::getVoidTy(getGlobalContext());
       if (SN->getType() != VoidType && !DN->isNodeCompletelyFolded()) {
         DN->mergeTypeInfo(SN->getType(), NH.getOffset()-SrcNH.getOffset());
         DN = NH.getNode();
@@ -1515,7 +1516,7 @@ static bool isMallocInst(Value* Ptr)
 /// and does not point to any other objects in the graph.
 DSNode *DSGraph::addObjectToGraph(Value *Ptr, bool UseDeclaredType) {
   assert(isa<PointerType>(Ptr->getType()) && "Ptr is not a pointer!");
-  const Type *Ty = cast<PointerType>(Ptr->getType())->getElementType();
+  Type *Ty = cast<PointerType>(Ptr->getType())->getElementType();
   DSNode *N = new DSNode(UseDeclaredType ? Ty : 0, this);
   assert(ScalarMap[Ptr].isNull() && "Object already in this graph!");
   ScalarMap[Ptr] = N;
@@ -2025,7 +2026,7 @@ void DSGraph::markIncompleteNodes(unsigned Flags) {
 }
 
 static inline void killIfUselessEdge(DSNodeHandle &Edge) {
-  const Type * VoidType = Type::getVoidTy(getGlobalContext());
+  Type * VoidType = Type::getVoidTy(getGlobalContext());
   if (DSNode *N = Edge.getNode())  // Is there an edge?
     if (N->getNumReferrers() == 1)  // Does it point to a lonely node?
       // No interesting info?

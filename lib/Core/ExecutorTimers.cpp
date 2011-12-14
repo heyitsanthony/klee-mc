@@ -78,14 +78,14 @@ Executor::Timer::~Timer() {}
 class Executor::TimerInfo {
 public:
   Timer *timer;
-  
+
   /// Approximate delay per timer firing.
   double rate;
   /// Wall time for next firing.
   double nextFireTime;
-  
+
 public:
-  TimerInfo(Timer *_timer, double _rate) 
+  TimerInfo(Timer *_timer, double _rate)
     : timer(_timer),
       rate(_rate),
       nextFireTime(util::estWallTime() + rate) {}
@@ -99,7 +99,7 @@ void Executor::addTimer(Timer *timer, double rate) {
 void Executor::processTimersDumpStates(void)
 {
   std::ostream *os = interpreterHandler->openOutputFile("states.txt");
-  
+
   if (!os) goto done;
 
   foreach (it,  stateManager->begin(), stateManager->end()) {
@@ -111,9 +111,9 @@ void Executor::processTimersDumpStates(void)
     foreach (sfIt,  es->stack.begin(), es->stack.end()) {
       *os << "('" << sfIt->kf->function->getNameStr() << "',";
       if (next == es->stack.end()) {
-        *os << es->prevPC->info->line << "), ";
+        *os << es->prevPC->getInfo()->line << "), ";
       } else {
-        *os << next->caller->info->line << "), ";
+        *os << next->caller->getInfo()->line << "), ";
         ++next;
       }
     }
@@ -124,7 +124,7 @@ void Executor::processTimersDumpStates(void)
 
     md2u = computeMinDistToUncovered(es->pc, sf.minDistToUncoveredOnReturn);
     icnt = theStatisticManager->getIndexedValue(
-    	stats::instructions, es->pc->info->id);
+    	stats::instructions, es->pc->getInfo()->id);
     cpicnt = sf.callPathNode->statistics.getValue(stats::instructions);
     *os << "{";
     *os << "'depth' : " << es->depth << ", ";
@@ -159,7 +159,7 @@ void Executor::processTimers(ExecutionState *current,
       processTree->dump(*os);
       delete os;
     }
-    
+
     dumpPTree = 0;
   }
 
@@ -178,7 +178,7 @@ void Executor::processTimers(ExecutionState *current,
 
   foreach (it, timers.begin(), timers.end()) {
     TimerInfo *ti = *it;
-  
+
     if (now >= ti->nextFireTime) {
       ti->timer->run();
       ti->nextFireTime = now + ti->rate;

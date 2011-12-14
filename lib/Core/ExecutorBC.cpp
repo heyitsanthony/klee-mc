@@ -302,7 +302,7 @@ done_ai:
 		int j, len = strlen(s);
 
 
-		os = state->allocate(len+1, false, true, state->pc->inst);
+		os = state->allocate(len+1, false, true, state->pc->getInst());
 		assert (os != NULL);
 
 		for (j=0; j<len+1; j++)
@@ -394,7 +394,7 @@ void ExecutorBC::callExternalFunction(
 	}
 
 	bool success;
-	success = externalDispatcher->executeCall(function, target->inst, args);
+	success = externalDispatcher->executeCall(function, target->getInst(), args);
 	if (!success) {
 		terminateStateOnError(
 			state,
@@ -411,11 +411,11 @@ void ExecutorBC::callExternalFunction(
 		return;
 	}
 
-	const Type *resultType = target->inst->getType();
-	if (resultType != Type::getVoidTy(getGlobalContext())) {
+	Type *resultType = target->getInst()->getType();
+	if (resultType->isVoidTy() == false) {
 		ref<Expr> e = ConstantExpr::fromMemory(
 			(void*) args,
-			getWidthForLLVMType(resultType));
+			kmodule->getWidthForLLVMType(resultType));
 		state.bindLocal(target, e);
 	}
 }
@@ -437,7 +437,7 @@ void ExecutorBC::allocGlobalVariableDecl(
 	// better we could support user definition, or use the EXE style
 	// hack where we check the object file information.
 
-	const Type *ty = gv.getType()->getElementType();
+	Type *ty = gv.getType()->getElementType();
 	uint64_t size = target_data->getTypeStoreSize(ty);
 
 	// XXX - DWD - hardcode some things until we decide how to fix.
@@ -490,7 +490,7 @@ void ExecutorBC::allocGlobalVariableNoDecl(
 	ExecutionState& state,
 	const GlobalVariable& gv)
 {
-	const Type *ty = gv.getType()->getElementType();
+	Type *ty = gv.getType()->getElementType();
 	uint64_t size = target_data->getTypeStoreSize(ty);
 	MemoryObject *mo = 0;
 	ObjectState *os = 0;

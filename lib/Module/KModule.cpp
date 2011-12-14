@@ -42,9 +42,11 @@
 using namespace klee;
 using namespace llvm;
 
+#if 0
 namespace llvm {
 	Pass *createLowerAtomicPass();
 }
+#endif
 
 namespace {
   enum SwitchImplType {
@@ -131,47 +133,52 @@ Function *getStubFunctionForCtorList(
 	GlobalVariable *gv,
 	std::string name)
 {
-  assert(!gv->isDeclaration() && !gv->hasInternalLinkage() &&
-         "do not support old LLVM style constructor/destructor lists");
+	assert(!gv->isDeclaration() && !gv->hasInternalLinkage() &&
+	 "do not support old LLVM style constructor/destructor lists");
 
-  std::vector<const Type*> nullary;
+	std::vector<Type*>	nullary;
+	Function		*fn;
+	BasicBlock		*bb;
 
-  Function *fn = Function::Create(
-    FunctionType::get(
-      Type::getVoidTy(getGlobalContext()), nullary, false),
-      GlobalVariable::InternalLinkage,
-      name,
-      m);
-  BasicBlock *bb = BasicBlock::Create(getGlobalContext(), "entry", fn);
+	fn = Function::Create(
+		FunctionType::get(
+			Type::getVoidTy(getGlobalContext()), nullary, false),
+		GlobalVariable::InternalLinkage,
+		name,
+		m);
 
-  // From lli:
-  // Should be an array of '{ int, void ()* }' structs.  The first value is
-  // the init priority, which we ignore.
-  ConstantArray *arr = dyn_cast<ConstantArray>(gv->getInitializer());
-  if (!arr) goto gen_return;
+	bb = BasicBlock::Create(getGlobalContext(), "entry", fn);
 
-  for (unsigned i=0; i<arr->getNumOperands(); i++) {
-    ConstantStruct *cs = cast<ConstantStruct>(arr->getOperand(i));
-    assert(cs->getNumOperands()==2 && "unexpected element in ctor initializer list");
+	// From lli:
+	// Should be an array of '{ int, void ()* }' structs.  The first value is
+	// the init priority, which we ignore.
+	ConstantArray *arr = dyn_cast<ConstantArray>(gv->getInitializer());
+	if (!arr) goto gen_return;
 
-    Constant *fp = cs->getOperand(1);
-    if (fp->isNullValue()) continue;
+	for (unsigned i=0; i<arr->getNumOperands(); i++) {
+		ConstantStruct *cs = cast<ConstantStruct>(arr->getOperand(i));
 
-    if (llvm::ConstantExpr *ce = dyn_cast<llvm::ConstantExpr>(fp))
-      fp = ce->getOperand(0);
+		assert(	cs->getNumOperands()==2 &&
+			"unexpected elem in ctor init list");
 
-    if (Function *f = dyn_cast<Function>(fp)) {
-      CallInst::Create(f, "", bb);
-    } else {
-      assert(0 && "unable to get function pointer from ctor initializer list");
-    }
-  }
+		Constant *fp = cs->getOperand(1);
+		if (fp->isNullValue()) continue;
+
+		if (llvm::ConstantExpr *ce = dyn_cast<llvm::ConstantExpr>(fp))
+			fp = ce->getOperand(0);
+
+		if (Function *f = dyn_cast<Function>(fp)) {
+			CallInst::Create(f, "", bb);
+		} else {
+			assert(0 && "unable to get fptr from ctor init list");
+		}
+	}
 
 
 gen_return:
-  ReturnInst::Create(getGlobalContext(), bb);
+	ReturnInst::Create(getGlobalContext(), bb);
 
-  return fn;
+	return fn;
 }
 
 static void injectStaticConstructorsAndDestructors(Module *m)
@@ -199,7 +206,7 @@ static void injectStaticConstructorsAndDestructors(Module *m)
 	}
 }
 
-static void forceImport(Module *m, const char *name, const Type *retType, ...)
+static void forceImport(Module *m, const char *name, Type *retType, ...)
 {
 	// If module lacks an externally visible symbol for the name then we
 	// need to create one. We have to look in the symbol table because
@@ -216,8 +223,8 @@ static void forceImport(Module *m, const char *name, const Type *retType, ...)
 	va_list ap;
 
 	va_start(ap, retType);
-	std::vector<const Type *> argTypes;
-	while (const Type *t = va_arg(ap, const Type*))
+	std::vector<Type *> argTypes;
+	while (Type *t = va_arg(ap, Type*))
 		argTypes.push_back(t);
 	va_end(ap);
 
@@ -233,10 +240,10 @@ void KModule::prepareMerge(
 
 	mergeFn = module->getFunction("klee_merge");
 	if (!mergeFn) {
-		const llvm::FunctionType *Ty ;
-		Ty =  FunctionType::get(
+		llvm::FunctionType *Ty;
+		Ty = FunctionType::get(
 			Type::getVoidTy(getGlobalContext()),
-			std::vector<const Type*>(), false);
+			std::vector<Type*>(), false);
 		mergeFn = Function::Create(
 			Ty,
 			GlobalVariable::ExternalLinkage,
@@ -268,8 +275,8 @@ void KModule::addMergeExit(Function* mergeFn, const std::string& name)
 
 	exit = BasicBlock::Create(getGlobalContext(), "exit", f);
 	result = NULL;
-	if (f->getReturnType() != Type::getVoidTy(getGlobalContext()))
-		result = PHINode::Create(f->getReturnType(), "retval", exit);
+	if (!f->getReturnType()->isVoidTy())
+		result = PHINode::Create(f->getReturnType(), 0, "retval", exit);
 
 	CallInst::Create(mergeFn, "", exit);
 	ReturnInst::Create(getGlobalContext(), result, exit);
@@ -352,11 +359,12 @@ void KModule::addModule(Module* in_mod)
 	std::string	err;
 	bool		isLinked;
 
-	isLinked = Linker::LinkModules(module, in_mod, &err);
+	isLinked = Linker::LinkModules(module, in_mod, Linker::PreserveSource, &err);
 
 	foreach (it, in_mod->begin(), in_mod->end()) {
 		Function	*kmod_f;
 		KFunction	*kf;
+
 		kmod_f = module->getFunction(it->getNameStr());
 		assert (kmod_f != NULL);
 
@@ -378,11 +386,12 @@ void KModule::injectRawChecks(const Interpreter::ModuleOptions &opts)
 	pm.add(new RaiseAsmPass(module));
 	if (opts.CheckDivZero) pm.add(new DivCheckPass());
 
-	pm.add(createLowerAtomicPass());
+	// pm.add(createLowerAtomicPass());
+
 	// There was a bug in IntrinsicLowering which caches values which
 	// may eventually  deleted (via RAUW).
 	// This should now be fixed in LLVM
-	pm.add(new IntrinsicCleanerPass(*targetData, false));
+	pm.add(new IntrinsicCleanerPass(this, *targetData, false));
 	pm.run(*module);
 
 }
@@ -404,8 +413,9 @@ void KModule::passEnforceInvariants(void)
 	default: klee_error("invalid --switch-type");
 	}
 
-	pm.add(createLowerAtomicPass());
-	pm.add(new IntrinsicCleanerPass(*targetData));
+	// pm.add(createLowerAtomicPass());
+
+	pm.add(new IntrinsicCleanerPass(this, *targetData));
 	pm.add(new PhiCleanerPass());
 	pm.run(*module);
 }
@@ -469,7 +479,7 @@ void KModule::prepare(
 	fpm->add(new RaiseAsmPass(module));
 	if (opts.CheckDivZero) fpm->add(new DivCheckPass());
 	fpm->add(createLowerAtomicPass());
-	fpm->add(new IntrinsicCleanerPass(*targetData));
+	fpm->add(new IntrinsicCleanerPass(this, *targetData));
 	fpm->add(new PhiCleanerPass());
 }
 
@@ -506,7 +516,7 @@ KFunction* KModule::addFunctionProcessed(Function* f)
 	kf = new KFunction(f, this);
 	for (unsigned i=0; i < kf->numInstructions; ++i) {
 		KInstruction *ki = kf->instructions[i];
-		ki->info = &infos->getInfo(ki->inst);
+		ki->setInfo(&infos->getInfo(ki->getInst()));
 	}
 
 	functions.push_back(kf);
@@ -578,8 +588,8 @@ void KModule::loadIntrinsicsLib(const Interpreter::ModuleOptions &opts)
 	// by name. We only add them if such a function doesn't exist to
 	// avoid creating stale uses.
 
-	const llvm::Type *i8Ty = Type::getInt8Ty(getGlobalContext());
-	const llvm::Type *i32Ty = Type::getInt32Ty(getGlobalContext());
+	llvm::Type *i8Ty = Type::getInt8Ty(getGlobalContext());
+	llvm::Type *i32Ty = Type::getInt32Ty(getGlobalContext());
 
 	forceImport(
 		module, "memcpy", PointerType::getUnqual(i8Ty),
@@ -633,3 +643,6 @@ void KModule::bindModuleConstTable(Executor* exe)
 		constantTable.push_back(c);
 	}
 }
+
+unsigned KModule::getWidthForLLVMType(Type* type) const
+{ return targetData->getTypeSizeInBits(type); }

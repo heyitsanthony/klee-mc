@@ -1,10 +1,19 @@
 # -*- Makefile -*-
+
+# clang *hates* us
+NO_PEDANTIC=1
+
 include $(LEVEL)/Makefile.config
 
 # Include LLVM's Master Makefile config and rules.
 include $(LLVM_OBJ_ROOT)/Makefile.config
 
 DISABLE_ASSERTIONS := 0
+
+# Suppress llvm Makefile from trying to build llvm-config
+override LLVM_CONFIG := /usr/bin/llvm-config
+override LLVMToolDir := /usr/bin/
+
 
 ifeq ($(BYTECODE_LIBRARY), 1)
 #
@@ -19,13 +28,19 @@ override ENABLE_PROFILING := $(RUNTIME_ENABLE_PROFILING)
 override ENABLE_COVERAGE := $(RUNTIME_ENABLE_COVERAGE)
 endif
 
-include $(LLVM_SRC_ROOT)/Makefile.rules
+LLVMCC_EMITIR_FLAG="-emit-llvm"
+LLVMCC=/usr/bin/clang
+LLVMAR=/usr/bin/llvm-ar
+LLVMCXX=/usr/bin/clang++
+LOPT=/usr/bin/opt
 
 # LLVMCC was added in 2.7.
 ifeq ($(LLVMCC),)
 LLVMCC := $(LLVMGCC)
 LLVMCXX := $(LLVMGXX)
 endif
+
+include $(LLVM_SRC_ROOT)/Makefile.rules
 
 # Needed to build runtime library using clang (gnu89 is the gcc default)
 C.Flags += -std=gnu89 $(LLVM_CFLAGS_EXTRA)
@@ -42,17 +57,17 @@ else
   LD.Flags += -L$(PROJ_SRC_ROOT)/stp/lib
   CXX.Flags += -I$(PROJ_SRC_ROOT)/stp/include
 endif
-CXX.Flags += -DKLEE_DIR=\"$(PROJ_OBJ_ROOT)\" -lssl -fopenmp
+CXX.Flags += -DKLEE_DIR=\"$(PROJ_OBJ_ROOT)\"
 CXX.Flags += -fexceptions -Wno-deprecated
 
 ifeq ($(ENABLE_TCMALLOC),1)
   LD.Flags += -ltcmalloc
 endif
 
-LD.Flags += -lz  -lcrypto
+LD.Flags += -lz  -lcrypto -lssl -fopenmp
 
 ifeq ($(ENABLE_INSTRUCTION_ID),1)
   CXXFLAGS += -DINCLUDE_INSTR_ID_IN_PATH_INFO
 endif
 
-SOLVERLIBS= -lstp -lboolector -lz3
+SOLVERLIBS= -lstp -lboolector -lz3 -lgomp

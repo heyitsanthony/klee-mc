@@ -1,7 +1,7 @@
 #include "klee/Common.h"
 #include "klee/Interpreter.h"
 #include "klee/Internal/Support/ModuleUtil.h"
-
+#include <llvm/Constants.h>
 #include "llvm/Module.h"
 #include "llvm/Instructions.h"
 
@@ -284,7 +284,7 @@ static llvm::Module *linkWithUclibc(llvm::Module *mainModule) {
 
 static void uclibc_forceImports(llvm::Module* mainModule)
 {
-    const llvm::Type *i8Ty = Type::getInt8Ty(getGlobalContext());
+    llvm::Type *i8Ty = Type::getInt8Ty(getGlobalContext());
     mainModule->getOrInsertFunction(
       "realpath",
       PointerType::getUnqual(i8Ty),
@@ -371,10 +371,10 @@ static void uclibc_setEntry(llvm::Module* mainModule)
   assert(uclibcMainFn && "unable to get uclibc main");
   userMainFn->setName("__user_main");
 
-  const FunctionType *ft = uclibcMainFn->getFunctionType();
+  FunctionType *ft = uclibcMainFn->getFunctionType();
   assert(ft->getNumParams() == 7);
 
-  std::vector<const Type*> fArgs;
+  std::vector<Type*> fArgs;
   fArgs.push_back(ft->getParamType(1)); // argc
   fArgs.push_back(ft->getParamType(2)); // argv
   Function *stub = Function::Create(
@@ -394,7 +394,7 @@ static void uclibc_setEntry(llvm::Module* mainModule)
   args.push_back(Constant::getNullValue(ft->getParamType(4))); // app_fini
   args.push_back(Constant::getNullValue(ft->getParamType(5))); // rtld_fini
   args.push_back(Constant::getNullValue(ft->getParamType(6))); // stack_end
-  CallInst::Create(uclibcMainFn, args.begin(), args.end(), "", bb);
+  CallInst::Create(uclibcMainFn, args, "", bb);
 
   new UnreachableInst(getGlobalContext(), bb);
 }
@@ -406,7 +406,7 @@ static llvm::Module *linkWithUclibc(llvm::Module *mainModule)
   mainModule->getOrInsertFunction(
     "__uClibc_main",
     FunctionType::get(Type::getVoidTy(getGlobalContext()),
-    std::vector<const Type*>(),
+    std::vector<Type*>(),
     true));
 
   // force various imports
@@ -421,7 +421,6 @@ static llvm::Module *linkWithUclibc(llvm::Module *mainModule)
   // versions are present in the module, make sure we don't create a
   // naming conflict.
   uclibc_stripPrefixes(mainModule);
-
 
   mainModule = klee::linkWithLibrary(mainModule, KLEE_UCLIBC "/lib/libc.a");
   assert(mainModule && "unable to link with uclibc");
@@ -498,7 +497,7 @@ static int initEnv(Module *mainModule)
 
   assert(!baseMainFn->isVarArg() && "main has variable arguments");
 
-  std::vector<const Type*> mainArgs;
+  std::vector<Type*> mainArgs;
   mainArgs.push_back(llvm::TypeBuilder<int,false>::get(getGlobalContext()));
   mainArgs.push_back(llvm::TypeBuilder<char**,false>::get(getGlobalContext()));
   mainArgs.push_back(llvm::TypeBuilder<char**,false>::get(getGlobalContext()));
@@ -533,7 +532,7 @@ static int initEnv(Module *mainModule)
   new StoreInst(oldArgv, argvPtr, dBB);
 
   /* Insert void klee_init_env(int* argc, char*** argv) */
-  std::vector<const Type*> params;
+  std::vector<Type*> params;
   params.push_back(Type::getInt32Ty(getGlobalContext()));
   params.push_back(Type::getInt32Ty(getGlobalContext()));
   Function* initEnvFn =
@@ -548,8 +547,8 @@ static int initEnv(Module *mainModule)
   std::vector<Value*> args;
   args.push_back(argcPtr);
   args.push_back(argvPtr);
-  /*Instruction* initEnvCall = */CallInst::Create(initEnvFn, args.begin(),
-                                              args.end(), "", dBB);
+  /*Instruction* initEnvCall = */
+  CallInst::Create(initEnvFn, args, "", dBB);
   Value *argc = new LoadInst(argcPtr, "newArgc", dBB);
   Value *argv = new LoadInst(argvPtr, "newArgv", dBB);
 
@@ -563,8 +562,7 @@ static int initEnv(Module *mainModule)
     assert(0 && "Too many arguments to main()");
   }
 
-  CallInst *mainRet = CallInst::Create(baseMainFn, baseMainArgs.begin(),
-                                       baseMainArgs.end(), "", dBB);
+  CallInst *mainRet = CallInst::Create(baseMainFn, baseMainArgs, "", dBB);
 
   ReturnInst::Create(getGlobalContext(), mainRet, dBB);
 

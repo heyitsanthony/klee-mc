@@ -11,8 +11,8 @@
 #include "KleeHandler.h"
 #include "cmdargs.h"
 
-#include "llvm/Support/CommandLine.h"
-#include "llvm/Support/ManagedStatic.h"
+#include <llvm/Support/CommandLine.h>
+#include <llvm/Support/ManagedStatic.h>
 
 #include "guest.h"
 #include "guestptimg.h"
@@ -31,8 +31,8 @@
 #undef PACKAGE_STRING
 #undef PACKAGE_TARNAME
 #undef PACKAGE_VERSION
-#include "llvm/Target/TargetSelect.h"
-#include "llvm/Support/Signals.h"
+#include <llvm/Support/TargetSelect.h>
+#include <llvm/Support/Signals.h>
 #include <iostream>
 #include <fstream>
 #include <cerrno>
@@ -50,7 +50,6 @@
 using namespace llvm;
 using namespace klee;
 
-extern Interpreter::ModuleOptions getMainModule(Module* &m);
 bool		SymArgs;
 extern double	MaxSTPTime;
 extern bool	WriteTraces;

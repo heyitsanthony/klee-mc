@@ -451,6 +451,7 @@ SFH_DEF_HANDLER(AllocAligned)
 	std::vector<ObjectState*>	new_os;
 
 	len = dyn_cast<ConstantExpr>(arguments[0]);
+	exe_vex = dynamic_cast<ExecutorVex*>(sfh->executor);
 	if (len == NULL) {
 		exe_vex->terminateStateOnError(
 			state,
@@ -463,11 +464,10 @@ SFH_DEF_HANDLER(AllocAligned)
 	name_str = sfh->readStringAtAddress(state, arguments[1]);
 
 	/* not requesting a specific address */
-	exe_vex  = dynamic_cast<ExecutorVex*>(sfh->executor);
 	new_os = state.allocateAlignedChopped(
 		len_v,
 		12 /* aligned on 2^12 */,
-		target->inst);
+		target->getInst());
 
 	if (new_os.size() == 0) {
 		std::cerr << "COULD NOT ALLOCATE ALIGNED?????\n\n";

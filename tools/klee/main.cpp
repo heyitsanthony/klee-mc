@@ -31,7 +31,7 @@
 #undef PACKAGE_STRING
 #undef PACKAGE_TARNAME
 #undef PACKAGE_VERSION
-#include "llvm/Target/TargetSelect.h"
+#include <llvm/Support/TargetSelect.h>
 #include "llvm/Support/Signals.h"
 #include <iostream>
 #include <fstream>

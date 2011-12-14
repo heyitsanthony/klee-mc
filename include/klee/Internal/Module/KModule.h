@@ -11,23 +11,27 @@
 #define KLEE_KMODULE_H
 
 #include "klee/Interpreter.h"
+#include "klee/Internal/Module/KFunction.h"
 
 #include <map>
 #include <set>
 #include <vector>
 
-namespace llvm {
-  class BasicBlock;
-  class Constant;
-  class Function;
-  class Instruction;
-  class Module;
-  class TargetData;
-  class Value;
-  class FunctionPassManager;
+namespace llvm
+{
+	class Type;
+	class BasicBlock;
+	class Constant;
+	class Function;
+	class Instruction;
+	class Module;
+	class TargetData;
+	class Value;
+	class FunctionPassManager;
 }
 
-namespace klee {
+namespace klee
+{
   class Cell;
   class Executor;
   class Expr;
@@ -36,39 +40,6 @@ namespace klee {
   class KInstruction;
   class KModule;
   template<class T> class ref;
-
-  struct KFunction {
-    llvm::Function *function;
-
-    unsigned numArgs, numRegisters;
-
-    unsigned numInstructions;
-    unsigned callcount;
-    KInstruction **instructions;
-    llvm::Value **arguments;
-
-    std::map<llvm::BasicBlock*, unsigned> basicBlockEntry;
-
-    /// Whether instructions in this function should count as
-    /// "coverable" for statistics and search heuristics.
-    bool trackCoverage;
-
-  private:
-    KFunction(const KFunction&);
-    KFunction &operator=(const KFunction&);
-    void addInstruction(
-      KModule* km,
-      llvm::Instruction* inst,
-      std::map<llvm::Instruction*, unsigned>& registerMap,
-      unsigned int& i);
-  public:
-    explicit KFunction(llvm::Function*, KModule *);
-    ~KFunction();
-
-    unsigned getArgRegister(unsigned index) { return index; }
-    llvm::Value* getValueForRegister(unsigned reg);
-  };
-
 
   class KConstant {
   public:
@@ -109,7 +80,6 @@ namespace klee {
     std::map<llvm::Constant*, KConstant*> constantMap;
     KConstant* getKConstant(llvm::Constant *c);
 
-
     std::vector<Cell>	constantTable;
 
   public:
@@ -138,10 +108,12 @@ namespace klee {
     std::vector<KFunction*>::const_iterator kfuncsEnd() const
     { return functions.end(); }
 
+    unsigned getWidthForLLVMType(llvm::Type* type) const;
 
     void bindModuleConstTable(Executor* exe);
+    KFunction* addFunctionProcessed(llvm::Function *f);
+
   private:
-	KFunction* addFunctionProcessed(llvm::Function *f);
 	void prepareMerge(
 		const Interpreter::ModuleOptions &opts,
 		InterpreterHandler *ih);

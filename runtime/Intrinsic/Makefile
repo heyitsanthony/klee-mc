@@ -12,21 +12,19 @@ LEVEL=../..
 RUNTIME_ENABLE_OPTIMIZED=0
 ENABLE_OPTIMIZED=0
 LIBRARYNAME=kleeRuntimeIntrinsic
-DONT_BUILD_RELINKED=1
 BUILD_ARCHIVE=1
 BYTECODE_LIBRARY=1
 # Don't strip debug info from the module.
 DEBUG_RUNTIME=1
-NO_PEDANTIC=1
 
 include $(LEVEL)/Makefile.common
+
 LIBBCA:=$(LibDir)/lib$(LIBRARYNAME).bca
 LIBTXT:=$(LibDir)/$(LIBRARYNAME)-fns.txt
 OPTFLAGS:="-disable-opt"
-
 # memset intrinsics have been causing some issues
-CFLAGS=-fno-builtin -nodefaultlibs -O0
-CXXFLAGS=-fno-builtin -nodefaultlibs -O0
+#CFLAGS=-fno-builtin -nodefaultlibs -O0 -emit-llvm
+#CXXFLAGS=-fno-builtin -nodefaultlibs -O0 -emit-llvm
 
 all:: $(LIBTXT)
 
