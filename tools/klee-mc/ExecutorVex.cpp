@@ -8,6 +8,7 @@
 #include "klee/breadcrumb.h"
 #include "klee/Solver.h"
 #include "../../lib/Solver/SMTPrinter.h"
+#include "../../lib/Core/Globals.h"
 #include "../../lib/Core/PrioritySearcher.h"
 #include "../../lib/Core/SpecialFunctionHandler.h"
 #include "../../lib/Core/TimingSolver.h"
@@ -118,7 +119,7 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih, Guest *in_gs)
 		pr = (UseSyscallPriority)
 			? (Prioritizer*)(new SyscallPrioritizer())
 			: (Prioritizer*)(new GuestPrioritizer(*this));
-		
+
 		UserSearcher::setPrioritizer(pr);
 	}
 
@@ -214,9 +215,8 @@ ExecutionState* ExecutorVex::setupInitialState(void)
 	/* add modules before initializing globals so that everything
 	 * will link in properly */
 	std::list<Module*> l = theVexHelpers->getModules();
-	foreach (it, l.begin(), l.end()) {
+	foreach (it, l.begin(), l.end())
 		kmodule->addModule(*it);
-	}
 	theVexHelpers->useExternalMod(kmodule->module);
 
 	sys_model->installInitializers(init_func);
@@ -229,7 +229,7 @@ ExecutionState* ExecutorVex::setupInitialState(void)
 	state = ExeStateBuilder::create(kmodule->getKFunction(init_func));
 
 	prepState(state, init_func);
-	initializeGlobals(*state);
+	globals = new Globals(kmodule, state, NULL);
 
 	sys_model->installConfig(*state);
 
@@ -241,6 +241,7 @@ ExecutionState* ExecutorVex::setupInitialState(void)
 
 	processTree = new PTree(state);
 	state->ptreeNode = processTree->root;
+
 
 	return state;
 }
@@ -262,185 +263,9 @@ void ExecutorVex::runImage(void)
 	delete memory;
 	memory = MemoryManager::create();
 
-	globalObjects.clear();
-	globalAddresses.clear();
-
 	if (statsTracker) statsTracker->done();
 
 	fprintf(stderr, "OK.\n");
-}
-
-void ExecutorVex::initializeGlobals(ExecutionState &state)
-{
-	Module *m;
-
-	m = kmodule->module;
-
-	assert (m->getModuleInlineAsm() == "" && "No inline asm!");
-	assert (m->lib_begin() == m->lib_end() &&
-		"XXX do not support dependent libraries");
-
-	initGlobalFuncs();
-
-	// represent function globals using the address of the
-	// actual llvm function object.
-	foreach (i, m->begin(), m->end()) {
-		Function *f = i;
-		ref<ConstantExpr> addr(0);
-
-		// Weak => should be null.  no externals allowed
-		if (	f->hasExternalWeakLinkage() ) {
-			addr = Expr::createPointer(0);
-			std::cerr << "KLEE:ERROR: couldn't find symbol "
-				<< "for weak linkage of global function: "
-				<< f->getNameStr() << std::endl;
-		} else {
-			addr = Expr::createPointer((unsigned long) (void*) f);
-			legalFunctions.insert(
-				(uint64_t) (unsigned long) (void*) f);
-		}
-
-		globalAddresses.insert(std::make_pair(f, addr));
-	}
-
-	// allocate and initialize globals, done in two passes since we may
-	// need address of a global in order to initialize some other one.
-
-	// allocate memory objects for all globals
-	foreach (i, m->global_begin(), m->global_end()) {
-		if (i->isDeclaration()) allocGlobalVariableDecl(state, *i);
-		else allocGlobalVariableNoDecl(state, *i);
-	}
-
-	// link aliases to their definitions (if bound)
-	foreach (i, m->alias_begin(), m->alias_end()) {
-		// Map the alias to its aliasee's address.
-		// This works because we have addresses for everything,
-		// even undefined functions.
-		globalAddresses.insert(
-			std::make_pair(i, evalConstant(i->getAliasee())));
-	}
-
-	// once all objects are allocated, do the actual initialization
-	foreach (i, m->global_begin(), m->global_end()) {
-		MemoryObject		*mo;
-		ObjectState		*wos;
-
-		if (!i->hasInitializer()) continue;
-
-		mo = globalObjects.find(i)->second;
-		wos = state.addressSpace.findWriteableObject(mo);
-
-		assert(wos);
-		initializeGlobalObject(state, wos, i->getInitializer(), 0);
-		if (i->isConstant()) wos->setReadOnly(true);
-	}
-
-	std::cerr << "GLOBAL ADDRESSES size=" << globalAddresses.size() << '\n';
-}
-
-void ExecutorVex::allocGlobalVariableNoDecl(
-	ExecutionState& state,
-	const GlobalVariable& gv)
-{
-	Type		*ty;
-	uint64_t	size;
-	MemoryObject	*mo = 0;
-	ObjectState	*os;
-
-	ty = gv.getType()->getElementType();
-	size = target_data->getTypeStoreSize(ty);
-
-	assert (gv.getName()[0] !='\01');
-
-	if (!mo) mo = memory->allocate(size, false, true, &gv, &state);
-	assert(mo && "out of memory");
-
-	os = state.bindMemObj(mo);
-	globalObjects.insert(std::make_pair(&gv, mo));
-	globalAddresses.insert(std::make_pair(&gv, mo->getBaseExpr()));
-
-	if (!gv.hasInitializer()) os->initializeToRandom();
-}
-
-void ExecutorVex::allocGlobalVariableDecl(
-  ExecutionState& state, const GlobalVariable& gv)
-{
-	MemoryObject *mo;
-	ObjectState *os;
-	assert (gv.isDeclaration());
-	// FIXME: We have no general way of handling unknown external
-	// symbols. If we really cared about making external stuff work
-	// better we could support user definition, or use the EXE style
-	// hack where we check the object file information.
-
-	Type *ty = gv.getType()->getElementType();
-	uint64_t size = target_data->getTypeStoreSize(ty);
-
-	// XXX - DWD - hardcode some things until we decide how to fix.
-#ifndef WINDOWS
-	if (gv.getName() == "_ZTVN10__cxxabiv117__class_type_infoE") {
-		size = 0x2C;
-	} else if (gv.getName() == "_ZTVN10__cxxabiv120__si_class_type_infoE") {
-		size = 0x2C;
-	} else if (gv.getName() == "_ZTVN10__cxxabiv121__vmi_class_type_infoE") {
-		size = 0x2C;
-	}
-#endif
-
-	if (size == 0) {
-		std::cerr << "Unable to find size for global variable: "
-		<< gv.getName().data()
-		<< " (use will result in out of bounds access)\n";
-	}
-
-	mo = memory->allocate(size, false, true, &gv, &state);
-	os = state.bindMemObj(mo);
-	globalObjects.insert(std::make_pair(&gv, mo));
-	globalAddresses.insert(std::make_pair(&gv, mo->getBaseExpr()));
-
-	// Program already running = object already initialized.  Read
-	// concrete value and write it to our copy.
-	if (size == 0) return;
-
-	void *addr;
-	if (gv.getName() == "__dso_handle") {
-		extern void *__dso_handle __attribute__ ((__weak__));
-		addr = &__dso_handle; // wtf ?
-	} else {
-		//addr = externalDispatcher->resolveSymbol(gv.getNameStr());
-	}
-	if (!addr) {
-		klee_warning(
-			"ERROR: unable to load symbol(%s) while initializing globals.",
-			gv.getName().data());
-	} else {
-		for (unsigned offset=0; offset < mo->size; offset++) {
-			//os->write8(offset, ((unsigned char*)addr)[offset]);
-			state.write8(os, offset, ((unsigned char*)addr)[offset]);
-		}
-	}
-}
-
-void ExecutorVex::initGlobalFuncs(void)
-{
-	Module *m = kmodule->module;
-
-	// represent function globals using the address of the actual llvm function
-	// object. given that we use malloc to allocate memory in states this also
-	// ensures that we won't conflict. we don't need to allocate a memory object
-	// since reading/writing via a function pointer is unsupported anyway.
-	foreach (i, m->begin(), m->end()) {
-		Function *f = i;
-		ref<ConstantExpr> addr(0);
-
-		// If the symbol has external weak linkage then it is implicitly
-		// not defined in this module; if it isn't resolvable then it
-		// should be null.
-		assert (!f->hasExternalWeakLinkage());
-		addr = Expr::createPointer((unsigned long) (void*) f);
-		globalAddresses.insert(std::make_pair(f, addr));
-	}
 }
 
 void ExecutorVex::makeArgsSymbolic(ExecutionState* state)
@@ -960,7 +785,7 @@ void ExecutorVex::handleXferSyscall(
 	else
 		state.addressSpace.copyToBuf(
 			es2esv(state).getRegCtx(), &sysnr, 4*7, 4);
-	
+
 	fprintf(stderr, "before syscall %d(?): states=%d. objs=%d. st=%p. n=%d\n",
 		(int)sysnr,
 		stateManager->size(),

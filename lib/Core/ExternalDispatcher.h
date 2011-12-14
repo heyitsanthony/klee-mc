@@ -43,7 +43,7 @@ namespace klee {
      * into args[0].
      */
     bool executeCall(llvm::Function *function, llvm::Instruction *i, uint64_t *args);
-    void *resolveSymbol(const std::string &name);
+    void *resolveSymbol(const std::string &name) const;
   };  
 }
 

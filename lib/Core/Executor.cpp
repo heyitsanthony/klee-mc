@@ -24,6 +24,7 @@
 #include "MemUsage.h"
 #include "MMU.h"
 #include "StatsTracker.h"
+#include "Globals.h"
 
 #include "static/Sugar.h"
 #include "klee/Common.h"
@@ -40,13 +41,14 @@
 #include "klee/Internal/Module/KModule.h"
 #include "klee/Internal/System/Time.h"
 
-#include "llvm/Analysis/MemoryBuiltins.h"
-#include "llvm/LLVMContext.h"
-#include "llvm/IntrinsicInst.h"
-#include "llvm/Module.h"
-#include "llvm/Support/CommandLine.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetData.h"
+#include <llvm/Support/CallSite.h>
+#include <llvm/Analysis/MemoryBuiltins.h>
+#include <llvm/LLVMContext.h>
+#include <llvm/IntrinsicInst.h>
+#include <llvm/Module.h>
+#include <llvm/Support/CommandLine.h>
+#include <llvm/Support/raw_ostream.h>
+#include <llvm/Target/TargetData.h>
 
 #include <cassert>
 #include <algorithm>
@@ -260,6 +262,7 @@ bool llvm::cl::parser<sockaddr_in_opt>::parse(llvm::cl::Option &O,
 
 Executor::Executor(InterpreterHandler *ih)
 : kmodule(0)
+, globals(0)
 , interpreterHandler(ih)
 , target_data(0)
 , statsTracker(0)
@@ -293,6 +296,8 @@ Executor::Executor(InterpreterHandler *ih)
 
 Executor::~Executor()
 {
+	if (globals) delete globals;
+
 	std::for_each(timers.begin(), timers.end(), deleteTimerInfo);
 	delete stateManager;
 	delete mmu;
@@ -308,22 +313,6 @@ inline void Executor::replaceStateImmForked(
 {
 	stateManager->replaceStateImmediate(os, ns);
 	removePTreeState(os);
-}
-
-MemoryObject * Executor::addExternalObject(
-	ExecutionState &state,
-	void *addr, unsigned size,
-	bool isReadOnly)
-{
-	ObjectState *os;
-
-	os = state.allocateFixed((uint64_t) (uintptr_t)addr, size, 0);
-	for(unsigned i = 0; i < size; i++)
-		state.write8(os, i, ((uint8_t*)addr)[i]);
-
-	if (isReadOnly) os->setReadOnly(true);
-
-	return os->getObject();
 }
 
 bool Executor::isStateSeeding(ExecutionState* s)
@@ -875,7 +864,7 @@ bool Executor::addConstraint(ExecutionState &state, ref<Expr> condition)
 }
 
 ref<klee::ConstantExpr> Executor::evalConstant(
-	const KModule* km, const globaladdr_map* gm, Constant *c)
+	const KModule* km, const Globals* gm, Constant *c)
 {
 	if (llvm::ConstantExpr *ce = dyn_cast<llvm::ConstantExpr>(c))
 		return evalConstantExpr(km, gm, ce);
@@ -888,9 +877,9 @@ ref<klee::ConstantExpr> Executor::evalConstant(
 
 	if (const GlobalValue *gv = dyn_cast<GlobalValue>(c)) {
 		assert (gm != NULL);
-		globaladdr_map::const_iterator it = gm->find(gv);
-		assert (it != gm->end() && "No global address!");
-		return it->second;
+		ref<klee::ConstantExpr>	ce(gm->findAddress(gv));
+		assert (!ce.isNull() && "No global address!");
+		return ce;
 	}
 
 	if (isa<ConstantPointerNull>(c)) {
@@ -1479,7 +1468,7 @@ void Executor::instCall(ExecutionState& state, KInstruction *ki)
 {
 	CallSite cs(ki->getInst());
 	unsigned numArgs = cs.arg_size();
-	Function *f = getCalledFunction(cs, state);
+	Function *f = cs.getCalledFunction();
 
 	// Skip debug intrinsics, we can't evaluate their metadata arguments.
 	if (f && isDebugIntrinsic(f)) return;
@@ -1525,6 +1514,10 @@ void Executor::executeBitCast(
 	const FunctionType	*fType, *ceType;
 
 	f = dyn_cast<Function>(ce->getOperand(0));
+	if (f == NULL) {
+		cs.getInstruction()->dump();
+		ce->getOperand(0)->dump();
+	}
      	assert(f && "XXX unrecognized constant expression in call");
 
         fType = dyn_cast<FunctionType>(
@@ -3028,8 +3021,8 @@ ObjectState* Executor::executeMakeSymbolic(
   ref<Expr> len,
   const char* arrName)
 {
-  if (!replayOut) return makeSymbolic(state, mo, len, arrName);
-  else return makeSymbolicReplay(state, mo, len);
+	if (!replayOut) return makeSymbolic(state, mo, len, arrName);
+	else return makeSymbolicReplay(state, mo, len);
 }
 
 ObjectState* Executor::makeSymbolic(
@@ -3321,88 +3314,30 @@ void Executor::instGetElementPtr(ExecutionState& state, KInstruction *ki)
 	state.bindLocal(ki, base);
 }
 
-void Executor::initializeGlobalObject(
-	ExecutionState &state,
-	ObjectState *os,
-	Constant *c,
- 	unsigned offset)
-{
-	if (ConstantVector *cp = dyn_cast<ConstantVector>(c)) {
-		unsigned elementSize;
-
-		elementSize = target_data->getTypeStoreSize(
-			cp->getType()->getElementType());
-		for (unsigned i=0, e=cp->getNumOperands(); i != e; ++i)
-			initializeGlobalObject(
-				state,
-				os,
-				cp->getOperand(i),
-				offset + i*elementSize);
-	} else if (isa<ConstantAggregateZero>(c)) {
-		unsigned size;
-		size = target_data->getTypeStoreSize(c->getType());
-		assert (size + offset <= os->getObject()->size);
-		for (unsigned i=0; i<size; i++) {
-			state.write8(os,offset+i, (uint8_t) 0);
-		}
-	} else if (ConstantArray *ca = dyn_cast<ConstantArray>(c)) {
-		unsigned elementSize;
-		elementSize = target_data->getTypeStoreSize(
-			ca->getType()->getElementType());
-		for (unsigned i=0, e=ca->getNumOperands(); i != e; ++i)
-			initializeGlobalObject(
-				state,
-				os,
-				ca->getOperand(i),
-				offset + i*elementSize);
-	} else if (ConstantStruct *cs = dyn_cast<ConstantStruct>(c)) {
-		const StructLayout *sl;
-		sl = target_data->getStructLayout(
-			cast<StructType>(cs->getType()));
-		for (unsigned i=0, e=cs->getNumOperands(); i != e; ++i)
-			initializeGlobalObject(
-				state,
-				os,
-				cs->getOperand(i),
-				offset + sl->getElementOffset(i));
-	} else {
-		unsigned StoreBits;
-		ref<ConstantExpr> C;
-
-		C = evalConstant(c);
-		StoreBits = target_data->getTypeStoreSizeInBits(c->getType());
-
-		// Extend the constant if necessary;
-		assert(StoreBits >= C->getWidth() && "Invalid store size!");
-		if (StoreBits > C->getWidth())
-			C = C->ZExt(StoreBits);
-
-		//os->write(offset, C);
-		state.write(os, offset, C);
-	}
-}
-
-Function* Executor::getCalledFunction(CallSite &cs, ExecutionState &state)
-{ return cs.getCalledFunction(); }
-
 void Executor::bindModuleConstants(void)
 {
-//	foreach (it, kmodule->kfuncsBegin(), kmodule->kfuncsEnd()) {
-//		bindKFuncConstants(*it);
-//	}
+	foreach (it, kmodule->kfuncsBegin(), kmodule->kfuncsEnd()) {
+		bindKFuncConstants(*it);
+	}
 
 	kmodule->bindModuleConstTable(this);
 }
 
 void Executor::bindKFuncConstants(KFunction* kf)
 {
-//	for (unsigned i=0; i<kf->numInstructions; ++i)
-//		bindInstructionConstants(kf->instructions[i]);
+	for (unsigned i=0; i<kf->numInstructions; ++i)
+		bindInstructionConstants(kf->instructions[i]);
 }
 
 void Executor::bindInstructionConstants(KInstruction *KI)
 {
-//	assert (0 == 1 && "STUBBO");
+	KGEPInstruction* kgepi;
+
+	kgepi = dynamic_cast<KGEPInstruction*>(KI);
+	if (kgepi == NULL)
+		return;
+
+	kgepi->resolveConstants(kmodule, globals);
 }
 
 void Executor::executeAllocConst(
@@ -3620,11 +3555,6 @@ void Executor::executeFree(
 
 MemoryObject* Executor::findGlobalObject(const llvm::GlobalValue* gv) const
 {
-	globalobj_map::const_iterator	it;
-
-	it = globalObjects.find(gv);
-	if (it == globalObjects.end())
-		return NULL;
-
-	return it->second;
+	assert (globals != NULL);
+	return globals->findObject(gv);
 }

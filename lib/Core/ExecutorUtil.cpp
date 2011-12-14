@@ -32,11 +32,12 @@ using namespace klee;
 using namespace llvm;
 
 namespace klee {
+class Globals;
 
   ref<klee::ConstantExpr>
   Executor::evalConstantExpr(
 	const KModule* km,
-	const globaladdr_map* gm,
+	const Globals* gm,
 	llvm::ConstantExpr *ce)
   {
     llvm::Type *type = ce->getType();

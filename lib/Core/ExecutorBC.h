@@ -33,14 +33,6 @@ protected:
 		std::vector< ref<Expr> > &arguments);
 
   	virtual llvm::Function* getFuncByAddr(uint64_t addr);
-	void allocGlobalVariableDecl(
-		ExecutionState& state,
-		const llvm::GlobalVariable& gv);
-	void allocGlobalVariableNoDecl(
-		ExecutionState& s,
-		const llvm::GlobalVariable& gv);
-
-	void initializeGlobals(ExecutionState &state);
 
 private:
 	void setupArgv(
@@ -50,10 +42,6 @@ private:
 
 	SpecialFunctionHandler *specialFunctionHandler;
  	ExternalDispatcher *externalDispatcher;
-
-	/// The set of legal function addresses, used to validate function
-	/// pointers. We use the actual Function* address as the function address.
-	std::set<uint64_t> legalFunctions;
 };
 
 }

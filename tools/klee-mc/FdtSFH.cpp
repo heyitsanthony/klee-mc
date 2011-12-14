@@ -114,8 +114,11 @@ SFH_DEF_HANDLER(SCConcreteFileSnapshot)
 		state.bindLocal(target, ConstantExpr::create(-errno, 64));
 		return;
 	}
+
 	MemoryObject* mo;
-	mo = sfh->executor->addExternalObject(state, addr, st.st_size, true);
+	// XXX FIXME:
+	// mo = sfh->executor->addExternalObject(state, addr, st.st_size, true);
+	assert (0 == 1 && "XXX ^^^ FIXME FIXME GLOBAL REVAMP");
 	g_snapshots.insert(std::make_pair(path, st.st_size));
 	std::cerr << "new file fork " << path << std::endl;
 	state.bindLocal(target, ConstantExpr::create((intptr_t)mo->address, 64));

@@ -124,21 +124,12 @@ private:
 		const GuestMem::Mapping& m,
 		unsigned int pgnum);
 
-	void initializeGlobals(ExecutionState& state);
-	void initGlobalFuncs(void);
-
 	void prepState(ExecutionState* state, llvm::Function*);
 	void installFDTInitializers(llvm::Function *init_func);
 	void installFDTConfig(ExecutionState& state);
 	void makeArgsSymbolic(ExecutionState* state);
 	void setupRegisterContext(ExecutionState* state, llvm::Function* f);
 	void setupProcessMemory(ExecutionState* state, llvm::Function* f);
-	void allocGlobalVariableDecl(
-		ExecutionState& state,
-		const llvm::GlobalVariable& gv);
-	void allocGlobalVariableNoDecl(
-		ExecutionState& state,
-		const llvm::GlobalVariable& gv);
 
 	struct XferStateIter
 	{

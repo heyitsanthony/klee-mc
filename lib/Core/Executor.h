@@ -19,7 +19,6 @@
 #include "klee/Interpreter.h"
 #include "klee/Internal/Module/Cell.h"
 #include "klee/Internal/Module/KInstruction.h"
-#include "llvm/Support/CallSite.h"
 #include "llvm/ADT/APFloat.h"
 #include "SeedInfo.h"	/* so forkInfo works */
 #include <vector>
@@ -48,33 +47,34 @@ namespace llvm {
 }
 
 namespace klee {
-  class Array;
-  class Cell;
-  class ExecutionState;
-  class ExeStateManager;
-  class ExternalDispatcher;
-  class Expr;
-  class ConstantExpr;
-  class InstructionInfoTable;
-  class KFunction;
-  class KInstIterator;
-  class MMU;
-  class MemoryManager;
-  class MemoryObject;
-  class ObjectState;
-  class PTree;
-  class Searcher;
-  class SpecialFunctionHandler;
-  struct StackFrame;
-  class StatsTracker;
-  class TimingSolver;
-  class TreeStreamWriter;
+class Array;
+class Cell;
+class ConstantExpr;
+class ExecutionState;
+class ExeStateManager;
+class ExternalDispatcher;
+class Expr;
+class Globals;
+class InstructionInfoTable;
+class KFunction;
+class KInstIterator;
+class MMU;
+class MemoryManager;
+class MemoryObject;
+class ObjectState;
+class PTree;
+class Searcher;
+class SpecialFunctionHandler;
+struct StackFrame;
+class StatsTracker;
+class TimingSolver;
+class TreeStreamWriter;
 
-  template<class T> class ref;
+template<class T> class ref;
 
-  /// \todo Add a context object to keep track of data only live
-  /// during an instruction step. Should contain addedStates,
-  /// removedStates, and haltExecution, among others.
+/// \todo Add a context object to keep track of data only live
+/// during an instruction step. Should contain addedStates,
+/// removedStates, and haltExecution, among others.
 
 #define EXE_SWITCH_RLE_LIMIT	4
 
@@ -157,14 +157,7 @@ private:
 protected:
   KModule	*kmodule;
   MMU		*mmu;
-
-  void initializeGlobalObject(
-    ExecutionState &state,
-    ObjectState *os,
-    llvm::Constant *c,
-    unsigned offset);
-
-  void initializeGlobals(ExecutionState &state);
+  Globals	*globals;
 
   virtual void executeInstruction(ExecutionState &state, KInstruction *ki);
 
@@ -201,8 +194,6 @@ protected:
     unsigned index,
     ExecutionState &state) const;
 
-  llvm::Function* getCalledFunction(llvm::CallSite &cs, ExecutionState &state);
-
   virtual llvm::Function* getFuncByAddr(uint64_t addr) = 0;
 
   virtual void callExternalFunction(ExecutionState &state,
@@ -233,14 +224,6 @@ protected:
 
 
   ExeStateManager* stateManager;
-
-  typedef std::map<const llvm::GlobalValue*, ref<ConstantExpr> > globaladdr_map;
-  typedef std::map<const llvm::GlobalValue*, MemoryObject*> globalobj_map;
-  /// Map of globals to their representative memory object.
-  globalobj_map globalObjects;
-  /// Map of globals to their bound address. This also includes
-  /// globals that have no representative object (i.e. functions).
-  globaladdr_map globalAddresses;
 
 private:
   std::vector<TimerInfo*> timers;
@@ -523,20 +506,12 @@ public:
 		const char *suffix,
 		const llvm::Twine &longMessage="");
 
-	// Given a concrete object in our [klee's] address space, add it to
-	// objects checked code can reference.
-	MemoryObject *addExternalObject(
-		ExecutionState &state,
-		void *addr,
-		unsigned size,
-		bool isReadOnly);
-
 	// XXX should just be moved out to utility module
 	ref<klee::ConstantExpr> evalConstant(llvm::Constant *c)
-	{ return evalConstant(kmodule, &globalAddresses, c); }
+	{ return evalConstant(kmodule, globals, c); }
 
 	static ref<klee::ConstantExpr> evalConstant(
-		const KModule* km, const globaladdr_map* gm, llvm::Constant *c);
+		const KModule* km, const Globals* gm, llvm::Constant *c);
 
 
 	/// Allocate and bind a new object in a particular state. NOTE: This
@@ -589,11 +564,11 @@ public:
 		KInstruction *target = 0);
 
 	ref<klee::ConstantExpr> evalConstantExpr(llvm::ConstantExpr *ce)
-	{ return evalConstantExpr(kmodule, &globalAddresses, ce); }
+	{ return evalConstantExpr(kmodule, globals, ce); }
 
 	static ref<klee::ConstantExpr> evalConstantExpr(
 		const KModule* km,
-		const globaladdr_map* gm,
+		const Globals* gm,
 		llvm::ConstantExpr *ce);
 
 	virtual void setSymbolicPathWriter(TreeStreamWriter *tsw)

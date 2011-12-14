@@ -18,6 +18,7 @@ namespace llvm {
 }
 
 namespace klee {
+class Globals;
 class Executor;
 struct InstructionInfo;
 class KModule;
@@ -72,9 +73,12 @@ public:
 	std::vector< std::pair<unsigned, uint64_t> > indices;
 
 	uint64_t getOffsetBits(void) const { return offset; }
+
+	void resolveConstants(const KModule* km, const Globals* gs);
 private:
 	template <typename TypeIt>
-	void computeOffsets(KModule* km, TypeIt ib, TypeIt ie);
+	void computeOffsets(
+		const KModule* km, const Globals*, TypeIt ib, TypeIt ie);
 
 	/// offset - A constant offset to add to the pointer operand to execute the
 	/// insturction.

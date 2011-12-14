@@ -14,6 +14,7 @@
 #include "ExternalDispatcher.h"
 #include "PTree.h"
 #include "HeapMM.h"
+#include "Globals.h"
 #include <sstream>
 #include "klee/Internal/Module/KModule.h"
 
@@ -23,10 +24,6 @@ using namespace klee;
 using namespace llvm;
 
 namespace {
-  cl::opt<bool>
-  UseAsmAddresses("use-asm-addresses",
-                  cl::init(false));
-
   cl::opt<bool>
   NoExternals("no-externals", 
            cl::desc("Do not allow external functin calls"));
@@ -105,7 +102,7 @@ void ExecutorBC::runFunctionAsMain(
 
 	setupArgv(state, f, argc, argv, envp);
 
-	initializeGlobals(*state);
+	globals = new Globals(kmodule, state, externalDispatcher);
 
 	processTree = new PTree(state);
 	state->ptreeNode = processTree->root;
@@ -115,121 +112,14 @@ void ExecutorBC::runFunctionAsMain(
 	delete processTree;
 	processTree = 0;
 
+	delete globals;
+	globals = NULL;
+
 	// hack to clear memory objects
 	delete memory;
 	memory = MemoryManager::create();
 
-	globalObjects.clear();
-	globalAddresses.clear();
-
 	if (statsTracker) statsTracker->done();
-}
-
-void ExecutorBC::initializeGlobals(ExecutionState &state)
-{
-	Module *m;
-	
-	m = kmodule->module;
-
-	if (m->getModuleInlineAsm() != "")
-		klee_warning("executable has module level assembly (ignoring)");
-
-	assert (m->lib_begin() == m->lib_end() &&
-		"XXX do not support dependent libraries");
-
-	// represent function globals using the address of the actual llvm function
-	// object. given that we use malloc to allocate memory in states this also
-	// ensures that we won't conflict. we don't need to allocate a memory object
-	// since reading/writing via a function pointer is unsupported anyway.
-	foreach (i, m->begin(), m->end()) {
-		Function *f = i;
-		ref<ConstantExpr> addr(0);
-
-		// If the symbol has external weak linkage then it is implicitly
-		// not defined in this module; if it isn't resolvable then it
-		// should be null.
-		if (	f->hasExternalWeakLinkage() && 
-			!externalDispatcher->resolveSymbol(f->getNameStr())) {
-			addr = Expr::createPointer(0);
-			std::cerr << "KLEE:ERROR: couldn't find symbol for weak linkage of " 
-				"global function: " << f->getNameStr() << std::endl;
-		} else {
-			addr = Expr::createPointer((unsigned long) (void*) f);
-			legalFunctions.insert(
-				(uint64_t) (unsigned long) (void*) f);
-		}
-
-		globalAddresses.insert(std::make_pair(f, addr));
-	}
-
-// Disabled, we don't want to promote use of live externals.
-#ifdef HAVE_CTYPE_EXTERNALS
-#ifndef WINDOWS
-#ifndef DARWIN
-	/* From /usr/include/errno.h: it [errno] is a per-thread variable. */
-	int *errno_addr = __errno_location();
-	addExternalObject(state, (void *)errno_addr, sizeof *errno_addr, false);
-
-	/* from /usr/include/ctype.h:
-	These point into arrays of 384, so they can be indexed by any `unsigned
-	char' value [0,255]; by EOF (-1); or by any `signed char' value
-	[-128,-1).  ISO C requires that the ctype functions work for `unsigned */
-	const uint16_t **addr = __ctype_b_loc();
-	addExternalObject(
-		state, (void *)(*addr-128), 384 * sizeof **addr, true);
-	addExternalObject(state, addr, sizeof(*addr), true);
-
-	const int32_t **lower_addr = __ctype_tolower_loc();
-	addExternalObject(
-		state, (void *)(*lower_addr-128), 384 * sizeof **lower_addr, true);
-	addExternalObject(state, lower_addr, sizeof(*lower_addr), true);
-
-	const int32_t **upper_addr = __ctype_toupper_loc();
-	addExternalObject(
-		state, (void *)(*upper_addr-128), 384 * sizeof **upper_addr, true);
-	addExternalObject(state, upper_addr, sizeof(*upper_addr), true);
-#endif
-#endif
-#endif
-
-	// allocate and initialize globals, done in two passes since we may
-	// need address of a global in order to initialize some other one.
-
-	// allocate memory objects for all globals
-	foreach (i, m->global_begin(), m->global_end()) {
-		if (i->isDeclaration())
-			allocGlobalVariableDecl(state, *i);
-		else
-			allocGlobalVariableNoDecl(state, *i);
-	}
-
-	// link aliases to their definitions (if bound)
-	foreach (i, m->alias_begin(), m->alias_end()) {
-		// Map the alias to its aliasee's address. 
-		// This works because we have addresses for everything, 
-		// even undefined functions. 
-		globalAddresses.insert(
-			std::make_pair(i, evalConstant(i->getAliasee())));
-	}
-
-	// once all objects are allocated, do the actual initialization
-	foreach (i, m->global_begin(), m->global_end()) {
-		MemoryObject		*mo;
-		const ObjectState	*os;
-		ObjectState		*wos;
-
-		if (!i->hasInitializer()) continue;
-
-		mo = globalObjects.find(i)->second;
-		os = state.addressSpace.findObject(mo);
-
-		assert(os);
-
-		wos = state.addressSpace.getWriteable(mo, os);
-
-		initializeGlobalObject(state, wos, i->getInitializer(), 0);
-		// if (i->isConstant()) os->setReadOnly(true);
-	}
 }
 
 void ExecutorBC::setupArgv(
@@ -426,108 +316,10 @@ void ExecutorBC::run(ExecutionState &initialState)
 	Executor::run(initialState);
 }
 
-void ExecutorBC::allocGlobalVariableDecl(
-  ExecutionState& state, const GlobalVariable& gv)
-{
-	MemoryObject *mo;
-	ObjectState *os;
-	assert (gv.isDeclaration());
-	// FIXME: We have no general way of handling unknown external
-	// symbols. If we really cared about making external stuff work
-	// better we could support user definition, or use the EXE style
-	// hack where we check the object file information.
-
-	Type *ty = gv.getType()->getElementType();
-	uint64_t size = target_data->getTypeStoreSize(ty);
-
-	// XXX - DWD - hardcode some things until we decide how to fix.
-#ifndef WINDOWS
-	if (gv.getName() == "_ZTVN10__cxxabiv117__class_type_infoE") {
-		size = 0x2C;
-	} else if (gv.getName() == "_ZTVN10__cxxabiv120__si_class_type_infoE") {
-		size = 0x2C;
-	} else if (gv.getName() == "_ZTVN10__cxxabiv121__vmi_class_type_infoE") {
-		size = 0x2C;
-	}
-#endif
-
-	if (size == 0) {
-		std::cerr << "Unable to find size for global variable: " 
-		<< gv.getName().data()
-		<< " (use will result in out of bounds access)\n";
-	}
-
-	os = state.allocate(size, false, true, &gv);
-	mo = os->getObject();
-	globalObjects.insert(std::make_pair(&gv, mo));
-	globalAddresses.insert(std::make_pair(&gv, mo->getBaseExpr()));
-
-	// Program already running = object already initialized.  Read
-	// concrete value and write it to our copy.
-	if (size == 0) return;
-
-	void *addr;
-	if (gv.getName() == "__dso_handle") {
-		extern void *__dso_handle __attribute__ ((__weak__));
-		addr = &__dso_handle; // wtf ?
-	} else {
-		addr = externalDispatcher->resolveSymbol(gv.getNameStr());
-	}
-	if (!addr) {
-		klee_warning(
-			"ERROR: unable to load symbol(%s) while initializing globals.", 
-			gv.getName().data());
-	} else {
-		for (unsigned offset=0; offset < mo->size; offset++) {
-			//os->write8(offset, ((unsigned char*)addr)[offset]);
-			state.write8(os, offset, ((unsigned char*)addr)[offset]);
-		}
-	}
-}
-
-/* XXX needs a better name */
-void ExecutorBC::allocGlobalVariableNoDecl(
-	ExecutionState& state,
-	const GlobalVariable& gv)
-{
-	Type *ty = gv.getType()->getElementType();
-	uint64_t size = target_data->getTypeStoreSize(ty);
-	MemoryObject *mo = 0;
-	ObjectState *os = 0;
-
-	if (UseAsmAddresses && gv.getName()[0]=='\01') {
-		char *end;
-		uint64_t address = ::strtoll(gv.getNameStr().c_str()+1, &end, 0);
-
-		if (end && *end == '\0') {
-		// We can't use the PRIu64 macro here for some reason, so we have to
-		// cast to long long unsigned int to avoid compiler warnings.
-			klee_message(
-			"NOTE: allocated global at asm specified address: %#08llx"
-			" (%llu bytes)",
-			(long long unsigned int) address,
-			(long long unsigned int) size);
-		//      mo = memory->allocateFixed(address, size, &*i, &state);
-			os = state.allocateFixed(address, size, &gv);
-			mo = os->getObject();
-			mo->isUserSpecified = true; // XXX hack;
-		}
-	}
-
-	//if (!mo) mo = memory->allocate(size, false, true, &*i, &state);
-	if (os == NULL) os = state.allocate(size, false, true, &gv);
-	assert(os && "out of memory");
-
-	mo = os->getObject();
-	globalObjects.insert(std::make_pair(&gv, mo));
-	globalAddresses.insert(std::make_pair(&gv, mo->getBaseExpr()));
-
-	if (!gv.hasInitializer()) os->initializeToRandom();
-}
 
 Function* ExecutorBC::getFuncByAddr(uint64_t addr)
 {
-	if (legalFunctions.count(addr) == 0)
+	if (!globals->isLegalFunction(addr))
 		return NULL;
 
 	/* hurr */

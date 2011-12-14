@@ -72,15 +72,18 @@ KGEPInstruction::KGEPInstruction(
 	llvm::Instruction* inst, unsigned dest)
 : KInstruction(inst, dest)
 , offset(~0)
+{}
+
+void KGEPInstruction::resolveConstants(const KModule* km, const Globals* g)
 {
-	if (GetElementPtrInst *gepi = dyn_cast<GetElementPtrInst>(inst)) {
-		computeOffsets(km, gep_type_begin(gepi), gep_type_end(gepi));
-	} else if (InsertValueInst *ivi = dyn_cast<InsertValueInst>(inst)) {
-		computeOffsets(km, iv_type_begin(ivi), iv_type_end(ivi));
+	if (GetElementPtrInst *gepi = dyn_cast<GetElementPtrInst>(getInst())) {
+		computeOffsets(km, g, gep_type_begin(gepi), gep_type_end(gepi));
+	} else if (InsertValueInst *ivi = dyn_cast<InsertValueInst>(getInst())) {
+		computeOffsets(km, g, iv_type_begin(ivi), iv_type_end(ivi));
 		assert(	indices.empty() &&
 			"InsertValue constant offset expected");
-	} else if (ExtractValueInst *evi = dyn_cast<ExtractValueInst>(inst)) {
-		computeOffsets(km, ev_type_begin(evi), ev_type_end(evi));
+	} else if (ExtractValueInst *evi = dyn_cast<ExtractValueInst>(getInst())) {
+		computeOffsets(km, g, ev_type_begin(evi), ev_type_end(evi));
 		assert(	indices.empty() &&
 			"ExtractValue constant offset expected");
 	} else {
@@ -89,7 +92,8 @@ KGEPInstruction::KGEPInstruction(
 }
 
 template <typename TypeIt>
-void KGEPInstruction::computeOffsets(KModule* km, TypeIt ib, TypeIt ie)
+void KGEPInstruction::computeOffsets(
+	const KModule* km, const Globals* g, TypeIt ib, TypeIt ie)
 {
 	ref<ConstantExpr>	constantOffset;
 	uint64_t		index;
@@ -127,7 +131,7 @@ void KGEPInstruction::computeOffsets(KModule* km, TypeIt ib, TypeIt ie)
 			ref<ConstantExpr>	index;
 			ref<ConstantExpr>	addend;
 
-			cVal = Executor::evalConstant(km, NULL, c);
+			cVal = Executor::evalConstant(km, g, c);
 
 			index = cast<ConstantExpr>(cVal)->SExt(
 				Context::get().getPointerWidth());
@@ -142,7 +146,7 @@ void KGEPInstruction::computeOffsets(KModule* km, TypeIt ib, TypeIt ie)
 			indices.push_back(std::make_pair(index, elementSize));
 		}
 	}
-		index++;
+	index++;
 	}
 
 	offset = constantOffset->getZExtValue();

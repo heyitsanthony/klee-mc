@@ -32,14 +32,12 @@ using namespace klee;
 static jmp_buf escapeCallJmpBuf;
 
 extern "C" {
-
-static void sigsegv_handler(int signal, siginfo_t *info, void *context) {
-  longjmp(escapeCallJmpBuf, 1);
+static void sigsegv_handler(int signal, siginfo_t *info, void *context)
+{ longjmp(escapeCallJmpBuf, 1); }
 }
 
-}
-
-void *ExternalDispatcher::resolveSymbol(const std::string &name) {
+void *ExternalDispatcher::resolveSymbol(const std::string &name) const
+{
   assert(executionEngine);
 
   const char *str = name.c_str();
