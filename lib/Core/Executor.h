@@ -371,7 +371,7 @@ private:
     KInstruction *ki,
     llvm::Function *f,
     std::vector< ref<Expr> > &arguments);
-  void executeBitCast(
+  llvm::Function* executeBitCast(
 	ExecutionState	&state,
 	llvm::CallSite	&cs,
 	llvm::ConstantExpr* ce,

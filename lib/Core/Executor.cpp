@@ -1492,8 +1492,7 @@ void Executor::instCall(ExecutionState& state, KInstruction *ki)
 		}
 
 		if (ce && ce->getOpcode()==Instruction::BitCast) {
-			f = dyn_cast<Function>(ce->getOperand(0));
-			executeBitCast(state, cs, ce, arguments);
+			f = executeBitCast(state, cs, ce, arguments);
 		}
 	}
 
@@ -1504,7 +1503,7 @@ void Executor::instCall(ExecutionState& state, KInstruction *ki)
 	}
 }
 
-void Executor::executeBitCast(
+llvm::Function* Executor::executeBitCast(
 	ExecutionState &state,
 	CallSite&		cs,
 	llvm::ConstantExpr*	ce,
@@ -1515,8 +1514,23 @@ void Executor::executeBitCast(
 
 	f = dyn_cast<Function>(ce->getOperand(0));
 	if (f == NULL) {
-		cs.getInstruction()->dump();
-		ce->getOperand(0)->dump();
+		GlobalAlias*	ga;
+
+		ga = dyn_cast<GlobalAlias>(ce->getOperand(0));
+		assert (ga != NULL && "Not alias-- then what?");
+
+		f = dyn_cast<Function>(ga->getAliasee());
+		if (f == NULL) {
+			llvm::ConstantExpr *new_ce;
+
+			new_ce =  dyn_cast<llvm::ConstantExpr>(ga->getAliasee());
+			if (new_ce && new_ce->getOpcode() == Instruction::BitCast)
+			{
+				return executeBitCast(
+					state, cs, new_ce, arguments);
+			}
+		}
+		assert (f != NULL && "Alias not function??");
 	}
      	assert(f && "XXX unrecognized constant expression in call");
 
@@ -1550,6 +1564,8 @@ void Executor::executeBitCast(
 			arguments[i] = ZExtExpr::create(arguments[i], to);
 		}
 	}
+
+	return f;
 }
 
 void Executor::executeSymbolicFuncPtr(
