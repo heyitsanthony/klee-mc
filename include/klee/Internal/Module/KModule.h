@@ -28,6 +28,7 @@ namespace llvm
 	class TargetData;
 	class Value;
 	class FunctionPassManager;
+	class raw_os_ostream;
 }
 
 namespace klee
@@ -122,12 +123,16 @@ namespace klee
 	void passEnforceInvariants(void);
 	void injectRawChecks(const Interpreter::ModuleOptions &opts);
 	void loadIntrinsicsLib(const Interpreter::ModuleOptions &opts);
+	void dumpModule(void);
+
+    void outputTruncSource(std::ostream* os, llvm::raw_os_ostream* ros) const;
 
     // Our shadow versions of LLVM structures.
     std::vector<KFunction*> functions;
     std::map<llvm::Function*, KFunction*> functionMap;
 
     llvm::FunctionPassManager* fpm;
+    InterpreterHandler	*ih;
   };
 } // End klee namespace
 

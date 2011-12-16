@@ -37,6 +37,7 @@
 
 #include "static/Sugar.h"
 
+#include <fstream>
 #include <sstream>
 
 using namespace klee;
@@ -301,26 +302,9 @@ void KModule::addMergeExit(Function* mergeFn, const std::string& name)
 	}
 }
 
-void KModule::outputSource(InterpreterHandler* ih)
+void KModule::outputTruncSource(
+	std::ostream* os, llvm::raw_os_ostream* ros) const
 {
-	std::ostream		*os;
-	llvm::raw_os_ostream	*ros;
-
-	os = ih->openOutputFile("assembly.ll");
-	assert(os && os->good() && "unable to open source output");
-
-
-	ros = new llvm::raw_os_ostream(*os);
-
-	// We have an option for this in case the user wants a .ll they
-	// can compile.
-	if (NoTruncateSourceLines) {
-		*ros << *module;
-		delete ros;
-		delete os;
-		return;
-	}
-
 	std::string			string;
 	llvm::raw_string_ostream	rss(string);
 	bool				truncated = false;
@@ -350,9 +334,48 @@ void KModule::outputSource(InterpreterHandler* ih)
 		position = end+1;
 	}
 
+
+}
+
+void KModule::outputSource(InterpreterHandler* ih)
+{
+	std::ostream		*os;
+	llvm::raw_os_ostream	*ros;
+
+	os = ih->openOutputFile("assembly.ll");
+	assert(os && os->good() && "unable to open source output");
+
+
+	ros = new llvm::raw_os_ostream(*os);
+
+	// We have an option for this in case the user wants a .ll they
+	// can compile.
+	if (NoTruncateSourceLines)
+		*ros << *module;
+	else
+		outputTruncSource(os, ros);
+
 	delete ros;
 	delete os;
 }
+
+void KModule::dumpModule(void)
+{
+	// Write out the .ll assembly file. We truncate long lines to work
+	// around a kcachegrind parsing bug (it puts them on new lines), so
+	// that source browsing works.
+	if (OutputSource)
+		outputSource(ih);
+
+	if (OutputModule) {
+		std::ostream *f = ih->openOutputFile("final.bc");
+		llvm::raw_os_ostream* rfs = new llvm::raw_os_ostream(*f);
+		WriteBitcodeToFile(module, *rfs);
+		delete rfs;
+		delete f;
+	}
+}
+
 
 void KModule::addModule(Module* in_mod)
 {
@@ -372,6 +395,7 @@ void KModule::addModule(Module* in_mod)
 		if (kf) kf->trackCoverage = CountModuleCoverage;
 	}
 
+	dumpModule();
 //	assert (isLinked);
 }
 
@@ -422,8 +446,10 @@ void KModule::passEnforceInvariants(void)
 
 void KModule::prepare(
 	const Interpreter::ModuleOptions &opts,
-	InterpreterHandler *ih)
+	InterpreterHandler *in_ih)
 {
+	ih = in_ih;
+
 	if (!MergeAtExit.empty())
 		prepareMerge(opts, ih);
 
@@ -445,20 +471,7 @@ void KModule::prepare(
 	// We used to remove forced functions here. Not any more-- we load
 	//  f = module->getFunction("memcpy");
 	//  if (f && f->use_empty()) f->eraseFromParent();
-
-
-	// Write out the .ll assembly file. We truncate long lines to work
-	// around a kcachegrind parsing bug (it puts them on new lines), so
-	// that source browsing works.
-	if (OutputSource) outputSource(ih);
-
-	if (OutputModule) {
-		std::ostream *f = ih->openOutputFile("final.bc");
-		llvm::raw_os_ostream* rfs = new llvm::raw_os_ostream(*f);
-		WriteBitcodeToFile(module, *rfs);
-		delete rfs;
-		delete f;
-	}
+	dumpModule();
 
 	kleeMergeFn = module->getFunction("klee_merge");
 
@@ -507,6 +520,16 @@ KFunction* KModule::addFunction(Function* f)
 	return addFunctionProcessed(f);
 }
 
+static void appendFunction(std::ofstream& os, const Function* f)
+{
+	llvm::raw_os_ostream	*ros;
+
+	ros = new llvm::raw_os_ostream(os);
+	*ros << *f;
+
+	delete ros;
+}
+
 KFunction* KModule::addFunctionProcessed(Function* f)
 {
 	KFunction	*kf;
@@ -517,6 +540,13 @@ KFunction* KModule::addFunctionProcessed(Function* f)
 	for (unsigned i=0; i < kf->numInstructions; ++i) {
 		KInstruction *ki = kf->instructions[i];
 		ki->setInfo(&infos->getInfo(ki->getInst()));
+	}
+
+	if (OutputSource) {
+		std::ofstream os(
+			ih->getOutputFilename("assembly.ll").c_str(),
+			std::ios::binary | std::ios::app);
+		appendFunction(os, f);
 	}
 
 	functions.push_back(kf);
@@ -576,8 +606,6 @@ KFunction* KModule::getKFunction(const char* fname) const
 
 	return getKFunction(f);
 }
-
-#include <iostream>
 
 void KModule::loadIntrinsicsLib(const Interpreter::ModuleOptions &opts)
 {
