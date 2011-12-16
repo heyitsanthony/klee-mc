@@ -60,8 +60,10 @@ namespace {
   MergeAtExit("merge-at-exit");
 
   cl::opt<bool>
-  NoTruncateSourceLines("no-truncate-source-lines",
-                        cl::desc("Don't truncate long lines in the output source"));
+  TruncateSourceLines(
+  	"truncate-source-lines",
+        cl::desc("Truncate long lines in the output source (kcachegrind?)"),
+	cl::init(false));
 
   cl::opt<bool>
   OutputSource("output-source",
@@ -349,11 +351,11 @@ void KModule::outputSource(InterpreterHandler* ih)
 	ros = new llvm::raw_os_ostream(*os);
 
 	// We have an option for this in case the user wants a .ll they
-	// can compile.
-	if (NoTruncateSourceLines)
-		*ros << *module;
-	else
+	// to work with kcachegrind
+	if (TruncateSourceLines)
 		outputTruncSource(os, ros);
+	else
+		*ros << *module;
 
 	delete ros;
 	delete os;
