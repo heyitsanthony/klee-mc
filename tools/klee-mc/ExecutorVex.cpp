@@ -48,13 +48,15 @@ extern bool WriteTraces;
 extern bool SymArgs;
 extern bool UsePrioritySearcher;
 
+bool SymRegs;
 bool UseConcreteVFS;
 
 namespace
 {
-	cl::opt<bool> SymRegs(
+	cl::opt<bool,true> SymRegsProxy(
 		"symregs",
 		cl::desc("Mark initial register file as symbolic"),
+		cl::location(SymRegs),
 		cl::init(false));
 
 	cl::opt<bool> LogRegs(
@@ -187,7 +189,7 @@ ExecutorVex::~ExecutorVex(void)
 	kmodule = NULL;
 }
 
-ExecutionState* ExecutorVex::setupInitialState(void)
+ExecutionState* ExecutorVex::setupInitialStateEntry(uint64_t entry_addr)
 {
 	ExecutionState	*state;
 	Function	*init_func;
@@ -205,7 +207,7 @@ ExecutionState* ExecutorVex::setupInitialState(void)
 	// This is mainly a problem for check-div-zero, since it won't
 	// yet have a global address but binding the constant table
 	// requires it!
-	init_func = getFuncByAddrNoKMod((uint64_t)gs->getEntryPoint(), is_new);
+	init_func = getFuncByAddrNoKMod(entry_addr, is_new);
 	assert (init_func != NULL && "Could not get init_func. Bad decode?");
 	if (init_func == NULL) {
 		fprintf(stderr, "[klee-mc] COULD NOT GET INIT_FUNC\n");
@@ -246,6 +248,11 @@ ExecutionState* ExecutorVex::setupInitialState(void)
 	return state;
 }
 
+ExecutionState* ExecutorVex::setupInitialState(void)
+{
+	return setupInitialStateEntry((uint64_t)gs->getEntryPoint());
+}
+
 void ExecutorVex::runImage(void)
 {
 	ExecutionState	*start_state;
@@ -256,6 +263,12 @@ void ExecutorVex::runImage(void)
 
 	run(*start_state);
 
+	cleanupImage();
+	fprintf(stderr, "OK.\n");
+}
+
+void ExecutorVex::cleanupImage(void)
+{
 	delete processTree;
 	processTree = NULL;
 
@@ -264,9 +277,8 @@ void ExecutorVex::runImage(void)
 	memory = MemoryManager::create();
 
 	if (statsTracker) statsTracker->done();
-
-	fprintf(stderr, "OK.\n");
 }
+
 
 void ExecutorVex::makeArgsSymbolic(ExecutionState* state)
 {

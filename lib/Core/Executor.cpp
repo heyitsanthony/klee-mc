@@ -2724,7 +2724,7 @@ void Executor::seedRunOne(ExecutionState* &lastState)
   stepInstruction(state);
   executeInstruction(state, ki);
   processTimers(&state, MaxInstructionTime * numSeeds);
-  updateStates(&state);
+  notifyCurrent(&state);
 }
 
 bool Executor::seedRun(ExecutionState& initialState)
@@ -2821,7 +2821,7 @@ dump:
 		else
 			terminateState(state);
 	}
-	updateStates(0);
+	notifyCurrent(0);
 
 done:
 	if (initialStateCopy) delete initialStateCopy;
@@ -2837,18 +2837,18 @@ void Executor::runLoop(void)
     if (state->isCompactForm) {
       ExecutionState* newState = state->reconstitute(*initialStateCopy);
       stateManager->replaceState(state, newState);
-      updateStates(state);
+      notifyCurrent(state);
       state = newState;
     }
 
     runState(state);
-    updateStates(state);
+    notifyCurrent(state);
   }
 }
 
-void Executor::updateStates(ExecutionState* current)
+void Executor::notifyCurrent(ExecutionState* current)
 {
-  stateManager->updateStates(this, current);
+  stateManager->notifyCurrent(this, current);
   if (stateManager->getNonCompactStateCount() == 0
     && !stateManager->empty())
   {

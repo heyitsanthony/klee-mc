@@ -22,8 +22,7 @@
 #include "ExecutorVex.h"
 #include "ExeSymHook.h"
 #include "ExeChk.h"
-
-//#include "llvm/Support/system_error.h"
+#include "ExeUC.h"
 
 // FIXME: Ugh, this is gross. But otherwise our config.h conflicts with LLVMs.
 #undef PACKAGE_BUGREPORT
@@ -153,6 +152,12 @@ namespace {
 		"guestfrag-base",
 		cl::desc("Base of the fragment"),
 		cl::init(0x400000));
+
+	cl::opt<bool>
+	Unconstrained(
+		"unconstrained",
+		cl::desc("Unconstrained Execution."),
+		cl::init(false));
 
 	cl::opt<bool>
 	XChkJIT(
@@ -422,6 +427,28 @@ bool isReplaying(void)
 	return (!ReplayOutDir.empty() || !ReplayOutFile.empty());
 }
 
+Interpreter* createInterpreter(KleeHandler *handler, Guest* gs)
+{
+	Interpreter	*interpreter;
+
+	if (Unconstrained)
+		return new ExeUC(handler, gs);
+
+	if (SymHook) {
+		interpreter = ExeSymHook::create(handler, gs);
+		if (interpreter != NULL)
+			return interpreter;
+
+		fprintf(stderr,
+			"Failed to create SymHook. Missing malloc?\n");
+	}
+
+	if (XChkJIT)
+		return new ExeChk(handler, gs);
+
+	return new ExecutorVex(handler, gs);
+}
+
 static std::list<ReplayPathType>	replayPaths;
 void setupReplayPaths(Interpreter* interpreter)
 {
@@ -477,20 +504,7 @@ int main(int argc, char **argv, char **envp)
 		return 2;
 	}
 
-	interpreter = NULL;
-	if (SymHook) {
-		interpreter = ExeSymHook::create(handler, gs);
-		if (interpreter == NULL) {
-			fprintf(stderr,
-				"Failed to create SymHook. Missing malloc?\n");
-		}
-	}
-
-	if (interpreter == NULL) {
-		interpreter = (XChkJIT)
-			? new ExeChk(handler, gs)
-			: new ExecutorVex(handler, gs);
-	}
+	interpreter = createInterpreter(handler, gs);
 
 	theInterpreter = interpreter;
 	handler->setInterpreter(interpreter);

@@ -65,6 +65,9 @@ public:
 
 protected:
 	virtual ExecutionState* setupInitialState(void);
+	ExecutionState* setupInitialStateEntry(uint64_t entry_addr);
+
+	void cleanupImage(void);
 
 	virtual llvm::Function* getFuncByAddr(uint64_t addr);
   	virtual void executeInstruction(
@@ -102,6 +105,10 @@ protected:
 	virtual void handleXfer(ExecutionState& state, KInstruction *ki);
 	void updateGuestRegs(ExecutionState& s);
 
+	llvm::Function* getFuncByAddrNoKMod(
+		uint64_t guest_addr, bool& is_new);
+
+
 	uint64_t getStateStack(ExecutionState& s) const;
 	ref<Expr> getRetArg(ExecutionState& state) const;
 	ref<Expr> getCallArg(ExecutionState& state, unsigned int n) const;
@@ -110,7 +117,6 @@ protected:
 	Guest		*gs;
 
 private:
-	llvm::Function* getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new);
 
 	void markExit(ExecutionState& state, uint8_t);
 

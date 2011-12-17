@@ -62,7 +62,7 @@ void ExeStateManager::setInitialState(
 		// remove initial state from ptree
 		states.insert(initialState);
 		removedStates.insert(initialState);
-		updateStates(exe, NULL); /* XXX ??? */
+		notifyCurrent(exe, NULL); /* XXX ??? */
 	} else {
 		states.insert(initialState);
 		++nonCompactStateCount;
@@ -93,7 +93,7 @@ void ExeStateManager::dropAdded(ExecutionState* es)
   addedStates.erase(it);
 }
 
-void ExeStateManager::updateStates(Executor* exe, ExecutionState *current)
+void ExeStateManager::notifyCurrent(Executor* exe, ExecutionState *current)
 {
   if (searcher) {
     searcher->update(current, getStates());
@@ -109,8 +109,7 @@ void ExeStateManager::updateStates(Executor* exe, ExecutionState *current)
   addedStates.clear();
 
   ExecutionState* root_to_be_removed = 0;
-  for (ExeStateSet::iterator it = removedStates.begin();
-       it != removedStates.end(); ++it) {
+  foreach (it, removedStates.begin(), removedStates.end()) {
     ExecutionState *es = *it;
 
     ExeStateSet::iterator it2 = states.find(es);

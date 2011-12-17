@@ -41,7 +41,7 @@ private:
 public:
   ExeStateManager();
   virtual ~ExeStateManager();
-  void updateStates(Executor* exe, ExecutionState* current);
+  void notifyCurrent(Executor* exe, ExecutionState* current);
 
   ExeStateSet::const_iterator begin(void) { return states.begin(); }
   ExeStateSet::const_iterator end(void) { return states.end(); }

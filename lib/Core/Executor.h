@@ -350,7 +350,7 @@ private:
   void compactStates(ExecutionState* &state);
   bool seedRun(ExecutionState& initialState);
   void seedRunOne(ExecutionState* &lastState);
-  void updateStates(ExecutionState *current);
+  void notifyCurrent(ExecutionState *current);
 
   typedef std::vector<SeedInfo>::iterator SeedInfoIterator;
   bool getSeedInfoIterRange(
