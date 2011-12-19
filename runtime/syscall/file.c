@@ -174,6 +174,50 @@ static void sc_stat(unsigned int sys_nr, void* regfile)
 	sc_stat_sym(regfile);
 }
 
+static void sc_open(const char* path, void* regfile)
+{
+	void		*new_regs;
+	int		ret_fd;
+
+	if (path == NULL) {
+		sc_ret_v(regfile, -1);
+		return;
+	}
+
+	if (!str_is_sym(path)) {
+		if (	deny_sys_files &&
+			(path[0] == '\0' ||
+			(path[0] == '/' &&
+			(path[1] == 'u' || path[1] == 'l')) ||
+			str_contains(".so", path)))
+		{
+			sc_ret_v(regfile, -1);
+			return;
+		}
+
+		if (concrete_vfs) {
+			ret_fd = fd_open(path);
+			if (	ret_fd != -1 ||
+				(path[0] == '/' &&
+				(path[1] == 'l' || path[1] == 'u')))
+			{
+				sc_ret_v(regfile, ret_fd);
+				return;
+			}
+		}
+	}
+
+	new_regs = sc_new_regs(regfile);
+	if (GET_SYSRET_S(new_regs) == -1) {
+		sc_ret_v(new_regs, -1);
+		return;
+	}
+
+	ret_fd = fd_open_sym();
+	klee_assume(GET_SYSRET_S(new_regs) == ret_fd);
+	sc_ret_v(new_regs, ret_fd);
+}
+
 int file_sc(unsigned int pure_sysnr, unsigned int sys_nr, void* regfile)
 {
 	void	*new_regs;
@@ -199,45 +243,13 @@ int file_sc(unsigned int pure_sysnr, unsigned int sys_nr, void* regfile)
 		break;
 	}
 	case SYS_openat:
-	case SYS_open: {
-		const char*	path;
-		int		ret_fd;
+		klee_warning_once("openat is kind of bogus");
+		sc_open((const char*)GET_ARG1_PTR(regfile), regfile);
+		break;
 
-		path = (const char*)(GET_ARG0_PTR(regfile));
-		if (!str_is_sym(path)) {
-			if (	deny_sys_files &&
-				(path[0] == '\0' ||
-				(path[0] == '/' &&
-				(path[1] == 'u' || path[1] == 'l')) ||
-				str_contains(".so", path)))
-			{
-				sc_ret_v(regfile, -1);
-				break;
-			}
-
-			if (concrete_vfs) {
-				ret_fd = fd_open(path);
-				if (	ret_fd != -1 ||
-					(path[0] == '/' &&
-					(path[1] == 'l' || path[1] == 'u')))
-				{
-					sc_ret_v(regfile, ret_fd);
-					break;
-				}
-			}
-		}
-
-		new_regs = sc_new_regs(regfile);
-		if (GET_SYSRET_S(new_regs) == -1) {
-			sc_ret_v(new_regs, -1);
-			break;
-		}
-
-		ret_fd = fd_open_sym();
-		klee_assume(GET_SYSRET_S(new_regs) == ret_fd);
-		sc_ret_v(new_regs, ret_fd);
-	}
-	break;
+	case SYS_open:
+		sc_open((const char*)GET_ARG0_PTR(regfile), regfile);
+		break;
 
 	case SYS_pread64:
 	case SYS_read:
