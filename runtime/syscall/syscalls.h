@@ -15,7 +15,7 @@
 #define GET_ARG4(x)	((VexGuestAMD64State*)x)->guest_R8
 #define GET_ARG5(x)	((VexGuestAMD64State*)x)->guest_R9
 #define GET_SYSNR(x)	((VexGuestAMD64State*)x)->guest_RAX
-#define ARCH_SIGN_CAST	intptr_t
+#define ARCH_SIGN_CAST	int64_t
 #elif GUEST_ARCH_ARM
 #define GET_SYSRET(x)	((VexGuestARMState*)x)->guest_R0
 /* XXX: There is some silliness when passing 64-bit parameters.

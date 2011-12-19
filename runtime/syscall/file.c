@@ -89,7 +89,7 @@ int sc_read_sym(
 
 #ifdef USE_SYS_FAILURE
 	if ((++fail_c.fc_read % FAILURE_RATE) == 0 &&
-	    (signed)GET_SYSRET(new_regs) == -1) {
+	    GET_SYSRET_S(new_regs) == -1) {
 	    return 1;
 	}
 #endif
@@ -106,7 +106,7 @@ static void sc_stat_sym(void* regfile)
 	void* new_regs = sc_new_regs(regfile);
 #ifdef USE_SYS_FAILURE
 	if (	(++fail_c.fc_stat % FAILURE_RATE) == 0 &&
-		(signed)GET_SYSRET(new_regs) == -1)
+		GET_SYSRET_S(new_regs) == -1)
 	{
 		return;
 	}
@@ -228,7 +228,7 @@ int file_sc(unsigned int pure_sysnr, unsigned int sys_nr, void* regfile)
 		}
 
 		new_regs = sc_new_regs(regfile);
-		if ((signed)GET_SYSRET(new_regs) == -1) {
+		if (GET_SYSRET_S(new_regs) == -1) {
 			sc_ret_v(new_regs, -1);
 			break;
 		}
@@ -277,7 +277,7 @@ int file_sc(unsigned int pure_sysnr, unsigned int sys_nr, void* regfile)
 	case SYS_creat:
 		klee_warning_once("phony creat call");
 		new_regs = sc_new_regs(regfile);
-		if ((signed)GET_SYSRET(new_regs) == -1)
+		if (GET_SYSRET_S(new_regs) == -1)
 			break;
 		klee_assume(GET_SYSRET(new_regs) > 3 && GET_SYSRET(new_regs) < 4096);
 		break;
