@@ -66,14 +66,16 @@ namespace {
 	cl::init(false));
 
   cl::opt<bool>
-  OutputSource("output-source",
-               cl::desc("Write the assembly for the final transformed source"),
-               cl::init(true));
+  OutputSource(
+  	"output-source",
+        cl::desc("Write the assembly for the final transformed source"),
+        cl::init(false));
 
   cl::opt<bool>
-  OutputModule("output-module",
-               cl::desc("Write the bitcode for the final transformed module"),
-               cl::init(false));
+  OutputModule(
+  	"output-module",
+	cl::desc("Write the bitcode for the final transformed module"),
+	cl::init(false));
 
   cl::opt<SwitchImplType>
   SwitchType("switch-type", cl::desc("Select the implementation of switch"),
