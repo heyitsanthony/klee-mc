@@ -507,6 +507,7 @@ public:
   UpdateList updates;
   ref<Expr> index;
 
+  const Array* getArray(void) const { return updates.root; }
   static ref<Expr> alloc(const UpdateList &updates, const ref<Expr> &index);
   static ref<Expr> create(const UpdateList &updates, ref<Expr> i);
 

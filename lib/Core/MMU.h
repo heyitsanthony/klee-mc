@@ -8,6 +8,8 @@ namespace klee
 
 class Executor;
 class ExecutionState;
+class KModule;
+class KInstruction;
 
 class MMU
 {
@@ -22,12 +24,14 @@ public:
 		void simplify(ExecutionState& es);
 		MemOp(	bool _isWrite, ref<Expr> _addr, ref<Expr> _value,
 			KInstruction* _target)
-		: isWrite(_isWrite)
+		: type_cache(-1)
+		, isWrite(_isWrite)
 		, address(_addr)
 		, value(_value)
 		, target(_target)
 		{}
 
+		mutable int	type_cache;
 		bool		isWrite;
 		ref<Expr>	address;
 		ref<Expr>	value;		/* undef if read */
@@ -44,6 +48,15 @@ public:
 protected:
 	struct MemOpRes
 	{
+	public:
+		static MemOpRes failure()
+		{
+			MemOpRes	r;
+			r.usable = false;
+			r.rc = false;
+			return r;
+		}
+
 		ObjectPair		op;
 		ref<Expr>		offset;
 		const MemoryObject	*mo;
@@ -61,7 +74,7 @@ protected:
 
 	void writeToMemRes(
 		ExecutionState& state,
-		struct MemOpRes& res,
+		const struct MemOpRes& res,
 		ref<Expr> value);
 
 	bool memOpByByte(ExecutionState& state, MemOp& mop);
@@ -73,12 +86,17 @@ protected:
 		unsigned	bytes,
 		Expr::Width	type);
 
-	void memOpError(ExecutionState& state, MemOp& mop);
+	virtual void memOpError(ExecutionState& state, MemOp& mop);
 
 	// Called on [for now] concrete reads, replaces constant with a symbolic
 	// Used for testing.
 	ref<Expr> replaceReadWithSymbolic(ExecutionState &state, ref<Expr> e);
 
+
+	void commitMOP(
+		ExecutionState& state,
+		const MemOp& mop,
+		const MemOpRes& res);
 
 private:
 	Executor& exe;

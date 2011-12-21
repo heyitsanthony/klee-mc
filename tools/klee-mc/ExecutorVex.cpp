@@ -323,8 +323,9 @@ void ExecutorVex::bindMappingPage(
 	assert ((m.offset.o & (PAGE_SIZE-1)) == 0);
 
 	addr_base = ((uint64_t)gs->getMem()->getData(m))+(PAGE_SIZE*pgnum);
-	mmap_mo = memory->allocateAt(
-		*state, addr_base, PAGE_SIZE, f->begin()->begin());
+
+	mmap_os = state->allocateAt(addr_base, PAGE_SIZE, f->begin()->begin());
+	mmap_mo = mmap_os->getObject();
 
 	if (m.type == GuestMem::Mapping::STACK) {
 		mmap_mo->setName("stack");
@@ -333,7 +334,6 @@ void ExecutorVex::bindMappingPage(
 	}
 
 	data = (const char*)addr_base;
-	mmap_os = state->bindMemObj(mmap_mo);
 	for (unsigned int i = 0; i < PAGE_SIZE; i++) {
 		/* bug fiend note:
 		 * valgrind will complain on this line because of the
@@ -816,6 +816,13 @@ void ExecutorVex::handleXferReturn(
 	ExecutionState& state, KInstruction* ki)
 {
 	struct XferStateIter	iter;
+
+	if (state.stack.size() == 1) {
+		/* Call-stack is exhausted. KLEE resumes
+		 * control. */
+		terminateStateOnExit(state);
+		return;
+	}
 
 	assert (state.stack.size() > 1);
 

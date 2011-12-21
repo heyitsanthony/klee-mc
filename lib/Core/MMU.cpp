@@ -32,7 +32,7 @@ using namespace klee;
 
 void MMU::writeToMemRes(
   	ExecutionState& state,
-	struct MemOpRes& res,
+	const struct MemOpRes& res,
 	ref<Expr> value)
 {
 	if (res.os->readOnly) {
@@ -49,10 +49,15 @@ void MMU::writeToMemRes(
 
 Expr::Width MMU::MemOp::getType(const KModule* m) const
 {
-	return (isWrite
+	if (type_cache != -1)
+		return type_cache;
+
+	type_cache = (isWrite
 		? value->getWidth()
 		: m->targetData->getTypeSizeInBits(
 			target->getInst()->getType()));
+
+	return type_cache;
 }
 
 void MMU::MemOp::simplify(ExecutionState& state)
@@ -74,17 +79,23 @@ bool MMU::memOpFast(ExecutionState& state, MemOp& mop)
 	if (!res.usable || !res.rc)
 		return false;
 
+	commitMOP(state, mop, res);
+	return true;
+}
+
+void MMU::commitMOP(
+	ExecutionState& state, const MemOp& mop, const MemOpRes& res)
+{
 	if (mop.isWrite) {
 		writeToMemRes(state, res, mop.value);
 	} else {
-		ref<Expr> result = state.read(res.os, res.offset, type);
+		ref<Expr> result = state.read(
+			res.os, res.offset, mop.getType(exe.getKModule()));
 		if (MakeConcreteSymbolic)
 			result = replaceReadWithSymbolic(state, result);
 
 		state.bindLocal(mop.target, result);
 	}
-
-	return true;
 }
 
 ref<Expr> MMU::readDebug(ExecutionState& state, uint64_t addr)
@@ -118,6 +129,8 @@ ExecutionState* MMU::getUnboundAddressState(
 	inBoundPtr = res.mo->getBoundsCheckPointer(mop.address, bytes);
 
 	Executor::StatePair branches(exe.fork(*unbound, inBoundPtr, true));
+	unbound = NULL;	/* pointer now invalid */
+
 	bound = branches.first;
 
 	// bound can be 0 on failure or overlapped
@@ -126,13 +139,7 @@ ExecutionState* MMU::getUnboundAddressState(
 	}
 
 	res.offset = res.mo->getOffsetExpr(mop.address);
-	if (mop.isWrite) {
-		writeToMemRes(*bound, res, mop.value);
-	} else {
-		ref<Expr> result;
-		result = bound->read(res.os, res.offset, type);
-		bound->bindLocal(mop.target, result);
-	}
+	commitMOP(*bound, mop, res);
 
 	return branches.second;
 }
@@ -292,7 +299,7 @@ MMU::MemOpRes MMU::memOpResolve(
 		ret.rc = state.addressSpace.resolveOne(
 			cast<ConstantExpr>(addr), ret.op);
 		if (!ret.rc)
-			return ret;
+			return MemOpRes::failure();
 	}
 
 	if (ret.op.first == NULL) {
@@ -319,8 +326,7 @@ MMU::MemOpRes MMU::memOpResolve(
 	if (!ret.rc) {
 		state.pc = state.prevPC;
 		exe.terminateStateEarly(state, "query timed out");
-		ret.rc = false;
-		return ret;
+		return MemOpRes::failure();
 	}
 
 	if (!alwaysInBounds)

@@ -435,13 +435,41 @@ ref<Expr> ConcatExpr::mergeExtracts(const ref<Expr>& l, const ref<Expr>& r)
 
 	ee_right = dyn_cast<ExtractExpr>(r);
 	if (ee_right != NULL) {
-		if (	ee_left->expr == ee_right->expr &&
-			ee_right->offset + ee_right->width == ee_left->offset)
+		if (	(ee_right->offset+ee_right->width)==ee_left->offset &&
+			(ee_left->expr == ee_right->expr))
 		{
 			return ExtractExpr::create(
 				ee_left->expr, ee_right->offset, w);
 		}
 	}
+
+	// TODO: more than just add?
+	if (r->getKind() == Expr::Add) {
+		// (concat
+		// 	(Extract w56 8 (Add 8 (Read64 x reg)))
+		// 	(Add 8 (Read8 x read)))
+		// => 
+		// (Add (Extract w8 0 8) (Extract w8 0 (Read64 x reg)))
+		ref<Expr>	ee_left_kid(ee_left->getKid(0));
+		if (ee_left_kid->getKind() == r->getKind())
+		{
+			ref<Expr>	test_expr;
+			test_expr = AddExpr::create(
+				ExtractExpr::create(
+					ee_left_kid->getKid(0),
+					0,
+					r->getWidth()),
+				ExtractExpr::create(
+					ee_left_kid->getKid(1),
+					0,
+					r->getWidth()));
+			if (test_expr == r) {
+				/* lift useless extract */
+				return ExtractExpr::create(ee_left_kid, 0, w);
+			}
+		}
+	}
+
 
 	// concat(extract(x[j+1]), concat(extract(x[j]), ...)
 	//   => concat(extract(x[j+1:j]), ...)

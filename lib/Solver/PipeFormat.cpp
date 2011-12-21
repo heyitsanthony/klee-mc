@@ -118,6 +118,7 @@ bool PipeSTP::parseModel(std::istream& is)
 	arrays.clear();
 	defaults.clear();
 
+	memset(line, 0, 8);
 	while (is.getline(line, 512)) {
 		char		*cur_buf = line;
 		char		arrname[128];

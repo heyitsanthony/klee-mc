@@ -80,10 +80,10 @@ $(LibDir)/libkleeRuntimeMC-arm.bca:
 
 mc-std: mc-std-amd64 mc-std-arm
 mc-std-%: $(LibDir)/libkleeRuntimeMC-%.bca
-	mkdir -p mc_tmp
-	cd mc_tmp && ar x $^ && cd ..
-	llvm-link -f -o `echo $^ | sed "s/\.bca/\.bc/"` mc_tmp/*.bc
-	rm -rf mc_tmp
+	mkdir -p mc_tmp-$@
+	cd mc_tmp-$@ && ar x $^ && cd ..
+	llvm-link -f -o `echo $^ | sed "s/\.bca/\.bc/"` mc_tmp-$@/*.bc
+	rm -rf mc_tmp-$@
 	cp  `echo $^ | sed "s/\.bca/\.bc/"` $(VEXLLVM_HELPER_PATH)
 
 
