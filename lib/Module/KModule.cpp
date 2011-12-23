@@ -412,7 +412,6 @@ void KModule::injectRawChecks(const Interpreter::ModuleOptions &opts)
 {
 	PassManager pm;
 	pm.add(new RaiseAsmPass(module));
-	if (opts.CheckDivZero) pm.add(new DivCheckPass());
 
 	// pm.add(createLowerAtomicPass());
 
@@ -494,7 +493,6 @@ void KModule::prepare(
 	}
 
 	fpm->add(new RaiseAsmPass(module));
-	if (opts.CheckDivZero) fpm->add(new DivCheckPass());
 	fpm->add(createLowerAtomicPass());
 	fpm->add(new IntrinsicCleanerPass(this, *targetData));
 	fpm->add(new PhiCleanerPass());
@@ -645,13 +643,6 @@ void KModule::loadIntrinsicsLib(const Interpreter::ModuleOptions &opts)
 		Type::getInt32Ty(getGlobalContext()),
 		(Type*) 0);
 
-
-	if (opts.CheckDivZero) {
-		forceImport(module, "klee_div_zero_check",
-			Type::getVoidTy(getGlobalContext()),
-			Type::getInt64Ty(getGlobalContext()),
-			NULL);
-	}
 
 	// FIXME: Missing force import for various math functions.
 

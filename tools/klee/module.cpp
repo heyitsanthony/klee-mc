@@ -34,11 +34,6 @@ namespace {
     "optimize",
     cl::desc("Optimize before execution"));
 
-  cl::opt<bool> CheckDivZero(
-    "check-div-zero",
-    cl::desc("Inject checks for division-by-zero"),
-    cl::init(true));
-
   cl::opt<bool> InitEnv(
     "init-env",
 	  cl::desc("Create custom environment.  Options that can be passed as arguments to the programs are: --sym-argv <max-len>  --sym-argvs <min-argvs> <max-argvs> <max-len> + file model options"));
@@ -612,7 +607,7 @@ Interpreter::ModuleOptions getMainModule(Module* &mainModule)
 	Interpreter::ModuleOptions Opts(
 		LibraryDir.c_str(),
 		OptimizeModule,
-		CheckDivZero,
+		false,
 		ExcludeCovFiles);
 
 	mainModule = setupLibc(mainModule, Opts);

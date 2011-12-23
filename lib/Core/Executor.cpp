@@ -2306,13 +2306,50 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     state.bindLocal(ki, y::create(left, right));     \
     break; }
 
+#define INST_DIVOP(x,y)						\
+	case Instruction::x : {					\
+	VectorType		*vt;				\
+	ExecutionState	*ok_state, *bad_state;			\
+	ref<Expr> left = eval(ki, 0, state).value;		\
+	ref<Expr> right = eval(ki, 1, state).value;		\
+	bad_state = ok_state = NULL;				\
+	if (!isa<ConstantExpr>(right)) {			\
+		StatePair	sp = fork(			\
+			state,					\
+			EqExpr::create(				\
+				right,					\
+				ConstantExpr::create(0, right->getWidth())), \
+			true);					\
+		bad_state = sp.first;				\
+		ok_state = sp.second;				\
+	} else if (right->isZero()) {				\
+		bad_state = &state;				\
+	} else {						\
+		ok_state = &state;				\
+	}							\
+	if (bad_state != NULL) {				\
+		terminateStateOnError(*bad_state, 		\
+			"Tried to divide by zero!",		\
+			"div.err");				\
+	}							\
+	if (ok_state == NULL) break;				\
+	vt = dyn_cast<VectorType>(ki->getInst()->getOperand(0)->getType()); \
+	if (vt) { 						\
+		SETUP_VOP(vt);					\
+		V_OP_PREPEND(x);				\
+		ok_state->bindLocal(ki, result);		\
+		break;						\
+	}							\
+	ok_state->bindLocal(ki, y::create(left, right));	\
+	break; }
+
   INST_ARITHOP(Add,AddExpr)
   INST_ARITHOP(Sub,SubExpr)
   INST_ARITHOP(Mul,MulExpr)
-  INST_ARITHOP(UDiv,UDivExpr)
-  INST_ARITHOP(SDiv,SDivExpr)
-  INST_ARITHOP(URem,URemExpr)
-  INST_ARITHOP(SRem,SRemExpr)
+  INST_DIVOP(UDiv,UDivExpr)
+  INST_DIVOP(SDiv,SDivExpr)
+  INST_DIVOP(URem,URemExpr)
+  INST_DIVOP(SRem,SRemExpr)
   INST_ARITHOP(And,AndExpr)
   INST_ARITHOP(Or,OrExpr)
   INST_ARITHOP(Xor,XorExpr)

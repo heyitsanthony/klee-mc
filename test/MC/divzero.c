@@ -1,5 +1,5 @@
 // RUN: gcc %s -O0 -o %t1
-// RUN: klee-mc -check-div-zero - ./%t1 2>%t1.err >%t1.out
+// RUN: klee-mc - ./%t1 2>%t1.err >%t1.out
 //
 // There should be errors.
 // RUN: ls klee-last | grep ".err"

@@ -69,11 +69,6 @@ namespace
 		cl::desc("Optimize before execution"),
 		cl::init(false));
 
-	cl::opt<bool> CheckDivZero(
-		"check-div-zero",
-		cl::desc("Inject checks for division-by-zero"),
-		cl::init(false));
-
 	cl::opt<bool,true> ConcreteVfsProxy(
 		"concrete-vfs",
 		cl::desc("Treat absolute path opens as concrete"),
@@ -130,7 +125,7 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih, Guest *in_gs)
 	Interpreter::ModuleOptions mod_opts(
 		LibraryDir.c_str(),
 		OptimizeModule,
-		CheckDivZero,
+		false,
 		std::vector<std::string>());
 
 	assert (gs);
@@ -203,16 +198,6 @@ ExecutionState* ExecutorVex::setupInitialStateEntry(uint64_t entry_addr)
 	// acrobatics because we have a fucking circular dependency
 	// on the globaladdress stucture which keeps us from binding
 	// the module constant table.
-	//
-	// This is mainly a problem for check-div-zero, since it won't
-	// yet have a global address but binding the constant table
-	// requires it!
-	init_func = getFuncByAddrNoKMod(entry_addr, is_new);
-	assert (init_func != NULL && "Could not get init_func. Bad decode?");
-	if (init_func == NULL) {
-		fprintf(stderr, "[klee-mc] COULD NOT GET INIT_FUNC\n");
-		return NULL;
-	}
 
 	/* add modules before initializing globals so that everything
 	 * will link in properly */
@@ -220,6 +205,13 @@ ExecutionState* ExecutorVex::setupInitialStateEntry(uint64_t entry_addr)
 	foreach (it, l.begin(), l.end())
 		kmodule->addModule(*it);
 	theVexHelpers->useExternalMod(kmodule->module);
+
+	init_func = getFuncByAddrNoKMod(entry_addr, is_new);
+	assert (init_func != NULL && "Could not get init_func. Bad decode?");
+	if (init_func == NULL) {
+		fprintf(stderr, "[klee-mc] COULD NOT GET INIT_FUNC\n");
+		return NULL;
+	}
 
 	sys_model->installInitializers(init_func);
 

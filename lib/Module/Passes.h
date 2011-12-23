@@ -114,16 +114,6 @@ public:
   virtual bool runOnFunction(llvm::Function &f);
 };
 
-class DivCheckPass : public llvm::FunctionPass
-{
-  static char ID;
-public:
-  DivCheckPass(): FunctionPass(ID), divZeroCheckFunction(0) {}
-  virtual bool runOnFunction(llvm::Function &f);
-private:
-  llvm::Function *divZeroCheckFunction;
-};
-
 /// LowerSwitchPass - Replace all SwitchInst instructions with chained branch
 /// instructions.  Note that this cannot be a BasicBlock pass because it
 /// modifies the CFG!
