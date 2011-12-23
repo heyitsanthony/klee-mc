@@ -458,6 +458,17 @@ void* sc_enter(void* regfile, void* jmpptr)
 	}
 	break;
 
+	case SYS_clock_gettime: {
+		void*	timespec = GET_ARG1(regfile);
+		if (timespec == NULL) {
+			sc_ret_v(regfile, -1);
+			return;
+		}
+		make_sym(GET_ARG1(regfile), sizeof(struct timespec), "timespec");
+		sc_ret_v(regfile, 0);
+		break;
+	}
+
 
 	UNIMPL_SC(readlinkat)
 	case SYS_pread64:
