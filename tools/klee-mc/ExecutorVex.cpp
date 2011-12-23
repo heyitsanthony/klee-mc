@@ -630,6 +630,14 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 	case GE_IGNORE:
 		handleXferJmp(state, ki);
 		return;
+	case GE_SIGSEGV:
+		std::cerr << "[VEXLLVM] Caught SigSegV. Error Exit.\n";
+		terminateStateOnError(
+			state,
+			"VEX SIGSEGV error: jump to sigsegv",
+			"sigsegv.err");
+		return;
+
 	case GE_SIGTRAP:
 		std::cerr << "[VEXLLVM] Caught SigTrap. Exiting\n";
 		terminateStateOnExit(state);
