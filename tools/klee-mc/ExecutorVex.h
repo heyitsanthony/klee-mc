@@ -6,7 +6,7 @@
 #include "../../lib/Core/Executor.h"
 
 #include <iostream>
-#include <hash_map>
+#include <tr1/unordered_map>
 #include <assert.h>
 
 class VexXlate;
@@ -27,8 +27,7 @@ class ObjectState;
 class SyscallSFH;
 class SysModel;
 
-// ugh g++, you delicate garbage
-typedef __gnu_cxx::hash_map<uintptr_t /* Func*/, VexSB*> func2vsb_map;
+typedef std::tr1::unordered_map<uintptr_t /* Func*/, VexSB*> func2vsb_map;
 
 #define es2esv(x)	static_cast<ExeStateVex&>(x)
 #define GETREGOBJ(x)	es2esv(x).getRegObj()
