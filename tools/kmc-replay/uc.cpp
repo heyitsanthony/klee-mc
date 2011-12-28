@@ -58,6 +58,8 @@ static void loadUCBuffers(Guest* gs, KTestStream* kts_uc)
 
 		std::cerr << "BASE_PTR: " << (void*)base_ptr << '\n';
 		uc_pages.insert((void*)((uintptr_t)base_ptr & ~(PAGE_SZ-1)));
+		uc_pages.insert((void*)(((uintptr_t)base_ptr+uctab[idx].len-1) & ~(PAGE_SZ-1)));
+
 	}
 
 	foreach (it, uc_pages.begin(), uc_pages.end()) {
