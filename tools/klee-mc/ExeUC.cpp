@@ -330,9 +330,9 @@ uint64_t ExeUC::getUCSym2Real(ExecutionState& es, ref<Expr> sym_ptr)
 
 void ExeUC::finalizeBuffers(ExecutionState& es)
 {
-	const ObjectState*	lentab_os;
+	ObjectState*	lentab_os;
 
-	lentab_os = es.addressSpace.findObject(lentab_mo);
+	lentab_os = es.addressSpace.findWriteableObject(lentab_mo);
 	assert (lentab_os != NULL);
 
 	for (unsigned idx = 0; idx < lentab_max; idx++) {
@@ -364,9 +364,6 @@ void ExeUC::finalizeBuffers(ExecutionState& es)
 					32)));
 
 		/* constrain symptr */
-		std::cerr
-			<< "TRYING BASEOFF: "
-			<< base_off << " (idx=" << idx << '\n';
 		symptr = es.read(lentab_os, base_off+SYMPTR_OFF, getPtrBytes()*8);
 		addConstraint(es, EqExpr::create(symptr, realptr));
 	}
