@@ -18,6 +18,7 @@ public:
 	virtual ~Crumbs();
 
 	static Crumbs* create(const char* fname);
+	static Crumbs* createEmpty(void) { return create("/dev/null"); }
 
 	struct breadcrumb* next(void);
 	struct breadcrumb* next(unsigned int bc_type);

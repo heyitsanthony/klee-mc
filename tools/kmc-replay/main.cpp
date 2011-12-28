@@ -11,7 +11,6 @@
 #include "guest.h"
 
 /* and all the rest */
-
 #include "SyscallsKTest.h"
 
 #include <stdlib.h>
@@ -20,6 +19,13 @@
 using namespace klee;
 
 extern void dumpIRSBs(void) {}
+
+extern KTestStream* setupUCFunc(
+	Guest		*gs,
+	const char	*func,
+	const char	*dirname,
+	unsigned	test_num);
+
 
 static void loadSymArgs(Guest* gs, KTestStream* kts)
 {
@@ -52,8 +58,8 @@ int main(int argc, char* argv[])
 	Crumbs		*crumbs;
 	unsigned int	test_num;
 	const char	*dirname;
-	char		fname_ktest[256];
 	char		fname_crumbs[256];
+	const char	*uc_func;
 
 	llvm::InitializeNativeTarget();
 
@@ -66,25 +72,41 @@ int main(int argc, char* argv[])
 	fprintf(stderr, "Replay: test #%d\n", test_num);
 
 	dirname = (argc == 3) ? argv[2] : "klee-last";
-	snprintf(fname_ktest, 256, "%s/test%06d.ktest.gz", dirname, test_num);
 	snprintf(fname_crumbs, 256, "%s/test%06d.crumbs.gz", dirname, test_num);
 
 	gs = Guest::load();
 	assert (gs != NULL && "Expects a guest snapshot");
 
-	kts = KTestStream::create(fname_ktest);
-	assert (kts != NULL && "Expects ktest");
-	if (kts->getKTest()->symArgvs)
-		loadSymArgs(gs, kts);
-
 	crumbs = Crumbs::create(fname_crumbs);
-	if (crumbs == NULL) {
-		fprintf(stderr, "No breadcrumb file at %s\n", fname_crumbs);
-		return -2;
-	}
 
 	re = VexExec::create<ReplayExec, Guest>(gs);
 	assert (theGenLLVM);
+
+	uc_func = getenv("REPLAY_UCFUNC");
+	if (uc_func != NULL) {
+		kts = setupUCFunc(gs, uc_func, dirname, test_num);
+		if (crumbs == NULL)
+			crumbs = Crumbs::createEmpty();
+	} else {
+		char	fname_ktest[256];
+		snprintf(
+			fname_ktest,
+			256,
+			"%s/test%06d.ktest.gz", dirname, test_num);
+		kts = KTestStream::create(fname_ktest);
+		if (crumbs == NULL) {
+			fprintf(
+				stderr, 
+				"No breadcrumb file at %s\n",
+				fname_crumbs);
+			return -2;
+		}
+	}
+
+	assert (crumbs != NULL && "Expects crumbs");
+	assert (kts != NULL && "Expects ktest");
+	if (kts->getKTest()->symArgvs)
+		loadSymArgs(gs, kts);
 
 	std::cerr << "[kmc-replay] Forcing fake vsyspage reads\n";
 	theGenLLVM->setFakeSysReads();
@@ -95,7 +117,18 @@ int main(int argc, char* argv[])
 	assert (skt != NULL && "Couldn't create ktest harness");
 
 	re->setSyscallsKTest(skt);
-	re->run();
+
+	if (uc_func == NULL) {
+		re->run();
+	} else {
+		/* special case for UC: we're not guaranteed to exit, so we
+		 * need to hook in a special return point */
+		re->beginStepping();
+		while (re->stepVSB()) {
+			if (re->getNextAddr() == 0xdeadbeef)
+				break;
+		}
+	}
 
 	delete re;
 	delete gs;

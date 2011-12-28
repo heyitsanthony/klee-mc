@@ -90,11 +90,7 @@ void ReplayExec::verifyOrPanic(void)
 			(reg_mismatch[i] != vex_regs[i]) ? '*' : ' ');
 	}
 	fprintf(stderr, "\n");
-#if 0
-	fprintf(stderr,
-		"*(RDI): %p\n",
-		*((uint64_t*)(((VexGuestAMD64State*)vex_regs)->guest_RDI)));
-#endif
+
 	delete [] reg_mismatch;
 	exit(-1);
 	assert (0 == 1);

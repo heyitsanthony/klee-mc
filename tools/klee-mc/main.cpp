@@ -9,6 +9,7 @@
 #include "static/Sugar.h"
 
 #include "KleeHandler.h"
+#include "UCHandler.h"
 #include "cmdargs.h"
 
 #include <llvm/Support/CommandLine.h>
@@ -496,7 +497,11 @@ int main(int argc, char **argv, char **envp)
 
 	cmdargs = getCmdArgs(envp);
 
-	handler = new KleeHandler(cmdargs);
+	if (!Unconstrained) {
+		handler = new KleeHandler(cmdargs);
+	} else {
+		handler = new UCHandler(cmdargs);
+	}
 
 	gs = getGuest(cmdargs);
 	if (gs == NULL) {

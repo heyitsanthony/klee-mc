@@ -38,7 +38,12 @@ private:
 		ExecutionState& state, MemOp& mop, uint64_t residue);
 
 	void bindFixedUC(ExecutionState& state, MemOp& mop, uint64_t real_addr);
-	void bindUnfixedUC(ExecutionState& state, MemOp& mop, ref<Expr> sym);
+	void bindUnfixedUC(
+		ExecutionState& state,
+		MemOp& mop,
+		ref<Expr> ful_ptr_sym,
+		uint64_t residue);
+
 	void handleSymResteer(ExecutionState& state, MemOp& mop);
 	void assignNewPointer(
 		ExecutionState& state, MemOp& mop, uint64_t residue);
@@ -56,7 +61,8 @@ private:
 
 	const char* expandRealPtr(
 		ExecutionState& state, 
-		ref<Expr> off_resteered,
+		uint64_t base_ptr,
+		ref<Expr> full_ptr,
 		ObjectPair& res);
 
 

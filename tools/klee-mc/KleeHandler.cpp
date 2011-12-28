@@ -231,7 +231,10 @@ std::ostream *KleeHandler::openTestFile(const std::string &suffix, unsigned id)
   return openOutputFile(filename);
 }
 
-void KleeHandler::processSuccessfulTest(unsigned id, out_objs& out)
+void KleeHandler::processSuccessfulTest(
+	const char	*name,
+	unsigned	id,
+	out_objs&	out)
 {
 	KTest		b;
 	bool		ktest_ok;
@@ -261,7 +264,7 @@ void KleeHandler::processSuccessfulTest(unsigned id, out_objs& out)
 	}
 
 	errno = 0;
-	fname = getTestFilename("ktest", id);
+	fname = getTestFilename(name, id);
 	ktest_ok = kTest_toFile(&b, fname.c_str());
 	if (!ktest_ok) {
 		klee_warning(
@@ -277,6 +280,13 @@ void KleeHandler::processSuccessfulTest(unsigned id, out_objs& out)
 	GZip::gzipFile(
 		fname.c_str(),
 		(fname + ".gz").c_str());
+}
+
+bool KleeHandler::getStateSymObjs(
+	const ExecutionState& state,
+	out_objs& out)
+{
+	return m_interpreter->getSymbolicSolution(state, out);
 }
 
 /* Outputs all files (.ktest, .pc, .cov etc.) describing a test case */
@@ -295,7 +305,7 @@ void KleeHandler::processTestCase(
   out_objs out;
   bool success;
 
-  success = m_interpreter->getSymbolicSolution(state, out);
+  success = getStateSymObjs(state, out);
   if (!success)
     klee_warning("unable to get symbolic solution, losing test case");
 
@@ -303,7 +313,7 @@ void KleeHandler::processTestCase(
 
   unsigned id = ++m_testIndex;
 
-  if (success) processSuccessfulTest(id, out);
+  if (success) processSuccessfulTest("ktest", id, out);
 
   if (errorMessage) {
     if (std::ostream* f = openTestFile(errorSuffix, id)) {
@@ -315,21 +325,23 @@ void KleeHandler::processTestCase(
   }
 
   if (WritePaths) {
-    if (std::ostream* f = openTestFile("path", id)) {
-      foreach(bit, state.branchesBegin(), state.branchesEnd()) {
-#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
-        (*f) << (*bit).first << "," << (*bit).second << "\n";
-#else
-        (*f) << (*bit).first << "\n";
-#endif
-      }
-      delete f;
-      GZip::gzipFile(
-      		getTestFilename("path", id).c_str(),
+	if (std::ostream* f = openTestFile("path", id)) {
+		foreach(bit, state.branchesBegin(), state.branchesEnd()) {
+			#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
+			(*f) << (*bit).first << "," << (*bit).second << "\n";
+			#else
+			(*f) << (*bit).first << "\n";
+			#endif
+		}
+		delete f;
+		GZip::gzipFile(
+		getTestFilename("path", id).c_str(),
 		(getTestFilename("path", id) + ".gz").c_str());
-    }
-    else
-      klee_warning("unable to write .path file, losing it (errno=%d: %s)", errno, strerror(errno));
+	} else {
+		klee_warning(
+			"can't write .path file, lost it (errno=%d: %s)",
+			errno, strerror(errno));
+	}
   }
 
   if (WriteSMT) {

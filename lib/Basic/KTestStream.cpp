@@ -37,10 +37,6 @@ char* KTestStream::feedObjData(unsigned int sz)
 
 	obj_buf = new char[sz];
 	memcpy(obj_buf, cur_obj->bytes, sz);
-	fprintf(stderr, "NOM NOM MemObj %s (%d bytes)\n",
-		cur_obj->name,
-		cur_obj->numBytes);
-
 	return obj_buf;
 }
 

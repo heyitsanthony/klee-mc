@@ -664,7 +664,7 @@ void ExecutorVex::xferIterInit(
 {
 	iter.v = eval(ki, 0, *state).value;
 	iter.free = state;
-	iter.first = true;
+	iter.state_c = 0;
 }
 
 /* this is mostly a copy of Executor's implementation of
@@ -685,12 +685,12 @@ bool ExecutorVex::xferIterNext(struct XferStateIter& iter)
 		(void) success;
 
 		iter.res = fork(*(iter.free), EqExpr::create(iter.v, value), true);
-		iter.first = false;
 		iter.free = iter.res.second;
 
 		if (!iter.res.first) continue;
 
 		addr = value->getZExtValue();
+		iter.state_c++;
 		iter_f = getFuncByAddr(addr);
 		if (iter_f == NULL) {
 			fprintf(stderr, "bogus jmp to %p!\n", (void*)addr);

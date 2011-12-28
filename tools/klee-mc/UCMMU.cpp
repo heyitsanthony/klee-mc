@@ -42,7 +42,7 @@ ref<Expr> RepairVisitor::repair(ref<Expr>& e)
 
 	ptrtab_idxs.clear();
 	aborted = false;
-	
+
 	realptr = visit(e);
 
 	if (aborted)
@@ -98,7 +98,7 @@ int RepairVisitor::getRootPtrIdx(const ReadExpr* re)
 
 	ce = dyn_cast<ConstantExpr>(re->index);
 	assert (ce != NULL && "Non-const regfile access");
-	
+
 	ptab_idx = ce->getZExtValue();
 	ptab_idx /= exe_uc.getPtrBytes();
 
@@ -159,50 +159,53 @@ UCMMU::MemOpRes UCMMU::memOpResolve(
 
 /* error message on failure, updates res on success with expanded MO */
 const char* UCMMU::expandRealPtr(
-	ExecutionState& state, 
-	ref<Expr> off_resteered,
+	ExecutionState& state,
+	uint64_t base_ptr,
+	ref<Expr> full_ptr,
 	ObjectPair& res)
 {
 	TimingSolver		*s;
-	ref<Expr>		cond;
+	ref<Expr>		cond, sym_off;
 	ObjectPair		ret;
 	unsigned		resize_len;
 	bool			sat;
-
-	std::cerr << "RESTEERED OFFSET: ";
-	off_resteered->dump();
-	std::cerr << '\n';
 
 	/* double length of array until we hit the right size */
 	/* TODO: binary search after hitting upper bound to find
 	 * tightest buffer possible */
 	s = exe_uc.getSolver();
 	sat = false;
-	// NOTE: off_resteered is the *last* byte we want to access
-	off_resteered = ZExtExpr::create(off_resteered, 32);
+
+	sym_off = SubExpr::create(
+		full_ptr,
+		ConstantExpr::create(
+			base_ptr, full_ptr->getWidth()));
 	resize_len = res.first->size/2;
 	do {
 		bool	ok;
 
 		resize_len *= 2;
 		cond = UleExpr::create(
-			off_resteered,
-			ConstantExpr::create(resize_len, 32));
+			sym_off,
+			ConstantExpr::create(resize_len, sym_off->getWidth()));
+		std::cerr << "RESIZE TO TRY: " << resize_len << '\n';
+		std::cerr << "TRYING THE COND: " << cond << '\n';
 		ok = s->mayBeTrue(state, cond, sat);
 		if (!ok)
 			return "Unconstrained: Expand query failed";
 
 	} while (sat == false && resize_len <= MAX_EXPAND_SIZE);
 
-	if (resize_len >= MAX_EXPAND_SIZE)
+	std::cerr << "FOUND FITTING RESIZE?\n";
+	if (resize_len >= MAX_EXPAND_SIZE) {
+		std::cerr << "RESIZE LEN = " << resize_len << '\n';
 		return "Unconstrained: Expansion offset exceeds limit";
+	}
 
 	assert (sat == true);
 	if (resize_len == res.first->size) {
 		std::cerr << "RESIZE_LEN = " << res.first->size << '\n';
-		std::cerr << "OFFEST = ";
-		off_resteered->dump();
-		std::cerr << '\n';
+		std::cerr << "OFFEST = " << sym_off << '\n';
 		return "Unconstrained: Offset already fit in buffer";
 	}
 
@@ -228,6 +231,14 @@ void UCMMU::expandMO(
 	ret.first = new_mo;
 	ret.second = new_os;
 
+	/* is this the best way to do this? I'm not sure. */
+	for (unsigned i = 0; i < res.first->size; i++) {
+		exe_uc.addConstraint(
+			state,
+			EqExpr::create(
+				state.read8(res.second, i),
+				state.read8(new_os, i)));
+	}
 	state.copy(new_os, res.second, res.first->size);
 
 	/* destroy old array */
@@ -241,7 +252,8 @@ void UCMMU::expandMO(
 void UCMMU::bindUnfixedUC(
 	ExecutionState& state,
 	MemOp& mop,
-	ref<Expr> sym_ptr)
+	ref<Expr> full_ptr_sym,
+	uint64_t residue)
 {
 	/*
 	 * Unfixed buffers on the other hand, fork *and* expand!
@@ -249,11 +261,6 @@ void UCMMU::bindUnfixedUC(
 	 * + fixed that satisfies new length requirement (expand to fixed),
 	 * + symbolic that satisfies len req (expand to sym)
 	 */
-
-	std::cerr << "WHATTTTTTT " << sym_ptr << '\n';
-	assert (0 == 1);
-
-#if 0
 	unsigned		op_bytes, resize_len;
 	uint64_t		real_addr;
 	ObjectPair		res;
@@ -263,7 +270,7 @@ void UCMMU::bindUnfixedUC(
 	std::cerr << "===============WOO: UNFIXED UC================\n";
 
 	op_bytes = Expr::getMinBytesForWidth(mop.getType(exe_uc.getKModule()));
-	real_addr = exe_uc.getUCSym2Real(state, sym_ptr);
+	real_addr = residue;
 	if (state.addressSpace.resolveOne(real_addr, res) == false) {
 		/* realptr now no where? but I put it there fair and square! */
 		exe_uc.terminateStateOnError(
@@ -274,13 +281,46 @@ void UCMMU::bindUnfixedUC(
 		return;
 	}
 
-	expand_err = expandRealPtr(
-		exe_uc,
-		state, 
-		AddExpr::create(
-			off_resteered,
+	std::cerr << "GOT MO ADDR=" << (void*)res.first->address << '\n';
+	std::cerr << "NAME: " << res.first->name << '\n';
+	/* not a UC buf. fork and error, don't do any buffer tricks */
+	if (res.first->name.substr(0,3) != "uc_") {
+		ExeUC::StatePair	sp;
+		ref<Expr>		cond;
+
+		std::cerr << "FULLL PTR SYM: " << full_ptr_sym << '\n';
+		cond = 	UltExpr::create(
+			SubExpr::create(
+				full_ptr_sym,
+				ConstantExpr::create(
+					res.first->address+op_bytes,
+					full_ptr_sym->getWidth())),
 			ConstantExpr::create(
-				op_bytes-1, off_resteered->getWidth())),
+				res.first->size,
+				full_ptr_sym->getWidth())),
+
+		std::cerr << "FORK COND: " << cond << '\n';
+		sp = exe_uc.fork(state, cond, true);
+		if (sp.second != NULL) {
+			exe_uc.terminateStateOnError(
+				*sp.second,
+				"bindUnfixedUC: out of bounds on image ptr",
+				"fixptr.err",
+				exe_uc.getAddressInfo(*sp.second, mop.address));
+		}
+
+		if (sp.first == NULL)
+			return;
+
+		MMU::memOpError(*sp.first, mop);
+		return;
+	}
+
+	assert (0 == 1 && "WORK HARDER");
+	expand_err = expandRealPtr(
+		state,
+		real_addr+(op_bytes-1),	// want to expand up to last byte
+		full_ptr_sym,
 		res);
 	if (expand_err != NULL) {
 		exe_uc.terminateStateOnError(
@@ -291,6 +331,8 @@ void UCMMU::bindUnfixedUC(
 		return;
 	}
 
+	assert (0 == 1 && "OOOOPS");
+#if 0
 	ExeUC::UCPtrFork ucp_fork(
 		exe_uc.forkUCPtr(
 			state,
@@ -352,7 +394,7 @@ void UCMMU::expandUnfixed(
 			exe_uc.getAddressInfo(state, mop.address));
 		return;
 	}
-	
+
 	round_off = res.first->size;
 	while (round_off < min_off)
 		round_off *= 2;
@@ -440,9 +482,10 @@ void UCMMU::assignNewPointer(
 	std::cerr << "ASSIGNING NEW POINTER!\n";
 	std::cerr << "PTABIDXS = " << resteer.ptrtab_idxs.size() << "\n";
 	assert (resteer.ptrtab_idxs.size() == 1);
-	if (resteer.untracked.size() != 0)
-		std::cerr << "ANTHONY: IMPLEMENT SCHEDULING CHOCIE HERE\n";
-	
+	if (resteer.untracked.size() != 0) {
+		std::cerr << "ANTHONY: IMPLEMENT SCHEDULING CHOICE HERE\n";
+	}
+
 	ptab_idx = (resteer.ptrtab_idxs.begin())->first;
 	std::cerr << "IDX = " << ptab_idx << '\n';
 
@@ -451,14 +494,14 @@ void UCMMU::assignNewPointer(
 		 * for forked state, back the PC up and restart execution. */
 		ExecutionState	*new_es;
 		ObjectState	*reg_wos;
-		unsigned	reg_off;
+		unsigned	reg_off, min_sz;
 
 		/* create the initial fork, first=len<=resi second len>resi
 		 * if resi < 8, resi = 8*/
-		std::cerr << "RESIDUE: " << residue << '\n';
+		std::cerr << "REG. assignNewPointer: RESIDUE: " << residue << '\n';
+		min_sz = residue+mop.getType(exe_uc.getKModule());
 		ExeUC::UCPtrFork ucp_fork(
-			exe_uc.initUCPtr(state, ptab_idx, residue));
-
+			exe_uc.initUCPtr(state, ptab_idx, min_sz));
 
 		new_es = ucp_fork.getState(true);
 		std::cerr << "TRUE STATE: " << (void*)new_es << '\n';
@@ -505,33 +548,39 @@ void UCMMU::resolveSymbolicOffset(
 	ref<Expr>	sym_ptr;
 	int		pt_idx;
 
-	std::cerr << "ORIGINAL: ";
-	resteer.old_expr->dump();
-	std::cerr << '\n';
+	pt_idx = -1;
+	if (resteer.untracked.size() != 0) {
+		std::cerr << "FIRST UNTRACKED: ";
+		std::cerr << *(resteer.untracked.begin()) << '\n';
+	}
 
-	std::cerr << "NEW: ";
-	resteer.new_expr->dump();
-	std::cerr << '\n';
-
-	std::cerr
-		<< "RESIDUE = " << residue
-		<< " / " << (void*)residue << '\n';
-
-	std::cerr << "ASSIGNING NEW POINTER!\n";
-	std::cerr << "PTABIDXS = " << resteer.ptrtab_idxs.size() << "\n";
+	if (resteer.ptrtab_idxs.size() == 0) {
+		/* No pointers are rewritten here--
+		 * that means we're certainly dealing with fixed buffers. */
+		bindFixedUC(state, mop, residue);
+		return;
+	}
 
 	assert (resteer.ptrtab_idxs.size() == 1);
 	pt_idx = resteer.ptrtab_idxs.begin()->first;
 
-	std::cerr << "PTIDX: " << pt_idx << '\n';
+	/* Use pt_idx to find out whether realptr is bound to
+	 * the symptr (symptr=const => bound) */
 	sym_ptr = exe_uc.getUCSymPtr(state, pt_idx);
 	if (isa<ConstantExpr>(sym_ptr)) {
 		bindFixedUC(state, mop, residue);
 		return;
 	}
-	std::cerr << "SYMPTR: " << sym_ptr << '\n';
 
-	assert (0 == 1 && "UGHG");
+	std::cerr << "PTIDX: " << pt_idx << '\n';
+	std::cerr << "RESIDUE: " << (void*)residue << '\n';
+	std::cerr << "SYMPTR: " << sym_ptr << '\n';
+	std::cerr << "NEW PTR: " << resteer.new_expr << "\n";
+	std::cerr << "ORIGINAL PTR: " << resteer.old_expr << "\n";
+
+	bindUnfixedUC(state, mop, resteer.new_expr, residue);
+
+	std::cerr << "BIND UNFIXED DONE.\n";
 }
 
 void UCMMU::handleSymResteer(ExecutionState& state, MemOp& mop)
@@ -549,7 +598,7 @@ void UCMMU::handleSymResteer(ExecutionState& state, MemOp& mop)
 	zero_syms = a.evaluate(resteer.new_expr);
 	ce = dyn_cast<ConstantExpr>(zero_syms);
 	assert (ce != NULL);
-	
+
 	residue = ce->getZExtValue();
 	if (residue >= MAX_EXPAND_SIZE) {
 		/* large constant => sym is an offset */
@@ -574,8 +623,6 @@ void UCMMU::memOpError(ExecutionState& state, MemOp& mop)
 	/* aborted? then we're rolling back.. do nothing */
 	if (aborted)
 		return;
-
-
 
 	if (resteered == false) {
 		std::cerr << "NOT RESTEERED: ";
@@ -615,10 +662,9 @@ void UCMMU::memOpError(ExecutionState& state, MemOp& mop)
 
 	std::cerr << "UNFIXED BIND: RESTEERING: ADDR: ";
 
-
 	expandUnfixed(
 		state,
-		mop, 
+		mop,
 		pt_idx,
 		exe_uc.getUCSym2Real(state, sym_ptr),
 		new_ce->getZExtValue());

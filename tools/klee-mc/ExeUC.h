@@ -2,11 +2,15 @@
 #define KLEE_EXEUC_H
 
 #include "ExecutorVex.h"
+#include "guestcpustate.h"
 
 namespace klee
 {
 class ObjectState;
 class Array;
+
+typedef std::pair<unsigned /* off */, unsigned /* len */> Exemptent;
+typedef std::vector<Exemptent> Exempts;
 
 struct UCPtr
 {
@@ -24,6 +28,15 @@ struct UCPtr
 	ref<Expr>	base_off;
 	unsigned	depth;
 };
+
+#pragma pack(1)
+struct UCTabEnt
+{
+	uint32_t	len;
+	void		*sym_ptr;
+	void		*real_ptr;
+};
+#pragma pack()
 
 class ExeUC : public ExecutorVex
 {
@@ -60,10 +73,10 @@ private:
 		ExecutionState	&es,
 		MemoryObject	*new_mo,
 		unsigned	idx);
+	ExecutionState* forkNullPtr(ExecutionState& es, unsigned pt_idx);
 
 	ref<Expr> getUCRealPtr(ExecutionState& es, unsigned idx);
 	ref<Expr> getUCSymPtr(ExecutionState& es, unsigned idx);
-	ref<Expr> getUCSize(ExecutionState& es, unsigned idx);
 	uint64_t getUCSym2Real(ExecutionState& es, ref<Expr> sym_ptr);
 
 	unsigned sym2idx(const Expr* sym_ptr) const;
@@ -72,6 +85,26 @@ private:
 
 
 	unsigned getPtrBytes(void) const;
+
+	/* inlined so that kmc-replay will work */
+	static Exempts getRegExempts(const Guest* gs)
+	{
+		Exempts	ret;
+
+		assert (gs->getArch() == Arch::X86_64 && "STUPID DFLAG");
+
+		ret.push_back(
+			Exemptent(
+				gs->getCPUState()->getStackRegOff(),
+				(gs->getMem()->is32Bit()) ? 4 : 8));
+		ret.push_back(Exemptent(160 /* guest_DFLAG */, 8));
+		ret.push_back(Exemptent(192 /* guest_FS_ZERO */, 8));
+
+		return ret;
+	}
+
+	void finalizeBuffers(ExecutionState& es);
+
 protected:
 	void runSym(const char* sym_name);
 
@@ -80,6 +113,7 @@ private:
 	 * 0		  			n
 	 * [ length  | sym_ptr | real_ptr	]
 	 */
+#define LEN_OFF		0
 #define SYMPTR_OFF	(4)
 #define REALPTR_OFF	(4+getPtrBytes())
 	MemoryObject	*lentab_mo;

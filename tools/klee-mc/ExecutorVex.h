@@ -144,7 +144,7 @@ private:
 		llvm::Function*	f;
 		uint64_t	f_addr;
 		StatePair 	res;
-		bool		first;
+		unsigned	state_c;
 	};
 	void xferIterInit(
 		struct XferStateIter& iter,

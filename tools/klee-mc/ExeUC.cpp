@@ -29,6 +29,10 @@ namespace {
 		llvm::cl::desc("Length of pointer table for unconstrained mode."),
 		llvm::cl::init(1024));
 
+	llvm::cl::opt<std::string>
+	WithFuncName(
+		"uc-func",
+		llvm::cl::desc("Name of function to check with UC."));
 }
 
 ExeUC::ExeUC(InterpreterHandler *ie, Guest* gs)
@@ -75,12 +79,6 @@ ref<Expr> ExeUC::getUCSymPtr(ExecutionState& es, unsigned idx)
 	return uc_expr;
 }
 
-ref<Expr> ExeUC::getUCSize(ExecutionState& es, unsigned idx)
-{
-	SETUP_UC(es, idx, 0, 32)
-	return uc_expr;
-}
-
 ExeUC::UCPtrFork ExeUC::forkUCPtr(
 	ExecutionState		&es,
 	MemoryObject		*new_mo,
@@ -97,7 +95,7 @@ ExeUC::UCPtrFork ExeUC::forkUCPtr(
 	wos = es.addressSpace.findWriteableObject(lentab_mo);
 
 	base_off = idx*lentab_elem_len;
-	len = es.read(wos, base_off, 32);
+	len = es.read(wos, base_off+LEN_OFF, 32);
 	assert (!isa<ReadExpr>(len) && "len not symbolic?");
 
 	/* 1. set real pointers to same value, */
@@ -112,7 +110,7 @@ ExeUC::UCPtrFork ExeUC::forkUCPtr(
 
 	if (res.first) {
 		 /* 3.a for len <= sz,
-		  * 	add constraint sym_ptr == real ptr, 
+		  * 	add constraint sym_ptr == real ptr,
 		  * 	add constraint len == sz */
 		wos = res.first->addressSpace.findWriteableObject(lentab_mo);
 
@@ -126,10 +124,10 @@ ExeUC::UCPtrFork ExeUC::forkUCPtr(
 				getUCSymPtr(*res.first, idx),
 				realptr_expr));
 
-		res.first->write(wos, base_off, min_size);
+		res.first->write(wos, base_off+LEN_OFF, min_size);
 		res.first->write(wos, base_off+SYMPTR_OFF, realptr_expr);
 	}
-	
+
 	if (res.second) {
 		 /* 3.b otherwise,
 		  * 	leave sym_ptr symbolic
@@ -145,38 +143,83 @@ ExeUC::UCPtrFork ExeUC::forkUCPtr(
 	return UCPtrFork(res, realptr_expr);
 }
 
+ExecutionState* ExeUC::forkNullPtr(ExecutionState& es, unsigned pt_idx)
+{
+	StatePair	res;
+	ref<Expr>	sym_ptr;
+
+	sym_ptr = getUCSymPtr(es, pt_idx);
+
+	/* 2. fork into to cases: len <= static_sz and len > static_sz */
+	res = fork(
+		es,
+		EqExpr::create(
+			sym_ptr,
+			ConstantExpr::create(0, sym_ptr->getWidth())),
+		true);
+
+	assert (res.first && res.second);
+
+	terminateStateOnError(
+		*res.first,
+		"Unconstrained: Must be a pointer",
+		"nullptr.err",
+		getAddressInfo(*res.first, sym_ptr));
+
+	return res.second;
+}
+
+
 ExeUC::UCPtrFork ExeUC::initUCPtr(
 	ExecutionState& es, unsigned idx, unsigned min_sz)
 {
+	ExecutionState		*ptr_es;
 	MemoryObject		*new_mo;
 
-	/* 1. create a shared symbolic shadow object of at least 8 bytes */
+	/*
+	 * 1. Since this is the initial dereference, we need to also fork off
+	 * a state where there is only an invalid pointer--
+	 * immediately terminate it
+	 */
+	ptr_es = forkNullPtr(es, idx);
+
+	/* 2. create a shared symbolic shadow object of at least 8 bytes */
 	if (min_sz < 8)
 		min_sz = 8;
 	new_mo = memory->allocate(
 		min_sz, false, true,
-		es.getCurrentKFunc()->function,
-		&es);
-	executeMakeSymbolic(es, new_mo, "uc_buf");
+		ptr_es->getCurrentKFunc()->function,
+		ptr_es);
+	executeMakeSymbolic(*ptr_es, new_mo, "uc_buf");
 
-	/* 2. expansion fork */
-	return forkUCPtr(es, new_mo, idx);
+	/* 3. expansion fork */
+	return forkUCPtr(*ptr_es, new_mo, idx);
 }
+
+static const char *xchk_fns[] = {
+	"readtcp",
+	"day_of_the_week",	// OK
+	"getspent",		// negative residue
+	"iruserok",		// negative residue
+	"strfry",
+	"svc_find",
+	"memcpy",
+	"parse_dollars",
+	"memset",
+	"printf",
+	"gettimeofday",
+	NULL};
 
 void ExeUC::runImage(void)
 {
-	const char	*xchk_fn[] = {
-		"strfry",
-		"svc_find",
-		"memcpy",
-		"parse_dollars",
-		"memset",
-		"printf",
-		"gettimeofday",
-		NULL};
-	
-	for (unsigned i = 0; xchk_fn[i]; i++) {
-		runSym(xchk_fn[i]);
+	if (WithFuncName.size() != 0) {
+		std::cerr << "USIGN FUNC: " << WithFuncName << '\n';
+		runSym(WithFuncName.c_str());
+	} else {
+		for (unsigned i = 0; xchk_fns[i]; i++) {
+			runSym(xchk_fns[i]);
+			assert (0 == 1 && "KERPLUNK FIXME");
+		}
 	}
 
 	fprintf(stderr, "DONE FOR THE DAY\n");
@@ -217,22 +260,19 @@ void ExeUC::setupUCEntry(
 	const char *xchk_fn)
 {
 	ObjectState	*reg_os, *lentab_os;
-	unsigned	ptr_bytes = getPtrBytes();
-	uint64_t	off;
+	const char*	state_data;
+	Exempts		ex(getRegExempts(gs));
 
 	/* restore stack pointer into symregs */
 	reg_os = GETREGOBJ(*start_state);
-	const char*  state_data = (const char*)gs->getCPUState()->getStateData();
-	off = gs->getCPUState()->getStackRegOff();
-	for (unsigned i=0; i < ptr_bytes; i++) {
-		start_state->write8(reg_os, off+i, state_data[off+i]);
-	}
+	state_data = (const char*)gs->getCPUState()->getStateData();
+	foreach (it, ex.begin(), ex.end()) {
+		unsigned	off, len;
 
-	/* and restore the dflags; otherwise vex complains on get_rflags */
-	assert (gs->getArch() == Arch::X86_64 && "STUPID DFLAG");
-	off = 160; // offset of guest_DFLAG
-	for (unsigned i=0; i < 8; i++) {
-		start_state->write8(reg_os, off+i, state_data[off+i]);
+		off = it->first;
+		len = it->second;
+		for (unsigned i=0; i < len; i++)
+			start_state->write8(reg_os, off+i, state_data[off+i]);
 	}
 
 	root_reg_arr = reg_os->getArray();
@@ -258,9 +298,11 @@ unsigned ExeUC::sym2idx(const Expr* sym_ptr) const
 	const ConcatExpr	*cc;
 
 	cc = dyn_cast<ConcatExpr>(sym_ptr);
-	assert (cc != NULL);
+	if (cc == NULL) {
+		re = dyn_cast<ReadExpr>(sym_ptr);
+	} else
+		re = dyn_cast<ReadExpr>(cc->getKid(0));
 
-	re = dyn_cast<ReadExpr>(cc->getKid(0));
 	assert (re != NULL && "Not ReadExpr??");
 
 	/* extract index from sym lookup to find real address */
@@ -284,4 +326,48 @@ uint64_t ExeUC::getUCSym2Real(ExecutionState& es, ref<Expr> sym_ptr)
 
 	ce = dyn_cast<ConstantExpr>(realptr);
 	return ce->getZExtValue();
+}
+
+void ExeUC::finalizeBuffers(ExecutionState& es)
+{
+	const ObjectState*	lentab_os;
+
+	lentab_os = es.addressSpace.findObject(lentab_mo);
+	assert (lentab_os != NULL);
+
+	for (unsigned idx = 0; idx < lentab_max; idx++) {
+		ref<Expr>		realptr, len, symptr;
+		const ConstantExpr	*ce;
+		bool			ok;
+		ObjectPair		res;
+		unsigned		base_off;
+
+		realptr = getUCRealPtr(es, idx);
+		if (realptr.isNull())
+			continue;
+
+		ce = dyn_cast<ConstantExpr>(realptr);
+		assert (ce != NULL);
+
+		ok = es.addressSpace.resolveOne(ce->getZExtValue(), res);
+		assert (ok && "REALPTR NOT FOUND");
+
+		/* constrain length */
+		base_off = idx*lentab_elem_len;
+		len = es.read(lentab_os, base_off+LEN_OFF, 32);
+		addConstraint(
+			es,
+			EqExpr::create(
+				len,
+				ConstantExpr::create(
+					res.first->size,
+					32)));
+
+		/* constrain symptr */
+		std::cerr
+			<< "TRYING BASEOFF: "
+			<< base_off << " (idx=" << idx << '\n';
+		symptr = es.read(lentab_os, base_off+SYMPTR_OFF, getPtrBytes()*8);
+		addConstraint(es, EqExpr::create(symptr, realptr));
+	}
 }
