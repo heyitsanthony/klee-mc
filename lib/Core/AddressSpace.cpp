@@ -748,7 +748,7 @@ void AddressSpace::printAddressInfo(std::ostream& info, uint64_t addr) const
 		std::string		alloc_info;
 
 		mo->getAllocInfo(alloc_info);
-		info	<< "object at "	<< mo->address
+		info	<< "object at "	<< (void*)mo->address
 			<< " of size "	<< mo->size
 			<< "\n\t\t"
 			<< alloc_info << "\n";
@@ -765,7 +765,7 @@ void AddressSpace::printAddressInfo(std::ostream& info, uint64_t addr) const
 		const MemoryObject *mo = lower->first;
 		std::string alloc_info;
 		mo->getAllocInfo(alloc_info);
-		info << "object at " << mo->address
+		info << "object at " << (void*)mo->address
 			<< " of size " << mo->size << "\n"
 			<< "\t\t" << alloc_info << "\n";
 	}

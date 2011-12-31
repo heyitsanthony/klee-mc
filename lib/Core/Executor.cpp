@@ -2900,12 +2900,16 @@ std::string Executor::getAddressInfo(
 	std::ostringstream	info;
 	uint64_t		example;
 
-	info << "\taddress: " << address << "\n";
+	info << "\taddress: ";
 	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(address)) {
 		example = CE->getZExtValue();
+		info << (void*)example << "\n";
 	} else {
 		ref<ConstantExpr> value;
-		bool success = solver->getValue(state, address, value);
+		bool success;
+
+		info << address << "\n";
+		success = solver->getValue(state, address, value);
 		assert(success && "FIXME: Unhandled solver failure");
 		(void) success;
 		example = value->getZExtValue();
