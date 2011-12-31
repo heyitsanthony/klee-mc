@@ -19,6 +19,7 @@ private:
 	ExecutionState	&state;
 
 	bool		aborted;
+	unsigned	ptr_sz;
 
 public:
 	ptrtab_map		ptrtab_idxs;
@@ -28,7 +29,7 @@ public:
 	: ExprVisitor(true)
 	, exe_uc(in_uc)
 	, state(es)
-	{}
+	{ ptr_sz = exe_uc.getPtrBytes(); }
 
 	ref<Expr> repair(ref<Expr>& e);
 	virtual Action visitExpr(const Expr &e);
@@ -44,7 +45,6 @@ ref<Expr> RepairVisitor::repair(ref<Expr>& e)
 	aborted = false;
 
 	realptr = visit(e);
-
 	if (aborted)
 		return NULL;
 
@@ -87,7 +87,7 @@ RepairVisitor::Action RepairVisitor::visitExpr(const Expr &e)
 	/* must be constantexpr!! */
 	re_idx = dyn_cast<ConstantExpr>(re->index)->getZExtValue();
 	return Action::changeTo(
-		ExtractExpr::create(real_ptr, 8*(re_idx%8), 8));
+		ExtractExpr::create(real_ptr, 8*(re_idx%ptr_sz), 8));
 }
 
 int RepairVisitor::getRootPtrIdx(const ReadExpr* re)

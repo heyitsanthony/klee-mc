@@ -91,14 +91,22 @@ private:
 	{
 		Exempts	ret;
 
-		assert (gs->getArch() == Arch::X86_64 && "STUPID DFLAG");
-
 		ret.push_back(
 			Exemptent(
 				gs->getCPUState()->getStackRegOff(),
 				(gs->getMem()->is32Bit()) ? 4 : 8));
-		ret.push_back(Exemptent(160 /* guest_DFLAG */, 8));
-		ret.push_back(Exemptent(192 /* guest_FS_ZERO */, 8));
+
+		switch (gs->getArch()) {
+		case Arch::X86_64:
+			ret.push_back(Exemptent(160 /* guest_DFLAG */, 8));
+			ret.push_back(Exemptent(192 /* guest_FS_ZERO */, 8));
+			break;
+		case Arch::ARM:
+			break;
+		default:
+			assert (0 == 1 && "UNSUPPORTED ARCHITECTURE");
+		}
+
 
 		return ret;
 	}
