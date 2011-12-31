@@ -13,6 +13,8 @@ using namespace llvm;
 
 enum MMType { MM_HEAP, MM_DETERMINISTIC };
 
+bool MemoryManager::m_is32Bit = false;
+
 namespace
 {
 	cl::opt<MMType>

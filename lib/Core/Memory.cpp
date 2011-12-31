@@ -34,9 +34,23 @@
 using namespace llvm;
 using namespace klee;
 
-/***/
+#define CHK_32BIT_ADDR(x)	\
+if (MemoryManager::is32Bit()) {	\
+	assert ((x & ~((uint64_t)0xffffffff)) == 0);	\
+}
+
 
 HeapMM* HeapObject::memoryManager = NULL;
+
+static int getFlags(void)
+{
+	int	flags;
+
+	flags = MAP_PRIVATE | MAP_ANONYMOUS;
+	if (MemoryManager::is32Bit())
+		flags |= MAP_32BIT;
+	return flags;
+}
 
 HeapObject::HeapObject(unsigned _size, unsigned _align)
 : size(_size)
@@ -45,13 +59,15 @@ HeapObject::HeapObject(unsigned _size, unsigned _align)
 {
 	if (!align) {
 		address = (uint64_t) (unsigned long) malloc((unsigned) size);
+		CHK_32BIT_ADDR(address);
 	} else {
 		assert (align == 12 && "Only handle page-level alignment");
+
 		address = (uint64_t)mmap(
 			NULL,
 			(size + 4095) & ~0xfff,
 			PROT_READ|PROT_WRITE,
-			MAP_PRIVATE | MAP_ANONYMOUS,
+			getFlags(),
 			-1,
 			0);
 		assert ((void*)address != MAP_FAILED);
@@ -82,7 +98,7 @@ std::vector<HeapObject*> HeapObject::contiguousPages(unsigned int bytes)
 		NULL,
 		(bytes + 4095) & ~0xfffULL,
 		PROT_READ|PROT_WRITE,
-		MAP_PRIVATE | MAP_ANONYMOUS,
+		getFlags(),
 		-1,
 		0);
 	assert (addr != MAP_FAILED);
@@ -93,7 +109,7 @@ std::vector<HeapObject*> HeapObject::contiguousPages(unsigned int bytes)
 		ret.push_back(cur_page);
 	}
 
-	std::cerr << "GOT " << ret.size() << " CONTIGUOUS PAGES\n";
+
 	return ret;
 }
 
@@ -103,6 +119,7 @@ HeapObject::HeapObject(void* page_addr)
 , align(12)
 , refCount(0)
 {
+	CHK_32BIT_ADDR(address);
 	memset(page_addr, 0, 4096);
 }
 /***/
@@ -127,7 +144,3 @@ ObjectHolder &ObjectHolder::operator=(const ObjectHolder &b) {
   os = b.os;
   return *this;
 }
-
-/***/
-
-

@@ -81,7 +81,8 @@ MemoryObject *HeapMM::allocate(
 		// so we can get hits in the cache and RWset
 		MallocKey::seensizes_ty::iterator it;
 		if (	allocSite &&
-			(it = MallocKey::seenSizes.find(mallocKey)) != MallocKey::seenSizes.end())
+			(	it = MallocKey::seenSizes.find(mallocKey)) !=
+				MallocKey::seenSizes.end())
 		{
 			std::set<uint64_t> &sizes(it->second);
 			std::set<uint64_t>::iterator it2;
@@ -100,7 +101,7 @@ MemoryObject *HeapMM::allocate(
 		heapObjects.insert(std::make_pair(mallocKey, heapObj));
 	}
 
-	bool anonymous = !state;
+	bool anonymous = (state == NULL);
 	MemoryObject *res;
 
 	res = new MemoryObject(

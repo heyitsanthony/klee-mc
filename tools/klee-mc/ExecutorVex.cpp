@@ -110,6 +110,10 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih, Guest *in_gs)
 
 	ExeStateBuilder::replaceBuilder(new ExeStateVexBuilder());
 
+	if (gs->getMem()->is32Bit()) {
+		MemoryManager::set32Bit();
+	}
+
 	if (UsePrioritySearcher) {
 		Prioritizer	*pr;
 
@@ -151,10 +155,7 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih, Guest *in_gs)
 	kmodule = new KModule(theGenLLVM->getModule());
 
 	target_data = kmodule->targetData;
-
-	// Initialize the context.
 	assert(target_data->isLittleEndian() && "BIGENDIAN??");
-
 	Context::initialize(
 		target_data->isLittleEndian(),
 		(Expr::Width) target_data->getPointerSizeInBits());

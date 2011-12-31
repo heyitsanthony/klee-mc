@@ -61,6 +61,8 @@ public:
 		uint64_t address, uint64_t size,
 		const llvm::Value *allocSite);
 
+	static void set32Bit(void) { m_is32Bit = true; }
+	static bool is32Bit(void) { return m_is32Bit; }
 protected:
 	MemoryManager();
 
@@ -71,6 +73,8 @@ protected:
 	std::list<ref<MemoryObject> > anonMemObjs;
 
 	bool isGoodSize(uint64_t) const;
+private:
+	static bool	m_is32Bit;
 };
 
 } // End klee namespace
