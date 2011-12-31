@@ -125,8 +125,12 @@ int main(int argc, char* argv[])
 		 * need to hook in a special return point */
 		re->beginStepping();
 		while (re->stepVSB()) {
-			if (re->getNextAddr() == 0xdeadbeef)
+			if (re->getNextAddr() == 0xdeadbeef) {
+				std::cerr
+					<< "[kmc-replay] UC: Exited '"
+					<< uc_func << "'.\n";
 				break;
+			}
 		}
 	}
 

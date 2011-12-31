@@ -154,9 +154,14 @@ KTestStream* setupUCFunc(
 	std::cerr << "WOO: " << (void*)gs->getCPUState()->getPC().o << '\n';
 
 	/* return to 'deadbeef' when done executing */
-	gs->getMem()->writeNative(
-		gs->getCPUState()->getStackPtr(),
-		0xdeadbeef);
+	if (gs->getArch() == Arch::ARM) {
+		/* this is the wrong thing to do; I know */
+		((uint32_t*)gs->getCPUState()->getStateData())[14] = 0xdeadbeef;
+	} else {
+		gs->getMem()->writeNative(
+			gs->getCPUState()->getStackPtr(),
+			0xdeadbeef);
+	}
 
 	/* 2. scan through ktest, allocate buffers */
 	loadUCBuffers(gs, kts_uc);
