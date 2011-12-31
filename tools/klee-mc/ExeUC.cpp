@@ -287,8 +287,6 @@ void ExeUC::setupUCEntry(
 	assert (lentab_mo != NULL);
 	lentab_os = executeMakeSymbolic(*start_state, lentab_mo, "lentab");
 	lentab_arr = lentab_os->getArray();
-
-	fprintf(stderr, "[EXEUC] OFF THE DEEP END\n");
 }
 
 unsigned ExeUC::sym2idx(const Expr* sym_ptr) const

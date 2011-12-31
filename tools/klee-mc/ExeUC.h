@@ -102,6 +102,7 @@ private:
 			ret.push_back(Exemptent(192 /* guest_FS_ZERO */, 8));
 			break;
 		case Arch::ARM:
+			ret.push_back(Exemptent(380 /* TPIDRURO */, 4));
 			break;
 		default:
 			assert (0 == 1 && "UNSUPPORTED ARCHITECTURE");
