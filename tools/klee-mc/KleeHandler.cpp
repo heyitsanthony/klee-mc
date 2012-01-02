@@ -76,12 +76,12 @@ namespace {
 }
 
 KleeHandler::KleeHandler(const CmdArgs* in_args)
-  : m_interpreter(0),
-    m_symPathWriter(0),
-    m_infoFile(0),
-    m_testIndex(0),
-    m_pathsExplored(0),
-    cmdargs(in_args)
+: m_symPathWriter(0)
+, m_infoFile(0)
+, m_testIndex(0)
+, m_pathsExplored(0)
+, cmdargs(in_args)
+, m_interpreter(0)
 {
 	std::string theDir;
 
@@ -239,8 +239,6 @@ void KleeHandler::processSuccessfulTest(
 	KTest		b;
 	bool		ktest_ok;
 	std::string	fname;
-
-	fprintf(stderr, "writing out test id=%d\n", id);
 
 	b.numArgs = cmdargs->getArgc();
 	b.args = cmdargs->getArgv();

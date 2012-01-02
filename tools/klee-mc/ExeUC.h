@@ -30,12 +30,20 @@ struct UCPtr
 };
 
 #pragma pack(1)
-struct UCTabEnt
+struct UCTabEnt64
 {
 	uint32_t	len;
-	void		*sym_ptr;
-	void		*real_ptr;
+	uint64_t	sym_ptr;
+	uint64_t	real_ptr;
 };
+
+struct UCTabEnt32
+{
+	uint32_t	len;
+	uint32_t	sym_ptr;
+	uint32_t	real_ptr;
+};
+
 #pragma pack()
 
 class ExeUC : public ExecutorVex

@@ -925,7 +925,7 @@ ref<Expr> ExecutorVex::getCallArg(ExecutionState& state, unsigned int n) const
 	return state.read(
 		regobj,
 		gs->getCPUState()->getFuncArgOff(n),
-		64);
+		gs->getMem()->is32Bit() ? 32 : 64);
 }
 
 ref<Expr> ExecutorVex::getRetArg(ExecutionState& state) const
@@ -936,7 +936,7 @@ ref<Expr> ExecutorVex::getRetArg(ExecutionState& state) const
 	return state.read(
 		regobj,
 		gs->getCPUState()->getRetOff(),
-		64);
+		gs->getMem()->is32Bit() ? 32 : 64);
 }
 
 uint64_t ExecutorVex::getStateStack(ExecutionState& es) const
@@ -947,7 +947,10 @@ uint64_t ExecutorVex::getStateStack(ExecutionState& es) const
 
 	/* XXX: not 32-bit clean */
 	os = GETREGOBJRO(es);
-	stack_e = es.read(os, getGuest()->getCPUState()->getStackRegOff(), 64);
+	stack_e = es.read(
+		os,
+		getGuest()->getCPUState()->getStackRegOff(),
+		gs->getMem()->is32Bit() ? 32 : 64);
 	stack_ce = dyn_cast<ConstantExpr>(stack_e);
 	if (stack_ce == NULL) {
 		std::cerr << "warning: COULD NOT WATCH BY STACK!!!!!!\n";

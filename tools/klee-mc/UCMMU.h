@@ -47,6 +47,10 @@ private:
 	void handleSymResteer(ExecutionState& state, MemOp& mop);
 	void assignNewPointer(
 		ExecutionState& state, MemOp& mop, uint64_t residue);
+	void assignRegPointer(
+		ExecutionState& state, MemOp& mop, uint64_t residue,
+		int ptab_idx);
+
 
 	void expandUnfixed(
 		ExecutionState& state,

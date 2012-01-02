@@ -490,57 +490,67 @@ void UCMMU::assignNewPointer(
 	std::cerr << "IDX = " << ptab_idx << '\n';
 
 	if (exe_uc.isRegIdx(ptab_idx)) {
-		/* finish up by doing memop resolve on still-running state
-		 * for forked state, back the PC up and restart execution. */
-		ExecutionState	*new_es;
-		ObjectState	*reg_wos;
-		unsigned	reg_off, min_sz;
-
-		/* create the initial fork, first=len<=resi second len>resi
-		 * if resi < 8, resi = 8*/
-		std::cerr << "REG. assignNewPointer: RESIDUE: " << residue << '\n';
-		min_sz = residue+mop.getType(exe_uc.getKModule());
-		ExeUC::UCPtrFork ucp_fork(
-			exe_uc.initUCPtr(state, ptab_idx, min_sz));
-
-		new_es = ucp_fork.getState(true);
-		std::cerr << "TRUE STATE: " << (void*)new_es << '\n';
-		--new_es->prevPC;
-		--new_es->pc;
-
-		/* since this is a root pointer, it'll stay in the register list--
-		 * set its value to the ptr table */
-
-		/* write back to register */
-		reg_wos = GETREGOBJ(*new_es);
-		reg_off = ptab_idx * exe_uc.getPtrBytes();
-		new_es->write(
-			reg_wos,
-			reg_off,
-			exe_uc.getUCSymPtr(*new_es, ptab_idx));
-
-
-		new_es = ucp_fork.getState(false);
-		std::cerr << "FALSE STATE: " << (void*)new_es << '\n';
-		--new_es->prevPC;
-		--new_es->pc;
-		reg_wos = GETREGOBJ(*new_es);
-		new_es->write(
-			reg_wos,
-			reg_off,
-			exe_uc.getUCSymPtr(*new_es, ptab_idx));
-
-		std::cerr << "WROTE BACK AT OFFSET: " << reg_off << '\n';
-
-		aborted = true;
-
-		std::cerr << "BACK IT UP HONEY\n";
+		assignRegPointer(state, mop, residue, ptab_idx);
 		return;
-
 	}
 
 	assert (0 == 1 && "DEEP RESOLUTION. WHOOPS");
 }
+
+void UCMMU::assignRegPointer(
+	ExecutionState& state, MemOp& mop, uint64_t residue,
+	int ptab_idx)
+{
+	/* finish up by doing memop resolve on still-running state
+	 * for forked state, back the PC up and restart execution. */
+	ExecutionState	*new_es;
+	ObjectState	*reg_wos;
+	unsigned	reg_off, min_sz;
+
+	/* create the initial fork, first=len<=resi second len>resi
+	 * if resi < 8, resi = 8*/
+	std::cerr << "REG. assignNewPointer: RESIDUE: " << residue << '\n';
+	min_sz = residue+mop.getType(exe_uc.getKModule());
+	ExeUC::UCPtrFork ucp_fork(
+		exe_uc.initUCPtr(state, ptab_idx, min_sz));
+
+	new_es = ucp_fork.getState(true);
+	--new_es->prevPC;
+	--new_es->pc;
+
+	/* since this is a root pointer, it'll stay in the register list--
+	 * set its value to the ptr table */
+
+	/* write back to register */
+	ref<Expr>	sym_ptr;
+
+	reg_wos = GETREGOBJ(*new_es);
+	reg_off = ptab_idx * exe_uc.getPtrBytes();
+	sym_ptr = exe_uc.getUCSymPtr(*new_es, ptab_idx);
+	exe_uc.addConstraint(*new_es,
+		EqExpr::create(
+			new_es->read(reg_wos, reg_off, sym_ptr->getWidth()),
+			sym_ptr));
+	new_es->write(reg_wos, reg_off, sym_ptr);
+
+
+	new_es = ucp_fork.getState(false);
+	--new_es->prevPC;
+	--new_es->pc;
+	reg_wos = GETREGOBJ(*new_es);
+	sym_ptr = exe_uc.getUCSymPtr(*new_es, ptab_idx);
+	exe_uc.addConstraint(*new_es,
+		EqExpr::create(
+			new_es->read(reg_wos, reg_off, sym_ptr->getWidth()),
+			sym_ptr));
+	new_es->write(reg_wos, reg_off, sym_ptr);
+
+	aborted = true;
+
+	std::cerr << "BACK IT UP HONEY\n";
+}
+
+
 
 void UCMMU::resolveSymbolicOffset(
 	ExecutionState& state, MemOp& mop, uint64_t residue)

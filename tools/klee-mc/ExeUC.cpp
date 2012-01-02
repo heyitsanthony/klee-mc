@@ -143,19 +143,34 @@ ExeUC::UCPtrFork ExeUC::forkUCPtr(
 	return UCPtrFork(res, realptr_expr);
 }
 
+#define UC_LOWER_BOUND	0x50000000
+#define UC_UPPER_BOUND	0xb0000000
+
 ExecutionState* ExeUC::forkNullPtr(ExecutionState& es, unsigned pt_idx)
 {
 	StatePair	res;
 	ref<Expr>	sym_ptr;
+	ref<Expr>	cond_eq_null, cond_oob;
 
 	sym_ptr = getUCSymPtr(es, pt_idx);
 
 	/* 2. fork into to cases: len <= static_sz and len > static_sz */
+	cond_eq_null = EqExpr::create(
+		sym_ptr,
+		ConstantExpr::create(0, sym_ptr->getWidth()));
+	cond_oob = OrExpr::create(
+		UltExpr::create(
+			sym_ptr,
+			ConstantExpr::create(
+				UC_LOWER_BOUND, sym_ptr->getWidth())),
+		UgtExpr::create(
+			sym_ptr,
+			ConstantExpr::create(
+				UC_UPPER_BOUND, sym_ptr->getWidth())));
+
 	res = fork(
 		es,
-		EqExpr::create(
-			sym_ptr,
-			ConstantExpr::create(0, sym_ptr->getWidth())),
+		OrExpr::create(cond_eq_null, cond_oob),
 		true);
 
 	assert (res.first && res.second);

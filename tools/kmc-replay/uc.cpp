@@ -16,9 +16,10 @@ using namespace klee;
 
 typedef std::map<std::string, std::vector<char> > ucbuf_map_ty;
 
+template <typename UCTabEnt>
 static void loadUCBuffers(Guest* gs, KTestStream* kts_uc)
 {
-	std::set<void*>		uc_pages;
+	std::set<uint64_t>	uc_pages;
 	ucbuf_map_ty		ucbufs;
 	const UCTabEnt		*uctab;
 	char			*lentab;
@@ -27,7 +28,7 @@ static void loadUCBuffers(Guest* gs, KTestStream* kts_uc)
 	unsigned		cpu_len;
 
 	
-	lentab = kts_uc->feedObjData(22060); // XXX need to be smarter
+	lentab = kts_uc->feedObjData(); // XXX need to be smarter
 	uctab = (const UCTabEnt*)lentab;
 
 	while ((kto = kts_uc->nextObject()) != NULL) {
@@ -37,7 +38,7 @@ static void loadUCBuffers(Guest* gs, KTestStream* kts_uc)
 
 	foreach (it, ucbufs.begin(), ucbufs.end()) {
 		std::string	uc_name(it->first);
-		void		*base_ptr;
+		uint64_t	base_ptr;
 		unsigned	idx;
 
 		std::cerr << uc_name << '\n';
@@ -46,26 +47,32 @@ static void loadUCBuffers(Guest* gs, KTestStream* kts_uc)
 
 		// uc_buf_n => uc_buf_n + 7 = n
 		idx = atoi(uc_name.c_str() + 7);
+		std::cerr << "WAHAHA IDX=" << idx << '\n';
+
 		assert (idx < (22060 / sizeof(*uctab)) &&
 			"UCBUF OUT OF BOUNDS");
+
+		std::cerr << "WUUUTTTT " << (void*)&uctab[idx] << '\n';
 		assert (uctab[idx].len == it->second.size());
 
 		base_ptr = NULL;
 		if (uctab[idx].real_ptr) base_ptr = uctab[idx].real_ptr;
 		if (uctab[idx].sym_ptr) base_ptr = uctab[idx].sym_ptr;
-		assert (base_ptr != NULL &&
+		assert (base_ptr &&
 			"No base pointer for ucbuf given!");
 
 		std::cerr << "BASE_PTR: " << (void*)base_ptr << '\n';
-		uc_pages.insert((void*)((uintptr_t)base_ptr & ~(PAGE_SZ-1)));
-		uc_pages.insert((void*)(((uintptr_t)base_ptr+uctab[idx].len-1) & ~(PAGE_SZ-1)));
-
+		uc_pages.insert(base_ptr & ~(PAGE_SZ-1));
+		uc_pages.insert((base_ptr+uctab[idx].len-1) & ~(PAGE_SZ-1));
+		std::cerr << "UC PAGES INSERTED\n";
 	}
+
+	std::cerr << "UC PAGES CYCLE\n";
 
 	foreach (it, uc_pages.begin(), uc_pages.end()) {
 		void	*new_page, *mapped_addr;
 		
-		new_page = *it;
+		new_page = (void*)*it;
 		mapped_addr = mmap(
 			new_page,
 			PAGE_SZ,
@@ -85,7 +92,7 @@ static void loadUCBuffers(Guest* gs, KTestStream* kts_uc)
 	cpu_len = gs->getCPUState()->getStateSize();
 	foreach (it, ucbufs.begin(), ucbufs.end()) {
 		std::string	uc_name(it->first);
-		void		*base_ptr;
+		uint64_t	base_ptr;
 		unsigned	idx;
 
 		idx = atoi(uc_name.c_str() + 7);
@@ -96,8 +103,11 @@ static void loadUCBuffers(Guest* gs, KTestStream* kts_uc)
 		for (unsigned i = 0; i < it->second.size(); i++)
 			((char*)base_ptr)[i] = it->second[i];
 
-		if (idx < cpu_len / 8) {
-			assert (gs->getArch() == Arch::X86_64);
+		if (gs->getMem()->is32Bit()) {
+			if (idx < cpu_len / 4) {
+				memcpy(cpu_state + idx*4, &base_ptr, 4);
+			}
+		} else if (idx < cpu_len / 8) {
 			memcpy(cpu_state + idx*8, &base_ptr, 8);
 		}
 	}
@@ -147,6 +157,13 @@ KTestStream* setupUCFunc(
 
 	/* 1.b resteer execution to function */
 	sym = gs->getSymbols()->findSym(func);
+	if (sym == NULL) {
+		std::cerr << "UC Function '" << func << "' not found. ULP\n";
+		delete kts_uc;
+		delete kts_klee;
+		return NULL;
+	}
+
 	guest_ptr	func_ptr(guest_ptr(sym->getBaseAddr()));
 	std::cerr << "HEY: " << (void*)func_ptr.o << '\n';
 	gs->getCPUState()->setPC(func_ptr);
@@ -164,7 +181,10 @@ KTestStream* setupUCFunc(
 	}
 
 	/* 2. scan through ktest, allocate buffers */
-	loadUCBuffers(gs, kts_uc);
+	if (gs->getMem()->is32Bit())
+		loadUCBuffers<UCTabEnt32>(gs, kts_uc);
+	else
+		loadUCBuffers<UCTabEnt64>(gs, kts_uc);
 
 	/* done setting up buffers, drop UC ktest data */
 	delete kts_uc;

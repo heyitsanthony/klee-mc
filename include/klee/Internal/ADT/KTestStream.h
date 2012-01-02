@@ -26,7 +26,7 @@ public:
 	}
 
 	const KTest* getKTest(void) const { return kt; }
-	char* feedObjData(unsigned int len);
+	char* feedObjData(unsigned int len = ~0U);
 protected:
 	KTestStream(KTest* kt);
 private:

@@ -32,7 +32,11 @@ char* KTestStream::feedObjData(unsigned int sz)
 		fprintf(stderr, "KTestStream: OOSYNC: Expected: %d. Got: %d\n",
 			sz,
 			cur_obj->numBytes);
-		return NULL;
+
+		if (sz != ~0U)
+			return NULL;
+		else
+			sz = cur_obj->numBytes;
 	}
 
 	obj_buf = new char[sz];
