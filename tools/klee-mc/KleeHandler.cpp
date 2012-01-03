@@ -275,9 +275,7 @@ void KleeHandler::processSuccessfulTest(
 		delete[] b.objects[i].bytes;
 	delete[] b.objects;
 
-	GZip::gzipFile(
-		fname.c_str(),
-		(fname + ".gz").c_str());
+	GZip::gzipFile(fname.c_str(), (fname + ".gz").c_str());
 }
 
 bool KleeHandler::getStateSymObjs(

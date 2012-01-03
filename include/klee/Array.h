@@ -95,6 +95,7 @@ public:
     }
   };
 
+  void print(std::ostream& os) const;
 private:
   /// constantValues - The constant initial values for this array, or empty for
   /// a symbolic array. If non-empty, this size of this array is equivalent to

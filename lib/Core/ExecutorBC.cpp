@@ -219,6 +219,9 @@ void ExecutorBC::callExternalFunction(
 	Function *function,
 	std::vector< ref<Expr> > &arguments)
 {
+	uint64_t	*args;
+	unsigned	wordIndex = 2;
+
 	// check if specialFunctionHandler wants it
 	if (specialFunctionHandler->handle(state, function, target, arguments))
 		return;
@@ -231,26 +234,28 @@ void ExecutorBC::callExternalFunction(
 	}
 
 	// normal external function handling path
-	// allocate 128 bits for each argument (+return value) to support fp80's;
-	// we could iterate through all the arguments first and determine the exact
-	// size we need, but this is faster, and the memory usage isn't significant.
-	uint64_t *args;
+	// allocate 128 bits for each argument (+return value)
+	// to support fp80's;
+	// we could iterate through all the arguments first
+	// and determine the exact size we need, but this is faster,
+	// and the memory usage isn't significant.
 	args = (uint64_t*) alloca(2*sizeof(*args) * (arguments.size() + 1));
 	memset(args, 0, 2 * sizeof(*args) * (arguments.size() + 1));
-	unsigned wordIndex = 2;
-	foreach (ai, arguments.begin(), arguments.end()) {
+	if (	AllowExternalSymCalls
+		|| okExternals.count(function->getName()))
+	{
 		// DAR: for printf, etc., don't terminate paths on symbolic calls
-		if (	AllowExternalSymCalls
-			|| okExternals.count(function->getName()))
-		{
-			// don't bother checking uniqueness
+		// don't bother checking uniqueness
+		foreach (ai, arguments.begin(), arguments.end()) {
 			ref<ConstantExpr> ce;
 			bool success = solver->getValue(state, *ai, ce);
 			assert(success && "FIXME: Unhandled solver failure");
 			(void) success;
 			ce->toMemory(&args[wordIndex]);
 			wordIndex += (ce->getWidth()+63)/64;
-		} else {
+		}
+	} else {
+		foreach (ai, arguments.begin(), arguments.end()) {
 			ref<Expr> arg = toUnique(state, *ai);
 			if (ConstantExpr *ce = dyn_cast<ConstantExpr>(arg)) {
 				// XXX kick toMemory functions from here
@@ -259,7 +264,7 @@ void ExecutorBC::callExternalFunction(
 			} else {
 				terminateStateOnExecError(
 					state, 
-					"external call with symbolic argument: "+
+					"external call with symbolic arg: "+
 					function->getName());
 				return;
 			}
@@ -277,10 +282,7 @@ void ExecutorBC::callExternalFunction(
 		}
 		os << ")";
 
-//		if (AllExternalWarnings)
-//			klee_warning("%s", os.str().c_str());
-//		else
-			klee_warning_once(function, "%s", os.str().c_str());
+		klee_warning_once(function, "%s", os.str().c_str());
 	}
 
 	bool success;

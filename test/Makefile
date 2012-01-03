@@ -70,8 +70,8 @@ clean::
 	$(RM) -rf `find $(PROJ_OBJ_ROOT)/test -name test.log`
 	rm -f site.exp
 
-LLVMGCC=llvm-gcc
-LLVMGXX=llvm-g++
+LLVMGCC=clang
+LLVMGXX=clang++
 
 site.exp: Makefile $(LEVEL)/Makefile.config
 	@echo 'Making a new site.exp file...'

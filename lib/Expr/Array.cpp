@@ -17,7 +17,7 @@ Array::~Array()
 
 	chk_val = ~0;
 	if (constantValues_u8) {
-		delete [] constantValues_u8; 
+		delete [] constantValues_u8;
 		constantValues_u8 = NULL;
 	}
 }
@@ -73,9 +73,9 @@ bool Array::operator< (const Array &b) const
 
 	if (isConstantArray() != b.isConstantArray())
 		return isConstantArray() < b.isConstantArray();
-	
+
 	if (isConstantArray() && b.isConstantArray()) {
-	// disregard mallocKey for constant arrays; mallocKey matches are 
+	// disregard mallocKey for constant arrays; mallocKey matches are
 	// not a sufficient condition for constant arrays, but value matches are
 		if (constant_count != b.constant_count)
 			return constant_count < b.constant_count;
@@ -107,6 +107,25 @@ bool Array::operator< (const Array &b) const
 	return name < b.name;
 }
 
+void Array::print(std::ostream& os) const
+{
+	os	<< "ARR: name=" << name << ". Size=" << constant_count
+		<< ".\n";
+
+	if (constantValues_u8) {
+		for (unsigned i = 0; i < constant_count; i++) {
+			if ((i % 16) == 0) os << "\n[" << i << "]: ";
+			os << (void*)constantValues_u8[i];
+		}
+	} else {
+		for (unsigned i = 0; i < constant_count; i++) {
+			if ((i % 16) == 0) os << "\n[" << i << "]: ";
+			os << constantValues_expr[i];
+		}
+	}
+
+	os << '\n';
+}
 
 Array* Array::uniqueArray(Array* arr)
 {

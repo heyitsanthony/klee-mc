@@ -99,40 +99,47 @@ ExternalDispatcher::~ExternalDispatcher() {
   delete executionEngine;
 }
 
-bool ExternalDispatcher::executeCall(Function *f, Instruction *i, uint64_t *args) {
-  dispatchers_ty::iterator it = dispatchers.find(i);
-  Function *dispatcher;
+llvm::Function* ExternalDispatcher::findDispatcher(
+	llvm::Function* f, llvm::Instruction *i)
+{
+	dispatchers_ty::iterator	it;
+	llvm::Function			*dispatcher;
 
-  if (it == dispatchers.end()) {
+	it = dispatchers.find(i);
+	if (it != dispatchers.end())
+		return it->second;
+
 #ifdef WINDOWS
-    std::map<std::string, void*>::iterator it2 =
-      preboundFunctions.find(f->getName()));
+	std::map<std::string, void*>::iterator it2;
 
-    if (it2 != preboundFunctions.end()) {
-      // only bind once
-      if (it2->second) {
-        executionEngine->addGlobalMapping(f, it2->second);
-        it2->second = 0;
-      }
-    }
+	it2 = preboundFunctions.find(f->getName());
+	if (it2 != preboundFunctions.end()) {
+		// only bind once
+		if (it2->second) {
+			executionEngine->addGlobalMapping(f, it2->second);
+			it2->second = 0;
+		}
+	}
 #endif
 
-    dispatcher = createDispatcher(f,i);
+	dispatcher = createDispatcher(f,i);
+	dispatchers.insert(std::make_pair(i, dispatcher));
 
-    dispatchers.insert(std::make_pair(i, dispatcher));
+	if (dispatcher == NULL)
+		return NULL;
 
-    if (dispatcher) {
-      // Force the JIT execution engine to go ahead and build the function. This
-      // ensures that any errors or assertions in the compilation process will
-      // trigger crashes instead of being caught as aborts in the external
-      // function.
-      executionEngine->recompileAndRelinkFunction(dispatcher);
-    }
-  } else {
-    dispatcher = it->second;
-  }
+	// Force the JIT execution engine to go ahead and build the function.
+	// This ensures that any errors or assertions in the compilation
+	// process will trigger crashes instead of being caught as aborts in
+	// the external function.
+	executionEngine->recompileAndRelinkFunction(dispatcher);
 
-  return runProtectedCall(dispatcher, args);
+	return dispatcher;
+}
+
+bool ExternalDispatcher::executeCall(Function *f, Instruction *i, uint64_t *args)
+{
+	return runProtectedCall(findDispatcher(f, i), args);
 }
 
 // FIXME: This is not reentrant.

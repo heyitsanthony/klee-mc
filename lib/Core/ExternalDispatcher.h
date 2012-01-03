@@ -32,6 +32,7 @@ namespace klee {
     std::map<std::string, void*> preboundFunctions;
     
     llvm::Function *createDispatcher(llvm::Function *f, llvm::Instruction *i);
+    llvm::Function *findDispatcher(llvm::Function* f, llvm::Instruction *i);
     bool runProtectedCall(llvm::Function *f, uint64_t *args);
     
   public:

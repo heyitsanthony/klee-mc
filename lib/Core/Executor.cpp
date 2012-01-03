@@ -98,8 +98,7 @@ namespace {
                    cl::init(true));
 
   cl::opt<bool>
-  NoPreferCex("no-prefer-cex",
-              cl::init(false));
+  PreferCex("prefer-cex", cl::init(true));
 
 
   cl::opt<bool>
@@ -437,9 +436,6 @@ bool Executor::forkFollowReplay(ExecutionState& current, struct ForkInfo& fi)
 	for (unsigned i = 0; i < fi.N; i++) {
 		if (fi.conditions[i].isNull())
 			continue;
-		std::cerr << "COND-"<<i<<": ";
-		fi.conditions[i]->print(std::cerr);
-		std::cerr << "\n";
 	}
 
 	klee_warning("hit invalid branch in replay path mode");
@@ -3261,7 +3257,9 @@ bool Executor::getSymbolicSolution(
 	ExecutionState		tmp(state);
 	bool			success;
 
-	if (!NoPreferCex) getSymbolicSolutionCex(state, tmp);
+	if (PreferCex) {
+		getSymbolicSolutionCex(state, tmp);
+	}
 
 	std::vector<const Array*> objects;
 	foreach (it, state.symbolicsBegin(), state.symbolicsEnd())

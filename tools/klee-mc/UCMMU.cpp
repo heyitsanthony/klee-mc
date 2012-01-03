@@ -228,23 +228,26 @@ void UCMMU::expandMO(
 
 	new_mo->setName("uc_buf");
 	new_os = exe_uc.executeMakeSymbolic(state, new_mo, "uc_buf");
-	ret.first = new_mo;
-	ret.second = new_os;
 
 	/* is this the best way to do this? I'm not sure. */
 	for (unsigned i = 0; i < res.first->size; i++) {
-		exe_uc.addConstraint(
-			state,
-			EqExpr::create(
-				state.read8(res.second, i),
-				state.read8(new_os, i)));
+		ref<Expr>	cond;
+
+		cond = EqExpr::create(
+			state.read8(res.second, i),
+			state.read8(new_os, i));
+		exe_uc.addConstraint(state, cond);
 	}
+
+	/* replace first half with updated values from old buffer */
 	state.copy(new_os, res.second, res.first->size);
 
 	/* destroy old array */
 	state.unbindObject(res.first);
 
 	/* update working object pair; errors to return */
+	ret.first = new_mo;
+	ret.second = new_os;
 	res = ret;
 }
 

@@ -228,6 +228,9 @@ UpdateList* UpdateList::fromUpdateStack(
 	if (newUpdates == NULL) {
 		const Array *newRoot;
 
+		if (constantValues.size() == 0)
+			return NULL;
+
 		newRoot = Array::uniqueArray(
 			new Array(
 				"simpl_arr"+llvm::utostr(++id),

@@ -170,6 +170,7 @@ ref<Expr> ExprVisitor::buildUpdateStack(
 	ref<Expr>	uniformValue(0);
 	bool		uniformUpdates = true;
 
+	rebuildUpdates = false;
 	for (const UpdateNode *un = ul.head; un != NULL; un=un->next) {
 		ref<Expr> index = isa<ConstantExpr>(un->index)
 			? un->index

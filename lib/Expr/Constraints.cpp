@@ -90,9 +90,6 @@ private:
 
 ExprVisitor::Action ExprReplaceVisitor2::visitRead(const ReadExpr &re)
 {
-	if (!SimplifyUpdates)
-		return Action::doChildren();
-
 	std::stack<std::pair<ref<Expr>, ref<Expr> > > updateStack;
 	ref<Expr>		uniformValue(0);
 	bool			rebuild, rebuildUpdates;
@@ -123,27 +120,37 @@ ExprVisitor::Action ExprReplaceVisitor2::visitRead(const ReadExpr &re)
 		return Action::changeTo(ConstantExpr::alloc(0, re.getWidth()));
 	}
 
+	/* rebuilding fucks up symbolics on underconstrained exe */
+	if (!SimplifyUpdates)
+		return Action::doChildren();
+
 	rebuild = rebuildUpdates = false;
 	if (readIndex != re.index)
 		rebuild = true;
 
 	uniformValue = buildUpdateStack(
 		re.updates, readIndex, updateStack, rebuildUpdates);
-	if (!uniformValue.isNull())
+	if (!uniformValue.isNull()) {
 		return Action::changeTo(uniformValue);
+	}
+
+	if (rebuild && !rebuildUpdates) {
+		ref<Expr>	new_re;
+
+		new_re = ReadExpr::create(re.updates, readIndex);
+		return Action::changeTo(new_re);
+	}
+
 
 	// at least one update was simplified? rebuild
-	if (rebuild || rebuildUpdates) {
+	if (rebuildUpdates) {
 		UpdateList	*newUpdates;
 		ref<Expr>	new_re;
 
-		if (!rebuildUpdates)
-			return Action::changeTo(
-				ReadExpr::create(re.updates, readIndex));
-
-	
 		newUpdates = UpdateList::fromUpdateStack(
 			re.updates.root, updateStack);
+		if (newUpdates == NULL)
+			return Action::doChildren();
 
 		new_re = ReadExpr::create(*newUpdates, readIndex);
 		delete newUpdates;
@@ -224,7 +231,7 @@ static void addEquality(
 				FALSE_EXPR));
 		return;
 	}
-	
+
 	if (const UleExpr *x = dyn_cast<UleExpr>(e)) {
 		equalities.insert(
 			std::make_pair(

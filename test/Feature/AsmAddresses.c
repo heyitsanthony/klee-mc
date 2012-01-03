@@ -12,12 +12,12 @@
 #include <assert.h>
 
 
-volatile unsigned char x0 __asm ("0x0021");
-volatile unsigned char whee __asm ("0x0WHEE");
+volatile unsigned char x0 __asm ("\0010x0021");
+volatile unsigned char whee __asm ("\0010x0WHEE");
 
 #ifdef OVERLAP
-volatile unsigned int y0 __asm ("0x0030");
-volatile unsigned int y1 __asm ("0x0032");
+volatile unsigned int y0 __asm ("\0010x0030");
+volatile unsigned int y1 __asm ("\0010x0032");
 #endif
 
 int main() {
