@@ -92,6 +92,8 @@ namespace {
 	cl::location(MakeConcreteSymbolic),
 	cl::init(0));
 
+  cl::opt<bool>
+  ChkConstraints("chk-constraints", cl::init(false));
 
   cl::opt<bool>
   DumpStatesOnHalt("dump-states-on-halt",
@@ -856,6 +858,21 @@ bool Executor::addConstraint(ExecutionState &state, ref<Expr> condition)
 	}
 
 	checkAddConstraintSeeds(state, condition);
+
+	if (ChkConstraints) {
+		bool	mayBeTrue, ok;
+
+		ok = solver->mayBeTrue(state, condition, mayBeTrue);
+		assert (ok);
+
+		if (!mayBeTrue) {
+			std::cerr
+				<< "[CHKCON] WHOOPS: "
+				<< condition << " is never true!\n";
+		}
+		assert (mayBeTrue);
+	}
+
 	if (!state.addConstraint(condition))
 		return false;
 

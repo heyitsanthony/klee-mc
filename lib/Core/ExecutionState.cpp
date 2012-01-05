@@ -210,6 +210,11 @@ Cell& ExecutionState::readLocalCell(unsigned sfi, unsigned i) const
 
 bool ExecutionState::addConstraint(ref<Expr> constraint)
 {
+	bool	ok;
+
+	ok = constraints.addConstraint(constraint);
+	assert (ok);
+
 	if (LogConstraints) {
 		Query		q(constraints, ConstantExpr::create(1, 1));
 
@@ -220,7 +225,7 @@ bool ExecutionState::addConstraint(ref<Expr> constraint)
 		prev_constraint_hash = q.hash();
 	}
 
-	return constraints.addConstraint(constraint);
+	return ok;
 }
 
 Cell& ExecutionState::getLocalCell(unsigned sfi, unsigned i) const

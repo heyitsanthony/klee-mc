@@ -12,6 +12,10 @@ print "FORMULAS " + sys.argv[1] + " " + sys.argv[2]
 st1 = SMTState.fromFile(sys.argv[1])
 st2 = SMTState.fromFile(sys.argv[2])
 
+# For every assumption in st, create a SMT file with
+# st_xchk's assumptions which checks the validity of the assumption of st.
+# 1. Check to see if it's satisfiable (it st_xchk refines st, it should be)
+# 2. Check to see if it's falsifiable (if st_xchk refines st, it should not be)
 def xchkFormulaStates(prefix, st_xchk, st):
 	xchk_c = 1
 	for a in st.assumptions:
