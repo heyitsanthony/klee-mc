@@ -20,7 +20,8 @@ using namespace klee;
 using namespace llvm;
 
 ObjectState::ObjectState(const MemoryObject *mo)
-: copyOnWriteOwner(0)
+: src_array(0)
+, copyOnWriteOwner(0)
 , refCount(0)
 , object(mo)
 , concreteStore(new uint8_t[mo->size])
@@ -53,7 +54,8 @@ ObjectState::ObjectState(const MemoryObject *mo, const Array *array)
 }
 
 ObjectState::ObjectState(const ObjectState &os)
-: copyOnWriteOwner(0)
+: src_array(os.src_array)
+, copyOnWriteOwner(0)
 , refCount(0)
 , object(os.object)
 , concreteStore(new uint8_t[os.size])

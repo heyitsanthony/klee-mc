@@ -27,13 +27,15 @@ Array::Array(
 	MallocKey _mallocKey,
 	const ref<ConstantExpr> *constantValuesBegin,
 	const ref<ConstantExpr> *constantValuesEnd)
-: name(_name), mallocKey(_mallocKey)
+: name(_name)
+, mallocKey(_mallocKey)
 , stpInitialArray(0), btorInitialArray(0), z3InitialArray(0)
 , refCount(refCountDontCare)
 , constantValues_expr(constantValuesBegin, constantValuesEnd)
 , constantValues_u8(NULL)
 , constant_count(constantValues_expr.size())
 , singleValue(0)
+, dummyUpdateList(this, NULL)
 {
 	chk_val = 0x12345678;
 	assert( (isSymbolicArray() || constant_count == mallocKey.size) &&

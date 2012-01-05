@@ -100,9 +100,9 @@ ExeUC::UCPtrFork ExeUC::forkUCPtr(
 
 	/* 1. set real pointers to same value, */
 	es.write(wos, base_off+REALPTR_OFF, realptr_expr);
-	std::cerr << "HEY, FOUND NEW REALPTR: ";
-	realptr_expr->dump();
-	std::cerr << '\n';
+	std::cerr << "NEW REALPTR: " <<
+		(void*)((cast<ConstantExpr>(realptr_expr)->getZExtValue()))
+		<< '\n';
 
 	/* 2. fork into to cases: len <= static_sz and len > static_sz */
 	min_size  = ConstantExpr::create(new_mo->size, 32);

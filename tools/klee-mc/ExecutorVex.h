@@ -144,7 +144,9 @@ private:
 		uint64_t	f_addr;
 		StatePair 	res;
 		unsigned	state_c;
+		unsigned	badjmp_c;
 	};
+
 	void xferIterInit(
 		struct XferStateIter& iter,
 		ExecutionState* state,

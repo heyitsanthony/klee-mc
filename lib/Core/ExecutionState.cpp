@@ -9,6 +9,8 @@
 
 #include "klee/ExecutionState.h"
 #include "klee/ExeStateBuilder.h"
+#include "klee/Solver.h"
+#include "../Solver/SMTPrinter.h"
 
 #include "klee/Internal/Module/Cell.h"
 #include "klee/Internal/Module/InstructionInfoTable.h"
@@ -24,6 +26,7 @@
 #include "llvm/Function.h"
 #include "llvm/Support/CommandLine.h"
 
+#include <fstream>
 #include <iostream>
 #include <iomanip>
 #include <cassert>
@@ -37,9 +40,19 @@ using namespace klee;
 ExeStateBuilder* ExeStateBuilder::theESB = NULL;
 MemoryManager* ExecutionState::mm = NULL;
 
+#define LOG_DIR		"statelog/log."
+namespace {
+	cl::opt<bool>
+	LogConstraints(
+		"log-constraints",
+		cl::desc("Log constraints into SMT as they are added to state."),
+		cl::init(false));
+}
+
 /** XXX XXX XXX REFACTOR PLEASEEE **/
 ExecutionState::ExecutionState(KFunction *kf)
 : num_allocs(0)
+, prev_constraint_hash(0)
 , underConstrained(false)
 , depth(0)
 , weight(1)
@@ -60,6 +73,7 @@ ExecutionState::ExecutionState(KFunction *kf)
 
 ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
 : num_allocs(0)
+, prev_constraint_hash(0)
 , underConstrained(false)
 , constraints(assumptions)
 , queryCost(0.)
@@ -73,6 +87,7 @@ ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
 
 ExecutionState::ExecutionState(void)
 : num_allocs(0)
+, prev_constraint_hash(0)
 , underConstrained(0)
 , lastChosen(0)
 , coveredNew(false)
@@ -195,6 +210,16 @@ Cell& ExecutionState::readLocalCell(unsigned sfi, unsigned i) const
 
 bool ExecutionState::addConstraint(ref<Expr> constraint)
 {
+	if (LogConstraints) {
+		Query		q(constraints, ConstantExpr::create(1, 1));
+
+		SMTPrinter::dump(
+			q,
+			(std::string(LOG_DIR)+
+				llvm::utohexstr(prev_constraint_hash)).c_str());
+		prev_constraint_hash = q.hash();
+	}
+
 	return constraints.addConstraint(constraint);
 }
 
@@ -380,9 +405,7 @@ ExecutionState* ExecutionState::createReplay(
 }
 
 bool ExecutionState::isReplayDone(void) const
-{
-	return (replayBranchIterator == branchDecisionsSequence.end());
-}
+{ return (replayBranchIterator == branchDecisionsSequence.end()); }
 
 unsigned ExecutionState::stepReplay(void)
 {
@@ -467,4 +490,44 @@ std::pair<unsigned, unsigned> ExecutionState::branchLast(void) const
 	if (branchDecisionsSequence.empty())
 		return std::pair<unsigned, unsigned>(0,0);
 	return branchDecisionsSequence.back();
+}
+
+/**
+ * this is kind of a cheat-- we want to read from an object state
+ * but we want the root symbolic access-- not the most recent state.
+ */
+ref<Expr> ExecutionState::readSymbolic(
+	const ObjectState* obj, unsigned offset, Expr::Width w) const
+{
+	const Array	*root_arr;
+	unsigned	NumBytes;
+	ref<Expr>	ret;
+
+	assert (w % 8 == 0 && w > 0);
+
+	NumBytes = w / 8;
+	root_arr = obj->getArray();
+	assert (root_arr != NULL);
+	assert (root_arr->isSymbolicArray());
+
+	for (unsigned i = 0; i != NumBytes; i++) {
+		unsigned	idx;
+		ref<Expr>	Byte(0);
+
+		idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
+
+		Byte = ReadExpr::create(
+			root_arr->getDummyUpdateList(),
+			ConstantExpr::create(idx+offset, 32));
+		ret = i ? ConcatExpr::create(Byte, ret) : Byte;
+	}
+
+	std::cerr << "READSYMBOLIC: " << ret << '\n';
+	return ret;
+}
+
+void ExecutionState::printConstraints(std::ostream& os) const
+{
+	Query	q(constraints, ConstantExpr::create(1, 1));
+	SMTPrinter::print(os, q);
 }

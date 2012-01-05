@@ -61,7 +61,10 @@ static void loadUCBuffers(Guest* gs, KTestStream* kts_uc)
 		assert (base_ptr &&
 			"No base pointer for ucbuf given!");
 
+		std::cerr << "REALPTR: " << uctab[idx].real_ptr << '\n';
+		std::cerr << "SYMPTR: " <<  uctab[idx].sym_ptr << '\n';
 		std::cerr << "BASE_PTR: " << (void*)base_ptr << '\n';
+
 		uc_pages.insert(base_ptr & ~(PAGE_SZ-1));
 		uc_pages.insert((base_ptr+uctab[idx].len-1) & ~(PAGE_SZ-1));
 		std::cerr << "UC PAGES INSERTED\n";

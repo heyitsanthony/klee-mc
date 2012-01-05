@@ -90,18 +90,21 @@ public:
   {
     // returns true if a < b
     bool operator()(const Array* a, const Array* b) const
-    {
-      return (*a < *b);
-    }
+    { return (*a < *b); }
   };
 
   void print(std::ostream& os) const;
+
+  const UpdateList& getDummyUpdateList(void) const
+  { return dummyUpdateList; }
+
 private:
   /// constantValues - The constant initial values for this array, or empty for
   /// a symbolic array. If non-empty, this size of this array is equivalent to
   /// the array size.
   std::vector< ref<ConstantExpr> >	constantValues_expr;
-  uint8_t*				constantValues_u8;
-  unsigned int				constant_count;
-  ref<Expr>				singleValue;
+  uint8_t*	constantValues_u8;
+  unsigned int	constant_count;
+  ref<Expr>	singleValue;
+  UpdateList	dummyUpdateList;
 };

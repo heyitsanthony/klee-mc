@@ -97,6 +97,8 @@ private:
 	typedef std::map<const Array*, const MemoryObject*> arr2sym_map;
 	arr2sym_map	arr2sym;
 
+	uint64_t	prev_constraint_hash;
+
 public:
 	typedef std::vector<StackFrame> stack_ty;
 
@@ -174,6 +176,8 @@ public:
 
 	KInstIterator getCaller(void) const;
 	void dumpStack(std::ostream &os);
+	void printConstraints(std::ostream& os) const;
+
 
 	KFunction* getCurrentKF(void) const { return (stack.back()).kf; }
 
@@ -230,6 +234,9 @@ public:
   ref<Expr>
   read(const ObjectState* obj, unsigned offset, Expr::Width w) const
   { return obj->read(offset, w); }
+
+  ref<Expr>
+  readSymbolic(const ObjectState* obj, unsigned offset, Expr::Width w) const;
 
   ref<Expr> read8(const ObjectState* obj, unsigned offset) const
   { return obj->read8(offset); }

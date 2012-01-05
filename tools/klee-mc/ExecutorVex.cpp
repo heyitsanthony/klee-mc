@@ -446,6 +446,14 @@ Function* ExecutorVex::getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new)
 		return f;
 	}
 
+	/* Need to load the function. First, make sure that addr is mapped. */
+	/* XXX: this is broken for code that is allocated *after* guest is
+	 * loaded and snapshot */
+	GuestMem::Mapping	m;
+	if (gs->getMem()->lookupMapping(guest_ptr(guest_addr), m) == false) {
+		return NULL;
+	}
+
 	/* !cached => put in cache, alert kmodule, other bookkepping */
 	f = xlate_cache->getFunc(host_addr, guest_ptr(guest_addr));
 	if (f == NULL) return NULL;
@@ -666,7 +674,10 @@ void ExecutorVex::xferIterInit(
 	iter.v = eval(ki, 0, *state).value;
 	iter.free = state;
 	iter.state_c = 0;
+	iter.badjmp_c = 0;
 }
+
+#define MAX_BADJMP	10
 
 /* this is mostly a copy of Executor's implementation of
  * the symbolic function call; probably should try to merge the two */
@@ -678,7 +689,7 @@ bool ExecutorVex::xferIterNext(struct XferStateIter& iter)
 	bool			success;
 
 	iter_f = NULL;
-	while (1) {
+	while (iter.badjmp_c < MAX_BADJMP) {
 		if (iter.free == NULL) return false;
 
 		success = solver->getValue(*(iter.free), iter.v, value);
@@ -695,14 +706,25 @@ bool ExecutorVex::xferIterNext(struct XferStateIter& iter)
 		iter_f = getFuncByAddr(addr);
 		if (iter_f == NULL) {
 			fprintf(stderr, "bogus jmp to %p!\n", (void*)addr);
+			std::cerr << "HEY: " << iter.v << '\n';
 			terminateStateOnError(
 				*(iter.res.first),
 				"fork error: jumping to bad pointer",
 				"badjmp.err");
+			iter.badjmp_c++;
 			continue;
 		}
 
 		break;
+	}
+
+	if (iter.badjmp_c >= MAX_BADJMP) {
+		terminateStateOnError(
+			*(iter.free),
+			"fork erorr: too many bad jumps",
+			"badjmp.err");
+		iter.free = NULL;
+		return false;
 	}
 
 	assert (iter_f != NULL && "BAD FUNCTION TO JUMP TO");

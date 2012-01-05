@@ -459,7 +459,8 @@ private:
 };
 
 #include "klee/MallocKey.h"
-#include "klee/Array.h"
+
+class Array;
 
 /// Class representing a complete list of updates into an array.
 class UpdateList
@@ -494,6 +495,9 @@ public:
 private:
 	void removeDups(const ref<Expr>& index);
 };
+
+
+#include "klee/Array.h"
 
 /// Class representing a one byte read from an array.
 class ReadExpr : public NonConstantExpr {

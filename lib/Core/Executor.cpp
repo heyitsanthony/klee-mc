@@ -815,6 +815,39 @@ void Executor::constrainForks(ExecutionState& current, struct ForkInfo& fi)
 	}
 }
 
+// Check to see if this constraint violates seeds.
+// N.B. There's a problem here-- it won't catch what happens if the seed
+// is wrong but we screwed up the constraints so that it's permitted.
+//
+// Offline solution-- save states, run through them, check for subsumption
+//
+void Executor::checkAddConstraintSeeds(ExecutionState& state, ref<Expr>& cond)
+{
+	std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it;
+	bool	warn = false;
+
+	it = seedMap.find(&state);
+	if (it == seedMap.end())
+		return;
+
+	foreach (siit, it->second.begin(), it->second.end()) {
+		bool	mustBeFalse, ok;
+
+		ok = solver->mustBeFalse(
+			state,
+			siit->assignment.evaluate(cond),
+			mustBeFalse);
+		assert(ok && "FIXME: Unhandled solver failure");
+		if (mustBeFalse) {
+			siit->patchSeed(state, cond, solver);
+			warn = true;
+		}
+	}
+
+	if (warn)
+		klee_warning("seeds patched for violating constraint");
+}
+
 bool Executor::addConstraint(ExecutionState &state, ref<Expr> condition)
 {
 	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(condition)) {
@@ -822,30 +855,7 @@ bool Executor::addConstraint(ExecutionState &state, ref<Expr> condition)
 		return true;
 	}
 
-	// Check to see if this constraint violates seeds.
-	std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it;
-
-	it = seedMap.find(&state);
-	if (it != seedMap.end()) {
-		bool warn = false;
-		foreach (siit, it->second.begin(), it->second.end()) {
-			bool res, success;
-
-			success = solver->mustBeFalse(
-				state,
-				siit->assignment.evaluate(condition),
-				res);
-			assert(success && "FIXME: Unhandled solver failure");
-			if (res) {
-				siit->patchSeed(state, condition, solver);
-				warn = true;
-			}
-		}
-
-		if (warn)
-			klee_warning("seeds patched for violating constraint");
-	}
-
+	checkAddConstraintSeeds(state, condition);
 	if (!state.addConstraint(condition))
 		return false;
 
@@ -1017,19 +1027,20 @@ void Executor::executeGetValue(
 
 void Executor::stepInstruction(ExecutionState &state)
 {
-  if (DebugPrintInstructions) {
-    printFileLine(state, state.pc);
-    std::cerr << std::setw(10) << stats::instructions << " "
-              << (state.pc->getInst()) << "\n";
-  }
+	if (DebugPrintInstructions) {
+		printFileLine(state, state.pc);
+		std::cerr
+			<< std::setw(10) << stats::instructions << " "
+			<< (state.pc->getInst()) << "\n";
+	}
 
-  if (statsTracker) statsTracker->stepInstruction(state);
+	if (statsTracker) statsTracker->stepInstruction(state);
 
-  ++stats::instructions;
-  state.prevPC = state.pc;
-  ++state.pc;
-  if (stats::instructions==StopAfterNInstructions)
-    haltExecution = true;
+	++stats::instructions;
+	state.prevPC = state.pc;
+	++state.pc;
+	if (stats::instructions==StopAfterNInstructions)
+		haltExecution = true;
 }
 
 void Executor::executeCallNonDecl(

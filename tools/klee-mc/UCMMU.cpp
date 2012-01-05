@@ -229,13 +229,18 @@ void UCMMU::expandMO(
 	new_mo->setName("uc_buf");
 	new_os = exe_uc.executeMakeSymbolic(state, new_mo, "uc_buf");
 
+	/* alias initial contents from smaller buffer into larger buffer */
 	/* is this the best way to do this? I'm not sure. */
 	for (unsigned i = 0; i < res.first->size; i++) {
 		ref<Expr>	cond;
 
 		cond = EqExpr::create(
-			state.read8(res.second, i),
-			state.read8(new_os, i));
+			state.readSymbolic(res.second, i, 8),
+			state.readSymbolic(new_os, i, 8));
+		assert (0 ==1 && "ARGHHHHHHH COPYING IS ALREADY RUINED");
+//		cond = EqExpr::create(
+//			state.read8(res.second, i),
+//			state.read8(new_os, i));
 		exe_uc.addConstraint(state, cond);
 	}
 
@@ -250,7 +255,6 @@ void UCMMU::expandMO(
 	ret.second = new_os;
 	res = ret;
 }
-
 
 void UCMMU::bindUnfixedUC(
 	ExecutionState& state,
@@ -483,7 +487,6 @@ void UCMMU::assignNewPointer(
 	int	ptab_idx;
 
 	std::cerr << "ASSIGNING NEW POINTER!\n";
-	std::cerr << "PTABIDXS = " << resteer.ptrtab_idxs.size() << "\n";
 	assert (resteer.ptrtab_idxs.size() == 1);
 	if (resteer.untracked.size() != 0) {
 		std::cerr << "ANTHONY: IMPLEMENT SCHEDULING CHOICE HERE\n";
@@ -512,7 +515,8 @@ void UCMMU::assignRegPointer(
 
 	/* create the initial fork, first=len<=resi second len>resi
 	 * if resi < 8, resi = 8*/
-	std::cerr << "REG. assignNewPointer: RESIDUE: " << residue << '\n';
+	std::cerr << "assignNewPointer: RESIDUE: " << (void*)residue << '\n';
+
 	min_sz = residue+mop.getType(exe_uc.getKModule());
 	ExeUC::UCPtrFork ucp_fork(
 		exe_uc.initUCPtr(state, ptab_idx, min_sz));
@@ -530,11 +534,17 @@ void UCMMU::assignRegPointer(
 	reg_wos = GETREGOBJ(*new_es);
 	reg_off = ptab_idx * exe_uc.getPtrBytes();
 	sym_ptr = exe_uc.getUCSymPtr(*new_es, ptab_idx);
+
+	std::cerr << "t-SYMPTR: " << sym_ptr << '\n';
+	std::cerr << "t-LOLWUT: " << 		EqExpr::create(
+	new_es->readSymbolic(reg_wos, reg_off, sym_ptr->getWidth()),
+	sym_ptr) << '\n';
 	exe_uc.addConstraint(*new_es,
 		EqExpr::create(
-			new_es->read(reg_wos, reg_off, sym_ptr->getWidth()),
+			new_es->readSymbolic(reg_wos, reg_off, sym_ptr->getWidth()),
 			sym_ptr));
-	new_es->write(reg_wos, reg_off, sym_ptr);
+	reg_wos->writeIVC(reg_off, dyn_cast<ConstantExpr>(sym_ptr));
+	std::cerr << "T-ES: " << new_es << '\n';
 
 
 	new_es = ucp_fork.getState(false);
@@ -544,16 +554,23 @@ void UCMMU::assignRegPointer(
 	sym_ptr = exe_uc.getUCSymPtr(*new_es, ptab_idx);
 	exe_uc.addConstraint(*new_es,
 		EqExpr::create(
-			new_es->read(reg_wos, reg_off, sym_ptr->getWidth()),
+			new_es->readSymbolic(reg_wos, reg_off, sym_ptr->getWidth()),
 			sym_ptr));
 	new_es->write(reg_wos, reg_off, sym_ptr);
+	std::cerr << "f-SYMPTR: " << sym_ptr << '\n';
+	std::cerr << "f-LOLWUT: " <<
+		EqExpr::create(
+			new_es->readSymbolic(
+				reg_wos, reg_off, sym_ptr->getWidth()),
+			sym_ptr)
+			<< '\n';
+	std::cerr << "F-ES: " << new_es << '\n';
+
 
 	aborted = true;
 
 	std::cerr << "BACK IT UP HONEY\n";
 }
-
-
 
 void UCMMU::resolveSymbolicOffset(
 	ExecutionState& state, MemOp& mop, uint64_t residue)

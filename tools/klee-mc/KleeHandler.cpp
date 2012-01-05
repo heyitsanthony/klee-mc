@@ -423,7 +423,8 @@ void KleeHandler::processTestCase(
   const ExeStateVex	*esv = dynamic_cast<const ExeStateVex*>(&state);
   assert (esv != NULL);
   dumpLog("crumbs", id, esv->crumbBegin(), esv->crumbEnd());
-  fprintf(stderr, "=========DONE WRITING OUT TESTID=%d =======\n", id);
+  fprintf(stderr, "=========DONE WRITING OUT TESTID=%d (es=%p) =======\n",
+  	id, (void*)&state);
 }
 
 void KleeHandler::dumpPCs(const ExecutionState& state, unsigned id)

@@ -38,7 +38,6 @@ namespace llvm {
   class ConstantExpr;
   class Function;
   class GlobalValue;
-  class GlobalVariable;
   class Instruction;
   class TargetData;
   class Twine;
@@ -463,7 +462,7 @@ private:
   bool seedObject(
     ExecutionState& state, SeedInfo& si,
     const MemoryObject* mo, const Array* array);
-
+  void checkAddConstraintSeeds(ExecutionState& state, ref<Expr> &cond);
   void getConstraintLogCVC(const ExecutionState& state, std::string& res);
 
 public:
