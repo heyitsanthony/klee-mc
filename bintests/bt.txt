@@ -162,3 +162,9 @@
 /sbin/mkfs.xfs asd
 /sbin/mkfs.bfs asd
 /usr/bin/xclock
+/usr/bin/xmlrpc a a
+/usr/bin/xmlif
+/usr/bin/xmlwf
+/usr/bin/pdftex
+/usr/bin/xmllint asd.xml
+/usr/bin/xmlcatalog --shell asd asd
