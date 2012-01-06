@@ -8,6 +8,7 @@
 #include "klee/Common.h"
 #include "klee/Expr.h"
 #include "klee/Internal/Module/KFunction.h"
+#include "../../lib/Core/TimingSolver.h"
 #include "../../lib/Core/AddressSpace.h"
 
 #include <iostream>
@@ -47,7 +48,7 @@ ExeUC::ExeUC(InterpreterHandler *ie, Guest* gs)
 	delete mmu;
 	mmu = new UCMMU(*this);
 	lentab_reg_ptrs = gs->getCPUState()->getStateSize() / getPtrBytes();
-	lentab_elem_len = (2*getPtrBytes())+4;
+	lentab_elem_len = (3*getPtrBytes())+4;
 	lentab_max = lentab_reg_ptrs + PtrTabLength;
 }
 
@@ -86,19 +87,29 @@ ExeUC::UCPtrFork ExeUC::forkUCPtr(
 {
 	ObjectState	*wos;
 	StatePair	res;
-	unsigned	base_off;
+	unsigned	base_off, init_align;
 	ref<Expr>	realptr_expr, len, min_size;
 
 	new_mo->setName(std::string("uc_buf_") +  llvm::utostr(idx));
 
-	realptr_expr = ConstantExpr::create(new_mo->address, getPtrBytes()*8);
 	wos = es.addressSpace.findWriteableObject(lentab_mo);
 
+	/* get ucptr length */
 	base_off = idx*lentab_elem_len;
 	len = es.read(wos, base_off+LEN_OFF, 32);
 	assert (!isa<ReadExpr>(len) && "len not symbolic?");
 
+	/* and the alignment */
+	init_align = dyn_cast<ConstantExpr>(
+		es.read(wos, base_off+INITALIGN_OFF, getPtrBytes()*8))
+			->getZExtValue();
+
+	std::cerr << "GOT INIT ALIGN: " << init_align << '\n';
+
 	/* 1. set real pointers to same value, */
+	realptr_expr = ConstantExpr::create(
+		new_mo->address+init_align,
+		getPtrBytes()*8);
 	es.write(wos, base_off+REALPTR_OFF, realptr_expr);
 	std::cerr << "NEW REALPTR: " <<
 		(void*)((cast<ConstantExpr>(realptr_expr)->getZExtValue()))
@@ -154,10 +165,12 @@ ExecutionState* ExeUC::forkNullPtr(ExecutionState& es, unsigned pt_idx)
 
 	sym_ptr = getUCSymPtr(es, pt_idx);
 
-	/* 2. fork into to cases: len <= static_sz and len > static_sz */
+	/* fork into to cases: sym_ptr is NULL. */
 	cond_eq_null = EqExpr::create(
 		sym_ptr,
 		ConstantExpr::create(0, sym_ptr->getWidth()));
+
+	/* sym_ptr < LOWER_BOUND || sym_ptr > UPPER_BOUND */
 	cond_oob = OrExpr::create(
 		UltExpr::create(
 			sym_ptr,
@@ -173,6 +186,9 @@ ExecutionState* ExeUC::forkNullPtr(ExecutionState& es, unsigned pt_idx)
 		OrExpr::create(cond_eq_null, cond_oob),
 		true);
 
+	/* res.first => invalid pointer
+	 * res.second => valid pointer */
+
 	assert (res.first && res.second);
 
 	terminateStateOnError(
@@ -186,7 +202,9 @@ ExecutionState* ExeUC::forkNullPtr(ExecutionState& es, unsigned pt_idx)
 
 
 ExeUC::UCPtrFork ExeUC::initUCPtr(
-	ExecutionState& es, unsigned idx, unsigned min_sz)
+	ExecutionState& es, unsigned idx,
+	ref<Expr>& ptr_expr,
+	unsigned min_sz)
 {
 	ExecutionState		*ptr_es;
 	MemoryObject		*new_mo;
@@ -207,9 +225,55 @@ ExeUC::UCPtrFork ExeUC::initUCPtr(
 		ptr_es);
 	executeMakeSymbolic(*ptr_es, new_mo, "uc_buf");
 
-	/* 3. expansion fork */
+	/* 3. force alignment */
+	setupUCAlignment(*ptr_es, idx, ptr_expr);
+
+	/* 4. expansion fork */
 	return forkUCPtr(*ptr_es, new_mo, idx);
 }
+
+/* impose alignment constraints on pointer. Yuck! */
+void ExeUC::setupUCAlignment(
+	ExecutionState& es, unsigned idx, ref<Expr>& ptr_expr)
+{
+	unsigned	k;
+	ref<Expr>	maskExpr;
+
+	maskExpr = ExtractExpr::create(ptr_expr, 0, 3);
+	for (k = 0; k < 8; k++) {
+		bool		mayBeAlign, ok;
+
+		ok = solver->mayBeTrue(
+			es,
+			EqExpr::create(maskExpr, ConstantExpr::create(k, 3)),
+			mayBeAlign);
+		assert (ok);
+
+		if (mayBeAlign)
+			break;
+	}
+
+	assert (k != 8 && "Could not get proper alignment-- terminate?");
+
+	/* force alignment on pointer */
+	/* This may lose some cases in the future, but whatever--
+	 * if we wanted to be super paranoid, we could fork off states for
+	 * every alignment */
+	addConstraint(
+		es,
+		EqExpr::create(maskExpr, ConstantExpr::create(k, 3)));
+
+	/* XXX add constraint for alignment or make it implied?--
+	 * alignment is already passed through the real pointer */
+	es.write(
+		es.addressSpace.findWriteableObject(lentab_mo),
+		(idx*lentab_elem_len)+INITALIGN_OFF,
+		ConstantExpr::create(k, 8*getPtrBytes()));
+
+	std::cerr << "JUST WROTE TO LENTBA: " << (idx*lentab_elem_len)+INITALIGN_OFF;
+	std::cerr << '\n';
+}
+
 
 static const char *xchk_fns[] = {
 	"readtcp",

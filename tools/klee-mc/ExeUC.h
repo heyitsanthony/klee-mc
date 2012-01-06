@@ -35,6 +35,7 @@ struct UCTabEnt64
 	uint32_t	len;
 	uint64_t	sym_ptr;
 	uint64_t	real_ptr;
+	uint64_t	init_align;
 };
 
 struct UCTabEnt32
@@ -42,6 +43,7 @@ struct UCTabEnt32
 	uint32_t	len;
 	uint32_t	sym_ptr;
 	uint32_t	real_ptr;
+	uint32_t	init_align;
 };
 
 #pragma pack()
@@ -76,7 +78,10 @@ private:
 	const Array* getRootArray(void) const { return root_reg_arr; }
 	const Array* getPtrTabArray(void) const { return lentab_arr; }
 
-	UCPtrFork initUCPtr(ExecutionState& st, unsigned idx, unsigned min_sz);
+	UCPtrFork initUCPtr(
+		ExecutionState& st, unsigned idx,
+		ref<Expr>& ptr_expr, unsigned min_sz);
+
 	UCPtrFork forkUCPtr(
 		ExecutionState	&es,
 		MemoryObject	*new_mo,
@@ -133,6 +138,13 @@ private:
 #define LEN_OFF		0
 #define SYMPTR_OFF	(4)
 #define REALPTR_OFF	(4+getPtrBytes())
+#define INITALIGN_OFF	(4+2*getPtrBytes())
+
+	void setupUCAlignment(
+		ExecutionState& es, unsigned idx, ref<Expr>& ptr_expr);
+
+
+
 	MemoryObject	*lentab_mo;
 	const Array	*lentab_arr;
 	unsigned int	lentab_reg_ptrs;

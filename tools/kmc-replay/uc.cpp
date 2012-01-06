@@ -103,9 +103,6 @@ static void loadUCBuffers(Guest* gs, KTestStream* kts_uc)
 		if (uctab[idx].real_ptr) base_ptr = uctab[idx].real_ptr;
 		if (uctab[idx].sym_ptr) base_ptr = uctab[idx].sym_ptr;
 
-		for (unsigned i = 0; i < it->second.size(); i++)
-			((char*)base_ptr)[i] = it->second[i];
-
 		if (gs->getMem()->is32Bit()) {
 			if (idx < cpu_len / 4) {
 				memcpy(cpu_state + idx*4, &base_ptr, 4);
@@ -113,6 +110,13 @@ static void loadUCBuffers(Guest* gs, KTestStream* kts_uc)
 		} else if (idx < cpu_len / 8) {
 			memcpy(cpu_state + idx*8, &base_ptr, 8);
 		}
+
+		/* buffers from klee are actually 8-aligned,
+		 * so adjust copy-out to start at 8-byte boundary */
+		base_ptr &= ~((uint64_t)0x7);
+		for (unsigned i = 0; i < it->second.size(); i++)
+			((char*)base_ptr)[i] = it->second[i];
+
 	}
 
 	std::cerr << "Copied in unconstrained buffers\n";
