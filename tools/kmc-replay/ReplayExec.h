@@ -33,6 +33,7 @@ private:
 		unsigned reg_sz;
 	};
 
+	unsigned	getCPUSize(void);
 	uint8_t*	verifyWithRegLog(void);
 	uint8_t*	regChk(const struct regchk_t&);
 	void		verifyOrPanic(void);

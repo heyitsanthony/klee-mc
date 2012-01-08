@@ -25,6 +25,7 @@ ReplayExec::ReplayExec(Guest* gs, VexXlate* vx)
 , has_reglog(false)
 , ign_reglog(getenv("KMC_REPLAY_IGNLOG") != NULL)
 , crumbs(NULL)
+, ignored_last(false)
 , print_exec(getenv("KMC_DUMP_EXE") != NULL)
 { }
 
@@ -35,9 +36,15 @@ void ReplayExec::setSyscallsKTest(SyscallsKTest* in_skt)
 	sc = skt;
 }
 
+unsigned ReplayExec::getCPUSize(void)
+{
+	return gs->getCPUState()->getStateSize();
+}
+
 void ReplayExec::dumpRegBuf(const uint8_t* buf)
 {
-	for (unsigned int i = 0; i < 633; i++) {
+	unsigned cpu_sz = getCPUSize();
+	for (unsigned int i = 0; i < cpu_sz; i++) {
 		if ((i % 16) == 0) fprintf(stderr, "\n%03x: ", i);
 		fprintf(stderr, "%02x ", buf[i]);
 	}
@@ -84,7 +91,7 @@ void ReplayExec::verifyOrPanic(void)
 	dumpRegBuf(vex_regs);
 
 	fprintf(stderr, "KLEE: ----------------\n");
-	for (unsigned int i = 0; i < 633; i++) {
+	for (unsigned int i = 0; i < getCPUSize(); i++) {
 		if ((i % 16) == 0) fprintf(stderr, "\n%03x: ", i);
 		fprintf(stderr, "%02x%c", reg_mismatch[i],
 			(reg_mismatch[i] != vex_regs[i]) ? '*' : ' ');
@@ -142,10 +149,11 @@ uint8_t* ReplayExec::verifyWithRegLog(void)
 			"Ran out of register log. Mismatch? Keep going.\n");
 		return NULL;
 	}
+
 	assert (bc_is_type(bc, BC_TYPE_VEXREG));
 	if (ign_reglog) goto done;
 
-	regchk.reg_sz = gs->getCPUState()->getStateSize();
+	regchk.reg_sz = getCPUSize();
 	assert (bc->bc_sz == regchk.reg_sz*2 + sizeof(struct breadcrumb));
 
 	regchk.guest_reg = (uint8_t*)gs->getCPUState()->getStateData();
