@@ -3,7 +3,9 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <zlib.h>
+#include <stdlib.h>
 #include <assert.h>
+#include <string.h>
 #include "klee/klee.h"
 #include "klee/util/gzip.h"
 
@@ -72,4 +74,47 @@ bool GZip::gunzipFile(const char* src, const char* dst)
 
 	/* don't remove src file! */
 	return true;
+}
+
+FILE* GZip::gunzipTempFile(const char* src)
+{
+	char 	buf[4096];
+	char	tempname[16];
+	ssize_t	br;
+	int	ktest_fd;
+	FILE	*ftest_f;
+	gzFile	gzF;
+
+	/* create fresh gz file */
+	gzF = gzopen(src, "r");
+	if (gzF == NULL) return NULL;
+
+	strcpy(tempname, "kleegzXXXXXX");
+	ktest_fd = mkstemp(tempname);
+	if (ktest_fd < 0) {
+		gzclose(gzF);
+		return NULL;
+	}
+
+	unlink(tempname);
+
+	ftest_f = fdopen(ktest_fd, "w+");
+	assert (ftest_f != NULL);
+
+	while ((br = gzread(gzF, buf, 4096)) > 0) {
+		size_t bw;
+		bw = fwrite(buf, br, 1, ftest_f);
+		assert (bw == 1 && "Leaky pen");
+		if (br < 4096)
+			break;
+	}
+	gzclose(gzF);
+
+	if (br < 0) {
+		fclose(ftest_f);
+		return NULL;
+	}
+
+	rewind(ftest_f); // my favorite libc function-- like a cassette!
+	return ftest_f;
 }

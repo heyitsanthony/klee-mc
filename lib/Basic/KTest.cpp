@@ -69,20 +69,19 @@ static int write_string(FILE *f, const char *value) {
 
 /***/
 
+unsigned kTest_getCurrentVersion() {return KTEST_VERSION;}
 
-unsigned kTest_getCurrentVersion() {
-  return KTEST_VERSION;
-}
+static bool kTest_checkHeader(FILE *f)
+{
+	char header[KTEST_MAGIC_SIZE];
+	if (fread(header, KTEST_MAGIC_SIZE, 1, f)!=1)
+		return false;
 
+	if (	memcmp(header, KTEST_MAGIC, KTEST_MAGIC_SIZE) &&
+		memcmp(header, BOUT_MAGIC, KTEST_MAGIC_SIZE))
+		return false;
 
-static int kTest_checkHeader(FILE *f) {
-  char header[KTEST_MAGIC_SIZE];
-  if (fread(header, KTEST_MAGIC_SIZE, 1, f)!=1)
-    return 0;
-  if (memcmp(header, KTEST_MAGIC, KTEST_MAGIC_SIZE) &&
-      memcmp(header, BOUT_MAGIC, KTEST_MAGIC_SIZE))
-    return 0;
-  return 1;
+	return true;
 }
 
 int kTest_isKTestFile(const char *path) {
@@ -93,113 +92,115 @@ int kTest_isKTestFile(const char *path) {
     return 0;
   res = kTest_checkHeader(f);
   fclose(f);
-  
+
   return res;
 }
 
-static KTest* kTest_fromUncompressedFile(const char* path)
+static KTest* kTest_fromUncompressedFile(FILE* f)
 {
-  FILE *f;
-  KTest *res = 0;
-  unsigned i, version;
+	KTest		*res = NULL;
+	unsigned	version;
 
-  f = fopen(path, "rb");
-  if (!f) goto error;
-  if (!kTest_checkHeader(f)) goto error;
+	if (!kTest_checkHeader(f)) goto error;
 
-  res = (KTest*) calloc(1, sizeof(*res));
-  if (!res) goto error;
+	res = (KTest*) calloc(1, sizeof(*res));
+	if (!res) goto error;
 
-  if (!read_uint32(f, &version)) goto error_res;
-  if (version > kTest_getCurrentVersion()) goto error_res;
+	if (!read_uint32(f, &version)) goto error_res;
+	if (version > kTest_getCurrentVersion()) goto error_res;
 
-  res->version = version;
+	res->version = version;
 
-  if (!read_uint32(f, &res->numArgs)) goto error;
+	if (!read_uint32(f, &res->numArgs)) goto error;
 
-  res->args = (char**) calloc(res->numArgs, sizeof(*res->args));
-  if (!res->args) goto error_res;
-  
-  for (i=0; i<res->numArgs; i++)
-    if (!read_string(f, &res->args[i]))
-      goto error_args;
+	res->args = (char**) calloc(res->numArgs, sizeof(*res->args));
+	if (!res->args) goto error_res;
 
-  if (version >= 2) {
-    if (!read_uint32(f, &res->symArgvs)) goto error_args;
-    if (!read_uint32(f, &res->symArgvLen)) goto error_args;
-  }
+	for (unsigned i=0; i<res->numArgs; i++)
+		if (!read_string(f, &res->args[i]))
+			goto error_args;
 
-  if (!read_uint32(f, &res->numObjects)) goto error_args;
+	if (version >= 2) {
+		if (!read_uint32(f, &res->symArgvs)) goto error_args;
+		if (!read_uint32(f, &res->symArgvLen)) goto error_args;
+	}
 
-  res->objects = (KTestObject*) calloc(res->numObjects, sizeof(*res->objects));
-  if (!res->objects) goto error_args;
+	if (!read_uint32(f, &res->numObjects)) goto error_args;
 
-  for (i=0; i<res->numObjects; i++) {
-    KTestObject *o = &res->objects[i];
-    if (!read_string(f, &o->name)) goto error_objs;
-    if (!read_uint32(f, &o->numBytes)) goto error_objs;
+	res->objects = (KTestObject*) calloc(
+		res->numObjects, sizeof(*res->objects));
+	if (!res->objects) goto error_args;
 
-    o->bytes = (unsigned char*) malloc(o->numBytes);
-    if (fread(o->bytes, o->numBytes, 1, f)!=1) goto error_objs;
-  }
+	for (unsigned i=0; i<res->numObjects; i++) {
+		KTestObject *o = &res->objects[i];
+		if (!read_string(f, &o->name)) goto error_objs;
+		if (!read_uint32(f, &o->numBytes)) goto error_objs;
 
-  fclose(f);
+		o->bytes = (unsigned char*) malloc(o->numBytes);
+		if (fread(o->bytes, o->numBytes, 1, f) != 1) goto error_objs;
+	}
 
-  return res;
+	return res;
 
 error_objs:
-  assert (res->objects != 0);
-  for (i=0; i<res->numObjects; i++) {
-    KTestObject *bo = &res->objects[i];
-    if (bo->name)  free(bo->name);
-    if (bo->bytes) free(bo->bytes);
-  }
-  free(res->objects);
+	assert (res->objects != 0);
+	for (unsigned i=0; i<res->numObjects; i++) {
+		KTestObject *bo = &res->objects[i];
+		if (bo->name)  free(bo->name);
+		if (bo->bytes) free(bo->bytes);
+	}
+	free(res->objects);
 
 error_args:
-  assert (res->args != 0);
-  for (i=0; i<res->numArgs; i++) {
-      if (res->args[i])
-        free(res->args[i]);
-  }
-  free(res->args);
+	assert (res->args != 0);
+	for (unsigned i=0; i<res->numArgs; i++) {
+		if (res->args[i])
+			free(res->args[i]);
+	}
+	free(res->args);
 
 error_res:
-  assert (res != 0);
-  free(res);
-  res = 0;
+	assert (res != 0);
+	free(res);
+	res = 0;
 
 error:
-  assert (res == 0);
-  if (f) fclose(f);
+	assert (res == 0);
+	return 0;
+}
 
-  return 0;
+static KTest* kTest_fromUncompressedPath(const char* path)
+{
+	FILE	*f;
+	KTest	*ret;
 
+	f = fopen(path, "rb");
+	if (!f) return NULL;
+
+	ret = kTest_fromUncompressedFile(f);
+	fclose(f);
+
+	return ret;
 }
 
 KTest *kTest_fromFile(const char *path)
 {
-	KTest		*ret;
-	char		*tmp_path = 0;
-	const char	*real_path;
-	int		path_len;
+	KTest	*ret;
+	int	path_len;
+	FILE	*f;
 
 	path_len = strlen(path);
-	if (path_len > 3 && strcmp(path+path_len-3, ".gz") == 0) {
-		/* if it's a gz, unzip it */
-		tmp_path = strdup(path);
-		real_path = tmp_path;
-		tmp_path[path_len-3] = '\0';
-		if (klee::GZip::gunzipFile(path, tmp_path) == false) {
-			free(tmp_path);
-			return NULL;
-		}
-	} else
-		real_path = path;
+	if (path_len <= 3 || strcmp(path+path_len-3, ".gz") != 0)
+		return kTest_fromUncompressedPath(path);
 
-	ret = kTest_fromUncompressedFile(real_path);
+	/* if it's a gz, unzip it */
 
-	if (tmp_path) free(tmp_path);
+	f = klee::GZip::gunzipTempFile(path);
+	if (f == NULL)
+		return NULL;
+
+	ret = kTest_fromUncompressedFile(f);
+	fclose(f);
 
 	return ret;
 }
@@ -208,13 +209,13 @@ int kTest_toFile(KTest *bo, const char *path) {
   FILE *f = fopen(path, "wb");
   unsigned i;
 
-  if (!f) 
+  if (!f)
     goto error;
   if (fwrite(KTEST_MAGIC, strlen(KTEST_MAGIC), 1, f)!=1)
     goto error;
   if (!write_uint32(f, KTEST_VERSION))
     goto error;
-      
+
   if (!write_uint32(f, bo->numArgs))
     goto error;
   for (i=0; i<bo->numArgs; i++) {
@@ -226,7 +227,7 @@ int kTest_toFile(KTest *bo, const char *path) {
     goto error;
   if (!write_uint32(f, bo->symArgvLen))
     goto error;
-  
+
   if (!write_uint32(f, bo->numObjects))
     goto error;
   for (i=0; i<bo->numObjects; i++) {
@@ -242,7 +243,7 @@ int kTest_toFile(KTest *bo, const char *path) {
   fclose(f);
 
   return 1;
- error:
+error:
   if (f) {
     int e = errno;
     fclose(f);

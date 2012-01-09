@@ -13,6 +13,7 @@ static const char* sysname_tab[] =
 #include <klee/Internal/ADT/Crumbs.h>
 #include <klee/Internal/ADT/KTestStream.h>
 #include <klee/util/gzip.h>
+#include <unistd.h>
 #include <string>
 #include <string.h>
 #include <assert.h>
@@ -38,15 +39,7 @@ Crumbs::Crumbs(const char* fname)
 
 	gzSuffix = strstr(fname, ".gz");
 	if (gzSuffix && strlen(gzSuffix) == 3) {
-		std::string	dst(
-			std::string(fname).substr(0, gzSuffix - fname));
-
-		if (!GZip::gunzipFile(fname, dst.c_str())) {
-			fprintf(stderr, "Could not gunzip %s\n", dst.c_str());
-			return;
-		}
-
-		f = fopen(dst.c_str(), "rb");
+		f = GZip::gunzipTempFile(fname);
 		if (f == NULL) return;
 	} else {
 		f = fopen(fname, "rb");
