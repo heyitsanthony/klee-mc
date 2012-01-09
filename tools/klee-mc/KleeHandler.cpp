@@ -181,21 +181,21 @@ KleeHandler::~KleeHandler()
 
 void KleeHandler::setInterpreter(Interpreter *i)
 {
-  m_interpreter = dynamic_cast<ExecutorVex*>(i);
-  assert (m_interpreter != NULL && "Expected ExecutorVex interpreter");
+	m_interpreter = dynamic_cast<ExecutorVex*>(i);
+	assert (m_interpreter != NULL && "Expected ExecutorVex interpreter");
 
-  if (!WriteSymPaths) return;
+	if (!WriteSymPaths) return;
 
-  m_symPathWriter = new TreeStreamWriter(getOutputFilename("symPaths.ts"));
-  assert(m_symPathWriter->good());
-  m_interpreter->setSymbolicPathWriter(m_symPathWriter);
+	m_symPathWriter = new TreeStreamWriter(getOutputFilename("symPaths.ts"));
+	assert(m_symPathWriter->good());
+	m_interpreter->setSymbolicPathWriter(m_symPathWriter);
 }
 
 std::string KleeHandler::getOutputFilename(const std::string &filename)
 {
-  char outfile[1024];
-  sprintf(outfile, "%s/%s", m_outputDirectory, filename.c_str());
-  return outfile;
+	char outfile[1024];
+	sprintf(outfile, "%s/%s", m_outputDirectory, filename.c_str());
+	return outfile;
 }
 
 std::ostream *KleeHandler::openOutputFile(const std::string &filename)
@@ -219,16 +219,16 @@ std::ostream *KleeHandler::openOutputFile(const std::string &filename)
 
 std::string KleeHandler::getTestFilename(const std::string &suffix, unsigned id)
 {
-  char filename[1024];
-  sprintf(filename, "test%06d.%s", id, suffix.c_str());
-  return getOutputFilename(filename);
+	char filename[1024];
+	sprintf(filename, "test%06d.%s", id, suffix.c_str());
+	return getOutputFilename(filename);
 }
 
 std::ostream *KleeHandler::openTestFile(const std::string &suffix, unsigned id)
 {
-  char filename[1024];
-  sprintf(filename, "test%06d.%s", id, suffix.c_str());
-  return openOutputFile(filename);
+	char filename[1024];
+	sprintf(filename, "test%06d.%s", id, suffix.c_str());
+	return openOutputFile(filename);
 }
 
 void KleeHandler::processSuccessfulTest(
@@ -285,161 +285,166 @@ bool KleeHandler::getStateSymObjs(
 	return m_interpreter->getSymbolicSolution(state, out);
 }
 
+#define LOSING_IT(x)	\
+	klee_warning("unable to write " #x " file, losing it (errno=%d: %s)", \
+		errno, strerror(errno))
+
 /* Outputs all files (.ktest, .pc, .cov etc.) describing a test case */
 void KleeHandler::processTestCase(
 	const ExecutionState &state,
 	const char *errorMessage,
 	const char *errorSuffix)
 {
-  if (errorMessage && ExitOnError) {
-    std::cerr << "EXITING ON ERROR:\n" << errorMessage << "\n";
-    exit(1);
-  }
-
-  if (NoOutput) return;
-
-  out_objs out;
-  bool success;
-
-  success = getStateSymObjs(state, out);
-  if (!success)
-    klee_warning("unable to get symbolic solution, losing test case");
-
-  double start_time = util::estWallTime();
-
-  unsigned id = ++m_testIndex;
-
-  if (success) processSuccessfulTest("ktest", id, out);
-
-  if (errorMessage) {
-    if (std::ostream* f = openTestFile(errorSuffix, id)) {
-      *f << errorMessage;
-      delete f;
-    }
-    else
-      klee_warning("unable to write error file, losing it (errno=%d: %s)", errno, strerror(errno));
-  }
-
-  if (WritePaths) {
-	if (std::ostream* f = openTestFile("path", id)) {
-		foreach(bit, state.branchesBegin(), state.branchesEnd()) {
-			#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
-			(*f) << (*bit).first << "," << (*bit).second << "\n";
-			#else
-			(*f) << (*bit).first << "\n";
-			#endif
-		}
-		delete f;
-		GZip::gzipFile(
-		getTestFilename("path", id).c_str(),
-		(getTestFilename("path", id) + ".gz").c_str());
-	} else {
-		klee_warning(
-			"can't write .path file, lost it (errno=%d: %s)",
-			errno, strerror(errno));
+	if (errorMessage && ExitOnError) {
+		std::cerr << "EXITING ON ERROR:\n" << errorMessage << "\n";
+		exit(1);
 	}
-  }
 
-  if (WriteSMT) {
-	Query		query(
-		state.constraints,
-		ConstantExpr::alloc(0, Expr::Bool));
-	std::ostream	*f;
+	if (NoOutput) return;
 
-	f = openTestFile("smt", id);
-	SMTPrinter::print(*f, query);
-	delete f;
-	/* these things are pretty big */
-	GZip::gzipFile(
-		getTestFilename("smt", id).c_str(),
-		(getTestFilename("smt", id) + ".gz").c_str());
-  }
+	out_objs out;
+	bool success;
 
-  if (errorMessage || WritePCs) {
-    dumpPCs(state, id);
-  }
+	success = getStateSymObjs(state, out);
+	if (!success)
+		klee_warning("unable to get symbolic solution, losing test");
 
-  if (WriteCVCs) {
-    std::string constraints;
-    m_interpreter->getConstraintLog(state, constraints, true);
-    if (std::ostream* f = openTestFile("cvc", id)) {
-      *f << constraints;
-      delete f;
-    }
-    else
-      klee_warning("unable to write .cvc file, losing it (errno=%d: %s)", errno, strerror(errno));
-  }
+	double		start_time = util::estWallTime();
+	unsigned	id = ++m_testIndex;
 
-  if (m_symPathWriter) {
-    std::vector<unsigned char> symbolicBranches;
-    m_symPathWriter->readStream(m_interpreter->getSymbolicPathStreamID(state),
-                                symbolicBranches);
-    if (std::ostream* f = openTestFile("sym.path", id)) {
-      std::copy(symbolicBranches.begin(), symbolicBranches.end(),
-                std::ostream_iterator<unsigned char>(*f, "\n"));
-      delete f;
-    }
-    else
-      klee_warning("unable to write .sym.path file, losing it (errno=%d: %s)", errno, strerror(errno));
-  }
+	if (success) processSuccessfulTest("ktest", id, out);
 
-  if (WriteCov) {
-    std::map<const std::string*, std::set<unsigned> > cov;
-    m_interpreter->getCoveredLines(state, cov);
-    if (std::ostream* f = openTestFile("cov", id)) {
-      foreach (it, cov.begin(), cov.end()) {
-        foreach (it2, it->second.begin(), it->second.end())
-          *f << *it->first << ":" << *it2 << "\n";
-      }
-      delete f;
-    }
-    else
-      klee_warning("unable to write .cov file, losing it (errno=%d: %s)", errno, strerror(errno));
-  }
+	if (errorMessage) {
+		if (std::ostream* f = openTestFile(errorSuffix, id)) {
+			*f << errorMessage;
+			delete f;
+		} else
+			LOSING_IT("error");
+	}
 
-  if (WriteTraces) {
-    if (std::ostream* f = openTestFile("trace", id)) {
-      state.exeTraceMgr.printAllEvents(*f);
-      delete f;
-    }
-    else
-      klee_warning("unable to write .trace file, losing it (errno=%d: %s)", errno, strerror(errno));
-  }
+	if (WritePaths) {
+		if (std::ostream* f = openTestFile("path", id)) {
+			foreach(bit, state.branchesBegin(), state.branchesEnd()) {
+				(*f) << (*bit).first
+#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
+				<< "," << (*bit).second
+#endif
+				<< "\n";
+			}
+			delete f;
+			GZip::gzipFile(
+				getTestFilename("path", id).c_str(),
+				(getTestFilename("path", id) + ".gz").c_str());
+		} else {
+			LOSING_IT(".path");
+		}
+	}
 
-  if (m_testIndex == StopAfterNTests)
-    m_interpreter->setHaltExecution(true);
+	if (WriteSMT) {
+		Query	query(	state.constraints,
+				ConstantExpr::alloc(0, Expr::Bool));
+				std::ostream	*f;
 
-  if (WriteTestInfo) {
-    double elapsed_time = util::estWallTime() - start_time;
-    if (std::ostream *f = openTestFile("info", id)) {
-      *f << "Time to generate test case: "
-         << elapsed_time << "s\n";
-      delete f;
-    }
-    else
-      klee_warning("unable to write .info file, losing it (errno=%d: %s)", errno, strerror(errno));
-  }
+		f = openTestFile("smt", id);
+		SMTPrinter::print(*f, query);
+		delete f;
 
-  const ExeStateVex	*esv = dynamic_cast<const ExeStateVex*>(&state);
-  assert (esv != NULL);
-  dumpLog("crumbs", id, esv->crumbBegin(), esv->crumbEnd());
-  fprintf(stderr, "=========DONE WRITING OUT TESTID=%d (es=%p) =======\n",
-  	id, (void*)&state);
+		/* these things are pretty big */
+		GZip::gzipFile(
+			getTestFilename("smt", id).c_str(),
+			(getTestFilename("smt", id) + ".gz").c_str());
+	}
+
+	if (errorMessage || WritePCs)
+		dumpPCs(state, id);
+
+	if (WriteCVCs) {
+		std::string constraints;
+		m_interpreter->getConstraintLog(state, constraints, true);
+		if (std::ostream* f = openTestFile("cvc", id)) {
+			*f << constraints;
+			delete f;
+		} else
+			LOSING_IT(".cvc");
+	}
+
+	if (m_symPathWriter) {
+		std::vector<unsigned char> symbolicBranches;
+
+		m_symPathWriter->readStream(
+			m_interpreter->getSymbolicPathStreamID(state),
+			symbolicBranches);
+		if (std::ostream* f = openTestFile("sym.path", id)) {
+			std::copy(
+				symbolicBranches.begin(), symbolicBranches.end(),
+				std::ostream_iterator<unsigned char>(*f, "\n"));
+			delete f;
+		} else
+			LOSING_IT(".sym.path");
+	}
+
+	if (WriteCov) {
+		std::map<const std::string*, std::set<unsigned> > cov;
+		m_interpreter->getCoveredLines(state, cov);
+		if (std::ostream* f = openTestFile("cov", id)) {
+			foreach (it, cov.begin(), cov.end()) {
+			foreach (it2, it->second.begin(), it->second.end())
+				*f << *it->first << ":" << *it2 << "\n";
+			}
+			delete f;
+		} else
+			LOSING_IT(".cov");
+	}
+
+	if (WriteTraces) {
+		if (std::ostream* f = openTestFile("trace", id)) {
+			state.exeTraceMgr.printAllEvents(*f);
+			delete f;
+		} else
+			LOSING_IT(".trace");
+	}
+
+	if (m_testIndex == StopAfterNTests)
+		m_interpreter->setHaltExecution(true);
+
+	if (WriteTestInfo) {
+		double elapsed_time = util::estWallTime() - start_time;
+		if (std::ostream *f = openTestFile("info", id)) {
+			*f	<< "Time to generate test case: "
+				<< elapsed_time << "s\n";
+			delete f;
+		} else
+			LOSING_IT(".info");
+	}
+
+	const ExeStateVex	*esv = dynamic_cast<const ExeStateVex*>(&state);
+	assert (esv != NULL);
+	dumpLog("crumbs", id, esv->crumbBegin(), esv->crumbEnd());
+	fprintf(stderr, "=====DONE WRITING OUT TESTID=%d (es=%p) ===\n",
+		id, (void*)&state);
 }
 
 void KleeHandler::dumpPCs(const ExecutionState& state, unsigned id)
 {
 	std::string constraints;
+	std::ostream* f;
 
 	m_interpreter->getConstraintLog(state, constraints);
-	if (std::ostream* f = openTestFile("pc", id)) {
-		*f << constraints;
-		delete f;
-	} else {
+	f = openTestFile("pc", id);
+	if (f == NULL) {
 		klee_warning(
 			"unable to write .pc file, losing it (errno=%d: %s)",
 			errno, strerror(errno));
+		return;
 	}
+
+	*f << constraints;
+	delete f;
+
+	/* these things get big too */
+	GZip::gzipFile(
+		getTestFilename("pc", id).c_str(),
+		(getTestFilename("pc", id) + ".gz").c_str());
 }
 
 void KleeHandler::dumpLog(
@@ -520,21 +525,22 @@ void KleeHandler::loadPathFile(std::string name, ReplayPathType &buffer)
 }
 
 void KleeHandler::getOutFiles(
-  std::string path,
-	std::vector<std::string> &results)
+	std::string path, std::vector<std::string> &results)
 {
-  llvm::sys::Path p(path);
-  std::set<llvm::sys::Path> contents;
-  std::string error;
-  if (p.getDirectoryContents(contents, &error)) {
-    std::cerr << "ERROR: unable to read output directory: " << path
-               << ": " << error << "\n";
-    exit(1);
-  }
-  foreach (it, contents.begin(), contents.end()) {
-    std::string f = it->str();
-    if (f.substr(f.size()-6,f.size()) == ".ktest") {
-      results.push_back(f);
-    }
-  }
+	llvm::sys::Path			p(path);
+	std::set<llvm::sys::Path>	contents;
+	std::string			error;
+
+	if (p.getDirectoryContents(contents, &error)) {
+		std::cerr
+			<< "ERROR: unable to read output directory: " << path
+			<< ": " << error << "\n";
+		exit(1);
+	}
+
+	foreach (it, contents.begin(), contents.end()) {
+		std::string f = it->str();
+		if (f.substr(f.size()-6,f.size()) == ".ktest")
+			results.push_back(f);
+	}
 }
