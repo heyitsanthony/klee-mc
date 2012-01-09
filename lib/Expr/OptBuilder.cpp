@@ -284,6 +284,25 @@ ref<Expr> OptBuilder::Extract(const ref<Expr>& expr, unsigned off, Expr::Width w
 		}
 	}
 
+	if (	(	expr->getKind() == Expr::Or ||
+			expr->getKind() == Expr::And ||
+			expr->getKind() == Expr::Xor) &&
+		//(off % 8 == 0) &&
+		(expr->getKid(0)->getKind() == Expr::Concat ||
+		 expr->getKid(1)->getKind() == Expr::Concat))
+	{
+		/* (extract[31:8]
+			(bvor 	(concat ( select ?e71  bv59[32] )
+				...
+				( select ?e71  bv56[32] ))  bv1[32]))
+		=> (bvor (...) bv0[24]) */
+
+		return BinaryExpr::create(
+			expr->getKind(),
+			ExtractExpr::create(expr->getKid(0), off, w),
+			ExtractExpr::create(expr->getKid(1), off, w));
+	}
+
 	if (const SelectExpr *se = dyn_cast<SelectExpr>(expr)) {
 		if (	se->getKid(1)->getKind() == Expr::Constant &&
 			se->getKid(2)->getKind() == Expr::Constant)
@@ -1006,8 +1025,7 @@ static ref<Expr> ShlExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 		return AndExpr::create(l, Expr::createIsZero(r));
 
 	if (const ConstantExpr* ce = dyn_cast<ConstantExpr>(r)) {
-		const ZExtExpr*	ze;
-		uint64_t	ce_val;
+		uint64_t		ce_val;
 
 		/* the same optimizations can be done on large values,
 		 * but it's a pain in the butt */
@@ -1025,8 +1043,7 @@ static ref<Expr> ShlExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 		//	bv8[64] ))
 		// =>
 		// zext[48] (concat (select rbuf) bv0[8])
-		ze = dyn_cast<ZExtExpr>(l);
-		if (ze) {
+		if (const ZExtExpr* ze = dyn_cast<ZExtExpr>(l)) {
 			ref<Expr>	shifted_bits;
 
 			shifted_bits = ConcatExpr::create(
@@ -1035,6 +1052,14 @@ static ref<Expr> ShlExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 					0, ce->getZExtValue()));
 
 			return ZExtExpr::create(shifted_bits, ze->getWidth());
+		}
+
+		const ConcatExpr* cc = dyn_cast<ConcatExpr>(l);
+		if (cc && (ce_val % 8 == 0)) {
+			return ConcatExpr::create(
+				ExtractExpr::create(
+					l, 0, l->getWidth() - ce_val),
+				ConstantExpr::create(0, ce_val));
 		}
 	}
 

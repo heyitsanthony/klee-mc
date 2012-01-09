@@ -114,11 +114,13 @@ def dumpFile(opts, file):
 	print 'ktest file : %r' % file
 	print 'args       : %r' % b.args
 	print 'num objects: %r' % len(b.objects)
+	k = 1
 	for i,(name,data) in enumerate(b.objects):
-		str = data
-		f = open(dirname + '/' + name, 'w')
-		f.write(str)
+		dat_str = data
+		f = open(dirname + '/' + name + '.' + str(k), 'w')
+		f.write(dat_str)
 		f.close()
+		k = k + 1
 
 def dumpData(opts, args):
 	for file in args:
