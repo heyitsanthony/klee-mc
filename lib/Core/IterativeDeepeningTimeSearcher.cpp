@@ -38,9 +38,7 @@ void IterativeDeepeningTimeSearcher::update(
 				alt.erase(alt.find(es));
 			}
 		}
-		baseSearcher->update(
-			current,
-			States(s.getAdded(), alt, s.getIgnored(), s.getUnignored()));
+		baseSearcher->update(current, States(s.getAdded(), alt));
 	} else {
 		baseSearcher->update(current, s);
 	}
@@ -54,10 +52,7 @@ void IterativeDeepeningTimeSearcher::update(
 		time *= 2;
 		std::cerr << "KLEE: increasing time budget to: " << time << "\n";
 		baseSearcher->update(
-			NULL,
-			States(	pausedStates,
-				States::emptySet,
-				s.getIgnored(), s.getUnignored()));
+			NULL, States(pausedStates, States::emptySet));
 		pausedStates.clear();
 	}
 }

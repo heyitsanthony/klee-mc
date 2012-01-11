@@ -2947,6 +2947,18 @@ std::string Executor::getAddressInfo(
 	return info.str();
 }
 
+void Executor::yield(ExecutionState& state)
+{
+	assert (0 == 1 && "STUB");
+#if 0
+	if (!stateManager->isAddedState(&state)) {
+		state.pc = state.prevPC;
+		stateManager->remove(&state); /* put on remove list */
+		return;
+	}
+#endif
+}
+
 void Executor::terminateState(ExecutionState &state)
 {
 	if (replayOut && replayPosition!=replayOut->numObjects) {

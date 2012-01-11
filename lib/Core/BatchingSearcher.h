@@ -17,8 +17,6 @@ class BatchingSearcher : public Searcher
 
 	std::set<ExecutionState*> addedStates;
 	std::set<ExecutionState*> removedStates;
-	std::set<ExecutionState*> ignoreStates;
-	std::set<ExecutionState*> unignoreStates;
 
 public:
 	BatchingSearcher(Searcher *baseSearcher, 
@@ -40,18 +38,12 @@ public:
 
 private:
 	States getStates(void) const
-	{
-		return States(
-			addedStates, removedStates,
-			ignoreStates, unignoreStates);
-	}
+	{ return States(addedStates, removedStates); }
 
 	void clearStates(void)
 	{
 		addedStates.clear();
 		removedStates.clear();
-		ignoreStates.clear();
-		unignoreStates.clear();
 	}
 
 	uint64_t getElapsedInstructions(void) const;

@@ -101,6 +101,7 @@ SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   // operator new(unsigned long)
   add("_Znwm", New, true),
 
+  add("yield", Yield, false)
 #undef addDNR
 #undef add
 };
@@ -791,3 +792,5 @@ SFH_DEF_HANDLER(ForceNE)
 
 	sfh->executor->terminateState(state);
 }
+
+SFH_DEF_HANDLER(Yield) { sfh->executor->yield(state); }

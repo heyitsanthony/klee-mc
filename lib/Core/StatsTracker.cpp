@@ -345,6 +345,13 @@ void StatsTracker::stepInstruction(ExecutionState &es)
 	stepInstUpdateFrame(es);
 }
 
+bool StatsTracker::isInstCovered(KInstruction* ki) const
+{
+	return theStatisticManager->getIndexedValue(
+		stats::coveredInstructions,
+		ki->getInfo()->id);
+}
+
 ///
 
 /* Should be called _after_ the es->pushFrame() */

@@ -1,110 +1,108 @@
-#include <fstream>
-#include "klee/Internal/ADT/RNG.h"
-
-#include "PTree.h"
 #include "Executor.h"
+#include "klee/ExecutionState.h"
 #include "ExeStateManager.h"
+#include "PTree.h"
 #include "static/Sugar.h"
+
+#include "klee/Statistics.h"
+#include "klee/Internal/ADT/DiscretePDF.h"
+#include "klee/Internal/ADT/RNG.h"
+#include "klee/Internal/System/Time.h"
 
 #include "RandomPathSearcher.h"
 
 using namespace klee;
+using namespace llvm;
 
 namespace klee { extern RNG theRNG; }
 
+
 RandomPathSearcher::RandomPathSearcher(Executor &_executor)
-: executor(_executor)
-{}
+: executor(_executor) {}
 
 ExecutionState &RandomPathSearcher::selectState(bool allowCompact)
 {
+	unsigned	flips=0, bits=0;
 	PTreeNode	*n;
-	unsigned	flips = 0, bits = 0;
-
-	executor.processTree->checkRep();
+	
 	n = executor.processTree->root;
+	while (n->data == NULL) {
+		unsigned numEnabledChildren = 0, enabledIndex = 0;
 
-	assert(!n->ignore && "no state selectable");
+		assert (!n->children.empty() && "Empty leaf node");
 
-	while (!n->data) {
-		if (	!n->left ||
-			n->left->ignore ||
-			!n->sumLeft[PTree::WeightAndCompact] ||
-			(!allowCompact && !n->sumLeft[PTree::WeightAnd]))
-		{
-			n = n->right;
-		} else if (
-			!n->right ||
-			n->right->ignore ||
-			!n->sumRight[PTree::WeightAndCompact] ||
-			(!allowCompact && !n->sumRight[PTree::WeightAnd]))
-		{
-			n = n->left;
-		} else {
-			if (bits == 0) {
+		if (n->children.size() == 1) {
+			n = n->children[0];
+			continue;
+		}
+
+		for (unsigned i = 0; i < n->children.size(); i++) {
+			if (!	(n->sums[i][PTree::WeightAndNoCompact]
+				&& (allowCompact || n->sums[i][PTree::WeightAnd])))
+			{
+				continue;
+			}
+
+			if (!numEnabledChildren) {
+				enabledIndex = i;
+				numEnabledChildren++;
+			} else if (n->sums[i][PTree::WeightAnd])
+				numEnabledChildren++;
+		}
+
+		if (!numEnabledChildren)
+			n = NULL; // assert below
+		else if (numEnabledChildren == 1)
+			n = n->children[enabledIndex];
+		else if (n->children.size() == 2) {
+			assert(numEnabledChildren == 2);
+			if (bits==0) {
 				flips = theRNG.getInt32();
 				bits = 32;
 			}
-
 			--bits;
-			assert(!n->left->ignore && !n->right->ignore);
-			n = (flips & (1 << bits)) ? n->left : n->right;
-		}
+			n = (flips&(1<<bits)) ? n->children[0] : n->children[1];
+		} else {
+			unsigned idx = theRNG.getInt32() % numEnabledChildren;
+			for (unsigned i = 0; i < n->children.size(); i++) {
+				if (!	(n->sums[i][PTree::WeightAndNoCompact]
+					&& (	allowCompact ||
+						n->sums[i][PTree::WeightAnd])))
+					continue;
 
-		if (!n) {
-			std::ofstream os;
-			std::string name = "process.dot";
-			os.open(name.c_str());
-			executor.processTree->dump(os);
-
-			os.flush();
-			os.close();
+				if (!idx) {
+					n = n->children[i];
+					break;
+				} else
+					idx--;
+			}
+			assert(!idx);
 		}
 
 		assert(n && "RandomPathSearcher hit unexpected dead end");
 	}
 
-	executor.processTree->checkRep();
-	assert(!n->ignore);
 	return *n->data;
 }
 
 void RandomPathSearcher::update(ExecutionState *current, const States s)
 {
-	foreach (it, s.getIgnored().begin(), s.getIgnored().end()) {
-		ExecutionState *state = *it;
-
-		executor.processTree->checkRep();
-		PTreeNode *n = state->ptreeNode;
-
-		assert (!n->right && !n->left);
-		while (	n && 
-			(!n->right || n->right->ignore) && 
-			(!n->left || n->left->ignore))
-		{
-			n->ignore = true;
-			n = n->parent;
-		}
-
-		executor.processTree->checkRep();
+	foreach (it, s.getAdded().begin(), s.getAdded().end()) {
+		ExecutionState *es = *it;
+		assert(es->ptreeNode->data == es);
+		es->ptreeNode->update(PTree::WeightRunnable, true);
 	}
 
-	foreach (it, s.getUnignored().begin(), s.getUnignored().end()) {
-		ExecutionState *state = *it;
+	foreach (it, s.getRemoved().begin(), s.getRemoved().end()) {
+		ExecutionState *es = *it;
 
-		executor.processTree->checkRep();
-		PTreeNode *n = state->ptreeNode;
+		if (es->ptreeNode == NULL)
+			continue;
 
-		while (n) {
-			n->ignore = false;
-			n = n->parent;
-		}
-
-		executor.processTree->checkRep();
+		assert(es->ptreeNode->data == es);
+		es->ptreeNode->update(PTree::WeightRunnable, false);
 	}
 }
 
-bool RandomPathSearcher::empty() const
-{
-	return executor.stateManager->empty();
-}
+bool RandomPathSearcher::empty(void) const
+{ return executor.stateManager->empty(); }

@@ -28,11 +28,12 @@ class PTree
 
 public:
 	enum Weights {
-		WeightAnd = 0, // logical AND of weights
-		WeightAndCompact, // logical AND of weights (except WeightCompact)
-		WeightCompact, // 0 = compact, 1 = non-compact
-		//      WeightRunning, // 0 = running, 1 = not running
-		NumWeights
+	      WeightAnd = 0, // logical AND of weights
+	      WeightAndNoCompact, // logical AND of weights (except WeightCompact)
+	      WeightCompact, // 0 = compact, 1 = non-compact
+	      WeightRunnable, // 0 = not runnable, 1 = runnable
+	      NumWeights,
+	      FirstVarWeight = WeightCompact
 	};
 
 	PTreeNode *root;
@@ -46,34 +47,34 @@ public:
 		const data_type &rightData);
 
 	void remove(PTreeNode *n);
-	void update(PTreeNode *n, Weights index, bool sum);
 
 	void dump(std::ostream &os);
 	void dump(const std::string& n);
-	void checkRep();
 	ExecutionState* removeState(
 		ExeStateManager* stateManager, ExecutionState* es);
 	void removeRoot(ExeStateManager* stateManager, ExecutionState* es);
 
 	void splitStates(PTreeNode* n, ExecutionState* a, ExecutionState* b);
-
-private:
-	void propagateSumsUp(PTreeNode *n);
 };
 
 class PTreeNode
 {
-friend class PTree;
+	friend class PTree;
 public:
-	bool ignore;
-	PTreeNode *parent, *left, *right;
-	ExecutionState *data;
-	std::vector<bool> sumLeft, sumRight;
-	unsigned id;
-	static unsigned idCount;
+	PTreeNode				*parent;
+	llvm::SmallVector<PTreeNode*, 2>	children;
+	ExecutionState				*data;
+	llvm::SmallVector<std::vector<bool>, 2>	sums;
+
+	void update(PTree::Weights index, bool sum);
+	double getProbability() const;
+
+	PTreeNode(PTreeNode *_parent, ExecutionState *_data)
+	: parent(_parent), data(_data) { }
+	~PTreeNode() { }
+
 private:
-	PTreeNode(PTreeNode *_parent, ExecutionState *_data);
-	~PTreeNode();
+	void propagateSumsUp();
 };
 }
 

@@ -116,21 +116,12 @@ void WeightedRandomSearcher::update(ExecutionState *current, const States s)
 {
 	if (	current && 
 		updateWeights && 
-		!s.getRemoved().count(current) &&
-		!s.getIgnored().count(current))
+		!s.getRemoved().count(current))
 	{
 		states->update(current, getWeight(current));
 	}
 
 	foreach (it, s.getAdded().begin(), s.getAdded().end()) {
-		ExecutionState *es = *it;
-		states->insert(es, getWeight(es), es->isCompactForm);
-	}
-
-	foreach (it, s.getIgnored().begin(), s.getIgnored().end())
-		states->remove(*it);
-
-	foreach (it, s.getUnignored().begin(), s.getUnignored().end()) {
 		ExecutionState *es = *it;
 		states->insert(es, getWeight(es), es->isCompactForm);
 	}

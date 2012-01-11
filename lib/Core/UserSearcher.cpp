@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "UserSearcher.h"
+#include "CovSearcher.h"
 
 #include "Searcher.h"
 #include "ExecutorBC.h"
@@ -109,7 +110,7 @@ namespace {
 
   cl::opt<bool>
   UseBatchingSearch("use-batching-search", 
-           cl::desc("Use batching searcher (keep running selected state for N instructions/time, see --batch-instructions and --batch-time"));
+           cl::desc("Use batching searcher (run state for N instructions/time, see --batch-instructions and --batch-time"));
 
   cl::opt<unsigned>
   BatchInstructions("batch-instructions",
@@ -131,6 +132,12 @@ namespace {
     "xchk-searcher",
     cl::desc("On reschedule, reaffirm validate address space is same as before"),
     cl::init(false));
+
+  cl::opt<bool>
+  UseCovSearcher(
+  	"use-cov-search",
+	cl::desc("Greedily execute uncovered instructions"),
+	cl::init(false));
 
   cl::opt<bool, true>
   UsePrioritySearcherProxy(
@@ -196,7 +203,11 @@ Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 {
 	Searcher* searcher;
 
-	if (UsePrioritySearcher) {
+	if (UseCovSearcher) {
+		searcher = new PrioritySearcher(
+			new CovPrioritizer(
+				*executor.getStatsTracker()));
+	} else if (UsePrioritySearcher) {
 		assert (prFunc != NULL);
 		searcher = new PrioritySearcher(prFunc);
 		prFunc = NULL;

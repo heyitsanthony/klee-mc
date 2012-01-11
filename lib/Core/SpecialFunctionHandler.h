@@ -159,6 +159,7 @@ namespace klee {
     SFH_HANDLER(UnderConstrained)
     SFH_HANDLER(Warning)
     SFH_HANDLER(WarningOnce)
+    SFH_HANDLER(Yield)
 } // End klee namespace
 
 #endif

@@ -38,11 +38,7 @@ void ExeStateManager::setupSearcher(Executor* exe)
 	searcher = UserSearcher::constructUserSearcher(*exe);
 	searcher->update(
 		NULL,
-		Searcher::States(
-			states,
-			Searcher::States::emptySet,
-			Searcher::States::emptySet,
-			Searcher::States::emptySet));
+		Searcher::States(states, Searcher::States::emptySet));
 }
 
 void ExeStateManager::teardownUserSearcher(void)
@@ -97,8 +93,6 @@ void ExeStateManager::notifyCurrent(Executor* exe, ExecutionState *current)
 {
   if (searcher) {
     searcher->update(current, getStates());
-    ignoreStates.clear();
-    unignoreStates.clear();
   }
 
   states.insert(addedStates.begin(), addedStates.end());
@@ -199,9 +193,5 @@ void ExeStateManager::compactStates(ExecutionState* &state, uint64_t maxMem)
 
 Searcher::States ExeStateManager::getStates(void) const
 {
-	return Searcher::States(
-		addedStates,
-		removedStates,
-		ignoreStates,
-		unignoreStates);
+	return Searcher::States(addedStates, removedStates);
 }

@@ -90,15 +90,9 @@ void BatchingSearcher::update(ExecutionState *current, const States s)
 
 	addedStates.insert(s.getAdded().begin(), s.getAdded().end());
 	removedStates.insert(s.getRemoved().begin(), s.getRemoved().end());
-	ignoreStates.insert(s.getIgnored().begin(), s.getIgnored().end());
-	unignoreStates.insert(s.getUnignored().begin(), s.getUnignored().end());
 
-	if (	lastState &&
-		!s.getRemoved().count(lastState) &&
-		!s.getIgnored().count(lastState))
-	{
+	if (lastState && !s.getRemoved().count(lastState))
 		return;
-	}
 
 	lastState = NULL;
 	baseSearcher->update(current, getStates());

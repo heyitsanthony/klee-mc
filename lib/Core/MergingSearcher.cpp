@@ -133,7 +133,5 @@ void MergingSearcher::update(ExecutionState *current, const States s)
 		alt.erase(alt.find(es));
 	}
 
-	baseSearcher->update(
-		current, 
-		States(s.getAdded(), alt, s.getIgnored(), s.getUnignored()));
+	baseSearcher->update(current, States(s.getAdded(), alt));
 }

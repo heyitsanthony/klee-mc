@@ -96,6 +96,8 @@ namespace klee {
 
     void computeReachableUncovered();
 
+    bool isInstCovered(KInstruction* ki) const;
+
   private:
     void computeReachableUncoveredInit(void);
     void computeCallTargets(llvm::Function* f);

@@ -615,6 +615,10 @@ public:
 	virtual void getCoveredLines(
 		const ExecutionState &state,
 		std::map<const std::string*, std::set<unsigned> > &res);
+
+	StatsTracker* getStatsTracker(void) const { return statsTracker; }
+
+	void yield(ExecutionState& state);
 };
 
 }

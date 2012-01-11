@@ -226,8 +226,7 @@ void StringMerger::update(ExecutionState *current, const States s)
       else newRemoved.insert(*it);
     }
 
-    baseSearcher->update(
-      current, States(newAdded, newRemoved, s.getIgnored(), s.getUnignored()));
+    baseSearcher->update(current, States(newAdded, newRemoved));
     return;
   }
 

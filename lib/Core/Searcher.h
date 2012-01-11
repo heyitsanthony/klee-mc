@@ -30,11 +30,8 @@ public:
 	{
 	public:
 		States(	const std::set<ExecutionState*>& a,
-			const std::set<ExecutionState*>& r,
-			const std::set<ExecutionState*>& i,
-			const std::set<ExecutionState*>& u)
+			const std::set<ExecutionState*>& r)
 		: addedStates(a), removedStates(r)
-		, ignoreStates(i), unignoreStates(u)
 		{}
 		virtual ~States() {}
 
@@ -44,18 +41,10 @@ public:
 		const std::set<ExecutionState*>& getRemoved(void) const
 		{ return removedStates; }
 
-		const std::set<ExecutionState*>& getIgnored(void) const
-		{ return ignoreStates; }
-
-		const std::set<ExecutionState*>& getUnignored(void) const
-		{ return unignoreStates; }
-
 		static const std::set<ExecutionState*> emptySet;
 	private:
 		const std::set<ExecutionState*> &addedStates;
 		const std::set<ExecutionState*> &removedStates;
-		const std::set<ExecutionState*> &ignoreStates;
-		const std::set<ExecutionState*> &unignoreStates;
 	};
 	Searcher();
 	virtual ~Searcher();
@@ -66,30 +55,21 @@ public:
 
 	// prints name of searcher as a klee_message()
 	// TODO: could probably make prettier or more flexible
-	virtual void printName(std::ostream &os) const {
-		os << "<unnamed searcher>\n";
-	}
+	virtual void printName(std::ostream &os) const
+	{ os << "<unnamed searcher>\n"; }
 
 	void addState(ExecutionState *es, ExecutionState *current = 0)
 	{
 		std::set<ExecutionState*> tmp;
 		tmp.insert(es);
-		update(	current,
-			States(	tmp,
-				States::emptySet,
-				States::emptySet,
-				States::emptySet));
+		update(current, States(tmp,States::emptySet));
 	}
 
 	void removeState(ExecutionState *es, ExecutionState *current = 0)
 	{
 		std::set<ExecutionState*> tmp;
 		tmp.insert(es);
-		update(	current,
-			States(	States::emptySet,
-				tmp,
-				States::emptySet,
-				States::emptySet));
+		update(current, States(States::emptySet, tmp));
 	}
 };
 }

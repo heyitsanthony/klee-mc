@@ -20,8 +20,6 @@
 
 using namespace klee;
 
-/* *** */
-
 PTree::PTree(const data_type &_root)
 : root(new PTreeNode(0, _root))
 {}
@@ -30,62 +28,25 @@ PTree::~PTree()
 {
 	assert(root);
 	assert(!root->data);
-	assert(!root->left && !root->right);
+	assert(root->children.empty());
+
 	delete root;
 }
 
-void PTree::checkRep()
-{
-	return;
-	std::vector<PTreeNode*> stack;
-	stack.push_back(root);
-	while (!stack.empty()) {
-		PTreeNode *n = stack.back();
-		stack.pop_back();
-
-		if (!n->ignore) continue;
-		if (!n->parent) continue;
-		if (	!(!n->parent->left || n->parent->left->ignore) &&
-			(!n->parent->right || n->parent->right->ignore))
-			continue;
-
-		if (!n->parent->ignore) {
-			std::cout << "PARENT=" << n->parent->id << std::endl;
-			if (n->parent->left) {
-				std::cout << "PARENT HAS LEFT="
-					<< n->parent->left->id
-					<< std::endl;
-				if (n->parent->left->ignore)
-					std::cout << "PARENT HAS LEFT IGNORE\n";
-			}
-			if (n->parent->right) {
-				std::cout << "PARENT HAS RIGHT"
-					<< n->parent->right->id << std::endl;
-				if (n->parent->right->ignore)
-					std::cout << "PARENT HAS RIGHT IGNORE\n";
-			}
-
-			dump("process");
-			assert(false);
-		}
-		if (n->left)
-			stack.push_back(n->left);
-		if (n->right)
-			stack.push_back(n->right);
-	}
-}
-
 std::pair<PTreeNode*, PTreeNode*>
-PTree::split(PTreeNode *n,
-        const data_type &leftData,
-        const data_type &rightData)
+PTree::split(
+	PTreeNode *n,
+	const data_type &leftData,
+	const data_type &rightData)
 {
-	checkRep();
-	assert(n && !n->left && !n->right);
-	n->left = new PTreeNode(n, leftData);
-	n->right = new PTreeNode(n, rightData);
-	checkRep();
-	return std::make_pair(n->left, n->right);
+	assert(n && n->children.empty());
+	n->children.resize(2);
+	n->children[0] = new PTreeNode(n, leftData);
+	n->children[1] = new PTreeNode(n, rightData);
+	n->sums.assign(
+		n->children.size(),
+		std::vector<bool>(NumWeights, true));
+	return std::make_pair(n->children[0], n->children[1]);
 }
 
 ExecutionState* PTree::removeState(
@@ -105,7 +66,7 @@ ExecutionState* PTree::removeState(
 		// replace the placeholder state in the process tree
 		ns->ptreeNode = es->ptreeNode;
 		ns->ptreeNode->data = ns;
-		update(ns->ptreeNode, WeightCompact, !ns->isCompactForm);
+		ns->ptreeNode->update(WeightCompact, !ns->isCompactForm);
 	}
 
 	delete es;
@@ -126,71 +87,101 @@ void PTree::removeRoot(ExeStateManager* stateManager, ExecutionState* es)
 	// replace the placeholder state in the process tree
 	ns->ptreeNode = es->ptreeNode;
 	ns->ptreeNode->data = ns;
-
-	update(ns->ptreeNode, WeightCompact, !ns->isCompactForm);
+	ns->ptreeNode->update(WeightCompact, !ns->isCompactForm);
 	delete es;
 }
 
 void PTree::remove(PTreeNode *n)
 {
-	checkRep();
-	assert(!n->left && !n->right);
-	//dump("process1");
-	do {
+	assert(n->children.empty() && "Cannot remove interior node");
+
+	while (n->parent && n->children.empty()) {
 		PTreeNode *p = n->parent;
+		bool found = false;
 
-		assert(p);
-		assert(n == p->left || n == p->right);
-		if (n == p->left) {
-			p->left = 0;
-			p->sumLeft.assign(NumWeights, false);
-		} else {
-			p->right = 0;
-			p->sumRight.assign(NumWeights, false);
+		assert(p != NULL);
+
+		for (unsigned i = 0; i < p->children.size(); i++) {
+			if (n != p->children[i])
+				continue;
+
+			found = true;
+			p->children.erase(&p->children[i]);
+			p->sums.erase(&p->sums[i]);
+			break;
 		}
+
+		assert(found && "Orphaned node detected");
+
+		// collapse away nodes with a single child
+		if (p->children.size() != 1) {
+			delete n;
+			n = p;
+			continue;
+		}
+
+		if (PTreeNode *p2 = p->parent) {
+			found = false;
+			for (unsigned i = 0; i < p2->children.size(); i++) {
+				if (p != p2->children[i])
+					continue;
+
+				found = true;
+				p2->children[i] = p->children[0];
+				p->children[0]->parent = p2;
+				p2->sums[i] = p->sums[0];
+
+				delete p;
+				p = p2;
+
+				break;
+			}
+
+			assert(found && "Orphaned node detected");
+		} else {
+			// 'p' is the root node
+			root = p->children[0];
+			root->parent = NULL;
+			delete p;
+			p = root;
+		}
+
 		delete n;
-
 		n = p;
-	} while (n->parent && !n->left && !n->right);
-	//dump("process2");
-
-
-	PTreeNode* k = n;
-	//std::cout << "START: " << k->id << std::endl;
-	while (k &&
-		((k->left && k->left->ignore) || (k->right && k->right->ignore)) &&
-		((!k->left || k->left->ignore) && (!k->right || k->right->ignore)))
-	{
-		//std::cout << "ITER: " << k->id << std::endl;
-		k->ignore = true;
-		k = k->parent;
 	}
 
-	propagateSumsUp(n);
-
-	checkRep();
+	n->propagateSumsUp();
 }
 
-void PTree::update(PTreeNode *n, Weights index, bool sum)
+void PTreeNode::update(PTree::Weights index, bool sum)
 {
-	PTreeNode* p = n->parent;
+	PTreeNode	*p;
+	unsigned	i;
 
-	if (p == NULL) return;
+	p = parent;
+	if (p == NULL)
+		return;
 
-	std::vector<bool> &curSum = ((n == p->left) ? p->sumLeft : p->sumRight);
+	for (i = 0; i < p->children.size(); i++)
+		if (p->children[i] == this)
+			break;
+
+	assert(i < p->children.size() && "Orphaned node detected");
+	std::vector<bool> &curSum = p->sums[i];
 	curSum[index] = sum;
 
-	curSum[WeightAnd] = true;
-	curSum[WeightAndCompact] = true;
-	for (unsigned i = WeightAnd; i < NumWeights; i++) {
-		curSum[WeightAnd] = curSum[WeightAnd] & curSum[i];
+	curSum[PTree::WeightAnd] = true;
+	curSum[PTree::WeightAndNoCompact] = true;
+	for(unsigned j = PTree::FirstVarWeight; j < PTree::NumWeights; j++) {
+		curSum[PTree::WeightAnd] = curSum[PTree::WeightAnd] & curSum[j];
+		if (j == PTree::WeightCompact)
+			continue;
 
-		if (i != WeightCompact)
-			curSum[WeightAndCompact] =
-				curSum[WeightAndCompact] & curSum[i];
+		curSum[PTree::WeightAndNoCompact] = 
+			curSum[PTree::WeightAndNoCompact] & curSum[j];
 	}
 
-	propagateSumsUp(p);
+	p->propagateSumsUp();
 }
 
 void PTree::dump(const std::string& n)
@@ -206,38 +197,32 @@ void PTree::dump(const std::string& n)
 
 void PTree::dump(std::ostream &os)
 {
-  ExprPPrinter *pp = ExprPPrinter::create(os);
-  pp->setNewline("\\l");
-  os << "digraph G {\n";
-  os << "\tsize=\"10,7.5\";\n";
-  os << "\tratio=fill;\n";
-  os << "\trotate=90;\n";
-  os << "\tcenter = \"true\";\n";
-  os << "\tnode [style=\"filled\",width=.1,height=.1,fontname=\"Terminus\"]\n";
-  os << "\tedge [arrowsize=.3]\n";
-  std::vector<PTreeNode*> stack;
-  stack.push_back(root);
-  while (!stack.empty()) {
-    PTreeNode *n = stack.back();
-    stack.pop_back();
-    os << "\tn" << n << " [label=\"n" << n->id << "\"";
-    //if (n->data)
-    //os << ",fillcolor=green";
-    if (n->ignore)
-      os << ",fillcolor=red";
-    os << "];\n";
-    if (n->left) {
-      os << "\tn" << n << " -> n" << n->left << ";\n";
-      stack.push_back(n->left);
-    }
-    if (n->right) {
+	ExprPPrinter *pp = ExprPPrinter::create(os);
+	pp->setNewline("\\l");
+	os << "digraph G {\n";
+	os << "\tsize=\"10,7.5\";\n";
+	os << "\tratio=fill;\n";
+	os << "\trotate=90;\n";
+	os << "\tcenter = \"true\";\n";
+	os << "\tnode [style=\"filled\",width=.1,height=.1,fontname=\"Terminus\"]\n";
+	os << "\tedge [arrowsize=.3]\n";
+	std::vector<PTreeNode*> stack;
+	stack.push_back(root);
+	while (!stack.empty()) {
+		PTreeNode *n = stack.back();
+		stack.pop_back();
+		os << "\tn" << n << " [label=\"\"";
+		if (n->data)
+			os << ",fillcolor=green";
+		os << "];\n";
+		for (unsigned i = 0; i < n->children.size(); i++) {
+			os << "\tn" << n << " -> n" << n->children[i] << ";\n";
+			stack.push_back(n->children[i]);
+		}
+	}
 
-      os << "\tn" << n << " -> n" << n->right << ";\n";
-      stack.push_back(n->right);
-    }
-  }
-  os << "}\n";
-  delete pp;
+	os << "}\n";
+	delete pp;
 }
 
 void PTree::splitStates(PTreeNode* n, ExecutionState* a, ExecutionState* b)
@@ -246,25 +231,35 @@ void PTree::splitStates(PTreeNode* n, ExecutionState* a, ExecutionState* b)
 	std::pair<PTreeNode*, PTreeNode*> res = split(n, a, b);
 
 	a->ptreeNode = res.first;
-	update(a->ptreeNode, PTree::WeightCompact, !a->isCompactForm);
+	a->ptreeNode->update(PTree::WeightCompact, !a->isCompactForm);
 	//  processTree->update(a->ptreeNode, PTree::WeightRunning, !a->isRunning);
 	b->ptreeNode = res.second;
-	update(b->ptreeNode, WeightCompact, !b->isCompactForm);
+	b->ptreeNode->update(WeightCompact, !b->isCompactForm);
 	//  processTree->update(b->ptreeNode, PTree::WeightRunning, !b->isRunning);
 }
 
-void PTree::propagateSumsUp(PTreeNode *n)
+void PTreeNode::propagateSumsUp(void)
 {
-	while (PTreeNode * p = n->parent) {
-		std::vector<bool> sums(PTree::NumWeights, false);
-		std::vector<bool> &curSum((n == p->left) ? p->sumLeft : p->sumRight);
+	PTreeNode *n = this;
 
-		for (unsigned i = 0; i < PTree::NumWeights; i++)
-			sums[i] = n->sumLeft[i] | n->sumRight[i];
+	while (PTreeNode* p = n->parent) {
+		unsigned i;
+		for (i = 0; i < p->children.size(); i++)
+			if (n == p->children[i])
+				break;
+		assert(i < p->children.size() && "Orphaned node detected");
+
+		std::vector<bool> sums(PTree::NumWeights, false);
+		std::vector<bool> &curSum = p->sums[i];
+
+		for (i = 0; i < n->children.size(); i++)
+			for (unsigned j = 0; j < PTree::NumWeights; j++)
+				sums[j] = sums[j] | n->sums[i][j];
 
 		// avoid propagating up if we already have the same weights
-		if (	curSum[WeightAnd] == sums[WeightAnd]
-			&& curSum[WeightAndCompact] == sums[WeightAndCompact])
+		if (	curSum[PTree::WeightAnd] == sums[PTree::WeightAnd]
+			&& 	curSum[PTree::WeightAndNoCompact] == 
+				sums[PTree::WeightAndNoCompact])
 		{
 			break;
 		}
@@ -274,18 +269,16 @@ void PTree::propagateSumsUp(PTreeNode *n)
 	}
 }
 
-unsigned PTreeNode::idCount = 0;
+double PTreeNode::getProbability() const
+{
+	double p = 1.;
+	const PTreeNode *n = this;
 
-PTreeNode::PTreeNode(PTreeNode *_parent,
-        ExecutionState *_data)
-: ignore(false)
-, parent(_parent)
-, left(0)
-, right(0)
-, data(_data)
-, sumLeft(PTree::NumWeights, true)
-, sumRight(PTree::NumWeights, true)
-, id(idCount++)
-{}
+	while (n->parent != NULL) {
+		p /= (double) n->parent->children.size();
+		n = n->parent;
+	}
 
-PTreeNode::~PTreeNode() {}
+	return p;
+}
+
