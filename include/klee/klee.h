@@ -143,6 +143,8 @@ extern "C" {
   void klee_stack_trace(void);
 
   void klee_force_ne(uint64_t expr_lhs, uint64_t expr_rhs);
+
+  void klee_yield(void);
 #ifdef __cplusplus
 }
 #endif

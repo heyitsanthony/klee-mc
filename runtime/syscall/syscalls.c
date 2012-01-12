@@ -183,13 +183,19 @@ static void sc_munmap(void* regfile)
 		sc_ret_range(sc_new_regs(regfile), y, z);		\
 		break;
 
+/* number of bytes in extent we'll make symbolic before yielding */
+#define SYM_YIELD_SIZE	(16*1024)
+
 void make_sym(uint64_t addr, uint64_t len, const char* name)
 {
 	klee_check_memory_access((void*)addr, 1);
 
 	klee_assume(addr == klee_get_value(addr));
-	klee_assume(len == klee_get_value(len));
 
+	if (len > SYM_YIELD_SIZE)
+		klee_yield();
+
+	klee_assume(len == klee_get_value(len));
 	kmc_make_range_symbolic(addr, len, name);
 	sc_breadcrumb_add_ptr((void*)addr, len);
 }
@@ -202,10 +208,12 @@ void make_sym_by_arg(
 	uint64_t	addr;
 
 	addr = concretize_u64(GET_ARG(regfile, arg_num));
-	len = concretize_u64(len);
-
 	klee_check_memory_access((void*)addr, 1);
 
+	if (len > SYM_YIELD_SIZE)
+		klee_yield();
+
+	len = concretize_u64(len);
 	kmc_make_range_symbolic(addr, len, name);
 	sc_breadcrumb_add_argptr(arg_num, 0, len);
 }

@@ -33,6 +33,12 @@ private:
   /// instructions step. 
   /// \invariant \ref replacedStates is a subset of \ref states U addedStates. 
   ExeStateReplaceMap replacedStates;
+  
+  /* states to yield */
+  ExeStateSet yieldStates;
+
+  /* all yielded states */
+  ExeStateSet yieldedStates;
 
   Searcher *searcher;
 
@@ -48,6 +54,8 @@ public:
   void dropAdded(ExecutionState* es);
   void add(ExecutionState* es);
   void remove(ExecutionState* s);
+  void yield(ExecutionState* s);
+
   void setInitialState(
     Executor* exe, ExecutionState* initialState, bool replay);
   void setWeights(double weight);

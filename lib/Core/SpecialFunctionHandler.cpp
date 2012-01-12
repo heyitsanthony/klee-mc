@@ -101,7 +101,7 @@ SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   // operator new(unsigned long)
   add("_Znwm", New, true),
 
-  add("yield", Yield, false)
+  add("klee_yield", Yield, false)
 #undef addDNR
 #undef add
 };
