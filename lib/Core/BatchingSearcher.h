@@ -7,19 +7,25 @@ namespace klee
 {
 class BatchingSearcher : public Searcher
 {
-	Searcher *baseSearcher;
-	double timeBudget;
-	unsigned instructionBudget;
+	Searcher		*baseSearcher;
+	double			timeBudget;
+	unsigned		instructionBudget;
 
-	ExecutionState *lastState;
-	double lastStartTime;
-	uint64_t lastStartInstructions;
+	ExecutionState		*lastState;
+	double			lastStartTime;
+	uint64_t		lastStartInstructions;
+	bool			select_new_state;
 
 	std::set<ExecutionState*> addedStates;
-	std::set<ExecutionState*> removedStates;
+	// We used to cache removed states here and then
+	// flush them out on a select new state event. This is wrong.
+	//
+	// Once a removed state goes though the searcher update function, it
+	// should be considered deleted for good and all pointers invalid.
+	// std::set<ExecutionState*> removedStates;
 
 public:
-	BatchingSearcher(Searcher *baseSearcher, 
+	BatchingSearcher(Searcher *baseSearcher,
 		     double _timeBudget,
 		     unsigned _instructionBudget);
 	virtual ~BatchingSearcher();
@@ -37,15 +43,6 @@ public:
 	}
 
 private:
-	States getStates(void) const
-	{ return States(addedStates, removedStates); }
-
-	void clearStates(void)
-	{
-		addedStates.clear();
-		removedStates.clear();
-	}
-
 	uint64_t getElapsedInstructions(void) const;
 	double getElapsedTime(void) const;
 };

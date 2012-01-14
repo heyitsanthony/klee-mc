@@ -15,6 +15,7 @@ BatchingSearcher::BatchingSearcher(
 , instructionBudget(_instructionBudget)
 , lastState(0)
 , lastStartInstructions(0)
+, select_new_state(true)
 {}
 
 BatchingSearcher::~BatchingSearcher() { delete baseSearcher; }
@@ -32,28 +33,13 @@ double BatchingSearcher::getElapsedTime(void) const
 
 ExecutionState &BatchingSearcher::selectState(bool allowCompact)
 {
-	if (	lastState && 
-		(timeBudget < 0.0 || getElapsedTime() <= timeBudget) &&
-		getElapsedInstructions() <= instructionBudget)
-	{
+	if (lastState != NULL && !select_new_state)
 		return *lastState;
-	}
-
-	if (lastState && timeBudget >= 0.0) {
-		double delta = getElapsedTime();
-		if (delta > timeBudget * 1.5) {
-			std::cerr << "KLEE: increased time budget from "
-				<< timeBudget << " to " << delta << "\n";
-			timeBudget = delta;
-		}
-	}
-
-	baseSearcher->update(lastState, getStates());
-	clearStates();
 
 	lastState = &baseSearcher->selectState(allowCompact);
 	lastStartTime = util::estWallTime();
 	lastStartInstructions = stats::instructions;
+	select_new_state = false;
 
 	return *lastState;
 }
@@ -75,26 +61,45 @@ bool is_disjoint(const C1& a, const C2& b)
 
 void BatchingSearcher::update(ExecutionState *current, const States s)
 {
-	assert(is_disjoint(s.getAdded(), s.getRemoved()));
+	// assert(is_disjoint(s.getAdded(), s.getRemoved()));
 
+	select_new_state |= (timeBudget > 0.0 && getElapsedTime() > timeBudget);
+	select_new_state |= (getElapsedInstructions() >= instructionBudget);
+
+	if (select_new_state && timeBudget >= 0.0) {
+		double delta = getElapsedTime();
+		if (delta > timeBudget * 1.5) {
+			std::cerr << "KLEE: increased time budget from "
+				<< timeBudget << " to " << delta << "\n";
+			timeBudget = delta;
+		}
+	}
+
+#if 0
+	bool	add_rmv_conflict;
 	// If there are pending additions before removals, 
 	// or pending removals before additions,
 	// process the pending states first, 
 	// since those may actually be different states!
-	if (	!is_disjoint(addedStates, s.getRemoved()) ||
-		!is_disjoint(removedStates, s.getAdded()))
-	{
+	add_rmv_conflict = (is_disjoint(addedStates, s.getRemoved()) == false);
+	add_rmv_conflict |= (is_disjoint(removedStates, s.getAdded()) == false);
+
+	if (add_rmv_conflict) {
 		baseSearcher->update(current, getStates());
 		clearStates();
 	}
 
-	addedStates.insert(s.getAdded().begin(), s.getAdded().end());
 	removedStates.insert(s.getRemoved().begin(), s.getRemoved().end());
+#endif
 
-	if (lastState && !s.getRemoved().count(lastState))
+	addedStates.insert(s.getAdded().begin(), s.getAdded().end());
+
+	if (select_new_state == false && s.getRemoved().empty())
 		return;
 
-	lastState = NULL;
-	baseSearcher->update(current, getStates());
-	clearStates();
+	baseSearcher->update(current, States(addedStates, s.getRemoved()));
+	addedStates.clear();
+
+	if (select_new_state || s.getRemoved().count(lastState))
+		lastState = NULL;
 }

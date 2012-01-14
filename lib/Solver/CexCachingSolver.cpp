@@ -23,7 +23,7 @@
 #include "SMTPrinter.h"
 
 #define MAX_BINDING_BYTES	(32*1024)
-#define MAX_CACHED_BYTES	(256*1024*1024)	/* custom alloc => hugetlb */
+#define MAX_CACHED_BYTES	(128*1024*1024)	/* custom alloc => hugetlb */
 
 
 using namespace klee;

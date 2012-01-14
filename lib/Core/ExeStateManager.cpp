@@ -5,6 +5,9 @@
 #include "MemUsage.h"
 #include "klee/Common.h"
 #include "static/Sugar.h"
+#include "PTree.h"
+
+#include <llvm/Support/CommandLine.h>
 
 #include <algorithm>
 #include <iostream>
@@ -13,7 +16,8 @@ using namespace llvm;
 using namespace klee;
 
 ExeStateManager::ExeStateManager()
-: nonCompactStateCount(0), searcher(0)
+: nonCompactStateCount(0)
+, searcher(NULL)
 {}
 
 ExeStateManager::~ExeStateManager()
@@ -28,16 +32,19 @@ ExecutionState* ExeStateManager::selectState(bool allowCompact)
 
 	assert (!empty());
 
+	/* only yielded states left? well.. pop one */
 	if (states.size() == yieldedStates.size()) {
 		ExecutionState	*es;
 		es = *yieldedStates.begin();
 		yieldedStates.erase(es);
-		add(es);
+		queueAdd(es);
 		searcher->update(NULL, getStates());
+		states.insert(es);
 		addedStates.clear();
 	}
+
 	ret = &searcher->selectState(allowCompact);
-	assert((allowCompact || !ret->isCompactForm) && "compact state chosen");
+	assert((allowCompact || !ret->isCompact()) && "compact state chosen");
 
 	return ret;
 }
@@ -59,8 +66,8 @@ void ExeStateManager::teardownUserSearcher(void)
 }
 
 void ExeStateManager::setInitialState(
-  Executor* exe,
-  ExecutionState* initialState, bool replay)
+	Executor* exe,
+	ExecutionState* initialState, bool replay)
 {
 	assert (empty());
 
@@ -68,10 +75,10 @@ void ExeStateManager::setInitialState(
 		// remove initial state from ptree
 		states.insert(initialState);
 		removedStates.insert(initialState);
-		notifyCurrent(exe, NULL); /* XXX ??? */
+		commitQueue(exe, NULL); /* XXX ??? */
 	} else {
 		states.insert(initialState);
-		++nonCompactStateCount;
+		nonCompactStateCount++;
 	}
 }
 
@@ -81,26 +88,27 @@ void ExeStateManager::setWeights(double weight)
 		(*it)->weight = weight;
 }
 
-void ExeStateManager::add(ExecutionState* es)
-{
-  if (!es->isCompactForm) ++nonCompactStateCount;
-  addedStates.insert(es);
-}
+void ExeStateManager::queueAdd(ExecutionState* es) { addedStates.insert(es); }
+void ExeStateManager::queueRemove(ExecutionState* s) { removedStates.insert(s); }
 
-void ExeStateManager::remove(ExecutionState* s) { removedStates.insert(s); }
-
+/* note: only a state that has already been added can call yield--
+ * this means 's' is gauranteed to be the states list and not in addedStates */
 void ExeStateManager::yield(ExecutionState* s)
 {
-	std::cerr << "YIELDING STATE. " << (void*)s << "\n";
+	ExecutionState	*compacted;
 
-	if (!isAddedState(s)) {
-		yieldStates.insert(s);
-		return;
-	}
+	assert (!s->isCompact() && "yielding compact state? HOW?");
 
-	// never reached searcher
-	dropAdded(s);
+	compacted = compactState(s);
+
+	/* compact state forced a replace copy,
+	 * new state is put on addedStates-- So take it away. 
+	 * old state is put on removedStates-- OK. */
+	dropAdded(compacted);
+
 	yieldedStates.insert(s);
+
+	/* NOTE: states and yieldedStates are disjoint */
 }
 
 void ExeStateManager::dropAdded(ExecutionState* es)
@@ -110,29 +118,23 @@ void ExeStateManager::dropAdded(ExecutionState* es)
 	addedStates.erase(it);
 }
 
-void ExeStateManager::notifyCurrent(Executor* exe, ExecutionState *current)
+void ExeStateManager::commitQueue(Executor* exe, ExecutionState *current)
 {
-	ExecutionState* root_to_be_removed = NULL;
+	ExecutionState	*root_to_be_removed;
 
-	if (searcher != NULL) {
+	root_to_be_removed = NULL;
+
+	if (searcher != NULL)
 		searcher->update(current, getStates());
-	}
-
-	states.insert(addedStates.begin(), addedStates.end());
-	nonCompactStateCount += std::count_if(
-		addedStates.begin(),
-		addedStates.end(),
-		std::mem_fun(&ExecutionState::isNonCompactForm_f));
-	addedStates.clear();
 
 	foreach (it, removedStates.begin(), removedStates.end()) {
 		ExecutionState *es = *it;
 
 		ExeStateSet::iterator it2 = states.find(es);
-		assert(it2!=states.end());
+		assert (it2 != states.end());
 		states.erase(it2);
 
-		if (!es->isCompactForm)
+		if (!es->isCompact())
 			--nonCompactStateCount;
 
 		// delete es
@@ -141,6 +143,15 @@ void ExeStateManager::notifyCurrent(Executor* exe, ExecutionState *current)
 
 	if (root_to_be_removed)
 		exe->removeRoot(root_to_be_removed);
+
+	if (!addedStates.empty()) {
+		states.insert(addedStates.begin(), addedStates.end());
+		nonCompactStateCount += std::count_if(
+			addedStates.begin(),
+			addedStates.end(),
+			std::mem_fun(&ExecutionState::isNonCompact));
+		addedStates.clear();
+	}
 
 	yieldedStates.insert(yieldStates.begin(), yieldStates.end());
 	yieldStates.clear();
@@ -181,25 +192,21 @@ ExecutionState* ExeStateManager::getReplacedState(ExecutionState* s) const
 	return NULL;
 }
 
-void ExeStateManager::compactStates(ExecutionState* &state, uint64_t maxMem)
+void ExeStateManager::compactStates(
+	ExecutionState* &state, unsigned toCompact)
 {
-	// compact instead of killing
 	std::vector<ExecutionState*> arr(nonCompactStateCount);
 	unsigned i = 0;
 
 	foreach (si, states.begin(), states.end()) {
-		if((*si)->isCompactForm) continue;
+		if ((*si)->isCompact())
+			continue;
 		arr[i++] = *si;
 	}
 
-	// a rough measure
-	unsigned s = nonCompactStateCount + ((size()-nonCompactStateCount)/16);
-	uint64_t mbs = getMemUsageMB();
-	unsigned toCompact = std::max(
-		(uint64_t)1, (uint64_t)s - s * maxMem / mbs);
-
-	toCompact = std::min(toCompact, (unsigned) nonCompactStateCount);
-	klee_warning("compacting %u states (over memory cap)", toCompact);
+	if (toCompact > nonCompactStateCount) {
+		toCompact = nonCompactStateCount / 2;
+	}
 
 	std::partial_sort(
 		arr.begin(),
@@ -208,25 +215,51 @@ void ExeStateManager::compactStates(ExecutionState* &state, uint64_t maxMem)
 		KillOrCompactOrdering());
 
 	for (i = 0; i < toCompact; ++i) {
-		ExecutionState* original = arr[i];
-		ExecutionState* compacted = original->compact();
+		ExecutionState* compacted;
 
-		compacted->coveredNew = false;
-		compacted->coveredLines.clear();
-		compacted->ptreeNode = original->ptreeNode;
-		replaceState(original, compacted);
-
-		if (state == original)
+		compacted = compactState(arr[i]);
+		if (state == arr[i])
 			state = compacted;
 	}
+}
+
+ExecutionState* ExeStateManager::compactState(ExecutionState* s)
+{
+	ExecutionState* compacted;
+
+	assert (s->isCompact() == false);
+
+	compacted = s->compact();
+	compacted->coveredNew = false;
+	compacted->ptreeNode = s->ptreeNode;
+
+	replaceState(s, compacted);
+
+	return compacted;
+}
+
+void ExeStateManager::compactPressureStates(
+	ExecutionState* &state, uint64_t maxMem)
+{
+	// compact instead of killing
+	// (a rough measure)
+	unsigned s = nonCompactStateCount + ((size()-nonCompactStateCount)/16);
+	uint64_t mbs = getMemUsageMB();
+	unsigned toCompact = std::max((uint64_t)1, (uint64_t)s - s*maxMem/mbs);
+
+	toCompact = std::min(toCompact, (unsigned) nonCompactStateCount);
+	klee_warning("compacting %u states (over memory cap)", toCompact);
+
+	compactStates(state, toCompact);
 }
 
 Searcher::States ExeStateManager::getStates(void) const
 {
 	if (yieldStates.size()) {
-		ExeStateSet	yieldAndRemove(removedStates);
-		yieldAndRemove.insert(yieldStates.begin(), yieldStates.end());
-		return Searcher::States(addedStates, yieldAndRemove);
+		allRemovedStates = yieldStates;
+		allRemovedStates.insert(
+			removedStates.begin(), removedStates.begin());
+		return Searcher::States(addedStates, allRemovedStates);
 	}
 
 	return Searcher::States(addedStates, removedStates);

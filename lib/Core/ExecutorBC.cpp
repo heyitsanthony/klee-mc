@@ -104,13 +104,13 @@ void ExecutorBC::runFunctionAsMain(
 
 	globals = new Globals(kmodule, state, externalDispatcher);
 
-	processTree = new PTree(state);
-	state->ptreeNode = processTree->root;
+	pathTree = new PTree(state);
+	state->ptreeNode = pathTree->root;
 
 	run(*state);
 
-	delete processTree;
-	processTree = 0;
+	delete pathTree;
+	pathTree = 0;
 
 	delete globals;
 	globals = NULL;

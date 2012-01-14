@@ -60,13 +60,13 @@ ExecutionState* PTree::removeState(
 	assert(es->ptreeNode->data == es);
 
 	ns = stateManager->getReplacedState(es);
-	if (!ns) {
+	if (ns == NULL) {
 		remove(es->ptreeNode);
 	} else {
 		// replace the placeholder state in the process tree
 		ns->ptreeNode = es->ptreeNode;
 		ns->ptreeNode->data = ns;
-		ns->ptreeNode->update(WeightCompact, !ns->isCompactForm);
+		ns->ptreeNode->update(WeightCompact, !ns->isCompact());
 	}
 
 	delete es;
@@ -87,7 +87,7 @@ void PTree::removeRoot(ExeStateManager* stateManager, ExecutionState* es)
 	// replace the placeholder state in the process tree
 	ns->ptreeNode = es->ptreeNode;
 	ns->ptreeNode->data = ns;
-	ns->ptreeNode->update(WeightCompact, !ns->isCompactForm);
+	ns->ptreeNode->update(WeightCompact, !ns->isCompact());
 	delete es;
 }
 
@@ -231,11 +231,11 @@ void PTree::splitStates(PTreeNode* n, ExecutionState* a, ExecutionState* b)
 	std::pair<PTreeNode*, PTreeNode*> res = split(n, a, b);
 
 	a->ptreeNode = res.first;
-	a->ptreeNode->update(PTree::WeightCompact, !a->isCompactForm);
-	//  processTree->update(a->ptreeNode, PTree::WeightRunning, !a->isRunning);
+	a->ptreeNode->update(PTree::WeightCompact, !a->isCompact());
+	// update(a->ptreeNode, PTree::WeightRunning, !a->isRunning);
 	b->ptreeNode = res.second;
-	b->ptreeNode->update(WeightCompact, !b->isCompactForm);
-	//  processTree->update(b->ptreeNode, PTree::WeightRunning, !b->isRunning);
+	b->ptreeNode->update(WeightCompact, !b->isCompact());
+	//  update(b->ptreeNode, PTree::WeightRunning, !b->isRunning);
 }
 
 void PTreeNode::propagateSumsUp(void)

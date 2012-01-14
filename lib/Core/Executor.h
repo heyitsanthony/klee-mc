@@ -152,6 +152,8 @@ private:
   static void deleteTimerInfo(TimerInfo*&);
   void runLoop(void);
   void handleMemoryUtilization(ExecutionState* &state);
+  void handleMemoryPID(ExecutionState* &state);
+
 
 protected:
   KModule	*kmodule;
@@ -217,7 +219,7 @@ protected:
   llvm::TargetData* target_data;
   llvm::Function* dbgStopPointFn;
   StatsTracker *statsTracker;
-  PTree *processTree;
+  PTree *pathTree;
   TreeStreamWriter *symPathWriter;
   TimingSolver *solver;
 
@@ -344,11 +346,10 @@ private:
   void printFileLine(ExecutionState &state, KInstruction *ki);
 
   void replayPathsIntoStates(ExecutionState& initialState);
-  void runState(ExecutionState* &state);
+  void stepStateInst(ExecutionState* &state);
   void killStates(ExecutionState* &state);
-  void compactStates(ExecutionState* &state);
   bool seedRun(ExecutionState& initialState);
-  void seedRunOne(ExecutionState* &lastState);
+  void stepSeedInst(ExecutionState* &lastState);
   void notifyCurrent(ExecutionState *current);
 
   typedef std::vector<SeedInfo>::iterator SeedInfoIterator;

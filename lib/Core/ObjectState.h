@@ -30,6 +30,8 @@ private:
 	// mutable because we may need flush during read of const
 	mutable UpdateList	updates;
 
+	static unsigned		numObjStates;
+
 
 public:
 	unsigned	size;
@@ -47,6 +49,8 @@ public:
 
 	ObjectState(const ObjectState &os);
 	~ObjectState();
+
+	static unsigned getNumObjStates(void) { return numObjStates; }
 
 	const MemoryObject *getObject() const { return object; }
 	MemoryObject* getObject(void)

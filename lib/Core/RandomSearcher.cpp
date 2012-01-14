@@ -21,7 +21,7 @@ void RandomSearcher::update(ExecutionState *current, const States s)
 	states.insert(states.end(), s.getAdded().begin(), s.getAdded().end());
 
 	foreach (it, s.getAdded().begin(), s.getAdded().end()) {
-		if (!(*it)->isCompactForm)
+		if (!(*it)->isCompact())
 			statesNonCompact.push_back(*it);
 	}
 
@@ -33,7 +33,7 @@ void RandomSearcher::update(ExecutionState *current, const States s)
 		assert(it2 != states.end() && "invalid state removed");
 		states.erase(it2);
 
-		if (!es->isCompactForm)
+		if (!es->isCompact())
 			continue;
 
 		it2 = std::find(

@@ -117,7 +117,7 @@ void StringMerger::buildArrExprList(
 {
   ConstraintManager* cons_man = &s->constraints;
 
-  if (s->isCompactForm) return;
+  if (s->isCompact()) return;
 
   foreach (it, cons_man->begin(), cons_man->end()) {
     std::string arr_name;

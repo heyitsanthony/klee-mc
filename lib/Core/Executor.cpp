@@ -93,6 +93,11 @@ namespace {
 	cl::init(0));
 
   cl::opt<bool>
+  UsePID("use-pid",
+	 cl::desc("Use proportional-integral-derivative state control"),
+	 cl::init(false));
+
+  cl::opt<bool>
   ChkConstraints("chk-constraints", cl::init(false));
 
   cl::opt<bool>
@@ -110,7 +115,6 @@ namespace {
   cl::opt<bool>
   DebugPrintInstructions("debug-print-instructions",
                          cl::desc("Print instructions during execution."));
-
   cl::opt<bool>
   DebugCheckForImpliedValues("debug-check-for-implied-values");
 
@@ -134,7 +138,7 @@ namespace {
 
   cl::opt<bool>
   OnlySeed("only-seed",
-           cl::desc("Stop execution after seeding is done without doing regular search."));
+           cl::desc("Stop execution after seeding is done."));
 
   cl::opt<bool>
   AllowSeedExtension("allow-seed-extension",
@@ -214,8 +218,10 @@ namespace {
             cl::init(false));
 
   cl::opt<bool>
-  ReplayInhibitedForks("replay-inhibited-forks",
-            cl::desc("When forking is inhibited, replay the inhibited path as a new state"));
+  ReplayInhibitedForks(
+  	"replay-inhibited-forks",
+        cl::desc("Replay fork inhibited path as new state"),
+	cl::init(false));
 
   cl::opt<bool>
   AllExternalWarnings("all-external-warnings");
@@ -267,7 +273,7 @@ Executor::Executor(InterpreterHandler *ih)
 , interpreterHandler(ih)
 , target_data(0)
 , statsTracker(0)
-, processTree(0)
+, pathTree(0)
 , symPathWriter(0)
 , replayOut(0)
 , replayPaths(0)
@@ -303,7 +309,7 @@ Executor::~Executor()
 	delete stateManager;
 	delete mmu;
 	delete memory;
-	if (processTree) delete processTree;
+	if (pathTree) delete pathTree;
 	if (statsTracker) delete statsTracker;
 	delete solver;
 	ExeStateBuilder::replaceBuilder(NULL);
@@ -446,7 +452,7 @@ bool Executor::forkFollowReplay(ExecutionState& current, struct ForkInfo& fi)
 
 bool Executor::forkSetupNoSeeding(ExecutionState& current, struct ForkInfo& fi)
 {
-	if (!fi.isInternal && current.isCompactForm) {
+	if (!fi.isInternal && current.isCompact()) {
 		// Can't fork compact states; sanity check
 		assert(false && "invalid state");
 	}
@@ -718,7 +724,7 @@ void Executor::makeForks(ExecutionState& current, struct ForkInfo& fi)
 			? current.branchForReplay()
 			: current.branch();
 
-		stateManager->add(newState);
+		stateManager->queueAdd(newState);
 		fi.resStates[condIndex] = newState;
 
 		// Split pathWriter stream
@@ -738,7 +744,7 @@ void Executor::makeForks(ExecutionState& current, struct ForkInfo& fi)
 
 		// Update path tree with new states
 		current.ptreeNode->data = 0;
-		processTree->splitStates(current.ptreeNode, baseState, newState);
+		pathTree->splitStates(current.ptreeNode, baseState, newState);
 	}
 }
 
@@ -756,7 +762,7 @@ void Executor::constrainFork(
 	assert(curState);
 
 	// Add path constraint
-	if (!curState->isCompactForm && fi.feasibleTargets > 1) {
+	if (!curState->isCompact() && fi.feasibleTargets > 1) {
 		bool	constraint_added;
 
 		constraint_added = addConstraint(
@@ -928,21 +934,20 @@ ref<Expr> Executor::toUnique(
 	const ExecutionState &state,
 	ref<Expr> &e)
 {
-	ref<Expr> result = e;
 	ref<ConstantExpr> value;
 	bool isTrue = false;
 
 	if (isa<ConstantExpr>(e))
-		return result;
+		return e;
 
 	if (	solver->getValue(state, e, value) &&
 		solver->mustBeTrue(state, EqExpr::create(e, value), isTrue) &&
 		isTrue)
 	{
-		result = value;
+		return value;
 	}
 
-	return result;
+	return e;
 }
 
 /* Concretize the given expression, and return a possible constant value.
@@ -985,14 +990,14 @@ Executor::toConstant(
 }
 
 bool Executor::getSeedInfoIterRange(
-  ExecutionState* s, SeedInfoIterator &b, SeedInfoIterator& e)
+	ExecutionState* s, SeedInfoIterator &b, SeedInfoIterator& e)
 {
-  std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it;
-  it = seedMap.find(s);
-  if (it == seedMap.end()) return false;
-  b = it->second.begin();
-  e = it->second.end();
-  return false;
+	std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it;
+	it = seedMap.find(s);
+	if (it == seedMap.end()) return false;
+	b = it->second.begin();
+	e = it->second.end();
+	return false;
 }
 
 void Executor::executeGetValue(
@@ -1000,46 +1005,46 @@ void Executor::executeGetValue(
 	ref<Expr> e,
 	KInstruction *target)
 {
-  bool              isSeeding;
-  SeedInfoIterator  si_begin, si_end;
+	bool              isSeeding;
+	SeedInfoIterator  si_begin, si_end;
 
-  e = state.constraints.simplifyExpr(e);
-  isSeeding = getSeedInfoIterRange(&state, si_begin, si_end);
+	e = state.constraints.simplifyExpr(e);
+	isSeeding = getSeedInfoIterRange(&state, si_begin, si_end);
 
-  if (!isSeeding || isa<ConstantExpr>(e)) {
-    ref<ConstantExpr> value;
-    bool success = solver->getValue(state, e, value);
-    assert(success && "FIXME: Unhandled solver failure");
-    (void) success;
-    if (target) state.bindLocal(target, value);
-    return;
-  }
+	if (!isSeeding || isa<ConstantExpr>(e)) {
+		ref<ConstantExpr> value;
+		bool ok = solver->getValue(state, e, value);
+		assert(ok && "FIXME: Unhandled solver failure");
+		if (target) state.bindLocal(target, value);
+		return;
+	}
 
-  std::set< ref<Expr> > values;
-  foreach (siit, si_begin, si_end) {
-    ref<ConstantExpr> value;
-    bool success =
-      solver->getValue(state, siit->assignment.evaluate(e), value);
-    assert(success && "FIXME: Unhandled solver failure");
-    (void) success;
-    values.insert(value);
-  }
+	std::set< ref<Expr> > values;
+	foreach (siit, si_begin, si_end) {
+		ref<ConstantExpr> value;
+		bool		ok;
 
-  std::vector< ref<Expr> > conditions;
-  foreach (vit, values.begin(), values.end())
-    conditions.push_back(EqExpr::create(e, *vit));
+		ok = solver->getValue(state, siit->assignment.evaluate(e), value);
+		assert(ok && "FIXME: Unhandled solver failure");
 
-  StateVector branches;
-  branches = fork(state, conditions.size(), conditions.data(), true);
-  if (!target) return;
+		values.insert(value);
+	}
 
-  StateVector::iterator bit = branches.begin();
+	std::vector< ref<Expr> > conditions;
+	foreach (vit, values.begin(), values.end())
+		conditions.push_back(EqExpr::create(e, *vit));
 
-  foreach (vit, values.begin(), values.end()) {
-    ExecutionState *es = *bit;
-    if (es) es->bindLocal(target, *vit);
-    ++bit;
-  }
+	StateVector branches;
+	branches = fork(state, conditions.size(), conditions.data(), true);
+	if (!target) return;
+
+	StateVector::iterator bit = branches.begin();
+
+	foreach (vit, values.begin(), values.end()) {
+		ExecutionState *es = *bit;
+		if (es) es->bindLocal(target, *vit);
+		++bit;
+	}
 }
 
 void Executor::stepInstruction(ExecutionState &state)
@@ -1464,12 +1469,12 @@ void Executor::finalizeBranch(
 	if (st == NULL) return;
 
 	kf = st->getCurrentKFunc();
+
 	// reconstitute the state if it was forked into compact form but will
 	// immediately cover a new instruction
 	// !!! this can be done more efficiently by simply forking a regular
 	// state inside fork() but that will change the fork() semantics
-
-	if (	st->isCompactForm &&
+	if (	st->isCompact() &&
 		kf->trackCoverage &&
 		theStatisticManager->getIndexedValue(
 			stats::uncoveredInstructions,
@@ -1482,7 +1487,7 @@ void Executor::finalizeBranch(
 		st = newState;
 	}
 
-//	if (st->isCompactForm == false)
+//	if (st->isCompact() == false)
 	st->transferToBasicBlock(
 		bi->getSuccessor(branchIdx),
 		bi->getParent());
@@ -1820,7 +1825,7 @@ void Executor::forkSwitch(
 		kf = state.getCurrentKFunc();
 
 		entry = kf->getBasicBlockEntry(destBlock);
-		if (	es->isCompactForm &&
+		if (	es->isCompact() &&
 			kf->trackCoverage &&
 			theStatisticManager->getIndexedValue(
 				stats::uncoveredInstructions,
@@ -1832,7 +1837,7 @@ void Executor::forkSwitch(
 			es = newState;
 		}
 
-		if (!es->isCompactForm)
+		if (!es->isCompact())
 			es->transferToBasicBlock(destBlock, parent_bb);
 
 		// Update coverage stats
@@ -2684,13 +2689,13 @@ void Executor::removePTreeState(
 	it3 = seedMap.find(es);
 	if (it3 != seedMap.end()) seedMap.erase(it3);
 
-	root = processTree->removeState(stateManager, es);
+	root = pathTree->removeState(stateManager, es);
 	if (root != NULL) *root_to_be_removed = root;
 }
 
 void Executor::removeRoot(ExecutionState* es)
 {
-	processTree->removeRoot(stateManager, es);
+	pathTree->removeRoot(stateManager, es);
 }
 
 void Executor::killStates(ExecutionState* &state)
@@ -2719,28 +2724,70 @@ void Executor::killStates(ExecutionState* &state)
   klee_message("Killed %u states.", toKill);
 }
 
-void Executor::runState(ExecutionState* &state)
+void Executor::stepStateInst(ExecutionState* &state)
 {
-  state->lastChosen = stats::instructions;
+	state->lastChosen = stats::instructions;
 
-  KInstruction *ki = state->pc;
-  assert(ki);
+	KInstruction *ki = state->pc;
+	assert(ki);
 
-  stepInstruction(*state);
-  executeInstruction(*state, ki);
-  processTimers(state, MaxInstructionTime);
-  handleMemoryUtilization(state);
+	stepInstruction(*state);
+	executeInstruction(*state, ki);
+	processTimers(state, MaxInstructionTime);
 }
 
 void Executor::handleMemoryUtilization(ExecutionState* &state)
 {
+	uint64_t mbs;
+
 	if (!(MaxMemory && (stats::instructions & 0xFFFF) == 0))
 		return;
 
 	// We need to avoid calling GetMallocUsage() often because it
 	// is O(elts on freelist). This is really bad since we start
 	// to pummel the freelist once we hit the memory cap.
-	uint64_t mbs = getMemUsageMB();
+	mbs = getMemUsageMB();
+
+	if (UsePID && MaxMemory) {
+#define K_P	0.1	/* 400MB/2000 states */
+#define K_D	0.1	/* damping factor-- damp changes in errors */
+#define K_I	0.01	/* systematic error-- negative while ramping  */
+		unsigned		nonCompact_c;
+		int			states_to_gen;
+		int64_t			err;
+		static int64_t		err_sum = 0;
+		static int64_t		last_err = 0;
+		static uint64_t		last_mbs = 0;
+
+		nonCompact_c = stateManager->getNonCompactStateCount();
+		err = MaxMemory - mbs;
+
+		std::cerr << "MBS=" << mbs << '\n';
+		std::cerr << "K_P: " << K_P*err << '\n';
+		std::cerr << "K_D: " << K_D*(err-last_err) << '\n';
+		std::cerr << "K_I: " << K_I*(err_sum) << '\n';
+
+		states_to_gen =
+			K_P*err +
+			K_D*(err - last_err) +
+			K_I*(err_sum);
+
+		err_sum += err;
+		last_err = err;
+		last_mbs = mbs;
+
+		std::cerr << "=========STATESTOGEN=" << states_to_gen << "\n";
+		if (states_to_gen < 0) {
+			std::cerr << "KILLED!! MBS=" << mbs << '\n';
+			std::cerr << "KILL IT!! REMOVESTATES="
+				<< states_to_gen << "\n";
+			onlyNonCompact = false;
+			stateManager->compactStates(state, -states_to_gen);
+			std::cerr << "NEW MBS=" << getMemUsageMB() << '\n';
+		}
+
+		return;
+	}
 
 	if (mbs < 0.9*MaxMemory) {
 		atMemoryLimit = false;
@@ -2756,7 +2803,7 @@ void Executor::handleMemoryUtilization(ExecutionState* &state)
 	if (mbs <= MaxMemory + 100) return;
 
 	/* Ran memory to the roof. FLIP OUT. */
-	if 	(!ReplayInhibitedForks ||
+	if 	(ReplayInhibitedForks == false ||
 		/* resort to killing states if the recent compacting
 		didn't help to reduce the memory usage */
 		stats::instructions-
@@ -2764,28 +2811,28 @@ void Executor::handleMemoryUtilization(ExecutionState* &state)
 	{
 		killStates(state);
 	} else {
-		stateManager->compactStates(state, MaxMemory);
+		stateManager->compactPressureStates(state, MaxMemory);
 	}
 
 	lastMemoryLimitOperationInstructions = stats::instructions;
 }
 
-void Executor::seedRunOne(ExecutionState* &lastState)
+void Executor::stepSeedInst(ExecutionState* &lastState)
 {
-  std::map<ExecutionState*, std::vector<SeedInfo> >::iterator it;
+	std::map<ExecutionState*, std::vector<SeedInfo> >::iterator it;
 
-  it = seedMap.upper_bound(lastState);
-  if (it == seedMap.end()) it = seedMap.begin();
-  lastState = it->first;
+	it = seedMap.upper_bound(lastState);
+	if (it == seedMap.end()) it = seedMap.begin();
+	lastState = it->first;
 
-  unsigned numSeeds = it->second.size();
-  ExecutionState &state = *lastState;
-  KInstruction *ki = state.pc;
+	unsigned numSeeds = it->second.size();
+	ExecutionState &state = *lastState;
+	KInstruction *ki = state.pc;
 
-  stepInstruction(state);
-  executeInstruction(state, ki);
-  processTimers(&state, MaxInstructionTime * numSeeds);
-  notifyCurrent(&state);
+	stepInstruction(state);
+	executeInstruction(state, ki);
+	processTimers(&state, MaxInstructionTime * numSeeds);
+	notifyCurrent(&state);
 }
 
 bool Executor::seedRun(ExecutionState& initialState)
@@ -2802,7 +2849,7 @@ bool Executor::seedRun(ExecutionState& initialState)
   while (!seedMap.empty() && !haltExecution) {
     double time;
 
-    seedRunOne(lastState);
+    stepSeedInst(lastState);
 
     /* every 1000 instructions, check timeouts, seed counts */
     if ((stats::instructions % 1000) != 0) continue;
@@ -2841,9 +2888,9 @@ void Executor::replayPathsIntoStates(ExecutionState& initialState)
 	foreach (it, replayPaths->begin(), replayPaths->end()) {
 		ExecutionState *newState;
 		newState = ExecutionState::createReplay(initialState, (*it));
-		processTree->splitStates(
+		pathTree->splitStates(
 			newState->ptreeNode, &initialState, newState);
-		stateManager->add(newState);
+		stateManager->queueAdd(newState);
 	}
 }
 
@@ -2890,31 +2937,38 @@ done:
 
 void Executor::runLoop(void)
 {
-  while (!stateManager->empty() && !haltExecution) {
-    ExecutionState *state = stateManager->selectState(!onlyNonCompact);
+	while (!stateManager->empty() && !haltExecution) {
+		ExecutionState *state;
 
-    assert (state != NULL && "State man not empty, but selectState is?");
-    /* decompress state if compact */
-    if (state->isCompactForm) {
-      ExecutionState* newState = state->reconstitute(*initialStateCopy);
-      stateManager->replaceState(state, newState);
-      notifyCurrent(state);
-      state = newState;
-    }
+		state = stateManager->selectState(!onlyNonCompact);
+		assert (state != NULL &&
+			"State man not empty, but selectState is?");
 
-    runState(state);
-    notifyCurrent(state);
-  }
+		/* decompress state if compact */
+		if (state->isCompact()) {
+			ExecutionState* newState;
+
+			newState = state->reconstitute(*initialStateCopy);
+			stateManager->replaceState(state, newState);
+			notifyCurrent(state);
+			state = newState;
+		}
+
+		stepStateInst(state);
+
+		handleMemoryUtilization(state);
+		notifyCurrent(state);
+	}
 }
 
 void Executor::notifyCurrent(ExecutionState* current)
 {
-  stateManager->notifyCurrent(this, current);
-  if (stateManager->getNonCompactStateCount() == 0
-    && !stateManager->empty())
-  {
-    onlyNonCompact = false;
-  }
+	stateManager->commitQueue(this, current);
+	if (	stateManager->getNonCompactStateCount() == 0
+		&& !stateManager->empty())
+	{
+		onlyNonCompact = false;
+	}
 }
 
 std::string Executor::getAddressInfo(
@@ -2961,7 +3015,7 @@ void Executor::terminateState(ExecutionState &state)
 
 	if (!stateManager->isAddedState(&state)) {
 		state.pc = state.prevPC;
-		stateManager->remove(&state); /* put on remove list */
+		stateManager->queueRemove(&state);
 		return;
 	}
 
@@ -2969,8 +3023,9 @@ void Executor::terminateState(ExecutionState &state)
 	std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it3;
 	it3 = seedMap.find(&state);
 	if (it3 != seedMap.end()) seedMap.erase(it3);
+
 	stateManager->dropAdded(&state);
-	processTree->remove(state.ptreeNode);
+	pathTree->remove(state.ptreeNode);
 	delete &state;
 }
 
@@ -3114,18 +3169,18 @@ ObjectState* Executor::makeSymbolic(
   ref<Expr> len,
   const char* arrPrefix)
 {
-  static unsigned	id = 0;
-  ObjectState*		os;
-  Array*		array;
+	static unsigned	id = 0;
+	ObjectState	*os;
+	Array		*array;
 
-  array = new Array(arrPrefix + llvm::utostr(++id), mo->mallocKey, 0, 0);
-  array->initRef();
-  os = state.bindMemObj(mo, array);
-  state.addSymbolic(const_cast<MemoryObject*>(mo) /* yuck */, array);
+	array = new Array(arrPrefix + llvm::utostr(++id), mo->mallocKey, 0, 0);
+	array->initRef();
+	os = state.bindMemObj(mo, array);
+	state.addSymbolic(const_cast<MemoryObject*>(mo) /* yuck */, array);
 
-  addSymbolicToSeeds(state, mo, array);
+	addSymbolicToSeeds(state, mo, array);
 
-  return os;
+	return os;
 }
 
 void Executor::addSymbolicToSeeds(

@@ -8,7 +8,7 @@ ExecutionState &BFSSearcher::selectState(bool allowCompact)
 {
 	foreach (it, states.begin(), states.end()) {
 		ExecutionState* es = *it;
-		if (!allowCompact && es->isCompactForm)
+		if (!allowCompact && es->isCompact())
 			continue;
 
 		// requeue the state at the back of the queue

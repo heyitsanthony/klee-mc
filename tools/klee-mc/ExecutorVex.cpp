@@ -234,8 +234,8 @@ ExecutionState* ExecutorVex::setupInitialStateEntry(uint64_t entry_addr)
 
 	if (SymArgs) makeArgsSymbolic(state);
 
-	processTree = new PTree(state);
-	state->ptreeNode = processTree->root;
+	pathTree = new PTree(state);
+	state->ptreeNode = pathTree->root;
 
 
 	return state;
@@ -262,8 +262,8 @@ void ExecutorVex::runImage(void)
 
 void ExecutorVex::cleanupImage(void)
 {
-	delete processTree;
-	processTree = NULL;
+	delete pathTree;
+	pathTree = NULL;
 
 	// hack to clear memory objects
 	delete memory;

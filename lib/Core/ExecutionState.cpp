@@ -53,6 +53,7 @@ namespace {
 ExecutionState::ExecutionState(KFunction *kf)
 : num_allocs(0)
 , prev_constraint_hash(0)
+, isCompactForm(false)
 , underConstrained(false)
 , depth(0)
 , weight(1)
@@ -62,7 +63,6 @@ ExecutionState::ExecutionState(KFunction *kf)
 , instsSinceCovNew(0)
 , lastChosen(0)
 , coveredNew(false)
-, isCompactForm(false)
 , isReplay(false)
 , forkDisabled(false)
 , ptreeNode(0)
@@ -74,11 +74,11 @@ ExecutionState::ExecutionState(KFunction *kf)
 ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
 : num_allocs(0)
 , prev_constraint_hash(0)
+, isCompactForm(false)
 , underConstrained(false)
 , constraints(assumptions)
 , queryCost(0.)
 , lastChosen(0)
-, isCompactForm(false)
 , isReplay(false)
 , ptreeNode(0)
 {
@@ -88,10 +88,10 @@ ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
 ExecutionState::ExecutionState(void)
 : num_allocs(0)
 , prev_constraint_hash(0)
+, isCompactForm(false)
 , underConstrained(0)
 , lastChosen(0)
 , coveredNew(false)
-, isCompactForm(false)
 , isReplay(false)
 , ptreeNode(0)
 {
@@ -127,7 +127,6 @@ ExecutionState *ExecutionState::branchForReplay(void)
 
 	newState = compact();
 	newState->coveredNew = false;
-	newState->coveredLines.clear();
 
 	return newState;
 }
@@ -144,6 +143,7 @@ void ExecutionState::compact(ExecutionState* newState) const
 	newState->isCompactForm = true;
 	newState->branchDecisionsSequence = branchDecisionsSequence;
 	newState->weight = weight;
+	newState->coveredLines.clear();
 
 	// necessary for WeightedRandomSearcher?
 	newState->pc = pc;

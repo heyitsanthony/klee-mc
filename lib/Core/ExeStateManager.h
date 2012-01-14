@@ -14,7 +14,6 @@ typedef std::map<ExecutionState*, ExecutionState*> ExeStateReplaceMap;
 
 class ExeStateManager
 {
-friend class Seacher;
 private:
   ExeStateSet states;
   ExeStateSet::size_type nonCompactStateCount;
@@ -29,6 +28,10 @@ private:
   /// \invariant \ref removedStates is a subset of \ref states. 
   /// \invariant \ref addedStates and \ref removedStates are disjoint.
   ExeStateSet removedStates;
+
+  // used when we need to remove yielded states + normal removed states
+  mutable ExeStateSet allRemovedStates;
+
   /// Used to track states that have been replaced during the current
   /// instructions step. 
   /// \invariant \ref replacedStates is a subset of \ref states U addedStates. 
@@ -46,14 +49,14 @@ private:
 public:
   ExeStateManager();
   virtual ~ExeStateManager();
-  void notifyCurrent(Executor* exe, ExecutionState* current);
+  void commitQueue(Executor* exe, ExecutionState* current);
 
   ExeStateSet::const_iterator begin(void) { return states.begin(); }
   ExeStateSet::const_iterator end(void) { return states.end(); }
 
   void dropAdded(ExecutionState* es);
-  void add(ExecutionState* es);
-  void remove(ExecutionState* s);
+  void queueAdd(ExecutionState* es);
+  void queueRemove(ExecutionState* s);
   void yield(ExecutionState* s);
 
   void setInitialState(
@@ -62,10 +65,14 @@ public:
   void replaceState(ExecutionState* old_s, ExecutionState* new_s);
   void replaceStateImmediate(ExecutionState* old_s, ExecutionState* new_s);
   ExecutionState* getReplacedState(ExecutionState* s) const;
-  void compactStates(ExecutionState* &state, uint64_t maxMem);
+
+  void compactPressureStates(ExecutionState* &state, uint64_t maxMem);
+  void compactStates(ExecutionState* &state, unsigned numToCompact);
+  ExecutionState* compactState(ExecutionState* state);
+
 
   bool empty(void) const { return states.empty(); }
-  unsigned int size(void) const { return states.size(); }
+  unsigned int size(void) const { return states.size() + yieldedStates.size(); }
   unsigned int numRemovedStates(void) const { return removedStates.size(); }
   bool isRemovedState(ExecutionState* s) const;
   bool isAddedState(ExecutionState* s) const;

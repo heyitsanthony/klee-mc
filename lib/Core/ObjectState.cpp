@@ -19,6 +19,8 @@
 using namespace klee;
 using namespace llvm;
 
+unsigned ObjectState::numObjStates = 0;
+
 ObjectState::ObjectState(const MemoryObject *mo)
 : src_array(0)
 , copyOnWriteOwner(0)
@@ -33,8 +35,8 @@ ObjectState::ObjectState(const MemoryObject *mo)
 , readOnly(false)
 {
 	memset(concreteStore, 0, mo->size);
+	numObjStates++;
 }
-
 
 ObjectState::ObjectState(const MemoryObject *mo, const Array *array)
 : src_array(array)
@@ -51,6 +53,7 @@ ObjectState::ObjectState(const MemoryObject *mo, const Array *array)
 {
 	memset(concreteStore, 0, mo->size);
 	makeSymbolic();
+	numObjStates++;
 }
 
 ObjectState::ObjectState(const ObjectState &os)
@@ -75,6 +78,8 @@ ObjectState::ObjectState(const ObjectState &os)
 	}
 
 	memcpy(concreteStore, os.concreteStore, size*sizeof(*concreteStore));
+
+	numObjStates++;
 }
 
 ObjectState::~ObjectState()
@@ -88,6 +93,8 @@ ObjectState::~ObjectState()
 	flushMask = NULL;
 	knownSymbolics = NULL;
 	concreteStore = NULL;
+
+	numObjStates--;
 }
 
 const UpdateList &ObjectState::getUpdates() const

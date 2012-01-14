@@ -15,7 +15,7 @@ ExecutionState &RRSearcher::selectState(bool allowCompact)
 	while (cur_state != states.end()) {
 		ExecutionState* es = *cur_state;
 		cur_state++;
-		if (!allowCompact && es->isCompactForm) continue;
+		if (!allowCompact && es->isCompact()) continue;
 		return *es;
 	}
 

@@ -99,6 +99,10 @@ private:
 
 	uint64_t	prev_constraint_hash;
 
+	// true iff this state is a mere placeholder
+	// to be replaced by a real state
+	bool			isCompactForm;
+
 public:
 	typedef std::vector<StackFrame> stack_ty;
 
@@ -125,9 +129,6 @@ public:
 	std::vector<ref<MemoryObject> > memObjects;
 
 	bool			coveredNew;
-	// true iff this state is a mere placeholder
-	// to be replaced by a real state
-	bool			isCompactForm;
 	bool			isReplay; /* started in replay mode? */
 	ExecutionTraceManager	exeTraceMgr;	/* prints traces on exit */
 
@@ -138,8 +139,8 @@ public:
 
 
 	// for use with std::mem_fun[_ref] since they don't accept data members
-	bool isCompactForm_f() const { return isCompactForm; }
-	bool isNonCompactForm_f() const { return !isCompactForm; }
+	bool isCompact() const { return isCompactForm; }
+	bool isNonCompact() const { return !isCompactForm; }
 
 	unsigned int getNumAllocs(void) const { return num_allocs; }
 

@@ -48,7 +48,7 @@ ExecutionState &WeightedRandomSearcher::selectState(bool allowCompact)
 
 double WeightedRandomSearcher::getWeight(ExecutionState *es)
 {
-	if (es->isCompactForm || es->isReplayDone() == false)
+	if (es->isCompact() || es->isReplayDone() == false)
 		return es->weight;
 
 	switch (type) {
@@ -123,7 +123,7 @@ void WeightedRandomSearcher::update(ExecutionState *current, const States s)
 
 	foreach (it, s.getAdded().begin(), s.getAdded().end()) {
 		ExecutionState *es = *it;
-		states->insert(es, getWeight(es), es->isCompactForm);
+		states->insert(es, getWeight(es), es->isCompact());
 	}
 
 	foreach (it, s.getRemoved().begin(), s.getRemoved().end())

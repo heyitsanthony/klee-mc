@@ -156,7 +156,7 @@ void Executor::processTimers(ExecutionState *current,
     sprintf(name, "ptree%08d.dot", (int) stats::instructions);
     std::ostream *os = interpreterHandler->openOutputFile(name);
     if (os) {
-      processTree->dump(*os);
+      pathTree->dump(*os);
       delete os;
     }
 

@@ -25,7 +25,7 @@ ExecutionState &DFSSearcher::selectState(bool allowCompact)
 {
   foreach (i, states.rbegin(), states.rend()) {
     ExecutionState* es = *i;
-    if (!allowCompact && es->isCompactForm) continue;
+    if (!allowCompact && es->isCompact()) continue;
     return *es;
   }
   // no non-compact [if !allowCompact]) states remain

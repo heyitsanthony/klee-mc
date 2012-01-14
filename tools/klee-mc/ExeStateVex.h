@@ -23,10 +23,20 @@ private:
 	unsigned int	syscall_c;
 
 protected:
-	ExeStateVex() {}
-  	ExeStateVex(KFunction *kf) : ExecutionState(kf) {}
+	ExeStateVex()
+	: reg_mo(NULL)
+	, syscall_c(0) {}
+
+	ExeStateVex(KFunction *kf)
+	: ExecutionState(kf)
+	, reg_mo(NULL)
+	, syscall_c(0) {}
+
 	ExeStateVex(const std::vector<ref<Expr> > &assumptions)
-	: ExecutionState(assumptions) {}
+	: ExecutionState(assumptions)
+	, reg_mo(NULL)
+	, syscall_c(0) {}
+
 	ExeStateVex(const ExeStateVex& src);
 
 public:
