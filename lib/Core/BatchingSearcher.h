@@ -32,12 +32,14 @@ public:
 
 	ExecutionState &selectState(bool allowCompact);
 	void update(ExecutionState *current, States s);
-	bool empty() const { return baseSearcher->empty(); }
+	bool empty() const;
 
 	void printName(std::ostream &os) const {
-		os << "<BatchingSearcher> timeBudget: " << timeBudget
-		 << ", instructionBudget: " << instructionBudget
-		 << ", baseSearcher:\n";
+		os << "<BatchingSearcher> timeBudget: "
+		<< timeBudget
+		<< ", instructionBudget: " << instructionBudget
+		<< ", baseSearcher:\n";
+
 		baseSearcher->printName(os);
 		os << "</BatchingSearcher>\n";
 	}

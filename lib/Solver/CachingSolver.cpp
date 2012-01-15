@@ -20,6 +20,8 @@
 
 using namespace klee;
 
+unsigned g_cachingsolver_sz = 0;
+
 class CachingSolver : public SolverImplWrapper
 {
 private:
@@ -123,6 +125,8 @@ bool CachingSolver::cacheLookup(
   return false;
 }
 
+#define CACHE_WATERMARK	2000
+
 /// Inserts the given query, result pair into the cache.
 void CachingSolver::cacheInsert(const Query& query,
                                 IncompleteSolver::PartialValidity result) {
@@ -133,7 +137,10 @@ void CachingSolver::cacheInsert(const Query& query,
   IncompleteSolver::PartialValidity cachedResult = 
     (negationUsed ? IncompleteSolver::negatePartialValidity(result) : result);
   
+  if (cache.size() > CACHE_WATERMARK)
+    cache.clear();
   cache.insert(std::make_pair(ce, cachedResult));
+  g_cachingsolver_sz = cache.size();
 }
 
 

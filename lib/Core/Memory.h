@@ -33,31 +33,36 @@ class Solver;
 class HeapMM;
 
 class HeapObject {
-  friend class ref<HeapObject>;
+	friend class ref<HeapObject>;
 
 public:
-  static HeapMM* memoryManager;
+	static HeapMM* memoryManager;
 
 private:
-  friend class HeapMM;
-  friend class UpdateList;
+	friend class HeapMM;
+	friend class UpdateList;
 
-  unsigned size;
-  uint64_t address;
-  unsigned align;
-  mutable unsigned refCount;
+	unsigned size;
+	uint64_t address;
+	unsigned align;
+	mutable unsigned refCount;
+
+	static unsigned long count;
 
 public:
-  HeapObject(unsigned _size, unsigned _align=0);
-  ~HeapObject();
+	HeapObject(unsigned _size, unsigned _align=0);
+	~HeapObject();
 
-  static std::vector<HeapObject*> contiguousPages(unsigned int bytes);
+	static std::vector<HeapObject*> contiguousPages(unsigned int bytes);
+	static unsigned long getNumHeapObjs(void) { return count; }
 protected:
-  HeapObject(void* page_addr);	// page constructor
+	// page constructor
+	HeapObject(void* page_addr);
 };
 
 #include "MemoryObject.h"
 #include "ObjectState.h"
-} // End klee namespace
+
+}
 
 #endif

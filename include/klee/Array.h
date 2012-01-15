@@ -18,6 +18,7 @@ private:
   // hash cons for Array objects
   typedef std::set<Array*, ArrayLT> ArrayHashCons;
   static ArrayHashCons arrayHashCons;
+  static unsigned count;
 
 public:
   const std::string name;
@@ -35,6 +36,7 @@ public:
   unsigned int getSize(void) const { return mallocKey.size; }
 
   static Array* uniqueArray(Array* arr);
+  static unsigned getNumArrays(void) { return count; }
 public:
   /// Array - Construct a new array object.
   ///

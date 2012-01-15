@@ -39,6 +39,7 @@ if (MemoryManager::is32Bit()) {	\
 	assert ((x & ~((uint64_t)0xffffffff)) == 0);	\
 }
 
+unsigned long HeapObject::count = 0;
 
 HeapMM* HeapObject::memoryManager = NULL;
 
@@ -57,6 +58,7 @@ HeapObject::HeapObject(unsigned _size, unsigned _align)
 , align(_align)
 , refCount(0)
 {
+	count++;
 	if (!align) {
 		address = (uint64_t) (unsigned long) malloc((unsigned) size);
 		CHK_32BIT_ADDR(address);
@@ -78,6 +80,8 @@ HeapObject::HeapObject(unsigned _size, unsigned _align)
 
 HeapObject::~HeapObject()
 {
+	count--;
+
 	if (memoryManager != NULL) {
 		memoryManager->dropHeapObj(this);
 	}
@@ -119,6 +123,7 @@ HeapObject::HeapObject(void* page_addr)
 , align(12)
 , refCount(0)
 {
+	count++;
 	CHK_32BIT_ADDR(address);
 	memset(page_addr, 0, 4096);
 }

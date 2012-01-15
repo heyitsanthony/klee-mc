@@ -40,19 +40,131 @@ MaxTimeProxy("max-time",
 	cl::location(MaxTime),
         cl::init(0));
 
-///
+cl::opt<unsigned>
+DumpStateStats("dump-statestats",
+        cl::desc("Dump state stats every n seconds (0=off)"),
+        cl::init(0));
 
-class HaltTimer : public Executor::Timer {
-  Executor *executor;
 
+class HaltTimer : public Executor::Timer
+{
 public:
-  HaltTimer(Executor *_executor) : executor(_executor) {}
-  ~HaltTimer() {}
+	HaltTimer(Executor *_executor) : executor(_executor) {}
+	virtual ~HaltTimer() {}
 
-  void run() {
-    std::cerr << "KLEE: HaltTimer invoked\n";
-    executor->setHaltExecution(true);
-  }
+	void run()
+	{
+		std::cerr << "KLEE: HaltTimer invoked\n";
+		executor->setHaltExecution(true);
+	}
+private:
+	Executor *executor;
+};
+
+class StatTimer : public Executor::Timer
+{
+public:
+	virtual ~StatTimer() { if (os) delete os;}
+
+protected:
+	StatTimer(Executor *_executor, const char* fname)
+	: executor(_executor)
+	, n(0)
+	{ os = executor->getInterpreterHandler()->openOutputFile(fname); }
+
+	void run()
+	{
+		if (!os) return;
+
+		*os << n++ << ' ';
+		print();
+		*os << '\n';
+		os->flush();
+	}
+
+	virtual void print(void) = 0;
+
+	Executor	*executor;
+	std::ostream 	*os;
+	unsigned	n;
+
+};
+
+#include <malloc.h>
+#include "MemUsage.h"
+#include "Memory.h"
+cl::opt<unsigned>
+DumpMemStats("dump-memstats",
+        cl::desc("Dump memory stats every n seconds (0=off)"),
+        cl::init(0));
+class MemStatTimer : public StatTimer
+{
+public:
+	MemStatTimer(Executor *_exe) : StatTimer(_exe, "mem.txt") {}
+protected:
+	void print(void) { *os << ObjectState::getNumObjStates() <<
+		' ' << getMemUsageMB() <<
+		' ' << mallinfo().uordblks <<
+		' ' << HeapObject::getNumHeapObjs(); }
+};
+
+class StateStatTimer : public StatTimer
+{
+public:
+	StateStatTimer(Executor *_exe) : StatTimer(_exe, "state.txt") {}
+protected:
+	void print(void) {
+		*os <<
+		executor->getNumStates() << ' ' <<
+		executor->getNumFullStates(); }
+};
+
+#include "../Expr/ExprAlloc.h"
+cl::opt<unsigned>
+DumpExprStats("dump-exprstats",
+        cl::desc("Dump expr stats every n seconds (0=off)"),
+        cl::init(0));
+class ExprStatTimer : public StatTimer
+{
+public:
+	ExprStatTimer(Executor *_exe) : StatTimer(_exe, "expr.txt") {}
+protected:
+	void print(void) { *os
+		<< Expr::getNumExprs() << ' '
+		<< Array::getNumArrays() << ' '
+		<< ExprAlloc::getNumConstants(); }
+};
+
+extern unsigned g_cachingsolver_sz;
+extern unsigned g_cexcache_sz;
+
+cl::opt<unsigned>
+DumpCacheStats("dump-cachestats",
+        cl::desc("Dump cache stats every n seconds (0=off)"),
+        cl::init(0));
+class CacheStatTimer : public StatTimer
+{
+public:
+	CacheStatTimer(Executor *_exe) : StatTimer(_exe, "cache.txt") {}
+protected:
+	void print(void) { *os
+		<< g_cachingsolver_sz << ' '
+		<< g_cexcache_sz; }
+};
+
+
+cl::opt<unsigned>
+DumpCovStats("dump-covstats",
+        cl::desc("Dump coverage stats every n seconds (0=off)"),
+        cl::init(0));
+class CovStatTimer : public StatTimer
+{
+public:
+	CovStatTimer(Executor *_exe) : StatTimer(_exe, "cov.txt") {}
+protected:
+	void print(void) { *os
+		<< stats::coveredInstructions << ' '
+		<< stats::uncoveredInstructions; }
 };
 
 ///
@@ -63,16 +175,30 @@ static const double kSecondsPerCheck = 0.25;
 extern "C" unsigned dumpStates, dumpPTree;
 unsigned dumpStates = 0, dumpPTree = 0;
 
-void Executor::initTimers() {
-  if (MaxTime) {
-    addTimer(new HaltTimer(this), MaxTime);
-  }
+void Executor::initTimers(void)
+{
+	if (MaxTime)
+		addTimer(new HaltTimer(this), MaxTime);
+
+	if (DumpMemStats)
+		addTimer(new MemStatTimer(this), DumpMemStats);
+
+	if (DumpStateStats)
+		addTimer(new StateStatTimer(this), DumpStateStats);
+
+	if (DumpExprStats)
+		addTimer(new ExprStatTimer(this), DumpExprStats);
+
+	if (DumpCacheStats)
+		addTimer(new CacheStatTimer(this), DumpCacheStats);
+
+	if (DumpCovStats)
+		addTimer(new CovStatTimer(this), DumpCovStats);
 }
 
 ///
 
 Executor::Timer::Timer() {}
-
 Executor::Timer::~Timer() {}
 
 class Executor::TimerInfo {
@@ -191,6 +317,6 @@ done:
 
 void Executor::deleteTimerInfo(TimerInfo*& p)
 {
-  delete p;
-  p = 0;
+	delete p;
+	p = 0;
 }

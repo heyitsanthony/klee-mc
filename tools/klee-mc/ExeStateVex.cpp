@@ -30,11 +30,7 @@ void ExeStateVex::recordBreadcrumb(const struct breadcrumb* bc)
 }
 
 ObjectState* ExeStateVex::getRegObj()
-{
-	return addressSpace.findWriteableObject(reg_mo);
-}
+{ return addressSpace.findWriteableObject(reg_mo); }
 
 const ObjectState* ExeStateVex::getRegObjRO() const
-{
-	return addressSpace.findObject(reg_mo);
-}
+{ return addressSpace.findObject(reg_mo); }

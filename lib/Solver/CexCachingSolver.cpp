@@ -29,6 +29,8 @@
 using namespace klee;
 using namespace llvm;
 
+unsigned g_cexcache_sz = 0;
+
 namespace {
 	cl::opt<bool>
 	DebugCexCacheCheckBinding("debug-cex-cache-check-binding");
@@ -247,7 +249,9 @@ Assignment* CexCachingSolver::addToTable(Assignment* binding)
 	std::pair<assignTab_ty::iterator, bool>	res;
 	unsigned int	new_bytes = 0;
 
-	if ((assignTab_bytes + MAX_BINDING_BYTES) > MAX_CACHED_BYTES) {
+	if ((	assignTab_bytes + MAX_BINDING_BYTES) > MAX_CACHED_BYTES ||
+		assignTab.size() > 2000)
+	{
 		new_bytes = binding->getBindingBytes();
 		evictRandom();
 	}
@@ -263,6 +267,7 @@ Assignment* CexCachingSolver::addToTable(Assignment* binding)
 	assert (binding != *res.first);
 	delete binding;
 
+	g_cexcache_sz = assignTab.size();
 	return *res.first;
 }
 

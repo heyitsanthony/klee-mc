@@ -33,9 +33,14 @@ ExecutionState* ExeStateManager::selectState(bool allowCompact)
 	assert (!empty());
 
 	/* only yielded states left? well.. pop one */
-	if (states.size() == yieldedStates.size()) {
+	if (states.empty()) {
 		ExecutionState	*es;
+
+		assert (addedStates.empty());
+		assert (!yieldedStates.empty());
+
 		es = *yieldedStates.begin();
+
 		yieldedStates.erase(es);
 		queueAdd(es);
 		searcher->update(NULL, getStates());
@@ -44,6 +49,8 @@ ExecutionState* ExeStateManager::selectState(bool allowCompact)
 	}
 
 	ret = &searcher->selectState(allowCompact);
+
+	assert (ret->checkCanary());
 	assert((allowCompact || !ret->isCompact()) && "compact state chosen");
 
 	return ret;
@@ -88,7 +95,10 @@ void ExeStateManager::setWeights(double weight)
 		(*it)->weight = weight;
 }
 
-void ExeStateManager::queueAdd(ExecutionState* es) { addedStates.insert(es); }
+void ExeStateManager::queueAdd(ExecutionState* es) {
+assert (es->checkCanary());
+addedStates.insert(es); }
+
 void ExeStateManager::queueRemove(ExecutionState* s) { removedStates.insert(s); }
 
 /* note: only a state that has already been added can call yield--
@@ -97,17 +107,20 @@ void ExeStateManager::yield(ExecutionState* s)
 {
 	ExecutionState	*compacted;
 
+	/* do not yield if we're low on states */
+	if (states.size() == 1)
+		return;
+
 	assert (!s->isCompact() && "yielding compact state? HOW?");
 
 	compacted = compactState(s);
 
 	/* compact state forced a replace copy,
-	 * new state is put on addedStates-- So take it away. 
+	 * new state is put on addedStates-- So take it away.
 	 * old state is put on removedStates-- OK. */
 	dropAdded(compacted);
 
-	yieldedStates.insert(s);
-
+	yieldedStates.insert(compacted);
 	/* NOTE: states and yieldedStates are disjoint */
 }
 
@@ -232,6 +245,13 @@ ExecutionState* ExeStateManager::compactState(ExecutionState* s)
 	compacted = s->compact();
 	compacted->coveredNew = false;
 	compacted->ptreeNode = s->ptreeNode;
+
+	std::cerr << "COMPACTING:: s=" << (void*)s << ". compact=" << (void*)
+		compacted
+		<< ((s->isReplayDone())
+		? ". NOREPLAY\n"
+		: ". INREPLAY\n");
+
 
 	replaceState(s, compacted);
 

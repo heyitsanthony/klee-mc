@@ -6,9 +6,11 @@ using namespace klee;
 Array::ArrayHashCons Array::arrayHashCons;
 
 extern "C" void vc_DeleteExpr(void*);
+unsigned Array::count = 0;
 
 Array::~Array()
 {
+	count--;
 	// FIXME: This shouldn't be necessary.
 	if (stpInitialArray) {
 		::vc_DeleteExpr(stpInitialArray);
@@ -37,6 +39,7 @@ Array::Array(
 , singleValue(0)
 , dummyUpdateList(this, NULL)
 {
+	count++;
 	chk_val = 0x12345678;
 	assert( (isSymbolicArray() || constant_count == mallocKey.size) &&
 		"Invalid size for constant array!");

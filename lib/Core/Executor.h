@@ -470,6 +470,9 @@ public:
 	Executor(InterpreterHandler *ie);
 	virtual ~Executor();
 
+	unsigned getNumStates(void) const;
+	unsigned getNumFullStates(void) const;
+
 	const InterpreterHandler& getHandler() { return *interpreterHandler; }
 	TimingSolver* getSolver(void) { return solver; }
 
@@ -620,6 +623,10 @@ public:
 	StatsTracker* getStatsTracker(void) const { return statsTracker; }
 
 	void yield(ExecutionState& state);
+
+	InterpreterHandler *getInterpreterHandler(void) const
+	{ return interpreterHandler; }
+
 };
 
 }

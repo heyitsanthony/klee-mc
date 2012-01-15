@@ -161,7 +161,6 @@ uint64_t DeterministicMM::findFree(
 			first_addr &= ~((((uint64_t)1) << align_pow)-1);
 		}
 
-
 		// want range [first_addr, target_end)
 		target_end = first_addr + sz;
 
@@ -175,16 +174,22 @@ uint64_t DeterministicMM::findFree(
 
 		// equal or greater...
 		mo = mi_begin->first;
+		assert (mo->address >= first_addr);
+
 		assert (mo != NULL);
 		if (target_end <= mo->address) {
 			/* no overlap on [first_addr, target_end)-- this
 			 * object comes some time after */
-			break;
+			mo = state->addressSpace.resolveOneMO(first_addr);
+			if (mo == NULL)
+				break;
 		}
 
 		/* end address overlaps with MO, bump and try again */
 		first_addr = mo->address + mo->size;
 	} while (1);
+
+	assert (state->addressSpace.resolveOneMO(first_addr) == NULL);
 
 	return first_addr;
 }

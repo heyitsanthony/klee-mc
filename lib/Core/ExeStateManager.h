@@ -71,7 +71,7 @@ public:
   ExecutionState* compactState(ExecutionState* state);
 
 
-  bool empty(void) const { return states.empty(); }
+  bool empty(void) const { return size() == 0; }
   unsigned int size(void) const { return states.size() + yieldedStates.size(); }
   unsigned int numRemovedStates(void) const { return removedStates.size(); }
   bool isRemovedState(ExecutionState* s) const;
@@ -94,6 +94,10 @@ struct KillOrCompactOrdering
     const ExecutionState* a, const ExecutionState* b) const
   // returns true if a is less important than b
   {
+    // replayed states have lower priority than non-replay
+    if (!a->isReplayDone() && b->isReplayDone()) return true;
+
+    // state that covered new code should stick around
     if (!a->coveredNew &&  b->coveredNew) return true;
     if ( a->coveredNew && !b->coveredNew) return false;
     return a->lastChosen < b->lastChosen;

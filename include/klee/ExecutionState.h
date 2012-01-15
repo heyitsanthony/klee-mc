@@ -103,12 +103,14 @@ private:
 	// to be replaced by a real state
 	bool			isCompactForm;
 
+#define ES_CANARY_VALUE	0x11667744
+	unsigned		canary;
 public:
+	bool checkCanary(void) const { return canary == ES_CANARY_VALUE; }
 	typedef std::vector<StackFrame> stack_ty;
 
 	// Are we currently underconstrained?  Hack: value is size to make fake
 	// objects.
-	unsigned	underConstrained;
 	unsigned	depth;
 	double		weight;
 

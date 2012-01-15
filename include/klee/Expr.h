@@ -190,10 +190,11 @@ protected:
 
   unsigned		hashValue;
 
-  Expr() : refCount(0) { }
+  Expr() : refCount(0) { count++; }
 
 public:
-  virtual ~Expr() { }
+  virtual ~Expr() { count--; }
+  static unsigned long getNumExprs(void) { return count; }
   static ExprBuilder* setBuilder(ExprBuilder* builder);
   static ExprAlloc* setAllocator(ExprAlloc* alloc);
   static ExprBuilder* getBuilder(void) {return theExprBuilder;}

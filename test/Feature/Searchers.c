@@ -7,7 +7,7 @@
 // RUN: %klee --use-batching-search --use-random-search %t2.bc
 // RUN: %klee --use-batching-search --use-non-uniform-random-search %t2.bc
 // RUN: %klee --use-batching-search --use-non-uniform-random-search --weight-type=query-cost %t2.bc
-// RUN: %klee --use-merge --debug-log-merge --debug-log-state-merge %t2.bc
+// RUN: %klee --use-merge --debug-log-state-merge %t2.bc
 // RUN: %klee --use-merge --use-batching-search %t2.bc
 // RUN: %klee --use-merge --use-batching-search --use-random-search %t2.bc
 // RUN: %klee --use-merge --use-batching-search --use-non-uniform-random-search %t2.bc

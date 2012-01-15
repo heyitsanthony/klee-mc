@@ -26,20 +26,21 @@ void RandomSearcher::update(ExecutionState *current, const States s)
 	}
 
 	foreach (it, s.getRemoved().begin(), s.getRemoved().end()) {
-		ExecutionState *es = *it;
-		std::vector<ExecutionState*>::iterator it2 =
-			std::find(states.begin(), states.end(), es);
+		ExecutionState				*es = *it;
+		std::vector<ExecutionState*>::iterator	it2;
 
+		it2 = std::find(states.begin(), states.end(), es);
 		assert(it2 != states.end() && "invalid state removed");
 		states.erase(it2);
 
-		if (!es->isCompact())
+		if (es->isCompact())
 			continue;
 
 		it2 = std::find(
 			statesNonCompact.begin(),
 			statesNonCompact.end(),
 			es);
+
 		assert(it2 != statesNonCompact.end() && "invalid state removed");
 		statesNonCompact.erase(it2);
 	}

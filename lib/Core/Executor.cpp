@@ -221,7 +221,7 @@ namespace {
   ReplayInhibitedForks(
   	"replay-inhibited-forks",
         cl::desc("Replay fork inhibited path as new state"),
-	cl::init(false));
+	cl::init(true));
 
   cl::opt<bool>
   AllExternalWarnings("all-external-warnings");
@@ -1049,6 +1049,8 @@ void Executor::executeGetValue(
 
 void Executor::stepInstruction(ExecutionState &state)
 {
+	assert (state.checkCanary() && "Not a valid state");
+
 	if (DebugPrintInstructions) {
 		printFileLine(state, state.pc);
 		std::cerr
@@ -1080,9 +1082,6 @@ void Executor::executeCallNonDecl(
 
 	assert (!f->isDeclaration() && "Expects a non-declaration function!");
 	kf = kmodule->getKFunction(f);
-	if (kf == NULL) {
-		std::cerr << "HEY: " << f->getNameStr() << '\n';
-	}
 	assert (kf != NULL && "Executing non-shadowed function");
 
 	state.pushFrame(state.prevPC, kf);
@@ -2726,6 +2725,8 @@ void Executor::killStates(ExecutionState* &state)
 
 void Executor::stepStateInst(ExecutionState* &state)
 {
+	assert (state->checkCanary() && "Not a valid state");
+
 	state->lastChosen = stats::instructions;
 
 	KInstruction *ki = state->pc;
@@ -2735,6 +2736,8 @@ void Executor::stepStateInst(ExecutionState* &state)
 	executeInstruction(*state, ki);
 	processTimers(state, MaxInstructionTime);
 }
+
+#include <malloc.h>
 
 void Executor::handleMemoryUtilization(ExecutionState* &state)
 {
@@ -2749,20 +2752,25 @@ void Executor::handleMemoryUtilization(ExecutionState* &state)
 	mbs = getMemUsageMB();
 
 	if (UsePID && MaxMemory) {
-#define K_P	0.1	/* 400MB/2000 states */
+#define K_P	0.6
 #define K_D	0.1	/* damping factor-- damp changes in errors */
-#define K_I	0.01	/* systematic error-- negative while ramping  */
+#define K_I	0.0001	/* systematic error-- negative while ramping  */
 		unsigned		nonCompact_c;
 		int			states_to_gen;
 		int64_t			err;
-		static int64_t		err_sum = 0;
+		static int64_t		err_sum = -(int64_t)MaxMemory;
 		static int64_t		last_err = 0;
 		static uint64_t		last_mbs = 0;
 
+		std::cerr << "MALLINFO:" << mallinfo().uordblks <<  '\n';
+		std::cerr << "MBS=" << mbs << '\n';
+
 		nonCompact_c = stateManager->getNonCompactStateCount();
+
+	//	if (mbs < 2048)
+		mbs = mallinfo().uordblks/(1024*1024);
 		err = MaxMemory - mbs;
 
-		std::cerr << "MBS=" << mbs << '\n';
 		std::cerr << "K_P: " << K_P*err << '\n';
 		std::cerr << "K_D: " << K_D*(err-last_err) << '\n';
 		std::cerr << "K_I: " << K_I*(err_sum) << '\n';
@@ -2800,7 +2808,8 @@ void Executor::handleMemoryUtilization(ExecutionState* &state)
 	atMemoryLimit = true;
 	onlyNonCompact = true;
 
-	if (mbs <= MaxMemory + 100) return;
+	if (mbs <= MaxMemory + 100)
+		return;
 
 	/* Ran memory to the roof. FLIP OUT. */
 	if 	(ReplayInhibitedForks == false ||
@@ -2882,6 +2891,13 @@ bool Executor::seedRun(ExecutionState& initialState)
   return true;
 }
 
+unsigned Executor::getNumStates(void) const
+{ return stateManager->size(); }
+
+unsigned Executor::getNumFullStates(void) const
+{ return stateManager->getNonCompactStateCount(); }
+
+
 void Executor::replayPathsIntoStates(ExecutionState& initialState)
 {
 	assert (replayPaths);
@@ -2941,6 +2957,7 @@ void Executor::runLoop(void)
 		ExecutionState *state;
 
 		state = stateManager->selectState(!onlyNonCompact);
+
 		assert (state != NULL &&
 			"State man not empty, but selectState is?");
 
@@ -2948,8 +2965,10 @@ void Executor::runLoop(void)
 		if (state->isCompact()) {
 			ExecutionState* newState;
 
+			assert (initialStateCopy != NULL);
 			newState = state->reconstitute(*initialStateCopy);
 			stateManager->replaceState(state, newState);
+
 			notifyCurrent(state);
 			state = newState;
 		}

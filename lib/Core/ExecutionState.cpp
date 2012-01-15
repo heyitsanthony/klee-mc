@@ -54,7 +54,6 @@ ExecutionState::ExecutionState(KFunction *kf)
 : num_allocs(0)
 , prev_constraint_hash(0)
 , isCompactForm(false)
-, underConstrained(false)
 , depth(0)
 , weight(1)
 , pc(kf->instructions)
@@ -67,6 +66,7 @@ ExecutionState::ExecutionState(KFunction *kf)
 , forkDisabled(false)
 , ptreeNode(0)
 {
+	canary = ES_CANARY_VALUE;
 	pushFrame(0, kf);
 	replayBranchIterator = branchDecisionsSequence.end();
 }
@@ -75,13 +75,13 @@ ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
 : num_allocs(0)
 , prev_constraint_hash(0)
 , isCompactForm(false)
-, underConstrained(false)
 , constraints(assumptions)
 , queryCost(0.)
 , lastChosen(0)
 , isReplay(false)
 , ptreeNode(0)
 {
+	canary = ES_CANARY_VALUE;
 	replayBranchIterator = branchDecisionsSequence.end();
 }
 
@@ -89,18 +89,19 @@ ExecutionState::ExecutionState(void)
 : num_allocs(0)
 , prev_constraint_hash(0)
 , isCompactForm(false)
-, underConstrained(0)
 , lastChosen(0)
 , coveredNew(false)
 , isReplay(false)
 , ptreeNode(0)
 {
+	canary = ES_CANARY_VALUE;
 	replayBranchIterator = branchDecisionsSequence.begin();
 }
 
 ExecutionState::~ExecutionState()
 {
 	while (!stack.empty()) popFrame();
+	canary = 0;
 }
 
 ExecutionState *ExecutionState::branch()

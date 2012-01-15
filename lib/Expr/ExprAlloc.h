@@ -57,6 +57,10 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS);
 	DECL_BIN_REF(Sgt)
 	DECL_BIN_REF(Sge)
 #undef DECL_BIN_REF
+
+	static unsigned long getNumConstants(void) { return constantCount; }
+private:
+	static unsigned long constantCount;
 };
 }
 

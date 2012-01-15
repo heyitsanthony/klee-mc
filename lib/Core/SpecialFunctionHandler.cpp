@@ -276,15 +276,8 @@ SpecialFunctionHandler::readStringAtAddress(
 
 SFH_DEF_HANDLER(Abort)
 {
-  SFH_CHK_ARGS(0, "abort");
-
-  //XXX:DRE:TAINT
-  if(state.underConstrained) {
-    std::cerr << "TAINT: skipping abort fail\n";
-    sfh->executor->terminateState(state);
-  } else {
-    sfh->executor->terminateStateOnError(state, "abort failure", "abort.err");
-  }
+	SFH_CHK_ARGS(0, "abort");
+	sfh->executor->terminateStateOnError(state, "abort failure", "abort.err");
 }
 
 SFH_DEF_HANDLER(Exit)
@@ -340,55 +333,37 @@ SFH_DEF_HANDLER(Prune)
 
 SFH_DEF_HANDLER(Assert)
 {
-  SFH_CHK_ARGS(3, "_assert");
+	SFH_CHK_ARGS(3, "_assert");
 
-  //XXX:DRE:TAINT
-  if(state.underConstrained) {
-    std::cerr << "TAINT: skipping assertion:"
-               << sfh->readStringAtAddress(state, arguments[0]) << "\n";
-    sfh->executor->terminateState(state);
-  } else
-    sfh->executor->terminateStateOnError(
-      state,
-      "ASSERTION FAIL: " + sfh->readStringAtAddress(state, arguments[0]),
-      "assert.err");
+	sfh->executor->terminateStateOnError(
+		state,
+		"ASSERTION FAIL: " + sfh->readStringAtAddress(state, arguments[0]),
+		"assert.err");
 }
 
 SFH_DEF_HANDLER(AssertFail)
 {
-  assert(arguments.size()==4 && "invalid number of arguments to __assert_fail");
+	assert(	arguments.size()==4 &&
+		"invalid number of arguments to __assert_fail");
 
-  //XXX:DRE:TAINT
-  if(state.underConstrained) {
-    std::cerr << "TAINT: skipping assertion:"
-               << sfh->readStringAtAddress(state, arguments[0]) << "\n";
-    sfh->executor->terminateState(state);
-  } else
-    sfh->executor->terminateStateOnError(state,
-                                   "ASSERTION FAIL: " + sfh->readStringAtAddress(state, arguments[0]),
-                                   "assert.err");
+	sfh->executor->terminateStateOnError(
+		state,
+		"ASSERTION FAIL: " + sfh->readStringAtAddress(state, arguments[0]),
+		"assert.err");
 }
 
 SFH_DEF_HANDLER(ReportError)
 {
-  SFH_CHK_ARGS(4, "klee_report_error");
+	SFH_CHK_ARGS(4, "klee_report_error");
 
-  // arg[0] = file
-  // arg[1] = line
-  // arg[2] = message
-  // arg[3] = suffix
-  std::string	message = sfh->readStringAtAddress(state, arguments[2]);
-  std::string	suffix = sfh->readStringAtAddress(state, arguments[3]);
+	// arg[0] = file
+	// arg[1] = line
+	// arg[2] = message
+	// arg[3] = suffix
+	std::string	message = sfh->readStringAtAddress(state, arguments[2]);
+	std::string	suffix = sfh->readStringAtAddress(state, arguments[3]);
 
-  //XXX:DRE:TAINT
-  if(state.underConstrained) {
-    std::cerr << "TAINT: skipping klee_report_error:"
-               << message << ":" << suffix << "\n";
-    sfh->executor->terminateState(state);
-    return;
-  }
-
-  sfh->executor->terminateStateOnError(state, message, suffix.c_str());
+	sfh->executor->terminateStateOnError(state, message, suffix.c_str());
 }
 
 SFH_DEF_HANDLER(Merge)

@@ -9,7 +9,7 @@ namespace klee
   class MergingSearcher : public Searcher
   {
     ExecutorBC &executor;
-    std::set<ExecutionState*> statesAtMerge;
+    ExeStateSet statesAtMerge;
     Searcher *baseSearcher;
     llvm::Function *mergeFunction;
 

@@ -56,6 +56,7 @@ void initSmallValTab(void)
 }
 
 static bool tab_ok = false;
+unsigned long ExprAlloc::constantCount = 0;
 
 
 ExprAlloc::~ExprAlloc() {}
@@ -68,6 +69,7 @@ ref<Expr> ExprAlloc::Constant(const llvm::APInt &v)
 	if (v.getBitWidth() <= 64 && (v_64 = v.getLimitedValue()) < 256) {
 		if (tab_ok == false) {
 			initSmallValTab();
+			constantCount = 256*4+2;
 			tab_ok = true;
 		}
 
@@ -89,6 +91,7 @@ ref<Expr> ExprAlloc::Constant(const llvm::APInt &v)
 	ref<ConstantExpr> r(new ConstantExpr(v));
 	r->computeHash();
 	const_hashtab.insert(std::make_pair(v, r));
+	constantCount++;
 
 	return r;
 }
