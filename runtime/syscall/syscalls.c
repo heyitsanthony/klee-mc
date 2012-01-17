@@ -768,6 +768,11 @@ void* sc_enter(void* regfile, void* jmpptr)
 		new_regs = sc_new_regs(regfile);
 		sc_ret_or(new_regs, 0, -1);
 		break;
+	case SYS_restart_syscall:
+		new_regs = sc_new_regs(regfile);
+		sc_ret_range(new_regs, -1, 1);
+		break;
+
 	default:
 		kmc_sc_bad(sys_nr);
 		klee_report_error(
