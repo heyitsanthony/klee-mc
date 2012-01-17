@@ -280,6 +280,7 @@ bool PipeSolverImpl::writeQueryToChild(const Query& q) const
 	return true;
 }
 
+/* terminates writer process */
 static void query_writer_alarm(int x) { exit(1); }
 
 bool PipeSolverImpl::writeQuery(const Query& q) const

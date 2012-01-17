@@ -164,7 +164,8 @@ public:
 protected:
 	void print(void) { *os
 		<< stats::coveredInstructions << ' '
-		<< stats::uncoveredInstructions; }
+		<< stats::uncoveredInstructions << ' '
+		<< stats::instructions; }
 };
 
 ///

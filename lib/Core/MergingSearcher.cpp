@@ -30,7 +30,9 @@ Instruction *MergingSearcher::getMergePoint(ExecutionState &es)
 
 	CallSite cs(cast<CallInst > (i));
 	if (mergeFunction == cs.getCalledFunction())
-	return i;
+		return i;
+
+	return 0;
 }
 
 ExecutionState &MergingSearcher::selectState(bool allowCompact)

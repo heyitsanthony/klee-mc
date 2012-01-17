@@ -10,68 +10,131 @@ ExecutionState& PrioritySearcher::selectState(bool allowCompact)
 {
 	PrStates*	prs;
 	ExecutionState*	next;
-	
-	prs = pr_heap.top();
-	assert (prs->getStateCount());
+	unsigned	refresh_c, max_refresh;
 
-	next = prs->getNext();
+	refresh_c = 0;
+	max_refresh = 0;
+
+	while (1) {
+		int	curPr;
+
+		prs = pr_heap.top();
+
+		if (prs->getStateCount() == 0) {
+			clearDeadPriorities();
+			continue;
+		}
+
+		next = prs->getNext();
+		prFunc->latch();
+		curPr = prFunc->getPriority(*next);
+		prFunc->unlatch();
+
+
+		if (refresh_c < max_refresh && curPr != prs->getPr()) {
+			prFunc->latch();
+			refreshPriority(next);
+			std::cerr << "PR: " <<
+				prs->getPr() << " -> " << curPr << '\n';
+			prFunc->unlatch();
+			refresh_c++;
+			continue;
+		}
+
+
+		std::cerr << "SELSTATE="
+		 << next->pc->getInst()->getParent()->getParent()->getNameStr()
+		 << (next->isReplayDone() ? ". NOREPLAY\n" : ". INREPLAY\n");
+		std::cerr
+			<< "CURRENT PR=" << prs->getPr()
+			<< ". COUNT=" << prs->getStateCount() << "\n";
+		std::cerr
+			<< "PRIORITY: GOT= " << curPr
+			<< ". EXPECTED=" << prs->getPr() <<". FIXED="
+			<< refresh_c
+			<< ".\n";
+		break;
+
+	}
 	assert (next != NULL);
 
+	/* penalize out-going state */
+	prFunc->getPriority(*next);
 	return *next;
+}
+
+bool PrioritySearcher::refreshPriority(ExecutionState* es)
+{
+	PrStates		*prs;
+	unsigned		idx;
+	int			new_pr;
+	statemap_ty::iterator	sm_it(state_backmap.find(es));
+
+	new_pr = prFunc->getPriority(*es);
+	if ((sm_it->second).first == new_pr)
+		return false;
+
+
+	prs = getPrStates((sm_it->second).first);
+	prs->rmvState((sm_it->second).second);
+
+	prs = getPrStates(new_pr);
+	idx = prs->addState(es);
+	state_backmap[es] = stateidx_ty(new_pr, idx);
+
+	return true;
 }
 
 void PrioritySearcher::update(ExecutionState *current, States s)
 {
 	/* new states */
-	foreach (it, s.getAdded().begin(), s.getAdded().end()) {
-		ExecutionState	*new_st(*it);
-		PrStates	*prs;
-		int		pr;
-		unsigned	idx;
-		
-		pr = prFunc->getPriority(*new_st);
-		prs = getPrStates(pr);
-		idx = prs->addState(new_st);
-		state_backmap[new_st] = stateidx_ty(pr, idx);
-		state_c++;
-	}
+	foreach (it, s.getAdded().begin(), s.getAdded().end())
+		addState(*it);
 
 	/* update current */
-	if (current != NULL) {
-		int			new_pr;
-		statemap_ty::iterator	sm_it(state_backmap.find(current));
-
-		new_pr = prFunc->getPriority(*current);
-		if ((sm_it->second).first != new_pr) {
-			PrStates	*prs;
-			unsigned	idx;
-
-			prs = getPrStates((sm_it->second).first);
-			prs->rmvState((sm_it->second).second);
-
-			prs = getPrStates(new_pr);
-			idx = prs->addState(current);
-			state_backmap[current] = stateidx_ty(new_pr, idx);
-		}
-		
-	}
+	if (current != NULL)
+		refreshPriority(current);
 
 	/* removed states */
-	foreach (it, s.getRemoved().begin(), s.getRemoved().end()) {
-		statemap_ty::iterator	sm_it(state_backmap.find(*it));
-		stateidx_ty		stateidx;
-		PrStates		*prs;
+	foreach (it, s.getRemoved().begin(), s.getRemoved().end())
+		removeState(*it);
 
-		assert (sm_it != state_backmap.end());
-		
-		stateidx = sm_it->second;
-		prs = getPrStates(stateidx.first);
-		prs->rmvState(stateidx.second);
-		state_backmap.erase(sm_it->first);
+	clearDeadPriorities();
+}
 
-		state_c--;
-	}
+void PrioritySearcher::addState(ExecutionState* es)
+{
+	PrStates	*prs;
+	int		pr;
+	unsigned	idx;
 
+	pr = prFunc->getPriority(*es);
+	prs = getPrStates(pr);
+	idx = prs->addState(es);
+	state_backmap[es] = stateidx_ty(pr, idx);
+
+	state_c++;
+}
+
+void PrioritySearcher::removeState(ExecutionState* es)
+{
+	statemap_ty::iterator	sm_it(state_backmap.find(es));
+	stateidx_ty		stateidx;
+	PrStates		*prs;
+
+	assert (sm_it != state_backmap.end());
+
+	stateidx = sm_it->second;
+	prs = getPrStates(stateidx.first);
+
+	prs->rmvState(stateidx.second);
+	state_backmap.erase(sm_it);
+
+	state_c--;
+}
+
+void PrioritySearcher::clearDeadPriorities(void)
+{
 	/* clear out dead priorities */
 	while (!pr_heap.empty()) {
 		PrStates	*prs;
@@ -133,7 +196,7 @@ void PrioritySearcher::PrStates::rmvState(unsigned idx)
 
 	if (idx < (states.size() - 1))
 		return;
-	
+
 	tail = 0;
 	for (int k = states.size() - 1; k >= 0; k--) {
 		if (states[k] != NULL)
@@ -152,6 +215,8 @@ ExecutionState* PrioritySearcher::PrStates::getNext(void)
 	assert (used_states != 0);
 
 	sz = states.size();
+	next_state = rand() % sz;
+
 	for (unsigned k = next_state; k < sz; k++) {
 		if (states[k]) {
 			next_state = k+1;

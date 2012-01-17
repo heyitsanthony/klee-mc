@@ -90,6 +90,11 @@ namespace
 		cl::desc("Count library coverage"),
 		cl::init(true));
 
+	cl::opt<bool> AllowNegativeStack (
+		"allow-negstack",
+		cl::desc("Allow negative call stacks"),
+		cl::init(false));
+
 	cl::opt<bool> PrintNewRanges(
 		"print-new-ranges",
 		cl::desc("Print uncovered address ranges"),
@@ -193,8 +198,11 @@ ExecutionState* ExecutorVex::setupInitialStateEntry(uint64_t entry_addr)
 	bool		is_new;
 
 	// force deterministic initialization of memory objects
-	srand(1);
-	srandom(1);
+	// XXX XXX XXX no determinism please
+	// srand(1);
+	// srandom(1);
+	srand(time(0));
+	srandom(time(0));
 
 	// acrobatics because we have a fucking circular dependency
 	// on the globaladdress stucture which keeps us from binding
@@ -839,21 +847,30 @@ void ExecutorVex::handleXferReturn(
 	ExecutionState& state, KInstruction* ki)
 {
 	struct XferStateIter	iter;
+	unsigned		stack_depth;
 
-	if (state.stack.size() == 1) {
+	stack_depth = state.stack.size();
+	if (!AllowNegativeStack && stack_depth == 1) {
 		/* Call-stack is exhausted. KLEE resumes
 		 * control. */
 		terminateStateOnExit(state);
 		return;
 	}
 
-	assert (state.stack.size() > 1);
+	assert (stack_depth >= 1);
 
 	xferIterInit(iter, &state, ki);
 	while (xferIterNext(iter)) {
 		ExecutionState*	new_state;
+
 		new_state = iter.res.first;
-		new_state->popFrame();
+		if (stack_depth > 1) {
+			/* pop frame to represent a 'return' */
+			/* if the depth < 1, we treat a ret like a
+			 * jump because what can you do */
+			new_state->popFrame();
+		}
+
 		jumpToKFunc(*new_state, kmodule->getKFunction(iter.f));
 	}
 }

@@ -14,8 +14,16 @@ public:
 	virtual ~Prioritizer() {}
 	/* pr_k > pr_j => pr_k scheduled first */
 	virtual int getPriority(ExecutionState& st) = 0;
+	void latch(void) { latched = true; }
+	void unlatch(void) { latched = false; }
+	bool isLatched(void) const { return latched; }
+
 protected:
-	Prioritizer() {}
+	Prioritizer()
+	: latched(false) {}
+private:
+	bool		latched;
+
 };
 
 class PrioritySearcher : public Searcher
@@ -29,7 +37,10 @@ public:
 	void printName(std::ostream &os) const { os << "PrioritySearcher\n"; }
 
 private:
-	void updateCurrent(ExecutionState* current);
+	bool refreshPriority(ExecutionState* es);
+	void removeState(ExecutionState* es);
+	void addState(ExecutionState* es);
+	void clearDeadPriorities(void);
 
 	class PrStates {
 	public:
@@ -60,7 +71,7 @@ private:
 
 	std::priority_queue<
 		PrStates*,
-		std::vector<PrStates*>, 
+		std::vector<PrStates*>,
 		PrStateCmp>			pr_heap;
 	typedef std::map<int, PrStates*>		prmap_ty;
 	typedef std::pair<int /*pr*/, unsigned /*idx*/>	stateidx_ty;
@@ -73,7 +84,7 @@ private:
 	Prioritizer	*prFunc;
 
 public:
-	PrioritySearcher(Prioritizer* p) 
+	PrioritySearcher(Prioritizer* p)
 	: state_c(0)
 	, prFunc(p)
 	{}

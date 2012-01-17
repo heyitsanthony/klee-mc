@@ -236,8 +236,8 @@ unsigned CastExpr::computeHash() {
 }
 
 unsigned ExtractExpr::computeHash() {
-  unsigned res = offset * Expr::MAGIC_HASH_CONSTANT;
-  res ^= getWidth() * Expr::MAGIC_HASH_CONSTANT;
+  unsigned res = (offset-127) * Expr::MAGIC_HASH_CONSTANT;
+  res ^= (getWidth()+127) * Expr::MAGIC_HASH_CONSTANT;
   hashValue = res ^ expr->hash() * Expr::MAGIC_HASH_CONSTANT;
   return hashValue;
 }
@@ -253,7 +253,7 @@ unsigned ReadExpr::computeHash()
 }
 
 unsigned NotExpr::computeHash() {
-  hashValue = expr->hash() * Expr::MAGIC_HASH_CONSTANT * Expr::Not;
+  hashValue = expr->hash() + ~(Expr::MAGIC_HASH_CONSTANT * Expr::Not);
   return hashValue;
 }
 

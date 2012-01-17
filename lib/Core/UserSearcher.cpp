@@ -17,6 +17,7 @@
 
 #include "llvm/Support/CommandLine.h"
 
+#include "BucketPriority.h"
 #include "BatchingSearcher.h"
 #include "BumpingMergeSearcher.h"
 #include "BFSSearcher.h"
@@ -48,6 +49,13 @@ namespace {
 
   cl::opt<bool>
   UseInterleavedRS("use-interleaved-RS");
+
+  cl::opt<bool>
+  UseInterleavedDFS("use-interleaved-DFS");
+
+  cl::opt<bool>
+  UseInterleavedRR("use-interleaved-RR");
+
 
   cl::opt<bool>
   UseInterleavedNURS("use-interleaved-NURS");
@@ -139,6 +147,13 @@ namespace {
 	cl::desc("Greedily execute uncovered instructions"),
 	cl::init(false));
 
+  cl::opt<bool>
+  UseBucketSearcher(
+  	"use-bucket-search",
+	cl::desc("BUCKETS"),
+	cl::init(false));
+
+
   cl::opt<bool, true>
   UsePrioritySearcherProxy(
   	"priority-search",
@@ -169,6 +184,13 @@ Searcher* UserSearcher::setupInterleavedSearcher(
     s.push_back(new WeightedRandomSearcher(
       executor, WeightedRandomSearcher::Depth));
   
+  if (UseInterleavedDFS)
+    s.push_back(new DFSSearcher());
+
+  if (UseInterleavedRR)
+    s.push_back(new RRSearcher());
+
+
   if (UseInterleavedMD2UNURS)
     s.push_back(new WeightedRandomSearcher(
       executor, WeightedRandomSearcher::MinDistToUncovered));
@@ -203,9 +225,12 @@ Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 {
 	Searcher* searcher;
 
-	if (UseCovSearcher) {
+	if (UseBucketSearcher) {
+		searcher = new PrioritySearcher(new BucketPrioritizer());
+	} else if (UseCovSearcher) {
 		searcher = new PrioritySearcher(
 			new CovPrioritizer(
+				executor.getKModule(),
 				*executor.getStatsTracker()));
 	} else if (UsePrioritySearcher) {
 		assert (prFunc != NULL);
