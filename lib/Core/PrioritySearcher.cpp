@@ -59,7 +59,7 @@ ExecutionState& PrioritySearcher::selectState(bool allowCompact)
 	assert (next != NULL);
 
 	/* penalize out-going state */
-	prFunc->getPriority(*next);
+	refreshPriority(next);
 	return *next;
 }
 

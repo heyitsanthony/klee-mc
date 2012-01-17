@@ -24,7 +24,11 @@ public:
 		if (st.coveredNew)
 			return -1;
 
-		f = st.pc->getInst()->getParent()->getParent();
+		// f = st.pc->getInst()->getParent()->getParent();
+
+		// necessary so that we don't absorb helper functions
+		// from vexllvm-- improper bucketing!
+		f = st.stack.front().kf->function;
 		hits = hitmap[f];
 
 		if (!isLatched()) {
