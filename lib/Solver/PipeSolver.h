@@ -39,7 +39,7 @@ public:
 
 	void setTimeout(double in_timeout) { timeout = in_timeout; }
 private:
-	bool setupChild(const char* exec_fname, char* const argv[]);
+	bool setupSolverChild(const char* exec_fname, char* const argv[]);
 	void finiChild(void);
 	std::istream* writeRecvQuery(const Query& q);
 	bool writeQuery(const Query& q) const;

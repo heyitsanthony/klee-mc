@@ -1,4 +1,6 @@
 #include "klee/SolverStats.h"
+#include <errno.h>
+#include <string.h>
 #include <sys/select.h>
 #include <sys/time.h>
 #include <assert.h>
@@ -35,13 +37,23 @@ namespace {
 		"large-pipes",
 		cl::desc("Force pipe buffers larger than the default 64KB."),
 		cl::init(true));
+
+	cl::opt<bool>
+	DebugPipeWriteBlock(
+		"debug-pipe-write-block",
+		cl::desc("Write query blocks forever."),
+		cl::init(false));
+
+	cl::opt<bool>
+	DebugPipeReadBlock(
+		"debug-pipe-read-block",
+		cl::desc("Read query response forever."),
+		cl::init(false));
 }
 
 PipeSolver::PipeSolver(PipeFormat* in_fmt)
 : TimedSolver(new PipeSolverImpl(in_fmt))
-{
-
-}
+{}
 
 PipeSolver::~PipeSolver(void) {}
 
@@ -80,7 +92,8 @@ PipeSolverImpl::~PipeSolverImpl(void)
 /* create solver child process with stdin/stdout pipes
  * for sending/receiving query expressions/models
  */
-bool PipeSolverImpl::setupChild(const char* exec_fname, char *const argv[])
+bool PipeSolverImpl::setupSolverChild(
+	const char* solver_fname, char *const argv[])
 {
 	int	rc;
 	int	parent2child[2]; // child reads from [0], parent writes [1]
@@ -114,19 +127,46 @@ bool PipeSolverImpl::setupChild(const char* exec_fname, char *const argv[])
 		prctl(PR_SET_PDEATHSIG, SIGKILL);
 
 		/* child reads from this */
-		close(STDIN_FILENO);
-		rc = dup(parent2child[0]);
-		close(parent2child[1]);
+		if (DebugPipeWriteBlock) {
+			/* Create a dummy pipe for solver to read.
+			 * In effect, any write to the solver block forever */
+			int dummy_pipe[2];
+			pipe(dummy_pipe);
+			close(STDIN_FILENO);
+			rc = dup(dummy_pipe[0]);
+			// and keep this around so we don't write to a broken pipe
+			dup(parent2child[0]);
+		} else {
+			close(STDIN_FILENO);
+			rc = dup(parent2child[0]);
+		}
+
+		// parent2child[0] -> fd=0
 		assert (rc == STDIN_FILENO);
 
 		/* child writes to this */
-		close(STDOUT_FILENO);
-		rc = dup(child2parent[1]);
-		close(child2parent[0]);
+		if (DebugPipeReadBlock) {
+			/* Create a dummy pipe for solver to write.
+			 * In effect, any reads from the solver block forever */
+			int dummy_pipe[2];
+			pipe(dummy_pipe);
+			close(STDOUT_FILENO);
+			rc = dup(dummy_pipe[1]);
+		} else {
+			close(STDOUT_FILENO);
+			rc = dup(child2parent[1]);
+		}
+		// child2parent[1] -> fd=1
 		assert (rc == STDOUT_FILENO);
 
-		execvp(exec_fname, argv);
-		fprintf(stderr, "Bad exec: exec_fname = %s\n", exec_fname);
+		// If we don't close the pipes, things will block.
+		close(parent2child[0]);
+		close(parent2child[1]);
+		close(child2parent[1]);
+		close(child2parent[0]);
+
+		execvp(solver_fname, argv);
+		fprintf(stderr, "Bad exec: exec_fname = %s\n", solver_fname);
 		assert (0 == 1 && "Failed to execve!");
 	} else if (child_pid == -1) {
 		/* error */
@@ -142,6 +182,22 @@ bool PipeSolverImpl::setupChild(const char* exec_fname, char *const argv[])
 	/* parent */
 	close(parent2child[0]);
 	close(child2parent[1]);
+
+	if (DebugPipeWriteBlock) {
+		/* Setup blocked pipe for klee to write */
+		int	sz;
+		int	flags;
+
+		/* fill up buffer so it immediately blocks */
+		flags = fcntl(parent2child[1], F_GETFL);
+		rc = fcntl(parent2child[1], F_SETFL, flags | O_NONBLOCK);
+		errno = 0;
+		do {
+			sz = write(parent2child[1], "a", 1024);
+		} while (sz == 1024);
+
+		rc = fcntl(parent2child[1], F_SETFL, flags);
+	}
 
 	fd_child_stdin = parent2child[1];
 	fd_child_stdout = child2parent[0];
@@ -173,7 +229,7 @@ bool PipeSolverImpl::computeInitialValues(const Query& q, Assignment& a)
 	TimerStatIncrementer	t(stats::queryTime);
 	bool			parse_ok, is_sat;
 
-	if (setupChild(
+	if (setupSolverChild(
 		fmt->getExec(),
 		const_cast<char* const*>(fmt->getArgvModel())) == false)
 	{
@@ -188,7 +244,8 @@ bool PipeSolverImpl::computeInitialValues(const Query& q, Assignment& a)
 		failQuery();
 		finiChild();
 		SMTPrinter::dump(q, "badwrite");
-		std::cerr << "FAILED TO WRITERECVQUERY\n";
+		std::cerr << "FAILED TO WRITERECVQUERY ("
+			<< (void*)q.hash() << ")\n";
 		return false;
 	}
 
@@ -224,7 +281,7 @@ bool PipeSolverImpl::computeSat(const Query& q)
 	TimerStatIncrementer	t(stats::queryTime);
 	bool			parse_ok, is_sat;
 
-	if (setupChild(
+	if (setupSolverChild(
 		fmt->getExec(),
 		const_cast<char* const*>(fmt->getArgvSAT())) == false)
 	{
