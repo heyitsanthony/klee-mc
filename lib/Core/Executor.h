@@ -145,6 +145,8 @@ public:
   const KModule* getKModule(void) const { return kmodule; }
   KModule* getKModule(void) { return kmodule; }
 
+  virtual void printStackTrace(ExecutionState& state, std::ostream& os) const;
+
   MemoryManager	*memory;
 private:
   class TimerInfo;

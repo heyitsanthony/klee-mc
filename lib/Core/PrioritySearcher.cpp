@@ -13,7 +13,7 @@ ExecutionState& PrioritySearcher::selectState(bool allowCompact)
 	unsigned	refresh_c, max_refresh;
 
 	refresh_c = 0;
-	max_refresh = 0;
+	max_refresh = 1;
 
 	while (1) {
 		int	curPr;
@@ -33,14 +33,17 @@ ExecutionState& PrioritySearcher::selectState(bool allowCompact)
 
 		if (refresh_c < max_refresh && curPr != prs->getPr()) {
 			prFunc->latch();
-			refreshPriority(next);
+			// refreshPriority(next);
+			int demote_pr = (curPr - prs->getPr())/2 + prs->getPr() - 1;
+			if (demote_pr != prs->getPr())
+				demote(next, demote_pr);
+
 			std::cerr << "PR: " <<
 				prs->getPr() << " -> " << curPr << '\n';
 			prFunc->unlatch();
 			refresh_c++;
 			continue;
 		}
-
 
 		std::cerr << "SELSTATE="
 		 << next->pc->getInst()->getParent()->getParent()->getNameStr()
@@ -58,10 +61,29 @@ ExecutionState& PrioritySearcher::selectState(bool allowCompact)
 	}
 	assert (next != NULL);
 
-	/* penalize out-going state */
-	refreshPriority(next);
+	///* penalize out-going state */
+	prFunc->getPriority(*next);
+	demote(next, prs->getPr() - 1);
+
 	return *next;
 }
+
+void PrioritySearcher::demote(ExecutionState* es, int new_pr)
+{
+	PrStates		*prs;
+	unsigned		idx;
+	statemap_ty::iterator	sm_it(state_backmap.find(es));
+
+	assert ((sm_it->second).first != new_pr);
+
+	prs = getPrStates((sm_it->second).first);
+	prs->rmvState((sm_it->second).second);
+
+	prs = getPrStates(new_pr);
+	idx = prs->addState(es);
+	state_backmap[es] = stateidx_ty(new_pr, idx);
+}
+
 
 bool PrioritySearcher::refreshPriority(ExecutionState* es)
 {
@@ -109,9 +131,14 @@ void PrioritySearcher::addState(ExecutionState* es)
 	unsigned	idx;
 
 	pr = prFunc->getPriority(*es);
+	std::cerr << "ADDING="
+		 << es->pc->getInst()->getParent()->getParent()->getNameStr()
+		 << " to PR=" << pr << '\n';
+
 	prs = getPrStates(pr);
 	idx = prs->addState(es);
 	state_backmap[es] = stateidx_ty(pr, idx);
+
 
 	state_c++;
 }
@@ -123,6 +150,10 @@ void PrioritySearcher::removeState(ExecutionState* es)
 	PrStates		*prs;
 
 	assert (sm_it != state_backmap.end());
+	
+	std::cerr << "RMV="
+		 << es->pc->getInst()->getParent()->getParent()->getNameStr()
+		 << " FROM PR=" << sm_it->second.first << '\n';
 
 	stateidx = sm_it->second;
 	prs = getPrStates(stateidx.first);

@@ -902,6 +902,29 @@ void ExecutorVex::updateGuestRegs(ExecutionState& state)
 	state.addressSpace.copyToBuf(es2esv(state).getRegCtx(), guest_regs);
 }
 
+void ExecutorVex::printStackTrace(ExecutionState& st, std::ostream& os) const
+{
+	unsigned idx = 0;
+	foreach (it, st.stack.rbegin(), st.stack.rend())
+	{
+		StackFrame	&sf = *it;
+		Function	*f = sf.kf->function;
+		VexSB		*vsb;
+		func2vsb_map::const_iterator	f2v_it;
+
+		f2v_it = func2vsb_table.find((uint64_t)f);
+		vsb = NULL;
+		if (f2v_it != func2vsb_table.end())
+			vsb = f2v_it->second;
+
+		os << "\t#" << idx++ << " in " << f->getNameStr();
+		if (vsb) {
+			os << " (" << gs->getName(vsb->getGuestAddr()) << ")";
+		}
+		os << "\n";
+	}
+}
+
 void ExecutorVex::printStateErrorMessage(
 	ExecutionState& state,
 	const std::string& message,
@@ -920,21 +943,8 @@ void ExecutorVex::printStateErrorMessage(
 	os << "\nRegisters: \n";
 	gs->getCPUState()->print(os);
 
-	unsigned idx = 0;
 	os << "\nStack: \n";
-	foreach (it, state.stack.rbegin(), state.stack.rend())
-	{
-		StackFrame	&sf = *it;
-		Function	*f = sf.kf->function;
-		VexSB		*vsb;
-
-		vsb = func2vsb_table[(uint64_t)f];
-		os << "\t#" << idx++ << " in " << f->getNameStr();
-		if (vsb) {
-			os << " (" << gs->getName(vsb->getGuestAddr()) << ")";
-		}
-		os << "\n";
-	}
+	printStackTrace(state, os);
 
 	if (state.prevPC && state.prevPC->getInst()) {
 		raw_os_ostream	ros(os);

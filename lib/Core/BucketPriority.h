@@ -17,19 +17,13 @@ public:
 	/* pr_k > pr_j => pr_k scheduled first */
 	virtual int getPriority(ExecutionState& st)
 	{
-	/* TODO: use stacklist */
 		llvm::Function	*f;
 		uint64_t	hits;
 
-		if (st.coveredNew)
-			return -1;
-
-		// f = st.pc->getInst()->getParent()->getParent();
-
-		// necessary so that we don't absorb helper functions
-		// from vexllvm-- improper bucketing!
-		f = st.stack.front().kf->function;
+		f = getHitFunction(st);
 		hits = hitmap[f];
+		if (st.coveredNew && hits < 4)
+			return -1;
 
 		if (!isLatched()) {
 			std::cerr << "Penalty: " << f->getNameStr()
@@ -37,9 +31,50 @@ public:
 			hitmap[f] = hits+1;
 		}
 
-		return -(hits/2);
+		return -getStackRank(st);
 	}
 private:
+	llvm::Function* getHitFunction(ExecutionState& st) const
+	{
+		// necessary so that we don't absorb helper functions
+		// from vexllvm-- improper bucketing!
+		if (st.stack.size() && st.stack.back().kf != NULL)
+			return st.stack.back().kf->function;
+		else
+			return st.pc->getInst()->getParent()->getParent();
+	}
+
+	int getStackRank(ExecutionState& st) const
+	{
+		ExecutionState::stack_ty& s(st.stack);
+		int	rank = 1;
+
+		if (s.size() == 0)
+			return hitmap.find(getHitFunction(st))->second;
+
+		for (unsigned i = 0; i < s.size(); i++) {
+			KFunction			*kf;
+			hitmap_ty::const_iterator	it;
+			int				hits;
+
+			kf = s[i].kf;
+			if (kf == NULL)
+				continue;
+
+			it = hitmap.find(kf->function);
+			if (it == hitmap.end())
+				continue;
+
+			hits = it->second;
+			if (!hits)
+				continue;
+
+			rank *= 1+((it->second)/(i+1));
+		}
+
+		return rank;
+	}
+
 protected:
 	typedef std::map<llvm::Function*, uint64_t> hitmap_ty;
 	hitmap_ty	hitmap;

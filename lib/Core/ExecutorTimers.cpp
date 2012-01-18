@@ -70,13 +70,16 @@ protected:
 	StatTimer(Executor *_executor, const char* fname)
 	: executor(_executor)
 	, n(0)
-	{ os = executor->getInterpreterHandler()->openOutputFile(fname); }
+	{ os = executor->getInterpreterHandler()->openOutputFile(fname); 
+	  base_time = util::estWallTime();
+	}
 
 	void run()
 	{
 		if (!os) return;
 
-		*os << n++ << ' ';
+		double cur_time = util::estWallTime();
+		*os << (cur_time - base_time) << ' ';
 		print();
 		*os << '\n';
 		os->flush();
@@ -84,6 +87,7 @@ protected:
 
 	virtual void print(void) = 0;
 
+	double		base_time;
 	Executor	*executor;
 	std::ostream 	*os;
 	unsigned	n;

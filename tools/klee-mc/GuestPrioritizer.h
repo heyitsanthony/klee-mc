@@ -11,8 +11,10 @@ public:
 	, len(0x400000) /* 4MB of code should be enough! */
 	{
 		const Guest	*gs = exe.getGuest();
-		base = gs->getEntryPoint().o & ~((uint64_t)len - 1);
-		end = base + len;
+		//base = gs->getEntryPoint().o & ~((uint64_t)len - 1);
+		std::cerr << "GUESTPRIORITIZER: FORCING 4MB REGION\n";
+		base = 0x400000;
+		end = base + 2*len;
 	}
 
 	virtual ~GuestPrioritizer() {}
@@ -27,10 +29,10 @@ public:
 
 		vsb = exe.getFuncVSB(ki->getInst()->getParent()->getParent());
 		if (vsb == NULL)
-			return 1;
+			return 0;
 
-		if (	vsb->getGuestAddr().o < base ||
-			vsb->getGuestAddr().o > end)
+		if (	(uint64_t)vsb->getGuestAddr().o < base ||
+			(uint64_t)vsb->getGuestAddr().o > end)
 			return 0;
 
 		return 1;

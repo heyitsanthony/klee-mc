@@ -51,6 +51,9 @@ namespace {
   UseInterleavedRS("use-interleaved-RS");
 
   cl::opt<bool>
+  UseInterleavedBS("use-interleaved-BS");
+
+  cl::opt<bool>
   UseInterleavedDFS("use-interleaved-DFS");
 
   cl::opt<bool>
@@ -190,6 +193,8 @@ Searcher* UserSearcher::setupInterleavedSearcher(
   if (UseInterleavedRR)
     s.push_back(new RRSearcher());
 
+  if (UseInterleavedBS)
+    s.push_back(new PrioritySearcher(new BucketPrioritizer()));
 
   if (UseInterleavedMD2UNURS)
     s.push_back(new WeightedRandomSearcher(

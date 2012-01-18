@@ -38,6 +38,7 @@ public:
 
 private:
 	bool refreshPriority(ExecutionState* es);
+	void demote(ExecutionState* es, int new_pr);
 	void removeState(ExecutionState* es);
 	void addState(ExecutionState* es);
 	void clearDeadPriorities(void);

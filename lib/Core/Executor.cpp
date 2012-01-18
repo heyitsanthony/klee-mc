@@ -85,6 +85,9 @@ namespace llvm
 unsigned MakeConcreteSymbolic;
 
 namespace {
+  cl::opt<bool>
+  DumpSelectStack("dump-select-stack", cl::init(false));
+
   cl::opt<unsigned,true>
   MakeConcreteSymbolicProxy(
   	"make-concrete-symbolic",
@@ -879,14 +882,30 @@ bool Executor::addConstraint(ExecutionState &state, ref<Expr> condition)
 		assert (mayBeTrue);
 	}
 
-	if (!state.addConstraint(condition))
+	if (!state.addConstraint(condition)) {
+		std::cerr << "[CHKCON] Failed to add constraint\n";
 		return false;
+	}
 
 	if (ivcEnabled) {
 		doImpliedValueConcretization(
 			state,
 			condition,
 			ConstantExpr::alloc(1, Expr::Bool));
+	}
+
+	if (ChkConstraints) {
+		bool	mustBeTrue, ok;
+
+		ok = solver->mustBeTrue(state, condition, mustBeTrue);
+		assert (ok);
+
+		if (!mustBeTrue) {
+			std::cerr
+				<< "[CHKCON] WHOOPS2: "
+				<< condition << " is never true!\n";
+		}
+		assert (mustBeTrue);
 	}
 
 	return true;
@@ -2953,10 +2972,16 @@ done:
 
 void Executor::runLoop(void)
 {
+	ExecutionState* last_state;
 	while (!stateManager->empty() && !haltExecution) {
 		ExecutionState *state;
 
 		state = stateManager->selectState(!onlyNonCompact);
+		if (last_state != state && DumpSelectStack) {
+			std::cerr << "StackTrace for st=" << (void*)state << '\n';
+			printStackTrace(*state, std::cerr);
+			std::cerr << "===================\n";
+		}
 
 		assert (state != NULL &&
 			"State man not empty, but selectState is?");
@@ -2977,6 +3002,7 @@ void Executor::runLoop(void)
 
 		handleMemoryUtilization(state);
 		notifyCurrent(state);
+		last_state = state;
 	}
 }
 
@@ -3128,8 +3154,11 @@ void Executor::printStateErrorMessage(
 	}
 
 	os << "Stack: \n";
-	state.dumpStack(os);
+	printStackTrace(state, os);
 }
+
+void Executor::printStackTrace(ExecutionState& st, std::ostream& os) const
+{ st.dumpStack(os); }
 
 void Executor::resolveExact(ExecutionState &state,
                             ref<Expr> p,
