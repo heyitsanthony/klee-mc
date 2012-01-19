@@ -374,6 +374,7 @@ bool PipeSolverImpl::writeQuery(const Query& q) const
 		old_sig_h = signal(SIGALRM, parent_query_writer_alarm);
 		alarm((unsigned int)timeout);
 		wait_pid = waitpid(query_writer_pid, &status, 0);
+		alarm(0); // unschedule alarm
 		signal(SIGALRM, old_sig_h);
 	} else {
 		wait_pid = waitpid(query_writer_pid, &status, 0);
