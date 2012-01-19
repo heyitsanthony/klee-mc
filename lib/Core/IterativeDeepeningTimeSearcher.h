@@ -14,6 +14,9 @@ class IterativeDeepeningTimeSearcher : public Searcher
 public:
 	IterativeDeepeningTimeSearcher(Searcher *baseSearcher);
 	virtual ~IterativeDeepeningTimeSearcher();
+	virtual Searcher* createEmpty(void) const
+	{ return new IterativeDeepeningTimeSearcher(
+		baseSearcher->createEmpty()); }
 
 	ExecutionState &selectState(bool allowCompact);
 	void update(ExecutionState *current, const States s);

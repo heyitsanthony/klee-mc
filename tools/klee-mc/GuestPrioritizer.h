@@ -17,6 +17,9 @@ public:
 		end = base + 2*len;
 	}
 
+	virtual Prioritizer* copy(void) const
+	{ return new GuestPrioritizer(exe); }
+
 	virtual ~GuestPrioritizer() {}
 
 	int getPriority(ExecutionState& st)

@@ -13,6 +13,7 @@ namespace klee
     ExecutionState &selectState(bool allowCompact);
     virtual ~DFSSearcher() {}
 
+    virtual Searcher* createEmpty(void) const { return new DFSSearcher(); }
     void update(ExecutionState *current, States s);
     bool empty() const { return states.empty(); }
     void printName(std::ostream &os) const { os << "DFSSearcher\n"; }

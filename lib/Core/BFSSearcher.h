@@ -6,18 +6,20 @@
 
 namespace klee
 {
-  class BFSSearcher : public Searcher
-  {
-    std::deque<ExecutionState*> states;
+class BFSSearcher : public Searcher
+{
+private:
+	std::deque<ExecutionState*> states;
 
-  public:
-    ExecutionState &selectState(bool allowCompact);
-    virtual ~BFSSearcher() {}
+public:
+	ExecutionState &selectState(bool allowCompact);
+	virtual ~BFSSearcher() {}
 
-    void update(ExecutionState *current, States s);
-    bool empty() const { return states.empty(); }
-    void printName(std::ostream &os) const { os << "BFSSearcher\n"; }
-  };
+	virtual Searcher* createEmpty(void) const { return new BFSSearcher(); }
+	void update(ExecutionState *current, States s);
+	bool empty() const { return states.empty(); }
+	void printName(std::ostream &os) const { os << "BFSSearcher\n"; }
+};
 }
 
 

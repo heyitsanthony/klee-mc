@@ -16,6 +16,8 @@ namespace klee
     explicit InterleavedSearcher(const searchers_ty &_searchers);
     virtual ~InterleavedSearcher();
 
+    virtual Searcher* createEmpty(void) const;
+
     ExecutionState &selectState(bool allowCompact);
     void update(ExecutionState *current, const States s);
     bool empty() const { return searchers[0]->empty(); }

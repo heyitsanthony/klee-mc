@@ -8,6 +8,9 @@ namespace klee
 class PhasedSearcher : public Searcher
 {
 public:
+	virtual Searcher* createEmpty(void) const
+	{ return new PhasedSearcher(); }
+
 	ExecutionState &selectState(bool allowCompact);
 	PhasedSearcher() : state_c(0), cur_phase(0) {}
 	virtual ~PhasedSearcher() {}

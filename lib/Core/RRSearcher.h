@@ -10,6 +10,9 @@ class RRSearcher : public Searcher
 	std::list<ExecutionState*>		states;
 	std::list<ExecutionState*>::iterator cur_state;
 public:
+	virtual Searcher* createEmpty(void) const
+	{ return new RRSearcher(); }
+
 	ExecutionState &selectState(bool allowCompact);
 	RRSearcher() : cur_state(states.end()) {}
 	virtual ~RRSearcher() {}

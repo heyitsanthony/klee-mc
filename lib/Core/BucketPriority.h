@@ -5,14 +5,19 @@
 #include "StatsTracker.h"
 #include "PrioritySearcher.h"
 
+#include "static/Sugar.h"
+
 namespace klee
 {
 
 class BucketPrioritizer : public Prioritizer
 {
+private:
 public:
 	BucketPrioritizer() {}
 	virtual ~BucketPrioritizer() {}
+
+	DEFAULT_PR_COPY(BucketPrioritizer)
 
 	/* pr_k > pr_j => pr_k scheduled first */
 	virtual int getPriority(ExecutionState& st)
@@ -22,16 +27,31 @@ public:
 
 		f = getHitFunction(st);
 		hits = hitmap[f];
-		if (st.coveredNew && hits < 4)
+		if (st.coveredNew && hits < 2)
 			return -1;
 
 		if (!isLatched()) {
 			std::cerr << "Penalty: " << f->getNameStr()
 				<< ". hits=" << hits << "\n";
 			hitmap[f] = hits+1;
+
+#if 0
+			if (!st.stack.empty()) {
+			for (unsigned i = 0; i < st.stack.size()-1; i++) {
+				KFunction	*kf;
+				int		hits;
+
+				kf = st.stack[i].kf;
+				if (kf == NULL)
+					continue;
+				hitmap[kf->function] = hitmap[kf->function] + 1;
+			}
+			}
+#endif
 		}
 
-		return -getStackRank(st);
+	//	return -getStackRank(st);
+		return -hits;
 	}
 private:
 	llvm::Function* getHitFunction(ExecutionState& st) const
@@ -69,7 +89,7 @@ private:
 			if (!hits)
 				continue;
 
-			rank *= 1+((it->second)/(i+1));
+			rank += 1+(i*(it->second))/(i+1);
 		}
 
 		return rank;

@@ -29,6 +29,10 @@ private:
 public:
 	WeightedRandomSearcher(Executor &executor, WeightType type);
 	virtual ~WeightedRandomSearcher();
+	virtual Searcher* createEmpty(void) const
+	{ return new WeightedRandomSearcher(executor, type); }
+
+
 	ExecutionState &selectState(bool allowCompact);
 	void update(ExecutionState *current, const States s);
 	bool empty() const;

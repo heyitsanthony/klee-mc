@@ -19,6 +19,9 @@ namespace klee
   public:
     BumpMergingSearcher(ExecutorBC &executor, Searcher *baseSearcher);
     virtual ~BumpMergingSearcher();
+    virtual Searcher* createEmpty(void) const
+   { return new BumpMergingSearcher(executor, baseSearcher->createEmpty()); }
+
 
     ExecutionState &selectState(bool allowCompact);
     void update(ExecutionState *current, States s);

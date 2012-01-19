@@ -12,6 +12,8 @@ class RandomSearcher : public Searcher
 
 public:
 	virtual ~RandomSearcher() {}
+	virtual Searcher* createEmpty(void) const
+	{ return new RandomSearcher(); }
 
 	ExecutionState &selectState(bool allowCompact);
 	void update(ExecutionState *current, const States s);

@@ -175,6 +175,8 @@ bool UserSearcher::userSearcherRequiresMD2U() {
           UseInterleavedQueryCostNURS);
 }
 
+#define DEFAULT_PR_SEARCHER	new RandomSearcher()
+
 /* Research quality */
 Searcher* UserSearcher::setupInterleavedSearcher(
 	Executor& executor, Searcher* searcher)
@@ -194,7 +196,9 @@ Searcher* UserSearcher::setupInterleavedSearcher(
     s.push_back(new RRSearcher());
 
   if (UseInterleavedBS)
-    s.push_back(new PrioritySearcher(new BucketPrioritizer()));
+    s.push_back(
+    	new PrioritySearcher(
+		new BucketPrioritizer(), DEFAULT_PR_SEARCHER));
 
   if (UseInterleavedMD2UNURS)
     s.push_back(new WeightedRandomSearcher(
@@ -231,15 +235,17 @@ Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 	Searcher* searcher;
 
 	if (UseBucketSearcher) {
-		searcher = new PrioritySearcher(new BucketPrioritizer());
+		searcher = new PrioritySearcher(
+			new BucketPrioritizer(), DEFAULT_PR_SEARCHER);
 	} else if (UseCovSearcher) {
 		searcher = new PrioritySearcher(
 			new CovPrioritizer(
 				executor.getKModule(),
-				*executor.getStatsTracker()));
+				*executor.getStatsTracker()),
+			DEFAULT_PR_SEARCHER);
 	} else if (UsePrioritySearcher) {
 		assert (prFunc != NULL);
-		searcher = new PrioritySearcher(prFunc);
+		searcher = new PrioritySearcher(prFunc, DEFAULT_PR_SEARCHER);
 		prFunc = NULL;
 	} else if (UsePhasedSearch) {
 		searcher = new PhasedSearcher();

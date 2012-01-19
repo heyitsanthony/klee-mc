@@ -30,6 +30,13 @@ public:
 		     unsigned _instructionBudget);
 	virtual ~BatchingSearcher();
 
+	virtual Searcher* createEmpty(void) const
+	{ return new BatchingSearcher(
+		baseSearcher->createEmpty(),
+		timeBudget,
+		instructionBudget); }
+
+
 	ExecutionState &selectState(bool allowCompact);
 	void update(ExecutionState *current, States s);
 	bool empty() const;

@@ -30,3 +30,12 @@ void InterleavedSearcher::update(ExecutionState *current, const States s)
 	foreach(it, searchers.begin(), searchers.end()) 
 		(*it)->update(current, s);
 }
+
+Searcher* InterleavedSearcher::createEmpty(void) const
+{
+	searchers_ty	new_s;
+	foreach (it, searchers.begin(), searchers.end())
+		new_s.push_back((*it)->createEmpty());
+
+	return new InterleavedSearcher(new_s);
+}

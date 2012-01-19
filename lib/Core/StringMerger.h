@@ -13,6 +13,8 @@ class StringMerger : public Searcher
 public:
 	StringMerger(Searcher* inBaseSearch) : baseSearcher(inBaseSearch) {}
 	virtual ~StringMerger();
+	virtual Searcher* createEmpty(void) const
+	{ return new StringMerger(baseSearcher->createEmpty()); }
 
 	virtual ExecutionState &selectState(bool allowCompact);
 

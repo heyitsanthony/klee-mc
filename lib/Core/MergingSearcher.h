@@ -19,6 +19,8 @@ namespace klee
   public:
     MergingSearcher(ExecutorBC &executor, Searcher *baseSearcher);
     virtual ~MergingSearcher();
+    virtual Searcher* createEmpty(void) const
+    { return new MergingSearcher(executor, baseSearcher->createEmpty()); }
 
     ExecutionState &selectState(bool allowCompact);
     void update(ExecutionState *current, const States s);

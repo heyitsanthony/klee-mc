@@ -41,6 +41,10 @@ public:
 	CovPrioritizer(const KModule* _km, StatsTracker& st)
 	: statTracker(st)
 	, km(_km) {}
+
+	virtual Prioritizer* copy(void) const
+	{ return new CovPrioritizer(km, statTracker); }
+
 protected:
 	bool isFuncCovered(const KFunction* kf)
 	{

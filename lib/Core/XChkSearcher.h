@@ -13,6 +13,9 @@ public:
 	ExecutionState &selectState(bool allowCompact);
 	XChkSearcher(Searcher* in_base);
 	virtual ~XChkSearcher();
+	virtual Searcher* createEmpty(void) const
+	{ return new XChkSearcher(base->createEmpty()); }
+
 
 	void updateHash(ExecutionState* s, unsigned hash=0);
 	void update(ExecutionState *current, States s);
