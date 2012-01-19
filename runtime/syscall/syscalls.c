@@ -81,6 +81,7 @@ static void* sc_mmap_addr(void* regfile, void* addr, uint64_t len)
 	if (!is_himem) {
 		/* not highmem, use if we've got it.. */
 		addr = (void*)concretize_u64(GET_ARG0(regfile));
+		klee_print_expr("oh this is a drag", addr);
 		klee_define_fixed_object(addr, len);
 		return addr;
 	}
@@ -467,10 +468,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 	break;
 
 	case SYS_clock_gettime: {
-		void*	timespec = GET_ARG1(regfile);
+		void*	timespec = (void*)GET_ARG1(regfile);
 		if (timespec == NULL) {
 			sc_ret_v(regfile, -1);
-			return;
+			break;
 		}
 		make_sym(GET_ARG1(regfile), sizeof(struct timespec), "timespec");
 		sc_ret_v(regfile, 0);
@@ -686,6 +687,11 @@ void* sc_enter(void* regfile, void* jmpptr)
 		klee_assume(GET_SYSRET(new_regs) > 3 && GET_SYSRET(new_regs) < 4096);
 		break;
 
+	case SYS_getsockopt:
+		klee_warning_once("phony getsockopt");
+		sc_ret_v(regfile, 0);
+		break;
+
 	case SYS_getsockname:
 		new_regs = sc_new_regs(regfile);
 		if (GET_SYSRET_S(new_regs) == -1)
@@ -771,6 +777,26 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_restart_syscall:
 		new_regs = sc_new_regs(regfile);
 		sc_ret_range(new_regs, -1, 1);
+		break;
+
+	case SYS_accept4:
+		// int accept4(
+		// 	int sockfd, struct sockaddr *addr,
+		// 	socklen_t *addrlen, int flags);
+		//
+		// We'll be funny and mark 'addr's data as symbolic
+		if (!GET_ARG1(regfile)) {
+			sc_ret_v(regfile, fd_open_sym());
+			break;
+		}
+
+		if (*(int*)GET_ARG2(regfile) < 4) {
+			sc_ret_v(regfile, -1);
+			break;
+		}
+
+		make_sym(GET_ARG1(regfile), 4, "accept4_addr");
+		sc_ret_v(regfile, fd_open_sym());
 		break;
 
 	default:

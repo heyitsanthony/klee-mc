@@ -4,6 +4,7 @@
 
 #include "arm_unistd.h"
 #define INVALID_SYSCALL_NR	511
+#define ARM__NR_process_vm_readv INVALID_SYSCALL_NR
 #define ARM__NR_mmap		INVALID_SYSCALL_NR
 #define ARM__NR_putpmsg		INVALID_SYSCALL_NR
 #define ARM__NR_getpmsg		INVALID_SYSCALL_NR
