@@ -339,11 +339,12 @@ bool PipeSolverImpl::writeQueryToChild(const Query& q) const
 
 /* terminates writer process */
 static void query_writer_alarm(int x) { exit(1); }
+static void parent_query_writer_alarm(int x) { return 0; }
 
 bool PipeSolverImpl::writeQuery(const Query& q) const
 {
-	pid_t	query_writer_pid;
-	int	status;
+	pid_t		query_writer_pid;
+	int		status, wait_pid;
 
 	if (!ForkQueries)
 		return writeQueryToChild(q);
@@ -366,11 +367,22 @@ bool PipeSolverImpl::writeQuery(const Query& q) const
 	}
 
 	assert (query_writer_pid > 0 && "Parent with bad pid");
-	if (waitpid(query_writer_pid, &status, 0) != query_writer_pid)
-		return false;
 
-	if (!WIFEXITED(status))
+	if (timeout > 0.0) {
+		sighandler_t	old_sig_h;
+
+		old_sig_h = signal(SIGALRM, parent_query_writer_alarm);
+		alarm((unsigned int)timeout);
+		wait_pid = waitpid(query_writer_pid, &status, 0);
+		signal(SIGALRM, old_sig_h);
+	} else {
+		wait_pid = waitpid(query_writer_pid, &status, 0);
+	}
+
+	if (wait_pid != query_writer_pid || !WIFEXITED(status)) {
+		kill(SIGKILL, query_writer_pid);
 		return false;
+	}
 
 	if (WEXITSTATUS(status) != 0)
 		return false;
