@@ -6,3 +6,11 @@ snooze*
 *pcache*
 *.smt
 guest-*
+kdump-*
+*.png
+*.gnuplot
+*.x
+klee-*
+lol*
+*.out
+*.err

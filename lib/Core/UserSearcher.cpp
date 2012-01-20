@@ -17,6 +17,7 @@
 
 #include "llvm/Support/CommandLine.h"
 
+#include "TailPriority.h"
 #include "BucketPriority.h"
 #include "BatchingSearcher.h"
 #include "BumpingMergeSearcher.h"
@@ -90,44 +91,44 @@ namespace {
   cl::opt<bool>
   UseRandomPathSearch("use-random-path");
 
-  cl::opt<WeightedRandomSearcher::WeightType>
-  WeightType("weight-type",
-    cl::desc("Set the weight type for --use-non-uniform-random-search"),
-    cl::values(
-      clEnumValN(WeightedRandomSearcher::Depth, "none", "use (2^depth)"),
-      clEnumValN(WeightedRandomSearcher::InstCount,
-        "icnt", "use current pc exec count"),
-      clEnumValN(WeightedRandomSearcher::CPInstCount,
-        "cpicnt", "use current pc exec count"),
-      clEnumValN(WeightedRandomSearcher::QueryCost,
-        "query-cost", "use query cost"),
-      clEnumValN(WeightedRandomSearcher::MinDistToUncovered,
-        "md2u", "use min dist to uncovered"),
-      clEnumValN(WeightedRandomSearcher::CoveringNew,
-        "covnew", "use min dist to uncovered + coveringNew flag"),
+  cl::opt<std::string>
+  WeightType(
+    "weight-type",
+    cl::desc(
+    	"Set the weight type for --use-non-uniform-random-search.\n"
+	"Weights: none, icnt, cpicnt, query-cost, md2u, covnew"),
+    cl::init("none"));
+#if 0
+      clEnumVal("none", "use (2^depth)"),
+      clEnumVal("icnt", "use current pc exec count"),
+      clEnumVal("cpicnt", "use current pc exec count"),
+      clEnumVal("query-cost", "use query cost"),
+      clEnumVal("md2u", "use min dist to uncovered"),
+      clEnumVal("covnew", "use min dist to uncovered + coveringNew flag"),
       clEnumValEnd));
-  
+#endif
+
   cl::opt<bool>
-  UseMerge("use-merge", 
+  UseMerge("use-merge",
            cl::desc("Enable support for klee_merge() (experimental)"));
- 
+
   cl::opt<bool>
-  UseBumpMerge("use-bump-merge", 
+  UseBumpMerge("use-bump-merge",
            cl::desc("Enable support for klee_merge() (extra experimental)"));
- 
+
   cl::opt<bool>
-  UseIterativeDeepeningTimeSearch("use-iterative-deepening-time-search", 
+  UseIterativeDeepeningTimeSearch("use-iterative-deepening-time-search",
                                     cl::desc("(experimental)"));
 
   cl::opt<bool>
-  UseBatchingSearch("use-batching-search", 
+  UseBatchingSearch("use-batching-search",
            cl::desc("Use batching searcher (run state for N instructions/time, see --batch-instructions and --batch-time"));
 
   cl::opt<unsigned>
   BatchInstructions("batch-instructions",
                     cl::desc("Number of instructions to batch when using --use-batching-search"),
                     cl::init(0));
-  
+
   cl::opt<double>
   BatchTime("batch-time",
             cl::desc("Amount of time to batch when using --use-batching-search"),
@@ -156,6 +157,12 @@ namespace {
 	cl::desc("BUCKETS"),
 	cl::init(false));
 
+  cl::opt<bool>
+  UseTailSearcher(
+  	"use-tail-search",
+	cl::desc("TAIL"),
+	cl::init(false));
+
 
   cl::opt<bool, true>
   UsePrioritySearcherProxy(
@@ -165,13 +172,31 @@ namespace {
 	cl::init(false));
 }
 
+static WeightFunc* getWeightFuncByName(const std::string& name)
+{
+	if (name == "none")
+		return new DepthWeight();
+	else if (name == "icnt")
+		return new InstCountWeight();
+	else if (name == "cpicnt")
+		return new CPInstCountWeight();
+	else if (name == "query-cost")
+		return new QueryCostWeight();
+	else if (name == "md2u")
+		return new MinDistToUncoveredWeight();
+	else if (name == "covnew")
+		return new CoveringNewWeight();
+
+	assert (0 == 1 && "Unknown weight type given");
+	return NULL;
+}
+
 bool UserSearcher::userSearcherRequiresMD2U() {
-  return (WeightType==WeightedRandomSearcher::MinDistToUncovered ||
-          WeightType==WeightedRandomSearcher::CoveringNew ||
+  return (WeightType=="md2u" || WeightType=="covnew" ||
           UseInterleavedMD2UNURS ||
-          UseInterleavedCovNewNURS || 
-          UseInterleavedInstCountNURS || 
-          UseInterleavedCPInstCountNURS || 
+          UseInterleavedCovNewNURS ||
+          UseInterleavedInstCountNURS ||
+          UseInterleavedCPInstCountNURS ||
           UseInterleavedQueryCostNURS);
 }
 
@@ -181,60 +206,69 @@ bool UserSearcher::userSearcherRequiresMD2U() {
 Searcher* UserSearcher::setupInterleavedSearcher(
 	Executor& executor, Searcher* searcher)
 {
-  std::vector<Searcher *> s;
+	std::vector<Searcher *> s;
 
-  s.push_back(searcher);
-    
-  if (UseInterleavedNURS)
-    s.push_back(new WeightedRandomSearcher(
-      executor, WeightedRandomSearcher::Depth));
-  
-  if (UseInterleavedDFS)
-    s.push_back(new DFSSearcher());
+	s.push_back(searcher);
 
-  if (UseInterleavedRR)
-    s.push_back(new RRSearcher());
+	if (UseInterleavedNURS)
+		s.push_back(
+			new WeightedRandomSearcher(
+				executor, new DepthWeight()));
 
-  if (UseInterleavedBS)
-    s.push_back(
-    	new PrioritySearcher(
-		new BucketPrioritizer(), DEFAULT_PR_SEARCHER));
+	if (UseInterleavedDFS)
+		s.push_back(new DFSSearcher());
 
-  if (UseInterleavedMD2UNURS)
-    s.push_back(new WeightedRandomSearcher(
-      executor, WeightedRandomSearcher::MinDistToUncovered));
-  
-  if (UseInterleavedCovNewNURS)
-    s.push_back(new WeightedRandomSearcher(
-      executor, WeightedRandomSearcher::CoveringNew));
-  
-  if (UseInterleavedInstCountNURS)
-    s.push_back(new WeightedRandomSearcher(
-      executor, WeightedRandomSearcher::InstCount));
-  
-  if (UseInterleavedCPInstCountNURS)
-    s.push_back(new WeightedRandomSearcher(
-      executor, WeightedRandomSearcher::CPInstCount));
-  
-  if (UseInterleavedQueryCostNURS)
-    s.push_back(new WeightedRandomSearcher(
-      executor, WeightedRandomSearcher::QueryCost));
+	if (UseInterleavedRR)
+		s.push_back(new RRSearcher());
 
-  if (UseInterleavedRS) 
-    s.push_back(new RandomSearcher());
+	if (UseInterleavedBS)
+		s.push_back(
+			new PrioritySearcher(
+				new BucketPrioritizer(), DEFAULT_PR_SEARCHER));
 
-  if (s.size() != 1)
-    return new InterleavedSearcher(s);
+	if (UseInterleavedMD2UNURS)
+		s.push_back(
+			new WeightedRandomSearcher(
+				executor, new MinDistToUncoveredWeight()));
 
-  /* No interleaved searchers defined. Don't bother with interleave obj */
-  return searcher;
+	if (UseInterleavedCovNewNURS)
+		s.push_back(
+			new WeightedRandomSearcher(
+				executor, new CoveringNewWeight()));
+
+	if (UseInterleavedInstCountNURS)
+		s.push_back(
+			new WeightedRandomSearcher(
+				executor, new InstCountWeight()));
+
+	if (UseInterleavedCPInstCountNURS)
+		s.push_back(
+			new WeightedRandomSearcher(
+				executor, new CPInstCountWeight()));
+
+	if (UseInterleavedQueryCostNURS)
+		s.push_back(
+			new WeightedRandomSearcher(
+				executor, new QueryCostWeight()));
+
+	if (UseInterleavedRS)
+		s.push_back(new RandomSearcher());
+
+	if (s.size() != 1)
+		return new InterleavedSearcher(s);
+
+	/* No interleaved searchers defined. Don't bother with interleave obj */
+	return searcher;
 }
 
 Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 {
 	Searcher* searcher;
 
-	if (UseBucketSearcher) {
+	if (UseTailSearcher) {
+		searcher = new PrioritySearcher(
+			new TailPrioritizer(), DEFAULT_PR_SEARCHER);
+	} else if (UseBucketSearcher) {
 		searcher = new PrioritySearcher(
 			new BucketPrioritizer(), DEFAULT_PR_SEARCHER);
 	} else if (UseCovSearcher) {
@@ -254,7 +288,9 @@ Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 	} else if (UseRandomPathSearch) {
 		searcher = new RandomPathSearcher(executor);
 	} else if (UseNonUniformRandomSearch) {
-		searcher = new WeightedRandomSearcher(executor, WeightType);
+		searcher = new WeightedRandomSearcher(
+			executor,
+			getWeightFuncByName(WeightType));
 	} else if (UseRandomSearch) {
 		searcher = new RandomSearcher();
 	} else if (UseBreadthFirst) {
@@ -273,7 +309,7 @@ Searcher* UserSearcher::setupMergeSearcher(
 		assert(!UseBumpMerge);
 		searcher = new MergingSearcher(
 			dynamic_cast<ExecutorBC&>(executor), searcher);
-	} else if (UseBumpMerge) {    
+	} else if (UseBumpMerge) {
 		searcher = new BumpMergingSearcher(
 		dynamic_cast<ExecutorBC&>(executor), searcher);
 	}
@@ -297,7 +333,7 @@ Searcher *UserSearcher::constructUserSearcher(Executor &executor)
   }
 
   searcher = setupMergeSearcher(executor, searcher);
-  
+
   if (UseIterativeDeepeningTimeSearch) {
     searcher = new IterativeDeepeningTimeSearcher(searcher);
   }

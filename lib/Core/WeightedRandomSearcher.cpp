@@ -14,31 +14,21 @@
 
 using namespace klee;
 namespace klee { extern RNG theRNG; }
+WeightFunc::~WeightFunc(void) {}
+
 
 WeightedRandomSearcher::WeightedRandomSearcher(
-	Executor &_executor,
-	WeightType _type)
+	Executor &_executor, WeightFunc* wf)
 : executor(_executor)
 , states(new DiscretePDF<ExecutionState*>())
-, type(_type)
-{
-	switch (type) {
-	case Depth:
-		updateWeights = false;
-		break;
-	case InstCount:
-	case CPInstCount:
-	case QueryCost:
-	case MinDistToUncovered:
-	case CoveringNew:
-		updateWeights = true;
-		break;
-	default:
-		assert(0 && "invalid weight type");
-	}
-}
+, weigh_func(wf)
+{}
 
-WeightedRandomSearcher::~WeightedRandomSearcher() { delete states; }
+WeightedRandomSearcher::~WeightedRandomSearcher()
+{
+	delete states;
+	delete weigh_func;
+}
 
 ExecutionState &WeightedRandomSearcher::selectState(bool allowCompact)
 {
@@ -48,65 +38,14 @@ ExecutionState &WeightedRandomSearcher::selectState(bool allowCompact)
 
 double WeightedRandomSearcher::getWeight(ExecutionState *es)
 {
+	double	w;
+
 	if (es->isCompact() || es->isReplayDone() == false)
 		return es->weight;
 
-	switch (type) {
-	default:
-	case Depth:
-		break;
-	case InstCount:
-	{
-		uint64_t count;
-		count = theStatisticManager->getIndexedValue(
-			stats::instructions,
-			es->pc->getInfo()->id);
-		double inv = 1. / std::max((uint64_t) 1, count);
-		es->weight = inv * inv;
-		break;
-	}
-
-	case CPInstCount:
-	{
-		StackFrame &sf = es->stack.back();
-		uint64_t count;
-		
-		count = sf.callPathNode->statistics.getValue(
-			stats::instructions);
-		double inv = 1. / std::max((uint64_t) 1, count);
-		es->weight = inv;
-		break;
-	}
-
-	case QueryCost:
-		es->weight = (es->queryCost < .1) ? 1. : 1. / es->queryCost;
-		break;
-
-	case CoveringNew:
-	case MinDistToUncovered:
-	{
-		uint64_t md2u;
-		
-		md2u = computeMinDistToUncovered(
-			es->pc,
-			es->stack.back().minDistToUncoveredOnReturn);
-
-		double invMD2U = 1. / (md2u ? md2u : 10000);
-
-		if (type == MinDistToUncovered) {
-			es->weight = invMD2U * invMD2U;
-			break;
-		}
-
-		assert (type == CoveringNew);
-
-		double invCovNew;
-		invCovNew = (es->instsSinceCovNew)
-			? 1. / std::max(1, (int) es->instsSinceCovNew - 1000)
-			: 0.;
-		es->weight = (invCovNew * invCovNew + invMD2U * invMD2U);
-		break;
-	}
+	if (weigh_func->isUpdating()) {
+		w = weigh_func->weigh(es);
+		es->weight = w;
 	}
 
 	return es->weight;
@@ -114,8 +53,8 @@ double WeightedRandomSearcher::getWeight(ExecutionState *es)
 
 void WeightedRandomSearcher::update(ExecutionState *current, const States s)
 {
-	if (	current && 
-		updateWeights && 
+	if (	current &&
+		weigh_func->isUpdating() &&
 		!s.getRemoved().count(current))
 	{
 		states->update(current, getWeight(current));
@@ -131,3 +70,62 @@ void WeightedRandomSearcher::update(ExecutionState *current, const States s)
 }
 
 bool WeightedRandomSearcher::empty() const { return states->empty(); }
+
+double InstCountWeight::weigh(const ExecutionState* es) const
+{
+	uint64_t count;
+	count = theStatisticManager->getIndexedValue(
+		stats::instructions,
+		es->pc->getInfo()->id);
+	double inv = 1. / std::max((uint64_t) 1, count);
+	return inv * inv;
+}
+
+double CPInstCountWeight::weigh(const ExecutionState *es) const
+{
+	const StackFrame	 &sf(es->stack.back());
+	uint64_t		count;
+
+	count = sf.callPathNode->statistics.getValue(
+		stats::instructions);
+	double inv = 1. / std::max((uint64_t) 1, count);
+	return inv;
+}
+
+double QueryCostWeight::weigh(const ExecutionState *es) const
+{ return (es->queryCost < .1) ? 1. : 1. / es->queryCost; }
+
+double CoveringNewWeight::weigh(const ExecutionState *es) const
+{
+	uint64_t	md2u;
+	double		invCovNew, invMD2U;
+
+	md2u = computeMinDistToUncovered(
+		es->pc,
+		es->stack.back().minDistToUncoveredOnReturn);
+
+	invMD2U = 1. / (md2u ? md2u : 10000);
+	invCovNew = (es->instsSinceCovNew)
+		? 1. / std::max(1, (int) es->instsSinceCovNew - 1000)
+		: 0.;
+
+	return (invCovNew * invCovNew + invMD2U * invMD2U);
+}
+
+double DepthWeight::weigh(const ExecutionState* es) const
+{ return es->weight; }
+
+double MinDistToUncoveredWeight::weigh(const ExecutionState *es) const
+{
+	uint64_t md2u;
+	double	invMD2U;
+
+	md2u = computeMinDistToUncovered(
+		es->pc,
+		es->stack.back().minDistToUncoveredOnReturn);
+
+	invMD2U = 1. / (md2u ? md2u : 10000);
+	return invMD2U * invMD2U;
+}
+
+
