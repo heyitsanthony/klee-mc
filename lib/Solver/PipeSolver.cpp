@@ -235,7 +235,7 @@ bool PipeSolverImpl::computeInitialValues(const Query& q, Assignment& a)
 	{
 		failQuery();
 		SMTPrinter::dump(q, "badsetup");
-		std::cerr << "FAILED TO SETUP FCHILD CIV\n";
+		std::cerr << "[PipeSolver] FAILED TO SETUP FCHILD CIV\n";
 		return false;
 	}
 
@@ -243,8 +243,12 @@ bool PipeSolverImpl::computeInitialValues(const Query& q, Assignment& a)
 	if (!is) {
 		failQuery();
 		finiChild();
-		SMTPrinter::dump(q, "badwrite");
-		std::cerr << "FAILED TO WRITERECVQUERY ("
+		if (!ForkQueries) {
+			SMTPrinter::dump(q, "badwrite");
+		} else {
+			std::cerr << "[PipeSolver] SUPPRESSING FORKQUERY ERROR\n";
+		}
+		std::cerr << "[PipeSolver] FAILED TO WRITERECVQUERY ("
 			<< (void*)q.hash() << ")\n";
 		return false;
 	}
@@ -255,7 +259,7 @@ bool PipeSolverImpl::computeInitialValues(const Query& q, Assignment& a)
 	finiChild();
 
 	if (parse_ok == false) {
-		std::cerr << "BAD PARSE computeInitialValues\n";
+		std::cerr << "[PipeSolver] BAD PARSE computeInitialValues\n";
 		SMTPrinter::dump(q, "badparse");
 		failQuery();
 		return false;
@@ -285,7 +289,7 @@ bool PipeSolverImpl::computeSat(const Query& q)
 		fmt->getExec(),
 		const_cast<char* const*>(fmt->getArgvSAT())) == false)
 	{
-		std::cerr << "FAILED COMPUTE SAT QUERY\n";
+		std::cerr << "[PipeSolver] FAILED COMPUTE SAT QUERY\n";
 		failQuery();
 		return false;
 	}
@@ -303,7 +307,7 @@ bool PipeSolverImpl::computeSat(const Query& q)
 	finiChild();
 
 	if (parse_ok == false) {
-		std::cerr << "BAD PARSE SAT\n";
+		std::cerr << "[PipeSolver] BAD PARSE SAT\n";
 		failQuery();
 		return false;
 	}
@@ -327,8 +331,9 @@ bool PipeSolverImpl::writeQueryToChild(const Query& q) const
 	/* write it all */
 	SMTPrinter::print(*os, q);
 	if (os->fail()) {
-		std::cerr << "FAILED TO COMPLETELY SEND SMT\n";
-		SMTPrinter::dump(q, "badsend");
+		std::cerr << "[PipeSolver] FAILED TO COMPLETELY SEND SMT\n";
+		if (!ForkQueries)
+			SMTPrinter::dump(q, "badsend");
 		return false;
 	}
 	os->flush();
