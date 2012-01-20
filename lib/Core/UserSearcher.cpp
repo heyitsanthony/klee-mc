@@ -25,6 +25,7 @@
 #include "DFSSearcher.h"
 #include "InterleavedSearcher.h"
 #include "IterativeDeepeningTimeSearcher.h"
+#include "PDFInterleavedSearcher.h"
 #include "PhasedSearcher.h"
 #include "MergingSearcher.h"
 #include "RandomPathSearcher.h"
@@ -125,13 +126,14 @@ namespace {
            cl::desc("Use batching searcher (run state for N instructions/time, see --batch-instructions and --batch-time"));
 
   cl::opt<unsigned>
-  BatchInstructions("batch-instructions",
-                    cl::desc("Number of instructions to batch when using --use-batching-search"),
-                    cl::init(0));
+  BatchInstructions(
+    "batch-instructions",
+    cl::desc("Number of instructions to batch with --use-batching-search"),
+    cl::init(0));
 
   cl::opt<double>
   BatchTime("batch-time",
-            cl::desc("Amount of time to batch when using --use-batching-search"),
+            cl::desc("Amount of time to batch with --use-batching-search"),
             cl::init(-1.0));
 
   cl::opt<bool>
@@ -163,6 +165,12 @@ namespace {
 	cl::desc("TAIL"),
 	cl::init(false));
 
+
+  cl::opt<bool>
+  UsePDFInterleave(
+  	"use-pdf-interleave",
+	cl::desc("Use uncovered instruction PDF interleaver"),
+	cl::init(false));
 
   cl::opt<bool, true>
   UsePrioritySearcherProxy(
@@ -254,8 +262,12 @@ Searcher* UserSearcher::setupInterleavedSearcher(
 	if (UseInterleavedRS)
 		s.push_back(new RandomSearcher());
 
-	if (s.size() != 1)
-		return new InterleavedSearcher(s);
+	if (s.size() != 1) {
+		if (UsePDFInterleave)
+			return new PDFInterleavedSearcher(s);
+		else
+			return new InterleavedSearcher(s);
+	}
 
 	/* No interleaved searchers defined. Don't bother with interleave obj */
 	return searcher;
