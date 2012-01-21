@@ -4,6 +4,7 @@ import os
 import struct
 import sys
 import gzip
+import subprocess
 
 version_no=3
 
@@ -12,16 +13,7 @@ class KTestError(Exception):
 
 class KTest:
     @staticmethod
-    def fromfile(path):
-        if not os.path.exists(path):
-            print "ERROR: file %s not found" % (path)
-            sys.exit(1)
-	print path
-        if path[-3:] == '.gz':
-		f = gzip.open(path)
-	else:
-	        f = open(path,'rb')
-
+    def fromFileKTest(f):
         hdr = f.read(5)
         if len(hdr)!=5 or (hdr!='KTEST' and hdr != "BOUT\n"):
             raise KTestError,'unrecognized file'
@@ -52,6 +44,74 @@ class KTest:
 
         # Create an instance
         b = KTest(version, args, symArgvs, symArgvLen, objects)
+        return b
+
+    @staticmethod
+    def fromFileSMT(f):
+        #numArgs, = struct.unpack('>i', f.read(4))
+#	stp_f = open('stp.out', 'w')
+#	stp = subprocess.call(['stp', '-m'], stdin=f, stdout=subprocess.PIPE, shell=True)
+	stp = subprocess.Popen(['stp -m -p'], stdin=f, stdout=subprocess.PIPE, shell=True)
+	data = dict()
+        for line in stp.stdout:
+		chunks=line.split(' ')
+		if chunks[0] != 'ASSERT(':
+			continue
+		var = chunks[1]
+		(varname, idx) = chunks[1].split('[')
+		idx = int(idx[:-1],16)
+		val = int(chunks[3],16)
+		if not varname in data:
+			data[varname] = dict()
+		data[varname][idx] = val
+
+	objects = []
+        for name in data.keys():
+		byte_list = data[name]
+		max_idx = max(byte_list.keys())
+
+		bytes = list('\0'*(max_idx+1))
+		for i in byte_list.keys():
+			bytes[i] = chr(byte_list[i])
+		bytes = ''.join(bytes)
+        	objects.append( (name,bytes) )
+
+        # Create an instance
+	# fake sym args for now
+	(args, symArgvs, symArgvLen) = ([], [], 0)
+        b = KTest(2000, args, symArgvs, symArgvLen, objects)
+        return b
+
+    @staticmethod
+    def fromfile(path):
+        if not os.path.exists(path):
+            print "ERROR: file %s not found" % (path)
+            sys.exit(1)
+	print path
+
+	ext = path.split('.')[-1]
+        if ext  == 'gz':
+		f = gzip.open(path)
+		ext = path.split('.')[-2]
+		if ext == 'smt':
+			# ugh
+			f2 = open('tmp.stp', 'w')
+			for l in f.readlines():
+				f2.write(l)
+			f.close()
+			f2.close()
+			f = open('tmp.stp', 'r')
+	else:
+	        f = open(path,'rb')
+
+	if ext == 'ktest':
+		b = KTest.fromFileKTest(f)
+	elif ext == 'smt':
+		b = KTest.fromFileSMT(f)
+	else:
+		print "Could not determine type by extension. Assume bout"
+		b = fromFileKTest(f)
+
         # Augment with extra filename field
         b.filename = path
         return b
