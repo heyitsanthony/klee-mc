@@ -2,6 +2,7 @@
 #include "CoreStats.h"
 #include "StatsTracker.h"
 #include "PDFInterleavedSearcher.h"
+#include <math.h>
 
 namespace klee { extern RNG theRNG; }
 using namespace klee;
@@ -26,19 +27,6 @@ PDFInterleavedSearcher::~PDFInterleavedSearcher()
 
 void PDFInterleavedSearcher::update(ExecutionState *current, const States s)
 {
-	if (stats::uncoveredInstructions > last_uncov_ins) {
-		ticket_c += searchers.size();
-		searchers[cur_searcher_idx].first += searchers.size();
-		last_uncov_ins = stats::uncoveredInstructions;
-	} else if (
-		last_ins != stats::instructions &&
-		searchers[cur_searcher_idx].first > 1)
-	{
-		searchers[cur_searcher_idx].first--;
-		ticket_c--;
-	}
-	last_ins = stats::instructions;
-
 	foreach(it, searchers.begin(), searchers.end()) 
 		(*it).second->update(current, s);
 }
@@ -57,6 +45,24 @@ ExecutionState& PDFInterleavedSearcher::selectState(bool allowCompact)
 {
 	double		rand_val;
 	int64_t		remaining_tickets;
+
+	if (stats::uncoveredInstructions > last_uncov_ins) {
+		int		payout;
+		uint64_t	budget;
+
+		budget = searchers[cur_searcher_idx].first;
+		payout =  ceil((1.0 - budget/(double)ticket_c)*searchers.size());
+		ticket_c += payout;
+		searchers[cur_searcher_idx].first = payout + budget;
+		last_uncov_ins = stats::uncoveredInstructions;
+	} else if (
+		last_ins != stats::instructions &&
+		searchers[cur_searcher_idx].first > 1)
+	{
+		searchers[cur_searcher_idx].first--;
+		ticket_c--;
+	}
+	last_ins = stats::instructions;
 
 	cur_searcher_idx = searchers.size() - 1;
 

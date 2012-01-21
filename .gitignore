@@ -10,7 +10,7 @@ kdump-*
 *.png
 *.gnuplot
 *.x
-klee-*
+klee-last
 lol*
 *.out
 *.err

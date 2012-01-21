@@ -54,7 +54,7 @@ struct bc_syscall
 union bc_ptr
 {
 	void		*ptr;
-	unsigned int	ptr_sysarg;
+	unsigned long	ptr_sysarg;
 };
 
 struct bc_sc_memop

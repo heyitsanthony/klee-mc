@@ -37,6 +37,7 @@
 #include "ExecutorVex.h"
 #include "ExeStateVex.h"
 
+#include "RegPrioritizer.h"
 #include "GuestPrioritizer.h"
 #include "SyscallPrioritizer.h"
 
@@ -104,6 +105,11 @@ namespace
 		"use-syscall-pr",
 		cl::desc("Use number of syscalls as priority"),
 		cl::init(false));
+
+	cl::opt<bool> UseRegPriority(
+		"use-reg-pr",
+		cl::desc("Use number of syscalls as priority"),
+		cl::init(false));
 }
 
 ExecutorVex::ExecutorVex(InterpreterHandler *ih, Guest *in_gs)
@@ -122,9 +128,12 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih, Guest *in_gs)
 	if (UsePrioritySearcher) {
 		Prioritizer	*pr;
 
-		pr = (UseSyscallPriority)
-			? (Prioritizer*)(new SyscallPrioritizer())
-			: (Prioritizer*)(new GuestPrioritizer(*this));
+		if (UseSyscallPriority)
+			pr = new SyscallPrioritizer();
+		else if (UseRegPriority)
+			pr = new RegPrioritizer(*this);
+		else
+			pr = new GuestPrioritizer(*this);
 
 		UserSearcher::setPrioritizer(pr);
 	}

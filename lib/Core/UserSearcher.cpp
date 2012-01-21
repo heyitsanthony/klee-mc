@@ -56,6 +56,9 @@ namespace {
   UseInterleavedBS("use-interleaved-BS");
 
   cl::opt<bool>
+  UseInterleavedTS("use-interleaved-TS");
+
+  cl::opt<bool>
   UseInterleavedDFS("use-interleaved-DFS");
 
   cl::opt<bool>
@@ -233,6 +236,10 @@ Searcher* UserSearcher::setupInterleavedSearcher(
 		s.push_back(
 			new PrioritySearcher(
 				new BucketPrioritizer(), DEFAULT_PR_SEARCHER));
+	if (UseInterleavedTS)
+		s.push_back(
+			new PrioritySearcher(
+				new TailPrioritizer(), DEFAULT_PR_SEARCHER));
 
 	if (UseInterleavedMD2UNURS)
 		s.push_back(
