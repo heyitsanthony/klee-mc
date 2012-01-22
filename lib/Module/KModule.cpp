@@ -13,6 +13,7 @@
 
 #include "Passes.h"
 
+#include "llvm/GlobalVariable.h"
 #include "klee/Common.h"
 #include "klee/Interpreter.h"
 #include "klee/Internal/Module/Cell.h"
@@ -386,7 +387,8 @@ void KModule::addModule(Module* in_mod)
 	std::string	err;
 	bool		isLinked;
 
-	isLinked = Linker::LinkModules(module, in_mod, Linker::PreserveSource, &err);
+	isLinked = Linker::LinkModules(
+		module, in_mod, Linker::PreserveSource, &err);
 
 	foreach (it, in_mod->begin(), in_mod->end()) {
 		Function	*kmod_f;
@@ -619,7 +621,6 @@ void KModule::loadIntrinsicsLib(const Interpreter::ModuleOptions &opts)
 	// avoid creating stale uses.
 
 	llvm::Type *i8Ty = Type::getInt8Ty(getGlobalContext());
-	llvm::Type *i32Ty = Type::getInt32Ty(getGlobalContext());
 
 	forceImport(
 		module, "memcpy", PointerType::getUnqual(i8Ty),
@@ -636,13 +637,6 @@ void KModule::loadIntrinsicsLib(const Interpreter::ModuleOptions &opts)
 		PointerType::getUnqual(i8Ty),
 		Type::getInt32Ty(getGlobalContext()),
 		targetData->getIntPtrType(getGlobalContext()), (Type*) 0);
-
-	forceImport(
-		module, "atomic.load.add", Type::getInt32Ty(getGlobalContext()),
-		PointerType::getUnqual(i32Ty),
-		Type::getInt32Ty(getGlobalContext()),
-		(Type*) 0);
-
 
 	// FIXME: Missing force import for various math functions.
 
