@@ -13,7 +13,7 @@ ExecutionState& PrioritySearcher::selectState(bool allowCompact)
 	unsigned	refresh_c, max_refresh;
 
 	refresh_c = 0;
-	max_refresh = 6;
+	max_refresh = 1;
 
 	while (1) {
 		int	curPr;
@@ -111,13 +111,20 @@ void PrioritySearcher::update(ExecutionState *current, States s)
 	foreach (it, s.getAdded().begin(), s.getAdded().end())
 		addState(*it);
 
-	/* update current */
-	if (current != NULL)
-		refreshPriority(current);
-
 	/* removed states */
-	foreach (it, s.getRemoved().begin(), s.getRemoved().end())
-		removeState(*it);
+	foreach (it, s.getRemoved().begin(), s.getRemoved().end()) {
+		ExecutionState	*es = *it;
+		removeState(es);
+		if (es == current)
+			current = NULL;
+	}
+
+	/* update current */
+	if (current != NULL) {
+		prFunc->latch();
+		refreshPriority(current);
+		prFunc->unlatch();
+	}
 
 	clearDeadPriorities();
 }
@@ -128,14 +135,12 @@ void PrioritySearcher::addState(ExecutionState* es)
 	int		pr;
 
 	pr = prFunc->getPriority(*es);
-	std::cerr << "ADDING="
-		 << es->pc->getInst()->getParent()->getParent()->getNameStr()
-		 << " to PR=" << pr << '\n';
 
 	prs = getPrSearcher(pr);
 	prs->addState(es);
 	state_backmap[es] = pr;
 
+	std::cerr << "ADD ES=" << (void*)es << " TO PR=" << pr << '\n';
 	state_c++;
 }
 
@@ -143,18 +148,17 @@ void PrioritySearcher::removeState(ExecutionState* es)
 {
 	statemap_ty::iterator	sm_it(state_backmap.find(es));
 	Searcher		*prs;
+	int			pr;
 
 	assert (sm_it != state_backmap.end());
 	
-	std::cerr << "RMV="
-		 << es->pc->getInst()->getParent()->getParent()->getNameStr()
-		 << " FROM PR=" << sm_it->second << '\n';
-
+	pr = sm_it->second;
 	prs = getPrSearcher(sm_it->second);
 
 	prs->removeState(es);
 	state_backmap.erase(sm_it);
 
+	std::cerr << "RMV ES=" << (void*)es << " FROM PR=" << pr << '\n';
 	state_c--;
 }
 

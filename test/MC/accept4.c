@@ -10,9 +10,9 @@ int main(int argc, char* argv[])
 	struct sockaddr	addr;
 	socklen_t	addrlen;
 	int		sock_fd;
-	
+
 	addrlen = 0;
-	sock_fd = accept4(sockfd, &addr, &addrlen, 0);
+	sock_fd = accept4(10, &addr, &addrlen, 0);
 
 #if 0
 	if (addrlen != 4) {

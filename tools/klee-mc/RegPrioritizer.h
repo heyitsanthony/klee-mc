@@ -8,11 +8,7 @@ class RegPrioritizer : public Prioritizer
 public:
 	RegPrioritizer(ExecutorVex& in_exe)
 	: exe(in_exe)
-	{
-		gs = exe.getGuest();
-		//base = gs->getEntryPoint().o & ~((uint64_t)len - 1);
-		std::cerr << "REGPRIORITIZER: FORCING 4MB REGION\n";
-	}
+	{ gs = exe.getGuest(); }
 
 	virtual Prioritizer* copy(void) const
 	{ return new RegPrioritizer(exe); }
@@ -22,10 +18,34 @@ public:
 	int getPriority(ExecutionState& st)
 	{
 		const ObjectState	*os = GETREGOBJRO(st);
+		if (os == NULL)
+			return -123;
+//		return (getRegPr(st, os, 1)+getRegPr(st, os, 0)+getRegPr(st, os, ~0));
+		return getSymCount(st, os);
+	}
+
+	int getSymCount(
+		ExecutionState		&st,
+		const ObjectState	*os)
+	{
+		int	sym_c;
+
+		sym_c = 0;
+		for (unsigned i = 0; i < os->size; i++)
+			if (!os->isByteConcrete(i))
+				sym_c++;
+		return sym_c;
+	}
+
+
+	int getRegPr(
+		ExecutionState		&st,
+		const ObjectState	*os,
+		uint64_t		target)
+	{
 		ref<Expr>		reg_val;
 		uint64_t		ret_base;
 
-#if 0
 		ret_base = gs->getCPUState()->getRetOff();
 		for (unsigned i = 0; i < 8; i++)
 			if (!os->isByteConcrete(i))
@@ -33,13 +53,17 @@ public:
 
 		reg_val = st.read(os, ret_base, 64);
 		if (const ConstantExpr* ce = dyn_cast<ConstantExpr>(reg_val)) {
-			if (ce->getZExtValue() == 0)
+			if (ce->getZExtValue() == target)
 				return 0;
 			return -1;
 		}
 
 		return -3;
-#endif
+
+	}
+
+	int getHashPr(ExecutionState& st, const ObjectState* os)
+	{
 		int64_t	hits;
 		uint64_t hash = 0;
 

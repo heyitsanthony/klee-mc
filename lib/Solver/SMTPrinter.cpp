@@ -131,8 +131,11 @@ ExprConstVisitor::Action ArrayFinder::visitExpr(const Expr* e)
 	const ReadExpr		*re;
 	update_pair		upp;
 
+	/* already seen it? */
 	if (visited_exprs.find(e) != visited_exprs.end())
 		return Close;
+
+	/* make note */
 	visited_exprs.insert(e);
 
 	if (e->getKind() != Expr::Read)
@@ -156,7 +159,8 @@ ExprConstVisitor::Action ArrayFinder::visitExpr(const Expr* e)
 
 		// seen both globally and locally, no need to
 		// look at any further
-		return Skip;
+		// return Skip;
+		return Expand;
 	}
 
 	/* record expression */

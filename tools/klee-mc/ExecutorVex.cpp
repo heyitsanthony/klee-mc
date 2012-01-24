@@ -934,6 +934,22 @@ void ExecutorVex::printStackTrace(ExecutionState& st, std::ostream& os) const
 	}
 }
 
+std::string ExecutorVex::getPrettyName(llvm::Function* f) const
+{
+	VexSB				*vsb;
+	func2vsb_map::const_iterator	f2v_it;
+
+	f2v_it = func2vsb_table.find((uint64_t)f);
+	vsb = NULL;
+	if (f2v_it != func2vsb_table.end())
+		vsb = f2v_it->second;
+
+	if (vsb != NULL)
+		return gs->getName(vsb->getGuestAddr());
+
+	return Executor::getPrettyName(f);
+}
+
 void ExecutorVex::printStateErrorMessage(
 	ExecutionState& state,
 	const std::string& message,

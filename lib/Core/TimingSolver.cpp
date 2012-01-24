@@ -135,7 +135,8 @@ bool TimingSolver::getInitialValues(
   return success;
 }
 
-std::pair< ref<Expr>, ref<Expr> >
-TimingSolver::getRange(const ExecutionState& state, ref<Expr> expr) {
-  return solver->getRange(Query(state.constraints, expr));
-}
+bool TimingSolver::getRange(
+	const ExecutionState& state,
+	ref<Expr> expr,
+	std::pair< ref<Expr>, ref<Expr> >& ret)
+{ return solver->getRange(Query(state.constraints, expr), ret); }

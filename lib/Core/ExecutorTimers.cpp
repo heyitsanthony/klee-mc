@@ -61,6 +61,57 @@ private:
 	Executor *executor;
 };
 
+#define USE_PREV_SIG	false
+class SigUsrTimer : public Executor::Timer
+{
+public:
+	SigUsrTimer(Executor *_executor)
+	: executor(_executor)
+	{
+		prev_sigh = signal(SIGUSR2, sigusr_handler);
+	}
+
+	virtual ~SigUsrTimer() { signal(SIGUSR2, prev_sigh); }
+
+	void run()
+	{
+		std::ostream	*os;
+
+		if (!sigusr_triggered)
+			return;
+
+		sigusr_triggered = false;
+
+		os = executor->getInterpreterHandler()->openOutputFile("tr.txt");
+		if (os == NULL) {
+			std::cerr << "[SIGUSR] Couldn't open tr.txt!\n";
+			return;
+		}
+
+		foreach (it, executor->beginStates(), executor->endStates()) {
+			executor->printStackTrace(*(*it), *os);
+		}
+
+		delete os;
+	}
+
+	static void sigusr_handler(int k)
+	{	sigusr_triggered = true;
+		if (	USE_PREV_SIG &&
+			prev_sigh != SIG_DFL && prev_sigh != SIG_IGN)
+		{
+			prev_sigh(k);
+		}
+	}
+private:
+	static bool		sigusr_triggered;
+	static sighandler_t	prev_sigh;
+	Executor		*executor;
+};
+bool SigUsrTimer::sigusr_triggered = false;
+sighandler_t SigUsrTimer::prev_sigh = NULL;
+
+
 class StatTimer : public Executor::Timer
 {
 public:
@@ -91,7 +142,6 @@ protected:
 	Executor	*executor;
 	std::ostream 	*os;
 	unsigned	n;
-
 };
 
 #include <malloc.h>
@@ -199,6 +249,8 @@ void Executor::initTimers(void)
 
 	if (DumpCovStats)
 		addTimer(new CovStatTimer(this), DumpCovStats);
+
+	addTimer(new SigUsrTimer(this), 1);
 }
 
 ///

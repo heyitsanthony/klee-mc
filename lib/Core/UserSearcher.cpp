@@ -23,6 +23,7 @@
 #include "BumpingMergeSearcher.h"
 #include "BFSSearcher.h"
 #include "DFSSearcher.h"
+#include "FilterSearcher.h"
 #include "InterleavedSearcher.h"
 #include "IterativeDeepeningTimeSearcher.h"
 #include "PDFInterleavedSearcher.h"
@@ -43,6 +44,11 @@ Prioritizer* UserSearcher::prFunc = NULL;
 bool UsePrioritySearcher;
 
 namespace {
+  cl::opt<bool>
+  UseFilterSearch(
+  	"use-search-filter",
+	cl::desc("Filter out unwanted functions from dispatch"),
+	cl::init(false));
   cl::opt<bool>
   UseRandomSearch("use-random-search");
 
@@ -298,7 +304,12 @@ Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 			DEFAULT_PR_SEARCHER);
 	} else if (UsePrioritySearcher) {
 		assert (prFunc != NULL);
-		searcher = new PrioritySearcher(prFunc, DEFAULT_PR_SEARCHER);
+		searcher = new PrioritySearcher(
+			prFunc,
+//			new PrioritySearcher(
+//				new BucketPrioritizer(),
+//				DEFAULT_PR_SEARCHER));
+			DEFAULT_PR_SEARCHER);
 		prFunc = NULL;
 	} else if (UsePhasedSearch) {
 		searcher = new PhasedSearcher();
@@ -338,32 +349,36 @@ Searcher* UserSearcher::setupMergeSearcher(
 
 Searcher *UserSearcher::constructUserSearcher(Executor &executor)
 {
-  Searcher *searcher;
+	Searcher *searcher;
 
-  searcher = setupBaseSearcher(executor);
-  searcher = setupInterleavedSearcher(executor, searcher);
+	searcher = setupBaseSearcher(executor);
+	searcher = setupInterleavedSearcher(executor, searcher);
 
-  /* xchk searcher should probably always be at the top */
-  if (UseXChkSearcher)
-    searcher = new XChkSearcher(searcher);
+	/* xchk searcher should probably always be at the top */
+	if (UseXChkSearcher)
+		searcher = new XChkSearcher(searcher);
 
-  if (UseBatchingSearch) {
-    searcher = new BatchingSearcher(searcher, BatchTime, BatchInstructions);
-  }
+	if (UseFilterSearch)
+		searcher = new FilterSearcher(executor, searcher);
 
-  searcher = setupMergeSearcher(executor, searcher);
+	if (UseBatchingSearch)
+		searcher = new BatchingSearcher(
+			searcher, BatchTime, BatchInstructions);
 
-  if (UseIterativeDeepeningTimeSearch) {
-    searcher = new IterativeDeepeningTimeSearcher(searcher);
-  }
+	searcher = setupMergeSearcher(executor, searcher);
 
-  if (UseStringPrune) searcher = new StringMerger(searcher);
+	if (UseIterativeDeepeningTimeSearch)
+		searcher = new IterativeDeepeningTimeSearcher(searcher);
 
-  std::ostream &os = executor.getHandler().getInfoStream();
+	if (UseStringPrune)
+		searcher = new StringMerger(searcher);
 
-  os << "BEGIN searcher description\n";
-  searcher->printName(os);
-  os << "END searcher description\n";
+	std::ostream &os = executor.getHandler().getInfoStream();
 
-  return searcher;
+	os << "BEGIN searcher description\n";
+	searcher->printName(os);
+	os << "END searcher description\n";
+	os.flush();
+
+	return searcher;
 }

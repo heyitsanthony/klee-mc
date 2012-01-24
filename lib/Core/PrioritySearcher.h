@@ -20,18 +20,40 @@ public:
 	virtual Prioritizer* copy(void) const = 0;
 #define DEFAULT_PR_COPY(x)	\
 	virtual Prioritizer* copy(void) const { return new x (); }
-
+	virtual void printName(std::ostream &os) const { os << "Prioritizer"; }
 protected:
 	Prioritizer() : latched(false) {}
 private:
 	bool		latched;
 };
 
+class AddPrioritizer : public Prioritizer
+{
+public:
+	AddPrioritizer(Prioritizer* _l, Prioritizer* _r)
+	: l(_l), r(_r) {}
+	virtual ~AddPrioritizer(void) { delete l; delete r; }
+	Prioritizer* copy(void) const
+	{ return new AddPrioritizer(l->copy(), r->copy()); }
+	virtual int getPriority(ExecutionState& st)
+	{ return l->getPriority(st) + r->getPriority(st); }
+	virtual void printName(std::ostream &os) const 
+	{	os << "(AddPr "; l->printName(os);
+		os << ' '; r->printName(os);
+		os << ')'; }
+private:
+	Prioritizer	*l, *r;
+};
+
 class PrioritySearcher : public Searcher
 {
 public:
 	ExecutionState &selectState(bool allowCompact);
-	virtual ~PrioritySearcher(void) { delete prFunc; }
+	virtual ~PrioritySearcher(void)
+	{
+		delete prFunc;
+		delete searcher_base;
+	}
 
 	virtual Searcher* createEmpty(void) const
 	{ return new PrioritySearcher(
@@ -39,7 +61,14 @@ public:
 
 	void update(ExecutionState *current, States s);
 	bool empty(void) const { return state_c == 0; }
-	void printName(std::ostream &os) const { os << "PrioritySearcher\n"; }
+	void printName(std::ostream &os) const
+	{
+		os << "<PrioritySearcher pr=\"";
+		prFunc->printName(os);
+		os << "\">\n";
+		searcher_base->printName(os);
+		os << "\n</PrioritySearcher>\n";
+	}
 
 private:
 	bool refreshPriority(ExecutionState* es);
@@ -76,7 +105,6 @@ public:
 	, prFunc(p)
 	, searcher_base(base)
 	{}
-
 };
 }
 

@@ -146,6 +146,10 @@ public:
   KModule* getKModule(void) { return kmodule; }
 
   virtual void printStackTrace(ExecutionState& state, std::ostream& os) const;
+  virtual std::string getPrettyName(llvm::Function* f) const;
+  ExeStateSet::const_iterator beginStates(void) const;
+  ExeStateSet::const_iterator endStates(void) const;
+
 
   MemoryManager	*memory;
 private:

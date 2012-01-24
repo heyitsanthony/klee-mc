@@ -528,9 +528,13 @@ SFH_DEF_HANDLER(PrintRange)
       std::cerr << " == " << value;
     } else {
       std::cerr << " ~= " << value;
-      std::pair< ref<Expr>, ref<Expr> > res =
-        sfh->executor->getSolver()->getRange(state, arguments[1]);
-      std::cerr << " (in [" << res.first << ", " << res.second <<"])";
+      std::pair< ref<Expr>, ref<Expr> > res;
+      bool ok;
+      ok = sfh->executor->getSolver()->getRange(state, arguments[1], res);
+      if (!ok)
+        std::cerr << " (in " << arguments[1]  << ")";
+      else
+        std::cerr << " (in [" << res.first << ", " << res.second <<"])";
     }
   }
   std::cerr << "\n";

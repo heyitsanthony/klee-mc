@@ -1238,46 +1238,33 @@ void Executor::executeCall(
            "vastart called in function with no vararg object");
      // FIXME: This is really specific to the architecture, not the pointer
     // size. This happens to work fir x86-32 and x86-64, however.
+#define MMU_WORD_OP(x,y)       mmu->exeMemOp(  \
+                               state,  \
+                               MMU::MemOp(true,        \
+                                       AddExpr::create(        \
+                                               arguments[0],   \
+                                               ConstantExpr::create(x, 64)),\
+                                       y, NULL))
+
     Expr::Width WordSize = Context::get().getPointerWidth();
     if (WordSize == Expr::Int32) {
-      mmu->exeMemOp(
-      	state,
-	MMU::MemOp(true, arguments[0], sf.varargs->getBaseExpr(), NULL));
+	MMU_WORD_OP(0, sf.varargs->getBaseExpr());
     } else {
-      assert(WordSize == Expr::Int64 && "Unknown word size!");
-       // X86-64 has quite complicated calling convention. However,
-      // instead of implementing it, we can do a simple hack: just
-      // make a function believe that all varargs are on stack.
+	assert(WordSize == Expr::Int64 && "Unknown word size!");
+	// X86-64 has quite complicated calling convention. However,
+	// instead of implementing it, we can do a simple hack: just
+	// make a function believe that all varargs are on stack.
 
-      // gp offest
-      mmu->exeMemOp(
-	state,
-	MMU::MemOp(true, arguments[0], ConstantExpr::create(48, 32), NULL));
-
-      // fp_offset
-      mmu->exeMemOp(
-      	state,
-	MMU::MemOp(
-		true,
-		AddExpr::create(arguments[0], ConstantExpr::create(4, 64)),
-		ConstantExpr::create(304, 32), NULL));
-
-      // overflow_arg_area
-      mmu->exeMemOp(
-      	state,
-	MMU::MemOp(
-		true,
-		AddExpr::create(arguments[0], ConstantExpr::create(8, 64)),
-		sf.varargs->getBaseExpr(), NULL));
-
-      // reg_save_area
-      mmu->exeMemOp(
-      	state,
-	MMU::MemOp(
-		true,
-		AddExpr::create(arguments[0], ConstantExpr::create(16, 64)),
-		ConstantExpr::create(0, 64), NULL));
+	// gp offset
+	MMU_WORD_OP(0, ConstantExpr::create(48,32));
+	// fp_offset
+	MMU_WORD_OP(4, ConstantExpr::create(304,32));
+	// overflow_arg_area
+	MMU_WORD_OP(8, sf.varargs->getBaseExpr());
+	// reg_save_area
+	MMU_WORD_OP(16, ConstantExpr::create(0, 64));
     }
+#undef MMU_WORD_OP
     break;
   }
   case Intrinsic::vaend:
@@ -2712,9 +2699,7 @@ void Executor::removePTreeState(
 }
 
 void Executor::removeRoot(ExecutionState* es)
-{
-	pathTree->removeRoot(stateManager, es);
-}
+{ pathTree->removeRoot(stateManager, es); }
 
 void Executor::killStates(ExecutionState* &state)
 {
@@ -2756,8 +2741,6 @@ void Executor::stepStateInst(ExecutionState* &state)
 	processTimers(state, MaxInstructionTime);
 }
 
-#include <malloc.h>
-
 void Executor::handleMemoryUtilization(ExecutionState* &state)
 {
 	uint64_t mbs;
@@ -2768,54 +2751,12 @@ void Executor::handleMemoryUtilization(ExecutionState* &state)
 	// We need to avoid calling GetMallocUsage() often because it
 	// is O(elts on freelist). This is really bad since we start
 	// to pummel the freelist once we hit the memory cap.
-	mbs = getMemUsageMB();
-
 	if (UsePID && MaxMemory) {
-#define K_P	0.6
-#define K_D	0.1	/* damping factor-- damp changes in errors */
-#define K_I	0.0001	/* systematic error-- negative while ramping  */
-		unsigned		nonCompact_c;
-		int			states_to_gen;
-		int64_t			err;
-		static int64_t		err_sum = -(int64_t)MaxMemory;
-		static int64_t		last_err = 0;
-		static uint64_t		last_mbs = 0;
-
-		std::cerr << "MALLINFO:" << mallinfo().uordblks <<  '\n';
-		std::cerr << "MBS=" << mbs << '\n';
-
-		nonCompact_c = stateManager->getNonCompactStateCount();
-
-	//	if (mbs < 2048)
-		mbs = mallinfo().uordblks/(1024*1024);
-		err = MaxMemory - mbs;
-
-		std::cerr << "K_P: " << K_P*err << '\n';
-		std::cerr << "K_D: " << K_D*(err-last_err) << '\n';
-		std::cerr << "K_I: " << K_I*(err_sum) << '\n';
-
-		states_to_gen =
-			K_P*err +
-			K_D*(err - last_err) +
-			K_I*(err_sum);
-
-		err_sum += err;
-		last_err = err;
-		last_mbs = mbs;
-
-		std::cerr << "=========STATESTOGEN=" << states_to_gen << "\n";
-		if (states_to_gen < 0) {
-			std::cerr << "KILLED!! MBS=" << mbs << '\n';
-			std::cerr << "KILL IT!! REMOVESTATES="
-				<< states_to_gen << "\n";
-			onlyNonCompact = false;
-			stateManager->compactStates(state, -states_to_gen);
-			std::cerr << "NEW MBS=" << getMemUsageMB() << '\n';
-		}
-
+		handleMemoryPID(state);
 		return;
 	}
 
+	mbs = getMemUsageMB();
 	if (mbs < 0.9*MaxMemory) {
 		atMemoryLimit = false;
 		return;
@@ -3028,16 +2969,26 @@ std::string Executor::getAddressInfo(
 		example = CE->getZExtValue();
 		info << (void*)example << "\n";
 	} else {
-		ref<ConstantExpr> value;
-		bool success;
+		std::pair< ref<Expr>, ref<Expr> > res;
+		ref<ConstantExpr>       value;
+		bool                    ok;
 
 		info << address << "\n";
-		success = solver->getValue(state, address, value);
-		assert(success && "FIXME: Unhandled solver failure");
-		(void) success;
+		ok = solver->getValue(state, address, value);
+		if (ok == false) {
+			info << "\texample: ???\n";
+			return info.str();
+		}
+
+		assert(ok && "FIXME: Unhandled solver failure");
+
 		example = value->getZExtValue();
-		std::pair< ref<Expr>, ref<Expr> > res = solver->getRange(state, address);
 		info << "\texample: " << example << "\n";
+		ok = solver->getRange(state, address, res);
+		if (ok == false) {
+			return info.str();
+		}
+
 		info << "\trange: [" << res.first << ", " << res.second <<"]\n";
 	}
 
@@ -3082,8 +3033,8 @@ void Executor::terminateStateEarly(
 		state.coveredNew ||
 		(AlwaysOutputSeeds && seedMap.count(&state)))
 	{
-	    interpreterHandler->processTestCase(
-	    	state, (message + "\n").str().c_str(), "early");
+		interpreterHandler->processTestCase(
+			state, (message + "\n").str().c_str(), "early");
 	}
 
 	terminateState(state);
@@ -3746,3 +3697,51 @@ MemoryObject* Executor::findGlobalObject(const llvm::GlobalValue* gv) const
 	assert (globals != NULL);
 	return globals->findObject(gv);
 }
+
+#include <malloc.h>
+void Executor::handleMemoryPID(ExecutionState* &state)
+{
+	#define K_P    0.6
+	#define K_D    0.1     /* damping factor-- damp changes in errors */
+	#define K_I    0.0001  /* systematic error-- negative while ramping  */
+	unsigned                nonCompact_c;
+	int                     states_to_gen;
+	int64_t                 err;
+	uint64_t                mbs;
+	static int64_t          err_sum = -(int64_t)MaxMemory;
+	static int64_t          last_err = 0;
+	static uint64_t         last_mbs = 0;
+
+	nonCompact_c = stateManager->getNonCompactStateCount();
+
+	mbs = mallinfo().uordblks/(1024*1024);
+	err = MaxMemory - mbs;
+
+	std::cerr << "K_P: " << K_P*err << '\n';
+	std::cerr << "K_D: " << K_D*(err-last_err) << '\n';
+	std::cerr << "K_I: " << K_I*(err_sum) << '\n';
+
+	states_to_gen =
+	K_P*err +
+	K_D*(err - last_err) +
+	K_I*(err_sum);
+
+	err_sum += err;
+	last_err = err;
+
+	std::cerr << "MALLINFO:" << mallinfo().uordblks <<  '\n';
+	std::cerr << "MBS=" << mbs << '\n';
+	std::cerr << "=========STATESTOGEN=" << states_to_gen << "\n";
+	if (states_to_gen < 0) {
+		onlyNonCompact = false;
+		stateManager->compactStates(state, -states_to_gen);
+	}
+}
+
+std::string Executor::getPrettyName(llvm::Function* f) const
+{ return f->getNameStr(); }
+
+ExeStateSet::const_iterator Executor::beginStates(void) const
+{ return stateManager->begin(); }
+ExeStateSet::const_iterator Executor::endStates(void) const
+{ return stateManager->end(); }

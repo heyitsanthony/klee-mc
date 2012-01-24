@@ -174,8 +174,8 @@ namespace klee {
     ///       mayBeTrue(min == e) &&
     ///       mayBeTrue(max == e))
     //
-    // FIXME: This should go into a helper class, and should handle failure.
-    virtual std::pair< ref<Expr>, ref<Expr> > getRange(const Query&);
+    // FIXME: This should go into a helper class
+    virtual bool getRange(const Query&,  std::pair< ref<Expr>, ref<Expr> >& r);
 
     void printName(int level = 0) const;
     virtual bool failed(void) const;

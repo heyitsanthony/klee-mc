@@ -124,7 +124,7 @@ test-broken-optmul:
 
 mc-clean:
 	rm -rf runtime/syscall/*/*.{bc,bca,ll,d,o}
-	rm -rf $(LibDir)/*-arm.bc*
+	rm -rf $(LibDir)/libkleeRuntimeMC*-*.bc*
 
 #rm -rf guest-*
 

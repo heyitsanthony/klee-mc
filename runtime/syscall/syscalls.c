@@ -269,6 +269,9 @@ static void sc_klee(void* regfile)
 	case KLEE_SYS_PRINT_EXPR:
 		klee_print_expr(GET_ARG1_PTR(regfile), GET_ARG2(regfile));
 		break;
+	case KLEE_SYS_SILENT_EXIT:
+		klee_silent_exit(GET_ARG1(regfile));
+		break;
 	default:
 		klee_report_error(
 			__FILE__,
@@ -481,13 +484,13 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 	UNIMPL_SC(readlinkat)
 	case SYS_pread64:
-	case SYS_read: 
+	case SYS_read:
 	case SYS_fstat:
 	case SYS_lstat:
 	case SYS_creat:
 	case SYS_readlink:
 	case SYS_lseek:
-	case SYS_stat: 
+	case SYS_stat:
 	case SYS_openat:
 	case SYS_open:
 	case SYS_close:
@@ -597,8 +600,9 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_select: {
 		new_regs = sc_new_regs(regfile);
 
-		/* let one through */
-		if (GET_SYSRET(new_regs) == 1) {
+		/* let all through */
+		if (GET_SYSRET(new_regs) == GET_ARG0(regfile)) {
+	#if 0
 			if (GET_ARG1(regfile))
 				make_sym_by_arg(
 					regfile, 1, sizeof(fd_set), "readfds");
@@ -609,14 +613,43 @@ void* sc_enter(void* regfile, void* jmpptr)
 				make_sym_by_arg(
 					regfile, 3, sizeof(fd_set), "exceptfds");
 
-			sc_ret_v(new_regs, 1);
+			if ((void*)GET_ARG4_PTR(regfile) != NULL) {
+				make_sym_by_arg(
+					regfile, 4, sizeof(fd_set), "timeoutbuf");
+			}
+#endif
+			if (GET_ARG1(regfile))
+				make_sym(
+					GET_ARG1(regfile),
+					sizeof(fd_set), "readfds");
+			if (GET_ARG2(regfile))
+				make_sym(
+					GET_ARG2(regfile),
+					sizeof(fd_set), "writefds");
+			if (GET_ARG3(regfile))
+				make_sym(
+					GET_ARG3(regfile),
+					sizeof(fd_set), "exceptfds");
+
+			if (GET_ARG4(regfile)) {
+				make_sym(
+					GET_ARG4(regfile),
+					sizeof(struct timeval),
+					"timeoutbuf");
+			}
+
+			sc_ret_v(new_regs, GET_ARG0(regfile));
 			break;
 		}
 
 		/* timeout case probably isn't too interesting */
-		if ((void*)GET_ARG4_PTR(regfile) != NULL) {
+		if (GET_ARG4(regfile)) {
 			if (GET_SYSRET(new_regs) == 0) {
 				/* timeout */
+				make_sym(
+					GET_ARG4(regfile),
+					sizeof(struct timeval),
+					"timeoutbuf");
 				sc_ret_v(new_regs, 0);
 				break;
 			}

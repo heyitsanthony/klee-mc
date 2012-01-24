@@ -50,7 +50,6 @@ void DFSSearcher::update(ExecutionState *current, const States s)
 	/* hack for common case of removing only one state...
 	* no need to scan the entire state list */
 	if (s.getRemoved().count(states.back())) {
-		ExecutionState	*x = states.back();
 		states.pop_back();
 		removed_c++;
 		if (s.getRemoved().size() == removed_c) {

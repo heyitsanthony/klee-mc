@@ -486,7 +486,9 @@ bool Solver::getInitialValues(const Query& query, Assignment& a)
 }
 
 // FIXME: REFACTOR REFACTOR REFACTOR REFACTOR
-std::pair< ref<Expr>, ref<Expr> > Solver::getRange(const Query& query)
+bool Solver::getRange(
+	const Query& query,
+	std::pair< ref<Expr>, ref<Expr> >& ret )
 {
 	ref<Expr>		e(query.expr);
 	Expr::Width		width = e->getWidth();
@@ -497,7 +499,8 @@ std::pair< ref<Expr>, ref<Expr> > Solver::getRange(const Query& query)
 		bool	eval_ok;
 
 		eval_ok = evaluate(query, result);
-		assert(eval_ok && "computeValidity failed");
+		if (!eval_ok)
+			return false;
 
 		switch (result) {
 		case Solver::True:	min = max = 1; break;
@@ -505,13 +508,15 @@ std::pair< ref<Expr>, ref<Expr> > Solver::getRange(const Query& query)
 		default:		min = 0, max = 1; break;
 		}
 
-		return std::make_pair(
+		ret = std::make_pair(
 			ConstantExpr::create(min, width),
 			ConstantExpr::create(max, width));
+		return true;
 	}
 
 	if (dyn_cast<ConstantExpr>(e) != NULL) {
-		return std::make_pair(e, e);
+		ret = std::make_pair(e, e);
+		return true;
 	}
 
 	// binary search for # of useful bits
@@ -530,8 +535,8 @@ std::pair< ref<Expr>, ref<Expr> > Solver::getRange(const Query& query)
 				ConstantExpr::create(0, width))),
 			res);
 
-		assert(success && "FIXME: Unhandled solver failure");
-		(void) success;
+		if (success == false)
+			return false;
 
 		if (res) {
 			hi = mid;
@@ -571,8 +576,8 @@ std::pair< ref<Expr>, ref<Expr> > Solver::getRange(const Query& query)
 					e, ConstantExpr::create(mid, width))),
 				res);
 
-			assert(success && "FIXME: Unhandled solver failure");
-			(void) success;
+			if (success == false)
+				return false;
 
 			if (res) {
 				hi = mid;
@@ -596,8 +601,8 @@ std::pair< ref<Expr>, ref<Expr> > Solver::getRange(const Query& query)
 					e, ConstantExpr::create(mid, width))),
 				res);
 
-		assert(success && "FIXME: Unhandled solver failure");
-		(void) success;
+		if (success == false)
+			return false;
 
 		if (res) {
 			hi = mid;
@@ -608,9 +613,10 @@ std::pair< ref<Expr>, ref<Expr> > Solver::getRange(const Query& query)
 
 	max = lo;
 
-	return std::make_pair(
+	ret = std::make_pair(
 		ConstantExpr::create(min, width),
 		ConstantExpr::create(max, width));
+	return true;
 }
 
 void Solver::printName(int level) const { impl->printName(level); }
