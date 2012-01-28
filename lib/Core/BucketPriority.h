@@ -95,6 +95,8 @@ private:
 		return rank;
 	}
 
+	virtual void printName(std::ostream &os) const { os << "Bucket"; }
+
 protected:
 	typedef std::map<llvm::Function*, uint64_t> hitmap_ty;
 	hitmap_ty	hitmap;

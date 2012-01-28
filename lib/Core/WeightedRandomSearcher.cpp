@@ -32,7 +32,16 @@ WeightedRandomSearcher::~WeightedRandomSearcher()
 
 ExecutionState &WeightedRandomSearcher::selectState(bool allowCompact)
 {
-	ExecutionState *es = states->choose(theRNG.getDoubleL(), allowCompact);
+	ExecutionState	*es;
+
+	es = states->choose(theRNG.getDoubleL(), allowCompact);
+	states->update(es, getWeight(es));
+	es = states->choose(theRNG.getDoubleL(), allowCompact);
+
+	double w = weigh_func->weigh(es);
+	states->update(es, getWeight(es));
+
+	std::cerr << "Selected Weight: " << es->weight << " / " <<  w << '\n';
 	return *es;
 }
 
@@ -53,16 +62,35 @@ double WeightedRandomSearcher::getWeight(ExecutionState *es)
 
 void WeightedRandomSearcher::update(ExecutionState *current, const States s)
 {
+	static int	reweigh_c = 0;
+
+	reweigh_c++;
+	if (reweigh_c == 50) {
+		for (unsigned i = 0; i < 50; i++) {
+			ExecutionState	*es;
+
+			es = states->choose(theRNG.getDoubleL(), false);
+			states->update(es, getWeight(es));
+		}
+
+		reweigh_c = 0;
+	}
+
 	if (	current &&
 		weigh_func->isUpdating() &&
 		!s.getRemoved().count(current))
 	{
-		states->update(current, getWeight(current));
+		double	w = getWeight(current);
+		std::cerr << "Updating Current Weight: " << w << '\n';
+		states->update(current, w);
 	}
 
 	foreach (it, s.getAdded().begin(), s.getAdded().end()) {
 		ExecutionState *es = *it;
-		states->insert(es, getWeight(es), es->isCompact());
+		double		w = getWeight(es);
+		std::cerr << "Adding Weight: " << w << '\n';
+		states->insert(es, w, es->isCompact());
+		executor.printStackTrace(*es, std::cerr);
 	}
 
 	foreach (it, s.getRemoved().begin(), s.getRemoved().end())
@@ -128,4 +156,49 @@ double MinDistToUncoveredWeight::weigh(const ExecutionState *es) const
 	return invMD2U * invMD2U;
 }
 
+#include "static/Markov.h"
 
+extern Markov<KFunction> theStackXfer;
+double MarkovPathWeight::weigh(const ExecutionState* es) const
+{
+	KFunction	*last_kf = NULL;
+	double		prob;
+
+	prob = 1.0;
+	foreach (it, es->stack.begin(), es->stack.end()) {
+		KFunction	*kf;
+		double		p;
+
+		kf = (*it).kf;
+		if (kf == NULL || last_kf == NULL) {
+			last_kf = kf;
+			continue;
+		}
+
+		p = theStackXfer.getProb(last_kf, kf);
+		last_kf = kf;
+
+		if (p == 0.0)
+			continue;
+		prob *= p;
+	}
+
+	return (1.0 - prob);
+}
+
+double TailWeight::weigh(const ExecutionState* es) const
+{
+	double		ret = 0;
+
+	foreach (it, es->stack.begin(), es->stack.end()) {
+		KFunction	*kf;
+
+		kf = (*it).kf;
+		if (kf == NULL)
+			continue;
+
+		ret += theStackXfer.getCount(kf);
+	}
+
+	return -ret;
+}

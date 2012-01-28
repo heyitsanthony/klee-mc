@@ -1132,71 +1132,15 @@ void Executor::executeCallNonDecl(
 			f->getName().data());
 		}
 	} else {
-		if (!setupCallVarArgs(state, funcArgs, arguments))
+		if (!state.setupCallVarArgs(funcArgs, arguments)) {
+			terminateStateOnExecError(state, "out of memory (varargs)");
 			return;
+		}
 	}
 
 	numFormals = f->arg_size();
 	for (unsigned i=0; i<numFormals; ++i)
 		state.bindArgument(kf, i, arguments[i]);
-}
-
-
-bool Executor::setupCallVarArgs(
-	ExecutionState& state,
-	unsigned funcArgs,
-	std::vector<ref<Expr> >& arguments)
-{
-	ObjectState	*os;
-	unsigned	size, offset, callingArgs;
-
-	StackFrame &sf = state.stack.back();
-
-	callingArgs = arguments.size();
-	size = 0;
-	for (unsigned i = funcArgs; i < callingArgs; i++) {
-	// FIXME: This is really specific to the architecture, not the pointer
-	// size. This happens to work fir x86-32 and x86-64, however.
-		Expr::Width WordSize = Context::get().getPointerWidth();
-		if (WordSize == Expr::Int32) {
-			size += Expr::getMinBytesForWidth(
-				arguments[i]->getWidth());
-		} else {
-			size += llvm::RoundUpToAlignment(
-				arguments[i]->getWidth(), WordSize)/8;
-		}
-	}
-
-	os = state.allocate(size, true, false, state.prevPC->getInst());
-	if (os == NULL) {
-		terminateStateOnExecError(state, "out of memory (varargs)");
-		return false;
-	}
-
-	sf.varargs = os->getObject();
-
-	offset = 0;
-	for (unsigned i = funcArgs; i < callingArgs; i++) {
-	// FIXME: This is really specific to the architecture, not the pointer
-	// size. This happens to work fir x86-32 and x86-64, however.
-		Expr::Width WordSize = Context::get().getPointerWidth();
-		if (WordSize == Expr::Int32) {
-			//os->write(offset, arguments[i]);
-			state.write(os, offset, arguments[i]);
-			offset += Expr::getMinBytesForWidth(
-				arguments[i]->getWidth());
-		} else {
-			assert (WordSize==Expr::Int64 && "Unknown word size!");
-
-			//os->write(offset, arguments[i]);
-			state.write(os, offset, arguments[i]);
-			offset += llvm::RoundUpToAlignment(
-					arguments[i]->getWidth(),
-					WordSize) / 8;
-		}
-	}
-
-	return true;
 }
 
 

@@ -272,6 +272,11 @@ static void sc_klee(void* regfile)
 	case KLEE_SYS_SILENT_EXIT:
 		klee_silent_exit(GET_ARG1(regfile));
 		break;
+	case KLEE_SYS_SYM_RANGE_BYTES:
+		sc_ret_v(
+			regfile,
+			klee_sym_range_bytes(GET_ARG1_PTR(regfile), GET_ARG2(regfile)));
+		break;
 	default:
 		klee_report_error(
 			__FILE__,

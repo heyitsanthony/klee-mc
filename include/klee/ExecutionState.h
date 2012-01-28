@@ -182,11 +182,12 @@ public:
 	void printConstraints(std::ostream& os) const;
 
 
-	KFunction* getCurrentKF(void) const { return (stack.back()).kf; }
+	KFunction* getCurrentKFunc(void) const { return (stack.back()).kf; }
 
 
 	void pushFrame(KInstIterator caller, KFunction *kf);
 	void popFrame();
+	void xferFrame(KFunction *kf);
 
 	void addSymbolic(MemoryObject *mo, Array *array)
 	{
@@ -224,6 +225,7 @@ public:
 	ObjectState *bindStackMemObj(const MemoryObject *mo, const Array *array = 0);
 
 
+	bool setupCallVarArgs(unsigned funcArgs, std::vector<ref<Expr> >& args);
 
   bool addConstraint(ref<Expr> constraint);
   bool merge(const ExecutionState &b);
@@ -263,8 +265,6 @@ public:
   void transferToBasicBlock(llvm::BasicBlock* dst, llvm::BasicBlock* src);
   void bindLocal(KInstruction *target, ref<Expr> value);
   void bindArgument(KFunction *kf, unsigned index, ref<Expr> value);
-
-  KFunction* getCurrentKFunc() const;
 
   void trackBranch(int condIndex, int asmLine);
   bool isReplayDone(void) const;

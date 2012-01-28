@@ -101,7 +101,8 @@ SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   // operator new(unsigned long)
   add("_Znwm", New, true),
 
-  add("klee_yield", Yield, false)
+  add("klee_yield", Yield, false),
+  add("klee_sym_range_bytes", SymRangeBytes, true)
 #undef addDNR
 #undef add
 };
@@ -551,6 +552,59 @@ SFH_DEF_HANDLER(GetObjSize)
     	target,
         ConstantExpr::create(it->first.first->size, Expr::Int32));
   }
+}
+
+SFH_DEF_HANDLER(SymRangeBytes)
+{
+	SFH_CHK_ARGS(2, "klee_sym_range_bytes");
+
+	ref<Expr>	addr(arguments[0]);
+	ref<Expr>	max_len(arguments[1]);
+	ConstantExpr	*ce_max_len, *ce_addr;
+	unsigned	c, max_len_v, total;
+	uint64_t	base_addr;
+
+	ce_addr = dyn_cast<ConstantExpr>(addr);
+	ce_max_len = dyn_cast<ConstantExpr>(max_len);
+
+	if (ce_addr == NULL || ce_max_len == NULL) {
+		sfh->executor->terminateStateOnError(
+			state,
+			"klee_sym_range_bytes expects constant addr and max_len",
+			"user.err");
+		return;
+	}
+
+	total = 0;
+	base_addr = ce_addr->getZExtValue();
+	do {
+		const MemoryObject	*cur_mo;
+		const ObjectState	*os;
+		unsigned		off;
+
+		cur_mo = state.addressSpace.resolveOneMO(base_addr);
+		if (cur_mo == NULL)
+			break;
+
+		os = state.addressSpace.findObject(cur_mo);
+		assert (os != NULL);
+
+		max_len_v = ce_max_len->getZExtValue();
+
+		assert (cur_mo->address <= base_addr);
+		off = base_addr - cur_mo->address;
+		for (unsigned i = off; i < os->size && total < max_len_v; i++) {
+			if (os->isByteConcrete(i)) {
+				max_len_v = 0;
+				break;
+			}
+			total++;
+		}
+
+		base_addr += os->size;
+	} while (total < max_len_v);
+
+	state.bindLocal(target, ConstantExpr::create(total, Expr::Int32));
 }
 
 SFH_DEF_HANDLER(GetErrno)

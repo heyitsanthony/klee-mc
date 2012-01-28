@@ -21,24 +21,24 @@
 using namespace klee;
 
 StackFrame::StackFrame(KInstIterator _caller, KFunction *_kf)
-  : call(_kf->callcount++), 
-    caller(_caller),
-    kf(_kf),
-    callPathNode(0),
-    minDistToUncoveredOnReturn(0),
-    varargs(0)
+: call(_kf->callcount++)
+, caller(_caller)
+, kf(_kf)
+, callPathNode(0)
+, minDistToUncoveredOnReturn(0)
+, varargs(0)
 {
-  locals = new Cell[kf->numRegisters];
+	locals = new Cell[kf->numRegisters];
 }
 
 StackFrame::StackFrame(const StackFrame &s) 
-  : call(s.call),
-    caller(s.caller),
-    kf(s.kf),
-    callPathNode(s.callPathNode),
-    allocas(s.allocas),
-    minDistToUncoveredOnReturn(s.minDistToUncoveredOnReturn),
-    varargs(s.varargs)
+: call(s.call)
+, caller(s.caller)
+, kf(s.kf)
+, callPathNode(s.callPathNode)
+, allocas(s.allocas)
+, minDistToUncoveredOnReturn(s.minDistToUncoveredOnReturn)
+, varargs(s.varargs)
 {
 	locals = new Cell[s.kf->numRegisters];
 	for (unsigned i=0; i<s.kf->numRegisters; i++)

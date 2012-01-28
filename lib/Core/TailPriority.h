@@ -50,6 +50,8 @@ public:
 
 		return -hits;
 	}
+
+	virtual void printName(std::ostream &os) const { os << "Tail"; }
 private:
 	typedef std::vector<KFunction*>	trace_ty;
 	typedef std::map<trace_ty, uint64_t>	tracemap_ty;

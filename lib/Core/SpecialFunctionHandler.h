@@ -156,7 +156,7 @@ namespace klee {
     SFH_HANDLER(SetForking)
     SFH_HANDLER(SilentExit)
     SFH_HANDLER(StackTrace)
-    SFH_HANDLER(UnderConstrained)
+    SFH_HANDLER(SymRangeBytes)
     SFH_HANDLER(Warning)
     SFH_HANDLER(WarningOnce)
     SFH_HANDLER(Yield)

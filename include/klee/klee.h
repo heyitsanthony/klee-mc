@@ -21,6 +21,7 @@
 #define KLEE_SYS_NE		4	/* klee_force_ne */
 #define KLEE_SYS_PRINT_EXPR	5	/* klee_print_expr */
 #define KLEE_SYS_SILENT_EXIT	6	/* klee_silent_exit */
+#define KLEE_SYS_SYM_RANGE_BYTES	7 /* klee_sym_range_bytes */
 
 #define ksys_report_error(x,y,z,w)	\
 	syscall(SYS_klee, KLEE_SYS_REPORT_ERROR, x, y, z, w)
@@ -34,6 +35,10 @@
 #define ksys_force_ne(x,y)	syscall(SYS_klee, KLEE_SYS_NE, x, y)
 #define ksys_print_expr(x,y)	syscall(SYS_klee, KLEE_SYS_PRINT_EXPR, (uint64_t)x, y)
 #define ksys_silent_exit(x)	syscall(SYS_klee, KLEE_SYS_SILENT_EXIT, (uint64_t)x)
+#define ksys_sym_range_bytes(x,y)	\
+	syscall(SYS_klee, KLEE_SYS_SYM_RANGE_BYTES, (uint64_t)x, y)
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -116,6 +121,10 @@ extern "C" {
    * mode.
    */
   unsigned klee_is_symbolic(uint64_t n);
+
+  /* returns number of bytes starting at 'ptr' that are symbolic */
+  /* max_bytes is the numebr of bytes to check before terminating early */
+  unsigned klee_sym_range_bytes(void* ptr, unsigned max_bytes);
 
 
   /* The following intrinsics are primarily intended for internal use

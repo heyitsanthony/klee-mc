@@ -765,23 +765,11 @@ void ExecutorVex::handleXferJmp(ExecutionState& state, KInstruction* ki)
 
 void ExecutorVex::jumpToKFunc(ExecutionState& state, KFunction* kf)
 {
-	CallPathNode		*cpn;
 	const MemoryObject	*regctx_mo;
-	KInstIterator		ki = state.getCaller();
-
-	assert (kf != NULL);
-	assert (state.stack.size() > 0);
 
 	/* save, pop off old state */
 	regctx_mo = es2esv(state).getRegCtx();
-	cpn = state.stack.back().callPathNode;
-	state.popFrame();
-
-	/* create new frame to replace old frame;
-	   new frame initialized with target function kf */
-	state.pushFrame(ki, kf);
-	StackFrame	&sf = state.stack.back();
-	sf.callPathNode = cpn;
+	state.xferFrame(kf);
 
 	/* set new state */
 	state.pc = kf->instructions;

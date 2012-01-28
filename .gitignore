@@ -14,3 +14,4 @@ klee-last
 lol*
 *.out
 *.err
+*.so

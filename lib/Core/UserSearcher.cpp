@@ -17,6 +17,7 @@
 
 #include "llvm/Support/CommandLine.h"
 
+#include "RescanSearcher.h"
 #include "TailPriority.h"
 #include "BucketPriority.h"
 #include "BatchingSearcher.h"
@@ -35,6 +36,7 @@
 #include "WeightedRandomSearcher.h"
 #include "XChkSearcher.h"
 #include "StringMerger.h"
+#include "Weight2Prioritizer.h"
 #include "PrioritySearcher.h"
 
 using namespace llvm;
@@ -59,6 +61,10 @@ namespace {
   UseInterleavedRS("use-interleaved-RS");
 
   cl::opt<bool>
+  UseInterleavedTailRS("use-interleaved-TRS");
+
+
+  cl::opt<bool>
   UseInterleavedBS("use-interleaved-BS");
 
   cl::opt<bool>
@@ -70,6 +76,8 @@ namespace {
   cl::opt<bool>
   UseInterleavedRR("use-interleaved-RR");
 
+  cl::opt<bool>
+  UseInterleavedMV("use-interleaved-MV");
 
   cl::opt<bool>
   UseInterleavedNURS("use-interleaved-NURS");
@@ -106,7 +114,7 @@ namespace {
     "weight-type",
     cl::desc(
     	"Set the weight type for --use-non-uniform-random-search.\n"
-	"Weights: none, icnt, cpicnt, query-cost, md2u, covnew"),
+	"Weights: none, icnt, cpicnt, query-cost, md2u, covnew, markov"),
     cl::init("none"));
 #if 0
       clEnumVal("none", "use (2^depth)"),
@@ -174,6 +182,12 @@ namespace {
 	cl::desc("TAIL"),
 	cl::init(false));
 
+  cl::opt<bool>
+  UseMarkovSearcher(
+  	"use-markov-search",
+	cl::desc("Markov"),
+	cl::init(false));
+
 
   cl::opt<bool>
   UsePDFInterleave(
@@ -203,6 +217,9 @@ static WeightFunc* getWeightFuncByName(const std::string& name)
 		return new MinDistToUncoveredWeight();
 	else if (name == "covnew")
 		return new CoveringNewWeight();
+	else if (name =="markov")
+		return new MarkovPathWeight();
+
 
 	assert (0 == 1 && "Unknown weight type given");
 	return NULL;
@@ -237,6 +254,16 @@ Searcher* UserSearcher::setupInterleavedSearcher(
 
 	if (UseInterleavedRR)
 		s.push_back(new RRSearcher());
+
+	if (UseInterleavedTailRS)
+		s.push_back(new RescanSearcher(
+			new Weight2Prioritizer<TailWeight>(1.0)));
+
+	if (UseInterleavedMV)
+		s.push_back(
+			new PrioritySearcher(
+				new Weight2Prioritizer<MarkovPathWeight>(100),
+				DEFAULT_PR_SEARCHER));
 
 	if (UseInterleavedBS)
 		s.push_back(
@@ -290,7 +317,12 @@ Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 {
 	Searcher* searcher;
 
-	if (UseTailSearcher) {
+	if (UseMarkovSearcher) {
+		searcher = new RescanSearcher(
+				new Weight2Prioritizer<MarkovPathWeight>(100));
+
+//			DEFAULT_PR_SEARCHER);
+	} else if (UseTailSearcher) {
 		searcher = new PrioritySearcher(
 			new TailPrioritizer(), DEFAULT_PR_SEARCHER);
 	} else if (UseBucketSearcher) {

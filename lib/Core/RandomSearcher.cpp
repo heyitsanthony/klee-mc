@@ -30,6 +30,8 @@ void RandomSearcher::update(ExecutionState *current, const States s)
 		std::vector<ExecutionState*>::iterator	it2;
 
 		it2 = std::find(states.begin(), states.end(), es);
+		if (it2 == states.end())
+			std::cerr << "COULD NOT FIND STATE=" << (void*)es << '\n';
 		assert(it2 != states.end() && "invalid state removed");
 		states.erase(it2);
 

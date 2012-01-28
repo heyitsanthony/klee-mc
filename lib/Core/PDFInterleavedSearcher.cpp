@@ -43,6 +43,7 @@ Searcher* PDFInterleavedSearcher::createEmpty(void) const
 
 ExecutionState& PDFInterleavedSearcher::selectState(bool allowCompact)
 {
+	ExecutionState	*es;
 	double		rand_val;
 	int64_t		remaining_tickets;
 
@@ -76,11 +77,13 @@ ExecutionState& PDFInterleavedSearcher::selectState(bool allowCompact)
 		}
 	}
 
+	es = &searchers[cur_searcher_idx].second->selectState(allowCompact);
 	std::cerr
 		<< "PDF: CHOOSING: IDX=" << cur_searcher_idx
+		<< ". ST=" << es
 		<< ". TICKETS=" << searchers[cur_searcher_idx].first
 		<< ". RANDVAL=" << rand_val
 		<< ". NAME=";
 	searchers[cur_searcher_idx].second->printName(std::cerr);
-	return searchers[cur_searcher_idx].second->selectState(allowCompact);
+	return *es;
 }

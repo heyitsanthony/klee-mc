@@ -22,6 +22,7 @@
 
 #include "PTree.h"
 #include "Memory.h"
+#include "static/Markov.h"
 
 #include "llvm/Function.h"
 #include "llvm/Support/CommandLine.h"
@@ -39,6 +40,8 @@ using namespace klee;
 
 ExeStateBuilder* ExeStateBuilder::theESB = NULL;
 MemoryManager* ExecutionState::mm = NULL;
+
+Markov<KFunction> theStackXfer;
 
 #define LOG_DIR		"statelog/log."
 namespace {
@@ -166,15 +169,50 @@ ExecutionState* ExecutionState::reconstitute(
 void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf)
 {
 	assert (kf != NULL && "Bad function pushed on stack");
+
+	if (stack.empty() == false)
+		theStackXfer.insert(getCurrentKFunc(), kf);
+
 	stack.push_back(StackFrame(caller,kf));
 }
 
 void ExecutionState::popFrame()
 {
 	StackFrame &sf = stack.back();
+	KFunction	*last_kf = getCurrentKFunc();
+
 	foreach (it, sf.allocas.begin(), sf.allocas.end())
 		unbindObject(*it);
 	stack.pop_back();
+
+	if (stack.empty() == false)
+		theStackXfer.insert(last_kf, getCurrentKFunc());
+}
+
+void ExecutionState::xferFrame(KFunction* kf)
+{
+	CallPathNode		*cpn;
+	KInstIterator		ki = getCaller();
+
+	assert (kf != NULL);
+	assert (stack.size() > 0);
+
+	theStackXfer.insert(getCurrentKFunc(), kf);
+
+	/* save, pop off old state */
+	cpn = stack.back().callPathNode;
+
+	// pop frame
+	StackFrame	&sf(stack.back());
+	foreach (it, sf.allocas.begin(), sf.allocas.end())
+		unbindObject(*it);
+	stack.pop_back();
+
+	/* create new frame to replace old frame;
+	   new frame initialized with target function kf */
+	stack.push_back(StackFrame(ki,kf));
+	StackFrame	&sf2(stack.back());
+	sf2.callPathNode = cpn;
 }
 
 void ExecutionState::bindObject(const MemoryObject *mo, ObjectState *os)
@@ -377,11 +415,6 @@ ObjectState* ExecutionState::bindStackMemObj(
 	return os;
 }
 
-KFunction* ExecutionState::getCurrentKFunc(void) const
-{
-	return stack.back().kf;
-}
-
 void ExecutionState::trackBranch(int condIndex, int asmLine)
 {
 	// only track NON-internal branches
@@ -536,4 +569,53 @@ void ExecutionState::printConstraints(std::ostream& os) const
 {
 	Query	q(constraints, ConstantExpr::create(1, 1));
 	SMTPrinter::print(os, q);
+}
+
+bool ExecutionState::setupCallVarArgs(
+	unsigned funcArgs, std::vector<ref<Expr> >& args)
+{
+	ObjectState	*os;
+	unsigned	size, offset, callingArgs;
+
+	StackFrame &sf = stack.back();
+
+	callingArgs = args.size();
+	size = 0;
+	for (unsigned i = funcArgs; i < callingArgs; i++) {
+	// FIXME: This is really specific to the architecture, not the pointer
+	// size. This happens to work fir x86-32 and x86-64, however.
+		Expr::Width WordSize = Context::get().getPointerWidth();
+		if (WordSize == Expr::Int32) {
+			size += Expr::getMinBytesForWidth(args[i]->getWidth());
+		} else {
+			size += llvm::RoundUpToAlignment(
+				args[i]->getWidth(), WordSize)/8;
+		}
+	}
+
+	os = allocate(size, true, false, prevPC->getInst());
+	if (os == NULL)
+		return false;
+
+	sf.varargs = os->getObject();
+
+	offset = 0;
+	for (unsigned i = funcArgs; i < callingArgs; i++) {
+	// FIXME: This is really specific to the architecture, not the pointer
+	// size. This happens to work fir x86-32 and x86-64, however.
+		Expr::Width WordSize = Context::get().getPointerWidth();
+		if (WordSize == Expr::Int32) {
+			write(os, offset, args[i]);
+			offset += Expr::getMinBytesForWidth(args[i]->getWidth());
+		} else {
+			assert (WordSize==Expr::Int64 && "Unknown word size!");
+
+			write(os, offset, args[i]);
+			offset += llvm::RoundUpToAlignment(
+				args[i]->getWidth(),
+				WordSize) / 8;
+		}
+	}
+
+	return true;
 }

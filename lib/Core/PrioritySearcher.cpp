@@ -3,8 +3,18 @@
 #include "klee/ExecutionState.h"
 #include "PrioritySearcher.h"
 #include <iostream>
+#include "llvm/Support/CommandLine.h"
+
 
 using namespace klee;
+
+namespace {
+	llvm::cl::opt<unsigned>
+	PrKickRate(
+		"pr-kick-rate",
+		llvm::cl::desc("Number of elements to kick per selection."),
+		llvm::cl::init(1));
+}
 
 ExecutionState& PrioritySearcher::selectState(bool allowCompact)
 {
@@ -13,7 +23,7 @@ ExecutionState& PrioritySearcher::selectState(bool allowCompact)
 	unsigned	refresh_c, max_refresh;
 
 	refresh_c = 0;
-	max_refresh = 1;
+	max_refresh = PrKickRate;
 
 	while (1) {
 		int	curPr;
@@ -151,7 +161,7 @@ void PrioritySearcher::removeState(ExecutionState* es)
 	int			pr;
 
 	assert (sm_it != state_backmap.end());
-	
+
 	pr = sm_it->second;
 	prs = getPrSearcher(sm_it->second);
 

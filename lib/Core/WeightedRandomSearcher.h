@@ -38,6 +38,8 @@ DECL_WEIGHT(InstCount, true)
 DECL_WEIGHT(CPInstCount, true)
 DECL_WEIGHT(MinDistToUncovered, true)
 DECL_WEIGHT(CoveringNew, true)
+DECL_WEIGHT(MarkovPath, true)
+DECL_WEIGHT(Tail, true)
 
 class WeightedRandomSearcher : public Searcher
 {
