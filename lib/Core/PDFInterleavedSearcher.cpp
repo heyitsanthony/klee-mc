@@ -85,5 +85,6 @@ ExecutionState& PDFInterleavedSearcher::selectState(bool allowCompact)
 		<< ". RANDVAL=" << rand_val
 		<< ". NAME=";
 	searchers[cur_searcher_idx].second->printName(std::cerr);
+	std::cerr << '\n';
 	return *es;
 }

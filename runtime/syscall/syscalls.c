@@ -151,7 +151,7 @@ static void* sc_mmap(void* regfile)
 		addr = sc_mmap_anon(regfile);
 	}
 
-	sc_ret_v(new_regs, (uint64_t)addr);
+	sc_ret_v_new(new_regs, (uint64_t)addr);
 	return new_regs;
 }
 
@@ -382,7 +382,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 				break;
 			}
 //			sc_ret_v(new_regs, concretize_u64(GET_ARG2(regfile)));
-			sc_ret_v(new_regs, GET_ARG2(regfile));
+			sc_ret_v_new(new_regs, GET_ARG2(regfile));
 		} else
 #endif
 			sc_ret_v(regfile, GET_ARG2(regfile));
@@ -470,7 +470,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			break;
 		}
 		klee_assume(GET_SYSRET(new_regs) == 0);
-		sc_ret_v(new_regs, 0);
+		sc_ret_v_new(new_regs, 0);
 		make_sym_by_arg(regfile, 2, sizeof(struct stat), "newstatbuf");
 	}
 	break;
@@ -607,22 +607,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 		/* let all through */
 		if (GET_SYSRET(new_regs) == GET_ARG0(regfile)) {
-	#if 0
-			if (GET_ARG1(regfile))
-				make_sym_by_arg(
-					regfile, 1, sizeof(fd_set), "readfds");
-			if (GET_ARG2(regfile))
-				make_sym_by_arg(
-					regfile, 2, sizeof(fd_set), "writefds");
-			if (GET_ARG3(regfile))
-				make_sym_by_arg(
-					regfile, 3, sizeof(fd_set), "exceptfds");
-
-			if ((void*)GET_ARG4_PTR(regfile) != NULL) {
-				make_sym_by_arg(
-					regfile, 4, sizeof(fd_set), "timeoutbuf");
-			}
-#endif
 			if (GET_ARG1(regfile))
 				make_sym(
 					GET_ARG1(regfile),
@@ -643,7 +627,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 					"timeoutbuf");
 			}
 
-			sc_ret_v(new_regs, GET_ARG0(regfile));
+			sc_ret_v_new(new_regs, (int)GET_ARG0(regfile));
 			break;
 		}
 
@@ -655,13 +639,13 @@ void* sc_enter(void* regfile, void* jmpptr)
 					GET_ARG4(regfile),
 					sizeof(struct timeval),
 					"timeoutbuf");
-				sc_ret_v(new_regs, 0);
+				sc_ret_v_new(new_regs, 0);
 				break;
 			}
 		}
 
 		/* error */
-		sc_ret_v(new_regs, -1);
+		sc_ret_v_new(new_regs, (int)-1);
 		break;
 	}
 
@@ -880,4 +864,8 @@ void sc_ret_v(void* regfile, uint64_t v1)
 	klee_assume(GET_SYSRET_S(regfile) == (ARCH_SIGN_CAST)v1);
 }
 
-
+void sc_ret_v_new(void* regfile, uint64_t v1)
+{
+	klee_assume(GET_SYSRET_S(regfile) == (ARCH_SIGN_CAST)v1);
+	GET_SYSRET(regfile) = v1;
+}

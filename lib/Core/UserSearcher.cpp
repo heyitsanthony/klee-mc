@@ -17,6 +17,7 @@
 
 #include "llvm/Support/CommandLine.h"
 
+#include "DemotionSearcher.h"
 #include "RescanSearcher.h"
 #include "TailPriority.h"
 #include "BucketPriority.h"
@@ -53,6 +54,9 @@ namespace {
 	cl::init(false));
   cl::opt<bool>
   UseRandomSearch("use-random-search");
+
+  cl::opt<bool>
+  UseDemotionSearch("use-demotion-search");
 
   cl::opt<bool>
   UseBreadthFirst("use-breadth-first");
@@ -389,6 +393,9 @@ Searcher *UserSearcher::constructUserSearcher(Executor &executor)
 	/* xchk searcher should probably always be at the top */
 	if (UseXChkSearcher)
 		searcher = new XChkSearcher(searcher);
+
+	if (UseDemotionSearch)
+		searcher = new DemotionSearcher(searcher);
 
 	if (UseFilterSearch)
 		searcher = new FilterSearcher(executor, searcher);

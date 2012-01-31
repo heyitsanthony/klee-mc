@@ -13,8 +13,8 @@ FilterSearcher::FilterSearcher(Executor& _exe, Searcher* _searcher_base)
 	blacklist_strs.insert("LoadDelegateList");
 	blacklist_strs.insert("ConfigureFileToStringInfo");
 	blacklist_strs.insert("ThrowMagickException");
-	blacklist_strs.insert("getch2");
-	blacklist_strs.insert("lavf_check_preferred_file");
+//	blacklist_strs.insert("getch2");
+//	blacklist_strs.insert("lavf_check_preferred_file");
 	blacklist_strs.insert("_ZNK4llvm10error_code7messageEv");
 	//blacklist_strs.insert("___printf_chk");
 	//blacklist_strs.insert("_IO_file_doallocate_internal");
@@ -58,7 +58,6 @@ bool FilterSearcher::isBlacklisted(ExecutionState& es) const
 		plus_off = s.find('+');
 		if (plus_off != 0) {
 			s = s.substr(0, plus_off);
-			std::cerr << "GOT: " << s << '\n';
 		}
 
 		if (blacklist_strs.count(s)) {

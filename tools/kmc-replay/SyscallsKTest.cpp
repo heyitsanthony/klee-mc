@@ -177,13 +177,27 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 	xlate_sysnr = loadSyscallEntry(sp);
 
 	/* GROSS UGLY HACK. OH WELL. */
-	if (bc_sc_is_thunk(bcs_crumb) && xlate_sysnr != SYS_recvmsg)
+	if (	bc_sc_is_thunk(bcs_crumb)
+		&& xlate_sysnr != SYS_recvmsg
+		&& xlate_sysnr != SYS_recvfrom)
+	{
 		crumbs->skip(bcs_crumb->bcs_op_c);
+	}
 
 	/* extra thunks */
 	switch(xlate_sysnr) {
+	case SYS_recvfrom:
+		feedSyscallOp(sp);
+		if (sp.getArgPtr(4) != NULL)
+			feedSyscallOp(sp);
+		if (sp.getArgPtr(5) != NULL) {
+			socklen_t	*sl;
+			sl = (socklen_t*)sp.getArgPtr(5);
+			*sl = sizeof(struct sockaddr_in);
+		}
+		setRet(sp.getArg(2));
+		break;
 	case SYS_recvmsg:
-		printf("HELLO RECVMSG!!!\n");
 		feedSyscallOp(sp);
 		(((struct msghdr*)sp.getArg(1)))->msg_controllen = 0;
 		break;
@@ -264,7 +278,7 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 	}
 
 	fprintf(stderr,
-		KREPLAY_NOTE "Retired: sys=%d. xsys=%d. ret=%p\n",
+		KREPLAY_NOTE "Retired: sys=%d. xsys=%d. ret=%p.\n",
 		(int)sys_nr,
 		(int)xlate_sysnr,
 		(void*)getRet());
