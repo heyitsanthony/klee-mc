@@ -191,12 +191,11 @@ void make_sym(uint64_t addr, uint64_t len, const char* name)
 {
 	klee_check_memory_access((void*)addr, 1);
 
-	klee_assume(addr == klee_get_value(addr));
-
+	addr = concretize_u64(addr);
 	if (len > SYM_YIELD_SIZE)
 		klee_yield();
 
-	klee_assume(len == klee_get_value(len));
+	len = concretize_u64(len);
 	kmc_make_range_symbolic(addr, len, name);
 	sc_breadcrumb_add_ptr((void*)addr, len);
 }

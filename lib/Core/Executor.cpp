@@ -2977,8 +2977,12 @@ void Executor::terminateStateEarly(
 		state.coveredNew ||
 		(AlwaysOutputSeeds && seedMap.count(&state)))
 	{
+		std::stringstream	ss;
+
+		ss << message.str() << '\n';
+		printStackTrace(state, ss);
 		interpreterHandler->processTestCase(
-			state, (message + "\n").str().c_str(), "early");
+			state, ss.str().c_str(), "early");
 	}
 
 	terminateState(state);
@@ -3654,7 +3658,6 @@ void Executor::handleMemoryPID(ExecutionState* &state)
 	uint64_t                mbs;
 	static int64_t          err_sum = -(int64_t)MaxMemory;
 	static int64_t          last_err = 0;
-	static uint64_t         last_mbs = 0;
 
 	nonCompact_c = stateManager->getNonCompactStateCount();
 
