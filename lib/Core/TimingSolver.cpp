@@ -140,3 +140,21 @@ bool TimingSolver::getRange(
 	ref<Expr> expr,
 	std::pair< ref<Expr>, ref<Expr> >& ret)
 { return solver->getRange(Query(state.constraints, expr), ret); }
+
+ref<Expr> TimingSolver::toUnique(const ExecutionState &state, ref<Expr> &e)
+{
+	ref<ConstantExpr> value;
+	bool isTrue = false;
+
+	if (isa<ConstantExpr>(e))
+		return e;
+
+	if (	getValue(state, e, value) &&
+		mustBeTrue(state, EqExpr::create(e, value), isTrue) &&
+		isTrue)
+	{
+		return value;
+	}
+
+	return e;
+}

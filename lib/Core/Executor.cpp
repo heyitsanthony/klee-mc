@@ -217,7 +217,7 @@ namespace {
 
   cl::opt<bool>
   ReplayPathOnly("replay-path-only",
-            cl::desc("On replay, terminate states when branch decisions have been exhausted"),
+            cl::desc("On replay, terminate states when branches have been exhausted"),
             cl::init(false));
 
   cl::opt<bool>
@@ -930,43 +930,20 @@ ref<klee::ConstantExpr> Executor::evalConstant(
 		return ce;
 	}
 
-	if (isa<ConstantPointerNull>(c)) {
+	if (isa<ConstantPointerNull>(c))
 		return Expr::createPointer(0);
-	}
 
 	if (isa<UndefValue>(c) || isa<ConstantAggregateZero>(c)) {
 		return ConstantExpr::create(
 			0, km->getWidthForLLVMType(c->getType()));
 	}
 
-	if (isa<ConstantVector>(c)) {
+	if (isa<ConstantVector>(c))
 		return ConstantExpr::createVector(cast<ConstantVector>(c));
-	}
 
 	// Constant{AggregateZero,Array,Struct,Vector}
-	fprintf(stderr, "AIEEEEEEEE!\n");
 	c->dump();
 	assert(0 && "invalid argument to evalConstant()");
-}
-
-ref<Expr> Executor::toUnique(
-	const ExecutionState &state,
-	ref<Expr> &e)
-{
-	ref<ConstantExpr> value;
-	bool isTrue = false;
-
-	if (isa<ConstantExpr>(e))
-		return e;
-
-	if (	solver->getValue(state, e, value) &&
-		solver->mustBeTrue(state, EqExpr::create(e, value), isTrue) &&
-		isTrue)
-	{
-		return value;
-	}
-
-	return e;
 }
 
 /* Concretize the given expression, and return a possible constant value.
@@ -1169,17 +1146,17 @@ void Executor::executeCall(
   }
 
   switch(f->getIntrinsicID()) {
-  case Intrinsic::not_intrinsic:
-    // state may be destroyed by this call, cannot touch
-    callExternalFunction(state, ki, f, arguments);
-    break;
+	case Intrinsic::not_intrinsic:
+	// state may be destroyed by this call, cannot touch
+	callExternalFunction(state, ki, f, arguments);
+	break;
 
-    // va_arg is handled by caller and intrinsic lowering, see comment for
-    // ExecutionState::varargs
-  case Intrinsic::vastart:  {
-    StackFrame &sf = state.stack.back();
-    assert(sf.varargs &&
-           "vastart called in function with no vararg object");
+	// va_arg is handled by caller and intrinsic lowering, see comment for
+	// ExecutionState::varargs
+	case Intrinsic::vastart:  {
+	StackFrame &sf = state.stack.back();
+	assert(sf.varargs &&
+	   "vastart called in function with no vararg object");
      // FIXME: This is really specific to the architecture, not the pointer
     // size. This happens to work fir x86-32 and x86-64, however.
 #define MMU_WORD_OP(x,y)       mmu->exeMemOp(  \
@@ -1190,10 +1167,12 @@ void Executor::executeCall(
                                                ConstantExpr::create(x, 64)),\
                                        y, NULL))
 
-    Expr::Width WordSize = Context::get().getPointerWidth();
-    if (WordSize == Expr::Int32) {
-	MMU_WORD_OP(0, sf.varargs->getBaseExpr());
-    } else {
+	Expr::Width WordSize = Context::get().getPointerWidth();
+	if (WordSize == Expr::Int32) {
+		MMU_WORD_OP(0, sf.varargs->getBaseExpr());
+		break;
+	}
+
 	assert(WordSize == Expr::Int64 && "Unknown word size!");
 	// X86-64 has quite complicated calling convention. However,
 	// instead of implementing it, we can do a simple hack: just
@@ -1207,7 +1186,6 @@ void Executor::executeCall(
 	MMU_WORD_OP(8, sf.varargs->getBaseExpr());
 	// reg_save_area
 	MMU_WORD_OP(16, ConstantExpr::create(0, 64));
-    }
 #undef MMU_WORD_OP
     break;
   }
@@ -1241,15 +1219,7 @@ void Executor::printFileLine(ExecutionState &state, KInstruction *ki) {
 }
 
 bool Executor::isDebugIntrinsic(const Function *f)
-{
-  switch (f->getIntrinsicID()) {
-  case Intrinsic::dbg_declare:
-    return true;
-
-  default:
-    return false;
-  }
-}
+{ return f->getIntrinsicID() == Intrinsic::dbg_declare; }
 
 static inline const llvm::fltSemantics * fpWidthToSemantics(unsigned width)
 {
@@ -1436,7 +1406,6 @@ void Executor::finalizeBranch(
 		st = newState;
 	}
 
-//	if (st->isCompact() == false)
 	st->transferToBasicBlock(
 		bi->getSuccessor(branchIdx),
 		bi->getParent());
@@ -1469,16 +1438,21 @@ void Executor::instCall(ExecutionState& state, KInstruction *ki)
 			return;
 		}
 
-		if (ce && ce->getOpcode()==Instruction::BitCast) {
+		if (ce && ce->getOpcode()==Instruction::BitCast)
 			f = executeBitCast(state, cs, ce, arguments);
-		}
 	}
 
-	if (f) {
-		executeCall(state, ki, f, arguments);
-	} else {
-		executeSymbolicFuncPtr(state, ki, arguments);
+	if (f == NULL) {
+		XferStateIter	iter;
+
+		xferIterInit(iter, &state, ki);
+		while (xferIterNext(iter))
+			executeCall(*(iter.res.first), ki, iter.f, arguments);
+
+		return;
 	}
+
+	executeCall(state, ki, f, arguments);
 }
 
 llvm::Function* Executor::executeBitCast(
@@ -1544,54 +1518,6 @@ llvm::Function* Executor::executeBitCast(
 	}
 
 	return f;
-}
-
-void Executor::executeSymbolicFuncPtr(
-	ExecutionState &state,
-        KInstruction *ki,
-        std::vector< ref<Expr> > &arguments)
-{
-    ref<Expr> v = eval(ki, 0, state).value;
-
-    ExecutionState *free = &state;
-    bool hasInvalid = false, first = true;
-
-    /* XXX This is wasteful, no need to do a full evaluate since we
-       have already got a value. But in the end the caches should
-       handle it for us, albeit with some overhead. */
-    do {
-      ref<ConstantExpr> value;
-      bool success = solver->getValue(*free, v, value);
-      assert(success && "FIXME: Unhandled solver failure");
-      (void) success;
-      StatePair res = fork(*free, EqExpr::create(v, value), true);
-      if (res.first) {
-        Function* f;
-        uint64_t addr;
-
-	addr = value->getZExtValue();
-	f = getFuncByAddr(addr);
-	if (f != NULL) {
-          // Don't give warning on unique resolution
-          if (res.second || !first)
-            klee_warning_once((void*) (unsigned long) addr,
-                              "resolved symbolic function pointer to: %s",
-                              f->getName().data());
-
-          executeCall(*res.first, ki, f, arguments);
-        } else {
-          if (!hasInvalid) {
-            klee_warning_once((void*) (unsigned long) addr,
-                              "invalid function pointer: %p", (void*)addr);
-            terminateStateOnExecError(state, "invalid function pointer");
-            hasInvalid = true;
-          }
-        }
-      }
-
-      first = false;
-      free = res.second;
-    } while (free);
 }
 
 void Executor::instCmp(ExecutionState& state, KInstruction *ki)
@@ -1776,6 +1702,7 @@ void Executor::forkSwitch(
 		entry = kf->getBasicBlockEntry(destBlock);
 		if (	es->isCompact() &&
 			kf->trackCoverage &&
+			/* XXX I don't understand this condition */
 			theStatisticManager->getIndexedValue(
 				stats::uncoveredInstructions,
 				kf->instructions[entry]->getInfo()->id))
@@ -1804,6 +1731,8 @@ void Executor::forkSwitch(
 		terminateState(state);
 }
 
+ref<Expr> Executor::toUnique(const ExecutionState &state, ref<Expr> &e)
+{ return solver->toUnique(state, e); }
 
 void Executor::instSwitch(ExecutionState& state, KInstruction *ki)
 {
@@ -3323,13 +3252,6 @@ bool Executor::getSymbolicSolution(
 	return true;
 }
 
-void Executor::getCoveredLines(
-	const ExecutionState &state,
-	std::map<const std::string*, std::set<unsigned> > &res)
-{
-	res = state.coveredLines;
-}
-
 void Executor::doImpliedValueConcretization(
 	ExecutionState &state,
 	ref<Expr> e,
@@ -3664,21 +3586,14 @@ void Executor::handleMemoryPID(ExecutionState* &state)
 	mbs = mallinfo().uordblks/(1024*1024);
 	err = MaxMemory - mbs;
 
-	std::cerr << "K_P: " << K_P*err << '\n';
-	std::cerr << "K_D: " << K_D*(err-last_err) << '\n';
-	std::cerr << "K_I: " << K_I*(err_sum) << '\n';
-
 	states_to_gen =
-	K_P*err +
-	K_D*(err - last_err) +
-	K_I*(err_sum);
+		K_P*err +
+		K_D*(err - last_err) +
+		K_I*(err_sum);
 
 	err_sum += err;
 	last_err = err;
 
-	std::cerr << "MALLINFO:" << mallinfo().uordblks <<  '\n';
-	std::cerr << "MBS=" << mbs << '\n';
-	std::cerr << "=========STATESTOGEN=" << states_to_gen << "\n";
 	if (states_to_gen < 0) {
 		onlyNonCompact = false;
 		stateManager->compactStates(state, -states_to_gen);
@@ -3692,3 +3607,89 @@ ExeStateSet::const_iterator Executor::beginStates(void) const
 { return stateManager->begin(); }
 ExeStateSet::const_iterator Executor::endStates(void) const
 { return stateManager->end(); }
+
+void Executor::xferIterInit(
+	struct XferStateIter& iter,
+	ExecutionState* state,
+	KInstruction* ki)
+{
+	iter.v = eval(ki, 0, *state).value;
+	iter.free = state;
+	iter.getval_c = 0;
+	iter.state_c = 0;
+	iter.badjmp_c = 0;
+}
+
+#define MAX_BADJMP	10
+
+bool Executor::xferIterNext(struct XferStateIter& iter)
+{
+	Function		*iter_f;
+	ref<ConstantExpr>	value;
+
+	iter_f = NULL;
+	while (iter.badjmp_c < MAX_BADJMP) {
+		uint64_t	addr;
+		bool		ok;
+
+		if (iter.free == NULL) return false;
+
+		ok = solver->getValue(*(iter.free), iter.v, value);
+		if (ok == false) {
+			terminateStateEarly(
+				*(iter.free),
+				"solver died on xferIterNext");
+			return false;
+		}
+
+		iter.getval_c++;
+		iter.res = fork(*(iter.free), EqExpr::create(iter.v, value), true);
+		iter.free = iter.res.second;
+
+		if (iter.res.first == NULL) continue;
+
+		addr = value->getZExtValue();
+		iter.state_c++;
+		iter_f = getFuncByAddr(addr);
+
+		if (iter_f == NULL) {
+			if (iter.badjmp_c == 0) {
+				klee_warning_once(
+					(void*) (unsigned long) addr,
+					"invalid function pointer: %p",
+					(void*)addr);
+			}
+
+			terminateStateOnError(
+				*(iter.res.first),
+				"xfer iter error: bad pointer",
+				"badjmp.err");
+			iter.badjmp_c++;
+			continue;
+		}
+
+		// Don't give warning on unique resolution
+		if (iter.res.second && iter.getval_c == 1) {
+			klee_warning_once(
+				(void*) (unsigned long) addr,
+				"resolved symbolic function pointer to: %s",
+				iter_f->getName().data());
+		}
+
+		break;
+	}
+
+	if (iter.badjmp_c >= MAX_BADJMP) {
+		terminateStateOnError(
+			*(iter.free),
+			"xfer iter erorr: too many bad jumps",
+			"badjmp.err");
+		iter.free = NULL;
+		return false;
+	}
+
+	assert (iter_f != NULL && "BAD FUNCTION TO JUMP TO");
+	iter.f = iter_f;
+
+	return true;
+}

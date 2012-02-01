@@ -138,23 +138,6 @@ private:
 	void setupRegisterContext(ExecutionState* state, llvm::Function* f);
 	void setupProcessMemory(ExecutionState* state, llvm::Function* f);
 
-	struct XferStateIter
-	{
-		ref<Expr>	v;
-		ExecutionState* free;
-		llvm::Function*	f;
-		uint64_t	f_addr;
-		StatePair 	res;
-		unsigned	state_c;
-		unsigned	badjmp_c;
-	};
-
-	void xferIterInit(
-		struct XferStateIter& iter,
-		ExecutionState* state,
-		KInstruction* ki);
-	bool xferIterNext(struct XferStateIter& iter);
-
 	void logXferRegisters(ExecutionState& state);
 
 	void logSCRegs(ExecutionState& state);

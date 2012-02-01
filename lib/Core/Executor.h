@@ -77,13 +77,13 @@ template<class T> class ref;
 
 #define EXE_SWITCH_RLE_LIMIT	4
 
-class Executor : public Interpreter {
+class Executor : public Interpreter
+{
   /* FIXME The executor shouldn't have friends. */
   friend class ExeStateManager;
   friend class BumpMergingSearcher;
-  friend class MergingSearcher;
   friend class RandomPathSearcher;
-  friend class OwningSearcher;
+  friend class MergingSearcher;
   friend class WeightedRandomSearcher;
   friend class SpecialFunctionHandler;
   friend class StatsTracker;
@@ -162,11 +162,28 @@ private:
 
 
 protected:
-  KModule	*kmodule;
-  MMU		*mmu;
-  Globals	*globals;
+	KModule	*kmodule;
+	MMU		*mmu;
+	Globals	*globals;
 
-  virtual void executeInstruction(ExecutionState &state, KInstruction *ki);
+	struct XferStateIter
+	{
+		ref<Expr>	v;
+		ExecutionState* free;
+		llvm::Function*	f;
+		StatePair 	res;
+		unsigned	getval_c;
+		unsigned	state_c;
+		unsigned	badjmp_c;
+	};
+
+	void xferIterInit(
+		struct XferStateIter& iter,
+		ExecutionState* state,
+		KInstruction* ki);
+	bool xferIterNext(struct XferStateIter& iter);
+
+	virtual void executeInstruction(ExecutionState &state, KInstruction *ki);
 
   virtual void run(ExecutionState &initialState);
   virtual void instRet(ExecutionState& state, KInstruction* ki);
@@ -188,9 +205,8 @@ protected:
   // unlowered instrinsic, or are unsupported, like inline assembly)
   void terminateStateOnExecError(ExecutionState &state,
                                  const llvm::Twine &message,
-                                 const llvm::Twine &info="") {
-    terminateStateOnError(state, message, "exec.err", info);
-  }
+                                 const llvm::Twine &info="")
+  { terminateStateOnError(state, message, "exec.err", info); }
 
   ref<ConstantExpr> getSmallSymAllocSize(
 	ExecutionState &state, ref<Expr>& size);
@@ -207,11 +223,6 @@ protected:
                             KInstruction *target,
                             llvm::Function *function,
                             std::vector< ref<Expr> > &arguments) = 0;
-
-  void executeSymbolicFuncPtr(
-	ExecutionState &state,
-	KInstruction *ki,
-	std::vector< ref<Expr> > &arguments);
 
   virtual void executeCall(ExecutionState &state,
         KInstruction *ki,
@@ -624,7 +635,8 @@ public:
 
 	virtual void getCoveredLines(
 		const ExecutionState &state,
-		std::map<const std::string*, std::set<unsigned> > &res);
+		std::map<const std::string*, std::set<unsigned> > &res)
+	{ res = state.coveredLines; }
 
 	StatsTracker* getStatsTracker(void) const { return statsTracker; }
 

@@ -506,6 +506,12 @@ const VexSB* ExecutorVex::getFuncVSB(Function* f) const
 	return it->second;
 }
 
+static void getReturnAddresses(llvm::Function* f)
+{
+	foreach (it, f->begin(), f->end()) {
+	}
+}
+
 
 #define LIBRARY_BASE_GUESTADDR	((uint64_t)0x10000000)
 
@@ -683,76 +689,6 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 	terminateStateOnExit(state);
 }
 
-void ExecutorVex::xferIterInit(
-	struct XferStateIter& iter,
-	ExecutionState* state,
-	KInstruction* ki)
-{
-	iter.v = eval(ki, 0, *state).value;
-	iter.free = state;
-	iter.state_c = 0;
-	iter.badjmp_c = 0;
-}
-
-#define MAX_BADJMP	10
-
-/* this is mostly a copy of Executor's implementation of
- * the symbolic function call; probably should try to merge the two */
-bool ExecutorVex::xferIterNext(struct XferStateIter& iter)
-{
-	Function		*iter_f;
-	ref<ConstantExpr>	value;
-	uint64_t		addr;
-	bool			success;
-
-	iter_f = NULL;
-	while (iter.badjmp_c < MAX_BADJMP) {
-		if (iter.free == NULL) return false;
-
-		success = solver->getValue(*(iter.free), iter.v, value);
-		assert(success && "FIXME: Unhandled solver failure");
-		(void) success;
-
-		iter.res = fork(*(iter.free), EqExpr::create(iter.v, value), true);
-		iter.free = iter.res.second;
-
-		if (!iter.res.first) continue;
-
-		addr = value->getZExtValue();
-		iter.state_c++;
-		iter_f = getFuncByAddr(addr);
-		if (iter_f == NULL) {
-			fprintf(stderr, "bogus jmp to %p!\n", (void*)addr);
-			std::cerr << "HEY: " << iter.v << '\n';
-			terminateStateOnError(
-				*(iter.res.first),
-				"fork error: jumping to bad pointer",
-				"badjmp.err");
-			iter.badjmp_c++;
-			continue;
-		}
-
-		break;
-	}
-
-	if (iter.badjmp_c >= MAX_BADJMP) {
-		terminateStateOnError(
-			*(iter.free),
-			"fork erorr: too many bad jumps",
-			"badjmp.err");
-		iter.free = NULL;
-		return false;
-	}
-
-	assert (iter_f != NULL && "BAD FUNCTION TO JUMP TO");
-	iter.f = iter_f;
-	iter.f_addr = addr;
-
-	// (iter.res.second || !iter.first) => non-unique resolution
-	// normal klee cares about this, we don't
-
-	return true;
-}
 
 void ExecutorVex::handleXferJmp(ExecutionState& state, KInstruction* ki)
 {
