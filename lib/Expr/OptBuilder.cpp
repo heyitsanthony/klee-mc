@@ -615,6 +615,16 @@ static ref<Expr> SubExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 		return AddExpr::create(
 			SubExpr::create(cl, r->getKid(0)), r->getKid(1));
 
+	if (rk == Expr::ZExt) {
+		const ZExtExpr	*zr = static_cast<const ZExtExpr*>(r);
+		ref<Expr>	cl_zext(ZExtExpr::create(cl, zr->getKid(0)->getWidth()));
+		if (ZExtExpr::create(cl_zext, cl->getWidth()) == cl) {
+			return SExtExpr::create(
+				SubExpr::create(cl_zext, zr->getKid(0)),
+				cl->getWidth());
+		}
+	}
+
 	return SubExpr::alloc(cl, r);
 }
 
@@ -656,6 +666,17 @@ static ref<Expr> SubExpr_create(Expr *l, Expr *r)
 	if (rk == Expr::Sub && isa<ConstantExpr>(r->getKid(0)))
 		return SubExpr::create(
 			AddExpr::create(l, r->getKid(1)), r->getKid(0));
+
+	if (rk == Expr::ZExt && lk == Expr::ZExt) {
+		const ZExtExpr	*zr, *zl;
+		zr = static_cast<const ZExtExpr*>(r);
+		zl = static_cast<const ZExtExpr*>(l);
+		if(zr->getKid(0)->getWidth() == zl->getKid(0)->getWidth()) {
+			return SExtExpr::create(
+				SubExpr::create(zl->getKid(0), zr->getKid(0)),
+				zl->getWidth());
+		}
+	}
 
 	return SubExpr::alloc(l, r);
 }
