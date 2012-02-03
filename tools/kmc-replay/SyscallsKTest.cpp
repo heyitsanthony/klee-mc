@@ -3,6 +3,7 @@
 #include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <sys/syscall.h>
 #include <sys/resource.h>
 #include <netinet/in.h>
@@ -15,6 +16,7 @@
 #include "klee/breadcrumb.h"
 #include "klee/Internal/ADT/KTestStream.h"
 #include "klee/Internal/ADT/Crumbs.h"
+#include "FileReconstructor.h"
 #include "guestcpustate.h"
 #include "guest.h"
 
@@ -56,13 +58,17 @@ SyscallsKTest::SyscallsKTest(
 , sc_retired(0)
 , crumbs(in_crumbs)
 , bcs_crumb(NULL)
+, file_recons(NULL)
 {
+	if (getenv("KMC_RECONS_FILES") != NULL)
+		file_recons = new FileReconstructor();
 }
 
 SyscallsKTest::~SyscallsKTest(void)
 {
 	if (kts) delete kts;
 	if (bcs_crumb) delete bcs_crumb;
+	if (file_recons) delete file_recons;
 }
 
 void SyscallsKTest::badCopyBail(void)
@@ -201,9 +207,21 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 		feedSyscallOp(sp);
 		(((struct msghdr*)sp.getArg(1)))->msg_controllen = 0;
 		break;
-	case SYS_read:
-		fprintf(stderr, KREPLAY_SC "READ ret=%p\n", (void*)getRet());
+
+	case SYS_lseek:
+		if (file_recons != NULL)
+			file_recons->seek(
+				sp.getArg(0), sp.getArg(1), sp.getArg(2));
+		fprintf(stderr, KREPLAY_SC "SEEK TO OFF=%p\n", (void*)sp.getArg(1));
 		break;
+
+	case SYS_read: {
+		fprintf(stderr, KREPLAY_SC "READ ret=%p\n", (void*)getRet());
+		if (file_recons != NULL)
+			file_recons->read(
+				sp.getArg(0), sp.getArgPtr(1), getRet());
+		break;
+	}
 
 	case SYS_open:
 		fprintf(stderr, KREPLAY_SC "OPEN \"%s\" ret=%p\n",

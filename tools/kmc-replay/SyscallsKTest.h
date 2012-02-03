@@ -10,6 +10,8 @@ class Crumbs;
 class KTestStream;
 }
 
+class FileReconstructor;
+
 class SyscallsKTest : public Syscalls
 {
 public:
@@ -40,6 +42,8 @@ private:
 
 	klee::Crumbs		*crumbs;	// not owner
 	struct bc_syscall	*bcs_crumb;
+
+	FileReconstructor	*file_recons;
 };
 
 #endif

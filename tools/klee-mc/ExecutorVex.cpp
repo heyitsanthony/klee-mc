@@ -60,6 +60,11 @@ namespace
 		cl::location(SymRegs),
 		cl::init(false));
 
+	cl::opt<bool> UseCtrlGraph(
+		"ctrl-graph",
+		cl::desc("Compute control graph."),
+		cl::init(false));
+
 	cl::opt<bool> LogRegs(
 		"logregs",
 		cl::desc("Log registers."),
@@ -116,6 +121,7 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih, Guest *in_gs)
 : Executor(ih)
 , gs(in_gs)
 , native_code_bytes(0)
+, ctrl_graph(in_gs)
 {
 	assert (kmodule == NULL && "KMod already initialized? My contract!");
 
@@ -506,13 +512,6 @@ const VexSB* ExecutorVex::getFuncVSB(Function* f) const
 	return it->second;
 }
 
-static void getReturnAddresses(llvm::Function* f)
-{
-	foreach (it, f->begin(), f->end()) {
-	}
-}
-
-
 #define LIBRARY_BASE_GUESTADDR	((uint64_t)0x10000000)
 
 Function* ExecutorVex::getFuncByAddr(uint64_t guest_addr)
@@ -531,6 +530,15 @@ Function* ExecutorVex::getFuncByAddr(uint64_t guest_addr)
 	if (!is_new) return f;
 
 	/* insert it into the kmodule */
+	if (UseCtrlGraph) {
+		ctrl_graph.addFunction(f, guest_ptr(guest_addr));
+		std::ostream* of;
+		of = interpreterHandler->openOutputFile("statics.dot");
+		if (of) {
+			ctrl_graph.dumpStatic(*of);
+			delete of;
+		}
+	}
 
 	if (CountLibraries == false) {
 		/* is library address? */

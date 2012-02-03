@@ -10,7 +10,7 @@ public:
 	: exe(in_exe)
 	, len(0x400000) /* 4MB of code should be enough! */
 	{
-		const Guest	*gs = exe.getGuest();
+		// const Guest	*gs = exe.getGuest();
 		//base = gs->getEntryPoint().o & ~((uint64_t)len - 1);
 		std::cerr << "GUESTPRIORITIZER: FORCING 4MB REGION\n";
 		base = 0x400000;

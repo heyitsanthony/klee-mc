@@ -5,6 +5,7 @@
 #include "guest.h"
 #include "../../lib/Core/Executor.h"
 
+#include "DynGraph.h"
 #include <iostream>
 #include <tr1/unordered_map>
 #include <assert.h>
@@ -153,7 +154,8 @@ private:
 	SysModel		*sys_model;
 	SyscallSFH		*sfh;
 
-	std::set<uint64_t> legalFunctions;
+	std::set<uint64_t>	legalFunctions;
+	DynGraph		ctrl_graph;
 };
 
 }
