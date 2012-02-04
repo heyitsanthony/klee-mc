@@ -19,6 +19,11 @@ using namespace llvm;
 
 namespace {
 	cl::opt<bool>
+	SpecializeSimpleEquality(
+		"special-simple-equality",
+		cl::init(true),
+		cl::desc("Use short-form for SMT equalities"));
+	cl::opt<bool>
 	MinimizeSMT(
 		"smt-minimize",
 		 cl::init(false), // experimental
@@ -474,6 +479,38 @@ void SMTPrinter::print(std::ostream& os, const Query& q)
 	delete smt_arr;
 }
 
+bool SMTPrinter::tryPrintSimpleEqConstraint(const ref<Expr>& e) const
+{
+	const EqExpr		*ee;
+	const ReadExpr		*re;
+	const ConstantExpr	*idx, *ce;
+
+	ee = dyn_cast<EqExpr>(e);
+	if (ee == NULL)
+		return false;
+
+	ce = dyn_cast<ConstantExpr>(ee->getKid(0));
+	if (ce == NULL)
+		return false;
+
+	re = dyn_cast<ReadExpr>(ee->getKid(1));
+	if (re == NULL)
+		return false;
+
+	idx = dyn_cast<ConstantExpr>(re->index);
+	if (idx == NULL)
+		return false;
+
+	if (re->updates.head != NULL)
+		return false;
+
+	os << "(= bv" << ce->getZExtValue() << "[8] "
+		<< "(select "
+			<< re->updates.root->name <<
+			" bv" << idx->getZExtValue() << "[32]))\n";
+	return true;
+}
+
 void SMTPrinter::printConstraint(
 	const ref<Expr>& e,
 	const std::list<update_pair>& updates,
@@ -484,6 +521,23 @@ void SMTPrinter::printConstraint(
 	LetExpr			*le;
 
 	os << '\n' << key << '\n';
+
+	/* silly fast path:
+	 * Often see
+	 * :assumption
+	 * (let (?e122 x)
+	 * 	(= (ite (= bv0[8] ( select ?e122  bv7[32] ))
+	 * 		bv1[1] bv0[1])
+	 *	bv1[1]))
+	 * Can rewrite this as:
+	 * :assumption (= (= bv0[8] (select x bv7[32])))
+	 * Fewer bytes, less processing, everyone wins.
+	 */
+	if (SpecializeSimpleEquality) {
+		if (tryPrintSimpleEqConstraint(e))
+			return;
+	}
+
 	if (MinimizeSMT) {
 		min_expr = ExprMinimizer::minimize(e);
 	} else {

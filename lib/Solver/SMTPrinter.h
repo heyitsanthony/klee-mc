@@ -9,6 +9,7 @@
 
 namespace klee {
 
+class Query;
 typedef std::pair<const Array*, const UpdateNode*> update_pair;
 
 class SMTPrinter : public ExprConstVisitor
@@ -31,7 +32,7 @@ protected:
 
 	void expr2os(const ref<Expr>& expr, std::ostream& os) const;
 private:
-	SMTPrinter(std::ostream& in_os, SMTArrays* in_arr) 
+	SMTPrinter(std::ostream& in_os, SMTArrays* in_arr)
 	// : ExprVisitor(false, true)
 	: ExprConstVisitor(false /* no update lists */)
 	, os(in_os)
@@ -51,6 +52,8 @@ private:
 	void printArrayDecls(void) const;
 	void printConstant(const ConstantExpr* ce) const;
 
+	bool tryPrintSimpleEqConstraint(const ref<Expr>& e) const;
+
 	bool printOptMul(const MulExpr* me) const;
 	void printOptMul64(const ref<Expr>& rhs, uint64_t lhs) const;
 
@@ -65,7 +68,7 @@ private:
 	const std::string& getInitialArray(const Array* root);
 
 	std::ostream	&os;
-	// allocated/freed by print. 
+	// allocated/freed by print.
 	// Used to pass array data for nested expr2str calls.
 	SMTArrays	*arr;
 };
