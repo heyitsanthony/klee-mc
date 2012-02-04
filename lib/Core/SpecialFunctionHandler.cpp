@@ -224,8 +224,8 @@ unsigned char* SpecialFunctionHandler::readBytesAtAddress(
 
 	assert (address.get() && "Expected constant address");
 	if (!state.addressSpace.resolveOne(address, op)) {
-		assert(	0 &&
-			"XXX out of bounds / multiple resolution unhandled");
+		klee_warning("hit multi-res on reading 'concrete' string");
+		return NULL;
 	}
 
 	mo = op.first;
@@ -245,8 +245,13 @@ unsigned char* SpecialFunctionHandler::readBytesAtAddress(
 
 		cur = state.read8(os, i);
 		cur = executor->toUnique(state, cur);
-		assert(	isa<ConstantExpr>(cur) &&
-			"hit symbolic char while reading concrete string");
+		if (isa<ConstantExpr>(cur) == false) {
+			klee_warning(
+				"hit sym char on reading 'concrete' string");
+			delete [] buf;
+			return NULL;
+		}
+
 		buf[i-offset] = cast<ConstantExpr>(cur)->getZExtValue(8);
 		if ((int)buf[i-offset] == terminator) {
 			buf[i-offset] = '\0';
@@ -260,14 +265,14 @@ unsigned char* SpecialFunctionHandler::readBytesAtAddress(
 
 
 // reads a concrete string from memory
-std::string
-SpecialFunctionHandler::readStringAtAddress(
-  ExecutionState &state,
-  ref<Expr> addressExpr)
+std::string SpecialFunctionHandler::readStringAtAddress(
+	ExecutionState &state, ref<Expr> addressExpr)
 {
 	unsigned char*	buf;
 	unsigned int	out_len;
 	buf = readBytesAtAddressNoBound(state, addressExpr, out_len, 0);
+	if (buf == NULL)
+		return "???";
 	std::string result((const char*)buf);
 	delete[] buf;
 	return result;
