@@ -413,6 +413,14 @@ SFH_DEF_HANDLER(Breadcrumb)
 	len_expected_ce = dyn_cast<ConstantExpr>(arguments[1]);
 	len_expected = (unsigned int)len_expected_ce->getZExtValue();
 	buf = sfh->readBytesAtAddress(state, arguments[0], len_expected, len_in, -1);
+	if (buf == NULL) {
+		sfh->executor->terminateStateOnError(
+			state,
+			"Breadcrumb error: Symbolic breadcrumb frame",
+			"breadcrumb.err");
+		return;
+	}
+
 	bc = (struct breadcrumb*)buf;
 	if (len_in < sizeof(struct breadcrumb) || bc->bc_sz != len_in) {
 		fprintf(stderr,
