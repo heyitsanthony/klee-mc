@@ -2935,26 +2935,29 @@ void Executor::terminateStateOnError(
 	const char *suffix,
 	const llvm::Twine &info)
 {
-  std::string message = messaget.str();
-  static std::set< std::pair<Instruction*, std::string> > emittedErrors;
+	std::string message = messaget.str();
+	static std::set< std::pair<Instruction*, std::string> > emittedErrors;
 
-  if (!(EmitAllErrors ||
-	emittedErrors.insert(
-      		std::make_pair(state.prevPC->getInst(), message)).second))
-  {
-    terminateState(state);
-    return;
-  }
+	if (!EmitAllErrors) {
+		bool	new_err;
+		new_err = emittedErrors.insert(
+			std::make_pair(
+				state.prevPC->getInst(), message)).second;
+		if (new_err == false) {
+			terminateState(state);
+			return;
+		}
+	}
 
-  std::ostringstream msg;
-  printStateErrorMessage(state, message, msg);
+	std::ostringstream msg;
+	printStateErrorMessage(state, message, msg);
 
-  std::string info_str = info.str();
-  if (info_str != "") msg << "Info: \n" << info_str;
+	std::string info_str = info.str();
+	if (info_str != "") msg << "Info: \n" << info_str;
 
-  interpreterHandler->processTestCase(state, msg.str().c_str(), suffix);
+	interpreterHandler->processTestCase(state, msg.str().c_str(), suffix);
 
-  terminateState(state);
+	terminateState(state);
 }
 
 void Executor::printStateErrorMessage(
