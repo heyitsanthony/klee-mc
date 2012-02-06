@@ -119,12 +119,14 @@ void* memcpy(void* d, const void* s, size_t n)
 	guard_n(d, n);
 	guard_n(s, n);
 
-
 	for (i = 0; i < n; i++)
 		((char*)d)[i] = ((const char*)s)[i];
 	
 	return d;
 }
+
+void* mempcpy(void* dest, const void* src, size_t n)
+{ return ((char*)memcpy(dest, src, n)) + n; }
 
 void *memset(void *s, int c, size_t n)
 {
@@ -150,6 +152,9 @@ size_t strlen(const char* s)
 	return i;
 }
 
+// TODO:
+// strstr
+// strspn
 #if 0
 int strcmp(const char* s1, const char* s2)
 {
@@ -177,10 +182,9 @@ void *memchr(const void *s, int c, size_t n)
 
 	for (k = 0; k < n; k++)
 		if (((const char*)s)[k] == (char)c)
-			return &((const char*)s)[k];
+			return &((char*)s)[k];
 	return NULL;
 }
-
 
 char* strchr(const char* s, int c)
 {
@@ -192,5 +196,5 @@ char* strchr(const char* s, int c)
 	if (s[k] == 0)
 		return NULL;
 
-	return &s[k];
+	return (char*)&s[k];
 }
