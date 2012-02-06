@@ -319,6 +319,8 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr* e)
 	VISIT_OP(Shl, bvshl)
 	VISIT_OP(LShr, bvlshr)
 	VISIT_OP(AShr, bvashr)
+
+	case Expr::Ne: os << "(ite ( = "; break;
 	case Expr::Not:
 		os << "(ite (= bv0[1] ";
 		break;
@@ -328,7 +330,6 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr* e)
 			<< static_cast<const BindExpr*>(e)->let_expr->getId()
 			<< " ";
 		break;
-	case Expr::Ne: os << "(ite ( = "; break;
 	case Expr::Constant:
 		printConstant(static_cast<const ConstantExpr*>(e));
 		break;
@@ -533,7 +534,7 @@ void SMTPrinter::printConstraint(
 	 * :assumption (= (= bv0[8] (select x bv7[32])))
 	 * Fewer bytes, less processing, everyone wins.
 	 */
-	if (SpecializeSimpleEquality) {
+	if (SpecializeSimpleEquality && key[1] == 'a') {
 		if (tryPrintSimpleEqConstraint(e))
 			return;
 	}
