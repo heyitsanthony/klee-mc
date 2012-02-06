@@ -344,7 +344,7 @@ bool PipeSolverImpl::writeQueryToChild(const Query& q) const
 
 /* terminates writer process */
 static void query_writer_alarm(int x) { exit(1); }
-static void parent_query_writer_alarm(int x) { return 0; }
+static void parent_query_writer_alarm(int x) { }
 
 bool PipeSolverImpl::writeQuery(const Query& q) const
 {
