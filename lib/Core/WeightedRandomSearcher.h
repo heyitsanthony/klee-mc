@@ -40,6 +40,7 @@ DECL_WEIGHT(MinDistToUncovered, true)
 DECL_WEIGHT(CoveringNew, true)
 DECL_WEIGHT(MarkovPath, true)
 DECL_WEIGHT(Tail, true)
+DECL_WEIGHT(Constraint, true)
 
 class WeightedRandomSearcher : public Searcher
 {

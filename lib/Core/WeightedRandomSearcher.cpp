@@ -186,6 +186,9 @@ double MarkovPathWeight::weigh(const ExecutionState* es) const
 	return (1.0 - prob);
 }
 
+double ConstraintWeight::weigh(const ExecutionState* es) const
+{ return es->constraints.size(); }
+
 double TailWeight::weigh(const ExecutionState* es) const
 {
 	double		ret = 0;

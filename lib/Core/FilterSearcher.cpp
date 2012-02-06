@@ -1,28 +1,44 @@
 #include <iostream>
+#include <fstream>
 #include <llvm/Function.h>
+#include "klee/Common.h"
 #include "klee/Internal/Module/KFunction.h"
 #include "static/Sugar.h"
 #include "FilterSearcher.h"
 
 using namespace klee;
 
+static const char* default_filters[] =
+{
+	"LoadDelegateList",
+	"ConfigureFileToStringInfo",
+	"ThrowMagickException",
+	"_ZNK4llvm10error_code7messageEv",
+	"mpc_reader_exit_stdio",
+	"_ZNK10GException6perrorEv",
+	"alphasort",
+	"qsort",
+	"rpl_getopt_long",
+	"__tz_convert",
+	NULL
+};
+
 FilterSearcher::FilterSearcher(Executor& _exe, Searcher* _searcher_base)
 : searcher_base(_searcher_base)
 , exe(_exe)
 {
-	blacklist_strs.insert("LoadDelegateList");
-	blacklist_strs.insert("ConfigureFileToStringInfo");
-	blacklist_strs.insert("ThrowMagickException");
-//	blacklist_strs.insert("getch2");
-//	blacklist_strs.insert("lavf_check_preferred_file");
-	blacklist_strs.insert("_ZNK4llvm10error_code7messageEv");
-	//blacklist_strs.insert("___printf_chk");
-	//blacklist_strs.insert("_IO_file_doallocate_internal");
-	blacklist_strs.insert("mpc_reader_exit_stdio");
-	blacklist_strs.insert("_ZNK10GException6perrorEv");
-	blacklist_strs.insert("alphasort");
-	blacklist_strs.insert("qsort");
-//	blacklist_strs.insert("poll_for_event");
+	std::ifstream	ifs("filtered_funcs.txt");
+
+	if (ifs.good()) {
+		std::string	s;
+		while (ifs >> s)
+			blacklist_strs.insert(s);
+		return;
+	}
+
+	klee_warning("Could not find filter file; using defaults.");
+	for (unsigned i = 0; default_filters[i] != NULL; i++)
+		blacklist_strs.insert(default_filters[i]);
 }
 
 ExecutionState& FilterSearcher::selectState(bool allowCompact)

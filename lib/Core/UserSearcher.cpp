@@ -65,6 +65,19 @@ namespace {
   UseInterleavedRS("use-interleaved-RS");
 
   cl::opt<bool>
+  UseConstraintSearcher("use-cons-search");
+
+  cl::opt<bool>
+  UseInterleavedConstraint("use-interleaved-CONS");
+
+  cl::opt<bool>
+  UseConstraintMinSearcher("use-mcons-search");
+
+  cl::opt<bool>
+  UseInterleavedMinConstraint("use-interleaved-MCONS");
+
+
+  cl::opt<bool>
   UseInterleavedTailRS("use-interleaved-TRS");
 
 
@@ -259,6 +272,15 @@ Searcher* UserSearcher::setupInterleavedSearcher(
 	if (UseInterleavedRR)
 		s.push_back(new RRSearcher());
 
+	if (UseInterleavedConstraint)
+		s.push_back(new RescanSearcher(
+			new Weight2Prioritizer<ConstraintWeight>(1.0)));
+
+	if (UseInterleavedMinConstraint)
+		s.push_back(new RescanSearcher(
+			new Weight2Prioritizer<ConstraintWeight>(-1.0)));
+
+
 	if (UseInterleavedTailRS)
 		s.push_back(new RescanSearcher(
 			new Weight2Prioritizer<TailWeight>(1.0)));
@@ -323,9 +345,10 @@ Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 
 	if (UseMarkovSearcher) {
 		searcher = new RescanSearcher(
-				new Weight2Prioritizer<MarkovPathWeight>(100));
-
-//			DEFAULT_PR_SEARCHER);
+			new Weight2Prioritizer<MarkovPathWeight>(100));
+	} else if (UseConstraintSearcher) {
+		searcher =new RescanSearcher(
+			new Weight2Prioritizer<ConstraintWeight>(1.0));
 	} else if (UseTailSearcher) {
 		searcher = new PrioritySearcher(
 			new TailPrioritizer(), DEFAULT_PR_SEARCHER);

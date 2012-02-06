@@ -5,7 +5,8 @@
 #include "Executor.h"
 #include "Searcher.h"
 
-namespace klee {
+namespace klee
+{
 class FilterSearcher : public Searcher
 {
 public:
@@ -34,7 +35,7 @@ private:
 	void recoverBlacklisted(void);
 	bool isBlacklisted(ExecutionState& es) const;
 
-	std::set<std::string>		blacklist_strs;
+	std::set<std::string>			blacklist_strs;
 	mutable std::set<llvm::Function*>	blacklist_f;
 	mutable std::set<llvm::Function*>	whitelist_f;
 
