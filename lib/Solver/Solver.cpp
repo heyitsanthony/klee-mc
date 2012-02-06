@@ -24,6 +24,7 @@
 #include "static/Sugar.h"
 #include "llvm/Support/CommandLine.h"
 
+#include "SMTPrinter.h"
 #include "ValidatingSolver.h"
 #include "PipeSolver.h"
 #include "BoolectorSolver.h"
@@ -52,8 +53,7 @@ bool UseFastCexSolver;
 
 namespace {
   cl::opt<bool>
-  DebugValidateSolver("debug-validate-solver",
-		      cl::init(false));
+  DebugValidateSolver("debug-validate-solver", cl::init(false));
 
   cl::opt<bool>
   UseForkedSTP("use-forked-stp", cl::desc("Run STP in forked process"));
@@ -253,7 +253,9 @@ static Solver* createChainWithTimedSolver(
 		if (UsePipeSolver || UseBoolector || UseZ3)
 			solver = createValidatingSolver(
 				solver,
-				new STPSolver(UseForkedSTP, STPServer));
+				timedSolver);
+				// new PipeSolver(new PipeSTP()));
+				//new STPSolver(UseForkedSTP, STPServer));
 		else
 			solver = createValidatingSolver(solver, timedSolver);
 	}
@@ -389,8 +391,11 @@ Solver::Validity SolverImpl::computeValidity(const Query& query)
 	isNegSat = computeSat(query.negateExpr());
 	if (failed()) return Solver::Unknown;
 
-	assert ((isNegSat || isSat) &&
-		"Inconsistent model-- neither SAT nor UNSAT");
+	if (!isNegSat && !isSat) {
+		SMTPrinter::dump(query, "incons");
+		SMTPrinter::dump(query.negateExpr(), "incons.neg");
+		assert (0 == 1 && "Inconsistent Model");
+	}
 
 	if (isNegSat && !isSat) return Solver::False;
 	if (!isNegSat && isSat) return Solver::True;

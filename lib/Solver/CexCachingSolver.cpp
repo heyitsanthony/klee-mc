@@ -48,9 +48,8 @@ namespace {
 typedef std::set< ref<Expr> > Key;
 
 struct AssignmentLessThan {
-bool operator()(const Assignment *a, const Assignment *b) {
-	return a->bindings < b->bindings;
-}
+bool operator()(const Assignment *a, const Assignment *b)
+{ return a->bindings < b->bindings; }
 };
 
 
@@ -164,6 +163,7 @@ bool CexCachingSolver::searchForAssignment(Key &key, Assignment *&result)
 				// cache result for deterministic reconstitution
 				result = a;
 				cache.insert(key, result);
+
 				return true;
 			}
 		}
@@ -300,13 +300,14 @@ bool CexCachingSolver::getAssignment(const Query& query, Assignment* &result)
 {
 	Key key;
 
-	if (lookupAssignment(query, key, result)) {
+	if (lookupAssignment(query, key, result))
 		return true;
-	}
 
 	result = createBinding(query, key);
 	if (failed()) return false;
-	if (result == NULL) return true;
+	if (result == NULL) {
+		return true;
+	}
 
 	cache.insert(key, result);
 
@@ -330,7 +331,11 @@ Solver::Validity CexCachingSolver::computeValidity(const Query& query)
 	ok_assignment = getAssignment(query.withFalse(), neg_a);
 	if (!ok_assignment) goto failed;
 
-	assert(neg_a && "computeValidity() must have assignment");
+	if (neg_a == NULL) {
+		klee_warning("Bad state; constraints should have solution");
+		goto failed;
+	}
+
 	neg_q = neg_a->evaluate(query.expr);
 
 	if (!isa<ConstantExpr>(neg_q)) {
@@ -395,6 +400,11 @@ ref<Expr> CexCachingSolver::computeValue(const Query& query)
 	bool			zeroDiv;
 
 	if (!getAssignment(query.withFalse(), a)) {
+		failQuery();
+		return ret;
+	}
+
+	if (failed()) {
 		failQuery();
 		return ret;
 	}
