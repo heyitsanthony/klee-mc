@@ -24,67 +24,90 @@ namespace klee {
   
 namespace expr {
 
-class SMTParser : public klee::expr::Parser {
-  private:
-    void *buf;
+class SMTParser : public klee::expr::Parser
+{
+private:
+	void *buf;
+
+	typedef std::map<const std::string, ExprHandle> VarEnv;
+	typedef std::map<const std::string, ExprHandle> FVarEnv;
+	std::stack<VarEnv> varEnvs;
+	std::stack<FVarEnv> fvarEnvs;
+
+public:
+	/* For interacting w/ the actual parser, should make this nicer */
+	static SMTParser* parserTemp;
+	std::string fileName;
+	std::istream* is;
+	int lineNum;
+	bool done;
+	bool arraysEnabled;
+
+	std::vector<ExprHandle> assumptions;
+	klee::expr::ExprHandle satQuery;
+
+	int bvSize;
+	bool queryParsed;
+
+	klee::ExprBuilder *builder;
     
- public:
-  /* For interacting w/ the actual parser, should make this nicer */
-  static SMTParser* parserTemp;
-  std::string fileName;
-  std::istream* is;
-  int lineNum;
-  bool done;
-  bool arraysEnabled;
-  
-  std::vector<ExprHandle> assumptions;
-  klee::expr::ExprHandle satQuery;
+	static SMTParser* Parse(
+		std::istream* ifs, ExprBuilder* _builder)
+	{
+		SMTParser	*smtp = new SMTParser(ifs, _builder);
+		if (smtp->Parse() == false) {
+			delete smtp;
+			return NULL;
+		}
+		return smtp;
+	}
 
-  int bvSize;
-  bool queryParsed;
+	static SMTParser* Parse(
+		const std::string& filename, ExprBuilder *builder)
+	{
+		SMTParser	*smtp = new SMTParser(filename, builder);
+		if (smtp->Parse() == false) {
+			delete smtp;
+			return NULL;
+		}
+		return smtp;
+	}
   
-  klee::ExprBuilder *builder;
-    
-  SMTParser(const std::string filename, ExprBuilder *builder);
+	virtual klee::expr::Decl *ParseTopLevelDecl();
+	bool Solve();
   
-  virtual klee::expr::Decl *ParseTopLevelDecl();
-  bool Solve();
+	virtual void SetMaxErrors(unsigned N) { }
+	virtual unsigned GetNumErrors() const { return 1; }
+	virtual ~SMTParser();
   
-  virtual void SetMaxErrors(unsigned N) { }
+	static int Error(const std::string& s);
+	static int StringToInt(const std::string& s);
+
+	ExprHandle GetConstExpr(std::string val, uint8_t base, klee::Expr::Width w);
   
-  virtual unsigned GetNumErrors() const {  return 1; }
-  
-  virtual ~SMTParser() {}
-  
-  void Parse(void);
-  
-  int Error(const std::string& s);
-  
-  int StringToInt(const std::string& s);
-  ExprHandle GetConstExpr(std::string val, uint8_t base, klee::Expr::Width w);
-  
-  void DeclareExpr(std::string name, Expr::Width w);
-  
-  ExprHandle CreateAnd(std::vector<ExprHandle>);
-  ExprHandle CreateOr(std::vector<ExprHandle>);
-  ExprHandle CreateXor(std::vector<ExprHandle>);
+	void DeclareExpr(std::string name, Expr::Width w);
+
+	ExprHandle CreateAnd(std::vector<ExprHandle>);
+	ExprHandle CreateOr(std::vector<ExprHandle>);
+	ExprHandle CreateXor(std::vector<ExprHandle>);
   
 
-  typedef std::map<const std::string, ExprHandle> VarEnv;
-  typedef std::map<const std::string, ExprHandle> FVarEnv;
+	void PushVarEnv(void);
+	void PopVarEnv(void);
+	void AddVar(std::string name, ExprHandle val); // to current var env
+	ExprHandle GetVar(std::string name); // from current var env
 
-  std::stack<VarEnv> varEnvs;
-  std::stack<FVarEnv> fvarEnvs;
+	void PushFVarEnv(void);
+	void PopFVarEnv(void);
+	void AddFVar(std::string name, ExprHandle val); // to current fvar env
+	ExprHandle GetFVar(std::string name); // from current fvar env
 
-  void PushVarEnv(void);
-  void PopVarEnv(void);
-  void AddVar(std::string name, ExprHandle val); // to current var env
-  ExprHandle GetVar(std::string name); // from current var env
+protected:
+	SMTParser(std::istream* ifs, ExprBuilder* _builder);
+	SMTParser(const std::string& filename, ExprBuilder *builder);
 
-  void PushFVarEnv(void);
-  void PopFVarEnv(void);
-  void AddFVar(std::string name, ExprHandle val); // to current fvar env
-  ExprHandle GetFVar(std::string name); // from current fvar env
+private:
+	bool Parse(void);
 };
 
 }
