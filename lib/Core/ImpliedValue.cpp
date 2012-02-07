@@ -281,7 +281,7 @@ void ImpliedValue::checkForImpliedValues(
 	getFoundMap(results, found);
 
 
-	findReads(e, false, reads);
+	ExprUtil::findReads(e, false, reads);
 	readset_ty readsSet(reads.begin(), reads.end());
 	reads = readvec_ty(readsSet.begin(), readsSet.end());
 

@@ -32,6 +32,8 @@ namespace klee {
       : constraints(_constraints), expr(_expr) {
     }
 
+    Query(ref<Expr> _expr) : constraints(dummyConstraints), expr(_expr) {}
+
     virtual ~Query() {}
 
     /// withExpr - Return a copy of the query with the given expression.
@@ -48,6 +50,8 @@ namespace klee {
     void print(std::ostream& os) const;
 
     unsigned hash(void) const;
+  private:
+    static ConstraintManager dummyConstraints;
   };
 
   struct sockaddr_in_opt

@@ -25,6 +25,8 @@ public:
 	virtual ~SMTPrinter() {}
 	static void print(std::ostream& os, const Query& q);
 	static void dump(const Query& q, const char* prefix);
+	static void dumpToFile(const Query& q, const char* fname);
+
 
 protected:
 	virtual Action visitExpr(const Expr *e);

@@ -28,7 +28,7 @@ Assignment::Assignment(const ref<Expr>& e, bool _allowFreeValues)
 {
 	std::vector<const Array*> objects;
 
-	findSymbolicObjects(e, objects);
+	ExprUtil::findSymbolicObjects(e, objects);
 	foreach (it, objects.begin(), objects.end())
 		free_bindings.insert(*it);
 }
@@ -70,6 +70,24 @@ void Assignment::bindFreeToU8(uint8_t x)
 		addBinding(
 			arr,
 			std::vector<unsigned char>(arr->mallocKey.size, x));
+	}
+
+	free_bindings.clear();
+}
+
+void Assignment::bindFreeToSequence(const std::vector<unsigned char>& seq)
+{
+	unsigned	seq_idx = 0;
+
+	foreach (it, free_bindings.begin(), free_bindings.end()) {
+		const Array			*arr = *it;
+		std::vector<unsigned char>	v(arr->mallocKey.size);
+
+		for (unsigned i = 0; i < v.size(); i++) {
+			v[i] = seq[seq_idx++ % seq.size()];
+		}
+
+		addBinding(arr, v);
 	}
 
 	free_bindings.clear();

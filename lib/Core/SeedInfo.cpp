@@ -79,7 +79,7 @@ void SeedInfo::patchSeed(const ExecutionState &state,
   // just inject those values back into the seed.
   std::set< std::pair<const Array*, unsigned> > directReads;
   std::vector< ref<ReadExpr> > reads;
-  findReads(condition, false, reads);
+  ExprUtil::findReads(condition, false, reads);
   foreach (it, reads.begin(), reads.end()) {
     ReadExpr *re = it->get();
     if (ConstantExpr *CE = dyn_cast<ConstantExpr>(re->index)) {

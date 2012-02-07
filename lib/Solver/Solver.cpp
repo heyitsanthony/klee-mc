@@ -662,6 +662,8 @@ flush:
 	os.flush();
 }
 
+ConstraintManager Query::dummyConstraints;
+
 unsigned Query::hash(void) const
 {
 	QHDefault	qh;

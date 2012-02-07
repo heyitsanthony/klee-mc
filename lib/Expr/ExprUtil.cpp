@@ -18,14 +18,14 @@
 
 using namespace klee;
 
-void klee::findReads(ref<Expr> e, 
+void ExprUtil::findReads(ref<Expr> e,
                      bool visitUpdates,
                      std::vector< ref<ReadExpr> > &results) {
-  // Invariant: \forall_{i \in stack} !i.isConstant() && i \in visited 
+  // Invariant: \forall_{i \in stack} !i.isConstant() && i \in visited
   std::vector< ref<Expr> > stack;
   ExprHashSet visited;
   std::set<const UpdateNode *> updates;
-  
+
   if (!isa<ConstantExpr>(e)) {
     visited.insert(e);
     stack.push_back(e);
@@ -43,7 +43,7 @@ void klee::findReads(ref<Expr> e,
       if (!isa<ConstantExpr>(re->index) &&
           visited.insert(re->index).second)
         stack.push_back(re->index);
-      
+
       if (visitUpdates) {
         // XXX this is probably suboptimal. We want to avoid a potential
         // explosion traversing update lists which can be quite
@@ -99,7 +99,7 @@ protected:
 public:
   std::set<const Array*> results;
   std::vector<const Array*> &objects;
-  
+
   SymbolicObjectFinder(std::vector<const Array*> &_objects)
     : objects(_objects) {}
 };
@@ -107,7 +107,7 @@ public:
 }
 
 template<typename InputIterator>
-void klee::findSymbolicObjects(InputIterator begin, 
+void ExprUtil::findSymbolicObjects(InputIterator begin,
                                InputIterator end,
                                std::vector<const Array*> &results) {
   SymbolicObjectFinder of(results);
@@ -115,13 +115,33 @@ void klee::findSymbolicObjects(InputIterator begin,
     of.visit(*begin);
 }
 
-void klee::findSymbolicObjects(ref<Expr> e,
+void ExprUtil::findSymbolicObjects(ref<Expr> e,
                                std::vector<const Array*> &results) {
   findSymbolicObjects(&e, &e+1, results);
 }
 
 typedef std::vector< ref<Expr> >::iterator A;
-template void klee::findSymbolicObjects<A>(A, A, std::vector<const Array*> &);
+template void klee::ExprUtil::findSymbolicObjects<A>(A, A, std::vector<const Array*> &);
 
 typedef std::set< ref<Expr> >::iterator B;
-template void klee::findSymbolicObjects<B>(B, B, std::vector<const Array*> &);
+template void klee::ExprUtil::findSymbolicObjects<B>(B, B, std::vector<const Array*> &);
+
+namespace klee{
+class NumNodeCounter : public ExprConstVisitor
+{
+public:
+	NumNodeCounter(unsigned _max) : ExprConstVisitor(false), max(_max) {}
+	virtual ~NumNodeCounter() {}
+	unsigned getCount(const ref<Expr>& e) { k = 0; visit(e); return k; }
+protected:
+	virtual Action visitExpr(const Expr* expr)
+	{ k++; return (k > max) ? Stop : Expand; }
+	unsigned k, max;
+};
+}
+unsigned ExprUtil::getNumNodes(ref<Expr>& e, bool visitUpdates, unsigned max)
+{
+	NumNodeCounter	nc(max);
+	assert (!visitUpdates);
+	return nc.getCount(e);
+}

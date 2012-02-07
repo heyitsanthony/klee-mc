@@ -736,11 +736,15 @@ void SMTPrinter::expr2os(const ref<Expr>& e, std::ostream& os) const
 	smt_pr.visit(e);
 }
 
+void SMTPrinter::dumpToFile(const Query& q, const char* fname)
+{
+	std::ofstream	os(fname, std::ios::out);
+	print(os, q);
+}
 
 void SMTPrinter::dump(const Query& q, const char* prefix)
 {
 	char	fname[256];
 	sprintf(fname, "%s.%x.smt", prefix, q.hash());
-	std::ofstream	os(fname, std::ios::out);
-	print(os, q);
+	dumpToFile(q, fname);
 }

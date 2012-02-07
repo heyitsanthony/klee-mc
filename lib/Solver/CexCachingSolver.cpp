@@ -277,7 +277,7 @@ Assignment* CexCachingSolver::createBinding(const Query& query, Key& key)
 	Assignment			*binding;
 	bool				hasSolution;
 
-	findSymbolicObjects(key.begin(), key.end(), objects);
+	ExprUtil::findSymbolicObjects(key.begin(), key.end(), objects);
 	binding = new Assignment(objects);
 
 	hasSolution = doComputeInitialValues(query, *binding);

@@ -91,7 +91,7 @@ public:
   IndependentElementSet() {}
   IndependentElementSet(ref<Expr> e) {
     std::vector< ref<ReadExpr> > reads;
-    findReads(e, /* visitUpdates= */ true, reads);
+    ExprUtil::findReads(e, /* visitUpdates= */ true, reads);
     for (unsigned i = 0; i != reads.size(); ++i) {
       ReadExpr *re = reads[i].get();
       const Array *array = re->updates.root;
