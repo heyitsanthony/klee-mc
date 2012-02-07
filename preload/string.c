@@ -152,6 +152,20 @@ size_t strlen(const char* s)
 	return i;
 }
 
+char* strcpy(char* dest, const char* src)
+{
+	char*	old_dest = dest;
+	guard_s(src);
+	while (*src) {
+		*dest = *src;
+		dest++;
+		src++;
+	}
+	*dest = '\0';
+
+	return old_dest;
+}
+
 // TODO:
 // strstr
 // strspn
