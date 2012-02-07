@@ -8,7 +8,7 @@
 #include "klee/util/Assignment.h"
 #include "llvm/Support/CommandLine.h"
 #include "SMTPrinter.h"
-#include "../SMT/SMTParser.h"
+#include "../Expr/SMTParser.h"
 #include "static/Sugar.h"
 #include "EquivExprBuilder.h"
 
@@ -99,7 +99,25 @@ ref<Expr> EquivExprBuilder::lookupByEval(ref<Expr>& e, unsigned nodes)
 		/* directory not found.. this is the first one! */
 		Query	q(e);
 		SMTPrinter::dumpToFile(q, ss.str().c_str());
+	}
+
+	/* constant? */
+	if (consts_map.count(hash)) {
 		return e;
+	}
+
+	/* for smallest matching input-hash, if any */
+	for (unsigned k = 2; k < nodes; k++) {
+		ss.clear();
+
+		ss << "equivdb/" << k << '/' << hash;
+		rc = stat(ss.str().c_str(), &s);
+		if (rc == 0) {
+			expr::SMTParser*	smtp;
+
+			smtp = expr::SMTParser::Parse(ss.str(), eb);
+			return e;
+		}
 	}
 
 	return e;

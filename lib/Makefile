@@ -9,6 +9,6 @@
 
 LEVEL=..
 
-PARALLEL_DIRS=DSA  Basic Support Expr Solver Module Core SMT
+PARALLEL_DIRS=DSA  Basic Support Expr Solver Module Core
 
 include $(LEVEL)/Makefile.common
