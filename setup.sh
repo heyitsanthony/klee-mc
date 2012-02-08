@@ -23,11 +23,8 @@ CXXFLAGS="-g -O2  $EXTRAHEADERS"		\
 		--with-uclibc="$UCLIBDIR"		\
 		--with-runtime=Release 
 
-make -k -j6 REQUIRES_RTTI=1
-pushd runtime
-make -j6
-popd
-make mc
+make -j6 REQUIRES_RTTI=1
+make mc-clean && make && make mc-std-amd64
 
 BASEDIR="Release+Asserts"
 if [ ! -x $BASEDIR ]; then
@@ -37,6 +34,6 @@ fi
 if [ -z "$VEXLLVM_HELPER_PATH" ]; then
 	echo "Can't find vex bitcode path. Not copying libkleeRuntimeMC.bc"
 else
-	cp "$BASEDIR"/lib/libkleeRuntimeMC.bc "$VEXLLVM_HELPER_PATH"/
+	cp "$BASEDIR"/lib/libkleeRuntimeMC-amd64.bc "$VEXLLVM_HELPER_PATH"/
 	cp "$BASEDIR"/lib/libkleeRuntimeMC-fdt.bc "$VEXLLVM_HELPER_PATH"/
 fi
