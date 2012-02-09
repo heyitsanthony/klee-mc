@@ -2,9 +2,9 @@
 /*****************************************************************************/
 /*!
  * \file smtlib.lex
- * 
+ *
  * Author: Clark Barrett
- * 
+ *
  * Created: 2005
  *
  * <hr>
@@ -13,9 +13,9 @@
  * and its documentation for any purpose is hereby granted without
  * royalty, subject to the terms and conditions defined in the \ref
  * LICENSE file provided with this distribution.
- * 
+ *
  * <hr>
- * 
+ *
  */
 /*****************************************************************************/
 
@@ -88,7 +88,7 @@ static std::string _string_lit;
    }
  }
 
-// for now, we don't have subranges.  
+// for now, we don't have subranges.
 //
 // ".."		{ return DOTDOT_TOK; }
 /*OPCHAR	(['!#?\_$&\|\\@])*/
@@ -115,20 +115,20 @@ IDCHAR  ({LETTER}|{DIGIT}|{OPCHAR})
 [\n]            { SMTParser::parserTemp->lineNum++; }
 [ \t\r\f]	{ /* skip whitespace */ }
 
-{DIGIT}+	{ smtliblval.str = new std::string(smtlibtext); return NUMERAL_TOK; }
+{DIGIT}+	{ smtliblval.str = smtlibtext; return NUMERAL_TOK; }
 
 ";"		{ BEGIN COMMENT; }
 <COMMENT>"\n"	{ BEGIN INITIAL; SMTParser::parserTemp->lineNum++; }
 <COMMENT>.	{ /* stay in comment mode */ }
 
-<INITIAL>"\""		{ BEGIN STRING_LITERAL; 
+<INITIAL>"\""		{ BEGIN STRING_LITERAL;
                           _string_lit.erase(_string_lit.begin(),
                                             _string_lit.end()); }
 <STRING_LITERAL>"\\".	{ /* escape characters (like \n or \") */
                           _string_lit.insert(_string_lit.end(),
                                              escapeChar(smtlibtext[1])); }
-<STRING_LITERAL>"\""	{ BEGIN INITIAL; /* return to normal mode */ 
-			  smtliblval.str = new std::string(_string_lit);
+<STRING_LITERAL>"\""	{ BEGIN INITIAL; /* return to normal mode */
+			  smtliblval.str = _string_lit;
                           return STRING_TOK; }
 <STRING_LITERAL>.	{ _string_lit.insert(_string_lit.end(),*smtlibtext); }
 
@@ -140,8 +140,8 @@ IDCHAR  ({LETTER}|{DIGIT}|{OPCHAR})
 <USER_VALUE>"\\"[{}] { /* escape characters */
                           _string_lit.insert(_string_lit.end(),smtlibtext[1]); }
 
-<USER_VALUE>"}"	        { BEGIN INITIAL; /* return to normal mode */ 
-			  smtliblval.str = new std::string(_string_lit);
+<USER_VALUE>"}"	        { BEGIN INITIAL; /* return to normal mode */
+			  smtliblval.str = _string_lit;
                           return USER_VAL_TOK; }
 
 <USER_VALUE>"\n"        { _string_lit.insert(_string_lit.end(),'\n');
@@ -163,6 +163,7 @@ IDCHAR  ({LETTER}|{DIGIT}|{OPCHAR})
 "iff"           { return IFF_TOK; }
 "exists"        { return EXISTS_TOK; }
 "forall"        { return FORALL_TOK; }
+"store"		{ return STORE_TOK; }
 "let"           { return LET_TOK; }
 "flet"          { return FLET_TOK; }
 "notes"         { return NOTES_TOK; }
@@ -186,7 +187,7 @@ IDCHAR  ({LETTER}|{DIGIT}|{OPCHAR})
 "extrapreds"    { return EXTRAPREDS_TOK; }
 "language"      { return LANGUAGE_TOK; }
 "distinct"      { return DISTINCT_TOK; }
-":pattern"      { return PAT_TOK; } 
+":pattern"      { return PAT_TOK; }
 ":"             { return COLON_TOK; }
 "\["            { return LBRACKET_TOK; }
 "\]"            { return RBRACKET_TOK; }
@@ -245,12 +246,12 @@ IDCHAR  ({LETTER}|{DIGIT}|{OPCHAR})
 "rotate_right"  { return ROR_TOK; }
 
 
-"bv"[0-9]+              { smtliblval.str = new std::string(smtlibtext); return BV_TOK; }
-"bvbin"[0-1]+	        { smtliblval.str = new std::string(smtlibtext); return BVBIN_TOK; }
-"bvhex"[0-9,A-F,a-f]+	{ smtliblval.str = new std::string(smtlibtext); return BVHEX_TOK; }
+"bv"[0-9]+              { smtliblval.str = smtlibtext; return BV_TOK; }
+"bvbin"[0-1]+	        { smtliblval.str = smtlibtext; return BVBIN_TOK; }
+"bvhex"[0-9,A-F,a-f]+	{ smtliblval.str = smtlibtext; return BVHEX_TOK; }
 
 
-({LETTER})({IDCHAR})* {smtliblval.str = new std::string(smtlibtext); return SYM_TOK; }
+({LETTER})({IDCHAR})* {smtliblval.str = smtlibtext; return SYM_TOK; }
 
 <<EOF>>         { return EOF_TOK; }
 

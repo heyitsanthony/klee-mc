@@ -2,9 +2,9 @@
 /*****************************************************************************/
 /*!
  * \file smtlib.y
- * 
+ *
  * Author: Clark Barrett
- * 
+ *
  * Created: Apr 30 2005
  * Hacked to death by Anthony: Feb 7, 2012
  * <hr>
@@ -13,15 +13,17 @@
  * and its documentation for any purpose is hereby granted without
  * royalty, subject to the terms and conditions defined in the \ref
  * LICENSE file provided with this distribution.
- * 
+ *
  * <hr>
- * 
+ *
  */
 /*****************************************************************************/
-/* 
+/*
    This file contains the bison code for the parser that reads in CVC
    commands in SMT-LIB language.
 */
+#define YYDEBUG		1
+#define YYERROR_VERBOSE	1
 
 #include "SMTParser.h"
 #include "klee/Expr.h"
@@ -58,31 +60,21 @@ int smtliberror(const char *s) { return SMTParser::parserTemp->Error(s); }
 
 %}
 
-/*
 %union {
-  std::string *str;
-  std::vector<std::string> *strvec;
-  CVC3::Expr *node;
-  std::vector<CVC3::Expr> *vec;
-  std::pair<std::vector<CVC3::Expr>, std::vector<std::string> > *pat_ann;
-};
-*/
-
-%union {
-  std::string *str;
-  klee::expr::ExprHandle node;
-  std::vector<klee::expr::ExprHandle> *vec;
+	std::string				str;
+	klee::expr::ExprHandle			node;
+	std::vector<klee::expr::ExprHandle>	*vec;
 };
 
 
 %start cmd
 
-/* strings are for better error messages.  
+/* strings are for better error messages.
    "_TOK" is so macros don't conflict with kind names */
 /*
 %type <vec> bench_attributes sort_symbs fun_symb_decls pred_symb_decls
 %type <vec> an_formulas quant_vars an_terms fun_symb patterns
-%type <node> pattern 
+%type <node> pattern
 %type <node> benchmark bench_name bench_attribute
 %type <node> status fun_symb_decl fun_sig pred_symb_decl pred_sig
 %type <node> an_formula quant_var an_atom prop_atom
@@ -98,7 +90,7 @@ int smtliberror(const char *s) { return SMTParser::parserTemp->Error(s); }
 %type <node> an_term basic_term constant
 %type <node> an_fun an_arithmetic_fun an_bitwise_fun
 %type <node> an_pred
-%type <str> logic_name status attribute user_value annotation annotations 
+%type <str> logic_name status attribute user_value annotation annotations
 %type <str> var fvar symb
 
 %token <str> NUMERAL_TOK
@@ -119,8 +111,8 @@ int smtliberror(const char *s) { return SMTParser::parserTemp->Error(s); }
 %token NOT_TOK IMPLIES_TOK IF_THEN_ELSE_TOK AND_TOK OR_TOK XOR_TOK IFF_TOK
 %token EXISTS_TOK
 %token FORALL_TOK
-%token LET_TOK
-%token FLET_TOK
+%token LET_TOK FLET_TOK
+%token STORE_TOK
 %token NOTES_TOK
 %token CVC_COMMAND_TOK
 %token SORTS_TOK
@@ -195,24 +187,24 @@ bench_attributes:
 
 bench_attribute:
 	COLON_TOK ASSUMPTION_TOK an_formula { ASSUMPTIONS.push_back($3); }
-	| COLON_TOK FORMULA_TOK an_formula 
+	| COLON_TOK FORMULA_TOK an_formula
 	{
 		QUERYPARSED = true;
 		QUERY = $3;
 	}
 	| COLON_TOK STATUS_TOK status { }
-	| COLON_TOK LOGIC_TOK logic_name 
+	| COLON_TOK LOGIC_TOK logic_name
 	{
-		if (*$3 != "QF_BV" && *$3 != "QF_AUFBV" && *$3 != "QF_UFBV") {
-			std::cerr << "ERROR: Logic " << *$3 << " not supported.";
+		if ($3 != "QF_BV" && $3 != "QF_AUFBV" && $3 != "QF_UFBV") {
+			std::cerr << "ERROR: Logic " << $3 << " not supported.";
 			exit(1);
 		}
-		if (*$3 == "QF_AUFBV")
+		if ($3 == "QF_AUFBV")
 			ARRAYSENABLED = true;
 	}
 	/*
 	| COLON_TOK EXTRASORTS_TOK LPAREN_TOK sort_symbs RPAREN_TOK
-	{ 
+	{
 	// XXX?
 	}
 	*/
@@ -222,7 +214,7 @@ bench_attribute:
 			SYM_TOK
 			BITVEC_TOK LBRACKET_TOK NUMERAL_TOK RBRACKET_TOK
 		RPAREN_TOK RPAREN_TOK
-	{ PARSER->DeclareExpr(*$5, atoi($8->c_str())); }
+	{ PARSER->DeclareExpr($5, atoi($8.c_str())); }
 
 	| COLON_TOK EXTRAFUNS_TOK
 	LPAREN_TOK LPAREN_TOK
@@ -231,9 +223,9 @@ bench_attribute:
 	RPAREN_TOK RPAREN_TOK
 	{
 		/* SymName Array[AddrWidth : DataWidth ] */
-		assert (atoi($8->c_str()) == 32);
-		assert (atoi($10->c_str()) == 8);
-		PARSER->DeclareArray(*$5);
+		assert (atoi($8.c_str()) == 32);
+		assert (atoi($10.c_str()) == 8);
+		PARSER->DeclareArray($5);
 	}
 
 	/*
@@ -252,8 +244,7 @@ bench_attribute:
 logic_name :
 	SYM_TOK LBRACKET_TOK NUMERAL_TOK RBRACKET_TOK
 	{
-		BVSIZE = atoi($3->c_str());
-		delete $3;
+		BVSIZE = atoi($3.c_str());
 		$$ = $1;
 	}
 	| SYM_TOK { $$ = $1; }
@@ -302,18 +293,18 @@ an_formula:
 	an_atom { $$ = $1; }
 	| an_logical_formula { $$ = $1; }
 	| LPAREN_TOK LET_TOK LPAREN_TOK var an_term RPAREN_TOK
-	{ 
+	{
 		PARSER->PushVarEnv();
-		PARSER->AddVar(*$4, $5); 
+		PARSER->AddVar($4, $5);
 	} an_formula annotations
 	{
 		$$ = $8;
 		PARSER->PopVarEnv();
 	}
-	| LPAREN_TOK FLET_TOK LPAREN_TOK fvar an_formula RPAREN_TOK 
-	{ 
+	| LPAREN_TOK FLET_TOK LPAREN_TOK fvar an_formula RPAREN_TOK
+	{
 		PARSER->PushFVarEnv();
-		PARSER->AddFVar(*$4, $5); 
+		PARSER->AddFVar($4, $5);
 	} an_formula annotations
 	{
 		$$ = $8;
@@ -366,8 +357,8 @@ an_atom:
 prop_atom:
 	TRUE_TOK { $$ = BUILDER->Constant(1, 1); }
 	| FALSE_TOK { $$ = BUILDER->Constant(0, 1);; }
-	| fvar { $$ = PARSER->GetFVar(*$1);}
-	; 
+	| fvar { $$ = PARSER->GetFVar($1);}
+	;
 
 
 an_pred:
@@ -397,7 +388,6 @@ an_arithmetic_fun:
 	smtliberror("bvneg not supported yet");
 	$$ = NULL; // TODO
 	}
-
 	| LPAREN_TOK BVADD_TOK an_term an_term annotations
 	{ $$ = BUILDER->Add($3, $4); }
 	| LPAREN_TOK BVSUB_TOK an_term an_term annotations
@@ -424,13 +414,13 @@ an_bitwise_fun:
 	LPAREN_TOK BVNOT_TOK an_term annotations
 	{ $$ = BUILDER->Not($3); }
 	| LPAREN_TOK BVAND_TOK an_term an_term annotations
-	{ $$ = BUILDER->And($3, $4); std::cerr << "HEY BITWISE:\n" << $$ << '\n';}
+	{ $$ = BUILDER->And($3, $4); }
 	| LPAREN_TOK BVOR_TOK an_term an_term annotations
 	{ $$ = BUILDER->Or($3, $4); }
 	| LPAREN_TOK BVXOR_TOK an_term an_term annotations
 	{ $$ = BUILDER->Xor($3, $4); }
 	| LPAREN_TOK BVXNOR_TOK an_term an_term annotations
-	{      
+	{
 		smtliberror("bvxnor not supported yet");
 		$$ = NULL;  // TODO
 	}
@@ -452,11 +442,11 @@ an_bitwise_fun:
 	}
 	| LPAREN_TOK ZEXT_TOK LBRACKET_TOK NUMERAL_TOK RBRACKET_TOK an_term annotations
 	{
-		$$ = BUILDER->ZExt($6, $6->getWidth() + PARSER->StringToInt(*$4));
+		$$ = BUILDER->ZExt($6, $6->getWidth() + PARSER->StringToInt($4));
 	}
 	| LPAREN_TOK SEXT_TOK LBRACKET_TOK NUMERAL_TOK RBRACKET_TOK an_term annotations
 	{
-		$$ = BUILDER->SExt($6, $6->getWidth() + PARSER->StringToInt(*$4));
+		$$ = BUILDER->SExt($6, $6->getWidth() + PARSER->StringToInt($4));
 	}
 	| LPAREN_TOK BVSELECT_TOK an_term an_term annotations
 	{
@@ -484,8 +474,8 @@ an_bitwise_fun:
 			LBRACKET_TOK NUMERAL_TOK COLON_TOK NUMERAL_TOK RBRACKET_TOK
 		an_term annotations
 	{
-		int off = PARSER->StringToInt(*$6);
-		$$ = BUILDER->Extract($8, off, PARSER->StringToInt(*$4) - off + 1);
+		int off = PARSER->StringToInt($6);
+		$$ = BUILDER->Extract($8, off, PARSER->StringToInt($4) - off + 1);
 	}
 	;
 
@@ -511,31 +501,34 @@ constant:
 	BIT0_TOK { $$ = PARSER->GetConstExpr("0", 2, 1); }
 	| BIT1_TOK { $$ = PARSER->GetConstExpr("1", 2, 1); }
 	| BVBIN_TOK
-	{ $$ = PARSER->GetConstExpr($1->substr(5), 2, $1->length()-5); }
+	{ $$ = PARSER->GetConstExpr($1.substr(5), 2, $1.length()-5); }
 	| BVHEX_TOK
-	{ $$ = PARSER->GetConstExpr($1->substr(5), 16, ($1->length()-5)*4); }
+	{ $$ = PARSER->GetConstExpr($1.substr(5), 16, ($1.length()-5)*4); }
 	| BV_TOK LBRACKET_TOK NUMERAL_TOK RBRACKET_TOK
-	{ $$ = PARSER->GetConstExpr($1->substr(2), 10, PARSER->StringToInt(*$3)); }
+	{ $$ = PARSER->GetConstExpr($1.substr(2), 10, PARSER->StringToInt($3)); }
 	;
 
 
 an_term:
 	basic_term { $$ = $1; }
-	| LPAREN_TOK basic_term annotations 
+	| LPAREN_TOK STORE_TOK an_term an_term an_term annotations
 	{
-		$$ = $2;
-		delete $3;
+		/* XXX we don't want an_term for the first param
+		 * (it should be an array), but I'd need to tear up the
+		 * grammar to get it to accept it precisely */
+		$$ = PARSER->ParseStore($3, $4, $5);
 	}
+	| LPAREN_TOK basic_term annotations
+	{ $$ = $2; }
 	| an_fun { $$ = $1; }
 	| LPAREN_TOK ITE_TOK an_formula an_term an_term annotations
 	{ $$ = BUILDER->Select($3, $4, $5); }
 	;
 
-
 basic_term:
 	constant { $$ = $1; }
-	| var { $$ = PARSER->GetVar(*$1); }
-	| symb { $$ = PARSER->GetVar(*$1); }
+	| var { $$ = PARSER->GetVar($1); }
+	| symb { $$ = PARSER->GetVar($1); }
 	;
 
 
@@ -547,7 +540,7 @@ annotations:
 
 annotation:
 	attribute { }
-	| attribute user_value { delete $2; }
+	| attribute user_value { }
 	;
 
 user_value:	USER_VAL_TOK { } ;

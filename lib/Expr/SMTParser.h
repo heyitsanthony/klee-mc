@@ -79,7 +79,7 @@ public:
 	bool Solve();
   
 	virtual void SetMaxErrors(unsigned N) { }
-	virtual unsigned GetNumErrors() const { return 1; }
+	virtual unsigned GetNumErrors() const { return (queryParsed) ? 0 : 1; }
 	virtual ~SMTParser();
   
 	static int Error(const std::string& s);
@@ -89,7 +89,7 @@ public:
   
 	void DeclareExpr(std::string name, Expr::Width w);
 	void DeclareArray(const std::string& name);
-
+	ExprHandle ParseStore(ref<Expr> arr, ref<Expr> idx, ref<Expr> val);
 
 	ExprHandle CreateAnd(std::vector<ExprHandle>);
 	ExprHandle CreateOr(std::vector<ExprHandle>);
@@ -112,6 +112,8 @@ protected:
 
 private:
 	bool Parse(void);
+
+	bool parsedTopLevel;
 };
 
 }

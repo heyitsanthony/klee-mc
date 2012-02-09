@@ -45,8 +45,8 @@ SMTParser::SMTParser(const std::string& _filename, ExprBuilder* _builder)
 , bvSize(0)
 , queryParsed(false)
 , builder(_builder)
+, parsedTopLevel(false)
 {
-	std::cerr << "I SEE YOU ARE OPENING " << fileName << '\n';
 	is = new ifstream(fileName.c_str());
 
 	// Initial empty environments
@@ -63,9 +63,9 @@ SMTParser::SMTParser(std::istream* ifs, ExprBuilder* _builder)
 , bvSize(0)
 , queryParsed(false)
 , builder(_builder)
+, parsedTopLevel(false)
 {
 	// Initial empty environments
-	std::cerr << "I SEE YOU ARE OPENING " << fileName << '\n';
 	varEnvs.push(VarEnv());
 	fvarEnvs.push(FVarEnv());
 }
@@ -104,7 +104,12 @@ bool SMTParser::Parse(void)
 	return true;
 }
 
-Decl* SMTParser::ParseTopLevelDecl() {
+Decl* SMTParser::ParseTopLevelDecl()
+{
+	if (parsedTopLevel)
+		return NULL;
+
+	parsedTopLevel = true;
 	return new QueryCommand(
 		assumptions,
 		builder->Not(satQuery),
@@ -251,6 +256,26 @@ void SMTParser::DeclareArray(const std::string& name)
 			builder->Read(
 				UpdateList(arr, NULL),
 				builder->Constant(0x321, 32))));
+}
+
+ExprHandle SMTParser::ParseStore(ref<Expr> arr, ref<Expr> idx, ref<Expr> val)
+{
+	const NotOptimizedExpr	*no;
+	const ReadExpr		*re;
+
+	no = dyn_cast<NotOptimizedExpr>(arr);
+	assert (no != NULL);
+
+	re = dyn_cast<ReadExpr>(no->getKid(0));
+	assert (re != NULL);
+
+	UpdateList	up(re->updates);
+	up.extend(idx, val);
+
+	return builder->NotOptimized(
+		builder->Read(
+			up,
+			builder->Constant(0x321, 32)));
 }
 
 ExprHandle SMTParser::GetConstExpr(
