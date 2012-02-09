@@ -31,27 +31,28 @@ extern char *smtlibtext;
 
 extern int smtliberror (const char *msg);
 
-static int smtlibinput(std::istream& is, char* buf, int size) {
-  int res;
-  if(is) {
-    // Set the terminator char to 0
-    is.getline(buf, size-1, 0);
-    // If failbit is set, but eof is not, it means the line simply
-    // didn't fit; so we clear the state and keep on reading.
-    bool partialStr = is.fail() && !is.eof();
-    if(partialStr)
-      is.clear();
+static int smtlibinput(std::istream& is, char* buf, int size)
+{
+	int res;
 
-    for(res = 0; res<size && buf[res] != 0; res++) ;
-    if(res == size) smtliberror("Lexer bug: overfilled the buffer");
-    if(!partialStr) { // Insert \n into the buffer
-      buf[res++] = '\n';
-      buf[res] = '\0';
-    }
-  } else {
-    res = YY_NULL;
-  }
-  return res;
+	if (!is)
+		return YY_NULL;
+
+	// Set the terminator char to 0
+	buf[0] = '\0';
+	is.getline(buf, size-1, 0);
+
+	// If failbit is set, but eof is not, it means the line simply
+	// didn't fit; so we clear the state and keep on reading.
+	bool partialStr = is.fail() && !is.eof();
+	if(partialStr)
+		is.clear();
+
+	res = strnlen(buf, size);
+	if(res == size)
+		smtliberror("Lexer bug: overfilled the buffer");
+
+	return res;
 }
 
 // Redefine the input buffer function to read from an istream
@@ -63,22 +64,18 @@ YY_BUFFER_STATE smtlib_buf_state() { return YY_CURRENT_BUFFER; }
 
 /* some wrappers for methods that need to refer to a struct.
    These are used by SMTParser. */
-void *smtlib_createBuffer(int sz) {
-  return (void *)smtlib_create_buffer(NULL, sz);
-}
-void smtlib_deleteBuffer(void *buf_state) {
-  smtlib_delete_buffer((struct yy_buffer_state *)buf_state);
-}
-void smtlib_switchToBuffer(void *buf_state) {
-  smtlib_switch_to_buffer((struct yy_buffer_state *)buf_state);
-}
-void *smtlib_bufState() {
-  return (void *)smtlib_buf_state();
-}
-
-void smtlib_setInteractive(bool is_interactive) {
-  yy_set_interactive(is_interactive);
-}
+void *smtlib_createBuffer(int sz)
+{ return smtlib_create_buffer(NULL, sz); }
+void smtlib_deleteBuffer(void *buf_state)
+{ smtlib_delete_buffer((struct yy_buffer_state *)buf_state); }
+void smtlib_flushBuffer(void *buf_state)
+{ smtlib_flush_buffer((struct yy_buffer_state *)buf_state); }
+void smtlib_switchToBuffer(void *buf_state)
+{ smtlib_switch_to_buffer((struct yy_buffer_state *)buf_state); }
+void *smtlib_bufState()
+{ return (void *)smtlib_buf_state(); }
+void smtlib_setInteractive(bool is_interactive)
+{ yy_set_interactive(is_interactive); }
 
 // File-static (local to this file) variables and functions
 static std::string _string_lit;
@@ -121,8 +118,7 @@ IDCHAR  ({LETTER}|{DIGIT}|{OPCHAR})
 {DIGIT}+	{ smtliblval.str = new std::string(smtlibtext); return NUMERAL_TOK; }
 
 ";"		{ BEGIN COMMENT; }
-<COMMENT>"\n"	{ BEGIN INITIAL; /* return to normal mode */ 
-                  SMTParser::parserTemp->lineNum++; }
+<COMMENT>"\n"	{ BEGIN INITIAL; SMTParser::parserTemp->lineNum++; }
 <COMMENT>.	{ /* stay in comment mode */ }
 
 <INITIAL>"\""		{ BEGIN STRING_LITERAL; 
@@ -136,10 +132,8 @@ IDCHAR  ({LETTER}|{DIGIT}|{OPCHAR})
                           return STRING_TOK; }
 <STRING_LITERAL>.	{ _string_lit.insert(_string_lit.end(),*smtlibtext); }
 
-<INITIAL>":pat"		{ BEGIN PAT_MODE;
-                          return PAT_TOK;}
-<PAT_MODE>"}"	        { BEGIN INITIAL; 
-                          return RCURBRACK_TOK; }
+<INITIAL>":pat"		{ BEGIN PAT_MODE; return PAT_TOK;}
+<PAT_MODE>"}"	        { BEGIN INITIAL; return RCURBRACK_TOK; }
 <INITIAL>"{"		{ BEGIN USER_VALUE;
                           _string_lit.erase(_string_lit.begin(),
                                             _string_lit.end()); }
@@ -155,6 +149,7 @@ IDCHAR  ({LETTER}|{DIGIT}|{OPCHAR})
 <USER_VALUE>.	        { _string_lit.insert(_string_lit.end(),*smtlibtext); }
 
 "BitVec"        { return BITVEC_TOK; }
+"Array"		{ return ARRAY_TOK; }
 
 "true"          { return TRUE_TOK; }
 "false"         { return FALSE_TOK; }
@@ -208,6 +203,7 @@ IDCHAR  ({LETTER}|{DIGIT}|{OPCHAR})
 
 "concat"        { return BVCONCAT_TOK; }
 "extract"       { return BVEXTRACT_TOK; }
+"select"	{ return BVSELECT_TOK; }
 
 "bvnot"         { return BVNOT_TOK; }
 "bvand"         { return BVAND_TOK; }

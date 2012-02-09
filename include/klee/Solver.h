@@ -16,43 +16,43 @@
 #include <vector>
 #include <netinet/in.h>
 
-namespace klee {
-  class ConstraintManager;
-  class Expr;
-  class SolverImpl;
-  class Assignment;
+namespace klee
+{
+class ConstraintManager;
+class Expr;
+class SolverImpl;
+class Assignment;
 
-  class Query
-  {
-  public:
-    const ConstraintManager &constraints;
-    ref<Expr> expr;
+class Query
+{
+public:
+	const ConstraintManager &constraints;
+	ref<Expr> expr;
 
-    Query(const ConstraintManager& _constraints, ref<Expr> _expr)
-      : constraints(_constraints), expr(_expr) {
-    }
+	Query(const ConstraintManager& _constraints, ref<Expr> _expr)
+	: constraints(_constraints), expr(_expr) { }
 
-    Query(ref<Expr> _expr) : constraints(dummyConstraints), expr(_expr) {}
+	Query(ref<Expr> _expr)
+	: constraints(dummyConstraints), expr(_expr) {}
 
-    virtual ~Query() {}
+	virtual ~Query() {}
 
-    /// withExpr - Return a copy of the query with the given expression.
-    Query withExpr(ref<Expr> _expr) const { return Query(constraints, _expr); }
+	/// withExpr - Return a copy of the query with the given expression.
+	Query withExpr(ref<Expr> _expr) const { return Query(constraints, _expr); }
 
-    /// withFalse - Return a copy of the query with a false expression.
-    Query withFalse() const {
-      return Query(constraints, ConstantExpr::alloc(0, Expr::Bool));
-    }
+	/// withFalse - Return a copy of the query with a false expression.
+	Query withFalse() const
+	{ return Query(constraints, ConstantExpr::alloc(0, Expr::Bool)); }
 
-    /// negateExpr - Return a copy of the query with the expression negated.
-    Query negateExpr() const { return withExpr(Expr::createIsZero(expr)); }
+	/// negateExpr - Return a copy of the query with the expression negated.
+	Query negateExpr() const { return withExpr(Expr::createIsZero(expr)); }
 
-    void print(std::ostream& os) const;
+	void print(std::ostream& os) const;
+	unsigned hash(void) const;
 
-    unsigned hash(void) const;
-  private:
-    static ConstraintManager dummyConstraints;
-  };
+private:
+	static ConstraintManager dummyConstraints;
+};
 
   struct sockaddr_in_opt
   {

@@ -49,74 +49,73 @@ ref<Expr> ExprVisitor::visit(const ref<Expr> &e)
 
 ref<Expr> ExprVisitor::visitActual(const ref<Expr> &e)
 {
-    if (isa<ConstantExpr>(e) && !visitConstants)
-    	return e;
+	if (isa<ConstantExpr>(e) && !visitConstants)
+		return e;
 
-    Expr &ep = *e.get();
+	Expr &ep = *e.get();
 
-    Action res = visitExpr(ep);
-    switch(res.kind) {
-    case Action::DoChildren:
-      // continue with normal action
-      break;
-    case Action::SkipChildren:
-      return e;
-    case Action::ChangeTo:
-      return res.argument;
-    }
+	Action res = visitExpr(ep);
+	switch(res.kind) {
+	// continue with normal action
+	case Action::DoChildren: break;
+	case Action::SkipChildren: return e;
+	case Action::ChangeTo: return res.argument;
+	}
 
-    switch(ep.getKind()) {
-    case Expr::NotOptimized: res = visitNotOptimized(static_cast<NotOptimizedExpr&>(ep)); break;
-    case Expr::Read: res = visitRead(static_cast<ReadExpr&>(ep)); break;
-    case Expr::Select: res = visitSelect(static_cast<SelectExpr&>(ep)); break;
-    case Expr::Concat: res = visitConcat(static_cast<ConcatExpr&>(ep)); break;
-    case Expr::Extract: res = visitExtract(static_cast<ExtractExpr&>(ep)); break;
-    case Expr::ZExt: res = visitZExt(static_cast<ZExtExpr&>(ep)); break;
-    case Expr::SExt: res = visitSExt(static_cast<SExtExpr&>(ep)); break;
-    case Expr::Add: res = visitAdd(static_cast<AddExpr&>(ep)); break;
-    case Expr::Sub: res = visitSub(static_cast<SubExpr&>(ep)); break;
-    case Expr::Mul: res = visitMul(static_cast<MulExpr&>(ep)); break;
-    case Expr::UDiv: res = visitUDiv(static_cast<UDivExpr&>(ep)); break;
-    case Expr::SDiv: res = visitSDiv(static_cast<SDivExpr&>(ep)); break;
-    case Expr::URem: res = visitURem(static_cast<URemExpr&>(ep)); break;
-    case Expr::SRem: res = visitSRem(static_cast<SRemExpr&>(ep)); break;
-    case Expr::Not: res = visitNot(static_cast<NotExpr&>(ep)); break;
-    case Expr::And: res = visitAnd(static_cast<AndExpr&>(ep)); break;
-    case Expr::Or: res = visitOr(static_cast<OrExpr&>(ep)); break;
-    case Expr::Xor: res = visitXor(static_cast<XorExpr&>(ep)); break;
-    case Expr::Shl: res = visitShl(static_cast<ShlExpr&>(ep)); break;
-    case Expr::LShr: res = visitLShr(static_cast<LShrExpr&>(ep)); break;
-    case Expr::AShr: res = visitAShr(static_cast<AShrExpr&>(ep)); break;
-    case Expr::Eq: res = visitEq(static_cast<EqExpr&>(ep)); break;
-    case Expr::Ne: res = visitNe(static_cast<NeExpr&>(ep)); break;
-    case Expr::Ult: res = visitUlt(static_cast<UltExpr&>(ep)); break;
-    case Expr::Ule: res = visitUle(static_cast<UleExpr&>(ep)); break;
-    case Expr::Ugt: res = visitUgt(static_cast<UgtExpr&>(ep)); break;
-    case Expr::Uge: res = visitUge(static_cast<UgeExpr&>(ep)); break;
-    case Expr::Slt: res = visitSlt(static_cast<SltExpr&>(ep)); break;
-    case Expr::Sle: res = visitSle(static_cast<SleExpr&>(ep)); break;
-    case Expr::Sgt: res = visitSgt(static_cast<SgtExpr&>(ep)); break;
-    case Expr::Sge: res = visitSge(static_cast<SgeExpr&>(ep)); break;
-    case Expr::Bind: res = visitBind(static_cast<BindExpr&>(ep)); break;
-    case Expr::Constant:
-    if (visitConstants) {
-      res = visitConstant(static_cast<ConstantExpr&>(ep));
-      break;
-    }
-    default:
-      assert(0 && "invalid expression kind");
-    }
+	switch(ep.getKind()) {
+#define EXPR_CASE(x)	\
+	case Expr::x: res = visit##x(static_cast<x##Expr&>(ep)); break;
 
-    switch(res.kind) {
-    default:
-      assert(0 && "invalid kind");
-    case Action::DoChildren:
-    	return handleActionDoChildren(ep);
-    case Action::SkipChildren:
-    	return e;
-    case Action::ChangeTo:
-    	return res.argument;
-    }
+	EXPR_CASE(NotOptimized)
+	EXPR_CASE(Read)
+	EXPR_CASE(Select)
+	EXPR_CASE(Concat)
+	EXPR_CASE(Extract)
+	EXPR_CASE(ZExt)
+	EXPR_CASE(SExt)
+	EXPR_CASE(Add)
+	EXPR_CASE(Sub)
+	EXPR_CASE(Mul)
+	EXPR_CASE(UDiv)
+	EXPR_CASE(SDiv)
+	EXPR_CASE(URem)
+	EXPR_CASE(SRem)
+	EXPR_CASE(Not)
+	EXPR_CASE(And)
+	EXPR_CASE(Or)
+	EXPR_CASE(Xor)
+	EXPR_CASE(Shl)
+	EXPR_CASE(LShr)
+	EXPR_CASE(AShr)
+	EXPR_CASE(Eq)
+	EXPR_CASE(Ne)
+	EXPR_CASE(Ult)
+	EXPR_CASE(Ule)
+	EXPR_CASE(Ugt)
+	EXPR_CASE(Uge)
+	EXPR_CASE(Slt)
+	EXPR_CASE(Sle)
+	EXPR_CASE(Sgt)
+	EXPR_CASE(Sge)
+	EXPR_CASE(Bind)
+#undef EXPR_CASE
+
+	case Expr::Constant:
+		if (visitConstants) {
+			res = visitConstant(static_cast<ConstantExpr&>(ep));
+			break;
+		}
+	default:
+		assert(0 && "invalid expression kind");
+	}
+
+	switch(res.kind) {
+	case Action::DoChildren: return handleActionDoChildren(ep);
+	case Action::SkipChildren: return e;
+	case Action::ChangeTo: return res.argument;
+	default:
+		assert(0 && "invalid kind");
+	}
 }
 
 ref<Expr> ExprVisitor::handleActionDoChildren(Expr& ep)
@@ -147,9 +146,8 @@ ref<Expr> ExprVisitor::handleActionDoChildren(Expr& ep)
 	return e;
 }
 
-ExprVisitor::Action ExprVisitor::visitExprPost(const Expr&) {
-  return Action::skipChildren();
-}
+ExprVisitor::Action ExprVisitor::visitExprPost(const Expr&)
+{ return Action::skipChildren(); }
 
 // simplify updates and build stack for rebuilding update list;
 // we also want to see if there's a single value that would result from

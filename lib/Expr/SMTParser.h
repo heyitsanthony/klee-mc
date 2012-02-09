@@ -34,6 +34,8 @@ private:
 	std::stack<VarEnv> varEnvs;
 	std::stack<FVarEnv> fvarEnvs;
 
+	typedef std::map<const std::string, Array*>	arrmap_ty;
+	arrmap_ty	arrmap;
 public:
 	/* For interacting w/ the actual parser, should make this nicer */
 	static SMTParser* parserTemp;
@@ -66,7 +68,7 @@ public:
 		const std::string& filename, ExprBuilder *builder)
 	{
 		SMTParser	*smtp = new SMTParser(filename, builder);
-		if (smtp->Parse() == false) {
+		if (smtp->Parse() == false || !smtp->queryParsed) {
 			delete smtp;
 			return NULL;
 		}
@@ -86,6 +88,8 @@ public:
 	ExprHandle GetConstExpr(std::string val, uint8_t base, klee::Expr::Width w);
   
 	void DeclareExpr(std::string name, Expr::Width w);
+	void DeclareArray(const std::string& name);
+
 
 	ExprHandle CreateAnd(std::vector<ExprHandle>);
 	ExprHandle CreateOr(std::vector<ExprHandle>);

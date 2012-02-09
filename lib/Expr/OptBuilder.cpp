@@ -345,7 +345,7 @@ ref<Expr> OptBuilder::Read(const UpdateList &ul, const ref<Expr>& index)
 
 	// sanity check for OoB read
 	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(index)) {
-		assert(CE->getZExtValue() < ul.root->mallocKey.size);
+		assert (CE->getZExtValue() < ul.root->mallocKey.size);
 	}
 
 	// XXX this doesn't really belong here... there are basically two
@@ -859,6 +859,29 @@ static ref<Expr> AndExpr_create(Expr *l, Expr *r)
 		}
 	}
 
+#if 0
+	/* XXX this upsets the internal STP used by the test cases for some
+	 * reason. Better disable it for now.
+	/* (And (Eq c1 x) (Eq c2 y)) => (Eq (concat c1 c2) (concat x y)) */
+	if (l->getKind() == Expr::Eq && r->getKind() == Expr::Eq) {
+		const ConstantExpr	*l_ce, *r_ce;
+
+		l_ce = dyn_cast<ConstantExpr>(l->getKid(0));
+		r_ce = dyn_cast<ConstantExpr>(r->getKid(0));
+		if (	l_ce && r_ce &&
+			l_ce->getWidth() <= 32 &&
+			l_ce->getWidth() == r_ce->getWidth())
+		{
+			return  ZExtExpr::create(
+				EqExpr::create(
+					ConcatExpr::create(
+						l->getKid(0), r->getKid(0)),
+					ConcatExpr::create(
+						l->getKid(1), r->getKid(1))),
+				l->getWidth());
+		}
+	}
+#endif
 	return AndExpr::alloc(l, r);
 }
 
@@ -1274,6 +1297,15 @@ static ref<Expr> EqExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 			return EqExpr::create(
 				ce_l->getKid(0), ce_r->getKid(0));
 
+		if (ce_l->getKid(0)->getWidth() == ce_r->getKid(0)->getWidth()
+			&& ce_l->getWidth() <= 64)
+		{
+			return AndExpr::create(
+				EqExpr::create(
+					ce_l->getKid(0), ce_r->getKid(0)),
+				EqExpr::create(
+					ce_l->getKid(1), ce_r->getKid(1)));
+		}
 	}
 
 	return EqExpr::alloc(l, r);
@@ -1463,8 +1495,12 @@ static ref<Expr> EqExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 	}
 	break;
 
+
 	case Expr::Concat: {
 		ConcatExpr *ce = cast<ConcatExpr>(r);
+
+		if (ce->getWidth() <= 64)
+			break;
 
 		return AndExpr::create(
 			EqExpr_createPartialR(
@@ -1473,10 +1509,10 @@ static ref<Expr> EqExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 					ce->getLeft()->getWidth()),
 				ce->getLeft().get()),
 			EqExpr_createPartialR(
-				cl->Extract(0,
-					ce->getRight()->getWidth()),
-					ce->getRight().get()));
+				cl->Extract(0, ce->getRight()->getWidth()),
+				ce->getRight().get()));
 	}
+
 
 	case Expr::Select: {
 		SelectExpr	*se = cast<SelectExpr>(r);

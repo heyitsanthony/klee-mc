@@ -7,7 +7,7 @@
 #include <tr1/unordered_set>
 
 
-#define EE_MIN_NODES	3
+#define EE_MIN_NODES	2
 #define EE_MAX_NODES	40
 
 namespace klee
@@ -108,14 +108,22 @@ return lookup(ret); }
 protected:
 	ref<Expr> lookup(ref<Expr>& e);
 	ref<Expr> lookupByEval(ref<Expr>& e, unsigned nodes);
-	uint64_t getEvalHash(ref<Expr>& e);
+	uint64_t getEvalHash(ref<Expr>& e, bool &maybeConst);
+	uint64_t getEvalHash(ref<Expr>& e)
+	{
+		bool mc;
+		return getEvalHash(e, mc);
+	}
+
+	ref<Expr> tryEquivRewrite(
+		const ref<Expr>& e, const ref<Expr>& smaller);
 
 	unsigned int			depth;
 	Solver				&solver;
 	ExprBuilder			*eb;	/* default builder */
 	std::vector<uint8_t>	sample_seq;
 	std::vector<uint8_t>	sample_seq_onoff;
-
+	std::vector<uint8_t>	sample_nonseq_zeros[8];
 
 	uint64_t			served_c;
 	uint64_t			ign_c;

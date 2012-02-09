@@ -23,9 +23,11 @@ public:
 	};
 
 	virtual ~SMTPrinter() {}
-	static void print(std::ostream& os, const Query& q);
+	static void print(std::ostream& os, const Query& q,
+		bool printConsts = true);
 	static void dump(const Query& q, const char* prefix);
-	static void dumpToFile(const Query& q, const char* fname);
+	static void dumpToFile(const Query& q, const char* fname,
+		bool printConsts = true);
 
 
 protected:
@@ -39,6 +41,7 @@ private:
 	: ExprConstVisitor(false /* no update lists */)
 	, os(in_os)
 	, arr(in_arr)
+	, print_const_arrays(false)
 	{
 		// remember: enabling hashcons means we wouldn't print
 		// expressions we have already seen!
@@ -73,6 +76,8 @@ private:
 	// allocated/freed by print.
 	// Used to pass array data for nested expr2str calls.
 	SMTArrays	*arr;
+
+	bool		print_const_arrays;
 };
 
 }

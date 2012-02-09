@@ -443,7 +443,7 @@ void SMTPrinter::printConstant(const ConstantExpr* ce) const
 /**
  * Prints queries in SMT form.
  */
-void SMTPrinter::print(std::ostream& os, const Query& q)
+void SMTPrinter::print(std::ostream& os, const Query& q, bool printConsts)
 {
 	SMTArrays		*smt_arr = new SMTArrays();
 	SMTPrinter		smt_pr(os, smt_arr);
@@ -462,6 +462,7 @@ void SMTPrinter::print(std::ostream& os, const Query& q)
 	arr_finder.addExprArrays(q.expr);
 
 	/* now have arrays, declare them */
+	smt_pr.print_const_arrays = printConsts;
 	smt_pr.printArrayDecls();
 
 	/* print constraints */
@@ -471,8 +472,10 @@ void SMTPrinter::print(std::ostream& os, const Query& q)
 	}
 
 	/* print expr */
-	std::list<update_pair> s(arr_finder.getNextExprLog());
-	smt_pr.printConstraint(q.expr, s, ":formula", "bv0[1]");
+	std::list<update_pair>	s(arr_finder.getNextExprLog());
+	char			bv[32];
+	sprintf(bv, "bv0[%d]", q.expr->getWidth());
+	smt_pr.printConstraint(q.expr, s, ":formula", bv);
 
 	// closing parens for (benchmark)
 	os << ")\n";
@@ -718,6 +721,9 @@ void SMTPrinter::printArrayDecls(void) const
 	}
 
 	/* print constant array values */
+	if (!print_const_arrays)
+		return;
+
 	foreach (it, arr->a_const_decls.begin(), arr->a_const_decls.end()) {
 		os << ":assumption\n" << it->second << "\n";
 	}
@@ -736,10 +742,10 @@ void SMTPrinter::expr2os(const ref<Expr>& e, std::ostream& os) const
 	smt_pr.visit(e);
 }
 
-void SMTPrinter::dumpToFile(const Query& q, const char* fname)
+void SMTPrinter::dumpToFile(const Query& q, const char* fname, bool printConsts)
 {
 	std::ofstream	os(fname, std::ios::out);
-	print(os, q);
+	print(os, q, printConsts);
 }
 
 void SMTPrinter::dump(const Query& q, const char* prefix)

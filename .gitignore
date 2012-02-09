@@ -15,4 +15,5 @@ lol*
 *.out
 *.err
 *.so
+smtlib_*
 filtered_funcs.txt

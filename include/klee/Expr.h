@@ -513,6 +513,8 @@ public:
   ref<Expr> index;
 
   const Array* getArray(void) const { return updates.root; }
+  bool hasUpdates(void) const { return updates.head != NULL; }
+
   static ref<Expr> alloc(const UpdateList &updates, const ref<Expr> &index);
   static ref<Expr> create(const UpdateList &updates, ref<Expr> i);
 
@@ -524,9 +526,8 @@ public:
 
   int compareContents(const Expr &b) const;
 
-  virtual ref<Expr> rebuild(ref<Expr> kids[]) const {
-    return create(updates, kids[0]);
-  }
+  virtual ref<Expr> rebuild(ref<Expr> kids[]) const
+  { return create(updates, kids[0]); }
 
   virtual unsigned computeHash();
 

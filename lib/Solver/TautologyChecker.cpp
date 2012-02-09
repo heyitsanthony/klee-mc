@@ -87,8 +87,7 @@ void TautologyChecker::splitQuery(const Query& q)
 
 void TautologyChecker::checkExpr(const ref<Expr>& e)
 {
-	ConstraintManager	dummyConstraints;
-	Query			q(dummyConstraints, e);
+	Query			q(e);
 	Solver::Validity	validity;
 
 	split_query_c++;

@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "SMTParser.h"
-
+#include "static/Sugar.h"
 #include "klee/ExprBuilder.h"
 #include "klee/Solver.h"
 #include "klee/Constraints.h"
@@ -28,6 +28,8 @@ using namespace klee::expr;
 
 extern int smtlibparse();
 extern void *smtlib_createBuffer(int);
+extern void smtlibrestart(FILE *);
+extern void smtlib_flushBuffer(void *);
 extern void smtlib_deleteBuffer(void *);
 extern void smtlib_switchToBuffer(void *);
 extern int smtlib_bufSize(void);
@@ -44,6 +46,7 @@ SMTParser::SMTParser(const std::string& _filename, ExprBuilder* _builder)
 , queryParsed(false)
 , builder(_builder)
 {
+	std::cerr << "I SEE YOU ARE OPENING " << fileName << '\n';
 	is = new ifstream(fileName.c_str());
 
 	// Initial empty environments
@@ -62,20 +65,41 @@ SMTParser::SMTParser(std::istream* ifs, ExprBuilder* _builder)
 , builder(_builder)
 {
 	// Initial empty environments
+	std::cerr << "I SEE YOU ARE OPENING " << fileName << '\n';
 	varEnvs.push(VarEnv());
 	fvarEnvs.push(FVarEnv());
 }
 
-SMTParser::~SMTParser(void) { delete is; }
+SMTParser::~SMTParser(void)
+{
+	foreach (it, arrmap.begin(), arrmap.end()) {
+		delete it->second;
+	}
+	delete is;
+	is = NULL;
+}
 
 bool SMTParser::Parse(void)
 {
-	SMTParser::parserTemp = this;
+	parserTemp = this;
+	lineNum = 1;
+	std::cerr << "IT IS PARSE TIME!!!!F=" << fileName <<"\n";
+#if 0
+	void *buf;
+	buf = smtlib_createBuffer(smtlib_bufSize());
 
-	void *buf = smtlib_createBuffer(smtlib_bufSize());
+
 	smtlib_switchToBuffer(buf);
+	smtlib_flushBuffer(buf);
+#endif
+	smtlibrestart(NULL);
 	smtlib_setInteractive(false);
 	smtlibparse();
+#if 0
+	smtlib_switchToBuffer(NULL);
+
+	smtlib_deleteBuffer(buf);
+#endif
 
 	return true;
 }
@@ -142,6 +166,7 @@ error:
 	return false;
 }
 
+extern char* smtlibtext;
 
 // XXX: give more info
 int SMTParser::Error(const string& msg)
@@ -149,7 +174,8 @@ int SMTParser::Error(const string& msg)
 	std::cerr
 		<< SMTParser::parserTemp->fileName << ":"
 		<< SMTParser::parserTemp->lineNum << ": "
-		<< msg << "\n";
+		<< msg << "\n"
+		<< smtlibtext << '\n';
 	exit(1);
 	return 0;
 }
@@ -164,46 +190,26 @@ int SMTParser::StringToInt(const std::string& s)
 	return x;
 }
 
-
-ExprHandle SMTParser::CreateAnd(std::vector<ExprHandle> kids)
-{
-	unsigned n_kids = kids.size();
-
-	assert(n_kids);
-	if (n_kids == 1)
-		return kids[0];
-
-	ExprHandle r = builder->And(kids[n_kids-2], kids[n_kids-1]);
-	for (int i=n_kids-3; i>=0; i--)
-		r = builder->And(kids[i], r);
-	return r;
+#define CREATE_MULTI(x)	\
+ExprHandle SMTParser::Create##x(std::vector<ExprHandle> kids)	\
+{	\
+	unsigned n_kids = kids.size();	\
+\
+	assert(n_kids);	\
+	if (n_kids == 1) return kids[0];	\
+\
+	ExprHandle r = builder->x(kids[n_kids-2], kids[n_kids-1]);	\
+	for (int i=n_kids-3; i>=0; i--)	\
+		r = builder->x(kids[i], r);	\
+\
+	std::cerr << "CREATED "#x":\n" << r << '\n';	\
+\
+	return r;	\
 }
 
-ExprHandle SMTParser::CreateOr(std::vector<ExprHandle> kids)
-{
-	unsigned n_kids = kids.size();
-	assert(n_kids);
-	if (n_kids == 1)
-		return kids[0];
-
-	ExprHandle r = builder->Or(kids[n_kids-2], kids[n_kids-1]);
-	for (int i=n_kids-3; i>=0; i--)
-		r = builder->Or(kids[i], r);
-	return r;
-}
-
-ExprHandle SMTParser::CreateXor(std::vector<ExprHandle> kids)
-{
-	unsigned n_kids = kids.size();
-	assert(n_kids);
-	if (n_kids == 1)
-		return kids[0];
-
-	ExprHandle r = builder->Xor(kids[n_kids-2], kids[n_kids-1]);
-	for (int i=n_kids-3; i>=0; i--)
-		r = builder->Xor(kids[i], r);
-	return r;
-}
+CREATE_MULTI(And)
+CREATE_MULTI(Or)
+CREATE_MULTI(Xor)
 
 void SMTParser::DeclareExpr(std::string name, Expr::Width w)
 {
@@ -229,6 +235,23 @@ void SMTParser::DeclareExpr(std::string name, Expr::Width w)
 	AddVar(name, var);
 }
 
+#define DEFAULT_ARR_SZ	4096
+void SMTParser::DeclareArray(const std::string& name)
+{
+	Array	*arr;
+
+	if (arrmap.count(name))
+		return;
+
+	arr = new Array(name, 4096);
+	arrmap[name] = arr;
+	AddVar(
+		name,
+		builder->NotOptimized(
+			builder->Read(
+				UpdateList(arr, NULL),
+				builder->Constant(0x321, 32))));
+}
 
 ExprHandle SMTParser::GetConstExpr(
 	std::string val, uint8_t base, klee::Expr::Width w)
@@ -251,6 +274,8 @@ ExprHandle SMTParser::GetVar(std::string name)
 	VarEnv top = varEnvs.top();
 	if (top.find(name) == top.end()) {
 		std::cerr << "Cannot find variable ?" << name << "\n";
+		Error("missing variable name");
+		assert (0 == 1 && "Expected variable name");
 		exit(1);
 	}
 	return top[name];
