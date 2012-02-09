@@ -2,6 +2,7 @@
 
 #include "expr/Lexer.h"
 #include "expr/Parser.h"
+#include "../../lib/Expr/SMTParser.h"
 
 #include "static/Sugar.h"
 #include "klee/Constraints.h"
@@ -26,6 +27,13 @@
 using namespace llvm;
 using namespace klee;
 using namespace klee::expr;
+
+enum ExprFormatEnum
+{
+	EXPR_FMT_SMT,
+	EXPR_FMT_KLEE,
+	EXPR_FMT_END
+};
 
 namespace {
   llvm::cl::opt<std::string>
@@ -70,8 +78,34 @@ namespace {
               clEnumValEnd));
 
   cl::opt<bool>
-  UseDummySolver("use-dummy-solver",
-		   cl::init(false));
+  UseDummySolver("use-dummy-solver", cl::init(false));
+
+	cl::opt<ExprFormatEnum>
+	FmtKind(
+		"exprfmt",
+		llvm::cl::desc("Expression builder:"),
+		llvm::cl::init(EXPR_FMT_KLEE),
+		llvm::cl::values(
+		clEnumValN(EXPR_FMT_SMT, "smt", "SMTLIB Parser"),
+		clEnumValN(EXPR_FMT_KLEE, "klee", "KLEE Parser"),
+		clEnumValEnd));
+}
+
+static Parser* createParser(
+	const char *Filename,
+	const MemoryBuffer *MB,
+	ExprBuilder *Builder)
+{
+	Parser	*P;
+
+	if(FmtKind == EXPR_FMT_KLEE ) {
+		P = Parser::Create(Filename, MB, Builder);
+		P->SetMaxErrors(20);
+	} else {
+		P = SMTParser::Parse(Filename, Builder);
+	}
+
+	return P;
 }
 
 static std::string escapedString(const char *start, unsigned length) {
@@ -113,8 +147,7 @@ static bool PrintInputAST(
 	Parser			*P;
 	unsigned int		NumQueries;
 
-	P = Parser::Create(Filename, MB, Builder);
-	P->SetMaxErrors(20);
+	P = createParser(Filename, MB, Builder);
 
 	NumQueries  = 0;
 	while (Decl *D = P->ParseTopLevelDecl()) {
@@ -255,8 +288,7 @@ static bool EvaluateInputAST(
 	Solver			*S;
 	unsigned int		Index;
 
-	P = Parser::Create(Filename, MB, Builder);
-	P->SetMaxErrors(20);
+	P = createParser(Filename, MB, Builder);
 	while (Decl *D = P->ParseTopLevelDecl())
 		Decls.push_back(D);
 
