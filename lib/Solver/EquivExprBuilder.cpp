@@ -115,6 +115,18 @@ public:
 
 	virtual ~ReadUnifier(void) {}
 
+	ref<Expr> getUnified(const ref<Expr>& e)
+	{
+		ref<Expr>	ret;
+
+		goodExpr = true;
+		ret = visit(e);
+		if (!goodExpr)
+			return NULL;
+
+		return ret;
+	}
+
 protected:
 	virtual Action visitRead(const ReadExpr& re)
 	{
@@ -122,6 +134,10 @@ protected:
 		const ConstantExpr		*ce_idx;
 		uni2src_arr_ty::const_iterator	it;
 
+		if (re.hasUpdates()) {
+			goodExpr = false;
+			return Action::skipChildren();
+		}
 		assert (re.hasUpdates() == false);
 
 		read_arr = re.getArray();
@@ -157,6 +173,7 @@ private:
 		const Array* /* array to replace */,
 		const Array* /* replacement */>	uni2src_arr_ty;
 	uni2src_arr_ty		uni2src_arr;
+	bool			goodExpr;
 };
 
 ref<Expr> EquivExprBuilder::tryEquivRewrite(
@@ -176,6 +193,11 @@ ref<Expr> EquivExprBuilder::tryEquivRewrite(
 		/* unify e_db into e */
 		ReadUnifier	ru(e_klee);
 		e_db_unified = ru.visit(e_db);
+	}
+
+	if (e_db_unified.isNull()) {
+		std::cerr << "CHECK EQUIV[unified]: COULD NOT UNIFY\n";
+		return NULL;
 	}
 
 	std::cerr << "CHECK EQUIV[unified]:\n";

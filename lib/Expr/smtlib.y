@@ -22,8 +22,6 @@
    This file contains the bison code for the parser that reads in CVC
    commands in SMT-LIB language.
 */
-#define YYDEBUG		1
-#define YYERROR_VERBOSE	1
 
 #include "SMTParser.h"
 #include "klee/Expr.h"
@@ -50,17 +48,27 @@ using namespace klee::expr;
 #undef __GNUC_MINOR__
 
 /* stuff that lives in smtlib.lex */
-extern int smtliblex(void);
-
 int smtliberror(const char *s) { return SMTParser::parserTemp->Error(s); }
 
-
-#define YYLTYPE_IS_TRIVIAL 1
 #define YYMAXDEPTH 10485760
+
+
+#include "smtlib_parser.hpp"
+//extern int smtliblex \
+//               (YYSTYPE * yylval_param,YYLTYPE * yylloc_param );
+
+void smtlib::parser::error (const location_type& loc, const std::string& msg)
+{ smtliberror(msg.c_str()); }
+
+extern int smtliblex(struct smtlib::parser::semantic_type*, smtlib::location*);
 
 %}
 
+%locations
+
 %union {
+#define SMT_STR_LEN	128
+#define SMT_CPY_TXT(x)	yylval_param->str = x;
 	std::string				str;
 	klee::expr::ExprHandle			node;
 	std::vector<klee::expr::ExprHandle>	*vec;
@@ -195,10 +203,12 @@ bench_attribute:
 	| COLON_TOK STATUS_TOK status { }
 	| COLON_TOK LOGIC_TOK logic_name
 	{
-		if ($3 != "QF_BV" && $3 != "QF_AUFBV" && $3 != "QF_UFBV") {
+		if ($3 !=  "QF_BV" && $3 != "QF_AUFBV" && $3 != "QF_UFBV")
+		{
 			std::cerr << "ERROR: Logic " << $3 << " not supported.";
 			exit(1);
 		}
+
 		if ($3 == "QF_AUFBV")
 			ARRAYSENABLED = true;
 	}
@@ -442,11 +452,11 @@ an_bitwise_fun:
 	}
 	| LPAREN_TOK ZEXT_TOK LBRACKET_TOK NUMERAL_TOK RBRACKET_TOK an_term annotations
 	{
-		$$ = BUILDER->ZExt($6, $6->getWidth() + PARSER->StringToInt($4));
+		$$ = BUILDER->ZExt($6, $6->getWidth() + atoi($4.c_str()));
 	}
 	| LPAREN_TOK SEXT_TOK LBRACKET_TOK NUMERAL_TOK RBRACKET_TOK an_term annotations
 	{
-		$$ = BUILDER->SExt($6, $6->getWidth() + PARSER->StringToInt($4));
+		$$ = BUILDER->SExt($6, $6->getWidth() + atoi($4.c_str()));
 	}
 	| LPAREN_TOK BVSELECT_TOK an_term an_term annotations
 	{
@@ -474,8 +484,8 @@ an_bitwise_fun:
 			LBRACKET_TOK NUMERAL_TOK COLON_TOK NUMERAL_TOK RBRACKET_TOK
 		an_term annotations
 	{
-		int off = PARSER->StringToInt($6);
-		$$ = BUILDER->Extract($8, off, PARSER->StringToInt($4) - off + 1);
+		int off = atoi($6.c_str());
+		$$ = BUILDER->Extract($8, off, atoi($4.c_str()) - off + 1);
 	}
 	;
 
@@ -505,7 +515,7 @@ constant:
 	| BVHEX_TOK
 	{ $$ = PARSER->GetConstExpr($1.substr(5), 16, ($1.length()-5)*4); }
 	| BV_TOK LBRACKET_TOK NUMERAL_TOK RBRACKET_TOK
-	{ $$ = PARSER->GetConstExpr($1.substr(2), 10, PARSER->StringToInt($3)); }
+	{ $$ = PARSER->GetConstExpr($1.substr(2), 10, atoi($3.c_str())); }
 	;
 
 

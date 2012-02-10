@@ -17,3 +17,6 @@ lol*
 *.so
 smtlib_*
 filtered_funcs.txt
+lib/Expr/position.hh
+lib/Expr/stack.hh
+lib/Expr/location.hh

@@ -13,6 +13,7 @@
 #include "klee/Solver.h"
 #include "klee/Constraints.h"
 #include "expr/Parser.h"
+#include "smtlib_parser.hpp"
 
 #include <llvm/ADT/StringRef.h>
 #include <iostream>
@@ -26,7 +27,6 @@ using namespace std;
 using namespace klee;
 using namespace klee::expr;
 
-extern int smtlibparse();
 extern void *smtlib_createBuffer(int);
 extern void smtlibrestart(FILE *);
 extern void smtlib_flushBuffer(void *);
@@ -72,15 +72,17 @@ SMTParser::SMTParser(std::istream* ifs, ExprBuilder* _builder)
 
 SMTParser::~SMTParser(void)
 {
-	foreach (it, arrmap.begin(), arrmap.end()) {
-		delete it->second;
-	}
+	foreach (it, arrmap.begin(), arrmap.end())
+		it->second->decRefIfCared();
 	delete is;
 	is = NULL;
 }
 
 bool SMTParser::Parse(void)
 {
+	smtlib::parser	p;
+	int		rc;
+
 	parserTemp = this;
 	lineNum = 1;
 	std::cerr << "IT IS PARSE TIME!!!!F=" << fileName <<"\n";
@@ -94,14 +96,14 @@ bool SMTParser::Parse(void)
 #endif
 	smtlibrestart(NULL);
 	smtlib_setInteractive(false);
-	smtlibparse();
+	rc = p.parse();
 #if 0
 	smtlib_switchToBuffer(NULL);
 
 	smtlib_deleteBuffer(buf);
 #endif
 
-	return true;
+	return (rc == 0);
 }
 
 Decl* SMTParser::ParseTopLevelDecl()
@@ -249,6 +251,8 @@ void SMTParser::DeclareArray(const std::string& name)
 		return;
 
 	arr = new Array(name, 4096);
+	arr->initRef();
+	arr->incRefIfCared();
 	arrmap[name] = arr;
 	AddVar(
 		name,

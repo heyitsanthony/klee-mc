@@ -21,10 +21,13 @@
 
 #include <iostream>
 #include "SMTParser.h"
-#include "smtlib_parser.h"
+#include "smtlib_parser.hpp"
 
 using namespace klee;
 using namespace klee::expr;
+
+#define YYSTYPE	smtlib::parser::semantic_type
+#define YYLTYPE smtlib::location
 
 extern int smtlib_inputLine;
 extern char *smtlibtext;
@@ -95,6 +98,8 @@ static std::string _string_lit;
 
 %}
 
+%option bison-bridge bison-locations
+
 %option noyywrap
 %option nounput
 %option noreject
@@ -115,7 +120,8 @@ IDCHAR  ({LETTER}|{DIGIT}|{OPCHAR})
 [\n]            { SMTParser::parserTemp->lineNum++; }
 [ \t\r\f]	{ /* skip whitespace */ }
 
-{DIGIT}+	{ smtliblval.str = smtlibtext; return NUMERAL_TOK; }
+{DIGIT}+	{	SMT_CPY_TXT(smtlibtext);
+			return smtlib::parser::token::NUMERAL_TOK; }
 
 ";"		{ BEGIN COMMENT; }
 <COMMENT>"\n"	{ BEGIN INITIAL; SMTParser::parserTemp->lineNum++; }
@@ -128,132 +134,132 @@ IDCHAR  ({LETTER}|{DIGIT}|{OPCHAR})
                           _string_lit.insert(_string_lit.end(),
                                              escapeChar(smtlibtext[1])); }
 <STRING_LITERAL>"\""	{ BEGIN INITIAL; /* return to normal mode */
-			  smtliblval.str = _string_lit;
-                          return STRING_TOK; }
+			  SMT_CPY_TXT(_string_lit.c_str());
+                          return smtlib::parser::token::STRING_TOK; }
 <STRING_LITERAL>.	{ _string_lit.insert(_string_lit.end(),*smtlibtext); }
 
-<INITIAL>":pat"		{ BEGIN PAT_MODE; return PAT_TOK;}
-<PAT_MODE>"}"	        { BEGIN INITIAL; return RCURBRACK_TOK; }
+<INITIAL>":pat"		{ BEGIN PAT_MODE; return smtlib::parser::token::PAT_TOK;}
+<PAT_MODE>"}"	        { BEGIN INITIAL; return smtlib::parser::token::RCURBRACK_TOK; }
 <INITIAL>"{"		{ BEGIN USER_VALUE;
                           _string_lit.erase(_string_lit.begin(),
                                             _string_lit.end()); }
 <USER_VALUE>"\\"[{}] { /* escape characters */
                           _string_lit.insert(_string_lit.end(),smtlibtext[1]); }
 
-<USER_VALUE>"}"	        { BEGIN INITIAL; /* return to normal mode */
-			  smtliblval.str = _string_lit;
-                          return USER_VAL_TOK; }
+<USER_VALUE>"}"	        {BEGIN INITIAL; /* return to normal mode */
+			SMT_CPY_TXT(_string_lit.c_str());
+                        return smtlib::parser::token::USER_VAL_TOK; }
 
 <USER_VALUE>"\n"        { _string_lit.insert(_string_lit.end(),'\n');
                           SMTParser::parserTemp->lineNum++; }
 <USER_VALUE>.	        { _string_lit.insert(_string_lit.end(),*smtlibtext); }
 
-"BitVec"        { return BITVEC_TOK; }
-"Array"		{ return ARRAY_TOK; }
+"BitVec"        { return smtlib::parser::token::BITVEC_TOK; }
+"Array"		{ return smtlib::parser::token::ARRAY_TOK; }
 
-"true"          { return TRUE_TOK; }
-"false"         { return FALSE_TOK; }
-"ite"           { return ITE_TOK; }
-"not"           { return NOT_TOK; }
-"implies"       { return IMPLIES_TOK; }
-"if_then_else"  { return IF_THEN_ELSE_TOK; }
-"and"           { return AND_TOK; }
-"or"            { return OR_TOK; }
-"xor"           { return XOR_TOK; }
-"iff"           { return IFF_TOK; }
-"exists"        { return EXISTS_TOK; }
-"forall"        { return FORALL_TOK; }
-"store"		{ return STORE_TOK; }
-"let"           { return LET_TOK; }
-"flet"          { return FLET_TOK; }
-"notes"         { return NOTES_TOK; }
-"cvc_command"   { return CVC_COMMAND_TOK; }
-"sorts"         { return SORTS_TOK; }
-"funs"          { return FUNS_TOK; }
-"preds"         { return PREDS_TOK; }
-"extensions"    { return EXTENSIONS_TOK; }
-"definition"    { return DEFINITION_TOK; }
-"axioms"        { return AXIOMS_TOK; }
-"logic"         { return LOGIC_TOK; }
-"sat"           { return SAT_TOK; }
-"unsat"         { return UNSAT_TOK; }
-"unknown"       { return UNKNOWN_TOK; }
-"assumption"    { return ASSUMPTION_TOK; }
-"formula"       { return FORMULA_TOK; }
-"status"        { return STATUS_TOK; }
-"benchmark"     { return BENCHMARK_TOK; }
-"extrasorts"    { return EXTRASORTS_TOK; }
-"extrafuns"     { return EXTRAFUNS_TOK; }
-"extrapreds"    { return EXTRAPREDS_TOK; }
-"language"      { return LANGUAGE_TOK; }
-"distinct"      { return DISTINCT_TOK; }
-":pattern"      { return PAT_TOK; }
-":"             { return COLON_TOK; }
-"\["            { return LBRACKET_TOK; }
-"\]"            { return RBRACKET_TOK; }
-"{"             { return LCURBRACK_TOK;}
-"}"             { return RCURBRACK_TOK;}
-"("             { return LPAREN_TOK; }
-")"             { return RPAREN_TOK; }
-"$"             { return DOLLAR_TOK; }
-"?"             { return QUESTION_TOK; }
-
-
-"bit0"          { return BIT0_TOK; }
-"bit1"          { return BIT1_TOK; }
-
-"concat"        { return BVCONCAT_TOK; }
-"extract"       { return BVEXTRACT_TOK; }
-"select"	{ return BVSELECT_TOK; }
-
-"bvnot"         { return BVNOT_TOK; }
-"bvand"         { return BVAND_TOK; }
-"bvor"          { return BVOR_TOK; }
-"bvneg"         { return BVNEG_TOK; }
-"bvnand"        { return BVNAND_TOK; }
-"bvnor"         { return BVNOR_TOK; }
-"bvxor"         { return BVXOR_TOK; }
-"bvxnor"        { return BVXNOR_TOK; }
-
-"="             { return EQ_TOK; }
-"bvcomp"        { return BVCOMP_TOK; }
-"bvult"         { return BVULT_TOK; }
-"bvule"         { return BVULE_TOK; }
-"bvugt"         { return BVUGT_TOK; }
-"bvuge"         { return BVUGE_TOK; }
-"bvslt"         { return BVSLT_TOK; }
-"bvsle"         { return BVSLE_TOK; }
-"bvsgt"         { return BVSGT_TOK; }
-"bvsge"         { return BVSGE_TOK; }
-
-"bvadd"         { return BVADD_TOK; }
-"bvsub"         { return BVSUB_TOK; }
-"bvmul"         { return BVMUL_TOK; }
-"bvudiv"        { return BVUDIV_TOK; }
-"bvurem"        { return BVUREM_TOK; }
-"bvsdiv"        { return BVSDIV_TOK; }
-"bvsrem"        { return BVSREM_TOK; }
-"bvsmod"        { return BVSMOD_TOK; }
-
-"bvshl"         { return BVSHL_TOK; }
-"bvlshr"        { return BVLSHR_TOK; }
-"bvashr"        { return BVASHR_TOK; }
-
-"repeat"        { return REPEAT_TOK; }
-"zero_extend"   { return ZEXT_TOK; }
-"sign_extend"   { return SEXT_TOK; }
-"rotate_left"   { return ROL_TOK; }
-"rotate_right"  { return ROR_TOK; }
+"true"          { return smtlib::parser::token::TRUE_TOK; }
+"false"         { return smtlib::parser::token::FALSE_TOK; }
+"ite"           { return smtlib::parser::token::ITE_TOK; }
+"not"           { return smtlib::parser::token::NOT_TOK; }
+"implies"       { return smtlib::parser::token::IMPLIES_TOK; }
+"if_then_else"  { return smtlib::parser::token::IF_THEN_ELSE_TOK; }
+"and"           { return smtlib::parser::token::AND_TOK; }
+"or"            { return smtlib::parser::token::OR_TOK; }
+"xor"           { return smtlib::parser::token::XOR_TOK; }
+"iff"           { return smtlib::parser::token::IFF_TOK; }
+"exists"        { return smtlib::parser::token::EXISTS_TOK; }
+"forall"        { return smtlib::parser::token::FORALL_TOK; }
+"store"		{ return smtlib::parser::token::STORE_TOK; }
+"let"           { return smtlib::parser::token::LET_TOK; }
+"flet"          { return smtlib::parser::token::FLET_TOK; }
+"notes"         { return smtlib::parser::token::NOTES_TOK; }
+"cvc_command"   { return smtlib::parser::token::CVC_COMMAND_TOK; }
+"sorts"         { return smtlib::parser::token::SORTS_TOK; }
+"funs"          { return smtlib::parser::token::FUNS_TOK; }
+"preds"         { return smtlib::parser::token::PREDS_TOK; }
+"extensions"    { return smtlib::parser::token::EXTENSIONS_TOK; }
+"definition"    { return smtlib::parser::token::DEFINITION_TOK; }
+"axioms"        { return smtlib::parser::token::AXIOMS_TOK; }
+"logic"         { return smtlib::parser::token::LOGIC_TOK; }
+"sat"           { return smtlib::parser::token::SAT_TOK; }
+"unsat"         { return smtlib::parser::token::UNSAT_TOK; }
+"unknown"       { return smtlib::parser::token::UNKNOWN_TOK; }
+"assumption"    { return smtlib::parser::token::ASSUMPTION_TOK; }
+"formula"       { return smtlib::parser::token::FORMULA_TOK; }
+"status"        { return smtlib::parser::token::STATUS_TOK; }
+"benchmark"     { return smtlib::parser::token::BENCHMARK_TOK; }
+"extrasorts"    { return smtlib::parser::token::EXTRASORTS_TOK; }
+"extrafuns"     { return smtlib::parser::token::EXTRAFUNS_TOK; }
+"extrapreds"    { return smtlib::parser::token::EXTRAPREDS_TOK; }
+"language"      { return smtlib::parser::token::LANGUAGE_TOK; }
+"distinct"      { return smtlib::parser::token::DISTINCT_TOK; }
+":pattern"      { return smtlib::parser::token::PAT_TOK; }
+":"             { return smtlib::parser::token::COLON_TOK; }
+"\["            { return smtlib::parser::token::LBRACKET_TOK; }
+"\]"            { return smtlib::parser::token::RBRACKET_TOK; }
+"{"             { return smtlib::parser::token::LCURBRACK_TOK;}
+"}"             { return smtlib::parser::token::RCURBRACK_TOK;}
+"("             { return smtlib::parser::token::LPAREN_TOK; }
+")"             { return smtlib::parser::token::RPAREN_TOK; }
+"$"             { return smtlib::parser::token::DOLLAR_TOK; }
+"?"             { return smtlib::parser::token::QUESTION_TOK; }
 
 
-"bv"[0-9]+              { smtliblval.str = smtlibtext; return BV_TOK; }
-"bvbin"[0-1]+	        { smtliblval.str = smtlibtext; return BVBIN_TOK; }
-"bvhex"[0-9,A-F,a-f]+	{ smtliblval.str = smtlibtext; return BVHEX_TOK; }
+"bit0"          { return smtlib::parser::token::BIT0_TOK; }
+"bit1"          { return smtlib::parser::token::BIT1_TOK; }
+
+"concat"        { return smtlib::parser::token::BVCONCAT_TOK; }
+"extract"       { return smtlib::parser::token::BVEXTRACT_TOK; }
+"select"	{ return smtlib::parser::token::BVSELECT_TOK; }
+
+"bvnot"         { return smtlib::parser::token::BVNOT_TOK; }
+"bvand"         { return smtlib::parser::token::BVAND_TOK; }
+"bvor"          { return smtlib::parser::token::BVOR_TOK; }
+"bvneg"         { return smtlib::parser::token::BVNEG_TOK; }
+"bvnand"        { return smtlib::parser::token::BVNAND_TOK; }
+"bvnor"         { return smtlib::parser::token::BVNOR_TOK; }
+"bvxor"         { return smtlib::parser::token::BVXOR_TOK; }
+"bvxnor"        { return smtlib::parser::token::BVXNOR_TOK; }
+
+"="             { return smtlib::parser::token::EQ_TOK; }
+"bvcomp"        { return smtlib::parser::token::BVCOMP_TOK; }
+"bvult"         { return smtlib::parser::token::BVULT_TOK; }
+"bvule"         { return smtlib::parser::token::BVULE_TOK; }
+"bvugt"         { return smtlib::parser::token::BVUGT_TOK; }
+"bvuge"         { return smtlib::parser::token::BVUGE_TOK; }
+"bvslt"         { return smtlib::parser::token::BVSLT_TOK; }
+"bvsle"         { return smtlib::parser::token::BVSLE_TOK; }
+"bvsgt"         { return smtlib::parser::token::BVSGT_TOK; }
+"bvsge"         { return smtlib::parser::token::BVSGE_TOK; }
+
+"bvadd"         { return smtlib::parser::token::BVADD_TOK; }
+"bvsub"         { return smtlib::parser::token::BVSUB_TOK; }
+"bvmul"         { return smtlib::parser::token::BVMUL_TOK; }
+"bvudiv"        { return smtlib::parser::token::BVUDIV_TOK; }
+"bvurem"        { return smtlib::parser::parser::token::BVUREM_TOK; }
+"bvsdiv"        { return smtlib::parser::token::BVSDIV_TOK; }
+"bvsrem"        { return smtlib::parser::token::BVSREM_TOK; }
+"bvsmod"        { return smtlib::parser::token::BVSMOD_TOK; }
+
+"bvshl"         { return smtlib::parser::token::BVSHL_TOK; }
+"bvlshr"        { return smtlib::parser::token::BVLSHR_TOK; }
+"bvashr"        { return smtlib::parser::token::BVASHR_TOK; }
+
+"repeat"        { return smtlib::parser::token::REPEAT_TOK; }
+"zero_extend"   { return smtlib::parser::token::ZEXT_TOK; }
+"sign_extend"   { return smtlib::parser::token::SEXT_TOK; }
+"rotate_left"   { return smtlib::parser::token::ROL_TOK; }
+"rotate_right"  { return smtlib::parser::token::ROR_TOK; }
 
 
-({LETTER})({IDCHAR})* {smtliblval.str = smtlibtext; return SYM_TOK; }
+"bv"[0-9]+              { SMT_CPY_TXT(smtlibtext); return smtlib::parser::token::BV_TOK; }
+"bvbin"[0-1]+	        { SMT_CPY_TXT(smtlibtext); return smtlib::parser::token::BVBIN_TOK; }
+"bvhex"[0-9,A-F,a-f]+	{ SMT_CPY_TXT(smtlibtext); return smtlib::parser::token::BVHEX_TOK; }
 
-<<EOF>>         { return EOF_TOK; }
+
+({LETTER})({IDCHAR})* { SMT_CPY_TXT(smtlibtext); return smtlib::parser::token::SYM_TOK; }
+
+<<EOF>>         { return smtlib::parser::token::EOF_TOK; }
 
 . { smtliberror("Illegal input character."); }
 %%
