@@ -146,7 +146,7 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 		IRBuilder<>	irb(inst);
 		Value		*v;
 		Function	*f;
-		bool		f_not;
+		bool		f_flip;
 
 		fi = cast<FCmpInst>(inst);
 		assert (ty_w == 32 || ty_w == 64);
@@ -156,7 +156,7 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 		// Ordered comps return false if either operand is NaN.
 		// Unordered comps return true if either operand is NaN.
 		pred = fi->getPredicate();
-		f_not = false;
+		f_flip = false;
 		if (pred == FCmpInst::FCMP_OEQ)
 			f = (ty_w == 32)
 				? f_fp32eq->function
@@ -167,16 +167,18 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 				: f_fp64lt->function;
 		else if (pred == FCmpInst::FCMP_OGT) {
 			f = (ty_w == 32)
-				? f_fp32le->function
-				: f_fp64le->function;
-			f_not = true;
+				? f_fp32lt->function
+				: f_fp64lt->function;
+			f_flip = true;
 		} else
 			assert (0 == 1 && "???");
 
-		v = irb.CreateCall2(f, v0, inst->getOperand(1));
-		if (f_not) {
-			v = irb.CreateNot(v);
+		if (f_flip == false) {
+			v = irb.CreateCall2(f, v0, inst->getOperand(1));
+		} else {
+			v = irb.CreateCall2(f, inst->getOperand(1), v0);
 		}
+
 		v = irb.CreateTrunc(
 			v,
 			IntegerType::get(ty->getContext(), 1));
