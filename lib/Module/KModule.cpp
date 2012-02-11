@@ -98,6 +98,12 @@ namespace {
 	cl::desc("Include module instructions in uncovered count"),
 	cl::init(false));
 
+  cl::opt<bool>
+  UseSoftFP(
+	"use-softfp",
+	cl::desc("Use soft-floating point to convert fp to int."),
+	cl::init(false));
+
 }
 
 KModule::KModule(Module *_module)
@@ -498,6 +504,10 @@ void KModule::prepare(
 	fpm->add(createLowerAtomicPass());
 	fpm->add(new IntrinsicCleanerPass(this, *targetData));
 	fpm->add(new PhiCleanerPass());
+
+	if (UseSoftFP) {
+		fpm->add(new SoftFPPass(this, opts.LibraryDir.c_str()));
+	}
 }
 
 

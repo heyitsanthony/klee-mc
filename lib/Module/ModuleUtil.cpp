@@ -26,6 +26,11 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/Support/Path.h"
+#include <llvm/Bitcode/ReaderWriter.h>
+#include <llvm/Support/MemoryBuffer.h>
+#include <llvm/Support/system_error.h>
+#include <llvm/LLVMContext.h>
+
 
 #include "static/Sugar.h"
 
@@ -181,4 +186,43 @@ void klee::runRemoveSentinelsPass(Module &module)
 	llvm::PassManager pm;
 	pm.add(new RemoveSentinelsPass());
 	pm.run(module);
+}
+
+namespace klee {
+Module* getBitcodeModule(const char* path);
+Module* getBitcodeModule(const char* path)
+{
+	Module			*ret_mod;
+	std::string		ErrorMsg;
+
+	OwningPtr<MemoryBuffer> Buffer;
+	bool			materialize_fail;
+
+	MemoryBuffer::getFile(path, Buffer);
+
+	if (!Buffer) {
+		std::cerr <<  "Bad membuffer on " << path << std::endl;
+		assert (Buffer && "Couldn't get mem buffer");
+	}
+
+	ret_mod = ParseBitcodeFile(Buffer.get(), getGlobalContext(), &ErrorMsg);
+	if (ret_mod == NULL) {
+		std::cerr
+			<< "Error Parsing Bitcode File '"
+			<< path << "': " << ErrorMsg << '\n';
+	}
+	assert (ret_mod && "Couldn't parse bitcode mod");
+	materialize_fail = ret_mod->MaterializeAllPermanently(&ErrorMsg);
+	if (materialize_fail) {
+		std::cerr << "Materialize failed: " << ErrorMsg << std::endl;
+		assert (0 == 1 && "BAD MOD");
+	}
+
+	if (ret_mod == NULL) {
+		std::cerr << "OOPS: " << ErrorMsg
+			<< " (path=" << path << ")\n";
+	}
+
+	return ret_mod;
+}
 }

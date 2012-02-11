@@ -30,6 +30,7 @@ namespace llvm {
 
 namespace klee {
 class KModule;
+class KFunction;
 
 /// RaiseAsmPass - This pass raises some common occurences of inline
 /// asm which are used by glibc into normal LLVM IR.
@@ -154,6 +155,37 @@ public:
   bool runOnBasicBlock(llvm::BasicBlock &BB);
 };
 #endif
+
+class SoftFPPass : public llvm::FunctionPass
+{
+public:
+	SoftFPPass(KModule* _km, const char* dir);
+	virtual ~SoftFPPass() {}
+
+	virtual bool runOnFunction(llvm::Function &F);
+private:
+	bool replaceInst(llvm::Instruction* inst);
+
+	static char	ID;
+
+	KModule		*km;
+	KFunction	*f_fptrunc, *f_fpext,
+
+			*f_fp32tosi32, *f_fp64tosi64,
+			*f_fp64tosi32, *f_fp32tosi64,
+
+			*f_si32tofp32, *f_si32tofp64,
+
+			*f_fp32add, *f_fp32sub,
+			*f_fp32mul, *f_fp32div, *f_fp32rem,
+			*f_fp64add, *f_fp64sub,
+			*f_fp64mul, *f_fp64div, *f_fp64rem,
+
+			*f_fp32eq, *f_fp64eq,
+			*f_fp32lt, *f_fp64lt,
+			*f_fp32le, *f_fp64le;
+
+};
 }
 
 #endif

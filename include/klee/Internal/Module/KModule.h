@@ -60,7 +60,6 @@ namespace klee
 
   class RaiseAsmPass;
   class IntrinsicCleanerPass;
-  class DivCheckPass;
   class PhiCleanerPass;
 
   class KModule {
