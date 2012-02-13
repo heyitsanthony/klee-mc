@@ -409,6 +409,15 @@ void* sc_enter(void* regfile, void* jmpptr)
 		}
 		break;
 
+	case SYS_clock_getres:
+		if (GET_ARG1(regfile) == 0) {
+			sc_ret_v(regfile, -1);
+			break;
+		}
+		make_sym(GET_ARG1(regfile), sizeof(struct timespec), "clock_getres");
+		sc_ret_or(sc_new_regs(regfile), 0, -1);
+		break;
+
 	case SYS_sync:
 		break;
 	case SYS_umask:
