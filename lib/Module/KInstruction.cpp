@@ -27,6 +27,7 @@ KInstruction::~KInstruction() { delete[] operands; }
 KInstruction::KInstruction(Instruction* in_inst, unsigned in_dest)
 : inst(in_inst)
 , dest(in_dest)
+, covered(false)
 {
 	if (isCall()) {
 		/* [0] = getCalledValue() */
@@ -62,6 +63,8 @@ KInstruction* KInstruction::create(
 	case Instruction::InsertValue:
 	case Instruction::ExtractValue:
 		return new KGEPInstruction(km, inst, dest);
+	case Instruction::Br:
+		return new KBrInstruction(inst, dest);
 	default:
 		return new KInstruction(inst, dest);
 	}

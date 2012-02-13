@@ -41,6 +41,7 @@ DECL_WEIGHT(CoveringNew, true)
 DECL_WEIGHT(MarkovPath, true)
 DECL_WEIGHT(Tail, true)
 DECL_WEIGHT(Constraint, true)
+DECL_WEIGHT(FreshBranch, true)
 
 class WeightedRandomSearcher : public Searcher
 {

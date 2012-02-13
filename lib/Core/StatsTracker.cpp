@@ -170,6 +170,7 @@ StatsTracker::StatsTracker(
 , fullBranches(0)
 , partialBranches(0)
 , updateMinDistToUncovered(_updateMinDistToUncovered)
+, lastCoveredInstruction(0)
 {
 	sys::Path module(objectFilename);
 	km = in_km;
@@ -317,19 +318,19 @@ void StatsTracker::stepInstUpdateFrame(ExecutionState &es)
 	if (!sf.kf->trackCoverage || !instructionIsCoverable(inst))
 		return;
 
-	if (theStatisticManager->getIndexedValue(
-		stats::coveredInstructions, ii.id))
-	{
+	if (es.pc->isCovered())
 		return;
-	}
 
 	// Checking for actual stoppoints avoids inconsistencies due
 	// to line number propogation.
 	if (!ii.file.empty())
 		es.coveredLines[&ii.file].insert(ii.line);
 
+	lastCoveredInstruction = stats::instructions+1;
 	es.coveredNew = true;
 	es.instsSinceCovNew = 1;
+
+	es.pc->cover();
 	++stats::coveredInstructions;
 	stats::uncoveredInstructions += (int64_t)-1;
 	assert ((int64_t)stats::uncoveredInstructions >= 0);

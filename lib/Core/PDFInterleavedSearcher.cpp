@@ -13,6 +13,7 @@ PDFInterleavedSearcher::PDFInterleavedSearcher(
 , ticket_c(0)
 , last_uncov_ins(0)
 , last_ins(0)
+, selects_since_new_ins(0)
 {
 	foreach (it, _searchers.begin(), _searchers.end())
 		searchers.push_back(ticket_searcher_ty(1, *it));
@@ -46,22 +47,36 @@ ExecutionState& PDFInterleavedSearcher::selectState(bool allowCompact)
 	ExecutionState	*es;
 	double		rand_val;
 	int64_t		remaining_tickets;
+	uint64_t	new_found_ins_count;
 
-	if (stats::uncoveredInstructions > last_uncov_ins) {
+	new_found_ins_count = stats::uncoveredInstructions;
+	new_found_ins_count += stats::coveredInstructions;
+
+	if (new_found_ins_count > last_uncov_ins) {
 		int		payout;
 		uint64_t	budget;
 
 		budget = searchers[cur_searcher_idx].first;
-		payout =  ceil((1.0 - budget/(double)ticket_c)*searchers.size());
+		payout =  ceil((1.0-budget/(double)ticket_c)*searchers.size());
 		ticket_c += payout;
 		searchers[cur_searcher_idx].first = payout + budget;
-		last_uncov_ins = stats::uncoveredInstructions;
-	} else if (
-		last_ins != stats::instructions &&
-		searchers[cur_searcher_idx].first > 1)
-	{
-		searchers[cur_searcher_idx].first--;
-		ticket_c--;
+		last_uncov_ins = new_found_ins_count;
+		selects_since_new_ins = 0;
+	} else if (last_ins != stats::instructions) {
+		uint64_t	budget;
+		int		penalty;
+
+		selects_since_new_ins++;
+		budget = searchers[cur_searcher_idx].first;
+
+		penalty = selects_since_new_ins;
+		penalty = ceil(penalty*(budget/((double)ticket_c)))+1;
+		if (penalty >= (int)budget)
+			penalty = budget - 1;
+
+
+		searchers[cur_searcher_idx].first -= penalty;
+		ticket_c -= penalty;
 	}
 	last_ins = stats::instructions;
 

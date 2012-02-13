@@ -23,16 +23,17 @@ namespace llvm {
 }
 
 namespace klee {
-  class ExecutionState;
-  class Executor;
-  class InstructionInfoTable;
-  class InterpreterHandler;
-  class KInstruction;
-  struct StackFrame;
-  class KModule;
-  class KFunction;
+class ExecutionState;
+class Executor;
+class InstructionInfoTable;
+class InterpreterHandler;
+class KInstruction;
+struct StackFrame;
+class KModule;
+class KFunction;
 
-  class StatsTracker {
+class StatsTracker
+{
     friend class WriteStatsTimer;
     friend class WriteIStatsTimer;
 
@@ -97,6 +98,8 @@ namespace klee {
     void computeReachableUncovered();
 
     bool isInstCovered(KInstruction* ki) const;
+    uint64_t getLastNewInstruction(void) const
+    { return lastCoveredInstruction; }
 
   private:
     void computeReachableUncoveredInit(void);
@@ -107,10 +110,11 @@ namespace klee {
     bool computePathsInit(std::vector<llvm::Instruction*>& insts);
     bool computePaths(std::vector<llvm::Instruction*>& insts);
     static bool init;
-  };
+    uint64_t lastCoveredInstruction;
+};
 
-  uint64_t computeMinDistToUncovered(
-    const KInstruction *ki, uint64_t minDistAtRA);
+uint64_t computeMinDistToUncovered(
+	const KInstruction *ki, uint64_t minDistAtRA);
 
 }
 

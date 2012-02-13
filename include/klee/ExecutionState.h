@@ -101,7 +101,8 @@ private:
 
 	// true iff this state is a mere placeholder
 	// to be replaced by a real state
-	bool			isCompactForm;
+	bool	isCompactForm;
+	bool	onFreshBranch;
 
 #define ES_CANARY_VALUE	0x11667744
 	unsigned		canary;
@@ -145,7 +146,9 @@ public:
 	bool isNonCompact() const { return !isCompactForm; }
 
 	unsigned int getNumAllocs(void) const { return num_allocs; }
-
+	void setFreshBranch(void) { onFreshBranch = true; }
+	void setOldBranch(void) { onFreshBranch = false; }
+	bool isOnFreshBranch(void) const { return onFreshBranch; }
 protected:
 	ExecutionState();
 	ExecutionState(KFunction *kf);

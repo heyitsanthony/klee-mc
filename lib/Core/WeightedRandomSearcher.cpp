@@ -205,3 +205,7 @@ double TailWeight::weigh(const ExecutionState* es) const
 
 	return -ret;
 }
+
+double FreshBranchWeight::weigh(const ExecutionState* es) const
+{ return es->isOnFreshBranch() ? 1.0 : 0.0; }
+

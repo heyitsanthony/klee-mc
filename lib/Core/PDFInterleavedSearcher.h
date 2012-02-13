@@ -18,6 +18,8 @@ private:
 	uint64_t	last_uncov_ins;
 	uint64_t	last_ins;
 
+	unsigned	selects_since_new_ins;
+
 public:
 	explicit PDFInterleavedSearcher(const std::vector<Searcher*> &_searchers);
 	virtual ~PDFInterleavedSearcher();

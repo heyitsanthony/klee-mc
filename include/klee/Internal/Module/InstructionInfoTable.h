@@ -26,8 +26,8 @@ namespace klee
 /* Stores debug information for a KInstruction */
 struct InstructionInfo
 {
-	unsigned id;
 	const std::string &file;
+	unsigned id;
 	unsigned line;
 	unsigned assemblyLine;
 
@@ -37,8 +37,8 @@ public:
 		const std::string &_file,
 		unsigned _line,
 		unsigned _assemblyLine)
-	: id(_id)
-	, file(_file)
+	: file(_file)
+	, id(_id)
 	, line(_line)
 	, assemblyLine(_assemblyLine) {}
 };

@@ -741,7 +741,7 @@ void Executor::makeForks(ExecutionState& current, struct ForkInfo& fi)
 		if (RandomizeFork && theRNG.getBool()) {
 			std::swap(baseState, newState);
 			// Randomize which actual state gets the T/F branch;
-			// Affects which state BatchinSearcher retains.
+			// Affects which state BatchingSearcher retains.
 			std::swap(*curStateUsed, fi.resStates[condIndex]);
 		}
 
@@ -1334,7 +1334,9 @@ void Executor::instRet(ExecutionState &state, KInstruction *ki)
 
 void Executor::instBranch(ExecutionState& state, KInstruction* ki)
 {
-	BranchInst *bi = cast<BranchInst>(ki->getInst());
+	KBrInstruction	*kbr;
+	BranchInst	*bi = cast<BranchInst>(ki->getInst());
+	bool		isTwoWay;
 
 	if (bi->isUnconditional()) {
 		state.transferToBasicBlock(
@@ -1349,10 +1351,27 @@ void Executor::instBranch(ExecutionState& state, KInstruction* ki)
 	const Cell &cond = eval(ki, 0, state);
 
 	StatePair branches = fork(state, cond.value, false);
+	isTwoWay = (branches.first && branches.second);
+
+	/* Mark state as representing branch if path never seen before. */
+	kbr = static_cast<KBrInstruction*>(ki);
+	if (branches.first != NULL) {
+		if (kbr->hasFoundTrue() == false) {
+			kbr->setFoundTrue();
+			branches.first->setFreshBranch();
+		} else
+			branches.first->setOldBranch();
+
+	}
+	if (branches.second != NULL) {
+		if (kbr->hasFoundFalse() == false) {
+			kbr->setFoundFalse();
+			branches.second->setFreshBranch();
+		} else
+			branches.second->setOldBranch();
+	}
 
 	if (WriteTraces) {
-		bool isTwoWay = (branches.first && branches.second);
-
 		if (branches.first) {
 			branches.first->exeTraceMgr.addEvent(
 				new BranchTraceEvent(
@@ -1365,6 +1384,8 @@ void Executor::instBranch(ExecutionState& state, KInstruction* ki)
 					state, ki, false, isTwoWay));
 		}
 	}
+
+
 
 	// NOTE: There is a hidden dependency here, markBranchVisited
 	// requires that we still be in the context of the branch

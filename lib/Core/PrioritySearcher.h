@@ -99,12 +99,10 @@ private:
 	unsigned int	state_c;
 	Prioritizer	*prFunc;
 	Searcher	*searcher_base;
+	unsigned	pr_kick_rate;
 public:
-	PrioritySearcher(Prioritizer* p, Searcher* base)
-	: state_c(0)
-	, prFunc(p)
-	, searcher_base(base)
-	{}
+	PrioritySearcher(Prioritizer* p, Searcher* base);
+	PrioritySearcher(Prioritizer* p, Searcher* base, unsigned kick_rate);
 };
 }
 

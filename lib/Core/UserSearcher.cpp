@@ -47,6 +47,16 @@ Prioritizer* UserSearcher::prFunc = NULL;
 bool UsePrioritySearcher;
 
 namespace {
+
+  cl::opt<bool>
+  UseFreshBranchSearch(
+  	"use-fresh-branch-search",
+	cl::init(false));
+
+  cl::opt<bool>
+  UseInterleavedFreshBranch("use-interleaved-fb", cl::init(false));
+
+
   cl::opt<bool>
   UseFilterSearch(
   	"use-search-filter",
@@ -261,6 +271,13 @@ Searcher* UserSearcher::setupInterleavedSearcher(
 
 	s.push_back(searcher);
 
+	if (UseInterleavedFreshBranch)
+		s.push_back(
+			new PrioritySearcher(
+				new Weight2Prioritizer<FreshBranchWeight>(1),
+				DEFAULT_PR_SEARCHER,
+				100));
+
 	if (UseInterleavedNURS)
 		s.push_back(
 			new WeightedRandomSearcher(
@@ -343,7 +360,12 @@ Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 {
 	Searcher* searcher;
 
-	if (UseMarkovSearcher) {
+	if (UseFreshBranchSearch) {
+		searcher = new PrioritySearcher(
+				new Weight2Prioritizer<FreshBranchWeight>(1),
+				DEFAULT_PR_SEARCHER,
+				100);
+	} else if (UseMarkovSearcher) {
 		searcher = new RescanSearcher(
 			new Weight2Prioritizer<MarkovPathWeight>(100));
 	} else if (UseConstraintSearcher) {

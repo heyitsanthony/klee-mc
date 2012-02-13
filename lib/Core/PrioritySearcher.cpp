@@ -16,6 +16,16 @@ namespace {
 		llvm::cl::init(1));
 }
 
+PrioritySearcher::PrioritySearcher(Prioritizer* p, Searcher* base)
+: state_c(0), prFunc(p), searcher_base(base), pr_kick_rate(PrKickRate)
+{}
+
+PrioritySearcher::PrioritySearcher(
+	Prioritizer* p, Searcher* base, unsigned kick_rate)
+: state_c(0), prFunc(p), searcher_base(base), pr_kick_rate(kick_rate)
+{}
+
+
 ExecutionState& PrioritySearcher::selectState(bool allowCompact)
 {
 	prsearcher_ty	prs;
@@ -23,7 +33,7 @@ ExecutionState& PrioritySearcher::selectState(bool allowCompact)
 	unsigned	refresh_c, max_refresh;
 
 	refresh_c = 0;
-	max_refresh = PrKickRate;
+	max_refresh = pr_kick_rate;
 
 	while (1) {
 		int	curPr;

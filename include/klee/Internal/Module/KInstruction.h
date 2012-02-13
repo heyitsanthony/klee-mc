@@ -41,8 +41,11 @@ public:
 	void setInfo(const InstructionInfo* inf) { info = inf; }
 	const InstructionInfo* getInfo(void) const { return info; }
 
+	bool isCovered(void) const { return covered; }
+	void cover(void) { covered = true; }
+
 protected:
-	KInstruction() {}
+	KInstruction() : covered(false) {}
 	KInstruction(llvm::Instruction* inst, unsigned dest);
 
 private:
@@ -57,6 +60,28 @@ private:
 
 	/// Destination register index.
 	unsigned		dest;
+
+	bool			covered;
+};
+
+/* potassium bromide instructoin */
+class KBrInstruction : public KInstruction
+{
+public:
+	KBrInstruction(llvm::Instruction* ins, unsigned dest)
+	: KInstruction(ins, dest)
+	, foundTrue(false)
+	, foundFalse(false) {}
+	virtual ~KBrInstruction() {}
+
+	bool foundAll(void) const { return foundTrue && foundFalse; }
+	void setFoundTrue(void) { foundTrue = true; }
+	void setFoundFalse(void) { foundFalse = true; }
+	bool hasFoundTrue(void) const { return foundTrue; }
+	bool hasFoundFalse(void) const { return foundFalse; }
+private:
+	bool	foundTrue;
+	bool	foundFalse;
 };
 
 class KGEPInstruction : public KInstruction
