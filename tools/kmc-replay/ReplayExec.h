@@ -23,6 +23,7 @@ public:
 
 protected:
 	virtual guest_ptr doVexSB(VexSB* sb);
+	virtual void doTrap(VexSB* sb);
 	virtual void doSysCall(VexSB* sb);
 
 private:

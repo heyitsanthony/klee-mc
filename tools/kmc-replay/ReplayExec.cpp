@@ -103,6 +103,12 @@ void ReplayExec::verifyOrPanic(void)
 	assert (0 == 1);
 }
 
+void ReplayExec::doTrap(VexSB* sb)
+{
+	fprintf(stderr, "[EXE] Hit Trap. Exiting\n");
+	setExit(0x0c0ffee);
+}
+
 guest_ptr ReplayExec::doVexSB(VexSB* sb)
 {
 	guest_ptr	next_pc;
