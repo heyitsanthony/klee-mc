@@ -262,7 +262,8 @@ bool UserSearcher::userSearcherRequiresMD2U() {
 }
 
 #define DEFAULT_PR_SEARCHER	new RandomSearcher()
-
+#define TAIL_RESCAN_SEARCHER	\
+	new RescanSearcher(new Weight2Prioritizer<TailWeight>(1.0))
 /* Research quality */
 Searcher* UserSearcher::setupInterleavedSearcher(
 	Executor& executor, Searcher* searcher)
@@ -275,7 +276,7 @@ Searcher* UserSearcher::setupInterleavedSearcher(
 		s.push_back(
 			new PrioritySearcher(
 				new Weight2Prioritizer<FreshBranchWeight>(1),
-				DEFAULT_PR_SEARCHER,
+				TAIL_RESCAN_SEARCHER,
 				100));
 
 	if (UseInterleavedNURS)
@@ -299,8 +300,7 @@ Searcher* UserSearcher::setupInterleavedSearcher(
 
 
 	if (UseInterleavedTailRS)
-		s.push_back(new RescanSearcher(
-			new Weight2Prioritizer<TailWeight>(1.0)));
+		s.push_back(TAIL_RESCAN_SEARCHER);
 
 	if (UseInterleavedMV)
 		s.push_back(
@@ -362,9 +362,9 @@ Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 
 	if (UseFreshBranchSearch) {
 		searcher = new PrioritySearcher(
-				new Weight2Prioritizer<FreshBranchWeight>(1),
-				DEFAULT_PR_SEARCHER,
-				100);
+			new Weight2Prioritizer<FreshBranchWeight>(1),
+			TAIL_RESCAN_SEARCHER,
+			100);
 	} else if (UseMarkovSearcher) {
 		searcher = new RescanSearcher(
 			new Weight2Prioritizer<MarkovPathWeight>(100));
