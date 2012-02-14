@@ -632,8 +632,10 @@ bool AddressSpace::binsearchRange(
 			if (r) return false;
 		}
 
-		if (size == maxResolutions)
+		if (size == maxResolutions) {
+			klee_warning("Hit maximum resolution count");
 			return true;
+		}
 	}
 
 	return false;
@@ -823,3 +825,18 @@ unsigned int AddressSpace::copyOutBuf(
 
 	return bw;
 }
+
+ref<Expr> AddressSpace::getOOBCond(ref<Expr>& symptr) const
+{
+	ref<Expr>	ret_expr = ConstantExpr::create(0,1);
+
+	foreach (it, begin(), end()) {
+		OrExpr::create(
+			ret_expr,
+			(it->first)->getBoundsCheckPointer(symptr));
+
+	}
+
+	return NotExpr::create(ret_expr);
+}
+

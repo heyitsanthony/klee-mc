@@ -597,8 +597,10 @@ Executor::fork(
 	fi.isSeeding = it != seedMap.end();
 	if (fi.isSeeding) fi.timeout *= it->second.size();
 
-	if (evalForks(current, fi) == false)
+	if (evalForks(current, fi) == false) {
+		terminateStateEarly(current, "fork query timed out");
 		return StateVector(N, NULL);
+	}
 
 	// need a copy telling us whether or not we need to add
 	// constraints later; especially important if we skip a fork for
@@ -607,11 +609,11 @@ Executor::fork(
 	assert(fi.validTargets && "invalid set of fork conditions");
 
 	fi.wasReplayed = false;
-	if (fi.isSeeding == false) {
+	if (fi.isSeeding) {
+		forkSetupSeeding(current, fi);
+	} else {
 		if (!forkSetupNoSeeding(current, fi))
 			return StateVector(N, NULL);
-	} else {
-		forkSetupSeeding(current, fi);
 	}
 
 	makeForks(current, fi);
@@ -623,18 +625,16 @@ Executor::fork(
 bool Executor::evalForkBranch(ExecutionState& current, struct ForkInfo& fi)
 {
 	Solver::Validity	result;
-	bool			success;
+	bool			ok;
 
 	assert (fi.isBranch);
 
 	solver->setTimeout(fi.timeout);
-	success = solver->evaluate(current, fi.conditions[1], result);
+	ok = solver->evaluate(current, fi.conditions[1], result);
 	solver->setTimeout(stpTimeout);
 
-	if (!success) {
-		terminateStateEarly(current, "query timed out");
+	if (!ok)
 		return false;
-	}
 
 	// known => [0] when false, [1] when true
 	// unknown => take both routes
@@ -664,8 +664,8 @@ bool Executor::evalForks(ExecutionState& current, struct ForkInfo& fi)
 	assert (fi.isBranch == false);
 
 	for (unsigned int condIndex = 0; condIndex < fi.N; condIndex++) {
-		ConstantExpr *CE;
-		bool result;
+		ConstantExpr	*CE;
+		bool		result;
 
 		CE = dyn_cast<ConstantExpr>(fi.conditions[condIndex]);
 		// If condition is a constant
@@ -677,16 +677,14 @@ bool Executor::evalForks(ExecutionState& current, struct ForkInfo& fi)
 			else assert(false && "Invalid constant fork condition");
 		} else {
 			solver->setTimeout(fi.timeout);
-			bool success;
-			success = solver->mayBeTrue(
+			bool	ok;
+			ok = solver->mayBeTrue(
 				current,
 				fi.conditions[condIndex],
 				result);
 			solver->setTimeout(stpTimeout);
-			if (!success) {
-				terminateStateEarly(current, "query timed out");
+			if (!ok)
 				return false;
-			}
 		}
 
 		fi.res[condIndex] = result;

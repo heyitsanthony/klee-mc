@@ -93,6 +93,8 @@ public:
 		ResolutionList &rl,
 		unsigned maxResolutions=0);
 
+	ref<Expr> getOOBCond(ref<Expr>& symptr) const;
+
 	unsigned hash(void) const;
 
 private:

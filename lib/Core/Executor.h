@@ -446,8 +446,14 @@ private:
   bool forkSetupNoSeeding(ExecutionState& current, struct ForkInfo& fi);
   bool forkFollowReplay(ExecutionState& current, struct ForkInfo& fi);
   void forkSetupSeeding(ExecutionState& current, struct ForkInfo& fi);
+
+  /* Assigns feasibility for forking condition(s) into fi.res[cond]
+   * NOTE: it is the caller's responsibility to terminate the current state
+   * on failure.
+   * */
   bool evalForks(ExecutionState& current, struct ForkInfo& fi);
   bool evalForkBranch(ExecutionState& current, struct ForkInfo& fi);
+
   void makeForks(ExecutionState& current, struct ForkInfo& fi);
   void constrainForks(ExecutionState& current, struct ForkInfo& fi);
   void constrainFork(

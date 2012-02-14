@@ -26,6 +26,12 @@ namespace {
 		"max-sym-array-size",
 		cl::desc("Concretize accesses to large symbolic arrays"),
 		cl::init(0));
+
+	cl::opt<unsigned>
+	MaxResolves(
+		"max-err-resolves",
+		cl::desc("Maximum number of states to fork on MemErr"),
+		cl::init(0));
 }
 
 using namespace klee;
@@ -156,7 +162,7 @@ void MMU::memOpError(ExecutionState& state, MemOp& mop)
 	bytes = Expr::getMinBytesForWidth(type);
 
 	incomplete = state.addressSpace.resolve(
-		state, exe.getSolver(), mop.address, rl, 0);
+		state, exe.getSolver(), mop.address, rl, MaxResolves);
 
 	// XXX there is some query wasteage here. who cares?
 	unbound = &state;
@@ -167,13 +173,37 @@ void MMU::memOpError(ExecutionState& state, MemOp& mop)
 			unbound, mop, res, bytes, type);
 
 		/* bad unbound state.. terminate */
-		if (!unbound)
+		if (unbound == NULL)
 			return;
 	}
 
-	// XXX should we distinguish out of bounds and overlapped cases?
 	if (incomplete) {
-		exe.terminateStateEarly(*unbound, "query timed out (resolve)");
+		/* Did not resolve everything we could.
+		 * Let's check for an invalid pointer.. */
+		ref<Expr>	oob_cond;
+
+		oob_cond = state.addressSpace.getOOBCond(mop.address);
+
+		Executor::StatePair branches(
+			exe.fork(*unbound, oob_cond, true));
+
+		if (branches.first) {
+			exe.terminateStateOnError(
+				*branches.first,
+				"memory error: out of bound pointer",
+				"ptr.err",
+				exe.getAddressInfo(*branches.first, mop.address));
+		}
+
+		if (branches.second)
+			exe.terminateStateEarly(
+				*branches.second,
+				"query timed out (memOpError)");
+
+		if (!branches.first && !branches.second) {
+			klee_warning(
+				"MMU query timeout: may have missed OOB ptr");
+		}
 		return;
 	}
 
@@ -325,7 +355,8 @@ MMU::MemOpRes MMU::memOpResolve(
 		alwaysInBounds);
 	if (!ret.rc) {
 		state.pc = state.prevPC;
-		exe.terminateStateEarly(state, "query timed out");
+		exe.terminateStateEarly(
+			state, "query timed out (memOpResolve)");
 		return MemOpRes::failure();
 	}
 
