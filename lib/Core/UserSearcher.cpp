@@ -39,6 +39,7 @@
 #include "StringMerger.h"
 #include "Weight2Prioritizer.h"
 #include "PrioritySearcher.h"
+#include "HistoPriority.h"
 
 using namespace llvm;
 using namespace klee;
@@ -46,95 +47,45 @@ using namespace klee;
 Prioritizer* UserSearcher::prFunc = NULL;
 bool UsePrioritySearcher;
 
+#define DECL_SEARCH_OPT(x,y,z)	\
+	namespace { \
+	cl::opt<bool> Use##x##Search("use-" y "-search", cl::init(false)); \
+	cl::opt<bool> UseInterleaved##x("use-interleaved-" z, cl::init(false)); }
+
+DECL_SEARCH_OPT(FreshBranch, "fresh-branch", "fb");
+DECL_SEARCH_OPT(Random, "random", "RS");
+DECL_SEARCH_OPT(Constraint, "cons", "CONS");
+DECL_SEARCH_OPT(MinConstraint, "mcons", "MCONS");
+DECL_SEARCH_OPT(Bucket, "bucket", "BS");
+DECL_SEARCH_OPT(Tail, "tail", "TS");
+DECL_SEARCH_OPT(RR, "rr", "RR");
+DECL_SEARCH_OPT(Markov, "markov", "MV");
+DECL_SEARCH_OPT(NonUniformRandom, "non-uniform-random", "NURS");
+
+#define SEARCH_HISTO	new RescanSearcher(new HistoPrioritizer(executor))
+DECL_SEARCH_OPT(Histo, "histo", "HS");
+
 namespace {
-
-  cl::opt<bool>
-  UseFreshBranchSearch(
-  	"use-fresh-branch-search",
-	cl::init(false));
-
-  cl::opt<bool>
-  UseInterleavedFreshBranch("use-interleaved-fb", cl::init(false));
-
 
   cl::opt<bool>
   UseFilterSearch(
   	"use-search-filter",
 	cl::desc("Filter out unwanted functions from dispatch"),
 	cl::init(false));
-  cl::opt<bool>
-  UseRandomSearch("use-random-search");
 
-  cl::opt<bool>
-  UseDemotionSearch("use-demotion-search");
+  cl::opt<bool> UseDemotionSearch("use-demotion-search");
+  cl::opt<bool> UseBreadthFirst("use-breadth-first");
+  cl::opt<bool> UsePhasedSearch("use-phased-search");
+  cl::opt<bool> UseRandomPathSearch("use-random-path");
 
-  cl::opt<bool>
-  UseBreadthFirst("use-breadth-first");
-
-  cl::opt<bool>
-  UseInterleavedRS("use-interleaved-RS");
-
-  cl::opt<bool>
-  UseConstraintSearcher("use-cons-search");
-
-  cl::opt<bool>
-  UseInterleavedConstraint("use-interleaved-CONS");
-
-  cl::opt<bool>
-  UseConstraintMinSearcher("use-mcons-search");
-
-  cl::opt<bool>
-  UseInterleavedMinConstraint("use-interleaved-MCONS");
-
-
-  cl::opt<bool>
-  UseInterleavedTailRS("use-interleaved-TRS");
-
-
-  cl::opt<bool>
-  UseInterleavedBS("use-interleaved-BS");
-
-  cl::opt<bool>
-  UseInterleavedTS("use-interleaved-TS");
-
-  cl::opt<bool>
-  UseInterleavedDFS("use-interleaved-DFS");
-
-  cl::opt<bool>
-  UseInterleavedRR("use-interleaved-RR");
-
-  cl::opt<bool>
-  UseInterleavedMV("use-interleaved-MV");
-
-  cl::opt<bool>
-  UseInterleavedNURS("use-interleaved-NURS");
-
-  cl::opt<bool>
-  UseInterleavedMD2UNURS("use-interleaved-MD2U-NURS");
-
-  cl::opt<bool>
-  UseInterleavedInstCountNURS("use-interleaved-icnt-NURS");
-
-  cl::opt<bool>
-  UseInterleavedCPInstCountNURS("use-interleaved-cpicnt-NURS");
-
-  cl::opt<bool>
-  UseInterleavedQueryCostNURS("use-interleaved-query-cost-NURS");
-
-  cl::opt<bool>
-  UseInterleavedCovNewNURS("use-interleaved-covnew-NURS");
-
-  cl::opt<bool>
-  UseNonUniformRandomSearch("use-non-uniform-random-search");
-
-  cl::opt<bool>
-  UsePhasedSearch("use-phased-search", cl::desc("Phased Searcher."));
-
-  cl::opt<bool>
-  UseRRSearch("use-rr-search");
-
-  cl::opt<bool>
-  UseRandomPathSearch("use-random-path");
+  cl::opt<bool> UseInterleavedTailRS("use-interleaved-TRS");
+  cl::opt<bool> UseInterleavedDFS("use-interleaved-DFS");
+  cl::opt<bool> UseInterleavedNURS("use-interleaved-NURS");
+  cl::opt<bool> UseInterleavedMD2UNURS("use-interleaved-MD2U-NURS");
+  cl::opt<bool> UseInterleavedInstCountNURS("use-interleaved-icnt-NURS");
+  cl::opt<bool> UseInterleavedCPInstCountNURS("use-interleaved-cpicnt-NURS");
+  cl::opt<bool> UseInterleavedQueryCostNURS("use-interleaved-query-cost-NURS");
+  cl::opt<bool> UseInterleavedCovNewNURS("use-interleaved-covnew-NURS");
 
   cl::opt<std::string>
   WeightType(
@@ -198,25 +149,6 @@ namespace {
 	cl::init(false));
 
   cl::opt<bool>
-  UseBucketSearcher(
-  	"use-bucket-search",
-	cl::desc("BUCKETS"),
-	cl::init(false));
-
-  cl::opt<bool>
-  UseTailSearcher(
-  	"use-tail-search",
-	cl::desc("TAIL"),
-	cl::init(false));
-
-  cl::opt<bool>
-  UseMarkovSearcher(
-  	"use-markov-search",
-	cl::desc("Markov"),
-	cl::init(false));
-
-
-  cl::opt<bool>
   UsePDFInterleave(
   	"use-pdf-interleave",
 	cl::desc("Use uncovered instruction PDF interleaver"),
@@ -261,6 +193,9 @@ bool UserSearcher::userSearcherRequiresMD2U() {
           UseInterleavedQueryCostNURS);
 }
 
+#define PUSH_SEARCHER_IF_SET(x, y)	if (x) s.push_back(y)
+#define PUSH_ILEAV_IF_SET(x,y)	PUSH_SEARCHER_IF_SET(UseInterleaved##x, y)
+
 #define DEFAULT_PR_SEARCHER	new RandomSearcher()
 #define TAIL_RESCAN_SEARCHER	\
 	new RescanSearcher(new Weight2Prioritizer<TailWeight>(1.0))
@@ -271,79 +206,73 @@ Searcher* UserSearcher::setupInterleavedSearcher(
 	std::vector<Searcher *> s;
 
 	s.push_back(searcher);
+	PUSH_ILEAV_IF_SET(
+		FreshBranch,
+		new PrioritySearcher(
+			new Weight2Prioritizer<FreshBranchWeight>(1),
+			TAIL_RESCAN_SEARCHER,
+			100));
 
-	if (UseInterleavedFreshBranch)
-		s.push_back(
-			new PrioritySearcher(
-				new Weight2Prioritizer<FreshBranchWeight>(1),
-				TAIL_RESCAN_SEARCHER,
-				100));
+	PUSH_ILEAV_IF_SET(Histo, SEARCH_HISTO);
 
-	if (UseInterleavedNURS)
-		s.push_back(
-			new WeightedRandomSearcher(
-				executor, new DepthWeight()));
+	PUSH_ILEAV_IF_SET(
+		NURS,
+		new WeightedRandomSearcher(executor, new DepthWeight()));
 
-	if (UseInterleavedDFS)
-		s.push_back(new DFSSearcher());
+	PUSH_ILEAV_IF_SET(DFS, new DFSSearcher());
+	PUSH_ILEAV_IF_SET(RR, new RRSearcher());
 
-	if (UseInterleavedRR)
-		s.push_back(new RRSearcher());
-
-	if (UseInterleavedConstraint)
-		s.push_back(new RescanSearcher(
+	PUSH_ILEAV_IF_SET(
+		Constraint,
+		new RescanSearcher(
 			new Weight2Prioritizer<ConstraintWeight>(1.0)));
 
-	if (UseInterleavedMinConstraint)
-		s.push_back(new RescanSearcher(
+	PUSH_ILEAV_IF_SET(
+		MinConstraint,
+		new RescanSearcher(
 			new Weight2Prioritizer<ConstraintWeight>(-1.0)));
 
 
-	if (UseInterleavedTailRS)
-		s.push_back(TAIL_RESCAN_SEARCHER);
+	PUSH_ILEAV_IF_SET(TailRS, TAIL_RESCAN_SEARCHER);
 
-	if (UseInterleavedMV)
-		s.push_back(
-			new PrioritySearcher(
-				new Weight2Prioritizer<MarkovPathWeight>(100),
-				DEFAULT_PR_SEARCHER));
+	PUSH_ILEAV_IF_SET(
+		Markov,
+		new PrioritySearcher(
+			new Weight2Prioritizer<MarkovPathWeight>(100),
+			DEFAULT_PR_SEARCHER));
 
-	if (UseInterleavedBS)
-		s.push_back(
-			new PrioritySearcher(
-				new BucketPrioritizer(), DEFAULT_PR_SEARCHER));
-	if (UseInterleavedTS)
-		s.push_back(
-			new PrioritySearcher(
-				new TailPrioritizer(), DEFAULT_PR_SEARCHER));
+	PUSH_ILEAV_IF_SET(
+		Bucket,
+		new PrioritySearcher(
+			new BucketPrioritizer(), DEFAULT_PR_SEARCHER));
 
-	if (UseInterleavedMD2UNURS)
-		s.push_back(
-			new WeightedRandomSearcher(
-				executor, new MinDistToUncoveredWeight()));
+	PUSH_ILEAV_IF_SET(
+		Tail,
+		new PrioritySearcher(
+			new TailPrioritizer(), DEFAULT_PR_SEARCHER));
 
-	if (UseInterleavedCovNewNURS)
-		s.push_back(
-			new WeightedRandomSearcher(
-				executor, new CoveringNewWeight()));
+	PUSH_ILEAV_IF_SET(
+		MD2UNURS,
+		new WeightedRandomSearcher(
+			executor, new MinDistToUncoveredWeight()));
 
-	if (UseInterleavedInstCountNURS)
-		s.push_back(
-			new WeightedRandomSearcher(
-				executor, new InstCountWeight()));
+	PUSH_ILEAV_IF_SET(
+		CovNewNURS,
+		new WeightedRandomSearcher(executor, new CoveringNewWeight()));
 
-	if (UseInterleavedCPInstCountNURS)
-		s.push_back(
-			new WeightedRandomSearcher(
-				executor, new CPInstCountWeight()));
+	PUSH_ILEAV_IF_SET(
+		InstCountNURS,
+		new WeightedRandomSearcher(executor, new InstCountWeight()));
 
-	if (UseInterleavedQueryCostNURS)
-		s.push_back(
-			new WeightedRandomSearcher(
-				executor, new QueryCostWeight()));
+	PUSH_ILEAV_IF_SET(
+		CPInstCountNURS,
+		new WeightedRandomSearcher(executor, new CPInstCountWeight()));
 
-	if (UseInterleavedRS)
-		s.push_back(new RandomSearcher());
+	PUSH_ILEAV_IF_SET(
+		QueryCostNURS,
+		new WeightedRandomSearcher(executor, new QueryCostWeight()));
+
+	PUSH_ILEAV_IF_SET(Random, new RandomSearcher());
 
 	if (s.size() != 1) {
 		if (UsePDFInterleave)
@@ -365,16 +294,18 @@ Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 			new Weight2Prioritizer<FreshBranchWeight>(1),
 			TAIL_RESCAN_SEARCHER,
 			100);
-	} else if (UseMarkovSearcher) {
+	} else if (UseHistoSearch) {
+		searcher = SEARCH_HISTO;
+	} else if (UseMarkovSearch) {
 		searcher = new RescanSearcher(
 			new Weight2Prioritizer<MarkovPathWeight>(100));
-	} else if (UseConstraintSearcher) {
+	} else if (UseConstraintSearch) {
 		searcher =new RescanSearcher(
 			new Weight2Prioritizer<ConstraintWeight>(1.0));
-	} else if (UseTailSearcher) {
+	} else if (UseTailSearch) {
 		searcher = new PrioritySearcher(
 			new TailPrioritizer(), DEFAULT_PR_SEARCHER);
-	} else if (UseBucketSearcher) {
+	} else if (UseBucketSearch) {
 		searcher = new PrioritySearcher(
 			new BucketPrioritizer(), DEFAULT_PR_SEARCHER);
 	} else if (UseCovSearcher) {
