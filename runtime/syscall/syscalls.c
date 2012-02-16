@@ -709,6 +709,34 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_connect:
 		sc_ret_or(sc_new_regs(regfile), -1, 0);
 		break;
+
+	case SYS_timer_delete:
+		klee_warning("phony timer_delete: always ret=success.");
+		sc_ret_v(regfile, 0);
+		break;
+
+	case SYS_timer_settime:
+		klee_warning("phony timer_settime");
+		new_regs = sc_new_regs(regfile);
+		if (GET_SYSRET_S(new_regs) == -1) {
+			sc_ret_v(new_regs, -1);
+			break;
+		}
+		
+		sc_ret_v(new_regs, 0);
+		break;
+
+	case SYS_timer_create:
+		klee_warning("phony timer_create");
+		new_regs = sc_new_regs(regfile);
+		if (GET_SYSRET_S(new_regs) == -1) {
+			sc_ret_v(new_regs, -1);
+			break;
+		}
+		
+		sc_ret_v(new_regs, 0);
+		break;
+
 	case SYS_epoll_create:
 		klee_warning_once("phony epoll_creat call");
 		new_regs = sc_new_regs(regfile);
