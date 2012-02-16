@@ -284,12 +284,20 @@ ref<Expr> OptBuilder::Extract(const ref<Expr>& expr, unsigned off, Expr::Width w
 		ZExtExpr	*ze;
 		ConstantExpr	*ce;
 
+		ce = dyn_cast<ConstantExpr>(shl_expr->getKid(1));
+		if (ce && ce->getWidth() <= 64) {
+			unsigned	max_bit = off+w;
+			unsigned	shl_bits = ce->getZExtValue();
+
+			if (max_bit < shl_bits)
+				return ConstantExpr::create(0, w);
+		}
+
 		// from readelf
 		// ( extract[7:0]
 		//   (bvshl (zext[56] ( sel buf bv33[32])) bv48[64]))
 		// >> works out to 0
 		ze = dyn_cast<ZExtExpr>(shl_expr->getKid(0));
-		ce = dyn_cast<ConstantExpr>(shl_expr->getKid(1));
 		if (ze && ce && ce->getWidth() <= 64) {
 			unsigned int	active_begin, active_w;
 
