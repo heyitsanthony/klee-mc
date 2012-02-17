@@ -609,7 +609,7 @@ void ExecutorVex::markExit(ExecutionState& state, uint8_t v)
 
 void ExecutorVex::logXferRegisters(ExecutionState& state)
 {
-	ObjectState*		state_regctx_os;
+	const ObjectState*	state_regctx_os;
 	unsigned int		reg_sz;
 	uint8_t			*crumb_buf, *crumb_base;
 	struct breadcrumb	*bc;
@@ -633,7 +633,7 @@ void ExecutorVex::logXferRegisters(ExecutionState& state)
 	crumb_buf += reg_sz;
 
 	/* 2. store concrete mask */
-	state_regctx_os = GETREGOBJ(state);
+	state_regctx_os = GETREGOBJRO(state);
 	for (unsigned int i = 0; i < reg_sz; i++) {
 		crumb_buf[i] =(state_regctx_os->isByteConcrete(i))
 			? 0xff

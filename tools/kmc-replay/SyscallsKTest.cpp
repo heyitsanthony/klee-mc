@@ -185,7 +185,8 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 	/* GROSS UGLY HACK. OH WELL. */
 	if (	bc_sc_is_thunk(bcs_crumb)
 		&& xlate_sysnr != SYS_recvmsg
-		&& xlate_sysnr != SYS_recvfrom)
+		&& xlate_sysnr != SYS_recvfrom
+		&& xlate_sysnr != SYS_getcwd)
 	{
 		crumbs->skip(bcs_crumb->bcs_op_c);
 	}
@@ -256,9 +257,10 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 		uint64_t len = sp.getArg(1);
 		if (len > 10) len = 10;
 
-		// feedSyscallOp(sp);
+		feedSyscallOp(sp);
 		fprintf(stderr, "ADDR=%p LEN=%d ARG0=%p. ARG1=%p\n",
 			(void*)addr, (int)len, sp.getArgPtr(0), sp.getArgPtr(1));
+
 		if (addr != sp.getArg(0)) {
 			fprintf(stderr, "LOOOOOOOOOOOOOOOOL\n");
 		}

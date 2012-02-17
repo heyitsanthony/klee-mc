@@ -155,7 +155,7 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 		fi = cast<FCmpInst>(inst);
 		assert (ty_w == 32 || ty_w == 64);
 
-		std::cerr << "[SoftFP] GET NANs working right: ";
+		std::cerr << "[FP] GET NANs working right: ";
 
 		// Ordered comps return false if either operand is NaN.
 		// Unordered comps return true if either operand is NaN.
@@ -248,7 +248,7 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 		Function		*f;
 		unsigned		ty_w, v_w;
 
-		std::cerr << "[SoftFP] worry about rounding modes more\n";
+		std::cerr << "[FP] worry about rounding modes more\n";
 		ty_w  = ty->getPrimitiveSizeInBits();
 		v_w = v0->getType()->getPrimitiveSizeInBits();
 		assert (ty_w == 32 &&  v_w == 64);
