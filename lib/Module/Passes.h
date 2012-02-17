@@ -175,6 +175,8 @@ private:
 			*f_fp64tosi32, *f_fp32tosi64,
 
 			*f_si32tofp32, *f_si32tofp64,
+			*f_si64tofp32, *f_si64tofp64,
+
 
 			*f_fp32add, *f_fp32sub,
 			*f_fp32mul, *f_fp32div, *f_fp32rem,

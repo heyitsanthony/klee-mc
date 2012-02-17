@@ -38,6 +38,10 @@ SoftFPPass::SoftFPPass(KModule* _km, const char* _dir)
 		{"int32_to_float32", &f_si32tofp32},
 		{"int32_to_float64", &f_si32tofp64},
 
+		{"int64_to_float32", &f_si64tofp32},
+		{"int64_to_float64", &f_si64tofp64},
+
+
 
 		{"float32_add", &f_fp32add},
 		{"float64_add", &f_fp64add},
@@ -152,7 +156,7 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 		assert (ty_w == 32 || ty_w == 64);
 
 		std::cerr << "[SoftFP] GET NANs working right: ";
-		inst->dump();
+
 		// Ordered comps return false if either operand is NaN.
 		// Unordered comps return true if either operand is NaN.
 		pred = fi->getPredicate();
@@ -214,13 +218,50 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 		return true;
 	}
 
+	case Instruction::SIToFP: {
+		CallInst		*fp_call;
+		Function		*f;
+		unsigned		ty_w, v_w;
 
-	case Instruction::FPTrunc:
+		ty_w  = ty->getPrimitiveSizeInBits();
+		v_w = v0->getType()->getPrimitiveSizeInBits();
+		assert ((ty_w == 32 || ty_w == 64) &&
+			(v_w == 32 || v_w == 64));
+
+		if (v_w == 32) {
+			f = (ty_w == 32)
+				? f_si32tofp32->function
+				: f_si32tofp64->function;
+		} else {
+			f = (ty_w == 32)
+				? f_si64tofp32->function
+				: f_si64tofp64->function;
+		}
+
+		fp_call = CallInst::Create(f, v0);
+		ReplaceInstWithInst(inst, fp_call);
+		return true;
+	}
+
+	case Instruction::FPTrunc: {
+		CallInst		*fp_call;
+		Function		*f;
+		unsigned		ty_w, v_w;
+
 		std::cerr << "[SoftFP] worry about rounding modes more\n";
+		ty_w  = ty->getPrimitiveSizeInBits();
+		v_w = v0->getType()->getPrimitiveSizeInBits();
+		assert (ty_w == 32 &&  v_w == 64);
+
+		f = f_fptrunc->function;
+		fp_call = CallInst::Create(f, v0);
+		ReplaceInstWithInst(inst, fp_call);
+		return true;
+	}
+
 	case Instruction::FRem:
 	case Instruction::FPToUI:
 	case Instruction::UIToFP:
-	case Instruction::SIToFP:
 		inst->dump();
 		std::cerr << "\n=======FUNC======\n";
 		inst->getParent()->getParent()->dump();
