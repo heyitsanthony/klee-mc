@@ -80,7 +80,6 @@ namespace {
 
   cl::opt<bool> UseInterleavedTailRS("use-interleaved-TRS");
   cl::opt<bool> UseInterleavedDFS("use-interleaved-DFS");
-  cl::opt<bool> UseInterleavedNURS("use-interleaved-NURS");
   cl::opt<bool> UseInterleavedMD2UNURS("use-interleaved-MD2U-NURS");
   cl::opt<bool> UseInterleavedInstCountNURS("use-interleaved-icnt-NURS");
   cl::opt<bool> UseInterleavedCPInstCountNURS("use-interleaved-cpicnt-NURS");
@@ -216,7 +215,7 @@ Searcher* UserSearcher::setupInterleavedSearcher(
 	PUSH_ILEAV_IF_SET(Histo, SEARCH_HISTO);
 
 	PUSH_ILEAV_IF_SET(
-		NURS,
+		NonUniformRandom,
 		new WeightedRandomSearcher(executor, new DepthWeight()));
 
 	PUSH_ILEAV_IF_SET(DFS, new DFSSearcher());

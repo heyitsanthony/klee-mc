@@ -146,12 +146,11 @@ const UpdateList &ObjectState::getUpdates() const
 	static unsigned id = 0;
 	const Array *array;
 
-	array = new Array(
+	array = Array::create(
 		"const_arr" + llvm::utostr(++id),
 		object->mallocKey,
 		&Contents[0],
 		&Contents[0] + Contents.size());
-	array->initRef();
 	updates = UpdateList(array, 0);
 
 	// Apply the remaining (non-constant) writes.

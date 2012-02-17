@@ -1357,7 +1357,7 @@ void Executor::instBranch(ExecutionState& state, KInstruction* ki)
 		if (kbr->hasFoundTrue() == false) {
 			kbr->setFoundTrue();
 			branches.first->setFreshBranch();
-		} else
+		} else if (isTwoWay)
 			branches.first->setOldBranch();
 
 	}
@@ -1365,7 +1365,7 @@ void Executor::instBranch(ExecutionState& state, KInstruction* ki)
 		if (kbr->hasFoundFalse() == false) {
 			kbr->setFoundFalse();
 			branches.second->setFreshBranch();
-		} else
+		} else if (isTwoWay)
 			branches.second->setOldBranch();
 	}
 
@@ -3071,8 +3071,7 @@ ObjectState* Executor::makeSymbolic(
 	ObjectState	*os;
 	Array		*array;
 
-	array = new Array(arrPrefix + llvm::utostr(++id), mo->mallocKey, 0, 0);
-	array->initRef();
+	array = Array::create(arrPrefix + llvm::utostr(++id), mo->mallocKey);
 	os = state.bindMemObj(mo, array);
 	state.addSymbolic(const_cast<MemoryObject*>(mo) /* yuck */, array);
 
@@ -3636,6 +3635,7 @@ void Executor::xferIterInit(
 	KInstruction* ki)
 {
 	iter.v = eval(ki, 0, *state).value;
+	iter.ki = ki;
 	iter.free = state;
 	iter.getval_c = 0;
 	iter.state_c = 0;

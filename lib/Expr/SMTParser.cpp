@@ -228,7 +228,7 @@ void SMTParser::DeclareExpr(std::string name, Expr::Width w)
 		exit(1);
 	}
 
-	Array *arr = new Array(name, w / 8);
+	Array *arr = Array::create(name, w / 8);
 
 	ref<Expr> *kids = new ref<Expr>[w/8];
 	for (unsigned i=0; i < w/8; i++)
@@ -250,8 +250,9 @@ void SMTParser::DeclareArray(const std::string& name)
 	if (arrmap.count(name))
 		return;
 
-	arr = new Array(name, 4096);
-	arr->initRef();
+	arr = Array::get(name);
+	if (arr == NULL)
+		arr = Array::create(name, DEFAULT_ARR_SZ);
 	arr->incRefIfCared();
 	arrmap[name] = arr;
 	AddVar(
@@ -259,7 +260,7 @@ void SMTParser::DeclareArray(const std::string& name)
 		builder->NotOptimized(
 			builder->Read(
 				UpdateList(arr, NULL),
-				builder->Constant(0x321, 32))));
+				builder->Constant(0, 32))));
 }
 
 ExprHandle SMTParser::ParseStore(ref<Expr> arr, ref<Expr> idx, ref<Expr> val)
@@ -279,7 +280,7 @@ ExprHandle SMTParser::ParseStore(ref<Expr> arr, ref<Expr> idx, ref<Expr> val)
 	return builder->NotOptimized(
 		builder->Read(
 			up,
-			builder->Constant(0x321, 32)));
+			builder->Constant(0, 32)));
 }
 
 ExprHandle SMTParser::GetConstExpr(

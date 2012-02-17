@@ -1,9 +1,11 @@
+#include <iostream>
 #include <string.h>
 #include "klee/Expr.h"
 
 using namespace klee;
 
-Array::ArrayHashCons Array::arrayHashCons;
+Array::ArrayHashCons	Array::arrayHashCons;
+Array::name2arr_ty	Array::name2arr;
 
 extern "C" void vc_DeleteExpr(void*);
 unsigned Array::count = 0;
@@ -22,6 +24,41 @@ Array::~Array()
 		delete [] constantValues_u8;
 		constantValues_u8 = NULL;
 	}
+
+	if (name2arr.count(name))
+		name2arr.erase(name);
+}
+
+Array* Array::get(const std::string &_name)
+{
+	name2arr_ty::iterator	it(name2arr.find(_name));
+	Array			*ret;
+
+	if (it == name2arr.end())
+		return NULL;
+
+	ret = it->second;
+	ret->incRefIfCared();
+	return ret;
+}
+
+Array* Array::create(
+	const std::string &_name,
+	MallocKey _mallocKey,
+	const ref<ConstantExpr> *constValBegin,
+	const ref<ConstantExpr> *constValEnd)
+{
+	Array	*ret;
+
+	ret = new Array(_name, _mallocKey, constValBegin, constValEnd);
+	ret->initRef();
+	if (_name.size()) {
+		name2arr.insert(std::make_pair(_name, ret));
+	}
+	ret->incRefIfCared();
+	ret->incRefIfCared();
+
+	return ret;
 }
 
 Array::Array(

@@ -1,3 +1,4 @@
+#include <fstream>
 #include <iostream>
 #include <sstream>
 #include <sys/types.h>
@@ -22,6 +23,12 @@ namespace {
 		"replace-equiv",
 		cl::init(false),
 		cl::desc("Replace large exprs with smaller exprs"));
+
+	cl::opt<bool>
+	WriteEquivProofs(
+		"write-equiv-proofs",
+		cl::init(false),
+		cl::desc("Dump equivalence proofs to proofs directory."));
 }
 
 
@@ -39,14 +46,22 @@ EquivExprBuilder::EquivExprBuilder(Solver& s, ExprBuilder* in_eb)
 , ign_c(0)
 , const_c(0)
 , wide_c(0)
+, hit_c(0)
+, miss_c(0)
+, failed_c(0)
+, blacklist_c(0)
 {
 	mkdir("equivdb", 0700);
-	mkdir("equivdb/1", 0700);	/* constants */
-	for (unsigned i = EE_MIN_NODES; i < EE_MAX_NODES; i++) {
-		std::stringstream ss;
-		ss << "equivdb/" << i;
-		mkdir(ss.str().c_str(), 0700);
-	}
+
+	for (unsigned i = 1; i <= 64; i++)
+		makeBitDir("equivdb", i);
+	makeBitDir("equivdb", 128);
+	makeBitDir("equivdb", 96);
+
+	if (WriteEquivProofs)
+		mkdir("proofs", 0700);
+
+	loadBlacklist("equivdb/blacklist.txt");
 
 	for (unsigned i = 0; i < 8; i++) {
 		for (unsigned j = 0; j < i; j++) {
@@ -57,6 +72,28 @@ EquivExprBuilder::EquivExprBuilder(Solver& s, ExprBuilder* in_eb)
 }
 
 EquivExprBuilder::~EquivExprBuilder(void) { delete eb; }
+
+void EquivExprBuilder::loadBlacklist(const char* fname)
+{
+	std::ifstream	ifs(fname);
+	uint64_t	hash;
+
+	while (ifs >> hash) blacklist.insert(hash);
+}
+
+void EquivExprBuilder::makeBitDir(const char* base, unsigned bits)
+{
+	std::stringstream ss;
+
+	ss << base << '/' << bits;
+	mkdir(ss.str().c_str(), 0700);
+
+	for (unsigned i = EE_MIN_NODES; i < EE_MAX_NODES; i++) {
+		ss.str("");
+		ss << base << '/' << bits << '/' << i;
+		mkdir(ss.str().c_str(), 0700);
+	}
+}
 
 ref<Expr> EquivExprBuilder::lookup(ref<Expr>& e)
 {
@@ -85,7 +122,14 @@ ref<Expr> EquivExprBuilder::lookup(ref<Expr>& e)
 			return e;
 
 		consts.insert(v);
+		depth++;
 		consts_map[getEvalHash(e)] = v;
+		depth--;
+		return e;
+	}
+
+	if (solver.inSolver()) {
+		std::cerr << "[EquivExpr] Skipping replace: In solver!\n";
 		return e;
 	}
 
@@ -96,12 +140,16 @@ ref<Expr> EquivExprBuilder::lookup(ref<Expr>& e)
 		return e;
 	}
 
+	if (lookup_memo.count(e))
+		return lookup_memo.find(e)->second;
+
 	// forcing non-zero depth ensures expr builder won't
 	// recursively call back into lookup when building
 	// intermediate expressions
-	depth = 1;
+	depth++;
 	ret = lookupByEval(e, nodes);
-	depth = 0;
+	lookup_memo[e] = ret;
+	depth--;
 
 	return ret;
 }
@@ -134,12 +182,15 @@ protected:
 		const ConstantExpr		*ce_idx;
 		uni2src_arr_ty::const_iterator	it;
 
+		/* ignore expressions with updates for now */
 		if (re.hasUpdates()) {
 			goodExpr = false;
+			std::cerr << "[EquivExpr] Ignoring updates\n";
 			return Action::skipChildren();
 		}
 		assert (re.hasUpdates() == false);
 
+		/* has array already been assigned? */
 		read_arr = re.getArray();
 		it = uni2src_arr.find(read_arr);
 		if (it != uni2src_arr.end()) {
@@ -149,7 +200,15 @@ protected:
 					re.index));
 		}
 
+		/* no arrays available for assignment? */
+		if (sym_arrays.empty()) {
+			std::cerr << "[EquivExpr] Ran out of syms\n";
+			return Action::changeTo(ConstantExpr::create(0, 8));
+		}
+
 		repl_arr = sym_arrays.back();
+
+		/* quick OOB sanity check */
 		ce_idx = dyn_cast<ConstantExpr>(re.index);
 		if (ce_idx != NULL) {
 			if (ce_idx->getZExtValue() >= repl_arr->mallocKey.size) {
@@ -161,8 +220,9 @@ protected:
 		sym_arrays.pop_back();
 		uni2src_arr[read_arr] = repl_arr;
 
-		return Action::changeTo(ReadExpr::create(
-			UpdateList(repl_arr, NULL), re.index));
+		return Action::changeTo(
+			ReadExpr::create(
+				UpdateList(repl_arr, NULL), re.index));
 	}
 
 private:
@@ -180,11 +240,9 @@ ref<Expr> EquivExprBuilder::tryEquivRewrite(
 	const ref<Expr>& e_klee,
 	const ref<Expr>& e_db)
 {
-	ref<Expr>	e_db_unified;
+	ref<Expr>	e_db_unified, e_klee_w;
 	bool		ok, must_be_true;
-
-	std::cerr << "CHECK EQUIV[fromKLEE]:\n" << e_klee << '\n';
-	std::cerr << "CHECK EQUIV[fromEDB]:\n" << e_db << '\n';
+	int		w_diff;
 
 	if (isa<ConstantExpr>(e_db)) {
 		/* nothing to unify for a constant */
@@ -196,27 +254,47 @@ ref<Expr> EquivExprBuilder::tryEquivRewrite(
 	}
 
 	if (e_db_unified.isNull()) {
-		std::cerr << "CHECK EQUIV[unified]: COULD NOT UNIFY\n";
+		failed_c++;
+		std::cerr
+			<< "CHECK EQUIV[unified]: COULD NOT UNIFY "
+			<< e_db << '\n';
 		return NULL;
 	}
 
-	std::cerr << "CHECK EQUIV[unified]:\n";
-	std::cerr << e_db_unified << '\n';
+
+	e_klee_w = e_klee;
+	w_diff = e_db_unified->getWidth() - e_klee->getWidth();
+	if (w_diff < 0) {
+		e_db_unified = ZExtExpr::create(e_db_unified, e_klee->getWidth());
+	} else if (w_diff > 0) {
+		e_klee_w = ZExtExpr::create(e_klee, e_db_unified->getWidth());
+	}
 
 	ok = solver.mustBeTrue(
-		Query(EqExpr::create(e_klee, e_db_unified)),
+		Query(EqExpr::create(e_klee_w, e_db_unified)),
 		must_be_true);
 	if (ok == false) {
-		std::cerr << "EQUIVFAILED\n";
+		failed_c++;
 		return NULL;
 	}
 
-	if (must_be_true) std::cerr << ">>EQUIV\n"; else std::cerr << "NOTEQUIV<<\n";
+	/* not an exact match */
+	if (!must_be_true) {
+		miss_c++;
+		return NULL;
+	}
 
-	if (must_be_true)
-		return e_db_unified;
+	/* found a better query */
+	hit_c++;
 
-	return NULL;
+	/* equivalent-- dump query that shows lhs != rhs => unsat */
+	if (WriteEquivProofs)
+		SMTPrinter::dump(
+			Query(EqExpr::create(e_klee_w, e_db_unified)),
+			"proofs/proof");
+
+	/* return unified query from cache */
+	return ZExtExpr::create(e_db_unified, e_klee->getWidth());
 }
 
 ref<Expr> EquivExprBuilder::lookupByEval(ref<Expr>& e, unsigned nodes)
@@ -225,53 +303,62 @@ ref<Expr> EquivExprBuilder::lookupByEval(ref<Expr>& e, unsigned nodes)
 	struct stat		st;
 	int			rc;
 	uint64_t		hash;
+	unsigned		w;
 
 	assert (nodes > 1);
 	hash = getEvalHash(e);
 
-	ss << "equivdb/" << nodes << '/' << hash;
-	rc = stat(ss.str().c_str(), &st);
-	if (rc != 0) {
-		/* directory not found.. this is the first one! */
-		Query	q(e);
-		SMTPrinter::dumpToFile(
-			q,
-			ss.str().c_str(),
-			false /* no consts */);
+	w = e->getWidth();
+
+	if (!written_hashes.count(hash)) {
+		ss << "equivdb/" << w << '/' << nodes << '/' << hash;
+		rc = stat(ss.str().c_str(), &st);
+		if (rc != 0) {
+			/* entry not found.. this is the first one! */
+			Query		q(e);
+			SMTPrinter::dumpToFile(
+				q,
+				ss.str().c_str(),
+				false /* no consts */);
+
+		}
+		written_hashes.insert(hash);
 	}
 
 	if (!ReplaceEquivExprs)
 		return e;
 
-	if (solver.inSolver()) {
-		std::cerr << "Skipping replace: In solver!\n";
-		return e;
-	}
-
 	/* seen constant? */
 	if (consts_map.count(hash)) {
-		unsigned	e_w = e->getWidth();
 		ref<Expr>	ce;
 
-		ce = ConstantExpr::create(
-				consts_map.find(hash)->second,
-				64);
-		ce = ZExtExpr::create(ce, e_w);
+		ce = ConstantExpr::create(consts_map.find(hash)->second, 64);
+		ce = ZExtExpr::create(ce, w);
 
-		std::cerr << "MATCHED CONST!!!! DO SOMETHING...\n";
+		std::cerr << "MATCHED CONST!!! "
+			<< "hits=" << hit_c
+			<< ". miss=" << miss_c
+			<< ". failed=" << failed_c
+			<< ". blacklist=" << blacklist_c;
+		std::cerr << '\n';
 		if (!tryEquivRewrite(e, ce).isNull())
 			return ce;
 
 		return e;
 	}
 
+	if (blacklist.count(hash)) {
+		blacklist_c++;
+		return e;
+	}
+
 	/* for smallest matching input-hash, if any */
 	for (unsigned k = 2; k < nodes; k++) {
-		ref<Expr>		ret;
+		ref<Expr>		ret, sat_q;
 		expr::SMTParser*	smtp;
 
 		ss.str("");
-		ss << "equivdb/" << k << '/' << hash;
+		ss << "equivdb/" << w << '/' << k << '/' << hash;
 		rc = stat(ss.str().c_str(), &st);
 		if (rc != 0)
 			continue;
@@ -283,7 +370,22 @@ ref<Expr> EquivExprBuilder::lookupByEval(ref<Expr>& e, unsigned nodes)
 			continue;
 		}
 
-		ret = tryEquivRewrite(e, smtp->satQuery);
+		sat_q = smtp->satQuery;
+
+		/* when written out, expressions must be cast as an equality
+		 * (the SMTPrinter does ( = 0 x) )
+		 * this tries to fix it up into the proper expression */
+		if (isa<EqExpr>(sat_q)) {
+			EqExpr		*ee = cast<EqExpr>(sat_q);
+			ConstantExpr	*ce;
+
+			ce = dyn_cast<ConstantExpr>(ee->getKid(0));
+			if (ce != NULL && ce->isZero()) {
+				sat_q = ee->getKid(1);
+			}
+		}
+
+		ret = tryEquivRewrite(e, sat_q);
 		delete smtp;
 
 		if (!ret.isNull())
@@ -306,7 +408,7 @@ public:
 		uint64_t	cur_eval_hash;
 
 		cur_eval_hash = a.evaluate(e)->hash();
-		if (hash_off == 2)
+		if (hash_off == 1)
 			last_eval_hash = cur_eval_hash;
 
 		hash ^= (cur_eval_hash + hash_off)*(hash_off);

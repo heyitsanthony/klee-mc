@@ -252,7 +252,7 @@ ref<Expr> MMU::replaceReadWithSymbolic(
 	// create a new fresh location, assert it is equal to
 	// concrete value in e and return it.
 
-	array = new Array(
+	array = Array::create(
 		"rrws_arr" + llvm::utostr(++id),
 		MallocKey(Expr::getMinBytesForWidth(e->getWidth())));
 

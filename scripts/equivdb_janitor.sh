@@ -10,6 +10,6 @@ EQUIVDIR="$1"
 olddir=`pwd`
 cd $EQUIVDIR
 mkdir trash
-for a in `find "./" | cut -f3 -d'/' | sort | uniq -c | grep " 1 " | awk ' { print $2 } '`; do
-	mv */$a trash/
+for a in `find "./" | cut -f4 -d'/' | sort | uniq -c | grep " 1 " | awk ' { print $2 } '`; do
+	mv */*/$a trash/
 done

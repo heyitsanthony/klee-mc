@@ -169,6 +169,7 @@ protected:
 	struct XferStateIter
 	{
 		ref<Expr>	v;
+		KInstruction	*ki;
 		ExecutionState* free;
 		llvm::Function*	f;
 		StatePair 	res;

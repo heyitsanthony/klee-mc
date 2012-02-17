@@ -31,6 +31,9 @@ namespace
 
 }
 
+//#define DEFAULT_XCHK_BUILDER	test_builder
+#define DEFAULT_XCHK_BUILDER	oracle_builder
+
 class ExprXChkBuilder : public ExprBuilder
 {
 public:
@@ -69,12 +72,10 @@ public:
 	}
 
 	virtual ref<Expr> Constant(const llvm::APInt &Value)
-	{
-		return test_builder->Constant(Value);
-	}
+	{ return DEFAULT_XCHK_BUILDER->Constant(Value); }
 
 	virtual ref<Expr> NotOptimized(const ref<Expr> &Index)
-	{ return test_builder->NotOptimized(Index); }
+	{ return DEFAULT_XCHK_BUILDER->NotOptimized(Index); }
 
 protected:
 	void xchk(
@@ -249,7 +250,7 @@ public:
 			in_xchker = true;
 			e_test = test_builder->Read(Updates, Index);
 		} else
-			return test_builder->Read(Updates, Index);
+			return DEFAULT_XCHK_BUILDER->Read(Updates, Index);
 
 		e_oracle = oracle_builder->Read(Updates, Index);
 		xchk(e_oracle, e_test);
@@ -266,7 +267,7 @@ public:
 			in_xchker = true;
 			e_test = test_builder->Select(Cond, LHS, RHS);
 		} else
-			return test_builder->Select(Cond, LHS, RHS);
+			return DEFAULT_XCHK_BUILDER->Select(Cond, LHS, RHS);
 
 		e_oracle = oracle_builder->Select(Cond, LHS, RHS);
 		xchk(e_oracle, e_test);
@@ -281,7 +282,7 @@ public:
 			in_xchker = true;
 			e_test = test_builder->Extract(LHS, Offset, W);
 		} else
-			return test_builder->Extract(LHS, Offset, W);
+			return DEFAULT_XCHK_BUILDER->Extract(LHS, Offset, W);
 		e_oracle = oracle_builder->Extract(LHS, Offset, W);
 		xchk(e_oracle, e_test);
 		return e_test;
@@ -294,7 +295,7 @@ public:
 			in_xchker = true;
 			e_test = test_builder->ZExt(LHS, W);
 		} else
-			return test_builder->ZExt(LHS, W);
+			return DEFAULT_XCHK_BUILDER->ZExt(LHS, W);
 		e_oracle = oracle_builder->ZExt(LHS, W);
 		xchk(e_oracle, e_test);
 		return e_test;
@@ -307,7 +308,7 @@ public:
 			in_xchker = true;
 			e_test = test_builder->SExt(LHS, W);
 		} else
-			return test_builder->SExt(LHS, W);
+			return DEFAULT_XCHK_BUILDER->SExt(LHS, W);
 		e_oracle = oracle_builder->SExt(LHS, W);
 		xchk(e_oracle, e_test);
 		return e_test;
@@ -320,7 +321,7 @@ public:
 			in_xchker = true;
 			e_test = test_builder->Not(L);
 		} else
-			return test_builder->Not(L);
+			return DEFAULT_XCHK_BUILDER->Not(L);
 		e_oracle = oracle_builder->Not(L);
 		xchk(e_oracle, e_test);
 		return e_test;
@@ -333,7 +334,7 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS) \
 		in_xchker = true;				\
 		e_test = test_builder->x(LHS, RHS);		\
 	} else							\
-		return test_builder->x(LHS, RHS);		\
+		return DEFAULT_XCHK_BUILDER->x(LHS, RHS);	\
 	e_oracle = oracle_builder->x(LHS, RHS);			\
 	xchk(e_oracle, e_test);					\
 	return e_test;						\

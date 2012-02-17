@@ -211,11 +211,11 @@ UpdateList* UpdateList::fromUpdateStack(
 
 		if (newUpdates == NULL) {
 			const Array *newRoot = Array::uniqueArray(
-			new Array(
-				"simpl_arr"+llvm::utostr(++id),
-				old_root->mallocKey,
-				&constantValues[0],
-				&constantValues[0]+constantValues.size()));
+				Array::create(
+					"simpl_arr"+llvm::utostr(++id),
+					old_root->mallocKey,
+					&constantValues[0],
+					&constantValues[0]+constantValues.size()));
 
 			newUpdates = new UpdateList(newRoot, NULL);
 		}
@@ -232,7 +232,7 @@ UpdateList* UpdateList::fromUpdateStack(
 			return NULL;
 
 		newRoot = Array::uniqueArray(
-			new Array(
+			Array::create(
 				"simpl_arr"+llvm::utostr(++id),
 				old_root->mallocKey,
 				&constantValues[0],

@@ -49,7 +49,8 @@ Solver::Validity ValidatingSolver::computeValidity(const Query &query)
 			<< "oracle = "
 			<< Solver::getValidityStr(oracleValidity) << " vs "
 			<< Solver::getValidityStr(solverValidity) << " = solver.\n";
-		SMTPrinter::print(std::cerr, query);
+		query.print(std::cerr);
+		SMTPrinter::dump(query, "satmismatch");
 	}
 
 	assert ((oracleValidity == solverValidity) &&
@@ -151,6 +152,7 @@ void ValidatingSolver::checkIVSolution(const Query& query, Assignment &a)
 	if (!isSat) {
 		std::cerr << "Solver says yes. Oracle says no. Query:\n";
 		query.print(std::cerr);
+		SMTPrinter::dump(query, "satmismatch");
 	}
 
 	assert(	isSat &&

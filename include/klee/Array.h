@@ -12,31 +12,42 @@
 class ConstantExpr;
 static inline ref<ConstantExpr> createConstantExpr(uint64_t v, Expr::Width w);
 
-class Array {
+class Array
+{
 private:
-  unsigned int chk_val;
-  // hash cons for Array objects
-  typedef std::set<Array*, ArrayLT> ArrayHashCons;
-  static ArrayHashCons arrayHashCons;
-  static unsigned count;
+	unsigned int chk_val;
+	// hash cons for Array objects
+	typedef std::set<Array*, ArrayLT> ArrayHashCons;
+	static ArrayHashCons arrayHashCons;
+	static unsigned count;
 
 public:
-  const std::string name;
-  MallocKey mallocKey;
+	const std::string name;
+	MallocKey mallocKey;
 
-  // FIXME: This does not belong here.
-  mutable void *stpInitialArray;
-  mutable void *btorInitialArray;
-  mutable void *z3InitialArray;
-  mutable unsigned refCount;  // used only for const_arr's
-  static const unsigned refCountDontCare = unsigned(-1);
-  void initRef() const { refCount = 0; }
-  void incRefIfCared() const { if (refCount != refCountDontCare) ++refCount; }
-  void decRefIfCared() const { if (refCount != refCountDontCare) --refCount; if (refCount == 0) delete this; }
-  unsigned int getSize(void) const { return mallocKey.size; }
+	// FIXME: This does not belong here.
+	mutable void *stpInitialArray;
+	mutable void *btorInitialArray;
+	mutable void *z3InitialArray;
+	mutable unsigned refCount;  // used only for const_arr's
+	static const unsigned refCountDontCare = unsigned(-1);
+	void initRef() const { refCount = 0; }
+	void incRefIfCared() const { if (refCount != refCountDontCare) ++refCount; }
+	void decRefIfCared() const
+	{
+		if (refCount != refCountDontCare) --refCount;
+		if (refCount == 0) delete this;
+	}
+	unsigned int getSize(void) const { return mallocKey.size; }
 
-  static Array* uniqueArray(Array* arr);
-  static unsigned getNumArrays(void) { return count; }
+	static Array* get(const std::string &_name);
+	static Array* create(
+		const std::string &_name,
+		MallocKey _mallocKey,
+		const ref<ConstantExpr> *constantValuesBegin = 0,
+		const ref<ConstantExpr> *constantValuesEnd = 0);
+	static Array* uniqueArray(Array* arr);
+	static unsigned getNumArrays(void) { return count; }
 public:
   /// Array - Construct a new array object.
   ///
@@ -45,10 +56,6 @@ public:
   /// when printing expressions. When expressions are printed the output will
   /// not parse correctly since two arrays with the same name cannot be
   /// distinguished once printed.
-  Array(const std::string &_name,
-        MallocKey _mallocKey,
-        const ref<ConstantExpr> *constantValuesBegin = 0,
-        const ref<ConstantExpr> *constantValuesEnd = 0);
   ~Array();
 
   bool isSymbolicArray() const {
@@ -101,12 +108,19 @@ public:
   { return dummyUpdateList; }
 
 private:
-  /// constantValues - The constant initial values for this array, or empty for
-  /// a symbolic array. If non-empty, this size of this array is equivalent to
-  /// the array size.
-  std::vector< ref<ConstantExpr> >	constantValues_expr;
-  uint8_t*	constantValues_u8;
-  unsigned int	constant_count;
-  ref<Expr>	singleValue;
-  UpdateList	dummyUpdateList;
+	Array(	const std::string &_name,
+		MallocKey _mallocKey,
+		const ref<ConstantExpr> *constantValuesBegin = 0,
+		const ref<ConstantExpr> *constantValuesEnd = 0);
+
+	// constantValues - The constant initial values for this array,
+	// or empty for a symbolic array.
+	// If non-empty, this size of this array is equiv to the array size.
+	std::vector< ref<ConstantExpr> >	constantValues_expr;
+	uint8_t*	constantValues_u8;
+	unsigned int	constant_count;
+	ref<Expr>	singleValue;
+	UpdateList	dummyUpdateList;
+	typedef std::map<const std::string, Array*> name2arr_ty;
+	static name2arr_ty name2arr;
 };

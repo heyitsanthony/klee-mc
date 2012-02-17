@@ -3,6 +3,7 @@
 
 #include "klee/Solver.h"
 #include "klee/ExprBuilder.h"
+#include "klee/util/ExprHashMap.h"
 #include <tr1/unordered_map>
 #include <tr1/unordered_set>
 
@@ -104,6 +105,9 @@ return lookup(ret); }
 	DECL_BIN_REF(Sge)
 #undef DECL_BIN_REF
 
+private:
+	void makeBitDir(const char* base, unsigned bits);
+	void loadBlacklist(const char* fname);
 
 protected:
 	ref<Expr> lookup(ref<Expr>& e);
@@ -133,6 +137,19 @@ protected:
 	typedef std::tr1::unordered_map<uint64_t, uint64_t> constmap_ty;
 	constmap_ty			consts_map;
 	constset_ty			consts;
+
+	typedef std::tr1::unordered_set<uint64_t> blacklist_ty;
+	blacklist_ty			blacklist;
+
+	typedef std::tr1::unordered_set<uint64_t> writtenhashes_ty;
+	writtenhashes_ty		written_hashes;
+
+	ExprHashMap<ref<Expr> >		lookup_memo;
+
+	unsigned		hit_c;
+	unsigned		miss_c;
+	unsigned		failed_c;
+	unsigned		blacklist_c;
 };
 
 }
