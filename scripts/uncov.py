@@ -33,7 +33,10 @@ uncov = dict()
 for l in f:
 	l = l.rstrip()
 	v = l.split(' ')
-	(addr_lo, addr_hi) = v[1].split('-')
+	addrs = v[1].split('-')
+	if len(addrs) < 2:
+		continue
+	(addr_lo, addr_hi) = addrs
 	uncov[addr_lo[2:]] = (addr_hi[2:], v[3])
 f.close()
 
