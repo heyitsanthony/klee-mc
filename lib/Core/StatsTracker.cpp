@@ -395,20 +395,17 @@ void StatsTracker::framePopped(ExecutionState &es)
 
 
 void StatsTracker::markBranchVisited(
-	ExecutionState *visitedTrue,
-	ExecutionState *visitedFalse)
+	KBrInstruction	*kbr,
+	ExecutionState	*visitedTrue,
+	ExecutionState	*visitedFalse)
 {
-	unsigned id;
 	uint64_t hasTrue, hasFalse;
 
 	if (!OutputIStats)
 		return;
 
-	id = theStatisticManager->getIndex();
-	hasTrue = theStatisticManager->getIndexedValue(
-		stats::trueBranches, id);
-	hasFalse = theStatisticManager->getIndexedValue(
-		stats::falseBranches, id);
+	hasTrue = kbr->hasFoundTrue();
+	hasFalse = kbr->hasFoundFalse();
 
 	if (visitedTrue && !hasTrue) {
 		visitedTrue->coveredNew = true;
@@ -419,7 +416,8 @@ void StatsTracker::markBranchVisited(
 			--partialBranches;
 		} else
 			++partialBranches;
-		hasTrue = 1;
+
+		hasTrue = true;
 	}
 
 	if (visitedFalse && !hasFalse) {

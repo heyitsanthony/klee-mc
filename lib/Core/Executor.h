@@ -312,6 +312,10 @@ private:
   void instExtractElement(ExecutionState& state, KInstruction* ki);
   void instInsertElement(ExecutionState& state, KInstruction *ki);
   void instBranch(ExecutionState& state, KInstruction* ki);
+  void markBranchVisited(
+  	ExecutionState& state,
+	KInstruction *ki,
+	const StatePair& branches);
   void finalizeBranch(ExecutionState* st, llvm::BranchInst* bi, int branchIdx);
 
   void instCmp(ExecutionState& state, KInstruction* ki);

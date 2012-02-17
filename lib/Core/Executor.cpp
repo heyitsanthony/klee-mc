@@ -1330,29 +1330,22 @@ void Executor::instRet(ExecutionState &state, KInstruction *ki)
 	retFromNested(state, ki);
 }
 
-void Executor::instBranch(ExecutionState& state, KInstruction* ki)
+void Executor::markBranchVisited(
+	ExecutionState& state,
+	KInstruction *ki,
+	const StatePair& branches)
 {
 	KBrInstruction	*kbr;
-	BranchInst	*bi = cast<BranchInst>(ki->getInst());
-	bool		isTwoWay;
+	bool		isTwoWay = (branches.first && branches.second);
 
-	if (bi->isUnconditional()) {
-		state.transferToBasicBlock(
-			bi->getSuccessor(0), bi->getParent());
-		return;
-	}
+	kbr = static_cast<KBrInstruction*>(ki);
 
-	// FIXME: Find a way that we don't have this hidden dependency.
-	assert (bi->getCondition() == bi->getOperand(0) &&
-		"Wrong operand index!");
+	if (statsTracker && state.getCurrentKFunc()->trackCoverage)
+		statsTracker->markBranchVisited(
+			kbr, branches.first, branches.second);
 
-	const Cell &cond = eval(ki, 0, state);
-
-	StatePair branches = fork(state, cond.value, false);
-	isTwoWay = (branches.first && branches.second);
 
 	/* Mark state as representing branch if path never seen before. */
-	kbr = static_cast<KBrInstruction*>(ki);
 	if (branches.first != NULL) {
 		if (kbr->hasFoundTrue() == false) {
 			kbr->setFoundTrue();
@@ -1369,7 +1362,29 @@ void Executor::instBranch(ExecutionState& state, KInstruction* ki)
 			branches.second->setOldBranch();
 	}
 
+
+}
+
+void Executor::instBranch(ExecutionState& state, KInstruction* ki)
+{
+	BranchInst	*bi = cast<BranchInst>(ki->getInst());
+
+	if (bi->isUnconditional()) {
+		state.transferToBasicBlock(
+			bi->getSuccessor(0), bi->getParent());
+		return;
+	}
+
+	// FIXME: Find a way that we don't have this hidden dependency.
+	assert (bi->getCondition() == bi->getOperand(0) &&
+		"Wrong operand index!");
+
+	const Cell &cond = eval(ki, 0, state);
+
+	StatePair branches = fork(state, cond.value, false);
+
 	if (WriteTraces) {
+		bool	isTwoWay = (branches.first && branches.second);
 		if (branches.first) {
 			branches.first->exeTraceMgr.addEvent(
 				new BranchTraceEvent(
@@ -1383,15 +1398,7 @@ void Executor::instBranch(ExecutionState& state, KInstruction* ki)
 		}
 	}
 
-
-
-	// NOTE: There is a hidden dependency here, markBranchVisited
-	// requires that we still be in the context of the branch
-	// instruction (it reuses its statistic id). Should be cleaned
-	// up with convenient instruction specific data.
-	if (statsTracker && state.getCurrentKFunc()->trackCoverage)
-		statsTracker->markBranchVisited(
-			branches.first, branches.second);
+	markBranchVisited(state, ki, branches);
 
 	finalizeBranch(branches.first, bi, 0 /* [0] successor => true/then */);
 	finalizeBranch(branches.second, bi, 1 /* [1] successor => false/else */);

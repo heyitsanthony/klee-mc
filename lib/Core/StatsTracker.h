@@ -28,6 +28,7 @@ class Executor;
 class InstructionInfoTable;
 class InterpreterHandler;
 class KInstruction;
+class KBrInstruction;
 struct StackFrame;
 class KModule;
 class KFunction;
@@ -50,10 +51,10 @@ class StatsTracker
 
     bool updateMinDistToUncovered;
 
-  public:
+public:
     static bool useStatistics();
 
-  private:
+private:
     class TimeAmountFormat;
     void trackInstTime(ExecutionState& es);
     void stepInstUpdateFrame(ExecutionState &es);
@@ -63,7 +64,7 @@ class StatsTracker
     const KModule *km;
     std::set<std::string> excludeNames;
 
-  public:
+public:
     StatsTracker(Executor &_executor,
     		const KModule* km,
 		std::string _objectFilename,
@@ -82,8 +83,10 @@ class StatsTracker
     // called when some side of a branch has been visited. it is
     // imperative that this be called when the statistics index is at
     // the index for the branch itself.
-    void markBranchVisited(ExecutionState *visitedTrue,
-                           ExecutionState *visitedFalse);
+    void markBranchVisited(
+	KBrInstruction* kbr,
+	ExecutionState *visitedTrue,
+	ExecutionState *visitedFalse);
 
     // called when execution is done and stats files should be flushed
     void done();
@@ -101,7 +104,7 @@ class StatsTracker
     uint64_t getLastNewInstruction(void) const
     { return lastCoveredInstruction; }
 
-  private:
+private:
     void computeReachableUncoveredInit(void);
     void computeCallTargets(llvm::Function* f);
     void initMinDistToReturn(
