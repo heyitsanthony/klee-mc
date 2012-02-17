@@ -20,7 +20,7 @@ endif
 
 CFLAGS += -I$(VEXLLVM_ROOT)/src/
 #ACK; OCAML HAS HUGE BSS-- we have to link a bit higher up
-CXXFLAGS += -I$(VEXLLVM_ROOT)/src/ 
+CXXFLAGS += -I$(VEXLLVM_ROOT)/src/  -DGIT_COMMIT=\"$(shell git log | head -n1 | cut -f2 -d' ')\"
 LDFLAGS += -Wl,-Ttext-segment=0x60000000
 LIBS += $(SOLVERLIBS)
 LIBS += -lrt

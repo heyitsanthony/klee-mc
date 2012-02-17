@@ -479,6 +479,7 @@ int main(int argc, char **argv, char **envp)
 	Guest		*gs;
 	Interpreter	*interpreter;
 
+	fprintf(stderr, "[klee-mc] git-commit: " GIT_COMMIT "\n");
 	atexit(llvm_shutdown);
 
 	llvm::InitializeNativeTarget();
