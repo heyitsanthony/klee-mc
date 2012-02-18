@@ -87,11 +87,11 @@ private:
     static const char *validity_to_str(Validity v);
     static TimingSolver* createTimerChain(
 	double timeout,
-	std::string queryPCLogPath,
-	std::string stpQueryPCLogPath);
+	std::string queryPCLogPath = "",
+	std::string stpQueryPCLogPath = "");
     static Solver* createChain(
-    	std::string queryPCLogPath,
-	std::string stpQueryPCLogPath);
+	std::string queryPCLogPath = "",
+	std::string stpQueryPCLogPath = "");
   public:
     SolverImpl *impl;
 

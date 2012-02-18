@@ -76,7 +76,6 @@ public:
 	}
   
 	virtual klee::expr::Decl *ParseTopLevelDecl();
-	bool Solve();
   
 	virtual void SetMaxErrors(unsigned N) { }
 	virtual unsigned GetNumErrors() const { return (queryParsed) ? 0 : 1; }

@@ -10,7 +10,6 @@
 #include "SMTParser.h"
 #include "static/Sugar.h"
 #include "klee/ExprBuilder.h"
-#include "klee/Solver.h"
 #include "klee/Constraints.h"
 #include "expr/Parser.h"
 #include "smtlib_parser.hpp"
@@ -117,60 +116,6 @@ Decl* SMTParser::ParseTopLevelDecl()
 		builder->Not(satQuery),
 		std::vector<ExprHandle>(),
 		std::vector<const Array*>());
-}
-
-static Solver* getSMTParserSolver(void)
-{
-	// FIXME: Support choice of solver.
-	bool	UseDummySolver = false,
-		UseFastCexSolver = true,
-		UseSTPQueryPCLog = true;
-	Solver	*S, *STP;
-
-	S = UseDummySolver ? createDummySolver() : new STPSolver(true);
-	STP = S;
-
-	if (UseSTPQueryPCLog)
-		S = createPCLoggingSolver(S, "stp-queries.pc");
-	if (UseFastCexSolver)
-		S = createFastCexSolver(S);
-	S = createCexCachingSolver(S);
-	S = createCachingSolver(S);
-	S = createIndependentSolver(S);
-	if (0)
-		S = createValidatingSolver(S, STP);
-
-	return S;
-}
-
-bool SMTParser::Solve()
-{
-	bool result;
-	Solver* S  = getSMTParserSolver();
-	Decl *D = this->ParseTopLevelDecl();
-	QueryCommand *QC = dyn_cast<QueryCommand>(D);
-
-	if (QC == NULL)
-		goto error;
-
-	//llvm::cout << "Query " << ":\t";
-
-	assert("FIXME: Support counterexample query commands!");
-	if (!QC->Values.empty() || !QC->Objects.empty())
-		goto error;
-
-	if (!S->mustBeTrue(
-		Query(ConstraintManager(QC->Constraints), QC->Query), result))
-		goto error;
-
-	//std::cout << (result ? "VALID" : "INVALID") << "\n";
-	return result;
-
-error:
-	std::cout << "FAIL";
-	exit(1);
-
-	return false;
 }
 
 extern char* smtlibtext;
