@@ -40,13 +40,13 @@ public:
 	}
 	unsigned int getSize(void) const { return mallocKey.size; }
 
-	static Array* get(const std::string &_name);
-	static Array* create(
+	static ref<Array> get(const std::string &_name);
+	static ref<Array> create(
 		const std::string &_name,
 		MallocKey _mallocKey,
 		const ref<ConstantExpr> *constantValuesBegin = 0,
 		const ref<ConstantExpr> *constantValuesEnd = 0);
-	static Array* uniqueArray(Array* arr);
+	static ref<Array> uniqueArray(Array* arr);
 	static unsigned getNumArrays(void) { return count; }
 public:
   /// Array - Construct a new array object.

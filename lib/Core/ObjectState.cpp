@@ -100,7 +100,7 @@ ObjectState::~ObjectState()
 const UpdateList &ObjectState::getUpdates() const
 {
 	// Constant arrays are created lazily.
-	if (updates.root != NULL)
+	if (updates.getRoot().isNull() == false)
 		return updates;
 
 	// Collect the list of writes, with the oldest writes first.
@@ -144,7 +144,7 @@ const UpdateList &ObjectState::getUpdates() const
 	// Start a new update list.
 	// FIXME: Leaked.
 	static unsigned id = 0;
-	const Array *array;
+	ref<Array>	array;
 
 	array = Array::create(
 		"const_arr" + llvm::utostr(++id),
@@ -609,7 +609,7 @@ void ObjectState::print(unsigned int begin, int end) const
   unsigned int real_end;
   std::cerr << "-- ObjectState --\n";
   std::cerr << "\tMemoryObject ID: " << object->id << "\n";
-  std::cerr << "\tRoot Object: " << updates.root << "\n";
+  std::cerr << "\tRoot Object: " << updates.getRoot().get() << "\n";
   std::cerr << "\tSize: " << size << "\n";
 
   std::cerr << "\tBytes:\n";

@@ -213,7 +213,8 @@ BtorExp* BoolectorSolverImpl::klee2btor(const ref<Expr>& e)
 		ReadExpr *re = cast<ReadExpr>(e);
 		ret = boolector_read(
 			btor,
-			getArrayForUpdate(re->updates.root, re->updates.head),
+			getArrayForUpdate(
+				re->updates.getRoot().get(), re->updates.head),
 			klee2btor(re->index));
 		goto done;
 	}

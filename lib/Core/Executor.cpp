@@ -3076,13 +3076,13 @@ ObjectState* Executor::makeSymbolic(
 {
 	static unsigned	id = 0;
 	ObjectState	*os;
-	Array		*array;
+	ref<Array>	array;
 
 	array = Array::create(arrPrefix + llvm::utostr(++id), mo->mallocKey);
-	os = state.bindMemObj(mo, array);
-	state.addSymbolic(const_cast<MemoryObject*>(mo) /* yuck */, array);
+	os = state.bindMemObj(mo, array.get());
+	state.addSymbolic(const_cast<MemoryObject*>(mo) /* yuck */, array.get());
 
-	addSymbolicToSeeds(state, mo, array);
+	addSymbolicToSeeds(state, mo, array.get());
 
 	return os;
 }
@@ -3301,7 +3301,7 @@ void Executor::doImpliedValueConcretization(
 
 		if (off == NULL) continue;
 
-		mo = state.findMemoryObject(re->updates.root);
+		mo = state.findMemoryObject(re->updates.getRoot().get());
 		if (mo == NULL)
 			continue;
 

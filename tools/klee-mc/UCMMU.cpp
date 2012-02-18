@@ -56,7 +56,7 @@ RepairVisitor::Action RepairVisitor::visitExpr(const Expr &e)
 	ref<Expr>		real_ptr;
 	const ReadExpr		*re;
 	unsigned		re_idx;
-	const Array		*re_arr;
+	const ref<Array>	re_arr;
 	int			pt_idx;
 
 	if (aborted)
@@ -67,9 +67,9 @@ RepairVisitor::Action RepairVisitor::visitExpr(const Expr &e)
 		return Action::doChildren();
 
 	re_arr = re->getArray();
-	if (re_arr == exe_uc.getRootArray()) {
+	if (*re_arr == *exe_uc.getRootArray()) {
 		pt_idx = getRootPtrIdx(re);
-	} else if (re_arr == exe_uc.getPtrTabArray()) {
+	} else if (*re_arr == *exe_uc.getPtrTabArray()) {
 		pt_idx = exe_uc.sym2idx(&e);
 	} else {
 		untracked.insert(ref<Expr>(static_cast<Expr*>((ReadExpr*)re)));

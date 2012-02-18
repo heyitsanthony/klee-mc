@@ -524,14 +524,15 @@ DeclResult ParserImpl::ParseArrayDecl() {
 
   // FIXME: Array should take domain and range.
   const Identifier *Label = GetOrCreateIdentifier(Name);
-  Array *Root;
+  ref<Array> Root;
   if (!Values.empty())
     Root = Array::create(Label->Name, MallocKey(Size.get()),
                      &Values[0], &Values[0] + Values.size());
   else
     Root = Array::create(Label->Name, Size.get());
-  ArrayDecl *AD = new ArrayDecl(Label, Size.get(),
-                                DomainType.get(), RangeType.get(), Root);
+  ArrayDecl *AD = new ArrayDecl(
+	Label, Size.get(),
+	DomainType.get(), RangeType.get(), Root.get());
 
   ArraySymTab.insert(std::make_pair(Label, AD));
 

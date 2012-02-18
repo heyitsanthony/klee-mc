@@ -15,7 +15,7 @@ ExprVisitor::Action ExprEvaluator::evalRead(const UpdateList &ul,
                                             unsigned index) {
   for (const UpdateNode *un=ul.head; un; un=un->next) {
     ref<Expr> ui = visit(un->index);
-    
+
     if (ConstantExpr *CE = dyn_cast<ConstantExpr>(ui)) {
       if (CE->getZExtValue() == index)
         return Action::changeTo(visit(un->value));
@@ -23,17 +23,17 @@ ExprVisitor::Action ExprEvaluator::evalRead(const UpdateList &ul,
       // update index is unknown, so may or may not be index, we
       // cannot guarantee value. we can rewrite to read at this
       // version though (mostly for debugging).
-      
-      return Action::changeTo(ReadExpr::create(UpdateList(ul.root, un), 
-                                               ConstantExpr::alloc(index, 
-                                                                   ul.root->getDomain())));
+
+      return Action::changeTo(ReadExpr::create(UpdateList(ul.getRoot(), un),
+                                               ConstantExpr::alloc(index,
+                                                                   ul.getRoot()->getDomain())));
     }
   }
-  
-  if (ul.root->isConstantArray() && index < ul.root->mallocKey.size)
-    return Action::changeTo(ul.root->getValue(index));
 
-  return Action::changeTo(getInitialValue(*ul.root, index));
+  if (ul.getRoot()->isConstantArray() && index < ul.getRoot()->mallocKey.size)
+    return Action::changeTo(ul.getRoot()->getValue(index));
+
+  return Action::changeTo(getInitialValue(*ul.getRoot(), index));
 }
 
 ExprVisitor::Action ExprEvaluator::visitExpr(const Expr &e) {
@@ -60,7 +60,7 @@ ExprVisitor::Action ExprEvaluator::visitExpr(const Expr &e) {
 
 ExprVisitor::Action ExprEvaluator::visitRead(const ReadExpr &re) {
   ref<Expr> v = visit(re.index);
-  
+
   if (ConstantExpr *CE = dyn_cast<ConstantExpr>(v)) {
     return evalRead(re.updates, CE->getZExtValue());
   } else {
@@ -89,15 +89,15 @@ ExprVisitor::Action ExprEvaluator::protectedDivOperation(const BinaryExpr &e) {
   }
 }
 
-ExprVisitor::Action ExprEvaluator::visitUDiv(const UDivExpr &e) { 
-  return protectedDivOperation(e); 
+ExprVisitor::Action ExprEvaluator::visitUDiv(const UDivExpr &e) {
+  return protectedDivOperation(e);
 }
-ExprVisitor::Action ExprEvaluator::visitSDiv(const SDivExpr &e) { 
-  return protectedDivOperation(e); 
+ExprVisitor::Action ExprEvaluator::visitSDiv(const SDivExpr &e) {
+  return protectedDivOperation(e);
 }
-ExprVisitor::Action ExprEvaluator::visitURem(const URemExpr &e) { 
-  return protectedDivOperation(e); 
+ExprVisitor::Action ExprEvaluator::visitURem(const URemExpr &e) {
+  return protectedDivOperation(e);
 }
-ExprVisitor::Action ExprEvaluator::visitSRem(const SRemExpr &e) { 
-  return protectedDivOperation(e); 
+ExprVisitor::Action ExprEvaluator::visitSRem(const SRemExpr &e) {
+  return protectedDivOperation(e);
 }

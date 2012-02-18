@@ -94,10 +94,10 @@ public:
     ExprUtil::findReads(e, /* visitUpdates= */ true, reads);
     for (unsigned i = 0; i != reads.size(); ++i) {
       ReadExpr *re = reads[i].get();
-      const Array *array = re->updates.root;
+      const Array *array = re->updates.getRoot().get();
 
       // Reads of a constant array don't alias.
-      if (re->updates.root->isConstantArray() &&
+      if (re->updates.getRoot().get()->isConstantArray() &&
           !re->updates.head)
         continue;
 

@@ -237,7 +237,7 @@ ref<Expr> MMU::replaceReadWithSymbolic(
 	ExecutionState &state, ref<Expr> e)
 {
 	static unsigned	id;
-	const Array	*array;
+	ref<Array>	array;
 	unsigned	n;
 
 	n = MakeConcreteSymbolic;
@@ -256,7 +256,7 @@ ref<Expr> MMU::replaceReadWithSymbolic(
 		"rrws_arr" + llvm::utostr(++id),
 		MallocKey(Expr::getMinBytesForWidth(e->getWidth())));
 
-	ref<Expr> res = Expr::createTempRead(array, e->getWidth());
+	ref<Expr> res = Expr::createTempRead(array.get(), e->getWidth());
 	ref<Expr> eq = NotOptimizedExpr::create(EqExpr::create(e, res));
 	std::cerr << "Making symbolic: " << eq << "\n";
 	state.addConstraint(eq);

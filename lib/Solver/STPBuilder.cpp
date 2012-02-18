@@ -492,9 +492,10 @@ ExprHandle STPBuilder::constructActual(ref<Expr> e, int *width_out) {
   case Expr::Read: {
     ReadExpr *re = cast<ReadExpr>(e);
     *width_out = 8;
-    return vc_readExpr(vc,
-                       getArrayForUpdate(re->updates.root, re->updates.head),
-                       construct(re->index, 0));
+    return vc_readExpr(
+      vc,
+      getArrayForUpdate(re->updates.getRoot().get(), re->updates.head),
+      construct(re->index, 0));
   }
 
   case Expr::Select: {

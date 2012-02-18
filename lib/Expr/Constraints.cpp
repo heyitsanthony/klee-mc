@@ -97,8 +97,8 @@ ExprVisitor::Action ExprReplaceVisitor2::visitRead(const ReadExpr &re)
 
 	// fast path: no updates, reading from constant array
 	// with a single value occupying all indices in the array
-	if (!ul.head && ul.root->isSingleValue())
-		return Action::changeTo(ul.root->getValue(0));
+	if (!ul.head && ul.getRoot()->isSingleValue())
+		return Action::changeTo(ul.getRoot()->getValue(0));
 
 	ref<Expr> readIndex = isa<ConstantExpr>(re.index)
 		? re.index
@@ -106,11 +106,11 @@ ExprVisitor::Action ExprReplaceVisitor2::visitRead(const ReadExpr &re)
 
 	// simplify case of a known read from a constant array
 	if (	isa<ConstantExpr>(readIndex) &&
-		!ul.head && ul.root->isConstantArray())
+		!ul.head && ul.getRoot()->isConstantArray())
 	{
 		uint64_t idx = cast<ConstantExpr>(readIndex)->getZExtValue();
-		if (idx < ul.root->mallocKey.size)
-			return Action::changeTo(ul.root->getValue(idx));
+		if (idx < ul.getRoot()->mallocKey.size)
+			return Action::changeTo(ul.getRoot()->getValue(idx));
 
 		klee_warning_once(
 			0,
@@ -148,7 +148,7 @@ ExprVisitor::Action ExprReplaceVisitor2::visitRead(const ReadExpr &re)
 		ref<Expr>	new_re;
 
 		newUpdates = UpdateList::fromUpdateStack(
-			re.updates.root, updateStack);
+			re.updates.getRoot().get(), updateStack);
 		if (newUpdates == NULL)
 			return Action::doChildren();
 

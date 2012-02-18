@@ -86,7 +86,7 @@ T ExprRangeEvaluator<T>::evalRead(const UpdateList &ul,
     }
   }
   
-  return res.set_union(getInitialReadRange(*ul.root, index));
+  return res.set_union(getInitialReadRange(*ul.getRoot().get(), index));
 }
 
 template<class T>

@@ -163,7 +163,7 @@ private:
 		scan1(ep->getKid(i));
 
 	if (const ReadExpr *re = dyn_cast<ReadExpr>(e)) {
-		usedArrays.insert(re->updates.root);
+		usedArrays.insert(re->updates.getRoot().get());
 		scanUpdate(re->updates.head);
 	}
   }
@@ -175,7 +175,7 @@ private:
     if (!head) {
       // FIXME: We need to do something (assert, mangle, etc.) so that printing
       // distinct arrays with the same name doesn't fail.
-      PC << updates.root->name;
+      PC << updates.getRoot()->name;
       return;
     }
 
@@ -225,7 +225,7 @@ private:
     if (openedList)
       PC << ']';
 
-    PC << " @ " << updates.root->name;
+    PC << " @ " << updates.getRoot()->name;
   }
 
   void printWidth(PrintContext &PC, ref<Expr> e) {

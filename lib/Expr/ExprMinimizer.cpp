@@ -121,7 +121,8 @@ ExprVisitor::Action ExprMinimizer::handlePostReadExpr(const ReadExpr* re)
 
 	/* make update list from update stack */
 	newUpdates = UpdateList::fromUpdateStack(
-		re->updates.root, updateStack);
+		re->updates.getRoot().get(),
+		updateStack);
 
 	ref<Expr> new_re;
 	

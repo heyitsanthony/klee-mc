@@ -467,15 +467,9 @@ class Array;
 class UpdateList
 {
 	friend class ReadExpr; // for default constructor
-
 public:
-	const Array *root;
-
-	/// pointer to the most recent update node
-	const UpdateNode *head;
-
-public:
-	UpdateList(const Array *_root, const UpdateNode *_head);
+	UpdateList(const ref<Array>& _root, const UpdateNode *_head);
+	UpdateList(const Array* _root, const UpdateNode *_head);
 	UpdateList(const UpdateList &b);
 	~UpdateList();
 
@@ -493,8 +487,15 @@ public:
 		const Array* arr,
 		std::stack<std::pair<ref<Expr>, ref<Expr> > >& updateStack);
 
+	const ref<Array> getRoot(void) const { return root; }
+
 private:
 	void removeDups(const ref<Expr>& index);
+
+	const ref<Array>	root;
+public:
+	/// pointer to the most recent update node
+	const UpdateNode *head;
 };
 
 
@@ -512,7 +513,7 @@ public:
   UpdateList updates;
   ref<Expr> index;
 
-  const Array* getArray(void) const { return updates.root; }
+  const ref<Array> getArray(void) const { return updates.root; }
   bool hasUpdates(void) const { return updates.head != NULL; }
 
   static ref<Expr> alloc(const UpdateList &updates, const ref<Expr> &index);

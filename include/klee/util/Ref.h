@@ -24,7 +24,7 @@ namespace klee {
 
 template<class T>
 class ref {
-  T *ptr;
+  mutable T *ptr;
 
 public:
   // default constructor: create a NULL reference
@@ -32,15 +32,15 @@ public:
   ~ref () { dec (); }
 
 private:
-  void inc() {
+  void inc() const {
     if (ptr)
       ++ptr->refCount;
   }
-  
-  void dec() {
+
+  void dec() const {
     if (ptr && --ptr->refCount == 0)
       delete ptr;
-  }  
+  }
 
 public:
   template<class U> friend class ref;
@@ -55,19 +55,19 @@ public:
   ref(T *p) : ptr(p) {
     inc();
   }
-  
+
   // normal copy constructor
   ref(const ref<T> &r) : ptr(r.ptr) {
     inc();
   }
-  
+
   // conversion constructor
   template<class U>
   ref (const ref<U> &r) {
     ptr = r.ptr;
     inc();
   }
-  
+
   // pointer operations
   T *get () const {
     return ptr;
@@ -79,17 +79,26 @@ public:
     dec();
     ptr = r.ptr;
     inc();
-    
+
     return *this;
   }
-  
+
   template<class U> ref<T> &operator= (const ref<U> &r) {
     dec();
     ptr = r.ptr;
     inc();
-    
+
     return *this;
   }
+
+  const ref<T> &operator= (const ref<T> &r) const {
+    dec();
+    ptr = r.ptr;
+    inc();
+
+    return *this;
+  }
+
 
   T& operator*() const {
     return *ptr;
@@ -136,7 +145,7 @@ struct simplify_type<const ::klee::ref<T> > {
   }
 };
 
-template<typename T> 
+template<typename T>
 struct simplify_type< ::klee::ref<T> >
   : public simplify_type<const ::klee::ref<T> > {};
 }

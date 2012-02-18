@@ -353,7 +353,7 @@ ref<Expr> OptBuilder::Read(const UpdateList &ul, const ref<Expr>& index)
 
 	// sanity check for OoB read
 	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(index)) {
-		assert (CE->getZExtValue() < ul.root->mallocKey.size);
+		assert (CE->getZExtValue() < ul.getRoot()->mallocKey.size);
 	}
 
 	// XXX this doesn't really belong here... there are basically two
@@ -1333,7 +1333,7 @@ static ref<Expr> TryConstArrayOpt(
 	const ref<ConstantExpr> &cl,
 	ReadExpr *rd)
 {
-	if (rd->updates.root->isSymbolicArray() || rd->updates.getSize())
+	if (rd->updates.getRoot()->isSymbolicArray() || rd->updates.getSize())
 		return EqExpr_create(cl, rd);
 
 	// Number of positions in the array that contain value ct.
@@ -1342,8 +1342,8 @@ static ref<Expr> TryConstArrayOpt(
 	// for now, just assume standard "flushing" of a concrete array,
 	// where the concrete array has one update for each index, in order
 	ref<Expr> res = ConstantExpr::alloc(0, Expr::Bool);
-	for (unsigned i = 0, e = rd->updates.root->mallocKey.size; i != e; ++i){
-		if (cl != rd->updates.root->getValue(i))
+	for (unsigned i = 0, e = rd->updates.getRoot()->mallocKey.size; i != e; ++i){
+		if (cl != rd->updates.getRoot()->getValue(i))
 			continue;
 
 		// Arbitrary maximum on the size of disjunction.

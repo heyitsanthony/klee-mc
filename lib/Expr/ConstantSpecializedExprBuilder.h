@@ -39,9 +39,9 @@ public:
 			UN = UN->next;
 
 		if (ConstantExpr *CE = dyn_cast<ConstantExpr>(Index))
-			return Builder.Read(UpdateList(Updates.root, UN), CE);
+			return Builder.Read(UpdateList(Updates.getRoot(), UN), CE);
 
-		return Builder.Read(UpdateList(Updates.root, UN), Index);
+		return Builder.Read(UpdateList(Updates.getRoot(), UN), Index);
 	}
 
 	virtual ref<Expr> Select(

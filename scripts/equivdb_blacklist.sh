@@ -5,7 +5,7 @@ if [ ! -d "$1" ]; then
 	exit 1
 fi
 
-./scripts/equivdb_list_hashes.sh "$1" | tail -n50 | \
+./scripts/equivdb_list_hashes.sh "$1" | tail -n200 | \
 while read a; do 
 	NUMELEMS=`echo $a | cut -f1 -d' '`
 	if [ "$NUMELEMS" -gt 5 ]; then
@@ -13,5 +13,5 @@ while read a; do
 	fi
 done
 
-uniq "$1"/blacklist.txt >"$1"/blacklist.uniq.txt
+sort "$1"/blacklist.txt | uniq >"$1"/blacklist.uniq.txt
 mv "$1"/blacklist.uniq.txt "$1"/blacklist.txt

@@ -35,7 +35,7 @@ bool StringMerger::isArrCmp(
   arr_idx = idx_expr->getLimitedValue(MERGE_STRMAX);
   if (arr_idx == MERGE_STRMAX) return false;
 
-  arrName = re->updates.root->name;
+  arrName = re->updates.getRoot()->name;
   cmp_val = cmp_expr->getLimitedValue(0xffff);  /* 8 bit cmp, should not OF */
 
   return true;
@@ -149,7 +149,7 @@ void Executor::mergeStringStates(ref<Expr>& readExpr)
   idx = ce_idx->getLimitedValue(MERGE_STRMAX);
   if (idx <= 1 || idx == MERGE_STRMAX) return;
   
-  arr_name = re->updates.root->name;
+  arr_name = re->updates.getRoot()->name;
 
   ExeStateSet ss;
   stateManager->getArrayStates(idx, arr_name, ss);

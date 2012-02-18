@@ -261,7 +261,7 @@ ConstraintManager getBoundConstraints(
 			UltExpr::create(
 				re->index,
 				ConstantExpr::alloc(
-					re->updates.root->mallocKey.size,
+					re->updates.getRoot()->mallocKey.size,
 					32)));
 	}
 

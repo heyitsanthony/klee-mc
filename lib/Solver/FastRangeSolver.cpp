@@ -1162,7 +1162,7 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 
 		case Expr::Read: {
 			ref<ReadExpr> re = cast<ReadExpr>(e);
-			const Array *arr = re->updates.root;
+			const Array *arr = re->updates.getRoot().get();
 
 			ValueSet &offsetRange = getRange(re->index);
 
@@ -1327,7 +1327,7 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 
 			int stride = 0;
 			if (const ReadExpr *re = isOrderedRead(ce, stride)) {
-				std::set<ref<Expr> > &reads = orderedReads[re->updates.root];
+				std::set<ref<Expr> > &reads = orderedReads[re->updates.getRoot().get()];
 
 				// check whether this is a subexpression in an ordered read we've already
 				// registered
@@ -1336,7 +1336,7 @@ bool RangeSimplifier::processExprInternal(ref<Expr> e, unsigned depth)
 					ref<Expr> r = *rit;
 					int stride2 = 0;
 					const ReadExpr *re2 = isOrderedRead(r, stride2);
-					if (re->updates.root == re2->updates.root && re->index == re2->index
+					if (re->updates.getRoot().get() == re2->updates.getRoot().get() && re->index == re2->index
 							&& stride == stride2 && ce->getWidth() <= r->getWidth())
 						break;
 				}

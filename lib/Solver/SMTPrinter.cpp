@@ -122,7 +122,7 @@ void ArrayFinder::visitExprPost(const Expr* e)
 		return;
 
 	re = static_cast<const ReadExpr*>(e);
-	upp = update_pair(re->updates.root, re->updates.head);
+	upp = update_pair(re->updates.getRoot().get(), re->updates.head);
 
 	if (cur_let_exprset.insert(upp).second == true) {
 		cur_let_exprlog->push_back(upp);
@@ -149,7 +149,7 @@ ExprConstVisitor::Action ArrayFinder::visitExpr(const Expr* e)
 	ref<Expr>	e_ref(const_cast<Expr*>(e));
 	re = cast<ReadExpr>(e_ref);
 
-	upp = update_pair(re->updates.root, re->updates.head);
+	upp = update_pair(re->updates.getRoot().get(), re->updates.head);
 	it = bindings.find(upp);
 	if (it != bindings.end()) {
 		// seen it elsewhere
@@ -169,7 +169,7 @@ ExprConstVisitor::Action ArrayFinder::visitExpr(const Expr* e)
 	}
 
 	/* record expression */
-	arr->getInitialArray(re->updates.root);
+	arr->getInitialArray(re->updates.getRoot().get());
 
 	let_expr = LetExpr::alloc(e_ref, ConstantExpr::create(0, 1));
 	bindings.insert(std::make_pair(upp, let_expr));
@@ -240,7 +240,7 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr* e)
 			writeArrayForUpdate(os, re);
 		} else {
 			writeExpandedArrayForUpdate(
-				os, re->updates.root, re->updates.head);
+				os, re->updates.getRoot().get(), re->updates.head);
 		}
 		os << " ";
 		expr2os(re->index, os);
@@ -510,7 +510,7 @@ bool SMTPrinter::tryPrintSimpleEqConstraint(const ref<Expr>& e) const
 
 	os << "(= bv" << ce->getZExtValue() << "[8] "
 		<< "(select "
-			<< re->updates.root->name <<
+			<< re->updates.getRoot().get()->name <<
 			" bv" << idx->getZExtValue() << "[32]))\n";
 	return true;
 }
@@ -605,7 +605,7 @@ void SMTPrinter::writeArrayForUpdate(
 	const LetExpr*	le;
 
 	it = arr->a_updates.find(
-		update_pair(re->updates.root, re->updates.head));
+		update_pair(re->updates.getRoot().get(), re->updates.head));
 	if (it == arr->a_updates.end()) {
 		assert (0 == 1 && "Expected update node to exist!");
 		return;

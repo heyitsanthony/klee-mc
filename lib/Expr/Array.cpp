@@ -29,7 +29,7 @@ Array::~Array()
 		name2arr.erase(name);
 }
 
-Array* Array::get(const std::string &_name)
+ref<Array> Array::get(const std::string &_name)
 {
 	name2arr_ty::iterator	it(name2arr.find(_name));
 	Array			*ret;
@@ -42,7 +42,7 @@ Array* Array::get(const std::string &_name)
 	return ret;
 }
 
-Array* Array::create(
+ref<Array> Array::create(
 	const std::string &_name,
 	MallocKey _mallocKey,
 	const ref<ConstantExpr> *constValBegin,
@@ -169,14 +169,15 @@ void Array::print(std::ostream& os) const
 	os << '\n';
 }
 
-Array* Array::uniqueArray(Array* arr)
+ref<Array> Array::uniqueArray(Array* arr)
 {
 	std::pair<ArrayHashCons::iterator,bool> ret(arrayHashCons.insert(arr));
-	if (ret.second)
+	if (ret.second) {
+		arr->incRefIfCared();
 		return arr;
+	}
 
 	assert (*arr == *(*ret.first));
-	delete arr;
 	return *ret.first;
 }
 

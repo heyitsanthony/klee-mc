@@ -228,7 +228,7 @@ void SMTParser::DeclareExpr(std::string name, Expr::Width w)
 		exit(1);
 	}
 
-	Array *arr = Array::create(name, w / 8);
+	ref<Array> arr = Array::create(name, w / 8);
 
 	ref<Expr> *kids = new ref<Expr>[w/8];
 	for (unsigned i=0; i < w/8; i++)
@@ -245,16 +245,16 @@ void SMTParser::DeclareExpr(std::string name, Expr::Width w)
 #define DEFAULT_ARR_SZ	4096
 void SMTParser::DeclareArray(const std::string& name)
 {
-	Array	*arr;
+	ref<Array>	arr;
 
 	if (arrmap.count(name))
 		return;
 
 	arr = Array::get(name);
-	if (arr == NULL)
+	if (arr.isNull())
 		arr = Array::create(name, DEFAULT_ARR_SZ);
 	arr->incRefIfCared();
-	arrmap[name] = arr;
+	arrmap[name] = arr.get();
 	AddVar(
 		name,
 		builder->NotOptimized(

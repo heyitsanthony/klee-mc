@@ -191,7 +191,7 @@ protected:
 		assert (re.hasUpdates() == false);
 
 		/* has array already been assigned? */
-		read_arr = re.getArray();
+		read_arr = re.getArray().get();
 		it = uni2src_arr.find(read_arr);
 		if (it != uni2src_arr.end()) {
 			return Action::changeTo(

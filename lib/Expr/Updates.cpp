@@ -66,11 +66,20 @@ unsigned UpdateNode::computeHash()
 	return hashValue;
 }
 
-UpdateList::UpdateList(const Array *_root, const UpdateNode *_head)
+/* XXX should I worry about reference counting now that I have ref<>'s? */
+UpdateList::UpdateList(const ref<Array>& _root, const UpdateNode *_head)
 : root(_root)
 , head(_head)
 {
-	if (root != NULL) root->incRefIfCared();
+	if (!root.isNull()) root->incRefIfCared();
+	if (head != NULL) ++head->refCount;
+}
+
+UpdateList::UpdateList(const Array* _root, const UpdateNode *_head)
+: root(const_cast<Array*>(_root))
+, head(_head)
+{
+	if (!root.isNull()) root->incRefIfCared();
 	if (head != NULL) ++head->refCount;
 }
 
@@ -78,7 +87,7 @@ UpdateList::UpdateList(const UpdateList &b)
 : root(b.root)
 , head(b.head)
 {
-	if (root != NULL) root->incRefIfCared();
+	if (!root.isNull()) root->incRefIfCared();
 	if (head != NULL) ++head->refCount;
 }
 
@@ -93,7 +102,7 @@ UpdateList::~UpdateList()
 		head = n;
 	}
 
-	if (root != NULL)
+	if (!root.isNull())
 		root->decRefIfCared();
 }
 
@@ -109,9 +118,9 @@ UpdateList &UpdateList::operator=(const UpdateList &b)
 		head = n;
 	}
 
-	if (b.root) b.root->incRefIfCared();
-	if (root) root->decRefIfCared();
-	root = b.root;
+	if (!b.root.isNull()) b.root->incRefIfCared();
+	if (!root.isNull()) root->decRefIfCared();
+	root = const_cast<Array*>(b.root.get());
 	head = b.head;
 
 	return *this;
@@ -157,7 +166,7 @@ unsigned UpdateList::hash() const
 {
 	unsigned res = 0;
 
-	if (root == NULL)
+	if (root.isNull())
 		return 0;
 
 	if (root->mallocKey.allocSite) {
@@ -210,12 +219,12 @@ UpdateList* UpdateList::fromUpdateStack(
 		}
 
 		if (newUpdates == NULL) {
-			const Array *newRoot = Array::uniqueArray(
+			ref<Array> newRoot = Array::uniqueArray(
 				Array::create(
 					"simpl_arr"+llvm::utostr(++id),
 					old_root->mallocKey,
 					&constantValues[0],
-					&constantValues[0]+constantValues.size()));
+					&constantValues[0]+constantValues.size()).get());
 
 			newUpdates = new UpdateList(newRoot, NULL);
 		}
@@ -226,7 +235,7 @@ UpdateList* UpdateList::fromUpdateStack(
 
 	// all-constant array
 	if (newUpdates == NULL) {
-		const Array *newRoot;
+		ref<Array> newRoot;
 
 		if (constantValues.size() == 0)
 			return NULL;
@@ -236,7 +245,7 @@ UpdateList* UpdateList::fromUpdateStack(
 				"simpl_arr"+llvm::utostr(++id),
 				old_root->mallocKey,
 				&constantValues[0],
-				&constantValues[0]+constantValues.size()));
+				&constantValues[0]+constantValues.size()).get());
 		newUpdates = new UpdateList(newRoot, NULL);
 	}
 
@@ -275,7 +284,7 @@ void UpdateList::removeDups(const ref<Expr>& index)
 		}
 
 		const_cast<UpdateNode*>(prev_node)->next = cur_node->next;
-		if (root != NULL)
+		if (!root.isNull())
 			root->decRefIfCared();
 
 		cur_node->refCount--;

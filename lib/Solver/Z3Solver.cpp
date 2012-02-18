@@ -222,7 +222,9 @@ Z3_ast Z3SolverImpl::klee2z3(const ref<Expr>& e)
 		ReadExpr *re = cast<ReadExpr>(e);
 		ret = Z3_mk_select(
 			z3_ctx,
-			getArrayForUpdate(re->updates.root, re->updates.head),
+			getArrayForUpdate(
+				re->updates.getRoot().get(),
+				re->updates.head),
 			klee2z3(re->index));
 		break;
 	}

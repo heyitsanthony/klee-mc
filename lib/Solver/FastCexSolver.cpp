@@ -462,7 +462,7 @@ public:
 
     case Expr::Read: {
       ReadExpr *re = cast<ReadExpr>(e);
-      const Array *array = re->updates.root;
+      const Array *array = re->updates.getRoot().get();
       CexObjectData &cod = getObjectData(array);
 
       // FIXME: This is imprecise, we need to look through the existing writes
@@ -799,7 +799,7 @@ public:
 
     case Expr::Read: {
       ReadExpr *re = cast<ReadExpr>(e);
-      const Array *array = re->updates.root;
+      const Array *array = re->updates.getRoot().get();
       CexObjectData &cod = getObjectData(array);
       CexValueData index = evalRangeForExpr(re->index);
 
