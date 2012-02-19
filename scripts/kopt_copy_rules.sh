@@ -26,7 +26,7 @@ while read a; do
 	lasthash="$HASHVAL"
 	if [ ! -e "$DST"/"$HASHVAL" ]; then
 		cp $FNAME "$DST"/"$HASHVAL"
-		newrules=`expr $newrules + 1`
+		newrules=$(($newrules + 1))
 	fi
 done
 echo "New rules: " $newrules

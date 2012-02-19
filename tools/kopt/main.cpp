@@ -2,6 +2,7 @@
 
 #include "../../lib/Expr/SMTParser.h"
 #include "../../lib/Expr/ExprRule.h"
+#include "../../lib/Expr/RuleBuilder.h"
 #include "../../lib/Core/TimingSolver.h"
 
 #include "static/Sugar.h"
@@ -37,6 +38,17 @@ namespace llvm
 		cl::desc("Apply given rule file to input smt"),
 		cl::init(""));
 
+	cl::opt<bool>
+	ApplyTransitivity(
+		"apply-transitive",
+		cl::desc("Use a rule builder to try to minimize rule"),
+		cl::init(false));
+
+
+	cl::opt<std::string>
+	TransitiveRuleFile(
+		"implied-rule-file",
+		cl::desc("Use a rule builder to try to minimize rule"));
 
 	enum BuilderKinds {
 		DefaultBuilder,
@@ -127,6 +139,80 @@ static void checkRule(ExprBuilder *eb, Solver* s)
 	delete er;
 }
 
+static void applyTransitivity(ExprBuilder* eb, Solver* s)
+{
+	ExprBuilder	*rule_eb, *old_eb;
+	ExprRule	*er;
+	ref<Expr>	rule_expr_old, rule_expr_rb;
+	ref<Expr>	init_expr, bridge_expr, impl_expr, new_rule_expr;
+	bool		ok, mustBeTrue;
+
+	er = ExprRule::loadPrettyRule(InputFile.c_str());
+	assert (er != NULL && "Bad rule?");
+
+	rule_expr_old = er->materialize();
+
+	rule_eb = new RuleBuilder(createExprBuilder());
+	old_eb = Expr::setBuilder(rule_eb);
+	rule_expr_rb = er->materialize();
+	Expr::setBuilder(old_eb);
+
+	if (isa<ConstantExpr>(rule_expr_rb)) {
+		std::cout << "true\n";
+		goto done;
+	}
+
+	if (rule_expr_rb == rule_expr_old) {
+		std::cout << "rule builder broken. got same materialization\n";
+		goto done;
+	}
+
+	/* bridge expr is shared expr */
+	if (	rule_expr_rb->getKid(0) != rule_expr_old->getKid(0) &&
+		rule_expr_rb->getKid(0) != rule_expr_old->getKid(1))
+
+		bridge_expr = rule_expr_rb->getKid(1);
+	else
+		bridge_expr = rule_expr_rb->getKid(0);
+
+	/* expect that for (eq nonopt opt),
+	 * rule builder will give (eq opt opt) */
+	if (	bridge_expr == rule_expr_rb->getKid(0) &&
+		bridge_expr == rule_expr_rb->getKid(1))
+	{
+		std::cout << "true\n";
+		goto done;
+	}
+
+	init_expr = (bridge_expr != rule_expr_old->getKid(0))
+		? rule_expr_old->getKid(0)
+		: rule_expr_old->getKid(1);
+
+	impl_expr = (bridge_expr == rule_expr_rb->getKid(0))
+		? rule_expr_rb->getKid(1)
+		: rule_expr_rb->getKid(0);
+
+	new_rule_expr = EqExpr::create(init_expr, impl_expr);
+	ok = s->mustBeTrue(Query(new_rule_expr), mustBeTrue);
+	assert (ok && "Unhandled solver failure");
+
+	if (mustBeTrue) {
+		std::cout << "valid rule\n";
+		if (!TransitiveRuleFile.empty()) {
+			std::ofstream	ofs(TransitiveRuleFile.c_str());
+			ExprRule::printRule(ofs, init_expr, impl_expr);
+		}
+		ExprRule::printRule(std::cout, init_expr, impl_expr);
+	} else {
+		std::cout << "invalid rule\n";
+	}
+
+done:
+	delete rule_eb;
+	delete er;
+}
+
+
 static void applyRule(ExprBuilder *eb, Solver* s)
 {
 	ExprRule	*er;
@@ -199,7 +285,7 @@ static void printRule(ExprBuilder *eb, Solver* s)
 	}
 
 	assert (mustBeTrue && "We've proven this valid, but now it isn't?");
-	
+
 	ExprRule::printRule(std::cout, lhs, rhs);
 
 	delete p;
@@ -229,7 +315,9 @@ int main(int argc, char **argv)
 		checkRule(eb, s);
 	} else if (ApplyRule.size()) {
 		applyRule(eb, s);
-	} else {
+	} else if (ApplyTransitivity) {
+		applyTransitivity(eb, s);
+	}else {
 		printRule(eb, s);
 	}
 

@@ -139,7 +139,8 @@ protected:
 	unsigned k, max;
 };
 }
-unsigned ExprUtil::getNumNodes(ref<Expr>& e, bool visitUpdates, unsigned max)
+unsigned ExprUtil::getNumNodes(
+	const ref<Expr>& e, bool visitUpdates, unsigned max)
 {
 	NumNodeCounter	nc(max);
 	assert (!visitUpdates);

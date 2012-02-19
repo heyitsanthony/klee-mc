@@ -62,7 +62,6 @@ void RuleBuilder::loadRules(const char* ruledir)
 		if (er == NULL)
 			continue;
 
-		std::cerr << "[RuleBuilder] Loaded " << de->d_name << '\n';
 		rules.push_back(er);
 	}
 

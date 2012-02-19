@@ -23,7 +23,7 @@ class ExprUtil
 {
 public:
 	static unsigned getNumNodes(
-		ref<Expr>& e, bool visitUpdates=false, unsigned max=~0);
+		const ref<Expr>& e, bool visitUpdates=false, unsigned max=~0);
 
 	  /// Find all ReadExprs used in the expression DAG. If visitUpdates
 	  /// is true then this will including those reachable by traversing

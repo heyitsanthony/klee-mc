@@ -4,12 +4,15 @@
 #include <iostream>
 #include "static/Sugar.h"
 #include "klee/util/ExprVisitor.h"
+#include "klee/util/ExprUtil.h"
 #include "ExprRule.h"
 
 using namespace klee;
 
 ExprRule::ExprRule(const Pattern& _from, const Pattern& _to)
-: from(_from), to(_to)
+: from(_from)
+, to(_to)
+, materialize_arr(0)
 {
 	unsigned max_id;
 
@@ -50,6 +53,8 @@ ref<Expr> ExprRule::flat2expr(
 		c = flat2expr(lm, fr, off);
 		t = flat2expr(lm, fr, off);
 		f = flat2expr(lm, fr, off);
+		if (c.isNull() || t.isNull() || f.isNull())
+			return NULL;
 		ret = SelectExpr::create(c, t, f);
 		break;
 	}
@@ -65,6 +70,9 @@ ref<Expr> ExprRule::flat2expr(
 		ce_w = dyn_cast<ConstantExpr>(e_w);
 
 		kid = flat2expr(lm, fr, off);
+
+		if (e_off.isNull() || e_w.isNull() || kid.isNull())
+			return NULL;
 
 		ret = ExtractExpr::create(
 			kid,
@@ -82,6 +90,9 @@ ref<Expr> ExprRule::flat2expr(
 		w = flat2expr(lm, fr, off);
 		ce_w = dyn_cast<ConstantExpr>(w);
 		kid = flat2expr(lm, fr, off);
+		if (w.isNull() || kid.isNull())
+			return NULL;
+
 		if (fr[op_idx] == Expr::SExt) {
 			ret = SExtExpr::create(kid, ce_w->getZExtValue());
 		} else {
@@ -101,6 +112,8 @@ ref<Expr> ExprRule::flat2expr(
 		ref<Expr>	lhs, rhs;	\
 		lhs = flat2expr(lm, fr, off);	\
 		rhs = flat2expr(lm, fr, off);	\
+		if (lhs.isNull() || rhs.isNull())\
+			return NULL;		\
 		ret = x##Expr::create(lhs, rhs);\
 		break;				\
 	}
@@ -169,12 +182,15 @@ ref<Expr> ExprRule::anonFlat2Expr(
 
 ref<Expr> ExprRule::materialize(void) const
 {
-	ref<Array>	arr = Array::create("exprrule", 4096);
+
 	ref<Expr>	lhs, rhs;
 
-	lhs = anonFlat2Expr(arr.get(), from);
+	if (materialize_arr.isNull())
+		materialize_arr = Array::create("exprrule", 4096);
+
+	lhs = anonFlat2Expr(materialize_arr.get(), from);
 	assert (lhs.isNull() == false);
-	rhs = anonFlat2Expr(arr.get(), to);
+	rhs = anonFlat2Expr(materialize_arr.get(), to);
 	assert (rhs.isNull() == false);
 
 	return EqExpr::create(lhs, rhs);
@@ -392,9 +408,14 @@ void ExprRule::printRule(
 	std::ostream& os, const ref<Expr>& lhs, const ref<Expr>& rhs)
 {
 	ExprFlatWriter	efw(os);
-	efw.print(lhs);
+	unsigned	lhs_nodes, rhs_nodes;
+
+	lhs_nodes = ExprUtil::getNumNodes(lhs);
+	rhs_nodes = ExprUtil::getNumNodes(rhs);
+
+	efw.print((lhs_nodes > rhs_nodes) ? lhs : rhs);
 	os << "\n->\n";
-	efw.print(rhs);
+	efw.print((lhs_nodes > rhs_nodes) ? rhs : lhs);
 	os << "\n\n";
 }
 
@@ -473,7 +494,7 @@ ExprFindLabels::Action ExprFindLabels::visitExpr(const Expr* expr)
 		if (it == lm.end()) {
 			/* create new label */
 			lm[label_num] = ref<Expr>(const_cast<Expr*>(expr));
-			return Skip;
+			goto skip_label;
 		}
 
 		if (*it->second != *expr) {
@@ -482,7 +503,13 @@ ExprFindLabels::Action ExprFindLabels::visitExpr(const Expr* expr)
 			return Stop;
 		}
 
+skip_label:
 		/* label was matched, continue */
+		if (fr_it == from_rule.end()) {
+			success = true;
+			return Stop;
+		}
+
 		return Skip;
 	}
 
@@ -566,5 +593,6 @@ ref<Expr> ExprRule::apply(const ref<Expr>& e) const
 	if (efl.assignLabels(e) == false)
 		return NULL;
 
+	off = 0;
 	return flat2expr(labels, to.rule, off);
 }

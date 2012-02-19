@@ -60,6 +60,7 @@ private:
 	Pattern		from, to;
 
 	mutable unsigned apply_hit_c, apply_fail_c;
+	ref<Array>	materialize_arr;
 };
 
 }
