@@ -200,10 +200,7 @@ static void printRule(ExprBuilder *eb, Solver* s)
 
 	assert (mustBeTrue && "We've proven this valid, but now it isn't?");
 	
-	ExprRule::printPattern(std::cout, lhs);
-	std::cout << "\n->\n";
-	ExprRule::printPattern(std::cout, rhs);
-	std::cout << "\n\n";
+	ExprRule::printRule(std::cout, lhs, rhs);
 
 	delete p;
 }

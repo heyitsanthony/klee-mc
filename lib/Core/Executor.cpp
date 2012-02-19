@@ -25,6 +25,7 @@
 #include "MMU.h"
 #include "StatsTracker.h"
 #include "Globals.h"
+#include "../Expr/RuleBuilder.h"
 
 #include "static/Sugar.h"
 #include "klee/Common.h"
@@ -234,6 +235,12 @@ namespace {
   	"use-ivc",
 	cl::desc("Implied Value Concretization"),
 	cl::init(true));
+
+  cl::opt<bool>
+  UseRuleBuilder(
+  	"use-rule-builder",
+	cl::desc("Machine-learned peephole expr builder"),
+  	cl::init(false));
 }
 
 
@@ -301,6 +308,9 @@ Executor::Executor(InterpreterHandler *ih)
 	stateManager = new ExeStateManager();
 	ExecutionState::setMemoryManager(memory);
 	ExeStateBuilder::replaceBuilder(new BaseExeStateBuilder());
+
+	if (UseRuleBuilder)
+		Expr::setBuilder(new RuleBuilder(Expr::getBuilder()));
 }
 
 

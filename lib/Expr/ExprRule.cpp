@@ -1,9 +1,23 @@
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <iostream>
 #include "static/Sugar.h"
 #include "klee/util/ExprVisitor.h"
 #include "ExprRule.h"
 
 using namespace klee;
+
+ExprRule::ExprRule(const Pattern& _from, const Pattern& _to)
+: from(_from), to(_to)
+{
+	unsigned max_id;
+
+	max_id = (from.label_c > to.label_c) ? from.label_c : to.label_c;
+	from.label_id_max = max_id;
+	to.label_id_max = max_id;
+}
+
 
 ref<Expr> ExprRule::flat2expr(
 	const labelmap_ty&	lm,
@@ -124,10 +138,10 @@ ref<Expr> ExprRule::flat2expr(
 	return ret;
 }
 
-ExprRule::ExprRule(void) {}
-
 void ExprRule::printBinaryRule(std::ostream& os) const
 {
+	assert( 0 == 1 && "STUB");
+#if 0
 	uint32_t	from_sz, to_sz;
 
 	from_sz = from.size();
@@ -136,36 +150,21 @@ void ExprRule::printBinaryRule(std::ostream& os) const
 	os.write((char*)&to_sz, 4);
 	os.write((char*)from.data(), from_sz*8);
 	os.write((char*)to.data(), to_sz*8);
-}
-
-unsigned ExprRule::estNumLabels(const flatrule_ty& fr) const
-{
-	std::set<unsigned>	labels;
-
-	foreach (it, fr.begin(), fr.end()) {
-		if (!OP_LABEL_TEST((*it)))
-			continue;
-
-		labels.insert(*it);
-	}
-
-	return labels.size();
+#endif
 }
 
 ref<Expr> ExprRule::anonFlat2Expr(
-	const Array* arr, const flatrule_ty& fr) const
+	const Array* arr, const Pattern& p) const
 {
 	int		off;
 	labelmap_ty	lm;
-	unsigned	est_labels;
 
-	est_labels = estNumLabels(fr);
-	for (unsigned i = 0; i < est_labels; i++)
+	for (unsigned i = 0; i < p.label_id_max; i++)
 		lm[i] = ReadExpr::create(
 			UpdateList(arr, NULL), ConstantExpr::create(i, 32));
 
 	off = 0;
-	return flat2expr(lm, fr, off);
+	return flat2expr(lm, p.rule, off);
 }
 
 ref<Expr> ExprRule::materialize(void) const
@@ -174,23 +173,59 @@ ref<Expr> ExprRule::materialize(void) const
 	ref<Expr>	lhs, rhs;
 
 	lhs = anonFlat2Expr(arr.get(), from);
+	assert (lhs.isNull() == false);
 	rhs = anonFlat2Expr(arr.get(), to);
+	assert (rhs.isNull() == false);
 
 	return EqExpr::create(lhs, rhs);
 }
 
-bool ExprRule::readFlatExpr(std::ifstream& ifs, flatrule_ty& r)
+ExprRule* ExprRule::loadBinaryRule(const char* fname)
 {
-	std::string	tok;
+	std::ifstream ifs(fname);
+	return loadBinaryRule(ifs);
+}
+
+ExprRule* ExprRule::loadBinaryRule(std::istream& is)
+{
+	assert (0 == 1 && "STUB: FIXME TO GIVE NODE COUNTS");
+	return NULL;
+#if 0
+	uint32_t	from_sz, to_sz;
+	flatrule_ty	from, to;
+
+
+	is.read((char*)&from_sz, 4);
+	is.read((char*)&to_sz, 4);
+	if (from_sz > 10000 || to_sz > 10000)
+		return NULL;
+
+	from.resize(from_sz);
+	to.resize(to_sz);
+	is.read((char*)from.data(), from_sz*8);
+	is.read((char*)to.data(), to_sz*8);
+
+	if (is.fail())
+		return NULL;
+
+	return new ExprRule(from, to);
+#endif
+}
+
+bool ExprRule::readFlatExpr(std::ifstream& ifs, Pattern& p)
+{
+	std::string		tok;
+	std::set<uint64_t>	labels;
 
 	while (ifs >> tok) {
 		if (tok[0] == 'l') {
 			uint64_t	label_num = atoi(tok.c_str() + 1);
-			r.push_back(OP_LABEL_MK(label_num));
+			p.rule.push_back(OP_LABEL_MK(label_num));
+			labels.insert(label_num);
 			continue;
 		}
 
-#define READ_TOK(x)	if (tok == #x) r.push_back((int)Expr::x)
+#define READ_TOK(x)	if (tok == #x) p.rule.push_back((int)Expr::x)
 
 		READ_TOK(Constant);
 		else READ_TOK(Select);
@@ -223,70 +258,53 @@ bool ExprRule::readFlatExpr(std::ifstream& ifs, flatrule_ty& r)
 		else READ_TOK(Sgt);
 		else READ_TOK(Sge);
 		else if (tok == "->")
-			return true;
+			goto success;
 		else {
-			for (unsigned i = 0; i < tok.size(); i++)
+			uint64_t	v = 0;
+			for (unsigned i = 0; i < tok.size(); i++) {
 				if (tok[i] < '0' || tok[i] > '9')
 					return false;
-			r.push_back(atoi(tok.c_str()));
+				v *= 10;
+				v += tok[i] - '0';
+			}
+			p.rule.push_back(v);
 		}
 	}
 
 	if (ifs.eof())
-		return true;
+		goto success;
 
 	return false;
-}
-
-ExprRule* ExprRule::loadBinaryRule(const char* fname)
-{
-	std::ifstream ifs(fname);
-	return loadBinaryRule(ifs);
-}
-
-ExprRule* ExprRule::loadBinaryRule(std::istream& is)
-{
-	ExprRule	*ret;
-	uint32_t	from_sz, to_sz;
-	flatrule_ty	from, to;
-
-	is.read((char*)&from_sz, 4);
-	is.read((char*)&to_sz, 4);
-	if (from_sz > 10000 || to_sz > 10000)
-		return NULL;
-
-	from.resize(from_sz);
-	to.resize(to_sz);
-	is.read((char*)from.data(), from_sz*8);
-	is.read((char*)to.data(), to_sz*8);
-
-	if (is.fail())
-		return NULL;
-
-	ret = new ExprRule();
-	ret->from = from;
-	ret->to = to;
-
-	return ret;
+success:
+	p.label_c = labels.size();
+	return true;
 }
 
 ExprRule* ExprRule::loadPrettyRule(const char* fname)
 {
-	ExprRule	*ret;
-	flatrule_ty	from, to;
-	std::ifstream	ifs(fname);
+	Pattern		p_from, p_to;
 
-	if (!readFlatExpr(ifs, from)) return NULL;
-	if (!readFlatExpr(ifs, to)) return NULL;
+	struct stat	s;
 
-	if (from.size() == 0 || to.size() == 0)
+	if (stat(fname, &s) != 0)
 		return NULL;
 
-	ret = new ExprRule();
-	ret->from = (from.size() > to.size()) ? from : to;
-	ret->to = (from.size() > to.size()) ? to : from;
+	if (!S_ISREG(s.st_mode))
+		return NULL;
 
-	return ret;
+	std::ifstream	ifs(fname);
+	if (!readFlatExpr(ifs, p_from)) return NULL;
+	if (!readFlatExpr(ifs, p_to)) return NULL;
+
+	if (	p_from.rule.size() == 0 || p_to.rule.size() == 0 ||
+		(p_from.rule.size() == 1 && p_to.rule.size() == 1))
+	{
+		return NULL;
+	}
+
+	return new ExprRule(
+		((p_from.rule.size() > p_to.rule.size()) ? p_from : p_to),
+		((p_from.rule.size() > p_to.rule.size()) ? p_to : p_from));
 }
 
 class ExprFlatWriter : public ExprConstVisitor
@@ -295,11 +313,7 @@ public:
 	ExprFlatWriter(std::ostream& _os) : os(_os) {}
 	virtual ~ExprFlatWriter(void) {}
 
-	void print(const ref<Expr>& e)
-	{
-		labels.clear();
-		visit(e);
-	}
+	void print(const ref<Expr>& e) { visit(e); }
 
 protected:
 	virtual Action visitExpr(const Expr* expr);
@@ -374,10 +388,14 @@ ExprFlatWriter::Action ExprFlatWriter::visitExpr(const Expr* expr)
 	return Expand;
 }
 
-void ExprRule::printPattern(std::ostream& os, const ref<Expr>& e)
+void ExprRule::printRule(
+	std::ostream& os, const ref<Expr>& lhs, const ref<Expr>& rhs)
 {
 	ExprFlatWriter	efw(os);
-	efw.print(e);
+	efw.print(lhs);
+	os << "\n->\n";
+	efw.print(rhs);
+	os << "\n\n";
 }
 
 class ExprFindLabels : public ExprConstVisitor
@@ -411,7 +429,6 @@ private:
 	ExprRule::flatrule_ty::const_iterator	fr_it;
 	bool					success;
 };
-
 
 bool ExprFindLabels::verifyConstant(const ConstantExpr* ce)
 {
@@ -544,10 +561,10 @@ ref<Expr> ExprRule::apply(const ref<Expr>& e) const
 {
 	labelmap_ty	labels;
 	int		off;
-	ExprFindLabels	efl(from, labels);
+	ExprFindLabels	efl(from.rule, labels);
 
 	if (efl.assignLabels(e) == false)
 		return NULL;
 
-	return flat2expr(labels, to, off);
+	return flat2expr(labels, to.rule, off);
 }

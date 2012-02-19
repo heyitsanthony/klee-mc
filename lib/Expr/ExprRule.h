@@ -23,28 +23,41 @@ public:
 	static ExprRule* loadBinaryRule(const char* fname);
 	static ExprRule* loadBinaryRule(std::istream& is);
 
-	static void printPattern(
-		std::ostream& os, const ref<Expr>& e);
+	static void printRule(
+		std::ostream& os, const ref<Expr>& lhs, const ref<Expr>& rhs);
+
 	virtual ~ExprRule() {}
 
 	void printBinaryRule(std::ostream& os) const;
 	ref<Expr> materialize(void) const;
 	ref<Expr> apply(const ref<Expr>& e) const;
 
+	/* XXX these are wrong-- should be taking a count from the exprs
+	 * the flatrule_ty values don't represent the actual node counts */
+	unsigned getFromNodeCount(void) const { return from.rule.size(); }
+	unsigned getToNodeCount(void) const { return to.rule.size(); }
+
+	unsigned getToLabels(void) const { return to.label_c; }
+	unsigned getFromLabels(void) const { return from.label_c; }
+
 protected:
-	ExprRule(void);
+	struct Pattern {
+		flatrule_ty	rule;
+		unsigned	label_c;
+		unsigned	label_id_max;
+	};
+	ExprRule(const Pattern& _from, const Pattern& _to);
+
 private:
-	unsigned estNumLabels(const flatrule_ty& fr) const;
 	ref<Expr> flat2expr(
 		const labelmap_ty& lm,
 		const flatrule_ty& fr, int& off) const;
-	ref<Expr> anonFlat2Expr(
-		const Array* arr,
-		const flatrule_ty& fr) const;
+	ref<Expr> anonFlat2Expr(const Array* arr, const Pattern& p) const;
 
 
-	static bool readFlatExpr(std::ifstream& ifs, flatrule_ty& r);
-	flatrule_ty	from, to;
+	static bool readFlatExpr(std::ifstream& ifs, Pattern& p);
+
+	Pattern		from, to;
 
 	mutable unsigned apply_hit_c, apply_fail_c;
 };
