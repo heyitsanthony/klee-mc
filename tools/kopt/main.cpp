@@ -204,7 +204,6 @@ static void applyTransitivity(ExprBuilder* eb, Solver* s)
 	assert (ok && "Unhandled solver failure");
 
 	if (mustBeTrue) {
-		std::cout << "valid rule\n";
 		if (!TransitiveRuleFile.empty()) {
 			std::ofstream	ofs(TransitiveRuleFile.c_str());
 			ExprRule::printRule(ofs, init_expr, impl_expr);
