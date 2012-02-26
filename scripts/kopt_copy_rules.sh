@@ -14,16 +14,12 @@ if [ ! -d "$DST" ]; then
 fi
 
 
-lasthash=''
 old_rule_count=`ls -l $DST/ | wc -l`
-md5sum `grep ^valid "$SRC"/*valid | cut -f1 -d':' | sed "s/rule/kopt/;s/valid/rule/" | cut -f1 -d' '` | sort | \
+# rule.HASH.valid
+md5sum `grep ^valid "$SRC"/*valid | cut -f1 -d':' | sed "s/rule/ur/;s/valid/uniqrule/" | cut -f1 -d' '` | sort | \
 while read a; do
 	HASHVAL=`echo $a | cut -f1 -d' '`
-	FNAME=`echo $a | cut -f2 -d' '`
-	if [ "$HASHVAL" = "$lasthash" ]; then
-		continue
-	fi
-	lasthash="$HASHVAL"
+	FNAME="$SRC"/ur.$HASHVAL.uniqrule
 	if [ ! -e "$DST"/"$HASHVAL" ]; then
 		cp $FNAME "$DST"/"$HASHVAL"
 	fi
