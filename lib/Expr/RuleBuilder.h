@@ -26,7 +26,7 @@ public:
 	ref<Expr>	eb_e, ret;	\
 	depth++;			\
 
-#define APPLY_RULE_FTR		\
+#define X_APPLY_RULE_FTR	\
 	depth--;		\
 	if (depth == 0) {	\
 		ret = tryApplyRules(eb_e);	\
@@ -35,6 +35,14 @@ public:
 	} else				\
 		ret = eb_e;		\
 	return ret;
+
+#define APPLY_RULE_FTR	\
+	depth--;		\
+	ret = tryApplyRules(eb_e);	\
+	if (ret.isNull())	\
+		ret = eb_e;	\
+	return ret;		\
+
 
 	virtual ref<Expr> Not(const ref<Expr> &L)
 	{
@@ -151,6 +159,7 @@ private:
 	std::vector<ExprRule*>		rules_arr;
 	ExprBuilder		*eb;
 	unsigned		depth;
+	unsigned		recur;
 
 	static uint64_t		hit_c;
 	static uint64_t		miss_c;

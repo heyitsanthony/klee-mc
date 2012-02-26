@@ -89,32 +89,100 @@ static ExprBuilder* createExprBuilder(void)
 	return Builder;
 }
 
-static void getEquivalence(ref<Expr> e, ref<Expr>& lhs, ref<Expr>& rhs)
+/*
+(= (ite (bvult
+		(bvadd
+			bv2936[64]
+			( zero_extend[56]
+				( select ?e2179  bv37[32] )))
+		bv3840[64])
+	bv1[1]
+	bv0[1]) 
+ bv0[1]))
+*/
+
+static bool getEquivalenceInEq(ref<Expr> e, ref<Expr>& lhs, ref<Expr>& rhs)
 {
 	const ConstantExpr	*ce;
 	const EqExpr		*ee;
 	const SelectExpr	*se;
 
 	ee = dyn_cast<EqExpr>(e);
+	if (!ee) return false;
 	assert (ee && "Expected TLS to be EqExpr!");
 
 	ce = dyn_cast<ConstantExpr>(ee->getKid(1));
+	if (!ce) return false;
 	assert (ce && ce->getZExtValue() == 0);
 
 	se = dyn_cast<SelectExpr>(ee->getKid(0));
+	if (!se) return false;
 	assert (se && "Expected (Eq (Sel x) 0)");
 
 	ce = dyn_cast<ConstantExpr>(se->trueExpr);
+	if (!ce) return false;
 	assert (ce && ce->getZExtValue() == 1);
 
 	ce = dyn_cast<ConstantExpr>(se->falseExpr);
+	if (!ce) return false;
 	assert (ce && ce->getZExtValue() == 0);
 
 	ee = dyn_cast<EqExpr>(se->cond);
+	if (ee) return false;
+	assert (!ee && "Expected (Eq (Sel ((NotEq) x y) 1 0) 0)");
+
+	lhs = se->cond;
+	rhs = ConstantExpr::create(1, 1);
+
+	return true;
+}
+
+static bool getEquivalenceEq(ref<Expr> e, ref<Expr>& lhs, ref<Expr>& rhs)
+{
+	const ConstantExpr	*ce;
+	const EqExpr		*ee;
+	const SelectExpr	*se;
+
+	ee = dyn_cast<EqExpr>(e);
+	if (!ee) return false;
+	assert (ee && "Expected TLS to be EqExpr!");
+
+	ce = dyn_cast<ConstantExpr>(ee->getKid(1));
+	if (!ce) return false;
+	assert (ce && ce->getZExtValue() == 0);
+
+	se = dyn_cast<SelectExpr>(ee->getKid(0));
+	if (!se) return false;
+	assert (se && "Expected (Eq (Sel x) 0)");
+
+	ce = dyn_cast<ConstantExpr>(se->trueExpr);
+	if (!ce) return false;
+	assert (ce && ce->getZExtValue() == 1);
+
+	ce = dyn_cast<ConstantExpr>(se->falseExpr);
+	if (!ce) return false;
+	assert (ce && ce->getZExtValue() == 0);
+
+	ee = dyn_cast<EqExpr>(se->cond);
+	if (!ee) return false;
 	assert (ee && "Expected (Eq (Sel (Eq x y) 1 0) 0)");
 
 	lhs = ee->getKid(0);
 	rhs = ee->getKid(1);
+
+	return true;
+}
+
+static void getEquivalence(ref<Expr> e, ref<Expr>& lhs, ref<Expr>& rhs)
+{
+	if (getEquivalenceEq(e, lhs, rhs))
+		return;
+
+	if (getEquivalenceInEq(e, lhs, rhs))
+		return;
+
+	std::cerr << "BAD EQUIV\n";
+	exit(-1);
 }
 
 static void checkRule(ExprBuilder *eb, Solver* s)
@@ -150,54 +218,55 @@ static void applyTransitivity(ExprBuilder* eb, Solver* s)
 {
 	ExprBuilder	*rule_eb, *old_eb;
 	ExprRule	*er;
-	ref<Expr>	rule_expr_old, rule_expr_rb;
+	ref<Expr>	rule_to_rb, rule_from_rb;
+	ref<Expr>	rule_to_old, rule_from_old;
 	ref<Expr>	init_expr, bridge_expr, impl_expr, new_rule_expr;
 	bool		ok, mustBeTrue;
 
 	er = ExprRule::loadPrettyRule(InputFile.c_str());
 	assert (er != NULL && "Bad rule?");
 
-	rule_expr_old = er->materialize();
+	rule_from_old = er->getFromExpr();
+	rule_to_old = er->getToExpr();
 
 	rule_eb = new RuleBuilder(createExprBuilder());
 	old_eb = Expr::setBuilder(rule_eb);
-	rule_expr_rb = er->materialize();
+	rule_from_rb = er->getFromExpr();
+	rule_to_rb = er->getToExpr();
 	Expr::setBuilder(old_eb);
 
-	if (isa<ConstantExpr>(rule_expr_rb)) {
-		std::cout << "true\n";
+	if (	rule_to_old.isNull() || rule_from_old.isNull() ||
+		rule_to_rb.isNull() || rule_from_rb.isNull())
+	{
+		std::cout << "could not build rule exprs\n";
 		goto done;
 	}
 
-	if (rule_expr_rb == rule_expr_old) {
+	if (rule_from_rb == rule_from_old) {
 		std::cout << "rule builder broken. got same materialization\n";
 		goto done;
 	}
 
 	/* bridge expr is shared expr */
-	if (	rule_expr_rb->getKid(0) != rule_expr_old->getKid(0) &&
-		rule_expr_rb->getKid(0) != rule_expr_old->getKid(1))
-
-		bridge_expr = rule_expr_rb->getKid(1);
+	if (rule_from_rb != rule_from_old && rule_from_rb != rule_to_old)
+		bridge_expr = rule_to_rb;
 	else
-		bridge_expr = rule_expr_rb->getKid(0);
+		bridge_expr = rule_from_rb;
 
-	/* expect that for (eq nonopt opt),
-	 * rule builder will give (eq opt opt) */
-	if (	bridge_expr == rule_expr_rb->getKid(0) &&
-		bridge_expr == rule_expr_rb->getKid(1))
-	{
-		std::cout << "true\n";
+	/* expect that for nonopt -> opt,
+	 * rule builder will give opt -> opt */
+	if (bridge_expr == rule_from_rb && bridge_expr == rule_to_rb) {
+		std::cout << "true (bridge_expr=" << bridge_expr << ")\n";
 		goto done;
 	}
 
-	init_expr = (bridge_expr != rule_expr_old->getKid(0))
-		? rule_expr_old->getKid(0)
-		: rule_expr_old->getKid(1);
+	init_expr = (bridge_expr != rule_from_old)
+		? rule_from_old
+		: rule_to_old;
 
-	impl_expr = (bridge_expr == rule_expr_rb->getKid(0))
-		? rule_expr_rb->getKid(1)
-		: rule_expr_rb->getKid(0);
+	impl_expr = (bridge_expr == rule_from_rb)
+		? rule_to_rb
+		: rule_from_rb;
 
 	new_rule_expr = EqExpr::create(init_expr, impl_expr);
 	ok = s->mustBeTrue(Query(new_rule_expr), mustBeTrue);
@@ -239,11 +308,11 @@ static void applyRule(ExprBuilder *eb, Solver* s)
 		ref<Expr>	lhs, rhs;
 		getEquivalence(p->satQuery, lhs, rhs);
 
-		applied_expr = er->apply(lhs);
 		e = lhs;
+		applied_expr = er->apply(e);
 		if (applied_expr.isNull()) {
-			applied_expr = er->apply(rhs);
 			e = rhs;
+			applied_expr = er->apply(e);
 		}
 
 		if (applied_expr.isNull()) {

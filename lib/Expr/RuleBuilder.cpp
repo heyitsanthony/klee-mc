@@ -32,7 +32,7 @@ uint64_t RuleBuilder::miss_c = 0;
 uint64_t RuleBuilder::rule_miss_c = 0;
 
 RuleBuilder::RuleBuilder(ExprBuilder* base)
-: eb(base), depth(0)
+: eb(base), depth(0), recur(0)
 {
 	loadRules(RuleDir.c_str());
 }
@@ -85,7 +85,11 @@ ref<Expr> RuleBuilder::tryApplyRules(const ref<Expr>& in)
 	if (in->getKind() == Expr::Constant)
 		return in;
 
-	assert (depth == 0);
+	recur++;
+	if (recur > 10) {
+		recur--;
+		return in;
+	}
 
 	/* don't call back to self in case we find an optimization! */
 	depth = 1;
@@ -95,6 +99,7 @@ ref<Expr> RuleBuilder::tryApplyRules(const ref<Expr>& in)
 	else
 		ret = tryTrieRules(in);
 
+	recur--;
 	depth = 0;
 
 	if ((void*)ret.get() == (void*)in.get())

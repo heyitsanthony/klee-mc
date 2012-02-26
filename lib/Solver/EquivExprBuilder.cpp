@@ -128,11 +128,6 @@ ref<Expr> EquivExprBuilder::lookup(ref<Expr>& e)
 		return e;
 	}
 
-	if (solver.inSolver()) {
-		std::cerr << "[EquivExpr] Skipping replace: In solver!\n";
-		return e;
-	}
-
 	nodes = ExprUtil::getNumNodes(e, false, EE_MAX_NODES+1);
 	/* cull 'simple' expressions */
 	if (nodes != 1 && (nodes < EE_MIN_NODES || nodes > EE_MAX_NODES)) {
@@ -323,6 +318,11 @@ ref<Expr> EquivExprBuilder::lookupByEval(ref<Expr>& e, unsigned nodes)
 
 		}
 		written_hashes.insert(hash);
+	}
+
+	if (solver.inSolver()) {
+		std::cerr << "[EquivExpr] Skipping replace: In solver!\n";
+		return e;
 	}
 
 	if (!ReplaceEquivExprs)

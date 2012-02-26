@@ -24,7 +24,8 @@ for a in kdump-*; do
 		cd ..
 		continue
 	fi
-	../../join_readbuf.sh
+	../../scripts/join_readbuf.sh
+	echo "$a"
 	$2 readbuf
 	cd ..
 done

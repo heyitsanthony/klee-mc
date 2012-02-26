@@ -463,7 +463,7 @@ ref<Expr> ConcatExpr::mergeExtracts(const ref<Expr>& l, const ref<Expr>& r)
 					ee_left_kid->getKid(1),
 					0,
 					r->getWidth()));
-			if (test_expr == r) {
+			if (test_expr == r && ee_left_kid->getWidth() >= w) {
 				/* lift useless extract */
 				return ExtractExpr::create(ee_left_kid, 0, w);
 			}

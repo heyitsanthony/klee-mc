@@ -192,6 +192,7 @@ protected:
 extern unsigned g_cachingsolver_sz;
 extern unsigned g_cexcache_sz;
 
+#include "../Solver/CachingSolver.h"
 cl::opt<unsigned>
 DumpCacheStats("dump-cachestats",
         cl::desc("Dump cache stats every n seconds (0=off)"),
@@ -203,7 +204,9 @@ public:
 protected:
 	void print(void) { *os
 		<< g_cachingsolver_sz << ' '
-		<< g_cexcache_sz; }
+		<< g_cexcache_sz << ' '
+		<< CachingSolver::getHits() << ' '
+		<< CachingSolver::getMisses(); }
 };
 
 

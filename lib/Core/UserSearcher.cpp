@@ -209,7 +209,7 @@ Searcher* UserSearcher::setupInterleavedSearcher(
 		FreshBranch,
 		new PrioritySearcher(
 			new Weight2Prioritizer<FreshBranchWeight>(1),
-			TAIL_RESCAN_SEARCHER,
+			SEARCH_HISTO,
 			100));
 
 	PUSH_ILEAV_IF_SET(Histo, SEARCH_HISTO);
@@ -291,7 +291,7 @@ Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 	if (UseFreshBranchSearch) {
 		searcher = new PrioritySearcher(
 			new Weight2Prioritizer<FreshBranchWeight>(1),
-			TAIL_RESCAN_SEARCHER,
+			SEARCH_HISTO,
 			100);
 	} else if (UseHistoSearch) {
 		searcher = SEARCH_HISTO;
