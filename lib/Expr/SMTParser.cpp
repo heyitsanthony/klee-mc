@@ -83,6 +83,7 @@ bool SMTParser::Parse(void)
 	int		rc;
 
 	parserTemp = this;
+	bad_read = false;
 	lineNum = 1;
 	std::cerr << "IT IS PARSE TIME!!!!F=" << fileName <<"\n";
 #if 0
@@ -102,7 +103,7 @@ bool SMTParser::Parse(void)
 	smtlib_deleteBuffer(buf);
 #endif
 
-	return (rc == 0);
+	return (rc == 0 && !bad_read);
 }
 
 Decl* SMTParser::ParseTopLevelDecl()

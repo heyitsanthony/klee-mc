@@ -451,26 +451,35 @@ an_bitwise_fun:
 		$$ = NULL; // TODO
 	}
 	| LPAREN_TOK ZEXT_TOK LBRACKET_TOK NUMERAL_TOK RBRACKET_TOK an_term annotations
-	{
-		$$ = BUILDER->ZExt($6, $6->getWidth() + atoi($4.c_str()));
-	}
+	{ $$ = BUILDER->ZExt($6, $6->getWidth() + atoi($4.c_str())); }
 	| LPAREN_TOK SEXT_TOK LBRACKET_TOK NUMERAL_TOK RBRACKET_TOK an_term annotations
-	{
-		$$ = BUILDER->SExt($6, $6->getWidth() + atoi($4.c_str()));
-	}
+	{ $$ = BUILDER->SExt($6, $6->getWidth() + atoi($4.c_str())); }
 	| LPAREN_TOK BVSELECT_TOK an_term an_term annotations
 	{
 		ref<Expr>	arr_expr($3);
 		ref<Expr>	idx_expr($4);
 		const NotOptimizedExpr	*no;
 		const ReadExpr		*re;
+		bool			is_oob;
 
 		no = dyn_cast<NotOptimizedExpr>(arr_expr);
 		assert (no);
 
 		re = dyn_cast<ReadExpr>(no->getKid(0));
 		assert (re);
-		$$ = BUILDER->Read(re->updates, idx_expr);
+
+		is_oob = false;
+		if (const ConstantExpr* idx_ce = dyn_cast<ConstantExpr>(idx_expr)) {
+			if (re->getArray()->getSize() <= idx_ce->getZExtValue())
+				is_oob = true;
+		}
+
+		if (is_oob) {
+			SMTParser::parserTemp->setBadRead();
+			$$ = BUILDER->Constant(0, 8);
+		} else {
+			$$ = BUILDER->Read(re->updates, idx_expr);
+		}
 	}
 	| LPAREN_TOK BVCONCAT_TOK an_term an_term annotations
 	{ $$ = BUILDER->Concat($3, $4); }

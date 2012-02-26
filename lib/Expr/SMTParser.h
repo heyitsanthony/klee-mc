@@ -105,6 +105,7 @@ public:
 	void AddFVar(std::string name, ExprHandle val); // to current fvar env
 	ExprHandle GetFVar(std::string name); // from current fvar env
 
+	void setBadRead(void) { bad_read = true; }
 protected:
 	SMTParser(std::istream* ifs, ExprBuilder* _builder);
 	SMTParser(const std::string& filename, ExprBuilder *builder);
@@ -113,6 +114,7 @@ private:
 	bool Parse(void);
 
 	bool parsedTopLevel;
+	bool bad_read;
 };
 
 }
