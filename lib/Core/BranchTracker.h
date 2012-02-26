@@ -188,6 +188,8 @@ namespace klee {
   private:
     void splitSegment(Segment &segment, unsigned index);
     SegmentRef containing(unsigned index) const;
+    typedef unsigned ReplayEntry;
+    iterator findChild(iterator it, ReplayEntry branch, bool &noChild) const;
   };
 }
 

@@ -190,50 +190,74 @@ void BranchTracker::advance(iterator it) {
   tail = it.curSeg;
 }
 
+BranchTracker::iterator
+BranchTracker::findChild(BranchTracker::iterator it,
+                         ReplayEntry branch,
+                         bool &noChild) const {
+  bool match = false;
+  for (Segment::SegmentVector::iterator cit = it.curSeg->children.begin(),
+       cie = it.curSeg->children.end(); cit != cie; ++cit) {
+    Segment* nextSeg = *cit;
+    assert(!nextSeg->branches.empty());
+#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
+  std::pair<unsigned,unsigned> nextValue = branch;
+#else
+  std::pair<unsigned,unsigned> nextValue =
+    std::make_pair(branch, 0);
+#endif
+    if ((nextSeg->isBranch[0]
+         && (unsigned) nextSeg->branches[0] == nextValue.first)
+        || (!nextSeg->isBranch[0]
+            && nextSeg->nonBranches[0] == nextValue.first)) {
+#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
+      assert(nextSeg->branchID[0] == nextValue.second
+             && "Identical branch leads to different target");
+#endif
+      match = true;
+      it.curSeg = it.tail = nextSeg;
+      it.curIndex = 0;
+      break;
+    }
+  }
+  if (!match) {
+    ++it;
+    noChild = true;
+  }
+  return it;
+}
+
 BranchTracker::SegmentRef
 BranchTracker::insert(const ReplayPathType &branches) {
   iterator it = begin();
   unsigned index = 0;
   bool noChild = false;
+
   for (; it != end() && index < branches.size(); index++) {
 #ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
     std::pair<unsigned,unsigned> value = branches[index];
 #else
     std::pair<unsigned,unsigned> value = std::make_pair(branches[index], 0);
 #endif
-    if (*it != value)
+
+    // handle special case of initial branch having more than one target; under
+    // these circumstances, the root segment in the trie is empty. this is the
+    // only time we allow an empty segment.
+    if (!index && it.curSeg->empty()) {
+      it = findChild(it, branches[index], noChild);
+      if (noChild)
+        break;
+      else
+        ++it;
+    }
+    // we found a divergence in the branch sequences
+    else if (*it != value)
       break;
     // if we're at the end of a segment, then see which child (if any) has a
     // matching next value
-    if (it.curIndex == it.curSeg->size() - 1 && index != branches.size() - 1) {
-      bool match = false;
-      for (Segment::SegmentVector::iterator cit = it.curSeg->children.begin(),
-           cie = it.curSeg->children.end(); cit != cie; ++cit) {
-        Segment* nextSeg = *cit;
-        assert(!nextSeg->branches.empty());
-#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
-      std::pair<unsigned,unsigned> nextValue = branches[index+1];
-#else
-      std::pair<unsigned,unsigned> nextValue =
-        std::make_pair(branches[index+1], 0);
-#endif
-        if ((nextSeg->isBranch[0]
-             && (unsigned) nextSeg->branches[0] == nextValue.first)
-            || (!nextSeg->isBranch[0]
-                && nextSeg->nonBranches[0] == nextValue.first)) {
-#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
-          assert(nextSeg->branchID[0] == nextValue.second
-                 && "Identical branch leads to different target");
-#endif
-          match = true;
-          it.curSeg = it.tail = nextSeg;
-          it.curIndex = 0;
-          break;
-        }
-      }
-      if (!match) {
-        ++it;
-        noChild = true;
+    else if (it.curIndex == it.curSeg->size() - 1
+             && index != branches.size() - 1) {
+      it = findChild(it, branches[index+1], noChild);
+      if (noChild) {
         index++;
         break;
       }
