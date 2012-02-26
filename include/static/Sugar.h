@@ -10,6 +10,9 @@
 #define foreach(_i, _b, _e) \
 	  for(typeof(_b) _i = _b, _i ## end = _e; _i != _i ## end;  ++ _i)
 
+#define foreach_T(T, _i, _b, _e) \
+	  for(typename T _i = _b, _i ## end = _e; _i != _i ## end;  ++ _i)
+
 #define forall_drain(_i, _b, _e)	\
 	  for(typeof(_b) _i = _b, _i ## end = _e; _i != _i ## end;  _i = _b)
 

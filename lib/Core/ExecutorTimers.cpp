@@ -222,6 +222,22 @@ protected:
 		<< stats::instructions; }
 };
 
+#include "../Expr/RuleBuilder.h"
+cl::opt<unsigned>
+DumpRuleBuilderStats("dump-rbstats",
+        cl::desc("Dump rule builder stats every n seconds (0=off)"),
+        cl::init(0));
+class RuleBuilderStatTimer : public StatTimer
+{
+public:
+	RuleBuilderStatTimer(Executor *_exe) : StatTimer(_exe, "rb.txt") {}
+protected:
+	void print(void) { *os
+		<< RuleBuilder::getHits() << ' '
+		<< RuleBuilder::getMisses() << ' '
+		<< RuleBuilder::getRuleMisses(); }
+};
+
 ///
 
 static const double kSecondsPerCheck = 0.25;
@@ -234,6 +250,9 @@ void Executor::initTimers(void)
 {
 	if (MaxTime)
 		addTimer(new HaltTimer(this), MaxTime);
+
+	if (DumpRuleBuilderStats)
+		addTimer(new RuleBuilderStatTimer(this), DumpRuleBuilderStats);
 
 	if (DumpMemStats)
 		addTimer(new MemStatTimer(this), DumpMemStats);

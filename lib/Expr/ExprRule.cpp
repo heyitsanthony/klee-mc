@@ -25,7 +25,7 @@ ExprRule::ExprRule(const Pattern& _from, const Pattern& _to)
 ref<Expr> ExprRule::flat2expr(
 	const labelmap_ty&	lm,
 	const flatrule_ty&	fr,
-	int&			off) const
+	int&			off)
 {
 	int		op_idx;
 	ref<Expr>	ret;
@@ -166,11 +166,16 @@ void ExprRule::printBinaryRule(std::ostream& os) const
 #endif
 }
 
-ref<Expr> ExprRule::anonFlat2Expr(
-	const Array* arr, const Pattern& p) const
+ref<Expr> ExprRule::anonFlat2Expr(const Pattern& p) const
 {
+	const Array	*arr;
 	int		off;
 	labelmap_ty	lm;
+
+	if (materialize_arr.isNull())
+		materialize_arr = Array::create("exprrule", 4096);
+
+	arr = materialize_arr.get();
 
 	for (unsigned i = 0; i < p.label_id_max; i++)
 		lm[i] = ReadExpr::create(
@@ -185,12 +190,9 @@ ref<Expr> ExprRule::materialize(void) const
 
 	ref<Expr>	lhs, rhs;
 
-	if (materialize_arr.isNull())
-		materialize_arr = Array::create("exprrule", 4096);
-
-	lhs = anonFlat2Expr(materialize_arr.get(), from);
+	lhs = getFromExpr();
 	assert (lhs.isNull() == false);
-	rhs = anonFlat2Expr(materialize_arr.get(), to);
+	rhs = getToExpr();
 	assert (rhs.isNull() == false);
 
 	return EqExpr::create(lhs, rhs);
@@ -423,9 +425,9 @@ class ExprFindLabels : public ExprConstVisitor
 {
 public:
 	ExprFindLabels(
-		const ExprRule::flatrule_ty& _from_rule,
-		ExprRule::labelmap_ty& _lm)
-	: from_rule(_from_rule)
+		ExprRule::RuleIterator	&_rule_it,
+		ExprRule::labelmap_ty	&_lm)
+	: rule_it(_rule_it)
 	, lm(_lm) {}
 
 	virtual ~ExprFindLabels() {}
@@ -434,7 +436,7 @@ public:
 	{
 		success = false;
 		lm.clear();
-		fr_it = from_rule.begin();
+		rule_it.reset();
 		visit(e);
 		return success;
 	}
@@ -445,52 +447,48 @@ private:
 	bool verifyConstant(const ConstantExpr* ce);
 	bool verifyConstant(uint64_t v, unsigned w);
 
-	const ExprRule::flatrule_ty		&from_rule;
+
+	ExprRule::RuleIterator			&rule_it;
 	ExprRule::labelmap_ty			&lm;
-	ExprRule::flatrule_ty::const_iterator	fr_it;
 	bool					success;
 };
 
 bool ExprFindLabels::verifyConstant(const ConstantExpr* ce)
 {
-	if (*fr_it != ce->getWidth())
+	if (rule_it.matchValue(ce->getWidth()) == false)
 		return false;
 
-	fr_it++;
-	if (*fr_it != ce->getZExtValue())
+	if (rule_it.matchValue(ce->getZExtValue()) == false)
 		return false;
 
-	fr_it++;
 	return true;
 }
 
 bool ExprFindLabels::verifyConstant(uint64_t v, unsigned w)
 {
-	if (*fr_it != Expr::Constant)
+	if (rule_it.matchValue(Expr::Constant) == false)
 		return Stop;
-	fr_it++;
 
-	if (*fr_it != w)
+	if (rule_it.matchValue(w) == false)
 		return false;
-	fr_it++;
 
-	if (*fr_it != v)
+	if (rule_it.matchValue(v) == false)
 		return false;
-	fr_it++;
 
 	return true;
 }
 
 ExprFindLabels::Action ExprFindLabels::visitExpr(const Expr* expr)
 {
-	if (OP_LABEL_TEST(*fr_it)) {
+	uint64_t	label_op;
+
+	if (rule_it.matchLabel(label_op)) {
 		ExprRule::labelmap_ty::iterator	it;
 		uint64_t			label_num;
 
-		label_num = OP_LABEL_NUM(*fr_it);
-		fr_it++;
-		it = lm.find(label_num);
+		label_num = OP_LABEL_NUM(label_op);
 
+		it = lm.find(label_num);
 		if (it == lm.end()) {
 			/* create new label */
 			lm[label_num] = ref<Expr>(const_cast<Expr*>(expr));
@@ -505,7 +503,7 @@ ExprFindLabels::Action ExprFindLabels::visitExpr(const Expr* expr)
 
 skip_label:
 		/* label was matched, continue */
-		if (fr_it == from_rule.end()) {
+		if (rule_it.isDone()) {
 			success = true;
 			return Stop;
 		}
@@ -513,13 +511,12 @@ skip_label:
 		return Skip;
 	}
 
-	/* mismatch-- rule does not apply */
-	if ((uint64_t)expr->getKind() != *fr_it) {
+	/* match the expression node's opcode */
+	if (rule_it.matchValue(expr->getKind()) == false) {
 		success = false;
 		return Stop;
 	}
 
-	fr_it++;
 	switch (expr->getKind()) {
 	case Expr::Constant:
 		if (!verifyConstant(static_cast<const ConstantExpr*>(expr)))
@@ -576,7 +573,7 @@ skip_label:
 	}
 
 	/* rule ran out of steam. we're done?? */
-	if (fr_it == from_rule.end()) {
+	if (rule_it.isDone()) {
 		success = true;
 		return Stop;
 	}
@@ -584,15 +581,74 @@ skip_label:
 	return Expand;
 }
 
-ref<Expr> ExprRule::apply(const ref<Expr>& e) const
+class SingleRuleIterator : public ExprRule::RuleIterator
 {
-	labelmap_ty	labels;
-	int		off;
-	ExprFindLabels	efl(from.rule, labels);
+public:
+	bool isDone(void) const { return (it == from_rule.end()); }
+	bool matchValue(uint64_t v)
+	{
+		if (isDone()) return false;
+
+		if (*it != v) {
+			it++;
+			return true;
+		}
+
+		return false;
+	}
+
+	void reset(void) { it = from_rule.begin(); }
+
+	bool matchLabel(uint64_t& v)
+	{
+		if (isDone()) return false;
+
+		v = *it;
+		if (OP_LABEL_TEST(v)) {
+			it++;
+			return true;
+		}
+
+		return false;
+	}
+
+	const ExprRule::flatrule_ty& getToRule(void) const
+	{
+		assert (isDone() && "Grabbing to-rule but didn't verify!");
+		return to_rule;
+	}
+
+	SingleRuleIterator(
+		const ExprRule::flatrule_ty& _from_rule,
+		const ExprRule::flatrule_ty& _to_rule)
+	: from_rule(_from_rule)
+	, to_rule(_to_rule)
+	, it(from_rule.begin()) {}
+
+	virtual ~SingleRuleIterator() {}
+
+private:
+	const ExprRule::flatrule_ty&		from_rule;
+	const ExprRule::flatrule_ty&		to_rule;
+	ExprRule::flatrule_ty::const_iterator	it;
+};
+
+ref<Expr> ExprRule::apply(const ref<Expr>& e, ExprRule::RuleIterator& ri)
+{
+	labelmap_ty		labels;
+	int			off;
+	ExprFindLabels		efl(ri, labels);
 
 	if (efl.assignLabels(e) == false)
 		return NULL;
 
 	off = 0;
-	return flat2expr(labels, to.rule, off);
+	return flat2expr(labels, ri.getToRule(), off);
+}
+
+
+ref<Expr> ExprRule::apply(const ref<Expr>& e) const
+{
+	SingleRuleIterator	sri(from.rule, to.rule);
+	return apply(e, sri);
 }

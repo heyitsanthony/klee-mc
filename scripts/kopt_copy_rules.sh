@@ -15,7 +15,7 @@ fi
 
 
 lasthash=''
-newrules="0"
+old_rule_count=`ls -l $DST/ | wc -l`
 md5sum `grep ^valid "$SRC"/*valid | cut -f1 -d':' | sed "s/rule/kopt/;s/valid/rule/" | cut -f1 -d' '` | sort | \
 while read a; do
 	HASHVAL=`echo $a | cut -f1 -d' '`
@@ -26,7 +26,7 @@ while read a; do
 	lasthash="$HASHVAL"
 	if [ ! -e "$DST"/"$HASHVAL" ]; then
 		cp $FNAME "$DST"/"$HASHVAL"
-		newrules=$(($newrules + 1))
 	fi
 done
-echo "New rules: " $newrules
+new_rule_count=`ls -l $DST/ | wc -l`
+echo "New rules: " `expr $new_rule_count - $old_rule_count`

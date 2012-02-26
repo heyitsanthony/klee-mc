@@ -8,6 +8,7 @@
 #include "static/Sugar.h"
 #include "klee/ExprBuilder.h"
 #include "klee/Solver.h"
+#include "klee/util/ExprUtil.h"
 
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ManagedStatic.h"
@@ -121,17 +122,23 @@ static void checkRule(ExprBuilder *eb, Solver* s)
 	ExprRule	*er = ExprRule::loadPrettyRule(InputFile.c_str());
 	ref<Expr>	rule_expr;
 	bool		ok, mustBeTrue;
+	unsigned	to_nodes, from_nodes;
 
 	assert (er != NULL && "Bad rule?");
 
 	rule_expr = er->materialize();
 	std::cerr << rule_expr << '\n';
 
+	to_nodes = ExprUtil::getNumNodes(er->getToExpr());
+	from_nodes = ExprUtil::getNumNodes(er->getFromExpr());
+
 	ok = s->mustBeTrue(Query(rule_expr), mustBeTrue);
 	assert (ok && "Unhandled solver failure");
 
 	if (mustBeTrue) {
 		std::cout << "valid rule\n";
+	} else if (to_nodes >= from_nodes) {
+		std::cout << "non-shrinking rule\n";
 	} else {
 		std::cout << "invalid rule\n";
 	}

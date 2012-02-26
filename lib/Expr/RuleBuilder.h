@@ -1,6 +1,7 @@
 #ifndef RULEBUILDER_H
 #define RULEBUILDER_H
 
+#include "static/Trie.h"
 #include "klee/ExprBuilder.h"
 
 namespace klee
@@ -10,6 +11,8 @@ class ExprRule;
 class RuleBuilder : public ExprBuilder
 {
 public:
+	typedef Trie<uint64_t, ExprRule*>	ruletrie_ty;
+
 	RuleBuilder(ExprBuilder* base);
 	virtual ~RuleBuilder(void);
 
@@ -141,8 +144,11 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS)	\
 private:
 	void loadRules(const char* ruledir);
 	ref<Expr> tryApplyRules(const ref<Expr>& in);
+	ref<Expr> tryAllRules(const ref<Expr>& in);
+	ref<Expr> tryTrieRules(const ref<Expr>& in);
 
-	std::vector<ExprRule*>	rules;
+	ruletrie_ty			rules_trie;
+	std::vector<ExprRule*>		rules_arr;
 	ExprBuilder		*eb;
 	unsigned		depth;
 
