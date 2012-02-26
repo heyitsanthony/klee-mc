@@ -18,6 +18,7 @@
 #include "llvm/Support/CommandLine.h"
 
 #include "DemotionSearcher.h"
+#include "SecondChanceSearcher.h"
 #include "RescanSearcher.h"
 #include "TailPriority.h"
 #include "BucketPriority.h"
@@ -86,6 +87,11 @@ namespace {
   cl::opt<bool> UseInterleavedQueryCostNURS("use-interleaved-query-cost-NURS");
   cl::opt<bool> UseInterleavedCovNewNURS("use-interleaved-covnew-NURS");
 
+  cl::opt<bool> UseSecondChance(
+  	"use-second-chance",
+	cl::desc("Give states that find new instructions extra time."),
+	cl::init(false));
+
   cl::opt<std::string>
   WeightType(
     "weight-type",
@@ -117,17 +123,17 @@ namespace {
 
   cl::opt<bool>
   UseBatchingSearch("use-batching-search",
-           cl::desc("Use batching searcher (run state for N instructions/time, see --batch-instructions and --batch-time"));
+           cl::desc("Batching searches by instructions and time"));
 
   cl::opt<unsigned>
   BatchInstructions(
     "batch-instructions",
-    cl::desc("Number of instructions to batch with --use-batching-search"),
+    cl::desc("Number of instructions to batch"),
     cl::init(0));
 
   cl::opt<double>
   BatchTime("batch-time",
-            cl::desc("Amount of time to batch with --use-batching-search"),
+            cl::desc("Amount of time to batch"),
             cl::init(-1.0));
 
   cl::opt<bool>
@@ -374,6 +380,9 @@ Searcher *UserSearcher::constructUserSearcher(Executor &executor)
 
 	if (UseFilterSearch)
 		searcher = new FilterSearcher(executor, searcher);
+
+	if (UseSecondChance)
+		searcher = new SecondChanceSearcher(searcher);
 
 	if (UseBatchingSearch)
 		searcher = new BatchingSearcher(
