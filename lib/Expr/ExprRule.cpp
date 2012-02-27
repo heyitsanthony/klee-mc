@@ -482,7 +482,9 @@ ExprFindLabels::Action ExprFindLabels::visitExpr(const Expr* expr)
 {
 	uint64_t	label_op;
 
-	if (rule_it.matchLabel(label_op)) {
+	/* SUPER IMPORTANT: labels are always 8-bits until otherwise
+	 * noted. Permitting other sizes tends to wreck expected sizes. */
+	if (expr->getWidth() == 8 && rule_it.matchLabel(label_op)) {
 		ExprRule::labelmap_ty::iterator	it;
 		uint64_t			label_num;
 
