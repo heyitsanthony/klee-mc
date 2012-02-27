@@ -189,6 +189,15 @@ protected:
 		read_arr = re.getArray().get();
 		it = uni2src_arr.find(read_arr);
 		if (it != uni2src_arr.end()) {
+			ce_idx = dyn_cast<ConstantExpr>(re.index);
+			if (	ce_idx != NULL &&
+				ce_idx->getZExtValue() >= it->second->getSize())
+			{
+				return Action::changeTo(
+					ConstantExpr::create(
+						0, re.getWidth()));
+			}
+
 			return Action::changeTo(
 				ReadExpr::create(
 					UpdateList(it->second, NULL),
@@ -206,7 +215,7 @@ protected:
 		/* quick OOB sanity check */
 		ce_idx = dyn_cast<ConstantExpr>(re.index);
 		if (ce_idx != NULL) {
-			if (ce_idx->getZExtValue() >= repl_arr->mallocKey.size) {
+			if (ce_idx->getZExtValue() >= repl_arr->getSize()) {
 				return Action::changeTo(
 					ConstantExpr::create(0, re.getWidth()));
 			}
