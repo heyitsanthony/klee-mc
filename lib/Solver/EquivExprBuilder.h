@@ -110,6 +110,7 @@ private:
 	void loadBlacklist(const char* fname);
 
 protected:
+	void handleQueuedExprs(void);
 	ref<Expr> lookup(ref<Expr>& e);
 	ref<Expr> lookupByEval(ref<Expr>& e, unsigned nodes);
 	uint64_t getEvalHash(ref<Expr>& e, bool &maybeConst);
@@ -145,6 +146,7 @@ protected:
 	writtenhashes_ty		written_hashes;
 
 	ExprHashMap<ref<Expr> >		lookup_memo;
+	std::list<ref<Expr> >		solver_exprs;
 
 	unsigned		hit_c;
 	unsigned		miss_c;

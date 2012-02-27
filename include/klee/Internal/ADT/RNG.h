@@ -25,7 +25,7 @@ namespace klee {
     int mti;
     
   public:
-    RNG(unsigned int seed=5489UL);
+    RNG(unsigned int seed=0UL);
   
     void seed(unsigned int seed);
     

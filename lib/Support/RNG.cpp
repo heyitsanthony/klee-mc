@@ -42,12 +42,15 @@
    email: m-mat @ math.sci.hiroshima-u.ac.jp (remove space)
 */
 
+#include <time.h>
 #include "klee/Internal/ADT/RNG.h"
 
 using namespace klee;
 
 /* initializes mt[N] with a seed */
-RNG::RNG(unsigned int s) {
+RNG::RNG(unsigned int s)
+{
+  if (s == 0) s = time(NULL);
   seed(s);
 }
 

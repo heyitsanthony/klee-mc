@@ -29,6 +29,13 @@ namespace {
 		"write-equiv-proofs",
 		cl::init(false),
 		cl::desc("Dump equivalence proofs to proofs directory."));
+
+	cl::opt<bool>
+	QueueSolverEquiv(
+		"queue-solver-equiv",
+		cl::init(false),
+		cl::desc("Check expr equiv outside of solver."));
+
 }
 
 
@@ -142,11 +149,34 @@ ref<Expr> EquivExprBuilder::lookup(ref<Expr>& e)
 	// recursively call back into lookup when building
 	// intermediate expressions
 	depth++;
+	handleQueuedExprs();
 	ret = lookupByEval(e, nodes);
-	lookup_memo[e] = ret;
+	if (solver.inSolver() == false)
+		lookup_memo[e] = ret;
 	depth--;
 
 	return ret;
+}
+
+void EquivExprBuilder::handleQueuedExprs(void)
+{
+	if (QueueSolverEquiv == false || solver.inSolver() == true)
+		return;
+
+	foreach (it, solver_exprs.begin(), solver_exprs.end()) {
+		ref<Expr>	ne, cur_e;
+
+		cur_e = *it;
+		if (lookup_memo.count(cur_e))
+			continue;
+
+		ne = lookupByEval(
+			cur_e,
+			ExprUtil::getNumNodes(cur_e, false, EE_MAX_NODES+1));
+		lookup_memo[cur_e] = ne;
+	}
+
+	solver_exprs.clear();
 }
 
 class ReadUnifier : public ExprVisitor
@@ -331,6 +361,8 @@ ref<Expr> EquivExprBuilder::lookupByEval(ref<Expr>& e, unsigned nodes)
 
 	if (solver.inSolver()) {
 		std::cerr << "[EquivExpr] Skipping replace: In solver!\n";
+		if (QueueSolverEquiv)
+			solver_exprs.push_back(e);
 		return e;
 	}
 
