@@ -75,12 +75,20 @@ EquivExprBuilder::EquivExprBuilder(Solver& s, ExprBuilder* in_eb)
 
 	loadBlacklist((EquivDBDir + "/blacklist.txt").c_str());
 
-	for (unsigned i = 0; i < 8; i++) {
+	for (unsigned i = 0; i < NONSEQ_COUNT; i++) {
 		for (unsigned j = 0; j < i; j++) {
 			sample_nonseq_zeros[i].push_back(0xa5);
 		}
 		sample_nonseq_zeros[i].push_back(0);
 	}
+
+	for (unsigned i = 0; i < NONSEQ_COUNT; i++) {
+		for (unsigned j = 0; j < i; j++) {
+			sample_nonseq_fe[i].push_back(0);
+		}
+		sample_nonseq_fe[i].push_back(0xfe);
+	}
+
 }
 
 EquivExprBuilder::~EquivExprBuilder(void) { delete eb; }
@@ -484,8 +492,13 @@ uint64_t EquivExprBuilder::getEvalHash(ref<Expr>& e, bool& maybeConst)
 	AssignHash		ah(e);
 	Assignment		&a(ah.getAssignment());
 
-	for (unsigned k = 0; k < 8; k++) {
+	for (unsigned k = 0; k < NONSEQ_COUNT; k++) {
 		a.bindFreeToSequence(sample_nonseq_zeros[k]);
+		ah.commitAssignment();
+	}
+
+	for (unsigned k = 0; k < NONSEQ_COUNT; k++) {
+		a.bindFreeToSequence(sample_nonseq_fe[k]);
 		ah.commitAssignment();
 	}
 

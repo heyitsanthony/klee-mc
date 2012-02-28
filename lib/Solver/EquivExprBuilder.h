@@ -128,7 +128,11 @@ protected:
 	ExprBuilder			*eb;	/* default builder */
 	std::vector<uint8_t>	sample_seq;
 	std::vector<uint8_t>	sample_seq_onoff;
-	std::vector<uint8_t>	sample_nonseq_zeros[8];
+
+	/* 64-bit machine = 8 byte sampling => 17 = nyquist rate */
+	#define NONSEQ_COUNT	17
+	std::vector<uint8_t>	sample_nonseq_zeros[NONSEQ_COUNT];
+	std::vector<uint8_t>	sample_nonseq_fe[NONSEQ_COUNT];
 
 	uint64_t			served_c;
 	uint64_t			ign_c;
