@@ -829,12 +829,43 @@ unsigned int AddressSpace::copyOutBuf(
 ref<Expr> AddressSpace::getOOBCond(ref<Expr>& symptr) const
 {
 	ref<Expr>	ret_expr = ConstantExpr::create(0,1);
+	uint64_t	extent_begin, extent_len;
 
+	extent_begin = 0;
+	extent_len = 0;
 	foreach (it, begin(), end()) {
-		OrExpr::create(
-			ret_expr,
-			(it->first)->getBoundsCheckPointer(symptr));
+		const MemoryObject	*mo;
 
+		mo = it->first;
+		if (mo->address == (extent_begin + extent_len)) {
+			extent_len += mo->size;
+			continue;
+		}
+
+		if (extent_len != 0) {
+			ref<Expr>	bound_chk;
+			bound_chk = UltExpr::create(
+				SubExpr::create(
+					symptr,
+					ConstantExpr::create(extent_begin, 64)),
+				ConstantExpr::create(extent_len, 64));
+
+			ret_expr = OrExpr::create(ret_expr, bound_chk);
+		}
+
+		extent_begin = mo->address;
+		extent_len = mo->size;
+	}
+
+	if (extent_len != 0) {
+		ref<Expr>	bound_chk;
+		bound_chk = UltExpr::create(
+			SubExpr::create(
+				symptr,
+				ConstantExpr::create(extent_begin, 64)),
+			ConstantExpr::create(extent_len, 64));
+
+		ret_expr = OrExpr::create(ret_expr, bound_chk);
 	}
 
 	return NotExpr::create(ret_expr);
