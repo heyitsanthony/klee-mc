@@ -1,6 +1,10 @@
 #!/bin/bash
 
 cd "$1"
+
+# get rid of huge proofs
+ls -lS proof.* | awk -e ' { if ($5 > 10000) print $9; } ' | xargs rm
+
 for a in proof.*.smt; do
 	RULEKEY=`echo $a | cut -f2 -d'.'`
 	RULEFNAME=kopt.$RULEKEY.rule
