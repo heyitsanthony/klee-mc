@@ -23,9 +23,11 @@ public:
 
 	bool isSymbolic(void) const { return symbolic; }
 	void setSymbolic(void) { symbolic = true; }
+	void setArgs(const std::list<std::string>& ptrs);
 private:
 	char** envFromString(const std::string& e_path);
 	void loadArgv(const std::list<std::string>& argv);
+	void clearArgv(void);
 	std::string	in_bin_path;
 	unsigned int	argc;
 	char		**argv;

@@ -25,9 +25,7 @@ CmdArgs::CmdArgs(
 
 CmdArgs::~CmdArgs(void)
 {
-	for (unsigned i = 0; i < argc; i++)
-		delete [] argv[i];
-	delete[] argv;
+	clearArgv();
 
 	if (envp != NULL) {
 		for (unsigned int i = 0; envp[i]; i++)
@@ -82,6 +80,19 @@ void CmdArgs::print(std::ostream& os) const
 	for (unsigned int i = 0; i < argc; i++) {
 		os << "arg[" << i << "]: " << argv[i] << std::endl;
 	}
+}
+
+void CmdArgs::clearArgv(void)
+{
+	for (unsigned i = 0; i < argc; i++)
+		delete [] argv[i];
+	delete[] argv;
+}
+
+void CmdArgs::setArgs(const list<string>& ptrs)
+{
+	clearArgv();
+	loadArgv(ptrs);
 }
 
 void CmdArgs::loadArgv(const list<string>& in_argv)

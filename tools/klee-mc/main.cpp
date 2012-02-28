@@ -408,6 +408,21 @@ Guest* getGuest(CmdArgs* cmdargs)
 			?	NULL
 			:	GuestSnapshotFName.c_str());
 		assert (gs && "Could not load guest snapshot");
+
+		/* ugh, got to force load so replay knows how many symargs
+		 * we have */
+		if (cmdargs->isSymbolic()) {
+			std::vector<guest_ptr>	ptrs(gs->getArgvPtrs());
+			std::list<std::string>	arg_l;
+
+			foreach (it, ptrs.begin(), ptrs.end()) {
+				const char	*s;
+				s =  (const char*)gs->getMem()->getHostPtr(*it);
+				arg_l.push_back(std::string(s));
+			}
+
+			cmdargs->setArgs(arg_l);
+		}
 	} else if (GuestType == "frag") {
 		GuestFragment	*gf;
 
