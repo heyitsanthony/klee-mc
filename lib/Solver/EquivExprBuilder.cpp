@@ -36,6 +36,11 @@ namespace {
 		cl::init(false),
 		cl::desc("Check expr equiv outside of solver."));
 
+	cl::opt<std::string>
+	EquivDBDir(
+		"equivdb-dir",
+		cl::init("equivdb"),
+		cl::desc("EquivDB directory. Defaults to ./equivdb"));
 }
 
 
@@ -58,17 +63,17 @@ EquivExprBuilder::EquivExprBuilder(Solver& s, ExprBuilder* in_eb)
 , failed_c(0)
 , blacklist_c(0)
 {
-	mkdir("equivdb", 0700);
+	mkdir(EquivDBDir.c_str(), 0700);
 
 	for (unsigned i = 1; i <= 64; i++)
-		makeBitDir("equivdb", i);
-	makeBitDir("equivdb", 128);
-	makeBitDir("equivdb", 96);
+		makeBitDir(EquivDBDir.c_str(), i);
+	makeBitDir(EquivDBDir.c_str(), 128);
+	makeBitDir(EquivDBDir.c_str(), 96);
 
 	if (WriteEquivProofs)
 		mkdir("proofs", 0700);
 
-	loadBlacklist("equivdb/blacklist.txt");
+	loadBlacklist((EquivDBDir + "/blacklist.txt").c_str());
 
 	for (unsigned i = 0; i < 8; i++) {
 		for (unsigned j = 0; j < i; j++) {
@@ -345,7 +350,7 @@ ref<Expr> EquivExprBuilder::lookupByEval(ref<Expr>& e, unsigned nodes)
 	w = e->getWidth();
 
 	if (!written_hashes.count(hash)) {
-		ss << "equivdb/" << w << '/' << nodes << '/' << hash;
+		ss << EquivDBDir << "/" << w << '/' << nodes << '/' << hash;
 		rc = stat(ss.str().c_str(), &st);
 		if (rc != 0) {
 			/* entry not found.. this is the first one! */
@@ -399,7 +404,7 @@ ref<Expr> EquivExprBuilder::lookupByEval(ref<Expr>& e, unsigned nodes)
 		expr::SMTParser*	smtp;
 
 		ss.str("");
-		ss << "equivdb/" << w << '/' << k << '/' << hash;
+		ss << EquivDBDir << "/" << w << '/' << k << '/' << hash;
 		rc = stat(ss.str().c_str(), &st);
 		if (rc != 0)
 			continue;
