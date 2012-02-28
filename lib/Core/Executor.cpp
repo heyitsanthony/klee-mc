@@ -113,8 +113,7 @@ namespace {
 
 
   cl::opt<bool>
-  RandomizeFork("randomize-fork",
-                cl::init(false));
+  RandomizeFork("randomize-fork", cl::init(false));
 
   cl::opt<bool>
   DebugPrintInstructions("debug-print-instructions",
@@ -438,11 +437,17 @@ bool Executor::forkFollowReplay(ExecutionState& current, struct ForkInfo& fi)
 		return true;
 	}
 
+	std::cerr << "Dump of Function:\n";
+	current.prevPC->getInst()->getParent()->getParent()->dump();
+
+	std::cerr << "Dump of BB:\n";
+	current.prevPC->getInst()->getParent()->getParent()->dump();
+
 	std::stringstream ss;
 	ss	<< "hit invalid branch in replay path mode (line="
 		<< current.prevPC->getInfo()->assemblyLine
-		<< ", expected target="
-		<< targetIndex << ", actual targets=";
+		<< ", prior-path target=" << targetIndex
+		<< ", replay targets=";
 
 	bool first = true;
 	for(unsigned i = 0; i < fi.N; i++) {
