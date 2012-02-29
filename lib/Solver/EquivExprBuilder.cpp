@@ -10,6 +10,7 @@
 #include "llvm/Support/CommandLine.h"
 #include "SMTPrinter.h"
 #include "../Expr/SMTParser.h"
+#include "../Expr/ExprRule.h"
 #include "static/Sugar.h"
 #include "EquivExprBuilder.h"
 
@@ -29,6 +30,13 @@ namespace {
 		"write-equiv-proofs",
 		cl::init(false),
 		cl::desc("Dump equivalence proofs to proofs directory."));
+
+	cl::opt<bool>
+	WriteEquivRules(
+		"write-equiv-rules",
+		cl::init(false),
+		cl::desc("Dump equivalence rules to proofs directory."));
+
 
 	cl::opt<bool>
 	QueueSolverEquiv(
@@ -70,7 +78,7 @@ EquivExprBuilder::EquivExprBuilder(Solver& s, ExprBuilder* in_eb)
 	makeBitDir(EquivDBDir.c_str(), 128);
 	makeBitDir(EquivDBDir.c_str(), 96);
 
-	if (WriteEquivProofs)
+	if (WriteEquivProofs || WriteEquivRules)
 		mkdir("proofs", 0700);
 
 	loadBlacklist((EquivDBDir + "/blacklist.txt").c_str());
@@ -339,6 +347,16 @@ ref<Expr> EquivExprBuilder::tryEquivRewrite(
 		SMTPrinter::dump(
 			Query(EqExpr::create(e_klee_w, e_db_unified)),
 			"proofs/proof");
+
+	if (WriteEquivRules) {
+		std::stringstream	ss;
+		Query	q(EqExpr::create(e_klee_w, e_db_unified));
+
+		ss << "proofs/pending." << q.hash() << ".rule";
+		std::ofstream		of(ss.str().c_str());
+		ExprRule::printRule(of, e_klee_w, e_db_unified);
+	}
+
 
 	/* return unified query from cache */
 	return ZExtExpr::create(e_db_unified, e_klee->getWidth());

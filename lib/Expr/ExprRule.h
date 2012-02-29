@@ -42,6 +42,7 @@ public:
 
 	static void printRule(
 		std::ostream& os, const ref<Expr>& lhs, const ref<Expr>& rhs);
+	static void printExpr(std::ostream& os, const ref<Expr>& e);
 
 	virtual ~ExprRule() {}
 

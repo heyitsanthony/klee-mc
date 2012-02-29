@@ -149,6 +149,7 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS)	\
 	static uint64_t getHits(void) { return hit_c; }
 	static uint64_t getMisses(void) { return miss_c; }
 	static uint64_t getRuleMisses(void) { return rule_miss_c; }
+	static uint64_t getNumRulesUsed(void) { return rules_used.size(); }
 private:
 	void loadRules(const char* ruledir);
 	ref<Expr> tryApplyRules(const ref<Expr>& in);
@@ -164,6 +165,8 @@ private:
 	static uint64_t		hit_c;
 	static uint64_t		miss_c;
 	static uint64_t		rule_miss_c;
+
+	static std::set<ExprRule*> rules_used;
 };
 }
 

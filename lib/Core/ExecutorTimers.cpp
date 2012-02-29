@@ -238,7 +238,8 @@ protected:
 	void print(void) { *os
 		<< RuleBuilder::getHits() << ' '
 		<< RuleBuilder::getMisses() << ' '
-		<< RuleBuilder::getRuleMisses(); }
+		<< RuleBuilder::getRuleMisses() << ' '
+		<< RuleBuilder::getNumRulesUsed(); }
 };
 
 ///

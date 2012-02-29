@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <sstream>
 #include <iostream>
+#include "klee/util/ExprUtil.h"
 
 #include "static/Sugar.h"
 #include "ExprRule.h"
@@ -30,6 +31,7 @@ namespace {
 uint64_t RuleBuilder::hit_c = 0;
 uint64_t RuleBuilder::miss_c = 0;
 uint64_t RuleBuilder::rule_miss_c = 0;
+std::set<ExprRule*> RuleBuilder::rules_used;
 
 RuleBuilder::RuleBuilder(ExprBuilder* base)
 : eb(base), depth(0), recur(0)
@@ -198,6 +200,7 @@ public:
 
 	virtual ~TrieRuleIterator() {}
 
+	ExprRule* getFoundRule(void) const { return found_rule; }
 private:
 	/* we use this to choose whether to seek out a label or not */
 	const RuleBuilder::ruletrie_ty	&rt;
@@ -215,8 +218,21 @@ ref<Expr> RuleBuilder::tryTrieRules(const ref<Expr>& in)
 
 	while (1) {
 		new_expr = ExprRule::apply(in, tri);
-		if (new_expr.isNull() == false)
+		if (new_expr.isNull() == false) {
+			unsigned in_nodes, new_nodes;
+
+			rules_used.insert(tri.getFoundRule());
+
+			in_nodes = ExprUtil::getNumNodes(in, false);
+			new_nodes = ExprUtil::getNumNodes(new_expr, false);
+			if (in_nodes < new_nodes) {
+				std::cerr
+					<< "[RuleBuilder] "
+					   "WTF!!! NEW EXPR IS BIGGER?!\n";
+				return in;
+			}
 			return new_expr;
+		}
 
 		rule_miss_c++;
 		if (tri.bumpSlot() == false)

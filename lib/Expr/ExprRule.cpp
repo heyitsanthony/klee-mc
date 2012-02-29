@@ -16,7 +16,8 @@ ExprRule::ExprRule(const Pattern& _from, const Pattern& _to)
 {
 	unsigned max_id;
 
-	max_id = (from.label_c > to.label_c) ? from.label_c : to.label_c;
+//	max_id = (from.label_c > to.label_c) ? from.label_c : to.label_c;
+	max_id = from.label_c + to.label_c;
 	from.label_id_max = max_id;
 	to.label_id_max = max_id;
 }
@@ -44,10 +45,24 @@ ref<Expr> ExprRule::flat2expr(
 	}
 
 	switch (fr[op_idx]) {
-	case Expr::Constant:
-		ret = ConstantExpr::create(fr[off+1], fr[off]);
-		off += 2;
+	case Expr::Constant: {
+		unsigned bits = fr[off++];
+		if (bits > 64) {
+			/* concat it in */
+			ret = ConstantExpr::create(fr[off++], 64);
+			bits -= 64;
+			while (bits) {
+				ref<Expr>	new_bits;
+				unsigned	w = (bits < 64) ? bits : 64;
+				new_bits = ConstantExpr::create(fr[off++], w);
+				ret = ConcatExpr::create(ret, new_bits);
+				bits -= w;
+			}
+		} else {
+			ret = ConstantExpr::create(fr[off++], bits);
+		}
 		break;
+	}
 	case Expr::Select: {
 		ref<Expr>	c, t, f;
 		c = flat2expr(lm, fr, off);
@@ -176,8 +191,7 @@ ref<Expr> ExprRule::anonFlat2Expr(const Pattern& p) const
 		materialize_arr = Array::create("exprrule", 4096);
 
 	arr = materialize_arr.get();
-
-	for (unsigned i = 0; i < p.label_id_max; i++)
+	for (unsigned i = 0; i <= p.label_id_max; i++)
 		lm[i] = ReadExpr::create(
 			UpdateList(arr, NULL), ConstantExpr::create(i, 32));
 
@@ -345,18 +359,41 @@ ExprFlatWriter::Action ExprFlatWriter::visitExpr(const Expr* expr)
 {
 	if (expr->getKind() == Expr::Read) {
 		ref<Expr>	re(const_cast<Expr*>(expr));
-		if (!labels.count(re))
-			labels[re] = labels.size();
+		if (!labels.count(re)) {
+			unsigned next_lid = labels.size();
+			labels[re] = next_lid;
+		}
 		os << " l" << labels.find(re)->second << ' ';
 		return Skip;
 	}
 
 	os << ' ' << expr->getKind() << ' ';
 	switch (expr->getKind()) {
-	case Expr::Constant:
-		os << expr->getWidth() << ' ' <<
-		static_cast<const ConstantExpr*>(expr)->getZExtValue();
-		break;
+	case Expr::Constant: {
+		unsigned 		bits, off, w;
+		const ConstantExpr	*ce;
+
+		bits = expr->getWidth();
+		os << bits << ' ';
+		ce = static_cast<const ConstantExpr*>(expr);
+		if (bits <= 64) {
+			os << ce->getZExtValue();
+			break;
+		}
+
+		off = 0;
+		while (bits) {
+			w = (bits > 64) ? 64 : bits;
+			/* NB: bits - w => hi bits listed first, lo bits last */
+			ce = dyn_cast<ConstantExpr>(
+				ExtractExpr::create(
+					const_cast<Expr*>(expr), bits - w, w));
+			assert (ce);
+			os << ce->getZExtValue() << ' ';
+			bits -= w;
+			off += w;
+		}
+	}
 	case Expr::Select: break;
 	case Expr::Concat: break;
 	case Expr::Extract:
@@ -404,6 +441,12 @@ ExprFlatWriter::Action ExprFlatWriter::visitExpr(const Expr* expr)
 	}
 
 	return Expand;
+}
+
+void ExprRule::printExpr(std::ostream& os, const ref<Expr>& e)
+{
+	ExprFlatWriter	efw(os);
+	efw.print(e);
 }
 
 void ExprRule::printRule(
@@ -455,11 +498,40 @@ private:
 
 bool ExprFindLabels::verifyConstant(const ConstantExpr* ce)
 {
-	if (rule_it.matchValue(ce->getWidth()) == false)
+	unsigned bits;
+
+	bits = ce->getWidth();
+
+
+	if (rule_it.matchValue(bits) == false)
 		return false;
 
-	if (rule_it.matchValue(ce->getZExtValue()) == false)
-		return false;
+	if (bits <= 64) {
+		if (rule_it.matchValue(ce->getZExtValue()) == false)
+			return false;
+		return true;
+	}
+
+	while (bits) {
+		unsigned		w;
+		const ConstantExpr	*cur_ce;
+
+		w = (bits > 64) ? 64 : bits;
+		cur_ce = dyn_cast<ConstantExpr>(
+			ExtractExpr::create(
+				const_cast<ConstantExpr*>(ce),
+				bits - w,
+				w));
+		if (cur_ce == NULL) {
+			std::cerr << "WTF EXPECTED CE FROM EXT(CE)\n";
+			return false;
+		}
+
+		if (rule_it.matchValue(cur_ce->getZExtValue()) == false)
+			return false;
+
+		bits -= w;
+	}
 
 	return true;
 }
@@ -481,6 +553,9 @@ bool ExprFindLabels::verifyConstant(uint64_t v, unsigned w)
 ExprFindLabels::Action ExprFindLabels::visitExpr(const Expr* expr)
 {
 	uint64_t	label_op;
+
+	/* success => stop */
+	assert (success == false);
 
 	/* SUPER IMPORTANT: labels are always 8-bits until otherwise
 	 * noted. Permitting other sizes tends to wreck expected sizes. */
@@ -639,13 +714,16 @@ ref<Expr> ExprRule::apply(const ref<Expr>& e, ExprRule::RuleIterator& ri)
 {
 	labelmap_ty		labels;
 	int			off;
+	ref<Expr>		ret;
 	ExprFindLabels		efl(ri, labels);
 
 	if (efl.assignLabels(e) == false)
 		return NULL;
 
 	off = 0;
-	return flat2expr(labels, ri.getToRule(), off);
+	ret = flat2expr(labels, ri.getToRule(), off);
+
+	return ret;
 }
 
 

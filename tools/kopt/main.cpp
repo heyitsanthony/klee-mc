@@ -3,6 +3,7 @@
 #include "../../lib/Expr/SMTParser.h"
 #include "../../lib/Expr/ExprRule.h"
 #include "../../lib/Expr/RuleBuilder.h"
+#include "../../lib/Expr/OptBuilder.h"
 #include "../../lib/Core/TimingSolver.h"
 
 #include "static/Sugar.h"
@@ -54,13 +55,14 @@ namespace llvm
 	enum BuilderKinds {
 		DefaultBuilder,
 		ConstantFoldingBuilder,
-		SimplifyingBuilder
+		SimplifyingBuilder,
+		HandOptBuilder
 	};
 
 	static cl::opt<BuilderKinds>
 	BuilderKind("builder",
 		cl::desc("Expression builder:"),
-		cl::init(DefaultBuilder),
+		cl::init(SimplifyingBuilder),
 		cl::values(
 			clEnumValN(DefaultBuilder, "default",
 			"Default expression construction."),
@@ -68,6 +70,8 @@ namespace llvm
 			"Fold constant expressions."),
 			clEnumValN(SimplifyingBuilder, "simplify",
 			"Fold constants and simplify expressions."),
+			clEnumValN(HandOptBuilder, "handopt",
+			"Hand-optimized builder."),
 			clEnumValEnd));
 }
 
@@ -83,6 +87,10 @@ static ExprBuilder* createExprBuilder(void)
 	case SimplifyingBuilder:
 		Builder = createConstantFoldingExprBuilder(Builder);
 		Builder = createSimplifyingExprBuilder(Builder);
+		break;
+	case HandOptBuilder:
+		delete Builder;
+		Builder = new OptBuilder();
 		break;
 	}
 
@@ -244,6 +252,13 @@ static void applyTransitivity(ExprBuilder* eb, Solver* s)
 
 	if (rule_from_rb == rule_from_old) {
 		std::cout << "rule builder broken. got same materialization\n";
+
+		std::cerr	<< "OLD: " << rule_from_old
+				<< "\n-> " << rule_to_old << '\n';
+
+		std::cerr	<< "RULE:" << rule_from_rb
+				<< "\n-> " << rule_to_rb << '\n';
+
 		goto done;
 	}
 
@@ -256,7 +271,8 @@ static void applyTransitivity(ExprBuilder* eb, Solver* s)
 	/* expect that for nonopt -> opt,
 	 * rule builder will give opt -> opt */
 	if (bridge_expr == rule_from_rb && bridge_expr == rule_to_rb) {
-		std::cout << "true (bridge_expr=" << bridge_expr << ")\n";
+		std::cout << "true\n(bridge_expr=" << bridge_expr << ")\n";
+		std::cout << "(from_old=" << rule_from_old << ")\n";
 		goto done;
 	}
 
