@@ -13,11 +13,17 @@ if [ ! -d "$DST" ]; then
 	exit -2
 fi
 
-
 old_rule_count=`ls -l $DST/ | wc -l`
 # rule.HASH.valid
-md5sum `grep ^valid "$SRC"/*valid | cut -f1 -d':' | sed "s/rule/ur/;s/valid/uniqrule/" | cut -f1 -d' '` | sort | \
-while read a; do
+VALIDRULES=`grep ^valid "$SRC"/*valid | cut -f1 -d':' | sed "s/rule/ur/;s/valid/uniqrule/" | cut -f1 -d' '`
+
+if [ -z "$VALIDRULES" ]; then
+	echo "No new rules."
+	exit 1
+fi
+
+
+md5sum $VALIDRULES | sort | while read a; do
 	HASHVAL=`echo $a | cut -f1 -d' '`
 	FNAME="$SRC"/ur.$HASHVAL.uniqrule
 	if [ ! -e "$DST"/"$HASHVAL" ]; then

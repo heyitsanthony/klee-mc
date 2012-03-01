@@ -76,7 +76,7 @@ ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS) \
 { \
 depth++;\
 ref<Expr> ret(eb->x(LHS, RHS));	\
-return lookup(ret); }	
+return lookup(ret); }
 	DECL_BIN_REF(Concat)
 	DECL_BIN_REF(Add)
 	DECL_BIN_REF(Sub)
@@ -120,6 +120,8 @@ protected:
 		return getEvalHash(e, mc);
 	}
 
+	ref<Expr> getParseByPath(const std::string& fname);
+
 	ref<Expr> tryEquivRewrite(
 		const ref<Expr>& e, const ref<Expr>& smaller);
 
@@ -151,6 +153,9 @@ protected:
 
 	ExprHashMap<ref<Expr> >		lookup_memo;
 	std::list<ref<Expr> >		solver_exprs;
+
+	typedef std::map<std::string, ref<Expr> > db_parse_cache_ty;
+	db_parse_cache_ty	db_parse_cache;
 
 	unsigned		hit_c;
 	unsigned		miss_c;

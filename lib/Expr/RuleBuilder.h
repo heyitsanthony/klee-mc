@@ -150,6 +150,8 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS)	\
 	static uint64_t getMisses(void) { return miss_c; }
 	static uint64_t getRuleMisses(void) { return rule_miss_c; }
 	static uint64_t getNumRulesUsed(void) { return rules_used.size(); }
+
+	static bool hasRule(const char* fname);
 private:
 	void loadRules(const char* ruledir);
 	ref<Expr> tryApplyRules(const ref<Expr>& in);

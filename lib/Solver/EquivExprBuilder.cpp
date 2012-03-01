@@ -11,6 +11,7 @@
 #include "SMTPrinter.h"
 #include "../Expr/SMTParser.h"
 #include "../Expr/ExprRule.h"
+#include "../Expr/RuleBuilder.h"
 #include "static/Sugar.h"
 #include "EquivExprBuilder.h"
 
@@ -49,6 +50,12 @@ namespace {
 		"equivdb-dir",
 		cl::init("equivdb"),
 		cl::desc("EquivDB directory. Defaults to ./equivdb"));
+
+	cl::opt<bool>
+	CheckRepeatRules(
+		"check-repeat-rules",
+		cl::init(true),
+		cl::desc("Check if \"discovered\" a known rule"));
 }
 
 
@@ -310,12 +317,9 @@ ref<Expr> EquivExprBuilder::tryEquivRewrite(
 
 	if (e_db_unified.isNull()) {
 		failed_c++;
-		std::cerr
-			<< "CHECK EQUIV[unified]: COULD NOT UNIFY "
-			<< e_db << '\n';
+		std::cerr << "[EquivDB] COULD NOT UNIFY " << e_db << '\n';
 		return NULL;
 	}
-
 
 	e_klee_w = e_klee;
 	w_diff = e_db_unified->getWidth() - e_klee->getWidth();
@@ -333,7 +337,7 @@ ref<Expr> EquivExprBuilder::tryEquivRewrite(
 		return NULL;
 	}
 
-	/* not an exact match */
+	/* not a precise match */
 	if (!must_be_true) {
 		miss_c++;
 		return NULL;
@@ -353,8 +357,20 @@ ref<Expr> EquivExprBuilder::tryEquivRewrite(
 		Query	q(EqExpr::create(e_klee_w, e_db_unified));
 
 		ss << "proofs/pending." << q.hash() << ".rule";
+
 		std::ofstream		of(ss.str().c_str());
 		ExprRule::printRule(of, e_klee_w, e_db_unified);
+		of.close();
+
+		if (	CheckRepeatRules &&
+			RuleBuilder::hasRule(ss.str().c_str()))
+		{
+			std::cerr << "HIT#" << hit_c << '\n';
+			std::cerr << "KLEE_W: " << e_klee_w << '\n';
+			std::cerr << "E_DB_UNI: " << e_db_unified << '\n';
+			std::cerr << "[EquivDB] Already have rule??\n";
+			assert ( 0 == 1 && "REPEAT RULE!");
+		}
 	}
 
 
@@ -427,7 +443,7 @@ ref<Expr> EquivExprBuilder::lookupByEval(ref<Expr>& e, unsigned nodes)
 	/* for smallest matching input-hash, if any */
 	for (unsigned k = 2; k < nodes; k++) {
 		ref<Expr>		ret, sat_q;
-		expr::SMTParser*	smtp;
+
 
 		ss.str("");
 		ss << EquivDBDir << "/" << w << '/' << k << '/' << hash;
@@ -435,14 +451,11 @@ ref<Expr> EquivExprBuilder::lookupByEval(ref<Expr>& e, unsigned nodes)
 		if (rc != 0)
 			continue;
 
-		smtp = expr::SMTParser::Parse(ss.str(), eb);
-
-		if (smtp == NULL) {
+		sat_q = getParseByPath(ss.str());
+		if (sat_q.isNull()) {
 			std::cerr << "WTF. BAD READ: " << ss.str() << '\n';
 			continue;
 		}
-
-		sat_q = smtp->satQuery;
 
 		/* when written out, expressions must be cast as an equality
 		 * (the SMTPrinter does ( = 0 x) )
@@ -458,13 +471,32 @@ ref<Expr> EquivExprBuilder::lookupByEval(ref<Expr>& e, unsigned nodes)
 		}
 
 		ret = tryEquivRewrite(e, sat_q);
-		delete smtp;
-
 		if (!ret.isNull())
 			return ret;
 	}
 
 	return e;
+}
+
+ref<Expr> EquivExprBuilder::getParseByPath(const std::string& fname)
+{
+	ref<Expr>		ret;
+	expr::SMTParser*	smtp;
+	db_parse_cache_ty::iterator it;
+
+	it = db_parse_cache.find(fname);
+	if (it != db_parse_cache.end())
+		return it->second;
+
+	smtp = expr::SMTParser::Parse(fname, eb);
+	if (smtp == NULL)
+		return NULL;
+
+	ret = smtp->satQuery;
+	db_parse_cache[fname] = ret;
+	delete smtp;
+
+	return ret;
 }
 
 class AssignHash

@@ -26,6 +26,7 @@ namespace {
 		cl::desc("Iterate through all rules until a match is found."),
 		cl::init(false));
 
+	cl::opt<bool> ShowXlate("show-xlated", cl::init(false));
 }
 
 uint64_t RuleBuilder::hit_c = 0;
@@ -83,6 +84,7 @@ void RuleBuilder::loadRules(const char* ruledir)
 ref<Expr> RuleBuilder::tryApplyRules(const ref<Expr>& in)
 {
 	ref<Expr>	ret;
+	unsigned	old_depth;
 
 	if (in->getKind() == Expr::Constant)
 		return in;
@@ -94,6 +96,7 @@ ref<Expr> RuleBuilder::tryApplyRules(const ref<Expr>& in)
 	}
 
 	/* don't call back to self in case we find an optimization! */
+	old_depth = depth;
 	depth = 1;
 
 	if (ApplyAllRules)
@@ -102,12 +105,19 @@ ref<Expr> RuleBuilder::tryApplyRules(const ref<Expr>& in)
 		ret = tryTrieRules(in);
 
 	recur--;
-	depth = 0;
+	depth = old_depth;
 
-	if ((void*)ret.get() == (void*)in.get())
+	if ((void*)ret.get() == (void*)in.get()) {
 		miss_c++;
-	else
+	} else {
+		if (ShowXlate) {
+			std::cerr << "[RuleBuilder] XLated!\n";
+			std::cerr << in << '\n';
+			std::cerr << "->" << '\n';
+			std::cerr << ret << '\n';
+		}
 		hit_c++;
+	}
 
 	return ret;
 }
@@ -231,6 +241,7 @@ ref<Expr> RuleBuilder::tryTrieRules(const ref<Expr>& in)
 					   "WTF!!! NEW EXPR IS BIGGER?!\n";
 				return in;
 			}
+
 			return new_expr;
 		}
 
@@ -258,3 +269,46 @@ ref<Expr> RuleBuilder::tryAllRules(const ref<Expr>& in)
 	return in;
 }
 
+#include "openssl/md5.h"
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+static const char ugh[] = "0123456789abcdef";
+bool RuleBuilder::hasRule(const char* fname)
+{
+	FILE			*f;
+	char			buf[4096];
+	unsigned		sz;
+	std::string		rule_file;
+	struct stat		s;
+	unsigned char		md[16];
+
+	/* expert quality */
+	f = fopen(fname, "rb");
+	if (f == NULL) {
+		std::cerr << "Could not load new rule '" << fname << "'\n";
+		return false;
+	}
+	sz = fread(buf, 1, 4095, f);
+	assert (sz > 0 && "DID NOT GET ANY DATA??");
+	buf[sz] = '\0';
+	fclose(f);
+
+	if (sz == 0)
+		return false;
+
+	MD5((unsigned char*)buf, sz, md);
+
+	std::stringstream ss;
+	for (unsigned i = 0; i < 16; i++)
+		ss	<< ugh[(md[i] & 0xf0) >> 4]
+			<< ugh[md[i] & 0x0f];
+
+	rule_file = RuleDir + "/" + ss.str();
+	if (stat(rule_file.c_str(), &s) == 0) {
+		std::cerr << "[RuileBuilder] Already has " << rule_file << '\n';
+		return true;
+	}
+
+	return false;
+}

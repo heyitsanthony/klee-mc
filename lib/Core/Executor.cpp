@@ -297,6 +297,12 @@ Executor::Executor(InterpreterHandler *ih)
 , stpTimeout(MaxInstructionTime ?
 	std::min(MaxSTPTime,(double)MaxInstructionTime) : MaxSTPTime)
 {
+	/* rule builder should be installed before equiv checker, otherwise
+	 * we wind up wasting time searching the equivdb for rules we 
+	 * already have! */
+	if (UseRuleBuilder)
+		Expr::setBuilder(new RuleBuilder(Expr::getBuilder()));
+
 	this->solver = Solver::createTimerChain(
 		stpTimeout,
 		interpreterHandler->getOutputFilename("queries.pc"),
@@ -307,11 +313,7 @@ Executor::Executor(InterpreterHandler *ih)
 	stateManager = new ExeStateManager();
 	ExecutionState::setMemoryManager(memory);
 	ExeStateBuilder::replaceBuilder(new BaseExeStateBuilder());
-
-	if (UseRuleBuilder)
-		Expr::setBuilder(new RuleBuilder(Expr::getBuilder()));
 }
-
 
 Executor::~Executor()
 {

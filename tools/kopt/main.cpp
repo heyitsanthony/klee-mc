@@ -211,10 +211,12 @@ static void checkRule(ExprBuilder *eb, Solver* s)
 	ok = s->mustBeTrue(Query(rule_expr), mustBeTrue);
 	assert (ok && "Unhandled solver failure");
 
-	if (mustBeTrue) {
-		std::cout << "valid rule\n";
+	if (er->getToExpr() == er->getFromExpr()) {
+		std::cerr << "identity rule\n";
 	} else if (to_nodes >= from_nodes) {
 		std::cout << "non-shrinking rule\n";
+	} else if (mustBeTrue) {
+		std::cout << "valid rule\n";
 	} else {
 		std::cout << "invalid rule\n";
 	}
