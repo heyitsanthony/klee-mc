@@ -39,6 +39,17 @@ for a in *; do
 	echo "OK."
 
 	cp $NEWFNAME xtive
-	mv $a culled
+
+	h1=`head -n1 $a`
+	chkhd=`grep "$h1" $NEWFNAME`
+	if [ ! -z "$chkhd" ]; then
+		echo "CULLING $a."
+		echo "MATCH: $chkhd with $h1"
+		mv $a culled
+	else
+		echo "DID NOT CULL $a."
+		echo "MISMATCH: $h1 vs "
+		cat $NEWFNAME
+	fi
 	mv $NEWFNAME $RULEHASH
 done
