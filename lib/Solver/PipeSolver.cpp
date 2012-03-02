@@ -374,13 +374,16 @@ bool PipeSolverImpl::writeQuery(const Query& q) const
 	assert (query_writer_pid > 0 && "Parent with bad pid");
 
 	if (timeout > 0.0) {
-		sighandler_t	old_sig_h;
+		/* this sigaction stuff is voodoo from lkml */
+		struct sigaction 	sa, old_sa;
 
-		old_sig_h = signal(SIGALRM, parent_query_writer_alarm);
+		sa.sa_handler = parent_query_writer_alarm;
+		sa.sa_flags = SA_NOMASK;
+		sigaction(SIGALRM, &sa, &old_sa);
 		alarm((unsigned int)timeout);
 		wait_pid = waitpid(query_writer_pid, &status, 0);
 		alarm(0); // unschedule alarm
-		signal(SIGALRM, old_sig_h);
+		sigaction(SIGALRM, &old_sa, NULL);
 	} else {
 		wait_pid = waitpid(query_writer_pid, &status, 0);
 	}
