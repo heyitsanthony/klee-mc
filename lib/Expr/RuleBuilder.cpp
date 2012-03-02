@@ -20,6 +20,12 @@ namespace {
 		cl::desc("Directory containing rules for RuleBuilder"),
 		cl::init("rules"));
 
+	cl::opt<std::string>
+	RuleDBFile(
+		"rule-file",
+		cl::desc("Rule database file"),
+		cl::init("brule.db"));
+
 	cl::opt<bool>
 	ApplyAllRules(
 		"try-all-rules",
@@ -37,7 +43,7 @@ std::set<ExprRule*> RuleBuilder::rules_used;
 RuleBuilder::RuleBuilder(ExprBuilder* base)
 : eb(base), depth(0), recur(0)
 {
-	loadRules(RuleDir.c_str());
+	loadRules();
 }
 
 RuleBuilder::~RuleBuilder()
@@ -55,13 +61,57 @@ static bool rulesSort(const ExprRule* l, const ExprRule* r)
 	return l->getToNodeCount() < r->getToNodeCount();
 }
 
-void RuleBuilder::loadRules(const char* ruledir)
+void RuleBuilder::loadRules()
+{
+	bool			ok;
+	const std::string*	load_s;
+
+	load_s = &RuleDBFile;
+	ok = loadRuleDB(RuleDBFile.c_str());
+	if (!ok) {
+		ok = loadRuleDir(RuleDir.c_str());
+		load_s = &RuleDir;
+	}
+
+	if (!ok) {
+		std::cerr << "[RuleBuilder] Could not load rules\n";
+		return;
+	}
+
+	std::cerr
+		<< "[RuleBuilder] Loaded " << rules_arr.size()
+		<< " rules from " << *load_s << ".\n";
+}
+
+bool RuleBuilder::loadRuleDB(const char* ruledir)
+{
+	std::ifstream	ifs(ruledir);
+
+	if (!ifs.good() || ifs.bad() || ifs.fail() || ifs.eof())
+		return false;
+
+	while (ifs.eof() == false) {
+		ExprRule	*er;
+
+		er = ExprRule::loadBinaryRule(ifs);
+		if (er == NULL)
+			continue;
+
+		rules_arr.push_back(er);
+		rules_trie.add(er->getFromKey(), er);
+	}
+
+	return true;
+}
+
+bool RuleBuilder::loadRuleDir(const char* ruledir)
 {
 	struct dirent	*de;
 	DIR		*d;
 
 	d = opendir(ruledir);
-	assert (d != NULL && "Could not open rules directory!");
+	if (d == NULL)
+		return false;
 
 	while ((de = readdir(d))) {
 		ExprRule		*er;
@@ -79,7 +129,9 @@ void RuleBuilder::loadRules(const char* ruledir)
 	std::sort(rules_arr.begin(), rules_arr.end(), rulesSort);
 
 	closedir(d);
+	return true;
 }
+
 
 ref<Expr> RuleBuilder::tryApplyRules(const ref<Expr>& in)
 {
@@ -159,7 +211,6 @@ public:
 
 		if (found_rule)
 			return false;
-
 
 		if (last_label_v.size() <= label_depth) {
 			last_label_v.push_back(OP_LABEL_MASK);

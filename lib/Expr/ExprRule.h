@@ -19,6 +19,11 @@ class ExprRule
 public:
 	typedef std::vector<uint64_t>	flatrule_ty;
 	typedef std::map<unsigned, ref<Expr> > labelmap_ty;
+	struct Pattern {
+		flatrule_ty	rule;
+		unsigned	label_c;
+		unsigned	label_id_max;
+	};
 
 	/* this is so that we can get rule application to works for both
 	 * tries and a single rule */
@@ -42,6 +47,7 @@ public:
 
 	static void printRule(
 		std::ostream& os, const ref<Expr>& lhs, const ref<Expr>& rhs);
+	static void printBinaryPattern(std::ostream& os, const Pattern& p);
 	static void printExpr(std::ostream& os, const ref<Expr>& e);
 
 	virtual ~ExprRule() {}
@@ -70,11 +76,6 @@ public:
 	const flatrule_ty& getToKey(void) const { return to.rule; }
 
 protected:
-	struct Pattern {
-		flatrule_ty	rule;
-		unsigned	label_c;
-		unsigned	label_id_max;
-	};
 	ExprRule(const Pattern& _from, const Pattern& _to);
 
 private:
@@ -82,6 +83,7 @@ private:
 		const labelmap_ty& lm,
 		const flatrule_ty& fr, int& off);
 	ref<Expr> anonFlat2Expr(const Pattern& p) const;
+	static void loadBinaryPattern(std::istream& is, Pattern& p);
 
 
 	static bool readFlatExpr(std::ifstream& ifs, Pattern& p);

@@ -52,6 +52,18 @@ namespace llvm
 		"implied-rule-file",
 		cl::desc("Use a rule builder to try to minimize rule"));
 
+	cl::opt<bool>
+	UseBin(
+		"use-bin",
+		cl::desc("Use binary rule for input."),
+		cl::init(false));
+
+	cl::opt<bool>
+	DumpBinRule(
+		"dump-bin",
+		cl::desc("Dump rule in binary format."),
+		cl::init(false));
+
 	enum BuilderKinds {
 		DefaultBuilder,
 		ConstantFoldingBuilder,
@@ -97,6 +109,13 @@ static ExprBuilder* createExprBuilder(void)
 	return Builder;
 }
 
+static ExprRule* loadRule(const char *path)
+{
+	if (UseBin)
+		return ExprRule::loadBinaryRule(path);
+	return ExprRule::loadPrettyRule(path);
+}
+
 /*
 (= (ite (bvult
 		(bvadd
@@ -108,7 +127,6 @@ static ExprBuilder* createExprBuilder(void)
 	bv0[1]) 
  bv0[1]))
 */
-
 static bool getEquivalenceInEq(ref<Expr> e, ref<Expr>& lhs, ref<Expr>& rhs)
 {
 	const ConstantExpr	*ce;
@@ -195,7 +213,7 @@ static void getEquivalence(ref<Expr> e, ref<Expr>& lhs, ref<Expr>& rhs)
 
 static void checkRule(ExprBuilder *eb, Solver* s)
 {
-	ExprRule	*er = ExprRule::loadPrettyRule(InputFile.c_str());
+	ExprRule	*er = loadRule(InputFile.c_str());
 	ref<Expr>	rule_expr;
 	bool		ok, mustBeTrue;
 	unsigned	to_nodes, from_nodes;
@@ -212,7 +230,7 @@ static void checkRule(ExprBuilder *eb, Solver* s)
 	assert (ok && "Unhandled solver failure");
 
 	if (er->getToExpr() == er->getFromExpr()) {
-		std::cerr << "identity rule\n";
+		std::cout << "identity rule\n";
 	} else if (to_nodes >= from_nodes) {
 		std::cout << "non-shrinking rule\n";
 	} else if (mustBeTrue) {
@@ -233,7 +251,7 @@ static void applyTransitivity(ExprBuilder* eb, Solver* s)
 	ref<Expr>	init_expr, bridge_expr, impl_expr, new_rule_expr;
 	bool		ok, mustBeTrue;
 
-	er = ExprRule::loadPrettyRule(InputFile.c_str());
+	er = loadRule(InputFile.c_str());
 	assert (er != NULL && "Bad rule?");
 
 	rule_from_old = er->getFromExpr();
@@ -314,7 +332,7 @@ static void applyRule(ExprBuilder *eb, Solver* s)
 	bool		ok, mustBeTrue;
 	ref<Expr>	e, cond;
 
-	er = ExprRule::loadPrettyRule(ApplyRule.c_str());
+	er = loadRule(ApplyRule.c_str());
 	assert (er != NULL && "Bad rule?");
 
 	p = SMTParser::Parse(InputFile.c_str(), eb);
@@ -410,7 +428,10 @@ int main(int argc, char **argv)
 		applyRule(eb, s);
 	} else if (ApplyTransitivity) {
 		applyTransitivity(eb, s);
-	}else {
+	} else if (DumpBinRule) {
+		ExprRule	*er = loadRule(InputFile.c_str());
+		er->printBinaryRule(std::cout);
+	} else {
 		printRule(eb, s);
 	}
 

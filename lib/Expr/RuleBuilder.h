@@ -153,7 +153,10 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS)	\
 
 	static bool hasRule(const char* fname);
 private:
-	void loadRules(const char* ruledir);
+	void loadRules(void);
+	bool loadRuleDir(const char* ruledir);
+	bool loadRuleDB(const char* rulefile);
+
 	ref<Expr> tryApplyRules(const ref<Expr>& in);
 	ref<Expr> tryAllRules(const ref<Expr>& in);
 	ref<Expr> tryTrieRules(const ref<Expr>& in);

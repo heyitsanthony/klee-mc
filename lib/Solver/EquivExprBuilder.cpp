@@ -42,7 +42,7 @@ namespace {
 	cl::opt<bool>
 	QueueSolverEquiv(
 		"queue-solver-equiv",
-		cl::init(false),
+		cl::init(true),
 		cl::desc("Check expr equiv outside of solver."));
 
 	cl::opt<std::string>
@@ -54,7 +54,7 @@ namespace {
 	cl::opt<bool>
 	CheckRepeatRules(
 		"check-repeat-rules",
-		cl::init(true),
+		cl::init(false),
 		cl::desc("Check if \"discovered\" a known rule"));
 }
 

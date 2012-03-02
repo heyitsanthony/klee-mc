@@ -38,8 +38,11 @@ ref<Expr> ExprRule::flat2expr(
 
 		label_num = OP_LABEL_NUM(fr[op_idx]);
 		it = lm.find(label_num);
-		if (it == lm.end())
+		if (it == lm.end()) {
+			std::cerr << "[ExprRule] Flat2Expr Error. No label: "
+					<< label_num << "\n";
 			return NULL;
+		}
 
 		return it->second;
 	}
@@ -68,8 +71,9 @@ ref<Expr> ExprRule::flat2expr(
 		c = flat2expr(lm, fr, off);
 		t = flat2expr(lm, fr, off);
 		f = flat2expr(lm, fr, off);
-		if (c.isNull() || t.isNull() || f.isNull())
+		if (c.isNull() || t.isNull() || f.isNull()) {
 			return NULL;
+		}
 		ret = SelectExpr::create(c, t, f);
 		break;
 	}
@@ -86,8 +90,9 @@ ref<Expr> ExprRule::flat2expr(
 
 		kid = flat2expr(lm, fr, off);
 
-		if (e_off.isNull() || e_w.isNull() || kid.isNull())
+		if (e_off.isNull() || e_w.isNull() || kid.isNull()) {
 			return NULL;
+		}
 
 		ret = ExtractExpr::create(
 			kid,
@@ -105,8 +110,9 @@ ref<Expr> ExprRule::flat2expr(
 		w = flat2expr(lm, fr, off);
 		ce_w = dyn_cast<ConstantExpr>(w);
 		kid = flat2expr(lm, fr, off);
-		if (w.isNull() || kid.isNull())
+		if (w.isNull() || kid.isNull()) {
 			return NULL;
+		}
 
 		if (fr[op_idx] == Expr::SExt) {
 			ret = SExtExpr::create(kid, ce_w->getZExtValue());
@@ -128,7 +134,7 @@ ref<Expr> ExprRule::flat2expr(
 		lhs = flat2expr(lm, fr, off);	\
 		rhs = flat2expr(lm, fr, off);	\
 		if (lhs.isNull() || rhs.isNull())\
-			return NULL;		\
+		{ return NULL;	} \
 		ret = x##Expr::create(lhs, rhs);\
 		break;				\
 	}
@@ -166,20 +172,67 @@ ref<Expr> ExprRule::flat2expr(
 	return ret;
 }
 
+#define HDR_MAGIC	0xFEFEFEFE01010101
+
 void ExprRule::printBinaryRule(std::ostream& os) const
 {
-	assert( 0 == 1 && "STUB");
-#if 0
-	uint32_t	from_sz, to_sz;
+	uint64_t	hdr = HDR_MAGIC;
 
-	from_sz = from.size();
-	to_sz = to.size();
-	os.write((char*)&from_sz, 4);
-	os.write((char*)&to_sz, 4);
-	os.write((char*)from.data(), from_sz*8);
-	os.write((char*)to.data(), to_sz*8);
-#endif
+	os.write((char*)&hdr, 8);
+	printBinaryPattern(os, from);
+	printBinaryPattern(os, to);
 }
+
+void ExprRule::printBinaryPattern(std::ostream& os, const Pattern& p)
+{
+	uint32_t	sz;
+	uint32_t	l_c;
+
+	sz = p.rule.size();
+	l_c = p.label_c;
+	os.write((char*)&sz, 4);
+	os.write((char*)&l_c, 4);
+	os.write((char*)p.rule.data(), sz*8);
+}
+
+ExprRule* ExprRule::loadBinaryRule(const char* fname)
+{
+	std::ifstream ifs(fname);
+	return loadBinaryRule(ifs);
+}
+
+ExprRule* ExprRule::loadBinaryRule(std::istream& is)
+{
+	uint64_t	hdr;
+	Pattern		p_from, p_to;
+
+
+	is.read((char*)&hdr, 8);
+	if (hdr != HDR_MAGIC)
+		return NULL;
+
+	loadBinaryPattern(is, p_from);
+	loadBinaryPattern(is, p_to);
+
+	if (is.fail())
+		return NULL;
+
+	return new ExprRule(p_from, p_to);
+}
+
+void ExprRule::loadBinaryPattern(std::istream& is, Pattern& p)
+{
+	uint32_t	sz;
+	uint32_t	l_c;
+
+	is.read((char*)&sz, 4);
+	is.read((char*)&l_c, 4);
+	p.rule.resize(sz);
+	p.label_c = l_c;
+	is.read((char*)p.rule.data(), sz*8);
+}
+
+
 
 ref<Expr> ExprRule::anonFlat2Expr(const Pattern& p) const
 {
@@ -210,38 +263,6 @@ ref<Expr> ExprRule::materialize(void) const
 	assert (rhs.isNull() == false);
 
 	return EqExpr::create(lhs, rhs);
-}
-
-ExprRule* ExprRule::loadBinaryRule(const char* fname)
-{
-	std::ifstream ifs(fname);
-	return loadBinaryRule(ifs);
-}
-
-ExprRule* ExprRule::loadBinaryRule(std::istream& is)
-{
-	assert (0 == 1 && "STUB: FIXME TO GIVE NODE COUNTS");
-	return NULL;
-#if 0
-	uint32_t	from_sz, to_sz;
-	flatrule_ty	from, to;
-
-
-	is.read((char*)&from_sz, 4);
-	is.read((char*)&to_sz, 4);
-	if (from_sz > 10000 || to_sz > 10000)
-		return NULL;
-
-	from.resize(from_sz);
-	to.resize(to_sz);
-	is.read((char*)from.data(), from_sz*8);
-	is.read((char*)to.data(), to_sz*8);
-
-	if (is.fail())
-		return NULL;
-
-	return new ExprRule(from, to);
-#endif
 }
 
 bool ExprRule::readFlatExpr(std::ifstream& ifs, Pattern& p)
