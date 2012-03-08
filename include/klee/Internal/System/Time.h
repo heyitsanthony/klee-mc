@@ -11,11 +11,11 @@
 #define KLEE_UTIL_TIME_H
 
 namespace klee {
-  namespace util {
-    double getUserTime();
-    double getWallTime();
-    double estWallTime();
-  }
+namespace util {
+	double getUserTime();
+	double getWallTime();
+	double estWallTime();
+}
 }
 
 #endif

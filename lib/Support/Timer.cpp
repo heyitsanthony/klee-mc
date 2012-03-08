@@ -16,13 +16,12 @@
 using namespace klee;
 using namespace llvm;
 
-WallTimer::WallTimer() {
-  startMicroseconds = util::estWallTime() * 1000000.;
-}
+WallTimer::WallTimer()
+: startTime(util::estWallTime())
+{}
 
-uint64_t WallTimer::check() {
-  uint64_t now = (util::estWallTime() * 1000000.);
-  // just in case 'now' is actual and 'start' was extrapolated to be greater
-  // than actual; minimal loss of timing precision
-  return std::max((uint64_t) 0, now - startMicroseconds);
+uint64_t WallTimer::check()
+{
+	double now = util::estWallTime();
+	return (uint64_t)((now - startTime)*1e6);
 }

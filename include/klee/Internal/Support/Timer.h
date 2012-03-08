@@ -12,16 +12,17 @@
 
 #include <stdint.h>
 
-namespace klee {
-  class WallTimer {
-    uint64_t startMicroseconds;
-    
-  public:
-    WallTimer();
-
-    /// check - Return the delta since the timer was created, in microseconds.
-    uint64_t check();
-  };
+namespace klee
+{
+class WallTimer
+{
+private:
+	double startTime;
+public:
+	WallTimer();
+	/// check - Return the delta since the timer was created, in microseconds.
+	uint64_t check(void);
+};
 }
 
 #endif
