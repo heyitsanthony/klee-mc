@@ -242,6 +242,22 @@ protected:
 		<< RuleBuilder::getNumRulesUsed(); }
 };
 
+#include "klee/SolverStats.h"
+cl::opt<unsigned>
+DumpQueryStats("dump-querystats",
+        cl::desc("Dump query stats every n seconds (0=off)"),
+        cl::init(0));
+class QueryStatTimer : public StatTimer
+{
+public:
+	QueryStatTimer(Executor *_exe) : StatTimer(_exe, "query.txt") {}
+protected:
+	void print(void) { *os
+		<< stats::queries << ' '
+		<< stats::queryTime << ' '
+		<< stats::solverTime; }
+};
+
 ///
 
 static const double kSecondsPerCheck = 0.25;
@@ -272,6 +288,9 @@ void Executor::initTimers(void)
 
 	if (DumpCovStats)
 		addTimer(new CovStatTimer(this), DumpCovStats);
+
+	if (DumpQueryStats)
+		addTimer(new QueryStatTimer(this), DumpQueryStats);
 
 	addTimer(new SigUsrTimer(this), 1);
 }

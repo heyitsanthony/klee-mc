@@ -404,6 +404,8 @@ std::istream* PipeSolverImpl::writeRecvQuery(const Query& q)
 	std::istream	*is;
 	bool		wrote_query;
 
+	++stats::queries;
+
 	wrote_query = writeQuery(q);
 	close(fd_child_stdin);
 	fd_child_stdin = -1;

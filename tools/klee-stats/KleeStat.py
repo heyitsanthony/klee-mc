@@ -32,14 +32,14 @@ class KleeStat:
 			100.*(2*rd['FullBranches']+rd['PartialBranches'])/
 				(2.*rd['NumBranches']),
 			InsSum,
-			100.*rd['SolverTime']/rd['UserTime'],
+			100.*rd['SolverTime']/rd['WallTime'],
 			rd['NumStates'],
 			rd['NumStatesNC'],
 			Mem,
 			rd['NumQueries'],
 			AvgQC,
-			100.*rd['CexCacheTime']/rd['UserTime'],
-			100.*rd['ForkTime']/rd['UserTime'])
+			100.*rd['CexCacheTime']/rd['WallTime'],
+			100.*rd['ForkTime']/rd['WallTime'])
 
 	def dumpXML(self):
 		print "<kstats>"
