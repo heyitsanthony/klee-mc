@@ -12,6 +12,7 @@ class RuleBuilder : public ExprBuilder
 {
 public:
 	typedef Trie<uint64_t, ExprRule*>	ruletrie_ty;
+	typedef std::vector<ExprRule*>		rulearr_ty;
 
 	RuleBuilder(ExprBuilder* base);
 	virtual ~RuleBuilder(void);
@@ -26,7 +27,7 @@ public:
 	ref<Expr>	eb_e, ret;	\
 	depth++;			\
 
-#define X_APPLY_RULE_FTR	\
+#define APPLY_RULE_FTR	\
 	depth--;		\
 	if (depth == 0) {	\
 		ret = tryApplyRules(eb_e);	\
@@ -36,7 +37,7 @@ public:
 		ret = eb_e;		\
 	return ret;
 
-#define APPLY_RULE_FTR	\
+#define X_APPLY_RULE_FTR	\
 	depth--;		\
 	ret = tryApplyRules(eb_e);	\
 	if (ret.isNull())	\
@@ -55,9 +56,9 @@ public:
 		const UpdateList &Updates,
 		const ref<Expr> &Index)
 	{
-		APPLY_RULE_HDR
-		eb_e = eb->Read(Updates, Index);
-		APPLY_RULE_FTR
+		// NOTE: Are reads  always optimal since we slot by reads?
+		// E.g. is there a reason to tryApplyRules on this?
+		return eb->Read(Updates, Index);
 	}
 
 	virtual ref<Expr> Select(
@@ -152,6 +153,12 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS)	\
 	static uint64_t getNumRulesUsed(void) { return rules_used.size(); }
 
 	static bool hasRule(const char* fname);
+
+	rulearr_ty::const_iterator begin(void) const
+	{ return rules_arr.begin(); }
+
+	rulearr_ty::const_iterator end(void) const { return rules_arr.end(); }
+
 private:
 	void loadRules(void);
 	bool loadRuleDir(const char* ruledir);

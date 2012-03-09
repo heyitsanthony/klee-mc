@@ -71,7 +71,6 @@ UpdateList::UpdateList(const ref<Array>& _root, const UpdateNode *_head)
 : root(_root)
 , head(_head)
 {
-	if (!root.isNull()) root->incRefIfCared();
 	if (head != NULL) ++head->refCount;
 }
 
@@ -79,7 +78,6 @@ UpdateList::UpdateList(const Array* _root, const UpdateNode *_head)
 : root(const_cast<Array*>(_root))
 , head(_head)
 {
-	if (!root.isNull()) root->incRefIfCared();
 	if (head != NULL) ++head->refCount;
 }
 
@@ -87,7 +85,6 @@ UpdateList::UpdateList(const UpdateList &b)
 : root(b.root)
 , head(b.head)
 {
-	if (!root.isNull()) root->incRefIfCared();
 	if (head != NULL) ++head->refCount;
 }
 
@@ -101,9 +98,6 @@ UpdateList::~UpdateList()
 		delete head;
 		head = n;
 	}
-
-	if (!root.isNull())
-		root->decRefIfCared();
 }
 
 UpdateList &UpdateList::operator=(const UpdateList &b)
@@ -118,8 +112,6 @@ UpdateList &UpdateList::operator=(const UpdateList &b)
 		head = n;
 	}
 
-	if (!b.root.isNull()) b.root->incRefIfCared();
-	if (!root.isNull()) root->decRefIfCared();
 	root = const_cast<Array*>(b.root.get());
 	head = b.head;
 
@@ -284,8 +276,6 @@ void UpdateList::removeDups(const ref<Expr>& index)
 		}
 
 		const_cast<UpdateNode*>(prev_node)->next = cur_node->next;
-		if (!root.isNull())
-			root->decRefIfCared();
 
 		cur_node->refCount--;
 		if (cur_node->refCount == 0)

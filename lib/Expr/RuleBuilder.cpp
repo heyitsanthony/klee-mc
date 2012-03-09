@@ -4,6 +4,10 @@
 #include <algorithm>
 #include <sstream>
 #include <iostream>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include "../Solver/SMTPrinter.h"
+#include "klee/Solver.h"
 #include "klee/util/ExprUtil.h"
 
 #include "static/Sugar.h"
@@ -33,6 +37,8 @@ namespace {
 		cl::init(false));
 
 	cl::opt<bool> ShowXlate("show-xlated", cl::init(false));
+
+	cl::opt<bool> DumpRuleMiss("dump-rule-miss", cl::init(false));
 }
 
 uint64_t RuleBuilder::hit_c = 0;
@@ -44,6 +50,8 @@ RuleBuilder::RuleBuilder(ExprBuilder* base)
 : eb(base), depth(0), recur(0)
 {
 	loadRules();
+	if (DumpRuleMiss)
+		mkdir("miss_dump", 0777);
 }
 
 RuleBuilder::~RuleBuilder()
@@ -161,6 +169,9 @@ ref<Expr> RuleBuilder::tryApplyRules(const ref<Expr>& in)
 
 	if ((void*)ret.get() == (void*)in.get()) {
 		miss_c++;
+		if (DumpRuleMiss) {
+			SMTPrinter::dump(Query(ret), "miss_dump/miss");
+		}
 	} else {
 		if (ShowXlate) {
 			std::cerr << "[RuleBuilder] XLated!\n";
@@ -280,10 +291,10 @@ ref<Expr> RuleBuilder::tryTrieRules(const ref<Expr>& in)
 	while (1) {
 		new_expr = ExprRule::apply(in, tri);
 		if (new_expr.isNull() == false) {
-			unsigned in_nodes, new_nodes;
-
 			rules_used.insert(tri.getFoundRule());
 
+#if 0
+			unsigned in_nodes, new_nodes;
 			in_nodes = ExprUtil::getNumNodes(in, false);
 			new_nodes = ExprUtil::getNumNodes(new_expr, false);
 			if (in_nodes < new_nodes) {
@@ -292,7 +303,7 @@ ref<Expr> RuleBuilder::tryTrieRules(const ref<Expr>& in)
 					   "WTF!!! NEW EXPR IS BIGGER?!\n";
 				return in;
 			}
-
+#endif
 			return new_expr;
 		}
 

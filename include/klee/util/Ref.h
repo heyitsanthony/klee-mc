@@ -52,14 +52,10 @@ public:
   }
 
   // constructor from pointer
-  ref(T *p) : ptr(p) {
-    inc();
-  }
+  ref(T *p) : ptr(p) { inc(); }
 
   // normal copy constructor
-  ref(const ref<T> &r) : ptr(r.ptr) {
-    inc();
-  }
+  ref(const ref<T> &r) : ptr(r.ptr) { inc(); }
 
   // conversion constructor
   template<class U>
@@ -69,9 +65,7 @@ public:
   }
 
   // pointer operations
-  T *get () const {
-    return ptr;
-  }
+  T *get () const { return ptr; }
 
   /* The copy assignment operator must also explicitly be defined,
    * despite a redundant template. */
@@ -100,14 +94,8 @@ public:
   }
 
 
-  T& operator*() const {
-    return *ptr;
-  }
-
-  T* operator->() const {
-    return ptr;
-  }
-
+  T& operator*() const { return *ptr; }
+  T* operator->() const { return ptr; }
   bool isNull() const { return ptr == 0; }
 
   // assumes non-null arguments
