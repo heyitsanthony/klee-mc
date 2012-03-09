@@ -14,14 +14,21 @@ if [ ! -d "$BRULEDIR" ]; then
 fi
 
 
-for a in "$RULEDIR"/[0-9a-f]*; do
+for a in "$RULEDIR"/*[0-9a-f][0-9a-f]; do
+	inv=`echo $a | sed "s/\//\n/g" | tail -n1 | grep "[^0-9a-f]"`
+	if [ ! -z "$inv" ]; then
+		continue
+	fi
 	echo $a
-	kopt -dump-bin $a  2>/dev/null \
-		>"$BRULEDIR"/`echo $a | sed "s/\//\n/g" | tail -n1` 
+	HASHVAL=`echo $a | sed "s/\//\n/g" | tail -n1`
+	if [ -e "$BRULEDIR"/"$HASHVAL" ]; then
+		continue
+	fi
+	kopt -dump-bin $a  2>/dev/null >"$BRULEDIR"/$HASHVAL
 done
 
 
-for a in "$BRULEDIR"/*; do
+for a in "$BRULEDIR"/*[0-9a-f][0-9a-f]; do
 	echo $a
 	if [ -e $a.valid ]; then
 		continue
@@ -30,7 +37,7 @@ for a in "$BRULEDIR"/*; do
 done
 
 rm -f "$BRULEDIR"/brule.db
-for a in "$BRULEDIR"/*.valid; do
+for a in "$BRULEDIR"/*[0-9a-f][0-9a-f].valid; do
 	isvalid=`grep "^valid" $a`
 	if [ -z "$isvalid" ]; then
 		continue

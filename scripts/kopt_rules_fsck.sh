@@ -9,7 +9,7 @@ fi
 
 mkdir "$FSCKDIR"/orphans
 
-for a in "$FSCKDIR"/*; do
+for a in "$FSCKDIR"/*[0-9a-f][0-9a-f]; do
 	if [ -d "$a" ]; then
 		continue
 	fi
@@ -20,6 +20,12 @@ for a in "$FSCKDIR"/*; do
 	fi
 
 	if [ -e "$a.valid" ]; then
+		echo $a.valid
+		continue
+	fi
+
+	badchar=`echo $a | grep "[^0-9a-f]"`
+	if [ ! -z "$badchar" ]; then
 		continue
 	fi
 

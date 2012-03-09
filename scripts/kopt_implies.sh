@@ -32,6 +32,7 @@ for a in *; do
 	isvalid=`grep "^valid rule" $RULEHASH.valid`
 	rm $RULEHASH.valid
 	if [ -z "$isvalid" ]; then
+		echo Invalid Rule.
 		rm $NEWFNAME
 		continue
 	fi
@@ -41,7 +42,7 @@ for a in *; do
 	cp $NEWFNAME xtive
 
 	h1=`head -n1 $a`
-	chkhd=`grep "$h1" $NEWFNAME`
+	chkhd=`grep "$h1" "$NEWFNAME"`
 	if [ ! -z "$chkhd" ]; then
 		echo "CULLING $a."
 		echo "MATCH: $chkhd with $h1"
