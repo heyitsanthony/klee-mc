@@ -11,6 +11,7 @@
 #include "klee/ExprBuilder.h"
 #include "klee/Solver.h"
 #include "klee/util/ExprUtil.h"
+#include "klee/util/Assignment.h"
 
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ManagedStatic.h"
@@ -480,6 +481,48 @@ static void rebuildBRule(ExprBuilder* eb, Solver* s)
 	delete rb;
 }
 
+static ref<Expr> getLabelErrorExpr(const ExprRule* er)
+{
+	/* could have been a label error;
+	 * labels_to not a proper subset of labels_from */
+	ref<Expr>			from_expr, to_expr;
+	std::vector<ref<ReadExpr> >	from_reads, to_reads;
+	std::set<ref<ReadExpr> >	from_set, to_set;
+
+	to_expr = er->getToExpr();
+	from_expr = er->getFromExpr();
+	ExprUtil::findReads(from_expr, false, from_reads);
+	ExprUtil::findReads(to_expr, false, to_reads);
+
+	foreach (it, from_reads.begin(), from_reads.end())
+		from_set.insert(*it);
+
+	foreach (it, to_reads.begin(), to_reads.end())
+		to_set.insert(*it);
+
+	foreach (it, to_set.begin(), to_set.end()) {
+		if (from_set.count(*it))
+			continue;
+
+		/* element in to set that does not
+		 * exist in from set?? Likely a constant. */
+		Assignment		a(to_expr);
+		ref<Expr>		v;
+		const ConstantExpr	*ce;
+
+		a.bindFreeToZero();
+		v = a.evaluate(to_expr);
+		ce = dyn_cast<ConstantExpr>(v);
+		if (ce == NULL)
+			break;
+
+		std::cerr << "Attempting LabelError fixup\n";
+		return v;
+	}
+
+	return NULL;
+}
+
 typedef std::list<
 	std::pair<
 		RuleBuilder::rulearr_ty::const_iterator,
@@ -506,9 +549,16 @@ static void xtiveBRule(ExprBuilder *eb, Solver* s)
 		Expr::setBuilder(old_eb);
 
 		i++;
+
 		/* no effective transitive rule? */
-		if (	old_to_expr == rb_to_expr ||
-			ExprUtil::getNumNodes(rb_to_expr) >=
+		if (old_to_expr == rb_to_expr) {
+			rb_to_expr = getLabelErrorExpr(er);
+			if (rb_to_expr.isNull())
+				continue;
+		}
+
+
+		if (	ExprUtil::getNumNodes(rb_to_expr) >=
 			ExprUtil::getNumNodes(old_to_expr))
 		{
 			continue;
