@@ -1,4 +1,5 @@
 #include <iostream>
+#include <sstream>
 
 #include "../../lib/Expr/SMTParser.h"
 #include "../../lib/Expr/ExprRule.h"
@@ -64,6 +65,18 @@ namespace llvm
 		cl::desc("Dump rule in binary format."),
 		cl::init(false));
 
+	cl::opt<bool>
+	BRuleXtive(
+		"brule-xtive",
+		cl::desc("Search for transitive rules in brule database"),
+		cl::init(false));
+
+	cl::opt<bool>
+	BRuleRebuild(
+		"brule-rebuild",
+		cl::desc("Rebuild brule file."),
+		cl::init(false));
+
 	enum BuilderKinds {
 		DefaultBuilder,
 		ConstantFoldingBuilder,
@@ -86,6 +99,8 @@ namespace llvm
 			"Hand-optimized builder."),
 			clEnumValEnd));
 }
+
+static bool checkRule(const ExprRule* er, Solver* s);
 
 static ExprBuilder* createExprBuilder(void)
 {
@@ -124,7 +139,7 @@ static ExprRule* loadRule(const char *path)
 				( select ?e2179  bv37[32] )))
 		bv3840[64])
 	bv1[1]
-	bv0[1]) 
+	bv0[1])
  bv0[1]))
 */
 static bool getEquivalenceInEq(ref<Expr> e, ref<Expr>& lhs, ref<Expr>& rhs)
@@ -211,9 +226,8 @@ static void getEquivalence(ref<Expr> e, ref<Expr>& lhs, ref<Expr>& rhs)
 	exit(-1);
 }
 
-static void checkRule(ExprBuilder *eb, Solver* s)
+static bool checkRule(const ExprRule* er, Solver* s)
 {
-	ExprRule	*er = loadRule(InputFile.c_str());
 	ref<Expr>	rule_expr;
 	bool		ok, mustBeTrue;
 	unsigned	to_nodes, from_nodes;
@@ -221,7 +235,6 @@ static void checkRule(ExprBuilder *eb, Solver* s)
 	assert (er != NULL && "Bad rule?");
 
 	rule_expr = er->materialize();
-	std::cerr << rule_expr << '\n';
 
 	to_nodes = ExprUtil::getNumNodes(er->getToExpr());
 	from_nodes = ExprUtil::getNumNodes(er->getFromExpr());
@@ -231,14 +244,27 @@ static void checkRule(ExprBuilder *eb, Solver* s)
 
 	if (er->getToExpr() == er->getFromExpr()) {
 		std::cout << "identity rule\n";
-	} else if (to_nodes >= from_nodes) {
-		std::cout << "non-shrinking rule\n";
-	} else if (mustBeTrue) {
-		std::cout << "valid rule\n";
-	} else {
-		std::cout << "invalid rule\n";
+		return false;
 	}
 
+	if (to_nodes >= from_nodes) {
+		std::cout << "non-shrinking rule\n";
+		return false;
+	}
+
+	if (mustBeTrue == false) {
+		std::cout << "invalid rule\n";
+		return false;
+	}
+
+	std::cout << "valid rule\n";
+	return true;
+}
+
+static void checkRule(ExprBuilder *eb, Solver* s)
+{
+	ExprRule	*er = loadRule(InputFile.c_str());
+	checkRule(er, s);
 	delete er;
 }
 
@@ -398,8 +424,138 @@ static void printRule(ExprBuilder *eb, Solver* s)
 	assert (mustBeTrue && "We've proven this valid, but now it isn't?");
 
 	ExprRule::printRule(std::cout, lhs, rhs);
-
 	delete p;
+}
+
+static void rebuildBRule(ExprBuilder* eb, Solver* s)
+{
+	std::ofstream		of(InputFile.c_str());
+	RuleBuilder		*rb;
+	unsigned		i;
+
+	assert (of.good() && !of.fail());
+
+	rb = new RuleBuilder(createExprBuilder());
+	i = 0;
+
+	foreach (it, rb->begin(), rb->end()) {
+		const ExprRule	*er = *it;
+		ExprRule	*er_rebuild;
+
+		std::cerr << "[" << ++i << "]: ";
+		if (checkRule(er, s) == false) {
+			std::cerr << "BAD RULE:\n";
+			er->printPrettyRule(std::cerr);
+			continue;
+		}
+
+		std::stringstream	ss;
+
+		er->printPrettyRule(ss);
+		er_rebuild = ExprRule::loadPrettyRule(ss);
+
+		/* ensure we haven't corrupted the from-expr--
+		 * otherwise, it might not match during runtime! */
+		if (	ExprUtil::getNumNodes(er_rebuild->getFromExpr()) !=
+			ExprUtil::getNumNodes(er->getFromExpr()))
+		{
+			std::cerr << "BAD REBUILD:\n";
+			std::cerr << "ORIGINAL:\n";
+			er->printPrettyRule(std::cerr);
+			std::cerr << "NEW:\n";
+			er_rebuild->printPrettyRule(std::cerr);
+
+			std::cerr	<< "ORIG-EXPR: "
+					<< er->getFromExpr() << '\n'
+					<< "NEW-EXPR: "
+					<< er_rebuild->getFromExpr() << '\n';
+			delete er_rebuild;
+			continue;
+		}
+
+		er_rebuild->printBinaryRule(of);
+		delete er_rebuild;
+	}
+
+	delete rb;
+}
+
+typedef std::list<
+	std::pair<
+		RuleBuilder::rulearr_ty::const_iterator,
+		ref<Expr> > > rule_replace_ty;
+
+static void xtiveBRule(ExprBuilder *eb, Solver* s)
+{
+	RuleBuilder			*rb;
+	rule_replace_ty			replacements;
+	std::set<const ExprRule*>	bad_repl;
+	unsigned int			i;
+
+	rb = new RuleBuilder(createExprBuilder());
+
+	i = 0;
+	foreach (it, rb->begin(), rb->end()) {
+		const ExprRule	*er = *it;
+		ref<Expr>	old_to_expr, rb_to_expr;
+		ExprBuilder	*old_eb;
+
+		old_to_expr = er->getToExpr();
+		old_eb = Expr::setBuilder(rb);
+		rb_to_expr = er->getToExpr();
+		Expr::setBuilder(old_eb);
+
+		i++;
+		/* no effective transitive rule? */
+		if (	old_to_expr == rb_to_expr ||
+			ExprUtil::getNumNodes(rb_to_expr) >=
+			ExprUtil::getNumNodes(old_to_expr))
+		{
+			continue;
+		}
+
+		std::cerr << "Xtive [" << i << "]:\n";
+		er->printPrettyRule(std::cout);
+		std::cerr	<< "OLD-TO-EXPR: " << old_to_expr << '\n'
+				<< "NEW-TO-EXPR: " << rb_to_expr << '\n';
+
+		replacements.push_back(std::make_pair(it, rb_to_expr));
+	}
+
+	// append new rules to brule file
+	std::ofstream	of(
+		rb->getDBPath().c_str(),
+		std::ios_base::out |
+		std::ios_base::app |
+		std::ios_base::binary);
+	foreach (it, replacements.begin(), replacements.end()) {
+		const ExprRule	*er = *(it->first);
+		ExprRule	*xtive_er;
+
+		xtive_er = ExprRule::changeDest(er, it->second);
+		if (xtive_er == NULL)
+			continue;
+
+		xtive_er->printPrettyRule(std::cout);
+		if (checkRule(xtive_er, s) == false) {
+			bad_repl.insert(er);
+			continue;
+		}
+
+		xtive_er->printBinaryRule(of);
+	}
+	of.close();
+
+
+	// erase all old rules
+	foreach (it, replacements.begin(), replacements.end()) {
+		const ExprRule	*er = *(it->first);
+		if (bad_repl.count(er))
+			continue;
+		rb->eraseDBRule(it->first);
+	}
+
+	delete rb;
 }
 
 int main(int argc, char **argv)
@@ -422,7 +578,11 @@ int main(int argc, char **argv)
 		return -3;
 	}
 
-	if (CheckRule) {
+	if (BRuleRebuild) {
+		rebuildBRule(eb, s);
+	} else if (BRuleXtive) {
+		xtiveBRule(eb, s);
+	} else if (CheckRule) {
 		checkRule(eb, s);
 	} else if (ApplyRule.size()) {
 		applyRule(eb, s);

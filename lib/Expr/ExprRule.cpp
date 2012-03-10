@@ -2,6 +2,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <iostream>
+#include <sstream>
 #include "static/Sugar.h"
 #include "klee/util/ExprVisitor.h"
 #include "klee/util/ExprUtil.h"
@@ -38,13 +39,20 @@ ref<Expr> ExprRule::flat2expr(
 
 		label_num = OP_LABEL_NUM(fr[op_idx]);
 		it = lm.find(label_num);
-		if (it == lm.end()) {
-			std::cerr << "[ExprRule] Flat2Expr Error. No label: "
-					<< label_num << "\n";
-			return NULL;
-		}
+		if (it != lm.end())
+			return it->second;
 
-		return it->second;
+		std::cerr	<< "[ExprRule] Flat2Expr Error. No label: "
+				<< label_num
+				<< "\n";
+
+		/*
+		std::cerr << "LABEL DUMP: " << lm.size() << '\n';
+		foreach (it2, lm.begin(), lm.end()) {
+			std::cerr << "#" << it2->first << ": " <<
+				it2->second << '\n';
+		} */
+		return NULL;
 	}
 
 	switch (fr[op_idx]) {
@@ -172,7 +180,31 @@ ref<Expr> ExprRule::flat2expr(
 	return ret;
 }
 
+bool ExprRule::Pattern::operator ==(const Pattern& p) const
+{
+	if (label_c != p.label_c) return false;
+	if (label_id_max != p.label_id_max) return false;
+	if (rule.size() != p.rule.size()) return false;
+
+	for (unsigned i = 0; i < rule.size(); i++) {
+		if (rule[i] != p.rule[i])
+			return false;
+	}
+
+	return true;
+}
+
+
+bool ExprRule::operator==(const ExprRule& er) const
+{
+	if (to != er.to) return false;
+	if (from != er.from) return false;
+
+	return true;
+}
+
 #define HDR_MAGIC	0xFEFEFEFE01010101
+#define HDR_SKIP	0xFEFEFEFEFEFEFEFE
 
 void ExprRule::printBinaryRule(std::ostream& os) const
 {
@@ -181,6 +213,32 @@ void ExprRule::printBinaryRule(std::ostream& os) const
 	os.write((char*)&hdr, 8);
 	printBinaryPattern(os, from);
 	printBinaryPattern(os, to);
+}
+
+ExprRule* ExprRule::changeDest(const ExprRule* er, const ref<Expr>& to)
+{
+	std::stringstream	ss;
+	printRule(ss, er->getFromExpr(), to);
+	return loadPrettyRule(ss);
+}
+
+void ExprRule::printTombstone(std::ostream& os, unsigned range_len)
+{
+	uint64_t	hdr = HDR_SKIP;
+	uint32_t	skip_len; // amount of space to skip past off=HDR+skip
+
+	assert (range_len >= 12 && "Not enough space for tombstone");
+	skip_len = range_len - (sizeof(hdr) + sizeof(skip_len));
+	os.write((char*)&hdr, sizeof(hdr));
+	os.write((char*)&skip_len, sizeof(skip_len));
+
+	if (!skip_len) return;
+
+	/* clear the rest out */
+	char		*buf = new char[skip_len];
+	memset(buf, 0xfe, skip_len);
+	os.write(buf, skip_len);
+	delete [] buf;
 }
 
 void ExprRule::printBinaryPattern(std::ostream& os, const Pattern& p)
@@ -206,8 +264,19 @@ ExprRule* ExprRule::loadBinaryRule(std::istream& is)
 	uint64_t	hdr;
 	Pattern		p_from, p_to;
 
+	/* skip tombstones */
+	do {
+		uint32_t	skip;
 
-	is.read((char*)&hdr, 8);
+		hdr = 0;
+		is.read((char*)&hdr, 8);
+		if (hdr != HDR_SKIP)
+			break;
+
+		is.read((char*)&skip, 4);
+		is.ignore(skip);
+	} while (hdr == HDR_SKIP);
+
 	if (hdr != HDR_MAGIC)
 		return NULL;
 
@@ -244,9 +313,10 @@ ref<Expr> ExprRule::anonFlat2Expr(const Pattern& p) const
 		materialize_arr = Array::create("exprrule", 4096);
 
 	arr = materialize_arr.get();
-	for (unsigned i = 0; i <= p.label_id_max; i++)
+	for (unsigned i = 0; i <= p.label_id_max; i++) {
 		lm[i] = ReadExpr::create(
 			UpdateList(arr, NULL), ConstantExpr::create(i, 32));
+	}
 
 	off = 0;
 	return flat2expr(lm, p.rule, off);
@@ -265,7 +335,7 @@ ref<Expr> ExprRule::materialize(void) const
 	return EqExpr::create(lhs, rhs);
 }
 
-bool ExprRule::readFlatExpr(std::ifstream& ifs, Pattern& p)
+bool ExprRule::readFlatExpr(std::istream& ifs, Pattern& p)
 {
 	std::string		tok;
 	std::set<uint64_t>	labels;
@@ -335,8 +405,6 @@ success:
 
 ExprRule* ExprRule::loadPrettyRule(const char* fname)
 {
-	Pattern		p_from, p_to;
-
 	struct stat	s;
 
 	if (stat(fname, &s) != 0)
@@ -346,8 +414,15 @@ ExprRule* ExprRule::loadPrettyRule(const char* fname)
 		return NULL;
 
 	std::ifstream	ifs(fname);
-	if (!readFlatExpr(ifs, p_from)) return NULL;
-	if (!readFlatExpr(ifs, p_to)) return NULL;
+	return loadPrettyRule(ifs);
+}
+
+ExprRule* ExprRule::loadPrettyRule(std::istream& is)
+{
+	Pattern		p_from, p_to;
+
+	if (!readFlatExpr(is, p_from)) return NULL;
+	if (!readFlatExpr(is, p_to)) return NULL;
 
 	if (	p_from.rule.size() == 0 || p_to.rule.size() == 0 ||
 		(p_from.rule.size() == 1 && p_to.rule.size() == 1))
@@ -355,9 +430,7 @@ ExprRule* ExprRule::loadPrettyRule(const char* fname)
 		return NULL;
 	}
 
-	return new ExprRule(
-		((p_from.rule.size() > p_to.rule.size()) ? p_from : p_to),
-		((p_from.rule.size() > p_to.rule.size()) ? p_to : p_from));
+	return new ExprRule(p_from, p_to);
 }
 
 class ExprFlatWriter : public ExprConstVisitor
@@ -710,46 +783,41 @@ public:
 		return false;
 	}
 
-	const ExprRule::flatrule_ty& getToRule(void) const
+	const ExprRule* getExprRule(void) const
 	{
 		assert (isDone() && "Grabbing to-rule but didn't verify!");
-		return to_rule;
+		return er;
 	}
 
-	SingleRuleIterator(
-		const ExprRule::flatrule_ty& _from_rule,
-		const ExprRule::flatrule_ty& _to_rule)
-	: from_rule(_from_rule)
-	, to_rule(_to_rule)
+	SingleRuleIterator(const ExprRule* _er)
+	: er(_er)
+	, from_rule(er->getFromKey())
 	, it(from_rule.begin()) {}
 
 	virtual ~SingleRuleIterator() {}
 
 private:
+	const ExprRule				*er;
 	const ExprRule::flatrule_ty&		from_rule;
-	const ExprRule::flatrule_ty&		to_rule;
 	ExprRule::flatrule_ty::const_iterator	it;
 };
 
 ref<Expr> ExprRule::apply(const ref<Expr>& e, ExprRule::RuleIterator& ri)
 {
-	labelmap_ty		labels;
+	labelmap_ty		lm;
 	int			off;
-	ref<Expr>		ret;
-	ExprFindLabels		efl(ri, labels);
+	ExprFindLabels		efl(ri, lm);
 
 	if (efl.assignLabels(e) == false)
 		return NULL;
 
 	off = 0;
-	ret = flat2expr(labels, ri.getToRule(), off);
-
-	return ret;
+	return flat2expr(lm, ri.getExprRule()->getToKey(), off);
 }
 
 
 ref<Expr> ExprRule::apply(const ref<Expr>& e) const
 {
-	SingleRuleIterator	sri(from.rule, to.rule);
+	SingleRuleIterator	sri(this);
 	return apply(e, sri);
 }

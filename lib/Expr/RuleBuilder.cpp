@@ -74,11 +74,11 @@ void RuleBuilder::loadRules()
 	bool			ok;
 	const std::string*	load_s;
 
-	load_s = &RuleDBFile;
-	ok = loadRuleDB(RuleDBFile.c_str());
+	load_s = &getDBPath();
+	ok = loadRuleDB(getDBPath().c_str());
 	if (!ok) {
-		ok = loadRuleDir(RuleDir.c_str());
 		load_s = &RuleDir;
+		ok = loadRuleDir(RuleDir.c_str());
 	}
 
 	if (!ok) {
@@ -90,6 +90,49 @@ void RuleBuilder::loadRules()
 		<< "[RuleBuilder] Loaded " << rules_arr.size()
 		<< " rules from " << *load_s << ".\n";
 }
+
+void RuleBuilder::eraseDBRule(rulearr_ty::const_iterator& it)
+{
+	const ExprRule	*to_rmv;
+	std::fstream	ifs(	getDBPath().c_str(),
+				std::ios_base::in |
+				std::ios_base::out |
+				std::ios_base::binary);
+	std::streampos	last_pos;
+
+	if (!ifs.good() || ifs.bad() || ifs.fail() || ifs.eof()) {
+		assert (0 == 1 && "Could not update erasedb??");
+		return;
+	}
+
+	to_rmv = *it;
+	last_pos = 0;
+	while (ifs.eof() == false) {
+		ExprRule	*er;
+		std::streampos	new_pos;
+
+		er = ExprRule::loadBinaryRule(ifs);
+		new_pos = ifs.tellg();
+
+		if (er == NULL) {
+			last_pos = new_pos;
+			continue;
+		}
+
+		if (*er == *to_rmv) {
+			assert (last_pos < new_pos);
+			ifs.seekg(last_pos);
+			ExprRule::printTombstone(ifs, new_pos - last_pos);
+			delete er;
+			break;
+		}
+
+		last_pos = new_pos;
+		delete er;
+	}
+}
+
+const std::string& RuleBuilder::getDBPath(void) const { return RuleDBFile; }
 
 bool RuleBuilder::loadRuleDB(const char* ruledir)
 {
@@ -250,11 +293,6 @@ public:
 
 		return found_label;
 	}
-	virtual const ExprRule::flatrule_ty& getToRule(void) const
-	{
-		assert (found_rule != NULL);
-		return found_rule->getToKey();
-	}
 
 	bool bumpSlot(void)
 	{
@@ -271,8 +309,7 @@ public:
 	}
 
 	virtual ~TrieRuleIterator() {}
-
-	ExprRule* getFoundRule(void) const { return found_rule; }
+	virtual ExprRule* getExprRule(void) const { return found_rule; }
 private:
 	/* we use this to choose whether to seek out a label or not */
 	const RuleBuilder::ruletrie_ty	&rt;
@@ -291,19 +328,7 @@ ref<Expr> RuleBuilder::tryTrieRules(const ref<Expr>& in)
 	while (1) {
 		new_expr = ExprRule::apply(in, tri);
 		if (new_expr.isNull() == false) {
-			rules_used.insert(tri.getFoundRule());
-
-#if 0
-			unsigned in_nodes, new_nodes;
-			in_nodes = ExprUtil::getNumNodes(in, false);
-			new_nodes = ExprUtil::getNumNodes(new_expr, false);
-			if (in_nodes < new_nodes) {
-				std::cerr
-					<< "[RuleBuilder] "
-					   "WTF!!! NEW EXPR IS BIGGER?!\n";
-				return in;
-			}
-#endif
+			rules_used.insert(tri.getExprRule());
 			return new_expr;
 		}
 

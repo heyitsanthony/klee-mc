@@ -159,6 +159,10 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS)	\
 
 	rulearr_ty::const_iterator end(void) const { return rules_arr.end(); }
 
+	void eraseDBRule(rulearr_ty::const_iterator& it);
+
+	const std::string& getDBPath(void) const;
+
 private:
 	void loadRules(void);
 	bool loadRuleDir(const char* ruledir);
