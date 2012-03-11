@@ -36,6 +36,12 @@ namespace llvm
 		cl::desc("Check a rule file"),
 		cl::init(false));
 
+	cl::opt<bool>
+	CheckDup(
+		"check-dup",
+		cl::desc("Check if duplicate rule"),
+		cl::init(false));
+
 	cl::opt<std::string>
 	ApplyRule(
 		"apply-rule",
@@ -226,6 +232,36 @@ static void getEquivalence(ref<Expr> e, ref<Expr>& lhs, ref<Expr>& rhs)
 	std::cerr << "BAD EQUIV\n";
 	exit(-1);
 }
+
+static bool checkDup(ExprBuilder* eb, Solver* s)
+{
+	ExprRule	*er = loadRule(InputFile.c_str());
+	RuleBuilder	*rb = new RuleBuilder(createExprBuilder());
+	ExprBuilder	*old_eb;
+	ref<Expr>	old_expr, rb_expr;
+
+	if (!er)
+		return false;
+
+
+	old_expr = er->materialize();
+	old_eb = Expr::setBuilder(rb);
+	rb_expr = er->materialize();
+	Expr::setBuilder(old_eb);
+
+	std::cerr 	<< "OLD-EB: " << old_expr << '\n'
+			<< "RB-EB: " << rb_expr << '\n';
+
+	if (old_expr != rb_expr)
+		std::cout << "DUP\n";
+	else
+		std::cout << "NEW\n";
+
+	delete rb;
+	delete er;
+	return true;
+}
+
 
 static bool checkRule(const ExprRule* er, Solver* s)
 {
@@ -628,7 +664,9 @@ int main(int argc, char **argv)
 		return -3;
 	}
 
-	if (BRuleRebuild) {
+	if (CheckDup) {
+		checkDup(eb, s);
+	} else if (BRuleRebuild) {
 		rebuildBRule(eb, s);
 	} else if (BRuleXtive) {
 		xtiveBRule(eb, s);
