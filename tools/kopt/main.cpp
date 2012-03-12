@@ -5,6 +5,7 @@
 #include "../../lib/Expr/ExprRule.h"
 #include "../../lib/Expr/RuleBuilder.h"
 #include "../../lib/Expr/OptBuilder.h"
+#include "../../lib/Expr/ExtraOptBuilder.h"
 #include "../../lib/Core/TimingSolver.h"
 
 #include "static/Sugar.h"
@@ -101,7 +102,8 @@ namespace llvm
 		DefaultBuilder,
 		ConstantFoldingBuilder,
 		SimplifyingBuilder,
-		HandOptBuilder
+		HandOptBuilder,
+		ExtraOptsBuilder
 	};
 
 	static cl::opt<BuilderKinds>
@@ -117,6 +119,8 @@ namespace llvm
 			"Fold constants and simplify expressions."),
 			clEnumValN(HandOptBuilder, "handopt",
 			"Hand-optimized builder."),
+			clEnumValN(ExtraOptsBuilder, "extraopt",
+			"Extra Hand-optimized builder."),
 			clEnumValEnd));
 }
 
@@ -138,6 +142,10 @@ ExprBuilder* createExprBuilder(void)
 	case HandOptBuilder:
 		delete Builder;
 		Builder = new OptBuilder();
+		break;
+	case ExtraOptsBuilder:
+		delete Builder;
+		Builder = new ExtraOptBuilder();
 		break;
 	}
 
@@ -294,7 +302,10 @@ static bool checkRule(const ExprRule* er, Solver* s)
 	from_nodes = ExprUtil::getNumNodes(er->getFromExpr());
 
 	ok = s->mustBeTrue(Query(rule_expr), mustBeTrue);
-	assert (ok && "Unhandled solver failure");
+	if (ok == false) {
+		std::cout << "query failure\n";
+		return false;
+	}
 
 	if (er->getToExpr() == er->getFromExpr()) {
 		std::cout << "identity rule\n";
@@ -390,9 +401,10 @@ static void applyTransitivity(ExprBuilder* eb, Solver* s)
 
 	new_rule_expr = EqExpr::create(init_expr, impl_expr);
 	ok = s->mustBeTrue(Query(new_rule_expr), mustBeTrue);
-	assert (ok && "Unhandled solver failure");
 
-	if (mustBeTrue) {
+	if (!ok) {
+		std::cout << "query failure\n";
+	} else if (mustBeTrue) {
 		if (!TransitiveRuleFile.empty()) {
 			std::ofstream	ofs(TransitiveRuleFile.c_str());
 			ExprRule::printRule(ofs, init_expr, impl_expr);

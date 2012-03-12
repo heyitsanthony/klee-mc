@@ -8,6 +8,7 @@ namespace klee
 
 class OptBuilder : public ExprBuilder
 {
+public:
 	virtual ref<Expr> Constant(const llvm::APInt &Value)
 	{ return ConstantExpr::alloc(Value); }
 

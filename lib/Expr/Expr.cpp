@@ -11,7 +11,7 @@
 #include "klee/Expr.h"
 #include "klee/ExprBuilder.h"
 #include "klee/util/ConstantDivision.h"
-#include "OptBuilder.h"
+#include "ExtraOptBuilder.h"
 
 // FIXME: We shouldn't need this once fast constant support moves into
 // Core. If we need to do arithmetic, we probably want to use APInt.
@@ -67,7 +67,7 @@ bool ArrayLT::operator()(const Array *a, const Array *b) const
 
 ExprFactory::ExprFactory(void)
 {
-	Expr::setBuilder(new OptBuilder());
+	Expr::setBuilder(new ExtraOptBuilder());
 	if (UseExprConsPtr) {
 		std::cerr << "USING EXPR CONS PTR!!!!!\n";
 		Expr::setAllocator(new ExprAllocUnique());
