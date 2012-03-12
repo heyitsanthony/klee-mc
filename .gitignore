@@ -15,6 +15,7 @@ lol*
 *.out
 *.err
 *.so
+*.db
 smtlib_*
 filtered_funcs.txt
 lib/Expr/position.hh

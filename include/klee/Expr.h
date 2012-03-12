@@ -271,7 +271,8 @@ public:
   //
   //XXX are there special semantics to this? Why wouldn't I want to
   //use ReadExpr::create?
-  static ref<Expr> createTempRead(const Array *array, Expr::Width w);
+  static ref<Expr> createTempRead(
+	const Array *array, Expr::Width w, unsigned arr_off = 0);
 
   static ref<ConstantExpr> createPointer(uint64_t v);
 

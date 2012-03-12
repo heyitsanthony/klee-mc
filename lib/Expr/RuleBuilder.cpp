@@ -141,18 +141,19 @@ bool RuleBuilder::loadRuleDB(const char* ruledir)
 	if (!ifs.good() || ifs.bad() || ifs.fail() || ifs.eof())
 		return false;
 
-	while (ifs.eof() == false) {
-		ExprRule	*er;
-
-		er = ExprRule::loadBinaryRule(ifs);
-		if (er == NULL)
-			continue;
-
-		rules_arr.push_back(er);
-		rules_trie.add(er->getFromKey(), er);
-	}
+	while (ifs.eof() == false)
+		addRule(ExprRule::loadBinaryRule(ifs));
 
 	return true;
+}
+
+void RuleBuilder::addRule(ExprRule* er)
+{
+	if (er == NULL)
+		return;
+
+	rules_arr.push_back(er);
+	rules_trie.add(er->getFromKey(), er);
 }
 
 bool RuleBuilder::loadRuleDir(const char* ruledir)
@@ -165,16 +166,10 @@ bool RuleBuilder::loadRuleDir(const char* ruledir)
 		return false;
 
 	while ((de = readdir(d))) {
-		ExprRule		*er;
 		std::stringstream	s;
 
 		s << ruledir << "/" << de->d_name;
-		er = ExprRule::loadPrettyRule(s.str().c_str());
-		if (er == NULL)
-			continue;
-
-		rules_arr.push_back(er);
-		rules_trie.add(er->getFromKey(), er);
+		addRule(ExprRule::loadPrettyRule(s.str().c_str()));
 	}
 
 	std::sort(rules_arr.begin(), rules_arr.end(), rulesSort);

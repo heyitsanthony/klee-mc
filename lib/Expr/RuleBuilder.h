@@ -163,6 +163,8 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS)	\
 
 	const std::string& getDBPath(void) const;
 
+	void addRule(ExprRule* er);
+
 private:
 	void loadRules(void);
 	bool loadRuleDir(const char* ruledir);

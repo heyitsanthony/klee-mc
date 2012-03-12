@@ -32,15 +32,10 @@ public:
   ~ref () { dec (); }
 
 private:
-  void inc() const {
-    if (ptr)
-      ++ptr->refCount;
-  }
-
-  void dec() const {
-    if (ptr && --ptr->refCount == 0)
-      delete ptr;
-  }
+  void inc() const { inc(ptr); }
+  void inc(T* p) const { if (p) ++p->refCount; }
+  void dec() const { dec(ptr); }
+  void dec(T* p) const { if (p && --p->refCount == 0) delete p; }
 
 public:
   template<class U> friend class ref;
@@ -70,26 +65,27 @@ public:
   /* The copy assignment operator must also explicitly be defined,
    * despite a redundant template. */
   ref<T> &operator= (const ref<T> &r) {
-    dec();
+    T* old_p = ptr;
     ptr = r.ptr;
     inc();
+    dec(old_p);
 
     return *this;
   }
 
   template<class U> ref<T> &operator= (const ref<U> &r) {
-    dec();
+    T* old_p = ptr;
     ptr = r.ptr;
     inc();
-
+    dec(old_p);
     return *this;
   }
 
   const ref<T> &operator= (const ref<T> &r) const {
-    dec();
+    T* old_p = ptr;
     ptr = r.ptr;
     inc();
-
+    dec(old_p);
     return *this;
   }
 

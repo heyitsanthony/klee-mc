@@ -93,12 +93,13 @@ ExprAlloc* Expr::setAllocator(ExprAlloc* a)
 	return oldAlloc;
 }
 
-ref<Expr> Expr::createTempRead(const Array *array, Expr::Width w)
+ref<Expr> Expr::createTempRead(
+	const Array *array, Expr::Width w, unsigned arr_off)
 {
 	UpdateList ul(array, 0);
 
 #define READ_BYTE_OFF(x)	\
-	ReadExpr::create(ul, ConstantExpr::alloc(x,Expr::Int32))
+	ReadExpr::create(ul, ConstantExpr::alloc(arr_off+x,Expr::Int32))
 
 	switch (w) {
 	default: assert(0 && "invalid width");
@@ -106,7 +107,7 @@ ref<Expr> Expr::createTempRead(const Array *array, Expr::Width w)
 		return ZExtExpr::create(
 			ReadExpr::create(
 				ul,
-				ConstantExpr::alloc(0, Expr::Int32)),
+				ConstantExpr::alloc(arr_off, Expr::Int32)),
 				Expr::Bool);
 	case Expr::Int8:
 		return READ_BYTE_OFF(0);

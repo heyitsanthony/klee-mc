@@ -31,6 +31,12 @@ namespace llvm
 		cl::init("-"));
 
 	cl::opt<bool>
+	DBPunchout(
+		"db-punchout",
+		cl::desc("Punch out constants in DB rules"),
+		cl::init(false));
+
+	cl::opt<bool>
 	CheckRule(
 		"check-rule",
 		cl::desc("Check a rule file"),
@@ -84,6 +90,13 @@ namespace llvm
 		cl::desc("Rebuild brule file."),
 		cl::init(false));
 
+	cl::opt<bool>
+	AddRule(
+		"add-rule",
+		cl::desc("Add rule to brule file."),
+		cl::init(false));
+
+
 	enum BuilderKinds {
 		DefaultBuilder,
 		ConstantFoldingBuilder,
@@ -109,7 +122,7 @@ namespace llvm
 
 static bool checkRule(const ExprRule* er, Solver* s);
 
-static ExprBuilder* createExprBuilder(void)
+ExprBuilder* createExprBuilder(void)
 {
 	ExprBuilder *Builder = createDefaultExprBuilder();
 	switch (BuilderKind) {
@@ -239,10 +252,10 @@ static bool checkDup(ExprBuilder* eb, Solver* s)
 	RuleBuilder	*rb = new RuleBuilder(createExprBuilder());
 	ExprBuilder	*old_eb;
 	ref<Expr>	old_expr, rb_expr;
+	bool		ret;
 
 	if (!er)
 		return false;
-
 
 	old_expr = er->materialize();
 	old_eb = Expr::setBuilder(rb);
@@ -252,16 +265,20 @@ static bool checkDup(ExprBuilder* eb, Solver* s)
 	std::cerr 	<< "OLD-EB: " << old_expr << '\n'
 			<< "RB-EB: " << rb_expr << '\n';
 
-	if (old_expr != rb_expr)
+	if (old_expr != rb_expr) {
+		/* rule builder had some kind of effect */
 		std::cout << "DUP\n";
-	else
+		ret = true;
+	} else {
 		std::cout << "NEW\n";
+		ret = false;
+	}
 
 	delete rb;
 	delete er;
-	return true;
-}
 
+	return ret;
+}
 
 static bool checkRule(const ExprRule* er, Solver* s)
 {
@@ -298,11 +315,15 @@ static bool checkRule(const ExprRule* er, Solver* s)
 	return true;
 }
 
-static void checkRule(ExprBuilder *eb, Solver* s)
+static bool checkRule(ExprBuilder *eb, Solver* s)
 {
 	ExprRule	*er = loadRule(InputFile.c_str());
-	checkRule(er, s);
+	bool		ok;
+
+	ok = checkRule(er, s);
 	delete er;
+
+	return ok;
 }
 
 static void applyTransitivity(ExprBuilder* eb, Solver* s)
@@ -644,6 +665,41 @@ static void xtiveBRule(ExprBuilder *eb, Solver* s)
 	delete rb;
 }
 
+static void addRule(ExprBuilder* eb, Solver* s)
+{
+	ExprRule	*er;
+	RuleBuilder	*rb;
+
+	/* bogus rule? */
+	if (checkRule(eb, s) == false)
+		return;
+
+	/* dup? */
+	if (checkDup(eb, s) == true)
+		return;
+
+	/* otherwise, append! */
+	er = loadRule(InputFile.c_str());
+	assert (er);
+
+	rb = new RuleBuilder(createExprBuilder());
+	std::ofstream	of(
+		rb->getDBPath().c_str(),
+		std::ios_base::out |
+		std::ios_base::app |
+		std::ios_base::binary);
+
+	er->printPrettyRule(std::cerr);
+	er->printBinaryRule(of);
+	of.close();
+
+	delete rb;
+
+	std::cout << "Add OK\n";
+}
+
+extern void dbPunchout(ExprBuilder *eb, Solver* s);
+
 int main(int argc, char **argv)
 {
 	Solver		*s;
@@ -664,7 +720,11 @@ int main(int argc, char **argv)
 		return -3;
 	}
 
-	if (CheckDup) {
+	if (AddRule) {
+		addRule(eb, s);
+	} else if (DBPunchout) {
+		dbPunchout(eb, s);
+	} else if (CheckDup) {
 		checkDup(eb, s);
 	} else if (BRuleRebuild) {
 		rebuildBRule(eb, s);
