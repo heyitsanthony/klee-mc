@@ -58,7 +58,7 @@ namespace
 	cl::opt<bool> OutputIStats(
 		"output-istats",
 		cl::desc("Write instruction level statistics (in callgrind format)"),
-		cl::init(true));
+		cl::init(false));
 
 	cl::opt<double> StatsWriteInterval(
 		"stats-write-interval",
@@ -70,7 +70,7 @@ namespace
 		cl::desc("Approximate number of seconds between istats writes (default: 10.0)"),
 		cl::init(10.));
 
-// XXX I really would like to have dynamic rate control for something like this.
+	// XXX I really would like to have dynamic rate control for something like this.
 	cl::opt<double>
 	UncoveredUpdateInterval(
 		"uncovered-update-interval",
