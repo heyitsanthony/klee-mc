@@ -1,5 +1,6 @@
 #define _LARGEFILE64_SOURCE
 
+#include <sys/vfs.h>
 #include <sys/sysinfo.h>
 #include <poll.h>
 #include <signal.h>
@@ -448,6 +449,14 @@ void* sc_enter(void* regfile, void* jmpptr)
 	FAKE_SC(rt_sigaction)
 	FAKE_SC(rt_sigprocmask)
 
+	case SYS_kill:
+		sc_ret_or(sc_new_regs(regfile), -1, 0);
+		break;
+
+	case SYS_keyctl:
+		new_regs = sc_new_regs(regfile);
+		break;
+
 	case SYS_sysinfo:
 		make_sym_by_arg(regfile, 0, sizeof(struct sysinfo), "sysinfo");
 		sc_ret_v(regfile, 0);
@@ -609,6 +618,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(regfile, 0);
 		break;
 	}
+
+	case SYS_utime:
+		sc_ret_or(sc_new_regs(regfile), 0, -1);
+		break;
 
 	case SYS_select: {
 		new_regs = sc_new_regs(regfile);
@@ -855,6 +868,85 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 		make_sym(GET_ARG1(regfile), 4, "accept4_addr");
 		sc_ret_v(regfile, fd_open_sym());
+		break;
+
+	case SYS_setxattr:
+	case SYS_lsetxattr:
+	case SYS_fsetxattr:
+	case SYS_rmdir:
+	case SYS_rename:
+	case SYS_mknod:
+	case SYS_unlinkat:
+	case SYS_linkat:
+	case SYS_sethostname:
+	case SYS_setdomainname:
+	case SYS_ftruncate:
+	case SYS_chroot:
+	case SYS_fchmodat:
+	case SYS_fchownat:
+		sc_ret_or(sc_new_regs(regfile), -1, 0);
+		break;
+
+	case SYS_llistxattr:
+	case SYS_flistxattr:
+	case SYS_listxattr: {
+		size_t len;
+
+		if (GET_ARG1_PTR(regfile) == NULL) {
+			sc_ret_v(regfile, -1);
+			break;
+		}
+
+		len = concretize_u64(GET_ARG2(regfile));
+		make_sym(GET_ARG1(regfile), len, "listxattr");
+		sc_ret_v(regfile, len);
+		break;
+	}
+
+	case SYS_syslog: {
+		int	len;
+
+		klee_warning_once("bogus syslog handling; whatever");
+		if (	GET_ARG1_PTR(regfile) == NULL ||
+			GET_ARG2_S(regfile) <= 0)
+		{
+			sc_ret_v(regfile, -1);
+			break;
+		}
+
+		len = concretize_u64(GET_ARG2_S(regfile));
+		make_sym(GET_ARG1(regfile), len, "syslog");
+		sc_ret_v(regfile, len);
+		break;
+	}
+
+	/* XXX may be broken for ARM */
+	case SYS_statfs:
+		if (GET_ARG1_PTR(regfile) == NULL) {
+			sc_ret_v(regfile, -1);
+			break;
+		}
+
+		new_regs = sc_new_regs(regfile);
+		if ((int64_t)GET_SYSRET(new_regs) == -1) {
+			sc_ret_v_new(new_regs, -1);
+			break;
+		}
+
+		klee_assume(GET_SYSRET(new_regs) == 0);
+		make_sym(GET_ARG1(regfile), sizeof(struct statfs), "statfs");
+
+		sc_ret_v_new(new_regs, 0);
+		break;
+
+	case SYS_getxattr:
+	case SYS_lgetxattr:
+		if (GET_ARG2_PTR(regfile) == NULL) {
+			sc_ret_v(regfile, -1);
+			break;	
+		}
+		make_sym(GET_ARG2(regfile), GET_ARG3(regfile), "getxattr");
+		sc_ret_or(sc_new_regs(regfile), -1, GET_ARG3(regfile));
 		break;
 
 	default:
