@@ -870,6 +870,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(regfile, fd_open_sym());
 		break;
 
+	case SYS_faccessat:
+	case SYS_removexattr:
+	case SYS_lremovexattr:
+	case SYS_fremovexattr:
 	case SYS_setxattr:
 	case SYS_lsetxattr:
 	case SYS_fsetxattr:
