@@ -59,6 +59,10 @@ namespace
 		"output-istats",
 		cl::desc("Write instruction level statistics (in callgrind format)"),
 		cl::init(false));
+	cl::opt<bool> TrackIStats(
+		"track-istats",
+		cl::desc("Track instruction level statistics"),
+		cl::init(true));
 
 	cl::opt<double> StatsWriteInterval(
 		"stats-write-interval",
@@ -85,9 +89,7 @@ namespace
 
 ///
 
-bool StatsTracker::useStatistics() {
-  return OutputStats || OutputIStats;
-}
+bool StatsTracker::useStatistics() { return OutputStats || TrackIStats; }
 
 namespace klee {
 
@@ -255,7 +257,7 @@ void StatsTracker::addKFunction(KFunction* kf)
 	for (unsigned i=0; i<kf->numInstructions; ++i) {
 		KInstruction *ki = kf->instructions[i];
 
-		if (OutputIStats) {
+		if (TrackIStats) {
 			unsigned id = ki->getInfo()->id;
 			theStatisticManager->setIndex(id);
 		}
@@ -338,7 +340,7 @@ void StatsTracker::stepInstUpdateFrame(ExecutionState &es)
 
 void StatsTracker::stepInstruction(ExecutionState &es)
 {
-	if (!OutputIStats) return;
+	if (!TrackIStats) return;
 
 	if (TrackInstructionTime)
 		trackInstTime(es);
@@ -358,7 +360,7 @@ bool StatsTracker::isInstCovered(KInstruction* ki) const
 /* Should be called _after_ the es->pushFrame() */
 void StatsTracker::framePushed(ExecutionState &es, StackFrame *parentFrame)
 {
-	if (!OutputIStats) return;
+	if (!TrackIStats) return;
 
 	StackFrame &sf = es.stack.back();
 
@@ -401,7 +403,7 @@ void StatsTracker::markBranchVisited(
 {
 	uint64_t hasTrue, hasFalse;
 
-	if (!OutputIStats)
+	if (!TrackIStats)
 		return;
 
 	hasTrue = kbr->hasFoundTrue();
