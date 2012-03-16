@@ -27,9 +27,6 @@ namespace {
   cl::opt<bool> WriteCov(
     "write-cov", 
     cl::desc("Write coverage information for each test case"));
-  cl::opt<bool> WriteCVCs(
-    "write-cvcs", 
-    cl::desc("Write .cvc files for each test case"));
 
   cl::opt<bool> WriteTestInfo(
     "write-test-info", 
@@ -275,7 +272,7 @@ void KleeHandler::processTestCase(const ExecutionState &state,
 
   if (errorMessage || WritePCs) {
     std::string constraints;
-    m_interpreter->getConstraintLog(state, constraints);
+    state.getConstraintLog(constraints);
     if (std::ostream* f = openTestFile("pc", id)) {
       *f << constraints;
       delete f;
@@ -284,17 +281,6 @@ void KleeHandler::processTestCase(const ExecutionState &state,
       klee_warning("unable to write .pc file, losing it (errno=%d: %s)", errno, strerror(errno));
   }
 
-  if (WriteCVCs) {
-    std::string constraints;
-    m_interpreter->getConstraintLog(state, constraints, true);
-    if (std::ostream* f = openTestFile("cvc", id)) {
-      *f << constraints;
-      delete f;
-    }
-    else
-      klee_warning("unable to write .cvc file, losing it (errno=%d: %s)", errno, strerror(errno));
-  }
-  
   if (m_symPathWriter) {
     std::vector<unsigned char> symbolicBranches;
     m_symPathWriter->readStream(m_interpreter->getSymbolicPathStreamID(state),

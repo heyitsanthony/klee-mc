@@ -118,10 +118,6 @@ public:
 
   virtual unsigned getSymbolicPathStreamID(const ExecutionState &state) = 0;
   
-  virtual void getConstraintLog(const ExecutionState &state,
-                                std::string &res,
-                                bool asCVC = false) = 0;
-
   virtual bool getSymbolicSolution(const ExecutionState &state, 
                                    std::vector< 
                                    std::pair<std::string,

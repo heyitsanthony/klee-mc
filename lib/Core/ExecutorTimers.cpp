@@ -121,7 +121,7 @@ protected:
 	StatTimer(Executor *_executor, const char* fname)
 	: executor(_executor)
 	, n(0)
-	{ os = executor->getInterpreterHandler()->openOutputFile(fname); 
+	{ os = executor->getInterpreterHandler()->openOutputFile(fname);
 	  base_time = util::estWallTime();
 	}
 
@@ -258,6 +258,44 @@ protected:
 		<< stats::solverTime; }
 };
 
+#include "klee/Internal/Module/KInstruction.h"
+cl::opt<unsigned>
+DumpBrData("dump-br-data",
+	cl::desc("Dump branch data (0=off)"),
+	cl::init(0));
+class BrDataTimer : public Executor::Timer
+{
+public:
+	BrDataTimer(Executor* _exe) : exe(_exe) {}
+	virtual ~BrDataTimer() {}
+
+	void run(void)
+	{
+		std::ostream* os;
+
+		os = exe->getInterpreterHandler()->openOutputFile(
+			"brdata.txt");
+		if (os == NULL) return;
+
+		foreach (it,
+			KBrInstruction::beginBr(),
+			KBrInstruction::endBr())
+		{
+			KBrInstruction	*kbr = *it;
+			llvm::Function	*parent_f;
+
+			parent_f = kbr->getInst()->getParent()->getParent();
+			(*os)	<< exe->getPrettyName(parent_f)
+				<< ' ' << kbr->getTrueHits()
+				<< ' ' << kbr->getFalseHits()
+				<< '\n';
+		}
+		delete os;
+	}
+private:
+	Executor* exe;
+};
+
 ///
 
 static const double kSecondsPerCheck = 0.25;
@@ -291,6 +329,10 @@ void Executor::initTimers(void)
 
 	if (DumpQueryStats)
 		addTimer(new QueryStatTimer(this), DumpQueryStats);
+
+	if (DumpBrData)
+		addTimer(new BrDataTimer(this), DumpBrData);
+
 
 	addTimer(new SigUsrTimer(this), 1);
 }

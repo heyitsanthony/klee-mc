@@ -1,5 +1,5 @@
 // RUN: %llvmgcc %s -emit-llvm -g -O0 -c -o %t1.bc
-// RUN: %klee --use-query-pc-log --write-pcs --write-cvcs %t1.bc 2> %t2.log
+// RUN: %klee --use-query-pc-log --write-pcs %t1.bc 2> %t2.log
 // RUN: %kleaver -print-ast klee-last/queries.pc > %t3.log
 // RUN: %kleaver -print-ast %t3.log > %t4.log
 // RUN: diff %t3.log %t4.log

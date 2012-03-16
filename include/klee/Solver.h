@@ -206,10 +206,6 @@ private:
     /// (required for using timeouts).
     STPSolver(bool useForkedSTP, sockaddr_in_opt stpServer = sockaddr_in_opt());
 
-    /// getConstraintLog - Return the constraint log for the given state in CVC
-    /// format.
-    char *getConstraintLog(const Query&);
-    
     /// setTimeout - Set constraint solver timeout delay to the given value; 0
     /// is off.
     virtual void setTimeout(double timeout);

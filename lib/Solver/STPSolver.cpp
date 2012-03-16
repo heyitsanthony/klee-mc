@@ -197,34 +197,11 @@ STPSolver::STPSolver(bool useForkedSTP, sockaddr_in_opt stpServer)
 {
 }
 
-char *STPSolver::getConstraintLog(const Query &query) {
-  return static_cast<STPSolverImpl*>(impl)->getConstraintLog(query);
-}
-
 void STPSolver::setTimeout(double timeout) {
   static_cast<STPSolverImpl*>(impl)->setTimeout(timeout);
 }
 
 /***/
-
-char *STPSolverImpl::getConstraintLog(const Query &query)
-{
-	char		*buffer;
-	unsigned long	length;
-
-	vc_push(vc);
-	foreach (it, query.constraints.begin(), query.constraints.end())
-		vc_assertFormula(vc, builder->construct(*it));
-
-	assert(	query.expr == ConstantExpr::alloc(0, Expr::Bool) &&
-		"Unexpected expression in query!");
-
-	vc_printQueryStateToBuffer(
-		vc, builder->getFalse(), &buffer, &length, false);
-	vc_pop(vc);
-
-	return buffer;
-}
 
 bool STPSolverImpl::computeSat(const Query& query)
 {

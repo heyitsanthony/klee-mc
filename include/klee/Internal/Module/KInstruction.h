@@ -10,8 +10,10 @@
 #ifndef KLEE_KINSTRUCTION_H
 #define KLEE_KINSTRUCTION_H
 
+#include "klee/util/ExprHashMap.h"
 #include <llvm/Support/DataTypes.h>
 #include <vector>
+#include <list>
 
 namespace llvm {
 	class Instruction;
@@ -68,20 +70,34 @@ private:
 class KBrInstruction : public KInstruction
 {
 public:
+	typedef std::list<KBrInstruction*> kbr_list_ty;
+
 	KBrInstruction(llvm::Instruction* ins, unsigned dest)
 	: KInstruction(ins, dest)
-	, foundTrue(false)
-	, foundFalse(false) {}
+	, true_c(0)
+	, false_c(0) { all_kbr.push_back(this); }
 	virtual ~KBrInstruction() {}
 
-	bool foundAll(void) const { return foundTrue && foundFalse; }
-	void setFoundTrue(void) { foundTrue = true; }
-	void setFoundFalse(void) { foundFalse = true; }
-	bool hasFoundTrue(void) const { return foundTrue; }
-	bool hasFoundFalse(void) const { return foundFalse; }
+	bool hasFoundAll(void) const { return true_c && false_c; }
+	void foundTrue(void) { true_c++; }
+	void foundFalse(void) { false_c++; }
+	bool hasFoundTrue(void) const { return true_c != 0; }
+	bool hasFoundFalse(void) const { return false_c != 0; }
+	unsigned getTrueHits(void) const { return true_c; }
+	unsigned getFalseHits(void) const { return false_c; }
+
+	void addExpr(const ref<Expr>& e) { expr_set.insert(e); }
+
+	static kbr_list_ty::const_iterator beginBr()
+	{ return all_kbr.begin(); }
+	static kbr_list_ty::const_iterator endBr(void)
+	{ return all_kbr.end(); }
 private:
-	bool	foundTrue;
-	bool	foundFalse;
+	unsigned		true_c;
+	unsigned		false_c;
+	ExprHashSet		expr_set;
+
+	static kbr_list_ty	all_kbr;
 };
 
 class KGEPInstruction : public KInstruction

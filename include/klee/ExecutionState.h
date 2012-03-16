@@ -175,6 +175,7 @@ public:
 	ExecutionState *compact() const;
 	ExecutionState *reconstitute(ExecutionState &initialStateCopy) const;
 
+	void getConstraintLog(std::string &res) const;
 
 	std::string getFnAlias(std::string fn);
 	void addFnAlias(std::string old_fn, std::string new_fn);

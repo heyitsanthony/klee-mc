@@ -53,6 +53,7 @@ class ExecutionState;
 class ExeStateManager;
 class ExternalDispatcher;
 class Expr;
+class Forks;
 class Globals;
 class InstructionInfoTable;
 class KFunction;
@@ -104,6 +105,7 @@ public:
   	std::pair<
 		std::pair<const MemoryObject*, const ObjectState*>,
 		ExecutionState*> > ExactResolutionList;
+  typedef  std::map<ExecutionState*, std::vector<SeedInfo> > SeedMapType;
   /// Resolve a pointer to the memory objects it could point to the
   /// start of, forking execution when necessary and generating errors
   /// for pointers to invalid locations (either out of bounds or
@@ -126,6 +128,12 @@ public:
   // not hold, respectively. One of the states is necessarily the
   // current state, and one of the states may be null.
   StatePair fork(ExecutionState &current, ref<Expr> condition, bool isInternal);
+  StateVector fork(
+	ExecutionState &current,
+	unsigned N, ref<Expr> conditions[], bool isInternal,
+	bool isBranch = false);
+
+
   /// Get textual information regarding a memory address.
   std::string getAddressInfo(ExecutionState &state, ref<Expr> address) const;
 
@@ -240,9 +248,8 @@ protected:
   PTree *pathTree;
   TreeStreamWriter *symPathWriter;
   TimingSolver *solver;
-
-
   ExeStateManager* stateManager;
+  Forks* forking;
 
 private:
   std::vector<TimerInfo*> timers;
@@ -254,7 +261,6 @@ private:
   /// satisfies one or more seeds will be added to this map. What
   /// happens with other states (that don't satisfy the seeds) depends
   /// on as-yet-to-be-determined flags.
-  typedef  std::map<ExecutionState*, std::vector<SeedInfo> > SeedMapType;
   SeedMapType seedMap;
 
   /// When non-null the bindings that will be used for calls to
@@ -312,10 +318,13 @@ private:
   void instExtractElement(ExecutionState& state, KInstruction* ki);
   void instInsertElement(ExecutionState& state, KInstruction *ki);
   void instBranch(ExecutionState& state, KInstruction* ki);
+  void instBranchConditional(ExecutionState& state, KInstruction* ki);
+
   void markBranchVisited(
   	ExecutionState& state,
 	KInstruction *ki,
-	const StatePair& branches);
+	const StatePair& branches,
+	const ref<Expr>& cond);
   void finalizeBranch(ExecutionState* st, llvm::BranchInst* bi, int branchIdx);
 
   void instCmp(ExecutionState& state, KInstruction* ki);
@@ -384,10 +393,6 @@ private:
   void removeRoot(ExecutionState* es);
   void replaceStateImmForked(ExecutionState* os, ExecutionState* ns);
 
-  bool setupCallVarArgs(
-    ExecutionState& state,
-    unsigned funcArgs,
-    std::vector<ref<Expr> >& arguments);
   void executeCallNonDecl(
     ExecutionState &state,
     KInstruction *ki,
@@ -408,68 +413,6 @@ private:
     const MemoryObject* mo,
     ref<Expr> len,
     const char* arrPrefix = "arr");
-
-  /* this forking code really should be refactored */
-  bool isForkingCondition(ExecutionState& current, ref<Expr> condition);
-  bool isForkingCallPath(CallPathNode* cpn);
-  StateVector fork(ExecutionState &current,
-                   unsigned N, ref<Expr> conditions[], bool isInternal,
-                   bool isBranch = false);
-
-  struct ForkInfo
-  {
-	ForkInfo(
-		ref<Expr>* in_conditions,
-		unsigned int in_N)
-	: resStates(in_N, NULL)
-	, res(in_N, false)
-	, conditions(in_conditions)
-	, N(in_N)
-	, feasibleTargets(0)
-	, validTargets(0)
-	, resSeeds(in_N)
-	, forkCompact(false)
-	{}
-
-	StateVector		resStates;
-	std::vector<bool>	res;
-	ref<Expr>		*conditions;
-	unsigned int		N;
-	unsigned int		feasibleTargets;
-	unsigned int		validTargets;
-	bool			isInternal;
-	bool			isSeeding;
-	bool			isBranch;
-	bool			wasReplayed;
-	std::vector<std::list<SeedInfo> > resSeeds;
-	bool			forkCompact;
-	double			timeout;
-  };
-
-  void skipAndRandomPrune(struct ForkInfo& fi, const char* reason);
-
-  bool forkSetupNoSeeding(ExecutionState& current, struct ForkInfo& fi);
-  bool forkFollowReplay(ExecutionState& current, struct ForkInfo& fi);
-  void forkSetupSeeding(ExecutionState& current, struct ForkInfo& fi);
-
-  /* Assigns feasibility for forking condition(s) into fi.res[cond]
-   * NOTE: it is the caller's responsibility to terminate the current state
-   * on failure.
-   * */
-  bool evalForks(ExecutionState& current, struct ForkInfo& fi);
-  bool evalForkBranch(ExecutionState& current, struct ForkInfo& fi);
-
-  void makeForks(ExecutionState& current, struct ForkInfo& fi);
-  void constrainForks(ExecutionState& current, struct ForkInfo& fi);
-  void constrainFork(
-  	ExecutionState& current, struct ForkInfo& fi, unsigned int);
-
-
-  bool isStateSeeding(ExecutionState* s);
-
-  void handlePointsToObj(ExecutionState &state,
-                         KInstruction *target,
-                         const std::vector<ref<Expr> > &arguments);
 
   void doImpliedValueConcretization(ExecutionState &state,
                                     ref<Expr> e,
@@ -492,7 +435,6 @@ private:
     ExecutionState& state, SeedInfo& si,
     const MemoryObject* mo, const Array* array);
   void checkAddConstraintSeeds(ExecutionState& state, ref<Expr> &cond);
-  void getConstraintLogCVC(const ExecutionState& state, std::string& res);
 
 public:
 	Executor(InterpreterHandler *ie);
@@ -503,6 +445,7 @@ public:
 
 	const InterpreterHandler& getHandler() { return *interpreterHandler; }
 	TimingSolver* getSolver(void) { return solver; }
+	bool isStateSeeding(ExecutionState* s) const;
 
 	/// Add the given (boolean) condition as a constraint on state. This
 	/// function is a wrapper around the state's addConstraint function
@@ -604,6 +547,7 @@ public:
 
 	virtual void setSymbolicPathWriter(TreeStreamWriter *tsw)
 	{ symPathWriter = tsw; }
+	TreeStreamWriter* getSymbolicPathWriter(void) { return symPathWriter; }
 
 	virtual void setReplayOut(const struct KTest *out)
 	{
@@ -626,17 +570,13 @@ public:
 
 	/*** Runtime options ***/
 
-	virtual void setHaltExecution(bool value) { haltExecution = value; }
-	virtual void setInhibitForking(bool value) { inhibitForking = value; }
+	virtual void setHaltExecution(bool v) { haltExecution = v; }
+	virtual void setInhibitForking(bool v) { inhibitForking = v; }
+	bool getInhibitForking(void) const { return inhibitForking; }
 
 	/*** State accessor methods ***/
 
 	virtual unsigned getSymbolicPathStreamID(const ExecutionState &state);
-
-	virtual void getConstraintLog(
-		const ExecutionState &state,
-		std::string &res,
-		bool asCVC = false);
 
 	virtual bool getSymbolicSolution(
 		const ExecutionState &state,
@@ -656,6 +596,11 @@ public:
 	InterpreterHandler *getInterpreterHandler(void) const
 	{ return interpreterHandler; }
 
+	const struct KTest *getReplayOut(void) const { return replayOut; }
+	bool isAtMemoryLimit(void) const { return atMemoryLimit; }
+	SeedMapType& getSeedMap(void) { return seedMap; }
+	PTree* getPTree(void) { return pathTree; }
+	ExeStateManager* getStateManager(void) { return stateManager; }
 };
 
 }

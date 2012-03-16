@@ -27,7 +27,6 @@ public:
   STPSolverImpl(STPSolver *_solver, bool _useForkedSTP);
   ~STPSolverImpl();
 
-  char *getConstraintLog(const Query&);
   void setTimeout(double _timeout) { timeout = _timeout; }
 
   bool computeSat(const Query&);

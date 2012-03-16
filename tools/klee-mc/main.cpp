@@ -242,23 +242,6 @@ static void interrupt_handle() {
   interrupted = true;
 }
 
-// This is a temporary hack. If the running process has access to
-// externals then it can disable interrupts, which screws up the
-// normal "nice" watchdog termination process. We try to request the
-// interpreter to halt using this mechanism as a last resort to save
-// the state data before going ahead and killing it.
-static void halt_via_gdb(int pid)
-{
-  char buffer[256];
-  sprintf(buffer,
-          "gdb --batch --eval-command=\"p halt_execution()\" "
-          "--eval-command=detach --pid=%d &> /dev/null",
-          pid);
-  //  fprintf(stderr, "KLEE: WATCHDOG: running: %s\n", buffer);
-  if (system(buffer)==-1)
-    perror("system");
-}
-
 void dumpIRSBs(void)
 {
 	std::cerr << "DUMPING LOGS" << std::endl;

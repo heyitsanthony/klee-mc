@@ -22,6 +22,8 @@
 using namespace llvm;
 using namespace klee;
 
+KBrInstruction::kbr_list_ty  KBrInstruction::all_kbr;
+
 KInstruction::~KInstruction() { delete[] operands; }
 
 KInstruction::KInstruction(Instruction* in_inst, unsigned in_dest)

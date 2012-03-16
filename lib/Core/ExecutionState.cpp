@@ -12,6 +12,7 @@
 #include "klee/Solver.h"
 #include "../Solver/SMTPrinter.h"
 
+#include "klee/util/ExprPPrinter.h"
 #include "klee/Internal/Module/Cell.h"
 #include "klee/Internal/Module/InstructionInfoTable.h"
 #include "klee/Internal/Module/KInstruction.h"
@@ -29,6 +30,7 @@
 
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <iomanip>
 #include <cassert>
 #include <map>
@@ -621,4 +623,11 @@ bool ExecutionState::setupCallVarArgs(
 	}
 
 	return true;
+}
+
+void ExecutionState::getConstraintLog(std::string &res) const
+{
+	std::ostringstream info;
+	ExprPPrinter::printConstraints(info, constraints);
+	res = info.str();
 }
