@@ -53,6 +53,9 @@ public:
 		ref<Expr> condition,
 		bool isInternal);
 
+	Executor::StatePair forkUnconditional(
+		ExecutionState &current, bool isInternal);
+
 private:
 	/* this forking code really should be refactored */
 	bool isForkingCondition(ExecutionState& current, ref<Expr> condition);

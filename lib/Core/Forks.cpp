@@ -155,6 +155,23 @@ Forks::fork(ExecutionState &s, ref<Expr> cond, bool isInternal)
 		results[0] /* second label in br => false */);
 }
 
+Executor::StatePair Forks::forkUnconditional(
+	ExecutionState &s, bool isInternal)
+{
+	ref<Expr>		conds[2];
+	Executor::StateVector	results;
+
+	conds[0] = ConstantExpr::create(1, 1);
+	conds[1] = ConstantExpr::create(1, 1);
+
+	/* NOTE: not marked as branch so that branch optimization is not
+	 * applied-- giving it (true, true) would result in only one branch! */
+	results = fork(s, 2, conds, isInternal, false);
+	return std::make_pair(
+		results[1] /* first label in br => true */,
+		results[0] /* second label in br => false */);
+}
+
 bool Forks::forkFollowReplay(ExecutionState& current, struct ForkInfo& fi)
 {
 	// Replaying non-internal fork; read value from replayBranchIterator

@@ -33,7 +33,6 @@
 #include "klee/ExeStateBuilder.h"
 #include "klee/Expr.h"
 #include "klee/Interpreter.h"
-#include "klee/TimerStatIncrementer.h"
 #include "klee/util/ExprPPrinter.h"
 #include "klee/Internal/ADT/KTest.h"
 #include "klee/Internal/ADT/RNG.h"
@@ -185,6 +184,12 @@ namespace {
            cl::desc("Write .trace file for each terminated state"),
            cl::location(WriteTraces),
            cl::init(false));
+
+  cl::opt<bool>
+  IgnoreBranchConstraints(
+  	"ignore-branch-constraints",
+	cl::desc("Speculatively execute both sides of a symbolic branch."),
+	cl::init(false));
 
   cl::opt<bool>
   TrackBranchExprs(
@@ -877,8 +882,16 @@ void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 {
 	BranchInst	*bi = cast<BranchInst>(ki->getInst());
 	const Cell	&cond = eval(ki, 0, state);
+	StatePair	branches;
 
-	StatePair branches = fork(state, cond.value, false);
+	if (	IgnoreBranchConstraints &&
+		cond.value->getKind() != Expr::Constant)
+	{
+		branches = forking->forkUnconditional(state, false);
+		assert (branches.first && branches.second);
+	} else {
+		branches = fork(state, cond.value, false);
+	}
 
 	if (WriteTraces) {
 		bool	isTwoWay = (branches.first && branches.second);
