@@ -13,11 +13,14 @@
 #include "klee/Solver.h"
 #include "klee/util/ExprUtil.h"
 #include "klee/util/Assignment.h"
+#include "klee/Internal/ADT/RNG.h"
 
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/system_error.h"
+
+#include "ExprGen.h"
 
 using namespace llvm;
 using namespace klee;
@@ -30,6 +33,12 @@ namespace llvm
 		cl::desc("<equivexpr proof .smt>"),
 		cl::Positional,
 		cl::init("-"));
+
+	cl::opt<bool>
+	BenchmarkRules(
+		"benchmark-rules",
+		cl::desc("Benchmark rules with random queries"),
+		cl::init(false));
 
 	cl::opt<bool>
 	DBPunchout(
@@ -712,6 +721,39 @@ static void addRule(ExprBuilder* eb, Solver* s)
 
 extern void dbPunchout(ExprBuilder *eb, Solver* s);
 
+void benchmarkRules(ExprBuilder *eb, Solver* s)
+{
+	RuleBuilder	*rb = new RuleBuilder(createExprBuilder());
+
+	foreach (it, rb->begin(), rb->end()) {
+		const ExprRule*	er = *it;
+		LoggingRNG	rng;
+		ReplayRNG	*replay;
+		ref<Expr>	base_from, base_to;
+		ref<Expr>	gen_from, gen_to;
+		ref<Array>	arr;
+
+		base_from = er->getFromExpr();
+		base_to = er->getToExpr();
+		arr = er->getMaterializeArray();
+
+		do {
+			gen_from = ExprGen::genExpr(rng, base_from, arr, 10);
+			replay = rng.getReplay();
+			gen_to = ExprGen::genExpr(*replay, base_to, arr, 10);
+			delete replay;
+
+			std::cerr << "TO-EXPR: " << gen_to << '\n';
+			std::cerr << "FROM-EXPR: " << gen_from << '\n';
+			std::cerr << "===========\n";
+		} while (
+			gen_from->getKind() == Expr::Constant &&
+			gen_to->getKind() == Expr::Constant);
+	}
+
+	delete rb;
+}
+
 int main(int argc, char **argv)
 {
 	Solver		*s;
@@ -734,6 +776,8 @@ int main(int argc, char **argv)
 
 	if (AddRule) {
 		addRule(eb, s);
+	} else if (BenchmarkRules) {
+		benchmarkRules(eb, s);
 	} else if (DBPunchout) {
 		dbPunchout(eb, s);
 	} else if (CheckDup) {

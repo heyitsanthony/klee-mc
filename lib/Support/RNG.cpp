@@ -48,10 +48,10 @@
 using namespace klee;
 
 /* initializes mt[N] with a seed */
-RNG::RNG(unsigned int s)
+RNG::RNG(unsigned int s, bool do_seed)
 {
   if (s == 0) s = time(NULL);
-  seed(s);
+  if (do_seed) seed(s);
 }
 
 void RNG::seed(unsigned int s) {

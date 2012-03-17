@@ -87,6 +87,9 @@ public:
 
 	bool operator==(const ExprRule& er) const;
 	bool operator!=(const ExprRule& er) const { return !(*this == er); }
+
+	virtual ref<Array> getMaterializeArray(void) const
+	{ return materialize_arr; }
 protected:
 	ExprRule(const Pattern& _from, const Pattern& _to);
 
