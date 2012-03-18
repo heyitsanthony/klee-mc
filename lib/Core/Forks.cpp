@@ -463,9 +463,27 @@ bool Forks::evalForks(ExecutionState& current, struct ForkInfo& fi)
 void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 {
 	ExecutionState	**curStateUsed = NULL;
+	unsigned	cond_idx_map[fi.N];
 
-	for(unsigned int condIndex = 0; condIndex < fi.N; condIndex++) {
+	for (unsigned i = 0; i < fi.N; i++)
+		cond_idx_map[i] = i;
+
+	if (RandomizeFork) {
+		for (unsigned i = 0; i < fi.N; i++) {
+			unsigned	swap_idx, swap_val;
+			
+			swap_idx = theRNG.getInt32() % fi.N;
+			swap_val = cond_idx_map[swap_idx];
+			cond_idx_map[swap_idx] = cond_idx_map[i];
+			cond_idx_map[i] = swap_val;
+		}
+	}
+
+	for(unsigned int i = 0; i < fi.N; i++) {
 		ExecutionState	*newState, *baseState;
+		unsigned	condIndex;
+
+		condIndex = cond_idx_map[i];
 
 		// Process each valid target and generate a state
 		if (!fi.res[condIndex]) continue;
@@ -501,14 +519,6 @@ void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 				newState->symPathOS = tsw->open(
 					current.symPathOS);
 			}
-		}
-
-		// Randomize path tree layout
-		if (RandomizeFork && theRNG.getBool()) {
-			std::swap(baseState, newState);
-			// Randomize which actual state gets the T/F branch;
-			// Affects which state BatchingSearcher retains.
-			std::swap(*curStateUsed, fi.resStates[condIndex]);
 		}
 
 		// Update path tree with new states
