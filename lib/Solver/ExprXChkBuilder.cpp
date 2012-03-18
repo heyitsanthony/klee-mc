@@ -461,12 +461,10 @@ void ExprXChkBuilder::dumpCounterExample(
 	const ref<Expr>& oracle_expr,
 	const ref<Expr>& test_expr)
 {
-	std::vector<const Array*>			objects;
-	std::vector< std::vector<unsigned char> >	values;
 	bool			ok;
-	ConstraintManager	cm;
-	Query			q(cm, EqExpr::alloc(oracle_expr, test_expr));
+	Query			q(EqExpr::alloc(oracle_expr, test_expr));
 	Assignment		a(q.expr);
+	ref<Expr>		oracle_eval, test_eval;
 
 
 	ok = solver.getInitialValues(q, a);
@@ -483,12 +481,14 @@ void ExprXChkBuilder::dumpCounterExample(
 		os << '\n';
 	}
 
+	oracle_eval = a.evaluate(oracle_expr);
 	os << "Oracle expr: ";
-	a.evaluate(oracle_expr)->print(os);
+	oracle_eval->print(os);
 	os << '\n';
 
+	test_eval = a.evaluate(test_expr);
 	os << "Test expr: ";
-	a.evaluate(test_expr)->print(os);
+	test_eval->print(os);
 	os << '\n';
 }
 
@@ -518,6 +518,9 @@ void ExprXChkBuilder::printBadXChk(
 	std::cerr << "BAD XCHK: ";
 	q.expr->print(std::cerr);
 	std::cerr << '\n';
+
+	std::cerr << "ORACLE-EXPR: " << oracle_expr << '\n';
+	std::cerr << "TEST-EXPR: " << test_expr << '\n';
 
 	dumpCounterExample(std::cerr, oracle_expr, test_expr);
 	SMTPrinter::dump(q, "exprxchk");

@@ -94,10 +94,6 @@ ref<Expr> ExprGen::genExpr(
 			if (cur_expr->getWidth() > 64)
 				cur_expr = ZExtExpr::create(cur_expr, 32);
 
-		case Expr::Add:
-		case Expr::Sub:
-		case Expr::Mul:
-
 		case Expr::UDiv:
 		case Expr::SDiv:
 		case Expr::URem:
@@ -108,7 +104,9 @@ ref<Expr> ExprGen::genExpr(
 				if (cur_expr->isZero())
 					break;
 			}
-
+		case Expr::Add:
+		case Expr::Sub:
+		case Expr::Mul:
 		case Expr::And:
 		case Expr::Or:
 		case Expr::Xor:
@@ -137,6 +135,7 @@ ref<Expr> ExprGen::genExpr(
 				ce = NotExpr::create(ce);
 
 			/* don't upset sdiv / udiv */
+			/* TODO: do a (select (= 0 expr) 1 expr) for div/rem */
 			if (ce->isZero()) {
 				ce = ConstantExpr::create(1, 32);
 				ce = ZExtExpr::create(ce, cur_expr->getWidth());

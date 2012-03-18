@@ -727,8 +727,6 @@ void benchmarkRules(ExprBuilder *eb, Solver* s)
 
 	foreach (it, rb->begin(), rb->end()) {
 		const ExprRule*	er = *it;
-		LoggingRNG	rng;
-		ReplayRNG	*replay;
 		ref<Expr>	base_from, base_to;
 		ref<Expr>	gen_from, gen_to;
 		ref<Array>	arr;
@@ -737,7 +735,13 @@ void benchmarkRules(ExprBuilder *eb, Solver* s)
 		base_to = er->getToExpr();
 		arr = er->getMaterializeArray();
 
+
+		std::cerr << "BASE-FROM: " << base_from << '\n';
+		std::cerr << "BASE-TO: " << base_to << '\n';
 		do {
+			LoggingRNG	rng;
+			ReplayRNG	*replay;
+
 			gen_from = ExprGen::genExpr(rng, base_from, arr, 10);
 			replay = rng.getReplay();
 			gen_to = ExprGen::genExpr(*replay, base_to, arr, 10);

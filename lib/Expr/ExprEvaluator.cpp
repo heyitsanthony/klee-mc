@@ -24,9 +24,10 @@ ExprVisitor::Action ExprEvaluator::evalRead(const UpdateList &ul,
       // cannot guarantee value. we can rewrite to read at this
       // version though (mostly for debugging).
 
-      return Action::changeTo(ReadExpr::create(UpdateList(ul.getRoot(), un),
-                                               ConstantExpr::alloc(index,
-                                                                   ul.getRoot()->getDomain())));
+      return Action::changeTo(
+        ReadExpr::create(
+	  UpdateList(ul.getRoot(), un),
+          ConstantExpr::alloc(index, ul.getRoot()->getDomain())));
     }
   }
 
@@ -58,46 +59,41 @@ ExprVisitor::Action ExprEvaluator::visitExpr(const Expr &e) {
   return Action::changeTo(e.rebuild(Kids));
 }
 
-ExprVisitor::Action ExprEvaluator::visitRead(const ReadExpr &re) {
-  ref<Expr> v = visit(re.index);
+ExprVisitor::Action ExprEvaluator::visitRead(const ReadExpr &re)
+{
+	ref<Expr> v = visit(re.index);
 
-  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(v)) {
-    return evalRead(re.updates, CE->getZExtValue());
-  } else {
-    return Action::doChildren();
-  }
+	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(v))
+		return evalRead(re.updates, CE->getZExtValue());
+
+	return Action::doChildren();
 }
 
 // we need to check for div by zero during partial evaluation,
 // if this occurs then simply ignore the 0 divisor and use the
 // original expression.
-ExprVisitor::Action ExprEvaluator::protectedDivOperation(const BinaryExpr &e) {
-  ref<Expr> kids[2] = { visit(e.left),
-                        visit(e.right) };
+ExprVisitor::Action ExprEvaluator::protectedDivOperation(const BinaryExpr &e)
+{
+	ref<Expr> kids[2] = { visit(e.left), visit(e.right) };
 
-  if (ConstantExpr *CE = dyn_cast<ConstantExpr>(kids[1])) {
-    if (CE->isZero()) {
-      kids[1] = e.right;
-      protected_div = true;
-    }
-  }
+	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(kids[1])) {
+		if (CE->isZero()) {
+			kids[1] = e.right;
+			protected_div = true;
+		}
+	}
 
-  if (kids[0]!=e.left || kids[1]!=e.right) {
-    return Action::changeTo(e.rebuild(kids));
-  } else {
-    return Action::skipChildren();
-  }
+	if (kids[0]!=e.left || kids[1]!=e.right)
+		return Action::changeTo(e.rebuild(kids));
+
+	return Action::skipChildren();
 }
 
-ExprVisitor::Action ExprEvaluator::visitUDiv(const UDivExpr &e) {
-  return protectedDivOperation(e);
-}
-ExprVisitor::Action ExprEvaluator::visitSDiv(const SDivExpr &e) {
-  return protectedDivOperation(e);
-}
-ExprVisitor::Action ExprEvaluator::visitURem(const URemExpr &e) {
-  return protectedDivOperation(e);
-}
-ExprVisitor::Action ExprEvaluator::visitSRem(const SRemExpr &e) {
-  return protectedDivOperation(e);
-}
+ExprVisitor::Action ExprEvaluator::visitUDiv(const UDivExpr &e)
+{ return protectedDivOperation(e); }
+ExprVisitor::Action ExprEvaluator::visitSDiv(const SDivExpr &e)
+{ return protectedDivOperation(e); }
+ExprVisitor::Action ExprEvaluator::visitURem(const URemExpr &e)
+{ return protectedDivOperation(e); }
+ExprVisitor::Action ExprEvaluator::visitSRem(const SRemExpr &e)
+{ return protectedDivOperation(e); }
