@@ -121,6 +121,7 @@ ref<Expr> OptBuilder::mergeConcatSExt(
 ref<Expr> OptBuilder::Extract(const ref<Expr>& expr, unsigned off, Expr::Width w)
 {
 	unsigned kw = expr->getWidth();
+	assert (w < 4096 && "A 4096 bit+ expression? Cool your jets.");
 	assert(w > 0 && off + w <= kw && "invalid extract");
 
 	if (w == kw)
@@ -234,7 +235,10 @@ ref<Expr> OptBuilder::Extract(const ref<Expr>& expr, unsigned off, Expr::Width w
 	/* Extract(Extract) */
 	if (expr->getKind() == Expr::Extract) {
 		const ExtractExpr* ee = cast<ExtractExpr>(expr);
-		return ExtractExpr::create(ee->expr, off+ee->offset, w);
+		return ExtractExpr::create(
+			ee->expr,
+			off+ee->offset,
+			w);
 	}
 
 	if (expr->getKind() == Expr::ZExt) {
@@ -1092,7 +1096,7 @@ static ref<Expr> URemExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 static ref<Expr> SRemExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 {
 	// r must be 1
- 	 if (l->getWidth() == Expr::Bool)
+	if (l->getWidth() == Expr::Bool)
 		return ConstantExpr::create(0, Expr::Bool);
 
 	return SRemExpr::alloc(l, r);
@@ -1224,12 +1228,21 @@ static ref<Expr> AShrExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 	if (ce != NULL && ce->getWidth() <= 64) {
 		uint64_t		shr_bits =  ce->getZExtValue();
 
+		/* STP behavior here seems to be
+		 * l < 0 => ~0
+		 * l >= 0 => 0
+		 * I can't think of a nice way of doing this without
+		 * extra expressions, so punt
+		 */
+		if (shr_bits >= w)
+			return AShrExpr::alloc(l, r);
+
 		return SExtExpr::create(
 			ExtractExpr::create(
 				l,
 				shr_bits,
 				w - shr_bits),
-			l->getWidth());
+			w);
 	}
 
 	ref<Expr> ret(ShrExprZExt_create(l, r));
@@ -1238,13 +1251,15 @@ static ref<Expr> AShrExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 
 	if (const ExtractExpr* ee = dyn_cast<ExtractExpr>(l)) {
 		if (const ConstantExpr* ce = dyn_cast<ConstantExpr>(r)) {
-			uint64_t	shift_v = ce->getZExtValue();;
-			return SExtExpr::create(
-				ExtractExpr::create(
-					l->getKid(0),
-					shift_v+ee->offset,
-					w - shift_v),
-				l->getWidth());
+			uint64_t	shift_v = ce->getZExtValue();
+
+			if (shift_v < w)
+				return SExtExpr::create(
+					ExtractExpr::create(
+						l->getKid(0),
+						shift_v+ee->offset,
+						w - shift_v),
+					l->getWidth());
 		}
 	}
 
