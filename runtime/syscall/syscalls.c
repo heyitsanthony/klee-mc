@@ -376,7 +376,9 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	case SYS_write:
 #ifdef USE_SYS_FAILURE
-		if (fail_c.fc_write % (4*FAILURE_RATE)) {
+		if (	GET_ARG0(regfile) != 0 /* never fail stdout */
+			&& fail_c.fc_write % (4*FAILURE_RATE))
+		{
 			new_regs = sc_new_regs(regfile);
 			if ((int64_t)GET_SYSRET(new_regs) == -1) {
 				break;
