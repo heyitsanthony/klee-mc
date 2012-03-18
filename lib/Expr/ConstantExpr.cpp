@@ -122,7 +122,12 @@ DECL_CE_FUNCOP(URem, urem)
 DECL_CE_FUNCOP(SRem, srem)
 DECL_CE_FUNCOP(Shl, shl)
 DECL_CE_FUNCOP(LShr, lshr)
-DECL_CE_FUNCOP(AShr, ashr)
+
+ref<ConstantExpr> ConstantExpr::AShr(const ref<ConstantExpr> &in_rhs)
+{
+	if (getWidth() == 1) return this;
+	return ConstantExpr::alloc(value.ashr(in_rhs->value));
+}
 
 ref<ConstantExpr> ConstantExpr::Neg() { return ConstantExpr::alloc(-value); }
 ref<ConstantExpr> ConstantExpr::Not() { return ConstantExpr::alloc(~value); }
