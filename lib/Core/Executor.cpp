@@ -69,7 +69,7 @@ using namespace klee;
 
 bool	WriteTraces = false;
 bool	ReplayInhibitedForks = true;
-double	MaxSTPTime;
+extern double	MaxSTPTime;
 
 namespace llvm
 {
@@ -161,12 +161,6 @@ namespace {
   SeedTime("seed-time",
            cl::desc("Amount of time to dedicate to seeds, before normal search (default=0 (off))"),
            cl::init(0));
-
-  cl::opt<double,true>
-  MaxSTPTimeProxy("max-stp-time",
-             cl::desc("Maximum amount of time for a single query (default=120s)"),
-	     cl::location(MaxSTPTime),
-             cl::init(120.0));
 
   cl::opt<unsigned int>
   StopAfterNInstructions("stop-after-n-instructions",

@@ -86,7 +86,7 @@ private:
     /// validity_to_str - Return the name of given Validity enum value.
     static const char *validity_to_str(Validity v);
     static TimingSolver* createTimerChain(
-	double timeout,
+	double timeout=0.0,
 	std::string queryPCLogPath = "",
 	std::string stpQueryPCLogPath = "");
     static Solver* createChain(

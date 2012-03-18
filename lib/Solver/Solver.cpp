@@ -49,7 +49,8 @@
 using namespace klee;
 using namespace llvm;
 
-bool UseFastCexSolver;
+bool	UseFastCexSolver;
+double	MaxSTPTime;
 
 namespace {
   cl::opt<bool>
@@ -75,6 +76,13 @@ namespace {
   	cl::desc("Use the fast CEX solver, whatever that is."),
   	cl::location(UseFastCexSolver),
 	cl::init(false));
+
+  cl::opt<double,true>
+  MaxSTPTimeProxy("max-stp-time",
+             cl::desc("Maximum amount of time for a single query (default=120s)"),
+	     cl::location(MaxSTPTime),
+             cl::init(120.0));
+
 
   cl::opt<bool>
   UseFastRangeSolver(
@@ -290,6 +298,8 @@ static Solver* createChainWithTimedSolver(
 		Expr::setBuilder(xchkBuilder);
 	}
 
+	timedSolver->setTimeout(MaxSTPTime);
+
 	return solver;
 }
 
@@ -298,6 +308,7 @@ Solver* Solver::createChain(
 	std::string stpQueryPCLogPath)
 {
 	TimedSolver	*timedSolver;
+
 	return createChainWithTimedSolver(
 		queryPCLogPath,
 		stpQueryPCLogPath,
@@ -312,6 +323,9 @@ TimingSolver* Solver::createTimerChain(
 	Solver		*solver;
 	TimedSolver	*timedSolver;
 	TimingSolver	*ts;
+
+	if (timeout == 0.0)
+		timeout = MaxSTPTime;
 
 	solver = createChainWithTimedSolver(
 		queryPCLogPath, stpQueryPCLogPath, timedSolver);
