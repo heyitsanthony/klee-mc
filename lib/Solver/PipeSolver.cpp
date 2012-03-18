@@ -309,6 +309,8 @@ bool PipeSolverImpl::computeSat(const Query& q)
 	if (parse_ok == false) {
 		std::cerr << "[PipeSolver] BAD PARSE SAT\n";
 		failQuery();
+		if (!ForkQueries)
+			SMTPrinter::dump(q, "badsat");
 		return false;
 	}
 

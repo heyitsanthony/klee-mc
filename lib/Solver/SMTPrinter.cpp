@@ -193,7 +193,6 @@ void SMTPrinter::visitExprPost(const Expr *e)
 	case Expr::Sle:
 	case Expr::Sgt:
 	case Expr::Sge:
-	case Expr::Not:
 		os << ") bv1[1] bv0[1]) \n";
 		break;
 
@@ -322,7 +321,7 @@ SMTPrinter::Action SMTPrinter::visitExpr(const Expr* e)
 
 	case Expr::Ne: os << "(ite ( = "; break;
 	case Expr::Not:
-		os << "(ite (= bv0[1] ";
+		os << "(bvnot ";
 		break;
 
 	case Expr::Bind:

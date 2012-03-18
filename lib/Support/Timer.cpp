@@ -25,3 +25,9 @@ uint64_t WallTimer::check()
 	double now = util::estWallTime();
 	return (uint64_t)((now - startTime)*1e6);
 }
+
+double WallTimer::checkSecs()
+{
+	double now = util::estWallTime();
+	return (now - startTime);
+}

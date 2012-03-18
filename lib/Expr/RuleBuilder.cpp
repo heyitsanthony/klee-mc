@@ -106,6 +106,30 @@ void RuleBuilder::eraseDBRule(rulearr_ty::const_iterator& it)
 	}
 
 	to_rmv = *it;
+	/* first, try the hint */
+	if (to_rmv->getOffsetHint()) {
+		ExprRule	*er;
+		std::streampos	off_hint;
+
+		off_hint = (std::streampos)to_rmv->getOffsetHint();
+
+		ifs.seekg(off_hint);
+		er = ExprRule::loadBinaryRule(ifs);
+		if (er != NULL && *er == *to_rmv) {
+			std::streampos new_pos = ifs.tellg();
+			ifs.seekg(off_hint);
+			ExprRule::printTombstone(ifs, new_pos - off_hint);
+			delete er;
+			return;
+
+		}
+
+		if (er != NULL) delete er;
+
+		ifs.seekg(0);
+	}
+
+	/* hint was bogus-- do a full scan like a jackass */
 	last_pos = 0;
 	while (ifs.eof() == false) {
 		ExprRule	*er;
@@ -124,7 +148,7 @@ void RuleBuilder::eraseDBRule(rulearr_ty::const_iterator& it)
 			ifs.seekg(last_pos);
 			ExprRule::printTombstone(ifs, new_pos - last_pos);
 			delete er;
-			break;
+			return;
 		}
 
 		last_pos = new_pos;

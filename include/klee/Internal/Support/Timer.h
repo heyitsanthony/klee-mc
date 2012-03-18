@@ -22,6 +22,7 @@ public:
 	WallTimer();
 	/// check - Return the delta since the timer was created, in microseconds.
 	uint64_t check(void);
+	double checkSecs(void);
 };
 }
 

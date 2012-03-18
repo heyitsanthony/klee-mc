@@ -90,6 +90,9 @@ public:
 
 	virtual ref<Array> getMaterializeArray(void) const
 	{ return materialize_arr; }
+
+	unsigned int getOffsetHint(void) const { return off_hint; }
+
 protected:
 	ExprRule(const Pattern& _from, const Pattern& _to);
 
@@ -107,6 +110,8 @@ private:
 
 	mutable unsigned apply_hit_c, apply_fail_c;
 	ref<Array>	materialize_arr;
+
+	unsigned int	off_hint;
 };
 
 }

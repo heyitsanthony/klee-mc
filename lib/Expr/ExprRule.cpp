@@ -263,6 +263,8 @@ ExprRule* ExprRule::loadBinaryRule(std::istream& is)
 {
 	uint64_t	hdr;
 	Pattern		p_from, p_to;
+	ExprRule	*er;
+	unsigned	off;
 
 	/* skip tombstones */
 	do {
@@ -277,6 +279,8 @@ ExprRule* ExprRule::loadBinaryRule(std::istream& is)
 		is.ignore(skip);
 	} while (hdr == HDR_SKIP);
 
+	off = (unsigned)is.tellg() - 8;
+
 	if (hdr != HDR_MAGIC)
 		return NULL;
 
@@ -286,7 +290,10 @@ ExprRule* ExprRule::loadBinaryRule(std::istream& is)
 	if (is.fail())
 		return NULL;
 
-	return new ExprRule(p_from, p_to);
+	er = new ExprRule(p_from, p_to);
+	er->off_hint = off;
+
+	return er;
 }
 
 void ExprRule::loadBinaryPattern(std::istream& is, Pattern& p)

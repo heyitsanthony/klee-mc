@@ -1387,7 +1387,8 @@ static ref<Expr> EqExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 			return r;
 
 		// 0 == ...
-		if (rk == Expr::Eq) {
+		switch (rk) {
+		case Expr::Eq: {
 			const EqExpr *ree = cast<EqExpr>(r);
 			ConstantExpr *CE = dyn_cast<ConstantExpr>(ree->left);
 
@@ -1395,25 +1396,30 @@ static ref<Expr> EqExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 			// 0 == (0 == A) => A
 			if (CE && CE->getWidth() == Expr::Bool && CE->isFalse())
 				return ree->right;
-		} else if (rk == Expr::Or) {
+			break;
+		}
+		case Expr::Or: {
 			const OrExpr *roe = cast<OrExpr>(r);
 
 			// transform not(or(a,b)) to and(not a, not b)
 			return AndExpr::create(
 				Expr::createIsZero(roe->left),
 				Expr::createIsZero(roe->right));
-		} else if (rk == Expr::Ule) {
+		}
+		case Expr::Ule:
 			// !(l <= r) => l > r =>
 			return UgtExpr::create(r->getKid(0), r->getKid(1));
-		} else if (rk == Expr::Ult) {
+		case Expr::Ult:
 			// !(l < r) => l >= r =>
 			return UgeExpr::create(r->getKid(0), r->getKid(1));
-		} else if (rk == Expr::Sle) {
+		case Expr::Sle:
 			// !(l <= r) => l > r =>
 			return SgtExpr::create(r->getKid(0), r->getKid(1));
-		} else if (rk == Expr::Slt) {
+		case Expr::Slt:
 			// !(l < r) => l >= r =>
 			return SgeExpr::create(r->getKid(0), r->getKid(1));
+		default:
+			break;
 		}
 	}
 
