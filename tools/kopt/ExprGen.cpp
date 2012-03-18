@@ -98,12 +98,14 @@ ref<Expr> ExprGen::genExpr(
 		case Expr::SDiv:
 		case Expr::URem:
 		case Expr::SRem:
-			if (cur_expr->isZero()) {
-				cur_expr = base;
-				/* ugh just skip */
-				if (cur_expr->isZero())
-					break;
-			}
+			/* protect from 0's */
+			cur_expr = SelectExpr::create(
+				EqExpr::create(
+					cur_expr,
+					ConstantExpr::create(
+						0, cur_expr->getWidth())),
+				ConstantExpr::create(1, cur_expr->getWidth()),
+				cur_expr);
 		case Expr::Add:
 		case Expr::Sub:
 		case Expr::Mul:
