@@ -52,12 +52,12 @@ void FileReconstructor::read(int vfd, void* buf, size_t count)
 	memset(tmp_buf, 0, count);
 
 	cur_off = lseek(fd, 0, SEEK_CUR);
-	read(fd, tmp_buf, count);
+	::read(fd, tmp_buf, count);
 	for (unsigned i = 0; i < count; i++)
 		tmp_buf[i] |= ((const char*)buf)[i];
 
-	lseek(fd, cur_off, SEEK_SET);
-	write(fd, tmp_buf, cur_off);
+	::lseek(fd, cur_off, SEEK_SET);
+	::write(fd, tmp_buf, count);
 
 	delete [] tmp_buf;
 }
