@@ -24,6 +24,7 @@
 #include "BucketPriority.h"
 #include "BatchingSearcher.h"
 #include "BumpingMergeSearcher.h"
+#include "EpochSearcher.h"
 #include "BFSSearcher.h"
 #include "DFSSearcher.h"
 #include "FilterSearcher.h"
@@ -124,6 +125,13 @@ namespace {
   cl::opt<bool>
   UseBatchingSearch("use-batching-search",
            cl::desc("Batching searches by instructions and time"));
+
+  cl::opt<bool>
+  UseEpochSearch(
+  	"use-epoch-search",
+	cl::desc("Treat older/run states with respect."),
+	cl::init(false));
+
 
   cl::opt<bool>
   UseStringPrune("string-prune",
@@ -372,6 +380,9 @@ Searcher *UserSearcher::constructUserSearcher(Executor &executor)
 
 	if (UseSecondChance)
 		searcher = new SecondChanceSearcher(searcher);
+
+	if (UseEpochSearch)
+		searcher = new EpochSearcher(new RRSearcher(), searcher);
 
 	if (UseBatchingSearch)
 		searcher = new BatchingSearcher(searcher);

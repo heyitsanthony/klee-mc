@@ -29,7 +29,7 @@ void RRSearcher::update(ExecutionState *current, const States s)
 {
 	states.insert(states.end(), s.getAdded().begin(), s.getAdded().end());
 
-	if (cur_state == states.end() && states.size() != 0)
+	if (cur_state == states.end() && states.empty() == false)
 		cur_state = states.begin();
 
 	if (s.getRemoved().empty()) return;
@@ -40,10 +40,15 @@ void RRSearcher::update(ExecutionState *current, const States s)
 		if (*cur_state == states.back())
 			cur_state = states.begin();
 		states.pop_back();
+
+		if (states.begin() == states.end())
+			cur_state = states.end();
+
 		if (s.getRemoved().size() == 1)
 			return;
 	}
 
+	bool reset_cur = false;
 	for (	std::list<ExecutionState*>::iterator it = states.begin(),
 		ie = states.end(); it != ie;)
 	{
@@ -52,8 +57,12 @@ void RRSearcher::update(ExecutionState *current, const States s)
 			++it;
 			continue;
 		}
-		if (it == cur_state) 
-			cur_state++;
+		if (it == cur_state)
+			reset_cur = true;
 		it = states.erase(it);
+		if (reset_cur) cur_state = it;
 	}
+
+	if (cur_state == states.end())
+		cur_state = states.begin();
 }

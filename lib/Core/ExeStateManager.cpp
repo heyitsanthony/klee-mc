@@ -50,7 +50,10 @@ ExecutionState* ExeStateManager::selectState(bool allowCompact)
 
 	ret = &searcher->selectState(allowCompact);
 
-	assert (ret->checkCanary());
+	if (ret->checkCanary() == false) {
+		std::cerr << "BAD CANARY ON ST=" << (void*)ret << '\n';
+		assert (ret->checkCanary());
+	}
 	assert((allowCompact || !ret->isCompact()) && "compact state chosen");
 
 	return ret;
