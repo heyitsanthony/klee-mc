@@ -187,6 +187,7 @@ void MMU::memOpError(ExecutionState& state, MemOp& mop)
 		Executor::StatePair branches(
 			exe.fork(*unbound, oob_cond, true));
 
+		/* ptr maps to OOB region */
 		if (branches.first) {
 			exe.terminateStateOnError(
 				*branches.first,
@@ -195,6 +196,7 @@ void MMU::memOpError(ExecutionState& state, MemOp& mop)
 				exe.getAddressInfo(*branches.first, mop.address));
 		}
 
+		/* ptr does not map to OOB region */
 		if (branches.second)
 			exe.terminateStateEarly(
 				*branches.second,
@@ -202,7 +204,7 @@ void MMU::memOpError(ExecutionState& state, MemOp& mop)
 
 		if (!branches.first && !branches.second) {
 			klee_warning(
-				"MMU query timeout: may have missed OOB ptr");
+				"MMU query total timeout: may miss OOB ptr");
 		}
 		return;
 	}

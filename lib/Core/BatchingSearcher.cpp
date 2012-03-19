@@ -2,36 +2,64 @@
 #include "klee/Internal/System/Time.h"
 #include "CoreStats.h"
 #include "static/Sugar.h"
+#include "llvm/Support/CommandLine.h"
 
 #include "BatchingSearcher.h"
 
 using namespace klee;
 
+namespace {
+	llvm::cl::opt<unsigned>
+	BatchInstructions(
+		"batch-instructions",
+		llvm::cl::desc("Number of instructions to batch"),
+		llvm::cl::init(0));
+
+	llvm::cl::opt<double>
+	BatchTime(
+		"batch-time",
+		llvm::cl::desc("Amount of time to batch"),
+		llvm::cl::init(-1.0));
+
+	llvm::cl::opt<bool>
+	BatchAdaptiveTime(
+		"batch-adaptive",
+		llvm::cl::desc("Amount of time to batch"),
+		llvm::cl::init(false));
+}
+
+#define SETUP_BATCHING(x,y,z)		\
+	baseSearcher(x)			\
+	, timeBudget(y)			\
+	, timeBudget_base(y)		\
+	, instructionBudget(z)		\
+	, lastState(0)					\
+	, lastStartTime(util::estWallTime())		\
+	, lastStartInstructions(stats::instructions)	\
+	, lastStartCov(	\
+		stats::coveredInstructions + stats::uncoveredInstructions) \
+	, select_new_state(true)
+
+
 BatchingSearcher::BatchingSearcher(
 	Searcher *_baseSearcher,
         double _timeBudget,
         unsigned _instructionBudget)
-: baseSearcher(_baseSearcher)
-, timeBudget(_timeBudget)
-, instructionBudget(_instructionBudget)
-, lastState(0)
-, lastStartTime(util::estWallTime())
-, lastStartInstructions(0)
-, select_new_state(true)
+: SETUP_BATCHING(_baseSearcher, _timeBudget, _instructionBudget)
+{}
+
+BatchingSearcher::BatchingSearcher(Searcher *_baseSearcher)
+: SETUP_BATCHING(_baseSearcher, BatchTime, BatchInstructions)
 {}
 
 BatchingSearcher::~BatchingSearcher() { delete baseSearcher; }
 
 
 uint64_t BatchingSearcher::getElapsedInstructions(void) const
-{
-	return (stats::instructions - lastStartInstructions);
-}
+{ return (stats::instructions - lastStartInstructions); }
 
 double BatchingSearcher::getElapsedTime(void) const
-{
-	return util::estWallTime() - lastStartTime;
-}
+{ return util::estWallTime() - lastStartTime; }
 
 ExecutionState &BatchingSearcher::selectState(bool allowCompact)
 {
@@ -67,6 +95,42 @@ bool is_disjoint(const C1& a, const C2& b)
   return true;
 }
 
+void BatchingSearcher::handleTimeout(void)
+{
+	uint64_t	total_ins;
+
+	/* TODO: PID controller */
+	if (!BatchAdaptiveTime || timeBudget < 0) {
+		std::cerr << "[BatchingSearch] TIMEOUT TRIGGERED\n";
+		return;
+	}
+
+	total_ins = stats::coveredInstructions + stats::uncoveredInstructions;
+	if (lastStartCov < total_ins) {
+		/* found new code--
+		 * maybe we can spend less time on things */
+		std::cerr
+			<< "[BatchingSearch] decreasing time budget from "
+			<< timeBudget << " to " << timeBudget*0.9 << "\n";
+
+		timeBudget *= 0.8;
+	} else {
+		/* didn't find ANY new code--
+		 * maybe we're not spending enough time on states */
+		std::cerr
+			<< "[BatchingSearch] increasing time budget from "
+			<< timeBudget << " to " << timeBudget*1.5 << "\n";
+		timeBudget *= 1.5;
+	}
+
+	if (timeBudget < timeBudget_base)
+		timeBudget = timeBudget_base;
+	else if (timeBudget > 5.0*timeBudget_base)
+		timeBudget = timeBudget_base*5.0;
+
+	lastStartCov = total_ins;
+}
+
 void BatchingSearcher::update(ExecutionState *current, const States s)
 {
 	bool exceeded_time;
@@ -79,15 +143,8 @@ void BatchingSearcher::update(ExecutionState *current, const States s)
 		instructionBudget &&
 		getElapsedInstructions() >= instructionBudget);
 
-	if (exceeded_time) {
-	//	double delta = getElapsedTime();
-	//	if (delta > timeBudget * 1.5) {
-	//		std::cerr << "KLEE: increased time budget from "
-	//			<< timeBudget << " to " << delta << "\n";
-	//		timeBudget = delta;
-	//	}
-		std::cerr << "TIMEOUT TRIGGERED\n";
-	}
+	if (exceeded_time)
+		handleTimeout();
 
 #if 0
 	bool	add_rmv_conflict;

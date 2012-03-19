@@ -9,11 +9,13 @@ class BatchingSearcher : public Searcher
 {
 	Searcher		*baseSearcher;
 	double			timeBudget;
+	double			timeBudget_base;
 	unsigned		instructionBudget;
 
 	ExecutionState		*lastState;
 	double			lastStartTime;
 	uint64_t		lastStartInstructions;
+	uint64_t		lastStartCov;
 	bool			select_new_state;
 
 	std::set<ExecutionState*> addedStates;
@@ -28,6 +30,8 @@ public:
 	BatchingSearcher(Searcher *baseSearcher,
 		     double _timeBudget,
 		     unsigned _instructionBudget);
+	BatchingSearcher(Searcher *baseSearcher);
+
 	virtual ~BatchingSearcher();
 
 	virtual Searcher* createEmpty(void) const
@@ -54,6 +58,7 @@ public:
 private:
 	uint64_t getElapsedInstructions(void) const;
 	double getElapsedTime(void) const;
+	void handleTimeout(void);
 };
 }
 

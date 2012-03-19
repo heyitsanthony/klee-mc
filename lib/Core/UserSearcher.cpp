@@ -125,17 +125,6 @@ namespace {
   UseBatchingSearch("use-batching-search",
            cl::desc("Batching searches by instructions and time"));
 
-  cl::opt<unsigned>
-  BatchInstructions(
-    "batch-instructions",
-    cl::desc("Number of instructions to batch"),
-    cl::init(0));
-
-  cl::opt<double>
-  BatchTime("batch-time",
-            cl::desc("Amount of time to batch"),
-            cl::init(-1.0));
-
   cl::opt<bool>
   UseStringPrune("string-prune",
     cl::desc("Prune intermediate scan states on strings (busted)"),
@@ -385,8 +374,7 @@ Searcher *UserSearcher::constructUserSearcher(Executor &executor)
 		searcher = new SecondChanceSearcher(searcher);
 
 	if (UseBatchingSearch)
-		searcher = new BatchingSearcher(
-			searcher, BatchTime, BatchInstructions);
+		searcher = new BatchingSearcher(searcher);
 
 	searcher = setupMergeSearcher(executor, searcher);
 
