@@ -379,6 +379,7 @@ bool PipeSolverImpl::writeQuery(const Query& q) const
 		/* this sigaction stuff is voodoo from lkml */
 		struct sigaction 	sa, old_sa;
 
+		memset(&sa, 0, sizeof(sa));
 		sa.sa_handler = parent_query_writer_alarm;
 		sa.sa_flags = SA_NOMASK;
 		sigaction(SIGALRM, &sa, &old_sa);
