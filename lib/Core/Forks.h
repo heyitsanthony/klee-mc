@@ -41,7 +41,12 @@ public:
 		bool			forkCompact;
 	};
 
-	Forks(Executor& _exe) : exe(_exe) {}
+	Forks(Executor& _exe)
+	: exe(_exe)
+	, preferTrueState(false)
+	, preferFalseState(false)
+	{}
+
 	virtual ~Forks() {}
 
 	Executor::StateVector fork(
@@ -56,6 +61,10 @@ public:
 	Executor::StatePair forkUnconditional(
 		ExecutionState &current, bool isInternal);
 
+	void setPreferFalseState(bool v)
+	{ assert (!preferTrueState); preferFalseState = v; }
+	void setPreferTrueState(bool v)
+	{ assert (!preferFalseState); preferTrueState = v; }
 private:
 	/* this forking code really should be refactored */
 	bool isForkingCondition(ExecutionState& current, ref<Expr> condition);
@@ -81,6 +90,8 @@ private:
 		ExecutionState& current, struct ForkInfo& fi, unsigned int);
 
 	Executor& exe;
+	bool	preferTrueState;
+	bool	preferFalseState;
 };
 
 }

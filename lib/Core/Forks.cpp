@@ -468,7 +468,13 @@ void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 	for (unsigned i = 0; i < fi.N; i++)
 		cond_idx_map[i] = i;
 
-	if (RandomizeFork) {
+	if (preferFalseState) {
+		/* swap true with false */
+		cond_idx_map[0] = 1;
+		cond_idx_map[1] = 0;
+	} else if (preferTrueState) {
+		/* nothing-- default prefers true */
+	} else if (RandomizeFork) {
 		for (unsigned i = 0; i < fi.N; i++) {
 			unsigned	swap_idx, swap_val;
 			

@@ -124,6 +124,12 @@ namespace {
                               cl::init(false));
 
   cl::opt<bool>
+  UseBranchHints(
+  	"branch-hint",
+  	cl::desc("Steer current state toward uncovered branches"),
+	cl::init(true));
+
+  cl::opt<bool>
   AlwaysOutputSeeds("always-output-seeds",
                               cl::init(true));
 
@@ -442,14 +448,17 @@ Executor::toConstant(
 	bool showLineInfo)
 {
 	ref<ConstantExpr>	value;
-	bool			success;
+	bool			ok;
 
 	e = state.constraints.simplifyExpr(e);
 	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(e))
 		return CE;
 
-	success = solver->getValue(state, e, value);
-	assert(success && "FIXME: Unhandled solver failure");
+	ok = solver->getValue(state, e, value);
+	if (!ok) {
+		terminateStateEarly(state, "toConstant query timeout");
+		return ConstantExpr::create(0, e->getWidth());
+	}
 
 	std::ostringstream	os;
 	os	<< "silently concretizing (reason: " << reason
@@ -828,6 +837,7 @@ void Executor::markBranchVisited(
 {
 	KBrInstruction	*kbr;
 	bool		isTwoWay = (branches.first && branches.second);
+	bool		got_fresh, fresh;
 
 	kbr = static_cast<KBrInstruction*>(ki);
 
@@ -839,22 +849,36 @@ void Executor::markBranchVisited(
 		kbr->addExpr(cond);
 	}
 
+	fresh = false;
+	got_fresh = false;
+
 	/* Mark state as representing branch if path never seen before. */
 	if (branches.first != NULL) {
-		if (kbr->hasFoundTrue() == false)
+		if (kbr->hasFoundTrue() == false) {
+			std::cerr << "[Branch] FOUND FRESH TRUE\n";
+			if (branches.first == &state)
+				got_fresh = true;
 			branches.first->setFreshBranch();
-		else if (isTwoWay)
+			fresh = true;
+		} else if (isTwoWay)
 			branches.first->setOldBranch();
 		kbr->foundTrue();
 	}
 
 	if (branches.second != NULL) {
-		if (kbr->hasFoundFalse() == false)
+		if (kbr->hasFoundFalse() == false) {
+			std::cerr << "[Branch] FOUND FRESH FALSE\n";
+			if (branches.second == &state)
+				got_fresh = true;
 			branches.second->setFreshBranch();
-		else if (isTwoWay)
+			fresh = true;
+		} else if (isTwoWay)
 			branches.second->setOldBranch();
 		kbr->foundFalse();
 	}
+
+	if (UseBranchHints && fresh && !got_fresh)
+		std::cerr << "[Branch] XXX: MISSED FRESH BRANCH!!!\n";
 }
 
 void Executor::instBranch(ExecutionState& state, KInstruction* ki)
@@ -872,11 +896,50 @@ void Executor::instBranch(ExecutionState& state, KInstruction* ki)
 	instBranchConditional(state, ki);
 }
 
+static bool getBranchHint(KInstruction* ki, bool& hint)
+{
+	KBrInstruction	*kbr;
+	bool		fresh_false, fresh_true;
+
+	kbr = static_cast<KBrInstruction*>(ki);
+	fresh_false = (kbr->hasFoundFalse() == false);
+	fresh_true = (kbr->hasFoundTrue() == false);
+
+	/* no freshbranch hint to give */
+	if (!fresh_false && !fresh_true) {
+		if (kbr->getTrueHits() == kbr->getFalseHits())
+			return false;
+
+		hint = (kbr->getTrueHits() < kbr->getFalseHits());
+		return true;
+	}
+
+	if (fresh_false && fresh_true) {
+		/* two-way branch-- flip coin to avoid bias */
+		hint = theRNG.getBool();
+	} else if (fresh_false)
+		hint = false;
+	else /* if (fresh_true) */
+		hint = true;
+
+	return true;
+}
+
 void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 {
 	BranchInst	*bi = cast<BranchInst>(ki->getInst());
 	const Cell	&cond = eval(ki, 0, state);
 	StatePair	branches;
+	bool		hasHint = false, branchHint;
+
+	if (UseBranchHints)
+		hasHint = getBranchHint(ki, branchHint);
+
+	if (hasHint) {
+		branchHint = !branchHint;
+		if (branchHint) forking->setPreferTrueState(true);
+		else forking->setPreferFalseState(true);
+	}
 
 	if (	IgnoreBranchConstraints &&
 		cond.value->getKind() != Expr::Constant)
@@ -885,6 +948,11 @@ void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 		assert (branches.first && branches.second);
 	} else {
 		branches = fork(state, cond.value, false);
+	}
+
+	if (hasHint) {
+		if (branchHint) forking->setPreferTrueState(false);
+		else forking->setPreferFalseState(false);
 	}
 
 	if (WriteTraces) {
