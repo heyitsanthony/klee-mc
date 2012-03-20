@@ -97,9 +97,14 @@ struct KillOrCompactOrdering
     // replayed states have lower priority than non-replay
     if (!a->isReplayDone() && b->isReplayDone()) return true;
 
+    // state that found fresh branch should rank higher
+    if (!a->isOnFreshBranch() &&  b->isOnFreshBranch()) return true;
+    if ( a->isOnFreshBranch() && !b->isOnFreshBranch()) return false;
+
     // state that covered new code should stick around
     if (!a->coveredNew &&  b->coveredNew) return true;
     if ( a->coveredNew && !b->coveredNew) return false;
+
     return a->lastChosen < b->lastChosen;
   }
 };
