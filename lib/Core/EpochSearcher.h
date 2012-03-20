@@ -36,12 +36,14 @@ private:
 		void update(ExecutionState* current, const Searcher::States& s);
 		void add(ExecutionState* s);
 		Searcher* getSearcher(void) { return searcher; }
+		unsigned getNumStates(void) const { return states.size(); }
 	private:
 		Searcher			*searcher;
 		std::set<ExecutionState*>	states;
 	};
 	std::vector<Epoch*>	epochs;
 	std::map<ExecutionState*, unsigned> es2epoch;
+	unsigned		epoch_state_c;
 };
 }
 

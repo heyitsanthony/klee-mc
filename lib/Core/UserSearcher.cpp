@@ -378,11 +378,11 @@ Searcher *UserSearcher::constructUserSearcher(Executor &executor)
 	if (UseFilterSearch)
 		searcher = new FilterSearcher(executor, searcher);
 
-	if (UseSecondChance)
-		searcher = new SecondChanceSearcher(searcher);
-
 	if (UseEpochSearch)
 		searcher = new EpochSearcher(new RRSearcher(), searcher);
+
+	if (UseSecondChance)
+		searcher = new SecondChanceSearcher(searcher);
 
 	if (UseBatchingSearch)
 		searcher = new BatchingSearcher(searcher);

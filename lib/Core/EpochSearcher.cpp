@@ -7,13 +7,16 @@
 
 using namespace klee;
 
+#define INST_TOTAL (stats::coveredInstructions + stats::uncoveredInstructions)
+
 EpochSearcher::EpochSearcher(
 	Searcher* _searcher_base, Searcher* _global_pool)
 : searcher_base(_searcher_base)
 , global_pool(_global_pool)
-, last_cov(stats::coveredInstructions)
+, last_cov(INST_TOTAL)
 , pool_countdown(3)
 , pool_period(3)
+, epoch_state_c(0)
 {
 	epochs.push_back(
 		new Epoch(searcher_base->createEmpty()));
@@ -59,9 +62,9 @@ ExecutionState* EpochSearcher::selectEpoch(bool allowCompact)
 
 ExecutionState& EpochSearcher::selectState(bool allowCompact)
 {
-	if (stats::coveredInstructions > last_cov) {
+	if (INST_TOTAL > last_cov) {
 		pool_countdown = pool_period;
-		last_cov = stats::coveredInstructions;
+		last_cov = INST_TOTAL;
 	} else
 		pool_countdown--;
 
@@ -74,7 +77,8 @@ ExecutionState& EpochSearcher::selectState(bool allowCompact)
 	}
 
 	/* select from epochs */
-	std::cerr << "[Epoch] SELECT FROM EPOCH\n";
+	std::cerr	<< "[Epoch] SELECT FROM EPOCH (states="
+			<< epoch_state_c << ")\n";
 	return *selectEpoch(allowCompact);
 }
 
@@ -115,7 +119,13 @@ void EpochSearcher::update(ExecutionState *current, States s)
 {
 	global_pool->update(current, s);
 
+	epoch_state_c = 0;
 	foreach (it, epochs.begin(), epochs.end()) {
-		(*it)->update(current, s);
+		Epoch	*e = *it;
+		e->update(current, s);
+		epoch_state_c += e->getNumStates();
 	}
+
+	if (epoch_state_c > 3)
+		pool_period = (epoch_state_c*3)/2;
 }
