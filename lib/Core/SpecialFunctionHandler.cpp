@@ -418,7 +418,7 @@ SFH_DEF_HANDLER(Malloc)
 SFH_DEF_HANDLER(Assume)
 {
 	ref<Expr>	e;
-	bool		mustBeFalse, success;
+	bool		mustBeFalse, ok;
 
 	SFH_CHK_ARGS(1, "klee_assume");
 
@@ -427,9 +427,13 @@ SFH_DEF_HANDLER(Assume)
 		e = NeExpr::create(e, ConstantExpr::create(0, e->getWidth()));
 	}
 
-	success = sfh->executor->getSolver()->mustBeFalse(
-		state, e, mustBeFalse);
-	assert(success && "FIXME: Unhandled solver failure");
+	ok = sfh->executor->getSolver()->mustBeFalse(state, e, mustBeFalse);
+	if (!ok) {
+		sfh->executor->terminateStateEarly(
+			state, "assume query failed");
+		return;
+	}
+
 	if (!mustBeFalse) {
 		sfh->executor->addConstraint(state, e);
 		return;

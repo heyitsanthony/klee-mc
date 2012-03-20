@@ -122,7 +122,8 @@ ref<Expr> OptBuilder::Extract(const ref<Expr>& expr, unsigned off, Expr::Width w
 {
 	unsigned kw = expr->getWidth();
 	assert (w < 4096 && "A 4096 bit+ expression? Cool your jets.");
-	assert(w > 0 && off + w <= kw && "invalid extract");
+	assert (w > 0 && "invalid extract with negative width");
+	assert (off + w <= kw && "invalid extract with excessive offset");
 
 	if (w == kw)
 		return expr;
