@@ -61,6 +61,29 @@ private:
 	Executor *executor;
 };
 
+#include "../Expr/ExprAlloc.h"
+cl::opt<unsigned>
+UseGCTimer("gc-timer",
+        cl::desc("Periodically activate expression garbage collection."),
+        cl::init(0));
+class ExprGCTimer : public Executor::Timer
+{
+public:
+	ExprGCTimer(Executor *_executor) : executor(_executor) {}
+	virtual ~ExprGCTimer() {}
+
+	void run()
+	{
+		std::cerr << "KLEE: ExprGC invoked\n";
+		ExprAlloc	*ea;
+		ea = Expr::getAllocator();
+		ea->garbageCollect();
+	}
+private:
+	Executor *executor;
+};
+
+
 #define USE_PREV_SIG	false
 class SigUsrTimer : public Executor::Timer
 {
@@ -333,6 +356,8 @@ void Executor::initTimers(void)
 	if (DumpBrData)
 		addTimer(new BrDataTimer(this), DumpBrData);
 
+	if (UseGCTimer)
+		addTimer(new ExprGCTimer(this), UseGCTimer);
 
 	addTimer(new SigUsrTimer(this), 1);
 }

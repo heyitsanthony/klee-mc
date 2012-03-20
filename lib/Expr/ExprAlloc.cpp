@@ -1,4 +1,6 @@
 #include <tr1/unordered_map>
+#include <iostream>
+#include "static/Sugar.h"
 #include "klee/Expr.h"
 #include "ExprAlloc.h"
 
@@ -94,6 +96,40 @@ ref<Expr> ExprAlloc::Constant(const llvm::APInt &v)
 	constantCount++;
 
 	return r;
+}
+
+unsigned ExprAlloc::garbageCollect(void)
+{
+	std::vector<ConstantExpr*>	to_rmv;
+	unsigned buckets[5];
+
+	memset(buckets, 0, sizeof(buckets));
+
+	foreach (it, const_hashtab.begin(), const_hashtab.end()) {
+		ref<Expr>	e(it->second);
+
+		if (e.getRefCount() > 4)
+			continue;
+
+		/* Two refs => hash table and 'e' => garbage */
+		if (e.getRefCount() == 2)
+			to_rmv.push_back(cast<ConstantExpr>(e));
+
+		buckets[e.getRefCount()]++;
+	}
+
+	foreach (it, to_rmv.begin(), to_rmv.end())
+		const_hashtab.erase((*it)->getAPValue());
+
+	constantCount -= to_rmv.size();
+
+	for (unsigned i = 0; i < 5; i++)
+		std::cerr
+			<< "[ExprGC] EXPR_REFS["
+			<< i << "] = "
+			<< buckets[i] << '\n';
+
+	return 0;
 }
 
 #define DECL_ALLOC_1(x)				\

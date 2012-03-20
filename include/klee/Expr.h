@@ -198,6 +198,7 @@ public:
   static ExprBuilder* setBuilder(ExprBuilder* builder);
   static ExprAlloc* setAllocator(ExprAlloc* alloc);
   static ExprBuilder* getBuilder(void) {return theExprBuilder;}
+  static ExprAlloc* getAllocator(void) { return theExprAllocator; }
 
   static ref<Expr> createBoothMul(const ref<Expr>& expr, uint64_t v);
   static ref<Expr> createShiftAddMul(const ref<Expr>& expr, uint64_t v);
