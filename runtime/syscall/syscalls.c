@@ -705,7 +705,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			sl = ((socklen_t*)GET_ARG5_PTR(regfile));
 			*sl = sizeof(struct sockaddr_in);
 		}
-		sc_ret_v(regfile, GET_ARG2(regfile));
+		sc_ret_or(sc_new_regs(regfile), 0, GET_ARG2(regfile));
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
 		break;
 	case SYS_sendto:
