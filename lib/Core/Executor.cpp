@@ -907,10 +907,24 @@ static bool getBranchHint(KInstruction* ki, bool& hint)
 
 	/* no freshbranch hint to give */
 	if (!fresh_false && !fresh_true) {
-		if (kbr->getTrueHits() == kbr->getFalseHits())
-			return false;
+		unsigned	hit_t, hit_f;
 
-		hint = (kbr->getTrueHits() < kbr->getFalseHits());
+		hit_t = kbr->getTrueHits();
+		hit_f = kbr->getFalseHits();
+
+		if (hit_t > 1) {
+			if (hit_t == hit_f)
+				return false;
+		}
+
+		/* retry */
+		if (hit_t == 1)
+			hint = true;
+		else if (hit_f == 1)
+			hint = false;
+		else
+			return false;
+//			hint = hit_t < hit_f;
 		return true;
 	}
 
