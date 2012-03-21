@@ -49,6 +49,12 @@ namespace {
 		"debug-pipe-read-block",
 		cl::desc("Read query response forever."),
 		cl::init(false));
+
+	cl::opt<bool>
+	DebugWriteRecvQuery(
+		"debug-pipe-wrq",
+		cl::desc("Debug WriteRecvQuery with pipe-fork"),
+		cl::init(false));
 }
 
 PipeSolver::PipeSolver(PipeFormat* in_fmt)
@@ -243,7 +249,7 @@ bool PipeSolverImpl::computeInitialValues(const Query& q, Assignment& a)
 	if (!is) {
 		failQuery();
 		finiChild();
-		if (!ForkQueries) {
+		if (!ForkQueries || DebugWriteRecvQuery) {
 			SMTPrinter::dump(q, "badwrite");
 		} else {
 			std::cerr << "[PipeSolver] SUPPRESSING FORKQUERY ERROR\n";
@@ -309,7 +315,7 @@ bool PipeSolverImpl::computeSat(const Query& q)
 	if (parse_ok == false) {
 		std::cerr << "[PipeSolver] BAD PARSE SAT\n";
 		failQuery();
-		if (!ForkQueries)
+		if (!ForkQueries || DebugWriteRecvQuery)
 			SMTPrinter::dump(q, "badsat");
 		return false;
 	}
