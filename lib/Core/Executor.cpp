@@ -845,6 +845,9 @@ void Executor::markBranchVisited(
 		statsTracker->markBranchVisited(
 			kbr, branches.first, branches.second);
 
+	if (isTwoWay)
+		kbr->foundFork();
+
 	if (TrackBranchExprs && cond->getKind() != Expr::Constant) {
 		kbr->addExpr(cond);
 	}

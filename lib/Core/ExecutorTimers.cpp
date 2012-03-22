@@ -311,6 +311,7 @@ public:
 			(*os)	<< exe->getPrettyName(parent_f)
 				<< ' ' << kbr->getTrueHits()
 				<< ' ' << kbr->getFalseHits()
+				<< ' ' << kbr->getForkHits()
 				<< '\n';
 		}
 		delete os;

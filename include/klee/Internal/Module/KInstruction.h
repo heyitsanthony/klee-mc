@@ -75,16 +75,21 @@ public:
 	KBrInstruction(llvm::Instruction* ins, unsigned dest)
 	: KInstruction(ins, dest)
 	, true_c(0)
-	, false_c(0) { all_kbr.push_back(this); }
+	, false_c(0)
+	, fork_c(0) { all_kbr.push_back(this); }
+
 	virtual ~KBrInstruction() {}
 
 	bool hasFoundAll(void) const { return true_c && false_c; }
 	void foundTrue(void) { true_c++; }
 	void foundFalse(void) { false_c++; }
+	void foundFork(void) { fork_c++; }
 	bool hasFoundTrue(void) const { return true_c != 0; }
 	bool hasFoundFalse(void) const { return false_c != 0; }
 	unsigned getTrueHits(void) const { return true_c; }
 	unsigned getFalseHits(void) const { return false_c; }
+	unsigned getForkHits(void) const { return fork_c; }
+
 
 	void addExpr(const ref<Expr>& e) { expr_set.insert(e); }
 
@@ -95,6 +100,7 @@ public:
 private:
 	unsigned		true_c;
 	unsigned		false_c;
+	unsigned		fork_c;
 	ExprHashSet		expr_set;
 
 	static kbr_list_ty	all_kbr;
