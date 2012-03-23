@@ -392,7 +392,7 @@ bool Solver::evaluate(const Query& query, Validity &result)
 
 	result = impl->computeValidity(query);
 	in_solver = false;
-	return (impl->failed() == false);
+	return (failed() == false);
 }
 
 Solver::Validity SolverImpl::computeValidity(const Query& query)
