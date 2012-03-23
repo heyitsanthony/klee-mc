@@ -67,7 +67,7 @@ ExecutionState& PrioritySearcher::selectState(bool allowCompact)
 			continue;
 		}
 
-		std::cerr << "SELSTATE="
+		std::cerr << "SELSTATE. PRS=" << (void*)prs.second << ". ST="
 		 << next->pc->getInst()->getParent()->getParent()->getNameStr()
 		 << (next->isReplayDone() ? ". NOREPLAY\n" : ". INREPLAY\n");
 		std::cerr
@@ -111,6 +111,10 @@ bool PrioritySearcher::refreshPriority(ExecutionState* es)
 	int			new_pr;
 	statemap_ty::iterator	sm_it(state_backmap.find(es));
 
+	/* occasionally, we'll get a 'current' we don't own */
+	if (sm_it == state_backmap.end())
+		return false;
+
 	new_pr = prFunc->getPriority(*es);
 	if (sm_it->second == new_pr)
 		return false;
@@ -127,6 +131,8 @@ bool PrioritySearcher::refreshPriority(ExecutionState* es)
 
 void PrioritySearcher::update(ExecutionState *current, States s)
 {
+	assert (!current || current->checkCanary());
+
 	/* new states */
 	foreach (it, s.getAdded().begin(), s.getAdded().end())
 		addState(*it);
@@ -160,7 +166,6 @@ void PrioritySearcher::addState(ExecutionState* es)
 	prs->addState(es);
 	state_backmap[es] = pr;
 
-	std::cerr << "ADD ES=" << (void*)es << " TO PR=" << pr << '\n';
 	state_c++;
 }
 
@@ -178,7 +183,6 @@ void PrioritySearcher::removeState(ExecutionState* es)
 	prs->removeState(es);
 	state_backmap.erase(sm_it);
 
-	std::cerr << "RMV ES=" << (void*)es << " FROM PR=" << pr << '\n';
 	state_c--;
 }
 
