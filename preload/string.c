@@ -1,7 +1,21 @@
 #include <klee/klee.h>
 #include <unistd.h>
 
-#define IS_IN_KLEE()	(ksys_is_sym(0) == 0)
+static int in_klee_cache = -1;
+static int __is_in_klee(void)
+{
+	if (in_klee_cache != -1)
+		return in_klee_cache;
+	
+	if (ksys_is_sym(0) == 0)
+		in_klee_cache = 1;
+	else
+		in_klee_cache = 0;
+
+	return in_klee_cache;
+}
+
+#define IS_IN_KLEE()	__is_in_klee()
 
 static void guard_s(const char* s)
 {
