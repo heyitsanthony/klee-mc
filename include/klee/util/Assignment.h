@@ -159,7 +159,7 @@ inline ref<Expr> Assignment::evaluate(
 inline ref<Expr> Assignment::evaluate(ref<Expr> e)
 {
 	AssignmentEvaluator v(*this);
-	return v.visit(e);
+	return v.apply(e);
 }
 
 inline ref<Expr> Assignment::evaluate(ref<Expr> e, bool &wasZeroDiv)
@@ -167,7 +167,7 @@ inline ref<Expr> Assignment::evaluate(ref<Expr> e, bool &wasZeroDiv)
 	AssignmentEvaluator	v(*this);
 	ref<Expr>		ret;
 
-	ret = v.visit(e);
+	ret = v.apply(e);
 	wasZeroDiv = v.wasDivProtected();
 
 	return ret;
@@ -178,7 +178,7 @@ inline bool Assignment::satisfies(InputIterator begin, InputIterator end)
 {
 	AssignmentEvaluator v(*this);
 	for (; begin!=end; ++begin)
-		if (!v.visit(*begin)->isTrue())
+		if (!v.apply(*begin)->isTrue())
 			return false;
 	return true;
 }

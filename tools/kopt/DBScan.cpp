@@ -9,6 +9,7 @@
 #include "klee/util/Assignment.h"
 #include "static/Sugar.h"
 
+#include "DBScan.h"
 
 using namespace klee;
 
@@ -23,7 +24,7 @@ public:
 	virtual Action visitExpr(const Expr* expr)
 	{
 		ref<ConstantExpr>	r_ce;
-		
+
 		if (expr->getKind() != Expr::Constant)
 			return Expand;
 
@@ -79,22 +80,47 @@ private:
 	const Array	*arr;
 };
 
-typedef std::map<ref<Expr>, std::list<const ExprRule*> >
-	komap_ty;
-
-
-void dbPunchout(ExprBuilder *eb, Solver* s)
+bool DBScan::queryKnockout(const ExprRule* er, Solver* s)
 {
-	RuleBuilder			*rb;
-	ref<Array>			arr;
-	std::map<unsigned, unsigned>	ko_c;
-	unsigned			match_c, rule_match_c;
-
-	rb = new RuleBuilder(createExprBuilder());
-	arr = Array::create("ko_arr", 4096);
-
 	KnockOut	ko(arr.get());
-	komap_ty	ko_map;
+	ref<Expr>	ko_expr, to_expr;
+	bool		ok, mustBeTrue;
+
+	ko_expr = er->getFromExpr();
+	ko_expr = ko.knockoutConsts(ko_expr);
+	to_expr = er->getToExpr();
+
+	ok = s->mustBeTrue(
+		Query(EqExpr::create(ko_expr, to_expr)),
+		mustBeTrue);
+
+	if (ok == false) {
+		std::cerr << "QUERY FAILED: KO="
+			<< ko_expr << "\nTO="
+			<< to_expr << '\n';
+	}
+
+	if (mustBeTrue == false)
+		return false;
+
+	return true;
+}
+
+extern ExprBuilder* createExprBuilder(void);
+
+
+DBScan::DBScan(void)
+{
+	arr = Array::create("ko_arr", 4096);
+	rb = new RuleBuilder(createExprBuilder());
+}
+
+DBScan::~DBScan() { delete rb; }
+
+
+void DBScan::loadKnockouts(komap_ty& ko_map)
+{
+	KnockOut	ko(arr.get());
 
 	foreach (it, rb->begin(), rb->end()) {
 		const ExprRule*	er;
@@ -110,14 +136,21 @@ void dbPunchout(ExprBuilder *eb, Solver* s)
 
 		ko_map[ko_expr].push_back(er);
 	}
+}
 
-	match_c = 0;
-	rule_match_c = 0;
+
+void DBScan::punchout(Solver* s)
+{
+	komap_ty			ko_map;
+	std::map<unsigned, unsigned>	ko_c;
+	unsigned			match_c, rule_match_c;
+
+	loadKnockouts(ko_map);
+
+	rule_match_c = match_c = 0;
 	foreach (it, ko_map.begin(), ko_map.end()) {
-		const ExprRule	*er;
+		const ExprRule	*er = it->second.front();
 		unsigned	rule_c;
-		ref<Expr>	ko_expr, to_expr;
-		bool		ok, mustBeTrue;
 
 		rule_c = it->second.size();
 		ko_c[rule_c] = ko_c[rule_c] + 1;
@@ -126,37 +159,25 @@ void dbPunchout(ExprBuilder *eb, Solver* s)
 		if (rule_c < 2)
 			continue;
 
-		er = it->second.front();
-		ko_expr = er->getFromExpr();
-		ko_expr = ko.knockoutConsts(ko_expr);
-		to_expr = er->getToExpr();
-
-		ok = s->mustBeTrue(
-			Query(EqExpr::create(ko_expr, to_expr)),
-			mustBeTrue);
-
 		if (rule_c > 16) {
 			std::cerr << "MEGA-RULE: RULE_MATCH=" << rule_c
-				<< "\nKO=" << ko_expr
+				<< "\nKO=" << it->first
 				<< "\nEXAMPLE-FROM=" << er->getFromExpr()
 				<< "\n\n";
 		}
 
-		if (ok == false) {
-			std::cerr << "QUERY FAILED: KO="
-				<< ko_expr << "\nTO="
-				<< to_expr << '\n';
-		}
-		
-		if (mustBeTrue == false)
+
+
+		if (queryKnockout(er, s) == false)
 			continue;
 
-		match_c++;
-		rule_match_c += rule_c;
 		std::cerr
 			<< "MATCH KO: " << it->first << "\nRuleCount="
 			<< rule_c << '\n'
 			<< "example-from: " << er->getFromExpr() << '\n';
+
+		match_c++;
+		rule_match_c += rule_c;
 	}
 
 	std::cerr << "TOTAL MATCHED KO's: " << match_c << '\n';
@@ -166,8 +187,6 @@ void dbPunchout(ExprBuilder *eb, Solver* s)
 		std::cerr << "KO_C: RULES=[" << it->first << "] : "
 			<< it->second << '\n';
 	}
-
-	delete rb;
 }
 
 #if 0

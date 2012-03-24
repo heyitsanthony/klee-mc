@@ -216,7 +216,7 @@ public:
 
 	virtual ~ReadUnifier(void) {}
 
-	ref<Expr> getUnified(const ref<Expr>& e)
+	virtual ref<Expr> apply(const ref<Expr>& e)
 	{
 		ref<Expr>	ret;
 
@@ -312,7 +312,7 @@ ref<Expr> EquivExprBuilder::tryEquivRewrite(
 	} else {
 		/* unify e_db into e */
 		ReadUnifier	ru(e_klee);
-		e_db_unified = ru.visit(e_db);
+		e_db_unified = ru.apply(e_db);
 	}
 
 	if (e_db_unified.isNull()) {

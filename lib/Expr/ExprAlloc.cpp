@@ -118,8 +118,10 @@ unsigned ExprAlloc::garbageCollect(void)
 		buckets[e.getRefCount()]++;
 	}
 
-	foreach (it, to_rmv.begin(), to_rmv.end())
-		const_hashtab.erase((*it)->getAPValue());
+	foreach (it, to_rmv.begin(), to_rmv.end()) {
+		llvm::APInt	v((*it)->getAPValue());
+		const_hashtab.erase(v);
+	}
 
 	constantCount -= to_rmv.size();
 

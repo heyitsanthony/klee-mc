@@ -172,7 +172,7 @@ bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor)
 
 	foreach (it, old.begin(), old.end()) {
 		ref<Expr> &ce = *it;
-		ref<Expr> e = visitor.visit(ce);
+		ref<Expr> e = visitor.apply(ce);
 
 		if (e != ce) {
 			// enable further reductions
@@ -252,7 +252,7 @@ ref<Expr> ConstraintManager::simplifyExpr(ref<Expr> e) const
 	if (isa<ConstantExpr>(e)) return e;
 
 	if (simplifier != NULL)
-		return simplifier->visit(e);
+		return simplifier->apply(e);
 
 	simplifier = new ExprReplaceVisitor2();
 	std::map< ref<Expr>, ref<Expr> >& equalities(
@@ -262,7 +262,7 @@ ref<Expr> ConstraintManager::simplifyExpr(ref<Expr> e) const
 		addEquality(equalities, *it);
 	}
 
-	return simplifier->visit(e);
+	return simplifier->apply(e);
 }
 
 bool ConstraintManager::addConstraintInternal(ref<Expr> e)

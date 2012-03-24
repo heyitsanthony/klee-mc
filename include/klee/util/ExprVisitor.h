@@ -79,40 +79,47 @@ protected:
 	virtual Action visitExpr(const Expr&);
 	virtual Action visitExprPost(const Expr&);
 
-	virtual Action visitNotOptimized(const NotOptimizedExpr&);
-	virtual Action visitRead(const ReadExpr&);
-	virtual Action visitSelect(const SelectExpr&);
-	virtual Action visitConcat(const ConcatExpr&);
-	virtual Action visitExtract(const ExtractExpr&);
-	virtual Action visitZExt(const ZExtExpr&);
-	virtual Action visitSExt(const SExtExpr&);
-	virtual Action visitAdd(const AddExpr&);
-	virtual Action visitSub(const SubExpr&);
-	virtual Action visitMul(const MulExpr&);
-	virtual Action visitUDiv(const UDivExpr&);
-	virtual Action visitSDiv(const SDivExpr&);
-	virtual Action visitURem(const URemExpr&);
-	virtual Action visitSRem(const SRemExpr&);
-	virtual Action visitNot(const NotExpr&);
-	virtual Action visitAnd(const AndExpr&);
-	virtual Action visitOr(const OrExpr&);
-	virtual Action visitXor(const XorExpr&);
-	virtual Action visitShl(const ShlExpr&);
-	virtual Action visitLShr(const LShrExpr&);
-	virtual Action visitAShr(const AShrExpr&);
-	virtual Action visitEq(const EqExpr&);
-	virtual Action visitNe(const NeExpr&);
-	virtual Action visitUlt(const UltExpr&);
-	virtual Action visitUle(const UleExpr&);
-	virtual Action visitUgt(const UgtExpr&);
-	virtual Action visitUge(const UgeExpr&);
-	virtual Action visitSlt(const SltExpr&);
-	virtual Action visitSle(const SleExpr&);
-	virtual Action visitSgt(const SgtExpr&);
-	virtual Action visitSge(const SgeExpr&);
-	virtual Action visitBind(const BindExpr&);
-	virtual Action visitConstant(const ConstantExpr&);
+#define VISIT_ACTION(x)	\
+	virtual Action visit##x(const x##Expr&)
+	VISIT_ACTION(NotOptimized);
+	VISIT_ACTION(Read);
+	VISIT_ACTION(Select);
+	VISIT_ACTION(Concat);
+	VISIT_ACTION(Extract);
+	VISIT_ACTION(ZExt);
+	VISIT_ACTION(SExt);
+	VISIT_ACTION(Add);
+	VISIT_ACTION(Sub);
+	VISIT_ACTION(Mul);
+	VISIT_ACTION(UDiv);
+	VISIT_ACTION(SDiv);
+	VISIT_ACTION(URem);
+	VISIT_ACTION(SRem);
+	VISIT_ACTION(Not);
+	VISIT_ACTION(And);
+	VISIT_ACTION(Or);
+	VISIT_ACTION(Xor);
+	VISIT_ACTION(Shl);
+	VISIT_ACTION(LShr);
+	VISIT_ACTION(AShr);
+	VISIT_ACTION(Eq);
+	VISIT_ACTION(Ne);
+	VISIT_ACTION(Ult);
+	VISIT_ACTION(Ule);
+	VISIT_ACTION(Ugt);
+	VISIT_ACTION(Uge);
+	VISIT_ACTION(Slt);
+	VISIT_ACTION(Sle);
+	VISIT_ACTION(Sgt);
+	VISIT_ACTION(Sge);
+	VISIT_ACTION(Bind);
+	VISIT_ACTION(Constant);
+
 	bool use_hashcons;
+
+	// apply the visitor to the expression and return a possibly
+	// modified new expression.
+	ref<Expr> visit(const ref<Expr> &e);
 
 private:
 	typedef ExprHashMap< ref<Expr> > visited_ty;
@@ -122,17 +129,71 @@ private:
 
 	ref<Expr> visitActual(const ref<Expr> &e);
 	ref<Expr> handleActionDoChildren(Expr& ep);
-
 public:
-	// apply the visitor to the expression and return a possibly
-	// modified new expression.
-	ref<Expr> visit(const ref<Expr> &e);
+	virtual ref<Expr> apply(const ref<Expr>& e) { return visit(e); }
 
 	ref<Expr> buildUpdateStack(
 		const UpdateList	&ul,
 		ref<Expr>		&readIndex,
 		std::stack<std::pair<ref<Expr>, ref<Expr> > >& updateStack,
 		bool	&rebuildUpdates);
+};
+
+/* tags parts of expression that changed */
+template <class T>
+class ExprVisitorTagger : public T
+{
+public:
+	typedef std::vector<unsigned>	tags_ty;
+
+	ExprVisitorTagger() {}
+	virtual ~ExprVisitorTagger() {}
+
+	virtual ref<Expr> apply(const ref<Expr>& e)
+	{
+		tag_pre = 0;
+		tag_post = 0;
+		tags_pre.clear();
+		tags_post.clear();
+		return T::apply(e);
+	}
+
+	virtual ExprVisitor::Action visitExpr(const Expr& e)
+	{
+		tag_pre++;
+		ExprVisitor::Action a = T::visitExpr(e);
+		if (a.kind == ExprVisitor::Action::ChangeTo)
+			tag();
+		return a;
+	}
+
+	virtual ExprVisitor::Action visitExprPost(const Expr& e)
+	{
+		tag_post++;
+		ExprVisitor::Action	a = T::visitExprPost(e);
+		if (a.kind == ExprVisitor::Action::ChangeTo)
+			tag();
+		return a;
+	}
+
+	tags_ty::const_iterator beginPre(void) const
+	{ return tags_pre.begin(); }
+	tags_ty::const_iterator endPre(void) const
+	{ return tags_pre.end(); }
+	tags_ty::const_iterator beginPost(void) const
+	{ return tags_post.begin(); }
+	tags_ty::const_iterator endPost(void) const
+	{ return tags_post.end(); }
+
+protected:
+	void tag(void) {
+		tags_post.push_back(tag_post);
+		tags_pre.push_back(tag_pre);
+	}
+
+private:
+	unsigned	tag_pre, tag_post;
+	tags_ty		tags_post, tags_pre;
 };
 
 }

@@ -933,11 +933,11 @@ public:
   /// evaluate - Try to evaluate the given expression using a consistent fixed
   /// value for the current set of possible ranges.
   ref<Expr> evaluatePossible(ref<Expr> e) {
-    return CexPossibleEvaluator(objects).visit(e);
+    return CexPossibleEvaluator(objects).apply(e);
   }
 
   ref<Expr> evaluateExact(ref<Expr> e) {
-    return CexExactEvaluator(objects).visit(e);
+    return CexExactEvaluator(objects).apply(e);
   }
 
   void dump() {

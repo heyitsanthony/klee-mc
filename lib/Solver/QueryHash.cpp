@@ -53,13 +53,13 @@ unsigned QHRewritePtr::hash(const Query& q) const
 	foreach (it, q.constraints.begin(), q.constraints.end()) {
 		RewriteVisitor	rw;
 		ref<Expr>	it_e = *it;
-    		ref<Expr>	e = rw.visit(it_e);
+		ref<Expr>	e = rw.apply(it_e);
 
 		cm.addConstraint(e);
 	}
 
 	RewriteVisitor rw;
-	new_expr = rw.visit(q.expr);
+	new_expr = rw.apply(q.expr);
 	Query	new_q(cm, new_expr);
 
 	return new_q.hash();

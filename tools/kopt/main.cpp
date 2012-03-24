@@ -1,6 +1,7 @@
 #include <iostream>
 #include <sstream>
 
+#include "DBScan.h"
 #include "../../lib/Expr/SMTParser.h"
 #include "../../lib/Expr/ExprRule.h"
 #include "../../lib/Expr/RuleBuilder.h"
@@ -720,9 +721,6 @@ static void addRule(ExprBuilder* eb, Solver* s)
 	std::cout << "Add OK\n";
 }
 
-extern void dbPunchout(ExprBuilder *eb, Solver* s);
-
-
 #define NUM_BENCH_ITER	(5+2)
 static double benchmarkExpr(ref<Expr>& e, Solver* s)
 {
@@ -774,7 +772,7 @@ static double benchmarkRule(ExprRule* er, Solver *s)
 	/* no reason to measure constant rules-- if solving is slower
 	 * with a constant, then the solver is broken */
 	if (base_to->getKind() == Expr::Constant)
-		return;
+		return -1.0/0.0; // -infty
 
 	base_from = er->getFromExpr();
 	arr = er->getMaterializeArray();
@@ -853,7 +851,8 @@ int main(int argc, char **argv)
 	} else if (BenchmarkRules) {
 		benchmarkRules(eb, s);
 	} else if (DBPunchout) {
-		dbPunchout(eb, s);
+		DBScan	dbs;
+		dbs.punchout(s);
 	} else if (CheckDup) {
 		checkDup(eb, s);
 	} else if (BRuleRebuild) {

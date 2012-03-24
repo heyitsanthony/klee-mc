@@ -112,7 +112,7 @@ void ExprUtil::findSymbolicObjects(InputIterator begin,
                                std::vector<const Array*> &results) {
   SymbolicObjectFinder of(results);
   for (; begin!=end; ++begin)
-    of.visit(*begin);
+    of.apply(*begin);
 }
 
 void ExprUtil::findSymbolicObjects(ref<Expr> e,
