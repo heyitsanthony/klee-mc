@@ -29,6 +29,7 @@ private:
 
 	static Searcher* setupInterleavedSearcher(
 		Executor& executor, Searcher* s);
+	static Searcher* setupConfigSearcher(Executor& executor);
 	static Searcher* setupBaseSearcher(Executor& executor);
 	static Searcher* setupMergeSearcher(
 		Executor& executor, Searcher* searcher);

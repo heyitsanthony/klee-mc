@@ -63,11 +63,17 @@ DECL_SEARCH_OPT(Tail, "tail", "TS");
 DECL_SEARCH_OPT(RR, "rr", "RR");
 DECL_SEARCH_OPT(Markov, "markov", "MV");
 DECL_SEARCH_OPT(NonUniformRandom, "non-uniform-random", "NURS");
+DECL_SEARCH_OPT(MinInst, "mininst", "MI");
 
 #define SEARCH_HISTO	new RescanSearcher(new HistoPrioritizer(executor))
 DECL_SEARCH_OPT(Histo, "histo", "HS");
 
 namespace {
+  cl::opt<bool>
+  UseTunedSearch(
+  	"use-tunedstack-search",
+	cl::desc("Ignore all scheduler options. Use tuned stack."),
+	cl::init(false));
 
   cl::opt<bool>
   UseFilterSearch(
@@ -83,7 +89,7 @@ namespace {
   cl::opt<bool> UseInterleavedTailRS("use-interleaved-TRS");
   cl::opt<bool> UseInterleavedDFS("use-interleaved-DFS");
   cl::opt<bool> UseInterleavedMD2UNURS("use-interleaved-MD2U-NURS");
-  cl::opt<bool> UseInterleavedInstCountNURS("use-interleaved-icnt-NURS");
+  cl::opt<bool> UseInterleavedPerInstCountNURS("use-interleaved-icnt-NURS");
   cl::opt<bool> UseInterleavedCPInstCountNURS("use-interleaved-cpicnt-NURS");
   cl::opt<bool> UseInterleavedQueryCostNURS("use-interleaved-query-cost-NURS");
   cl::opt<bool> UseInterleavedCovNewNURS("use-interleaved-covnew-NURS");
@@ -169,7 +175,7 @@ static WeightFunc* getWeightFuncByName(const std::string& name)
 	if (name == "none")
 		return new DepthWeight();
 	else if (name == "icnt")
-		return new InstCountWeight();
+		return new PerInstCountWeight();
 	else if (name == "cpicnt")
 		return new CPInstCountWeight();
 	else if (name == "query-cost")
@@ -190,7 +196,7 @@ bool UserSearcher::userSearcherRequiresMD2U() {
   return (WeightType=="md2u" || WeightType=="covnew" ||
           UseInterleavedMD2UNURS ||
           UseInterleavedCovNewNURS ||
-          UseInterleavedInstCountNURS ||
+          UseInterleavedPerInstCountNURS ||
           UseInterleavedCPInstCountNURS ||
           UseInterleavedQueryCostNURS);
 }
@@ -220,6 +226,11 @@ Searcher* UserSearcher::setupInterleavedSearcher(
 	PUSH_ILEAV_IF_SET(
 		NonUniformRandom,
 		new WeightedRandomSearcher(executor, new DepthWeight()));
+
+	PUSH_ILEAV_IF_SET(
+		MinInst,
+		new RescanSearcher(
+			new Weight2Prioritizer<StateInstCountWeight>(-1.0)));
 
 	PUSH_ILEAV_IF_SET(DFS, new DFSSearcher());
 	PUSH_ILEAV_IF_SET(RR, new RRSearcher());
@@ -263,8 +274,9 @@ Searcher* UserSearcher::setupInterleavedSearcher(
 		new WeightedRandomSearcher(executor, new CoveringNewWeight()));
 
 	PUSH_ILEAV_IF_SET(
-		InstCountNURS,
-		new WeightedRandomSearcher(executor, new InstCountWeight()));
+		PerInstCountNURS,
+		new WeightedRandomSearcher(
+			executor, new PerInstCountWeight()));
 
 	PUSH_ILEAV_IF_SET(
 		CPInstCountNURS,
@@ -301,6 +313,9 @@ Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 	} else if (UseMarkovSearch) {
 		searcher = new RescanSearcher(
 			new Weight2Prioritizer<MarkovPathWeight>(100));
+	} else if (UseMinInstSearch) {
+		searcher = new RescanSearcher(
+			new Weight2Prioritizer<StateInstCountWeight>(-1.0));
 	} else if (UseConstraintSearch) {
 		searcher =new RescanSearcher(
 			new Weight2Prioritizer<ConstraintWeight>(1.0));
@@ -361,9 +376,9 @@ Searcher* UserSearcher::setupMergeSearcher(
 	return searcher;
 }
 
-Searcher *UserSearcher::constructUserSearcher(Executor &executor)
+Searcher* UserSearcher::setupConfigSearcher(Executor& executor)
 {
-	Searcher *searcher;
+	Searcher	*searcher;
 
 	searcher = setupBaseSearcher(executor);
 	searcher = setupInterleavedSearcher(executor, searcher);
@@ -379,7 +394,8 @@ Searcher *UserSearcher::constructUserSearcher(Executor &executor)
 		searcher = new FilterSearcher(executor, searcher);
 
 	if (UseEpochSearch)
-		searcher = new EpochSearcher(new RRSearcher(), searcher);
+		searcher = new EpochSearcher(
+			executor, new RRSearcher(), searcher);
 
 	if (UseSecondChance)
 		searcher = new SecondChanceSearcher(searcher);
@@ -394,6 +410,60 @@ Searcher *UserSearcher::constructUserSearcher(Executor &executor)
 
 	if (UseStringPrune)
 		searcher = new StringMerger(searcher);
+
+	return searcher;
+}
+
+Searcher *UserSearcher::constructUserSearcher(Executor &executor)
+{
+	Searcher *searcher;
+
+	if (UseTunedSearch) {
+		std::vector<Searcher *>	s;
+		PDFInterleavedSearcher	*p;
+
+		/* alive states */
+		s.push_back(
+//searcher = 
+		new PrioritySearcher(
+				new Weight2Prioritizer<FreshBranchWeight>(1),
+				SEARCH_HISTO,
+				100));
+		s.push_back(
+//			new RescanSearcher(
+//				new Weight2Prioritizer<
+//					ConstraintWeight>(-1.0)));
+//			new RescanSearcher(
+//				new Weight2Prioritizer<MarkovPathWeight>(100)));
+			new RescanSearcher(
+				new Weight2Prioritizer<
+					StateInstCountWeight>(-1.0)));
+//		s.push_back(
+//			new RescanSearcher(
+//				new Weight2Prioritizer<
+//					StateInstCountWeight>(1.0)));
+
+		searcher = new PDFInterleavedSearcher(s);
+		s.clear();
+		searcher = new EpochSearcher(
+			executor, new RRSearcher(), searcher);
+
+		/* filter away dying states */
+		s.push_back(new FilterSearcher(
+			executor, searcher, "dying_filter.txt"));
+
+		/* dead states-- eagerly run dying */
+		s.push_back(new WhitelistFilterSearcher(
+			executor, new DFSSearcher(), "dying_filter.txt"));
+
+		p = new PDFInterleavedSearcher(s);
+		// 4x as many base tickets for alive side
+		p->setBaseTickets(0 /* alive idx */, 4);
+		searcher = p;
+		searcher = new SecondChanceSearcher(searcher);
+		searcher = new BatchingSearcher(searcher);
+	} else
+		searcher = setupConfigSearcher(executor);
 
 	std::ostream &os = executor.getHandler().getInfoStream();
 
