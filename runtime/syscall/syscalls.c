@@ -25,6 +25,8 @@
 #include "concrete_fd.h"
 #include "breadcrumb.h"
 
+#define USE_SYS_FAILURE
+
 void* kmc_sc_regs(void*);
 void kmc_sc_bad(unsigned int);
 void kmc_free_run(uint64_t addr, uint64_t num_bytes);
@@ -104,7 +106,13 @@ static void* sc_mmap_anon(void* regfile)
 	void		*addr;
 	uint64_t	len;
 
-	len = concretize_u64(GET_ARG1(regfile));
+	len = GET_ARG1(regfile);
+	if (len == 0)
+		return MAP_FAILED;
+	else if (len < 16*1024)
+		len = concretize_u64(GET_ARG1(regfile));
+	else
+		len = concretize_u64(GET_ARG1(regfile));
 
 	/* mapping may be placed anywhere */
 	if (GET_ARG0(regfile) == 0) {
@@ -122,7 +130,21 @@ static void* sc_mmap_anon(void* regfile)
 static void* sc_mmap_fd(void* regfile)
 {
 	void		*ret_addr;
-	uint64_t	len = concretize_u64(GET_ARG1(regfile));
+	uint64_t	len;
+
+	len = GET_ARG1(regfile);
+	/* TODO, how should this be split? */
+	if (len == 0) {
+		return MAP_FAILED;
+	} else if (len <= 4096) {
+		len = concretize_u64(len);
+	} else if (len <= 8192) {
+		len = concretize_u64(len);
+	} else if (len <= (16*1024)) {
+		len = concretize_u64(len);
+	} else {
+		len = concretize_u64(len);
+	}
 
 	ret_addr = sc_mmap_anon(regfile);
 	if (ret_addr == MAP_FAILED) return ret_addr;
@@ -196,6 +218,9 @@ void make_sym(uint64_t addr, uint64_t len, const char* name)
 	if (len > SYM_YIELD_SIZE)
 		klee_yield();
 
+	if (len == 0)
+		return;
+
 	len = concretize_u64(len);
 	kmc_make_range_symbolic(addr, len, name);
 	sc_breadcrumb_add_ptr((void*)addr, len);
@@ -213,6 +238,9 @@ void make_sym_by_arg(
 
 	if (len > SYM_YIELD_SIZE)
 		klee_yield();
+
+	if (len == 0)
+		return;
 
 	len = concretize_u64(len);
 	kmc_make_range_symbolic(addr, len, name);
@@ -378,7 +406,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 #ifdef USE_SYS_FAILURE
 		if (	GET_ARG0(regfile) != 1		/* never fail stdout */
 			&& GET_ARG0(regfile) != 2	/* never fail stderr */
-			&& fail_c.fc_write % (4*FAILURE_RATE))
+		)//	&& fail_c.fc_write % (4*FAILURE_RATE))
 		{
 			new_regs = sc_new_regs(regfile);
 			if ((int64_t)GET_SYSRET(new_regs) == -1) {
@@ -678,6 +706,18 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_recvmsg: {
 		struct msghdr	*mhdr;
 
+		new_regs = sc_new_regs(regfile);
+
+		if (GET_SYSRET(new_regs) == 0) {
+			sc_ret_v(new_regs, 0);
+			break;
+		}
+
+		if (GET_SYSRET_S(new_regs) == -1) {
+			sc_ret_v(new_regs, -1);
+			break;
+		}
+
 		mhdr = (void*)klee_get_value(GET_ARG1(regfile));
 		klee_assume(mhdr->msg_iovlen >= 1);
 		make_sym(
@@ -685,7 +725,9 @@ void* sc_enter(void* regfile, void* jmpptr)
 			mhdr->msg_iov[0].iov_len,
 			"recvmsg_iov");
 		mhdr->msg_controllen = 0;	/* XXX update? */
-		sc_ret_v(regfile, mhdr->msg_iov[0].iov_len);
+
+		klee_assume(GET_SYSRET(new_regs) == mhdr->msg_iov[0].iov_len);
+		sc_ret_v(new_regs, mhdr->msg_iov[0].iov_len);
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
 	}
 	break;

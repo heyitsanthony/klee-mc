@@ -234,8 +234,10 @@ int file_sc(unsigned int pure_sysnr, unsigned int sys_nr, void* regfile)
 			sc_ret_v(regfile, br);
 		} else {
 #ifdef USE_SYS_FAILURE
+			ssize_t br = GET_ARG1(regfile) + GET_ARG2(regfile);
 			klee_warning_once("lseek [-1, 4096]");
-			sc_ret_range(sc_new_regs(regfile), -1, 4096);
+			br = concretize_u64(br);
+			sc_ret_range(sc_new_regs(regfile), -1, br);
 #else
 			sc_ret_v(regfile, GET_ARG1(regfile));
 #endif
