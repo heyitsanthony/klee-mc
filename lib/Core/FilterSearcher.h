@@ -11,7 +11,10 @@ class FilterSearcher : public Searcher
 {
 public:
 	ExecutionState &selectState(bool allowCompact);
-	FilterSearcher(Executor& exe, Searcher* _searcher_base);
+	FilterSearcher(
+		Executor& exe,
+		Searcher* _searcher_base,
+		const char* filter_name = "filtered_funcs.txt");
 	virtual ~FilterSearcher(void) { delete searcher_base; }
 
 	virtual Searcher* createEmpty(void) const
@@ -24,16 +27,22 @@ public:
 	bool empty(void) const
 	{ return (scheduled.size() + blacklisted.size()) == 0; }
 
-	void printName(std::ostream &os) const
+	virtual void printName(std::ostream &os) const
 	{
 		os << "<FilterSearcher>\n";
 		searcher_base->printName(os);
 		os << "</FilterSearcher>\n";
 	}
 
+	const char* getFilterFileName(void) const { return filter_fname; }
+
+protected:
+	virtual bool isBlacklisted(ExecutionState& es) const;
+	Searcher* getSearcherBase(void) const { return searcher_base; }
+	Executor& getExe(void) const { return exe; }
 private:
+	bool recheckListing(ExecutionState* current);
 	void recoverBlacklisted(void);
-	bool isBlacklisted(ExecutionState& es) const;
 
 	std::set<std::string>			blacklist_strs;
 	mutable std::set<llvm::Function*>	blacklist_f;
@@ -44,6 +53,39 @@ private:
 	Searcher	*searcher_base;
 	uint64_t	last_uncovered;
 	Executor	&exe;
+	const char*	filter_fname;
+};
+
+class WhitelistFilterSearcher : public FilterSearcher
+{
+public:
+	WhitelistFilterSearcher(
+		Executor& exe,
+		Searcher* _searcher_base,
+		const char* filter_name = "whitelist_funcs.txt")
+	: FilterSearcher(exe, _searcher_base, filter_name)
+	{
+		std::cerr	<< "[Whitelist] Whitelisting file="
+				<< filter_name << '\n';
+	}
+
+	virtual ~WhitelistFilterSearcher() {}
+
+	virtual Searcher* createEmpty(void) const
+	{ return new WhitelistFilterSearcher(
+		getExe(),
+		getSearcherBase()->createEmpty(),
+		getFilterFileName()); }
+
+	virtual void printName(std::ostream &os) const
+	{
+		os << "<WhitelistFilterSearcher>\n";
+		getSearcherBase()->printName(os);
+		os << "</WhitelistFilterSearcher>\n";
+	}
+protected:
+	virtual bool isBlacklisted(ExecutionState& es) const
+	{ return !FilterSearcher::isBlacklisted(es); }
 };
 }
 

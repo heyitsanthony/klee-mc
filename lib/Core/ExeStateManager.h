@@ -105,7 +105,7 @@ struct KillOrCompactOrdering
     if (!a->coveredNew &&  b->coveredNew) return true;
     if ( a->coveredNew && !b->coveredNew) return false;
 
-    return a->lastChosen < b->lastChosen;
+    return a->lastGlobalInstCount < b->lastGlobalInstCount;
   }
 };
 

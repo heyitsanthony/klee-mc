@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "klee/util/Assignment.h"
 #include "klee/ExecutionState.h"
 #include "klee/ExeStateBuilder.h"
 #include "klee/Solver.h"
@@ -66,7 +67,9 @@ ExecutionState::ExecutionState(KFunction *kf)
 , prevPC(pc)
 , queryCost(0.)
 , instsSinceCovNew(0)
-, lastChosen(0)
+, lastGlobalInstCount(0)
+, totalInsts(0)
+, concretizeCount(0)
 , coveredNew(false)
 , isReplay(false)
 , forkDisabled(false)
@@ -74,7 +77,7 @@ ExecutionState::ExecutionState(KFunction *kf)
 {
 	canary = ES_CANARY_VALUE;
 	pushFrame(0, kf);
-	replayBranchIterator = branchDecisionsSequence.end();
+	replayBrIter = brChoiceSeq.end();
 }
 
 ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
@@ -84,12 +87,14 @@ ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
 , onFreshBranch(false)
 , constraints(assumptions)
 , queryCost(0.)
-, lastChosen(0)
+, lastGlobalInstCount(0)
+, totalInsts(0)
+, concretizeCount(0)
 , isReplay(false)
 , ptreeNode(0)
 {
 	canary = ES_CANARY_VALUE;
-	replayBranchIterator = branchDecisionsSequence.end();
+	replayBrIter = brChoiceSeq.end();
 }
 
 ExecutionState::ExecutionState(void)
@@ -97,13 +102,15 @@ ExecutionState::ExecutionState(void)
 , prev_constraint_hash(0)
 , isCompactForm(false)
 , onFreshBranch(false)
-, lastChosen(0)
+, lastGlobalInstCount(0)
 , coveredNew(false)
+, totalInsts(0)
+, concretizeCount(0)
 , isReplay(false)
 , ptreeNode(0)
 {
 	canary = ES_CANARY_VALUE;
-	replayBranchIterator = branchDecisionsSequence.begin();
+	replayBrIter = brChoiceSeq.begin();
 }
 
 ExecutionState::~ExecutionState()
@@ -122,7 +129,7 @@ ExecutionState *ExecutionState::branch()
 	newState = copy();
 	newState->coveredNew = false;
 	newState->coveredLines.clear();
-	newState->replayBranchIterator = newState->branchDecisionsSequence.end();
+	newState->replayBrIter = newState->brChoiceSeq.end();
 
 	return newState;
 }
@@ -150,7 +157,7 @@ ExecutionState *ExecutionState::compact() const
 void ExecutionState::compact(ExecutionState* newState) const
 {
 	newState->isCompactForm = true;
-	newState->branchDecisionsSequence = branchDecisionsSequence;
+	newState->brChoiceSeq = brChoiceSeq;
 	newState->weight = weight;
 	newState->coveredLines.clear();
 
@@ -164,8 +171,8 @@ ExecutionState* ExecutionState::reconstitute(
 	ExecutionState* newState;
 
 	newState = copy(&initialStateCopy);
-	newState->branchDecisionsSequence = branchDecisionsSequence;
-	newState->replayBranchIterator = newState->branchDecisionsSequence.begin();
+	newState->brChoiceSeq = brChoiceSeq;
+	newState->replayBrIter = newState->brChoiceSeq.begin();
 	newState->weight = weight;
 
 	return newState;
@@ -423,11 +430,11 @@ ObjectState* ExecutionState::bindStackMemObj(
 void ExecutionState::trackBranch(int condIndex, int asmLine)
 {
 	// only track NON-internal branches
-	if (replayBranchIterator != branchDecisionsSequence.end())
+	if (replayBrIter != brChoiceSeq.end())
 		return;
 
-	branchDecisionsSequence.push_back(condIndex, asmLine);
-	replayBranchIterator = branchDecisionsSequence.end();
+	brChoiceSeq.push_back(condIndex, asmLine);
+	replayBrIter = brChoiceSeq.end();
 }
 
 ExecutionState* ExecutionState::createReplay(
@@ -438,10 +445,10 @@ ExecutionState* ExecutionState::createReplay(
 
 	newState = initialState.copy();
 	foreach (it, replayPath.begin(), replayPath.end()) {
-		newState->branchDecisionsSequence.push_back(*it);
+		newState->brChoiceSeq.push_back(*it);
 	}
 
-	newState->replayBranchIterator = newState->branchDecisionsSequence.begin();
+	newState->replayBrIter = newState->brChoiceSeq.begin();
 	newState->ptreeNode->data = 0;
 	newState->isReplay = true;
 
@@ -449,16 +456,16 @@ ExecutionState* ExecutionState::createReplay(
 }
 
 bool ExecutionState::isReplayDone(void) const
-{ return (replayBranchIterator == branchDecisionsSequence.end()); }
+{ return (replayBrIter == brChoiceSeq.end()); }
 
 unsigned ExecutionState::stepReplay(void)
 {
 #ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
-    assert (prevPC->getInfo()->assemblyLine == (*replayBranchIterator).second &&
+    assert (prevPC->getInfo()->assemblyLine == (*replayBrIter).second &&
       "branch instruction IDs do not match");
 #endif
-    unsigned targetIndex = (*replayBranchIterator).first;
-    ++replayBranchIterator;
+    unsigned targetIndex = (*replayBrIter).first;
+    ++replayBrIter;
     return targetIndex;
 }
 
@@ -531,9 +538,9 @@ ExecutionState* ExecutionState::copy(void) const { return copy(this); }
 
 std::pair<unsigned, unsigned> ExecutionState::branchLast(void) const
 {
-	if (branchDecisionsSequence.empty())
+	if (brChoiceSeq.empty())
 		return std::pair<unsigned, unsigned>(0,0);
-	return branchDecisionsSequence.back();
+	return brChoiceSeq.back();
 }
 
 /**
@@ -630,4 +637,46 @@ void ExecutionState::getConstraintLog(std::string &res) const
 	std::ostringstream info;
 	ExprPPrinter::printConstraints(info, constraints);
 	res = info.str();
+}
+
+void ExecutionState::abortInstruction(void)
+{
+	--prevPC;
+	--pc;
+	totalInsts--;
+}
+
+bool ExecutionState::isConcrete(void) const
+{
+	foreach (it, symbolics.begin(), symbolics.end()) {
+		if (it->getConcretization() == NULL)
+			return false;
+	}
+	return true;
+}
+
+void ExecutionState::assignSymbolics(const Assignment& a)
+{
+	foreach (it, symbolics.begin(), symbolics.end()) {
+		SymbolicArray			&sa = *it;
+		const std::vector<uint8_t>	*v;
+
+		// we might see a repeat because of a concretized symbolic
+		// array because the assignment passed in is
+		// the assignment for all symbolics in the state
+		//
+		// however, the assignment should match up with the current
+		// concretization since it's bound before the query
+		// is submitted.
+		//
+		// This could check for equality, but it would be slow; ignore
+		if (sa.getConcretization())
+			continue;
+
+		v = a.getBinding(sa.getArray());
+		if (v == NULL)
+			continue;
+
+		sa.setConcretization(*v);
+	}
 }

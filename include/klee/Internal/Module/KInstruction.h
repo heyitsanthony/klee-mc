@@ -74,21 +74,22 @@ public:
 
 	KBrInstruction(llvm::Instruction* ins, unsigned dest)
 	: KInstruction(ins, dest)
-	, true_c(0)
-	, false_c(0)
-	, fork_c(0) { all_kbr.push_back(this); }
+	{ all_kbr.push_back(this); }
 
 	virtual ~KBrInstruction() {}
 
-	bool hasFoundAll(void) const { return true_c && false_c; }
-	void foundTrue(void) { true_c++; }
-	void foundFalse(void) { false_c++; }
-	void foundFork(void) { fork_c++; }
-	bool hasFoundTrue(void) const { return true_c != 0; }
-	bool hasFoundFalse(void) const { return false_c != 0; }
-	unsigned getTrueHits(void) const { return true_c; }
-	unsigned getFalseHits(void) const { return false_c; }
-	unsigned getForkHits(void) const { return fork_c; }
+	bool hasFoundAll(void) const { return br_true.hits && br_false.hits; }
+	void foundTrue(uint64_t inst_clock) { foundBr(br_true, inst_clock); }
+	void foundFalse(uint64_t inst_clock) { foundBr(br_false, inst_clock); }
+	void foundFork(uint64_t inst_clock) { foundBr(br_fork, inst_clock); }
+	bool hasFoundTrue(void) const { return br_true.hits != 0; }
+	bool hasFoundFalse(void) const { return br_false.hits != 0; }
+	unsigned getTrueHits(void) const { return br_true.hits; }
+	unsigned getFalseHits(void) const { return br_false.hits; }
+
+	uint64_t getTrueMinInst(void) const { return br_true.min_inst; }
+	uint64_t getFalseMinInst(void) const { return br_false.min_inst; }
+	unsigned getForkHits(void) const { return br_fork.hits; }
 
 
 	void addExpr(const ref<Expr>& e) { expr_set.insert(e); }
@@ -98,9 +99,26 @@ public:
 	static kbr_list_ty::const_iterator endBr(void)
 	{ return all_kbr.end(); }
 private:
-	unsigned		true_c;
-	unsigned		false_c;
-	unsigned		fork_c;
+	struct BrType {
+		BrType() : hits(0), min_inst(~0), max_inst(0) {}
+		unsigned	hits;
+		uint64_t	min_inst;
+		uint64_t	max_inst;
+	};
+
+	void foundBr(BrType& brt, uint64_t inst_clock)
+	{
+		brt.hits++;
+		if (brt.min_inst > inst_clock)
+			brt.min_inst = inst_clock;
+		if (brt.max_inst < inst_clock)
+			brt.max_inst = inst_clock;
+	}
+
+	BrType	br_true;
+	BrType	br_false;
+	BrType	br_fork;
+
 	ExprHashSet		expr_set;
 
 	static kbr_list_ty	all_kbr;

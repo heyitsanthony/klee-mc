@@ -415,13 +415,11 @@ void UCMMU::expandUnfixed(
 
 	// no need to set offset constraints:
 	// they will be added through the fixed buffer error path
-	--new_es->prevPC;
-	--new_es->pc;
+	new_es->abortInstruction();
 
 	new_es = ucp_fork.getState(false);
 	assert (new_es != NULL);
-	--new_es->prevPC;
-	--new_es->pc;
+	new_es->abortInstruction();
 }
 
 
@@ -517,8 +515,7 @@ void UCMMU::assignRegPointer(
 		exe_uc.initUCPtr(state, ptab_idx, reg_sym, min_sz));
 
 	new_es = ucp_fork.getState(true);
-	--new_es->prevPC;
-	--new_es->pc;
+	new_es->abortInstruction();
 
 	/* since this is a root pointer, it'll stay in the register list--
 	 * set its value to the ptr table */
@@ -532,8 +529,8 @@ void UCMMU::assignRegPointer(
 
 
 	new_es = ucp_fork.getState(false);
-	--new_es->prevPC;
-	--new_es->pc;
+	new_es->abortInstruction();
+
 	reg_wos = GETREGOBJ(*new_es);
 	sym_ptr = exe_uc.getUCSymPtr(*new_es, ptab_idx);
 	reg_sym = new_es->readSymbolic(reg_wos, reg_off, sym_ptr->getWidth());

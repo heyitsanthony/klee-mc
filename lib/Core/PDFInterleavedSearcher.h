@@ -9,8 +9,19 @@ namespace klee
 class PDFInterleavedSearcher : public Searcher
 {
 private:
-	typedef std::pair<unsigned, Searcher*>	ticket_searcher_ty;
-	typedef std::vector<ticket_searcher_ty>	searchers_ty;
+class TicketSearcher
+{
+public:
+	TicketSearcher(Searcher* s)
+	: tickets_base(1)
+	, tickets(tickets_base)
+	, searcher(s) {}
+
+	unsigned	tickets_base;
+	unsigned	tickets;
+	Searcher	*searcher;
+};
+	typedef std::vector<TicketSearcher>	searchers_ty;
 
 	searchers_ty	searchers;
 	unsigned	cur_searcher_idx;
@@ -28,15 +39,13 @@ public:
 
 	ExecutionState &selectState(bool allowCompact);
 	void update(ExecutionState *current, const States s);
-	bool empty() const { return searchers[0].second->empty(); }
+	bool empty() const { return searchers[0].searcher->empty(); }
+	void setBaseTickets(unsigned idx, unsigned tickets);
 	void printName(std::ostream &os) const
 	{
-		os	<< "<PDFInterleavedSearcher> containing "
-			<< searchers.size()
-			<< " searchers:\n";
+		os << "<PDFInterleavedSearcher>\n";
 		foreach (it, searchers.begin(), searchers.end())
-			(*it).second->printName(os);
-
+			(*it).searcher->printName(os);
 		os << "</PDFInterleavedSearcher>\n";
 	};
 };

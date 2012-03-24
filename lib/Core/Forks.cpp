@@ -459,6 +459,26 @@ bool Forks::evalForks(ExecutionState& current, struct ForkInfo& fi)
 	return true;
 }
 
+ExecutionState* Forks::pureFork(ExecutionState& es, bool compact)
+{
+	// Update stats
+	TimerStatIncrementer	timer(stats::forkTime);
+	ExecutionState		*newState;
+
+	++stats::forks;
+
+	// Do actual state forking
+	newState = compact ? es.branchForReplay() : es.branch();
+
+	exe.getStateManager()->queueAdd(newState);
+
+	// Update path tree with new states
+	es.ptreeNode->data = 0;
+	exe.getPTree()->splitStates(es.ptreeNode, &es, newState);
+
+	return newState;
+}
+
 
 void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 {
@@ -503,17 +523,9 @@ void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 
 		assert (!fi.forkCompact || ReplayInhibitedForks);
 
-		// Update stats
-		TimerStatIncrementer timer(stats::forkTime);
-		++stats::forks;
-
 		// Do actual state forking
 		baseState = &current;
-		newState = fi.forkCompact
-			? current.branchForReplay()
-			: current.branch();
-
-		exe.getStateManager()->queueAdd(newState);
+		newState = pureFork(current, fi.forkCompact);
 		fi.resStates[condIndex] = newState;
 
 		// Split pathWriter stream
@@ -527,12 +539,6 @@ void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 			}
 		}
 
-		// Update path tree with new states
-		current.ptreeNode->data = 0;
-		exe.getPTree()->splitStates(
-			current.ptreeNode,
-			baseState,
-			newState);
 	}
 }
 

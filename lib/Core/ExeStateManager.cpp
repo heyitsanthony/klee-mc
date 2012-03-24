@@ -15,6 +15,11 @@
 using namespace llvm;
 using namespace klee;
 
+namespace
+{
+	cl::opt<bool> UseYield("use-yield", cl::init(true));
+}
+
 ExeStateManager::ExeStateManager()
 : nonCompactStateCount(0)
 , searcher(NULL)
@@ -111,9 +116,10 @@ void ExeStateManager::yield(ExecutionState* s)
 	ExecutionState	*compacted;
 
 	/* do not yield if we're low on states */
-	if (states.size() == 1)
+	if (!UseYield || states.size() == 1)
 		return;
 
+	std::cerr << "[ExeMan] Yielding st=" << (void*)s << '\n';
 	assert (!s->isCompact() && "yielding compact state? HOW?");
 
 	compacted = compactState(s);

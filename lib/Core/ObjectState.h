@@ -67,6 +67,8 @@ public:
 	bool isByteConcrete(unsigned offset) const;
 	bool isByteFlushed(unsigned offset) const;
 	bool isByteKnownSymbolic(unsigned offset) const;
+	bool isConcrete(void) const { return concreteMask == NULL; }
+
 	void markRangeSymbolic(unsigned offset, unsigned len);
 
 	bool writeIVC(unsigned offset, const ref<ConstantExpr>& ce);

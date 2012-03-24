@@ -301,13 +301,13 @@ void StatsTracker::trackInstTime(ExecutionState& es)
 
 void StatsTracker::stepInstUpdateFrame(ExecutionState &es)
 {
-	Instruction *inst = es.pc->getInst();
-	const InstructionInfo &ii = *es.pc->getInfo();
-
 	if (es.stack.empty())
 		return;
 
-	StackFrame &sf = es.stack.back();
+	StackFrame		&sf = es.stack.back();
+	const InstructionInfo	&ii = *es.pc->getInfo();
+
+
 	theStatisticManager->setIndex(ii.id);
 	if (UseCallPaths) {
 		assert (sf.callPathNode != NULL);
@@ -317,6 +317,7 @@ void StatsTracker::stepInstUpdateFrame(ExecutionState &es)
 	if (es.instsSinceCovNew)
 		++es.instsSinceCovNew;
 
+	Instruction *inst = es.pc->getInst();
 	if (!sf.kf->trackCoverage || !instructionIsCoverable(inst))
 		return;
 

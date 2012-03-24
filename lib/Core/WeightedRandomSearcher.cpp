@@ -99,7 +99,7 @@ void WeightedRandomSearcher::update(ExecutionState *current, const States s)
 
 bool WeightedRandomSearcher::empty() const { return states->empty(); }
 
-double InstCountWeight::weigh(const ExecutionState* es) const
+double PerInstCountWeight::weigh(const ExecutionState* es) const
 {
 	uint64_t count;
 	count = theStatisticManager->getIndexedValue(
@@ -108,6 +108,10 @@ double InstCountWeight::weigh(const ExecutionState* es) const
 	double inv = 1. / std::max((uint64_t) 1, count);
 	return inv * inv;
 }
+
+
+double StateInstCountWeight::weigh(const ExecutionState* es) const
+{ return es->totalInsts; }
 
 double CPInstCountWeight::weigh(const ExecutionState *es) const
 {

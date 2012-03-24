@@ -2,14 +2,17 @@
 #include "static/Sugar.h"
 #include "CoreStats.h"
 #include <assert.h>
-#include "EpochSearcher.h"
 #include <algorithm>
+#include "Executor.h"
+#include "EpochSearcher.h"
 
 using namespace klee;
 
+#define CONCRETE_WATERMARK	3
 #define INST_TOTAL (stats::coveredInstructions + stats::uncoveredInstructions)
 
 EpochSearcher::EpochSearcher(
+	Executor& _exe,
 	Searcher* _searcher_base, Searcher* _global_pool)
 : searcher_base(_searcher_base)
 , global_pool(_global_pool)
@@ -17,6 +20,7 @@ EpochSearcher::EpochSearcher(
 , pool_countdown(3)
 , pool_period(3)
 , epoch_state_c(0)
+, exe(_exe)
 {
 	epochs.push_back(
 		new Epoch(searcher_base->createEmpty()));
@@ -62,6 +66,8 @@ ExecutionState* EpochSearcher::selectEpoch(bool allowCompact)
 
 ExecutionState& EpochSearcher::selectState(bool allowCompact)
 {
+	ExecutionState	*next_state;
+
 	if (INST_TOTAL > last_cov) {
 		pool_countdown = pool_period;
 		last_cov = INST_TOTAL;
@@ -79,7 +85,15 @@ ExecutionState& EpochSearcher::selectState(bool allowCompact)
 	/* select from epochs */
 	std::cerr	<< "[Epoch] SELECT FROM EPOCH (states="
 			<< epoch_state_c << ")\n";
-	return *selectEpoch(allowCompact);
+
+	next_state = selectEpoch(allowCompact);
+	if (epoch_state_c > CONCRETE_WATERMARK) {
+		std::cerr << "[Epoch] Concretizing state\n";
+		pool_countdown += pool_period;
+		exe.concretizeState(*next_state);
+	}
+
+	return *next_state;
 }
 
 
@@ -105,7 +119,6 @@ void EpochSearcher::Epoch::update(
 		states.begin(), states.end(),
 		std::inserter(rmv, rmv.begin()));
 
-
 	searcher->update(current, States(add, rmv));
 
 	foreach (it, rmv.begin(), rmv.end())
@@ -121,11 +134,15 @@ void EpochSearcher::update(ExecutionState *current, States s)
 
 	epoch_state_c = 0;
 	foreach (it, epochs.begin(), epochs.end()) {
-		Epoch	*e = *it;
+		Epoch		*e;
+		unsigned	e_states;
+
+		e = *it;
 		e->update(current, s);
-		epoch_state_c += e->getNumStates();
+
+		e_states = e->getNumStates();
+		epoch_state_c += e_states;
 	}
 
-	if (epoch_state_c > 3)
-		pool_period = (epoch_state_c*3)/2;
+	pool_period = (epoch_state_c/2)+1;
 }

@@ -443,7 +443,6 @@ SFH_DEF_HANDLER(Assume)
 		state,
 		"invalid klee_assume call (provably false)",
 		"user.err");
-	assert (0 == 1);
 }
 
 SFH_DEF_HANDLER(IsSymbolic)

@@ -14,9 +14,8 @@ namespace klee {
   class ObjectState;
 
   class ObjectHolder {
-    ObjectState *os;
-    
   public:
+    ObjectState *os;
     ObjectHolder() : os(0) {}
     ObjectHolder(ObjectState *_os);
     ObjectHolder(const ObjectHolder &b);

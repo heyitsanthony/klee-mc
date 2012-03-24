@@ -24,6 +24,7 @@
 #include "UserSearcher.h"
 #include "MemUsage.h"
 #include "MMU.h"
+#include "BranchPredictor.h"
 #include "StatsTracker.h"
 #include "Globals.h"
 #include "../Expr/RuleBuilder.h"
@@ -89,6 +90,18 @@ unsigned MakeConcreteSymbolic;
 namespace {
   cl::opt<bool>
   DumpSelectStack("dump-select-stack", cl::init(false));
+
+  cl::opt<bool>
+  ConcretizeEarlyTerminate(
+  	"concretize-early",
+	cl::desc("Concretizeearly terminations"),
+	cl::init(false));
+
+  cl::opt<bool>
+  DumpBadInitValues(
+  	"dump-bad-init-values",
+	cl::desc("Dump states which fail to get initial values to console."),
+	cl::init(false));
 
   cl::opt<unsigned,true>
   MakeConcreteSymbolicProxy(
@@ -220,7 +233,6 @@ namespace {
   	cl::init(false));
 }
 
-
 namespace klee {
   RNG theRNG;
 }
@@ -276,7 +288,7 @@ Executor::Executor(InterpreterHandler *ih)
 	std::min(MaxSTPTime,(double)MaxInstructionTime) : MaxSTPTime)
 {
 	/* rule builder should be installed before equiv checker, otherwise
-	 * we wind up wasting time searching the equivdb for rules we 
+	 * we wind up wasting time searching the equivdb for rules we
 	 * already have! */
 	if (UseRuleBuilder)
 		Expr::setBuilder(new RuleBuilder(Expr::getBuilder()));
@@ -288,6 +300,8 @@ Executor::Executor(InterpreterHandler *ih)
 
 	memory = MemoryManager::create();
 	mmu = new MMU(*this);
+	if (UseBranchHints)
+		brPredict = new BranchPredictor();
 	stateManager = new ExeStateManager();
 	ExecutionState::setMemoryManager(memory);
 	ExeStateBuilder::replaceBuilder(new BaseExeStateBuilder());
@@ -300,6 +314,7 @@ Executor::~Executor()
 
 	std::for_each(timers.begin(), timers.end(), deleteTimerInfo);
 	delete stateManager;
+	delete brPredict;
 	delete mmu;
 	delete memory;
 	if (pathTree) delete pathTree;
@@ -553,9 +568,11 @@ void Executor::stepInstruction(ExecutionState &state)
 
 	if (statsTracker) statsTracker->stepInstruction(state);
 
-	++stats::instructions;
+	state.lastGlobalInstCount = ++stats::instructions;
+	state.totalInsts++;
 	state.prevPC = state.pc;
 	++state.pc;
+
 	if (stats::instructions==StopAfterNInstructions)
 		haltExecution = true;
 }
@@ -846,11 +863,10 @@ void Executor::markBranchVisited(
 			kbr, branches.first, branches.second);
 
 	if (isTwoWay)
-		kbr->foundFork();
+		kbr->foundFork(state.totalInsts);
 
-	if (TrackBranchExprs && cond->getKind() != Expr::Constant) {
+	if (TrackBranchExprs && cond->getKind() != Expr::Constant)
 		kbr->addExpr(cond);
-	}
 
 	fresh = false;
 	got_fresh = false;
@@ -865,7 +881,7 @@ void Executor::markBranchVisited(
 			fresh = true;
 		} else if (isTwoWay)
 			branches.first->setOldBranch();
-		kbr->foundTrue();
+		kbr->foundTrue(state.totalInsts);
 	}
 
 	if (branches.second != NULL) {
@@ -877,7 +893,7 @@ void Executor::markBranchVisited(
 			fresh = true;
 		} else if (isTwoWay)
 			branches.second->setOldBranch();
-		kbr->foundFalse();
+		kbr->foundFalse(state.totalInsts);
 	}
 
 	if (UseBranchHints && fresh && !got_fresh)
@@ -899,47 +915,109 @@ void Executor::instBranch(ExecutionState& state, KInstruction* ki)
 	instBranchConditional(state, ki);
 }
 
-static bool getBranchHint(KInstruction* ki, bool& hint)
+/* branches st back into scheduler,
+ * overwrites st with concrete data */
+ExecutionState* Executor::concretizeState(ExecutionState& st)
 {
-	KBrInstruction	*kbr;
-	bool		fresh_false, fresh_true;
+	ExecutionState	*new_st;
+	Assignment	a;
 
-	kbr = static_cast<KBrInstruction*>(ki);
-	fresh_false = (kbr->hasFoundFalse() == false);
-	fresh_true = (kbr->hasFoundTrue() == false);
-
-	/* no freshbranch hint to give */
-	if (!fresh_false && !fresh_true) {
-		unsigned	hit_t, hit_f;
-
-		hit_t = kbr->getTrueHits();
-		hit_f = kbr->getFalseHits();
-
-		if (hit_t > 1) {
-			if (hit_t == hit_f)
-				return false;
-		}
-
-		/* retry */
-		if (hit_t == 1)
-			hint = true;
-		else if (hit_f == 1)
-			hint = false;
-		else
-			return false;
-//			hint = hit_t < hit_f;
-		return true;
+	if (st.isConcrete()) {
+		std::cerr << "[Exe] Ignoring totally concretized state\n";
+		return NULL;
 	}
 
-	if (fresh_false && fresh_true) {
-		/* two-way branch-- flip coin to avoid bias */
-		hint = theRNG.getBool();
-	} else if (fresh_false)
-		hint = false;
-	else /* if (fresh_true) */
-		hint = true;
+	/* create new_st-- copy of symbolic version of st */
+	new_st = forking->pureFork(st);
 
-	return true;
+	/* Sweet new state. Now, make the immediate state concrete */
+	std::cerr
+		<< "[Exe] st=" << (void*)&st
+		<< ". Concretized=" << st.concretizeCount << '\n';
+	st.concretizeCount++;
+
+	/* 1. get concretization */
+	std::cerr << "[Exe] Getting assignment\n";
+	if (getSatAssignment(st, a) == false) {
+		terminateStateEarly(st, "couldn't concretize imm state");
+		return new_st;
+	}
+
+	/* 2. enumerate all objstates-- replace sym objstates w/ concrete */
+	std::cerr << "[Exe] Concretizing objstates\n";
+	foreach (it, st.addressSpace.begin(), st.addressSpace.end()) {
+		const MemoryObject	*mo = it->first;
+		const ObjectState	*os = it->second.os;
+		ObjectState		*new_os;
+
+		/* we only change symbolic objstates */
+		if (os->isConcrete())
+			continue;
+
+		new_os = (os->getArray())
+			? new ObjectState(mo, os->getArray())
+			: new ObjectState(mo);
+
+		std::cerr << "[Exe] Concretizing MO="
+			<< (void*)mo->address << "--"
+			<< (void*)(mo->address + mo->size) << "\n";
+		for (unsigned i = 0; i < new_os->size; i++) {
+			const ConstantExpr	*ce;
+			ref<Expr>		e;
+			uint8_t			v;
+
+			e = os->read8(i);
+			ce = dyn_cast<ConstantExpr>(e);
+			if (ce != NULL) {
+				v = ce->getZExtValue();
+			} else {
+				e = a.evaluate(e);
+				ce = dyn_cast<ConstantExpr>(e);
+				if (ce == NULL) {
+					delete new_os;
+					terminateStateEarly(
+						st,
+						"bad eval on imm state");
+					return new_st;
+				}
+				v = ce->getZExtValue();
+			}
+			new_os->write8(i, v);
+		}
+
+		st.unbindObject(mo);
+		st.bindObject(mo, new_os);
+	}
+
+	/* 3. enumerate stack frames-- eval all expressions */
+	std::cerr << "[Exe] Concretizing StackFrames\n";
+	foreach (it, st.stackBegin(), st.stackEnd()) {
+		StackFrame	&sf(*it);
+
+		if (sf.kf == NULL)
+			continue;
+
+		/* update all registers in stack frame */
+		for (unsigned i = 0; i < sf.kf->numRegisters; i++) {
+			ref<Expr>	e;
+
+			if (sf.locals[i].value.isNull())
+				continue;
+
+			e = a.evaluate(sf.locals[i].value);
+			sf.locals[i].value = e;
+		}
+	}
+
+	/* 4. drop constraints, since we lost all symbolics! */
+	st.constraints = ConstraintManager();
+
+	/* 5. mark symbolics as concrete */
+	std::cerr << "[Exe] Set concretization\n";
+	st.assignSymbolics(a);
+
+	/* TODO: verify that assignment satisfies old constraints */
+	return new_st;
 }
 
 void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
@@ -949,8 +1027,8 @@ void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 	StatePair	branches;
 	bool		hasHint = false, branchHint;
 
-	if (UseBranchHints)
-		hasHint = getBranchHint(ki, branchHint);
+	if (brPredict && cond.value->getKind() == Expr::Constant)
+		hasHint = brPredict->predict(state, ki, branchHint);
 
 	if (hasHint) {
 		branchHint = !branchHint;
@@ -2219,8 +2297,6 @@ void Executor::stepStateInst(ExecutionState* &state)
 {
 	assert (state->checkCanary() && "Not a valid state");
 
-	state->lastChosen = stats::instructions;
-
 	KInstruction *ki = state->pc;
 	assert(ki);
 
@@ -2407,7 +2483,9 @@ void Executor::runLoop(void)
 
 		state = stateManager->selectState(!onlyNonCompact);
 		if (last_state != state && DumpSelectStack) {
-			std::cerr << "StackTrace for st=" << (void*)state << '\n';
+			std::cerr << "StackTrace for st=" << (void*)state
+				<< ". Insts=" << state->totalInsts
+				<< '\n';
 			printStackTrace(*state, std::cerr);
 			std::cerr << "===================\n";
 		}
@@ -2517,19 +2595,44 @@ void Executor::terminateStateEarly(
 	ExecutionState &state,
 	const Twine &message)
 {
+	static int	call_depth = 0;
+	ExecutionState	*term_st;
+
+	call_depth++;
+	term_st = &state;
+	std::cerr << "[Exe] TERMINATING EARLY\n";
+	if (	ConcretizeEarlyTerminate &&
+		call_depth == 1 && !state.isConcrete())
+	{
+		ExecutionState	*sym_st;
+
+		/* timed out on some instruction-- back it up */
+		state.abortInstruction();
+
+		sym_st = concretizeState(state);
+		if (sym_st == NULL) {
+			call_depth--;
+			return;
+		}
+		/* terminate forked symbolic state
+		 * -- we already know that it is too slow! */
+		term_st = sym_st;
+	}
+
 	if (	!OnlyOutputStatesCoveringNew ||
-		state.coveredNew ||
-		(AlwaysOutputSeeds && seedMap.count(&state)))
+		term_st->coveredNew ||
+		(AlwaysOutputSeeds && seedMap.count(term_st)))
 	{
 		std::stringstream	ss;
 
 		ss << message.str() << '\n';
-		printStackTrace(state, ss);
+		printStackTrace(*term_st, ss);
 		interpreterHandler->processTestCase(
-			state, ss.str().c_str(), "early");
+			*term_st, ss.str().c_str(), "early");
 	}
 
-	terminateState(state);
+	call_depth--;
+	terminateState(*term_st);
 }
 
 void Executor::terminateStateOnExit(ExecutionState &state)
@@ -2791,6 +2894,41 @@ void Executor::getSymbolicSolutionCex(
   }
 }
 
+bool Executor::getSatAssignment(const ExecutionState& st, Assignment& a)
+{
+	std::vector<const Array*>	objects;
+	bool				ok;
+
+	foreach (it, st.symbolicsBegin(), st.symbolicsEnd())
+		objects.push_back(it->getArray());
+
+	a = Assignment(objects);
+
+	/* second pass to bind early concretizations */
+	foreach (it, st.symbolicsBegin(), st.symbolicsEnd()) {
+		const SymbolicArray		&sa = *it;
+		const std::vector<uint8_t>	*conc;
+
+		conc = sa.getConcretization();
+		if (conc)
+			a.bindFree(sa.getArray(), *conc);
+	}
+
+
+	ok = solver->getInitialValues(st, a);
+	if (ok)
+		return true;
+
+	klee_warning("can't compute initial values (invalid constraints?)!");
+	if (DumpBadInitValues)
+		ExprPPrinter::printQuery(
+			std::cerr,
+			st.constraints,
+			ConstantExpr::alloc(0, Expr::Bool));
+
+	return false;
+}
+
 bool Executor::getSymbolicSolution(
 	const ExecutionState &state,
 	std::vector<
@@ -2798,29 +2936,13 @@ bool Executor::getSymbolicSolution(
 			std::vector<unsigned char> > > &res)
 {
 	ExecutionState		tmp(state);
-	bool			success;
+	Assignment		a;
 
-	if (PreferCex) {
+	if (PreferCex)
 		getSymbolicSolutionCex(state, tmp);
-	}
 
-	std::vector<const Array*> objects;
-	foreach (it, state.symbolicsBegin(), state.symbolicsEnd())
-		objects.push_back(it->getArray());
-
-	Assignment a(objects);
-
-	success = solver->getInitialValues(tmp, a);
-	if (!success) {
-		klee_warning(
-			"unable to compute initial values "
-			"(invalid constraints?)!");
-		ExprPPrinter::printQuery(
-			std::cerr,
-			state.constraints,
-			ConstantExpr::alloc(0, Expr::Bool));
+	if (!getSatAssignment(tmp, a))
 		return false;
-	}
 
 	foreach (it, state.symbolicsBegin(), state.symbolicsEnd()) {
 		const std::vector<unsigned char>	*v;
@@ -3286,4 +3408,3 @@ Executor::StateVector Executor::fork(
 	unsigned N, ref<Expr> conditions[], bool isInternal,
 	bool isBranch)
 { return forking->fork(current, N, conditions, isInternal, isBranch); }
-

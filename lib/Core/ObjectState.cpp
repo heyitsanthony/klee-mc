@@ -287,22 +287,17 @@ void ObjectState::flushRangeForWrite(
 	}
 }
 
-bool ObjectState::isByteConcrete(unsigned offset) const {
-  return !concreteMask || concreteMask->get(offset);
-}
+bool ObjectState::isByteConcrete(unsigned offset) const
+{ return !concreteMask || concreteMask->get(offset); }
 
-bool ObjectState::isByteFlushed(unsigned offset) const {
-  return flushMask && !flushMask->get(offset);
-}
+bool ObjectState::isByteFlushed(unsigned offset) const
+{ return flushMask && !flushMask->get(offset); }
 
-bool ObjectState::isByteKnownSymbolic(unsigned offset) const {
-  return knownSymbolics && knownSymbolics[offset].get();
-}
+bool ObjectState::isByteKnownSymbolic(unsigned offset) const
+{  return knownSymbolics && knownSymbolics[offset].get(); }
 
-void ObjectState::markByteConcrete(unsigned offset) {
-  if (concreteMask)
-    concreteMask->set(offset);
-}
+void ObjectState::markByteConcrete(unsigned offset)
+{ if (concreteMask) concreteMask->set(offset); }
 
 void ObjectState::markByteSymbolic(unsigned offset)
 {

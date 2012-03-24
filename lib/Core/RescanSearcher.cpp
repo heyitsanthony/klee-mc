@@ -34,12 +34,14 @@ ExecutionState& RescanSearcher::selectState(bool allowCompact)
 
 	es = matches[theRNG.getInt32() % matches.size()];
 
-	std::cerr << "BEST PRIORITY: " << max_pr << '\n';
+	std::cerr << "[RS] BEST PRIORITY: " << max_pr << '\n';
 	return *es;
 }
 
 void RescanSearcher::update(ExecutionState *current, States s)
 {
+	unsigned	removed_c;
+
 	foreach (it, s.getAdded().begin(), s.getAdded().end()) {
 		states.push_back(*it);
 		state_c++;
@@ -48,6 +50,7 @@ void RescanSearcher::update(ExecutionState *current, States s)
 	if (s.getRemoved().empty())
 		return;
 
+	removed_c = 0;
 	for (	state_list_ty::iterator it = states.begin(), ie = states.end();
 		it != ie;)
 	{
@@ -56,7 +59,10 @@ void RescanSearcher::update(ExecutionState *current, States s)
 			it++;
 			states.erase(old_it);
 			state_c--;
+			removed_c++;
 		} else
 			it++;
 	}
+
+	assert (removed_c == s.getRemoved().size());
 }

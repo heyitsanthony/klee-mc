@@ -65,6 +65,8 @@ public:
 	{ assert (!preferTrueState); preferFalseState = v; }
 	void setPreferTrueState(bool v)
 	{ assert (!preferFalseState); preferTrueState = v; }
+
+	ExecutionState* pureFork(ExecutionState& es, bool compact=false);
 private:
 	/* this forking code really should be refactored */
 	bool isForkingCondition(ExecutionState& current, ref<Expr> condition);

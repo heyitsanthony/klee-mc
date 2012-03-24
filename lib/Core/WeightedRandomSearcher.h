@@ -34,7 +34,7 @@ public:	\
 
 DECL_WEIGHT(Depth, false)
 DECL_WEIGHT(QueryCost, true)
-DECL_WEIGHT(InstCount, true)
+DECL_WEIGHT(PerInstCount, true)
 DECL_WEIGHT(CPInstCount, true)
 DECL_WEIGHT(MinDistToUncovered, true)
 DECL_WEIGHT(CoveringNew, true)
@@ -42,6 +42,7 @@ DECL_WEIGHT(MarkovPath, true)
 DECL_WEIGHT(Tail, true)
 DECL_WEIGHT(Constraint, true)
 DECL_WEIGHT(FreshBranch, true)
+DECL_WEIGHT(StateInstCount, true)
 
 class WeightedRandomSearcher : public Searcher
 {

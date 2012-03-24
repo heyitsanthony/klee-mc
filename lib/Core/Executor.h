@@ -69,6 +69,7 @@ struct StackFrame;
 class StatsTracker;
 class TimingSolver;
 class TreeStreamWriter;
+class BranchPredictor;
 
 template<class T> class ref;
 
@@ -170,9 +171,10 @@ private:
 
 
 protected:
-	KModule	*kmodule;
+	KModule		*kmodule;
 	MMU		*mmu;
-	Globals	*globals;
+	Globals		*globals;
+	BranchPredictor	*brPredict;
 
 	struct XferStateIter
 	{
@@ -417,6 +419,8 @@ private:
   void doImpliedValueConcretization(ExecutionState &state,
                                     ref<Expr> e,
                                     ref<ConstantExpr> value);
+  bool getSatAssignment(const ExecutionState& st, Assignment& a);
+
 
   /// Add a timer to be executed periodically.
   ///
@@ -454,6 +458,9 @@ public:
 	bool addConstraint(ExecutionState &state, ref<Expr> condition);
 
 	MemoryObject* findGlobalObject(const llvm::GlobalValue*) const;
+
+	/* returns forked copy of symbolic state st; st is concretized */
+	ExecutionState* concretizeState(ExecutionState& st);
 
 	ObjectState* executeMakeSymbolic(
 		ExecutionState &state,

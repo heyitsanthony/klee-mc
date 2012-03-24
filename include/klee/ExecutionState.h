@@ -36,6 +36,7 @@
 namespace klee
 {
 class Array;
+class Assignment;
 class CallPathNode;
 class Cell;
 class KFunction;
@@ -45,11 +46,26 @@ struct InstructionInfo;
 class MemoryManager;
 
 /* Represents a memory array, its materialization, and ... */
+
+/* basically for ref counting */
+class ConcreteArray
+{
+public:
+	ConcreteArray(const std::vector<uint8_t>& _v)
+	: refCount(0), v(_v) {}
+	~ConcreteArray() {}
+	const std::vector<uint8_t>& getValues(void) const { return v; }
+
+	mutable unsigned refCount;
+private:
+	std::vector<uint8_t> v;
+};
+
 class SymbolicArray
 {
 public:
 	SymbolicArray(MemoryObject* in_mo, Array* in_array)
-	: mo(in_mo), array(in_array) {}
+	: mo(in_mo), array(in_array), concretization(0) {}
 	virtual ~SymbolicArray() {}
 	bool operator ==(const SymbolicArray& sa) const
 	{
@@ -58,9 +74,22 @@ public:
 	}
 	const Array *getArray(void) const { return array.get(); }
 	const MemoryObject *getMemoryObject(void) const { return mo.get(); }
+	const std::vector<uint8_t>* getConcretization(void) const
+	{
+		if (concretization.isNull())
+			return NULL;
+		return &concretization->getValues();
+	}
+
+	void setConcretization(const std::vector<uint8_t>& v)
+	{
+		assert (concretization.isNull());
+		concretization = new ConcreteArray(v);
+	}
 private:
 	ref<MemoryObject>	mo;
 	ref<Array>		array;
+	ref<ConcreteArray>	concretization;
 };
 
 std::ostream &operator<<(std::ostream &os, const MemoryMap &mm);
@@ -84,9 +113,9 @@ private:
 
 	// An ordered sequence of branches this state took thus far:
 	// XXX: ugh mutable for non-const copy constructor
-	BranchTracker branchDecisionsSequence;
+	BranchTracker brChoiceSeq;
 	// used only if isCompactForm
-	BranchTracker::iterator replayBranchIterator;
+	BranchTracker::iterator replayBrIter;
 
 	unsigned incomingBBIndex;
 
@@ -109,6 +138,7 @@ private:
 public:
 	bool checkCanary(void) const { return canary == ES_CANARY_VALUE; }
 	typedef std::vector<StackFrame> stack_ty;
+	typedef stack_ty::iterator	stack_iter_ty;
 
 	// Are we currently underconstrained?  Hack: value is size to make fake
 	// objects.
@@ -123,7 +153,10 @@ public:
 	AddressSpace		addressSpace;
 	TreeOStream		symPathOS;
 	unsigned		instsSinceCovNew;
-	uint64_t		lastChosen;
+	uint64_t		lastGlobalInstCount; // last stats::instructions
+	uint64_t		totalInsts;
+	unsigned		concretizeCount;
+
 
 	// Number of malloc calls per callsite
 	std::map<const llvm::Value*,unsigned> mallocIterations;
@@ -273,15 +306,15 @@ public:
   void trackBranch(int condIndex, int asmLine);
   bool isReplayDone(void) const;
   bool pushHeapRef(HeapObject* heapObj)
-  { return branchDecisionsSequence.push_heap_ref(heapObj); }
+  { return brChoiceSeq.push_heap_ref(heapObj); }
 
   unsigned stepReplay(void);
 
   BranchTracker::iterator branchesBegin(void) const
-  { return branchDecisionsSequence.begin(); }
+  { return brChoiceSeq.begin(); }
 
   BranchTracker::iterator branchesEnd(void) const
-  { return branchDecisionsSequence.end(); }
+  { return brChoiceSeq.end(); }
 
   std::pair<unsigned, unsigned> branchLast(void) const;
 
@@ -293,7 +326,15 @@ public:
   std::vector< SymbolicArray >::const_iterator symbolicsEnd(void) const
   { return symbolics.end(); }
 
+  stack_iter_ty stackBegin(void) { return stack.begin(); }
+  stack_iter_ty stackEnd(void) { return stack.end(); }
+
   unsigned int getNumSymbolics(void) const { return symbolics.size(); }
+  bool isConcrete(void) const;
+
+  void assignSymbolics(const Assignment& a);
+
+  void abortInstruction(void);
 };
 
 }

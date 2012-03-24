@@ -312,6 +312,8 @@ public:
 				<< ' ' << kbr->getTrueHits()
 				<< ' ' << kbr->getFalseHits()
 				<< ' ' << kbr->getForkHits()
+				<< ' ' << kbr->getTrueMinInst()
+				<< ' ' << kbr->getFalseMinInst()
 				<< '\n';
 		}
 		delete os;

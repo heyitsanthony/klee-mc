@@ -23,14 +23,20 @@ static const char* default_filters[] =
 	NULL
 };
 
-FilterSearcher::FilterSearcher(Executor& _exe, Searcher* _searcher_base)
+FilterSearcher::FilterSearcher(
+	Executor& _exe,
+	Searcher* _searcher_base,
+	const char* _filter_fname)
 : searcher_base(_searcher_base)
 , exe(_exe)
+, filter_fname(_filter_fname)
 {
-	std::ifstream	ifs("filtered_funcs.txt");
+	std::ifstream	ifs(filter_fname);
 
 	if (ifs.good()) {
 		std::string	s;
+		std::cerr << "[Blacklist] Blacklisting file="
+			<< filter_fname << '\n';
 		while (ifs >> s)
 			blacklist_strs.insert(s);
 		return;
@@ -43,8 +49,22 @@ FilterSearcher::FilterSearcher(Executor& _exe, Searcher* _searcher_base)
 
 ExecutionState& FilterSearcher::selectState(bool allowCompact)
 {
-	assert (searcher_base->empty() == false);
-	return searcher_base->selectState(allowCompact);
+	ExecutionState	*es;
+
+	do {
+		if (searcher_base->empty()) {
+			recoverBlacklisted();
+			es = &searcher_base->selectState(allowCompact);
+			break;
+		}
+
+		es = &searcher_base->selectState(allowCompact);
+
+		/* another scheduler may have run this andv>
+		 * suddenly blacklisted it! */
+	} while (recheckListing(es));
+
+	return *es;
 }
 
 bool FilterSearcher::isBlacklisted(ExecutionState& es) const
@@ -105,6 +125,36 @@ void FilterSearcher::recoverBlacklisted(void)
 	blacklisted.erase(it);
 }
 
+bool FilterSearcher::recheckListing(ExecutionState* es)
+{
+	/* scheduled, but should be blacklisted */
+	if (scheduled.count(es) && isBlacklisted(*es)) {
+		std::cerr
+			<< "[Blacklist] Rechecked to BL. ST="
+			<< (void*)es << '\n';
+		searcher_base->removeState(es);
+		scheduled.erase(es);
+		blacklisted.insert(es);
+		std::cerr << "[Blacklist] Recheck done.\n";
+		return true;
+	}
+
+	/* blacklisted, but should be scheduled */
+	if (blacklisted.count(es) && !isBlacklisted(*es)) {
+		searcher_base->addState(es);
+		blacklisted.erase(es);
+		scheduled.insert(es);
+
+		std::cerr
+			<< "[Blacklist] Rechecked out of BL. ST="
+			<< (void*)es << '\n';
+
+		return true;
+	}
+
+	return false;
+}
+
 void FilterSearcher::update(ExecutionState *current, States s)
 {
 	ExeStateSet	addSet, rmvSet;
@@ -114,8 +164,12 @@ void FilterSearcher::update(ExecutionState *current, States s)
 
 		if (isBlacklisted(*es) == false)
 			addSet.insert(es);
-		else
+		else {
+			std::cerr
+				<< "[Blacklist] Added to BL. ST="
+				<< (void*)es << '\n';
 			blacklisted.insert(es);
+		}
 	}
 
 	foreach (it, s.getRemoved().begin(), s.getRemoved().end()) {
@@ -136,16 +190,10 @@ void FilterSearcher::update(ExecutionState *current, States s)
 	searcher_base->update(current, States(addSet, rmvSet));
 
 	/* if current state is blacklisted, remove it */
-	if (current != NULL && !s.getRemoved().count(current)) {
-		if (isBlacklisted(*current)) {
-			searcher_base->removeState(current);
-			scheduled.erase(current);
-			blacklisted.insert(current);
-		}
-	}
+	if (current != NULL && !s.getRemoved().count(current))
+		recheckListing(current);
 
 	/* pull a state from the black list if nothing left to schedule */
-	if (searcher_base->empty()) {
+	if (searcher_base->empty())
 		recoverBlacklisted();
-	}
 }
