@@ -1027,7 +1027,7 @@ void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 	StatePair	branches;
 	bool		hasHint = false, branchHint;
 
-	if (brPredict && cond.value->getKind() == Expr::Constant)
+	if (brPredict && cond.value->getKind() != Expr::Constant)
 		hasHint = brPredict->predict(state, ki, branchHint);
 
 	if (hasHint) {
