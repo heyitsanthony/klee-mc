@@ -164,12 +164,12 @@ unsigned UpdateList::hash() const
 	if (root->mallocKey.allocSite) {
 		res = root->mallocKey.hash();
 	} else {
-		res = hashImpl(root->name.c_str(), root->name.size(), 0);
+		res = Expr::hashImpl(root->name.c_str(), root->name.size(), 0);
 	}
 
 	if (head != NULL) {
 		uint32_t	head_hash = head->hash();
-		res = hashImpl(&head_hash, 4, res);
+		res = Expr::hashImpl(&head_hash, 4, res);
 	}
 
 	return res;
