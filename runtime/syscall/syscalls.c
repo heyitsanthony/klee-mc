@@ -107,9 +107,9 @@ static void* sc_mmap_anon(void* regfile)
 	uint64_t	len;
 
 	len = GET_ARG1(regfile);
-	if (len == 0)
-		return MAP_FAILED;
-	else if (len < 16*1024)
+	if (len <= 4096)
+		len = concretize_u64(GET_ARG1(regfile));
+	else if (len <= 16*1024)
 		len = concretize_u64(GET_ARG1(regfile));
 	else
 		len = concretize_u64(GET_ARG1(regfile));
@@ -134,9 +134,7 @@ static void* sc_mmap_fd(void* regfile)
 
 	len = GET_ARG1(regfile);
 	/* TODO, how should this be split? */
-	if (len == 0) {
-		return MAP_FAILED;
-	} else if (len <= 4096) {
+	if (len <= 4096) {
 		len = concretize_u64(len);
 	} else if (len <= 8192) {
 		len = concretize_u64(len);
@@ -162,7 +160,7 @@ static void* sc_mmap(void* regfile)
 	len = GET_ARG1(regfile);
 	new_regs = sc_new_regs(regfile);
 
-	if (len >= (uintptr_t)0x10000000 || (int64_t)len < 0) {
+	if (len >= (uintptr_t)0x10000000 || (int64_t)len <= 0) {
 		addr = MAP_FAILED;
 	} else if (((int)GET_ARG4(regfile)) != -1) {
 		/* file descriptor mmap-- things need to be symbolic */

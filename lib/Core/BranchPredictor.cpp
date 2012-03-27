@@ -41,7 +41,10 @@ bool BranchPredictor::predict(
 			hint = true;
 		else if (hit_f == 1)
 			hint = false;
-		else {
+		else
+			hint = kbr->getForkHits() % 2;
+#if 0		
+		{
 			hint = (((phase_hint++) % period) < (period/2))
 				? 1 : 0;
 			if ((phase_hint % period) == 0) {
@@ -57,7 +60,7 @@ bool BranchPredictor::predict(
 				}
 			}
 		}
-
+#endif
 		// BAD RULE: DOESN'T WORK ON FORKS.
 		// hint = hit_t < hit_f;
 		// Hit count is recorded before state is dispatched,
