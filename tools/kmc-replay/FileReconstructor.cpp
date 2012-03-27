@@ -44,6 +44,10 @@ void FileReconstructor::read(int vfd, void* buf, size_t count)
 	int	fd;
 	off_t	cur_off;
 
+	if (count == -1) {
+		/* error read */
+		return;
+	}
 	assert (count < 1024*1024*16 && "Huge read??");
 
 	fd = getFD(vfd);
