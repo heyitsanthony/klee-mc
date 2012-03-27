@@ -23,7 +23,11 @@
 
 namespace klee
 {
+class KInstruction;
+
 /// Implements a trie data structure for tracking branch decisions
+//
+typedef std::pair<unsigned, const KInstruction*> BranchInfo;
 class BranchTracker
 {
 public:
@@ -42,6 +46,7 @@ public:
 	// storage
 	typedef std::vector<bool> BoolVector;
 	typedef std::map<unsigned, unsigned, std::less<unsigned> > NonBranchesTy;
+	typedef std::vector<const KInstruction*> BranchSites;
 	typedef std::list<ref<HeapObject> > HeapObjectsTy;
 	typedef std::vector<Segment*> SegmentVector;
 
@@ -50,10 +55,7 @@ public:
 
 	NonBranchesTy nonBranches; // key = index, value = target
 
-	#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
-		typedef std::vector<unsigned> BranchIDs;
-		BranchIDs branchID;
-	#endif
+	BranchSites	branchSites;
 
 	HeapObjectsTy	heapObjects;
 	unsigned	refCount;
@@ -62,7 +64,7 @@ public:
 
 	inline size_t size() const { return branches.size(); }
 	inline bool empty() const { return branches.empty(); }
-	std::pair<unsigned, unsigned> operator[](unsigned index) const;
+	BranchInfo operator[](unsigned index) const;
 	int compare(Segment &a) const
 	{
 		if (this < &a)
@@ -97,7 +99,7 @@ private:
 	{ }
 public:
 	bool isNull() const { return curSeg.isNull(); }
-	std::pair<unsigned, unsigned> operator*() const;
+	BranchInfo operator*() const;
 	iterator operator++(int notused);
 	iterator operator++();
 	inline bool operator==(iterator a) const
@@ -128,16 +130,14 @@ public:
 		return iterator(this, temp, temp->size());
 	}
 
-	// these return (decision,id) pairs; id is undefined ifndef
-	// INCLUDE_INSTR_ID_IN_PATH_INFO
-	std::pair<unsigned, unsigned> front() const;
-	std::pair<unsigned, unsigned> back() const;
-	std::pair<unsigned, unsigned> operator[](unsigned index) const;
+
+	BranchInfo front() const;
+	BranchInfo back() const;
+	BranchInfo operator[](unsigned index) const;
 	BranchTracker& operator=(const BranchTracker &a);
 
-	void push_back(unsigned decision, unsigned id = 0);
-	void push_back(const std::pair<unsigned,unsigned> &a)
-	{ push_back(a.first, a.second); }
+	void push_back(unsigned decision, const KInstruction* ki = 0);
+	void push_back(const BranchInfo &a) { push_back(a.first, a.second); }
 
 	bool push_heap_ref(HeapObject *a);
 

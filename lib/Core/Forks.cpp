@@ -595,9 +595,7 @@ void Forks::constrainFork(
 
 		// only track NON-internal branches
 		if (!fi.wasReplayed)
-			curState->trackBranch(
-				condIndex,
-				current.prevPC->getInfo()->assemblyLine);
+			curState->trackBranch(condIndex, current.prevPC);
 	}
 
 	if (fi.isSeeding) {

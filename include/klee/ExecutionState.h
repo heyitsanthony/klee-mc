@@ -44,6 +44,7 @@ class MemoryObject;
 class PTreeNode;
 struct InstructionInfo;
 class MemoryManager;
+class KInstruction;
 
 /* Represents a memory array, its materialization, and ... */
 
@@ -303,7 +304,7 @@ public:
   void bindLocal(KInstruction *target, ref<Expr> value);
   void bindArgument(KFunction *kf, unsigned index, ref<Expr> value);
 
-  void trackBranch(int condIndex, int asmLine);
+  void trackBranch(int condIndex, const KInstruction* ki);
   bool isReplayDone(void) const;
   bool pushHeapRef(HeapObject* heapObj)
   { return brChoiceSeq.push_heap_ref(heapObj); }
@@ -316,7 +317,7 @@ public:
   BranchTracker::iterator branchesEnd(void) const
   { return brChoiceSeq.end(); }
 
-  std::pair<unsigned, unsigned> branchLast(void) const;
+  BranchInfo branchLast(void) const;
 
   unsigned getPHISlot(void) const { return incomingBBIndex; }
 

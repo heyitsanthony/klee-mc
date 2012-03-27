@@ -103,9 +103,9 @@ ExecutionState::ExecutionState(void)
 , isCompactForm(false)
 , onFreshBranch(false)
 , lastGlobalInstCount(0)
-, coveredNew(false)
 , totalInsts(0)
 , concretizeCount(0)
+, coveredNew(false)
 , isReplay(false)
 , ptreeNode(0)
 {
@@ -427,13 +427,13 @@ ObjectState* ExecutionState::bindStackMemObj(
 	return os;
 }
 
-void ExecutionState::trackBranch(int condIndex, int asmLine)
+void ExecutionState::trackBranch(int condIndex, const KInstruction* ki)
 {
 	// only track NON-internal branches
 	if (replayBrIter != brChoiceSeq.end())
 		return;
 
-	brChoiceSeq.push_back(condIndex, asmLine);
+	brChoiceSeq.push_back(condIndex, ki);
 	replayBrIter = brChoiceSeq.end();
 }
 
@@ -536,10 +536,10 @@ ObjectState* ExecutionState::allocateAt(
 
 ExecutionState* ExecutionState::copy(void) const { return copy(this); }
 
-std::pair<unsigned, unsigned> ExecutionState::branchLast(void) const
+BranchInfo ExecutionState::branchLast(void) const
 {
 	if (brChoiceSeq.empty())
-		return std::pair<unsigned, unsigned>(0,0);
+		return BranchInfo();
 	return brChoiceSeq.back();
 }
 

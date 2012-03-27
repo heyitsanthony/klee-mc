@@ -11,25 +11,22 @@
 
 using namespace klee;
 
-std::pair<unsigned, unsigned>
-BranchTracker::Segment::operator[](unsigned index) const
+BranchInfo BranchTracker::Segment::operator[](unsigned index) const
 {
 	assert(index < branches.size()); // bounds check
-	unsigned id = 0;
+	const KInstruction	*ki;
 
-#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
-	id = branchID[index];
-#endif
+	ki = branchSites[index];
 
 	if (!isBranch[index]) {
 		std::map<unsigned,unsigned>::const_iterator sit;
 
 		sit = nonBranches.find(index);
 		assert(sit != nonBranches.end());
-		return std::make_pair(sit->second, id);
+		return BranchInfo(sit->second, ki);
 	}
 
-	return std::make_pair(branches[index], id);
+	return BranchInfo(branches[index], ki);
 }
 
 ///
@@ -51,9 +48,7 @@ BranchTracker::BranchTracker(const BranchTracker &a)
 	needNewSegment = true;
 }
 
-///
-
-void BranchTracker::push_back(unsigned decision, unsigned id)
+void BranchTracker::push_back(unsigned decision, const KInstruction* ki)
 {
 	if (needNewSegment) {
 		SegmentRef newseg = new Segment();
@@ -63,9 +58,7 @@ void BranchTracker::push_back(unsigned decision, unsigned id)
 		needNewSegment = false;
 	}
 
-#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
-	tail->branchID.push_back(id);
-#endif
+	tail->branchSites.push_back(ki);
 
 	if (decision == 0 || decision == 1) {
 		tail->branches.push_back(decision == 1);
@@ -107,26 +100,28 @@ BranchTracker::containing(unsigned index) const {
   return it.get();
 }
 
-std::pair<unsigned, unsigned> BranchTracker::front() const
+BranchInfo BranchTracker::front() const
 {
 	assert(!empty());
 	return (*head)[0];
 }
 
-std::pair<unsigned, unsigned> BranchTracker::back() const
+BranchInfo BranchTracker::back() const
 {
 	assert(!empty());
 	return (*tail)[tail->size()-1];
 }
 
-std::pair<unsigned, unsigned>
-BranchTracker::operator[](unsigned index) const {
-  unsigned prefixSize = size();
-  SegmentRef it = tail;
-  for (; prefixSize - tail->size() > index;
-       it = it->parent)
-    prefixSize -= tail->size(); 
-  return (*it)[index - prefixSize];
+BranchInfo BranchTracker::operator[](unsigned index) const
+{
+	unsigned	prefixSize;
+	SegmentRef 	it;
+
+	prefixSize = size();
+	for (it = tail; prefixSize - tail->size() > index; it = it->parent)
+		prefixSize -= tail->size(); 
+
+	return (*it)[index - prefixSize];
 }
 
 unsigned BranchTracker::getNumSuccessors(iterator it) const
@@ -182,23 +177,15 @@ BranchTracker::findChild(BranchTracker::iterator it,
 		Segment* nextSeg = *cit;
 
 		assert (!nextSeg->branches.empty());
-		#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
-		std::pair<unsigned,unsigned> nextValue = branch;
-		#else
-		std::pair<unsigned,unsigned> nextValue =
-		std::make_pair(branch, 0);
-		#endif
 
 		if (	(nextSeg->isBranch[0]
-			&& (unsigned) nextSeg->branches[0] == nextValue.first)
+			&& (unsigned) nextSeg->branches[0] == branch)
 			||
 			(!nextSeg->isBranch[0]
-			&& nextSeg->nonBranches[0] == nextValue.first))
+			&& nextSeg->nonBranches[0] == branch))
 		{
-			#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
-			assert(nextSeg->branchID[0] == nextValue.second
-			     && "Identical branch leads to different target");
-			#endif
+		//	assert(nextSeg->branchID[0] == nextValue.second
+		//	     && "Identical branch leads to different target");
 			match = true;
 			it.curSeg = it.tail = nextSeg;
 			it.curIndex = 0;
@@ -215,43 +202,44 @@ BranchTracker::findChild(BranchTracker::iterator it,
 }
 
 BranchTracker::SegmentRef
-BranchTracker::insert(const ReplayPathType &branches) {
+BranchTracker::insert(const ReplayPathType &branches)
+{
   iterator it = begin();
   unsigned index = 0;
   bool noChild = false;
 
   for (; it != end() && index < branches.size(); index++) {
-#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
-    std::pair<unsigned,unsigned> value = branches[index];
-#else
-    std::pair<unsigned,unsigned> value = std::make_pair(branches[index], 0);
-#endif
+    BranchInfo value = BranchInfo(branches[index], 0);
 
     // handle special case of initial branch having more than one target; under
     // these circumstances, the root segment in the trie is empty. this is the
     // only time we allow an empty segment.
-    if (!index && it.curSeg->empty()) {
-      it = findChild(it, branches[index], noChild);
-      if (noChild)
-        break;
-      else
-        ++it;
-    }
-    // we found a divergence in the branch sequences
-    else if (*it != value)
-      break;
-    // if we're at the end of a segment, then see which child (if any) has a
-    // matching next value
-    else if (it.curIndex == it.curSeg->size() - 1
-             && index != branches.size() - 1) {
-      it = findChild(it, branches[index+1], noChild);
-      if (noChild) {
-        index++;
-        break;
-      }
-    }
-    else
-      ++it;
+	if (!index && it.curSeg->empty()) {
+		it = findChild(it, branches[index], noChild);
+		if (noChild)
+			break;
+		else
+			++it;
+		continue;
+	}
+
+	// we found a divergence in the branch sequences
+	if (*it != value)
+		break;
+
+	// if we're at the end of a segment, then see which child (if any) has a
+	// matching next value
+	if (it.curIndex == it.curSeg->size() - 1
+	     && index != branches.size() - 1) {
+		it = findChild(it, branches[index+1], noChild);
+		if (noChild) {
+			index++;
+			break;
+		}
+		continue;
+	}
+
+	++it;
   }
 
   // new set of branches is a subset of an existing path
@@ -273,11 +261,7 @@ BranchTracker::insert(const ReplayPathType &branches) {
   }
 
   for (; index < branches.size(); index++) {
-#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
-    std::pair<unsigned,unsigned> value = branches[index];
-#else
-    std::pair<unsigned,unsigned> value = std::make_pair(branches[index], 0);
-#endif
+    BranchInfo value = BranchInfo(branches[index], 0 /* ??? */);
     push_back(value);
   }
   tail = oldTail;
@@ -306,12 +290,11 @@ void BranchTracker::splitSwapData(Segment &seg, unsigned index, Segment* newseg)
 		newseg->isBranch.begin(),
 		seg.isBranch.begin(),
 		seg.isBranch.begin() + index);
-#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
-	newseg->branchID.insert(
-		newseg->branchID.begin(),
-		seg.branchID.begin(),
-		seg.branchID.begin()+index);
-#endif
+
+	newseg->branchSites.insert(
+		newseg->branchSites.begin(),
+		seg.branchSites.begin(),
+		seg.branchSites.begin()+index);
 
 	Segment::BoolVector tempBranches(
 		seg.branches.begin() + index,
@@ -323,14 +306,13 @@ void BranchTracker::splitSwapData(Segment &seg, unsigned index, Segment* newseg)
 	std::swap(seg.branches, tempBranches);
 	std::swap(seg.isBranch, tempIsBranch);
 
-#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
-	Segment::BranchIDs tempBranchIDs(
-		seg.branchID.begin() + index,
-		seg.branchID.end());
-	std::swap(seg.branchID, tempBranchIDs);
-#endif
+	Segment::BranchSites tempBranchSites(
+		seg.branchSites.begin() + index,
+		seg.branchSites.end());
+	std::swap(seg.branchSites, tempBranchSites);
+
 	// for safety, keep the heap object references in the parent
-	std::swap(newseg->heapObjects,seg.heapObjects);
+	std::swap(newseg->heapObjects, seg.heapObjects);
 }
 
 
@@ -378,28 +360,29 @@ void BranchTracker::splitNonBranches(
 }
 
 
-/// iterator
+BranchInfo BranchTracker::iterator::operator*() const
+{
+	assert (!curSeg.isNull() &&
+		!(curSeg == tail && curIndex >= curSeg->size()));
+	assert (!curSeg->empty());
 
-std::pair<unsigned,unsigned> BranchTracker::iterator::operator*() const {
-  assert(!curSeg.isNull() && !(curSeg == tail && curIndex >= curSeg->size()));
-  assert(!curSeg->empty());
-  if (curIndex == curSeg->size()) {
-    iterator it = *this;
-    ++it;
-    assert(!it.curSeg->empty());
-    return *it;
-  }
-  return (*curSeg)[curIndex];
+	if (curIndex == curSeg->size()) {
+		iterator it = *this;
+		++it;
+		assert (!it.curSeg->empty());
+		return *it;
+	}
+
+	return (*curSeg)[curIndex];
 }
 
-// postfix operator
-BranchTracker::iterator BranchTracker::iterator::operator++(int notused) {
-  iterator temp = *this;
-  ++(*this);
-  return temp;
+BranchTracker::iterator BranchTracker::iterator::operator++(int notused)
+{
+	iterator temp = *this;
+	++(*this);
+	return temp;
 }
 
-// prefix operator
 BranchTracker::iterator BranchTracker::iterator::operator++()
 {
 	assert(!curSeg.isNull());
@@ -443,7 +426,6 @@ BranchTracker::iterator BranchTracker::iterator::operator++()
 	return *this;
 }
 
-#include <iostream>
 unsigned BranchTracker::Segment::seg_alloc_c = 0;
 
 BranchTracker::Segment::Segment(void)
