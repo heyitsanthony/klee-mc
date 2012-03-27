@@ -167,6 +167,26 @@ protected:
 	unsigned	n;
 };
 
+class PyStatTimer : public StatTimer
+{
+public:
+	virtual ~PyStatTimer() {}
+protected:
+	PyStatTimer(Executor *_exe, const char* fname)
+	: StatTimer(_exe, fname) {}
+
+	void run(void)
+	{
+		if (!os) return;
+		double cur_time = util::estWallTime();
+		*os << '[';
+		*os << (cur_time - base_time) << ", ";
+		print();
+		*os << "]\n";
+		os->flush();
+	}
+};
+
 #include <malloc.h>
 #include "MemUsage.h"
 #include "Memory.h"
@@ -322,6 +342,37 @@ private:
 	Executor* exe;
 };
 
+cl::opt<unsigned>
+DumpStateInstStats("dump-stateinststats",
+        cl::desc("Dump state inst stats every n seconds (0=off)"),
+        cl::init(0));
+class StateInstStatTimer : public PyStatTimer
+{
+public:
+	StateInstStatTimer(Executor *_exe) : PyStatTimer(_exe, "sinst.txt") {}
+protected:
+	void print(void)
+	{
+		std::map<unsigned, unsigned>	inst_buckets;
+
+		foreach (it, executor->beginStates(), executor->endStates()) {
+			const ExecutionState*	es = *it;
+			unsigned		old_c, b_idx;
+
+			b_idx = es->totalInsts / 1000;
+			old_c = inst_buckets[b_idx];
+			inst_buckets[b_idx] = old_c+1;
+		}
+
+		/* (~ num insts dispatched, num states) */
+		foreach (it, inst_buckets.begin(), inst_buckets.end()) {
+			*os	<< "(" << (it->first*1000)
+				<< ", " << it->second << "), ";
+		}
+	}
+};
+
+
 ///
 
 static const double kSecondsPerCheck = 0.25;
@@ -361,6 +412,9 @@ void Executor::initTimers(void)
 
 	if (UseGCTimer)
 		addTimer(new ExprGCTimer(this), UseGCTimer);
+
+	if (DumpStateInstStats)
+		addTimer(new StateInstStatTimer(this), DumpStateInstStats);
 
 	addTimer(new SigUsrTimer(this), 1);
 }
