@@ -98,6 +98,7 @@ Todo: Shouldn't bool \c Xor just be written as not equal?
 
 class Expr {
 public:
+  typedef unsigned Hash;
   static unsigned long count;
   static const unsigned MAGIC_HASH_CONSTANT = 39;
 
@@ -188,7 +189,7 @@ protected:
   static ExprBuilder	*theExprBuilder;
   static ExprAlloc	*theExprAllocator;
 
-  unsigned		hashValue;
+  Hash hashValue;
 
   Expr() : refCount(0) { count++; }
 
@@ -215,11 +216,11 @@ public:
   void dump() const;
 
   /// Returns the pre-computed hash of the current expression
-  virtual unsigned hash() const { return hashValue; }
+  virtual Hash hash() const { return hashValue; }
 
   /// (Re)computes the hash of the current expression.
   /// Returns the hash value.
-  virtual unsigned computeHash();
+  virtual Hash computeHash();
 
   // Returns
   // 0 iff b is structuraly equivalent to *this
@@ -286,6 +287,8 @@ public:
 
   int compareSlow(const Expr& b) const;
   int compareDeep(const Expr& b) const;
+
+  static Hash hashImpl(const void* data, size_t len, Hash hash);
 };
 
 struct Expr::CreateArg {
@@ -431,7 +434,7 @@ class UpdateNode
 	// gross
 	mutable void *stpArray;
 	// cache instead of recalc
-	unsigned hashValue;
+	Expr::Hash hashValue;
 
 public:
 	const UpdateNode *next;
@@ -451,14 +454,14 @@ public:
 	unsigned getSize() const { return size; }
 
 	int compare(const UpdateNode &b) const;
-	unsigned hash() const { return hashValue; }
+	Expr::Hash hash() const { return hashValue; }
 
 private:
 	UpdateNode()
 	: refCount(0), stpArray(0) , btorArray(0), z3Array(0) {}
 	~UpdateNode();
 
-	unsigned computeHash();
+	Expr::Hash computeHash();
 };
 
 #include "klee/MallocKey.h"
@@ -483,7 +486,7 @@ public:
 	void extend(const ref<Expr> &index, const ref<Expr> &value);
 
 	int compare(const UpdateList &b) const;
-	unsigned hash() const;
+	Expr::Hash hash() const;
 
 	static UpdateList* fromUpdateStack(
 		const Array* arr,
@@ -532,7 +535,7 @@ public:
   virtual ref<Expr> rebuild(ref<Expr> kids[]) const
   { return create(updates, kids[0]); }
 
-  virtual unsigned computeHash();
+  virtual Expr::Hash computeHash();
 
   static bool classof(const Expr *E) { return E->getKind() == Expr::Read; }
   static bool classof(const ReadExpr *) { return true; }
@@ -616,7 +619,7 @@ public:
 	unsigned getNumKids() const { return 0; }
 	ref<Expr> getKid(unsigned i) const { return NULL; }
 	Kind getKind() const { return kind; }
-	unsigned computeHash(void);
+	Expr::Hash computeHash(void);
 
 	static ref<Expr> alloc(const ref<LetExpr> &l) {
 		ref<Expr> c(new BindExpr(l));
@@ -775,7 +778,7 @@ public:
   virtual ref<Expr> rebuild(ref<Expr> kids[]) const
   { return create(kids[0], offset, width); }
 
-  virtual unsigned computeHash();
+  virtual Hash computeHash();
 
   static bool classof(const Expr *E)
   { return E->getKind() == Expr::Extract; }
@@ -812,7 +815,7 @@ public:
 
   virtual ref<Expr> rebuild(ref<Expr> kids[]) const { return create(kids[0]); }
 
-  virtual unsigned computeHash();
+  virtual Hash computeHash();
 
   static bool classof(const Expr *E) { return E->getKind() == Expr::Not; }
   static bool classof(const NotExpr *) { return true; }
@@ -841,7 +844,7 @@ public:
     return 0;
   }
 
-  virtual unsigned computeHash();
+  virtual Hash computeHash();
 
   static bool classof(const Expr *E) {
     Expr::Kind k = E->getKind();

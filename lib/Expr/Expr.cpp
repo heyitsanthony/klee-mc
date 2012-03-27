@@ -205,59 +205,6 @@ void Expr::printKind(std::ostream &os, Kind k)
 	}
 }
 
-////////
-//
-// Simple hash functions for various kinds of Exprs
-//
-///////
-
-unsigned Expr::computeHash() {
-  unsigned res = getKind() * Expr::MAGIC_HASH_CONSTANT;
-
-  int n = getNumKids();
-  for (int i = 0; i < n; i++) {
-    res <<= 1;
-    res ^= getKid(i)->hash() * Expr::MAGIC_HASH_CONSTANT;
-  }
-
-  hashValue = res;
-  return hashValue;
-}
-
-unsigned BindExpr::computeHash(void)
-{
-	hashValue = let_expr->hash()^(getKind()*MAGIC_HASH_CONSTANT);
-	return hashValue;
-}
-
-unsigned CastExpr::computeHash() {
-  unsigned res = getWidth() * Expr::MAGIC_HASH_CONSTANT;
-  hashValue = res ^ src->hash() * Expr::MAGIC_HASH_CONSTANT;
-  return hashValue;
-}
-
-unsigned ExtractExpr::computeHash() {
-  unsigned res = (offset-127) * Expr::MAGIC_HASH_CONSTANT;
-  res ^= (getWidth()+127) * Expr::MAGIC_HASH_CONSTANT;
-  hashValue = res ^ expr->hash() * Expr::MAGIC_HASH_CONSTANT;
-  return hashValue;
-}
-
-unsigned ReadExpr::computeHash()
-{
-	unsigned h_idx = index->hash();
-	unsigned h_updates = updates.hash();
-	unsigned res = (h_idx * Expr::MAGIC_HASH_CONSTANT);
-	res ^= h_updates;
-	hashValue = res;
-	return hashValue;
-}
-
-unsigned NotExpr::computeHash() {
-  hashValue = expr->hash() + ~(Expr::MAGIC_HASH_CONSTANT * Expr::Not);
-  return hashValue;
-}
-
 ref<Expr> Expr::createFromKind(Kind k, std::vector<CreateArg> args) {
   unsigned numArgs = args.size();
   (void) numArgs;
@@ -413,10 +360,8 @@ unsigned MallocKey::hash(void) const
 			alloc_v = alloc_v*33+s_f[i];
 	}
 
-	res = alloc_v * Expr::MAGIC_HASH_CONSTANT;
-	res ^= iteration * Expr::MAGIC_HASH_CONSTANT;
-
-	return res;
+	uint32_t dat[2] = {alloc_v, iteration};
+	return Expr::hashImpl(&dat, sizeof(dat), 0);
 }
 
 int ReadExpr::compareContents(const Expr &b) const
@@ -750,3 +695,64 @@ DECL_CREATE_BIN_EXPR(Slt)
 DECL_CREATE_BIN_EXPR(Sle)
 DECL_CREATE_BIN_EXPR(Sgt)
 DECL_CREATE_BIN_EXPR(Sge)
+
+////////
+//
+// Simple hash functions for various kinds of Exprs
+//
+///////
+
+Expr::Hash Expr::computeHash()
+{
+	int		n = getNumKids();
+	uint32_t	dat[n+1];
+
+	for (int i = 0; i < n; i++)
+		dat[i] = getKid(i)->hash();
+	dat[n] = getKind();
+
+	hashValue = hashImpl(&dat, (n+1)*4, 0);
+	return hashValue;
+}
+
+Expr::Hash BindExpr::computeHash(void)
+{
+	uint32_t dat[2] = { let_expr->hash(), getKind() };
+	hashValue = hashImpl(&dat, 8, 0);
+	return hashValue;
+}
+
+Expr::Hash CastExpr::computeHash() {
+	uint32_t dat[3] = { getWidth(), src->hash(), getKind() };
+	hashValue = hashImpl(&dat, 12, 0);
+	return hashValue;
+}
+
+Expr::Hash ExtractExpr::computeHash()
+{
+	uint32_t dat[4] = { offset, getWidth(), expr->hash(), Expr::Extract };
+	hashValue = hashImpl(&dat, 16, 0);
+	return hashValue;
+}
+
+Expr::Hash ReadExpr::computeHash()
+{
+	uint32_t dat[3] = { index->hash(), updates.hash(), Expr::Read };
+	hashValue = hashImpl(&dat, 12, 0);
+	return hashValue;
+}
+
+Expr::Hash NotExpr::computeHash()
+{
+	uint32_t dat[2] = {expr->hash(), Expr::Not};
+	hashValue = hashImpl(&dat, 8, 0);
+	return hashValue;
+}
+
+#include "murmur3.h"
+Expr::Hash Expr::hashImpl(const void* data, size_t len, Hash hash)
+{
+	Hash	ret;
+	MurmurHash3_x86_32(data, len, hash, &ret);
+	return ret;
+}
