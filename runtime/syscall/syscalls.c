@@ -336,7 +336,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 		pure_sysnr = sys_nr;
 	}
 
-#ifdef GUEST_ARCH_ARM
+#ifndef GUEST_ARCH_AMD64
+	/* non-native architecture */
 	sys_nr = syscall_xlate(pure_sysnr);
 #endif
 
@@ -643,6 +644,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 				dst_addr,
 				sizeof(struct timespec),
 				"nanosleep");
+			sc_ret_v(regfile, -1);
+			break;
 		}
 		sc_ret_v(regfile, 0);
 		break;
@@ -734,6 +737,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(regfile, 0);
 		break;
 	case SYS_recvfrom:
+		new_regs = sc_new_regs(regfile);
 		make_sym(GET_ARG1(regfile), GET_ARG2(regfile), "recvfrom_buf");
 		if (GET_ARG4(regfile))
 			make_sym(
@@ -745,7 +749,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			sl = ((socklen_t*)GET_ARG5_PTR(regfile));
 			*sl = sizeof(struct sockaddr_in);
 		}
-		sc_ret_or(sc_new_regs(regfile), 0, GET_ARG2(regfile));
+		sc_ret_or(new_regs, 0, GET_ARG2(regfile));
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
 		break;
 	case SYS_sendto:
@@ -824,7 +828,11 @@ void* sc_enter(void* regfile, void* jmpptr)
 		klee_warning_once("phony pipe");
 		sc_ret_or(sc_new_regs(regfile), -1, 0);
 		break;
-#ifdef GUEST_ARCH_ARM
+#if GUEST_ARCH_X86
+	case X86_SYS_mmap2:
+		GET_ARG5(regfile) *= 4096;
+#endif
+#if GUEST_ARCH_ARM
 	case ARM_SYS_mmap2:
 		GET_ARG5(regfile) *= 4096;
 #endif

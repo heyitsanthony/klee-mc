@@ -763,12 +763,23 @@ void ExecutorVex::handleXferSyscall(
 	es2esv(state).incSyscallCount();
 
 	sysnr = 0;
-	if (gs->getArch() == Arch::X86_64)
+	switch (gs->getArch()) {
+	case Arch::X86_64:
 		state.addressSpace.copyToBuf(
 			es2esv(state).getRegCtx(), &sysnr, 0, 8);
-	else
+		break;
+	case Arch::ARM:
 		state.addressSpace.copyToBuf(
 			es2esv(state).getRegCtx(), &sysnr, 4*7, 4);
+		break;
+	case Arch::I386:
+		state.addressSpace.copyToBuf(
+			es2esv(state).getRegCtx(), &sysnr, 0, 4);
+		break;
+	default:
+		assert (0 == 1 && "ULP");
+	}
+
 
 	fprintf(stderr, "before syscall %d(?): states=%d. objs=%d. st=%p. n=%d\n",
 		(int)sysnr,

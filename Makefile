@@ -73,12 +73,8 @@ test::
 .PHONY: mc
 mc: mc-std mc-fdt
 
-$(LibDir)/libkleeRuntimeMC-arm.bca:
-	echo heyyyyyyy
-	rm -rf runtime/syscall/*/*.{bc,bca,ll,d,o}
-	export GUEST_ARCH=arm; make
+mc-std: mc-std-amd64 mc-std-arm mc-std-x86
 
-mc-std: mc-std-amd64 mc-std-arm
 mc-std-%: $(LibDir)/libkleeRuntimeMC-%.bca
 	mkdir -p mc_tmp-$@
 	cd mc_tmp-$@ && ar x $^ && cd ..

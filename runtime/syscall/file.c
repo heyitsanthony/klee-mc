@@ -113,7 +113,11 @@ static void sc_stat_sym(void* regfile)
 #endif
 	sc_ret_v(new_regs, 0);
 
-#ifdef GUEST_ARCH_ARM
+/* XXX FIXME XXX
+ * what happens if I'm 32-bit and fstat64? Shouldn't I be using the
+ * 64 bit struct instead? */
+#if (GUEST_ARCH_ARM || GUEST_ARCH_X86)
+	/* 32-bit statbuf */
 	make_sym_by_arg(regfile, 1, 88, "statbuf");
 #else
 	make_sym_by_arg(regfile, 1, sizeof(struct stat), "statbuf");

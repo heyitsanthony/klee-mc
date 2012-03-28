@@ -120,12 +120,20 @@ SFH_DEF_HANDLER(SCRegs)
 				assert (state_regctx_os->isByteConcrete(i) == false);
 				continue;
 			}
-		} else {
+		} else if (gs->getArch() == Arch::ARM) {
 			if (reg_idx == offsetof(VexGuestARMState, guest_R0)/8) {
 				/* ignore r0 and r1 */
 				assert (state_regctx_os->isByteConcrete(i) == false);
 				continue;
 			}
+		} else if (gs->getArch() == Arch::I386) {
+			/* EAX = offset 0 in Vex struct */
+			if (i < 4) {
+				assert (state_regctx_os->isByteConcrete(i) == false);
+				continue;
+			}
+		} else {
+			assert (0 == 1);
 		}
 
 		/* copy it by expression */

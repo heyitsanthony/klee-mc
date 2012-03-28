@@ -35,6 +35,8 @@ static const char* guest2rtlib(const Guest* g)
 		return "libkleeRuntimeMC-amd64.bc";
 	case Arch::ARM:
 		return "libkleeRuntimeMC-arm.bc";
+	case Arch::I386:
+		return "libkleeRuntimeMC-x86.bc";
 	default:
 		assert (0 == 1 && "ULP");
 		break;

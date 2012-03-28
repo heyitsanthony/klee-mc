@@ -1,12 +1,10 @@
 #ifndef KLEE_SYSCALLS_H
 #define KLEE_SYSCALLS_H
 
-#include <valgrind/libvex_guest_amd64.h>
-#include <valgrind/libvex_guest_arm.h>
-
 #include <stdint.h>
 
 #ifdef GUEST_ARCH_AMD64
+#include <valgrind/libvex_guest_amd64.h>
 #define GET_SYSRET(x)	((VexGuestAMD64State*)x)->guest_RAX
 #define GET_ARG0(x)	((VexGuestAMD64State*)x)->guest_RDI
 #define GET_ARG1(x)	((VexGuestAMD64State*)x)->guest_RSI
@@ -17,6 +15,7 @@
 #define GET_SYSNR(x)	((VexGuestAMD64State*)x)->guest_RAX
 #define ARCH_SIGN_CAST	int64_t
 #elif GUEST_ARCH_ARM
+#include <valgrind/libvex_guest_arm.h>
 #define GET_SYSRET(x)	((VexGuestARMState*)x)->guest_R0
 /* XXX: There is some silliness when passing 64-bit parameters.
  * Should be fine though.. */
@@ -29,6 +28,19 @@
 #define GET_SYSNR(x)	((VexGuestARMState*)x)->guest_R7	/* ARM EABI */
 #define ARM_SYS_mmap2	0x1000
 #define ARCH_SIGN_CAST	signed
+#elif GUEST_ARCH_X86
+#include <valgrind/libvex_guest_x86.h>
+// %eax for syscall_number %ebx, %ecx, %edx, %esi, %edi, %ebp
+#define GET_SYSRET(x)	((VexGuestX86State*)x)->guest_EAX
+#define GET_ARG0(x)	((VexGuestX86State*)x)->guest_EBX
+#define GET_ARG1(x)	((VexGuestX86State*)x)->guest_ECX
+#define GET_ARG2(x)	((VexGuestX86State*)x)->guest_EDX
+#define GET_ARG3(x)	((VexGuestX86State*)x)->guest_ESI
+#define GET_ARG4(x)	((VexGuestX86State*)x)->guest_EDI
+#define GET_ARG5(x)	((VexGuestX86State*)x)->guest_EBP
+#define GET_SYSNR(x)	((VexGuestX86State*)x)->guest_EAX
+#define ARCH_SIGN_CAST	int32_t
+#define X86_SYS_mmap2	0x1000
 #else
 #error UNKNOWN GUEST ARCH
 #endif

@@ -24,7 +24,9 @@ CXXFLAGS="-g -O2  $EXTRAHEADERS"		\
 		--with-runtime=Release 
 
 make -j6 REQUIRES_RTTI=1
-make mc-clean && make && make mc-std-amd64
+make mc-clean && GUEST_ARCH=arm make -j6 && GUEST_ARCH=arm make mc-std-arm
+make mc-clean && GUEST_ARCH=x86 make -j6 && GUEST_ARCH=x86 make mc-std-x86
+make mc-clean && GUEST_ARCH=amd64 make -j6 && GUEST_ARCH=amd64 make mc-std-amd64
 
 BASEDIR="Release+Asserts"
 if [ ! -x $BASEDIR ]; then
