@@ -25,7 +25,7 @@
 #include "concrete_fd.h"
 #include "breadcrumb.h"
 
-#define USE_SYS_FAILURE
+//#define USE_SYS_FAILURE
 
 void* kmc_sc_regs(void*);
 void kmc_sc_bad(unsigned int);
@@ -33,6 +33,11 @@ void kmc_free_run(uint64_t addr, uint64_t num_bytes);
 void kmc_exit(uint64_t);
 void kmc_make_range_symbolic(uint64_t, uint64_t, const char*);
 void* kmc_alloc_aligned(uint64_t, const char* name);
+
+/* klee-mc fiddles with these on init */
+uint64_t	heap_begin;
+uint64_t	 heap_end;
+static void	*last_brk = 0;
 
 // arg0, arg1, ...
 // %rdi, %rsi, %rdx, %r10, %r8 and %r9a
@@ -56,7 +61,7 @@ static void sc_ret_ge0(void* regfile)
 	klee_assume(rax >= 0);
 }
 
-static void sc_ret_or(void* regfile, uint64_t v1, uint64_t v2)
+void sc_ret_or(void* regfile, uint64_t v1, uint64_t v2)
 {
 	ARCH_SIGN_CAST rax = GET_SYSRET(regfile);
 	klee_assume(rax == (ARCH_SIGN_CAST)v1 || rax == (ARCH_SIGN_CAST)v2);
@@ -393,10 +398,47 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_munlock:
 		sc_ret_v(regfile, 0);
 		break;
-	case SYS_brk:
-		klee_warning_once("failing brk");
-		sc_ret_v(regfile, -1);
+	case SYS_brk: {
+		ptrdiff_t grow_len;
+
+		if (last_brk == 0)
+			last_brk = (void*)heap_end;
+		sc_ret_v(regfile, (uintptr_t)last_brk);
 		break;
+	}
+#if 0
+		new_regs = sc_new_regs(regfile);
+
+		/* error case -- linux returns current break */
+		if (GET_SYSRET(new_regs) == (uintptr_t)last_brk) {
+			sc_ret_v_new(new_regs, last_brk);
+			break;
+		}
+
+		/* don't forget:
+		 * heap grows forward into a stack that grows down! */
+		grow_len = GET_ARG0(regfile) - (intptr_t)last_brk;
+
+		if (grow_len == 0) {
+			/* request nothing */
+			klee_warning("Program requesting empty break? Weird.");
+		} else if (grow_len < 0) {
+			/* deallocate */
+			uint64_t	dealloc_base;
+
+			dealloc_base = (intptr_t)last_brk + grow_len;
+			num_bytes = -grow_len;
+			kmc_free_run(dealloc_base, num_bytes);
+
+			last_brk = (void*)dealloc_base;
+		} else {
+			/* grow */
+			last_brk
+		}
+
+		sc_ret_v_new(new_regs, last_brk);
+		break;
+#endif
 	case SYS_munmap:
 		sc_munmap(regfile);
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);

@@ -66,6 +66,7 @@ void* sc_new_regs(void* regfile);
 void sc_ret_range(void* regfile, int64_t lo, int64_t hi);
 uint64_t concretize_u64(uint64_t s);
 void sc_ret_v(void* regfile, uint64_t v1);
+void sc_ret_or(void* regfile, uint64_t v1, uint64_t v2);
 void sc_ret_v_new(void* regfile, uint64_t v1);
 void make_sym_by_arg(
 	void *regfile, uint64_t arg_num, uint64_t len, const char* name);

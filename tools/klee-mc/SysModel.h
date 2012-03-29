@@ -1,5 +1,7 @@
 #ifndef SYSMODEL_H
 
+#include <stdint.h>
+
 namespace llvm
 {
 class Function;
@@ -22,6 +24,7 @@ public:
 	virtual SyscallSFH* allocSpecialFuncHandler(Executor*) const = 0;
 
 	void setModelBool(llvm::Module* m, const char* gv_name, bool bv);
+	void setModelU64(llvm::Module* m, const char* gv_name, uint64_t bv);
 
 protected:
 	SysModel(Executor* e, const char* in_fname)

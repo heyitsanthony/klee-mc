@@ -333,6 +333,7 @@ void ExecutorVex::bindMappingPage(
 	MemoryObject		*mmap_mo;
 	ObjectState		*mmap_os;
 	uint64_t		addr_base;
+	uint64_t		heap_min, heap_max;
 
 	assert (m.getBytes() > pgnum*PAGE_SIZE);
 	assert ((m.getBytes() % PAGE_SIZE) == 0);
@@ -343,9 +344,16 @@ void ExecutorVex::bindMappingPage(
 	mmap_os = state->allocateAt(addr_base, PAGE_SIZE, f->begin()->begin());
 	mmap_mo = mmap_os->getObject();
 
+	heap_min = ~0UL;
+	heap_max = 0;
+
 	if (m.type == GuestMem::Mapping::STACK) {
 		mmap_mo->setName("stack");
-	} else {
+	} else if (m.type == GuestMem::Mapping::HEAP) {
+		mmap_mo->setName("heap");
+		if (addr_base > heap_max) heap_max = addr_base;
+		if (addr_base < heap_min) heap_min = addr_base;
+	}else {
 		mmap_mo->setName("guestimg");
 	}
 
@@ -358,6 +366,17 @@ void ExecutorVex::bindMappingPage(
 		 * This is safe, but will need a workaround *eventually* */
 		state->write8(mmap_os, i, data[i]);
 	}
+
+	if (heap_min != ~0UL && heap_max != 0) {
+		/* scanning memory is kind of stupid, but we're desperate */
+		sys_model->setModelU64(
+			kmodule->module, "heap_begin", heap_min);
+		sys_model->setModelU64(
+			kmodule->module, "heap_end",
+			heap_max + 4096 /* max = start of last page */ );
+	}
+
+
 }
 
 void ExecutorVex::bindMapping(
