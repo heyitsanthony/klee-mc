@@ -14,6 +14,7 @@ public:
 
 	void read(int vfd, void* buf, size_t count);
 	void seek(int vfd, off_t offset, int whence);
+	void close(int vfd);
 private:
 	int getFD(int vfd);
 

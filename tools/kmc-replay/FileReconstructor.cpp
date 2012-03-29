@@ -13,7 +13,7 @@ FileReconstructor::FileReconstructor()
 FileReconstructor::~FileReconstructor()
 {
 	foreach (it, vfd2fd.begin(), vfd2fd.end())
-		close(it->second);
+		::close(it->second);
 }
 
 int FileReconstructor::getFD(int vfd)
@@ -44,7 +44,7 @@ void FileReconstructor::read(int vfd, void* buf, size_t count)
 	int	fd;
 	off_t	cur_off;
 
-	if (count == -1) {
+	if (count == ~((size_t)0)) {
 		/* error read */
 		return;
 	}
@@ -68,3 +68,15 @@ void FileReconstructor::read(int vfd, void* buf, size_t count)
 
 void FileReconstructor::seek(int vfd, off_t offset, int whence)
 { lseek(getFD(vfd), offset, whence); }
+
+void FileReconstructor::close(int vfd)
+{
+	vfd2fd_ty::iterator	it;
+
+	it = vfd2fd.find(vfd);
+	if (it == vfd2fd.end())
+		return;
+
+	::close(it->second);
+	vfd2fd.erase(it);
+}

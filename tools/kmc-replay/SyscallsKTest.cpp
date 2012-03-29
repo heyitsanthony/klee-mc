@@ -224,6 +224,13 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 		break;
 	}
 
+	case SYS_close:
+		fprintf(stderr, KREPLAY_SC "CLOSE fd=%p\n", sp.getArgPtr(0));
+		if (file_recons) {
+			file_recons->close(sp.getArg(0));
+		}
+		break;
+
 	case SYS_open:
 		fprintf(stderr, KREPLAY_SC "OPEN \"%s\" ret=%p\n",
 			(char*)sp.getArgPtr(0), (void*)getRet());
