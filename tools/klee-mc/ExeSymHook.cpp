@@ -161,20 +161,27 @@ void ExeSymHook::unwatchMalloc(ESVSymHook &esh)
 	ret_ce = dyn_cast<ConstantExpr>(ret_arg);
 	in_len_ce = dyn_cast<ConstantExpr>(esh.getWatchParam());
 
-	if (ret_ce == NULL || in_len_ce == NULL) {
-		assert (0 == 1 && "Symbolic len/ret not yet supported");
-		return;
+	if (ret_ce == NULL) {
+		ret_arg = toConstant(esh, ret_arg, "symbolic ret ptr");
+		ret_ce = dyn_cast<ConstantExpr>(ret_arg);
 	}
-
+	assert (ret_ce != NULL);
 	out_ptr = guest_ptr(ret_ce->getZExtValue());
 	if (!out_ptr)
 		return;
+
+	if (in_len_ce == NULL) {
+		in_len = toConstant(
+			esh, ret_arg, "symbolic len")->getZExtValue();
+
+	} else
+		in_len = in_len_ce->getZExtValue();
+
 
 #ifdef DEBUG_ESH
 	std::cerr << "GOT PTR: " << (void*)out_ptr.o << '\n';
 #endif
 
-	in_len = in_len_ce->getZExtValue();
 	if (in_len == 0) {
 		if (zero_malloc_ptr == 0) {
 			zero_malloc_ptr = out_ptr.o;
