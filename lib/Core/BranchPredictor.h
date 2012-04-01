@@ -9,16 +9,13 @@ class KInstruction;
 class BranchPredictor
 {
 public:
-	BranchPredictor();
+	BranchPredictor() {}
 	virtual ~BranchPredictor() {}
 	virtual bool predict(
 		const ExecutionState& st,
 		KInstruction* ki,
-		bool& hint);
+		bool& hint) = 0;
 private:
-	unsigned phase_hint;
-	int	period;
-	int	period_bump;
 };
 }
 #endif

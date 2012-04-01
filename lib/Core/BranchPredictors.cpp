@@ -1,18 +1,19 @@
 #include "klee/Internal/Module/KInstruction.h"
-#include "BranchPredictor.h"
+#include "BranchPredictors.h"
 #include "klee/Internal/ADT/RNG.h"
+#include "static/Sugar.h"
 
 namespace klee { extern RNG theRNG; }
 
 using namespace klee;
 
 
-BranchPredictor::BranchPredictor()
+RandomPredictor::RandomPredictor()
 : phase_hint(0)
 , period(32)
 , period_bump(2) {}
 
-bool BranchPredictor::predict(
+bool RandomPredictor::predict(
 	const ExecutionState& st,
 	KInstruction* ki,
 	bool& hint)
@@ -42,7 +43,8 @@ bool BranchPredictor::predict(
 		else if (hit_f == 1)
 			hint = false;
 		else
-			hint = kbr->getForkHits() % 2;
+			hint = theRNG.getBool();
+//			hint = kbr->getForkHits() % 2;
 #if 0		
 		{
 			hint = (((phase_hint++) % period) < (period/2))
@@ -80,3 +82,32 @@ bool BranchPredictor::predict(
 
 	return true;
 }
+
+bool SeqPredictor::predict(
+	const ExecutionState& st,
+	KInstruction* ki,
+	bool& hint)
+{
+	hint = seq[idx++ % seq.size()];
+	return true;
+}
+
+RotatingPredictor::RotatingPredictor()
+: period(100)
+, tick(0)
+{}
+
+RotatingPredictor::~RotatingPredictor()
+{
+	foreach (it, bps.begin(), bps.end())
+		delete (*it);
+}
+
+bool RotatingPredictor::predict(
+	const ExecutionState& st,
+	KInstruction* ki,
+	bool& hint)
+{
+	return bps[(tick++ / period) % bps.size()]->predict(st, ki, hint);
+}
+

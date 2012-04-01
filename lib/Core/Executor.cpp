@@ -24,7 +24,7 @@
 #include "UserSearcher.h"
 #include "MemUsage.h"
 #include "MMU.h"
-#include "BranchPredictor.h"
+#include "BranchPredictors.h"
 #include "StatsTracker.h"
 #include "Globals.h"
 #include "../Expr/RuleBuilder.h"
@@ -300,8 +300,15 @@ Executor::Executor(InterpreterHandler *ih)
 
 	memory = MemoryManager::create();
 	mmu = new MMU(*this);
-	if (UseBranchHints)
-		brPredict = new BranchPredictor();
+	if (UseBranchHints) {
+	//	RotatingPredictor	*rp;
+	//	rp = new RotatingPredictor();
+	//	rp->add(new RandomPredictor());
+	//	rp->add(SeqPredictor::createTrue());
+	//	rp->add(SeqPredictor::createFalse());
+	//	brPredict = rp;
+		brPredict = new RandomPredictor();
+	}
 	stateManager = new ExeStateManager();
 	ExecutionState::setMemoryManager(memory);
 	ExeStateBuilder::replaceBuilder(new BaseExeStateBuilder());

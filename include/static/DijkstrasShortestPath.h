@@ -16,7 +16,7 @@
 using namespace boost;
 
 template <typename V>
-class DjikstrasShortestPath {
+class DijkstrasShortestPath {
 public:
     typedef adjacency_list < vecS, vecS, directedS > Graph;
     typedef graph_traits < Graph >::vertex_descriptor Vertex;
@@ -33,7 +33,7 @@ public:
         }
     };
 
-    DjikstrasShortestPath(LabelGraph<V, int64_t>* graph, V v) {
+    DijkstrasShortestPath(LabelGraph<V, int64_t>* graph, V v) {
         std::map<Edge, int64_t, cmp_edge> weightmap;
         std::map<Vertex, int> verteximap;
 
