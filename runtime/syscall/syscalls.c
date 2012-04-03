@@ -505,10 +505,12 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_ge0(sc_new_regs(regfile));
 		break;
 
+	case SYS_getpgrp:
 	case SYS_getpid:
 	case SYS_gettid:
 		sc_ret_v(regfile, 1000); /* FIXME: single threaded*/
 		break;
+
 	case SYS_setgid:
 	case SYS_setuid:
 		sc_ret_or(sc_new_regs(regfile), -1, 0);
@@ -519,7 +521,14 @@ void* sc_enter(void* regfile, void* jmpptr)
 	FAKE_SC_RANGE(fcntl, -1, 1)
 	FAKE_SC(fadvise64)
 	FAKE_SC(rt_sigaction)
-	FAKE_SC(rt_sigprocmask)
+
+	case SYS_rt_sigprocmask:
+		if (GET_ARG2(regfile)) {
+			make_sym(GET_ARG2(regfile), sizeof(sigset_t), "sigset");
+			sc_ret_v(regfile, 0);
+		} else
+			sc_ret_v(regfile, -1);
+		break;
 
 	case SYS_kill:
 		sc_ret_or(sc_new_regs(regfile), -1, 0);
@@ -679,9 +688,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 	FAKE_SC(fchown)
 	FAKE_SC(utimensat)
 	case SYS_nanosleep: {
-		uint64_t	dst_addr = klee_get_value(GET_ARG1(regfile));
-		if (dst_addr != 0) {
-			klee_assume(GET_ARG1(regfile) == dst_addr);
+		if (GET_ARG1(regfile) != 0) {
+			uint64_t dst_addr = concretize_u64(GET_ARG1(regfile));
 			make_sym(
 				dst_addr,
 				sizeof(struct timespec),
@@ -689,7 +697,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			sc_ret_v(regfile, -1);
 			break;
 		}
-		sc_ret_v(regfile, 0);
+		sc_ret_or(sc_new_regs(regfile), -1, 0);
 		break;
 	}
 
@@ -963,6 +971,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(regfile, fd_open_sym());
 		break;
 
+	case SYS_chown:
+	case SYS_shutdown:
 	case SYS_inotify_init:
 	case SYS_faccessat:
 	case SYS_removexattr:
