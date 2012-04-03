@@ -23,8 +23,11 @@
 #include "llvm/Function.h"
 #include "llvm/Support/CommandLine.h"
 
+#include <fstream>
+
 #include <unistd.h>
 #include <signal.h>
+#include <fcntl.h>
 #include <sys/time.h>
 #include <math.h>
 
@@ -64,8 +67,8 @@ private:
 #include "../Expr/ExprAlloc.h"
 cl::opt<unsigned>
 UseGCTimer("gc-timer",
-        cl::desc("Periodically activate expression garbage collection."),
-        cl::init(0));
+        cl::desc("Periodically garbage collect expressions (default=60s)."),
+        cl::init(60));
 class ExprGCTimer : public Executor::Timer
 {
 public:
@@ -373,6 +376,184 @@ protected:
 };
 
 
+class UserCommand
+{
+public:
+	UserCommand(Executor *_exe) : exe(_exe) {}
+	virtual ~UserCommand() {}
+	virtual void run(std::istream& is, std::ostream& os) = 0;
+protected:
+	Executor	*exe;
+};
+
+#define DECL_PIPECMD(x)			\
+class PC##x : public UserCommand {	\
+public:					\
+	PC##x(Executor* _exe) : UserCommand(_exe) {}		\
+	virtual ~PC##x () {}					\
+	virtual void run(std::istream &is, std::ostream& os);	\
+};					\
+void PC##x::run(std::istream& is, std::ostream& os)	\
+
+static KFunction* lookupPrettyModule(
+	Executor* exe, const std::string& func_name)
+{
+	foreach (
+		it,
+		exe->getKModule()->kfuncsBegin(),
+		exe->getKModule()->kfuncsEnd())
+	{
+		std::string name;
+		name = exe->getPrettyName((*it)->function);
+		if (name == func_name) {
+			return *it;
+		}
+	}
+
+	return NULL;
+}
+
+#include "static/DijkstrasShortestPath.h"
+static void dumpStateDist(
+	Executor* exe, ExecutionState* es,
+	const std::string& dst_func,
+	DijkstrasShortestPath<const KFunction*>& dsp,
+	LabelGraph<const KFunction*, int64_t>&	back_graph)
+{
+	unsigned	depth = 0;
+
+	foreach (it, es->stack.rbegin(), es->stack.rend()) {
+		const KFunction	*cur_kf;
+		int64_t		dist;
+
+		cur_kf = (*it).kf;
+		if (cur_kf == NULL)
+			break;
+
+		dist = dsp.dist(cur_kf);
+		if (dist > 0xffffffff || dist < 0) {
+			depth++;
+			continue;
+		}
+
+		dist += depth*10;
+
+		std::cerr << dist << " : "
+			<< exe->getPrettyName(cur_kf->function)
+			<< " -> " << dst_func << ": "
+			<< ". StInst="
+			<< es->totalInsts
+			<< "[" << depth << "]"
+			<< '\n';
+		exe->printStackTrace(*es, std::cerr);
+		break;
+	}
+}
+
+DECL_PIPECMD(DumpDistance)
+{
+	KFunction	*kf;
+	std::string	func_name;
+
+	is >> func_name;
+	if (func_name.size() == 0) {
+		os << "[DumpDist] NO FUNCTION GIVEN!\n";
+		return;
+	}
+
+	/* given a state, compute the shortest path to given func */
+	/* XXX: need to use djikstra to find shortest paths */
+	std::cerr << "[DumpDist] New dist " << func_name << '\n';
+	
+	kf = lookupPrettyModule(exe, func_name);
+	if (!kf) {
+		std::cerr << "[DumpDist] Not found: " << func_name << '\n';
+		return;
+	}
+
+
+	kf->function->dump();
+
+	LabelGraph<const KFunction*, int64_t>	exit_graph, back_graph;
+	std::cerr << "[DD] Creating exit graph\n";
+	foreach (
+		it,
+		exe->getKModule()->kfuncsBegin(),
+		exe->getKModule()->kfuncsEnd())
+	{
+		const KFunction	*cur_kf = *it;
+
+		foreach (it, cur_kf->beginExits(), cur_kf->endExits()) {
+			exit_graph.addEdge(cur_kf, *it, 1);
+			back_graph.addEdge(*it, cur_kf, 1);
+		}
+	}
+
+	std::cerr << "[DD] Computing shortest path\n";
+
+	DijkstrasShortestPath<const KFunction*>	dsp(&exit_graph, kf);
+
+	foreach (it, exe->beginStates(), exe->endStates())
+		dumpStateDist(exe, *it, func_name, dsp, back_graph);
+}
+
+
+class UserCommandTimer : public Executor::Timer
+{
+public:
+	UserCommandTimer(Executor *_exe) : exe(_exe), fd(-1)
+	{
+		cmds["dumpstates"] = new PCDumpDistance(exe);
+	}
+	virtual ~UserCommandTimer()
+	{
+		foreach (it, cmds.begin(), cmds.end())
+			delete it->second;
+		close(fd);
+	}
+	void run(void);
+private:
+	typedef std::map<std::string, UserCommand*> cmds_ty;
+	UserCommand* get(const char* buf)
+	{
+		cmds_ty::const_iterator it(cmds.find(buf));
+		if (it == cmds.end())
+			return NULL;
+		return it->second;
+	}
+
+	Executor	*exe;
+	int		fd;
+	cmds_ty		cmds;
+};
+
+
+cl::opt<bool>
+UseCmdUser("cmdpipe",
+        cl::desc("Let user enter commands using cmdklee file."),
+        cl::init(false));
+
+void UserCommandTimer::run(void)
+{
+	UserCommand	*pc;
+	std::ifstream	ifs("cmdklee");
+	std::string	s;
+
+	if (!ifs.good() || ifs.bad() || ifs.fail())
+		return;
+
+	if (!(ifs >> s))
+		return;
+
+	std::cerr << "[CmdUser] WOO: " << s << '\n';
+	pc = get(s.c_str());
+	if (pc != NULL)
+		pc->run(ifs, std::cerr);
+
+	ifs.close();
+	unlink("cmdklee");
+}
+
 ///
 
 static const double kSecondsPerCheck = 0.25;
@@ -415,6 +596,9 @@ void Executor::initTimers(void)
 
 	if (DumpStateInstStats)
 		addTimer(new StateInstStatTimer(this), DumpStateInstStats);
+
+	if (UseCmdUser)
+		addTimer(new UserCommandTimer(this), 2);
 
 	addTimer(new SigUsrTimer(this), 1);
 }

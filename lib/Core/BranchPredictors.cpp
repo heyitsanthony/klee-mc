@@ -44,31 +44,6 @@ bool RandomPredictor::predict(
 			hint = false;
 		else
 			hint = theRNG.getBool();
-//			hint = kbr->getForkHits() % 2;
-#if 0		
-		{
-			hint = (((phase_hint++) % period) < (period/2))
-				? 1 : 0;
-			if ((phase_hint % period) == 0) {
-				phase_hint = 0;
-				period_bump = 8-(rand() % 16);
-				period += period_bump;
-				if (period <= 0) {
-					period_bump = 1;
-					period = 32;
-				} else if (period > 64) {
-					period_bump = -1;
-					period = 32;
-				}
-			}
-		}
-#endif
-		// BAD RULE: DOESN'T WORK ON FORKS.
-		// hint = hit_t < hit_f;
-		// Hit count is recorded before state is dispatched,
-		// so if a branch always forks, it'll always have
-		// hit_t < hit_f-- which will bias things in favor of false.
-
 		return true;
 	}
 
@@ -82,6 +57,33 @@ bool RandomPredictor::predict(
 
 	return true;
 }
+
+// some notes for a periodic branch predictor:
+#if 0		
+	{
+		hint = (((phase_hint++) % period) < (period/2))
+			? 1 : 0;
+		if ((phase_hint % period) == 0) {
+			phase_hint = 0;
+			period_bump = 8-(rand() % 16);
+			period += period_bump;
+			if (period <= 0) {
+				period_bump = 1;
+				period = 32;
+			} else if (period > 64) {
+				period_bump = -1;
+				period = 32;
+			}
+		}
+	}
+#endif
+// BAD RULE: DOESN'T WORK ON FORKS.
+// hint = hit_t < hit_f;
+// Hit count is recorded before state is dispatched,
+// so if a branch always forks, it'll always have
+// hit_t < hit_f-- which will bias things in favor of false.
+// OK:
+// hint = (kbr->getForkHits()/8) % 2;
 
 bool SeqPredictor::predict(
 	const ExecutionState& st,
