@@ -213,3 +213,71 @@ double TailWeight::weigh(const ExecutionState* es) const
 double FreshBranchWeight::weigh(const ExecutionState* es) const
 { return es->isOnFreshBranch() ? 1.0 : 0.0; }
 
+
+double TroughWeight::weigh(const ExecutionState* es) const
+{
+	if (stats::instructions > (last_ins+trough_width)) {
+		/* many new instructions accumulated */
+		/* recompute histogram */
+
+		trough_hits.clear();
+		foreach (it, exe->beginStates(), exe->endStates()) {
+			const ExecutionState	*cur_st = *it;
+			unsigned		idx;
+
+			idx = cur_st->totalInsts/trough_width;
+			trough_hits[idx] = trough_hits[idx] + 1;
+		}
+
+		last_ins = stats::instructions;
+	}
+
+	return trough_hits[es->totalInsts/trough_width];
+}
+
+/* returns distance from frontier of bucket */
+double FrontierTroughWeight::weigh(const ExecutionState* es) const
+{
+	unsigned	es_idx;
+
+	if (stats::instructions > (last_ins+trough_width/2)) {
+		/* many new instructions accumulated */
+		/* recompute histogram */
+		foreach (it, trough_hits.begin(), trough_hits.end())
+			delete it->second;
+		trough_hits.clear();
+
+		foreach (it, exe->beginStates(), exe->endStates()) {
+			const ExecutionState	*cur_st = *it;
+			std::set<unsigned>	*ss;
+			unsigned		idx;
+
+			idx = cur_st->totalInsts/trough_width;
+			ss = trough_hits[idx];
+			if (ss == NULL) {
+				ss = new std::set<unsigned>();
+				trough_hits[idx] = ss;
+			}
+			ss->insert(cur_st->totalInsts);
+		}
+
+		last_ins = stats::instructions;
+	}
+
+
+	es_idx = es->totalInsts/trough_width;
+
+	std::set<unsigned>	*ss(trough_hits[es_idx]);
+	int			gt = 0;
+
+	if (ss == NULL)
+		return 0;
+
+	foreach (it, ss->begin(), ss->end()) {
+		if (*it > es->totalInsts)
+			gt++;
+	}
+
+	/* rank frontier as 0 (e.g. gt=0), rank last as ss.size() (e.g. gt) */
+	return gt;
+}

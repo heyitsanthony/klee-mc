@@ -64,6 +64,9 @@ DECL_SEARCH_OPT(RR, "rr", "RR");
 DECL_SEARCH_OPT(Markov, "markov", "MV");
 DECL_SEARCH_OPT(NonUniformRandom, "non-uniform-random", "NURS");
 DECL_SEARCH_OPT(MinInst, "mininst", "MI");
+DECL_SEARCH_OPT(MaxInst, "maxinst", "MXI");
+DECL_SEARCH_OPT(Trough, "trough", "TR");
+DECL_SEARCH_OPT(FrontierTrough, "ftrough", "FTR");
 
 #define SEARCH_HISTO	new RescanSearcher(new HistoPrioritizer(executor))
 DECL_SEARCH_OPT(Histo, "histo", "HS");
@@ -218,7 +221,7 @@ Searcher* UserSearcher::setupInterleavedSearcher(
 		FreshBranch,
 		new PrioritySearcher(
 			new Weight2Prioritizer<FreshBranchWeight>(1),
-			SEARCH_HISTO,
+			new RandomSearcher(),
 			100));
 
 	PUSH_ILEAV_IF_SET(Histo, SEARCH_HISTO);
@@ -232,8 +235,22 @@ Searcher* UserSearcher::setupInterleavedSearcher(
 		new RescanSearcher(
 			new Weight2Prioritizer<StateInstCountWeight>(-1.0)));
 
+	PUSH_ILEAV_IF_SET(
+		MaxInst,
+		new RescanSearcher(
+			new Weight2Prioritizer<StateInstCountWeight>(1.0)));
+
 	PUSH_ILEAV_IF_SET(DFS, new DFSSearcher());
 	PUSH_ILEAV_IF_SET(RR, new RRSearcher());
+
+	PUSH_ILEAV_IF_SET(Trough, new RescanSearcher(
+		new Weight2Prioritizer<TroughWeight>(
+			new TroughWeight(&executor), -1.0)));
+
+	PUSH_ILEAV_IF_SET(FrontierTrough, new RescanSearcher(
+		new Weight2Prioritizer<FrontierTroughWeight>(
+			new FrontierTroughWeight(&executor), -1.0)));
+
 
 	PUSH_ILEAV_IF_SET(
 		Constraint,
@@ -306,13 +323,16 @@ Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 	if (UseFreshBranchSearch) {
 		searcher = new PrioritySearcher(
 			new Weight2Prioritizer<FreshBranchWeight>(1),
-			SEARCH_HISTO,
+			new RandomSearcher(),
 			100);
 	} else if (UseHistoSearch) {
 		searcher = SEARCH_HISTO;
 	} else if (UseMarkovSearch) {
 		searcher = new RescanSearcher(
 			new Weight2Prioritizer<MarkovPathWeight>(100));
+	} else if (UseMaxInstSearch) {
+		searcher = new RescanSearcher(
+			new Weight2Prioritizer<StateInstCountWeight>(1.0));
 	} else if (UseMinInstSearch) {
 		searcher = new RescanSearcher(
 			new Weight2Prioritizer<StateInstCountWeight>(-1.0));
@@ -344,6 +364,16 @@ Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 		searcher = new PhasedSearcher();
 	} else if (UseRRSearch) {
 		searcher = new RRSearcher();
+	} else if (UseTroughSearch) {
+		searcher = new RescanSearcher(
+			new Weight2Prioritizer<TroughWeight>(
+				new TroughWeight(&executor),
+				-1.0));
+ 	} else if (UseTroughSearch) {
+		searcher = new RescanSearcher(
+			new Weight2Prioritizer<FrontierTroughWeight>(
+				new FrontierTroughWeight(&executor),
+				-1.0));
 	} else if (UseRandomPathSearch) {
 		searcher = new RandomPathSearcher(executor);
 	} else if (UseNonUniformRandomSearch) {
@@ -427,7 +457,7 @@ Searcher *UserSearcher::constructUserSearcher(Executor &executor)
 //searcher = 
 		new PrioritySearcher(
 				new Weight2Prioritizer<FreshBranchWeight>(1),
-				SEARCH_HISTO,
+				new RandomSearcher(),
 				100));
 		s.push_back(
 //			new RescanSearcher(

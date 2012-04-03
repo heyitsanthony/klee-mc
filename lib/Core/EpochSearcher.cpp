@@ -8,7 +8,7 @@
 
 using namespace klee;
 
-#define CONCRETE_WATERMARK	3
+#define CONCRETE_WATERMARK	10
 #define INST_TOTAL (stats::coveredInstructions + stats::uncoveredInstructions)
 
 EpochSearcher::EpochSearcher(
@@ -88,9 +88,15 @@ ExecutionState& EpochSearcher::selectState(bool allowCompact)
 
 	next_state = selectEpoch(allowCompact);
 	if (epoch_state_c > CONCRETE_WATERMARK) {
-		std::cerr << "[Epoch] Concretizing state\n";
-		pool_countdown += pool_period;
-		exe.concretizeState(*next_state);
+		static int	con_backoff = 0;
+
+		if (con_backoff == 0) {
+			std::cerr << "[Epoch] Concretizing state\n";
+			pool_countdown++;
+			exe.concretizeState(*next_state);
+		}
+
+		con_backoff = (con_backoff+1) % pool_period;
 	}
 
 	return *next_state;

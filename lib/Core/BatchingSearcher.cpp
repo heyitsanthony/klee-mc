@@ -110,17 +110,17 @@ void BatchingSearcher::handleTimeout(void)
 		/* found new code--
 		 * maybe we can spend less time on things */
 		std::cerr
-			<< "[BatchingSearch] decreasing time budget from "
-			<< timeBudget << " to " << timeBudget*0.9 << "\n";
+			<< "[BatchingSearch] increasing time budget from "
+			<< timeBudget << " to " << timeBudget*1.5 << "\n";
 
-		timeBudget *= 0.8;
+		timeBudget *= 1.5;
 	} else {
 		/* didn't find ANY new code--
 		 * maybe we're not spending enough time on states */
 		std::cerr
-			<< "[BatchingSearch] increasing time budget from "
-			<< timeBudget << " to " << timeBudget*1.5 << "\n";
-		timeBudget *= 1.5;
+			<< "[BatchingSearch] decreasing time budget from "
+			<< timeBudget << " to " << timeBudget*0.7 << "\n";
+		timeBudget *= 0.7;
 	}
 
 	if (timeBudget < timeBudget_base)

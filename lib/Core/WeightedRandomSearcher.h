@@ -1,6 +1,7 @@
 #ifndef WEIGHTEDRANDOMSEARCHER_H
 #define WEIGHTEDRANDOMSEARCHER_H
 
+#include "CoreStats.h"
 #include "Searcher.h"
 
 namespace klee
@@ -43,6 +44,53 @@ DECL_WEIGHT(Tail, true)
 DECL_WEIGHT(Constraint, true)
 DECL_WEIGHT(FreshBranch, true)
 DECL_WEIGHT(StateInstCount, true)
+
+class Executor;
+
+class TroughWeight : public WeightFunc
+{
+public:
+	TroughWeight(Executor* _exe, unsigned _tw = 10000)
+	: WeightFunc("Trough", true)
+	, exe(_exe)
+	, trough_width(_tw)
+	{ last_ins = stats::instructions; }
+	virtual ~TroughWeight() {}
+
+	virtual double weigh(const ExecutionState* es) const;
+	virtual WeightFunc* copy(void) const
+	{ return new TroughWeight(exe, trough_width); }
+private:
+	Executor				*exe;
+	unsigned				trough_width;
+	mutable std::map<unsigned, unsigned>	trough_hits;
+	mutable uint64_t			last_ins;
+};
+
+class FrontierTroughWeight : public WeightFunc
+{
+public:
+	FrontierTroughWeight(Executor* _exe, unsigned _tw = 10000)
+	: WeightFunc("FrontierTrough", true)
+	, exe(_exe)
+	, trough_width(_tw)
+	{ last_ins = stats::instructions; }
+	virtual ~FrontierTroughWeight() {}
+
+	virtual double weigh(const ExecutionState* es) const;
+	virtual WeightFunc* copy(void) const
+	{ return new FrontierTroughWeight(exe, trough_width); }
+private:
+	Executor			*exe;
+	unsigned			trough_width;
+	typedef std::map<unsigned, std::set<unsigned>* >
+		trough_hit_ty;
+	mutable trough_hit_ty		trough_hits;
+	mutable uint64_t		last_ins;
+};
+
+
+
 
 class WeightedRandomSearcher : public Searcher
 {
