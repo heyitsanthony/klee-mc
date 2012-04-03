@@ -298,6 +298,9 @@ Executor::Executor(InterpreterHandler *ih)
 		interpreterHandler->getOutputFilename("queries.pc"),
 		interpreterHandler->getOutputFilename("stp-queries.pc"));
 
+
+	ObjectState::setupZeroObjs();
+
 	memory = MemoryManager::create();
 	mmu = new MMU(*this);
 	if (UseBranchHints) {
@@ -529,7 +532,10 @@ void Executor::executeGetValue(
 	if (!isSeeding || isa<ConstantExpr>(e)) {
 		ref<ConstantExpr> value;
 		bool ok = solver->getValue(state, e, value);
-		assert(ok && "FIXME: Unhandled solver failure");
+		if (!ok) {
+			terminateStateEarly(state, "exeGetVal timeout");
+			return;
+		}
 		if (target) state.bindLocal(target, value);
 		return;
 	}
@@ -540,7 +546,10 @@ void Executor::executeGetValue(
 		bool		ok;
 
 		ok = solver->getValue(state, siit->assignment.evaluate(e), value);
-		assert(ok && "FIXME: Unhandled solver failure");
+		if (!ok) {
+			terminateStateEarly(state, "exeGetValues timeout");
+			return;
+		}
 
 		values.insert(value);
 	}
@@ -956,18 +965,20 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 		const MemoryObject	*mo = it->first;
 		const ObjectState	*os = it->second.os;
 		ObjectState		*new_os;
+		bool			all_zeroes;
 
 		/* we only change symbolic objstates */
 		if (os->isConcrete())
 			continue;
 
 		new_os = (os->getArray())
-			? new ObjectState(mo, os->getArray())
-			: new ObjectState(mo);
+			? new ObjectState(mo->size, os->getArray())
+			: new ObjectState(mo->size);
 
 		std::cerr << "[Exe] Concretizing MO="
 			<< (void*)mo->address << "--"
 			<< (void*)(mo->address + mo->size) << "\n";
+		all_zeroes = true;
 		for (unsigned i = 0; i < new_os->size; i++) {
 			const ConstantExpr	*ce;
 			ref<Expr>		e;
@@ -989,11 +1000,18 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 				}
 				v = ce->getZExtValue();
 			}
+
+			all_zeroes &= (v == 0);
 			new_os->write8(i, v);
 		}
 
-		st.unbindObject(mo);
-		st.bindObject(mo, new_os);
+		if (all_zeroes) {
+			delete new_os;
+			std::cerr << "[Exe] Concrete using zero page\n";
+			new_os = ObjectState::createDemandObj(mo->size);
+		}
+
+		st.rebindObject(mo, new_os);
 	}
 
 	/* 3. enumerate stack frames-- eval all expressions */
@@ -2778,7 +2796,7 @@ ObjectState* Executor::makeSymbolic(
 	ref<Array>	array;
 
 	array = Array::create(arrPrefix + llvm::utostr(++id), mo->mallocKey);
-	os = state.bindMemObj(mo, array.get());
+	os = state.bindMemObjWriteable(mo, array.get());
 	state.addSymbolic(const_cast<MemoryObject*>(mo) /* yuck */, array.get());
 
 	addSymbolicToSeeds(state, mo, array.get());
@@ -2806,7 +2824,7 @@ void Executor::addSymbolicToSeeds(
 ObjectState* Executor::makeSymbolicReplay(
 	ExecutionState& state, const MemoryObject* mo, ref<Expr> len)
 {
-	ObjectState *os = state.bindMemObj(mo);
+	ObjectState *os = state.bindMemObjWriteable(mo);
 	if (replayPosition >= replayOut->numObjects) {
 		terminateStateOnError(
 			state, "replay count mismatch", "user.err");
@@ -3066,12 +3084,13 @@ void Executor::executeAllocConst(
 	bool isLocal,
 	KInstruction *target,
 	bool zeroMemory,
-	const ObjectState *reallocFrom)
+	ObjectPair reallocFrom)
 {
-	ObjectState *os;
+	ObjectPair	op;
+	ObjectState	*os;
 
-	os = state.allocate(sz, isLocal, false, state.prevPC->getInst());
-	if (os == NULL) {
+	op = state.allocate(sz, isLocal, false, state.prevPC->getInst());
+	if (op_mo(op) == NULL) {
 		state.bindLocal(
 			target,
 			ConstantExpr::alloc(
@@ -3079,22 +3098,24 @@ void Executor::executeAllocConst(
 		return;
 	}
 
-	if (zeroMemory)
-		os->initializeToZero();
-	else
-		os->initializeToRandom();
+	os = NULL;
+	if (op_os(op)->isZeroPage() == false || op_mo(reallocFrom))
+		os = state.addressSpace.getWriteable(op);
 
-	state.bindLocal(target, os->getObject()->getBaseExpr());
+	if (os) {
+		if (zeroMemory)
+			os->initializeToZero();
+		else
+			os->initializeToRandom();
+	}
 
-	if (reallocFrom) {
-		unsigned count = std::min(reallocFrom->size, os->size);
+	state.bindLocal(target, op_mo(op)->getBaseExpr());
 
-		state.copy(os, reallocFrom, count);
-		/*(for (unsigned i=0; i<count; i++) {
-		//os->write(i, reallocFrom->read8(i));
-		//state.write(os, i, state.read8(reallocFrom, i));
-		}*/
-		state.unbindObject(reallocFrom->getObject());
+	if (op_mo(reallocFrom)) {
+		unsigned count = std::min(op_mo(reallocFrom)->size, os->size);
+
+		state.copy(os, op_os(reallocFrom), count);
+		state.unbindObject(op_mo(reallocFrom));
 	}
 }
 
@@ -3134,7 +3155,7 @@ void Executor::executeAllocSymbolic(
 	bool isLocal,
 	KInstruction *target,
 	bool zeroMemory,
-	const ObjectState *reallocFrom)
+	ObjectPair reallocFrom)
 {
 	// XXX For now we just pick a size. Ideally we would support
 	// symbolic sizes fully but even if we don't it would be better to
@@ -3216,7 +3237,7 @@ void Executor::executeAlloc(
 	bool isLocal,
 	KInstruction *target,
 	bool zeroMemory,
-	const ObjectState *reallocFrom)
+	ObjectPair reallocFrom)
 {
 	size = toUnique(state, size);
 	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(size)) {

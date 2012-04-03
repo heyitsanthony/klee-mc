@@ -34,15 +34,6 @@ namespace {
 static unsigned	ContiguousPrevScanLen = 10;
 static unsigned	ContiguousNextScanLen = 20;
 
-void AddressSpace::bindObject(const MemoryObject *mo, ObjectState *os)
-{
-	assert(os->copyOnWriteOwner == 0 && "object already has owner");
-	os->copyOnWriteOwner = cowKey;
-	objects = objects.replace(std::make_pair(mo, os));
-	if (mo == last_mo)
-		last_mo = NULL;
-}
-
 void AddressSpace::unbindObject(const MemoryObject *mo)
 {
 	if (mo == last_mo)
@@ -55,6 +46,20 @@ const ObjectState *AddressSpace::findObject(const MemoryObject *mo) const
 {
 	const MemoryMap::value_type *res = objects.lookup(mo);
 	return res ? res->second :  NULL;
+}
+
+void AddressSpace::bindObject(const MemoryObject *mo, ObjectState *os)
+{
+	if (os->copyOnWriteOwner != COW_ZERO) {
+		assert(	os->copyOnWriteOwner == 0 &&
+			"object already has owner");
+		os->copyOnWriteOwner = cowKey;
+
+	}
+
+	objects = objects.replace(std::make_pair(mo, os));
+	if (mo == last_mo)
+		last_mo = NULL;
 }
 
 ObjectState *AddressSpace::getWriteable(
@@ -261,15 +266,26 @@ bool AddressSpace::getFeasibleObject(
 
 	// We couldn't throw a dart and hit a feasible address.
 	// The next step is to try to find any feasible address.
-	MemoryObject toFind(c_addr->getZExtValue());
-	MMIter oi = objects.upper_bound(&toFind);
-	MMIter gt = oi;
+	return binsearchFeasible(
+		state, solver, address, c_addr->getZExtValue(), res);
+}
+
+bool AddressSpace::binsearchFeasible(
+	ExecutionState& state,
+	TimingSolver* solver,
+	ref<Expr>& address,
+	uint64_t upper_addr, ObjectPair& res)
+{
+	MemoryObject	toFind(upper_addr);
+	MMIter		oi = objects.upper_bound(&toFind);
+	MMIter		gt = oi;
+	MMIter		lt = oi;
+
 	if (gt == objects.end())
 		--gt;
 	else
 		++gt;
 
-	MMIter lt = oi;
 	if (lt != objects.begin()) --lt;
 
 	MMIter begin = objects.begin();
@@ -279,6 +295,7 @@ bool AddressSpace::getFeasibleObject(
 	std::pair<MMIter, MMIter>
 		left(objects.begin(),lt),
 		right(gt,objects.end());
+
 	while (true) {
 		// Check whether current range of MemoryObjects is feasible
 		unsigned i = 0;
@@ -376,13 +393,13 @@ bool AddressSpace::resolve(
 		return false;
 	}
 
+	TimerStatIncrementer timer(stats::resolveTime);
+
 	if (ContiguousOffsetResolution) {
 		bool	bad_addr;
 		if (contigOffsetSearchRange(state, p, solver, rl, bad_addr))
 			return bad_addr;
 	}
-
-	TimerStatIncrementer timer(stats::resolveTime);
 
 	ref<ConstantExpr> cex;
 	if (!solver->getValue(state, p, cex))

@@ -515,8 +515,17 @@ public:
 		ref<Expr> size,
 		bool isLocal,
 		KInstruction *target,
-		bool zeroMemory=false,
-		const ObjectState *reallocFrom=0);
+		bool zeroMemory,
+		ObjectPair reallocFrom);
+
+	void executeAlloc(
+		ExecutionState &state,
+		ref<Expr> size,
+		bool isLocal,
+		KInstruction *target,
+		bool zeroMemory=false)
+	{ executeAlloc(
+		state, size, isLocal, target, zeroMemory, ObjectPair(0,0)); }
 
 	void executeAllocSymbolic(
 		ExecutionState &state,
@@ -524,7 +533,16 @@ public:
 		bool isLocal,
 		KInstruction *target,
 		bool zeroMemory,
-		const ObjectState *reallocFrom);
+		ObjectPair reallocFrom);
+
+	void executeAllocSymbolic(
+		ExecutionState &state,
+		ref<Expr> size,
+		bool isLocal,
+		KInstruction *target,
+		bool zeroMemory)
+	{ executeAllocSymbolic(
+		state, size, isLocal, target, zeroMemory, ObjectPair(0,0)); }
 
 	void executeAllocConst(
 		ExecutionState &state,
@@ -532,7 +550,17 @@ public:
 		bool isLocal,
 		KInstruction *target,
 		bool zeroMemory,
-		const ObjectState *reallocFrom);
+		ObjectPair reallocFrom);
+
+	void executeAllocConst(
+		ExecutionState &state,
+		uint64_t size,
+		bool isLocal,
+		KInstruction *target,
+		bool zeroMemory)
+	{ executeAllocConst(
+		state, size, isLocal, target, zeroMemory, ObjectPair(0,0)); }
+
 
 	/// Free the given address with checking for errors. If target is
 	/// given it will be bound to 0 in the resulting states (this is a

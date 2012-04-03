@@ -331,6 +331,7 @@ void ExecutorVex::bindMappingPage(
 {
 	const char		*data;
 	MemoryObject		*mmap_mo;
+	const ObjectState	*mmap_os_c;
 	ObjectState		*mmap_os;
 	uint64_t		addr_base;
 	uint64_t		heap_min, heap_max;
@@ -341,8 +342,8 @@ void ExecutorVex::bindMappingPage(
 
 	addr_base = ((uint64_t)gs->getMem()->getData(m))+(PAGE_SIZE*pgnum);
 
-	mmap_os = state->allocateAt(addr_base, PAGE_SIZE, f->begin()->begin());
-	mmap_mo = mmap_os->getObject();
+	mmap_os_c = state->allocateAt(addr_base, PAGE_SIZE, f->begin()->begin());
+	mmap_mo = const_cast<MemoryObject*>(state->addressSpace.resolveOneMO(addr_base));
 
 	heap_min = ~0UL;
 	heap_max = 0;
@@ -358,7 +359,15 @@ void ExecutorVex::bindMappingPage(
 	}
 
 	data = (const char*)addr_base;
-	for (unsigned int i = 0; i < PAGE_SIZE; i++) {
+	unsigned i = 0;
+	for (i = 0; i < PAGE_SIZE; i++) {
+		if (data[i]) {
+			mmap_os = state->addressSpace.getWriteable(
+				mmap_mo, mmap_os_c);
+			break;
+		}
+	}
+	for (; i < PAGE_SIZE; i++) {
 		/* bug fiend note:
 		 * valgrind will complain on this line because of the
 		 * data[i] on the syspage. Linux keeps a syscall page at
@@ -448,7 +457,7 @@ void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
 
 	if (SymRegs) return;
 
-	state_regctx_os = state->bindMemObj(state_regctx_mo);
+	state_regctx_os = state->bindMemObjWriteable(state_regctx_mo);
 
 	const char*  state_data = (const char*)gs->getCPUState()->getStateData();
 	for (unsigned int i=0; i < state_regctx_sz; i++)

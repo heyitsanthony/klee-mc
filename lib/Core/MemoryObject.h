@@ -7,23 +7,20 @@ class MemoryObject
   friend class MemoryManager;
 
 private:
-  static int counter;
-  static MemoryManager* memoryManager;
+  static unsigned		counter;
+  static unsigned		numMemObjs;
+  static MemoryManager		*memoryManager;
 
 public:
-  unsigned id;
-  uint64_t address;
-
-  /// size in bytes
-  unsigned size;
-  std::string name;
-
-  MallocKey mallocKey;
-  ref<HeapObject> heapObj;
+  unsigned	id;
+  unsigned	size;	// in bytes
+  uint64_t	address;
+  std::string	name;
+  MallocKey	mallocKey;
 
   /// true if created by us.
-  bool fake_object;
-  bool isUserSpecified;
+  bool		fake_object;
+  bool		isUserSpecified;
 
   /// A list of boolean expressions the user has requested be true of
   /// a counterexample. Mutable since we play a little fast and loose
@@ -46,26 +43,20 @@ public:
   MemoryObject(
     uint64_t _address,
     unsigned _size,
-    const MallocKey &_mallocKey,
-    HeapObject* _heapObj = NULL);
+    const MallocKey &_mallocKey);
 
   // Ugh. But we can't include this in the inlined dtor or we'll have a circular
   // dependency between Memory.h and MemoryManager.h
   void remove();
 
-  inline ~MemoryObject() {
-    if(size && memoryManager)
-      remove();
-  }
+  ~MemoryObject();
 
   void print(std::ostream& out) const;
 
   /// Get an identifying string for this allocation.
   void getAllocInfo(std::string &result) const;
 
-  void setName(std::string name) {
-    this->name = name;
-  }
+  void setName(std::string name) { this->name = name; }
 
   unsigned int getRefCount(void) const { return refCount; }
 

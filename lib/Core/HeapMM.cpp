@@ -104,8 +104,7 @@ MemoryObject *HeapMM::allocate(
 	bool anonymous = (state == NULL);
 	MemoryObject *res;
 
-	res = new MemoryObject(
-		size ? heapObj->address : 0, size, mallocKey, heapObj);
+	res = new MemoryObject(size ? heapObj->address : 0, size, mallocKey);
 
 	// if not replaying state, add reference to heap object
 	if (state && (state->isReplay || state->isReplayDone()))
@@ -179,7 +178,7 @@ MemoryObject* HeapMM::insertHeapObj(
 	anonymous = (state == NULL);
 
 	heapObjects.insert(std::make_pair(mk, heapObj));
-	cur_mo = new MemoryObject(heapObj->address, size, mk, heapObj);
+	cur_mo = new MemoryObject(heapObj->address, size, mk);
 
 	// if not replaying state, add reference to heap object
 	if (state->isReplay || state->isReplayDone())

@@ -569,7 +569,7 @@ SFH_DEF_HANDLER(SymRangeBytes)
 	ref<Expr>	addr(arguments[0]);
 	ref<Expr>	max_len(arguments[1]);
 	ConstantExpr	*ce_max_len, *ce_addr;
-	unsigned	c, max_len_v, total;
+	unsigned	max_len_v, total;
 	uint64_t	base_addr;
 
 	ce_addr = dyn_cast<ConstantExpr>(addr);
@@ -634,37 +634,43 @@ SFH_DEF_HANDLER(Calloc)
 
 SFH_DEF_HANDLER(Realloc)
 {
-  // XXX should type check args
-  SFH_CHK_ARGS(2, "realloc");
-  ref<Expr> address = arguments[0];
-  ref<Expr> size = arguments[1];
+	// XXX should type check args
+	SFH_CHK_ARGS(2, "realloc");
+	ref<Expr> address = arguments[0];
+	ref<Expr> size = arguments[1];
 
-  Executor::StatePair zeroSize = sfh->executor->fork(state,
-                                               Expr::createIsZero(size),
-                                               true);
+	Executor::StatePair zeroSize;
 
-  if (zeroSize.first) { // size == 0
-    sfh->executor->executeFree(*zeroSize.first, address, target);
-  }
-  if (zeroSize.second) { // size != 0
-    Executor::StatePair zeroPointer = sfh->executor->fork(*zeroSize.second,
-                                                    Expr::createIsZero(address),
-                                                    true);
+	zeroSize = sfh->executor->fork(state, Expr::createIsZero(size), true);
 
-    if (zeroPointer.first) { // address == 0
-      sfh->executor->executeAlloc(*zeroPointer.first, size, false, target);
-    }
-    if (zeroPointer.second) { // address != 0
-      Executor::ExactResolutionList rl;
-      sfh->executor->resolveExact(*zeroPointer.second, address, rl, "realloc");
+	if (zeroSize.first) { // size == 0
+		sfh->executor->executeFree(*zeroSize.first, address, target);
+	}
 
-      for (Executor::ExactResolutionList::iterator it = rl.begin(),
-             ie = rl.end(); it != ie; ++it) {
-        sfh->executor->executeAlloc(*it->second, size, false, target, false,
-                              it->first.second);
-      }
-    }
-  }
+	if (!zeroSize.second)
+		return;
+
+	// size != 0
+	Executor::StatePair zeroPointer;
+
+	zeroPointer = sfh->executor->fork(
+		*zeroSize.second, Expr::createIsZero(address), true);
+
+	if (zeroPointer.first) { // address == 0
+		sfh->executor->executeAlloc(*zeroPointer.first, size, false, target);
+	}
+
+	if (!zeroPointer.second)
+		return;
+
+	// address != 0
+	Executor::ExactResolutionList rl;
+	sfh->executor->resolveExact(*zeroPointer.second, address, rl, "realloc");
+
+	foreach (it, rl.begin(), rl.end()) {
+		sfh->executor->executeAlloc(
+			*it->second, size, false, target, false,  it->first);
+	}
 }
 
 SFH_DEF_HANDLER(Free)
@@ -720,17 +726,24 @@ SFH_DEF_HANDLER(GetValue)
 
 SFH_DEF_HANDLER(DefineFixedObject)
 {
-  SFH_CHK_ARGS(2, "klee_define_fixed_object");
-  assert(isa<ConstantExpr>(arguments[0]) &&
-         "expect constant address argument to klee_define_fixed_object");
-  assert(isa<ConstantExpr>(arguments[1]) &&
-         "expect constant size argument to klee_define_fixed_object");
+	uint64_t		address, size;
+	const ObjectState	*os;
+	MemoryObject		*mo;
 
-  uint64_t address = cast<ConstantExpr>(arguments[0])->getZExtValue();
-  uint64_t size = cast<ConstantExpr>(arguments[1])->getZExtValue();
-  ObjectState *os;
-  os = state.allocateFixed(address, size, state.prevPC->getInst());
-  os->getObject()->isUserSpecified = true; // XXX hack;
+	SFH_CHK_ARGS(2, "klee_define_fixed_object");
+	assert(isa<ConstantExpr>(arguments[0]) &&
+	 "expect constant address argument to klee_define_fixed_object");
+	assert(isa<ConstantExpr>(arguments[1]) &&
+	 "expect constant size argument to klee_define_fixed_object");
+
+	address = cast<ConstantExpr>(arguments[0])->getZExtValue();
+	size  = cast<ConstantExpr>(arguments[1])->getZExtValue();
+
+	os = state.allocateFixed(address, size, state.prevPC->getInst());
+	mo = const_cast<MemoryObject*>(state.addressSpace.resolveOneMO(address));
+	assert (mo);
+
+	mo->isUserSpecified = true; // XXX hack;
 }
 
 #define MAKESYM_ARGIDX_ADDR   0

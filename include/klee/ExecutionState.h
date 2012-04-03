@@ -163,7 +163,7 @@ public:
 	std::map<const llvm::Value*,unsigned> mallocIterations;
 
 	// Ref counting for MemoryObject deallocation
-	std::vector<ref<MemoryObject> > memObjects;
+	std::list<ref<MemoryObject> > memObjects;
 
 	bool			coveredNew;
 	bool			isReplay; /* started in replay mode? */
@@ -240,33 +240,45 @@ public:
 	}
 
 
-	ObjectState* allocate(
+	ObjectPair allocate(
 		uint64_t size, bool isLocal, bool isGlobal,
 		const llvm::Value *allocSite);
 
-	std::vector<ObjectState*> allocateAlignedChopped(
+	ObjectPair allocateGlobal(uint64_t size,
+		const llvm::Value *allocSite)
+	{ return allocate(size, false, true, allocSite); }
+
+
+	std::vector<ObjectPair> allocateAlignedChopped(
 		uint64_t size, unsigned pow2,
 		const llvm::Value *allocSite);
 
-	ObjectState *allocateFixed(
+	const ObjectState *allocateFixed(
 		uint64_t address, uint64_t size,
 		const llvm::Value *allocSite);
 
-	ObjectState *allocateAt(
+	const ObjectState *allocateAt(
 		uint64_t address, uint64_t size,
 		const llvm::Value *allocSite);
 
 	virtual void bindObject(const MemoryObject *mo, ObjectState *os);
 	virtual void unbindObject(const MemoryObject* mo);
+	virtual void rebindObject(const MemoryObject* mo, ObjectState* os);
 
-	ObjectState* bindMemObj(const MemoryObject *mo, const Array *array = 0);
-	ObjectState *bindStackMemObj(const MemoryObject *mo, const Array *array = 0);
+
+	const ObjectState* bindMemObj(
+		const MemoryObject *mo, const Array *array = 0);
+	ObjectState* bindMemObjWriteable(
+		const MemoryObject *mo, const Array *array = 0);
+
+	const ObjectState *bindStackMemObj(
+		const MemoryObject *mo, const Array *array = 0);
 
 
 	bool setupCallVarArgs(unsigned funcArgs, std::vector<ref<Expr> >& args);
 
-  bool addConstraint(ref<Expr> constraint);
-  bool merge(const ExecutionState &b);
+	bool addConstraint(ref<Expr> constraint);
+	bool merge(const ExecutionState &b);
 
   void copy(ObjectState* os, const ObjectState* reallocFrom, unsigned count);
 

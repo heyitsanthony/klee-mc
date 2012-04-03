@@ -24,7 +24,10 @@ namespace klee {
 
   template<class T> class ref;
 
+#define op_mo(x)	x.first
+#define op_os(x)	x.second
   typedef std::pair<const MemoryObject*, const ObjectState*> ObjectPair;
+
   typedef std::vector<ObjectPair> ResolutionList;
 
   /// Function object ordering MemoryObject's by address.
@@ -164,6 +167,13 @@ private:
 		unsigned int maxResolutions,
 		ResolutionList& rl);
 
+	bool binsearchFeasible(
+		ExecutionState& state,
+		TimingSolver* solver,
+		ref<Expr>& addr,
+		uint64_t upper_addr, ObjectPair& res);
+
+
 	bool contigOffsetSearchRange(
 		ExecutionState& state,
 		ref<Expr>	p,
@@ -197,6 +207,8 @@ public:
 	/// \param os The current binding of the MemoryObject.
 	/// \return A writeable ObjectState (\a os or a copy).
 	ObjectState *getWriteable(const MemoryObject *mo, const ObjectState *os);
+	ObjectState *getWriteable(const ObjectPair& op)
+	{ return getWriteable(op.first, op.second); }
 
 	bool copyToBuf(const MemoryObject* mo, void* buf) const;
 	bool copyToBuf(

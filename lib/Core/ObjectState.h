@@ -5,6 +5,8 @@
 #error Never include objstate.h; use memory.h
 #endif
 
+#define COW_ZERO	~((unsigned)0)
+
 class ObjectState
 {
 	friend class AddressSpace;
@@ -18,7 +20,6 @@ private:
 	// exclusively for AddressSpace
 	unsigned		copyOnWriteOwner;
 	unsigned		refCount;
-	const MemoryObject	*object;
 
 	uint8_t			*concreteStore;
 	BitArray		*concreteMask;
@@ -31,7 +32,7 @@ private:
 	mutable UpdateList	updates;
 
 	static unsigned		numObjStates;
-
+	static ObjectState	*zeroPage;
 
 public:
 	unsigned	size;
@@ -41,20 +42,16 @@ public:
 	/// Create a new object state for the given memory object with concrete
 	/// contents. The initial contents are undefined, it is the callers
 	/// responsibility to initialize the object contents appropriately.
-	ObjectState(const MemoryObject *mo);
+	ObjectState(unsigned size);
 
 	/// Create a new object state for the given memory object with symbolic
 	/// contents.
-	ObjectState(const MemoryObject *mo, const Array *array);
+	ObjectState(unsigned size, const Array *array);
 
 	ObjectState(const ObjectState &os);
 	~ObjectState();
 
 	static unsigned getNumObjStates(void) { return numObjStates; }
-
-	const MemoryObject *getObject() const { return object; }
-	MemoryObject* getObject(void)
-	{ return const_cast<MemoryObject*>(object); }
 
 	void setReadOnly(bool ro) { readOnly = ro; }
 
@@ -81,6 +78,11 @@ public:
 	void print(unsigned int begin = 0, int end = -1) const;
 
 	unsigned hash(void) const;
+
+	static void setupZeroObjs(void);
+	static ObjectState* createDemandObj(unsigned sz);
+
+	bool isZeroPage(void) const { return copyOnWriteOwner == COW_ZERO; }
 private:
 
 	// return bytes written.

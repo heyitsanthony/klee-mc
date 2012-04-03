@@ -182,8 +182,10 @@ void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf)
 {
 	assert (kf != NULL && "Bad function pushed on stack");
 
-	if (stack.empty() == false)
+	if (stack.empty() == false) {
 		theStackXfer.insert(getCurrentKFunc(), kf);
+		getCurrentKFunc()->addExit(kf);
+	}
 
 	stack.push_back(StackFrame(caller,kf));
 }
@@ -197,8 +199,10 @@ void ExecutionState::popFrame()
 		unbindObject(*it);
 	stack.pop_back();
 
-	if (stack.empty() == false)
+	if (stack.empty() == false && last_kf) {
 		theStackXfer.insert(last_kf, getCurrentKFunc());
+		// last_kf->addExit(getCurrentKFunc());
+	}
 }
 
 void ExecutionState::xferFrame(KFunction* kf)
@@ -210,6 +214,7 @@ void ExecutionState::xferFrame(KFunction* kf)
 	assert (stack.size() > 0);
 
 	theStackXfer.insert(getCurrentKFunc(), kf);
+	getCurrentKFunc()->addExit(kf);
 
 	/* save, pop off old state */
 	cpn = stack.back().callPathNode;
@@ -235,6 +240,19 @@ void ExecutionState::bindObject(const MemoryObject *mo, ObjectState *os)
 void ExecutionState::unbindObject(const MemoryObject* mo)
 {
 	addressSpace.unbindObject(mo);
+	/* XXX: toslow? use set? */
+	foreach (it, memObjects.begin(), memObjects.end()) {
+		if (it->get() == mo) {
+			memObjects.erase(it);
+			break;
+		}
+	}
+}
+
+void ExecutionState::rebindObject(const MemoryObject* mo, ObjectState* os)
+{
+	addressSpace.unbindObject(mo);
+	addressSpace.bindObject(mo, os);
 }
 
 void ExecutionState::write64(
@@ -401,21 +419,37 @@ void ExecutionState::transferToBasicBlock(BasicBlock *dst, BasicBlock *src)
 	}
 }
 
-ObjectState* ExecutionState::bindMemObj(
+const ObjectState* ExecutionState::bindMemObj(
 	const MemoryObject *mo,
 	const Array *array)
 {
 	ObjectState *os;
-	os = (array) ? new ObjectState(mo, array) : new ObjectState(mo);
+	if (array)
+		os = new ObjectState(mo->size, array);
+	else
+		os = ObjectState::createDemandObj(mo->size);
 	bindObject(mo, os);
 	return os;
 }
 
-ObjectState* ExecutionState::bindStackMemObj(
+ObjectState* ExecutionState::bindMemObjWriteable(
+	const MemoryObject *mo, const Array *array)
+{
+	const ObjectState	*os_c;
+
+	os_c = bindMemObj(mo, array);
+	if (os_c == NULL)
+		return NULL;
+
+	return addressSpace.getWriteable(mo, os_c);
+}
+
+
+const ObjectState* ExecutionState::bindStackMemObj(
 	const MemoryObject *mo,
 	const Array *array)
 {
-	ObjectState* os;
+	const ObjectState* os;
 
 	os = bindMemObj(mo, array);
 
@@ -469,27 +503,28 @@ unsigned ExecutionState::stepReplay(void)
     return targetIndex;
 }
 
-ObjectState* ExecutionState::allocate(
+ObjectPair ExecutionState::allocate(
 	uint64_t size, bool isLocal, bool isGlobal,
 	const llvm::Value *allocSite)
 {
-	MemoryObject	*mo;
-	ObjectState	*os;
+	MemoryObject		*mo;
+	const ObjectState	*os;
 
 	mo = mm->allocate(size, isLocal, isGlobal, allocSite, this);
 	if (mo == NULL)
-		return NULL;
+		return ObjectPair(NULL, NULL);
 
 	num_allocs++;
 	os = (isLocal) ? bindStackMemObj(mo) : bindMemObj(mo);
-	return os;
+
+	return ObjectPair(mo, os);
 }
 
-std::vector<ObjectState*> ExecutionState::allocateAlignedChopped(
+std::vector<ObjectPair> ExecutionState::allocateAlignedChopped(
 	uint64_t size, unsigned pow2, const llvm::Value *allocSite)
 {
 	std::vector<MemoryObject*>	mos;
-	std::vector<ObjectState*>	os;
+	std::vector<ObjectPair>		os;
 
 	mos = mm->allocateAlignedChopped(size, pow2, allocSite, this);
 	if (mos.size() == 0)
@@ -497,17 +532,17 @@ std::vector<ObjectState*> ExecutionState::allocateAlignedChopped(
 
 	num_allocs++;
 	foreach (it, mos.begin(), mos.end()) {
-		ObjectState	*cur_os;
+		const ObjectState	*cur_os;
 
 		cur_os = bindMemObj(*it);
 		assert (cur_os != NULL);
-		os.push_back(cur_os);
+		os.push_back(ObjectPair(*it, cur_os));
 	}
 
 	return os;
 }
 
-ObjectState* ExecutionState::allocateFixed(
+const ObjectState* ExecutionState::allocateFixed(
 	uint64_t address, uint64_t size,
 	const llvm::Value *allocSite)
 {
@@ -521,7 +556,7 @@ ObjectState* ExecutionState::allocateFixed(
 	return bindMemObj(mo);
 }
 
-ObjectState* ExecutionState::allocateAt(
+const ObjectState* ExecutionState::allocateAt(
 	uint64_t address, uint64_t size, const llvm::Value *allocSite)
 {
 	MemoryObject	*mo;
@@ -586,6 +621,7 @@ void ExecutionState::printConstraints(std::ostream& os) const
 bool ExecutionState::setupCallVarArgs(
 	unsigned funcArgs, std::vector<ref<Expr> >& args)
 {
+	ObjectPair	op;
 	ObjectState	*os;
 	unsigned	size, offset, callingArgs;
 
@@ -605,11 +641,15 @@ bool ExecutionState::setupCallVarArgs(
 		}
 	}
 
-	os = allocate(size, true, false, prevPC->getInst());
+	op = allocateGlobal(size, prevPC->getInst());
+	if (op_mo(op) == NULL)
+		return false;
+
+	os = addressSpace.getWriteable(op);
 	if (os == NULL)
 		return false;
 
-	sf.varargs = os->getObject();
+	sf.varargs = op_mo(op);
 
 	offset = 0;
 	for (unsigned i = funcArgs; i < callingArgs; i++) {

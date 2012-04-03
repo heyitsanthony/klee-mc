@@ -27,9 +27,13 @@ namespace
 			MM_DETERMINISTIC, "deterministic", "Deterministic MM"),
 		clEnumValEnd),
 	cl::init(MM_HEAP));
-}
 
-#define MAX_ALLOC_BYTES	(16*1024*1024)
+	cl::opt<uint64_t>
+	LimitMaxAlloc(
+		"mm-max-alloc",
+		cl::desc("Set maximum contiguous allocation in bytes"),
+		cl::init(512*1024*1024));
+}
 
 MemoryManager::MemoryManager(void)
 {
@@ -49,7 +53,7 @@ MemoryManager::~MemoryManager(void)
 
 bool MemoryManager::isGoodSize(uint64_t size) const
 {
-	if (size <= MAX_ALLOC_BYTES) return true;
+	if (!LimitMaxAlloc || size <= LimitMaxAlloc) return true;
 
 	klee_warning_once(0, "failing large alloc: %u bytes", (unsigned) size);
 	return false;
@@ -70,7 +74,7 @@ MemoryObject* MemoryManager::allocateAt(
 	++stats::allocations;
 
 	if (state.addressSpace.resolveOneMO(address) != NULL) {
-		std::cerr << "ADDRESS ALREADY TAKEN!?\n";
+		std::cerr << "[MemoryManager] ADDRESS ALREADY TAKEN!?\n";
 		return NULL;
 	}
 

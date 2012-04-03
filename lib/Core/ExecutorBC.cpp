@@ -175,9 +175,10 @@ done_ai:
 
 	if (!argvMO) return;
 
-	ObjectState *argvOS = state->bindMemObj(argvMO);
+	ObjectState *argvOS = state->bindMemObjWriteable(argvMO);
 
 	for (int i=0; i<argc+1+envc+1+1; i++) {
+		ObjectPair	op;
 		ObjectState	*os;
 
 		if (i==argc || i>=argc+1+envc) {
@@ -192,15 +193,14 @@ done_ai:
 		int j, len = strlen(s);
 
 
-		os = state->allocate(len+1, false, true, state->pc->getInst());
-		assert (os != NULL);
+		op = state->allocateGlobal(len+1, state->pc->getInst());
+		assert (op_os(op) != NULL);
+		os = state->addressSpace.getWriteable(op);
 
 		for (j=0; j<len+1; j++)
 			state->write8(os, j, s[j]);
 
-		state->write(
-			argvOS, i * NumPtrBytes,
-			os->getObject()->getBaseExpr());
+		state->write(argvOS, i * NumPtrBytes, op_mo(op)->getBaseExpr());
 	}
 }
 

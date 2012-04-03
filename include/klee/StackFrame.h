@@ -52,7 +52,7 @@ public:
   // is setup to match the way the front-end generates vaarg code (it
   // does not pass vaarg through as expected). VACopy is lowered inside
   // of intrinsic lowering.
-  MemoryObject *varargs;
+  const MemoryObject *varargs;
 
   StackFrame(KInstIterator caller, KFunction *kf);
   StackFrame(const StackFrame &s);

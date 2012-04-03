@@ -140,22 +140,26 @@ Globals::Globals(
 MemoryObject *Globals::addExternalObject(
 	void *addr, unsigned size, bool isReadOnly)
 {
-	ObjectState *os;
+	const ObjectState 	*os_c;
+	const MemoryObject	*mo;
+	ObjectState		*os;
 
-	os = init_state->allocateFixed((uint64_t) (uintptr_t)addr, size, 0);
+	os_c = init_state->allocateFixed((uint64_t) (uintptr_t)addr, size, 0);
+	mo = init_state->addressSpace.resolveOneMO((uintptr_t)addr);
+	os = init_state->addressSpace.getWriteable(mo, os_c);
+
 	for(unsigned i = 0; i < size; i++)
 		init_state->write8(os, i, ((uint8_t*)addr)[i]);
 
 	if (isReadOnly) os->setReadOnly(true);
 
-	return os->getObject();
+	return const_cast<MemoryObject*>(mo);
 }
 
 
 void Globals::allocGlobalVariableDecl(const GlobalVariable& gv)
 {
-	MemoryObject	*mo;
-	ObjectState	*os;
+	ObjectPair	op;
 	Type		*ty;
 	uint64_t	size;
 
@@ -185,10 +189,10 @@ void Globals::allocGlobalVariableDecl(const GlobalVariable& gv)
 		<< " (use will result in out of bounds access)\n";
 	}
 
-	os = init_state->allocate(size, false, true, &gv);
-	mo = os->getObject();
-	globalObjects.insert(std::make_pair(&gv, mo));
-	globalAddresses.insert(std::make_pair(&gv, mo->getBaseExpr()));
+	op = init_state->allocate(size, false, true, &gv);
+	globalObjects.insert(std::make_pair(
+		&gv, const_cast<MemoryObject*>(op_mo(op))));
+	globalAddresses.insert(std::make_pair(&gv, op_mo(op)->getBaseExpr()));
 
 	// Program already running = object already initialized.  Read
 	// concrete value and write it to our copy.
@@ -207,7 +211,9 @@ void Globals::allocGlobalVariableDecl(const GlobalVariable& gv)
 			"ERROR: unable to get symbol(%s) while loading globals.",
 			gv.getName().data());
 	} else {
-		for (unsigned offset=0; offset < mo->size; offset++) {
+		ObjectState	*os;
+		os = init_state->addressSpace.getWriteable(op);
+		for (unsigned offset=0; offset < op_mo(op)->size; offset++) {
 			//os->write8(offset, ((unsigned char*)addr)[offset]);
 			init_state->write8(
 				os, offset, ((unsigned char*)addr)[offset]);
@@ -218,10 +224,9 @@ void Globals::allocGlobalVariableDecl(const GlobalVariable& gv)
 /* XXX needs a better name */
 void Globals::allocGlobalVariableNoDecl(const GlobalVariable& gv)
 {
+	ObjectPair	op(NULL,NULL);
 	Type *ty = gv.getType()->getElementType();
 	uint64_t size = kmodule->targetData->getTypeStoreSize(ty);
-	MemoryObject *mo = 0;
-	ObjectState *os = 0;
 
 	if (UseAsmAddresses && gv.getName()[0]=='\01') {
 		char *end;
@@ -235,20 +240,26 @@ void Globals::allocGlobalVariableNoDecl(const GlobalVariable& gv)
 			" (%llu bytes)",
 			(long long unsigned int) address,
 			(long long unsigned int) size);
-			os = init_state->allocateFixed(address, size, &gv);
-			mo = os->getObject();
-			mo->isUserSpecified = true; // XXX hack;
+			op.second = init_state->allocateFixed(address, size, &gv);
+			op.first = init_state->addressSpace.resolveOneMO(address);
+			// XXX hack;
+			((MemoryObject*)op_mo(op))->isUserSpecified = true;
 		}
 	}
 
-	if (os == NULL) os = init_state->allocate(size, false, true, &gv);
-	assert(os && "out of memory");
+	if (op_mo(op) == NULL)
+		op = init_state->allocate(size, false, true, &gv);
+	assert(op_os(op) && "out of memory");
 
-	mo = os->getObject();
-	globalObjects.insert(std::make_pair(&gv, mo));
-	globalAddresses.insert(std::make_pair(&gv, mo->getBaseExpr()));
+	globalObjects.insert(std::make_pair(
+		&gv, const_cast<MemoryObject*>(op_mo(op))));
+	globalAddresses.insert(std::make_pair(&gv, op_mo(op)->getBaseExpr()));
 
-	if (!gv.hasInitializer()) os->initializeToRandom();
+	if (!gv.hasInitializer()) {
+		ObjectState	*os;
+		os = init_state->addressSpace.getWriteable(op);
+		os->initializeToRandom();
+	}
 }
 
 
@@ -273,7 +284,7 @@ void Globals::initializeGlobalObject(
 	if (isa<ConstantAggregateZero>(c)) {
 		unsigned size;
 		size = kmodule->targetData->getTypeStoreSize(c->getType());
-		assert (size + offset <= os->getObject()->size);
+		assert (size + offset <= os->size);
 		for (unsigned i=0; i<size; i++) {
 			init_state->write8(os,offset+i, (uint8_t) 0);
 		}

@@ -19,39 +19,41 @@
 using namespace klee;
 using namespace llvm;
 
+namespace {
+  cl::opt<bool> UseZeroPage("opt-zero-page", cl::init(true));
+}
+
 unsigned ObjectState::numObjStates = 0;
 
-ObjectState::ObjectState(const MemoryObject *mo)
+ObjectState::ObjectState(unsigned _size)
 : src_array(0)
 , copyOnWriteOwner(0)
 , refCount(0)
-, object(mo)
-, concreteStore(new uint8_t[mo->size])
+, concreteStore(new uint8_t[_size])
 , concreteMask(0)
 , flushMask(0)
 , knownSymbolics(0)
 , updates(0, 0)
-, size(mo->size)
+, size(_size)
 , readOnly(false)
 {
-	memset(concreteStore, 0, mo->size);
+	memset(concreteStore, 0, size);
 	numObjStates++;
 }
 
-ObjectState::ObjectState(const MemoryObject *mo, const Array *array)
+ObjectState::ObjectState(unsigned _size, const Array *array)
 : src_array(array)
 , copyOnWriteOwner(0)
 , refCount(0)
-, object(mo)
-, concreteStore(new uint8_t[mo->size])
+, concreteStore(new uint8_t[_size])
 , concreteMask(0)
 , flushMask(0)
 , knownSymbolics(0)
 , updates(array, 0)
-, size(mo->size)
+, size(_size)
 , readOnly(false)
 {
-	memset(concreteStore, 0, mo->size);
+	memset(concreteStore, 0, size);
 	makeSymbolic();
 	numObjStates++;
 }
@@ -60,7 +62,6 @@ ObjectState::ObjectState(const ObjectState &os)
 : src_array(os.src_array)
 , copyOnWriteOwner(0)
 , refCount(0)
-, object(os.object)
 , concreteStore(new uint8_t[os.size])
 , concreteMask(os.concreteMask ? new BitArray(*os.concreteMask, os.size) : 0)
 , flushMask(os.flushMask ? new BitArray(*os.flushMask, os.size) : 0)
@@ -84,6 +85,8 @@ ObjectState::ObjectState(const ObjectState &os)
 
 ObjectState::~ObjectState()
 {
+	assert (copyOnWriteOwner != COW_ZERO);
+
 	if (concreteMask) delete concreteMask;
 	if (flushMask) delete flushMask;
 	if (knownSymbolics) delete[] knownSymbolics;
@@ -148,7 +151,7 @@ const UpdateList &ObjectState::getUpdates() const
 
 	array = Array::create(
 		"const_arr" + llvm::utostr(++id),
-		object->mallocKey,
+		MallocKey(size),
 		&Contents[0],
 		&Contents[0] + Contents.size());
 	updates = UpdateList(array, 0);
@@ -172,6 +175,8 @@ void ObjectState::makeConcrete()
 
 void ObjectState::markRangeSymbolic(unsigned offset, unsigned len)
 {
+	assert (copyOnWriteOwner != COW_ZERO);
+
 	assert (len+offset < size && "Bad range");
 	for (unsigned i=0; i<len; i++) {
 		markByteSymbolic(i+offset);
@@ -182,6 +187,7 @@ void ObjectState::markRangeSymbolic(unsigned offset, unsigned len)
 
 void ObjectState::makeSymbolic(void)
 {
+	assert (copyOnWriteOwner != COW_ZERO);
 	assert(!updates.head &&
          	"XXX makeSymbolic of objs with symbolic vals is unsupported");
 
@@ -363,16 +369,6 @@ ref<Expr> ObjectState::read8(ref<Expr> offset) const
 	fastRangeCheckOffset(offset, &base, &size);
 	flushRangeForRead(base, size);
 
-	if (size > 4096) {
-		std::string allocInfo;
-		object->getAllocInfo(allocInfo);
-		klee_warning_once(
-			0,
-			"flushing %d bytes on read, may be slow and/or crash: %s",
-			size,
-			allocInfo.c_str());
-	}
-
 	return ReadExpr::create(
 		getUpdates(),
 		ZExtExpr::create(offset, Expr::Int32));
@@ -381,6 +377,8 @@ ref<Expr> ObjectState::read8(ref<Expr> offset) const
 void ObjectState::write8(unsigned offset, uint8_t value)
 {
 	assert(!readOnly  && "writing to read-only object!");
+	assert(copyOnWriteOwner != COW_ZERO);
+
 	concreteStore[offset] = value;
 	setKnownSymbolic(offset, 0);
 
@@ -390,6 +388,8 @@ void ObjectState::write8(unsigned offset, uint8_t value)
 
 void ObjectState::write8(unsigned offset, ref<Expr> value)
 {
+	assert (copyOnWriteOwner != COW_ZERO);
+
 	// can happen when ExtractExpr special cases
 	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(value)) {
 		write8(offset, (uint8_t) CE->getZExtValue(8));
@@ -406,22 +406,13 @@ void ObjectState::write8(ref<Expr> offset, ref<Expr> value)
 {
 	unsigned	base, size;
 
+	assert (copyOnWriteOwner != COW_ZERO);
 	assert (!readOnly);
 	assert(!isa<ConstantExpr>(offset) &&
 		"constant offset passed to symbolic write8");
 
 	fastRangeCheckOffset(offset, &base, &size);
 	flushRangeForWrite(base, size);
-
-	if (size > 4096) {
-		std::string allocInfo;
-		object->getAllocInfo(allocInfo);
-		klee_warning_once(
-			0,
-			"flushing %d bytes on write, may be slow and/or crash: %s",
-			size,
-			allocInfo.c_str());
-	}
 
 	updates.extend(ZExtExpr::create(offset, Expr::Int32), value);
 }
@@ -485,6 +476,7 @@ ref<Expr> ObjectState::read(unsigned offset, Expr::Width width) const
 void ObjectState::write(ref<Expr> offset, ref<Expr> value)
 {
 	assert (!readOnly);
+	assert (copyOnWriteOwner != COW_ZERO);
 
 	// Truncate offset to 32-bits.
 	offset = ZExtExpr::create(offset, Expr::Int32);
@@ -518,6 +510,8 @@ void ObjectState::write(ref<Expr> offset, ref<Expr> value)
 
 void ObjectState::write(unsigned offset, ref<Expr> value)
 {
+	assert (copyOnWriteOwner != COW_ZERO);
+
 	// Check for writes of constant values.
 	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(value)) {
 		Expr::Width w = CE->getWidth();
@@ -573,6 +567,7 @@ bool ObjectState::writeIVC(unsigned offset, const ref<ConstantExpr>& ce)
 	uint64_t	v;
 	bool		updated;
 
+	assert (copyOnWriteOwner != COW_ZERO);
 	assert ((w % 8) == 0 && "Expected byte write");
 
 	v = ce->getZExtValue();
@@ -603,7 +598,7 @@ void ObjectState::print(unsigned int begin, int end) const
 {
   unsigned int real_end;
   std::cerr << "-- ObjectState --\n";
-  std::cerr << "\tMemoryObject ID: " << object->id << "\n";
+  std::cerr << "\tMemoryObject ID: XXX\n";
   std::cerr << "\tRoot Object: " << updates.getRoot().get() << "\n";
   std::cerr << "\tSize: " << size << "\n";
 
@@ -661,3 +656,26 @@ unsigned ObjectState::hash(void) const
 
 	return hash_ret;
 }
+
+ObjectState* ObjectState::zeroPage;
+
+/* TODO: support more sizes */
+void ObjectState::setupZeroObjs(void)
+{
+	zeroPage = new ObjectState(4096);
+	zeroPage->copyOnWriteOwner = COW_ZERO;
+	zeroPage->initializeToZero();
+	zeroPage->refCount = 1;
+}
+
+ObjectState* ObjectState::createDemandObj(unsigned sz)
+{
+	if (sz == 4096 && UseZeroPage) {
+		assert (zeroPage->copyOnWriteOwner == COW_ZERO);
+		assert (zeroPage->isConcrete());
+		zeroPage->refCount++;
+		return zeroPage;
+	}
+	return new ObjectState(sz);
+}
+

@@ -100,6 +100,7 @@ SFH_DEF_HANDLER(SCRegs)
 
 	// do not unbind the object, we need to be able to grab it
 	// for replay
+	// XXX: this should probably be unbound
 	// state.unbindObject(old_mo);
 
 	/* 1. make all of symbolic */
@@ -464,7 +465,7 @@ SFH_DEF_HANDLER(AllocAligned)
 	ConstantExpr			*len;
 	uint64_t			len_v;
 	std::string			name_str;
-	std::vector<ObjectState*>	new_os;
+	std::vector<ObjectPair>		new_op;
 
 	len = dyn_cast<ConstantExpr>(arguments[0]);
 	exe_vex = dynamic_cast<ExecutorVex*>(sfh->executor);
@@ -480,25 +481,35 @@ SFH_DEF_HANDLER(AllocAligned)
 	name_str = sfh->readStringAtAddress(state, arguments[1]);
 
 	/* not requesting a specific address */
-	new_os = state.allocateAlignedChopped(
+	new_op = state.allocateAlignedChopped(
 		len_v,
 		12 /* aligned on 2^12 */,
 		target->getInst());
 
-	if (new_os.size() == 0) {
+	if (new_op.size() == 0) {
 		std::cerr << "COULD NOT ALLOCATE ALIGNED?????\n\n";
 		std::cerr << "LEN_V = " << len_v << std::endl;
 		state.bindLocal(target, ConstantExpr::create(0, 64));
 		return;
 	}
 
-	state.bindLocal(target, new_os[0]->getObject()->getBaseExpr());
-	foreach (it, new_os.begin(), new_os.end()) {
-		(*it)->getObject()->setName(name_str.c_str());
+	state.bindLocal(target, op_mo(new_op[0])->getBaseExpr());
+	foreach (it, new_op.begin(), new_op.end()) {
+		const_cast<MemoryObject*>(op_mo((*it)))->setName(
+			name_str.c_str());
 	}
 }
 
+static ObjectState* ALLOC_AT_WR(ExecutionState& s, uint64_t addr, uint64_t sz)
+{
+	const ObjectState	*os_c;
+	const MemoryObject	*mo;
 
+	os_c = s.allocateAt(addr, sz, NULL);
+	mo = s.addressSpace.resolveOneMO(addr);
+
+	return s.addressSpace.getWriteable(mo, os_c);
+}
 
 void SyscallSFH::removeTail(
 	ExecutionState& state,
@@ -518,13 +529,12 @@ void SyscallSFH::removeTail(
 	head_size = mo_size - taken;
 	buf_head = new ref<Expr>[head_size];
 	state.addressSpace.copyToExprBuf(mo, buf_head, 0, head_size);
-	os = state.addressSpace.findWriteableObject(mo);
 
 	/* free object from address space */
 	state.unbindObject(mo);
 
 	/* mark head concrete */
-	os = state.allocateAt(mo_addr, head_size, 0);
+	os = ALLOC_AT_WR(state, mo_addr, head_size);
 	copyIntoObjState(state, os, buf_head, 0, head_size);
 
 	delete [] buf_head;
@@ -553,13 +563,12 @@ void SyscallSFH::removeHead(
 	tail_size = mo_size - taken;
 	buf_tail = new ref<Expr>[tail_size];
 	state.addressSpace.copyToExprBuf(mo, buf_tail, taken, tail_size);
-	os = state.addressSpace.findWriteableObject(mo);
 
 	/* free object from address space */
 	state.unbindObject(mo);
 
 	/* create tail */
-	os = state.allocateAt(mo_addr+taken, tail_size, 0);
+	os = ALLOC_AT_WR(state, mo_addr+taken, tail_size);
 	copyIntoObjState(state, os, buf_tail, 0, tail_size);
 
 	delete [] buf_tail;
@@ -585,15 +594,14 @@ void SyscallSFH::removeMiddle(
 	buf_tail = new ref<Expr>[tail_size];
 	state.addressSpace.copyToExprBuf(mo, buf_head, 0, mo_off);
 	state.addressSpace.copyToExprBuf(mo, buf_tail, mo_off+taken, tail_size);
-	os = state.addressSpace.findWriteableObject(mo);
 
 	/* free object from address space */
 	state.unbindObject(mo);
 
-	os = state.allocateAt(mo_addr, mo_off, NULL);
+	os = ALLOC_AT_WR(state, mo_addr, mo_off);
 	copyIntoObjState(state, os, buf_head, 0, mo_off);
 
-	os = state.allocateAt(mo_addr+mo_off+taken, tail_size, NULL);
+	os = ALLOC_AT_WR(state, mo_addr+mo_off+taken, tail_size);
 	copyIntoObjState(state, os, buf_tail, 0, tail_size);
 
 	delete [] buf_head;
