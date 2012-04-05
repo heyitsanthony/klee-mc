@@ -506,6 +506,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 
 	case SYS_getpgrp:
+	case SYS_getsid:
 	case SYS_getpid:
 	case SYS_gettid:
 		sc_ret_v(regfile, 1000); /* FIXME: single threaded*/
