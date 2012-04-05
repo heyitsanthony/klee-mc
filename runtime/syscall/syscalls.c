@@ -526,8 +526,9 @@ void* sc_enter(void* regfile, void* jmpptr)
 		if (GET_ARG2(regfile)) {
 			make_sym(GET_ARG2(regfile), sizeof(sigset_t), "sigset");
 			sc_ret_v(regfile, 0);
-		} else
-			sc_ret_v(regfile, -1);
+		} else {
+			sc_ret_or(sc_new_regs(regfile), -1, 0);
+		}
 		break;
 
 	case SYS_kill:
@@ -604,7 +605,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(regfile, -1);
 		break;
 	case SYS_ioctl:
-		sc_ret_ge0(sc_new_regs(regfile));
+		new_regs = sc_new_regs(regfile);
+		if (GET_SYSRET_S(new_regs) == -1)
+			break;
+		sc_ret_ge0(new_regs);
 		break;
 
 	case SYS_uname:

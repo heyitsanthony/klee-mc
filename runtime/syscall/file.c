@@ -3,6 +3,7 @@
 #include <limits.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
+#include <unistd.h>
 #include <klee/klee.h>
 
 #include "syscalls.h"
@@ -229,6 +230,9 @@ int file_sc(unsigned int pure_sysnr, unsigned int sys_nr, void* regfile)
 	switch (sys_nr) {
 	case SYS_lseek: {
 		int fd = GET_ARG0(regfile);
+		klee_print_expr("ARGHGHGHG", GET_ARG1(regfile));
+		klee_print_expr("ERGHGHGHG", GET_ARG2(regfile));
+
 		if (fd_is_concrete(fd)) {
 			ssize_t br;
 			br = fd_lseek(
@@ -236,21 +240,34 @@ int file_sc(unsigned int pure_sysnr, unsigned int sys_nr, void* regfile)
 				(off_t)GET_ARG1(regfile),
 				(size_t)GET_ARG2(regfile));
 			sc_ret_v(regfile, br);
-		} else {
-#ifdef USE_SYS_FAILURE
-			ssize_t br = GET_ARG1(regfile);
-			klee_warning_once("lseek [-1, 4096]");
-			if (br > 0) {
-				// br = concretize_u64(br);
-				// new_regs = sc_new_regs(regfile);
-				/* return unboundd range */
-				sc_ret_or(sc_new_regs(regfile), -1, br);
-			} else
-				sc_ret_v(regfile, -1);
-#else
-			sc_ret_v(regfile, GET_ARG1(regfile));
-#endif
+			klee_print_expr("Seek concrete", GET_ARG1(regfile));
+			break;
 		}
+
+		if (GET_ARG2(regfile) == SEEK_END) {
+			new_regs = sc_new_regs(regfile);
+			if (	GET_SYSRET(new_regs) > ((unsigned)3*0x40000000)
+				&& GET_SYSRET_S(new_regs) > 0)
+			{
+				klee_silent_exit(0);
+			}
+			break;
+		}
+#ifdef USE_SYS_FAILURE
+		ssize_t br = GET_ARG1(regfile);
+		klee_warning_once("lseek [-1, 4096]");
+		if (br > 0) {
+			// br = concretize_u64(br);
+			// new_regs = sc_new_regs(regfile);
+			/* return unboundd range */
+			// sc_ret_or(sc_new_regs(regfile), -1, br);
+			sc_ret_v(regfile, br);
+		} else
+			sc_ret_v(regfile, -1);
+#else
+		klee_print_expr("Seek distance", GET_ARG1(regfile));
+		sc_ret_v(regfile, GET_ARG1(regfile));
+#endif
 		break;
 	}
 	case SYS_openat:
