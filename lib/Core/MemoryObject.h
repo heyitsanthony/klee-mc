@@ -60,42 +60,28 @@ public:
 
   unsigned int getRefCount(void) const { return refCount; }
 
-  ref<ConstantExpr> getBaseExpr() const {
-    return ConstantExpr::create(address, Context::get().getPointerWidth());
-  }
-  ref<ConstantExpr> getSizeExpr() const {
-    return ConstantExpr::create(size, Context::get().getPointerWidth());
-  }
-  ref<Expr> getOffsetExpr(ref<Expr> pointer) const {
-    return SubExpr::create(pointer, getBaseExpr());
-  }
-  ref<Expr> getBoundsCheckPointer(ref<Expr> pointer) const {
-    return getBoundsCheckOffset(getOffsetExpr(pointer));
-  }
-  ref<Expr> getBoundsCheckPointer(ref<Expr> pointer, unsigned bytes) const {
-    return getBoundsCheckOffset(getOffsetExpr(pointer), bytes);
-  }
+  ref<ConstantExpr> getBaseExpr() const
+  { return ConstantExpr::create(address, Context::get().getPointerWidth()); }
 
-  ref<Expr> getBoundsCheckOffset(ref<Expr> offset) const {
-	if (size==0) {
-		return EqExpr::create(
-			offset,
-			ConstantExpr::alloc(
-				0, Context::get().getPointerWidth()));
-	}
+  ref<ConstantExpr> getSizeExpr() const
+  { return ConstantExpr::create(size, Context::get().getPointerWidth()); }
 
-	return UltExpr::create(offset, getSizeExpr());
-  }
+  ref<Expr> getOffsetExpr(ref<Expr> pointer) const
+  { return SubExpr::create(pointer, getBaseExpr()); }
+
+  
+  ref<Expr> getBoundsCheckPointer(ref<Expr> pointer, unsigned bytes) const
+  { return getBoundsCheckOffset(getOffsetExpr(pointer), bytes); }
 
   ref<Expr> getBoundsCheckOffset(ref<Expr> offset, unsigned bytes) const {
-	if (bytes<=size) {
-		return UltExpr::create(
-			offset,
-			ConstantExpr::alloc(
-				size - bytes + 1,
-				Context::get().getPointerWidth()));
-	}
-	return ConstantExpr::alloc(0, Expr::Bool);
+	if (bytes > size)
+		return ConstantExpr::alloc(0, Expr::Bool);
+
+	return UltExpr::create(
+		offset,
+		ConstantExpr::alloc(
+			size - bytes + 1,
+			Context::get().getPointerWidth()));
   }
 
   inline bool isLocal() const { return mallocKey.isLocal; }

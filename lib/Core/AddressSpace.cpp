@@ -214,18 +214,39 @@ bool AddressSpace::testInBoundPointer(
 	const MemoryObject*	&mo)
 {
 	const MemoryMap::value_type	*res;
-	uint64_t			example;
+	uint64_t			example = 0;
+	bool				ok;
 
 	mo = NULL;
-	if (!solver->getValue(state, address, c_addr)) {
-		c_addr = ConstantExpr::create(~0ULL, address->getWidth());
-		return false;
+
+	if (	isa<AddExpr>(address) &&
+		isa<ConstantExpr>(address->getKid(0)) &&
+		isa<ZExtExpr>(address->getKid(1)))
+	{
+		/* handle case (add base_constant (zext w8)) */
+		const ZExtExpr		*ze;
+
+		ze = cast<ZExtExpr>(address->getKid(1));
+		if (ze->getKid(0)->getWidth() == 8) {
+			c_addr = cast<ConstantExpr>(address->getKid(0));
+			example = c_addr->getZExtValue();
+		}
 	}
 
-	example = c_addr->getZExtValue();
+	if (!example) {
+		ok = solver->getValue(state, address, c_addr);
+		if (!ok) {
+			c_addr = ConstantExpr::create(~0ULL, address->getWidth());
+			return false;
+		}
+
+		example = c_addr->getZExtValue();
+	}
+
 	MemoryObject toFind(example);
 	res = objects.lookup_previous(&toFind);
-	if (!res) return true;
+	if (!res)
+		return true;
 
 	mo = res->first;
 	if (example < mo->address + mo->size && example >= mo->address)
