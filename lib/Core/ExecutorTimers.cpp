@@ -101,7 +101,7 @@ public:
 	void run()
 	{
 		std::cerr << "KLEE: ExprObjScan invoked\n";
-		Array::garbageCollect();
+	//	Array::garbageCollect();
 	//	assert (0 ==1  && "STUB");
 	}
 private:
