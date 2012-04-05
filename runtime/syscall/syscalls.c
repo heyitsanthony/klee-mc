@@ -89,7 +89,7 @@ static void* sc_mmap_addr(void* regfile, void* addr, uint64_t len)
 	if (!is_himem) {
 		/* not highmem, use if we've got it.. */
 		addr = (void*)concretize_u64(GET_ARG0(regfile));
-		klee_print_expr("oh this is a drag", addr);
+		klee_print_expr("non-highmem define fixed addr", addr);
 		klee_define_fixed_object(addr, len);
 		return addr;
 	}

@@ -230,8 +230,6 @@ int file_sc(unsigned int pure_sysnr, unsigned int sys_nr, void* regfile)
 	switch (sys_nr) {
 	case SYS_lseek: {
 		int fd = GET_ARG0(regfile);
-		klee_print_expr("ARGHGHGHG", GET_ARG1(regfile));
-		klee_print_expr("ERGHGHGHG", GET_ARG2(regfile));
 
 		if (fd_is_concrete(fd)) {
 			ssize_t br;
@@ -240,7 +238,6 @@ int file_sc(unsigned int pure_sysnr, unsigned int sys_nr, void* regfile)
 				(off_t)GET_ARG1(regfile),
 				(size_t)GET_ARG2(regfile));
 			sc_ret_v(regfile, br);
-			klee_print_expr("Seek concrete", GET_ARG1(regfile));
 			break;
 		}
 
@@ -265,7 +262,6 @@ int file_sc(unsigned int pure_sysnr, unsigned int sys_nr, void* regfile)
 		} else
 			sc_ret_v(regfile, -1);
 #else
-		klee_print_expr("Seek distance", GET_ARG1(regfile));
 		sc_ret_v(regfile, GET_ARG1(regfile));
 #endif
 		break;
