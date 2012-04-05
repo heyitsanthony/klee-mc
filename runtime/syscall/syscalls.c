@@ -971,6 +971,14 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(regfile, fd_open_sym());
 		break;
 
+	case SYS_sched_get_priority_min:
+		sc_ret_v(regfile, 0);
+		break;
+	case SYS_sched_get_priority_max:
+		sc_ret_v(regfile, 1);
+		break;
+
+
 	case SYS_chown:
 	case SYS_shutdown:
 	case SYS_inotify_init:
