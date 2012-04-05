@@ -636,6 +636,7 @@ public:
 	SeedMapType& getSeedMap(void) { return seedMap; }
 	PTree* getPTree(void) { return pathTree; }
 	ExeStateManager* getStateManager(void) { return stateManager; }
+	const Forks* getForking(void) const { return forking; }
 };
 
 }

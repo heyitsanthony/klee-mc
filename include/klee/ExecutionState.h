@@ -157,6 +157,7 @@ public:
 	uint64_t		lastGlobalInstCount; // last stats::instructions
 	uint64_t		totalInsts;
 	unsigned		concretizeCount;
+	ref<Expr>		prevForkCond;	// last condition to cause fork
 
 
 	// Number of malloc calls per callsite

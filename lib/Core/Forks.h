@@ -3,6 +3,7 @@
 
 #include "Executor.h"
 #include "klee/Expr.h"
+#include "static/Graph.h"
 
 namespace klee
 {
@@ -12,6 +13,8 @@ class CallPathNode;
 class Forks
 {
 public:
+	typedef std::set<std::pair<ref<Expr>, ref<Expr> > > condxfer_ty;
+
 	struct ForkInfo
 	{
 		ForkInfo(
@@ -67,6 +70,11 @@ public:
 	{ assert (!preferFalseState); preferTrueState = v; }
 
 	ExecutionState* pureFork(ExecutionState& es, bool compact=false);
+
+	condxfer_ty::const_iterator beginConds(void) const
+	{ return condXfer.begin(); }
+	condxfer_ty::const_iterator endConds(void) const
+	{ return condXfer.end(); }
 private:
 	/* this forking code really should be refactored */
 	bool isForkingCondition(ExecutionState& current, ref<Expr> condition);
@@ -91,9 +99,11 @@ private:
 	void constrainFork(
 		ExecutionState& current, struct ForkInfo& fi, unsigned int);
 
-	Executor& exe;
-	bool	preferTrueState;
-	bool	preferFalseState;
+	Executor			&exe;
+	bool				preferTrueState;
+	bool				preferFalseState;
+	//GenericGraph<ref<Expr> >	condXfer;
+	condxfer_ty	condXfer;
 };
 
 }

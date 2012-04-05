@@ -24,6 +24,7 @@
 #include "llvm/Support/CommandLine.h"
 
 #include <fstream>
+#include <sstream>
 
 #include <unistd.h>
 #include <signal.h>
@@ -86,57 +87,26 @@ private:
 	Executor *executor;
 };
 
-
-#define USE_PREV_SIG	false
-class SigUsrTimer : public Executor::Timer
+#include "ObjectState.h"
+cl::opt<unsigned>
+UseObjScanTimer("objscan-timer",
+        cl::desc("Periodically garbage collect expressions (default=60s)."),
+        cl::init(0));
+class ExprObjScanTimer : public Executor::Timer
 {
 public:
-	SigUsrTimer(Executor *_executor)
-	: executor(_executor)
-	{
-		prev_sigh = signal(SIGUSR2, sigusr_handler);
-	}
-
-	virtual ~SigUsrTimer() { signal(SIGUSR2, prev_sigh); }
+	ExprObjScanTimer(Executor *_executor) : executor(_executor) {}
+	virtual ~ExprObjScanTimer() {}
 
 	void run()
 	{
-		std::ostream	*os;
-
-		if (!sigusr_triggered)
-			return;
-
-		sigusr_triggered = false;
-
-		os = executor->getInterpreterHandler()->openOutputFile("tr.txt");
-		if (os == NULL) {
-			std::cerr << "[SIGUSR] Couldn't open tr.txt!\n";
-			return;
-		}
-
-		foreach (it, executor->beginStates(), executor->endStates()) {
-			executor->printStackTrace(*(*it), *os);
-		}
-
-		delete os;
-	}
-
-	static void sigusr_handler(int k)
-	{	sigusr_triggered = true;
-		if (	USE_PREV_SIG &&
-			prev_sigh != SIG_DFL && prev_sigh != SIG_IGN)
-		{
-			prev_sigh(k);
-		}
+		std::cerr << "KLEE: ExprObjScan invoked\n";
+		Array::garbageCollect();
+	//	assert (0 ==1  && "STUB");
 	}
 private:
-	static bool		sigusr_triggered;
-	static sighandler_t	prev_sigh;
-	Executor		*executor;
+	Executor *executor;
 };
-bool SigUsrTimer::sigusr_triggered = false;
-sighandler_t SigUsrTimer::prev_sigh = NULL;
-
 
 class StatTimer : public Executor::Timer
 {
@@ -346,6 +316,73 @@ private:
 };
 
 cl::opt<unsigned>
+DumpForkCondGraph("dump-forkcondgraph",
+	cl::desc("Dump fork condition graph (0=off)"),
+	cl::init(0));
+
+#include "Forks.h"
+class ForkCondTimer : public Executor::Timer
+{
+public:
+	ForkCondTimer(Executor* _exe) : exe(_exe) {}
+	virtual ~ForkCondTimer() {}
+
+	std::string cutoffExpr(const ref<Expr>& e)
+	{
+		std::string		ret;
+		std::stringstream	ss;
+
+		ss << e; 
+		ret = ss.str(); 
+		ss.str("");
+		for (unsigned i = 0; i < ret.size(); i++) {
+			if (ret[i] == '\n') {
+				ss << "\\n";
+				continue;
+			}
+			
+			ss << ret[i];
+		}
+		ret = ss.str();
+		if (ret.size() > 96) {
+			ss.str("");
+			ss << ret.substr(0, 96) << "\\n...";
+			// << "\\n[" << e->hash() << "]";
+			ret = ss.str();
+		}
+
+		return ret;
+	}
+
+	void run(void)
+	{
+		std::ostream* os;
+
+		os = exe->getInterpreterHandler()->openOutputFile(
+			"fconds.txt");
+		if (os == NULL) return;
+
+		(*os) << "digraph {\n";
+		foreach (it,
+			exe->getForking()->beginConds(),
+			exe->getForking()->endConds())
+		{
+			std::string		from, to;
+
+			from = cutoffExpr(it->first);
+			to = cutoffExpr(it->second);
+
+			(*os) << '"'<< from << "\" -> \"" << to << "\";\n";
+		}
+		(*os) << "\n}\n";
+		delete os;
+	}
+private:
+	Executor* exe;
+};
+
+
+cl::opt<unsigned>
 DumpStateInstStats("dump-stateinststats",
         cl::desc("Dump state inst stats every n seconds (0=off)"),
         cl::init(0));
@@ -395,115 +432,30 @@ public:					\
 };					\
 void PC##x::run(std::istream& is, std::ostream& os)	\
 
-static KFunction* lookupPrettyModule(
-	Executor* exe, const std::string& func_name)
+
+DECL_PIPECMD(BacktraceStates)
 {
-	foreach (
-		it,
-		exe->getKModule()->kfuncsBegin(),
-		exe->getKModule()->kfuncsEnd())
-	{
-		std::string name;
-		name = exe->getPrettyName((*it)->function);
-		if (name == func_name) {
-			return *it;
-		}
-	}
-
-	return NULL;
-}
-
-#include "static/DijkstrasShortestPath.h"
-static void dumpStateDist(
-	Executor* exe, ExecutionState* es,
-	const std::string& dst_func,
-	DijkstrasShortestPath<const KFunction*>& dsp,
-	LabelGraph<const KFunction*, int64_t>&	back_graph)
-{
-	unsigned	depth = 0;
-
-	foreach (it, es->stack.rbegin(), es->stack.rend()) {
-		const KFunction	*cur_kf;
-		int64_t		dist;
-
-		cur_kf = (*it).kf;
-		if (cur_kf == NULL)
-			break;
-
-		dist = dsp.dist(cur_kf);
-		if (dist > 0xffffffff || dist < 0) {
-			depth++;
-			continue;
-		}
-
-		dist += depth*10;
-
-		std::cerr << dist << " : "
-			<< exe->getPrettyName(cur_kf->function)
-			<< " -> " << dst_func << ": "
-			<< ". StInst="
-			<< es->totalInsts
-			<< "[" << depth << "]"
-			<< '\n';
-		exe->printStackTrace(*es, std::cerr);
-		break;
-	}
-}
-
-DECL_PIPECMD(DumpDistance)
-{
-	KFunction	*kf;
-	std::string	func_name;
-
-	is >> func_name;
-	if (func_name.size() == 0) {
-		os << "[DumpDist] NO FUNCTION GIVEN!\n";
-		return;
-	}
-
-	/* given a state, compute the shortest path to given func */
-	/* XXX: need to use djikstra to find shortest paths */
-	std::cerr << "[DumpDist] New dist " << func_name << '\n';
+	std::ostream* of;
 	
-	kf = lookupPrettyModule(exe, func_name);
-	if (!kf) {
-		std::cerr << "[DumpDist] Not found: " << func_name << '\n';
+	of = exe->getInterpreterHandler()->openOutputFile("tr.txt");
+	if (of == NULL) {
+		os << "[Backtrace] Couldn't open tr.txt!\n";
 		return;
 	}
 
-
-	kf->function->dump();
-
-	LabelGraph<const KFunction*, int64_t>	exit_graph, back_graph;
-	std::cerr << "[DD] Creating exit graph\n";
-	foreach (
-		it,
-		exe->getKModule()->kfuncsBegin(),
-		exe->getKModule()->kfuncsEnd())
-	{
-		const KFunction	*cur_kf = *it;
-
-		foreach (it, cur_kf->beginExits(), cur_kf->endExits()) {
-			exit_graph.addEdge(cur_kf, *it, 1);
-			back_graph.addEdge(*it, cur_kf, 1);
-		}
+	foreach (it, exe->beginStates(), exe->endStates()) {
+		exe->printStackTrace(*(*it), *of);
 	}
 
-	std::cerr << "[DD] Computing shortest path\n";
-
-	DijkstrasShortestPath<const KFunction*>	dsp(&exit_graph, kf);
-
-	foreach (it, exe->beginStates(), exe->endStates())
-		dumpStateDist(exe, *it, func_name, dsp, back_graph);
+	delete of;
 }
-
 
 class UserCommandTimer : public Executor::Timer
 {
 public:
 	UserCommandTimer(Executor *_exe) : exe(_exe), fd(-1)
 	{
-		cmds["dumpstates"] = new PCDumpDistance(exe);
+		cmds["backtrace"] = new PCBacktraceStates(exe);
 	}
 	virtual ~UserCommandTimer()
 	{
@@ -594,13 +546,18 @@ void Executor::initTimers(void)
 	if (UseGCTimer)
 		addTimer(new ExprGCTimer(this), UseGCTimer);
 
+	if (UseObjScanTimer)
+		addTimer(new ExprObjScanTimer(this), UseObjScanTimer);
+
+
 	if (DumpStateInstStats)
 		addTimer(new StateInstStatTimer(this), DumpStateInstStats);
 
 	if (UseCmdUser)
 		addTimer(new UserCommandTimer(this), 2);
 
-	addTimer(new SigUsrTimer(this), 1);
+	if (DumpForkCondGraph)
+		addTimer(new ForkCondTimer(this), DumpForkCondGraph);
 }
 
 ///

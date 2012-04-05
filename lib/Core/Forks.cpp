@@ -540,6 +540,28 @@ void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 		}
 
 	}
+
+	if (fi.validTargets < 2)
+		return;
+
+	/* Track forking condition transitions */
+	for (unsigned i = 0; i < fi.N; i++) {
+		ref<Expr>	new_cond;
+		ExecutionState	*cur_st;
+
+		if (!fi.res[i]) continue;
+
+		cur_st = fi.resStates[i];
+		new_cond = fi.conditions[i];
+		if (cur_st->prevForkCond.isNull() == false) {
+			condXfer.insert(
+				std::make_pair(
+					cur_st->prevForkCond,
+					new_cond));
+		}
+
+		cur_st->prevForkCond = new_cond;
+	}
 }
 
 void Forks::constrainFork(
