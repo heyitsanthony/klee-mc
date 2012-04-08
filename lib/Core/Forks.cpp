@@ -2,6 +2,7 @@
 #include <iostream>
 #include <sstream>
 
+#include "klee/util/ExprVisitor.h"
 #include "klee/Internal/Module/InstructionInfoTable.h"
 #include "klee/Statistics.h"
 #include "klee/Internal/ADT/RNG.h"
@@ -35,6 +36,7 @@ namespace
 		MaxDepth("max-depth",
 			llvm::cl::desc("Only this many sym branches (0=off)"),
 			llvm::cl::init(0));
+
 	llvm::cl::opt<bool>
 	ReplayPathOnly(
 		"replay-path-only",
@@ -60,6 +62,9 @@ namespace
 
 	llvm::cl::opt<bool>
 	RandomizeFork("randomize-fork", llvm::cl::init(false));
+
+	llvm::cl::opt<unsigned>
+	ForkCondIdxMod("forkcond-idx-mod", llvm::cl::init(4));
 }
 
 using namespace klee;
@@ -190,12 +195,6 @@ bool Forks::forkFollowReplay(ExecutionState& current, struct ForkInfo& fi)
 
 		return true;
 	}
-
-	std::cerr << "Dump of Function:\n";
-	current.prevPC->getInst()->getParent()->getParent()->dump();
-
-	std::cerr << "Dump of BB:\n";
-	current.prevPC->getInst()->getParent()->getParent()->dump();
 
 	std::stringstream ss;
 	ss	<< "hit invalid branch in replay path mode (line="
@@ -497,7 +496,7 @@ void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 	} else if (RandomizeFork) {
 		for (unsigned i = 0; i < fi.N; i++) {
 			unsigned	swap_idx, swap_val;
-			
+
 			swap_idx = theRNG.getInt32() % fi.N;
 			swap_val = cond_idx_map[swap_idx];
 			cond_idx_map[swap_idx] = cond_idx_map[i];
@@ -552,17 +551,28 @@ void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 		if (!fi.res[i]) continue;
 
 		cur_st = fi.resStates[i];
-		new_cond = fi.conditions[i];
+		new_cond = condFilter->apply(fi.conditions[i]);
+
 		if (cur_st->prevForkCond.isNull() == false) {
 			condXfer.insert(
 				std::make_pair(
 					cur_st->prevForkCond,
 					new_cond));
+			hasSucc.insert(cur_st->prevForkCond);
 		}
 
 		cur_st->prevForkCond = new_cond;
 	}
 }
+
+bool Forks::hasSuccessor(ExecutionState& st) const
+{ return hasSucc.count(st.prevForkCond) != 0; }
+
+/* XXX memoize? */
+bool Forks::hasSuccessor(const ref<Expr>& cond) const
+{ return hasSucc.count(condFilter->apply(cond)); }
+
+
 
 void Forks::constrainFork(
 	ExecutionState& current,
@@ -635,4 +645,79 @@ void Forks::constrainForks(ExecutionState& current, struct ForkInfo& fi)
 	for (unsigned int condIndex = 0; condIndex < fi.N; condIndex++) {
 		constrainFork(current, fi, condIndex);
 	}
+}
+
+class MergeArrays : public ExprVisitor
+{
+public:
+	MergeArrays(void) : ExprVisitor(false, true) {}
+	virtual ~MergeArrays(void) {}
+protected:
+	virtual Action visitConstant(const ConstantExpr& ce)
+	{
+		if (ce.getWidth() > 64)
+			return Action::skipChildren();
+
+		return Action::changeTo(
+			ConstantExpr::create(
+				ce.getZExtValue() & 0x800000000000001f,
+				ce.getWidth()));
+	}
+
+	virtual Action visitRead(const ReadExpr& r)
+	{
+		mergearr_ty::iterator	it;
+		ref<Array>		arr = r.getArray();
+		ref<Array>		repl_arr;
+		std::string		merge_name;
+		const ConstantExpr	*ce_re_idx;
+		unsigned		num_run, new_re_idx;
+
+		for (num_run = 0; arr->name[num_run]; num_run++) {
+			if (	arr->name[num_run] >= '0' &&
+				arr->name[num_run] <= '9')
+			{
+				break;
+			}
+		}
+
+		if (num_run == arr->name.size())
+			return Action::skipChildren();
+
+		merge_name = arr->name.substr(0, num_run);
+		it = merge_arrs.find(merge_name);
+		if (it != merge_arrs.end()) {
+			repl_arr = it->second;
+		} else {
+			repl_arr = Array::create(merge_name, 1024);
+			merge_arrs.insert(std::make_pair(merge_name, repl_arr));
+		}
+
+		new_re_idx = 0;
+		ce_re_idx = dyn_cast<ConstantExpr>(r.index);
+		if (ce_re_idx != NULL) {
+			/* XXX: this loses information about structures
+			 * since fields will alias but it is good for strings
+			 * since it catches all idxmod-graphs */
+			new_re_idx = ce_re_idx->getZExtValue() % ForkCondIdxMod;
+		}
+
+		return Action::changeTo(
+			ReadExpr::create(
+				UpdateList(repl_arr, NULL),
+				ConstantExpr::create(new_re_idx, 32)));
+	}
+private:
+	typedef std::map<std::string, ref<Array> > mergearr_ty;
+	mergearr_ty	merge_arrs;
+};
+
+Forks::~Forks(void) { delete condFilter; }
+
+Forks::Forks(Executor& _exe)
+: exe(_exe)
+, preferTrueState(false)
+, preferFalseState(false)
+{
+	condFilter = new MergeArrays();
 }

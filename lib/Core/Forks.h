@@ -9,11 +9,13 @@ namespace klee
 {
 class ExecutionState;
 class CallPathNode;
+class ExprVisitor;
 
 class Forks
 {
 public:
-	typedef std::set<std::pair<ref<Expr>, ref<Expr> > > condxfer_ty;
+	typedef std::set<std::pair<ref<Expr>, ref<Expr> > >	condxfer_ty;
+	typedef std::set<ref<Expr> > 				succ_ty;
 
 	struct ForkInfo
 	{
@@ -44,13 +46,8 @@ public:
 		bool			forkCompact;
 	};
 
-	Forks(Executor& _exe)
-	: exe(_exe)
-	, preferTrueState(false)
-	, preferFalseState(false)
-	{}
-
-	virtual ~Forks() {}
+	Forks(Executor& _exe);
+	virtual ~Forks();
 
 	Executor::StateVector fork(
 		ExecutionState &current,
@@ -75,6 +72,10 @@ public:
 	{ return condXfer.begin(); }
 	condxfer_ty::const_iterator endConds(void) const
 	{ return condXfer.end(); }
+
+	bool hasSuccessor(ExecutionState& st) const;
+	bool hasSuccessor(const ref<Expr>& cond) const;
+
 private:
 	/* this forking code really should be refactored */
 	bool isForkingCondition(ExecutionState& current, ref<Expr> condition);
@@ -103,7 +104,9 @@ private:
 	bool				preferTrueState;
 	bool				preferFalseState;
 	//GenericGraph<ref<Expr> >	condXfer;
-	condxfer_ty	condXfer;
+	condxfer_ty			condXfer;
+	succ_ty				hasSucc;
+	ExprVisitor			*condFilter;
 };
 
 }

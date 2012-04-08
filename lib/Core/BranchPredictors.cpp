@@ -13,15 +13,18 @@ RandomPredictor::RandomPredictor()
 , period(32)
 , period_bump(2) {}
 
-bool RandomPredictor::predict(
-	const ExecutionState& st,
-	KInstruction* ki,
-	bool& hint)
+bool RandomPredictor::predict(const StateBranch& sb, bool& hint)
+{
+	hint = theRNG.getBool();
+	return true;
+}
+
+bool KBrPredictor::predict(const StateBranch& sb, bool& hint)
 {
 	KBrInstruction	*kbr;
 	bool		fresh_false, fresh_true;
 
-	kbr = static_cast<KBrInstruction*>(ki);
+	kbr = static_cast<KBrInstruction*>(sb.ki);
 	fresh_false = (kbr->hasFoundFalse() == false);
 	fresh_true = (kbr->hasFoundTrue() == false);
 
@@ -43,7 +46,8 @@ bool RandomPredictor::predict(
 		else if (hit_f == 1)
 			hint = false;
 		else
-			hint = theRNG.getBool();
+			return false;
+
 		return true;
 	}
 
@@ -59,7 +63,7 @@ bool RandomPredictor::predict(
 }
 
 // some notes for a periodic branch predictor:
-#if 0		
+#if 0
 	{
 		hint = (((phase_hint++) % period) < (period/2))
 			? 1 : 0;
@@ -85,10 +89,7 @@ bool RandomPredictor::predict(
 // OK:
 // hint = (kbr->getForkHits()/8) % 2;
 
-bool SeqPredictor::predict(
-	const ExecutionState& st,
-	KInstruction* ki,
-	bool& hint)
+bool SeqPredictor::predict(const StateBranch& sb, bool& hint)
 {
 	hint = seq[idx++ % seq.size()];
 	return true;
@@ -105,11 +106,37 @@ RotatingPredictor::~RotatingPredictor()
 		delete (*it);
 }
 
-bool RotatingPredictor::predict(
-	const ExecutionState& st,
-	KInstruction* ki,
-	bool& hint)
+bool RotatingPredictor::predict(const StateBranch& sb, bool& hint)
 {
-	return bps[(tick++ / period) % bps.size()]->predict(st, ki, hint);
+	return bps[(tick++ / period) % bps.size()]->predict(sb, hint);
 }
 
+#include "Forks.h"
+bool CondPredictor::predict(const StateBranch& sb, bool& hint)
+{
+	/* XXX need to distinguish between forking conditions and
+	 * conditions that have never been seen in the past */
+	bool	has_true, has_false;
+
+	has_true = f->hasSuccessor(sb.cond);
+	has_false = f->hasSuccessor(Expr::createIsZero(sb.cond));
+
+	if (!has_false && !has_true) {
+		return false;
+	}
+
+	if (!has_false || !has_true)
+		std::cerr << "CALLING IT FOR EXPR=" << sb.cond << '\n';
+
+	if (!has_true) {
+		hint = true;
+		return true;
+	}
+
+	if (!has_false) {
+		hint = false;
+		return true;
+	}
+
+	return false;
+}

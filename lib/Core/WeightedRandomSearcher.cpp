@@ -8,6 +8,7 @@
 #include "CoreStats.h"
 #include "StatsTracker.h"
 #include "Executor.h"
+#include "Forks.h"
 #include "static/Sugar.h"
 
 #include "WeightedRandomSearcher.h"
@@ -142,6 +143,17 @@ double CoveringNewWeight::weigh(const ExecutionState *es) const
 		: 0.;
 
 	return (invCovNew * invCovNew + invMD2U * invMD2U);
+}
+
+double CondSuccWeight::weigh(const ExecutionState* es) const
+{
+	if (es->prevForkCond.isNull())
+		return 2;
+
+	if (!exe->getForking()->hasSuccessor(es->prevForkCond))
+		return 1;
+
+	return 0;
 }
 
 double DepthWeight::weigh(const ExecutionState* es) const

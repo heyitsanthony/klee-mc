@@ -113,7 +113,7 @@ void* memmove(void* _dest, const void* _src, size_t n)
 		return;
 
 	/* Check for destructive overlap.  */
-	if (src < dest && dest < src + n) {
+	if (src < dest && (dest - src) < n) {
 		/* Destructive overlap ... have to copy backwards.  */
 		src += n;
 		dest += n;

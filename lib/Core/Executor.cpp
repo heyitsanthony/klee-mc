@@ -303,6 +303,11 @@ Executor::Executor(InterpreterHandler *ih)
 
 	memory = MemoryManager::create();
 	mmu = new MMU(*this);
+	stateManager = new ExeStateManager();
+	ExecutionState::setMemoryManager(memory);
+	ExeStateBuilder::replaceBuilder(new BaseExeStateBuilder());
+	forking = new Forks(*this);
+
 	if (UseBranchHints) {
 	//	RotatingPredictor	*rp;
 	//	rp = new RotatingPredictor();
@@ -310,12 +315,11 @@ Executor::Executor(InterpreterHandler *ih)
 	//	rp->add(SeqPredictor::createTrue());
 	//	rp->add(SeqPredictor::createFalse());
 	//	brPredict = rp;
-		brPredict = new RandomPredictor();
+		ListPredictor		*lp = new ListPredictor();
+		lp->add(new CondPredictor(forking));
+		lp->add(new KBrPredictor());
+		brPredict = lp;
 	}
-	stateManager = new ExeStateManager();
-	ExecutionState::setMemoryManager(memory);
-	ExeStateBuilder::replaceBuilder(new BaseExeStateBuilder());
-	forking = new Forks(*this);
 }
 
 Executor::~Executor()
@@ -1053,7 +1057,9 @@ void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 	bool		hasHint = false, branchHint;
 
 	if (brPredict && cond.value->getKind() != Expr::Constant)
-		hasHint = brPredict->predict(state, ki, branchHint);
+		hasHint = brPredict->predict(
+			BranchPredictor::StateBranch(state, ki, cond.value),
+			branchHint);
 
 	if (hasHint) {
 		branchHint = !branchHint;

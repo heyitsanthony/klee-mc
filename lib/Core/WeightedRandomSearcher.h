@@ -28,10 +28,13 @@ private:
 #define DECL_WEIGHT(x,y) 		\
 class x##Weight : public WeightFunc {	\
 public:	\
-	x##Weight() : WeightFunc(#x, y) {}	\
+	x##Weight() : WeightFunc(#x, y), exe(NULL) {}	\
+	x##Weight(Executor* _exe) : WeightFunc(#x, y), exe(_exe) {} \
 	virtual double weigh(const ExecutionState* es) const;	\
-	virtual WeightFunc* copy(void) const { return new x##Weight(); }\
-	virtual ~x##Weight() {} };
+	virtual WeightFunc* copy(void) const { return new x##Weight(exe); }\
+	virtual ~x##Weight() {} \
+protected: \
+	Executor	*exe; };
 
 DECL_WEIGHT(Depth, false)
 DECL_WEIGHT(QueryCost, true)
@@ -44,6 +47,7 @@ DECL_WEIGHT(Tail, true)
 DECL_WEIGHT(Constraint, true)
 DECL_WEIGHT(FreshBranch, true)
 DECL_WEIGHT(StateInstCount, true)
+DECL_WEIGHT(CondSucc, true)
 
 class Executor;
 

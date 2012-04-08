@@ -67,6 +67,7 @@ DECL_SEARCH_OPT(MinInst, "mininst", "MI");
 DECL_SEARCH_OPT(MaxInst, "maxinst", "MXI");
 DECL_SEARCH_OPT(Trough, "trough", "TR");
 DECL_SEARCH_OPT(FrontierTrough, "ftrough", "FTR");
+DECL_SEARCH_OPT(CondSucc, "cond", "CD");
 
 #define SEARCH_HISTO	new RescanSearcher(new HistoPrioritizer(executor))
 DECL_SEARCH_OPT(Histo, "histo", "HS");
@@ -227,6 +228,13 @@ Searcher* UserSearcher::setupInterleavedSearcher(
 	PUSH_ILEAV_IF_SET(Histo, SEARCH_HISTO);
 
 	PUSH_ILEAV_IF_SET(
+		CondSucc,
+		new RescanSearcher(
+			new Weight2Prioritizer<CondSuccWeight>(
+				new CondSuccWeight(&executor),
+				1.0)));
+
+	PUSH_ILEAV_IF_SET(
 		NonUniformRandom,
 		new WeightedRandomSearcher(executor, new DepthWeight()));
 
@@ -325,6 +333,11 @@ Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 			new Weight2Prioritizer<FreshBranchWeight>(1),
 			new RandomSearcher(),
 			100);
+	} else if (UseCondSuccSearch) {
+		searcher = new RescanSearcher(
+			new Weight2Prioritizer<CondSuccWeight>(
+				new CondSuccWeight(&executor),
+				1.0));
 	} else if (UseHistoSearch) {
 		searcher = SEARCH_HISTO;
 	} else if (UseMarkovSearch) {

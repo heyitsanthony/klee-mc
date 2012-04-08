@@ -74,7 +74,6 @@ protected:
 protected:
 	explicit
 	ExprVisitor(bool _recursive=false, bool in_visitConstants=false);
-	virtual ~ExprVisitor() {}
 
 	virtual Action visitExpr(const Expr&);
 	virtual Action visitExprPost(const Expr&);
@@ -129,7 +128,9 @@ private:
 
 	ref<Expr> visitActual(const ref<Expr> &e);
 	ref<Expr> handleActionDoChildren(Expr& ep);
+
 public:
+	virtual ~ExprVisitor() {}
 	virtual ref<Expr> apply(const ref<Expr>& e) { return visit(e); }
 
 	ref<Expr> buildUpdateStack(
