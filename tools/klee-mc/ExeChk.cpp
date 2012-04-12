@@ -18,8 +18,9 @@
 using namespace llvm;
 using namespace klee;
 
-ExeChk::ExeChk(InterpreterHandler *ie, Guest* gs)
-: ExecutorVex(ie, gs), exited(false)
+ExeChk::ExeChk(InterpreterHandler *ie)
+: ExecutorVex(ie)
+, exited(false)
 {
 	/* This is a really silly hack to get two genllvm's running
 	 * at once. Fortunately the code doesn't change much, so 

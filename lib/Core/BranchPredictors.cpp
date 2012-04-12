@@ -125,9 +125,6 @@ bool CondPredictor::predict(const StateBranch& sb, bool& hint)
 		return false;
 	}
 
-	if (!has_false || !has_true)
-		std::cerr << "CALLING IT FOR EXPR=" << sb.cond << '\n';
-
 	if (!has_true) {
 		hint = true;
 		return true;

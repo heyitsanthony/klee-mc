@@ -68,7 +68,7 @@ private:
 	StatePair	sp;
 	ref<Expr>	real_ptr;
 };
-	ExeUC(InterpreterHandler *ie, Guest* gs);
+	ExeUC(InterpreterHandler *ie);
 	virtual ~ExeUC();
 
 	virtual void runImage(void);

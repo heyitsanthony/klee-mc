@@ -21,11 +21,11 @@ class ESVSymHook;
 class ExeSymHook : public ExecutorVex
 {
 public:
-	static ExeSymHook* create(InterpreterHandler *ie, Guest* gs);
+	static ExeSymHook* create(InterpreterHandler *ie);
 	virtual ~ExeSymHook(void);
 
 protected:
-	ExeSymHook(InterpreterHandler *ie, Guest* gs);
+	ExeSymHook(InterpreterHandler *ie);
 
 	virtual void executeCall(ExecutionState &state,
 		KInstruction *ki,

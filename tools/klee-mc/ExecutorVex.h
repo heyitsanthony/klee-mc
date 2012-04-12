@@ -37,7 +37,7 @@ typedef std::tr1::unordered_map<uintptr_t /* Func*/, VexSB*> func2vsb_map;
 class ExecutorVex : public Executor
 {
 public:
-	ExecutorVex(InterpreterHandler *ie, Guest* gs);
+	ExecutorVex(InterpreterHandler *ie);
 	virtual ~ExecutorVex(void);
 
 	const llvm::Module * setModule(

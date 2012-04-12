@@ -12,9 +12,10 @@ class ExecutorVex;
 class UCHandler : public KleeHandler
 {
 public:
-	UCHandler(const CmdArgs* cmdargs) : KleeHandler(cmdargs) {}
-	virtual ~UCHandler() {}
+	UCHandler(const CmdArgs* cmdargs, Guest* g)
+	: KleeHandler(cmdargs, g) {}
 
+	virtual ~UCHandler() {}
 protected:
 	virtual void processSuccessfulTest(
 		const char* name, unsigned id, out_objs&);

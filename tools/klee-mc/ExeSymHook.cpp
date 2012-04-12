@@ -5,6 +5,7 @@
 #include "ESVSymHook.h"
 #include "klee/Common.h"
 #include "../../lib/Core/MMU.h"
+#include "KleeHandler.h"
 #include "symbols.h"
 #include "guest.h"
 
@@ -97,8 +98,8 @@ MallocMMU::MemOpRes MallocMMU::memOpResolve(
 	return ret;
 }
 
-ExeSymHook::ExeSymHook(InterpreterHandler *ie, Guest* gs)
-: ExecutorVex(ie, gs)
+ExeSymHook::ExeSymHook(InterpreterHandler *ie)
+: ExecutorVex(ie)
 , zero_malloc_ptr(0)
 {
 	ExeStateBuilder::replaceBuilder(new ESVSymHookBuilder());
@@ -406,12 +407,12 @@ ExecutionState* ExeSymHook::setupInitialState(void)
 }
 
 
-ExeSymHook* ExeSymHook::create(InterpreterHandler *ie, Guest* gs)
+ExeSymHook* ExeSymHook::create(InterpreterHandler *ie)
 {
 	const Symbols	*syms;
 	const Symbol	*sym_malloc;
 
-	syms = gs->getDynSymbols();
+	syms = dynamic_cast<KleeHandler*>(ie)->getGuest()->getDynSymbols();
 	if (syms == NULL)
 		return NULL;
 
@@ -422,5 +423,5 @@ ExeSymHook* ExeSymHook::create(InterpreterHandler *ie, Guest* gs)
 		return NULL;
 	}
 
-	return new ExeSymHook(ie, gs);
+	return new ExeSymHook(ie);
 }

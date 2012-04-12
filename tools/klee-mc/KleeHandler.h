@@ -6,6 +6,7 @@
 #include "klee/Interpreter.h"
 
 class CmdArgs;
+class Guest;
 
 namespace klee
 {
@@ -23,9 +24,9 @@ private:
 
 	// used for writing .ktest files
 	const CmdArgs*	cmdargs;
-
+	Guest	*gs;
 public:
-	KleeHandler(const CmdArgs* cmdargs);
+	KleeHandler(const CmdArgs* cmdargs, Guest* gs);
 	virtual ~KleeHandler();
 
 	std::ostream &getInfoStream() const { return *m_infoFile; }
@@ -58,6 +59,7 @@ public:
 	static void getOutFiles(
 		std::string path, std::vector<std::string> &results);
 
+	Guest* getGuest(void) const { return gs; }
 protected:
 typedef
 	std::vector< std::pair<std::string, std::vector<unsigned char> > >

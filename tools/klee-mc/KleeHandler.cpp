@@ -72,12 +72,13 @@ namespace {
     cl::desc("Exit if errors occur"));
 }
 
-KleeHandler::KleeHandler(const CmdArgs* in_args)
+KleeHandler::KleeHandler(const CmdArgs* in_args, Guest* _gs)
 : m_symPathWriter(0)
 , m_infoFile(0)
 , m_testIndex(0)
 , m_pathsExplored(0)
 , cmdargs(in_args)
+, gs(_gs)
 , m_interpreter(0)
 {
 	std::string theDir;

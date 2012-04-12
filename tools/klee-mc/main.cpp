@@ -431,10 +431,10 @@ Interpreter* createInterpreter(KleeHandler *handler, Guest* gs)
 	Interpreter	*interpreter;
 
 	if (Unconstrained)
-		return new ExeUC(handler, gs);
+		return new ExeUC(handler);
 
 	if (SymHook) {
-		interpreter = ExeSymHook::create(handler, gs);
+		interpreter = ExeSymHook::create(handler);
 		if (interpreter != NULL)
 			return interpreter;
 
@@ -443,9 +443,9 @@ Interpreter* createInterpreter(KleeHandler *handler, Guest* gs)
 	}
 
 	if (XChkJIT)
-		return new ExeChk(handler, gs);
+		return new ExeChk(handler);
 
-	return new ExecutorVex(handler, gs);
+	return new ExecutorVex(handler);
 }
 
 static std::list<ReplayPathType>	replayPaths;
@@ -495,17 +495,16 @@ int main(int argc, char **argv, char **envp)
 	}
 
 	cmdargs = getCmdArgs(envp);
-
-	if (!Unconstrained) {
-		handler = new KleeHandler(cmdargs);
-	} else {
-		handler = new UCHandler(cmdargs);
-	}
-
 	gs = getGuest(cmdargs);
 	if (gs == NULL) {
 		fprintf(stderr, "[klee-mc] Could not get guest.\n");
 		return 2;
+	}
+
+	if (!Unconstrained) {
+		handler = new KleeHandler(cmdargs, gs);
+	} else {
+		handler = new UCHandler(cmdargs, gs);
 	}
 
 	interpreter = createInterpreter(handler, gs);

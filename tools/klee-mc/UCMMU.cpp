@@ -261,11 +261,10 @@ void UCMMU::bindUnfixedUC(
 	 * + fixed that satisfies new length requirement (expand to fixed),
 	 * + symbolic that satisfies len req (expand to sym)
 	 */
-	unsigned		op_bytes, resize_len;
+	unsigned		op_bytes;
 	uint64_t		real_addr;
 	ObjectPair		res;
 	const char		*expand_err;
-	ExecutionState		*new_es;
 
 	std::cerr << "===============WOO: UNFIXED UC================\n";
 

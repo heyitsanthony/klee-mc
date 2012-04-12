@@ -36,8 +36,8 @@ namespace {
 		llvm::cl::desc("Name of function to check with UC."));
 }
 
-ExeUC::ExeUC(InterpreterHandler *ie, Guest* gs)
-: ExecutorVex(ie, gs)
+ExeUC::ExeUC(InterpreterHandler *ie)
+: ExecutorVex(ie)
 {
 	if (!SymRegs) {
 		fprintf(stderr,

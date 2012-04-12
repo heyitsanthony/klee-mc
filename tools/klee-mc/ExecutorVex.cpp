@@ -40,6 +40,7 @@
 #include "RegPrioritizer.h"
 #include "GuestPrioritizer.h"
 #include "SyscallPrioritizer.h"
+#include "KleeHandler.h"
 
 using namespace klee;
 using namespace llvm;
@@ -117,11 +118,11 @@ namespace
 		cl::init(false));
 }
 
-ExecutorVex::ExecutorVex(InterpreterHandler *ih, Guest *in_gs)
+ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 : Executor(ih)
-, gs(in_gs)
+, gs(dynamic_cast<KleeHandler*>(ih)->getGuest())
 , native_code_bytes(0)
-, ctrl_graph(in_gs)
+, ctrl_graph(gs)
 {
 	assert (kmodule == NULL && "KMod already initialized? My contract!");
 
@@ -154,9 +155,9 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih, Guest *in_gs)
 
 	assert (gs);
 
-	if (!theGenLLVM) theGenLLVM = new GenLLVM(in_gs);
+	if (!theGenLLVM) theGenLLVM = new GenLLVM(gs);
 	if (!theVexHelpers)
-		theVexHelpers = VexHelpers::create(in_gs->getArch());
+		theVexHelpers = VexHelpers::create(gs->getArch());
 
 	std::cerr << "[klee-mc] Forcing fake vsyspage reads\n";
 	theGenLLVM->setFakeSysReads();
@@ -168,7 +169,7 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih, Guest *in_gs)
 
 	theVexHelpers->loadUserMod(sys_model->getModelFileName());
 
-	xlate = new VexXlate(in_gs->getArch());
+	xlate = new VexXlate(gs->getArch());
 	xlate_cache = new VexFCache(xlate);
 
 	assert (kmodule == NULL);
