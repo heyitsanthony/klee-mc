@@ -1,7 +1,9 @@
 #include "syscalls.h"
 
 #ifdef GUEST_ARCH_ARM
-
+#ifdef GUEST_ARCH_AMD64
+#error wtf
+#endif
 #include "arm_unistd.h"
 #define INVALID_SYSCALL_NR	511
 /* these calls are in amd64 but not arm-- create fake arm calls */
@@ -20,8 +22,8 @@
 
 static int sysnr_arm2amd64[512] =
 {
-#define __SYSCALL(x,y)	[ARM##x] = x,	
-#include <asm/unistd_64.h>
+#define __SYSCALL(x)	[ARM##x] = x,
+#include "unistd_amd64.h"
 [ARM__NR_fcntl64] = __NR_fcntl,
 [ARM__NR_fstat64] = __NR_fstat
 };
@@ -93,8 +95,8 @@ int syscall_xlate(unsigned int sys_nr)
 
 static int sysnr_x86toamd64[512] =
 {
-#define __SYSCALL(x,y)	[X86##x] = x,	
-#include <asm/unistd_64.h>
+#define __SYSCALL(x)	[X86##x] = x,
+#include "unistd_amd64.h"
 [X86__NR_fcntl64] = __NR_fcntl,
 [X86__NR_fstat64] = __NR_fstat
 };
