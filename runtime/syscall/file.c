@@ -124,7 +124,7 @@ static void sc_stat_sym(struct sc_pkt* sc)
 		make_sym_by_arg(sc->regfile, 1, 88, "statbuf");
 	else
 		/* 64-bit statbuf */
-		make_sym_by_arg(sc->regfile, 1, 104, "statbuf");
+		make_sym_by_arg(sc->regfile, 1, 96, "statbuf");
 #else
 #error wtf
 #endif
