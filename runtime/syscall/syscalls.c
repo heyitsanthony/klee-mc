@@ -322,33 +322,28 @@ static void sc_klee(void* regfile)
 
 void* sc_enter(void* regfile, void* jmpptr)
 {
+	struct sc_pkt		sc;
 	void			*new_regs;
-	unsigned int		sys_nr, pure_sysnr;
 
-	pure_sysnr = GET_SYSNR(regfile);
-	sys_nr = pure_sysnr;
+	sc_clear(&sc);
+	sc.regfile = regfile;
+	sc.pure_sys_nr = GET_SYSNR(regfile);
 
-	/* quick note here: sys_nr can be any syscall number OR
-	 * SYS_klee. Checking for bogus sysnr's by bounding sys_nr by
-	 * 0x1000 would lead to false positives on SYS_klee. */
-	// if (sys_nr > 1000 && sys_nr != SYS_klee) {
-	//	klee_warning("loooooool bogus sysnr");
-	// }
-
-	if (klee_is_symbolic(sys_nr)) {
+	if (klee_is_symbolic(sc.pure_sys_nr)) {
 		klee_warning_once("Resolving symbolic syscall nr");
-		sys_nr = concretize_u64(sys_nr);
-		pure_sysnr = sys_nr;
+		sc.pure_sys_nr = concretize_u64(sc.pure_sys_nr);
 	}
+
+	sc.sys_nr = sc.pure_sys_nr;
 
 #ifndef GUEST_ARCH_AMD64
 	/* non-native architecture */
-	sys_nr = syscall_xlate(pure_sysnr);
+	syscall_xlate(&sc);
 #endif
 
 	sc_breadcrumb_reset();
 
-	switch (sys_nr) {
+	switch (sc.sys_nr) {
 #if 0
 /* tricky semantics */
 	case SYS_clone: {
@@ -399,7 +394,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(regfile, 0);
 		break;
 	case SYS_brk: {
-		ptrdiff_t grow_len;
+		// ptrdiff_t grow_len;
 
 		if (last_brk == 0)
 			last_brk = (void*)heap_end;
@@ -466,7 +461,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		exit_code = klee_get_value(GET_ARG0(regfile));
 		sc_ret_v(regfile, exit_code);
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
-		sc_breadcrumb_commit(pure_sysnr, sys_nr, exit_code);
+		sc_breadcrumb_commit(&sc, exit_code);
 		kmc_exit(exit_code);
 	}
 	break;
@@ -475,7 +470,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		if (GET_ARG2(regfile) == SIGABRT) {
 			sc_ret_v(regfile, SIGABRT);
 			SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
-			sc_breadcrumb_commit(pure_sysnr, sys_nr, SIGABRT);
+			sc_breadcrumb_commit(&sc, SIGABRT);
 			kmc_exit(SIGABRT);
 		} else {
 			sc_ret_or(sc_new_regs(regfile), 0, -1);
@@ -599,7 +594,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_openat:
 	case SYS_open:
 	case SYS_close:
-		if (!file_sc(pure_sysnr, sys_nr, regfile))
+		if (!file_sc(&sc))
 			goto already_logged;
 		break;
 	case SYS_prctl:
@@ -650,7 +645,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		}
 
 		sc_ret_v(regfile, addr);
-		sc_breadcrumb_commit(pure_sysnr, sys_nr, addr);
+		sc_breadcrumb_commit(&sc, addr);
 		goto already_logged;
 	}
 	break;
@@ -894,7 +889,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_mmap:
 		new_regs = sc_mmap(regfile);
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
-		sc_breadcrumb_commit(pure_sysnr, sys_nr, GET_SYSRET(new_regs));
+		sc_breadcrumb_commit(&sc, GET_SYSRET(new_regs));
 		goto already_logged;
 	case SYS_socket:
 		klee_warning_once("phony socket call");
@@ -1071,7 +1066,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 
 	default:
-		kmc_sc_bad(sys_nr);
+		kmc_sc_bad(sc.sys_nr);
 		klee_report_error(
 			__FILE__,
 			__LINE__,
@@ -1082,10 +1077,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 	if (sc_breadcrumb_is_newregs()) {
 		/* ret value is stored in ktest regctx */
-		sc_breadcrumb_commit(pure_sysnr, sys_nr, 0);
+		sc_breadcrumb_commit(&sc, 0);
 	} else {
 		/* ret value was written concretely */
-		sc_breadcrumb_commit(pure_sysnr, sys_nr, GET_SYSRET(regfile));
+		sc_breadcrumb_commit(&sc, GET_SYSRET(regfile));
 	}
 
 already_logged:

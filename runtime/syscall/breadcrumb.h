@@ -4,14 +4,13 @@
 #include <klee/breadcrumb.h>
 #include <stdint.h>
 
+struct sc_pkt;
+
 void sc_breadcrumb_reset(void);
 void sc_breadcrumb_add_ptr(void* ptr, unsigned int sz);
 void sc_breadcrumb_add_argptr(
 	unsigned int arg, unsigned int off, unsigned int sz);
-void sc_breadcrumb_commit(
-	unsigned int sysnr,
-	unsigned int xlate_sysnr,
-	uint64_t aux_ret);
+void sc_breadcrumb_commit(struct sc_pkt* sc, uint64_t aux_ret);
 
 void sc_breadcrumb_set_flags(unsigned int);
 struct bc_syscall* sc_breadcrumb_get(void);

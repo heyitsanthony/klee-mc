@@ -232,6 +232,13 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 		}
 		break;
 
+	case SYS_lstat:
+	case SYS_stat:
+		fprintf(stderr, KREPLAY_SC "stat \"%s\" ret=%p\n",
+			(char*)sp.getArgPtr(0),
+			(void*)getRet());
+		break;
+
 	case SYS_open:
 		fprintf(stderr, KREPLAY_SC "OPEN \"%s\" ret=%p\n",
 			(char*)sp.getArgPtr(0), (void*)getRet());
@@ -289,6 +296,10 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 			(void*)(sp.getArg(0) + sp.getArg(1)));
 		guest->getMem()->munmap(guest_ptr(sp.getArg(0)), sp.getArg(1));
 		break;
+/* XXX: think of a better place to put this-- from runtime/syscall/syscalls.h */
+#define ARCH_mmap2	0x1000
+	case ARCH_mmap2:
+		sp.setArg(5, sp.getArg(5)*4096);
 	case SYS_mmap:
 		sc_mmap(sp);
 		break;

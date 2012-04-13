@@ -66,9 +66,7 @@ static int str_contains(const char* needle, const char* haystack)
 
 /* 0 => early terminate
  * 1 => normal terminate */
-int sc_read_sym(
-	unsigned pure_sysnr,
-	unsigned sys_nr, void* regfile, uint64_t len)
+int sc_read_sym(struct sc_pkt* sc, uint64_t len)
 {
 	void	*new_regs;
 
@@ -76,17 +74,17 @@ int sc_read_sym(
 	// since this causes the state space to explode into really useless
 	// code.
 	if (len == 0) {
-		sc_ret_v(regfile, 0);
+		sc_ret_v(sc->regfile, 0);
 		return 1;
 	}
 
 	if (len > SSIZE_MAX) {
 		/* "result is unspecified"-- -1 for an error */
-		sc_ret_v(regfile, -1);
+		sc_ret_v(sc->regfile, -1);
 		return 1;
 	}
 
-	new_regs = sc_new_regs(regfile);
+	new_regs = sc_new_regs(sc->regfile);
 
 #ifdef USE_SYS_FAILURE
 	if ((++fail_c.fc_read % FAILURE_RATE) == 0 &&
@@ -97,14 +95,16 @@ int sc_read_sym(
 	klee_assume(GET_SYSRET(new_regs) == len);
 
 	sc_ret_v(new_regs, len);
-	make_sym_by_arg(regfile, 1, len, "readbuf");
-	sc_breadcrumb_commit(pure_sysnr, sys_nr, GET_SYSRET(new_regs));
+	make_sym_by_arg(sc->regfile, 1, len, "readbuf");
+	sc_breadcrumb_commit(sc, GET_SYSRET(new_regs));
 	return 0;
 }
 
-static void sc_stat_sym(void* regfile)
+static void sc_stat_sym(struct sc_pkt* sc)
 {
-	void* new_regs = sc_new_regs(regfile);
+	void	*new_regs;
+
+	new_regs = sc_new_regs(sc->regfile);
 #ifdef USE_SYS_FAILURE
 	if (	(++fail_c.fc_stat % FAILURE_RATE) == 0 &&
 		GET_SYSRET_S(new_regs) == -1)
@@ -114,14 +114,19 @@ static void sc_stat_sym(void* regfile)
 #endif
 	sc_ret_v(new_regs, 0);
 
-/* XXX FIXME XXX
- * what happens if I'm 32-bit and fstat64? Shouldn't I be using the
- * 64 bit struct instead? */
-#if (GUEST_ARCH_ARM || GUEST_ARCH_X86)
-	/* 32-bit statbuf */
-	make_sym_by_arg(regfile, 1, 88, "statbuf");
+#ifdef GUEST_ARCH_AMD64
+	make_sym_by_arg(sc->regfile, 1, sizeof(struct stat), "statbuf");
+#elif GUEST_ARCH_ARM
+	make_sym_by_arg(sc->regfile, 1, 88, "statbuf");
+#elif GUEST_ARCH_X86
+	if (sc_is_32bit(sc))
+		/* 32-bit statbuf */
+		make_sym_by_arg(sc->regfile, 1, 88, "statbuf");
+	else
+		/* 64-bit statbuf */
+		make_sym_by_arg(sc->regfile, 1, 104, "statbuf");
 #else
-	make_sym_by_arg(regfile, 1, sizeof(struct stat), "statbuf");
+#error wtf
 #endif
 }
 
@@ -139,35 +144,35 @@ int str_is_sym(const char* s)
 	return 1;
 }
 
-static void sc_stat(unsigned int sys_nr, void* regfile)
+static void sc_stat(struct sc_pkt* sc)
 {
-	if (sys_nr == SYS_lstat || sys_nr == SYS_stat) {
+	if (sc->sys_nr == SYS_lstat || sc->sys_nr == SYS_stat) {
 		const char	*path;
 
-		path = (const char*)(GET_ARG0_PTR(regfile));
+		path = (const char*)(GET_ARG0_PTR(sc->regfile));
 		if (!str_is_sym(path)) {
 			int		fd;
 
 			fd = fd_open(path);
 			if (fd > 0) {
 				struct stat	*s;
-				s = (struct stat*)(GET_ARG1_PTR(regfile));
-				sc_ret_v(regfile, fd_stat(fd, s));
+				s = (struct stat*)(GET_ARG1_PTR(sc->regfile));
+				sc_ret_v(sc->regfile, fd_stat(fd, s));
 				fd_close(fd);
 				return;
 			}
 		}
 	}
 
-	if (sys_nr == SYS_fstat) {
+	if (sc->sys_nr == SYS_fstat) {
 		int	fd;
 
-		fd = GET_ARG0(regfile);
+		fd = GET_ARG0(sc->regfile);
 		if (fd_is_concrete(fd)) {
 			struct stat	*s;
 
-			s = (struct stat*)(GET_ARG1_PTR(regfile));
-			sc_ret_v(regfile, fd_stat(fd, s));
+			s = (struct stat*)(GET_ARG1_PTR(sc->regfile));
+			sc_ret_v(sc->regfile, fd_stat(fd, s));
 
 			return;
 		}
@@ -176,7 +181,7 @@ static void sc_stat(unsigned int sys_nr, void* regfile)
 	klee_warning_once(
 		"stat not respecting concretes as it ought to");
 
-	sc_stat_sym(regfile);
+	sc_stat_sym(sc);
 }
 
 static void sc_open(const char* path, void* regfile)
@@ -223,11 +228,12 @@ static void sc_open(const char* path, void* regfile)
 	sc_ret_v(new_regs, ret_fd);
 }
 
-int file_sc(unsigned int pure_sysnr, unsigned int sys_nr, void* regfile)
+int file_sc(struct sc_pkt* sc)
 {
+	void	*regfile = sc->regfile;
 	void	*new_regs;
 
-	switch (sys_nr) {
+	switch (sc->sys_nr) {
 	case SYS_lseek: {
 		int fd = GET_ARG0(regfile);
 
@@ -291,7 +297,7 @@ int file_sc(unsigned int pure_sysnr, unsigned int sys_nr, void* regfile)
 			break;
 		}
 
-		if (sc_read_sym(pure_sysnr, sys_nr, regfile, len) == 0)
+		if (sc_read_sym(sc, len) == 0)
 			return 0;
 	}
 	break;
@@ -300,9 +306,9 @@ int file_sc(unsigned int pure_sysnr, unsigned int sys_nr, void* regfile)
 	case SYS_lstat:
 	case SYS_stat:
 		if (!concrete_vfs)
-			sc_stat_sym(regfile);
+			sc_stat_sym(sc);
 		else
-			sc_stat(sys_nr, regfile);
+			sc_stat(sc);
 		break;
 
 	case SYS_close:

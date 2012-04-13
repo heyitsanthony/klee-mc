@@ -1,3 +1,4 @@
+#include "klee/klee.h"
 #include "syscalls.h"
 
 #ifdef GUEST_ARCH_ARM
@@ -28,18 +29,33 @@ static int sysnr_arm2amd64[512] =
 [ARM__NR_fstat64] = __NR_fstat
 };
 
-int syscall_xlate(unsigned int sys_nr)
+void syscall_xlate(struct sc_pkt* sc)
 {
-	 if (sys_nr > 511)
-	 	return -1;
+	int	ret;
 
-	if (sys_nr == ARM__NR_mmap2)
-		return __NR_mmap;
-// XXX: we'll need this when we start supporting
-// mmap of concrete files with offsets..
-//		return ARM_SYS_mmap2;
+	if (sc->sys_nr > 511) {
+		sc->sys_nr = -1;
+		return;
+	}
 
-	return sysnr_arm2amd64[sys_nr];
+	sc_set_32bit(sc);
+
+	if (sc->sys_nr == ARM__NR_mmap2) {
+		sc->sys_nr = __NR_mmap;
+		return;
+	}
+
+	ret = sysnr_arm2amd64[sc->sys_nr];
+	if (ret != 0 || sc->sys_nr == ARM__NR_read) {
+		klee_print_expr("pure sysnr", sc->sys_nr);
+		klee_print_expr("xlate sysnr", ret);
+		klee_report_error(
+			__FILE__, __LINE__,
+			"Could not find appropriate translation for syscall",
+			"scxlate.err");
+	}
+
+	sc->sys_nr = ret;
 }
 
 #endif
@@ -93,23 +109,78 @@ int syscall_xlate(unsigned int sys_nr)
 //#define X86__NR_		INVALID_SYSCALL_NR
 //#define X86__NR_		INVALID_SYSCALL_NR
 
+/* works just like amd64, just with different pointer sizes */
 static int sysnr_x86toamd64[512] =
 {
 #define __SYSCALL(x)	[X86##x] = x,
 #include "unistd_amd64.h"
 [X86__NR_fcntl64] = __NR_fcntl,
-[X86__NR_fstat64] = __NR_fstat
+[X86__NR_stat64] = __NR_stat,
+[X86__NR_lstat64] = __NR_lstat,
+[X86__NR_fstat64] = __NR_fstat,
+[X86__NR_chown32] = __NR_chown,
+[X86__NR_setuid32] = __NR_setuid,
+[X86__NR_setgid32] = __NR_setgid,
+[X86__NR_setfsuid32] = __NR_setfsuid,
+[X86__NR_setfsgid32] = __NR_setfsgid
 };
 
-int syscall_xlate(unsigned int sys_nr)
+/* different structure sizes for 32-bit calls */
+static int sysnr_x86toamd64_32bit[512] =
 {
-	 if (sys_nr > 511)
-	 	return -1;
+[X86__NR_lchown32] = __NR_lchown,
+[X86__NR_getuid32] = __NR_getuid,
+[X86__NR_getgid32] = __NR_getgid,
+[X86__NR_geteuid32] = __NR_geteuid,
+[X86__NR_getegid32] = __NR_getegid,
+[X86__NR_setreuid32] = __NR_setreuid,
+[X86__NR_setregid32] = __NR_setregid,
+[X86__NR_getgroups32] = __NR_getgroups,
+[X86__NR_setgroups32] = __NR_setgroups,
+[X86__NR_fchown32] = __NR_fchown,
+[X86__NR_setresuid32] = __NR_setresuid,
+[X86__NR_getresuid32] = __NR_getresuid,
+[X86__NR_setresgid32] = __NR_setresgid,
+[X86__NR_getresgid32] = __NR_getresgid,
+__SYSCALL(__NR_stat)
+__SYSCALL(__NR_lstat)
+__SYSCALL(__NR_fstat)
+};
 
-	if (sys_nr == X86__NR_mmap2)
-		return X86_SYS_mmap2;
+void syscall_xlate(struct sc_pkt* sc)
+{
+	int	ret;
 
-	return sysnr_x86toamd64[sys_nr];
+	if (sc->sys_nr > 511) {
+		sc->sys_nr = -1;
+	 	return;
+	}
+
+	if (sc->sys_nr == X86__NR_mmap2) {
+		sc->sys_nr = X86_SYS_mmap2;
+		return;
+	}
+
+	ret = sysnr_x86toamd64_32bit[sc->sys_nr];
+	if (ret != 0 || sc->sys_nr == X86__NR_read) {
+		sc_set_32bit(sc);
+		sc->sys_nr = ret;
+		return;
+	}
+
+
+	ret = sysnr_x86toamd64[sc->sys_nr];
+	if (ret == 0 && sc->sys_nr != X86__NR_read) {
+		klee_print_expr("pure sysnr", sc->sys_nr);
+		klee_print_expr("xlate sysnr", ret);
+		klee_report_error(
+			__FILE__, __LINE__,
+			"Could not find appropriate translation for syscall",
+			"scxlate.err");
+	}
+
+	sc->sys_nr = ret;
+	return;
 }
 
 #endif

@@ -1,6 +1,7 @@
 #include <klee/klee.h>
 #include <klee/breadcrumb.h>
 #include "breadcrumb.h"
+#include "syscalls.h"
 
 void kmc_breadcrumb(struct breadcrumb* bc, unsigned int sz);
 
@@ -69,10 +70,7 @@ void sc_breadcrumb_add_argptr(
 	op->sop_sz = sz;
 }
 
-void sc_breadcrumb_commit(
-	unsigned int sysnr,
-	unsigned int xlate_sysnr,
-	uint64_t aux_ret)
+void sc_breadcrumb_commit(struct sc_pkt* sc, uint64_t aux_ret)
 {
 	int i;
 
@@ -82,8 +80,8 @@ void sc_breadcrumb_commit(
 			"Reusing already-set breadcrumb for commit",
 			"sc.err");
 	}
-	bc_sc.bcs_sysnr = sysnr;
-	bc_sc.bcs_xlate_sysnr = xlate_sysnr;
+	bc_sc.bcs_sysnr = sc->pure_sys_nr;
+	bc_sc.bcs_xlate_sysnr = sc->sys_nr;
 	bc_sc.bcs_op_c = bc_opbufidx+1;
 	bc_sc.bcs_ret = aux_ret;
 

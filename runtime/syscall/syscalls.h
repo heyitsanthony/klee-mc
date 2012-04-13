@@ -59,8 +59,20 @@
 #define GET_ARG4_PTR(x)	(void*)((uintptr_t)GET_ARG4(x))
 #define GET_ARG5_PTR(x)	(void*)((uintptr_t)GET_ARG5(x))
 
+#define sc_clear(x)	(x)->flags = 0
+#define sc_is_32bit(x)	((x)->flags & 1)
+#define sc_set_32bit(x)	(x)->flags |= 1
 
-int syscall_xlate(unsigned int sys_nr);
+struct sc_pkt
+{
+	int	pure_sys_nr;	/* syscall number given to us by guest */
+	int	sys_nr;		/* syscall we translate it to for host */
+	void	*regfile;	/* guest's incoming register file */
+	int	flags;
+};
+
+
+void syscall_xlate(struct sc_pkt* sc);
 
 void* sc_new_regs(void* regfile);
 void sc_ret_range(void* regfile, int64_t lo, int64_t hi);
