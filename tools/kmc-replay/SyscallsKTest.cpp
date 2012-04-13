@@ -31,6 +31,7 @@ extern "C"
 {
 #include <valgrind/libvex_guest_amd64.h>
 #include <valgrind/libvex_guest_arm.h>
+#include <valgrind/libvex_guest_x86.h>
 }
 
 SyscallsKTest* SyscallsKTest::create(
@@ -324,7 +325,7 @@ void SyscallsKTest::sc_mmap(SyscallParams& sp)
 	int		rc;
 
 	bcs_ret = (void*)bcs_crumb->bcs_ret;
-	if (bcs_ret == MAP_FAILED) {
+	if (((int32_t)(intptr_t)bcs_ret) == ((int32_t)(intptr_t)MAP_FAILED)) {
 		setRet((uint64_t)bcs_ret);
 		return;
 	}
@@ -353,7 +354,7 @@ void SyscallsKTest::sc_mmap(SyscallParams& sp)
 
 	setRet((uint64_t)g_ret.o);
 
-	if (((int)sp.getArg(4)) != -1) {
+	if (((int32_t)sp.getArg(4)) != (int32_t)-1) {
 		/* only symbolic if fd is defined (e.g. fd != -1) */
 		bool	copied_in;
 		copied_in = copyInMemObj(g_ret.o, sp.getArg(1));
@@ -378,35 +379,59 @@ bool SyscallsKTest::copyInMemObj(uint64_t guest_addr, unsigned int sz)
 void SyscallsKTest::setRet(uint64_t r)
 {
 	void	*state_data;
+	Arch::Arch	arch;
 
 	state_data = guest->getCPUState()->getStateData();
 
-	if (guest->getArch() == Arch::X86_64) {
+	arch = guest->getArch();
+	if (arch == Arch::X86_64) {
 		VexGuestAMD64State	*guest_cpu;
 		guest_cpu = (VexGuestAMD64State*)state_data;
 		guest_cpu->guest_RAX = r;
-	} else if (guest->getArch() == Arch::ARM) {
+		return;
+	}
+	if (arch == Arch::ARM) {
 		VexGuestARMState	*guest_cpu;
 		guest_cpu = (VexGuestARMState*)state_data;
 		guest_cpu->guest_R0 = (uint32_t)r;
-	} else {
-		assert (0 == 1 && "UNK ARCH");
+		return;
 	}
+
+	if (arch == Arch::I386) {
+		VexGuestX86State	*guest_cpu;
+		guest_cpu = (VexGuestX86State*)state_data;
+		guest_cpu->guest_EAX = (uint32_t)r;
+		return;
+	}
+
+	assert (0 == 1 && "UNK ARCH");
 }
 
 uint64_t SyscallsKTest::getRet(void) const
 {
+	Arch::Arch	arch;
+
 	const void* state_data;
 
 	state_data = guest->getCPUState()->getStateData();
-	if (guest->getArch() == Arch::X86_64) {
+	arch = guest->getArch();
+	if (arch == Arch::X86_64) {
 		const VexGuestAMD64State *guest_cpu;
 		guest_cpu = (const VexGuestAMD64State*)state_data;
 		return guest_cpu->guest_RAX;
-	} else if (guest->getArch() == Arch::ARM) {
+	}
+
+	if (guest->getArch() == Arch::ARM) {
 		const VexGuestARMState	*guest_cpu;
 		guest_cpu = (const VexGuestARMState*)state_data;
 		return (uint64_t)guest_cpu->guest_R0;
+	}
+
+
+	if (guest->getArch() == Arch::I386) {
+		const VexGuestX86State	*guest_cpu;
+		guest_cpu = (const VexGuestX86State*)state_data;
+		return (uint64_t)guest_cpu->guest_EAX;
 	}
 
 	assert (0 == 1 && "UNK ARCH");
@@ -418,6 +443,7 @@ bool SyscallsKTest::copyInRegMemObj(void)
 	char			*partial_reg_buf;
 	void			*state_data;
 	unsigned int		reg_sz;
+	Arch::Arch		arch;
 
 	reg_sz = guest->getCPUState()->getStateSize();
 	if ((partial_reg_buf = kts->feedObjData(reg_sz)) == NULL) {
@@ -425,8 +451,8 @@ bool SyscallsKTest::copyInRegMemObj(void)
 	}
 
 	state_data = guest->getCPUState()->getStateData();
-
-	if (guest->getArch() == Arch::X86_64) {
+	arch = guest->getArch();
+	if (arch == Arch::X86_64) {
 		VexGuestAMD64State	*partial_cpu, *guest_cpu;
 
 		partial_cpu = (VexGuestAMD64State*)partial_reg_buf;
@@ -436,16 +462,30 @@ bool SyscallsKTest::copyInRegMemObj(void)
 		guest_cpu->guest_RAX = partial_cpu->guest_RAX;
 		guest_cpu->guest_RCX = partial_cpu->guest_RCX;
 		guest_cpu->guest_R11 = partial_cpu->guest_R11;
-	} else if (guest->getArch() == Arch::ARM) {
+		goto done;
+	}
+
+	if (arch == Arch::ARM) {
 		VexGuestARMState	*partial_cpu, *guest_cpu;
 
 		partial_cpu = (VexGuestARMState*)partial_reg_buf;
 		guest_cpu = (VexGuestARMState*)state_data;
 		guest_cpu->guest_R0 = partial_cpu->guest_R0;
-	} else {
-		assert (0 == 1 && "UNK ARCH");
+		goto done;
 	}
 
+	if (arch == Arch::I386) {
+		VexGuestX86State	*partial_cpu, *guest_cpu;
+
+		partial_cpu = (VexGuestX86State*)partial_reg_buf;
+		guest_cpu = (VexGuestX86State*)state_data;
+		guest_cpu->guest_EAX = partial_cpu->guest_EAX;
+		guest_cpu->guest_EDX = partial_cpu->guest_EDX;
+		goto done;
+	}
+
+	assert (0 == 1 && "UNK ARCH");
+done:
 	delete [] partial_reg_buf;
 	return true;
 }

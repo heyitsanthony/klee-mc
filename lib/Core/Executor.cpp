@@ -316,8 +316,10 @@ Executor::Executor(InterpreterHandler *ih)
 	//	rp->add(SeqPredictor::createFalse());
 	//	brPredict = rp;
 		ListPredictor		*lp = new ListPredictor();
-		lp->add(new CondPredictor(forking));
+		/* unexplored condition path should have higher priority
+		 * than unexplored condition value. */
 		lp->add(new KBrPredictor());
+		lp->add(new CondPredictor(forking));
 		brPredict = lp;
 	}
 }
@@ -1690,11 +1692,12 @@ void Executor::instInsertElement(ExecutionState& state, KInstruction* ki)
 	} else {
 		/* replace mid */
 		/* (v, off, width) */
-		out_val = ExtractExpr::create(
-			in_v, 0, v_elem_sz*(idx - 1));
+		out_val = ExtractExpr::create(in_v, 0, v_elem_sz*idx);
+
 		out_val = ConcatExpr::create(
 			out_val /* head */,
 			in_newelem /* mid */ );
+
 		out_val = ConcatExpr::create(
 			out_val,
 			ExtractExpr::create(
@@ -1702,6 +1705,8 @@ void Executor::instInsertElement(ExecutionState& state, KInstruction* ki)
 				(idx+1)*v_elem_sz,
 				(v_elem_c-(idx+1))*v_elem_sz) /* tail */);
 	}
+
+	assert (out_val->getWidth() == in_v->getWidth());
 
 	state.bindLocal(ki, out_val);
 }
