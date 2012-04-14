@@ -29,8 +29,8 @@ unsigned MemoryObject::numMemObjs = 0;
 
 MemoryObject::MemoryObject(uint64_t _address)
 : id(counter++)
-, address(_address)
 , size(0)
+, address(_address)
 , mallocKey(0, 0, 0, false, false, true)
 , refCount(0)
 {
@@ -42,8 +42,8 @@ MemoryObject::MemoryObject(
   unsigned _size,
   const MallocKey &_mallocKey)
 : id(counter++)
-, address(_address)
 , size(_size)
+, address(_address)
 , name("unnamed")
 , mallocKey(_mallocKey)
 , fake_object(false)

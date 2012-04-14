@@ -136,6 +136,7 @@ private:
 	void installFDTInitializers(llvm::Function *init_func);
 	void installFDTConfig(ExecutionState& state);
 	void makeArgsSymbolic(ExecutionState* state);
+	void makeMagicSymbolic(ExecutionState* state);
 	void setupRegisterContext(ExecutionState* state, llvm::Function* f);
 	void setupProcessMemory(ExecutionState* state, llvm::Function* f);
 

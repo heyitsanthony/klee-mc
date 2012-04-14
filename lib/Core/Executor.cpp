@@ -1677,26 +1677,23 @@ void Executor::instInsertElement(ExecutionState& state, KInstruction* ki)
 			0,
 			v_elem_sz*(v_elem_c - 1));
 
-		out_val = ConcatExpr::create(
-			in_newelem /* tail */,
-			out_val /* head */);
+		/* tail, head */
+		out_val = ConcatExpr::create(in_newelem, out_val);
 	} else if (idx == 0) {
 		/* replace tail */
 		out_val = ExtractExpr::create(
 			in_v,
 			v_elem_sz,
 			v_elem_sz*(v_elem_c - 1));
-		out_val = ConcatExpr::create(
-			out_val /* head */,
-			in_newelem /* tail */);
+		/* head, tail */
+		out_val = ConcatExpr::create(out_val, in_newelem);
 	} else {
 		/* replace mid */
 		/* (v, off, width) */
 		out_val = ExtractExpr::create(in_v, 0, v_elem_sz*idx);
 
-		out_val = ConcatExpr::create(
-			out_val /* head */,
-			in_newelem /* mid */ );
+		/* head, mid */
+		out_val = ConcatExpr::create(out_val, in_newelem);
 
 		out_val = ConcatExpr::create(
 			out_val,

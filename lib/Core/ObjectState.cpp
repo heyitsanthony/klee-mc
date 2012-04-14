@@ -343,6 +343,12 @@ void ObjectState::setKnownSymbolic(
 	knownSymbolics[offset] = value;
 }
 
+uint8_t ObjectState::read8c(unsigned offset) const
+{
+	assert (isByteConcrete(offset));
+	return concreteStore[offset];
+}
+
 ref<Expr> ObjectState::read8(unsigned offset) const
 {
 	if (isByteConcrete(offset))

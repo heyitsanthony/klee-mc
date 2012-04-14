@@ -241,6 +241,9 @@ public:
 	/// \retval false The copy failed because a read-only object was modified.
 	bool copyInConcretes(void);
 	void print(std::ostream& os) const;
+
+	/* scan for 16*n byte extents of 'magic' byte 0xa3 */
+	std::vector<std::pair<void*, unsigned> > getMagicExtents(void);
 };
 } // End klee namespace
 

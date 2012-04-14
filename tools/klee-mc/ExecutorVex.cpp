@@ -55,6 +55,11 @@ bool UseConcreteVFS;
 
 namespace
 {
+	cl::opt<bool> SymMagic(
+		"sym-magic",
+		cl::desc("Mark 'magic' 0xa3 bytes as symbolic"),
+		cl::init(false));
+
 	cl::opt<bool,true> SymRegsProxy(
 		"symregs",
 		cl::desc("Mark initial register file as symbolic"),
@@ -257,6 +262,7 @@ ExecutionState* ExecutorVex::setupInitialStateEntry(uint64_t entry_addr)
 	assert (kf_scenter && "Could not load sc_enter from runtime library");
 
 	if (SymArgs) makeArgsSymbolic(state);
+	if (SymMagic) makeMagicSymbolic(state);
 
 	pathTree = new PTree(state);
 	state->ptreeNode = pathTree->root;
@@ -296,6 +302,21 @@ void ExecutorVex::cleanupImage(void)
 	if (statsTracker) statsTracker->done();
 }
 
+void ExecutorVex::makeMagicSymbolic(ExecutionState* state)
+{
+	std::vector<std::pair<void*, unsigned> >	exts;
+
+	exts = state->addressSpace.getMagicExtents();
+	if (exts.size() == 0) return;
+
+	fprintf(stderr,
+		"[klee-mc] Making %d magic extents symbolic\n",
+		(int)exts.size());
+
+	foreach (it, exts.begin(), exts.end())
+		sfh->makeRangeSymbolic(
+			*state, it->first, it->second, "magic");
+}
 
 void ExecutorVex::makeArgsSymbolic(ExecutionState* state)
 {

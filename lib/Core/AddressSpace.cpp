@@ -909,3 +909,65 @@ ref<Expr> AddressSpace::getOOBCond(ref<Expr>& symptr) const
 	return NotExpr::create(ret_expr);
 }
 
+std::vector<std::pair<void*, unsigned> > AddressSpace::getMagicExtents(void)
+{
+	std::vector<std::pair<void*, unsigned> >	ret;
+	std::pair<void*, unsigned>		cur_ext;
+
+	cur_ext.first = NULL;
+	cur_ext.second = 0;
+	foreach (it, begin(), end()) {
+		const MemoryObject	*mo = it->first;
+		const ObjectState	*os = it->second;
+		void			*ext_base;
+
+		ext_base = ((char*)cur_ext.first + cur_ext.second);
+
+		if (ext_base != (void*)mo->address) {
+			if (cur_ext.second > 16) {
+				cur_ext.second /= 16;
+				cur_ext.second *= 16;
+				if (cur_ext.second)
+					ret.push_back(cur_ext);
+			}
+
+			cur_ext.first = NULL;
+			cur_ext.second = 0;
+		}
+
+		for (unsigned i = 0; i < mo->size; i++) {
+			uint8_t	c;
+
+			/* mismatch */
+			if (	os->isByteConcrete(i) == false ||
+				((c = os->read8c(i)) != 0xa3))
+			{
+				if (cur_ext.first == NULL)
+					continue;
+
+				if (cur_ext.second > 16) {
+					cur_ext.second /= 16;
+					cur_ext.second *= 16;
+					if (cur_ext.second)
+						ret.push_back(cur_ext);
+				}
+
+				cur_ext.first = NULL;
+				cur_ext.second = 0;
+				continue;
+			}
+
+			/* match */
+			if (cur_ext.first == NULL) {
+				/* start run */
+				cur_ext.first = (char*)mo->address + i;
+				cur_ext.second = 0;
+			}
+
+			/* new byte matched */
+			cur_ext.second++;
+		}
+	}
+
+	return ret;
+}
