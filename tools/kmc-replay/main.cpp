@@ -69,6 +69,13 @@ static int doReplay(
 
 	snprintf(fname_crumbs, 256, "%s/test%06d.crumbs.gz", dirname, test_num);
 	crumbs = Crumbs::create(fname_crumbs);
+	if (crumbs == NULL) {
+		fprintf(
+			stderr,
+			"[kmc] No breadcrumb file at %s. Faking it.\n",
+			fname_crumbs);
+		crumbs = Crumbs::createEmpty();
+	}
 
 	re = VexExec::create<ReplayExec, Guest>(gs);
 	assert (theGenLLVM);
@@ -79,8 +86,6 @@ static int doReplay(
 		uc_state = UCState::init(gs, uc_func, dirname, test_num);
 		assert (uc_state != NULL);
 		kts = uc_state->allocKTest();
-		if (crumbs == NULL)
-			crumbs = Crumbs::createEmpty();
 	} else {
 		char	fname_ktest[256];
 		snprintf(
@@ -88,13 +93,6 @@ static int doReplay(
 			256,
 			"%s/test%06d.ktest.gz", dirname, test_num);
 		kts = KTestStream::create(fname_ktest);
-		if (crumbs == NULL) {
-			fprintf(
-				stderr, 
-				"No breadcrumb file at %s\n",
-				fname_crumbs);
-			return -2;
-		}
 	}
 
 	assert (crumbs != NULL && "Expects crumbs");
