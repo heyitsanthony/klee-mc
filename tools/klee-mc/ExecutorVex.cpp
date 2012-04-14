@@ -174,6 +174,16 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 
 	theVexHelpers->loadUserMod(sys_model->getModelFileName());
 
+	/* occasionally we want to load something elsewhere
+	 * (ARM 0x8000 code base on fogger,
+	 *  0xf..fe000 faketimer page on fogger,
+	 *  ...) --
+	 * this creates problems because normally the codegen will
+	 * update loads/stores to reflect these new addresses.
+	 * unsetting the bias should revert to unbiased behavior */
+	if (getenv("VEXLLVM_BASE_BIAS") != NULL)
+		unsetenv("VEXLLVM_BASE_BIAS");
+
 	xlate = new VexXlate(gs->getArch());
 	xlate_cache = new VexFCache(xlate);
 
