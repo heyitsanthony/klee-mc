@@ -878,6 +878,15 @@ void* sc_enter(void* regfile, void* jmpptr)
 		klee_warning_once("phony pipe");
 		sc_ret_or(sc_new_regs(regfile), -1, 0);
 		break;
+
+	case ARCH_SYS_DEFAULT_EQ0:
+		sc_ret_v(regfile, 0);
+		break;
+
+	case ARCH_SYS_DEFAULT_LE0:
+		sc_ret_or(sc_new_regs(regfile), -1, 0);
+		break;
+
 #if GUEST_ARCH_X86
 	case X86_SYS_mmap2:
 		GET_ARG5(regfile) *= 4096;
@@ -1065,6 +1074,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_or(sc_new_regs(regfile), -1, GET_ARG3(regfile));
 		break;
 
+	case ARCH_SYS_UNSUPP:
 	default:
 		kmc_sc_bad(sc.sys_nr);
 		klee_report_error(
