@@ -102,6 +102,8 @@ ExeSymHook::ExeSymHook(InterpreterHandler *ie)
 : ExecutorVex(ie)
 , zero_malloc_ptr(0)
 {
+	assert (canSymhook(ie) == true);
+
 	ExeStateBuilder::replaceBuilder(new ESVSymHookBuilder());
 	delete mmu;
 	mmu = new MallocMMU(*this);
@@ -407,21 +409,18 @@ ExecutionState* ExeSymHook::setupInitialState(void)
 }
 
 
-ExeSymHook* ExeSymHook::create(InterpreterHandler *ie)
+bool ExeSymHook::canSymhook(InterpreterHandler *ie)
 {
 	const Symbols	*syms;
 	const Symbol	*sym_malloc;
 
 	syms = dynamic_cast<KleeHandler*>(ie)->getGuest()->getDynSymbols();
 	if (syms == NULL)
-		return NULL;
+		return false;
 
 	sym_malloc = syms->findSym("malloc");
-	if (	!syms->findSym("malloc") &&
-		!syms->findSym("calloc"))
-	{
-		return NULL;
-	}
+	if (!syms->findSym("malloc") && !syms->findSym("calloc"))
+		return false;
 
-	return new ExeSymHook(ie);
+	return true;
 }

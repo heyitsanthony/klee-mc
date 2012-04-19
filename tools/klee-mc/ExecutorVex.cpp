@@ -132,6 +132,7 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 	assert (kmodule == NULL && "KMod already initialized? My contract!");
 
 	ExeStateBuilder::replaceBuilder(new ExeStateVexBuilder());
+	ExeStateVex::setBaseGuest(gs);
 
 	if (gs->getMem()->is32Bit()) {
 		MemoryManager::set32Bit();
@@ -375,7 +376,8 @@ void ExecutorVex::bindMappingPage(
 	addr_base = ((uint64_t)gs->getMem()->getData(m))+(PAGE_SIZE*pgnum);
 
 	mmap_os_c = state->allocateAt(addr_base, PAGE_SIZE, f->begin()->begin());
-	mmap_mo = const_cast<MemoryObject*>(state->addressSpace.resolveOneMO(addr_base));
+	mmap_mo = const_cast<MemoryObject*>(
+		state->addressSpace.resolveOneMO(addr_base));
 
 	heap_min = ~0UL;
 	heap_max = 0;

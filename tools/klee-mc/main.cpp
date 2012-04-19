@@ -7,7 +7,7 @@
 #include "klee/Internal/System/Time.h"
 #include "klee/Internal/ADT/TwoOStreams.h"
 #include "static/Sugar.h"
-
+#include "../../lib/Core/GDBExecutor.h"
 #include "KleeHandler.h"
 #include "UCHandler.h"
 #include "cmdargs.h"
@@ -65,6 +65,11 @@ namespace {
 	cl::opt<bool> SymHook(
 		"use-symhooks",
 		cl::desc("Apply additional analysis by tracking library calls"),
+		cl::init(false));
+
+	cl::opt<bool> UseGDB(
+		"use-gdb",
+		cl::desc("Enable remote GDB monitoring"),
 		cl::init(false));
 
 	cl::opt<std::string>
@@ -426,26 +431,16 @@ bool isReplaying(void)
 	return (!ReplayOutDir.empty() || !ReplayOutFile.empty());
 }
 
+#define NEW_INTERP(x)	\
+	((UseGDB) ? new GDBExecutor<x>(handler) : new x(handler))
+
 Interpreter* createInterpreter(KleeHandler *handler, Guest* gs)
 {
-	Interpreter	*interpreter;
+	if (Unconstrained) return NEW_INTERP(ExeUC);
+	if (SymHook) return NEW_INTERP(ExeSymHook);
+	if (XChkJIT) return NEW_INTERP(ExeChk);
 
-	if (Unconstrained)
-		return new ExeUC(handler);
-
-	if (SymHook) {
-		interpreter = ExeSymHook::create(handler);
-		if (interpreter != NULL)
-			return interpreter;
-
-		fprintf(stderr,
-			"Failed to create SymHook. Missing malloc?\n");
-	}
-
-	if (XChkJIT)
-		return new ExeChk(handler);
-
-	return new ExecutorVex(handler);
+	return NEW_INTERP(ExecutorVex);
 }
 
 static std::list<ReplayPathType>	replayPaths;

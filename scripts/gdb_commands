@@ -1,0 +1,22 @@
+define saveregs
+	set pagination off
+	shell rm -f gdb.regs
+	shell rm -f gdb.threads
+	set logging file gdb.regs
+	set logging on
+	info registers
+	set logging off
+
+	set logging file gdb.threads
+	set logging on
+	info threads 
+	set logging off
+end
+
+define scan
+	saveregs
+	shell /home/chz/klee-trunk/scripts/scan_suspend.sh
+	detach
+	shell /home/chz/klee-trunk/scripts/scan_launch.sh
+	target remote :55555
+end

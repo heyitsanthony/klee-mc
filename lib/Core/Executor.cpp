@@ -2469,6 +2469,8 @@ void Executor::replayPathsIntoStates(ExecutionState& initialState)
 
 void Executor::run(ExecutionState &initialState)
 {
+	currentState = &initialState;
+
 	// Delay init till now so that ticks don't accrue during
 	// optimization and such.
 	initTimers();
@@ -2506,43 +2508,45 @@ dump:
 
 done:
 	if (initialStateCopy) delete initialStateCopy;
+
+	currentState = NULL;
 }
 
 void Executor::runLoop(void)
 {
 	ExecutionState* last_state;
 	while (!stateManager->empty() && !haltExecution) {
-		ExecutionState *state;
 
-		state = stateManager->selectState(!onlyNonCompact);
-		if (last_state != state && DumpSelectStack) {
-			std::cerr << "StackTrace for st=" << (void*)state
-				<< ". Insts=" << state->totalInsts
+		currentState = stateManager->selectState(!onlyNonCompact);
+		if (last_state !=currentState && DumpSelectStack) {
+			std::cerr << "StackTrace for st="
+				<< (void*)currentState
+				<< ". Insts=" <<currentState->totalInsts
 				<< '\n';
-			printStackTrace(*state, std::cerr);
+			printStackTrace(*currentState, std::cerr);
 			std::cerr << "===================\n";
 		}
 
-		assert (state != NULL &&
+		assert (currentState != NULL &&
 			"State man not empty, but selectState is?");
 
 		/* decompress state if compact */
-		if (state->isCompact()) {
-			ExecutionState* newState;
+		if (currentState->isCompact()) {
+			ExecutionState* newSt;
 
 			assert (initialStateCopy != NULL);
-			newState = state->reconstitute(*initialStateCopy);
-			stateManager->replaceState(state, newState);
+			newSt = currentState->reconstitute(*initialStateCopy);
+			stateManager->replaceState(currentState, newSt);
 
-			notifyCurrent(state);
-			state = newState;
+			notifyCurrent(currentState);
+			currentState = newSt;
 		}
 
-		stepStateInst(state);
+		stepStateInst(currentState);
 
-		handleMemoryUtilization(state);
-		notifyCurrent(state);
-		last_state = state;
+		handleMemoryUtilization(currentState);
+		notifyCurrent(currentState);
+		last_state = currentState;
 	}
 }
 

@@ -971,3 +971,71 @@ std::vector<std::pair<void*, unsigned> > AddressSpace::getMagicExtents(void)
 
 	return ret;
 }
+
+bool AddressSpace::readConcrete(
+	std::vector<uint8_t>& v,
+	std::vector<bool>& is_conc,
+	uint64_t addr,
+	unsigned len) const
+{
+	MemoryObject	hack(addr);
+	MMIter		it = objects.upper_bound(&hack), e = end();
+	uint64_t	cur_addr;
+	unsigned	remaining;
+	bool		bogus_reads = false;
+
+	if (it != begin() && it->first->address > addr)
+		--it;
+
+	cur_addr = addr;
+	remaining = len;
+
+	while (it != e) {
+		const MemoryObject*	mo;
+		const ObjectState*	os;
+		unsigned		mo_off, v_off, i;
+
+		mo = it->first;
+		mo_off = (mo->address < cur_addr)
+			? cur_addr - mo->address
+			: 0;
+		assert (mo_off <= mo->size);
+
+		v_off = (mo->address > cur_addr)
+			? mo->address - cur_addr
+			: 0;
+
+		/* gap in memory; fill in */
+		if (v_off) {
+			i = 0;
+			bogus_reads = true;
+			while (i < v_off && remaining) {
+				v.push_back(0);
+				is_conc.push_back(false);
+				remaining--;
+				i++;
+			}
+		}
+
+		if (!remaining) return bogus_reads;
+
+		os = it->second;
+		i = 0;
+		while (i < (mo->size - mo_off) && remaining) {
+			if (os->isByteConcrete(i + mo_off)) {
+				v.push_back(os->read8c(i + mo_off));
+				is_conc.push_back(true);
+			} else {
+				v.push_back(0);
+				is_conc.push_back(false);
+				bogus_reads = true;
+			}
+			i++;
+			remaining--;
+		}
+
+		if (!remaining) return bogus_reads;
+	}
+
+	return bogus_reads;
+}

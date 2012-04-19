@@ -324,31 +324,39 @@ public:
 
   unsigned stepReplay(void);
 
-  BranchTracker::iterator branchesBegin(void) const
-  { return brChoiceSeq.begin(); }
+	BranchTracker::iterator branchesBegin(void) const
+	{ return brChoiceSeq.begin(); }
 
-  BranchTracker::iterator branchesEnd(void) const
-  { return brChoiceSeq.end(); }
+	BranchTracker::iterator branchesEnd(void) const
+	{ return brChoiceSeq.end(); }
 
-  BranchInfo branchLast(void) const;
+	BranchInfo branchLast(void) const;
 
-  unsigned getPHISlot(void) const { return incomingBBIndex; }
+	unsigned getPHISlot(void) const { return incomingBBIndex; }
 
-  std::vector< SymbolicArray >::const_iterator symbolicsBegin(void) const
-  { return symbolics.begin(); }
+	std::vector< SymbolicArray >::const_iterator symbolicsBegin(void) const
+	{ return symbolics.begin(); }
 
-  std::vector< SymbolicArray >::const_iterator symbolicsEnd(void) const
-  { return symbolics.end(); }
+	std::vector< SymbolicArray >::const_iterator symbolicsEnd(void) const
+	{ return symbolics.end(); }
 
-  stack_iter_ty stackBegin(void) { return stack.begin(); }
-  stack_iter_ty stackEnd(void) { return stack.end(); }
+	stack_iter_ty stackBegin(void) { return stack.begin(); }
+	stack_iter_ty stackEnd(void) { return stack.end(); }
 
-  unsigned int getNumSymbolics(void) const { return symbolics.size(); }
-  bool isConcrete(void) const;
+	unsigned int getNumSymbolics(void) const { return symbolics.size(); }
+	bool isConcrete(void) const;
 
-  void assignSymbolics(const Assignment& a);
+	void assignSymbolics(const Assignment& a);
 
-  void abortInstruction(void);
+	void abortInstruction(void);
+
+	/* translates state's registers into gdb format */
+	/* for default llvm stuff, there's no register file, only
+	 * stack frames with SSA variables */
+	virtual void getGDBRegs(
+		std::vector<uint8_t>& v,
+		std::vector<bool>& is_conc) const
+	{ v.clear(); is_conc.clear(); }
 };
 
 }

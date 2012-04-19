@@ -242,16 +242,19 @@ protected:
 
   void bindModuleConstants(void);
   void bindKFuncConstants(KFunction *kfunc);
+  virtual void stepStateInst(ExecutionState* &state);
 
-  InterpreterHandler *interpreterHandler;
-  llvm::TargetData* target_data;
-  llvm::Function* dbgStopPointFn;
-  StatsTracker *statsTracker;
-  PTree *pathTree;
-  TreeStreamWriter *symPathWriter;
-  TimingSolver *solver;
-  ExeStateManager* stateManager;
-  Forks* forking;
+
+  InterpreterHandler	*interpreterHandler;
+  llvm::TargetData	*target_data;
+  llvm::Function	*dbgStopPointFn;
+  StatsTracker		*statsTracker;
+  PTree			*pathTree;
+  TreeStreamWriter	*symPathWriter;
+  TimingSolver		*solver;
+  ExeStateManager	*stateManager;
+  Forks			*forking;
+  ExecutionState	*currentState;
 
 private:
   std::vector<TimerInfo*> timers;
@@ -379,7 +382,6 @@ private:
   void printFileLine(ExecutionState &state, KInstruction *ki);
 
   void replayPathsIntoStates(ExecutionState& initialState);
-  void stepStateInst(ExecutionState* &state);
   void killStates(ExecutionState* &state);
   bool seedRun(ExecutionState& initialState);
   void stepSeedInst(ExecutionState* &lastState);
@@ -637,6 +639,8 @@ public:
 	PTree* getPTree(void) { return pathTree; }
 	ExeStateManager* getStateManager(void) { return stateManager; }
 	const Forks* getForking(void) const { return forking; }
+
+	ExecutionState* getCurrentState(void) const { return currentState; }
 };
 
 }

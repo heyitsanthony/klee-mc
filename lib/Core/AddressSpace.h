@@ -244,6 +244,14 @@ public:
 
 	/* scan for 16*n byte extents of 'magic' byte 0xa3 */
 	std::vector<std::pair<void*, unsigned> > getMagicExtents(void);
+
+	bool readConcrete(
+		std::vector<uint8_t>& v,
+		std::vector<bool>& is_conc,
+		uint64_t addr,
+		unsigned len) const;
+
+
 };
 } // End klee namespace
 
