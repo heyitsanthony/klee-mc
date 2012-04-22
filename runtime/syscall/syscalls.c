@@ -960,6 +960,11 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_range(new_regs, -1, 1);
 		break;
 
+	case SYS_accept:
+		/* int accept(
+		 * 	int sockfd, struct sockaddr *addr,
+		 * 	socklen_t *addrlen); */
+
 	case SYS_accept4:
 		// int accept4(
 		// 	int sockfd, struct sockaddr *addr,
