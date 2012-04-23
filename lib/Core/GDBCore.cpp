@@ -1,3 +1,4 @@
+#include <signal.h>
 #include <sstream>
 #include "static/Sugar.h"
 #include <sys/types.h>
@@ -9,24 +10,67 @@
 #include <assert.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
+#include <llvm/Support/CommandLine.h>
 
 #include <iostream>
 
+#include "Forks.h"
 #include "Executor.h"
+#include "OverrideSearcher.h"
 #include "klee/ExecutionState.h"
 #include "GDBCore.h"
 
 using namespace klee;
 
+namespace {
+	llvm::cl::opt<bool>
+	UseBogusGDBMem(
+		"use-gdb-bogusmem",
+		llvm::cl::desc("Replace every symbolic byte with 0xfe."),
+		llvm::cl::init(true));
+}
+
+
+static GDBCore	*ctrlc_gc;
+static void handle_ctrlc(int x)
+{
+	ctrlc_gc->setStopped();
+	ctrlc_gc->setPendingBreak();
+}
+
+class GDBTimer : public Executor::Timer
+{
+public:
+	GDBTimer(GDBCore* _gc) : gc(_gc) {}
+	virtual ~GDBTimer() {}
+
+	void run(void)
+	{
+		GDBCmd	*gcmd;
+		gcmd = gc->getNextCmd();
+		if (!gcmd) return;
+		delete gcmd;
+	}
+private:
+	GDBCore	*gc;
+};
+
 GDBCore::GDBCore(Executor* _exe, unsigned _port)
 : port(_port)
 , exe(_exe)
 , run_state(Stopped)
+, pending_break(false)
+, sel_thread(0)
+, watch_fork_br(false)
 {
 	fd_listen = opensock();
 	fd_client = acceptsock();
 	addHandler(new GDBQueryPkt(this, exe));
 	addHandler(new GDBPkt(this, exe));
+
+	ctrlc_gc = this;
+	signal(SIGINT, handle_ctrlc);
+	exe->addTimer(new GDBTimer(this), 1.0);
 }
 
 GDBCore::~GDBCore(void)
@@ -56,6 +100,11 @@ GDBCmd* GDBCore::getNextCmd(void)
 	ssize_t		sz;
 	unsigned	i;
 	uint8_t		expected_chksum, actual_chksum;
+
+	if (pending_break) {
+		writePkt("S02");
+		pending_break = false;
+	}
 
 	sz = recv(fd_client, &linebuf, 1023, 0);
 	if (sz == -1 && errno == EAGAIN)
@@ -102,13 +151,14 @@ GDBCmd* GDBCore::getNextCmd(void)
 		actual_chksum += (uint8_t)incoming_buf[i];
 	}
 
-
 	gcmd = NULL;
 	if (expected_chksum == actual_chksum) {
 		incoming_buf[i] = '\0';
 		gcmd = new GDBCmd(&incoming_buf[1] /* 1 => skip $ */);
 		std::cerr << "Processing command: \"" << gcmd->getStr() << "\"\n";
 		handleCmd(gcmd);
+	} else {
+		std::cerr << "[GDBCore] !!!BAD CHKSUM!!!\n";
 	}
 
 	incoming_buf = std::vector<char>(
@@ -235,13 +285,47 @@ bool GDBQueryPkt::handle(GDBCmd* gcmd)
 	}
 
 	if (first_tok == "C") {
-		gc->writePkt("12345");
+		char	tmp[32];
+		sprintf(tmp, "%lx", (uint64_t)exe->getCurrentState());
+		gc->writePkt(tmp);
 		return true;
 	}
 
 	if (first_tok == "fThreadInfo") {
+		std::stringstream	ss;
+		std::string		outstr;
+		char			tmp[32];
+
 		/* fake only one thread: 12345 */
-		gc->writePkt("m 12345");
+		if (exe->beginStates() == exe->endStates()) {
+			sprintf(tmp, "%lx", (uint64_t)exe->getCurrentState());
+			ss << "m" << tmp;
+			gc->writePkt(ss.str().c_str());
+			return true;
+		}
+
+		ss << "m";
+		foreach (it, exe->beginStates(), exe->endStates()) {
+			sprintf(tmp, "%lx", (uint64_t)(*it));
+			ss << tmp << ",";
+		}
+
+		outstr = ss.str();
+		outstr = outstr.substr(0, outstr.size() - 1);
+		gc->writePkt(outstr.c_str());
+
+		return true;
+	}
+
+	if (strncmp(
+		"ThreadExtraInfo",
+		first_tok.c_str(),
+		sizeof("ThreadExtraInfo")-1) == 0)
+	{
+		void*	p;
+		sscanf(first_tok.c_str()+sizeof("ThreadExtraInfo"), "%p", &p);
+		/* hey. */
+		gc->writePkt("6865792e");
 		return true;
 	}
 
@@ -266,8 +350,8 @@ bool GDBQueryPkt::handle(GDBCmd* gcmd)
 
 
 	if (first_tok == "TStatus") {
-		/* no trace running */
-		gc->writePkt("T0" /*;tnotrun:0"*/);
+		/* we don't support traces yet */
+		gc->writePkt("");
 		return true;
 	}
 
@@ -352,23 +436,59 @@ bool GDBPkt::handle(GDBCmd* gcmd)
 		gc->ack();
 		gc->writePkt("OK");
 		return true;
-	case 'H':
-		/* FIXME: needs to set the current thread */
-		std::cerr
-			<< "[GDBPkt] Ignoring SET-THREAD: "
-			<< gcmd->getStr() << '\n';
+	case 'H': {
+		void	*tid = NULL;
+
+		if (gcmd->getStr()[2] != '-') {
+			sscanf(&(gcmd->getStr().c_str()[2]), "%p", &tid);
+		}
+
+		OverrideSearcher::setOverride((ExecutionState*)tid);
+		if (tid == NULL)
+			tid = exe->getCurrentState();
+
 		gc->ack();
+		if (exe->hasState((ExecutionState*)tid) == false) {
+			gc->overrideThread(NULL);
+			gc->writePkt("E01");
+			return true;
+		}
+
+		gc->setSelThread((ExecutionState*)tid);
 		gc->writePkt("OK");
 		return true;
+	}
 	case '?': /* stop reason */
 		gc->ack();
-		gc->writePkt("S011");	/* sigstop, 17=0x11 */
+		gc->writePkt("S05");	/* sigtrap */
 		return true;
+
+	case 'p': {
+		std::vector<uint8_t>	v;
+		std::vector<bool>	is_conc;
+		int			n;
+
+		sscanf(&(gcmd->getStr().c_str()[1]), "%x", &n);
+
+		exe->getCurrentState()->getGDBRegs(v, is_conc);
+		gc->ack();
+		v = std::vector<uint8_t>(
+			v.begin() + n,
+			v.begin() + n + 1);
+		is_conc = std::vector<bool>(
+			is_conc.begin() + n,
+			is_conc.begin() + n + 1);
+
+
+		gc->writeStateRead(v, is_conc);
+		return true;
+	}
+
 	case 'g': {/* request registers */
 		std::vector<uint8_t>	v;
 		std::vector<bool>	is_conc;
 
-		exe->getCurrentState()->getGDBRegs(v, is_conc);
+		gc->getSelThread()->getGDBRegs(v, is_conc);
 		gc->ack();
 		gc->writeStateRead(v, is_conc);
 
@@ -383,6 +503,7 @@ bool GDBPkt::handle(GDBCmd* gcmd)
 		return true;
 	}
 
+	case 'c':
 	case 'C': {
 		std::cerr << "[GDBPkt] 'C'ont\n";
 		gc->setRunning();
@@ -392,6 +513,7 @@ bool GDBPkt::handle(GDBCmd* gcmd)
 
 	case 's': {
 		std::cerr << "[GDBPkt] 's'inglestep\n";
+		OverrideSearcher::setOverride(gc->getSelThread());
 		gc->setSingleStep();
 		gc->ack();
 		return true;
@@ -403,7 +525,7 @@ bool GDBPkt::handle(GDBCmd* gcmd)
 		sscanf(&(gcmd->getStr().c_str()[1]), "%x", &sig);
 		if (sig == 1)
 			gc->setSingleStep();
-		else if (sig == 17)
+		else if (sig == 17 || sig == SIGCONT)
 			gc->setRunning();
 		else
 			std::cerr << "[GDBPkt] UNKNOWN S-SIGNAL!\n";
@@ -419,20 +541,14 @@ bool GDBPkt::handle(GDBCmd* gcmd)
 	}
 
 	case 'v' : {
-		if (strncmp(&(gcmd->getStr().c_str())[1], "Cont", 4) == 0) {
-			const char	*fields;
-			fields = &gcmd->getStr().c_str()[5];
+		const char	*fields;
+		fields = &gcmd->getStr().c_str()[5];
 
-			if (fields[0] == '?') {
-				gc->ack();
-				gc->writePkt("vCont;c;s;t;C01;S01");
-				break;
-			}
-
+		if (strncmp(&(gcmd->getStr().c_str())[1], "Cont", 4) != 0)
 			break;
-		}
 
-		break;
+		vcont(fields);
+		return true;
 	}
 
 	case 'm': {/* mADDR,LEN */
@@ -454,10 +570,19 @@ bool GDBPkt::handle(GDBCmd* gcmd)
 		gc->ack();
 
 		if (bogus_reads) {
-			unsigned ok = 0;
-			while (is_conc[ok]) ok++;
-			v.resize(ok);
-			is_conc.resize(ok);
+			if (!UseBogusGDBMem) {
+				unsigned ok = 0;
+				while (is_conc[ok]) ok++;
+				v.resize(ok);
+				is_conc.resize(ok);
+			} else {
+				for (unsigned i = 0; i < v.size(); i++) {
+					if (is_conc[i] == false) {
+						v[i] = 0xfe;
+						is_conc[i] = true;
+					}
+				}
+			}
 		}
 
 		if (v.size() == 0) {
@@ -470,10 +595,137 @@ bool GDBPkt::handle(GDBCmd* gcmd)
 		break;
 	}
 
+	/* T thread-id
+	 * test if thread is active */
+	case 'T': {
+		void	*tid;
+
+		gc->ack();
+
+		sscanf(&(gcmd->getStr().c_str())[1], "%p", &tid);
+
+		if (exe->hasState((ExecutionState*)tid)) {
+			gc->writePkt("OK");
+			return true;
+		}
+
+		gc->writePkt("E01");
+		return true;
+	}
+
 	default:
 		return false;
 	}
 
 	gc->ack();
 	return true;
+}
+
+ExecutionState* GDBCore::getSelThread(void)
+{
+	if (!exe->hasState(sel_thread))
+		sel_thread = exe->getCurrentState();
+
+	return sel_thread;
+}
+
+void GDBPkt::vcont(const char* fields)
+{
+	gc->ack();
+	if (fields[0] == '?') {
+		/* gdb wants *everything */
+		gc->writePkt("vCont;s;c;S;C;t");
+		return;
+	}
+
+	// signal format:
+	// C70:-1;c
+	if (fields[1] == 's' || fields[1] == 'S') {
+		if (checkSignal(&fields[2]))
+			return;
+		gc->setSingleStep();
+		return;
+	}
+
+	if (fields[1] == 'C' || fields[1] == 'c') {
+		if (checkSignal(&fields[2]))
+			return;
+		gc->setRunning();
+		return;
+	}
+
+}
+
+void GDBCore::overrideThread(ExecutionState* es)
+{
+	sel_thread = es;
+	OverrideSearcher::setOverride(sel_thread);
+}
+
+#define SIGCMD_CONCRETIZE	109	/* SIG95 */
+#define SIGCMD_TAKETRUE		110	/* SIG96 */
+#define SIGCMD_TAKEFALSE	111	/* SIG97 */
+#define SIGCMD_STEPBRANCH	112	/* SIG98 */
+
+
+bool GDBPkt::checkSignal(const char* sigstr)
+{
+	Executor::StatePair	sp;
+	int			elems;
+	unsigned		sig;
+
+	elems = sscanf(sigstr, "%x", &sig);
+	if (elems == 0)
+		return false;
+
+	std::cerr << "[GDBPkt] CHECK SIG: " << sig << '\n';
+	sp = exe->getForking()->getLastFork();
+
+	switch (sig) {
+	case SIGCMD_CONCRETIZE:
+		exe->concretizeState(*gc->getSelThread());
+		gc->overrideThread(gc->getSelThread());
+		break;
+
+	case SIGCMD_TAKETRUE:
+		if (!gc->watchForkBranch() || sp.first == NULL)
+			break;
+
+		gc->overrideThread(sp.first);
+		gc->setWatchForkBranch(false);
+		gc->setSingleStep();
+		return true;
+
+	case SIGCMD_TAKEFALSE:
+		if (!gc->watchForkBranch() || sp.second == NULL)
+			break;
+
+		gc->overrideThread(sp.second);
+		gc->setWatchForkBranch(false);
+		gc->setSingleStep();
+		return true;
+
+	case SIGCMD_STEPBRANCH:
+		gc->overrideThread(gc->getSelThread());
+		gc->setRunning();
+		gc->setWatchForkBranch(true);
+		return true;
+	}
+
+	return false;
+}
+
+void GDBCore::handleForkBranch(void)
+{
+	Executor::StatePair	sp;
+
+	sp = exe->getForking()->getLastFork();
+
+	/* not an actual fork?! */
+	if (!sp.first || !sp.second)
+		return;
+
+	setSelThread(exe->getCurrentState());
+	setStopped();
+	writePkt("S70");	// STEPBRANCH
 }

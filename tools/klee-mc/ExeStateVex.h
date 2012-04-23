@@ -74,6 +74,9 @@ public:
 	virtual void getGDBRegs(
 		std::vector<uint8_t>& v,
 		std::vector<bool>& is_conc) const;
+
+	virtual uint64_t getAddrPC(void) const;
+
 };
 
 }

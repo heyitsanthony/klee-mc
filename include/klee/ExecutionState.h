@@ -13,17 +13,12 @@
 #include "klee/Constraints.h"
 #include "klee/Expr.h"
 #include "klee/util/ExprUtil.h"
-#include "klee/Internal/ADT/TreeStream.h"
 #include "klee/Internal/Module/Cell.h"
-#include "klee/Interpreter.h"
 #include "../../lib/Core/AddressSpace.h"
 #include "../../lib/Core/BranchTracker.h"
 #include "../../lib/Core/ExecutionTrace.h"
 #include "klee/Internal/Module/KInstIterator.h"
 #include "../../lib/Core/Memory.h"
-#include "llvm/Function.h"
-#include "Internal/Module/KInstruction.h"
-#include "llvm/Instructions.h"
 
 #include <map>
 #include <set>
@@ -31,7 +26,6 @@
 
 #include "klee/ExeStateBuilder.h"
 #include "klee/StackFrame.h"
-
 
 namespace klee
 {
@@ -357,6 +351,8 @@ public:
 		std::vector<uint8_t>& v,
 		std::vector<bool>& is_conc) const
 	{ v.clear(); is_conc.clear(); }
+
+	virtual uint64_t getAddrPC(void) const { return (uint64_t)(&(*pc)); }
 };
 
 }

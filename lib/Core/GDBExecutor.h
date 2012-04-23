@@ -1,7 +1,10 @@
 #ifndef GDBEXE_H
 #define GDBEXE_H
 
+#include "klee/ExecutionState.h"
+#include "UserSearcher.h"
 #include "GDBCore.h"
+#include "CoreStats.h"
 
 namespace klee
 {
@@ -13,7 +16,11 @@ public:
 	GDBExecutor(InterpreterHandler* ie)
 	: T(ie)
 	, gc(this)
-	{}
+	, last_pc(0)
+	{
+		UserSearcher::setOverride();
+	}
+
 	virtual ~GDBExecutor() {}
 
 	virtual void run(ExecutionState &initialState)
@@ -25,14 +32,40 @@ public:
 
 	virtual void stepStateInst(ExecutionState* &state)
 	{
+		uint64_t	last_fork_c;
+
+		last_fork_c = stats::forks;
+
 		T::stepStateInst(state);
-		if (gc.isSingleStep()) {
-			gc.setStopped();
-			gc.writePkt("S05");
-			processCommands();
+
+		if (gc.watchForkBranch() && stats::forks > last_fork_c) {
+			gc.handleForkBranch();
 		}
+
+		if (gc.isCont())
+			return;
+
+		if (gc.isSingleStep()) {
+			uint64_t	cur_pc;
+
+			if (last_pc == 0) {
+				last_pc = state->getAddrPC();
+				return;
+			}
+
+			cur_pc = state->getAddrPC();
+			if (last_pc == cur_pc)
+				return;
+
+			last_pc = cur_pc;
+			gc.setStopped();
+			gc.writePkt("S13");
+		}
+
+		processCommands();
 	}
 
+protected:
 private:
 	void processCommands(void)
 	{
@@ -46,7 +79,8 @@ private:
 		}
 	}
 
-	GDBCore	gc;
+	GDBCore		gc;
+	uint64_t	last_pc;
 };
 
 }

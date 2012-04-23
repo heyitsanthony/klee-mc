@@ -76,6 +76,9 @@ public:
 	bool hasSuccessor(ExecutionState& st) const;
 	bool hasSuccessor(const ref<Expr>& cond) const;
 
+	/* WARNING: may return bogus exestates / one state / nothing */
+	Executor::StatePair getLastFork(void) const { return lastFork; }
+
 private:
 	/* this forking code really should be refactored */
 	bool isForkingCondition(ExecutionState& current, ref<Expr> condition);
@@ -107,6 +110,7 @@ private:
 	condxfer_ty			condXfer;
 	succ_ty				hasSucc;
 	ExprVisitor			*condFilter;
+	Executor::StatePair		lastFork;
 };
 
 }

@@ -582,9 +582,8 @@ public:
   ~TimerInfo() { delete timer; }
 };
 
-void Executor::addTimer(Timer *timer, double rate) {
-  timers.push_back(new TimerInfo(timer, rate));
-}
+void Executor::addTimer(Timer *timer, double rate)
+{ timers.push_back(new TimerInfo(timer, rate)); }
 
 void Executor::processTimersDumpStates(void)
 {

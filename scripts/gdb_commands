@@ -13,6 +13,34 @@ define saveregs
 	set logging off
 end
 
+
+define concretize
+	signal SIG95
+end
+
+# step branch.
+# takes us up to the branch
+define sb
+	signal SIG98
+end
+
+# step-false
+define sf
+	signal SIG97
+end
+
+# step-true
+define st
+	signal SIG96
+end
+
+define scan_blocked
+	saveregs
+	detach
+	shell /home/chz/klee-trunk/scripts/scan_blocked.sh
+	target remote :55555
+end
+
 define scan
 	saveregs
 	shell /home/chz/klee-trunk/scripts/scan_suspend.sh

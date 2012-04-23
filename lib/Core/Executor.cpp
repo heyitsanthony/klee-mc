@@ -3448,3 +3448,17 @@ Executor::StateVector Executor::fork(
 	unsigned N, ref<Expr> conditions[], bool isInternal,
 	bool isBranch)
 { return forking->fork(current, N, conditions, isInternal, isBranch); }
+
+
+bool Executor::hasState(const ExecutionState* es) const
+{
+	if (getCurrentState() == es)
+		return true;
+
+	foreach (it, beginStates(), endStates()) {
+		if ((*it) == es)
+			return true;
+	}
+
+	return false;
+}

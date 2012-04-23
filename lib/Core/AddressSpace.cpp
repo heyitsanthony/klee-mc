@@ -996,16 +996,20 @@ bool AddressSpace::readConcrete(
 		unsigned		mo_off, v_off, i;
 
 		mo = it->first;
+		/* offset into mo to get cur_addr */
 		mo_off = (mo->address < cur_addr)
 			? cur_addr - mo->address
 			: 0;
-		assert (mo_off <= mo->size);
+		if (mo_off >= mo->size) {
+			++it;
+			continue;
+		}
 
 		v_off = (mo->address > cur_addr)
 			? mo->address - cur_addr
 			: 0;
 
-		/* gap in memory; fill in */
+		/* gggMMMMM; gap in memory; fill in */
 		if (v_off) {
 			i = 0;
 			bogus_reads = true;

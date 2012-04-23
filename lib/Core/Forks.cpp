@@ -155,9 +155,11 @@ Forks::fork(ExecutionState &s, ref<Expr> cond, bool isInternal)
 	Executor::StateVector results;
 
 	results = fork(s, 2, conds, isInternal, true);
-	return std::make_pair(
+	lastFork = std::make_pair(
 		results[1] /* first label in br => true */,
 		results[0] /* second label in br => false */);
+
+	return lastFork;
 }
 
 Executor::StatePair Forks::forkUnconditional(
@@ -172,9 +174,10 @@ Executor::StatePair Forks::forkUnconditional(
 	/* NOTE: not marked as branch so that branch optimization is not
 	 * applied-- giving it (true, true) would result in only one branch! */
 	results = fork(s, 2, conds, isInternal, false);
-	return std::make_pair(
+	lastFork = std::make_pair(
 		results[1] /* first label in br => true */,
 		results[0] /* second label in br => false */);
+	return lastFork;
 }
 
 bool Forks::forkFollowReplay(ExecutionState& current, struct ForkInfo& fi)
@@ -718,6 +721,7 @@ Forks::Forks(Executor& _exe)
 : exe(_exe)
 , preferTrueState(false)
 , preferFalseState(false)
+, lastFork(0,0)
 {
 	condFilter = new MergeArrays();
 }

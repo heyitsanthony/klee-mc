@@ -99,9 +99,9 @@ void BatchingSearcher::handleTimeout(void)
 {
 	uint64_t	total_ins;
 
-	/* TODO: PID controller */
 	if (!BatchAdaptiveTime || timeBudget < 0) {
 		std::cerr << "[BatchingSearch] TIMEOUT TRIGGERED\n";
+		lastState = NULL;
 		return;
 	}
 
@@ -133,35 +133,22 @@ void BatchingSearcher::handleTimeout(void)
 
 void BatchingSearcher::update(ExecutionState *current, const States s)
 {
-	bool exceeded_time;
-	// assert(is_disjoint(s.getAdded(), s.getRemoved()));
+	if (lastState != NULL) {
+		bool exceeded_time;
+		// assert(is_disjoint(s.getAdded(), s.getRemoved()));
 
-	exceeded_time = (timeBudget > 0.0 && getElapsedTime() > timeBudget);
+		exceeded_time = (
+			timeBudget > 0.0 &&
+			getElapsedTime() > timeBudget);
 
-	select_new_state |= exceeded_time;
-	select_new_state |= (
-		instructionBudget &&
-		getElapsedInstructions() >= instructionBudget);
+		select_new_state |= exceeded_time;
+		select_new_state |= (
+			instructionBudget &&
+			getElapsedInstructions() >= instructionBudget);
 
-	if (exceeded_time)
-		handleTimeout();
-
-#if 0
-	bool	add_rmv_conflict;
-	// If there are pending additions before removals,
-	// or pending removals before additions,
-	// process the pending states first,
-	// since those may actually be different states!
-	add_rmv_conflict = (is_disjoint(addedStates, s.getRemoved()) == false);
-	add_rmv_conflict |= (is_disjoint(removedStates, s.getAdded()) == false);
-
-	if (add_rmv_conflict) {
-		baseSearcher->update(current, getStates());
-		clearStates();
+		if (exceeded_time)
+			handleTimeout();
 	}
-
-	removedStates.insert(s.getRemoved().begin(), s.getRemoved().end());
-#endif
 
 	if (select_new_state == false && s.getRemoved().empty()) {
 		addedStates.insert(s.getAdded().begin(), s.getAdded().end());

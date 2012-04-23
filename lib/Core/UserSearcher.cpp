@@ -42,11 +42,14 @@
 #include "Weight2Prioritizer.h"
 #include "PrioritySearcher.h"
 #include "HistoPriority.h"
+#include "OverrideSearcher.h"
 
 using namespace llvm;
 using namespace klee;
 
 Prioritizer* UserSearcher::prFunc = NULL;
+bool UserSearcher::useOverride = false;
+
 bool UsePrioritySearcher;
 
 #define DECL_SEARCH_OPT(x,y,z)	\
@@ -507,6 +510,9 @@ Searcher *UserSearcher::constructUserSearcher(Executor &executor)
 		searcher = new BatchingSearcher(searcher);
 	} else
 		searcher = setupConfigSearcher(executor);
+
+	if (useOverride)
+		searcher = new OverrideSearcher(searcher);
 
 	std::ostream &os = executor.getHandler().getInfoStream();
 

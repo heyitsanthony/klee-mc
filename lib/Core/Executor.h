@@ -165,9 +165,9 @@ private:
   class TimerInfo;
 
   static void deleteTimerInfo(TimerInfo*&);
-  void runLoop(void);
   void handleMemoryUtilization(ExecutionState* &state);
   void handleMemoryPID(ExecutionState* &state);
+  void runLoop(void);
 
 
 protected:
@@ -197,6 +197,7 @@ protected:
 	virtual void executeInstruction(ExecutionState &state, KInstruction *ki);
 
   virtual void run(ExecutionState &initialState);
+
   virtual void instRet(ExecutionState& state, KInstruction* ki);
   virtual void instAlloc(ExecutionState& state, KInstruction* ki);
 
@@ -424,12 +425,6 @@ private:
   bool getSatAssignment(const ExecutionState& st, Assignment& a);
 
 
-  /// Add a timer to be executed periodically.
-  ///
-  /// \param timer The timer object to run on firings.
-  /// \param rate The approximate delay (in seconds) between firings.
-  void addTimer(Timer *timer, double rate);
-
   void initTimers();
   void processTimers(ExecutionState *current,
                      double maxInstTime);
@@ -641,6 +636,9 @@ public:
 	const Forks* getForking(void) const { return forking; }
 
 	ExecutionState* getCurrentState(void) const { return currentState; }
+	bool hasState(const ExecutionState* es) const;
+
+ 	void addTimer(Timer *timer, double rate);
 };
 
 }

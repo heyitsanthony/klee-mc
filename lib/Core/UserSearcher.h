@@ -22,10 +22,13 @@ public:
 	static bool userSearcherRequiresMD2U();
 	static bool userSearcherRequiresBranchSequences();
 	static Searcher *constructUserSearcher(Executor &executor);
+
 	static void setPrioritizer(Prioritizer* p) { prFunc = p; }
+	static void setOverride(void) { useOverride = true; }
 
 private:
 	static Prioritizer	*prFunc;
+	static bool		useOverride;
 
 	static Searcher* setupInterleavedSearcher(
 		Executor& executor, Searcher* s);

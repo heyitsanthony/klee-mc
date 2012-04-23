@@ -61,3 +61,21 @@ void ExeStateVex::getGDBRegs(
 		is_conc.push_back(true);
 	}
 }
+
+uint64_t ExeStateVex::getAddrPC(void) const
+{
+	const ObjectState	*reg_os;
+	uint64_t		ret;
+	unsigned		off;
+
+	reg_os = getRegObjRO();
+	assert (base_guest->getArch() == Arch::X86_64 && "??? ARCH ???");
+
+	off = base_guest->getCPUState()->getPCOff();
+	ret = 0;
+	for (unsigned i = 0; i < 8; i++) {
+		ret |= ((uint64_t)reg_os->read8c(off+i)) << (i*8);
+	}
+
+	return ret;
+}
