@@ -249,13 +249,9 @@ int file_sc(struct sc_pkt* sc)
 
 		if (GET_ARG2(regfile) == SEEK_END) {
 			new_regs = sc_new_regs(regfile);
-			if (	GET_SYSRET(new_regs) > ((unsigned)3*0x40000000)
-				&& GET_SYSRET_S(new_regs) > 0)
-			{
-				klee_silent_exit(0);
-			}
 			break;
 		}
+
 #ifdef USE_SYS_FAILURE
 		ssize_t br = GET_ARG1(regfile);
 		klee_warning_once("lseek [-1, 4096]");
@@ -264,7 +260,7 @@ int file_sc(struct sc_pkt* sc)
 			// new_regs = sc_new_regs(regfile);
 			/* return unboundd range */
 			// sc_ret_or(sc_new_regs(regfile), -1, br);
-			sc_ret_v(regfile, br);
+			sc_ret_v_new(sc_new_regs(regfile), br);
 		} else
 			sc_ret_v(regfile, -1);
 #else
