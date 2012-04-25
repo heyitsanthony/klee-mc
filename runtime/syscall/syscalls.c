@@ -701,6 +701,18 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	}
 
+	case SYS_time:
+		if (GET_ARG0(regfile) == 0) {
+			/* only need to return symbolic ret reg */
+			new_regs = sc_new_regs(regfile);
+			break;
+		}
+
+		/* otherwise, mark buffer as symbolic */
+		make_sym(GET_ARG0(regfile), 4, "time");
+		sc_ret_v(regfile, GET_ARG0(regfile));
+		break;
+
 	case SYS_utime:
 		sc_ret_or(sc_new_regs(regfile), 0, -1);
 		break;
