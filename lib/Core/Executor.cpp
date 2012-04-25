@@ -2495,7 +2495,10 @@ void Executor::run(ExecutionState &initialState)
 
 dump:
 	if (stateManager->empty()) goto done;
+
 	std::cerr << "KLEE: halting execution, dumping remaining states\n";
+	haltExecution = true;
+
 	foreach (it, stateManager->begin(), stateManager->end()) {
 		ExecutionState &state = **it;
 		stepInstruction(state); // keep stats rolling
@@ -2639,6 +2642,7 @@ void Executor::terminateStateEarly(
 	term_st = &state;
 	std::cerr << "[Exe] TERMINATING EARLY\n";
 	if (	ConcretizeEarlyTerminate &&
+		!haltExecution &&
 		call_depth == 1 && !state.isConcrete())
 	{
 		ExecutionState	*sym_st;
