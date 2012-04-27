@@ -100,6 +100,7 @@ class Expr {
 public:
   typedef unsigned Hash;
   static unsigned long count;
+  static unsigned int errors;
   static const unsigned MAGIC_HASH_CONSTANT = 39;
 
   /// The type of an expression is simply its width, in bits.

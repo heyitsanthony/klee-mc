@@ -38,6 +38,8 @@
 #define ksys_sym_range_bytes(x,y)	\
 	syscall(SYS_klee, KLEE_SYS_SYM_RANGE_BYTES, (uint64_t)x, y)
 
+#define ksys_get_value(n)	n
+
 
 #ifdef __cplusplus
 extern "C" {

@@ -14,6 +14,15 @@ define saveregs
 end
 
 
+define stat_scan
+	b main
+	run
+	b _xstat
+	c
+	scan
+	c
+	c
+
 define concretize
 	signal SIG95
 end
@@ -38,6 +47,11 @@ define scan_blocked
 	saveregs
 	detach
 	shell /home/chz/klee-trunk/scripts/scan_blocked.sh
+	target remote :55555
+end
+
+define scan_retry
+	shell /home/chz/klee-trunk/scripts/scan_retry.sh
 	target remote :55555
 end
 

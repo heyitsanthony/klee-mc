@@ -21,3 +21,4 @@ filtered_funcs.txt
 lib/Expr/position.hh
 lib/Expr/stack.hh
 lib/Expr/location.hh
+utils/fp/fp*-*

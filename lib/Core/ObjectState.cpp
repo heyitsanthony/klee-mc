@@ -294,7 +294,10 @@ void ObjectState::flushRangeForWrite(
 }
 
 bool ObjectState::isByteConcrete(unsigned offset) const
-{ return !concreteMask || concreteMask->get(offset); }
+{
+	assert (offset < size);
+	return (concreteMask == NULL || concreteMask->get(offset));
+}
 
 bool ObjectState::isByteFlushed(unsigned offset) const
 { return flushMask && !flushMask->get(offset); }
@@ -585,6 +588,9 @@ bool ObjectState::writeIVC(unsigned offset, const ref<ConstantExpr>& ce)
 		idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
 		v8 = v >> (8 * i);
 		cur_off = offset+idx;
+
+		if (cur_off >= size)
+			break;
 
 		if (isByteConcrete(cur_off))
 			continue;

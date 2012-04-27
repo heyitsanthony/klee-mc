@@ -985,7 +985,7 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 			<< (void*)mo->address << "--"
 			<< (void*)(mo->address + mo->size) << "\n";
 		all_zeroes = true;
-		for (unsigned i = 0; i < new_os->size; i++) {
+		for (unsigned i = 0; i < os->size; i++) {
 			const ConstantExpr	*ce;
 			ref<Expr>		e;
 			uint8_t			v;
@@ -2280,6 +2280,14 @@ INST_FOP_ARITH(FRem, mod)
     i->dump();
     terminateStateOnExecError(state, "illegal instruction");
     break;
+  }
+
+  if (Expr::errors) {
+  	terminateStateOnError(
+		state,
+		"expr error; bad div?",
+		"expr.err");
+	Expr::errors = 0;
   }
 }
 

@@ -14,20 +14,25 @@
 #error uh
 #endif
 
-int main(void)
+int main(int argc, char* argv[])
 {
 	TYPE1_IN	in1;
 	TYPE2_IN	in2;
 	TYPE3_OUT	out, sym_out;
 	size_t		br;
+	int		fd = 0;
 
-	br = read(0, &in1, sizeof(in1));
+	if (argc > 1) {
+		fd = open(argv[1], O_RDONLY);
+	}
+
+	br = read(fd, &in1, sizeof(in1));
 	if (br != sizeof(in1)) return 6;
 
-	br = read(0, &in2, sizeof(in2));
+	br = read(fd, &in2, sizeof(in2));
 	if (br != sizeof(in2)) return 7;
 
-	br = read(0, &sym_out, sizeof(sym_out));
+	br = read(fd, &sym_out, sizeof(sym_out));
 	if (br != sizeof(sym_out)) return 6;
 
 	out = in1 FPOP in2;

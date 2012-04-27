@@ -358,7 +358,11 @@ ref<Expr> OptBuilder::Read(const UpdateList &ul, const ref<Expr>& index)
 
 	// sanity check for OoB read
 	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(index)) {
-		assert (CE->getZExtValue() < ul.getRoot()->mallocKey.size);
+		if (CE->getZExtValue() >= ul.getRoot()->mallocKey.size) {
+			Expr::errors++;
+			std::cerr << "[Expr] Replaing OOB read with 0.\n";
+			return ConstantExpr::create(0, 32);
+		}
 	}
 
 	// XXX this doesn't really belong here... there are basically two

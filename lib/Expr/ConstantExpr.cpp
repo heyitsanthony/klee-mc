@@ -106,6 +106,18 @@ ref<ConstantExpr> ConstantExpr::FNAME(const ref<ConstantExpr> &in_rhs) \
 ref<ConstantExpr> ConstantExpr::FNAME(const ref<ConstantExpr> &in_rhs) \
 { return ConstantExpr::alloc(value.OP(in_rhs->value)); }
 
+#define DECL_CE_NONZERO_FUNCOP(FNAME, OP)	\
+ref<ConstantExpr> ConstantExpr::FNAME(const ref<ConstantExpr> &in_rhs) \
+{ \
+	if (in_rhs->isZero()) {	\
+		Expr::errors++;	\
+		std::cerr << "[Expr] 0 as RHS on restricted op\n"; \
+		return in_rhs;	\
+	} \
+	return ConstantExpr::alloc(value.OP(in_rhs->value));	\
+}
+
+
 #define DECL_CE_CMPOP(FNAME, OP)	\
 ref<ConstantExpr> ConstantExpr::FNAME(const ref<ConstantExpr> &in_rhs)	\
 { return ConstantExpr::alloc(value.OP(in_rhs->value), Expr::Bool); }
@@ -116,10 +128,10 @@ DECL_CE_OP(Mul, *)
 DECL_CE_OP(And, &)
 DECL_CE_OP(Or, |)
 DECL_CE_OP(Xor, ^)
-DECL_CE_FUNCOP(UDiv, udiv)
-DECL_CE_FUNCOP(SDiv, sdiv)
-DECL_CE_FUNCOP(URem, urem)
-DECL_CE_FUNCOP(SRem, srem)
+DECL_CE_NONZERO_FUNCOP(UDiv, udiv)
+DECL_CE_NONZERO_FUNCOP(SDiv, sdiv)
+DECL_CE_NONZERO_FUNCOP(URem, urem)
+DECL_CE_NONZERO_FUNCOP(SRem, srem)
 DECL_CE_FUNCOP(Shl, shl)
 DECL_CE_FUNCOP(LShr, lshr)
 
