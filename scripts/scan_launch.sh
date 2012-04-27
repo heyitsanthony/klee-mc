@@ -1,10 +1,22 @@
 #!/bin/bash
 
-attach_pid=`sed "s/ /\n/g" gdb.threads | grep -A1 LWP | tail -n1 | sed "s/[^0-9].*//g"`
+# grab selected line, if any
+#target_line=`grep "^*" gdb.threads`
+#if [ -z "$target_line" ]; then
+	# none found? just get last listed thread
+	target_line=`tail -n1 gdb.threads`
+#fi
+
+attach_pid=`echo "$target_line" | sed "s/ /\n/g" | grep -A1 LWP | tail -n1 | sed "s/[^0-9].*//g"`
 if [ -z "$attach_pid" ]; then
 	attach_pid=`sed "s/ /\n/g" gdb.threads | grep -A1 process | tail -n1 | sed "s/[^0-9].*//g"`
 fi
 echo "ATTACH_PID=" $attach_pid
+
+if [ ! -d /proc/$attach_pid/ ]; then
+	echo Could not get pid $attach_pid
+	exit 1
+fi
 
 if [ -z "$GDB_SCAN_BLOCKED" ]; then
 	VEXLLVM_SAVE=1		\
