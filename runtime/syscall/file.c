@@ -235,6 +235,9 @@ int file_sc(struct sc_pkt* sc)
 
 	switch (sc->sys_nr) {
 	case SYS_lseek: {
+		/* XXX these are pretty wrong since they expect the
+		 * return value to be the current position of the cursor.
+		 * Does this mean I should be tracking cursor pos? Probably.. */
 		int fd = GET_ARG0(regfile);
 
 		if (fd_is_concrete(fd)) {
@@ -254,15 +257,15 @@ int file_sc(struct sc_pkt* sc)
 
 #ifdef USE_SYS_FAILURE
 		ssize_t br = GET_ARG1(regfile);
-		klee_warning_once("lseek [-1, 4096]");
-		if (br > 0) {
+		if (br >= 0) {
 			// br = concretize_u64(br);
 			// new_regs = sc_new_regs(regfile);
 			/* return unboundd range */
 			// sc_ret_or(sc_new_regs(regfile), -1, br);
 			sc_ret_v_new(sc_new_regs(regfile), br);
-		} else
+		} else {
 			sc_ret_v(regfile, -1);
+		}
 #else
 		sc_ret_v(regfile, GET_ARG1(regfile));
 #endif
