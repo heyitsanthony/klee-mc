@@ -1,11 +1,64 @@
 #!/bin/bash
 
 killall -9 klee-mc
-#	-use-cache=false
-#	-use-cex-cache=false	
+
+#	-gc-timer=0
+
+#	-use-batching-search	\
+#	-batch-instructions=99999999	\
+#	-batch-time=5		\
+#	-use-second-chance=false	\
+#	-second-chance-boost=2		\
+#	-randomize-fork=true		\
+#	-branch-hint=false		\
+#	-use-pdf-interleave=false \
+#	-use-interleaved-MXI=false \
+#	-use-interleaved-MI=false \
+#	-use-interleaved-FTR=false	\
+#	-use-interleaved-CD=false	\
+#	-use-interleaved-fb=false	\
+#	-use-random-search=true		\
+#	-use-cond-search=false 	\
+
+#	-use-batching-search	\
+#	-batch-instructions=99999999	\
+#	-batch-time=5		\
+#	-use-second-chance=true \
+#	-second-chance-boost=2		\
+#	-randomize-fork=true		\
+#	-branch-hint=true \
+#	-use-pdf-interleave=true \
+#	-use-interleaved-MXI=true \
+#	-use-interleaved-MI=true \
+#	-use-interleaved-FTR=false	\
+#	-use-interleaved-CD=false	\
+#	-use-interleaved-fb=true \
+#	-use-cond-search=true \
+#	\
+
+#	-use-batching-search	\
+#	-batch-instructions=99999999	\
+#	-batch-time=5			\
+#	-use-second-chance=true		\
+#	-second-chance-boost=2		\
+#	-randomize-fork=true		\
+#	-branch-hint=true		\
+#	-use-pdf-interleave=false	\
+#	-use-interleaved-MXI=false	\
+#	-use-interleaved-MI=false	\
+#	-use-interleaved-FTR=false	\
+#	-use-interleaved-CD=false	\
+#	-use-interleaved-fb=false	\
+#	-use-random-search=true		\
+#	-use-cond-search=false 	\
+
+
+
 klee-mc					\
 	-use-gdb			\
 	-use-search-filter=false	\
+	-use-cache=false	\
+	-use-cex-cache=false	\
 	-deny-sys-files 	\
 	-pipe-fork-queries	\
 	-smt-let-arrays=true	\
@@ -19,21 +72,22 @@ klee-mc					\
 	-use-pid		\
 	-max-err-resolves=32	\
 	-max-stp-time=5		\
+	-concretize-early	\
 	\
 	-use-batching-search	\
 	-batch-instructions=99999999	\
 	-batch-time=5		\
-	-use-second-chance	\
-	-randomize-fork		\
-	-concretize-early	\
-	-second-chance-boost=2	\
+	-use-second-chance=true \
+	-second-chance-boost=2		\
+	-randomize-fork=true		\
+	-branch-hint=true \
 	-use-pdf-interleave=true \
-	-use-interleaved-MXI=true	\
-	-use-interleaved-MI=true	\
+	-use-interleaved-MXI=true \
+	-use-interleaved-MI=true \
 	-use-interleaved-FTR=false	\
 	-use-interleaved-CD=false	\
-	-use-interleaved-fb=true	\
-	-use-cond-search 	\
+	-use-interleaved-fb=true \
+	-use-cond-search=true \
 	\
 	-use-softfp		\
 	-guest-type=sshot	\

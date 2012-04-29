@@ -330,7 +330,7 @@ Executor::~Executor()
 
 	std::for_each(timers.begin(), timers.end(), deleteTimerInfo);
 	delete stateManager;
-	delete brPredict;
+	if (brPredict) delete brPredict;
 	delete mmu;
 	delete memory;
 	if (pathTree) delete pathTree;

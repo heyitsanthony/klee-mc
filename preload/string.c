@@ -102,12 +102,12 @@ static void guard_n(const char* s, size_t n)
 
 	for (k = 1; k < 12; k++) {
 		if (n <= (1 << k)) {
-			klee_assume(n == klee_get_value(n));
+			ksys_assume(n == ksys_get_value(n));
 			return;
 		}
 	}
 
-	klee_assume(n == klee_get_value(n));
+	ksys_assume(n == ksys_get_value(n));
 }
 
 int  memcmp(const void* l, const void* r, size_t n)

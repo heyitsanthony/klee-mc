@@ -486,6 +486,17 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_or(sc_new_regs(regfile), 0, -1);
 		break;
 
+	case SYS_clock_gettime: {
+		void*	timespec = (void*)GET_ARG1(regfile);
+		if (timespec == NULL) {
+			sc_ret_v(regfile, -1);
+			break;
+		}
+		make_sym(GET_ARG1(regfile), sizeof(struct timespec), "timespec");
+		sc_ret_v(regfile, 0);
+		break;
+	}
+
 	case SYS_sync:
 		break;
 	case SYS_umask:
@@ -507,6 +518,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(regfile, 1000); /* FIXME: single threaded*/
 		break;
 
+	case SYS_setfsuid:
+	case SYS_setfsgid:
+	case SYS_setpgid:
+	case SYS_setsid:
 	case SYS_setgid:
 	case SYS_setuid:
 		sc_ret_or(sc_new_regs(regfile), -1, 0);
@@ -569,18 +584,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 		make_sym_by_arg(regfile, 2, sizeof(struct stat), "newstatbuf");
 	}
 	break;
-
-	case SYS_clock_gettime: {
-		void*	timespec = (void*)GET_ARG1(regfile);
-		if (timespec == NULL) {
-			sc_ret_v(regfile, -1);
-			break;
-		}
-		make_sym(GET_ARG1(regfile), sizeof(struct timespec), "timespec");
-		sc_ret_v(regfile, 0);
-		break;
-	}
-
 
 	UNIMPL_SC(readlinkat)
 	case SYS_pread64:
@@ -687,6 +690,21 @@ void* sc_enter(void* regfile, void* jmpptr)
 	FAKE_SC(fchmod)
 	FAKE_SC(fchown)
 	FAKE_SC(utimensat)
+
+	case SYS_clock_nanosleep: {
+		if (GET_ARG3(regfile) != 0) {
+			uint64_t dst_addr = concretize_u64(GET_ARG3(regfile));
+			make_sym(
+				dst_addr,
+				sizeof(struct timespec),
+				"clock_nanosleep");
+			sc_ret_v(regfile, -1);
+			break;
+		}
+		sc_ret_or(sc_new_regs(regfile), -1, 0);
+		break;
+	}
+
 	case SYS_nanosleep: {
 		if (GET_ARG1(regfile) != 0) {
 			uint64_t dst_addr = concretize_u64(GET_ARG1(regfile));
@@ -1004,10 +1022,15 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(regfile, 1);
 		break;
 
-
+	case SYS_symlink:
+	case SYS_clock_settime:
+	case SYS_clock_adjtime:
 	case SYS_chown:
 	case SYS_shutdown:
 	case SYS_inotify_init:
+	case SYS_inotify_init1:
+	case SYS_inotify_add_watch: /* XXX this should be some kind of desc */
+	case SYS_inotify_rm_watch:
 	case SYS_faccessat:
 	case SYS_removexattr:
 	case SYS_lremovexattr:
