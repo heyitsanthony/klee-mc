@@ -735,6 +735,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_or(sc_new_regs(regfile), 0, -1);
 		break;
 
+	case SYS_pselect6:
 	case SYS_select: {
 		new_regs = sc_new_regs(regfile);
 
@@ -753,7 +754,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 					GET_ARG3(regfile),
 					sizeof(fd_set), "exceptfds");
 
-			if (GET_ARG4(regfile)) {
+			if (sc.sys_nr != SYS_pselect6 && GET_ARG4(regfile)) {
 				make_sym(
 					GET_ARG4(regfile),
 					sizeof(struct timeval),
@@ -765,7 +766,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		}
 
 		/* timeout case probably isn't too interesting */
-		if (GET_ARG4(regfile)) {
+		if (sc.sys_nr != SYS_pselect6 && GET_ARG4(regfile)) {
 			if (GET_SYSRET(new_regs) == 0) {
 				/* timeout */
 				make_sym(
