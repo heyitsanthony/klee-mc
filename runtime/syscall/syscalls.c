@@ -735,6 +735,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_or(sc_new_regs(regfile), 0, -1);
 		break;
 
+	case SYS_madvise:
+		sc_ret_v(regfile, 0);
+		break;
+
 	case SYS_pselect6:
 	case SYS_select: {
 		new_regs = sc_new_regs(regfile);

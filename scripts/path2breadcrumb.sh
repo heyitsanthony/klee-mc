@@ -26,7 +26,9 @@ function do_path_replay
 		-pipe-fork-queries	\
 		-max-stp-time=$STPTIMEOUT	\
 		-print-new-ranges -mm-type=deterministic	\
-		-output-dir="$RUNDIR/$n" -replay-path="$a" 2>"$n"_err
+		-output-dir="$RUNDIR/$n"	\
+		-replay-path-only=true		\
+		-replay-path="$a" 2>"$n"_err
 	mv "$n"_err $RUNDIR/$n/err
 }
 
