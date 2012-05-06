@@ -12,9 +12,6 @@
 #include "UCHandler.h"
 #include "cmdargs.h"
 
-#include <llvm/Support/CommandLine.h>
-#include <llvm/Support/ManagedStatic.h>
-
 #include "guest.h"
 #include "guestptimg.h"
 #include "guestfragment.h"
@@ -26,34 +23,27 @@
 #include "ExeUC.h"
 
 // FIXME: Ugh, this is gross. But otherwise our config.h conflicts with LLVMs.
-#undef PACKAGE_BUGREPORT
-#undef PACKAGE_NAME
-#undef PACKAGE_STRING
-#undef PACKAGE_TARNAME
-#undef PACKAGE_VERSION
+#include <llvm/Support/CommandLine.h>
+#include <llvm/Support/ManagedStatic.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/Signals.h>
 #include <iostream>
 #include <fstream>
-#include <cerrno>
-#include <errno.h>
-#include <sys/stat.h>
-#include <sys/wait.h>
-#include <sys/times.h>
-#include <signal.h>
+#include <time.h>
+#include <pthread.h>
 
 #include <iostream>
-#include <iterator>
 #include <fstream>
 #include <sstream>
 
 using namespace llvm;
 using namespace klee;
 
-bool		SymArgs;
-extern double	MaxSTPTime;
-extern bool	WriteTraces;
-extern double	MaxTime;
+bool			SymArgs;
+static pthread_t	pt_watchdog;
+extern double		MaxSTPTime;
+extern bool		WriteTraces;
+extern double		MaxTime;
 
 namespace {
 	cl::opt<bool, true> SymArgsProxy(
@@ -77,11 +67,6 @@ namespace {
 		cl::desc("<input executable>"),
 		cl::Positional,
 		cl::init("-"));
-
-	cl::opt<std::string>
-	RunInDir(
-		"run-in",
-		cl::desc("Change to the given directory prior to executing"));
 
 	cl::opt<std::string>
 	Environ(
@@ -129,11 +114,8 @@ namespace {
 		cl::desc("Specify a directory to replay path files from"),
 		cl::value_desc("path directory"));
 
-	cl::list<std::string>
-	SeedOutFile("seed-out");
-
-	cl::list<std::string>
-	SeedOutDir("seed-out-dir");
+	cl::list<std::string> SeedOutFile("seed-out");
+	cl::list<std::string> SeedOutDir("seed-out-dir");
 
 	cl::opt<std::string>
 	GuestType(
@@ -174,8 +156,8 @@ namespace {
 	cl::opt<bool>
 	Watchdog(
 		"watchdog",
-		cl::desc("Use a watchdog process to enforce --max-time."),
-		cl::init(0));
+		cl::desc("Use a watchdog thread to enforce --max-time."),
+		cl::init(false));
 
 }
 
@@ -184,13 +166,11 @@ static bool interrupted = false;
 
 std::string stripEdgeSpaces(std::string &in)
 {
-  unsigned len = in.size();
-  unsigned lead = 0, trail = len;
-  while (lead<len && isspace(in[lead]))
-    ++lead;
-  while (trail>lead && isspace(in[trail-1]))
-    --trail;
-  return in.substr(lead, trail-lead);
+	unsigned len = in.size();
+	unsigned lead = 0, trail = len;
+	while (lead<len && isspace(in[lead])) ++lead;
+	while (trail>lead && isspace(in[trail-1])) --trail;
+	return in.substr(lead, trail-lead);
 }
 
 static void readArgumentsFromFile(char *file, std::vector<std::string> &results)
@@ -253,19 +233,7 @@ void dumpIRSBs(void)
 	std::cerr << "(NO DUMPING IN TEST JIT)" << std::endl;
 }
 
-void run(ExecutorVex* exe)
-{
-	if (RunInDir != "") {
-		int res = chdir(RunInDir.c_str());
-		if (res < 0) {
-			klee_error(
-				"Unable to change directory to: %s",
-				RunInDir.c_str());
-		}
-	}
-
-	exe->runImage();
-}
+void run(ExecutorVex* exe) { exe->runImage(); }
 
 void runReplay(Interpreter* interpreter)
 {
@@ -353,13 +321,6 @@ static CmdArgs* getCmdArgs(char** envp)
 	if (SymArgs)
 		ret->setSymbolic();
 	return ret;
-}
-
-static void watchdog_alarm(int sig)
-{
-	ssize_t	sz;
-	sz = write(2, "watchdog\n", 9);
-	exit(-1);
 }
 
 Guest* getGuest(CmdArgs* cmdargs)
@@ -465,6 +426,28 @@ void setupReplayPaths(Interpreter* interpreter)
 	}
 }
 
+static void* watchdog_thread(void* x)
+{
+	struct timespec		ts, rem;
+	int			rc;
+	ssize_t			sz;
+
+	/* don't expect any one to try to join with watchdog  */
+	pthread_detach(pthread_self());
+
+	ts.tv_sec = MaxTime;
+	ts.tv_nsec = 0;
+	do {
+		rc = nanosleep(&ts, &rem);
+		ts = rem;
+	} while (rc == -1);
+
+	sz = write(2, "watchdog timeout\n", 17);
+	exit(-1);
+
+	return NULL;
+}
+
 int main(int argc, char **argv, char **envp)
 {
 	KleeHandler	*handler;
@@ -482,12 +465,8 @@ int main(int argc, char **argv, char **envp)
 
 	sys::SetInterruptFunction(interrupt_handle);
 
-	if (Watchdog) {
-		/* XXX, make sure no one else is using alarm() */
-		MaxSTPTime = -1.0;
-		signal(SIGALRM, watchdog_alarm);
-		alarm((unsigned int)MaxTime);
-	}
+	if (Watchdog && MaxTime)
+		pthread_create(&pt_watchdog, NULL, watchdog_thread, NULL);
 
 	cmdargs = getCmdArgs(envp);
 	gs = getGuest(cmdargs);
