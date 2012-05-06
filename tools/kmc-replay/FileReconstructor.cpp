@@ -1,13 +1,16 @@
 #include <sstream>
 #include <assert.h>
 #include <string.h>
+#include <stdlib.h>
 #include <unistd.h>
+#include <iostream>
 
 #include "static/Sugar.h"
 #include "FileReconstructor.h"
 
 FileReconstructor::FileReconstructor()
 : fd_generation(0)
+, ign_close(getenv("KMC_IGN_CLOSE") != NULL)
 {}
 
 FileReconstructor::~FileReconstructor()
@@ -72,6 +75,12 @@ void FileReconstructor::seek(int vfd, off_t offset, int whence)
 void FileReconstructor::close(int vfd)
 {
 	vfd2fd_ty::iterator	it;
+
+	if (ign_close) {
+		std::cerr << "[kmc-recons] Ignoring close\n";
+		this->seek(vfd, 0, SEEK_SET);
+		return;
+	}
 
 	it = vfd2fd.find(vfd);
 	if (it == vfd2fd.end())

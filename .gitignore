@@ -22,3 +22,5 @@ lib/Expr/position.hh
 lib/Expr/stack.hh
 lib/Expr/location.hh
 utils/fp/fp*-*
+stp/Makefile.common
+recons*

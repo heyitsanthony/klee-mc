@@ -21,6 +21,7 @@ private:
 	typedef std::map<int,int>	vfd2fd_ty;
 	vfd2fd_ty			vfd2fd;	/* replay fd -> open fd */
 	unsigned int			fd_generation;
+	bool				ign_close;
 };
 
 #endif
