@@ -13,6 +13,7 @@
 #include <iostream>
 
 #include "ExeStateVex.h"
+#include "KModuleVex.h"
 #include "ExeChk.h"
 
 using namespace llvm;
@@ -33,7 +34,7 @@ ExeChk::ExeChk(InterpreterHandler *ie)
 	theGenLLVM = NULL;
 	theVexHelpers = NULL;
 
-	vex_exe = VexExec::create<VexExec, Guest>(gs, xlate);
+	vex_exe = VexExec::create<VexExec, Guest>(gs, km_vex->getXlate());
 	assert (vex_exe != NULL);
 
 	jit_genllvm = theGenLLVM;

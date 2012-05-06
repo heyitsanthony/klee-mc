@@ -40,6 +40,7 @@ namespace klee
   class InstructionInfoTable;
   class KInstruction;
   class KModule;
+
   template<class T> class ref;
 
   class KConstant {
@@ -84,7 +85,7 @@ namespace klee
 
   public:
     KModule(llvm::Module *_module);
-    ~KModule();
+    virtual ~KModule();
 
     /// Initialize local data structures.
     //
@@ -110,8 +111,12 @@ namespace klee
 
     unsigned getWidthForLLVMType(llvm::Type* type) const;
 
-    void bindModuleConstTable(Executor* exe);
     KFunction* addFunctionProcessed(llvm::Function *f);
+
+	void bindModuleConstTable(Executor* exe);
+	void bindModuleConstants(Executor* exe);
+	void bindInstructionConstants(Executor* exe, KInstruction *KI);
+	void bindKFuncConstants(Executor* exe, KFunction* kf);
 
   private:
 	void prepareMerge(

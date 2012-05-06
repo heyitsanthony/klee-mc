@@ -5,14 +5,8 @@
 #include "guest.h"
 #include "../../lib/Core/Executor.h"
 
-#include "DynGraph.h"
 #include <iostream>
-#include <tr1/unordered_map>
 #include <assert.h>
-
-class VexXlate;
-class VexSB;
-class VexFCache;
 
 namespace llvm
 {
@@ -27,8 +21,7 @@ class MemoryObject;
 class ObjectState;
 class SyscallSFH;
 class SysModel;
-
-typedef std::tr1::unordered_map<uintptr_t /* Func*/, VexSB*> func2vsb_map;
+class KModuleVex;
 
 #define es2esv(x)	static_cast<ExeStateVex&>(x)
 #define GETREGOBJ(x)	es2esv(x).getRegObj()
@@ -60,8 +53,6 @@ public:
 
 	void setRegCtx(ExecutionState& state, MemoryObject* mo);
 	void dumpSCRegs(const std::string& fname);
-
-	const VexSB* getFuncVSB(llvm::Function*) const;
 
 	virtual void printStackTrace(ExecutionState& st, std::ostream& o) const;
 	virtual std::string getPrettyName(llvm::Function* f) const;
@@ -107,17 +98,12 @@ protected:
 	virtual void handleXfer(ExecutionState& state, KInstruction *ki);
 	void updateGuestRegs(ExecutionState& s);
 
-	llvm::Function* getFuncByAddrNoKMod(
-		uint64_t guest_addr, bool& is_new);
-
-
 	uint64_t getStateStack(ExecutionState& s) const;
 	ref<Expr> getRetArg(ExecutionState& state) const;
 	ref<Expr> getCallArg(ExecutionState& state, unsigned int n) const;
 
-	VexXlate	*xlate;
 	Guest		*gs;
-
+	KModuleVex	*km_vex;
 private:
 
 	void markExit(ExecutionState& state, uint8_t);
@@ -144,19 +130,12 @@ private:
 
 	void logSCRegs(ExecutionState& state);
 
-	func2vsb_map	func2vsb_table;
-	VexFCache	*xlate_cache;
-	unsigned int	native_code_bytes;
-
 	bool		dump_funcs;
 	bool		in_sc;
 
 	KFunction		*kf_scenter;
 	SysModel		*sys_model;
 	SyscallSFH		*sfh;
-
-	std::set<uint64_t>	legalFunctions;
-	DynGraph		ctrl_graph;
 };
 
 }

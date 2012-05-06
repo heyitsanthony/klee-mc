@@ -314,7 +314,7 @@ void ExecutorBC::callExternalFunction(
 
 void ExecutorBC::run(ExecutionState &initialState)
 {
-	bindModuleConstants();
+	kmodule->bindModuleConstants(this);
 	Executor::run(initialState);
 }
 

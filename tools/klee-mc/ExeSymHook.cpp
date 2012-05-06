@@ -414,7 +414,7 @@ bool ExeSymHook::canSymhook(InterpreterHandler *ie)
 	const Symbols	*syms;
 	const Symbol	*sym_malloc;
 
-	syms = dynamic_cast<KleeHandler*>(ie)->getGuest()->getDynSymbols();
+	syms = dynamic_cast<KleeHandler*>(ie)->getGuest()->getSymbols();
 	if (syms == NULL)
 		return false;
 

@@ -152,6 +152,7 @@ public:
 	uint64_t		totalInsts;
 	unsigned		concretizeCount;
 	ref<Expr>		prevForkCond;	// last condition to cause fork
+	unsigned		arrayId;
 
 
 	// Number of malloc calls per callsite

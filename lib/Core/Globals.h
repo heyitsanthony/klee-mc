@@ -17,6 +17,7 @@ class ExternalDispatcher;
 class MemoryObject;
 class ConstantExpr;
 class Executor;
+class ExecutionState;
 
 /* Manages global memory objects and addresses */
 class Globals

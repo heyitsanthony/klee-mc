@@ -2815,11 +2815,13 @@ ObjectState* Executor::makeSymbolic(
   ref<Expr> len,
   const char* arrPrefix)
 {
-	static unsigned	id = 0;
 	ObjectState	*os;
 	ref<Array>	array;
 
-	array = Array::create(arrPrefix + llvm::utostr(++id), mo->mallocKey);
+	array = Array::create(
+		arrPrefix + llvm::utostr(++state.arrayId),
+		mo->mallocKey);
+
 	os = state.bindMemObjWriteable(mo, array.get());
 	state.addSymbolic(const_cast<MemoryObject*>(mo) /* yuck */, array.get());
 
@@ -3074,32 +3076,6 @@ void Executor::instGetElementPtr(ExecutionState& state, KInstruction *ki)
 			Expr::createPointer(kgepi->getOffsetBits()));
 
 	state.bindLocal(ki, base);
-}
-
-void Executor::bindModuleConstants(void)
-{
-	foreach (it, kmodule->kfuncsBegin(), kmodule->kfuncsEnd()) {
-		bindKFuncConstants(*it);
-	}
-
-	kmodule->bindModuleConstTable(this);
-}
-
-void Executor::bindKFuncConstants(KFunction* kf)
-{
-	for (unsigned i=0; i<kf->numInstructions; ++i)
-		bindInstructionConstants(kf->instructions[i]);
-}
-
-void Executor::bindInstructionConstants(KInstruction *KI)
-{
-	KGEPInstruction* kgepi;
-
-	kgepi = dynamic_cast<KGEPInstruction*>(KI);
-	if (kgepi == NULL)
-		return;
-
-	kgepi->resolveConstants(kmodule, globals);
 }
 
 void Executor::executeAllocConst(

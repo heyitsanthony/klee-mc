@@ -259,6 +259,7 @@ protected:
 };
 
 #include "klee/SolverStats.h"
+#include "MMU.h"
 cl::opt<unsigned>
 DumpQueryStats("dump-querystats",
         cl::desc("Dump query stats every n seconds (0=off)"),
@@ -270,6 +271,7 @@ public:
 protected:
 	void print(void) { *os
 		<< stats::queries << ' '
+		<< MMU::getQueries() << ' '
 		<< stats::queryTime << ' '
 		<< stats::solverTime; }
 };

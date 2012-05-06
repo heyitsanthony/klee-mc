@@ -5,6 +5,7 @@
 #include "TimingSolver.h"
 #include "Executor.h"
 #include "MMU.h"
+#include "klee/SolverStats.h"
 #include "klee/ExecutionState.h"
 #include "klee/Expr.h"
 #include "klee/Internal/Module/KInstruction.h"
@@ -12,7 +13,8 @@
 
 using namespace llvm;
 
-extern unsigned MakeConcreteSymbolic;
+extern unsigned		MakeConcreteSymbolic;
+uint64_t		klee::MMU::query_c = 0;
 
 namespace {
 	cl::opt<bool>
@@ -218,14 +220,18 @@ void MMU::memOpError(ExecutionState& state, MemOp& mop)
 
 void MMU::exeMemOp(ExecutionState &state, MemOp mop)
 {
+	uint64_t	q_start;
+
+	q_start = stats::queries;
+
 	if (SimplifySymIndices) mop.simplify(state);
 
 	if (memOpFast(state, mop))
-		return;
+		goto done;
 
 	// handle straddled accesses
 	if (memOpByByte(state, mop))
-		return;
+		goto done;
 
 	// we are on an error path
 	// Possible reasons:
@@ -233,6 +239,9 @@ void MMU::exeMemOp(ExecutionState &state, MemOp mop)
 	// 	* multiple resolution
 	// 	* one resolution with out of bounds
 	memOpError(state, mop);
+
+done:
+	query_c += stats::queries - q_start;
 }
 
 ref<Expr> MMU::replaceReadWithSymbolic(

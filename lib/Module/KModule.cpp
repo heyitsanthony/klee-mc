@@ -659,6 +659,32 @@ void KModule::loadIntrinsicsLib(const Interpreter::ModuleOptions &opts)
 	module = linkWithLibrary(module, path.c_str());
 }
 
+void KModule::bindModuleConstants(Executor* exe)
+{
+	foreach (it, kfuncsBegin(), kfuncsEnd())
+		bindKFuncConstants(exe, *it);
+
+	bindModuleConstTable(exe);
+}
+
+
+void KModule::bindKFuncConstants(Executor* exe, KFunction* kf)
+{
+	for (unsigned i=0; i<kf->numInstructions; ++i)
+		bindInstructionConstants(exe, kf->instructions[i]);
+}
+
+void KModule::bindInstructionConstants(Executor* exe, KInstruction *KI)
+{
+	KGEPInstruction* kgepi;
+
+	kgepi = dynamic_cast<KGEPInstruction*>(KI);
+	if (kgepi == NULL)
+		return;
+
+	kgepi->resolveConstants(this, exe->getGlobals());
+}
+
 void KModule::bindModuleConstTable(Executor* exe)
 {
 	unsigned int	old_ct_sz;

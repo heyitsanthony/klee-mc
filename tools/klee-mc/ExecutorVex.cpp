@@ -1,7 +1,6 @@
 #include "llvm/Target/TargetData.h"
 #include "llvm/IntrinsicInst.h"
 #include "llvm/Support/CommandLine.h"
-#include "klee/Internal/Module/KModule.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_os_ostream.h"
 #include "klee/Config/config.h"
@@ -22,13 +21,12 @@
 #include <stdio.h>
 #include <vector>
 
+#include "KModuleVex.h"
 #include "guest.h"
 #include "guestcpustate.h"
 #include "genllvm.h"
 #include "vexhelpers.h"
-#include "vexxlate.h"
 #include "vexsb.h"
-#include "vexfcache.h"
 #include "static/Sugar.h"
 
 #include "SyscallSFH.h"
@@ -38,7 +36,6 @@
 #include "ExeStateVex.h"
 
 #include "RegPrioritizer.h"
-#include "GuestPrioritizer.h"
 #include "SyscallPrioritizer.h"
 #include "KleeHandler.h"
 
@@ -64,11 +61,6 @@ namespace
 		"symregs",
 		cl::desc("Mark initial register file as symbolic"),
 		cl::location(SymRegs),
-		cl::init(false));
-
-	cl::opt<bool> UseCtrlGraph(
-		"ctrl-graph",
-		cl::desc("Compute control graph."),
 		cl::init(false));
 
 	cl::opt<bool> LogRegs(
@@ -97,19 +89,9 @@ namespace
 		cl::desc("Dump state constraints before a syscall"),
 		cl::init(false));
 
-	cl::opt<bool> CountLibraries(
-		"count-lib-cov",
-		cl::desc("Count library coverage"),
-		cl::init(true));
-
 	cl::opt<bool> AllowNegativeStack (
 		"allow-negstack",
 		cl::desc("Allow negative call stacks"),
-		cl::init(false));
-
-	cl::opt<bool> PrintNewRanges(
-		"print-new-ranges",
-		cl::desc("Print uncovered address ranges"),
 		cl::init(false));
 
 	cl::opt<bool> UseSyscallPriority(
@@ -126,8 +108,6 @@ namespace
 ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 : Executor(ih)
 , gs(dynamic_cast<KleeHandler*>(ih)->getGuest())
-, native_code_bytes(0)
-, ctrl_graph(gs)
 {
 	assert (kmodule == NULL && "KMod already initialized? My contract!");
 
@@ -145,8 +125,6 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 			pr = new SyscallPrioritizer();
 		else if (UseRegPriority)
 			pr = new RegPrioritizer(*this);
-		else
-			pr = new GuestPrioritizer(*this);
 
 		UserSearcher::setPrioritizer(pr);
 	}
@@ -185,11 +163,10 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 	if (getenv("VEXLLVM_BASE_BIAS") != NULL)
 		unsetenv("VEXLLVM_BASE_BIAS");
 
-	xlate = new VexXlate(gs->getArch());
-	xlate_cache = new VexFCache(xlate);
-
 	assert (kmodule == NULL);
-	kmodule = new KModule(theGenLLVM->getModule());
+
+	km_vex = new KModuleVex(this, gs);
+	kmodule = km_vex;
 
 	target_data = kmodule->targetData;
 	assert(target_data->isLittleEndian() && "BIGENDIAN??");
@@ -213,8 +190,6 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 
 ExecutorVex::~ExecutorVex(void)
 {
-	delete xlate_cache;
-	delete xlate;
 	if (sfh) delete sfh;
 	sfh = NULL;
 	delete sys_model;
@@ -247,7 +222,7 @@ ExecutionState* ExecutorVex::setupInitialStateEntry(uint64_t entry_addr)
 		kmodule->addModule(*it);
 	theVexHelpers->useExternalMod(kmodule->module);
 
-	init_func = getFuncByAddrNoKMod(entry_addr, is_new);
+	init_func = km_vex->getFuncByAddrNoKMod(entry_addr, is_new);
 	assert (init_func != NULL && "Could not get init_func. Bad decode?");
 	if (init_func == NULL) {
 		fprintf(stderr, "[klee-mc] COULD NOT GET INIT_FUNC\n");
@@ -259,7 +234,7 @@ ExecutionState* ExecutorVex::setupInitialStateEntry(uint64_t entry_addr)
 	init_kfunc = kmodule->addFunction(init_func);
 
 	statsTracker->addKFunction(init_kfunc);
-	bindKFuncConstants(init_kfunc);
+	km_vex->bindKFuncConstants(this, init_kfunc);
 
 	state = ExeStateBuilder::create(kmodule->getKFunction(init_func));
 
@@ -277,7 +252,6 @@ ExecutionState* ExecutorVex::setupInitialStateEntry(uint64_t entry_addr)
 
 	pathTree = new PTree(state);
 	state->ptreeNode = pathTree->root;
-
 
 	return state;
 }
@@ -431,18 +405,16 @@ void ExecutorVex::bindMapping(
 
 	len = m.getBytes();
 	assert ((len % PAGE_SIZE) == 0);
-	for (unsigned int i = 0; i < len/PAGE_SIZE; i++) {
+	for (unsigned int i = 0; i < len/PAGE_SIZE; i++)
 		bindMappingPage(state, f, m, i);
-	}
 }
 
 void ExecutorVex::setupProcessMemory(ExecutionState* state, Function* f)
 {
 	std::list<GuestMem::Mapping> memmap(gs->getMem()->getMaps());
 
-	foreach (it, memmap.begin(), memmap.end()) {
+	foreach (it, memmap.begin(), memmap.end())
 		bindMapping(state, f, *it);
-	}
 }
 
 MemoryObject* ExecutorVex::allocRegCtx(ExecutionState* state, Function* f)
@@ -501,122 +473,8 @@ void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
 
 void ExecutorVex::run(ExecutionState &initialState)
 {
-	bindModuleConstants();
+	km_vex->bindModuleConstants(this);
 	Executor::run(initialState);
-}
-
-Function* ExecutorVex::getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new)
-{
-	void		*host_addr;
-	Function	*f;
-	VexSB		*vsb;
-
-	if (	guest_addr == 0 ||
-		((guest_addr > 0x7fffffffffffULL) &&
-		((guest_addr & 0xfffffffffffff000) != 0xffffffffff600000)) ||
-		guest_addr == 0xffffffff)
-	{
-		/* short circuit obviously bad addresses */
-		return NULL;
-	}
-
-	/* XXX: This is wrong because it doesn't acknowledge write-backs */
-	/* The right way to do it would involve grabbing from the state's MO */
-	host_addr = gs->getMem()->getHostPtr(guest_ptr(guest_addr));
-
-	/* cached => already seen it */
-	f = xlate_cache->getCachedFunc(guest_ptr(guest_addr));
-	if (f != NULL) {
-		is_new = false;
-		return f;
-	}
-
-	/* Need to load the function. First, make sure that addr is mapped. */
-	/* XXX: this is broken for code that is allocated *after* guest is
-	 * loaded and snapshot */
-	GuestMem::Mapping	m;
-	if (gs->getMem()->lookupMapping(guest_ptr(guest_addr), m) == false) {
-		return NULL;
-	}
-
-	/* !cached => put in cache, alert kmodule, other bookkepping */
-	f = xlate_cache->getFunc(host_addr, guest_ptr(guest_addr));
-	if (f == NULL) return NULL;
-
-	/* need to know func -> vsb to compute func's guest address */
-	vsb = xlate_cache->getCachedVSB(guest_ptr(guest_addr));
-	assert (vsb && "Dropped VSB too early?");
-	func2vsb_table[(uint64_t)f] = vsb;
-
-	is_new = true;
-	native_code_bytes += vsb->getEndAddr() - vsb->getGuestAddr();
-
-	if (PrintNewRanges) {
-		std::cerr << "[UNCOV] "
-			<< (void*)vsb->getGuestAddr().o
-			<< "-"
-			<< (void*)vsb->getEndAddr().o << " : "
-			<< gs->getName(vsb->getGuestAddr())
-			<< '\n';
-	}
-
-	return f;
-}
-
-const VexSB* ExecutorVex::getFuncVSB(Function* f) const
-{
-	func2vsb_map::const_iterator	it;
-
-	it = func2vsb_table.find((uint64_t)f);
-	if (it == func2vsb_table.end())
-		return NULL;
-
-	return it->second;
-}
-
-#define LIBRARY_BASE_GUESTADDR	((uint64_t)0x10000000)
-
-Function* ExecutorVex::getFuncByAddr(uint64_t guest_addr)
-{
-	KFunction	*kf;
-	Function	*f;
-	bool		is_new;
-
-	//let functions inside our bitcode syscall model be called.
-	//there is surely some shitty overlap problem now
-	if (legalFunctions.count(guest_addr))
-		return (Function*)guest_addr;
-
-	f = getFuncByAddrNoKMod(guest_addr, is_new);
-	if (f == NULL) return NULL;
-	if (!is_new) return f;
-
-	/* insert it into the kmodule */
-	if (UseCtrlGraph) {
-		ctrl_graph.addFunction(f, guest_ptr(guest_addr));
-		std::ostream* of;
-		of = interpreterHandler->openOutputFile("statics.dot");
-		if (of) {
-			ctrl_graph.dumpStatic(*of);
-			delete of;
-		}
-	}
-
-	if (CountLibraries == false) {
-		/* is library address? */
-		if (guest_addr > LIBRARY_BASE_GUESTADDR) {
-			kf = kmodule->addUntrackedFunction(f);
-		} else {
-			kf = kmodule->addFunction(f);
-		}
-	} else
-		kf = kmodule->addFunction(f);
-
-	statsTracker->addKFunction(kf);
-	bindKFuncConstants(kf);
-	kmodule->bindModuleConstTable(this);
-
-	return f;
 }
 
 void ExecutorVex::executeInstruction(
@@ -631,14 +489,13 @@ void ExecutorVex::executeInstruction(
 void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
 {
 	Function		*cur_func;
-	VexSB			*vsb;
+	const VexSB		*vsb;
 
 	/* need to trapeze between VSB's; depending on exit type,
 	 * translate VSB exits into LLVM instructions on the fly */
 	cur_func = (state.stack.back()).kf->function;
 
-
-	vsb = func2vsb_table[(uintptr_t)cur_func];
+	vsb = km_vex->getVSB(cur_func);
 	if (vsb == NULL && cur_func != kf_scenter->function) {
 		/* no VSB => outcall to externa LLVM bitcode;
 		 * use default KLEE return handling */
@@ -923,16 +780,11 @@ void ExecutorVex::printStackTrace(ExecutionState& st, std::ostream& os) const
 	{
 		StackFrame	&sf = *it;
 		Function	*f = sf.kf->function;
-		VexSB		*vsb;
-		func2vsb_map::const_iterator	f2v_it;
+		const VexSB	*vsb;
 
-		f2v_it = func2vsb_table.find((uint64_t)f);
-		vsb = NULL;
-		if (f2v_it != func2vsb_table.end())
-			vsb = f2v_it->second;
-
+		vsb = km_vex->getVSB(f);
 		os << "\t#" << idx++ << " in " << f->getNameStr();
-		if (vsb) {
+		if (vsb != NULL) {
 			os << " (" << gs->getName(vsb->getGuestAddr()) << ")";
 		}
 		os << "\n";
@@ -941,14 +793,9 @@ void ExecutorVex::printStackTrace(ExecutionState& st, std::ostream& os) const
 
 std::string ExecutorVex::getPrettyName(llvm::Function* f) const
 {
-	VexSB				*vsb;
-	func2vsb_map::const_iterator	f2v_it;
+	const VexSB *vsb;
 
-	f2v_it = func2vsb_table.find((uint64_t)f);
-	vsb = NULL;
-	if (f2v_it != func2vsb_table.end())
-		vsb = f2v_it->second;
-
+	vsb = km_vex->getVSB(f);
 	if (vsb != NULL)
 		return gs->getName(vsb->getGuestAddr());
 
@@ -1041,3 +888,6 @@ uint64_t ExecutorVex::getStateStack(ExecutionState& es) const
 
 	return stack_ce->getZExtValue();
 }
+
+llvm::Function* ExecutorVex::getFuncByAddr(uint64_t addr)
+{ return km_vex->getFuncByAddr(addr); }

@@ -241,10 +241,7 @@ protected:
         llvm::Function *f,
         std::vector< ref<Expr> > &arguments);
 
-  void bindModuleConstants(void);
-  void bindKFuncConstants(KFunction *kfunc);
   virtual void stepStateInst(ExecutionState* &state);
-
 
   InterpreterHandler	*interpreterHandler;
   llvm::TargetData	*target_data;
@@ -639,6 +636,8 @@ public:
 	bool hasState(const ExecutionState* es) const;
 
  	void addTimer(Timer *timer, double rate);
+	const Globals* getGlobals(void) const { return globals; }
+	StatsTracker* getStatsTracker(void) { return statsTracker; }
 };
 
 }

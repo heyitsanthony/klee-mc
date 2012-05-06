@@ -45,6 +45,8 @@ public:
 	/* small convenience function that should ONLY be used for debugging */
 	ref<Expr> readDebug(ExecutionState& state, uint64_t addr);
 
+	static uint64_t getQueries(void) { return query_c; }
+
 protected:
 	struct MemOpRes
 	{
@@ -99,7 +101,8 @@ protected:
 		const MemOpRes& res);
 
 private:
-	Executor& exe;
+	Executor		&exe;
+	static uint64_t		query_c;
 };
 
 }

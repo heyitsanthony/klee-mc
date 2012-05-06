@@ -70,6 +70,7 @@ ExecutionState::ExecutionState(KFunction *kf)
 , lastGlobalInstCount(0)
 , totalInsts(0)
 , concretizeCount(0)
+, arrayId(0)
 , coveredNew(false)
 , isReplay(false)
 , forkDisabled(false)
@@ -90,6 +91,7 @@ ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
 , lastGlobalInstCount(0)
 , totalInsts(0)
 , concretizeCount(0)
+, arrayId(0)
 , isReplay(false)
 , ptreeNode(0)
 {
@@ -105,6 +107,7 @@ ExecutionState::ExecutionState(void)
 , lastGlobalInstCount(0)
 , totalInsts(0)
 , concretizeCount(0)
+, arrayId(0)
 , coveredNew(false)
 , isReplay(false)
 , ptreeNode(0)
@@ -119,7 +122,7 @@ ExecutionState::~ExecutionState()
 	canary = 0;
 }
 
-ExecutionState *ExecutionState::branch()
+ExecutionState *ExecutionState::branch(void)
 {
 	ExecutionState *newState;
 
