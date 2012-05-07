@@ -22,8 +22,9 @@ public:
 	{ dyn_xfers.addEdge(src_addr, dst_addr); }
 
 	void dumpStatic(std::ostream& os) const;
+
+	static std::list<guest_ptr> getStaticReturnAddresses(llvm::Function* f);
 private:
-	std::list<guest_ptr> getStaticReturnAddresses(llvm::Function* f);
 	GenericGraph<guest_ptr>		static_xfers;
 	GenericGraph<guest_ptr>		dyn_xfers;
 	const Guest			*gs;

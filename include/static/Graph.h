@@ -34,9 +34,7 @@ template <typename V>
 class GenericGraph {
 public:
 
-    bool hasNode(V v) {
-        return getNode(v);
-    }
+    bool hasNode(V v) { return getNode(v); }
 
     GenericGraphNode<V>* getNode(V v) {
         typename std::map<V, GenericGraphNode<V> >::iterator it = v2node.find(v);
@@ -103,9 +101,9 @@ public:
         v2node.erase(v1);
     }
 
-    GenericGraph() {
+    GenericGraph() {}
 
-    }
+    unsigned getNumNodes(void) const { return v2node.size(); }
 
     std::map<V, GenericGraphNode<V > > v2node;
     std::list<GenericGraphNode<V>*> nodes;

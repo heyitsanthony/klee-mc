@@ -32,6 +32,9 @@ public:
 
 	VexXlate* getXlate(void) const { return xlate; }
 private:
+	void scanFuncExits(uint64_t guest_addr, llvm::Function* f);
+	void writeCodeGraph(GenericGraph<guest_ptr>& g);
+
 	Executor	*exe;
 	Guest		*gs;
 
@@ -42,6 +45,7 @@ private:
 	DynGraph	ctrl_graph;
 
 	unsigned int	native_code_bytes;
+	bool		in_scan;
 };
 }
 

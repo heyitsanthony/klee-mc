@@ -1,28 +1,23 @@
 #include "llvm/Target/TargetData.h"
-#include "llvm/IntrinsicInst.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_os_ostream.h"
 #include "klee/Config/config.h"
 #include "klee/breadcrumb.h"
+
 #include "klee/Solver.h"
 #include "../../lib/Solver/SMTPrinter.h"
 #include "../../lib/Core/Globals.h"
 #include "../../lib/Core/PrioritySearcher.h"
-#include "../../lib/Core/SpecialFunctionHandler.h"
-#include "../../lib/Core/TimingSolver.h"
 #include "../../lib/Core/StatsTracker.h"
 #include "../../lib/Core/ExeStateManager.h"
 #include "../../lib/Core/UserSearcher.h"
 #include "../../lib/Core/PTree.h"
 
-#include <iomanip>
-#include <unistd.h>
 #include <stdio.h>
 #include <vector>
 
 #include "KModuleVex.h"
-#include "guest.h"
 #include "guestcpustate.h"
 #include "genllvm.h"
 #include "vexhelpers.h"
@@ -225,7 +220,7 @@ ExecutionState* ExecutorVex::setupInitialStateEntry(uint64_t entry_addr)
 	init_func = km_vex->getFuncByAddrNoKMod(entry_addr, is_new);
 	assert (init_func != NULL && "Could not get init_func. Bad decode?");
 	if (init_func == NULL) {
-		fprintf(stderr, "[klee-mc] COULD NOT GET INIT_FUNC\n");
+		std::cerr << "[klee-mc] COULD NOT GET INIT_FUNC\n";
 		return NULL;
 	}
 
@@ -272,7 +267,7 @@ void ExecutorVex::runImage(void)
 	run(*start_state);
 
 	cleanupImage();
-	fprintf(stderr, "OK.\n");
+	std::cerr << "OK.\n";
 }
 
 void ExecutorVex::cleanupImage(void)
@@ -294,9 +289,9 @@ void ExecutorVex::makeMagicSymbolic(ExecutionState* state)
 	exts = state->addressSpace.getMagicExtents();
 	if (exts.size() == 0) return;
 
-	fprintf(stderr,
-		"[klee-mc] Making %d magic extents symbolic\n",
-		(int)exts.size());
+	std::cerr << "[klee-mc] Making "
+		<< exts.size()
+		<< "magic extents symbolic\n";
 
 	foreach (it, exts.begin(), exts.end())
 		sfh->makeRangeSymbolic(
@@ -310,9 +305,10 @@ void ExecutorVex::makeArgsSymbolic(ExecutionState* state)
 	argv = gs->getArgvPtrs();
 	if (argv.size() == 0) return;
 
-	fprintf(stderr,
-		"[klee-mc] Making %d arguments symbolic\n",
-		(int)(argv.size()-1));
+	std::cerr << "[klee-mc] Making "
+		<< (argv.size()-1)
+		<< "arguments symbolic\n";
+
 	foreach (it, argv.begin()+1, argv.end()) {
 		guest_ptr	p = *it;
 		sfh->makeRangeSymbolic(
@@ -585,7 +581,11 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 		handleXferSyscall(state, ki);
 		return;
 	case GE_EMWARN:
-		std::cerr << "[VEXLLVM] VEX Emulation warning!?" << std::endl;
+		std::cerr << "[VEXLLVM] VEX Emulation warning!?\n";
+		handleXferJmp(state, ki);
+		return;
+	case GE_YIELD:
+		std::cerr << "[VEXLLVM] Need to support yielding\n" ;
 	case GE_IGNORE:
 		handleXferJmp(state, ki);
 		return;
@@ -602,7 +602,7 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 		terminateStateOnExit(state);
 		return;
 	default:
-		fprintf(stderr, "WTF: EXIT_TYPE=%d\n", exit_type);
+		std::cerr << "WTF: EXIT_TYPE=" << exit_type << '\n';
 		assert (0 == 1 && "SPECIAL EXIT TYPE");
 	}
 
@@ -610,8 +610,7 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 	ref<Expr> result = ConstantExpr::alloc(0, Expr::Bool);
 	result = eval(ki, 0, state).value;
 
-	fprintf(stderr, "terminating initial stack frame\n");
-	fprintf(stderr, "result: ");
+	std::cerr <<  "terminating initial stack frame\nresult: ";
 	result->dump();
 	terminateStateOnExit(state);
 }
@@ -621,9 +620,8 @@ void ExecutorVex::handleXferJmp(ExecutionState& state, KInstruction* ki)
 {
 	struct XferStateIter	iter;
 	xferIterInit(iter, &state, ki);
-	while (xferIterNext(iter)) {
+	while (xferIterNext(iter))
 		jumpToKFunc(*(iter.res.first), kmodule->getKFunction(iter.f));
-	}
 }
 
 void ExecutorVex::jumpToKFunc(ExecutionState& state, KFunction* kf)
@@ -648,9 +646,8 @@ void ExecutorVex::handleXferCall(ExecutionState& state, KInstruction* ki)
 
 	args.push_back(es2esv(state).getRegCtx()->getBaseExpr());
 	xferIterInit(iter, &state, ki);
-	while (xferIterNext(iter)) {
+	while (xferIterNext(iter))
 		executeCall(*(iter.res.first), ki, iter.f, args);
-	}
 }
 
 /**
@@ -700,13 +697,13 @@ void ExecutorVex::handleXferSyscall(
 	}
 
 
-	fprintf(stderr, "before syscall %d(?): states=%d. objs=%d. st=%p. n=%d\n",
-		(int)sysnr,
-		stateManager->size(),
-		state.getNumSymbolics(),
-		(void*)&state,
-		es2esv(state).getSyscallCount());
-
+	std::cerr << "[klee-mc] before syscall "
+		<< sysnr
+		<< "(?): states=" << stateManager->size()
+		<< ". objs=" << state.getNumSymbolics()
+		<< ". st=" << (void*)&state
+		<< ". n=" << es2esv(state).getSyscallCount() << '\n';
+		
 	/* arg0 = regctx, arg1 = jmpptr */
 	args.push_back(es2esv(state).getRegCtx()->getBaseExpr());
 	args.push_back(eval(ki, 0, state).value);
@@ -814,13 +811,13 @@ void ExecutorVex::printStateErrorMessage(
 
 	os << "Error: " << message << "\n";
 
-	os << "Objects: " << std::endl;
+	os << "Objects:\n";
 	state.addressSpace.printObjects(os);
 
-	os << "\nRegisters: \n";
+	os << "\nRegisters:\n";
 	gs->getCPUState()->print(os);
 
-	os << "\nStack: \n";
+	os << "\nStack:\n";
 	printStackTrace(state, os);
 
 	if (state.prevPC && state.prevPC->getInst()) {
@@ -871,7 +868,6 @@ uint64_t ExecutorVex::getStateStack(ExecutionState& es) const
 	const ConstantExpr	*stack_ce;
 	const ObjectState	*os;
 
-	/* XXX: not 32-bit clean */
 	os = GETREGOBJRO(es);
 	stack_e = es.read(
 		os,

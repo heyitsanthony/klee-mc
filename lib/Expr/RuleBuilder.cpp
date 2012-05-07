@@ -9,6 +9,7 @@
 #include "../Solver/SMTPrinter.h"
 #include "klee/Solver.h"
 #include "klee/util/ExprUtil.h"
+#include "klee/Internal/ADT/Hash.h"
 
 #include "static/Sugar.h"
 #include "ExprRule.h"
@@ -191,7 +192,6 @@ bool RuleBuilder::loadRuleDir(const char* ruledir)
 
 	while ((de = readdir(d))) {
 		std::stringstream	s;
-
 		s << ruledir << "/" << de->d_name;
 		addRule(ExprRule::loadPrettyRule(s.str().c_str()));
 	}
@@ -375,19 +375,17 @@ ref<Expr> RuleBuilder::tryAllRules(const ref<Expr>& in)
 	return in;
 }
 
-#include "openssl/md5.h"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-static const char ugh[] = "0123456789abcdef";
+
 bool RuleBuilder::hasRule(const char* fname)
 {
 	FILE			*f;
-	char			buf[4096];
-	unsigned		sz;
 	std::string		rule_file;
+	unsigned char		buf[4096];
+	unsigned		sz;
 	struct stat		s;
-	unsigned char		md[16];
 
 	/* expert quality */
 	f = fopen(fname, "rb");
@@ -403,14 +401,7 @@ bool RuleBuilder::hasRule(const char* fname)
 	if (sz == 0)
 		return false;
 
-	MD5((unsigned char*)buf, sz, md);
-
-	std::stringstream ss;
-	for (unsigned i = 0; i < 16; i++)
-		ss	<< ugh[(md[i] & 0xf0) >> 4]
-			<< ugh[md[i] & 0x0f];
-
-	rule_file = RuleDir + "/" + ss.str();
+	rule_file = RuleDir + "/" + Hash::MD5(buf, sz);
 	if (stat(rule_file.c_str(), &s) == 0) {
 		std::cerr << "[RuileBuilder] Already has " << rule_file << '\n';
 		return true;
