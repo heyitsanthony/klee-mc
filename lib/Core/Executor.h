@@ -419,6 +419,10 @@ private:
   void doImpliedValueConcretization(ExecutionState &state,
                                     ref<Expr> e,
                                     ref<ConstantExpr> value);
+  void commitIVC(
+	ExecutionState	&state,
+	const ref<ReadExpr>&	re,
+	const ref<ConstantExpr>& ce);
   bool getSatAssignment(const ExecutionState& st, Assignment& a);
 
 

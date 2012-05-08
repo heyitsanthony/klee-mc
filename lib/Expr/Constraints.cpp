@@ -13,6 +13,7 @@
 #include "klee/util/ExprPPrinter.h"
 #include "klee/util/ExprVisitor.h"
 #include "static/Sugar.h"
+#include "ExprReplaceVisitor.h"
 
 #include <stack>
 #include <string.h>
@@ -31,29 +32,8 @@ namespace {
 		llvm::cl::init(true));
 }
 
-namespace klee {
-
-class ExprReplaceVisitor : public ExprVisitor
+namespace klee
 {
-private:
-	ref<Expr> src, dst;
-
-public:
-	ExprReplaceVisitor(ref<Expr> _src, ref<Expr> _dst)
-	: src(_src), dst(_dst) {}
-
-	Action visitExpr(const Expr &e) {
-		return (e == *src.get())
-			? Action::changeTo(dst)
-			: Action::doChildren();
-	}
-
-	Action visitExprPost(const Expr &e) {
-		return (e == *src.get())
-			? Action::changeTo(dst)
-			: Action::doChildren();
-	}
-};
 
 class ExprReplaceVisitor2 : public ExprVisitor
 {

@@ -28,6 +28,7 @@
 #include "StatsTracker.h"
 #include "Globals.h"
 #include "../Expr/RuleBuilder.h"
+#include "../Expr/ExprReplaceVisitor.h"
 
 #include "static/Sugar.h"
 #include "klee/Common.h"
@@ -62,7 +63,6 @@
 #include <string>
 
 #include <netdb.h>
-
 #include <errno.h>
 
 using namespace llvm;
@@ -3019,35 +3019,59 @@ void Executor::doImpliedValueConcretization(
 	ImpliedValueList results;
 	ImpliedValue::getImpliedValues(e, value, results);
 
-	foreach (it, results.begin(), results.end()) {
-		const MemoryObject	*mo;
-		const ObjectState	*os;
-		ObjectState		*wos;
-		ReadExpr		*re = it->first.get();
-		ConstantExpr		*off = dyn_cast<ConstantExpr>(re->index);
+	foreach (it, results.begin(), results.end())
+		commitIVC(state, it->first, it->second);
+}
 
-		if (off == NULL) continue;
+void Executor::commitIVC(
+	ExecutionState	&state,
+	const ref<ReadExpr>&	re,
+	const ref<ConstantExpr>& ce)
+{
+	const MemoryObject	*mo;
+	const ObjectState	*os;
+	ObjectState		*wos;
+	ConstantExpr		*off = dyn_cast<ConstantExpr>(re->index);
 
-		mo = state.findMemoryObject(re->updates.getRoot().get());
-		if (mo == NULL)
+	if (off == NULL) return;
+
+	mo = state.findMemoryObject(re->updates.getRoot().get());
+	if (mo == NULL) return;
+
+	assert (mo != NULL && "Could not find MO?");
+	os = state.addressSpace.findObject(mo);
+
+	// os = 0 => obj has been free'd,
+	// no need to concretize (although as in other cases we
+	// would like to concretize the outstanding
+	// reads, but we have no facility for that yet)
+	if (os == NULL) return;
+
+	assert(	!os->readOnly && "read only object with static read?");
+
+	wos = state.addressSpace.getWriteable(mo, os);
+	assert (wos != NULL && "Could not get writable ObjectState?");
+
+	wos->writeIVC(off->getZExtValue(), ce);
+
+	foreach (it, state.stackBegin(), state.stackEnd()) {
+		ExprReplaceVisitor	erv(re, ce);
+		StackFrame		&sf(*it);
+
+		if (sf.kf == NULL)
 			continue;
 
-		assert (mo != NULL && "Could not find MO?");
-		os = state.addressSpace.findObject(mo);
+		/* update all registers in stack frame */
+		for (unsigned i = 0; i < sf.kf->numRegisters; i++) {
+			ref<Expr>	e;
 
-		// os = 0 => obj has been free'd,
-		// no need to concretize (although as in other cases we
-		// would like to concretize the outstanding
-		// reads, but we have no facility for that yet)
-		if (os == NULL) continue;
+			if (	sf.locals[i].value.isNull() ||
+				isa<ConstantExpr>(sf.locals[i].value))
+				continue;
 
-		assert(	!os->readOnly &&
-			"not possible? read only object with static read?");
-
-		wos = state.addressSpace.getWriteable(mo, os);
-		assert (wos != NULL && "Could not get writable ObjectState?");
-
-		wos->writeIVC(off->getZExtValue(), it->second);
+			e = erv.apply(sf.locals[i].value);
+			sf.locals[i].value = e;
+		}
 	}
 }
 
