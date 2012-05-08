@@ -27,9 +27,12 @@ public:
 	}
 
 private:
+	void updateInsCounts(void);
+
 	Searcher	*searcher_base;
 	ExecutionState	*last_current;
 	unsigned	remaining_quanta;
+	uint64_t	last_ins_total;
 	uint64_t	last_ins_cov;
 };
 }
