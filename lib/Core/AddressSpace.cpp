@@ -26,7 +26,12 @@ namespace {
 	cl::opt<bool>
 	ContiguousOffsetResolution(
 		"contig-off-resolution",
-		cl::desc("Resolve contiguous offsets instead of entire address space."),
+		cl::desc("Resolve contiguous offsets, not entire address space."),
+		cl::init(false));
+
+	cl::opt<bool> RandomizePtrAddend(
+		"randomize-ptraddend",
+		cl::desc("Randomize pointer addend hint for ptr+u8."),
 		cl::init(false));
 }
 
@@ -162,28 +167,6 @@ ref<Expr> AddressSpace::getFeasibilityExpr(
 	return inRange;
 }
 
-/* return true if there exists an assignment for the address
- * such that the address does not fall within the given range */
-bool AddressSpace::isInfeasibleRange(
-	ExecutionState &state,
-	TimingSolver *solver,
-	ref<Expr> address,
-	const MemoryObject* lo, const MemoryObject* hi,
-	bool& ok)
-{
-	bool	mayBeFalse;
-
-	ref<Expr> inRange = getFeasibilityExpr(address, lo, hi);
-
-	ok = solver->mayBeFalse(state, inRange, mayBeFalse);
-	if (!ok) {
-		// query error
-		return false;
-	}
-
-	return mayBeFalse;
-}
-
 bool AddressSpace::isFeasibleRange(
 	ExecutionState &state,
 	TimingSolver *solver,
@@ -196,10 +179,7 @@ bool AddressSpace::isFeasibleRange(
 	ref<Expr> inRange = getFeasibilityExpr(address, lo, hi);
 
 	ok = solver->mayBeTrue(state, inRange, mayBeTrue);
-	if (!ok) {
-		// query error
-		return false;
-	}
+	if (!ok) return false;
 
 	return mayBeTrue;
 }
@@ -213,9 +193,7 @@ bool AddressSpace::testInBoundPointer(
 	ref<ConstantExpr>	&c_addr,
 	const MemoryObject*	&mo)
 {
-	const MemoryMap::value_type	*res;
 	uint64_t			example = 0;
-	bool				ok;
 
 	mo = NULL;
 
@@ -230,31 +208,59 @@ bool AddressSpace::testInBoundPointer(
 		if (ze->getKid(0)->getWidth() == 8) {
 			c_addr = cast<ConstantExpr>(address->getKid(0));
 			example = c_addr->getZExtValue();
+			if (RandomizePtrAddend)
+				example += rand() % 256;
 		}
 	}
 
-	if (!example) {
-		ok = solver->getValue(state, address, c_addr);
-		if (!ok) {
-			c_addr = ConstantExpr::create(~0ULL, address->getWidth());
-			return false;
-		}
+#if 1
+	if (	example == 0 &&
+		isa<ConstantExpr>(address->getKid(0)) &&
+		isa<ZExtExpr>(address->getKid(1)) &&
+		address->getKid(0)->getWidth() >= 10)
+	{
+		/* try to go out of range */
+		example = cast<ConstantExpr>(address->getKid(0))->getZExtValue();
+		example += 1 << (address->getKid(0)->getWidth() - 1);
+	}
+#endif
 
-		example = c_addr->getZExtValue();
+	if (example != 0) {
+		if (lookupGuess(example, mo))
+			return true;
+	}
+		
+	/* XXX: is this too expensive? */
+	if (solver->getValue(state, address, c_addr) == false) {
+		c_addr = ConstantExpr::create(~0ULL, address->getWidth());
+		return false;
 	}
 
+	example = c_addr->getZExtValue();
+	if (lookupGuess(example, mo) == false)
+		c_addr = ConstantExpr::create(~0ULL, address->getWidth());
+
+	return true;
+}
+
+bool AddressSpace::lookupGuess(
+	uint64_t		example,
+	const MemoryObject*	&mo)
+{
+	const MemoryMap::value_type	*res;
 	MemoryObject toFind(example);
+
+	mo = NULL;
 	res = objects.lookup_previous(&toFind);
-	if (!res)
-		return true;
+	if (res == NULL)
+		return false;
 
 	mo = res->first;
 	if (example < mo->address + mo->size && example >= mo->address)
 		return true;
 
 	mo = NULL;
-	c_addr = ConstantExpr::create(~0ULL, address->getWidth());
-	return true;
+	return false;
 }
 
 bool AddressSpace::getFeasibleObject(
@@ -263,7 +269,7 @@ bool AddressSpace::getFeasibleObject(
 	ref<Expr> address,
 	ObjectPair& res)
 {
-	bool			found, ok;
+	bool			found;
 	ref<ConstantExpr>	c_addr;
 
 	res.first = NULL;
@@ -276,14 +282,18 @@ bool AddressSpace::getFeasibleObject(
 
 	TimerStatIncrementer timer(stats::resolveTime);
 
-	ok = testInBoundPointer(state, solver, address, c_addr, res.first);
-	if (!ok) return false;
+	if (!testInBoundPointer(state, solver, address, c_addr, res.first))
+		return false;
 
 	if (res.first != NULL) {
-		/* we lucked out and found a feasible address. */
+		/* we lucked out and found a maybe-feasible address. */
 		if (resolveOne(c_addr, res))
 			return true;
 	}
+
+	/* one more check; zero it out */
+
+
 
 	// We couldn't throw a dart and hit a feasible address.
 	// The next step is to try to find any feasible address.
@@ -294,7 +304,7 @@ bool AddressSpace::getFeasibleObject(
 bool AddressSpace::binsearchFeasible(
 	ExecutionState& state,
 	TimingSolver* solver,
-	ref<Expr>& address,
+	ref<Expr>& addr,
 	uint64_t upper_addr, ObjectPair& res)
 {
 	MemoryObject	toFind(upper_addr);
@@ -335,22 +345,20 @@ bool AddressSpace::binsearchFeasible(
 			high = cur.second->first;
 
 			feasible = isFeasibleRange(
-				state, solver, address, low, high, ok);
+				state, solver, addr, low, high, ok);
 
 			if (!ok) {
 				res.first = NULL;
 				return false;
 			}
 
-			if (!feasible) {
-				/* address can not possibly be in
-				 * this range */
+			/* address can not possibly be in this range? */
+			if (feasible == false)
 				continue;
-			}
 
-			// range is feasible-- address may
-			// it only contains one MemoryObject (proven feasible),
-			// so return it
+			// range is feasible-- 
+			// address may only contains one MemoryObject
+			// (proven feasible), so return it
 			if (low == high) {
 				res = *cur.first;
 				return true;
@@ -364,7 +372,7 @@ bool AddressSpace::binsearchFeasible(
 
 			left = std::make_pair(cur.first, mid);
 			right = std::make_pair(++mid, cur.second);
-			break; // out of for loop
+			break;
 		}
 
 		// neither range was feasible

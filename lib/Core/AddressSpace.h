@@ -104,20 +104,16 @@ private:
 	/// Add a binding to the address space.
 	void bindObject(const MemoryObject *mo, ObjectState *os);
 
+	bool lookupGuess(
+		uint64_t		example,
+		const MemoryObject*	&mo);
+
 	bool testInBoundPointer(
 		ExecutionState &state,
 		TimingSolver *solver,
 		ref<Expr> address,
 		ref<ConstantExpr>& c_addr,
 		const MemoryObject*	&mo);
-
-	bool isInfeasibleRange(
-		ExecutionState &state,
-		TimingSolver *solver,
-		ref<Expr> address,
-		const MemoryObject* lo,
-		const MemoryObject* hi,
-		bool& ok);
 
 	bool isFeasibleRange(
 		ExecutionState &state,
