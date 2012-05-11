@@ -1029,6 +1029,9 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 	case SYS_symlink:
 	case SYS_clock_settime:
+#ifndef SYS_clock_adjtime
+#define SYS_clock_adjtime 305
+#endif
 	case SYS_clock_adjtime:
 	case SYS_chown:
 	case SYS_shutdown:
