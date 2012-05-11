@@ -25,6 +25,9 @@
 using namespace klee;
 using namespace llvm;
 
+uint64_t PipeSolverImpl::prefork_misses = 0;
+uint64_t PipeSolverImpl::prefork_hits = 0;
+
 namespace {
 	cl::opt<bool>
 	ForkQueries(
@@ -55,6 +58,19 @@ namespace {
 		"debug-pipe-wrq",
 		cl::desc("Debug WriteRecvQuery with pipe-fork"),
 		cl::init(false));
+
+	cl::opt<bool>
+	PreforkSolver(
+		"prefork-solver",
+		cl::desc("exec() solver at query fini."),
+		cl::init(true));
+
+	cl::opt<bool>
+	PreforkSolverLast(
+		"prefork-solver-last",
+		cl::desc("exec() solver at query fini."),
+		cl::init(true));
+
 }
 
 PipeSolver::PipeSolver(PipeFormat* in_fmt)
@@ -93,6 +109,25 @@ PipeSolverImpl::~PipeSolverImpl(void)
 {
 	finiChild();
 	delete fmt;
+}
+
+bool PipeSolverImpl::setupCachedSolver(char *const argv[])
+{
+	if (PreforkSolver == false)
+		return setupSolverChild(fmt->getExec(), argv);
+
+	if (child_pid == -1)
+		return setupSolverChild(fmt->getExec(), argv);
+
+	if (argv != cached_argv) {
+		/* fuck. wasted time on a useless solver */
+		prefork_misses++;
+		stopChild();
+		return setupSolverChild(fmt->getExec(), argv);
+	}
+
+	prefork_hits++;
+	return true;
 }
 
 /* create solver child process with stdin/stdout pipes
@@ -207,11 +242,31 @@ bool PipeSolverImpl::setupSolverChild(
 
 	fd_child_stdin = parent2child[1];
 	fd_child_stdout = child2parent[0];
+	cached_argv = (const char**)argv;
 
 	return true;
 }
 
 void PipeSolverImpl::finiChild(void)
+{
+	char* const*	argv = NULL;
+
+	stopChild();
+
+	if (!PreforkSolver)
+		return;
+
+	if (PreforkSolverLast && cached_argv)
+		argv = const_cast<char* const*>(fmt->getArgvSAT());
+
+	if (argv == NULL)
+		argv = (char* const*)cached_argv;
+
+	if (argv != NULL)
+		setupSolverChild(fmt->getExec(), argv);
+}
+
+void PipeSolverImpl::stopChild(void)
 {
 	if (stdout_buf) {
 		delete stdout_buf;
@@ -235,8 +290,7 @@ bool PipeSolverImpl::computeInitialValues(const Query& q, Assignment& a)
 	TimerStatIncrementer	t(stats::queryTime);
 	bool			parse_ok, is_sat;
 
-	if (setupSolverChild(
-		fmt->getExec(),
+	if (setupCachedSolver(
 		const_cast<char* const*>(fmt->getArgvModel())) == false)
 	{
 		failQuery();
@@ -291,8 +345,7 @@ bool PipeSolverImpl::computeSat(const Query& q)
 	TimerStatIncrementer	t(stats::queryTime);
 	bool			parse_ok, is_sat;
 
-	if (setupSolverChild(
-		fmt->getExec(),
+	if (setupCachedSolver(
 		const_cast<char* const*>(fmt->getArgvSAT())) == false)
 	{
 		std::cerr << "[PipeSolver] FAILED COMPUTE SAT QUERY\n";

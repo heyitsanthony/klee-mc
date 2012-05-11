@@ -40,7 +40,9 @@ public:
 	void setTimeout(double in_timeout) { timeout = in_timeout; }
 private:
 	bool setupSolverChild(const char* exec_fname, char* const argv[]);
+	bool setupCachedSolver(char* const argv[]);
 	void finiChild(void);
+	void stopChild(void);
 	std::istream* writeRecvQuery(const Query& q);
 	bool writeQuery(const Query& q) const;
 	bool writeQueryToChild(const Query& q) const;
@@ -54,6 +56,10 @@ private:
 	__gnu_cxx::stdio_filebuf<char> *stdout_buf;
 
 	double		timeout;
+
+	const char** cached_argv;
+	static uint64_t	prefork_misses;
+	static uint64_t prefork_hits;
 };
 }
 #endif
