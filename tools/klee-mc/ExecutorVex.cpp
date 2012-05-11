@@ -362,8 +362,16 @@ void ExecutorVex::bindMappingPage(
 		mmap_mo->setName("guestimg");
 	}
 
+	/* optimize for zero pages */
 	data = (const char*)addr_base;
 	unsigned i = 0;
+
+#ifdef CLUSTER_HACKS
+	if (data == (void*)0xffffffffff5fe000) {
+		return;
+	}
+#endif
+
 	for (i = 0; i < PAGE_SIZE; i++) {
 		if (data[i]) {
 			mmap_os = state->addressSpace.getWriteable(
