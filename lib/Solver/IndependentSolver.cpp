@@ -280,26 +280,55 @@ public:
 	std::vector< ref<Expr> > required;	\
 	IndependentElementSet eltsClosure;	\
 	eltsClosure = getIndependentConstraints(query, required);	\
-	ConstraintManager tmp(required);
+	ConstraintManager tmp(required);	\
+	if (tmp.size() == 0 && isUnconstrained(query))
+
+
+static bool isUnconstrained(const Query& query)
+{
+	if (	query.expr->getKind() == Expr::Eq &&
+		query.expr->getKid(1)->getKind() == Expr::Read)
+	{
+		return true;
+	}
+
+	if (	query.expr->getKind() == Expr::Extract &&
+		query.expr->getKid(0)->getKind() == Expr::Read)
+	{
+		return true;
+	}
+
+	// std::cerr << "MISSED UNCONSTRAINED: " << query.expr << '\n';
+	return false;
+}
 
 Solver::Validity IndependentSolver::computeValidity(const Query& query)
 {
-	SETUP_CONSTRAINTS
+	SETUP_CONSTRAINTS { return Solver::Unknown; }
 	return doComputeValidity(Query(tmp, query.expr));
 }
 
 bool IndependentSolver::computeSat(const Query& query)
 {
-	SETUP_CONSTRAINTS
+	SETUP_CONSTRAINTS { return true; }
 	return doComputeSat(Query(tmp, query.expr));
 }
 
 ref<Expr> IndependentSolver::computeValue(const Query& query)
 {
-	SETUP_CONSTRAINTS
+	SETUP_CONSTRAINTS {
+		uint64_t	v;
+		
+		v = rand();
+		if (query.expr->getWidth() < 64)
+			v &= (1 << query.expr->getWidth()) - 1;
+
+		return ConstantExpr::create(
+			v, query.expr->getWidth());
+	}
+
 	return doComputeValue(Query(tmp, query.expr));
 }
 
-Solver *klee::createIndependentSolver(Solver *s) {
-  return new Solver(new IndependentSolver(s));
-}
+Solver *klee::createIndependentSolver(Solver *s)
+{ return new Solver(new IndependentSolver(s)); }
