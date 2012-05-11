@@ -3433,6 +3433,7 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 				iter_f->getName().data());
 		}
 
+		iter.res.first->setFreshBranch();
 		break;
 	}
 
