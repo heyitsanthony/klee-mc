@@ -66,13 +66,22 @@ ref<ConstantExpr> ConstantExpr::createVector(llvm::ConstantVector* v)
 
 	ref<ConstantExpr>	cur_v;
 	for (unsigned int i = 0; i < elem_count; i++) {
-		llvm::ConstantInt *cur_ci;
+		llvm::ConstantInt	*cur_ci;
+		llvm::ConstantFP	*cur_fi;
+		llvm::APInt		api;
 
 		cur_ci = dyn_cast<llvm::ConstantInt>(v->getOperand(i));
-		assert (cur_ci != NULL);
+		cur_fi = dyn_cast<llvm::ConstantFP>(v->getOperand(i));
+		if (cur_ci != NULL) {
+			api = cur_ci->getValue();
+		} else if (cur_fi != NULL) {
+			api = cur_fi->getValueAPF().bitcastToAPInt();
+		} else {
+			assert (0 == 1 && "Weird type??");
+		}
 
-		if (i == 0) cur_v = alloc(cur_ci->getValue());
-		else cur_v = cur_v->Concat(alloc(cur_ci->getValue()));
+		if (i == 0) cur_v = alloc(api);
+		else cur_v = cur_v->Concat(alloc(api));
 	}
 
 	return cur_v;

@@ -41,7 +41,11 @@ SoftFPPass::SoftFPPass(KModule* _km, const char* _dir)
 		{"int64_to_float32", &f_si64tofp32},
 		{"int64_to_float64", &f_si64tofp64},
 
+		{"float32_is_nan", &f_isnan32},
+		{"float64_is_nan", &f_isnan64},
 
+		{"float32_sqrt", &f_sqrt32},
+		{"float64_sqrt", &f_sqrt64},
 
 		{"float32_add", &f_fp32add},
 		{"float64_add", &f_fp64add},
@@ -150,7 +154,7 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 		IRBuilder<>	irb(inst);
 		Value		*v;
 		Function	*f;
-		bool		f_flip;
+		bool		f_flip, unordered = false;
 
 		fi = cast<FCmpInst>(inst);
 		assert (ty_w == 32 || ty_w == 64);
@@ -161,21 +165,54 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 		// Unordered comps return true if either operand is NaN.
 		pred = fi->getPredicate();
 		f_flip = false;
-		if (pred == FCmpInst::FCMP_OEQ)
+		/* Ordered AND cond */
+		if (pred == FCmpInst::FCMP_OEQ) {
 			f = (ty_w == 32)
 				? f_fp32eq->function
 				: f_fp64eq->function;
-		else if (pred == FCmpInst::FCMP_OLT)
+		} else if (pred == FCmpInst::FCMP_OLT) {
 			f = (ty_w == 32)
 				? f_fp32lt->function
 				: f_fp64lt->function;
-		else if (pred == FCmpInst::FCMP_OGT) {
+		}  else if (pred == FCmpInst::FCMP_OLE) {
+			f = (ty_w == 32)
+				? f_fp32le->function
+				: f_fp64le->function;
+			f_flip = true;
+		} else if (pred == FCmpInst::FCMP_OGT) {
 			f = (ty_w == 32)
 				? f_fp32lt->function
 				: f_fp64lt->function;
 			f_flip = true;
-		} else
+		}
+		/* Unordered OR cond */
+		else if (pred == FCmpInst::FCMP_UEQ) {
+			f = (ty_w == 32)
+				? f_fp32eq->function
+				: f_fp64eq->function;
+			unordered = true;
+		} else if (pred == FCmpInst::FCMP_ULT) {
+			f = (ty_w == 32)
+				? f_fp32lt->function
+				: f_fp64lt->function;
+			unordered = true;
+		}  else if (pred == FCmpInst::FCMP_ULE) {
+			f = (ty_w == 32)
+				? f_fp32le->function
+				: f_fp64le->function;
+			f_flip = true;
+			unordered = true;
+		} else if (pred == FCmpInst::FCMP_UGT) {
+			f = (ty_w == 32)
+				? f_fp32lt->function
+				: f_fp64lt->function;
+			f_flip = true;
+			unordered = true;
+		} else {
+			inst->dump();
 			assert (0 == 1 && "???");
+		}
+
 
 		if (f_flip == false) {
 			v = irb.CreateCall2(f, v0, inst->getOperand(1));
@@ -183,6 +220,16 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 			v = irb.CreateCall2(f, inst->getOperand(1), v0);
 		}
 
+		if (unordered) {
+			Function	*is_nan;
+
+			is_nan = (ty_w == 32)
+				? f_isnan32->function
+				: f_isnan64->function;
+			v = irb.CreateOr(irb.CreateCall(is_nan, v0), v);
+		}
+
+		/* turn result into bool */
 		v = irb.CreateTrunc(
 			v,
 			IntegerType::get(ty->getContext(), 1));
@@ -267,6 +314,26 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 		inst->getParent()->getParent()->dump();
 		assert (0 == 1 && "IMPLEMENT ME!!!!!!");
 	break;
+
+	case Instruction::Call: {
+		unsigned	ty_w = v0->getType()->getPrimitiveSizeInBits();
+		IRBuilder<>	irb(inst);
+		CallInst	*ci = static_cast<CallInst*>(inst);
+		Function	*called;
+
+		called = ci->getCalledFunction();
+		if (called == NULL)
+			break;
+
+		if (called->getNameStr() == "sqrt") {
+			Function	*f;
+			f = (ty_w == 32)
+				? f_sqrt32->function
+				: f_sqrt64->function;
+			ReplaceInstWithInst(inst, irb.CreateCall(f, v0));
+		}
+	break;
+	}
 
 	}
 
