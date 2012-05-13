@@ -19,8 +19,8 @@ public:
   /// Within the state where this malloc() call occurred, # of times malloc()
   /// was called at this allocSite before the call that generated this key.
   unsigned iteration;
-
-  uint64_t size;
+  unsigned size;
+  mutable unsigned hash_v;
   bool isLocal;
   bool isGlobal;
   bool isFixed;
@@ -28,11 +28,14 @@ public:
   MallocKey(const llvm::Value* _allocSite, unsigned _iteration,
                  uint64_t _size, bool _isLocal, bool _isGlobal,
                  bool _isFixed)
-    : allocSite(_allocSite), iteration(_iteration), size(_size),
-      isLocal(_isLocal), isGlobal(_isGlobal), isFixed(_isFixed) { }
+    : allocSite(_allocSite), iteration(_iteration), size(_size)
+    , hash_v(0)
+    , isLocal(_isLocal), isGlobal(_isGlobal), isFixed(_isFixed) { }
+
   MallocKey(uint64_t _size)
-    : allocSite(0), iteration(0), size(_size), isLocal(false),
-      isGlobal(false), isFixed(false) { }
+    : allocSite(0), iteration(0), size(_size)
+    , hash_v(0)
+    , isLocal(false), isGlobal(false), isFixed(false) { }
 
   /// Compares two MallocKeys; used for ordering MallocKeys within STL
   /// containers

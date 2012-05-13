@@ -41,7 +41,7 @@ ObjectState::ObjectState(unsigned _size)
 	numObjStates++;
 }
 
-ObjectState::ObjectState(unsigned _size, const Array *array)
+ObjectState::ObjectState(unsigned _size, const ref<Array>& array)
 : src_array(array)
 , copyOnWriteOwner(0)
 , refCount(0)

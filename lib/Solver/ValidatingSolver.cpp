@@ -128,7 +128,7 @@ void ValidatingSolver::checkIVSolution(const Query& query, Assignment &a)
 			bindings.push_back(
 			EqExpr::create(
 				ReadExpr::create(
-					UpdateList(array, 0),
+					UpdateList(ARR2REF(array), 0),
 					ConstantExpr::alloc(j, Expr::Int32)),
 				ConstantExpr::alloc(v, Expr::Int8)));
 		}

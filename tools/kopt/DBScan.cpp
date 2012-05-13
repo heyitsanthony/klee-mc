@@ -70,7 +70,8 @@ public:
 		if (!(ce.getWidth() == 32 || ce.getWidth() == 64))
 			return Action::skipChildren();
 
-		new_expr = Expr::createTempRead(arr, ce.getWidth(), arr_off);
+		new_expr = Expr::createTempRead(
+			ARR2REF(arr), ce.getWidth(), arr_off);
 		arr_off += ce.getWidth() / 8;
 		return Action::changeTo(new_expr);
 	}

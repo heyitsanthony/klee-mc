@@ -258,7 +258,9 @@ protected:
 
 			return Action::changeTo(
 				ReadExpr::create(
-					UpdateList(it->second, NULL),
+					UpdateList(
+						ref<Array>(const_cast<Array*>(it->second)),
+						NULL),
 					re.index));
 		}
 
@@ -284,7 +286,10 @@ protected:
 
 		return Action::changeTo(
 			ReadExpr::create(
-				UpdateList(repl_arr, NULL), re.index));
+				UpdateList(
+					ref<Array>(const_cast<Array*>(repl_arr)),
+					NULL),
+				re.index));
 	}
 
 private:

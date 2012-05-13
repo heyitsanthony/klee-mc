@@ -66,19 +66,14 @@ unsigned UpdateNode::computeHash()
 	return hashValue;
 }
 
-/* XXX should I worry about reference counting now that I have ref<>'s? */
+unsigned UpdateList::totalUpdateLists = 0;
+
 UpdateList::UpdateList(const ref<Array>& _root, const UpdateNode *_head)
 : root(_root)
 , head(_head)
 {
 	if (head != NULL) ++head->refCount;
-}
-
-UpdateList::UpdateList(const Array* _root, const UpdateNode *_head)
-: root(const_cast<Array*>(_root))
-, head(_head)
-{
-	if (head != NULL) ++head->refCount;
+	totalUpdateLists++;
 }
 
 UpdateList::UpdateList(const UpdateList &b)
@@ -86,6 +81,7 @@ UpdateList::UpdateList(const UpdateList &b)
 , head(b.head)
 {
 	if (head != NULL) ++head->refCount;
+	totalUpdateLists++;
 }
 
 UpdateList::~UpdateList()
@@ -98,6 +94,7 @@ UpdateList::~UpdateList()
 		delete head;
 		head = n;
 	}
+	totalUpdateLists--;
 }
 
 UpdateList &UpdateList::operator=(const UpdateList &b)
@@ -242,9 +239,11 @@ UpdateList* UpdateList::fromUpdateStack(
 		newUpdates = new UpdateList(newRoot, NULL);
 	}
 
-	foreach (it, dup_idx.begin(), dup_idx.end()) {
+	//std::cerr << "TOTAL UPDATELISTS: " << UpdateList::getCount() << '\n';
+	//std::cerr << "TOTAL ARRAYS: " << Array::getNumArrays() << '\n';
+
+	foreach (it, dup_idx.begin(), dup_idx.end())
 		newUpdates->removeDups(*it);
-	}
 
 	return newUpdates;
 }

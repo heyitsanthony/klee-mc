@@ -92,7 +92,7 @@ void SeedInfo::patchSeed(const ExecutionState &state,
   foreach (it, directReads.begin(), directReads.end()) {
     const Array *array = it->first;
     unsigned i = it->second;
-    ref<Expr> read = ReadExpr::create(UpdateList(array, 0),
+    ref<Expr> read = ReadExpr::create(UpdateList(ARR2REF(array), 0),
                                       ConstantExpr::alloc(i, Expr::Int32));
 
     // If not in bindings then this can't be a violation?
@@ -134,7 +134,7 @@ void SeedInfo::patchSeed(const ExecutionState &state,
   foreach (it, assignment.bindings.begin(), assignment.bindings.end()) {
     const Array *array = it->first;
     for (unsigned i=0; i<array->mallocKey.size; ++i) {
-      ref<Expr> read = ReadExpr::create(UpdateList(array, 0),
+      ref<Expr> read = ReadExpr::create(UpdateList(ARR2REF(array), 0),
                                         ConstantExpr::alloc(i, Expr::Int32));
       ref<Expr> isSeed = EqExpr::create(read,
                                         ConstantExpr::alloc(it->second[i],

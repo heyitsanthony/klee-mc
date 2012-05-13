@@ -12,12 +12,18 @@
 class ConstantExpr;
 static inline ref<ConstantExpr> createConstantExpr(uint64_t v, Expr::Width w);
 
+
+struct ArrayConsLT { bool operator()(const Array *a, const Array *b) const; };
+
+#define ARRAY_CHK_VAL	0x12345678
+#define ARR2REF(x)	ref<Array>(const_cast<Array*>(x))
+
 class Array
 {
 private:
 	unsigned int chk_val;
 	// hash cons for Array objects
-	typedef std::set<Array*, ArrayLT> ArrayHashCons;
+	typedef std::set<Array*, ArrayConsLT> ArrayHashCons;
 	static ArrayHashCons arrayHashCons;
 	static unsigned count;
 
@@ -59,7 +65,7 @@ public:
   ~Array();
 
   bool isSymbolicArray() const {
-  	assert (chk_val == 0x12345678);
+  	assert (chk_val == ARRAY_CHK_VAL);
 	return (constant_count == 0);
   }
   bool isConstantArray() const { return !isSymbolicArray(); }
@@ -87,6 +93,8 @@ public:
 
   // returns true if a < b
   bool operator< (const Array &b) const;
+  bool lt_cons (const Array &b) const;
+
   bool operator== (const Array &b) const
   {
   	if (&b == this) return true;
@@ -104,9 +112,6 @@ public:
 
   void print(std::ostream& os) const;
 
-  const UpdateList& getDummyUpdateList(void) const
-  { return dummyUpdateList; }
-
 private:
 	Array(	const std::string &_name,
 		MallocKey _mallocKey,
@@ -120,7 +125,6 @@ private:
 	uint8_t*	constantValues_u8;
 	unsigned int	constant_count;
 	ref<Expr>	singleValue;
-	UpdateList	dummyUpdateList;
 	typedef std::map<const std::string, Array*> name2arr_ty;
 	static name2arr_ty name2arr;
 };

@@ -978,7 +978,7 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 			continue;
 
 		new_os = (os->getArray())
-			? new ObjectState(mo->size, os->getArray())
+			? new ObjectState(mo->size, ARR2REF(os->getArray()))
 			: new ObjectState(mo->size);
 
 		std::cerr << "[Exe] Concretizing MO="

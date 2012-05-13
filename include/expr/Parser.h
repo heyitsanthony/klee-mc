@@ -86,12 +86,12 @@ namespace expr {
     const unsigned Range;
 
     /// Root - The root array object defined by this decl.
-    const Array *Root;
+    const ref<Array> Root;
 
   public:
     ArrayDecl(const Identifier *_Name, uint64_t _Size, 
               unsigned _Domain, unsigned _Range,
-              const Array *_Root)
+              const ref<Array>& _Root)
       : Decl(ArrayDeclKind), Name(_Name), 
         Domain(_Domain), Range(_Range), 
         Root(_Root) {

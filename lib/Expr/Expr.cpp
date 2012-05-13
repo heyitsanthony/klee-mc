@@ -95,9 +95,9 @@ ExprAlloc* Expr::setAllocator(ExprAlloc* a)
 }
 
 ref<Expr> Expr::createTempRead(
-	const Array *array, Expr::Width w, unsigned arr_off)
+	const ref<Array> &array, Expr::Width w, unsigned arr_off)
 {
-	UpdateList ul(array, 0);
+	UpdateList ul(array, NULL);
 
 #define READ_BYTE_OFF(x)	\
 	ReadExpr::create(ul, ConstantExpr::alloc(arr_off+x,Expr::Int32))
@@ -320,29 +320,35 @@ MallocKey::seensizes_ty MallocKey::seenSizes;
 //     allocSite and iteration match but size < a.size
 //  1  if allocSite or iteration do not match and operator< returns false or
 //     allocSite and iteration match but size > a.size's lower bound
-int MallocKey::compare(const MallocKey &a) const {
-  if (allocSite == a.allocSite && iteration == a.iteration) {
-    if (size < a.size)
-      return -1;
-    else if (size == a.size)
-      return 0;
-    else { // size > a.size; check whether they share a lower bound
-      std::set<uint64_t>::iterator it = seenSizes[*this].lower_bound(a.size);
-      assert(it != seenSizes[*this].end());
-      if (size <= *it)
-        return 0;
-      else // this->size > lower bound, so *this > a
-        return 1;
-    }
-  } else
-    return (*this < a) ? -1 : 1;
+int MallocKey::compare(const MallocKey &a) const
+{
+	if (allocSite != a.allocSite || iteration != a.iteration)
+		return (*this < a) ? -1 : 1;
+
+	if (size < a.size)
+		return -1;
+
+	if (size == a.size)
+		return 0;
+
+	// size > a.size; check whether they share a lower bound
+	std::set<uint64_t>::iterator it = seenSizes[*this].lower_bound(a.size);
+
+	assert(it != seenSizes[*this].end());
+	if (size <= *it)
+		return 0;
+
+	// this->size > lower bound, so *this > a
+	return 1;
 }
 
 unsigned MallocKey::hash(void) const
 {
-	unsigned		res = 0;
 	unsigned long		alloc_v;
 	const Instruction	*ins;
+
+	if (hash_v != 0)
+		return hash_v;
 
 	ins = dyn_cast<Instruction>(allocSite);
 	if (ins == NULL) {
@@ -362,7 +368,8 @@ unsigned MallocKey::hash(void) const
 	}
 
 	uint32_t dat[2] = {alloc_v, iteration};
-	return Expr::hashImpl(&dat, sizeof(dat), 0);
+	hash_v = Expr::hashImpl(&dat, sizeof(dat), 0);
+	return hash_v;
 }
 
 int ReadExpr::compareContents(const Expr &b) const
@@ -395,7 +402,7 @@ ref<Expr> ConcatExpr::mergeExtracts(const ref<Expr>& l, const ref<Expr>& r)
 		// (concat
 		// 	(Extract w56 8 (Add 8 (Read64 x reg)))
 		// 	(Add 8 (Read8 x read)))
-		// => 
+		// =>
 		// (Add (Extract w8 0 8) (Extract w8 0 (Read64 x reg)))
 		ref<Expr>	ee_left_kid(ee_left->getKid(0));
 		if (ee_left_kid->getKind() == r->getKind())

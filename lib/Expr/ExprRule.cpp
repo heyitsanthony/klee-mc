@@ -312,17 +312,16 @@ void ExprRule::loadBinaryPattern(std::istream& is, Pattern& p)
 
 ref<Expr> ExprRule::anonFlat2Expr(const Pattern& p) const
 {
-	const Array	*arr;
 	int		off;
 	labelmap_ty	lm;
 
 	if (materialize_arr.isNull())
 		materialize_arr = Array::create("exprrule", 4096);
 
-	arr = materialize_arr.get();
 	for (unsigned i = 0; i <= p.label_id_max; i++) {
 		lm[i] = ReadExpr::create(
-			UpdateList(arr, NULL), ConstantExpr::create(i, 32));
+			UpdateList(materialize_arr, NULL),
+			ConstantExpr::create(i, 32));
 	}
 
 	off = 0;

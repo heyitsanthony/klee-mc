@@ -428,7 +428,7 @@ const ObjectState* ExecutionState::bindMemObj(
 {
 	ObjectState *os;
 	if (array)
-		os = new ObjectState(mo->size, array);
+		os = new ObjectState(mo->size, ARR2REF(array));
 	else
 		os = ObjectState::createDemandObj(mo->size);
 	bindObject(mo, os);
@@ -601,13 +601,11 @@ ref<Expr> ExecutionState::readSymbolic(
 
 	for (unsigned i = 0; i != NumBytes; i++) {
 		unsigned	idx;
-		ref<Expr>	Byte(0);
+		ref<Expr>	Byte;
 
 		idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
+		Byte = Expr::createTempRead(ARR2REF(root_arr), 8, idx+offset);
 
-		Byte = ReadExpr::create(
-			root_arr->getDummyUpdateList(),
-			ConstantExpr::create(idx+offset, 32));
 		ret = i ? ConcatExpr::create(Byte, ret) : Byte;
 	}
 

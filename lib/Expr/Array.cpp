@@ -12,12 +12,15 @@ unsigned Array::count = 0;
 
 Array::~Array()
 {
+	assert (chk_val == ARRAY_CHK_VAL && "Double free?");
+
 	count--;
 	// FIXME: This shouldn't be necessary.
-	if (stpInitialArray) {
-		::vc_DeleteExpr(stpInitialArray);
-		stpInitialArray = 0;
-	}
+	// XXX this crashes shit. whoops.
+	// if (stpInitialArray) {
+	//	::vc_DeleteExpr(stpInitialArray);
+	//	stpInitialArray = 0;
+	// }
 
 	chk_val = ~0;
 	if (constantValues_u8) {
@@ -52,11 +55,8 @@ ref<Array> Array::create(
 
 	ret = new Array(_name, _mallocKey, constValBegin, constValEnd);
 	ret->initRef();
-	if (_name.size()) {
+	if (_name.size())
 		name2arr.insert(std::make_pair(_name, ret));
-	}
-	ret->incRefIfCared();
-	ret->incRefIfCared();
 
 	return ret;
 }
@@ -74,21 +74,11 @@ Array::Array(
 , constantValues_u8(NULL)
 , constant_count(constantValues_expr.size())
 , singleValue(0)
-, dummyUpdateList(this, NULL)
 {
 	count++;
-	chk_val = 0x12345678;
+	chk_val = ARRAY_CHK_VAL;
 	assert( (isSymbolicArray() || constant_count == mallocKey.size) &&
 		"Invalid size for constant array!");
-
-	#ifdef NDEBUG
-	for (	const ref<ConstantExpr> *it = constantValuesBegin;
-		 it != constantValuesEnd; ++it)
-	{
-		assert(it->getWidth() == getRange() &&
-		     "Invalid initial constant value!");
-	}
-	#endif
 
 	if (constant_count == 0) return;
 	if (getRange() != 8) return;
@@ -108,6 +98,52 @@ Array::Array(
 
 	singleValue = getValue(0);
 }
+
+bool ArrayConsLT::operator()(const Array *a, const Array *b) const
+{ return a->lt_cons(*b); }
+
+bool Array::lt_cons(const Array& b) const
+{
+	if (&b == this) return false;
+
+	if (isConstantArray() != b.isConstantArray())
+		return isConstantArray() < b.isConstantArray();
+
+	if (isConstantArray() && b.isConstantArray()) {
+		// disregard mallocKey for constant arrays;
+		// mallocKey matches are not a
+		// sufficient condition for constant arrays,
+		// but value matches are.
+		if (constant_count != b.constant_count)
+			return constant_count < b.constant_count;
+
+		if (constantValues_u8) {
+			if ( memcmp(
+				constantValues_u8,
+				b.constantValues_u8,
+				constant_count) < 0)
+			{
+				return true;
+			}
+
+			return false;
+		}
+
+		for (unsigned i = 0; i < constantValues_expr.size(); i++) {
+			if (constantValues_expr[i] != b.constantValues_expr[i])
+				return	constantValues_expr[i] <
+					b.constantValues_expr[i];
+		}
+		return false; // equal, so NOT less than
+	}
+
+	if (mallocKey.allocSite && b.mallocKey.allocSite)
+		return (mallocKey.compare(b.mallocKey) < 0);
+
+	/* equal */
+	return false;
+}
+
 
 bool Array::operator< (const Array &b) const
 {
@@ -151,13 +187,12 @@ bool Array::operator< (const Array &b) const
 
 void Array::print(std::ostream& os) const
 {
-	os	<< "ARR: name=" << name << ". Size=" << constant_count
-		<< ".\n";
+	os << "ARR: name=" << name << ". Size=" << constant_count << ".\n";
 
 	if (constantValues_u8) {
 		for (unsigned i = 0; i < constant_count; i++) {
 			if ((i % 16) == 0) os << "\n[" << i << "]: ";
-			os << (void*)constantValues_u8[i];
+			os << (void*)constantValues_u8[i] << ' ';
 		}
 	} else {
 		for (unsigned i = 0; i < constant_count; i++) {
@@ -172,11 +207,15 @@ void Array::print(std::ostream& os) const
 ref<Array> Array::uniqueArray(Array* arr)
 {
 	std::pair<ArrayHashCons::iterator,bool> ret(arrayHashCons.insert(arr));
-	if (ret.second) {
+
+	/* added new element? */
+	if (ret.second && arr) {
+		assert (arr->chk_val == ARRAY_CHK_VAL);
 		arr->incRefIfCared();
 		return arr;
 	}
 
+	/* found a unique */
 	assert (*arr == *(*ret.first));
 	return *ret.first;
 }

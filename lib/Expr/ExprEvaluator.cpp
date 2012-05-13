@@ -11,8 +11,9 @@
 
 using namespace klee;
 
-ExprVisitor::Action ExprEvaluator::evalRead(const UpdateList &ul,
-                                            unsigned index) {
+ExprVisitor::Action ExprEvaluator::evalRead(
+	const UpdateList &ul, unsigned index)
+{
   for (const UpdateNode *un=ul.head; un; un=un->next) {
     ref<Expr> ui = visit(un->index);
 
@@ -34,7 +35,7 @@ ExprVisitor::Action ExprEvaluator::evalRead(const UpdateList &ul,
   if (ul.getRoot()->isConstantArray() && index < ul.getRoot()->mallocKey.size)
     return Action::changeTo(ul.getRoot()->getValue(index));
 
-  return Action::changeTo(getInitialValue(*ul.getRoot(), index));
+  return Action::changeTo(getInitialValue(ul.getRoot(), index));
 }
 
 ExprVisitor::Action ExprEvaluator::visitExpr(const Expr &e) {

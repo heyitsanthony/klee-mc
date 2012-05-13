@@ -275,7 +275,7 @@ public:
   //XXX are there special semantics to this? Why wouldn't I want to
   //use ReadExpr::create?
   static ref<Expr> createTempRead(
-	const Array *array, Expr::Width w, unsigned arr_off = 0);
+	const ref<Array>& array, Expr::Width w, unsigned arr_off = 0);
 
   static ref<ConstantExpr> createPointer(uint64_t v);
 
@@ -475,7 +475,6 @@ class UpdateList
 	friend class ReadExpr; // for default constructor
 public:
 	UpdateList(const ref<Array>& _root, const UpdateNode *_head);
-	UpdateList(const Array* _root, const UpdateNode *_head);
 	UpdateList(const UpdateList &b);
 	~UpdateList();
 
@@ -494,10 +493,10 @@ public:
 		std::stack<std::pair<ref<Expr>, ref<Expr> > >& updateStack);
 
 	const ref<Array> getRoot(void) const { return root; }
-
+	static unsigned getCount(void) { return totalUpdateLists; }
 private:
 	void removeDups(const ref<Expr>& index);
-
+	static unsigned		totalUpdateLists;
 	const ref<Array>	root;
 public:
 	/// pointer to the most recent update node

@@ -8,9 +8,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "expr/Parser.h"
-
 #include "expr/Lexer.h"
 
+#include "static/Sugar.h"
 #include "klee/Constraints.h"
 #include "klee/ExprBuilder.h"
 #include "klee/Solver.h"
@@ -532,7 +532,7 @@ DeclResult ParserImpl::ParseArrayDecl() {
     Root = Array::create(Label->Name, Size.get());
   ArrayDecl *AD = new ArrayDecl(
 	Label, Size.get(),
-	DomainType.get(), RangeType.get(), Root.get());
+	DomainType.get(), RangeType.get(), Root);
 
   ArraySymTab.insert(std::make_pair(Label, AD));
 
@@ -583,10 +583,11 @@ DeclResult ParserImpl::ParseQueryCommand() {
 
   // Reinsert initial array versions.
   // FIXME: Remove this!
-  for (std::map<const Identifier*, const ArrayDecl*>::iterator
-         it = ArraySymTab.begin(), ie = ArraySymTab.end(); it != ie; ++it) {
-    VersionSymTab.insert(std::make_pair(it->second->Name,
-                                        UpdateList(it->second->Root, NULL)));
+  foreach (it, ArraySymTab.begin(), ArraySymTab.end()) {
+    VersionSymTab.insert(
+      std::make_pair(
+	it->second->Name,
+        UpdateList(it->second->Root, NULL)));
   }
 
 
@@ -676,7 +677,7 @@ DeclResult ParserImpl::ParseQueryCommand() {
     if (it == ArraySymTab.end()) {
       Error("unknown array", LTok);
     } else {
-      Objects.push_back(it->second->Root);
+      Objects.push_back(it->second->Root.get());
     }
   }
   ConsumeRSquare();

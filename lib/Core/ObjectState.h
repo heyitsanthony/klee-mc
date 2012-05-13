@@ -16,7 +16,7 @@ class ObjectState
 private:
 	friend class ObjectHolder;
 
-	const Array*		src_array;
+	const ref<Array>	src_array;
 	// exclusively for AddressSpace
 	unsigned		copyOnWriteOwner;
 	unsigned		refCount;
@@ -46,7 +46,7 @@ public:
 
 	/// Create a new object state for the given memory object with symbolic
 	/// contents.
-	ObjectState(unsigned size, const Array *array);
+	ObjectState(unsigned size, const ref<Array> &array);
 
 	ObjectState(const ObjectState &os);
 	~ObjectState();
@@ -74,7 +74,7 @@ public:
 	ref<Expr> read(unsigned offset, Expr::Width width) const;
 	ref<Expr> read8(unsigned offset) const;
 	uint8_t	read8c(unsigned off) const;
-	const Array* getArray(void) const { return src_array; }
+	const Array* getArray(void) const { return src_array.get(); }
 	void print(unsigned int begin = 0, int end = -1) const;
 
 	unsigned hash(void) const;

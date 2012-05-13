@@ -39,7 +39,8 @@ public:
 	/// This will only be called for constant arrays if the index is
 	/// out-of-bounds. If the value is unknown then the user should return a
 	/// ReadExpr at the initial version of this array.
-	virtual ref<Expr> getInitialValue(const Array& os, unsigned index) = 0;
+	virtual ref<Expr> getInitialValue(
+		const ref<Array>& os, unsigned index) = 0;
 };
 }
 

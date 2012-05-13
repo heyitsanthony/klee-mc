@@ -67,7 +67,7 @@ public:
 
 	virtual ~Assignment(void) {}
 
-	ref<Expr> evaluate(const Array *mo, unsigned index) const;
+	ref<Expr> evaluate(const ref<Array> &mo, unsigned index) const;
 	ref<Expr> evaluate(ref<Expr> e);
 	ref<Expr> evaluate(ref<Expr> e, bool& wasDivProtected);
 
@@ -125,10 +125,9 @@ class AssignmentEvaluator : public ExprEvaluator
 {
 	const Assignment &a;
 public:
-	virtual ref<Expr> getInitialValue(const Array &mo, unsigned index)
-	{ return a.evaluate(&mo, index); }
-	AssignmentEvaluator(const Assignment &_a) : a(_a)
-	{ }
+	virtual ref<Expr> getInitialValue(const ref<Array> &mo, unsigned index)
+	{ return a.evaluate(mo, index); }
+	AssignmentEvaluator(const Assignment &_a) : a(_a) { }
 	virtual ~AssignmentEvaluator() {}
 };
 
@@ -136,9 +135,9 @@ public:
 
 /* concretize array read with assignment value */
 inline ref<Expr> Assignment::evaluate(
-	const Array *array, unsigned index) const
+	const ref<Array>& array, unsigned index) const
 {
-	bindings_ty::const_iterator it = bindings.find(array);
+	bindings_ty::const_iterator it = bindings.find(array.get());
 
 	/* found, can immediately resolve */
 	if (it != bindings.end() && index < it->second.size()) {
