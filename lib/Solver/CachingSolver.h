@@ -3,6 +3,7 @@
 
 #include "klee/Constraints.h"
 #include "klee/Solver.h"
+#include "klee/SolverStats.h"
 #include "SolverImplWrapper.h"
 #include "IncompleteSolver.h"
 #include <tr1/unordered_map>
@@ -59,9 +60,6 @@ private:
 		CacheEntryHash> cache_map;
   
 	cache_map cache;
-	static uint64_t hit_c;
-	static uint64_t miss_c;
-
 public:
 	CachingSolver(Solver *s) : SolverImplWrapper(s) {}
 	virtual ~CachingSolver() { cache.clear(); }
@@ -80,8 +78,8 @@ public:
 		wrappedSolver->printName(level + 1);
 	}
 
-	static uint64_t getHits(void) { return hit_c; }
-	static uint64_t getMisses(void) { return miss_c; }
+	static uint64_t getHits(void) { return stats::queryCacheHits; }
+	static uint64_t getMisses(void) { return stats::queryCacheMisses; }
 };
 
 }

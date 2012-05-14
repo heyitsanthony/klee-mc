@@ -37,6 +37,7 @@
 #include <map>
 #include <set>
 #include <stdarg.h>
+#include <string.h>
 
 using namespace llvm;
 using namespace klee;
@@ -61,6 +62,7 @@ ExecutionState::ExecutionState(KFunction *kf)
 , prev_constraint_hash(0)
 , isCompactForm(false)
 , onFreshBranch(false)
+, arrayId(0)
 , depth(0)
 , weight(1)
 , pc(kf->instructions)
@@ -70,7 +72,6 @@ ExecutionState::ExecutionState(KFunction *kf)
 , lastGlobalInstCount(0)
 , totalInsts(0)
 , concretizeCount(0)
-, arrayId(0)
 , coveredNew(false)
 , isReplay(false)
 , forkDisabled(false)
@@ -86,12 +87,12 @@ ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
 , prev_constraint_hash(0)
 , isCompactForm(false)
 , onFreshBranch(false)
+, arrayId(0)
 , constraints(assumptions)
 , queryCost(0.)
 , lastGlobalInstCount(0)
 , totalInsts(0)
 , concretizeCount(0)
-, arrayId(0)
 , isReplay(false)
 , ptreeNode(0)
 {
@@ -104,10 +105,10 @@ ExecutionState::ExecutionState(void)
 , prev_constraint_hash(0)
 , isCompactForm(false)
 , onFreshBranch(false)
+, arrayId(0)
 , lastGlobalInstCount(0)
 , totalInsts(0)
 , concretizeCount(0)
-, arrayId(0)
 , coveredNew(false)
 , isReplay(false)
 , ptreeNode(0)
@@ -720,4 +721,20 @@ void ExecutionState::assignSymbolics(const Assignment& a)
 
 		sa.setConcretization(*v);
 	}
+}
+
+/* kind of stupid-- probably shouldn't loop like this */
+std::string ExecutionState::getArrName(const char* arrPrefix)
+{
+	unsigned	k = 1;
+	unsigned	pre_len;
+
+	pre_len = strlen(arrPrefix);
+	foreach (it, symbolics.begin(), symbolics.end()) {
+		if (memcmp(arrPrefix, it->getArray()->name.c_str(), pre_len))
+			continue;
+		k++;
+	}
+
+	return arrPrefix + llvm::utostr(k);
 }

@@ -130,6 +130,8 @@ private:
 
 #define ES_CANARY_VALUE	0x11667744
 	unsigned		canary;
+	unsigned		arrayId;
+
 public:
 	bool checkCanary(void) const { return canary == ES_CANARY_VALUE; }
 	typedef std::vector<StackFrame> stack_ty;
@@ -152,7 +154,6 @@ public:
 	uint64_t		totalInsts;
 	unsigned		concretizeCount;
 	ref<Expr>		prevForkCond;	// last condition to cause fork
-	unsigned		arrayId;
 
 
 	// Number of malloc calls per callsite
@@ -354,6 +355,7 @@ public:
 	{ v.clear(); is_conc.clear(); }
 
 	virtual uint64_t getAddrPC(void) const { return (uint64_t)(&(*pc)); }
+	std::string getArrName(const char* arrPrefix);
 };
 
 }

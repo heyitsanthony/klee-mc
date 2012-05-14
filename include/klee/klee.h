@@ -39,7 +39,7 @@
 	syscall(SYS_klee, KLEE_SYS_SYM_RANGE_BYTES, (uint64_t)x, y)
 
 #define ksys_get_value(n)	n
-
+#define ksys_is_active()	(ksys_is_sym(0) != -1)
 
 #ifdef __cplusplus
 extern "C" {

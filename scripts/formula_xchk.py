@@ -21,7 +21,9 @@ def xchkFormulaStates(prefix, st_xchk, st):
 	for a in st.assumptions:
 		if a in st_xchk.assumptions:
 			continue
+		# make sure alien expr is sat under current state
 		st_xchk.writeXChk(((prefix + '.%d.sat.smt') % xchk_c), a)
+		# make sure NOT alien expr is unsat under current state
 		st_xchk.writeXChk(
 			((prefix + '.%d.unsat.smt') % xchk_c), 
 			'(not ' + a + ')')

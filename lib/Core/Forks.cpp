@@ -653,7 +653,7 @@ void Forks::constrainForks(ExecutionState& current, struct ForkInfo& fi)
 class MergeArrays : public ExprVisitor
 {
 public:
-	MergeArrays(void) : ExprVisitor(false, true) {}
+	MergeArrays(void) : ExprVisitor(false, true) { use_hashcons = false; }
 	virtual ~MergeArrays(void) {}
 protected:
 	virtual Action visitConstant(const ConstantExpr& ce)

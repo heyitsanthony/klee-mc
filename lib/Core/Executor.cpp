@@ -2818,10 +2818,7 @@ ObjectState* Executor::makeSymbolic(
 	ObjectState	*os;
 	ref<Array>	array;
 
-	array = Array::create(
-		arrPrefix + llvm::utostr(++state.arrayId),
-		mo->mallocKey);
-
+	array = Array::create(state.getArrName(arrPrefix), mo->mallocKey);
 	os = state.bindMemObjWriteable(mo, array.get());
 	state.addSymbolic(const_cast<MemoryObject*>(mo) /* yuck */, array.get());
 

@@ -1,11 +1,19 @@
 #!/usr/bin/python
 
+import gzip
 import sys
 
 class SMTState:
 	def __init__(self):
 		self.assumptions = []
 		self.arrays = []
+
+	@staticmethod
+	def fromFiles(fnames):
+		s = SMTState()
+		for f in fnames:
+			s.merge(SMTState.fromFile(f))
+		return s
 
 	@staticmethod
 	def fromFile(fname):
@@ -38,19 +46,42 @@ class SMTState:
 			if '[8])\n(= (select simpl_arr' in a:
 				self.assumptions.append(a)
 
+	def andAssumptions(self):
+		andexpr = = '(and ' + ('(and '.join(self.assumptions))
+		andexpr += ' true '
+		andexpr += ')'*self.assumptions
+		return andexpr
+
+
+	def mergeOr(self, s):
+		lhs = self.andAssumptions()
+		rhs = s.andAssumptions()
+		self.arrays = list(set(self.arrays + s.arrays))
+		self.assumptions = ['(or ' + lhs + ' ' + rhs + ')']
+
+
 	def merge(self, s):
 		self.arrays = list(set(self.arrays + s.arrays))
 		self.assumptions = list(set(self.assumptions + s.assumptions))
 
+	# fills up assumptions and arrays
 	def readFromFile(self, fname):
-		f = open(fname, 'r')
+
+		if fname[-3:] == ".gz":
+			f = gzip.open(fname, 'rb')
+		else:
+			f = open(fname, 'r')
 
 		states = { ':assumption\n' : 1, ':extrafuns\n' : 2 }
+
+		# initialization state
 		cur_state = 0
 		cur_chunk = ''
 
 		for line in f:
 			if not line in states:
+				# no new assumption or extrafun?
+				# append to query string
 				cur_chunk = cur_chunk + line
 				continue
 

@@ -16,8 +16,6 @@
 using namespace klee;
 
 unsigned g_cachingsolver_sz = 0;
-uint64_t CachingSolver::hit_c = 0;
-uint64_t CachingSolver::miss_c = 0;
 
 
 /** @returns the canonical version of the given query.  The reference
@@ -54,8 +52,9 @@ bool CachingSolver::cacheLookup(
 	CacheEntry ce(query.constraints, canonicalQuery);
 	it = cache.find(ce);
 
-	if (it == cache.end())
+	if (it == cache.end()) {
 		return false;
+	}
 
 	result = (negationUsed)
 		? IncompleteSolver::negatePartialValidity(it->second)
@@ -90,7 +89,7 @@ Solver::Validity CachingSolver::computeValidityHit(
 {
 	bool	isSat;
 
-	hit_c++;
+	++stats::queryCacheHits;
 
 	switch(cachedResult) {
 	case IncompleteSolver::MustBeTrue: return Solver::True;
@@ -131,7 +130,7 @@ Solver::Validity CachingSolver::computeValidity(const Query& query)
 	cacheHit = cacheLookup(query, cachedResult);
 	if (cacheHit) return computeValidityHit(query, cachedResult);
 
-	miss_c++;
+	++stats::queryCacheMisses;
 
 	v = doComputeValidity(query);
 	if (failed()) return v;
@@ -149,24 +148,27 @@ Solver::Validity CachingSolver::computeValidity(const Query& query)
 bool CachingSolver::computeSat(const Query& query)
 {
 	IncompleteSolver::PartialValidity cachedResult;
-	bool cacheHit = cacheLookup(query, cachedResult);
-	bool isSat;
+	bool	cacheHit, isSat;
 
+	cacheHit = cacheLookup(query, cachedResult);
 	if (cacheHit) {
-		++stats::queryCacheHits;
-		if (cachedResult == IncompleteSolver::MustBeFalse)
+		if (cachedResult == IncompleteSolver::MustBeFalse) {
+			++stats::queryCacheHits;
 			return false;
+		}
+
 		if (	cachedResult == IncompleteSolver::MustBeTrue ||
 			cachedResult == IncompleteSolver::MayBeTrue ||
 			cachedResult == IncompleteSolver::TrueOrFalse)
 		{
+			++stats::queryCacheHits;
 			return true;
 		}
 
 		/* {None, MayBeFalse} */
 	}
 
-	miss_c++;
+	++stats::queryCacheMisses;
   
 	// cache miss: query solver
 	isSat = doComputeSat(query);
