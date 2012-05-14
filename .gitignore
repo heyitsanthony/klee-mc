@@ -24,3 +24,6 @@ lib/Expr/location.hh
 utils/fp/fp*-*
 stp/Makefile.common
 recons*
+hey*
+rules*
+brule*

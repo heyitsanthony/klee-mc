@@ -76,35 +76,46 @@ Array::Array(
 , singleValue(0)
 {
 	count++;
+	hash_v = mallocKey.size;
 	chk_val = ARRAY_CHK_VAL;
 	assert( (isSymbolicArray() || constant_count == mallocKey.size) &&
 		"Invalid size for constant array!");
 
-	if (constant_count == 0) return;
-	if (getRange() != 8) return;
+	if (constant_count == 0)
+		return;
+
+	assert (getRange() == 8);
 
 	/* use u8 constant cache and save a bundle. */
 	constantValues_u8 = new uint8_t[constant_count];
 	for (unsigned int i = 0; i < constant_count; i++) {
 		constantValues_u8[i] = constantValues_expr[i]->getZExtValue(8);
+		hash_v += constantValues_u8[i] * (i+1);
 	}
 	constantValues_expr.clear();
 
 	for (unsigned int i = 1; i  < constant_count; i++) {
-		if (constantValues_u8[i] != constantValues_u8[i-1]) {
+		if (constantValues_u8[i] != constantValues_u8[i-1])
 			return;
-		}
 	}
 
 	singleValue = getValue(0);
 }
 
 bool ArrayConsLT::operator()(const Array *a, const Array *b) const
-{ return a->lt_cons(*b); }
+{ bool ft; return a->lt_partial(*b, ft); }
 
-bool Array::lt_cons(const Array& b) const
+bool Array::lt_partial(const Array& b, bool& fell_through) const
 {
+	fell_through = false;
+
 	if (&b == this) return false;
+
+	if (hash_v < b.hash_v)
+		return true;
+
+	if (hash_v > b.hash_v)
+		return false;
 
 	if (isConstantArray() != b.isConstantArray())
 		return isConstantArray() < b.isConstantArray();
@@ -140,48 +151,20 @@ bool Array::lt_cons(const Array& b) const
 	if (mallocKey.allocSite && b.mallocKey.allocSite)
 		return (mallocKey.compare(b.mallocKey) < 0);
 
-	/* equal */
+	/* maybe equal */
+	fell_through = true;
 	return false;
 }
 
-
 bool Array::operator< (const Array &b) const
 {
-	if (&b == this) return false;
+	bool	is_lt;
+	bool	fell_through;
 
-	if (isConstantArray() != b.isConstantArray())
-		return isConstantArray() < b.isConstantArray();
-
-	if (isConstantArray() && b.isConstantArray()) {
-	// disregard mallocKey for constant arrays; mallocKey matches are
-	// not a sufficient condition for constant arrays, but value matches are
-		if (constant_count != b.constant_count)
-			return constant_count < b.constant_count;
-
-		if (constantValues_u8) {
-			if ( memcmp(
-				constantValues_u8,
-				b.constantValues_u8,
-				constant_count) < 0)
-			{
-				return true;
-			}
-
-			return false;
-		}
-
-		for (unsigned i = 0; i < constantValues_expr.size(); i++) {
-			if (constantValues_expr[i] != b.constantValues_expr[i])
-				return	constantValues_expr[i] <
-					b.constantValues_expr[i];
-		}
-		return false; // equal, so NOT less than
-	}
-
-	if (mallocKey.allocSite && b.mallocKey.allocSite) {
-		return (mallocKey.compare(b.mallocKey) < 0);
-	}
-
+	is_lt = lt_partial(b, fell_through);
+	if (!fell_through)
+		return is_lt;
+	
 	return name < b.name;
 }
 

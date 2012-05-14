@@ -21,7 +21,7 @@ struct ArrayConsLT { bool operator()(const Array *a, const Array *b) const; };
 class Array
 {
 private:
-	unsigned int chk_val;
+	unsigned int	chk_val;
 	// hash cons for Array objects
 	typedef std::set<Array*, ArrayConsLT> ArrayHashCons;
 	static ArrayHashCons arrayHashCons;
@@ -54,7 +54,7 @@ public:
 		const ref<ConstantExpr> *constantValuesEnd = 0);
 	static ref<Array> uniqueArray(Array* arr);
 	static unsigned getNumArrays(void) { return count; }
-public:
+
   /// Array - Construct a new array object.
   ///
   /// \param _name - The name for this array. Names should generally be unique
@@ -93,7 +93,7 @@ public:
 
   // returns true if a < b
   bool operator< (const Array &b) const;
-  bool lt_cons (const Array &b) const;
+  bool lt_partial(const Array& b, bool& fell_through) const;
 
   bool operator== (const Array &b) const
   {
@@ -117,6 +117,7 @@ private:
 		MallocKey _mallocKey,
 		const ref<ConstantExpr> *constantValuesBegin = 0,
 		const ref<ConstantExpr> *constantValuesEnd = 0);
+	unsigned hash(void) const;
 
 	// constantValues - The constant initial values for this array,
 	// or empty for a symbolic array.
@@ -125,6 +126,8 @@ private:
 	uint8_t*	constantValues_u8;
 	unsigned int	constant_count;
 	ref<Expr>	singleValue;
+	unsigned	hash_v;
+
 	typedef std::map<const std::string, Array*> name2arr_ty;
 	static name2arr_ty name2arr;
 };
