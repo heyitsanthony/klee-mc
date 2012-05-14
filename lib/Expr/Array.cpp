@@ -199,7 +199,7 @@ ref<Array> Array::uniqueArray(Array* arr)
 	}
 
 	/* found a unique */
-	assert (*arr == *(*ret.first));
+	assert (arr->hash_v == (*ret.first)->hash_v);
 	return *ret.first;
 }
 
