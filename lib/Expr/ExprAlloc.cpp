@@ -7,9 +7,7 @@
 using namespace klee;
 
 struct hashapint
-{
-unsigned operator()(const llvm::APInt& a) const { return a.getHashValue(); }
-};
+{unsigned operator()(const llvm::APInt& a) const {return a.getHashValue();}};
 
 struct apinteq
 {
@@ -30,9 +28,9 @@ typedef std::tr1::unordered_map<
 ConstantExprTab			const_hashtab;
 static ref<ConstantExpr>	ce_smallval_tab_1[2];
 static ref<ConstantExpr>	ce_smallval_tab_8[256];
-static ref<ConstantExpr>	ce_smallval_tab_16[256];
-static ref<ConstantExpr>	ce_smallval_tab_32[256];
-static ref<ConstantExpr>	ce_smallval_tab_64[256];
+static ref<ConstantExpr>	ce_smallval_tab_16[256*2];
+static ref<ConstantExpr>	ce_smallval_tab_32[256*2];
+static ref<ConstantExpr>	ce_smallval_tab_64[256*2];
 
 void initSmallValTab(void)
 {
@@ -44,40 +42,42 @@ void initSmallValTab(void)
 	ce_smallval_tab_1[0]->computeHash();
 	ce_smallval_tab_1[1]->computeHash();
 
-#define SET_SMALLTAB(w)	\
-	for (unsigned int i = 0; i < 256; i++) {	\
-		ref<ConstantExpr>	r(new ConstantExpr(llvm::APInt(w, i)));	\
+#define SET_SMALLTAB(w,ext)	\
+	for (int i = 0; i < 256+ext; i++) {	\
+		ref<ConstantExpr>	r(	\
+			new ConstantExpr(llvm::APInt(w, i-ext)));	\
 		ce_smallval_tab_##w[i] = r;	\
 		r->computeHash();		\
 	}
 
-	SET_SMALLTAB(8)
-	SET_SMALLTAB(16)
-	SET_SMALLTAB(32)
-	SET_SMALLTAB(64)
+	SET_SMALLTAB(8,0)
+	SET_SMALLTAB(16,256)
+	SET_SMALLTAB(32,256)
+	SET_SMALLTAB(64,256)
 }
 
 static bool tab_ok = false;
 unsigned long ExprAlloc::constantCount = 0;
-
-
-ExprAlloc::~ExprAlloc() {}
 
 ref<Expr> ExprAlloc::Constant(const llvm::APInt &v)
 {
 	ConstantExprTab::iterator	it;
 	uint64_t			v_64;
 
-	if (v.getBitWidth() <= 64 && (v_64 = v.getLimitedValue()) < 256) {
+	/* wired constants-- [-255,255] */
+	/* XXX: get hit rates; include powers of 2? */
+	if (v.getBitWidth() <= 64 &&
+	   (v_64 = (v.getLimitedValue()+256)) < 2*256)
+	{
 		if (tab_ok == false) {
 			initSmallValTab();
-			constantCount = 256*4+2;
+			constantCount = 2+256+3*(2*256);
 			tab_ok = true;
 		}
 
 		switch (v.getBitWidth()) {
-		case 1: return ce_smallval_tab_1[v_64];
-		case 8: return ce_smallval_tab_8[v_64];
+		case 1: return ce_smallval_tab_1[v_64-256];
+		case 8: return ce_smallval_tab_8[v_64-256];
 		case 16: return ce_smallval_tab_16[v_64];
 		case 32: return ce_smallval_tab_32[v_64];
 		case 64: return ce_smallval_tab_64[v_64];
@@ -86,9 +86,8 @@ ref<Expr> ExprAlloc::Constant(const llvm::APInt &v)
 	}
 
 	it = const_hashtab.find(v);
-	if (it != const_hashtab.end()) {
+	if (it != const_hashtab.end())
 		return it->second;
-	}
 
 	ref<ConstantExpr> r(new ConstantExpr(v));
 	r->computeHash();
@@ -97,6 +96,8 @@ ref<Expr> ExprAlloc::Constant(const llvm::APInt &v)
 
 	return r;
 }
+
+ExprAlloc::~ExprAlloc() {}
 
 unsigned ExprAlloc::garbageCollect(void)
 {
