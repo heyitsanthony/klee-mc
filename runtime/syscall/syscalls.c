@@ -387,12 +387,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_listen:
 		sc_ret_v(regfile, 0);
 		break;
-	case SYS_mlock:
-		sc_ret_v(regfile, 0);
-		break;
-	case SYS_munlock:
-		sc_ret_v(regfile, 0);
-		break;
+
 	case SYS_brk: {
 		// ptrdiff_t grow_len;
 
@@ -502,6 +497,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_umask:
 		sc_ret_v(regfile, 0666);
 		break;
+
+	case SYS_getpgid:
 	case SYS_getgid:
 	case SYS_getuid:
 		sc_ret_ge0(sc_new_regs(regfile));
@@ -524,6 +521,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_setsid:
 	case SYS_setgid:
 	case SYS_setuid:
+	case SYS_setregid:
+	case SYS_setreuid:
 		sc_ret_or(sc_new_regs(regfile), -1, 0);
 		break;
 	FAKE_SC_RANGE(geteuid, 0, 1)
@@ -686,7 +685,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 			break;
 		make_sym_by_arg(regfile, 1, GET_ARG2(regfile), "getdents");
 		break;
-	FAKE_SC(unlink)
 	FAKE_SC(fchmod)
 	FAKE_SC(fchown)
 	FAKE_SC(utimensat)
@@ -986,10 +984,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(regfile, 0x12345);
 		break;
 
-	case SYS_fsync:
-		new_regs = sc_new_regs(regfile);
-		sc_ret_or(new_regs, 0, -1);
-		break;
 	case SYS_restart_syscall:
 		new_regs = sc_new_regs(regfile);
 		sc_ret_range(new_regs, -1, 1);
@@ -1049,15 +1043,49 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_rmdir:
 	case SYS_rename:
 	case SYS_mknod:
-	case SYS_unlinkat:
+	case SYS_link:
 	case SYS_linkat:
+	case SYS_unlink:
+	case SYS_unlinkat:
 	case SYS_sethostname:
 	case SYS_setdomainname:
 	case SYS_ftruncate:
 	case SYS_chroot:
 	case SYS_fchmodat:
 	case SYS_fchownat:
+	case SYS_fdatasync:
+	case SYS_fsync:
+	case SYS_mount:
+	case SYS_umount2:
+	case SYS_capset:
+	case SYS_mlock:
+	case SYS_mlockall:
+	case SYS_munlock:
+	case SYS_munlockall:
+	case SYS_flock:
 		sc_ret_or(sc_new_regs(regfile), -1, 0);
+		break;
+
+	case SYS_capget:
+		if (!GET_ARG1(regfile)) {
+			/* no pointer given */
+			sc_ret_v(regfile, -1);
+			break;
+		}
+
+		new_regs = sc_new_regs(regfile); 
+		sc_ret_or(new_regs, 0, -1);
+		if (GET_SYSRET(new_regs) != 0)
+			break;
+
+		make_sym(GET_ARG1(regfile), 4, "capget");
+		break;
+
+	case SYS_reboot:
+		new_regs = sc_new_regs(regfile);
+		sc_ret_or(new_regs, -1, 0);
+		if (GET_SYSRET(new_regs) == 0)
+			kmc_exit(0);
 		break;
 
 	case SYS_llistxattr:
@@ -1099,7 +1127,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			sc_ret_v(regfile, -1);
 			break;
 		}
-
+	case SYS_fstatfs:
 		new_regs = sc_new_regs(regfile);
 		if ((int64_t)GET_SYSRET(new_regs) == -1) {
 			sc_ret_v_new(new_regs, -1);
