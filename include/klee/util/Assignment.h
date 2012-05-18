@@ -68,7 +68,7 @@ public:
 	virtual ~Assignment(void) {}
 
 	ref<Expr> evaluate(const ref<Array> &mo, unsigned index) const;
-	ref<Expr> evaluate(ref<Expr> e);
+	ref<Expr> evaluate(ref<Expr> e) const;
 	ref<Expr> evaluate(ref<Expr> e, bool& wasDivProtected);
 
 	template<typename InputIterator>
@@ -155,7 +155,7 @@ inline ref<Expr> Assignment::evaluate(
 	return ConstantExpr::alloc(0, Expr::Int8);
 }
 
-inline ref<Expr> Assignment::evaluate(ref<Expr> e)
+inline ref<Expr> Assignment::evaluate(ref<Expr> e) const
 {
 	AssignmentEvaluator v(*this);
 	return v.apply(e);

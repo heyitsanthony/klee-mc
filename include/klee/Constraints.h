@@ -20,6 +20,7 @@ namespace klee {
 
 class ExprVisitor;
 class ExprReplaceVisitor2;
+class Assignment;
 
 class ConstraintManager
 {
@@ -71,6 +72,8 @@ public:
 	{ return constraints == other.constraints; }
 
 	void print(std::ostream& os) const;
+
+	bool isValid(const Assignment& a) const;
 
 private:
 	constraints_ty constraints;

@@ -7,7 +7,8 @@ using namespace klee;
 StagedIncompleteSolverImpl::StagedIncompleteSolverImpl(
 	IncompleteSolver *_primary, Solver *_secondary)
 : primary(_primary)
-, secondary(_secondary) {}
+, secondary(_secondary)
+{}
 
 StagedIncompleteSolverImpl::~StagedIncompleteSolverImpl()
 {
@@ -97,9 +98,11 @@ bool StagedIncompleteSolverImpl::computeInitialValues(
 	return hasSol;
 }
 
-StagedSolverImpl::StagedSolverImpl(Solver *_primary, Solver *_secondary)
+StagedSolverImpl::StagedSolverImpl(
+	Solver *_primary, Solver *_secondary, bool _vs)
 : primary(_primary)
 , secondary(_secondary)
+, validityBySat(_vs)
 {}
 
 StagedSolverImpl::~StagedSolverImpl()
@@ -126,6 +129,9 @@ Solver::Validity StagedSolverImpl::computeValidity(const Query& query)
 {
 	Solver::Validity	v;
 
+	if (validityBySat)
+		return SolverImpl::computeValidity(query);
+
 	v = primary->impl->computeValidity(query);
 	if (!primary->impl->failed()) return v;
 	primary->impl->ackFail();
@@ -141,14 +147,14 @@ ref<Expr> StagedSolverImpl::computeValue(const Query& query)
 	ref<Expr> result;
 
 	result = primary->impl->computeValue(query);
-	if (!primary->impl->failed()) return result;
+	if (!primary->impl->failed())
+		return result;
 	primary->impl->ackFail();
 
 	result = secondary->impl->computeValue(query);
 	if (secondary->impl->failed()) failQuery();
 
 	return result;
-
 }
 
 bool StagedSolverImpl::computeInitialValues(
@@ -158,12 +164,12 @@ bool StagedSolverImpl::computeInitialValues(
 	bool hasSol;
 
 	hasSol = primary->impl->computeInitialValues(query, a);
-	if (!primary->failed()) return hasSol;
+	if (!primary->failed() && hasSol)
+		return hasSol;
 	primary->impl->ackFail();
 
 	hasSol = secondary->impl->computeInitialValues(query, a);
 	if (secondary->impl->failed()) failQuery();
-
 	return hasSol;
 }
 

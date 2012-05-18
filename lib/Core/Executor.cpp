@@ -2996,6 +2996,8 @@ bool Executor::getSymbolicSolution(
 		const std::vector<unsigned char>	*v;
 
 		v = a.getBinding(it->getArray());
+		assert (v != NULL);
+
 		res.push_back(
 			std::make_pair(
 				it->getMemoryObject()->name, *v));

@@ -99,9 +99,8 @@ private:
 
 struct NullAssignment { bool operator()(Assignment *a) const { return !a; } };
 
-struct NonNullAssignment {
-  bool operator()(Assignment *a) const { return a!=0; }
-};
+struct NonNullAssignment
+{ bool operator()(Assignment *a) const { return a!=0; } };
 
 struct NullOrSatisfyingAssignment {
   Key &key;
@@ -127,6 +126,7 @@ bool CexCachingSolver::searchForAssignment(Key &key, Assignment *&result)
 
 	if (lookup) {
 		result = *lookup;
+		++stats::cexCacheHits;
 		return true;
 	}
 
@@ -151,6 +151,7 @@ bool CexCachingSolver::searchForAssignment(Key &key, Assignment *&result)
 	// If either lookup succeeded, then we have a cached solution.
 	if (lookup_super) {
 		result = *lookup_super;
+		++stats::cexCacheHits;
 		return true;
 	}
 
@@ -163,12 +164,14 @@ bool CexCachingSolver::searchForAssignment(Key &key, Assignment *&result)
 				// cache result for deterministic reconstitution
 				result = a;
 				cache.insert(key, result);
-
+				++stats::cexCacheHits;
 				return true;
 			}
 		}
 	}
 
+
+	++stats::cexCacheMisses;
 	return false;
 }
 

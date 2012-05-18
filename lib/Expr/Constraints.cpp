@@ -10,6 +10,7 @@
 #include "klee/Constraints.h"
 #include "klee/Common.h"
 
+#include "klee/util/Assignment.h"
 #include "klee/util/ExprPPrinter.h"
 #include "klee/util/ExprVisitor.h"
 #include "static/Sugar.h"
@@ -310,4 +311,12 @@ void ConstraintManager::print(std::ostream& os) const
 ConstraintManager::~ConstraintManager(void)
 {
 	if (simplifier) delete simplifier;
+}
+
+bool ConstraintManager::isValid(const Assignment& a) const
+{
+	foreach (it, begin(), end())
+		if (a.evaluate(*it)->isTrue() == false)
+			return false;
+	return true;
 }

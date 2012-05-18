@@ -33,13 +33,8 @@ class DenseSet {
 public:
   DenseSet() {}
 
-  void add(T x) {
-    s.insert(x);
-  }
-  void add(T start, T end) {
-    for (; start<end; start++)
-      s.insert(start);
-  }
+  void add(T x) { s.insert(x); }
+  void add(T start, T end) { for (; start<end; start++) s.insert(start); }
 
   // returns true iff set is changed by addition
   bool add(const DenseSet &b) {
@@ -77,52 +72,29 @@ public:
 };
 
 template<class T>
-inline std::ostream &operator<<(std::ostream &os, const DenseSet<T> &dis) {
-  dis.print(os);
-  return os;
-}
+inline std::ostream &operator<<(std::ostream &os, const DenseSet<T> &dis)
+{ dis.print(os); return os; }
 
-class IndependentElementSet {
-  typedef std::map<const Array*, DenseSet<unsigned> > elements_ty;
-  elements_ty elements;
-  std::set<const Array*> wholeObjects;
+class IndependentElementSet
+{
+	typedef std::map<const Array*, DenseSet<unsigned> > elements_ty;
+	elements_ty			elements;
+	std::set<const Array*>		wholeObjects;
 
 public:
-  IndependentElementSet() {}
-  IndependentElementSet(ref<Expr> e) {
-    std::vector< ref<ReadExpr> > reads;
-    ExprUtil::findReads(e, /* visitUpdates= */ true, reads);
-    for (unsigned i = 0; i != reads.size(); ++i) {
-      ReadExpr *re = reads[i].get();
-      const Array *array = re->updates.getRoot().get();
+	IndependentElementSet() {}
+	IndependentElementSet(ref<Expr> e);
 
-      // Reads of a constant array don't alias.
-      if (re->updates.getRoot().get()->isConstantArray() &&
-          !re->updates.head)
-        continue;
+	IndependentElementSet(const IndependentElementSet &ies)
+	: elements(ies.elements)
+	, wholeObjects(ies.wholeObjects) {}
 
-      if (!wholeObjects.count(array)) {
-        if (ConstantExpr *CE = dyn_cast<ConstantExpr>(re->index)) {
-          DenseSet<unsigned> &dis = elements[array];
-          dis.add((unsigned) CE->getZExtValue(32));
-        } else {
-          elements_ty::iterator it2 = elements.find(array);
-          if (it2!=elements.end())
-            elements.erase(it2);
-          wholeObjects.insert(array);
-        }
-      }
-    }
-  }
-  IndependentElementSet(const IndependentElementSet &ies) :
-    elements(ies.elements),
-    wholeObjects(ies.wholeObjects) {}
-
-  IndependentElementSet &operator=(const IndependentElementSet &ies) {
-    elements = ies.elements;
-    wholeObjects = ies.wholeObjects;
-    return *this;
-  }
+	IndependentElementSet &operator=(const IndependentElementSet &ies)
+	{
+		elements = ies.elements;
+		wholeObjects = ies.wholeObjects;
+		return *this;
+	}
 
   void print(std::ostream &os) const {
     os << "{";
@@ -153,81 +125,141 @@ public:
     os << "}";
   }
 
-  // more efficient when this is the smaller set
-  bool intersects(const IndependentElementSet &b) {
-    foreach (it, wholeObjects.begin(), wholeObjects.end()) {
-      const Array *array = *it;
-      if (b.wholeObjects.count(array) ||
-          b.elements.find(array) != b.elements.end())
-        return true;
-    }
-    foreach (it, elements.begin(), elements.end()) {
-      const Array *array = it->first;
-      if (b.wholeObjects.count(array))
-        return true;
-      elements_ty::const_iterator it2 = b.elements.find(array);
-      if (it2 != b.elements.end()) {
-        if (it->second.intersects(it2->second))
-          return true;
-      }
-    }
-    return false;
-  }
+	bool intersects(const IndependentElementSet &b); 
 
-  // returns true iff set is changed by addition
-  bool add(const IndependentElementSet &b) {
-    bool modified = false;
-    foreach (it, b.wholeObjects.begin(), b.wholeObjects.end()) {
-      const Array *array = *it;
-      elements_ty::iterator it2 = elements.find(array);
-      if (it2!=elements.end()) {
-        modified = true;
-        elements.erase(it2);
-        wholeObjects.insert(array);
-      } else {
-        if (!wholeObjects.count(array)) {
-          modified = true;
-          wholeObjects.insert(array);
-        }
-      }
-    }
-    foreach (it, b.elements.begin(), b.elements.end()) {
-      const Array *array = it->first;
-      if (wholeObjects.count(array)) continue;
-      elements_ty::iterator it2 = elements.find(array);
-      if (it2==elements.end()) {
-        modified = true;
-        elements.insert(*it);
-      } else {
-        if (it2->second.add(it->second))
-          modified = true;
-      }
-    }
-    return modified;
-  }
+	// returns true iff set is changed by addition
+	bool add(const IndependentElementSet &b);
 };
 
-inline std::ostream &operator<<(std::ostream &os, const IndependentElementSet &ies) {
-  ies.print(os);
-  return os;
+// more efficient when this is the smaller set
+bool IndependentElementSet::intersects(const IndependentElementSet &b)
+{
+	foreach (it, wholeObjects.begin(), wholeObjects.end()) {
+		const Array *array = *it;
+		if (	b.wholeObjects.count(array) ||
+			b.elements.find(array) != b.elements.end())
+			return true;
+	}
+
+	foreach (it, elements.begin(), elements.end()) {
+		const Array *array = it->first;
+		elements_ty::const_iterator it2;
+
+		if (b.wholeObjects.count(array))
+			return true;
+		it2 = b.elements.find(array);
+		if (it2 != b.elements.end()) {
+			if (it->second.intersects(it2->second))
+				return true;
+		}
+	}
+
+	return false;
 }
+
+bool IndependentElementSet::add(const IndependentElementSet &b)
+{
+	bool	modified = false;
+
+	foreach (it, b.wholeObjects.begin(), b.wholeObjects.end()) {
+		const Array *array;
+		elements_ty::iterator it2;
+
+		it2 = elements.find(array);
+		if (it2 != elements.end()) {
+			modified = true;
+			elements.erase(it2);
+			wholeObjects.insert(array);
+			continue;
+		}
+
+		array = *it;
+		if (!wholeObjects.count(array)) {
+			modified = true;
+			wholeObjects.insert(array);
+		}
+	}
+
+	foreach (it, b.elements.begin(), b.elements.end()) {
+		const Array *array = it->first;
+		elements_ty::iterator it2;
+
+		if (wholeObjects.count(array))
+			continue;
+
+		it2 = elements.find(array);
+		if (it2==elements.end()) {
+			modified = true;
+			elements.insert(*it);
+			continue;
+		}
+
+		if (it2->second.add(it->second))
+			modified = true;
+	}
+
+	return modified;
+}
+
+
+IndependentElementSet::IndependentElementSet(ref<Expr> e)
+{
+	std::vector< ref<ReadExpr> > reads;
+
+	ExprUtil::findReads(e, /* visitUpdates= */ true, reads);
+	for (unsigned i = 0; i != reads.size(); ++i) {
+		ReadExpr *re = reads[i].get();
+		const Array *array = re->updates.getRoot().get();
+
+		// Reads of a constant array don't alias.
+		if (	re->updates.getRoot().get()->isConstantArray() &&
+			re->updates.head == NULL)
+		{
+			continue;
+		}
+
+		if (wholeObjects.count(array))
+			continue;
+
+		if (ConstantExpr *CE = dyn_cast<ConstantExpr>(re->index)) {
+			DenseSet<unsigned> &dis = elements[array];
+			dis.add((unsigned) CE->getZExtValue(32));
+		} else {
+			elements_ty::iterator it2 = elements.find(array);
+			if (it2!=elements.end())
+				elements.erase(it2);
+			wholeObjects.insert(array);
+		}
+	}
+}
+
+
+inline std::ostream &operator<<(
+	std::ostream &os, const IndependentElementSet &ies)
+{ ies.print(os); return os; }
+
+
+typedef std::vector<
+	std::pair<ref<Expr>, IndependentElementSet> > worklist_ty;
 
 static IndependentElementSet getIndependentConstraints(
 	const Query& query,
 	std::vector< ref<Expr> > &result)
 {
-	IndependentElementSet eltsClosure(query.expr);
-	std::vector< std::pair<ref<Expr>, IndependentElementSet> > worklist;
+	IndependentElementSet	eltsClosure(query.expr);
+	worklist_ty		worklist;
 
 	foreach (it, query.constraints.begin(), query.constraints.end())
 		worklist.push_back(
 			std::make_pair(*it, IndependentElementSet(*it)));
 
-	// XXX This should be more efficient (in terms of low level copy stuff).
+	// XXX This should be more efficient
+	// (in terms of low level copy stuff).
 	bool done = false;
-	do {
+	while (done == false) {
+		worklist_ty	newWorklist;
+
 		done = true;
-		std::vector< std::pair<ref<Expr>, IndependentElementSet> > newWorklist;
 		foreach (it, worklist.begin(), worklist.end()) {
 			if (it->second.intersects(eltsClosure)) {
 				if (eltsClosure.add(it->second))
@@ -238,7 +270,10 @@ static IndependentElementSet getIndependentConstraints(
 			}
 		}
 		worklist.swap(newWorklist);
-	} while (!done);
+	}
+
+	return eltsClosure;
+}
 
 #if 0
     std::set< ref<Expr> > reqset(result.begin(), result.end());
@@ -254,8 +289,7 @@ static IndependentElementSet getIndependentConstraints(
     std::cerr << "elts closure: " << eltsClosure << "\n";
 #endif
 
-  return eltsClosure;
-}
+
 
 class IndependentSolver : public SolverImplWrapper
 {
@@ -281,11 +315,14 @@ public:
 	IndependentElementSet eltsClosure;	\
 	eltsClosure = getIndependentConstraints(query, required);	\
 	ConstraintManager tmp(required);	\
-	if (tmp.size() == 0 && isUnconstrained(query))
+	if (isUnconstrained(tmp, query))
 
-
-static bool isUnconstrained(const Query& query)
+static bool isUnconstrained(
+	const ConstraintManager& cm, const Query& query)
 {
+	if (cm.size() != 0)
+		return false;
+
 	if (	query.expr->getKind() == Expr::Eq &&
 		query.expr->getKid(1)->getKind() == Expr::Read)
 	{
@@ -318,7 +355,7 @@ ref<Expr> IndependentSolver::computeValue(const Query& query)
 {
 	SETUP_CONSTRAINTS {
 		uint64_t	v;
-		
+
 		v = rand();
 		if (query.expr->getWidth() < 64)
 			v &= (1 << query.expr->getWidth()) - 1;

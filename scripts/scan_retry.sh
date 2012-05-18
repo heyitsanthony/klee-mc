@@ -55,6 +55,7 @@ killall -9 klee-mc
 
 
 klee-mc					\
+	$EXTRA_ARGS			\
 	-use-gdb			\
 	-use-search-filter=false	\
 	-use-cache=false	\
@@ -78,12 +79,13 @@ klee-mc					\
 	-batch-instructions=99999999	\
 	-batch-time=5		\
 	-use-second-chance=true \
-	-second-chance-boost=2		\
+	-second-chance-boost=1		\
+	-second-chance-boost-cov=1	\
 	-randomize-fork=true		\
 	-branch-hint=true \
 	-use-pdf-interleave=true \
 	-use-interleaved-MXI=true \
-	-use-interleaved-MI=true \
+	-use-interleaved-MI=false \
 	-use-interleaved-FTR=false	\
 	-use-interleaved-CD=false	\
 	-use-interleaved-fb=true \

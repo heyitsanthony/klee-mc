@@ -38,10 +38,14 @@ class StagedSolverImpl : public SolverImpl
 private:
 	Solver	*primary;
 	Solver	*secondary;
+	bool	validityBySat;
 protected:
 	virtual void failQuery(void);
 public:
-	StagedSolverImpl(Solver *_primary, Solver *_secondary);
+	StagedSolverImpl(
+		Solver *_primary,
+		Solver *_secondary,
+		bool validity_with_sat=false);
 	virtual ~StagedSolverImpl();
 
 	bool computeSat(const Query&);

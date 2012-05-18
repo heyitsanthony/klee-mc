@@ -100,9 +100,8 @@ static int runAndGetCex(
 
 	res = vc_query(vc, q);
 	hasSolution = (res == STP_QUERY_INVALID);	/* !res */
-	if (!hasSolution || res == STP_QUERY_ERROR) {
+	if (hasSolution == false)
 		return res;
-	}
 
 	rh.reserve(objects.size());
 
