@@ -415,7 +415,9 @@ Solver::Validity SolverImpl::computeValidity(const Query& query)
 	if (!isNegSat && !isSat) {
 		SMTPrinter::dump(query, "incons");
 		SMTPrinter::dump(query.negateExpr(), "incons.neg");
-		assert (0 == 1 && "Inconsistent Model");
+		klee_warning("Inconsistent Model. Killing Solver");
+		failQuery();
+		return Solver::Unknown;
 	}
 
 	if (isNegSat && !isSat) return Solver::False;

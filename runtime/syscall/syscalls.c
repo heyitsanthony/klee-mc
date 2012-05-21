@@ -1058,11 +1058,31 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_setgroups:
 	case SYS_iopl:
 	case SYS_socketpair:
+	case SYS_setpriority:
+	case SYS_setitimer:
 		sc_ret_or(sc_new_regs(regfile), -1, 0);
 		break;
 
+	case SYS_getpriority:
 	case SYS_semget:
 		new_regs = sc_new_regs(regfile);
+		break;
+
+
+	case SYS_pause: sc_ret_v(regfile, -1); break;
+	case SYS_getitimer:
+		new_regs = sc_new_regs(regfile);
+		if (GET_SYSRET_S(new_regs) == -1)
+			break;
+
+		if (GET_ARG1_PTR(regfile) != NULL) {
+			make_sym(
+				(uint64_t)GET_ARG1_PTR(regfile),
+				sizeof(struct itimerval),
+				"itimer");
+		}
+
+		sc_ret_v_new(new_regs, 0);
 		break;
 
 

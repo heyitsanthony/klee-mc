@@ -188,7 +188,7 @@ void HashSolver::saveCachedAssignment(const Assignment& a)
 std::string HashSolver::getHashPath##x(void) const	\
 {	\
 	char	path[256];	\
-	snprintf(path, 256, "hcache/" #y "/%016lx", cur_hash);	\
+	snprintf(path, 256, "%s/" #y "/%016lx", HCacheDir.c_str(), cur_hash);	\
 	return std::string(path); }
 
 DECL_HASHPATH(SAT, sat)
