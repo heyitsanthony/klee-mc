@@ -1,6 +1,8 @@
 #ifndef QUERYHASH_H
 #define QUERYHASH_H
 
+#include "klee/Expr.h"
+
 namespace klee
 {
 
@@ -11,7 +13,7 @@ class QueryHash
 public:
 	QueryHash(const char* in_name) : name(in_name) {}
 	virtual ~QueryHash() {}
-	virtual unsigned hash(const Query& q) const = 0;
+	virtual Expr::Hash hash(const Query& q) const = 0;
 	const char* getName(void) const { return name; }
 private:
 	const char* name;
@@ -24,7 +26,7 @@ class QH##x : public QueryHash				\
 public:							\
 	QH##x() : QueryHash(y) {}			\
 	virtual ~QH##x() {}				\
-	virtual unsigned hash(const Query &q) const;	\
+	virtual Expr::Hash hash(const Query &q) const;	\
 private: };
 
 

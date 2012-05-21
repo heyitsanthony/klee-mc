@@ -31,6 +31,16 @@ Solver::Validity SolverImplWrapper::doComputeValidity(const Query& query)
 	return ret;
 }
 
+Solver::Validity SolverImplWrapper::doComputeValiditySplit(const Query& query)
+{
+	Solver::Validity	ret;
+	ret = SolverImpl::computeValidity(query);
+	if (wrappedSolver->impl->failed())
+		failQuery();
+	return ret;
+}
+
+
 bool SolverImplWrapper::doComputeInitialValues(
 	const Query& query, Assignment& a)
 {

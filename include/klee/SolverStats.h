@@ -19,6 +19,7 @@ namespace stats {
   extern Statistic cexCacheHits;
   extern Statistic cexCacheMisses;
   extern Statistic queries;
+  extern Statistic queriesTopLevel;
   extern Statistic queriesInvalid;
   extern Statistic queriesValid;
   extern Statistic queriesFailed;

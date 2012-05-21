@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <sys/uio.h>
 #include <sys/mman.h>
 #include <sys/time.h>
 #include <sys/times.h>
@@ -344,22 +345,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	sc_breadcrumb_reset();
 
 	switch (sc.sys_nr) {
-#if 0
-/* tricky semantics */
-	case SYS_clone: {
-		// clone(pt_regs); UGH!
-		struct pt_regs	*pt = (void*)GET_ARG0(regfile);
-		klee_warning_once("clone() will give funny semantics");
-
-		new_regs = sc_new_regs(regfile);
-		if (GET_SYSRET(new_regs) == 0) {
-			jmpptr = pt->rip;
-		} else {
-			klee_assume(GET_SYSRET(new_regs) == 1001);
-		}
-		break;
-	}
-#endif
+	case SYS_vfork:
 	case SYS_fork:
 		new_regs = sc_new_regs(regfile);
 		sc_ret_or(
@@ -391,6 +377,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_brk: {
 		// ptrdiff_t grow_len;
 
+		klee_warning("Don't grow brks! This breaks static linking!");
 		if (last_brk == 0)
 			last_brk = (void*)heap_end;
 		sc_ret_v(regfile, (uintptr_t)last_brk);
@@ -639,18 +626,24 @@ void* sc_enter(void* regfile, void* jmpptr)
 		((char*)addr)[len-1] = '\0';
 
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
-		if (addr != GET_ARG0(regfile)) {
-			klee_report_error(
-				__FILE__,__LINE__,
-				"getcwd retmismatch. ARHGHGGHGHGHG",
-				"badcwd.err");
-		}
 
 		sc_ret_v(regfile, addr);
 		sc_breadcrumb_commit(&sc, addr);
 		goto already_logged;
 	}
 	break;
+
+//	case SYS_waitpid: 32-bit only
+	case SYS_wait4: {
+		int *status;
+
+		status = GET_ARG1_PTR(regfile);
+		new_regs = sc_new_regs(regfile);
+		if (status != NULL)
+			make_sym((uint64_t)status, sizeof(int), "status");
+		break;
+	}
+
 
 	case SYS_sched_getscheduler:
 		klee_warning_once("Pure symbolic on sched_getscheduler");
@@ -785,8 +778,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	}
 
-	UNIMPL_SC(clone);
-
 	case SYS_recvmsg: {
 		struct msghdr	*mhdr;
 
@@ -865,7 +856,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			sc_ret_v(new_regs, -1);
 			break;
 		}
-		
+
 		sc_ret_v(new_regs, 0);
 		break;
 
@@ -876,7 +867,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			sc_ret_v(new_regs, -1);
 			break;
 		}
-		
+
 		sc_ret_v(new_regs, 0);
 		break;
 
@@ -1063,8 +1054,132 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_munlock:
 	case SYS_munlockall:
 	case SYS_flock:
+	case SYS_sched_setscheduler:
+	case SYS_setgroups:
+	case SYS_iopl:
+	case SYS_socketpair:
 		sc_ret_or(sc_new_regs(regfile), -1, 0);
 		break;
+
+	case SYS_semget:
+		new_regs = sc_new_regs(regfile);
+		break;
+
+
+	/* sys_clone is actually much simpler than clone()! */
+// from the kernel:
+// asmlinkage int sys_clone(unsigned long clone_flags, unsigned long newsp,
+// unsigned long parent_tidp, unsigned long child_tidp)
+
+	case SYS_clone:
+		new_regs = sc_new_regs(regfile);
+		if (GET_ARG1_PTR(regfile) == NULL)
+			break;
+
+		klee_warning("Is clone()'s stack switching right?");
+		klee_assume(GET_STACK(new_regs) == GET_ARG1(regfile));
+		break;
+
+	case SYS_pwrite64:
+		sc_ret_or(sc_new_regs(regfile), -1, GET_ARG2(regfile));
+		break;
+	case SYS_readv: {
+		struct iovec* iov;
+		int total_bytes = 0;
+		unsigned i;
+
+		iov = GET_ARG1_PTR(regfile);
+		if (iov == NULL) {
+			sc_ret_v(regfile, -1);
+			break;
+		}
+
+		for (i = 0; i < GET_ARG2(regfile); i++) {
+			total_bytes += iov[i].iov_len;
+			if (iov->iov_len)
+				make_sym(
+					(uint64_t)iov[i].iov_base,
+					iov[i].iov_len,
+					"readv");
+		}
+
+
+		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
+		break;
+	}
+
+	case SYS_sendmsg: {
+		const struct msghdr	*mh;
+		int			total_bytes = 0;
+		unsigned 		i;
+
+		if (!GET_ARG1(regfile)) {
+			sc_ret_v(regfile, -1);
+			break;
+		}
+
+		mh = GET_ARG1_PTR(regfile);
+		for (i = 0; i < mh->msg_iovlen; i++)
+			total_bytes += mh->msg_iov[i].iov_len;
+
+		sc_ret_or(sc_new_regs(regfile), -1, total_bytes);
+		break;
+	}
+
+	case SYS_execve: {
+		int 	i;
+		char	**argv;
+
+		new_regs = sc_new_regs(regfile);
+		sc_ret_or(new_regs, -1, 0);
+		if (GET_SYSRET_S(new_regs) == -1) {
+			/* execve can fail sometimes */
+			break;
+		}
+
+		/* check strings for symbolic / tainted data */
+		if (file_path_has_sym(GET_ARG0_PTR(regfile))) {
+			klee_report_error(
+				__FILE__,__LINE__,
+				"Symbolic exec filepath",
+				"symexec.err");
+		}
+
+		argv = GET_ARG1_PTR(regfile);
+		for (i = 0; argv[i] != NULL; i++) {
+			if (file_path_has_sym(argv[i])) {
+				klee_report_error(
+				__FILE__,__LINE__,
+				"Symbolic exec argv",
+				"symexec.err");
+			}
+		}
+
+		kmc_exit(0);
+		break;
+	}
+
+	case SYS_getresgid:
+	case SYS_getresuid:
+		if (!GET_ARG0(regfile)
+			|| !GET_ARG1(regfile)
+			|| !GET_ARG2(regfile))
+		{
+			sc_ret_v(regfile, -1);
+			break;
+		}
+		make_sym(GET_ARG0(regfile), sizeof(uid_t), "res_id");
+		make_sym(GET_ARG1(regfile), sizeof(uid_t), "res_eid");
+		make_sym(GET_ARG2(regfile), sizeof(uid_t), "res_sid");
+		sc_ret_v(regfile, 0);
+		break;
+
+	case SYS_eventfd: {
+		sc_ret_or(sc_new_regs(regfile),
+			-1, /* error */
+			0x7e00 /* fake eventfd */);
+		break;
+	}
 
 	case SYS_capget:
 		if (!GET_ARG1(regfile)) {
@@ -1073,7 +1188,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			break;
 		}
 
-		new_regs = sc_new_regs(regfile); 
+		new_regs = sc_new_regs(regfile);
 		sc_ret_or(new_regs, 0, -1);
 		if (GET_SYSRET(new_regs) != 0)
 			break;
@@ -1144,7 +1259,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_lgetxattr:
 		if (GET_ARG2_PTR(regfile) == NULL) {
 			sc_ret_v(regfile, -1);
-			break;	
+			break;
 		}
 		make_sym(GET_ARG2(regfile), GET_ARG3(regfile), "getxattr");
 		sc_ret_or(sc_new_regs(regfile), -1, GET_ARG3(regfile));

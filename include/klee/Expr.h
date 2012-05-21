@@ -98,7 +98,7 @@ Todo: Shouldn't bool \c Xor just be written as not equal?
 
 class Expr {
 public:
-  typedef unsigned Hash;
+  typedef uint64_t	Hash;
   static unsigned long count;
   static unsigned int errors;
   static const unsigned MAGIC_HASH_CONSTANT = 39;
@@ -184,8 +184,6 @@ public:
     CmpKindLast=Sge
   };
 
-  unsigned refCount;
-
 protected:
   static ExprBuilder	*theExprBuilder;
   static ExprAlloc	*theExprAllocator;
@@ -195,6 +193,8 @@ protected:
   Expr() : refCount(0) { count++; }
 
 public:
+  unsigned refCount;
+
   virtual ~Expr() { count--; }
   static unsigned long getNumExprs(void) { return count; }
   static ExprBuilder* setBuilder(ExprBuilder* builder);
@@ -348,12 +348,12 @@ inline std::ostream &operator<<(std::ostream &os, const Expr::Kind kind) {
 
 // Utility classes
 
-class NonConstantExpr : public Expr {
+class NonConstantExpr : public Expr
+{
 public:
-  static bool classof(const Expr *E) {
-    return E->getKind() != Expr::Constant;
-  }
-  static bool classof(const NonConstantExpr *) { return true; }
+	static bool classof(const Expr *E)
+	{ return E->getKind() != Expr::Constant; }
+	static bool classof(const NonConstantExpr *) { return true; }
 };
 
 class BinaryExpr : public NonConstantExpr {

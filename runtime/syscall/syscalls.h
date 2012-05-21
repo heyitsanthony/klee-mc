@@ -12,6 +12,7 @@
 #define GET_ARG3(x)	((VexGuestAMD64State*)x)->guest_R10
 #define GET_ARG4(x)	((VexGuestAMD64State*)x)->guest_R8
 #define GET_ARG5(x)	((VexGuestAMD64State*)x)->guest_R9
+#define GET_STACK(x)	((VexGuestAMD64State*)x)->guest_RSP
 #define GET_SYSNR(x)	((VexGuestAMD64State*)x)->guest_RAX
 #define ARCH_SIGN_CAST	int64_t
 #elif GUEST_ARCH_ARM
@@ -26,6 +27,7 @@
 #define GET_ARG4(x)	((VexGuestARMState*)x)->guest_R4
 #define GET_ARG5(x)	((VexGuestARMState*)x)->guest_R5
 #define GET_SYSNR(x)	((VexGuestARMState*)x)->guest_R7	/* ARM EABI */
+#define GET_STACK(x)	((VexGuestARMState*)x)->guest_R13
 #define ARM_SYS_mmap2	0x1000
 #define ARCH_SIGN_CAST	signed
 #elif GUEST_ARCH_X86
@@ -39,6 +41,7 @@
 #define GET_ARG4(x)	((VexGuestX86State*)x)->guest_EDI
 #define GET_ARG5(x)	((VexGuestX86State*)x)->guest_EBP
 #define GET_SYSNR(x)	((VexGuestX86State*)x)->guest_EAX
+#define GET_STACK(x)	((VexGuestX86State*)x)->guest_ESP
 #define ARCH_SIGN_CAST	int32_t
 #define X86_SYS_mmap2	0x1000
 #else

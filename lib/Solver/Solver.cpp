@@ -50,6 +50,7 @@ using namespace klee;
 using namespace llvm;
 
 bool	UseFastCexSolver;
+bool	UseHashSolver;
 double	MaxSTPTime;
 
 namespace {
@@ -76,6 +77,15 @@ namespace {
   	cl::desc("Use the fast CEX solver, whatever that is."),
   	cl::location(UseFastCexSolver),
 	cl::init(false));
+
+  cl::opt<bool, true>
+  ProxyUseHashSolver(
+  	"use-hash-solver",
+	cl::desc("Save hashes of queries w/results"),
+  	cl::location(UseHashSolver),
+  	cl::init(false));
+
+
 
   cl::opt<double,true>
   MaxSTPTimeProxy("max-stp-time",
@@ -120,11 +130,6 @@ namespace {
   UsePoisonCacheRewritePtr("use-pcache-rewriteptr",
   	cl::init(false),
 	cl::desc("Cache/Reject poisonous query with pointers rewritten."));
-
-  cl::opt<bool>
-  UseHashSolver("use-hash-solver",
-  	cl::init(false),
-	cl::desc("Save hashes of queries w/results"));
 
   cl::opt<bool>
   UseBoolector(
@@ -248,7 +253,9 @@ static Solver* createChainWithTimedSolver(
 
 	if (UseHashSolver)
 		solver = new Solver(
-			new HashSolver(solver, new QHRewritePtr()));
+//			new HashSolver(solver, new QHRewritePtr()));
+			new HashSolver(solver, new QHDefault()));
+
 
 	if (UseFastCexSolver) solver = createFastCexSolver(solver);
 	if (UseFastRangeSolver) solver = createFastRangeSolver(solver);
@@ -678,7 +685,7 @@ flush:
 
 ConstraintManager Query::dummyConstraints;
 
-unsigned Query::hash(void) const
+Expr::Hash Query::hash(void) const
 {
 	QHDefault	qh;
 	return qh.hash(*this);

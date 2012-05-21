@@ -111,13 +111,12 @@ public:
   };
 
   void print(std::ostream& os) const;
-
+  unsigned hash(void) const { return hash_v; }
 private:
 	Array(	const std::string &_name,
 		MallocKey _mallocKey,
 		const ref<ConstantExpr> *constantValuesBegin = 0,
 		const ref<ConstantExpr> *constantValuesEnd = 0);
-	unsigned hash(void) const;
 
 	// constantValues - The constant initial values for this array,
 	// or empty for a symbolic array.

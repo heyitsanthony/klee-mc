@@ -168,7 +168,7 @@ DECL_CE_CMPOP(Sle, sle)
 DECL_CE_CMPOP(Sgt, sgt)
 DECL_CE_CMPOP(Sge, sge)
 
-unsigned ConstantExpr::computeHash() {
+Expr::Hash ConstantExpr::computeHash() {
   hashValue = value.getHashValue() ^ (getWidth() * MAGIC_HASH_CONSTANT);
   return hashValue;
 }

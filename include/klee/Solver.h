@@ -48,7 +48,7 @@ public:
 	Query negateExpr() const { return withExpr(Expr::createIsZero(expr)); }
 
 	void print(std::ostream& os) const;
-	unsigned hash(void) const;
+	Expr::Hash hash(void) const;
 
 private:
 	static ConstraintManager dummyConstraints;

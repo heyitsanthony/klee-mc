@@ -72,8 +72,8 @@ public:
 	ref<Expr> evaluate(ref<Expr> e, bool& wasDivProtected);
 
 	template<typename InputIterator>
-	bool satisfies(InputIterator begin, InputIterator end);
-	bool satisfies(ref<Expr> e) { return evaluate(e)->isTrue(); }
+	bool satisfies(InputIterator begin, InputIterator end) const;
+	bool satisfies(ref<Expr> e) const { return evaluate(e)->isTrue(); }
 
 	void save(const char* path) const;
 	bool load(
@@ -173,7 +173,7 @@ inline ref<Expr> Assignment::evaluate(ref<Expr> e, bool &wasZeroDiv)
 }
 
 template<typename InputIterator>
-inline bool Assignment::satisfies(InputIterator begin, InputIterator end)
+inline bool Assignment::satisfies(InputIterator begin, InputIterator end) const
 {
 	AssignmentEvaluator v(*this);
 	for (; begin!=end; ++begin)

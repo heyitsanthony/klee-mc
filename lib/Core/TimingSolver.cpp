@@ -16,6 +16,7 @@
 #include "klee/util/Assignment.h"
 
 #include "CoreStats.h"
+#include "klee/SolverStats.h"
 
 #include "llvm/Support/Process.h"
 
@@ -39,6 +40,7 @@ bool TimingSolver::evaluate(
   if (simplifyExprs)
     expr = state.constraints.simplifyExpr(expr);
 
+  ++stats::queriesTopLevel;
   bool success = solver->evaluate(Query(state.constraints, expr), result);
 
   double finish = util::estWallTime();
@@ -61,6 +63,7 @@ bool TimingSolver::mustBeTrue(const ExecutionState& state, ref<Expr> expr,
   if (simplifyExprs)
     expr = state.constraints.simplifyExpr(expr);
 
+  ++stats::queriesTopLevel;
   bool success = solver->mustBeTrue(Query(state.constraints, expr), result);
 
   double finish = util::estWallTime();
@@ -106,6 +109,7 @@ bool TimingSolver::getValue(const ExecutionState& state, ref<Expr> expr,
   if (simplifyExprs)
     expr = state.constraints.simplifyExpr(expr);
 
+  ++stats::queriesTopLevel;
   bool success = solver->getValue(Query(state.constraints, expr), result);
 
   double finish = util::estWallTime();
@@ -124,6 +128,8 @@ bool TimingSolver::getInitialValues(
   double start = util::estWallTime();
 
   bool success;
+
+  ++stats::queriesTopLevel;
   success = solver->getInitialValues(
   	Query(
 		state.constraints,

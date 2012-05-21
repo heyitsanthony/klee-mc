@@ -309,14 +309,7 @@ void ConstraintManager::print(std::ostream& os) const
 }
 
 ConstraintManager::~ConstraintManager(void)
-{
-	if (simplifier) delete simplifier;
-}
+{ if (simplifier) delete simplifier; }
 
 bool ConstraintManager::isValid(const Assignment& a) const
-{
-	foreach (it, begin(), end())
-		if (a.evaluate(*it)->isTrue() == false)
-			return false;
-	return true;
-}
+{ return a.satisfies(begin(), end()); }

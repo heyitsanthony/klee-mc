@@ -64,9 +64,8 @@ public:
 
   /// getLimitedValue - If this value is smaller than the specified limit,
   /// return it, otherwise return the limit value.
-  uint64_t getLimitedValue(uint64_t Limit = ~0ULL) const {
-    return value.getLimitedValue(Limit);
-  }
+  uint64_t getLimitedValue(uint64_t Limit = ~0ULL) const
+  { return value.getLimitedValue(Limit); }
 
   /// toString - Return the constant value as a decimal string.
   void toString(std::string &Res) const;
@@ -85,7 +84,7 @@ public:
     return (Expr*) this;
   }
 
-  virtual unsigned computeHash();
+  virtual Hash computeHash();
   
   static ref<Expr> fromMemory(void *address, Width w);
   void toMemory(void *address);

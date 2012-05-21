@@ -94,6 +94,7 @@ klee-mc					\
 	-use-softfp		\
 	-guest-type=sshot	\
 	-write-smt		\
+	-show-syscalls		\
 	-dump-select-stack	\
 	-dump-covstats=1	\
 	-dump-rbstats=1		\

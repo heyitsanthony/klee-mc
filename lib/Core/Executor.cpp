@@ -11,6 +11,7 @@
 #include "Executor.h"
 #include "ExecutorBC.h"	/* for 'interpreter::create()' */
 #include "ExeStateManager.h"
+#include "klee/Internal/Support/Timer.h"
 
 #include "Context.h"
 #include "CoreStats.h"
@@ -966,6 +967,7 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 	}
 
 	/* 2. enumerate all objstates-- replace sym objstates w/ concrete */
+	WallTimer	wt;
 	std::cerr << "[Exe] Concretizing objstates\n";
 	foreach (it, st.addressSpace.begin(), st.addressSpace.end()) {
 		const MemoryObject	*mo = it->first;
@@ -976,6 +978,13 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 		/* we only change symbolic objstates */
 		if (os->isConcrete())
 			continue;
+
+		if (MaxSTPTime > 0 && wt.check() > 3*MaxSTPTime) {
+			terminateStateEarly(
+				st,
+				"timeout eval on imm concretize state");
+			return new_st;
+		}
 
 		new_os = (os->getArray())
 			? new ObjectState(mo->size, ARR2REF(os->getArray()))

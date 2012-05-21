@@ -130,7 +130,7 @@ static void sc_stat_sym(struct sc_pkt* sc)
 #endif
 }
 
-int str_is_sym(const char* s)
+int file_path_has_sym(const char* s)
 {
 	int	i;
 
@@ -150,7 +150,7 @@ static void sc_stat(struct sc_pkt* sc)
 		const char	*path;
 
 		path = (const char*)(GET_ARG0_PTR(sc->regfile));
-		if (!str_is_sym(path)) {
+		if (!file_path_has_sym(path)) {
 			int		fd;
 
 			fd = fd_open(path);
@@ -194,7 +194,7 @@ static void sc_open(const char* path, void* regfile)
 		return;
 	}
 
-	if (!str_is_sym(path)) {
+	if (!file_path_has_sym(path)) {
 		if (	deny_sys_files &&
 			(path[0] == '\0' ||
 			(path[0] == '/' &&

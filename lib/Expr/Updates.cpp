@@ -58,7 +58,7 @@ int UpdateNode::compare(const UpdateNode &b) const
 	return 0;
 }
 
-unsigned UpdateNode::computeHash()
+Expr::Hash UpdateNode::computeHash()
 {
 	hashValue = index->hash() ^ value->hash();
 	if (next != NULL)
@@ -151,7 +151,7 @@ int UpdateList::compare(const UpdateList &b) const
 	return 0;
 }
 
-unsigned UpdateList::hash() const
+Expr::Hash UpdateList::hash() const
 {
 	unsigned res = 0;
 
@@ -161,7 +161,9 @@ unsigned UpdateList::hash() const
 	if (root->mallocKey.allocSite) {
 		res = root->mallocKey.hash();
 	} else {
-		res = Expr::hashImpl(root->name.c_str(), root->name.size(), 0);
+		//res = Expr::hashImpl(
+		//root->name.c_str(), root->name.size(), 0);
+		res = root->hash();
 	}
 
 	if (head != NULL) {

@@ -47,6 +47,7 @@ bool UseConcreteVFS;
 
 namespace
 {
+	cl::opt<bool> ShowSyscalls("show-syscalls", cl::init(false));
 	cl::opt<bool> SymMagic(
 		"sym-magic",
 		cl::desc("Mark 'magic' 0xa3 bytes as symbolic"),
@@ -704,13 +705,13 @@ void ExecutorVex::handleXferSyscall(
 		assert (0 == 1 && "ULP");
 	}
 
-
-	std::cerr << "[klee-mc] before syscall "
-		<< sysnr
-		<< "(?): states=" << stateManager->size()
-		<< ". objs=" << state.getNumSymbolics()
-		<< ". st=" << (void*)&state
-		<< ". n=" << es2esv(state).getSyscallCount() << '\n';
+	if (ShowSyscalls)
+		std::cerr << "[klee-mc] before syscall "
+			<< sysnr
+			<< "(?): states=" << stateManager->size()
+			<< ". objs=" << state.getNumSymbolics()
+			<< ". st=" << (void*)&state
+			<< ". n=" << es2esv(state).getSyscallCount() << '\n';
 		
 	/* arg0 = regctx, arg1 = jmpptr */
 	args.push_back(es2esv(state).getRegCtx()->getBaseExpr());

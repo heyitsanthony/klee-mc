@@ -45,7 +45,7 @@ public:
  * smart about partitioning with low-value constants.
  *
  */
-unsigned QHRewritePtr::hash(const Query& q) const
+Expr::Hash QHRewritePtr::hash(const Query& q) const
 {
 	ConstraintManager	cm;
 	ref<Expr>		new_expr;
@@ -67,7 +67,7 @@ unsigned QHRewritePtr::hash(const Query& q) const
 
 /* Just to be sure that the hash Daniel gave us didn't have a lot of
  * bad collisions, we're using a cryptographic hash on the string. */
-unsigned QHExprStrSHA::hash(const Query& q) const
+Expr::Hash QHExprStrSHA::hash(const Query& q) const
 {
 	std::string	s;
 	unsigned char	md[SHA_DIGEST_LENGTH];
@@ -86,9 +86,9 @@ unsigned QHExprStrSHA::hash(const Query& q) const
 }
 
 
-unsigned QHDefault::hash(const Query& q) const
+Expr::Hash QHDefault::hash(const Query& q) const
 {
-	unsigned	ret;
+	Expr::Hash	ret;
 
 	ret = q.expr->hash();
 	foreach (it, q.constraints.begin(), q.constraints.end()) {

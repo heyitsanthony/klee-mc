@@ -18,6 +18,7 @@ protected:
 	bool doComputeSat(const Query& q);
 	ref<Expr> doComputeValue(const Query& q);
 	Solver::Validity doComputeValidity(const Query& q);
+	Solver::Validity doComputeValiditySplit(const Query& q);
 	bool doComputeInitialValues(const Query& query, Assignment&);
 
 	Solver*	wrappedSolver;

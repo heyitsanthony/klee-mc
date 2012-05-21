@@ -760,7 +760,8 @@ Expr::Hash NotExpr::computeHash()
 #include "murmur3.h"
 Expr::Hash Expr::hashImpl(const void* data, size_t len, Hash hash)
 {
-	Hash	ret;
-	MurmurHash3_x86_32(data, len, hash, &ret);
-	return ret;
+	Hash	ret[128/(sizeof(Hash)*8)];
+	memset(ret, 0, sizeof(ret));
+	MurmurHash3_x64_128(data, len, hash, &ret);
+	return ret[0];
 }

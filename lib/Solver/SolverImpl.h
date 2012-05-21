@@ -47,15 +47,15 @@ public:
 	/// bool type.
 	virtual bool computeSat(const Query& query) = 0;
 
-	/// computeValue - Compute a feasible value for the expression.
-	/// Assumes that there is a solution to the given query.
-	/// The query expression is guaranteed to be non-constant.
-	virtual ref<Expr> computeValue(const Query& query);
-
 	/* finds a counter example for the given query
 	* returns true if cex exists, false otherwise */
 	virtual bool computeInitialValues(
 		const Query& query, Assignment& a) = 0;
+
+	/// computeValue - Compute a feasible value for the expression.
+	/// Assumes that there is a solution to the given query.
+	/// The query expression is guaranteed to be non-constant.
+	virtual ref<Expr> computeValue(const Query& query);
 
 	/// printName - Recursively print name of solver class
 	virtual void printName(int level = 0) const = 0;
