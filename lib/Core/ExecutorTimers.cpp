@@ -270,6 +270,7 @@ public:
 	QueryStatTimer(Executor *_exe) : StatTimer(_exe, "query.txt") {}
 protected:
 	void print(void) { *os
+		<< stats::queriesTopLevel << ' '
 		<< stats::queries << ' '
 		<< MMU::getQueries() << ' '
 		<< stats::queryTime << ' '

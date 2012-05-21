@@ -322,6 +322,31 @@ int file_sc(struct sc_pkt* sc)
 			break;
 		klee_assume(GET_SYSRET(new_regs) > 3 && GET_SYSRET(new_regs) < 4096);
 		break;
+
+	case SYS_readlinkat:
+	{
+		if (concrete_vfs) {
+			klee_warning_once(
+				"readlinkat() should work with concretes, "
+				"but Anthony is dying.");
+		}
+
+		/* keep the string short since we're pure symbolic now */
+		/* In the future, use system information to satisfy this */
+		uint64_t	addr  = klee_get_value(GET_ARG2(regfile));
+		new_regs = sc_new_regs(regfile);
+		if (GET_ARG3(regfile) >= 2) {
+			sc_ret_range(new_regs, 1, 2);
+			make_sym(addr, GET_ARG3(regfile), "readlink");
+			// readlink()  does not append a null byte to buf.
+			// No need for this:
+			// ((char*)addr)[GET_ARG2(new_regs)] = '\0';
+		} else {
+			sc_ret_v(regfile, -1);
+		}
+	}
+	break;
+
 	case SYS_readlink:
 	{
 		if (concrete_vfs) {

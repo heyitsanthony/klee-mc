@@ -571,17 +571,17 @@ void* sc_enter(void* regfile, void* jmpptr)
 	}
 	break;
 
-	UNIMPL_SC(readlinkat)
 	case SYS_pread64:
 	case SYS_read:
 	case SYS_fstat:
 	case SYS_lstat:
 	case SYS_creat:
 	case SYS_readlink:
+	case SYS_readlinkat:
 	case SYS_lseek:
 	case SYS_stat:
-	case SYS_openat:
 	case SYS_open:
+	case SYS_openat:
 	case SYS_close:
 		if (!file_sc(&sc))
 			goto already_logged;
