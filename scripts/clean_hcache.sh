@@ -19,9 +19,7 @@ for a in `find "$1"/`; do
 
 	sz=`stat --printf="%s" "$a"`
 	if [ "$sz" == 0 ]; then
-		echo "BYE $a"
 		rm "$a"
 		continue
 	fi
-	echo $a
 done
