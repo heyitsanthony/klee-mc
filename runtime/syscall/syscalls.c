@@ -1116,7 +1116,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 		for (i = 0; i < GET_ARG2(regfile); i++) {
 			total_bytes += iov[i].iov_len;
-			if (iov->iov_len)
+			if (iov->iov_len && iov[i].iov_base != NULL)
 				make_sym(
 					(uint64_t)iov[i].iov_base,
 					iov[i].iov_len,

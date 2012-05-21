@@ -239,6 +239,15 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 			(void*)getRet());
 		break;
 
+	case SYS_readlinkat:
+	case SYS_readlink:
+		fprintf(stderr, KREPLAY_SC "READLINK \"%s\" ret=%p\n",
+			(char*)sp.getArgPtr(
+				(xlate_sysnr == SYS_readlink) ? 0 : 1),
+				(void*)getRet());
+		break;
+	
+
 	case SYS_open:
 		fprintf(stderr, KREPLAY_SC "OPEN \"%s\" ret=%p\n",
 			(char*)sp.getArgPtr(0), (void*)getRet());
