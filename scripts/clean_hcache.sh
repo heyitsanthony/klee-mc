@@ -6,8 +6,11 @@ if [ -z "$HCACHE" ]; then
 fi
 
 echo "HCACHE = $1"
-echo "Sleeping for clean."
-sleep 2
+
+if [ ! -d "$HCACHE" ]; then
+	echo $HCACHE does not exist
+	exit -1
+fi
 
 for a in `find "$1"/`; do
 	if [ ! -f "$a" ]; then
