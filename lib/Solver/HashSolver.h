@@ -11,6 +11,59 @@
 
 namespace klee
 {
+class QHSEntry {
+public:
+	QHSEntry(const Query& _q, Expr::Hash _qh, bool _isSAT)
+	: q(_q), qh(_qh), isSAT(_isSAT) {}
+	~QHSEntry() {}
+
+	Query		q;
+	Expr::Hash	qh;
+	bool		isSAT;
+};
+
+/* virtual cheesey base class for storage backends */
+class QHSStore
+{
+public:
+	virtual ~QHSStore() {}
+	virtual bool lookup(const QHSEntry& qhs) = 0;
+	virtual void saveSAT(const QHSEntry& qhs) = 0;
+protected:
+	QHSStore() {}
+};
+
+class QHSSink : public QHSStore
+{
+public:
+	virtual ~QHSSink(void)
+	{
+		delete src;
+		delete dst;
+	}
+	QHSSink(QHSStore* _src, QHSStore* _dst)
+	: src(_src)
+	, dst(_dst)
+	{ assert (src && dst); }
+
+	virtual bool lookup(const QHSEntry& qhs);
+	virtual void saveSAT(const QHSEntry& qhs);
+protected:
+	QHSStore *src, *dst;
+};
+
+class QHSDir : public QHSStore
+{
+public:
+	virtual ~QHSDir(void) {}
+	static QHSDir* create();
+	virtual bool lookup(const QHSEntry& qe);
+	virtual void saveSAT(const QHSEntry& qe);
+protected:
+	QHSDir() {}
+private:
+	static void writeSAT(const QHSEntry& qe);
+};
 
 class HashSolver : public SolverImplWrapper
 {
@@ -21,18 +74,8 @@ public:
 private:
 	static unsigned	hits;
 	static unsigned	misses;
-	class MissEntry {
-	public:
-		MissEntry(const Query& _q, Expr::Hash _qh, bool _isSAT)
-		: q(_q), qh(_qh), isSAT(_isSAT) {}
-		~MissEntry() {}
-
-		Query		q;
-		Expr::Hash	qh;
-		bool		isSAT;
-	};
 	
-	typedef std::vector< MissEntry* > missqueue_ty;
+	typedef std::vector< QHSEntry* > missqueue_ty;
 
 	static missqueue_ty	miss_queue;
 	QueryHash		*qhash;
@@ -43,7 +86,7 @@ private:
 	bool			q_loaded;
 	std::set<Expr::Hash>	sat_hashes;
 	std::set<Expr::Hash>	unsat_hashes;
-
+	QHSStore		*qstore;
 
 	Assignment* loadCachedAssignment(const std::vector<const Array*>& objs);
 
@@ -60,17 +103,12 @@ private:
 
 	bool lookup(const Query& q, bool isSAT);
 	void saveSAT(const Query& q, bool isSAT);
-	static void writeSAT(
-		const Query	&q,
-		Expr::Hash	qh,
-		bool		isSAT);
-	static void writeSAT(const MissEntry& me);
 
 	static void touchSAT(
 		const Query	&q,
 		Expr::Hash	qh,
 		bool		isSAT);
-	static void touchSAT(const MissEntry& me);
+	static void touchSAT(const QHSEntry& me);
 
 public:
 	virtual Solver::Validity computeValidity(const Query&);

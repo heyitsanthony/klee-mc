@@ -8,9 +8,11 @@
 #include <sys/stat.h>
 #include <assert.h>
 #include "klee/util/Assignment.h"
-#include "llvm/Support/CommandLine.h"
+#include <llvm/Support/CommandLine.h>
 #include "klee/util/gzip.h"
+
 #include "HashSolver.h"
+#include "QHSFile.h"
 
 using namespace klee;
 using namespace llvm;
@@ -21,39 +23,120 @@ HashSolver::missqueue_ty HashSolver::miss_queue;
 
 namespace
 {
+	/* I'm not particularly happy about all of the options,
+	 * but it's necessary to make a distinction between RO and
+	 * RW caches */
 	cl::opt<std::string>
 	HCacheDir(
 		"hcache-dir",
 		cl::desc("Alternative directory for hash cache."),
 		cl::init("hcache"));
+	cl::opt<std::string>
+	HCacheFDir(
+		"hcache-fdir",	/* sat.hcache; unsat.hcache */
+		cl::desc("Directory with accelerated hash files."),
+		cl::init(""));
+
+	cl::opt<std::string>
+	HCachePendingDir(
+		"hcache-pending",
+		cl::desc("Dir for hashes pending inclusion into main cache."),
+		cl::init(""));
+
+	cl::opt<bool>
+	HCacheSink(
+		"hcache-sink",
+		cl::desc("Sink directory hits into accel cache"),
+		cl::init(false));
 }
 
-bool HashSolver::lookup(const Query& q, bool isSAT)
+bool QHSSink::lookup(const QHSEntry& qhs)
+{
+	if (dst->lookup(qhs)) return true;
+
+	if (src->lookup(qhs)) {
+		dst->saveSAT(qhs);
+		return true;
+	}
+
+	return false;
+}
+
+void QHSSink::saveSAT(const QHSEntry& qhs) { dst->saveSAT(qhs); }
+
+QHSDir* QHSDir::create(void)
+{
+	mkdir(HCacheDir.c_str(), 0770);
+	mkdir((HCacheDir + "/sat").c_str(), 0770);
+	mkdir((HCacheDir + "/unsat").c_str(), 0770);
+	return new QHSDir();
+}
+
+bool QHSDir::lookup(const QHSEntry& qhs)
 {
 	char		path[256];
 	const char	*subdir;
 	struct stat	s;
 	bool		found;
 
+	subdir = (qhs.isSAT) ? "sat" : "unsat";
+	snprintf(
+		path, 256, "%s/%s/%016lx",
+		HCacheDir.c_str(), subdir, qhs.qh);
+
+	found = stat(path, &s) == 0;
+	if (found && s.st_size == 0) {
+		/* seen this twice; better save the whole thing */
+		writeSAT(qhs);
+	}
+
+	return found;
+}
+
+void QHSDir::saveSAT(const QHSEntry& qhs)
+{
+	const char	*subdir;
+	char		path[256];
+	FILE		*f;
+
+	/* dump to corresponding SAT directory */
+	subdir = (qhs.isSAT) ? "sat" : "unsat";
+	snprintf(
+		path, 256, "%s/%s/%016lx",
+		HCacheDir.c_str(), subdir, qhs.qh);
+	f = fopen(path, "w");
+	if (f != NULL) fclose(f);
+}
+
+void QHSDir::writeSAT(const QHSEntry& qhs)
+{
+	const char	*subdir;
+	char		path[256], path2[256];
+
+	/* dump to corresponding SAT directory */
+	/* XXX: how to handle too-big queries? */
+	subdir = (qhs.isSAT) ? "sat" : "unsat";
+	snprintf(
+		path, 256, "%s/%s/%016lx.x",
+		HCacheDir.c_str(), subdir, qhs.qh);
+	SMTPrinter::dumpToFile(qhs.q, path);
+
+	snprintf(path2, 256, "%s/%s/%016lx", HCacheDir.c_str(),subdir,qhs.qh);
+	GZip::gzipFile(path, path2);
+}
+
+
+bool HashSolver::lookup(const Query& q, bool isSAT)
+{
 	if (isSAT && sat_hashes.count(cur_hash))
 		return true;
 
 	if (!isSAT && unsat_hashes.count(cur_hash))
 		return true;
 
-	subdir = (isSAT) ? "sat" : "unsat";
-	snprintf(
-		path, 256, "%s/%s/%016lx",
-		HCacheDir.c_str(), subdir, cur_hash);
-
-	found = stat(path, &s) == 0;
-	if (found && s.st_size == 0) {
-		/* seen this twice; better save the whole thing */
-		writeSAT(q, cur_hash, isSAT);
-	}
-
-	return found;
+	return qstore->lookup(QHSEntry(q, cur_hash, isSAT));
 }
+
 
 bool HashSolver::computeSat(const Query& q)
 {
@@ -83,64 +166,25 @@ bool HashSolver::computeSatMiss(const Query& q)
 	return isSAT;
 }
 
+
 void HashSolver::saveSAT(const Query& q, bool isSAT)
 {
-	miss_queue.push_back(new MissEntry(q, cur_hash, isSAT));
+	qstore->saveSAT(QHSEntry(q, cur_hash, isSAT));
 	/* XXX */
-	commitMisses();
+	//miss_queue.push_back(new QHSEntry(q, cur_hash, isSAT));
+	//commitMisses();
 }
 
 void HashSolver::commitMisses(void)
 {
+	assert (0 == 1 && "XXX");
+#if 0
 	foreach (it, miss_queue.begin(), miss_queue.end()) {
-		touchSAT(*(*it));
+		qstore->saveSAT(*(*it));
 		delete (*it);
 	}
 	miss_queue.clear();
-}
-
-void HashSolver::writeSAT(const MissEntry& me)
-{ writeSAT(me.q, me.qh, me.isSAT); }
-
-void HashSolver::touchSAT(const MissEntry& me)
-{ touchSAT(me.q, me.qh, me.isSAT); }
-
-void HashSolver::touchSAT(
-	const Query	&q,
-	Expr::Hash	qh,
-	bool		isSAT)
-{
-	const char	*subdir;
-	char		path[256];
-	FILE		*f;
-
-	/* dump to corresponding SAT directory */
-	subdir = (isSAT) ? "sat" : "unsat";
-	snprintf(
-		path, 256, "%s/%s/%016lx",
-		HCacheDir.c_str(), subdir, qh);
-	f = fopen(path, "w");
-	if (f != NULL) fclose(f);
-}
-
-void HashSolver::writeSAT(
-	const Query	&q,
-	Expr::Hash	qh,
-	bool		isSAT)
-{
-	const char	*subdir;
-	char		path[256], path2[256];
-
-	/* dump to corresponding SAT directory */
-	/* XXX: how to handle too-big queries? */
-	subdir = (isSAT) ? "sat" : "unsat";
-	snprintf(
-		path, 256, "%s/%s/%016lx.x",
-		HCacheDir.c_str(), subdir, qh);
-	SMTPrinter::dumpToFile(q, path);
-
-	snprintf(path2, 256, "%s/%s/%016lx", HCacheDir.c_str(), subdir, qh);
-	GZip::gzipFile(path, path2);
+#endif
 }
 
 Solver::Validity HashSolver::computeValidity(const Query& q)
@@ -164,12 +208,12 @@ bool HashSolver::getCachedAssignment(const Query& q, Assignment& a_out)
 	cur_q = &q;
 	cur_hash = qhash->hash(q);
 	q_loaded = false;
-	
+
 	a = loadCachedAssignment(a_out.getObjectVector());
 	if (a == NULL) return false;
 
 	if (isMatch(a) == false) goto err;
-	
+
 	a_out = *a;
 	delete a;
 	return true;
@@ -235,18 +279,29 @@ HashSolver::HashSolver(Solver* s, QueryHash* in_qhash)
 , qhash(in_qhash)
 , cur_q(NULL)
 {
-	mkdir(HCacheDir.c_str(), 0770);
-	mkdir((HCacheDir + "/sat").c_str(), 0770);
-	mkdir((HCacheDir + "/unsat").c_str(), 0770);
-	mkdir((HCacheDir + "/solution").c_str(), 0770);
+	if (HCacheSink == false) {
+		if (HCacheFDir.size())
+			qstore = QHSFile::create(
+				HCacheFDir.c_str(),
+				HCachePendingDir.c_str());
+		else
+			qstore = QHSDir::create();
+	} else {
+		assert (HCacheFDir.size() && HCacheDir.size());
+		qstore = new QHSSink(
+			QHSDir::create(),
+			QHSFile::create(
+				HCacheFDir.c_str(),
+				HCachePendingDir.c_str()));
+	}
 
+	assert (qstore != NULL);
 	assert (qhash);
+	mkdir((HCacheDir + "/solution").c_str(), 0770);
 }
 
 HashSolver::~HashSolver()
 {
-	std::cerr
-		<< "HashSolver: Hits = " << hits
-		<< ". Misses = " << misses << '\n';
+	delete qstore;
 	delete qhash;
 }
