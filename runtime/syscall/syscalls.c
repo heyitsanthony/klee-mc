@@ -1158,7 +1158,9 @@ void* sc_enter(void* regfile, void* jmpptr)
 		}
 
 		/* check strings for symbolic / tainted data */
-		if (file_path_has_sym(GET_ARG0_PTR(regfile))) {
+		if (	GET_ARG0_PTR(regfile) && 
+			file_path_has_sym(GET_ARG0_PTR(regfile)))
+		{
 			klee_report_error(
 				__FILE__,__LINE__,
 				"Symbolic exec filepath",
@@ -1167,7 +1169,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 		argv = GET_ARG1_PTR(regfile);
 		for (i = 0; argv[i] != NULL; i++) {
-			if (file_path_has_sym(argv[i])) {
+			if (argv[i] && file_path_has_sym(argv[i])) {
 				klee_report_error(
 				__FILE__,__LINE__,
 				"Symbolic exec argv",
@@ -1282,6 +1284,16 @@ void* sc_enter(void* regfile, void* jmpptr)
 			break;
 		}
 		make_sym(GET_ARG2(regfile), GET_ARG3(regfile), "getxattr");
+		sc_ret_or(sc_new_regs(regfile), -1, GET_ARG3(regfile));
+		break;
+
+	case SYS_gettimeofday:
+		if (GET_ARG0_PTR(regfile) == NULL) {
+			sc_ret_v(regfile, -1);
+			break;
+		}
+
+		make_sym(GET_ARG0(regfile), sizeof(struct timeval), "timeofday");
 		sc_ret_or(sc_new_regs(regfile), -1, GET_ARG3(regfile));
 		break;
 
