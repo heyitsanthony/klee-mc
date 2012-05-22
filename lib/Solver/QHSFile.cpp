@@ -29,7 +29,7 @@ QHSFile::HashFile* QHSFile::HashFile::create(const char* fname)
 QHSFile::PendingFile* QHSFile::PendingFile::create(const char* fname)
 {
 	FILE	*f;
-	f = fopen(fname, "w+");
+	f = fopen(fname, "a+");
 	if (f == NULL) return NULL;
 	return new PendingFile(f);
 }
