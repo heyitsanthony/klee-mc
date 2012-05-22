@@ -87,7 +87,10 @@ bool QHSDir::lookup(const QHSEntry& qhs)
 	found = stat(path, &s) == 0;
 	if (found && s.st_size == 0) {
 		/* seen this twice; better save the whole thing */
-		writeSAT(qhs);
+
+		/* if we're sinking into a file cache, no need to save here */
+		if (!HCacheSink)
+			writeSAT(qhs);
 	}
 
 	return found;
