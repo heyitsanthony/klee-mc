@@ -16,34 +16,40 @@
 #include "klee/Expr.h"
 #include "klee/Internal/ADT/ImmutableMap.h"
 
-namespace klee {
-  class ExecutionState;
-  class MemoryObject;
-  class ObjectState;
-  class TimingSolver;
+namespace klee
+{
+class ExecutionState;
+class MemoryObject;
+class ObjectState;
+class TimingSolver;
 
-  template<class T> class ref;
+template<class T> class ref;
 
 #define op_mo(x)	x.first
 #define op_os(x)	x.second
-  typedef std::pair<const MemoryObject*, const ObjectState*> ObjectPair;
+typedef std::pair<const MemoryObject*, const ObjectState*> ObjectPair;
 
-  typedef std::vector<ObjectPair> ResolutionList;
+typedef std::vector<ObjectPair> ResolutionList;
 
-  /// Function object ordering MemoryObject's by address.
-  struct MemoryObjectLT {
-    bool operator()(const MemoryObject *a, const MemoryObject *b) const;
-  };
+/// Function object ordering MemoryObject's by address.
+struct MemoryObjectLT
+{ bool operator()(const MemoryObject *a, const MemoryObject *b) const; };
 
-  typedef ImmutableMap<const MemoryObject*, ObjectHolder, MemoryObjectLT> MemoryMap;
-  typedef MemoryMap::iterator		MMIter;
+typedef ImmutableMap<
+	const MemoryObject*, ObjectHolder, MemoryObjectLT> MemoryMap;
+typedef MemoryMap::iterator		MMIter;
 
-class AddressSpace {
+class AddressSpace
+{
 	friend class ExecutionState;
 	friend class ObjectState;
 private:
 	/// Epoch counter used to control ownership of objects.
 	mutable unsigned cowKey;
+	/**
+	 * Counts the number of modifications made to the AS since fork.
+	 * This is primarily used by the TLB to track changes. */
+	unsigned	generation;
 
 	const MemoryObject* last_mo;
 
@@ -58,11 +64,11 @@ private:
 	///
 	/// \invariant forall o in objects, o->copyOnWriteOwner <= cowKey
 	MemoryMap objects;
-
 public:
-	AddressSpace() : cowKey(1), last_mo(NULL) {}
+	AddressSpace() : cowKey(1), generation(0), last_mo(NULL) {}
 	AddressSpace(const AddressSpace &b)
 	: cowKey(++b.cowKey)
+	, generation(0)
 	, last_mo(NULL)
 	, objects(b.objects)
 	{ }
@@ -97,16 +103,13 @@ public:
 		unsigned maxResolutions=0);
 
 	ref<Expr> getOOBCond(ref<Expr>& symptr) const;
-
 	unsigned hash(void) const;
-
+	unsigned getGeneration(void) const { return generation; }
 private:
 	/// Add a binding to the address space.
 	void bindObject(const MemoryObject *mo, ObjectState *os);
 
-	bool lookupGuess(
-		uint64_t		example,
-		const MemoryObject*	&mo);
+	bool lookupGuess(uint64_t example, const MemoryObject* &mo);
 
 	bool testInBoundPointer(
 		ExecutionState &state,

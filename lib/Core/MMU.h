@@ -2,6 +2,7 @@
 #define MMU_H
 
 #include "Memory.h"
+#include "TLB.h"
 
 namespace klee
 {
@@ -72,6 +73,12 @@ protected:
 		ref<Expr> address,
 		Expr::Width type);
 
+	MMU::MemOpRes memOpResolveConst(
+		ExecutionState& state, uint64_t addr, Expr::Width type);
+
+	MMU::MemOpRes memOpResolveExpr(
+		ExecutionState& state, ref<Expr> addr, Expr::Width type);
+
 	bool memOpFast(ExecutionState& state, MemOp& mop);
 
 	void writeToMemRes(
@@ -103,6 +110,7 @@ protected:
 private:
 	Executor		&exe;
 	static uint64_t		query_c;
+	TLB			tlb;
 };
 
 }

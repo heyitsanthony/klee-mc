@@ -64,7 +64,7 @@ Function* KModuleVex::getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new)
 	Function	*f;
 	VexSB		*vsb;
 
-	if (	guest_addr == 0 ||
+	if (	guest_addr < 0x1000 ||
 		((guest_addr > 0x7fffffffffffULL) &&
 		((guest_addr & 0xfffffffffffff000) != 0xffffffffff600000)) ||
 		guest_addr == 0xffffffff)

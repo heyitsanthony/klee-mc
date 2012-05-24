@@ -69,6 +69,15 @@ public:
   ref<Expr> getOffsetExpr(ref<Expr> pointer) const
   { return SubExpr::create(pointer, getBaseExpr()); }
 
+  int64_t getOffset(uint64_t p) const { return (int64_t)(p - address); }
+  bool isInBounds(uint64_t p, unsigned bytes) const
+  {
+  	int64_t	off;
+  	if (bytes > size) return false;
+	off = getOffset(p);
+	if (off < 0) return false;
+	return (off < (size - bytes + 1));
+  }
   
   ref<Expr> getBoundsCheckPointer(ref<Expr> pointer, unsigned bytes) const
   { return getBoundsCheckOffset(getOffsetExpr(pointer), bytes); }

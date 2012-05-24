@@ -26,7 +26,7 @@ namespace {
 	cl::opt<bool>
 	ContiguousOffsetResolution(
 		"contig-off-resolution",
-		cl::desc("Resolve contiguous offsets, not entire address space."),
+		cl::desc("Scan only contiguous offsets on ptr resolution."),
 		cl::init(false));
 
 	cl::opt<bool> RandomizePtrAddend(
@@ -45,6 +45,7 @@ void AddressSpace::unbindObject(const MemoryObject *mo)
 		last_mo = NULL;
 
 	objects = objects.remove(mo);
+	generation++;
 }
 
 const ObjectState *AddressSpace::findObject(const MemoryObject *mo) const
@@ -63,6 +64,8 @@ void AddressSpace::bindObject(const MemoryObject *mo, ObjectState *os)
 	}
 
 	objects = objects.replace(std::make_pair(mo, os));
+	generation++;
+
 	if (mo == last_mo)
 		last_mo = NULL;
 }
@@ -81,6 +84,8 @@ ObjectState *AddressSpace::getWriteable(
 	n = new ObjectState(*os);
 	n->copyOnWriteOwner = cowKey;
 	objects = objects.replace(std::make_pair(mo, n));
+	generation++;
+
 	return n;
 }
 

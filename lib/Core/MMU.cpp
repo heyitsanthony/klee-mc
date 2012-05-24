@@ -319,7 +319,58 @@ bool MMU::memOpByByte(ExecutionState& state, MemOp& mop)
 	return true;
 }
 
+MMU::MemOpRes MMU::memOpResolveConst(
+	ExecutionState& state,
+	uint64_t addr,
+	Expr::Width type)
+{
+	MemOpRes	ret;
+	unsigned	bytes;
+	bool		tlb_hit;
+
+	bytes = Expr::getMinBytesForWidth(type);
+	ret.rc = true;
+	ret.usable = false;
+	ret.op.first = NULL;
+
+	tlb_hit = tlb.get(state, addr, ret.op);
+	if (!tlb_hit || !ret.op.first->isInBounds(addr, bytes)) {
+		bool	in_bounds;
+
+		if (state.addressSpace.resolveOne(addr, ret.op) == false) {
+			/* no feasible objects */
+			return ret;
+		}
+		tlb.put(state, ret.op);
+
+		in_bounds = ret.op.first->isInBounds(addr, bytes);
+		if (in_bounds == false) {
+			/* not in bounds */
+			return ret;
+		}
+	}
+
+	ret.mo = ret.op.first;
+	ret.os = ret.op.second;
+	ret.offset = ConstantExpr::create(
+		ret.mo->getOffset(addr),
+		Context::get().getPointerWidth());
+	ret.usable = true;
+	return ret;
+}
+
 MMU::MemOpRes MMU::memOpResolve(
+	ExecutionState& state,
+	ref<Expr> addr,
+	Expr::Width type)
+{
+	if (const ConstantExpr* CE = dyn_cast<ConstantExpr>(addr))
+		return memOpResolveConst(state, CE->getZExtValue(), type);
+
+	return memOpResolveExpr(state, addr, type);
+}
+
+MMU::MemOpRes MMU::memOpResolveExpr(
 	ExecutionState& state,
 	ref<Expr> addr,
 	Expr::Width type)
