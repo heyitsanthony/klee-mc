@@ -8,7 +8,6 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/uio.h>
-#include <sys/mman.h>
 #include <sys/time.h>
 #include <sys/times.h>
 #include <sys/resource.h>
@@ -22,23 +21,12 @@
 #include <grp.h>
 
 #include "file.h"
+#include "mem.h"
 #include "syscalls.h"
 #include "concrete_fd.h"
 #include "breadcrumb.h"
 
 //#define USE_SYS_FAILURE
-
-void* kmc_sc_regs(void*);
-void kmc_sc_bad(unsigned int);
-void kmc_free_run(uint64_t addr, uint64_t num_bytes);
-void kmc_exit(uint64_t);
-void kmc_make_range_symbolic(uint64_t, uint64_t, const char*);
-void* kmc_alloc_aligned(uint64_t, const char* name);
-
-/* klee-mc fiddles with these on init */
-uint64_t	heap_begin;
-uint64_t	 heap_end;
-static void	*last_brk = 0;
 
 // arg0, arg1, ...
 // %rdi, %rsi, %rdx, %r10, %r8 and %r9a
@@ -78,120 +66,6 @@ void sc_ret_range(void* regfile, int64_t lo, int64_t hi)
 	}
 	rax = GET_SYSRET_S(regfile);
 	klee_assume(rax >= (ARCH_SIGN_CAST)lo && rax <= (ARCH_SIGN_CAST)hi);
-}
-
-/* IMPORTANT: this will just *allocate* some data,
- * if you want symbolic, do it after calling this */
-static void* sc_mmap_addr(void* regfile, void* addr, uint64_t len)
-{
-	int	is_himem;
-
-	is_himem = (((intptr_t)addr & ~0x7fffffffffffULL) != 0);
-	if (!is_himem) {
-		/* not highmem, use if we've got it.. */
-		addr = (void*)concretize_u64(GET_ARG0(regfile));
-		klee_print_expr("non-highmem define fixed addr", addr);
-		klee_define_fixed_object(addr, len);
-		return addr;
-	}
-
-	/* can never satisfy a hi-mem request */
-	if (GET_ARG2(regfile) & MAP_FIXED) {
-		/* can never fixed map hi-mem */
-		return MAP_FAILED;
-	}
-
-	/* toss back whatever */
-	addr = kmc_alloc_aligned(len, "mmap");
-	if (addr == NULL) addr = MAP_FAILED;
-	return addr;
-}
-
-static void* sc_mmap_anon(void* regfile)
-{
-	void		*addr;
-	uint64_t	len;
-
-	len = GET_ARG1(regfile);
-	if (len <= 4096)
-		len = concretize_u64(GET_ARG1(regfile));
-	else if (len <= 16*1024)
-		len = concretize_u64(GET_ARG1(regfile));
-	else
-		len = concretize_u64(GET_ARG1(regfile));
-
-	/* mapping may be placed anywhere */
-	if (GET_ARG0(regfile) == 0) {
-		addr = kmc_alloc_aligned(len, "mmap");
-		if (addr == NULL) addr = MAP_FAILED;
-		return addr;
-	}
-
-	/* mapping has a deisred location */
-	addr = sc_mmap_addr(regfile, (void*)GET_ARG0(regfile), len);
-	return addr;
-}
-
-// return address of mmap
-static void* sc_mmap_fd(void* regfile)
-{
-	void		*ret_addr;
-	uint64_t	len;
-
-	len = GET_ARG1(regfile);
-	/* TODO, how should this be split? */
-	if (len <= 4096) {
-		len = concretize_u64(len);
-	} else if (len <= 8192) {
-		len = concretize_u64(len);
-	} else if (len <= (16*1024)) {
-		len = concretize_u64(len);
-	} else {
-		len = concretize_u64(len);
-	}
-
-	ret_addr = sc_mmap_anon(regfile);
-	if (ret_addr == MAP_FAILED) return ret_addr;
-
-	make_sym((uint64_t)ret_addr, len, "mmap_fd");
-	return ret_addr;
-}
-
-static void* sc_mmap(void* regfile)
-{
-	void		*addr;
-	uint64_t	len;
-	void		*new_regs;
-
-	len = GET_ARG1(regfile);
-	new_regs = sc_new_regs(regfile);
-
-	if (len >= (uintptr_t)0x10000000 || (int64_t)len <= 0) {
-		addr = MAP_FAILED;
-	} else if (((int)GET_ARG4(regfile)) != -1) {
-		/* file descriptor mmap-- things need to be symbolic */
-		addr = sc_mmap_fd(regfile);
-	} else if ((GET_ARG3(regfile) & MAP_ANONYMOUS) == 0) {
-		/* !fd && !anon => WTF */
-		addr = MAP_FAILED;
-	} else {
-		addr = sc_mmap_anon(regfile);
-	}
-
-	sc_ret_v_new(new_regs, (uint64_t)addr);
-	return new_regs;
-}
-
-static void sc_munmap(void* regfile)
-{
-	uint64_t	addr, num_bytes;
-
-	addr = klee_get_value(GET_ARG0(regfile));
-	num_bytes = klee_get_value(GET_ARG1(regfile));
-	kmc_free_run(addr, num_bytes);
-
-	/* always succeeds, don't bother with new regctx */
-	sc_ret_v(regfile, 0);
 }
 
 #define UNIMPL_SC(x)						\
@@ -324,7 +198,7 @@ static void sc_klee(void* regfile)
 void* sc_enter(void* regfile, void* jmpptr)
 {
 	struct sc_pkt		sc;
-	void			*new_regs;
+	void			*new_regs = NULL;
 
 	sc_clear(&sc);
 	sc.regfile = regfile;
@@ -372,53 +246,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	case SYS_listen:
 		sc_ret_v(regfile, 0);
-		break;
-
-	case SYS_brk: {
-		// ptrdiff_t grow_len;
-
-		klee_warning("Don't grow brks! This breaks static linking!");
-		if (last_brk == 0)
-			last_brk = (void*)heap_end;
-		sc_ret_v(regfile, (uintptr_t)last_brk);
-		break;
-	}
-#if 0
-		new_regs = sc_new_regs(regfile);
-
-		/* error case -- linux returns current break */
-		if (GET_SYSRET(new_regs) == (uintptr_t)last_brk) {
-			sc_ret_v_new(new_regs, last_brk);
-			break;
-		}
-
-		/* don't forget:
-		 * heap grows forward into a stack that grows down! */
-		grow_len = GET_ARG0(regfile) - (intptr_t)last_brk;
-
-		if (grow_len == 0) {
-			/* request nothing */
-			klee_warning("Program requesting empty break? Weird.");
-		} else if (grow_len < 0) {
-			/* deallocate */
-			uint64_t	dealloc_base;
-
-			dealloc_base = (intptr_t)last_brk + grow_len;
-			num_bytes = -grow_len;
-			kmc_free_run(dealloc_base, num_bytes);
-
-			last_brk = (void*)dealloc_base;
-		} else {
-			/* grow */
-			last_brk
-		}
-
-		sc_ret_v_new(new_regs, last_brk);
-		break;
-#endif
-	case SYS_munmap:
-		sc_munmap(regfile);
-		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
 		break;
 	case SYS_write:
 #ifdef USE_SYS_FAILURE
@@ -911,19 +738,37 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_or(sc_new_regs(regfile), -1, 0);
 		break;
 
-#if GUEST_ARCH_X86
-	case X86_SYS_mmap2:
-		GET_ARG5(regfile) *= 4096;
-#endif
-#if GUEST_ARCH_ARM
-	case ARM_SYS_mmap2:
-		GET_ARG5(regfile) *= 4096;
-#endif
-	case SYS_mmap:
-		new_regs = sc_mmap(regfile);
+
+	case SYS_brk: {
+		new_regs = sc_brk(regfile);
+		break;
+	}
+	case SYS_munmap:
+		sc_munmap(regfile);
+		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
+		break;
+
+	case ARCH_SYS_MMAP2:
+		/* XXX: NOTE: mmap2 means pgoff is in pages, not bytes. OOPS */
+	case SYS_mmap: {
+		uint64_t len = GET_ARG1(regfile);
+		if (sc.sys_nr == ARCH_SYS_MMAP2) {
+			// klee_print_expr("DONT BOOST MMAP2", len);
+			// len *= 4096;
+		}
+
+		if (GET_ARG1(regfile) == 0) {
+			sc_ret_v(regfile, ~0);
+			break;
+		}
+		if (new_regs == NULL)
+			new_regs = sc_mmap(regfile, len);
+
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
 		sc_breadcrumb_commit(&sc, GET_SYSRET(new_regs));
 		goto already_logged;
+	}
+
 	case SYS_socket:
 		klee_warning_once("phony socket call");
 		sc_ret_range(sc_new_regs(regfile), -1, 4096);
@@ -1293,8 +1138,14 @@ void* sc_enter(void* regfile, void* jmpptr)
 			break;
 		}
 
-		make_sym(GET_ARG0(regfile), sizeof(struct timeval), "timeofday");
-		sc_ret_or(sc_new_regs(regfile), -1, GET_ARG3(regfile));
+		new_regs = sc_new_regs(regfile);
+#if defined(GUEST_ARCH_X86) || defined(GUEST_ARCH_ARM)
+#define TIMEVAL_BYTES	8
+#else
+#define TIMEVAL_BYTES	sizeof(struct timeval)
+#endif
+		make_sym(GET_ARG0(regfile), TIMEVAL_BYTES, "timeofday");
+		sc_ret_or(new_regs, 0, -1);
 		break;
 
 	case ARCH_SYS_UNSUPP:

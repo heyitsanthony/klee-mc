@@ -1,12 +1,12 @@
-/* lollercycle
- * PhD time saving trick:
- * Use macro replacement to generate the table! YES! */
+/* XXX they took out the sweet macros */
+#if 0
 static const char* sysname_tab[] =
 {
 //#define __SYSCALL(a,b) [a] = #b,
 #define __SYSCALL(a,b) #b ,
 #include <asm/unistd.h>
 };
+#endif
 #define SYSNAME_MAX	sizeof(sysname_tab)/sizeof(const char*)
 
 #include <klee/breadcrumb.h>
@@ -189,12 +189,14 @@ void BCSyscall::consumeOps(KTestStream* kts, Crumbs* crumbs)
 {
 	/* read new register */
 	if (bc_sc_is_newregs(getBCS())) {
+		unsigned	br;
 		const KTestObject* kto = kts->nextObject();
 		assert (kto);
-		if (kto->numBytes != 633) {
+		br = kto->numBytes;
+		if (br != 633 && br != 345) {
 			fprintf(stderr, "GOT %d BYTES. WHOOPS!\n", kto->numBytes);
 		}
-		assert (kto->numBytes == 633);
+		assert (br == 633 || br == 345 );
 	}
 
 	/* read in any objects written out */
@@ -237,8 +239,8 @@ unsigned int BCSyscall::getKTestObjs(void) const
 
 const char* get_sysnr_str(unsigned int n)
 {
-	if (n < SYSNAME_MAX)
-		return sysname_tab[n];
+//	if (n < SYSNAME_MAX)
+//		return sysname_tab[n];
 	return NULL;
 }
 
@@ -255,6 +257,7 @@ void BCSyscall::print(std::ostream& os) const
 
 	os << "<flags>" << (void*)getBC()->bc_type_flags << "</flags>\n";
 	os << "<ret>" << (void*)getRet() << "</ret>\n";
+	os << "<opC>" << getBCS()->bcs_op_c << "</opC>\n";
 	os << "<testObjs>" << getKTestObjs() << "</testObjs>\n";
 	os << "</syscall>\n";
 }

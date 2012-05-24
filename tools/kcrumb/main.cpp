@@ -3,6 +3,7 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <assert.h>
 
 #include "klee/breadcrumb.h"
@@ -61,6 +62,19 @@ int main(int argc, char* argv[])
 		fprintf(stderr, "No ktest file at %s\n", fname_ktest);
 		goto done;
 	}
+
+	/* ignore argv objects, if any */
+	if (kts->getKTest()->symArgvs) {
+		do {
+			const KTestObject	*kto;
+
+			kto = kts->peekObject();
+			if (kto == NULL || strcmp(kto->name, "argv"))
+				break;
+			kts->nextObject();
+		} while (1);
+	}
+
 
 	crumbs = Crumbs::create(fname_crumbs);
 	if (crumbs == NULL) {

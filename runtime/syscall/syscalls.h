@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#define ARCH_SYS_MMAP2		0x1000
+
 #ifdef GUEST_ARCH_AMD64
 #include <valgrind/libvex_guest_amd64.h>
 #define GET_SYSRET(x)	((VexGuestAMD64State*)x)->guest_RAX
@@ -28,7 +30,7 @@
 #define GET_ARG5(x)	((VexGuestARMState*)x)->guest_R5
 #define GET_SYSNR(x)	((VexGuestARMState*)x)->guest_R7	/* ARM EABI */
 #define GET_STACK(x)	((VexGuestARMState*)x)->guest_R13
-#define ARM_SYS_mmap2	0x1000
+#define ARM_SYS_mmap2	ARCH_SYS_MMAP2
 #define ARCH_SIGN_CAST	signed
 #elif GUEST_ARCH_X86
 #include <valgrind/libvex_guest_x86.h>
@@ -43,7 +45,7 @@
 #define GET_SYSNR(x)	((VexGuestX86State*)x)->guest_EAX
 #define GET_STACK(x)	((VexGuestX86State*)x)->guest_ESP
 #define ARCH_SIGN_CAST	int32_t
-#define X86_SYS_mmap2	0x1000
+#define X86_SYS_mmap2	ARCH_SYS_MMAP2
 #else
 #error UNKNOWN GUEST ARCH
 #endif
@@ -90,5 +92,13 @@ void sc_ret_v_new(void* regfile, uint64_t v1);
 void make_sym_by_arg(
 	void *regfile, uint64_t arg_num, uint64_t len, const char* name);
 void make_sym(uint64_t addr, uint64_t len, const char* name);
+
+/* ... */
+void* kmc_sc_regs(void*);
+void kmc_sc_bad(unsigned int);
+void kmc_free_run(uint64_t addr, uint64_t num_bytes);
+void kmc_exit(uint64_t);
+void kmc_make_range_symbolic(uint64_t, uint64_t, const char*);
+void* kmc_alloc_aligned(uint64_t, const char* name);
 
 #endif

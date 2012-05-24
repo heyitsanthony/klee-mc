@@ -12,6 +12,7 @@
 extern "C"
 {
 #include "valgrind/libvex_guest_amd64.h"
+#include "valgrind/libvex_guest_x86.h"
 #include "valgrind/libvex_guest_arm.h"
 }
 
@@ -81,6 +82,41 @@ void SyscallSFH::bind(void)
 	SpecialFunctionHandler::bind((HandlerInfo*)&hInfo, NUM_HANDLERS);
 }
 
+static bool isSymRegByte(Arch::Arch a, int i)
+{
+	if (a == Arch::X86_64) {
+		if (i/8	== offsetof(VexGuestAMD64State, guest_RAX)/8 ||
+			i/8  == offsetof(VexGuestAMD64State, guest_RCX)/8 ||
+			i/8 == offsetof(VexGuestAMD64State, guest_R11)/8)
+		{
+			/* ignore rax, rcx, r11 */
+			return true;
+		}
+		return false;
+	}
+
+	if (a == Arch::ARM) {
+		if (i/8 == offsetof(VexGuestARMState, guest_R0)/8) {
+			/* ignore r0 and r1 */
+			return true;
+		}
+		return false;
+	}
+
+	if (a == Arch::I386) {
+		/* leave eax and rdx alone */
+		/* EAX = offset 0 in Vex struct */
+		if (i/4 == offsetof(VexGuestX86State, guest_EAX)/4 ||
+		    i/4 == offsetof(VexGuestX86State, guest_EDX)/4) {
+		    	return true;
+		}
+		return false;
+	}
+
+	assert (0 == 1);
+	return false;
+}
+
 SFH_DEF_HANDLER(SCRegs)
 {
 	Guest			*gs;
@@ -109,34 +145,10 @@ SFH_DEF_HANDLER(SCRegs)
 
 	/* 2. set everything that should be initialized */
 	for (unsigned int i=0; i < sz; i++) {
-		unsigned int	reg_idx;
-
-		reg_idx = i/8;
-		if (gs->getArch() == Arch::X86_64) {
-			if (	reg_idx == offsetof(VexGuestAMD64State, guest_RAX)/8 ||
-				reg_idx == offsetof(VexGuestAMD64State, guest_RCX)/8 ||
-				reg_idx == offsetof(VexGuestAMD64State, guest_R11)/8)
-			{
-				/* ignore rax, rcx, r11 */
-				assert (state_regctx_os->isByteConcrete(i) == false);
-				continue;
-			}
-		} else if (gs->getArch() == Arch::ARM) {
-			if (reg_idx == offsetof(VexGuestARMState, guest_R0)/8) {
-				/* ignore r0 and r1 */
-				assert (state_regctx_os->isByteConcrete(i) == false);
-				continue;
-			}
-		} else if (gs->getArch() == Arch::I386) {
-			/* EAX = offset 0 in Vex struct */
-			if (i < 4) {
-				assert (state_regctx_os->isByteConcrete(i) == false);
-				continue;
-			}
-		} else {
-			assert (0 == 1);
+		if (isSymRegByte(gs->getArch(), i)) {
+			assert (state_regctx_os->isByteConcrete(i) == false);
+			continue;
 		}
-
 		/* copy it by expression */
 		state.write(
 			state_regctx_os,
