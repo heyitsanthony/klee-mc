@@ -58,23 +58,20 @@ namespace {
                         "Print parsed AST nodes from the input file."),
              clEnumValEnd));
 
-  enum BuilderKinds {
-    DefaultBuilder,
-    ConstantFoldingBuilder,
-    SimplifyingBuilder
-  };
-
-  static llvm::cl::opt<BuilderKinds>
+  static llvm::cl::opt<ExprBuilder::BuilderKind>
   BuilderKind("builder",
               llvm::cl::desc("Expression builder:"),
-              llvm::cl::init(DefaultBuilder),
+              llvm::cl::init(ExprBuilder::DefaultBuilder),
               llvm::cl::values(
-              clEnumValN(DefaultBuilder, "default",
-                         "Default expression construction."),
-              clEnumValN(ConstantFoldingBuilder, "constant-folding",
-                         "Fold constant expressions."),
-              clEnumValN(SimplifyingBuilder, "simplify",
-                         "Fold constants and simplify expressions."),
+              clEnumValN(ExprBuilder::DefaultBuilder,
+		"default",
+		"Default expression construction."),
+              clEnumValN(ExprBuilder::ConstantFoldingBuilder,
+		"constant-folding",
+		"Fold constant expressions."),
+              clEnumValN(ExprBuilder::SimplifyingBuilder,
+	      	"simplify",
+		"Fold constants and simplify expressions."),
               clEnumValEnd));
 
   cl::opt<bool>
@@ -339,18 +336,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	ExprBuilder *Builder = createDefaultExprBuilder();
-	switch (BuilderKind) {
-	case DefaultBuilder:
-		break;
-	case ConstantFoldingBuilder:
-		Builder = createConstantFoldingExprBuilder(Builder);
-		break;
-	case SimplifyingBuilder:
-		Builder = createConstantFoldingExprBuilder(Builder);
-		Builder = createSimplifyingExprBuilder(Builder);
-		break;
-	}
+	ExprBuilder *Builder = ExprBuilder::create(BuilderKind);
 
 	switch (ToolAction) {
 	case PrintTokens:

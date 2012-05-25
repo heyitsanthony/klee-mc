@@ -13,7 +13,7 @@
 
 using namespace klee;
 
-extern ExprBuilder* createExprBuilder(void);
+extern ExprBuilder::BuilderKind	BuilderKind;
 
 class ConstCounter : public ExprConstVisitor
 {
@@ -81,7 +81,7 @@ private:
 	const Array	*arr;
 };
 
-bool DBScan::queryKnockout(const ExprRule* er, Solver* s)
+bool DBScan::isKnockoutValid(const ExprRule* er, Solver* s)
 {
 	KnockOut	ko(arr.get());
 	ref<Expr>	ko_expr, to_expr;
@@ -107,19 +107,17 @@ bool DBScan::queryKnockout(const ExprRule* er, Solver* s)
 	return true;
 }
 
-extern ExprBuilder* createExprBuilder(void);
-
-
-DBScan::DBScan(void)
+DBScan::DBScan(Solver* _s)
+: s(_s)
 {
 	arr = Array::create("ko_arr", 4096);
-	rb = new RuleBuilder(createExprBuilder());
+	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
 }
 
 DBScan::~DBScan() { delete rb; }
 
 
-void DBScan::loadKnockouts(komap_ty& ko_map)
+void DBScan::loadKnockoutRulesFromBuilder(komap_ty& ko_map)
 {
 	KnockOut	ko(arr.get());
 
@@ -140,13 +138,13 @@ void DBScan::loadKnockouts(komap_ty& ko_map)
 }
 
 
-void DBScan::punchout(Solver* s)
+void DBScan::punchout(void)
 {
 	komap_ty			ko_map;
 	std::map<unsigned, unsigned>	ko_c;
 	unsigned			match_c, rule_match_c;
 
-	loadKnockouts(ko_map);
+	loadKnockoutRulesFromBuilder(ko_map);
 
 	rule_match_c = match_c = 0;
 	foreach (it, ko_map.begin(), ko_map.end()) {
@@ -169,7 +167,7 @@ void DBScan::punchout(Solver* s)
 
 
 
-		if (queryKnockout(er, s) == false)
+		if (isKnockoutValid(er, s) == false)
 			continue;
 
 		std::cerr
@@ -191,15 +189,15 @@ void DBScan::punchout(Solver* s)
 }
 
 #if 0
-		ConstCounter	cc;
-		cc.visit(from_expr);
-		std::cerr << "FROM-EXPR: " << from_expr << '\n';
-		foreach (it2, cc.begin(), cc.end()) {
-			ref<Expr>		is_ugt_bound;
-			ref<ConstantExpr>	e;
+ConstCounter	cc;
+cc.visit(from_expr);
+std::cerr << "FROM-EXPR: " << from_expr << '\n';
+foreach (it2, cc.begin(), cc.end()) {
+	ref<Expr>		is_ugt_bound;
+	ref<ConstantExpr>	e;
 
-			std::cerr
-				<< it2->first << "[" << it2->first->getWidth()
-				<< "]: " << it2->second << '\n';
-		}
+	std::cerr
+		<< it2->first << "[" << it2->first->getWidth()
+		<< "]: " << it2->second << '\n';
+}
 #endif

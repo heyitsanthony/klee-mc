@@ -12,7 +12,8 @@
 
 #include "Expr.h"
 
-namespace klee {
+namespace klee
+{
 /// ExprBuilder - Base expression builder class.
 class ExprBuilder
 {
@@ -20,6 +21,17 @@ protected:
 	ExprBuilder();
 
 public:
+	enum BuilderKind {
+		DefaultBuilder,
+		ConstantFoldingBuilder,
+		SimplifyingBuilder,
+		HandOptBuilder,
+		ExtraOptsBuilder,
+		RuleBuilder
+	};
+
+	static ExprBuilder* create(BuilderKind);
+
 	virtual ~ExprBuilder();
 
 	// Expressions

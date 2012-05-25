@@ -17,7 +17,7 @@ include $(LEVEL)/Makefile.common
 
 CFLAGS += -I$(VEXLLVM_ROOT)/src/
 CXXFLAGS += -I$(VEXLLVM_ROOT)/src/
-LDFLAGS += -Wl,-Ttext-segment=0x30000000
+LDFLAGS += -Wl,-Ttext-segment=0x70000000
 LIBS += -lrt $(SOLVERLIBS)
 LIBS += $(shell llvm-config --libfiles $(X_LINK_COMPONENTS))
 ObjectsO += $(VEXLLVM_ROOT)/bin/vexllvm.a $(VEXLIB_ROOT)/libvex-amd64-linux.a

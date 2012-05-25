@@ -15,19 +15,20 @@ class Array;
 class DBScan
 {
 public:
-	DBScan();
+	DBScan(Solver*);
 	virtual ~DBScan();
-	void punchout(Solver* s);
+	void punchout(void);
 
 private:
 	typedef std::map<ref<Expr>, std::list<const ExprRule*> >
 		komap_ty;
 
-	bool queryKnockout(const ExprRule* er, Solver *s);
-	void loadKnockouts(komap_ty& ko_map);
+	bool isKnockoutValid(const ExprRule* er, Solver *s);
+	void loadKnockoutRulesFromBuilder(komap_ty& ko_map);
 
 	ref<Array>	arr;
 	RuleBuilder	*rb;
+	Solver		*s;
 };
 };
 #endif

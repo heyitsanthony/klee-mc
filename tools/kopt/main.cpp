@@ -14,19 +14,17 @@
 #include "klee/Solver.h"
 #include "klee/util/ExprUtil.h"
 #include "klee/util/Assignment.h"
-#include "klee/Internal/ADT/RNG.h"
-#include "klee/Internal/Support/Timer.h"
 
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/system_error.h"
 
-#include "ExprGen.h"
-
 using namespace llvm;
 using namespace klee;
 using namespace klee::expr;
+
+ExprBuilder::BuilderKind	BuilderKind;
 
 namespace llvm
 {
@@ -79,12 +77,6 @@ namespace llvm
 		cl::desc("Use a rule builder to try to minimize rule"));
 
 	cl::opt<bool>
-	UseBin(
-		"use-bin",
-		cl::desc("Use binary rule for input."),
-		cl::init(false));
-
-	cl::opt<bool>
 	DumpBinRule(
 		"dump-bin",
 		cl::desc("Dump rule in binary format."),
@@ -109,66 +101,30 @@ namespace llvm
 		cl::init(false));
 
 
-	enum BuilderKinds {
-		DefaultBuilder,
-		ConstantFoldingBuilder,
-		SimplifyingBuilder,
-		HandOptBuilder,
-		ExtraOptsBuilder
-	};
-
-	static cl::opt<BuilderKinds>
-	BuilderKind("builder",
+	static cl::opt<ExprBuilder::BuilderKind,true>
+	BuilderKindProxy("builder",
 		cl::desc("Expression builder:"),
-		cl::init(SimplifyingBuilder),
+		cl::location(BuilderKind),
+		cl::init(ExprBuilder::SimplifyingBuilder),
 		cl::values(
-			clEnumValN(DefaultBuilder, "default",
+			clEnumValN(ExprBuilder::DefaultBuilder, "default",
 			"Default expression construction."),
-			clEnumValN(ConstantFoldingBuilder, "constant-folding",
+			clEnumValN(ExprBuilder::ConstantFoldingBuilder,
+			"constant-folding",
 			"Fold constant expressions."),
-			clEnumValN(SimplifyingBuilder, "simplify",
+			clEnumValN(ExprBuilder::SimplifyingBuilder, "simplify",
 			"Fold constants and simplify expressions."),
-			clEnumValN(HandOptBuilder, "handopt",
+			clEnumValN(ExprBuilder::HandOptBuilder, "handopt",
 			"Hand-optimized builder."),
-			clEnumValN(ExtraOptsBuilder, "extraopt",
+			clEnumValN(ExprBuilder::ExtraOptsBuilder, "extraopt",
 			"Extra Hand-optimized builder."),
 			clEnumValEnd));
 }
 
-static bool checkRule(const ExprRule* er, Solver* s);
 
-ExprBuilder* createExprBuilder(void)
-{
-	ExprBuilder *Builder = createDefaultExprBuilder();
-	switch (BuilderKind) {
-	case DefaultBuilder:
-		break;
-	case ConstantFoldingBuilder:
-		Builder = createConstantFoldingExprBuilder(Builder);
-		break;
-	case SimplifyingBuilder:
-		Builder = createConstantFoldingExprBuilder(Builder);
-		Builder = createSimplifyingExprBuilder(Builder);
-		break;
-	case HandOptBuilder:
-		delete Builder;
-		Builder = new OptBuilder();
-		break;
-	case ExtraOptsBuilder:
-		delete Builder;
-		Builder = new ExtraOptBuilder();
-		break;
-	}
-
-	return Builder;
-}
-
-static ExprRule* loadRule(const char *path)
-{
-	if (UseBin)
-		return ExprRule::loadBinaryRule(path);
-	return ExprRule::loadPrettyRule(path);
-}
+void xtiveBRule(ExprBuilder *eb, Solver* s);
+bool checkRule(const ExprRule* er, Solver* s);
+void benchmarkRules(ExprBuilder *eb, Solver* s);
 
 /*
 (= (ite (bvult
@@ -267,8 +223,8 @@ static void getEquivalence(ref<Expr> e, ref<Expr>& lhs, ref<Expr>& rhs)
 
 static bool checkDup(ExprBuilder* eb, Solver* s)
 {
-	ExprRule	*er = loadRule(InputFile.c_str());
-	RuleBuilder	*rb = new RuleBuilder(createExprBuilder());
+	ExprRule	*er = ExprRule::loadRule(InputFile.c_str());
+	RuleBuilder	*rb;
 	ExprBuilder	*old_eb;
 	ref<Expr>	old_expr, rb_expr;
 	bool		ret;
@@ -276,6 +232,7 @@ static bool checkDup(ExprBuilder* eb, Solver* s)
 	if (!er)
 		return false;
 
+	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
 	old_expr = er->materialize();
 	old_eb = Expr::setBuilder(rb);
 	rb_expr = er->materialize();
@@ -299,7 +256,7 @@ static bool checkDup(ExprBuilder* eb, Solver* s)
 	return ret;
 }
 
-static bool checkRule(const ExprRule* er, Solver* s)
+bool checkRule(const ExprRule* er, Solver* s)
 {
 	ref<Expr>	rule_expr;
 	bool		ok, mustBeTrue;
@@ -339,7 +296,7 @@ static bool checkRule(const ExprRule* er, Solver* s)
 
 static bool checkRule(ExprBuilder *eb, Solver* s)
 {
-	ExprRule	*er = loadRule(InputFile.c_str());
+	ExprRule	*er = ExprRule::loadRule(InputFile.c_str());
 	bool		ok;
 
 	ok = checkRule(er, s);
@@ -357,13 +314,13 @@ static void applyTransitivity(ExprBuilder* eb, Solver* s)
 	ref<Expr>	init_expr, bridge_expr, impl_expr, new_rule_expr;
 	bool		ok, mustBeTrue;
 
-	er = loadRule(InputFile.c_str());
+	er = ExprRule::loadRule(InputFile.c_str());
 	assert (er != NULL && "Bad rule?");
 
 	rule_from_old = er->getFromExpr();
 	rule_to_old = er->getToExpr();
 
-	rule_eb = new RuleBuilder(createExprBuilder());
+	rule_eb = new RuleBuilder(ExprBuilder::create(BuilderKind));
 	old_eb = Expr::setBuilder(rule_eb);
 	rule_from_rb = er->getFromExpr();
 	rule_to_rb = er->getToExpr();
@@ -439,7 +396,7 @@ static void applyRule(ExprBuilder *eb, Solver* s)
 	bool		ok, mustBeTrue;
 	ref<Expr>	e, cond;
 
-	er = loadRule(ApplyRule.c_str());
+	er = ExprRule::loadRule(ApplyRule.c_str());
 	assert (er != NULL && "Bad rule?");
 
 	p = SMTParser::Parse(InputFile.c_str(), eb);
@@ -479,7 +436,6 @@ static void applyRule(ExprBuilder *eb, Solver* s)
 	delete er;
 }
 
-
 static void printRule(ExprBuilder *eb, Solver* s)
 {
 	ref<Expr>	lhs, rhs;
@@ -516,7 +472,7 @@ static void rebuildBRule(ExprBuilder* eb, Solver* s)
 
 	assert (of.good() && !of.fail());
 
-	rb = new RuleBuilder(createExprBuilder());
+	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
 	i = 0;
 
 	foreach (it, rb->begin(), rb->end()) {
@@ -561,133 +517,6 @@ static void rebuildBRule(ExprBuilder* eb, Solver* s)
 	delete rb;
 }
 
-static ref<Expr> getLabelErrorExpr(const ExprRule* er)
-{
-	/* could have been a label error;
-	 * labels_to not a proper subset of labels_from */
-	ref<Expr>			from_expr, to_expr;
-	std::vector<ref<ReadExpr> >	from_reads, to_reads;
-	std::set<ref<ReadExpr> >	from_set, to_set;
-
-	to_expr = er->getToExpr();
-	from_expr = er->getFromExpr();
-	ExprUtil::findReads(from_expr, false, from_reads);
-	ExprUtil::findReads(to_expr, false, to_reads);
-
-	foreach (it, from_reads.begin(), from_reads.end())
-		from_set.insert(*it);
-
-	foreach (it, to_reads.begin(), to_reads.end())
-		to_set.insert(*it);
-
-	foreach (it, to_set.begin(), to_set.end()) {
-		if (from_set.count(*it))
-			continue;
-
-		/* element in to set that does not
-		 * exist in from set?? Likely a constant. */
-		Assignment		a(to_expr);
-		ref<Expr>		v;
-		const ConstantExpr	*ce;
-
-		a.bindFreeToZero();
-		v = a.evaluate(to_expr);
-		ce = dyn_cast<ConstantExpr>(v);
-		if (ce == NULL)
-			break;
-
-		std::cerr << "Attempting LabelError fixup\n";
-		return v;
-	}
-
-	return NULL;
-}
-
-typedef std::list<
-	std::pair<
-		RuleBuilder::rulearr_ty::const_iterator,
-		ref<Expr> > > rule_replace_ty;
-
-static void xtiveBRule(ExprBuilder *eb, Solver* s)
-{
-	RuleBuilder			*rb;
-	rule_replace_ty			replacements;
-	std::set<const ExprRule*>	bad_repl;
-	unsigned int			i;
-
-	rb = new RuleBuilder(createExprBuilder());
-
-	i = 0;
-	foreach (it, rb->begin(), rb->end()) {
-		const ExprRule	*er = *it;
-		ref<Expr>	old_to_expr, rb_to_expr;
-		ExprBuilder	*old_eb;
-
-		old_to_expr = er->getToExpr();
-		old_eb = Expr::setBuilder(rb);
-		rb_to_expr = er->getToExpr();
-		Expr::setBuilder(old_eb);
-
-		i++;
-
-		/* no effective transitive rule? */
-		if (old_to_expr == rb_to_expr) {
-			rb_to_expr = getLabelErrorExpr(er);
-			if (rb_to_expr.isNull())
-				continue;
-		}
-
-
-		if (	ExprUtil::getNumNodes(rb_to_expr) >=
-			ExprUtil::getNumNodes(old_to_expr))
-		{
-			continue;
-		}
-
-		std::cerr << "Xtive [" << i << "]:\n";
-		er->printPrettyRule(std::cout);
-		std::cerr	<< "OLD-TO-EXPR: " << old_to_expr << '\n'
-				<< "NEW-TO-EXPR: " << rb_to_expr << '\n';
-
-		replacements.push_back(std::make_pair(it, rb_to_expr));
-	}
-
-	// append new rules to brule file
-	std::ofstream	of(
-		rb->getDBPath().c_str(),
-		std::ios_base::out |
-		std::ios_base::app |
-		std::ios_base::binary);
-	foreach (it, replacements.begin(), replacements.end()) {
-		const ExprRule	*er = *(it->first);
-		ExprRule	*xtive_er;
-
-		xtive_er = ExprRule::changeDest(er, it->second);
-		if (xtive_er == NULL)
-			continue;
-
-		xtive_er->printPrettyRule(std::cout);
-		if (checkRule(xtive_er, s) == false) {
-			bad_repl.insert(er);
-			continue;
-		}
-
-		xtive_er->printBinaryRule(of);
-	}
-	of.close();
-
-
-	// erase all old rules
-	foreach (it, replacements.begin(), replacements.end()) {
-		const ExprRule	*er = *(it->first);
-		if (bad_repl.count(er))
-			continue;
-		rb->eraseDBRule(it->first);
-	}
-
-	delete rb;
-}
-
 static void addRule(ExprBuilder* eb, Solver* s)
 {
 	ExprRule	*er;
@@ -702,10 +531,10 @@ static void addRule(ExprBuilder* eb, Solver* s)
 		return;
 
 	/* otherwise, append! */
-	er = loadRule(InputFile.c_str());
+	er = ExprRule::loadRule(InputFile.c_str());
 	assert (er);
 
-	rb = new RuleBuilder(createExprBuilder());
+	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
 	std::ofstream	of(
 		rb->getDBPath().c_str(),
 		std::ios_base::out |
@@ -721,111 +550,6 @@ static void addRule(ExprBuilder* eb, Solver* s)
 	std::cout << "Add OK\n";
 }
 
-#define NUM_BENCH_ITER	(5+2)
-static double benchmarkExpr(ref<Expr>& e, Solver* s)
-{
-	Query		q(
-			EqExpr::create(
-				ConstantExpr::create(0, e->getWidth()),
-				e));
-	double		dat[NUM_BENCH_ITER];
-	double		total_time, avg_time;
-
-	for (unsigned i = 0; i < NUM_BENCH_ITER; i++) {
-		WallTimer	wt;
-		bool		ok, maybeTrue;
-
-		ok = s->mayBeTrue(q, maybeTrue);
-		if (ok == false)
-			return 1.0/0.0; // infty
-
-		dat[i] = wt.checkSecs();
-	}
-
-	/* throw out outliers */
-	unsigned	min_time_idx, max_time_idx;
-	max_time_idx = min_time_idx = 0;
-	for (unsigned i = 0; i < NUM_BENCH_ITER; i++) {
-		if (dat[i] < dat[min_time_idx])
-			min_time_idx = i;
-		if (dat[i] > dat[max_time_idx])
-			max_time_idx = i;
-	}
-
-	dat[min_time_idx] = 0;
-	dat[max_time_idx] = 0;
-
-	for (unsigned i = 0; i < NUM_BENCH_ITER; i++)
-		total_time += dat[i];
-
-	avg_time = total_time / ((double)NUM_BENCH_ITER-2);
-	return avg_time;
-}
-
-static double benchmarkRule(ExprRule* er, Solver *s)
-{
-	ref<Expr>	base_from, base_to;
-	ref<Expr>	gen_from, gen_to;
-	ref<Array>	arr;
-
-	base_to = er->getToExpr();
-	/* no reason to measure constant rules-- if solving is slower
-	 * with a constant, then the solver is broken */
-	if (base_to->getKind() == Expr::Constant)
-		return -1.0/0.0; // -infty
-
-	base_from = er->getFromExpr();
-	arr = er->getMaterializeArray();
-
-	do {
-		LoggingRNG	rng;
-		ReplayRNG	*replay;
-
-		gen_from = ExprGen::genExpr(rng, base_from, arr, 10);
-		replay = rng.getReplay();
-		gen_to = ExprGen::genExpr(*replay, base_to, arr, 10);
-		delete replay;
-	} while (
-		gen_from->getKind() == Expr::Constant &&
-		gen_to->getKind() == Expr::Constant);
-
-	double from_time, to_time, rel_err;
-
-	from_time = benchmarkExpr(gen_from, s);
-	to_time = benchmarkExpr(gen_to, s);
-	rel_err = (to_time - from_time)/from_time;
-	if (rel_err > 0.05) {
-		std::cerr << "BASE-FROM: " << base_from << '\n';
-		std::cerr << "BASE-TO: " << base_to << '\n';
-
-		std::cerr	<< "FROM-TIME=" << from_time
-				<< ". TO-TIME=" << to_time
-				<< ". RELERR=" << rel_err << '\n';
-
-	}
-
-	return rel_err;
-}
-
-void benchmarkRules(ExprBuilder *eb, Solver* s)
-{
-	RuleBuilder	*rb = new RuleBuilder(createExprBuilder());
-	unsigned	i = 0;
-
-	foreach (it, rb->begin(), rb->end()) {
-		double rel_err;
-
-		std::cerr << "Benchmarking rule #" << ++i << '\n';
-		rel_err = benchmarkRule(*it, s);
-		if (rel_err > 0.05) {
-			std::cerr << "Retrying benchmark #" << i << "\n";
-			benchmarkRule(*it, s);
-		}
-	}
-
-	delete rb;
-}
-
 int main(int argc, char **argv)
 {
 	Solver		*s;
@@ -834,7 +558,7 @@ int main(int argc, char **argv)
 	llvm::sys::PrintStackTraceOnErrorSignal();
 	llvm::cl::ParseCommandLineOptions(argc, argv);
 
-	eb = createExprBuilder();
+	eb = ExprBuilder::create(BuilderKind);
 	if (eb == NULL) {
 		std::cerr << "[kopt] Could not create builder\n";
 		return -1;
@@ -851,8 +575,8 @@ int main(int argc, char **argv)
 	} else if (BenchmarkRules) {
 		benchmarkRules(eb, s);
 	} else if (DBPunchout) {
-		DBScan	dbs;
-		dbs.punchout(s);
+		DBScan	dbs(s);
+		dbs.punchout();
 	} else if (CheckDup) {
 		checkDup(eb, s);
 	} else if (BRuleRebuild) {
@@ -866,7 +590,8 @@ int main(int argc, char **argv)
 	} else if (ApplyTransitivity) {
 		applyTransitivity(eb, s);
 	} else if (DumpBinRule) {
-		ExprRule	*er = loadRule(InputFile.c_str());
+		ExprRule	*er;
+		er = ExprRule::loadRule(InputFile.c_str());
 		er->printBinaryRule(std::cout);
 	} else {
 		printRule(eb, s);

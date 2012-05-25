@@ -45,6 +45,7 @@ public:
 	private:
 	};
 
+	static ExprRule* loadRule(const char* fname);
 	static ExprRule* loadPrettyRule(const char* fname);
 	static ExprRule* loadPrettyRule(std::istream& is);
 	static ExprRule* loadBinaryRule(const char* fname);

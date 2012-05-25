@@ -23,6 +23,13 @@ ExprRule::ExprRule(const Pattern& _from, const Pattern& _to)
 	to.label_id_max = max_id;
 }
 
+ExprRule* ExprRule::loadRule(const char* path)
+{
+	ExprRule	*r;
+	if ((r = loadBinaryRule(path)) != NULL)
+		return r;
+	return loadPrettyRule(path);
+}
 
 ref<Expr> ExprRule::flat2expr(
 	const labelmap_ty&	lm,
