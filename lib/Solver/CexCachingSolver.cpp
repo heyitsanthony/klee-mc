@@ -102,14 +102,12 @@ struct NullAssignment { bool operator()(Assignment *a) const { return !a; } };
 struct NonNullAssignment
 { bool operator()(Assignment *a) const { return a!=0; } };
 
-struct NullOrSatisfyingAssignment {
-  Key &key;
-
-  NullOrSatisfyingAssignment(Key &_key) : key(_key) {}
-
-  bool operator()(Assignment *a) const {
-    return !a || a->satisfies(key.begin(), key.end());
-  }
+struct NullOrSatisfyingAssignment
+{
+	Key &key;
+	NullOrSatisfyingAssignment(Key &_key) : key(_key) {}
+	bool operator()(Assignment *a) const
+	{ return !a || a->satisfies(key.begin(), key.end()); }
 };
 
 /// searchForAssignment - Look for a cached solution for a query.
@@ -130,8 +128,9 @@ bool CexCachingSolver::searchForAssignment(Key &key, Assignment *&result)
 		return true;
 	}
 
-	// Look for a satisfying assignment for a superset, which is trivially an
-	// assignment for any subset.
+	// Find a satisfying assignment for a superset;
+	// trivially an assignment for any subset
+	// (i.e. superset of constraints is a refinement of the subset).
 	lookup_super = cache.findSuperset(key, NonNullAssignment());
 
 	// Otherwise, look for a subset which is unsatisfiable -- if the subset is
@@ -307,10 +306,9 @@ bool CexCachingSolver::getAssignment(const Query& query, Assignment* &result)
 		return true;
 
 	result = createBinding(query, key);
+
 	if (failed()) return false;
-	if (result == NULL) {
-		return true;
-	}
+	if (result == NULL) return true;
 
 	cache.insert(key, result);
 
@@ -327,39 +325,41 @@ CexCachingSolver::~CexCachingSolver()
 Solver::Validity CexCachingSolver::computeValidity(const Query& query)
 {
 	TimerStatIncrementer t(stats::cexCacheTime);
-	bool		ok_assignment;
-	ref<Expr>	neg_q;
-	Assignment	*neg_a = NULL, *pos_a = NULL;
+	bool		ok, has_free_var;
+	ref<Expr>	eval;
+	Assignment	*a, *neg_a = NULL, *pos_a = NULL;
 
-	ok_assignment = getAssignment(query.withFalse(), neg_a);
-	if (!ok_assignment) goto failed;
+	/* get assignment for constraints; ignore query expr for now */
+	ok = getAssignment(query.withFalse(), a);
+	if (!ok) goto failed;
 
-	if (neg_a == NULL) {
+	if (a == NULL) {
 		klee_warning("Bad state; constraints should have solution");
 		goto failed;
 	}
 
-	neg_q = neg_a->evaluate(query.expr);
+	eval = a->evaluate(query.expr);
 
-	if (!isa<ConstantExpr>(neg_q)) {
+	/* !const => some free variable in the query */
+	has_free_var = !isa<ConstantExpr>(eval);
+	if (has_free_var) {
 		if (!getAssignment(query, pos_a)) goto failed;
-		if (pos_a) {
-			if (!getAssignment(query.negateExpr(), neg_a))
-				goto failed;
+		if (pos_a == NULL) return Solver::True;
 
-			return (!neg_a ? Solver::False : Solver::Unknown);
-		}
-		return Solver::True;
+		if (!getAssignment(query.negateExpr(), neg_a))
+			goto failed;
+
+		return (!neg_a) ? Solver::False : Solver::Unknown;
 	}
 
-	if (cast<ConstantExpr>(neg_q)->isTrue()) {
+	if (cast<ConstantExpr>(eval)->isTrue()) {
 		if (!getAssignment(query, pos_a)) goto failed;
-		return !pos_a ? Solver::True : Solver::Unknown;
+		return (pos_a == NULL) ? Solver::True : Solver::Unknown;
 	}
 
 	if (!getAssignment(query.negateExpr(), neg_a)) goto failed;
 
-	return !neg_a ? Solver::False : Solver::Unknown;
+	return (neg_a == NULL) ? Solver::False : Solver::Unknown;
 
 failed:
 	failQuery();

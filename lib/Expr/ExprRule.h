@@ -4,53 +4,36 @@
 #include <fstream>
 #include <vector>
 #include "klee/Expr.h"
+#include "klee/util/ExprTag.h"
+#include "Pattern.h"
+#include "ExprPatternMatch.h"
 
-#define OP_LABEL_MASK		(1ULL << 63)
-#define OP_LABEL_TEST(x)	(((x) & OP_LABEL_MASK) != 0)
-#define OP_LABEL_MK(x)		((x) | (1ULL << 63))
-#define OP_LABEL_NUM(x)		((x) & ~(1ULL << 63))
+#define hdr_mask(x)	((x) & ~((uint64_t)0xff))
+#define is_hdr_magic(x)	(hdr_mask(x) == ER_HDR_MAGIC_MASK)
+#define ER_HDR_MAGIC_MASK	0xFEFEFEFE01010100
+#define ER_HDR_MAGIC1		0xFEFEFEFE01010101	/* fixed consts */
+#define ER_HDR_MAGIC2		0xFEFEFEFE01010102	/* constrained consts */
+#define ER_HDR_SKIP		0xFEFEFEFEFEFEFEFE
 
 
 namespace klee
 {
-
 class ExprRule
 {
 public:
-	typedef std::vector<uint64_t>	flatrule_ty;
-	typedef std::map<unsigned, ref<Expr> > labelmap_ty;
-	struct Pattern {
-		bool operator ==(const Pattern& p) const;
-		bool operator !=(const Pattern& p) const
-		{ return !(*this == p); }
-
-		flatrule_ty	rule;
-		unsigned	label_c;
-		unsigned	label_id_max;
-	};
-
-	/* this is so that we can get rule application to works for both
-	 * tries and a single rule */
-	class RuleIterator
-	{
-	public:
-		virtual bool isDone(void) const = 0;
-		virtual void reset(void) = 0;
-		virtual bool matchValue(uint64_t v) = 0;
-		virtual bool matchLabel(uint64_t& v) = 0;
-		virtual const ExprRule* getExprRule(void) const = 0;
-		virtual ~RuleIterator() {}
-	protected:
-		RuleIterator() {}
-	private:
-	};
-
 	static ExprRule* loadRule(const char* fname);
 	static ExprRule* loadPrettyRule(const char* fname);
 	static ExprRule* loadPrettyRule(std::istream& is);
 	static ExprRule* loadBinaryRule(const char* fname);
 	static ExprRule* loadBinaryRule(std::istream& is);
 	static ExprRule* changeDest(const ExprRule* er, const ref<Expr>& to);
+
+	/* assumes unique variables for every repl */
+	ExprRule* addConstraints(
+		const Array			*repl_arr,
+		const exprtags_ty		&visit_tags,
+		const std::vector<ref<Expr> >	&constraints) const;
+
 
 	static void printRule(
 		std::ostream& os, const ref<Expr>& lhs, const ref<Expr>& rhs);
@@ -65,14 +48,13 @@ public:
 	{ printRule(os, getFromExpr(), getToExpr()); }
 
 	ref<Expr> materialize(void) const;
-	ref<Expr> getFromExpr(void) const
-	{ return anonFlat2Expr(from); }
-
-	ref<Expr> getToExpr(void) const
-	{ return anonFlat2Expr(to); }
+	ref<Expr> getFromExpr(void) const { return from.anonFlat2Expr(); }
+	ref<Expr> getToExpr(void) const	{ return to.anonFlat2Expr(); }
 
 	ref<Expr> apply(const ref<Expr>& e) const;
-	static ref<Expr> apply(const ref<Expr>& e, RuleIterator& ri);
+	static ref<Expr> apply(
+		const ref<Expr>& e,
+		ExprPatternMatch::RuleIterator& ri);
 
 
 	/* XXX these are wrong-- should be taking a count from the exprs
@@ -80,8 +62,8 @@ public:
 	unsigned getFromNodeCount(void) const { return from.rule.size(); }
 	unsigned getToNodeCount(void) const { return to.rule.size(); }
 
-	unsigned getToLabels(void) const { return to.label_c; }
-	unsigned getFromLabels(void) const { return from.label_c; }
+	//unsigned getToLabels(void) const { return to.label_c; }
+	//unsigned getFromLabels(void) const { return from.label_c; }
 
 	const flatrule_ty& getFromKey(void) const { return from.rule; }
 	const flatrule_ty& getToKey(void) const { return to.rule; }
@@ -90,29 +72,25 @@ public:
 	bool operator!=(const ExprRule& er) const { return !(*this == er); }
 
 	virtual ref<Array> getMaterializeArray(void) const
-	{ return materialize_arr; }
+	{ return Pattern::getMaterializeArray(); }
 
 	unsigned int getOffsetHint(void) const { return off_hint; }
 
+	bool checkConstants(const labelmap_ty& clm) const;
+
 protected:
 	ExprRule(const Pattern& _from, const Pattern& _to);
-
 private:
-	static ref<Expr> flat2expr(
-		const labelmap_ty& lm,
-		const flatrule_ty& fr, int& off);
-	ref<Expr> anonFlat2Expr(const Pattern& p) const;
 	static void loadBinaryPattern(std::istream& is, Pattern& p);
 
 
 	static bool readFlatExpr(std::istream& ifs, Pattern& p);
 
-	Pattern		from, to;
+	Pattern			from, to;
+	std::vector<Pattern>	*const_constraints;
 
-	mutable unsigned apply_hit_c, apply_fail_c;
-	ref<Array>	materialize_arr;
-
-	unsigned int	off_hint;
+	mutable unsigned	apply_hit_c, apply_fail_c;
+	unsigned int		off_hint;
 };
 
 }

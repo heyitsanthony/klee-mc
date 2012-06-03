@@ -21,10 +21,10 @@ class ExprConstVisitor
 public:
 	typedef std::pair<
 		const Expr*, bool /* t=to open/to close=f */> exprvis_ty;
-	enum Action { Skip, Stop, Expand, Close };
+	enum Action { Skip=0, Stop=1, Expand=2, Close=3 };
 	virtual ~ExprConstVisitor() {}
-	void visit(const Expr* expr);
-	void visit(const ref<Expr>& expr);
+	void apply(const Expr* expr);
+	void apply(const ref<Expr>& expr);
 protected:
 	virtual Action visitExpr(const Expr* expr) = 0;
 	virtual void visitExprPost(const Expr* expr) {}
@@ -41,7 +41,7 @@ protected:
 	// typed variant, but non-virtual for efficiency
 	class Action {
 	public:
-		enum Kind { SkipChildren, DoChildren, ChangeTo };
+		enum Kind { SkipChildren=0, DoChildren=1, ChangeTo=2 };
 
 	private:
 		//      Action() {}
@@ -62,8 +62,11 @@ protected:
 		friend class ExprVisitor;
 
 	public:
-		Kind kind;
-		ref<Expr> argument;
+		Kind		kind;
+		ref<Expr>	argument;
+
+		Action(const Action& a)
+		: kind(a.kind), argument(a.argument) {}
 
 		static Action changeTo(const ref<Expr> &expr)
 		{ return Action(ChangeTo,expr); }
@@ -119,14 +122,13 @@ protected:
 	// apply the visitor to the expression and return a possibly
 	// modified new expression.
 	ref<Expr> visit(const ref<Expr> &e);
-
+	virtual Action visitAction(const Expr &ep);
 private:
 	typedef ExprHashMap< ref<Expr> > visited_ty;
 	visited_ty visited;
 	bool recursive;
 	bool visitConstants;
 
-	ref<Expr> visitActual(const ref<Expr> &e);
 	ref<Expr> handleActionDoChildren(Expr& ep);
 
 public:
@@ -139,64 +141,6 @@ public:
 		std::stack<std::pair<ref<Expr>, ref<Expr> > >& updateStack,
 		bool	&rebuildUpdates);
 };
-
-/* tags parts of expression that changed */
-template <class T>
-class ExprVisitorTagger : public T
-{
-public:
-	typedef std::vector<unsigned>	tags_ty;
-
-	ExprVisitorTagger() {}
-	virtual ~ExprVisitorTagger() {}
-
-	virtual ref<Expr> apply(const ref<Expr>& e)
-	{
-		tag_pre = 0;
-		tag_post = 0;
-		tags_pre.clear();
-		tags_post.clear();
-		return T::apply(e);
-	}
-
-	virtual ExprVisitor::Action visitExpr(const Expr& e)
-	{
-		tag_pre++;
-		ExprVisitor::Action a = T::visitExpr(e);
-		if (a.kind == ExprVisitor::Action::ChangeTo)
-			tag();
-		return a;
-	}
-
-	virtual ExprVisitor::Action visitExprPost(const Expr& e)
-	{
-		tag_post++;
-		ExprVisitor::Action	a = T::visitExprPost(e);
-		if (a.kind == ExprVisitor::Action::ChangeTo)
-			tag();
-		return a;
-	}
-
-	tags_ty::const_iterator beginPre(void) const
-	{ return tags_pre.begin(); }
-	tags_ty::const_iterator endPre(void) const
-	{ return tags_pre.end(); }
-	tags_ty::const_iterator beginPost(void) const
-	{ return tags_post.begin(); }
-	tags_ty::const_iterator endPost(void) const
-	{ return tags_post.end(); }
-
-protected:
-	void tag(void) {
-		tags_post.push_back(tag_post);
-		tags_pre.push_back(tag_pre);
-	}
-
-private:
-	unsigned	tag_pre, tag_post;
-	tags_ty		tags_post, tags_pre;
-};
-
 }
 
 #endif

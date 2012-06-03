@@ -18,7 +18,6 @@ class EquivExprBuilder : public ExprBuilder
 {
 public:
 	EquivExprBuilder(Solver& s, ExprBuilder* in_eb);
-
 	virtual ~EquivExprBuilder(void);
 
 	virtual ref<Expr> Constant(const llvm::APInt &Value)
@@ -112,18 +111,27 @@ private:
 protected:
 	void handleQueuedExprs(void);
 	ref<Expr> lookup(ref<Expr>& e);
+	ref<Expr> lookupConst(const ref<Expr>& e);
 	ref<Expr> lookupByEval(ref<Expr>& e, unsigned nodes);
-	uint64_t getEvalHash(ref<Expr>& e, bool &maybeConst);
-	uint64_t getEvalHash(ref<Expr>& e)
-	{
-		bool mc;
-		return getEvalHash(e, mc);
-	}
+	uint64_t getEvalHash(const ref<Expr>& e, bool &maybeConst);
+	uint64_t getEvalHash(const ref<Expr>& e)
+	{ bool mc; return getEvalHash(e, mc); }
 
 	ref<Expr> getParseByPath(const std::string& fname);
 
 	ref<Expr> tryEquivRewrite(
 		const ref<Expr>& e, const ref<Expr>& smaller);
+
+	void writeEquivRule(
+		const ref<Expr>& e_klee_w, const ref<Expr>& e_db_unified);
+
+	bool unify(
+		const ref<Expr>& e_klee,
+		const ref<Expr>& e_db,
+		ref<Expr>& e_db_unified,
+		ref<Expr>& e_klee_w);
+
+	void missedLookup(const ref<Expr>& e, unsigned nodes, uint64_t hash);
 
 	unsigned int			depth;
 	Solver				&solver;
@@ -136,7 +144,6 @@ protected:
 	std::vector<uint8_t>	sample_nonseq_zeros[NONSEQ_COUNT];
 	std::vector<uint8_t>	sample_nonseq_fe[NONSEQ_COUNT];
 
-	uint64_t			served_c;
 	uint64_t			ign_c;
 	uint64_t			const_c;
 	uint64_t			wide_c;

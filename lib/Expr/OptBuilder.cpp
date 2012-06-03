@@ -911,19 +911,23 @@ static ref<Expr> OrExpr_createPartial(Expr *l, const ref<ConstantExpr> &cr)
 
 	/* don't reapply */
 	if (l->getKind() == Expr::Or) {
-		const OrExpr	*o = static_cast<const OrExpr*>(l);
-
-		if (o->getKid(0) == cr)
-			return l;
+		const OrExpr		*o = static_cast<const OrExpr*>(l);
+		if (o->getKid(0)->getKind() == Expr::Constant) {
+			ref<ConstantExpr>	ce;
+			ce = dyn_cast<ConstantExpr>(o->getKid(0));
+			if (ce == cr)
+				return l;
+			return OrExpr::create(
+				OrExpr::create(ce, cr), l->getKid(1));
+		}
 	}
+
 
 	return OrExpr::alloc(cr, l);
 }
 
 static ref<Expr> OrExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
-{
-	return OrExpr_createPartial(r, cl);
-}
+{ return OrExpr_createPartial(r, cl); }
 
 static ref<Expr> OrExpr_factorZExt(Expr* l, Expr* r)
 {
@@ -1655,25 +1659,31 @@ static ref<Expr> UleExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 	// !(l && !r)
 	if (l->getWidth() == Expr::Bool)
 		return OrExpr::create(Expr::createIsZero(l), r);
+	if (l->isZero())
+		return ConstantExpr::alloc(1, Expr::Bool);
 	if (r->isZero() || l == r)
 		return EqExpr::create(l, r);
 
-	if (	l->getKind() == Expr::ZExt &&
-		r->getKind() == Expr::Constant)
-	{
-		ZExtExpr	*ze = cast<ZExtExpr>(l);
+	if (r->getKind() == Expr::Constant) {
 		ConstantExpr	*ce = cast<ConstantExpr>(r);
 
-		if (ce->getWidth() <= 64) {
-			unsigned active_bits;
-			active_bits = ze->src->getWidth();
-			if ((1ULL << active_bits) < ce->getZExtValue()) {
-				// maximum value of lhs always less than rhs
-				return ConstantExpr::alloc(1, Expr::Bool);
+		/* (l <= ~0) is always true */
+		if (ce->isAllOnes())
+			return ConstantExpr::create(1, Expr::Bool);
+
+		if (l->getKind() == Expr::ZExt)	{
+			ZExtExpr	*ze = cast<ZExtExpr>(l);
+
+			if (ce->getWidth() <= 64) {
+				unsigned active_bits;
+				active_bits = ze->src->getWidth();
+				if ((1ULL << active_bits) < ce->getZExtValue()) {
+					// maximum value of lhs always less than rhs
+					return ConstantExpr::alloc(1, Expr::Bool);
+				}
 			}
 		}
 	}
-
 
 	return UleExpr::alloc(l, r);
 }

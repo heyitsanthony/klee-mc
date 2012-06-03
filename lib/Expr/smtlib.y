@@ -466,6 +466,12 @@ an_bitwise_fun:
 		assert (no);
 
 		re = dyn_cast<ReadExpr>(no->getKid(0));
+		if (re == NULL) {
+			SMTParser::parserTemp->setBadRead();
+			$$ = BUILDER->Constant(0, 8);
+			YYACCEPT;
+		}
+
 		assert (re);
 
 		is_oob = false;
@@ -477,6 +483,7 @@ an_bitwise_fun:
 		if (is_oob) {
 			SMTParser::parserTemp->setBadRead();
 			$$ = BUILDER->Constant(0, 8);
+			YYACCEPT;
 		} else {
 			$$ = BUILDER->Read(re->updates, idx_expr);
 		}

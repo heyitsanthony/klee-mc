@@ -4,10 +4,9 @@
 #include "../../lib/Expr/RuleBuilder.h"
 #include "klee/Expr.h"
 #include "klee/ExprBuilder.h"
-#include "klee/Solver.h"
-#include "klee/util/ExprUtil.h"
-#include "klee/util/Assignment.h"
 #include "static/Sugar.h"
+#include "KnockoutRule.h"
+#include "KnockoutClass.h"
 
 #include "DBScan.h"
 
@@ -15,189 +14,140 @@ using namespace klee;
 
 extern ExprBuilder::BuilderKind	BuilderKind;
 
-class ConstCounter : public ExprConstVisitor
-{
-public:
-	typedef	std::map<ref<ConstantExpr>, unsigned> constcount_ty;
-
-	ConstCounter(void) : ExprConstVisitor(false) {}
-	virtual Action visitExpr(const Expr* expr)
-	{
-		ref<ConstantExpr>	r_ce;
-
-		if (expr->getKind() != Expr::Constant)
-			return Expand;
-
-		r_ce = ref<ConstantExpr>(
-			static_cast<ConstantExpr*>(
-				const_cast<Expr*>(expr)));
-		const_c[r_ce] = const_c[r_ce] + 1;
-		return Expand;
-	}
-
-	constcount_ty::const_iterator begin(void) const
-	{ return const_c.begin(); }
-
-	constcount_ty::const_iterator end(void) const
-	{ return const_c.end(); }
-private:
-	constcount_ty	const_c;
-};
-
-class KnockOut : public ExprVisitor
-{
-public:
-	KnockOut(const Array* _arr)
-	: ExprVisitor(false, true)
-	, arr(_arr)
-	{ use_hashcons = false; }
-	virtual ~KnockOut() {}
-
-	ref<Expr> knockoutConsts(ref<Expr>& e)
-	{
-		arr_off = 0;
-		return visit(e);
-	}
-
-
-	virtual Action visitRead(const ReadExpr& re)
-	{ return Action::skipChildren(); }
-
-	virtual Action visitConstant(const ConstantExpr& ce)
-	{
-		ref<Expr>	new_expr;
-
-		if (!(ce.getWidth() == 32 || ce.getWidth() == 64))
-			return Action::skipChildren();
-
-		new_expr = Expr::createTempRead(
-			ARR2REF(arr), ce.getWidth(), arr_off);
-		arr_off += ce.getWidth() / 8;
-		return Action::changeTo(new_expr);
-	}
-
-private:
-	unsigned	arr_off;
-	const Array	*arr;
-};
-
-bool DBScan::isKnockoutValid(const ExprRule* er, Solver* s)
-{
-	KnockOut	ko(arr.get());
-	ref<Expr>	ko_expr, to_expr;
-	bool		ok, mustBeTrue;
-
-	ko_expr = er->getFromExpr();
-	ko_expr = ko.knockoutConsts(ko_expr);
-	to_expr = er->getToExpr();
-
-	ok = s->mustBeTrue(
-		Query(EqExpr::create(ko_expr, to_expr)),
-		mustBeTrue);
-
-	if (ok == false) {
-		std::cerr << "QUERY FAILED: KO="
-			<< ko_expr << "\nTO="
-			<< to_expr << '\n';
-	}
-
-	if (mustBeTrue == false)
-		return false;
-
-	return true;
-}
-
 DBScan::DBScan(Solver* _s)
 : s(_s)
+, uninteresting_c(0)
 {
 	arr = Array::create("ko_arr", 4096);
 	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
 }
 
-DBScan::~DBScan() { delete rb; }
-
-
-void DBScan::loadKnockoutRulesFromBuilder(komap_ty& ko_map)
+DBScan::~DBScan()
 {
-	KnockOut	ko(arr.get());
-
-	foreach (it, rb->begin(), rb->end()) {
-		const ExprRule*	er;
-		ref<Expr>	from_expr, ko_expr;
-
-		er = *it;
-		from_expr = er->getFromExpr();
-		ko_expr = ko.knockoutConsts(from_expr);
-
-		/* nothing changed? */
-		if (ko_expr == from_expr)
-			continue;
-
-		ko_map[ko_expr].push_back(er);
+	if (kc_map.size()) {
+		foreach (it, kc_map.begin(), kc_map.end())
+			delete it->second;
+		kc_map.clear();
 	}
+
+	if (kr_list.size()) {
+		foreach (it, kr_list.begin(), kr_list.end())
+			delete (*it);
+		kr_list.clear();
+	}
+
+
+	delete rb;
 }
 
+void DBScan::addRule(const ExprRule* er)
+{
+	KnockoutClass			*kc;
+	KnockoutRule			*kr;
+	kcmap_ty::const_iterator	kc_it;
+
+	/* knock out what we can */
+	kr = new KnockoutRule(er, arr.get());
+	if (kr->knockedOut() == false) {
+		/* nothing changed-- not interesting */
+		uninteresting_c++;
+		delete kr;
+		return;
+	}
+
+	kr_list.push_back(kr);
+	
+	/* classify knockout rule */
+	kc_it = kc_map.find(kr->getKOExpr());
+	if (kc_it == kc_map.end()) {
+		kc = new KnockoutClass(kr);
+		kc_map.insert(std::make_pair(kr->getKOExpr(), kc));
+	} else
+		kc = kc_it->second;
+
+	kc->addRule(kr);
+}
+
+void DBScan::loadKnockoutRulesFromBuilder()
+{
+	assert (kc_map.size() == 0 && "Already loaded KO rules");
+		
+	foreach (it, rb->begin(), rb->end())
+		addRule(*it);
+
+	std::cerr << "[KO] Uninteresting: " << uninteresting_c << '\n';
+}
+
+void DBScan::histo(void)
+{
+	std::map<
+		unsigned /* # rules in class */,
+		unsigned /* # classes */ >	ko_c;
+
+	loadKnockoutRulesFromBuilder();
+
+	foreach (it, kc_map.begin(), kc_map.end()) {
+		const KnockoutRule	*kr;
+		unsigned		rule_c;
+
+		kr = it->second->front();
+		rule_c = it->second->size();
+		ko_c[rule_c] = ko_c[rule_c] + 1;
+	}
+
+	std::cout << "# RULES-IN-CLASS | TOTAL-CLASS-RULES" << '\n';
+	unsigned total = 0;
+	foreach (it, ko_c.begin(), ko_c.end()) {
+		total += it->first * it->second;
+	}
+
+	unsigned cur_total = 0;
+	foreach (it, ko_c.begin(), ko_c.end()) {
+		cur_total += it->first * it->second;
+		std::cout << it->first << ' ' << 
+			(100*cur_total)/total << '\n';
+	}
+}
 
 void DBScan::punchout(void)
 {
-	komap_ty			ko_map;
-	std::map<unsigned, unsigned>	ko_c;
-	unsigned			match_c, rule_match_c;
+	std::vector<newrule_ty>		valid_kos;
+	unsigned			rule_match_c;
 
-	loadKnockoutRulesFromBuilder(ko_map);
+	loadKnockoutRulesFromBuilder();
 
-	rule_match_c = match_c = 0;
-	foreach (it, ko_map.begin(), ko_map.end()) {
-		const ExprRule	*er = it->second.front();
-		unsigned	rule_c;
+	rule_match_c = 0;
+	foreach (it, kc_map.begin(), kc_map.end()) {
+		const KnockoutClass	*kc;
+		const KnockoutRule	*kr;
+		ExprRule		*new_rule;
 
-		rule_c = it->second.size();
-		ko_c[rule_c] = ko_c[rule_c] + 1;
+		kc = it->second;
 
 		/* don't try anything with unique rules */
-		if (rule_c < 2)
+		if (kc->size() < 2)
 			continue;
 
-		if (rule_c > 16) {
-			std::cerr << "MEGA-RULE: RULE_MATCH=" << rule_c
-				<< "\nKO=" << it->first
-				<< "\nEXAMPLE-FROM=" << er->getFromExpr()
-				<< "\n\n";
-		}
-
-
-
-		if (isKnockoutValid(er, s) == false)
+		kr = kc->front();
+		new_rule = kr->createRule(s);
+		if (new_rule == NULL)
 			continue;
 
-		std::cerr
-			<< "MATCH KO: " << it->first << "\nRuleCount="
-			<< rule_c << '\n'
-			<< "example-from: " << er->getFromExpr() << '\n';
-
-		match_c++;
-		rule_match_c += rule_c;
+		valid_kos.push_back(std::make_pair(kr, new_rule));
+		rule_match_c += kc->size();
+		std::cerr << "TOTAL RULES: " << valid_kos.size() << '\n';
 	}
-
-	std::cerr << "TOTAL MATCHED KO's: " << match_c << '\n';
+	std::cerr << '\n';
+	std::cerr << "TOTAL VALID KO's: " << valid_kos.size() << '\n';
 	std::cerr << "TOTAL RULES MATCHED: " << rule_match_c << '\n';
 
-	foreach (it, ko_c.begin(), ko_c.end()) {
-		std::cerr << "KO_C: RULES=[" << it->first << "] : "
-			<< it->second << '\n';
+	/* free created rules */
+	foreach (it, valid_kos.begin(), valid_kos.end()) {
+		const ExprRule	*er(it->second);
+		std::cerr << "example-from: " << er->getFromExpr() << '\n';
+		ref<Expr> e(er->getFromExpr());
+//		std::cerr << "ko-from: " << ko.knockoutConsts(e) << '\n';
+		std::cerr << "example-to: " << er->getToExpr() << '\n';
+		delete it->second;
 	}
 }
-
-#if 0
-ConstCounter	cc;
-cc.visit(from_expr);
-std::cerr << "FROM-EXPR: " << from_expr << '\n';
-foreach (it2, cc.begin(), cc.end()) {
-	ref<Expr>		is_ugt_bound;
-	ref<ConstantExpr>	e;
-
-	std::cerr
-		<< it2->first << "[" << it2->first->getWidth()
-		<< "]: " << it2->second << '\n';
-}
-#endif

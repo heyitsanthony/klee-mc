@@ -62,6 +62,7 @@ SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   add("calloc", Calloc, true),
   add("free", Free, false),
   add("klee_assume", Assume, false),
+  add("klee_assume_eq", AssumeEq, false),
   add("klee_check_memory_access", CheckMemoryAccess, false),
   add("klee_force_ne", ForceNE, false),
   add("klee_get_value", GetValue, true),
@@ -442,6 +443,32 @@ SFH_DEF_HANDLER(Assume)
 	sfh->executor->terminateStateOnError(
 		state,
 		"invalid klee_assume call (provably false)",
+		"user.err");
+}
+
+SFH_DEF_HANDLER(AssumeEq)
+{
+	ref<Expr>	e;
+	bool		mayBeTrue, ok;
+
+	SFH_CHK_ARGS(2, "klee_assume_eq");
+
+	e = EqExpr::create(arguments[0], arguments[1]);
+
+	ok = sfh->executor->getSolver()->mayBeTrue(state, e, mayBeTrue);
+	if (!ok) {
+		sfh->executor->terminateStateEarly(state, "assumeeq failed");
+		return;
+	}
+
+	if (mayBeTrue) {
+		sfh->executor->addConstraint(state, e);
+		return;
+	}
+
+	sfh->executor->terminateStateOnError(
+		state,
+		"invalid klee_assume_eq call (provably false)",
 		"user.err");
 }
 

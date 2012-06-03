@@ -99,7 +99,7 @@ static int runAndGetCex(
 	int	res;
 
 	res = vc_query(vc, q);
-	hasSolution = (res == STP_QUERY_INVALID);	/* !res */
+	hasSolution = (res == STP_QUERY_INVALID);
 	if (hasSolution == false)
 		return res;
 
@@ -151,54 +151,59 @@ public:
 static const int timeoutExitCode = 52;
 static void stpTimeoutHandler(int x) { _exit(timeoutExitCode); }
 
-STPSolverImpl::STPSolverImpl(STPSolver *_solver, bool _useForkedSTP)
-  : solver(_solver),
-    vc(vc_createValidityChecker()),
-    builder(new STPBuilder(vc)),
-    timeout(0.0),
-    useForkedSTP(_useForkedSTP)
+
+static void initVC(VC& vc)
 {
-  assert(vc && "unable to create validity checker");
-  assert(builder && "unable to create STPBuilder");
-
+	vc = vc_createValidityChecker();
 #ifdef HAVE_EXT_STP
-  // In newer versions of STP, a memory management mechanism has been
-  // introduced that automatically invalidates certain C interface
-  // pointers at vc_Destroy time.  This caused double-free errors
-  // due to the ExprHandle destructor also attempting to invalidate
-  // the pointers using vc_DeleteExpr.  By setting EXPRDELETE to 0
-  // we restore the old behaviour.
-  vc_setInterfaceFlags(vc, EXPRDELETE, 0);
+	// In newer versions of STP, a memory management mechanism has been
+	// introduced that automatically invalidates certain C interface
+	// pointers at vc_Destroy time.  This caused double-free errors
+	// due to the ExprHandle destructor also attempting to invalidate
+	// the pointers using vc_DeleteExpr.  By setting EXPRDELETE to 0
+	// we restore the old behaviour.
+	vc_setInterfaceFlags(vc, EXPRDELETE, 0);
 #endif
-  vc_registerErrorHandler(::stp_error_handler);
+	vc_registerErrorHandler(::stp_error_handler);
+}
 
-  if (useForkedSTP) {
-    shared_memory_id = shmget(IPC_PRIVATE, SharedMemorySize, IPC_CREAT | 0700);
-    assert(shared_memory_id>=0 && "shmget failed");
-    shared_memory_ptr = (unsigned char*) shmat(shared_memory_id, NULL, 0);
-    assert(shared_memory_ptr!=(void*)-1 && "shmat failed");
-    shmctl(shared_memory_id, IPC_RMID, NULL);
-  }
+STPSolverImpl::STPSolverImpl(STPSolver *_solver, bool _useForkedSTP)
+: solver(_solver)
+, timeout(0.0)
+, useForkedSTP(_useForkedSTP)
+{
+	initVC(vc);
+	assert(vc && "unable to create validity checker");
+
+	builder = new STPBuilder(vc);
+	assert(builder && "unable to create STPBuilder");
+
+	if (useForkedSTP) {
+		shared_memory_id = shmget(
+			IPC_PRIVATE, SharedMemorySize, IPC_CREAT | 0700);
+		assert(shared_memory_id>=0 && "shmget failed");
+		shared_memory_ptr = (uint8_t*)shmat(shared_memory_id, NULL, 0);
+		assert(shared_memory_ptr!=(void*)-1 && "shmat failed");
+		shmctl(shared_memory_id, IPC_RMID, NULL);
+	}
 }
 
 STPSolverImpl::~STPSolverImpl()
 {
-  delete builder;
-  vc_Destroy(vc);
+	delete builder;
+	vc_Destroy(vc);
 }
 
 /***/
 
 STPSolver::STPSolver(bool useForkedSTP, sockaddr_in_opt stpServer)
-  : TimedSolver(stpServer.null()
-      ? new STPSolverImpl(this, useForkedSTP)
-      : new ServerSTPSolverImpl(this, useForkedSTP, stpServer))
-{
-}
+: TimedSolver(stpServer.null()
+	? new STPSolverImpl(this, useForkedSTP)
+	: new ServerSTPSolverImpl(this, useForkedSTP, stpServer))
+{}
 
-void STPSolver::setTimeout(double timeout) {
-  static_cast<STPSolverImpl*>(impl)->setTimeout(timeout);
-}
+void STPSolver::setTimeout(double timeout)
+{ static_cast<STPSolverImpl*>(impl)->setTimeout(timeout); }
 
 /***/
 
@@ -210,7 +215,8 @@ bool STPSolverImpl::computeSat(const Query& query)
 	hasCex = computeInitialValues(query.negateExpr(), a);
 	if (failed()) return false;
 
-	// counter example to negated query exists => normal query is SAT (sol = cex)
+	// counter example to negated query exists
+	// => normal query is SAT (sol = cex)
 	return hasCex;
 }
 
@@ -535,7 +541,7 @@ void STPSolverImpl::setupVCQuery(
 
 	foreach (it, query.constraints.begin(), query.constraints.end())
 		vc_assertFormula(vc, builder->construct(*it));
-
+	
 	++stats::queries;
 	++stats::queryCounterexamples;
 

@@ -1188,12 +1188,12 @@ void* sc_new_regs(void* r)
 
 void sc_ret_v(void* regfile, uint64_t v1)
 {
+//	klee_assume_eq(GET_SYSRET_S(regfile), (ARCH_SIGN_CAST)v1);
 	GET_SYSRET(regfile) = v1;
-	klee_assume(GET_SYSRET_S(regfile) == (ARCH_SIGN_CAST)v1);
 }
 
 void sc_ret_v_new(void* regfile, uint64_t v1)
 {
-	klee_assume(GET_SYSRET_S(regfile) == (ARCH_SIGN_CAST)v1);
+	klee_assume_eq(GET_SYSRET_S(regfile), (ARCH_SIGN_CAST)v1);
 	GET_SYSRET(regfile) = v1;
 }

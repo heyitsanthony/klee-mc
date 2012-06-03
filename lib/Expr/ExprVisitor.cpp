@@ -35,36 +35,53 @@ ExprVisitor::ExprVisitor(bool _recursive, bool in_visitConstants)
 
 ref<Expr> ExprVisitor::visit(const ref<Expr> &e)
 {
-	if (!use_hashcons || isa<ConstantExpr>(e))
-		return visitActual(e);
+	Expr		&ep(*e.get());
+	ref<Expr>	res;
+	Action 		a(Action::skipChildren());
 
-	visited_ty::iterator it = visited.find(e);
-	if (it != visited.end())
-		return it->second;
+	if (isa<ConstantExpr>(e)) {
+		if (visitConstants)
+			a = visitAction(ep);
+	} else if (!use_hashcons) {
+		a = visitAction(ep);
+	} else {
+		visited_ty::iterator it = visited.find(e);
+		if (it != visited.end())
+			return it->second;
+		a = visitAction(ep);
+	}
 
-	ref<Expr> res = visitActual(e);
-	visited.insert(std::make_pair(e, res));
+	switch(a.kind) {
+	case Action::DoChildren:
+		res = handleActionDoChildren(ep);
+		break;
+	case Action::SkipChildren: res = e; break;
+	case Action::ChangeTo: res = a.argument; break;
+	default:
+		assert(0 && "invalid kind");
+	}
+
+	if (use_hashcons && !isa<ConstantExpr>(e))
+		visited.insert(std::make_pair(e, res));
+
 	return res;
 }
 
-ref<Expr> ExprVisitor::visitActual(const ref<Expr> &e)
+ExprVisitor::Action ExprVisitor::visitAction(const Expr &ep)
 {
-	if (isa<ConstantExpr>(e) && !visitConstants)
-		return e;
-
-	Expr &ep = *e.get();
-
 	Action res = visitExpr(ep);
 	switch(res.kind) {
 	// continue with normal action
-	case Action::DoChildren: break;
-	case Action::SkipChildren: return e;
-	case Action::ChangeTo: return res.argument;
+	case Action::DoChildren:
+		break;
+	case Action::SkipChildren:
+	case Action::ChangeTo:
+		return res;
 	}
 
 	switch(ep.getKind()) {
 #define EXPR_CASE(x)	\
-	case Expr::x: res = visit##x(static_cast<x##Expr&>(ep)); break;
+	case Expr::x: res = visit##x(static_cast<const x##Expr&>(ep)); break;
 
 	EXPR_CASE(NotOptimized)
 	EXPR_CASE(Read)
@@ -102,20 +119,15 @@ ref<Expr> ExprVisitor::visitActual(const ref<Expr> &e)
 
 	case Expr::Constant:
 		if (visitConstants) {
-			res = visitConstant(static_cast<ConstantExpr&>(ep));
+			res = visitConstant(
+				static_cast<const ConstantExpr&>(ep));
 			break;
 		}
 	default:
 		assert(0 && "invalid expression kind");
 	}
 
-	switch(res.kind) {
-	case Action::DoChildren: return handleActionDoChildren(ep);
-	case Action::SkipChildren: return e;
-	case Action::ChangeTo: return res.argument;
-	default:
-		assert(0 && "invalid kind");
-	}
+	return res;
 }
 
 ref<Expr> ExprVisitor::handleActionDoChildren(Expr& ep)
@@ -250,17 +262,15 @@ DO_CHILDREN_ACTION(Bind, BindExpr)
 DO_CHILDREN_ACTION(Constant, ConstantExpr)
 
 
-void ExprConstVisitor::visit(const ref<Expr>& expr)
-{
-	visit(expr.get());
-}
+void ExprConstVisitor::apply(const ref<Expr>& expr)
+{ apply(expr.get()); }
 
 #define OPEN_EXPR(x)	exprvis_ty(x, true)
 #define CLOSE_EXPR(x)	exprvis_ty(x, false)
 #define IS_OPEN_EXPR(x)		(x.second == true)
 #define IS_CLOSE_EXPR(x)	(x.second == false)
 
-void ExprConstVisitor::visit(const Expr* expr)
+void ExprConstVisitor::apply(const Expr* expr)
 {
 	std::stack<exprvis_ty>	expr_stack;
 

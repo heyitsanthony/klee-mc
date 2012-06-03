@@ -170,6 +170,14 @@ private:
 	bool loadRuleDir(const char* ruledir);
 	bool loadRuleDB(const char* rulefile);
 
+
+	bool eraseDBRuleHint(std::fstream& ifs, const ExprRule* to_rmv);
+	bool tryEraseDBRule(
+		std::fstream& ifs,
+		std::streampos& last_pos,
+		const ExprRule* to_rmv);
+
+
 	ref<Expr> tryApplyRules(const ref<Expr>& in);
 	ref<Expr> tryAllRules(const ref<Expr>& in);
 	ref<Expr> tryTrieRules(const ref<Expr>& in);

@@ -78,7 +78,7 @@ public:
 	{
 		expr_updates_ty	eu;
 		cur_let_exprlog = &eu;
-		visit(e);
+		apply(e);
 		visited_exprs.clear();
 
 		used_let_exprlog.push(eu);
@@ -578,7 +578,7 @@ void SMTPrinter::printConstraint(
 
 
 	os << "(= ";
-	visit(min_expr);
+	apply(min_expr);
 	os << ' ' << val << ')';
 
 	for (unsigned i = 0; i < let_c; i++)
@@ -738,7 +738,7 @@ void SMTPrinter::expr2os(const ref<Expr>& e, std::ostream& os) const
 	}
 
 	SMTPrinter	smt_pr(os, arr);
-	smt_pr.visit(e);
+	smt_pr.apply(e);
 }
 
 void SMTPrinter::dumpToFile(const Query& q, const char* fname, bool printConsts)

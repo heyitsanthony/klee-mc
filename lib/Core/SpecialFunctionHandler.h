@@ -126,6 +126,7 @@ namespace klee {
     SFH_HANDLER(Assert)
     SFH_HANDLER(AssertFail)
     SFH_HANDLER(Assume)
+    SFH_HANDLER(AssumeEq)
     SFH_HANDLER(Calloc)
     SFH_HANDLER(CheckMemoryAccess)
     SFH_HANDLER(DefineFixedObject)

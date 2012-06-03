@@ -427,6 +427,12 @@ Solver::Validity SolverImpl::computeValidity(const Query& query)
 	return Solver::Unknown;
 }
 
+bool Solver::mustBeFalse(const Query& query, bool &result)
+{ return mustBeTrue(query.negateExpr(), result); }
+
+bool Solver::mayBeFalse(const Query& query, bool &result)
+{ return mayBeTrue(query.negateExpr(), result); }
+
 bool Solver::mustBeTrue(const Query& query, bool &result)
 {
 	Solver::Validity	validity;
@@ -434,52 +440,32 @@ bool Solver::mustBeTrue(const Query& query, bool &result)
 	assert(	query.expr->getWidth() == Expr::Bool &&
 		"Invalid expression type!");
 
-	in_solver = true;
-
-	// Maintain invariants implementations expect.
 	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(query.expr)) {
-		result = CE->isTrue() ? true : false;
-		in_solver = false;
+		result = CE->isTrue();
 		return true;
 	}
 
+	// Maintain invariants implementations expect.
+	in_solver = true;
 	validity = impl->computeValidity(query);
 	result = (validity == Solver::True);
-
 	in_solver = false;
-	return (failed() == false);
-}
 
-bool Solver::mustBeFalse(const Query& query, bool &result)
-{
-	return mustBeTrue(query.negateExpr(), result);
+	return (failed() == false);
 }
 
 bool Solver::mayBeTrue(const Query& query, bool &result)
 {
-	bool res, ok;
+	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(query.expr)) {
+		result = CE->isTrue();
+		return true;
+	}
 
 	in_solver = true;
-	ok = mustBeFalse(query, res);
-	in_solver = false;
-	if (!ok)
-		return false;
-	result = !res;
-	return true;
-}
-
-bool Solver::mayBeFalse(const Query& query, bool &result)
-{
-	bool res, ok;
-
-	in_solver = true;
-	ok = mustBeTrue(query, res);
+	result = impl->computeSat(query);
 	in_solver = false;
 
-	if (!ok)
-		return false;
-	result = !res;
-	return true;
+	return (failed() == false);
 }
 
 bool Solver::getValue(const Query& query, ref<ConstantExpr> &result)
@@ -497,7 +483,10 @@ bool Solver::getValue(const Query& query, ref<ConstantExpr> &result)
 	in_solver = false;
 	if (failed()) return false;
 
+	if (tmp->getKind() != Expr::Constant)
+		return false;
 	result = cast<ConstantExpr>(tmp);
+
 	return true;
 }
 
@@ -513,60 +502,31 @@ bool Solver::getInitialValues(const Query& query, Assignment& a)
 	return hasSolution;
 }
 
-// FIXME: REFACTOR REFACTOR REFACTOR REFACTOR
-bool Solver::getRange(
-	const Query& query,
-	std::pair< ref<Expr>, ref<Expr> >& ret )
+bool Solver::getUsefulBits(const Query& q, uint64_t& bits)
 {
-	ref<Expr>		e(query.expr);
-	Expr::Width		width = e->getWidth();
-	uint64_t		min, max;
+	ref<Expr>	e(q.expr);
+	Expr::Width	width = e->getWidth();
+	uint64_t	lo, mid, hi;
 
-	if (width==1) {
-		Solver::Validity result;
-		bool	eval_ok;
+	bits=0;
+	lo=0;
+	hi=width;
+	while (lo < hi) {
+		bool alwaysTrue, ok;
 
-		eval_ok = evaluate(query, result);
-		if (!eval_ok)
-			return false;
-
-		switch (result) {
-		case Solver::True:	min = max = 1; break;
-		case Solver::False:	min = max = 0; break;
-		default:		min = 0, max = 1; break;
-		}
-
-		ret = std::make_pair(
-			ConstantExpr::create(min, width),
-			ConstantExpr::create(max, width));
-		return true;
-	}
-
-	if (dyn_cast<ConstantExpr>(e) != NULL) {
-		ret = std::make_pair(e, e);
-		return true;
-	}
-
-	// binary search for # of useful bits
-	uint64_t lo=0, hi=width, mid, bits=0;
-	while (lo<hi) {
 		mid = lo + (hi - lo)/2;
-		bool res;
-		bool success;
 
-		success = mustBeTrue(
-			query.withExpr(
-				EqExpr::create(
-					LShrExpr::create(
+		ok = mustBeTrue(q.withExpr(
+			EqExpr::create(
+				LShrExpr::create(
 					e,
 					ConstantExpr::create(mid, width)),
 				ConstantExpr::create(0, width))),
-			res);
+			alwaysTrue);
 
-		if (success == false)
-			return false;
+		if (ok == false) return false;
 
-		if (res) {
+		if (alwaysTrue) {
 			hi = mid;
 		} else {
 			lo = mid+1;
@@ -575,61 +535,30 @@ bool Solver::getRange(
 		bits = lo;
 	}
 
-	// could binary search for training zeros and offset
-	// min max but unlikely to be very useful
+	return true;
+}
 
-	// check common case
-	bool res = false;
-	bool success;
-	success = mayBeTrue(
-		query.withExpr(
-			EqExpr::create(e, ConstantExpr::create(0, width))),
-		res);
 
-	assert(success && "FIXME: Unhandled solver failure");
-	(void) success;
+// binary search for max
+bool Solver::getRangeMax(
+	const Query& q, uint64_t bits, uint64_t min, uint64_t& max)
+{
+	ref<Expr>	e(q.expr);
+	Expr::Width	width = e->getWidth();
+	uint64_t	lo, hi;
 
-	if (res) {
-		min = 0;
-	} else {
-		// binary search for min
-		lo=0, hi=bits64::maxValueOfNBits(bits);
-		while (lo<hi) {
-			mid = lo + (hi - lo)/2;
-			bool res = false;
-			bool success;
-			success = mayBeTrue(
-				query.withExpr(
-				UleExpr::create(
-					e, ConstantExpr::create(mid, width))),
-				res);
-
-			if (success == false)
-				return false;
-
-			if (res) {
-				hi = mid;
-			} else {
-				lo = mid+1;
-			}
-		}
-
-		min = lo;
-	}
-
-	// binary search for max
-	lo=min, hi=bits64::maxValueOfNBits(bits);
+	lo=min;
+	hi=bits64::maxValueOfNBits(bits);
 	while (lo<hi) {
-		mid = lo + (hi - lo)/2;
-		bool res;
-		bool success;
-		success = mustBeTrue(
-			query.withExpr(
-				UleExpr::create(
-					e, ConstantExpr::create(mid, width))),
-				res);
+		uint64_t	mid;
+		bool		ok, res;
 
-		if (success == false)
+		mid = lo + (hi - lo)/2;
+		ok = mustBeTrue(q.withExpr(
+			UleExpr::create(e, ConstantExpr::create(mid, width))),
+			res);
+
+		if (ok == false)
 			return false;
 
 		if (res) {
@@ -640,18 +569,107 @@ bool Solver::getRange(
 	}
 
 	max = lo;
+	return true;
+}
+
+bool Solver::getRangeMin(const Query& q, uint64_t bits, uint64_t& min)
+{
+	ref<Expr>		e(q.expr);
+	Expr::Width		width = e->getWidth();
+	uint64_t		lo, hi;
+	bool			ok, res;
+
+	// check common case: min == 0
+	ok = mayBeTrue(q.withExpr(
+		EqExpr::create(e, ConstantExpr::create(0, width))),
+		res);
+	if (ok == false)
+		return false;
+
+	if (res) {
+		min = 0;
+		return true;
+	}
+
+	// binary search for min
+	// XXX why is this MAY be true and not MUST?
+	lo=0;
+	hi=bits64::maxValueOfNBits(bits);
+	while (lo<hi) {
+		uint64_t	mid;
+
+		mid = lo + (hi - lo)/2;
+		ok = mayBeTrue(q.withExpr(
+			UleExpr::create(e, ConstantExpr::create(mid, width))),
+			res);
+		if (ok == false)
+			return false;
+
+		if (res) {
+			hi = mid;
+		} else {
+			lo = mid+1;
+		}
+	}
+
+	min = lo;
+	return true;
+}
+
+// FIXME: REFACTOR REFACTOR REFACTOR REFACTOR
+bool Solver::getRange(
+	const Query& query,
+	std::pair< ref<Expr>, ref<Expr> >& ret )
+{
+	ref<Expr>		e(query.expr);
+	Expr::Width		w = e->getWidth();
+	uint64_t		bits, min, max;
+
+	if (dyn_cast<ConstantExpr>(e) != NULL) {
+		ret = std::make_pair(e, e);
+		return true;
+	}
+
+	if (w == 1) {
+		Solver::Validity	result;
+		bool			ok;
+
+		ok = evaluate(query, result);
+		if (!ok) return false;
+
+		switch (result) {
+		case Solver::True:	min = max = 1; break;
+		case Solver::False:	min = max = 0; break;
+		default:		min = 0, max = 1; break;
+		}
+
+		ret = std::make_pair(
+			ConstantExpr::create(min, w),
+			ConstantExpr::create(max, w));
+		return true;
+	}
+
+	if (!getUsefulBits(query, bits))
+		return false;
+
+	// could binary search for training zeros and offset
+	// min max but unlikely to be very useful
+	if (!getRangeMin(query, bits, min))
+		return false;
+
+	if (!getRangeMax(query, bits, min, max))
+		return false;
 
 	ret = std::make_pair(
-		ConstantExpr::create(min, width),
-		ConstantExpr::create(max, width));
+		ConstantExpr::create(min, w),
+		ConstantExpr::create(max, w));
 	return true;
 }
 
 void Solver::printName(int level) const { impl->printName(level); }
 
-Solver *klee::createValidatingSolver(Solver *s, Solver *oracle) {
-  return new Solver(new ValidatingSolver(s, oracle));
-}
+Solver *klee::createValidatingSolver(Solver *s, Solver *oracle)
+{ return new Solver(new ValidatingSolver(s, oracle)); }
 
 Solver *klee::createDummySolver() { return new Solver(new DummySolverImpl()); }
 

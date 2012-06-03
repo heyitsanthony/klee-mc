@@ -445,16 +445,19 @@ ref<Expr> ObjectState::read(ref<Expr> offset, Expr::Width width) const
 	assert(width == NumBytes * 8 && "Invalid write size!");
 	ref<Expr> Res(0);
 	for (unsigned i = 0; i != NumBytes; ++i) {
-		ref<Expr>	Byte(0);
+		ref<Expr>	byte(0), cur_off;
 		unsigned	idx;
 
 		idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
-		Byte = read8(
-			AddExpr::create(
-				offset,
-				ConstantExpr::create(idx, Expr::Int32)));
-
-		Res = i ? ConcatExpr::create(Byte, Res) : Byte;
+		cur_off = AddExpr::create(
+			offset,
+			ConstantExpr::create(idx, Expr::Int32));
+		if (cur_off->getKind() == Expr::Constant) {
+			byte = read8(cast<ConstantExpr>(
+				cur_off)->getZExtValue(32));
+		} else
+			byte = read8(cur_off);
+		Res = i ? ConcatExpr::create(byte, Res) : byte;
 	}
 
 	return Res;

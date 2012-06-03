@@ -12,7 +12,7 @@ using namespace klee;
 
 extern ExprBuilder::BuilderKind	BuilderKind;
 
-bool checkRule(const ExprRule* er, Solver* s);
+bool checkRule(const ExprRule* er, Solver* s, std::ostream&);
 
 static ref<Expr> getLabelErrorExpr(const ExprRule* er)
 {
@@ -120,7 +120,7 @@ void xtiveBRule(ExprBuilder *eb, Solver* s)
 			continue;
 
 		xtive_er->printPrettyRule(std::cout);
-		if (checkRule(xtive_er, s) == false) {
+		if (checkRule(xtive_er, s, std::cerr) == false) {
 			bad_repl.insert(er);
 			continue;
 		}

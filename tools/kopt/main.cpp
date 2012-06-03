@@ -9,16 +9,22 @@
 #include "../../lib/Expr/ExtraOptBuilder.h"
 #include "../../lib/Core/TimingSolver.h"
 
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <stdio.h>
+#include <dirent.h>
+#include <unistd.h>
+
 #include "static/Sugar.h"
 #include "klee/ExprBuilder.h"
 #include "klee/Solver.h"
 #include "klee/util/ExprUtil.h"
 #include "klee/util/Assignment.h"
 
-#include "llvm/Support/CommandLine.h"
-#include "llvm/Support/ManagedStatic.h"
-#include "llvm/Support/Signals.h"
-#include "llvm/Support/system_error.h"
+#include <llvm/Support/CommandLine.h>
+#include <llvm/Support/ManagedStatic.h>
+#include <llvm/Support/Signals.h>
+#include <llvm/Support/system_error.h>
 
 using namespace llvm;
 using namespace klee;
@@ -47,6 +53,14 @@ namespace llvm
 		cl::init(false));
 
 	cl::opt<bool>
+	DBHisto(
+		"db-histo",
+		cl::desc("Print histogram of DB rule classes"),
+		cl::init(false));
+
+
+
+	cl::opt<bool>
 	CheckRule(
 		"check-rule",
 		cl::desc("Check a rule file"),
@@ -63,18 +77,6 @@ namespace llvm
 		"apply-rule",
 		cl::desc("Apply given rule file to input smt"),
 		cl::init(""));
-
-	cl::opt<bool>
-	ApplyTransitivity(
-		"apply-transitive",
-		cl::desc("Use a rule builder to try to minimize rule"),
-		cl::init(false));
-
-
-	cl::opt<std::string>
-	TransitiveRuleFile(
-		"implied-rule-file",
-		cl::desc("Use a rule builder to try to minimize rule"));
 
 	cl::opt<bool>
 	DumpBinRule(
@@ -100,7 +102,6 @@ namespace llvm
 		cl::desc("Add rule to brule file."),
 		cl::init(false));
 
-
 	static cl::opt<ExprBuilder::BuilderKind,true>
 	BuilderKindProxy("builder",
 		cl::desc("Expression builder:"),
@@ -123,18 +124,13 @@ namespace llvm
 
 
 void xtiveBRule(ExprBuilder *eb, Solver* s);
-bool checkRule(const ExprRule* er, Solver* s);
+bool checkRule(const ExprRule* er, Solver* s, std::ostream&);
 void benchmarkRules(ExprBuilder *eb, Solver* s);
 
 /*
-(= (ite (bvult
-		(bvadd
-			bv2936[64]
-			( zero_extend[56]
-				( select ?e2179  bv37[32] )))
-		bv3840[64])
-	bv1[1]
-	bv0[1])
+(= (ite (bvult (bvadd bv2936[64] ( zero_extend[56] ( select ?e1 bv37[32] )))
+	bv3840[64])
+ bv1[1] bv0[1])
  bv0[1]))
 */
 static bool getEquivalenceInEq(ref<Expr> e, ref<Expr>& lhs, ref<Expr>& rhs)
@@ -256,7 +252,7 @@ static bool checkDup(ExprBuilder* eb, Solver* s)
 	return ret;
 }
 
-bool checkRule(const ExprRule* er, Solver* s)
+bool checkRule(const ExprRule* er, Solver* s, std::ostream& os)
 {
 	ref<Expr>	rule_expr;
 	bool		ok, mustBeTrue;
@@ -271,26 +267,26 @@ bool checkRule(const ExprRule* er, Solver* s)
 
 	ok = s->mustBeTrue(Query(rule_expr), mustBeTrue);
 	if (ok == false) {
-		std::cout << "query failure\n";
+		os << "query failure\n";
 		return false;
 	}
 
 	if (er->getToExpr() == er->getFromExpr()) {
-		std::cout << "identity rule\n";
+		os << "identity rule\n";
 		return false;
 	}
 
 	if (to_nodes >= from_nodes) {
-		std::cout << "non-shrinking rule\n";
+		os << "non-shrinking rule\n";
 		return false;
 	}
 
 	if (mustBeTrue == false) {
-		std::cout << "invalid rule\n";
+		os << "invalid rule\n";
 		return false;
 	}
 
-	std::cout << "valid rule\n";
+	os << "valid rule\n";
 	return true;
 }
 
@@ -299,94 +295,11 @@ static bool checkRule(ExprBuilder *eb, Solver* s)
 	ExprRule	*er = ExprRule::loadRule(InputFile.c_str());
 	bool		ok;
 
-	ok = checkRule(er, s);
+	ok = checkRule(er, s, std::cout);
 	delete er;
 
 	return ok;
 }
-
-static void applyTransitivity(ExprBuilder* eb, Solver* s)
-{
-	ExprBuilder	*rule_eb, *old_eb;
-	ExprRule	*er;
-	ref<Expr>	rule_to_rb, rule_from_rb;
-	ref<Expr>	rule_to_old, rule_from_old;
-	ref<Expr>	init_expr, bridge_expr, impl_expr, new_rule_expr;
-	bool		ok, mustBeTrue;
-
-	er = ExprRule::loadRule(InputFile.c_str());
-	assert (er != NULL && "Bad rule?");
-
-	rule_from_old = er->getFromExpr();
-	rule_to_old = er->getToExpr();
-
-	rule_eb = new RuleBuilder(ExprBuilder::create(BuilderKind));
-	old_eb = Expr::setBuilder(rule_eb);
-	rule_from_rb = er->getFromExpr();
-	rule_to_rb = er->getToExpr();
-	Expr::setBuilder(old_eb);
-
-	if (	rule_to_old.isNull() || rule_from_old.isNull() ||
-		rule_to_rb.isNull() || rule_from_rb.isNull())
-	{
-		std::cout << "could not build rule exprs\n";
-		goto done;
-	}
-
-	if (rule_from_rb == rule_from_old) {
-		std::cout << "rule builder broken. got same materialization\n";
-
-		std::cerr	<< "OLD: " << rule_from_old
-				<< "\n-> " << rule_to_old << '\n';
-
-		std::cerr	<< "RULE:" << rule_from_rb
-				<< "\n-> " << rule_to_rb << '\n';
-
-		goto done;
-	}
-
-	/* bridge expr is shared expr */
-	if (rule_from_rb != rule_from_old && rule_from_rb != rule_to_old)
-		bridge_expr = rule_to_rb;
-	else
-		bridge_expr = rule_from_rb;
-
-	/* expect that for nonopt -> opt,
-	 * rule builder will give opt -> opt */
-	if (bridge_expr == rule_from_rb && bridge_expr == rule_to_rb) {
-		std::cout << "true\n(bridge_expr=" << bridge_expr << ")\n";
-		std::cout << "(from_old=" << rule_from_old << ")\n";
-		goto done;
-	}
-
-	init_expr = (bridge_expr != rule_from_old)
-		? rule_from_old
-		: rule_to_old;
-
-	impl_expr = (bridge_expr == rule_from_rb)
-		? rule_to_rb
-		: rule_from_rb;
-
-	new_rule_expr = EqExpr::create(init_expr, impl_expr);
-	ok = s->mustBeTrue(Query(new_rule_expr), mustBeTrue);
-
-	if (!ok) {
-		std::cout << "query failure\n";
-	} else if (mustBeTrue) {
-		if (!TransitiveRuleFile.empty()) {
-			std::ofstream	ofs(TransitiveRuleFile.c_str());
-			ExprRule::printRule(ofs, init_expr, impl_expr);
-		}
-		ExprRule::printRule(std::cout, init_expr, impl_expr);
-	} else {
-		std::cout << "invalid rule\n";
-	}
-
-done:
-	delete rule_eb;
-	delete er;
-}
-
 
 static void applyRule(ExprBuilder *eb, Solver* s)
 {
@@ -480,7 +393,7 @@ static void rebuildBRule(ExprBuilder* eb, Solver* s)
 		ExprRule	*er_rebuild;
 
 		std::cerr << "[" << ++i << "]: ";
-		if (checkRule(er, s) == false) {
+		if (checkRule(er, s, std::cout) == false) {
 			std::cerr << "BAD RULE:\n";
 			er->printPrettyRule(std::cerr);
 			continue;
@@ -550,6 +463,62 @@ static void addRule(ExprBuilder* eb, Solver* s)
 	std::cout << "Add OK\n";
 }
 
+static void dumpRuleDir(Solver* s)
+{
+	DIR		*d;
+	struct dirent	*de;
+
+	d = opendir(InputFile.c_str());
+	assert (d != NULL);
+	while ((de = readdir(d)) != NULL) {
+		ExprRule	*er;
+		char		path[256];
+
+		snprintf(path, 256, "%s/%s", InputFile.c_str(), de->d_name);
+		er = ExprRule::loadRule(path);
+		if (er == NULL)
+			continue;
+
+		if (CheckRule && !checkRule(er, s, std::cerr)) {
+			delete er;
+			continue;
+		}
+
+		er->printBinaryRule(std::cout);
+		delete er;
+	}
+
+	closedir(d);
+}
+
+static void dumpRule(Solver* s)
+{
+	struct stat	st;
+
+	if (stat(InputFile.c_str(), &st) != 0) {
+		std::cerr << "[kopt] " << InputFile << " not found.\n";
+		return;
+	}
+
+	if (S_ISREG(st.st_mode)) {
+		ExprRule	*er;
+		er = ExprRule::loadRule(InputFile.c_str());
+		if (CheckRule && !checkRule(er, s, std::cerr))
+			return;
+
+		er->printBinaryRule(std::cout);
+		return;
+	}
+
+	if (!S_ISDIR(st.st_mode)) {
+		std::cerr << "[kopt] Expected file or directory\n";
+		return;
+	}
+
+	std::cerr << "[kopt] Dumping rule dir\n";
+	dumpRuleDir(s);
+}
+
 int main(int argc, char **argv)
 {
 	Solver		*s;
@@ -574,6 +543,9 @@ int main(int argc, char **argv)
 		addRule(eb, s);
 	} else if (BenchmarkRules) {
 		benchmarkRules(eb, s);
+	} else if (DBHisto) {
+		DBScan	dbs(s);
+		dbs.histo();
 	} else if (DBPunchout) {
 		DBScan	dbs(s);
 		dbs.punchout();
@@ -583,16 +555,12 @@ int main(int argc, char **argv)
 		rebuildBRule(eb, s);
 	} else if (BRuleXtive) {
 		xtiveBRule(eb, s);
+	} else if (DumpBinRule) {
+		dumpRule(s);
 	} else if (CheckRule) {
 		checkRule(eb, s);
 	} else if (ApplyRule.size()) {
 		applyRule(eb, s);
-	} else if (ApplyTransitivity) {
-		applyTransitivity(eb, s);
-	} else if (DumpBinRule) {
-		ExprRule	*er;
-		er = ExprRule::loadRule(InputFile.c_str());
-		er->printBinaryRule(std::cout);
 	} else {
 		printRule(eb, s);
 	}

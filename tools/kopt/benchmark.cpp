@@ -1,3 +1,4 @@
+#include <llvm/Support/CommandLine.h>
 #include <iostream>
 #include "klee/Internal/Support/Timer.h"
 #include "klee/Internal/ADT/RNG.h"
@@ -15,6 +16,15 @@
 #define NUM_BENCH_ITER	(5+2)
 
 using namespace klee;
+using namespace llvm;
+
+namespace {
+	cl::opt<bool>
+	ParanoidBenchmark(
+		"paranoid-benchmark",
+		cl::desc("Check all queries in benchmark for equivalence."),
+		cl::init(false));
+}
 
 extern ExprBuilder::BuilderKind	BuilderKind;
 
@@ -73,6 +83,15 @@ static double benchmarkRule(ExprRule* er, Solver *s)
 	base_from = er->getFromExpr();
 	arr = er->getMaterializeArray();
 
+	bool mustBeTrue;
+	if (ParanoidBenchmark && s->mustBeTrue(
+		Query(EqExpr::create(base_from, base_to)),
+		mustBeTrue) && !mustBeTrue)
+	{
+		std::cerr << "[BENCHMARK] !!! BASES NOT EQUAL !!!?!\n";
+		return 1.0/0.0;
+	}
+
 	do {
 		LoggingRNG	rng;
 		ReplayRNG	*replay;
@@ -84,6 +103,22 @@ static double benchmarkRule(ExprRule* er, Solver *s)
 	} while (
 		gen_from->getKind() == Expr::Constant &&
 		gen_to->getKind() == Expr::Constant);
+
+	if (ParanoidBenchmark && s->mustBeTrue(
+		Query(EqExpr::create(gen_from, gen_to)),
+		mustBeTrue) && !mustBeTrue)
+	{
+		std::cerr << "[BENCHMARK] !!! SAME OPS. NOT EQUAL !!!?!\n";
+		std::cerr << "BASE-FROM: " << base_from << '\n';
+		std::cerr << "BASE-TO: " << base_to << '\n';
+
+		std::cerr << "GEN-FROM: " << gen_from << '\n';
+		std::cerr << "GEN-TO: " << base_to << '\n';
+
+		assert (0 == 1);
+		return 1.0/0.0;
+	}
+
 
 	double from_time, to_time, rel_err;
 

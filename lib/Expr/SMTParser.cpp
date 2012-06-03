@@ -85,7 +85,6 @@ bool SMTParser::Parse(void)
 	parserTemp = this;
 	bad_read = false;
 	lineNum = 1;
-	std::cerr << "IT IS PARSE TIME!!!!F=" << fileName <<"\n";
 #if 0
 	void *buf;
 	buf = smtlib_createBuffer(smtlib_bufSize());
@@ -218,6 +217,13 @@ ExprHandle SMTParser::ParseStore(ref<Expr> arr, ref<Expr> idx, ref<Expr> val)
 	assert (no != NULL);
 
 	re = dyn_cast<ReadExpr>(no->getKid(0));
+	if (re == NULL) {
+		std::cerr << "[SMTParser] Ooops!\n";
+		std::cerr << "Expr = " << no->getKid(0) << '\n';
+		std::cerr << "But expected read!\n";
+		bad_read = true;
+		return builder->NotOptimized(builder->Constant(0, 8));
+	}
 	assert (re != NULL);
 
 	UpdateList	up(re->updates);

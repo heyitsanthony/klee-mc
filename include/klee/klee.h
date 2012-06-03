@@ -133,6 +133,8 @@ extern "C" {
      and may have peculiar semantics. */
 
   void klee_assume(uint64_t condition);
+  void klee_assume_eq(uint64_t lhs, uint64_t rhs);
+
   void klee_warning(const char *message);
   void klee_warning_once(const char *message);
   void klee_prefer_cex(void *object, uint64_t condition);

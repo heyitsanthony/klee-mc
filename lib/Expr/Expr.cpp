@@ -116,6 +116,12 @@ ref<Expr> Expr::createTempRead(
 		return ConcatExpr::create(
 			READ_BYTE_OFF(1),
 			READ_BYTE_OFF(0));
+	case 24:
+		return ConcatExpr::create(
+			READ_BYTE_OFF(2),
+			ConcatExpr::create(
+				READ_BYTE_OFF(1),
+				READ_BYTE_OFF(0)));
 
 	case Expr::Int32:
 		return ConcatExpr::create4(
@@ -123,6 +129,39 @@ ref<Expr> Expr::createTempRead(
 			READ_BYTE_OFF(2),
 			READ_BYTE_OFF(1),
 			READ_BYTE_OFF(0));
+	case 40:
+		return ConcatExpr::create(
+			READ_BYTE_OFF(4),
+			ConcatExpr::create4(
+				READ_BYTE_OFF(3),
+				READ_BYTE_OFF(2),
+				READ_BYTE_OFF(1),
+				READ_BYTE_OFF(0)));
+
+	case 48:
+		return ConcatExpr::create(
+			READ_BYTE_OFF(5),
+			ConcatExpr::create(
+			READ_BYTE_OFF(4),
+			ConcatExpr::create4(
+				READ_BYTE_OFF(3),
+				READ_BYTE_OFF(2),
+				READ_BYTE_OFF(1),
+				READ_BYTE_OFF(0))));
+
+	case 56:
+		return ConcatExpr::create(
+			READ_BYTE_OFF(6),
+			ConcatExpr::create(
+			READ_BYTE_OFF(5),
+			ConcatExpr::create(
+			READ_BYTE_OFF(4),
+			ConcatExpr::create4(
+				READ_BYTE_OFF(3),
+				READ_BYTE_OFF(2),
+				READ_BYTE_OFF(1),
+				READ_BYTE_OFF(0)))));
+
 	case Expr::Int64:
 		return ConcatExpr::create8(
 			READ_BYTE_OFF(7),

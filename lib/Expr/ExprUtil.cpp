@@ -132,7 +132,7 @@ class NumNodeCounter : public ExprConstVisitor
 public:
 	NumNodeCounter(unsigned _max) : ExprConstVisitor(false), max(_max) {}
 	virtual ~NumNodeCounter() {}
-	unsigned getCount(const ref<Expr>& e) { k = 0; visit(e); return k; }
+	unsigned getCount(const ref<Expr>& e) { k = 0; apply(e); return k; }
 protected:
 	virtual Action visitExpr(const Expr* expr)
 	{ k++; return (k > max) ? Stop : Expand; }

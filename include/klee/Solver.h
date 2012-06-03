@@ -181,6 +181,13 @@ private:
     // FIXME: This should go into a helper class
     virtual bool getRange(const Query&,  std::pair< ref<Expr>, ref<Expr> >& r);
 
+    // binary search for # of useful bits in query expression
+    bool getUsefulBits(const Query&, uint64_t& bits);
+    bool getRangeMin(const Query& q, uint64_t bits, uint64_t& min);
+    bool getRangeMax(
+	const Query& q, uint64_t bits, uint64_t min, uint64_t& max);
+
+
     void printName(int level = 0) const;
     virtual bool failed(void) const;
   private:

@@ -108,53 +108,71 @@ void RuleBuilder::eraseDBRule(rulearr_ty::const_iterator& it)
 
 	to_rmv = *it;
 	/* first, try the hint */
-	if (to_rmv->getOffsetHint()) {
-		ExprRule	*er;
-		std::streampos	off_hint;
-
-		off_hint = (std::streampos)to_rmv->getOffsetHint();
-
-		ifs.seekg(off_hint);
-		er = ExprRule::loadBinaryRule(ifs);
-		if (er != NULL && *er == *to_rmv) {
-			std::streampos new_pos = ifs.tellg();
-			ifs.seekg(off_hint);
-			ExprRule::printTombstone(ifs, new_pos - off_hint);
-			delete er;
+	if (to_rmv->getOffsetHint())
+		if (eraseDBRuleHint(ifs, to_rmv))
 			return;
-
-		}
-
-		if (er != NULL) delete er;
-
-		ifs.seekg(0);
-	}
 
 	/* hint was bogus-- do a full scan like a jackass */
 	last_pos = 0;
 	while (ifs.eof() == false) {
-		ExprRule	*er;
-		std::streampos	new_pos;
-
-		er = ExprRule::loadBinaryRule(ifs);
-		new_pos = ifs.tellg();
-
-		if (er == NULL) {
-			last_pos = new_pos;
-			continue;
-		}
-
-		if (*er == *to_rmv) {
-			assert (last_pos < new_pos);
-			ifs.seekg(last_pos);
-			ExprRule::printTombstone(ifs, new_pos - last_pos);
-			delete er;
+		if (tryEraseDBRule(ifs, last_pos, to_rmv))
 			return;
-		}
-
-		last_pos = new_pos;
-		delete er;
 	}
+}
+
+bool RuleBuilder::tryEraseDBRule(
+	std::fstream& ifs,
+	std::streampos& last_pos,
+	const ExprRule* to_rmv)
+{
+	ExprRule	*er;
+	std::streampos	new_pos;
+
+	er = ExprRule::loadBinaryRule(ifs);
+	new_pos = ifs.tellg();
+
+	if (er == NULL) {
+		last_pos = new_pos;
+		return false;
+	}
+
+	if (*er == *to_rmv) {
+		assert (last_pos < new_pos);
+		ifs.seekg(last_pos);
+		ExprRule::printTombstone(ifs, new_pos - last_pos);
+		delete er;
+		return true;
+	}
+
+	last_pos = new_pos;
+	delete er;
+	return false;
+}
+
+bool RuleBuilder::eraseDBRuleHint(
+	std::fstream& ifs,
+	const ExprRule* to_rmv)
+{
+	ExprRule	*er;
+	std::streampos	off_hint;
+
+	off_hint = (std::streampos)to_rmv->getOffsetHint();
+
+	ifs.seekg(off_hint);
+	er = ExprRule::loadBinaryRule(ifs);
+	if (er != NULL && *er == *to_rmv) {
+		std::streampos new_pos = ifs.tellg();
+		ifs.seekg(off_hint);
+		ExprRule::printTombstone(ifs, new_pos - off_hint);
+		delete er;
+		return true;
+
+	}
+
+	if (er != NULL) delete er;
+
+	ifs.seekg(0);
+	return false;
 }
 
 const std::string& RuleBuilder::getDBPath(void) const { return RuleDBFile; }
@@ -202,6 +220,7 @@ bool RuleBuilder::loadRuleDir(const char* ruledir)
 	return true;
 }
 
+#define RB_MAX_RECUR	5
 
 ref<Expr> RuleBuilder::tryApplyRules(const ref<Expr>& in)
 {
@@ -211,11 +230,10 @@ ref<Expr> RuleBuilder::tryApplyRules(const ref<Expr>& in)
 	if (in->getKind() == Expr::Constant)
 		return in;
 
-	recur++;
-	if (recur > 10) {
-		recur--;
+	if (recur > RB_MAX_RECUR)
 		return in;
-	}
+
+	recur++;
 
 	/* don't call back to self in case we find an optimization! */
 	old_depth = depth;
@@ -247,7 +265,7 @@ ref<Expr> RuleBuilder::tryApplyRules(const ref<Expr>& in)
 	return ret;
 }
 
-class TrieRuleIterator : public ExprRule::RuleIterator
+class TrieRuleIterator : public ExprPatternMatch::RuleIterator
 {
 public:
 	TrieRuleIterator(const RuleBuilder::ruletrie_ty& _rt)
@@ -263,12 +281,19 @@ public:
 		it = rt.begin();
 	}
 
+	virtual bool skipValue(void)
+	{
+		if (isDone()) return false;
+	
+		assert (0 == 1 && "HOW I DO I SKIP VALUE IN TRIE???");
+		return true;
+	}
+
 	virtual bool matchValue(uint64_t v)
 	{
 		bool	is_matched;
 
-		if (found_rule)
-			return false;
+		if (isDone()) return false;
 
 		it.next(v);
 		if (it.isFound())
@@ -277,6 +302,9 @@ public:
 		is_matched = (it != rt.end() || found_rule);
 		return is_matched;
 	}
+
+	virtual bool matchCLabel(uint64_t& v) { assert (0 == 1 && "STUB"); }
+
 	virtual bool matchLabel(uint64_t& v)
 	{
 		bool		found_label;
