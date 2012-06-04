@@ -131,7 +131,7 @@ public:
 protected:
 	virtual ExprFlatWriter::Action preTagVisit(const Expr* e)
 	{
-		(*os) << "c" << tag_c++
+		(*os) << " c" << tag_c++
 			<< ' ' << e->getWidth()
 			<< ' ' << *e << ' ';
 		return Close;
@@ -175,15 +175,24 @@ bool ExprRule::operator==(const ExprRule& er) const
 void ExprRule::printBinaryRule(std::ostream& os) const
 {
 	uint64_t	hdr;
+	uint16_t	num_constrs;
 
 	hdr = (const_constraints == NULL)
 		? ER_HDR_MAGIC1
 		: ER_HDR_MAGIC2;
-	assert (const_constraints == NULL && "STUB: Write constraints");
 
 	os.write((char*)&hdr, 8);
 	printBinaryPattern(os, from);
 	printBinaryPattern(os, to);
+
+	if (const_constraints == NULL)
+		return;
+
+	/* 64 thousand constraints should be enough for any rule */
+	num_constrs = const_constraints->size();
+	os.write((char*)&num_constrs, 2);
+	foreach (it, const_constraints->begin(), const_constraints->end())
+		printBinaryPattern(os, *it);
 }
 
 ExprRule* ExprRule::changeDest(const ExprRule* er, const ref<Expr>& to)
@@ -261,13 +270,34 @@ ExprRule* ExprRule::loadBinaryRule(std::istream& is)
 	loadBinaryPattern(is, p_from);
 	loadBinaryPattern(is, p_to);
 
-	assert (hdr != ER_HDR_MAGIC2 && "STUB: EXPECT CONSTRAINTS");
-
 	if (is.fail())
 		return NULL;
 
 	er = new ExprRule(p_from, p_to);
 	er->off_hint = off;
+
+	/* load constant constraints */
+	if (hdr == ER_HDR_MAGIC2) {
+		uint16_t 		num_constr;
+		std::vector<Pattern>	*constr;
+
+		if (!is.read((char*)&num_constr, 2)) {
+			delete er;
+			return NULL;
+		}
+
+		constr = new std::vector<Pattern>(num_constr);
+		for (unsigned i = 0; i < num_constr; i++) {
+			loadBinaryPattern(is, (*constr)[i]);
+		}
+
+		if (is.fail()) {
+			delete constr;
+			delete er;
+		}
+
+		er->const_constraints = constr;
+	}
 
 	return er;
 }
@@ -451,6 +481,7 @@ ExprRule* ExprRule::addConstraints(
 
 	if (p.readFlatExpr(ss) == false) {
 		std::cerr << "[ExprRule] Failed to add constraints\n";
+		std::cerr << "BAD PATTERN: " << ss.str() << '\n';
 		return NULL;
 	}
 

@@ -62,10 +62,10 @@ void DBScan::addRule(const ExprRule* er)
 	if (kc_it == kc_map.end()) {
 		kc = new KnockoutClass(kr);
 		kc_map.insert(std::make_pair(kr->getKOExpr(), kc));
-	} else
+	} else {
 		kc = kc_it->second;
-
-	kc->addRule(kr);
+		kc->addRule(kr);
+	}
 }
 
 void DBScan::loadKnockoutRulesFromBuilder()
@@ -109,7 +109,7 @@ void DBScan::histo(void)
 	}
 }
 
-void DBScan::punchout(void)
+void DBScan::punchout(std::ostream& os)
 {
 	std::vector<newrule_ty>		valid_kos;
 	unsigned			rule_match_c;
@@ -136,18 +136,14 @@ void DBScan::punchout(void)
 		valid_kos.push_back(std::make_pair(kr, new_rule));
 		rule_match_c += kc->size();
 		std::cerr << "TOTAL RULES: " << valid_kos.size() << '\n';
+		new_rule->printBinaryRule(os);
+		os.flush();
 	}
 	std::cerr << '\n';
 	std::cerr << "TOTAL VALID KO's: " << valid_kos.size() << '\n';
 	std::cerr << "TOTAL RULES MATCHED: " << rule_match_c << '\n';
 
 	/* free created rules */
-	foreach (it, valid_kos.begin(), valid_kos.end()) {
-		const ExprRule	*er(it->second);
-		std::cerr << "example-from: " << er->getFromExpr() << '\n';
-		ref<Expr> e(er->getFromExpr());
-//		std::cerr << "ko-from: " << ko.knockoutConsts(e) << '\n';
-		std::cerr << "example-to: " << er->getToExpr() << '\n';
+	foreach (it, valid_kos.begin(), valid_kos.end())
 		delete it->second;
-	}
 }

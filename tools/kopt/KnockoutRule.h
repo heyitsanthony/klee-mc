@@ -1,6 +1,7 @@
 #ifndef KNOCKOUTRULE_H
 #define KNOCKOUTRULE_H
 
+#include "klee/util/ExprTag.h"
 #include "klee/util/Ref.h"
 
 namespace klee
@@ -19,6 +20,9 @@ public:
 	ref<Expr> getKOExpr(void) const;
 	const ExprRule* getExprRule(void) const { return er; }
 	ExprRule* createRule(Solver* s) const;
+
+	exprtags_ty getTags(int slot = -1 /* all tags */) const;
+
 private:
 	bool isConstInvariant(Solver* s) const;
 	bool isRangedRuleValid(

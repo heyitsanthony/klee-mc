@@ -303,7 +303,13 @@ public:
 		return is_matched;
 	}
 
-	virtual bool matchCLabel(uint64_t& v) { assert (0 == 1 && "STUB"); }
+	virtual bool matchCLabel(uint64_t& v)
+	{
+		if (found_rule) return false;
+		/* XXX: fix this!!! */
+		// assert (0 == 1 && "STUB");
+		return false;
+	}
 
 	virtual bool matchLabel(uint64_t& v)
 	{

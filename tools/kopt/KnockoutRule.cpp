@@ -201,8 +201,13 @@ bool KnockoutRule::isRangedRuleValid(
 	ref<Expr>	e_from;
 	int		i;
 
+
 	e_from = er->getFromExpr();
 	i = -1;
+
+	std::cerr << "TRYING RANGES FOR:\n";
+	std::cerr << "FROM-EXPR={" << e_from << "}\n";
+	std::cerr << "TO-EXPR={" << er->getToExpr() << "}\n";
 	foreach (it, kout->begin(), kout->end()) {
 		KnockOut		kout_partial(arr, i+1);
 		ref<Expr>		rule_eq;
@@ -226,23 +231,23 @@ bool KnockoutRule::isRangedRuleValid(
 			continue;
 		}
 		if (!isValidRange(s, rule_eq, it->first, r.first, r.second)) {
-			std::cerr << "INVALID RANGE\n";
-			std::cerr << "RANGE: [" << r.first
-				<< ", " << r.second << "]\n";
-			std::cerr << "FROM-EXPR={" << e_from << "}\n";
+			std::cerr << "INVALID RANGE: ["
+				<< r.first << ", " << r.second << "]\n";
 			continue;
 		}
+
+		e_range = getRangeExpr(it->first, r.first, r.second);
 
 		er->printPrettyRule(std::cerr);
 		std::cerr << "\n======================\n";
 		std::cerr << "\nIT-FIRST: " << it->first << '\n';
-		std::cerr << "\nIGN-IDX: " << i << '\n';
-		std::cerr << "\nE-FROM: " << e_from << '\n';
-		std::cerr << "\nPART-KO: " << e_ko << '\n';
-		std::cerr << "\nORIG-KO: " << ko << '\n';
+		std::cerr << "IGN-IDX: " << i << '\n';
+		std::cerr << "E-FROM: " << e_from << '\n';
+		std::cerr << "PART-KO: " << e_ko << '\n';
+		std::cerr << "ORIG-KO: " << ko << '\n';
+		std::cerr << "RANGE-EXPR " << e_range << '\n';
 		std::cerr << "\n=====================\n";
 		slot = i;
-		e_range = getRangeExpr(it->first, r.first, r.second);
 		return true;
 	}
 
@@ -273,25 +278,32 @@ bool KnockoutRule::isConstInvariant(Solver* s) const
 	return mustBeTrue;
 }
 
+exprtags_ty KnockoutRule::getTags(int slot) const
+{
+	ExprVisitorTagger<KnockOut>	tag_kout;
+	ref<Expr>			e_from;
+
+	tag_kout.setParams(arr, slot);
+	e_from = er->getFromExpr();
+	tag_kout.apply(e_from);
+
+	assert (tag_kout.getPreTags().size() > 0);
+	return tag_kout.getPreTags();
+}
+
 ExprRule* KnockoutRule::createFullRule(Solver* s) const
 {
 	ExprRule			*er_ret;
-	ExprVisitorTagger<KnockOut>	tag_kout;
-	ref<Expr>			e_from;
+	exprtags_ty			tags;
 
 	if (!isConstInvariant(s))
 		return NULL;
 
-	tag_kout.setParams(arr, -1);
-	e_from = er->getFromExpr();
-	tag_kout.apply(e_from);
-	assert (tag_kout.getPreTags().size() > 0);
+	tags = getTags();
 
-	std::vector<ref<Expr> >	cs(
-		tag_kout.getPreTags().size(),
-		ConstantExpr::create(1, 1));
+	std::vector<ref<Expr> >	cs(tags.size(), ConstantExpr::create(1, 1));
 
-	er_ret = er->addConstraints(arr, tag_kout.getPreTags(), cs);
+	er_ret = er->addConstraints(arr, tags, cs);
 	assert (er_ret != NULL);
 	return er_ret;
 }
@@ -299,30 +311,27 @@ ExprRule* KnockoutRule::createFullRule(Solver* s) const
 ExprRule* KnockoutRule::createPartialRule(Solver* s) const
 {
 	ExprRule			*er_ret;
-	ExprVisitorTagger<KnockOut>	tag_kout;
+	exprtags_ty			tags;
 	int				slot;
-	ref<Expr>			e_from, e_range;
+	ref<Expr>			e_range;
 
 	if (!isRangedRuleValid(s, slot, e_range))
 		return NULL;
 
-	tag_kout.setParams(arr, slot);
-	e_from = er->getFromExpr();
-	tag_kout.apply(e_from);
-	if (tag_kout.getPreTags().size() != 1)
+	tags = getTags(slot);
+	if (tags.size() != 1)
 		std::cerr << "WHOOPS! SLOT="
 			<< slot
 			<< ". PRETAGS = "
-			<< tag_kout.getPreTags().size() << '\n';
-	assert (tag_kout.getPreTags().size() == 1);
+			<< tags.size() << '\n';
+	assert (tags.size() == 1);
 
-	std::vector<ref<Expr> >	cs(tag_kout.getPreTags().size(), e_range);
+	std::vector<ref<Expr> >	cs(tags.size(), e_range);
 
-	er_ret = er->addConstraints(arr, tag_kout.getPreTags(), cs);
+	er_ret = er->addConstraints(arr, tags, cs);
 	assert (er_ret != NULL);
 	return er_ret;
 }
-
 
 /* create a knocked-out rule */
 ExprRule* KnockoutRule::createRule(Solver* s) const

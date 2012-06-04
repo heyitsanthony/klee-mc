@@ -1,6 +1,7 @@
 #ifndef DBSCAN_H
 #define DBSCAN_H
 
+#include <iostream>
 #include <map>
 #include <vector>
 #include "klee/util/Ref.h"
@@ -19,7 +20,7 @@ class DBScan
 public:
 	DBScan(Solver*);
 	virtual ~DBScan();
-	void punchout(void);
+	void punchout(std::ostream& os);
 	void histo(void);
 private:
 	typedef std::pair<const KnockoutRule*, ExprRule*> newrule_ty;

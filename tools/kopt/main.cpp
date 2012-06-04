@@ -400,9 +400,9 @@ static void rebuildBRule(ExprBuilder* eb, Solver* s)
 		}
 
 		std::stringstream	ss;
-
-		er->printPrettyRule(ss);
-		er_rebuild = ExprRule::loadPrettyRule(ss);
+		/* XXX: was pretty rule only: any reason for this? */
+		er->printBinaryRule(ss);
+		er_rebuild = ExprRule::loadBinaryRule(ss);
 
 		/* ensure we haven't corrupted the from-expr--
 		 * otherwise, it might not match during runtime! */
@@ -547,8 +547,9 @@ int main(int argc, char **argv)
 		DBScan	dbs(s);
 		dbs.histo();
 	} else if (DBPunchout) {
-		DBScan	dbs(s);
-		dbs.punchout();
+		DBScan		dbs(s);
+		std::ofstream	of(InputFile.c_str());
+		dbs.punchout(of);
 	} else if (CheckDup) {
 		checkDup(eb, s);
 	} else if (BRuleRebuild) {

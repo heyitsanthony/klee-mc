@@ -93,12 +93,39 @@ public:
 
 protected:
 	virtual typename T::Action preTagVisit(const Expr* e) = 0;
-	virtual void postTagVisit(const Expr* e) = 0;
+	virtual void postTagVisit(const Expr* e) {}
 
 	unsigned			tag_pre, tag_post;
 private:
 	const exprtags_ty		&tags_pre, &tags_post;
 	exprtags_ty::const_iterator	pre_it, post_it;
 };
+
+class ExprGetTag : public ExprVisitorTags<ExprConstVisitorNull>
+{
+public:
+	static ref<Expr> getExpr(const ref<Expr>& e, int n)
+	{
+		exprtags_ty	pre(1, n), post(0);
+		ExprGetTag	egt(pre, post);
+
+		egt.ret_expr = NULL;
+		egt.apply(e);
+		return egt.ret_expr;
+	}
+	virtual ~ExprGetTag() {}
+protected:
+	ExprGetTag(const exprtags_ty& pre, const exprtags_ty& post)
+	: ExprVisitorTags<ExprConstVisitorNull>(pre, post) {}
+
+	Action preTagVisit(const Expr* e)
+	{
+		ret_expr = ref<Expr>(const_cast<Expr*>(e));
+		return Stop;
+	}
+private:
+	ref<Expr>	ret_expr;
+};
+
 }
 #endif

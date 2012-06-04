@@ -19,7 +19,7 @@ public:
 
 	void addRule(const KnockoutRule* er);
 
-	const KnockoutRule* front(void) const { return kr; }
+	const KnockoutRule* front(void) const { return root_kr; }
 	rules_ty::const_iterator begin(void) const { return rules.begin(); }
 	rules_ty::const_iterator end(void) const { return rules.end() ; }
 	unsigned size(void) const { return rules.size(); }
@@ -28,9 +28,14 @@ private:
 	KnockoutClass() {}
 
 	/* main knockout-rule */
-	const KnockoutRule	*kr;
+	const KnockoutRule	*root_kr;
 	/* list of additional knock-out rules */
 	rules_ty		rules;
+
+	typedef std::map<int, std::set<uint64_t> >	tagvals_ty;
+	tagvals_ty	tagvals;
+
+	exprtags_ty	tags;
 };
 }
 

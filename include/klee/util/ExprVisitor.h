@@ -35,6 +35,12 @@ private:
 	bool visit_update_lists;
 };
 
+class ExprConstVisitorNull : public ExprConstVisitor
+{
+protected:
+	virtual Action visitExpr(const Expr* expr) { return Expand; }
+};
+
 class ExprVisitor
 {
 protected:
