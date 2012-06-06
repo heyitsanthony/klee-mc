@@ -44,8 +44,7 @@ public:
 	virtual ~ExprRule() {}
 
 	void printBinaryRule(std::ostream& os) const;
-	void printPrettyRule(std::ostream& os) const
-	{ printRule(os, getFromExpr(), getToExpr()); }
+	void printPrettyRule(std::ostream& os) const;
 
 	ref<Expr> materialize(void) const;
 	ref<Expr> getFromExpr(void) const { return from.anonFlat2Expr(); }

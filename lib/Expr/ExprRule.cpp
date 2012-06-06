@@ -195,9 +195,22 @@ void ExprRule::printBinaryRule(std::ostream& os) const
 		printBinaryPattern(os, *it);
 }
 
+void ExprRule::printPrettyRule(std::ostream& os) const
+{
+	assert (const_constraints == NULL);
+	printRule(os, getFromExpr(), getToExpr());
+}
+
 ExprRule* ExprRule::changeDest(const ExprRule* er, const ref<Expr>& to)
 {
 	std::stringstream	ss;
+
+	if (er->const_constraints != NULL) {
+		std::cerr << "[ExprRule] can't change dest w/ constraints\n";
+		assert (0 == 1 && "ARGHG");
+		return NULL;
+	}
+
 	printRule(ss, er->getFromExpr(), to);
 	return loadPrettyRule(ss);
 }
@@ -287,9 +300,8 @@ ExprRule* ExprRule::loadBinaryRule(std::istream& is)
 		}
 
 		constr = new std::vector<Pattern>(num_constr);
-		for (unsigned i = 0; i < num_constr; i++) {
+		for (unsigned i = 0; i < num_constr; i++)
 			loadBinaryPattern(is, (*constr)[i]);
-		}
 
 		if (is.fail()) {
 			delete constr;

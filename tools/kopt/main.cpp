@@ -1,7 +1,11 @@
 #include <iostream>
 #include <sstream>
 
-#include "DBScan.h"
+#include <llvm/Support/CommandLine.h>
+#include <llvm/Support/ManagedStatic.h>
+#include <llvm/Support/Signals.h>
+#include <llvm/Support/system_error.h>
+
 #include "../../lib/Expr/SMTParser.h"
 #include "../../lib/Expr/ExprRule.h"
 #include "../../lib/Expr/RuleBuilder.h"
@@ -21,10 +25,8 @@
 #include "klee/util/ExprUtil.h"
 #include "klee/util/Assignment.h"
 
-#include <llvm/Support/CommandLine.h>
-#include <llvm/Support/ManagedStatic.h>
-#include <llvm/Support/Signals.h>
-#include <llvm/Support/system_error.h>
+#include "Benchmarker.h"
+#include "DBScan.h"
 
 using namespace llvm;
 using namespace klee;
@@ -85,6 +87,12 @@ namespace llvm
 		cl::init(false));
 
 	cl::opt<bool>
+	DumpDB(
+		"dump-db",
+		cl::desc("Dump rule db in pretty format."),
+		cl::init(false));
+
+	cl::opt<bool>
 	BRuleXtive(
 		"brule-xtive",
 		cl::desc("Search for transitive rules in brule database"),
@@ -125,7 +133,6 @@ namespace llvm
 
 void xtiveBRule(ExprBuilder *eb, Solver* s);
 bool checkRule(const ExprRule* er, Solver* s, std::ostream&);
-void benchmarkRules(ExprBuilder *eb, Solver* s);
 
 /*
 (= (ite (bvult (bvadd bv2936[64] ( zero_extend[56] ( select ?e1 bv37[32] )))
@@ -377,7 +384,49 @@ static void printRule(ExprBuilder *eb, Solver* s)
 	delete p;
 }
 
-static void rebuildBRule(ExprBuilder* eb, Solver* s)
+static void rebuildBRule(
+	ExprBuilder* eb,
+	Solver *s,
+	const ExprRule* er,
+	std::ostream& of)
+{
+	ExprRule	*er_rebuild;
+
+	if (checkRule(er, s, std::cout) == false) {
+		std::cerr << "BAD RULE:\n";
+		er->printPrettyRule(std::cerr);
+		return;
+	}
+
+	std::stringstream	ss;
+	/* XXX: was pretty rule only: any reason for this? */
+	er->printBinaryRule(ss);
+	er_rebuild = ExprRule::loadBinaryRule(ss);
+
+	/* ensure we haven't corrupted the from-expr--
+	 * otherwise, it might not match during runtime! */
+	if (	ExprUtil::getNumNodes(er_rebuild->getFromExpr()) !=
+		ExprUtil::getNumNodes(er->getFromExpr()))
+	{
+		std::cerr << "BAD REBUILD:\n";
+		std::cerr << "ORIGINAL:\n";
+		er->printPrettyRule(std::cerr);
+		std::cerr << "NEW:\n";
+		er_rebuild->printPrettyRule(std::cerr);
+
+		std::cerr	<< "ORIG-EXPR: "
+				<< er->getFromExpr() << '\n'
+				<< "NEW-EXPR: "
+				<< er_rebuild->getFromExpr() << '\n';
+		delete er_rebuild;
+		return;
+	}
+
+	er_rebuild->printBinaryRule(of);
+	delete er_rebuild;
+}
+
+static void rebuildBRules(ExprBuilder* eb, Solver* s)
 {
 	std::ofstream		of(InputFile.c_str());
 	RuleBuilder		*rb;
@@ -386,45 +435,11 @@ static void rebuildBRule(ExprBuilder* eb, Solver* s)
 	assert (of.good() && !of.fail());
 
 	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
+
 	i = 0;
-
 	foreach (it, rb->begin(), rb->end()) {
-		const ExprRule	*er = *it;
-		ExprRule	*er_rebuild;
-
 		std::cerr << "[" << ++i << "]: ";
-		if (checkRule(er, s, std::cout) == false) {
-			std::cerr << "BAD RULE:\n";
-			er->printPrettyRule(std::cerr);
-			continue;
-		}
-
-		std::stringstream	ss;
-		/* XXX: was pretty rule only: any reason for this? */
-		er->printBinaryRule(ss);
-		er_rebuild = ExprRule::loadBinaryRule(ss);
-
-		/* ensure we haven't corrupted the from-expr--
-		 * otherwise, it might not match during runtime! */
-		if (	ExprUtil::getNumNodes(er_rebuild->getFromExpr()) !=
-			ExprUtil::getNumNodes(er->getFromExpr()))
-		{
-			std::cerr << "BAD REBUILD:\n";
-			std::cerr << "ORIGINAL:\n";
-			er->printPrettyRule(std::cerr);
-			std::cerr << "NEW:\n";
-			er_rebuild->printPrettyRule(std::cerr);
-
-			std::cerr	<< "ORIG-EXPR: "
-					<< er->getFromExpr() << '\n'
-					<< "NEW-EXPR: "
-					<< er_rebuild->getFromExpr() << '\n';
-			delete er_rebuild;
-			continue;
-		}
-
-		er_rebuild->printBinaryRule(of);
-		delete er_rebuild;
+		rebuildBRule(eb, s, *it, of);	
 	}
 
 	delete rb;
@@ -519,6 +534,16 @@ static void dumpRule(Solver* s)
 	dumpRuleDir(s);
 }
 
+void dumpDB(void)
+{
+	RuleBuilder	*rb;
+
+	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
+	foreach (it, rb->begin(), rb->end())
+		(*it)->printPrettyRule(std::cout);
+	delete rb;
+}
+
 int main(int argc, char **argv)
 {
 	Solver		*s;
@@ -539,10 +564,13 @@ int main(int argc, char **argv)
 		return -3;
 	}
 
-	if (AddRule) {
+	if (DumpDB) {
+		dumpDB();
+	} else if (AddRule) {
 		addRule(eb, s);
 	} else if (BenchmarkRules) {
-		benchmarkRules(eb, s);
+		Benchmarker	bm(s, BuilderKind);
+		bm.benchRules();
 	} else if (DBHisto) {
 		DBScan	dbs(s);
 		dbs.histo();
@@ -553,7 +581,7 @@ int main(int argc, char **argv)
 	} else if (CheckDup) {
 		checkDup(eb, s);
 	} else if (BRuleRebuild) {
-		rebuildBRule(eb, s);
+		rebuildBRules(eb, s);
 	} else if (BRuleXtive) {
 		xtiveBRule(eb, s);
 	} else if (DumpBinRule) {
