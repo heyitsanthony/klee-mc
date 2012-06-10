@@ -108,6 +108,7 @@ namespace klee
 
     std::vector<KFunction*>::const_iterator kfuncsEnd() const
     { return functions.end(); }
+    unsigned getNumKFuncs(void) const { return functions.size(); }
 
     unsigned getWidthForLLVMType(llvm::Type* type) const;
 
