@@ -225,7 +225,10 @@ Searcher* UserSearcher::setupInterleavedSearcher(
 		FreshBranch,
 		new PrioritySearcher(
 			new Weight2Prioritizer<FreshBranchWeight>(1),
-			new RandomSearcher(),
+			//new RandomSearcher(),
+			new RescanSearcher(
+				new Weight2Prioritizer<
+					StateInstCountWeight>(-1.0)),
 			100));
 
 	PUSH_ILEAV_IF_SET(Histo, SEARCH_HISTO);
