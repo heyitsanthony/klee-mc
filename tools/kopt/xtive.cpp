@@ -1,6 +1,7 @@
 #include <iostream>
 #include "../../lib/Expr/ExprRule.h"
 #include "../../lib/Expr/RuleBuilder.h"
+#include "../../lib/Expr/ExprReplaceVisitor.h"
 #include "klee/Expr.h"
 #include "klee/ExprBuilder.h"
 #include "klee/Solver.h"
@@ -14,6 +15,23 @@ extern ExprBuilder::BuilderKind	BuilderKind;
 
 bool checkRule(const ExprRule* er, Solver* s, std::ostream&);
 
+
+static ref<Expr> fixupDisjointLabels(
+	ref<Expr>& to_expr,
+	const std::set<ref<ReadExpr> >& disjoined)
+{
+	/* Element in to-set that does not exist in from set??
+	 * Must be nonsense. Replace with 0. */
+	ref<Expr>	v(to_expr);
+
+	foreach (it, disjoined.begin(), disjoined.end()) {
+		ExprReplaceVisitor	erv(*it, ConstantExpr::create(0, 8));
+		v = erv.apply(v);
+	}
+
+	return v;
+}
+
 static ref<Expr> getLabelErrorExpr(const ExprRule* er)
 {
 	/* could have been a label error;
@@ -21,6 +39,7 @@ static ref<Expr> getLabelErrorExpr(const ExprRule* er)
 	ref<Expr>			from_expr, to_expr;
 	std::vector<ref<ReadExpr> >	from_reads, to_reads;
 	std::set<ref<ReadExpr> >	from_set, to_set;
+	std::set<ref<ReadExpr> >	disjoined;
 
 	to_expr = er->getToExpr();
 	from_expr = er->getFromExpr();
@@ -37,29 +56,14 @@ static ref<Expr> getLabelErrorExpr(const ExprRule* er)
 		if (from_set.count(*it))
 			continue;
 
-		/* element in to-set that does not
-		 * exist in from set?? Likely a constant. */
-		Assignment		a(to_expr);
-		ref<Expr>		v;
-		const ConstantExpr	*ce;
+		disjoined.insert(*it);
 
-		a.bindFreeToZero();
-		v = a.evaluate(to_expr);
-		ce = dyn_cast<ConstantExpr>(v);
-		if (ce == NULL)
-			break;
-
-		/* fixup idea here is that it might actually be a constant
-		 * rule; so evaluate with whatever params to get a const
-		 * thentry that as the to-expr instead */
-		// std::cerr << "Attempting LabelError fixup for"
-		//	<< "\nfrom-expr=" << from_expr
-		//	<< "\nto-expr=" << to_expr << '\n';
-		// std::cerr << "=========\n";
-		return v;
 	}
 
-	return NULL;
+	if (disjoined.empty())
+		return NULL;
+
+	return fixupDisjointLabels(to_expr, disjoined);
 }
 
 typedef std::list<
