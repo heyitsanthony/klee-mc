@@ -1,6 +1,7 @@
 #ifndef TRIE_H
 #define TRIE_H
 
+#include <iostream>
 #include "static/Sugar.h"
 #include <assert.h>
 #include <list>
@@ -32,6 +33,33 @@ public:
 
 		if (leafs != NULL) delete leafs;
 		if (td != NULL) delete td;
+	}
+
+	void dump(std::ostream& os) const
+	{
+		os << "[Trie] Dumping ptr=" << (void*)this << '\n';
+		if (td != NULL) {
+			os << "[Trie] Tail:\n";
+			os << "Key: ";
+			foreach (it, td->full_key.begin(), td->full_key.end())
+				os << (void*)(*it) << ' ';
+			os << '\n';
+		}	
+
+		if (children != NULL) {
+			os << "[Trie] children:\n";
+			foreach (it, children->begin(), children->end()) {
+				os << (void*)it->first << '\n';
+			}
+		}
+
+		if (leafs != NULL) {
+			os << "[Trie] leafs:\n";
+			foreach (it, leafs->begin(), leafs->end()) {
+				os << (void*)it->first << '\n';
+			}
+		}
+		os << "[Trie] Dump done.\n";
 	}
 
 	bool add(const std::vector<K>& k, V v)
@@ -112,7 +140,7 @@ class const_iterator
 {
 public:
 	const_iterator(const Trie* _t = 0)
-	: t(_t), depth(0), found(false) {}
+	: t(_t), t_last(0), depth(0), found(false) {}
 	virtual ~const_iterator(void) {}
 	bool operator ==(const const_iterator& it) const
 	{ return t == it.t; }
@@ -140,6 +168,7 @@ public:
 
 			it = t->leafs->lower_bound(k);
 			if (it != t->leafs->end()) {
+				t_last = t;
 				t = NULL;
 				found_k = it->first;
 				found = true;
@@ -161,6 +190,7 @@ public:
 		if (depth == t->td->full_key.size()) {
 			found = true;
 			final_v = t->td->v;
+			t_last = t;
 			t = NULL;
 		}
 
@@ -185,6 +215,7 @@ public:
 			typename valmap_ty::const_iterator it;
 			it = t->leafs->find(k);
 			if (it != t->leafs->end()) {
+				t_last = t;
 				t = NULL;
 				found = true;
 				final_v = it->second;
@@ -194,12 +225,14 @@ public:
 		}
 
 		if (t->td == NULL) {
+			t_last = t;
 			t = NULL;
 			return;
 		}
 
 		assert (depth >= t->td->depth);
 		if (t->td->full_key[depth] != k) {
+			t_last = t;
 			t = NULL;
 			return;
 		}
@@ -208,6 +241,7 @@ public:
 		if (depth == t->td->full_key.size()) {
 			found = true;
 			final_v = t->td->v;
+			t_last = t;
 			t = NULL;
 			return;
 		}
@@ -227,9 +261,23 @@ public:
 	}
 
 	bool isFound(void) const { return found; }
+	void dump(std::ostream& os) const
+	{
+		if (t != NULL) {
+			os << "Dumping 't':\n";
+			t->dump(os);
+			return;
+		}
 
+		if (t_last != NULL) {
+			os << "Dumping 't_last':\n";
+			t_last->dump(os);
+			return;
+		}
+	}
 private:
 	const Trie	*t;
+	const Trie	*t_last;
 	unsigned	depth;
 	bool		found;
 	V		final_v;
@@ -255,8 +303,7 @@ private:
 		V		v;
 	};
 
-	TailData		*td;
-
+	TailData		*td;	/* don't waste space on tails */
 };
 
 #endif

@@ -21,9 +21,9 @@ public:
 		virtual bool matchValue(uint64_t v) = 0;
 		virtual bool skipValue(void) = 0;
 		virtual bool matchLabel(uint64_t& v) = 0;
-		virtual bool matchCLabel(uint64_t& v) = 0;
 		virtual const ExprRule* getExprRule(void) const = 0;
 		virtual ~RuleIterator() {}
+		virtual void dump(void) {}
 	protected:
 		RuleIterator() {}
 	private:

@@ -12,7 +12,7 @@ ref<Expr> Pattern::flat2expr(
 	int&			off)
 {
 	flatrule_tok	tok;
-	int		op_idx;
+	unsigned	op_idx;
 	ref<Expr>	ret;
 
 	op_idx = off++;
@@ -31,13 +31,6 @@ ref<Expr> Pattern::flat2expr(
 		std::cerr	<< "[ExprRule] Flat2Expr Error. No label: "
 				<< label_num
 				<< "\n";
-
-		/*
-		std::cerr << "LABEL DUMP: " << lm.size() << '\n';
-		foreach (it2, lm.begin(), lm.end()) {
-			std::cerr << "#" << it2->first << ": " <<
-				it2->second << '\n';
-		} */
 		return NULL;
 	}
 
@@ -271,12 +264,17 @@ bool Pattern::operator ==(const Pattern& p) const
 	return true;
 }
 
-ref<Expr> Pattern::anonFlat2Expr(void) const
+ref<Expr> Pattern::anonFlat2Expr(int label_max) const
 {
 	int		off;
 	labelmap_ty	lm;
+	unsigned	max_label;
 
-	for (unsigned i = 0; i <= label_id_max; i++) {
+	max_label = (label_max == -1)
+		? label_id_max
+		: label_max;
+
+	for (unsigned i = 0; i <= max_label; i++) {
 		lm[i] = ReadExpr::create(
 			UpdateList(getMaterializeArray(), NULL),
 			ConstantExpr::create(i, 32));
@@ -292,3 +290,66 @@ ref<Array> Pattern::getMaterializeArray(void)
 		materialize_arr = Array::create("exprrule", 4096);
 	return materialize_arr;
 }
+
+/* so we can have a trie without counter examples making shit impossible */
+/* I thought this would be a pain in the butt-- turns out it was OK! */
+flatrule_ty Pattern::stripConstExamples(void) const
+{
+	flatrule_ty	ret;
+	unsigned	i;
+
+	if (clabel_c == 0)
+		return rule;
+
+	i = 0;
+	while (i < rule.size()) {
+		flatrule_tok	tok;
+
+		tok = rule[i];
+		if (OP_LABEL_TEST(tok)) {
+			ret.push_back(tok);
+			i++;
+			continue;
+		}
+
+		/* tear out constant example */
+		if (OP_CLABEL_TEST(tok)) {
+			uint64_t	bits;
+			/* keep clabel */
+			ret.push_back(tok);
+			i++;
+
+			/* keep bit width */
+			bits = rule[i];
+			ret.push_back(bits);
+
+			/* move cursor to constant data */
+			i++;
+
+			/* skip constant data */
+			i += (bits + 63)/64;
+			continue;
+		}
+
+		/* TRICKY: all expr types besides const follow a prefix rule
+		 * which means they can be safely ignored (thank god) */
+		ret.push_back(tok);
+		i++;
+		if (tok == Expr::Constant) {
+			uint64_t bits = rule[i];
+			int	chunks;
+			ret.push_back(bits);
+			i++;
+			chunks = (bits + 63)/64;
+			while (chunks) {
+				ret.push_back(rule[i]);
+				i++;
+				chunks--;
+			}
+		}
+	}
+
+	return ret;
+}
+
+bool Pattern::isConst(void) const { return (rule[0] == Expr::Constant); }

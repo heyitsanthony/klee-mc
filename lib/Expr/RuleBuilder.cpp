@@ -1,4 +1,7 @@
+
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <dirent.h>
 #include <llvm/Support/CommandLine.h>
 #include <algorithm>
@@ -19,6 +22,12 @@ using namespace klee;
 using namespace llvm;
 
 namespace {
+	cl::opt<bool>
+	RBMissFilter(
+		"rb-miss-filter",
+		cl::desc("Filter out misses by hash"),
+		cl::init(false));
+
 	cl::opt<std::string>
 	RuleDir(
 		"rule-dir",
@@ -45,6 +54,9 @@ namespace {
 uint64_t RuleBuilder::hit_c = 0;
 uint64_t RuleBuilder::miss_c = 0;
 uint64_t RuleBuilder::rule_miss_c = 0;
+uint64_t RuleBuilder::miss_filtered_c = 0;
+const ExprRule* RuleBuilder::last_er = NULL;
+
 std::set<ExprRule*> RuleBuilder::rules_used;
 
 RuleBuilder::RuleBuilder(ExprBuilder* base)
@@ -196,7 +208,7 @@ void RuleBuilder::addRule(ExprRule* er)
 		return;
 
 	rules_arr.push_back(er);
-	rules_trie.add(er->getFromKey(), er);
+	rules_trie.add(er->getFromPattern().stripConstExamples(), er);
 }
 
 bool RuleBuilder::loadRuleDir(const char* ruledir)
@@ -233,6 +245,14 @@ ref<Expr> RuleBuilder::tryApplyRules(const ref<Expr>& in)
 	if (recur > RB_MAX_RECUR)
 		return in;
 
+	if (RBMissFilter) {
+		/* known to miss? why bother.. */
+		if (miss_filter.find(in->hash()) != miss_filter.end()) {
+			miss_filtered_c++;
+			return in;
+		}
+	}
+
 	recur++;
 
 	/* don't call back to self in case we find an optimization! */
@@ -252,6 +272,8 @@ ref<Expr> RuleBuilder::tryApplyRules(const ref<Expr>& in)
 		if (DumpRuleMiss) {
 			SMTPrinter::dump(Query(ret), "miss_dump/miss");
 		}
+		if (RBMissFilter)
+			miss_filter.insert(in->hash());
 	} else {
 		if (ShowXlate) {
 			std::cerr << "[RuleBuilder] XLated!\n";
@@ -269,23 +291,21 @@ class TrieRuleIterator : public ExprPatternMatch::RuleIterator
 {
 public:
 	TrieRuleIterator(const RuleBuilder::ruletrie_ty& _rt)
-	: rt(_rt), found_rule(NULL), last_depth(0), label_depth(0)
+	: rt(_rt), found_rule(NULL), label_depth(0)
 	{}
 
 	virtual bool isDone(void) const { return found_rule != NULL; }
 	virtual void reset(void)
 	{
 		found_rule = NULL;
-		last_depth = 0;
 		label_depth = 0;
 		it = rt.begin();
 	}
 
 	virtual bool skipValue(void)
 	{
-		if (isDone()) return false;
-	
-		assert (0 == 1 && "HOW I DO I SKIP VALUE IN TRIE???");
+		/* skip value only makes sense if there's an example constant.
+		 * we strip the example constants out; so this is a no-op */
 		return true;
 	}
 
@@ -303,50 +323,14 @@ public:
 		return is_matched;
 	}
 
-	virtual bool matchCLabel(uint64_t& v)
-	{
-		if (found_rule) return false;
-		/* XXX: fix this!!! */
-		// assert (0 == 1 && "STUB");
-		return false;
-	}
+	virtual bool matchLabel(uint64_t& v);
+	virtual bool matchLabel(uint64_t& v, uint64_t mask);
 
-	virtual bool matchLabel(uint64_t& v)
-	{
-		bool		found_label;
-		uint64_t	target_label;
+	void dump(void) { it.dump(std::cerr); }
 
-		if (found_rule)
-			return false;
-
-		if (last_label_v.size() <= label_depth) {
-			last_label_v.push_back(OP_LABEL_MASK);
-			target_label = OP_LABEL_MASK;
-		} else
-			target_label = last_label_v[label_depth];
-
-		if (target_label == ~0ULL) {
-			/* already know not to look for anything here */
-			label_depth++;
-			return false;
-		}
-
-		found_label = it.tryNextMin(target_label, v);
-
-		last_label_v[label_depth] = (found_label) ? v+1 : ~0ULL;
-		if (last_label_v[label_depth] == ~0ULL) {
-			/* failed to find label; invalidate / trunc */
-			last_label_v.resize(label_depth+1);
-		}
-
-		label_depth++;
-
-		if (it.isFound())
-			found_rule = it.get();
-
-		return found_label;
-	}
-
+	/* Find last non-invalid label and increment by one,
+	 * then shrink label list to that label to reflect unevaluated
+	 * labels. Essentially simulates DFS search. */
 	bool bumpSlot(void)
 	{
 		int i;
@@ -361,6 +345,14 @@ public:
 		return false;
 	}
 
+	void dumpSlots(std::ostream& os)
+	{
+		os << "Dumping slots:\n";
+		foreach (it, last_label_v.begin(), last_label_v.end())
+			os << (void*)(*it) << ' ';
+		os << '\n';
+	}
+
 	virtual ~TrieRuleIterator() {}
 	virtual ExprRule* getExprRule(void) const { return found_rule; }
 private:
@@ -368,10 +360,56 @@ private:
 	const RuleBuilder::ruletrie_ty	&rt;
 	ExprRule			*found_rule;
 	std::vector<uint64_t>		last_label_v;
-	unsigned			last_depth;
 	unsigned			label_depth;
 	RuleBuilder::ruletrie_ty::const_iterator	it;
 };
+
+bool TrieRuleIterator::matchLabel(uint64_t& v)
+{
+	if (found_rule)
+		return false;
+
+	return matchLabel(v, OP_LABEL_MASK);
+}
+
+bool TrieRuleIterator::matchLabel(uint64_t& v, uint64_t mask)
+{
+	bool		found_label;
+	uint64_t	target_label;
+
+	if (last_label_v.size() <= label_depth) {
+		/* try new label */
+		last_label_v.push_back(mask);
+		target_label = mask;
+	} else {
+		/* replay label from last run */
+		target_label = last_label_v[label_depth];
+	}
+
+	if (target_label == ~0ULL) {
+		/* already know not to look for anything here */
+		label_depth++;
+		return false;
+	}
+
+	/* find minimum where label >= target_label */
+	found_label = it.tryNextMin(target_label, v);
+
+	/* mark bump replay label */
+	last_label_v[label_depth] = (found_label) ? v : ~0ULL;
+	if (last_label_v[label_depth] == ~0ULL) {
+		/* failed to find label; invalidate / trunc */
+		last_label_v.resize(label_depth+1);
+	}
+
+	label_depth++;
+
+	if (it.isFound()) {
+		found_rule = it.get();
+	}
+	
+	return found_label;
+}
 
 ref<Expr> RuleBuilder::tryTrieRules(const ref<Expr>& in)
 {
@@ -382,10 +420,12 @@ ref<Expr> RuleBuilder::tryTrieRules(const ref<Expr>& in)
 		new_expr = ExprRule::apply(in, tri);
 		if (new_expr.isNull() == false) {
 			rules_used.insert(tri.getExprRule());
+			last_er = tri.getExprRule();
 			return new_expr;
 		}
 
 		rule_miss_c++;
+
 		if (tri.bumpSlot() == false)
 			break;
 	}
@@ -400,18 +440,16 @@ ref<Expr> RuleBuilder::tryAllRules(const ref<Expr>& in)
 		ref<Expr>	new_expr;
 
 		new_expr = er->apply(in);
-		if (!new_expr.isNull())
+		if (!new_expr.isNull()) {
+			last_er = er;
 			return new_expr;
+		}
 
 		rule_miss_c++;
 	}
 
 	return in;
 }
-
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 bool RuleBuilder::hasRule(const char* fname)
 {

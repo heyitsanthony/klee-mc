@@ -1,6 +1,7 @@
 #ifndef RULEBUILDER_H
 #define RULEBUILDER_H
 
+#include <tr1/unordered_set>
 #include "static/Trie.h"
 #include "klee/ExprBuilder.h"
 
@@ -150,14 +151,16 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS)	\
 	static uint64_t getHits(void) { return hit_c; }
 	static uint64_t getMisses(void) { return miss_c; }
 	static uint64_t getRuleMisses(void) { return rule_miss_c; }
+	static uint64_t getFiltered(void) { return miss_filtered_c; }
 	static uint64_t getNumRulesUsed(void) { return rules_used.size(); }
+	static const ExprRule* getLastRule(void) { return last_er; }
 
 	static bool hasRule(const char* fname);
 
 	rulearr_ty::const_iterator begin(void) const
 	{ return rules_arr.begin(); }
-
 	rulearr_ty::const_iterator end(void) const { return rules_arr.end(); }
+	unsigned size(void) const { return rules_arr.size(); }
 
 	void eraseDBRule(rulearr_ty::const_iterator& it);
 
@@ -191,8 +194,12 @@ private:
 	static uint64_t		hit_c;
 	static uint64_t		miss_c;
 	static uint64_t		rule_miss_c;
+	static uint64_t		miss_filtered_c;
+	static const ExprRule	*last_er;
 
-	static std::set<ExprRule*> rules_used;
+	static std::set<ExprRule*>	rules_used;
+	std::tr1::unordered_set<Expr::Hash>	miss_filter;
+
 };
 }
 

@@ -201,6 +201,26 @@ void ExprRule::printPrettyRule(std::ostream& os) const
 	printRule(os, getFromExpr(), getToExpr());
 }
 
+void ExprRule::print(std::ostream& os) const
+{
+	unsigned	i;
+
+	printRule(os, getFromExpr(), getToExpr());
+	if (const_constraints == NULL)
+		return;
+
+	i = 0;
+	foreach (it, const_constraints->begin(), const_constraints->end()) {
+		ExprFlatWriter	efw(&os);
+		ref<Expr>	pat_expr;
+
+		os << "Const[" << i++ << "]: ";
+		pat_expr = (*it).anonFlat2Expr((*it).label_c*8);
+		efw.apply(pat_expr);
+		os << '\n';
+	}
+}
+
 ExprRule* ExprRule::changeDest(const ExprRule* er, const ref<Expr>& to)
 {
 	std::stringstream	ss;
@@ -299,6 +319,7 @@ ExprRule* ExprRule::loadBinaryRule(std::istream& is)
 			return NULL;
 		}
 
+		er->from.clabel_c = num_constr;
 		constr = new std::vector<Pattern>(num_constr);
 		for (unsigned i = 0; i < num_constr; i++)
 			loadBinaryPattern(is, (*constr)[i]);
@@ -390,21 +411,6 @@ void ExprRule::printRule(
 	os << "\n\n";
 }
 
-ref<Expr> ExprRule::apply(
-	const ref<Expr>& e,
-	ExprPatternMatch::RuleIterator& ri)
-{
-	labelmap_ty		lm;
-	ExprPatternMatch	epm(ri, lm);
-
-	/* match 'e' with ruleset */
-	if (epm.match(e) == false)
-		return NULL;
-
-	/* got a match; materialize to-expr */
-	return ri.getExprRule()->to.flat2expr(lm);
-}
-
 class SingleRuleIterator : public ExprPatternMatch::RuleIterator
 {
 public:
@@ -432,18 +438,8 @@ public:
 		if (isDone()) return false;
 
 		v = *it;
-		if (!OP_LABEL_TEST(v)) return false;
-
-		it++;
-		return true;
-	}
-
-	bool matchCLabel(uint64_t& v)
-	{
-		if (isDone()) return false;
-
-		v = *it;
-		if (!OP_CLABEL_TEST(v)) return false;
+		if (!OP_LABEL_TEST(v) && !OP_CLABEL_TEST(v))
+			return false;
 
 		it++;
 		return true;
@@ -473,6 +469,21 @@ ref<Expr> ExprRule::apply(const ref<Expr>& e) const
 {
 	SingleRuleIterator	sri(this);
 	return apply(e, sri);
+}
+
+ref<Expr> ExprRule::apply(
+	const ref<Expr>& e,
+	ExprPatternMatch::RuleIterator& ri)
+{
+	labelmap_ty		lm;
+	ExprPatternMatch	epm(ri, lm);
+
+	/* match 'e' with ruleset */
+	if (epm.match(e) == false)
+		return NULL;
+
+	/* got a match; materialize to-expr */
+	return ri.getExprRule()->to.flat2expr(lm);
 }
 
 /* assumes unique variables for every repl */
@@ -517,6 +528,8 @@ ExprRule* ExprRule::addConstraints(
 	return ret;
 }
 
+/* verify that the slotted constants collected during matching
+ * satisfy the constant constraints */
 bool ExprRule::checkConstants(const labelmap_ty& clm) const
 {
 	unsigned	constr_c;
@@ -532,6 +545,12 @@ bool ExprRule::checkConstants(const labelmap_ty& clm) const
 		const Pattern			*p;
 		labelmap_ty::const_iterator	it;
 		labelmap_ty			tmp_lm;
+		unsigned			byte_c;
+
+		/* all-accepting? */
+		p = &(*const_constraints)[i];
+		if (p->isConst())
+			continue;
 
 		it = clm.find(i);
 		if (it == clm.end())
@@ -539,11 +558,11 @@ bool ExprRule::checkConstants(const labelmap_ty& clm) const
 		c_e = it->second;
 
 		/* build fake label map for constant-- 8 bits each */
-		for (unsigned j = 0; j < c_e->getWidth() / 8; j++)
-			tmp_lm[j] = ExtractExpr::create(c_e, j*8, 8);
+		byte_c = c_e->getWidth() / 8;
+		for (unsigned j = 0; j < byte_c; j++)
+			tmp_lm[byte_c - (j+1)] = ExtractExpr::create(c_e, j*8, 8);
 
 		/* evaluate by filling out pattern */
-		p = &(*const_constraints)[i];
 		e = p->flat2expr(tmp_lm);
 
 		if (e.isNull() == true)
@@ -557,4 +576,4 @@ bool ExprRule::checkConstants(const labelmap_ty& clm) const
 	}
 
 	return true;
-}
+} 

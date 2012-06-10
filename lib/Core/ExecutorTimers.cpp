@@ -255,7 +255,8 @@ protected:
 		<< RuleBuilder::getHits() << ' '
 		<< RuleBuilder::getMisses() << ' '
 		<< RuleBuilder::getRuleMisses() << ' '
-		<< RuleBuilder::getNumRulesUsed(); }
+		<< RuleBuilder::getNumRulesUsed() << ' '
+		<< RuleBuilder::getFiltered(); }
 };
 
 #include "klee/SolverStats.h"

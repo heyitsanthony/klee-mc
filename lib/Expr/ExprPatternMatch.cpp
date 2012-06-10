@@ -29,7 +29,7 @@ bool ExprPatternMatch::verifyConstant(const ConstantExpr* ce)
 				bits - w,
 				w));
 		if (cur_ce == NULL) {
-			std::cerr << "WTF EXPECTED CE FROM EXT(CE)\n";
+			std::cerr << "[ExprMatch] EXPECTED CE FROM EXT(CE)!\n";
 			return false;
 		}
 
@@ -135,13 +135,27 @@ ExprPatternMatch::Action ExprPatternMatch::visitExpr(const Expr* expr)
 	/* success => stop */
 	assert (success == false);
 
-	/* SUPER IMPORTANT: labels are always 8-bits until otherwise
+	/* SUPER IMPORTANT: read labels are always 8-bits until otherwise
 	 * noted. Permitting other sizes tends to wreck expected sizes. */
-	if (expr->getWidth() == 8 && rule_it.matchLabel(label_op))
-		return matchLabel(expr, label_op);
+	if (expr->getWidth() == 8 || expr->getKind() == Expr::Constant) {
+		bool	matched;
 
-	if (rule_it.matchCLabel(label_op))
-		return matchCLabel(expr, label_op);
+		matched = rule_it.matchLabel(label_op);
+		if (matched) {
+			/* read label */
+			if (expr->getWidth() == 8 && OP_LABEL_TEST(label_op))
+				return matchLabel(expr, label_op);
+
+			/* handle slotted constants */
+			if (expr->getKind() == Expr::Constant &&
+				OP_CLABEL_TEST(label_op))
+				return matchCLabel(expr, label_op);
+
+			/* oops. */
+			success = false;
+			return Stop;
+		}
+	}
 
 	/* match the expression node's opcode */
 	if (rule_it.matchValue(expr->getKind()) == false) {
@@ -222,10 +236,10 @@ bool ExprPatternMatch::match(const ref<Expr>& e)
 	rule_it.reset();
 	apply(e);
 
-	if (success && clm.size() != 0) {
-		er = rule_it.getExprRule();
-		success = er->checkConstants(clm);
-	}
+	if (!success || clm.empty())
+		return success;
 
+	er = rule_it.getExprRule();
+	success = er->checkConstants(clm);
 	return success;
 }

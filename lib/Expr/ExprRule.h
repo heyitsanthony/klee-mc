@@ -45,6 +45,7 @@ public:
 
 	void printBinaryRule(std::ostream& os) const;
 	void printPrettyRule(std::ostream& os) const;
+	void print(std::ostream& os) const;
 
 	ref<Expr> materialize(void) const;
 	ref<Expr> getFromExpr(void) const { return from.anonFlat2Expr(); }
@@ -61,11 +62,9 @@ public:
 	unsigned getFromNodeCount(void) const { return from.rule.size(); }
 	unsigned getToNodeCount(void) const { return to.rule.size(); }
 
-	//unsigned getToLabels(void) const { return to.label_c; }
-	//unsigned getFromLabels(void) const { return from.label_c; }
-
 	const flatrule_ty& getFromKey(void) const { return from.rule; }
 	const flatrule_ty& getToKey(void) const { return to.rule; }
+	const Pattern& getFromPattern(void) const { return from; }
 
 	bool operator==(const ExprRule& er) const;
 	bool operator!=(const ExprRule& er) const { return !(*this == er); }

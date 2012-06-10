@@ -43,6 +43,12 @@ namespace llvm
 		cl::init("-"));
 
 	cl::opt<bool>
+	BenchRB(
+		"benchmark-rb",
+		cl::desc("Benchmark rule builder with random queries"),
+		cl::init(false));
+
+	cl::opt<bool>
 	BenchmarkRules(
 		"benchmark-rules",
 		cl::desc("Benchmark rules with random queries"),
@@ -60,12 +66,16 @@ namespace llvm
 		cl::desc("Print histogram of DB rule classes"),
 		cl::init(false));
 
-
-
 	cl::opt<bool>
 	CheckRule(
 		"check-rule",
 		cl::desc("Check a rule file"),
+		cl::init(false));
+
+	cl::opt<bool>
+	CheckDB(
+		"check-db",
+		cl::desc("Verify that rule database is working"),
 		cl::init(false));
 
 	cl::opt<bool>
@@ -104,6 +114,13 @@ namespace llvm
 		cl::desc("Rebuild brule file."),
 		cl::init(false));
 
+	cl::opt<int>
+	ExtractRule(
+		"extract-rule",
+		cl::desc("Extract rule from brule file."),
+		cl::init(-1));
+
+
 	cl::opt<bool>
 	AddRule(
 		"add-rule",
@@ -114,7 +131,7 @@ namespace llvm
 	BuilderKindProxy("builder",
 		cl::desc("Expression builder:"),
 		cl::location(BuilderKind),
-		cl::init(ExprBuilder::SimplifyingBuilder),
+		cl::init(ExprBuilder::ExtraOptsBuilder),
 		cl::values(
 			clEnumValN(ExprBuilder::DefaultBuilder, "default",
 			"Default expression construction."),
@@ -439,7 +456,7 @@ static void rebuildBRules(ExprBuilder* eb, Solver* s)
 	i = 0;
 	foreach (it, rb->begin(), rb->end()) {
 		std::cerr << "[" << ++i << "]: ";
-		rebuildBRule(eb, s, *it, of);	
+		rebuildBRule(eb, s, *it, of);
 	}
 
 	delete rb;
@@ -544,6 +561,113 @@ void dumpDB(void)
 	delete rb;
 }
 
+/* verify that the rule data base is properly translating rules */
+static void checkDB(Solver* s)
+{
+	ExprBuilder	*init_eb;
+	RuleBuilder	*rb;
+	unsigned	i;
+	unsigned	unexpected_from_c, better_from_c;
+
+	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
+	init_eb = Expr::getBuilder();
+	i = 0;
+	unexpected_from_c = 0;
+	better_from_c = 0;
+
+	foreach (it, rb->begin(), rb->end()) {
+		const ExprRule	*er(*it);
+		ref<Expr>	from_eb, from_rb, to_e;
+
+		i++;
+
+		to_e = er->getToExpr();
+		from_eb = er->getFromExpr();
+
+		Expr::setBuilder(rb);
+		from_rb = er->getFromExpr();
+		Expr::setBuilder(init_eb);
+
+		if (from_rb == to_e)
+			continue;
+
+
+		if (from_rb != from_eb) {
+			unsigned	to_node_c, from_node_c;
+
+			std::cerr << "=======================\n";
+			std::cerr << "!!!DID NOT TRANSLATE AS EXPECTED!!!!\n";
+			std::cerr << "FROM-EXPR-EB=" << from_eb << '\n';
+			std::cerr << "FROM-EXPR-RB=" << from_rb << '\n';
+
+			to_node_c = ExprUtil::getNumNodes(to_e);
+			from_node_c = ExprUtil::getNumNodes(from_rb);
+
+			if (to_node_c > from_node_c)
+				better_from_c++;
+
+			std::cerr << "EXPECTED RULE:\n";
+			er->print(std::cerr);
+			std::cerr << '\n';
+
+			er = RuleBuilder::getLastRule();
+			if (er != NULL) {
+				std::cerr << "LAST RULE APPLIED:\n";
+				er->print(std::cerr);
+				std::cerr << '\n';
+			}
+
+			std::cerr << "=======================\n";
+
+			unexpected_from_c++;
+			continue;
+		}
+
+		std::cerr << "DID NOT TRANSLATE #" << i << ":\n";
+		std::cerr << "FROM-EXPR-EB: " << from_eb << '\n';
+		std::cerr << "FROM-EXPR-RB: " << from_rb << '\n';
+		std::cerr << "TO-EXPR: " << to_e << '\n';
+		std::cerr << "RULE:\n";
+		er->print(std::cerr);
+		std::cerr << '\n';
+		assert (0 == 1);
+	}
+
+	delete rb;
+	std::cout << "PASSED CHECKDB. NUM-RULES=" << i
+		<< ". UNEXPECTED-FROM-EXPRS=" << unexpected_from_c
+		<< ". BETTER-FROM-EXPRS=" << better_from_c
+		<< ".\n";
+}
+
+static void extractRule(unsigned rule_num)
+{
+	std::ofstream	of(InputFile.c_str());
+	RuleBuilder	*rb;
+	unsigned	i;
+
+	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
+	if (rb->size() < rule_num) {
+		std::cerr << "Could not extract rule #" << rule_num
+			<< " from total of " << rb->size() << "rules.\n";
+		delete rb;
+		return;
+	}
+
+	i = 0;
+	foreach (it, rb->begin(), rb->end()) {
+		const ExprRule	*er(*it);
+
+		if (i == rule_num) {
+			er->printBinaryRule(of);
+			break;
+		}
+		i++;
+	}
+
+	delete rb;
+}
+
 int main(int argc, char **argv)
 {
 	Solver		*s;
@@ -564,10 +688,17 @@ int main(int argc, char **argv)
 		return -3;
 	}
 
-	if (DumpDB) {
+	if (ExtractRule != -1) {
+		extractRule(ExtractRule);
+	} else if (DumpDB) {
 		dumpDB();
 	} else if (AddRule) {
 		addRule(eb, s);
+	} else if (CheckDB) {
+		checkDB(s);
+	} else if (BenchRB) {
+		Benchmarker	bm(s, BuilderKind);
+		bm.benchRuleBuilder(eb);
 	} else if (BenchmarkRules) {
 		Benchmarker	bm(s, BuilderKind);
 		bm.benchRules();

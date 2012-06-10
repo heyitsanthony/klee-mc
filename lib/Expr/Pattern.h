@@ -36,7 +36,7 @@ public:
 	bool operator !=(const Pattern& p) const
 	{ return !(*this == p); }
 
-	ref<Expr> anonFlat2Expr(void) const;
+	ref<Expr> anonFlat2Expr(int label_max = -1) const;
 
 	static ref<Array> getMaterializeArray(void);
 
@@ -52,6 +52,8 @@ public:
 	}
 
 	bool readFlatExpr(std::istream& ifs);
+	flatrule_ty stripConstExamples(void) const;
+	bool isConst(void) const;
 
 	flatrule_ty		rule;
 	uint16_t		label_c;
