@@ -530,8 +530,8 @@ void Executor::executeGetValue(
 	ref<Expr> e,
 	KInstruction *target)
 {
-	bool              isSeeding;
 	SeedInfoIterator  si_begin, si_end;
+	bool	isSeeding;
 
 	e = state.constraints.simplifyExpr(e);
 	isSeeding = getSeedInfoIterRange(&state, si_begin, si_end);
@@ -979,7 +979,7 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 		if (os->isConcrete())
 			continue;
 
-		if (MaxSTPTime > 0 && wt.check() > 3*MaxSTPTime) {
+		if (MaxSTPTime > 0 && wt.checkSecs() > 3*MaxSTPTime) {
 			terminateStateEarly(
 				st,
 				"timeout eval on imm concretize state");
@@ -2620,7 +2620,11 @@ std::string Executor::getAddressInfo(
 	return info.str();
 }
 
-void Executor::yield(ExecutionState& state) { stateManager->yield(&state); }
+void Executor::yield(ExecutionState& state)
+{
+	terminateStateOnError(state, "yielding state", "yield");
+	// stateManager->yield(&state);
+}
 
 void Executor::terminateState(ExecutionState &state)
 {
@@ -2767,10 +2771,11 @@ void Executor::printStateErrorMessage(
 void Executor::printStackTrace(ExecutionState& st, std::ostream& os) const
 { st.dumpStack(os); }
 
-void Executor::resolveExact(ExecutionState &state,
-                            ref<Expr> p,
-                            ExactResolutionList &results,
-                            const std::string &name)
+void Executor::resolveExact(
+	ExecutionState &state,
+	ref<Expr> p,
+	ExactResolutionList &results,
+	const std::string &name)
 {
 	// XXX we may want to be capping this?
 	ResolutionList rl;
@@ -3335,15 +3340,15 @@ MemoryObject* Executor::findGlobalObject(const llvm::GlobalValue* gv) const
 #include <malloc.h>
 void Executor::handleMemoryPID(ExecutionState* &state)
 {
-	#define K_P    0.6
-	#define K_D    0.1     /* damping factor-- damp changes in errors */
-	#define K_I    0.0001  /* systematic error-- negative while ramping  */
-	unsigned                nonCompact_c;
-	int                     states_to_gen;
-	int64_t                 err;
-	uint64_t                mbs;
-	static int64_t          err_sum = -(int64_t)MaxMemory;
-	static int64_t          last_err = 0;
+	#define K_P	0.6
+	#define K_D	0.1	/* damping factor-- damp changes in errors */
+	#define K_I	0.0001  /* systematic error-- negative while ramping  */
+	unsigned	nonCompact_c;
+	int		states_to_gen;
+	int64_t		err;
+	uint64_t	mbs;
+	static int64_t	err_sum = -(int64_t)MaxMemory;
+	static int64_t	last_err = 0;
 
 	nonCompact_c = stateManager->getNonCompactStateCount();
 
@@ -3396,6 +3401,7 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 	while (iter.badjmp_c < MAX_BADJMP) {
 		uint64_t	addr;
 		bool		ok;
+		unsigned	num_funcs = kmodule->getNumKFuncs();
 
 		if (iter.free == NULL) return false;
 
@@ -3441,7 +3447,9 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 				iter_f->getName().data());
 		}
 
-		iter.res.first->setFreshBranch();
+		/* uncovered new function => set fresh */
+		if (kmodule->getNumKFuncs() > num_funcs)
+			iter.res.first->setFreshBranch();
 		break;
 	}
 
