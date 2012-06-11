@@ -3450,6 +3450,9 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 		/* uncovered new function => set fresh */
 		if (kmodule->getNumKFuncs() > num_funcs)
 			iter.res.first->setFreshBranch();
+		else if (iter.getval_c > 1)
+			iter.res.first->setOldBranch();
+
 		break;
 	}
 

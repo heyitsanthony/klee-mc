@@ -174,8 +174,7 @@ public:
 protected:
 	void print(void) { *os << ObjectState::getNumObjStates() <<
 		' ' << getMemUsageMB() <<
-		' ' << mallinfo().uordblks <<
-		' ' << HeapObject::getNumHeapObjs(); }
+		' ' << UpdateList::getCount(); }
 };
 
 class StateStatTimer : public StatTimer
@@ -202,7 +201,8 @@ protected:
 	void print(void) { *os
 		<< Expr::getNumExprs() << ' '
 		<< Array::getNumArrays() << ' '
-		<< ExprAlloc::getNumConstants(); }
+		<< ExprAlloc::getNumConstants() << ' '
+		<< Expr::getNumExprs() - ExprAlloc::getNumConstants(); }
 };
 
 extern unsigned g_cachingsolver_sz;
@@ -256,7 +256,8 @@ protected:
 		<< RuleBuilder::getMisses() << ' '
 		<< RuleBuilder::getRuleMisses() << ' '
 		<< RuleBuilder::getNumRulesUsed() << ' '
-		<< RuleBuilder::getFiltered(); }
+		<< RuleBuilder::getFiltered() << ' '
+		<< RuleBuilder::getFilterSize(); }
 };
 
 #include "klee/SolverStats.h"

@@ -22,11 +22,17 @@ using namespace klee;
 using namespace llvm;
 
 namespace {
+	cl::opt<std::string>
+	DumpUsedRules(
+		"dump-used-rules",
+		cl::desc("Write used rules to a file."),
+		cl::init(""));
+
 	cl::opt<bool>
 	RBMissFilter(
 		"rb-miss-filter",
 		cl::desc("Filter out misses by hash"),
-		cl::init(false));
+		cl::init(true));
 
 	cl::opt<std::string>
 	RuleDir(
@@ -55,20 +61,25 @@ uint64_t RuleBuilder::hit_c = 0;
 uint64_t RuleBuilder::miss_c = 0;
 uint64_t RuleBuilder::rule_miss_c = 0;
 uint64_t RuleBuilder::miss_filtered_c = 0;
+uint64_t RuleBuilder::filter_size = 0;
 const ExprRule* RuleBuilder::last_er = NULL;
 
-std::set<ExprRule*> RuleBuilder::rules_used;
+std::set<const ExprRule*> RuleBuilder::rules_used;
 
 RuleBuilder::RuleBuilder(ExprBuilder* base)
-: eb(base), depth(0), recur(0)
+: eb(base), depth(0), recur(0), rule_ofs(0)
 {
 	loadRules();
 	if (DumpRuleMiss)
 		mkdir("miss_dump", 0777);
+	if (DumpUsedRules.size() != 0)
+		rule_ofs = new std::ofstream(DumpUsedRules.c_str());
 }
 
 RuleBuilder::~RuleBuilder()
 {
+	if (rule_ofs) delete rule_ofs;
+
 	foreach (it, rules_arr.begin(), rules_arr.end())
 		delete (*it);
 	rules_arr.clear();
@@ -272,8 +283,10 @@ ref<Expr> RuleBuilder::tryApplyRules(const ref<Expr>& in)
 		if (DumpRuleMiss) {
 			SMTPrinter::dump(Query(ret), "miss_dump/miss");
 		}
-		if (RBMissFilter)
+		if (RBMissFilter) {
 			miss_filter.insert(in->hash());
+			filter_size++;
+		}
 	} else {
 		if (ShowXlate) {
 			std::cerr << "[RuleBuilder] XLated!\n";
@@ -419,8 +432,12 @@ ref<Expr> RuleBuilder::tryTrieRules(const ref<Expr>& in)
 	while (1) {
 		new_expr = ExprRule::apply(in, tri);
 		if (new_expr.isNull() == false) {
-			rules_used.insert(tri.getExprRule());
+			bool	inserted;
+
 			last_er = tri.getExprRule();
+			inserted = rules_used.insert(last_er).second;
+			if (inserted && rule_ofs != NULL)
+				last_er->printBinaryRule(*rule_ofs);
 			return new_expr;
 		}
 

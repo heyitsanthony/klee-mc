@@ -249,8 +249,10 @@ static bool checkDup(ExprBuilder* eb, Solver* s)
 	ref<Expr>	old_expr, rb_expr;
 	bool		ret;
 
-	if (!er)
+	if (!er) {
+		std::cerr << "[kopt] No rule given\n.";
 		return false;
+	}
 
 	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
 	old_expr = er->materialize();
@@ -407,16 +409,15 @@ static void rebuildBRule(
 	const ExprRule* er,
 	std::ostream& of)
 {
-	ExprRule	*er_rebuild;
+	std::stringstream	ss;
+	ExprRule		*er_rebuild;
 
 	if (checkRule(er, s, std::cout) == false) {
 		std::cerr << "BAD RULE:\n";
-		er->printPrettyRule(std::cerr);
+		er->print(std::cerr);
 		return;
 	}
 
-	std::stringstream	ss;
-	/* XXX: was pretty rule only: any reason for this? */
 	er->printBinaryRule(ss);
 	er_rebuild = ExprRule::loadBinaryRule(ss);
 
@@ -427,9 +428,9 @@ static void rebuildBRule(
 	{
 		std::cerr << "BAD REBUILD:\n";
 		std::cerr << "ORIGINAL:\n";
-		er->printPrettyRule(std::cerr);
+		er->print(std::cerr);
 		std::cerr << "NEW:\n";
-		er_rebuild->printPrettyRule(std::cerr);
+		er_rebuild->print(std::cerr);
 
 		std::cerr	<< "ORIG-EXPR: "
 				<< er->getFromExpr() << '\n'

@@ -153,6 +153,7 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS)	\
 	static uint64_t getRuleMisses(void) { return rule_miss_c; }
 	static uint64_t getFiltered(void) { return miss_filtered_c; }
 	static uint64_t getNumRulesUsed(void) { return rules_used.size(); }
+	static uint64_t getFilterSize(void) { return filter_size; }
 	static const ExprRule* getLastRule(void) { return last_er; }
 
 	static bool hasRule(const char* fname);
@@ -195,10 +196,12 @@ private:
 	static uint64_t		miss_c;
 	static uint64_t		rule_miss_c;
 	static uint64_t		miss_filtered_c;
+	static uint64_t		filter_size;
 	static const ExprRule	*last_er;
 
-	static std::set<ExprRule*>	rules_used;
+	static std::set<const ExprRule*>	rules_used;
 	std::tr1::unordered_set<Expr::Hash>	miss_filter;
+	std::ofstream		*rule_ofs;
 
 };
 }

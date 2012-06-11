@@ -171,10 +171,14 @@ ref<Expr> EquivExprBuilder::lookup(ref<Expr>& e)
 	if (isa<ConstantExpr>(e))
 		return lookupConst(e);
 
+	if (ident_memo.count(e->hash()))
+		return e;
+
 	nodes = ExprUtil::getNumNodes(e, false, EE_MAX_NODES+1);
 	if (nodes != 1 && (nodes < EE_MIN_NODES || nodes > EE_MAX_NODES)) {
 		/* cull 'simple' expressions */
 		ign_c++;
+		ident_memo.insert(e->hash());
 		return e;
 	}
 
@@ -187,7 +191,9 @@ ref<Expr> EquivExprBuilder::lookup(ref<Expr>& e)
 	depth++;
 	handleQueuedExprs();
 	ret = lookupByEval(e, nodes);
-	if (solver.inSolver() == false)
+	if (ret->hash() == e->hash())
+		ident_memo.insert(e->hash());
+	else if (solver.inSolver() == false)
 		lookup_memo[e] = ret;
 	depth--;
 
@@ -203,7 +209,7 @@ void EquivExprBuilder::handleQueuedExprs(void)
 		ref<Expr>	ne, cur_e;
 
 		cur_e = *it;
-		if (lookup_memo.count(cur_e))
+		if (ident_memo.count(cur_e->hash()) || lookup_memo.count(cur_e))
 			continue;
 
 		ne = lookupByEval(
@@ -416,7 +422,7 @@ void EquivExprBuilder::missedLookup(
 	std::stringstream	ss;
 	struct stat		st;
 
-	ss << EquivDBDir <<"/"<< e->getWidth() << '/' << nodes << '/' << hash;
+	ss << EquivDBDir << "/" << e->getWidth() << '/' << nodes << '/' << hash;
 	if (stat(ss.str().c_str(), &st) != 0) {
 		/* entry not found.. this is the first one! */
 		Query		q(e);
@@ -433,9 +439,10 @@ ref<Expr> EquivExprBuilder::lookupByEval(ref<Expr>& e, unsigned nodes)
 {
 	uint64_t		hash;
 	unsigned		w;
+	bool			maybeConst;
 
 	assert (nodes > 1);
-	hash = getEvalHash(e);
+	hash = getEvalHash(e, maybeConst);
 	w = e->getWidth();
 
 	if (written_hashes.count(hash) == 0)
@@ -470,6 +477,25 @@ ref<Expr> EquivExprBuilder::lookupByEval(ref<Expr>& e, unsigned nodes)
 		return e;
 	}
 
+	/* all hashes were the same, so it could be const;
+	 * may not have constant cached so could have missed it above */
+	if (maybeConst) {
+		Assignment		a(e);
+		ref<Expr>		ce;
+		ref<ConstantExpr>	r_ce;
+
+		a.bindFreeToZero();
+		ce = a.evaluate(e);
+		r_ce = cast<ConstantExpr>(ZExtExpr::create(ce, 64));
+
+		/* constant never seen before, so we may have missed it */
+		if (consts.count(r_ce->getZExtValue()) == 0) {
+			lookupConst(r_ce);
+			if (!tryEquivRewrite(e, ce).isNull())
+				return ce;
+		}
+	}
+
 	if (blacklist.count(hash)) {
 		blacklist_c++;
 		return e;
@@ -487,7 +513,8 @@ ref<Expr> EquivExprBuilder::lookupByEval(ref<Expr>& e, unsigned nodes)
 
 		sat_q = getParseByPath(ss.str());
 		if (sat_q.isNull()) {
-			std::cerr << "WTF. BAD READ: " << ss.str() << '\n';
+			std::cerr << "WTF. BAD READ: " << ss.str() << ".\n";
+			unlink(ss.str().c_str());
 			continue;
 		}
 
@@ -548,6 +575,8 @@ public:
 		if (hash_off == 1)
 			last_eval_hash = cur_eval_hash;
 
+		/* XXX: update this to use murmur too.
+		 * I don't trust this mixing function. */
 		hash ^= (cur_eval_hash + hash_off)*(hash_off);
 		hash_off++;
 

@@ -9,7 +9,7 @@
 
 
 #define EE_MIN_NODES	2
-#define EE_MAX_NODES	40
+#define EE_MAX_NODES	64
 
 namespace klee
 {
@@ -157,6 +157,9 @@ protected:
 
 	typedef std::tr1::unordered_set<uint64_t> writtenhashes_ty;
 	writtenhashes_ty		written_hashes;
+
+	typedef std::tr1::unordered_set<Expr::Hash> identmemo_ty;
+	identmemo_ty			ident_memo;
 
 	ExprHashMap<ref<Expr> >		lookup_memo;
 	std::list<ref<Expr> >		solver_exprs;
