@@ -6,6 +6,11 @@
 #include <string>
 #include <string.h>
 
+#define IPUT_TYPE(x)			\
+virtual std::ostream& operator<< (x v)	\
+{ if (overflow()) return *this; 	\
+  return std::stringstream::operator<<(v); }
+ 
 class limited_sstream : public std::stringstream
 {
 public:
@@ -16,17 +21,20 @@ public:
 	virtual ~limited_sstream(void) {}
 	bool overflow(void) const { return total_bytes > max_bytes; }
 
-	virtual std::ostream& operator<< (int i)
-	{
-		if (overflow()) return *this;
-		return std::stringstream::operator<<(i);
-	}
-	virtual std::ostream& operator<< (unsigned i)
-	{
-		if (overflow()) return *this;
-		return std::stringstream::operator<<(i);
-	}
-	virtual std::ostream& operator<< (char s) { return write(&s, 1); }
+	IPUT_TYPE(short);
+	IPUT_TYPE(unsigned short);
+	IPUT_TYPE(int);
+	IPUT_TYPE(unsigned int);
+	IPUT_TYPE(long);
+	IPUT_TYPE(unsigned long);
+	IPUT_TYPE(float);
+	IPUT_TYPE(double) 
+	IPUT_TYPE(long double);
+	IPUT_TYPE(const void*);
+	IPUT_TYPE(char)
+	IPUT_TYPE(signed char)
+	IPUT_TYPE(unsigned char)
+
 	virtual std::ostream& operator<< (const char* s)
 	{ return write(s, strlen(s)); }
 	virtual std::ostream& operator<< (const std::string& s)
