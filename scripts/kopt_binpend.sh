@@ -13,4 +13,9 @@ kopt -max-stp-time=30 -pipe-solver -db-punchout		\
 	-uninteresting-file=$FPREFIX.unint.brule	\
 	-stubborn-file=$FPREFIX.stubborn.brule		\
 	$FPREFIX.punch.brule
+kopt -pipe-solver -brule-xtive -rule-file=$FPREFIX.punch.brule
+kopt -pipe-solver -brule-rebuild -rule-file=$FPREFIX.punch.brule $FPREFIX.punch.rebuild.brule
+mv $FPREFIX.punch.rebuild.brule $FPREFIX.punch.brule
+
+
 cp "$FPREFIX".punch.brule punch.brule

@@ -223,16 +223,22 @@ void ExprRule::print(std::ostream& os) const
 
 ExprRule* ExprRule::changeDest(const ExprRule* er, const ref<Expr>& to)
 {
+	ExprRule		*new_er;
+	Pattern			new_to;
 	std::stringstream	ss;
 
-	if (er->const_constraints != NULL) {
-		std::cerr << "[ExprRule] can't change dest w/ constraints\n";
-		assert (0 == 1 && "ARGHG");
+	printExpr(ss, to);
+	new_to.readFlatExpr(ss);
+	if (new_to.size() == 0)
 		return NULL;
-	}
 
-	printRule(ss, er->getFromExpr(), to);
-	return loadPrettyRule(ss);
+	new_er = new ExprRule(er->from, new_to);
+	if (er->const_constraints == NULL)
+		return new_er;
+
+	new_er->const_constraints = new std::vector<Pattern>();
+	*new_er->const_constraints = *er->const_constraints;
+	return new_er;
 }
 
 void ExprRule::printTombstone(std::ostream& os, unsigned range_len)

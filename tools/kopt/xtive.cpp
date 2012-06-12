@@ -108,7 +108,7 @@ static void findReplacements(
 		}
 
 		std::cerr << "Xtive [" << i << "]:\n";
-		er->printPrettyRule(std::cout);
+		er->print(std::cout);
 		std::cerr	<< "OLD-TO-EXPR: " << old_to_expr << '\n'
 				<< "NEW-TO-EXPR: " << rb_to_expr << '\n';
 
@@ -135,7 +135,7 @@ void appendReplacements(
 		if (xtive_er == NULL)
 			continue;
 
-		xtive_er->printPrettyRule(std::cout);
+		xtive_er->print(std::cout);
 		if (checkRule(xtive_er, s, std::cerr) == false) {
 			bad_repl.insert(er);
 			continue;

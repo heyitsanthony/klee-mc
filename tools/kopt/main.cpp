@@ -558,7 +558,7 @@ void dumpDB(void)
 
 	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
 	foreach (it, rb->begin(), rb->end())
-		(*it)->printPrettyRule(std::cout);
+		(*it)->print(std::cout);
 	delete rb;
 }
 

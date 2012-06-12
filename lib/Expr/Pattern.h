@@ -55,6 +55,8 @@ public:
 	flatrule_ty stripConstExamples(void) const;
 	bool isConst(void) const;
 
+	unsigned size(void) const { return rule.size(); }
+
 	flatrule_ty		rule;
 	uint16_t		label_c;
 	uint16_t		label_id_max;
