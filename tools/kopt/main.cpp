@@ -73,6 +73,12 @@ namespace llvm
 		cl::init(false));
 
 	cl::opt<bool>
+	VerifyDB(
+		"verify-db",
+		cl::desc("Verify rule database works and validates."),
+		cl::init(false));
+
+	cl::opt<bool>
 	CheckDB(
 		"check-db",
 		cl::desc("Verify that rule database is working"),
@@ -568,13 +574,14 @@ static void checkDB(Solver* s)
 	ExprBuilder	*init_eb;
 	RuleBuilder	*rb;
 	unsigned	i;
-	unsigned	unexpected_from_c, better_from_c;
+	unsigned	unexpected_from_c, better_from_c, bad_verify_c;
 
 	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
 	init_eb = Expr::getBuilder();
 	i = 0;
 	unexpected_from_c = 0;
 	better_from_c = 0;
+	bad_verify_c = 0;
 
 	foreach (it, rb->begin(), rb->end()) {
 		const ExprRule	*er(*it);
@@ -589,8 +596,13 @@ static void checkDB(Solver* s)
 		from_rb = er->getFromExpr();
 		Expr::setBuilder(init_eb);
 
-		if (from_rb == to_e)
+		if (from_rb == to_e) {
+			if (VerifyDB) {
+				checkRule(er, s, std::cerr);
+				bad_verify_c++;
+			}
 			continue;
+		}
 
 
 		if (from_rb != from_eb) {
@@ -637,8 +649,12 @@ static void checkDB(Solver* s)
 	delete rb;
 	std::cout << "PASSED CHECKDB. NUM-RULES=" << i
 		<< ". UNEXPECTED-FROM-EXPRS=" << unexpected_from_c
-		<< ". BETTER-FROM-EXPRS=" << better_from_c
-		<< ".\n";
+		<< ". BETTER-FROM-EXPRS=" << better_from_c;
+
+	if (VerifyDB)
+		std::cout << ". BAD-VERIFY=" << bad_verify_c;
+
+	std::cout << ".\n";
 }
 
 static void extractRule(unsigned rule_num)
@@ -695,7 +711,7 @@ int main(int argc, char **argv)
 		dumpDB();
 	} else if (AddRule) {
 		addRule(eb, s);
-	} else if (CheckDB) {
+	} else if (VerifyDB || CheckDB) {
 		checkDB(s);
 	} else if (BenchRB) {
 		Benchmarker	bm(s, BuilderKind);
