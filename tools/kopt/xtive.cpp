@@ -119,7 +119,7 @@ static void findReplacements(
 void appendReplacements(
 	RuleBuilder* rb,
 	Solver* s,
-	rule_replace_ty& repl,
+	const rule_replace_ty& repl,
 	bad_repl_ty& bad_repl)
 {
 	std::ofstream	of(
@@ -156,9 +156,12 @@ void xtiveBRule(ExprBuilder *eb, Solver* s)
 	findReplacements(eb, rb, replacements);
 
 	// append new rules to brule file
+	std::cout << "Appending " << replacements.size() << " rules.\n";
 	appendReplacements(rb, s, replacements, bad_repl);
 
 	// erase all superseded rules (ignoring ones that weren't valid)
+	std::cout << "Superseding replacements. bad_repl="
+		<< bad_repl.size() << '\n';
 	foreach (it, replacements.begin(), replacements.end()) {
 		const ExprRule	*er = *(it->first);
 		if (bad_repl.count(er))
