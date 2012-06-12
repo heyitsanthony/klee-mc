@@ -2,7 +2,7 @@
 CURDATE=`date +%s`
 FPREFIX="pending.$CURDATE"
 PROOFDIR=${1:-"proofs"}
-kopt -pipe-solver -dump-bin -check-rule  proofs >$FPREFIX.brule
+kopt -pipe-solver -dump-bin -check-rule "$PROOFDIR" >$FPREFIX.brule
 kopt -pipe-solver -brule-xtive -rule-file=$FPREFIX.brule
 kopt -pipe-solver -brule-rebuild -rule-file=$FPREFIX.brule $FPREFIX.rebuild.brule
 mv $FPREFIX.rebuild.brule $FPREFIX.brule
