@@ -1,6 +1,7 @@
 #!/bin/bash
 CURDATE=`date +%s`
 FPREFIX="pending.$CURDATE"
+PROOFDIR=${1:-"proofs"}
 kopt -pipe-solver -dump-bin -check-rule  proofs >$FPREFIX.brule
 kopt -pipe-solver -brule-xtive -rule-file=$FPREFIX.brule
 kopt -pipe-solver -brule-rebuild -rule-file=$FPREFIX.brule $FPREFIX.rebuild.brule
