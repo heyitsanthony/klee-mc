@@ -101,6 +101,9 @@ public:
   	return !(*this < b || b < *this);
   }
 
+  inline int compare(const Array &b) const { return *this < b; }
+
+
   bool isSingleValue(void) const { return !singleValue.isNull(); }
 
   struct Compare

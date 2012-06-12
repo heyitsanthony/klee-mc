@@ -226,7 +226,7 @@ class ReadUnifier : public ExprVisitor
 public:
 	ReadUnifier(const ref<Expr>& _src_e)
 	: src_e(_src_e)
-	{ ExprUtil::findSymbolicObjects(src_e, sym_arrays); }
+	{ ExprUtil::findSymbolicObjectsRef(src_e, sym_arrays); }
 
 	virtual ~ReadUnifier(void) {}
 
@@ -248,17 +248,17 @@ protected:
 private:
 	const ref<Expr>	src_e;
 
-	std::vector<const Array*>	sym_arrays;
+	std::vector<ref<Array> >	sym_arrays;
 	typedef std::map<
-		const Array* /* array to replace */,
-		const Array* /* replacement */>	uni2src_arr_ty;
+		ref<Array> /* array to replace */,
+		ref<Array> /* replacement */>	uni2src_arr_ty;
 	uni2src_arr_ty		uni2src_arr;
 	bool			goodExpr;
 };
 
 ReadUnifier::Action ReadUnifier::visitRead(const ReadExpr& re)
 {
-	const Array			*read_arr, *repl_arr;
+	ref<Array>			read_arr, repl_arr;
 	const ConstantExpr		*ce_idx;
 	uni2src_arr_ty::const_iterator	it;
 
@@ -270,7 +270,7 @@ ReadUnifier::Action ReadUnifier::visitRead(const ReadExpr& re)
 	assert (re.hasUpdates() == false);
 
 	/* has array already been assigned? */
-	read_arr = re.getArray().get();
+	read_arr = re.getArray();
 	it = uni2src_arr.find(read_arr);
 	if (it != uni2src_arr.end()) {
 		ce_idx = dyn_cast<ConstantExpr>(re.index);
@@ -283,10 +283,7 @@ ReadUnifier::Action ReadUnifier::visitRead(const ReadExpr& re)
 
 		return Action::changeTo(
 			ReadExpr::create(
-				UpdateList(
-					ref<Array>(
-						const_cast<Array*>(it->second)),
-					NULL),
+				UpdateList(it->second, NULL),
 				re.index));
 	}
 
@@ -296,7 +293,8 @@ ReadUnifier::Action ReadUnifier::visitRead(const ReadExpr& re)
 
 	repl_arr = sym_arrays.back();
 
-	/* quick OOB sanity check */
+	/* quick OOB sanity check-- ensure index does not exceed
+	 * size of the array */
 	ce_idx = dyn_cast<ConstantExpr>(re.index);
 	if (ce_idx != NULL) {
 		if (ce_idx->getZExtValue() >= repl_arr->getSize()) {
@@ -310,9 +308,7 @@ ReadUnifier::Action ReadUnifier::visitRead(const ReadExpr& re)
 
 	return Action::changeTo(
 		ReadExpr::create(
-			UpdateList(
-				ref<Array>(const_cast<Array*>(repl_arr)),
-				NULL),
+			UpdateList(repl_arr, NULL),
 			re.index));
 }
 

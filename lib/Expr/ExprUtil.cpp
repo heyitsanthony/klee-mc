@@ -14,6 +14,7 @@
 
 #include "klee/util/ExprVisitor.h"
 
+#include "static/Sugar.h"
 #include <set>
 
 using namespace klee;
@@ -115,9 +116,21 @@ void ExprUtil::findSymbolicObjects(InputIterator begin,
     of.apply(*begin);
 }
 
-void ExprUtil::findSymbolicObjects(ref<Expr> e,
-                               std::vector<const Array*> &results) {
-  findSymbolicObjects(&e, &e+1, results);
+void ExprUtil::findSymbolicObjects(
+	const ref<Expr>& e,
+	std::vector<const Array*> &results)
+{ findSymbolicObjects(&e, &e+1, results); }
+
+void ExprUtil::findSymbolicObjectsRef(
+	const ref<Expr>& e,
+	std::vector<ref<Array> > &results)
+{
+	std::vector<const Array*>	a;
+	findSymbolicObjects(e, a);
+	foreach (it, a.begin(), a.end()) {
+		results.push_back(
+			ref<Array>(const_cast<Array*>(*it)));
+	}
 }
 
 typedef std::vector< ref<Expr> >::iterator A;

@@ -37,7 +37,7 @@ public:
 	  /// Return a list of all unique symbolic objects referenced by the given
 	  /// expression.
 	static void findSymbolicObjects(
-		ref<Expr> e, std::vector<const Array*> &results);
+		const ref<Expr>& e, std::vector<const Array*> &results);
 
 	  /// Return a list of all unique symbolic objects referenced by the
 	  /// given expression range.
@@ -46,6 +46,11 @@ public:
 		InputIterator begin,
 		InputIterator end,
 		std::vector<const Array*> &results);
+
+	static void findSymbolicObjectsRef(
+		const ref<Expr>& e,
+		std::vector<ref<Array> > &results);
+
 };
 }
 
