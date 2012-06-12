@@ -130,6 +130,6 @@ private:
 	ref<Expr>	singleValue;
 	unsigned	hash_v;
 
-	typedef std::map<const std::string, Array*> name2arr_ty;
+	typedef std::map<const std::string, ref<Array> > name2arr_ty;
 	static name2arr_ty name2arr;
 };

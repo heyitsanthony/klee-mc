@@ -8,6 +8,7 @@ Z3DIR=${Z3DIR:-"/home/chz/src/z3/"}
 UCLIBDIR=${UCLIBDIR:-"/home/chz/src/uclibc-pruning"}
 VEXLIBDIR=${VEXLIBDIR:-"/usr/lib/valgrind/"}
 
+if [ -z "$QUICK" ]; then
 LLVM_CFLAGS_EXTRA="$EXTRAHEADERS"			\
 LLVM_CXXFLAGS_EXTRA="$EXTRAHEADERS"			\
 CFLAGS="-g -O3 -I${STPDIR}/include $EXTRAHEADERS"	\
@@ -22,8 +23,13 @@ CXXFLAGS="-g -O2  $EXTRAHEADERS"		\
 		--enable-posix-runtime			\
 		--with-uclibc="$UCLIBDIR"		\
 		--with-runtime=Release 
+fi
 
 make -j6 REQUIRES_RTTI=1
+if [ ! -z "$QUICK" ]; then
+	exit
+fi
+
 make mc-clean && GUEST_ARCH=arm make -j6 && GUEST_ARCH=arm make mc-std-arm
 make mc-clean && GUEST_ARCH=x86 make -j6 && GUEST_ARCH=x86 make mc-std-x86
 make mc-clean && GUEST_ARCH=amd64 make -j6 && GUEST_ARCH=amd64 make mc-std-amd64

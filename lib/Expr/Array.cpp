@@ -35,14 +35,11 @@ Array::~Array()
 ref<Array> Array::get(const std::string &_name)
 {
 	name2arr_ty::iterator	it(name2arr.find(_name));
-	Array			*ret;
 
 	if (it == name2arr.end())
 		return NULL;
 
-	ret = it->second;
-	ret->incRefIfCared();
-	return ret;
+	return it->second;
 }
 
 ref<Array> Array::create(
@@ -51,12 +48,17 @@ ref<Array> Array::create(
 	const ref<ConstantExpr> *constValBegin,
 	const ref<ConstantExpr> *constValEnd)
 {
-	Array	*ret;
+	ref<Array>	ret;
+	Array		*arr;
 
-	ret = new Array(_name, _mallocKey, constValBegin, constValEnd);
-	ret->initRef();
-	if (_name.size())
+	/* XXX: will this leak arrays? I hope not. */
+	arr = new Array(_name, _mallocKey, constValBegin, constValEnd);
+	arr->initRef();
+	arr->incRefIfCared();
+	ret = ref<Array>(arr);
+	if (_name.size()) {
 		name2arr.insert(std::make_pair(_name, ret));
+	}
 
 	return ret;
 }

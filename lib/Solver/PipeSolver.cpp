@@ -91,6 +91,7 @@ PipeSolverImpl::PipeSolverImpl(PipeFormat* in_fmt)
 , child_pid(-1)
 , stdout_buf(NULL)
 , timeout(-1.0)
+, cached_argv(0)
 {
 	assert (fmt);
 	parent_pid = getpid();

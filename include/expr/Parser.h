@@ -32,7 +32,7 @@ namespace expr {
     const std::string Name;
 
   public:
-    Identifier(const std::string _Name) : Name(_Name) {}
+    Identifier(const std::string& _Name) : Name(_Name) {}
   };
 
   // FIXME: Do we have a use for tracking source locations?
