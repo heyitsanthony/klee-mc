@@ -44,6 +44,12 @@ namespace
 		cl::init(""));
 
 	cl::opt<bool>
+	HCacheWriteSols(
+		"hcache-write-sols",
+		cl::desc("Write solutions on eval with hcache."),
+		cl::init(false));
+
+	cl::opt<bool>
 	HCacheSink(
 		"hcache-sink",
 		cl::desc("Sink directory hits into accel cache"),
@@ -228,7 +234,8 @@ err:
 void HashSolver::saveCachedAssignment(const Assignment& a)
 {
 	if (q_loaded) return;
-	a.save(getHashPathSolution().c_str());
+	if (HCacheWriteSols)
+		a.save(getHashPathSolution().c_str());
 }
 
 #define DECL_HASHPATH(x,y)				\
