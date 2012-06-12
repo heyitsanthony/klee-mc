@@ -4,6 +4,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include "klee/Internal/ADT/LimitedStream.h"
 #include "klee/Constraints.h"
 #include "klee/util/ExprUtil.h"
 #include "klee/util/Assignment.h"
@@ -14,6 +15,8 @@
 #include "../Expr/RuleBuilder.h"
 #include "static/Sugar.h"
 #include "EquivExprBuilder.h"
+
+#define MAX_EXPRFILE_BYTES	(1024*512)
 
 using namespace klee;
 using namespace llvm;
@@ -421,11 +424,10 @@ void EquivExprBuilder::missedLookup(
 	ss << EquivDBDir << "/" << e->getWidth() << '/' << nodes << '/' << hash;
 	if (stat(ss.str().c_str(), &st) != 0) {
 		/* entry not found.. this is the first one! */
-		Query		q(e);
-		SMTPrinter::dumpToFile(
-			q,
-			ss.str().c_str(),
-			false /* no consts */);
+		Query			q(e);
+		limited_ofstream	lofs(
+			ss.str().c_str(), MAX_EXPRFILE_BYTES);
+		SMTPrinter::print(lofs, q, false /* no consts */);
 	}
 
 	written_hashes.insert(hash);
