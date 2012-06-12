@@ -2,8 +2,26 @@
 CURDATE=`date +%s`
 FPREFIX="pending.$CURDATE"
 PROOFDIR=${1:-"proofs"}
+
+function xtive_loop
+{
+	BRULEF="$1"
+	while [ 1 ]; do
+		APPENDED=`kopt -pipe-solver -brule-xtive -rule-file="$BRULEF" 2>&1 | grep Append | cut -f2 -d' '`
+		if [ -z "$APPENDED" ]; then
+			break
+		fi
+		if [ "$APPENDED" -eq "0" ]; then
+			break
+		fi
+	done
+}
+
 kopt -pipe-solver -dump-bin -check-rule "$PROOFDIR" >$FPREFIX.brule
-kopt -pipe-solver -brule-xtive -rule-file=$FPREFIX.brule
+
+xtive_loop "$FPREFIX.brule"
+
+
 kopt -pipe-solver -brule-rebuild -rule-file=$FPREFIX.brule $FPREFIX.rebuild.brule
 mv $FPREFIX.rebuild.brule $FPREFIX.brule
 cp "$FPREFIX.brule" pending.brule
@@ -13,7 +31,7 @@ kopt -max-stp-time=30 -pipe-solver -db-punchout		\
 	-uninteresting-file=$FPREFIX.unint.brule	\
 	-stubborn-file=$FPREFIX.stubborn.brule		\
 	$FPREFIX.punch.brule
-kopt -pipe-solver -brule-xtive -rule-file=$FPREFIX.punch.brule
+xtive_loop "$FPREFIX.punch.brule"
 kopt -pipe-solver -brule-rebuild -rule-file=$FPREFIX.punch.brule $FPREFIX.punch.rebuild.brule
 mv $FPREFIX.punch.rebuild.brule $FPREFIX.punch.brule
 
