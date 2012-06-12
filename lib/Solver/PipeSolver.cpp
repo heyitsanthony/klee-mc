@@ -405,7 +405,7 @@ bool PipeSolverImpl::writeQueryToChild(const Query& q) const
 }
 
 /* terminates writer process */
-static void query_writer_alarm(int x) { exit(1); }
+static void query_writer_alarm(int x) { _exit(1); }
 static void parent_query_writer_alarm(int x) { }
 
 bool PipeSolverImpl::writeQuery(const Query& q) const
@@ -430,7 +430,7 @@ bool PipeSolverImpl::writeQuery(const Query& q) const
 			alarm((unsigned int)timeout);
 		}
 		writeQueryToChild(q);
-		exit(0);
+		_exit(0);
 	}
 
 	assert (query_writer_pid > 0 && "Parent with bad pid");
