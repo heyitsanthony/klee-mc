@@ -264,6 +264,16 @@ bool Pattern::operator ==(const Pattern& p) const
 	return true;
 }
 
+void Pattern::getLabelMap(labelmap_ty& lm, unsigned l_max) const
+{
+	for (unsigned i = 0; i <= l_max; i++) {
+		lm[i] = ReadExpr::create(
+			UpdateList(getMaterializeArray(), NULL),
+			ConstantExpr::create(i, 32));
+	}
+}
+
+
 ref<Expr> Pattern::anonFlat2Expr(int label_max) const
 {
 	int		off;
@@ -274,11 +284,7 @@ ref<Expr> Pattern::anonFlat2Expr(int label_max) const
 		? label_id_max
 		: label_max;
 
-	for (unsigned i = 0; i <= max_label; i++) {
-		lm[i] = ReadExpr::create(
-			UpdateList(getMaterializeArray(), NULL),
-			ConstantExpr::create(i, 32));
-	}
+	getLabelMap(lm, max_label);
 
 	off = 0;
 	return flat2expr(lm, rule, off);

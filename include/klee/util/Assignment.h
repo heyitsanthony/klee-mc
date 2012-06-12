@@ -10,6 +10,7 @@
 #ifndef KLEE_UTIL_ASSIGNMENT_H
 #define KLEE_UTIL_ASSIGNMENT_H
 
+#include <iostream>
 #include <map>
 #include "klee/util/ExprEvaluator.h"
 
@@ -111,6 +112,7 @@ public:
 	unsigned int getNumBindings(void) const { return bindings.size(); }
 	unsigned int getNumFree(void) const { return free_bindings.size(); }
 	void resetBindings(void);
+	void print(std::ostream& os) const;
 
 private:
 	void addBinding(

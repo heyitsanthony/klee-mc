@@ -40,6 +40,8 @@ public:
 	static void printBinaryPattern(std::ostream& os, const Pattern& p);
 	static void printTombstone(std::ostream& os, unsigned range_len);
 	static void printExpr(std::ostream& os, const ref<Expr>& e);
+	static void printExpr(
+		std::ostream& os, const ref<Expr>& e, const labelmap_ty& tm);
 
 	virtual ~ExprRule() {}
 

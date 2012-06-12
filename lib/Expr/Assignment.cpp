@@ -63,6 +63,16 @@ unsigned int Assignment::getBindingBytes(void) const
 	return ret;
 }
 
+void Assignment::print(std::ostream& os) const
+{
+	foreach (it, bindingsBegin(), bindingsEnd()) {
+		os << (*it).first->name << ": ";
+		foreach (it_v, (*it).second.begin(), (*it).second.end())
+			os << ((void*)(*it_v)) << ' ';
+		os << '\n';
+	}
+}
+
 void Assignment::bindFreeToU8(uint8_t x)
 {
 	foreach (it, free_bindings.begin(), free_bindings.end()) {

@@ -14,7 +14,7 @@ using namespace klee;
 extern ExprBuilder::BuilderKind	BuilderKind;
 
 bool checkRule(const ExprRule* er, Solver* s, std::ostream&);
-
+bool getRuleCex(const ExprRule* er, Solver* s, std::ostream&);
 
 static ref<Expr> fixupDisjointLabels(
 	ref<Expr>& to_expr,
@@ -85,6 +85,7 @@ static void findReplacements(
 		const ExprRule	*er = *it;
 		ref<Expr>	old_to_expr, rb_to_expr;
 		ExprBuilder	*old_eb;
+		bool		fixed_up = false;
 
 		old_to_expr = er->getToExpr();
 		old_eb = Expr::setBuilder(rb);
@@ -98,6 +99,7 @@ static void findReplacements(
 			rb_to_expr = getLabelErrorExpr(er);
 			if (rb_to_expr.isNull())
 				continue;
+			fixed_up = true;
 		}
 
 		/* transitive rule does not reduce nodes? */
@@ -107,9 +109,13 @@ static void findReplacements(
 			continue;
 		}
 
-		std::cerr << "Xtive [" << i << "]:\n";
+		std::cerr << "Xtive [" << i << "]:";
+		if (fixed_up) std::cerr << " (fixedup)";
+		std::cerr << '\n';
+
 		er->print(std::cout);
-		std::cerr	<< "OLD-TO-EXPR: " << old_to_expr << '\n'
+		std::cerr	<< "FROM-EXPR: " << er->getFromExpr() << '\n'
+				<< "OLD-TO-EXPR: " << old_to_expr << '\n'
 				<< "NEW-TO-EXPR: " << rb_to_expr << '\n';
 
 		replacements.push_back(std::make_pair(it, rb_to_expr));
@@ -136,7 +142,10 @@ void appendReplacements(
 			continue;
 
 		xtive_er->print(std::cout);
-		if (checkRule(xtive_er, s, std::cerr) == false) {
+		if (getRuleCex(xtive_er, s, std::cerr) == false) {
+			/* don't add rule if it doesn't work */
+			std::cerr << "Checking Initial Rule.\n";
+			getRuleCex(er, s, std::cerr);
 			bad_repl.insert(er);
 			continue;
 		}

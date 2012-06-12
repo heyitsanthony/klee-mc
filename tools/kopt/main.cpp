@@ -156,6 +156,8 @@ namespace llvm
 
 void xtiveBRule(ExprBuilder *eb, Solver* s);
 bool checkRule(const ExprRule* er, Solver* s, std::ostream&);
+bool getRuleCex(const ExprRule* er, Solver* s, std::ostream&);
+
 
 /*
 (= (ite (bvult (bvadd bv2936[64] ( zero_extend[56] ( select ?e1 bv37[32] )))
@@ -282,6 +284,27 @@ static bool checkDup(ExprBuilder* eb, Solver* s)
 	delete er;
 
 	return ret;
+}
+
+bool getRuleCex(const ExprRule* er, Solver* s, std::ostream& os)
+{
+	bool		ok;
+
+	ok = checkRule(er, s, os);
+	if (ok) return true;
+
+
+	ref<Expr>	re(er->materialize());
+	Assignment	a(re);
+
+	ok = s->getInitialValues(Query(re), a);
+	if (!ok) {
+		std::cerr << "Bad getInitV\n";
+		return false;
+	}
+
+	a.print(std::cerr);
+	return false;
 }
 
 bool checkRule(const ExprRule* er, Solver* s, std::ostream& os)
@@ -598,8 +621,8 @@ static void checkDB(Solver* s)
 
 		if (from_rb == to_e) {
 			if (VerifyDB) {
-				checkRule(er, s, std::cerr);
-				bad_verify_c++;
+				if (checkRule(er, s, std::cerr) == false)
+					bad_verify_c++;
 			}
 			continue;
 		}

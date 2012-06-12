@@ -474,12 +474,7 @@ void ExprXChkBuilder::dumpCounterExample(
 	}
 
 	os << "Counter example:\n";
-	foreach (it, a.bindingsBegin(), a.bindingsEnd()) {
-		os << (*it).first->name << ": ";
-		foreach (it_v, (*it).second.begin(), (*it).second.end())
-			os << ((void*)(*it_v)) << ' ';
-		os << '\n';
-	}
+	a.print(os);
 
 	oracle_eval = a.evaluate(oracle_expr);
 	os << "Oracle expr: ";
@@ -538,6 +533,4 @@ ExprBuilder *createXChkBuilder(
 }
 
 void xchkExpr(const ref<Expr>& oracle, const ref<Expr>& test)
-{
-	ExprXChkBuilder::xchkExpr(oracle, test);
-}
+{ ExprXChkBuilder::xchkExpr(oracle, test); }

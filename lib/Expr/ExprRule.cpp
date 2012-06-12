@@ -17,6 +17,13 @@ public:
 	ExprFlatWriter(std::ostream* _os = NULL) : os(_os) {}
 	virtual ~ExprFlatWriter(void) {}
 	void setOS(std::ostream* _os) { os = _os; }
+	void setLabelMap(const labelmap_ty& lm) {
+		foreach (it, lm.begin(), lm.end()) {
+			ref<Expr>	e(it->second);
+			unsigned	v(it->first);
+			labels.insert(std::make_pair(e,v));
+		}
+	}
 protected:
 	virtual Action visitExpr(const Expr* expr);
 	std::ostream		*os;
@@ -224,10 +231,12 @@ void ExprRule::print(std::ostream& os) const
 ExprRule* ExprRule::changeDest(const ExprRule* er, const ref<Expr>& to)
 {
 	ExprRule		*new_er;
+	labelmap_ty		lm;
 	Pattern			new_to;
 	std::stringstream	ss;
 
-	printExpr(ss, to);
+	er->to.getLabelMap(lm, er->to.label_id_max);
+	printExpr(ss, to, lm);
 	new_to.readFlatExpr(ss);
 	if (new_to.size() == 0)
 		return NULL;
@@ -399,6 +408,14 @@ ExprRule* ExprRule::loadPrettyRule(std::istream& is)
 void ExprRule::printExpr(std::ostream& os, const ref<Expr>& e)
 {
 	ExprFlatWriter	efw(&os);
+	efw.apply(e);
+}
+
+void ExprRule::printExpr(
+	std::ostream& os, const ref<Expr>& e, const labelmap_ty& lm)
+{
+	ExprFlatWriter	efw(&os);
+	efw.setLabelMap(lm);
 	efw.apply(e);
 }
 
@@ -582,4 +599,4 @@ bool ExprRule::checkConstants(const labelmap_ty& clm) const
 	}
 
 	return true;
-} 
+}

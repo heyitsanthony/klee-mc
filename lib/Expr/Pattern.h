@@ -51,6 +51,8 @@ public:
 		return flat2expr(lm, rule, off);
 	}
 
+	void getLabelMap(labelmap_ty& lm, unsigned l_max) const;
+
 	bool readFlatExpr(std::istream& ifs);
 	flatrule_ty stripConstExamples(void) const;
 	bool isConst(void) const;
