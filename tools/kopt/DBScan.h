@@ -23,7 +23,7 @@ public:
 	void punchout(std::ostream& os);
 	void histo(void);
 private:
-	typedef std::pair<const KnockoutRule*, ExprRule*> newrule_ty;
+	typedef std::pair<const KnockoutClass*, ExprRule*> newrule_ty;
 	typedef std::map<
 		ref<Expr> /* knock out expr */,
 		KnockoutClass*
@@ -33,14 +33,17 @@ private:
 
 	void loadKnockoutRulesFromBuilder();
 	void addRule(const ExprRule* er);
+	void saveRules(
+		const std::string& fname,
+		const std::vector<const ExprRule*>& ers);
 
 	ref<Array>	arr;
 	RuleBuilder	*rb;
 	Solver		*s;
 
-	kcmap_ty	kc_map;
-	krlist_ty	kr_list;
-	unsigned	uninteresting_c;
+	kcmap_ty			kc_map;
+	krlist_ty			kr_list;
+	std::vector<const ExprRule*>	uninteresting;
 
 };
 };

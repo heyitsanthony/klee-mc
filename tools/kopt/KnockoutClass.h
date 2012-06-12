@@ -13,7 +13,7 @@ class KnockoutClass
 {
 public:
 	typedef std::vector<const KnockoutRule*>	rules_ty;
-		
+
 	KnockoutClass(const KnockoutRule* _kr);
 	virtual ~KnockoutClass() {}
 
@@ -24,6 +24,7 @@ public:
 	rules_ty::const_iterator end(void) const { return rules.end() ; }
 	unsigned size(void) const { return rules.size(); }
 
+	ExprRule* createRule(Solver* s) const;
 private:
 	KnockoutClass() {}
 

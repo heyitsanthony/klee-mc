@@ -53,9 +53,6 @@ private:
 class klee::KnockOut : public ExprVisitor
 {
 public:
-	// first = symbolic expr, second = old constant
-	typedef std::pair<ref<Expr>, ref<ConstantExpr> >	replvar_t;
-
 	KnockOut(const Array* _arr = NULL, int _uri = -1)
 	: ExprVisitor(false, true)
 	, arr(_arr)
@@ -193,6 +190,50 @@ static bool isValidRange(
 	return mustBeTrue;
 }
 
+
+ref<Expr> KnockoutRule::trySlot(
+	Solver* s, const ref<Expr>& e_from,
+	const replvar_t& rv, int i) const
+{
+	KnockOut		kout_partial(arr, i);
+	ref<Expr>		rule_eq, e_range, e_ko;
+	std::pair< ref<Expr>, ref<Expr> >	r;
+	ConstraintManager	cs;
+	Query			q(cs, rv.first);
+
+	e_ko = kout_partial.apply(e_from);
+	rule_eq = EqExpr::create(e_ko, er->getToExpr());
+	cs.addConstraint(rule_eq);
+
+	if (!s->getRange(q, r)) {
+		std::cerr << "FAILED RANGE\n";
+		return NULL;
+	}
+	if (r.first == r.second) {
+		std::cerr << "SINGLETON RANGE\n";
+		return NULL;
+	}
+	if (!isValidRange(s, rule_eq, rv.first, r.first, r.second)) {
+		std::cerr << "INVALID RANGE: ["
+			<< r.first << ", " << r.second << "]\n";
+		return NULL;
+	}
+
+	e_range = getRangeExpr(rv.first, r.first, r.second);
+
+	er->printPrettyRule(std::cerr);
+	std::cerr << "\n======================\n";
+	std::cerr << "\nIT-FIRST: " << rv.first << '\n';
+	std::cerr << "IGN-IDX: " << i << '\n';
+	std::cerr << "E-FROM: " << e_from << '\n';
+	std::cerr << "PART-KO: " << e_ko << '\n';
+	std::cerr << "ORIG-KO: " << ko << '\n';
+	std::cerr << "RANGE-EXPR " << e_range << '\n';
+	std::cerr << "\n=====================\n";
+
+	return e_range;
+}
+
 /* start with the original expression;
  * successively knock out constants */
 bool KnockoutRule::isRangedRuleValid(
@@ -201,54 +242,20 @@ bool KnockoutRule::isRangedRuleValid(
 	ref<Expr>	e_from;
 	int		i;
 
-
 	e_from = er->getFromExpr();
-	i = -1;
+	i = 0;
 
 	std::cerr << "TRYING RANGES FOR:\n";
 	std::cerr << "FROM-EXPR={" << e_from << "}\n";
 	std::cerr << "TO-EXPR={" << er->getToExpr() << "}\n";
 	foreach (it, kout->begin(), kout->end()) {
-		KnockOut		kout_partial(arr, i+1);
-		ref<Expr>		rule_eq;
-		std::pair< ref<Expr>, ref<Expr> >	r;
-		ref<Expr>		e_ko;
-		ConstraintManager	cs;
-		Query			q(cs, it->first);
+		e_range = trySlot(s, e_from, *it, i);
 
+		if (!e_range.isNull()) {
+			slot = i;
+			return true;
+		}
 		i++;
-
-		e_ko = kout_partial.apply(e_from);
-		rule_eq = EqExpr::create(e_ko, er->getToExpr());
-		cs.addConstraint(rule_eq);
-
-		if (!s->getRange(q, r)) {
-			std::cerr << "FAILED RANGE\n";
-			continue;
-		}
-		if (r.first == r.second) {
-			std::cerr << "SINGLETON RANGE\n";
-			continue;
-		}
-		if (!isValidRange(s, rule_eq, it->first, r.first, r.second)) {
-			std::cerr << "INVALID RANGE: ["
-				<< r.first << ", " << r.second << "]\n";
-			continue;
-		}
-
-		e_range = getRangeExpr(it->first, r.first, r.second);
-
-		er->printPrettyRule(std::cerr);
-		std::cerr << "\n======================\n";
-		std::cerr << "\nIT-FIRST: " << it->first << '\n';
-		std::cerr << "IGN-IDX: " << i << '\n';
-		std::cerr << "E-FROM: " << e_from << '\n';
-		std::cerr << "PART-KO: " << e_ko << '\n';
-		std::cerr << "ORIG-KO: " << ko << '\n';
-		std::cerr << "RANGE-EXPR " << e_range << '\n';
-		std::cerr << "\n=====================\n";
-		slot = i;
-		return true;
 	}
 
 	return false;
@@ -350,17 +357,3 @@ ExprRule* KnockoutRule::createRule(Solver* s) const
 
 	return NULL;
 }
-
-#if 0
-ConstCounter	cc;
-cc.visit(from_expr);
-std::cerr << "FROM-EXPR: " << from_expr << '\n';
-foreach (it2, cc.begin(), cc.end()) {
-	ref<Expr>		is_ugt_bound;
-	ref<ConstantExpr>	e;
-
-	std::cerr
-		<< it2->first << "[" << it2->first->getWidth()
-		<< "]: " << it2->second << '\n';
-}
-#endif

@@ -1,5 +1,6 @@
 #include <iostream>
 
+#include <llvm/Support/CommandLine.h>
 #include "../../lib/Expr/ExprRule.h"
 #include "../../lib/Expr/RuleBuilder.h"
 #include "klee/Expr.h"
@@ -11,12 +12,33 @@
 #include "DBScan.h"
 
 using namespace klee;
+using namespace llvm;
+
+namespace llvm
+{
+	cl::opt<std::string>
+	UninterestingFile(
+		"uninteresting-file",
+		cl::desc("File to write uninteresting rules."),
+		cl::init(""));
+
+	cl::opt<std::string>
+	UniqueFile(
+		"unique-file",
+		cl::desc("File to write unique knockout rules."),
+		cl::init(""));
+
+	cl::opt<std::string>
+	StubbornFile(
+		"stubborn-file",
+		cl::desc("File to write rules that weren't generalized."),
+		cl::init(""));
+}
 
 extern ExprBuilder::BuilderKind	BuilderKind;
 
 DBScan::DBScan(Solver* _s)
 : s(_s)
-, uninteresting_c(0)
 {
 	arr = Array::create("ko_arr", 4096);
 	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
@@ -50,8 +72,7 @@ void DBScan::addRule(const ExprRule* er)
 	kr = new KnockoutRule(er, arr.get());
 	if (kr->knockedOut() == false) {
 		/* nothing changed-- not interesting */
-		uninteresting_c++;
-		delete kr;
+		uninteresting.push_back(er);
 		return;
 	}
 
@@ -62,6 +83,7 @@ void DBScan::addRule(const ExprRule* er)
 	if (kc_it == kc_map.end()) {
 		kc = new KnockoutClass(kr);
 		kc_map.insert(std::make_pair(kr->getKOExpr(), kc));
+		return;
 	} else {
 		kc = kc_it->second;
 		kc->addRule(kr);
@@ -75,7 +97,7 @@ void DBScan::loadKnockoutRulesFromBuilder()
 	foreach (it, rb->begin(), rb->end())
 		addRule(*it);
 
-	std::cerr << "[KO] Uninteresting: " << uninteresting_c << '\n';
+	std::cerr << "[KO] Uninteresting: " << uninteresting.size() << '\n';
 }
 
 void DBScan::histo(void)
@@ -112,6 +134,8 @@ void DBScan::histo(void)
 void DBScan::punchout(std::ostream& os)
 {
 	std::vector<newrule_ty>		valid_kos;
+	std::vector<const ExprRule*>	unique_rules;
+	std::vector<const ExprRule*>	stubborn_rules;
 	unsigned			rule_match_c;
 
 	loadKnockoutRulesFromBuilder();
@@ -119,21 +143,28 @@ void DBScan::punchout(std::ostream& os)
 	rule_match_c = 0;
 	foreach (it, kc_map.begin(), kc_map.end()) {
 		const KnockoutClass	*kc;
-		const KnockoutRule	*kr;
 		ExprRule		*new_rule;
 
 		kc = it->second;
 
-		/* don't try anything with unique rules */
-		if (kc->size() < 2)
+		/* don't try generalizing unique rules */
+		if (kc->size() < 2) {
+			unique_rules.push_back(kc->front()->getExprRule());
 			continue;
+		}
 
-		kr = kc->front();
-		new_rule = kr->createRule(s);
-		if (new_rule == NULL)
+		new_rule = kc->createRule(s);
+		if (new_rule == NULL) {
+			/* could not generalize; save all rules */
+			foreach (it2, kc->begin(), kc->end()) {
+				const ExprRule	*er;
+				er = (*it2)->getExprRule();
+				stubborn_rules.push_back(er);
+			}
 			continue;
+		}
 
-		valid_kos.push_back(std::make_pair(kr, new_rule));
+		valid_kos.push_back(std::make_pair(kc, new_rule));
 		rule_match_c += kc->size();
 		std::cerr << "TOTAL RULES: " << valid_kos.size() << '\n';
 		new_rule->printBinaryRule(os);
@@ -146,4 +177,19 @@ void DBScan::punchout(std::ostream& os)
 	/* free created rules */
 	foreach (it, valid_kos.begin(), valid_kos.end())
 		delete it->second;
+
+	saveRules(UniqueFile, unique_rules);
+	saveRules(UninterestingFile, uninteresting);
+	saveRules(StubbornFile, stubborn_rules);
+}
+
+void DBScan::saveRules(
+	const std::string& fname, const std::vector<const ExprRule*>& ers)
+{
+	if (fname.empty())
+		return;
+
+	std::ofstream	ofs(fname.c_str());
+	foreach (it, ers.begin(), ers.end())
+		(*it)->printBinaryRule(ofs);
 }

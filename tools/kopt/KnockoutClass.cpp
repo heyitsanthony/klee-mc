@@ -29,3 +29,6 @@ void KnockoutClass::addRule(const KnockoutRule* kr)
 		tagvals[*it].insert(cast<ConstantExpr>(e)->getZExtValue());
 	}
 }
+
+ExprRule* KnockoutClass::createRule(Solver* s) const
+{ return root_kr->createRule(s); }

@@ -11,6 +11,10 @@ class ExprRule;
 class Expr;
 class Array;
 class KnockOut;
+// first = symbolic expr, second = old constant
+typedef std::pair<ref<Expr>, ref<ConstantExpr> >	replvar_t;
+
+
 class KnockoutRule
 {
 public:
@@ -19,12 +23,16 @@ public:
 	bool knockedOut(void) const { return ko.isNull() == false; }
 	ref<Expr> getKOExpr(void) const;
 	const ExprRule* getExprRule(void) const { return er; }
-	ExprRule* createRule(Solver* s) const;
 
 	exprtags_ty getTags(int slot = -1 /* all tags */) const;
 
+	ExprRule* createRule(Solver* s) const;
 private:
 	bool isConstInvariant(Solver* s) const;
+
+
+	ref<Expr> trySlot(Solver* s, const ref<Expr>& e_from,
+		const replvar_t& rv, int i) const;
 	bool isRangedRuleValid(
 		Solver* s,
 		int& slot,
