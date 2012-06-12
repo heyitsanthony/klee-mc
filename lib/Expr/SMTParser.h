@@ -34,7 +34,7 @@ private:
 	std::stack<VarEnv> varEnvs;
 	std::stack<FVarEnv> fvarEnvs;
 
-	typedef std::map<const std::string, Array*>	arrmap_ty;
+	typedef std::map<const std::string, ref<Array> >	arrmap_ty;
 	arrmap_ty	arrmap;
 public:
 	/* For interacting w/ the actual parser, should make this nicer */

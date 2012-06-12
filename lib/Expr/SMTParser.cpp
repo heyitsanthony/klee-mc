@@ -71,8 +71,6 @@ SMTParser::SMTParser(std::istream* ifs, ExprBuilder* _builder)
 
 SMTParser::~SMTParser(void)
 {
-	foreach (it, arrmap.begin(), arrmap.end())
-		it->second->decRefIfCared();
 	delete is;
 	is = NULL;
 }
@@ -199,7 +197,7 @@ void SMTParser::DeclareArray(const std::string& name)
 	if (arr.isNull())
 		arr = Array::create(name, DEFAULT_ARR_SZ);
 	arr->incRefIfCared();
-	arrmap[name] = arr.get();
+	arrmap[name] = arr;
 	AddVar(
 		name,
 		builder->NotOptimized(

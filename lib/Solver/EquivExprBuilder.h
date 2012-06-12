@@ -153,18 +153,17 @@ protected:
 	constset_ty			consts;
 
 	typedef std::tr1::unordered_set<uint64_t> blacklist_ty;
-	blacklist_ty			blacklist;
-
 	typedef std::tr1::unordered_set<uint64_t> writtenhashes_ty;
-	writtenhashes_ty		written_hashes;
-
 	typedef std::tr1::unordered_set<Expr::Hash> identmemo_ty;
+	typedef std::map<std::string, ref<Expr> > db_parse_cache_ty;
+
+	blacklist_ty			blacklist;
+	writtenhashes_ty		written_hashes;
 	identmemo_ty			ident_memo;
 
 	ExprHashMap<ref<Expr> >		lookup_memo;
 	std::list<ref<Expr> >		solver_exprs;
 
-	typedef std::map<std::string, ref<Expr> > db_parse_cache_ty;
 	db_parse_cache_ty	db_parse_cache;
 
 	unsigned		hit_c;
