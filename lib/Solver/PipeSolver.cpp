@@ -30,6 +30,12 @@ uint64_t PipeSolverImpl::prefork_hits = 0;
 
 namespace {
 	cl::opt<bool>
+	DumpSnooze(
+		"dump-snooze",
+		cl::desc("DUmp snoozing queries to snooze.<hash>.smt"),
+		cl::init(false));
+
+	cl::opt<bool>
 	ForkQueries(
 		"pipe-fork-queries",
 		cl::desc("Fork query writer before sending to pipe."),
@@ -511,7 +517,8 @@ bool PipeSolverImpl::waitOnSolver(const Query& q) const
 
 	if (rc == 0) {
 		/* timeout */
-		SMTPrinter::dump(q, "snooze");
+		if (DumpSnooze)
+			SMTPrinter::dump(q, "snooze");
 		return false;
 	}
 
