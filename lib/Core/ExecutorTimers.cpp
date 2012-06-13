@@ -242,6 +242,7 @@ protected:
 };
 
 #include "../Expr/RuleBuilder.h"
+#include "../Expr/ExprPatternMatch.h"
 cl::opt<unsigned>
 DumpRuleBuilderStats("dump-rbstats",
         cl::desc("Dump rule builder stats every n seconds (0=off)"),
@@ -254,10 +255,11 @@ protected:
 	void print(void) { *os
 		<< RuleBuilder::getHits() << ' '
 		<< RuleBuilder::getMisses() << ' '
+		<< ExprPatternMatch::getConstMiss() << ' '
 		<< RuleBuilder::getRuleMisses() << ' '
 		<< RuleBuilder::getNumRulesUsed() << ' '
 		<< RuleBuilder::getFiltered() << ' '
-		<< RuleBuilder::getFilterSize(); }
+		<< RuleBuilder::getFilterSize() << ' '; }
 };
 
 #include "klee/SolverStats.h"

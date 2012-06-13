@@ -6,6 +6,8 @@
 
 using namespace klee;
 
+uint64_t ExprPatternMatch::const_miss_c = 0;
+
 bool ExprPatternMatch::verifyConstant(const ConstantExpr* ce)
 {
 	unsigned bits;
@@ -241,5 +243,8 @@ bool ExprPatternMatch::match(const ref<Expr>& e)
 
 	er = rule_it.getExprRule();
 	success = er->checkConstants(clm);
+	if (success == false)
+		const_miss_c++;
+
 	return success;
 }

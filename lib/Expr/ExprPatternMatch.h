@@ -41,6 +41,7 @@ public:
 	/* Call this! */
 	bool match(const ref<Expr>& e);
 
+	static uint64_t getConstMiss(void) { return const_miss_c; }
 protected:
 	virtual Action visitExpr(const Expr* expr);
 private:
@@ -49,11 +50,12 @@ private:
 	Action matchLabel(const Expr* expr, uint64_t label_op);
 	Action matchCLabel(const Expr* expr, uint64_t label_op);
 
-
 	RuleIterator		&rule_it;
 	labelmap_ty		&lm;		/* read label map */
 	labelmap_ty		clm;		/* const label map */
 	bool			success;
+
+	static uint64_t		const_miss_c;
 };
 
 }
