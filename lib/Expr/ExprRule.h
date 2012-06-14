@@ -35,6 +35,8 @@ public:
 		const std::vector<ref<Expr> >	&constraints) const;
 
 
+	static ExprRule* createRule(
+		const ref<Expr>& lhs, const ref<Expr>& rhs);
 	static void printRule(
 		std::ostream& os, const ref<Expr>& lhs, const ref<Expr>& rhs);
 	static void printBinaryPattern(std::ostream& os, const Pattern& p);
@@ -77,6 +79,7 @@ public:
 	unsigned int getOffsetHint(void) const { return off_hint; }
 
 	bool checkConstants(const labelmap_ty& clm) const;
+	bool hasConstraints(void) const { return const_constraints != NULL; }
 
 protected:
 	ExprRule(const Pattern& _from, const Pattern& _to);

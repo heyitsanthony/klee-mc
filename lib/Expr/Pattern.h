@@ -7,8 +7,9 @@
 
 #define OP_LABEL_MASK		(1ULL << 63)
 #define OP_CLABEL_MASK		((1ULL << 63) | (1ULL << 62))
+#define OP_MASK			((1ULL << 63) | (1ULL << 62))
 
-#define OP_L_TEST(x,y)		(((x) & OP_CLABEL_MASK) == y)
+#define OP_L_TEST(x,y)		(((x) & OP_MASK) == y)
 #define OP_L_NUM(x,y)		((x) & ~(y))
 
 #define OP_LABEL_TEST(x)	OP_L_TEST(x, OP_LABEL_MASK)
@@ -58,6 +59,7 @@ public:
 	bool isConst(void) const;
 
 	unsigned size(void) const { return rule.size(); }
+	void dump(std::ostream& os) const;
 
 	flatrule_ty		rule;
 	uint16_t		label_c;

@@ -11,6 +11,12 @@
 template<class K, class V>
 class Trie
 {
+private:
+	struct TailData {
+		unsigned int	depth;
+		std::vector<K>	full_key;
+		V		v;
+	};
 public:
 	typedef std::map<K, Trie<K,V>*>	nodemap_ty;
 	typedef std::map<K, V>		valmap_ty;
@@ -44,7 +50,7 @@ public:
 			foreach (it, td->full_key.begin(), td->full_key.end())
 				os << (void*)(*it) << ' ';
 			os << '\n';
-		}	
+		}
 
 		if (children != NULL) {
 			os << "[Trie] children:\n";
@@ -62,68 +68,30 @@ public:
 		os << "[Trie] Dump done.\n";
 	}
 
+
 	bool add(const std::vector<K>& k, V v)
 	{
-		std::list<TailData*>	td_list;
 		Trie			*cur_trie;
+		std::list<TailData*>	td_list;
 
 		assert (k.size() > 0);
 
-		cur_trie = this;
 		/* handle internal trie nodes (n-1) */
-		for (unsigned i = 0; i < k.size()-1; i++) {
-			typename nodemap_ty::const_iterator	it;
+		cur_trie = handleInternal(k, v, td_list);
 
-			if (	cur_trie->children == NULL &&
-				cur_trie->leafs == NULL &&
-				cur_trie->td == NULL)
-			{
-				/* special case: make this a tail node
-				 * to save space */
-				TailData	*new_td = new TailData();
-				new_td->full_key = k;
-				new_td->v = v;
-				new_td->depth = i;
-				cur_trie->td = new_td;
-				cur_trie = NULL;
-				break;
-			}
-
-			/* has leafs but no children, force a child node */
-			if (cur_trie->children == NULL) {
-				cur_trie->children = new nodemap_ty();
-
-				/* tail can't be set any more, queue for re-add
-				* if any */
+		/* last node-- handle leaf trie (n-1) + 1 = n */
+		if (cur_trie != NULL) {
+			if (cur_trie->leafs == NULL) {
+				cur_trie->leafs = new valmap_ty();
 				if (cur_trie->td != NULL) {
 					td_list.push_back(cur_trie->td);
 					cur_trie->td = NULL;
 				}
 			}
 
-			it = cur_trie->children->find(k[i]);
-			if (it == cur_trie->children->end()) {
-				Trie	*new_trie;
-				new_trie = new Trie();
-				cur_trie->children->insert(
-					std::make_pair(k[i], new_trie));
-				cur_trie = new_trie;
-				continue;
-			}
-
-			cur_trie = it->second;
-		}
-
-		/* last node-- handle leaf trie (n-1) + 1 = n */
-		if (cur_trie != NULL) {
-			if (cur_trie->leafs == NULL) {
-				cur_trie->leafs = new valmap_ty();
-			}
-
 			cur_trie->leafs->insert(
 				std::make_pair(k[k.size()-1], v));
 		}
-
 
 		/* finally, restore nuked tails */
 		foreach (it, td_list.begin(), td_list.end()) {
@@ -293,16 +261,63 @@ private:
 		return true;
 	}
 
+	Trie* handleInternal(
+		const std::vector<K>& k,
+		V v,
+		std::list<TailData*>& td_list)
+	{
+		Trie	*cur_trie;
+
+		cur_trie = this;
+
+		for (unsigned i = 0; i < k.size()-1; i++) {
+			typename nodemap_ty::const_iterator	it;
+
+			if (	cur_trie->children == NULL &&
+				cur_trie->leafs == NULL &&
+				cur_trie->td == NULL)
+			{
+				/* special case: make this a tail node
+				 * to save space */
+				TailData	*new_td = new TailData();
+				new_td->full_key = k;
+				new_td->v = v;
+				new_td->depth = i;
+				cur_trie->td = new_td;
+				return NULL;
+			}
+
+			/* has leafs but no children, force a child node */
+			if (cur_trie->children == NULL) {
+				cur_trie->children = new nodemap_ty();
+
+				/* tail can't be set any more;
+				 * queue for re-add */
+				if (cur_trie->td != NULL) {
+					td_list.push_back(cur_trie->td);
+					cur_trie->td = NULL;
+				}
+			}
+
+			/* add child */
+			it = cur_trie->children->find(k[i]);
+			if (it == cur_trie->children->end()) {
+				Trie	*new_trie;
+				new_trie = new Trie();
+				cur_trie->children->insert(
+					std::make_pair(k[i], new_trie));
+				cur_trie = new_trie;
+				continue;
+			}
+
+			cur_trie = it->second;
+		}
+
+		return cur_trie;
+	}
 
 	nodemap_ty		*children;
-	valmap_ty		*leafs;
-
-	struct TailData {
-		unsigned int	depth;
-		std::vector<K>	full_key;
-		V		v;
-	};
-
+	valmap_ty		*leafs;	/* values one key elem from a match */
 	TailData		*td;	/* don't waste space on tails */
 };
 

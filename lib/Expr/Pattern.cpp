@@ -1,4 +1,5 @@
 #include <iostream>
+#include "static/Sugar.h"
 #include "Pattern.h"
 
 using namespace klee;
@@ -359,3 +360,10 @@ flatrule_ty Pattern::stripConstExamples(void) const
 }
 
 bool Pattern::isConst(void) const { return (rule[0] == Expr::Constant); }
+
+void Pattern::dump(std::ostream& os) const
+{
+	foreach (it, rule.begin(), rule.end())
+		os << (void*)(*it) << ' ';
+	os << '\n';
+}

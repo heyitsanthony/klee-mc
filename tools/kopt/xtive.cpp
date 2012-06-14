@@ -15,6 +15,9 @@ extern ExprBuilder::BuilderKind	BuilderKind;
 
 bool checkRule(const ExprRule* er, Solver* s, std::ostream&);
 bool getRuleCex(const ExprRule* er, Solver* s, std::ostream&);
+bool getExprCex(
+	Solver* s, const ref<Expr>& e1, const ref<Expr>& e2,
+	std::ostream& os);
 
 static ref<Expr> fixupDisjointLabels(
 	ref<Expr>& to_expr,
@@ -73,7 +76,105 @@ typedef std::list<
 
 typedef std::set<const ExprRule*>	bad_repl_ty;
 
-static void findReplacements(
+static unsigned appendNewFroms(Solver* s, RuleBuilder* rb)
+{
+	ExprBuilder	*init_eb;
+	unsigned	new_rule_c;
+	std::ofstream	of(
+		rb->getDBPath().c_str(),
+		std::ios_base::out |
+		std::ios_base::app |
+		std::ios_base::binary);
+
+	init_eb = Expr::getBuilder();
+	new_rule_c = 0;
+	foreach (it, rb->begin(), rb->end()) {
+		const ExprRule	*er(*it);
+		ExprRule	*new_rule;
+		ref<Expr>	from_rb, to_e, from_e;
+		unsigned	from_rb_node_c, to_node_c, from_e_node_c;
+
+		Expr::setBuilder(rb);
+		from_rb = er->getFromExpr();
+		Expr::setBuilder(init_eb);
+		to_e = er->getToExpr();
+		from_e = er->getFromExpr();
+
+		/* translation of from->to worked perfectly? great! */
+		if (from_rb == to_e)
+			continue;
+
+		to_node_c = ExprUtil::getNumNodes(to_e);
+		from_rb_node_c = ExprUtil::getNumNodes(from_rb);
+		from_e_node_c = ExprUtil::getNumNodes(from_e);
+
+		/* better to-expr -- handled elsewhere */
+		if (from_rb_node_c < to_node_c)
+			continue;
+
+		/* careful-- we want to be monotone decreasing or 
+		 * the size of the db could explode */
+		if (from_rb_node_c >= from_e_node_c)
+			continue;
+
+		new_rule = ExprRule::createRule(from_rb, to_e);
+		if (new_rule == NULL)
+			continue;
+
+		if (checkRule(new_rule, s, std::cerr) == false) {
+			delete new_rule;
+			continue;
+		}
+
+		new_rule->printBinaryRule(of);
+		new_rule->print(std::cerr);
+		of.flush();
+
+		new_rule_c++;
+		delete new_rule;
+	}
+
+	return new_rule_c;
+}
+
+static void findReplacementsInFrom(
+	RuleBuilder* rb,
+	rule_replace_ty& replacements)
+{
+	ExprBuilder	*init_eb;
+	unsigned	i = 0;
+
+	init_eb = Expr::getBuilder();
+	foreach (it, rb->begin(), rb->end()) {
+		const ExprRule	*er(*it);
+		ref<Expr>	from_rb, to_e, from_e;
+		unsigned	from_node_c, to_node_c;
+
+		i++;
+
+		Expr::setBuilder(rb);
+		from_rb = er->getFromExpr();
+		Expr::setBuilder(init_eb);
+		to_e = er->getToExpr();
+		from_e = er->getFromExpr();
+
+		/* translation of from->to worked perfectly? great! */
+		if (from_rb == to_e)
+			continue;
+
+		to_node_c = ExprUtil::getNumNodes(to_e);
+		from_node_c = ExprUtil::getNumNodes(from_rb);
+
+		if (from_node_c < to_node_c) {
+			/* translated from-expr better than the rule's to-expr;
+			 * make improvement explicit. */
+			replacements.push_back(std::make_pair(it, from_rb));
+			continue;
+		}
+	}
+}
+
+static void findDestReplacements(
 	ExprBuilder* eb,
 	RuleBuilder* rb,
 	rule_replace_ty& replacements)
@@ -145,7 +246,8 @@ void appendReplacements(
 		if (getRuleCex(xtive_er, s, std::cerr) == false) {
 			/* don't add rule if it doesn't work */
 			std::cerr << "Checking Initial Rule.\n";
-			getRuleCex(er, s, std::cerr);
+			if (getRuleCex(er, s, std::cerr))
+				std::cerr << "INITIAL RULE IS OK.\n";
 			bad_repl.insert(er);
 			continue;
 		}
@@ -160,12 +262,27 @@ void xtiveBRule(ExprBuilder *eb, Solver* s)
 	RuleBuilder		*rb;
 	bad_repl_ty		bad_repl;
 	rule_replace_ty		replacements;
+	unsigned		new_from_c;
 
 	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
-	findReplacements(eb, rb, replacements);
+
+	/* find rules where building expr with rb is better than to-expr */
+	/* from experience, these usually turn out to be bugs */
+	findReplacementsInFrom(rb, replacements);
+	std::cerr << "Got src replace count=" << replacements.size() << '\n';
+
+	/* find rules where building to-expr with rulebuilder is better
+	 * than to-expr from rule */
+	findDestReplacements(eb, rb, replacements);
+
+	/* create rules when rule builder generates a different
+	 * from-expr where |from-expr| > |to-expr| */
+	new_from_c = appendNewFroms(s, rb);
 
 	// append new rules to brule file
-	std::cout << "Appending " << replacements.size() << " rules.\n";
+	std::cout << "Appending "
+		<< replacements.size() + new_from_c
+		<< " rules.\n";
 	appendReplacements(rb, s, replacements, bad_repl);
 
 	// erase all superseded rules (ignoring ones that weren't valid)

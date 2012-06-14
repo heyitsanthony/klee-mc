@@ -157,6 +157,9 @@ namespace llvm
 void xtiveBRule(ExprBuilder *eb, Solver* s);
 bool checkRule(const ExprRule* er, Solver* s, std::ostream&);
 bool getRuleCex(const ExprRule* er, Solver* s, std::ostream&);
+bool getExprCex(
+	Solver* s, const ref<Expr>& e1, const ref<Expr>& e2,
+	std::ostream& os);
 
 
 /*
@@ -286,13 +289,37 @@ static bool checkDup(ExprBuilder* eb, Solver* s)
 	return ret;
 }
 
+bool getExprCex(
+	Solver* s, const ref<Expr>& e1, const ref<Expr>& e2,
+	std::ostream& os)
+{
+	ref<Expr>	eq_expr;
+	bool		mustBeTrue;
+
+	eq_expr = EqExpr::create(e1, e2);
+	if (!s->mustBeTrue(Query(eq_expr), mustBeTrue))
+		return true;
+
+	if (mustBeTrue) return true;
+
+	Assignment	a(eq_expr);
+
+	if (!s->getInitialValues(Query(eq_expr), a)) {
+		std::cerr << "Could not get initial values\n";
+		return false;
+	}
+	a.print(os);
+
+	return false;
+}
+
+
 bool getRuleCex(const ExprRule* er, Solver* s, std::ostream& os)
 {
 	bool		ok;
 
 	ok = checkRule(er, s, os);
 	if (ok) return true;
-
 
 	ref<Expr>	re(er->materialize());
 	Assignment	a(re);
@@ -303,10 +330,12 @@ bool getRuleCex(const ExprRule* er, Solver* s, std::ostream& os)
 		return false;
 	}
 
+	std::cerr << "RULE-EQ-EXPR: " << re << '\n';
 	a.print(std::cerr);
 	return false;
 }
 
+/* return false if rule did not check out as OK */
 bool checkRule(const ExprRule* er, Solver* s, std::ostream& os)
 {
 	ref<Expr>	rule_expr;
@@ -656,7 +685,23 @@ static void checkDB(Solver* s)
 			std::cerr << "=======================\n";
 
 			unexpected_from_c++;
-			continue;
+
+			if (!VerifyDB)
+				continue;
+
+			bool	bad;
+
+			bad = (checkRule(er, s, std::cerr) == false);
+			if (!getExprCex(s, from_rb, from_eb, std::cerr))
+				bad = true;
+
+			/* terminate if bad rule */
+			if (bad) {
+				std::cerr << "!! BAD VERIFY !!\n";
+				bad_verify_c++;
+			} else {
+				continue;
+			}
 		}
 
 		std::cerr << "DID NOT TRANSLATE #" << i << ":\n";

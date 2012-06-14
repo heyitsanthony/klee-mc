@@ -600,3 +600,10 @@ bool ExprRule::checkConstants(const labelmap_ty& clm) const
 
 	return true;
 }
+
+ExprRule* ExprRule::createRule(const ref<Expr>& lhs, const ref<Expr>& rhs)
+{
+	std::stringstream	ss;
+	printRule(ss, lhs, rhs);
+	return loadPrettyRule(ss);
+}
