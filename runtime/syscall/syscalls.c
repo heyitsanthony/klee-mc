@@ -28,6 +28,8 @@
 
 //#define USE_SYS_FAILURE
 
+static int last_sc = 0;
+
 // arg0, arg1, ...
 // %rdi, %rsi, %rdx, %r10, %r8 and %r9a
 
@@ -341,10 +343,26 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	FAKE_SC_RANGE(geteuid, 0, 1)
 	FAKE_SC_RANGE(getegid, 0, 1)
-	FAKE_SC_RANGE(futex, -1, 1)
 	FAKE_SC_RANGE(fcntl, -1, 1)
 	FAKE_SC(fadvise64)
 	FAKE_SC(rt_sigaction)
+
+	case SYS_futex: {
+		static int futex_c = 0;
+		if (last_sc == SYS_futex) {
+			futex_c++;
+		} else
+			futex_c = 0;
+
+		if (futex_c > 10)
+			klee_report_error(
+				__FILE__,
+				__LINE__,
+				"Possible futex infinite loop",
+				"futex.early");
+		sc_ret_range(sc_new_regs(regfile), -1, 1);
+		break;
+	}
 
 	case SYS_rt_sigprocmask:
 		if (GET_ARG2(regfile)) {
@@ -1158,6 +1176,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 			"sc.err");
 		break;
 	}
+
+	last_sc = sc.sys_nr;
 
 	if (sc_breadcrumb_is_newregs()) {
 		/* ret value is stored in ktest regctx */
