@@ -141,19 +141,17 @@ const UpdateList &ObjectState::getUpdates() const
 		Contents[Index->getZExtValue()] = Value;
 	}
 
-	// FIXME: We should unique these,
-	// there is no good reason to create multiple ones.
-
+	// There is no good reason to create multiple ones.
 	// Start a new update list.
-	// FIXME: Leaked.
 	static unsigned id = 0;
 	ref<Array>	array;
 
 	array = Array::create(
-		"const_arr" + llvm::utostr(++id),
+		"const_osa" + llvm::utostr(++id),
 		MallocKey(size),
 		&Contents[0],
 		&Contents[0] + Contents.size());
+	array = Array::uniqueArray(array);
 	updates = UpdateList(array, 0);
 
 	// Apply the remaining (non-constant) writes.

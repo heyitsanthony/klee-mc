@@ -1,10 +1,13 @@
 #include <iostream>
 #include <string.h>
+#include "static/Sugar.h"
 #include "klee/Expr.h"
 
 using namespace klee;
 
-Array::ArrayHashCons	Array::arrayHashCons;
+Array::ArrayHashCons		Array::arrayHashConsAnon;
+Array::ArrayHashConsExact	Array::arrayHashConsExact;
+
 Array::name2arr_ty	Array::name2arr;
 
 extern "C" void vc_DeleteExpr(void*);
@@ -54,8 +57,8 @@ ref<Array> Array::create(
 	/* XXX: will this leak arrays? I hope not. */
 	arr = new Array(_name, _mallocKey, constValBegin, constValEnd);
 	arr->initRef();
-	arr->incRefIfCared();
 	ret = ref<Array>(arr);
+
 	if (_name.size()) {
 		name2arr.insert(std::make_pair(_name, ret));
 	}
@@ -104,8 +107,12 @@ Array::Array(
 	singleValue = getValue(0);
 }
 
-bool ArrayConsLT::operator()(const Array *a, const Array *b) const
+bool ArrayConsLT::operator()(const ref<Array>& a, const ref<Array>& b) const
 { bool ft; return a->lt_partial(*b, ft); }
+
+bool ArrayConsLTExact::operator()(const ref<Array>& a, const ref<Array>& b) const
+{ return *a < *b; }
+
 
 bool Array::lt_partial(const Array& b, bool& fell_through) const
 {
@@ -131,15 +138,13 @@ bool Array::lt_partial(const Array& b, bool& fell_through) const
 			return constant_count < b.constant_count;
 
 		if (constantValues_u8) {
-			if ( memcmp(
+			int	v;
+			v = memcmp(
 				constantValues_u8,
 				b.constantValues_u8,
-				constant_count) < 0)
-			{
-				return true;
-			}
-
-			return false;
+				constant_count);
+			if (v < 0) return true;
+			if (v > 0) return false;
 		}
 
 		for (unsigned i = 0; i < constantValues_expr.size(); i++) {
@@ -147,11 +152,15 @@ bool Array::lt_partial(const Array& b, bool& fell_through) const
 				return	constantValues_expr[i] <
 					b.constantValues_expr[i];
 		}
-		return false; // equal, so NOT less than
+		// return false; // equal, so NOT less than
 	}
 
-	if (mallocKey.allocSite && b.mallocKey.allocSite)
-		return (mallocKey.compare(b.mallocKey) < 0);
+	if (mallocKey.allocSite && b.mallocKey.allocSite) {
+		int	v;
+		v = mallocKey.compare(b.mallocKey);
+		if (v < 0) return true;
+		if (v > 0) return false;
+	}
 
 	/* maybe equal */
 	fell_through = true;
@@ -166,7 +175,7 @@ bool Array::operator< (const Array &b) const
 	is_lt = lt_partial(b, fell_through);
 	if (!fell_through)
 		return is_lt;
-	
+
 	return name < b.name;
 }
 
@@ -189,14 +198,51 @@ void Array::print(std::ostream& os) const
 	os << '\n';
 }
 
-ref<Array> Array::uniqueArray(Array* arr)
+ref<Array> Array::uniqueByName(ref<Array>& arr)
 {
-	std::pair<ArrayHashCons::iterator,bool> ret(arrayHashCons.insert(arr));
+	std::pair<ArrayHashConsExact::iterator,bool> ret;
+
+	ret = arrayHashConsExact.insert(arr);
 
 	/* added new element? */
-	if (ret.second && arr) {
+	if (ret.second && !arr.isNull()) {
 		assert (arr->chk_val == ARRAY_CHK_VAL);
-		arr->incRefIfCared();
+		return arr;
+	}
+
+	/* found a unique */
+	return *ret.first;
+}
+
+void Array::garbageCollect(void)
+{
+	unsigned		min_v;
+	std::vector<ref<Array> > to_del;
+
+	if (arrayHashConsExact.size() < 100)
+		return;
+
+	foreach (it, arrayHashConsExact.begin(), arrayHashConsExact.end()) {
+		ref<Array>	a(*it);
+
+		if (a.getRefCount() == 2)
+			to_del.push_back(a);
+	}
+
+	foreach (it, to_del.begin(), to_del.end())
+		arrayHashConsExact.erase(*it);
+}
+
+/* gets a unique array ignoring the name */
+ref<Array> Array::uniqueArray(ref<Array>& arr)
+{
+	std::pair<ArrayHashCons::iterator,bool> ret;
+
+	ret = arrayHashConsAnon.insert(arr);
+
+	/* added new element? */
+	if (ret.second && !arr.isNull()) {
+		assert (arr->chk_val == ARRAY_CHK_VAL);
 		return arr;
 	}
 

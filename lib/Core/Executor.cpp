@@ -2824,15 +2824,16 @@ ObjectState* Executor::executeMakeSymbolic(
 }
 
 ObjectState* Executor::makeSymbolic(
-  ExecutionState& state,
-  const MemoryObject* mo,
-  ref<Expr> len,
-  const char* arrPrefix)
+	ExecutionState& state,
+	const MemoryObject* mo,
+	ref<Expr> len,
+	const char* arrPrefix)
 {
 	ObjectState	*os;
 	ref<Array>	array;
 
 	array = Array::create(state.getArrName(arrPrefix), mo->mallocKey);
+	array = Array::uniqueByName(array);
 	os = state.bindMemObjWriteable(mo, array.get());
 	state.addSymbolic(const_cast<MemoryObject*>(mo) /* yuck */, array.get());
 

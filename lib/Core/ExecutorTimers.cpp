@@ -82,6 +82,7 @@ public:
 		ExprAlloc	*ea;
 		ea = Expr::getAllocator();
 		ea->garbageCollect();
+		Array::garbageCollect();
 	}
 private:
 	Executor *executor;

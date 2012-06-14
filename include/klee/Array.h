@@ -13,7 +13,13 @@ class ConstantExpr;
 static inline ref<ConstantExpr> createConstantExpr(uint64_t v, Expr::Width w);
 
 
-struct ArrayConsLT { bool operator()(const Array *a, const Array *b) const; };
+/* does a *partial* compare using lt_partial */
+struct ArrayConsLT
+{ bool operator()(const ref<Array> &a, const ref<Array> &b) const; };
+/* does *full* compare */
+struct ArrayConsLTExact
+{ bool operator()(const ref<Array> &a, const ref<Array> &b) const; };
+
 
 #define ARRAY_CHK_VAL	0x12345678
 #define ARR2REF(x)	ref<Array>(const_cast<Array*>(x))
@@ -23,8 +29,12 @@ class Array
 private:
 	unsigned int	chk_val;
 	// hash cons for Array objects
-	typedef std::set<Array*, ArrayConsLT> ArrayHashCons;
-	static ArrayHashCons arrayHashCons;
+	typedef std::set<ref<Array> , ArrayConsLT> ArrayHashCons;
+	typedef std::set<ref<Array>, ArrayConsLTExact> ArrayHashConsExact;
+
+	static ArrayHashCons arrayHashConsAnon;
+	static ArrayHashConsExact arrayHashConsExact;
+
 	static unsigned count;
 
 public:
@@ -52,8 +62,11 @@ public:
 		MallocKey _mallocKey,
 		const ref<ConstantExpr> *constantValuesBegin = 0,
 		const ref<ConstantExpr> *constantValuesEnd = 0);
-	static ref<Array> uniqueArray(Array* arr);
+	static ref<Array> uniqueArray(ref<Array>& arr);
+	static ref<Array> uniqueByName(ref<Array>& arr);
+
 	static unsigned getNumArrays(void) { return count; }
+	static void garbageCollect(void);
 
   /// Array - Construct a new array object.
   ///

@@ -106,7 +106,6 @@ private:
 	Executor			&exe;
 	bool				preferTrueState;
 	bool				preferFalseState;
-	//GenericGraph<ref<Expr> >	condXfer;
 	condxfer_ty			condXfer;
 	succ_ty				hasSucc;
 	ExprVisitor			*condFilter;

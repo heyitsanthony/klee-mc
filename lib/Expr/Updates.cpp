@@ -211,12 +211,14 @@ UpdateList* UpdateList::fromUpdateStack(
 		}
 
 		if (newUpdates == NULL) {
-			ref<Array> newRoot = Array::uniqueArray(
-				Array::create(
-					"simpl_arr"+llvm::utostr(++id),
-					old_root->mallocKey,
-					&constantValues[0],
-					&constantValues[0]+constantValues.size()).get());
+			ref<Array> newRoot;
+
+			newRoot = Array::create(
+				"simpl_arr"+llvm::utostr(++id),
+				old_root->mallocKey,
+				&constantValues[0],
+				&constantValues[0]+constantValues.size());
+			newRoot = Array::uniqueArray(newRoot);
 
 			newUpdates = new UpdateList(newRoot, NULL);
 		}
@@ -232,12 +234,12 @@ UpdateList* UpdateList::fromUpdateStack(
 		if (constantValues.size() == 0)
 			return NULL;
 
-		newRoot = Array::uniqueArray(
-			Array::create(
-				"simpl_arr"+llvm::utostr(++id),
-				old_root->mallocKey,
-				&constantValues[0],
-				&constantValues[0]+constantValues.size()).get());
+		newRoot = Array::create(
+			"simpl_arr"+llvm::utostr(++id),
+			old_root->mallocKey,
+			&constantValues[0],
+			&constantValues[0]+constantValues.size());
+		newRoot = Array::uniqueArray(newRoot);
 		newUpdates = new UpdateList(newRoot, NULL);
 	}
 

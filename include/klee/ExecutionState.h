@@ -68,6 +68,7 @@ public:
 			array.get() == sa.array.get());
 	}
 	const Array *getArray(void) const { return array.get(); }
+	const ref<Array> getArrayRef(void) const { return array; }
 	const MemoryObject *getMemoryObject(void) const { return mo.get(); }
 	const std::vector<uint8_t>* getConcretization(void) const
 	{
@@ -224,11 +225,7 @@ public:
 	void popFrame();
 	void xferFrame(KFunction *kf);
 
-	void addSymbolic(MemoryObject *mo, Array *array)
-	{
-		symbolics.push_back(SymbolicArray(mo, array));
-		arr2sym[array] = mo;
-	}
+	void addSymbolic(MemoryObject *mo, Array *array);
 
 	const MemoryObject* findMemoryObject(const Array* a) const
 	{

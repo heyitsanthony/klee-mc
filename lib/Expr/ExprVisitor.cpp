@@ -138,7 +138,7 @@ ref<Expr> ExprVisitor::handleActionDoChildren(Expr& ep)
 
 	assert (count < 8);
 	for (unsigned i = 0; i < count; i++) {
-		ref<Expr> kid = ep.getKid(i);
+		ref<Expr> kid(ep.getKid(i));
 		kids[i] = visit(kid);
 		if (kids[i] != kid)
 			rebuild = true;

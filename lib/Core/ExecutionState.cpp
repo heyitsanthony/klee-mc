@@ -736,5 +736,21 @@ std::string ExecutionState::getArrName(const char* arrPrefix)
 		k++;
 	}
 
-	return arrPrefix + llvm::utostr(k);
+	return arrPrefix + ("_" + llvm::utostr(k));
+}
+
+void ExecutionState::addSymbolic(MemoryObject* mo, Array* array)
+{
+#if 0
+	/* debugging */
+	foreach (it, symbolics.begin(), symbolics.end()) {
+		if ((*it).getArray()->name == array->name) {
+			std::cerr << "WTFFFFFFFF!!!!!!!!!!!\n";
+			array->print(std::cerr);
+			assert (0 == 1);
+		}
+	}
+#endif
+	symbolics.push_back(SymbolicArray(mo, array));
+	arr2sym[array] = mo;
 }
