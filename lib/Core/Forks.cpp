@@ -561,7 +561,7 @@ void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 				std::make_pair(
 					cur_st->prevForkCond,
 					new_cond));
-			hasSucc.insert(cur_st->prevForkCond);
+			hasSucc.insert(cur_st->prevForkCond->hash());
 		}
 
 		cur_st->prevForkCond = new_cond;
@@ -569,12 +569,11 @@ void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 }
 
 bool Forks::hasSuccessor(ExecutionState& st) const
-{ return hasSucc.count(st.prevForkCond) != 0; }
+{ return hasSucc.count(st.prevForkCond->hash()) != 0; }
 
 /* XXX memoize? */
 bool Forks::hasSuccessor(const ref<Expr>& cond) const
-{ return hasSucc.count(condFilter->apply(cond)); }
-
+{ return hasSucc.count(condFilter->apply(cond)->hash()); }
 
 
 void Forks::constrainFork(

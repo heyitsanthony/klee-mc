@@ -15,7 +15,7 @@ class Forks
 {
 public:
 	typedef std::set<std::pair<ref<Expr>, ref<Expr> > >	condxfer_ty;
-	typedef std::set<ref<Expr> > 				succ_ty;
+	typedef std::set<Expr::Hash> 				succ_ty;
 
 	struct ForkInfo
 	{
