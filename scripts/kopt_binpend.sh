@@ -6,18 +6,24 @@ PROOFDIR=${1:-"proofs"}
 function xtive_loop
 {
 	BRULEF="$1"
+	loopc=0
 	while [ 1 ]; do
-		APPENDED=`kopt -pipe-solver -brule-xtive -rule-file="$BRULEF" 2>&1 | grep Append | cut -f2 -d' '`
+		APPENDED=`kopt -max-stp-time=30 -pipe-solver -brule-xtive -rule-file="$BRULEF" 2>&1 | grep Append | cut -f2 -d' '`
 		if [ -z "$APPENDED" ]; then
 			break
 		fi
 		if [ "$APPENDED" -eq "0" ]; then
 			break
 		fi
+
+		loopc=$(($loopc + 1))
+		if [ "$loopc" -gt 32 ]; then
+			break;
+		fi
 	done
 }
 
-kopt -pipe-solver -dump-bin -check-rule "$PROOFDIR" >$FPREFIX.brule
+kopt -max-stp-time=30 -pipe-solver -dump-bin -check-rule "$PROOFDIR" >$FPREFIX.brule
 
 xtive_loop "$FPREFIX.brule"
 

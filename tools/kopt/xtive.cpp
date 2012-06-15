@@ -1,3 +1,4 @@
+#include <llvm/Support/CommandLine.h>
 #include <iostream>
 #include "../../lib/Expr/ExprRule.h"
 #include "../../lib/Expr/RuleBuilder.h"
@@ -10,6 +11,15 @@
 #include "static/Sugar.h"
 
 using namespace klee;
+
+namespace
+{
+	llvm::cl::opt<bool>
+	NoisyXtive(
+		"xtive-noisy",
+		llvm::cl::desc("Print generated transivity rules"),
+		llvm::cl::init(false));
+}
 
 extern ExprBuilder::BuilderKind	BuilderKind;
 
@@ -127,7 +137,9 @@ static unsigned appendNewFroms(Solver* s, RuleBuilder* rb)
 		}
 
 		new_rule->printBinaryRule(of);
-		new_rule->print(std::cerr);
+
+		if (NoisyXtive)
+			new_rule->print(std::cerr);
 		of.flush();
 
 		new_rule_c++;
@@ -214,11 +226,12 @@ static void findDestReplacements(
 		if (fixed_up) std::cerr << " (fixedup)";
 		std::cerr << '\n';
 
+		if (NoisyXtive) {
 		er->print(std::cout);
 		std::cerr	<< "FROM-EXPR: " << er->getFromExpr() << '\n'
 				<< "OLD-TO-EXPR: " << old_to_expr << '\n'
 				<< "NEW-TO-EXPR: " << rb_to_expr << '\n';
-
+		}
 		replacements.push_back(std::make_pair(it, rb_to_expr));
 	}
 }
@@ -242,7 +255,9 @@ void appendReplacements(
 		if (xtive_er == NULL)
 			continue;
 
-		xtive_er->print(std::cout);
+		if (NoisyXtive)
+			xtive_er->print(std::cout);
+
 		if (getRuleCex(xtive_er, s, std::cerr) == false) {
 			/* don't add rule if it doesn't work */
 			std::cerr << "Checking Initial Rule.\n";
