@@ -176,7 +176,26 @@ bool ExprRule::operator==(const ExprRule& er) const
 	if (to != er.to) return false;
 	if (from != er.from) return false;
 
+	if (	const_constraints == NULL &&
+		er.const_constraints == NULL)
+	{
+		return true;
+	}
+
+	/* XXX handle const_constraints properly */
+
 	return true;
+}
+
+bool ExprRule::operator<(const ExprRule& er) const
+{
+	if (to != er.to)
+		return (to < er.to);
+	if (from != er.from)
+		return (from < er.from);
+
+	/* == */
+	return false;
 }
 
 void ExprRule::printBinaryRule(std::ostream& os) const

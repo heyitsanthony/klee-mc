@@ -252,6 +252,25 @@ success:
 	return true;
 }
 
+bool Pattern::operator <(const Pattern& p) const
+{
+	if (label_c != p.label_c)
+		return (label_c < p.label_c);
+	if (label_id_max != p.label_id_max)
+		return (label_id_max < p.label_id_max);
+
+	if (rule.size() != p.rule.size())
+		return (rule.size() < p.rule.size());
+
+	for (unsigned i = 0; i < rule.size(); i++)
+		if (rule[i] != p.rule[i])
+			return rule[i] < p.rule[i];
+
+	/* == */
+	return false;
+}
+
+
 bool Pattern::operator ==(const Pattern& p) const
 {
 	if (label_c != p.label_c) return false;

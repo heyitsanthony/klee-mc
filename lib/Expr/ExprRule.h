@@ -71,6 +71,7 @@ public:
 	const Pattern& getFromPattern(void) const { return from; }
 
 	bool operator==(const ExprRule& er) const;
+	bool operator<(const ExprRule& er) const;
 	bool operator!=(const ExprRule& er) const { return !(*this == er); }
 
 	virtual ref<Array> getMaterializeArray(void) const

@@ -85,6 +85,12 @@ namespace llvm
 		cl::init(false));
 
 	cl::opt<bool>
+	CheckDBDups(
+		"check-db-dup",
+		cl::desc("Check database for duplicates"),
+		cl::init(false));
+
+	cl::opt<bool>
 	CheckDup(
 		"check-dup",
 		cl::desc("Check if duplicate rule"),
@@ -624,6 +630,28 @@ void dumpDB(void)
 	delete rb;
 }
 
+static void checkDBDups(void)
+{
+	RuleBuilder		*rb;
+	std::set<ExprRule>	ers;
+	unsigned		i;
+
+	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
+	i = 0;
+	foreach (it, rb->begin(), rb->end()) {
+		const ExprRule	*er(*it);
+		if (ers.count(*er)) {
+			i++;
+			continue;
+		}
+		ers.insert(*er);
+	}
+
+	delete rb;
+
+	std::cout << "Dups found: " << i << '\n';
+}
+
 /* verify that the rule data base is properly translating rules */
 static void checkDB(Solver* s)
 {
@@ -777,7 +805,9 @@ int main(int argc, char **argv)
 		return -3;
 	}
 
-	if (ExtractRule != -1) {
+	if (CheckDBDups) {
+		checkDBDups();
+	} else if (ExtractRule != -1) {
 		extractRule(ExtractRule);
 	} else if (DumpDB) {
 		dumpDB();

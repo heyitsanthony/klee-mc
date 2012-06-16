@@ -36,6 +36,7 @@ public:
 	bool operator ==(const Pattern& p) const;
 	bool operator !=(const Pattern& p) const
 	{ return !(*this == p); }
+	bool operator <(const Pattern& p) const;
 
 	ref<Expr> anonFlat2Expr(int label_max = -1) const;
 
