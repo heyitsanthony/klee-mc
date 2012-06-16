@@ -8,8 +8,6 @@ using namespace klee;
 Array::ArrayHashCons		Array::arrayHashConsAnon;
 Array::ArrayHashConsExact	Array::arrayHashConsExact;
 
-Array::name2arr_ty	Array::name2arr;
-
 extern "C" void vc_DeleteExpr(void*);
 unsigned Array::count = 0;
 
@@ -30,19 +28,6 @@ Array::~Array()
 		delete [] constantValues_u8;
 		constantValues_u8 = NULL;
 	}
-
-	if (name2arr.count(name))
-		name2arr.erase(name);
-}
-
-ref<Array> Array::get(const std::string &_name)
-{
-	name2arr_ty::iterator	it(name2arr.find(_name));
-
-	if (it == name2arr.end())
-		return NULL;
-
-	return it->second;
 }
 
 ref<Array> Array::create(
@@ -58,10 +43,6 @@ ref<Array> Array::create(
 	arr = new Array(_name, _mallocKey, constValBegin, constValEnd);
 	arr->initRef();
 	ret = ref<Array>(arr);
-
-	if (_name.size()) {
-		name2arr.insert(std::make_pair(_name, ret));
-	}
 
 	return ret;
 }

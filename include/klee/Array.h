@@ -56,7 +56,6 @@ public:
 	}
 	unsigned int getSize(void) const { return mallocKey.size; }
 
-	static ref<Array> get(const std::string &_name);
 	static ref<Array> create(
 		const std::string &_name,
 		MallocKey _mallocKey,

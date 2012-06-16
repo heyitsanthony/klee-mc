@@ -193,10 +193,8 @@ void SMTParser::DeclareArray(const std::string& name)
 	if (arrmap.count(name))
 		return;
 
-	arr = Array::get(name);
-	if (arr.isNull())
-		arr = Array::create(name, DEFAULT_ARR_SZ);
-	arr->incRefIfCared();
+	arr = Array::create(name, DEFAULT_ARR_SZ);
+	arr = Array::uniqueByName(arr);
 	arrmap[name] = arr;
 	AddVar(
 		name,
