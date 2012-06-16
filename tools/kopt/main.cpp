@@ -33,6 +33,7 @@ using namespace klee;
 using namespace klee::expr;
 
 ExprBuilder::BuilderKind	BuilderKind;
+int				WorkerForks;
 
 namespace llvm
 {
@@ -41,6 +42,12 @@ namespace llvm
 		cl::desc("<equivexpr proof .smt>"),
 		cl::Positional,
 		cl::init("-"));
+
+	cl::opt<int, true>
+	WorkerForksProxy("worker-forks",
+		cl::desc("Number of forked workers to use"),
+		cl::location(WorkerForks),
+		cl::init(0));
 
 	cl::opt<bool>
 	BenchRB(
@@ -159,8 +166,9 @@ namespace llvm
 			clEnumValEnd));
 }
 
+void rebuildBRules(Solver* s, const std::string& InputPath);
+extern void xtiveBRule(ExprBuilder *eb, Solver* s);
 
-void xtiveBRule(ExprBuilder *eb, Solver* s);
 bool checkRule(const ExprRule* er, Solver* s, std::ostream&);
 bool getRuleCex(const ExprRule* er, Solver* s, std::ostream&);
 bool getExprCex(
@@ -471,66 +479,6 @@ static void printRule(ExprBuilder *eb, Solver* s)
 	delete p;
 }
 
-static void rebuildBRule(
-	ExprBuilder* eb,
-	Solver *s,
-	const ExprRule* er,
-	std::ostream& of)
-{
-	std::stringstream	ss;
-	ExprRule		*er_rebuild;
-
-	if (checkRule(er, s, std::cout) == false) {
-		std::cerr << "BAD RULE:\n";
-		er->print(std::cerr);
-		return;
-	}
-
-	er->printBinaryRule(ss);
-	er_rebuild = ExprRule::loadBinaryRule(ss);
-
-	/* ensure we haven't corrupted the from-expr--
-	 * otherwise, it might not match during runtime! */
-	if (	ExprUtil::getNumNodes(er_rebuild->getFromExpr()) !=
-		ExprUtil::getNumNodes(er->getFromExpr()))
-	{
-		std::cerr << "BAD REBUILD:\n";
-		std::cerr << "ORIGINAL:\n";
-		er->print(std::cerr);
-		std::cerr << "NEW:\n";
-		er_rebuild->print(std::cerr);
-
-		std::cerr	<< "ORIG-EXPR: "
-				<< er->getFromExpr() << '\n'
-				<< "NEW-EXPR: "
-				<< er_rebuild->getFromExpr() << '\n';
-		delete er_rebuild;
-		return;
-	}
-
-	er_rebuild->printBinaryRule(of);
-	delete er_rebuild;
-}
-
-static void rebuildBRules(ExprBuilder* eb, Solver* s)
-{
-	std::ofstream		of(InputFile.c_str());
-	RuleBuilder		*rb;
-	unsigned		i;
-
-	assert (of.good() && !of.fail());
-
-	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
-
-	i = 0;
-	foreach (it, rb->begin(), rb->end()) {
-		std::cerr << "[" << ++i << "]: ";
-		rebuildBRule(eb, s, *it, of);
-	}
-
-	delete rb;
-}
-
 static void addRule(ExprBuilder* eb, Solver* s)
 {
 	ExprRule	*er;
@@ -651,6 +599,7 @@ static void checkDBDups(void)
 
 	std::cout << "Dups found: " << i << '\n';
 }
+
 
 /* verify that the rule data base is properly translating rules */
 static void checkDB(Solver* s)
@@ -831,7 +780,7 @@ int main(int argc, char **argv)
 	} else if (CheckDup) {
 		checkDup(eb, s);
 	} else if (BRuleRebuild) {
-		rebuildBRules(eb, s);
+		rebuildBRules(s, InputFile);
 	} else if (BRuleXtive) {
 		xtiveBRule(eb, s);
 	} else if (DumpBinRule) {
