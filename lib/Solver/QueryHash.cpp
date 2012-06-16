@@ -98,3 +98,67 @@ Expr::Hash QHDefault::hash(const Query& q) const
 
 	return ret;
 }
+
+namespace klee
+{
+class NormalizeHash : public ExprConstVisitor
+{
+public:
+	NormalizeHash() {}
+	virtual ~NormalizeHash() {}
+	Expr::Hash hash(const ref<Expr>& e)
+	{
+		cur_hash = 0;
+		apply(e);
+		return cur_hash;
+	}
+protected:
+	virtual Action visitExpr(const Expr* expr);
+private:
+	/* replacement hash values for found arrays */
+	/* for now, we just keep a counter and bump if not found */
+	typedef std::map<ref<Array>, Expr::Hash> arrmap_ty;
+	arrmap_ty	arrs;
+	Expr::Hash	cur_hash;
+};
+}
+
+NormalizeHash::Action NormalizeHash::visitExpr(const Expr* expr)
+{
+	cur_hash ^= expr->hash();
+
+	if (expr->getKind() == Expr::Read) {
+		const ReadExpr	*re = static_cast<const ReadExpr*>(expr);
+		ref<Array>			arr(re->getArray());
+		arrmap_ty::const_iterator	it;
+
+		it = arrs.find(arr);
+		if (it == arrs.end()) {
+			arrs.insert(std::make_pair(arr, arrs.size()+0xff));
+			it = arrs.find(arr);
+		}
+
+		cur_hash += it->second;
+	}
+
+	return Expand;
+}
+
+/* this hash makes arrays count..
+ * the normal hash ignores array sizes so we have
+ * h((+ a a)) = h((+ a b))
+ * However, this hash has h((+ a a)) != h((+a b)) up to collision
+ */
+Expr::Hash QHNormalizeArrays::hash(const Query& q) const
+{
+	Expr::Hash		ret;
+	NormalizeHash		nh;
+
+	ret = nh.hash(q.expr);
+	foreach (it, q.constraints.begin(), q.constraints.end()) {
+		ref<Expr>	e = *it;
+		ret ^= nh.hash(e);
+	}
+
+	return ret;
+}

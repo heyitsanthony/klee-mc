@@ -33,6 +33,7 @@
 #include "PoisonCache.h"
 #include "DummySolver.h"
 #include "TautologyChecker.h"
+#include "HashComparison.h"
 
 #include <cassert>
 #include <cstdio>
@@ -56,6 +57,10 @@ double	MaxSTPTime;
 namespace {
   cl::opt<bool>
   DebugValidateSolver("debug-validate-solver", cl::init(false));
+
+  cl::opt<bool>
+  UseHashCmp("use-hash-cmp",
+  	cl::desc("Compare two kinds of hashes on queries."), cl::init(false));
 
   cl::opt<bool>
   UseForkedSTP("use-forked-stp", cl::desc("Run STP in forked process"));
@@ -133,19 +138,13 @@ namespace {
 
   cl::opt<bool>
   UseBoolector(
-  	"use-boolector",
-	cl::init(false),
-	cl::desc("Use boolector solver"));
+  	"use-boolector", cl::init(false), cl::desc("Use boolector solver"));
 
   cl::opt<bool>
-  UseZ3("use-z3",
-  	cl::init(false),
-	cl::desc("Use z3 solver"));
+  UseZ3("use-z3", cl::init(false), cl::desc("Use z3 solver"));
 
   cl::opt<bool>
-  UseB15("use-b15",
-  	cl::init(false),
-	cl::desc("Use boolector-1.5 solver"));
+  UseB15("use-b15", cl::init(false), cl::desc("Use boolector-1.5 solver"));
 
   cl::opt<bool>
   UseCVC3("use-cvc3",
@@ -153,9 +152,7 @@ namespace {
 	cl::desc("Use CVC3 solver (broken)"));
 
   cl::opt<bool>
-  UseYices("use-yices",
-  	cl::init(false),
-	cl::desc("Use Yices solver"));
+  UseYices("use-yices", cl::init(false), cl::desc("Use Yices solver"));
 
   cl::opt<bool>
   UsePipeSolver(
@@ -256,6 +253,12 @@ static Solver* createChainWithTimedSolver(
 //			new HashSolver(solver, new QHRewritePtr()));
 			new HashSolver(solver, new QHDefault()));
 
+	if (UseHashCmp)
+		solver = new Solver(
+			new HashComparison(
+				solver,
+				new QHDefault(),
+				new QHNormalizeArrays()));
 
 	if (UseFastCexSolver) solver = createFastCexSolver(solver);
 	if (UseFastRangeSolver) solver = createFastRangeSolver(solver);
@@ -672,36 +675,6 @@ Solver *klee::createValidatingSolver(Solver *s, Solver *oracle)
 { return new Solver(new ValidatingSolver(s, oracle)); }
 
 Solver *klee::createDummySolver() { return new Solver(new DummySolverImpl()); }
-
-/***/
-void SolverImpl::printDebugQueries(
-	std::ostream& os,
-	double t_check,
-	const Assignment& a,
-	bool hasSolution) const
-{
-	os	<< "STP CounterExample -- Has Solution: "
-		<< hasSolution << " ("
-		<< t_check/1000000.
-		<< "s)\n";
-
-	if (!hasSolution) goto flush;
-
-	foreach (it, a.bindingsBegin(), a.bindingsEnd()) {
-		const Array			*obj = it->first;
-		const std::vector<unsigned char> &data(it->second);
-
-		os << " " << obj->name << " = [";
-		for (unsigned j=0; j<obj->mallocKey.size; j++) {
-			os << (int) data[j];
-			if (j+1<obj->mallocKey.size) os << ",";
-		}
-		os << "]\n";
-	}
-
-flush:
-	os.flush();
-}
 
 ConstraintManager Query::dummyConstraints;
 

@@ -23,6 +23,11 @@ protected:
   double timeout;
   bool useForkedSTP;
   void setupVCQuery(const Query& query, ExprHandle& stp_e, std::ostream& os);
+  void printDebugQueries(
+	std::ostream& os,
+	double t_check,
+	const Assignment& a,
+	bool hasSolution) const;
 public:
   STPSolverImpl(STPSolver *_solver, bool _useForkedSTP);
   ~STPSolverImpl();

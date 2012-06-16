@@ -63,11 +63,6 @@ public:
 	virtual void ackFail(void) { has_failed = false; }
 
 protected:
-	void printDebugQueries(
-		std::ostream& os,
-		double t_check,
-		const Assignment& a,
-		bool hasSolution) const;
 	virtual void failQuery(void);
 	bool has_failed;
 };

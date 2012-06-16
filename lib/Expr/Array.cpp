@@ -216,7 +216,6 @@ ref<Array> Array::uniqueByName(ref<Array>& arr)
 
 void Array::garbageCollect(void)
 {
-	unsigned		min_v;
 	std::vector<ref<Array> > to_del;
 
 	if (arrayHashConsExact.size() < 100)

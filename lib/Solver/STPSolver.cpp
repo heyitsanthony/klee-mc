@@ -649,3 +649,20 @@ int runForked(const char* name, F& f, unsigned timeout, sighandler_t handler)
 }
 
 
+void STPSolverImpl::printDebugQueries(
+	std::ostream& os,
+	double t_check,
+	const Assignment& a,
+	bool hasSolution) const
+{
+	os	<< "STP CounterExample -- Has Solution: "
+		<< hasSolution << " ("
+		<< t_check/1000000.
+		<< "s)\n";
+
+	if (hasSolution) {
+		/* XXX: the formatting changed here, does it matter? */
+		a.print(os);
+	}
+	os.flush();
+}

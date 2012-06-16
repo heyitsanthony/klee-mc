@@ -20,19 +20,24 @@ private:
 };
 
 /* default class declaration-- hash declared in cpp file */
-#define DECL_QHASH(x,y)					\
+/* split into begin and end in case we want private vars */
+#define DECL_QHASH_BEGIN(x,y)				\
 class QH##x : public QueryHash				\
 {							\
 public:							\
 	QH##x() : QueryHash(y) {}			\
 	virtual ~QH##x() {}				\
 	virtual Expr::Hash hash(const Query &q) const;	\
-private: };
+private: 
 
+#define DECL_QHASH_END()	};
+#define DECL_QHASH(x,y)		DECL_QHASH_BEGIN(x,y) DECL_QHASH_END()
 
 DECL_QHASH(ExprStrSHA, "strsha")
 DECL_QHASH(Default, "default")
 DECL_QHASH(RewritePtr, "rewriteptr")
+DECL_QHASH(NormalizeArrays, "normarrs")
+	
 
 }
 
