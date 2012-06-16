@@ -645,6 +645,7 @@ static void checkDB(Solver* s)
 			std::cerr << "!!!DID NOT TRANSLATE AS EXPECTED!!!!\n";
 			std::cerr << "FROM-EXPR-EB=" << from_eb << '\n';
 			std::cerr << "FROM-EXPR-RB=" << from_rb << '\n';
+			std::cerr << "TO-EXPR=" << to_e << '\n';
 
 			to_node_c = ExprUtil::getNumNodes(to_e);
 			from_node_c = ExprUtil::getNumNodes(from_rb);
