@@ -364,13 +364,15 @@ void ExprRule::loadBinaryPattern(std::istream& is, Pattern& p)
 
 ref<Expr> ExprRule::materialize(void) const
 {
-
 	ref<Expr>	lhs, rhs;
 
 	lhs = getFromExpr();
-	assert (lhs.isNull() == false);
+	if (lhs.isNull())
+		return NULL;
+
 	rhs = getToExpr();
-	assert (rhs.isNull() == false);
+	if (rhs.isNull())
+		return NULL;
 
 	return EqExpr::create(lhs, rhs);
 }

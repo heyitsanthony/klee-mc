@@ -345,6 +345,10 @@ bool checkRule(const ExprRule* er, Solver* s, std::ostream& os)
 	assert (er != NULL && "Bad rule?");
 
 	rule_expr = er->materialize();
+	if (rule_expr.isNull()) {
+		os << "No materialize\n";
+		return false;
+	}
 
 	to_nodes = ExprUtil::getNumNodes(er->getToExpr());
 	from_nodes = ExprUtil::getNumNodes(er->getFromExpr());
