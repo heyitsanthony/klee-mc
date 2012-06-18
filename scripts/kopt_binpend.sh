@@ -23,7 +23,11 @@ function xtive_loop
 	done
 }
 
-kopt -max-stp-time=30 -pipe-solver -dump-bin -check-rule "$PROOFDIR" >$FPREFIX.brule
+if [ -f "$PROOFDIR" ]; then
+	cp "$PROOFDIR" "$FPREFIX".brule
+else
+	kopt -max-stp-time=30 -pipe-solver -dump-bin -check-rule "$PROOFDIR" >$FPREFIX.brule
+fi
 
 xtive_loop "$FPREFIX.brule"
 

@@ -343,6 +343,11 @@ bool getRuleCex(const ExprRule* er, Solver* s, std::ostream& os)
 	if (ok) return true;
 
 	ref<Expr>	re(er->materialize());
+	if (re.isNull()) {
+		std::cerr << "Bad materialize\n";
+		return false;
+	}
+
 	Assignment	a(re);
 
 	ok = s->getInitialValues(Query(re), a);
