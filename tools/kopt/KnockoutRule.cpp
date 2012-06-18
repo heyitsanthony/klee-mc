@@ -192,7 +192,7 @@ ref<Expr> KnockoutRule::trySlot(
 
 	e_range = getRangeExpr(rv.first, r.first, r.second);
 
-	er->printPrettyRule(std::cerr);
+	er->print(std::cerr);
 	std::cerr << "\n======================\n";
 	std::cerr << "\nIT-FIRST: " << rv.first << '\n';
 	std::cerr << "IGN-IDX: " << i << '\n';
