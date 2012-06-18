@@ -3,6 +3,7 @@
 #include <sstream>
 
 #include "klee/util/ExprVisitor.h"
+#include "klee/util/ExprTimer.h"
 #include "klee/Internal/Module/InstructionInfoTable.h"
 #include "klee/Statistics.h"
 #include "klee/Internal/ADT/RNG.h"
@@ -555,6 +556,8 @@ void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 
 		cur_st = fi.resStates[i];
 		new_cond = condFilter->apply(fi.conditions[i]);
+		if (new_cond.isNull())
+			continue;
 
 		if (cur_st->prevForkCond.isNull() == false) {
 			condXfer.insert(
@@ -569,11 +572,18 @@ void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 }
 
 bool Forks::hasSuccessor(ExecutionState& st) const
-{ return hasSucc.count(st.prevForkCond->hash()) != 0; }
+{
+	return hasSucc.count(st.prevForkCond->hash()) != 0;
+}
 
 /* XXX memoize? */
 bool Forks::hasSuccessor(const ref<Expr>& cond) const
-{ return hasSucc.count(condFilter->apply(cond)->hash()); }
+{
+	ref<Expr>	e(condFilter->apply(cond));
+	if (e.isNull())
+		return true;
+	return hasSucc.count(e->hash());
+}
 
 
 void Forks::constrainFork(
@@ -722,5 +732,5 @@ Forks::Forks(Executor& _exe)
 , preferFalseState(false)
 , lastFork(0,0)
 {
-	condFilter = new MergeArrays();
+	condFilter = new ExprTimer<MergeArrays>(1000);
 }
