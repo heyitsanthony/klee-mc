@@ -36,6 +36,7 @@ kopt -pipe-solver -brule-rebuild -rule-file=$FPREFIX.brule $FPREFIX.rebuild.brul
 mv $FPREFIX.rebuild.brule $FPREFIX.brule
 cp "$FPREFIX.brule" pending.brule
 kopt -max-stp-time=30 -pipe-solver -db-punchout		\
+	-ko-consts=16					\
 	-rule-file=$FPREFIX.brule			\
 	-unique-file=$FPREFIX.uniq.brule		\
 	-uninteresting-file=$FPREFIX.unint.brule	\
