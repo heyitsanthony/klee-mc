@@ -1,4 +1,3 @@
-
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -51,6 +50,13 @@ namespace {
 		"try-all-rules",
 		cl::desc("Iterate through all rules until a match is found."),
 		cl::init(false));
+
+	cl::opt<bool>
+	ApplyRuleHash(
+		"try-hash-rules",
+		cl::desc("Use skeleton hashes to look up rules."),
+		cl::init(false));
+
 
 	cl::opt<bool> ShowXlate("show-xlated", cl::init(false));
 
@@ -219,7 +225,17 @@ void RuleBuilder::addRule(ExprRule* er)
 		return;
 
 	rules_arr.push_back(er);
-	rules_trie.add(er->getFromPattern().stripConstExamples(), er);
+	if (ApplyRuleHash) {
+		ExprBuilder	*old_eb;
+		ref<Expr>	e;
+		old_eb = Expr::setBuilder(eb);
+		e = er->getFromExpr();
+		Expr::setBuilder(old_eb);
+		if (!e.isNull()) {
+			rules_tab.insert(std::make_pair(e->skeleton(), er));
+		}
+	} else if (!ApplyAllRules)
+		rules_trie.add(er->getFromPattern().stripConstExamples(), er);
 }
 
 bool RuleBuilder::loadRuleDir(const char* ruledir)
@@ -272,6 +288,8 @@ ref<Expr> RuleBuilder::tryApplyRules(const ref<Expr>& in)
 
 	if (ApplyAllRules)
 		ret = tryAllRules(in);
+	else if (ApplyRuleHash)
+		ret = trySkeletalRules(in);
 	else
 		ret = tryTrieRules(in);
 
@@ -432,12 +450,7 @@ ref<Expr> RuleBuilder::tryTrieRules(const ref<Expr>& in)
 	while (1) {
 		new_expr = ExprRule::apply(in, tri);
 		if (new_expr.isNull() == false) {
-			bool	inserted;
-
-			last_er = tri.getExprRule();
-			inserted = rules_used.insert(last_er).second;
-			if (inserted && rule_ofs != NULL)
-				last_er->printBinaryRule(*rule_ofs);
+			updateLastRule(tri.getExprRule());
 			return new_expr;
 		}
 
@@ -458,7 +471,7 @@ ref<Expr> RuleBuilder::tryAllRules(const ref<Expr>& in)
 
 		new_expr = er->apply(in);
 		if (!new_expr.isNull()) {
-			last_er = er;
+			updateLastRule(er);
 			return new_expr;
 		}
 
@@ -466,6 +479,41 @@ ref<Expr> RuleBuilder::tryAllRules(const ref<Expr>& in)
 	}
 
 	return in;
+}
+
+ref<Expr> RuleBuilder::trySkeletalRules(const ref<Expr>& in)
+{
+	const ExprRule			*er;
+	ruletab_ty::const_iterator	it;
+	ref<Expr>			new_expr;
+
+	it = rules_tab.find(in->skeleton());
+	if (it == rules_tab.end())
+		goto miss;
+
+	er = it->second;
+	new_expr = er->apply(in);
+	if (new_expr.isNull())
+		goto miss;
+
+	updateLastRule(er);
+	return new_expr;
+
+miss:
+	rule_miss_c++;
+	return in;
+}
+
+void RuleBuilder::updateLastRule(const ExprRule* er)
+{
+	bool	inserted;
+
+	assert (er != NULL);
+
+	last_er = er;
+	inserted = rules_used.insert(last_er).second;
+	if (inserted && rule_ofs != NULL)
+		last_er->printBinaryRule(*rule_ofs);
 }
 
 bool RuleBuilder::hasRule(const char* fname)

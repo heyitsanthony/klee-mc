@@ -2,6 +2,7 @@
 #define RULEBUILDER_H
 
 #include <tr1/unordered_set>
+#include <tr1/unordered_map>
 #include "static/Trie.h"
 #include "klee/ExprBuilder.h"
 
@@ -13,6 +14,8 @@ class RuleBuilder : public ExprBuilder
 {
 public:
 	typedef Trie<uint64_t, ExprRule*>	ruletrie_ty;
+	typedef std::tr1::unordered_map<
+		Expr::Hash, const ExprRule*>	ruletab_ty;
 	typedef std::vector<ExprRule*>		rulearr_ty;
 
 	RuleBuilder(ExprBuilder* base);
@@ -175,6 +178,8 @@ private:
 	bool loadRuleDB(const char* rulefile);
 
 
+	void updateLastRule(const ExprRule* er);
+
 	bool eraseDBRuleHint(std::fstream& ifs, const ExprRule* to_rmv);
 	bool tryEraseDBRule(
 		std::fstream& ifs,
@@ -185,9 +190,16 @@ private:
 	ref<Expr> tryApplyRules(const ref<Expr>& in);
 	ref<Expr> tryAllRules(const ref<Expr>& in);
 	ref<Expr> tryTrieRules(const ref<Expr>& in);
+	ref<Expr> trySkeletalRules(const ref<Expr>& in);
 
-	ruletrie_ty			rules_trie;
-	std::vector<ExprRule*>		rules_arr;
+	ruletrie_ty		rules_trie;
+	std::vector<ExprRule*>	rules_arr;
+
+	/* skeletal hash lookup */
+	/* XXX: this is missing buckets for collisions;
+	 * this will miss a lot of rules in the same equiv class */
+	ruletab_ty		rules_tab;
+
 	ExprBuilder		*eb;
 	unsigned		depth;
 	unsigned		recur;

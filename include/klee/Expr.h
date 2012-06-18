@@ -221,8 +221,8 @@ public:
   void dump() const;
 
   /// Returns the pre-computed hash of the current expression
-  virtual Hash hash() const { return hashValue; }
-  virtual Hash skeleton() const { return skeletonHash; }
+  Hash hash() const { return hashValue; }
+  Hash skeleton() const { return skeletonHash; }
 
   /// (Re)computes the hash of the current expression.
   /// Returns the hash value.

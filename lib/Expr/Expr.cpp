@@ -771,8 +771,8 @@ Expr::Hash BindExpr::computeHash(void)
 		let_expr->skeleton(),
 		getKind(),
 		let_expr->hash() };
-	hashValue = hashImpl(&dat, 16, 0);
-	skeletonHash = hashImpl(&dat[1], 16, 0);
+	skeletonHash = hashImpl(&dat, 16, 0);
+	hashValue = hashImpl(&dat[1], 16, 0);
 	return hashValue;
 }
 
