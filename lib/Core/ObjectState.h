@@ -74,6 +74,8 @@ public:
 	ref<Expr> read(unsigned offset, Expr::Width width) const;
 	ref<Expr> read8(unsigned offset) const;
 	uint8_t	read8c(unsigned off) const;
+	void write8(unsigned offset, uint8_t value);
+
 	const Array* getArray(void) const { return src_array.get(); }
 	void print(unsigned int begin = 0, int end = -1) const;
 
@@ -89,7 +91,6 @@ private:
 	void write(unsigned offset, ref<Expr> value);
 	void write(ref<Expr> offset, ref<Expr> value);
 
-	void write8(unsigned offset, uint8_t value);
 	void write16(unsigned offset, uint16_t value);
 	void write32(unsigned offset, uint32_t value);
 	void write64(unsigned offset, uint64_t value);

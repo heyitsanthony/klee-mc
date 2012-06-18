@@ -938,6 +938,76 @@ void Executor::instBranch(ExecutionState& state, KInstruction* ki)
 	instBranchConditional(state, ki);
 }
 
+static bool concretizeObject(
+	ExecutionState		&st,
+	Assignment		&a,
+	const MemoryObject	*mo,
+	const ObjectState	*os,
+	WallTimer& wt)
+{
+	unsigned		sym_bytes = 0;
+	ObjectState		*new_os;
+	bool			all_zeroes;
+
+	/* we only change symbolic objstates */
+	if (os->isConcrete())
+		return true;
+
+	if (MaxSTPTime > 0 && wt.checkSecs() > 3*MaxSTPTime)
+		return false;
+
+	new_os = (os->getArray())
+		? new ObjectState(mo->size, ARR2REF(os->getArray()))
+		: new ObjectState(mo->size);
+
+	std::cerr << "[Exe] Concretizing MO="
+		<< (void*)mo->address << "--"
+		<< (void*)(mo->address + mo->size) << "\n";
+	all_zeroes = true;
+	for (unsigned i = 0; i < os->size; i++) {
+		const klee::ConstantExpr	*ce;
+		ref<klee::Expr>		e;
+		uint8_t			v;
+
+		e = os->read8(i);
+		ce = dyn_cast<klee::ConstantExpr>(e);
+		if (ce != NULL) {
+			v = ce->getZExtValue();
+		} else {
+			e = a.evaluateCostly(e);
+			if (e.isNull() || e->getKind() != Expr::Constant) {
+				delete new_os;
+				return false;
+			}
+			ce = cast<klee::ConstantExpr>(e);
+			v = ce->getZExtValue();
+			sym_bytes++;
+		}
+
+		if ((sym_bytes % 200) == 199) {
+			if (MaxSTPTime > 0 && wt.checkSecs() > 3*MaxSTPTime) {
+				delete new_os;
+				return false;
+			}
+			/* bump so we don't check again */
+			sym_bytes++;
+		}
+
+
+		all_zeroes &= (v == 0);
+		new_os->write8(i, v);
+	}
+
+	if (all_zeroes) {
+		delete new_os;
+		std::cerr << "[Exe] Concrete using zero page\n";
+		new_os = ObjectState::createDemandObj(mo->size);
+	}
+
+	st.rebindObject(mo, new_os);
+	return true;
+}
+
 /* branches st back into scheduler,
  * overwrites st with concrete data */
 ExecutionState* Executor::concretizeState(ExecutionState& st)
@@ -947,6 +1017,11 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 
 	if (st.isConcrete()) {
 		std::cerr << "[Exe] Ignoring totally concretized state\n";
+		return NULL;
+	}
+
+	if (bad_conc_kfuncs.count(st.getCurrentKFunc())) {
+		std::cerr << "[Exe] Ignoring bad concretization kfunc\n";
 		return NULL;
 	}
 
@@ -962,6 +1037,7 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 	/* 1. get concretization */
 	std::cerr << "[Exe] Getting assignment\n";
 	if (getSatAssignment(st, a) == false) {
+		bad_conc_kfuncs.insert(st.getCurrentKFunc());
 		terminateStateEarly(st, "couldn't concretize imm state");
 		return new_st;
 	}
@@ -970,63 +1046,11 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 	WallTimer	wt;
 	std::cerr << "[Exe] Concretizing objstates\n";
 	foreach (it, st.addressSpace.begin(), st.addressSpace.end()) {
-		const MemoryObject	*mo = it->first;
-		const ObjectState	*os = it->second.os;
-		ObjectState		*new_os;
-		bool			all_zeroes;
-
-		/* we only change symbolic objstates */
-		if (os->isConcrete())
-			continue;
-
-		if (MaxSTPTime > 0 && wt.checkSecs() > 3*MaxSTPTime) {
-			terminateStateEarly(
-				st,
-				"timeout eval on imm concretize state");
+		if (!concretizeObject(st, a, it->first, it->second.os, wt)) {
+			bad_conc_kfuncs.insert(st.getCurrentKFunc());
+			terminateStateEarly(st, "timeout eval on conc state");
 			return new_st;
 		}
-
-		new_os = (os->getArray())
-			? new ObjectState(mo->size, ARR2REF(os->getArray()))
-			: new ObjectState(mo->size);
-
-		std::cerr << "[Exe] Concretizing MO="
-			<< (void*)mo->address << "--"
-			<< (void*)(mo->address + mo->size) << "\n";
-		all_zeroes = true;
-		for (unsigned i = 0; i < os->size; i++) {
-			const ConstantExpr	*ce;
-			ref<Expr>		e;
-			uint8_t			v;
-
-			e = os->read8(i);
-			ce = dyn_cast<ConstantExpr>(e);
-			if (ce != NULL) {
-				v = ce->getZExtValue();
-			} else {
-				e = a.evaluate(e);
-				ce = dyn_cast<ConstantExpr>(e);
-				if (ce == NULL) {
-					delete new_os;
-					terminateStateEarly(
-						st,
-						"bad eval on imm state");
-					return new_st;
-				}
-				v = ce->getZExtValue();
-			}
-
-			all_zeroes &= (v == 0);
-			new_os->write8(i, v);
-		}
-
-		if (all_zeroes) {
-			delete new_os;
-			std::cerr << "[Exe] Concrete using zero page\n";
-			new_os = ObjectState::createDemandObj(mo->size);
-		}
-
-		st.rebindObject(mo, new_os);
 	}
 
 	/* 3. enumerate stack frames-- eval all expressions */

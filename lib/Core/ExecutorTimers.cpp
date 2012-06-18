@@ -256,6 +256,7 @@ protected:
 	void print(void) { *os
 		<< RuleBuilder::getHits() << ' '
 		<< RuleBuilder::getMisses() << ' '
+		<< ExprPatternMatch::getConstHit() << ' '
 		<< ExprPatternMatch::getConstMiss() << ' '
 		<< RuleBuilder::getRuleMisses() << ' '
 		<< RuleBuilder::getNumRulesUsed() << ' '

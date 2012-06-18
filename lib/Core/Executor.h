@@ -70,6 +70,7 @@ class StatsTracker;
 class TimingSolver;
 class TreeStreamWriter;
 class BranchPredictor;
+class WallTimer;
 
 template<class T> class ref;
 
@@ -169,7 +170,6 @@ private:
   void handleMemoryPID(ExecutionState* &state);
   void runLoop(void);
 
-
 protected:
 	KModule		*kmodule;
 	MMU		*mmu;
@@ -255,7 +255,8 @@ protected:
   ExecutionState	*currentState;
 
 private:
-  std::vector<TimerInfo*> timers;
+  std::vector<TimerInfo*>	timers;
+  std::set<KFunction*>		bad_conc_kfuncs;
 
   /// When non-empty the Executor is running in "seed" mode. The
   /// states in this map will be executed in an arbitrary order

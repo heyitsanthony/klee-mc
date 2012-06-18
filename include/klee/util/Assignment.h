@@ -72,6 +72,11 @@ public:
 	ref<Expr> evaluate(ref<Expr> e) const;
 	ref<Expr> evaluate(ref<Expr> e, bool& wasDivProtected);
 
+	/* evaluate costly expressions with the possibility of a time-out */
+	ref<Expr> evaluateCostly(ref<Expr>& e, unsigned& cost) const;
+	ref<Expr> evaluateCostly(ref<Expr>& e) const
+	{ unsigned c; return evaluateCostly(e, c); }
+
 	template<typename InputIterator>
 	bool satisfies(InputIterator begin, InputIterator end) const;
 	bool satisfies(ref<Expr> e) const { return evaluate(e)->isTrue(); }
@@ -125,11 +130,12 @@ private:
 
 class AssignmentEvaluator : public ExprEvaluator
 {
-	const Assignment &a;
+	const Assignment *a;
 public:
 	virtual ref<Expr> getInitialValue(const ref<Array> &mo, unsigned index)
-	{ return a.evaluate(mo, index); }
-	AssignmentEvaluator(const Assignment &_a) : a(_a) { }
+	{ return a->evaluate(mo, index); }
+	AssignmentEvaluator(const Assignment *_a = NULL) : a(_a) { }
+	void setAssignment(const Assignment *_a) { a = _a; }
 	virtual ~AssignmentEvaluator() {}
 };
 
@@ -159,13 +165,13 @@ inline ref<Expr> Assignment::evaluate(
 
 inline ref<Expr> Assignment::evaluate(ref<Expr> e) const
 {
-	AssignmentEvaluator v(*this);
+	AssignmentEvaluator v(this);
 	return v.apply(e);
 }
 
 inline ref<Expr> Assignment::evaluate(ref<Expr> e, bool &wasZeroDiv)
 {
-	AssignmentEvaluator	v(*this);
+	AssignmentEvaluator	v(this);
 	ref<Expr>		ret;
 
 	ret = v.apply(e);
@@ -177,7 +183,7 @@ inline ref<Expr> Assignment::evaluate(ref<Expr> e, bool &wasZeroDiv)
 template<typename InputIterator>
 inline bool Assignment::satisfies(InputIterator begin, InputIterator end) const
 {
-	AssignmentEvaluator v(*this);
+	AssignmentEvaluator v(this);
 	for (; begin!=end; ++begin)
 		if (!v.apply(*begin)->isTrue())
 			return false;

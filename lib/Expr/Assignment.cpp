@@ -2,6 +2,7 @@
 #include "static/Sugar.h"
 #include "klee/util/ExprUtil.h"
 #include "klee/util/Assignment.h"
+#include "klee/util/ExprTimer.h"
 
 using namespace klee;
 
@@ -200,4 +201,15 @@ void Assignment::resetBindings(void)
 	foreach (it, bindings.begin(), bindings.end())
 		free_bindings.insert((*it).first);
 	bindings.clear();
+}
+
+ref<Expr> Assignment::evaluateCostly(ref<Expr>& e, unsigned& cost) const
+{
+	ExprTimer<AssignmentEvaluator>	v(500000);
+	ref<Expr>			ret;
+
+	v.setAssignment(this);
+	ret = v.apply(e);
+	cost = v.getCost();
+	return ret;
 }

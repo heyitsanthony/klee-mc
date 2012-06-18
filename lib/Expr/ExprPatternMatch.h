@@ -42,6 +42,8 @@ public:
 	bool match(const ref<Expr>& e);
 
 	static uint64_t getConstMiss(void) { return const_miss_c; }
+	static uint64_t getConstHit(void) { return const_hit_c; }
+
 protected:
 	virtual Action visitExpr(const Expr* expr);
 private:
@@ -56,6 +58,7 @@ private:
 	bool			success;
 
 	static uint64_t		const_miss_c;
+	static uint64_t		const_hit_c;
 };
 
 }
