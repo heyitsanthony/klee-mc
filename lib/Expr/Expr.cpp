@@ -752,65 +752,68 @@ DECL_CREATE_BIN_EXPR(Sge)
 Expr::Hash Expr::computeHash(void)
 {
 	int		n = getNumKids();
-	uint32_t	dat[2*n+1];
+	uint64_t	dat[2*n+1];
 
 	for (int i = 0; i < n; i++)
-		dat[i+1] = getKid(i)->skeleton();
+		dat[i] = getKid(i)->skeleton();
 	dat[n] = getKind();
 	for (int i = 0; i < n; i++)
 		dat[i+n+1] = getKid(i)->hash();
 
-	skeletonHash = hashImpl(&dat, (n+1)*4, 0);
-	hashValue = hashImpl(&dat[n], (n+1)*4, 0);
+	skeletonHash = hashImpl(&dat, (n+1)*8, 0);
+	hashValue = hashImpl(&dat[n], (n+1)*8, 0);
 	return hashValue;
 }
 
 Expr::Hash BindExpr::computeHash(void)
 {
-	uint32_t dat[3] = { let_expr->skeleton(), getKind(), let_expr->hash() };
-	hashValue = hashImpl(&dat, 8, 0);
-	skeletonHash = hashImpl(&dat[1], 8, 0);
+	uint64_t dat[3] = {
+		let_expr->skeleton(),
+		getKind(),
+		let_expr->hash() };
+	hashValue = hashImpl(&dat, 16, 0);
+	skeletonHash = hashImpl(&dat[1], 16, 0);
 	return hashValue;
 }
 
 Expr::Hash CastExpr::computeHash(void) {
-	uint32_t dat[4] = {
+	uint64_t dat[4] = {
 		src->skeleton(),
 		getWidth(), getKind(),
 		src->hash()};
-	skeletonHash = hashImpl(&dat, 12, 0);
-	hashValue = hashImpl(&dat[1], 12, 0);
+	skeletonHash = hashImpl(&dat, 3*8, 0);
+	hashValue = hashImpl(&dat[1], 3*8, 0);
 	return hashValue;
 }
 
 Expr::Hash ExtractExpr::computeHash(void)
 {
-	uint32_t dat[5] = {
+	uint64_t dat[5] = {
 		expr->skeleton(),
 		Expr::Extract, offset, getWidth(),
 		expr->hash() };
-	skeletonHash = hashImpl(&dat, 16, 0);
-	hashValue = hashImpl(&dat[1], 16, 0);
+	skeletonHash = hashImpl(&dat, 4*8, 0);
+	hashValue = hashImpl(&dat[1], 4*8, 0);
 	return hashValue;
 }
 
 Expr::Hash ReadExpr::computeHash(void)
 {
-	uint32_t dat[4] = {
+	uint64_t dat[4] = {
 		index->skeleton(),
 		Expr::Read,
 		index->hash(), updates.hash()};
 
-	skeletonHash = hashImpl(&dat, 8, 0);
-	hashValue = hashImpl(&dat[1], 12, 0);
+	skeletonHash = hashImpl(&dat, 2*8, 0);
+	hashValue = hashImpl(&dat[1], 3*8, 0);
 	return hashValue;
 }
 
 Expr::Hash NotExpr::computeHash(void)
 {
-	uint32_t dat[3] = {expr->skeleton(), Expr::Not, expr->hash()};
-	skeletonHash = hashImpl(&dat, 2*4, 0);
-	hashValue = hashImpl(&dat[1], 2*4, 0);
+	uint64_t dat[3] = {expr->skeleton(), Expr::Not, expr->hash()};
+	skeletonHash = hashImpl(&dat, 2*8, 0);
+	hashValue = hashImpl(&dat[1], 2*8, 0);
 	return hashValue;
 }
 
