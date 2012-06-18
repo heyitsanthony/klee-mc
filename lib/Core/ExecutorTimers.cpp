@@ -324,6 +324,23 @@ private:
 	Executor* exe;
 };
 
+#include "../Solver/HashSolver.h"
+cl::opt<unsigned>
+DumpHashStats("dump-hashstats",
+        cl::desc("Dump hash stats every n seconds (0=off)"),
+        cl::init(0));
+class HashStatTimer : public StatTimer
+{
+public:
+	HashStatTimer(Executor *_exe) : StatTimer(_exe, "hashstats.txt") {}
+protected:
+	void print(void) { *os
+		<< HashSolver::getHits() << ' '
+		<< HashSolver::getStoreHits() << ' '
+		<< HashSolver::getMisses(); }
+};
+
+
 cl::opt<unsigned>
 DumpForkCondGraph("dump-forkcondgraph",
 	cl::desc("Dump fork condition graph (0=off)"),
@@ -542,6 +559,9 @@ void Executor::initTimers(void)
 
 	if (DumpCacheStats)
 		addTimer(new CacheStatTimer(this), DumpCacheStats);
+
+	if (DumpHashStats)
+		addTimer(new HashStatTimer(this), DumpHashStats);
 
 	if (DumpCovStats)
 		addTimer(new CovStatTimer(this), DumpCovStats);

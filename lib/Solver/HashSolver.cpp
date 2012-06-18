@@ -19,6 +19,7 @@ using namespace llvm;
 
 unsigned HashSolver::hits = 0;
 unsigned HashSolver::misses = 0;
+unsigned HashSolver::store_hits = 0;
 HashSolver::missqueue_ty HashSolver::miss_queue;
 
 namespace
@@ -143,7 +144,12 @@ bool HashSolver::lookup(const Query& q, bool isSAT)
 	if (!isSAT && unsat_hashes.count(cur_hash))
 		return true;
 
-	return qstore->lookup(QHSEntry(q, cur_hash, isSAT));
+	if (qstore->lookup(QHSEntry(q, cur_hash, isSAT))) {
+		store_hits++;
+		return true;
+	}
+
+	return false;
 }
 
 

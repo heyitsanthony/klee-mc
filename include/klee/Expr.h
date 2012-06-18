@@ -188,7 +188,11 @@ protected:
   static ExprBuilder	*theExprBuilder;
   static ExprAlloc	*theExprAllocator;
 
+  // insensitive to array names
   Hash hashValue;
+
+  // insensitive to constant values and arrays (e.g. names AND size)
+  Hash skeletonHash;
 
   Expr() : refCount(0) { count++; }
 
@@ -218,6 +222,7 @@ public:
 
   /// Returns the pre-computed hash of the current expression
   virtual Hash hash() const { return hashValue; }
+  virtual Hash skeleton() const { return skeletonHash; }
 
   /// (Re)computes the hash of the current expression.
   /// Returns the hash value.

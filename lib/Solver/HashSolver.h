@@ -74,6 +74,7 @@ public:
 private:
 	static unsigned	hits;
 	static unsigned	misses;
+	static unsigned store_hits;
 	
 	typedef std::vector< QHSEntry* > missqueue_ty;
 
@@ -125,6 +126,7 @@ public:
 	}
 
 	static unsigned getHits(void) { return hits; }
+	static unsigned getStoreHits(void) { return hits; }
 	static unsigned getMisses(void) { return misses; }
 	static void commitMisses(void);
 };
