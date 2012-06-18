@@ -1,6 +1,7 @@
 #include <iostream>
 #include <sstream>
 
+#include <llvm/ADT/StringExtras.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/ManagedStatic.h>
 #include <llvm/Support/Signals.h>
@@ -120,6 +121,12 @@ namespace llvm
 		"dump-db",
 		cl::desc("Dump rule db in pretty format."),
 		cl::init(false));
+
+	cl::opt<int>
+	SplitDB(
+		"split-db",
+		cl::desc("Split rule data base into n chunks"),
+		cl::init(0));
 
 	cl::opt<bool>
 	BRuleXtive(
@@ -735,6 +742,39 @@ static void extractRule(unsigned rule_num)
 	delete rb;
 }
 
+static void splitDB(std::string& prefix, int num_chunks)
+{
+	RuleBuilder	*rb;
+	std::ofstream	**ofs;
+	unsigned	rules_per_chunk;
+	unsigned	rule_c;
+
+	assert (num_chunks > 1);
+	assert (!prefix.empty());
+
+	ofs = new std::ofstream*[num_chunks];
+	for (int i = 0; i < num_chunks; i++)
+		ofs[i] = new std::ofstream(
+			((prefix + ".") + llvm::utostr(i)).c_str());
+
+	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
+	rules_per_chunk = (rb->size()+num_chunks-1) / num_chunks;
+	rule_c = 0;
+	foreach (it, rb->begin(), rb->end()) {
+		const ExprRule	*er(*it);
+		unsigned	chunk_num;
+
+		chunk_num = rule_c / rules_per_chunk;
+		er->printBinaryRule(*ofs[chunk_num]);
+		rule_c++;
+	}
+
+	delete rb;
+	for (int i = 0; i < num_chunks; i++)
+		delete ofs[i];
+	delete [] ofs;
+}
+
 int main(int argc, char **argv)
 {
 	Solver		*s;
@@ -755,7 +795,9 @@ int main(int argc, char **argv)
 		return -3;
 	}
 
-	if (CheckDBDups) {
+	if (SplitDB) {
+		splitDB(InputFile, SplitDB);
+	} else if (CheckDBDups) {
 		checkDBDups();
 	} else if (ExtractRule != -1) {
 		extractRule(ExtractRule);
