@@ -614,6 +614,7 @@ static void checkDBDups(void)
 
 
 /* verify that the rule data base is properly translating rules */
+extern int xxx_rb;
 static void checkDB(Solver* s)
 {
 	ExprBuilder	*init_eb;
@@ -633,6 +634,7 @@ static void checkDB(Solver* s)
 		ref<Expr>	from_eb, from_rb, to_e;
 
 		i++;
+		xxx_rb = i;
 
 		to_e = er->getToExpr();
 		from_eb = er->getFromExpr();

@@ -1,3 +1,4 @@
+int xxx_rb;
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -237,14 +238,19 @@ void ExprRule::print(std::ostream& os) const
 
 	i = 0;
 	foreach (it, const_constraints->begin(), const_constraints->end()) {
-		ExprFlatWriter	efw(&os);
-		ref<Expr>	pat_expr;
-
 		os << "Const[" << i++ << "]: ";
-		pat_expr = (*it).anonFlat2Expr((*it).label_c*8);
-		efw.apply(pat_expr);
+		printConstr(os, *it);
 		os << '\n';
 	}
+}
+
+void ExprRule::printConstr(std::ostream& os, const Pattern& p)
+{
+	ExprFlatWriter	efw(&os);
+	ref<Expr>	pat_expr;
+
+	pat_expr = p.anonFlat2Expr(p.label_c*8);
+	efw.apply(pat_expr);
 }
 
 ExprRule* ExprRule::changeDest(const ExprRule* er, const ref<Expr>& to)

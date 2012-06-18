@@ -44,6 +44,7 @@ public:
 	static void printExpr(std::ostream& os, const ref<Expr>& e);
 	static void printExpr(
 		std::ostream& os, const ref<Expr>& e, const labelmap_ty& tm);
+	static void printConstr(std::ostream& os, const Pattern& p);
 
 	virtual ~ExprRule() {}
 
