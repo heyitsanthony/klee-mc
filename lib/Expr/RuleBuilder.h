@@ -170,7 +170,7 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS)	\
 	rulearr_ty::const_iterator end(void) const { return rules_arr.end(); }
 	unsigned size(void) const { return rules_arr.size(); }
 
-	void eraseDBRule(rulearr_ty::const_iterator& it);
+	void eraseDBRule(const ExprRule*);
 
 	const std::string& getDBPath(void) const;
 

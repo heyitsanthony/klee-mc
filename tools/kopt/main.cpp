@@ -77,7 +77,13 @@ namespace llvm
 	cl::opt<bool>
 	CheckRule(
 		"check-rule",
-		cl::desc("Check a rule file"),
+		cl::desc("Check a rule file."),
+		cl::init(false));
+
+	cl::opt<bool>
+	EraseShadows(
+		"erase-shadows",
+		cl::desc("Erase shadowed rules."),
 		cl::init(false));
 
 	cl::opt<bool>
@@ -622,6 +628,83 @@ static void checkDBDups(void)
 	std::cout << "Dups found: " << i << '\n';
 }
 
+static void eraseShadowRules(Solver* s)
+{
+	ExprBuilder			*init_eb;
+	RuleBuilder			*rb;
+	std::set<const ExprRule*>	del_rules;
+
+	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
+	init_eb = Expr::getBuilder();
+
+	foreach (it, rb->begin(), rb->end()) {
+		const ExprRule	*er(*it), *last_er;
+		ref<Expr>	from_eb, from_rb, to_e;
+		unsigned	to_node_c, from_node_c;
+
+		to_e = er->getToExpr();
+		from_eb = er->getFromExpr();
+
+		Expr::setBuilder(rb);
+		from_rb = er->getFromExpr();
+		Expr::setBuilder(init_eb);
+
+		last_er = RuleBuilder::getLastRule();
+		if (last_er == er)
+			continue;
+
+		/* some other rule is doing the work! great */
+		if (from_rb == to_e) {
+			/* I'd much prefer constrained rules
+			 * since they are known to cover more rules;
+			 * may not want this if rule is hopelessly masked.
+			 * How can we test if it's masked? */
+			if (er->hasConstraints()&&!last_er->hasConstraints()) {
+				if (!del_rules.count(last_er))
+					continue;
+				del_rules.insert(last_er);
+				rb->eraseDBRule(last_er);
+				std::cerr << "Overconstrained\n";
+			}
+
+			continue;
+		}
+
+		if (from_rb == from_eb) {
+			std::cerr << "Translation didn't take. Ulp\n";
+			continue;
+		}
+
+		to_node_c = ExprUtil::getNumNodes(to_e);
+		from_node_c = ExprUtil::getNumNodes(from_rb);
+
+		if (to_node_c > from_node_c) {
+			/* rule is obsolete; did better than expected */
+			if (!del_rules.count(er)) {
+				rb->eraseDBRule(er);
+				del_rules.insert(er);
+				std::cerr << "Obsolete\n";
+			}
+			continue;
+		}
+
+		if (to_node_c == from_node_c) {
+			/* duplicate rule */
+			if (er->hasConstraints()&&!last_er->hasConstraints())
+				continue;
+
+			if (!del_rules.count(er)) {
+				rb->eraseDBRule(er);
+				del_rules.insert(er);
+				std::cerr << "Shadowed\n";
+			}
+		}
+	}
+
+	delete rb;
+}
+
+
 
 /* verify that the rule data base is properly translating rules */
 extern int xxx_rb;
@@ -664,6 +747,7 @@ static void checkDB(Solver* s)
 
 		if (from_rb != from_eb) {
 			unsigned	to_node_c, from_node_c;
+			bool		bad;
 
 			std::cerr << "=======================\n";
 			std::cerr << "!!!DID NOT TRANSLATE AS EXPECTED!!!!\n";
@@ -694,8 +778,6 @@ static void checkDB(Solver* s)
 
 			if (!VerifyDB)
 				continue;
-
-			bool	bad;
 
 			bad = (checkRule(er, s, std::cerr) == false);
 			if (!getExprCex(s, from_rb, from_eb, std::cerr))
@@ -828,7 +910,9 @@ int main(int argc, char **argv)
 		return -3;
 	}
 
-	if (SplitDB) {
+	if (EraseShadows) {
+		eraseShadowRules(s);
+	} else if (SplitDB) {
 		splitDB(InputFile, SplitDB);
 	} else if (ExtractConstrs) {
 		extractConstrs(InputFile);

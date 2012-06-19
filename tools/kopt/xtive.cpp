@@ -307,7 +307,7 @@ void xtiveBRule(ExprBuilder *eb, Solver* s)
 		const ExprRule	*er = *(it->first);
 		if (bad_repl.count(er))
 			continue;
-		rb->eraseDBRule(it->first);
+		rb->eraseDBRule(*(it->first));
 	}
 
 	delete rb;

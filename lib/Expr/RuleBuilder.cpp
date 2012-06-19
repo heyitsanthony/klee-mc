@@ -131,9 +131,8 @@ void RuleBuilder::loadRules()
 		<< " rules from " << *load_s << ".\n";
 }
 
-void RuleBuilder::eraseDBRule(rulearr_ty::const_iterator& it)
+void RuleBuilder::eraseDBRule(const ExprRule* to_rmv)
 {
-	const ExprRule	*to_rmv;
 	std::fstream	ifs(	getDBPath().c_str(),
 				std::ios_base::in |
 				std::ios_base::out |
@@ -145,7 +144,6 @@ void RuleBuilder::eraseDBRule(rulearr_ty::const_iterator& it)
 		return;
 	}
 
-	to_rmv = *it;
 	/* first, try the hint */
 	if (to_rmv->getOffsetHint())
 		if (eraseDBRuleHint(ifs, to_rmv))
