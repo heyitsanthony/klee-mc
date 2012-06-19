@@ -195,6 +195,22 @@ static void sc_klee(void* regfile)
 	}
 }
 
+static void loop_protect(int sc, int* ctr)
+{
+	*ctr = (last_sc == SYS_futex)
+		? *ctr + 1
+		: 0;
+
+	if (*ctr < 10)
+		return;
+
+	klee_report_error(
+		__FILE__,
+		__LINE__,
+		"Possible syscall infinite loop",
+		"loop.early");
+}
+
 #include <asm/ptrace.h>
 
 void* sc_enter(void* regfile, void* jmpptr)
@@ -349,20 +365,14 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 	case SYS_futex: {
 		static int futex_c = 0;
-		if (last_sc == SYS_futex) {
-			futex_c++;
-		} else
-			futex_c = 0;
-
-		if (futex_c > 10)
-			klee_report_error(
-				__FILE__,
-				__LINE__,
-				"Possible futex infinite loop",
-				"futex.early");
+		loop_protect(SYS_futex, &futex_c);
 		sc_ret_range(sc_new_regs(regfile), -1, 1);
 		break;
 	}
+
+	case SYS_rt_sigsuspend:
+		sc_ret_v(regfile, -1);
+		break;
 
 	case SYS_rt_sigprocmask:
 		if (GET_ARG2(regfile)) {
