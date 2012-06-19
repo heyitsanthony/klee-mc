@@ -370,9 +370,13 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	}
 
-	case SYS_rt_sigsuspend:
+	case SYS_rt_sigsuspend: {
+		/* XXX this should tweak a sighandler */
+		static int suspend_c = 0;
+		loop_protect(SYS_rt_sigsuspend, &suspend_c);
 		sc_ret_v(regfile, -1);
 		break;
+	}
 
 	case SYS_rt_sigprocmask:
 		if (GET_ARG2(regfile)) {
