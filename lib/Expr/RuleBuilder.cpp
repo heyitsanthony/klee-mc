@@ -55,7 +55,13 @@ namespace {
 	ApplyRuleHash(
 		"try-hash-rules",
 		cl::desc("Use skeleton hashes to look up rules."),
-		cl::init(false));
+		cl::init(true));
+
+	cl::opt<bool>
+	ApplyRuleTrie(
+		"try-trie-rules",
+		cl::desc("Use trie to look up rules."),
+		cl::init(true));
 
 
 	cl::opt<bool> ShowXlate("show-xlated", cl::init(false));
@@ -233,9 +239,9 @@ void RuleBuilder::addRule(ExprRule* er)
 		return;
 
 	rules_arr.push_back(er);
-	if (ApplyRuleHash) {
+	if (ApplyRuleHash)
 		addRuleHash(er);
-	} else if (!ApplyAllRules)
+	if (ApplyRuleTrie)
 		rules_trie.add(er->getFromPattern().stripConstExamples(), er);
 }
 
@@ -264,7 +270,6 @@ bool RuleBuilder::loadRuleDir(const char* ruledir)
 
 ref<Expr> RuleBuilder::tryApplyRules(const ref<Expr>& in)
 {
-	ref<Expr>	ret;
 	unsigned	old_depth;
 
 	if (in->getKind() == Expr::Constant)
@@ -281,18 +286,20 @@ ref<Expr> RuleBuilder::tryApplyRules(const ref<Expr>& in)
 		}
 	}
 
+	ref<Expr>	ret(0);
 	recur++;
 
 	/* don't call back to self in case we find an optimization! */
 	old_depth = depth;
 	depth = 1;
 
-	if (ApplyAllRules)
-		ret = tryAllRules(in);
-	else if (ApplyRuleHash)
-		ret = trySkeletalRules(in);
-	else
+	if (ApplyRuleTrie)
 		ret = tryTrieRules(in);
+	if (ApplyRuleHash && ret.isNull())
+		ret = trySkeletalRules(in);
+	/* so desperate */
+	if (ApplyAllRules && ret.isNull())
+		ret = tryAllRules(in);
 
 	recur--;
 	depth = old_depth;
@@ -490,7 +497,7 @@ ref<Expr> RuleBuilder::trySkeletalRules(const ref<Expr>& in)
 
 	it = rules_tab.find(in->skeleton());
 	if (it == rules_tab.end())
-		goto miss;
+		return in;
 
 	rtl = it->second;
 	assert (rtl != NULL && "Null list added to rule table?");
@@ -503,10 +510,10 @@ ref<Expr> RuleBuilder::trySkeletalRules(const ref<Expr>& in)
 			updateLastRule(er);
 			return new_expr;
 		}
+
+		rule_miss_c++;
 	}
 
-miss:
-	rule_miss_c++;
 	return in;
 }
 
