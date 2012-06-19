@@ -390,8 +390,13 @@ bool checkRule(const ExprRule* er, Solver* s, std::ostream& os)
 		return false;
 	}
 
-	if (to_nodes >= from_nodes) {
-		os << "non-shrinking rule\n";
+	if (to_nodes == from_nodes) {
+		os << "not-better rule\n";
+		return false;
+	}
+
+	if (to_nodes > from_nodes) {
+		os << "expanding rule\n";
 		return false;
 	}
 

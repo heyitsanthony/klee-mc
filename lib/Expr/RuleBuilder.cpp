@@ -79,15 +79,25 @@ RuleBuilder::RuleBuilder(ExprBuilder* base)
 	if (DumpRuleMiss)
 		mkdir("miss_dump", 0777);
 	if (DumpUsedRules.size() != 0)
-		rule_ofs = new std::ofstream(DumpUsedRules.c_str());
+		rule_ofs = new std::ofstream(
+			DumpUsedRules.c_str(),
+			std::ofstream::out | std::ofstream::app |
+			std::ofstream::binary);
 }
 
 RuleBuilder::~RuleBuilder()
 {
 	if (rule_ofs) delete rule_ofs;
 
+	foreach (it, rules_tab.begin(), rules_tab.end()) {
+		rtlist_ty	*rtl(it->second);
+		if (rtl != NULL)
+			delete it->second;
+	}
+
 	foreach (it, rules_arr.begin(), rules_arr.end())
 		delete (*it);
+
 	rules_arr.clear();
 	delete eb;
 }
@@ -226,14 +236,7 @@ void RuleBuilder::addRule(ExprRule* er)
 
 	rules_arr.push_back(er);
 	if (ApplyRuleHash) {
-		ExprBuilder	*old_eb;
-		ref<Expr>	e;
-		old_eb = Expr::setBuilder(eb);
-		e = er->getFromExpr();
-		Expr::setBuilder(old_eb);
-		if (!e.isNull()) {
-			rules_tab.insert(std::make_pair(e->skeleton(), er));
-		}
+		addRuleHash(er);
 	} else if (!ApplyAllRules)
 		rules_trie.add(er->getFromPattern().stripConstExamples(), er);
 }
@@ -483,25 +486,54 @@ ref<Expr> RuleBuilder::tryAllRules(const ref<Expr>& in)
 
 ref<Expr> RuleBuilder::trySkeletalRules(const ref<Expr>& in)
 {
-	const ExprRule			*er;
 	ruletab_ty::const_iterator	it;
+	rtlist_ty			*rtl;
 	ref<Expr>			new_expr;
 
 	it = rules_tab.find(in->skeleton());
 	if (it == rules_tab.end())
 		goto miss;
 
-	er = it->second;
-	new_expr = er->apply(in);
-	if (new_expr.isNull())
-		goto miss;
+	rtl = it->second;
+	assert (rtl != NULL && "Null list added to rule table?");
 
-	updateLastRule(er);
-	return new_expr;
+	foreach (it2, rtl->begin(), rtl->end()) {
+		const ExprRule	*er(*it2);
+
+		new_expr = er->apply(in);
+		if (!new_expr.isNull()) {
+			updateLastRule(er);
+			return new_expr;
+		}
+	}
 
 miss:
 	rule_miss_c++;
 	return in;
+}
+
+void RuleBuilder::addRuleHash(const ExprRule* er)
+{
+	ExprBuilder		*old_eb;
+	ref<Expr>		e;
+	ruletab_ty::iterator	it;
+	rtlist_ty		*bucket;
+
+	old_eb = Expr::setBuilder(eb);
+	e = er->getFromExpr();
+	Expr::setBuilder(old_eb);
+
+	if (e.isNull())
+		return;
+
+	it = rules_tab.find(e->skeleton());
+	if (it == rules_tab.end())  {
+		bucket = new rtlist_ty();
+		rules_tab.insert(std::make_pair(e->skeleton(), bucket));
+	} else
+		bucket = it->second;
+
+	bucket->push_back(er);
 }
 
 void RuleBuilder::updateLastRule(const ExprRule* er)
@@ -512,8 +544,12 @@ void RuleBuilder::updateLastRule(const ExprRule* er)
 
 	last_er = er;
 	inserted = rules_used.insert(last_er).second;
-	if (inserted && rule_ofs != NULL)
+	if (inserted && rule_ofs != NULL) {
 		last_er->printBinaryRule(*rule_ofs);
+		/* flush every 10 rules */
+		if ((rules_used.size() % 10) == 9)
+			rule_ofs->flush();
+	}
 }
 
 bool RuleBuilder::hasRule(const char* fname)

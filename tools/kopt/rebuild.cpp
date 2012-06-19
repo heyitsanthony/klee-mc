@@ -84,10 +84,12 @@ void rebuildBRules(Solver* s, const std::string& Input)
 		if (er_rebuild == NULL)
 			continue;
 
+		/* only emit if hasn't seen rule before */
 		if (!ers.count(*er_rebuild)) {
 			er_rebuild->printBinaryRule(of);
 			ers.insert(*er_rebuild);
 		}
+
 		delete er_rebuild;
 	}
 

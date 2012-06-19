@@ -3,6 +3,7 @@
 
 #include <tr1/unordered_set>
 #include <tr1/unordered_map>
+#include <list>
 #include "static/Trie.h"
 #include "klee/ExprBuilder.h"
 
@@ -14,8 +15,11 @@ class RuleBuilder : public ExprBuilder
 {
 public:
 	typedef Trie<uint64_t, ExprRule*>	ruletrie_ty;
+
+	typedef std::list<const ExprRule*>	rtlist_ty;
 	typedef std::tr1::unordered_map<
-		Expr::Hash, const ExprRule*>	ruletab_ty;
+		Expr::Hash, rtlist_ty*>		ruletab_ty;
+
 	typedef std::vector<ExprRule*>		rulearr_ty;
 
 	RuleBuilder(ExprBuilder* base);
@@ -177,7 +181,7 @@ private:
 	bool loadRuleDir(const char* ruledir);
 	bool loadRuleDB(const char* rulefile);
 
-
+	void addRuleHash(const ExprRule* er);
 	void updateLastRule(const ExprRule* er);
 
 	bool eraseDBRuleHint(std::fstream& ifs, const ExprRule* to_rmv);
