@@ -146,6 +146,11 @@ namespace llvm
 		cl::desc("Extract rule from brule file."),
 		cl::init(-1));
 
+	cl::opt<bool>
+	ExtractConstrs(
+		"extract-constrs",
+		cl::desc("Extract rules with constraints"),
+		cl::init(false));
 
 	cl::opt<bool>
 	AddRule(
@@ -754,6 +759,22 @@ static void extractRule(unsigned rule_num)
 	delete rb;
 }
 
+static void extractConstrs(const std::string& fname)
+{
+	std::ofstream	of(fname.c_str());
+	RuleBuilder	*rb;
+
+	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
+	foreach (it, rb->begin(), rb->end()) {
+		const ExprRule	*er(*it);
+		if (!er->hasConstraints())
+			continue;
+		er->printBinaryRule(of);
+	}
+
+	delete rb;
+}
+
 static void splitDB(std::string& prefix, int num_chunks)
 {
 	RuleBuilder	*rb;
@@ -809,6 +830,8 @@ int main(int argc, char **argv)
 
 	if (SplitDB) {
 		splitDB(InputFile, SplitDB);
+	} else if (ExtractConstrs) {
+		extractConstrs(InputFile);
 	} else if (CheckDBDups) {
 		checkDBDups();
 	} else if (ExtractRule != -1) {

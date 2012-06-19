@@ -18,7 +18,7 @@ using namespace llvm;
 namespace 
 {
 	cl::opt<unsigned>
-	KOConsts("ko-consts", cl::desc("KO const widths"), cl::init(32));
+	KOConsts("ko-consts", cl::desc("KO const widths"), cl::init(8));
 }
 
 class klee::KnockOut : public ExprVisitor
