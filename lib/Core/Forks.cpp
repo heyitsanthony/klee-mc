@@ -20,6 +20,11 @@
 #include "ExeStateManager.h"
 #include "Forks.h"
 
+/* XXX */
+#include "../Solver/SMTPrinter.h"
+#include "klee/Internal/ADT/LimitedStream.h"
+
+
 extern bool		ReplayInhibitedForks;
 namespace klee { extern RNG theRNG; }
 
@@ -58,8 +63,7 @@ namespace
 
 	llvm::cl::opt<bool>
 	OnlyReplaySeeds(
-		"only-replay-seeds",
-		llvm::cl::desc("Discard states that do not have a seed."));
+		"only-replay-seeds", llvm::cl::desc("Drop seedless states."));
 
 	llvm::cl::opt<bool>
 	RandomizeFork("randomize-fork", llvm::cl::init(false));
@@ -300,53 +304,57 @@ void Forks::skipAndRandomPrune(struct ForkInfo& fi, const char* reason)
 	fi.res[condIndex] = true;
 }
 
-void Forks::forkSetupSeeding(
-  ExecutionState& current,
-  struct ForkInfo& fi)
+void Forks::forkSetupSeeding(ExecutionState& current, struct ForkInfo& fi)
 {
-  Executor::SeedMapType	&seedMap(exe.getSeedMap());
-  Executor::SeedMapType::iterator it = seedMap.find(&current);
-  assert (it != seedMap.end());
+	Executor::SeedMapType		&seedMap(exe.getSeedMap());
+	Executor::SeedMapType::iterator it(seedMap.find(&current));
 
-  // Fix branch in only-replay-seed mode, if we don't have both true
-  // and false seeds.
+	assert (it != seedMap.end());
 
-  // Assume each seed only satisfies one condition (necessarily true
-  // when conditions are mutually exclusive and their conjunction is
-  // a tautology).
-  // This partitions the seed set for the current state
-  foreach (siit, it->second.begin(), it->second.end()) {
-    unsigned i;
-    for (i = 0; i < fi.N; ++i) {
-      ref<ConstantExpr> seedCondRes;
-      bool success = exe.getSolver()->getValue(current,
-        siit->assignment.evaluate(fi.conditions[i]), seedCondRes);
-      assert(success && "FIXME: Unhandled solver failure");
-      if (seedCondRes->isTrue()) break;
-    }
+	// Fix branch in only-replay-seed mode, if we don't have both true
+	// and false seeds.
 
-    // If we didn't find a satisfying condition, randomly pick one
-    // (the seed will be patched).
-    if (i == fi.N) i = theRNG.getInt32() % fi.N;
+	// Assume each seed only satisfies one condition (necessarily true
+	// when conditions are mutually exclusive and their conjunction is
+	// a tautology).
+	// This partitions the seed set for the current state
+	foreach (siit, it->second.begin(), it->second.end()) {
+		unsigned i;
+		for (i = 0; i < fi.N; ++i) {
+			ref<ConstantExpr>	seedCondRes;
+			bool			ok;
+			ok = exe.getSolver()->getValue(
+				current,
+				siit->assignment.evaluate(fi.conditions[i]),
+				seedCondRes);
+			assert(ok && "FIXME: Unhandled solver failure");
+			if (seedCondRes->isTrue())
+				break;
+		}
 
-    fi.resSeeds[i].push_back(*siit);
-  }
+		// If we didn't find a satisfying condition, randomly pick one
+		// (the seed will be patched).
+		if (i == fi.N) i = theRNG.getInt32() % fi.N;
 
-  // Clear any valid conditions that seeding rejects
-  if ((current.forkDisabled || OnlyReplaySeeds) && fi.validTargets > 1) {
-    fi.validTargets = 0;
-    for (unsigned i = 0; i < fi.N; i++) {
-      if (fi.resSeeds[i].empty()) fi.res[i] = false;
-      if (fi.res[i]) fi.validTargets++;
-    }
-    assert(fi.validTargets && "seed must result in at least one valid target");
-  }
+		fi.resSeeds[i].push_back(*siit);
+	}
 
-  // Remove seeds corresponding to current state
-  seedMap.erase(it);
+	// Clear any valid conditions that seeding rejects
+	if ((current.forkDisabled || OnlyReplaySeeds) && fi.validTargets > 1) {
+		fi.validTargets = 0;
+		for (unsigned i = 0; i < fi.N; i++) {
+			if (fi.resSeeds[i].empty()) fi.res[i] = false;
+			if (fi.res[i]) fi.validTargets++;
+		}
+		assert (fi.validTargets &&
+			"seed must result in at least one valid target");
+	}
 
-  // !!! it's possible for the current state to end up with no seeds. Does
-  // this matter? Old fork() used to handle it but branch() didn't.
+	// Remove seeds corresponding to current state
+	seedMap.erase(it);
+
+	// !!! it's possible for the current state to end up with no seeds. Does
+	// this matter? Old fork() used to handle it but branch() didn't.
 }
 
 // !!! for normal branch, conditions = {false,true} so that replay 0,1 reflects
@@ -359,15 +367,11 @@ Forks::fork(
         bool isInternal,
 	bool isBranch)
 {
-	Executor::SeedMapType		&seedMap(exe.getSeedMap());
-	Executor::SeedMapType::iterator	it;
 	ForkInfo			fi(conditions, N);
 
 	fi.isInternal = isInternal;
 	fi.isBranch = isBranch;
-
-	it = seedMap.find(&current);
-	fi.isSeeding = it != seedMap.end();
+	fi.isSeeding = exe.isStateSeeding(&current);
 
 	if (evalForks(current, fi) == false) {
 		exe.terminateStateEarly(current, "fork query timed out");

@@ -169,6 +169,9 @@ private:
   void handleMemoryUtilization(ExecutionState* &state);
   void handleMemoryPID(ExecutionState* &state);
   void runLoop(void);
+  bool executeGetValueSeeding(
+  	ExecutionState &state, ref<Expr> e, KInstruction *target);
+
 
 protected:
 	KModule		*kmodule;
