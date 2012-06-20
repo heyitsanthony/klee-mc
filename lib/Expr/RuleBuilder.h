@@ -180,6 +180,7 @@ private:
 	void loadRules(void);
 	bool loadRuleDir(const char* ruledir);
 	bool loadRuleDB(const char* rulefile);
+	bool loadRuleStream(std::istream& is);
 
 	void addRuleHash(const ExprRule* er);
 	void updateLastRule(const ExprRule* er);

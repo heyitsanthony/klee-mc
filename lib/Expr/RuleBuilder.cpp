@@ -12,6 +12,7 @@
 #include "klee/Solver.h"
 #include "klee/util/ExprUtil.h"
 #include "klee/Internal/ADT/Hash.h"
+#include "klee/Internal/ADT/zfstream.h"
 
 #include "static/Sugar.h"
 #include "ExprRule.h"
@@ -220,17 +221,28 @@ bool RuleBuilder::eraseDBRuleHint(
 
 const std::string& RuleBuilder::getDBPath(void) const { return RuleDBFile; }
 
-bool RuleBuilder::loadRuleDB(const char* ruledir)
+bool RuleBuilder::loadRuleStream(std::istream& is)
 {
-	std::ifstream	ifs(ruledir);
-
-	if (!ifs.good() || ifs.bad() || ifs.fail() || ifs.eof())
+	if (!is.good() || is.bad() || is.fail() || is.eof())
 		return false;
 
-	while (ifs.eof() == false)
-		addRule(ExprRule::loadBinaryRule(ifs));
+	while (is.eof() == false)
+		addRule(ExprRule::loadBinaryRule(is));
 
 	return true;
+}
+
+bool RuleBuilder::loadRuleDB(const char* rulef)
+{
+	gzifstream	gzif(rulef);
+	if (loadRuleStream(gzif))
+		return true;
+
+	std::ifstream	ifs(rulef);
+	if (loadRuleStream(ifs))
+		return true;
+
+	return false;
 }
 
 void RuleBuilder::addRule(ExprRule* er)
