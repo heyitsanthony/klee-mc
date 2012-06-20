@@ -3,7 +3,6 @@
 
 #include <iostream>
 #include <set>
-#include <stdio.h>
 #include "klee/breadcrumb.h"
 
 namespace klee
@@ -22,11 +21,11 @@ public:
 
 	struct breadcrumb* next(void);
 	struct breadcrumb* next(unsigned int bc_type);
-	struct breadcrumb* peek(void) const;
+	struct breadcrumb* peek(void);
 
 	BCrumb* nextBC(void) { return toBC(next()); }
 	BCrumb* nextBC(unsigned int bc_type) { return toBC(next(bc_type)); }
-	BCrumb* peekBC(void) const { return toBC(peek()); }
+	BCrumb* peekBC(void) { return toBC(peek()); }
 
 	void skip(unsigned int i = 1);
 
@@ -38,10 +37,12 @@ public:
 protected:
 	Crumbs(const char* fname);
 private:
-	void 			loadTypeList();
-	FILE*			f;
-	std::set<unsigned int>	bc_types;
-	unsigned int		crumbs_processed;
+	std::istream			*getFile(const char* fname);
+	void 				loadTypeList(std::istream& is);
+	std::istream			*is;
+	std::set<unsigned int>		bc_types;
+	unsigned int			crumbs_processed;
+	struct breadcrumb		*peekbuf;
 };
 
 class BCrumb

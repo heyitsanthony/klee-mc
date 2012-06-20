@@ -4,7 +4,7 @@
 #include "klee/Common.h"
 #include "klee/Internal/ADT/KTest.h"
 #include "klee/Internal/System/Time.h"
-#include "klee/util/gzip.h"
+#include "klee/Internal/ADT/zfstream.h"
 #include "klee/Solver.h"
 #include "../../lib/Solver/SMTPrinter.h"
 #include "static/Sugar.h"
@@ -196,23 +196,45 @@ std::string KleeHandler::getOutputFilename(const std::string &filename)
 	return outfile;
 }
 
+static std::ostream* file_check(std::ostream* os, const std::string& fname)
+{
+	if (os == NULL) {
+		klee_error(
+			"error opening file \"%s\" (out of memory)",
+			fname.c_str());
+		return NULL;
+	}
+
+	if (!os->good()) {
+		klee_error(
+			"error opening file \"%s\". KLEE may have run out of file "
+			"descriptors: try to increase the max open file "
+			"descriptors by using ulimit.", fname.c_str());
+		delete os;
+		return NULL;
+	}
+
+	return os;
+}
+
+std::ostream *KleeHandler::openOutputFileGZ(const std::string &filename)
+{
+	std::ios::openmode io_mode =
+		std::ios::out | std::ios::trunc | std::ios::binary;
+	std::string path = getOutputFilename(filename);
+	std::ostream* f = new gzofstream(path.c_str(), io_mode);
+
+	return file_check(f, filename);
+}
+
+
 std::ostream *KleeHandler::openOutputFile(const std::string &filename)
 {
-  std::ios::openmode io_mode = std::ios::out | std::ios::trunc
-                             | std::ios::binary;
-  std::string path = getOutputFilename(filename);
-  std::ostream* f = new std::ofstream(path.c_str(), io_mode);
-  if (!f) {
-    klee_error("error opening file \"%s\" (out of memory)", filename.c_str());
-  } else if (!f->good()) {
-    klee_error("error opening file \"%s\".  KLEE may have run out of file "
-                   "descriptors: try to increase the maximum number of open file "
-                   "descriptors by using ulimit.", filename.c_str());
-    delete f;
-    f = NULL;
-  }
-
-  return f;
+	std::ios::openmode io_mode =
+		std::ios::out | std::ios::trunc | std::ios::binary;
+	std::string path = getOutputFilename(filename);
+	std::ostream* f = new std::ofstream(path.c_str(), io_mode);
+	return file_check(f, filename);
 }
 
 std::string KleeHandler::getTestFilename(const std::string &suffix, unsigned id)
@@ -220,6 +242,14 @@ std::string KleeHandler::getTestFilename(const std::string &suffix, unsigned id)
 	char filename[1024];
 	sprintf(filename, "test%06d.%s", id, suffix.c_str());
 	return getOutputFilename(filename);
+}
+
+std::ostream *KleeHandler::openTestFileGZ(
+	const std::string &suffix, unsigned id)
+{
+	char filename[1024];
+	sprintf(filename, "test%06d.%s.gz", id, suffix.c_str());
+	return openOutputFileGZ(filename);
 }
 
 std::ostream *KleeHandler::openTestFile(const std::string &suffix, unsigned id)
@@ -235,8 +265,7 @@ void KleeHandler::processSuccessfulTest(
 	out_objs&	out)
 {
 	KTest		b;
-	bool		ktest_ok;
-	std::string	fname;
+	bool		ktest_ok = false;
 
 	b.numArgs = cmdargs->getArgc();
 	b.args = cmdargs->getArgv();
@@ -260,8 +289,13 @@ void KleeHandler::processSuccessfulTest(
 	}
 
 	errno = 0;
-	fname = getTestFilename(name, id);
-	ktest_ok = kTest_toFile(&b, fname.c_str());
+
+	std::ostream	*os = openTestFileGZ(name, id);
+	if (os != NULL) {
+		ktest_ok = kTest_toStream(&b, *os);
+		delete os;
+	}
+
 	if (!ktest_ok) {
 		klee_warning(
 		"unable to write output test case, losing it (errno=%d: %s)",
@@ -272,8 +306,6 @@ void KleeHandler::processSuccessfulTest(
 	for (unsigned i=0; i<b.numObjects; i++)
 		delete[] b.objects[i].bytes;
 	delete[] b.objects;
-
-	GZip::gzipFile(fname.c_str(), (fname + ".gz").c_str());
 }
 
 bool KleeHandler::getStateSymObjs(
@@ -321,7 +353,7 @@ void KleeHandler::processTestCase(
 	}
 
 	if (WritePaths) {
-		if (std::ostream* f = openTestFile("path", id)) {
+		if (std::ostream* f = openTestFileGZ("path", id)) {
 			foreach(bit, state.branchesBegin(), state.branchesEnd()) {
 				(*f) << (*bit).first
 #ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
@@ -330,9 +362,6 @@ void KleeHandler::processTestCase(
 				<< "\n";
 			}
 			delete f;
-			GZip::gzipFile(
-				getTestFilename("path", id).c_str(),
-				(getTestFilename("path", id) + ".gz").c_str());
 		} else {
 			LOSING_IT(".path");
 		}
@@ -341,16 +370,11 @@ void KleeHandler::processTestCase(
 	if (WriteSMT) {
 		Query	query(	state.constraints,
 				ConstantExpr::alloc(0, Expr::Bool));
-				std::ostream	*f;
+		std::ostream	*f;
 
-		f = openTestFile("smt", id);
+		f = openTestFileGZ("smt", id);
 		SMTPrinter::print(*f, query);
 		delete f;
-
-		/* these things are pretty big */
-		GZip::gzipFile(
-			getTestFilename("smt", id).c_str(),
-			(getTestFilename("smt", id) + ".gz").c_str());
 	}
 
 	if (errorMessage || WritePCs)
@@ -418,7 +442,7 @@ void KleeHandler::dumpPCs(const ExecutionState& state, unsigned id)
 	std::ostream* f;
 
 	state.getConstraintLog(constraints);
-	f = openTestFile("pc", id);
+	f = openTestFileGZ("pc", id);
 	if (f == NULL) {
 		klee_warning(
 			"unable to write .pc file, losing it (errno=%d: %s)",
@@ -428,11 +452,6 @@ void KleeHandler::dumpPCs(const ExecutionState& state, unsigned id)
 
 	*f << constraints;
 	delete f;
-
-	/* these things get big too */
-	GZip::gzipFile(
-		getTestFilename("pc", id).c_str(),
-		(getTestFilename("pc", id) + ".gz").c_str());
 }
 
 void KleeHandler::dumpLog(
@@ -442,7 +461,7 @@ void KleeHandler::dumpLog(
 {
 	if (begin == end) return;
 
-	std::ostream* f = openTestFile(name, id);
+	std::ostream* f = openTestFileGZ(name, id);
 	if (f == NULL) return;
 
 	foreach (it, begin, end) {
@@ -453,10 +472,6 @@ void KleeHandler::dumpLog(
 	}
 
 	delete f;
-
-	GZip::gzipFile(
-		getTestFilename(name, id).c_str(),
-		(getTestFilename(name, id) + ".gz").c_str());
 }
 
 void KleeHandler::getPathFiles(
@@ -480,36 +495,39 @@ void KleeHandler::getPathFiles(
 }
 
 // load a .path file
+#define IFSMODE	std::ios::in | std::ios::binary
 void KleeHandler::loadPathFile(std::string name, ReplayPathType &buffer)
 {
+	std::istream	*is;
+
 	if (name.substr(name.size() - 3) == ".gz") {
 		std::string new_name = name.substr(0, name.size() - 3);
-		GZip::gunzipFile(name.c_str(), new_name.c_str());
-		name = new_name;
-	}
+		is = new gzifstream(name.c_str(), IFSMODE);
+	} else
+		is = new std::ifstream(name.c_str(), IFSMODE);
 
-	std::ifstream f(name.c_str(), std::ios::in | std::ios::binary);
-
-	if (!f.good()) {
+	if (is == NULL || !is->good()) {
 		assert(0 && "unable to open path file");
+		if (is) delete is;
 		return;
 	}
 
-	while (f.good()) {
+	while (is->good()) {
 		unsigned value;
-		f >> value;
-		if(!f.good())
-			break;
-		f.get();
-		#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
+		*is >> value;
+		if (!is->good()) break;
+		is->get();
+#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
 		unsigned id;
-		f >> id;
-		f.get();
+		*is >> id;
+		is->get();
 		buffer.push_back(std::make_pair(value,id));
-		#else
+#else
 		buffer.push_back(value);
-		#endif
+#endif
 	}
+
+	delete is;
 }
 
 void KleeHandler::getOutFiles(

@@ -11,19 +11,20 @@ static const char* sysname_tab[] =
 
 #include <klee/breadcrumb.h>
 #include <klee/Internal/ADT/Crumbs.h>
+#include <klee/Internal/ADT/zfstream.h>
 #include <klee/Internal/ADT/KTestStream.h>
-#include <klee/util/gzip.h>
 #include <unistd.h>
 #include <string>
 #include <string.h>
 #include <assert.h>
+#include <fstream>
 
 using namespace klee;
 
 Crumbs* Crumbs::create(const char* fname)
 {
 	Crumbs	*ret = new Crumbs(fname);
-	if (ret->f == NULL) {
+	if (ret->is == NULL) {
 		delete ret;
 		ret = NULL;
 	}
@@ -32,27 +33,50 @@ Crumbs* Crumbs::create(const char* fname)
 }
 
 Crumbs::Crumbs(const char* fname)
-: f(NULL)
+: is(NULL)
 , crumbs_processed(0)
+, peekbuf(NULL)
 {
-	const char* gzSuffix;
+	/* XXX: load on demand */
+	is = getFile(fname);
+	if (is == NULL)
+		return;
+
+	loadTypeList(*is);
+	delete is;
+
+	is = getFile(fname);
+	assert (is != NULL);
+}
+
+std::istream* Crumbs::getFile(const char* fname)
+{
+	std::istream	*ret;
+	const char	*gzSuffix;
 
 	gzSuffix = strstr(fname, ".gz");
 	if (gzSuffix && strlen(gzSuffix) == 3) {
-		f = GZip::gunzipTempFile(fname);
-		if (f == NULL) return;
+		ret = new gzifstream(fname, std::ios::binary | std::ios::in);
 	} else {
-		f = fopen(fname, "rb");
-		if (f == NULL) return;
+		ret = new std::ifstream(fname, std::ios::binary | std::ios::in);
 	}
 
-	/* XXX: load on demand */
-	loadTypeList();
+	if (ret == NULL)
+		return NULL;
+
+	if (!ret->good()) {
+		delete ret;
+		return NULL;
+	}
+
+	return ret;
 }
+
 
 Crumbs::~Crumbs()
 {
-	if (f != NULL) fclose(f);
+	if (peekbuf != NULL) freeCrumb(peekbuf);
+	if (is != NULL) delete is;
 }
 
 void Crumbs::skip(unsigned int i)
@@ -65,27 +89,19 @@ void Crumbs::skip(unsigned int i)
 	}
 }
 
-struct breadcrumb* Crumbs::peek(void) const
+struct breadcrumb* Crumbs::peek(void)
 {
 	struct breadcrumb	hdr;
 	char			*ret;
-	size_t			br;
-	int			err;
 
-	if (feof(f)) return NULL;
+	if (peekbuf == NULL)
+		peekbuf = next();
 
-	br = fread(&hdr, sizeof(hdr), 1, f);
-	if (br != 1) return NULL;
+	if (peekbuf == NULL)
+		return NULL;
 
-	ret = new char[hdr.bc_sz];
-	memcpy(ret, &hdr, sizeof(hdr));
-
-	br = fread(ret + sizeof(hdr), hdr.bc_sz - sizeof(hdr), 1, f);
-	if (br != 1) return NULL;
-
-	err = fseek(f, -((long)hdr.bc_sz), SEEK_CUR);
-	assert (err == 0);
-
+	ret = new char[peekbuf->bc_sz];
+	memcpy(ret, peekbuf, peekbuf->bc_sz);
 	return reinterpret_cast<struct breadcrumb*>(ret);
 }
 
@@ -95,25 +111,30 @@ struct breadcrumb* Crumbs::next(void)
 	char			*ret;
 	size_t			br;
 
-	if (feof(f)) return NULL;
+	if (peekbuf != NULL) {
+		struct breadcrumb *tmp = peekbuf;
+		peekbuf = NULL;
+		return tmp;
+	}
 
-	br = fread(&hdr, sizeof(hdr), 1, f);
-	if (br != 1) return NULL;
+	if (is->eof() || !is->good())
+		return NULL;
+
+	if (!is->read((char*)&hdr, sizeof(hdr)))
+		return NULL;
 
 	ret = new char[hdr.bc_sz];
 	memcpy(ret, &hdr, sizeof(hdr));
 
-	br = fread(ret + sizeof(hdr), hdr.bc_sz - sizeof(hdr), 1, f);
-	if (br != 1) return NULL;
+	if (!is->read((char*)(ret + sizeof(hdr)), hdr.bc_sz - sizeof(hdr)))
+		return NULL;
 
 	crumbs_processed++;
 	return reinterpret_cast<struct breadcrumb*>(ret);
 }
 
 void Crumbs::freeCrumb(struct breadcrumb* bc)
-{
-	delete [] reinterpret_cast<char*>(bc);
-}
+{ delete [] reinterpret_cast<char*>(bc); }
 
 struct breadcrumb* Crumbs::next(unsigned int bc_type)
 {
@@ -127,35 +148,25 @@ struct breadcrumb* Crumbs::next(unsigned int bc_type)
 }
 
 bool Crumbs::hasType(unsigned int v) const
-{
-	return (bc_types.count(v) != 0);
-}
+{ return (bc_types.count(v) != 0); }
 
-void Crumbs::loadTypeList(void)
+void Crumbs::loadTypeList(std::istream& cur_is)
 {
-	long			old_off;
 	struct breadcrumb	*cur_bc;
 	unsigned int		old_processed;
 
 	assert (bc_types.size() == 0);
 
 	old_processed = crumbs_processed;
-	old_off = ftell(f);
-	rewind(f);
-
 	while ((cur_bc = next()) != NULL) {
 		bc_types.insert(cur_bc->bc_type);
 		freeCrumb(cur_bc);
 	}
 
-	fseek(f, old_off, SEEK_SET);
 	crumbs_processed = old_processed;
 }
 
-void BCrumb::print(std::ostream& os) const
-{
-	os << "BCrumb" << std::endl;
-}
+void BCrumb::print(std::ostream& os) const { os << "BCrumb" << std::endl; }
 
 
 BCrumb* Crumbs::toBC(struct breadcrumb* bc)
@@ -175,10 +186,7 @@ BCrumb* Crumbs::toBC(struct breadcrumb* bc)
 	return NULL;
 }
 
-void BCVexReg::print(std::ostream& os) const
-{
-	os << "VEXREG\n";
-}
+void BCVexReg::print(std::ostream& os) const { os << "VEXREG\n"; }
 
 /* Meant to consume a system call op.
  * System calls have a sequence of associated sysops, which

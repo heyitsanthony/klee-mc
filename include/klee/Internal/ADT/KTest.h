@@ -57,6 +57,10 @@ extern "C" {
 
 #ifdef __cplusplus
 }
+
+#include <iostream>
+int kTest_toStream(KTest* bo, std::ostream& os);
 #endif
+
 
 #endif

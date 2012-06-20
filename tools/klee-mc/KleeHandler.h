@@ -43,8 +43,11 @@ public:
 
 	std::string getOutputFilename(const std::string &filename);
 	std::ostream *openOutputFile(const std::string &filename);
+	std::ostream *openOutputFileGZ(const std::string &filename);
+
 	std::string getTestFilename(const std::string &suffix, unsigned id);
 	std::ostream *openTestFile(const std::string &suffix, unsigned id);
+	std::ostream *openTestFileGZ(const std::string &suffix, unsigned id);
 
 	// load a .out file
 	static void loadOutFile(

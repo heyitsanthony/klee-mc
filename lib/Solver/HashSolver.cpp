@@ -9,7 +9,7 @@
 #include <assert.h>
 #include "klee/util/Assignment.h"
 #include <llvm/Support/CommandLine.h>
-#include "klee/util/gzip.h"
+#include "klee/Internal/ADT/zfstream.h"
 
 #include "HashSolver.h"
 #include "QHSFile.h"
@@ -121,18 +121,16 @@ void QHSDir::saveSAT(const QHSEntry& qhs)
 void QHSDir::writeSAT(const QHSEntry& qhs)
 {
 	const char	*subdir;
-	char		path[256], path2[256];
+	char		path[256];
+	gzofstream	*os;
 
 	/* dump to corresponding SAT directory */
-	/* XXX: how to handle too-big queries? */
 	subdir = (qhs.isSAT) ? "sat" : "unsat";
-	snprintf(
-		path, 256, "%s/%s/%016lx.x",
-		HCacheDir.c_str(), subdir, qhs.qh);
-	SMTPrinter::dumpToFile(qhs.q, path);
+	snprintf(path, 256, "%s/%s/%016lx", HCacheDir.c_str(), subdir, qhs.qh);
 
-	snprintf(path2, 256, "%s/%s/%016lx", HCacheDir.c_str(),subdir,qhs.qh);
-	GZip::gzipFile(path, path2);
+	os = new gzofstream(path, std::ios::in | std::ios::binary);
+	SMTPrinter::print(*os, qhs.q, true);
+	delete os;
 }
 
 
