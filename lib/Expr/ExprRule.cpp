@@ -205,9 +205,13 @@ bool ExprRule::operator==(const ExprRule& er) const
 		return true;
 	}
 
-	/* XXX handle const_constraints properly */
+	if (	const_constraints == NULL ||
+		er.const_constraints == NULL)
+	{
+		return false;
+	}
 
-	return true;
+	return *const_constraints == *er.const_constraints;
 }
 
 bool ExprRule::operator<(const ExprRule& er) const
@@ -217,8 +221,20 @@ bool ExprRule::operator<(const ExprRule& er) const
 	if (from != er.from)
 		return (from < er.from);
 
-	/* == */
-	return false;
+	if (	const_constraints == NULL &&
+		er.const_constraints == NULL)
+	{
+		/* == */
+		return false;
+	}
+
+	if (const_constraints == NULL)
+		return true;
+
+	if (er.const_constraints == NULL)
+		return false;
+
+	return *const_constraints < *er.const_constraints;
 }
 
 void ExprRule::printBinaryRule(std::ostream& os) const

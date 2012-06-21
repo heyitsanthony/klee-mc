@@ -99,9 +99,9 @@ namespace llvm
 		cl::init(false));
 
 	cl::opt<bool>
-	CheckDBDups(
-		"check-db-dup",
-		cl::desc("Check database for duplicates"),
+	DedupDB(
+		"dedup-db",
+		cl::desc("Remove duplicates from DB"),
 		cl::init(false));
 
 	cl::opt<bool>
@@ -606,8 +606,9 @@ void dumpDB(void)
 	delete rb;
 }
 
-static void checkDBDups(void)
+static void dedupDB(void)
 {
+	std::ofstream		of(InputFile.c_str());
 	RuleBuilder		*rb;
 	std::set<ExprRule>	ers;
 	unsigned		i;
@@ -620,6 +621,7 @@ static void checkDBDups(void)
 			i++;
 			continue;
 		}
+		er->printBinaryRule(of);
 		ers.insert(*er);
 	}
 
@@ -916,8 +918,8 @@ int main(int argc, char **argv)
 		splitDB(InputFile, SplitDB);
 	} else if (ExtractConstrs) {
 		extractConstrs(InputFile);
-	} else if (CheckDBDups) {
-		checkDBDups();
+	} else if (DedupDB) {
+		dedupDB();
 	} else if (ExtractRule != -1) {
 		extractRule(ExtractRule);
 	} else if (DumpDB) {
