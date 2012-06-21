@@ -24,6 +24,12 @@ namespace {
 }
 
 unsigned ObjectState::numObjStates = 0;
+ObjectState::objlist_ty	ObjectState::objs;
+
+
+#define ADD_TO_LIST		\
+	do {	numObjStates++;	\
+		objs.push_front(this); objs_it = objs.begin(); } while (0)
 
 ObjectState::ObjectState(unsigned _size)
 : src_array(0)
@@ -38,7 +44,7 @@ ObjectState::ObjectState(unsigned _size)
 , readOnly(false)
 {
 	memset(concreteStore, 0, size);
-	numObjStates++;
+	ADD_TO_LIST;
 }
 
 ObjectState::ObjectState(unsigned _size, const ref<Array>& array)
@@ -55,7 +61,7 @@ ObjectState::ObjectState(unsigned _size, const ref<Array>& array)
 {
 	memset(concreteStore, 0, size);
 	makeSymbolic();
-	numObjStates++;
+	ADD_TO_LIST;
 }
 
 ObjectState::ObjectState(const ObjectState &os)
@@ -79,8 +85,7 @@ ObjectState::ObjectState(const ObjectState &os)
 	}
 
 	memcpy(concreteStore, os.concreteStore, size*sizeof(*concreteStore));
-
-	numObjStates++;
+	ADD_TO_LIST;
 }
 
 ObjectState::~ObjectState()
@@ -98,6 +103,7 @@ ObjectState::~ObjectState()
 	concreteStore = NULL;
 
 	numObjStates--;
+	objs.erase(objs_it);
 }
 
 const UpdateList &ObjectState::getUpdates() const
@@ -692,3 +698,5 @@ ObjectState* ObjectState::createDemandObj(unsigned sz)
 	return new ObjectState(sz);
 }
 
+/* XXX: nothing yet-- not enough concrete-only states to justify */
+void ObjectState::garbageCollect(void) {}

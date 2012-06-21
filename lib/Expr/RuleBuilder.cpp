@@ -420,7 +420,7 @@ bool TrieRuleIterator::matchLabel(uint64_t& v)
 	if (found_rule)
 		return false;
 
-	return matchLabel(v, OP_LABEL_MASK);
+	return matchLabel(v, OP_EXT_VAR);
 }
 
 bool TrieRuleIterator::matchLabel(uint64_t& v, uint64_t mask)

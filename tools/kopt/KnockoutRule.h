@@ -18,18 +18,19 @@ typedef std::pair<ref<Expr>, ref<ConstantExpr> >	replvar_t;
 class KnockoutRule
 {
 public:
-	KnockoutRule(const ExprRule* _er, const Array* ko_arr);
+	KnockoutRule(const ExprRule* _er, ref<Array>& ko_arr);
 	virtual ~KnockoutRule(void);
 	bool knockedOut(void) const { return ko.isNull() == false; }
 	ref<Expr> getKOExpr(void) const;
 	const ExprRule* getExprRule(void) const { return er; }
 
-	exprtags_ty getTags(int slot = -1 /* all tags */) const;
+	ExprRule* createFullRule(Solver* s) const;
+	ExprRule* createPartialRule(Solver* s) const;
+	ExprRule* createSubtreeRule(Solver* s) const;
 
-	ExprRule* createRule(Solver* s) const;
+	exprtags_ty getTags(int slot = -1 /* all tags */) const;
 private:
 	bool isConstInvariant(Solver* s) const;
-
 
 	ref<Expr> trySlot(Solver* s, const ref<Expr>& e_from,
 		const replvar_t& rv, int i) const;
@@ -42,13 +43,8 @@ private:
 		const ref<Expr>& src,
 		ref<Expr>& lo, ref<Expr>& hi) const;
 
-
-	ExprRule* createFullRule(Solver* s) const;
-	ExprRule* createPartialRule(Solver* s) const;
-
-
 	const ExprRule	*er;
-	const Array	*arr;
+	mutable ref<Array>	arr;
 	ref<Expr>	ko;
 	KnockOut	*kout;
 };

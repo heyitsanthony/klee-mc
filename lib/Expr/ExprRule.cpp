@@ -44,6 +44,11 @@ ExprFlatWriter::Action ExprFlatWriter::visitExpr(const Expr* e)
 		return Skip;
 	}
 
+	if (e->getKind() == Expr::NotOptimized) {
+		if (os) *os << " v" << e->getWidth() << ' ';
+		return Skip;
+	}
+
 	if (os) *os << ' ' << e->getKind() << ' ';
 
 	switch (e->getKind()) {
@@ -126,8 +131,9 @@ ExprFlatWriter::Action ExprFlatWriter::visitExpr(const Expr* e)
 class EFWTagged : public ExprVisitorTags<ExprFlatWriter>
 {
 public:
-	EFWTagged(const exprtags_ty& _tags_pre)
-	: ExprVisitorTags<ExprFlatWriter>(_tags_pre, dummy) {}
+	EFWTagged(const exprtags_ty& _tags_pre, bool _const_repl=true)
+	: ExprVisitorTags<ExprFlatWriter>(_tags_pre, dummy)
+	, const_repl(_const_repl) {}
 
 	virtual void apply(const ref<Expr>& e)
 	{
@@ -139,19 +145,29 @@ public:
 protected:
 	virtual ExprFlatWriter::Action preTagVisit(const Expr* e)
 	{
-		(*os) << " c" << tag_c++
-			<< ' ' << e->getWidth()
-			<< ' ' << *e << ' ';
+		if (const_repl) {
+			/* constant label */
+			(*os) << " c" << tag_c++
+				<< ' ' << e->getWidth()
+				<< ' ' << *e << ' ';
+		} else {
+			/* sink */
+			(*os) << " v" << e->getWidth() << ' ';
+		}
 		return Close;
 	}
 	virtual void postTagVisit(const Expr* e) {}
 private:
+	bool			const_repl;
 	unsigned		tag_c;
 	static exprtags_ty	dummy;
 };
 exprtags_ty EFWTagged::dummy;
 
-ExprRule::ExprRule(const Pattern& _from, const Pattern& _to)
+ExprRule::ExprRule(
+	const Pattern& _from,
+	const Pattern& _to,
+	const std::vector<Pattern>* constrs)
 : from(_from)
 , to(_to)
 , const_constraints(NULL)
@@ -162,6 +178,12 @@ ExprRule::ExprRule(const Pattern& _from, const Pattern& _to)
 	max_id = from.label_c + to.label_c;
 	from.label_id_max = max_id;
 	to.label_id_max = max_id;
+
+	if (constrs != NULL) {
+		const_constraints = new std::vector<Pattern>();
+		*const_constraints = *constrs;
+		from.clabel_c = const_constraints->size();
+	}
 }
 
 ExprRule* ExprRule::loadRule(const char* path)
@@ -317,10 +339,11 @@ ExprRule* ExprRule::loadBinaryRule(const char* fname)
 
 ExprRule* ExprRule::loadBinaryRule(std::istream& is)
 {
-	uint64_t	hdr;
-	Pattern		p_from, p_to;
-	ExprRule	*er;
-	unsigned	off;
+	uint64_t		hdr;
+	Pattern			p_from, p_to;
+	ExprRule		*er;
+	unsigned		off;
+	std::vector<Pattern>	*constr = NULL;
 
 	/* skip tombstones */
 	do {
@@ -346,31 +369,25 @@ ExprRule* ExprRule::loadBinaryRule(std::istream& is)
 	if (is.fail())
 		return NULL;
 
-	er = new ExprRule(p_from, p_to);
-	er->off_hint = off;
-
-	/* load constant constraints */
+	/* load constant constraints if v2 */
 	if (hdr == ER_HDR_MAGIC2) {
-		uint16_t 		num_constr;
-		std::vector<Pattern>	*constr;
+		uint16_t	num_constr;
 
-		if (!is.read((char*)&num_constr, 2)) {
-			delete er;
+		if (!is.read((char*)&num_constr, 2))
 			return NULL;
-		}
 
-		er->from.clabel_c = num_constr;
 		constr = new std::vector<Pattern>(num_constr);
 		for (unsigned i = 0; i < num_constr; i++)
 			loadBinaryPattern(is, (*constr)[i]);
 
 		if (is.fail()) {
 			delete constr;
-			delete er;
+			return NULL;
 		}
-
-		er->const_constraints = constr;
 	}
+
+	er = new ExprRule(p_from, p_to, constr);
+	er->off_hint = off;
 
 	return er;
 }
@@ -488,7 +505,7 @@ public:
 		if (isDone()) return false;
 
 		v = *it;
-		if (!OP_LABEL_TEST(v) && !OP_CLABEL_TEST(v))
+		if (!OP_LABEL_TEST(v) && !OP_CLABEL_TEST(v) && !OP_VAR_TEST(v))
 			return false;
 
 		it++;
@@ -538,7 +555,6 @@ ref<Expr> ExprRule::apply(
 
 /* assumes unique variables for every repl */
 ExprRule* ExprRule::addConstraints(
-	const Array			*repl_arr,
 	const exprtags_ty		&visit_tags,
 	const std::vector<ref<Expr> >	&constraints) const
 {
@@ -547,6 +563,12 @@ ExprRule* ExprRule::addConstraints(
 	std::stringstream	ss;
 	Pattern			p;
 	ref<Expr>		e;
+
+	/* already has constraints */
+	if (const_constraints) {
+		std::cerr << "[ExprRule] XXX rule always has constraints\n";
+		return NULL;
+	}
 
 	/* create from-pattern, marking constants as slots */
 	efwt.setOS(&ss);
@@ -575,6 +597,31 @@ ExprRule* ExprRule::addConstraints(
 		ret->const_constraints->push_back(new_p);
 	}
 
+	return ret;
+}
+
+ExprRule* ExprRule::markUnbound(int tag) const
+{
+	ExprRule		*ret;
+	exprtags_ty		visit_tag(1, tag);
+	EFWTagged		efwt(visit_tag, false);
+	std::stringstream	ss;
+	Pattern			p;
+	ref<Expr>		e;
+
+	/* create from-pattern, marking constants as slots */
+	efwt.setOS(&ss);
+	efwt.apply(getFromExpr());
+
+	std::cerr << "[TAG] " << visit_tag[0] << '\n';
+	std::cerr << "[Tags] " << visit_tag.size() << '\n';
+	if (p.readFlatExpr(ss) == false) {
+		std::cerr << "[ExprRule] Failed to unbind subtree.\n";
+		std::cerr << "BAD PATTERN: " << ss.str() << '\n';
+		return NULL;
+	}
+
+	ret = new ExprRule(p, to);
 	return ret;
 }
 

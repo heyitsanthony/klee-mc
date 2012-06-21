@@ -7,6 +7,7 @@
 
 #define OP_LABEL_MASK		(1ULL << 63)
 #define OP_CLABEL_MASK		((1ULL << 63) | (1ULL << 62))
+#define OP_EXT_VAR		(1ULL << 62) /* followed by 64-bit width token */
 #define OP_MASK			((1ULL << 63) | (1ULL << 62))
 
 #define OP_L_TEST(x,y)		(((x) & OP_MASK) == y)
@@ -20,6 +21,9 @@
 #define OP_CLABEL_NUM(x)	OP_L_NUM(x, OP_CLABEL_MASK)
 #define OP_CLABEL_MK(x)		((x) | OP_CLABEL_MASK)
 
+#define OP_VAR_TEST(x)		OP_L_TEST(x, OP_EXT_VAR)
+#define OP_VAR_MK(x)		(OP_EXT_VAR | x)
+#define OP_VAR_W(x)		((x) & ~OP_EXT_VAR)
 
 namespace klee
 {
@@ -41,6 +45,8 @@ public:
 	ref<Expr> anonFlat2Expr(int label_max = -1) const;
 
 	static ref<Array> getMaterializeArray(void);
+	static ref<Array> getFreeArray(void);
+
 
 	static ref<Expr> flat2expr(
 		const labelmap_ty&	lm,
@@ -68,6 +74,9 @@ public:
 	uint16_t		clabel_c;
 private:
 	static ref<Array>	materialize_arr;
+	static ref<Array>	free_arr;
+	static unsigned free_off;
+
 };
 
 }

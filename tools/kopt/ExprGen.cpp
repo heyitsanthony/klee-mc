@@ -129,7 +129,7 @@ ref<Expr> ExprGen::genExpr(
 			unsigned int	n;
 			/* XXX randomize */
 			n = rng.getInt32();
-			if (n == ~0 || n == 0) n = 2;
+			if (n == ~((unsigned int)0) || n == 0) n = 2;
 
 			ce = ConstantExpr::create(n, 32);
 			ce = ZExtExpr::create(ce, cur_expr->getWidth());

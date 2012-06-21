@@ -31,8 +31,13 @@ private:
 	// mutable because we may need flush during read of const
 	mutable UpdateList	updates;
 
-	static unsigned		numObjStates;
-	static ObjectState	*zeroPage;
+	static unsigned			numObjStates;
+	static ObjectState		*zeroPage;
+
+	typedef std::list<const ObjectState*> objlist_ty;
+
+	static objlist_ty	objs;		/* all active objects */
+	objlist_ty::iterator	objs_it;	/* obj's position in list */
 
 public:
 	unsigned	size;
@@ -83,6 +88,7 @@ public:
 
 	static void setupZeroObjs(void);
 	static ObjectState* createDemandObj(unsigned sz);
+	static void garbageCollect(void);
 
 	bool isZeroPage(void) const { return copyOnWriteOwner == COW_ZERO; }
 private:

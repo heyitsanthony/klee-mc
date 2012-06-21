@@ -83,6 +83,7 @@ public:
 		ea = Expr::getAllocator();
 		ea->garbageCollect();
 		Array::garbageCollect();
+		ObjectState::garbageCollect();
 	}
 private:
 	Executor *executor;

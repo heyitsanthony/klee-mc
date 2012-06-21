@@ -59,6 +59,23 @@ bool ExprPatternMatch::verifyConstant(uint64_t v, unsigned w)
 	return true;
 }
 
+ExprPatternMatch::Action ExprPatternMatch::matchVar(
+	const Expr* expr, uint64_t label_op)
+{
+	if (OP_VAR_W(label_op) != expr->getWidth()) {
+		success = false;
+		return Stop;
+	}
+
+	/* label was matched, continue */
+	if (rule_it.isDone()) {
+		success = true;
+		return Stop;
+	}
+
+	return Skip;
+}
+
 ExprPatternMatch::Action ExprPatternMatch::matchLabel(
 	const Expr* expr, uint64_t label_op)
 {
@@ -133,6 +150,7 @@ skip_label:
 
 ExprPatternMatch::Action ExprPatternMatch::visitExpr(const Expr* expr)
 {
+	bool		matched;
 	uint64_t	label_op;
 
 	/* success => stop */
@@ -140,24 +158,24 @@ ExprPatternMatch::Action ExprPatternMatch::visitExpr(const Expr* expr)
 
 	/* SUPER IMPORTANT: read labels are always 8-bits until otherwise
 	 * noted. Permitting other sizes tends to wreck expected sizes. */
-	if (expr->getWidth() == 8 || expr->getKind() == Expr::Constant) {
-		bool	matched;
 
-		matched = rule_it.matchLabel(label_op);
-		if (matched) {
-			/* read label */
-			if (expr->getWidth() == 8 && OP_LABEL_TEST(label_op))
-				return matchLabel(expr, label_op);
+	matched = rule_it.matchLabel(label_op);
+	if (matched) {
+		/* read label */
+		if (expr->getWidth() == 8 && OP_LABEL_TEST(label_op))
+			return matchLabel(expr, label_op);
 
-			/* handle slotted constants */
-			if (expr->getKind() == Expr::Constant &&
-				OP_CLABEL_TEST(label_op))
-				return matchCLabel(expr, label_op);
+		/* handle slotted constants */
+		if (expr->getKind() == Expr::Constant &&
+			OP_CLABEL_TEST(label_op))
+			return matchCLabel(expr, label_op);
 
-			/* oops. */
-			success = false;
-			return Stop;
-		}
+		if (OP_VAR_TEST(label_op))
+			return matchVar(expr, label_op);
+
+		/* oops. */
+		success = false;
+		return Stop;
 	}
 
 	/* match the expression node's opcode */

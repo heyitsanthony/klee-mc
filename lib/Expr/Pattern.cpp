@@ -5,6 +5,8 @@
 using namespace klee;
 
 ref<Array> Pattern::materialize_arr = NULL;
+ref<Array> Pattern::free_arr = NULL;
+unsigned Pattern::free_off = 0;
 
 /* XXX: make non-recursive? */
 ref<Expr> Pattern::flat2expr(
@@ -33,6 +35,15 @@ ref<Expr> Pattern::flat2expr(
 				<< label_num
 				<< "\n";
 		return NULL;
+	}
+
+	if (OP_VAR_TEST(tok)) {
+		/* fake with a bogus constant */
+		uint64_t	w = OP_VAR_W(tok);
+		ret = NotOptimizedExpr::create(
+			Expr::createTempRead(getFreeArray(), w, free_off));
+		free_off = (free_off + (w+7)/8) % 4096;
+		return ret;
 	}
 
 	if (OP_CLABEL_TEST(tok)) {
@@ -196,6 +207,13 @@ bool Pattern::readFlatExpr(std::istream& ifs)
 			continue;
 		}
 
+		/* var slot; whatever! */
+		if (tok[0] == 'v') {
+			uint64_t	var_size = atoi(tok.c_str() + 1);
+			rule.push_back(OP_VAR_MK(var_size));
+			continue;
+		}
+
 #define READ_TOK(x)	if (tok == #x) rule.push_back((int)Expr::x)
 
 		READ_TOK(Constant);
@@ -315,6 +333,14 @@ ref<Array> Pattern::getMaterializeArray(void)
 	if (materialize_arr.isNull())
 		materialize_arr = Array::create("exprrule", 4096);
 	return materialize_arr;
+}
+
+
+ref<Array> Pattern::getFreeArray(void)
+{
+	if (free_arr.isNull())
+		free_arr = Array::create("freearr", 4096);
+	return free_arr;
 }
 
 /* so we can have a trie without counter examples making shit impossible */

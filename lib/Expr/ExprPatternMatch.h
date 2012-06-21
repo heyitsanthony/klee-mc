@@ -51,6 +51,7 @@ private:
 	bool verifyConstant(uint64_t v, unsigned w);
 	Action matchLabel(const Expr* expr, uint64_t label_op);
 	Action matchCLabel(const Expr* expr, uint64_t label_op);
+	Action matchVar(const Expr* expr, uint64_t label_op);
 
 	RuleIterator		&rule_it;
 	labelmap_ty		&lm;		/* read label map */

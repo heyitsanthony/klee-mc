@@ -7,6 +7,7 @@
 #include "klee/util/ExprUtil.h"
 #include "klee/util/ExprTag.h"
 #include "klee/util/Assignment.h"
+#include "klee/util/Subtree.h"
 #include <llvm/Support/CommandLine.h>
 
 #include "KnockoutRule.h"
@@ -24,14 +25,14 @@ namespace
 class klee::KnockOut : public ExprVisitor
 {
 public:
-	KnockOut(const Array* _arr = NULL, int _uri = -1)
+	KnockOut(ref<Array> _arr = NULL, int _uri = -1)
 	: ExprVisitor(false, true)
 	, arr(_arr)
 	, uniqReplIdx(_uri)
 	{ use_hashcons = false; }
 	virtual ~KnockOut() {}
 
-	void setParams(const Array* _arr, int _uri = -1)
+	void setParams(ref<Array>& _arr, int _uri = -1)
 	{ arr = _arr; uniqReplIdx = _uri; }
 
 	ref<Expr> apply(const ref<Expr>& e)
@@ -41,6 +42,7 @@ public:
 		return visit(e);
 	}
 
+	// NOTE: this mean that tag users must also skip reads
 	virtual Action visitRead(const ReadExpr& re)
 	{ return Action::skipChildren(); }
 
@@ -51,8 +53,7 @@ public:
 		if (isIgnoreConst(ce))
 			return Action::skipChildren();
 
-		new_expr = Expr::createTempRead(
-			ARR2REF(arr), ce.getWidth(), arr_off);
+		new_expr = Expr::createTempRead(arr, ce.getWidth(), arr_off);
 
 		replvars.push_back(
 			replvar_t(
@@ -81,7 +82,7 @@ public:
 	unsigned getNumReplVars(void) const { return replvars.size(); }
 private:
 	unsigned	arr_off;
-	const Array	*arr;
+	ref<Array>	arr;
 	int		uniqReplIdx;
 
 	bool isIgnoreConst(const ConstantExpr& ce)
@@ -112,7 +113,7 @@ private:
 	std::vector<replvar_t>	replvars;
 };
 
-KnockoutRule::KnockoutRule(const ExprRule* _er, const Array* ko_arr)
+KnockoutRule::KnockoutRule(const ExprRule* _er, ref<Array>& ko_arr)
 : er(_er)
 , arr(ko_arr)
 {
@@ -185,7 +186,7 @@ ref<Expr> KnockoutRule::trySlot(
 		return NULL;
 	}
 	if (!isValidRange(s, rule_eq, rv.first, r.first, r.second)) {
-		std::cerr << "INVALID RANGE: ["
+		std::cerr << "INVALID RANGE [" << i << "]: ["
 			<< r.first << ", " << r.second << "]\n";
 		return NULL;
 	}
@@ -233,9 +234,7 @@ bool KnockoutRule::isRangedRuleValid(
 }
 
 ref<Expr> KnockoutRule::getKOExpr(void) const
-{
-	return (ko.isNull()) ? er->getFromExpr() : ko;
-}
+{ return (ko.isNull()) ? er->getFromExpr() : ko; }
 
 bool KnockoutRule::isConstInvariant(Solver* s) const
 {
@@ -281,7 +280,7 @@ ExprRule* KnockoutRule::createFullRule(Solver* s) const
 
 	std::vector<ref<Expr> >	cs(tags.size(), ConstantExpr::create(1, 1));
 
-	er_ret = er->addConstraints(arr, tags, cs);
+	er_ret = er->addConstraints(tags, cs);
 	assert (er_ret != NULL);
 	return er_ret;
 }
@@ -306,25 +305,55 @@ ExprRule* KnockoutRule::createPartialRule(Solver* s) const
 
 	std::vector<ref<Expr> >	cs(tags.size(), e_range);
 
-	er_ret = er->addConstraints(arr, tags, cs);
+	er_ret = er->addConstraints(tags, cs);
 	assert (er_ret != NULL);
 	return er_ret;
 }
 
-/* create a knocked-out rule */
-ExprRule* KnockoutRule::createRule(Solver* s) const
+ExprRule* KnockoutRule::createSubtreeRule(Solver *s) const
 {
-	ExprRule	*ret;
+	std::pair<ref<Expr>, ref<Expr> >	split_e;
+	ref<Expr>	from_e;
+	unsigned	i, tag;
 
-	/* nothing knocked out => can't make a new rule */
-	if (!knockedOut())
+	from_e = er->getFromExpr();
+	split_e.first = from_e;
+	/* check knock out each subtree, check for validity */
+	for (i = 0; !split_e.first.isNull(); i++) {
+		ref<Expr>	cond;
+		bool		mbt;
+
+		split_e = Subtree::getSubtree(arr, from_e, i);
+		if (split_e.first.isNull())
+			break;
+
+		if (split_e.first == from_e)
+			continue;
+
+		/* hm.. */
+		if (split_e.second->getKind() == Expr::NotOptimized)
+			continue;
+
+		/* ignore reads-- they've already got symbolics */
+		if (split_e.second->getKind() == Expr::Read)
+			continue;
+
+		/* is from-expr necessarily equal to subtree expr? */
+		cond = EqExpr::create(split_e.first, from_e);
+		if (!s->mustBeTrue(Query(cond), mbt))
+			continue;
+
+		/* yes, the two are equivalent. get chopping */
+		if (mbt == true)
+			break;
+	}
+
+	if (split_e.first.isNull())
 		return NULL;
 
-	if ((ret = createFullRule(s)) != NULL)
-		return ret;
+	assert (from_e != split_e.first);
 
-	if ((ret = createPartialRule(s)) != NULL)
-		return ret;
-
-	return NULL;
+	/* get tag of what to remove */
+	tag = Subtree::getTag(arr, from_e, i);
+	return er->markUnbound(tag);
 }

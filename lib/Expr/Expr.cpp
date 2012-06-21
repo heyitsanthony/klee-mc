@@ -6,8 +6,6 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-#include <stdio.h>
-#include <llvm/Function.h>
 #include "klee/Expr.h"
 #include "klee/ExprBuilder.h"
 #include "klee/util/ConstantDivision.h"
@@ -15,14 +13,12 @@
 
 // FIXME: We shouldn't need this once fast constant support moves into
 // Core. If we need to do arithmetic, we probably want to use APInt.
-#include "klee/Internal/Support/IntEvaluation.h"
 #include "llvm/Support/CommandLine.h"
 
 #include "klee/util/ExprPPrinter.h"
 #include "ExprAllocUnique.h"
 
 #include <iostream>
-#include <sstream>
 
 using namespace klee;
 using namespace llvm;
@@ -94,91 +90,37 @@ ExprAlloc* Expr::setAllocator(ExprAlloc* a)
 	return oldAlloc;
 }
 
+static ref<Expr> getTempReadBytes(
+	const ref<Array> &array, unsigned bytes, unsigned arr_off)
+{
+	UpdateList	ul(array, NULL);
+	ref<Expr>	kids[16];
+	assert (bytes && bytes <= 16);
+
+	for (unsigned i = 0; i < bytes; i++)
+		kids[i] = ReadExpr::create(
+			ul,
+			ConstantExpr::create(arr_off+i,Expr::Int32));
+
+	return ConcatExpr::createN(bytes, kids);
+}
+
 ref<Expr> Expr::createTempRead(
 	const ref<Array> &array, Expr::Width w, unsigned arr_off)
 {
-	UpdateList ul(array, NULL);
+	unsigned	w_bytes;
+	ref<Expr>	ret;
 
-#define READ_BYTE_OFF(x)	\
-	ReadExpr::create(ul, ConstantExpr::alloc(arr_off+x,Expr::Int32))
-
-	switch (w) {
-	default: assert(0 && "invalid width");
-	case Expr::Bool:
-		return ZExtExpr::create(
-			ReadExpr::create(
-				ul,
-				ConstantExpr::alloc(arr_off, Expr::Int32)),
-				Expr::Bool);
-	case Expr::Int8:
-		return READ_BYTE_OFF(0);
-	case Expr::Int16:
-		return ConcatExpr::create(
-			READ_BYTE_OFF(1),
-			READ_BYTE_OFF(0));
-	case 24:
-		return ConcatExpr::create(
-			READ_BYTE_OFF(2),
-			ConcatExpr::create(
-				READ_BYTE_OFF(1),
-				READ_BYTE_OFF(0)));
-
-	case Expr::Int32:
-		return ConcatExpr::create4(
-			READ_BYTE_OFF(3),
-			READ_BYTE_OFF(2),
-			READ_BYTE_OFF(1),
-			READ_BYTE_OFF(0));
-	case 40:
-		return ConcatExpr::create(
-			READ_BYTE_OFF(4),
-			ConcatExpr::create4(
-				READ_BYTE_OFF(3),
-				READ_BYTE_OFF(2),
-				READ_BYTE_OFF(1),
-				READ_BYTE_OFF(0)));
-
-	case 48:
-		return ConcatExpr::create(
-			READ_BYTE_OFF(5),
-			ConcatExpr::create(
-			READ_BYTE_OFF(4),
-			ConcatExpr::create4(
-				READ_BYTE_OFF(3),
-				READ_BYTE_OFF(2),
-				READ_BYTE_OFF(1),
-				READ_BYTE_OFF(0))));
-
-	case 56:
-		return ConcatExpr::create(
-			READ_BYTE_OFF(6),
-			ConcatExpr::create(
-			READ_BYTE_OFF(5),
-			ConcatExpr::create(
-			READ_BYTE_OFF(4),
-			ConcatExpr::create4(
-				READ_BYTE_OFF(3),
-				READ_BYTE_OFF(2),
-				READ_BYTE_OFF(1),
-				READ_BYTE_OFF(0)))));
-
-	case Expr::Int64:
-		return ConcatExpr::create8(
-			READ_BYTE_OFF(7),
-			READ_BYTE_OFF(6),
-			READ_BYTE_OFF(5),
-			READ_BYTE_OFF(4),
-			READ_BYTE_OFF(3),
-			READ_BYTE_OFF(2),
-			READ_BYTE_OFF(1),
-			READ_BYTE_OFF(0));
-	}
+	w_bytes = ((w + 7)/8);
+	ret = getTempReadBytes(array, w_bytes, arr_off);
+	if (w_bytes*8 == w)
+		return ret;
+	ret = ZExtExpr::create(ret, w);
+	return ret;
 }
 
 int Expr::compareSlow(const Expr& b) const
-{
-	return theExprAllocator->compare(*this, b);
-}
+{ return theExprAllocator->compare(*this, b); }
 
 /* Slow path for comparison. This should only be used by Expr::compare */
 int Expr::compareDeep(const Expr& b) const
@@ -245,7 +187,8 @@ void Expr::printKind(std::ostream &os, Kind k)
 	}
 }
 
-ref<Expr> Expr::createFromKind(Kind k, std::vector<CreateArg> args) {
+ref<Expr> Expr::createFromKind(Kind k, std::vector<CreateArg> args)
+{
   unsigned numArgs = args.size();
   (void) numArgs;
 
@@ -317,24 +260,22 @@ ref<Expr> Expr::createFromKind(Kind k, std::vector<CreateArg> args) {
 
 
 void Expr::printWidth(std::ostream &os, Width width) {
-  switch(width) {
-  case Expr::Bool: os << "Expr::Bool"; break;
-  case Expr::Int8: os << "Expr::Int8"; break;
-  case Expr::Int16: os << "Expr::Int16"; break;
-  case Expr::Int32: os << "Expr::Int32"; break;
-  case Expr::Int64: os << "Expr::Int64"; break;
-  case Expr::Fl80: os << "Expr::Fl80"; break;
-  default: os << "<invalid type: " << (unsigned) width << ">";
-  }
+	switch(width) {
+		case Expr::Bool: os << "Expr::Bool"; break;
+		case Expr::Int8: os << "Expr::Int8"; break;
+		case Expr::Int16: os << "Expr::Int16"; break;
+		case Expr::Int32: os << "Expr::Int32"; break;
+		case Expr::Int64: os << "Expr::Int64"; break;
+		case Expr::Fl80: os << "Expr::Fl80"; break;
+		default: os << "<invalid type: " << (unsigned) width << ">";
+	}
 }
 
-ref<Expr> Expr::createImplies(ref<Expr> hyp, ref<Expr> conc) {
-  return OrExpr::create(Expr::createIsZero(hyp), conc);
-}
+ref<Expr> Expr::createImplies(ref<Expr> hyp, ref<Expr> conc)
+{ return OrExpr::create(Expr::createIsZero(hyp), conc); }
 
-ref<Expr> Expr::createIsZero(ref<Expr> e) {
-  return EqExpr::create(e, ConstantExpr::create(0, e->getWidth()));
-}
+ref<Expr> Expr::createIsZero(ref<Expr> e)
+{ return EqExpr::create(e, ConstantExpr::create(0, e->getWidth())); }
 
 void Expr::print(std::ostream &os) const
 {
@@ -342,9 +283,10 @@ void Expr::print(std::ostream &os) const
 	ExprPPrinter::printSingleExpr(os, e);
 }
 
-void Expr::dump() const {
-  this->print(std::cerr);
-  std::cerr << std::endl;
+void Expr::dump() const
+{
+	this->print(std::cerr);
+	std::cerr << std::endl;
 }
 
 /***/
@@ -381,40 +323,8 @@ int MallocKey::compare(const MallocKey &a) const
 	return 1;
 }
 
-unsigned MallocKey::hash(void) const
-{
-	unsigned long		alloc_v;
-	const Instruction	*ins;
-
-	if (hash_v != 0)
-		return hash_v;
-
-	ins = dyn_cast<Instruction>(allocSite);
-	if (ins == NULL) {
-		alloc_v = 1;
-	} else {
-		/* before we were using the pointer value from allocSite.
-		 * this broke stuff horribly, so use bb+func names. */
-		std::string	s_bb, s_f;
-
-		s_bb = ins->getParent()->getNameStr();
-		s_f = ins->getParent()->getParent()->getNameStr();
-		alloc_v = 0;
-		for (unsigned int i = 0; i < s_bb.size(); i++)
-			alloc_v = alloc_v*33+s_bb[i];
-		for (unsigned int i = 0; i < s_f.size(); i++)
-			alloc_v = alloc_v*33+s_f[i];
-	}
-
-	uint32_t dat[2] = {alloc_v, iteration};
-	hash_v = Expr::hashImpl(&dat, sizeof(dat), 0);
-	return hash_v;
-}
-
 int ReadExpr::compareContents(const Expr &b) const
-{
-	return updates.compare(static_cast<const ReadExpr&>(b).updates);
-}
+{ return updates.compare(static_cast<const ReadExpr&>(b).updates); }
 
 ref<Expr> ConcatExpr::mergeExtracts(const ref<Expr>& l, const ref<Expr>& r)
 {
@@ -486,15 +396,16 @@ ref<Expr> ConcatExpr::mergeExtracts(const ref<Expr>& l, const ref<Expr>& r)
 }
 
 /// Shortcut to concat N kids.  The chain returned is unbalanced to the right
-ref<Expr> ConcatExpr::createN(unsigned n_kids, const ref<Expr> kids[]) {
-  assert(n_kids > 0);
-  if (n_kids == 1)
-    return kids[0];
+ref<Expr> ConcatExpr::createN(unsigned n_kids, const ref<Expr> kids[])
+{
+	assert(n_kids > 0);
 
-  ref<Expr> r = ConcatExpr::create(kids[n_kids-2], kids[n_kids-1]);
-  for (int i=n_kids-3; i>=0; i--)
-    r = ConcatExpr::create(kids[i], r);
-  return r;
+	if (n_kids == 1) return kids[0];
+
+	ref<Expr> r = ConcatExpr::create(kids[n_kids-2], kids[n_kids-1]);
+	for (int i=n_kids-3; i>=0; i--)
+		r = ConcatExpr::create(kids[i], r);
+	return r;
 }
 
 /// Shortcut to concat 4 kids.  The chain returned is unbalanced to the right
@@ -583,6 +494,7 @@ ref<Expr> Expr::createBoothMul(const ref<Expr>& e, uint64_t v)
 	return cur_expr;
 }
 
+/* XXX: I am pretty sure this is broken. -AJR */
 ref<Expr> Expr::createShiftAddMul(const ref<Expr>& expr, uint64_t v)
 {
 	ref<Expr>	cur_expr;
@@ -664,6 +576,7 @@ ref<Expr> BinaryExpr::create(Kind k, const ref<Expr> &l, const ref<Expr> &r)
 #undef BINARY_EXPR_CASE
 }
 
+/* specialized create/allocs */
 ref<Expr> NotOptimizedExpr::create(ref<Expr> src)
 { return theExprBuilder->NotOptimized(src); }
 
@@ -684,8 +597,6 @@ ref<Expr> ZExtExpr::create(const ref<Expr> &e, Width w)
 
 ref<Expr> SExtExpr::create(const ref<Expr> &e, Width w)
 { return theExprBuilder->SExt(e, w); }
-
-/***/
 
 ref<Expr> NotOptimizedExpr::alloc(const ref<Expr>& src)
 { return theExprAllocator->NotOptimized(src); }
@@ -710,7 +621,7 @@ ref<Expr> ZExtExpr::alloc(const ref<Expr> &e, Width w)
 ref<Expr> SExtExpr::alloc(const ref<Expr> &e, Width w)
 { return theExprAllocator->SExt(e, w); }
 
-
+/* generic create/allocs */
 #define DECL_CREATE_BIN_EXPR(x)	\
 ref<Expr> x##Expr::create(const ref<Expr> &l, const ref<Expr> &r) \
 { return theExprBuilder->x(l,r); } \
@@ -742,86 +653,3 @@ DECL_CREATE_BIN_EXPR(Slt)
 DECL_CREATE_BIN_EXPR(Sle)
 DECL_CREATE_BIN_EXPR(Sgt)
 DECL_CREATE_BIN_EXPR(Sge)
-
-////////
-//
-// Simple hash functions for various kinds of Exprs
-//
-///////
-
-Expr::Hash Expr::computeHash(void)
-{
-	int		n = getNumKids();
-	uint64_t	dat[2*n+1];
-
-	for (int i = 0; i < n; i++)
-		dat[i] = getKid(i)->skeleton();
-	dat[n] = getKind();
-	for (int i = 0; i < n; i++)
-		dat[i+n+1] = getKid(i)->hash();
-
-	skeletonHash = hashImpl(&dat, (n+1)*8, 0);
-	hashValue = hashImpl(&dat[n], (n+1)*8, 0);
-	return hashValue;
-}
-
-Expr::Hash BindExpr::computeHash(void)
-{
-	uint64_t dat[3] = {
-		let_expr->skeleton(),
-		getKind(),
-		let_expr->hash() };
-	skeletonHash = hashImpl(&dat, 16, 0);
-	hashValue = hashImpl(&dat[1], 16, 0);
-	return hashValue;
-}
-
-Expr::Hash CastExpr::computeHash(void) {
-	uint64_t dat[4] = {
-		src->skeleton(),
-		getWidth(), getKind(),
-		src->hash()};
-	skeletonHash = hashImpl(&dat, 3*8, 0);
-	hashValue = hashImpl(&dat[1], 3*8, 0);
-	return hashValue;
-}
-
-Expr::Hash ExtractExpr::computeHash(void)
-{
-	uint64_t dat[5] = {
-		expr->skeleton(),
-		Expr::Extract, offset, getWidth(),
-		expr->hash() };
-	skeletonHash = hashImpl(&dat, 4*8, 0);
-	hashValue = hashImpl(&dat[1], 4*8, 0);
-	return hashValue;
-}
-
-Expr::Hash ReadExpr::computeHash(void)
-{
-	uint64_t dat[4] = {
-		index->skeleton(),
-		Expr::Read,
-		index->hash(), updates.hash()};
-
-	skeletonHash = hashImpl(&dat, 2*8, 0);
-	hashValue = hashImpl(&dat[1], 3*8, 0);
-	return hashValue;
-}
-
-Expr::Hash NotExpr::computeHash(void)
-{
-	uint64_t dat[3] = {expr->skeleton(), Expr::Not, expr->hash()};
-	skeletonHash = hashImpl(&dat, 2*8, 0);
-	hashValue = hashImpl(&dat[1], 2*8, 0);
-	return hashValue;
-}
-
-#include "murmur3.h"
-Expr::Hash Expr::hashImpl(const void* data, size_t len, Hash hash)
-{
-	Hash	ret[128/(sizeof(Hash)*8)];
-	memset(ret, 0, sizeof(ret));
-	MurmurHash3_x64_128(data, len, hash, &ret);
-	return ret[0];
-}

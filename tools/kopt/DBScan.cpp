@@ -69,7 +69,7 @@ void DBScan::addRule(const ExprRule* er)
 	kcmap_ty::const_iterator	kc_it;
 
 	/* knock out what we can */
-	kr = new KnockoutRule(er, arr.get());
+	kr = new KnockoutRule(er, arr);
 	if (kr->knockedOut() == false) {
 		/* nothing changed-- not interesting */
 		uninteresting.push_back(er);

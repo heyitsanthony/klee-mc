@@ -57,7 +57,7 @@ public:
 		const exprtags_ty& _tags_pre,
 		const exprtags_ty& _tags_post)
 	: tags_pre(_tags_pre)
-	, tags_post(_tags_post) {}
+	, tags_post(_tags_post) { }
 
 	virtual void apply(const ref<Expr>& e)
 	{
@@ -104,11 +104,13 @@ private:
 class ExprGetTag : public ExprVisitorTags<ExprConstVisitorNull>
 {
 public:
-	static ref<Expr> getExpr(const ref<Expr>& e, int n)
+	static ref<Expr> getExpr(
+		const ref<Expr>& e, int n, bool _skip_reads=false)
 	{
 		exprtags_ty	pre(1, n), post(0);
 		ExprGetTag	egt(pre, post);
 
+		egt.skip_reads = _skip_reads;
 		egt.ret_expr = NULL;
 		egt.apply(e);
 		return egt.ret_expr;
@@ -116,14 +118,24 @@ public:
 	virtual ~ExprGetTag() {}
 protected:
 	ExprGetTag(const exprtags_ty& pre, const exprtags_ty& post)
-	: ExprVisitorTags<ExprConstVisitorNull>(pre, post) {}
-
+	: ExprVisitorTags<ExprConstVisitorNull>(pre, post)
+	{}
 	Action preTagVisit(const Expr* e)
 	{
 		ret_expr = ref<Expr>(const_cast<Expr*>(e));
 		return Stop;
 	}
+
+	virtual Action visitExpr(const Expr* e)
+	{
+		if (skip_reads && e->getKind() == Expr::Read) {
+			tag_pre++;
+			return Skip;
+		}
+		return ExprVisitorTags<ExprConstVisitorNull>::visitExpr(e);
+	}
 private:
+	bool		skip_reads;
 	ref<Expr>	ret_expr;
 };
 

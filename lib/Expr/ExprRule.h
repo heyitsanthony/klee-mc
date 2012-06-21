@@ -30,10 +30,10 @@ public:
 
 	/* assumes unique variables for every repl */
 	ExprRule* addConstraints(
-		const Array			*repl_arr,
 		const exprtags_ty		&visit_tags,
 		const std::vector<ref<Expr> >	&constraints) const;
 
+	ExprRule* markUnbound(int tag) const;
 
 	static ExprRule* createRule(
 		const ref<Expr>& lhs, const ref<Expr>& rhs);
@@ -84,7 +84,10 @@ public:
 	bool hasConstraints(void) const { return const_constraints != NULL; }
 
 protected:
-	ExprRule(const Pattern& _from, const Pattern& _to);
+	ExprRule(
+		const Pattern& _from,
+		const Pattern& _to,
+		const std::vector<Pattern>* constrs = NULL);
 private:
 	static void loadBinaryPattern(std::istream& is, Pattern& p);
 
