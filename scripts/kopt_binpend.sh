@@ -1,5 +1,5 @@
 #!/bin/bash
-CURDATE=`date +%s`
+CURDATE=`date +"%s-%N"`
 FPREFIX="pending.$CURDATE"
 PROOFDIR=${1:-"proofs"}
 
@@ -17,9 +17,12 @@ function xtive_loop
 		fi
 
 		loopc=$(($loopc + 1))
-		if [ "$loopc" -gt 32 ]; then
+		if [ "$loopc" -gt 4 ]; then
 			break;
 		fi
+
+		kopt -dedup-db -rule-file="$BRULEF" $BRULEF.tmp 2>&1
+		mv $BRULEF.tmp $BRULEF
 	done
 }
 
@@ -32,9 +35,8 @@ fi
 xtive_loop "$FPREFIX.brule"
 
 
-kopt -pipe-solver -brule-rebuild -rule-file=$FPREFIX.brule $FPREFIX.rebuild.brule
+kopt -pipe-solver -brule-rebuild -rule-file=$FPREFIX.brule $FPREFIX.rebuild.brule 2>/dev/null
 mv $FPREFIX.rebuild.brule $FPREFIX.brule
-cp "$FPREFIX.brule" pending.brule
 kopt -max-stp-time=30 -pipe-solver -db-punchout		\
 	-ko-consts=16					\
 	-rule-file=$FPREFIX.brule			\
@@ -45,6 +47,4 @@ kopt -max-stp-time=30 -pipe-solver -db-punchout		\
 xtive_loop "$FPREFIX.punch.brule"
 kopt -pipe-solver -brule-rebuild -rule-file=$FPREFIX.punch.brule $FPREFIX.punch.rebuild.brule
 mv $FPREFIX.punch.rebuild.brule $FPREFIX.punch.brule
-
-
-cp "$FPREFIX".punch.brule punch.brule
+cat $FPREFIX.{punch,uniq,unint,stubborn}.brule | gzip -c >$FPREFIX.final.brule.gz

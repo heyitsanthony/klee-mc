@@ -58,10 +58,16 @@ ExprRule* KnockoutClass::createRule(Solver* s) const
 		std::cerr << "GOT SUBTREE RULE:\n";
 		std::cerr << "OLD RULE:\n";
 		root_kr->getExprRule()->print(std::cerr);
-		std::cerr << "V-RULE:\n";
-		ret->print(std::cerr);
-		std::cerr << "=====================================\n";
-		return ret;
+
+		if (!ret->materialize().isNull()) {
+			std::cerr << "V-RULE:\n";
+			ret->print(std::cerr);
+			std::cerr << "=====================================\n";
+			return ret;
+		}
+		std::cerr << "COULD NOT MATERIALIZE!!\n";
+		delete ret;
+		ret = NULL;
 	}
 
 #if 1

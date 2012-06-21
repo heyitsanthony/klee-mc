@@ -40,6 +40,9 @@ ref<Expr> Pattern::flat2expr(
 	if (OP_VAR_TEST(tok)) {
 		/* fake with a bogus constant */
 		uint64_t	w = OP_VAR_W(tok);
+
+		if (free_off + ((w+7)/8) >= 4096)
+			free_off = 0;
 		ret = NotOptimizedExpr::create(
 			Expr::createTempRead(getFreeArray(), w, free_off));
 		free_off = (free_off + (w+7)/8) % 4096;
@@ -142,6 +145,9 @@ ref<Expr> Pattern::flat2expr(
 		rhs = flat2expr(lm, fr, off);	\
 		if (lhs.isNull() || rhs.isNull())\
 		{ return NULL;	} \
+		if (Expr::x != Expr::Concat &&			\
+			rhs->getWidth() != lhs->getWidth())	\
+		{ return NULL; }		\
 		ret = x##Expr::create(lhs, rhs);\
 		break;				\
 	}
