@@ -46,7 +46,7 @@ public:
 		std::ostream& os, const ref<Expr>& e, const labelmap_ty& tm);
 	static void printConstr(std::ostream& os, const Pattern& p);
 
-	virtual ~ExprRule() {}
+	virtual ~ExprRule();
 
 	void printBinaryRule(std::ostream& os) const;
 	void printPrettyRule(std::ostream& os) const;
@@ -83,13 +83,14 @@ public:
 	bool checkConstants(const labelmap_ty& clm) const;
 	bool hasConstraints(void) const { return const_constraints != NULL; }
 
+	ExprRule(const ExprRule& er);
 protected:
 	ExprRule(
 		const Pattern& _from,
 		const Pattern& _to,
 		const std::vector<Pattern>* constrs = NULL);
 private:
-	static void loadBinaryPattern(std::istream& is, Pattern& p);
+	static bool loadBinaryPattern(std::istream& is, Pattern& p);
 
 
 	static bool readFlatExpr(std::istream& ifs, Pattern& p);

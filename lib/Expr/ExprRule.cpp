@@ -164,6 +164,9 @@ private:
 };
 exprtags_ty EFWTagged::dummy;
 
+ExprRule::~ExprRule()
+{ if (const_constraints != NULL) delete const_constraints; }
+
 ExprRule::ExprRule(
 	const Pattern& _from,
 	const Pattern& _to,
@@ -183,6 +186,15 @@ ExprRule::ExprRule(
 		const_constraints = new std::vector<Pattern>();
 		*const_constraints = *constrs;
 		from.clabel_c = const_constraints->size();
+	}
+}
+
+ExprRule::ExprRule(const ExprRule& er)
+{
+	*this = er;
+	if (er.const_constraints != NULL) {
+		const_constraints = new std::vector<Pattern>();
+		*const_constraints = *er.const_constraints;
 	}
 }
 
@@ -379,11 +391,9 @@ ExprRule* ExprRule::loadBinaryRule(std::istream& is)
 
 	off = (unsigned)is.tellg() - sizeof(hdr);
 
-	loadBinaryPattern(is, p_from);
-	loadBinaryPattern(is, p_to);
-
-	if (is.fail())
-		return NULL;
+	if (!loadBinaryPattern(is, p_from)) return NULL;
+	if (!loadBinaryPattern(is, p_to)) return NULL;
+	if (is.fail()) return NULL;
 
 	/* load constant constraints if v2 */
 	if (hdr == ER_HDR_MAGIC2) {
@@ -393,8 +403,12 @@ ExprRule* ExprRule::loadBinaryRule(std::istream& is)
 			return NULL;
 
 		constr = new std::vector<Pattern>(num_constr);
-		for (unsigned i = 0; i < num_constr; i++)
-			loadBinaryPattern(is, (*constr)[i]);
+		for (unsigned i = 0; i < num_constr; i++) {
+			if (!loadBinaryPattern(is, (*constr)[i])) {
+				delete constr;
+				return NULL;
+			}
+		}
 
 		if (is.fail()) {
 			delete constr;
@@ -404,20 +418,22 @@ ExprRule* ExprRule::loadBinaryRule(std::istream& is)
 
 	er = new ExprRule(p_from, p_to, constr);
 	er->off_hint = off;
+	if (constr) delete constr;
 
 	return er;
 }
 
-void ExprRule::loadBinaryPattern(std::istream& is, Pattern& p)
+bool ExprRule::loadBinaryPattern(std::istream& is, Pattern& p)
 {
 	uint32_t	sz;
 	uint32_t	l_c;
 
-	is.read((char*)&sz, 4);
-	is.read((char*)&l_c, 4);
+	if (!is.read((char*)&sz, 4)) return false;
+	if (!is.read((char*)&l_c, 4)) return false;
 	p.rule.resize(sz);
 	p.label_c = l_c;
-	is.read((char*)p.rule.data(), sz*8);
+	if (!is.read((char*)p.rule.data(), sz*8)) return false;
+	return true;
 }
 
 ref<Expr> ExprRule::materialize(void) const
