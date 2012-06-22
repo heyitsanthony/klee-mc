@@ -84,6 +84,8 @@ public:
 	bool hasConstraints(void) const { return const_constraints != NULL; }
 
 	ExprRule(const ExprRule& er);
+
+	bool hasFree(void) const;
 protected:
 	ExprRule(
 		const Pattern& _from,

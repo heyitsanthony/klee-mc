@@ -159,6 +159,13 @@ namespace llvm
 		cl::init(false));
 
 	cl::opt<bool>
+	ExtractFrees(
+		"extract-free",
+		cl::desc("Extract rules with free vars"),
+		cl::init(false));
+
+
+	cl::opt<bool>
 	AddRule(
 		"add-rule",
 		cl::desc("Add rule to brule file."),
@@ -859,6 +866,23 @@ static void extractConstrs(const std::string& fname)
 	delete rb;
 }
 
+static void extractFree(const std::string& fname)
+{
+	std::ofstream	of(fname.c_str());
+	RuleBuilder	*rb;
+
+	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
+	foreach (it, rb->begin(), rb->end()) {
+		const ExprRule	*er(*it);
+		if (!er->hasFree())
+			continue;
+		er->printBinaryRule(of);
+	}
+
+	delete rb;
+}
+
+
 static void splitDB(std::string& prefix, int num_chunks)
 {
 	RuleBuilder	*rb;
@@ -912,7 +936,9 @@ int main(int argc, char **argv)
 		return -3;
 	}
 
-	if (EraseShadows) {
+	if (ExtractFrees) {
+		extractFree(InputFile);
+	} else if (EraseShadows) {
 		eraseShadowRules(s);
 	} else if (SplitDB) {
 		splitDB(InputFile, SplitDB);

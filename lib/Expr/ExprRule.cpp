@@ -423,6 +423,25 @@ ExprRule* ExprRule::loadBinaryRule(std::istream& is)
 	return er;
 }
 
+bool ExprRule::hasFree(void) const
+{
+	ref<Expr>		from(getFromExpr());
+	std::vector<ref<Array> > objs;
+	ref<Array>		free_arr;
+
+	if (from.isNull()) return false;
+
+	ExprUtil::findSymbolicObjectsRef(from, objs);
+
+	free_arr = Pattern::getFreeArray();
+	foreach (it, objs.begin(), objs.end()) {
+		if (free_arr.get() == (*it).get())
+			return true;
+	}
+
+	return false;
+}
+
 bool ExprRule::loadBinaryPattern(std::istream& is, Pattern& p)
 {
 	uint32_t	sz;
