@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <sys/mman.h>
 #include <klee/klee.h>
 #include "syscalls.h"
@@ -11,21 +12,23 @@ static void	*last_brk = 0;
 
 /* IMPORTANT: this will just *allocate* some data,
  * if you want symbolic, do it after calling this */
-static void* sc_mmap_addr(void* regfile, void* addr, uint64_t len)
+static void* sc_mmap_addr(void* addr, uint64_t len, int flags)
 {
 	int	is_himem;
 
 	is_himem = (((intptr_t)addr & ~0x7fffffffffffULL) != 0);
 	if (!is_himem) {
 		/* not highmem, use if we've got it.. */
-		addr = (void*)concretize_u64(GET_ARG0(regfile));
-		klee_print_expr("non-highmem define fixed addr", addr);
-		klee_define_fixed_object(addr, len);
+		unsigned	i;
+		addr = concretize_ptr(addr);
+		// klee_print_expr("non-highmem define fixed addr", addr);
+		for (i = 0; i < (len+4095)/4096; i++)
+			klee_define_fixed_object((char*)addr+(i*4096), 4096);
 		return addr;
 	}
 
 	/* can never satisfy a hi-mem request */
-	if (GET_ARG2(regfile) & MAP_FIXED) {
+	if (flags & MAP_FIXED) {
 		/* can never fixed map hi-mem */
 		return MAP_FAILED;
 	}
@@ -55,7 +58,7 @@ static void* sc_mmap_anon(void* regfile, uint64_t len)
 	}
 
 	/* mapping has a deisred location */
-	addr = sc_mmap_addr(regfile, (void*)GET_ARG0(regfile), len);
+	addr = sc_mmap_addr((void*)GET_ARG0(regfile), len, GET_ARG3(regfile));
 	return addr;
 }
 
@@ -103,6 +106,68 @@ void* sc_mmap(void* regfile, uint64_t len)
 
 	sc_ret_v_new(new_regs, (uint64_t)addr);
 	return new_regs;
+}
+
+void* sc_mremap(void* regfile)
+{
+	void	*old_addr = GET_ARG0_PTR(regfile);
+	size_t	old_sz = GET_ARG1(regfile);
+	size_t	new_sz = GET_ARG2(regfile);
+	int	flags = GET_ARG3(regfile);
+	void	*new_base;
+	bool	is_range_free;
+	unsigned i;
+
+	if (flags & MREMAP_FIXED) {
+		/* XXX: honor fixed reqs */
+		sc_ret_v(regfile, ~0);
+		return regfile;
+	}
+
+	old_addr = concretize_ptr(old_addr);
+	new_base = ((char*)old_addr) + old_sz;
+
+	/* this is just a munmap */
+	if (new_sz < old_sz) {
+		unsigned	rmv_sz = old_sz - new_sz;
+		rmv_sz = concretize_u64(rmv_sz);
+		kmc_free_run((uint64_t)old_addr + new_sz, rmv_sz);
+		sc_ret_v(regfile, (uint64_t)old_addr);
+		return regfile;
+	}
+
+
+	is_range_free = true;
+	for (i = 0; i < ((new_sz - old_sz)+4095)/4096; i++) {
+		if (klee_is_valid_addr(((char*)new_base)+i*4096)) {
+			is_range_free = false;
+			break;
+		}
+	}
+
+	/* room is available to extend segment */
+	if (is_range_free) {
+		sc_mmap_addr(new_base, new_sz - old_sz, MAP_FIXED);
+		sc_ret_v(regfile, (uint64_t)old_addr);
+		return regfile;
+	}
+
+	/* (!is_range_free) */
+
+	/* will have to move the block around */
+	if (!(flags & MREMAP_MAYMOVE)) {
+		sc_ret_v(regfile, ~0);
+		return regfile;
+	}
+
+	/* get new memory, copy data, free old memory */
+	new_base = kmc_alloc_aligned(new_sz, "mremap");
+	for (i = 0; i < old_sz; i++)
+		((char*)new_base)[i] = ((char*)old_addr)[i];
+	kmc_free_run((uint64_t)old_addr, old_sz);
+
+	sc_ret_v(regfile, (uint64_t)new_base);
+	return regfile;
 }
 
 void sc_munmap(void* regfile)

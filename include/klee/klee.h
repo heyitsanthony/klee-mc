@@ -22,6 +22,7 @@
 #define KLEE_SYS_PRINT_EXPR	5	/* klee_print_expr */
 #define KLEE_SYS_SILENT_EXIT	6	/* klee_silent_exit */
 #define KLEE_SYS_SYM_RANGE_BYTES	7 /* klee_sym_range_bytes */
+#define KLEE_SYS_VALID_ADDR	8	/* klee_is_valid_addr */
 
 #define ksys_report_error(x,y,z,w)	\
 	syscall(SYS_klee, KLEE_SYS_REPORT_ERROR, x, y, z, w)
@@ -37,6 +38,7 @@
 #define ksys_silent_exit(x)	syscall(SYS_klee, KLEE_SYS_SILENT_EXIT, (uint64_t)x)
 #define ksys_sym_range_bytes(x,y)	\
 	syscall(SYS_klee, KLEE_SYS_SYM_RANGE_BYTES, (uint64_t)x, y)
+#define ksys_is_valid_addr(x)	syscall(SYS_klee, KLEE_SYS_VALID_ADDR, x)
 
 #define ksys_get_value(n)	n
 #define ksys_is_active()	(ksys_is_sym(0) != -1)
@@ -123,6 +125,9 @@ extern "C" {
    * mode.
    */
   unsigned klee_is_symbolic(uint64_t n);
+
+  /* return true if byte at given address may be accessed */
+  unsigned klee_is_valid_addr(void* p);
 
   /* returns number of bytes starting at 'ptr' that are symbolic */
   /* max_bytes is the numebr of bytes to check before terminating early */

@@ -141,6 +141,7 @@ namespace klee {
     SFH_HANDLER(GetObjSize)
     SFH_HANDLER(GetValue)
     SFH_HANDLER(IsSymbolic)
+    SFH_HANDLER(IsValidAddr)
     SFH_HANDLER(MakeSymbolic)
     SFH_HANDLER(Malloc)
     SFH_HANDLER(MarkGlobal)

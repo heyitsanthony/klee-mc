@@ -70,6 +70,7 @@ SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   add("klee_get_obj_size", GetObjSize, true),
   add("klee_get_errno", GetErrno, true),
   add("klee_is_symbolic", IsSymbolic, true),
+  add("klee_is_valid_addr", IsValidAddr, true),
   add("klee_make_symbolic", MakeSymbolic, false),
   add("klee_mark_global", MarkGlobal, false),
   add("klee_merge", Merge, false),
@@ -373,10 +374,7 @@ SFH_DEF_HANDLER(ReportError)
 	sfh->executor->terminateStateOnError(state, message, suffix.c_str());
 }
 
-SFH_DEF_HANDLER(Merge)
-{
-  // nop
-}
+SFH_DEF_HANDLER(Merge) { /* nop */ }
 
 SFH_DEF_HANDLER(New)
 {
@@ -480,6 +478,22 @@ SFH_DEF_HANDLER(IsSymbolic)
   	ConstantExpr::create(
 		!isa<ConstantExpr>(arguments[0]),
 		Expr::Int32));
+}
+
+SFH_DEF_HANDLER(IsValidAddr)
+{
+	SFH_CHK_ARGS(1, "klee_is_valid_addr");
+	ref<Expr>	addr(arguments[0]);
+	ref<Expr>	ret;
+	bool		ok;
+	ObjectPair	op;
+
+	assert (addr->getKind() == Expr::Constant);
+	ok = state.addressSpace.resolveOne(cast<ConstantExpr>(addr), op);
+	ret = ConstantExpr::create((ok) ? 1 : 0, 32);
+
+	std::cerr << "ADDR=" << addr << ". OK: " << ok << '\n';
+	state.bindLocal(target, ret);
 }
 
 SFH_DEF_HANDLER(PreferCex)

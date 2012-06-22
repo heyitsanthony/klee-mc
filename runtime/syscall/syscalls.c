@@ -185,6 +185,9 @@ static void sc_klee(void* regfile)
 			regfile,
 			klee_sym_range_bytes(GET_ARG1_PTR(regfile), GET_ARG2(regfile)));
 		break;
+	case KLEE_SYS_VALID_ADDR:
+		sc_ret_v(regfile, klee_is_valid_addr(GET_ARG1_PTR(regfile)));
+		break;
 	default:
 		klee_report_error(
 			__FILE__,
@@ -801,6 +804,20 @@ void* sc_enter(void* regfile, void* jmpptr)
 		goto already_logged;
 	}
 
+	case SYS_mremap:
+		/* bad address / not page aligned */
+		if (	GET_ARG1(regfile) == 0 ||
+			((GET_ARG1(regfile)) & 0xfff) != 0)
+		{
+			sc_ret_v(regfile, ~0);
+			break;
+		}
+
+		new_regs = sc_mremap(regfile);
+		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
+		sc_breadcrumb_commit(&sc, GET_SYSRET(new_regs));
+		goto already_logged;
+
 	case SYS_socket:
 		klee_warning_once("phony socket call");
 		sc_ret_range(sc_new_regs(regfile), -1, 4096);
@@ -813,7 +830,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_klee:
 		sc_klee(regfile);
 		break;
-	UNIMPL_SC(mremap)
 	case SYS_poll:
 		sc_poll(regfile);
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
@@ -1205,11 +1221,17 @@ already_logged:
 	return jmpptr;
 }
 
+void* concretize_ptr(void* s)
+{
+	uint64_t s2 = klee_get_value((uint64_t)s);
+	klee_assume_eq((uint64_t)s, s2);
+	return (void*)s2;
+}
 
 uint64_t concretize_u64(uint64_t s)
 {
 	uint64_t sc = klee_get_value(s);
-	klee_assume(sc == s);
+	klee_assume_eq(sc, s);
 	return sc;
 }
 
