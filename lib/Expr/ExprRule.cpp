@@ -377,7 +377,7 @@ ExprRule* ExprRule::loadBinaryRule(std::istream& is)
 	if (is_hdr_magic(hdr) == false)
 		return NULL;
 
-	off = (unsigned)is.tellg() - 8;
+	off = (unsigned)is.tellg() - sizeof(hdr);
 
 	loadBinaryPattern(is, p_from);
 	loadBinaryPattern(is, p_to);

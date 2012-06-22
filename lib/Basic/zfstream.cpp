@@ -67,6 +67,11 @@ gzfilebuf::open(const char *name,
   if ((file = gzopen(name, char_mode)) == NULL)
     return NULL;
 
+  if (gzdirect(file)) {
+    gzclose(file);
+    return NULL;
+  }
+
   // On success, allocate internal buffer and set flags
   this->enable_buffer();
   io_mode = mode;

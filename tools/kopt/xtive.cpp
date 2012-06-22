@@ -290,6 +290,8 @@ void xtiveBRule(ExprBuilder *eb, Solver* s)
 	 * than to-expr from rule */
 	findDestReplacements(eb, rb, replacements);
 
+	std::cout << "after dest, found " << replacements.size() << '\n';
+
 	/* create rules when rule builder generates a different
 	 * from-expr where |from-expr| > |to-expr| */
 	new_from_c = appendNewFroms(s, rb);
@@ -305,8 +307,10 @@ void xtiveBRule(ExprBuilder *eb, Solver* s)
 		<< bad_repl.size() << '\n';
 	foreach (it, replacements.begin(), replacements.end()) {
 		const ExprRule	*er = *(it->first);
-		if (bad_repl.count(er))
+		if (bad_repl.count(er)) {
+			/* failed to replace parent rule, do not erase! */
 			continue;
+		}
 		rb->eraseDBRule(*(it->first));
 	}
 

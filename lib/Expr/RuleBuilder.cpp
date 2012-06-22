@@ -156,7 +156,7 @@ void RuleBuilder::eraseDBRule(const ExprRule* to_rmv)
 		if (eraseDBRuleHint(ifs, to_rmv))
 			return;
 
-	/* hint was bogus-- do a full scan like a jackass */
+	/* hint was bogus (or started at 0)-- do a full scan like a jackass */
 	last_pos = 0;
 	while (ifs.eof() == false) {
 		if (tryEraseDBRule(ifs, last_pos, to_rmv))
@@ -238,7 +238,7 @@ bool RuleBuilder::loadRuleDB(const char* rulef)
 	if (loadRuleStream(gzif))
 		return true;
 
-	std::ifstream	ifs(rulef);
+	std::ifstream	ifs(rulef, std::ios::in | std::ios::binary);
 	if (loadRuleStream(ifs))
 		return true;
 
