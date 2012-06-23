@@ -23,7 +23,7 @@ ref<Expr> CanonBuilder::x(const ref<Expr> &l, const ref<Expr> &r)	\
 		return Base->x(l, r);		\
 	if (r->getKind() == Expr::Constant)	\
 		return Builder->x(r, l);	\
-	return Builder->x(r, l);		\
+	return Base->x(l, r);			\
 }
 
 //	if (l->getKind() > r->getKind())	\
