@@ -236,10 +236,7 @@ ref<Expr> OptBuilder::Extract(const ref<Expr>& expr, unsigned off, Expr::Width w
 	/* Extract(Extract) */
 	if (expr->getKind() == Expr::Extract) {
 		const ExtractExpr* ee = cast<ExtractExpr>(expr);
-		return ExtractExpr::create(
-			ee->expr,
-			off+ee->offset,
-			w);
+		return ExtractExpr::create(ee->expr, off+ee->offset, w);
 	}
 
 	if (expr->getKind() == Expr::ZExt) {

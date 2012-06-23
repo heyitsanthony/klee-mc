@@ -364,18 +364,13 @@ flatrule_ty Pattern::stripConstExamples(void) const
 		flatrule_tok	tok;
 
 		tok = rule[i];
-		if (OP_LABEL_TEST(tok)) {
-			ret.push_back(tok);
-			i++;
-			continue;
-		}
+
+		ret.push_back(tok);
+		i++;
 
 		/* tear out constant example */
 		if (OP_CLABEL_TEST(tok)) {
 			uint64_t	bits;
-			/* keep clabel */
-			ret.push_back(tok);
-			i++;
 
 			/* keep bit width */
 			bits = rule[i];
@@ -391,8 +386,6 @@ flatrule_ty Pattern::stripConstExamples(void) const
 
 		/* TRICKY: all expr types besides const follow a prefix rule
 		 * which means they can be safely ignored (thank god) */
-		ret.push_back(tok);
-		i++;
 		if (tok == Expr::Constant) {
 			uint64_t bits = rule[i];
 			int	chunks;

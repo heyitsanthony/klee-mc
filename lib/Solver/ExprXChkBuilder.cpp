@@ -24,6 +24,9 @@ namespace
 		llvm::cl::init(true));
 
 	llvm::cl::opt<bool>
+	OptimizeEqHash("opt-ignore-eqhash", llvm::cl::init(true));
+
+	llvm::cl::opt<bool>
 	RandomValueCheck(
 		"opt-rvc",
 		llvm::cl::desc("Optimize exprxchk with test values (imprecise)"),
@@ -376,6 +379,11 @@ void ExprXChkBuilder::xchk(
 	const ConstantExpr	*ce_o, *ce_t;
 
 	assert (in_xchker);
+
+	if (OptimizeEqHash && oracle_expr->hash() == test_expr->hash()) {
+		in_xchker = false;
+		return;
+	}
 
 	// expressions may simplify to constants
 	// (even though we already skip Constant() calls)--

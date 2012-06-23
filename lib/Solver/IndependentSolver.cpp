@@ -324,8 +324,11 @@ static bool isUnconstrained(
 		return false;
 
 	if (	query.expr->getKind() == Expr::Eq &&
-		query.expr->getKid(1)->getKind() == Expr::Read)
+		query.expr->getKid(1)->getKind() == Expr::Read &&
+		query.expr->getKid(0)->getKind() == Expr::Constant)
 	{
+		/* this was breaking on (Eq (x) (extract [7:0] x))
+		 * before the I added a constant check */
 		return true;
 	}
 

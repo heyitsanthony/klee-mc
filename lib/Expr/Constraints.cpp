@@ -46,6 +46,13 @@ public:
 	: ExprVisitor(true)
 	, replacements(_replacements) {}
 
+	virtual ref<Expr> apply(const ref<Expr>& e)
+	{
+		if (replacements.size() > 1000)
+			replacements.clear();
+		return ExprVisitor::apply(e);
+	}
+
 	Action visitExprPost(const Expr &e)
 	{
 		std::map< ref<Expr>, ref<Expr> >::const_iterator it;
@@ -56,9 +63,7 @@ public:
 	}
 
 	std::map< ref<Expr>, ref<Expr> >& getReplacements(void)
-	{
-		return replacements;
-	}
+	{ return replacements; }
 
 protected:
 	virtual Action visitRead(const ReadExpr &re);

@@ -57,15 +57,16 @@ Expr::Hash ExtractExpr::computeHash(void)
 	return hashValue;
 }
 
+/* skeletal hash ignores updates AND indices --
+ * this makes sense since the common case (read 0 x) and (read 1 x)
+ * are indistinguishable because h(x) = h(y).
+ * */
 Expr::Hash ReadExpr::computeHash(void)
 {
-	uint64_t dat[4] = {
-		index->skeleton(),
-		Expr::Read,
-		index->hash(), updates.hash()};
+	uint64_t dat[3] = {Expr::Read, index->hash(), updates.hash()};
 
-	skeletonHash = hashImpl(&dat, 2*8, 0);
-	hashValue = hashImpl(&dat[1], 3*8, 0);
+	skeletonHash = Expr::Read;
+	hashValue = hashImpl(&dat, 3*8, 0);
 	return hashValue;
 }
 

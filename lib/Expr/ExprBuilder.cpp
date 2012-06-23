@@ -3,6 +3,7 @@
 #include "OptBuilder.h"
 #include "ExtraOptBuilder.h"
 #include "RuleBuilder.h"
+#include "CanonBuilder.h"
 
 using namespace klee;
 
@@ -11,7 +12,7 @@ ExprBuilder* ExprBuilder::create(BuilderKind bk)
 	ExprBuilder *Builder = createDefaultExprBuilder();
 	switch (bk) {
 	case DefaultBuilder:
-		break;
+		return Builder;
 	case ConstantFoldingBuilder:
 		Builder = createConstantFoldingExprBuilder(Builder);
 		break;
@@ -36,5 +37,5 @@ ExprBuilder* ExprBuilder::create(BuilderKind bk)
 		break;
 	}
 
-	return Builder;
+	return new CanonBuilder(Builder, Builder);
 }

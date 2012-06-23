@@ -51,6 +51,11 @@ Solver::Validity ValidatingSolver::computeValidity(const Query &query)
 			<< Solver::getValidityStr(solverValidity) << " = solver.\n";
 		query.print(std::cerr);
 		SMTPrinter::dump(query, "satmismatch");
+		std::cerr << "oracle:\n";
+		oracle->printName();
+		std::cerr << "test:\n";
+		solver->printName();
+		std::cerr << '\n';
 	}
 
 	assert ((oracleValidity == solverValidity) &&

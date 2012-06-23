@@ -8,7 +8,7 @@ namespace klee
 /// ChainedBuilder - Helper class for construct specialized expression
 /// builders, which implements (non-virtual) methods which forward to a base
 /// expression builder, for all expressions.
-class ChainedBuilder
+class ChainedBuilder : public ExprBuilder
 {
 protected:
 	/// Builder - The builder that this specialized builder is contained

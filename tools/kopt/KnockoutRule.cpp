@@ -273,6 +273,9 @@ ExprRule* KnockoutRule::createFullRule(Solver* s) const
 	ExprRule			*er_ret;
 	exprtags_ty			tags;
 
+	if (er->hasConstraints())
+		return NULL;
+
 	if (!isConstInvariant(s))
 		return NULL;
 
@@ -281,7 +284,6 @@ ExprRule* KnockoutRule::createFullRule(Solver* s) const
 	std::vector<ref<Expr> >	cs(tags.size(), ConstantExpr::create(1, 1));
 
 	er_ret = er->addConstraints(tags, cs);
-	assert (er_ret != NULL);
 	return er_ret;
 }
 
