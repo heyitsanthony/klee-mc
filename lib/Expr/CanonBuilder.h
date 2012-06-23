@@ -6,11 +6,11 @@
 namespace klee
 {
 
-class CanonBuilder : public ChainedBuilder
+class CanonBuilder : public ChainedEB
 {
 public:
 	CanonBuilder(ExprBuilder* b1, ExprBuilder* b2)
-	: ChainedBuilder(b1, b2) {}
+	: ChainedEB(b1, b2) {}
 	virtual ~CanonBuilder() {}
 #define DECL_BIN_REF(x)	\
 virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS);
