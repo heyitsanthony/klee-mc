@@ -39,10 +39,11 @@ namespace klee
 class ExprReplaceVisitor2 : public ExprVisitor
 {
 public:
+//	typedef std::tr1::unordered_map< ref<Expr>, ref<Expr> > replmap_ty;
+	typedef std::map< ref<Expr>, ref<Expr> > replmap_ty;
 	ExprReplaceVisitor2(void) : ExprVisitor(true) {}
 
-	ExprReplaceVisitor2(
-		const std::map< ref<Expr>, ref<Expr> >& _replacements)
+	ExprReplaceVisitor2(const replmap_ty& _replacements)
 	: ExprVisitor(true)
 	, replacements(_replacements) {}
 
@@ -55,21 +56,20 @@ public:
 
 	Action visitExprPost(const Expr &e)
 	{
-		std::map< ref<Expr>, ref<Expr> >::const_iterator it;
+		replmap_ty::const_iterator it;
 		it = replacements.find(ref<Expr>(const_cast<Expr*>(&e)));
 		return (it != replacements.end())
 			? Action::changeTo(it->second)
 			: Action::doChildren();
 	}
 
-	std::map< ref<Expr>, ref<Expr> >& getReplacements(void)
-	{ return replacements; }
+	replmap_ty& getReplacements(void) { return replacements; }
 
 protected:
 	virtual Action visitRead(const ReadExpr &re);
 
 private:
-	std::map< ref<Expr>, ref<Expr> > replacements;
+	replmap_ty replacements;
 };
 
 }
@@ -192,7 +192,7 @@ void ConstraintManager::simplifyForValidConstraint(ref<Expr> e)
 #define FALSE_EXPR	ConstantExpr::alloc(0, Expr::Bool)
 
 static void addEquality(
-	std::map< ref<Expr>, ref<Expr> > &equalities,
+	ExprReplaceVisitor2::replmap_ty& equalities,
 	const ref<Expr>& e)
 {
 	if (const EqExpr *ee = dyn_cast<EqExpr>(e)) {
@@ -241,12 +241,10 @@ ref<Expr> ConstraintManager::simplifyExpr(ref<Expr> e) const
 		return simplifier->apply(e);
 
 	simplifier = new ExprReplaceVisitor2();
-	std::map< ref<Expr>, ref<Expr> >& equalities(
-		simplifier->getReplacements());
+	ExprReplaceVisitor2::replmap_ty &equalities(simplifier->getReplacements());
 
-	foreach (it, constraints.begin(), constraints.end()) {
+	foreach (it, constraints.begin(), constraints.end())
 		addEquality(equalities, *it);
-	}
 
 	return simplifier->apply(e);
 }
