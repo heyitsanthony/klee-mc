@@ -308,7 +308,6 @@ ExprRule* KnockoutRule::createPartialRule(Solver* s) const
 	std::vector<ref<Expr> >	cs(tags.size(), e_range);
 
 	er_ret = er->addConstraints(tags, cs);
-	assert (er_ret != NULL);
 	return er_ret;
 }
 
