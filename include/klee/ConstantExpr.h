@@ -46,6 +46,7 @@ public:
 
   unsigned getNumKids() const { return 0; }
   ref<Expr> getKid(unsigned i) const { return 0; }
+  const Expr* getKidConst(unsigned i) const { return 0; }
 
   /// getAPValue - Return the arbitrary precision value directly.
   ///

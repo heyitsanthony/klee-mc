@@ -109,28 +109,35 @@ ObjectState::~ObjectState()
 const UpdateList &ObjectState::getUpdates() const
 {
 	// Constant arrays are created lazily.
-	if (updates.getRoot().isNull() == false)
-		return updates;
+	if (updates.getRoot().isNull())
+		buildUpdates();
 
-	// Collect the list of writes, with the oldest writes first.
+	return updates;
+}
 
-	// FIXME: We should be able to do this more efficiently,
-	// we just need to be careful to get the interaction with
-	// the cache right. In particular we should avoid creating
-	// UpdateNode instances we never use.
+// Collect the list of writes, with the oldest writes first.
+//
+// FIXME: We should be able to do this more efficiently,
+// we just need to be careful to get the interaction with
+// the cache right. In particular we should avoid creating
+// UpdateNode instances we never use.
+void ObjectState::buildUpdates(void) const
+{
 	unsigned NumWrites = updates.head ? updates.head->getSize() : 0;
 	std::vector< std::pair< ref<Expr>, ref<Expr> > > Writes(NumWrites);
-	const UpdateNode *un = updates.head;
+	const UpdateNode	*un = updates.head;
+
+	std::vector< ref<ConstantExpr> > Contents(size);
+
+	// Start content as zeros.
+	for (unsigned i = 0, e = size; i != e; ++i)
+		Contents[i] = ConstantExpr::create(0, Expr::Int8);
+
+	// Collect writes, [0] being first, [n] being last
 	for (unsigned i = NumWrites; i != 0; un = un->next) {
 		--i;
 		Writes[i] = std::make_pair(un->index, un->value);
 	}
-
-	std::vector< ref<ConstantExpr> > Contents(size);
-
-	// Initialize to zeros.
-	for (unsigned i = 0, e = size; i != e; ++i)
-		Contents[i] = ConstantExpr::create(0, Expr::Int8);
 
 	// Pull off as many concrete writes as we can.
 	unsigned Begin = 0, End = Writes.size();
@@ -163,8 +170,6 @@ const UpdateList &ObjectState::getUpdates() const
 	// Apply the remaining (non-constant) writes.
 	for (; Begin != End; ++Begin)
 		updates.extend(Writes[Begin].first, Writes[Begin].second);
-
-	return updates;
 }
 
 void ObjectState::makeConcrete()
@@ -399,7 +404,7 @@ void ObjectState::write8(unsigned offset, uint8_t value)
 	markByteUnflushed(offset);
 }
 
-void ObjectState::write8(unsigned offset, ref<Expr> value)
+void ObjectState::write8(unsigned offset, ref<Expr>& value)
 {
 	assert (copyOnWriteOwner != COW_ZERO);
 
@@ -415,7 +420,7 @@ void ObjectState::write8(unsigned offset, ref<Expr> value)
 	markByteUnflushed(offset);
 }
 
-void ObjectState::write8(ref<Expr> offset, ref<Expr> value)
+void ObjectState::write8(ref<Expr> offset, ref<Expr>& value)
 {
 	unsigned	base, size;
 
@@ -489,7 +494,7 @@ ref<Expr> ObjectState::read(unsigned offset, Expr::Width width) const
 	return Res;
 }
 
-void ObjectState::write(ref<Expr> offset, ref<Expr> value)
+void ObjectState::write(ref<Expr> offset, ref<Expr>& value)
 {
 	assert (!readOnly);
 	assert (copyOnWriteOwner != COW_ZERO);
@@ -506,7 +511,8 @@ void ObjectState::write(ref<Expr> offset, ref<Expr> value)
 	// Treat bool specially, it is the only non-byte sized write we allow.
 	Expr::Width w = value->getWidth();
 	if (w == Expr::Bool) {
-		write8(offset, ZExtExpr::create(value, Expr::Int8));
+		ref<Expr>	v(ZExtExpr::create(value, Expr::Int8));
+		write8(offset, v);
 		return;
 	}
 
@@ -514,17 +520,18 @@ void ObjectState::write(ref<Expr> offset, ref<Expr> value)
 	unsigned NumBytes = w / 8;
 	assert(w == NumBytes * 8 && "Invalid write size!");
 	for (unsigned i = 0; i != NumBytes; ++i) {
-		unsigned idx;
+		ref<Expr>	v(0), off(0);
+		unsigned	idx;
 
 		idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
-		write8(
-			AddExpr::create(
-				offset, ConstantExpr::create(idx, Expr::Int32)),
-			ExtractExpr::create(value, 8 * i, Expr::Int8));
+		v = ExtractExpr::create(value, 8 * i, Expr::Int8);
+		off = AddExpr::create(
+			offset, ConstantExpr::create(idx, Expr::Int32));
+		write8(off, v);
 	}
 }
 
-void ObjectState::write(unsigned offset, ref<Expr> value)
+void ObjectState::write(unsigned offset, const ref<Expr>& value)
 {
 	assert (copyOnWriteOwner != COW_ZERO);
 
@@ -547,7 +554,8 @@ void ObjectState::write(unsigned offset, ref<Expr> value)
 	// Treat bool specially, it is the only non-byte sized write we allow.
 	Expr::Width w = value->getWidth();
 	if (w == Expr::Bool) {
-		write8(offset, ZExtExpr::create(value, Expr::Int8));
+		ref<Expr>	v(ZExtExpr::create(value, Expr::Int8));
+		write8(offset, v);
 		return;
 	}
 
@@ -555,10 +563,12 @@ void ObjectState::write(unsigned offset, ref<Expr> value)
 	unsigned NumBytes = w / 8;
 	assert(w == NumBytes * 8 && "Invalid write size!");
 	for (unsigned i = 0; i != NumBytes; ++i) {
-		unsigned idx;
+		unsigned	idx;
+		ref<Expr>	v(0);
+
 		idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
-		write8(	offset + idx,
-			ExtractExpr::create(value, 8 * i, Expr::Int8));
+		v = ExtractExpr::create(value, 8 * i, Expr::Int8);
+		write8(offset + idx, v);
 	}
 }
 

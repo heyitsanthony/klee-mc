@@ -92,10 +92,11 @@ public:
 
 	bool isZeroPage(void) const { return copyOnWriteOwner == COW_ZERO; }
 private:
+	void buildUpdates(void) const;
 
 	// return bytes written.
-	void write(unsigned offset, ref<Expr> value);
-	void write(ref<Expr> offset, ref<Expr> value);
+	void write(unsigned offset, const ref<Expr>& value);
+	void write(ref<Expr> offset, ref<Expr>& value);
 
 	void write16(unsigned offset, uint16_t value);
 	void write32(unsigned offset, uint32_t value);
@@ -108,8 +109,8 @@ private:
 	void makeSymbolic();
 
 	ref<Expr> read8(ref<Expr> offset) const;
-	void write8(unsigned offset, ref<Expr> value);
-	void write8(ref<Expr> offset, ref<Expr> value);
+	void write8(unsigned offset, ref<Expr>& value);
+	void write8(ref<Expr> offset, ref<Expr>& value);
 
 	void fastRangeCheckOffset(
 		ref<Expr> offset, unsigned *base_r, unsigned *size_r) const;

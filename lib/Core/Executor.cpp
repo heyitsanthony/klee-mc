@@ -1377,6 +1377,7 @@ ref<Expr> Executor::cmpScalar(
   return result;
 }
 
+/* XXX: move to forks.c? */
 void Executor::forkSwitch(
 	ExecutionState& state,
 	BasicBlock*	parent_bb,
@@ -1453,183 +1454,28 @@ ref<Expr> Executor::toUnique(const ExecutionState &state, ref<Expr> &e)
 
 void Executor::instSwitch(ExecutionState& state, KInstruction *ki)
 {
-	SwitchInst *si = cast<SwitchInst>(ki->getInst());
-	ref<Expr> cond = eval(ki, 0, state).value;
+	KSwitchInstruction	*ksi(static_cast<KSwitchInstruction*>(ki));
+	ref<Expr>		cond(eval(ki, 0, state).value);
+	TargetTy 		defaultTarget;
+	TargetsTy		targets;
 
 	cond = toUnique(state, cond);
-
-	/* deterministically order basic blocks by lowest value */
-	std::vector<Val2TargetTy >	cases(si->getNumCases());
-	TargetsTy			targets;
-	TargetTy			defaultTarget;
-	TargetValsTy			minTargetValues; // lowest val -> BB
-
-	assert (cases.size () >= 1);
-
-	/* initialize minTargetValues and cases */
-	cases[0] = Val2TargetTy(ref<ConstantExpr>(), si->getDefaultDest());
-	for (unsigned i = 1; i < cases.size(); i++) {
-		ref<ConstantExpr>	value;
-		BasicBlock		*target;
-		TargetValsTy::iterator	it;
-
-		value  = evalConstant(si->getCaseValue(i));
-		target = si->getSuccessor(i);
-		cases[i] = Val2TargetTy(value, target);
-
-		it = minTargetValues.find(target);
-		if (it == minTargetValues.end())
-			minTargetValues[target] = value;
-		else if (value < it->second)
-			it->second = value;
-	}
+	ksi->orderTargets(kmodule, globals);
 
 	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(cond)) {
-		defaultTarget = getConstCondSwitchTargets(
-			ki,
-			CE,
-			cases,
-			minTargetValues,
-			targets);
+		defaultTarget = ksi->getConstCondSwitchTargets(
+			CE->getZExtValue(), targets);
 	} else {
-		defaultTarget = getExprCondSwitchTargets(
-			cond, cases, minTargetValues, targets);
+		defaultTarget = ksi->getExprCondSwitchTargets(cond, targets);
 	}
 
-	// may not have any targets to jump to!
+	/* may not have any targets to jump to! */
 	if (targets.empty()) {
-		terminateState(state);
+		terminateStateEarly(state, "bad switch");
 		return;
 	}
 
-	forkSwitch(state, si->getParent(), defaultTarget, targets);
-}
-
-Executor::TargetTy Executor::getExprCondSwitchTargets(
-	ref<Expr> cond,
-	const std::vector<Val2TargetTy >& cases,
-	const TargetValsTy& minTargetValues,
-	TargetsTy& targets)
-{
-	std::map<BasicBlock*, std::set<uint64_t> > caseMap;
-	ref<Expr>	defaultCase;
-
-	defaultCase = ConstantExpr::alloc(1, Expr::Bool);
-	// build map from target BasicBlock to value(s) that lead to that block
-	for (unsigned i = 1; i < cases.size(); ++i)
-		caseMap[cases[i].second].insert(cases[i].first->getZExtValue());
-
-	// generate conditions for each block
-	foreach (cit, caseMap.begin(), caseMap.end()) {
-		BasicBlock *target = cit->first;
-		std::set<uint64_t> &values = cit->second;
-		ref<Expr> match = ConstantExpr::create(0, Expr::Bool);
-
-		foreach (vit, values.begin(), values.end()) {
-			// try run-length encoding long sequences of consecutive
-			// switch values that map to the same BasicBlock
-			std::set<uint64_t>::iterator vit2 = vit;
-			uint64_t runLen = 1;
-
-			for (++vit2; vit2 != values.end(); ++vit2) {
-				if (*vit2 == *vit + runLen)
-					runLen++;
-				else
-					break;
-			}
-
-			if (runLen < EXE_SWITCH_RLE_LIMIT) {
-				match = OrExpr::create(
-					match,
-					EqExpr::create(
-						cond,
-						ConstantExpr::alloc(*vit,
-						cond->getWidth())));
-				continue;
-			}
-
-			// use run-length encoding
-			ref<Expr>	rle_bounds;
-			rle_bounds = AndExpr::create(
-				UgeExpr::create(
-					cond,
-					ConstantExpr::alloc(
-						*vit, cond->getWidth())),
-				UltExpr::create(
-					cond,
-					ConstantExpr::alloc(
-						*vit + runLen,
-						cond->getWidth())));
-
-			match = OrExpr::create(match, rle_bounds);
-
-			vit = vit2;
-			--vit;
-		}
-
-		targets.insert(std::make_pair(
-			(minTargetValues.find(target))->second,
-			std::make_pair(target, match)));
-
-		// default case is the AND of all the complements
-		defaultCase = AndExpr::create(
-			defaultCase, Expr::createIsZero(match));
-	}
-
-	// include default case
-	return std::make_pair(cases[0].second, defaultCase);
-}
-
-// Somewhat gross to create these all the time, but fine till we
-// switch to an internal rep.
-Executor::TargetTy Executor::getConstCondSwitchTargets(
-	KInstruction	*ki,
-	ConstantExpr	*CE,
-	const std::vector<Val2TargetTy >& cases,
-	const TargetValsTy	&minTargetValues,
-	TargetsTy		&targets)
-{
-	SwitchInst		*si;
-	llvm::IntegerType	*Ty;
-	ConstantInt		*ci;
-	unsigned		index;
-	TargetTy		defaultTarget;
-
-	targets.clear();
-
-	si = cast<SwitchInst>(ki->getInst());
-	Ty = cast<IntegerType>(si->getCondition()->getType());
-	ci = ConstantInt::get(Ty, CE->getZExtValue());
-	index = si->findCaseValue(ci);
-
-	// We need to have the same set of targets to pass to fork() in case
-	// toUnique fails/times out on replay (it's happened before...)
-	defaultTarget = TargetTy(
-		cases[0].second,
-		ConstantExpr::alloc(0, Expr::Bool));
-	if (index == 0)
-		defaultTarget.second = ConstantExpr::alloc(1, Expr::Bool);
-
-	for (unsigned i = 1; i < cases.size(); ++i) {
-		// default to infeasible target
-		TargetsTy::iterator	it;
-		TargetTy		cur_target;
-
-		cur_target = TargetTy(
-			cases[i].second,
-			ConstantExpr::alloc(0, Expr::Bool));
-		it = targets.insert(
-			std::make_pair(
-				minTargetValues.find(cases[i].second)->second,
-				cur_target)).first;
-
-		// set unique target as feasible
-		if (i == index) {
-			it->second.second = ConstantExpr::alloc(1, Expr::Bool);
-		}
-	}
-
-	return defaultTarget;
+	forkSwitch(state, ki->getInst()->getParent(), defaultTarget, targets);
 }
 
 

@@ -9,160 +9,10 @@ int xxx_rb;
 #include "klee/util/ExprUtil.h"
 #include "ExprRule.h"
 #include "ExprPatternMatch.h"
+#include "ExprFlatWriter.h"
 
 using namespace klee;
 
-class ExprFlatWriter : public ExprConstVisitor
-{
-public:
-	ExprFlatWriter(std::ostream* _os = NULL) : os(_os) {}
-	virtual ~ExprFlatWriter(void) {}
-	void setOS(std::ostream* _os) { os = _os; }
-	void setLabelMap(const labelmap_ty& lm) {
-		foreach (it, lm.begin(), lm.end()) {
-			ref<Expr>	e(it->second);
-			unsigned	v(it->first);
-			labels.insert(std::make_pair(e,v));
-		}
-	}
-protected:
-	virtual Action visitExpr(const Expr* expr);
-	std::ostream		*os;
-	ExprHashMap<unsigned>	labels;
-};
-
-ExprFlatWriter::Action ExprFlatWriter::visitExpr(const Expr* e)
-{
-	if (e->getKind() == Expr::Read) {
-		ref<Expr>	re(const_cast<Expr*>(e));
-		if (!labels.count(re)) {
-			unsigned next_lid = labels.size();
-			labels[re] = next_lid;
-		}
-		if (os)
-			*os << " l" << labels.find(re)->second << ' ';
-		return Skip;
-	}
-
-	if (e->getKind() == Expr::NotOptimized) {
-		if (os) *os << " v" << e->getWidth() << ' ';
-		return Skip;
-	}
-
-	if (os) *os << ' ' << e->getKind() << ' ';
-
-	switch (e->getKind()) {
-	case Expr::Constant: {
-		unsigned 		bits, off, w;
-		const ConstantExpr	*ce;
-
-		bits = e->getWidth();
-		if (os) *os << bits << ' ';
-		ce = static_cast<const ConstantExpr*>(e);
-		if (bits <= 64) {
-			if (os) *os << ce->getZExtValue();
-			break;
-		}
-
-		off = 0;
-		while (bits) {
-			w = (bits > 64) ? 64 : bits;
-			/* NB: bits - w => hi bits listed first, lo bits last */
-			ce = dyn_cast<ConstantExpr>(
-				ExtractExpr::create(
-					const_cast<Expr*>(e), bits - w, w));
-			assert (ce);
-			if (os) *os << ce->getZExtValue() << ' ';
-			bits -= w;
-			off += w;
-		}
-	}
-	case Expr::Select: break;
-	case Expr::Concat: break;
-	case Expr::Extract:
-		if (!os) break;
-		*os	<< Expr::Constant << ' ' << 32 << ' '
-			<< static_cast<const ExtractExpr*>(e)->offset
-			<< ' '
-			<< Expr::Constant << ' ' << 32 << ' '
-			<< e->getWidth();
-		break;
-
-	case Expr::SExt:
-	case Expr::ZExt:
-		if (!os) break;
-		*os << Expr::Constant << ' ' << 32 << ' ' << e->getWidth();
-		break;
-
-	case Expr::Add:
-	case Expr::Sub:
-	case Expr::Mul:
-	case Expr::UDiv:
-	case Expr::SDiv:
-	case Expr::URem:
-	case Expr::SRem:
-	case Expr::Not:
-	case Expr::And:
-	case Expr::Or:
-	case Expr::Xor:
-	case Expr::Shl:
-	case Expr::LShr:
-	case Expr::AShr:
-	case Expr::Eq:
-	case Expr::Ne:
-	case Expr::Ult:
-	case Expr::Ule:
-	case Expr::Ugt:
-	case Expr::Uge:
-	case Expr::Slt:
-	case Expr::Sle:
-	case Expr::Sgt:
-	case Expr::Sge:
-		break;
-	default:
-		std::cerr << "WTF??? " << e << '\n';
-		assert (0 == 1);
-		break;
-	}
-
-	return Expand;
-}
-
-class EFWTagged : public ExprVisitorTags<ExprFlatWriter>
-{
-public:
-	EFWTagged(const exprtags_ty& _tags_pre, bool _const_repl=true)
-	: ExprVisitorTags<ExprFlatWriter>(_tags_pre, dummy)
-	, const_repl(_const_repl) {}
-
-	virtual void apply(const ref<Expr>& e)
-	{
-		tag_c = 0;
-		ExprVisitorTags<ExprFlatWriter>::apply(e);
-	}
-
-	virtual ~EFWTagged() {}
-protected:
-	virtual ExprFlatWriter::Action preTagVisit(const Expr* e)
-	{
-		if (const_repl) {
-			/* constant label */
-			(*os) << " c" << tag_c++
-				<< ' ' << e->getWidth()
-				<< ' ' << *e << ' ';
-		} else {
-			/* sink */
-			(*os) << " v" << e->getWidth() << ' ';
-		}
-		return Close;
-	}
-	virtual void postTagVisit(const Expr* e) {}
-private:
-	bool			const_repl;
-	unsigned		tag_c;
-	static exprtags_ty	dummy;
-};
-exprtags_ty EFWTagged::dummy;
 
 ExprRule::~ExprRule()
 { if (const_constraints != NULL) delete const_constraints; }
@@ -651,14 +501,21 @@ ExprRule* ExprRule::addConstraints(
 	return ret;
 }
 
+/* first = old label id; second = new label id */
+static std::map<unsigned, unsigned> getRemaps(EFWTagged &efw)
+{
+
+}
+
+/* XXX: this will wreck things with label numbers right now
+ * how to fix?? */
 ExprRule* ExprRule::markUnbound(int tag) const
 {
 	ExprRule		*ret;
 	exprtags_ty		visit_tag(1, tag);
 	EFWTagged		efwt(visit_tag, false);
 	std::stringstream	ss;
-	Pattern			p;
-	ref<Expr>		e;
+	Pattern			p_from;
 
 	/* create from-pattern, marking constants as slots */
 	efwt.setOS(&ss);
@@ -666,13 +523,17 @@ ExprRule* ExprRule::markUnbound(int tag) const
 
 	std::cerr << "[TAG] " << visit_tag[0] << '\n';
 	std::cerr << "[Tags] " << visit_tag.size() << '\n';
-	if (p.readFlatExpr(ss) == false) {
+	if (p_from.readFlatExpr(ss) == false) {
 		std::cerr << "[ExprRule] Failed to unbind subtree.\n";
 		std::cerr << "BAD PATTERN: " << ss.str() << '\n';
 		return NULL;
 	}
 
-	ret = new ExprRule(p, to);
+	if (to.isConst()) {
+		ret = new ExprRule(p_from, to);
+	} else {
+		assert (0 == 1 && "AIEEEEEEEEEEEEEE");
+	}
 	return ret;
 }
 

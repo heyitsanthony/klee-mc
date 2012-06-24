@@ -214,6 +214,7 @@ public:
 
   virtual unsigned getNumKids() const = 0;
   virtual ref<Expr> getKid(unsigned i) const = 0;
+  virtual const Expr* getKidConst(unsigned i) const = 0;
 
   virtual void print(std::ostream &os) const;
 
@@ -373,6 +374,13 @@ public:
     return 0;
   }
 
+  const Expr* getKidConst(unsigned i) const
+  {
+  	if (i == 0) return left.get();
+	if (i == 1) return right.get();
+	return NULL;
+  }
+
   static ref<Expr> create(Kind k, const ref<Expr> &l, const ref<Expr> &r);
 protected:
   BinaryExpr(const ref<Expr> &l, const ref<Expr> &r) : left(l), right(r) {}
@@ -420,7 +428,7 @@ public:
 
   unsigned getNumKids() const { return 1; }
   ref<Expr> getKid(unsigned i) const { return src; }
-
+  const Expr* getKidConst(unsigned i) const { return src.get(); }
   virtual ref<Expr> rebuild(ref<Expr> kids[]) const { return create(kids[0]); }
 
   static bool classof(const Expr *E)
@@ -534,6 +542,7 @@ public:
 
   unsigned getNumKids() const { return numKids; }
   ref<Expr> getKid(unsigned i) const { return !i ? index : 0; }
+  const Expr* getKidConst(unsigned i) const { return !i ? index.get() : NULL; }
 
   int compareContents(const Expr &b) const;
 
@@ -568,6 +577,11 @@ public:
 		assert (i < 2);
 		return (i == 0) ? binding_expr : scope_expr;
 	}
+
+
+	const Expr* getKidConst(unsigned i) const
+	{ assert (i < 2);
+	  return (i == 0) ? binding_expr.get() : scope_expr.get(); }
 
 	Kind getKind() const { return Let; }
 	static bool classof(const Expr *E) { return E->getKind() == Expr::Let; }
@@ -623,6 +637,7 @@ public:
 	virtual ~BindExpr() {}
 	unsigned getNumKids() const { return 0; }
 	ref<Expr> getKid(unsigned i) const { return NULL; }
+	const Expr* getKidConst(unsigned i) const { return NULL; }
 	Kind getKind() const { return kind; }
 	Expr::Hash computeHash(void);
 
@@ -676,6 +691,13 @@ public:
         }
    }
 
+
+    const Expr* getKidConst(unsigned i) const
+    { if (i == 0) return cond.get();
+      if (i == 1) return trueExpr.get();
+      if (i == 2) return falseExpr.get();
+      return NULL; }
+
   static bool isValidKidWidth(unsigned kid, Width w) {
     if (kid == 0)
       return w == Bool;
@@ -723,6 +745,11 @@ public:
     else if (i == 1) return right;
     else return NULL;
   }
+
+   const Expr* getKidConst(unsigned i) const
+   { if (i == 0) return left.get();
+     if (i == 1) return right.get();
+     return NULL; }
 
   /// Shortcuts to create larger concats.  The chain returned is unbalanced to the right
   static ref<Expr> createN(unsigned nKids, const ref<Expr> kids[]);
@@ -772,6 +799,7 @@ public:
 
   unsigned getNumKids() const { return numKids; }
   ref<Expr> getKid(unsigned i) const { return expr; }
+  const Expr* getKidConst(unsigned i) const { return expr.get(); }
 
   int compareContents(const Expr &b) const {
     const ExtractExpr &eb = static_cast<const ExtractExpr&>(b);
@@ -811,6 +839,7 @@ public:
 
   unsigned getNumKids() const { return numKids; }
   ref<Expr> getKid(unsigned i) const { return expr; }
+  const Expr* getKidConst(unsigned i) const { return expr.get(); }
 
   int compareContents(const Expr &b) const {
     const NotExpr &eb = static_cast<const NotExpr&>(b);
@@ -842,6 +871,7 @@ public:
 
   unsigned getNumKids() const { return 1; }
   ref<Expr> getKid(unsigned i) const { return (i==0) ? src : 0; }
+  const Expr* getKidConst(unsigned i) const { return (i==0) ? src.get() : 0; }
 
   int compareContents(const Expr &b) const {
     const CastExpr &eb = static_cast<const CastExpr&>(b);

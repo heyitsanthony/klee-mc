@@ -750,6 +750,6 @@ void SMTPrinter::dumpToFile(const Query& q, const char* fname, bool printConsts)
 void SMTPrinter::dump(const Query& q, const char* prefix)
 {
 	char	fname[256];
-	sprintf(fname, "%s.%x.smt", prefix, q.hash());
+	sprintf(fname, "%s.%lx.smt", prefix, q.hash());
 	dumpToFile(q, fname);
 }

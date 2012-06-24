@@ -41,7 +41,7 @@ using namespace klee;
 void MMU::writeToMemRes(
   	ExecutionState& state,
 	const struct MemOpRes& res,
-	ref<Expr> value)
+	const ref<Expr>& value)
 {
 	if (res.os->readOnly) {
 		exe.terminateStateOnError(

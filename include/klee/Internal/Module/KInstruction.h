@@ -17,9 +17,11 @@
 
 namespace llvm {
 	class Instruction;
+	class BasicBlock;
 }
 
-namespace klee {
+namespace klee
+{
 class Globals;
 class Executor;
 struct InstructionInfo;
@@ -64,6 +66,29 @@ private:
 	unsigned		dest;
 
 	bool			covered;
+};
+
+typedef std::pair<llvm::BasicBlock*, ref<Expr> >	TargetTy;
+typedef std::map<ref<ConstantExpr>, TargetTy >		TargetsTy;
+typedef std::map<llvm::BasicBlock*, ref<ConstantExpr> >	TargetValsTy;
+typedef std::pair<ref<ConstantExpr>, llvm::BasicBlock*>	Val2TargetTy;
+
+class KSwitchInstruction : public KInstruction
+{
+public:
+	KSwitchInstruction(llvm::Instruction* ins, unsigned dest)
+	: KInstruction(ins, dest)
+	{}
+	virtual ~KSwitchInstruction() {}
+
+	void orderTargets(const KModule* km, const Globals* g);
+
+	TargetTy getConstCondSwitchTargets(uint64_t v, TargetsTy &t);
+	TargetTy getExprCondSwitchTargets(ref<Expr> cond, TargetsTy &t);
+private:
+	std::vector<Val2TargetTy >	cases;
+	TargetValsTy			minTargetValues; // lowest val -> BB
+	std::map<llvm::BasicBlock*, std::set<uint64_t> > caseMap;
 };
 
 /* potassium bromide instructoin */

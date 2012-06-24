@@ -84,7 +84,7 @@ protected:
 	void writeToMemRes(
 		ExecutionState& state,
 		const struct MemOpRes& res,
-		ref<Expr> value);
+		const ref<Expr>& value);
 
 	bool memOpByByte(ExecutionState& state, MemOp& mop);
 

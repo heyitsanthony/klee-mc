@@ -136,11 +136,12 @@ int Expr::compareDeep(const Expr& b) const
 		return res;
 
 	unsigned aN = getNumKids();
-	for (unsigned i=0; i<aN; i++)
-		if (int res = getKid(i).compare(b.getKid(i)))
+	for (unsigned i=0; i<aN-1; i++)
+		if (int res = getKidConst(i)->compare(*b.getKidConst(i)))
 			return res;
 
-	return 0;
+	/* tail recursion? */
+	return getKidConst(aN-1)->compare(*b.getKidConst(aN-1));
 }
 
 void Expr::printKind(std::ostream &os, Kind k)
