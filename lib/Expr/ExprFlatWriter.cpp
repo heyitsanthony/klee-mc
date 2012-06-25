@@ -11,10 +11,21 @@ exprtags_ty EFWTagged::dummy;
 
 void ExprFlatWriter::setLabelMap(const labelmap_ty& lm)
 {
+	labels.clear();
 	foreach (it, lm.begin(), lm.end()) {
 		ref<Expr>	e(it->second);
 		unsigned	v(it->first);
 		labels.insert(std::make_pair(e,v));
+	}
+}
+
+void ExprFlatWriter::getLabelMap(labelmap_ty& lm) const
+{
+	lm.clear();
+	foreach (it, labels.begin(), labels.end()) {
+		ref<Expr>	e(it->first);
+		unsigned	v(it->second);
+		lm.insert(std::make_pair(v,e));
 	}
 }
 
@@ -137,9 +148,11 @@ ExprFlatWriter::Action EFWTagged::preTagVisit(const Expr* e)
 void EFWTagged::apply(const ref<Expr>& e)
 {
 	tag_c = 0;
-	masked_base = 0;
+	masked_list_base = 0;
+	masked_start_lid = 0;
 	masked_new = 0;
 	masked_reads = 0;
+	label_list.clear();
 	ExprVisitorTags<ExprFlatWriter>::apply(e);
 }
 
@@ -152,7 +165,7 @@ void EFWTagged::visitVar(const Expr* _e)
 	/* sink */
 	(*os) << " v" << e->getWidth() << ' ';
 	/* if we start masking, it's here. */
-	masked_base = label_list.size();
+	masked_list_base = label_list.size();
 
 	ExprUtil::findReads(e, false, reads);
 	foreach (it, reads.begin(), reads.end())

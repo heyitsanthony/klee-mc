@@ -155,7 +155,6 @@ void ExprRule::printConstr(std::ostream& os, const Pattern& p)
 
 ExprRule* ExprRule::changeDest(const ExprRule* er, const ref<Expr>& to)
 {
-	ExprRule		*new_er;
 	labelmap_ty		lm;
 	Pattern			new_to;
 	std::stringstream	ss;
@@ -166,13 +165,7 @@ ExprRule* ExprRule::changeDest(const ExprRule* er, const ref<Expr>& to)
 	if (new_to.size() == 0)
 		return NULL;
 
-	new_er = new ExprRule(er->from, new_to);
-	if (er->const_constraints == NULL)
-		return new_er;
-
-	new_er->const_constraints = new std::vector<Pattern>();
-	*new_er->const_constraints = *er->const_constraints;
-	return new_er;
+	return new ExprRule(er->from, new_to, er->const_constraints);
 }
 
 void ExprRule::printTombstone(std::ostream& os, unsigned range_len)
@@ -501,17 +494,11 @@ ExprRule* ExprRule::addConstraints(
 	return ret;
 }
 
-/* first = old label id; second = new label id */
-static std::map<unsigned, unsigned> getRemaps(EFWTagged &efw)
-{
-
-}
-
 /* XXX: this will wreck things with label numbers right now
  * how to fix?? */
 ExprRule* ExprRule::markUnbound(int tag) const
 {
-	ExprRule		*ret;
+	ref<Expr>		from_expr;
 	exprtags_ty		visit_tag(1, tag);
 	EFWTagged		efwt(visit_tag, false);
 	std::stringstream	ss;
@@ -519,22 +506,78 @@ ExprRule* ExprRule::markUnbound(int tag) const
 
 	/* create from-pattern, marking constants as slots */
 	efwt.setOS(&ss);
-	efwt.apply(getFromExpr());
+	from_expr = getFromExpr();
+	efwt.apply(from_expr);
 
-	std::cerr << "[TAG] " << visit_tag[0] << '\n';
-	std::cerr << "[Tags] " << visit_tag.size() << '\n';
 	if (p_from.readFlatExpr(ss) == false) {
 		std::cerr << "[ExprRule] Failed to unbind subtree.\n";
 		std::cerr << "BAD PATTERN: " << ss.str() << '\n';
 		return NULL;
 	}
 
-	if (to.isConst()) {
-		ret = new ExprRule(p_from, to);
-	} else {
-		assert (0 == 1 && "AIEEEEEEEEEEEEEE");
+	if (to.isConst() || !efwt.getMaskedNew()) {
+		/* no need to translate */
+		return new ExprRule(p_from, to, const_constraints);
 	}
-	return ret;
+
+	/* must do a translation of the to-expr;
+	 * labels may have been shifted around.
+	 * The algorithm is as follows: keep an ordered list of
+	 * visited reads for a normal flat write.
+	 * On a var replace, remember the position in the list where
+	 * we started chopping reads and the number of reads removed.
+	 * Labels *prior* to the mask are OK.
+	 * Labels after masked range must be recomputed based on
+	 * when they're first seen.
+	 * e.g. if I mask labels 2 and 3, then see 3 and 2,
+	 * I'd know that 3->2 and 2->3. */
+	ss.str("");
+	ExprFlatWriter	efw(&ss);
+	efw.apply(from_expr);
+
+	/* construct correspondence */
+	const labellist_ty	&ll(efw.getLabelList());
+	std::vector<std::pair<unsigned, unsigned> > old2new;
+	std::set<unsigned>	known_lids;
+
+	/* label ids known before replacement */
+	for (unsigned i = 0; i < efwt.getMaskedStartLID(); i++)
+		known_lids.insert(i);
+
+	for (	unsigned i = efwt.getMaskedBase() + efwt.getMaskedReads();
+		i < ll.size(); i++)
+	{
+		if (known_lids.count(ll[i]))
+			continue;
+
+		old2new.push_back(std::make_pair(ll[i], known_lids.size()));
+		known_lids.insert(ll[i]);
+	}
+
+	ExprFlatWriter	efw_to(&ss);
+	Pattern		p_to;
+	labelmap_ty	lm, lm_new;
+
+	efw.getLabelMap(lm);
+
+	/* establish new mappings */
+	foreach (it, old2new.begin(), old2new.end())
+		lm_new.insert(std::make_pair(it->second, lm[it->first]));
+
+	/* read in old mappigns */
+	foreach (it, lm.begin(), lm.end())
+		if (!lm_new.count(it->first))
+			lm_new.insert(std::make_pair(it->first, it->second));
+
+	efw_to.setLabelMap(lm_new);
+	ss.str(""); ss.clear();
+	efw_to.apply(getToExpr());
+	if (p_to.readFlatExpr(ss) == false) {
+		std::cerr << "[ExprRule] Failed to rebind to-expr.\n";
+		return NULL;
+	}
+
+	return new ExprRule(p_from, p_to, const_constraints);
 }
 
 /* verify that the slotted constants collected during matching

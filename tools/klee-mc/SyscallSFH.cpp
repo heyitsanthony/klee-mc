@@ -644,13 +644,15 @@ void SyscallSFH::makeRangeSymbolic(
 
 		mo = state.addressSpace.resolveOneMO(cur_addr);
 		if (mo == NULL) {
-			state.addressSpace.print(std::cerr);
 			fprintf(stderr,
-				"couldn't find %p in range %p-%p (state=%p)\n",
+				"couldn't find %p in user range %p-%p\n",
 				(void*)cur_addr,
-				addr, ((char*)addr)+sz,
-				(void*)&state);
-			assert ("TODO: Allocate memory");
+				addr, ((char*)addr)+sz);
+			executor->terminateStateOnError(
+				state,
+				"Tried to make non-allocated memory symbolic",
+				"symoob.err");
+			return;
 		}
 
 		assert (mo->address <= cur_addr && "BAD SEARCH?");
@@ -689,6 +691,6 @@ void SyscallSFH::makeRangeSymbolic(
 	sym_os = exe_vex->executeMakeSymbolic(
 		state,
 		sym_mo,
-		ConstantExpr::alloc(sz, 32),
+		ConstantExpr::create((total_sz < sz) ? total_sz : sz, 32),
 		name);
 }

@@ -1,3 +1,5 @@
+/* Tracks object state hashes across schedule/deschedule.
+ * Raises an error if a hash is not preserved across scheduling. */
 #include <assert.h>
 #include <sstream>
 #include <iostream>

@@ -4,6 +4,7 @@
 
 namespace klee
 {
+typedef std::vector<unsigned>	labellist_ty;
 class ExprFlatWriter : public ExprConstVisitor
 {
 public:
@@ -11,11 +12,13 @@ public:
 	virtual ~ExprFlatWriter(void) {}
 	void setOS(std::ostream* _os) { os = _os; }
 	void setLabelMap(const labelmap_ty& lm);
+	void getLabelMap(labelmap_ty& lm) const;
+	const labellist_ty& getLabelList(void) const { return label_list; }
 protected:
 	virtual Action visitExpr(const Expr* expr);
 	std::ostream		*os;
 	ExprHashMap<unsigned>	labels;
-	std::vector<unsigned>	label_list;
+	labellist_ty		label_list;
 };
 
 class EFWTagged : public ExprVisitorTags<ExprFlatWriter>
@@ -28,7 +31,8 @@ public:
 	virtual void apply(const ref<Expr>& e);
 	virtual ~EFWTagged() {}
 
-	unsigned getMaskedBase(void) const { return masked_base; }
+	unsigned getMaskedBase(void) const { return masked_list_base; }
+	unsigned getMaskedStartLID(void) const { return masked_start_lid; }
 	unsigned getMaskedNew(void) const { return masked_new; }
 	unsigned getMaskedReads(void) const { return masked_reads; }
 protected:
@@ -39,7 +43,8 @@ private:
 
 	bool			const_repl;
 	unsigned		tag_c;
-	unsigned		masked_base;
+	unsigned		masked_list_base;
+	unsigned		masked_start_lid;
 	unsigned		masked_new;
 	unsigned		masked_reads;
 	static exprtags_ty	dummy;
