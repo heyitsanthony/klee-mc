@@ -443,7 +443,10 @@ static void* watchdog_thread(void* x)
 	} while (rc == -1);
 
 	sz = write(2, "watchdog timeout\n", 17);
-	exit(-1);
+
+	/* the _exit() is important because this is a signal,
+	 * otherwise we segfault! */
+	_exit(-1);
 
 	return NULL;
 }
