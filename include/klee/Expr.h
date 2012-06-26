@@ -416,7 +416,8 @@ class NotOptimizedExpr : public NonConstantExpr
 public:
   static const Kind kind = NotOptimized;
   static const unsigned numKids = 1;
-  NotOptimizedExpr(const ref<Expr> &_src) : src(_src), tag(0) {}
+  NotOptimizedExpr(const ref<Expr> &_src, unsigned _tag=0)
+  : src(_src), tag(_tag) {}
 
   ref<Expr> src;
 
@@ -429,7 +430,12 @@ public:
   unsigned getNumKids() const { return 1; }
   ref<Expr> getKid(unsigned i) const { return src; }
   const Expr* getKidConst(unsigned i) const { return src.get(); }
-  virtual ref<Expr> rebuild(ref<Expr> kids[]) const { return create(kids[0]); }
+  virtual ref<Expr> rebuild(ref<Expr> kids[]) const
+  {
+  	ref<Expr>	e(create(kids[0]));
+	cast<NotOptimizedExpr>(e)->tag = tag;
+	return e;
+  }
 
   static bool classof(const Expr *E)
   { return E->getKind() == Expr::NotOptimized; }

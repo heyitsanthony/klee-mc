@@ -148,7 +148,7 @@ ExprFlatWriter::Action EFWTagged::preTagVisit(const Expr* e)
 	visited_tag = true;
 	if (const_repl) {
 		/* constant label */
-		(*os) << " c" << tag_c
+		(*os) << " c" << tag_c++
 			<< ' ' << e->getWidth()
 			<< ' ' << *e << ' ';
 	} else
