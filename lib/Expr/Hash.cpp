@@ -24,6 +24,14 @@ Expr::Hash Expr::computeHash(void)
 	return hashValue;
 }
 
+/* transparent */
+Expr::Hash NotOptimizedExpr::computeHash(void)
+{
+	skeletonHash = src->skeleton();
+	hashValue = src->hash();
+	return hashValue;
+}
+
 Expr::Hash BindExpr::computeHash(void)
 {
 	uint64_t dat[3] = {

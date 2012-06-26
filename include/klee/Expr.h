@@ -435,6 +435,7 @@ public:
   { return E->getKind() == Expr::NotOptimized; }
 
   static bool classof(const NotOptimizedExpr *) { return true; }
+  virtual Hash computeHash(void);
 };
 
 

@@ -17,7 +17,7 @@ function xtive_loop
 		fi
 
 		loopc=$(($loopc + 1))
-		if [ "$loopc" -gt 4 ]; then
+		if [ "$loopc" -gt 8 ]; then
 			break;
 		fi
 
@@ -30,6 +30,10 @@ if [ -f "$PROOFDIR" ]; then
 	cp "$PROOFDIR" "$FPREFIX".brule
 else
 	kopt -max-stp-time=30 -pipe-solver -dump-bin -check-rule "$PROOFDIR" >$FPREFIX.brule
+fi
+
+if [ -f "$SEEDBRULE" ]; then
+	cat "$SEEDBRULE" >>$FPREFIX.brule
 fi
 
 xtive_loop "$FPREFIX.brule"
