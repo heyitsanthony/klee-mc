@@ -200,7 +200,7 @@ static void sc_klee(void* regfile)
 
 static void loop_protect(int sc, int* ctr)
 {
-	*ctr = (last_sc == SYS_futex)
+	*ctr = (last_sc == sc)
 		? *ctr + 1
 		: 0;
 
