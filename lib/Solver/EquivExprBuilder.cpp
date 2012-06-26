@@ -16,7 +16,7 @@
 #include "static/Sugar.h"
 #include "EquivExprBuilder.h"
 
-#define MAX_EXPRFILE_BYTES	(1024*512)
+#define MAX_EXPRFILE_BYTES	(1024*128)
 
 using namespace klee;
 using namespace llvm;
@@ -45,6 +45,12 @@ namespace {
 		"write-equiv-rules",
 		cl::init(false),
 		cl::desc("Dump equivalence rules to proofs directory."));
+
+	cl::opt<std::string>
+	EquivRuleFile(
+		"equiv-rule-file",
+		cl::init(""),
+		cl::desc("File for writing equivdb rules."));
 
 	cl::opt<bool>
 	QueueSolverEquiv(
@@ -83,6 +89,7 @@ EquivExprBuilder::EquivExprBuilder(Solver& s, ExprBuilder* in_eb)
 , miss_c(0)
 , failed_c(0)
 , blacklist_c(0)
+, equiv_rule_file(NULL)
 {
 	mkdir(EquivDBDir.c_str(), 0700);
 
@@ -110,9 +117,17 @@ EquivExprBuilder::EquivExprBuilder(Solver& s, ExprBuilder* in_eb)
 		sample_nonseq_fe[i].push_back(0xfe);
 	}
 
+	if (!EquivRuleFile.empty())
+		equiv_rule_file = new std::ofstream(
+			EquivRuleFile.c_str(),
+			std::ios::out | std::ios::binary | std::ios::app);
 }
 
-EquivExprBuilder::~EquivExprBuilder(void) { delete eb; }
+EquivExprBuilder::~EquivExprBuilder(void)
+{
+	if (equiv_rule_file) delete equiv_rule_file;
+	delete eb;
+}
 
 void EquivExprBuilder::loadBlacklist(const char* fname)
 {
@@ -395,6 +410,25 @@ void EquivExprBuilder::writeEquivRule(
 	const ref<Expr>& e_klee_w,
 	const ref<Expr>& e_db_unified)
 {
+	ExprRule	*er;
+
+	if (equiv_rule_file == NULL) {
+		writeEquivRuleToDir(e_klee_w, e_db_unified);
+		return;
+	}
+
+	er = ExprRule::createRule(e_klee_w, e_db_unified);
+	if (er == NULL)
+		return;
+
+	er->printBinaryRule(*equiv_rule_file);
+	equiv_rule_file->flush();
+	delete er;
+}
+
+void EquivExprBuilder::writeEquivRuleToDir(
+	const ref<Expr>& e_klee_w, const ref<Expr>& e_db_unified)
+{
 	std::stringstream	ss;
 	Query	q(EqExpr::create(e_klee_w, e_db_unified));
 
@@ -414,6 +448,7 @@ void EquivExprBuilder::writeEquivRule(
 		assert ( 0 == 1 && "REPEAT RULE!");
 	}
 }
+
 
 void EquivExprBuilder::missedLookup(
 	const ref<Expr>& e, unsigned nodes, uint64_t hash)

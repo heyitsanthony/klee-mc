@@ -123,6 +123,10 @@ protected:
 	void writeEquivRule(
 		const ref<Expr>& e_klee_w, const ref<Expr>& e_db_unified);
 
+	void writeEquivRuleToDir(
+		const ref<Expr>& e_klee_w, const ref<Expr>& e_db_unified);
+
+
 	bool unify(
 		const ref<Expr>& e_klee,
 		const ref<Expr>& e_db,
@@ -168,6 +172,8 @@ protected:
 	unsigned		miss_c;
 	unsigned		failed_c;
 	unsigned		blacklist_c;
+
+	std::ofstream		*equiv_rule_file;
 };
 
 }
