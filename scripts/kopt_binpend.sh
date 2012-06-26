@@ -33,7 +33,10 @@ else
 fi
 
 if [ -f "$SEEDBRULE" ]; then
-	cat "$SEEDBRULE" >>$FPREFIX.brule
+	zcat "$SEEDBRULE" >>$FPREFIX.brule
+	if [ $? -ne 0 ]; then
+		cat "$SEEDBRULE" >>$FPREFIX.brule
+	fi
 fi
 
 xtive_loop "$FPREFIX.brule"
