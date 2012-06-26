@@ -51,4 +51,6 @@ kopt -max-stp-time=30 -pipe-solver -db-punchout		\
 xtive_loop "$FPREFIX.punch.brule"
 kopt -pipe-solver -brule-rebuild -rule-file=$FPREFIX.punch.brule $FPREFIX.punch.rebuild.brule
 mv $FPREFIX.punch.rebuild.brule $FPREFIX.punch.brule
-cat $FPREFIX.{punch,uniq,unint,stubborn}.brule | gzip -c >$FPREFIX.final.brule.gz
+cat $FPREFIX.{punch,uniq,unint,stubborn}.brule  >$FPREFIX.final.brule
+xtive_loop $FPREFIX.final.brule
+gzip $FPREFIX.final.brule
