@@ -64,9 +64,8 @@ bool ArrayLT::operator()(const Array *a, const Array *b) const
 
 ExprFactory::ExprFactory(void)
 {
-	Expr::setBuilder(new ExtraOptBuilder());
+	Expr::setBuilder(ExprBuilder::create(ExprBuilder::ExtraOptsBuilder));
 	if (UseExprConsPtr) {
-		std::cerr << "USING EXPR CONS PTR!!!!!\n";
 		Expr::setAllocator(new ExprAllocUnique());
 	} else {
 		Expr::setAllocator(new ExprAlloc());

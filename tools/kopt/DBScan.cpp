@@ -41,7 +41,7 @@ DBScan::DBScan(Solver* _s)
 : s(_s)
 {
 	arr = Array::create("ko_arr", 4096);
-	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
+	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
 }
 
 DBScan::~DBScan()

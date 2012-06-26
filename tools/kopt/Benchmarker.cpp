@@ -236,7 +236,7 @@ void Benchmarker::benchRules(void)
 	RuleBuilder	*rb;
 	unsigned	i = 0;
 
-	rb = new RuleBuilder(ExprBuilder::create(bk));
+	rb = RuleBuilder::create(ExprBuilder::create(bk));
 	foreach (it, rb->begin(), rb->end()) {
 		double rel_err;
 
@@ -256,7 +256,7 @@ void Benchmarker::benchRuleBuilder(ExprBuilder *eb)
 	RuleBuilder	*rb;
 	unsigned	i = 0;
 
-	rb = new RuleBuilder(ExprBuilder::create(bk));
+	rb = RuleBuilder::create(ExprBuilder::create(bk));
 	foreach (it, rb->begin(), rb->end()) {
 		const ExprRule	*er(*it);
 		ref<Array>	arr(er->getMaterializeArray());

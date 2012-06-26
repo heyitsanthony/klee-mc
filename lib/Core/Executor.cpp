@@ -291,8 +291,9 @@ Executor::Executor(InterpreterHandler *ih)
 	/* rule builder should be installed before equiv checker, otherwise
 	 * we wind up wasting time searching the equivdb for rules we
 	 * already have! */
-	if (UseRuleBuilder)
-		Expr::setBuilder(new RuleBuilder(Expr::getBuilder()));
+	if (UseRuleBuilder) {
+		Expr::setBuilder(RuleBuilder::create(Expr::getBuilder()));
+	}
 
 	this->solver = Solver::createTimerChain(
 		stpTimeout,

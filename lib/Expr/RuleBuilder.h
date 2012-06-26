@@ -22,7 +22,6 @@ public:
 
 	typedef std::vector<ExprRule*>		rulearr_ty;
 
-	RuleBuilder(ExprBuilder* base);
 	virtual ~RuleBuilder(void);
 
 	virtual ref<Expr> Constant(const llvm::APInt &Value)
@@ -176,6 +175,9 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS)	\
 
 	void addRule(ExprRule* er);
 
+	static RuleBuilder* create(ExprBuilder* b);
+protected:
+	RuleBuilder(ExprBuilder* base);
 private:
 	void loadRules(void);
 	bool loadRuleDir(const char* ruledir);

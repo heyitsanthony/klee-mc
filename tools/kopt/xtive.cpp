@@ -279,7 +279,7 @@ void xtiveBRule(ExprBuilder *eb, Solver* s)
 	rule_replace_ty		replacements;
 	unsigned		new_from_c;
 
-	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
+	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
 
 	/* find rules where building expr with rb is better than to-expr */
 	/* from experience, these usually turn out to be bugs */

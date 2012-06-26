@@ -78,8 +78,8 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS) = 0;
 #undef DECL_BIN_REF
 
 	// Utility functions
-	ref<Expr> False() { return ConstantExpr::alloc(0, Expr::Bool); }
-	ref<Expr> True() { return ConstantExpr::alloc(1, Expr::Bool); }
+	ref<Expr> False() { return ConstantExpr::create(0, Expr::Bool); }
+	ref<Expr> True() { return ConstantExpr::create(1, Expr::Bool); }
 
 	ref<Expr> Constant(uint64_t Value, Expr::Width W)
 	{ return Constant(llvm::APInt(W, Value)); }

@@ -29,14 +29,12 @@ ExprBuilder* ExprBuilder::create(BuilderKind bk)
 		Builder = new ExtraOptBuilder();
 		break;
 	case RuleBuilder:
-		Builder = new klee::RuleBuilder(
-			new CanonBuilder(Builder, Builder));
-		break;
+		return RuleBuilder::create(new CanonBuilder(Builder));
 	default:
 		std::cerr << "Unknown BuilderKind.\n";
 		assert (0 == 1);
 		break;
 	}
 
-	return new CanonBuilder(Builder, Builder);
+	return new CanonBuilder(Builder);
 }

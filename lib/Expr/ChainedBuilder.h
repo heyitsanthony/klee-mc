@@ -107,6 +107,11 @@ public:
 	, Base(_Base)
 	{}
 
+	ChainedEB(ExprBuilder * _Builder)
+	: Builder(_Builder), Base(_Builder)
+	{}
+
+
 	virtual ~ChainedEB() { delete Base; }
 
 	ref<Expr> Constant(const llvm::APInt & Value)

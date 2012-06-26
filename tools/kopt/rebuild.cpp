@@ -73,7 +73,7 @@ void rebuildBRules(Solver* s, const std::string& Input)
 
 	assert (of.good() && !of.fail());
 
-	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
+	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
 
 	i = 0;
 	foreach (it, rb->begin(), rb->end()) {

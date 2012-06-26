@@ -304,7 +304,7 @@ static bool checkDup(ExprBuilder* eb, Solver* s)
 		return false;
 	}
 
-	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
+	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
 	old_expr = er->materialize();
 	old_eb = Expr::setBuilder(rb);
 	rb_expr = er->materialize();
@@ -531,7 +531,7 @@ static void addRule(ExprBuilder* eb, Solver* s)
 	er = ExprRule::loadRule(InputFile.c_str());
 	assert (er);
 
-	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
+	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
 	std::ofstream	of(
 		rb->getDBPath().c_str(),
 		std::ios_base::out |
@@ -607,7 +607,7 @@ void dumpDB(void)
 {
 	RuleBuilder	*rb;
 
-	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
+	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
 	foreach (it, rb->begin(), rb->end())
 		(*it)->print(std::cout);
 	delete rb;
@@ -620,7 +620,7 @@ static void dedupDB(void)
 	std::set<ExprRule>	ers;
 	unsigned		i;
 
-	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
+	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
 	i = 0;
 	foreach (it, rb->begin(), rb->end()) {
 		const ExprRule	*er(*it);
@@ -643,7 +643,7 @@ static void eraseShadowRules(Solver* s)
 	RuleBuilder			*rb;
 	std::set<const ExprRule*>	del_rules;
 
-	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
+	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
 	init_eb = Expr::getBuilder();
 
 	foreach (it, rb->begin(), rb->end()) {
@@ -724,7 +724,7 @@ static void checkDB(Solver* s)
 	unsigned	i;
 	unsigned	unexpected_from_c, better_from_c, bad_verify_c;
 
-	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
+	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
 	init_eb = Expr::getBuilder();
 	i = 0;
 	unexpected_from_c = 0;
@@ -828,7 +828,7 @@ static void extractRule(unsigned rule_num)
 	RuleBuilder	*rb;
 	unsigned	i;
 
-	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
+	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
 	if (rb->size() < rule_num) {
 		std::cerr << "Could not extract rule #" << rule_num
 			<< " from total of " << rb->size() << "rules.\n";
@@ -855,7 +855,7 @@ static void extractConstrs(const std::string& fname)
 	std::ofstream	of(fname.c_str());
 	RuleBuilder	*rb;
 
-	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
+	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
 	foreach (it, rb->begin(), rb->end()) {
 		const ExprRule	*er(*it);
 		if (!er->hasConstraints())
@@ -871,7 +871,7 @@ static void extractFree(const std::string& fname)
 	std::ofstream	of(fname.c_str());
 	RuleBuilder	*rb;
 
-	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
+	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
 	foreach (it, rb->begin(), rb->end()) {
 		const ExprRule	*er(*it);
 		if (!er->hasFree())
@@ -898,7 +898,7 @@ static void splitDB(std::string& prefix, int num_chunks)
 		ofs[i] = new std::ofstream(
 			((prefix + ".") + llvm::utostr(i)).c_str());
 
-	rb = new RuleBuilder(ExprBuilder::create(BuilderKind));
+	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
 	rules_per_chunk = (rb->size()+num_chunks-1) / num_chunks;
 	rule_c = 0;
 	foreach (it, rb->begin(), rb->end()) {

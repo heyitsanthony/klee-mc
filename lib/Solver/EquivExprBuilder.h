@@ -26,12 +26,10 @@ public:
 	virtual ref<Expr> NotOptimized(const ref<Expr> &Index)
 	{ return eb->NotOptimized(Index); }
 
+	/* since we ignore update lists and we've already constructed
+	 * the index, there's nothing new we'd get from checking a read */
 	ref<Expr> Read(const UpdateList &u, const ref<Expr> &i)
-	{
-		depth++;
-		ref<Expr>	ret(eb->Read(u, i));
-		return lookup(ret);
-	}
+	{ return eb->Read(u, i); }
 
 	ref<Expr> Select(
 		const ref<Expr> &Cond,

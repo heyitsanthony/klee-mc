@@ -17,6 +17,7 @@
 #include "static/Sugar.h"
 #include "ExprRule.h"
 #include "RuleBuilder.h"
+#include "CanonBuilder.h"
 
 using namespace klee;
 using namespace llvm;
@@ -108,6 +109,10 @@ RuleBuilder::~RuleBuilder()
 	rules_arr.clear();
 	delete eb;
 }
+
+
+RuleBuilder* RuleBuilder::create(ExprBuilder* b)
+{ return new Canonizer<RuleBuilder>(b); }
 
 static bool rulesSort(const ExprRule* l, const ExprRule* r)
 {
