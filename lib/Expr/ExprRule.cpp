@@ -41,7 +41,9 @@ ExprRule::ExprRule(
 
 ExprRule::ExprRule(const ExprRule& er)
 {
+	/* shallow copy data */
 	*this = er;
+	/* deep copy pointers */
 	if (er.const_constraints != NULL) {
 		const_constraints = new std::vector<Pattern>();
 		*const_constraints = *er.const_constraints;
@@ -380,7 +382,6 @@ public:
 	{
 		if (isDone()) return false;
 		if (*it != v) return false;
-
 		it++;
 		return true;
 	}
@@ -401,7 +402,6 @@ public:
 		v = *it;
 		if (!OP_LABEL_TEST(v) && !OP_CLABEL_TEST(v) && !OP_VAR_TEST(v))
 			return false;
-
 		it++;
 		return true;
 	}
@@ -466,6 +466,7 @@ ExprRule* ExprRule::addConstraints(
 
 	/* create from-pattern, marking constants as slots */
 	efwt.setOS(&ss);
+	efwt.setConstTag((const_constraints) ? const_constraints->size() : 0);
 	efwt.apply(getFromExpr());
 
 	if (p.readFlatExpr(ss) == false) {
@@ -474,10 +475,12 @@ ExprRule* ExprRule::addConstraints(
 		return NULL;
 	}
 
-	ret = new ExprRule(p, to);
+	ret = new ExprRule(p, to, const_constraints);
 
 	/* add constraints */
-	ret->const_constraints = new std::vector<Pattern>();
+	if (ret->const_constraints == NULL)
+		ret->const_constraints = new std::vector<Pattern>();
+
 	foreach (it, constraints.begin(), constraints.end()) {
 		std::stringstream	ss;
 		ExprFlatWriter		efw(&ss);
@@ -514,6 +517,8 @@ ExprRule* ExprRule::markUnbound(int tag) const
 		std::cerr << "BAD PATTERN: " << ss.str() << '\n';
 		return NULL;
 	}
+
+	assert (efwt.visitedTag());
 
 	if (to.isConst() || !efwt.getMaskedNew()) {
 		/* no need to translate */

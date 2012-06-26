@@ -42,7 +42,7 @@ public:
 	{ return !(*this == p); }
 	bool operator <(const Pattern& p) const;
 
-	ref<Expr> anonFlat2Expr(int label_max = -1) const;
+	ref<Expr> anonFlat2Expr(int label_max = -1, bool strip_notopt=false) const;
 
 	static ref<Array> getMaterializeArray(void);
 	static ref<Array> getFreeArray(void);
@@ -51,7 +51,8 @@ public:
 	static ref<Expr> flat2expr(
 		const labelmap_ty&	lm,
 		const flatrule_ty&	fr,
-		int&			off);
+		int&			off,
+		bool			strip_notopt = false);
 
 	ref<Expr> flat2expr(const labelmap_ty &lm) const
 	{

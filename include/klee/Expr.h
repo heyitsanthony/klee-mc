@@ -416,7 +416,7 @@ class NotOptimizedExpr : public NonConstantExpr
 public:
   static const Kind kind = NotOptimized;
   static const unsigned numKids = 1;
-  NotOptimizedExpr(const ref<Expr> &_src) : src(_src) {}
+  NotOptimizedExpr(const ref<Expr> &_src) : src(_src), tag(0) {}
 
   ref<Expr> src;
 
@@ -436,6 +436,11 @@ public:
 
   static bool classof(const NotOptimizedExpr *) { return true; }
   virtual Hash computeHash(void);
+
+  void setTag(unsigned t) { tag = t; }
+  unsigned getTag(void) const { return tag; }
+private:
+  unsigned tag;
 };
 
 

@@ -12,11 +12,13 @@ unsigned Pattern::free_off = 0;
 ref<Expr> Pattern::flat2expr(
 	const labelmap_ty&	lm,
 	const flatrule_ty&	fr,
-	int&			off)
+	int&			off,
+	bool			strip_notopt)
 {
 	flatrule_tok	tok;
 	unsigned	op_idx;
 	ref<Expr>	ret;
+	int		clabel_num = -1;
 
 	op_idx = off++;
 	assert (op_idx < fr.size());
@@ -43,17 +45,18 @@ ref<Expr> Pattern::flat2expr(
 
 		if (free_off + ((w+7)/8) >= 4096)
 			free_off = 0;
-		ret = NotOptimizedExpr::create(
-			Expr::createTempRead(getFreeArray(), w, free_off));
+		ret = Expr::createTempRead(getFreeArray(), w, free_off);
+		// always have not-opt so that structure of concats
+		// are preserved.
+		// if (!strip_notopt)
+			ret = NotOptimizedExpr::create(ret);
 		free_off = (free_off + (w+7)/8) % 4096;
 		return ret;
 	}
 
 	if (OP_CLABEL_TEST(tok)) {
 		/* replace label with provided example */
-		unsigned	label_num;
-
-		label_num = OP_CLABEL_NUM(tok);
+		clabel_num = OP_CLABEL_NUM(tok);
 		tok = Expr::Constant;
 	}
 
@@ -74,13 +77,20 @@ ref<Expr> Pattern::flat2expr(
 		} else {
 			ret = ConstantExpr::create(fr[off++], bits);
 		}
+
+		if (clabel_num != -1 && !strip_notopt) {
+			NotOptimizedExpr	*noe;
+			ret = NotOptimizedExpr::create(ret);
+			noe = cast<NotOptimizedExpr>(ret);
+			noe->setTag((unsigned)clabel_num);
+		}
 		break;
 	}
 	case Expr::Select: {
 		ref<Expr>	c, t, f;
-		c = flat2expr(lm, fr, off);
-		t = flat2expr(lm, fr, off);
-		f = flat2expr(lm, fr, off);
+		c = flat2expr(lm, fr, off, strip_notopt);
+		t = flat2expr(lm, fr, off, strip_notopt);
+		f = flat2expr(lm, fr, off, strip_notopt);
 		if (c.isNull() || t.isNull() || f.isNull()) {
 			return NULL;
 		}
@@ -92,13 +102,13 @@ ref<Expr> Pattern::flat2expr(
 		ref<Expr>		e_off, e_w, kid;
 		const ConstantExpr	*ce_off, *ce_w;
 
-		e_off = flat2expr(lm, fr, off);
-		e_w = flat2expr(lm, fr, off);
+		e_off = flat2expr(lm, fr, off, strip_notopt);
+		e_w = flat2expr(lm, fr, off, strip_notopt);
 
 		ce_off = dyn_cast<ConstantExpr>(e_off);
 		ce_w = dyn_cast<ConstantExpr>(e_w);
 
-		kid = flat2expr(lm, fr, off);
+		kid = flat2expr(lm, fr, off, strip_notopt);
 
 		if (e_off.isNull() || e_w.isNull() || kid.isNull()) {
 			return NULL;
@@ -117,9 +127,9 @@ ref<Expr> Pattern::flat2expr(
 		ref<Expr>		w, kid;
 		const ConstantExpr	*ce_w;
 
-		w = flat2expr(lm, fr, off);
+		w = flat2expr(lm, fr, off, strip_notopt);
 		ce_w = dyn_cast<ConstantExpr>(w);
-		kid = flat2expr(lm, fr, off);
+		kid = flat2expr(lm, fr, off, strip_notopt);
 		if (w.isNull() || kid.isNull()) {
 			return NULL;
 		}
@@ -133,7 +143,7 @@ ref<Expr> Pattern::flat2expr(
 	}
 
 	case Expr::Not: {
-		ref<Expr> e = flat2expr(lm, fr, off);
+		ref<Expr> e = flat2expr(lm, fr, off, strip_notopt);
 		ret = NotExpr::create(e);
 		break;
 	}
@@ -141,8 +151,8 @@ ref<Expr> Pattern::flat2expr(
 #define FLAT_BINOP(x)				\
 	case Expr::x: {				\
 		ref<Expr>	lhs, rhs;	\
-		lhs = flat2expr(lm, fr, off);	\
-		rhs = flat2expr(lm, fr, off);	\
+		lhs = flat2expr(lm, fr, off, strip_notopt);	\
+		rhs = flat2expr(lm, fr, off, strip_notopt);	\
 		if (lhs.isNull() || rhs.isNull())\
 		{ return NULL;	} \
 		if (Expr::x != Expr::Concat &&			\
@@ -317,8 +327,7 @@ void Pattern::getLabelMap(labelmap_ty& lm, unsigned l_max) const
 	}
 }
 
-
-ref<Expr> Pattern::anonFlat2Expr(int label_max) const
+ref<Expr> Pattern::anonFlat2Expr(int label_max, bool strip_notopt) const
 {
 	int		off;
 	labelmap_ty	lm;
@@ -331,7 +340,7 @@ ref<Expr> Pattern::anonFlat2Expr(int label_max) const
 	getLabelMap(lm, max_label);
 
 	off = 0;
-	return flat2expr(lm, rule, off);
+	return flat2expr(lm, rule, off, strip_notopt);
 }
 
 ref<Array> Pattern::getMaterializeArray(void)
@@ -340,7 +349,6 @@ ref<Array> Pattern::getMaterializeArray(void)
 		materialize_arr = Array::create("exprrule", 4096);
 	return materialize_arr;
 }
-
 
 ref<Array> Pattern::getFreeArray(void)
 {

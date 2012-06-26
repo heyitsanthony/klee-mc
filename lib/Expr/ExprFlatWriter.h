@@ -26,7 +26,8 @@ class EFWTagged : public ExprVisitorTags<ExprFlatWriter>
 public:
 	EFWTagged(const exprtags_ty& _tags_pre, bool _const_repl=true)
 	: ExprVisitorTags<ExprFlatWriter>(_tags_pre, dummy)
-	, const_repl(_const_repl) {}
+	, const_repl(_const_repl)
+	, tag_c(0) {}
 
 	virtual void apply(const ref<Expr>& e);
 	virtual ~EFWTagged() {}
@@ -35,9 +36,17 @@ public:
 	unsigned getMaskedStartLID(void) const { return masked_start_lid; }
 	unsigned getMaskedNew(void) const { return masked_new; }
 	unsigned getMaskedReads(void) const { return masked_reads; }
+	bool visitedTag(void) const { return visited_tag; }
+	void setConstTag(unsigned c) { tag_c = c; }
 protected:
 	virtual ExprFlatWriter::Action preTagVisit(const Expr* e);
 	virtual void postTagVisit(const Expr* e) {}
+//	virtual Action visitExpr(const Expr* expr)
+//	{
+//		std::cerr << "[TAGPRE] " << tag_pre << " -> "
+//		<< *expr << '\n';
+//		return ExprVisitorTags<ExprFlatWriter>::visitExpr(expr);
+//	}
 private:
 	void visitVar(const Expr* _e);
 
@@ -48,5 +57,6 @@ private:
 	unsigned		masked_new;
 	unsigned		masked_reads;
 	static exprtags_ty	dummy;
+	bool			visited_tag;
 };
 }

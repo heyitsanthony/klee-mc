@@ -42,15 +42,18 @@ protected:
 	, arr(0)
 	, cur_node(0)
 	{ use_hashcons = false;	}
+
 	virtual Action visitRead(const ReadExpr& re)
 	{ return Action::skipChildren(); }
 
-	virtual Action visitReadExpr(const ReadExpr& e)
-	{ return Action::skipChildren(); }
+	virtual Action visitNotOptimized(const NotOptimizedExpr& e)
+	{return Action::skipChildren(); }
 
 	virtual Action visitExpr(const Expr& e)
 	{
 		if (done) return Action::skipChildren();
+
+	//	std::cerr << "SUBTAG: " << cur_node << ": " << e << '\n';
 
 		if (cur_node == target_node) {
 			ref<Expr>	repl;
@@ -64,9 +67,6 @@ protected:
 		cur_node++;
 		return Action::doChildren();
 	}
-
-	virtual Action visitNotOptimizedExpr(const NotOptimizedExpr& e)
-	{return Action::skipChildren(); }
 private:
 	ref<Array>	arr;
 	unsigned	cur_node;

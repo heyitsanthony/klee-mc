@@ -128,6 +128,12 @@ namespace llvm
 		cl::desc("Dump rule db in pretty format."),
 		cl::init(false));
 
+	cl::opt<bool>
+	DumpPattern(
+		"dump-pat",
+		cl::desc("Dump rule db patterns"),
+		cl::init(false));
+
 	cl::opt<int>
 	SplitDB(
 		"split-db",
@@ -394,8 +400,8 @@ bool checkRule(const ExprRule* er, Solver* s, std::ostream& os)
 		return false;
 	}
 
-	to_nodes = ExprUtil::getNumNodes(er->getToExpr());
-	from_nodes = ExprUtil::getNumNodes(er->getFromExpr());
+	to_nodes = ExprUtil::getNumNodes(er->getCleanToExpr());
+	from_nodes = ExprUtil::getNumNodes(er->getCleanFromExpr());
 
 	ok = s->mustBeTrue(Query(rule_expr), mustBeTrue);
 	if (ok == false) {
@@ -603,6 +609,21 @@ static void dumpRule(Solver* s)
 	dumpRuleDir(s);
 }
 
+void dumpPattern(void)
+{
+	RuleBuilder	*rb;
+
+	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
+	foreach (it, rb->begin(), rb->end()) {
+		std::cout << "FROM: ";
+		(*it)->getFromPattern().dump(std::cout);
+		std::cout << "TO: ";
+		(*it)->getToPattern().dump(std::cout);
+		std::cout << "=======================\n";
+	}
+	delete rb;
+}
+
 void dumpDB(void)
 {
 	RuleBuilder	*rb;
@@ -739,10 +760,10 @@ static void checkDB(Solver* s)
 		xxx_rb = i;
 
 		to_e = er->getToExpr();
-		from_eb = er->getFromExpr();
+		from_eb = er->getCleanFromExpr();
 
 		Expr::setBuilder(rb);
-		from_rb = er->getFromExpr();
+		from_rb = er->getCleanFromExpr();
 		Expr::setBuilder(init_eb);
 
 		if (from_rb == to_e) {
@@ -754,14 +775,16 @@ static void checkDB(Solver* s)
 		}
 
 
-		if (from_rb != from_eb) {
+		if (from_rb->skeleton() != from_eb->skeleton()) {
 			unsigned	to_node_c, from_node_c;
 			bool		bad;
 
 			std::cerr << "=======================\n";
-			std::cerr << "!!!DID NOT TRANSLATE AS EXPECTED!!!!\n";
+			std::cerr << "!!!DID NOT TRANSLATE AS EXPECTED #"
+				<< i << "!!!!\n";
 			std::cerr << "FROM-EXPR-EB=" << from_eb << '\n';
 			std::cerr << "FROM-EXPR-RB=" << from_rb << '\n';
+			std::cerr << "FROM-RAW-EXPR=" << er->getFromExpr() << '\n';
 			std::cerr << "TO-EXPR=" << to_e << '\n';
 
 			to_node_c = ExprUtil::getNumNodes(to_e);
@@ -775,6 +798,9 @@ static void checkDB(Solver* s)
 			std::cerr << '\n';
 
 			er = RuleBuilder::getLastRule();
+			if (er == NULL)
+				continue;
+
 			if (er != NULL) {
 				std::cerr << "LAST RULE APPLIED:\n";
 				er->print(std::cerr);
@@ -938,6 +964,8 @@ int main(int argc, char **argv)
 
 	if (ExtractFrees) {
 		extractFree(InputFile);
+	} else if (DumpPattern) {
+		dumpPattern();
 	} else if (EraseShadows) {
 		eraseShadowRules(s);
 	} else if (SplitDB) {

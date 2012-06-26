@@ -829,11 +829,12 @@ static ref<Expr> AndExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 
 static ref<Expr> AndExpr_create(Expr *l, Expr *r)
 {
+	Expr	*t = NULL;
 	if (*l == *r)
 		return l;
 
 	if (r->getKind() == Expr::And) {
-		Expr* t = l;
+		t = l;
 		l = r;
 		r = t;
 	}
@@ -842,6 +843,11 @@ static ref<Expr> AndExpr_create(Expr *l, Expr *r)
 	if (l->getKind() == Expr::And) {
 		if (*l->getKid(0) == *r || *l->getKid(1) == *r)
 			return l;
+	}
+
+	if (t != NULL) {
+		r = l;
+		l = t;
 	}
 
 	if (l->getWidth() == Expr::Bool) {

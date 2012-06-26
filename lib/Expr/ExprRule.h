@@ -56,6 +56,12 @@ public:
 	ref<Expr> getFromExpr(void) const { return from.anonFlat2Expr(); }
 	ref<Expr> getToExpr(void) const	{ return to.anonFlat2Expr(); }
 
+	ref<Expr> getCleanFromExpr(void) const
+	{ return from.anonFlat2Expr(-1,true); }
+	ref<Expr> getCleanToExpr(void) const
+	{ return to.anonFlat2Expr(-1,true); }
+
+
 	ref<Expr> apply(const ref<Expr>& e) const;
 	static ref<Expr> apply(
 		const ref<Expr>& e,
@@ -70,6 +76,7 @@ public:
 	const flatrule_ty& getFromKey(void) const { return from.rule; }
 	const flatrule_ty& getToKey(void) const { return to.rule; }
 	const Pattern& getFromPattern(void) const { return from; }
+	const Pattern& getToPattern(void) const { return to; }
 
 	bool operator==(const ExprRule& er) const;
 	bool operator<(const ExprRule& er) const;
@@ -82,10 +89,10 @@ public:
 
 	bool checkConstants(const labelmap_ty& clm) const;
 	bool hasConstraints(void) const { return const_constraints != NULL; }
+	bool hasFree(void) const;
+	bool isNaive(void) const { return !hasConstraints() && !hasFree(); }
 
 	ExprRule(const ExprRule& er);
-
-	bool hasFree(void) const;
 protected:
 	ExprRule(
 		const Pattern& _from,

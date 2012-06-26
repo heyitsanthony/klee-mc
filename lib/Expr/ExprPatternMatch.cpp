@@ -62,6 +62,7 @@ bool ExprPatternMatch::verifyConstant(uint64_t v, unsigned w)
 ExprPatternMatch::Action ExprPatternMatch::matchVar(
 	const Expr* expr, uint64_t label_op)
 {
+	/* verify expression width matches expected width */
 	if (OP_VAR_W(label_op) != expr->getWidth()) {
 		success = false;
 		return Stop;
@@ -155,9 +156,6 @@ ExprPatternMatch::Action ExprPatternMatch::visitExpr(const Expr* expr)
 
 	/* success => stop */
 	assert (success == false);
-
-	/* SUPER IMPORTANT: read labels are always 8-bits until otherwise
-	 * noted. Permitting other sizes tends to wreck expected sizes. */
 
 	matched = rule_it.matchLabel(label_op);
 	if (matched) {

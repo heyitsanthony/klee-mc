@@ -50,6 +50,16 @@ ExprFlatWriter::Action ExprFlatWriter::visitExpr(const Expr* e)
 	}
 
 	if (e->getKind() == Expr::NotOptimized) {
+		if (e->getKid(0)->getKind() == Expr::Constant) {
+			const NotOptimizedExpr	*noe;
+			noe = cast<NotOptimizedExpr>(e);
+			if (os)
+				*os << " c" << noe->getTag() <<
+					' ' << e->getWidth() <<
+					' ' << *noe->src << ' ';
+			return Skip;
+		}
+
 		if (os) *os << " v" << e->getWidth() << ' ';
 		return Skip;
 	}
@@ -135,9 +145,10 @@ ExprFlatWriter::Action ExprFlatWriter::visitExpr(const Expr* e)
 
 ExprFlatWriter::Action EFWTagged::preTagVisit(const Expr* e)
 {
+	visited_tag = true;
 	if (const_repl) {
 		/* constant label */
-		(*os) << " c" << tag_c++
+		(*os) << " c" << tag_c
 			<< ' ' << e->getWidth()
 			<< ' ' << *e << ' ';
 	} else
@@ -147,13 +158,14 @@ ExprFlatWriter::Action EFWTagged::preTagVisit(const Expr* e)
 
 void EFWTagged::apply(const ref<Expr>& e)
 {
-	tag_c = 0;
+	visited_tag = false;
 	masked_list_base = 0;
 	masked_start_lid = 0;
 	masked_new = 0;
 	masked_reads = 0;
 	label_list.clear();
 	ExprVisitorTags<ExprFlatWriter>::apply(e);
+	tag_c = 0;
 }
 
 void EFWTagged::visitVar(const Expr* _e)

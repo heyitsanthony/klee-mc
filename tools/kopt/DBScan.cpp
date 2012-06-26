@@ -144,12 +144,14 @@ void DBScan::punchout(std::ostream& os)
 	foreach (it, kc_map.begin(), kc_map.end()) {
 		const KnockoutClass	*kc;
 		ExprRule		*new_rule;
+		const ExprRule		*old_rule_example;
 
 		kc = it->second;
 
 		/* don't try generalizing unique rules */
-		if (kc->size() < 2) {
-			unique_rules.push_back(kc->front()->getExprRule());
+		old_rule_example = kc->front()->getExprRule();
+		if (kc->size() < 2 && old_rule_example->isNaive()) {
+			unique_rules.push_back(old_rule_example);
 			continue;
 		}
 

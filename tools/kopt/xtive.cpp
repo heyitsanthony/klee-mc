@@ -124,7 +124,7 @@ static unsigned appendNewFroms(Solver* s, RuleBuilder* rb)
 
 		/* careful-- we want to be monotone decreasing or 
 		 * the size of the db could explode */
-		if (from_rb_node_c >= from_e_node_c)
+		if (from_rb_node_c > from_e_node_c)
 			continue;
 
 		new_rule = ExprRule::createRule(from_rb, to_e);

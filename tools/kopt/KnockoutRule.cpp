@@ -331,9 +331,23 @@ ExprRule* KnockoutRule::createSubtreeRule(Solver *s) const
 		if (split_e.first == from_e)
 			continue;
 
-		/* hm.. */
+		/* we've already marked this one as being a free 
+		 * subtree-- don't redo it. */
 		if (split_e.second->getKind() == Expr::NotOptimized)
 			continue;
+		/* note, we'll still traverse the notopt subtree, but
+		 * we already know its format */
+		if (split_e.second->getKind() == Expr::Concat) {
+			ref<Expr>	kid(split_e.second->getKid(0));
+
+			if (kid->getKind() == Expr::Read) {
+				if (cast<ReadExpr>(kid)->getArray() == 	
+					Pattern::getFreeArray())
+				{
+					continue;
+				}
+			}
+		}
 
 		/* ignore reads-- they've already got symbolics */
 		if (split_e.second->getKind() == Expr::Read)
