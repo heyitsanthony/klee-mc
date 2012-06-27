@@ -182,47 +182,51 @@ void sc_munmap(void* regfile)
 	sc_ret_v(regfile, 0);
 }
 
+/*
+However, the actual Linux system call returns
+the new program break on success.  On failure, the system call returns the
+current break.  The glibc wrapper function does some work (i.e., checks
+whether the new break is less than addr) to provide the 0 and -1 return values
+described above.
+ */
 void* sc_brk(void* regfile)
 {
-	// ptrdiff_t grow_len;
+	uintptr_t	new_addr;
 
 	klee_warning("Don't grow brks! This breaks static linking!");
-	if (last_brk == 0)
+
+	/* NB: to disable brk(), just return 0 every time */
+
+	/* setup last_brk if never set before */
+	if (last_brk == 0) {
 		last_brk = (void*)heap_end;
+	}
+
+/* usual first request size is 132kb, so allocate about that much */
+/* we're demand paged so it shouldn't cost much anyway */
+#define DEFAULT_HEAP_SZ	200*1024
+	if (last_brk == 0) {
+		/* hm, no heap. better make one */
+		heap_begin = (uint64_t)kmc_alloc_aligned(
+			DEFAULT_HEAP_SZ,
+			"brk_init");
+		heap_end = heap_begin + DEFAULT_HEAP_SZ;
+		last_brk = (void*)heap_begin;
+	}
+
+	new_addr = GET_ARG0(regfile);
+
+	if (new_addr != 0) {
+		/* update program break to new position */
+		/* XXX STUB STUB STUB */
+		ptrdiff_t	new_space;
+		new_space = new_addr - heap_end;
+		if (new_space < 0) {
+			/* we can satisfy this request-- enough space */
+			last_brk = (void*)new_addr;
+		}
+	}
+
 	sc_ret_v(regfile, (uintptr_t)last_brk);
 	return regfile;
 }
-
-#if 0
-	new_regs = sc_new_regs(regfile);
-
-	/* error case -- linux returns current break */
-	if (GET_SYSRET(new_regs) == (uintptr_t)last_brk) {
-		sc_ret_v_new(new_regs, last_brk);
-		break;
-	}
-
-	/* don't forget:
-	 * heap grows forward into a stack that grows down! */
-	grow_len = GET_ARG0(regfile) - (intptr_t)last_brk;
-
-	if (grow_len == 0) {
-		/* request nothing */
-		klee_warning("Program requesting empty break? Weird.");
-	} else if (grow_len < 0) {
-		/* deallocate */
-		uint64_t	dealloc_base;
-
-		dealloc_base = (intptr_t)last_brk + grow_len;
-		num_bytes = -grow_len;
-		kmc_free_run(dealloc_base, num_bytes);
-
-		last_brk = (void*)dealloc_base;
-	} else {
-		/* grow */
-		last_brk
-	}
-
-	sc_ret_v_new(new_regs, last_brk);
-	break;
-#endif

@@ -210,6 +210,37 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 		(((struct msghdr*)sp.getArg(1)))->msg_controllen = 0;
 		break;
 
+	case SYS_brk: {
+		static uint64_t	last_brk = 0;
+		uint64_t	new_brk;
+		void		*mmap_ret;
+
+		new_brk = getRet();
+		if (last_brk == 0) {
+			/* first brk(), don't do much */
+			last_brk = new_brk;
+			break;
+		}
+
+		/* make things page-aligned so mmap won't complain */
+		last_brk = last_brk & ~0xfff;
+		new_brk = 4096*((new_brk + 4095) / 4096);
+
+		if (last_brk == new_brk)
+			break;
+
+		/* extend program break */
+		mmap_ret = mmap(
+			(void*)last_brk, new_brk - last_brk,
+			PROT_READ | PROT_WRITE,
+			MAP_PRIVATE | MAP_ANONYMOUS,
+			-1, 0);
+		assert (mmap_ret == (void*)last_brk);
+		last_brk = new_brk;
+		break;
+	}
+
+
 	case SYS_lseek:
 		if (file_recons != NULL)
 			file_recons->seek(
@@ -246,7 +277,7 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 				(xlate_sysnr == SYS_readlink) ? 0 : 1),
 				(void*)getRet());
 		break;
-	
+
 
 	case SYS_open:
 		fprintf(stderr, KREPLAY_SC "OPEN \"%s\" ret=%p\n",
