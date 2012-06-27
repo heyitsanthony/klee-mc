@@ -193,8 +193,6 @@ void* sc_brk(void* regfile)
 {
 	uintptr_t	new_addr;
 
-	klee_warning("Don't grow brks! This breaks static linking!");
-
 	/* NB: to disable brk(), just return 0 every time */
 
 	/* setup last_brk if never set before */

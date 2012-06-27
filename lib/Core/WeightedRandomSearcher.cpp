@@ -293,3 +293,100 @@ double FrontierTroughWeight::weigh(const ExecutionState* es) const
 	/* rank frontier as 0 (e.g. gt=0), rank last as ss.size() (e.g. gt) */
 	return gt;
 }
+
+double BranchWeight::weigh(const ExecutionState* es) const
+{
+	unsigned	br_c, st_c;
+
+	loadIns();
+
+	br_c = getBrCount(es->totalInsts);
+	st_c = getStCount(es->totalInsts);
+
+	if (st_c == 0) return 0;
+
+	return ((double)br_c) / ((double)st_c);
+}
+
+
+unsigned BranchWeight::getStCount(uint64_t es_ins) const
+{
+	st_ins_ty::const_iterator	it, it_end;
+	uint64_t			ins_upper, ins_lower;
+	unsigned			st_c;
+
+	ins_upper = es_ins + n_width;
+	ins_lower = (es_ins > n_width) ? (es_ins - n_width) : 0;
+
+	it_end = st_ins.end();
+	it = st_ins.lower_bound(ins_lower);
+	st_c = 0;
+	while (it != it_end) {
+		unsigned		ins(it->first);
+
+		it++;
+		if (ins > ins_upper)
+			break;
+
+		st_c++;
+	}
+
+	return st_c;
+}
+
+unsigned BranchWeight::getBrCount(uint64_t es_ins) const
+{
+	br_ins_ty::const_iterator	it, it_end;
+	uint64_t			ins_upper, ins_lower;
+	unsigned			br_c;
+
+	ins_upper = es_ins + n_width;
+	// ins_lower = (es_ins > n_width) ? (es_ins - n_width) : 0;
+	ins_lower = es_ins;
+	/* only consider branches directly ahead of us */
+
+	it_end = br_ins.end();
+	it = br_ins.lower_bound(ins_lower);
+	br_c = 0;
+	while (it != it_end) {
+		unsigned		ins(it->first);
+
+		it++;
+		if (ins > ins_upper)
+			break;
+
+		br_c++;
+	}
+
+	return br_c;
+}
+
+#define BR_COMPUTE_INTERVAL	10	/* min 10 instructions must pass */
+void BranchWeight::loadIns(void) const
+{
+	if (stats::instructions < (last_ins+BR_COMPUTE_INTERVAL)) 
+		return;
+
+	last_ins = stats::instructions;
+	br_ins.clear();
+	foreach (it, KBrInstruction::beginBr(), KBrInstruction::endBr()) {
+		const KBrInstruction*	kbr(*it);
+		if (kbr->hasFoundAll() /*|| !kbr->hasSeenExpr()*/)
+			continue;
+		if (kbr->getTrueMinInst() != ~((uint64_t)0)) {
+			br_ins.insert(std::make_pair(kbr->getTrueMinInst(), kbr));
+			continue;
+		}
+		if (kbr->getFalseMinInst() != ~((uint64_t)0)) {
+			br_ins.insert(std::make_pair(kbr->getFalseMinInst(), kbr));
+			continue;
+		}
+		/* Hm. */
+	}
+
+	st_ins.clear();
+	foreach (it, exe->beginStates(), exe->endStates()) {
+		const ExecutionState	*es(*it);
+		st_ins.insert(std::make_pair(es->totalInsts, es));
+	}
+}

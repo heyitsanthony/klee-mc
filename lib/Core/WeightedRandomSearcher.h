@@ -8,6 +8,8 @@ namespace klee
 {
 template<class T> class DiscretePDF;
 
+class KBrInstruction;
+
 class WeightFunc
 {
 public:
@@ -94,6 +96,35 @@ private:
 };
 
 
+
+class BranchWeight : public WeightFunc
+{
+public:
+	BranchWeight(Executor* _exe, unsigned _nw = 10000)
+	: WeightFunc("BranchInsWeight", true)
+	, exe(_exe)
+	, n_width(_nw) /* neighborhood width */
+	{ last_ins = stats::instructions; }
+	virtual ~BranchWeight() {}
+
+	virtual double weigh(const ExecutionState* es) const;
+	virtual WeightFunc* copy(void) const
+	{ return new BranchWeight(exe, n_width); }
+private:
+	void loadIns(void) const;
+	unsigned getBrCount(uint64_t insts) const;
+	unsigned getStCount(uint64_t insts) const;
+
+	Executor			*exe;
+	unsigned			n_width;	/* neighborhood width */
+	typedef std::map<uint64_t, const KBrInstruction* > br_ins_ty;
+	typedef std::map<uint64_t, const ExecutionState* > st_ins_ty;
+
+	/* branches keyed by instruction visit */
+	mutable br_ins_ty		br_ins;
+	mutable st_ins_ty		st_ins; /* state instructions */
+	mutable uint64_t		last_ins;
+};
 
 
 class WeightedRandomSearcher : public Searcher

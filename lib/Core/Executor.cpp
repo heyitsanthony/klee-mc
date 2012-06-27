@@ -838,7 +838,7 @@ void Executor::markBranchVisited(
 {
 	KBrInstruction	*kbr;
 	bool		isTwoWay = (branches.first && branches.second);
-	bool		got_fresh, fresh;
+	bool		got_fresh, fresh, is_cond_const;
 
 	kbr = static_cast<KBrInstruction*>(ki);
 
@@ -849,8 +849,13 @@ void Executor::markBranchVisited(
 	if (isTwoWay)
 		kbr->foundFork(state.totalInsts);
 
-	if (TrackBranchExprs && cond->getKind() != Expr::Constant)
-		kbr->addExpr(cond);
+	is_cond_const = cond->getKind() == Expr::Constant;
+	if (!is_cond_const) {
+		if (TrackBranchExprs) {
+			kbr->addExpr(cond);
+		}
+		kbr->seenExpr();
+	}
 
 	fresh = false;
 	got_fresh = false;
