@@ -56,4 +56,7 @@ kopt -pipe-solver -brule-rebuild -rule-file=$FPREFIX.punch.brule $FPREFIX.punch.
 mv $FPREFIX.punch.rebuild.brule $FPREFIX.punch.brule
 cat $FPREFIX.{punch,uniq,unint,stubborn}.brule  >$FPREFIX.final.brule
 xtive_loop $FPREFIX.final.brule
-gzip $FPREFIX.final.brule
+kopt -pipe-solver -brule-rebuild -rule-file=$FPREFIX.final.brule $FPREFIX.final.rb.brule
+rm $FPREFIX.final.brule
+gzip $FPREFIX.final.rb.brule
+mv $FPREFIX.final.rb.brule.gz  $FPREFIX.final.brule.gz 
