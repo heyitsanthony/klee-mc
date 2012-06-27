@@ -24,6 +24,9 @@
 
 using namespace klee;
 
+#define MAX_UPDATE_TIME	1000
+#define MAX_REPL_SIZE	1000
+
 namespace {
 	llvm::cl::opt<bool>
 	SimplifyUpdates(
@@ -32,6 +35,9 @@ namespace {
 		"Simplifies update list expressions in constraint manager."),
 		llvm::cl::init(true));
 }
+
+unsigned ConstraintManager::replacement_c = 0;
+unsigned ConstraintManager::timeout_c = 0;
 
 namespace klee
 {
@@ -49,7 +55,7 @@ public:
 
 	virtual ref<Expr> apply(const ref<Expr>& e)
 	{
-		if (replacements.size() > 1000)
+		if (replacements.size() > MAX_REPL_SIZE)
 			replacements.clear();
 		return ExprVisitor::apply(e);
 	}
@@ -58,9 +64,11 @@ public:
 	{
 		replmap_ty::const_iterator it;
 		it = replacements.find(ref<Expr>(const_cast<Expr*>(&e)));
-		return (it != replacements.end())
-			? Action::changeTo(it->second)
-			: Action::doChildren();
+		if (it == replacements.end())
+			return Action::doChildren();
+
+		ConstraintManager::incReplacements();
+		return Action::changeTo(it->second);
 	}
 
 	replmap_ty& getReplacements(void) { return replacements; }
@@ -83,8 +91,10 @@ ExprVisitor::Action ExprReplaceVisitor2::visitRead(const ReadExpr &re)
 
 	// fast path: no updates, reading from constant array
 	// with a single value occupying all indices in the array
-	if (!ul.head && ul.getRoot()->isSingleValue())
+	if (!ul.head && ul.getRoot()->isSingleValue()) {
+		ConstraintManager::incReplacements();
 		return Action::changeTo(ul.getRoot()->getValue(0));
+	}
 
 	ref<Expr> readIndex = isa<ConstantExpr>(re.index)
 		? re.index
@@ -94,7 +104,11 @@ ExprVisitor::Action ExprReplaceVisitor2::visitRead(const ReadExpr &re)
 	if (	isa<ConstantExpr>(readIndex) &&
 		!ul.head && ul.getRoot()->isConstantArray())
 	{
-		uint64_t idx = cast<ConstantExpr>(readIndex)->getZExtValue();
+		uint64_t idx;
+		
+		ConstraintManager::incReplacements();
+
+		idx = cast<ConstantExpr>(readIndex)->getZExtValue();
 		if (idx < ul.getRoot()->mallocKey.size)
 			return Action::changeTo(ul.getRoot()->getValue(idx));
 
@@ -107,7 +121,7 @@ ExprVisitor::Action ExprReplaceVisitor2::visitRead(const ReadExpr &re)
 	}
 
 	/* rebuilding fucks up symbolics on underconstrained exe */
-	if (!SimplifyUpdates)
+	if (SimplifyUpdates == false)
 		return Action::doChildren();
 
 	rebuild = rebuildUpdates = false;
@@ -117,14 +131,14 @@ ExprVisitor::Action ExprReplaceVisitor2::visitRead(const ReadExpr &re)
 	uniformValue = buildUpdateStack(
 		re.updates, readIndex, updateStack, rebuildUpdates);
 	if (!uniformValue.isNull()) {
+		ConstraintManager::incReplacements();
 		return Action::changeTo(uniformValue);
 	}
 
 	if (rebuild && !rebuildUpdates) {
-		ref<Expr>	new_re;
-
-		new_re = ReadExpr::create(re.updates, readIndex);
-		return Action::changeTo(new_re);
+		ConstraintManager::incReplacements();
+		return Action::changeTo(
+			ReadExpr::create(re.updates, readIndex));
 	}
 
 
@@ -141,6 +155,7 @@ ExprVisitor::Action ExprReplaceVisitor2::visitRead(const ReadExpr &re)
 		new_re = ReadExpr::create(*newUpdates, readIndex);
 		delete newUpdates;
 
+		ConstraintManager::incReplacements();
 		return Action::changeTo(new_re);
 	}
 
@@ -233,20 +248,31 @@ static void addEquality(
 	}
 }
 
-ref<Expr> ConstraintManager::simplifyExpr(ref<Expr> e) const
+void ConstraintManager::setupSimplifier(void) const
 {
-	if (isa<ConstantExpr>(e)) return e;
-
-	if (simplifier != NULL)
-		return simplifier->apply(e);
-
-	simplifier = new ExprReplaceVisitor2();
+	assert (simplifier == NULL);
+	simplifier = new ExprTimer<ExprReplaceVisitor2>(MAX_UPDATE_TIME);
 	ExprReplaceVisitor2::replmap_ty &equalities(simplifier->getReplacements());
 
 	foreach (it, constraints.begin(), constraints.end())
 		addEquality(equalities, *it);
+}
 
-	return simplifier->apply(e);
+ref<Expr> ConstraintManager::simplifyExpr(ref<Expr> e) const
+{
+	ref<Expr>	ret;
+
+	if (isa<ConstantExpr>(e)) return e;
+
+	if (simplifier == NULL)
+		setupSimplifier();
+
+	ret = simplifier->apply(e);
+	if (ret.isNull()) {
+		timeout_c++;
+		return e;
+	}
+	return ret;
 }
 
 bool ConstraintManager::addConstraintInternal(ref<Expr> e)

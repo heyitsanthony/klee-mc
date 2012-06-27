@@ -11,6 +11,7 @@
 #define KLEE_CONSTRAINTS_H
 
 #include "klee/Expr.h"
+#include "klee/util/ExprTimer.h"
 
 // FIXME: Currently we use ConstraintManager for two things: to pass
 // sets of constraints around, and to optimize constraints. We should
@@ -75,15 +76,22 @@ public:
 
 	bool isValid(const Assignment& a) const;
 
+	static unsigned getReplacements(void) { return replacement_c; }
+	static unsigned getTimeouts(void) { return timeout_c; }
+	static void incReplacements(void) { replacement_c++; }
 private:
 	constraints_ty constraints;
-	mutable ExprReplaceVisitor2* simplifier;
+	mutable ExprTimer<ExprReplaceVisitor2>* simplifier;
 
 	// returns true iff the constraints were modified
 	bool rewriteConstraints(ExprVisitor &visitor);
 
 	bool addConstraintInternal(ref<Expr> e);
 	void invalidateSimplifier(void) const;
+	void setupSimplifier(void) const;
+
+	static unsigned replacement_c;
+	static unsigned timeout_c;
 };
 
 }
