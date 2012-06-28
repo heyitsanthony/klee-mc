@@ -47,7 +47,8 @@ class ExprReplaceVisitor2 : public ExprVisitor
 public:
 //	typedef std::tr1::unordered_map< ref<Expr>, ref<Expr> > replmap_ty;
 	typedef std::map< ref<Expr>, ref<Expr> > replmap_ty;
-	ExprReplaceVisitor2(void) : ExprVisitor(true) {}
+	ExprReplaceVisitor2(void) : ExprVisitor(true)
+	{ }
 
 	ExprReplaceVisitor2(const replmap_ty& _replacements)
 	: ExprVisitor(true)
@@ -175,7 +176,7 @@ bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor)
 		ref<Expr> &ce = *it;
 		ref<Expr> e = visitor.apply(ce);
 
-		if (e != ce) {
+		if (!e.isNull() && e != ce) {
 			// enable further reductions
 			addConstraintInternal(e);
 			changed = true;
@@ -306,7 +307,8 @@ bool ConstraintManager::addConstraintInternal(ref<Expr> e)
 	case Expr::Eq: {
 		BinaryExpr *be = cast<BinaryExpr>(e);
 		if (isa<ConstantExpr>(be->left)) {
-			ExprReplaceVisitor visitor(be->right, be->left);
+			ExprTimer<ExprReplaceVisitor> visitor(
+				be->right, be->left, MAX_UPDATE_TIME);
 			rewriteConstraints(visitor);
 		}
 		constraints.push_back(e);

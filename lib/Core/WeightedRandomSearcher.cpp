@@ -297,15 +297,24 @@ double FrontierTroughWeight::weigh(const ExecutionState* es) const
 double BranchWeight::weigh(const ExecutionState* es) const
 {
 	unsigned	br_c, st_c;
+	unsigned	br_prev_c, br_next_c;
 
 	loadIns();
 
 	br_c = getBrCount(es->totalInsts);
 	st_c = getStCount(es->totalInsts);
+	br_prev_c = getBrCount(
+		(es->totalInsts > n_width)
+		? es->totalInsts - n_width
+		: 0);
+	br_next_c = getBrCount(es->totalInsts + n_width);
 
 	if (st_c == 0) return 0;
+	if (br_prev_c == 0) br_prev_c = 1;
+	if (br_next_c == 0) br_next_c = 1;
 
-	return ((double)br_c) / ((double)st_c);
+	return  ((double)br_c) / ((double)st_c*br_prev_c*br_next_c);
+//	return  ((double)br_c) / ((double)st_c);
 }
 
 
@@ -371,7 +380,7 @@ void BranchWeight::loadIns(void) const
 	br_ins.clear();
 	foreach (it, KBrInstruction::beginBr(), KBrInstruction::endBr()) {
 		const KBrInstruction*	kbr(*it);
-		if (kbr->hasFoundAll() /*|| !kbr->hasSeenExpr()*/)
+		if (kbr->hasFoundAll() || !kbr->hasSeenExpr())
 			continue;
 		if (kbr->getTrueMinInst() != ~((uint64_t)0)) {
 			br_ins.insert(std::make_pair(kbr->getTrueMinInst(), kbr));
