@@ -1,5 +1,7 @@
 /* -*- mode: c++; c-basic-offset: 2; -*- */
 
+#include "../../lib/Core/SeedExecutor.h"
+#include "../../lib/Core/ExecutorBC.h"
 #include "klee/Common.h"
 #include "klee/ExecutionState.h"
 #include "klee/Expr.h"
@@ -64,11 +66,11 @@ namespace {
   Environ("environ", cl::desc("Parse environ from given file (in \"env\" format)"));
 
   cl::list<std::string>
-  InputArgv(cl::ConsumeAfter, 
+  InputArgv(cl::ConsumeAfter,
             cl::desc("<program arguments>..."));
 
   cl::opt<LibcType> Libc(
-    "libc", 
+    "libc",
     cl::desc("Choose libc version (none by default)."),
     cl::values(
       clEnumValN(NoLibc, "none", "Don't link in a libc"),
@@ -77,22 +79,22 @@ namespace {
   		clEnumValEnd),
     cl::init(NoLibc));
 
-    
+
   cl::opt<bool>
-  WithPOSIXRuntime("posix-runtime", 
+  WithPOSIXRuntime("posix-runtime",
 		cl::desc("Link with POSIX runtime"),
 		cl::init(false));
-    
+
   // this is a fake entry, its automagically handled
   cl::list<std::string>
-  ReadArgsFilesFake("read-args", 
+  ReadArgsFilesFake("read-args",
                     cl::desc("File to read arguments from (one arg per line)"));
-    
+
   cl::opt<bool>
-  ReplayKeepSymbolic("replay-keep-symbolic", 
+  ReplayKeepSymbolic("replay-keep-symbolic",
                      cl::desc("Replay the test cases only by asserting"
                               "the bytes, not necessarily making them concrete."));
-    
+
   cl::list<std::string>
   ReplayOutFile("replay-out",
                 cl::desc("Specify an out file to replay"),
@@ -115,10 +117,10 @@ namespace {
 
   cl::list<std::string>
   SeedOutFile("seed-out");
-  
+
   cl::list<std::string>
   SeedOutDir("seed-out-dir");
-  
+
   cl::opt<bool>
   Watchdog("watchdog",
            cl::desc("Use a watchdog process to enforce --max-time."),
@@ -174,7 +176,7 @@ static void parseArguments(int argc, char **argv)
       arguments.push_back(argv[i]);
     }
   }
-    
+
   int numArgs = arguments.size() + 1;
   const char **argArray = new const char*[numArgs+1];
   argArray[0] = argv[0];
@@ -225,12 +227,12 @@ static void interrupt_handle() {
 // the state data before going ahead and killing it.
 static void halt_via_gdb(int pid) {
   char buffer[256];
-  sprintf(buffer, 
+  sprintf(buffer,
           "gdb --batch --eval-command=\"p halt_execution()\" "
           "--eval-command=detach --pid=%d &> /dev/null",
           pid);
   //  fprintf(stderr, "KLEE: WATCHDOG: running: %s\n", buffer);
-  if (system(buffer)==-1) 
+  if (system(buffer)==-1)
     perror("system");
 }
 
@@ -292,23 +294,23 @@ static void printTimes(PrefixWriter& info, struct tms* tms, clock_t* tm, time_t*
 
 static void printStats(PrefixWriter& info, KleeHandler* handler)
 {
-  uint64_t queries = 
+  uint64_t queries =
     *theStatisticManager->getStatisticByName("Queries");
-  uint64_t queriesValid = 
+  uint64_t queriesValid =
     *theStatisticManager->getStatisticByName("QueriesValid");
-  uint64_t queriesInvalid = 
+  uint64_t queriesInvalid =
     *theStatisticManager->getStatisticByName("QueriesInvalid");
-  uint64_t queryCounterexamples = 
+  uint64_t queryCounterexamples =
     *theStatisticManager->getStatisticByName("QueriesCEX");
-  uint64_t queryConstructs = 
+  uint64_t queryConstructs =
     *theStatisticManager->getStatisticByName("QueriesConstructs");
   uint64_t queryCacheHits =
     *theStatisticManager->getStatisticByName("QueryCacheHits");
   uint64_t queryCacheMisses =
     *theStatisticManager->getStatisticByName("QueryCacheMisses");
-  uint64_t instructions = 
+  uint64_t instructions =
     *theStatisticManager->getStatisticByName("Instructions");
-  uint64_t forks = 
+  uint64_t forks =
     *theStatisticManager->getStatisticByName("Forks");
 
   info << "done: total queries = " << queries << " ("
@@ -316,8 +318,8 @@ static void printStats(PrefixWriter& info, KleeHandler* handler)
        << "invalid: " << queriesInvalid << ", "
        << "cex: " << queryCounterexamples << ")\n";
   if (queries)
-    info << "done: avg. constructs per query = " 
-         << queryConstructs / queries << "\n";  
+    info << "done: avg. constructs per query = "
+         << queryConstructs / queries << "\n";
 
   info << "done: query cache hits = " << queryCacheHits << ", "
        << "query cache misses = " << queryCacheMisses << "\n";
@@ -364,7 +366,7 @@ static int runWatchdog(void)
 
       if (time > nextStep) {
         ++level;
-    
+
         if (level==1) {
           fprintf(stderr, "KLEE: WATCHDOG: time expired, attempting halt via INT\n");
           kill(pid, SIGINT);
@@ -420,7 +422,7 @@ static void runReplay(Interpreter* interpreter, Function* mainFn, char** pEnvp)
 {
   std::vector<std::string> outFiles = ReplayOutFile;
   foreach (it, ReplayOutDir.begin(),  ReplayOutDir.end())
-    KleeHandler::getOutFiles(*it, outFiles);    
+    KleeHandler::getOutFiles(*it, outFiles);
 
   std::vector<KTest*> kTests;
   foreach (it, outFiles.begin(), outFiles.end()) {
@@ -459,174 +461,196 @@ static void runReplay(Interpreter* interpreter, Function* mainFn, char** pEnvp)
 }
 
 static void runSeeds(
-  Interpreter* interpreter, Function* mainFn,
-  int pArgc, char** pArgv, char** pEnvp)
+	SeedExecutor<ExecutorBC>*	exe,
+	Function* mainFn, int pArgc, char** pArgv, char** pEnvp)
 {
-  std::vector<KTest *> seeds;
-  foreach (it, SeedOutFile.begin(), SeedOutFile.end()) {
-    KTest *out = kTest_fromFile(it->c_str());
-    if (!out) {
-      std::cerr << "KLEE: unable to open: " << *it << "\n";
-      exit(1);
-    }
-    seeds.push_back(out);
-  }
+	std::vector<KTest *>	seeds;
 
-  foreach (it, SeedOutDir.begin(), SeedOutDir.end()) {
-    std::vector<std::string> outFiles;
-    KleeHandler::getOutFiles(*it, outFiles);
-    foreach (it2, outFiles.begin(), outFiles.end()) {
-      KTest *out = kTest_fromFile(it2->c_str());
-      if (!out) {
-        std::cerr << "KLEE: unable to open: " << *it2 << "\n";
-        exit(1);
-      }
-      seeds.push_back(out);
-    }
-    if (outFiles.empty()) {
-      std::cerr << "KLEE: seeds directory is empty: " << *it << "\n";
-      exit(1);
-    }
-  }
-     
-  if (!seeds.empty()) {
-    std::cerr << "KLEE: using " << seeds.size() << " seeds\n";
-    interpreter->useSeeds(&seeds);
-  }
-  if (RunInDir != "") {
-    int res = chdir(RunInDir.c_str());
-    if (res < 0) {
-      klee_error("Unable to change directory to: %s", RunInDir.c_str());
-    }
-  }
-  interpreter->runFunctionAsMain(mainFn, pArgc, pArgv, pEnvp);
+	foreach (it, SeedOutFile.begin(), SeedOutFile.end()) {
+		KTest *out = kTest_fromFile(it->c_str());
+		if (!out) {
+			std::cerr << "KLEE: unable to open: " << *it << "\n";
+			exit(1);
+		}
+		seeds.push_back(out);
+	}
 
-  while (!seeds.empty()) {
-    kTest_free(seeds.back());
-    seeds.pop_back();
-  }
+	foreach (it, SeedOutDir.begin(), SeedOutDir.end()) {
+		std::vector<std::string> outFiles;
+		KleeHandler::getOutFiles(*it, outFiles);
+		foreach (it2, outFiles.begin(), outFiles.end()) {
+			KTest *out = kTest_fromFile(it2->c_str());
+			if (!out) {
+				std::cerr << "KLEE: unable to open: "
+					<< *it2 << "\n";
+				exit(1);
+			}
+			seeds.push_back(out);
+		}
+		if (outFiles.empty()) {
+			std::cerr	<< "KLEE: seeds directory is empty: "
+					<< *it << "\n";
+			exit(1);
+		}
+	}
+
+	if (!seeds.empty()) {
+		std::cerr << "KLEE: using " << seeds.size() << " seeds\n";
+		exe->useSeeds(&seeds);
+	}
+
+	if (RunInDir != "") {
+		int res = chdir(RunInDir.c_str());
+		if (res < 0) {
+			klee_error(
+				"Unable to change directory to: %s",
+				RunInDir.c_str());
+		}
+	}
+	exe->runFunctionAsMain(mainFn, pArgc, pArgv, pEnvp);
+
+	while (!seeds.empty()) {
+		kTest_free(seeds.back());
+		seeds.pop_back();
+	}
 }
 
-int main(int argc, char **argv, char **envp) {  
+int main(int argc, char **argv, char **envp)
+{
 #if ENABLE_STPLOG == 1
-  STPLOG_init("stplog.c");
+	STPLOG_init("stplog.c");
 #endif
+	bool		useSeeds;
+	Module		*mainModule;
+	const Module	*finalModule;
+	KleeHandler	*handler;
+	Function	*mainFn;
+	Interpreter	*interpreter;
+	ExecutorBC			*exe_bc;
+	SeedExecutor<ExecutorBC>	*exe_seed;
+	std::vector<std::string>	pathFiles;
+	std::list<ReplayPathType>	replayPaths;
+	ReplayPathType			replayPath;
 
-  atexit(llvm_shutdown);  // Call llvm_shutdown() on exit.
+	atexit(llvm_shutdown);  // Call llvm_shutdown() on exit.
 
-  llvm::InitializeNativeTarget();
+	llvm::InitializeNativeTarget();
 
-  parseArguments(argc, argv);
-  sys::PrintStackTraceOnErrorSignal();
+	parseArguments(argc, argv);
+	sys::PrintStackTraceOnErrorSignal();
 
-  g_InputFile = InputFile;
-  g_Libc = Libc;
-  g_WithPOSIXRuntime = WithPOSIXRuntime;
+	g_InputFile = InputFile;
+	g_Libc = Libc;
+	g_WithPOSIXRuntime = WithPOSIXRuntime;
+	useSeeds = ReplayOutDir.empty() && ReplayOutFile.empty();
 
+	if (Watchdog) return runWatchdog();
 
+	sys::SetInterruptFunction(interrupt_handle);
 
-  if (Watchdog) return runWatchdog();
+	// Load the bytecode...
+	Interpreter::ModuleOptions Opts = getMainModule(mainModule);
 
-  sys::SetInterruptFunction(interrupt_handle);
+	// Get the desired main function.  klee_main initializes uClibc
+	// locale and other data and then calls main.
+	mainFn = mainModule->getFunction("main");
+	if (mainFn == NULL) {
+		std::cerr << "'main' function not found in module.\n";
+		return -1;
+	}
 
-  // Load the bytecode...
-  Module* mainModule;
-  Interpreter::ModuleOptions Opts = getMainModule(mainModule);
+	// FIXME: Change me to std types.
+	char **pEnvp = getEnvironment();
+	if (pEnvp == NULL) pEnvp = envp;
 
-  // Get the desired main function.  klee_main initializes uClibc
-  // locale and other data and then calls main.
-  Function *mainFn = mainModule->getFunction("main");
-  if (!mainFn) {
-    std::cerr << "'main' function not found in module.\n";
-    return -1;
-  }
+	int pArgc = InputArgv.size() + 1;
+	char** pArgv = new char *[pArgc];
+	for (unsigned i=0; i<InputArgv.size()+1; i++) {
+		std::string &arg = (i==0 ? InputFile : InputArgv[i-1]);
+		unsigned size = arg.size() + 1;
+		char *pArg = new char[size];
 
-  // FIXME: Change me to std types.
-  char **pEnvp = getEnvironment();
-  if (pEnvp == NULL) pEnvp = envp;
+		std::copy(arg.begin(), arg.end(), pArg);
+		pArg[size - 1] = 0;
 
-  int pArgc = InputArgv.size() + 1; 
-  char** pArgv = new char *[pArgc];
-  for (unsigned i=0; i<InputArgv.size()+1; i++) {
-    std::string &arg = (i==0 ? InputFile : InputArgv[i-1]);
-    unsigned size = arg.size() + 1;
-    char *pArg = new char[size];
-    
-    std::copy(arg.begin(), arg.end(), pArg);
-    pArg[size - 1] = 0;
-    
-    pArgv[i] = pArg;
-  }
+		pArgv[i] = pArg;
+	}
 
-  std::vector<std::string> pathFiles;
-  if (ReplayPathDir != "") KleeHandler::getPathFiles(ReplayPathDir, pathFiles);
-  if (ReplayPathFile != "") pathFiles.push_back(ReplayPathFile);
+	if (ReplayPathDir != "")
+		KleeHandler::getPathFiles(ReplayPathDir, pathFiles);
+	if (ReplayPathFile != "")
+		pathFiles.push_back(ReplayPathFile);
 
-  std::list<ReplayPathType> replayPaths;
-  ReplayPathType replayPath;
+	foreach (it, pathFiles.begin(), pathFiles.end()) {
+	KleeHandler::loadPathFile(*it, replayPath);
+		replayPaths.push_back(replayPath);
+		replayPath.clear();
+	}
 
-  foreach (it, pathFiles.begin(), pathFiles.end()) {
-    KleeHandler::loadPathFile(*it, replayPath);
-    replayPaths.push_back(replayPath);
-    replayPath.clear();
-  }
+	handler = new KleeHandler(InputFile, pArgc, pArgv);
+	if (useSeeds) {
+		exe_seed = new SeedExecutor<ExecutorBC>(handler);
+		interpreter = exe_seed;
+	} else {
+		exe_bc = new ExecutorBC(handler);
+		interpreter = exe_bc;
+	}
+	theInterpreter = interpreter;
+	handler->setInterpreter(interpreter);
 
-  KleeHandler *handler = new KleeHandler(InputFile, pArgc, pArgv);
-  Interpreter *interpreter = Interpreter::create(handler);
-  theInterpreter = interpreter;
-  handler->setInterpreter(interpreter);
-  
-  std::ostream &infoFile = handler->getInfoStream();
-  for (int i=0; i<argc; i++) {
-    infoFile << argv[i] << (i+1<argc ? " ":"\n");
-  }
+	std::ostream &infoFile = handler->getInfoStream();
+	for (int i=0; i<argc; i++) {
+		infoFile << argv[i] << (i+1<argc ? " ":"\n");
+	}
 
-  TwoOStreams info2s(&std::cerr, &infoFile);
-  PrefixWriter info(info2s, "KLEE: ");
-  info << "PID: " << getpid() << "\n";
+	TwoOStreams info2s(&std::cerr, &infoFile);
+	PrefixWriter info(info2s, "KLEE: ");
+	info << "PID: " << getpid() << "\n";
 
-  const Module *finalModule = interpreter->setModule(mainModule, Opts);
-  externalsAndGlobalsCheck(finalModule);
+	finalModule = interpreter->setModule(mainModule, Opts);
+	externalsAndGlobalsCheck(finalModule);
 
-  if (!replayPaths.empty()) {
-    interpreter->setReplayPaths(&replayPaths);
-  }
+	if (!replayPaths.empty()) {
+		interpreter->setReplayPaths(&replayPaths);
+	}
 
-  char buf[256];
-  time_t t[2];
-  clock_t tm[2];
-  struct tms tms[2];
-  bool tms_valid = true;
+	char buf[256];
+	time_t t[2];
+	clock_t tm[2];
+	struct tms tms[2];
+	bool tms_valid = true;
 
-  t[0] = time(NULL);
-  tm[0] = times(&tms[0]);
-  if (tm[0] == (clock_t) -1) {
-    perror("times");
-    tms_valid = false;
-  }
-  strftime(buf, sizeof(buf), "Started: %Y-%m-%d %H:%M:%S\n", localtime(&t[0]));
-  info << buf;
-  infoFile.flush();
+	t[0] = time(NULL);
+	tm[0] = times(&tms[0]);
+	if (tm[0] == (clock_t) -1) {
+		perror("times");
+		tms_valid = false;
+	}
+	strftime(
+		buf, sizeof(buf),
+		"Started: %Y-%m-%d %H:%M:%S\n", localtime(&t[0]));
+	info << buf;
+	infoFile.flush();
 
-  if (!ReplayOutDir.empty() || !ReplayOutFile.empty()) {
-    assert(SeedOutFile.empty());
-    assert(SeedOutDir.empty());
-    runReplay(interpreter, mainFn, pEnvp);
-  } else {
-    runSeeds(interpreter, mainFn, pArgc, pArgv, pEnvp);
-  }
- 
-  printTimes(info, tms, tm, t);
+	if (!useSeeds) {
+		assert(SeedOutFile.empty());
+		assert(SeedOutDir.empty());
+		runReplay(interpreter, mainFn, pEnvp);
+	} else {
+		runSeeds(exe_seed, mainFn, pArgc, pArgv, pEnvp);
+	}
 
-  // Free all the args.
-  for (unsigned i=0; i<InputArgv.size()+1; i++)
-    delete[] pArgv[i];
-  delete[] pArgv;
+	printTimes(info, tms, tm, t);
 
-  delete interpreter;
+	// Free all the args.
+	for (unsigned i=0; i<InputArgv.size()+1; i++)
+	delete[] pArgv[i];
+	delete[] pArgv;
 
-  printStats(info, handler);
-  delete handler;
+	delete interpreter;
 
-  return 0;
+	printStats(info, handler);
+	delete handler;
+
+	return 0;
 }

@@ -212,7 +212,19 @@ void* sc_brk(void* regfile)
 		last_brk = (void*)heap_begin;
 	}
 
+#define EXCESSIVE_BRK_BYTES	0x80000000
 	new_addr = GET_ARG0(regfile);
+	if (	new_addr != 0 &&
+		((intptr_t)new_addr-(intptr_t)heap_end) > EXCESSIVE_BRK_BYTES)
+	{
+		klee_uerror("Excessive brk", "bigbrk.err");
+	}
+
+
+	if (klee_is_symbolic(new_addr)) {
+		klee_warning_once("concretizing brk");
+		new_addr = concretize_u64(GET_ARG0(regfile));
+	}
 
 	if (new_addr != 0) {
 		/* update program break to new position */

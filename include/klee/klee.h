@@ -93,6 +93,7 @@ extern "C" {
   /// \arg line - The line number to report in the error message.
   /// \arg message - A string to include in the error message.
   /// \arg suffix - The suffix to use for error files.
+#define klee_uerror(x, y)	klee_report_error(__FILE__, __LINE__, x, y)
   __attribute__((noreturn))
   void klee_report_error(const char *file,
 			 int line,

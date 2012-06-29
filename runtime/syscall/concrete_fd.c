@@ -63,9 +63,7 @@ static void find_next_free(void)
 	}
 
 	if (k == MAX_FD) {
-		klee_report_error(
-			__FILE__, __LINE__,
-			"Ran out of virtual fds", "fd.err");
+		klee_uerror("Ran out of virtual fds", "fd.err");
 	}
 }
 

@@ -72,9 +72,7 @@ void sc_ret_range(void* regfile, int64_t lo, int64_t hi)
 
 #define UNIMPL_SC(x)						\
 	case SYS_##x:						\
-		klee_report_error(				\
-			__FILE__, __LINE__,			\
-			"Unimplemented syscall "#x, "sc.err");	\
+		klee_uerror("Unimplemented syscall "#x, "sc.err");	\
 		break;
 #define FAKE_SC(x)							\
 	case SYS_##x:							\
@@ -189,11 +187,7 @@ static void sc_klee(void* regfile)
 		sc_ret_v(regfile, klee_is_valid_addr(GET_ARG1_PTR(regfile)));
 		break;
 	default:
-		klee_report_error(
-			__FILE__,
-			__LINE__,
-			"Unsupported SYS_klee syscall",
-			"kleesc.err");
+		klee_uerror("Unsupported SYS_klee syscall", "kleesc.err");
 		break;
 	}
 }
@@ -207,11 +201,7 @@ static void loop_protect(int sc, int* ctr)
 	if (*ctr < 10)
 		return;
 
-	klee_report_error(
-		__FILE__,
-		__LINE__,
-		"Possible syscall infinite loop",
-		"loop.early");
+	klee_uerror("Possible syscall infinite loop", "loop.early");
 }
 
 #include <asm/ptrace.h>
@@ -1054,19 +1044,13 @@ void* sc_enter(void* regfile, void* jmpptr)
 		if (	GET_ARG0_PTR(regfile) && 
 			file_path_has_sym(GET_ARG0_PTR(regfile)))
 		{
-			klee_report_error(
-				__FILE__,__LINE__,
-				"Symbolic exec filepath",
-				"symexec.err");
+			klee_uerror("Symbolic exec filepath", "symexec.err");
 		}
 
 		argv = GET_ARG1_PTR(regfile);
 		for (i = 0; argv[i] != NULL; i++) {
 			if (argv[i] && file_path_has_sym(argv[i])) {
-				klee_report_error(
-				__FILE__,__LINE__,
-				"Symbolic exec argv",
-				"symexec.err");
+				klee_uerror("Symbolic exec argv", "symexec.err");
 			}
 		}
 
@@ -1199,11 +1183,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case ARCH_SYS_UNSUPP:
 	default:
 		kmc_sc_bad(sc.sys_nr);
-		klee_report_error(
-			__FILE__,
-			__LINE__,
-			"Unknown Syscall",
-			"sc.err");
+		klee_uerror("Unknown Syscall", "sc.err");
 		break;
 	}
 

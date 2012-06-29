@@ -27,9 +27,7 @@ static struct bc_sc_memop* next_opbuf(void)
 
 	bc_opbufidx++;
 	if (bc_opbufidx >= OPBUF_MAX)
-		klee_report_error(
-			__FILE__, __LINE__,
-			"MemOp Buf Overflow", "sc.err");
+		klee_uerror("MemOp Buf Overflow", "sc.err");
 	
 	op = &bc_opbuf[bc_opbufidx];
 	op->sop_hdr.bc_sz = sizeof(struct bc_sc_memop);
@@ -75,10 +73,7 @@ void sc_breadcrumb_commit(struct sc_pkt* sc, uint64_t aux_ret)
 	int i;
 
 	if (bc_sc.bcs_sysnr != (uint32_t)~0) {
-		klee_report_error(
-			__FILE__, __LINE__,
-			"Reusing already-set breadcrumb for commit",
-			"sc.err");
+		klee_uerror("Reusing set breadcrumb for commit", "sc.err");
 	}
 	bc_sc.bcs_sysnr = sc->pure_sys_nr;
 	bc_sc.bcs_xlate_sysnr = sc->sys_nr;

@@ -20,7 +20,8 @@
 #include "klee/Internal/Module/Cell.h"
 #include "klee/Internal/Module/KInstruction.h"
 #include "llvm/ADT/APFloat.h"
-#include "SeedInfo.h"	/* so forkInfo works */
+#include "SeedInfo.h"
+#include "SeedCore.h"
 #include <vector>
 #include <string>
 #include <map>
@@ -82,32 +83,30 @@ template<class T> class ref;
 
 class Executor : public Interpreter
 {
-  /* FIXME The executor shouldn't have friends. */
-  friend class ExeStateManager;
-  friend class BumpMergingSearcher;
-  friend class RandomPathSearcher;
-  friend class MergingSearcher;
-  friend class WeightedRandomSearcher;
-  friend class SpecialFunctionHandler;
-  friend class StatsTracker;
+/* FIXME The executor shouldn't have friends. */
+friend class ExeStateManager;
+friend class BumpMergingSearcher;
+friend class RandomPathSearcher;
+friend class MergingSearcher;
+friend class WeightedRandomSearcher;
+friend class SpecialFunctionHandler;
+friend class StatsTracker;
 
 public:
-  class Timer {
-  public:
-    Timer();
-    virtual ~Timer();
+	class Timer {
+	public:
+		Timer();
+		virtual ~Timer();
+		virtual void run() = 0;
+	};
 
-    /// The event callback.
-    virtual void run() = 0;
-  };
-
-  typedef std::pair<ExecutionState*,ExecutionState*> StatePair;
-  typedef std::vector<ExecutionState*> StateVector;
-  typedef std::vector<
-  	std::pair<
+	typedef std::pair<ExecutionState*,ExecutionState*> StatePair;
+	typedef std::vector<ExecutionState*> StateVector;
+	typedef std::vector<
+	std::pair<
 		std::pair<const MemoryObject*, const ObjectState*>,
 		ExecutionState*> > ExactResolutionList;
-  typedef  std::map<ExecutionState*, std::vector<SeedInfo> > SeedMapType;
+
   /// Resolve a pointer to the memory objects it could point to the
   /// start of, forking execution when necessary and generating errors
   /// for pointers to invalid locations (either out of bounds or
@@ -150,7 +149,8 @@ public:
 	bool showLineInfo = true);
   /// Bind a constant value for e to the given target. NOTE: This
   /// function may fork state if the state has multiple seeds.
-  void executeGetValue(ExecutionState &state, ref<Expr> e, KInstruction *target);
+  virtual void executeGetValue(
+  	ExecutionState &state, ref<Expr> e, KInstruction *target);
 
   const KModule* getKModule(void) const { return kmodule; }
   KModule* getKModule(void) { return kmodule; }
@@ -159,19 +159,17 @@ public:
   virtual std::string getPrettyName(llvm::Function* f) const;
   ExeStateSet::const_iterator beginStates(void) const;
   ExeStateSet::const_iterator endStates(void) const;
-
+  virtual void stepStateInst(ExecutionState* &state);
+  void notifyCurrent(ExecutionState *current);
+  bool isHalted(void) const { return haltExecution; }
 
   MemoryManager	*memory;
 private:
-  class TimerInfo;
+	class TimerInfo;
 
-  static void deleteTimerInfo(TimerInfo*&);
-  void handleMemoryUtilization(ExecutionState* &state);
-  void handleMemoryPID(ExecutionState* &state);
-  void runLoop(void);
-  bool executeGetValueSeeding(
-  	ExecutionState &state, ref<Expr> e, KInstruction *target);
-
+	static void deleteTimerInfo(TimerInfo*&);
+	void handleMemoryUtilization(ExecutionState* &state);
+	void handleMemoryPID(ExecutionState* &state);
 
 protected:
 	KModule		*kmodule;
@@ -199,12 +197,13 @@ protected:
 
 	virtual void executeInstruction(ExecutionState &state, KInstruction *ki);
 
-  virtual void run(ExecutionState &initialState);
+	virtual void run(ExecutionState &initialState);
+	virtual void runLoop();
 
-  virtual void instRet(ExecutionState& state, KInstruction* ki);
-  virtual void instAlloc(ExecutionState& state, KInstruction* ki);
+	virtual void instRet(ExecutionState& state, KInstruction* ki);
+	virtual void instAlloc(ExecutionState& state, KInstruction* ki);
 
-  void retFromNested(ExecutionState& state, KInstruction* ki);
+	void retFromNested(ExecutionState& state, KInstruction* ki);
 
   /// bindInstructionConstants - Initialize any necessary per instruction
   /// constant values.
@@ -223,14 +222,18 @@ protected:
                                  const llvm::Twine &info="")
   { terminateStateOnError(state, message, "exec.err", info); }
 
-  ref<ConstantExpr> getSmallSymAllocSize(
-	ExecutionState &state, ref<Expr>& size);
+  ref<ConstantExpr> getSmallSymAllocSize(ExecutionState &st, ref<Expr>& size);
+  virtual void removePTreeState(
+  	ExecutionState* es, ExecutionState** root_to_be_removed = 0);
+
+  virtual ObjectState* makeSymbolic(
+    ExecutionState& state,
+    const MemoryObject* mo,
+    ref<Expr> len,
+    const char* arrPrefix = "arr");
 
 
-  const Cell& eval(
-    KInstruction *ki,
-    unsigned index,
-    ExecutionState &state) const;
+  const Cell& eval(KInstruction *ki, unsigned idx, ExecutionState &st) const;
 
   virtual llvm::Function* getFuncByAddr(uint64_t addr) = 0;
 
@@ -244,7 +247,7 @@ protected:
         llvm::Function *f,
         std::vector< ref<Expr> > &arguments);
 
-  virtual void stepStateInst(ExecutionState* &state);
+  virtual bool isInterestingTestCase(ExecutionState* st) const;
 
   InterpreterHandler	*interpreterHandler;
   llvm::TargetData	*target_data;
@@ -261,15 +264,6 @@ private:
   std::vector<TimerInfo*>	timers;
   std::set<KFunction*>		bad_conc_kfuncs;
 
-  /// When non-empty the Executor is running in "seed" mode. The
-  /// states in this map will be executed in an arbitrary order
-  /// (outside the normal search interface) until they terminate. When
-  /// the states reach a symbolic branch then either direction that
-  /// satisfies one or more seeds will be added to this map. What
-  /// happens with other states (that don't satisfy the seeds) depends
-  /// on as-yet-to-be-determined flags.
-  SeedMapType seedMap;
-
   /// When non-null the bindings that will be used for calls to
   /// klee_make_symbolic in order replay.
   const struct KTest *replayOut;
@@ -280,10 +274,6 @@ private:
   /// The index into the current \ref replayOut object.
   unsigned replayPosition;
 
-  /// When non-null a list of "seed" inputs which will be used to
-  /// drive execution.
-  const std::vector<struct KTest *> *usingSeeds;
-
   /// Disables forking, instead a random path is chosen. Enabled as
   /// needed to control memory usage. \see fork()
   bool atMemoryLimit;
@@ -291,8 +281,7 @@ private:
   /// Disables forking, set by client. \see setInhibitForking()
   bool inhibitForking;
 
-  /// Signals the executor to halt execution at the next instruction
-  /// step.
+  /// Signals the executor to halt execution at the next instruction step.
   bool haltExecution;
 
   /// Forces only non-compact states to be chosen. Initially false,
@@ -315,11 +304,6 @@ private:
   double stpTimeout;
 
   bool isDebugIntrinsic(const llvm::Function *f);
-
-  void addSymbolicToSeeds(
-    ExecutionState& state,
-    const MemoryObject* mo,
-    const  Array* array);
 
   void instShuffleVector(ExecutionState& state, KInstruction* ki);
   void instExtractElement(ExecutionState& state, KInstruction* ki);
@@ -369,17 +353,8 @@ private:
 
   void replayPathsIntoStates(ExecutionState& initialState);
   void killStates(ExecutionState* &state);
-  bool seedRun(ExecutionState& initialState);
-  void stepSeedInst(ExecutionState* &lastState);
-  void notifyCurrent(ExecutionState *current);
-
-  typedef std::vector<SeedInfo>::iterator SeedInfoIterator;
-  bool getSeedInfoIterRange(
-    ExecutionState* s, SeedInfoIterator &b, SeedInfoIterator& e);
 
   void stepInstruction(ExecutionState &state);
-  void removePTreeState(
-  	ExecutionState* es, ExecutionState** root_to_be_removed = 0);
   void removeRoot(ExecutionState* es);
   void replaceStateImmForked(ExecutionState* os, ExecutionState* ns);
 
@@ -388,6 +363,7 @@ private:
     KInstruction *ki,
     llvm::Function *f,
     std::vector< ref<Expr> > &arguments);
+
   llvm::Function* executeBitCast(
 	ExecutionState	&state,
 	llvm::CallSite	&cs,
@@ -397,12 +373,6 @@ private:
 
   ObjectState* makeSymbolicReplay(
     ExecutionState& state, const MemoryObject* mo, ref<Expr> len);
-
-  ObjectState* makeSymbolic(
-    ExecutionState& state,
-    const MemoryObject* mo,
-    ref<Expr> len,
-    const char* arrPrefix = "arr");
 
   void doImpliedValueConcretization(ExecutionState &state,
                                     ref<Expr> e,
@@ -415,17 +385,10 @@ private:
 
 
   void initTimers();
-  void processTimers(ExecutionState *current,
-                     double maxInstTime);
+  void processTimers(ExecutionState *current, double maxInstTime);
   void processTimersDumpStates(void);
 
   void getSymbolicSolutionCex(const ExecutionState& state, ExecutionState& t);
-
-  bool seedObject(
-    ExecutionState& state, SeedInfo& si,
-    const MemoryObject* mo, const Array* array);
-  void checkAddConstraintSeeds(ExecutionState& state, ref<Expr> &cond);
-
 public:
 	Executor(InterpreterHandler *ie);
 	virtual ~Executor();
@@ -435,13 +398,13 @@ public:
 
 	const InterpreterHandler& getHandler() { return *interpreterHandler; }
 	TimingSolver* getSolver(void) { return solver; }
-	bool isStateSeeding(ExecutionState* s) const;
+	virtual bool isStateSeeding(ExecutionState* s) const { return false; }
 
 	/// Add the given (boolean) condition as a constraint on state. This
 	/// function is a wrapper around the state's addConstraint function
 	/// which also manages manages propogation of implied values,
 	/// validity checks, and seed patching.
-	bool addConstraint(ExecutionState &state, ref<Expr> condition);
+	virtual bool addConstraint(ExecutionState &state, ref<Expr> condition);
 
 	MemoryObject* findGlobalObject(const llvm::GlobalValue*) const;
 
@@ -460,7 +423,7 @@ public:
 		const char* arrPrefix = "arr");
 
 	// remove state from queue and delete
-	void terminateState(ExecutionState &state);
+	virtual void terminateState(ExecutionState &state);
 	// call exit handler and terminate state
 	void terminateStateEarly(
 		ExecutionState &state, const llvm::Twine &message);
@@ -586,9 +549,6 @@ public:
 	bool isReplayOut(void) const { return (replayOut != NULL); }
 	bool isReplayPaths(void) const { return (replayPaths != NULL); }
 
-	virtual void useSeeds(const std::vector<struct KTest *> *seeds)
-	{usingSeeds = seeds; }
-
 	/*** Runtime options ***/
 
 	virtual void setHaltExecution(bool v) { haltExecution = v; }
@@ -619,7 +579,6 @@ public:
 
 	const struct KTest *getReplayOut(void) const { return replayOut; }
 	bool isAtMemoryLimit(void) const { return atMemoryLimit; }
-	SeedMapType& getSeedMap(void) { return seedMap; }
 	PTree* getPTree(void) { return pathTree; }
 	ExeStateManager* getStateManager(void) { return stateManager; }
 	const Forks* getForking(void) const { return forking; }
@@ -630,6 +589,10 @@ public:
  	void addTimer(Timer *timer, double rate);
 	const Globals* getGlobals(void) const { return globals; }
 	StatsTracker* getStatsTracker(void) { return statsTracker; }
+
+	/* XXX XXX XXX get rid of me!! XXX XXX */
+	SeedMapType	dummySeedMap;
+	virtual SeedMapType& getSeedMap(void) { return dummySeedMap; }
 };
 
 }

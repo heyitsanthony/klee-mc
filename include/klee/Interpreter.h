@@ -99,10 +99,6 @@ public:
   // a user specified path. use null to reset.
   virtual void setReplayPaths(const std::list<ReplayPathType>* paths) = 0;
 
-  // supply a set of symbolic bindings that will be used as "seeds"
-  // for the search. use null to reset.
-  virtual void useSeeds(const std::vector<struct KTest *> *seeds) = 0;
-
   virtual void runFunctionAsMain(llvm::Function *f,
                                  int argc,
                                  char **argv,

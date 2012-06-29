@@ -6,12 +6,41 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
+#include <llvm/Support/CallSite.h>
+#include <llvm/Analysis/MemoryBuiltins.h>
+#include <llvm/LLVMContext.h>
+#include <llvm/IntrinsicInst.h>
+#include <llvm/Module.h>
+#include <llvm/Support/CommandLine.h>
+#include <llvm/Target/TargetData.h>
 
+#include <cassert>
+#include <algorithm>
+#include <iomanip>
+#include <fstream>
+#include <sstream>
+#include <vector>
+#include <string>
+
+#include <netdb.h>
+#include <errno.h>
+
+#include "static/Sugar.h"
+#include "klee/Common.h"
+#include "klee/ExeStateBuilder.h"
+#include "klee/Expr.h"
+#include "klee/util/ExprPPrinter.h"
+#include "klee/Internal/ADT/KTest.h"
+#include "klee/Internal/ADT/RNG.h"
+#include "klee/Internal/Module/Cell.h"
+#include "klee/Internal/Module/InstructionInfoTable.h"
+#include "klee/Internal/Module/KInstruction.h"
+#include "klee/Internal/Module/KModule.h"
+#include "klee/Internal/System/Time.h"
+#include "klee/Internal/Support/Timer.h"
 
 #include "Executor.h"
-#include "ExecutorBC.h"	/* for 'interpreter::create()' */
 #include "ExeStateManager.h"
-#include "klee/Internal/Support/Timer.h"
 
 #include "Context.h"
 #include "CoreStats.h"
@@ -20,7 +49,6 @@
 #include "PTree.h"
 #include "Forks.h"
 #include "Searcher.h"
-#include "SeedInfo.h"
 #include "TimingSolver.h"
 #include "UserSearcher.h"
 #include "MemUsage.h"
@@ -30,41 +58,6 @@
 #include "Globals.h"
 #include "../Expr/RuleBuilder.h"
 #include "../Expr/ExprReplaceVisitor.h"
-
-#include "static/Sugar.h"
-#include "klee/Common.h"
-#include "klee/ExeStateBuilder.h"
-#include "klee/Expr.h"
-#include "klee/Interpreter.h"
-#include "klee/util/ExprPPrinter.h"
-#include "klee/Internal/ADT/KTest.h"
-#include "klee/Internal/ADT/RNG.h"
-#include "klee/Internal/Module/Cell.h"
-#include "klee/Internal/Module/InstructionInfoTable.h"
-#include "klee/Internal/Module/KInstruction.h"
-#include "klee/Internal/Module/KModule.h"
-#include "klee/Internal/System/Time.h"
-
-#include <llvm/Support/CallSite.h>
-#include <llvm/Analysis/MemoryBuiltins.h>
-#include <llvm/LLVMContext.h>
-#include <llvm/IntrinsicInst.h>
-#include <llvm/Module.h>
-#include <llvm/Support/CommandLine.h>
-#include <llvm/Support/raw_ostream.h>
-#include <llvm/Target/TargetData.h>
-
-#include <cassert>
-#include <algorithm>
-#include <iostream>
-#include <iomanip>
-#include <fstream>
-#include <sstream>
-#include <vector>
-#include <string>
-
-#include <netdb.h>
-#include <errno.h>
 
 using namespace llvm;
 using namespace klee;
@@ -206,34 +199,6 @@ namespace {
 	cl::desc("Machine-learned peephole expr builder"),
   	cl::init(false));
 
-  cl::opt<bool> AlwaysOutputSeeds("always-output-seeds", cl::init(true));
-
-  cl::opt<bool>
-  OnlySeed("only-seed",
-           cl::desc("Stop execution after seeding is done."));
-
-  cl::opt<bool>
-  AllowSeedExtension("allow-seed-extension",
-                     cl::desc("Allow extra (unbound) values to become symbolic during seeding."));
-
-  cl::opt<bool> ZeroSeedExtension("zero-seed-extension");
-
-  cl::opt<bool>
-  AllowSeedTruncation("allow-seed-truncation",
-                      cl::desc("Allow smaller buffers than in seeds."));
-
-  cl::opt<bool>
-  NamedSeedMatching("named-seed-matching",
-                    cl::desc("Use names to match symbolic objects to inputs."));
-
-
-  cl::opt<double>
-  SeedTime("seed-time",
-           cl::desc("Amount of time to dedicate to seeds, before normal search (default=0 (off))"),
-           cl::init(0));
-
-
-
 }
 
 namespace klee { RNG theRNG; }
@@ -277,7 +242,6 @@ Executor::Executor(InterpreterHandler *ih)
 , symPathWriter(0)
 , replayOut(0)
 , replayPaths(0)
-, usingSeeds(0)
 , atMemoryLimit(false)
 , inhibitForking(false)
 , haltExecution(false)
@@ -322,6 +286,7 @@ Executor::Executor(InterpreterHandler *ih)
 		 * than unexplored condition value. */
 		lp->add(new KBrPredictor());
 		lp->add(new CondPredictor(forking));
+		lp->add(new RandomPredictor());
 		brPredict = lp;
 	}
 }
@@ -355,8 +320,6 @@ bool Executor::addConstraint(ExecutionState &state, ref<Expr> condition)
 		assert(CE->isTrue() && "attempt to add invalid constraint");
 		return true;
 	}
-
-	checkAddConstraintSeeds(state, condition);
 
 	if (ChkConstraints) {
 		bool	mayBeTrue, ok;
@@ -476,63 +439,11 @@ Executor::toConstant(
 	return value;
 }
 
-bool Executor::executeGetValueSeeding(
-	ExecutionState &state, ref<Expr> e, KInstruction *target)
-{
-	SeedInfoIterator	si_begin, si_end;
-	bool			isSeeding;
-
-	e = state.constraints.simplifyExpr(e);
-	if (isa<ConstantExpr>(e))
-		return false;
-
-	isSeeding = getSeedInfoIterRange(&state, si_begin, si_end);
-	if (!isSeeding)
-		return false;
-
-	std::set< ref<Expr> > values;
-	foreach (siit, si_begin, si_end) {
-		ref<ConstantExpr> value;
-		bool		ok;
-
-		ok = solver->getValue(state, siit->assignment.evaluate(e), value);
-		if (!ok) {
-			terminateStateEarly(state, "exeGetValues timeout");
-			return true;
-		}
-
-		values.insert(value);
-	}
-
-	StateVector			branches;
-	std::vector< ref<Expr> >	conditions;
-
-	foreach (vit, values.begin(), values.end())
-		conditions.push_back(EqExpr::create(e, *vit));
-
-	branches = fork(state, conditions.size(), conditions.data(), true);
-	if (target == NULL)
-		return true;
-
-	StateVector::iterator	bit(branches.begin());
-	foreach (vit, values.begin(), values.end()) {
-		ExecutionState	*es(*bit);
-
-		++bit;
-		if (es) es->bindLocal(target, *vit);
-	}
-
-
-	return true;
-}
-
 void Executor::executeGetValue(
 	ExecutionState &state, ref<Expr> e, KInstruction *target)
 {
-	if (executeGetValueSeeding(state, e, target))
-		return;
-	
-	ref<ConstantExpr> value;
+	ref<ConstantExpr>	value;
+
 	if (solver->getValue(state, e, value) == false) {
 		terminateStateEarly(state, "exeGetVal timeout");
 		return;
@@ -591,8 +502,6 @@ void Executor::executeCallNonDecl(
 
 	// TODO: support "byval" parameter attribute
 	// TODO: support zeroext, signext, sret attributes
-	//
-	//
 
 	callingArgs = arguments.size();
 	funcArgs = f->arg_size();
@@ -678,13 +587,10 @@ void Executor::executeCall(
 	// instead of implementing it, we can do a simple hack: just
 	// make a function believe that all varargs are on stack.
 
-	// gp offset
+	// gp offset; fp_offset; overflow_arg_area; reg_save_area
 	MMU_WORD_OP(0, ConstantExpr::create(48,32));
-	// fp_offset
 	MMU_WORD_OP(4, ConstantExpr::create(304,32));
-	// overflow_arg_area
 	MMU_WORD_OP(8, sf.varargs->getBaseExpr());
-	// reg_save_area
 	MMU_WORD_OP(16, ConstantExpr::create(0, 64));
 #undef MMU_WORD_OP
 	break;
@@ -2104,11 +2010,6 @@ void Executor::removePTreeState(
 	ExecutionState** root_to_be_removed)
 {
 	ExecutionState	*root;
-
-	std::map<ExecutionState*, std::vector<SeedInfo> >::iterator it3;
-	it3 = seedMap.find(es);
-	if (it3 != seedMap.end()) seedMap.erase(it3);
-
 	root = pathTree->removeState(stateManager, es);
 	if (root != NULL) *root_to_be_removed = root;
 }
@@ -2204,7 +2105,6 @@ unsigned Executor::getNumStates(void) const { return stateManager->size(); }
 unsigned Executor::getNumFullStates(void) const
 { return stateManager->getNonCompactStateCount(); }
 
-
 void Executor::replayPathsIntoStates(ExecutionState& initialState)
 {
 	assert (replayPaths);
@@ -2231,20 +2131,14 @@ void Executor::run(ExecutionState &initialState)
 		replayPathsIntoStates(initialState);
 
 	stateManager->setInitialState(this, &initialState, replayPaths);
-
-	if (usingSeeds) {
-		if (!seedRun(initialState)) goto dump;
-		if (OnlySeed) goto dump;
-	}
-
 	stateManager->setupSearcher(this);
 
 	runLoop();
 
 	stateManager->teardownUserSearcher();
 
-dump:
-	if (stateManager->empty()) goto done;
+	if (stateManager->empty())
+		goto done;
 
 	std::cerr << "KLEE: halting execution, dumping remaining states\n";
 	haltExecution = true;
@@ -2369,11 +2263,6 @@ void Executor::terminateState(ExecutionState &state)
 		return;
 	}
 
-	// never reached searcher, just delete immediately
-	std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it3;
-	it3 = seedMap.find(&state);
-	if (it3 != seedMap.end()) seedMap.erase(it3);
-
 	stateManager->dropAdded(&state);
 	pathTree->remove(state.ptreeNode);
 	delete &state;
@@ -2408,10 +2297,7 @@ void Executor::terminateStateEarly(
 		term_st = sym_st;
 	}
 
-	if (	!OnlyOutputStatesCoveringNew ||
-		term_st->coveredNew ||
-		(AlwaysOutputSeeds && seedMap.count(term_st)))
-	{
+	if (isInterestingTestCase(term_st)) {
 		std::stringstream	ss;
 
 		ss << message.str() << '\n';
@@ -2424,14 +2310,15 @@ void Executor::terminateStateEarly(
 	terminateState(*term_st);
 }
 
+bool Executor::isInterestingTestCase(ExecutionState* st) const
+{
+	return !OnlyOutputStatesCoveringNew || st->coveredNew;
+}
+
 void Executor::terminateStateOnExit(ExecutionState &state)
 {
-	if (	!OnlyOutputStatesCoveringNew ||
-		state.coveredNew ||
-		(AlwaysOutputSeeds && seedMap.count(&state)))
-	{
+	if (isInterestingTestCase(&state))
 		interpreterHandler->processTestCase(state, 0, 0);
-	}
 
 	terminateState(state);
 }
@@ -2561,8 +2448,6 @@ ObjectState* Executor::makeSymbolic(
 	os = state.bindMemObjWriteable(mo, array.get());
 	state.addSymbolic(const_cast<MemoryObject*>(mo) /* yuck */, array.get());
 
-	addSymbolicToSeeds(state, mo, array.get());
-
 	return os;
 }
 
@@ -2597,7 +2482,7 @@ unsigned Executor::getSymbolicPathStreamID(const ExecutionState &state)
 }
 
 void Executor::getSymbolicSolutionCex(
-  const ExecutionState& state, ExecutionState& tmp)
+	const ExecutionState& state, ExecutionState& tmp)
 {
 	foreach (sym_it, state.symbolicsBegin(), state.symbolicsEnd()) {
 		const MemoryObject				*mo;
@@ -3151,180 +3036,4 @@ bool Executor::hasState(const ExecutionState* es) const
 	}
 
 	return false;
-}
-
-void Executor::stepSeedInst(ExecutionState* &lastState)
-{
-	std::map<ExecutionState*, std::vector<SeedInfo> >::iterator it;
-
-	it = seedMap.upper_bound(lastState);
-	if (it == seedMap.end()) it = seedMap.begin();
-	lastState = it->first;
-
-	unsigned numSeeds = it->second.size();
-	ExecutionState &state = *lastState;
-	KInstruction *ki = state.pc;
-
-	stepInstruction(state);
-	executeInstruction(state, ki);
-	processTimers(&state, MaxInstructionTime * numSeeds);
-	notifyCurrent(&state);
-}
-
-bool Executor::seedRun(ExecutionState& initialState)
-{
-  ExecutionState *lastState = 0;
-  double lastTime, startTime = lastTime = util::estWallTime();
-  std::vector<SeedInfo> &v = seedMap[&initialState];
-
-  foreach (it, usingSeeds->begin(), usingSeeds->end()) {
-    v.push_back(SeedInfo(*it));
-  }
-
-  int lastNumSeeds = usingSeeds->size()+10;
-  while (!seedMap.empty() && !haltExecution) {
-    double time;
-
-    stepSeedInst(lastState);
-
-    /* every 1000 instructions, check timeouts, seed counts */
-    if ((stats::instructions % 1000) != 0) continue;
-
-    unsigned numSeeds = 0;
-    unsigned numStates = seedMap.size();
-    foreach (it, seedMap.begin(), seedMap.end()) {
-    	numSeeds += it->second.size();
-    }
-
-    time = util::estWallTime();
-    if (SeedTime>0. && time > startTime + SeedTime) {
-      klee_warning("seed time expired, %d seeds remain over %d states",
-                   numSeeds, numStates);
-      break;
-    } else if ((int)numSeeds<=lastNumSeeds-10 || time >= lastTime+10) {
-      lastTime = time;
-      lastNumSeeds = numSeeds;
-      klee_message("%d seeds remaining over: %d states", numSeeds, numStates);
-    }
-  }
-
-  if (haltExecution) return false;
-
-  klee_message("seeding done (%d states remain)", (int) stateManager->size());
-
-  // XXX total hack, just because I like non uniform better but want
-  // seed results to be equally weighted.
-  stateManager->setWeights(1.0);
-  return true;
-}
-
-bool Executor::seedObject(
-	ExecutionState& state,
-	SeedInfo& si,
-	const MemoryObject* mo,
-	const Array* array)
-{
-  KTestObject *obj = si.getNextInput(mo, NamedSeedMatching);
-
-  /* if no test objects, create zeroed array object */
-  if (!obj) {
-    if (ZeroSeedExtension) {
-      std::vector<unsigned char> &values = si.assignment.bindings[array];
-      values = std::vector<unsigned char>(mo->size, '\0');
-    } else if (!AllowSeedExtension) {
-      terminateStateOnError(state, "ran out of seed inputs", "seed.err");
-      return false;
-    }
-    return true;
-  }
-
-  /* resize permitted? */
-  if (obj->numBytes != mo->size &&
-      ((!(AllowSeedExtension || ZeroSeedExtension)
-        && obj->numBytes < mo->size) ||
-       (!AllowSeedTruncation && obj->numBytes > mo->size)))
-  {
-    std::stringstream msg;
-    msg << "replace size mismatch: "
-    << mo->name << "[" << mo->size << "]"
-    << " vs " << obj->name << "[" << obj->numBytes << "]"
-    << " in test\n";
-
-    terminateStateOnError(state, msg.str(), "user.err");
-    return false;
-  }
-
-  /* resize object to memory size */
-  std::vector<unsigned char> &values = si.assignment.bindings[array];
-  values.insert(values.begin(), obj->bytes,
-                obj->bytes + std::min(obj->numBytes, mo->size));
-  if (ZeroSeedExtension) {
-    for (unsigned i=obj->numBytes; i<mo->size; ++i)
-      values.push_back('\0');
-  }
-
-  return true;
-}
-
-bool Executor::isStateSeeding(ExecutionState* s) const
-{ return (seedMap.find(s) != seedMap.end()); }
-
-// Check to see if this constraint violates seeds.
-// N.B. There's a problem here-- it won't catch what happens if the seed
-// is wrong but we screwed up the constraints so that it's permitted.
-//
-// Offline solution-- save states, run through them, check for subsumption
-//
-void Executor::checkAddConstraintSeeds(ExecutionState& state, ref<Expr>& cond)
-{
-	std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it;
-	bool	warn = false;
-
-	it = seedMap.find(&state);
-	if (it == seedMap.end())
-		return;
-
-	foreach (siit, it->second.begin(), it->second.end()) {
-		bool	mustBeFalse, ok;
-
-		ok = solver->mustBeFalse(
-			state,
-			siit->assignment.evaluate(cond),
-			mustBeFalse);
-		assert(ok && "FIXME: Unhandled solver failure");
-		if (mustBeFalse) {
-			siit->patchSeed(state, cond, solver);
-			warn = true;
-		}
-	}
-
-	if (warn)
-		klee_warning("seeds patched for violating constraint");
-}
-
-bool Executor::getSeedInfoIterRange(
-	ExecutionState* s, SeedInfoIterator &b, SeedInfoIterator& e)
-{
-	std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it;
-	it = seedMap.find(s);
-	if (it == seedMap.end()) return false;
-	b = it->second.begin();
-	e = it->second.end();
-	return false;
-}
-
-void Executor::addSymbolicToSeeds(
-	ExecutionState& state,
-	const MemoryObject* mo,
-	const  Array* array)
-{
-	std::map< ExecutionState*, std::vector<SeedInfo> >::iterator it;
-	it = seedMap.find(&state);
-	if (it == seedMap.end()) return;
-
-	// In seed mode we need to add this as a binding.
-	foreach (siit, it->second.begin(), it->second.end()) {
-		if (!seedObject(state, *siit, mo, array))
-			break;
-	}
 }

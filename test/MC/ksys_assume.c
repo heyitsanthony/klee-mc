@@ -1,7 +1,7 @@
 // RUN: gcc %s -g -I../../../include/ -O0 -o %t1
 //
 // Please don't crash on this test.
-// RUN: klee-mc - ./%t1 2>%t1.err >%t1.out
+// RUN: klee-mc -pipe-solver - ./%t1 2>%t1.err >%t1.out
 //
 // And this shouldn't cause any errors
 // RUN: ls klee-last | not grep .err

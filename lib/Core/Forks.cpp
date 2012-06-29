@@ -306,8 +306,8 @@ void Forks::skipAndRandomPrune(struct ForkInfo& fi, const char* reason)
 
 void Forks::forkSetupSeeding(ExecutionState& current, struct ForkInfo& fi)
 {
-	Executor::SeedMapType		&seedMap(exe.getSeedMap());
-	Executor::SeedMapType::iterator it(seedMap.find(&current));
+	SeedMapType		&seedMap(exe.getSeedMap());
+	SeedMapType::iterator	it(seedMap.find(&current));
 
 	assert (it != seedMap.end());
 

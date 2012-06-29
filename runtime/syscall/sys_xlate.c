@@ -419,8 +419,7 @@ void syscall_xlate(struct sc_pkt* sc)
 	sc_set_32bit(sc);
 	ret = sysnr_arm2amd64[sc->sys_nr];
 	if (ret == 0 && sc->sys_nr != ARM__NR_read) {
-		klee_report_error(
-			__FILE__, __LINE__,
+		klee_uerror(
 			"Could not find appropriate translation for syscall",
 			"scxlate.err");
 	}
@@ -879,8 +878,7 @@ void syscall_xlate(struct sc_pkt* sc)
 	if (ret == 0 && sc->sys_nr != X86__NR_read) {
 		klee_print_expr("pure sysnr", sc->sys_nr);
 		klee_print_expr("xlate sysnr", ret);
-		klee_report_error(
-			__FILE__, __LINE__,
+		klee_uerror(
 			"Could not find appropriate translation for syscall",
 			"scxlate.err");
 	}

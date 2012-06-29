@@ -683,8 +683,7 @@ done:
   dumpStates = 0;
 }
 
-void Executor::processTimers(ExecutionState *current,
-                             double maxInstTime)
+void Executor::processTimers(ExecutionState *current, double maxInstTime)
 {
   static double lastCall = 0., lastCheck = 0.;
   double now = util::estWallTime();
