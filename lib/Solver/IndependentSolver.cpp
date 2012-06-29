@@ -317,26 +317,110 @@ public:
 	ConstraintManager tmp(required);	\
 	if (isUnconstrained(tmp, query))
 
-static bool isUnconstrained(
-	const ConstraintManager& cm, const Query& query)
+static bool isFreeRead(const ref<Expr>& e)
 {
-	if (cm.size() != 0)
+	const ReadExpr		*re;
+	const ConstantExpr	*ce;
+
+	re = dyn_cast<ReadExpr>(e);
+	if (re != NULL)
+		return (re->updates.getSize() == 0 &&
+			re->index->getKind() == Expr::Constant);
+
+	std::set<unsigned>	indices;
+
+	while (e->getKind() == Expr::Concat) {
+		ref<Expr>	lhs(e->getKid(0));
+		uint64_t		idx;
+
+		re = dyn_cast<ReadExpr>(lhs);
+		if (re == NULL || re->updates.getSize())
+			return false;
+
+		ce = dyn_cast<ConstantExpr>(re->index);
+		if (ce == NULL)
+			return false;
+
+		idx = ce->getZExtValue();
+		if (indices.count(idx))
+			return false;
+
+		indices.insert(idx);
+		e = e->getKid(1);
+	}
+
+	re = dyn_cast<ReadExpr>(e);
+	if (re == NULL)
 		return false;
 
-	if (	query.expr->getKind() == Expr::Eq &&
-		query.expr->getKid(1)->getKind() == Expr::Read &&
-		query.expr->getKid(0)->getKind() == Expr::Constant)
+	ce = dyn_cast<ConstantExpr>(re->index);
+	if (ce == NULL)
+		return false;
+
+	if (indices.count(ce->getZExtValue()))
+		return false;
+
+	return true;
+}
+
+static bool isFreeExpr(const ref<Expr> e)
+{
+	bool	is_lhs_free, is_rhs_free;
+
+	if (	e->getKind() == Expr::Eq &&
+		e->getKid(0)->isZero() &&
+		e->getKid(1)->getKind() == Expr::Eq)
+	{
+		return isFreeExpr(e->getKid(1));
+	}
+
+	if (	e->getKind() == Expr::Eq ||
+		e->getKind() == Expr::Ule ||
+		e->getKind() == Expr::Ult)
+	{
+		is_lhs_free = isFreeRead(e->getKid(0));
+		is_rhs_free = isFreeRead(e->getKid(1));
+	}
+
+	if (	e->getKind() == Expr::Eq && is_rhs_free &&
+		e->getKid(0)->getKind() == Expr::Constant)
 	{
 		/* this was breaking on (Eq (x) (extract [7:0] x))
 		 * before the I added a constant check */
 		return true;
 	}
 
-	if (	query.expr->getKind() == Expr::Extract &&
-		query.expr->getKid(0)->getKind() == Expr::Read)
+	if (e->getKind() == Expr::Extract)
+		return isFreeRead(e->getKid(0));
+
+	if (	(e->getKind() == Expr::Ule || e->getKind() == Expr::Ult) &&
+		(is_lhs_free || is_rhs_free))
 	{
-		return true;
+		ConstantExpr	*ce;
+
+		/* lhs is const? */
+		ce = dyn_cast<ConstantExpr>(e->getKid(0));
+		if (ce != NULL && !ce->isZero())
+			return true;
+
+		/* rhs is const? */
+		ce = dyn_cast<ConstantExpr>(e->getKid(1));
+		if (ce != NULL && !ce->isZero())
+			return true;
+
 	}
+
+	return false;
+}
+
+static bool isUnconstrained(
+	const ConstraintManager& cm, const Query& query)
+{
+	if (cm.size() != 0)
+		return false;
+
+	if (isFreeExpr(query.expr))
+		return true;
 
 	// std::cerr << "MISSED UNCONSTRAINED: " << query.expr << '\n';
 	return false;
