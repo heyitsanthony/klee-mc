@@ -12,6 +12,7 @@
 #include "klee/ExeStateBuilder.h"
 #include "klee/Solver.h"
 #include "../Solver/SMTPrinter.h"
+#include "MemoryManager.h"
 
 #include "klee/util/ExprPPrinter.h"
 #include "klee/Internal/Module/Cell.h"
@@ -26,8 +27,8 @@
 #include "Memory.h"
 #include "static/Markov.h"
 
-#include "llvm/Function.h"
-#include "llvm/Support/CommandLine.h"
+#include <llvm/Function.h>
+#include <llvm/Support/CommandLine.h>
 
 #include <fstream>
 #include <iostream>
@@ -123,30 +124,23 @@ ExecutionState::~ExecutionState()
 	canary = 0;
 }
 
-ExecutionState *ExecutionState::branch(void)
+ExecutionState *ExecutionState::branch(bool forReplay)
 {
 	ExecutionState *newState;
 
 	depth++;
 	weight *= .5;
 
+	if (forReplay) {
+		newState = compact();
+		newState->coveredNew = false;
+		return newState;
+	}
+
 	newState = copy();
 	newState->coveredNew = false;
 	newState->coveredLines.clear();
 	newState->replayBrIter = newState->brChoiceSeq.end();
-
-	return newState;
-}
-
-ExecutionState *ExecutionState::branchForReplay(void)
-{
-	ExecutionState* newState;
-
-	depth++;
-	weight *= .5;
-
-	newState = compact();
-	newState->coveredNew = false;
 
 	return newState;
 }
@@ -167,19 +161,6 @@ void ExecutionState::compact(ExecutionState* newState) const
 
 	// necessary for WeightedRandomSearcher?
 	newState->pc = pc;
-}
-
-ExecutionState* ExecutionState::reconstitute(
-	ExecutionState &initialStateCopy) const
-{
-	ExecutionState* newState;
-
-	newState = copy(&initialStateCopy);
-	newState->brChoiceSeq = brChoiceSeq;
-	newState->replayBrIter = newState->brChoiceSeq.begin();
-	newState->weight = weight;
-
-	return newState;
 }
 
 void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf)
@@ -366,22 +347,23 @@ void ExecutionState::dumpStack(std::ostream& os)
 
 /**/
 
-std::ostream &klee::operator<<(std::ostream &os, const MemoryMap &mm) {
-  os << "{";
-  MemoryMap::iterator it = mm.begin();
-  MemoryMap::iterator ie = mm.end();
-  if (it!=ie) {
-    os << "MO" << it->first->id << ": (";
-    it->first->print(os);
-    os << ") " << it->second;
-    for (++it; it!=ie; ++it) {
-      os << ", \nMO" << it->first->id << ": (";
-      it->first->print(os);
-      os << ") " << it->second;
-    }
-  }
-  os << "}";
-  return os;
+std::ostream &klee::operator<<(std::ostream &os, const MemoryMap &mm)
+{
+	MemoryMap::iterator it(mm.begin()), ie(mm.end());
+
+	os << "{";
+	if (it != ie) {
+		os << "MO" << it->first->id << ": (";
+		it->first->print(os);
+		os << ") " << it->second;
+		for (++it; it!=ie; ++it) {
+			os << ", \nMO" << it->first->id << ": (";
+			it->first->print(os);
+			os << ") " << it->second;
+		}
+	}
+	os << "}";
+	return os;
 }
 
 void ExecutionState::bindArgument(
@@ -465,48 +447,6 @@ const ObjectState* ExecutionState::bindStackMemObj(
 	return os;
 }
 
-void ExecutionState::trackBranch(int condIndex, const KInstruction* ki)
-{
-	// only track NON-internal branches
-	if (replayBrIter != brChoiceSeq.end())
-		return;
-
-	brChoiceSeq.push_back(condIndex, ki);
-	replayBrIter = brChoiceSeq.end();
-}
-
-ExecutionState* ExecutionState::createReplay(
-	ExecutionState& initialState,
-	const ReplayPathType& replayPath)
-{
-	ExecutionState* newState;
-
-	newState = initialState.copy();
-	foreach (it, replayPath.begin(), replayPath.end()) {
-		newState->brChoiceSeq.push_back(*it);
-	}
-
-	newState->replayBrIter = newState->brChoiceSeq.begin();
-	newState->ptreeNode->data = 0;
-	newState->isReplay = true;
-
-	return newState;
-}
-
-bool ExecutionState::isReplayDone(void) const
-{ return (replayBrIter == brChoiceSeq.end()); }
-
-unsigned ExecutionState::stepReplay(void)
-{
-#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
-    assert (prevPC->getInfo()->assemblyLine == (*replayBrIter).second &&
-      "branch instruction IDs do not match");
-#endif
-    unsigned targetIndex = (*replayBrIter).first;
-    ++replayBrIter;
-    return targetIndex;
-}
-
 ObjectPair ExecutionState::allocate(
 	uint64_t size, bool isLocal, bool isGlobal,
 	const llvm::Value *allocSite)
@@ -574,13 +514,6 @@ const ObjectState* ExecutionState::allocateAt(
 }
 
 ExecutionState* ExecutionState::copy(void) const { return copy(this); }
-
-BranchInfo ExecutionState::branchLast(void) const
-{
-	if (brChoiceSeq.empty())
-		return BranchInfo();
-	return brChoiceSeq.back();
-}
 
 /**
  * this is kind of a cheat-- we want to read from an object state
@@ -753,4 +686,66 @@ void ExecutionState::addSymbolic(MemoryObject* mo, Array* array)
 #endif
 	symbolics.push_back(SymbolicArray(mo, array));
 	arr2sym[array] = mo;
+}
+
+void ExecutionState::trackBranch(int condIndex, const KInstruction* ki)
+{
+	// only track NON-internal branches
+	if (replayBrIter != brChoiceSeq.end())
+		return;
+
+	brChoiceSeq.push_back(condIndex, ki);
+	replayBrIter = brChoiceSeq.end();
+}
+
+ExecutionState* ExecutionState::createReplay(
+	ExecutionState& initialState,
+	const ReplayPathType& replayPath)
+{
+	ExecutionState* newState;
+
+	newState = initialState.copy();
+	foreach (it, replayPath.begin(), replayPath.end()) {
+		newState->brChoiceSeq.push_back(*it);
+	}
+
+	newState->replayBrIter = newState->brChoiceSeq.begin();
+	newState->ptreeNode->data = 0;
+	newState->isReplay = true;
+
+	return newState;
+}
+
+bool ExecutionState::isReplayDone(void) const
+{ return (replayBrIter == brChoiceSeq.end()); }
+
+unsigned ExecutionState::stepReplay(void)
+{
+#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
+    assert (prevPC->getInfo()->assemblyLine == (*replayBrIter).second &&
+      "branch instruction IDs do not match");
+#endif
+    unsigned targetIndex = (*replayBrIter).first;
+    ++replayBrIter;
+    return targetIndex;
+}
+
+BranchInfo ExecutionState::branchLast(void) const
+{
+	if (brChoiceSeq.empty())
+		return BranchInfo();
+	return brChoiceSeq.back();
+}
+
+ExecutionState* ExecutionState::reconstitute(
+	ExecutionState &initialStateCopy) const
+{
+	ExecutionState* newState;
+
+	newState = copy(&initialStateCopy);
+	newState->brChoiceSeq = brChoiceSeq;
+	newState->replayBrIter = newState->brChoiceSeq.begin();
+	newState->weight = weight;
+
+	return newState;
 }

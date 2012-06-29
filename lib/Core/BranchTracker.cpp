@@ -9,30 +9,17 @@
 #include "static/Sugar.h"
 #include "BranchTracker.h"
 
+#include <algorithm>
+#include "MemoryManager.h"
+#include "Memory.h"
+
 using namespace klee;
 
-BranchInfo BranchTracker::Segment::operator[](unsigned index) const
-{
-	assert(index < branches.size()); // bounds check
-	const KInstruction	*ki;
-
-	ki = branchSites[index];
-
-	if (!isBranch[index]) {
-		std::map<unsigned,unsigned>::const_iterator sit;
-
-		sit = nonBranches.find(index);
-		assert(sit != nonBranches.end());
-		return BranchInfo(sit->second, ki);
-	}
-
-	return BranchInfo(branches[index], ki);
-}
-
-///
-
 BranchTracker::BranchTracker()
-: head(new Segment()), tail(head), needNewSegment(false), replayAll(false) { }
+: head(new Segment())
+, tail(head)
+, needNewSegment(false)
+, replayAll(false) { }
 
 BranchTracker::BranchTracker(const BranchTracker &a)
 : head(a.head), tail(a.tail), replayAll(a.replayAll)
@@ -84,10 +71,10 @@ bool BranchTracker::empty() const
 { return (head == tail && !tail->size() && head->children.empty()); }
 
 size_t BranchTracker::size() const {
-  size_t retVal = 0;
-  for (SegmentRef it = tail; !it.isNull(); it = it->parent)
-    retVal += it->size();
-  return retVal;
+	size_t retVal = 0;
+	for (SegmentRef it = tail; !it.isNull(); it = it->parent)
+		retVal += it->size();
+	return retVal;
 }
 
 BranchTracker::SegmentRef
@@ -114,12 +101,15 @@ BranchInfo BranchTracker::back() const
 
 BranchInfo BranchTracker::operator[](unsigned index) const
 {
-	unsigned	prefixSize;
+	int		prefixSize;
 	SegmentRef 	it;
 
 	prefixSize = size();
 	for (it = tail; prefixSize - tail->size() > index; it = it->parent)
-		prefixSize -= tail->size(); 
+		prefixSize -= tail->size();
+
+	assert (prefixSize >= 0);
+	assert (index >= (unsigned)prefixSize);
 
 	return (*it)[index - prefixSize];
 }
@@ -204,68 +194,73 @@ BranchTracker::findChild(BranchTracker::iterator it,
 BranchTracker::SegmentRef
 BranchTracker::insert(const ReplayPathType &branches)
 {
-  iterator it = begin();
-  unsigned index = 0;
-  bool noChild = false;
+	iterator it = begin();
+	unsigned index = 0;
+	bool noChild = false;
 
-  for (; it != end() && index < branches.size(); index++) {
-    BranchInfo value = BranchInfo(branches[index], 0);
+	for (; it != end() && index < branches.size(); index++) {
+		BranchInfo	value(branches[index], 0);
 
-    // handle special case of initial branch having more than one target; under
-    // these circumstances, the root segment in the trie is empty. this is the
-    // only time we allow an empty segment.
-	if (!index && it.curSeg->empty()) {
-		it = findChild(it, branches[index], noChild);
-		if (noChild)
-			break;
-		else
-			++it;
-		continue;
-	}
-
-	// we found a divergence in the branch sequences
-	if (*it != value)
-		break;
-
-	// if we're at the end of a segment, then see which child (if any) has a
-	// matching next value
-	if (it.curIndex == it.curSeg->size() - 1
-	     && index != branches.size() - 1) {
-		it = findChild(it, branches[index+1], noChild);
-		if (noChild) {
-			index++;
-			break;
+		// special case of initial branch having more than one target;
+		// the root segment in the trie is empty.
+		// this is the only time we allow an empty segment.
+		if (index == 0 && it.curSeg->empty()) {
+			it = findChild(it, branches[index], noChild);
+			if (noChild)
+				break;
+			else
+				++it;
+			continue;
 		}
-		continue;
+
+		// we found a divergence in the branch sequences
+		if (*it != value)
+			break;
+
+		// if we're at the end of a segment,
+		// then see which child (if any) has a
+		// matching next value
+		if (	it.curIndex == it.curSeg->size() - 1 &&
+			index != branches.size() - 1)
+		{
+			it = findChild(it, branches[index+1], noChild);
+			if (noChild) {
+				index++;
+				break;
+			}
+			continue;
+		}
+
+		++it;
 	}
 
-	++it;
-  }
+	// new set of branches is a subset of an existing path
+	if (index == branches.size())
+		return it.curSeg;
 
-  // new set of branches is a subset of an existing path
-  if (index == branches.size())
-    return it.curSeg;
+	if (	noChild == false &&
+		((it.curSeg == head && !it.curSeg->empty()) || it.curIndex))
+	{
+		// split this segment
+		splitSegment(*it.curSeg, it.curIndex);
+		it.curIndex = 0;
+	}
 
-  if (((it.curSeg == head && !it.curSeg->empty()) || it.curIndex) && !noChild) {
-    // need to split this segment
-    splitSegment(*it.curSeg, it.curIndex);
-    it.curIndex = 0;
-  }
+	SegmentRef oldTail = tail;
+	if (noChild || it.curSeg != head) {
+		SegmentRef newseg = new Segment();
+		newseg->parent = noChild ? it.curSeg : it.curSeg->parent;
+		newseg->parent->children.push_back(newseg.get());
+		tail = it.curSeg = newseg;
+	}
 
-  SegmentRef oldTail = tail;
-  if (noChild || it.curSeg != head) {
-    SegmentRef newseg = new Segment();
-    newseg->parent = noChild ? it.curSeg : it.curSeg->parent;
-    newseg->parent->children.push_back(newseg.get());
-    tail = it.curSeg = newseg;
-  }
+	for (; index < branches.size(); index++) {
+		BranchInfo value(branches[index], 0 /* ??? */);
+		push_back(value);
+	}
 
-  for (; index < branches.size(); index++) {
-    BranchInfo value = BranchInfo(branches[index], 0 /* ??? */);
-    push_back(value);
-  }
-  tail = oldTail;
-  return it.curSeg;
+	tail = oldTail;
+	return it.curSeg;
 }
 
 void BranchTracker::splitSegment(Segment &seg, unsigned index)
@@ -359,12 +354,23 @@ void BranchTracker::splitNonBranches(
 	std::swap(nonBranchesTemp, seg.nonBranches);
 }
 
+bool BranchTracker::iterator::mayDeref(void) const
+{
+	if (curSeg.isNull())
+		return false;
+
+	if (curSeg == tail && curIndex >= curSeg->size())
+		return false;
+
+	if (curSeg->empty())
+		return false;
+
+	return true;
+}
 
 BranchInfo BranchTracker::iterator::operator*() const
 {
-	assert (!curSeg.isNull() &&
-		!(curSeg == tail && curIndex >= curSeg->size()));
-	assert (!curSeg->empty());
+	assert (mayDeref());
 
 	if (curIndex == curSeg->size()) {
 		iterator it = *this;
@@ -415,8 +421,8 @@ BranchTracker::iterator BranchTracker::iterator::operator++()
 		return *this;
 	}
 
-	// we're at the end of a segment other than the tail, so advance to the
-	// segment that lets us reach the tail
+	// we're at the end of a segment other than the tail,
+	// advance to the segment that lets us reach the tail
 	curIndex = 0;
 	SegmentRef temp = tail;
 	while (temp->parent != curSeg)
@@ -445,3 +451,23 @@ BranchTracker::Segment::~Segment(void)
 
 	seg_alloc_c--;
 }
+
+BranchInfo BranchTracker::Segment::operator[](unsigned index) const
+{
+	assert(index < branches.size()); // bounds check
+	const KInstruction	*ki;
+
+	ki = branchSites[index];
+
+	if (!isBranch[index]) {
+		NonBranchesTy::const_iterator sit;
+
+		sit = nonBranches.find(index);
+		assert(sit != nonBranches.end());
+		return BranchInfo(sit->second, ki);
+	}
+
+	return BranchInfo(branches[index], ki);
+}
+
+

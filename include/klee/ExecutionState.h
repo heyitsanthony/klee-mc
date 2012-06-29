@@ -108,7 +108,6 @@ private:
 	ExecutionState &operator=(const ExecutionState&);
 
 	// An ordered sequence of branches this state took thus far:
-	// XXX: ugh mutable for non-const copy constructor
 	BranchTracker brChoiceSeq;
 	// used only if isCompactForm
 	BranchTracker::iterator replayBrIter;
@@ -202,8 +201,7 @@ public:
 		ExecutionState& initialState,
 		const ReplayPathType& replayPath);
 
-	ExecutionState *branch();
-	ExecutionState *branchForReplay();
+	ExecutionState *branch(bool forReplay = false);
 	ExecutionState *compact() const;
 	ExecutionState *reconstitute(ExecutionState &initialStateCopy) const;
 

@@ -1,3 +1,7 @@
+#include <llvm/Support/CommandLine.h>
+#include <sys/stat.h>
+
+#include "../../lib/Core/MemoryManager.h"
 #include "klee/Expr.h"
 #include "ExecutorVex.h"
 #include "ExeStateVex.h"
@@ -5,9 +9,7 @@
 #include "guestcpustate.h"
 #include "klee/breadcrumb.h"
 #include <sys/syscall.h>
-#include <llvm/Support/CommandLine.h>
 #include "static/Sugar.h"
-#include <sys/stat.h>
 
 extern "C"
 {

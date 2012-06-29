@@ -1,7 +1,7 @@
-#include "llvm/Target/TargetData.h"
-#include "llvm/Support/CommandLine.h"
-#include "llvm/Support/Path.h"
-#include "llvm/Support/raw_os_ostream.h"
+#include <llvm/Target/TargetData.h>
+#include <llvm/Support/CommandLine.h>
+#include <llvm/Support/Path.h>
+#include <llvm/Support/raw_os_ostream.h>
 #include "klee/Config/config.h"
 #include "klee/breadcrumb.h"
 
@@ -13,6 +13,7 @@
 #include "../../lib/Core/ExeStateManager.h"
 #include "../../lib/Core/UserSearcher.h"
 #include "../../lib/Core/PTree.h"
+#include "../../lib/Core/MemoryManager.h"
 
 #include <stdio.h>
 #include <vector>

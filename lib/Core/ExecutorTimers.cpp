@@ -289,26 +289,39 @@ cl::opt<unsigned>
 DumpBrData("dump-br-data",
 	cl::desc("Dump branch data (0=off)"),
 	cl::init(0));
+cl::opt<unsigned>
+DumpBrExprData("dump-br-expr-data",
+	cl::desc("Dump branch w/ expression data (0=off)"),
+	cl::init(0));
+
 class BrDataTimer : public Executor::Timer
 {
 public:
-	BrDataTimer(Executor* _exe) : exe(_exe) {}
+	BrDataTimer(
+		const char* _fname,
+		Executor* _exe,
+		bool _ignoreConcrete=false)
+	: fname(_fname)
+	, exe(_exe)
+	, ignoreConcrete(_ignoreConcrete) {}
 	virtual ~BrDataTimer() {}
 
 	void run(void)
 	{
 		std::ostream* os;
 
-		os = exe->getInterpreterHandler()->openOutputFile(
-			"brdata.txt");
+		os = exe->getInterpreterHandler()->openOutputFile(fname);
 		if (os == NULL) return;
 
 		foreach (it,
 			KBrInstruction::beginBr(),
 			KBrInstruction::endBr())
 		{
-			KBrInstruction	*kbr = *it;
-			llvm::Function	*parent_f;
+			const KBrInstruction	*kbr = *it;
+			llvm::Function		*parent_f;
+
+			if (ignoreConcrete && !kbr->hasSeenExpr())
+				continue;
 
 			parent_f = kbr->getInst()->getParent()->getParent();
 			(*os)	<< exe->getPrettyName(parent_f)
@@ -322,7 +335,9 @@ public:
 		delete os;
 	}
 private:
-	Executor* exe;
+	const char	*fname;
+	Executor	*exe;
+	bool		ignoreConcrete;
 };
 
 #include "../Solver/HashSolver.h"
@@ -571,7 +586,11 @@ void Executor::initTimers(void)
 		addTimer(new QueryStatTimer(this), DumpQueryStats);
 
 	if (DumpBrData)
-		addTimer(new BrDataTimer(this), DumpBrData);
+		addTimer(new BrDataTimer("brdata.txt", this), DumpBrData);
+	if (DumpBrExprData)
+		addTimer(
+			new BrDataTimer("brexprdata.txt", this, true),
+			DumpBrExprData);
 
 	if (UseGCTimer)
 		addTimer(new ExprGCTimer(this), UseGCTimer);

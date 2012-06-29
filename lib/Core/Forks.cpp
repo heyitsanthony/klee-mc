@@ -475,7 +475,7 @@ ExecutionState* Forks::pureFork(ExecutionState& es, bool compact)
 	++stats::forks;
 
 	// Do actual state forking
-	newState = compact ? es.branchForReplay() : es.branch();
+	newState = es.branch(compact);
 
 	exe.getStateManager()->queueAdd(newState);
 

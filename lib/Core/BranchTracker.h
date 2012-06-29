@@ -10,9 +10,7 @@
 #ifndef KLEE_BRANCHTRACKER_H
 #define KLEE_BRANCHTRACKER_H
 
-#include "Memory.h"
-#include "MemoryManager.h"
-
+#include "klee/util/Ref.h"
 #include "klee/Interpreter.h"
 
 #include <map>
@@ -24,101 +22,23 @@
 namespace klee
 {
 class KInstruction;
+class HeapObject;
 
 /// Implements a trie data structure for tracking branch decisions
-//
 typedef std::pair<unsigned, const KInstruction*> BranchInfo;
 class BranchTracker
 {
+friend class iterator;
 public:
 	class Segment;
 	typedef ref<Segment> SegmentRef;
+	#include "BTSegment.h"
+	#include "BTIter.h"
 
-/// A segment is a decision sequence that forms an edge in the path tree
-class Segment
-{
-public:
-	Segment(void);
-	~Segment(void);
-
-	// vectors may not be the ideal data struct here, but STL provides a
-	// partial specialization for vector<bool> for optimized bit vector
-	// storage
-	typedef std::vector<bool> BoolVector;
-	typedef std::map<unsigned, unsigned, std::less<unsigned> > NonBranchesTy;
-	typedef std::vector<const KInstruction*> BranchSites;
-	typedef std::list<ref<HeapObject> > HeapObjectsTy;
-	typedef std::vector<Segment*> SegmentVector;
-
-	BoolVector branches; // 0,1 branch decision (compressed for bools)
-	BoolVector isBranch; // 1 = branch, 0 = switch (nonBranches)
-
-	NonBranchesTy nonBranches; // key = index, value = target
-
-	BranchSites	branchSites;
-
-	HeapObjectsTy	heapObjects;
-	unsigned	refCount;
-	SegmentVector	children; // not ref to avoid circular references
-	SegmentRef	parent;
-
-	inline size_t size() const { return branches.size(); }
-	inline bool empty() const { return branches.empty(); }
-	BranchInfo operator[](unsigned index) const;
-	int compare(Segment &a) const
-	{
-		if (this < &a)
-			return -1;
-		if (this == &a)
-			return 0;
-		return 1;
-	}
-private:
-	static unsigned seg_alloc_c;
-};
-
-class iterator
-{
-	friend class BranchTracker;
-public:
-	iterator() : curIndex(0) { }
-	iterator(const BranchTracker *tracker)
-	: curSeg(tracker->head), tail(tracker->tail), curIndex(0) { }
-	iterator(const BranchTracker *tracker, SegmentRef _curSeg,
-	       unsigned _curIndex = 0)
-	: curSeg(_curSeg), tail(tracker->tail), curIndex(_curIndex) { }
-
-	~iterator() { }
-
-private:
-	SegmentRef	curSeg, tail;
-	unsigned	curIndex;
-
-	iterator(SegmentRef _tail, SegmentRef _curSeg, unsigned _curIndex)
-	: curSeg(_curSeg), tail(_tail), curIndex(_curIndex)
-	{ }
-public:
-	bool isNull() const { return curSeg.isNull(); }
-	BranchInfo operator*() const;
-	iterator operator++(int notused);
-	iterator operator++();
-	inline bool operator==(iterator a) const
-	{ return (curSeg.get() == a.curSeg.get() && curIndex == a.curIndex); }
-	inline bool operator!=(iterator a) const { return !(*this == a); }
-};
-
-public:
 	BranchTracker();
 	BranchTracker(const BranchTracker &a);
 	~BranchTracker() { }
 
-private:
-	friend class iterator;
-	SegmentRef	head, tail;
-	mutable bool	needNewSegment;
-	bool		replayAll;
-
-public:
 	bool empty() const;
 	size_t size() const;
 	iterator begin() const { return (empty()) ? end() : iterator(this); }
@@ -159,6 +79,10 @@ private:
 	SegmentRef containing(unsigned index) const;
 	typedef unsigned ReplayEntry;
 	iterator findChild(iterator it, ReplayEntry branch, bool &noChild) const;
+
+	SegmentRef	head, tail;
+	mutable bool	needNewSegment;
+	bool		replayAll;
 };
 }
 

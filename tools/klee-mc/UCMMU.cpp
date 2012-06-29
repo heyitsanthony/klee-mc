@@ -2,6 +2,7 @@
  * MOTHER OF GOD
  */
 #include "../../lib/Core/AddressSpace.h"
+#include "../../lib/Core/MemoryManager.h"
 #include "../../lib/Core/TimingSolver.h"
 #include "klee/Internal/Module/KModule.h"
 #include "klee/util/ExprUtil.h"

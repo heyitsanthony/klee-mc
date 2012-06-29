@@ -2271,7 +2271,7 @@ void Executor::runLoop(void)
 	while (!stateManager->empty() && !haltExecution) {
 
 		currentState = stateManager->selectState(!onlyNonCompact);
-		if (last_state !=currentState && DumpSelectStack) {
+		if (last_state != currentState && DumpSelectStack) {
 			std::cerr << "StackTrace for st="
 				<< (void*)currentState
 				<< ". Insts=" <<currentState->totalInsts

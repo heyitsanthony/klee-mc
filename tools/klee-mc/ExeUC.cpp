@@ -10,6 +10,7 @@
 #include "klee/Internal/Module/KFunction.h"
 #include "../../lib/Core/TimingSolver.h"
 #include "../../lib/Core/AddressSpace.h"
+#include "../../lib/Core/MemoryManager.h"
 
 #include <iostream>
 #include "klee/Solver.h"
