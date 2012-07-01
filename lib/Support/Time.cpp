@@ -10,7 +10,7 @@
 #include "klee/Internal/System/Time.h"
 #include "klee/SolverStats.h"
 #include <llvm/Support/Process.h>
-
+#include "klee/Internal/Support/cycle.h"
 #include <iostream>
 
 using namespace llvm;
@@ -24,9 +24,19 @@ double util::getUserTime()
 }
 
 
+#define TICK_INTERVAL	10000000
 double util::getWallTime()
 {
-	sys::TimeValue time = sys::TimeValue::now();
+	static sys::TimeValue	time = sys::TimeValue::now();
+	static ticks		last_tick = 0;
+	ticks			cur_tick, tick_diff;
+
+	cur_tick = getticks();
+	tick_diff = cur_tick - last_tick;
+	if (tick_diff > TICK_INTERVAL) {
+		last_tick = cur_tick;
+		time = sys::TimeValue::now();
+	}
 	return time.seconds() + (double) time.nanoseconds() * 1e-9;
 }
 
