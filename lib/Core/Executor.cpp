@@ -286,6 +286,7 @@ Executor::Executor(InterpreterHandler *ih)
 		 * than unexplored condition value. */
 		lp->add(new KBrPredictor());
 		lp->add(new CondPredictor(forking));
+		lp->add(new ExprBiasPredictor());
 		lp->add(new RandomPredictor());
 		brPredict = lp;
 	}

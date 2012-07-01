@@ -147,23 +147,27 @@ public:
   ref<klee::ConstantExpr> toConstant(
   	ExecutionState &state, ref<Expr> e, const char *purpose,
 	bool showLineInfo = true);
-  /// Bind a constant value for e to the given target. NOTE: This
-  /// function may fork state if the state has multiple seeds.
-  virtual void executeGetValue(
-  	ExecutionState &state, ref<Expr> e, KInstruction *target);
 
-  const KModule* getKModule(void) const { return kmodule; }
-  KModule* getKModule(void) { return kmodule; }
+	/// Bind a constant value for e to the given target. NOTE: This
+	/// function may fork state if the state has multiple seeds.
+	virtual void executeGetValue(
+		ExecutionState &state, ref<Expr> e, KInstruction *target);
 
-  virtual void printStackTrace(ExecutionState& state, std::ostream& os) const;
-  virtual std::string getPrettyName(llvm::Function* f) const;
-  ExeStateSet::const_iterator beginStates(void) const;
-  ExeStateSet::const_iterator endStates(void) const;
-  virtual void stepStateInst(ExecutionState* &state);
-  void notifyCurrent(ExecutionState *current);
-  bool isHalted(void) const { return haltExecution; }
+	const KModule* getKModule(void) const { return kmodule; }
+	KModule* getKModule(void) { return kmodule; }
 
-  MemoryManager	*memory;
+	virtual void printStackTrace(
+		ExecutionState& state, std::ostream& os) const;
+	virtual std::string getPrettyName(llvm::Function* f) const;
+
+	ExeStateSet::const_iterator beginStates(void) const;
+	ExeStateSet::const_iterator endStates(void) const;
+
+	virtual void stepStateInst(ExecutionState* &state);
+	void notifyCurrent(ExecutionState *current);
+	bool isHalted(void) const { return haltExecution; }
+
+	MemoryManager	*memory;
 private:
 	class TimerInfo;
 
@@ -205,22 +209,23 @@ protected:
 
 	void retFromNested(ExecutionState& state, KInstruction* ki);
 
-  /// bindInstructionConstants - Initialize any necessary per instruction
-  /// constant values.
-  void bindInstructionConstants(KInstruction *KI);
+	/// bindInstructionConstants - Initialize any necessary per instruction
+	/// constant values.
+	void bindInstructionConstants(KInstruction *KI);
 
-  virtual void printStateErrorMessage(
-	ExecutionState& state,
-	const std::string& message,
-	std::ostream& os);
+	virtual void printStateErrorMessage(
+		ExecutionState& state,
+		const std::string& message,
+		std::ostream& os);
 
-  // call error handler and terminate state, for execution errors
-  // (things that should not be possible, like illegal instruction or
-  // unlowered instrinsic, or are unsupported, like inline assembly)
-  void terminateStateOnExecError(ExecutionState &state,
-                                 const llvm::Twine &message,
-                                 const llvm::Twine &info="")
-  { terminateStateOnError(state, message, "exec.err", info); }
+	// call error handler and terminate state, for execution errors
+	// (things that should not be possible, like illegal instruction or
+	// unlowered instrinsic, or are unsupported, like inline assembly)
+	void terminateStateOnExecError(
+		ExecutionState &state,
+		const llvm::Twine &message,
+		const llvm::Twine &info="")
+	{ terminateStateOnError(state, message, "exec.err", info); }
 
   ref<ConstantExpr> getSmallSymAllocSize(ExecutionState &st, ref<Expr>& size);
   virtual void removePTreeState(

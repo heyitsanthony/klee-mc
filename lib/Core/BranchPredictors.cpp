@@ -13,9 +13,63 @@ RandomPredictor::RandomPredictor()
 , period(32)
 , period_bump(2) {}
 
+#include <iostream>
 bool RandomPredictor::predict(const StateBranch& sb, bool& hint)
 {
 	hint = theRNG.getBool();
+	//static unsigned c = 0;
+	//std::cerr << "RAND PRED: " << c++ << ". HINT=" << hint << '\n';
+	//std::cerr << "RAND COND: " << sb.cond << '\n';
+	return true;
+}
+
+#define BIAS_WIDTH	8
+bool ExprBiasPredictor::predict(const StateBranch& sb, bool& hint)
+{
+	const ConstantExpr	*ce;
+	const EqExpr		*ee;
+
+	ee = dyn_cast<EqExpr>(sb.cond);
+	if (ee == NULL)
+		return false;
+
+	ce = dyn_cast<ConstantExpr>(ee->getKid(0));
+	if (ce == NULL)
+		return false;
+
+	/* likely to be (eq false (x == y)) or something. 
+	 * this would induce a bias we don't want toward certain equalities. */
+	if (ce->getWidth() == 1)
+		return false;
+
+	if (!ce->isZero()) {
+		if (ce->getWidth() <= 64) {
+			/* check for 0x0..0ffff masks */
+			uint64_t	v;
+			int		bitc = 0;
+			v = ce->getZExtValue();
+			v++;
+			while (v && bitc < 2) {
+				if (v & 1)
+					bitc++;
+				v >>= 1;
+			}
+			if (bitc > 1)
+				return false;
+		} else
+			return false;
+	}
+
+	/* bias toward (Eq CONST x) being false */
+	/* we are biasing *against* x == 0 and x == -1 */
+	if ((theRNG.getInt32() % BIAS_WIDTH) == 0) {
+		/* x == <CE> */
+		hint = true;
+	} else {
+		/* x != <CE> */
+		hint = false;
+	}
+
 	return true;
 }
 

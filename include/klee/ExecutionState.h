@@ -96,51 +96,23 @@ std::ostream &operator<<(std::ostream &os, const MemoryMap &mm);
 typedef std::set<ExecutionState*> ExeStateSet;
 
 #define BaseExeStateBuilder	DefaultExeStateBuilder<ExecutionState>
+#define ES_CANARY_VALUE	0x11667744
 
 class ExecutionState
 {
 friend class BaseExeStateBuilder;
 private:
-	static MemoryManager* mm;
-	unsigned int num_allocs;
 
 	// unsupported, use copy constructor
 	ExecutionState &operator=(const ExecutionState&);
-
-	// An ordered sequence of branches this state took thus far:
-	BranchTracker brChoiceSeq;
-	// used only if isCompactForm
-	BranchTracker::iterator replayBrIter;
-
-	unsigned incomingBBIndex;
-
-	/// ordered list of symbolics: used to generate test cases.
-	//
-	// FIXME: Move to a shared list structure (not critical).
-	std::vector< SymbolicArray > symbolics;
-	typedef std::map<const Array*, const MemoryObject*> arr2sym_map;
-	arr2sym_map	arr2sym;
-
-	uint64_t	prev_constraint_hash;
-
-	// true iff this state is a mere placeholder
-	// to be replaced by a real state
-	bool	isCompactForm;
-	bool	onFreshBranch;
-
-#define ES_CANARY_VALUE	0x11667744
-	unsigned		canary;
-	unsigned		arrayId;
 
 public:
 	bool checkCanary(void) const { return canary == ES_CANARY_VALUE; }
 	typedef std::vector<StackFrame> stack_ty;
 	typedef stack_ty::iterator	stack_iter_ty;
 
-	// Are we currently underconstrained?  Hack: value is size to make fake
-	// objects.
-	unsigned	depth;
-	double		weight;
+	unsigned		depth;
+	double			weight;
 
 	// pc - pointer to current instruction stream
 	KInstIterator		pc, prevPC;
@@ -154,7 +126,6 @@ public:
 	uint64_t		totalInsts;
 	unsigned		concretizeCount;
 	ref<Expr>		prevForkCond;	// last condition to cause fork
-
 
 	// Number of malloc calls per callsite
 	std::map<const llvm::Value*,unsigned> mallocIterations;
@@ -205,8 +176,6 @@ public:
 	ExecutionState *compact() const;
 	ExecutionState *reconstitute(ExecutionState &initialStateCopy) const;
 
-	void getConstraintLog(std::string &res) const;
-
 	std::string getFnAlias(std::string fn);
 	void addFnAlias(std::string old_fn, std::string new_fn);
 	void removeFnAlias(std::string fn);
@@ -217,7 +186,6 @@ public:
 
 
 	KFunction* getCurrentKFunc(void) const { return (stack.back()).kf; }
-
 
 	void pushFrame(KInstIterator caller, KFunction *kf);
 	void popFrame();
@@ -351,6 +319,33 @@ public:
 
 	virtual uint64_t getAddrPC(void) const { return (uint64_t)(&(*pc)); }
 	std::string getArrName(const char* arrPrefix);
+	void getConstraintLog(std::string& res) const;
+private:
+	static MemoryManager* mm;
+	unsigned int num_allocs;
+
+	// An ordered sequence of branches this state took thus far:
+	BranchTracker brChoiceSeq;
+	// used only if isCompactForm
+	BranchTracker::iterator replayBrIter;
+
+	unsigned incomingBBIndex;
+
+	/// ordered list of symbolics: used to generate test cases.
+	//
+	// FIXME: Move to a shared list structure (not critical).
+	std::vector< SymbolicArray > symbolics;
+	typedef std::map<const Array*, const MemoryObject*> arr2sym_map;
+	arr2sym_map	arr2sym;
+
+	uint64_t	prev_constraint_hash;
+
+	// true iff this state is a mere placeholder
+	// to be replaced by a real state
+	bool	isCompactForm;
+	bool	onFreshBranch;
+
+	unsigned		canary;
 };
 
 }

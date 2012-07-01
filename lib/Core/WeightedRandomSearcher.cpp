@@ -298,6 +298,7 @@ double BranchWeight::weigh(const ExecutionState* es) const
 {
 	unsigned	br_c, st_c;
 	unsigned	br_prev_c, br_next_c;
+	double		bias;
 
 	loadIns();
 
@@ -313,8 +314,10 @@ double BranchWeight::weigh(const ExecutionState* es) const
 	if (br_prev_c == 0) br_prev_c = 1;
 	if (br_next_c == 0) br_next_c = 1;
 
-	return  ((double)br_c) / ((double)st_c*br_prev_c*br_next_c);
-//	return  ((double)br_c) / ((double)st_c);
+	bias = 1.0 - (double)(es->totalInsts % n_width) / (double)n_width;
+//	return  bias*((double)br_c) / ((double)st_c*br_prev_c*br_next_c);
+//	return  ((double)br_c) / ((double)st_c*br_prev_c*br_next_c);
+	return  ((double)br_c) / ((double)st_c);
 }
 
 

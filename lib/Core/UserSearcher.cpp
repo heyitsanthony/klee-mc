@@ -215,6 +215,14 @@ bool UserSearcher::userSearcherRequiresMD2U() {
 #define DEFAULT_PR_SEARCHER	new RandomSearcher()
 #define TAIL_RESCAN_SEARCHER	\
 	new RescanSearcher(new Weight2Prioritizer<TailWeight>(1.0))
+
+#define FRESH_BRANCH_SEARCHER	\
+	new PrioritySearcher(	\
+			new Weight2Prioritizer<FreshBranchWeight>(1),	\
+			new RescanSearcher(	\
+				new Weight2Prioritizer<	\
+					StateInstCountWeight>(-1.0)),	\
+			100)
 /* Research quality */
 Searcher* UserSearcher::setupInterleavedSearcher(
 	Executor& executor, Searcher* searcher)
@@ -222,15 +230,7 @@ Searcher* UserSearcher::setupInterleavedSearcher(
 	std::vector<Searcher *> s;
 
 	s.push_back(searcher);
-	PUSH_ILEAV_IF_SET(
-		FreshBranch,
-		new PrioritySearcher(
-			new Weight2Prioritizer<FreshBranchWeight>(1),
-			//new RandomSearcher(),
-			new RescanSearcher(
-				new Weight2Prioritizer<
-					StateInstCountWeight>(-1.0)),
-			100));
+	PUSH_ILEAV_IF_SET(FreshBranch, FRESH_BRANCH_SEARCHER);
 
 	PUSH_ILEAV_IF_SET(Histo, SEARCH_HISTO);
 
@@ -342,10 +342,7 @@ Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 	Searcher* searcher;
 
 	if (UseFreshBranchSearch) {
-		searcher = new PrioritySearcher(
-			new Weight2Prioritizer<FreshBranchWeight>(1),
-			new RandomSearcher(),
-			100);
+		searcher = FRESH_BRANCH_SEARCHER;
 	} else if (UseBranchInsSearch) {
 		searcher = new RescanSearcher(
 			new Weight2Prioritizer<BranchWeight>(

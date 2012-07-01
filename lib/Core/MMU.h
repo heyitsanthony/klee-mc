@@ -60,6 +60,8 @@ protected:
 			return r;
 		}
 
+		bool isBad(void) const { return !rc || !usable; }
+
 		ObjectPair		op;
 		ref<Expr>		offset;
 		const MemoryObject	*mo;
@@ -107,6 +109,7 @@ protected:
 		const MemOp& mop,
 		const MemOpRes& res);
 
+	void analyzeOffset(ExecutionState& st, const MemOpRes& res);
 private:
 	Executor		&exe;
 	static uint64_t		query_c;

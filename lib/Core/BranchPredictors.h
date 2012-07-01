@@ -30,6 +30,15 @@ private:
 };
 
 
+class ExprBiasPredictor : public BranchPredictor
+{
+public:
+	ExprBiasPredictor(void) {}
+	virtual ~ExprBiasPredictor() {}
+	virtual bool predict(const StateBranch& sb, bool& hint);
+private:
+};
+
 class RandomPredictor : public BranchPredictor
 {
 public:

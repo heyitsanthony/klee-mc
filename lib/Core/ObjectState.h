@@ -81,6 +81,7 @@ public:
 	uint8_t	read8c(unsigned off) const;
 	void write8(unsigned offset, uint8_t value);
 
+	const ref<Array> getArrayRef(void) const { return src_array; }
 	const Array* getArray(void) const { return src_array.get(); }
 	void print(unsigned int begin = 0, int end = -1) const;
 

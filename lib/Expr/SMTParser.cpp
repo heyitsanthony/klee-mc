@@ -48,6 +48,8 @@ SMTParser::SMTParser(const std::string& _filename, ExprBuilder* _builder)
 {
 	is = new ifstream(fileName.c_str());
 
+	if (builder == NULL) builder = Expr::getBuilder();
+
 	// Initial empty environments
 	varEnvs.push(VarEnv());
 	fvarEnvs.push(FVarEnv());
@@ -64,6 +66,8 @@ SMTParser::SMTParser(std::istream* ifs, ExprBuilder* _builder)
 , builder(_builder)
 , parsedTopLevel(false)
 {
+	if (builder == NULL) builder = Expr::getBuilder();
+
 	// Initial empty environments
 	varEnvs.push(VarEnv());
 	fvarEnvs.push(FVarEnv());

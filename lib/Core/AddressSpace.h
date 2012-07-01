@@ -82,7 +82,7 @@ public:
 	const MemoryObject* getLastBoundHint(void) const { return last_mo; }
 
 	// Find a feasible object for 'address'.
-	//
+	// Returns 'true' if feasible object is found
 	bool getFeasibleObject(
 		ExecutionState &state,
 		TimingSolver *solver,

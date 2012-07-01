@@ -1,9 +1,14 @@
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Target/TargetData.h>
+#include <sstream>
+#include "klee/Internal/ADT/LimitedStream.h"
 
+#include "../Solver/SMTPrinter.h"
+#include "PTree.h"
 #include "static/Sugar.h"
 #include "TimingSolver.h"
 #include "Executor.h"
+#include "ExeStateManager.h"
 #include "MMU.h"
 #include "klee/SolverStats.h"
 #include "klee/ExecutionState.h"
@@ -34,6 +39,13 @@ namespace {
 		"max-err-resolves",
 		cl::desc("Maximum number of states to fork on MemErr"),
 		cl::init(0));
+
+	cl::opt<std::string>
+	SatSymOOBPtrDir(
+		"satsymptr-dir",
+		cl::desc("Satisfiable out of bound pointer expr dump dir."),
+		cl::init(""));
+	//	cl::init("ptrexprs/off"));
 }
 
 using namespace klee;
@@ -84,16 +96,61 @@ bool MMU::memOpFast(ExecutionState& state, MemOp& mop)
 
 	type = mop.getType(exe.getKModule());
 	res = memOpResolve(state, mop.address, type);
-	if (!res.usable || !res.rc)
+	if (res.isBad())
 		return false;
 
 	commitMOP(state, mop, res);
 	return true;
 }
 
+#define MAX_PTR_EXPR_BYTES	(1024*16)
+void MMU::analyzeOffset(ExecutionState& st, const MemOpRes& res)
+{
+	static std::set<Expr::Hash>	hashes;
+	bool				mbt;
+	ref<Expr>			bound_chk;
+
+	if (hashes.count(res.offset->hash()))
+		return;
+
+#if 0
+	bound_chk = SltExpr::create(
+		res.offset,
+		ConstantExpr::create(
+			-((int64_t)(res.os->size + 1024*1024*16)),
+			res.offset->getWidth()));
+#endif
+	bound_chk = SgtExpr::create(
+		res.offset,
+		ConstantExpr::create(
+			((int64_t)(res.os->size + 1024*1024*16)),
+			res.offset->getWidth()));
+
+	if (exe.getSolver()->solver->mayBeTrue(Query(bound_chk), mbt) == false)
+		return;
+
+	if (mbt == false) {
+		hashes.insert(res.offset->hash());
+		return;
+	}
+
+	std::stringstream	ss;
+	ss << SatSymOOBPtrDir << "." << (void*)bound_chk->hash() << ".smt";
+
+	limited_ofstream	lofs(ss.str().c_str(), MAX_PTR_EXPR_BYTES);
+
+	SMTPrinter::print(lofs, Query(bound_chk));
+}
+
 void MMU::commitMOP(
 	ExecutionState& state, const MemOp& mop, const MemOpRes& res)
 {
+	if (	SatSymOOBPtrDir.empty() == false &&
+		res.offset->getKind() != Expr::Constant)
+	{
+		analyzeOffset(state, res);
+	}
+
 	if (mop.isWrite) {
 		writeToMemRes(state, res, mop.value);
 	} else {
@@ -270,7 +327,7 @@ ref<Expr> MMU::replaceReadWithSymbolic(
 	ref<Expr> res = Expr::createTempRead(array.get(), e->getWidth());
 	ref<Expr> eq = NotOptimizedExpr::create(EqExpr::create(e, res));
 	std::cerr << "Making symbolic: " << eq << "\n";
-	state.addConstraint(eq);
+	exe.addConstraint(state, eq);
 	return res;
 }
 
@@ -295,7 +352,7 @@ bool MMU::memOpByByte(ExecutionState& state, MemOp& mop)
 			ConstantExpr::create(i, mop.address->getWidth()));
 
 		res = memOpResolve(state, byte_addr, 8);
-		if (!res.usable || !res.rc)
+		if (res.isBad())
 			return false;
 		if (mop.isWrite) {
 			byte_val = ExtractExpr::create(mop.value, 8*i, 8);

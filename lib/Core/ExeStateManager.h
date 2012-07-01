@@ -53,6 +53,7 @@ public:
 
   ExeStateSet::const_iterator begin(void) { return states.begin(); }
   ExeStateSet::const_iterator end(void) { return states.end(); }
+  bool hasState(ExecutionState* st) const{ return states.count(st) != 0; }
 
   void dropAdded(ExecutionState* es);
   void queueAdd(ExecutionState* es);

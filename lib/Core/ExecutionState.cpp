@@ -59,12 +59,7 @@ namespace {
 
 /** XXX XXX XXX REFACTOR PLEASEEE **/
 ExecutionState::ExecutionState(KFunction *kf)
-: num_allocs(0)
-, prev_constraint_hash(0)
-, isCompactForm(false)
-, onFreshBranch(false)
-, arrayId(0)
-, depth(0)
+: depth(0)
 , weight(1)
 , pc(kf->instructions)
 , prevPC(pc)
@@ -77,6 +72,10 @@ ExecutionState::ExecutionState(KFunction *kf)
 , isReplay(false)
 , forkDisabled(false)
 , ptreeNode(0)
+, num_allocs(0)
+, prev_constraint_hash(0)
+, isCompactForm(false)
+, onFreshBranch(false)
 {
 	canary = ES_CANARY_VALUE;
 	pushFrame(0, kf);
@@ -84,35 +83,33 @@ ExecutionState::ExecutionState(KFunction *kf)
 }
 
 ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
-: num_allocs(0)
-, prev_constraint_hash(0)
-, isCompactForm(false)
-, onFreshBranch(false)
-, arrayId(0)
-, constraints(assumptions)
+: constraints(assumptions)
 , queryCost(0.)
 , lastGlobalInstCount(0)
 , totalInsts(0)
 , concretizeCount(0)
 , isReplay(false)
 , ptreeNode(0)
+, num_allocs(0)
+, prev_constraint_hash(0)
+, isCompactForm(false)
+, onFreshBranch(false)
 {
 	canary = ES_CANARY_VALUE;
 	replayBrIter = brChoiceSeq.end();
 }
 
 ExecutionState::ExecutionState(void)
-: num_allocs(0)
-, prev_constraint_hash(0)
-, isCompactForm(false)
-, onFreshBranch(false)
-, arrayId(0)
-, lastGlobalInstCount(0)
+: lastGlobalInstCount(0)
 , totalInsts(0)
 , concretizeCount(0)
 , coveredNew(false)
 , isReplay(false)
 , ptreeNode(0)
+, num_allocs(0)
+, prev_constraint_hash(0)
+, isCompactForm(false)
+, onFreshBranch(false)
 {
 	canary = ES_CANARY_VALUE;
 	replayBrIter = brChoiceSeq.begin();
@@ -543,7 +540,6 @@ ref<Expr> ExecutionState::readSymbolic(
 		ret = i ? ConcatExpr::create(Byte, ret) : Byte;
 	}
 
-	std::cerr << "READSYMBOLIC: " << ret << '\n';
 	return ret;
 }
 
@@ -552,6 +548,14 @@ void ExecutionState::printConstraints(std::ostream& os) const
 	Query	q(constraints, ConstantExpr::create(1, 1));
 	SMTPrinter::print(os, q);
 }
+
+void ExecutionState::getConstraintLog(std::string &res) const
+{
+	std::ostringstream info;
+	ExprPPrinter::printConstraints(info, constraints);
+	res = info.str();
+}
+
 
 bool ExecutionState::setupCallVarArgs(
 	unsigned funcArgs, std::vector<ref<Expr> >& args)
@@ -605,13 +609,6 @@ bool ExecutionState::setupCallVarArgs(
 	}
 
 	return true;
-}
-
-void ExecutionState::getConstraintLog(std::string &res) const
-{
-	std::ostringstream info;
-	ExprPPrinter::printConstraints(info, constraints);
-	res = info.str();
 }
 
 void ExecutionState::abortInstruction(void)

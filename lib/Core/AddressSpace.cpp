@@ -179,9 +179,8 @@ bool AddressSpace::isFeasibleRange(
 	const MemoryObject* lo, const MemoryObject* hi,
 	bool& ok)
 {
-	bool	mayBeTrue;
-
-	ref<Expr> inRange = getFeasibilityExpr(address, lo, hi);
+	bool		mayBeTrue;
+	ref<Expr>	inRange = getFeasibilityExpr(address, lo, hi);
 
 	ok = solver->mayBeTrue(state, inRange, mayBeTrue);
 	if (!ok) return false;
@@ -234,8 +233,7 @@ bool AddressSpace::testInBoundPointer(
 		if (lookupGuess(example, mo))
 			return true;
 	}
-		
-	/* XXX: is this too expensive? */
+
 	if (solver->getValue(state, address, c_addr) == false) {
 		c_addr = ConstantExpr::create(~0ULL, address->getWidth());
 		return false;
@@ -274,18 +272,13 @@ bool AddressSpace::getFeasibleObject(
 	ref<Expr> address,
 	ObjectPair& res)
 {
-	bool			found;
 	ref<ConstantExpr>	c_addr;
+	TimerStatIncrementer	timer(stats::resolveTime);
 
 	res.first = NULL;
 
-	if (ConstantExpr * CE = dyn_cast<ConstantExpr > (address)) {
-		found = resolveOne(CE, res);
-		if (!found) res.first = NULL;
-		return true;
-	}
-
-	TimerStatIncrementer timer(stats::resolveTime);
+	if (ConstantExpr * CE = dyn_cast<ConstantExpr > (address))
+		return resolveOne(CE, res);
 
 	if (!testInBoundPointer(state, solver, address, c_addr, res.first))
 		return false;
@@ -295,10 +288,6 @@ bool AddressSpace::getFeasibleObject(
 		if (resolveOne(c_addr, res))
 			return true;
 	}
-
-	/* one more check; zero it out */
-
-
 
 	// We couldn't throw a dart and hit a feasible address.
 	// The next step is to try to find any feasible address.
@@ -419,6 +408,8 @@ bool AddressSpace::resolve(
 	ResolutionList &rl,
 	unsigned maxResolutions)
 {
+	TimerStatIncrementer timer(stats::resolveTime);
+
 	/* fast path for constant expressions */
 	if (ConstantExpr * CE = dyn_cast<ConstantExpr > (p)) {
 		ObjectPair res;
@@ -426,8 +417,6 @@ bool AddressSpace::resolve(
 			rl.push_back(res);
 		return false;
 	}
-
-	TimerStatIncrementer timer(stats::resolveTime);
 
 	if (ContiguousOffsetResolution) {
 		bool	bad_addr;
@@ -492,10 +481,10 @@ bool AddressSpace::mustContain(
 	const MemoryObject* hi,
 	bool& ok)
 {
-	bool mustBeTrue;
+	bool		mustBeTrue;
+	ref<Expr>	feas(getFeasibilityExpr(address, lo, hi));
 
-	ok = solver->mustBeTrue(
-		state, getFeasibilityExpr(address, lo, hi), mustBeTrue);
+	ok = solver->mustBeTrue(state, feas, mustBeTrue);
 
 	if (!ok) return false;
 

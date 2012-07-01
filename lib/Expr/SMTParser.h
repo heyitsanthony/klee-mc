@@ -54,7 +54,7 @@ public:
 	klee::ExprBuilder *builder;
     
 	static SMTParser* Parse(
-		std::istream* ifs, ExprBuilder* _builder)
+		std::istream* ifs, ExprBuilder* _builder = NULL)
 	{
 		SMTParser	*smtp = new SMTParser(ifs, _builder);
 		if (smtp->Parse() == false) {
@@ -65,9 +65,10 @@ public:
 	}
 
 	static SMTParser* Parse(
-		const std::string& filename, ExprBuilder *builder)
+		const std::string& filename, ExprBuilder *builder = NULL)
 	{
 		SMTParser	*smtp = new SMTParser(filename, builder);
+
 		if (smtp->Parse() == false || !smtp->queryParsed) {
 			delete smtp;
 			return NULL;
@@ -107,8 +108,8 @@ public:
 
 	void setBadRead(void) { bad_read = true; }
 protected:
-	SMTParser(std::istream* ifs, ExprBuilder* _builder);
-	SMTParser(const std::string& filename, ExprBuilder *builder);
+	SMTParser(std::istream* ifs, ExprBuilder* _builder = NULL);
+	SMTParser(const std::string& filename, ExprBuilder *builder = NULL);
 
 private:
 	bool Parse(void);

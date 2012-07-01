@@ -251,13 +251,9 @@ public:
 	virtual ref<Expr> apply(const ref<Expr>& e)
 	{
 		ref<Expr>	ret;
-
 		goodExpr = true;
 		ret = visit(e);
-		if (!goodExpr)
-			return NULL;
-
-		return ret;
+		return (goodExpr) ? ret : NULL;
 	}
 
 protected:

@@ -8,6 +8,7 @@
 #include "klee/Internal/ADT/TwoOStreams.h"
 #include "static/Sugar.h"
 #include "../../lib/Core/GDBExecutor.h"
+#include "../../lib/Core/ConstraintSeedExecutor.h"
 #include "KleeHandler.h"
 #include "UCHandler.h"
 #include "cmdargs.h"
@@ -51,6 +52,13 @@ namespace {
 		cl::desc("Make argument strings symbolic"),
 		cl::location(SymArgs),
 		cl::init(false));
+
+	cl::opt<bool>
+	UseConstraintSeed(
+		"use-constr-seed",
+		cl::desc("Use constraint seeds."),
+		cl::init(false));
+
 
 	cl::opt<bool> SymHook(
 		"use-symhooks",
@@ -392,8 +400,12 @@ bool isReplaying(void)
 	return (!ReplayOutDir.empty() || !ReplayOutFile.empty());
 }
 
-#define NEW_INTERP(x)	\
-	((UseGDB) ? new GDBExecutor<x>(handler) : new x(handler))
+#define NEW_INTERP(x)						\
+	((UseGDB)						\
+		? new GDBExecutor<x>(handler) 			\
+		: (UseConstraintSeed)				\
+			? new ConstraintSeedExecutor<x>(handler)\
+			: new x(handler))
 
 Interpreter* createInterpreter(KleeHandler *handler, Guest* gs)
 {
