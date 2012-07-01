@@ -84,6 +84,27 @@ bool ConstraintSeedCore::loadConstraintFile(const std::string& path)
 	return true;
 }
 
+bool ConstraintSeedCore::isExprAdmissible(
+	const exprlist_ty* exprs, const ref<Expr>& e)
+{
+	/* check conjunction */
+	ref<Expr>	test_e;
+	bool		mbt;
+
+	test_e = e;
+	foreach (it, exprs->begin(), exprs->end())
+		test_e = OrExpr::create(*it, test_e);
+
+	if (!exe->getSolver()->solver->mustBeTrue(Query(test_e), mbt))
+		return false;
+
+	/* valid; oops */
+	if (mbt == true)
+		return false;
+
+	return true;
+}
+
 bool ConstraintSeedCore::addExprToLabel(const std::string& s, const ref<Expr>& e)
 {
 	name2exprs_ty::iterator		it;
@@ -96,24 +117,9 @@ bool ConstraintSeedCore::addExprToLabel(const std::string& s, const ref<Expr>& e
 	} else
 		exprs = it->second;
 
-#if 0
-	/* check conjunction */
-	ref<Expr>	test_conj;
-	bool		bt;
-
-	test_conj = e;
-	foreach (it2, exprs->begin(), exprs->end()) {
-		test_conj = AndExpr::create(*it2, test_conj);
-	}
-
-	if (exe->getSolver()->solver->mayBeTrue(
-		Query(test_conj), mbt) == false)
-	{
+	if (isExprAdmissible(exprs, e) == false)
 		return false;
-	}
 
-	if (mbt == false) return false;
-#endif
 	exprs->push_back(e);
 
 	return true;
@@ -188,12 +194,45 @@ private:
 	bool		goodExpr;
 };
 
+ref<Expr> ConstraintSeedCore::getDisjunction(
+	ExprVisitor* ev, const exprlist_ty* exprs) const
+{
+	ref<Expr>	ret(NULL);
+
+	foreach (it, exprs->begin(), exprs->end()) {
+		ref<Expr>	seed_constr(*it);
+		ref<Expr>	state_constr;
+
+		state_constr = ev->apply(seed_constr);
+		if (state_constr.isNull()) {
+			std::cerr << "Could not unify the seed constraint!\n";
+			continue;
+		}
+
+		if (ret.isNull())
+			ret  = state_constr;
+		else
+			ret = OrExpr::create(state_constr, ret);
+
+#if 0
+		std::vector<ref<Array> >	arrs;
+		std::set<std::string>		arrnames;
+		ExprUtil::findSymbolicObjectsRef(state_constr, arrs);
+		foreach (it3, arrs.begin(), arrs.end()) {
+			assert (arrnames.count((*it3)->name) == 0);
+			arrnames.insert((*it3)->name);
+		}
+#endif
+	}
+
+	return ret;
+}
+
 void ConstraintSeedCore::addSeedConstraints(
 	ExecutionState& state, const ref<Array> arr)
 {
 	name2exprs_ty::const_iterator	it;
-	exprlist_ty			*exprs;
-	ref<Expr>			e_disjunction(NULL);
+	ref<Expr>			constr(NULL);
 
 	it = name2exprs.find(arr->name);
 	if (it == name2exprs.end())
@@ -207,46 +246,16 @@ void ConstraintSeedCore::addSeedConstraints(
 		arrmap.insert(std::make_pair(arr->name, arr));
 	}
 
-	exprs = it->second;
 	std::cerr << "===================\n";
-	foreach (it2, exprs->begin(), exprs->end()) {
-		ref<Expr>	seed_constr(*it2);
-		ref<Expr>	state_constr;
-
-		state_constr = ra.apply(seed_constr);
-		if (state_constr.isNull()) {
-			std::cerr << "Could not unify the seed constraint!\n";
-			continue;
-		}
-
-		if (e_disjunction.isNull())
-			e_disjunction = state_constr;
-		else
-			e_disjunction = OrExpr::create(
-				state_constr,
-				e_disjunction);
-
-#if 0
-		std::vector<ref<Array> >	arrs;
-		std::set<std::string>		arrnames;
-		ExprUtil::findSymbolicObjectsRef(state_constr, arrs);
-		foreach (it3, arrs.begin(), arrs.end()) {
-			assert (arrnames.count((*it3)->name) == 0);
-			arrnames.insert((*it3)->name);
-		}
-#endif
-	//	if (exe->addConstraint(state, state_constr) == false)
-	//		std::cerr << "Could not add state constraint!\n";
-	}
-
-	if (e_disjunction.isNull()) {
-		std::cerr << "NULL DISJUNC??\n";
+	constr = getDisjunction(&ra, it->second);
+	if (constr.isNull()) {
+		std::cerr << "NULL CONSTR??\n";
 		return;
 	}
 
-	if (exe->addConstraint(state, e_disjunction) == false)
-		std::cerr << "Could not add seed disjunction!\n";
+	if (exe->addConstraint(state, constr) == false)
+		std::cerr << "Could not add seed constraint!\n";
 	std::cerr << ">>>>>>>>>>>>LOLLLLLLL<<<<<<<<" << arr->name << '\n';;
-	std::cerr << "ADDED CONSTRS: " << e_disjunction << '\n';
+	std::cerr << "ADDED CONSTRS: " << constr << '\n';
 	std::cerr << "===================\n";
 }

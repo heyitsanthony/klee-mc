@@ -104,42 +104,47 @@ bool MMU::memOpFast(ExecutionState& state, MemOp& mop)
 }
 
 #define MAX_PTR_EXPR_BYTES	(1024*16)
+static void dumpOffset(const ref<Expr>& e)
+{
+	std::stringstream	ss;
+	ss << SatSymOOBPtrDir << "." << (void*)e->hash() << ".smt";
+	limited_ofstream	lofs(ss.str().c_str(), MAX_PTR_EXPR_BYTES);
+	SMTPrinter::print(lofs, Query(e));
+}
+
 void MMU::analyzeOffset(ExecutionState& st, const MemOpRes& res)
 {
 	static std::set<Expr::Hash>	hashes;
-	bool				mbt;
-	ref<Expr>			bound_chk;
+	bool				mbt_neg, mbt_pos;
+	ref<Expr>			bound_chk_neg, bound_chk_pos;
 
 	if (hashes.count(res.offset->hash()))
 		return;
 
-#if 0
-	bound_chk = SltExpr::create(
+	bound_chk_neg = SltExpr::create(
 		res.offset,
 		ConstantExpr::create(
 			-((int64_t)(res.os->size + 1024*1024*16)),
 			res.offset->getWidth()));
-#endif
-	bound_chk = SgtExpr::create(
+	if (!exe.getSolver()->solver->mayBeTrue(Query(bound_chk_neg), mbt_neg))
+		return;
+
+	bound_chk_pos = SgtExpr::create(
 		res.offset,
 		ConstantExpr::create(
 			((int64_t)(res.os->size + 1024*1024*16)),
 			res.offset->getWidth()));
-
-	if (exe.getSolver()->solver->mayBeTrue(Query(bound_chk), mbt) == false)
+	if (!exe.getSolver()->solver->mayBeTrue(Query(bound_chk_pos), mbt_pos))
 		return;
 
-	if (mbt == false) {
+
+	if (mbt_pos == false && mbt_neg == false) {
 		hashes.insert(res.offset->hash());
 		return;
 	}
 
-	std::stringstream	ss;
-	ss << SatSymOOBPtrDir << "." << (void*)bound_chk->hash() << ".smt";
-
-	limited_ofstream	lofs(ss.str().c_str(), MAX_PTR_EXPR_BYTES);
-
-	SMTPrinter::print(lofs, Query(bound_chk));
+	if (mbt_pos) dumpOffset(bound_chk_pos);
+	if (mbt_neg) dumpOffset(bound_chk_neg);
 }
 
 void MMU::commitMOP(

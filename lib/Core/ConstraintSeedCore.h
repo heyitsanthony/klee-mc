@@ -11,6 +11,8 @@ namespace klee
 {
 class Executor;
 class ExecutionState;
+class ExprVisitor;
+
 class ConstraintSeedCore
 {
 public:
@@ -23,6 +25,11 @@ public:
 private:
 	bool loadConstraintFile(const std::string& path);
 	bool addExprToLabel(const std::string& s, const ref<Expr>& e);
+
+	ref<Expr> getDisjunction(
+		ExprVisitor*	ev,
+		const exprlist_ty* el) const;
+	bool isExprAdmissible(const exprlist_ty* el, const ref<Expr>& e);
 
 	Executor	*exe;
 	name2exprs_ty	name2exprs;
