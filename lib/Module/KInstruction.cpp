@@ -165,30 +165,36 @@ void KGEPInstruction::computeOffsets(
 void KSwitchInstruction::orderTargets(const KModule* km, const Globals* g)
 {
 	SwitchInst	*si(cast<SwitchInst>(getInst()));
+	unsigned	i;
 
 	/* already ordered targets! */
 	if (cases.size())
 		return;
 
-	cases.resize(si->getNumCases());
-	assert (cases.size () >= 1);
+	cases.resize(si->getNumCases()+1);
+	assert (cases.size() >= 2);
 
 	/* initialize minTargetValues and cases */
 	cases[0] = Val2TargetTy(ref<ConstantExpr>(), si->getDefaultDest());
-	for (unsigned i = 1; i < cases.size(); i++) {
+	assert (si->getDefaultDest() == si->case_default().getCaseSuccessor());
+
+	foreach (it, si->case_begin(), si->case_end()) {
 		ref<ConstantExpr>	value;
 		BasicBlock		*target;
-		TargetValsTy::iterator	it;
+		TargetValsTy::iterator	it2;
 
-		value  = Executor::evalConstant(km, g, si->getCaseValue(i));
-		target = si->getSuccessor(i);
-		cases[i] = Val2TargetTy(value, target);
+		i = it.getCaseIndex();
+		assert ((i+1) < cases.size());
 
-		it = minTargetValues.find(target);
-		if (it == minTargetValues.end())
+		value  = Executor::evalConstant(km, g, it.getCaseValue());
+		target = it.getCaseSuccessor();
+		cases[i+1] = Val2TargetTy(value, target);
+
+		it2 = minTargetValues.find(target);
+		if (it2 == minTargetValues.end())
 			minTargetValues[target] = value;
-		else if (value < it->second)
-			it->second = value;
+		else if (value < it2->second)
+			it2->second = value;
 	}
 
 	// build map from target BasicBlock to value(s) that lead to that block
@@ -266,13 +272,12 @@ TargetTy KSwitchInstruction::getExprCondSwitchTargets(
 // Somewhat gross to create these all the time, but fine till we
 // switch to an internal rep.
 TargetTy KSwitchInstruction::getConstCondSwitchTargets(
-	uint64_t	v,
-	TargetsTy &targets)
+	uint64_t v, TargetsTy &targets)
 {
 	SwitchInst		*si;
 	llvm::IntegerType	*Ty;
 	ConstantInt		*ci;
-	unsigned		index;
+	int			index;
 	TargetTy		defaultTarget;
 
 	targets.clear();
@@ -280,17 +285,21 @@ TargetTy KSwitchInstruction::getConstCondSwitchTargets(
 	si = cast<SwitchInst>(getInst());
 	Ty = cast<IntegerType>(si->getCondition()->getType());
 	ci = ConstantInt::get(Ty, v);
-	index = si->findCaseValue(ci);
+
+	SwitchInst::CaseIt	cit(si->findCaseValue(ci));
+	index = (cit == si->case_end())
+		? -1
+		: cit.getCaseIndex();
 
 	// We need to have the same set of targets to pass to fork() in case
 	// toUnique fails/times out on replay (it's happened before...)
 	defaultTarget = TargetTy(
 		cases[0].second,
 		ConstantExpr::create(0, Expr::Bool));
-	if (index == 0)
+	if (index < 0)
 		defaultTarget.second = ConstantExpr::create(1, Expr::Bool);
 
-	for (unsigned i = 1; i < cases.size(); ++i) {
+	for (int i = 1; i < (int)cases.size(); ++i) {
 		// default to infeasible target
 		TargetsTy::iterator	it;
 		TargetTy		cur_target;
@@ -304,7 +313,7 @@ TargetTy KSwitchInstruction::getConstCondSwitchTargets(
 				cur_target)).first;
 
 		// set unique target as feasible
-		if (i == index) {
+		if (i-1 == index) {
 			it->second.second = ConstantExpr::create(1, Expr::Bool);
 		}
 	}

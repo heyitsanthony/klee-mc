@@ -627,6 +627,7 @@ bool GraphBuilder::visitIntrinsic(CallSite CS, Function *F) {
       N->setModifiedMarker();
     return true;
 
+#if 0
   case Intrinsic::eh_exception: {
     DSNode * Node = createNode();
     Node->setIncompleteMarker();
@@ -635,7 +636,6 @@ bool GraphBuilder::visitIntrinsic(CallSite CS, Function *F) {
     return true;
   }
 
-#if 0
   case Intrinsic::atomic_cmp_swap: {
     DSNodeHandle Ptr = getValueDest(**CS.arg_begin());
     Ptr.getNode()->setReadMarker();
@@ -664,10 +664,8 @@ bool GraphBuilder::visitIntrinsic(CallSite CS, Function *F) {
       if (isa<PointerType>(F->getReturnType()))
         setDestTo(*(CS.getInstruction()), getValueDest(**(CS.arg_begin() + 1)));
     }
-#endif
-              
-
   case Intrinsic::eh_selector:
+#endif
   case Intrinsic::eh_typeid_for:
   case Intrinsic::prefetch:
     return true;

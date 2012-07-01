@@ -39,10 +39,8 @@ ExecutionState &WeightedRandomSearcher::selectState(bool allowCompact)
 	states->update(es, getWeight(es));
 	es = states->choose(theRNG.getDoubleL(), allowCompact);
 
-	double w = weigh_func->weigh(es);
+	// double w = weigh_func->weigh(es);
 	states->update(es, getWeight(es));
-
-	std::cerr << "Selected Weight: " << es->weight << " / " <<  w << '\n';
 	return *es;
 }
 
@@ -82,16 +80,13 @@ void WeightedRandomSearcher::update(ExecutionState *current, const States s)
 		!s.getRemoved().count(current))
 	{
 		double	w = getWeight(current);
-		std::cerr << "Updating Current Weight: " << w << '\n';
 		states->update(current, w);
 	}
 
 	foreach (it, s.getAdded().begin(), s.getAdded().end()) {
 		ExecutionState *es = *it;
 		double		w = getWeight(es);
-		std::cerr << "Adding Weight: " << w << '\n';
 		states->insert(es, w, es->isCompact());
-		executor.printStackTrace(*es, std::cerr);
 	}
 
 	foreach (it, s.getRemoved().begin(), s.getRemoved().end())

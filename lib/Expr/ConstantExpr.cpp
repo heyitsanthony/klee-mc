@@ -87,6 +87,31 @@ ref<ConstantExpr> ConstantExpr::createVector(llvm::ConstantVector* v)
 	return cur_v;
 }
 
+ref<ConstantExpr> ConstantExpr::createSeqData(llvm::ConstantDataSequential* v)
+{
+	unsigned		bytes_per_elem, elem_c;
+	ref<ConstantExpr>	cur_v;
+
+	bytes_per_elem = v->getElementByteSize();
+	elem_c = v->getNumElements();
+
+	assert (bytes_per_elem*elem_c <= 64);
+	assert (isa<llvm::IntegerType>(v->getElementType()));
+
+	for (unsigned i = 0; i < elem_c; i++) {
+		ref<ConstantExpr>	ce;
+		ce = ConstantExpr::create(
+			v->getElementAsInteger(i),
+			bytes_per_elem*8);
+
+		if (i == 0) cur_v = ce;
+		else cur_v = cur_v->Concat(ce);
+	}
+
+
+	return cur_v;
+}
+
 ref<ConstantExpr> ConstantExpr::Concat(const ref<ConstantExpr> &RHS)
 {
   Expr::Width W = getWidth() + RHS->getWidth();
@@ -168,9 +193,14 @@ DECL_CE_CMPOP(Sle, sle)
 DECL_CE_CMPOP(Sgt, sgt)
 DECL_CE_CMPOP(Sge, sge)
 
+#include <llvm/ADT/Hashing.h>
+
 Expr::Hash ConstantExpr::computeHash(void)
 {
 	skeletonHash = getWidth() * MAGIC_HASH_CONSTANT;
-	hashValue = value.getHashValue() ^ (getWidth() * MAGIC_HASH_CONSTANT);
+	hashValue =
+		//value.hash_value(value).size_t() 
+		hash_value(value)
+		^ (getWidth() * MAGIC_HASH_CONSTANT);
 	return hashValue;
 }

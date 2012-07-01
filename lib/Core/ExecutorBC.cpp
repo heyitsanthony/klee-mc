@@ -226,9 +226,9 @@ void ExecutorBC::callExternalFunction(
 	if (specialFunctionHandler->handle(state, function, target, arguments))
 		return;
 
-	if (NoExternals && !okExternals.count(function->getName())) {
+	if (NoExternals && !okExternals.count(function->getName().str())) {
 		std::cerr << "KLEE:ERROR: Calling not-OK external function : "
-			<< function->getNameStr() << "\n";
+			<< function->getName().str() << "\n";
 		terminateStateOnError(state, "externals disallowed", "user.err");
 		return;
 	}
@@ -242,7 +242,7 @@ void ExecutorBC::callExternalFunction(
 	args = (uint64_t*) alloca(2*sizeof(*args) * (arguments.size() + 1));
 	memset(args, 0, 2 * sizeof(*args) * (arguments.size() + 1));
 	if (	AllowExternalSymCalls
-		|| okExternals.count(function->getName()))
+		|| okExternals.count(function->getName().str()))
 	{
 		// DAR: for printf, etc., don't terminate paths on symbolic calls
 		// don't bother checking uniqueness
@@ -265,7 +265,7 @@ void ExecutorBC::callExternalFunction(
 				terminateStateOnExecError(
 					state, 
 					"external call with symbolic arg: "+
-					function->getName());
+					function->getName().str());
 				return;
 			}
 		}
@@ -275,7 +275,7 @@ void ExecutorBC::callExternalFunction(
 
 	if (!SuppressExternalWarnings) {
 		std::ostringstream os;
-		os << "calling external: " << function->getNameStr() << "(";
+		os << "calling external: " << function->getName().str() << "(";
 		for (unsigned i=0; i<arguments.size(); i++) {
 			os << arguments[i];
 			if (i != arguments.size()-1) os << ", ";
@@ -290,7 +290,7 @@ void ExecutorBC::callExternalFunction(
 	if (!success) {
 		terminateStateOnError(
 			state,
-			"failed external call: " + function->getName(),
+			"failed external call: " + function->getName().str(),
 			"external.err");
 		return;
 	}

@@ -767,7 +767,7 @@ void ExecutorVex::callExternalFunction(
 
 	std::cerr
 		<< "KLEE:ERROR: Calling non-special external function : "
-		<< function->getNameStr() << "\n";
+		<< function->getName().str() << "\n";
 	terminateStateOnError(state, "externals disallowed", "user.err");
 }
 
@@ -790,7 +790,7 @@ void ExecutorVex::printStackTrace(ExecutionState& st, std::ostream& os) const
 		const VexSB	*vsb;
 
 		vsb = km_vex->getVSB(f);
-		os << "\t#" << idx++ << " in " << f->getNameStr();
+		os << "\t#" << idx++ << " in " << f->getName().str();
 		if (vsb != NULL) {
 			os << " (" << gs->getName(vsb->getGuestAddr()) << ")";
 		}

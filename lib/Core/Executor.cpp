@@ -395,6 +395,9 @@ ref<klee::ConstantExpr> Executor::evalConstant(
 	if (isa<ConstantVector>(c))
 		return ConstantExpr::createVector(cast<ConstantVector>(c));
 
+	if (ConstantDataSequential *csq = dyn_cast<ConstantDataSequential>(c))
+		return ConstantExpr::createSeqData(csq);
+
 	// Constant{AggregateZero,Array,Struct,Vector}
 	c->dump();
 	assert(0 && "invalid argument to evalConstant()");
@@ -547,7 +550,7 @@ void Executor::executeCall(
 	Instruction *i = ki->getInst();
 	Function* f2 = NULL;
 	if (	!f->isDeclaration() ||
-		(f2 = kmodule->module->getFunction(f->getNameStr())))
+		(f2 = kmodule->module->getFunction(f->getName().str())))
 	{
 		/* this is so that vexllvm linked modules work */
 		if (f2 == NULL) f2 = f;
@@ -1527,27 +1530,6 @@ void Executor::instShuffleVector(ExecutionState& state, KInstruction* ki)
 	state.bindLocal(ki, out_val);
 }
 
-void Executor::instUnwind(ExecutionState& state)
-{
-  while (1) {
-    KInstruction *kcaller = state.getCaller();
-    state.popFrame();
-
-    if (statsTracker) statsTracker->framePopped(state);
-
-    if (state.stack.empty()) {
-      terminateStateOnExecError(state, "unwind from initial stack frame");
-      return;
-    }
-
-    Instruction *caller = kcaller->getInst();
-    if (InvokeInst *ii = dyn_cast<InvokeInst>(caller)) {
-      state.transferToBasicBlock(ii->getUnwindDest(), caller->getParent());
-      return;
-    }
-  }
-}
-
 bool Executor::isFPPredicateMatched(
   APFloat::cmpResult CmpRes, CmpInst::Predicate pred)
 {
@@ -1622,7 +1604,6 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
 	instRet(state, ki);
 	break;
 
-  case Instruction::Unwind: instUnwind(state); break;
   case Instruction::Br: instBranch(state, ki); break;
   case Instruction::Switch: instSwitch(state, ki); break;
   case Instruction::Unreachable:
@@ -2916,7 +2897,7 @@ void Executor::handleMemoryPID(ExecutionState* &state)
 }
 
 std::string Executor::getPrettyName(llvm::Function* f) const
-{ return f->getNameStr(); }
+{ return f->getName().str(); }
 
 ExeStateSet::const_iterator Executor::beginStates(void) const
 { return stateManager->begin(); }

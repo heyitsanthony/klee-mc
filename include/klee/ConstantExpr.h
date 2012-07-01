@@ -14,8 +14,9 @@
 #include <iosfwd> // FIXME: Remove this!!!
 
 namespace llvm {
-  class Type;
-  class Value;
+class Type;
+class Value;
+class ConstantDataSequential;
 }
 
 namespace klee {
@@ -105,6 +106,7 @@ public:
   }
 
   static ref<ConstantExpr> createVector(llvm::ConstantVector* v);
+  static ref<ConstantExpr> createSeqData(llvm::ConstantDataSequential* v);
 
   static bool classof(const Expr *E) {
     return E->getKind() == Expr::Constant;

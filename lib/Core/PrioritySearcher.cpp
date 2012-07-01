@@ -68,7 +68,7 @@ ExecutionState& PrioritySearcher::selectState(bool allowCompact)
 		}
 
 		std::cerr << "SELSTATE. PRS=" << (void*)prs.second << ". ST="
-		 << next->pc->getInst()->getParent()->getParent()->getNameStr()
+		 << next->pc->getInst()->getParent()->getParent()->getName().str()
 		 << (next->isReplayDone() ? ". NOREPLAY\n" : ". INREPLAY\n");
 		std::cerr
 			<< "CURRENT PR=" << heap_pr  << ". COUNT=???\n";

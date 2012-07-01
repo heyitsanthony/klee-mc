@@ -102,8 +102,8 @@ unsigned MallocKey::hash(void) const
 		 * this broke stuff horribly, so use bb+func names. */
 		std::string	s_bb, s_f;
 
-		s_bb = ins->getParent()->getNameStr();
-		s_f = ins->getParent()->getParent()->getNameStr();
+		s_bb = ins->getParent()->getName().str();
+		s_f = ins->getParent()->getParent()->getName().str();
 		alloc_v = 0;
 		for (unsigned int i = 0; i < s_bb.size(); i++)
 			alloc_v = alloc_v*33+s_bb[i];

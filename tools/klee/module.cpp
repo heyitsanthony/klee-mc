@@ -30,22 +30,24 @@ using namespace klee;
 using namespace llvm;
 
 namespace {
-  cl::opt<bool> OptimizeModule(
-    "optimize",
-    cl::desc("Optimize before execution"));
+	cl::opt<bool> OptimizeModule(
+		"optimize", cl::desc("Optimize before execution"));
 
   cl::opt<bool> InitEnv(
-    "init-env",
-	  cl::desc("Create custom environment.  Options that can be passed as arguments to the programs are: --sym-argv <max-len>  --sym-argvs <min-argvs> <max-argvs> <max-len> + file model options"));
+	"init-env",
+	cl::desc("Create custom environment.  Options that can be passed as arguments to the programs are: --sym-argv <max-len>  --sym-argvs <min-argvs> <max-argvs> <max-len> + file model options"));
 
 
   cl::opt<bool> ExcludeLibcCov(
-    "exclude-libc-cov",
-    cl::desc("Do not track coverage in libc"));
+  	"exclude-libc-cov", cl::desc("Do not track coverage in libc"));
 
   cl::list<std::string> ExcludeCovFiles(
-    "exclude-cov-file",
-    cl::desc("Filename to load function names to not track coverage for"));
+	"exclude-cov-file",
+	cl::desc("Filename to load function names to not track coverage for"));
+
+  cl::opt<bool> WarnAllExternals(
+	"warn-all-externals",
+	cl::desc("Give initial warning for all externals."));
 }
 
 
@@ -54,13 +56,6 @@ namespace {
 extern std::string g_InputFile;
 extern LibcType g_Libc;
 extern bool g_WithPOSIXRuntime;
-
-namespace
-{
-  cl::opt<bool> WarnAllExternals(
-    "warn-all-externals",
-    cl::desc("Give initial warning for all externals."));
-}
 
 // Symbols we explicitly support
 static const char *modelledExternals[] =
@@ -270,10 +265,11 @@ void externalsAndGlobalsCheck(const Module *m)
 }
 
 #ifndef KLEE_UCLIBC
-static llvm::Module *linkWithUclibc(llvm::Module *mainModule) {
-  fprintf(stderr, "error: invalid libc, no uclibc support!\n");
-  exit(1);
-  return 0;
+static llvm::Module *linkWithUclibc(llvm::Module *mainModule)
+{
+	fprintf(stderr, "error: invalid libc, no uclibc support!\n");
+	exit(1);
+	return 0;
 }
 #else
 
@@ -324,116 +320,124 @@ static void uclibc_stripPrefixes(llvm::Module* mainModule)
   }
 }
 
+static void fixup_func(llvm::Module* m, const char *dest, const char *src)
+{
+	Function *f, *f2;
+
+	f = m->getFunction(dest);
+	f2 = m->getFunction(src);
+
+	if (f2 == NULL) return;
+
+	if (f) {
+		f2->replaceAllUsesWith(f);
+		f2->eraseFromParent();
+	} else {
+		f2->setName(dest);
+		assert(f2->getName() == dest);
+	}
+}
+
 static void uclibc_fixups(llvm::Module* mainModule)
 {
-  // more sighs, this is horrible but just a temp hack
-  //    f = mainModule->getFunction("__fputc_unlocked");
-  //    if (f) f->setName("fputc_unlocked");
-  //    f = mainModule->getFunction("__fgetc_unlocked");
-  //    if (f) f->setName("fgetc_unlocked");
+	// more sighs, this is horrible but just a temp hack
+	//    f = mainModule->getFunction("__fputc_unlocked");
+	//    if (f) f->setName("fputc_unlocked");
+	//    f = mainModule->getFunction("__fgetc_unlocked");
+	//    if (f) f->setName("fgetc_unlocked");
 
-  Function *f, *f2;
-  f = mainModule->getFunction("open");
-  f2 = mainModule->getFunction("__libc_open");
-  if (f2) {
-    if (f) {
-      f2->replaceAllUsesWith(f);
-      f2->eraseFromParent();
-    } else {
-      f2->setName("open");
-      assert(f2->getName() == "open");
-    }
-  }
-
-  f = mainModule->getFunction("fcntl");
-  f2 = mainModule->getFunction("__libc_fcntl");
-  if (f2) {
-    if (f) {
-      f2->replaceAllUsesWith(f);
-      f2->eraseFromParent();
-    } else {
-      f2->setName("fcntl");
-      assert(f2->getName() == "fcntl");
-    }
-  }
+	fixup_func(mainModule, "open", "__libc_open");
+	fixup_func(mainModule, "fcntl", "__libc_fcntl");
 }
 
 static void uclibc_setEntry(llvm::Module* mainModule)
 {
-  Function *userMainFn = mainModule->getFunction("main");
-  assert(userMainFn && "unable to get user main");
-  Function *uclibcMainFn = mainModule->getFunction("__uClibc_main");
-  assert(uclibcMainFn && "unable to get uclibc main");
-  userMainFn->setName("__user_main");
+	FunctionType		*ft;
+	Function		*userMainFn, *uclibcMainFn, *stub;
+	BasicBlock		*bb;
+	std::vector<Type*>	fArgs;
+	std::vector<llvm::Value*> args;
 
-  FunctionType *ft = uclibcMainFn->getFunctionType();
-  assert(ft->getNumParams() == 7);
+	userMainFn = mainModule->getFunction("main");
+	assert(userMainFn && "unable to get user main");
 
-  std::vector<Type*> fArgs;
-  fArgs.push_back(ft->getParamType(1)); // argc
-  fArgs.push_back(ft->getParamType(2)); // argv
-  Function *stub = Function::Create(
-    FunctionType::get(
-      Type::getInt32Ty(getGlobalContext()), fArgs, false),
-      GlobalVariable::ExternalLinkage,
-      "main",
-      mainModule);
-  BasicBlock *bb = BasicBlock::Create(getGlobalContext(), "entry", stub);
+	uclibcMainFn = mainModule->getFunction("__uClibc_main");
+	assert(uclibcMainFn && "unable to get uclibc main");
 
-  std::vector<llvm::Value*> args;
-  args.push_back(llvm::ConstantExpr::getBitCast(
-    userMainFn, ft->getParamType(0)));
-  args.push_back(stub->arg_begin()); // argc
-  args.push_back(++stub->arg_begin()); // argv
-  args.push_back(Constant::getNullValue(ft->getParamType(3))); // app_init
-  args.push_back(Constant::getNullValue(ft->getParamType(4))); // app_fini
-  args.push_back(Constant::getNullValue(ft->getParamType(5))); // rtld_fini
-  args.push_back(Constant::getNullValue(ft->getParamType(6))); // stack_end
-  CallInst::Create(uclibcMainFn, args, "", bb);
+	userMainFn->setName("__user_main");
 
-  new UnreachableInst(getGlobalContext(), bb);
+	ft = uclibcMainFn->getFunctionType();
+	assert(ft->getNumParams() == 7);
+
+	/* argc, argv */
+	fArgs.push_back(ft->getParamType(1));
+	fArgs.push_back(ft->getParamType(2));
+	stub = Function::Create(
+		FunctionType::get(
+			Type::getInt32Ty(getGlobalContext()), fArgs, false),
+			GlobalVariable::ExternalLinkage,
+			"main",
+			mainModule);
+
+	bb = BasicBlock::Create(getGlobalContext(), "entry", stub);
+
+	/* mainPtr, argc, argv, app_init, app_fini, rtld_fini, stack_end */
+	args.push_back(
+		llvm::ConstantExpr::getBitCast(
+			userMainFn,
+			ft->getParamType(0)));
+	args.push_back(stub->arg_begin());
+	args.push_back(++stub->arg_begin());
+	args.push_back(Constant::getNullValue(ft->getParamType(3)));
+	args.push_back(Constant::getNullValue(ft->getParamType(4)));
+	args.push_back(Constant::getNullValue(ft->getParamType(5)));
+	args.push_back(Constant::getNullValue(ft->getParamType(6)));
+	CallInst::Create(uclibcMainFn, args, "", bb);
+
+	new UnreachableInst(getGlobalContext(), bb);
 }
 
 static llvm::Module *linkWithUclibc(llvm::Module *mainModule)
 {
-  Function *f;
-  // force import of __uClibc_main
-  mainModule->getOrInsertFunction(
-    "__uClibc_main",
-    FunctionType::get(Type::getVoidTy(getGlobalContext()),
-    std::vector<Type*>(),
-    true));
+	Function	*f;
 
-  // force various imports
-  if (g_WithPOSIXRuntime) uclibc_forceImports(mainModule);
+	// force import of __uClibc_main
+	mainModule->getOrInsertFunction(
+		"__uClibc_main",
+		FunctionType::get(Type::getVoidTy(getGlobalContext()),
+		std::vector<Type*>(),
+		true));
 
-  f = mainModule->getFunction("__ctype_get_mb_cur_max");
-  if (f) f->setName("_stdlib_mb_cur_max");
+	// force various imports
+	if (g_WithPOSIXRuntime) uclibc_forceImports(mainModule);
 
-  // Strip of asm prefixes for 64 bit versions because they are not
-  // present in uclibc and we want to make sure stuff will get
-  // linked. In the off chance that both prefixed and unprefixed
-  // versions are present in the module, make sure we don't create a
-  // naming conflict.
-  uclibc_stripPrefixes(mainModule);
+	f = mainModule->getFunction("__ctype_get_mb_cur_max");
+	if (f) f->setName("_stdlib_mb_cur_max");
 
-  mainModule = klee::linkWithLibrary(mainModule, KLEE_UCLIBC "/lib/libc.a");
-  assert(mainModule && "unable to link with uclibc");
+	// Strip of asm prefixes for 64 bit versions because they are not
+	// present in uclibc and we want to make sure stuff will get
+	// linked. In the off chance that both prefixed and unprefixed
+	// versions are present in the module, make sure we don't create a
+	// naming conflict.
+	uclibc_stripPrefixes(mainModule);
 
-  uclibc_fixups(mainModule);
+	mainModule = klee::linkWithLibrary(mainModule, KLEE_UCLIBC "/lib/libc.a");
+	assert(mainModule && "unable to link with uclibc");
 
-  // XXX we need to rearchitect so this can also be used with
-  // programs externally linked with uclibc.
+	uclibc_fixups(mainModule);
 
-  // We now need to swap things so that __uClibc_main is the entry
-  // point, in such a way that the arguments are passed to
-  // __uClibc_main correctly. We do this by renaming the user main
-  // and generating a stub function to call __uClibc_main. There is
-  // also an implicit cooperation in that runFunctionAsMain sets up
-  // the environment arguments to what uclibc expects (following
-  // argv), since it does not explicitly take an envp argument.
-  uclibc_setEntry(mainModule);
-  return mainModule;
+	// XXX we need to rearchitect so this can also be used with
+	// programs externally linked with uclibc.
+
+	// We now need to swap things so that __uClibc_main is the entry
+	// point, in such a way that the arguments are passed to
+	// __uClibc_main correctly. We do this by renaming the user main
+	// and generating a stub function to call __uClibc_main. There is
+	// also an implicit cooperation in that runFunctionAsMain sets up
+	// the environment arguments to what uclibc expects (following
+	// argv), since it does not explicitly take an envp argument.
+	uclibc_setEntry(mainModule);
+	return mainModule;
 }
 #endif
 

@@ -52,12 +52,12 @@ Globals::Globals(
 		// not defined in this module; if it isn't resolvable then it
 		// should be null.
 		if (	f->hasExternalWeakLinkage() &&
-			(ed == NULL || !ed->resolveSymbol(f->getNameStr())))
+			(ed == NULL || !ed->resolveSymbol(f->getName().str())))
 		{
 			addr = Expr::createPointer(0);
 			std::cerr
 			<< "KLEE:ERROR: couldn't find symbol for weak linkage of "
-			   "global function: " << f->getNameStr() << std::endl;
+			   "global function: " << f->getName().str() << std::endl;
 		} else {
 			addr = Expr::createPointer((uint64_t) (void*) f);
 			legalFunctions.insert((uint64_t) (void*) f);
@@ -203,7 +203,7 @@ void Globals::allocGlobalVariableDecl(const GlobalVariable& gv)
 		extern void *__dso_handle __attribute__ ((__weak__));
 		addr = &__dso_handle; // wtf ?
 	} else if (ed) {
-		addr = ed->resolveSymbol(gv.getNameStr());
+		addr = ed->resolveSymbol(gv.getName().str());
 	}
 
 	if (addr == NULL) {
@@ -230,7 +230,7 @@ void Globals::allocGlobalVariableNoDecl(const GlobalVariable& gv)
 
 	if (UseAsmAddresses && gv.getName()[0]=='\01') {
 		char *end;
-		uint64_t address = ::strtoll(gv.getNameStr().c_str()+1, &end, 0);
+		uint64_t address = ::strtoll(gv.getName().str().c_str()+1, &end, 0);
 
 		if (end && *end == '\0') {
 		// We can't use the PRIu64 macro here for some reason, so we have to
@@ -268,19 +268,6 @@ void Globals::initializeGlobalObject(
 	Constant *c,
  	unsigned offset)
 {
-	if (ConstantVector *cp = dyn_cast<ConstantVector>(c)) {
-		unsigned elementSize;
-
-		elementSize = kmodule->targetData->getTypeStoreSize(
-			cp->getType()->getElementType());
-		for (unsigned i=0, e=cp->getNumOperands(); i != e; ++i)
-			initializeGlobalObject(
-				os,
-				cp->getOperand(i),
-				offset + i*elementSize);
-		return;
-	}
-
 	if (isa<ConstantAggregateZero>(c)) {
 		unsigned size;
 		size = kmodule->targetData->getTypeStoreSize(c->getType());
@@ -303,6 +290,26 @@ void Globals::initializeGlobalObject(
 		return;
 	}
 
+	if (ConstantDataSequential *csq=dyn_cast<ConstantDataSequential>(c)) {
+		unsigned	bytes_per_elem;
+		unsigned	elem_c;
+
+		bytes_per_elem = csq->getElementByteSize();
+		elem_c = csq->getNumElements();
+		assert (bytes_per_elem <= 8);
+
+		for (unsigned i = 0; i < elem_c; i++) {
+			ref<ConstantExpr>	ce;
+			ce = ConstantExpr::create(
+				csq->getElementAsInteger(i),
+				bytes_per_elem*8);
+			init_state->write(os, offset+(i*bytes_per_elem), ce);
+		}
+
+		return;
+	}
+
+
 	if (ConstantStruct *cs = dyn_cast<ConstantStruct>(c)) {
 		const StructLayout *sl;
 		sl = kmodule->targetData->getStructLayout(
@@ -314,6 +321,22 @@ void Globals::initializeGlobalObject(
 				offset + sl->getElementOffset(i));
 		return;
 	}
+
+	if (ConstantVector *cp = dyn_cast<ConstantVector>(c)) {
+		unsigned elementSize;
+
+		elementSize = kmodule->targetData->getTypeStoreSize(
+			cp->getType()->getElementType());
+		for (unsigned i=0, e=cp->getNumOperands(); i != e; ++i)
+			initializeGlobalObject(
+				os,
+				cp->getOperand(i),
+				offset + i*elementSize);
+		return;
+	}
+
+	if (isa<UndefValue>(c))
+		return;
 
 	unsigned StoreBits;
 	ref<ConstantExpr> C;

@@ -6,16 +6,17 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
+#include <llvm/LLVMContext.h>
+#include <llvm/InlineAsm.h>
+#include <llvm/Support/raw_ostream.h>
+#include <llvm/Target/TargetLowering.h>
+#include <llvm/Target/TargetOptions.h>
+#include <llvm/Support/Host.h>
+#include <llvm/Support/TargetRegistry.h>
+#include <llvm/CodeGen/IntrinsicLowering.h>
 
 #include "Passes.h"
 #include "static/Sugar.h"
-#include "llvm/LLVMContext.h"
-#include "llvm/InlineAsm.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetLowering.h"
-#include "llvm/Support/Host.h"
-#include "llvm/Support/TargetRegistry.h"
-#include <llvm/CodeGen/IntrinsicLowering.h>
 
 using namespace llvm;
 using namespace klee;
@@ -27,19 +28,21 @@ RaiseAsmPass::RaiseAsmPass(llvm::Module* module)
 , TM(NULL)
 , module_(module)
 {
-	std::string Err;
-	std::string HostTriple = llvm::sys::getHostTriple();
-	const Target *NativeTarget;
+	std::string	Err;
+	std::string	HostTriple = llvm::sys::getDefaultTargetTriple();
+	const Target	*NativeTarget;
+	TargetOptions	to;
+
 	NativeTarget = TargetRegistry::lookupTarget(HostTriple, Err);
-	if (NativeTarget == 0) {
+	if (NativeTarget == NULL) {
 		llvm::errs()
 			<< "Warning: unable to select native target: "
 			<< Err << "\n";
 		TLI = 0;
-	} else {
-		TM = NativeTarget->createTargetMachine(HostTriple, "", "");
-		TLI = TM->getTargetLowering();
+		return;
 	}
+	TM = NativeTarget->createTargetMachine(HostTriple, "", "", to);
+	TLI = TM->getTargetLowering();
 }
 
 RaiseAsmPass::~RaiseAsmPass(void) { if (TM) delete TM; }

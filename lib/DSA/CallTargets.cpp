@@ -108,13 +108,13 @@ void CallTargetFinder::print(raw_ostream &O, const Module *M) const
       O << "* ";
       CallSite cs = ii->first;
       cs.getInstruction()->dump();
-      O << cs.getInstruction()->getParent()->getParent()->getNameStr() << " "
-        << cs.getInstruction()->getNameStr() << " ";
+      O << cs.getInstruction()->getParent()->getParent()->getName().str() << " "
+        << cs.getInstruction()->getName().str() << " ";
     }
 
     O << ii->first.getInstruction() << ":";
     foreach (i, ii->second.begin(), ii->second.end()) {
-      O << " " << (*i)->getNameStr();
+      O << " " << (*i)->getName().str();
     }
     O << "\n";
   }

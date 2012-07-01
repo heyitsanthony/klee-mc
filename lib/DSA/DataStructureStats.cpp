@@ -98,7 +98,7 @@ void DSGraphStats::countCallees(const Function& F)
       ++numIndirectCalls;
     } else {
       DEBUG(errs() << "WARNING: No callee in Function '"
-        << F.getNameStr() << "' at call: \n"
+        << F.getName().str() << "' at call: \n"
         << *I->getCallSite().getInstruction());
     }
   }

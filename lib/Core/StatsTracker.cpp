@@ -606,7 +606,7 @@ void StatsTracker::writeIStats(void)
           sourceFile = ii.file;
         }
         if (bbIt == fnIt->begin() && it == bbIt->begin()) {
-          of << "fn=" << fnIt->getNameStr() << "\n";
+          of << "fn=" << fnIt->getName().str() << "\n";
         }
         of << ii.assemblyLine << " ";
         of << ii.line << " ";
@@ -633,7 +633,7 @@ void StatsTracker::writeIStats(void)
             else
               of << "cfl=" << fii.file << "\n";
           }
-          of << "cfn=" << f->getNameStr() << "\n";
+          of << "cfn=" << f->getName().str() << "\n";
           of << "calls=" << csi.count << " ";
           of << fii.assemblyLine << " ";
           of << fii.line << "\n";

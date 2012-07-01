@@ -189,9 +189,7 @@ static KTest* kTest_fromUncompressedPath(const char* path)
 
 KTest *kTest_fromFile(const char *path)
 {
-	KTest	*ret;
 	int	path_len;
-	FILE	*f;
 
 	path_len = strlen(path);
 	if (path_len <= 3 || strcmp(path+path_len-3, ".gz") != 0)

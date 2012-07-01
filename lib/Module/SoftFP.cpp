@@ -325,7 +325,7 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 		if (called == NULL)
 			break;
 
-		if (called->getNameStr() == "sqrt") {
+		if (called->getName().str() == "sqrt") {
 			Function	*f;
 			f = (ty_w == 32)
 				? f_sqrt32->function

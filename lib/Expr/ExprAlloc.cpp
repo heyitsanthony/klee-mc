@@ -1,17 +1,20 @@
 #include <tr1/unordered_map>
+#include <llvm/ADT/Hashing.h>
 #include <iostream>
 #include "static/Sugar.h"
 #include "klee/Expr.h"
 #include "ExprAlloc.h"
 
 using namespace klee;
+using namespace llvm;
 
 struct hashapint
-{unsigned operator()(const llvm::APInt& a) const {return a.getHashValue();}};
+{unsigned operator()(const llvm::APInt& a) const
+{return hash_value(a);}};
 
 struct apinteq
 {
-bool operator()(const llvm::APInt& a, const llvm::APInt& b) const
+bool operator()(const APInt& a, const APInt& b) const
 {
 	if (a.getBitWidth() != b.getBitWidth()) return false;
 	return a == b;
@@ -20,7 +23,7 @@ bool operator()(const llvm::APInt& a, const llvm::APInt& b) const
 
 /* important to use an unordered_map instead of a map so we get O(1) access. */
 typedef std::tr1::unordered_map<
-	llvm::APInt,
+	APInt,
 	ref<ConstantExpr>,
 	hashapint,
 	apinteq> ConstantExprTab;
@@ -35,9 +38,9 @@ static ref<ConstantExpr>	ce_smallval_tab_64[256*2];
 void initSmallValTab(void)
 {
 	ce_smallval_tab_1[0] = ref<ConstantExpr>(
-		new ConstantExpr(llvm::APInt(1, 0)));
+		new ConstantExpr(APInt(1, 0)));
 	ce_smallval_tab_1[1] = ref<ConstantExpr>(
-		new ConstantExpr(llvm::APInt(1, 1)));
+		new ConstantExpr(APInt(1, 1)));
 
 	ce_smallval_tab_1[0]->computeHash();
 	ce_smallval_tab_1[1]->computeHash();
@@ -45,7 +48,7 @@ void initSmallValTab(void)
 #define SET_SMALLTAB(w,ext)	\
 	for (int i = 0; i < 256+ext; i++) {	\
 		ref<ConstantExpr>	r(	\
-			new ConstantExpr(llvm::APInt(w, i-ext)));	\
+			new ConstantExpr(APInt(w, i-ext)));	\
 		ce_smallval_tab_##w[i] = r;	\
 		r->computeHash();		\
 	}
@@ -59,7 +62,7 @@ void initSmallValTab(void)
 static bool tab_ok = false;
 unsigned long ExprAlloc::constantCount = 0;
 
-ref<Expr> ExprAlloc::Constant(const llvm::APInt &v)
+ref<Expr> ExprAlloc::Constant(const APInt &v)
 {
 	ConstantExprTab::iterator	it;
 	uint64_t			v_64;
@@ -120,7 +123,7 @@ unsigned ExprAlloc::garbageCollect(void)
 	}
 
 	foreach (it, to_rmv.begin(), to_rmv.end()) {
-		llvm::APInt	v((*it)->getAPValue());
+		APInt	v((*it)->getAPValue());
 		const_hashtab.erase(v);
 	}
 

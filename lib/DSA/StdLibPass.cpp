@@ -234,8 +234,8 @@ void StdLibDataStructures::eraseCallsTo(Function* F) {
       if (CI->getOperand(0) == F) {
         DSGraph* Graph = getDSGraph(*CI->getParent()->getParent());
         //delete the call
-        DEBUG(errs() << "Removing " << F->getNameStr() << " from " 
-	      << CI->getParent()->getParent()->getNameStr() << "\n");
+        DEBUG(errs() << "Removing " << F->getName().str() << " from " 
+	      << CI->getParent()->getParent()->getName().str() << "\n");
         Graph->removeFunctionCalls(*F);
       }
 }
@@ -291,11 +291,11 @@ bool StdLibDataStructures::runOnModule(Module &M) {
   for (Module::iterator I = M.begin(), E = M.end(); I != E; ++I) {
 	  Function* f = &*I;
 	  if (f->isDeclaration() && (summarized.find(f) == summarized.end())) {
-		  std::cout << "ERROR: Declaration function aliasing effects not summarized: " << f->getNameStr() << "\n";
+		  std::cout << "ERROR: Declaration function aliasing effects not summarized: " << f->getName().str() << "\n";
 	  }
 	  
 	  if (!f->isDeclaration() && (summarized.find(f) != summarized.end())) {
-		  std::cout << "ERROR: Non-declaration function aliasing effect summarized " << f->getNameStr() << "\n";
+		  std::cout << "ERROR: Non-declaration function aliasing effect summarized " << f->getName().str() << "\n";
 	  }
   }
   

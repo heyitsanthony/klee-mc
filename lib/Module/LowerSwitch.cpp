@@ -16,11 +16,14 @@
 
 #include "Passes.h"
 #include <llvm/LLVMContext.h>
+#include <llvm/Instructions.h>
 #include <algorithm>
+#include "static/Sugar.h"
 
 using namespace llvm;
 
-namespace klee {
+namespace klee
+{
 
 char LowerSwitchPass::ID = 0;
 
@@ -89,43 +92,52 @@ void LowerSwitchPass::switchConvert(CaseItr begin, CaseItr end,
 // processSwitchInst - Replace the specified switch instruction with a sequence
 // of chained if-then instructions.
 //
-void LowerSwitchPass::processSwitchInst(SwitchInst *SI) {
-  BasicBlock *origBlock = SI->getParent();
-  BasicBlock *defaultBlock = SI->getDefaultDest();
-  Function *F = origBlock->getParent();
-  Value *switchValue = SI->getOperand(0);
+void LowerSwitchPass::processSwitchInst(SwitchInst *SI)
+{
+	BasicBlock	*origBlock = SI->getParent();
+	BasicBlock	*defaultBlock = SI->getDefaultDest();
+	Function	*F = origBlock->getParent();
+	Value		*switchValue = SI->getOperand(0);
+	BasicBlock	*newDefault;
+	CaseVector	cases;
 
-  // Create a new, empty default block so that the new hierarchy of
-  // if-then statements go to this and the PHI nodes are happy.
-  BasicBlock* newDefault = BasicBlock::Create(getGlobalContext(), "newDefault");
+	// Create a new, empty default block so that the new hierarchy of
+	// if-then statements go to this and the PHI nodes are happy.
+	newDefault = BasicBlock::Create(getGlobalContext(), "newDefault");
 
-  F->getBasicBlockList().insert(defaultBlock, newDefault);
-  BranchInst::Create(defaultBlock, newDefault);
+	F->getBasicBlockList().insert(defaultBlock, newDefault);
+	BranchInst::Create(defaultBlock, newDefault);
 
-  // If there is an entry in any PHI nodes for the default edge, make sure
-  // to update them as well.
-  for (BasicBlock::iterator I = defaultBlock->begin(); isa<PHINode>(I); ++I) {
-    PHINode *PN = cast<PHINode>(I);
-    int BlockIdx = PN->getBasicBlockIndex(origBlock);
-    assert(BlockIdx != -1 && "Switch didn't go to this successor??");
-    PN->setIncomingBlock((unsigned)BlockIdx, newDefault);
-  }
-  
-  CaseVector cases;
-  for (unsigned i = 1; i < SI->getNumSuccessors(); ++i)
-    cases.push_back(SwitchCase(SI->getSuccessorValue(i),
-                               SI->getSuccessor(i)));
-  
-  // reverse cases, as switchConvert constructs a chain of
-  //   basic blocks by appending to the front. if we reverse,
-  //   the if comparisons will happen in the same order
-  //   as the cases appear in the switch
-  std::reverse(cases.begin(), cases.end());
-  
-  switchConvert(cases.begin(), cases.end(), switchValue, origBlock, newDefault);
+	// If there is an entry in any PHI nodes for the default edge, make sure
+	// to update them as well.
+	foreach (it, defaultBlock->begin(), defaultBlock->end()) {
+		PHINode	*PN;
+		int	BlockIdx;
 
-  // We are now done with the switch instruction, so delete it
-  origBlock->getInstList().erase(SI);
+		if (isa<PHINode>(it) == false)
+			break;
+		PN = cast<PHINode>(it);
+		BlockIdx = PN->getBasicBlockIndex(origBlock);
+		assert(BlockIdx != -1 && "Switch didn't go to this successor??");
+		PN->setIncomingBlock((unsigned)BlockIdx, newDefault);
+	}
+
+	cases.resize(SI->getNumCases());
+	foreach (cit, SI->case_begin(), SI->case_end()) {
+		cases[cit.getCaseIndex()] = SwitchCase(
+			cit.getCaseValue(),
+			cit.getCaseSuccessor());
+	}
+
+	// reverse cases, as switchConvert constructs a chain of
+	//   basic blocks by appending to the front. if we reverse,
+	//   the if comparisons will happen in the same order
+	//   as the cases appear in the switch
+	std::reverse(cases.begin(), cases.end());
+
+	switchConvert(cases.begin(), cases.end(), switchValue, origBlock, newDefault);
+
+	// We are now done with the switch instruction, so delete it
+	origBlock->getInstList().erase(SI);
 }
-
 }

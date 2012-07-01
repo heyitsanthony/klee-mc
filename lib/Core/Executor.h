@@ -348,8 +348,6 @@ private:
 	const TargetTy&		defaultTarget,
 	const TargetsTy&	targets);
 
-  void instUnwind(ExecutionState& state);
-
   bool isFPPredicateMatched(
     llvm::APFloat::cmpResult CmpRes, llvm::CmpInst::Predicate pred);
 

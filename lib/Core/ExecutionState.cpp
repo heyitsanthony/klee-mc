@@ -319,14 +319,14 @@ void ExecutionState::dumpStack(std::ostream& os)
     const InstructionInfo &ii = *target->getInfo();
     os << "\t#" << idx++
         << " " << std::setw(8) << std::setfill('0') << ii.assemblyLine
-        << " in " << f->getNameStr() << " (";
+        << " in " << f->getName().str() << " (";
     // we could go up and print varargs if we wanted to.
     unsigned index = 0;
     foreach (ai, f->arg_begin(), f->arg_end())
     {
       if (ai!=f->arg_begin()) os << ", ";
 
-      os << ai->getNameStr();
+      os << ai->getName().str();
       // XXX should go through function
       ref<Expr> value;
       value = getLocalCell(

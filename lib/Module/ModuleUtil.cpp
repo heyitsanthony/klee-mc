@@ -58,14 +58,16 @@ Module *klee::linkWithLibrary(
 	Module *module,
 	const std::string &libraryName)
 {
-	Archive		*libArchive;
-	std::string	errMsg;
-	llvm::sys::Path	libraryPath(libraryName);
+	Archive			*libArchive;
+	std::string		errMsg;
+	llvm::sys::Path		libraryPath(libraryName);
+	std::set<Module*>	modulesToLoad;
+	Linker			linker("klee", module, 0 /* Linker::Verbose */);
 
-
+#if 0
 	// Load symbol table for library archive
 	libArchive = Archive::OpenAndLoad(
-	libraryPath, module->getContext(), &errMsg);
+		libraryPath, module->getContext(), &errMsg);
 	if (libArchive == NULL) {
 		klee_error(
 			"failed to load library archive %s: %s",
@@ -73,30 +75,17 @@ Module *klee::linkWithLibrary(
 	}
 
 	const llvm::Archive::SymTabType& symbols = libArchive->getSymbolTable();
+	std::set<std::string>		syms;
+	SmallVector<Module*, 4>		mods;
 
-	std::set<Module*> modulesToLoad;
-	// Walk the symbol table and assemble a list of modules that need to loaded,
-	// processed, and linked
-	foreach (si, symbols.begin(), symbols.end()) {
-		const std::string &symName = si->first;
+	foreach (si, symbols.begin(), symbols.end())
+		syms.insert(si->first);
 
-		if(symName[0] != 1) continue;
-
-		Module	*m;
-
-		m = libArchive->findModuleDefiningSymbol(symName, &errMsg);
-		if (!m)
-			klee_error(
-				"failed to find symbol %s: %s",
-				symName.c_str(),
-				errMsg.c_str());
-		modulesToLoad.insert(m);
-	}
-
-	Linker linker("klee", module, 0 /* Linker::Verbose */);
+	if (libArchive->findModulesDefiningSymbols(syms, mods, &errMsg) == false)
+		klee_error("failed to load modules: %s", errMsg.c_str());
 
 	// Run passes on relevant modules and then link against them
-	foreach (mi, modulesToLoad.begin(), modulesToLoad.end()) {
+	foreach (mi, mods.begin(), mods.end()) {
 		Module	*m = *mi;
 		runRemoveSentinelsPass(*m);
 		if (linker.LinkInModule(m, &errMsg)) {
@@ -109,8 +98,10 @@ Module *klee::linkWithLibrary(
 	}
 
 	modulesToLoad.clear();
+
 	/* frees modules from modulesToLoad */
 	delete libArchive;
+#endif
 
 	// Now link against an unmodified version of the library archive for
 	// the common case when no sentinels are found.

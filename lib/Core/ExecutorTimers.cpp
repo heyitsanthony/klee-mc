@@ -647,7 +647,7 @@ void Executor::processTimersDumpStates(void)
     ExecutionState::stack_ty::iterator next = es->stack.begin();
     ++next;
     foreach (sfIt,  es->stack.begin(), es->stack.end()) {
-      *os << "('" << sfIt->kf->function->getNameStr() << "',";
+      *os << "('" << sfIt->kf->function->getName().str() << "',";
       if (next == es->stack.end()) {
         *os << es->prevPC->getInfo()->line << "), ";
       } else {

@@ -400,7 +400,7 @@ void KModule::addModule(Module* in_mod)
 		Function	*kmod_f;
 		KFunction	*kf;
 
-		kmod_f = module->getFunction(it->getNameStr());
+		kmod_f = module->getFunction(it->getName().str());
 		assert (kmod_f != NULL);
 
 		kf = addFunction(kmod_f);
@@ -445,7 +445,7 @@ void KModule::passEnforceInvariants(void)
 	case eSwitchTypeInternal: break;
 	case eSwitchTypeSimple: pm.add(new LowerSwitchPass()); break;
 	case eSwitchTypeLLVM:  pm.add(createLowerSwitchPass()); break;
-	default: klee_error("invalid --switch-type");
+	// default: klee_error("invalid --switch-type");
 	}
 
 	// pm.add(createLowerAtomicPass());

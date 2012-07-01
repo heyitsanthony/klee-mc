@@ -31,7 +31,7 @@ public:
 			return -1;
 
 		if (!isLatched()) {
-			std::cerr << "Penalty: " << f->getNameStr()
+			std::cerr << "Penalty: " << f->getName().str()
 				<< ". hits=" << hits << "\n";
 			hitmap[f] = hits+1;
 

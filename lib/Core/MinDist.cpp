@@ -133,7 +133,7 @@ void StatsTracker::initMinDistToReturn(
 		sm.setIndexedValue(
 			stats::minDistToReturn,
 			id,
-			isa<ReturnInst>(it) || isa<UnwindInst>(it));
+			isa<ReturnInst>(it) /*  || isa<UnwindInst>(it) */);
 	}
 	}
 }

@@ -17,7 +17,7 @@ using namespace klee;
 char RemoveSentinelsPass::ID = 0;
 
 bool RemoveSentinelsPass::runOnFunction(Function &F) {
-  std::string funcName = F.getNameStr();
+  std::string funcName = F.getName().str();
 
   // Strip '\x01' prefix from function name
   if(funcName[0] == 1) {

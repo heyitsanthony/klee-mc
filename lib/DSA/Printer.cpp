@@ -192,7 +192,7 @@ struct DOTGraphTraits<const DSGraph*> : public DefaultDOTGraphTraits {
         if (G->getReturnNodes().size() == 1)
           Label = "returning";
         else
-          Label = I->first->getNameStr() + " ret node";
+          Label = I->first->getName().str() + " ret node";
         // Output the return node...
         GW.emitSimpleNode((void*)I->first, "plaintext=circle", Label);
 
@@ -306,17 +306,17 @@ static void printCollection(const Collection &C, std::ostream &O,
       if (I->getName() == "main" || !OnlyPrintMain) {
         const Function *SCCFn = Gr->retnodes_begin()->first;
         if (&*I == SCCFn) {
-          Gr->writeGraphToFile(O, Prefix+I->getNameStr());
+          Gr->writeGraphToFile(O, Prefix+I->getName().str());
         } else {
           IsDuplicateGraph = true; // Don't double count node/call nodes.
-          //O << "Didn't write '" << Prefix+I->getNameStr()
-            //<< ".dot' - Graph already emitted to '" << Prefix+SCCFn->getNameStr()
+          //O << "Didn't write '" << Prefix+I->getName().str()
+            //<< ".dot' - Graph already emitted to '" << Prefix+SCCFn->getName().str()
             //<< "\n";
         }
       } else {
         const Function *SCCFn = Gr->retnodes_begin()->first;
         if (&*I == SCCFn) {
-          O << "Skipped Writing '" << Prefix+I->getNameStr() << ".dot'... ["
+          O << "Skipped Writing '" << Prefix+I->getName().str() << ".dot'... ["
             << Gr->getGraphSize() << "+" << NumCalls << "]\n";
         } else {
           IsDuplicateGraph = true; // Don't double count node/call nodes.

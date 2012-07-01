@@ -91,7 +91,6 @@ void Crumbs::skip(unsigned int i)
 
 struct breadcrumb* Crumbs::peek(void)
 {
-	struct breadcrumb	hdr;
 	char			*ret;
 
 	if (peekbuf == NULL)
@@ -109,7 +108,6 @@ struct breadcrumb* Crumbs::next(void)
 {
 	struct breadcrumb	hdr;
 	char			*ret;
-	size_t			br;
 
 	if (peekbuf != NULL) {
 		struct breadcrumb *tmp = peekbuf;
