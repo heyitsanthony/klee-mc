@@ -63,13 +63,21 @@ Function *getStubFunctionForCtorList(
 void SysModel::setModelBool(Module* m, const char* gv_name, bool bv)
 {
 	GlobalVariable	*gv;
+	Constant	*initer;
+	Type		*t;
 
 	gv = static_cast<GlobalVariable*>(m->getGlobalVariable(gv_name));
 	assert (gv != NULL);
 
+	gv->dump();
+
+	initer = gv->getInitializer();
+	t = IntegerType::get(
+		getGlobalContext(),
+		initer->getType()->getPrimitiveSizeInBits());
 	gv->setInitializer(bv
-		? ConstantInt::getTrue(getGlobalContext())
-		: ConstantInt::getFalse(getGlobalContext()));
+		? ConstantInt::get(t, 1)
+		: ConstantInt::get(t, 0));
 
 	gv->setConstant(true);
 }

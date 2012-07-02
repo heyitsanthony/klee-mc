@@ -6,7 +6,7 @@
 # clang *hates* us
 NO_PEDANTIC=1
 LLVMCC=$(shell which clang)
-LLVMCXX=clang++
+LLVMCXX=$(shell which clang++)
 LLVMCC_EMITIR_FLAG="-emit-llvm"
 REQUIRES_RTTI=1
 
