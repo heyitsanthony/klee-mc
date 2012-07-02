@@ -434,7 +434,7 @@ SFH_DEF_HANDLER(Assume)
 	}
 
 	if (!mustBeFalse) {
-		sfh->executor->addConstraint(state, e);
+		sfh->executor->addConstrOrDie(state, e);
 		return;
 	}
 
@@ -460,7 +460,7 @@ SFH_DEF_HANDLER(AssumeEq)
 	}
 
 	if (mayBeTrue) {
-		sfh->executor->addConstraint(state, e);
+		sfh->executor->addConstrOrDie(state, e);
 		return;
 	}
 
@@ -881,7 +881,7 @@ SFH_DEF_HANDLER(ForceNE)
 
 	assert(success && "FIXME: Unhandled solver failure");
 	if (!mustBeEqual) {
-		sfh->executor->addConstraint(state, cmp_expr);
+		sfh->executor->addConstrOrDie(state, cmp_expr);
 		return;
 	}
 

@@ -286,7 +286,8 @@ Executor::Executor(InterpreterHandler *ih)
 		 * than unexplored condition value. */
 		lp->add(new KBrPredictor());
 		lp->add(new CondPredictor(forking));
-		lp->add(new ExprBiasPredictor());
+	// I'm not convinced this is wise.
+	//	lp->add(new ExprBiasPredictor());
 		lp->add(new RandomPredictor());
 		brPredict = lp;
 	}
@@ -315,6 +316,14 @@ inline void Executor::replaceStateImmForked(
 	removePTreeState(os);
 }
 
+void Executor::addConstrOrDie(ExecutionState &state, ref<Expr> condition)
+{
+	if (addConstraint(state, condition))
+		return;
+
+	terminateStateOnError(state, "Died adding constraint", "constr.err");
+}
+
 bool Executor::addConstraint(ExecutionState &state, ref<Expr> condition)
 {
 	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(condition)) {
@@ -337,7 +346,8 @@ bool Executor::addConstraint(ExecutionState &state, ref<Expr> condition)
 	}
 
 	if (!state.addConstraint(condition)) {
-		std::cerr << "[CHKCON] Failed to add constraint\n";
+		std::cerr << "[CHKCON] Failed to add constraint. Expr=\n"
+			<< condition << '\n';;
 		return false;
 	}
 
@@ -438,7 +448,7 @@ Executor::toConstant(
 	else
 		klee_warning_once(reason, "%s", os.str().c_str());
 
-	addConstraint(state, EqExpr::create(e, value));
+	addConstrOrDie(state, EqExpr::create(e, value));
 
 	return value;
 }
@@ -1004,6 +1014,7 @@ void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 					state, ki, false, isTwoWay));
 		}
 	}
+
 
 	markBranchVisited(state, ki, branches, cond.value);
 
@@ -1981,10 +1992,14 @@ INST_FOP_ARITH(FRem, mod)
     break;
   }
 
-  if (Expr::errors) {
-  	terminateStateOnError(state, "expr error; bad div?", "expr.err");
-	Expr::errors = 0;
-  }
+	if (Expr::errors) {
+		std::stringstream	ss;
+		ss << "expr error; bad div?\n";
+		if (!Expr::errorExpr.isNull())
+			ss << "bad expr: " << Expr::errorExpr << '\n';
+		terminateStateOnError(state, ss.str(), "expr.err");
+		Expr::resetErrors();
+	}
 }
 
 void Executor::removePTreeState(

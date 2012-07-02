@@ -21,7 +21,7 @@ namespace
 	llvm::cl::opt<bool>
 	ConstraintSolveSeeds(
 		"constrseed-solve",
-		llvm::cl::desc("xyz"),
+		llvm::cl::desc("Solve for out of bound constraints."),
 		llvm::cl::init(true));
 
 	llvm::cl::opt<std::string>
@@ -155,6 +155,7 @@ class ReplaceArrays : public ExprVisitor
 {
 public:
 	typedef std::map<std::string, const ref<Array> > arrmap_ty;
+	typedef std::list<ref<Expr> > guardlist_ty;
 
 	ReplaceArrays(arrmap_ty& _arrmap)
 	: arrmap(_arrmap) {}
@@ -172,7 +173,26 @@ public:
 	{
 		if (goodExpr == false)
 			return Action::skipChildren();
+
 		return Action::doChildren();
+	}
+
+	virtual Action visitExprPost(const Expr& e)
+	{
+		switch(e.getKind()) {
+		default: break;
+		case Expr::UDiv:
+		case Expr::SDiv:
+		case Expr::URem:
+		case Expr::SRem:
+			/* can't divide by zero! */
+			guards.push_back(
+				NeExpr::create(
+					ConstantExpr::create(0, e.getWidth()),
+					e.getKid(1)));
+		}
+
+		return Action::skipChildren();
 	}
 
 	virtual Action visitRead(const ReadExpr& re)
@@ -215,15 +235,22 @@ public:
 			ReadExpr::create(UpdateList(repl_arr, NULL), idx));
 	}
 
+	guardlist_ty::const_iterator beginGuards(void) const
+	{ return guards.begin(); }
+	guardlist_ty::const_iterator endGuards(void) const
+	{ return guards.end(); }
+	void clearGuards(void) { guards.clear(); }
 private:
-	arrmap_ty&	arrmap;
-	bool		goodExpr;
+	std::list<ref<Expr> >	guards;
+	arrmap_ty&		arrmap;
+	bool			goodExpr;
 };
 
 ref<Expr> ConstraintSeedCore::getDisjunction(
-	ExprVisitor* ev, const exprlist_ty* exprs) const
+	ExprVisitor* evv, const exprlist_ty* exprs) const
 {
 	ref<Expr>	ret(NULL);
+	ReplaceArrays	*ev = dynamic_cast<ReplaceArrays*>(evv);
 
 	foreach (it, exprs->begin(), exprs->end()) {
 		ref<Expr>	seed_constr(*it);
@@ -234,6 +261,10 @@ ref<Expr> ConstraintSeedCore::getDisjunction(
 			std::cerr << "Could not unify the seed constraint!\n";
 			continue;
 		}
+
+		foreach (it, ev->beginGuards(), ev->endGuards())
+			state_constr = AndExpr::create(*it, state_constr);
+		ev->clearGuards();
 
 		if (ret.isNull())
 			ret  = state_constr;
@@ -282,9 +313,12 @@ void ConstraintSeedCore::addSeedConstraints(
 #endif
 
 
-	if (exe->addConstraint(state, constr) == false)
-		std::cerr << "Could not add seed constraint!\n";
-	std::cerr << ">>>>>>>>>>>>LOLLLLLLL<<<<<<<<" << arr->name << '\n';;
+	if (!exe->addConstraint(state, constr)) {
+		std::cerr << "Could not add seed constraint! (keep going anyway)\n";
+		std::cerr << "STATE DUMP:\n";
+		state.printConstraints(std::cerr);
+	}
+	std::cerr << ">>>>>>>>>>>>LOLLLLLLL<<<<<<<<<\n" << arr->name << '\n';;
 	std::cerr << "ADDED CONSTRS: " << constr << '\n';
 	std::cerr << "===================\n";
 }
@@ -310,6 +344,7 @@ bool ConstraintSeedCore::logConstraint(Executor* ex, const ref<Expr> e)
 	if (hashes.count(e->hash()))
 		return false;
 
+	hashes.insert(e->hash());
 	if (!ex->getSolver()->solver->mayBeTrue(Query(e), mbt))
 		return false;
 
@@ -317,6 +352,5 @@ bool ConstraintSeedCore::logConstraint(Executor* ex, const ref<Expr> e)
 		return false;
 
 	dumpOffset(e);
-	hashes.insert(e->hash());
 	return true;
 }

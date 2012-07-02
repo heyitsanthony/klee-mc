@@ -37,6 +37,12 @@ namespace {
 		"max-err-resolves",
 		cl::desc("Maximum number of states to fork on MemErr"),
 		cl::init(0));
+
+	cl::opt<unsigned>
+	OOBAperture(
+		"oob-aperture",
+		cl::desc("Radius of acceptable OOB expressions."),
+		cl::init(32*1024));
 }
 
 using namespace klee;
@@ -101,7 +107,7 @@ void MMU::analyzeOffset(ExecutionState& st, const MemOpRes& res)
 		SltExpr::create(
 			res.offset,
 			ConstantExpr::create(
-				-((int64_t)(res.os->size + 1024*1024*16)),
+				-((int64_t)(OOBAperture)),
 				res.offset->getWidth())));
 
 	ConstraintSeedCore::logConstraint(
@@ -109,7 +115,7 @@ void MMU::analyzeOffset(ExecutionState& st, const MemOpRes& res)
 		SgtExpr::create(
 			res.offset,
 			ConstantExpr::create(
-				((int64_t)(res.os->size + 1024*1024*16)),
+				((int64_t)(res.os->size + OOBAperture)),
 				res.offset->getWidth())));
 }
 
@@ -295,7 +301,7 @@ ref<Expr> MMU::replaceReadWithSymbolic(
 	ref<Expr> res = Expr::createTempRead(array.get(), e->getWidth());
 	ref<Expr> eq = NotOptimizedExpr::create(EqExpr::create(e, res));
 	std::cerr << "Making symbolic: " << eq << "\n";
-	exe.addConstraint(state, eq);
+	exe.addConstrOrDie(state, eq);
 	return res;
 }
 

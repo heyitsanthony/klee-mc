@@ -148,7 +148,7 @@ Forks::fork(ExecutionState &s, ref<Expr> cond, bool isInternal)
 			ok = exe.getSolver()->getValue(s, cond, value);
 			assert(ok && "FIXME: Unhandled solver failure");
 
-			exe.addConstraint(s, EqExpr::create(value, cond));
+			exe.addConstrOrDie(s, EqExpr::create(value, cond));
 			cond = value;
 		}
 	}
@@ -668,6 +668,22 @@ class MergeArrays : public ExprVisitor
 public:
 	MergeArrays(void) : ExprVisitor(false, true) { use_hashcons = false; }
 	virtual ~MergeArrays(void) {}
+
+	virtual ref<Expr> apply(const ref<Expr>& e)
+	{
+		ref<Expr>	ret;
+		assert (!Expr::errors);
+
+		ret = ExprVisitor::apply(e);
+
+		/* must have changed a zero inside of a divide. oops */
+		if (Expr::errors) {
+			Expr::errors = 0;
+			return ConstantExpr::create(0xff, 8);
+		}
+
+		return ret;
+	}
 protected:
 	virtual Action visitConstant(const ConstantExpr& ce)
 	{

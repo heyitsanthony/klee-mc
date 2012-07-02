@@ -156,15 +156,31 @@ ref<Expr> ExprAlloc::x(const ref<Expr>& lhs, const ref<Expr>& rhs)	\
 	r->computeHash();		\
 	return r;			\
 }
+
+#define DECL_ALLOC_2_DIV(x)		\
+ref<Expr> ExprAlloc::x(const ref<Expr>& lhs, const ref<Expr>& rhs)	\
+{						\
+	if (rhs->isZero()) {			\
+		Expr::errors++;			\
+		Expr::errorExpr = lhs;		\
+		return lhs;			\
+	}					\
+	ref<Expr> r(new x##Expr(lhs, rhs));	\
+	r->computeHash();		\
+	return r;			\
+}
+
+
 DECL_ALLOC_2(Concat)
 DECL_ALLOC_2(Add)
 DECL_ALLOC_2(Sub)
 DECL_ALLOC_2(Mul)
-DECL_ALLOC_2(UDiv)
 
-DECL_ALLOC_2(SDiv)
-DECL_ALLOC_2(URem)
-DECL_ALLOC_2(SRem)
+DECL_ALLOC_2_DIV(UDiv)
+DECL_ALLOC_2_DIV(SDiv)
+DECL_ALLOC_2_DIV(URem)
+DECL_ALLOC_2_DIV(SRem)
+
 DECL_ALLOC_2(And)
 DECL_ALLOC_2(Or)
 DECL_ALLOC_2(Xor)

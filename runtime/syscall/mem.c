@@ -212,7 +212,7 @@ void* sc_brk(void* regfile)
 		last_brk = (void*)heap_begin;
 	}
 
-#define EXCESSIVE_BRK_BYTES	0x80000000
+#define EXCESSIVE_BRK_BYTES	0x70000000
 	new_addr = GET_ARG0(regfile);
 	if (	new_addr != 0 &&
 		((intptr_t)new_addr-(intptr_t)heap_end) > EXCESSIVE_BRK_BYTES)

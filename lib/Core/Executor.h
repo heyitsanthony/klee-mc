@@ -408,6 +408,8 @@ public:
 	/// which also manages manages propogation of implied values,
 	/// validity checks, and seed patching.
 	virtual bool addConstraint(ExecutionState &state, ref<Expr> condition);
+	void addConstrOrDie(ExecutionState &state, ref<Expr> condition);
+
 
 	MemoryObject* findGlobalObject(const llvm::GlobalValue*) const;
 

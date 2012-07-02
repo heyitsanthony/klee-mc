@@ -264,8 +264,6 @@ bool ExecutionState::addConstraint(ref<Expr> constraint)
 	bool	ok;
 
 	ok = constraints.addConstraint(constraint);
-	assert (ok);
-
 	if (LogConstraints) {
 		Query		q(constraints, ConstantExpr::create(1, 1));
 

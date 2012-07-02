@@ -22,12 +22,9 @@
 #include <vector>
 #include <map>
 #include <stack>
-#include <iosfwd> // FIXME: Remove this!!!
 
 // from stp/c_interface.h, ugly dependency
-extern "C" {
-  const char* exprName(void* e);
-}
+extern "C" { const char* exprName(void* e); }
 
 namespace llvm {
   class Type;
@@ -99,9 +96,11 @@ Todo: Shouldn't bool \c Xor just be written as not equal?
 class Expr {
 public:
   typedef uint64_t	Hash;
-  static unsigned long count;
-  static unsigned int errors;
+  static unsigned long	count;
+  static unsigned int	errors;
+  static ref<Expr>	errorExpr;
   static const unsigned MAGIC_HASH_CONSTANT = 39;
+
 
   /// The type of an expression is simply its width, in bits.
   typedef unsigned Width;
@@ -130,34 +129,18 @@ public:
     NotOptimized,
 
     //// Skip old varexpr, just for deserialization, purge at some point
-    Read=NotOptimized+2,
-    Select,
-    Concat,
-    Extract,
+    Read=NotOptimized+2, Select, Concat, Extract,
 
     // Casting,
-    ZExt,
-    SExt,
+    ZExt, SExt,
 
     // All subsequent kinds are binary.
 
     // Arithmetic
-    Add,
-    Sub,
-    Mul,
-    UDiv,
-    SDiv,
-    URem,
-    SRem,
+    Add, Sub, Mul, UDiv, SDiv, URem, SRem,
 
     // Bit
-    Not,
-    And,
-    Or,
-    Xor,
-    Shl,
-    LShr,
-    AShr,
+    Not, And, Or, Xor, Shl, LShr, AShr,
 
     // Compare
     Eq,
@@ -171,8 +154,7 @@ public:
     Sgt, /// Not used in canonical form
     Sge, /// Not used in canonical form
 
-    Let,
-    Bind,
+    Let, Bind,
 
     LastKind=Bind,
 
@@ -205,7 +187,7 @@ public:
   static ExprAlloc* setAllocator(ExprAlloc* alloc);
   static ExprBuilder* getBuilder(void) {return theExprBuilder;}
   static ExprAlloc* getAllocator(void) { return theExprAllocator; }
-
+  static void resetErrors(void) { errors = 0; errorExpr = NULL; }
   static ref<Expr> createBoothMul(const ref<Expr>& expr, uint64_t v);
   static ref<Expr> createShiftAddMul(const ref<Expr>& expr, uint64_t v);
 
@@ -970,16 +952,11 @@ public:  \
     static ref<Expr> alloc(const ref<Expr> &l, const ref<Expr> &r);  \
     static ref<Expr> create(const ref<Expr> &l, const ref<Expr> &r); \
     Kind getKind() const { return _class_kind; }                     \
-    virtual ref<Expr> rebuild(ref<Expr> kids[]) const {              \
-      return create(kids[0], kids[1]);                               \
-    }                                                                \
-                                                                     \
-    static bool classof(const Expr *E) {                             \
-      return E->getKind() == Expr::_class_kind;                      \
-    }                                                                \
-    static bool classof(const  _class_kind ## Expr *) {              \
-      return true;                                                   \
-    }                                                                \
+    virtual ref<Expr> rebuild(ref<Expr> kids[]) const			\
+    { return create(kids[0], kids[1]); } 				\
+    static bool classof(const Expr *E)				     \
+    { return E->getKind() == Expr::_class_kind; }                    \
+    static bool classof(const  _class_kind ## Expr *) { return true; } \
 };                                                                   \
 
 COMPARISON_EXPR_CLASS(Eq)

@@ -172,9 +172,15 @@ bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor)
 	constraints.swap(old);
 	invalidateSimplifier();
 
+	assert (!Expr::errors);
+
 	foreach (it, old.begin(), old.end()) {
 		ref<Expr> &ce = *it;
 		ref<Expr> e = visitor.apply(ce);
+
+		/* ulp. */
+		if (Expr::errors)
+			break;
 
 		if (!e.isNull() && e != ce) {
 			// enable further reductions
@@ -183,9 +189,12 @@ bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor)
 			continue;
 		}
 
+		assert (!Expr::errors);
 		if (changed)
 			e = simplifyExpr(ce);
 		constraints.push_back(ce);
+
+		assert (!Expr::errors);
 		invalidateSimplifier();
 	}
 
@@ -268,16 +277,25 @@ ref<Expr> ConstraintManager::simplifyExpr(ref<Expr> e) const
 	if (simplifier == NULL)
 		setupSimplifier();
 
+	assert (!Expr::errors);
 	ret = simplifier->apply(e);
 	if (ret.isNull()) {
 		timeout_c++;
 		return e;
 	}
+
+	if (Expr::errors) {
+		std::cerr << "CONSTRAINT MANAGER RUINED EXPR!!!!!!\n";
+		Expr::resetErrors();
+		return e;
+	}
+
 	return ret;
 }
 
 bool ConstraintManager::addConstraintInternal(ref<Expr> e)
 {
+	assert (!Expr::errors);
 	// rewrite any known equalities, return false if
 	// we find ourselves with a contradiction. This means that
 	// the constraint we're adding can't happen!
@@ -327,8 +345,18 @@ bool ConstraintManager::addConstraintInternal(ref<Expr> e)
 
 bool ConstraintManager::addConstraint(ref<Expr> e)
 {
+	bool	added;
+
 	e = simplifyExpr(e);
-	return addConstraintInternal(e);
+	assert(!Expr::errors);
+
+	added = addConstraintInternal(e);
+	if (Expr::errors) {
+		Expr::resetErrors();
+		return false;
+	}
+
+	return added;
 }
 
 void ConstraintManager::print(std::ostream& os) const

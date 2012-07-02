@@ -59,6 +59,17 @@ public:
 		T::executeInstruction(state, ki);
 	}
 
+#if 0
+	bool addConstraint(ExecutionState &state, ref<Expr> condition)
+	{
+		bool	ok;
+		ok = T::addConstraint(state, condition);
+		if (ok) return true;
+		assert (0 == 1 && "STUB: remove superfluous constraints");
+		return true;
+	}
+#endif
+
 protected:
 	virtual void xferIterInit(
 		struct T::XferStateIter& iter,

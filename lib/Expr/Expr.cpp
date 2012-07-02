@@ -55,6 +55,7 @@ ExprFactory	theExprFactory;
 static bool	UseExprConsPtr = false;
 ExprBuilder*	Expr::theExprBuilder = NULL;
 ExprAlloc*	Expr::theExprAllocator = NULL;
+ref<Expr>	Expr::errorExpr = NULL;
 unsigned long	Expr::count = 0;
 unsigned int	Expr::errors = 0;
 uint64_t	LetExpr::next_id = 0;
