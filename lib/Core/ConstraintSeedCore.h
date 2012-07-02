@@ -22,6 +22,9 @@ public:
 	ConstraintSeedCore(Executor* _exe);
 	virtual ~ConstraintSeedCore();
 	void addSeedConstraints(ExecutionState& state, const ref<Array> arr);
+
+	bool logConstraint(const ref<Expr> e) { return logConstraint(exe, e); }
+	static bool logConstraint(Executor* exe, const ref<Expr> e);
 private:
 	bool loadConstraintFile(const std::string& path);
 	bool addExprToLabel(const std::string& s, const ref<Expr>& e);

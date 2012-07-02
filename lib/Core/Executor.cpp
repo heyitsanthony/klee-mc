@@ -1623,7 +1623,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     break;
   }
 
-    // Special instructions
+  // Special instructions
   case Instruction::Select: {
     SelectInst *SI = cast<SelectInst>(ki->getInst());
     assert(SI->getCondition() == SI->getOperand(0) &&

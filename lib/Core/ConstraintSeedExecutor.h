@@ -1,6 +1,8 @@
 #ifndef CONSTRAINT_SEED_EXE_H
 #define CONSTRAINT_SEED_EXE_H
 
+#include "Executor.h"
+#include "klee/Internal/Module/KInstruction.h"
 #include "klee/Expr.h"
 #include "ConstraintSeedCore.h"
 
@@ -29,6 +31,55 @@ public:
 		csCore.addSeedConstraints(state, os->getArrayRef());
 		return os;
 	}
+
+	virtual void executeInstruction(
+		ExecutionState &state, KInstruction *ki)
+	{
+		llvm::Instruction *i = ki->getInst();
+
+		/* XXX: this is not ideal; I'd prefer to instrument the
+		 * code with a special instruction which will give me the
+		 * expression I'm interested in. */
+		switch (i->getOpcode()) {
+#define INST_DIVOP(x)		\
+		case llvm::Instruction::x : {	\
+		ref<Expr>	r(T::eval(ki, 1, state).value);	\
+		if (r->getKind() == Expr::Constant) break;	\
+		csCore.logConstraint(	\
+			EqExpr::create(	\
+				ConstantExpr::create(0, r->getWidth()), r));\
+		break; }
+		INST_DIVOP(UDiv)
+		INST_DIVOP(SDiv)
+		INST_DIVOP(URem)
+		INST_DIVOP(SRem)
+#undef INST_DIVOP
+		}
+
+		T::executeInstruction(state, ki);
+	}
+
+protected:
+	virtual void xferIterInit(
+		struct T::XferStateIter& iter,
+		ExecutionState* state,
+		KInstruction* ki)
+	{
+		T::xferIterInit(iter, state, ki);
+
+		if (iter.v->getKind() == Expr::Constant)
+			return;
+
+		/* NOTE: alternatively, this could be some stack location
+		 * we want to inject an expl017 into */
+		csCore.logConstraint(
+			SltExpr::create(
+				iter.v,
+				ConstantExpr::create(
+					0x400000 /* program beginning */,
+					iter.v->getWidth())));
+	}
+
 private:
 	ConstraintSeedCore	csCore;
 };

@@ -3,9 +3,11 @@
 #include <dirent.h>
 #include <iostream>
 #include <sstream>
+#include "klee/Internal/ADT/LimitedStream.h"
 
 #include "TimingSolver.h"
 #include "../Expr/SMTParser.h"
+#include "../Solver/SMTPrinter.h"
 #include "klee/util/ExprUtil.h"
 #include "static/Sugar.h"
 #include "klee/ExecutionState.h"
@@ -16,10 +18,16 @@ using namespace klee;
 
 namespace
 {
+	llvm::cl::opt<bool>
+	ConstraintSolveSeeds(
+		"constrseed-solve",
+		llvm::cl::desc("xyz"),
+		llvm::cl::init(true));
+
 	llvm::cl::opt<std::string>
 	ConstraintSeedDir(
-		"constraint-seed-dir",
-		llvm::cl::desc("Directory of constraints for seeding."),
+		"constrseed-dir",
+		llvm::cl::desc("Satisfiable OOB pointer expr dump dir."),
 		llvm::cl::init("ptrexprs/"));
 };
 
@@ -47,7 +55,7 @@ ConstraintSeedCore::ConstraintSeedCore(Executor* _exe)
 			expr_c++;
 	}
 
-	assert (!name2exprs.empty() && "No constraints loaded??");
+	// assert (!name2exprs.empty() && "No constraints loaded??");
 	std::cerr << "[ConstraintSeed] Loaded " << expr_c << " exprs.\n";
 }
 
@@ -88,19 +96,37 @@ bool ConstraintSeedCore::isExprAdmissible(
 	const exprlist_ty* exprs, const ref<Expr>& e)
 {
 	/* check conjunction */
-	ref<Expr>	test_e;
+	ref<Expr>	base_e(0);
+	ref<Expr>	full_constr;
 	bool		mbt;
 
-	test_e = e;
-	foreach (it, exprs->begin(), exprs->end())
-		test_e = OrExpr::create(*it, test_e);
+	foreach (it, exprs->begin(), exprs->end()) {
+		base_e = (base_e.isNull())
+			? *it
+			: OrExpr::create(*it, base_e);
+	}
 
-	if (!exe->getSolver()->solver->mustBeTrue(Query(test_e), mbt))
+	if (base_e.isNull())
+		return true;
+
+	/* try adding the expressoin, check for validity */
+	full_constr = OrExpr::create(e, base_e);
+	if (!exe->getSolver()->solver->mustBeTrue(Query(full_constr), mbt))
 		return false;
 
 	/* valid; oops */
 	if (mbt == true)
 		return false;
+
+	/* is the rule useless? */
+	if (!exe->getSolver()->solver->mustBeTrue(
+		Query(EqExpr::create(full_constr, base_e)), mbt))
+		return false;
+
+	/* subsumed => useless */
+	if (mbt == true)
+		return false;
+
 
 	return true;
 }
@@ -214,15 +240,6 @@ ref<Expr> ConstraintSeedCore::getDisjunction(
 		else
 			ret = OrExpr::create(state_constr, ret);
 
-#if 0
-		std::vector<ref<Array> >	arrs;
-		std::set<std::string>		arrnames;
-		ExprUtil::findSymbolicObjectsRef(state_constr, arrs);
-		foreach (it3, arrs.begin(), arrs.end()) {
-			assert (arrnames.count((*it3)->name) == 0);
-			arrnames.insert((*it3)->name);
-		}
-#endif
 	}
 
 	return ret;
@@ -253,9 +270,53 @@ void ConstraintSeedCore::addSeedConstraints(
 		return;
 	}
 
+#if 1
+	std::vector<ref<Array> >	arrs;
+	std::set<std::string>		arrnames;
+	ExprUtil::findSymbolicObjectsRef(constr, arrs);
+	foreach (it3, arrs.begin(), arrs.end()) {
+		assert (arrnames.count((*it3)->name) == 0);
+		arrnames.insert((*it3)->name);
+		assert (arrmap.count((*it3)->name));
+	}
+#endif
+
+
 	if (exe->addConstraint(state, constr) == false)
 		std::cerr << "Could not add seed constraint!\n";
 	std::cerr << ">>>>>>>>>>>>LOLLLLLLL<<<<<<<<" << arr->name << '\n';;
 	std::cerr << "ADDED CONSTRS: " << constr << '\n';
 	std::cerr << "===================\n";
+}
+
+#define MAX_PTR_EXPR_BYTES	(1024*100)
+static void dumpOffset(const ref<Expr>& e)
+{
+	std::stringstream	ss;
+	ss << ConstraintSeedDir << "/off." << (void*)e->hash() << ".smt";
+	limited_ofstream	lofs(ss.str().c_str(), MAX_PTR_EXPR_BYTES);
+	std::cerr << "[CSCore] DUMPING TO: " << ss.str() << '\n';
+	SMTPrinter::print(lofs, Query(e));
+}
+
+bool ConstraintSeedCore::logConstraint(Executor* ex, const ref<Expr> e)
+{
+	static std::set<Expr::Hash>	hashes;
+	bool				mbt;
+
+	if (!ConstraintSolveSeeds)
+		return false;
+
+	if (hashes.count(e->hash()))
+		return false;
+
+	if (!ex->getSolver()->solver->mayBeTrue(Query(e), mbt))
+		return false;
+
+	if (mbt == false)
+		return false;
+
+	dumpOffset(e);
+	hashes.insert(e->hash());
+	return true;
 }

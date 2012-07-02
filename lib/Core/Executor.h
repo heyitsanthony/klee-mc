@@ -193,7 +193,7 @@ protected:
 		unsigned	badjmp_c;
 	};
 
-	void xferIterInit(
+	virtual void xferIterInit(
 		struct XferStateIter& iter,
 		ExecutionState* state,
 		KInstruction* ki);

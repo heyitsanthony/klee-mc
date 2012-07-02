@@ -1,9 +1,6 @@
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Target/TargetData.h>
-#include <sstream>
-#include "klee/Internal/ADT/LimitedStream.h"
 
-#include "../Solver/SMTPrinter.h"
 #include "PTree.h"
 #include "static/Sugar.h"
 #include "TimingSolver.h"
@@ -15,6 +12,7 @@
 #include "klee/Expr.h"
 #include "klee/Internal/Module/KInstruction.h"
 #include "klee/Internal/Module/KModule.h"
+#include "ConstraintSeedCore.h"
 
 using namespace llvm;
 
@@ -39,13 +37,6 @@ namespace {
 		"max-err-resolves",
 		cl::desc("Maximum number of states to fork on MemErr"),
 		cl::init(0));
-
-	cl::opt<std::string>
-	SatSymOOBPtrDir(
-		"satsymptr-dir",
-		cl::desc("Satisfiable out of bound pointer expr dump dir."),
-		cl::init(""));
-	//	cl::init("ptrexprs/off"));
 }
 
 using namespace klee;
@@ -103,58 +94,30 @@ bool MMU::memOpFast(ExecutionState& state, MemOp& mop)
 	return true;
 }
 
-#define MAX_PTR_EXPR_BYTES	(1024*16)
-static void dumpOffset(const ref<Expr>& e)
-{
-	std::stringstream	ss;
-	ss << SatSymOOBPtrDir << "." << (void*)e->hash() << ".smt";
-	limited_ofstream	lofs(ss.str().c_str(), MAX_PTR_EXPR_BYTES);
-	SMTPrinter::print(lofs, Query(e));
-}
-
 void MMU::analyzeOffset(ExecutionState& st, const MemOpRes& res)
 {
-	static std::set<Expr::Hash>	hashes;
-	bool				mbt_neg, mbt_pos;
-	ref<Expr>			bound_chk_neg, bound_chk_pos;
+	ConstraintSeedCore::logConstraint(
+		&exe,
+		SltExpr::create(
+			res.offset,
+			ConstantExpr::create(
+				-((int64_t)(res.os->size + 1024*1024*16)),
+				res.offset->getWidth())));
 
-	if (hashes.count(res.offset->hash()))
-		return;
-
-	bound_chk_neg = SltExpr::create(
-		res.offset,
-		ConstantExpr::create(
-			-((int64_t)(res.os->size + 1024*1024*16)),
-			res.offset->getWidth()));
-	if (!exe.getSolver()->solver->mayBeTrue(Query(bound_chk_neg), mbt_neg))
-		return;
-
-	bound_chk_pos = SgtExpr::create(
-		res.offset,
-		ConstantExpr::create(
-			((int64_t)(res.os->size + 1024*1024*16)),
-			res.offset->getWidth()));
-	if (!exe.getSolver()->solver->mayBeTrue(Query(bound_chk_pos), mbt_pos))
-		return;
-
-
-	if (mbt_pos == false && mbt_neg == false) {
-		hashes.insert(res.offset->hash());
-		return;
-	}
-
-	if (mbt_pos) dumpOffset(bound_chk_pos);
-	if (mbt_neg) dumpOffset(bound_chk_neg);
+	ConstraintSeedCore::logConstraint(
+		&exe,
+		SgtExpr::create(
+			res.offset,
+			ConstantExpr::create(
+				((int64_t)(res.os->size + 1024*1024*16)),
+				res.offset->getWidth())));
 }
 
 void MMU::commitMOP(
 	ExecutionState& state, const MemOp& mop, const MemOpRes& res)
 {
-	if (	SatSymOOBPtrDir.empty() == false &&
-		res.offset->getKind() != Expr::Constant)
-	{
+	if (res.offset->getKind() != Expr::Constant)
 		analyzeOffset(state, res);
-	}
 
 	if (mop.isWrite) {
 		writeToMemRes(state, res, mop.value);
