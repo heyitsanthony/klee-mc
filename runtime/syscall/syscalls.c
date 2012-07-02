@@ -192,13 +192,13 @@ static void sc_klee(void* regfile)
 	}
 }
 
-static void loop_protect(int sc, int* ctr)
+static void loop_protect(int sc, int* ctr, int max_loop)
 {
 	*ctr = (last_sc == sc)
 		? *ctr + 1
 		: 0;
 
-	if (*ctr < 10)
+	if (*ctr < max_loop)
 		return;
 
 	klee_uerror("Possible syscall infinite loop", "loop.early");
@@ -258,7 +258,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_listen:
 		sc_ret_v(regfile, 0);
 		break;
-	case SYS_write:
+	case SYS_write: {
+		static int write_c = 0;
+		loop_protect(SYS_write, &write_c, 1024);
+
 #ifdef USE_SYS_FAILURE
 		if (	GET_ARG0(regfile) != 1		/* never fail stdout */
 			&& GET_ARG0(regfile) != 2	/* never fail stderr */
@@ -275,6 +278,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			sc_ret_v(regfile, GET_ARG2(regfile));
 //			sc_ret_v(regfile, concretize_u64(GET_ARG2(regfile)));
 		break;
+	}
 	case SYS_exit:
 	case SYS_exit_group: {
 		uint64_t exit_code;
@@ -358,7 +362,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 	case SYS_futex: {
 		static int futex_c = 0;
-		loop_protect(SYS_futex, &futex_c);
+		loop_protect(SYS_futex, &futex_c, 10);
 		sc_ret_range(sc_new_regs(regfile), -1, 1);
 		break;
 	}
@@ -366,7 +370,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_rt_sigsuspend: {
 		/* XXX this should tweak a sighandler */
 		static int suspend_c = 0;
-		loop_protect(SYS_rt_sigsuspend, &suspend_c);
+		loop_protect(SYS_rt_sigsuspend, &suspend_c, 10);
 		sc_ret_v(regfile, -1);
 		break;
 	}
