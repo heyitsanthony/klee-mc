@@ -1,7 +1,14 @@
 # -*- Makefile -*-
 
+#ifndef GUEST_ARCH
+#	GUEST_ARCH := $(GUEST_ARCH)
+#endif
 # clang *hates* us
 NO_PEDANTIC=1
+LLVMCC=$(shell which clang)
+LLVMCXX=clang++
+LLVMCC_EMITIR_FLAG="-emit-llvm"
+REQUIRES_RTTI=1
 
 include $(LEVEL)/Makefile.config
 
@@ -9,11 +16,6 @@ include $(LEVEL)/Makefile.config
 include $(LLVM_OBJ_ROOT)/Makefile.config
 
 DISABLE_ASSERTIONS := 0
-
-# Suppress llvm Makefile from trying to build llvm-config
-override LLVM_CONFIG := /usr/bin/llvm-config
-override LLVMToolDir := /usr/bin/
-
 
 ifeq ($(BYTECODE_LIBRARY), 1)
 #
@@ -28,11 +30,13 @@ override ENABLE_PROFILING := $(RUNTIME_ENABLE_PROFILING)
 override ENABLE_COVERAGE := $(RUNTIME_ENABLE_COVERAGE)
 endif
 
-LLVMCC_EMITIR_FLAG="-emit-llvm"
-LLVMCC=/usr/bin/clang
-LLVMAR=/usr/bin/llvm-ar
-LLVMCXX=/usr/bin/clang++
-LOPT=/usr/bin/opt
+# Suppress llvm Makefile from trying to build llvm-config
+override LLVM_CONFIG := /usr/bin/llvm-config
+override LLVMToolDir := $(shell llvm-config --bindir)
+
+#LLVMAR=/usr/bin/llvm-ar
+#LOPT=opt
+#LOPT=/usr/bin/opt
 
 # LLVMCC was added in 2.7.
 ifeq ($(LLVMCC),)
@@ -45,10 +49,6 @@ include $(LLVM_SRC_ROOT)/Makefile.rules
 # Needed to build runtime library using clang (gnu89 is the gcc default)
 C.Flags += -std=gnu89 $(LLVM_CFLAGS_EXTRA)
 CXX.Flags += $(LLVM_CXXFLAGS_EXTRA)
-
-ifndef GUEST_ARCH
-	GUEST_ARCH := $(GUEST_ARCH)
-endif
 
 ifeq ($(ENABLE_EXT_STP),1)
   LD.Flags += -L$(STP_ROOT)/lib -L$(BOOLECTOR_ROOT)/ -L$(Z3_ROOT)/lib
