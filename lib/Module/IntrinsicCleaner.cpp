@@ -141,6 +141,99 @@ void IntrinsicCleanerPass::createReturnStruct(
 }
 
 
+void IntrinsicCleanerPass::instUMulWithOF(
+	llvm::BasicBlock& b, llvm::IntrinsicInst* ii)
+{
+	Function::ArgumentListType::iterator ait;
+	Argument *arg_a, *arg_b;
+        Module * m = b.getParent()->getParent();
+	BasicBlock *bb;
+	Value		*Result, *aq, *ICMPDiff;
+	Type		*retType;
+        std::stringstream namestream;
+
+        namestream << "_umul_with_overflow_";
+        namestream << cast<StructType>(ii->getType())->getElementType(0)->getPrimitiveSizeInBits();
+        namestream << "bit_impl";
+        const std::string & newname = namestream.str();
+        Function * f = m->getFunction(newname);
+        if (f != NULL) goto done;
+
+	f = Function::Create(
+		ii->getCalledFunction()->getFunctionType(),
+		GlobalValue::ExternalLinkage,
+		newname,m);
+	ait = f->getArgumentList().begin();
+
+	arg_a = &*ait;
+	arg_b = &*++ait;
+	arg_a->setName("a");
+	arg_b->setName("b");
+	bb = BasicBlock::Create(getGlobalContext(),"entry",f);
+	Result = BinaryOperator::CreateMul(arg_a, arg_b,"",bb);
+	aq = BinaryOperator::CreateUDiv(Result, arg_b,"",bb);
+	ICMPDiff = new ICmpInst(*bb,CmpInst::ICMP_NE,arg_a,aq);
+
+	retType = f->getReturnType();
+	createReturnStruct(retType,Result,ICMPDiff,bb);
+
+done:
+        ii->getCalledFunction()->replaceAllUsesWith(f);
+}
+
+void IntrinsicCleanerPass::instUAddWithOF(
+	BasicBlock& b,
+	IntrinsicInst* ii)
+{
+	Module 		*m;
+	Function	*f;
+	BasicBlock	*bb;
+	Argument	*arg_a, *arg_b;
+	Value		*Result, *ICMPLarger, *Larger, *Overflow;
+	Type		*retType;
+	StructType	*st;
+	Function::ArgumentListType::iterator ait;
+	std::stringstream namestream;
+
+	st = cast<StructType>(ii->getType());
+
+	namestream << "_uadd_with_overflow_"
+		<< st->getElementType(0)->getPrimitiveSizeInBits()
+		<< "bit_impl";
+
+	const std::string & newname = namestream.str();
+
+	m = b.getParent()->getParent();
+	f = m->getFunction(newname);
+	if (f != NULL) goto done;
+
+	f = Function::Create(
+		ii->getCalledFunction()->getFunctionType(),
+		GlobalValue::ExternalLinkage,
+		newname,
+		m);
+	ait = f->getArgumentList().begin();
+	arg_a = &*ait;
+	arg_b = &*++ait;
+	arg_a->setName("a");
+	arg_b->setName("b");
+	bb = BasicBlock::Create(getGlobalContext(),"entry",f);
+	Result = BinaryOperator::CreateAdd(arg_a, arg_b,"",bb);
+	ICMPLarger = new ICmpInst(*bb,CmpInst::ICMP_UGE,arg_a,arg_b);
+	Larger = SelectInst::Create(ICMPLarger, arg_a, arg_b, "", bb);
+	Overflow = new ICmpInst(*bb, CmpInst::ICMP_UGT, Larger, Result);
+
+	retType = f->getReturnType();
+	createReturnStruct(retType,Result,Overflow,bb);
+
+	km->addFunctionProcessed(f);
+
+done:
+	ii->getCalledFunction()->replaceAllUsesWith(f);
+}
+
+
+
 bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b)
 {
 	bool dirty = false;
@@ -163,75 +256,15 @@ bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b)
 		case Intrinsic::vaend:
 			break;
 
-	/* stolen from Ben. So fucking sick of llvm-3.0 right now */
-      case Intrinsic::uadd_with_overflow: {
-        Module * m = b.getParent()->getParent();
-        std::stringstream namestream;
-        namestream << "_uadd_with_overflow_";
-        namestream << cast<StructType>(ii->getType())->getElementType(0)->getPrimitiveSizeInBits();
-        namestream << "bit_impl";
-        const std::string & newname = namestream.str();
-        Function * f = m->getFunction(newname);
-        if (f == NULL) {
-          f = Function::Create(ii->getCalledFunction()->getFunctionType(),
-                              GlobalValue::ExternalLinkage,
-                              newname,m);
-          Function::ArgumentListType::iterator ait=
-                  f->getArgumentList().begin();
-          Argument *a, *b;
-          a = &*ait;
-          b = &*++ait;
-          a->setName("a");
-          b->setName("b");
-          BasicBlock * bb = BasicBlock::Create(getGlobalContext(),"entry",f);
-          Value * Result = BinaryOperator::CreateAdd(a,
-                                b,"",bb);
-          Value * ICMPLarger = new ICmpInst(*bb,CmpInst::ICMP_UGE,a,b);
-          Value * Larger = SelectInst::Create(ICMPLarger, a, b, "", bb);
-          Value * Overflow = new ICmpInst(*bb, CmpInst::ICMP_UGT, Larger, Result);
-
-          Type * retType = f->getReturnType();
-          createReturnStruct(retType,Result,Overflow,bb);
-	  km->addFunctionProcessed(f);
-        }
-        ii->getCalledFunction()->replaceAllUsesWith(f);
-	dirty = true;
-        break;
-      }
-      case Intrinsic::umul_with_overflow: {
-        Module * m = b.getParent()->getParent();
-        std::stringstream namestream;
-        namestream << "_umul_with_overflow_";
-        namestream << cast<StructType>(ii->getType())->getElementType(0)->getPrimitiveSizeInBits();
-        namestream << "bit_impl";
-        const std::string & newname = namestream.str();
-        Function * f = m->getFunction(newname);
-        if (!f) {
-          f = Function::Create(ii->getCalledFunction()->getFunctionType(),
-                              GlobalValue::ExternalLinkage,
-                              newname,m);
-          Function::ArgumentListType::iterator ait=
-                  f->getArgumentList().begin();
-          Argument *a, *b;
-          a = &*ait;
-          b = &*++ait;
-          a->setName("a");
-          b->setName("b");
-          BasicBlock * bb = BasicBlock::Create(getGlobalContext(),"entry",f);
-          Value * Result = BinaryOperator::CreateMul(a,
-                                b,"",bb);
-          Value * aq = BinaryOperator::CreateUDiv(Result,
-                                b,"",bb);
-          Value * ICMPDiff = new ICmpInst(*bb,CmpInst::ICMP_NE,a,aq);
-
-          Type * retType = f->getReturnType();
-          createReturnStruct(retType,Result,ICMPDiff,bb);
-        }
-        ii->getCalledFunction()->replaceAllUsesWith(f);
-	dirty = true;
-        break;
-      }
-
+		/* stolen from Ben. So fucking sick of llvm-3.0 right now */
+		case Intrinsic::uadd_with_overflow:
+			instUAddWithOF(b, ii);
+			dirty = true;
+			break;
+		case Intrinsic::umul_with_overflow:
+			instUMulWithOF(b, ii);
+			dirty = true;
+			break;
 
 		// Lower vacopy so that object resolution etc is handled by
 		// normal instructions.
@@ -262,6 +295,7 @@ bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b)
 		}
 	}
 
-  return dirty;
+	return dirty;
 }
+
 }

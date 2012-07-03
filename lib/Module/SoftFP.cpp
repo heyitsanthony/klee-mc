@@ -5,7 +5,9 @@
 #include "klee/Internal/Module/KFunction.h"
 #include "Passes.h"
 #include "static/Sugar.h"
+
 #include <iostream>
+#include <sstream>
 
 using namespace llvm;
 using namespace klee;
@@ -30,43 +32,27 @@ SoftFPPass::SoftFPPass(KModule* _km, const char* _dir)
 		{"float64_to_float32", &f_fptrunc},
 		{"float32_to_float64", &f_fpext},
 
-		{"float32_to_int32", &f_fp32tosi32},
-		{"float32_to_int64", &f_fp32tosi64},
-		{"float64_to_int32", &f_fp64tosi32},
-		{"float64_to_int64", &f_fp64tosi64},
-
 		{"int32_to_float32", &f_si32tofp32},
 		{"int32_to_float64", &f_si32tofp64},
-
 		{"int64_to_float32", &f_si64tofp32},
 		{"int64_to_float64", &f_si64tofp64},
 
-		{"float32_is_nan", &f_isnan32},
-		{"float64_is_nan", &f_isnan64},
-
-		{"float32_sqrt", &f_sqrt32},
-		{"float64_sqrt", &f_sqrt64},
-
-		{"float32_add", &f_fp32add},
-		{"float64_add", &f_fp64add},
-		{"float32_sub", &f_fp32sub},
-		{"float64_sub", &f_fp64sub},
-		{"float32_mul", &f_fp32mul},
-		{"float64_mul", &f_fp64mul},
-		{"float32_div", &f_fp32div},
-		{"float64_div", &f_fp64div},
-		{"float32_rem", &f_fp32rem},
-		{"float64_rem", &f_fp64rem},
-
-		{"float32_eq", &f_fp32eq},
-		{"float64_eq", &f_fp64eq},
-
-		{"float32_lt", &f_fp32lt},
-		{"float64_lt", &f_fp64lt},
-
-		{"float32_le", &f_fp32le},
-		{"float64_le", &f_fp64le},
-
+#define DECL_FOP(x,y)	\
+		{"float32_" #x, &f_fp32 ##y},\
+		{"float64_" #x, &f_fp64 ##y},
+		DECL_FOP(to_int32, tosi32)
+		DECL_FOP(to_int64, tosi64)
+		DECL_FOP(is_nan, isnan)
+		DECL_FOP(sqrt, sqrt)
+		DECL_FOP(add, add)
+		DECL_FOP(sub, sub)
+		DECL_FOP(mul, mul)
+		DECL_FOP(div, div)
+		DECL_FOP(rem, rem)
+		DECL_FOP(eq, eq)
+		DECL_FOP(lt, lt)
+		DECL_FOP(le, le)
+#undef DECL_FOP
 		{NULL, NULL}
 	};
 
@@ -103,6 +89,163 @@ bool SoftFPPass::runOnFunction(llvm::Function &F)
 	return changed;
 }
 
+/* bitcast FP arguments into Integer, bitcast Integer result into FP */
+llvm::Function* SoftFPPass::getCastThunk(
+	llvm::Function* f,
+	llvm::Type	*retType,
+	llvm::Value	*arg0,
+	llvm::Value	*arg1)
+{
+	Module			*m;
+	Function		*ret_f;
+	BasicBlock		*bb;
+	FunctionType		*ft;
+	std::stringstream	namestream;
+	std::string		newname;
+	Argument		*arg_a, *arg_b;
+	Type			*cast_type;
+	Value			*v_ret, *v_arg0, *v_arg1;
+	Function::ArgumentListType::iterator ait;
+
+
+	namestream << "__stub_" << f->getName().str();
+	m = km->module;
+	newname = namestream.str();
+	ret_f = m->getFunction(newname);
+	if (ret_f != NULL) return ret_f;
+
+	std::vector<Type *> argTypes;
+
+	argTypes.push_back(arg0->getType());
+	if (arg1) argTypes.push_back(arg1->getType());
+	ft = FunctionType::get(retType, argTypes, false);
+
+	ret_f = Function::Create(ft, GlobalValue::ExternalLinkage, newname, m);
+	bb = BasicBlock::Create(getGlobalContext(), "entry", ret_f);
+
+	ait = ret_f->getArgumentList().begin();
+	arg_a = &*ait;
+	arg_a->setName("a");
+
+	cast_type = IntegerType::get(
+		getGlobalContext(),
+		f->getArgumentList().front().getType()->
+			getPrimitiveSizeInBits());
+
+	v_arg0 = CastInst::CreateZExtOrBitCast(arg_a, cast_type, "", bb);
+
+	if (arg1) {
+		arg_b = (arg1) ? &*++ait : NULL;
+		arg_b->setName("b");
+		v_arg1 = CastInst::CreateZExtOrBitCast(arg_b, cast_type, "", bb);
+	}
+
+	std::vector<Value*>	callargs;
+
+	callargs.push_back(v_arg0);
+	if (arg1) callargs.push_back(v_arg1);
+
+	v_ret = CallInst::Create(f, callargs, "", bb);
+	v_ret = CastInst::CreateTruncOrBitCast(v_ret, retType, "", bb);
+	ReturnInst::Create(getGlobalContext(), v_ret, bb);
+	km->addFunctionProcessed(ret_f);
+
+	return ret_f;
+}
+
+bool SoftFPPass::replaceFCmp(Instruction *inst)
+{
+	IRBuilder<>	irb(inst);
+	FCmpInst 	*fi;
+	CmpInst::Predicate pred;
+	unsigned	ty_w;
+	Value		*v, *v0, *arg[2];
+	Type		*ty, *ret_type;
+	Function	*f;
+	bool		f_flip, unordered = false;
+
+	ty = inst->getType();
+	v0 = (inst->getNumOperands() > 0) ? inst->getOperand(0) : NULL;
+	ty_w = v0->getType()->getPrimitiveSizeInBits();
+
+	assert (ty_w == 32 || ty_w == 64);
+
+	fi = cast<FCmpInst>(inst);
+
+	std::cerr << "[FP] GET NANs working right\n";
+
+	// Ordered comps return false if either operand is NaN.
+	// Unordered comps return true if either operand is NaN.
+	pred = fi->getPredicate();
+	f_flip = false;
+	/* Ordered AND cond */
+#define GET_F(x)	\
+	f = (ty_w == 32) ? f_fp32##x->function : f_fp64##x->function
+	if (pred == FCmpInst::FCMP_OEQ) {
+		GET_F(eq);
+	} else if (pred == FCmpInst::FCMP_OLT) {
+		GET_F(lt);
+	}  else if (pred == FCmpInst::FCMP_OLE) {
+		GET_F(le);
+		f_flip = true;
+	} else if (pred == FCmpInst::FCMP_OGT) {
+		GET_F(lt);
+		f_flip = true;
+	}
+	/* Unordered OR cond */
+	else if (pred == FCmpInst::FCMP_UEQ) {
+		GET_F(eq);
+		unordered = true;
+	} else if (pred == FCmpInst::FCMP_ULT) {
+		GET_F(lt);
+		unordered = true;
+	}  else if (pred == FCmpInst::FCMP_ULE) {
+		GET_F(le);
+		f_flip = true;
+		unordered = true;
+	} else if (pred == FCmpInst::FCMP_UGT) {
+		GET_F(lt);
+		f_flip = true;
+		unordered = true;
+	} else {
+		inst->dump();
+		assert (0 == 1 && "???");
+	}
+#undef GET_F
+
+	if (f_flip) {
+		arg[1] = v0;
+		arg[0] = inst->getOperand(1);
+	} else {
+		arg[0] = v0;
+		arg[1] = inst->getOperand(1);
+	}
+
+	ret_type = IntegerType::get(ty->getContext(), 1);
+
+	v = CallInst::Create(getCastThunk(f, ret_type, arg[0], arg[1]), arg);
+	std::cerr << "URB DONE\n";
+
+	if (unordered) {
+		Function	*is_nan;
+
+		std::cerr << "UNORDERD!!!\n";
+		is_nan = (ty_w == 32)
+			? f_fp32isnan->function
+			: f_fp64isnan->function;
+		v = irb.CreateOr(
+			irb.CreateCall(
+				getCastThunk(is_nan, ret_type, v0, NULL),
+				v0),
+			v);
+	}
+
+	std::cerr << "REPLACEING\n";
+	ReplaceInstWithInst(inst, static_cast<Instruction*>(v));
+	return true;
+
+}
+
 bool SoftFPPass::replaceInst(Instruction* inst)
 {
 	BasicBlock::iterator	ii(inst);
@@ -137,8 +280,9 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 		ty_w  = ty->getPrimitiveSizeInBits();	\
 		assert(ty_w == 32 || ty_w == 64);	\
 		f = (ty_w == 32) ? f_fp32##y->function : f_fp64##y->function;	\
-\
-		fp_call = CallInst::Create(f, ArrayRef<Value*>(args, 2));	\
+		fp_call = CallInst::Create(				\
+			getCastThunk(f, ty, args[0], args[1]),		\
+			ArrayRef<Value*>(args, 2));	\
 		ReplaceInstWithInst(inst, fp_call);	\
 		return true; }
 
@@ -147,98 +291,7 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 	OP_REPL(Mul, mul)
 	OP_REPL(Div, div)
 
-	case Instruction::FCmp: {
-		FCmpInst 	*fi;
-		CmpInst::Predicate pred;
-		unsigned	ty_w = v0->getType()->getPrimitiveSizeInBits();
-		IRBuilder<>	irb(inst);
-		Value		*v;
-		Function	*f;
-		bool		f_flip, unordered = false;
-
-		fi = cast<FCmpInst>(inst);
-		assert (ty_w == 32 || ty_w == 64);
-
-		std::cerr << "[FP] GET NANs working right: ";
-
-		// Ordered comps return false if either operand is NaN.
-		// Unordered comps return true if either operand is NaN.
-		pred = fi->getPredicate();
-		f_flip = false;
-		/* Ordered AND cond */
-		if (pred == FCmpInst::FCMP_OEQ) {
-			f = (ty_w == 32)
-				? f_fp32eq->function
-				: f_fp64eq->function;
-		} else if (pred == FCmpInst::FCMP_OLT) {
-			f = (ty_w == 32)
-				? f_fp32lt->function
-				: f_fp64lt->function;
-		}  else if (pred == FCmpInst::FCMP_OLE) {
-			f = (ty_w == 32)
-				? f_fp32le->function
-				: f_fp64le->function;
-			f_flip = true;
-		} else if (pred == FCmpInst::FCMP_OGT) {
-			f = (ty_w == 32)
-				? f_fp32lt->function
-				: f_fp64lt->function;
-			f_flip = true;
-		}
-		/* Unordered OR cond */
-		else if (pred == FCmpInst::FCMP_UEQ) {
-			f = (ty_w == 32)
-				? f_fp32eq->function
-				: f_fp64eq->function;
-			unordered = true;
-		} else if (pred == FCmpInst::FCMP_ULT) {
-			f = (ty_w == 32)
-				? f_fp32lt->function
-				: f_fp64lt->function;
-			unordered = true;
-		}  else if (pred == FCmpInst::FCMP_ULE) {
-			f = (ty_w == 32)
-				? f_fp32le->function
-				: f_fp64le->function;
-			f_flip = true;
-			unordered = true;
-		} else if (pred == FCmpInst::FCMP_UGT) {
-			f = (ty_w == 32)
-				? f_fp32lt->function
-				: f_fp64lt->function;
-			f_flip = true;
-			unordered = true;
-		} else {
-			inst->dump();
-			assert (0 == 1 && "???");
-		}
-
-
-		if (f_flip == false) {
-			v = irb.CreateCall2(f, v0, inst->getOperand(1));
-		} else {
-			v = irb.CreateCall2(f, inst->getOperand(1), v0);
-		}
-
-		if (unordered) {
-			Function	*is_nan;
-
-			is_nan = (ty_w == 32)
-				? f_isnan32->function
-				: f_isnan64->function;
-			v = irb.CreateOr(irb.CreateCall(is_nan, v0), v);
-		}
-
-		/* turn result into bool */
-		v = irb.CreateTrunc(
-			v,
-			IntegerType::get(ty->getContext(), 1));
-
-		ReplaceInstWithInst(
-			inst,
-			static_cast<Instruction*>(v));
-		return true;
-	}
+	case Instruction::FCmp: return replaceFCmp(inst);
 
 	case Instruction::FPToSI: {
 		CallInst		*fp_call;
@@ -306,18 +359,8 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 		return true;
 	}
 
-	case Instruction::FRem:
-	case Instruction::FPToUI:
-	case Instruction::UIToFP:
-		inst->dump();
-		std::cerr << "\n=======FUNC======\n";
-		inst->getParent()->getParent()->dump();
-		assert (0 == 1 && "IMPLEMENT ME!!!!!!");
-	break;
-
 	case Instruction::Call: {
 		unsigned	ty_w = v0->getType()->getPrimitiveSizeInBits();
-		IRBuilder<>	irb(inst);
 		CallInst	*ci = static_cast<CallInst*>(inst);
 		Function	*called;
 
@@ -328,13 +371,21 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 		if (called->getName().str() == "sqrt") {
 			Function	*f;
 			f = (ty_w == 32)
-				? f_sqrt32->function
-				: f_sqrt64->function;
-			ReplaceInstWithInst(inst, irb.CreateCall(f, v0));
+				? f_fp32sqrt->function
+				: f_fp64sqrt->function;
+			ReplaceInstWithInst(inst, CallInst::Create(f, v0));
 		}
-	break;
 	}
+	break;
 
+	case Instruction::FRem:
+	case Instruction::FPToUI:
+	case Instruction::UIToFP:
+		inst->dump();
+		std::cerr << "\n=======FUNC======\n";
+		inst->getParent()->getParent()->dump();
+		assert (0 == 1 && "IMPLEMENT ME!!!!!!");
+	break;
 	}
 
 	return false;

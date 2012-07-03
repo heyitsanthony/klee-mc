@@ -58,13 +58,14 @@ Module *klee::linkWithLibrary(
 	Module *module,
 	const std::string &libraryName)
 {
-	Archive			*libArchive;
-	std::string		errMsg;
 	llvm::sys::Path		libraryPath(libraryName);
-	std::set<Module*>	modulesToLoad;
 	Linker			linker("klee", module, 0 /* Linker::Verbose */);
 
 #if 0
+	Archive			*libArchive;
+	std::set<Module*>	modulesToLoad;
+	std::string		errMsg;
+
 	// Load symbol table for library archive
 	libArchive = Archive::OpenAndLoad(
 		libraryPath, module->getContext(), &errMsg);

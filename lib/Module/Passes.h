@@ -88,6 +88,9 @@ private:
 	llvm::Type * retType, llvm::Value * value1,
 	llvm::Value * value2, llvm::BasicBlock * bb);
 
+  void instUAddWithOF(llvm::BasicBlock& b, llvm::IntrinsicInst* ii);
+  void instUMulWithOF(llvm::BasicBlock& b, llvm::IntrinsicInst* ii);
+
   void clean_vacopy(llvm::BasicBlock::iterator& i, llvm::IntrinsicInst* ii);
   bool clean_dup_stoppoint(
   	llvm::BasicBlock::iterator& i, llvm::IntrinsicInst* ii);
@@ -165,6 +168,11 @@ public:
 	virtual bool runOnFunction(llvm::Function &F);
 private:
 	bool replaceInst(llvm::Instruction* inst);
+	bool replaceFCmp(llvm::Instruction* inst);
+	llvm::Function* getCastThunk(
+		llvm::Function* f,
+		llvm::Type* retType,
+		llvm::Value* arg0, llvm::Value* arg1);
 
 	static char	ID;
 
@@ -177,8 +185,8 @@ private:
 			*f_si32tofp32, *f_si32tofp64,
 			*f_si64tofp32, *f_si64tofp64,
 
-			*f_isnan32, *f_isnan64,
-			*f_sqrt32, *f_sqrt64,
+			*f_fp32isnan, *f_fp64isnan,
+			*f_fp32sqrt, *f_fp64sqrt,
 
 			*f_fp32add, *f_fp32sub,
 			*f_fp32mul, *f_fp32div, *f_fp32rem,
