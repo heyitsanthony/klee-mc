@@ -22,5 +22,4 @@ rm guest-last
 ln -s "$GUESTPATH" guest-last
 
 USE_LAST=1	\
-EXTRA_ARGS="$EXTRA_ARGS -symargs -hcache-fdir="`pwd`"/hcache -hcache-pending="`pwd`"/hcache -hcache-sink -hcache-dir="`pwd`"/hcache  -use-hash-solver=true" \
-	./scripts/klee_bigcmd.sh "none"
+EXTRA_ARGS="$EXTRA_ARGS -symargs" ./scripts/klee_bigcmd.sh "none"

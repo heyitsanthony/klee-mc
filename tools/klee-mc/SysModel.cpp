@@ -69,8 +69,6 @@ void SysModel::setModelBool(Module* m, const char* gv_name, bool bv)
 	gv = static_cast<GlobalVariable*>(m->getGlobalVariable(gv_name));
 	assert (gv != NULL);
 
-	gv->dump();
-
 	initer = gv->getInitializer();
 	t = IntegerType::get(
 		getGlobalContext(),

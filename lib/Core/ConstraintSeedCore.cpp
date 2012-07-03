@@ -22,7 +22,7 @@ namespace
 	ConstraintSolveSeeds(
 		"constrseed-solve",
 		llvm::cl::desc("Solve for out of bound constraints."),
-		llvm::cl::init(true));
+		llvm::cl::init(false));
 
 	llvm::cl::opt<std::string>
 	ConstraintSeedDir(
