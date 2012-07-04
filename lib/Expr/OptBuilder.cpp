@@ -1120,6 +1120,11 @@ static ref<Expr> ShlExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 	if (l->getWidth() == Expr::Bool)
 		return AndExpr::create(l, Expr::createIsZero(r));
 
+	if (l->getKind() == Expr::Shl)
+		return ShlExpr::create(
+			l->getKid(0),
+			AddExpr::create(l->getKid(1), r));
+
 	if (const ConstantExpr* ce = dyn_cast<ConstantExpr>(r)) {
 		uint64_t		ce_val;
 
