@@ -493,7 +493,12 @@ public:
 	void extend(const ref<Expr> &index, const ref<Expr> &value);
 
 	int compare(const UpdateList &b) const;
-	Expr::Hash hash() const;
+	Expr::Hash hash() const
+	{
+		if (hashValue) return hashValue;
+		hashValue = computeHash();
+		return hashValue;
+	}
 
 	static UpdateList* fromUpdateStack(
 		const Array* arr,
@@ -502,9 +507,11 @@ public:
 	const ref<Array> getRoot(void) const { return root; }
 	static unsigned getCount(void) { return totalUpdateLists; }
 private:
+	Expr::Hash	computeHash(void) const;
 	void removeDups(const ref<Expr>& index);
 	static unsigned		totalUpdateLists;
 	const ref<Array>	root;
+	mutable Expr::Hash	hashValue;
 public:
 	/// pointer to the most recent update node
 	const UpdateNode *head;

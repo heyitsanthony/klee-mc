@@ -49,6 +49,8 @@ UpdateNode::~UpdateNode()
 
 int UpdateNode::compare(const UpdateNode &b) const
 {
+	if (this == &b) return 0;
+
 	if (int i = index.compare(b.index))
 		return i;
 
@@ -70,6 +72,7 @@ unsigned UpdateList::totalUpdateLists = 0;
 
 UpdateList::UpdateList(const ref<Array>& _root, const UpdateNode *_head)
 : root(_root)
+, hashValue(0)
 , head(_head)
 {
 	if (head != NULL) ++head->refCount;
@@ -78,6 +81,7 @@ UpdateList::UpdateList(const ref<Array>& _root, const UpdateNode *_head)
 
 UpdateList::UpdateList(const UpdateList &b)
 : root(b.root)
+, hashValue(0)
 , head(b.head)
 {
 	if (head != NULL) ++head->refCount;
@@ -111,6 +115,7 @@ UpdateList &UpdateList::operator=(const UpdateList &b)
 
 	root = const_cast<Array*>(b.root.get());
 	head = b.head;
+	hashValue = 0;
 
 	return *this;
 }
@@ -121,10 +126,16 @@ void UpdateList::extend(const ref<Expr> &index, const ref<Expr> &value)
 		--head->refCount;
 	head = new UpdateNode(head, index, value);
 	++head->refCount;
+	hashValue = 0;
 }
 
 int UpdateList::compare(const UpdateList &b) const
 {
+	if (this == &b) return 0;
+
+	if (hash() != b.hash())
+		return (hash() < b.hash()) ? -1 : 1;
+
 	if (*root < *b.root)
 		return -1;
 	if (*b.root < *root)
@@ -147,17 +158,17 @@ int UpdateList::compare(const UpdateList &b) const
 	}
 
 	assert (!an && !bn);
-
 	return 0;
 }
 
-Expr::Hash UpdateList::hash() const
+Expr::Hash UpdateList::computeHash() const
 {
-	unsigned res = 0;
+	Expr::Hash	res;
 
 	if (root.isNull())
-		return 0;
+		return ~0;
 
+	res = 0;
 	if (root->mallocKey.allocSite) {
 		res = root->mallocKey.hash();
 	} else {
