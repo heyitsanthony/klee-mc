@@ -23,6 +23,11 @@ class ExecutionState;
 class Globals
 {
 public:
+	typedef std::map<const llvm::GlobalValue*, ref<klee::ConstantExpr> >
+		globaladdr_map;
+	typedef std::map<const llvm::GlobalValue*, MemoryObject*>
+		globalobj_map;
+
 	Globals(
 		const KModule* km,
 		ExecutionState* init_state,
@@ -30,7 +35,6 @@ public:
 	virtual ~Globals() {}
 
 	void allocGlobalVariableDecl(const llvm::GlobalVariable& gv);
-
 	void allocGlobalVariableNoDecl(const llvm::GlobalVariable& gv);
 
 	MemoryObject* findObject(const llvm::GlobalValue* gv) const;
@@ -38,6 +42,12 @@ public:
 
 	bool isLegalFunction(uint64_t v) const
 	{ return (legalFunctions.count(v) != 0); }
+
+	globaladdr_map::const_iterator beginAddrs(void) const
+	{ return globalAddresses.begin(); }
+
+	globaladdr_map::const_iterator endAddrs(void) const
+	{ return globalAddresses.end(); }
 
 private:
 	Globals() {}
@@ -56,11 +66,6 @@ private:
 	ExecutionState			*init_state;
 	const ExternalDispatcher	*ed;
 
-	typedef std::map<const llvm::GlobalValue*, ref<klee::ConstantExpr> >
-		globaladdr_map;
-	typedef std::map<const llvm::GlobalValue*, MemoryObject*>
-		globalobj_map;
-
 	/// The set of legal function addresses, used to validate function
 	/// pointers. We use the actual Function* address as the function address.
 	std::set<uint64_t> legalFunctions;
@@ -70,8 +75,6 @@ private:
 	/// Map of globals to their bound address. This also includes
 	/// globals that have no representative object (i.e. functions).
 	globaladdr_map globalAddresses;
-
-
 };
 }
 

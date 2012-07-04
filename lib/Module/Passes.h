@@ -172,7 +172,7 @@ private:
 	llvm::Function* getCastThunk(
 		llvm::Function* f,
 		llvm::Type* retType,
-		llvm::Value* arg0, llvm::Value* arg1);
+		llvm::Value* arg0, llvm::Value* arg1 = NULL);
 
 	static char	ID;
 

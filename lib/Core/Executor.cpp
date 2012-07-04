@@ -390,6 +390,19 @@ ref<klee::ConstantExpr> Executor::evalConstant(
 	if (const GlobalValue *gv = dyn_cast<GlobalValue>(c)) {
 		assert (gm != NULL);
 		ref<klee::ConstantExpr>	ce(gm->findAddress(gv));
+
+		if (ce.isNull()) {
+//			foreach (it, gm->beginAddrs(), gm->endAddrs()) {
+//				std::cerr << "===========================\n";
+//				std::cerr << "GV = " << (void*)it->first << '\n';
+//				it->first->dump();
+//				std::cerr << "===========================\n";
+//			}
+			std::cerr << "UGH!!\n";
+			std::cerr << "GV = " << (void*)gv << '\n';
+			gv->dump();
+		}
+
 		assert (!ce.isNull() && "No global address!");
 		return ce;
 	}

@@ -27,7 +27,8 @@ SoftFPPass::SoftFPPass(KModule* _km, const char* _dir)
 , km(_km)
 {
 	llvm::Module	*mod;
-	llvm::sys::Path path(_dir);
+	llvm::sys::Path	path(_dir);
+
 	struct func_names	fns[] = {
 		{"float64_to_float32", &f_fptrunc},
 		{"float32_to_float64", &f_fpext},
@@ -223,8 +224,9 @@ bool SoftFPPass::replaceFCmp(Instruction *inst)
 
 	ret_type = IntegerType::get(ty->getContext(), 1);
 
-	v = CallInst::Create(getCastThunk(f, ret_type, arg[0], arg[1]), arg);
-	std::cerr << "URB DONE\n";
+	v = CallInst::Create(
+		getCastThunk(f, ret_type, arg[0], arg[1]),
+		ArrayRef<Value*>(arg, 2));
 
 	if (unordered) {
 		Function	*is_nan;
@@ -240,7 +242,6 @@ bool SoftFPPass::replaceFCmp(Instruction *inst)
 			v);
 	}
 
-	std::cerr << "REPLACEING\n";
 	ReplaceInstWithInst(inst, static_cast<Instruction*>(v));
 	return true;
 
@@ -261,7 +262,8 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 		assert (ty->getPrimitiveSizeInBits() == 64 &&
 			v0->getType()->getPrimitiveSizeInBits() == 32);
 
-		fpext_call = CallInst::Create(f_fpext->function, v0);
+		fpext_call = CallInst::Create(
+			getCastThunk(f_fpext->function, ty, v0), v0);
 		ReplaceInstWithInst(
 			inst->getParent()->getInstList(),
 			ii,
@@ -283,7 +285,11 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 		fp_call = CallInst::Create(				\
 			getCastThunk(f, ty, args[0], args[1]),		\
 			ArrayRef<Value*>(args, 2));	\
+		std::cerr << "INST: ";			\
+		inst->dump();				\
 		ReplaceInstWithInst(inst, fp_call);	\
+		std::cerr << "FPCALL: ";		\
+		fp_call->dump();			\
 		return true; }
 
 	OP_REPL(Add, add)
@@ -313,7 +319,7 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 				: f_fp64tosi64->function;
 		}
 
-		fp_call = CallInst::Create(f, v0);
+		fp_call = CallInst::Create(getCastThunk(f, ty, v0), v0);
 		ReplaceInstWithInst(inst, fp_call);
 		return true;
 	}
@@ -338,8 +344,10 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 				: f_si64tofp64->function;
 		}
 
-		fp_call = CallInst::Create(f, v0);
+		fp_call = CallInst::Create(getCastThunk(f, ty, v0), v0);
 		ReplaceInstWithInst(inst, fp_call);
+		std::cerr << "HI SI2FP:";
+		fp_call->dump();
 		return true;
 	}
 
@@ -354,7 +362,7 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 		assert (ty_w == 32 &&  v_w == 64);
 
 		f = f_fptrunc->function;
-		fp_call = CallInst::Create(f, v0);
+		fp_call = CallInst::Create(getCastThunk(f, ty, v0), v0);
 		ReplaceInstWithInst(inst, fp_call);
 		return true;
 	}
@@ -373,7 +381,10 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 			f = (ty_w == 32)
 				? f_fp32sqrt->function
 				: f_fp64sqrt->function;
-			ReplaceInstWithInst(inst, CallInst::Create(f, v0));
+			ReplaceInstWithInst(
+				inst,
+				CallInst::Create(
+					getCastThunk(f, ty, v0), v0));
 		}
 	}
 	break;
