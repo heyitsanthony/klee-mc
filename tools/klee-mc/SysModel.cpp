@@ -5,6 +5,7 @@
 #include <llvm/IntrinsicInst.h>
 #include <llvm/LLVMContext.h>
 
+#include "../../lib/Core/Globals.h"
 #include "klee/Internal/Module/KModule.h"
 #include "ExeStateVex.h"
 #include "ExecutorVex.h"
@@ -142,7 +143,8 @@ void FDTModel::installConfig(ExecutionState& state)
 
 	g_utsname = static_cast<GlobalVariable*>(
 		exe->getKModule()->module->getGlobalVariable("g_utsname"));
-	mo = exe->findGlobalObject(g_utsname);
+
+	mo = exe->getGlobals()->findObject(g_utsname);
 	os = state.addressSpace.findWriteableObject(mo);
 
 	assert(os != NULL);

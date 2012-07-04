@@ -411,8 +411,6 @@ public:
 	void addConstrOrDie(ExecutionState &state, ref<Expr> condition);
 
 
-	MemoryObject* findGlobalObject(const llvm::GlobalValue*) const;
-
 	/* returns forked copy of symbolic state st; st is concretized */
 	ExecutionState* concretizeState(ExecutionState& st);
 

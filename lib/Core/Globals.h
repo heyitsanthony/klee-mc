@@ -1,6 +1,8 @@
 #ifndef KLEE_GLOBALS_H
 #define KLEE_GLOBALS_H
 
+#include "klee/Expr.h"
+#include <map>
 #include <set>
 
 namespace llvm
@@ -68,13 +70,13 @@ private:
 
 	/// The set of legal function addresses, used to validate function
 	/// pointers. We use the actual Function* address as the function address.
-	std::set<uint64_t> legalFunctions;
+	mutable std::set<uint64_t> legalFunctions;
+	/// Map of globals to their bound address. This also includes
+	/// globals that have no representative object (i.e. functions).
+	mutable globaladdr_map globalAddresses;
 
 	/// Map of globals to their representative memory object.
 	globalobj_map globalObjects;
-	/// Map of globals to their bound address. This also includes
-	/// globals that have no representative object (i.e. functions).
-	globaladdr_map globalAddresses;
 };
 }
 

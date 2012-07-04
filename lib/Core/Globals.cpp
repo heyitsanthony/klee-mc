@@ -159,6 +159,7 @@ MemoryObject *Globals::addExternalObject(
 
 void Globals::allocGlobalVariableDecl(const GlobalVariable& gv)
 {
+	ObjectState	*os;
 	ObjectPair	op;
 	Type		*ty;
 	uint64_t	size;
@@ -210,14 +211,13 @@ void Globals::allocGlobalVariableDecl(const GlobalVariable& gv)
 		klee_warning(
 			"ERROR: unable to get symbol(%s) while loading globals.",
 			gv.getName().data());
-	} else {
-		ObjectState	*os;
-		os = init_state->addressSpace.getWriteable(op);
-		for (unsigned offset=0; offset < op_mo(op)->size; offset++) {
-			//os->write8(offset, ((unsigned char*)addr)[offset]);
-			init_state->write8(
-				os, offset, ((unsigned char*)addr)[offset]);
-		}
+		return;
+	}
+
+	os = init_state->addressSpace.getWriteable(op);
+	for (unsigned offset=0; offset < op_mo(op)->size; offset++) {
+		//os->write8(offset, ((unsigned char*)addr)[offset]);
+		init_state->write8(os, offset, ((unsigned char*)addr)[offset]);
 	}
 }
 
@@ -369,8 +369,22 @@ ref<klee::ConstantExpr> Globals::findAddress(
 	const llvm::GlobalValue* gv) const
 {
 	globaladdr_map::const_iterator it(globalAddresses.find(gv));
+	Function	*f;
 
-	if (it == globalAddresses.end()) return NULL;
+	if (it != globalAddresses.end()) return it->second;
 
-	return it->second;
+	/* this is stupid, but it shouldn't happen often */
+	foreach (it, kmodule->module->begin(), kmodule->module->end()) {
+		f = it;
+		if (f == gv) break;
+		f = NULL;
+	}
+	if (f == NULL) return NULL;
+
+	ref<ConstantExpr> addr(Expr::createPointer((uint64_t) (void*) f));
+
+	globalAddresses.insert(std::make_pair(f, addr));
+	legalFunctions.insert((uint64_t) (void*) f);
+
+	return addr;
 }

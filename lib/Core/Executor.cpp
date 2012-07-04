@@ -68,15 +68,15 @@ extern double	MaxSTPTime;
 
 namespace llvm
 {
-  namespace cl
-  {
-    template <>
-    class parser<sockaddr_in_opt> : public basic_parser<sockaddr_in_opt> {
-    public:
-      bool parse(llvm::cl::Option &O, const char *ArgName, const std::string &Arg, sockaddr_in_opt &Val);
-      virtual const char *getValueName() const { return "sockaddr_in"; }
-    };
-  }
+namespace cl
+{
+template <>
+class parser<sockaddr_in_opt> : public basic_parser<sockaddr_in_opt> {
+public:
+bool parse(Option&, const char *, const std::string&, sockaddr_in_opt &);
+virtual const char *getValueName() const { return "sockaddr_in"; }
+};
+}
 }
 
 unsigned MakeConcreteSymbolic;
@@ -113,12 +113,10 @@ namespace {
   ChkConstraints("chk-constraints", cl::init(false));
 
   cl::opt<bool>
-  DumpStatesOnHalt("dump-states-on-halt",
-                   cl::init(true));
+  DumpStatesOnHalt("dump-states-on-halt", cl::init(true));
 
   cl::opt<bool>
   PreferCex("prefer-cex", cl::init(true));
-
 
   cl::opt<bool>
   DebugPrintInstructions("debug-print-instructions",
@@ -127,8 +125,8 @@ namespace {
   DebugCheckForImpliedValues("debug-check-for-implied-values");
 
   cl::opt<bool>
-  OnlyOutputStatesCoveringNew("only-output-states-covering-new",
-                              cl::init(false));
+  OnlyOutputStatesCoveringNew(
+  	"only-output-states-covering-new", cl::init(false));
 
   cl::opt<bool>
   UseBranchHints(
@@ -144,26 +142,28 @@ namespace {
 
 
   cl::opt<double>
-  MaxInstructionTime("max-instruction-time",
-                     cl::desc("Only allow a single instruction to take this much time (default=0 (off))"),
-                     cl::init(0));
+  MaxInstructionTime(
+	"max-instruction-time",
+	cl::desc("Limit single instructions to this much time (default=0 (off))"),
+	cl::init(0));
 
   cl::opt<unsigned int>
-  StopAfterNInstructions("stop-after-n-instructions",
-                         cl::desc("Stop execution after specified number of instructions (0=off)"),
-                         cl::init(0));
+  StopAfterNInstructions(
+	"stop-after-n-instructions",
+	cl::desc("Stop execution after number of instructions (0=off)"),
+	cl::init(0));
 
   cl::opt<unsigned>
   MaxMemory("max-memory",
-            cl::desc("Refuse to fork when more above this about of memory (in MB, 0=off)"),
-            cl::init(0));
+	cl::desc("Refuse to fork when above amount (in MB, 0=off)"),
+	cl::init(0));
 
   // use 'external storage' because also needed by tools/klee/main.cpp
   cl::opt<bool, true>
   WriteTracesProxy("write-traces",
-           cl::desc("Write .trace file for each terminated state"),
-           cl::location(WriteTraces),
-           cl::init(false));
+	cl::desc("Write .trace file for each terminated state"),
+	cl::location(WriteTraces),
+	cl::init(false));
 
   cl::opt<bool>
   IgnoreBranchConstraints(
@@ -188,10 +188,7 @@ namespace {
   AllExternalWarnings("all-external-warnings");
 
   cl::opt<bool>
-  UseIVC(
-  	"use-ivc",
-	cl::desc("Implied Value Concretization"),
-	cl::init(true));
+  UseIVC("use-ivc", cl::desc("Implied Value Concretization"), cl::init(true));
 
   cl::opt<bool>
   UseRuleBuilder(
@@ -392,13 +389,7 @@ ref<klee::ConstantExpr> Executor::evalConstant(
 		ref<klee::ConstantExpr>	ce(gm->findAddress(gv));
 
 		if (ce.isNull()) {
-//			foreach (it, gm->beginAddrs(), gm->endAddrs()) {
-//				std::cerr << "===========================\n";
-//				std::cerr << "GV = " << (void*)it->first << '\n';
-//				it->first->dump();
-//				std::cerr << "===========================\n";
-//			}
-			std::cerr << "UGH!!\n";
+			std::cerr << "Bad global, no cookies.\n";
 			std::cerr << "GV = " << (void*)gv << '\n';
 			gv->dump();
 		}
@@ -2886,12 +2877,6 @@ void Executor::executeFree(
 	}
 }
 
-MemoryObject* Executor::findGlobalObject(const llvm::GlobalValue* gv) const
-{
-	assert (globals != NULL);
-	return globals->findObject(gv);
-}
-
 #include <malloc.h>
 void Executor::handleMemoryPID(ExecutionState* &state)
 {
@@ -3040,10 +3025,9 @@ bool Executor::hasState(const ExecutionState* es) const
 	if (getCurrentState() == es)
 		return true;
 
-	foreach (it, beginStates(), endStates()) {
+	foreach (it, beginStates(), endStates())
 		if ((*it) == es)
 			return true;
-	}
 
 	return false;
 }
