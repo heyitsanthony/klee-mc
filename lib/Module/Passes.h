@@ -174,6 +174,17 @@ private:
 		llvm::Type* retType,
 		llvm::Value* arg0, llvm::Value* arg1 = NULL);
 
+	llvm::Function* getUnorderedStub(
+		llvm::Function* f,
+		llvm::Value* arg0,
+		llvm::Value* arg1);
+
+	llvm::BasicBlock* setupFuncEntry(
+		const std::string& newname,
+		llvm::Type* retType,
+		llvm::Value* arg0, llvm::Value* arg1,
+		llvm::Value** v_arg0, llvm::Value** v_arg1);
+
 	static char	ID;
 
 	KModule		*km;

@@ -97,52 +97,35 @@ llvm::Function* SoftFPPass::getCastThunk(
 	llvm::Value	*arg0,
 	llvm::Value	*arg1)
 {
-	Module			*m;
 	Function		*ret_f;
 	BasicBlock		*bb;
-	FunctionType		*ft;
+	Type			*cast_type;
 	std::stringstream	namestream;
 	std::string		newname;
-	Argument		*arg_a, *arg_b;
-	Type			*cast_type;
 	Value			*v_ret, *v_arg0, *v_arg1;
-	Function::ArgumentListType::iterator ait;
 
+	assert (f != NULL);
 
 	namestream << "__stub_" << f->getName().str();
-	m = km->module;
 	newname = namestream.str();
-	ret_f = m->getFunction(newname);
+
+	ret_f = km->module->getFunction(newname);
 	if (ret_f != NULL) return ret_f;
 
-	std::vector<Type *> argTypes;
-
-	argTypes.push_back(arg0->getType());
-	if (arg1) argTypes.push_back(arg1->getType());
-	ft = FunctionType::get(retType, argTypes, false);
-
-	ret_f = Function::Create(ft, GlobalValue::ExternalLinkage, newname, m);
-	bb = BasicBlock::Create(getGlobalContext(), "entry", ret_f);
-
-	ait = ret_f->getArgumentList().begin();
-	arg_a = &*ait;
-	arg_a->setName("a");
+	bb = setupFuncEntry(newname, retType, arg0, arg1, &v_arg0, &v_arg1);
+	ret_f = bb->getParent();
 
 	cast_type = IntegerType::get(
 		getGlobalContext(),
 		f->getArgumentList().front().getType()->
 			getPrimitiveSizeInBits());
 
-	v_arg0 = CastInst::CreateZExtOrBitCast(arg_a, cast_type, "", bb);
-
-	if (arg1) {
-		arg_b = (arg1) ? &*++ait : NULL;
-		arg_b->setName("b");
-		v_arg1 = CastInst::CreateZExtOrBitCast(arg_b, cast_type, "", bb);
-	}
+	v_arg0 = CastInst::CreateZExtOrBitCast(v_arg0, cast_type, "", bb);
+	if (arg1)
+		v_arg1 = CastInst::CreateZExtOrBitCast(
+			v_arg0, cast_type, "", bb);
 
 	std::vector<Value*>	callargs;
-
 	callargs.push_back(v_arg0);
 	if (arg1) callargs.push_back(v_arg1);
 
@@ -156,12 +139,11 @@ llvm::Function* SoftFPPass::getCastThunk(
 
 bool SoftFPPass::replaceFCmp(Instruction *inst)
 {
-	IRBuilder<>	irb(inst);
 	FCmpInst 	*fi;
 	CmpInst::Predicate pred;
 	unsigned	ty_w;
 	Value		*v, *v0, *arg[2];
-	Type		*ty, *ret_type;
+	Type		*ty;
 	Function	*f;
 	bool		f_flip, unordered = false;
 
@@ -222,30 +204,113 @@ bool SoftFPPass::replaceFCmp(Instruction *inst)
 		arg[1] = inst->getOperand(1);
 	}
 
-	ret_type = IntegerType::get(ty->getContext(), 1);
-
-	v = CallInst::Create(
-		getCastThunk(f, ret_type, arg[0], arg[1]),
-		ArrayRef<Value*>(arg, 2));
-
-	if (unordered) {
-		Function	*is_nan;
-
-		std::cerr << "UNORDERD!!!\n";
-		is_nan = (ty_w == 32)
-			? f_fp32isnan->function
-			: f_fp64isnan->function;
-		v = irb.CreateOr(
-			irb.CreateCall(
-				getCastThunk(is_nan, ret_type, v0, NULL),
-				v0),
-			v);
+	if (!unordered) {
+		Type	*ret_type;
+		ret_type = IntegerType::get(ty->getContext(), 1);
+		v = CallInst::Create(
+			getCastThunk(f, ret_type, arg[0], arg[1]),
+			ArrayRef<Value*>(arg, 2));
+	} else {
+		/* FFFFFFFFFFUCK */
+		v = CallInst::Create(
+			getUnorderedStub(f, arg[0], arg[1]),
+			ArrayRef<Value*>(arg, 2));
 	}
 
 	ReplaceInstWithInst(inst, static_cast<Instruction*>(v));
 	return true;
 
 }
+
+Function* SoftFPPass::getUnorderedStub(
+	Function* f, Value* arg0, Value* arg1)
+{
+	Function		*ret_f, *thunk_f;
+	BasicBlock		*bb;
+	Function		*is_nan;
+	Value			*v_arg[2], *v_cmp, *v_nan, *v;
+	Type			*ret_type;
+	unsigned		ty_w;
+	std::stringstream	namestream;
+	std::string		newname;
+
+	namestream << "__stub_UO_" << f->getName().str();
+	newname = namestream.str();
+
+	ret_f = km->module->getFunction(newname);
+	if (ret_f != NULL) return ret_f;
+
+	ret_type = IntegerType::get(getGlobalContext(), 1);
+	bb = setupFuncEntry(
+		newname, ret_type, arg0, arg1, &v_arg[0], &v_arg[1]);
+
+	ret_f = bb->getParent();
+
+	ty_w = arg0->getType()->getPrimitiveSizeInBits();
+	is_nan = (ty_w == 32)
+		? f_fp32isnan->function
+		: f_fp64isnan->function;
+
+	/* TODO: proper 'or' short circuiting */
+	v_nan = CallInst::Create(
+		getCastThunk(is_nan, ret_type, v_arg[0], NULL),
+		ArrayRef<Value*>(&v_arg[0],1),
+		"",
+		bb);
+
+	thunk_f = getCastThunk(f, ret_type, v_arg[0], v_arg[1]);
+	assert (thunk_f != NULL);
+	v_cmp = CallInst::Create(thunk_f, ArrayRef<Value*>(v_arg, 2), "", bb);
+
+	v = BinaryOperator::Create(BinaryOperator::Or, v_nan, v_cmp, "", bb);
+
+	ReturnInst::Create(getGlobalContext(), v, bb);
+	km->addFunctionProcessed(ret_f);
+
+	assert (ret_f != NULL);
+	return ret_f;
+}
+
+
+BasicBlock* SoftFPPass::setupFuncEntry(
+	const std::string& newname,
+	Type* retType,
+	Value* arg0, Value* arg1,
+	Value** v_arg0, Value** v_arg1)
+{
+	Function		*ret_f;
+	FunctionType		*ft;
+	BasicBlock		*bb;
+	Argument		*arg_a, *arg_b;
+	std::vector<Type *>	argTypes;
+	Function::ArgumentListType::iterator ait;
+
+	argTypes.push_back(arg0->getType());
+	if (arg1) argTypes.push_back(arg1->getType());
+	ft = FunctionType::get(retType, argTypes, false);
+
+	ret_f = Function::Create(
+		ft,
+		GlobalValue::ExternalLinkage,
+		newname,
+		km->module);
+	bb = BasicBlock::Create(getGlobalContext(), "entry", ret_f);
+
+	ait = ret_f->getArgumentList().begin();
+	arg_a = &*ait;
+	arg_a->setName("a");
+	*v_arg0 = arg_a;
+
+	if (arg1) {
+		arg_b = (arg1) ? &*++ait : NULL;
+		arg_b->setName("b");
+		*v_arg1 = arg_b;
+	} else
+		*v_arg1 = NULL;
+	return bb;
+}
+
+
 
 bool SoftFPPass::replaceInst(Instruction* inst)
 {
@@ -285,11 +350,7 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 		fp_call = CallInst::Create(				\
 			getCastThunk(f, ty, args[0], args[1]),		\
 			ArrayRef<Value*>(args, 2));	\
-		std::cerr << "INST: ";			\
-		inst->dump();				\
 		ReplaceInstWithInst(inst, fp_call);	\
-		std::cerr << "FPCALL: ";		\
-		fp_call->dump();			\
 		return true; }
 
 	OP_REPL(Add, add)
@@ -346,8 +407,6 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 
 		fp_call = CallInst::Create(getCastThunk(f, ty, v0), v0);
 		ReplaceInstWithInst(inst, fp_call);
-		std::cerr << "HI SI2FP:";
-		fp_call->dump();
 		return true;
 	}
 
