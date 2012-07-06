@@ -76,9 +76,9 @@ public:
 
 	bool isValid(const Assignment& a) const;
 
-	static unsigned getReplacements(void) { return replacement_c; }
+	static unsigned getReplacements(void) { return simplify_c; }
 	static unsigned getTimeouts(void) { return timeout_c; }
-	static void incReplacements(void) { replacement_c++; }
+	static void incReplacements(void) { simplify_c++; }
 private:
 	constraints_ty constraints;
 	mutable ExprTimer<ExprReplaceVisitor2>* simplifier;
@@ -90,7 +90,8 @@ private:
 	void invalidateSimplifier(void) const;
 	void setupSimplifier(void) const;
 
-	static unsigned replacement_c;
+	static unsigned simplify_c;	/* number of simplify calls */
+	static unsigned simplified_c;	/* number of expressions simplified */
 	static unsigned timeout_c;
 };
 

@@ -16,6 +16,8 @@
 using namespace klee;
 using namespace llvm;
 
+unsigned KFunction::inst_clock = 0;
+
 static int getOperandNum(
 	Value *v,
         const std::map<Instruction*, unsigned> &regMap,
@@ -47,6 +49,8 @@ KFunction::KFunction(llvm::Function *_function, KModule *km)
 	unsigned arg_c = 0;
 	unsigned rnum = numArgs;
 	unsigned ins_num = 0;
+
+	inst_tick = inst_clock++;
 
 	foreach (bbit, function->begin(), function->end()) {
 		BasicBlock *bb = bbit;
@@ -127,4 +131,13 @@ KFunction::~KFunction()
 
 	delete[] arguments;
 	delete[] instructions;
+}
+
+unsigned KFunction::getUncov(void) const
+{
+	unsigned ret = 0;
+	for (unsigned i = 0; i < numInstructions; i++)
+		if (instructions[i]->isCovered() == false)
+			ret++;
+	return ret;
 }

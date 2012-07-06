@@ -57,7 +57,7 @@ MemoryObject *HeapMM::allocate(
 		hitPair = heapObjects.equal_range(mallocKey);
 		foreach (hit, hitPair.first, hitPair.second) {
 			HeapObject *curObj = hit->second;
-			MallocKey sigh = hit->first;
+			// MallocKey sigh = hit->first;
 
 			// we should never have more than
 			// one candidate object with the same size

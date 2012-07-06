@@ -332,8 +332,6 @@ private:
 	unsigned incomingBBIndex;
 
 	/// ordered list of symbolics: used to generate test cases.
-	//
-	// FIXME: Move to a shared list structure (not critical).
 	std::vector< SymbolicArray > symbolics;
 	typedef std::map<const Array*, const MemoryObject*> arr2sym_map;
 	arr2sym_map	arr2sym;
@@ -346,6 +344,8 @@ private:
 	bool	onFreshBranch;
 
 	unsigned		canary;
+	// ConstraintManager	concrete_constraints;
+
 };
 
 }

@@ -259,8 +259,8 @@ bool Forks::forkSetupNoSeeding(ExecutionState& current, struct ForkInfo& fi)
 	const char* reason = 0;
 	if (MaxMemoryInhibit && exe.isAtMemoryLimit())
 		reason = "memory cap exceeded";
-	if (current.forkDisabled)
-		reason = "fork disabled on current path";
+//	if (current.forkDisabled)
+//		reason = "fork disabled on current path";
 	if (exe.getInhibitForking())
 		reason = "fork disabled globally";
 	if (MaxForks!=~0u && stats::forks >= MaxForks)
@@ -530,6 +530,12 @@ void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 
 		assert (!fi.forkCompact || ReplayInhibitedForks);
 
+		if (current.forkDisabled) {
+			fi.res[condIndex] = false;
+			continue;
+		}
+
+
 		// Do actual state forking
 		baseState = &current;
 		newState = pureFork(current, fi.forkCompact);
@@ -548,7 +554,7 @@ void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 
 	}
 
-	if (fi.validTargets < 2)
+	if (fi.validTargets < 2 || current.forkDisabled)
 		return;
 
 	/* Track forking condition transitions */

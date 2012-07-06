@@ -59,6 +59,15 @@ public:
 	void addExit(const KFunction* ex) { exits_seen.insert(ex); }
 	exit_iter_ty beginExits(void) const { return exits_seen.begin(); }
 	exit_iter_ty endExits(void) const { return exits_seen.end(); }
+	unsigned getUncov(void) const;
+
+
+	static unsigned getClock(void) { return inst_clock; }
+	unsigned getTick(void) const { return inst_tick; }
+
+private:
+	static unsigned		inst_clock;
+	unsigned		inst_tick;
 };
 }
 

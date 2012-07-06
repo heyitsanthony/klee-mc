@@ -37,7 +37,7 @@ bool ExprBiasPredictor::predict(const StateBranch& sb, bool& hint)
 	if (ce == NULL)
 		return false;
 
-	/* likely to be (eq false (x == y)) or something. 
+	/* likely to be (eq false (x == y)) or something.
 	 * this would induce a bias we don't want toward certain equalities. */
 	if (ce->getWidth() == 1)
 		return false;
@@ -82,27 +82,18 @@ bool KBrPredictor::predict(const StateBranch& sb, bool& hint)
 	fresh_false = (kbr->hasFoundFalse() == false);
 	fresh_true = (kbr->hasFoundTrue() == false);
 
-	/* no freshbranch hint to give */
 	if (!fresh_false && !fresh_true) {
-		unsigned	hit_t, hit_f;
-
-		hit_t = kbr->getTrueHits();
-		hit_f = kbr->getFalseHits();
-
-		if (hit_t > 1) {
-			if (hit_t == hit_f)
-				return false;
+		if (kbr->getTrueFollows() == 0) {
+			hint = true;
+			return true;
 		}
 
-		/* retry */
-		if (hit_t == 1)
-			hint = true;
-		else if (hit_f == 1)
+		if (kbr->getFalseFollows() == 0) {
 			hint = false;
-		else
-			return false;
+			return true;
+		}
 
-		return true;
+		return false;
 	}
 
 	if (fresh_false && fresh_true) {
@@ -164,3 +155,36 @@ bool CondPredictor::predict(const StateBranch& sb, bool& hint)
 
 	return false;
 }
+
+bool FollowedPredictor::predict(const StateBranch& sb, bool& hint)
+{
+	KBrInstruction	*kbr;
+
+	kbr = static_cast<KBrInstruction*>(sb.ki);
+	if (kbr->getTrueFollows() == kbr->getFalseFollows())
+		return false;
+
+	hint = (kbr->getTrueFollows() < kbr->getFalseFollows());
+	return true;
+}
+
+bool SkewPredictor::predict(const StateBranch& sb, bool& hint)
+{
+	skewmap_ty::iterator	it;
+	double			bias;
+
+	predicts++;
+	if ((predicts % 128) == 0)
+		brSkews.clear();
+
+	it = brSkews.find(sb.ki);
+	if (it == brSkews.end()) {
+		bias = theRNG.getDouble();
+		brSkews.insert(std::make_pair(sb.ki, bias));
+	} else
+		bias = it->second;
+
+	hint = theRNG.getDouble() < bias;
+	return true;
+}
+

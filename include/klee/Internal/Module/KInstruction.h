@@ -47,7 +47,6 @@ public:
 
 	bool isCovered(void) const { return covered; }
 	void cover(void) { covered = true; }
-
 protected:
 	KInstruction() : covered(false) {}
 	KInstruction(llvm::Instruction* inst, unsigned dest);
@@ -64,7 +63,6 @@ private:
 
 	/// Destination register index.
 	unsigned		dest;
-
 	bool			covered;
 };
 
@@ -100,7 +98,10 @@ public:
 	KBrInstruction(llvm::Instruction* ins, unsigned dest)
 	: KInstruction(ins, dest)
 	, seen_expr(false)
-	{ all_kbr.push_back(this); }
+	{
+		all_kbr.push_back(this);
+		kbr_c++;
+	}
 
 	virtual ~KBrInstruction() {}
 
@@ -112,6 +113,12 @@ public:
 	bool hasFoundFalse(void) const { return br_false.hits != 0; }
 	unsigned getTrueHits(void) const { return br_true.hits; }
 	unsigned getFalseHits(void) const { return br_false.hits; }
+
+	void followedTrue(void) { br_true.follows++; }
+	void followedFalse(void) { br_false.follows++;}
+
+	unsigned getTrueFollows(void) const { return br_true.follows; }
+	unsigned getFalseFollows(void) const { return br_false.follows; }
 
 	uint64_t getTrueMinInst(void) const { return br_true.min_inst; }
 	uint64_t getFalseMinInst(void) const { return br_false.min_inst; }
@@ -126,12 +133,18 @@ public:
 	{ return all_kbr.begin(); }
 	static kbr_list_ty::const_iterator endBr(void)
 	{ return all_kbr.end(); }
+
+	static double getForkMean(void);
+	static double getForkStdDev(void);
+	static double getForkMedian(void);
 private:
 	struct BrType {
-		BrType() : hits(0), min_inst(~0), max_inst(0) {}
+		BrType()
+		: hits(0), min_inst(~0), max_inst(0), follows(0) {}
 		unsigned	hits;
 		uint64_t	min_inst;
 		uint64_t	max_inst;
+		unsigned	follows;
 	};
 
 	void foundBr(BrType& brt, uint64_t inst_clock)
@@ -151,6 +164,7 @@ private:
 	ExprHashSet		expr_set;
 
 	static kbr_list_ty	all_kbr;
+	static unsigned		kbr_c;
 };
 
 class KGEPInstruction : public KInstruction

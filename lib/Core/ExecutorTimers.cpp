@@ -325,8 +325,8 @@ public:
 
 			parent_f = kbr->getInst()->getParent()->getParent();
 			(*os)	<< exe->getPrettyName(parent_f)
-				<< ' ' << kbr->getTrueHits()
-				<< ' ' << kbr->getFalseHits()
+				<< ' ' << kbr->getTrueFollows()
+				<< ' ' << kbr->getFalseFollows()
 				<< ' ' << kbr->getForkHits()
 				<< ' ' << kbr->getTrueMinInst()
 				<< ' ' << kbr->getFalseMinInst()

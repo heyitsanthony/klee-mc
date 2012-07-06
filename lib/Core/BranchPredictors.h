@@ -30,6 +30,27 @@ private:
 };
 
 
+class SkewPredictor : public BranchPredictor
+{
+public:
+	typedef std::map<const KInstruction*, double>	skewmap_ty;
+	SkewPredictor(void) : predicts(0) {}
+	virtual ~SkewPredictor(void) {}
+	virtual bool predict(const StateBranch& sb, bool& hint);
+private:
+	skewmap_ty	brSkews;
+	unsigned	predicts;
+};
+
+class FollowedPredictor : public BranchPredictor
+{
+public:
+	FollowedPredictor(void) {}
+	virtual ~FollowedPredictor(void) {}
+	virtual bool predict(const StateBranch& sb, bool& hint);
+private:
+};
+
 class ExprBiasPredictor : public BranchPredictor
 {
 public:

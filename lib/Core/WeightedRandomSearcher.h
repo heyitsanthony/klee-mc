@@ -30,7 +30,7 @@ private:
 #define DECL_WEIGHT(x,y) 		\
 class x##Weight : public WeightFunc {	\
 public:	\
-	x##Weight() : WeightFunc(#x, y), exe(NULL) {}	\
+	x##Weight() : WeightFunc(#x, y), exe(NULL) { } \
 	x##Weight(Executor* _exe) : WeightFunc(#x, y), exe(_exe) {} \
 	virtual double weigh(const ExecutionState* es) const;	\
 	virtual WeightFunc* copy(void) const { return new x##Weight(exe); }\
@@ -50,6 +50,7 @@ DECL_WEIGHT(Constraint, true)
 DECL_WEIGHT(FreshBranch, true)
 DECL_WEIGHT(StateInstCount, true)
 DECL_WEIGHT(CondSucc, true)
+DECL_WEIGHT(Uncov, true)
 
 class Executor;
 
@@ -131,7 +132,7 @@ class WeightedRandomSearcher : public Searcher
 {
 private:
 	Executor			&executor;
-	DiscretePDF<ExecutionState*>	*states;
+	DiscretePDF<ExecutionState*>	*pdf;
 	WeightFunc			*weigh_func;
 	double getWeight(ExecutionState*);
 

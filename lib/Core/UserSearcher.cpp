@@ -72,6 +72,7 @@ DECL_SEARCH_OPT(Trough, "trough", "TR");
 DECL_SEARCH_OPT(FrontierTrough, "ftrough", "FTR");
 DECL_SEARCH_OPT(CondSucc, "cond", "CD");
 DECL_SEARCH_OPT(BranchIns, "brins", "BI");
+DECL_SEARCH_OPT(Uncov, "uncov", "UNC");
 
 #define SEARCH_HISTO	new RescanSearcher(new HistoPrioritizer(executor))
 DECL_SEARCH_OPT(Histo, "histo", "HS");
@@ -223,6 +224,22 @@ bool UserSearcher::userSearcherRequiresMD2U() {
 				new Weight2Prioritizer<	\
 					StateInstCountWeight>(-1.0)),	\
 			100)
+
+//#define BRANCHINS_SEARCHER	\
+//	new RescanSearcher(	\
+//		new Weight2Prioritizer<BranchWeight>(	\
+//			new BranchWeight(&executor), 1000.0)) \
+//
+#define BRANCHINS_SEARCHER	\
+	new WeightedRandomSearcher(executor, new BranchWeight(&executor))
+//#define UNCOV_SEARCHER	\
+//	new RescanSearcher(	\
+//		new Weight2Prioritizer<UncovWeight>(	\
+//				new UncovWeight(), 10000.0))
+#define UNCOV_SEARCHER	\
+	new WeightedRandomSearcher(executor, new UncovWeight())
+
+
 /* Research quality */
 Searcher* UserSearcher::setupInterleavedSearcher(
 	Executor& executor, Searcher* searcher)
@@ -234,12 +251,11 @@ Searcher* UserSearcher::setupInterleavedSearcher(
 
 	PUSH_ILEAV_IF_SET(Histo, SEARCH_HISTO);
 
-	PUSH_ILEAV_IF_SET(
-		BranchIns,
-		new RescanSearcher(
-			new Weight2Prioritizer<BranchWeight>(
-				new BranchWeight(&executor),
-				1000.0)));
+	PUSH_ILEAV_IF_SET(BranchIns, BRANCHINS_SEARCHER);
+
+	PUSH_ILEAV_IF_SET(Uncov, UNCOV_SEARCHER);
+
+
 	PUSH_ILEAV_IF_SET(
 		CondSucc,
 		new RescanSearcher(
@@ -344,10 +360,9 @@ Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 	if (UseFreshBranchSearch) {
 		searcher = FRESH_BRANCH_SEARCHER;
 	} else if (UseBranchInsSearch) {
-		searcher = new RescanSearcher(
-			new Weight2Prioritizer<BranchWeight>(
-				new BranchWeight(&executor),
-				1000.0));
+		searcher = BRANCHINS_SEARCHER;
+	} else if (UseUncovSearch) {
+		searcher = UNCOV_SEARCHER;
 	} else if (UseCondSuccSearch) {
 		searcher = new RescanSearcher(
 			new Weight2Prioritizer<CondSuccWeight>(

@@ -36,7 +36,8 @@ namespace {
 		llvm::cl::init(true));
 }
 
-unsigned ConstraintManager::replacement_c = 0;
+unsigned ConstraintManager::simplify_c = 0;
+unsigned ConstraintManager::simplified_c = 0;
 unsigned ConstraintManager::timeout_c = 0;
 
 namespace klee
@@ -278,11 +279,15 @@ ref<Expr> ConstraintManager::simplifyExpr(ref<Expr> e) const
 		setupSimplifier();
 
 	assert (!Expr::errors);
+	simplify_c++;
 	ret = simplifier->apply(e);
 	if (ret.isNull()) {
 		timeout_c++;
 		return e;
 	}
+
+	if (ret->hash() != e->hash())
+		simplified_c++;
 
 	if (Expr::errors) {
 		std::cerr << "CONSTRAINT MANAGER RUINED EXPR!!!!!!\n";

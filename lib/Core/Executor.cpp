@@ -196,6 +196,11 @@ namespace {
 	cl::desc("Machine-learned peephole expr builder"),
   	cl::init(false));
 
+  cl::opt<bool>
+  QuenchRunaways(
+  	"quench-runaways",
+	cl::desc("Drop states at heavily forking instructions."),
+	cl::init(true));
 }
 
 namespace klee { RNG theRNG; }
@@ -282,8 +287,10 @@ Executor::Executor(InterpreterHandler *ih)
 		/* unexplored condition path should have higher priority
 		 * than unexplored condition value. */
 		lp->add(new KBrPredictor());
+	//	lp->add(new FollowedPredictor());
 		lp->add(new CondPredictor(forking));
-	// I'm not convinced this is wise.
+	// I'm not convinced these are any good.
+	//	lp->add(new SkewPredictor());
 	//	lp->add(new ExprBiasPredictor());
 		lp->add(new RandomPredictor());
 		brPredict = lp;
@@ -807,6 +814,11 @@ void Executor::markBranchVisited(
 		kbr->foundFalse(state.totalInsts);
 	}
 
+	if (branches.first == &state)
+		kbr->followedTrue();
+	else if (branches.second == &state)
+		kbr->followedFalse();
+
 	if (UseBranchHints && fresh && !got_fresh)
 		std::cerr << "[Branch] XXX: MISSED FRESH BRANCH!!!\n";
 }
@@ -972,6 +984,40 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 	return new_st;
 }
 
+#define RUNAWAY_REFRESH	32
+static bool isRunawayBranch(KInstruction* ki)
+{
+	KBrInstruction	*kbr;
+	double		stddevs;
+	static int	count = 0;
+	static double	stddev, mean, median;
+	unsigned	forks, rand_mod;
+
+	kbr = static_cast<KBrInstruction*>(ki);
+	if ((count++ % RUNAWAY_REFRESH) == 0) {
+		stddev = KBrInstruction::getForkStdDev();
+		mean = KBrInstruction::getForkMean();
+		median = KBrInstruction::getForkMedian();
+	}
+
+	if (stddev == 0)
+		return false;
+
+	forks = kbr->getForkHits();
+	if (forks <= 5)
+		return false;
+
+	stddevs = ((double)(kbr->getForkHits() - mean))/stddev;
+	if (stddevs < 1.0)
+		return false;
+
+	rand_mod = (1 << (1+(int)(stddevs*((double)forks/(median)))));
+	if ((rand() % rand_mod) == 0)
+		return false;
+
+	return true;
+}
+
 void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 {
 	BranchInst	*bi = cast<BranchInst>(ki->getInst());
@@ -988,6 +1034,12 @@ void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 		branchHint = !branchHint;
 		if (branchHint) forking->setPreferTrueState(true);
 		else forking->setPreferFalseState(true);
+	}
+
+	if (	QuenchRunaways &&
+		cond.value->getKind() != Expr::Constant)
+	{
+		state.forkDisabled = isRunawayBranch(ki);
 	}
 
 	if (	IgnoreBranchConstraints &&

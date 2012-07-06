@@ -10,7 +10,9 @@
 #include <llvm/DerivedTypes.h>
 #include <llvm/Support/CallSite.h>
 #include <llvm/Target/TargetData.h>
+#include <algorithm>
 #include <string.h>
+#include <math.h>
 
 #include "../Core/Executor.h"
 #include "../Core/Context.h"
@@ -23,7 +25,8 @@
 using namespace llvm;
 using namespace klee;
 
-KBrInstruction::kbr_list_ty  KBrInstruction::all_kbr;
+KBrInstruction::kbr_list_ty 	KBrInstruction::all_kbr;
+unsigned			KBrInstruction::kbr_c = 0;
 
 KInstruction::~KInstruction() { delete[] operands; }
 
@@ -319,4 +322,70 @@ TargetTy KSwitchInstruction::getConstCondSwitchTargets(
 	}
 
 	return defaultTarget;
+}
+
+double KBrInstruction::getForkMean(void)
+{
+	unsigned	i;
+	unsigned	forks;
+
+	i = 0;
+	forks = 0;
+	foreach (it, all_kbr.begin(), all_kbr.end()) {
+		unsigned	hits((*it)->getForkHits());
+
+		if (!hits) continue;
+		forks += hits;
+		i++;
+	}
+
+	if (i == 0)
+		return 0;
+
+	return (double)forks / (double)i;
+}
+
+double KBrInstruction::getForkStdDev(void)
+{
+	unsigned	i;
+	unsigned	forks, forks_sq;
+	double		mean_sq, sum_sq;
+
+	i = 0;
+	forks = 0;
+	forks_sq = 0;
+	foreach (it, all_kbr.begin(), all_kbr.end()) {
+		unsigned	hits((*it)->getForkHits());
+		if (!hits) continue;
+		forks += hits;
+		forks_sq += hits*hits;
+		i++;
+	}
+
+	if (i == 0)
+		return 0;
+
+	mean_sq = (double)forks / (double)i;
+	mean_sq *= mean_sq;
+
+	sum_sq = (double)forks_sq / (double)i;
+
+	return sqrt(sum_sq - mean_sq);
+}
+
+double KBrInstruction::getForkMedian(void)
+{
+	std::vector<unsigned> forks_v;
+
+	foreach (it, all_kbr.begin(), all_kbr.end()) {
+		unsigned	hits((*it)->getForkHits());
+		if (!hits) continue;
+		forks_v.push_back(hits);
+	}
+
+	if (forks_v.size() == 0)
+		return 1;
+
+	std::sort(forks_v.begin(), forks_v.end());
+	return forks_v[forks_v.size()/2];
 }
