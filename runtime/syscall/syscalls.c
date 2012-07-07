@@ -526,14 +526,30 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(regfile, 0);
 		make_sym_by_arg(regfile, 1, sizeof(struct rusage), "getrusage");
 		break;
+#ifdef SYM_DENTS
+#define MAX_DENT_SZ	512
 	case SYS_getdents64:
-	case SYS_getdents:
+	case SYS_getdents: {
+		uint64_t	num_bytes = GET_ARG2(regfile);
+
 		new_regs = sc_new_regs(regfile);
-		sc_ret_or(new_regs, 0, -1);
+		if (num_bytes > MAX_DENT_SZ)
+			num_bytes = MAX_DENT_SZ;
+		sc_ret_or(new_regs, num_bytes, -1);
 		if (GET_SYSRET_S(new_regs) == -1)
 			break;
-		make_sym_by_arg(regfile, 1, GET_ARG2(regfile), "getdents");
+		make_sym_by_arg(regfile, 1, num_bytes, "getdents");
 		break;
+	}
+#else
+	case SYS_getdents64:
+	case SYS_getdents: {
+		new_regs = sc_new_regs(regfile);
+		sc_ret_or(new_regs, 0, -1);
+		break;
+	}
+	break;
+#endif
 	FAKE_SC(fchmod)
 	FAKE_SC(fchown)
 	FAKE_SC(utimensat)

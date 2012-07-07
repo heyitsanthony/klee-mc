@@ -492,7 +492,7 @@ SFH_DEF_HANDLER(IsValidAddr)
 	ok = state.addressSpace.resolveOne(cast<ConstantExpr>(addr), op);
 	ret = ConstantExpr::create((ok) ? 1 : 0, 32);
 
-	std::cerr << "ADDR=" << addr << ". OK: " << ok << '\n';
+	// std::cerr << "ADDR=" << addr << ". OK: " << ok << '\n';
 	state.bindLocal(target, ret);
 }
 

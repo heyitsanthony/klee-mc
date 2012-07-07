@@ -68,7 +68,7 @@ static int str_contains(const char* needle, const char* haystack)
  * 1 => normal terminate */
 int sc_read_sym(struct sc_pkt* sc, uint64_t len)
 {
-	void	*new_regs;
+	void		*new_regs;
 
 	// This is an error case that we should probably make optional
 	// since this causes the state space to explode into really useless
@@ -93,6 +93,11 @@ int sc_read_sym(struct sc_pkt* sc, uint64_t len)
 	}
 #endif
 	klee_assume(GET_SYSRET(new_regs) == len);
+
+	/* limit lengths */
+	if (len > (16*1024)) {
+		len = 4096;
+	}
 
 	sc_ret_v(new_regs, len);
 	make_sym_by_arg(sc->regfile, 1, len, "readbuf");

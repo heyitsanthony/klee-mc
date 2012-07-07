@@ -1011,7 +1011,7 @@ static bool isRunawayBranch(KInstruction* ki)
 	if (stddevs < 1.0)
 		return false;
 
-	rand_mod = (1 << (1+(int)(stddevs*((double)forks/(median)))));
+	rand_mod = (1 << (1+(int)(((double)forks/(median)))));
 	if ((rand() % rand_mod) == 0)
 		return false;
 
@@ -1025,6 +1025,14 @@ void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 	StatePair	branches;
 	bool		hasHint = false, branchHint;
 
+	if (	QuenchRunaways &&
+		cond.value->getKind() != Expr::Constant &&
+		getNumStates() > 100)
+	{
+		state.forkDisabled = isRunawayBranch(ki);
+	} else
+		state.forkDisabled = false;
+
 	if (brPredict && cond.value->getKind() != Expr::Constant)
 		hasHint = brPredict->predict(
 			BranchPredictor::StateBranch(state, ki, cond.value),
@@ -1036,12 +1044,6 @@ void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 		else forking->setPreferFalseState(true);
 	}
 
-	if (	QuenchRunaways &&
-		cond.value->getKind() != Expr::Constant)
-	{
-		state.forkDisabled = isRunawayBranch(ki);
-	}
-
 	if (	IgnoreBranchConstraints &&
 		cond.value->getKind() != Expr::Constant)
 	{
@@ -1051,6 +1053,11 @@ void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 		branches = fork(state, cond.value, false);
 	}
 
+	markBranchVisited(state, ki, branches, cond.value);
+
+	finalizeBranch(branches.first, bi, 0 /* [0] successor => true/then */);
+	finalizeBranch(branches.second, bi, 1 /* [1] successor => false/else */);
+
 	if (hasHint) {
 		if (branchHint) forking->setPreferTrueState(false);
 		else forking->setPreferFalseState(false);
@@ -1058,24 +1065,12 @@ void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 
 	if (WriteTraces) {
 		bool	isTwoWay = (branches.first && branches.second);
-		if (branches.first) {
-			branches.first->exeTraceMgr.addEvent(
-				new BranchTraceEvent(
-					state, ki, true, isTwoWay));
-		}
-
-		if (branches.second) {
-			branches.second->exeTraceMgr.addEvent(
-				new BranchTraceEvent(
-					state, ki, false, isTwoWay));
-		}
+#define WRBR(x,y) \
+if(x) x->exeTraceMgr.addEvent(new BranchTraceEvent(state, ki, y, isTwoWay))
+		WRBR(branches.first, true);
+		WRBR(branches.second, false);
+#undef WRBR
 	}
-
-
-	markBranchVisited(state, ki, branches, cond.value);
-
-	finalizeBranch(branches.first, bi, 0 /* [0] successor => true/then */);
-	finalizeBranch(branches.second, bi, 1 /* [1] successor => false/else */);
 }
 
 void Executor::finalizeBranch(
