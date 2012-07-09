@@ -163,6 +163,7 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS)	\
 	static const ExprRule* getLastRule(void) { return last_er; }
 
 	static bool hasRule(const char* fname);
+	bool hasExprRule(const ExprRule* er) const;
 
 	rulearr_ty::const_iterator begin(void) const
 	{ return rules_arr.begin(); }
@@ -175,7 +176,8 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS)	\
 
 	void addRule(ExprRule* er);
 
-	static RuleBuilder* create(ExprBuilder* b);
+	static RuleBuilder* create(ExprBuilder* b, const char* fname = NULL);
+
 protected:
 	RuleBuilder(ExprBuilder* base);
 private:

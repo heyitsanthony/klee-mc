@@ -83,7 +83,6 @@ std::set<const ExprRule*> RuleBuilder::rules_used;
 RuleBuilder::RuleBuilder(ExprBuilder* base)
 : eb(base), depth(0), recur(0), rule_ofs(0)
 {
-	loadRules();
 	if (DumpRuleMiss)
 		mkdir("miss_dump", 0777);
 	if (DumpUsedRules.size() != 0)
@@ -111,8 +110,20 @@ RuleBuilder::~RuleBuilder()
 }
 
 
-RuleBuilder* RuleBuilder::create(ExprBuilder* b)
-{ return new Canonizer<RuleBuilder>(b); }
+RuleBuilder* RuleBuilder::create(ExprBuilder* b, const char *fname)
+{
+	RuleBuilder	*rb = new Canonizer<RuleBuilder>(b);
+
+	if (fname != NULL) {
+		if (rb->loadRuleDB(fname) == false) {
+			delete rb;
+			rb = NULL;
+		}
+	} else
+		rb->loadRules();
+
+	return rb;
+}
 
 static bool rulesSort(const ExprRule* l, const ExprRule* r)
 {
@@ -574,6 +585,17 @@ void RuleBuilder::updateLastRule(const ExprRule* er)
 	}
 }
 
+bool RuleBuilder::hasExprRule(const ExprRule* er) const
+{
+	/* slow, but whatever. */
+	foreach (it, rules_arr.begin(), rules_arr.end())
+		if (*er == *(*it))
+			return true;
+
+	return false;
+}
+
+/* TODO: static hasRule is scheduled for deletion. */
 bool RuleBuilder::hasRule(const char* fname)
 {
 	FILE			*f;

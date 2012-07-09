@@ -123,6 +123,12 @@ namespace llvm
 		cl::init(false));
 
 	cl::opt<bool>
+	CompareDBs(
+		"compare-db",
+		cl::desc("Compute percent of InputFile which is in rule-file"),
+		cl::init(false));
+
+	cl::opt<bool>
 	DumpDB(
 		"dump-db",
 		cl::desc("Dump rule db in pretty format."),
@@ -735,7 +741,6 @@ static void eraseShadowRules(Solver* s)
 }
 
 
-
 /* verify that the rule data base is properly translating rules */
 extern int xxx_rb;
 static void checkDB(Solver* s)
@@ -908,6 +913,28 @@ static void extractFree(const std::string& fname)
 	delete rb;
 }
 
+/* counts how many challenge file rules match the
+ * rule-file database */
+static void compareDBs(const std::string& fname)
+{
+	RuleBuilder	*rb_db, *rb_in;
+	unsigned	matches = 0;
+
+	rb_db = RuleBuilder::create(ExprBuilder::create(BuilderKind));
+	rb_in = RuleBuilder::create(
+		ExprBuilder::create(BuilderKind),
+		fname.c_str());
+
+	foreach (it, rb_in->begin(), rb_in->end()) {
+		if (rb_db->hasExprRule(*it))
+			matches++;
+	}
+
+	std::cout << "Matched: " << matches  << " / " << rb_in->size() << '\n';
+
+	delete rb_db;
+	delete rb_in;
+}
 
 static void splitDB(std::string& prefix, int num_chunks)
 {
@@ -962,7 +989,9 @@ int main(int argc, char **argv)
 		return -3;
 	}
 
-	if (ExtractFrees) {
+	if (CompareDBs) {
+		compareDBs(InputFile);
+	} else if (ExtractFrees) {
 		extractFree(InputFile);
 	} else if (DumpPattern) {
 		dumpPattern();
