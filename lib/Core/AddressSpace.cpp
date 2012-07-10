@@ -15,12 +15,15 @@
 #include "TimingSolver.h"
 #include "klee/Expr.h"
 #include "klee/TimerStatIncrementer.h"
+#include "klee/Internal/ADT/RNG.h"
 #include <stdint.h>
 #include <stack>
 #include "static/Sugar.h"
 
 using namespace llvm;
 using namespace klee;
+
+namespace klee  { extern RNG theRNG; }
 
 namespace {
 	cl::opt<bool>
@@ -213,7 +216,7 @@ bool AddressSpace::testInBoundPointer(
 			c_addr = cast<ConstantExpr>(address->getKid(0));
 			example = c_addr->getZExtValue();
 			if (RandomizePtrAddend)
-				example += rand() % 256;
+				example += theRNG.getInt31() % 256;
 		}
 	}
 

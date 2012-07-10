@@ -54,34 +54,32 @@ private:
 	static ConstraintManager dummyConstraints;
 };
 
-  struct sockaddr_in_opt
-  {
-    std::string str;
-    sockaddr_in sin;
-
-    sockaddr_in_opt() : str(), sin() /* value-initialize the members */ { }
-    bool null() const { return str.empty(); }
-  };
+struct sockaddr_in_opt
+{
+	std::string str;
+	sockaddr_in sin;
+	/* value-initialize the members */
+	sockaddr_in_opt() : str(), sin() { }
+	bool null() const { return str.empty(); }
+};
 
   class TimingSolver;
+  class TimedSolver;
+
   class Solver {
     // DO NOT IMPLEMENT.
     Solver(const Solver&);
     void operator=(const Solver&);
 
   public:
-    enum Validity {
-      True = 1,
-      False = -1,
-      Unknown = 0
-    };
+    enum Validity {True = 1, False = -1, Unknown = 0 };
 
     static const char* getValidityStr(Validity v)
     {
     	const char*	strs[3] = {"False", "Unknown", "True"};
 	return strs[((int)v+1)];
     }
-  
+
   public:
     /// validity_to_str - Return the name of given Validity enum value.
     static const char *validity_to_str(Validity v);
@@ -92,6 +90,11 @@ private:
     static Solver* createChain(
 	std::string queryPCLogPath = "",
 	std::string stpQueryPCLogPath = "");
+
+  static Solver* createChainWithTimedSolver(
+	std::string queryPCLogPath,
+	std::string stpQueryPCLogPath,
+	TimedSolver* &timedSolver);
   public:
     SolverImpl *impl;
 
@@ -109,7 +112,7 @@ private:
     ///
     /// \return True on success.
     bool evaluate(const Query&, Validity &result);
-  
+
     /// mustBeTrue - Determine if the expression is provably true.
     ///
     /// \param [out] result - On success, true iff the expresssion is provably
@@ -174,7 +177,7 @@ private:
     ///
     /// \return - A pair with (min, max) values for the expression.
     ///
-    /// \post(mustBeTrue(min <= e <= max) && 
+    /// \post(mustBeTrue(min <= e <= max) &&
     ///       mayBeTrue(min == e) &&
     ///       mayBeTrue(max == e))
     //
@@ -256,7 +259,7 @@ private:
   ///
   /// \param s - The underlying solver to use.
   Solver *createIndependentSolver(Solver *s);
-  
+
   /// createPCLoggingSolver - Create a solver which will forward all queries
   /// after writing them to the given path in .pc format.
   Solver *createPCLoggingSolver(Solver *s, std::string path);
@@ -266,6 +269,7 @@ private:
   Solver *createDummySolver();
 
   Solver *createFastRangeSolver(Solver *complete_solver);
+
 }
 
 #endif

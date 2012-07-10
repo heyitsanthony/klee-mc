@@ -7,25 +7,6 @@ namespace klee
 {
 class BatchingSearcher : public Searcher
 {
-	Searcher		*baseSearcher;
-	double			timeBudget;
-	double			timeBudget_base;
-	unsigned		instructionBudget;
-
-	ExecutionState		*lastState;
-	double			lastStartTime;
-	uint64_t		lastStartInstructions;
-	uint64_t		lastStartCov;
-	bool			select_new_state;
-
-	std::set<ExecutionState*> addedStates;
-	// We used to cache removed states here and then
-	// flush them out on a select new state event. This is wrong.
-	//
-	// Once a removed state goes though the searcher update function, it
-	// should be considered deleted for good and all pointers invalid.
-	// std::set<ExecutionState*> removedStates;
-
 public:
 	BatchingSearcher(Searcher *baseSearcher,
 		     double _timeBudget,
@@ -57,8 +38,30 @@ public:
 
 private:
 	uint64_t getElapsedInstructions(void) const;
+	uint64_t getElapsedQueries(void) const;
 	double getElapsedTime(void) const;
 	void handleTimeout(void);
+	void adjustAdaptiveTime(void);
+
+	Searcher		*baseSearcher;
+	double			timeBudget;
+	double			timeBudget_base;
+	unsigned		instructionBudget;
+
+	ExecutionState		*lastState;
+	double			lastStartTime;
+	uint64_t		lastStartInstructions;
+	uint64_t		lastStartCov;
+	uint64_t		lastStartQueries;
+	bool			select_new_state;
+
+	std::set<ExecutionState*> addedStates;
+	// We used to cache removed states here and then
+	// flush them out on a select new state event. This is wrong.
+	//
+	// Once a removed state goes though the searcher update function, it
+	// should be considered deleted for good and all pointers invalid.
+	// std::set<ExecutionState*> removedStates;
 };
 }
 

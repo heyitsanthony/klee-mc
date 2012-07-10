@@ -3,6 +3,7 @@
 #include "CoreStats.h"
 #include "static/Sugar.h"
 #include "llvm/Support/CommandLine.h"
+#include "klee/SolverStats.h"
 
 #include "BatchingSearcher.h"
 
@@ -21,6 +22,12 @@ namespace {
 		llvm::cl::desc("Amount of time to batch"),
 		llvm::cl::init(-1.0));
 
+	llvm::cl::opt<unsigned>
+	BatchQueries(
+		"batch-queries",
+		llvm::cl::desc("Number of queries to batch"),
+		llvm::cl::init(0));
+
 	llvm::cl::opt<bool>
 	BatchAdaptiveTime(
 		"batch-adaptive",
@@ -38,6 +45,7 @@ namespace {
 	, lastStartInstructions(stats::instructions)	\
 	, lastStartCov(	\
 		stats::coveredInstructions + stats::uncoveredInstructions) \
+	, lastStartQueries(0)	\
 	, select_new_state(true)
 
 
@@ -54,9 +62,11 @@ BatchingSearcher::BatchingSearcher(Searcher *_baseSearcher)
 
 BatchingSearcher::~BatchingSearcher() { delete baseSearcher; }
 
-
 uint64_t BatchingSearcher::getElapsedInstructions(void) const
 { return (stats::instructions - lastStartInstructions); }
+
+uint64_t BatchingSearcher::getElapsedQueries(void) const
+{ return (stats::queriesTopLevel - lastStartQueries); }
 
 double BatchingSearcher::getElapsedTime(void) const
 { return util::estWallTime() - lastStartTime; }
@@ -73,37 +83,18 @@ ExecutionState &BatchingSearcher::selectState(bool allowCompact)
 	}
 
 	lastState = &baseSearcher->selectState(allowCompact);
+
 	lastStartTime = util::estWallTime();
 	lastStartInstructions = stats::instructions;
+	lastStartQueries = stats::queriesTopLevel;
 	select_new_state = false;
 
 	return *lastState;
 }
 
-template<typename C1, typename C2>
-bool is_disjoint(const C1& a, const C2& b)
-{
-  typename C1::const_iterator i = a.begin(), ii = a.end();
-  typename C2::const_iterator j = b.begin(), jj = b.end();
-
-  while (i != ii && j != jj) {
-    if (*i < *j) ++i;
-    else if (*j < *i) ++j;
-    else return false;
-  }
-
-  return true;
-}
-
-void BatchingSearcher::handleTimeout(void)
+void BatchingSearcher::adjustAdaptiveTime(void)
 {
 	uint64_t	total_ins;
-
-	if (!BatchAdaptiveTime || timeBudget < 0) {
-		std::cerr << "[BatchingSearch] TIMEOUT TRIGGERED\n";
-		lastState = NULL;
-		return;
-	}
 
 	total_ins = stats::coveredInstructions + stats::uncoveredInstructions;
 	if (lastStartCov < total_ins) {
@@ -131,11 +122,21 @@ void BatchingSearcher::handleTimeout(void)
 	lastStartCov = total_ins;
 }
 
+void BatchingSearcher::handleTimeout(void)
+{
+	if (!BatchAdaptiveTime || timeBudget < 0) {
+		std::cerr << "[BatchingSearch] TIMEOUT TRIGGERED\n";
+		lastState = NULL;
+		return;
+	}
+
+	adjustAdaptiveTime();
+}
+
 void BatchingSearcher::update(ExecutionState *current, const States s)
 {
 	if (lastState != NULL) {
 		bool exceeded_time;
-		// assert(is_disjoint(s.getAdded(), s.getRemoved()));
 
 		exceeded_time = (
 			timeBudget > 0.0 &&
@@ -145,6 +146,9 @@ void BatchingSearcher::update(ExecutionState *current, const States s)
 		select_new_state |= (
 			instructionBudget &&
 			getElapsedInstructions() >= instructionBudget);
+		select_new_state |= (
+			BatchQueries &&
+			getElapsedQueries() > BatchQueries);
 
 		if (exceeded_time)
 			handleTimeout();

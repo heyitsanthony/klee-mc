@@ -13,20 +13,19 @@
 #include "klee/Expr.h"
 #include "klee/Solver.h"
 
-#include <vector>
-
-namespace klee {
+namespace klee
+{
 class ExecutionState;
 class Solver;
-class STPSolver;
 
 /// TimingSolver - A simple class which wraps a solver and handles
 /// tracking the statistics that we care about.
-class TimingSolver {
+class TimingSolver
+{
 public:
-	Solver *solver;
-	TimedSolver *timedSolver;
-	bool simplifyExprs;
+	Solver		*solver;
+	TimedSolver	*timedSolver;
+	bool		simplifyExprs;
 
 	/// TimingSolver - Construct a new timing solver.
 	///
@@ -66,8 +65,11 @@ public:
 	/// given state, if it has one (i.e. it provably only has a single
 	/// value). Otherwise return the original expression.
 	ref<Expr> toUnique(const ExecutionState &state, ref<Expr> &e);
-};
 
+	static uint64_t getConstQueries(void) { return constQueries; }
+private:
+	static uint64_t	constQueries;
+};
 }
 
 #endif

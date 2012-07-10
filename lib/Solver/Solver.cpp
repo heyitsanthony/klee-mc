@@ -12,9 +12,6 @@
 #include "klee/SolverStats.h"
 #include "klee/Constraints.h"
 
-#include "../Core/TimingSolver.h"
-#include "STPBuilder.h"
-
 #include "klee/Expr.h"
 #include "klee/Internal/Support/Timer.h"
 #include "klee/util/Assignment.h"
@@ -183,9 +180,7 @@ namespace {
 }
 
 namespace klee
-{
-extern Solver *createSMTLoggingSolver(Solver *_solver, std::string path);
-}
+{ extern Solver *createSMTLoggingSolver(Solver *_solver, std::string path); }
 
 extern ExprBuilder *createXChkBuilder(
 	Solver& solver,
@@ -194,7 +189,7 @@ extern ExprBuilder *createXChkBuilder(
 extern ExprBuilder *createEquivBuilder(Solver& solver, ExprBuilder* test);
 
 
-static Solver* createChainWithTimedSolver(
+Solver* Solver::createChainWithTimedSolver(
 	std::string queryPCLogPath,
 	std::string stpQueryPCLogPath,
 	TimedSolver* &timedSolver)
@@ -324,28 +319,6 @@ Solver* Solver::createChain(
 		stpQueryPCLogPath,
 		timedSolver);
 }
-
-TimingSolver* Solver::createTimerChain(
-	double timeout,
-	std::string queryPCLogPath,
-	std::string stpQueryPCLogPath)
-{
-	Solver		*solver;
-	TimedSolver	*timedSolver;
-	TimingSolver	*ts;
-
-	if (timeout == 0.0)
-		timeout = MaxSTPTime;
-
-	solver = createChainWithTimedSolver(
-		queryPCLogPath, stpQueryPCLogPath, timedSolver);
-	ts = new TimingSolver(solver, timedSolver);
-	timedSolver->setTimeout(timeout);
-
-	return ts;
-}
-
-/***/
 
 const char *Solver::validity_to_str(Validity v)
 {

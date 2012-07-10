@@ -27,7 +27,14 @@ double util::getUserTime()
 #define TICK_INTERVAL	10000000
 double util::getWallTime()
 {
-	static sys::TimeValue	time = sys::TimeValue::now();
+	sys::TimeValue	time(sys::TimeValue::now());
+	return time.seconds() + (double) time.nanoseconds() * 1e-9;
+}
+
+// efficient estimation of current wall time
+double util::estWallTime()
+{
+	static double		time = getWallTime();
 	static ticks		last_tick = 0;
 	ticks			cur_tick, tick_diff;
 
@@ -35,10 +42,8 @@ double util::getWallTime()
 	tick_diff = cur_tick - last_tick;
 	if (tick_diff > TICK_INTERVAL) {
 		last_tick = cur_tick;
-		time = sys::TimeValue::now();
+		time = getWallTime();
 	}
-	return time.seconds() + (double) time.nanoseconds() * 1e-9;
-}
 
-// efficient estimation of current wall time
-double util::estWallTime() { return getWallTime(); }
+	return time;
+}

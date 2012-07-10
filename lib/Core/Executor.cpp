@@ -13,6 +13,8 @@
 #include <llvm/Module.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Target/TargetData.h>
+#include <llvm/Support/raw_os_ostream.h>
+#include <llvm/Support/raw_ostream.h>
 
 #include <cassert>
 #include <algorithm>
@@ -201,6 +203,10 @@ namespace {
   	"quench-runaways",
 	cl::desc("Drop states at heavily forking instructions."),
 	cl::init(true));
+
+  cl::opt<unsigned>
+  SeedRNG("seed-rng", cl::desc("Seed random number generator"), cl::init(0));
+
 }
 
 namespace klee { RNG theRNG; }
@@ -234,6 +240,8 @@ bool llvm::cl::parser<sockaddr_in_opt>::parse(llvm::cl::Option &O,
   return false;
 }
 
+static TimingSolver* createTimerChain(double to, std::string q, std::string s);
+
 Executor::Executor(InterpreterHandler *ih)
 : kmodule(0)
 , globals(0)
@@ -261,11 +269,10 @@ Executor::Executor(InterpreterHandler *ih)
 		Expr::setBuilder(RuleBuilder::create(Expr::getBuilder()));
 	}
 
-	this->solver = Solver::createTimerChain(
+	this->solver = createTimerChain(
 		stpTimeout,
 		interpreterHandler->getOutputFilename("queries.pc"),
 		interpreterHandler->getOutputFilename("stp-queries.pc"));
-
 
 	ObjectState::setupZeroObjs();
 
@@ -277,24 +284,16 @@ Executor::Executor(InterpreterHandler *ih)
 	forking = new Forks(*this);
 
 	if (UseBranchHints) {
-	//	RotatingPredictor	*rp;
-	//	rp = new RotatingPredictor();
-	//	rp->add(new RandomPredictor());
-	//	rp->add(SeqPredictor::createTrue());
-	//	rp->add(SeqPredictor::createFalse());
-	//	brPredict = rp;
 		ListPredictor		*lp = new ListPredictor();
 		/* unexplored condition path should have higher priority
 		 * than unexplored condition value. */
 		lp->add(new KBrPredictor());
-	//	lp->add(new FollowedPredictor());
 		lp->add(new CondPredictor(forking));
-	// I'm not convinced these are any good.
-	//	lp->add(new SkewPredictor());
-	//	lp->add(new ExprBiasPredictor());
 		lp->add(new RandomPredictor());
 		brPredict = lp;
 	}
+
+	if (SeedRNG) theRNG.seed(SeedRNG);
 }
 
 Executor::~Executor()
@@ -425,7 +424,7 @@ ref<klee::ConstantExpr> Executor::evalConstant(
 }
 
 /* Concretize the given expression, and return a possible constant value.
-   'reason' is just a documentation string stating the reason for concretization. */
+   'reason' is documentation stating the reason for concretization. */
 ref<klee::ConstantExpr>
 Executor::toConstant(
 	ExecutionState &state, ref<Expr> e, const char *reason,
@@ -483,10 +482,10 @@ void Executor::stepInstruction(ExecutionState &state)
 	assert (state.checkCanary() && "Not a valid state");
 
 	if (DebugPrintInstructions) {
+		raw_os_ostream	os(std::cerr);
 		printFileLine(state, state.pc);
-		std::cerr
-			<< std::setw(10) << stats::instructions << " "
-			<< (state.pc->getInst()) << "\n";
+		std::cerr << std::setw(10) << stats::instructions << " ";
+		os << *(state.pc->getInst()) << "\n";
 	}
 
 	if (statsTracker) statsTracker->stepInstruction(state);
@@ -639,12 +638,23 @@ void Executor::executeCall(
 	}
 }
 
-void Executor::printFileLine(ExecutionState &state, KInstruction *ki) {
-  const InstructionInfo &ii = *ki->getInfo();
-  if (ii.file != "")
-    std::cerr << "     " << ii.file << ":" << ii.line << ":";
-  else
-    std::cerr << "     [no debug info]:";
+void Executor::printFileLine(ExecutionState &state, KInstruction *ki)
+{
+	const InstructionInfo &ii = *ki->getInfo();
+	const Function* f;
+
+	if (!ii.file.empty()) {
+		std::cerr << "     " << ii.file << ':' << ii.line << ':';
+		return;
+	}
+
+	f = ki->getInst()->getParent()->getParent();
+	if (f != NULL) {
+		std::cerr << "     " << f->getName().str() << ':';
+		return;
+	}
+
+	std::cerr << "     [no debug info]:";
 }
 
 bool Executor::isDebugIntrinsic(const Function *f)
@@ -2065,21 +2075,17 @@ void Executor::removePTreeState(
 void Executor::removeRoot(ExecutionState* es)
 { pathTree->removeRoot(stateManager, es); }
 
+// guess at how many to kill
 void Executor::killStates(ExecutionState* &state)
 {
-  // just guess at how many to kill
   uint64_t numStates = stateManager->size();
   uint64_t mbs = getMemUsageMB();
   unsigned toKill = std::max((uint64_t)1, numStates - (numStates*MaxMemory)/mbs);
   assert (mbs > MaxMemory);
 
-  klee_warning(
-    "killing %u states (over memory cap). Total states = %ld.",
-    toKill, numStates);
+  klee_warning("killing %u states (over mem). Total: %ld.", toKill, numStates);
 
-  std::vector<ExecutionState*> arr(
-    stateManager->begin(),
-    stateManager->end());
+  std::vector<ExecutionState*> arr(stateManager->begin(), stateManager->end());
 
   // use priority ordering for selecting which states to kill
   std::partial_sort(
@@ -2359,9 +2365,7 @@ void Executor::terminateStateEarly(
 }
 
 bool Executor::isInterestingTestCase(ExecutionState* st) const
-{
-	return !OnlyOutputStatesCoveringNew || st->coveredNew;
-}
+{ return !OnlyOutputStatesCoveringNew || st->coveredNew; }
 
 void Executor::terminateStateOnExit(ExecutionState &state)
 {
@@ -2573,15 +2577,14 @@ bool Executor::getSatAssignment(const ExecutionState& st, Assignment& a)
 
 
 	ok = solver->getInitialValues(st, a);
-	if (ok)
-		return true;
+	if (ok) return true;
 
 	klee_warning("can't compute initial values (invalid constraints?)!");
 	if (DumpBadInitValues)
 		ExprPPrinter::printQuery(
 			std::cerr,
 			st.constraints,
-			ConstantExpr::alloc(0, Expr::Bool));
+			ConstantExpr::create(0, Expr::Bool));
 
 	return false;
 }
@@ -2723,7 +2726,7 @@ void Executor::executeAllocConst(
 	if (op_mo(op) == NULL) {
 		state.bindLocal(
 			target,
-			ConstantExpr::alloc(
+			ConstantExpr::create(
 				0, Context::get().getPointerWidth()));
 		return;
 	}
@@ -2777,7 +2780,6 @@ klee::ref<klee::ConstantExpr> Executor::getSmallSymAllocSize(
 
 	return example;
 }
-
 
 void Executor::executeAllocSymbolic(
 	ExecutionState &state,
@@ -2942,11 +2944,7 @@ void Executor::handleMemoryPID(ExecutionState* &state)
 	mbs = mallinfo().uordblks/(1024*1024);
 	err = MaxMemory - mbs;
 
-	states_to_gen =
-		K_P*err +
-		K_D*(err - last_err) +
-		K_I*(err_sum);
-
+	states_to_gen = K_P*err + K_D*(err - last_err) + K_I*(err_sum);
 	err_sum += err;
 	last_err = err;
 
@@ -3077,4 +3075,21 @@ bool Executor::hasState(const ExecutionState* es) const
 			return true;
 
 	return false;
+}
+
+static TimingSolver* createTimerChain(
+	double timeout, std::string qPath, std::string logPath)
+{
+	Solver		*s;
+	TimedSolver	*timedSolver;
+	TimingSolver	*ts;
+
+	if (timeout == 0.0)
+		timeout = MaxSTPTime;
+
+	s = Solver::createChainWithTimedSolver(qPath, logPath, timedSolver);
+	ts = new TimingSolver(s, timedSolver);
+	timedSolver->setTimeout(timeout);
+
+	return ts;
 }

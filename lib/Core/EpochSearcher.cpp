@@ -3,10 +3,13 @@
 #include "CoreStats.h"
 #include <assert.h>
 #include <algorithm>
+#include "klee/Internal/ADT/RNG.h"
 #include "Executor.h"
 #include "EpochSearcher.h"
 
 using namespace klee;
+
+namespace klee { extern RNG theRNG; }
 
 #define CONCRETE_WATERMARK	10
 #define INST_TOTAL (stats::coveredInstructions + stats::uncoveredInstructions)
@@ -54,7 +57,7 @@ ExecutionState* EpochSearcher::selectPool(bool allowCompact)
 
 ExecutionState* EpochSearcher::selectEpoch(bool allowCompact)
 {
-	unsigned	e_idx = rand() % epochs.size();
+	unsigned	e_idx = theRNG.getInt31() % epochs.size();
 
 	if (epochs[e_idx]->getSearcher()->empty()) {
 		std::cerr << "[Epoch] Empty epoch. Pull from pool.\n";
