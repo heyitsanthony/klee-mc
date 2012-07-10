@@ -12,7 +12,7 @@
 #include "../../lib/Expr/RuleBuilder.h"
 #include "../../lib/Expr/OptBuilder.h"
 #include "../../lib/Expr/ExtraOptBuilder.h"
-#include "../../lib/Core/TimingSolver.h"
+#include "../../lib/Core/StateSolver.h"
 
 #include <sys/stat.h>
 #include <sys/types.h>

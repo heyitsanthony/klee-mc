@@ -14,7 +14,7 @@
 #include "static/Sugar.h"
 
 #include "CallPathManager.h"
-#include "TimingSolver.h"
+#include "StateSolver.h"
 
 #include "PTree.h"
 #include "ExeStateManager.h"

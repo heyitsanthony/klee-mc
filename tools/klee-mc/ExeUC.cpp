@@ -8,7 +8,7 @@
 #include "klee/Common.h"
 #include "klee/Expr.h"
 #include "klee/Internal/Module/KFunction.h"
-#include "../../lib/Core/TimingSolver.h"
+#include "../../lib/Core/StateSolver.h"
 #include "../../lib/Core/AddressSpace.h"
 #include "../../lib/Core/MemoryManager.h"
 

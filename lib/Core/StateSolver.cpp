@@ -1,4 +1,4 @@
-//===-- TimingSolver.cpp --------------------------------------------------===//
+//===-- StateSolver.cpp --------------------------------------------------===//
 //
 //                     The KLEE Symbolic Virtual Machine
 //
@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "TimingSolver.h"
+#include "StateSolver.h"
 
 #include "klee/ExecutionState.h"
 #include "klee/Solver.h"
@@ -21,7 +21,7 @@
 using namespace klee;
 using namespace llvm;
 
-uint64_t TimingSolver::constQueries = 0;
+uint64_t StateSolver::constQueries = 0;
 
 #define WRAP_QUERY(x)	\
 do {	\
@@ -46,7 +46,7 @@ do {	\
 
 #define CONST_FASTPATH
 
-bool TimingSolver::evaluate(
+bool StateSolver::evaluate(
 	const ExecutionState& state,
 	ref<Expr> expr,
 	Solver::Validity &result)
@@ -68,7 +68,7 @@ bool TimingSolver::evaluate(
 	return ok;
 }
 
-bool TimingSolver::mustBeTrue(
+bool StateSolver::mustBeTrue(
 	const ExecutionState& state, ref<Expr> expr, bool &result)
 {
 	double	start, finish;
@@ -89,11 +89,11 @@ bool TimingSolver::mustBeTrue(
 	return ok;
 }
 
-bool TimingSolver::mustBeFalse(
+bool StateSolver::mustBeFalse(
 	const ExecutionState& state, ref<Expr> expr, bool &result)
 { return mustBeTrue(state, Expr::createIsZero(expr), result); }
 
-bool TimingSolver::mayBeTrue(
+bool StateSolver::mayBeTrue(
 	const ExecutionState& state, ref<Expr> expr, bool &result)
 {
 	bool res;
@@ -103,7 +103,7 @@ bool TimingSolver::mayBeTrue(
 	return true;
 }
 
-bool TimingSolver::mayBeFalse(
+bool StateSolver::mayBeFalse(
 	const ExecutionState& state, ref<Expr> expr, bool &result)
 {
 	bool res;
@@ -113,7 +113,7 @@ bool TimingSolver::mayBeFalse(
 	return true;
 }
 
-bool TimingSolver::getValue(
+bool StateSolver::getValue(
 	const ExecutionState& state, ref<Expr> expr, ref<ConstantExpr> &result)
 {
 	double	start, finish;
@@ -133,7 +133,7 @@ bool TimingSolver::getValue(
 	return ok;
 }
 
-bool TimingSolver::getInitialValues(const ExecutionState& state, Assignment& a)
+bool StateSolver::getInitialValues(const ExecutionState& state, Assignment& a)
 {
 	bool	ok;
 	double	start, finish;
@@ -150,13 +150,13 @@ bool TimingSolver::getInitialValues(const ExecutionState& state, Assignment& a)
 	return ok;
 }
 
-bool TimingSolver::getRange(
+bool StateSolver::getRange(
 	const ExecutionState& state,
 	ref<Expr> expr,
 	std::pair< ref<Expr>, ref<Expr> >& ret)
 { return solver->getRange(Query(state.constraints, expr), ret); }
 
-ref<Expr> TimingSolver::toUnique(const ExecutionState &state, ref<Expr> &e)
+ref<Expr> StateSolver::toUnique(const ExecutionState &state, ref<Expr> &e)
 {
 	ref<ConstantExpr>	value;
 	ref<Expr>		eq_expr;

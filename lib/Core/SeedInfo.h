@@ -20,7 +20,7 @@ extern "C" {
 namespace klee
 {
 class ExecutionState;
-class TimingSolver;
+class StateSolver;
 class MemoryObject;
 class SeedInfo
 {
@@ -43,7 +43,7 @@ public:
 	void patchSeed(
 		const ExecutionState &state, 
 		ref<Expr> condition,
-		TimingSolver *solver);
+		StateSolver *solver);
 };
 
 typedef std::vector<SeedInfo>::iterator SeedInfoIterator;

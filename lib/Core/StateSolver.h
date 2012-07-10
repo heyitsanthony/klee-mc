@@ -1,4 +1,4 @@
-//===-- TimingSolver.h ------------------------------------------*- C++ -*-===//
+//===-- StateSolver.h ------------------------------------------*- C++ -*-===//
 //
 //                     The KLEE Symbolic Virtual Machine
 //
@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef KLEE_TIMINGSOLVER_H
-#define KLEE_TIMINGSOLVER_H
+#ifndef KLEE_STATESOLVER_H
+#define KLEE_STATESOLVER_H
 
 #include "klee/Expr.h"
 #include "klee/Solver.h"
@@ -18,21 +18,19 @@ namespace klee
 class ExecutionState;
 class Solver;
 
-/// TimingSolver - A simple class which wraps a solver and handles
+/// StateSolver - A simple class which wraps a solver and handles
 /// tracking the statistics that we care about.
-class TimingSolver
+class StateSolver
 {
 public:
 	Solver		*solver;
 	TimedSolver	*timedSolver;
 	bool		simplifyExprs;
 
-	/// TimingSolver - Construct a new timing solver.
-	///
 	/// \param _simplifyExprs - Whether expressions should be
 	/// simplified (via the constraint manager interface) prior to
 	/// querying.
-	TimingSolver(
+	StateSolver(
 		Solver *_solver,
 		TimedSolver *_timedSolver,
 		bool _simplifyExprs = true)
@@ -40,7 +38,7 @@ public:
 	, timedSolver(_timedSolver)
 	, simplifyExprs(_simplifyExprs) {}
 
-	~TimingSolver() { delete solver; }
+	~StateSolver() { delete solver; }
 
 	void setTimeout(double t) { timedSolver->setTimeout(t); }
 	bool evaluate(const ExecutionState&, ref<Expr>, Solver::Validity &result);

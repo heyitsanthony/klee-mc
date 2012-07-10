@@ -51,7 +51,7 @@
 #include "PTree.h"
 #include "Forks.h"
 #include "Searcher.h"
-#include "TimingSolver.h"
+#include "StateSolver.h"
 #include "UserSearcher.h"
 #include "MemUsage.h"
 #include "MMU.h"
@@ -240,7 +240,7 @@ bool llvm::cl::parser<sockaddr_in_opt>::parse(llvm::cl::Option &O,
   return false;
 }
 
-static TimingSolver* createTimerChain(double to, std::string q, std::string s);
+static StateSolver* createTimerChain(double to, std::string q, std::string s);
 
 Executor::Executor(InterpreterHandler *ih)
 : kmodule(0)
@@ -3077,18 +3077,18 @@ bool Executor::hasState(const ExecutionState* es) const
 	return false;
 }
 
-static TimingSolver* createTimerChain(
+static StateSolver* createTimerChain(
 	double timeout, std::string qPath, std::string logPath)
 {
 	Solver		*s;
 	TimedSolver	*timedSolver;
-	TimingSolver	*ts;
+	StateSolver	*ts;
 
 	if (timeout == 0.0)
 		timeout = MaxSTPTime;
 
 	s = Solver::createChainWithTimedSolver(qPath, logPath, timedSolver);
-	ts = new TimingSolver(s, timedSolver);
+	ts = new StateSolver(s, timedSolver);
 	timedSolver->setTimeout(timeout);
 
 	return ts;

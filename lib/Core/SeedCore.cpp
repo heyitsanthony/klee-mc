@@ -8,7 +8,7 @@
 #include "static/Sugar.h"
 
 #include "CoreStats.h"
-#include "TimingSolver.h"
+#include "StateSolver.h"
 #include "Executor.h"
 #include "SeedCore.h"
 

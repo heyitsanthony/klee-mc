@@ -3,7 +3,7 @@
 
 #include "PTree.h"
 #include "static/Sugar.h"
-#include "TimingSolver.h"
+#include "StateSolver.h"
 #include "Executor.h"
 #include "ExeStateManager.h"
 #include "MMU.h"

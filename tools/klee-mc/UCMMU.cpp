@@ -3,7 +3,7 @@
  */
 #include "../../lib/Core/AddressSpace.h"
 #include "../../lib/Core/MemoryManager.h"
-#include "../../lib/Core/TimingSolver.h"
+#include "../../lib/Core/StateSolver.h"
 #include "klee/Internal/Module/KModule.h"
 #include "klee/util/ExprUtil.h"
 
@@ -165,7 +165,7 @@ const char* UCMMU::expandRealPtr(
 	ref<Expr> full_ptr,
 	ObjectPair& res)
 {
-	TimingSolver		*s;
+	StateSolver		*s;
 	ref<Expr>		cond, sym_off;
 	ObjectPair		ret;
 	unsigned		resize_len;

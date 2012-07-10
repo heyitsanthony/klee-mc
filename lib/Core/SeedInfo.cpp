@@ -9,7 +9,7 @@
 
 #include "Memory.h"
 #include "SeedInfo.h"
-#include "TimingSolver.h"
+#include "StateSolver.h"
 #include "static/Sugar.h"
 
 #include "klee/Common.h"
@@ -61,7 +61,7 @@ KTestObject *SeedInfo::getNextInput(const MemoryObject *mo, bool byName)
 
 void SeedInfo::patchSeed(const ExecutionState &state,
                          ref<Expr> condition,
-                         TimingSolver *solver)
+                         StateSolver *solver)
 {
   std::vector< ref<Expr> > required(state.constraints.begin(),
                                     state.constraints.end());

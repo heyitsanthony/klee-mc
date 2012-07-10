@@ -68,7 +68,7 @@ class Searcher;
 class SpecialFunctionHandler;
 struct StackFrame;
 class StatsTracker;
-class TimingSolver;
+class StateSolver;
 class TreeStreamWriter;
 class BranchPredictor;
 class WallTimer;
@@ -260,7 +260,7 @@ protected:
   StatsTracker		*statsTracker;
   PTree			*pathTree;
   TreeStreamWriter	*symPathWriter;
-  TimingSolver		*solver;
+  StateSolver		*solver;
   ExeStateManager	*stateManager;
   Forks			*forking;
   ExecutionState	*currentState;
@@ -400,7 +400,7 @@ public:
 	unsigned getNumFullStates(void) const;
 
 	const InterpreterHandler& getHandler() { return *interpreterHandler; }
-	TimingSolver* getSolver(void) { return solver; }
+	StateSolver* getSolver(void) { return solver; }
 	virtual bool isStateSeeding(ExecutionState* s) const { return false; }
 
 	/// Add the given (boolean) condition as a constraint on state. This

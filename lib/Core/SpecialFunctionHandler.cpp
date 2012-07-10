@@ -9,7 +9,7 @@
 
 #include "Memory.h"
 #include "SpecialFunctionHandler.h"
-#include "TimingSolver.h"
+#include "StateSolver.h"
 
 #include "klee/Common.h"
 #include "klee/ExecutionState.h"

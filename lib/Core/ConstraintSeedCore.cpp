@@ -5,7 +5,7 @@
 #include <sstream>
 #include "klee/Internal/ADT/LimitedStream.h"
 
-#include "TimingSolver.h"
+#include "StateSolver.h"
 #include "../Expr/SMTParser.h"
 #include "../Solver/SMTPrinter.h"
 #include "klee/util/ExprUtil.h"

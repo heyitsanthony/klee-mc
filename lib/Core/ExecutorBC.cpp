@@ -9,7 +9,7 @@
 #include "UserSearcher.h"
 #include "SpecialFunctionHandler.h"
 #include "StatsTracker.h"
-#include "TimingSolver.h"
+#include "StateSolver.h"
 #include "ExeStateManager.h"
 #include "ExternalDispatcher.h"
 #include "PTree.h"

@@ -12,7 +12,7 @@
 #include "AddressSpace.h"
 #include "CoreStats.h"
 #include "Memory.h"
-#include "TimingSolver.h"
+#include "StateSolver.h"
 #include "klee/Expr.h"
 #include "klee/TimerStatIncrementer.h"
 #include "klee/Internal/ADT/RNG.h"
@@ -177,7 +177,7 @@ ref<Expr> AddressSpace::getFeasibilityExpr(
 
 bool AddressSpace::isFeasibleRange(
 	ExecutionState &state,
-	TimingSolver *solver,
+	StateSolver *solver,
 	ref<Expr> address,
 	const MemoryObject* lo, const MemoryObject* hi,
 	bool& ok)
@@ -195,7 +195,7 @@ bool AddressSpace::isFeasibleRange(
 // success => mo != NULL
 bool AddressSpace::testInBoundPointer(
 	ExecutionState		&state,
-	TimingSolver		*solver,
+	StateSolver		*solver,
 	ref<Expr>		address,
 	ref<ConstantExpr>	&c_addr,
 	const MemoryObject*	&mo)
@@ -271,7 +271,7 @@ bool AddressSpace::lookupGuess(
 
 bool AddressSpace::getFeasibleObject(
 	ExecutionState &state,
-	TimingSolver *solver,
+	StateSolver *solver,
 	ref<Expr> address,
 	ObjectPair& res)
 {
@@ -300,7 +300,7 @@ bool AddressSpace::getFeasibleObject(
 
 bool AddressSpace::binsearchFeasible(
 	ExecutionState& state,
-	TimingSolver* solver,
+	StateSolver* solver,
 	ref<Expr>& addr,
 	uint64_t upper_addr, ObjectPair& res)
 {
@@ -406,7 +406,7 @@ bool AddressSpace::binsearchFeasible(
 // Otherwise, abandon that range of addresses.
 bool AddressSpace::resolve(
 	ExecutionState &state,
-	TimingSolver *solver,
+	StateSolver *solver,
 	ref<Expr> p,
 	ResolutionList &rl,
 	unsigned maxResolutions)
@@ -478,7 +478,7 @@ MMIter AddressSpace::lower_bound(uint64_t addr) const
 
 bool AddressSpace::mustContain(
 	ExecutionState &state,
-	TimingSolver* solver,
+	StateSolver* solver,
 	ref<Expr> address,
 	const MemoryObject* lo,
 	const MemoryObject* hi,
@@ -503,7 +503,7 @@ bool AddressSpace::mustContain(
 bool AddressSpace::contigOffsetSearchRange(
 	ExecutionState& state,
 	ref<Expr>	p,
-	TimingSolver *solver,
+	StateSolver *solver,
 	ResolutionList& rl,
 	bool &bad_addr)
 {
@@ -624,7 +624,7 @@ bool AddressSpace::contigOffsetSearchRange(
 bool AddressSpace::binsearchRange(
 	ExecutionState& state,
 	ref<Expr>	p,
-	TimingSolver *solver,
+	StateSolver *solver,
 	std::stack<std::pair<MMIter, MMIter> >& tryRanges,
 	unsigned int maxResolutions,
 	ResolutionList& rl)

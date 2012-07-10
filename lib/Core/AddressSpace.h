@@ -21,7 +21,7 @@ namespace klee
 class ExecutionState;
 class MemoryObject;
 class ObjectState;
-class TimingSolver;
+class StateSolver;
 
 template<class T> class ref;
 
@@ -85,7 +85,7 @@ public:
 	// Returns 'true' if feasible object is found
 	bool getFeasibleObject(
 		ExecutionState &state,
-		TimingSolver *solver,
+		StateSolver *solver,
 		ref<Expr> address,
 		ObjectPair &result);
 
@@ -97,7 +97,7 @@ public:
 	/// is non-zero and the search terminated early, or a query timed out).
 	bool resolve(
 		ExecutionState &state,
-		TimingSolver *solver,
+		StateSolver *solver,
 		ref<Expr> address,
 		ResolutionList &rl,
 		unsigned maxResolutions=0);
@@ -113,14 +113,14 @@ private:
 
 	bool testInBoundPointer(
 		ExecutionState &state,
-		TimingSolver *solver,
+		StateSolver *solver,
 		ref<Expr> address,
 		ref<ConstantExpr>& c_addr,
 		const MemoryObject*	&mo);
 
 	bool isFeasibleRange(
 		ExecutionState &state,
-		TimingSolver *solver,
+		StateSolver *solver,
 		ref<Expr> address,
 		const MemoryObject* lo,
 		const MemoryObject* hi,
@@ -128,7 +128,7 @@ private:
 
 	bool mustContain(
 		ExecutionState &state,
-		TimingSolver* solver,
+		StateSolver* solver,
 		ref<Expr> address,
 		const MemoryObject* mo,
 		bool& ok)
@@ -136,7 +136,7 @@ private:
 
 	bool mustContain(
 		ExecutionState &state,
-		TimingSolver* solver,
+		StateSolver* solver,
 		ref<Expr> address,
 		const MemoryObject* lo,
 		const MemoryObject* hi,
@@ -145,7 +145,7 @@ private:
 
 	bool isFeasible(
 		ExecutionState &state,
-		TimingSolver* solver,
+		StateSolver* solver,
 		ref<Expr> address,
 		const MemoryObject* mo,
 		bool& ok)
@@ -161,14 +161,14 @@ private:
 	bool binsearchRange(
 		ExecutionState& state,
 		ref<Expr>	p,
-		TimingSolver *solver,
+		StateSolver *solver,
 		std::stack<std::pair<MMIter, MMIter> >& tryRanges,
 		unsigned int maxResolutions,
 		ResolutionList& rl);
 
 	bool binsearchFeasible(
 		ExecutionState& state,
-		TimingSolver* solver,
+		StateSolver* solver,
 		ref<Expr>& addr,
 		uint64_t upper_addr, ObjectPair& res);
 
@@ -176,7 +176,7 @@ private:
 	bool contigOffsetSearchRange(
 		ExecutionState& state,
 		ref<Expr>	p,
-		TimingSolver *solver,
+		StateSolver *solver,
 		ResolutionList& rl,
 		bool& bad_addr);
 

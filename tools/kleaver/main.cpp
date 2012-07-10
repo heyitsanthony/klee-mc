@@ -13,7 +13,6 @@
 #include "klee/util/ExprPPrinter.h"
 #include "klee/util/ExprVisitor.h"
 #include "klee/util/Assignment.h"
-#include "../../lib/Core/TimingSolver.h"
 
 #include "llvm/ADT/OwningPtr.h"
 #include "llvm/ADT/StringExtras.h"
@@ -250,9 +249,7 @@ static void doQuery(Solver* S, QueryCommand* QC)
 }
 
 static Solver* buildSolver(void)
-{
-	return Solver::createChain("", "");
-}
+{ return Solver::createChain("", ""); }
 
 static void printQueries(void)
 {
