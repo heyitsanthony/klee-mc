@@ -44,7 +44,8 @@ do {	\
 } while (0)
 
 
-#define CONST_FASTPATH
+uint64_t StateSolver::getRealQueries(void)
+{ return stats::queriesTopLevel - constQueries;	}
 
 bool StateSolver::evaluate(
 	const ExecutionState& state,

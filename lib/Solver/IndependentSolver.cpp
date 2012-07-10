@@ -8,18 +8,16 @@
 //===----------------------------------------------------------------------===//
 
 #include "klee/Solver.h"
-
 #include "klee/Expr.h"
 #include "klee/Constraints.h"
 #include "SolverImplWrapper.h"
-
 #include "klee/util/ExprUtil.h"
+#include "klee/Internal/ADT/RNG.h"
 
 #include "static/Sugar.h"
 
 #include <map>
 #include <vector>
-#include <ostream>
 #include <iostream>
 
 using namespace klee;
@@ -294,20 +292,25 @@ static IndependentElementSet getIndependentConstraints(
 class IndependentSolver : public SolverImplWrapper
 {
 public:
-  IndependentSolver(Solver *_solver)
-    : SolverImplWrapper(_solver) {}
-  virtual ~IndependentSolver() { }
+	IndependentSolver(Solver *_solver)
+	: SolverImplWrapper(_solver)
+	{ rng.seed(12345); }
 
-  bool computeSat(const Query&);
-  Solver::Validity computeValidity(const Query&);
-  ref<Expr> computeValue(const Query&);
-  bool computeInitialValues(const Query& query, Assignment& a)
-  { return doComputeInitialValues(query, a); }
+	virtual ~IndependentSolver() {}
 
-  void printName(int level = 0) const {
-    klee_message("%*s" "IndependentSolver containing:", 2*level, "");
-    wrappedSolver->printName(level + 1);
-  }
+	bool computeSat(const Query&);
+	Solver::Validity computeValidity(const Query&);
+	ref<Expr> computeValue(const Query&);
+	bool computeInitialValues(const Query& query, Assignment& a)
+	{ return doComputeInitialValues(query, a); }
+
+	void printName(int level = 0) const
+	{
+		klee_message("%*s""IndependentSolver containing:", 2*level, "");
+		wrappedSolver->printName(level + 1);
+	}
+private:
+	RNG rng;
 };
 
 #define SETUP_CONSTRAINTS			\
@@ -422,7 +425,7 @@ static bool isUnconstrained(
 	if (isFreeExpr(query.expr))
 		return true;
 
-	// std::cerr << "MISSED UNCONSTRAINED: " << query.expr << '\n';
+//	std::cerr << "MISSED UNCONSTRAINED: " << query.expr << '\n';
 	return false;
 }
 
@@ -443,7 +446,9 @@ ref<Expr> IndependentSolver::computeValue(const Query& query)
 	SETUP_CONSTRAINTS {
 		uint64_t	v;
 
-		v = rand();
+		v = rng.getInt32();
+		v <<= 32;
+		v |= rng.getInt32();
 		if (query.expr->getWidth() < 64)
 			v &= (1 << query.expr->getWidth()) - 1;
 

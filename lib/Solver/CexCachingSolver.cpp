@@ -17,6 +17,7 @@
 #include "klee/util/ExprUtil.h"
 #include "klee/util/ExprVisitor.h"
 #include "klee/Internal/ADT/MapOfSets.h"
+#include "klee/Internal/ADT/RNG.h"
 #include "klee/Common.h"
 
 #include "llvm/Support/CommandLine.h"
@@ -59,7 +60,7 @@ public:
 	CexCachingSolver(Solver *_solver)
 	: SolverImplWrapper(_solver)
 	, assignTab_bytes(0)
-	, evicted_bytes(0) {}
+	, evicted_bytes(0) { rng.seed(54321); }
 	virtual ~CexCachingSolver();
 
 	bool computeSat(const Query&);
@@ -92,9 +93,10 @@ private:
 	MapOfSets<ref<Expr>, Assignment*>	cache;
 
 	typedef std::set<Assignment*, AssignmentLessThan> assignTab_ty;
-	assignTab_ty				assignTab; // memo table
-	unsigned int				assignTab_bytes;
-	unsigned int				evicted_bytes;
+	assignTab_ty	assignTab; // memo table
+	unsigned int	assignTab_bytes;
+	unsigned int	evicted_bytes;
+	RNG		rng;
 };
 
 struct NullAssignment { bool operator()(Assignment *a) const { return !a; } };
@@ -209,7 +211,7 @@ void CexCachingSolver::evictRandom(void)
 	/* collect assignments to trash */
 	foreach (it, assignTab.begin(), assignTab.end()) {
 		/* 50% chance of being thrown in bit-bin */
-		if (rand() % 2)
+		if (rng.getBool())
 			as_to_del.insert(*it);
 	}
 
@@ -223,9 +225,8 @@ void CexCachingSolver::evictRandom(void)
 
 	/* clear, rebuild */
 	cache.clear();
-	foreach (it, expr_sets.begin(), expr_sets.end()) {
+	foreach (it, expr_sets.begin(), expr_sets.end())
 		cache.insert((*it).first, (*it).second);
-	}
 	expr_sets.clear();
 
 	/* delete all */

@@ -1022,7 +1022,7 @@ static bool isRunawayBranch(KInstruction* ki)
 		return false;
 
 	rand_mod = (1 << (1+(int)(((double)forks/(median)))));
-	if ((rand() % rand_mod) == 0)
+	if ((theRNG.getInt31() % rand_mod) == 0)
 		return false;
 
 	return true;
@@ -2116,9 +2116,7 @@ void Executor::handleMemoryUtilization(ExecutionState* &state)
 	if (!(MaxMemory && (stats::instructions & 0xFFFF) == 0))
 		return;
 
-	// We need to avoid calling GetMallocUsage() often because it
-	// is O(elts on freelist). This is really bad since we start
-	// to pummel the freelist once we hit the memory cap.
+	// Avoid calling GetMallocUsage() often; it is O(elts on freelist).
 	if (UsePID && MaxMemory) {
 		handleMemoryPID(state);
 		return;
@@ -2342,13 +2340,8 @@ void Executor::terminateStateEarly(
 		state.abortInstruction();
 
 		sym_st = concretizeState(state);
-		if (sym_st == NULL) {
-			call_depth--;
-			return;
-		}
-		/* terminate forked symbolic state
-		 * -- we already know that it is too slow! */
-		term_st = sym_st;
+		if (sym_st != NULL)
+			term_st = sym_st;
 	}
 
 	if (isInterestingTestCase(term_st)) {

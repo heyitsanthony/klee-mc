@@ -10,6 +10,7 @@
 #include "CoreStats.h"
 #include "Executor.h"
 #include "ExeStateManager.h"
+#include "StateSolver.h"
 #include "PTree.h"
 #include "StatsTracker.h"
 #include "static/Sugar.h"
@@ -277,11 +278,13 @@ public:
 	QueryStatTimer(Executor *_exe) : StatTimer(_exe, "query.txt") {}
 protected:
 	void print(void) { *os
-		<< stats::queriesTopLevel << ' '
+		<< StateSolver::getRealQueries() << ' '
 		<< stats::queries << ' '
 		<< MMU::getQueries() << ' '
 		<< stats::queryTime << ' '
-		<< stats::solverTime; }
+		<< stats::solverTime << ' '
+		<< StateSolver::getConstQueries(); }
+// stats::queriesTopLevel
 };
 
 #include "klee/Internal/Module/KInstruction.h"

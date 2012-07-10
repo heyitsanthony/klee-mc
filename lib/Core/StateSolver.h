@@ -38,7 +38,7 @@ public:
 	, timedSolver(_timedSolver)
 	, simplifyExprs(_simplifyExprs) {}
 
-	~StateSolver() { delete solver; }
+	virtual ~StateSolver() { delete solver; }
 
 	void setTimeout(double t) { timedSolver->setTimeout(t); }
 	bool evaluate(const ExecutionState&, ref<Expr>, Solver::Validity &result);
@@ -65,6 +65,7 @@ public:
 	ref<Expr> toUnique(const ExecutionState &state, ref<Expr> &e);
 
 	static uint64_t getConstQueries(void) { return constQueries; }
+	static uint64_t getRealQueries(void);
 private:
 	static uint64_t	constQueries;
 };

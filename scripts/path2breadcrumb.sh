@@ -1,6 +1,14 @@
 #!/bin/bash
 
 PATHDIR="$1"
+
+if [ -f "$PATHDIR" ]; then
+	rm -rf pathdir
+	mkdir pathdir
+	cp "$PATHDIR" pathdir/
+	PATHDIR="pathdir"
+fi
+
 if [ -z "$PATHDIR" ]; then
 	PATHDIR="klee-last"
 fi

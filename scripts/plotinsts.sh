@@ -12,4 +12,4 @@ set ylabel 'instrs'
 splot 'sinst.dat' with pm3d
 "
 
-feh sinst.png
+# feh sinst.png

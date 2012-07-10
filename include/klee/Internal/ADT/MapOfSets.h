@@ -342,7 +342,6 @@ namespace klee {
         if (res) return res;
       }
     } else {
-      typename Node::children_ty::iterator kbegin = n->children.begin();
       typename Node::children_ty::iterator kmid = 
         n->children.lower_bound(*begin);
       foreach(it, n->children.begin(), n->children.end()) {
