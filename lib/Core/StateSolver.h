@@ -10,6 +10,7 @@
 #ifndef KLEE_STATESOLVER_H
 #define KLEE_STATESOLVER_H
 
+#include <iostream>
 #include "klee/Expr.h"
 #include "klee/Solver.h"
 
@@ -33,10 +34,7 @@ public:
 	StateSolver(
 		Solver *_solver,
 		TimedSolver *_timedSolver,
-		bool _simplifyExprs = true)
-	: solver(_solver)
-	, timedSolver(_timedSolver)
-	, simplifyExprs(_simplifyExprs) {}
+		bool _simplifyExprs = true);
 
 	virtual ~StateSolver() { delete solver; }
 
@@ -66,8 +64,15 @@ public:
 
 	static uint64_t getConstQueries(void) { return constQueries; }
 	static uint64_t getRealQueries(void);
+
+	static void dumpTimes(std::ostream& os);
 private:
 	static uint64_t	constQueries;
+	static void updateTimes(const ExecutionState& state, double totalTime);
+#define STATESOLVER_LOWEST_TIME		1.0e-6
+#define STATESOLVER_TIME_INTERVAL	1.5
+#define NUM_STATESOLVER_BUCKETS		40
+	static unsigned timeBuckets[NUM_STATESOLVER_BUCKETS];
 };
 }
 

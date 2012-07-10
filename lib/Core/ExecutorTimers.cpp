@@ -277,13 +277,27 @@ class QueryStatTimer : public StatTimer
 public:
 	QueryStatTimer(Executor *_exe) : StatTimer(_exe, "query.txt") {}
 protected:
-	void print(void) { *os
+	void print(void)
+	{
+		printTimes();
+		*os
 		<< StateSolver::getRealQueries() << ' '
 		<< stats::queries << ' '
 		<< MMU::getQueries() << ' '
 		<< stats::queryTime << ' '
 		<< stats::solverTime << ' '
-		<< StateSolver::getConstQueries(); }
+		<< StateSolver::getConstQueries();
+	}
+
+
+	void printTimes(void) {
+		std::ostream*	f;
+
+		f = executor->getInterpreterHandler()->openOutputFile("qtimes.txt");
+		if (f == NULL) return;
+		StateSolver::dumpTimes(*f);
+		delete f;
+	}
 // stats::queriesTopLevel
 };
 
@@ -385,7 +399,7 @@ public:
 				ss << "\\n";
 				continue;
 			}
-			
+
 			ss << ret[i];
 		}
 		ret = ss.str();
@@ -481,7 +495,7 @@ void PC##x::run(std::istream& is, std::ostream& os)	\
 DECL_PIPECMD(BacktraceStates)
 {
 	std::ostream* of;
-	
+
 	of = exe->getInterpreterHandler()->openOutputFile("tr.txt");
 	if (of == NULL) {
 		os << "[Backtrace] Couldn't open tr.txt!\n";

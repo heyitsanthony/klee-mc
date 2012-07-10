@@ -17,11 +17,13 @@
 
 #include "CoreStats.h"
 #include "klee/SolverStats.h"
+#include <string.h>
 
 using namespace klee;
 using namespace llvm;
 
 uint64_t StateSolver::constQueries = 0;
+unsigned StateSolver::timeBuckets[NUM_STATESOLVER_BUCKETS];
 
 #define WRAP_QUERY(x)	\
 do {	\
@@ -30,8 +32,7 @@ do {	\
 		expr = state.constraints.simplifyExpr(expr);	\
 	ok = x;	\
 	finish = util::getWallTime();	\
-	stats::solverTime += (std::max(0.,finish - start)) * 1000000.;	\
-	state.queryCost += (std::max(0.,finish - start));	\
+	updateTimes(state, std::max(0.,finish - start));	\
 } while (0)
 
 #define WRAP_QUERY_NOSIMP(x)	\
@@ -39,13 +40,40 @@ do {	\
 	start = util::getWallTime();	\
 	ok = x;	\
 	finish = util::getWallTime();	\
-	stats::solverTime += (std::max(0.,finish - start)) * 1000000.;	\
-	state.queryCost += (std::max(0.,finish - start));	\
+	updateTimes(state, std::max(0.,finish - start));	\
 } while (0)
+
+
+StateSolver::StateSolver(
+	Solver *_solver,
+	TimedSolver *_timedSolver,
+	bool _simplifyExprs)
+: solver(_solver)
+, timedSolver(_timedSolver)
+, simplifyExprs(_simplifyExprs)
+{
+	memset(timeBuckets, 0, sizeof(timeBuckets));
+}
 
 
 uint64_t StateSolver::getRealQueries(void)
 { return stats::queriesTopLevel - constQueries;	}
+
+void StateSolver::updateTimes(const ExecutionState& state, double totalTime)
+{
+	double	timeLowest = STATESOLVER_LOWEST_TIME;
+	/* convert to milliseconds */
+	stats::solverTime += totalTime * 1.0e6;
+	state.queryCost += totalTime;
+
+	for (unsigned i = 0; i < NUM_STATESOLVER_BUCKETS; i++) {
+		if (totalTime < timeLowest) {
+			timeBuckets[i]++;
+			break;
+		}
+		timeLowest *= STATESOLVER_TIME_INTERVAL;
+	}
+}
 
 bool StateSolver::evaluate(
 	const ExecutionState& state,
@@ -177,4 +205,14 @@ ref<Expr> StateSolver::toUnique(const ExecutionState &state, ref<Expr> &e)
 		return value;
 
 	return e;
+}
+
+void StateSolver::dumpTimes(std::ostream& os)
+{
+	double	timeLowest = STATESOLVER_LOWEST_TIME;
+	os << "# LT-TIME NUM-QUERIES\n";
+	for (unsigned i = 0; i < NUM_STATESOLVER_BUCKETS; i++) {
+		os << timeLowest  << " " << timeBuckets[i] << '\n';
+		timeLowest *= STATESOLVER_TIME_INTERVAL;
+	}
 }
