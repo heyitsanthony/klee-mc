@@ -92,15 +92,14 @@ int sc_read_sym(struct sc_pkt* sc, uint64_t len)
 	    return 1;
 	}
 #endif
-	klee_assume(GET_SYSRET(new_regs) == len);
-
 	/* limit lengths */
 	if (len > (16*1024)) {
 		len = 4096;
 	}
 
-	sc_ret_v(new_regs, len);
 	make_sym_by_arg(sc->regfile, 1, len, "readbuf");
+	klee_assume(GET_SYSRET(new_regs) == len);
+	sc_ret_v(new_regs, len);
 	sc_breadcrumb_commit(sc, GET_SYSRET(new_regs));
 	return 0;
 }

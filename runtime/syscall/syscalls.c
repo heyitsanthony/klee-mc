@@ -552,6 +552,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 #endif
 	FAKE_SC(fchmod)
 	FAKE_SC(fchown)
+	FAKE_SC(lchown)
 	FAKE_SC(utimensat)
 
 	case SYS_clock_nanosleep: {
