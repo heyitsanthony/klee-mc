@@ -73,6 +73,7 @@ private:
 #define STATESOLVER_TIME_INTERVAL	1.5
 #define NUM_STATESOLVER_BUCKETS		40
 	static unsigned timeBuckets[NUM_STATESOLVER_BUCKETS];
+	static double timeBucketTotal[NUM_STATESOLVER_BUCKETS];
 };
 }
 

@@ -24,6 +24,7 @@ using namespace llvm;
 
 uint64_t StateSolver::constQueries = 0;
 unsigned StateSolver::timeBuckets[NUM_STATESOLVER_BUCKETS];
+double StateSolver::timeBucketTotal[NUM_STATESOLVER_BUCKETS];
 
 #define WRAP_QUERY(x)	\
 do {	\
@@ -53,8 +54,8 @@ StateSolver::StateSolver(
 , simplifyExprs(_simplifyExprs)
 {
 	memset(timeBuckets, 0, sizeof(timeBuckets));
+	memset(timeBucketTotal, 0, sizeof(timeBucketTotal));
 }
-
 
 uint64_t StateSolver::getRealQueries(void)
 { return stats::queriesTopLevel - constQueries;	}
@@ -69,6 +70,7 @@ void StateSolver::updateTimes(const ExecutionState& state, double totalTime)
 	for (unsigned i = 0; i < NUM_STATESOLVER_BUCKETS; i++) {
 		if (totalTime < timeLowest) {
 			timeBuckets[i]++;
+			timeBucketTotal[i] += totalTime;
 			break;
 		}
 		timeLowest *= STATESOLVER_TIME_INTERVAL;
@@ -210,9 +212,11 @@ ref<Expr> StateSolver::toUnique(const ExecutionState &state, ref<Expr> &e)
 void StateSolver::dumpTimes(std::ostream& os)
 {
 	double	timeLowest = STATESOLVER_LOWEST_TIME;
-	os << "# LT-TIME NUM-QUERIES\n";
+	os << "# LT-TIME NUM-QUERIES TOTAL-TIME\n";
 	for (unsigned i = 0; i < NUM_STATESOLVER_BUCKETS; i++) {
-		os << timeLowest  << " " << timeBuckets[i] << '\n';
+		os	<< timeLowest << ' ' 
+			<< timeBuckets[i] << ' '
+			<< timeBucketTotal[i] << '\n';
 		timeLowest *= STATESOLVER_TIME_INTERVAL;
 	}
 }
