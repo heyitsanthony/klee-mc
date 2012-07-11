@@ -68,10 +68,10 @@ public:
 	static void dumpTimes(std::ostream& os);
 private:
 	static uint64_t	constQueries;
-	static void updateTimes(const ExecutionState& state, double totalTime);
+	bool updateTimes(const ExecutionState& state, double totalTime);
 #define STATESOLVER_LOWEST_TIME		1.0e-6
 #define STATESOLVER_TIME_INTERVAL	1.5
-#define NUM_STATESOLVER_BUCKETS		40
+#define NUM_STATESOLVER_BUCKETS		45
 	static unsigned timeBuckets[NUM_STATESOLVER_BUCKETS];
 	static double timeBucketTotal[NUM_STATESOLVER_BUCKETS];
 };

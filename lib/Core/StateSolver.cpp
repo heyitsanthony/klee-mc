@@ -26,6 +26,8 @@ uint64_t StateSolver::constQueries = 0;
 unsigned StateSolver::timeBuckets[NUM_STATESOLVER_BUCKETS];
 double StateSolver::timeBucketTotal[NUM_STATESOLVER_BUCKETS];
 
+extern double MaxSTPTime;
+
 #define WRAP_QUERY(x)	\
 do {	\
 	start = util::getWallTime();	\
@@ -33,7 +35,7 @@ do {	\
 		expr = state.constraints.simplifyExpr(expr);	\
 	ok = x;	\
 	finish = util::getWallTime();	\
-	updateTimes(state, std::max(0.,finish - start));	\
+	if (!updateTimes(state, std::max(0.,finish - start))) ok = false; \
 } while (0)
 
 #define WRAP_QUERY_NOSIMP(x)	\
@@ -41,7 +43,7 @@ do {	\
 	start = util::getWallTime();	\
 	ok = x;	\
 	finish = util::getWallTime();	\
-	updateTimes(state, std::max(0.,finish - start));	\
+	if (!updateTimes(state, std::max(0.,finish - start))) ok = false; \
 } while (0)
 
 
@@ -60,7 +62,7 @@ StateSolver::StateSolver(
 uint64_t StateSolver::getRealQueries(void)
 { return stats::queriesTopLevel - constQueries;	}
 
-void StateSolver::updateTimes(const ExecutionState& state, double totalTime)
+bool StateSolver::updateTimes(const ExecutionState& state, double totalTime)
 {
 	double	timeLowest = STATESOLVER_LOWEST_TIME;
 	/* convert to milliseconds */
@@ -75,6 +77,8 @@ void StateSolver::updateTimes(const ExecutionState& state, double totalTime)
 		}
 		timeLowest *= STATESOLVER_TIME_INTERVAL;
 	}
+
+	return totalTime < MaxSTPTime;
 }
 
 bool StateSolver::evaluate(
