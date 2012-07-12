@@ -26,6 +26,7 @@
 #include "klee/util/ExprUtil.h"
 #include "klee/util/Assignment.h"
 
+#include "BuiltRule.h"
 #include "Benchmarker.h"
 #include "DBScan.h"
 
@@ -35,6 +36,8 @@ using namespace klee::expr;
 
 ExprBuilder::BuilderKind	BuilderKind;
 int				WorkerForks;
+
+#define DEF_OPT(x,y,z) cl::opt<bool> x(y,cl::desc(z),cl::init(false))
 
 namespace llvm
 {
@@ -50,95 +53,11 @@ namespace llvm
 		cl::location(WorkerForks),
 		cl::init(0));
 
-	cl::opt<bool>
-	BenchRB(
-		"benchmark-rb",
-		cl::desc("Benchmark rule builder with random queries"),
-		cl::init(false));
-
-	cl::opt<bool>
-	BenchmarkRules(
-		"benchmark-rules",
-		cl::desc("Benchmark rules with random queries"),
-		cl::init(false));
-
-	cl::opt<bool>
-	DBPunchout(
-		"db-punchout",
-		cl::desc("Punch out constants in DB rules"),
-		cl::init(false));
-
-	cl::opt<bool>
-	DBHisto(
-		"db-histo",
-		cl::desc("Print histogram of DB rule classes"),
-		cl::init(false));
-
-	cl::opt<bool>
-	CheckRule(
-		"check-rule",
-		cl::desc("Check a rule file."),
-		cl::init(false));
-
-	cl::opt<bool>
-	EraseShadows(
-		"erase-shadows",
-		cl::desc("Erase shadowed rules."),
-		cl::init(false));
-
-	cl::opt<bool>
-	VerifyDB(
-		"verify-db",
-		cl::desc("Verify rule database works and validates."),
-		cl::init(false));
-
-	cl::opt<bool>
-	CheckDB(
-		"check-db",
-		cl::desc("Verify that rule database is working"),
-		cl::init(false));
-
-	cl::opt<bool>
-	DedupDB(
-		"dedup-db",
-		cl::desc("Remove duplicates from DB"),
-		cl::init(false));
-
-	cl::opt<bool>
-	CheckDup(
-		"check-dup",
-		cl::desc("Check if duplicate rule"),
-		cl::init(false));
-
 	cl::opt<std::string>
 	ApplyRule(
 		"apply-rule",
 		cl::desc("Apply given rule file to input smt"),
 		cl::init(""));
-
-	cl::opt<bool>
-	DumpBinRule(
-		"dump-bin",
-		cl::desc("Dump rule in binary format."),
-		cl::init(false));
-
-	cl::opt<bool>
-	CompareDBs(
-		"compare-db",
-		cl::desc("Compute percent of InputFile which is in rule-file"),
-		cl::init(false));
-
-	cl::opt<bool>
-	DumpDB(
-		"dump-db",
-		cl::desc("Dump rule db in pretty format."),
-		cl::init(false));
-
-	cl::opt<bool>
-	DumpPattern(
-		"dump-pat",
-		cl::desc("Dump rule db patterns"),
-		cl::init(false));
 
 	cl::opt<int>
 	SplitDB(
@@ -146,42 +65,11 @@ namespace llvm
 		cl::desc("Split rule data base into n chunks"),
 		cl::init(0));
 
-	cl::opt<bool>
-	BRuleXtive(
-		"brule-xtive",
-		cl::desc("Search for transitive rules in brule database"),
-		cl::init(false));
-
-	cl::opt<bool>
-	BRuleRebuild(
-		"brule-rebuild",
-		cl::desc("Rebuild brule file."),
-		cl::init(false));
-
 	cl::opt<int>
 	ExtractRule(
 		"extract-rule",
 		cl::desc("Extract rule from brule file."),
 		cl::init(-1));
-
-	cl::opt<bool>
-	ExtractConstrs(
-		"extract-constrs",
-		cl::desc("Extract rules with constraints"),
-		cl::init(false));
-
-	cl::opt<bool>
-	ExtractFrees(
-		"extract-free",
-		cl::desc("Extract rules with free vars"),
-		cl::init(false));
-
-
-	cl::opt<bool>
-	AddRule(
-		"add-rule",
-		cl::desc("Add rule to brule file."),
-		cl::init(false));
 
 	static cl::opt<ExprBuilder::BuilderKind,true>
 	BuilderKindProxy("builder",
@@ -201,6 +89,26 @@ namespace llvm
 			clEnumValN(ExprBuilder::ExtraOptsBuilder, "extraopt",
 			"Extra Hand-optimized builder."),
 			clEnumValEnd));
+
+DEF_OPT(BenchRB, "benchmark-rb", "Benchmark rule builder with random queries");
+DEF_OPT(BenchmarkRules, "benchmark-rules", "Benchmark rules with random queries");
+DEF_OPT(DBPunchout, "db-punchout", "Punch out constants in DB rules");
+DEF_OPT(DBHisto, "db-histo", "Print histogram of DB rule classes");
+DEF_OPT(CheckRule, "check-rule", "Check a rule file.");
+DEF_OPT(EraseShadows, "erase-shadows", "Erase shadowed rules.");
+DEF_OPT(VerifyDB, "verify-db", "Verify rule database works and validates.");
+DEF_OPT(CheckDB, "check-db", "Verify that rule database is working");
+DEF_OPT(DedupDB, "dedup-db", "Remove duplicates from DB");
+DEF_OPT(CheckDup, "check-dup", "Check if duplicate rule");
+DEF_OPT(DumpBinRule, "dump-bin", "Dump rule in binary format.");
+DEF_OPT(CompareDBs, "compare-db", "Compute % of input which is in rule-file");
+DEF_OPT(DumpDB, "dump-db", "Dump rule db in pretty format.");
+DEF_OPT(DumpPattern, "dump-pat", "Dump rule db patterns");
+DEF_OPT(BRuleXtive, "brule-xtive", "Search for transitive rules in brule database");
+DEF_OPT(BRuleRebuild, "brule-rebuild", "Rebuild brule file.");
+DEF_OPT(ExtractConstrs, "extract-constrs", "Extract rules with constraints");
+DEF_OPT(ExtractFrees, "extract-free", "Extract rules with free vars");
+DEF_OPT(AddRule, "add-rule", "Add rule to brule file.");
 }
 
 void rebuildBRules(Solver* s, const std::string& InputPath);
@@ -250,7 +158,7 @@ static bool getEquivalenceInEq(ref<Expr> e, ref<Expr>& lhs, ref<Expr>& rhs)
 	assert (!ee && "Expected (Eq (Sel ((NotEq) x y) 1 0) 0)");
 
 	lhs = se->cond;
-	rhs = ConstantExpr::create(1, 1);
+	rhs = MK_CONST(1, 1);
 
 	return true;
 }
@@ -483,7 +391,7 @@ static void applyRule(ExprBuilder *eb, Solver* s)
 		}
 	}
 
-	cond = EqExpr::create(applied_expr, e);
+	cond = MK_EQ(applied_expr, e);
 	std::cerr << "CHECKING APPLICATION: " << cond << '\n';
 
 	ok = s->mustBeTrue(Query(cond), mustBeTrue);
@@ -513,7 +421,7 @@ static void printRule(ExprBuilder *eb, Solver* s)
 	std::cerr << p->satQuery << "!!!\n";
 	getEquivalence(p->satQuery, lhs, rhs);
 
-	ok = s->mustBeTrue(Query(EqExpr::create(lhs, rhs)), mustBeTrue);
+	ok = s->mustBeTrue(Query(MK_EQ(lhs, rhs)), mustBeTrue);
 	if (!ok) {
 		std::cerr << "[kopt] Solver failed\n";
 		delete p;
@@ -675,22 +583,14 @@ static void eraseShadowRules(Solver* s)
 
 	foreach (it, rb->begin(), rb->end()) {
 		const ExprRule	*er(*it), *last_er;
-		ref<Expr>	from_eb, from_rb, to_e;
-		unsigned	to_node_c, from_node_c;
-
-		to_e = er->getToExpr();
-		from_eb = er->getFromExpr();
-
-		Expr::setBuilder(rb);
-		from_rb = er->getFromExpr();
-		Expr::setBuilder(init_eb);
+		BuiltRule	br(init_eb, rb, er);
 
 		last_er = RuleBuilder::getLastRule();
 		if (last_er == er)
 			continue;
 
 		/* some other rule is doing the work! great */
-		if (from_rb == to_e) {
+		if (br.builtAsExpected()) {
 			/* I'd much prefer constrained rules
 			 * since they are known to cover more rules;
 			 * may not want this if rule is hopelessly masked.
@@ -706,15 +606,12 @@ static void eraseShadowRules(Solver* s)
 			continue;
 		}
 
-		if (from_rb == from_eb) {
+		if (br.isIneffective()) {
 			std::cerr << "Translation didn't take. Ulp\n";
 			continue;
 		}
 
-		to_node_c = ExprUtil::getNumNodes(to_e);
-		from_node_c = ExprUtil::getNumNodes(from_rb);
-
-		if (to_node_c > from_node_c) {
+		if (br.isBetter()) {
 			/* rule is obsolete; did better than expected */
 			if (!del_rules.count(er)) {
 				rb->eraseDBRule(er);
@@ -724,7 +621,7 @@ static void eraseShadowRules(Solver* s)
 			continue;
 		}
 
-		if (to_node_c == from_node_c) {
+		if (!br.isWorse()) {
 			/* duplicate rule */
 			if (er->hasConstraints()&&!last_er->hasConstraints())
 				continue;
@@ -740,7 +637,6 @@ static void eraseShadowRules(Solver* s)
 	delete rb;
 }
 
-
 /* verify that the rule data base is properly translating rules */
 extern int xxx_rb;
 static void checkDB(Solver* s)
@@ -752,6 +648,7 @@ static void checkDB(Solver* s)
 
 	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
 	init_eb = Expr::getBuilder();
+
 	i = 0;
 	unexpected_from_c = 0;
 	better_from_c = 0;
@@ -759,19 +656,13 @@ static void checkDB(Solver* s)
 
 	foreach (it, rb->begin(), rb->end()) {
 		const ExprRule	*er(*it);
-		ref<Expr>	from_eb, from_rb, to_e;
+		bool		bad;
+		BuiltRule	br(init_eb, rb, er);
 
 		i++;
 		xxx_rb = i;
 
-		to_e = er->getToExpr();
-		from_eb = er->getCleanFromExpr();
-
-		Expr::setBuilder(rb);
-		from_rb = er->getCleanFromExpr();
-		Expr::setBuilder(init_eb);
-
-		if (from_rb == to_e) {
+		if (br.builtAsExpected()) {
 			if (VerifyDB) {
 				if (checkRule(er, s, std::cerr) == false)
 					bad_verify_c++;
@@ -780,62 +671,47 @@ static void checkDB(Solver* s)
 		}
 
 
-		if (from_rb->skeleton() != from_eb->skeleton()) {
-			unsigned	to_node_c, from_node_c;
-			bool		bad;
+		std::cerr << "=======================\n";
+		std::cerr << "!DIDN'T XLATE AS EXPECTED #" << i << "!\n";
+		br.dump(std::cerr);
 
-			std::cerr << "=======================\n";
-			std::cerr << "!!!DID NOT TRANSLATE AS EXPECTED #"
-				<< i << "!!!!\n";
-			std::cerr << "FROM-EXPR-EB=" << from_eb << '\n';
-			std::cerr << "FROM-EXPR-RB=" << from_rb << '\n';
-			std::cerr << "FROM-RAW-EXPR=" << er->getFromExpr() << '\n';
-			std::cerr << "TO-EXPR=" << to_e << '\n';
+		if (br.isBetter()) better_from_c++;
 
-			to_node_c = ExprUtil::getNumNodes(to_e);
-			from_node_c = ExprUtil::getNumNodes(from_rb);
+		std::cerr << "EXPECTED RULE:\n";
+		er->print(std::cerr);
+		std::cerr << '\n';
 
-			if (to_node_c > from_node_c)
-				better_from_c++;
+		er = RuleBuilder::getLastRule();
+		if (er == NULL)
+			continue;
 
-			std::cerr << "EXPECTED RULE:\n";
+		if (er != NULL) {
+			std::cerr << "LAST RULE APPLIED:\n";
 			er->print(std::cerr);
 			std::cerr << '\n';
+		}
 
-			er = RuleBuilder::getLastRule();
-			if (er == NULL)
-				continue;
+		std::cerr << "=======================\n";
 
-			if (er != NULL) {
-				std::cerr << "LAST RULE APPLIED:\n";
-				er->print(std::cerr);
-				std::cerr << '\n';
-			}
+		unexpected_from_c++;
 
-			std::cerr << "=======================\n";
+		if (!VerifyDB)
+			continue;
 
-			unexpected_from_c++;
+		bad = (checkRule(er, s, std::cerr) == false);
+		if (!getExprCex(s, br.getToActual(), br.getFrom(), std::cerr))
+			bad = true;
 
-			if (!VerifyDB)
-				continue;
-
-			bad = (checkRule(er, s, std::cerr) == false);
-			if (!getExprCex(s, from_rb, from_eb, std::cerr))
-				bad = true;
-
-			/* terminate if bad rule */
-			if (bad) {
-				std::cerr << "!! BAD VERIFY !!\n";
-				bad_verify_c++;
-			} else {
-				continue;
-			}
+		/* terminate if bad rule */
+		if (bad) {
+			std::cerr << "!! BAD VERIFY !!\n";
+			bad_verify_c++;
+		} else {
+			continue;
 		}
 
 		std::cerr << "DID NOT TRANSLATE #" << i << ":\n";
-		std::cerr << "FROM-EXPR-EB: " << from_eb << '\n';
-		std::cerr << "FROM-EXPR-RB: " << from_rb << '\n';
-		std::cerr << "TO-EXPR: " << to_e << '\n';
+		br.dump(std::cerr);
 		std::cerr << "RULE:\n";
 		er->print(std::cerr);
 		std::cerr << '\n';

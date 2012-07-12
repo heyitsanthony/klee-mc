@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 #include "klee/Expr.h"
 #include "klee/ExprBuilder.h"
+#include "ExprRebuilder.h"
 #include "klee/util/ConstantDivision.h"
 #include "ExtraOptBuilder.h"
 
@@ -90,6 +91,12 @@ ExprAlloc* Expr::setAllocator(ExprAlloc* a)
 	return oldAlloc;
 }
 
+ref<Expr> Expr::rebuild(void) const
+{
+	ExprRebuilder	r;
+	return r.rebuild(this);
+}
+
 static ref<Expr> getTempReadBytes(
 	const ref<Array> &array, unsigned bytes, unsigned arr_off)
 {
@@ -154,34 +161,12 @@ void Expr::printKind(std::ostream &os, Kind k)
 	X(Select);
 	X(Concat);
 	X(Extract);
-	X(ZExt);
-	X(SExt);
-	X(Add);
-	X(Sub);
-	X(Mul);
-	X(UDiv);
-	X(SDiv);
-	X(URem);
-	X(SRem);
-	X(Not);
-	X(And);
-	X(Or);
-	X(Xor);
-	X(Shl);
-	X(LShr);
-	X(AShr);
-	X(Eq);
-	X(Ne);
-	X(Ult);
-	X(Ule);
-	X(Ugt);
-	X(Uge);
-	X(Slt);
-	X(Sle);
-	X(Sgt);
-	X(Sge);
-	X(Bind);
-	X(Let);
+	X(ZExt); X(SExt);
+	X(Add); X(Sub);	X(Mul); X(UDiv); X(SDiv); X(URem); X(SRem);
+	X(Not); X(And); X(Or); X(Xor); X(Shl); X(LShr); X(AShr);
+	X(Eq); X(Ne);
+	X(Ult); X(Ule); X(Ugt); X(Uge); X(Slt); X(Sle); X(Sgt); X(Sge);
+	X(Bind); X(Let);
 #undef X
 	default:
 	assert(0 && "invalid kind");
@@ -191,7 +176,6 @@ void Expr::printKind(std::ostream &os, Kind k)
 ref<Expr> Expr::createFromKind(Kind k, std::vector<CreateArg> args)
 {
   unsigned numArgs = args.size();
-  (void) numArgs;
 
   switch(k) {
     case Constant:
@@ -230,29 +214,11 @@ ref<Expr> Expr::createFromKind(Kind k, std::vector<CreateArg> args)
       CAST_EXPR_CASE(ZExt);
       CAST_EXPR_CASE(SExt);
 
-      case Add:
-      case Sub:
-      case Mul:
-      case UDiv:
-      case SDiv:
-      case URem:
-      case SRem:
-      case And:
-      case Or:
-      case Xor:
-      case Shl:
-      case LShr:
-      case AShr:
-      case Eq:
-      case Ne:
-      case Ult:
-      case Ule:
-      case Ugt:
-      case Uge:
-      case Slt:
-      case Sle:
-      case Sgt:
-      case Sge:
+      case Add: case Sub: case Mul: case UDiv: case SDiv: case URem: case SRem:
+      case And: case Or: case Xor: case Shl: case LShr: case AShr:
+      case Eq: case Ne:
+      case Ult: case Ule: case Ugt: case Uge:
+      case Slt: case Sle: case Sgt: case Sge:
         assert (numArgs == 2 &&
 		args[0].isExpr() && args[1].isExpr() && "invalid args array");
         return BinaryExpr::create(k, args[0].expr, args[1].expr);
@@ -260,7 +226,8 @@ ref<Expr> Expr::createFromKind(Kind k, std::vector<CreateArg> args)
 }
 
 
-void Expr::printWidth(std::ostream &os, Width width) {
+void Expr::printWidth(std::ostream &os, Width width)
+{
 	switch(width) {
 		case Expr::Bool: os << "Expr::Bool"; break;
 		case Expr::Int8: os << "Expr::Int8"; break;

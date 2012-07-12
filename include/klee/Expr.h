@@ -44,6 +44,38 @@ template<class T> class ref;
 
 struct ArrayLT { bool operator()(const Array *a, const Array *b) const; };
 
+
+#define MK_ZEXT(x,y)		ZExt::create(x,y)
+#define MK_SEXT(x,y)		SExtExpr::create(x,y)
+#define MK_READ(x,y)		ReadExpr::create(x,y)
+#define MK_CONST(x,y)		ConstantExpr::create(x,y)
+#define MK_SELECT(x,y,z)	SelectExpr::create(x,y,z)
+#define MK_CONCAT(x,y)		ConcatExpr::create(x,y)
+#define MK_EXTRACT(x,y,z)	ExtractExpr::craete(x,y,z)
+#define MK_ADD(x,y)		AddExpr::create(x,y)
+#define MK_SUB(x,y)		SubExpr::create(x,y)
+#define MK_MUL(x,y)		MulExpr::create(x,y)
+#define MK_UDIV(x,y)		UDivExpr::create(x,y)
+#define MK_SDIV(x,y)		SDivExpr::create(x,y)
+#define MK_UREM(x,y)		URemExpr::create(x,y)
+#define MK_SREM(x,y)		SRemExpr::create(x,y)
+#define MK_NOT(x,y)		NotExpr::create(x,y)
+#define MK_OR(x,y)		OrExpr::create(x,y)
+#define MK_AND(x,y)		AndExpr::create(x,y)
+#define MK_XOR(x,y)		XorExpr::create(x,y)
+#define MK_SHL(x,y)		ShlExpr::create(x,y)
+#define MK_LSHR(x,y)		LShrExpr::create(x,y)
+#define ML_ASHR(x,y)		AShrExpr::create(x,y)
+#define MK_EQ(x,y)		EqExpr::create(x,y)
+#define MK_NE(x,y)		NeExpr::create(x,y)
+#define MK_ULT(x,y)		UltExpr::create(x,y)
+#define MK_ULE(x,y)		UleExpr::create(x,y)
+#define MK_UGT(x,y)		UgtExpr::create(x,y)
+#define MK_SLT(x,y)		SltExpr::create(x,y)
+#define MK_SLE(x,y)		SleExpr::create(x,y)
+#define MK_SGT(x,y)		SgtExpr::create(x,y)
+#define MK_SGE(x,y)		SgeExpr::create(x,y)
+
 /// Class representing symbolic expressions.
 /**
 
@@ -93,7 +125,8 @@ Todo: Shouldn't bool \c Xor just be written as not equal?
 
 */
 
-class Expr {
+class Expr
+{
 public:
   typedef uint64_t	Hash;
   static unsigned long	count;
@@ -221,10 +254,8 @@ public:
   inline int compare(const Expr &b) const
   {
 	if (this == &b) return 0;
-	if (hashValue < b.hashValue)
-		return -1;
-	if (hashValue > b.hashValue)
-		return 1;
+	if (hashValue < b.hashValue) return -1;
+	if (hashValue > b.hashValue) return 1;
 	return compareSlow(b);
   }
   virtual int compareContents(const Expr &b) const { return 0; }
@@ -233,13 +264,13 @@ public:
   // but using those children.
   virtual ref<Expr> rebuild(ref<Expr> kids[/* getNumKids() */]) const = 0;
 
+  // reconstruct expression from bottom up
+  ref<Expr> rebuild(void) const;
+
   /// isZero - Is this a constant zero.
   bool isZero() const;
-
-  /// isTrue - Is this the true expression.
+  /// Is this the true/false expression.
   bool isTrue() const;
-
-  /// isFalse - Is this the false expression.
   bool isFalse() const;
 
   /* Static utility methods */
@@ -259,9 +290,6 @@ public:
 
   /// Create a little endian read of the given type at offset 0 of the
   /// given object.
-  //
-  //XXX are there special semantics to this? Why wouldn't I want to
-  //use ReadExpr::create?
   static ref<Expr> createTempRead(
 	const ref<Array>& array, Expr::Width w, unsigned arr_off = 0);
 
@@ -344,35 +372,37 @@ public:
 	static bool classof(const NonConstantExpr *) { return true; }
 };
 
-class BinaryExpr : public NonConstantExpr {
+class BinaryExpr : public NonConstantExpr
+{
 public:
-  ref<Expr> left, right;
+	ref<Expr> left, right;
 
 public:
-  unsigned getNumKids() const { return 2; }
-  ref<Expr> getKid(unsigned i) const {
-    if(i == 0) return left;
-    if(i == 1) return right;
-    return 0;
-  }
+	unsigned getNumKids() const { return 2; }
+	ref<Expr> getKid(unsigned i) const
+	{
+		if(i == 0) return left;
+		if(i == 1) return right;
+		return 0;
+	}
 
-  const Expr* getKidConst(unsigned i) const
-  {
-  	if (i == 0) return left.get();
-	if (i == 1) return right.get();
-	return NULL;
-  }
+	const Expr* getKidConst(unsigned i) const
+	{
+		if (i == 0) return left.get();
+		if (i == 1) return right.get();
+		return NULL;
+	}
 
-  static ref<Expr> create(Kind k, const ref<Expr> &l, const ref<Expr> &r);
+	static ref<Expr> create(Kind k, const ref<Expr> &l, const ref<Expr> &r);
 protected:
-  BinaryExpr(const ref<Expr> &l, const ref<Expr> &r) : left(l), right(r) {}
+	BinaryExpr(const ref<Expr> &l, const ref<Expr> &r) : left(l), right(r) {}
 
 public:
-  static bool classof(const Expr *E) {
-    Kind k = E->getKind();
-    return Expr::BinaryKindFirst <= k && k <= Expr::BinaryKindLast;
-  }
-  static bool classof(const BinaryExpr *) { return true; }
+	static bool classof(const Expr *E) {
+		Kind k = E->getKind();
+		return Expr::BinaryKindFirst <= k && k <= Expr::BinaryKindLast;
+	}
+	static bool classof(const BinaryExpr *) { return true; }
 };
 
 
@@ -728,8 +758,6 @@ public:
   : left(l), right(r)
   { width = l->getWidth() + r->getWidth(); }
 
-
-
   static ref<Expr> alloc(const ref<Expr> &l, const ref<Expr> &r);
   static ref<Expr> create(const ref<Expr> &l, const ref<Expr> &r);
 
@@ -814,8 +842,7 @@ public:
 
   virtual Hash computeHash();
 
-  static bool classof(const Expr *E)
-  { return E->getKind() == Expr::Extract; }
+  static bool classof(const Expr *E) { return E->getKind() == Expr::Extract; }
   static bool classof(const ExtractExpr *) { return true; }
 };
 
