@@ -31,11 +31,26 @@ void ExprRebuilder::visitExprPost(const Expr* expr)
 		return;
 	}
 
-	/* need to rebuild this expression */
+	/* need to rebuild this expression? */
 	assert (postexprs.size() > depth+1);
 
+	/* rewrite arguments to use old ones if possible */
+	for (unsigned i = 0; i < expr->getNumKids(); i++) {
+		if (	postexprs[depth+1][i]->hash() !=
+			expr->getKidConst(i)->hash())
+		{
+			continue;
+		}
+		/* use old expression */
+		postexprs[depth+1][i] = expr->getKid(i);
+	}
+
 	post_e = expr->rebuild(postexprs[depth+1].data());
-	postexprs[depth].push_back(post_e);
+	if (post_e->hash() != expr->hash())
+		postexprs[depth].push_back(post_e);
+	else
+		postexprs[depth].push_back(
+			ref<Expr>(const_cast<Expr*>(expr)));
 
 	/* done with all expressions in subtree, remove the postexprs */
 	postexprs.resize(depth+1);
