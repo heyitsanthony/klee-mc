@@ -30,6 +30,18 @@ namespace {
 		cl::init(""));
 
 	cl::opt<bool>
+	RBRecursive(
+		"rb-recursive",
+		cl::desc("Recursively call rulebuilder when applying rules"),
+		cl::init(false));
+
+	cl::opt<bool>
+	RBRebuild(
+		"rb-rebuild",
+		cl::desc("Rebuild on effective rule."),
+		cl::init(false));
+
+	cl::opt<bool>
 	RBMissFilter(
 		"rb-miss-filter",
 		cl::desc("Filter out misses by hash"),
@@ -319,7 +331,7 @@ ref<Expr> RuleBuilder::tryApplyRules(const ref<Expr>& in)
 
 	/* don't call back to self in case we find an optimization! */
 	old_depth = depth;
-	depth = 1;
+	depth = (RBRecursive) ? 0 : 1;
 
 	if (ApplyRuleTrie)
 		ret = tryTrieRules(in);
@@ -332,6 +344,7 @@ ref<Expr> RuleBuilder::tryApplyRules(const ref<Expr>& in)
 	recur--;
 	depth = old_depth;
 
+	/* didn't change expr */
 	if ((void*)ret.get() == (void*)in.get()) {
 		miss_c++;
 		if (DumpRuleMiss) {
@@ -349,6 +362,18 @@ ref<Expr> RuleBuilder::tryApplyRules(const ref<Expr>& in)
 			std::cerr << ret << '\n';
 		}
 		hit_c++;
+
+		/* try again. ? */
+		if (RBRebuild && ret->hash() != in->hash()) {
+			ref<Expr>	rebuilt(ret->rebuild());
+
+			/* NB: if we return the rebuilt expression regardless,
+			 * we may wind up with lots of copies of the
+			 * same expression hanging around. Hence, only return
+			 * if it's actually different. */
+			if (rebuilt->hash() != in->hash())
+				ret = rebuilt;
+		}
 	}
 
 	return ret;
