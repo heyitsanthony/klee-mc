@@ -71,8 +71,7 @@ typedef
 		const char* name, unsigned id, out_objs&);
 
 	virtual bool getStateSymObjs(
-		const ExecutionState& state,
-		out_objs& out);
+		const ExecutionState& state, out_objs& out);
 
 	ExecutorVex	*m_interpreter;
 private:
@@ -82,9 +81,11 @@ private:
 	bool scanForOutputDir(const std::string& path, std::string& theDir);
 	void dumpPCs(const ExecutionState& state, unsigned id);
 	void dumpLog(
+		const ExecutionState& state,
 		const char* name,
-		unsigned id,
-		RecordLog::const_iterator begin, RecordLog::const_iterator end);
+		unsigned id);
+
+	bool validateTest(unsigned id);
 };
 
 }

@@ -1,3 +1,7 @@
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/CommandLine.h"
 
@@ -13,6 +17,7 @@
 #include "ExecutorVex.h"
 #include "ExeStateVex.h"
 #include "KleeHandler.h"
+#include "guestsnapshot.h"
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -28,48 +33,27 @@ using namespace klee;
 
 extern bool WriteTraces;
 
+#define DECL_OPT(x,y,z)	cl::opt<bool> x(y,cl::desc(z))
+
 namespace {
-  cl::opt<bool> NoOutput(
-    "no-output",
-    cl::desc("Don't generate test files"));
+DECL_OPT(NoOutput, "no-output", "Don't generate test files");
+DECL_OPT(WriteCov, "write-cov", "Write coverage info for each test");
+DECL_OPT(WritePCs, "write-pcs", "Write .pc files for each test case");
+DECL_OPT(WriteSMT,  "write-smt", "Write .smt for each test");
+DECL_OPT(WritePaths, "write-paths", "Write .path files for each test");
+DECL_OPT(WriteSymPaths, "write-sym-paths", "Write .sym.path files for each test");
+DECL_OPT(ExitOnError, "exit-on-error", "Exit if errors occur");
+DECL_OPT(ValidateTestCase, "validate-test", "Validate tests with concrete replay");
 
-  cl::opt<bool> WriteCov(
-    "write-cov",
-    cl::desc("Write coverage information for each test case"));
+cl::opt<unsigned> StopAfterNTests(
+	"stop-after-n-tests",
+	cl::desc("Halt execution after generating the given number of tests."),
+	cl::init(0));
 
-  cl::opt<bool> WriteTestInfo(
-    "write-test-info",
-    cl::desc("Write additional test case information"));
-
-  cl::opt<bool> WritePCs(
-    "write-pcs",
-    cl::desc("Write .pc files for each test case"));
-
-  cl::opt<bool> WriteSMT(
-  	"write-smt",
-	cl::desc("Write .smt files for each test case"),
-	cl::init(false));
-
-  cl::opt<bool> WritePaths(
-    "write-paths",
-    cl::desc("Write .path files for each test case"));
-  cl::opt<bool> WriteSymPaths(
-    "write-sym-paths",
-    cl::desc("Write .sym.path files for each test case"));
-
-  cl::opt<unsigned> StopAfterNTests(
-    "stop-after-n-tests",
-	  cl::desc("Stop execution after generating the given number of tests.  Extra tests corresponding to partially explored paths will also be dumped."),
-	  cl::init(0));
-
-  cl::opt<std::string> OutputDir(
-    "output-dir",
-    cl::desc("Directory to write results in (defaults to klee-out-N)"),
-    cl::init(""));
-
-  cl::opt<bool> ExitOnError(
-    "exit-on-error",
-    cl::desc("Exit if errors occur"));
+cl::opt<std::string> OutputDir(
+	"output-dir",
+	cl::desc("Directory to write results in (defaults to klee-out-N)"),
+	cl::init(""));
 }
 
 KleeHandler::KleeHandler(const CmdArgs* in_args, Guest* _gs)
@@ -104,6 +88,11 @@ KleeHandler::KleeHandler(const CmdArgs* in_args, Guest* _gs)
 	}
 
 	setupOutputFiles();
+
+	if (ValidateTestCase) {
+		assert (gs != NULL);
+		assert (dynamic_cast<GuestSnapshot*>(gs) != NULL);
+	}
 }
 
 bool KleeHandler::scanForOutputDir(const std::string& p, std::string& theDir)
@@ -217,21 +206,20 @@ static std::ostream* file_check(std::ostream* os, const std::string& fname)
 	return os;
 }
 
+#define IO_OUT_MODE	std::ios::out | std::ios::trunc | std::ios::binary
+
 std::ostream *KleeHandler::openOutputFileGZ(const std::string &filename)
 {
-	std::ios::openmode io_mode =
-		std::ios::out | std::ios::trunc | std::ios::binary;
+	std::ios::openmode io_mode = IO_OUT_MODE;
 	std::string path = getOutputFilename(filename);
 	std::ostream* f = new gzofstream(path.c_str(), io_mode);
 
 	return file_check(f, filename);
 }
 
-
 std::ostream *KleeHandler::openOutputFile(const std::string &filename)
 {
-	std::ios::openmode io_mode =
-		std::ios::out | std::ios::trunc | std::ios::binary;
+	std::ios::openmode io_mode = IO_OUT_MODE;
 	std::string path = getOutputFilename(filename);
 	std::ostream* f = new std::ofstream(path.c_str(), io_mode);
 	return file_check(f, filename);
@@ -311,9 +299,7 @@ void KleeHandler::processSuccessfulTest(
 bool KleeHandler::getStateSymObjs(
 	const ExecutionState& state,
 	out_objs& out)
-{
-	return m_interpreter->getSymbolicSolution(state, out);
-}
+{ return m_interpreter->getSymbolicSolution(state, out); }
 
 #define LOSING_IT(x)	\
 	klee_warning("unable to write " #x " file, losing it (errno=%d: %s)", \
@@ -325,6 +311,10 @@ void KleeHandler::processTestCase(
 	const char *errorMessage,
 	const char *errorSuffix)
 {
+	unsigned	id;
+	out_objs	out;
+	bool		success;
+
 	if (errorMessage && ExitOnError) {
 		std::cerr << "EXITING ON ERROR:\n" << errorMessage << "\n";
 		exit(1);
@@ -332,15 +322,11 @@ void KleeHandler::processTestCase(
 
 	if (NoOutput) return;
 
-	out_objs out;
-	bool success;
-
 	success = getStateSymObjs(state, out);
 	if (!success)
 		klee_warning("unable to get symbolic solution, losing test");
 
-	double		start_time = util::estWallTime();
-	unsigned	id = ++m_testIndex;
+	id = ++m_testIndex;
 
 	if (success) processSuccessfulTest("ktest", id, out);
 
@@ -419,21 +405,15 @@ void KleeHandler::processTestCase(
 	if (m_testIndex == StopAfterNTests)
 		m_interpreter->setHaltExecution(true);
 
-	if (WriteTestInfo) {
-		double elapsed_time = util::estWallTime() - start_time;
-		if (std::ostream *f = openTestFile("info", id)) {
-			*f	<< "Time to generate test case: "
-				<< elapsed_time << "s\n";
-			delete f;
-		} else
-			LOSING_IT(".info");
-	}
+	dumpLog(state, "crumbs", id);
 
-	const ExeStateVex	*esv = dynamic_cast<const ExeStateVex*>(&state);
-	assert (esv != NULL);
-	dumpLog("crumbs", id, esv->crumbBegin(), esv->crumbEnd());
-	fprintf(stderr, "=====DONE WRITING OUT TESTID=%d (es=%p) ===\n",
-		id, (void*)&state);
+	fprintf(stderr, "===DONE WRITING TESTID=%d (es=%p)===\n", id, &state);
+	if (ValidateTestCase) {
+		if (validateTest(id))
+			std::cerr << "VALIDATED TEST#" << id << '\n';
+		else
+			std::cerr << "FAILED TO VALIDATE TEST#" << id << '\n';
+	}
 }
 
 void KleeHandler::dumpPCs(const ExecutionState& state, unsigned id)
@@ -455,17 +435,24 @@ void KleeHandler::dumpPCs(const ExecutionState& state, unsigned id)
 }
 
 void KleeHandler::dumpLog(
-	const char* name,
-	unsigned id,
-	RecordLog::const_iterator begin, RecordLog::const_iterator end)
+	const ExecutionState& state, const char* name, unsigned id)
 {
+	const ExeStateVex		*esv;
+	RecordLog::const_iterator	begin, end;
+	std::ostream			*f;
+
+	esv = dynamic_cast<const ExeStateVex*>(&state);
+	assert (esv != NULL);
+
+	begin = esv->crumbBegin();
+	end = esv->crumbEnd();
 	if (begin == end) return;
 
-	std::ostream* f = openTestFileGZ(name, id);
+	f = openTestFileGZ(name, id);
 	if (f == NULL) return;
 
 	foreach (it, begin, end) {
-		std::vector<unsigned char> r = *it;
+		const std::vector<unsigned char>	&r(*it);
 		std::copy(
 			r.begin(), r.end(),
 			std::ostream_iterator<unsigned char>(*f));
@@ -549,4 +536,50 @@ void KleeHandler::getOutFiles(
 		if (f.substr(f.size()-6,f.size()) == ".ktest")
 			results.push_back(f);
 	}
+}
+
+bool KleeHandler::validateTest(unsigned id)
+{
+	pid_t	child_pid, ret_pid;
+	int	status;
+
+	child_pid = fork();
+	if (child_pid == -1) {
+		std::cerr << "ERROR: could not validate test " << id << '\n';
+		return false;
+	}
+
+	if (child_pid == 0) {
+		const char	*argv[5];
+		char		idstr[32];
+
+		argv[0] = "kmc-replay";
+
+		snprintf(idstr, 32, "%d", id);
+		argv[1] = idstr;
+		argv[2] = m_outputDirectory;
+		argv[3] = static_cast<GuestSnapshot*>(gs)->getPath().c_str();
+		argv[4] = NULL;
+
+		execvp("kmc-replay", (char**)argv); 
+		_exit(-1);
+	}
+
+	ret_pid = waitpid(child_pid, &status, 0);
+	if (ret_pid != child_pid) {
+		std::cerr << "VALDIATE: BAD WAIT\n";
+		return false;
+	}
+
+	if (!WIFEXITED(status)) {
+		std::cerr << "VALIDATE: DID NOT EXIT\n";
+		return false;
+	}
+
+	if (WEXITSTATUS(status) != 0) {
+		std::cerr << "VALIDATE: BAD RETURN\n";
+		return false;
+	}
+
+	return true;
 }

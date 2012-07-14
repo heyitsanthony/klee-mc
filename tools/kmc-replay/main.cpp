@@ -142,27 +142,29 @@ static int doReplay(
 int main(int argc, char* argv[])
 {
 	unsigned	test_num;
-	const char	*dirname, *xchk_guest;
+	const char	*dirname, *xchk_guest, *guest_path;
 	int		err;
 
 	llvm::InitializeNativeTarget();
 
 	if (argc < 2) {
-		fprintf(stderr, "Usage: %s testnum [directory]\n", argv[0]);
+		fprintf(stderr, "Usage: %s testnum [testdir [guestdir]]\n", argv[0]);
 		return -1;
 	}
 
 	test_num = atoi(argv[1]);
 	fprintf(stderr, "Replay: test #%d\n", test_num);
 
-	dirname = (argc == 3) ? argv[2] : "klee-last";
+	dirname = (argc >= 3) ? argv[2] : "klee-last";
+	guest_path = (argc >= 4) ? argv[3] : NULL;
+
 	xchk_guest = getenv("XCHK_GUEST");
 	if (xchk_guest != NULL) {
 		std::cerr << "XCHK WITH GUEST: " << xchk_guest << '\n';
 		setenv("KMC_REPLAY_IGNLOG", "true", 1);
+		guest_path = xchk_guest;
 	}
 
-	err = doReplay(dirname, test_num, xchk_guest);
-
+	err = doReplay(dirname, test_num, guest_path);
 	return err;
 }

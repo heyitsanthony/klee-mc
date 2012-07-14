@@ -248,14 +248,13 @@ void ObjectState::flushRangeForRead(
 
 		if (isByteConcrete(offset)) {
 			updates.extend(
-				ConstantExpr::create(offset, Expr::Int32),
-				ConstantExpr::create(
-					concreteStore[offset], Expr::Int8));
+				MK_CONST(offset, Expr::Int32),
+				MK_CONST(concreteStore[offset], Expr::Int8));
 		} else {
 			assert(	isByteKnownSymbolic(offset) &&
 				"invalid bit set in flushMask");
 			updates.extend(
-				ConstantExpr::create(offset, Expr::Int32),
+				MK_CONST(offset, Expr::Int32),
 				knownSymbolics[offset]);
 		}
 		flushMask->unset(offset);
@@ -267,14 +266,15 @@ void ObjectState::flushWriteByte(unsigned offset)
 	assert (isByteFlushed(offset) == false);
 
 	if (isByteConcrete(offset)) {
-		updates.extend(ConstantExpr::create(offset, Expr::Int32),
-		ConstantExpr::create(concreteStore[offset], Expr::Int8));
+		updates.extend(
+			MK_CONST(offset, Expr::Int32),
+			MK_CONST(concreteStore[offset], Expr::Int8));
 		markByteSymbolic(offset);
 	} else {
 		assert(	isByteKnownSymbolic(offset) &&
 			"invalid bit set in flushMask");
-		updates.extend(ConstantExpr::create(offset, Expr::Int32),
-		knownSymbolics[offset]);
+		updates.extend(
+			MK_CONST(offset, Expr::Int32), knownSymbolics[offset]);
 		setKnownSymbolic(offset, 0);
 	}
 
@@ -372,9 +372,7 @@ ref<Expr> ObjectState::read8(unsigned offset) const
 
 
 	assert(isByteFlushed(offset) && "unflushed byte without cache value");
-	return ReadExpr::create(
-		getUpdates(),
-		ConstantExpr::create(offset, Expr::Int32));
+	return MK_READ(getUpdates(), MK_CONST(offset, Expr::Int32));
 }
 
 ref<Expr> ObjectState::read8(ref<Expr> offset) const
@@ -387,9 +385,7 @@ ref<Expr> ObjectState::read8(ref<Expr> offset) const
 	fastRangeCheckOffset(offset, &base, &size);
 	flushRangeForRead(base, size);
 
-	return ReadExpr::create(
-		getUpdates(),
-		ZExtExpr::create(offset, Expr::Int32));
+	return MK_READ(getUpdates(), MK_ZEXT(offset, Expr::Int32));
 }
 
 void ObjectState::write8(unsigned offset, uint8_t value)
@@ -458,9 +454,7 @@ ref<Expr> ObjectState::read(ref<Expr> offset, Expr::Width width) const
 		unsigned	idx;
 
 		idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
-		cur_off = AddExpr::create(
-			offset,
-			ConstantExpr::create(idx, Expr::Int32));
+		cur_off = MK_ADD(offset, MK_CONST(idx, Expr::Int32));
 		if (cur_off->getKind() == Expr::Constant) {
 			byte = read8(cast<ConstantExpr>(
 				cur_off)->getZExtValue(32));
@@ -525,8 +519,7 @@ void ObjectState::write(ref<Expr> offset, ref<Expr>& value)
 
 		idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
 		v = ExtractExpr::create(value, 8 * i, Expr::Int8);
-		off = AddExpr::create(
-			offset, ConstantExpr::create(idx, Expr::Int32));
+		off = MK_ADD(offset, MK_CONST(idx, Expr::Int32));
 		write8(off, v);
 	}
 }
