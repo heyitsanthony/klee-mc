@@ -109,13 +109,19 @@ static unsigned appendNewFroms(Solver* s, RuleBuilder* rb)
 			continue;
 
 		/* better than to-expr -- handled elsewhere */
-		if (br.isBetter())
+		if (br.isBetter()) {
+			std::cerr << ">>>>>>>>>IS BETTER\n";
 			continue;
+		}
 
 		/* careful-- we want to be monotone decreasing or 
 		 * the size of the db could explode */
-		if (!br.isReduced())
-			continue;
+		/* I think this is OK though, since sometimes the 
+		 * hand optimizer will make things slightly larger.
+		 * If the DB *does* explode, maybe revisit this. */
+		if (br.isWorse()) {
+			std::cerr << "WARNING: Making rule for worse expr.\n";
+		}
 
 		/* create new rule to clear fuckup */
 		new_rule = ExprRule::createRule(
