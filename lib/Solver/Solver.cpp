@@ -91,9 +91,9 @@ namespace {
 
   cl::opt<double,true>
   MaxSTPTimeProxy("max-stp-time",
-             cl::desc("Maximum amount of time for a single query (default=120s)"),
-	     cl::location(MaxSTPTime),
-             cl::init(120.0));
+	cl::desc("Maximum time for a single query (default=120s)"),
+	cl::location(MaxSTPTime),
+        cl::init(120.0));
 
 
   cl::opt<bool>
@@ -108,9 +108,7 @@ namespace {
 	      cl::desc("Use counterexample caching"));
 
   cl::opt<bool>
-  UseCache("use-cache",
-	   cl::init(true),
-	   cl::desc("Use validity caching"));
+  UseCache("use-cache", cl::init(true), cl::desc("Use validity caching"));
 
   cl::opt<bool>
   UseTautologyChecker(
@@ -160,11 +158,10 @@ namespace {
   cl::opt<bool>
   UseIndependentSolver("use-independent-solver",
                        cl::init(true),
-		       cl::desc("Use constraint independence"));
+		       cl::desc("Compute constraint independence"));
 
   cl::opt<bool>
-  UseQueryPCLog("use-query-pc-log",
-                cl::init(false));
+  UseQueryPCLog("use-query-pc-log", cl::init(false));
 
   cl::opt<bool>
   XChkExprBuilder(
@@ -478,170 +475,6 @@ bool Solver::getInitialValues(const Query& query, Assignment& a)
 	return hasSolution;
 }
 
-bool Solver::getUsefulBits(const Query& q, uint64_t& bits)
-{
-	ref<Expr>	e(q.expr);
-	Expr::Width	width = e->getWidth();
-	uint64_t	lo, mid, hi;
-
-	bits=0;
-	lo=0;
-	hi=width;
-	while (lo < hi) {
-		bool alwaysTrue, ok;
-
-		mid = lo + (hi - lo)/2;
-
-		ok = mustBeTrue(q.withExpr(
-			EqExpr::create(
-				LShrExpr::create(
-					e,
-					ConstantExpr::create(mid, width)),
-				ConstantExpr::create(0, width))),
-			alwaysTrue);
-
-		if (ok == false) return false;
-
-		if (alwaysTrue) {
-			hi = mid;
-		} else {
-			lo = mid+1;
-		}
-
-		bits = lo;
-	}
-
-	return true;
-}
-
-
-// binary search for max
-bool Solver::getRangeMax(
-	const Query& q, uint64_t bits, uint64_t min, uint64_t& max)
-{
-	ref<Expr>	e(q.expr);
-	Expr::Width	width = e->getWidth();
-	uint64_t	lo, hi;
-
-	lo=min;
-	hi=bits64::maxValueOfNBits(bits);
-	while (lo<hi) {
-		uint64_t	mid;
-		bool		ok, res;
-
-		mid = lo + (hi - lo)/2;
-		ok = mustBeTrue(q.withExpr(
-			UleExpr::create(e, ConstantExpr::create(mid, width))),
-			res);
-
-		if (ok == false)
-			return false;
-
-		if (res) {
-			hi = mid;
-		} else {
-			lo = mid+1;
-		}
-	}
-
-	max = lo;
-	return true;
-}
-
-bool Solver::getRangeMin(const Query& q, uint64_t bits, uint64_t& min)
-{
-	ref<Expr>		e(q.expr);
-	Expr::Width		width = e->getWidth();
-	uint64_t		lo, hi;
-	bool			ok, res;
-
-	// check common case: min == 0
-	ok = mayBeTrue(q.withExpr(
-		EqExpr::create(e, ConstantExpr::create(0, width))),
-		res);
-	if (ok == false)
-		return false;
-
-	if (res) {
-		min = 0;
-		return true;
-	}
-
-	// binary search for min
-	// XXX why is this MAY be true and not MUST?
-	lo=0;
-	hi=bits64::maxValueOfNBits(bits);
-	while (lo<hi) {
-		uint64_t	mid;
-
-		mid = lo + (hi - lo)/2;
-		ok = mayBeTrue(q.withExpr(
-			UleExpr::create(e, ConstantExpr::create(mid, width))),
-			res);
-		if (ok == false)
-			return false;
-
-		if (res) {
-			hi = mid;
-		} else {
-			lo = mid+1;
-		}
-	}
-
-	min = lo;
-	return true;
-}
-
-// FIXME: REFACTOR REFACTOR REFACTOR REFACTOR
-bool Solver::getRange(
-	const Query& query,
-	std::pair< ref<Expr>, ref<Expr> >& ret )
-{
-	ref<Expr>		e(query.expr);
-	Expr::Width		w = e->getWidth();
-	uint64_t		bits, min, max;
-
-	if (dyn_cast<ConstantExpr>(e) != NULL) {
-		ret = std::make_pair(e, e);
-		return true;
-	}
-
-	if (w == 1) {
-		Solver::Validity	result;
-		bool			ok;
-
-		ok = evaluate(query, result);
-		if (!ok) return false;
-
-		switch (result) {
-		case Solver::True:	min = max = 1; break;
-		case Solver::False:	min = max = 0; break;
-		default:		min = 0, max = 1; break;
-		}
-
-		ret = std::make_pair(
-			ConstantExpr::create(min, w),
-			ConstantExpr::create(max, w));
-		return true;
-	}
-
-	if (!getUsefulBits(query, bits))
-		return false;
-
-	// could binary search for training zeros and offset
-	// min max but unlikely to be very useful
-	if (!getRangeMin(query, bits, min))
-		return false;
-
-	if (!getRangeMax(query, bits, min, max))
-		return false;
-
-	ret = std::make_pair(
-		ConstantExpr::create(min, w),
-		ConstantExpr::create(max, w));
-	return true;
-}
-
 void Solver::printName(int level) const { impl->printName(level); }
 
 Solver *klee::createValidatingSolver(Solver *s, Solver *oracle)
@@ -674,3 +507,152 @@ void SolverImpl::failQuery(void)
 	++stats::queriesFailed;
 	has_failed = true;
 }
+
+/** getRange code **/
+
+bool Solver::getUsefulBits(const Query& q, uint64_t& bits)
+{
+	ref<Expr>	e(q.expr);
+	Expr::Width	width = e->getWidth();
+	uint64_t	lo, mid, hi;
+
+	bits=0;
+	lo=0;
+	hi=width;
+	while (lo < hi) {
+		bool mbt, ok;
+
+		mid = lo + (hi - lo)/2;
+
+		ok = mustBeTrue(q.withExpr(
+			MK_EQ(	MK_LSHR(e, MK_CONST(mid, width)),
+				MK_CONST(0, width))),
+			mbt);
+
+		if (ok == false) return false;
+
+		if (mbt) {
+			hi = mid;
+		} else {
+			lo = mid+1;
+		}
+
+		bits = lo;
+	}
+
+	return true;
+}
+
+// binary search for max
+bool Solver::getRangeMax(
+	const Query& q, uint64_t bits, uint64_t min, uint64_t& max)
+{
+	ref<Expr>	e(q.expr);
+	Expr::Width	w = e->getWidth();
+	uint64_t	lo, hi;
+
+	lo=min;
+	hi=bits64::maxValueOfNBits(bits);
+	while (lo < hi) {
+		uint64_t	mid;
+		bool		ok, mbt;
+
+		mid = lo + (hi - lo)/2;
+		ok = mustBeTrue(q.withExpr(MK_ULE(e, MK_CONST(mid, w))), mbt);
+
+		if (ok == false)
+			return false;
+
+		if (mbt) {
+			hi = mid;
+		} else {
+			lo = mid+1;
+		}
+	}
+
+	max = lo;
+	return true;
+}
+
+bool Solver::getRangeMin(const Query& q, uint64_t bits, uint64_t& min)
+{
+	ref<Expr>		e(q.expr);
+	Expr::Width		w = e->getWidth();
+	uint64_t		lo, hi;
+	bool			ok, mbt;
+
+	// check common case: min == 0
+	ok = mayBeTrue(q.withExpr(MK_EQ(e, MK_CONST(0, w))), mbt);
+	if (ok == false)
+		return false;
+
+	if (mbt) {
+		min = 0;
+		return true;
+	}
+
+	// binary search for min
+	lo=0;
+	hi=bits64::maxValueOfNBits(bits);
+	while (lo<hi) {
+		uint64_t	mid;
+
+		mid = lo + (hi - lo)/2;
+		ok = mustBeTrue(q.withExpr(MK_ULE(e, MK_CONST(mid, w))), mbt);
+		if (ok == false)
+			return false;
+
+		if (mbt) {
+			hi = mid;
+		} else {
+			lo = mid+1;
+		}
+	}
+
+	min = lo;
+	return true;
+}
+
+bool Solver::getRange(
+	const Query& query,
+	std::pair< ref<Expr>, ref<Expr> >& ret )
+{
+	ref<Expr>		e(query.expr);
+	Expr::Width		w = e->getWidth();
+	uint64_t		bits, min, max;
+
+	if (dyn_cast<ConstantExpr>(e) != NULL) {
+		ret = std::make_pair(e, e);
+		return true;
+	}
+
+	/* not much range checking necessary for a single bit */
+	if (w == 1) {
+		Solver::Validity	result;
+
+		if (!evaluate(query, result)) return false;
+
+		switch (result) {
+		case Solver::True:	min = max = 1; break;
+		case Solver::False:	min = max = 0; break;
+		default:		min = 0, max = 1; break;
+		}
+
+		ret = std::make_pair(MK_CONST(min, w), MK_CONST(max, w));
+		return true;
+	}
+
+	if (!getUsefulBits(query, bits))
+		return false;
+
+	if (!getRangeMin(query, bits, min))
+		return false;
+
+	if (!getRangeMax(query, bits, min, max))
+		return false;
+
+	ret = std::make_pair(MK_CONST(min, w), MK_CONST(max, w));
+	return true;
+}
+
+/** end getrange code */

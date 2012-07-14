@@ -12,6 +12,7 @@
 #include "klee/ExeStateBuilder.h"
 #include "klee/Solver.h"
 #include "../Solver/SMTPrinter.h"
+#include "../Expr/ExprReplaceVisitor.h"
 #include "MemoryManager.h"
 
 #include "klee/util/ExprPPrinter.h"
@@ -743,4 +744,54 @@ ExecutionState* ExecutionState::reconstitute(
 	newState->weight = weight;
 
 	return newState;
+}
+
+void ExecutionState::commitIVC(
+	const ref<ReadExpr>& re, const ref<ConstantExpr>& ce)
+{
+	const MemoryObject	*mo;
+	const ObjectState	*os;
+	ObjectState		*wos;
+	ConstantExpr		*off = dyn_cast<ConstantExpr>(re->index);
+
+	if (off == NULL) return;
+
+	mo = findMemoryObject(re->updates.getRoot().get());
+	if (mo == NULL) return;
+
+	assert (mo != NULL && "Could not find MO?");
+	os = addressSpace.findObject(mo);
+
+	// os = 0 => obj has been free'd,
+	// no need to concretize (although as in other cases we
+	// would like to concretize the outstanding
+	// reads, but we have no facility for that yet)
+	if (os == NULL) return;
+
+	assert(	!os->readOnly && "read only object with static read?");
+
+	wos = addressSpace.getWriteable(mo, os);
+	assert (wos != NULL && "Could not get writable ObjectState?");
+
+	wos->writeIVC(off->getZExtValue(), ce);
+
+	foreach (it, stackBegin(), stackEnd()) {
+		ExprReplaceVisitor	erv(re, ce);
+		StackFrame		&sf(*it);
+
+		if (sf.kf == NULL)
+			continue;
+
+		/* update all registers in stack frame */
+		for (unsigned i = 0; i < sf.kf->numRegisters; i++) {
+			ref<Expr>	e;
+
+			if (	sf.locals[i].value.isNull() ||
+				isa<ConstantExpr>(sf.locals[i].value))
+				continue;
+
+			e = erv.apply(sf.locals[i].value);
+			sf.locals[i].value = e;
+		}
+	}
 }

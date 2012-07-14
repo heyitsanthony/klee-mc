@@ -16,8 +16,7 @@
 
 using namespace llvm;
 
-extern unsigned		MakeConcreteSymbolic;
-uint64_t		klee::MMU::query_c = 0;
+uint64_t klee::MMU::query_c = 0;
 
 namespace {
 	cl::opt<bool>
@@ -43,6 +42,12 @@ namespace {
 		"oob-aperture",
 		cl::desc("Radius of acceptable OOB expressions."),
 		cl::init(32*1024));
+
+	cl::opt<unsigned>
+	MakeConcreteSymbolic(
+		"make-concrete-symbolic",
+		cl::desc("Rate at which to make concrete reads symbolic (0=off)"),
+		cl::init(0));
 }
 
 using namespace klee;
@@ -122,8 +127,11 @@ void MMU::analyzeOffset(ExecutionState& st, const MemOpRes& res)
 void MMU::commitMOP(
 	ExecutionState& state, const MemOp& mop, const MemOpRes& res)
 {
-	if (res.offset->getKind() != Expr::Constant)
+	if (	res.offset->getKind() != Expr::Constant &&
+		ConstraintSeedCore::isActive())
+	{
 		analyzeOffset(state, res);
+	}
 
 	if (mop.isWrite) {
 		writeToMemRes(state, res, mop.value);

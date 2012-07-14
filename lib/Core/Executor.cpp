@@ -47,7 +47,7 @@
 #include "Context.h"
 #include "CoreStats.h"
 #include "ImpliedValue.h"
-#include "HeapMM.h"
+#include "MemoryManager.h"
 #include "PTree.h"
 #include "Forks.h"
 #include "Searcher.h"
@@ -59,7 +59,6 @@
 #include "StatsTracker.h"
 #include "Globals.h"
 #include "../Expr/RuleBuilder.h"
-#include "../Expr/ExprReplaceVisitor.h"
 
 using namespace llvm;
 using namespace klee;
@@ -81,11 +80,11 @@ virtual const char *getValueName() const { return "sockaddr_in"; }
 }
 }
 
-unsigned MakeConcreteSymbolic;
+#define DECL_OPTBOOL(x,y)	cl::opt<bool> x(y, cl::init(false))
+
 
 namespace {
-  cl::opt<bool>
-  DumpSelectStack("dump-select-stack", cl::init(false));
+  DECL_OPTBOOL(DumpSelectStack, "dump-select-stack");
 
   cl::opt<bool>
   ConcretizeEarlyTerminate(
@@ -99,20 +98,12 @@ namespace {
 	cl::desc("Dump states which fail to get initial values to console."),
 	cl::init(false));
 
-  cl::opt<unsigned,true>
-  MakeConcreteSymbolicProxy(
-  	"make-concrete-symbolic",
-	cl::desc("Rate at which to make concrete reads symbolic (0=off)"),
-	cl::location(MakeConcreteSymbolic),
-	cl::init(0));
-
   cl::opt<bool>
   UsePID("use-pid",
 	 cl::desc("Use proportional-integral-derivative state control"),
 	 cl::init(false));
 
-  cl::opt<bool>
-  ChkConstraints("chk-constraints", cl::init(false));
+  DECL_OPTBOOL(ChkConstraints, "chk-constraints");
 
   cl::opt<bool>
   DumpStatesOnHalt("dump-states-on-halt", cl::init(true));
@@ -408,8 +399,7 @@ ref<klee::ConstantExpr> Executor::evalConstant(
 		return Expr::createPointer(0);
 
 	if (isa<UndefValue>(c) || isa<ConstantAggregateZero>(c)) {
-		return ConstantExpr::create(
-			0, km->getWidthForLLVMType(c->getType()));
+		return MK_CONST(0, km->getWidthForLLVMType(c->getType()));
 	}
 
 	if (isa<ConstantVector>(c))
@@ -438,7 +428,7 @@ Executor::toConstant(
 
 	if (solver->getValue(state, e, value) == false) {
 		terminateStateEarly(state, "toConstant query timeout");
-		return ConstantExpr::create(0, e->getWidth());
+		return MK_CONST(0, e->getWidth());
 	}
 
 	std::ostringstream	os;
@@ -458,7 +448,7 @@ Executor::toConstant(
 	else
 		klee_warning_once(reason, "%s", os.str().c_str());
 
-	addConstrOrDie(state, EqExpr::create(e, value));
+	addConstrOrDie(state, MK_EQ(e, value));
 
 	return value;
 }
@@ -1265,10 +1255,8 @@ void Executor::instCmp(ExecutionState& state, KInstruction *ki)
 	for (unsigned int i = 0; i < v_elem_c; i++) {		\
 		ref<Expr>	left_i, right_i;		\
 		ref<Expr>	op_i;				\
-		left_i = ExtractExpr::create(			\
-			left, i*v_elem_w, v_elem_w);		\
-		right_i = ExtractExpr::create(			\
-			right, i*v_elem_w, v_elem_w);		\
+		left_i = MK_EXTRACT(left, i*v_elem_w, v_elem_w);\
+		right_i = MK_EXTRACT(right, i*v_elem_w, v_elem_w); \
 		op_i = y##Expr::create(left_i, right_i);	\
 		if (i == 0) result = op_i;			\
 		else result = z;				\
@@ -1328,8 +1316,7 @@ ref<Expr> Executor::sextVector(
 	SETUP_VOP_CAST(srcTy, dstTy);
 	for (unsigned int i = 0; i < v_elem_c; i++) {
 		ref<Expr>	cur_elem;
-		cur_elem = ExtractExpr::create(
-			v, i*v_elem_w_src, v_elem_w_src);
+		cur_elem = MK_EXTRACT(v, i*v_elem_w_src, v_elem_w_src);
 		cur_elem = SExtExpr::create(cur_elem, v_elem_w_dst);
 		if (i == 0)
 			result = cur_elem;
@@ -1501,10 +1488,7 @@ void Executor::instInsertElement(ExecutionState& state, KInstruction* ki)
 		out_val = ConcatExpr::create(in_newelem, out_val);
 	} else if (idx == 0) {
 		/* replace tail; head, tail */
-		out_val = ExtractExpr::create(
-			in_v,
-			v_elem_sz,
-			v_elem_sz*(v_elem_c-1));
+		out_val = MK_EXTRACT(in_v, v_elem_sz, v_elem_sz*(v_elem_c-1));
 		out_val = ConcatExpr::create(out_val, in_newelem);
 	} else {
 		/* replace mid */
@@ -1587,12 +1571,10 @@ void Executor::instShuffleVector(ExecutionState& state, KInstruction* ki)
 		idx = v_idx->getZExtValue();
 		assert (idx < 2*v_elem_c && "Shuffle permutation out of range");
 		if (idx < v_elem_c) {
-			ext = ExtractExpr::create(
-				in_v_lo, v_elem_sz*idx, v_elem_sz);
+			ext = MK_EXTRACT(in_v_lo, v_elem_sz*idx, v_elem_sz);
 		} else {
 			idx -= v_elem_c;
-			ext = ExtractExpr::create(
-				in_v_hi, v_elem_sz*idx, v_elem_sz);
+			ext = MK_EXTRACT(in_v_hi, v_elem_sz*idx, v_elem_sz);
 		}
 
 		if (i == 0) out_val = ext;
@@ -1738,9 +1720,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
 	if (!isa<ConstantExpr>(right)) {			\
 		StatePair	sp = fork(			\
 			state,					\
-			EqExpr::create(				\
-				right,					\
-				ConstantExpr::create(0, right->getWidth())), \
+			MK_EQ(right, MK_CONST(0, right->getWidth())), \
 			true);					\
 		bad_state = sp.first;				\
 		ok_state = sp.second;				\
@@ -2622,59 +2602,7 @@ void Executor::doImpliedValueConcretization(
 	ImpliedValue::getImpliedValues(e, value, results);
 
 	foreach (it, results.begin(), results.end())
-		commitIVC(state, it->first, it->second);
-}
-
-void Executor::commitIVC(
-	ExecutionState	&state,
-	const ref<ReadExpr>&	re,
-	const ref<ConstantExpr>& ce)
-{
-	const MemoryObject	*mo;
-	const ObjectState	*os;
-	ObjectState		*wos;
-	ConstantExpr		*off = dyn_cast<ConstantExpr>(re->index);
-
-	if (off == NULL) return;
-
-	mo = state.findMemoryObject(re->updates.getRoot().get());
-	if (mo == NULL) return;
-
-	assert (mo != NULL && "Could not find MO?");
-	os = state.addressSpace.findObject(mo);
-
-	// os = 0 => obj has been free'd,
-	// no need to concretize (although as in other cases we
-	// would like to concretize the outstanding
-	// reads, but we have no facility for that yet)
-	if (os == NULL) return;
-
-	assert(	!os->readOnly && "read only object with static read?");
-
-	wos = state.addressSpace.getWriteable(mo, os);
-	assert (wos != NULL && "Could not get writable ObjectState?");
-
-	wos->writeIVC(off->getZExtValue(), ce);
-
-	foreach (it, state.stackBegin(), state.stackEnd()) {
-		ExprReplaceVisitor	erv(re, ce);
-		StackFrame		&sf(*it);
-
-		if (sf.kf == NULL)
-			continue;
-
-		/* update all registers in stack frame */
-		for (unsigned i = 0; i < sf.kf->numRegisters; i++) {
-			ref<Expr>	e;
-
-			if (	sf.locals[i].value.isNull() ||
-				isa<ConstantExpr>(sf.locals[i].value))
-				continue;
-
-			e = erv.apply(sf.locals[i].value);
-			sf.locals[i].value = e;
-		}
-	}
+		state.commitIVC(it->first, it->second);
 }
 
 void Executor::instGetElementPtr(ExecutionState& state, KInstruction *ki)
@@ -2717,10 +2645,7 @@ void Executor::executeAllocConst(
 
 	op = state.allocate(sz, isLocal, false, state.prevPC->getInst());
 	if (op_mo(op) == NULL) {
-		state.bindLocal(
-			target,
-			ConstantExpr::create(
-				0, Context::get().getPointerWidth()));
+		state.bindLocal(target,	Expr::createPointer(0));
 		return;
 	}
 
@@ -2764,7 +2689,7 @@ klee::ref<klee::ConstantExpr> Executor::getSmallSymAllocSize(
 		bool			res;
 
 		tmp = example->LShr(ConstantExpr::alloc(1, W));
-		ok = solver->mayBeTrue(state, EqExpr::create(tmp, size), res);
+		ok = solver->mayBeTrue(state, MK_EQ(tmp, size), res);
 		assert(ok && "FIXME: Unhandled solver failure");
 		if (!res)
 			break;
@@ -2796,7 +2721,7 @@ void Executor::executeAllocSymbolic(
 	ref<ConstantExpr>	example(getSmallSymAllocSize(state, size));
 	Expr::Width		W = example->getWidth();
 
-	StatePair fixedSize = fork(state, EqExpr::create(example, size), true);
+	StatePair fixedSize = fork(state, MK_EQ(example, size), true);
 
 	if (fixedSize.second) {
 		// Check for exactly two values
@@ -2807,7 +2732,7 @@ void Executor::executeAllocSymbolic(
 		ne_state = fixedSize.second;
 		ok = solver->getValue(*ne_state, size, tmp);
 		assert(ok && "FIXME: Unhandled solver failure");
-		ok = solver->mustBeTrue(*ne_state, EqExpr::create(tmp, size), res);
+		ok = solver->mustBeTrue(*ne_state, MK_EQ(tmp, size), res);
 		assert(ok && "FIXME: Unhandled solver failure");
 
 		if (res) {
@@ -2821,15 +2746,13 @@ void Executor::executeAllocSymbolic(
 		// malloc will fail for it, so lets fork and return 0.
 			StatePair hugeSize = fork(
 				*ne_state,
-				UltExpr::create(ConstantExpr::alloc(1<<31, W), size),
+				MK_ULT(MK_CONST(1<<31, W), size),
 				true);
 			if (hugeSize.first) {
 				klee_message("NOTE: found huge malloc, returing 0");
 				hugeSize.first->bindLocal(
 					target,
-					ConstantExpr::alloc(
-						0,
-						Context::get().getPointerWidth()));
+					Expr::createPointer(0));
 			}
 
 			if (hugeSize.second) {
@@ -2990,7 +2913,7 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 		}
 
 		iter.getval_c++;
-		iter.res = fork(*(iter.free), EqExpr::create(iter.v, value), true);
+		iter.res = fork(*(iter.free), MK_EQ(iter.v, value), true);
 		iter.free = iter.res.second;
 
 		if (iter.res.first == NULL) continue;

@@ -333,6 +333,8 @@ static void dumpOffset(const ref<Expr>& e)
 	SMTPrinter::print(lofs, Query(e));
 }
 
+bool ConstraintSeedCore::isActive(void) { return ConstraintSolveSeeds; }
+
 bool ConstraintSeedCore::logConstraint(Executor* ex, const ref<Expr> e)
 {
 	static std::set<Expr::Hash>	hashes;

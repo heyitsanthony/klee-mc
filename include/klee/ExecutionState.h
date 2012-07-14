@@ -242,6 +242,8 @@ public:
 
   void copy(ObjectState* os, const ObjectState* reallocFrom, unsigned count);
 
+  void commitIVC(const ref<ReadExpr>& re, const ref<ConstantExpr>& ce);
+
   ref<Expr>
   read(const ObjectState* obj, ref<Expr> offset, Expr::Width w) const
   { return obj->read(offset, w); }

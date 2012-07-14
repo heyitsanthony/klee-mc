@@ -247,27 +247,27 @@ protected:
                             llvm::Function *function,
                             std::vector< ref<Expr> > &arguments) = 0;
 
-  virtual void executeCall(ExecutionState &state,
-        KInstruction *ki,
-        llvm::Function *f,
-        std::vector< ref<Expr> > &arguments);
+	virtual void executeCall(ExecutionState &state,
+		KInstruction *ki,
+		llvm::Function *f,
+		std::vector< ref<Expr> > &arguments);
 
-  virtual bool isInterestingTestCase(ExecutionState* st) const;
+	virtual bool isInterestingTestCase(ExecutionState* st) const;
 
-  InterpreterHandler	*interpreterHandler;
-  llvm::TargetData	*target_data;
-  llvm::Function	*dbgStopPointFn;
-  StatsTracker		*statsTracker;
-  PTree			*pathTree;
-  TreeStreamWriter	*symPathWriter;
-  StateSolver		*solver;
-  ExeStateManager	*stateManager;
-  Forks			*forking;
-  ExecutionState	*currentState;
+	InterpreterHandler	*interpreterHandler;
+	llvm::TargetData	*target_data;
+	llvm::Function		*dbgStopPointFn;
+	StatsTracker		*statsTracker;
+	PTree			*pathTree;
+	TreeStreamWriter	*symPathWriter;
+	StateSolver		*solver;
+	ExeStateManager		*stateManager;
+	Forks			*forking;
+	ExecutionState		*currentState;
 
 private:
-  std::vector<TimerInfo*>	timers;
-  std::set<KFunction*>		bad_conc_kfuncs;
+	std::vector<TimerInfo*>	timers;
+	std::set<KFunction*>	bad_conc_kfuncs;
 
   /// When non-null the bindings that will be used for calls to
   /// klee_make_symbolic in order replay.
@@ -351,47 +351,40 @@ private:
   bool isFPPredicateMatched(
     llvm::APFloat::cmpResult CmpRes, llvm::CmpInst::Predicate pred);
 
+	void printFileLine(ExecutionState &state, KInstruction *ki);
 
-  void printFileLine(ExecutionState &state, KInstruction *ki);
+	void replayPathsIntoStates(ExecutionState& initialState);
+	void killStates(ExecutionState* &state);
 
-  void replayPathsIntoStates(ExecutionState& initialState);
-  void killStates(ExecutionState* &state);
+	void stepInstruction(ExecutionState &state);
+	void removeRoot(ExecutionState* es);
+	void replaceStateImmForked(ExecutionState* os, ExecutionState* ns);
 
-  void stepInstruction(ExecutionState &state);
-  void removeRoot(ExecutionState* es);
-  void replaceStateImmForked(ExecutionState* os, ExecutionState* ns);
+	void executeCallNonDecl(
+		ExecutionState &state,
+		KInstruction *ki,
+		llvm::Function *f,
+		std::vector< ref<Expr> > &arguments);
 
-  void executeCallNonDecl(
-    ExecutionState &state,
-    KInstruction *ki,
-    llvm::Function *f,
-    std::vector< ref<Expr> > &arguments);
+	llvm::Function* executeBitCast(
+		ExecutionState	&state,
+		llvm::CallSite	&cs,
+		llvm::ConstantExpr* ce,
+		std::vector< ref<Expr> > &arguments);
 
-  llvm::Function* executeBitCast(
-	ExecutionState	&state,
-	llvm::CallSite	&cs,
-	llvm::ConstantExpr* ce,
-	std::vector< ref<Expr> > &arguments);
+	ObjectState* makeSymbolicReplay(
+		ExecutionState& state, const MemoryObject* mo, ref<Expr> len);
 
+	void doImpliedValueConcretization(
+		ExecutionState &state, ref<Expr> e, ref<ConstantExpr> v);
+	bool getSatAssignment(const ExecutionState& st, Assignment& a);
 
-  ObjectState* makeSymbolicReplay(
-    ExecutionState& state, const MemoryObject* mo, ref<Expr> len);
+	void initTimers();
+	void processTimers(ExecutionState *current, double maxInstTime);
+	void processTimersDumpStates(void);
 
-  void doImpliedValueConcretization(ExecutionState &state,
-                                    ref<Expr> e,
-                                    ref<ConstantExpr> value);
-  void commitIVC(
-	ExecutionState	&state,
-	const ref<ReadExpr>&	re,
-	const ref<ConstantExpr>& ce);
-  bool getSatAssignment(const ExecutionState& st, Assignment& a);
-
-
-  void initTimers();
-  void processTimers(ExecutionState *current, double maxInstTime);
-  void processTimersDumpStates(void);
-
-  void getSymbolicSolutionCex(const ExecutionState& state, ExecutionState& t);
+	void getSymbolicSolutionCex(
+		const ExecutionState& state, ExecutionState& t);
 public:
 	Executor(InterpreterHandler *ie);
 	virtual ~Executor();

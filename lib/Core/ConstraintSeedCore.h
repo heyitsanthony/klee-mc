@@ -25,6 +25,8 @@ public:
 
 	bool logConstraint(const ref<Expr> e) { return logConstraint(exe, e); }
 	static bool logConstraint(Executor* exe, const ref<Expr> e);
+
+	static bool isActive(void);
 private:
 	bool loadConstraintFile(const std::string& path);
 	bool addExprToLabel(const std::string& s, const ref<Expr>& e);

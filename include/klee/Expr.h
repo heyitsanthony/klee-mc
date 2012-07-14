@@ -51,7 +51,7 @@ struct ArrayLT { bool operator()(const Array *a, const Array *b) const; };
 #define MK_CONST(x,y)		ConstantExpr::create(x,y)
 #define MK_SELECT(x,y,z)	SelectExpr::create(x,y,z)
 #define MK_CONCAT(x,y)		ConcatExpr::create(x,y)
-#define MK_EXTRACT(x,y,z)	ExtractExpr::craete(x,y,z)
+#define MK_EXTRACT(x,y,z)	ExtractExpr::create(x,y,z)
 #define MK_ADD(x,y)		AddExpr::create(x,y)
 #define MK_SUB(x,y)		SubExpr::create(x,y)
 #define MK_MUL(x,y)		MulExpr::create(x,y)
