@@ -114,7 +114,7 @@ static unsigned appendNewFroms(Solver* s, RuleBuilder* rb)
 
 		/* careful-- we want to be monotone decreasing or 
 		 * the size of the db could explode */
-		if (br.isReduced())
+		if (!br.isReduced())
 			continue;
 
 		/* create new rule to clear fuckup */
