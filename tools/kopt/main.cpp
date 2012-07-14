@@ -670,7 +670,6 @@ static void checkDB(Solver* s)
 			continue;
 		}
 
-
 		std::cerr << "=======================\n";
 		std::cerr << "!DIDN'T XLATE AS EXPECTED #" << i << "!\n";
 		br.dump(std::cerr);
@@ -695,20 +694,20 @@ static void checkDB(Solver* s)
 
 		unexpected_from_c++;
 
-		if (!VerifyDB)
-			continue;
+		if (VerifyDB) {
+			bad = (checkRule(er, s, std::cerr) == false);
+			if (!getExprCex(s, br.getToActual(), br.getFrom(), std::cerr))
+				bad = true;
 
-		bad = (checkRule(er, s, std::cerr) == false);
-		if (!getExprCex(s, br.getToActual(), br.getFrom(), std::cerr))
-			bad = true;
-
-		/* terminate if bad rule */
-		if (bad) {
-			std::cerr << "!! BAD VERIFY !!\n";
-			bad_verify_c++;
-		} else {
-			continue;
+			/* terminate if bad rule */
+			if (bad) {
+				std::cerr << "!! BAD VERIFY !!\n";
+				bad_verify_c++;
+			}
 		}
+
+		if (br.isReduced())
+			continue;
 
 		std::cerr << "DID NOT TRANSLATE #" << i << ":\n";
 		br.dump(std::cerr);

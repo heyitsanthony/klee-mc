@@ -132,15 +132,16 @@ ExprVisitor::Action ExprVisitor::visitAction(const Expr &ep)
 
 ref<Expr> ExprVisitor::handleActionDoChildren(Expr& ep)
 {
-	bool rebuild = false;
-	ref<Expr> e(&ep), kids[8];
-	unsigned count = ep.getNumKids();
+	bool		rebuild = false;
+	ref<Expr>	e(&ep), kids[8];
+	unsigned	count(ep.getNumKids());
 
 	assert (count < 8);
 	for (unsigned i = 0; i < count; i++) {
 		ref<Expr> kid(ep.getKid(i));
+
 		kids[i] = visit(kid);
-		if (kids[i] != kid)
+		if (!rebuild && kids[i] != kid)
 			rebuild = true;
 	}
 

@@ -48,7 +48,7 @@ ref<Expr> Pattern::flat2expr(
 		ret = Expr::createTempRead(getFreeArray(), w, free_off);
 		// always have not-opt so that structure of concats
 		// are preserved.
-		// if (!strip_notopt)
+		if (!strip_notopt)
 			ret = NotOptimizedExpr::create(ret);
 		free_off = (free_off + (w+7)/8) % 4096;
 		return ret;

@@ -14,50 +14,63 @@ using namespace klee;
 ExprVisitor::Action ExprEvaluator::evalRead(
 	const UpdateList &ul, unsigned index)
 {
-  for (const UpdateNode *un=ul.head; un; un=un->next) {
-    ref<Expr> ui(visit(un->index));
+	for (const UpdateNode *un=ul.head; un; un=un->next) {
+		ref<Expr> ui(visit(un->index));
 
-    if (ConstantExpr *CE = dyn_cast<ConstantExpr>(ui)) {
-      if (CE->getZExtValue() == index)
-        return Action::changeTo(visit(un->value));
-    } else {
-      // update index is unknown, so may or may not be index, we
-      // cannot guarantee value. we can rewrite to read at this
-      // version though (mostly for debugging).
+		if (ConstantExpr *CE = dyn_cast<ConstantExpr>(ui)) {
+			if (CE->getZExtValue() == index)
+				return Action::changeTo(visit(un->value));
+			continue;
+		}
 
-      return Action::changeTo(
-        ReadExpr::create(
-	  UpdateList(ul.getRoot(), un),
-          ConstantExpr::alloc(index, ul.getRoot()->getDomain())));
-    }
-  }
+		// update index is unknown, so may or may not be index, we
+		// cannot guarantee value. we can rewrite to read at this
+		// version though (mostly for debugging).
+		return Action::changeTo(
+			ReadExpr::create(
+				UpdateList(ul.getRoot(), un),
+				MK_CONST(index, ul.getRoot()->getDomain())));
+	}
 
-  if (ul.getRoot()->isConstantArray() && index < ul.getRoot()->mallocKey.size)
-    return Action::changeTo(ul.getRoot()->getValue(index));
+	if (ul.getRoot()->isConstantArray() && index < ul.getRoot()->mallocKey.size)
+		return Action::changeTo(ul.getRoot()->getValue(index));
 
-  return Action::changeTo(getInitialValue(ul.getRoot(), index));
+	return Action::changeTo(getInitialValue(ul.getRoot(), index));
 }
 
-ExprVisitor::Action ExprEvaluator::visitExpr(const Expr &e) {
-  // Evaluate all constant expressions here, in case they weren't folded in
-  // construction. Don't do this for reads though, because we want them to go to
-  // the normal rewrite path.
-  unsigned N = e.getNumKids();
-  if (!N || isa<ReadExpr>(e)) {
-    return Action::doChildren();
-  }
+ExprVisitor::Action ExprEvaluator::visitExpr(const Expr &e)
+{
+#if 0
+	// Evaluate all constant expressions here,
+	// in case they weren't folded in construction.
+	//
+	// Don't do this for reads, we want them to go to
+	// the normal rewrite path.
+	unsigned	N = e.getNumKids();
 
-  for (unsigned i = 0; i != N; ++i)
-    if (!isa<ConstantExpr>(e.getKid(i)))
-      return Action::doChildren();
+	if (!N || isa<ReadExpr>(e))
+		return Action::doChildren();
 
-  ref<Expr> Kids[3];
-  assert(N < 3);
-  for (unsigned i = 0; i != N; ++i) {
-    Kids[i] = e.getKid(i);
-  }
+	/* this only matters if we have an inadequate constant folder
+	 * such as with the default builder. I don't think this
+	 * should be on every path. --AJR */
 
-  return Action::changeTo(e.rebuild(Kids));
+	for (unsigned i = 0; i != N; ++i)
+		if (e.getKidConst(i)->getKind() != Expr::Constant)
+			return Action::doChildren();
+
+	std::cerr << "HEY: " << e << '\n';
+	assert (0 == 1 && "SHOULD HAVE FOLDED!!");
+
+	ref<Expr> Kids[3];
+	assert(N < 3);
+	for (unsigned i = 0; i != N; ++i) {
+		Kids[i] = e.getKid(i);
+	}
+
+	return Action::changeTo(e.rebuild(Kids));
+#endif
+	return Action::doChildren();
 }
 
 ExprVisitor::Action ExprEvaluator::visitRead(const ReadExpr &re)
@@ -77,14 +90,12 @@ ExprVisitor::Action ExprEvaluator::protectedDivOperation(const BinaryExpr &e)
 {
 	ref<Expr> kids[2] = { visit(e.left), visit(e.right) };
 
-	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(kids[1])) {
-		if (CE->isZero()) {
-			kids[1] = e.right;
-			protected_div = true;
-		}
+	if (kids[1]->isZero()) {
+		kids[1] = e.right;
+		protected_div = true;
 	}
 
-	if (kids[0]!=e.left || kids[1]!=e.right)
+	if (kids[0] != e.left || kids[1] != e.right)
 		return Action::changeTo(e.rebuild(kids));
 
 	return Action::skipChildren();

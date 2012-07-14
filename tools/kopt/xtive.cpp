@@ -8,6 +8,7 @@
 #include "klee/Solver.h"
 #include "klee/util/ExprUtil.h"
 #include "klee/util/Assignment.h"
+#include "BuiltRule.h"
 #include "static/Sugar.h"
 
 using namespace klee;
@@ -100,34 +101,26 @@ static unsigned appendNewFroms(Solver* s, RuleBuilder* rb)
 	new_rule_c = 0;
 	foreach (it, rb->begin(), rb->end()) {
 		const ExprRule	*er(*it);
+		BuiltRule	br(init_eb, rb, er);
 		ExprRule	*new_rule;
-		ref<Expr>	from_rb, to_e, from_e;
-		unsigned	from_rb_node_c, to_node_c, from_e_node_c;
-
-		Expr::setBuilder(rb);
-		from_rb = er->getFromExpr();
-		Expr::setBuilder(init_eb);
-		to_e = er->getToExpr();
-		from_e = er->getFromExpr();
 
 		/* translation of from->to worked perfectly? great! */
-		if (from_rb == to_e)
+		if (br.builtAsExpected())
 			continue;
 
-		to_node_c = ExprUtil::getNumNodes(to_e);
-		from_rb_node_c = ExprUtil::getNumNodes(from_rb);
-		from_e_node_c = ExprUtil::getNumNodes(from_e);
-
-		/* better to-expr -- handled elsewhere */
-		if (from_rb_node_c < to_node_c)
+		/* better than to-expr -- handled elsewhere */
+		if (br.isBetter())
 			continue;
 
 		/* careful-- we want to be monotone decreasing or 
 		 * the size of the db could explode */
-		if (from_rb_node_c > from_e_node_c)
+		if (br.isReduced())
 			continue;
 
-		new_rule = ExprRule::createRule(from_rb, to_e);
+		/* create new rule to clear fuckup */
+		new_rule = ExprRule::createRule(
+			br.getToActual(),
+			br.getToExpected());
 		if (new_rule == NULL)
 			continue;
 
@@ -137,12 +130,10 @@ static unsigned appendNewFroms(Solver* s, RuleBuilder* rb)
 		}
 
 		new_rule->printBinaryRule(of);
-
-		if (NoisyXtive)
-			new_rule->print(std::cerr);
 		of.flush();
 
 		new_rule_c++;
+		if (NoisyXtive)	new_rule->print(std::cerr);
 		delete new_rule;
 	}
 
@@ -159,28 +150,19 @@ static void findReplacementsInFrom(
 	init_eb = Expr::getBuilder();
 	foreach (it, rb->begin(), rb->end()) {
 		const ExprRule	*er(*it);
-		ref<Expr>	from_rb, to_e, from_e;
-		unsigned	from_node_c, to_node_c;
+		BuiltRule	br(init_eb, rb, er);
 
 		i++;
 
-		Expr::setBuilder(rb);
-		from_rb = er->getFromExpr();
-		Expr::setBuilder(init_eb);
-		to_e = er->getToExpr();
-		from_e = er->getFromExpr();
-
 		/* translation of from->to worked perfectly? great! */
-		if (from_rb == to_e)
+		if (br.builtAsExpected())
 			continue;
 
-		to_node_c = ExprUtil::getNumNodes(to_e);
-		from_node_c = ExprUtil::getNumNodes(from_rb);
-
-		if (from_node_c < to_node_c) {
+		if (br.isBetter()) {
 			/* translated from-expr better than the rule's to-expr;
 			 * make improvement explicit. */
-			replacements.push_back(std::make_pair(it, from_rb));
+			replacements.push_back(
+				std::make_pair(it, br.getToActual()));
 			continue;
 		}
 	}
