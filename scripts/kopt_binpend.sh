@@ -27,7 +27,12 @@ function xtive_loop
 }
 
 if [ -f "$PROOFDIR" ]; then
-	cp "$PROOFDIR" "$FPREFIX".brule
+	ISGZIP=`file "$PROOFDIR" | grep gzip`
+	if [ -z "$ISGZIP" ]; then
+		cp "$PROOFDIR" "$FPREFIX".brule
+	else
+		zcat "$PROOFDIR" >"$FPREFIX".brule
+	fi
 else
 	kopt -max-stp-time=30 -pipe-solver -dump-bin -check-rule "$PROOFDIR" >$FPREFIX.brule
 fi
