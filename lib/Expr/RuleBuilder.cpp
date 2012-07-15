@@ -254,7 +254,7 @@ bool RuleBuilder::loadRuleStream(std::istream& is)
 	if (!is.good() || is.bad() || is.fail() || is.eof())
 		return false;
 
-	while (is.eof() == false)
+	while (!is.eof() && !is.bad())
 		addRule(ExprRule::loadBinaryRule(is));
 
 	return true;

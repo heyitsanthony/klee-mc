@@ -223,11 +223,15 @@ ExprRule* ExprRule::loadBinaryRule(std::istream& is)
 		uint32_t	skip;
 
 		hdr = 0;
-		is.read((char*)&hdr, 8);
+		if (!is.read((char*)&hdr, 8))
+			return NULL;
+
 		if (hdr != ER_HDR_SKIP)
 			break;
 
-		is.read((char*)&skip, 4);
+		if (!is.read((char*)&skip, 4))
+			return NULL;
+
 		is.ignore(skip);
 	} while (hdr == ER_HDR_SKIP);
 
