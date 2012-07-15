@@ -558,7 +558,7 @@ bool Solver::getRangeMax(
 		bool		ok, mbt;
 
 		mid = lo + (hi - lo)/2;
-		ok = mustBeTrue(q.withExpr(MK_ULE(e, MK_CONST(mid, w))), mbt);
+		ok = mayBeTrue(q.withExpr(MK_ULE(e, MK_CONST(mid, w))), mbt);
 
 		if (ok == false)
 			return false;
@@ -598,7 +598,7 @@ bool Solver::getRangeMin(const Query& q, uint64_t bits, uint64_t& min)
 		uint64_t	mid;
 
 		mid = lo + (hi - lo)/2;
-		ok = mustBeTrue(q.withExpr(MK_ULE(e, MK_CONST(mid, w))), mbt);
+		ok = mayBeTrue(q.withExpr(MK_ULE(e, MK_CONST(mid, w))), mbt);
 		if (ok == false)
 			return false;
 

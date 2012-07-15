@@ -2262,10 +2262,14 @@ std::string Executor::getAddressInfo(
 
 		example = value->getZExtValue();
 		info << "\texample: " << example << "\n";
+		// XXX: It turns out that getRange() is really slow
+		// Nothing really uses this information,
+		// but it grinds things to a halt when there is a memory error.
+#if 0
 		if (solver->getRange(state, address, res) == false)
 			return info.str();
-
 		info << "\trange: [" << res.first << ", " << res.second <<"]\n";
+#endif
 	}
 
 	state.addressSpace.printAddressInfo(info, example);
