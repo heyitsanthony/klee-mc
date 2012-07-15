@@ -29,6 +29,10 @@ public:
 	/* worse than expected from-expr */
 	bool isWorse(void) const;
 
+	/* does the translated expr have fewer bits than the
+	 * expected dest expr? */
+	bool fewerBits(void) const;
+
 	void dump(std::ostream& os) const;
 
 	ref<Expr> getFrom(void) const { return from; }

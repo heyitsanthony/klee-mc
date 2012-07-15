@@ -164,7 +164,7 @@ static void findReplacementsInFrom(
 		if (br.builtAsExpected())
 			continue;
 
-		if (br.isBetter()) {
+		if (br.isBetter() || (!br.isWorse() && br.fewerBits())) {
 			/* translated from-expr better than the rule's to-expr;
 			 * make improvement explicit. */
 			replacements.push_back(

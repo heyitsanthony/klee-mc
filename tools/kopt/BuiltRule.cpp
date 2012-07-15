@@ -1,5 +1,6 @@
 #include "../../lib/Expr/ExprRule.h"
 #include "klee/util/ExprUtil.h"
+#include "BitCounter.h"
 #include "BuiltRule.h"
 
 using namespace klee;
@@ -43,4 +44,10 @@ void BuiltRule::dump(std::ostream& os) const
 	os << "FROM-EXPR-RB=" << to_actual << '\n';
 	os << "FROM-RAW-EXPR=" << er->getFromExpr() << '\n';
 	os << "TO-EXPR=" << to_expected << '\n';
+}
+
+bool BuiltRule::fewerBits(void) const
+{
+	BitCounter	bc;
+	return bc.countBits(to_actual) < bc.countBits(to_expected);
 }
