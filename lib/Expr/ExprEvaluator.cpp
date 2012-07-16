@@ -18,9 +18,9 @@ ExprVisitor::Action ExprEvaluator::evalRead(
 		ref<Expr> ui(visit(un->index));
 
 		if (ConstantExpr *CE = dyn_cast<ConstantExpr>(ui)) {
-			if (CE->getZExtValue() == index)
-				return Action::changeTo(visit(un->value));
-			continue;
+			if (CE->getZExtValue() != index)
+				continue;
+			return Action::changeTo(visit(un->value));
 		}
 
 		// update index is unknown, so may or may not be index, we

@@ -1,7 +1,7 @@
 #ifndef UCMMU_H
 #define UCMMU_H
 
-#include "../../lib/Core/MMU.h"
+#include "../../lib/Core/KleeMMU.h"
 #include "ExeUC.h"
 
 namespace klee {
@@ -9,7 +9,7 @@ namespace klee {
 typedef std::map<int, ref<Expr> > ptrtab_map;
 
 #define MAX_EXPAND_SIZE	128
-class UCMMU: public MMU
+class UCMMU: public KleeMMU
 {
 public:
 	struct UCRewrite {
@@ -20,12 +20,12 @@ public:
 	};
 
 	UCMMU(ExeUC& uc)
-	: MMU(uc)
+	: KleeMMU(uc)
 	, exe_uc(uc)
 	, aborted(true) {}
 
 	virtual ~UCMMU(void) {}
-	virtual void exeMemOp(ExecutionState &state, MemOp mop);
+	virtual bool exeMemOp(ExecutionState &state, MemOp& mop);
 protected:
 	virtual MemOpRes memOpResolve(
 		ExecutionState& state,
@@ -68,8 +68,6 @@ private:
 		uint64_t base_ptr,
 		ref<Expr> full_ptr,
 		ObjectPair& res);
-
-
 
 	UCRewrite rewriteAddress(ExecutionState& state, ref<Expr> address);
 

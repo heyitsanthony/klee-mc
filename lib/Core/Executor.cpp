@@ -268,7 +268,7 @@ Executor::Executor(InterpreterHandler *ih)
 	ObjectState::setupZeroObjs();
 
 	memory = MemoryManager::create();
-	mmu = new MMU(*this);
+	mmu = MMU::create(*this);
 	stateManager = new ExeStateManager();
 	ExecutionState::setMemoryManager(memory);
 	ExeStateBuilder::replaceBuilder(new BaseExeStateBuilder());
@@ -585,10 +585,11 @@ void Executor::executeCall(
 	// FIXME: This is really specific to the architecture, not the pointer
 	// size. This happens to work fir x86-32 and x86-64, however.
 #define MMU_WORD_OP(x,y)	\
-	mmu->exeMemOp(state,	\
-		MMU::MemOp(true, \
-			AddExpr::create(args[0], ConstantExpr::create(x, 64)),\
-			y, NULL))
+	do { MMU::MemOp	mop(	\
+		true, \
+		AddExpr::create(args[0], ConstantExpr::create(x, 64)),\
+		y, NULL);\
+	mmu->exeMemOp(state, mop); } while (0)
 
 	Expr::Width WordSize = Context::get().getPointerWidth();
 	if (WordSize == Expr::Int32) {
@@ -1762,16 +1763,17 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
   case Instruction::ICmp: instCmp(state, ki); break;
 
   case Instruction::Load: {
-    ref<Expr> base(eval(ki, 0, state).value);
-    mmu->exeMemOp(state, MMU::MemOp(false, base, 0, ki));
-    break;
+	ref<Expr> 	base(eval(ki, 0, state).value);
+	MMU::MemOp	mop(false, base, 0, ki);
+	mmu->exeMemOp(state, mop);
+	break;
   }
   case Instruction::Store: {
-    ref<Expr>	base(eval(ki, 1, state).value);
-    ref<Expr>	value(eval(ki, 0, state).value);
-
-    mmu->exeMemOp(state, MMU::MemOp(true, base, value, 0));
-    break;
+	ref<Expr>	base(eval(ki, 1, state).value);
+	ref<Expr>	value(eval(ki, 0, state).value);
+	MMU::MemOp	mop(true, base, value, 0);
+	mmu->exeMemOp(state, mop);
+	break;
   }
 
   case Instruction::GetElementPtr: instGetElementPtr(state, ki); break;

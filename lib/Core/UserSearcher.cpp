@@ -18,6 +18,7 @@
 #include "llvm/Support/CommandLine.h"
 
 #include "DemotionSearcher.h"
+#include "ConcretizingSearcher.h"
 #include "SecondChanceSearcher.h"
 #include "RescanSearcher.h"
 #include "TailPriority.h"
@@ -90,6 +91,7 @@ namespace {
 	cl::desc("Filter out unwanted functions from dispatch"),
 	cl::init(false));
 
+  cl::opt<bool> UseConcretizingSearch("use-concretizing-search");
   cl::opt<bool> UseDemotionSearch("use-demotion-search");
   cl::opt<bool> UseBreadthFirst("use-breadth-first");
   cl::opt<bool> UsePhasedSearch("use-phased-search");
@@ -472,6 +474,9 @@ Searcher* UserSearcher::setupConfigSearcher(Executor& executor)
 
 	if (UseSecondChance)
 		searcher = new SecondChanceSearcher(searcher);
+
+	if (UseConcretizingSearch)
+		searcher = new ConcretizingSearcher(executor, searcher);
 
 	if (UseBatchingSearch)
 		searcher = new BatchingSearcher(searcher);

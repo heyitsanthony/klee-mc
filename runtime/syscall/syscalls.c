@@ -375,6 +375,15 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	}
 
+	case SYS_rt_sigtimedwait: {
+		/* XXX this should tweak a sighandler */
+		static int suspend_c = 0;
+		loop_protect(SYS_rt_sigtimedwait, &suspend_c, 10);
+		sc_ret_v(regfile, 0);
+		break;
+	}
+
+
 	case SYS_rt_sigprocmask:
 		if (GET_ARG2(regfile)) {
 			make_sym(GET_ARG2(regfile), sizeof(sigset_t), "sigset");

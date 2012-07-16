@@ -143,7 +143,7 @@ UCMMU::MemOpRes UCMMU::memOpResolve(
 	if (aborted)
 		return MemOpRes::failure();
 
-	ret = MMU::memOpResolve(state, address, type);
+	ret = KleeMMU::memOpResolve(state, address, type);
 
 	/*  resolved fine or constant, no need to do another check */
 	if ((ret.usable && ret.rc) || isa<ConstantExpr>(address))
@@ -152,7 +152,7 @@ UCMMU::MemOpRes UCMMU::memOpResolve(
 	resteer = rewriteAddress(state, address);
 	resteered = true;
 	if (isa<ConstantExpr>(resteer.new_expr))
-		return MMU::memOpResolve(state, resteer.new_expr, type);
+		return KleeMMU::memOpResolve(state, resteer.new_expr, type);
 
 	return MemOpRes::failure();
 }
@@ -312,7 +312,7 @@ void UCMMU::bindUnfixedUC(
 		if (sp.first == NULL)
 			return;
 
-		MMU::memOpError(*sp.first, mop);
+		KleeMMU::memOpError(*sp.first, mop);
 		return;
 	}
 
@@ -625,7 +625,7 @@ void UCMMU::memOpError(ExecutionState& state, MemOp& mop)
 		return;
 
 	if (resteered == false)
-		return MMU::memOpError(state, mop);
+		return KleeMMU::memOpError(state, mop);
 
 	new_ce = dyn_cast<ConstantExpr>(resteer.new_expr);
 	if (new_ce == NULL) {
@@ -666,10 +666,10 @@ void UCMMU::memOpError(ExecutionState& state, MemOp& mop)
 		new_ce->getZExtValue());
 }
 
-void UCMMU::exeMemOp(ExecutionState &state, MemOp mop)
+bool UCMMU::exeMemOp(ExecutionState &state, MemOp& mop)
 {
 	is_write = mop.isWrite;
 	aborted = false;
 	resteered = false;
-	MMU::exeMemOp(state, mop);
+	return KleeMMU::exeMemOp(state, mop);
 }

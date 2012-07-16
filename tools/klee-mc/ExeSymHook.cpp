@@ -4,7 +4,7 @@
 #include "ExeSymHook.h"
 #include "ESVSymHook.h"
 #include "klee/Common.h"
-#include "../../lib/Core/MMU.h"
+#include "../../lib/Core/KleeMMU.h"
 #include "KleeHandler.h"
 #include "symbols.h"
 #include "guest.h"
@@ -15,17 +15,17 @@ using namespace klee;
 
 #define es2esh(x)	static_cast<ESVSymHook&>(x)
 
-class MallocMMU : public MMU
+class MallocMMU : public KleeMMU
 {
 public:
 	MallocMMU(ExeSymHook& esh)
-	: MMU(esh), exe_esh(esh) {}
+	: KleeMMU(esh), exe_esh(esh) {}
 
 	virtual ~MallocMMU(void) {}
-	virtual void exeMemOp(ExecutionState &state, MemOp mop)
+	virtual bool exeMemOp(ExecutionState &state, MemOp& mop)
 	{
 		is_write = mop.isWrite;
-		MMU::exeMemOp(state, mop);
+		return KleeMMU::exeMemOp(state, mop);
 	}
 protected:
 	virtual MemOpRes memOpResolve(
@@ -48,7 +48,7 @@ MallocMMU::MemOpRes MallocMMU::memOpResolve(
 	uint64_t		addr, bytes;
 	ESVSymHook		&esh(es2esh(state));
 
-	ret = MMU::memOpResolve(state, address, type);
+	ret = KleeMMU::memOpResolve(state, address, type);
 
 	/* failed to resolve, no need to do another check */
 	if (!ret.usable || !ret.rc)

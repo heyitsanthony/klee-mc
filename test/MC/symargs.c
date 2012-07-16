@@ -1,5 +1,5 @@
 // RUN: gcc %s -I../../../include/ -O0 -o %t1
-// RUN: klee-mc -symargs - ./%t1 asd 2>%t1.err >%t1.out
+// RUN: klee-mc -pipe-solver -symargs - ./%t1 asd 2>%t1.err >%t1.out
 // RUN: ls klee-last | not grep err
 #include <stdint.h>
 int main(int argc, char* argv[])
