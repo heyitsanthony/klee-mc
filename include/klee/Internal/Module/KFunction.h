@@ -3,6 +3,7 @@
 
 #include <set>
 #include <map>
+#include <tr1/unordered_map>
 
 namespace llvm
 {
@@ -36,7 +37,9 @@ public:
 	bool trackCoverage;
 
 private:
-	std::map<llvm::BasicBlock*, unsigned> basicBlockEntry;
+	typedef std::tr1::unordered_map<llvm::BasicBlock*, unsigned>
+		bbentry_ty;
+	bbentry_ty basicBlockEntry;
 	std::set<const KFunction*>	exits_seen;
 
 

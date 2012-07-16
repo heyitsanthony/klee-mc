@@ -592,18 +592,15 @@ unsigned KModule::getConstantID(Constant *c, KInstruction* ki)
 	return id;
 }
 
-/***/
-
 KConstant::KConstant(llvm::Constant* _ct, unsigned _id, KInstruction* _ki)
 : ct(_ct)
 , id(_id)
 , ki(_ki)
 {}
 
-/***/
 KFunction* KModule::getKFunction(llvm::Function* f) const
 {
-	std::map<llvm::Function*, KFunction*>::const_iterator it;
+	func2kfunc_ty::const_iterator it;
 
 	it = functionMap.find(f);
 	if (it == functionMap.end()) return NULL;

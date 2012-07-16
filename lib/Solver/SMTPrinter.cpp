@@ -737,6 +737,8 @@ void SMTPrinter::expr2os(const ref<Expr>& e, std::ostream& os) const
 		return;
 	}
 
+	if (!os.good()) return;
+
 	SMTPrinter	smt_pr(os, arr);
 	smt_pr.apply(e);
 }

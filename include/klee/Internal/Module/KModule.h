@@ -12,7 +12,7 @@
 
 #include "klee/Interpreter.h"
 #include "klee/Internal/Module/KFunction.h"
-
+#include <tr1/unordered_map>
 #include <map>
 #include <set>
 #include <vector>
@@ -134,7 +134,9 @@ namespace klee
 
     // Our shadow versions of LLVM structures.
     std::vector<KFunction*> functions;
-    std::map<llvm::Function*, KFunction*> functionMap;
+    typedef std::tr1::unordered_map<llvm::Function*, KFunction*>
+    	func2kfunc_ty;
+    func2kfunc_ty functionMap;
 
     llvm::FunctionPassManager* fpm;
     InterpreterHandler	*ih;

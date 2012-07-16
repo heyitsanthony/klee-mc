@@ -18,14 +18,15 @@ protected:
 	std::streamsize xsputn ( const char * s, std::streamsize n )
 	{
 		total_bytes += n;
-		if (overCapacity()) return 0;
+		if (overCapacity())
+			return -1;
 		return std::stringbuf::xsputn(s, n);
 	}
 
 	int overflow (int c = EOF )
 	{
 		total_bytes++;
-		if (overCapacity()) return 0;
+		if (overCapacity()) return -1;
 		return std::stringbuf::overflow(c);
 	}
 

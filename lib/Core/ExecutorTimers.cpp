@@ -705,6 +705,8 @@ void Executor::processTimers(ExecutionState *current, double maxInstTime)
   static double lastCall = 0., lastCheck = 0.;
   double now = util::estWallTime();
 
+  if (now - lastCheck <= kSecondsPerCheck) goto done;
+
   if (dumpPTree) {
     char name[32];
     sprintf(name, "ptree%08d.dot", (int) stats::instructions);
@@ -718,8 +720,6 @@ void Executor::processTimers(ExecutionState *current, double maxInstTime)
   }
 
   if (dumpStates) processTimersDumpStates();
-
-  if (now - lastCheck <= kSecondsPerCheck) goto done;
 
   if (maxInstTime>0 && current && !stateManager->isRemovedState(current)
       && lastCall != 0. && (now - lastCall) > maxInstTime) {
