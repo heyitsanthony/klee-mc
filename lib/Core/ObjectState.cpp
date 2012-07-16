@@ -473,8 +473,33 @@ ref<Expr> ObjectState::read(unsigned offset, Expr::Width width) const
 		return ExtractExpr::create(read8(offset), 0, Expr::Bool);
 
 	// Otherwise, follow the slow general case.
-	unsigned NumBytes = width / 8;
+	unsigned	NumBytes = width / 8;
+
 	assert(width == NumBytes * 8 && "Invalid write size!");
+	if (NumBytes <= 8) {
+		bool		is_conc = true;
+
+		if (!isConcrete()) {
+			for (unsigned i = 0; i != NumBytes; ++i) {
+				if (!isByteConcrete(offset+i)) {
+					is_conc = false;
+					break;
+				}
+			}
+		}
+
+		if (is_conc) {
+			uint64_t	ret = 0;
+			for (unsigned i = 0; i != NumBytes; ++i) {
+				ret <<= 8;
+				ret |= read8c(offset+(NumBytes-1-i));
+			}
+
+			return MK_CONST(ret, NumBytes*8);
+		}
+	}
+
+
 	ref<Expr> Res(0);
 	for (unsigned i = 0; i != NumBytes; ++i) {
 		ref<Expr>	Byte(0);
@@ -702,4 +727,13 @@ ObjectState* ObjectState::createDemandObj(unsigned sz)
 }
 
 /* XXX: nothing yet-- not enough concrete-only states to justify */
-void ObjectState::garbageCollect(void) {}
+void ObjectState::garbageCollect(void)
+{
+#if 0
+	unsigned	c = 0;
+	foreach (it, objs.begin(), objs.end())
+		if ((*it)->isConcrete())
+			c++;
+	std::cerr << "OS-GC: c=" << c << '\n';
+#endif
+}

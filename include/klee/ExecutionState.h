@@ -346,7 +346,7 @@ private:
 	bool	onFreshBranch;
 
 	unsigned		canary;
-	// ConstraintManager	concrete_constraints;
+	ConstraintManager	concrete_constraints;
 
 };
 

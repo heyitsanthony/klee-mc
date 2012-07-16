@@ -91,7 +91,7 @@ namespace {
 	cl::desc("Filter out unwanted functions from dispatch"),
 	cl::init(false));
 
-  cl::opt<bool> UseConcretizingSearch("use-concretizing-search");
+  cl::opt<unsigned> UseConcretizingSearch("use-concretizing-search");
   cl::opt<bool> UseDemotionSearch("use-demotion-search");
   cl::opt<bool> UseBreadthFirst("use-breadth-first");
   cl::opt<bool> UsePhasedSearch("use-phased-search");
@@ -472,10 +472,13 @@ Searcher* UserSearcher::setupConfigSearcher(Executor& executor)
 		searcher = new EpochSearcher(
 			executor, new RRSearcher(), searcher);
 
+	if (UseConcretizingSearch == 1)
+		searcher = new ConcretizingSearcher(executor, searcher);
+
 	if (UseSecondChance)
 		searcher = new SecondChanceSearcher(searcher);
 
-	if (UseConcretizingSearch)
+	if (UseConcretizingSearch == 2)
 		searcher = new ConcretizingSearcher(executor, searcher);
 
 	if (UseBatchingSearch)

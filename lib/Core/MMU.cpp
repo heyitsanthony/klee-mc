@@ -50,5 +50,5 @@ ref<Expr> MMU::readDebug(ExecutionState& state, uint64_t addr)
 /* TODO: make this a command line option */
 #include "DualMMU.h"
 #include "KleeMMU.h"
-MMU* MMU::create(Executor& exe) { return new KleeMMU(exe); }
-//MMU* MMU::create(Executor& exe) { return new DualMMU(exe); }
+//MMU* MMU::create(Executor& exe) { return new KleeMMU(exe); }
+MMU* MMU::create(Executor& exe) { return new DualMMU(exe); }

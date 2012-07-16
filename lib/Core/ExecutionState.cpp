@@ -650,6 +650,12 @@ void ExecutionState::assignSymbolics(const Assignment& a)
 
 		sa.setConcretization(*v);
 	}
+
+
+	foreach (it, constraints.begin(), constraints.end())
+		concrete_constraints.addConstraint(*it);
+
+	constraints = ConstraintManager();
 }
 
 /* kind of stupid-- probably shouldn't loop like this */

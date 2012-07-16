@@ -1,5 +1,6 @@
 #include "ConcreteMMU.h"
 #include "SymMMU.h"
+#include "KleeMMU.h"
 #include "DualMMU.h"
 
 using namespace klee;
@@ -7,7 +8,8 @@ using namespace klee;
 DualMMU::DualMMU(Executor& exe)
 : MMU(exe)
 , mmu_conc(new ConcreteMMU(exe))
-, mmu_sym(new SymMMU(exe))
+//, mmu_sym(new SymMMU(exe))
+, mmu_sym(new KleeMMU(exe))
 {}
 
 DualMMU::~DualMMU(void)

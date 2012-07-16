@@ -22,18 +22,20 @@ void ConcretizingSearcher::update(ExecutionState *current, States s)
 		return;
 	}
 
-	if (last_cov < TOTAL_INS) {
-		last_cov = TOTAL_INS;
+	if (last_cov < TOTAL_INS)
 		last_es = current;
+}
+
+ExecutionState& ConcretizingSearcher::selectState(bool allowCompact)
+{
+	if (last_es && last_cov < TOTAL_INS) {
+		last_cov = TOTAL_INS;
 		if (last_es->isConcrete() == false) {
 			exe.concretizeState(*last_es);
 			concretized = true;
 		}
 	}
-}
 
-ExecutionState& ConcretizingSearcher::selectState(bool allowCompact)
-{
 	last_cov = TOTAL_INS;
 
 	if (concretized && last_es != NULL) {
