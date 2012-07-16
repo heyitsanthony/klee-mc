@@ -80,6 +80,31 @@ static ref<Expr> getLabelErrorExpr(const ExprRule* er)
 	return fixupDisjointLabels(to_expr, disjoined);
 }
 
+/* XXX: this should probably be lifted into klee proper */
+static ref<Expr> getConstExpr(ref<Expr>& e)
+{
+	ref<Expr>	expected;
+	Assignment	a(e);
+
+	a.bindFreeToU8(0);
+	expected = a.evaluate(e);
+	if (expected->getKind() != Expr::Constant)
+		return NULL;
+
+	for (unsigned i = 1; i <= 255; i++) {
+		ref<Expr>	new_e;
+
+		a.resetBindings();
+		a.bindFreeToU8(i);
+
+		new_e = a.evaluate(e);
+		if (new_e != expected)
+			return NULL;
+	}
+
+	return expected;
+}
+
 typedef std::list<
 	std::pair<
 		RuleBuilder::rulearr_ty::const_iterator,
@@ -114,9 +139,9 @@ static unsigned appendNewFroms(Solver* s, RuleBuilder* rb)
 			continue;
 		}
 
-		/* careful-- we want to be monotone decreasing or 
+		/* careful-- we want to be monotone decreasing or
 		 * the size of the db could explode */
-		/* I think this is OK though, since sometimes the 
+		/* I think this is OK though, since sometimes the
 		 * hand optimizer will make things slightly larger.
 		 * If the DB *does* explode, maybe revisit this. */
 		if (br.isWorse()) {
@@ -186,7 +211,7 @@ static void findDestReplacements(
 		const ExprRule	*er = *it;
 		ref<Expr>	old_to_expr, rb_to_expr;
 		ExprBuilder	*old_eb;
-		bool		fixed_up = false;
+		bool		fixed_up = false, expanded;
 
 		old_to_expr = er->getToExpr();
 		old_eb = Expr::setBuilder(rb);
@@ -204,10 +229,14 @@ static void findDestReplacements(
 		}
 
 		/* transitive rule does not reduce nodes? */
-		if (	ExprUtil::getNumNodes(rb_to_expr) >=
-			ExprUtil::getNumNodes(old_to_expr))
-		{
-			continue;
+		expanded = ExprUtil::getNumNodes(rb_to_expr) >=
+			ExprUtil::getNumNodes(old_to_expr);
+
+		if (expanded) {
+			rb_to_expr = getConstExpr(rb_to_expr);
+			if (rb_to_expr.isNull())
+				continue;
+			fixed_up = true;
 		}
 
 		std::cerr << "Xtive [" << i << "]:";

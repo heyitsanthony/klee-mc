@@ -8,7 +8,7 @@ function xtive_loop
 	BRULEF="$1"
 	loopc=0
 	while [ 1 ]; do
-		APPENDED=`kopt -max-stp-time=30 -pipe-solver -brule-xtive -rule-file="$BRULEF" 2>&1 | grep Append | cut -f2 -d' '`
+		APPENDED=`kopt -rb-recursive -max-stp-time=30 -pipe-solver -brule-xtive -rule-file="$BRULEF" 2>&1 | grep Append | cut -f2 -d' '`
 		if [ -z "$APPENDED" ]; then
 			break
 		fi
