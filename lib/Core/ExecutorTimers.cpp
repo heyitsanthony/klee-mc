@@ -268,6 +268,7 @@ protected:
 
 #include "klee/SolverStats.h"
 #include "MMU.h"
+#include "../Solver/IndependentSolver.h"
 cl::opt<unsigned>
 DumpQueryStats("dump-querystats",
         cl::desc("Dump query stats every n seconds (0=off)"),
@@ -284,6 +285,7 @@ protected:
 		<< StateSolver::getRealQueries() << ' '
 		<< stats::queries << ' '
 		<< MMU::getQueries() << ' '
+		<< IndependentSolver::getIndependentCount() << ' '
 		<< stats::queryTime << ' '
 		<< stats::solverTime << ' '
 		<< StateSolver::getConstQueries();

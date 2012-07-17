@@ -7,14 +7,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "klee/Solver.h"
 #include "klee/Expr.h"
 #include "klee/Constraints.h"
-#include "SolverImplWrapper.h"
 #include "klee/util/ExprUtil.h"
-#include "klee/Internal/ADT/RNG.h"
-
 #include "static/Sugar.h"
+
+#include "IndependentSolver.h"
 
 #include <map>
 #include <vector>
@@ -23,50 +21,52 @@
 using namespace klee;
 using namespace llvm;
 
+uint64_t IndependentSolver::indep_c = 0;
+
 template<class T>
-class DenseSet {
-  typedef std::set<T> set_ty;
-  set_ty s;
-
+class DenseSet
+{
+	typedef std::set<T> set_ty;
+	set_ty s;
 public:
-  DenseSet() {}
+	DenseSet() {}
 
-  void add(T x) { s.insert(x); }
-  void add(T start, T end) { for (; start<end; start++) s.insert(start); }
+	void add(T x) { s.insert(x); }
+	void add(T start, T end)
+	{ for (; start<end; start++) s.insert(start); }
 
-  // returns true iff set is changed by addition
-  bool add(const DenseSet &b) {
-    bool modified = false;
-    foreach (it, b.s.begin(), b.s.end()) {
-      if (modified || !s.count(*it)) {
-        modified = true;
-        s.insert(*it);
-      }
-    }
-    return modified;
-  }
+	bool add(const DenseSet &b) {
+		bool modified = false;
+		foreach (it, b.s.begin(), b.s.end()) {
+			if (modified || !s.count(*it)) {
+				modified = true;
+				s.insert(*it);
+			}
+		}
+		return modified;
+	}
 
-  bool intersects(const DenseSet &b) {
-    foreach (it, s.begin(), s.end()) {
-      if (b.s.count(*it))
-        return true;
-    }
-    return false;
-  }
+	bool intersects(const DenseSet &b) {
+		foreach (it, s.begin(), s.end()) {
+			if (b.s.count(*it))
+				return true;
+		}
+		return false;
+	}
 
-  void print(std::ostream &os) const {
-    bool first = true;
-    os << "{";
-    foreach (it, s.begin(), s.end()) {
-      if (first) {
-        first = false;
-      } else {
-        os << ",";
-      }
-      os << *it;
-    }
-    os << "}";
-  }
+	void print(std::ostream &os) const {
+		bool first = true;
+		os << "{";
+		foreach (it, s.begin(), s.end()) {
+			if (first) {
+				first = false;
+			} else {
+				os << ",";
+			}
+			os << *it;
+		}
+		os << "}";
+	}
 };
 
 template<class T>
@@ -94,34 +94,36 @@ public:
 		return *this;
 	}
 
-  void print(std::ostream &os) const {
-    os << "{";
-    bool first = true;
-    foreach (it, wholeObjects.begin(), wholeObjects.end()) {
-      const Array *array = *it;
+	void print(std::ostream &os) const
+	{
+		os << "{";
+		bool first = true;
+		foreach (it, wholeObjects.begin(), wholeObjects.end()) {
+			const Array *array = *it;
 
-      if (first) {
-        first = false;
-      } else {
-        os << ", ";
-      }
+			if (first) {
+				first = false;
+			} else {
+				os << ", ";
+			}
 
-      os << "MO" << array->name;
-    }
-    foreach (it, elements.begin(), elements.end()) {
-      const Array *array = it->first;
-      const DenseSet<unsigned> &dis = it->second;
+			os << "MO" << array->name;
+		}
 
-      if (first) {
-        first = false;
-      } else {
-        os << ", ";
-      }
+		foreach (it, elements.begin(), elements.end()) {
+			const Array *array = it->first;
+			const DenseSet<unsigned> &dis = it->second;
 
-      os << "MO" << array->name << " : " << dis;
-    }
-    os << "}";
-  }
+			if (first) {
+			first = false;
+			} else {
+			os << ", ";
+			}
+
+			os << "MO" << array->name << " : " << dis;
+		}
+		os << "}";
+	}
 
 	bool intersects(const IndependentElementSet &b); 
 
@@ -287,32 +289,6 @@ static IndependentElementSet getIndependentConstraints(
     std::cerr << "elts closure: " << eltsClosure << "\n";
 #endif
 
-
-
-class IndependentSolver : public SolverImplWrapper
-{
-public:
-	IndependentSolver(Solver *_solver)
-	: SolverImplWrapper(_solver)
-	{ rng.seed(12345); }
-
-	virtual ~IndependentSolver() {}
-
-	bool computeSat(const Query&);
-	Solver::Validity computeValidity(const Query&);
-	ref<Expr> computeValue(const Query&);
-	bool computeInitialValues(const Query& query, Assignment& a)
-	{ return doComputeInitialValues(query, a); }
-
-	void printName(int level = 0) const
-	{
-		klee_message("%*s""IndependentSolver containing:", 2*level, "");
-		wrappedSolver->printName(level + 1);
-	}
-private:
-	RNG rng;
-};
-
 #define SETUP_CONSTRAINTS			\
 	std::vector< ref<Expr> > required;	\
 	IndependentElementSet eltsClosure;	\
@@ -431,13 +407,13 @@ static bool isUnconstrained(
 
 Solver::Validity IndependentSolver::computeValidity(const Query& query)
 {
-	SETUP_CONSTRAINTS { return Solver::Unknown; }
+	SETUP_CONSTRAINTS { indep_c++; return Solver::Unknown; }
 	return doComputeValidity(Query(tmp, query.expr));
 }
 
 bool IndependentSolver::computeSat(const Query& query)
 {
-	SETUP_CONSTRAINTS { return true; }
+	SETUP_CONSTRAINTS { indep_c++; return true; }
 	return doComputeSat(Query(tmp, query.expr));
 }
 
@@ -452,8 +428,8 @@ ref<Expr> IndependentSolver::computeValue(const Query& query)
 		if (query.expr->getWidth() < 64)
 			v &= (1 << query.expr->getWidth()) - 1;
 
-		return ConstantExpr::create(
-			v, query.expr->getWidth());
+		indep_c++;
+		return ConstantExpr::create(v, query.expr->getWidth());
 	}
 
 	return doComputeValue(Query(tmp, query.expr));
