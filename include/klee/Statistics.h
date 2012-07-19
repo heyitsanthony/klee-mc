@@ -39,9 +39,9 @@ namespace klee {
 
   class StatisticManager {
   private:
-    bool enabled;
+    bool			enabled;
     std::vector<Statistic*>	stats;
-    uint64_t			*globalStats;
+    std::vector<uint64_t>	globalStats;
     StatisticRecord		*contextStats;
     unsigned			index;
 

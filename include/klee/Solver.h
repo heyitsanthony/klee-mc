@@ -16,43 +16,13 @@
 #include <vector>
 #include <netinet/in.h>
 
+#include "klee/Query.h"
+
 namespace klee
 {
 class ConstraintManager;
-class Expr;
 class SolverImpl;
 class Assignment;
-
-class Query
-{
-public:
-	const ConstraintManager &constraints;
-	ref<Expr> expr;
-
-	Query(const ConstraintManager& _constraints, ref<Expr> _expr)
-	: constraints(_constraints), expr(_expr) { }
-
-	Query(ref<Expr> _expr)
-	: constraints(dummyConstraints), expr(_expr) {}
-
-	virtual ~Query() {}
-
-	/// withExpr - Return a copy of the query with the given expression.
-	Query withExpr(ref<Expr> _expr) const { return Query(constraints, _expr); }
-
-	/// withFalse - Return a copy of the query with a false expression.
-	Query withFalse() const
-	{ return Query(constraints, ConstantExpr::alloc(0, Expr::Bool)); }
-
-	/// negateExpr - Return a copy of the query with the expression negated.
-	Query negateExpr() const { return withExpr(Expr::createIsZero(expr)); }
-
-	void print(std::ostream& os) const;
-	Expr::Hash hash(void) const;
-
-private:
-	static ConstraintManager dummyConstraints;
-};
 
 struct sockaddr_in_opt
 {
@@ -185,10 +155,19 @@ struct sockaddr_in_opt
     virtual bool getRange(const Query&,  std::pair< ref<Expr>, ref<Expr> >& r);
 
     // binary search for # of useful bits in query expression
-    bool getUsefulBits(const Query&, uint64_t& bits);
-    bool getRangeMin(const Query& q, uint64_t bits, uint64_t& min);
-    bool getRangeMax(
-	const Query& q, uint64_t bits, uint64_t min, uint64_t& max);
+	bool getUsefulBits(const Query&, uint64_t& bits);
+	bool getRangeMin(const Query& q, uint64_t bits, uint64_t& min);
+	bool getRangeMax(
+		const Query& q, uint64_t bits, uint64_t min, uint64_t& max);
+	bool fastGetRange(
+		const Query& query,
+		std::pair< ref<Expr>, ref<Expr> >& ret,
+		bool	&ok);
+	bool getImpliedRange(
+		const Query&	query,
+		uint64_t	pivot,
+		std::pair<uint64_t, uint64_t>& ret);
+
 
 
     void printName(int level = 0) const;

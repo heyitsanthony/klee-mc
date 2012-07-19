@@ -16,23 +16,19 @@ using namespace klee;
 
 StatisticManager::StatisticManager()
 : enabled(true)
-, globalStats(0)
 , contextStats(0)
 , index(0)
 {
 }
 
-StatisticManager::~StatisticManager() {
-  if (globalStats) delete[] globalStats;
-}
+StatisticManager::~StatisticManager() {}
 
 void StatisticManager::registerStatistic(Statistic &s)
 {
-  if (globalStats) delete[] globalStats;
   s.id = stats.size();
+  globalStats.resize(s.id);
+  memset(globalStats.data(), 0, sizeof(uint64_t)*s.id);
   stats.push_back(&s);
-  globalStats = new uint64_t[stats.size()];
-  memset(globalStats, 0, sizeof(*globalStats)*stats.size());
 }
 
 int StatisticManager::getStatisticID(const std::string &name) const {
@@ -49,6 +45,7 @@ Statistic *StatisticManager::getStatisticByName(const std::string &name) const {
   return 0;
 }
 
+
 StatisticManager *klee::theStatisticManager = 0;
 
 static StatisticManager &getStatisticManager() {
@@ -56,7 +53,6 @@ static StatisticManager &getStatisticManager() {
   theStatisticManager = &sm;
   return sm;
 }
-
 /* *** */
 
 Statistic::Statistic(const std::string &_name, 

@@ -43,6 +43,8 @@ KFunction::KFunction(llvm::Function *_function, KModule *km)
 , numArgs(function->arg_size())
 , numInstructions(0)
 , callcount(0)
+, instructions(0)
+, arguments(0)
 , trackCoverage(true)
 {
 	std::map<Instruction*, unsigned> regMap;

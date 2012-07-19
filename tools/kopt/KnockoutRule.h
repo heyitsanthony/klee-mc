@@ -14,7 +14,6 @@ class KnockOut;
 // first = symbolic expr, second = old constant
 typedef std::pair<ref<Expr>, ref<ConstantExpr> >	replvar_t;
 
-
 class KnockoutRule
 {
 public:

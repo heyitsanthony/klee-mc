@@ -71,6 +71,7 @@ struct ArrayLT { bool operator()(const Array *a, const Array *b) const; };
 #define MK_ULT(x,y)		UltExpr::create(x,y)
 #define MK_ULE(x,y)		UleExpr::create(x,y)
 #define MK_UGT(x,y)		UgtExpr::create(x,y)
+#define MK_UGE(x,y)		UgeExpr::create(x,y)
 #define MK_SLT(x,y)		SltExpr::create(x,y)
 #define MK_SLE(x,y)		SleExpr::create(x,y)
 #define MK_SGT(x,y)		SgtExpr::create(x,y)
@@ -394,6 +395,15 @@ public:
 	}
 
 	static ref<Expr> create(Kind k, const ref<Expr> &l, const ref<Expr> &r);
+
+	template<class InputIter>
+	static ref<Expr> Fold(Kind k, InputIter b, InputIter e)
+	{
+		ref<Expr>	ret(*b);
+		++b;
+		for (; b != e; ++b) ret = BinaryExpr::create(k, ret, *b);
+		return ret;
+	}
 protected:
 	BinaryExpr(const ref<Expr> &l, const ref<Expr> &r) : left(l), right(r) {}
 
