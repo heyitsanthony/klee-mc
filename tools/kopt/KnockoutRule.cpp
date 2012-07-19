@@ -73,6 +73,7 @@ ref<Expr> KnockoutRule::trySlot(
 
 	e_ko = kout_partial.apply(e_from);
 	pivot = rv.second->getZExtValue();
+
 	rule_eq = EqExpr::create(e_ko, er->getToExpr());
 	cs.addConstraint(rule_eq);
 
@@ -98,7 +99,7 @@ ref<Expr> KnockoutRule::trySlot(
 	e_range = RANGE_EXPR(rv.first, r_e.first, r_e.second);
 
 	er->print(std::cerr);
-	std::cerr << "\n======================\n";
+	std::cerr << "\n=========GOT SLOT=============\n";
 	std::cerr << "\nIT-FIRST: " << rv.first << '\n';
 	std::cerr << "IGN-IDX: " << i << '\n';
 	std::cerr << "E-FROM: " << e_from << '\n';

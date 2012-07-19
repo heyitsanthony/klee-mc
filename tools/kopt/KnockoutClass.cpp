@@ -30,7 +30,7 @@ void KnockoutClass::addRule(const KnockoutRule* kr)
 	er_e = kr->getExprRule()->getFromExpr();
 	foreach (it, tags.begin(), tags.end()) {
 		ref<Expr>	e;
-		e = ExprGetTag::getExpr(er_e, *it, true);
+		e = ExprGetTag::getExpr(er_e, *it, true, true);
 		assert (e.isNull() == false);
 		assert (e->getKind() == Expr::Constant);
 		tagvals[*it].insert(cast<ConstantExpr>(e)->getZExtValue());
@@ -40,12 +40,21 @@ void KnockoutClass::addRule(const KnockoutRule* kr)
 ExprRule* KnockoutClass::createRule(Solver* s) const
 {
 	ExprRule				*ret;
+	static unsigned i = 0;
 	std::vector<std::pair<int, int> >	sorted_tags;
+
+	i++;
+// /* XXX DEBUG */
+//	if (root_kr->getExprRule()->getFromExpr()->getKind() != Expr::Ult)
+//		return NULL;
+
+	std::cerr << "[KnockoutClass] [" << i << "]: ";
 
 	std::cerr << "RULE OF INTEREST: ";
 	root_kr->getExprRule()->print(std::cerr);
 	std::cerr << root_kr->getExprRule()->getFromExpr() << '\n';
 	std::cerr << '\n';
+
 
 	if (!root_kr->knockedOut())
 		return NULL;
@@ -53,6 +62,9 @@ ExprRule* KnockoutClass::createRule(Solver* s) const
 	if ((ret = root_kr->createFullRule(s)) != NULL)
 		return ret;
 
+	/* subtree knockouts come first so that dummy constants
+	 * will be translated into dummy slots */
+#if 1
 	if ((ret = root_kr->createSubtreeRule(s)) != NULL) {
 		std::cerr << "=====================================\n";
 		std::cerr << "GOT SUBTREE RULE:\n";
@@ -69,7 +81,7 @@ ExprRule* KnockoutClass::createRule(Solver* s) const
 		delete ret;
 		ret = NULL;
 	}
-
+#endif
 #if 1
 	foreach (it, tagvals.begin(), tagvals.end()) {
 		std::cerr << "TAG: " << it->first

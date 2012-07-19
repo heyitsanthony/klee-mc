@@ -105,12 +105,13 @@ class ExprGetTag : public ExprVisitorTags<ExprConstVisitorNull>
 {
 public:
 	static ref<Expr> getExpr(
-		const ref<Expr>& e, int n, bool _skip_reads=false)
+		const ref<Expr>& e, int n, bool _skip_reads=false, bool _skip_notopt=false)
 	{
 		exprtags_ty	pre(1, n), post(0);
 		ExprGetTag	egt(pre, post);
 
 		egt.skip_reads = _skip_reads;
+		egt.skip_notopts = _skip_notopt;
 		egt.ret_expr = NULL;
 		egt.apply(e);
 		return egt.ret_expr;
@@ -132,10 +133,16 @@ protected:
 			tag_pre++;
 			return Skip;
 		}
+
+		if (skip_notopts && e->getKind() == Expr::NotOptimized) {
+			tag_pre++;
+			return Skip;
+		}
+
 		return ExprVisitorTags<ExprConstVisitorNull>::visitExpr(e);
 	}
 private:
-	bool		skip_reads;
+	bool		skip_reads, skip_notopts;
 	ref<Expr>	ret_expr;
 };
 

@@ -38,6 +38,13 @@ KnockOut::Action KnockOut::visitConstant(const ConstantExpr& ce)
 	return Action::skipChildren();
 }
 
+KnockOut::Action KnockOut::visitExpr(const Expr& e)
+{
+	if (e.getKind() == Expr::NotOptimized)
+		return Action::skipChildren();
+	return ExprVisitor::visitExpr(e);
+}
+
 ref<Expr> KnockOut::apply(const ref<Expr>& e)
 {
 	arr_off = 0;

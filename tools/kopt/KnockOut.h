@@ -29,6 +29,7 @@ public:
 	{ return Action::skipChildren(); }
 
 	virtual Action visitConstant(const ConstantExpr& ce);
+	virtual Action visitExpr(const Expr& e);
 
 	unsigned getArrOff(void) const { return arr_off; }
 

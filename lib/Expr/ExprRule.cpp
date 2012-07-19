@@ -470,7 +470,10 @@ ExprRule* ExprRule::addConstraints(
 
 	/* create from-pattern, marking constants as slots */
 	efwt.setOS(&ss);
+
+	/* skip over already given constraints */
 	efwt.setConstTag((const_constraints) ? const_constraints->size() : 0);
+
 	efwt.apply(getFromExpr());
 
 	if (p.readFlatExpr(ss) == false) {
@@ -497,6 +500,9 @@ ExprRule* ExprRule::addConstraints(
 
 		ret->const_constraints->push_back(new_p);
 	}
+
+	std::cerr << "[ExprRule] Constraints added:\n";
+	ret->print(std::cerr);
 
 	return ret;
 }

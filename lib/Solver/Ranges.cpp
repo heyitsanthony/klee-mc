@@ -220,6 +220,8 @@ static bool getImpliedMin(
 	}
 
 	min = lo;
+	if (min > pivot) min = pivot;
+
 	return true;
 }
 
@@ -259,10 +261,9 @@ static bool getImpliedMax(
 			hi = mid;
 	}
 
-	if (lo == hi)
-		max = (hi == pivot) ? pivot : hi - 1;
-	else
-		max = hi;
+	lo--;
+	if (lo < pivot) lo = pivot;
+	max = lo;
 
 	return true;
 }

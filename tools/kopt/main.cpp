@@ -711,7 +711,7 @@ static void checkDB(Solver* s)
 
 		std::cerr << "DID NOT TRANSLATE #" << i << ":\n";
 		br.dump(std::cerr);
-		std::cerr << "RULE:\n";
+		std::cerr << "LAST RULE:\n";
 		er->print(std::cerr);
 		std::cerr << '\n';
 		assert (0 == 1);

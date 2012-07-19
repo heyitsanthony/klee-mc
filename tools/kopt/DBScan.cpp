@@ -168,7 +168,9 @@ void DBScan::punchout(std::ostream& os)
 
 		valid_kos.push_back(std::make_pair(kc, new_rule));
 		rule_match_c += kc->size();
-		std::cerr << "TOTAL RULES: " << valid_kos.size() << '\n';
+		std::cerr << "=========================================\n";
+		std::cerr << "[DBScan] TOTAL RULES: " << valid_kos.size() << '\n';
+		std::cerr << "=========================================\n";
 		new_rule->printBinaryRule(os);
 		os.flush();
 	}
