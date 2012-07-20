@@ -162,7 +162,7 @@ public:
 class SoftFPPass : public llvm::FunctionPass
 {
 public:
-	SoftFPPass(KModule* _km, const char* dir);
+	SoftFPPass(KModule* _km);
 	virtual ~SoftFPPass() {}
 
 	virtual bool runOnFunction(llvm::Function &F);

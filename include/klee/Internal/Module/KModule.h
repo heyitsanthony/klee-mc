@@ -84,14 +84,13 @@ namespace klee
     std::vector<Cell>	constantTable;
 
   public:
-    KModule(llvm::Module *_module);
+    KModule(llvm::Module *_module, const Interpreter::ModuleOptions &opts);
     virtual ~KModule();
 
     /// Initialize local data structures.
     //
     // FIXME: ihandler should not be here
-    void prepare(const Interpreter::ModuleOptions &opts,
-                 InterpreterHandler *ihandler);
+    void prepare(InterpreterHandler *ihandler);
     // link mod with object's module
     void addModule(llvm::Module* mod);
 
@@ -119,15 +118,14 @@ namespace klee
 	void bindInstructionConstants(Executor* exe, KInstruction *KI);
 	void bindKFuncConstants(Executor* exe, KFunction* kf);
 
+	const std::string& getLibraryDir(void) const { return opts.LibraryDir; }
   private:
-	void prepareMerge(
-		const Interpreter::ModuleOptions &opts,
-		InterpreterHandler *ih);
+	void prepareMerge(InterpreterHandler *ih);
 	void outputSource(InterpreterHandler* ih);
 	void addMergeExit(llvm::Function* mergeFn, const std::string& name);
 	void passEnforceInvariants(void);
-	void injectRawChecks(const Interpreter::ModuleOptions &opts);
-	void loadIntrinsicsLib(const Interpreter::ModuleOptions &opts);
+	void injectRawChecks();
+	void loadIntrinsicsLib();
 	void dumpModule(void);
 
     void outputTruncSource(std::ostream* os, llvm::raw_os_ostream* ros) const;
@@ -140,6 +138,8 @@ namespace klee
 
     llvm::FunctionPassManager* fpm;
     InterpreterHandler	*ih;
+
+    Interpreter::ModuleOptions opts;
   };
 } // End klee namespace
 

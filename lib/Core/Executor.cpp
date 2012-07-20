@@ -235,6 +235,7 @@ static StateSolver* createTimerChain(double to, std::string q, std::string s);
 
 Executor::Executor(InterpreterHandler *ih)
 : kmodule(0)
+, mmu(0)
 , globals(0)
 , interpreterHandler(ih)
 , target_data(0)
@@ -268,7 +269,6 @@ Executor::Executor(InterpreterHandler *ih)
 	ObjectState::setupZeroObjs();
 
 	memory = MemoryManager::create();
-	mmu = MMU::create(*this);
 	stateManager = new ExeStateManager();
 	ExecutionState::setMemoryManager(memory);
 	ExeStateBuilder::replaceBuilder(new BaseExeStateBuilder());
@@ -294,7 +294,7 @@ Executor::~Executor()
 	std::for_each(timers.begin(), timers.end(), deleteTimerInfo);
 	delete stateManager;
 	if (brPredict) delete brPredict;
-	delete mmu;
+	if (mmu != NULL) delete mmu;
 	delete memory;
 	if (pathTree) delete pathTree;
 	if (statsTracker) delete statsTracker;
@@ -491,7 +491,6 @@ void Executor::stepInstruction(ExecutionState &state)
 
 void Executor::executeCallNonDecl(
 	ExecutionState &state,
-	KInstruction *ki,
 	Function *f,
 	std::vector< ref<Expr> > &arguments)
 {
@@ -551,21 +550,21 @@ void Executor::executeCall(
 	Function *f,
 	std::vector< ref<Expr> > &args)
 {
+	Function	*f2 = NULL;
+
 	assert (f);
 
 	if (WriteTraces)
 		state.exeTraceMgr.addEvent(
 			new FunctionCallTraceEvent(state, ki, f->getName()));
 
-	Instruction *i = ki->getInst();
-	Function* f2 = NULL;
 	if (	!f->isDeclaration() ||
 		(f2 = kmodule->module->getFunction(f->getName().str())))
 	{
 		/* this is so that vexllvm linked modules work */
 		if (f2 == NULL) f2 = f;
 		if (!f2->isDeclaration()) {
-			executeCallNonDecl(state, ki, f2, args);
+			executeCallNonDecl(state, f2, args);
 			return;
 		}
 	}
@@ -624,6 +623,7 @@ void Executor::executeCall(
 		klee_error("unknown intrinsic: %s", f->getName().data());
 	}
 
+	Instruction	*i(ki->getInst());
 	if (InvokeInst *ii = dyn_cast<InvokeInst>(i)) {
 		state.transferToBasicBlock(ii->getNormalDest(), i->getParent());
 	}
@@ -2155,6 +2155,8 @@ void Executor::run(ExecutionState &initialState)
 {
 	currentState = &initialState;
 
+	if (mmu == NULL) mmu = MMU::create(*this);
+
 	// Delay init till now so that ticks don't accrue during
 	// optimization and such.
 	initTimers();
@@ -2191,6 +2193,8 @@ done:
 	if (initialStateCopy) delete initialStateCopy;
 
 	currentState = NULL;
+	delete mmu;
+	mmu = NULL;
 }
 
 void Executor::runLoop(void)

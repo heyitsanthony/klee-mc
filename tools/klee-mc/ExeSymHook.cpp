@@ -105,14 +105,20 @@ ExeSymHook::ExeSymHook(InterpreterHandler *ie)
 	assert (canSymhook(ie) == true);
 
 	ExeStateBuilder::replaceBuilder(new ESVSymHookBuilder());
-	delete mmu;
-	mmu = new MallocMMU(*this);
 
 	memset(f_mallocs, 0, sizeof(f_mallocs));
 	memset(f_frees, 0, sizeof(f_frees));
 }
 
 ExeSymHook::~ExeSymHook(void) {}
+
+
+void ExeSymHook::run(ExecutionState &initialState)
+{
+	assert (mmu == NULL);
+	mmu = new MallocMMU(*this);
+	ExecutorVex::run(initialState);
+}
 
 void ExeSymHook::executeCall(
 	ExecutionState &state,

@@ -23,7 +23,10 @@ class KModuleVex : public KModule
 typedef std::tr1::unordered_map<uintptr_t /* Func*/, VexSB*> func2vsb_map;
 
 public:
-	KModuleVex(Executor* _exe, Guest* _gs);
+	KModuleVex(
+		Executor* _exe,
+		Interpreter::ModuleOptions& mod_opts,
+		Guest* _gs);
 	virtual ~KModuleVex(void);
 
 	llvm::Function* getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new);

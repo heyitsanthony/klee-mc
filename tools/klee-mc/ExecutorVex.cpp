@@ -162,7 +162,7 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 
 	assert (kmodule == NULL);
 
-	km_vex = new KModuleVex(this, gs);
+	km_vex = new KModuleVex(this, mod_opts, gs);
 	kmodule = km_vex;
 
 	target_data = kmodule->targetData;
@@ -173,7 +173,7 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 
 	sfh = sys_model->allocSpecialFuncHandler(this);
 	sfh->prepare();
-	kmodule->prepare(mod_opts, ih);
+	kmodule->prepare(ih);
 
 	if (StatsTracker::useStatistics())
 		statsTracker = new StatsTracker(

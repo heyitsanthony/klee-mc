@@ -22,12 +22,12 @@ namespace klee { extern Module* getBitcodeModule(const char* path); }
 
 char SoftFPPass::ID;
 
-SoftFPPass::SoftFPPass(KModule* _km, const char* _dir)
+SoftFPPass::SoftFPPass(KModule* _km)
 : llvm::FunctionPass(ID)
 , km(_km)
 {
 	llvm::Module	*mod;
-	llvm::sys::Path	path(_dir);
+	llvm::sys::Path	path(km->getLibraryDir());
 
 	struct func_names	fns[] = {
 		{"float64_to_float32", &f_fptrunc},

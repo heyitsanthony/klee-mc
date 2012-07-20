@@ -247,7 +247,8 @@ protected:
                             llvm::Function *function,
                             std::vector< ref<Expr> > &arguments) = 0;
 
-	virtual void executeCall(ExecutionState &state,
+	virtual void executeCall(
+		ExecutionState &state,
 		KInstruction *ki,
 		llvm::Function *f,
 		std::vector< ref<Expr> > &arguments);
@@ -360,12 +361,6 @@ private:
 	void removeRoot(ExecutionState* es);
 	void replaceStateImmForked(ExecutionState* os, ExecutionState* ns);
 
-	void executeCallNonDecl(
-		ExecutionState &state,
-		KInstruction *ki,
-		llvm::Function *f,
-		std::vector< ref<Expr> > &arguments);
-
 	llvm::Function* executeBitCast(
 		ExecutionState	&state,
 		llvm::CallSite	&cs,
@@ -395,6 +390,12 @@ public:
 	const InterpreterHandler& getHandler() { return *interpreterHandler; }
 	StateSolver* getSolver(void) { return solver; }
 	virtual bool isStateSeeding(ExecutionState* s) const { return false; }
+
+	void executeCallNonDecl(
+		ExecutionState &state,
+		llvm::Function *f,
+		std::vector< ref<Expr> > &arguments);
+
 
 	/// Add the given (boolean) condition as a constraint on state. This
 	/// function is a wrapper around the state's addConstraint function

@@ -11,6 +11,8 @@ using namespace klee;
 
 uint64_t klee::MMU::query_c = 0;
 
+extern unsigned MakeConcreteSymbolic;
+
 void MMU::MemOp::simplify(ExecutionState& state)
 {
 	if (!isa<ConstantExpr>(address))
@@ -50,5 +52,10 @@ ref<Expr> MMU::readDebug(ExecutionState& state, uint64_t addr)
 /* TODO: make this a command line option */
 #include "DualMMU.h"
 #include "KleeMMU.h"
-//MMU* MMU::create(Executor& exe) { return new KleeMMU(exe); }
-MMU* MMU::create(Executor& exe) { return new DualMMU(exe); }
+MMU* MMU::create(Executor& exe)
+{
+	/* XXX should have concrete mmu be able to do this */
+	if (MakeConcreteSymbolic)
+		return new KleeMMU(exe);
+	return new DualMMU(exe);
+}

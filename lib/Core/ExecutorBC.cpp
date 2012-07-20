@@ -24,16 +24,14 @@ using namespace klee;
 using namespace llvm;
 
 namespace {
-  cl::opt<bool>
-  NoExternals("no-externals", 
-           cl::desc("Do not allow external functin calls"));
+	cl::opt<bool>
+	NoExternals("no-externals",  cl::desc("Disallow external func calls"));
 
-  cl::opt<bool>
-  AllowExternalSymCalls("allow-external-sym-calls",
-                        cl::init(false));
+	cl::opt<bool>
+	AllowExternalSymCalls("allow-external-sym-calls", cl::init(false));
 
-  cl::opt<bool>
-  SuppressExternalWarnings("suppress-external-warnings");
+	cl::opt<bool>
+	SuppressExternalWarnings("suppress-external-warnings");
 }
 
 ExecutorBC::ExecutorBC(InterpreterHandler *ie)
@@ -58,7 +56,7 @@ const Module* ExecutorBC::setModule(
 	// XXX gross
 	assert(!kmodule && module && "can only register one module");
 
-	kmodule = new KModule(module);
+	kmodule = new KModule(module, opts);
 
 	target_data = kmodule->targetData;
 
@@ -70,7 +68,7 @@ const Module* ExecutorBC::setModule(
 	specialFunctionHandler = new SpecialFunctionHandler(this);
 
 	specialFunctionHandler->prepare();
-	kmodule->prepare(opts, interpreterHandler);
+	kmodule->prepare(interpreterHandler);
 	specialFunctionHandler->bind();
 
 	if (StatsTracker::useStatistics()) {
@@ -205,10 +203,9 @@ done_ai:
 }
 
 // XXX shoot me
-static const char *okExternalsList[] = { "printf", 
-                                         "fprintf", 
-                                         "puts",
-                                         "getpid" };
+static const char *okExternalsList[] =
+{ "printf", "fprintf", "puts", "getpid" };
+
 static std::set<std::string> okExternals(
 	okExternalsList,
 	okExternalsList + (sizeof(okExternalsList)/sizeof(okExternalsList[0])));

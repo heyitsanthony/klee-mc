@@ -26,12 +26,14 @@ public:
 	static bool canSymhook(InterpreterHandler *ie);
 
 protected:
-	virtual void executeCall(ExecutionState &state,
+	virtual void executeCall(
+		ExecutionState &state,
 		KInstruction *ki,
 		llvm::Function *f,
 		std::vector< ref<Expr> > &arguments);
 	virtual void jumpToKFunc(ExecutionState& state, KFunction* kf);
 	virtual ExecutionState* setupInitialState(void);
+  	virtual void run(ExecutionState &initialState);
 
 private:
 	bool isFreeFunc(llvm::Function* f) const;

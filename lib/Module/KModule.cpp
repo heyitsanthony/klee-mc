@@ -106,13 +106,16 @@ namespace {
 
 }
 
-KModule::KModule(Module *_module)
+KModule::KModule(
+	Module *_module,
+	const Interpreter::ModuleOptions &_opts)
 : module(_module)
 , targetData(new TargetData(module))
 , kleeMergeFn(0)
 , infos(0)
 , constantTable(0)
 , fpm(new FunctionPassManager(_module))
+, opts(_opts)
 {
 }
 
@@ -244,9 +247,7 @@ static void forceImport(Module *m, const char *name, Type *retType, ...)
 		name, FunctionType::get(retType, argTypes, false));
 }
 
-void KModule::prepareMerge(
-	const Interpreter::ModuleOptions &opts,
-	InterpreterHandler *ih)
+void KModule::prepareMerge(InterpreterHandler *ih)
 {
 	Function *mergeFn;
 
@@ -416,7 +417,7 @@ void KModule::addModule(Module* in_mod)
 // optimize is seeing what is as close as possible to the final
 // module.
 
-void KModule::injectRawChecks(const Interpreter::ModuleOptions &opts)
+void KModule::injectRawChecks()
 {
 	PassManager pm;
 	pm.add(new RaiseAsmPass(module));
@@ -455,18 +456,16 @@ void KModule::passEnforceInvariants(void)
 	pm.run(*module);
 }
 
-void KModule::prepare(
-	const Interpreter::ModuleOptions &opts,
-	InterpreterHandler *in_ih)
+void KModule::prepare(InterpreterHandler *in_ih)
 {
 	ih = in_ih;
 
 	if (!MergeAtExit.empty())
-		prepareMerge(opts, ih);
+		prepareMerge(ih);
 
 
-	loadIntrinsicsLib(opts);
-	injectRawChecks(opts);
+	loadIntrinsicsLib();
+	injectRawChecks();
 
 	infos = new InstructionInfoTable(module);
 	if (opts.Optimize) Optimize(module);
@@ -505,9 +504,7 @@ void KModule::prepare(
 	fpm->add(new IntrinsicCleanerPass(this, *targetData));
 	fpm->add(new PhiCleanerPass());
 
-	if (UseSoftFP) {
-		fpm->add(new SoftFPPass(this, opts.LibraryDir.c_str()));
-	}
+	if (UseSoftFP) fpm->add(new SoftFPPass(this));
 }
 
 
@@ -618,7 +615,7 @@ KFunction* KModule::getKFunction(const char* fname) const
 	return getKFunction(f);
 }
 
-void KModule::loadIntrinsicsLib(const Interpreter::ModuleOptions &opts)
+void KModule::loadIntrinsicsLib()
 {
 	// Force importing functions required by intrinsic lowering. Kind of
 	// unfortunate clutter when we don't need them but we won't know
@@ -650,7 +647,7 @@ void KModule::loadIntrinsicsLib(const Interpreter::ModuleOptions &opts)
 	// FIXME: Find a way that we can test programs without requiring
 	// this to be linked in, it makes low level debugging much more
 	// annoying.
-	llvm::sys::Path path(opts.LibraryDir);
+	llvm::sys::Path path(getLibraryDir());
 
 	path.appendComponent("libkleeRuntimeIntrinsic.bca");
 	module = linkWithLibrary(module, path.c_str());

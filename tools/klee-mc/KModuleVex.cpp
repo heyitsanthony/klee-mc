@@ -40,8 +40,11 @@ namespace
 		cl::init(false));
 }
 
-KModuleVex::KModuleVex(Executor* _exe, Guest* _gs)
-: KModule(theGenLLVM->getModule())
+KModuleVex::KModuleVex(
+	Executor* _exe,
+	Interpreter::ModuleOptions& mod_opts,
+	Guest* _gs)
+: KModule(theGenLLVM->getModule(), mod_opts)
 , exe(_exe)
 , gs(_gs)
 , ctrl_graph(gs)

@@ -243,7 +243,6 @@ static bool getImpliedMax(
 	while (lo < hi) {
 		ConstraintManager	cm;
 		Query			cur_q(cm, 0);
-		ref<Expr>	premise;
 		uint64_t	mid;
 		bool		mbt;
 
@@ -268,6 +267,44 @@ static bool getImpliedMax(
 	return true;
 }
 
+static bool isImpliedIsolated(
+	Solver* s, const Query& q, uint64_t pivot, bool &isIsolated)
+{
+	ConstraintManager	cm;
+	unsigned	w(q.expr->getWidth());
+	bool		mbt;
+	ref<Expr>	pivot_e, lo_e, hi_e;
+	ref<Expr>	conclusion;
+
+	conclusion = BinaryExpr::Fold(
+		Expr::And,
+		q.constraints.begin(),
+		q.constraints.end());
+
+	pivot_e = MK_CONST(pivot, w);
+	hi_e = MK_ULE(q.expr, MK_ADD(pivot_e, MK_CONST(1,w)));
+	lo_e = MK_UGE(q.expr, MK_SUB(pivot_e, MK_CONST(1,w)));
+
+	if (pivot != 0) {
+		cm.addConstraint(MK_OR(hi_e, lo_e));
+	} else {
+		assert (pivot == 0);
+		cm.addConstraint(hi_e);
+	}
+
+	Query	cur_q(cm, conclusion);
+	if (s->mustBeTrue(cur_q, mbt) == false)
+		return false;
+
+	/* consider: x < (pivot+1) => y
+	 * must be true <=> point ~isolated;
+	 * nb: ~mbt <=> isolated */
+	isIsolated = (mbt == false);
+
+	return true;
+}
+
+
 /* get a range where query.e in [a,b] => query.constraints */
 bool Solver::getImpliedRange(
 	const Query&	query,
@@ -275,13 +312,22 @@ bool Solver::getImpliedRange(
 	std::pair<uint64_t, uint64_t>& ret)
 {
 	uint64_t		min, max;
-	bool			ok;
+	bool			ok, isolated;
 	std::pair< ref<Expr>, ref<Expr> > ret_e;
 
 	if (fastGetRange(query, ret_e, ok)) {
 		ret.first = cast<ConstantExpr>(ret_e.first)->getZExtValue();
 		ret.second = cast<ConstantExpr>(ret_e.second)->getZExtValue();
 		return ok;
+	}
+
+	if (!isImpliedIsolated(this, query, pivot, isolated))
+		return false;
+
+	if (isolated) {
+		ret.first = pivot;
+		ret.second = pivot;
+		return true;
 	}
 
 	if (!getImpliedMin(this, query, pivot, min))

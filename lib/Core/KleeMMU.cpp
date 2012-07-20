@@ -14,6 +14,7 @@
 
 using namespace llvm;
 
+unsigned MakeConcreteSymbolic;
 
 namespace {
 	cl::opt<bool>
@@ -40,9 +41,10 @@ namespace {
 		cl::desc("Radius of acceptable OOB expressions."),
 		cl::init(32*1024));
 
-	cl::opt<unsigned>
-	MakeConcreteSymbolic(
+	cl::opt<unsigned, true>
+	MakeConcreteSymbolicProxy(
 		"make-concrete-symbolic",
+		cl::location(MakeConcreteSymbolic),
 		cl::desc("Rate to make concrete reads symbolic (0=off)"),
 		cl::init(0));
 }
