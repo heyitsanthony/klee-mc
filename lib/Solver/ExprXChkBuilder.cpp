@@ -1,4 +1,5 @@
 #include <iostream>
+#include <sstream>
 #include "klee/Solver.h"
 #include "klee/Constraints.h"
 #include "klee/ExprBuilder.h"
@@ -31,7 +32,6 @@ namespace
 		"opt-rvc",
 		llvm::cl::desc("Optimize exprxchk with test values (imprecise)"),
 		llvm::cl::init(false));
-
 }
 
 //#define DEFAULT_XCHK_BUILDER	test_builder
@@ -68,7 +68,7 @@ public:
 		if (theXChkBuilder->in_xchker) {
 			theXChkBuilder->deferred_exprs.push(
 				std::make_pair(oracle, test));
-			return;	
+			return;
 		}
 		theXChkBuilder->in_xchker = true;
 		theXChkBuilder->xchk(oracle, test);
@@ -92,9 +92,16 @@ protected:
 		const ref<Expr>& oracle_expr,
 		const ref<Expr>& test_expr);
 	void printBadXChk(
+		std::ostream& os,
 		const Query& q,
 		const ref<Expr>& oracle_expr,
 		const ref<Expr>& test_expr);
+
+	void notifyBadXChk(
+		const Query& q,
+		const ref<Expr>& oracle_expr,
+		const ref<Expr>& test_expr);
+
 	void xchkRandomValue(
 		const ref<Expr>& oracle_expr,
 		const ref<Expr>& test_expr);
@@ -397,9 +404,7 @@ void ExprXChkBuilder::xchk(
 			ConstraintManager	cm;
 			Query	q(cm, EqExpr::alloc(oracle_expr, test_expr));
 
-			printBadXChk(q, oracle_expr, test_expr);
-			assert (oracle_expr == test_expr &&
-				"XCHK: CE MISMATCH");
+			notifyBadXChk(q, oracle_expr, test_expr);
 		}
 
 		in_xchker = false;
@@ -426,7 +431,7 @@ void ExprXChkBuilder::xchk(
 		in_xchker = false;
 		return;
 	} 
-	
+
 	/* xchk all deferred expressions */
 	while (!deferred_exprs.empty()) {
 		std::pair<ref<Expr>, ref<Expr> > p(deferred_exprs.front());
@@ -459,7 +464,7 @@ void ExprXChkBuilder::xchkRandomValue(
 		Query			q(
 			cm, EqExpr::alloc(oracle_expr, test_expr));
 
-		printBadXChk(q, oracle_expr, test_expr);
+		notifyBadXChk(q, oracle_expr, test_expr);
 		return;
 	}
 }
@@ -503,29 +508,46 @@ void ExprXChkBuilder::xchkWithSolver(
 	ConstraintManager	cm;
 	Query			q(cm, EqExpr::alloc(oracle_expr, test_expr));
 
+	/* ignore if errors already detected */
+	if (Expr::errors) return;
+
 	ok = solver.mustBeTrue(q, res);
 	if (!ok)
 		return;
 
 	if (res != true) {
-		printBadXChk(q, oracle_expr, test_expr);
+		notifyBadXChk(q, oracle_expr, test_expr);
 	}
-	assert (res == true && "XCHK FAILED! MUST BE EQUAL!");
 }
 
-void ExprXChkBuilder::printBadXChk(
+
+void ExprXChkBuilder::notifyBadXChk(
 	const Query& q,
 	const ref<Expr>& oracle_expr,
 	const ref<Expr>& test_expr)
 {
-	std::cerr << "BAD XCHK: ";
-	q.expr->print(std::cerr);
-	std::cerr << '\n';
+	std::stringstream	ss;
 
-	std::cerr << "ORACLE-EXPR: " << oracle_expr << '\n';
-	std::cerr << "TEST-EXPR: " << test_expr << '\n';
+	printBadXChk(ss, q, oracle_expr, test_expr);
+	Expr::errors++;
+	Expr::errorMsg = ss.str();
+	Expr::errorExpr =  EqExpr::alloc(oracle_expr, test_expr);
+}
 
-	dumpCounterExample(std::cerr, oracle_expr, test_expr);
+void ExprXChkBuilder::printBadXChk(
+	std::ostream& os,
+	const Query& q,
+	const ref<Expr>& oracle_expr,
+	const ref<Expr>& test_expr)
+{
+	os << "BAD XCHK: ";
+	q.expr->print(os);
+	os << '\n';
+
+	os << "ORACLE-EXPR: " << oracle_expr << '\n';
+	os << "TEST-EXPR: " << test_expr << '\n';
+
+	dumpCounterExample(os, oracle_expr, test_expr);
 	SMTPrinter::dump(q, "exprxchk");
 }
 

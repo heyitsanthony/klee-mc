@@ -59,6 +59,7 @@ ExprAlloc*	Expr::theExprAllocator = NULL;
 ref<Expr>	Expr::errorExpr = NULL;
 unsigned long	Expr::count = 0;
 unsigned int	Expr::errors = 0;
+std::string	Expr::errorMsg;
 uint64_t	LetExpr::next_id = 0;
 
 bool ArrayLT::operator()(const Array *a, const Array *b) const

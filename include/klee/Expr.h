@@ -133,6 +133,8 @@ public:
   static unsigned long	count;
   static unsigned int	errors;
   static ref<Expr>	errorExpr;
+  static std::string	errorMsg;
+
   static const unsigned MAGIC_HASH_CONSTANT = 39;
 
 
@@ -221,7 +223,7 @@ public:
   static ExprAlloc* setAllocator(ExprAlloc* alloc);
   static ExprBuilder* getBuilder(void) {return theExprBuilder;}
   static ExprAlloc* getAllocator(void) { return theExprAllocator; }
-  static void resetErrors(void) { errors = 0; errorExpr = NULL; }
+  static void resetErrors(void) { errors = 0; errorExpr = NULL; errorMsg = ""; }
   static ref<Expr> createBoothMul(const ref<Expr>& expr, uint64_t v);
   static ref<Expr> createShiftAddMul(const ref<Expr>& expr, uint64_t v);
 
