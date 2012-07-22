@@ -331,6 +331,7 @@ Solver* Solver::createChainWithTimedSolver(
 			createEquivBuilder(*solver, Expr::getBuilder()));
 	}
 
+	/* TODO: specify oracle builder */
 	if (XChkExprBuilder) {
 		ExprBuilder *xchkBuilder;
 		xchkBuilder = createDefaultExprBuilder();

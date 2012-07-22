@@ -1997,7 +1997,9 @@ INST_FOP_ARITH(FRem, mod)
 
 	if (Expr::errors) {
 		std::stringstream	ss;
-		ss << "expr error; bad div?\n";
+		ss << "expr error\n";
+		if (Expr::errorMsg.empty() == false)
+			ss << "error msg: " << Expr::errorMsg << '\n';
 		if (!Expr::errorExpr.isNull())
 			ss << "bad expr: " << Expr::errorExpr << '\n';
 		terminateStateOnError(state, ss.str(), "expr.err");

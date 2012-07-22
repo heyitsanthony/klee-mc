@@ -1,5 +1,6 @@
 #include <iostream>
 #include <sstream>
+#include "../Expr/RuleBuilder.h"
 #include "klee/Solver.h"
 #include "klee/Constraints.h"
 #include "klee/ExprBuilder.h"
@@ -18,6 +19,14 @@ namespace
 	OnlyCheckTopLevelExpr(
 		"only-toplevel-xchk",
 		llvm::cl::init(true));
+
+	/* I'm not totally happy with this option-- should be 
+ * covered by test/oracle builder selection */
+	llvm::cl::opt<bool>
+	OnlyCheckRBHits(
+		"only-check-rb-hits",
+		llvm::cl::desc("only check hits in rule builder"),
+		llvm::cl::init(false));
 
 	llvm::cl::opt<bool>
 	OptimizeConstChecking(
@@ -80,6 +89,7 @@ public:
 	virtual ref<Expr> NotOptimized(const ref<Expr> &Index)
 	{ return DEFAULT_XCHK_BUILDER->NotOptimized(Index); }
 
+	static uint64_t getQueryCount(void) { return query_c; }
 protected:
 	void xchk(
 		const ref<Expr>& oracle_expr,
@@ -113,7 +123,11 @@ protected:
 		std::pair<
 			ref<Expr> /* oracle */,
 			ref<Expr> /* test */ > > deferred_exprs;
+	uint64_t	last_rb_hit_c;
+
+	static uint64_t query_c;
 };
+uint64_t ExprXChkBuilder::query_c = 0;
 
 class AllExprXChkBuilder : public ExprXChkBuilder
 {
@@ -258,6 +272,7 @@ public:
 
 		if (!in_xchker) {
 			in_xchker = true;
+			last_rb_hit_c = RuleBuilder::getHits();
 			e_test = test_builder->Read(Updates, Index);
 		} else
 			return DEFAULT_XCHK_BUILDER->Read(Updates, Index);
@@ -275,6 +290,7 @@ public:
 		ref<Expr>	e_test, e_oracle;
 		if (!in_xchker) {
 			in_xchker = true;
+			last_rb_hit_c = RuleBuilder::getHits();
 			e_test = test_builder->Select(Cond, LHS, RHS);
 		} else
 			return DEFAULT_XCHK_BUILDER->Select(Cond, LHS, RHS);
@@ -290,6 +306,7 @@ public:
 		ref<Expr>	e_test, e_oracle;
 		if (!in_xchker) {
 			in_xchker = true;
+			last_rb_hit_c = RuleBuilder::getHits();
 			e_test = test_builder->Extract(LHS, Offset, W);
 		} else
 			return DEFAULT_XCHK_BUILDER->Extract(LHS, Offset, W);
@@ -303,6 +320,7 @@ public:
 		ref<Expr>	e_test, e_oracle;
 		if (!in_xchker) {
 			in_xchker = true;
+			last_rb_hit_c = RuleBuilder::getHits();
 			e_test = test_builder->ZExt(LHS, W);
 		} else
 			return DEFAULT_XCHK_BUILDER->ZExt(LHS, W);
@@ -316,6 +334,7 @@ public:
 		ref<Expr>	e_test, e_oracle;
 		if (!in_xchker) {
 			in_xchker = true;
+			last_rb_hit_c = RuleBuilder::getHits();
 			e_test = test_builder->SExt(LHS, W);
 		} else
 			return DEFAULT_XCHK_BUILDER->SExt(LHS, W);
@@ -329,6 +348,7 @@ public:
 		ref<Expr>	e_test, e_oracle;
 		if (!in_xchker) {
 			in_xchker = true;
+			last_rb_hit_c = RuleBuilder::getHits();
 			e_test = test_builder->Not(L);
 		} else
 			return DEFAULT_XCHK_BUILDER->Not(L);
@@ -342,6 +362,7 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS) \
 	ref<Expr>	e_test, e_oracle;			\
 	if (!in_xchker) {					\
 		in_xchker = true;				\
+		last_rb_hit_c = RuleBuilder::getHits();		\
 		e_test = test_builder->x(LHS, RHS);		\
 	} else							\
 		return DEFAULT_XCHK_BUILDER->x(LHS, RHS);	\
@@ -407,6 +428,12 @@ void ExprXChkBuilder::xchk(
 			notifyBadXChk(q, oracle_expr, test_expr);
 		}
 
+		in_xchker = false;
+		return;
+	}
+
+	/* only check if rule builder triggered */
+	if (OnlyCheckRBHits && RuleBuilder::getHits() == last_rb_hit_c) {
 		in_xchker = false;
 		return;
 	}
@@ -511,6 +538,7 @@ void ExprXChkBuilder::xchkWithSolver(
 	/* ignore if errors already detected */
 	if (Expr::errors) return;
 
+	query_c++;
 	ok = solver.mustBeTrue(q, res);
 	if (!ok)
 		return;
