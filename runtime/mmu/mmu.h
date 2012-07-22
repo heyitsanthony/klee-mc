@@ -11,6 +11,6 @@ DEF_ACCESS(8, uint8_t)
 DEF_ACCESS(16, uint16_t)
 DEF_ACCESS(32, uint32_t)
 DEF_ACCESS(64, uint64_t)
-DEF_ACCESS(128, long long)
+DEF_ACCESS(128, __uint128_t)
 
 #endif

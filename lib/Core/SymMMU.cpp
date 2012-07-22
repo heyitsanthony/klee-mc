@@ -1,5 +1,6 @@
 #include <llvm/Support/Path.h>
 #include "Executor.h"
+#include "klee/ExecutionState.h"
 #include "klee/Internal/Module/KModule.h"
 #include "SymMMU.h"
 
@@ -43,7 +44,7 @@ void SymMMU::initModule(KModule *km)
 
 	llvm::sys::Path path(km->getLibraryDir());
 
-	path.appendComponent("libkleeRuntimeMMU.bca");
+	path.appendComponent("libkleeRuntimeMMU.bc");
 	mod = getBitcodeModule(path.c_str());
 	assert (mod != NULL);
 
@@ -81,8 +82,15 @@ bool SymMMU::exeMemOp(ExecutionState &state, MemOp& mop)
 		}
 
 		args.push_back(mop.address);
-		args.push_back(mop.value);
+		if (w == 128) {
+			/* ugh. coercion */
+			args.push_back(MK_EXTRACT(mop.value, 0, 64));
+			args.push_back(MK_EXTRACT(mop.value, 64, 128));
+		} else
+			args.push_back(mop.value);
 		exe.executeCallNonDecl(state, f->function, args);
+
+		sym_w_c++;
 		return true;
 	}
 
@@ -98,5 +106,7 @@ bool SymMMU::exeMemOp(ExecutionState &state, MemOp& mop)
 
 	args.push_back(mop.address);
 	exe.executeCallNonDecl(state, f->function, args);
+
+	sym_r_c++;
 	return true;
 }

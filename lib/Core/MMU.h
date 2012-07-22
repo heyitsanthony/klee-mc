@@ -47,6 +47,9 @@ public:
 	ref<Expr> readDebug(ExecutionState& state, uint64_t addr);
 
 	static uint64_t getQueries(void) { return query_c; }
+	static uint64_t getSymAccesses(void) { return sym_w_c + sym_r_c; }
+	static uint64_t getSymWrites(void) { return sym_w_c; }
+	static uint64_t getSymReads(void) { return sym_r_c; }
 
 	static MMU* create(Executor& exe);
 protected:
@@ -54,6 +57,8 @@ protected:
 
 	Executor		&exe;
 	static uint64_t		query_c;
+	static uint64_t		sym_w_c;
+	static uint64_t		sym_r_c;
 };
 
 }

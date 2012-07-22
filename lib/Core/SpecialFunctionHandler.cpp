@@ -180,23 +180,22 @@ bool SpecialFunctionHandler::handle(
   KInstruction *target,
   std::vector< ref<Expr> > &arguments)
 {
-  handlers_ty::iterator it = handlers.find(f);
-  if (it == handlers.end()) return false;
+	handlers_ty::iterator it = handlers.find(f);
+	if (it == handlers.end()) return false;
 
-  Handler* h = it->second.first;
-  bool hasReturnValue = it->second.second;
-   // FIXME: Check this... add test?
-  if (!hasReturnValue && !target->getInst()->use_empty()) {
-    executor->terminateStateOnExecError(
-    	state,
-        "expected return value from void special function");
-  } else {
-    h->handle(state, target, arguments);
-  }
-  return true;
+	Handler* h = it->second.first;
+	bool hasReturnValue = it->second.second;
+
+	// FIXME: Check this... add test?
+	if (!hasReturnValue && !target->getInst()->use_empty()) {
+		executor->terminateStateOnExecError(
+			state,
+			"expected return value from void special function");
+	} else {
+		h->handle(state, target, arguments);
+	}
+	return true;
 }
-
-/****/
 
 unsigned char* SpecialFunctionHandler::readBytesAtAddressNoBound(
 	ExecutionState &state,
@@ -447,37 +446,46 @@ SFH_DEF_HANDLER(Assume)
 SFH_DEF_HANDLER(AssumeEq)
 {
 	ref<Expr>	e;
-	bool		mayBeTrue, ok;
+	bool		mustBeTrue, mayBeTrue, ok;
 
 	SFH_CHK_ARGS(2, "klee_assume_eq");
 
 	e = EqExpr::create(arguments[0], arguments[1]);
 
+	/* valid? */
+	ok = sfh->executor->getSolver()->mustBeTrue(state, e, mustBeTrue);
+	if (!ok) goto error;
+
+	/* nothing to do here? */
+	if (mustBeTrue) return;
+
+	/* satisfiable? */
 	ok = sfh->executor->getSolver()->mayBeTrue(state, e, mayBeTrue);
-	if (!ok) {
-		sfh->executor->terminateStateEarly(state, "assumeeq failed");
+	if (!ok) goto error;
+
+	if (!mayBeTrue) {
+		sfh->executor->terminateStateOnError(
+			state,
+			"invalid klee_assume_eq call (provably false)",
+			"user.err");
 		return;
 	}
 
-	if (mayBeTrue) {
-		sfh->executor->addConstrOrDie(state, e);
-		return;
-	}
+	/* only add constraint if we know it's not already implied */
+	sfh->executor->addConstrOrDie(state, e);
+	return;
 
-	sfh->executor->terminateStateOnError(
-		state,
-		"invalid klee_assume_eq call (provably false)",
-		"user.err");
+error:
+	sfh->executor->terminateStateEarly(state, "assumeeq failed");
 }
 
 SFH_DEF_HANDLER(IsSymbolic)
 {
-  SFH_CHK_ARGS(1, "klee_is_symbolic");
+	SFH_CHK_ARGS(1, "klee_is_symbolic");
 
-  state.bindLocal(target,
-  	ConstantExpr::create(
-		!isa<ConstantExpr>(arguments[0]),
-		Expr::Int32));
+	state.bindLocal(
+		target,
+		MK_CONST(!isa<ConstantExpr>(arguments[0]), Expr::Int32));
 }
 
 SFH_DEF_HANDLER(IsValidAddr)

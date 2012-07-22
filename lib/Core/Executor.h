@@ -311,11 +311,12 @@ private:
 
   bool isDebugIntrinsic(const llvm::Function *f);
 
-  void instShuffleVector(ExecutionState& state, KInstruction* ki);
-  void instExtractElement(ExecutionState& state, KInstruction* ki);
-  void instInsertElement(ExecutionState& state, KInstruction *ki);
-  void instBranch(ExecutionState& state, KInstruction* ki);
-  void instBranchConditional(ExecutionState& state, KInstruction* ki);
+	void instInsertValue(ExecutionState& state, KInstruction* ki);
+	void instShuffleVector(ExecutionState& state, KInstruction* ki);
+	void instExtractElement(ExecutionState& state, KInstruction* ki);
+	void instInsertElement(ExecutionState& state, KInstruction *ki);
+	void instBranch(ExecutionState& state, KInstruction* ki);
+	void instBranchConditional(ExecutionState& state, KInstruction* ki);
 
   void markBranchVisited(
   	ExecutionState& state,

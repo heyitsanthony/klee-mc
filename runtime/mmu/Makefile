@@ -15,7 +15,7 @@ LIBRARYNAME=kleeRuntimeMMU
 BUILD_ARCHIVE=1
 BYTECODE_LIBRARY=1
 # Don't strip debug info from the module.
-DEBUG_RUNTIME=1
+DEBUG_RUNTIME=0
 
 include $(LEVEL)/Makefile.common
 

@@ -10,6 +10,8 @@
 using namespace klee;
 
 uint64_t klee::MMU::query_c = 0;
+uint64_t klee::MMU::sym_r_c = 0;
+uint64_t klee::MMU::sym_w_c = 0;
 
 extern unsigned MakeConcreteSymbolic;
 

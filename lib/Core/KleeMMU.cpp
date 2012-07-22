@@ -105,10 +105,11 @@ void KleeMMU::analyzeOffset(ExecutionState& st, const MemOpRes& res)
 void KleeMMU::commitMOP(
 	ExecutionState& state, const MemOp& mop, const MemOpRes& res)
 {
-	if (	res.offset->getKind() != Expr::Constant &&
-		ConstraintSeedCore::isActive())
-	{
-		analyzeOffset(state, res);
+	if (res.offset->getKind() != Expr::Constant) {
+		if (ConstraintSeedCore::isActive())
+			analyzeOffset(state, res);
+		if (mop.isWrite) sym_w_c++;
+		else sym_r_c++;
 	}
 
 	if (mop.isWrite) {

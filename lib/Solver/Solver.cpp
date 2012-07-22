@@ -6,6 +6,7 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
+//
 #include <llvm/Support/CommandLine.h>
 
 #include "klee/Solver.h"
@@ -38,6 +39,7 @@
 #include <iostream>
 #include <string>
 
+#include <netdb.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -50,6 +52,52 @@ bool	UseFastCexSolver;
 bool	UseHashSolver;
 double	MaxSTPTime;
 
+#if 0
+namespace llvm
+{
+namespace cl
+{
+template <>
+class parser<sockaddr_in_opt> : public basic_parser<sockaddr_in_opt> {
+public:
+bool parse(Option&, const std::string&, const std::string&, sockaddr_in_opt &);
+virtual const char *getValueName() const { return "sockaddr_in"; }
+};
+}
+}
+
+bool llvm::cl::parser<sockaddr_in_opt>::parse(
+	llvm::cl::Option &O,
+	const std::string& ArgName,
+	const std::string &Arg,
+	sockaddr_in_opt &Val)
+{
+  // find the separator
+  std::string::size_type p = Arg.rfind(':');
+  if (p == std::string::npos)
+    return O.error("'" + Arg + "' not in format <host>:<port>");
+
+  // read the port number
+  unsigned short port;
+  if (std::sscanf(Arg.c_str() + p + 1, "%hu", &port) < 1)
+    return O.error("'" + Arg.substr(p + 1) + "' invalid port number");
+
+  // resolve server name
+  std::string host = Arg.substr(0, p);
+  struct hostent* h = gethostbyname(host.c_str());
+  if (!h)
+    return O.error("cannot resolve '" + host + "' (" + hstrerror(h_errno) + ")");
+
+  // prepare the return value
+  Val.str = Arg;
+  std::memset(&Val.sin, 0, sizeof(Val.sin));
+  Val.sin.sin_family = AF_INET;
+  Val.sin.sin_port = htons(port);
+  Val.sin.sin_addr = *(struct in_addr*)h->h_addr;
+
+  return false;
+}
+#endif
 namespace {
   cl::opt<bool>
   DebugValidateSolver("debug-validate-solver", cl::init(false));
@@ -65,8 +113,7 @@ namespace {
   STPServer("stp-server", cl::value_desc("host:port"));
 
   cl::opt<bool>
-  UseSTPQueryPCLog("use-stp-query-pc-log",
-                   cl::init(false));
+  UseSTPQueryPCLog("use-stp-query-pc-log", cl::init(false));
 
   cl::opt<bool> UseSMTQueryLog("use-smt-log", cl::init(false));
 

@@ -26,7 +26,6 @@
 
 #include "PTree.h"
 #include "Memory.h"
-#include "static/Markov.h"
 
 #include <llvm/Function.h>
 #include <llvm/Support/CommandLine.h>
@@ -47,6 +46,8 @@ using namespace klee;
 ExeStateBuilder* ExeStateBuilder::theESB = NULL;
 MemoryManager* ExecutionState::mm = NULL;
 
+/* XXX: deactivated */
+#include "static/Markov.h"
 Markov<KFunction> theStackXfer;
 
 #define LOG_DIR		"statelog/log."
@@ -166,7 +167,7 @@ void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf)
 	assert (kf != NULL && "Bad function pushed on stack");
 
 	if (stack.empty() == false) {
-		theStackXfer.insert(getCurrentKFunc(), kf);
+		// theStackXfer.insert(getCurrentKFunc(), kf);
 		getCurrentKFunc()->addExit(kf);
 	}
 
@@ -183,7 +184,7 @@ void ExecutionState::popFrame()
 	stack.pop_back();
 
 	if (stack.empty() == false && last_kf) {
-		theStackXfer.insert(last_kf, getCurrentKFunc());
+		// theStackXfer.insert(last_kf, getCurrentKFunc());
 		// last_kf->addExit(getCurrentKFunc());
 	}
 }
@@ -196,7 +197,7 @@ void ExecutionState::xferFrame(KFunction* kf)
 	assert (kf != NULL);
 	assert (stack.size() > 0);
 
-	theStackXfer.insert(getCurrentKFunc(), kf);
+	// theStackXfer.insert(getCurrentKFunc(), kf);
 	getCurrentKFunc()->addExit(kf);
 
 	/* save, pop off old state */

@@ -11,7 +11,7 @@ using namespace klee;
 namespace {
 	llvm::cl::opt<bool>
 	UseSymMMU(
-		"use-symmu",
+		"use-sym-mmu",
 		llvm::cl::desc("Use MMU that forwards to interpreter."),
 		llvm::cl::init(false));
 };

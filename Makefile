@@ -75,6 +75,14 @@ mc: mc-std mc-fdt
 
 mc-std: mc-std-amd64 mc-std-arm mc-std-x86
 
+all:: $(LibDir)/libkleeRuntimeMMU.bc
+
+$(LibDir)/libkleeRuntimeMMU.bc: $(LibDir)/libkleeRuntimeMMU.bca
+	mkdir -p mmu_tmp-$@
+	cd mmu_tmp-$@ && ar x $^ && cd ..
+	llvm-link -f -o `echo $^ | sed "s/\.bca/\.bc/"` mmu_tmp-$@/*.bc
+	rm -rf mmu_tmp-$@
+
 mc-std-%: $(LibDir)/libkleeRuntimeMC-%.bca
 	mkdir -p mc_tmp-$@
 	cd mc_tmp-$@ && ar x $^ && cd ..

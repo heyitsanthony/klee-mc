@@ -24,9 +24,6 @@
 #include <vector>
 #include <string>
 
-#include <netdb.h>
-#include <errno.h>
-
 #include "static/Sugar.h"
 #include "klee/Common.h"
 #include "klee/ExeStateBuilder.h"
@@ -67,24 +64,11 @@ bool	WriteTraces = false;
 bool	ReplayInhibitedForks = true;
 extern double	MaxSTPTime;
 
-namespace llvm
-{
-namespace cl
-{
-template <>
-class parser<sockaddr_in_opt> : public basic_parser<sockaddr_in_opt> {
-public:
-bool parse(Option&, const char *, const std::string&, sockaddr_in_opt &);
-virtual const char *getValueName() const { return "sockaddr_in"; }
-};
-}
-}
-
 #define DECL_OPTBOOL(x,y)	cl::opt<bool> x(y, cl::init(false))
-
 
 namespace {
   DECL_OPTBOOL(DumpSelectStack, "dump-select-stack");
+  DECL_OPTBOOL(ChkConstraints, "chk-constraints");
 
   cl::opt<bool>
   ConcretizeEarlyTerminate(
@@ -103,19 +87,14 @@ namespace {
 	 cl::desc("Use proportional-integral-derivative state control"),
 	 cl::init(false));
 
-  DECL_OPTBOOL(ChkConstraints, "chk-constraints");
+  cl::opt<bool> DumpStatesOnHalt("dump-states-on-halt", cl::init(true));
 
-  cl::opt<bool>
-  DumpStatesOnHalt("dump-states-on-halt", cl::init(true));
-
-  cl::opt<bool>
-  PreferCex("prefer-cex", cl::init(true));
+  cl::opt<bool> PreferCex("prefer-cex", cl::init(true));
 
   cl::opt<bool>
   DebugPrintInstructions("debug-print-instructions",
                          cl::desc("Print instructions during execution."));
-  cl::opt<bool>
-  DebugCheckForImpliedValues("debug-check-for-implied-values");
+  cl::opt<bool> DebugCheckForImpliedValues("debug-check-for-implied-values");
 
   cl::opt<bool>
   OnlyOutputStatesCoveringNew(
@@ -132,7 +111,6 @@ namespace {
                 cl::init(false),
                 cl::desc("Generate tests cases for all errors "
                          "(default=one per (error,instruction) pair)"));
-
 
   cl::opt<double>
   MaxInstructionTime(
@@ -201,35 +179,6 @@ namespace {
 }
 
 namespace klee { RNG theRNG; }
-
-bool llvm::cl::parser<sockaddr_in_opt>::parse(llvm::cl::Option &O,
-     const char *ArgName, const std::string &Arg, sockaddr_in_opt &Val)
-{
-  // find the separator
-  std::string::size_type p = Arg.rfind(':');
-  if (p == std::string::npos)
-    return O.error("'" + Arg + "' not in format <host>:<port>");
-
-  // read the port number
-  unsigned short port;
-  if (std::sscanf(Arg.c_str() + p + 1, "%hu", &port) < 1)
-    return O.error("'" + Arg.substr(p + 1) + "' invalid port number");
-
-  // resolve server name
-  std::string host = Arg.substr(0, p);
-  struct hostent* h = gethostbyname(host.c_str());
-  if (!h)
-    return O.error("cannot resolve '" + host + "' (" + hstrerror(h_errno) + ")");
-
-  // prepare the return value
-  Val.str = Arg;
-  std::memset(&Val.sin, 0, sizeof(Val.sin));
-  Val.sin.sin_family = AF_INET;
-  Val.sin.sin_port = htons(port);
-  Val.sin.sin_addr = *(struct in_addr*)h->h_addr;
-
-  return false;
-}
 
 static StateSolver* createTimerChain(double to, std::string q, std::string s);
 
@@ -398,9 +347,8 @@ ref<klee::ConstantExpr> Executor::evalConstant(
 	if (isa<ConstantPointerNull>(c))
 		return Expr::createPointer(0);
 
-	if (isa<UndefValue>(c) || isa<ConstantAggregateZero>(c)) {
+	if (isa<UndefValue>(c) || isa<ConstantAggregateZero>(c))
 		return MK_CONST(0, km->getWidthForLLVMType(c->getType()));
-	}
 
 	if (isa<ConstantVector>(c))
 		return ConstantExpr::createVector(cast<ConstantVector>(c));
@@ -716,10 +664,16 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 	Expr::Width to = kmodule->getWidthForLLVMType(t);
 
 	if (from != to) {
-		CallSite cs = (isa<InvokeInst>(caller) ?
-			CallSite(cast<InvokeInst>(caller)) :
-			CallSite(cast<CallInst>(caller)));
+		CallSite	cs;
 
+		if (isa<CallInst>(caller))
+			cs = CallSite(cast<CallInst>(caller));
+		else if (isa<InvokeInst>(caller))
+			cs = CallSite(cast<InvokeInst>(caller));
+		else {
+			std::cerr << "WTF: ";
+			kcaller->getInst()->dump();
+		}
 		// XXX need to check other param attrs ?
 		if (cs.paramHasAttr(0, llvm::Attribute::SExt)) {
 			result = SExtExpr::create(result, to);
@@ -1585,6 +1539,38 @@ void Executor::instShuffleVector(ExecutionState& state, KInstruction* ki)
 	state.bindLocal(ki, out_val);
 }
 
+void Executor::instInsertValue(ExecutionState& state, KInstruction* ki)
+{
+	KGEPInstruction	*kgepi = dynamic_cast<KGEPInstruction*>(ki);
+	int		lOffset, rOffset;
+	ref<Expr>	result, l(0), r(0);
+	ref<Expr>	agg = eval(ki, 0, state).value;
+	ref<Expr>	val = eval(ki, 1, state).value;
+
+	assert (kgepi != NULL);
+	lOffset = kgepi->getOffsetBits()*8;
+	rOffset = kgepi->getOffsetBits()*8 + val->getWidth();
+
+	if (lOffset > 0) {
+		l = MK_EXTRACT(agg, 0, lOffset);
+	}
+
+	if (rOffset < (int)agg->getWidth()) {
+		r = MK_EXTRACT(agg, rOffset, agg->getWidth() - rOffset);
+	}
+
+	if (!l.isNull() && !r.isNull())
+		result = MK_CONCAT(r, MK_CONCAT(val, l));
+	else if (!l.isNull())
+		result = MK_CONCAT(val, l);
+	else if (!r.isNull())
+		result = MK_CONCAT(r, val);
+	else
+		result = val;
+
+	state.bindLocal(ki, result);
+}
+
 bool Executor::isFPPredicateMatched(
   APFloat::cmpResult CmpRes, CmpInst::Predicate pred)
 {
@@ -1973,33 +1959,7 @@ INST_FOP_ARITH(FRem, mod)
   }
 
   case Instruction::InsertValue: {
-    KGEPInstruction *kgepi = static_cast<KGEPInstruction*>(ki);
-
-    ref<Expr> agg = eval(ki, 0, state).value;
-    ref<Expr> val = eval(ki, 1, state).value;
-
-    ref<Expr> l = NULL, r = NULL;
-    unsigned lOffset, rOffset;
-
-    lOffset = kgepi->getOffsetBits()*8;
-    rOffset = kgepi->getOffsetBits()*8 + val->getWidth();
-
-    if (lOffset > 0)
-      l = ExtractExpr::create(agg, 0, lOffset);
-    if (rOffset < agg->getWidth())
-      r = ExtractExpr::create(agg, rOffset, agg->getWidth() - rOffset);
-
-    ref<Expr> result;
-    if (!l.isNull() && !r.isNull())
-      result = ConcatExpr::create(r, ConcatExpr::create(val, l));
-    else if (!l.isNull())
-      result = ConcatExpr::create(val, l);
-    else if (!r.isNull())
-      result = ConcatExpr::create(r, val);
-    else
-      result = val;
-
-    state.bindLocal(ki, result);
+	instInsertValue(state, ki);
     break;
   }
 
@@ -2604,11 +2564,11 @@ void Executor::doImpliedValueConcretization(
 	ref<Expr> e,
 	ref<ConstantExpr> value)
 {
-	if (DebugCheckForImpliedValues)
-		ImpliedValue::checkForImpliedValues(
-			solver->solver, e, value);
-
 	ImpliedValueList results;
+
+	if (DebugCheckForImpliedValues)
+		ImpliedValue::checkForImpliedValues(solver->solver, e, value);
+
 	ImpliedValue::getImpliedValues(e, value, results);
 
 	foreach (it, results.begin(), results.end())

@@ -1,14 +1,30 @@
 #include "klee/klee.h"
 #include "mmu.h"
 
-uint8_t mmu_load_8(void* addr) { return 0; }
-uint16_t mmu_load_16(void* addr) { return 0; }
-uint32_t mmu_load_32(void* addr) { return 0; }
-uint64_t mmu_load_64(void* addr) { return 0; }
-long long mmu_load_128(void* addr) { return 0; }
+#define MMU_LOAD(x,y)		\
+y mmu_load_##x(void* addr)	\
+{	y		*p;	\
+	uint64_t	a_64 = (uint64_t)addr, c_64;	\
+	c_64 = klee_get_value(a_64);		\
+	klee_assume_eq (a_64, c_64);		\
+	p = (y*)c_64;				\
+	return *p; }
 
-void mmu_store_8(void* addr, uint8_t v) { }
-void mmu_store_16(void* addr, uint16_t v) { }
-void mmu_store_32(void* addr, uint32_t v) { }
-void mmu_store_64(void* addr, uint64_t v) { }
-void mmu_store_128(void* addr, long long v) { }
+#define MMU_STORE(x,y)			\
+void mmu_store_##x(void* addr, y v)	\
+{	y *p;	\
+	uint64_t	a_64 = (uint64_t)addr, c_64;	\
+	c_64 = klee_get_value(a_64);		\
+	klee_assume_eq (a_64, c_64);		\
+	p = (y*)c_64;				\
+	*p = v;	}
+
+#define MMU_ACCESS(x,y)	\
+	MMU_LOAD(x,y)	\
+	MMU_STORE(x,y)
+
+MMU_ACCESS(8, uint8_t)
+MMU_ACCESS(16, uint16_t)
+MMU_ACCESS(32, uint32_t)
+MMU_ACCESS(64, uint64_t)
+MMU_ACCESS(128, __uint128_t)
