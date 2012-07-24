@@ -1,4 +1,5 @@
 #include <unistd.h>
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
@@ -409,10 +410,14 @@ void KleeHandler::processTestCase(
 
 	fprintf(stderr, "===DONE WRITING TESTID=%d (es=%p)===\n", id, &state);
 	if (ValidateTestCase) {
-		if (validateTest(id))
-			std::cerr << "VALIDATED TEST#" << id << '\n';
-		else
-			std::cerr << "FAILED TO VALIDATE TEST#" << id << '\n';
+		std::ostream* f = openTestFile("validate", id);
+		if (f != NULL) {
+			if (validateTest(id))
+				(*f) << "OK #" << id << '\n';
+			else
+				(*f) << "FAIL #" << id << '\n';
+			delete f;
+		}
 	}
 }
 
@@ -561,6 +566,11 @@ bool KleeHandler::validateTest(unsigned id)
 		argv[3] = static_cast<GuestSnapshot*>(gs)->getPath().c_str();
 		argv[4] = NULL;
 
+		/* don't write anything please! */
+		close(0);
+		close(1);
+		open("/dev/null", O_RDWR);
+		open("/dev/null", O_RDWR);
 		execvp("kmc-replay", (char**)argv); 
 		_exit(-1);
 	}
@@ -569,6 +579,14 @@ bool KleeHandler::validateTest(unsigned id)
 	if (ret_pid != child_pid) {
 		std::cerr << "VALDIATE: BAD WAIT\n";
 		return false;
+	}
+
+	if (WIFSIGNALED(status)) {
+		int	sig = WTERMSIG(status);
+		if (sig == SIGSEGV)
+			return true;
+		if (sig == SIGFPE)
+			return true;
 	}
 
 	if (!WIFEXITED(status)) {
