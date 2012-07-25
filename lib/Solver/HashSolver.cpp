@@ -55,6 +55,12 @@ namespace
 		"hcache-sink",
 		cl::desc("Sink directory hits into accel cache"),
 		cl::init(false));
+
+	cl::opt<bool>
+	HCacheWriteSAT(
+		"hcache-write-sat",
+		cl::desc("Write entire SAT query"),
+		cl::init(false));
 }
 
 bool QHSSink::lookup(const QHSEntry& qhs)
@@ -96,7 +102,7 @@ bool QHSDir::lookup(const QHSEntry& qhs)
 		/* seen this twice; better save the whole thing */
 
 		/* if we're sinking into a file cache, no need to save here */
-		if (!HCacheSink)
+		if (!HCacheSink && HCacheWriteSAT)
 			writeSAT(qhs);
 	}
 
