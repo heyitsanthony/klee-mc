@@ -89,7 +89,7 @@ namespace
 	cl::opt<bool> AllowNegativeStack (
 		"allow-negstack",
 		cl::desc("Allow negative call stacks"),
-		cl::init(false));
+		cl::init(true));
 
 	cl::opt<bool> UseSyscallPriority(
 		"use-syscall-pr",
