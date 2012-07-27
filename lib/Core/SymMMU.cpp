@@ -1,3 +1,4 @@
+#include <llvm/Support/CommandLine.h>
 #include <llvm/Support/Path.h>
 #include "Executor.h"
 #include "klee/ExecutionState.h"
@@ -7,6 +8,15 @@
 using namespace klee;
 
 namespace klee { extern llvm::Module* getBitcodeModule(const char* path); }
+
+namespace {
+	llvm::cl::opt<std::string>
+	SymMMUType(
+		"sym-mmu-type",
+		llvm::cl::desc("Suffix for symbolic MMU operations."),
+		llvm::cl::init("uniqptr"));
+};
+
 
 KFunction	*SymMMU::f_store8 = NULL,
 		*SymMMU::f_store16, *SymMMU::f_store32,
@@ -24,6 +34,7 @@ struct loadent
 void SymMMU::initModule(KModule *km)
 {
 	llvm::Module	*mod;
+	std::string	suffix("_" + SymMMUType);
 
 	struct loadent	loadtab[] =  {
 		{ "mmu_load_8", &f_load8},
@@ -51,7 +62,12 @@ void SymMMU::initModule(KModule *km)
 	km->addModule(mod);
 
 	for (struct loadent* le = &loadtab[0]; le->le_name; le++) {
-		KFunction	*kf(km->getKFunction(le->le_name));
+		std::string	func_name(le->le_name + suffix);
+		KFunction	*kf(km->getKFunction(func_name.c_str()));
+		if (kf == NULL) {
+			std::cerr <<	"[SymMMU] Could not find: " <<
+					func_name << '\n';
+		}
 		assert (kf != NULL);
 		*(le->le_kf) = kf;
 	}

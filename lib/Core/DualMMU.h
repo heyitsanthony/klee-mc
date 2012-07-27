@@ -9,9 +9,14 @@ class DualMMU : public MMU
 {
 public:
 	DualMMU(Executor& exe);
+
 	virtual ~DualMMU(void);
 
+	static DualMMU* create(MMU* normal_mmu, MMU* slow_mmu);
+
 	virtual bool exeMemOp(ExecutionState &state, MemOp& mop);
+protected:
+	DualMMU(Executor& exe, MMU* fast_path, MMU* slow_path);
 private:
 	MMU	*mmu_conc;
 	MMU	*mmu_sym;

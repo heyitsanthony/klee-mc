@@ -5,12 +5,16 @@
 
 #define DEF_LOAD(x, y)	y mmu_load_##x(void* addr)
 #define DEF_STORE(x, y)	void mmu_store_##x(void* addr, y v)
-#define DEF_ACCESS(x,y)	DEF_LOAD(x,y); DEF_STORE(x,y);
+#define DEF_ACCESS(a,x,y)	DEF_LOAD(x##a,y); DEF_STORE(x##a,y);
 
-DEF_ACCESS(8, uint8_t)
-DEF_ACCESS(16, uint16_t)
-DEF_ACCESS(32, uint32_t)
-DEF_ACCESS(64, uint64_t)
-DEF_ACCESS(128, __uint128_t)
+#define DEF_MMU(a)			\
+	DEF_ACCESS(a, 8, uint8_t)	\
+	DEF_ACCESS(a, 16, uint16_t)	\
+	DEF_ACCESS(a, 32, uint32_t)	\
+	DEF_ACCESS(a, 64, uint64_t)	\
+	DEF_ACCESS(a, 128, __uint128_t)
+DEF_MMU(uniqptr)
+DEF_MMU(null)
+DEF_MMU(objwide)
 
 #endif

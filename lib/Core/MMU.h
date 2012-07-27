@@ -52,6 +52,8 @@ public:
 	static uint64_t getSymReads(void) { return sym_r_c; }
 
 	static MMU* create(Executor& exe);
+
+	Executor& getExe(void) { return exe; }
 protected:
 	MMU(Executor& e) : exe(e) {}
 
