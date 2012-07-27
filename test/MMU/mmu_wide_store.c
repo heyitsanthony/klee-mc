@@ -18,13 +18,15 @@ int main(int argc, char *argv[])
 {
 	void		*p;
 	uint8_t		c;
+	__m128i		u128;
 
 	p = x;
 	if (read(0, &c, 1) != 1) return 1;
 
-	p = ((char*)p + c);
+	p = ((char*)p + (c & ~0xf));
 	memset(p, 1, 256);
-	*((__m128i*)p) = *((__m128i*)x);
+	u128 = *((__m128i*)x);
+	*((__m128i*)p) = u128;
 
 	return 2;
 }

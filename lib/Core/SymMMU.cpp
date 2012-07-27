@@ -85,7 +85,7 @@ bool SymMMU::exeMemOp(ExecutionState &state, MemOp& mop)
 		if (w == 128) {
 			/* ugh. coercion */
 			args.push_back(MK_EXTRACT(mop.value, 0, 64));
-			args.push_back(MK_EXTRACT(mop.value, 64, 128));
+			args.push_back(MK_EXTRACT(mop.value, 64, 64));
 		} else
 			args.push_back(mop.value);
 		exe.executeCallNonDecl(state, f->function, args);

@@ -144,8 +144,7 @@ namespace {
 
   cl::opt<bool>
   TrackBranchExprs(
-  	"track-br-exprs",
-	cl::desc("Track Branching Expressions"),
+  	"track-br-exprs", cl::desc("Track Branching Expressions"),
 	cl::init(false));
 
   cl::opt<bool, true>
@@ -155,8 +154,7 @@ namespace {
 	cl::location(ReplayInhibitedForks),
 	cl::init(true));
 
-  cl::opt<bool>
-  AllExternalWarnings("all-external-warnings");
+  cl::opt<bool> AllExternalWarnings("all-external-warnings");
 
   cl::opt<bool>
   UseIVC("use-ivc", cl::desc("Implied Value Concretization"), cl::init(true));
@@ -298,7 +296,7 @@ bool Executor::addConstraint(ExecutionState &state, ref<Expr> condition)
 		doImpliedValueConcretization(
 			state,
 			condition,
-			ConstantExpr::alloc(1, Expr::Bool));
+			ConstantExpr::create(1, Expr::Bool));
 	}
 
 	if (ChkConstraints) {
@@ -665,20 +663,27 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 
 	if (from != to) {
 		CallSite	cs;
+		bool		is_cs = true;
 
 		if (isa<CallInst>(caller))
 			cs = CallSite(cast<CallInst>(caller));
 		else if (isa<InvokeInst>(caller))
 			cs = CallSite(cast<InvokeInst>(caller));
 		else {
-			std::cerr << "WTF: ";
-			kcaller->getInst()->dump();
+			/* this is in case we patch an arbitrary
+			 * instruction with a function call
+			 * (e.g. load/store calling out to runtime code
+			 *  with the symbolic mmu) */
+			is_cs = false;
 		}
-		// XXX need to check other param attrs ?
-		if (cs.paramHasAttr(0, llvm::Attribute::SExt)) {
-			result = SExtExpr::create(result, to);
-		} else {
-			result = ZExtExpr::create(result, to);
+
+		if (is_cs) {
+			// XXX need to check other param attrs ?
+			if (cs.paramHasAttr(0, llvm::Attribute::SExt)) {
+				result = SExtExpr::create(result, to);
+			} else {
+				result = ZExtExpr::create(result, to);
+			}
 		}
 	}
 
@@ -1884,7 +1889,7 @@ INST_FOP_ARITH(FRem, mod)
     bool isExact = true;
     Arg.convertToInteger(&value, resultType, false,
                          llvm::APFloat::rmTowardZero, &isExact);
-    state.bindLocal(ki, ConstantExpr::alloc(value, resultType));
+    state.bindLocal(ki, ConstantExpr::create(value, resultType));
     break;
   }
 
@@ -1901,7 +1906,7 @@ INST_FOP_ARITH(FRem, mod)
     bool isExact = true;
     Arg.convertToInteger(&value, resultType, false,
                          llvm::APFloat::rmTowardZero, &isExact);
-    state.bindLocal(ki, ConstantExpr::alloc(value, resultType));
+    state.bindLocal(ki, ConstantExpr::create(value, resultType));
     break;
   }
 
@@ -1952,16 +1957,13 @@ INST_FOP_ARITH(FRem, mod)
     APFloat::cmpResult CmpRes = LHS.compare(RHS);
 
     state.bindLocal(ki,
-      ConstantExpr::alloc(
+      ConstantExpr::create(
         isFPPredicateMatched(CmpRes, fi->getPredicate()),
         Expr::Bool));
     break;
   }
 
-  case Instruction::InsertValue: {
-	instInsertValue(state, ki);
-    break;
-  }
+  case Instruction::InsertValue: instInsertValue(state, ki); break;
 
   case Instruction::ExtractValue: {
     KGEPInstruction *kgepi = static_cast<KGEPInstruction*>(ki);
@@ -2655,12 +2657,12 @@ klee::ref<klee::ConstantExpr> Executor::getSmallSymAllocSize(
 
 	// start with a small example
 	W = example->getWidth();
-	ce_128 = ConstantExpr::alloc(128, W);
+	ce_128 = ConstantExpr::create(128, W);
 	while (example->Ugt(ce_128)->isTrue()) {
 		ref<ConstantExpr>	tmp;
 		bool			res;
 
-		tmp = example->LShr(ConstantExpr::alloc(1, W));
+		tmp = example->LShr(ConstantExpr::create(1, W));
 		ok = solver->mayBeTrue(state, MK_EQ(tmp, size), res);
 		assert(ok && "FIXME: Unhandled solver failure");
 		if (!res)
