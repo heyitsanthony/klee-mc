@@ -18,17 +18,16 @@ StatisticManager::StatisticManager()
 : enabled(true)
 , contextStats(0)
 , index(0)
-{
-}
+{}
 
 StatisticManager::~StatisticManager() {}
 
 void StatisticManager::registerStatistic(Statistic &s)
 {
-  s.id = stats.size();
-  globalStats.resize(s.id);
-  memset(globalStats.data(), 0, sizeof(uint64_t)*s.id);
-  stats.push_back(&s);
+	s.id = stats.size();
+	globalStats.resize(s.id+1);
+	globalStats[s.id] = 0;
+	stats.push_back(&s);
 }
 
 int StatisticManager::getStatisticID(const std::string &name) const {
@@ -45,7 +44,6 @@ Statistic *StatisticManager::getStatisticByName(const std::string &name) const {
   return 0;
 }
 
-
 StatisticManager *klee::theStatisticManager = 0;
 
 static StatisticManager &getStatisticManager() {
@@ -55,23 +53,20 @@ static StatisticManager &getStatisticManager() {
 }
 /* *** */
 
-Statistic::Statistic(const std::string &_name, 
-                     const std::string &_shortName) 
-  : name(_name), 
-    shortName(_shortName) {
-  getStatisticManager().registerStatistic(*this);
-}
+Statistic::Statistic(const std::string &_name,
+                     const std::string &_shortName)
+: name(_name)
+, shortName(_shortName)
+{ getStatisticManager().registerStatistic(*this); }
 
-Statistic::~Statistic() {
-}
+Statistic::~Statistic() {}
 
 Statistic &Statistic::operator +=(const uint64_t addend)
 {
-  assert (this != NULL);
-  getStatisticManager().incrementStatistic(*this, addend);
-  return *this;
+	assert (this != NULL);
+	getStatisticManager().incrementStatistic(*this, addend);
+	return *this;
 }
 
-uint64_t Statistic::getValue() const {
-  return theStatisticManager->getValue(*this);
-}
+uint64_t Statistic::getValue() const
+{ return theStatisticManager->getValue(*this); }

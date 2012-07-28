@@ -283,7 +283,8 @@ public:
   bool pushHeapRef(HeapObject* heapObj)
   { return brChoiceSeq.push_heap_ref(heapObj); }
 
-  unsigned stepReplay(void);
+	void printFileLine(void);
+	unsigned stepReplay(void);
 
 	BranchTracker::iterator branchesBegin(void) const
 	{ return brChoiceSeq.begin(); }

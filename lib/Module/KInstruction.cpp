@@ -389,3 +389,6 @@ double KBrInstruction::getForkMedian(void)
 	std::sort(forks_v.begin(), forks_v.end());
 	return forks_v[forks_v.size()/2];
 }
+
+Function* KInstruction::getFunction(void) const
+{ return inst->getParent()->getParent(); }

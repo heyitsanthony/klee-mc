@@ -18,6 +18,7 @@
 namespace llvm {
 	class Instruction;
 	class BasicBlock;
+	class Function;
 }
 
 namespace klee
@@ -47,6 +48,8 @@ public:
 
 	bool isCovered(void) const { return covered; }
 	void cover(void) { covered = true; }
+
+	llvm::Function* getFunction(void) const;
 protected:
 	KInstruction() : covered(false) {}
 	KInstruction(llvm::Instruction* inst, unsigned dest);

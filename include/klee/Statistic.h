@@ -73,9 +73,7 @@ namespace klee {
     }
 
    inline uint64_t getIndexedValue(unsigned index) const
-   {
-     return (indexedStats.size() <= index) ? 0 : indexedStats[index];
-   }
+   { return (indexedStats.size() <= index) ? 0 : indexedStats[index]; }
 
   };
 }

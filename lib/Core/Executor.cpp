@@ -221,6 +221,7 @@ Executor::Executor(InterpreterHandler *ih)
 	ExeStateBuilder::replaceBuilder(new BaseExeStateBuilder());
 	forking = new Forks(*this);
 
+	brPredict = NULL;
 	if (UseBranchHints) {
 		ListPredictor		*lp = new ListPredictor();
 		/* unexplored condition path should have higher priority
@@ -419,7 +420,7 @@ void Executor::stepInstruction(ExecutionState &state)
 
 	if (DebugPrintInstructions) {
 		raw_os_ostream	os(std::cerr);
-		printFileLine(state, state.pc);
+		state.printFileLine();
 		std::cerr << std::setw(10) << stats::instructions << " ";
 		os << *(state.pc->getInst()) << "\n";
 	}
@@ -573,25 +574,6 @@ void Executor::executeCall(
 	if (InvokeInst *ii = dyn_cast<InvokeInst>(i)) {
 		state.transferToBasicBlock(ii->getNormalDest(), i->getParent());
 	}
-}
-
-void Executor::printFileLine(ExecutionState &state, KInstruction *ki)
-{
-	const InstructionInfo &ii = *ki->getInfo();
-	const Function* f;
-
-	if (!ii.file.empty()) {
-		std::cerr << "     " << ii.file << ':' << ii.line << ':';
-		return;
-	}
-
-	f = ki->getInst()->getParent()->getParent();
-	if (f != NULL) {
-		std::cerr << "     " << f->getName().str() << ':';
-		return;
-	}
-
-	std::cerr << "     [no debug info]:";
 }
 
 bool Executor::isDebugIntrinsic(const Function *f)
@@ -993,10 +975,11 @@ void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 	} else
 		state.forkDisabled = false;
 
-	if (brPredict && cond.value->getKind() != Expr::Constant)
+	if (brPredict && cond.value->getKind() != Expr::Constant) {
 		hasHint = brPredict->predict(
 			BranchPredictor::StateBranch(state, ki, cond.value),
 			branchHint);
+	}
 
 	if (hasHint) {
 		branchHint = !branchHint;
@@ -1467,7 +1450,6 @@ void Executor::instInsertElement(ExecutionState& state, KInstruction* ki)
 	}
 
 	assert (out_val->getWidth() == in_v->getWidth());
-
 	state.bindLocal(ki, out_val);
 }
 

@@ -802,3 +802,22 @@ void ExecutionState::commitIVC(
 		}
 	}
 }
+
+void ExecutionState::printFileLine(void)
+{
+	const InstructionInfo &ii = *pc->getInfo();
+	const Function* f;
+
+	if (!ii.file.empty()) {
+		std::cerr << "     " << ii.file << ':' << ii.line << ':';
+		return;
+	}
+
+	f = pc->getFunction();
+	if (f != NULL) {
+		std::cerr << "     " << f->getName().str() << ':';
+		return;
+	}
+
+	std::cerr << "     [no debug info]:";
+}

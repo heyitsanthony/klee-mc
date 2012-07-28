@@ -145,7 +145,7 @@ bool SoftFPPass::replaceFCmp(Instruction *inst)
 	Value		*v, *v0, *arg[2];
 	Type		*ty;
 	Function	*f;
-	bool		f_flip, unordered = false;
+	bool		f_flip, ordered;
 
 	ty = inst->getType();
 	v0 = (inst->getNumOperands() > 0) ? inst->getOperand(0) : NULL;
@@ -160,6 +160,7 @@ bool SoftFPPass::replaceFCmp(Instruction *inst)
 	// Ordered comps return false if either operand is NaN.
 	// Unordered comps return true if either operand is NaN.
 	pred = fi->getPredicate();
+	ordered = true;
 	f_flip = false;
 	/* Ordered AND cond */
 #define GET_F(x)	\
@@ -170,26 +171,24 @@ bool SoftFPPass::replaceFCmp(Instruction *inst)
 		GET_F(lt);
 	}  else if (pred == FCmpInst::FCMP_OLE) {
 		GET_F(le);
-		f_flip = true;
 	} else if (pred == FCmpInst::FCMP_OGT) {
-		GET_F(lt);
+		GET_F(le);
 		f_flip = true;
 	}
 	/* Unordered OR cond */
 	else if (pred == FCmpInst::FCMP_UEQ) {
 		GET_F(eq);
-		unordered = true;
+		ordered = false;
 	} else if (pred == FCmpInst::FCMP_ULT) {
 		GET_F(lt);
-		unordered = true;
+		ordered = false;
 	}  else if (pred == FCmpInst::FCMP_ULE) {
 		GET_F(le);
-		f_flip = true;
-		unordered = true;
+		ordered = false;
 	} else if (pred == FCmpInst::FCMP_UGT) {
-		GET_F(lt);
+		GET_F(le);
 		f_flip = true;
-		unordered = true;
+		ordered = false;
 	} else {
 		inst->dump();
 		assert (0 == 1 && "???");
@@ -204,22 +203,81 @@ bool SoftFPPass::replaceFCmp(Instruction *inst)
 		arg[1] = inst->getOperand(1);
 	}
 
-	if (!unordered) {
-		Type	*ret_type;
-		ret_type = IntegerType::get(ty->getContext(), 1);
+	if (ordered) {
+		/* vexops runtime calls only ORDERED comparisons */
 		v = CallInst::Create(
-			getCastThunk(f, ret_type, arg[0], arg[1]),
+			getOrderedStub(f, arg[0], arg[1]),
 			ArrayRef<Value*>(arg, 2));
 	} else {
-		/* FFFFFFFFFFUCK */
 		v = CallInst::Create(
 			getUnorderedStub(f, arg[0], arg[1]),
 			ArrayRef<Value*>(arg, 2));
+
 	}
 
 	ReplaceInstWithInst(inst, static_cast<Instruction*>(v));
 	return true;
 
+}
+
+
+
+Function* SoftFPPass::getOrderedStub(
+	Function* f, Value* arg0, Value* arg1)
+{
+	Function		*ret_f, *thunk_f;
+	BasicBlock		*bb;
+	Function		*is_nan;
+	Value			*v_arg[2], *v_cmp, *v_nan[2], *v;
+	Type			*ret_type;
+	unsigned		ty_w;
+	std::stringstream	namestream;
+	std::string		newname;
+
+	namestream << "__stub_O_" << f->getName().str();
+	newname = namestream.str();
+
+	ret_f = km->module->getFunction(newname);
+	if (ret_f != NULL) return ret_f;
+
+	ret_type = IntegerType::get(getGlobalContext(), 1);
+	bb = setupFuncEntry(
+		newname, ret_type, arg0, arg1, &v_arg[0], &v_arg[1]);
+
+	ret_f = bb->getParent();
+
+	ty_w = arg0->getType()->getPrimitiveSizeInBits();
+	is_nan = (ty_w == 32)
+		? f_fp32isnan->function
+		: f_fp64isnan->function;
+
+	/* TODO: proper 'or' short circuiting */
+	v_nan[0] = CallInst::Create(
+		getCastThunk(is_nan, ret_type, v_arg[0], NULL),
+		ArrayRef<Value*>(&v_arg[0],1),
+		"",
+		bb);
+
+	v_nan[1] = CallInst::Create(
+		getCastThunk(is_nan, ret_type, v_arg[1], NULL),
+		ArrayRef<Value*>(&v_arg[1],1),
+		"",
+		bb);
+
+	thunk_f = getCastThunk(f, ret_type, v_arg[0], v_arg[1]);
+	assert (thunk_f != NULL);
+	v_cmp = CallInst::Create(thunk_f, ArrayRef<Value*>(v_arg, 2), "", bb);
+
+	v = BinaryOperator::Create(
+		BinaryOperator::Or, v_nan[0], v_nan[1], "", bb);
+	v = BinaryOperator::CreateNot(v, "", bb);
+	v = BinaryOperator::Create(BinaryOperator::Or, v, v_cmp, "", bb);
+
+	ReturnInst::Create(getGlobalContext(), v, bb);
+	km->addFunctionProcessed(ret_f);
+
+	assert (ret_f != NULL);
+	return ret_f;
 }
 
 Function* SoftFPPass::getUnorderedStub(
@@ -228,7 +286,7 @@ Function* SoftFPPass::getUnorderedStub(
 	Function		*ret_f, *thunk_f;
 	BasicBlock		*bb;
 	Function		*is_nan;
-	Value			*v_arg[2], *v_cmp, *v_nan, *v;
+	Value			*v_arg[2], *v_cmp, *v_nan[2], *v;
 	Type			*ret_type;
 	unsigned		ty_w;
 	std::stringstream	namestream;
@@ -252,9 +310,15 @@ Function* SoftFPPass::getUnorderedStub(
 		: f_fp64isnan->function;
 
 	/* TODO: proper 'or' short circuiting */
-	v_nan = CallInst::Create(
+	v_nan[0] = CallInst::Create(
 		getCastThunk(is_nan, ret_type, v_arg[0], NULL),
 		ArrayRef<Value*>(&v_arg[0],1),
+		"",
+		bb);
+
+	v_nan[1] = CallInst::Create(
+		getCastThunk(is_nan, ret_type, v_arg[1], NULL),
+		ArrayRef<Value*>(&v_arg[1],1),
 		"",
 		bb);
 
@@ -262,7 +326,10 @@ Function* SoftFPPass::getUnorderedStub(
 	assert (thunk_f != NULL);
 	v_cmp = CallInst::Create(thunk_f, ArrayRef<Value*>(v_arg, 2), "", bb);
 
-	v = BinaryOperator::Create(BinaryOperator::Or, v_nan, v_cmp, "", bb);
+	v = BinaryOperator::Create(
+		BinaryOperator::Or, v_nan[0], v_nan[1], "", bb);
+	v = BinaryOperator::CreateNot(v, "", bb);
+	v = BinaryOperator::Create(BinaryOperator::And, v, v_cmp, "", bb);
 
 	ReturnInst::Create(getGlobalContext(), v, bb);
 	km->addFunctionProcessed(ret_f);

@@ -94,6 +94,7 @@ bool SymMMU::exeMemOp(ExecutionState &state, MemOp& mop)
 		case 64:	f = f_store64; break;
 		case 128:	f = f_store128; break;
 		default:
+			std::cerr << "[SymMMU] BAD WIDTH! W=" << w << '\n';
 			assert (0 == 1 && "BAD WIDTH");
 		}
 

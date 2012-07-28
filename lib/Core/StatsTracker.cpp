@@ -76,9 +76,7 @@ namespace
 
 	// XXX I really would like to have dynamic rate control for something like this.
 	cl::opt<double>
-	UncoveredUpdateInterval(
-		"uncovered-update-interval",
-		cl::init(30.));
+	UncoveredUpdateInterval("uncovered-update-interval", cl::init(30.));
 
 	cl::opt<bool> UseCallPaths(
 		"use-call-paths",

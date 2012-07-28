@@ -409,7 +409,9 @@ void KleeHandler::processTestCase(
 	dumpLog(state, "crumbs", id);
 
 	fprintf(stderr, "===DONE WRITING TESTID=%d (es=%p)===\n", id, &state);
-	if (ValidateTestCase) {
+	if (	ValidateTestCase &&
+		(!StopAfterNTests || m_testIndex <= StopAfterNTests))
+	{
 		std::ostream* f = openTestFile("validate", id);
 		if (f != NULL) {
 			if (validateTest(id))
