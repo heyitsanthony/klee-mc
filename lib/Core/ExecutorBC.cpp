@@ -1,21 +1,20 @@
-#include <static/Sugar.h>
+#include <llvm/Module.h>
+#include <llvm/LLVMContext.h>
+#include <llvm/Target/TargetData.h>
+#include <llvm/Support/CommandLine.h>
+#include <sstream>
+
+#include "static/Sugar.h"
 #include "klee/ExeStateBuilder.h"
-#include "llvm/Module.h"
-#include "llvm/LLVMContext.h"
-#include "llvm/Target/TargetData.h"
-#include "llvm/Support/CommandLine.h"
 #include "klee/Common.h"
 #include "klee/util/ExprPPrinter.h"
-#include "UserSearcher.h"
 #include "SpecialFunctionHandler.h"
 #include "StatsTracker.h"
 #include "StateSolver.h"
-#include "ExeStateManager.h"
 #include "ExternalDispatcher.h"
 #include "PTree.h"
 #include "HeapMM.h"
 #include "Globals.h"
-#include <sstream>
 #include "klee/Internal/Module/KModule.h"
 
 #include "ExecutorBC.h"
@@ -73,11 +72,10 @@ const Module* ExecutorBC::setModule(
 
 	if (StatsTracker::useStatistics()) {
 		statsTracker = new StatsTracker(
-		*this,
-		kmodule,
-		interpreterHandler->getOutputFilename("assembly.ll"),
-		opts.ExcludeCovFiles,
-		UserSearcher::userSearcherRequiresMD2U());
+			*this,
+			kmodule,
+			interpreterHandler->getOutputFilename("assembly.ll"),
+			opts.ExcludeCovFiles);
 	}
 
 	return module;

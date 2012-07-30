@@ -9,15 +9,21 @@
 
 LEVEL=../..
 TOOLNAME = klee
-USEDLIBS = kleeCore.a kleeModule.a kleaverSolver.a kleaverExpr.a kleeSupport.a kleeBasic.a kleeDSA.a
 X_LINK_COMPONENTS = jit bitreader bitwriter ipo linker engine
-
+USEDLIBS= kleeSearcher.a		\
+	kleeCore.a			\
+	kleeModule.a			\
+	kleaverSolver.a kleaverExpr.a	\
+	kleeSupport.a kleeBasic.a
 include $(LEVEL)/Makefile.common
 
 ifeq ($(ENABLE_STPLOG), 1)
 	LIBS += -lstplog
 endif
 
-LIBS += $(SOLVERLIBS)
+LIBS += $(SOLVERLIBS) -lrt
 LIBS += $(shell llvm-config --libfiles $(X_LINK_COMPONENTS))
+# XXX this is kind of a stupid hack to get linking to work after
+# splitting out the searcher code
+ObjectsO += $(LibDir)/libkleeCore.a
 #-ltcmalloc

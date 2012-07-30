@@ -159,8 +159,7 @@ StatsTracker::StatsTracker(
 	Executor &_executor,
 	const KModule	*in_km,
 	std::string _objectFilename,
-	const std::vector<std::string> &excludeCovFiles,
-	bool _updateMinDistToUncovered)
+	const std::vector<std::string> &excludeCovFiles)
 : executor(_executor)
 , objectFilename(_objectFilename)
 , statsFile(0)
@@ -169,7 +168,7 @@ StatsTracker::StatsTracker(
 , numBranches(0)
 , fullBranches(0)
 , partialBranches(0)
-, updateMinDistToUncovered(_updateMinDistToUncovered)
+, updateMinDistToUncovered(false)
 , lastCoveredInstruction(0)
 {
 	sys::Path module(objectFilename);
@@ -210,13 +209,6 @@ StatsTracker::StatsTracker(
 
 		executor.addTimer(
 			new WriteStatsTimer(this), StatsWriteInterval);
-
-		if (updateMinDistToUncovered) {
-			computeReachableUncovered();
-			executor.addTimer(
-				new UpdateReachableTimer(this),
-				UncoveredUpdateInterval);
-		}
 	}
 
 	if (OutputIStats) {
@@ -226,6 +218,18 @@ StatsTracker::StatsTracker(
 		executor.addTimer(
 			new WriteIStatsTimer(this), IStatsWriteInterval);
 	}
+}
+
+void StatsTracker::setUpdateMinDist(void)
+{
+	if (updateMinDistToUncovered) return;
+
+	updateMinDistToUncovered = true;
+
+	computeReachableUncovered();
+	executor.addTimer(
+		new UpdateReachableTimer(this),
+		UncoveredUpdateInterval);
 }
 
 StatsTracker::~StatsTracker()

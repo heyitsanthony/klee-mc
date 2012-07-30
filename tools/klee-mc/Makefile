@@ -9,9 +9,10 @@
 
 LEVEL=../..
 TOOLNAME = klee-mc
-USEDLIBS = kleeCore.a kleeModule.a kleaverSolver.a kleaverExpr.a kleeSupport.a kleeBasic.a kleeDSA.a
 X_LINK_COMPONENTS = jit bitreader bitwriter ipo linker engine core
-
+USEDLIBS=kleeSearcher.a kleeCore.a kleeModule.a	\
+	kleaverSolver.a kleaverExpr.a \
+	kleeSupport.a kleeBasic.a
 include $(LEVEL)/Makefile.common
 
 ifeq ($(ENABLE_STPLOG), 1)

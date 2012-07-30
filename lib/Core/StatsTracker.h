@@ -68,8 +68,7 @@ public:
     StatsTracker(Executor &_executor,
     		const KModule* km,
 		std::string _objectFilename,
-                const std::vector<std::string> &excludeCovFiles,
-                bool _updateMinDistToUncovered);
+                const std::vector<std::string> &excludeCovFiles);
     ~StatsTracker();
 
     void addKFunction(KFunction*);
@@ -104,6 +103,7 @@ public:
     uint64_t getLastNewInstruction(void) const
     { return lastCoveredInstruction; }
 
+    void setUpdateMinDist(void);
 private:
     void computeReachableUncoveredInit(void);
     void computeCallTargets(llvm::Function* f);

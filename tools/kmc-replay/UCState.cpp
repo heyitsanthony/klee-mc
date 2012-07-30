@@ -5,8 +5,9 @@
 #include <sys/mman.h>
 #include <assert.h>
 #include "guestmem.h"
+#include "guestcpustate.h"
 
-#include "../klee-mc/ExeUC.h"
+#include "../klee-mc/UCTabEnt.h"
 #include "UCState.h"
 #include "UCBuf.h"
 #include "symbols.h"
@@ -159,7 +160,7 @@ KTestStream* UCState::allocKTest(void) const
 
 void UCState::setupRegValues(KTestStream* kts_uc)
 {
-	Exempts		ex(ExeUC::getRegExempts(gs));
+	Exempts		ex(getRegExempts(gs));
 	char		*regfile_uc, *regfile_gs;
 
 	regfile_uc = kts_uc->feedObjData(gs->getCPUState()->getStateSize());

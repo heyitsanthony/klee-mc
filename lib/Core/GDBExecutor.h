@@ -2,7 +2,7 @@
 #define GDBEXE_H
 
 #include "klee/ExecutionState.h"
-#include "UserSearcher.h"
+#include "../Searcher/UserSearcher.h"
 #include "GDBCore.h"
 #include "CoreStats.h"
 

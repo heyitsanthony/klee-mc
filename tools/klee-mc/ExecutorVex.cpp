@@ -8,10 +8,10 @@
 #include "klee/Solver.h"
 #include "../../lib/Solver/SMTPrinter.h"
 #include "../../lib/Core/Globals.h"
-#include "../../lib/Core/PrioritySearcher.h"
+#include "../../lib/Searcher/PrioritySearcher.h"
+#include "../../lib/Searcher/UserSearcher.h"
 #include "../../lib/Core/StatsTracker.h"
 #include "../../lib/Core/ExeStateManager.h"
-#include "../../lib/Core/UserSearcher.h"
 #include "../../lib/Core/PTree.h"
 #include "../../lib/Core/MemoryManager.h"
 
@@ -180,8 +180,7 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 			*this,
 			kmodule,
 			interpreterHandler->getOutputFilename("assembly.ll"),
-			mod_opts.ExcludeCovFiles,
-			UserSearcher::userSearcherRequiresMD2U());
+			mod_opts.ExcludeCovFiles);
 
 }
 

@@ -14,7 +14,6 @@
 #include <set>
 #include <map>
 #include <list>
-// FIXME: Move out of header, use llvm streams.
 #include <ostream>
 #include <stdint.h>
 
@@ -33,6 +32,9 @@ public:
 			const std::set<ExecutionState*>& r)
 		: addedStates(a), removedStates(r)
 		{}
+
+		States(const std::set<ExecutionState*>& a);
+
 		virtual ~States() {}
 
 		const std::set<ExecutionState*>& getAdded(void) const

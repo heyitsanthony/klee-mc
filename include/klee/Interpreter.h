@@ -76,8 +76,6 @@ protected:
 public:
   virtual ~Interpreter() {};
 
-  static Interpreter* create(InterpreterHandler *ih);
-
   /// Register the module to be executed.  
   ///
   /// \return The final module after it has been optimized, checks

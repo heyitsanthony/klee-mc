@@ -1,7 +1,7 @@
 #include "Executor.h"
 #include "ExeStateManager.h"
 #include "Searcher.h"
-#include "UserSearcher.h"
+#include "../Searcher/UserSearcher.h"
 #include "MemUsage.h"
 #include "klee/Common.h"
 #include "static/Sugar.h"
@@ -68,9 +68,7 @@ void ExeStateManager::setupSearcher(Executor* exe)
 {
 	assert (!searcher && "Searcher already inited");
 	searcher = UserSearcher::constructUserSearcher(*exe);
-	searcher->update(
-		NULL,
-		Searcher::States(states, Searcher::States::emptySet));
+	searcher->update(NULL, Searcher::States(states));
 }
 
 void ExeStateManager::teardownUserSearcher(void)

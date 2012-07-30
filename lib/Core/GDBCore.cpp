@@ -16,7 +16,7 @@
 
 #include "Forks.h"
 #include "Executor.h"
-#include "OverrideSearcher.h"
+#include "../Searcher/OverrideSearcher.h"
 #include "klee/ExecutionState.h"
 #include "GDBCore.h"
 
@@ -560,7 +560,10 @@ bool GDBPkt::handle(GDBCmd* gcmd)
 		bool		bogus_reads;
 		AddressSpace	*as;
 
-		elems = sscanf(gcmd->getStr().c_str()+1, "%p,%x", &addr, &len);
+		elems = sscanf(
+			gcmd->getStr().c_str()+1,
+			"%p,%x",
+			(void**)(&addr), &len);
 		assert (elems == 2);
 
 		std::cerr << "[GDBPKT] Doing memory access\n";
