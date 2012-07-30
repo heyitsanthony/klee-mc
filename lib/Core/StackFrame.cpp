@@ -2,21 +2,14 @@
 
 #include "klee/Internal/Module/Cell.h"
 #include "klee/Internal/Module/KInstruction.h"
-#include "klee/Internal/Module/KModule.h"
+#include "klee/Internal/Module/KFunction.h"
 
 #include "klee/Expr.h"
 #include "static/Sugar.h"
 
-#include "Memory.h"
-
-#include "llvm/Function.h"
-#include "llvm/Support/CommandLine.h"
-
-#include <iostream>
 #include <cassert>
 #include <map>
 #include <set>
-#include <stdarg.h>
 
 using namespace klee;
 

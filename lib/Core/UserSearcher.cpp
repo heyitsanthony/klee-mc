@@ -39,7 +39,6 @@
 #include "RandomSearcher.h"
 #include "WeightedRandomSearcher.h"
 #include "XChkSearcher.h"
-#include "StringMerger.h"
 #include "Weight2Prioritizer.h"
 #include "PrioritySearcher.h"
 #include "HistoPriority.h"
@@ -148,12 +147,6 @@ namespace {
   	"use-epoch-search",
 	cl::desc("Treat older/run states with respect."),
 	cl::init(false));
-
-
-  cl::opt<bool>
-  UseStringPrune("string-prune",
-    cl::desc("Prune intermediate scan states on strings (busted)"),
-     cl::init(false));
 
   cl::opt<bool>
   UseXChkSearcher(
@@ -488,9 +481,6 @@ Searcher* UserSearcher::setupConfigSearcher(Executor& executor)
 
 	if (UseIterativeDeepeningTimeSearch)
 		searcher = new IterativeDeepeningTimeSearcher(searcher);
-
-	if (UseStringPrune)
-		searcher = new StringMerger(searcher);
 
 	return searcher;
 }
