@@ -15,6 +15,7 @@
 	DEF_ACCESS(a, 128, __uint128_t)
 DEF_MMU(uniqptr)
 DEF_MMU(null)
+DEF_MMU(fork)
 DEF_MMU(objwide)
 
 #endif
