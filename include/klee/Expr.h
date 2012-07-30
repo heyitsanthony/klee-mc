@@ -421,7 +421,7 @@ public:
 class CmpExpr : public BinaryExpr {
 
 protected:
-  CmpExpr(ref<Expr> l, ref<Expr> r) : BinaryExpr(l,r) {}
+  CmpExpr(const ref<Expr>& l, const ref<Expr>& r) : BinaryExpr(l,r) {}
 
 public:
   Width getWidth() const { return Bool; }
@@ -933,7 +933,7 @@ class _class_kind ## Expr : public CastExpr {                    \
 public:   \
   static const Kind kind = _class_kind;                          \
   static const unsigned numKids = 1;                             \
-    _class_kind ## Expr(ref<Expr> e, Width w) : CastExpr(e,w) {} \
+    _class_kind ## Expr(const ref<Expr>& e, Width w) : CastExpr(e,w) {} \
     static ref<Expr> alloc(const ref<Expr> &e, Width w);	\
     static ref<Expr> create(const ref<Expr> &e, Width w);        \
     Kind getKind() const { return _class_kind; }                 \

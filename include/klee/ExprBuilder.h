@@ -12,6 +12,49 @@
 
 #include "Expr.h"
 
+#define EXPR_BUILDER_DECL_BIN_REF(x)	\
+virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS);
+
+#define EXPR_BUILDER_DECL_ALL	\
+	virtual ref<Expr> Constant(const llvm::APInt &Value);	\
+	virtual ref<Expr> NotOptimized(const ref<Expr> &Index);	\
+	virtual ref<Expr> Read(const UpdateList &Updates, const ref<Expr> &idx); \
+	virtual ref<Expr> Select(	\
+		const ref<Expr> &Cond,	\
+		const ref<Expr> &LHS, const ref<Expr> &RHS);	\
+	virtual ref<Expr> Extract(	\
+		const ref<Expr> &LHS, unsigned Offset, Expr::Width W);	\
+	virtual ref<Expr> ZExt(const ref<Expr> &LHS, Expr::Width W);	\
+	virtual ref<Expr> SExt(const ref<Expr> &LHS, Expr::Width W);	\
+\
+	virtual ref<Expr> Not(const ref<Expr> &LHS);	\
+	EXPR_BUILDER_DECL_BIN_REF(Concat)	\
+	EXPR_BUILDER_DECL_BIN_REF(Add)	\
+	EXPR_BUILDER_DECL_BIN_REF(Sub)	\
+	EXPR_BUILDER_DECL_BIN_REF(Mul)	\
+	EXPR_BUILDER_DECL_BIN_REF(UDiv)	\
+\
+	EXPR_BUILDER_DECL_BIN_REF(SDiv)	\
+	EXPR_BUILDER_DECL_BIN_REF(URem)	\
+	EXPR_BUILDER_DECL_BIN_REF(SRem)	\
+	EXPR_BUILDER_DECL_BIN_REF(And)	\
+	EXPR_BUILDER_DECL_BIN_REF(Or)	\
+	EXPR_BUILDER_DECL_BIN_REF(Xor)	\
+	EXPR_BUILDER_DECL_BIN_REF(Shl)	\
+	EXPR_BUILDER_DECL_BIN_REF(LShr)	\
+	EXPR_BUILDER_DECL_BIN_REF(AShr)	\
+	EXPR_BUILDER_DECL_BIN_REF(Eq)	\
+	EXPR_BUILDER_DECL_BIN_REF(Ne)	\
+\
+	EXPR_BUILDER_DECL_BIN_REF(Ult)	\
+	EXPR_BUILDER_DECL_BIN_REF(Ule)	\
+	EXPR_BUILDER_DECL_BIN_REF(Ugt)	\
+	EXPR_BUILDER_DECL_BIN_REF(Uge)	\
+	EXPR_BUILDER_DECL_BIN_REF(Slt)	\
+	EXPR_BUILDER_DECL_BIN_REF(Sle)	\
+	EXPR_BUILDER_DECL_BIN_REF(Sgt)	\
+	EXPR_BUILDER_DECL_BIN_REF(Sge)
+
 namespace klee
 {
 /// ExprBuilder - Base expression builder class.

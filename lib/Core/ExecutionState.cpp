@@ -30,7 +30,6 @@
 #include <llvm/Function.h>
 #include <llvm/Support/CommandLine.h>
 
-#include <fstream>
 #include <iostream>
 #include <sstream>
 #include <iomanip>
