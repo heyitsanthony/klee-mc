@@ -65,11 +65,6 @@ namespace
 		cl::desc("Log registers."),
 		cl::init(false));
 
-	cl::opt<bool> OptimizeModule(
-		"optimize",
-		cl::desc("Optimize before execution"),
-		cl::init(false));
-
 	cl::opt<bool,true> ConcreteVfsProxy(
 		"concrete-vfs",
 		cl::desc("Treat absolute path opens as concrete"),
@@ -130,7 +125,7 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 	llvm::sys::Path LibraryDir(KLEE_DIR "/" RUNTIME_CONFIGURATION "/lib");
 	Interpreter::ModuleOptions mod_opts(
 		LibraryDir.c_str(),
-		OptimizeModule,
+		false, // XXX: DUMMY. REMOVE ME; OptimizeModule,
 		false,
 		std::vector<std::string>());
 

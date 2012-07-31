@@ -50,6 +50,9 @@ public:
 	void cover(void) { covered = true; }
 
 	llvm::Function* getFunction(void) const;
+
+	unsigned getForkCount(void) const { return fork_c; }
+	void forked(void) { fork_c++; }
 protected:
 	KInstruction() : covered(false) {}
 	KInstruction(llvm::Instruction* inst, unsigned dest);
@@ -57,6 +60,9 @@ protected:
 private:
 	llvm::Instruction	*inst;
 	const InstructionInfo	*info;
+
+	/* number of forks on this instruction */
+	unsigned		fork_c;
 
 	/// Value numbers for each operand. -1 is an invalid value,
 	/// otherwise negative numbers are indices (negated and offset by

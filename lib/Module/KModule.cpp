@@ -6,6 +6,22 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
+#include <llvm/Linker.h>
+#include <llvm/LLVMContext.h>
+
+#include <llvm/Bitcode/ReaderWriter.h>
+#include <llvm/Instructions.h>
+#include <llvm/Module.h>
+#include <llvm/PassManager.h>
+#include <llvm/ValueSymbolTable.h>
+#include <llvm/Support/CommandLine.h>
+#include <llvm/Support/raw_ostream.h>
+#include <llvm/Support/raw_os_ostream.h>
+#include <llvm/Support/Path.h>
+#include <llvm/Target/TargetData.h>
+#include <llvm/Transforms/Scalar.h>
+#include <llvm/Transforms/IPO/PassManagerBuilder.h>
+
 
 #include "klee/Internal/Module/KModule.h"
 #include "../lib/Core/Context.h"
@@ -20,21 +36,6 @@
 #include "klee/Internal/Module/KInstruction.h"
 #include "klee/Internal/Module/InstructionInfoTable.h"
 #include "klee/Internal/Support/ModuleUtil.h"
-
-#include "llvm/Linker.h"
-#include "llvm/LLVMContext.h"
-
-#include "llvm/Bitcode/ReaderWriter.h"
-#include "llvm/Instructions.h"
-#include "llvm/Module.h"
-#include "llvm/PassManager.h"
-#include "llvm/ValueSymbolTable.h"
-#include "llvm/Support/CommandLine.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/raw_os_ostream.h"
-#include "llvm/Support/Path.h"
-#include "llvm/Target/TargetData.h"
-#include "llvm/Transforms/Scalar.h"
 
 #include "static/Sugar.h"
 
@@ -57,8 +58,7 @@ namespace {
     eSwitchTypeInternal
   };
 
-  cl::list<std::string>
-  MergeAtExit("merge-at-exit");
+  cl::list<std::string> MergeAtExit("merge-at-exit");
 
   cl::opt<bool>
   TruncateSourceLines(
@@ -104,6 +104,12 @@ namespace {
 	cl::desc("Use soft-floating point to convert fp to int."),
 	cl::init(false));
 
+  cl::opt<bool>
+  OptimizeKModule(
+  	"optimize",
+	cl::desc("Optimize before execution"),
+	cl::init(false));
+
 }
 
 KModule::KModule(
@@ -116,6 +122,7 @@ KModule::KModule(
 , constantTable(0)
 , fpm(new FunctionPassManager(_module))
 , opts(_opts)
+, updated_funcs(0)
 {
 }
 
@@ -272,7 +279,9 @@ void KModule::prepareMerge(InterpreterHandler *ih)
 
 void KModule::addMergeExit(Function* mergeFn, const std::string& name)
 {
-	Function *f;
+	Function	*f;
+	BasicBlock	*exit;
+	PHINode		*result;
 
 	f = module->getFunction(name);
 	if (!f) {
@@ -282,9 +291,6 @@ void KModule::addMergeExit(Function* mergeFn, const std::string& name)
 		klee_error("can't insert merge-at-exit for: %s (external)",
 		name.c_str());
 	}
-
-	BasicBlock	*exit;
-	PHINode		*result;
 
 	exit = BasicBlock::Create(getGlobalContext(), "exit", f);
 	result = NULL;
@@ -345,8 +351,6 @@ void KModule::outputTruncSource(
 
 		position = end+1;
 	}
-
-
 }
 
 void KModule::outputSource(InterpreterHandler* ih)
@@ -416,7 +420,6 @@ void KModule::addModule(Module* in_mod)
 // invariant transformations that we will end up doing later so that
 // optimize is seeing what is as close as possible to the final
 // module.
-
 void KModule::injectRawChecks()
 {
 	PassManager pm;
@@ -429,7 +432,6 @@ void KModule::injectRawChecks()
 	// This should now be fixed in LLVM
 	pm.add(new IntrinsicCleanerPass(this, *targetData, false));
 	pm.run(*module);
-
 }
 
 // Finally, run the passes that maintain invariants we expect during
@@ -463,12 +465,11 @@ void KModule::prepare(InterpreterHandler *in_ih)
 	if (!MergeAtExit.empty())
 		prepareMerge(ih);
 
-
 	loadIntrinsicsLib();
 	injectRawChecks();
 
 	infos = new InstructionInfoTable(module);
-	if (opts.Optimize) Optimize(module);
+	if (OptimizeKModule) Optimize(module);
 
 	// Needs to happen after linking (since ctors/dtors can be modified)
 	// and optimization (since global optimization can rewrite lists).
@@ -499,6 +500,17 @@ void KModule::prepare(InterpreterHandler *in_ih)
 		llvm::errs() << "]\n";
 	}
 
+	setupFunctionPasses();
+}
+
+void KModule::setupFunctionPasses(void)
+{
+	if (OptimizeKModule) {
+		PassManagerBuilder	pmb;
+		pmb.OptLevel = 3;	/* XXX: Make tunable? */
+		pmb.populateFunctionPassManager(*fpm);
+	}
+
 	fpm->add(new RaiseAsmPass(module));
 	fpm->add(createLowerAtomicPass());
 	fpm->add(new IntrinsicCleanerPass(this, *targetData));
@@ -507,6 +519,7 @@ void KModule::prepare(InterpreterHandler *in_ih)
 	if (UseSoftFP) fpm->add(new SoftFPPass(this));
 }
 
+void KModule::addFunctionPass(llvm::FunctionPass* fp) { fpm->add(fp); }
 
 KFunction* KModule::addUntrackedFunction(llvm::Function* f)
 {
@@ -522,9 +535,15 @@ KFunction* KModule::addUntrackedFunction(llvm::Function* f)
 /* add a function that hasn't been cleaned up by any of our passes */
 KFunction* KModule::addFunction(Function* f)
 {
+	bool		changed;
+	unsigned	old_sz;
+
 	if (f->isDeclaration()) return NULL;
 
-	fpm->run(*f);
+	old_sz = f->size();
+	changed = fpm->run(*f);
+	if (changed) updated_funcs++;
+
 	fpm->doFinalization();
 	fpm->doInitialization();
 

@@ -32,6 +32,8 @@ KInstruction::~KInstruction() { delete[] operands; }
 
 KInstruction::KInstruction(Instruction* in_inst, unsigned in_dest)
 : inst(in_inst)
+, info(0)
+, fork_c(0)
 , dest(in_dest)
 , covered(false)
 {

@@ -30,9 +30,6 @@ using namespace klee;
 using namespace llvm;
 
 namespace {
-	cl::opt<bool> OptimizeModule(
-		"optimize", cl::desc("Optimize before execution"));
-
   cl::opt<bool> InitEnv(
 	"init-env",
 	cl::desc("Create custom environment.  Options that can be passed as arguments to the programs are: --sym-argv <max-len>  --sym-argvs <min-argvs> <max-argvs> <max-len> + file model options"));
@@ -610,7 +607,7 @@ Interpreter::ModuleOptions getMainModule(Module* &mainModule)
 	llvm::sys::Path LibraryDir(KLEE_DIR "/" RUNTIME_CONFIGURATION "/lib");
 	Interpreter::ModuleOptions Opts(
 		LibraryDir.c_str(),
-		OptimizeModule,
+		false, /* XXX: DUMMY. REMOVE ME */
 		false,
 		ExcludeCovFiles);
 

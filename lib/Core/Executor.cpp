@@ -2900,6 +2900,9 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 				iter_f->getName().data());
 		}
 
+		if (iter.getval_c > 1)
+			iter.ki->forked();
+
 		/* uncovered new function => set fresh */
 		if (kmodule->getNumKFuncs() > num_funcs)
 			iter.res.first->setFreshBranch();
@@ -2932,7 +2935,9 @@ Executor::StateVector Executor::fork(
 	ExecutionState &current,
 	unsigned N, ref<Expr> conditions[], bool isInternal,
 	bool isBranch)
-{ return forking->fork(current, N, conditions, isInternal, isBranch); }
+{
+	return forking->fork(current, N, conditions, isInternal, isBranch);
+}
 
 
 bool Executor::hasState(const ExecutionState* es) const

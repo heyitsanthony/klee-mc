@@ -28,43 +28,46 @@ namespace llvm
 	class TargetData;
 	class Value;
 	class FunctionPassManager;
+	class FunctionPass;
 	class raw_os_ostream;
 }
 
 namespace klee
 {
-  class Cell;
-  class Executor;
-  class Expr;
-  class InterpreterHandler;
-  class InstructionInfoTable;
-  class KInstruction;
-  class KModule;
+class Cell;
+class Executor;
+class Expr;
+class InterpreterHandler;
+class InstructionInfoTable;
+class KInstruction;
+class KModule;
 
-  template<class T> class ref;
+template<class T> class ref;
 
-  class KConstant {
-  public:
-    /// Actual LLVM constant this represents.
-    llvm::Constant* ct;
+class KConstant
+{
+public:
+	/// Actual LLVM constant this represents.
+	llvm::Constant* ct;
 
-    /// The constant ID.
-    unsigned id;
+	/// The constant ID.
+	unsigned id;
 
-    /// First instruction where this constant was encountered, or NULL
-    /// if not applicable/unavailable.
-    KInstruction *ki;
+	/// First instruction where this constant was encountered, or NULL
+	/// if not applicable/unavailable.
+	KInstruction *ki;
 
-    KConstant(llvm::Constant*, unsigned, KInstruction*);
-  };
+	KConstant(llvm::Constant*, unsigned, KInstruction*);
+};
 
 
-  class RaiseAsmPass;
-  class IntrinsicCleanerPass;
-  class PhiCleanerPass;
+class RaiseAsmPass;
+class IntrinsicCleanerPass;
+class PhiCleanerPass;
 
-  class KModule {
-  public:
+class KModule
+{
+public:
     llvm::Module *module;
     llvm::TargetData *targetData;
 
@@ -83,7 +86,7 @@ namespace klee
 
     std::vector<Cell>	constantTable;
 
-  public:
+public:
     KModule(llvm::Module *_module, const Interpreter::ModuleOptions &opts);
     virtual ~KModule();
 
@@ -119,7 +122,10 @@ namespace klee
 	void bindKFuncConstants(Executor* exe, KFunction* kf);
 
 	const std::string& getLibraryDir(void) const { return opts.LibraryDir; }
-  private:
+
+	void addFunctionPass(llvm::FunctionPass* fp);
+private:
+	void setupFunctionPasses(void);
 	void prepareMerge(InterpreterHandler *ih);
 	void outputSource(InterpreterHandler* ih);
 	void addMergeExit(llvm::Function* mergeFn, const std::string& name);
@@ -128,19 +134,21 @@ namespace klee
 	void loadIntrinsicsLib();
 	void dumpModule(void);
 
-    void outputTruncSource(std::ostream* os, llvm::raw_os_ostream* ros) const;
+	void outputTruncSource(std::ostream* os, llvm::raw_os_ostream* ros) const;
 
-    // Our shadow versions of LLVM structures.
-    std::vector<KFunction*> functions;
-    typedef std::tr1::unordered_map<llvm::Function*, KFunction*>
-    	func2kfunc_ty;
-    func2kfunc_ty functionMap;
+	// Our shadow versions of LLVM structures.
+	std::vector<KFunction*> functions;
+	typedef std::tr1::unordered_map<llvm::Function*, KFunction*>
+	func2kfunc_ty;
+	func2kfunc_ty functionMap;
 
-    llvm::FunctionPassManager* fpm;
-    InterpreterHandler	*ih;
+	llvm::FunctionPassManager	*fpm;
+	InterpreterHandler		*ih;
 
-    Interpreter::ModuleOptions opts;
-  };
+	Interpreter::ModuleOptions opts;
+
+	unsigned			updated_funcs;
+};
 } // End klee namespace
 
 #endif
