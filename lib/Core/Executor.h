@@ -155,6 +155,7 @@ public:
 
 	const KModule* getKModule(void) const { return kmodule; }
 	KModule* getKModule(void) { return kmodule; }
+	void addModule(llvm::Module* m);
 
 	virtual void printStackTrace(
 		ExecutionState& state, std::ostream& os) const;

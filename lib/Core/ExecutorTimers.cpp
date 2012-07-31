@@ -266,6 +266,7 @@ protected:
 		<< RuleBuilder::getFilterSize() << ' '; }
 };
 
+#include "Forks.h"
 #include "klee/SolverStats.h"
 #include "MMU.h"
 #include "../Solver/IndependentSolver.h"
@@ -381,7 +382,6 @@ DumpForkCondGraph("dump-forkcondgraph",
 	cl::desc("Dump fork condition graph (0=off)"),
 	cl::init(0));
 
-#include "Forks.h"
 class ForkCondTimer : public Executor::Timer
 {
 public:

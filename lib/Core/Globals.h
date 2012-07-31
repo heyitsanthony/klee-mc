@@ -10,6 +10,7 @@ namespace llvm
 class GlobalValue;
 class GlobalVariable;
 class Constant;
+class Module;
 }
 
 namespace klee
@@ -51,8 +52,15 @@ public:
 	globaladdr_map::const_iterator endAddrs(void) const
 	{ return globalAddresses.end(); }
 
+	void updateModule(void);
 private:
 	Globals() {}
+	
+	void setupCTypes(void);
+	void setupFuncAddrs(llvm::Module* m);
+	void setupGlobalObjects(llvm::Module* m);
+	void setupAliases(llvm::Module* m);
+	void setupGlobalData(llvm::Module* m);
 
 	// Given a concrete object in our [klee's] address space, add it to
 	// objects checked code can reference.

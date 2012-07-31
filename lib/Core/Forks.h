@@ -10,6 +10,7 @@ namespace klee
 class ExecutionState;
 class CallPathNode;
 class ExprVisitor;
+class KInstruction;
 
 class Forks
 {
@@ -28,6 +29,7 @@ public:
 		, N(in_N)
 		, feasibleTargets(0)
 		, validTargets(0)
+		, forkedTargets(0)
 		, resSeeds(in_N)
 		, forkCompact(false)
 		{}
@@ -38,9 +40,11 @@ public:
 		unsigned int		N;
 		unsigned int		feasibleTargets;
 		unsigned int		validTargets;
+		unsigned		forkedTargets;
 		bool			isInternal;
 		bool			isSeeding;
 		bool			isBranch;
+		bool			forkDisabled;
 		bool			wasReplayed;
 		std::vector<std::list<SeedInfo> > resSeeds;
 		bool			forkCompact;
@@ -102,7 +106,7 @@ private:
 	void constrainForks(ExecutionState& current, struct ForkInfo& fi);
 	void constrainFork(
 		ExecutionState& current, struct ForkInfo& fi, unsigned int);
-
+	bool isRunawayBranch(KInstruction* ki);
 	Executor			&exe;
 	bool				preferTrueState;
 	bool				preferFalseState;
@@ -110,6 +114,9 @@ private:
 	succ_ty				hasSucc;
 	ExprVisitor			*condFilter;
 	Executor::StatePair		lastFork;
+	static unsigned			quench_c;
+	static unsigned			fork_c;
+	static unsigned			fork_uniq_c;
 };
 
 }

@@ -163,15 +163,8 @@ namespace {
 	cl::desc("Machine-learned peephole expr builder"),
   	cl::init(false));
 
-  cl::opt<bool>
-  QuenchRunaways(
-  	"quench-runaways",
-	cl::desc("Drop states at heavily forking instructions."),
-	cl::init(true));
-
   cl::opt<unsigned>
   SeedRNG("seed-rng", cl::desc("Seed random number generator"), cl::init(0));
-
 }
 
 namespace klee { RNG theRNG; }
@@ -924,54 +917,12 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 	return new_st;
 }
 
-#define RUNAWAY_REFRESH	32
-static bool isRunawayBranch(KInstruction* ki)
-{
-	KBrInstruction	*kbr;
-	double		stddevs;
-	static int	count = 0;
-	static double	stddev, mean, median;
-	unsigned	forks, rand_mod;
-
-	kbr = static_cast<KBrInstruction*>(ki);
-	if ((count++ % RUNAWAY_REFRESH) == 0) {
-		stddev = KBrInstruction::getForkStdDev();
-		mean = KBrInstruction::getForkMean();
-		median = KBrInstruction::getForkMedian();
-	}
-
-	if (stddev == 0)
-		return false;
-
-	forks = kbr->getForkHits();
-	if (forks <= 5)
-		return false;
-
-	stddevs = ((double)(kbr->getForkHits() - mean))/stddev;
-	if (stddevs < 1.0)
-		return false;
-
-	rand_mod = (1 << (1+(int)(((double)forks/(median)))));
-	if ((theRNG.getInt31() % rand_mod) == 0)
-		return false;
-
-	return true;
-}
-
 void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 {
 	BranchInst	*bi = cast<BranchInst>(ki->getInst());
 	const Cell	&cond = eval(ki, 0, state);
 	StatePair	branches;
 	bool		hasHint = false, branchHint;
-
-	if (	QuenchRunaways &&
-		cond.value->getKind() != Expr::Constant &&
-		getNumStates() > 100)
-	{
-		state.forkDisabled = isRunawayBranch(ki);
-	} else
-		state.forkDisabled = false;
 
 	if (brPredict && cond.value->getKind() != Expr::Constant) {
 		hasHint = brPredict->predict(
@@ -2870,6 +2821,7 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 		iter.res = fork(*(iter.free), MK_EQ(iter.v, value), true);
 		iter.free = iter.res.second;
 
+		/* did not evaluate to 'true', getValue is busted? */
 		if (iter.res.first == NULL) continue;
 
 		addr = value->getZExtValue();
@@ -2899,9 +2851,6 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 				"resolved symbolic function pointer to: %s",
 				iter_f->getName().data());
 		}
-
-		if (iter.getval_c > 1)
-			iter.ki->forked();
 
 		/* uncovered new function => set fresh */
 		if (kmodule->getNumKFuncs() > num_funcs)
@@ -2935,10 +2884,7 @@ Executor::StateVector Executor::fork(
 	ExecutionState &current,
 	unsigned N, ref<Expr> conditions[], bool isInternal,
 	bool isBranch)
-{
-	return forking->fork(current, N, conditions, isInternal, isBranch);
-}
-
+{ return forking->fork(current, N, conditions, isInternal, isBranch); }
 
 bool Executor::hasState(const ExecutionState* es) const
 {
@@ -2967,4 +2913,10 @@ static StateSolver* createTimerChain(
 	timedSolver->setTimeout(timeout);
 
 	return ts;
+}
+
+void Executor::addModule(Module* m)
+{
+	kmodule->addModule(m);
+	globals->updateModule();
 }

@@ -16,7 +16,7 @@ public:
 
 	virtual bool exeMemOp(ExecutionState &state, MemOp& mop);
 private:
-	static void initModule(KModule* km);
+	static void initModule(Executor& exe);
 	static KFunction	*f_store8, *f_store16, *f_store32,
 				*f_store64, *f_store128;
 

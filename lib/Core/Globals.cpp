@@ -40,101 +40,18 @@ Globals::Globals(
 	assert (m->lib_begin() == m->lib_end() &&
 		"XXX do not support dependent libraries");
 
-	// represent function globals using the address of the actual llvm function
-	// object. given that we use malloc to allocate memory in states this also
-	// ensures that we won't conflict. we don't need to allocate a memory object
-	// since reading/writing via a function pointer is unsupported anyway.
-	foreach (i, m->begin(), m->end()) {
-		Function		*f = i;
-		ref<ConstantExpr>	addr(0);
+	setupCTypes();
+	updateModule();
+}
 
-		// If the symbol has external weak linkage then it is implicitly
-		// not defined in this module; if it isn't resolvable then it
-		// should be null.
-		if (	f->hasExternalWeakLinkage() &&
-			(ed == NULL || !ed->resolveSymbol(f->getName().str())))
-		{
-			addr = Expr::createPointer(0);
-			std::cerr
-			<< "KLEE:ERROR: couldn't find symbol for weak linkage of "
-			   "global function: " << f->getName().str() << std::endl;
-		} else {
-			addr = Expr::createPointer((uint64_t) (void*) f);
-			legalFunctions.insert((uint64_t) (void*) f);
-		}
+void Globals::updateModule(void)
+{
+	Module	*m = kmodule->module;
 
-		globalAddresses.insert(std::make_pair(f, addr));
-	}
-
-// Disabled, we don't want to promote use of live externals.
-#ifdef HAVE_CTYPE_EXTERNALS
-#ifndef WINDOWS
-#ifndef DARWIN
-	/* From /usr/include/errno.h: it [errno] is a per-thread variable. */
-	int *errno_addr = __errno_location();
-	addExternalObject((void *)errno_addr, sizeof *errno_addr, false);
-
-	/* from /usr/include/ctype.h:
-	These point into arrays of 384, so they can be indexed by any `unsigned
-	char' value [0,255]; by EOF (-1); or by any `signed char' value
-	[-128,-1).  ISO C requires that the ctype functions work for `unsigned */
-	const uint16_t **addr = __ctype_b_loc();
-	addExternalObject((void *)(*addr-128), 384 * sizeof **addr, true);
-	addExternalObject(addr, sizeof(*addr), true);
-
-	const int32_t **lower_addr = __ctype_tolower_loc();
-	addExternalObject(
-		(void *)(*lower_addr-128), 384 * sizeof **lower_addr, true);
-	addExternalObject(lower_addr, sizeof(*lower_addr), true);
-
-	const int32_t **upper_addr = __ctype_toupper_loc();
-	addExternalObject(
-		(void *)(*upper_addr-128), 384 * sizeof **upper_addr, true);
-	addExternalObject(upper_addr, sizeof(*upper_addr), true);
-#endif
-#endif
-#endif
-
-	// allocate and initialize globals, done in two passes since we may
-	// need address of a global in order to initialize some other one.
-
-	// allocate memory objects for all globals
-	foreach (i, m->global_begin(), m->global_end()) {
-		if (i->isDeclaration())
-			allocGlobalVariableDecl(*i);
-		else
-			allocGlobalVariableNoDecl(*i);
-	}
-
-	// link aliases to their definitions (if bound)
-	foreach (i, m->alias_begin(), m->alias_end()) {
-		// Map the alias to its aliasee's address.
-		// This works because we have addresses for everything,
-		// even undefined functions.
-		globalAddresses.insert(
-			std::make_pair(i,
-				Executor::evalConstant(
-					kmodule, this, i->getAliasee())));
-	}
-
-	// once all objects are allocated, do the actual initialization
-	foreach (i, m->global_begin(), m->global_end()) {
-		MemoryObject		*mo;
-		const ObjectState	*os;
-		ObjectState		*wos;
-
-		if (!i->hasInitializer()) continue;
-
-		mo = globalObjects.find(i)->second;
-		os = init_state->addressSpace.findObject(mo);
-
-		assert(os);
-
-		wos = init_state->addressSpace.getWriteable(mo, os);
-
-		initializeGlobalObject(wos, i->getInitializer(), 0);
-		// if (i->isConstant()) os->setReadOnly(true);
-	}
+	setupFuncAddrs(m);
+	setupGlobalObjects(m);
+	setupAliases(m);
+	setupGlobalData(m);
 }
 
 MemoryObject *Globals::addExternalObject(
@@ -387,4 +304,119 @@ ref<klee::ConstantExpr> Globals::findAddress(
 	legalFunctions.insert((uint64_t) (void*) f);
 
 	return addr;
+}
+
+// represent function globals using the address of the actual llvm function
+// object. given that we use malloc to allocate memory in states this also
+// ensures that we won't conflict. we don't need to allocate a memory object
+// since reading/writing via a function pointer is unsupported anyway.
+void Globals::setupFuncAddrs(llvm::Module* m)
+{
+	foreach (i, m->begin(), m->end()) {
+		Function		*f = i;
+		ref<ConstantExpr>	addr(0);
+
+		// If the symbol has external weak linkage then it is implicitly
+		// not defined in this module; if it isn't resolvable then it
+		// should be null.
+		if (	f->hasExternalWeakLinkage() &&
+			(ed == NULL || !ed->resolveSymbol(f->getName().str())))
+		{
+			addr = Expr::createPointer(0);
+			std::cerr
+			<< "KLEE:ERROR: couldn't find symbol for weak linkage of "
+			   "global function: " << f->getName().str() << std::endl;
+		} else {
+			addr = Expr::createPointer((uint64_t) (void*) f);
+			legalFunctions.insert((uint64_t) (void*) f);
+		}
+
+		globalAddresses.insert(std::make_pair(f, addr));
+	}
+}
+
+// Disabled, we don't want to promote use of live externals.
+void Globals::setupCTypes(void)
+{
+#ifdef HAVE_CTYPE_EXTERNALS
+#ifndef WINDOWS
+#ifndef DARWIN
+	/* From /usr/include/errno.h: it [errno] is a per-thread variable. */
+	int *errno_addr = __errno_location();
+	addExternalObject((void *)errno_addr, sizeof *errno_addr, false);
+
+	/* from /usr/include/ctype.h:
+	These point into arrays of 384, so they can be indexed by any `unsigned
+	char' value [0,255]; by EOF (-1); or by any `signed char' value
+	[-128,-1).  ISO C requires that the ctype functions work for `unsigned */
+	const uint16_t **addr = __ctype_b_loc();
+	addExternalObject((void *)(*addr-128), 384 * sizeof **addr, true);
+	addExternalObject(addr, sizeof(*addr), true);
+
+	const int32_t **lower_addr = __ctype_tolower_loc();
+	addExternalObject(
+		(void *)(*lower_addr-128), 384 * sizeof **lower_addr, true);
+	addExternalObject(lower_addr, sizeof(*lower_addr), true);
+
+	const int32_t **upper_addr = __ctype_toupper_loc();
+	addExternalObject(
+		(void *)(*upper_addr-128), 384 * sizeof **upper_addr, true);
+	addExternalObject(upper_addr, sizeof(*upper_addr), true);
+#endif
+#endif
+#endif
+}
+
+// allocate and initialize globals, done in two passes since we may
+// need address of a global in order to initialize some other one.
+void Globals::setupGlobalObjects(llvm::Module* m)
+{
+	// allocate memory objects for all globals
+	foreach (i, m->global_begin(), m->global_end()) {
+		if (globalAddresses.count(&(*i)))
+			continue;
+
+		if (i->isDeclaration())
+			allocGlobalVariableDecl(*i);
+		else
+			allocGlobalVariableNoDecl(*i);
+	}
+}
+
+void Globals::setupAliases(llvm::Module* m)
+{
+	// link aliases to their definitions (if bound)
+	foreach (i, m->alias_begin(), m->alias_end()) {
+		// Map the alias to its aliasee's address.
+		// This works because we have addresses for everything,
+		// even undefined functions.
+		if (globalAddresses.count(i))
+			continue;
+		globalAddresses.insert(
+			std::make_pair(i,
+				Executor::evalConstant(
+					kmodule, this, i->getAliasee())));
+	}
+}
+
+void Globals::setupGlobalData(llvm::Module* m)
+{
+	// once all objects are allocated, do the actual initialization
+	foreach (i, m->global_begin(), m->global_end()) {
+		MemoryObject		*mo;
+		const ObjectState	*os;
+		ObjectState		*wos;
+
+		if (!i->hasInitializer()) continue;
+
+		mo = globalObjects.find(i)->second;
+		os = init_state->addressSpace.findObject(mo);
+
+		assert(os);
+
+		wos = init_state->addressSpace.getWriteable(mo, os);
+
+		initializeGlobalObject(wos, i->getInitializer(), 0);
+		// if (i->isConstant()) os->setReadOnly(true);
+	}
 }

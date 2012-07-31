@@ -31,8 +31,9 @@ struct loadent
 	KFunction**	le_kf;
 };
 
-void SymMMU::initModule(KModule *km)
+void SymMMU::initModule(Executor& exe)
 {
+	KModule		*km(exe.getKModule());
 	llvm::Module	*mod;
 	std::string	suffix("_" + SymMMUType);
 
@@ -59,7 +60,7 @@ void SymMMU::initModule(KModule *km)
 	mod = getBitcodeModule(path.c_str());
 	assert (mod != NULL);
 
-	km->addModule(mod);
+	exe.addModule(mod);
 
 	for (struct loadent* le = &loadtab[0]; le->le_name; le++) {
 		std::string	func_name(le->le_name + suffix);
@@ -75,10 +76,7 @@ void SymMMU::initModule(KModule *km)
 
 SymMMU::SymMMU(Executor& exe)
 : MMU(exe)
-{
-	KModule	*km(exe.getKModule());
-	initModule(km);
-}
+{ initModule(exe); }
 
 bool SymMMU::exeMemOp(ExecutionState &state, MemOp& mop)
 {

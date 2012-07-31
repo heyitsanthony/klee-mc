@@ -1,4 +1,5 @@
 #include <llvm/Support/CommandLine.h>
+#include <llvm/Instruction.h>
 #include <iostream>
 #include <sstream>
 
@@ -66,13 +67,78 @@ namespace
 		"only-replay-seeds", llvm::cl::desc("Drop seedless states."));
 
 	llvm::cl::opt<bool>
-	RandomizeFork("randomize-fork", llvm::cl::init(false));
+	RandomizeFork("randomize-fork", llvm::cl::init(true));
 
 	llvm::cl::opt<unsigned>
 	ForkCondIdxMod("forkcond-idx-mod", llvm::cl::init(4));
+
+	llvm::cl::opt<bool>
+	QuenchRunaways(
+		"quench-runaways",
+		llvm::cl::desc("Drop states at heavily forking instructions."),
+		llvm::cl::init(true));
 }
 
 using namespace klee;
+
+unsigned Forks::quench_c = 0;
+unsigned Forks::fork_c = 0;
+unsigned Forks::fork_uniq_c = 0;
+
+
+#define RUNAWAY_REFRESH	32
+bool Forks::isRunawayBranch(KInstruction* ki)
+{
+	KBrInstruction	*kbr;
+	double		stddevs;
+	static int	count = 0;
+	static double	stddev, mean, median;
+	unsigned	forks, rand_mod;
+
+	kbr = dynamic_cast<KBrInstruction*>(ki);
+	if (kbr == NULL) {
+		bool		is_likely;
+		unsigned	mean;
+		unsigned 	r;
+
+		/* only rets and branches may be runaways */
+		if (ki->getInst()->getOpcode() != llvm::Instruction::Ret)
+			return false;
+
+		/* XXX: FIXME. Need better scoring system. */
+		//std::cerr << "RAND FOR (" << (void*)ki->getInst() << ") fc="
+		//	<< ki->getForkCount() << ": ";
+		// ki->getInst()->dump();
+
+		mean = (fork_c+fork_uniq_c-1)/fork_uniq_c;
+		r = rand() % (1 << (1+(10*ki->getForkCount())/mean));
+		is_likely = (r != 0);
+		return is_likely;
+	}
+
+	if ((count++ % RUNAWAY_REFRESH) == 0) {
+		stddev = KBrInstruction::getForkStdDev();
+		mean = KBrInstruction::getForkMean();
+		median = KBrInstruction::getForkMedian();
+	}
+
+	if (stddev == 0)
+		return false;
+
+	forks = kbr->getForkHits();
+	if (forks <= 5)
+		return false;
+
+	stddevs = ((double)(kbr->getForkHits() - mean))/stddev;
+	if (stddevs < 1.0)
+		return false;
+
+	rand_mod = (1 << (1+(int)(((double)forks/(median)))));
+	if ((theRNG.getInt31() % rand_mod) == 0)
+		return false;
+
+	return true;
+}
 
 /* TODO: understand this */
 bool Forks::isForkingCallPath(CallPathNode* cpn)
@@ -135,7 +201,7 @@ bool Forks::isForkingCondition(ExecutionState& current, ref<Expr> condition)
 Executor::StatePair
 Forks::fork(ExecutionState &s, ref<Expr> cond, bool isInternal)
 {
-	ref<Expr> conds[2];
+	ref<Expr>	conds[2];
 
 	// !!! is this the correct behavior?
 	if (isForkingCondition(s, cond)) {
@@ -340,7 +406,7 @@ void Forks::forkSetupSeeding(ExecutionState& current, struct ForkInfo& fi)
 	}
 
 	// Clear any valid conditions that seeding rejects
-	if ((current.forkDisabled || OnlyReplaySeeds) && fi.validTargets > 1) {
+	if ((fi.forkDisabled || OnlyReplaySeeds) && fi.validTargets > 1) {
 		fi.validTargets = 0;
 		for (unsigned i = 0; i < fi.N; i++) {
 			if (fi.resSeeds[i].empty()) fi.res[i] = false;
@@ -369,6 +435,15 @@ Forks::fork(
 {
 	ForkInfo			fi(conditions, N);
 
+
+	fi.forkDisabled = current.forkDisabled;
+	if (	QuenchRunaways &&
+		!fi.forkDisabled &&
+		(*current.prevPC).getForkCount() > 10)
+	{
+		fi.forkDisabled = isRunawayBranch(current.prevPC);
+	}
+
 	fi.isInternal = isInternal;
 	fi.isBranch = isBranch;
 	fi.isSeeding = exe.isStateSeeding(&current);
@@ -394,6 +469,16 @@ Forks::fork(
 
 	makeForks(current, fi);
 	constrainForks(current, fi);
+
+
+	if (fi.forkedTargets) {
+		if (current.prevPC->getForkCount() == 0)
+			fork_uniq_c++;
+		current.prevPC->forked();
+		fork_c += fi.forkedTargets;
+	} else if (fi.validTargets > 1 && fi.forkDisabled) {
+		quench_c++;
+	}
 
 	return fi.resStates;
 }
@@ -530,7 +615,7 @@ void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 
 		assert (!fi.forkCompact || ReplayInhibitedForks);
 
-		if (current.forkDisabled) {
+		if (fi.forkDisabled) {
 			fi.res[condIndex] = false;
 			continue;
 		}
@@ -539,6 +624,7 @@ void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 		// Do actual state forking
 		baseState = &current;
 		newState = pureFork(current, fi.forkCompact);
+		fi.forkedTargets++;
 		fi.resStates[condIndex] = newState;
 
 		// Split pathWriter stream
@@ -554,7 +640,7 @@ void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 
 	}
 
-	if (fi.validTargets < 2 || current.forkDisabled)
+	if (fi.validTargets < 2 || fi.forkDisabled)
 		return;
 
 	/* Track forking condition transitions */
@@ -760,3 +846,4 @@ Forks::Forks(Executor& _exe)
 {
 	condFilter = new ExprTimer<MergeArrays>(1000);
 }
+
