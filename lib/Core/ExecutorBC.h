@@ -40,7 +40,6 @@ private:
 		llvm::Function *f,
 		int argc, char **argv, char **envp);
 
-	SpecialFunctionHandler *specialFunctionHandler;
  	ExternalDispatcher *externalDispatcher;
 };
 

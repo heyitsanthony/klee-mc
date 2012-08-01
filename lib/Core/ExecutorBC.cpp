@@ -35,7 +35,6 @@ namespace {
 
 ExecutorBC::ExecutorBC(InterpreterHandler *ie)
 : Executor(ie)
-, specialFunctionHandler(0)
 , externalDispatcher(new ExternalDispatcher())
 {
 	assert (kmodule == NULL);
@@ -43,7 +42,6 @@ ExecutorBC::ExecutorBC(InterpreterHandler *ie)
 
 ExecutorBC::~ExecutorBC(void)
 {
-  	if (specialFunctionHandler) delete specialFunctionHandler;
 	if (externalDispatcher)  delete externalDispatcher;
 	if (kmodule) delete kmodule;
 }
@@ -64,11 +62,11 @@ const Module* ExecutorBC::setModule(
 		target_data->isLittleEndian(),
 		(Expr::Width) target_data->getPointerSizeInBits());
 
-	specialFunctionHandler = new SpecialFunctionHandler(this);
+	sfh = new SpecialFunctionHandler(this);
 
-	specialFunctionHandler->prepare();
+	sfh->prepare();
 	kmodule->prepare(interpreterHandler);
-	specialFunctionHandler->bind();
+	sfh->bind();
 
 	if (StatsTracker::useStatistics()) {
 		statsTracker = new StatsTracker(
@@ -217,8 +215,8 @@ void ExecutorBC::callExternalFunction(
 	uint64_t	*args;
 	unsigned	wordIndex = 2;
 
-	// check if specialFunctionHandler wants it
-	if (specialFunctionHandler->handle(state, function, target, arguments))
+	// check if sfh wants it
+	if (sfh->handle(state, function, target, arguments))
 		return;
 
 	if (NoExternals && !okExternals.count(function->getName().str())) {
@@ -280,9 +278,9 @@ void ExecutorBC::callExternalFunction(
 		klee_warning_once(function, "%s", os.str().c_str());
 	}
 
-	bool success;
-	success = externalDispatcher->executeCall(function, target->getInst(), args);
-	if (!success) {
+	bool ok;
+	ok = externalDispatcher->executeCall(function, target->getInst(), args);
+	if (!ok) {
 		terminateStateOnError(
 			state,
 			"failed external call: " + function->getName().str(),

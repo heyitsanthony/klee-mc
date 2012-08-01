@@ -207,6 +207,8 @@ void KSwitchInstruction::orderTargets(const KModule* km, const Globals* g)
 		caseMap[cases[i].second].insert(cases[i].first->getZExtValue());
 }
 
+#define EXE_SWITCH_RLE_LIMIT	4
+
 TargetTy KSwitchInstruction::getExprCondSwitchTargets(
 	ref<Expr> cond, TargetsTy& targets)
 {

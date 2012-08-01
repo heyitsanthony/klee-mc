@@ -135,7 +135,6 @@ private:
 
 	KFunction		*kf_scenter;
 	SysModel		*sys_model;
-	SyscallSFH		*sfh;
 };
 
 }

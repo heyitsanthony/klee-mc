@@ -27,19 +27,34 @@ void Handler##x::handle(		\
 	std::vector<ref<Expr> >& arguments)
 
 namespace klee {
-  class ExecutorBC;
-  class Expr;
-  class ExecutionState;
-  class KInstruction;
-  class Handler;
-  template<typename T> class ref;
+class ExecutorBC;
+class Expr;
+class ExecutionState;
+class KInstruction;
+class SFHandler;
+class SpecialFunctionHandler;
+template<typename T> class ref;
 
-  class SpecialFunctionHandler {
-  public:
-    typedef std::map<const llvm::Function*, std::pair<Handler*,bool> >
+class SFHandler
+{
+public:
+	virtual void handle(
+		ExecutionState &state,
+		KInstruction* target,
+		std::vector<ref<Expr> > &arguments) = 0;
+	virtual ~SFHandler(void) {}
+protected:
+	SFHandler(SpecialFunctionHandler* _sfh) : sfh(_sfh) {}
+	SpecialFunctionHandler	*sfh;
+};
+
+class SpecialFunctionHandler
+{
+public:
+    typedef std::map<const llvm::Function*, std::pair<SFHandler*,bool> >
     	handlers_ty;
 
-	typedef Handler*(HandlerInit)(SpecialFunctionHandler*);
+	typedef SFHandler*(HandlerInit)(SpecialFunctionHandler*);
 	struct HandlerInfo {
 	  const char *name;
 	  HandlerInit* handler_init;
@@ -75,6 +90,8 @@ namespace klee {
                 KInstruction *target,
                 std::vector< ref<Expr> > &arguments);
 
+    bool addHandler(struct HandlerInfo& hi);
+
     /* Convenience routines */
 
     std::string readStringAtAddress(ExecutionState &state, ref<Expr> address);
@@ -92,33 +109,19 @@ namespace klee {
 
   };
 
-  class Handler
-  {
-  public:
-  	virtual void handle(
-		ExecutionState &state,
-		KInstruction* target,
-		std::vector<ref<Expr> > &arguments) = 0;
-  	virtual ~Handler(void) {}
-  protected:
-  	Handler(SpecialFunctionHandler* _sfh) : sfh(_sfh) {}
-	SpecialFunctionHandler	*sfh;
-  };
-    /* Handlers */
-
+/* Handlers */
 #define SFH_HANDLER(name) 				\
-	class Handler##name : public Handler {	\
+	class Handler##name : public SFHandler {	\
 	public:	\
-		Handler##name(SpecialFunctionHandler* sfh) : 	\
-			Handler(sfh) {}	\
+		Handler##name(SpecialFunctionHandler* sfh)	\
+		: SFHandler(sfh) {}	\
 		virtual ~Handler##name() {}	\
-		static Handler* create(SpecialFunctionHandler* sfh) { 	\
-			return new Handler##name(sfh);		\
-		}						\
+		static SFHandler* create(SpecialFunctionHandler* sfh) \
+		{ return new Handler##name(sfh); }	\
 	  	virtual void handle(	\
-		ExecutionState &state,	\
-		KInstruction* target,	\
-		std::vector<ref<Expr> > &arguments);	\
+			ExecutionState &state,	\
+			KInstruction* target,	\
+			std::vector<ref<Expr> > &arguments);	\
 	};
 
     SFH_HANDLER(Abort)

@@ -53,6 +53,7 @@
 #include "BranchPredictors.h"
 #include "StatsTracker.h"
 #include "Globals.h"
+#include "SpecialFunctionHandler.h"
 #include "../Expr/RuleBuilder.h"
 
 using namespace llvm;
@@ -180,6 +181,7 @@ Executor::Executor(InterpreterHandler *ih)
 , statsTracker(0)
 , pathTree(0)
 , symPathWriter(0)
+, sfh(0)
 , replayOut(0)
 , replayPaths(0)
 , atMemoryLimit(false)
@@ -229,6 +231,8 @@ Executor::Executor(InterpreterHandler *ih)
 Executor::~Executor()
 {
 	if (globals) delete globals;
+
+	if (sfh != NULL) delete sfh;
 
 	std::for_each(timers.begin(), timers.end(), deleteTimerInfo);
 	delete stateManager;

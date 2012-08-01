@@ -79,8 +79,6 @@ template<class T> class ref;
 /// during an instruction step. Should contain addedStates,
 /// removedStates, and haltExecution, among others.
 
-#define EXE_SWITCH_RLE_LIMIT	4
-
 class Executor : public Interpreter
 {
 /* FIXME The executor shouldn't have friends. */
@@ -155,6 +153,7 @@ public:
 
 	const KModule* getKModule(void) const { return kmodule; }
 	KModule* getKModule(void) { return kmodule; }
+	SpecialFunctionHandler* getSFH(void) { return sfh; }
 	void addModule(llvm::Module* m);
 
 	virtual void printStackTrace(
@@ -266,6 +265,7 @@ protected:
 	ExeStateManager		*stateManager;
 	Forks			*forking;
 	ExecutionState		*currentState;
+	SpecialFunctionHandler	*sfh;
 
 private:
 	std::vector<TimerInfo*>	timers;

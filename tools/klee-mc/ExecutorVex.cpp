@@ -46,6 +46,8 @@ extern bool UsePrioritySearcher;
 bool SymRegs;
 bool UseConcreteVFS;
 
+#define GET_SFH(x)	static_cast<SyscallSFH*>(x)
+
 namespace
 {
 	cl::opt<bool> ShowSyscalls("show-syscalls", cl::init(false));
@@ -181,8 +183,6 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 
 ExecutorVex::~ExecutorVex(void)
 {
-	if (sfh) delete sfh;
-	sfh = NULL;
 	delete sys_model;
 	if (kmodule) delete kmodule;
 	kmodule = NULL;
@@ -290,7 +290,7 @@ void ExecutorVex::makeMagicSymbolic(ExecutionState* state)
 		<< "magic extents symbolic\n";
 
 	foreach (it, exts.begin(), exts.end())
-		sfh->makeRangeSymbolic(
+		GET_SFH(sfh)->makeRangeSymbolic(
 			*state, it->first, it->second, "magic");
 }
 
@@ -307,7 +307,7 @@ void ExecutorVex::makeArgsSymbolic(ExecutionState* state)
 
 	foreach (it, argv.begin()+1, argv.end()) {
 		guest_ptr	p = *it;
-		sfh->makeRangeSymbolic(
+		GET_SFH(sfh)->makeRangeSymbolic(
 			*state,
 			gs->getMem()->getHostPtr(p),
 			gs->getMem()->strlen(p),

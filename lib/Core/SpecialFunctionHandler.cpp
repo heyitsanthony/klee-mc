@@ -110,80 +110,90 @@ SpecialFunctionHandler::HandlerInfo handlerInfo[] =
 };
 
 SpecialFunctionHandler::SpecialFunctionHandler(Executor* _executor)
-  : executor(_executor) {}
+: executor(_executor) {}
 
 
 void SpecialFunctionHandler::prepare()
 {
-  unsigned N = sizeof(handlerInfo)/sizeof(handlerInfo[0]);
-  prepare((HandlerInfo*)(&handlerInfo), N);
+	unsigned N = sizeof(handlerInfo)/sizeof(handlerInfo[0]);
+	prepare((HandlerInfo*)(&handlerInfo), N);
 }
 
 void SpecialFunctionHandler::bind(void)
 {
-  unsigned N = sizeof(handlerInfo)/sizeof(handlerInfo[0]);
-  bind((HandlerInfo*)&handlerInfo, N);
+	unsigned N = sizeof(handlerInfo)/sizeof(handlerInfo[0]);
+	bind((HandlerInfo*)&handlerInfo, N);
 }
 
 void SpecialFunctionHandler::prepare(HandlerInfo* hinfo, unsigned int N)
 {
-  for (unsigned i=0; i<N; ++i) {
-    HandlerInfo &hi = hinfo[i];
-    Function *f = executor->getKModule()->module->getFunction(hi.name);
+	for (unsigned i=0; i<N; ++i) {
+		HandlerInfo &hi = hinfo[i];
+		Function *f;
+		
+		f = executor->getKModule()->module->getFunction(hi.name);
 
-    // No need to create if the function doesn't exist, since it cannot
-    // be called in that case.
-    if (!f) continue;
-    if (!(!hi.doNotOverride || f->isDeclaration())) continue;
+		// No need to create if the function doesn't exist, since it cannot
+		// be called in that case.
+		if (!f) continue;
+		if (!(!hi.doNotOverride || f->isDeclaration())) continue;
 
-    // Make sure NoReturn attribute is set, for optimization and
-    // coverage counting.
-    if (hi.doesNotReturn)
-      f->addFnAttr(Attribute::NoReturn);
+		// Make sure NoReturn attribute is set, for optimization and
+		// coverage counting.
+		if (hi.doesNotReturn)
+		f->addFnAttr(Attribute::NoReturn);
 
-    // Change to a declaration since we handle internally (simplifies
-    // module and allows deleting dead code).
-    if (!f->isDeclaration())
-      f->deleteBody();
-  }
+		// Change to a declaration since we handle internally (simplifies
+		// module and allows deleting dead code).
+		if (!f->isDeclaration())
+		f->deleteBody();
+	}
 }
 
 
 SpecialFunctionHandler::~SpecialFunctionHandler(void)
 {
 	foreach (it, handlers.begin(), handlers.end()) {
-		Handler	*h = (it->second).first;
+		SFHandler	*h = (it->second).first;
 		delete h;
 	}
 }
 
 void SpecialFunctionHandler::bind(HandlerInfo* hinfo, unsigned int N)
 {
-  for (unsigned i=0; i<N; ++i) {
-    HandlerInfo &hi = hinfo[i];
-    Function *f = executor->getKModule()->module->getFunction(hi.name);
+	for (unsigned i=0; i<N; ++i)
+		addHandler(hinfo[i]);
+}
 
-    if (f && (!hi.doNotOverride || f->isDeclaration())) {
-    	Handler	*old_h = handlers[f].first;
+bool SpecialFunctionHandler::addHandler(struct HandlerInfo& hi)
+{
+	SFHandler		*old_h;
+	Function		*f;
+
+	f = executor->getKModule()->module->getFunction(hi.name);
+	if (f == NULL) return false;
+
+	if (hi.doNotOverride && !f->isDeclaration())
+		return false;
+
+	old_h = handlers[f].first;
 	if (old_h) delete old_h;
-        handlers[f] = std::make_pair(
-      	  hi.handler_init(this),
-          hi.hasReturnValue);
-    }
-  }
+
+	handlers[f] = std::make_pair(hi.handler_init(this), hi.hasReturnValue);
+	return true;
 }
 
 
 bool SpecialFunctionHandler::handle(
-  ExecutionState &state,
-  Function *f,
-  KInstruction *target,
-  std::vector< ref<Expr> > &arguments)
+	ExecutionState &state,
+	Function *f,
+	KInstruction *target,
+	std::vector< ref<Expr> > &arguments)
 {
 	handlers_ty::iterator it = handlers.find(f);
 	if (it == handlers.end()) return false;
 
-	Handler* h = it->second.first;
+	SFHandler* h = it->second.first;
 	bool hasReturnValue = it->second.second;
 
 	// FIXME: Check this... add test?
@@ -543,10 +553,7 @@ SFH_DEF_HANDLER(SetForking)
   }
 }
 
-SFH_DEF_HANDLER(StackTrace)
-{
-  state.dumpStack(std::cout);
-}
+SFH_DEF_HANDLER(StackTrace) { state.dumpStack(std::cout); }
 
 SFH_DEF_HANDLER(Warning)
 {
