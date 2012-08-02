@@ -208,8 +208,6 @@ BranchTracker::insert(const ReplayPathType &branches)
 			it = findChild(it, branches[index], noChild);
 			if (noChild)
 				break;
-			else
-				++it;
 			continue;
 		}
 
@@ -401,7 +399,10 @@ BranchTracker::iterator BranchTracker::iterator::operator++()
 
 	// we're at the end of a segment with only one child, so just advance to the
 	// start of the next child
-	if (curIndex == curSeg->size() - 1 && curSeg->children.size() == 1) {
+	if (	curIndex == curSeg->size() - 1 &&
+		curSeg->children.size() == 1 &&
+		curSeg != tail)
+	{
 		curIndex = 0;
 		if (curSeg == tail)
 			tail = curSeg = curSeg->children[0];
