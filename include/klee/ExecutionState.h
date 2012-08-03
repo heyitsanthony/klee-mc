@@ -276,6 +276,7 @@ public:
 
   void transferToBasicBlock(llvm::BasicBlock* dst, llvm::BasicBlock* src);
   void bindLocal(KInstruction *target, ref<Expr> value);
+  ref<Expr> readLocal(KInstruction* target) const;
   void bindArgument(KFunction *kf, unsigned index, ref<Expr> value);
 
   void trackBranch(int condIndex, const KInstruction* ki);

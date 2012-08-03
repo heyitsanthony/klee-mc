@@ -49,7 +49,7 @@ private:
 	const shadow_tags_ty	&tags;
 	llvm::Constant		*f_enter, *f_leave;
 
-	bool runOnInstruction(llvm::Instruction *I);
+	bool runOnBasicBlock(llvm::BasicBlock& bi, uint64_t tag);
 public:
 	ShadowPass(
 		Executor& _exe,
@@ -66,47 +66,57 @@ public:
 };
 char ShadowPass::ID;
 
+/* instrument all loads to taint data */
+bool ShadowPass::runOnBasicBlock(
+	llvm::BasicBlock& bi,
+	uint64_t tag)
+{
+	Instruction	*last_load = NULL;
+	unsigned	tainted_ins_c = 0;
+
+	foreach (iit, bi.begin(), bi.end()) {
+		Instruction		*ii = iit;
+
+		if (last_load != NULL) {
+			CallInst *new_call;
+			std::vector<Value*>	args;
+
+			args.push_back(
+				ConstantInt::get(
+					IntegerType::get(getGlobalContext(), 64),
+					tag));
+			new_call = CallInst::Create(f_enter, args, "", ii);
+			last_load = NULL;
+			tainted_ins_c++;
+		}
+
+		if (ii->getOpcode() == Instruction::Load)
+			last_load = ii;
+	}
+
+	return (tainted_ins_c != 0);
+}
 bool ShadowPass::runOnFunction(llvm::Function& f)
 {
-	std::string			f_name(exe.getPrettyName(&f));
-	shadow_tags_ty::const_iterator		it;
-	unsigned				i;
+	std::string			f_name_raw(exe.getPrettyName(&f));
+	std::string			f_name;
+	shadow_tags_ty::const_iterator	it;
+	unsigned			i;
+	bool				was_changed = false;
 
-	for (i = 0; f_name[i] && f_name[i] != '+'; i++);
-	f_name = f_name.substr(0, i);
+	for (i = 0; f_name_raw[i] && f_name_raw[i] != '+'; i++);
+	f_name = f_name_raw.substr(0, i);
 	
 	it = tags.find(f_name);
 	if (it == tags.end())
 		return false;
 
-	std::cerr << "PARSED: " << f_name << '\n';
-
-
-	/* instrument all loads to taint data */
 	foreach (bit, f.begin(), f.end()) {
-		foreach (iit, bit->begin(), bit->end()) {
-			Instruction		*ii = iit;
-			std::vector<Value*>	args;
-
-			if (ii->getOpcode() != Instruction::Load)
-				continue;
-
-			CallInst *new_call;
-			args.push_back(
-				ConstantInt::get(
-					IntegerType::get(getGlobalContext(), 32),
-					it->second));
-			new_call = CallInst::Create(
-				f_enter,
-				args,
-				"hook",
-				ii);
-
-		}
+		if (runOnBasicBlock(*bit, it->second))
+			was_changed = true;
 	}
-	f.dump();
-	assert (0 == 1);
-	return true;
+
+	return was_changed;
 }
 
 
@@ -170,8 +180,19 @@ void ShadowCore::setupInitialState(ExecutionState* es)
 
 SFH_DEF_HANDLER(TaintOn)
 {
+	const klee::ConstantExpr	*ce;
+	ShadowAlloc			*sa;
+	KInstIterator			kii = state.prevPC;
+	ref<Expr>			old_expr, tainted_expr;
+
+	--kii;
+	old_expr = state.readLocal(kii);
+	ce = cast<const klee::ConstantExpr>(arguments[0]);
+	sa = static_cast<ShadowAlloc*>(Expr::getAllocator());
+	sa->startShadow(ce->getZExtValue());
+	tainted_expr = old_expr->rebuild();
+	state.bindLocal(kii, tainted_expr);
+	sa->stopShadow();
 }
 
-SFH_DEF_HANDLER(TaintOff)
-{
-}
+SFH_DEF_HANDLER(TaintOff) {}

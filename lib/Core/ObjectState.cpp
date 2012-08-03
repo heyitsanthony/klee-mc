@@ -14,7 +14,8 @@
 #include "klee/Expr.h"
 #include "klee/Solver.h"
 
-#include "llvm/Support/CommandLine.h"
+#include <llvm/Support/CommandLine.h>
+#include "UnboxingObjectState.h"
 
 using namespace klee;
 using namespace llvm;
@@ -25,6 +26,8 @@ namespace {
 
 unsigned ObjectState::numObjStates = 0;
 ObjectState::objlist_ty	ObjectState::objs;
+ObjectState* ObjectState::zeroPage = NULL;
+ObjectStateAlloc* ObjectState::os_alloc = NULL;
 
 
 #define ADD_TO_LIST		\
@@ -90,7 +93,7 @@ ObjectState::ObjectState(const ObjectState &os)
 
 ObjectState::~ObjectState()
 {
-	assert (copyOnWriteOwner != COW_ZERO);
+	assert (!isZeroPage());
 
 	if (concreteMask) delete concreteMask;
 	if (flushMask) delete flushMask;
@@ -184,7 +187,7 @@ void ObjectState::makeConcrete()
 
 void ObjectState::markRangeSymbolic(unsigned offset, unsigned len)
 {
-	assert (copyOnWriteOwner != COW_ZERO);
+	assert (!isZeroPage());
 
 	assert (len+offset < size && "Bad range");
 	for (unsigned i=0; i<len; i++) {
@@ -196,7 +199,7 @@ void ObjectState::markRangeSymbolic(unsigned offset, unsigned len)
 
 void ObjectState::makeSymbolic(void)
 {
-	assert (copyOnWriteOwner != COW_ZERO);
+	assert (!isZeroPage());
 	assert(!updates.head &&
          	"XXX makeSymbolic of objs with symbolic vals is unsupported");
 
@@ -364,8 +367,7 @@ uint8_t ObjectState::read8c(unsigned offset) const
 ref<Expr> ObjectState::read8(unsigned offset) const
 {
 	if (isByteConcrete(offset))
-		return ConstantExpr::create(
-			concreteStore[offset], Expr::Int8);
+		return MK_CONST(concreteStore[offset], Expr::Int8);
 
 	if (isByteKnownSymbolic(offset))
 		return knownSymbolics[offset];
@@ -391,7 +393,7 @@ ref<Expr> ObjectState::read8(ref<Expr> offset) const
 void ObjectState::write8(unsigned offset, uint8_t value)
 {
 	assert(!readOnly  && "writing to read-only object!");
-	assert(copyOnWriteOwner != COW_ZERO);
+	assert(!isZeroPage());
 
 	concreteStore[offset] = value;
 	setKnownSymbolic(offset, 0);
@@ -402,13 +404,7 @@ void ObjectState::write8(unsigned offset, uint8_t value)
 
 void ObjectState::write8(unsigned offset, ref<Expr>& value)
 {
-	assert (copyOnWriteOwner != COW_ZERO);
-
-	// can happen when ExtractExpr special cases
-	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(value)) {
-		write8(offset, (uint8_t) CE->getZExtValue(8));
-		return;
-	}
+	assert (!isZeroPage());
 
 	setKnownSymbolic(offset, value.get());
 
@@ -420,7 +416,7 @@ void ObjectState::write8(ref<Expr> offset, ref<Expr>& value)
 {
 	unsigned	base, size;
 
-	assert (copyOnWriteOwner != COW_ZERO);
+	assert (!isZeroPage());
 	assert (!readOnly);
 	assert(!isa<ConstantExpr>(offset) &&
 		"constant offset passed to symbolic write8");
@@ -446,9 +442,15 @@ ref<Expr> ObjectState::read(ref<Expr> offset, Expr::Width width) const
 		return ExtractExpr::create(read8(offset), 0, Expr::Bool);
 
 	// Otherwise, follow the slow general case.
-	unsigned NumBytes = width / 8;
+	return readSlow(offset, width);
+}
+
+ref<Expr> ObjectState::readSlow(ref<Expr>& offset, Expr::Width width) const
+{
+	ref<Expr>	Res(0);
+	unsigned	NumBytes = width / 8;
+
 	assert(width == NumBytes * 8 && "Invalid write size!");
-	ref<Expr> Res(0);
 	for (unsigned i = 0; i != NumBytes; ++i) {
 		ref<Expr>	byte(0), cur_off;
 		unsigned	idx;
@@ -456,14 +458,35 @@ ref<Expr> ObjectState::read(ref<Expr> offset, Expr::Width width) const
 		idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);
 		cur_off = MK_ADD(offset, MK_CONST(idx, Expr::Int32));
 		if (cur_off->getKind() == Expr::Constant) {
-			byte = read8(cast<ConstantExpr>(
-				cur_off)->getZExtValue(32));
+			byte = read8(
+				cast<ConstantExpr>(cur_off)->getZExtValue(32));
 		} else
 			byte = read8(cur_off);
 		Res = i ? ConcatExpr::create(byte, Res) : byte;
 	}
 
 	return Res;
+}
+
+ref<Expr> ObjectState::readConstantBytes(
+	unsigned offset, unsigned NumBytes) const
+{
+	uint64_t	ret = 0;
+
+	if (!isConcrete()) {
+		for (unsigned i = 0; i != NumBytes; ++i) {
+			if (!isByteConcrete(offset+i)) {
+				return NULL;
+			}
+		}
+	}
+
+	for (unsigned i = 0; i != NumBytes; ++i) {
+		ret <<= 8;
+		ret |= read8c(offset+(NumBytes-1-i));
+	}
+
+	return MK_CONST(ret, NumBytes*8);
 }
 
 ref<Expr> ObjectState::read(unsigned offset, Expr::Width width) const
@@ -475,28 +498,11 @@ ref<Expr> ObjectState::read(unsigned offset, Expr::Width width) const
 	// Otherwise, follow the slow general case.
 	unsigned	NumBytes = width / 8;
 
-	assert(width == NumBytes * 8 && "Invalid write size!");
+	assert(width == NumBytes * 8 && "Non-byte aligned write size!");
 	if (NumBytes <= 8) {
-		bool		is_conc = true;
-
-		if (!isConcrete()) {
-			for (unsigned i = 0; i != NumBytes; ++i) {
-				if (!isByteConcrete(offset+i)) {
-					is_conc = false;
-					break;
-				}
-			}
-		}
-
-		if (is_conc) {
-			uint64_t	ret = 0;
-			for (unsigned i = 0; i != NumBytes; ++i) {
-				ret <<= 8;
-				ret |= read8c(offset+(NumBytes-1-i));
-			}
-
-			return MK_CONST(ret, NumBytes*8);
-		}
+		ref<Expr>	ret(readConstantBytes(offset, NumBytes));
+		if (!ret.isNull())
+			return ret;
 	}
 
 
@@ -513,10 +519,10 @@ ref<Expr> ObjectState::read(unsigned offset, Expr::Width width) const
 	return Res;
 }
 
-void ObjectState::write(ref<Expr> offset, ref<Expr>& value)
+void ObjectState::write(ref<Expr> offset, const ref<Expr>& value)
 {
 	assert (!readOnly);
-	assert (copyOnWriteOwner != COW_ZERO);
+	assert (!isZeroPage());
 
 	// Truncate offset to 32-bits.
 	offset = ZExtExpr::create(offset, Expr::Int32);
@@ -549,25 +555,10 @@ void ObjectState::write(ref<Expr> offset, ref<Expr>& value)
 	}
 }
 
+
 void ObjectState::write(unsigned offset, const ref<Expr>& value)
 {
-	assert (copyOnWriteOwner != COW_ZERO);
-
-	// Check for writes of constant values.
-	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(value)) {
-		Expr::Width w = CE->getWidth();
-		if (w <= 64) {
-			uint64_t val = CE->getZExtValue();
-			switch (w) {
-			default: assert(0 && "Invalid write size!");
-			case Expr::Bool:
-			case Expr::Int8:  write8(offset, val); return;
-			case Expr::Int16: write16(offset, val); return;
-			case Expr::Int32: write32(offset, val); return;
-			case Expr::Int64: write64(offset, val); return;
-			}
-		}
-	}
+	assert (!isZeroPage());
 
 	// Treat bool specially, it is the only non-byte sized write we allow.
 	Expr::Width w = value->getWidth();
@@ -590,20 +581,6 @@ void ObjectState::write(unsigned offset, const ref<Expr>& value)
 	}
 }
 
-#define writeN(n)		\
-void ObjectState::write##n(unsigned offset, uint##n##_t value) {	\
-unsigned NumBytes = n/8;	\
-for (unsigned i = 0; i != NumBytes; ++i) {	\
-	unsigned idx;	\
-	idx = Context::get().isLittleEndian() ? i : (NumBytes - i - 1);	\
-	write8(offset + idx, (uint8_t) (value >> (8 * i)));	\
-}	\
-}
-
-writeN(16)
-writeN(32)
-writeN(64)
-
 bool ObjectState::writeIVC(unsigned offset, const ref<ConstantExpr>& ce)
 {
 	unsigned	w = ce->getWidth();
@@ -611,7 +588,7 @@ bool ObjectState::writeIVC(unsigned offset, const ref<ConstantExpr>& ce)
 	uint64_t	v;
 	bool		updated;
 
-	assert (copyOnWriteOwner != COW_ZERO);
+	assert (!isZeroPage());
 	assert ((w % 8) == 0 && "Expected byte write");
 
 	v = ce->getZExtValue();
@@ -704,26 +681,15 @@ unsigned ObjectState::hash(void) const
 	return hash_ret;
 }
 
-ObjectState* ObjectState::zeroPage;
-
 /* TODO: support more sizes */
 void ObjectState::setupZeroObjs(void)
 {
+	if (zeroPage != NULL) return;
+	os_alloc = new ObjectStateFactory<UnboxingObjectState>();
 	zeroPage = new ObjectState(4096);
 	zeroPage->copyOnWriteOwner = COW_ZERO;
 	zeroPage->initializeToZero();
 	zeroPage->refCount = 1;
-}
-
-ObjectState* ObjectState::createDemandObj(unsigned sz)
-{
-	if (sz == 4096 && UseZeroPage) {
-		assert (zeroPage->copyOnWriteOwner == COW_ZERO);
-		assert (zeroPage->isConcrete());
-		zeroPage->refCount++;
-		return zeroPage;
-	}
-	return new ObjectState(sz);
 }
 
 /* XXX: nothing yet-- not enough concrete-only states to justify */
@@ -737,3 +703,29 @@ void ObjectState::garbageCollect(void)
 	std::cerr << "OS-GC: c=" << c << '\n';
 #endif
 }
+
+void ObjectState::writeConcrete(const uint8_t* addr, unsigned wr_sz)
+{ memcpy(concreteStore, addr, wr_sz); }
+
+void ObjectState::readConcrete(uint8_t* addr, unsigned rd_sz, unsigned off) const
+{ memcpy(addr, concreteStore+off, rd_sz);  }
+
+ObjectState* ObjectState::createDemandObj(unsigned sz)
+{
+	if (sz == 4096 && UseZeroPage) {
+		assert (zeroPage->isZeroPage());
+		assert (zeroPage->isConcrete());
+		zeroPage->refCount++;
+		return zeroPage;
+	}
+	return ObjectState::create(sz);
+}
+
+ObjectState* ObjectState::create(unsigned size)
+{ return os_alloc->create(size); }
+
+ObjectState* ObjectState::create(unsigned size, const ref<Array>& arr)
+{ return os_alloc->create(size, arr); }
+
+ObjectState* ObjectState::create(const ObjectState& os)
+{ return os_alloc->create(os); }

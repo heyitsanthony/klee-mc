@@ -59,11 +59,9 @@ const ObjectState *AddressSpace::findObject(const MemoryObject *mo) const
 
 void AddressSpace::bindObject(const MemoryObject *mo, ObjectState *os)
 {
-	if (os->copyOnWriteOwner != COW_ZERO) {
-		assert(	os->copyOnWriteOwner == 0 &&
-			"object already has owner");
-		os->copyOnWriteOwner = cowKey;
-
+	if (os->isZeroPage() == false) {
+		assert(	!os->hasOwner() && "object already has owner");
+		os->setOwner(cowKey);
 	}
 
 	objects = objects.replace(std::make_pair(mo, os));
@@ -81,11 +79,11 @@ ObjectState *AddressSpace::getWriteable(
 
 	assert(!os->readOnly);
 
-	if (cowKey == os->copyOnWriteOwner)
+	if (os->isOwner(cowKey))
 		return const_cast<ObjectState*> (os);
 
-	n = new ObjectState(*os);
-	n->copyOnWriteOwner = cowKey;
+	n = ObjectState::create(*os);
+	n->setOwner(cowKey);
 	objects = objects.replace(std::make_pair(mo, n));
 	generation++;
 
@@ -164,14 +162,9 @@ ref<Expr> AddressSpace::getFeasibilityExpr(
 	 * address < high->base+high->size) */
 	ref<Expr> inRange =
 	AndExpr::create(
-		UgeExpr::create(
-			address,
-			lo->getBaseExpr()),
-		UltExpr::create(
-			address,
-			AddExpr::create(
-				hi->getBaseExpr(),
-				hi->getSizeExpr())));
+		MK_UGE(address, lo->getBaseExpr()),
+		MK_ULT(	address,
+			MK_ADD(hi->getBaseExpr(), hi->getSizeExpr())));
 	return inRange;
 }
 
@@ -393,11 +386,6 @@ bool AddressSpace::binsearchFeasible(
 // XXX how do we smartly amortize the cost of checking to
 // see if we need to keep searching up/down, in bad cases?
 // maybe we don't care?
-
-// XXX we really just need a smart place to start (although
-// if its a known solution then the code below is guaranteed
-// to hit the fast path with exactly 2 queries). we could also
-// just get this by inspection of the expr.
 
 // DAR: replaced original O(N) lookup with O(log N) binary search strategy
 
@@ -701,8 +689,7 @@ void AddressSpace::copyOutConcretes(void)
 		os = it->second;
 		address = (uint8_t*) (uintptr_t) mo->address;
 
-		if (!os->readOnly)
-			memcpy(address, os->concreteStore, mo->size);
+		if (!os->readOnly) os->readConcrete(address, mo->size);
 	}
 }
 
@@ -735,7 +722,7 @@ bool AddressSpace::copyToBuf(
 		return false;
 
 	assert (len <= (mo->size - off) && "LEN+OFF SPANS >1 MO");
-	memcpy(buf, os->concreteStore + off, len);
+	os->readConcrete((uint8_t*)buf, len, off);
 	return true;
 }
 
@@ -754,11 +741,11 @@ bool AddressSpace::copyInConcretes(void)
 		os = it->second;
 		address = (uint8_t*)((uintptr_t) mo->address);
 
-		if (memcmp(address, os->concreteStore, mo->size) == 0)
+		if (os->cmpConcrete(address, mo->size) == 0)
 			continue;
 
 		wos = getWriteable(mo, os);
-		memcpy(wos->concreteStore, address, mo->size);
+		wos->writeConcrete(address, mo->size);
 	}
 
 	return true;

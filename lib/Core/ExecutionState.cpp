@@ -364,14 +364,13 @@ std::ostream &klee::operator<<(std::ostream &os, const MemoryMap &mm)
 
 void ExecutionState::bindArgument(
 	KFunction *kf, unsigned index, ref<Expr> value)
-{
-    writeLocalCell(stack.size() - 1, kf->getArgRegister(index), value);
-}
+{ writeLocalCell(stack.size() - 1, kf->getArgRegister(index), value); }
 
 void ExecutionState::bindLocal(KInstruction* target, ref<Expr> value)
-{
-    writeLocalCell(stack.size() - 1, target->getDest(), value);
-}
+{ writeLocalCell(stack.size() - 1, target->getDest(), value); }
+
+ref<Expr> ExecutionState::readLocal(KInstruction* target) const
+{ return readLocalCell(stack.size() - 1, target->getDest()).value; }
 
 void ExecutionState::transferToBasicBlock(BasicBlock *dst, BasicBlock *src)
 {
@@ -407,7 +406,7 @@ const ObjectState* ExecutionState::bindMemObj(
 {
 	ObjectState *os;
 	if (array)
-		os = new ObjectState(mo->size, ARR2REF(array));
+		os = ObjectState::create(mo->size, ARR2REF(array));
 	else
 		os = ObjectState::createDemandObj(mo->size);
 	bindObject(mo, os);

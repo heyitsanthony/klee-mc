@@ -794,8 +794,8 @@ static bool concretizeObject(
 		return false;
 
 	new_os = (os->getArray())
-		? new ObjectState(mo->size, ARR2REF(os->getArray()))
-		: new ObjectState(mo->size);
+		? ObjectState::create(mo->size, ARR2REF(os->getArray()))
+		: ObjectState::create(mo->size);
 
 	std::cerr << "[Exe] Concretizing MO="
 		<< (void*)mo->address << "--"
@@ -832,7 +832,7 @@ static bool concretizeObject(
 
 
 		all_zeroes &= (v == 0);
-		new_os->write8(i, v);
+		new_os->write(i, e);
 	}
 
 	if (all_zeroes) {
