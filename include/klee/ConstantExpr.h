@@ -108,9 +108,7 @@ public:
   static ref<ConstantExpr> createVector(llvm::ConstantVector* v);
   static ref<ConstantExpr> createSeqData(llvm::ConstantDataSequential* v);
 
-  static bool classof(const Expr *E) {
-    return E->getKind() == Expr::Constant;
-  }
+  static bool classof(const Expr *E) { return E->getKind() == Expr::Constant; }
   static bool classof(const ConstantExpr *) { return true; }
 
   /* Utility Functions */

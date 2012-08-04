@@ -37,7 +37,11 @@ public:
 	: T(Value), shadow_val(_s) {}
 
 	virtual ~ShadowExpr() {}
-	const V& getShadow(void) const { return shadow_val; }
+	const V& getShadow(void) const { return *((V*)getShadowPtr()); }
+
+	bool isShadowed(void) const { return true; }
+
+	void* getShadowPtr(void) const { return (void*)&shadow_val; }
 protected:
 	void setShadow(const V& v) { shadow_val = v; }
 private:

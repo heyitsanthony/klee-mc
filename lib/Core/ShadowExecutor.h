@@ -27,7 +27,10 @@ public:
 	}
 
 	virtual bool addConstraint(ExecutionState &state, ref<Expr> condition)
-	{ return T::addConstraint(state, condition); }
+	{
+		shadowCore.addConstraint(state, condition);
+		return T::addConstraint(state, condition);
+	}
 
 	virtual void run(ExecutionState &initialState)
 	{

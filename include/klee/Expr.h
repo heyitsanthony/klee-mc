@@ -269,6 +269,7 @@ public:
 
   // reconstruct expression from bottom up
   ref<Expr> rebuild(void) const;
+  ref<Expr> realloc(void) const;
 
   /// isZero - Is this a constant zero.
   bool isZero() const;
@@ -309,6 +310,10 @@ public:
   int compareDeep(const Expr& b) const;
 
   static Hash hashImpl(const void* data, size_t len, Hash hash);
+
+  virtual bool isShadowed(void) const { return false; }
+  /* I am really unhappy with this interface */
+  virtual void* getShadowPtr(void) const { return NULL; }
 };
 
 struct Expr::CreateArg {

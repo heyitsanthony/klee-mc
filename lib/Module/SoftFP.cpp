@@ -217,7 +217,6 @@ bool SoftFPPass::replaceFCmp(Instruction *inst)
 
 	ReplaceInstWithInst(inst, static_cast<Instruction*>(v));
 	return true;
-
 }
 
 

@@ -98,6 +98,12 @@ ref<Expr> Expr::rebuild(void) const
 	return r.rebuild(this);
 }
 
+ref<Expr> Expr::realloc(void) const
+{
+	ExprRealloc	r;
+	return r.rebuild(this);
+}
+
 static ref<Expr> getTempReadBytes(
 	const ref<Array> &array, unsigned bytes, unsigned arr_off)
 {
@@ -106,9 +112,7 @@ static ref<Expr> getTempReadBytes(
 	assert (bytes && bytes <= 16);
 
 	for (unsigned i = 0; i < bytes; i++)
-		kids[i] = ReadExpr::create(
-			ul,
-			ConstantExpr::create(arr_off+i,Expr::Int32));
+		kids[i] = MK_READ(ul, MK_CONST(arr_off+i,Expr::Int32));
 
 	return ConcatExpr::createN(bytes, kids);
 }
@@ -144,6 +148,9 @@ int Expr::compareDeep(const Expr& b) const
 		return res;
 
 	unsigned aN = getNumKids();
+	if (aN == 0)
+		return 0;
+
 	for (unsigned i=0; i<aN-1; i++)
 		if (int res = getKidConst(i)->compare(*b.getKidConst(i)))
 			return res;
@@ -382,9 +389,7 @@ ref<Expr> ConcatExpr::create4(
 	const ref<Expr> &kid1, const ref<Expr> &kid2,
 	const ref<Expr> &kid3, const ref<Expr> &kid4)
 {
-	return ConcatExpr::create(
-		kid1,
-		ConcatExpr::create(kid2, ConcatExpr::create(kid3, kid4)));
+	return MK_CONCAT(kid1, MK_CONCAT(kid2, MK_CONCAT(kid3, kid4)));
 }
 
 /// Shortcut to concat 8 kids.  The chain returned is unbalanced to the right
@@ -454,10 +459,7 @@ ref<Expr> Expr::createBoothMul(const ref<Expr>& e, uint64_t v)
 
 	/* cut off sign extension */
 	if (e_w > 64 && last_bit) {
-		cur_expr = AddExpr::create(
-			cur_expr,
-			ShlExpr::create(e, ConstantExpr::create(64, e_w)));
-
+		cur_expr = MK_ADD(cur_expr, MK_SHL(e, MK_CONST(64, e_w)));
 	}
 
 	return cur_expr;

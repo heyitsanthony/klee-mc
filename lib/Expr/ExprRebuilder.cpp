@@ -3,7 +3,7 @@
 
 using namespace klee;
 
-ref<Expr> ExprRebuilder::rebuild(const Expr* e)
+ref<Expr> ExprRedo::rebuild(const Expr* e)
 {
 	depth = 0;
 	postexprs.clear();
@@ -11,7 +11,7 @@ ref<Expr> ExprRebuilder::rebuild(const Expr* e)
 	return postexprs[0][0];
 }
 
-ExprRebuilder::Action ExprRebuilder::visitExpr(const Expr* expr)
+ExprRedo::Action ExprRedo::visitExpr(const Expr* expr)
 {
 	depth++;
 	if (depth > postexprs.size())
@@ -26,7 +26,7 @@ void ExprRebuilder::visitExprPost(const Expr* expr)
 	depth--;
 	assert (postexprs.size() > depth);
 	if (postexprs.size() == depth+1) {
-		/* no need to rebuild */
+		/* no need to rebuild; leaf */
 		postexprs[depth].push_back(ref<Expr>(const_cast<Expr*>(expr)));
 		return;
 	}
@@ -51,6 +51,35 @@ void ExprRebuilder::visitExprPost(const Expr* expr)
 	else
 		postexprs[depth].push_back(
 			ref<Expr>(const_cast<Expr*>(expr)));
+
+	/* done with all expressions in subtree, remove the postexprs */
+	postexprs.resize(depth+1);
+}
+
+void ExprRealloc::visitExprPost(const Expr* expr)
+{
+	ref<Expr>			post_e;
+
+	depth--;
+	assert (postexprs.size() > depth);
+	if (postexprs.size() == depth+1) {
+		/* no need to rebuild; leaf */
+		const ConstantExpr	*ce;
+
+		ce = dynamic_cast<const ConstantExpr*>(expr);
+		if (ce != NULL)
+			postexprs[depth].push_back(
+				ConstantExpr::alloc(ce->getAPValue()));
+		else
+			postexprs[depth].push_back(ref<Expr>(
+				const_cast<Expr*>(expr)));
+		return;
+	}
+
+	assert (postexprs.size() > depth+1);
+
+	post_e = expr->rebuild(postexprs[depth+1].data());
+	postexprs[depth].push_back(post_e);
 
 	/* done with all expressions in subtree, remove the postexprs */
 	postexprs.resize(depth+1);

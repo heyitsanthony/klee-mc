@@ -1,29 +1,40 @@
 #ifndef SHADOWBUILDER_H
 #define SHADOWBUILDER_H
 
-#include "ShadowExpr.h"
+#include "ShadowAlloc.h"
 #include "klee/ExprBuilder.h"
 
 namespace klee
 {
-class ShadowAlloc;
 
-typedef ShadowExpr<Expr, uint64_t>	shadowed_ty;
+class ShadowCombine
+{
+public:
+	virtual ~ShadowCombine() {}
+	virtual uint64_t combine(uint64_t a, uint64_t b) = 0;
+protected:
+	ShadowCombine(void) {}
+};
+
+class ShadowCombineOr : public ShadowCombine
+{ virtual uint64_t combine(uint64_t a, uint64_t b) { return a | b; } };
+
 class ShadowBuilder : public ExprBuilder
 {
 public:
-	static ExprBuilder* create(ExprBuilder* default_builder);
-	virtual ~ShadowBuilder() { /* eb_default is deleted by TLBuiler */ }
+	static ExprBuilder* create(
+		ExprBuilder* default_builder,
+		ShadowCombine* sc = NULL);
+	virtual ~ShadowBuilder() { delete sc; }
 
 	EXPR_BUILDER_DECL_ALL
 protected:
-	const shadowed_ty* getShadowExpr(const ref<Expr>& e) const;
-	ShadowBuilder(ExprBuilder* eb);
-	/* XXX: think this out */
-	virtual uint64_t combine(uint64_t a, uint64_t b) { return a; } 
+	const ShadowType* getShadowExpr(const ref<Expr>& e) const;
+	ShadowBuilder(ExprBuilder* eb, ShadowCombine* _sc);
 private:
 	ShadowAlloc*	sa;
 	ExprBuilder*	eb_default;
+	ShadowCombine	*sc;
 };
 }
 

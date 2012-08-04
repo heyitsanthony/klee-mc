@@ -167,6 +167,8 @@ public:
 	void notifyCurrent(ExecutionState *current);
 	bool isHalted(void) const { return haltExecution; }
 
+	MMU* getMMU(void) const { return mmu; }
+
 	MemoryManager	*memory;
 private:
 	class TimerInfo;
@@ -238,8 +240,6 @@ protected:
     const char* arrPrefix = "arr");
 
 
-  const Cell& eval(KInstruction *ki, unsigned idx, ExecutionState &st) const;
-
   virtual llvm::Function* getFuncByAddr(uint64_t addr) = 0;
 
   virtual void callExternalFunction(ExecutionState &state,
@@ -254,6 +254,9 @@ protected:
 		std::vector< ref<Expr> > &arguments);
 
 	virtual bool isInterestingTestCase(ExecutionState* st) const;
+
+	const Cell& eval(
+		KInstruction *ki, unsigned idx, ExecutionState &st) const;
 
 	InterpreterHandler	*interpreterHandler;
 	llvm::TargetData	*target_data;

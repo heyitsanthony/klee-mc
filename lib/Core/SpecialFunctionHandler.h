@@ -90,7 +90,7 @@ public:
                 KInstruction *target,
                 std::vector< ref<Expr> > &arguments);
 
-    bool addHandler(struct HandlerInfo& hi);
+    SFHandler* addHandler(struct HandlerInfo& hi);
 
     /* Convenience routines */
 
@@ -110,7 +110,7 @@ public:
   };
 
 /* Handlers */
-#define SFH_HANDLER(name) 				\
+#define SFH_HANDLER2(name,x) 				\
 	class Handler##name : public SFHandler {	\
 	public:	\
 		Handler##name(SpecialFunctionHandler* sfh)	\
@@ -122,7 +122,10 @@ public:
 			ExecutionState &state,	\
 			KInstruction* target,	\
 			std::vector<ref<Expr> > &arguments);	\
+		x;	\
 	};
+
+#define SFH_HANDLER(name)	SFH_HANDLER2(name,;)
 
     SFH_HANDLER(Abort)
     SFH_HANDLER(Alarm)

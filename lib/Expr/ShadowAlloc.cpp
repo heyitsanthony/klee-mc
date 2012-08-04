@@ -120,3 +120,63 @@ ref<Expr> ShadowAlloc::Constant(const llvm::APInt &Value)
 	r->computeHash();
 	return r;
 }
+
+ShadowRef ShadowAlloc::getExpr(const ref<Expr>& e)
+{
+	if (e->isShadowed() == false)
+		return NULL;
+
+	return ShadowRef(static_cast<ShadowType*>(e.get()));
+}
+
+ShadowRef ShadowAlloc::getExprDynCast(const ref<Expr>& e)
+{
+	switch (e->getKind()) {
+#define CAST_CASE(x)	\
+	case Expr::x:		\
+	return ShadowRef(	\
+		reinterpret_cast<ShadowType*>(	\
+			dynamic_cast<ShadowExpr<x##Expr,uint64_t>*>(	\
+				e.get())));
+
+	CAST_CASE(Constant)
+	CAST_CASE(NotOptimized)
+	CAST_CASE(Read)
+	CAST_CASE(Select)
+	CAST_CASE(Concat)
+	CAST_CASE(Extract)
+
+	CAST_CASE(ZExt)
+	CAST_CASE(SExt)
+
+	CAST_CASE(Add)
+	CAST_CASE(Sub)
+	CAST_CASE(Mul)
+	CAST_CASE(UDiv)
+
+	CAST_CASE(SDiv)
+	CAST_CASE(URem)
+	CAST_CASE(SRem)
+
+	CAST_CASE(Not)
+	CAST_CASE(And)
+	CAST_CASE(Or)
+	CAST_CASE(Xor)
+	CAST_CASE(Shl)
+	CAST_CASE(LShr)
+	CAST_CASE(AShr)
+
+	CAST_CASE(Eq)
+	CAST_CASE(Ne)
+	CAST_CASE(Ult)
+	CAST_CASE(Ule)
+	CAST_CASE(Ugt)
+	CAST_CASE(Uge)
+	CAST_CASE(Slt)
+	CAST_CASE(Sle)
+	CAST_CASE(Sgt)
+	CAST_CASE(Sge)
+	default: break;
+	}
+	return NULL;
+}

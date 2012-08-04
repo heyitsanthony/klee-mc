@@ -165,24 +165,24 @@ void SpecialFunctionHandler::bind(HandlerInfo* hinfo, unsigned int N)
 		addHandler(hinfo[i]);
 }
 
-bool SpecialFunctionHandler::addHandler(struct HandlerInfo& hi)
+SFHandler* SpecialFunctionHandler::addHandler(struct HandlerInfo& hi)
 {
-	SFHandler		*old_h;
+	SFHandler		*old_h, *new_h;
 	Function		*f;
 
 	f = executor->getKModule()->module->getFunction(hi.name);
-	if (f == NULL) return false;
+	if (f == NULL) return NULL;
 
 	if (hi.doNotOverride && !f->isDeclaration())
-		return false;
+		return NULL;
 
 	old_h = handlers[f].first;
 	if (old_h) delete old_h;
 
-	handlers[f] = std::make_pair(hi.handler_init(this), hi.hasReturnValue);
-	return true;
+	new_h = hi.handler_init(this);
+	handlers[f] = std::make_pair(new_h, hi.hasReturnValue);
+	return new_h;
 }
-
 
 bool SpecialFunctionHandler::handle(
 	ExecutionState &state,

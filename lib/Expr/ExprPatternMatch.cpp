@@ -23,14 +23,14 @@ bool ExprPatternMatch::verifyConstant(const ConstantExpr* ce)
 	/* handle large constants */
 	while (bits) {
 		unsigned		w;
+		ref<Expr>		tmp_ce;
 		const ConstantExpr	*cur_ce;
 
 		w = (bits > 64) ? 64 : bits;
-		cur_ce = dyn_cast<ConstantExpr>(
-			ExtractExpr::create(
-				const_cast<ConstantExpr*>(ce),
-				bits - w,
-				w));
+		tmp_ce = MK_EXTRACT(
+			const_cast<ConstantExpr*>(ce), bits - w, w);
+
+		cur_ce = dyn_cast<ConstantExpr>(tmp_ce);
 		if (cur_ce == NULL) {
 			std::cerr << "[ExprMatch] EXPECTED CE FROM EXT(CE)!\n";
 			return false;
