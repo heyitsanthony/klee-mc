@@ -376,6 +376,45 @@ protected:
 		<< HashSolver::getMisses(); }
 };
 
+cl::opt<unsigned>
+DumpStackStats("dump-stackstats",
+        cl::desc("Dump stack stats every n seconds (0=off)"),
+        cl::init(0));
+class StackStatTimer : public StatTimer
+{
+public:
+	StackStatTimer(Executor *_exe)
+	: StatTimer(_exe, "stackstats.txt") {}
+protected:
+	void print(void)
+	{
+		getStackStats();
+		*os << s_min << ' ' << s_max << ' ' << s_avg;
+	}
+
+	void getStackStats(void)
+	{
+		s_min = ~0;
+		s_max = 0;
+		s_total = 0;
+		n = 0;
+		foreach (it, exe.beginStates(), exe.endStates()) {
+			const ExecutionState	*es;
+			unsigned		cur_depth;
+
+			es = *it;
+			cur_depth = es->getStackDepth();
+			if (cur_depth > s_max) s_max = cur_depth;
+			if (cur_depth < s_min) s_min = cur_depth;
+			n++;
+			s_total += cur_depth;
+		}
+
+		s_avg = (n) ? s_total / n : 0;
+	}
+private:
+	unsigned	s_min, s_max, s_total, n, s_avg;
+};
 
 cl::opt<unsigned>
 DumpForkCondGraph("dump-forkcondgraph",
@@ -603,6 +642,9 @@ void Executor::initTimers(void)
 
 	if (DumpQueryStats)
 		addTimer(new QueryStatTimer(this), DumpQueryStats);
+
+	if (DumpStackStats)
+		addTimer(new StackStatTimer(this), DumpStackStats);
 
 	if (DumpBrData)
 		addTimer(new BrDataTimer("brdata.txt", this), DumpBrData);

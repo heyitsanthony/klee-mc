@@ -79,3 +79,29 @@ uint64_t ExeStateVex::getAddrPC(void) const
 
 	return ret;
 }
+
+unsigned ExeStateVex::getStackDepth(void) const
+{
+	unsigned	off;
+	uint64_t	cur_stack;
+	guestptr_t	stack_base;
+
+	off = base_guest->getCPUState()->getStackRegOff();
+	stack_base = base_guest->getCPUState()->getStackPtr();
+
+	if (reg_os->isByteConcrete(off) == false) {
+		std::cerr << "[ExeStateVex] Symbolic stackptr?\n";
+		return 0;
+	}
+
+	cur_stack = 0;
+	for (unsigned i = 0; i < 8; i++)
+		cur_stack |= ((uint64_t)reg_os->read8c(off+i)) << (i*8);
+
+	if (stack_base.o < cur_stack) {
+		std::cerr << "[ExeStateVex] base < curstack!?\n";
+		return 0;
+	}
+
+	return stack_base.o - cur_stack;
+}

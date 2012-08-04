@@ -358,3 +358,6 @@ double UncovWeight::weigh(const ExecutionState* es) const
 
 	return ret;
 }
+
+double StackWeight::weigh(const ExecutionState* es)
+{ return es->getStackDepth(); }

@@ -77,6 +77,7 @@ public:
 
 	virtual uint64_t getAddrPC(void) const;
 
+	virtual unsigned getStackDepth(void) const;
 };
 
 }

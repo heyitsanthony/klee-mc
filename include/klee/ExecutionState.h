@@ -182,6 +182,7 @@ public:
 
 	KInstIterator getCaller(void) const;
 	void dumpStack(std::ostream &os);
+	virtual unsigned getStackDepth(void) const;
 	void printConstraints(std::ostream& os) const;
 
 

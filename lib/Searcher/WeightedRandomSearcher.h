@@ -51,7 +51,7 @@ DECL_WEIGHT(FreshBranch, true)
 DECL_WEIGHT(StateInstCount, true)
 DECL_WEIGHT(CondSucc, true)
 DECL_WEIGHT(Uncov, true)
-
+DECL_WEIGHT(Stack, true)
 class Executor;
 
 class TroughWeight : public WeightFunc

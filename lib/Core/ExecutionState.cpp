@@ -819,3 +819,6 @@ void ExecutionState::printFileLine(void)
 
 	std::cerr << "     [no debug info]:";
 }
+
+unsigned ExecutionState::getStackDepth(void) const
+{ return stack.size(); }
