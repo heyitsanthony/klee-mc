@@ -389,7 +389,7 @@ protected:
 	void print(void)
 	{
 		getStackStats();
-		*os << s_min << ' ' << s_max << ' ' << s_avg;
+		*os << s_min << ' ' << s_max << ' ' << s_avg << ' ' << n;
 	}
 
 	void getStackStats(void)
@@ -398,7 +398,7 @@ protected:
 		s_max = 0;
 		s_total = 0;
 		n = 0;
-		foreach (it, exe.beginStates(), exe.endStates()) {
+		foreach (it, executor->beginStates(), executor->endStates()) {
 			const ExecutionState	*es;
 			unsigned		cur_depth;
 
@@ -413,7 +413,7 @@ protected:
 		s_avg = (n) ? s_total / n : 0;
 	}
 private:
-	unsigned	s_min, s_max, s_total, n, s_avg;
+	unsigned	s_min, s_max, s_total, s_avg, n;
 };
 
 cl::opt<unsigned>

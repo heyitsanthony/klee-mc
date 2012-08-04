@@ -71,6 +71,7 @@ DECL_SEARCH_OPT(FrontierTrough, "ftrough", "FTR");
 DECL_SEARCH_OPT(CondSucc, "cond", "CD");
 DECL_SEARCH_OPT(BranchIns, "brins", "BI");
 DECL_SEARCH_OPT(Uncov, "uncov", "UNC");
+DECL_SEARCH_OPT(Stack, "stack", "STK");
 
 #define SEARCH_HISTO	new RescanSearcher(new HistoPrioritizer(executor))
 DECL_SEARCH_OPT(Histo, "histo", "HS");
@@ -232,6 +233,8 @@ bool UserSearcher::userSearcherRequiresMD2U() {
 #define UNCOV_SEARCHER	\
 	new WeightedRandomSearcher(executor, new UncovWeight())
 
+#define STACK_SEARCHER	\
+	new WeightedRandomSearcher(executor, new StackWeight())
 
 /* Research quality */
 Searcher* UserSearcher::setupInterleavedSearcher(
@@ -254,7 +257,9 @@ Searcher* UserSearcher::setupInterleavedSearcher(
 		new RescanSearcher(
 			new Weight2Prioritizer<CondSuccWeight>(
 				new CondSuccWeight(&executor),
-				1.0)));
+			1.0)));
+
+	PUSH_ILEAV_IF_SET(Stack, STACK_SEARCHER);
 
 	PUSH_ILEAV_IF_SET(
 		NonUniformRandom,
@@ -381,6 +386,8 @@ Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 	} else if (UseBucketSearch) {
 		searcher = new PrioritySearcher(
 			new BucketPrioritizer(), DEFAULT_PR_SEARCHER);
+	} else if (UseStackSearch) {
+		searcher = STACK_SEARCHER;
 	} else if (UseCovSearcher) {
 		searcher = new PrioritySearcher(
 			new CovPrioritizer(

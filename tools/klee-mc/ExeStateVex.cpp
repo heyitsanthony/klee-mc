@@ -82,13 +82,15 @@ uint64_t ExeStateVex::getAddrPC(void) const
 
 unsigned ExeStateVex::getStackDepth(void) const
 {
+	const ObjectState	*reg_os;
 	unsigned	off;
 	uint64_t	cur_stack;
-	guestptr_t	stack_base;
+	guest_ptr	stack_base;
 
 	off = base_guest->getCPUState()->getStackRegOff();
 	stack_base = base_guest->getCPUState()->getStackPtr();
 
+	reg_os = getRegObjRO();
 	if (reg_os->isByteConcrete(off) == false) {
 		std::cerr << "[ExeStateVex] Symbolic stackptr?\n";
 		return 0;
@@ -99,7 +101,9 @@ unsigned ExeStateVex::getStackDepth(void) const
 		cur_stack |= ((uint64_t)reg_os->read8c(off+i)) << (i*8);
 
 	if (stack_base.o < cur_stack) {
-		std::cerr << "[ExeStateVex] base < curstack!?\n";
+	//	std::cerr << "[ExeStateVex] base="
+	//		<< (void*)stack_base.o <<  " < "
+	//		<< (void*)cur_stack << "=cur_stack\n";
 		return 0;
 	}
 
