@@ -186,6 +186,9 @@ static void sc_klee(void* regfile)
 	case KLEE_SYS_VALID_ADDR:
 		sc_ret_v(regfile, klee_is_valid_addr(GET_ARG1_PTR(regfile)));
 		break;
+	case KLEE_SYS_IS_SHADOWED:
+		sc_ret_v(regfile, klee_is_shadowed(GET_ARG1(regfile)));
+		break;
 	default:
 		klee_uerror("Unsupported SYS_klee syscall", "kleesc.err");
 		break;

@@ -55,7 +55,8 @@ private:
 	const shadow_tags_ty	&tags;
 	llvm::Constant		*f_load, *f_store;
 
-	bool runOnBasicBlock(llvm::BasicBlock& bi, uint64_t tag);
+	bool runOnBasicBlockLoads(llvm::BasicBlock& bi, uint64_t tag);
+	bool runOnBasicBlockStores(llvm::BasicBlock& bi, uint64_t tag);
 public:
 	ShadowPass(
 		Executor& _exe,
@@ -72,16 +73,43 @@ public:
 };
 char ShadowPass::ID;
 
+/* instrument all stores to taint data */
+bool ShadowPass::runOnBasicBlockStores(llvm::BasicBlock& bi, uint64_t tag)
+{
+	unsigned tainted_ins_c = 0;
+
+	foreach_manual(iit, bi.begin(), bi.end()) {
+		Instruction	*ii = iit;
+
+		++iit;
+		if (ii->getOpcode() != Instruction::Store)
+			continue;
+
+		CallInst *new_call;
+		std::vector<Value*>	args;
+
+		args.push_back(ii->getOperand(0));
+		args.push_back(ii->getOperand(1));
+		args.push_back(
+			ConstantInt::get(
+				IntegerType::get(getGlobalContext(), 64),
+				tag));
+		new_call = CallInst::Create(f_store, args);
+		ReplaceInstWithInst(ii, new_call);
+		tainted_ins_c++;
+	}
+
+	return (tainted_ins_c != 0);
+}
+
 /* instrument all loads to taint data */
-bool ShadowPass::runOnBasicBlock(
-	llvm::BasicBlock& bi,
-	uint64_t tag)
+bool ShadowPass::runOnBasicBlockLoads(llvm::BasicBlock& bi, uint64_t tag)
 {
 	Instruction	*last_load = NULL;
 	unsigned	tainted_ins_c = 0;
 
 	foreach_manual (iit, bi.begin(), bi.end()) {
-		Instruction		*ii = iit;
+		Instruction	*ii = iit;
 
 		++iit;
 
@@ -97,20 +125,6 @@ bool ShadowPass::runOnBasicBlock(
 			new_call = CallInst::Create(f_load, args, "", ii);
 			last_load = NULL;
 			tainted_ins_c++;
-		} else if (ii->getOpcode() == Instruction::Store) {
-			/* overwrite store */
-			CallInst *new_call;
-			std::vector<Value*>	args;
-
-			args.push_back(ii->getOperand(0));
-			args.push_back(ii->getOperand(1));
-			args.push_back(
-				ConstantInt::get(
-					IntegerType::get(getGlobalContext(), 64),
-					tag));
-			new_call = CallInst::Create(f_store, args);
-			ReplaceInstWithInst(ii, new_call);
-			tainted_ins_c++;
 		}
 
 		if (ii->getOpcode() == Instruction::Load)
@@ -119,6 +133,8 @@ bool ShadowPass::runOnBasicBlock(
 
 	return (tainted_ins_c != 0);
 }
+
+
 bool ShadowPass::runOnFunction(llvm::Function& f)
 {
 	std::string			f_name_raw(exe.getPrettyName(&f));
@@ -135,7 +151,9 @@ bool ShadowPass::runOnFunction(llvm::Function& f)
 		return false;
 
 	foreach (bit, f.begin(), f.end()) {
-		if (runOnBasicBlock(*bit, it->second))
+		if (runOnBasicBlockStores(*bit, it->second))
+			was_changed = true;
+		if (runOnBasicBlockLoads(*bit, it->second))
 			was_changed = true;
 	}
 
@@ -286,6 +304,7 @@ SFH_DEF_HANDLER(TaintStore)
 
 	sa = static_cast<ShadowAlloc*>(Expr::getAllocator());
 	sa->startShadow(shadow_tag);
+
 	value = value->realloc();
 
 	MMU::MemOp	mop(true, base, value, 0);

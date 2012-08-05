@@ -23,12 +23,14 @@
 #define KLEE_SYS_SILENT_EXIT	6	/* klee_silent_exit */
 #define KLEE_SYS_SYM_RANGE_BYTES	7 /* klee_sym_range_bytes */
 #define KLEE_SYS_VALID_ADDR	8	/* klee_is_valid_addr */
+#define KLEE_SYS_IS_SHADOWED	9	/* klee_is_shadowed */
 
 #define ksys_report_error(x,y,z,w)	\
 	syscall(SYS_klee, KLEE_SYS_REPORT_ERROR, x, y, z, w)
 #define ksys_error(x,y)		ksys_report_error(__FILE__, __LINE__, x, y)
 
 #define ksys_sym(x,y) ksys_kmc_symrange(x, y, "")
+#define ksys_is_shadowed(x)	syscall(SYS_klee, KLEE_SYS_IS_SHADOWED, x)
 #define ksys_kmc_symrange(x,y,z)	\
 	syscall(SYS_klee, KLEE_SYS_KMC_SYMRANGE, x, y, z)
 #define ksys_assume(x)		syscall(SYS_klee, KLEE_SYS_ASSUME, x)
