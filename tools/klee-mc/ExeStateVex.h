@@ -41,7 +41,8 @@ protected:
 
 	ExeStateVex(const ExeStateVex& src);
 
-	static Guest* base_guest;
+	static Guest*	base_guest;
+	static uint64_t base_stack;
 public:
 	virtual ExecutionState* copy(void) const { return copy(this); }
 	virtual ExecutionState* copy(const ExecutionState* es) const
@@ -70,6 +71,7 @@ public:
 	void incSyscallCount(void) { syscall_c++; }
 	unsigned int getSyscallCount(void) const { return syscall_c; }
 	static void setBaseGuest(Guest* gs) { base_guest = gs; }
+	static void setBaseStack(uint64_t p) { base_stack = p; }
 
 	virtual void getGDBRegs(
 		std::vector<uint8_t>& v,

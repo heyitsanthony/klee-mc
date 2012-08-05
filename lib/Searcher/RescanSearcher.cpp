@@ -34,7 +34,6 @@ ExecutionState& RescanSearcher::selectState(bool allowCompact)
 
 	es = matches[theRNG.getInt32() % matches.size()];
 
-	std::cerr << "[RS] BEST PRIORITY: " << max_pr << '\n';
 	return *es;
 }
 

@@ -107,6 +107,7 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 
 	ExeStateBuilder::replaceBuilder(new ExeStateVexBuilder());
 	ExeStateVex::setBaseGuest(gs);
+	ExeStateVex::setBaseStack(gs->getCPUState()->getStackPtr().o);
 
 	if (gs->getMem()->is32Bit()) {
 		MemoryManager::set32Bit();

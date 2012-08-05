@@ -6,6 +6,7 @@
 using namespace klee;
 
 Guest* ExeStateVex::base_guest = NULL;
+uint64_t ExeStateVex::base_stack = 0;
 
 void ExeStateVex::recordRegisters(const void* reg, int sz)
 {
@@ -85,10 +86,8 @@ unsigned ExeStateVex::getStackDepth(void) const
 	const ObjectState	*reg_os;
 	unsigned	off;
 	uint64_t	cur_stack;
-	guest_ptr	stack_base;
 
 	off = base_guest->getCPUState()->getStackRegOff();
-	stack_base = base_guest->getCPUState()->getStackPtr();
 
 	reg_os = getRegObjRO();
 	if (reg_os->isByteConcrete(off) == false) {
@@ -100,12 +99,12 @@ unsigned ExeStateVex::getStackDepth(void) const
 	for (unsigned i = 0; i < 8; i++)
 		cur_stack |= ((uint64_t)reg_os->read8c(off+i)) << (i*8);
 
-	if (stack_base.o < cur_stack) {
+	if (base_stack < cur_stack) {
 	//	std::cerr << "[ExeStateVex] base="
-	//		<< (void*)stack_base.o <<  " < "
+	//		<< (void*)base_stack.o <<  " < "
 	//		<< (void*)cur_stack << "=cur_stack\n";
 		return 0;
 	}
 
-	return stack_base.o - cur_stack;
+	return base_stack - cur_stack;
 }

@@ -233,8 +233,13 @@ bool UserSearcher::userSearcherRequiresMD2U() {
 #define UNCOV_SEARCHER	\
 	new WeightedRandomSearcher(executor, new UncovWeight())
 
+
+//	new WeightedRandomSearcher(executor, new StackWeight())
 #define STACK_SEARCHER	\
-	new WeightedRandomSearcher(executor, new StackWeight())
+	new RescanSearcher(	\
+		new Weight2Prioritizer<StackWeight>(	\
+				new StackWeight(), 1.0))
+
 
 /* Research quality */
 Searcher* UserSearcher::setupInterleavedSearcher(
