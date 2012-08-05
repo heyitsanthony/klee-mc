@@ -86,6 +86,8 @@ SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   add("malloc", Malloc, true),
   add("realloc", Realloc, true),
 
+  add("klee_indirect", Indirect, true),
+  add("klee_is_shadowed", IsShadowed, true),
   // operator delete[](void*)
   add("_ZdaPv", DeleteArray, false),
   // operator delete(void*)
@@ -904,3 +906,13 @@ SFH_DEF_HANDLER(ForceNE)
 }
 
 SFH_DEF_HANDLER(Yield) { sfh->executor->yield(state); }
+
+SFH_DEF_HANDLER(IsShadowed)
+{
+	state.bindLocal(
+		target,
+		MK_CONST(arguments[0]->isShadowed(), Expr::Int32));
+}
+
+/* indirect call-- first parameter is function name */
+SFH_DEF_HANDLER(Indirect) { assert (0 == 1 && "STUB STUB STUB STUB"); }

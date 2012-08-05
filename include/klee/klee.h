@@ -54,6 +54,7 @@ extern "C" {
      calls. */
   void klee_define_fixed_object(void *addr, size_t nbytes);
 
+  int klee_is_shadowed(uint64_t v);
   /// klee_make_symbolic - Make the contents of the object pointer to by \arg
   /// addr symbolic.
   ///

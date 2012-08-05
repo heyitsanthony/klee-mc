@@ -168,6 +168,8 @@ public:
     SFH_HANDLER(Warning)
     SFH_HANDLER(WarningOnce)
     SFH_HANDLER(Yield)
+    SFH_HANDLER(IsShadowed)
+    SFH_HANDLER(Indirect)
 } // End klee namespace
 
 #endif
