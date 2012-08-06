@@ -1,5 +1,5 @@
 // RUN: %llvmgcc %s -emit-llvm -O0 -c -o %t1.bc
-// RUN: %klee %t1.bc
+// RUN: %klee %t1.bc 2>%t1.err
 // RUN: ls klee-last/ | grep .err | wc -l | grep 2
 // RUN: ls klee-last/ | grep .ptr.err | wc -l | grep 2
 
@@ -32,7 +32,7 @@ int main() {
   buf[0][1] = 42;
   buf[1][0] = 20;
 
-  int i = klee_urange(0,4);
+  int i = klee_urange(0,4); /* [0,3] */
   int new_size = 2 * sizeof(int) * klee_urange(0,2); // 0 or 8
 
   // whee, party time, needs to:
@@ -49,15 +49,16 @@ int main() {
     if (i==0) assert(!buf[0] && buf[1]);
     if (i==1) assert(buf[0] && !buf[1]);
     assert(i != 3); // we should have crashed on free of invalid
-  } else {
-    assert(new_size == sizeof(int)*2);
-    assert(buf[0][0] == 10);
-    assert(buf[0][1] == 42); // make sure copied
-    assert(buf[1][0] == 20);
-    if (i==1) { int x = buf[1][1]; } // should be safe
-    if (i==2) { int x = buf[2][0]; } // should be safe
-    assert(i != 3); // we should have crashed on realloc of invalid
+    return 0;
   }
+
+  assert(new_size == sizeof(int)*2);
+  assert(buf[0][0] == 10);
+  assert(buf[0][1] == 42); // make sure copied
+  assert(buf[1][0] == 20);
+  if (i==1) { int x = buf[1][1]; } // should be safe
+  if (i==2) { int x = buf[2][0]; } // should be safe
+  assert(i != 3); // we should have crashed on realloc of invalid
 
   return 0;
 }

@@ -634,6 +634,9 @@ KFunction* KModule::getKFunction(const char* fname) const
 	return getKFunction(f);
 }
 
+
+namespace klee { extern Module* getBitcodeModule(const char* s); }
+
 void KModule::loadIntrinsicsLib()
 {
 	// Force importing functions required by intrinsic lowering. Kind of
@@ -663,13 +666,28 @@ void KModule::loadIntrinsicsLib()
 
 	// FIXME: Missing force import for various math functions.
 
-	// FIXME: Find a way that we can test programs without requiring
-	// this to be linked in, it makes low level debugging much more
-	// annoying.
 	llvm::sys::Path path(getLibraryDir());
 
-	path.appendComponent("libkleeRuntimeIntrinsic.bca");
-	module = linkWithLibrary(module, path.c_str());
+	path.appendComponent("libkleeRuntimeIntrinsic.bc");
+	Module	*m = klee::getBitcodeModule(path.str().c_str());
+	std::string err;
+
+	assert (m != NULL);
+	foreach(it, m->begin(), m->end()) {
+		Function	*f;
+		f = module->getFunction(it->getName().str());
+		if (f == NULL)
+			continue;
+		f->deleteBody();
+	}
+
+	Linker::LinkModules(module, m, Linker::DestroySource, &err);
+	if (!err.empty()) {
+		std::cerr << "err: " << err << '\n';
+		exit(1);
+	}
+////	path.appendComponent("libkleeRuntimeIntrinsic.bca");
+//	module = linkWithLibrary(module, path.c_str());
 }
 
 void KModule::bindModuleConstants(Executor* exe)

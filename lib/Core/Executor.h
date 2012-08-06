@@ -436,7 +436,8 @@ public:
 		ExecutionState &state,
 		const llvm::Twine &message,
 		const char *suffix,
-		const llvm::Twine &longMessage="");
+		const llvm::Twine &longMessage="",
+		bool alwaysEmit = false);
 
 	// XXX should just be moved out to utility module
 	ref<klee::ConstantExpr> evalConstant(llvm::Constant *c)
@@ -466,52 +467,21 @@ public:
 		ref<Expr> size,
 		bool isLocal,
 		KInstruction *target,
-		bool zeroMemory,
-		ObjectPair reallocFrom);
-
-	void executeAlloc(
-		ExecutionState &state,
-		ref<Expr> size,
-		bool isLocal,
-		KInstruction *target,
-		bool zeroMemory=false)
-	{ executeAlloc(
-		state, size, isLocal, target, zeroMemory, ObjectPair(0,0)); }
+		bool zeroMemory = false);
 
 	void executeAllocSymbolic(
 		ExecutionState &state,
 		ref<Expr> size,
 		bool isLocal,
 		KInstruction *target,
-		bool zeroMemory,
-		ObjectPair reallocFrom);
-
-	void executeAllocSymbolic(
-		ExecutionState &state,
-		ref<Expr> size,
-		bool isLocal,
-		KInstruction *target,
-		bool zeroMemory)
-	{ executeAllocSymbolic(
-		state, size, isLocal, target, zeroMemory, ObjectPair(0,0)); }
+		bool zeroMemory);
 
 	void executeAllocConst(
 		ExecutionState &state,
 		uint64_t sz,
 		bool isLocal,
 		KInstruction *target,
-		bool zeroMemory,
-		ObjectPair reallocFrom);
-
-	void executeAllocConst(
-		ExecutionState &state,
-		uint64_t size,
-		bool isLocal,
-		KInstruction *target,
-		bool zeroMemory)
-	{ executeAllocConst(
-		state, size, isLocal, target, zeroMemory, ObjectPair(0,0)); }
-
+		bool zeroMemory);
 
 	/// Free the given address with checking for errors. If target is
 	/// given it will be bound to 0 in the resulting states (this is a

@@ -138,9 +138,7 @@ llvm::Function* ExternalDispatcher::findDispatcher(
 }
 
 bool ExternalDispatcher::executeCall(Function *f, Instruction *i, uint64_t *args)
-{
-	return runProtectedCall(findDispatcher(f, i), args);
-}
+{ return runProtectedCall(findDispatcher(f, i), args); }
 
 // FIXME: This is not reentrant.
 static uint64_t *gTheArgsP;

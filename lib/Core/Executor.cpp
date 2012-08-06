@@ -2261,12 +2261,13 @@ void Executor::terminateStateOnError(
 	ExecutionState &state,
 	const llvm::Twine &messaget,
 	const char *suffix,
-	const llvm::Twine &info)
+	const llvm::Twine &info,
+	bool alwaysEmit)
 {
 	std::string message = messaget.str();
 	static std::set< std::pair<Instruction*, std::string> > emittedErrors;
 
-	if (!EmitAllErrors) {
+	if (!alwaysEmit && !EmitAllErrors) {
 		bool	new_err;
 		new_err = emittedErrors.insert(
 			std::make_pair(
@@ -2546,8 +2547,7 @@ void Executor::executeAllocConst(
 	uint64_t sz,
 	bool isLocal,
 	KInstruction *target,
-	bool zeroMemory,
-	ObjectPair reallocFrom)
+	bool zeroMemory)
 {
 	ObjectPair	op;
 	ObjectState	*os;
@@ -2559,10 +2559,10 @@ void Executor::executeAllocConst(
 	}
 
 	os = NULL;
-	if (op_os(op)->isZeroPage() == false || op_mo(reallocFrom))
+	if (op_os(op)->isZeroPage() == false)
 		os = state.addressSpace.getWriteable(op);
 
-	if (os) {
+	if (os != NULL) {
 		if (zeroMemory)
 			os->initializeToZero();
 		else
@@ -2570,13 +2570,6 @@ void Executor::executeAllocConst(
 	}
 
 	state.bindLocal(target, op_mo(op)->getBaseExpr());
-
-	if (op_mo(reallocFrom)) {
-		unsigned count = std::min(op_mo(reallocFrom)->size, os->size);
-
-		state.copy(os, op_os(reallocFrom), count);
-		state.unbindObject(op_mo(reallocFrom));
-	}
 }
 
 klee::ref<klee::ConstantExpr> Executor::getSmallSymAllocSize(
@@ -2613,8 +2606,7 @@ void Executor::executeAllocSymbolic(
 	ref<Expr> size,
 	bool isLocal,
 	KInstruction *target,
-	bool zeroMemory,
-	ObjectPair reallocFrom)
+	bool zeroMemory)
 {
 	// XXX For now we just pick a size. Ideally we would support
 	// symbolic sizes fully but even if we don't it would be better to
@@ -2649,7 +2641,7 @@ void Executor::executeAllocSymbolic(
 				*ne_state,
 				tmp,
 				isLocal,
-				target, zeroMemory, reallocFrom);
+				target, zeroMemory);
 		} else {
 		// See if a *really* big value is possible. If so assume
 		// malloc will fail for it, so lets fork and return 0.
@@ -2684,7 +2676,7 @@ void Executor::executeAllocSymbolic(
 			*fixedSize.first,
 			example,
 			isLocal,
-			target, zeroMemory, reallocFrom);
+			target, zeroMemory);
 	}
 }
 
@@ -2693,17 +2685,15 @@ void Executor::executeAlloc(
 	ref<Expr> size,
 	bool isLocal,
 	KInstruction *target,
-	bool zeroMemory,
-	ObjectPair reallocFrom)
+	bool zeroMemory)
 {
 	size = toUnique(state, size);
 	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(size)) {
 		executeAllocConst(
 			state, CE->getZExtValue(),
-			isLocal, target, zeroMemory, reallocFrom);
+			isLocal, target, zeroMemory);
 	} else {
-		executeAllocSymbolic(
-			state, size, isLocal, target, zeroMemory, reallocFrom);
+		executeAllocSymbolic(state, size, isLocal, target, zeroMemory);
 	}
 }
 

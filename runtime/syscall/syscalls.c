@@ -220,7 +220,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 	if (klee_is_symbolic(sc.pure_sys_nr)) {
 		klee_warning_once("Resolving symbolic syscall nr");
-		sc.pure_sys_nr = concretize_u64(sc.pure_sys_nr);
+		sc.pure_sys_nr = klee_fork_all(sc.pure_sys_nr);
 	}
 
 	sc.sys_nr = sc.pure_sys_nr;

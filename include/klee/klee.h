@@ -82,12 +82,10 @@ extern "C" {
 
   /// klee_silent_exit - Terminate the current KLEE process without generating a
   /// test file.
-  __attribute__((noreturn))
-  void klee_silent_exit(int status);
+  __attribute__((noreturn)) void klee_silent_exit(int status);
 
   /// klee_abort - Abort the current KLEE process.
-  __attribute__((noreturn))
-  void klee_abort(void);
+  __attribute__((noreturn)) void klee_abort(void);
 
   /// klee_report_error - Report a user defined error and terminate the current
   /// KLEE process.
@@ -102,9 +100,6 @@ extern "C" {
 			 int line,
 			 const char *message,
 			 const char *suffix);
-
-  /* called by checking code to get size of memory. */
-  unsigned klee_get_obj_size(void *ptr);
 
   /* print the tree associated w/ a given expression. */
   void klee_print_expr(const char *msg, ...);
@@ -121,7 +116,8 @@ extern "C" {
 # define klee_assert(expr)                                              \
   ((expr)                                                               \
    ? (void) (0)                                                         \
-   : __assert_fail (#expr, __FILE__, __LINE__, __PRETTY_FUNCTION__))    \
+   : klee_assert_fail ((void*)#expr, (void*)__FILE__, __LINE__, (void*)__PRETTY_FUNCTION__))
+  __attribute__((noreturn)) void klee_assert_fail(void* a, void* b, unsigned c, void* d);
 
   /* Return true if the given value is symbolic (represented by an
    * expression) in the current state. This is primarily for debugging
@@ -162,6 +158,11 @@ extern "C" {
      constants and that the range lie within a single object. */
   void klee_check_memory_access(const void *address, size_t size);
 
+#define klee_fork_all(x)	__klee_fork_all((uint64_t)x)
+  uint64_t __klee_fork_all(uint64_t v);
+#define klee_fork_eq(x,y)	__klee_fork_eq((uint64_t)x, (uint64_t)y)
+  int __klee_fork_eq(uint64_t v, uint64_t v2);
+
   /* Enable/disable forking. */
   void klee_set_forking(unsigned enable);
 
@@ -170,6 +171,14 @@ extern "C" {
   void klee_force_ne(uint64_t expr_lhs, uint64_t expr_rhs);
 
   void klee_yield(void);
+
+  /* get a concrete object base from possibly symbolic pointer (forks) */
+  void* klee_get_obj(void* p);
+
+  /* get concrete object from concrete pointer */
+  unsigned klee_get_obj_size(void *ptr);
+  void* klee_get_obj_next(void* p);
+  void* klee_get_obj_prev(void* p);
 #ifdef __cplusplus
 }
 #endif

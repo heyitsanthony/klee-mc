@@ -59,50 +59,7 @@ Module *klee::linkWithLibrary(
 	const std::string &libraryName)
 {
 	llvm::sys::Path		libraryPath(libraryName);
-	Linker			linker("klee", module, 0 /* Linker::Verbose */);
-
-#if 0
-	Archive			*libArchive;
-	std::set<Module*>	modulesToLoad;
-	std::string		errMsg;
-
-	// Load symbol table for library archive
-	libArchive = Archive::OpenAndLoad(
-		libraryPath, module->getContext(), &errMsg);
-	if (libArchive == NULL) {
-		klee_error(
-			"failed to load library archive %s: %s",
-			libraryPath.c_str(), errMsg.c_str());
-	}
-
-	const llvm::Archive::SymTabType& symbols = libArchive->getSymbolTable();
-	std::set<std::string>		syms;
-	SmallVector<Module*, 4>		mods;
-
-	foreach (si, symbols.begin(), symbols.end())
-		syms.insert(si->first);
-
-	if (libArchive->findModulesDefiningSymbols(syms, mods, &errMsg) == false)
-		klee_error("failed to load modules: %s", errMsg.c_str());
-
-	// Run passes on relevant modules and then link against them
-	foreach (mi, mods.begin(), mods.end()) {
-		Module	*m = *mi;
-		runRemoveSentinelsPass(*m);
-		if (linker.LinkInModule(m, &errMsg)) {
-			klee_error(
-				"failed to link with module %s->%s: %s",
-				libraryName.c_str(),
-				m->getModuleIdentifier().c_str(),
-				errMsg.c_str());
-		}
-	}
-
-	modulesToLoad.clear();
-
-	/* frees modules from modulesToLoad */
-	delete libArchive;
-#endif
+	Linker			linker("klee", module, 0/*Linker::Verbose */);
 
 	// Now link against an unmodified version of the library archive for
 	// the common case when no sentinels are found.

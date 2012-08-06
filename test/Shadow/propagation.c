@@ -9,10 +9,19 @@
 typedef int(*strcmp_f)(const char*, const char*);
 
 
+void test_shadowed_buf(char* buf, int len)
+{
+	unsigned	i;
+	for (i = 0; i < len; i++)
+		if (!ksys_is_shadowed(buf[i]))
+			ksys_error("buf not shadowed", "noshadow.err");
+}
+
 int main(int argc, char *argv[])
 {
 	int		v;
 	char		buf[17];
+	unsigned	i;
 	strcmp_f	f;
 
 	if (read(0, buf, 16) != 16)
@@ -25,9 +34,23 @@ int main(int argc, char *argv[])
 	f = strcmp;
 	v = f("abcdef", buf);
 
-	if (!ksys_is_shadowed(v)) {
-		ksys_error("strcmp was not shadowed", "noshadow.err");
-		return 1;
-	}
+	v++;
+	if (!ksys_is_shadowed(v))
+		ksys_error("inc was not shadowed", "noshadow.err");
+
+	buf[0] = v*v;
+	if (!ksys_is_shadowed(buf[0]))
+		ksys_error("buf[0] not shadowed", "noshadow.err");
+
+	for (i = 0; i < 16; i++)
+		buf[i] = v;
+
+	test_shadowed_buf(buf, 16);
+
+	v = 0;
+	if (ksys_is_shadowed(v))
+		ksys_error("overwritten was shadowed", "shadow.err");
+
+
 	return 0;
 }

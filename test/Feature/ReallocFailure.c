@@ -1,5 +1,5 @@
 // RUN: %llvmgcc %s -emit-llvm -O0 -c -o %t1.bc
-// RUN: %klee --exit-on-error %t1.bc
+// RUN: %klee --exit-on-error %t1.bc 2>%t1.err
 
 #include <assert.h>
 #include <stdlib.h>

@@ -2,7 +2,8 @@
 // RUN: rm -rf tmp-123
 // RUN: %klee --libc=uclibc --output-dir=tmp-123 --posix-runtime --init-env %t.bc --sym-arg 1 --sym-files 1 10  2>%t.log
 // RUN: %klee --seed-out-dir=tmp-123 --zero-seed-extension --libc=uclibc --posix-runtime --init-env %t.bc --sym-arg 1 --sym-files 1 10 --max-fail 1
-// RUN: ls klee-last/ | grep -c assert | grep -x 4
+// RUN: ls klee-last/ | grep -c assert | grep -x 7
+// RUN: ls klee-last/ | grep -c ktest | grep -x 8
 
 #include <stdio.h>
 #include <assert.h>

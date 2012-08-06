@@ -75,7 +75,14 @@ mc: mc-std mc-fdt
 
 mc-std: mc-std-amd64 mc-std-arm mc-std-x86
 
-all:: $(LibDir)/libkleeRuntimeMMU.bc
+all:: $(LibDir)/libkleeRuntimeMMU.bc $(LibDir)/libkleeRuntimeIntrinsic.bc
+
+$(LibDir)/libkleeRuntimeIntrinsic.bc: $(LibDir)/libkleeRuntimeIntrinsic.bca
+	mkdir -p intrin_tmp-$@
+	cd intrin_tmp-$@ && ar x $^ && cd ..
+	llvm-link -f -o `echo $^ | sed "s/\.bca/\.bc/"` intrin_tmp-$@/*.bc
+	rm -rf intrin_tmp-$@
+
 
 $(LibDir)/libkleeRuntimeMMU.bc: $(LibDir)/libkleeRuntimeMMU.bca
 	mkdir -p mmu_tmp-$@
