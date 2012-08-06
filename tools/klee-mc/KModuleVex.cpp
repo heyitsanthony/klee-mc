@@ -12,6 +12,7 @@
 #include "vexxlate.h"
 #include "vexfcache.h"
 
+#include "RemovePCPass.h"
 #include <stdio.h>
 
 using namespace llvm;
@@ -39,6 +40,8 @@ namespace
 		cl::desc("Statically scan new blocks."),
 		cl::init(false));
 }
+
+char RemovePCPass::ID;
 
 KModuleVex::KModuleVex(
 	Executor* _exe,
@@ -289,3 +292,9 @@ void KModuleVex::scanFuncExits(uint64_t guest_addr, Function* f)
 	writeCodeGraph(g);
 }
 
+
+void KModuleVex::prepare(InterpreterHandler *ihandler)
+{
+	KModule::prepare(ihandler);
+	addFunctionPass(new RemovePCPass());
+}

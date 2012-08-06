@@ -93,7 +93,7 @@ public:
     /// Initialize local data structures.
     //
     // FIXME: ihandler should not be here
-    void prepare(InterpreterHandler *ihandler);
+    virtual void prepare(InterpreterHandler *ihandler);
     // link mod with object's module
     void addModule(llvm::Module* mod);
 

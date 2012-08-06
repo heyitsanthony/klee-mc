@@ -34,6 +34,8 @@ public:
 	const VexSB* getVSB(llvm::Function* f) const;
 
 	VexXlate* getXlate(void) const { return xlate; }
+
+	virtual void prepare(InterpreterHandler *ihandler);
 private:
 	void scanFuncExits(uint64_t guest_addr, llvm::Function* f);
 	void writeCodeGraph(GenericGraph<guest_ptr>& g);
