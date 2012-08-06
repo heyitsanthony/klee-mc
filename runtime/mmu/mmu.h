@@ -16,6 +16,7 @@
 DEF_MMU(uniqptr)
 DEF_MMU(null)
 DEF_MMU(fork)
+DEF_MMU(forkall)
 DEF_MMU(objwide)
 
 #endif

@@ -92,7 +92,7 @@ unsigned ExeStateVex::getStackDepth(void) const
 	reg_os = getRegObjRO();
 	if (reg_os->isByteConcrete(off) == false) {
 		std::cerr << "[ExeStateVex] Symbolic stackptr?\n";
-		return 0;
+		return 9999999;
 	}
 
 	cur_stack = 0;
