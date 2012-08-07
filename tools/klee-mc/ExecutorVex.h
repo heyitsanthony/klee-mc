@@ -54,7 +54,8 @@ public:
 	void setRegCtx(ExecutionState& state, MemoryObject* mo);
 	void dumpSCRegs(const std::string& fname);
 
-	virtual void printStackTrace(ExecutionState& st, std::ostream& o) const;
+	virtual void printStackTrace(
+		const ExecutionState& st, std::ostream& o) const;
 	virtual std::string getPrettyName(llvm::Function* f) const;
 protected:
 	virtual ExecutionState* setupInitialState(void);

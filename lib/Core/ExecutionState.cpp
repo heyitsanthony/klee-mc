@@ -307,13 +307,13 @@ void ExecutionState::copy(
 	}
 }
 
-void ExecutionState::dumpStack(std::ostream& os)
+void ExecutionState::dumpStack(std::ostream& os) const
 {
   unsigned idx = 0;
   const KInstruction *target = prevPC;
   foreach (it, stack.rbegin(), stack.rend())
   {
-    StackFrame &sf = *it;
+    const StackFrame &sf(*it);
     Function *f = sf.kf->function;
     const InstructionInfo &ii = *target->getInfo();
     os << "\t#" << idx++

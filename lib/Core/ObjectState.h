@@ -103,7 +103,9 @@ public:
 
 	ref<Expr> read(ref<Expr> offset, Expr::Width width) const;
 	ref<Expr> read(unsigned offset, Expr::Width width) const;
-	ref<Expr> read8(unsigned offset) const;
+
+	virtual ref<Expr> read8(unsigned offset) const;
+
 	uint8_t	read8c(unsigned off) const;
 	void write8(unsigned offset, uint8_t value);
 
@@ -144,7 +146,7 @@ protected:
 	void makeConcrete();
 	void makeSymbolic();
 
-	ref<Expr> read8(ref<Expr> offset) const;
+	virtual ref<Expr> read8(ref<Expr> offset) const;
 	ref<Expr> readSlow(ref<Expr>& offset, Expr::Width width) const;
 	virtual void write8(unsigned offset, ref<Expr>& value);
 	void write8(ref<Expr> offset, ref<Expr>& value);

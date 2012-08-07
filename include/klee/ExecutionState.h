@@ -181,7 +181,7 @@ public:
 	void removeFnAlias(std::string fn);
 
 	KInstIterator getCaller(void) const;
-	void dumpStack(std::ostream &os);
+	void dumpStack(std::ostream &os) const;
 	virtual unsigned getStackDepth(void) const;
 	void printConstraints(std::ostream& os) const;
 

@@ -2317,7 +2317,7 @@ void Executor::printStateErrorMessage(
 	printStackTrace(state, os);
 }
 
-void Executor::printStackTrace(ExecutionState& st, std::ostream& os) const
+void Executor::printStackTrace(const ExecutionState& st, std::ostream& os) const
 { st.dumpStack(os); }
 
 void Executor::resolveExact(

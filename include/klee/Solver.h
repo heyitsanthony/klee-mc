@@ -124,6 +124,8 @@ struct sockaddr_in_opt
     ///
     /// \return True on success.
     bool getValue(const Query&, ref<ConstantExpr> &result);
+    bool getValueDirect(const Query&, ref<ConstantExpr> &result);
+    bool getValueRandomized(const Query& query, ref<ConstantExpr>& result);
 
     /// getInitialValues - Compute the initial values for a list of objects.
     ///

@@ -5,7 +5,9 @@
 
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/CommandLine.h"
+#include <llvm/Support/raw_os_ostream.h>
 
+#include "guestcpustate.h"
 #include "klee/Common.h"
 #include "klee/Internal/ADT/KTest.h"
 #include "klee/Internal/System/Time.h"
@@ -15,6 +17,7 @@
 #include "static/Sugar.h"
 #include "cmdargs.h"
 
+#include "klee/Internal/Module/KFunction.h"
 #include "ExecutorVex.h"
 #include "ExeStateVex.h"
 #include "KleeHandler.h"
@@ -306,6 +309,34 @@ bool KleeHandler::getStateSymObjs(
 	klee_warning("unable to write " #x " file, losing it (errno=%d: %s)", \
 		errno, strerror(errno))
 
+
+void KleeHandler::printErrDump(
+	const ExecutionState& state,
+	std::ostream& os) const
+{
+	const Function* top_f;
+	os << "Stack:\n";
+	m_interpreter->printStackTrace(state, os);
+
+	os << "\nRegisters:\n";
+	gs->getCPUState()->print(os);
+
+	top_f = state.stack.back().kf->function;
+	os << "Func: ";
+	if (top_f != NULL) {
+		raw_os_ostream ros(os);
+		ros << top_f;
+	} else
+		os << "???";
+	os << "\n";
+
+	os << "Objects:\n";
+	state.addressSpace.printObjects(os);
+
+	os << "Constraints: \n";
+	state.constraints.print(os);
+}
+
 /* Outputs all files (.ktest, .pc, .cov etc.) describing a test case */
 void KleeHandler::processTestCase(
 	const ExecutionState &state,
@@ -337,6 +368,12 @@ void KleeHandler::processTestCase(
 			delete f;
 		} else
 			LOSING_IT("error");
+
+		if (std::ostream* f= openTestFileGZ("errdump", id)) {
+			printErrDump(state, *f);
+			delete f;
+		} else
+			LOSING_IT("errdump");
 	}
 
 	if (WritePaths) {

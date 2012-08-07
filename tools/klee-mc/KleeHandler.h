@@ -73,6 +73,10 @@ typedef
 	virtual bool getStateSymObjs(
 		const ExecutionState& state, out_objs& out);
 
+	void printErrDump(
+		const ExecutionState& state,
+		std::ostream& os) const;
+
 	ExecutorVex	*m_interpreter;
 private:
 

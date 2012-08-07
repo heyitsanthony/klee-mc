@@ -19,7 +19,10 @@ public:
 	static ShadowRef getExprDynCast(const ref<Expr>& e);
 	static ShadowRef getExpr(const ref<Expr>& e);
 
-	EXPR_BUILDER_DECL_ALL	
+	static ShadowAlloc* get(void)
+	{ return static_cast<ShadowAlloc*>(Expr::getAllocator()); }
+
+	EXPR_BUILDER_DECL_ALL
 
 private:
 	bool		is_shadowing;

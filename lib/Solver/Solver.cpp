@@ -12,7 +12,7 @@
 #include "klee/Solver.h"
 #include "SolverImpl.h"
 #include "klee/SolverStats.h"
-
+#include "klee/Constraints.h"
 #include "klee/Expr.h"
 #include "klee/Internal/Support/Timer.h"
 #include "klee/util/Assignment.h"
@@ -380,6 +380,7 @@ bool Solver::failed(void) const
 	return failure;
 }
 
+
 ref<Expr> SolverImpl::computeValue(const Query& query)
 {
 	bool		hasSolution;
@@ -484,7 +485,62 @@ bool Solver::mayBeTrue(const Query& query, bool &result)
 	return (failed() == false);
 }
 
+bool Solver::getValueRandomized(const Query& query, ref<ConstantExpr>& result)
+{
+	ConstraintManager	cs(query.constraints);
+	ref<Expr>		ret;
+
+	if (query.expr->getKind() == Expr::Constant) {
+		result = dyn_cast<ConstantExpr>(query.expr);
+		return true;
+	}
+
+	do {
+		Query	cur_query(cs, query.expr);
+		int	expr_sel = rand() % 4;
+		bool	mbt;
+
+		if (getValueDirect(query, result) == false)
+			return false;
+
+		switch (expr_sel) {
+		/* == */
+		case 0: return true;
+		/* > */
+		case 1:
+			cs.addConstraint(MK_UGT(query.expr, result));
+			break;
+		/* < */
+		case 2:
+			cs.addConstraint(MK_ULT(query.expr, result));
+			break;
+		/* != */
+		case 3:
+			cs.addConstraint(MK_NE(query.expr, result));
+			break;
+		default:
+			assert(0 == 1 && "WTF");
+			break;
+		}
+
+		if (!mayBeTrue(cur_query.withExpr(MK_CONST(1,1)), mbt))
+			break;
+
+		if (mbt == false) {
+			cs = query.constraints;
+			continue;
+		}
+	} while (1);
+
+	return true;
+}
+
+
+
 bool Solver::getValue(const Query& query, ref<ConstantExpr> &result)
+{ return getValueRandomized(query, result); }
+
+bool Solver::getValueDirect(const Query& query, ref<ConstantExpr> &result)
 {
 	// Maintain invariants implementation expect.
 	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(query.expr)) {

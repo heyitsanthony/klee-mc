@@ -775,14 +775,16 @@ void ExecutorVex::updateGuestRegs(ExecutionState& state)
 	state.addressSpace.copyToBuf(es2esv(state).getRegCtx(), guest_regs);
 }
 
-void ExecutorVex::printStackTrace(ExecutionState& st, std::ostream& os) const
+void ExecutorVex::printStackTrace(
+	const ExecutionState& st,
+	std::ostream& os) const
 {
 	unsigned idx = 0;
 	foreach (it, st.stack.rbegin(), st.stack.rend())
 	{
-		StackFrame	&sf = *it;
-		Function	*f = sf.kf->function;
-		const VexSB	*vsb;
+		const StackFrame	&sf(*it);
+		Function		*f = sf.kf->function;
+		const VexSB		*vsb;
 
 		vsb = km_vex->getVSB(f);
 		os << "\t#" << idx++ << " in " << f->getName().str();
@@ -809,18 +811,10 @@ void ExecutorVex::printStateErrorMessage(
 	const std::string& message,
 	std::ostream& os)
 {
-	Function*	top_f;
-
 	/* TODO: get line information for state.prevPC */
 	klee_message("ERROR: %s", message.c_str());
 
 	os << "Error: " << message << "\n";
-
-	os << "Objects:\n";
-	state.addressSpace.printObjects(os);
-
-	os << "\nRegisters:\n";
-	gs->getCPUState()->print(os);
 
 	os << "\nStack:\n";
 	printStackTrace(state, os);
@@ -831,18 +825,6 @@ void ExecutorVex::printStateErrorMessage(
 		ros << *(state.prevPC->getInst());
 		ros << "\n";
 	}
-
-	top_f = state.stack.back().kf->function;
-	os << "Func: ";
-	if (top_f) {
-		raw_os_ostream ros(os);
-		ros << top_f;
-	} else
-		os << "???";
-	os << "\n";
-
-	os << "Constraints: \n";
-	state.constraints.print(os);
 }
 
 ref<Expr> ExecutorVex::getCallArg(ExecutionState& state, unsigned int n) const

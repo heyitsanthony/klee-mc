@@ -157,7 +157,7 @@ public:
 	void addModule(llvm::Module* m);
 
 	virtual void printStackTrace(
-		ExecutionState& state, std::ostream& os) const;
+		const ExecutionState& state, std::ostream& os) const;
 	virtual std::string getPrettyName(llvm::Function* f) const;
 
 	ExeStateSet::const_iterator beginStates(void) const;
@@ -385,6 +385,20 @@ private:
 
 	void getSymbolicSolutionCex(
 		const ExecutionState& state, ExecutionState& t);
+
+	void executeAllocSymbolic(
+		ExecutionState &state,
+		ref<Expr> size,
+		bool isLocal,
+		KInstruction *target,
+		bool zeroMemory);
+
+	void executeAllocConst(
+		ExecutionState &state,
+		uint64_t sz,
+		bool isLocal,
+		KInstruction *target,
+		bool zeroMemory);
 public:
 	Executor(InterpreterHandler *ie);
 	virtual ~Executor();
@@ -468,20 +482,6 @@ public:
 		bool isLocal,
 		KInstruction *target,
 		bool zeroMemory = false);
-
-	void executeAllocSymbolic(
-		ExecutionState &state,
-		ref<Expr> size,
-		bool isLocal,
-		KInstruction *target,
-		bool zeroMemory);
-
-	void executeAllocConst(
-		ExecutionState &state,
-		uint64_t sz,
-		bool isLocal,
-		KInstruction *target,
-		bool zeroMemory);
 
 	/// Free the given address with checking for errors. If target is
 	/// given it will be bound to 0 in the resulting states (this is a
