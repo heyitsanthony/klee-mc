@@ -34,8 +34,12 @@ private:
 				continue;
 
 			/* XXX: get working on other archs */
-			if (ii->getOperand(1)->getName() != "RIP")
+			if (strncmp(
+				ii->getOperand(1)->getName().str().c_str(),
+				"RIP", 3))
+			{
 				continue;
+			}
 
 			/* if this instruction covers prior store inst to PC,
 			 * prior instruction can safely be removed */

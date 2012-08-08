@@ -134,7 +134,7 @@ public:
 	std::list<ref<MemoryObject> > memObjects;
 
 	bool			coveredNew;
-	bool			isReplay; /* started in replay mode? */
+	bool			isReplay;	/* started in replay mode? */
 	ExecutionTraceManager	exeTraceMgr;	/* prints traces on exit */
 
 	bool forkDisabled;	/* Disables forking, set by user code. */
@@ -275,11 +275,12 @@ public:
   Cell& getLocalCell(unsigned sfi, unsigned i) const;
   Cell& readLocalCell(unsigned sfi, unsigned i) const;
 
-  void transferToBasicBlock(llvm::BasicBlock* dst, llvm::BasicBlock* src);
   void bindLocal(KInstruction *target, ref<Expr> value);
   ref<Expr> readLocal(KInstruction* target) const;
+  bool hasLocal(KInstruction *target) const;
   void bindArgument(KFunction *kf, unsigned index, ref<Expr> value);
 
+  void transferToBasicBlock(llvm::BasicBlock* dst, llvm::BasicBlock* src);
   void trackBranch(int condIndex, const KInstruction* ki);
   bool isReplayDone(void) const;
   bool pushHeapRef(HeapObject* heapObj)
@@ -325,6 +326,10 @@ public:
 	virtual uint64_t getAddrPC(void) const { return (uint64_t)(&(*pc)); }
 	std::string getArrName(const char* arrPrefix);
 	void getConstraintLog(std::string& res) const;
+
+	bool isShadowing(void) const { return is_shadowing; }
+	void setShadow(uint64_t s) { is_shadowing = true; shadow_v = s; }
+	void unsetShadow(void) { is_shadowing = false; }
 private:
 	static MemoryManager* mm;
 	unsigned int num_allocs;
@@ -343,13 +348,15 @@ private:
 
 	uint64_t	prev_constraint_hash;
 
-	// true iff this state is a mere placeholder
-	// to be replaced by a real state
+	// true iff this state is a mere placeholder for a real state
 	bool	isCompactForm;
 	bool	onFreshBranch;
 
 	unsigned		canary;
 	ConstraintManager	concrete_constraints;
+
+	bool			is_shadowing;
+	uint64_t		shadow_v;
 
 };
 

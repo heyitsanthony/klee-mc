@@ -61,6 +61,7 @@ using namespace klee;
 
 bool	WriteTraces = false;
 bool	ReplayInhibitedForks = true;
+bool	DebugPrintInstructions = false;
 extern double	MaxSTPTime;
 
 #define DECL_OPTBOOL(x,y)	cl::opt<bool> x(y, cl::init(false))
@@ -90,9 +91,12 @@ namespace {
 
   cl::opt<bool> PreferCex("prefer-cex", cl::init(true));
 
-  cl::opt<bool>
-  DebugPrintInstructions("debug-print-instructions",
-                         cl::desc("Print instructions during execution."));
+  cl::opt<bool,true>
+  DebugPrintInstructionsProxy(
+  	"debug-print-instructions",
+	cl::location(DebugPrintInstructions),
+        cl::desc("Print instructions during execution."),
+	cl::init(false));
   cl::opt<bool> DebugCheckForImpliedValues("debug-check-for-implied-values");
 
   cl::opt<bool>
@@ -400,25 +404,29 @@ void Executor::executeGetValue(
 {
 	ref<ConstantExpr>	value;
 
+	if (target == NULL) return;
+
 	if (solver->getValue(state, e, value) == false) {
 		terminateStateEarly(state, "exeGetVal timeout");
 		return;
 	}
 
-	if (target != NULL)
-		state.bindLocal(target, value);
+	state.bindLocal(target, value);
+}
+
+void Executor::debugPrintInst(ExecutionState& state)
+{
+	raw_os_ostream	os(std::cerr);
+	state.printFileLine();
+	std::cerr << std::setw(10) << stats::instructions << " ";
+	os << *(state.pc->getInst()) << "\n";
 }
 
 void Executor::stepInstruction(ExecutionState &state)
 {
 	assert (state.checkCanary() && "Not a valid state");
 
-	if (DebugPrintInstructions) {
-		raw_os_ostream	os(std::cerr);
-		state.printFileLine();
-		std::cerr << std::setw(10) << stats::instructions << " ";
-		os << *(state.pc->getInst()) << "\n";
-	}
+	if (DebugPrintInstructions) debugPrintInst(state);
 
 	if (statsTracker) statsTracker->stepInstruction(state);
 
@@ -427,7 +435,7 @@ void Executor::stepInstruction(ExecutionState &state)
 	state.prevPC = state.pc;
 	++state.pc;
 
-	if (stats::instructions==StopAfterNInstructions)
+	if (stats::instructions == StopAfterNInstructions)
 		haltExecution = true;
 }
 
@@ -620,11 +628,10 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 		// We check that the return value has no users instead of
 		// checking the type, since C defaults to returning int for
 		// undeclared functions.
-		if (!caller->use_empty()) {
-			terminateStateOnExecError(
-				state,
-				"return void when caller expected a result");
-		}
+		if (caller->use_empty()) return;
+
+		terminateStateOnExecError(
+			state, "return void when caller expected a result");
 		return;
 	}
 
@@ -656,11 +663,9 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 
 		if (is_cs) {
 			// XXX need to check other param attrs ?
-			if (cs.paramHasAttr(0, llvm::Attribute::SExt)) {
-				result = SExtExpr::create(result, to);
-			} else {
-				result = ZExtExpr::create(result, to);
-			}
+			result = (cs.paramHasAttr(0, llvm::Attribute::SExt))
+				? MK_SEXT(result, to)
+				: MK_ZEXT(result, to);
 		}
 	}
 
@@ -2769,7 +2774,7 @@ void Executor::handleMemoryPID(ExecutionState* &state)
 	}
 }
 
-std::string Executor::getPrettyName(llvm::Function* f) const
+std::string Executor::getPrettyName(const llvm::Function* f) const
 { return f->getName().str(); }
 
 ExeStateSet::const_iterator Executor::beginStates(void) const

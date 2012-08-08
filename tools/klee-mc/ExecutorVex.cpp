@@ -795,11 +795,11 @@ void ExecutorVex::printStackTrace(
 	}
 }
 
-std::string ExecutorVex::getPrettyName(llvm::Function* f) const
+std::string ExecutorVex::getPrettyName(const llvm::Function* f) const
 {
 	const VexSB *vsb;
 
-	vsb = km_vex->getVSB(f);
+	vsb = km_vex->getVSB((llvm::Function*)f);
 	if (vsb != NULL)
 		return gs->getName(vsb->getGuestAddr());
 

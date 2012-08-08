@@ -1,6 +1,9 @@
 #ifndef SHADOWCORE_H
 #define SHADOWCORE_H
 
+#include <map>
+#include "klee/Expr.h"
+
 namespace klee
 {
 class ExecutionState;

@@ -11,7 +11,7 @@ void ShadowObjectState::write8(unsigned offset, ref<Expr>& value)
 		return;
 	}
 
-	if (dynamic_cast<ShadowExpr<Expr,uint64_t>* >(value.get()) != NULL) {
+	if (value->isShadowed()) {
 		ObjectState::write8(offset, value);
 		return;
 	}
@@ -26,7 +26,7 @@ void ShadowObjectState::write(unsigned offset, const ref<Expr>& value)
 		return;
 	}
 
-	if (dynamic_cast<ShadowExpr<Expr, uint64_t>* >(value.get()) != NULL) {
+	if (value->isShadowed()) {
 		ObjectState::write(offset, value);
 		return;
 	}

@@ -56,7 +56,7 @@ public:
 
 	virtual void printStackTrace(
 		const ExecutionState& st, std::ostream& o) const;
-	virtual std::string getPrettyName(llvm::Function* f) const;
+	virtual std::string getPrettyName(const llvm::Function* f) const;
 protected:
 	virtual ExecutionState* setupInitialState(void);
 	ExecutionState* setupInitialStateEntry(uint64_t entry_addr);

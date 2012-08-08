@@ -133,6 +133,7 @@ private:
 	void injectRawChecks();
 	void loadIntrinsicsLib();
 	void dumpModule(void);
+	void outputFunction(const KFunction* kf);
 
 	void outputTruncSource(std::ostream* os, llvm::raw_os_ostream* ros) const;
 

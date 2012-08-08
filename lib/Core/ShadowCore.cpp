@@ -1,13 +1,9 @@
 #include <fstream>
 #include <iostream>
 #include <llvm/Support/CommandLine.h>
-#include <llvm/Transforms/Utils/BasicBlockUtils.h>
-#include <llvm/Pass.h>
 #include <llvm/Module.h>
 #include <llvm/LLVMContext.h>
 #include <llvm/Type.h>
-#include <llvm/Instructions.h>
-#include <llvm/Constants.h>
 #include "static/Sugar.h"
 
 #include "ShadowObjectState.h"
@@ -20,6 +16,8 @@
 #include "SpecialFunctionHandler.h"
 #include "Executor.h"
 #include "ShadowCore.h"
+#include "ShadowPass.h"
+
 #include "MMU.h"
 
 namespace llvm
@@ -46,123 +44,6 @@ static struct SpecialFunctionHandler::HandlerInfo shadow_hi[] =
 },
 { "shadow_taint_store", &HandlerTaintStore::create, false, false, false }
 };
-
-class ShadowPass : public llvm::FunctionPass
-{
-private:
-	static char		ID;
-	Executor		&exe;
-	const shadow_tags_ty	&tags;
-	llvm::Constant		*f_load, *f_store;
-
-	bool runOnBasicBlockLoads(llvm::BasicBlock& bi, uint64_t tag);
-	bool runOnBasicBlockStores(llvm::BasicBlock& bi, uint64_t tag);
-public:
-	ShadowPass(
-		Executor& _exe,
-		llvm::Constant *_f_load,
-		llvm::Constant *_f_store,
-		const shadow_tags_ty& st)
-	: llvm::FunctionPass(ID)
-	, exe(_exe)
-	, tags(st)
-	, f_load(_f_load), f_store(_f_store) {}
-
-	virtual ~ShadowPass() {}
-	virtual bool runOnFunction(llvm::Function& f);
-};
-char ShadowPass::ID;
-
-/* instrument all stores to taint data */
-bool ShadowPass::runOnBasicBlockStores(llvm::BasicBlock& bi, uint64_t tag)
-{
-	unsigned tainted_ins_c = 0;
-
-	foreach_manual(iit, bi.begin(), bi.end()) {
-		Instruction	*ii = iit;
-
-		++iit;
-		if (ii->getOpcode() != Instruction::Store)
-			continue;
-
-		CallInst *new_call;
-		std::vector<Value*>	args;
-
-		args.push_back(ii->getOperand(0));
-		args.push_back(ii->getOperand(1));
-		args.push_back(
-			ConstantInt::get(
-				IntegerType::get(getGlobalContext(), 64),
-				tag));
-		new_call = CallInst::Create(f_store, args);
-		ReplaceInstWithInst(ii, new_call);
-		tainted_ins_c++;
-	}
-
-	return (tainted_ins_c != 0);
-}
-
-/* instrument all loads to taint data */
-bool ShadowPass::runOnBasicBlockLoads(llvm::BasicBlock& bi, uint64_t tag)
-{
-	Instruction	*last_load = NULL;
-	unsigned	tainted_ins_c = 0;
-
-	foreach_manual (iit, bi.begin(), bi.end()) {
-		Instruction	*ii = iit;
-
-		++iit;
-
-		/* instrument post-load */
-		if (last_load != NULL) {
-			CallInst *new_call;
-			std::vector<Value*>	args;
-
-			args.push_back(
-				ConstantInt::get(
-					IntegerType::get(getGlobalContext(), 64),
-					tag));
-			new_call = CallInst::Create(f_load, args, "", ii);
-			last_load = NULL;
-			tainted_ins_c++;
-		}
-
-		if (ii->getOpcode() == Instruction::Load)
-			last_load = ii;
-	}
-
-	return (tainted_ins_c != 0);
-}
-
-
-bool ShadowPass::runOnFunction(llvm::Function& f)
-{
-	std::string			f_name_raw(exe.getPrettyName(&f));
-	std::string			f_name;
-	shadow_tags_ty::const_iterator	it;
-	unsigned			i;
-	bool				was_changed = false;
-
-	for (i = 0; f_name_raw[i] && f_name_raw[i] != '+'; i++);
-	f_name = f_name_raw.substr(0, i);
-
-	it = tags.find(f_name);
-	if (it == tags.end())
-		return false;
-
-	foreach (bit, f.begin(), f.end()) {
-		if (runOnBasicBlockStores(*bit, it->second))
-			was_changed = true;
-		if (runOnBasicBlockLoads(*bit, it->second))
-			was_changed = true;
-	}
-
-	if (was_changed)
-		f.dump();
-
-	return was_changed;
-}
-
 
 ShadowCore::ShadowCore(Executor* _exe)
 : exe(_exe)
@@ -273,6 +154,11 @@ SFH_DEF_HANDLER(TaintLoad)
 	tainted_expr = old_expr->realloc();
 
 	assert (ShadowAlloc::getExpr(tainted_expr).get());
+
+	std::cerr << "TAINTED LOAD: " << tainted_expr << '\n';
+	std::cerr << "TAINTED INST: ";
+	kii->getInst()->dump();
+
 
 	state.bindLocal(kii, tainted_expr);
 	sa->stopShadow();

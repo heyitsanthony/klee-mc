@@ -89,6 +89,11 @@ namespace {
                         clEnumValEnd),
              cl::init(eSwitchTypeInternal));
 
+  cl::opt<bool> OutputFunctions(
+  	"output-funcs",
+	cl::desc("Write the .ll for each function"),
+	cl::init(false));
+
   cl::opt<bool>
   DebugPrintEscapingFunctions("debug-print-escaping-functions",
                               cl::desc("Print functions whose address is taken."));
@@ -560,6 +565,20 @@ static void appendFunction(std::ofstream& os, const Function* f)
 	delete ros;
 }
 
+void KModule::outputFunction(const KFunction *kf)
+{
+	std::ostream		*os;
+	llvm::raw_os_ostream	*ros;
+
+	os = ih->openOutputFile((kf->function->getName().str() + ".ll"));
+	assert(os && os->good() && "unable to open source output");
+
+	ros = new llvm::raw_os_ostream(*os);
+	*ros << *kf->function;
+	delete ros;
+	delete os;
+}
+
 KFunction* KModule::addFunctionProcessed(Function* f)
 {
 	KFunction	*kf;
@@ -572,6 +591,12 @@ KFunction* KModule::addFunctionProcessed(Function* f)
 		ki->setInfo(&infos->getInfo(ki->getInst()));
 	}
 
+	functions.push_back(kf);
+	functionMap.insert(std::make_pair(f, kf));
+	/* Compute various interesting properties */
+	if (functionEscapes(kf->function))
+		escapingFunctions.insert(kf->function);
+
 	if (OutputSource) {
 		std::ofstream os(
 			ih->getOutputFilename("assembly.ll").c_str(),
@@ -579,11 +604,8 @@ KFunction* KModule::addFunctionProcessed(Function* f)
 		appendFunction(os, f);
 	}
 
-	functions.push_back(kf);
-	functionMap.insert(std::make_pair(f, kf));
-	/* Compute various interesting properties */
-	if (functionEscapes(kf->function))
-		escapingFunctions.insert(kf->function);
+	if (OutputFunctions)
+		outputFunction(kf);
 
 	return kf;
 }

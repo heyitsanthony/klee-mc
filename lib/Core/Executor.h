@@ -46,6 +46,8 @@ namespace llvm {
   class VectorType;
 }
 
+extern bool DebugPrintInstructions;
+
 namespace klee {
 class Array;
 class Cell;
@@ -58,7 +60,6 @@ class Forks;
 class Globals;
 class InstructionInfoTable;
 class KFunction;
-class KInstIterator;
 class MMU;
 class MemoryManager;
 class MemoryObject;
@@ -73,12 +74,9 @@ class TreeStreamWriter;
 class BranchPredictor;
 class WallTimer;
 
-template<class T> class ref;
-
 /// \todo Add a context object to keep track of data only live
 /// during an instruction step. Should contain addedStates,
 /// removedStates, and haltExecution, among others.
-
 class Executor : public Interpreter
 {
 /* FIXME The executor shouldn't have friends. */
@@ -158,7 +156,7 @@ public:
 
 	virtual void printStackTrace(
 		const ExecutionState& state, std::ostream& os) const;
-	virtual std::string getPrettyName(llvm::Function* f) const;
+	virtual std::string getPrettyName(const llvm::Function* f) const;
 
 	ExeStateSet::const_iterator beginStates(void) const;
 	ExeStateSet::const_iterator endStates(void) const;
@@ -202,6 +200,7 @@ protected:
 	bool xferIterNext(struct XferStateIter& iter);
 
 	virtual void executeInstruction(ExecutionState &state, KInstruction *ki);
+	virtual void debugPrintInst(ExecutionState& st);
 
 	virtual void run(ExecutionState &initialState);
 	virtual void runLoop();

@@ -77,6 +77,7 @@ ExecutionState::ExecutionState(KFunction *kf)
 , prev_constraint_hash(0)
 , isCompactForm(false)
 , onFreshBranch(false)
+, is_shadowing(false)
 {
 	canary = ES_CANARY_VALUE;
 	pushFrame(0, kf);
@@ -95,6 +96,7 @@ ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
 , prev_constraint_hash(0)
 , isCompactForm(false)
 , onFreshBranch(false)
+, is_shadowing(false)
 {
 	canary = ES_CANARY_VALUE;
 	replayBrIter = brChoiceSeq.end();
@@ -111,6 +113,7 @@ ExecutionState::ExecutionState(void)
 , prev_constraint_hash(0)
 , isCompactForm(false)
 , onFreshBranch(false)
+, is_shadowing(false)
 {
 	canary = ES_CANARY_VALUE;
 	replayBrIter = brChoiceSeq.begin();
@@ -247,6 +250,17 @@ void ExecutionState::write64(
 		write8(object, offset+i, v & 0xff);
 		v >>= 8;
 	}
+}
+
+bool ExecutionState::hasLocal(KInstruction *target) const
+{
+	if (stack.empty()) return false;
+
+	const StackFrame& sf(stack[stack.size() - 1]);
+
+	if (target->getDest() >= sf.kf->numRegisters) return false;
+
+	return true;
 }
 
 Cell& ExecutionState::readLocalCell(unsigned sfi, unsigned i) const
