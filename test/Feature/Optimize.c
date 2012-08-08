@@ -1,6 +1,6 @@
 // RUN: %llvmgcc %s -emit-llvm -O0 -c -o %t2.bc
 // RUN: rm -f %t2.log
-// RUN: %klee --stop-after-n-instructions=100 --optimize %t2.bc > %t3.log
+// RUN: %klee --stop-after-n-instructions=100 --optimize=3 %t2.bc > %t3.log
 // RUN: echo "good" > %t3.good
 // RUN: diff %t3.log %t3.good
 

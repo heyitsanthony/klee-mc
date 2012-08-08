@@ -1,4 +1,5 @@
 #include <llvm/Target/TargetData.h>
+#include <llvm/Support/CommandLine.h>
 
 #include "Executor.h"
 #include "MMU.h"
@@ -14,6 +15,16 @@ uint64_t klee::MMU::sym_r_c = 0;
 uint64_t klee::MMU::sym_w_c = 0;
 
 extern unsigned MakeConcreteSymbolic;
+
+namespace {
+	llvm::cl::opt<bool>
+	UseSymMMU(
+		"use-sym-mmu",
+		llvm::cl::desc("Use MMU that forwards to interpreter."),
+		llvm::cl::init(false));
+};
+
+
 
 void MMU::MemOp::simplify(ExecutionState& state)
 {
@@ -61,3 +72,5 @@ MMU* MMU::create(Executor& exe)
 		return new KleeMMU(exe);
 	return new DualMMU(exe);
 }
+
+bool MMU::isSymMMU(void) { return UseSymMMU; }

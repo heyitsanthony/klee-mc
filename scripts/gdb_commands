@@ -28,6 +28,11 @@ define concretize
 	signal SIG95
 end
 
+# turn on debug inst
+define di
+	signal SIG94
+end
+
 # step branch.
 # takes us up to the branch
 define sb

@@ -120,8 +120,7 @@ void ShadowCore::setupInitialState(ExecutionState* es)
 
 	/* add function pass to instrument interesting funcs */
 	km->addFunctionPass(
-		new ShadowPass(
-			*exe, f_load, f_store, shadow_tags));
+		new ShadowPass(*exe, f_load, f_store, shadow_tags));
 }
 
 SFH_DEF_HANDLER(TaintLoad)
@@ -136,8 +135,7 @@ SFH_DEF_HANDLER(TaintLoad)
 	old_expr = state.readLocal(kii);
 	shadow_tag = cast<klee::ConstantExpr>(arguments[0])->getZExtValue();
 
-	sa = static_cast<ShadowAlloc*>(Expr::getAllocator());
-
+	sa = ShadowAlloc::get();
 	old_shadow = ShadowAlloc::getExpr(old_expr);
 	if (!old_shadow.isNull()) {
 		uint64_t	old_tag;
@@ -155,10 +153,11 @@ SFH_DEF_HANDLER(TaintLoad)
 
 	assert (ShadowAlloc::getExpr(tainted_expr).get());
 
+#if 0
 	std::cerr << "TAINTED LOAD: " << tainted_expr << '\n';
 	std::cerr << "TAINTED INST: ";
 	kii->getInst()->dump();
-
+#endif
 
 	state.bindLocal(kii, tainted_expr);
 	sa->stopShadow();
@@ -188,7 +187,7 @@ SFH_DEF_HANDLER(TaintStore)
 		shadow_tag = sc->combine(shadow_tag, old_shadow->getShadow());
 	}
 
-	sa = static_cast<ShadowAlloc*>(Expr::getAllocator());
+	sa = ShadowAlloc::get();
 	sa->startShadow(shadow_tag);
 
 	value = value->realloc();

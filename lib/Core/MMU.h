@@ -54,6 +54,8 @@ public:
 	static MMU* create(Executor& exe);
 
 	Executor& getExe(void) { return exe; }
+
+	static bool isSymMMU(void);
 protected:
 	MMU(Executor& e) : exe(e) {}
 

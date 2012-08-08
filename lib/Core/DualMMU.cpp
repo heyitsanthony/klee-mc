@@ -1,5 +1,3 @@
-#include <llvm/Support/CommandLine.h>
-
 #include "ConcreteMMU.h"
 #include "SymMMU.h"
 #include "KleeMMU.h"
@@ -7,19 +5,12 @@
 
 using namespace klee;
 
-
-namespace {
-	llvm::cl::opt<bool>
-	UseSymMMU(
-		"use-sym-mmu",
-		llvm::cl::desc("Use MMU that forwards to interpreter."),
-		llvm::cl::init(false));
-};
-
 DualMMU::DualMMU(Executor& exe)
 : MMU(exe)
 , mmu_conc(new ConcreteMMU(exe))
-, mmu_sym((UseSymMMU) ? (MMU*)new SymMMU(exe) : (MMU*)new KleeMMU(exe))
+, mmu_sym((MMU::isSymMMU())
+	? (MMU*)new SymMMU(exe)
+	: (MMU*)new KleeMMU(exe))
 {}
 
 DualMMU::DualMMU(Executor& exe, MMU* mmu_first, MMU* mmu_second)

@@ -109,11 +109,11 @@ namespace {
 	cl::desc("Use soft-floating point to convert fp to int."),
 	cl::init(false));
 
-  cl::opt<bool>
+  cl::opt<unsigned>
   OptimizeKModule(
   	"optimize",
 	cl::desc("Optimize before execution"),
-	cl::init(false));
+	cl::init(0));
 
 }
 
@@ -512,7 +512,7 @@ void KModule::setupFunctionPasses(void)
 {
 	if (OptimizeKModule) {
 		PassManagerBuilder	pmb;
-		pmb.OptLevel = 3;	/* XXX: Make tunable? */
+		pmb.OptLevel = OptimizeKModule;
 		pmb.populateFunctionPassManager(*fpm);
 	}
 

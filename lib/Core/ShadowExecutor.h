@@ -5,6 +5,7 @@
 #include "ExeStateManager.h"
 #include "ObjectState.h"
 #include "ShadowCore.h"
+#include "ShadowMMU.h"
 
 namespace klee
 {
@@ -35,6 +36,11 @@ public:
 	virtual void run(ExecutionState &initialState)
 	{
 		shadowCore.setupInitialState(&initialState);
+
+		if (MMU::isSymMMU() == false) {
+			if (T::mmu == NULL) T::mmu = MMU::create(*this);
+			T::mmu = new ShadowMMU(T::mmu);
+		}
 		T::run(initialState);
 	}
 

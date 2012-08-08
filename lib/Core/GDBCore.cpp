@@ -665,6 +665,7 @@ void GDBCore::overrideThread(ExecutionState* es)
 	OverrideSearcher::setOverride(sel_thread);
 }
 
+#define SIGCMD_TOGGLE_DEBUGINST	108	/* SIG94 */
 #define SIGCMD_CONCRETIZE	109	/* SIG95 */
 #define SIGCMD_TAKETRUE		110	/* SIG96 */
 #define SIGCMD_TAKEFALSE	111	/* SIG97 */
@@ -685,6 +686,9 @@ bool GDBPkt::checkSignal(const char* sigstr)
 	sp = exe->getForking()->getLastFork();
 
 	switch (sig) {
+	case SIGCMD_TOGGLE_DEBUGINST:
+		DebugPrintInstructions = !DebugPrintInstructions;
+		break;
 	case SIGCMD_CONCRETIZE:
 		exe->concretizeState(*gc->getSelThread());
 		gc->overrideThread(gc->getSelThread());
