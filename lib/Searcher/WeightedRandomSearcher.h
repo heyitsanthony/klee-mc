@@ -52,6 +52,7 @@ DECL_WEIGHT(StateInstCount, true)
 DECL_WEIGHT(CondSucc, true)
 DECL_WEIGHT(Uncov, true)
 DECL_WEIGHT(Stack, true)
+DECL_WEIGHT(StateInst, true)
 class Executor;
 
 class TroughWeight : public WeightFunc

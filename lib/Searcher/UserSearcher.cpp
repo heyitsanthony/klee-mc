@@ -72,6 +72,7 @@ DECL_SEARCH_OPT(CondSucc, "cond", "CD");
 DECL_SEARCH_OPT(BranchIns, "brins", "BI");
 DECL_SEARCH_OPT(Uncov, "uncov", "UNC");
 DECL_SEARCH_OPT(Stack, "stack", "STK");
+DECL_SEARCH_OPT(StateInst, "stinst", "SI");
 
 #define SEARCH_HISTO	new RescanSearcher(new HistoPrioritizer(executor))
 DECL_SEARCH_OPT(Histo, "histo", "HS");
@@ -239,7 +240,8 @@ bool UserSearcher::userSearcherRequiresMD2U() {
 	new RescanSearcher(	\
 		new Weight2Prioritizer<StackWeight>(	\
 				new StackWeight(), 1.0))
-
+#define STINST_SEARCHER	\
+	new WeightedRandomSearcher(executor, new StateInstWeight())
 
 /* Research quality */
 Searcher* UserSearcher::setupInterleavedSearcher(
@@ -256,6 +258,7 @@ Searcher* UserSearcher::setupInterleavedSearcher(
 
 	PUSH_ILEAV_IF_SET(Uncov, UNCOV_SEARCHER);
 
+	PUSH_ILEAV_IF_SET(StateInst, STINST_SEARCHER);
 
 	PUSH_ILEAV_IF_SET(
 		CondSucc,
@@ -371,6 +374,8 @@ Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 			new Weight2Prioritizer<CondSuccWeight>(
 				new CondSuccWeight(&executor),
 				1.0));
+	} else if (UseStateInstSearch) {
+		searcher = STINST_SEARCHER;
 	} else if (UseHistoSearch) {
 		searcher = SEARCH_HISTO;
 	} else if (UseMarkovSearch) {

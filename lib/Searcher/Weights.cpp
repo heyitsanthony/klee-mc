@@ -361,3 +361,6 @@ double UncovWeight::weigh(const ExecutionState* es) const
 
 double StackWeight::weigh(const ExecutionState* es) const
 { return es->getStackDepth(); }
+
+double StateInstWeight::weigh(const ExecutionState* es) const
+{ return es->personalInsts; }
