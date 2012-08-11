@@ -296,8 +296,7 @@ bool KleeMMU::memOpByByte(ExecutionState& state, MemOp& mop)
 		MemOpRes	res;
 
 		byte_addr = AddExpr::create(
-			mop.address,
-			ConstantExpr::create(i, mop.address->getWidth()));
+			mop.address, MK_CONST(i, mop.address->getWidth()));
 
 		res = memOpResolve(state, byte_addr, 8);
 		if (res.isBad())
@@ -310,8 +309,7 @@ bool KleeMMU::memOpByByte(ExecutionState& state, MemOp& mop)
 			if (read_expr.isNull())
 				read_expr = result;
 			else
-				read_expr = ConcatExpr::create(
-					result, read_expr);
+				read_expr = MK_CONCAT(result, read_expr);
 		}
 	}
 

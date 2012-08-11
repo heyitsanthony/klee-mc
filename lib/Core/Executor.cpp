@@ -432,6 +432,7 @@ void Executor::stepInstruction(ExecutionState &state)
 
 	state.lastGlobalInstCount = ++stats::instructions;
 	state.totalInsts++;
+	state.personalInsts++;
 	state.prevPC = state.pc;
 	++state.pc;
 
@@ -2111,6 +2112,7 @@ void Executor::runLoop(void)
 			std::cerr << "StackTrace for st="
 				<< (void*)currentState
 				<< ". Insts=" <<currentState->totalInsts
+				<< ". SInsts=" << currentState->personalInsts
 				<< '\n';
 			printStackTrace(*currentState, std::cerr);
 			std::cerr << "===================\n";

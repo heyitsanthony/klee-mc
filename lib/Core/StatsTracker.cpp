@@ -306,8 +306,8 @@ void StatsTracker::stepInstUpdateFrame(ExecutionState &es)
 	if (es.stack.empty())
 		return;
 
-	StackFrame		&sf = es.stack.back();
-	const InstructionInfo	&ii = *es.pc->getInfo();
+	const StackFrame	&sf(es.stack.back());
+	const InstructionInfo	&ii(*es.pc->getInfo());
 
 
 	theStatisticManager->setIndex(ii.id);
@@ -319,11 +319,11 @@ void StatsTracker::stepInstUpdateFrame(ExecutionState &es)
 	if (es.instsSinceCovNew)
 		++es.instsSinceCovNew;
 
-	Instruction *inst = es.pc->getInst();
-	if (!sf.kf->trackCoverage || !instructionIsCoverable(inst))
+	if (es.pc->isCovered())
 		return;
 
-	if (es.pc->isCovered())
+	Instruction *inst = es.pc->getInst();
+	if (!sf.kf->trackCoverage || !instructionIsCoverable(inst))
 		return;
 
 	// Checking for actual stoppoints avoids inconsistencies due

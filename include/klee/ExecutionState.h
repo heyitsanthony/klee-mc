@@ -126,6 +126,7 @@ public:
 	uint64_t		totalInsts;
 	unsigned		concretizeCount;
 	ref<Expr>		prevForkCond;	// last condition to cause fork
+	uint64_t		personalInsts;
 
 	// Number of malloc calls per callsite
 	std::map<const llvm::Value*,unsigned> mallocIterations;

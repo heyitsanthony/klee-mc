@@ -67,11 +67,16 @@ public:
     handlers_ty handlers;
     class Executor* executor;
 
-  protected:
-	void bind(SpecialFunctionHandler::HandlerInfo* hinfo, unsigned int N);
-	void prepare(SpecialFunctionHandler::HandlerInfo* hinfo, unsigned int N);
+protected:
+	void bind(const HandlerInfo* hinfo, unsigned int N);
+	void prepare(HandlerInfo* hinfo, unsigned int N);
 
-  public:
+private:
+	bool lateBind(const llvm::Function *f);
+	typedef std::map<std::string, const HandlerInfo*> latebindings_ty;
+	latebindings_ty lateBindings;
+
+public:
     SpecialFunctionHandler(Executor* _executor);
     virtual ~SpecialFunctionHandler();
 
@@ -90,7 +95,7 @@ public:
                 KInstruction *target,
                 std::vector< ref<Expr> > &arguments);
 
-    SFHandler* addHandler(struct HandlerInfo& hi);
+    SFHandler* addHandler(const struct HandlerInfo& hi);
 
     /* Convenience routines */
 
@@ -162,6 +167,15 @@ public:
     SFH_HANDLER(IsShadowed)
     SFH_HANDLER(Indirect)
     SFH_HANDLER(ForkEq)
+#define DEF_SFH_MMU(x)			\
+    	SFH_HANDLER(WideStore##x)	\
+	SFH_HANDLER(WideLoad##x)
+    DEF_SFH_MMU(8)
+    DEF_SFH_MMU(16)
+    DEF_SFH_MMU(32)
+    DEF_SFH_MMU(64)
+    DEF_SFH_MMU(128)
+#undef DEF_SFH_MMU
 } // End klee namespace
 
 #endif

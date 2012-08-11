@@ -6,6 +6,8 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
+#include <llvm/Module.h>
+#include <llvm/Support/CommandLine.h>
 
 #include "Memory.h"
 #include "SpecialFunctionHandler.h"
@@ -14,16 +16,10 @@
 #include "klee/Common.h"
 #include "klee/ExecutionState.h"
 
-#include "klee/Internal/Module/KInstruction.h"
 #include "klee/Internal/Module/KModule.h"
 #include "static/Sugar.h"
 
 #include "Executor.h"
-#include "MemoryManager.h"
-
-#include "llvm/Module.h"
-#include "llvm/ADT/Twine.h"
-#include "llvm/Support/CommandLine.h"
 
 #include <errno.h>
 
@@ -86,6 +82,16 @@ SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   add("klee_indirect", Indirect, true),
   add("klee_is_shadowed", IsShadowed, true),
 
+#define DEF_WIDE(x)	\
+	add("klee_wide_load_" #x, WideLoad##x, true),	\
+	add("klee_wide_store_" #x, WideStore##x, false)
+  DEF_WIDE(8),
+  DEF_WIDE(16),
+  DEF_WIDE(32),
+  DEF_WIDE(64),
+  DEF_WIDE(128),
+#undef DEF_WIDE
+
   add("klee_yield", Yield, false),
   add("klee_sym_range_bytes", SymRangeBytes, true)
 #undef addDNR
@@ -116,20 +122,23 @@ void SpecialFunctionHandler::prepare(HandlerInfo* hinfo, unsigned int N)
 
 		f = executor->getKModule()->module->getFunction(hi.name);
 
-		// No need to create if the function doesn't exist, since it cannot
-		// be called in that case.
-		if (!f) continue;
+		// Can't create function if it doesn't exist;
+		// queue for late binding in case it turns up later.
+		if (f == NULL) {
+			lateBindings[hi.name] = &hinfo[i];
+			continue;
+		}
 		if (!(!hi.doNotOverride || f->isDeclaration())) continue;
 
 		// Make sure NoReturn attribute is set, for optimization and
 		// coverage counting.
 		if (hi.doesNotReturn)
-		f->addFnAttr(Attribute::NoReturn);
+			f->addFnAttr(Attribute::NoReturn);
 
 		// Change to a declaration since we handle internally (simplifies
 		// module and allows deleting dead code).
 		if (!f->isDeclaration())
-		f->deleteBody();
+			f->deleteBody();
 	}
 }
 
@@ -142,13 +151,13 @@ SpecialFunctionHandler::~SpecialFunctionHandler(void)
 	}
 }
 
-void SpecialFunctionHandler::bind(HandlerInfo* hinfo, unsigned int N)
+void SpecialFunctionHandler::bind(const HandlerInfo* hinfo, unsigned int N)
 {
 	for (unsigned i=0; i<N; ++i)
 		addHandler(hinfo[i]);
 }
 
-SFHandler* SpecialFunctionHandler::addHandler(struct HandlerInfo& hi)
+SFHandler* SpecialFunctionHandler::addHandler(const struct HandlerInfo& hi)
 {
 	SFHandler		*old_h, *new_h;
 	Function		*f;
@@ -164,7 +173,21 @@ SFHandler* SpecialFunctionHandler::addHandler(struct HandlerInfo& hi)
 
 	new_h = hi.handler_init(this);
 	handlers[f] = std::make_pair(new_h, hi.hasReturnValue);
+
 	return new_h;
+}
+
+bool SpecialFunctionHandler::lateBind(const llvm::Function* f)
+{
+	latebindings_ty::iterator it(lateBindings.find(f->getName().str()));
+
+	if (it == lateBindings.end())
+		return false;
+
+	addHandler(*(it->second));
+	lateBindings.erase(it);
+
+	return true;
 }
 
 bool SpecialFunctionHandler::handle(
@@ -173,20 +196,30 @@ bool SpecialFunctionHandler::handle(
 	KInstruction *target,
 	std::vector< ref<Expr> > &arguments)
 {
-	handlers_ty::iterator it = handlers.find(f);
-	if (it == handlers.end()) return false;
+	SFHandler		*h;
+	bool			hasReturnValue;
+	handlers_ty::iterator	it(handlers.find(f));
 
-	SFHandler* h = it->second.first;
-	bool hasReturnValue = it->second.second;
+	if (it == handlers.end()) {
+		if (!lateBind(f))
+			return false;
+		it = handlers.find(f);
+		if (it == handlers.end())
+			return false;
+	}
+
+	h = it->second.first;
+	hasReturnValue = it->second.second;
 
 	// FIXME: Check this... add test?
 	if (!hasReturnValue && !target->getInst()->use_empty()) {
 		executor->terminateStateOnExecError(
 			state,
 			"expected return value from void special function");
-	} else {
-		h->handle(state, target, arguments);
+		return true;
 	}
+
+	h->handle(state, target, arguments);
 	return true;
 }
 
@@ -276,14 +309,14 @@ std::string SpecialFunctionHandler::readStringAtAddress(
 
 SFH_DEF_HANDLER(Exit)
 {
-  SFH_CHK_ARGS(1, "exit");
-  sfh->executor->terminateStateOnExit(state);
+	SFH_CHK_ARGS(1, "exit");
+	sfh->executor->terminateStateOnExit(state);
 }
 
 SFH_DEF_HANDLER(SilentExit)
 {
-  assert(arguments.size()==1 && "invalid number of arguments to exit");
-  sfh->executor->terminateState(state);
+	assert(arguments.size()==1 && "invalid number of arguments to exit");
+	sfh->executor->terminateState(state);
 }
 
 cl::opt<bool> EnablePruning("enable-pruning", cl::init(true));
@@ -357,9 +390,8 @@ SFH_DEF_HANDLER(Assume)
 	SFH_CHK_ARGS(1, "klee_assume");
 
 	e = arguments[0];
-	if (e->getWidth() != Expr::Bool) {
-		e = NeExpr::create(e, ConstantExpr::create(0, e->getWidth()));
-	}
+	if (e->getWidth() != Expr::Bool)
+		e = MK_NE(e, MK_CONST(0, e->getWidth()));
 
 	ok = sfh->executor->getSolver()->mustBeFalse(state, e, mustBeFalse);
 	if (!ok) {
@@ -436,33 +468,33 @@ SFH_DEF_HANDLER(IsValidAddr)
 	ok = state.addressSpace.resolveOne(cast<ConstantExpr>(addr), op);
 	ret = ConstantExpr::create((ok) ? 1 : 0, 32);
 
-	// std::cerr << "ADDR=" << addr << ". OK: " << ok << '\n';
 	state.bindLocal(target, ret);
 }
 
 SFH_DEF_HANDLER(PreferCex)
 {
-  SFH_CHK_ARGS(2, "klee_prefex_cex");
+	Executor::ExactResolutionList rl;
 
-  ref<Expr> cond = arguments[1];
-  if (cond->getWidth() != Expr::Bool)
-    cond = NeExpr::create(cond, ConstantExpr::alloc(0, cond->getWidth()));
+	SFH_CHK_ARGS(2, "klee_prefex_cex");
 
-  Executor::ExactResolutionList rl;
-  sfh->executor->resolveExact(state, arguments[0], rl, "prefex_cex");
+	ref<Expr> cond = arguments[1];
+	if (cond->getWidth() != Expr::Bool)
+		cond = MK_NE(cond, MK_CONST(0, cond->getWidth()));
 
-  assert(rl.size() == 1 &&
-         "prefer_cex target must resolve to precisely one object");
+	sfh->executor->resolveExact(state, arguments[0], rl, "prefex_cex");
 
-  rl[0].first.first->cexPreferences.push_back(cond);
+	assert(rl.size() == 1 &&
+		"prefer_cex target must resolve to precisely one object");
+
+	rl[0].first.first->cexPreferences.push_back(cond);
 }
 
 SFH_DEF_HANDLER(PrintExpr)
 {
-  SFH_CHK_ARGS(2, "klee_print_expr");
+	SFH_CHK_ARGS(2, "klee_print_expr");
 
-  std::string msg_str = sfh->readStringAtAddress(state, arguments[0]);
-  std::cerr << msg_str << ":" << arguments[1] << "\n";
+	std::string msg_str = sfh->readStringAtAddress(state, arguments[0]);
+	std::cerr << msg_str << ":" << arguments[1] << "\n";
 }
 
 SFH_DEF_HANDLER(SetForking)
@@ -485,11 +517,11 @@ SFH_DEF_HANDLER(StackTrace) { state.dumpStack(std::cout); }
 
 SFH_DEF_HANDLER(Warning)
 {
-  SFH_CHK_ARGS(1, "klee_warning");
+	SFH_CHK_ARGS(1, "klee_warning");
 
-  std::string msg_str = sfh->readStringAtAddress(state, arguments[0]);
-  klee_warning("%s: %s", state.getCurrentKFunc()->function->getName().data(),
-               msg_str.c_str());
+	std::string msg_str = sfh->readStringAtAddress(state, arguments[0]);
+	klee_warning("%s: %s", state.getCurrentKFunc()->function->getName().data(),
+	       msg_str.c_str());
 }
 
 SFH_DEF_HANDLER(WarningOnce)
@@ -503,34 +535,39 @@ SFH_DEF_HANDLER(WarningOnce)
 
 SFH_DEF_HANDLER(PrintRange)
 {
-  SFH_CHK_ARGS(2, "klee_print_range");
+	ref<ConstantExpr>	value;
+	bool			ok, res;
+	std::string		msg_str;
 
-  std::string msg_str = sfh->readStringAtAddress(state, arguments[0]);
-  std::cerr << msg_str << ":" << arguments[1];
-  if (!isa<ConstantExpr>(arguments[1])) {
-    // FIXME: Pull into a unique value method?
-    ref<ConstantExpr> value;
-    bool success = sfh->executor->getSolver()->getValue(state, arguments[1], value);
-    assert(success && "FIXME: Unhandled solver failure");
-    bool res;
-    success = sfh->executor->getSolver()->mustBeTrue(state,
-                                          EqExpr::create(arguments[1], value),
-                                          res);
-    assert(success && "FIXME: Unhandled solver failure");
-    if (res) {
-      std::cerr << " == " << value;
-    } else {
-      std::cerr << " ~= " << value;
-      std::pair< ref<Expr>, ref<Expr> > res;
-      bool ok;
-      ok = sfh->executor->getSolver()->getRange(state, arguments[1], res);
-      if (!ok)
-        std::cerr << " (in " << arguments[1]  << ")";
-      else
-        std::cerr << " (in [" << res.first << ", " << res.second <<"])";
-    }
-  }
-  std::cerr << "\n";
+	SFH_CHK_ARGS(2, "klee_print_range");
+
+	msg_str = sfh->readStringAtAddress(state, arguments[0]);
+	std::cerr << msg_str << ":" << arguments[1];
+	if (!isa<ConstantExpr>(arguments[1])) {
+		std::cerr << "\n";
+		return;
+	}
+
+	// FIXME: Pull into a unique value method?
+	ok = sfh->executor->getSolver()->getValue(state, arguments[1], value);
+	assert(ok && "FIXME: Unhandled solver failure");
+	ok= sfh->executor->getSolver()->mustBeTrue(
+		state, MK_EQ(arguments[1], value), res);
+	assert(ok && "FIXME: Unhandled solver failure");
+
+	if (res) {
+		std::cerr << " == " << value << '\n';
+		return;
+	}
+
+	std::cerr << " ~= " << value;
+	std::pair< ref<Expr>, ref<Expr> > p;
+	ok = sfh->executor->getSolver()->getRange(state, arguments[1], p);
+	if (!ok)
+		std::cerr << " (in " << arguments[1]  << ")\n";
+	else
+		std::cerr	<< " (in ["
+				<< p.first << ", " << p.second <<"])\n";
 }
 
 SFH_DEF_HANDLER(SymRangeBytes)
@@ -657,7 +694,7 @@ SFH_DEF_HANDLER(DefineFixedObject)
 	 "expect constant size argument to klee_define_fixed_object");
 
 	address = cast<ConstantExpr>(arguments[0])->getZExtValue();
-	size  = cast<ConstantExpr>(arguments[1])->getZExtValue();
+	size = cast<ConstantExpr>(arguments[1])->getZExtValue();
 
 	os = state.allocateFixed(address, size, state.prevPC->getInst());
 	mo = const_cast<MemoryObject*>(state.addressSpace.resolveOneMO(address));
@@ -671,53 +708,51 @@ SFH_DEF_HANDLER(DefineFixedObject)
 #define MAKESYM_ARGIDX_NAME   2
 SFH_DEF_HANDLER(MakeSymbolic)
 {
-  std::string name;
+  	Executor::ExactResolutionList	rl;
+	std::string			name;
 
-  // FIXME: For backwards compatibility, we should eventually enforce the
-  // correct arguments.
-  if (arguments.size() == 2) {
-    name = "unnamed";
-  } else {
-    // FIXME: Should be a user.err, not an assert.
-    SFH_CHK_ARGS(3, "klee_make_symbolic");
-    name = sfh->readStringAtAddress(state, arguments[MAKESYM_ARGIDX_NAME]);
-  }
+	SFH_CHK_ARGS(3, "klee_make_symbolic");
 
-  Executor::ExactResolutionList rl;
-  sfh->executor->resolveExact(
-  	state, arguments[MAKESYM_ARGIDX_ADDR], rl, "make_symbolic");
+	name = sfh->readStringAtAddress(state, arguments[MAKESYM_ARGIDX_NAME]);
+	sfh->executor->resolveExact(
+  		state, arguments[MAKESYM_ARGIDX_ADDR], rl, "make_symbolic");
 
-  foreach (it, rl.begin(), rl.end()) {
-    MemoryObject *mo = const_cast<MemoryObject*>(it->first.first);
-    const ObjectState *old = it->first.second;
-    ExecutionState *s = it->second;
-    ref<Expr>	cond;
-    bool res, ok;
+	foreach (it, rl.begin(), rl.end()) {
+		MemoryObject *mo = const_cast<MemoryObject*>(it->first.first);
+		const ObjectState *old = it->first.second;
+		ExecutionState *s = it->second;
+		ref<Expr>	cond;
+		bool		res, ok;
 
-    mo->setName(name);
+		mo->setName(name);
 
-    if (old->readOnly) {
-      sfh->executor->terminateStateOnError(
-        *s, "cannot make readonly object symbolic", "user.err");
-      return;
-    }
+		if (old->readOnly) {
+			sfh->executor->terminateStateOnError(
+				*s,
+				"cannot make readonly object symbolic",
+				"user.err");
+			return;
+		}
 
-    // FIXME: Type coercion should be done consistently somewhere.
-    // UleExpr instead of EqExpr to make a symbol partially symbolic.
-    cond = MK_ULE(MK_ZEXT(
-			arguments[MAKESYM_ARGIDX_LEN],
-			Context::get().getPointerWidth()),
-		mo->getSizeExpr());
-    ok = sfh->executor->getSolver()->mustBeTrue(*s, cond, res);
-    assert(ok && "FIXME: Unhandled solver failure");
+		// FIXME: Type coercion should be done consistently somewhere.
+		// UleExpr instead of EqExpr to make symbol partially symbolic.
+		cond = MK_ULE(	MK_ZEXT(arguments[MAKESYM_ARGIDX_LEN],
+					Context::get().getPointerWidth()),
+				mo->getSizeExpr());
 
-    if (res) {
-      sfh->executor->executeMakeSymbolic(*s, mo);
-    } else {
-      sfh->executor->terminateStateOnError(
-        *s, "size given to klee_make_symbolic[_name] too big", "user.err");
-    }
-  }
+		ok = sfh->executor->getSolver()->mustBeTrue(*s, cond, res);
+		assert(ok && "FIXME: Unhandled solver failure");
+
+		if (res) {
+			sfh->executor->executeMakeSymbolic(*s, mo);
+			continue;
+		}
+ 
+		sfh->executor->terminateStateOnError(
+			*s,
+			"size for klee_make_symbolic[_name] too big",
+			"user.err");
+	}
 }
 
 
@@ -884,3 +919,62 @@ SFH_DEF_HANDLER(ForkEq)
 	if (sp.first != NULL) sp.first->bindLocal(target, MK_CONST(1, 32));
 	if (sp.second != NULL) sp.second->bindLocal(target, MK_CONST(0, 32));
 }
+
+
+#define wide_load_def(x)	\
+SFH_DEF_HANDLER(WideLoad##x) 	\
+{	\
+	ObjectPair		op;	\
+	uint64_t		obj_base;	\
+	ref<Expr>		user_addr, val;	\
+\
+	obj_base = dyn_cast<ConstantExpr>(arguments[0])->getZExtValue(); \
+	if (state.addressSpace.resolveOne(obj_base, op) == false) {	\
+		std::cerr << "OBJ BASE=" << (void*)obj_base << '\n';	\
+		sfh->executor->terminateStateOnError(	\
+			state,	\
+			"Could not resolve addr for wide load",	\
+			"mmu.err");	\
+		return;	\
+	}	\
+\
+	user_addr = arguments[1];	\
+	val = state.read(op.second, MK_SUB(user_addr, arguments[0]), x);	\
+	state.bindLocal(target, val);	\
+}
+
+#define wide_store_def(x)	\
+SFH_DEF_HANDLER(WideStore##x)	\
+{	\
+	ObjectState		*os;	\
+	ObjectPair		op;	\
+	uint64_t		obj_base;	\
+	ref<Expr>		val, user_addr;	\
+\
+	obj_base = dyn_cast<ConstantExpr>(arguments[0])->getZExtValue(); \
+	if (!state.addressSpace.resolveOne(obj_base, op)) {	\
+		sfh->executor->terminateStateOnError(	\
+			state,	\
+			"Could not resolve addr for wide store", \
+			"mmu.err");	\
+		return;	\
+	}	\
+\
+	user_addr = arguments[1];	\
+	val = arguments[2];		\
+	if (arguments.size() == 4) 	\
+		val = MK_CONCAT(arguments[3], val);	\
+\
+	os = state.addressSpace.getWriteable(op);		\
+	state.write(os, MK_SUB(user_addr, arguments[0]), val);	\
+}
+
+#define wide_op_def(x)	\
+	wide_load_def(x) \
+	wide_store_def(x)
+
+wide_op_def(8)
+wide_op_def(16)
+wide_op_def(32)
+wide_op_def(64)
+wide_op_def(128)

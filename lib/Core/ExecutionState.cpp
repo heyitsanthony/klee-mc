@@ -69,6 +69,7 @@ ExecutionState::ExecutionState(KFunction *kf)
 , lastGlobalInstCount(0)
 , totalInsts(0)
 , concretizeCount(0)
+, personalInsts(0)
 , coveredNew(false)
 , isReplay(false)
 , forkDisabled(false)
@@ -90,6 +91,7 @@ ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
 , lastGlobalInstCount(0)
 , totalInsts(0)
 , concretizeCount(0)
+, personalInsts(0)
 , isReplay(false)
 , ptreeNode(0)
 , num_allocs(0)
@@ -142,6 +144,7 @@ ExecutionState *ExecutionState::branch(bool forReplay)
 	newState->coveredNew = false;
 	newState->coveredLines.clear();
 	newState->replayBrIter = newState->brChoiceSeq.end();
+	newState->personalInsts = 0;
 
 	return newState;
 }
@@ -162,6 +165,8 @@ void ExecutionState::compact(ExecutionState* newState) const
 
 	// necessary for WeightedRandomSearcher?
 	newState->pc = pc;
+
+	newState->personalInsts = 0;
 }
 
 void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf)
@@ -727,6 +732,7 @@ ExecutionState* ExecutionState::createReplay(
 	newState->replayBrIter = newState->brChoiceSeq.begin();
 	newState->ptreeNode->data = 0;
 	newState->isReplay = true;
+	newState->personalInsts = 0;
 
 	return newState;
 }
@@ -761,6 +767,7 @@ ExecutionState* ExecutionState::reconstitute(
 	newState->brChoiceSeq = brChoiceSeq;
 	newState->replayBrIter = newState->brChoiceSeq.begin();
 	newState->weight = weight;
+	newState->personalInsts = 0;
 
 	return newState;
 }
