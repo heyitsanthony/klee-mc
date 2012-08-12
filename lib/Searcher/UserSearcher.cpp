@@ -241,7 +241,9 @@ bool UserSearcher::userSearcherRequiresMD2U() {
 		new Weight2Prioritizer<StackWeight>(	\
 				new StackWeight(), 1.0))
 #define STINST_SEARCHER	\
-	new WeightedRandomSearcher(executor, new StateInstWeight())
+	new RescanSearcher(	\
+		new Weight2Prioritizer<StateInstWeight>(	\
+			new StateInstWeight(), 1.0))
 
 /* Research quality */
 Searcher* UserSearcher::setupInterleavedSearcher(

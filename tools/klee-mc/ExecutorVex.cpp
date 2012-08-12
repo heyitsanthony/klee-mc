@@ -761,7 +761,7 @@ void ExecutorVex::callExternalFunction(
 		return;
 
 	std::cerr
-		<< "KLEE:ERROR: Calling non-special external function : "
+		<< "KLEE: ERROR: Calling non-special external function : "
 		<< function->getName().str() << "\n";
 	terminateStateOnError(state, "externals disallowed", "user.err");
 }

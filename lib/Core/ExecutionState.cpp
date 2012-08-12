@@ -145,6 +145,7 @@ ExecutionState *ExecutionState::branch(bool forReplay)
 	newState->coveredLines.clear();
 	newState->replayBrIter = newState->brChoiceSeq.end();
 	newState->personalInsts = 0;
+	newState->onFreshBranch = false;
 
 	return newState;
 }
@@ -165,7 +166,7 @@ void ExecutionState::compact(ExecutionState* newState) const
 
 	// necessary for WeightedRandomSearcher?
 	newState->pc = pc;
-
+	newState->onFreshBranch = false;
 	newState->personalInsts = 0;
 }
 

@@ -711,9 +711,14 @@ SFH_DEF_HANDLER(MakeSymbolic)
   	Executor::ExactResolutionList	rl;
 	std::string			name;
 
-	SFH_CHK_ARGS(3, "klee_make_symbolic");
+	if (arguments.size() == 2) {
+		name = "unnamed";
+	} else {
+		SFH_CHK_ARGS(3, "klee_make_symbolic");
+		name = sfh->readStringAtAddress(
+			state, arguments[MAKESYM_ARGIDX_NAME]);
+	}
 
-	name = sfh->readStringAtAddress(state, arguments[MAKESYM_ARGIDX_NAME]);
 	sfh->executor->resolveExact(
   		state, arguments[MAKESYM_ARGIDX_ADDR], rl, "make_symbolic");
 

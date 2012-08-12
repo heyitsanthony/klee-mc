@@ -31,6 +31,7 @@
 #include "DummySolver.h"
 #include "TautologyChecker.h"
 #include "HashComparison.h"
+#include "RandomValue.h"
 
 #include <cassert>
 #include <cstdio>
@@ -485,86 +486,9 @@ bool Solver::mayBeTrue(const Query& query, bool &result)
 	return (failed() == false);
 }
 
-/* TODO: this can be smarter by keeping track of the values found for
- * a given expression hash and sampling/extending prior values */
+
 bool Solver::getValueRandomized(const Query& query, ref<ConstantExpr>& result)
-{
-	static std::map<Expr::Hash, uint64_t>	seen_map;
-	ConstraintManager		cs(query.constraints);
-	std::vector<ref<ConstantExpr> >		seen;
-	ref<Expr>			ret;
-	unsigned			samples_remaining = 5;
-	ref<Expr>	min_result, max_result;
-	bool		redo = false;
-
-	do {
-		Query	cur_query(cs, query.expr);
-		std::pair<std::map<Expr::Hash, Expr::Hash>::iterator, bool> pi;
-		int		expr_sel = rand() % 3;
-		Expr::Hash	bloom_hash;
-		bool		mbt, ok;
-		ref<Expr>	new_cond;
-
-		if (!redo) {
-			if (getValueDirect(cur_query, result) == false)
-				return false;
-
-			seen.push_back(result);
-
-			pi = seen_map.insert(
-				std::make_pair(
-					query.expr->hash(), result->hash()));
-
-			/* new value inserted!? */
-			if (pi.second)
-				return true;
-
-			/* Bloom filter: found new value? */
-			bloom_hash = pi.first->second;
-			if ((bloom_hash & result->hash()) != result->hash()) {
-				bloom_hash = pi.first->second | result->hash();
-				seen_map[query.expr->hash()] = bloom_hash;
-				return true;
-			}
-
-			if (min_result.isNull()) min_result = result;
-			if (max_result.isNull()) max_result = result;
-
-			if (MK_ULT(result, min_result)->isTrue())
-				min_result = result;
-			if (MK_UGT(result, max_result)->isTrue())
-				max_result = result;
-		}
-
-		/* force NE */
-		if (redo) expr_sel = 0;
-
-		switch (expr_sel) {
-		case 0: new_cond = MK_NE(query.expr, result); break;
-		case 1: new_cond = MK_UGT(query.expr, max_result); break;
-		case 2:	new_cond = MK_ULT(query.expr, min_result); break;
-		default:
-			assert(0 == 1 && "WTF");
-			break;
-		}
-
-		redo = false;
-
-		if (!mayBeTrue(cur_query.withExpr(new_cond), mbt))
-			break;
-
-		if (mbt == false) {
-			if (expr_sel == 0) break;
-			redo = true;
-		} else
-			cs.addConstraint(new_cond);
-
-		samples_remaining--;
-	} while (samples_remaining);
-
-	result = seen[rand() % seen.size()];
-	return true;
-}
+{ return RandomValue::get(this, query, result); }
 
 bool Solver::getValue(const Query& query, ref<ConstantExpr> &result)
 { 
