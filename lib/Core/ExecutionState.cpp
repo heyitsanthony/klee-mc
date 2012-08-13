@@ -14,6 +14,7 @@
 #include "../Solver/SMTPrinter.h"
 #include "../Expr/ExprReplaceVisitor.h"
 #include "MemoryManager.h"
+#include "ImpliedValue.h"
 
 #include "klee/util/ExprPPrinter.h"
 #include "klee/Internal/Module/Cell.h"
@@ -802,25 +803,8 @@ void ExecutionState::commitIVC(
 
 	wos->writeIVC(off->getZExtValue(), ce);
 
-	foreach (it, stackBegin(), stackEnd()) {
-		ExprReplaceVisitor	erv(re, ce);
-		StackFrame		&sf(*it);
-
-		if (sf.kf == NULL)
-			continue;
-
-		/* update all registers in stack frame */
-		for (unsigned i = 0; i < sf.kf->numRegisters; i++) {
-			ref<Expr>	e;
-
-			if (	sf.locals[i].value.isNull() ||
-				isa<ConstantExpr>(sf.locals[i].value))
-				continue;
-
-			e = erv.apply(sf.locals[i].value);
-			sf.locals[i].value = e;
-		}
-	}
+	ImpliedValue::ivcStack(stack, re, ce);
+	ImpliedValue::ivcMem(addressSpace, re, ce);
 }
 
 void ExecutionState::printFileLine(void)

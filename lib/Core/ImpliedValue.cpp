@@ -15,14 +15,20 @@
 #include "klee/Solver.h"
 #include "static/Sugar.h"
 #include "klee/Internal/Support/IntEvaluation.h"
-
+#include "AddressSpace.h"
+#include "Memory.h"
+#include "../Expr/ExprReplaceVisitor.h"
 #include "klee/util/ExprUtil.h"
+#include "klee/Internal/Module/KFunction.h"
 
 #include <iostream>
 #include <map>
 #include <set>
 
 using namespace klee;
+
+uint64_t ImpliedValue::ivc_mem_bytes = 0;
+uint64_t ImpliedValue::ivc_stack_cells = 0;
 
 // XXX we really want to do some sort of canonicalization of exprs
 // globally so that cases below become simpler
@@ -68,18 +74,14 @@ void ImpliedValue::getImpliedValues(
 
 		if (value == TrueCE) {
 			getImpliedValues(
-				se->cond,
-				ConstantExpr::alloc(1, Expr::Bool),
-				results);
+				se->cond, MK_CONST(1, Expr::Bool), results);
 			break;
 		}
 
 		assert(	value == FalseCE &&
 			"err in implied value calculation");
-		getImpliedValues(
-			se->cond,
-			ConstantExpr::alloc(0, Expr::Bool),
-			results);
+
+		getImpliedValues(se->cond, MK_CONST(0, Expr::Bool), results);
 		break;
 	}
 
@@ -322,4 +324,66 @@ void ImpliedValue::checkForImpliedValues(
 	}
 
 	assert(found.empty());
+}
+
+void ImpliedValue::ivcMem(
+	AddressSpace& as,
+	const ref<ReadExpr>& re, const ref<ConstantExpr>& ce)
+{
+	ExprReplaceVisitor	erv(re, ce);
+
+	foreach (it, as.begin(), as.end()) {
+		const ObjectState		*os;
+		ObjectState			*wos = NULL;
+
+		os = (*it).second;
+		if (os->isConcrete())
+			continue;
+
+		for (unsigned i = 0; i < os->size; i++) {
+			ref<Expr>	e, e_new;
+
+			if (os->isByteKnownSymbolic(i) == false)
+				continue;
+
+			e = os->read8(i);
+			e_new = erv.apply(e);
+			if (e->hash() == e_new->hash())
+				continue;
+
+			if (wos == NULL) {
+				wos = as.getWriteable((*it));
+				os = wos;
+			}
+			wos->write(i, e_new);
+			ivc_mem_bytes++;
+		}
+	}
+}
+
+void ImpliedValue::ivcStack(
+	ExecutionState::stack_ty& stk,
+	const ref<ReadExpr>& re, const ref<ConstantExpr>& ce)
+{
+	foreach (it, stk.begin(), stk.end()) {
+		ExprReplaceVisitor	erv(re, ce);
+		StackFrame		&sf(*it);
+
+		if (sf.kf == NULL)
+			continue;
+
+		/* update all registers in stack frame */
+		for (unsigned i = 0; i < sf.kf->numRegisters; i++) {
+			ref<Expr>	e, old_v(sf.locals[i].value);
+
+			if (old_v.isNull() || old_v->getKind() ==Expr::Constant)
+				continue;
+
+			e = erv.apply(old_v);
+			if (e->hash() != old_v->hash())
+				ivc_stack_cells++;
+
+			sf.locals[i].value = e;
+		}
+	}
 }

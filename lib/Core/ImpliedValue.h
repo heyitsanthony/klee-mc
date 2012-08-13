@@ -10,6 +10,7 @@
 #ifndef KLEE_IMPLIEDVALUE_H
 #define KLEE_IMPLIEDVALUE_H
 
+#include "klee/ExecutionState.h"
 #include "klee/Expr.h"
 
 #include <vector>
@@ -21,20 +22,37 @@
 // and their computed values.
 
 namespace klee {
-  class ConstantExpr;
-  class Expr;
-  class ReadExpr;
-  class Solver;
+class ConstantExpr;
+class Expr;
+class ReadExpr;
+class Solver;
+class AddressSpace;
 
-  typedef std::vector< std::pair<ref<ReadExpr>, 
-                                 ref<ConstantExpr> > > ImpliedValueList;
-  
-  namespace ImpliedValue {        
-    void getImpliedValues(ref<Expr> e, ref<ConstantExpr> cvalue, 
-                          ImpliedValueList &result);
-    void checkForImpliedValues(Solver *S, ref<Expr> e, 
-                               ref<ConstantExpr> cvalue);    
-  }
+typedef std::vector< std::pair<ref<ReadExpr>, 
+			 ref<ConstantExpr> > > ImpliedValueList;
+ 
+class ImpliedValue
+{
+public:
+	static void getImpliedValues(
+		ref<Expr> e,
+		ref<ConstantExpr> cvalue,
+		ImpliedValueList &result);
+	static void checkForImpliedValues(
+		Solver *S, ref<Expr> e, ref<ConstantExpr> cvalue);
+
+	static void ivcMem(
+		AddressSpace& as,
+		const ref<ReadExpr>& re, const ref<ConstantExpr>& ce);
+	static void ivcStack(
+		ExecutionState::stack_ty& stk,
+		const ref<ReadExpr>& re, const ref<ConstantExpr>& ce);
+
+private:
+	static uint64_t	ivc_mem_bytes;
+	static uint64_t ivc_stack_cells;
+
+};
 
 }
 
