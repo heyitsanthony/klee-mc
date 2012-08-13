@@ -19,11 +19,8 @@ int mmu_testptr_invalid(void* ptr)
 	if (iptr < 0x1000) return 1;
 
 	iptr_c = klee_get_value(iptr);
-	if (	(iptr - iptr_c) > MAX_PTR_RANGE ||
-		(iptr_c - iptr) > MAX_PTR_RANGE)
-	{
-		return 1;
-	}
+	if ((iptr - iptr_c) > MAX_PTR_RANGE) return 1;
+	if ((iptr_c - iptr) > MAX_PTR_RANGE) return 1;
 
 	return 0;
 }

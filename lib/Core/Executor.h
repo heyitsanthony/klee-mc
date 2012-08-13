@@ -210,10 +210,6 @@ protected:
 
 	void retFromNested(ExecutionState& state, KInstruction* ki);
 
-	/// bindInstructionConstants - Initialize any necessary per instruction
-	/// constant values.
-	void bindInstructionConstants(KInstruction *KI);
-
 	virtual void printStateErrorMessage(
 		ExecutionState& state,
 		const std::string& message,

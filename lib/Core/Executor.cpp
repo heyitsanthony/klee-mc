@@ -1738,13 +1738,9 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     vt_src = dyn_cast<VectorType>(ci->getSrcTy());
     vt_dst = dyn_cast<VectorType>(ci->getDestTy());
     evaled =  eval(ki, 0, state).value;
-    if (vt_src) {
-      result = sextVector(state, evaled, vt_src, vt_dst);
-    } else {
-      result = SExtExpr::create(
-        evaled,
-        kmodule->getWidthForLLVMType(ci->getType()));
-    }
+    result = (vt_src)
+      	? sextVector(state, evaled, vt_src, vt_dst)
+	: MK_SEXT(evaled, kmodule->getWidthForLLVMType(ci->getType()));
     state.bindLocal(ki, result);
     break;
   }
@@ -1907,14 +1903,17 @@ INST_FOP_ARITH(FRem, mod)
   case Instruction::InsertValue: instInsertValue(state, ki); break;
 
   case Instruction::ExtractValue: {
-    KGEPInstruction *kgepi = static_cast<KGEPInstruction*>(ki);
-    ref<Expr> agg, result;
-    agg = eval(ki, 0, state).value;
-    result = ExtractExpr::create(
-      agg, kgepi->getOffsetBits()*8, kmodule->getWidthForLLVMType(i->getType()));
+	KGEPInstruction *kgepi = static_cast<KGEPInstruction*>(ki);
+	ref<Expr>	agg, result;
 
-    state.bindLocal(ki, result);
-    break;
+	agg = eval(ki, 0, state).value;
+	result = MK_EXTRACT(
+		agg,
+		kgepi->getOffsetBits()*8,
+		kmodule->getWidthForLLVMType(i->getType()));
+
+	state.bindLocal(ki, result);
+	break;
   }
 
 
@@ -2061,6 +2060,8 @@ void Executor::run(ExecutionState &initialState)
 	currentState = &initialState;
 
 	if (mmu == NULL) mmu = MMU::create(*this);
+
+	kmodule->bindModuleConstants(this);
 
 	// Delay init till now so that ticks don't accrue during
 	// optimization and such.

@@ -11,20 +11,22 @@
 #include <unistd.h>
 
 char x[4096];
+typedef int(*strcmp_f)(const char*, const char*);
 
 int main(int argc, char *argv[])
 {
 	void		*p;
 	uint8_t		c;
 	int		cmp;
+	strcmp_f	sf;
 
 	p = x;
 	if (read(0, &c, 1) != 1) return 1;
 
 	p = ((char*)p + c);
 	memset(p, 1, 256);
-	__asm__("");
-	cmp = strcmp(p, "abcdefghijklmnopqrstuv");
+	sf = strcmp;
+	cmp = sf(p, "abcdefghijklmnopqrstuv");
 	ksys_assume(cmp != 0);
 
 	return 2;

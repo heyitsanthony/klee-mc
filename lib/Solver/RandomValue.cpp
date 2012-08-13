@@ -53,20 +53,29 @@ ref<ConstantExpr> RandomValue::extend(Solver* s, const Query& q)
 	if (seen.empty()) return tryExtend(s, q);
 
 	ref<Expr>	unseen_cond(MK_CONST(1, 1)), trial_cond;
-	bool		mbt;
+	bool		mbt, ok;
 
 	foreach (it, seen.begin(), seen.end())
 		unseen_cond = MK_AND(unseen_cond, MK_NE(q.expr, *it));
 
-	if (!s->mayBeTrue(q.withExpr(unseen_cond), mbt) || !mbt)
+	ok = s->mayBeTrue(q.withExpr(unseen_cond), mbt);
+
+	/* ran out of options? */
+	if (!ok || !mbt)
 		return NULL;
 
+	/* randomly choose value < or > known range */
 	trial_cond = (rand() % 2)
 		? MK_ULT(q.expr, min_res)
 		: MK_UGT(q.expr, max_res);
 
-	if (!s->mayBeTrue(q.withExpr(trial_cond), mbt) || !mbt)
+	ok = s->mayBeTrue(q.withExpr(trial_cond), mbt);
+	if (!ok || !mbt) {
+		/* constraints make this impossible,
+		 * but we already have a generating constraint
+		 * which is OK */
 		trial_cond = unseen_cond;
+	}
 
 	ConstraintManager	new_cs(q.constraints);
 	Query			new_q(new_cs, q.expr);
@@ -89,7 +98,7 @@ bool RandomValue::getValue(Solver* s, const Query& q, ref<ConstantExpr>& result)
 
 		result = seen[(r+i) % seen.size()];
 		if (!s->mayBeTrue(q.withExpr(MK_EQ(q.expr, result)), mbt))
-			return false;
+			break;
 
 		if (mbt) return true;
 	}

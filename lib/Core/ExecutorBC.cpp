@@ -305,13 +305,6 @@ void ExecutorBC::callExternalFunction(
 	}
 }
 
-void ExecutorBC::run(ExecutionState &initialState)
-{
-	kmodule->bindModuleConstants(this);
-	Executor::run(initialState);
-}
-
-
 Function* ExecutorBC::getFuncByAddr(uint64_t addr)
 {
 	if (!globals->isLegalFunction(addr))

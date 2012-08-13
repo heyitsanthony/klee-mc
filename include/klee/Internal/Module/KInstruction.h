@@ -14,6 +14,7 @@
 #include <llvm/Support/DataTypes.h>
 #include <vector>
 #include <list>
+#include <assert.h>
 
 namespace llvm {
 	class Instruction;
@@ -176,6 +177,7 @@ private:
 	static unsigned		kbr_c;
 };
 
+#define KGEP_OFF_UNINIT	0xdeadbeef12345678
 class KGEPInstruction : public KInstruction
 {
 public:
@@ -189,7 +191,8 @@ public:
 	/// element size to multiple that index by.
 	std::vector< std::pair<unsigned, uint64_t> > indices;
 
-	uint64_t getOffsetBits(void) const { return offset; }
+	uint64_t getOffsetBits(void) const
+	{ assert (offset != KGEP_OFF_UNINIT); return offset; }
 
 	void resolveConstants(const KModule* km, const Globals* gs);
 private:

@@ -926,25 +926,46 @@ SFH_DEF_HANDLER(ForkEq)
 }
 
 
+static bool getObjectFromBase(ExecutionState& state, ref<Expr>& e, ObjectPair& op)
+{
+	uint64_t	obj_base;
+
+	obj_base = dyn_cast<klee::ConstantExpr>(e)->getZExtValue();
+	MMIter	it(state.addressSpace.lower_bound(obj_base));
+
+	op = *it;
+	if (op.first->isInBounds(obj_base, 1))
+		return true;
+
+	--it;
+	if (it == state.addressSpace.begin())
+		return false;
+
+	op = *it;
+	if (op.first->isInBounds(obj_base, 1))
+		return true;
+
+	return false;
+}
+
 #define wide_load_def(x)	\
 SFH_DEF_HANDLER(WideLoad##x) 	\
 {	\
 	ObjectPair		op;	\
-	uint64_t		obj_base;	\
 	ref<Expr>		user_addr, val;	\
 \
-	obj_base = dyn_cast<ConstantExpr>(arguments[0])->getZExtValue(); \
-	if (state.addressSpace.resolveOne(obj_base, op) == false) {	\
-		std::cerr << "OBJ BASE=" << (void*)obj_base << '\n';	\
-		sfh->executor->terminateStateOnError(	\
-			state,	\
-			"Could not resolve addr for wide load",	\
+	if (getObjectFromBase(state, arguments[0], op) == false) {	\
+		sfh->executor->terminateStateOnError(			\
+			state,						\
+			"Could not resolve addr for wide load",		\
 			"mmu.err");	\
-		return;	\
-	}	\
+		return; \
+	} \
 \
 	user_addr = arguments[1];	\
-	val = state.read(op.second, MK_SUB(user_addr, arguments[0]), x);	\
+	val = state.read(		\
+		op.second,	\
+		MK_SUB(user_addr, MK_CONST(op.first->address, 64)), x);	\
 	state.bindLocal(target, val);	\
 }
 
@@ -953,25 +974,24 @@ SFH_DEF_HANDLER(WideStore##x)	\
 {	\
 	ObjectState		*os;	\
 	ObjectPair		op;	\
-	uint64_t		obj_base;	\
 	ref<Expr>		val, user_addr;	\
 \
-	obj_base = dyn_cast<ConstantExpr>(arguments[0])->getZExtValue(); \
-	if (!state.addressSpace.resolveOne(obj_base, op)) {	\
+	if (getObjectFromBase(state, arguments[0], op) == false) {	\
 		sfh->executor->terminateStateOnError(	\
 			state,	\
-			"Could not resolve addr for wide store", \
+			"Could not resolve addr for wide store",	\
 			"mmu.err");	\
 		return;	\
 	}	\
-\
 	user_addr = arguments[1];	\
 	val = arguments[2];		\
 	if (arguments.size() == 4) 	\
 		val = MK_CONCAT(arguments[3], val);	\
 \
 	os = state.addressSpace.getWriteable(op);		\
-	state.write(os, MK_SUB(user_addr, arguments[0]), val);	\
+	state.write(	\
+		os,	\
+		MK_SUB(user_addr, MK_CONST(op.first->address, 64)), val); \
 }
 
 #define wide_op_def(x)	\

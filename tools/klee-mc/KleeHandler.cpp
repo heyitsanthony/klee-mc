@@ -608,6 +608,8 @@ bool KleeHandler::validateTest(unsigned id)
 		/* don't write anything please! */
 		close(0);
 		close(1);
+		close(2);
+		open("/dev/null", O_RDWR);
 		open("/dev/null", O_RDWR);
 		open("/dev/null", O_RDWR);
 		execvp("kmc-replay", (char**)argv); 

@@ -24,8 +24,6 @@ public:
 		char **envp);
 
 protected:
-  	virtual void run(ExecutionState &initialState);
-
 	virtual void callExternalFunction(
 		ExecutionState &state,
 		KInstruction *target,

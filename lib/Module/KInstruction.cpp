@@ -84,7 +84,7 @@ KGEPInstruction::KGEPInstruction(
 	KModule* km,
 	llvm::Instruction* inst, unsigned dest)
 : KInstruction(inst, dest)
-, offset(~0)
+, offset(KGEP_OFF_UNINIT)
 {}
 
 void KGEPInstruction::resolveConstants(const KModule* km, const Globals* g)
@@ -113,7 +113,7 @@ void KGEPInstruction::computeOffsets(
 
 	indices.clear();
 
-	constantOffset = ConstantExpr::create(0, Context::get().getPointerWidth());
+	constantOffset = MK_CONST(0, Context::get().getPointerWidth());
 
 	index = 1;
 	for (TypeIt ii = ib; ii != ie; ++ii) {
@@ -127,8 +127,7 @@ void KGEPInstruction::computeOffsets(
 		addend = sl->getElementOffset((unsigned) ci->getZExtValue());
 
 		constantOffset = constantOffset->Add(
-			ConstantExpr::create(
-				addend, Context::get().getPointerWidth()));
+			MK_CONST(addend, Context::get().getPointerWidth()));
 	} else {
 		const SequentialType	*st2;
 		uint64_t		elementSize;
@@ -150,7 +149,7 @@ void KGEPInstruction::computeOffsets(
 				Context::get().getPointerWidth());
 
 			addend = index->Mul(
-				ConstantExpr::create(
+				MK_CONST(
 					elementSize,
 					Context::get().getPointerWidth()));
 			constantOffset = constantOffset->Add(addend);
@@ -235,11 +234,10 @@ TargetTy KSwitchInstruction::getExprCondSwitchTargets(
 			}
 
 			if (runLen < EXE_SWITCH_RLE_LIMIT) {
-				match = OrExpr::create(
+				match = MK_OR(
 					match,
-					EqExpr::create(
-						cond,
-						ConstantExpr::create(*vit,
+					MK_EQ(	cond,
+						MK_CONST(*vit,
 						cond->getWidth())));
 				continue;
 			}
@@ -249,8 +247,7 @@ TargetTy KSwitchInstruction::getExprCondSwitchTargets(
 			rle_bounds = AndExpr::create(
 				UgeExpr::create(
 					cond,
-					ConstantExpr::create(
-						*vit, cond->getWidth())),
+					MK_CONST(*vit, cond->getWidth())),
 				UltExpr::create(
 					cond,
 					ConstantExpr::create(
