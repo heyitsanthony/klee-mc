@@ -24,6 +24,6 @@ int main(int argc, char *argv[])
 	ksys_print_expr("c", c);
 	p = (x + c);
 	ksys_print_expr("ppp", p);
-	if (*(char*)p == 0) return 2;
+	if (*(uint32_t*)p == 0) return 2;
 	return 3;
 }

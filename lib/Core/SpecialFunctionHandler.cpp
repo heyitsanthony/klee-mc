@@ -888,7 +888,6 @@ SFH_DEF_HANDLER(GetObjPrev)
 	SFH_CHK_ARGS(1, "klee_get_obj_prev");
 
 	ce = dyn_cast<ConstantExpr>(arguments[0]);
-	std::cerr << "CALLING PREV: " << arguments[0] << '\n';
 	if (ce == NULL) {
 		std::cerr << "OOPS: ARG=" << arguments[0] << '\n';
 		sfh->executor->terminateStateOnError(

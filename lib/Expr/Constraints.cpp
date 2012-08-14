@@ -114,12 +114,16 @@ ExprVisitor::Action ExprReplaceVisitor2::visitRead(const ReadExpr &re)
 		if (idx < ul.getRoot()->mallocKey.size)
 			return Action::changeTo(ul.getRoot()->getValue(idx));
 
+		std::cerr << "[Constraints] WTF: ARR=" << ul.getRoot()->name
+			<< ". BAD IDX="
+			<< idx << ". Size="
+			<<  ul.getRoot()->mallocKey.size << '\n';
 		klee_warning_once(
 			0,
 			"out of bounds constant array read (possibly within "
 			"an infeasible Select path?)");
 
-		return Action::changeTo(ConstantExpr::alloc(0, re.getWidth()));
+		return Action::changeTo(MK_CONST(0, re.getWidth()));
 	}
 
 	/* rebuilding fucks up symbolics on underconstrained exe */
@@ -239,7 +243,7 @@ static void addEquality(
 	if (const UltExpr *x = dyn_cast<UltExpr>(e)) {
 		equalities.insert(
 			std::make_pair(
-				UleExpr::create(x->getKid(1), x->getKid(0)),
+				MK_ULE(x->getKid(1), x->getKid(0)),
 				FALSE_EXPR));
 		return;
 	}
@@ -247,7 +251,7 @@ static void addEquality(
 	if (const UleExpr *x = dyn_cast<UleExpr>(e)) {
 		equalities.insert(
 			std::make_pair(
-				UltExpr::create(x->getKid(1), x->getKid(0)),
+				MK_ULT(x->getKid(1), x->getKid(0)),
 				FALSE_EXPR));
 
 		// x <= 0 implies x == 0
