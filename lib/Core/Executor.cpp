@@ -45,7 +45,6 @@
 #include "CoreStats.h"
 #include "ImpliedValue.h"
 #include "MemoryManager.h"
-#include "PTree.h"
 #include "Forks.h"
 #include "StateSolver.h"
 #include "MemUsage.h"
@@ -183,7 +182,6 @@ Executor::Executor(InterpreterHandler *ih)
 , interpreterHandler(ih)
 , target_data(0)
 , statsTracker(0)
-, pathTree(0)
 , symPathWriter(0)
 , sfh(0)
 , replayOut(0)
@@ -243,19 +241,14 @@ Executor::~Executor()
 	if (brPredict) delete brPredict;
 	if (mmu != NULL) delete mmu;
 	delete memory;
-	if (pathTree) delete pathTree;
 	if (statsTracker) delete statsTracker;
 	delete solver;
 	ExeStateBuilder::replaceBuilder(NULL);
 	delete forking;
 }
 
-inline void Executor::replaceStateImmForked(
-	ExecutionState* os, ExecutionState* ns)
-{
-	stateManager->replaceStateImmediate(os, ns);
-	removePTreeState(os);
-}
+void Executor::replaceStateImmForked(ExecutionState* os, ExecutionState* ns)
+{ stateManager->replaceStateImmediate(os, ns); }
 
 void Executor::addConstrOrDie(ExecutionState &state, ref<Expr> condition)
 {
@@ -1947,18 +1940,6 @@ INST_FOP_ARITH(FRem, mod)
 	}
 }
 
-void Executor::removePTreeState(
-	ExecutionState* es,
-	ExecutionState** root_to_be_removed)
-{
-	ExecutionState	*root;
-	root = pathTree->removeState(stateManager, es);
-	if (root != NULL) *root_to_be_removed = root;
-}
-
-void Executor::removeRoot(ExecutionState* es)
-{ pathTree->removeRoot(stateManager, es); }
-
 // guess at how many to kill
 void Executor::killStates(ExecutionState* &state)
 {
@@ -2043,13 +2024,13 @@ unsigned Executor::getNumFullStates(void) const
 
 void Executor::replayPathsIntoStates(ExecutionState& initialState)
 {
-	assert (replayPaths);
+	assert (replayPaths != NULL);
+	assert (initialState.ptreeNode != NULL);
+
 	foreach (it, replayPaths->begin(), replayPaths->end()) {
-		ExecutionState *newState;
-		newState = ExecutionState::createReplay(initialState, (*it));
-		pathTree->splitStates(
-			newState->ptreeNode, &initialState, newState);
-		stateManager->queueAdd(newState);
+		ExecutionState *es;
+		es = ExecutionState::createReplay(initialState, (*it));
+		stateManager->queueSplitAdd(es->ptreeNode, &initialState, es);
 	}
 }
 
@@ -2066,11 +2047,14 @@ void Executor::run(ExecutionState &initialState)
 	initTimers();
 
 	initialStateCopy = (ReplayInhibitedForks) ? initialState.copy() : NULL;
-
-	if (replayPaths != NULL)
+	
+	stateManager->setInitialState(&initialState);
+	if (replayPaths) {
 		replayPathsIntoStates(initialState);
+		stateManager->queueRemove(&initialState);
+		stateManager->commitQueue(0);
+	}
 
-	stateManager->setInitialState(this, &initialState, replayPaths);
 	stateManager->setupSearcher(this);
 
 	runLoop();
@@ -2144,7 +2128,7 @@ void Executor::runLoop(void)
 
 void Executor::notifyCurrent(ExecutionState* current)
 {
-	stateManager->commitQueue(this, current);
+	stateManager->commitQueue(current);
 	if (	stateManager->getNonCompactStateCount() == 0
 		&& !stateManager->empty())
 	{
@@ -2213,8 +2197,6 @@ void Executor::terminateState(ExecutionState &state)
 	}
 
 	stateManager->dropAdded(&state);
-	pathTree->remove(state.ptreeNode);
-	delete &state;
 }
 
 void Executor::terminateStateEarly(

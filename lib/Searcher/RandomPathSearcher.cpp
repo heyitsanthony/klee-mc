@@ -26,7 +26,7 @@ ExecutionState &RandomPathSearcher::selectState(bool allowCompact)
 	unsigned	flips=0, bits=0;
 	PTreeNode	*n;
 	
-	n = executor.getPTree()->root;
+	n = executor.getStateManager()->getPTree()->root;
 	while (n->getData() == NULL) {
 		unsigned numEnabledChildren = 0, enabledIndex = 0;
 

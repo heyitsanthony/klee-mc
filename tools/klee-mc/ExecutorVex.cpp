@@ -12,7 +12,6 @@
 #include "../../lib/Searcher/UserSearcher.h"
 #include "../../lib/Core/StatsTracker.h"
 #include "../../lib/Core/ExeStateManager.h"
-#include "../../lib/Core/PTree.h"
 #include "../../lib/Core/MemoryManager.h"
 
 #include <stdio.h>
@@ -242,16 +241,11 @@ ExecutionState* ExecutorVex::setupInitialStateEntry(uint64_t entry_addr)
 	if (SymArgs) makeArgsSymbolic(state);
 	if (SymMagic) makeMagicSymbolic(state);
 
-	pathTree = new PTree(state);
-	state->ptreeNode = pathTree->root;
-
 	return state;
 }
 
 ExecutionState* ExecutorVex::setupInitialState(void)
-{
-	return setupInitialStateEntry((uint64_t)gs->getEntryPoint());
-}
+{ return setupInitialStateEntry((uint64_t)gs->getEntryPoint()); }
 
 void ExecutorVex::runImage(void)
 {
@@ -269,9 +263,6 @@ void ExecutorVex::runImage(void)
 
 void ExecutorVex::cleanupImage(void)
 {
-	delete pathTree;
-	pathTree = NULL;
-
 	// hack to clear memory objects
 	delete memory;
 	memory = MemoryManager::create();
@@ -619,7 +610,6 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 	result->dump();
 	terminateStateOnExit(state);
 }
-
 
 void ExecutorVex::handleXferJmp(ExecutionState& state, KInstruction* ki)
 {

@@ -756,7 +756,7 @@ void Executor::processTimers(ExecutionState *current, double maxInstTime)
     sprintf(name, "ptree%08d.dot", (int) stats::instructions);
     std::ostream *os = interpreterHandler->openOutputFile(name);
     if (os) {
-      pathTree->dump(*os);
+      stateManager->getPTree()->dump(*os);
       delete os;
     }
 

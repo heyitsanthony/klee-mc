@@ -9,6 +9,7 @@
 namespace klee
 {
 class Searcher;
+class PTree;
 
 typedef std::map<ExecutionState*, ExecutionState*> ExeStateReplaceMap;
 
@@ -19,12 +20,12 @@ private:
   ExeStateSet::size_type nonCompactStateCount;
 
   /// Tracks states that have been added during the current instructions step.
-  /// \invariant \ref addedStates is a subset of \ref states. 
+  /// \invariant \ref addedStates is a subset of \ref states.
   /// \invariant \ref addedStates and \ref removedStates are disjoint.
   ExeStateSet addedStates;
   /// Used to track states that have been removed during the current
-  /// instructions step. 
-  /// \invariant \ref removedStates is a subset of \ref states. 
+  /// instructions step.
+  /// \invariant \ref removedStates is a subset of \ref states.
   /// \invariant \ref addedStates and \ref removedStates are disjoint.
   ExeStateSet removedStates;
 
@@ -32,9 +33,9 @@ private:
   mutable ExeStateSet allRemovedStates;
 
   /// Tracks states that have been replaced during the current instructions step.
-  /// \invariant \ref replacedStates is a subset of \ref states U addedStates. 
+  /// \invariant \ref replacedStates is a subset of \ref states U addedStates.
   ExeStateReplaceMap replacedStates;
-  
+
   /* states to yield */
   ExeStateSet yieldStates;
 
@@ -45,24 +46,31 @@ private:
 
   Searcher::States getStates(void) const;
 public:
-  ExeStateManager();
-  virtual ~ExeStateManager();
-  void commitQueue(Executor* exe, ExecutionState* current);
+	ExeStateManager();
+	virtual ~ExeStateManager();
+	void commitQueue(ExecutionState* current);
 
-  ExeStateSet::const_iterator begin(void) { return states.begin(); }
-  ExeStateSet::const_iterator end(void) { return states.end(); }
-  bool hasState(ExecutionState* st) const{ return states.count(st) != 0; }
+	ExeStateSet::const_iterator begin(void) { return states.begin(); }
+	ExeStateSet::const_iterator end(void) { return states.end(); }
+	bool hasState(ExecutionState* st) const{ return states.count(st) != 0; }
 
-  void dropAdded(ExecutionState* es);
-  void queueAdd(ExecutionState* es);
-  void queueRemove(ExecutionState* s);
-  void yield(ExecutionState* s);
+	void dropAdded(ExecutionState* es);
+	void queueAdd(ExecutionState* es);
+	void queueSplitAdd(
+		PTreeNode	*ptn,
+		ExecutionState	*initialState,
+		ExecutionState	*newState);
 
-  void setInitialState(
-    Executor* exe, ExecutionState* initialState, bool replay);
+	void queueRemove(ExecutionState* s);
+	void yield(ExecutionState* s);
+
+  void setInitialState(ExecutionState* initialState);
   void setWeights(double weight);
   void replaceState(ExecutionState* old_s, ExecutionState* new_s);
-  void replaceStateImmediate(ExecutionState* old_s, ExecutionState* new_s);
+  void replaceStateImmediate(
+  	ExecutionState* old_s,
+	ExecutionState* new_s,
+	ExecutionState** root_to_be_removed = NULL);
   ExecutionState* getReplacedState(ExecutionState* s) const;
 
   void compactPressureStates(ExecutionState* &state, uint64_t maxMem);
@@ -79,11 +87,20 @@ public:
   bool isAddedState(ExecutionState* s) const;
   ExecutionState* selectState(bool allowCompact);
 
-  void teardownUserSearcher(void);
-  void setupSearcher(Executor* exe);
-  void setupSearcher(Searcher* s);
+	void teardownUserSearcher(void);
+	void setupSearcher(Executor* exe);
+	void setupSearcher(Searcher* s);
 
-  unsigned int getNonCompactStateCount(void) const { return nonCompactStateCount; }
+	unsigned int getNonCompactStateCount(void) const
+	{ return nonCompactStateCount; }
+
+	const PTree* getPTree(void) const { return pathTree; }
+private:
+	void dropAddedDirect(ExecutionState* es);
+	void removePTreeState(
+		ExecutionState* es,
+		ExecutionState** root_to_be_removed);
+	PTree	*pathTree;
 };
 
 struct KillOrCompactOrdering

@@ -43,8 +43,8 @@ public:
 
 	void remove(PTreeNode *n);
 
-	void dump(std::ostream &os);
-	void dump(const std::string& n);
+	void dump(std::ostream &os) const;
+	void dump(const std::string& n) const;
 	ExecutionState* removeState(
 		ExeStateManager* stateManager, ExecutionState* es);
 	void removeRoot(ExeStateManager* stateManager, ExecutionState* es);

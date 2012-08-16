@@ -12,7 +12,6 @@
 #include "StatsTracker.h"
 #include "StateSolver.h"
 #include "ExternalDispatcher.h"
-#include "PTree.h"
 #include "HeapMM.h"
 #include "Globals.h"
 #include "klee/Internal/Module/KModule.h"
@@ -98,13 +97,7 @@ void ExecutorBC::runFunctionAsMain(
 
 	globals = new Globals(kmodule, state, externalDispatcher);
 
-	pathTree = new PTree(state);
-	state->ptreeNode = pathTree->root;
-
 	run(*state);
-
-	delete pathTree;
-	pathTree = 0;
 
 	delete globals;
 	globals = NULL;

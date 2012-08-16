@@ -20,10 +20,15 @@ namespace { cl::opt<bool> UseYield("use-yield", cl::init(true)); }
 ExeStateManager::ExeStateManager()
 : nonCompactStateCount(0)
 , searcher(NULL)
+, pathTree(NULL)
 {}
 
 ExeStateManager::~ExeStateManager()
-{ if (searcher != NULL) delete searcher; }
+{
+	if (searcher != NULL) delete searcher;
+	delete pathTree;
+	pathTree = 0;
+}
 
 ExecutionState* ExeStateManager::selectState(bool allowCompact)
 {
@@ -75,21 +80,17 @@ void ExeStateManager::teardownUserSearcher(void)
 	searcher = NULL;
 }
 
-void ExeStateManager::setInitialState(
-	Executor* exe,
-	ExecutionState* initialState, bool replay)
+void ExeStateManager::setInitialState(ExecutionState* initialState)
 {
 	assert (empty());
 
-	if (replay) {
-		// remove initial state from ptree
-		states.insert(initialState);
-		removedStates.insert(initialState);
-		commitQueue(exe, NULL); /* XXX ??? */
-	} else {
-		states.insert(initialState);
-		nonCompactStateCount++;
-	}
+	if (pathTree != NULL) delete pathTree;
+	pathTree = new PTree(initialState);
+
+	initialState->ptreeNode = pathTree->root;
+
+	states.insert(initialState);
+	nonCompactStateCount++;
 }
 
 void ExeStateManager::setWeights(double weight)
@@ -101,6 +102,16 @@ void ExeStateManager::setWeights(double weight)
 void ExeStateManager::queueAdd(ExecutionState* es) {
 assert (es->checkCanary());
 addedStates.insert(es); }
+
+void ExeStateManager::queueSplitAdd(
+	PTreeNode	*ptn,
+	ExecutionState	*initialState,
+	ExecutionState	*newState)
+{
+	pathTree->splitStates(ptn, initialState, newState);
+	queueAdd(newState);
+}
+
 
 void ExeStateManager::queueRemove(ExecutionState* s) { removedStates.insert(s); }
 
@@ -122,7 +133,7 @@ void ExeStateManager::yield(ExecutionState* s)
 	/* compact state forced a replace copy,
 	 * new state is put on addedStates-- So take it away.
 	 * old state is put on removedStates-- OK. */
-	dropAdded(compacted);
+	dropAddedDirect(compacted);
 
 	yieldedStates.insert(compacted);
 	/* NOTE: states and yieldedStates are disjoint */
@@ -130,12 +141,20 @@ void ExeStateManager::yield(ExecutionState* s)
 
 void ExeStateManager::dropAdded(ExecutionState* es)
 {
+	dropAddedDirect(es);
+	pathTree->remove(es->ptreeNode);
+	delete es;
+}
+
+void ExeStateManager::dropAddedDirect(ExecutionState* es)
+{
 	ExeStateSet::iterator it = addedStates.find(es);
 	assert (it != addedStates.end());
 	addedStates.erase(it);
 }
 
-void ExeStateManager::commitQueue(Executor* exe, ExecutionState *current)
+
+void ExeStateManager::commitQueue(ExecutionState *current)
 {
 	ExecutionState	*root_to_be_removed;
 
@@ -155,11 +174,11 @@ void ExeStateManager::commitQueue(Executor* exe, ExecutionState *current)
 			--nonCompactStateCount;
 
 		// delete es
-		exe->removePTreeState(es, &root_to_be_removed);
+		removePTreeState(es, &root_to_be_removed);
 	}
 
 	if (root_to_be_removed)
-		exe->removeRoot(root_to_be_removed);
+		pathTree->removeRoot(this, root_to_be_removed);
 
 	if (!addedStates.empty()) {
 		states.insert(addedStates.begin(), addedStates.end());
@@ -186,13 +205,25 @@ void ExeStateManager::replaceState(ExecutionState* old_s, ExecutionState* new_s)
 
 /* don't bother queueing up state for deletion, get rid of it immediately */
 void ExeStateManager::replaceStateImmediate(
-	ExecutionState* old_s, ExecutionState* new_s)
+	ExecutionState* old_s, ExecutionState* new_s,
+	ExecutionState** root_to_be_removed)
 {
 	assert (!isRemovedState(new_s));
 	addedStates.insert(new_s);
 	assert (isAddedState(old_s));
 	addedStates.erase(old_s);
 	replacedStates[old_s] = new_s;
+
+	removePTreeState(old_s, root_to_be_removed);
+}
+
+void ExeStateManager::removePTreeState(
+	ExecutionState* es,
+	ExecutionState** root_to_be_removed)
+{
+	ExecutionState	*root;
+	root = pathTree->removeState(this, es);
+	if (root != NULL) *root_to_be_removed = root;
 }
 
 bool ExeStateManager::isAddedState(ExecutionState* s) const

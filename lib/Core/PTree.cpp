@@ -184,7 +184,7 @@ void PTreeNode::update(PTree::Weights index, bool sum)
 	p->propagateSumsUp();
 }
 
-void PTree::dump(const std::string& n)
+void PTree::dump(const std::string& n) const
 {
 	std::ofstream os;
 	std::string name = n + ".dot";
@@ -195,7 +195,7 @@ void PTree::dump(const std::string& n)
 	os.close();
 }
 
-void PTree::dump(std::ostream &os)
+void PTree::dump(std::ostream &os) const
 {
 	ExprPPrinter		*pp;
 	std::vector<PTreeNode*> stack;

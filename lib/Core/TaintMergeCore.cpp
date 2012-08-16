@@ -83,7 +83,6 @@ TaintMergeCore::TaintMergeCore(Executor* _exe)
 : exe(_exe)
 , taint_id(1)
 , merging_st(NULL)
-, old_pt(NULL)
 , old_esm(NULL)
 {
 	ExprAlloc	*ea;
@@ -145,32 +144,27 @@ SFH_DEF_HANDLER(TaintMerge)
 void TaintMergeCore::taintMergeBegin(ExecutionState& state)
 {
 	ExeStateManager	*new_esm;
-	PTree		*new_pt;
 	ExecutionState	*new_st;
 
-	if (old_pt != NULL) {
+	if (old_esm != NULL) {
 		std::cerr << "[TaintMerge] Ignorign nested merge.\n";
 		return;
 	}
-
 
 	/* NOW MERGINGGGGGGGG */
 	std::cerr << "BEGIN THE MERGE!!\n";
 
 	/* swap out state information to support exhaustive search */
-	old_pt = exe->getPTree();
 	old_esm = exe->getStateManager();
 
 	/* activate expression tainting */
 	merging_st = &state;
 	new_st = merging_st->copy();
-	new_pt = new PTree(new_st);
 
 	new_esm = new ExeStateManager();
-	new_esm->setInitialState(exe, new_st, false);
+	new_esm->setInitialState(new_st);
 	new_esm->setupSearcher(new DFSSearcher());
 
-	exe->setPTree(new_pt);
 	exe->setStateManager(new_esm);
 
 	/* at the end, we expect to have a set of states which are all tainted 
@@ -178,7 +172,6 @@ void TaintMergeCore::taintMergeBegin(ExecutionState& state)
 
 	assert (0 == 1 && "MERGE POINT");
 }
-
 
 void TaintMergeCore::taintMergeEnd(void)
 {

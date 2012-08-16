@@ -72,11 +72,11 @@ public:
 		return os;
 	}
 
-	virtual void removePTreeState(
-		ExecutionState* es, ExecutionState** root_to_be_removed = 0)
+	virtual void replaceStateImmForked(
+		ExecutionState* os, ExecutionState* ns)
 	{
-		seedCore.erase(es);
-		T::removePTreeState(es, root_to_be_removed);
+		seedCore.erase(os);
+		T::replaceStateImmForked(os, ns);
 	}
 
 	virtual bool addConstraint(ExecutionState &state, ref<Expr> condition)

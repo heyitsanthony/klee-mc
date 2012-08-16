@@ -33,7 +33,6 @@ private:
 
 	/* state information before activating the branch mode */
 	ExecutionState	*merging_st;
-	PTree		*old_pt;
 	ExeStateManager	*old_esm;
 };
 }

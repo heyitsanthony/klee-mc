@@ -64,7 +64,6 @@ class MMU;
 class MemoryManager;
 class MemoryObject;
 class ObjectState;
-class PTree;
 class SpecialFunctionHandler;
 struct StackFrame;
 class StatsTracker;
@@ -221,8 +220,8 @@ protected:
 	{ terminateStateOnError(state, message, "exec.err", info); }
 
   ref<ConstantExpr> getSmallSymAllocSize(ExecutionState &st, ref<Expr>& size);
-  virtual void removePTreeState(
-  	ExecutionState* es, ExecutionState** root_to_be_removed = 0);
+	virtual void replaceStateImmForked(ExecutionState* os, ExecutionState* ns);
+
 
   virtual ObjectState* makeSymbolic(
     ExecutionState& state,
@@ -253,7 +252,6 @@ protected:
 	llvm::TargetData	*target_data;
 	llvm::Function		*dbgStopPointFn;
 	StatsTracker		*statsTracker;
-	PTree			*pathTree;
 	TreeStreamWriter	*symPathWriter;
 	StateSolver		*solver;
 	ExeStateManager		*stateManager;
@@ -356,7 +354,6 @@ private:
 
 	void stepInstruction(ExecutionState &state);
 	void removeRoot(ExecutionState* es);
-	void replaceStateImmForked(ExecutionState* os, ExecutionState* ns);
 
 	llvm::Function* executeBitCast(
 		ExecutionState	&state,
@@ -544,9 +541,7 @@ public:
 	const struct KTest *getReplayOut(void) const { return replayOut; }
 	bool isAtMemoryLimit(void) const { return atMemoryLimit; }
 
-	PTree* getPTree(void) { return pathTree; }
 	ExeStateManager* getStateManager(void) { return stateManager; }
-	void setPTree(PTree* pt) { pathTree = pt; }
 	void setStateManager(ExeStateManager* esm) { stateManager = esm; }
 
 	const Forks* getForking(void) const { return forking; }
