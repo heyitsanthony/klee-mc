@@ -732,7 +732,7 @@ ExecutionState* ExecutionState::createReplay(
 	}
 
 	newState->replayBrIter = newState->brChoiceSeq.begin();
-	newState->ptreeNode->data = 0;
+	newState->ptreeNode->markReplay();
 	newState->isReplay = true;
 	newState->personalInsts = 0;
 

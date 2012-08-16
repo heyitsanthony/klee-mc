@@ -33,17 +33,19 @@ Executor* ShadowCore::g_exe = NULL;
 SFH_HANDLER2(TaintLoad, ShadowCombine* sc)
 SFH_HANDLER2(TaintStore, ShadowCombine* sc)
 
+#define TABENT(x,y) {		\
+	x,			\
+	&Handler##y::create,	\
+	false, /* terminates */	\
+	false, /* has return value */	\
+	false /* do not override intrinsic */ }
+
 static struct SpecialFunctionHandler::HandlerInfo shadow_hi[] =
 {
-{
-	"shadow_taint_load",
-	&HandlerTaintLoad::create,
-	false, /* terminates */
-	false, /* has return value */
-	false /* do not override intrinsic */
-},
-{ "shadow_taint_store", &HandlerTaintStore::create, false, false, false }
+	TABENT("shadow_taint_load", TaintLoad),
+	TABENT("shadow_taint_store", TaintStore),
 };
+#undef TABENT
 
 ShadowCore::ShadowCore(Executor* _exe)
 : exe(_exe)
@@ -98,7 +100,6 @@ void ShadowCore::setupInitialState(ExecutionState* es)
 		false);
 	f_load = m->getOrInsertFunction("shadow_taint_load", f_ty);
 
-
 	argTypes.clear();
 	argTypes.push_back(IntegerType::get(getGlobalContext(), 64));
 	argTypes.push_back(IntegerType::get(getGlobalContext(), 64));
@@ -119,8 +120,7 @@ void ShadowCore::setupInitialState(ExecutionState* es)
 	t_store_h->sc = sc;
 
 	/* add function pass to instrument interesting funcs */
-	km->addFunctionPass(
-		new ShadowPass(*exe, f_load, f_store, shadow_tags));
+	km->addFunctionPass(new ShadowPass(*exe, f_load, f_store, shadow_tags));
 }
 
 SFH_DEF_HANDLER(TaintLoad)

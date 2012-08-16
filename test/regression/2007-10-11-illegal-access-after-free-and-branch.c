@@ -1,5 +1,5 @@
 // RUN: %llvmgcc %s -emit-llvm -g -c -o %t1.bc
-// RUN: %klee --optimize %t1.bc
+// RUN: %klee --optimize=3 %t1.bc
 // RUN: test -f klee-last/test000001.ptr.err
 
 #include <stdlib.h>

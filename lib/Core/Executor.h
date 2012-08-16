@@ -65,7 +65,6 @@ class MemoryManager;
 class MemoryObject;
 class ObjectState;
 class PTree;
-class Searcher;
 class SpecialFunctionHandler;
 struct StackFrame;
 class StatsTracker;
@@ -81,10 +80,6 @@ class Executor : public Interpreter
 {
 /* FIXME The executor shouldn't have friends. */
 friend class ExeStateManager;
-friend class BumpMergingSearcher;
-friend class RandomPathSearcher;
-friend class MergingSearcher;
-friend class WeightedRandomSearcher;
 friend class SpecialFunctionHandler;
 friend class StatsTracker;
 
@@ -204,6 +199,7 @@ protected:
 
 	virtual void run(ExecutionState &initialState);
 	virtual void runLoop();
+	void step(void);
 
 	virtual void instRet(ExecutionState& state, KInstruction* ki);
 	virtual void instAlloc(ExecutionState& state, KInstruction* ki);
@@ -263,6 +259,7 @@ protected:
 	ExeStateManager		*stateManager;
 	Forks			*forking;
 	ExecutionState		*currentState;
+	ExecutionState		*prevState;
 	SpecialFunctionHandler	*sfh;
 
 private:
@@ -546,8 +543,12 @@ public:
 
 	const struct KTest *getReplayOut(void) const { return replayOut; }
 	bool isAtMemoryLimit(void) const { return atMemoryLimit; }
+
 	PTree* getPTree(void) { return pathTree; }
 	ExeStateManager* getStateManager(void) { return stateManager; }
+	void setPTree(PTree* pt) { pathTree = pt; }
+	void setStateManager(ExeStateManager* esm) { stateManager = esm; }
+
 	const Forks* getForking(void) const { return forking; }
 
 	ExecutionState* getCurrentState(void) const { return currentState; }

@@ -41,11 +41,6 @@ public:
 	PTree(const data_type &_root);
 	~PTree();
 
-	std::pair<PTreeNode*,PTreeNode*> split(
-		PTreeNode *n,
-		const data_type &leftData,
-		const data_type &rightData);
-
 	void remove(PTreeNode *n);
 
 	void dump(std::ostream &os);
@@ -55,15 +50,19 @@ public:
 	void removeRoot(ExeStateManager* stateManager, ExecutionState* es);
 
 	void splitStates(PTreeNode* n, ExecutionState* a, ExecutionState* b);
+
+private:
+	std::pair<PTreeNode*,PTreeNode*> split(
+		PTreeNode *n,
+		const data_type &leftData,
+		const data_type &rightData);
 };
 
 class PTreeNode
 {
 	friend class PTree;
 public:
-	PTreeNode				*parent;
 	llvm::SmallVector<PTreeNode*, 2>	children;
-	ExecutionState				*data;
 	llvm::SmallVector<std::vector<bool>, 2>	sums;
 
 	void update(PTree::Weights index, bool sum);
@@ -73,8 +72,14 @@ public:
 	: parent(_parent), data(_data) { }
 	~PTreeNode() { }
 
+	PTreeNode* getParent(void) const { return parent; }
+	ExecutionState* getData(void) const { return data; }
+	void markReplay(void) { data = 0; }
 private:
 	void propagateSumsUp();
+
+	PTreeNode	*parent;
+	ExecutionState	*data;
 };
 }
 

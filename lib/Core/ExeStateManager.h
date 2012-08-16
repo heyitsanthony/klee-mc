@@ -8,7 +8,7 @@
 
 namespace klee
 {
-class EquivalentStateEliminator;
+class Searcher;
 
 typedef std::map<ExecutionState*, ExecutionState*> ExeStateReplaceMap;
 
@@ -18,8 +18,7 @@ private:
   ExeStateSet states;
   ExeStateSet::size_type nonCompactStateCount;
 
-  /// Used to track states that have been added during the current
-  /// instructions step. 
+  /// Tracks states that have been added during the current instructions step.
   /// \invariant \ref addedStates is a subset of \ref states. 
   /// \invariant \ref addedStates and \ref removedStates are disjoint.
   ExeStateSet addedStates;
@@ -32,8 +31,7 @@ private:
   // used when we need to remove yielded states + normal removed states
   mutable ExeStateSet allRemovedStates;
 
-  /// Used to track states that have been replaced during the current
-  /// instructions step. 
+  /// Tracks states that have been replaced during the current instructions step.
   /// \invariant \ref replacedStates is a subset of \ref states U addedStates. 
   ExeStateReplaceMap replacedStates;
   
@@ -73,14 +71,17 @@ public:
 
 
   bool empty(void) const { return size() == 0; }
-  unsigned int size(void) const { return states.size() + yieldedStates.size(); }
-  unsigned int numRemovedStates(void) const { return removedStates.size(); }
+  unsigned size(void) const { return states.size() + yieldedStates.size(); }
+  unsigned numYieldedStates(void) const { return yieldedStates.size(); }
+  unsigned numRunningStates(void) const { return states.size(); }
+  unsigned numRemovedStates(void) const { return removedStates.size(); }
   bool isRemovedState(ExecutionState* s) const;
   bool isAddedState(ExecutionState* s) const;
   ExecutionState* selectState(bool allowCompact);
 
   void teardownUserSearcher(void);
   void setupSearcher(Executor* exe);
+  void setupSearcher(Searcher* s);
 
   unsigned int getNonCompactStateCount(void) const { return nonCompactStateCount; }
 };

@@ -15,10 +15,7 @@
 using namespace llvm;
 using namespace klee;
 
-namespace
-{
-	cl::opt<bool> UseYield("use-yield", cl::init(true));
-}
+namespace { cl::opt<bool> UseYield("use-yield", cl::init(true)); }
 
 ExeStateManager::ExeStateManager()
 : nonCompactStateCount(0)
@@ -26,10 +23,7 @@ ExeStateManager::ExeStateManager()
 {}
 
 ExeStateManager::~ExeStateManager()
-{
-	if (searcher)
-		delete searcher;
-}
+{ if (searcher != NULL) delete searcher; }
 
 ExecutionState* ExeStateManager::selectState(bool allowCompact)
 {
@@ -65,9 +59,12 @@ ExecutionState* ExeStateManager::selectState(bool allowCompact)
 }
 
 void ExeStateManager::setupSearcher(Executor* exe)
+{ setupSearcher(UserSearcher::constructUserSearcher(*exe)); }
+
+void ExeStateManager::setupSearcher(Searcher* s)
 {
 	assert (!searcher && "Searcher already inited");
-	searcher = UserSearcher::constructUserSearcher(*exe);
+	searcher = s;
 	searcher->update(NULL, Searcher::States(states));
 }
 

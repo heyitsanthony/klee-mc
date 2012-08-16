@@ -51,7 +51,7 @@ bool ShadowPass::runOnBasicBlockLoads(llvm::BasicBlock& bi, uint64_t tag)
 
 		++iit;
 
-		/* instrument post-load */
+	/* instrument post-load */
 		if (last_load != NULL) {
 			CallInst *new_call;
 			std::vector<Value*>	args;

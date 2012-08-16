@@ -1,5 +1,5 @@
 // RUN: %llvmgcc %s -emit-llvm -O0 -c -o %t1.bc
-// RUN: %klee --exit-on-error --optimize --libc=uclibc %t1.bc
+// RUN: %klee --exit-on-error --optimize=3 --libc=uclibc %t1.bc
 
 #include <string.h>
 #include <assert.h>

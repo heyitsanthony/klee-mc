@@ -373,7 +373,7 @@ SFH_DEF_HANDLER(ReportError)
 		state, message, suffix.c_str(), "", true);
 }
 
-SFH_DEF_HANDLER(Merge) { /* nop */ }
+SFH_DEF_HANDLER(Merge) { std::cerr << "[Merge] Merging disabled\n"; /* nop */ }
 
 SFH_DEF_HANDLER(Malloc)
 {

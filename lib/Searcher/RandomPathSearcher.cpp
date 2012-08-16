@@ -20,13 +20,14 @@ namespace klee { extern RNG theRNG; }
 RandomPathSearcher::RandomPathSearcher(Executor &_executor)
 : executor(_executor) {}
 
+/* XXX: I don't understand this code. --AJR */
 ExecutionState &RandomPathSearcher::selectState(bool allowCompact)
 {
 	unsigned	flips=0, bits=0;
 	PTreeNode	*n;
 	
-	n = executor.pathTree->root;
-	while (n->data == NULL) {
+	n = executor.getPTree()->root;
+	while (n->getData() == NULL) {
 		unsigned numEnabledChildren = 0, enabledIndex = 0;
 
 		assert (!n->children.empty() && "Empty leaf node");
@@ -82,7 +83,7 @@ ExecutionState &RandomPathSearcher::selectState(bool allowCompact)
 		assert(n && "RandomPathSearcher hit unexpected dead end");
 	}
 
-	return *n->data;
+	return *n->getData();
 }
 
 void RandomPathSearcher::update(ExecutionState *current, const States s)
@@ -91,17 +92,17 @@ void RandomPathSearcher::update(ExecutionState *current, const States s)
 
 	foreach (it, s.getAdded().begin(), s.getAdded().end()) {
 		ExecutionState *es = *it;
-		if (es->ptreeNode->data != es) {
+		if (es->ptreeNode->getData() != es) {
 			/* Node is probably replacing another node which
 			 * is in the remove list. Ignore it. */
-			assert (s.getRemoved().count(es->ptreeNode->data));
+			assert (s.getRemoved().count(es->ptreeNode->getData()));
 			inflight.insert(es);
 		}
 		es->ptreeNode->update(PTree::WeightRunnable, true);
 	}
 
 	foreach (it, s.getRemoved().begin(), s.getRemoved().end()) {
-		ExecutionState *es = *it;
+		ExecutionState *es = *it, *es_data;
 
 		if (es->ptreeNode == NULL)
 			continue;
@@ -109,14 +110,15 @@ void RandomPathSearcher::update(ExecutionState *current, const States s)
 		if (inflight.size() && inflight.find(es) != inflight.end())
 			continue;
 
-		if (es->ptreeNode->data != es)
+		es_data = es->ptreeNode->getData();
+		if (es_data != es)
 			std::cerr << "GOD DAMN IT: ES=" << (void*)es << 
-				". vs data=" << es->ptreeNode->data << '\n';
+				". vs data=" << es_data << '\n';
 
-		assert(es->ptreeNode->data == es && "Rmv w/ bad pNode data");
+		assert(es_data == es && "Rmv w/ bad pNode data");
 		es->ptreeNode->update(PTree::WeightRunnable, false);
 	}
 }
 
 bool RandomPathSearcher::empty(void) const
-{ return executor.stateManager->empty(); }
+{ return executor.getStateManager()->empty(); }

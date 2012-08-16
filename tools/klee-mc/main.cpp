@@ -9,6 +9,7 @@
 #include "static/Sugar.h"
 #include "../../lib/Core/GDBExecutor.h"
 #include "../../lib/Core/ShadowExecutor.h"
+#include "../../lib/Core/TaintMergeExecutor.h"
 #include "../../lib/Core/ConstraintSeedExecutor.h"
 #include "KleeHandler.h"
 #include "UCHandler.h"
@@ -64,6 +65,11 @@ namespace {
 	cl::opt<bool> UseTaint(
 		"use-taint",
 		cl::desc("Taint functions or something. EXPERIMENTAL"),
+		cl::init(false));
+
+	cl::opt<bool> UseTaintMerge(
+		"use-taint-merge",
+		cl::desc("Taint and merge specific functions."),
 		cl::init(false));
 
 	cl::opt<bool> SymHook(
@@ -406,14 +412,16 @@ bool isReplaying(void)
 	return (!ReplayOutDir.empty() || !ReplayOutFile.empty());
 }
 
-#define NEW_INTERP(x)						\
-	((UseGDB)						\
-		? new GDBExecutor<x>(handler) 			\
-		: (UseConstraintSeed)				\
-			? new ConstraintSeedExecutor<x>(handler)\
-			: (UseTaint)				\
-				? new ShadowExecutor<x>(handler) \
-				: new x(handler))
+#define NEW_INTERP(x)					\
+	((UseGDB)					\
+		? new GDBExecutor<x>(handler) 		\
+	: (UseConstraintSeed)				\
+		? new ConstraintSeedExecutor<x>(handler)\
+	: (UseTaintMerge)				\
+		? new TaintMergeExecutor<x>(handler)	\
+	: (UseTaint)					\
+		? new ShadowExecutor<x>(handler)	\
+	: new x(handler))
 
 Interpreter* createInterpreter(KleeHandler *handler, Guest* gs)
 {

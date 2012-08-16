@@ -562,11 +562,11 @@ ExecutionState* Forks::pureFork(ExecutionState& es, bool compact)
 	// Do actual state forking
 	newState = es.branch(compact);
 
-	exe.getStateManager()->queueAdd(newState);
-
 	// Update path tree with new states
-	es.ptreeNode->data = 0;
+	es.ptreeNode->markReplay();
 	exe.getPTree()->splitStates(es.ptreeNode, &es, newState);
+
+	exe.getStateManager()->queueAdd(newState);
 
 	return newState;
 }

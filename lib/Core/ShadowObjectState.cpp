@@ -4,8 +4,29 @@
 
 using namespace klee;
 
+ShadowObjectState::ShadowObjectState(const ObjectState& os)
+: UnboxingObjectState(os)
+{
+	const ShadowObjectState*	sos;
+
+	sos = dynamic_cast<const ShadowObjectState*>(&os);
+	if (sos == NULL) {
+		/* should this *ever* happen? */
+		is_tainted = false;
+		tainted_bytes = 0;
+		return;
+	}
+
+	is_tainted = sos->is_tainted;
+	taint_v = sos->taint_v;
+	tainted_bytes = sos->tainted_bytes;
+}
+
 void ShadowObjectState::write8(unsigned offset, ref<Expr>& value)
 {
+	/* XXX: this is imprecise */
+	if (value->isShadowed()) tainted_bytes++;
+
 	if (value->getKind() != Expr::Constant) {
 		ObjectState::write8(offset, value);
 		return;
@@ -21,6 +42,9 @@ void ShadowObjectState::write8(unsigned offset, ref<Expr>& value)
 
 void ShadowObjectState::write(unsigned offset, const ref<Expr>& value)
 {
+	/* XXX: this is imprecise */
+	if (value->isShadowed()) tainted_bytes++;
+
 	if (value->getKind() != Expr::Constant) {
 		ObjectState::write(offset, value);
 		return;
@@ -34,7 +58,7 @@ void ShadowObjectState::write(unsigned offset, const ref<Expr>& value)
 	UnboxingObjectState::write(offset, value);
 }
 
-void ShadowObjectState::taint(uint64_t v)
+void ShadowObjectState::taintAccesses(uint64_t v)
 {
 	is_tainted = true;
 	taint_v = v;

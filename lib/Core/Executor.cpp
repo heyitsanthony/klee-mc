@@ -294,9 +294,7 @@ bool Executor::addConstraint(ExecutionState &state, ref<Expr> condition)
 
 	if (ivcEnabled) {
 		doImpliedValueConcretization(
-			state,
-			condition,
-			ConstantExpr::create(1, Expr::Bool));
+			state, condition, MK_CONST(1, Expr::Bool));
 	}
 
 	if (ChkConstraints) {
@@ -2103,43 +2101,45 @@ done:
 	mmu = NULL;
 }
 
+void Executor::step(void)
+{
+	currentState = stateManager->selectState(!onlyNonCompact);
+	if (prevState != currentState && DumpSelectStack) {
+		std::cerr << "StackTrace for st="
+			<< (void*)currentState
+			<< ". Insts=" <<currentState->totalInsts
+			<< ". SInsts=" << currentState->personalInsts
+			<< '\n';
+		printStackTrace(*currentState, std::cerr);
+		std::cerr << "===================\n";
+	}
+
+	assert (currentState != NULL &&
+		"State man not empty, but selectState is?");
+
+	/* decompress state if compact */
+	if (currentState->isCompact()) {
+		ExecutionState* newSt;
+
+		assert (initialStateCopy != NULL);
+		newSt = currentState->reconstitute(*initialStateCopy);
+		stateManager->replaceState(currentState, newSt);
+
+		notifyCurrent(currentState);
+		currentState = newSt;
+	}
+
+	stepStateInst(currentState);
+
+	handleMemoryUtilization(currentState);
+	notifyCurrent(currentState);
+	prevState = currentState;
+}
+
 void Executor::runLoop(void)
 {
-	ExecutionState* last_state;
-	while (!stateManager->empty() && !haltExecution) {
-
-		currentState = stateManager->selectState(!onlyNonCompact);
-		if (last_state != currentState && DumpSelectStack) {
-			std::cerr << "StackTrace for st="
-				<< (void*)currentState
-				<< ". Insts=" <<currentState->totalInsts
-				<< ". SInsts=" << currentState->personalInsts
-				<< '\n';
-			printStackTrace(*currentState, std::cerr);
-			std::cerr << "===================\n";
-		}
-
-		assert (currentState != NULL &&
-			"State man not empty, but selectState is?");
-
-		/* decompress state if compact */
-		if (currentState->isCompact()) {
-			ExecutionState* newSt;
-
-			assert (initialStateCopy != NULL);
-			newSt = currentState->reconstitute(*initialStateCopy);
-			stateManager->replaceState(currentState, newSt);
-
-			notifyCurrent(currentState);
-			currentState = newSt;
-		}
-
-		stepStateInst(currentState);
-
-		handleMemoryUtilization(currentState);
-		notifyCurrent(currentState);
-		last_state = currentState;
-	}
+	prevState = NULL;
+	while (!stateManager->empty() && !haltExecution) step();
 }
 
 void Executor::notifyCurrent(ExecutionState* current)

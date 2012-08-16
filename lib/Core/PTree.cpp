@@ -197,16 +197,20 @@ void PTree::dump(const std::string& n)
 
 void PTree::dump(std::ostream &os)
 {
-	ExprPPrinter *pp = ExprPPrinter::create(os);
+	ExprPPrinter		*pp;
+	std::vector<PTreeNode*> stack;
+
+	pp = ExprPPrinter::create(os);
 	pp->setNewline("\\l");
 	os << "digraph G {\n";
 	os << "\tsize=\"10,7.5\";\n";
 	os << "\tratio=fill;\n";
 	os << "\trotate=90;\n";
 	os << "\tcenter = \"true\";\n";
-	os << "\tnode [style=\"filled\",width=.1,height=.1,fontname=\"Terminus\"]\n";
+	os << 	"\tnode [style=\"filled\","
+		"width=.1,height=.1,fontname=\"Terminus\"]\n";
 	os << "\tedge [arrowsize=.3]\n";
-	std::vector<PTreeNode*> stack;
+
 	stack.push_back(root);
 	while (!stack.empty()) {
 		PTreeNode *n = stack.back();
