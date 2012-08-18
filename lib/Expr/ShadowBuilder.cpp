@@ -4,6 +4,17 @@
 
 using namespace klee;
 
+#define SHADOW_BEGIN(x) {				\
+	bool		was_shadow(sa->isShadowing());	\
+	ShadowVal	old_v;				\
+	if (was_shadow) old_v = sa->getShadow();	\
+	sa->startShadow(x);
+
+#define SHADOW_END				\
+	if (!was_shadow) sa->stopShadow();	\
+	else sa->startShadow(old_v);		\
+}
+
 ExprBuilder* ShadowBuilder::create(ExprBuilder* eb, ShadowCombine* _sc)
 {
 	if (_sc == NULL) _sc = new ShadowCombineOr();
@@ -26,9 +37,10 @@ const ShadowType* ShadowBuilder::getShadowExpr(const ref<Expr>& e) const
 ref<Expr> ShadowBuilder::x(const ref<Expr>& src)	\
 {	const ShadowType	*se(getShadowExpr(src));\
 	if (se == NULL) return eb_default->x(src);	\
-	sa->startShadow(se->getShadow());		\
-	ref<Expr> e(eb_default->x(src));	\
-	sa->stopShadow();			\
+	ref<Expr>	e;			\
+	SHADOW_BEGIN(se->getShadow());		\
+	e = eb_default->x(src);			\
+	SHADOW_END				\
 	return e;				\
 }
 
@@ -37,7 +49,7 @@ DECL_ALLOC_1(Not)
 
 #define DECL_ALLOC_2_BODY(x)		\
 	const ShadowType	*se[2];	\
-	uint64_t		tag;	\
+	ShadowVal		tag;	\
 	se[0] = getShadowExpr(lhs);	\
 	se[1] = getShadowExpr(rhs);	\
 	if (se[0] == NULL && se[1] == NULL)	\
@@ -46,9 +58,10 @@ DECL_ALLOC_1(Not)
 		tag = sc->combine(se[0]->getShadow(), se[1]->getShadow()); \
 	else if (se[1]) tag = se[1]->getShadow();	\
 	else tag = se[0]->getShadow();		\
-	sa->startShadow(tag);			\
-	ref<Expr> e(eb_default->x(lhs, rhs));	\
-	sa->stopShadow();			\
+	ref<Expr>	e;			\
+	SHADOW_BEGIN(tag)			\
+	e = eb_default->x(lhs, rhs);		\
+	SHADOW_END				\
 	return e;				\
 
 #define DECL_ALLOC_2(x)	\
@@ -99,9 +112,10 @@ ref<Expr> ShadowBuilder::Read(const UpdateList &updates, const ref<Expr> &idx)
 {
 	const ShadowType	*se(getShadowExpr(idx));
 	if (se == NULL) return eb_default->Read(updates, idx);
-	sa->startShadow(se->getShadow());
-	ref<Expr> e(eb_default->Read(updates, idx));
-	sa->stopShadow();
+	ref<Expr>	e;
+	SHADOW_BEGIN(se->getShadow());
+	e = eb_default->Read(updates, idx);
+	SHADOW_END
 	return e;
 }
 
@@ -112,8 +126,8 @@ ref<Expr> ShadowBuilder::Select(
 
 	const ShadowType	*se[3];
 	bool			tag_used = false;
-	uint64_t		tag;
-	
+	ShadowVal		tag;
+
 	se[0] = getShadowExpr(c);
 	se[1] = getShadowExpr(t);
 	se[2] = getShadowExpr(f);
@@ -134,10 +148,10 @@ ref<Expr> ShadowBuilder::Select(
 		tag_used = true;
 	}
 
-
-	sa->startShadow(tag);
-	ref<Expr> e(eb_default->Select(c, t, f));
-	sa->stopShadow();
+	ref<Expr> e;
+	SHADOW_BEGIN(tag);
+	e = eb_default->Select(c, t, f);
+	SHADOW_END
 	return e;
 }
 
@@ -148,9 +162,10 @@ ref<Expr> ShadowBuilder::Extract(const ref<Expr> &e, unsigned o, Expr::Width w)
 	se = getShadowExpr(e);
 	if (se == NULL) return eb_default->Extract(e, o, w);
 
-	sa->startShadow(se->getShadow());
-	ref<Expr> r(eb_default->Extract(e, o, w));
-	sa->stopShadow();
+	ref<Expr> r;
+	SHADOW_BEGIN(se->getShadow());
+	r = eb_default->Extract(e, o, w);
+	SHADOW_END
 	return r;
 }
 
@@ -161,9 +176,10 @@ ref<Expr> ShadowBuilder::ZExt(const ref<Expr> &e, Expr::Width w)
 	se = getShadowExpr(e);
 	if (se == NULL) return eb_default->ZExt(e, w);
 
-	sa->startShadow(se->getShadow());
-	ref<Expr> r(eb_default->ZExt(e, w));
-	sa->stopShadow();
+	ref<Expr> r;
+	SHADOW_BEGIN(se->getShadow());
+	r = eb_default->ZExt(e, w);
+	SHADOW_END
 	return r;
 }
 
@@ -174,9 +190,10 @@ ref<Expr> ShadowBuilder::SExt(const ref<Expr> &e, Expr::Width w)
 	se = getShadowExpr(e);
 	if (se == NULL) return eb_default->SExt(e, w);
 
-	sa->startShadow(se->getShadow());
-	ref<Expr> r(eb_default->SExt(e, w));
-	sa->stopShadow();
+	ref<Expr> r;
+	SHADOW_BEGIN(se->getShadow());
+	r = eb_default->SExt(e, w);
+	SHADOW_END
 	return r;
 }
 

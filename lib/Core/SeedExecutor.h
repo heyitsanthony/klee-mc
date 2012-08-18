@@ -28,11 +28,11 @@ public:
 		T::executeGetValue(state, e, target);
 	}
 
-	virtual void terminateState(ExecutionState &state)
+	virtual void terminate(ExecutionState &state)
 	{
 		// never reached searcher, just delete immediately
 		seedCore.erase(&state);
-		T::terminateState(state);
+		T::terminate(state);
 	}
 
 	void useSeeds(const std::vector<struct KTest *> *seeds)

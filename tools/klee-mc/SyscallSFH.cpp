@@ -337,7 +337,7 @@ SFH_DEF_HANDLER(FreeRun)
 	addr = dyn_cast<ConstantExpr>(arguments[0]);
 	len = dyn_cast<ConstantExpr>(arguments[1]);
 	if (addr == NULL || len == NULL) {
-		exe_vex->terminateStateOnError(
+		exe_vex->terminateOnError(
 			state,
 			"munmap error: non-CE exprs. Bad runtime",
 			"munmap.err");
@@ -358,7 +358,7 @@ SFH_DEF_HANDLER(FreeRun)
 
 		mo = state.addressSpace.resolveOneMO(cur_addr);
 		if (mo == NULL && len_remaining >= 4096) {
-			exe_vex->terminateStateOnError(
+			exe_vex->terminateOnError(
 				state,
 				"munmap error: munmapping bad address",
 				"munmap.err");
@@ -389,7 +389,7 @@ SFH_DEF_HANDLER(KMCExit)
 	if (ce)  fprintf(stderr, "exitcode=%lu\n", ce->getZExtValue());
 	else fprintf(stderr, "exitcode=?\n");
 
-	sfh->executor->terminateStateOnExit(state);
+	sfh->executor->terminateOnExit(state);
 }
 
 SFH_DEF_HANDLER(MakeRangeSymbolic)
@@ -407,7 +407,7 @@ SFH_DEF_HANDLER(MakeRangeSymbolic)
 	addr = dyn_cast<ConstantExpr>(arguments[0]);
 	len = dyn_cast<ConstantExpr>(arguments[1]);
 	if (addr == NULL || len == NULL) {
-		exe_vex->terminateStateOnError(
+		exe_vex->terminateOnError(
 			state,
 			"makerangesymbolic error: Addr or len not CE exprs. Smash runtime",
 			"mrs.err");
@@ -437,7 +437,7 @@ SFH_DEF_HANDLER(Breadcrumb)
 	len_expected = (unsigned int)len_expected_ce->getZExtValue();
 	buf = sfh->readBytesAtAddress(state, arguments[0], len_expected, len_in, -1);
 	if (buf == NULL) {
-		sfh->executor->terminateStateOnError(
+		sfh->executor->terminateOnError(
 			state,
 			"Breadcrumb error: Symbolic breadcrumb frame",
 			"breadcrumb.err");
@@ -449,7 +449,7 @@ SFH_DEF_HANDLER(Breadcrumb)
 		fprintf(stderr,
 			"GOT LENGTH %d. Expected %d\n", len_in, bc->bc_sz);
 		assert (0 == 1);
-		sfh->executor->terminateStateOnError(
+		sfh->executor->terminateOnError(
 			state,
 			"Breadcrumb error: Bad length",
 			"breadcrumb.err");
@@ -484,7 +484,7 @@ SFH_DEF_HANDLER(AllocAligned)
 	len = dyn_cast<ConstantExpr>(arguments[0]);
 	exe_vex = dynamic_cast<ExecutorVex*>(sfh->executor);
 	if (len == NULL) {
-		exe_vex->terminateStateOnError(
+		exe_vex->terminateOnError(
 			state,
 			"kmc_alloc_aligned error: len not constant.",
 			"mrs.err");
@@ -650,7 +650,7 @@ void SyscallSFH::makeRangeSymbolic(
 				"couldn't find %p in user range %p-%p\n",
 				(void*)cur_addr,
 				addr, ((char*)addr)+sz);
-			executor->terminateStateOnError(
+			executor->terminateOnError(
 				state,
 				"Tried to make non-allocated memory symbolic",
 				"symoob.err");

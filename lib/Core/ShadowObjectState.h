@@ -14,6 +14,7 @@ public:
 	ref<Expr> read8(unsigned offset) const;
 
 	bool isClean(void) const { return tainted_bytes == 0; }
+	bool isByteTainted(unsigned s) const;
 
 protected:
 	ShadowObjectState(unsigned size)

@@ -220,7 +220,7 @@ void ExecutionState::xferFrame(KFunction* kf)
 
 	/* create new frame to replace old frame;
 	   new frame initialized with target function kf */
-	stack.push_back(StackFrame(ki,kf));
+	stack.push_back(StackFrame(ki, kf));
 	StackFrame	&sf2(stack.back());
 	sf2.callPathNode = cpn;
 }

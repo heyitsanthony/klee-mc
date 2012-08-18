@@ -273,7 +273,7 @@ void UCMMU::bindUnfixedUC(
 	real_addr = residue;
 	if (state.addressSpace.resolveOne(real_addr, res) == false) {
 		/* realptr now no where? but I put it there fair and square! */
-		exe_uc.terminateStateOnError(
+		exe_uc.terminateOnError(
 			state,
 			"Unconstrained: bogus realptr. I screwed up! FIXME",
 			"uc.err",
@@ -302,7 +302,7 @@ void UCMMU::bindUnfixedUC(
 		std::cerr << "FORK COND: " << cond << '\n';
 		sp = exe_uc.fork(state, cond, true);
 		if (sp.second != NULL) {
-			exe_uc.terminateStateOnError(
+			exe_uc.terminateOnError(
 				*sp.second,
 				"bindUnfixedUC: out of bounds on image ptr",
 				"fixptr.err",
@@ -323,7 +323,7 @@ void UCMMU::bindUnfixedUC(
 		full_ptr_sym,
 		res);
 	if (expand_err != NULL) {
-		exe_uc.terminateStateOnError(
+		exe_uc.terminateOnError(
 			state,
 			expand_err,
 			"expand.err",
@@ -375,7 +375,7 @@ void UCMMU::expandUnfixed(
 	bytes = Expr::getMinBytesForWidth(type);
 
 	if (state.addressSpace.resolveOne(real_addr, res) == false) {
-		exe_uc.terminateStateOnError(
+		exe_uc.terminateOnError(
 			state,
 			"Unconstrained: bogus realptr. I screwed up! FIXME",
 			"uc.err",
@@ -387,7 +387,7 @@ void UCMMU::expandUnfixed(
 	min_off = (req_addr - real_addr) + bytes;
 	if (min_off > MAX_EXPAND_SIZE) {
 		std::cerr << "MAXBUF: " << min_off << '\n';
-		exe_uc.terminateStateOnError(
+		exe_uc.terminateOnError(
 			state,
 			"Unconstrained: Maximum buffer size reached.",
 			"ucmax.err",
@@ -437,7 +437,7 @@ void UCMMU::bindFixedUC(
 
 	if (unbound.addressSpace.resolveOne(real_addr, res) == false) {
 		/* realptr now no where? but I put it there fair and square! */
-		exe_uc.terminateStateOnError(
+		exe_uc.terminateOnError(
 			unbound,
 			"Unconstrained: bogus realptr. I screwed up! FIXME",
 			"uc.err",
@@ -461,7 +461,7 @@ void UCMMU::bindFixedUC(
 	if (oob_state == NULL)
 		return;
 
-	exe_uc.terminateStateOnError(
+	exe_uc.terminateOnError(
 		*oob_state,
 		"memory error: out of bound pointer",
 		"ptr.err",
@@ -606,7 +606,7 @@ void UCMMU::handleSymResteer(ExecutionState& state, MemOp& mop)
 			klee_warning(
 				"Ignoring negative residue %p\n",
 				(void*)residue);
-			exe_uc.terminateStateOnExit(state);
+			exe_uc.terminateOnExit(state);
 			return;
 		}
 		resolveSymbolicOffset(state, mop, residue);
@@ -648,7 +648,7 @@ void UCMMU::memOpError(ExecutionState& state, MemOp& mop)
 
 	if (sym_ce != NULL) {
 		/* dead on a fixed buffer.. not much we can do */
-		exe_uc.terminateStateOnError(
+		exe_uc.terminateOnError(
 			state,
 			"Unconstrained: exceeded length of fixed buffer.",
 			"ptr.err",

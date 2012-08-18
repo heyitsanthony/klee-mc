@@ -46,7 +46,7 @@ void ConcreteMMU::exeConstMemOp(
 	}
 
 	/*  BAD ACCESS */
-	exe.terminateStateOnError(
+	exe.terminateOnError(
 		state,
 		"memory error: out of bound pointer",
 		"ptr.err",
@@ -104,7 +104,7 @@ bool ConcreteMMU::slowPathWrite(
 		ref<Expr>	byte_val(MK_EXTRACT(mop.value, 8*i, 8));
 
 		if (op.second->readOnly) {
-			exe.terminateStateOnError(
+			exe.terminateOnError(
 				state,
 				"memory error: object read only",
 				"readonly.err");
@@ -138,7 +138,7 @@ void ConcreteMMU::commitMOP(
 	}
 	
 	if (op.second->readOnly) {
-		exe.terminateStateOnError(
+		exe.terminateOnError(
 			state,
 			"memory error: object read only",
 			"readonly.err");

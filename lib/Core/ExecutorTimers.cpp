@@ -767,9 +767,8 @@ void Executor::processTimers(ExecutionState *current, double maxInstTime)
 
   if (maxInstTime>0 && current && !stateManager->isRemovedState(current)
       && lastCall != 0. && (now - lastCall) > maxInstTime) {
-    klee_warning("max-instruction-time exceeded: %.2fs",
-                 now - lastCall);
-    terminateStateEarly(*current, "max-instruction-time exceeded");
+    klee_warning("max-instruction-time exceeded: %.2fs", now - lastCall);
+    terminateEarly(*current, "max-instruction-time exceeded");
   }
 
   if (timers.empty()) goto done;

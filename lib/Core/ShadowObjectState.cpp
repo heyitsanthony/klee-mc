@@ -22,10 +22,12 @@ ShadowObjectState::ShadowObjectState(const ObjectState& os)
 	tainted_bytes = sos->tainted_bytes;
 }
 
+#include <iostream>
 void ShadowObjectState::write8(unsigned offset, ref<Expr>& value)
 {
 	/* XXX: this is imprecise */
-	if (value->isShadowed()) tainted_bytes++;
+	if (value->isShadowed())
+		tainted_bytes++;
 
 	if (value->getKind() != Expr::Constant) {
 		ObjectState::write8(offset, value);
@@ -85,3 +87,6 @@ ref<Expr> ShadowObjectState::read8(ref<Expr> offset) const
 
 	return ret;
 }
+ 
+bool ShadowObjectState::isByteTainted(unsigned off) const
+{ return read8(off)->isShadowed(); }

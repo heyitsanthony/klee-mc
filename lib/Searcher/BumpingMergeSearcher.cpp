@@ -55,7 +55,7 @@ entry:
       // hack, because we are terminating the state we need to let
       // the baseSearcher know about it again
       baseSearcher->addState(&es);
-      executor.terminateState(es);
+      executor.terminate(es);
     } else {
       it->second = &es; // the bump
       ++mergeWith->pc;

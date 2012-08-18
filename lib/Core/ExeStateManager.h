@@ -16,43 +16,48 @@ typedef std::map<ExecutionState*, ExecutionState*> ExeStateReplaceMap;
 class ExeStateManager
 {
 private:
-  ExeStateSet states;
-  ExeStateSet::size_type nonCompactStateCount;
+	ExeStateSet states;
+	ExeStateSet::size_type nonCompactStateCount;
 
-  /// Tracks states that have been added during the current instructions step.
-  /// \invariant \ref addedStates is a subset of \ref states.
-  /// \invariant \ref addedStates and \ref removedStates are disjoint.
-  ExeStateSet addedStates;
-  /// Used to track states that have been removed during the current
-  /// instructions step.
-  /// \invariant \ref removedStates is a subset of \ref states.
-  /// \invariant \ref addedStates and \ref removedStates are disjoint.
-  ExeStateSet removedStates;
+	/// States that have been added during the current instructions step.
+	/// \invariant \ref addedStates is a subset of \ref states.
+	/// \invariant \ref addedStates and \ref removedStates are disjoint.
+	ExeStateSet addedStates;
+	/// Used to track states that have been removed during the current
+	/// instructions step.
+	/// \invariant \ref removedStates is a subset of \ref states.
+	/// \invariant \ref addedStates and \ref removedStates are disjoint.
+	ExeStateSet removedStates;
 
-  // used when we need to remove yielded states + normal removed states
-  mutable ExeStateSet allRemovedStates;
+	// used when we need to remove yielded states + normal removed states
+	mutable ExeStateSet allRemovedStates;
 
-  /// Tracks states that have been replaced during the current instructions step.
-  /// \invariant \ref replacedStates is a subset of \ref states U addedStates.
-  ExeStateReplaceMap replacedStates;
+	// States replaced during the current instructions step.
+	ExeStateReplaceMap replacedStates;
 
-  /* states to yield */
-  ExeStateSet yieldStates;
+	/* states to yield */
+	ExeStateSet yieldStates;
 
-  /* all yielded states */
-  ExeStateSet yieldedStates;
+	/* all yielded states */
+	ExeStateSet yieldedStates;
 
-  Searcher *searcher;
+	Searcher *searcher;
 
-  Searcher::States getStates(void) const;
+	Searcher::States getStates(void) const;
 public:
 	ExeStateManager();
 	virtual ~ExeStateManager();
 	void commitQueue(ExecutionState* current);
 
-	ExeStateSet::const_iterator begin(void) { return states.begin(); }
-	ExeStateSet::const_iterator end(void) { return states.end(); }
+	ExeStateSet::const_iterator begin(void) const { return states.begin(); }
+	ExeStateSet::const_iterator end(void) const { return states.end(); }
 	bool hasState(ExecutionState* st) const{ return states.count(st) != 0; }
+
+	ExeStateSet::const_iterator beginYielded(void) const
+	{ return yieldedStates.begin(); }
+
+	ExeStateSet::const_iterator endYielded(void) const
+	{ return yieldedStates.end(); }
 
 	void dropAdded(ExecutionState* es);
 	void queueAdd(ExecutionState* es);
@@ -63,29 +68,32 @@ public:
 
 	void queueRemove(ExecutionState* s);
 	void yield(ExecutionState* s);
+	void forceYield(ExecutionState* s);
 
-  void setInitialState(ExecutionState* initialState);
-  void setWeights(double weight);
-  void replaceState(ExecutionState* old_s, ExecutionState* new_s);
-  void replaceStateImmediate(
-  	ExecutionState* old_s,
-	ExecutionState* new_s,
-	ExecutionState** root_to_be_removed = NULL);
-  ExecutionState* getReplacedState(ExecutionState* s) const;
+	void setInitialState(ExecutionState* initialState);
+	void setWeights(double weight);
+	void replaceState(ExecutionState* old_s, ExecutionState* new_s);
+	void replaceStateImmediate(
+		ExecutionState* old_s,
+		ExecutionState* new_s,
+		ExecutionState** root_to_be_removed = NULL);
+	ExecutionState* getReplacedState(ExecutionState* s) const;
 
-  void compactPressureStates(ExecutionState* &state, uint64_t maxMem);
-  void compactStates(ExecutionState* &state, unsigned numToCompact);
-  ExecutionState* compactState(ExecutionState* state);
+	void compactPressureStates(ExecutionState* &state, uint64_t maxMem);
+	void compactStates(ExecutionState* &state, unsigned numToCompact);
+	ExecutionState* compactState(ExecutionState* state);
 
 
-  bool empty(void) const { return size() == 0; }
-  unsigned size(void) const { return states.size() + yieldedStates.size(); }
-  unsigned numYieldedStates(void) const { return yieldedStates.size(); }
-  unsigned numRunningStates(void) const { return states.size(); }
-  unsigned numRemovedStates(void) const { return removedStates.size(); }
-  bool isRemovedState(ExecutionState* s) const;
-  bool isAddedState(ExecutionState* s) const;
-  ExecutionState* selectState(bool allowCompact);
+	bool empty(void) const { return size() == 0; }
+	unsigned size(void) const
+	{ return states.size() + yieldedStates.size(); }
+
+	unsigned numYieldedStates(void) const { return yieldedStates.size(); }
+	unsigned numRunningStates(void) const { return states.size(); }
+	unsigned numRemovedStates(void) const { return removedStates.size(); }
+	bool isRemovedState(ExecutionState* s) const;
+	bool isAddedState(ExecutionState* s) const;
+	ExecutionState* selectState(bool allowCompact);
 
 	void teardownUserSearcher(void);
 	void setupSearcher(Executor* exe);
@@ -96,6 +104,7 @@ public:
 
 	const PTree* getPTree(void) const { return pathTree; }
 private:
+	ExecutionState* popYieldedState(void);
 	void dropAddedDirect(ExecutionState* es);
 	void removePTreeState(
 		ExecutionState* es,

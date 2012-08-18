@@ -167,32 +167,25 @@ ExecutionState* ExeUC::forkNullPtr(ExecutionState& es, unsigned pt_idx)
 	sym_ptr = getUCSymPtr(es, pt_idx);
 
 	/* fork into to cases: sym_ptr is NULL. */
-	cond_eq_null = EqExpr::create(
-		sym_ptr,
-		ConstantExpr::create(0, sym_ptr->getWidth()));
+	cond_eq_null = MK_EQ(sym_ptr, MK_CONST(0, sym_ptr->getWidth()));
 
 	/* sym_ptr < LOWER_BOUND || sym_ptr > UPPER_BOUND */
 	cond_oob = OrExpr::create(
 		UltExpr::create(
 			sym_ptr,
-			ConstantExpr::create(
-				UC_LOWER_BOUND, sym_ptr->getWidth())),
+			MK_CONST(UC_LOWER_BOUND, sym_ptr->getWidth())),
 		UgtExpr::create(
 			sym_ptr,
-			ConstantExpr::create(
-				UC_UPPER_BOUND, sym_ptr->getWidth())));
+			MK_CONST(UC_UPPER_BOUND, sym_ptr->getWidth())));
 
-	res = fork(
-		es,
-		OrExpr::create(cond_eq_null, cond_oob),
-		true);
+	res = fork(es, MK_OR(cond_eq_null, cond_oob), true);
 
 	/* res.first => invalid pointer
 	 * res.second => valid pointer */
 
 	assert (res.first && res.second);
 
-	terminateStateOnError(
+	terminateOnError(
 		*res.first,
 		"Unconstrained: Must be a pointer",
 		"nullptr.err",

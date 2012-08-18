@@ -587,7 +587,7 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 		return;
 	case GE_SIGSEGV:
 		std::cerr << "[VEXLLVM] Caught SigSegV. Error Exit.\n";
-		terminateStateOnError(
+		terminateOnError(
 			state,
 			"VEX SIGSEGV error: jump to sigsegv",
 			"sigsegv.err");
@@ -595,7 +595,7 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 
 	case GE_SIGTRAP:
 		std::cerr << "[VEXLLVM] Caught SigTrap. Exiting\n";
-		terminateStateOnExit(state);
+		terminateOnExit(state);
 		return;
 	default:
 		std::cerr << "WTF: EXIT_TYPE=" << exit_type << '\n';
@@ -603,12 +603,12 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 	}
 
 	/* XXX need better bad stack frame handling */
-	ref<Expr> result = ConstantExpr::alloc(0, Expr::Bool);
-	result = eval(ki, 0, state).value;
+	ref<Expr> result = MK_CONST(0, Expr::Bool);
+	result = eval(ki, 0, state);
 
 	std::cerr <<  "terminating initial stack frame\nresult: ";
 	result->dump();
-	terminateStateOnExit(state);
+	terminateOnExit(state);
 }
 
 void ExecutorVex::handleXferJmp(ExecutionState& state, KInstruction* ki)
@@ -701,7 +701,7 @@ void ExecutorVex::handleXferSyscall(
 		
 	/* arg0 = regctx, arg1 = jmpptr */
 	args.push_back(es2esv(state).getRegCtx()->getBaseExpr());
-	args.push_back(eval(ki, 0, state).value);
+	args.push_back(eval(ki, 0, state));
 
 	executeCall(state, ki, kf_scenter->function, args);
 }
@@ -716,7 +716,7 @@ void ExecutorVex::handleXferReturn(
 	if (!AllowNegativeStack && stack_depth == 1) {
 		/* Call-stack is exhausted. KLEE resumes
 		 * control. */
-		terminateStateOnExit(state);
+		terminateOnExit(state);
 		return;
 	}
 
@@ -753,7 +753,7 @@ void ExecutorVex::callExternalFunction(
 	std::cerr
 		<< "KLEE: ERROR: Calling non-special external function : "
 		<< function->getName().str() << "\n";
-	terminateStateOnError(state, "externals disallowed", "user.err");
+	terminateOnError(state, "externals disallowed", "user.err");
 }
 
 

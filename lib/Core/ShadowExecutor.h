@@ -21,10 +21,10 @@ public:
 	: T(ie), shadowCore(this) {}
 	virtual ~ShadowExecutor() {}
 
-	virtual void terminateState(ExecutionState &state)
+	virtual void terminate(ExecutionState &state)
 	{
 		// never reached searcher, just delete immediately
-		T::terminateState(state);
+		T::terminate(state);
 	}
 
 	virtual bool addConstraint(ExecutionState &state, ref<Expr> condition)

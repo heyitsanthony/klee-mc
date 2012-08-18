@@ -77,7 +77,7 @@ ExecutionState &MergingSearcher::selectState(bool allowCompact)
 			foreach (ers_it, toErase.begin(), toErase.end()) {
 				ExeStateSet::iterator it2 = toMerge.find(*ers_it);
 				assert(it2 != toMerge.end());
-				executor.terminateState(**ers_it);
+				executor.terminate(**ers_it);
 				toMerge.erase(it2);
 			}
 

@@ -57,7 +57,7 @@ void KleeMMU::writeToMemRes(
 	const ref<Expr>& value)
 {
 	if (res.os->readOnly) {
-		exe.terminateStateOnError(
+		exe.terminateOnError(
 			state,
 			"memory error: object read only",
 			"readonly.err");
@@ -195,7 +195,7 @@ void KleeMMU::memOpError(ExecutionState& state, MemOp& mop)
 
 		/* ptr maps to OOB region */
 		if (branches.first) {
-			exe.terminateStateOnError(
+			exe.terminateOnError(
 				*branches.first,
 				"memory error: out of bound pointer",
 				"ptr.err",
@@ -204,7 +204,7 @@ void KleeMMU::memOpError(ExecutionState& state, MemOp& mop)
 
 		/* ptr does not map to OOB region */
 		if (branches.second)
-			exe.terminateStateEarly(
+			exe.terminateEarly(
 				*branches.second,
 				"query timed out (memOpError)");
 
@@ -215,7 +215,7 @@ void KleeMMU::memOpError(ExecutionState& state, MemOp& mop)
 		return;
 	}
 
-	exe.terminateStateOnError(
+	exe.terminateOnError(
 		*unbound,
 		"memory error: out of bound pointer",
 		"ptr.err",
@@ -420,8 +420,7 @@ KleeMMU::MemOpRes KleeMMU::memOpResolveExpr(
 		alwaysInBounds);
 	if (!ret.rc) {
 		state.pc = state.prevPC;
-		exe.terminateStateEarly(
-			state, "query timed out (memOpResolve)");
+		exe.terminateEarly(state, "query timed out (memOpResolve)");
 		return MemOpRes::failure();
 	}
 

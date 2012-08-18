@@ -43,11 +43,9 @@ public:
 		switch (i->getOpcode()) {
 #define INST_DIVOP(x)		\
 		case llvm::Instruction::x : {	\
-		ref<Expr>	r(T::eval(ki, 1, state).value);	\
+		ref<Expr>	r(T::eval(ki, 1, state));	\
 		if (r->getKind() == Expr::Constant) break;	\
-		csCore.logConstraint(	\
-			EqExpr::create(	\
-				ConstantExpr::create(0, r->getWidth()), r));\
+		csCore.logConstraint(MK_EQ(MK_CONST(0, r->getWidth()), r));\
 		break; }
 		INST_DIVOP(UDiv)
 		INST_DIVOP(SDiv)

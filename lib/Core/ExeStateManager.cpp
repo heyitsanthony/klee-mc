@@ -25,9 +25,47 @@ ExeStateManager::ExeStateManager()
 
 ExeStateManager::~ExeStateManager()
 {
+	if (searcher && pathTree) {
+		/* flush all pending states */
+		commitQueue(NULL);
+
+		/* wake up all yielding */
+		while (!yieldedStates.empty()) {
+			popYieldedState();
+			commitQueue(NULL);
+		}
+
+		/* queue erase all states */
+		foreach (it, states.begin(), states.end())
+			queueRemove(*it);
+
+		/* flush all pending states (erase all) */
+		commitQueue(NULL);
+	}
+
 	if (searcher != NULL) delete searcher;
-	delete pathTree;
-	pathTree = 0;
+	if (pathTree != NULL) delete pathTree;
+
+	searcher = NULL;
+	pathTree = NULL;
+}
+
+ExecutionState* ExeStateManager::popYieldedState(void)
+{
+	ExecutionState	*es;
+
+	assert (addedStates.empty());
+	assert (!yieldedStates.empty());
+
+	es = *yieldedStates.begin();
+
+	yieldedStates.erase(es);
+	queueAdd(es);
+	searcher->update(NULL, getStates());
+	states.insert(es);
+	addedStates.clear();
+
+	return es;
 }
 
 ExecutionState* ExeStateManager::selectState(bool allowCompact)
@@ -37,20 +75,7 @@ ExecutionState* ExeStateManager::selectState(bool allowCompact)
 	assert (!empty());
 
 	/* only yielded states left? well.. pop one */
-	if (states.empty()) {
-		ExecutionState	*es;
-
-		assert (addedStates.empty());
-		assert (!yieldedStates.empty());
-
-		es = *yieldedStates.begin();
-
-		yieldedStates.erase(es);
-		queueAdd(es);
-		searcher->update(NULL, getStates());
-		states.insert(es);
-		addedStates.clear();
-	}
+	if (states.empty()) popYieldedState();
 
 	ret = &searcher->selectState(allowCompact);
 
@@ -135,8 +160,19 @@ void ExeStateManager::yield(ExecutionState* s)
 	 * old state is put on removedStates-- OK. */
 	dropAddedDirect(compacted);
 
-	yieldedStates.insert(compacted);
+	yieldStates.insert(compacted);
 	/* NOTE: states and yieldedStates are disjoint */
+}
+
+void ExeStateManager::forceYield(ExecutionState* s)
+{
+	yieldStates.insert(s);
+
+	ExeStateSet		dummy;
+	Searcher::States	ss(dummy, yieldStates);
+
+	searcher->update(NULL, ss);
+	states.erase(s);
 }
 
 void ExeStateManager::dropAdded(ExecutionState* es)

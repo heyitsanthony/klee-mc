@@ -51,8 +51,9 @@ protected:
 class SpecialFunctionHandler
 {
 public:
-    typedef std::map<const llvm::Function*, std::pair<SFHandler*,bool> >
-    	handlers_ty;
+	typedef std::map<const llvm::Function*, std::pair<SFHandler*,bool> >
+		handlers_ty;
+
 
 	typedef SFHandler*(HandlerInit)(SpecialFunctionHandler*);
 	struct HandlerInfo {
@@ -64,7 +65,7 @@ public:
 	};
 
 
-    handlers_ty handlers;
+    handlers_ty		handlers;
     class Executor* executor;
 
 protected:
@@ -94,6 +95,11 @@ public:
                 llvm::Function *f,
                 KInstruction *target,
                 std::vector< ref<Expr> > &arguments);
+
+	void handleByName(
+		ExecutionState		&state,
+		const std::string	&fname,
+		KInstruction		*target);
 
     SFHandler* addHandler(const struct HandlerInfo& hi);
 
@@ -167,6 +173,7 @@ public:
     SFH_HANDLER(IsShadowed)
     SFH_HANDLER(Indirect)
     SFH_HANDLER(ForkEq)
+    SFH_HANDLER(StackDepth)
 #define DEF_SFH_MMU(x)			\
     	SFH_HANDLER(WideStore##x)	\
 	SFH_HANDLER(WideLoad##x)

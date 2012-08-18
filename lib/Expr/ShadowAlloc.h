@@ -3,9 +3,10 @@
 
 #include "ShadowExpr.h"
 #include "ExprAlloc.h"
-
+#include <iostream>
 namespace klee {
-typedef ShadowExpr<Expr, uint64_t> ShadowType;
+typedef uint64_t ShadowVal;
+typedef ShadowExpr<Expr, ShadowVal> ShadowType;
 typedef ref<ShadowType> ShadowRef;
 
 class ShadowAlloc : public ExprAlloc
@@ -13,8 +14,10 @@ class ShadowAlloc : public ExprAlloc
 public:
 	ShadowAlloc() : is_shadowing(false) {}
 	virtual ~ShadowAlloc() {}
-	void startShadow(uint64_t v) { is_shadowing = true; shadow_v = v; }
+	void startShadow(ShadowVal v) { is_shadowing = true; shadow_v = v; }
 	void stopShadow(void) { is_shadowing = false; }
+	bool isShadowing(void) const { return is_shadowing; }
+	ShadowVal getShadow(void) const { return shadow_v; }
 
 	static ShadowRef getExprDynCast(const ref<Expr>& e);
 	static ShadowRef getExpr(const ref<Expr>& e);
@@ -26,7 +29,7 @@ public:
 
 private:
 	bool		is_shadowing;
-	uint64_t	shadow_v;
+	ShadowVal	shadow_v;
 };
 }
 

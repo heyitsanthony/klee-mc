@@ -213,29 +213,30 @@ protected:
 	// call error handler and terminate state, for execution errors
 	// (things that should not be possible, like illegal instruction or
 	// unlowered instrinsic, or are unsupported, like inline assembly)
-	void terminateStateOnExecError(
+	void terminateOnExecError(
 		ExecutionState &state,
 		const llvm::Twine &message,
 		const llvm::Twine &info="")
-	{ terminateStateOnError(state, message, "exec.err", info); }
+	{ terminateOnError(state, message, "exec.err", info); }
 
-  ref<ConstantExpr> getSmallSymAllocSize(ExecutionState &st, ref<Expr>& size);
+	ref<ConstantExpr> getSmallSymAllocSize(ExecutionState&, ref<Expr>& sz);
 	virtual void replaceStateImmForked(ExecutionState* os, ExecutionState* ns);
 
 
-  virtual ObjectState* makeSymbolic(
-    ExecutionState& state,
-    const MemoryObject* mo,
-    ref<Expr> len,
-    const char* arrPrefix = "arr");
+	virtual ObjectState* makeSymbolic(
+		ExecutionState& state,
+		const MemoryObject* mo,
+		ref<Expr> len,
+		const char* arrPrefix = "arr");
 
 
-  virtual llvm::Function* getFuncByAddr(uint64_t addr) = 0;
+	virtual llvm::Function* getFuncByAddr(uint64_t addr) = 0;
 
-  virtual void callExternalFunction(ExecutionState &state,
-                            KInstruction *target,
-                            llvm::Function *function,
-                            std::vector< ref<Expr> > &arguments) = 0;
+	virtual void callExternalFunction(
+		ExecutionState &state,
+		KInstruction *target,
+		llvm::Function *function,
+		std::vector< ref<Expr> > &arguments) = 0;
 
 	virtual void executeCall(
 		ExecutionState &state,
@@ -245,8 +246,10 @@ protected:
 
 	virtual bool isInterestingTestCase(ExecutionState* st) const;
 
-	const Cell& eval(
-		KInstruction *ki, unsigned idx, ExecutionState &st) const;
+	virtual const ref<Expr> eval(
+		KInstruction *ki,
+		unsigned idx,
+		ExecutionState &st) const;
 
 	InterpreterHandler	*interpreterHandler;
 	llvm::TargetData	*target_data;
@@ -260,6 +263,8 @@ protected:
 	ExecutionState		*prevState;
 	SpecialFunctionHandler	*sfh;
 
+	/// Signals the executor to halt execution at the next instruction step.
+	bool haltExecution;
 private:
 	std::vector<TimerInfo*>	timers;
 	std::set<KFunction*>	bad_conc_kfuncs;
@@ -280,9 +285,6 @@ private:
 
   /// Disables forking, set by client. \see setInhibitForking()
   bool inhibitForking;
-
-  /// Signals the executor to halt execution at the next instruction step.
-  bool haltExecution;
 
   /// Forces only non-compact states to be chosen. Initially false,
   /// gets true when atMemoryLimit becomes true, and reset to false
@@ -428,14 +430,14 @@ public:
 		const char* arrPrefix = "arr");
 
 	// remove state from queue and delete
-	virtual void terminateState(ExecutionState &state);
+	virtual void terminate(ExecutionState &state);
 	// call exit handler and terminate state
-	void terminateStateEarly(
+	virtual void terminateEarly(
 		ExecutionState &state, const llvm::Twine &message);
 	// call exit handler and terminate state
-	void terminateStateOnExit(ExecutionState &state);
+	virtual void terminateOnExit(ExecutionState &state);
 	// call error handler and terminate state
-	void terminateStateOnError(
+	virtual void terminateOnError(
 		ExecutionState &state,
 		const llvm::Twine &message,
 		const char *suffix,

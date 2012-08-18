@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 #include <llvm/Module.h>
 #include <llvm/Support/CommandLine.h>
-
+#include <llvm/LLVMContext.h>
 #include "Memory.h"
 #include "SpecialFunctionHandler.h"
 #include "StateSolver.h"
@@ -27,7 +27,7 @@ using namespace llvm;
 using namespace klee;
 
 /// \todo Almost all of the demands in this file should be replaced
-/// with terminateState calls.
+/// with terminate calls.
 
 // FIXME: We are more or less committed to requiring an intrinsic
 // library these days. We can move some of this stuff there,
@@ -78,7 +78,7 @@ SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   add("klee_get_prune_id", GetPruneID, true),
   add("klee_prune", Prune, false),
   add("malloc", Malloc, true),
-
+  add("klee_stack_depth", StackDepth, true),
   add("klee_indirect", Indirect, true),
   add("klee_is_shadowed", IsShadowed, true),
 
@@ -190,6 +190,28 @@ bool SpecialFunctionHandler::lateBind(const llvm::Function* f)
 	return true;
 }
 
+void SpecialFunctionHandler::handleByName(
+	ExecutionState		&state,
+	const std::string	&fname,
+	KInstruction		*target)
+{
+	Function		*f;
+	std::vector< ref<Expr> > arguments;
+
+	f = executor->getKModule()->module->getFunction(fname);
+	if (f == NULL) {
+		Constant	*c;
+		c = executor->getKModule()->module->getOrInsertFunction(
+			fname,
+			FunctionType::get(
+				IntegerType::get(getGlobalContext(), 64),
+				false));
+		f = (Function*)c;
+	}
+
+	handle(state, f, target, arguments);
+}
+
 bool SpecialFunctionHandler::handle(
 	ExecutionState &state,
 	Function *f,
@@ -213,7 +235,7 @@ bool SpecialFunctionHandler::handle(
 
 	// FIXME: Check this... add test?
 	if (!hasReturnValue && !target->getInst()->use_empty()) {
-		executor->terminateStateOnExecError(
+		executor->terminateOnExecError(
 			state,
 			"expected return value from void special function");
 		return true;
@@ -310,13 +332,13 @@ std::string SpecialFunctionHandler::readStringAtAddress(
 SFH_DEF_HANDLER(Exit)
 {
 	SFH_CHK_ARGS(1, "exit");
-	sfh->executor->terminateStateOnExit(state);
+	sfh->executor->terminateOnExit(state);
 }
 
 SFH_DEF_HANDLER(SilentExit)
 {
 	assert(arguments.size()==1 && "invalid number of arguments to exit");
-	sfh->executor->terminateState(state);
+	sfh->executor->terminate(state);
 }
 
 cl::opt<bool> EnablePruning("enable-pruning", cl::init(true));
@@ -353,7 +375,7 @@ SFH_DEF_HANDLER(Prune)
 	 "Invalid prune ID passed to klee_prune()");
 
   if (pruneMap[prune_id] == 0)
-    sfh->executor->terminateState(state);
+    sfh->executor->terminate(state);
   else
     pruneMap[prune_id]--;
 }
@@ -369,7 +391,7 @@ SFH_DEF_HANDLER(ReportError)
 	std::string	message = sfh->readStringAtAddress(state, arguments[2]);
 	std::string	suffix = sfh->readStringAtAddress(state, arguments[3]);
 
-	sfh->executor->terminateStateOnError(
+	sfh->executor->terminateOnError(
 		state, message, suffix.c_str(), "", true);
 }
 
@@ -395,7 +417,7 @@ SFH_DEF_HANDLER(Assume)
 
 	ok = sfh->executor->getSolver()->mustBeFalse(state, e, mustBeFalse);
 	if (!ok) {
-		sfh->executor->terminateStateEarly(
+		sfh->executor->terminateEarly(
 			state, "assume query failed");
 		return;
 	}
@@ -405,7 +427,7 @@ SFH_DEF_HANDLER(Assume)
 		return;
 	}
 
-	sfh->executor->terminateStateOnError(
+	sfh->executor->terminateOnError(
 		state,
 		"invalid klee_assume call (provably false)",
 		"user.err");
@@ -432,7 +454,7 @@ SFH_DEF_HANDLER(AssumeEq)
 	if (!ok) goto error;
 
 	if (!mayBeTrue) {
-		sfh->executor->terminateStateOnError(
+		sfh->executor->terminateOnError(
 			state,
 			"invalid klee_assume_eq call (provably false)",
 			"user.err");
@@ -444,7 +466,7 @@ SFH_DEF_HANDLER(AssumeEq)
 	return;
 
 error:
-	sfh->executor->terminateStateEarly(state, "assumeeq failed");
+	sfh->executor->terminateEarly(state, "assumeeq failed");
 }
 
 SFH_DEF_HANDLER(IsSymbolic)
@@ -507,13 +529,16 @@ SFH_DEF_HANDLER(SetForking)
 		return;
 	}
 
-	sfh->executor->terminateStateOnError(
+	sfh->executor->terminateOnError(
 		state,
 		"klee_set_forking requires a constant arg",
 		"user.err");
 }
 
 SFH_DEF_HANDLER(StackTrace) { state.dumpStack(std::cout); }
+
+SFH_DEF_HANDLER(StackDepth)
+{ state.bindLocal(target, MK_CONST(state.stack.size(), 32)); }
 
 SFH_DEF_HANDLER(Warning)
 {
@@ -584,7 +609,7 @@ SFH_DEF_HANDLER(SymRangeBytes)
 	ce_max_len = dyn_cast<ConstantExpr>(max_len);
 
 	if (ce_addr == NULL || ce_max_len == NULL) {
-		sfh->executor->terminateStateOnError(
+		sfh->executor->terminateOnError(
 			state,
 			"klee_sym_range_bytes expects constant addr and max_len",
 			"user.err");
@@ -644,7 +669,7 @@ SFH_DEF_HANDLER(CheckMemoryAccess)
 	ref<Expr> address = sfh->executor->toUnique(state, arguments[0]);
 	ref<Expr> size = sfh->executor->toUnique(state, arguments[1]);
 	if (!isa<ConstantExpr>(address) || !isa<ConstantExpr>(size)) {
-		sfh->executor->terminateStateOnError(
+		sfh->executor->terminateOnError(
 			state,
 			"check_memory_access requires constant args",
 			"user.err");
@@ -654,10 +679,11 @@ SFH_DEF_HANDLER(CheckMemoryAccess)
 	ObjectPair op;
 
 	if (!state.addressSpace.resolveOne(cast<ConstantExpr>(address), op)) {
-		sfh->executor->terminateStateOnError(state,
-		"check_memory_access: memory error",
-		"ptr.err",
-		sfh->executor->getAddressInfo(state, address));
+		sfh->executor->terminateOnError(
+			state,
+			"check_memory_access: memory error",
+			"ptr.err",
+			sfh->executor->getAddressInfo(state, address));
 		return;
 	}
 
@@ -667,7 +693,7 @@ SFH_DEF_HANDLER(CheckMemoryAccess)
 		cast<ConstantExpr>(size)->getZExtValue());
 
 	if (!chk->isTrue()) {
-		sfh->executor->terminateStateOnError(
+		sfh->executor->terminateOnError(
 			state,
 			"check_memory_access: memory error",
 			"ptr.err",
@@ -732,7 +758,7 @@ SFH_DEF_HANDLER(MakeSymbolic)
 		mo->setName(name);
 
 		if (old->readOnly) {
-			sfh->executor->terminateStateOnError(
+			sfh->executor->terminateOnError(
 				*s,
 				"cannot make readonly object symbolic",
 				"user.err");
@@ -753,7 +779,7 @@ SFH_DEF_HANDLER(MakeSymbolic)
 			continue;
 		}
  
-		sfh->executor->terminateStateOnError(
+		sfh->executor->terminateOnError(
 			*s,
 			"size for klee_make_symbolic[_name] too big",
 			"user.err");
@@ -796,7 +822,7 @@ SFH_DEF_HANDLER(ForceNE)
 		return;
 	}
 
-	sfh->executor->terminateState(state);
+	sfh->executor->terminate(state);
 }
 
 SFH_DEF_HANDLER(Yield) { sfh->executor->yield(state); }
@@ -809,7 +835,11 @@ SFH_DEF_HANDLER(IsShadowed)
 }
 
 /* indirect call-- first parameter is function name */
-SFH_DEF_HANDLER(Indirect) { assert (0 == 1 && "STUB STUB STUB STUB"); }
+SFH_DEF_HANDLER(Indirect)
+{
+	std::string	fname(sfh->readStringAtAddress(state, arguments[0]));
+	sfh->handleByName(state, fname, target);
+}
 
 #if 0
 SFH_DEF_HANDLER(GetObjSize)
@@ -835,7 +865,7 @@ SFH_DEF_HANDLER(GetObjSize)
 
 	ce = dyn_cast<ConstantExpr>(arguments[0]);
 	if (ce == NULL) {
-		sfh->executor->terminateStateOnError(
+		sfh->executor->terminateOnError(
 			state,
 			"symbolic passed to klee_get_obj_size",
 			"user.err");
@@ -856,7 +886,7 @@ SFH_DEF_HANDLER(GetObjNext)
 
 	ce = dyn_cast<ConstantExpr>(arguments[0]);
 	if (ce == NULL) {
-		sfh->executor->terminateStateOnError(
+		sfh->executor->terminateOnError(
 			state,
 			"klee_get_obj_next: expected constant argument",
 			"user.err");
@@ -890,7 +920,7 @@ SFH_DEF_HANDLER(GetObjPrev)
 	ce = dyn_cast<ConstantExpr>(arguments[0]);
 	if (ce == NULL) {
 		std::cerr << "OOPS: ARG=" << arguments[0] << '\n';
-		sfh->executor->terminateStateOnError(
+		sfh->executor->terminateOnError(
 			state,
 			"klee_get_obj_prev: expected constant argument",
 			"user.err");
@@ -954,7 +984,7 @@ SFH_DEF_HANDLER(WideLoad##x) 	\
 	ref<Expr>		user_addr, val;	\
 \
 	if (getObjectFromBase(state, arguments[0], op) == false) {	\
-		sfh->executor->terminateStateOnError(			\
+		sfh->executor->terminateOnError(			\
 			state,						\
 			"Could not resolve addr for wide load",		\
 			"mmu.err");	\
@@ -976,7 +1006,7 @@ SFH_DEF_HANDLER(WideStore##x)	\
 	ref<Expr>		val, user_addr;	\
 \
 	if (getObjectFromBase(state, arguments[0], op) == false) {	\
-		sfh->executor->terminateStateOnError(	\
+		sfh->executor->terminateOnError(	\
 			state,	\
 			"Could not resolve addr for wide store",	\
 			"mmu.err");	\

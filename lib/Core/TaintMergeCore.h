@@ -25,6 +25,8 @@ public:
 	void setupInitialState(ExecutionState* es);
 	void taintMergeBegin(ExecutionState& state);
 	void taintMergeEnd(void);
+	bool isMerging(void) const { return merging; }
+	void step(void);
 private:
 	void loadTags(const std::string& fname);
 	Executor	*exe;
@@ -34,6 +36,8 @@ private:
 	/* state information before activating the branch mode */
 	ExecutionState	*merging_st;
 	ExeStateManager	*old_esm;
+	unsigned	merge_depth;
+	bool		merging;
 };
 }
 

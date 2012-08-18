@@ -215,7 +215,7 @@ void ExecutorBC::callExternalFunction(
 	if (NoExternals && !okExternals.count(function->getName().str())) {
 		std::cerr << "KLEE:ERROR: Calling not-OK external function : "
 			<< function->getName().str() << "\n";
-		terminateStateOnError(state, "externals disallowed", "user.err");
+		terminateOnError(state, "externals disallowed", "user.err");
 		return;
 	}
 
@@ -248,7 +248,7 @@ void ExecutorBC::callExternalFunction(
 				ce->toMemory(&args[wordIndex]);
 				wordIndex += (ce->getWidth()+63)/64;
 			} else {
-				terminateStateOnExecError(
+				terminateOnExecError(
 					state, 
 					"external call with symbolic arg: "+
 					function->getName().str());
@@ -274,7 +274,7 @@ void ExecutorBC::callExternalFunction(
 	bool ok;
 	ok = externalDispatcher->executeCall(function, target->getInst(), args);
 	if (!ok) {
-		terminateStateOnError(
+		terminateOnError(
 			state,
 			"failed external call: " + function->getName().str(),
 			"external.err");
@@ -282,7 +282,7 @@ void ExecutorBC::callExternalFunction(
 	}
 
 	if (!state.addressSpace.copyInConcretes()) {
-		terminateStateOnError(
+		terminateOnError(
 			state,
 			"external modified read-only object",
 			"external.err");

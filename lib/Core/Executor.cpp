@@ -184,11 +184,11 @@ Executor::Executor(InterpreterHandler *ih)
 , statsTracker(0)
 , symPathWriter(0)
 , sfh(0)
+, haltExecution(false)
 , replayOut(0)
 , replayPaths(0)
 , atMemoryLimit(false)
 , inhibitForking(false)
-, haltExecution(false)
 , onlyNonCompact(false)
 , initialStateCopy(0)
 , ivcEnabled(UseIVC)
@@ -255,7 +255,7 @@ void Executor::addConstrOrDie(ExecutionState &state, ref<Expr> condition)
 	if (addConstraint(state, condition))
 		return;
 
-	terminateStateOnError(state, "Died adding constraint", "constr.err");
+	terminateOnError(state, "Died adding constraint", "constr.err");
 }
 
 bool Executor::addConstraint(ExecutionState &state, ref<Expr> condition)
@@ -364,7 +364,7 @@ Executor::toConstant(
 		return CE;
 
 	if (solver->getValue(state, e, value) == false) {
-		terminateStateEarly(state, "toConstant query timeout");
+		terminateEarly(state, "toConstant query timeout");
 		return MK_CONST(0, e->getWidth());
 	}
 
@@ -398,7 +398,7 @@ void Executor::executeGetValue(
 	if (target == NULL) return;
 
 	if (solver->getValue(state, e, value) == false) {
-		terminateStateEarly(state, "exeGetVal timeout");
+		terminateEarly(state, "exeGetVal timeout");
 		return;
 	}
 
@@ -461,7 +461,7 @@ void Executor::executeCallNonDecl(
 	callingArgs = arguments.size();
 	funcArgs = f->arg_size();
 	if (callingArgs < funcArgs) {
-		terminateStateOnError(
+		terminateOnError(
 			state,
 			"calling function with too few arguments",
 			"user.err");
@@ -475,7 +475,7 @@ void Executor::executeCallNonDecl(
 		}
 	} else {
 		if (!state.setupCallVarArgs(funcArgs, arguments)) {
-			terminateStateOnExecError(state, "out of memory (varargs)");
+			terminateOnExecError(state, "out of memory (varargs)");
 			return;
 		}
 	}
@@ -602,7 +602,7 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 	assert (state.stack.size() > 1);
 
 	if (!isVoidReturn) {
-		result = eval(ki, 0, state).value;
+		result = eval(ki, 0, state);
 	}
 
 	state.popFrame();
@@ -622,7 +622,7 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 		// undeclared functions.
 		if (caller->use_empty()) return;
 
-		terminateStateOnExecError(
+		terminateOnExecError(
 			state, "return void when caller expected a result");
 		return;
 	}
@@ -664,7 +664,7 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 	state.bindLocal(kcaller, result);
 }
 
-const Cell& Executor::eval(
+const ref<Expr> Executor::eval(
 	KInstruction *ki,
 	unsigned index,
 	ExecutionState &state) const
@@ -678,9 +678,9 @@ const Cell& Executor::eval(
 		"Invalid operand to eval(), not a value or constant!");
 
 	// Determine if this is a constant or not.
-	if (vnumber < 0) return kmodule->constantTable[-vnumber - 2];
+	if (vnumber < 0) return kmodule->constantTable[-vnumber - 2].value;
 
-	return state.readLocalCell(state.stack.size() - 1, vnumber);
+	return state.readLocalCell(state.stack.size() - 1, vnumber).value;
 }
 
 void Executor::instRet(ExecutionState &state, KInstruction *ki)
@@ -688,7 +688,7 @@ void Executor::instRet(ExecutionState &state, KInstruction *ki)
 	if (state.stack.size() <= 1) {
 		assert (!(state.getCaller()) &&
 			"caller set on initial stack frame");
-		terminateStateOnExit(state);
+		terminateOnExit(state);
 		return;
 	}
 
@@ -872,7 +872,7 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 	std::cerr << "[Exe] Getting assignment\n";
 	if (getSatAssignment(st, a) == false) {
 		bad_conc_kfuncs.insert(st.getCurrentKFunc());
-		terminateStateEarly(st, "couldn't concretize imm state");
+		terminateEarly(st, "couldn't concretize imm state");
 		return new_st;
 	}
 
@@ -882,7 +882,7 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 	foreach (it, st.addressSpace.begin(), st.addressSpace.end()) {
 		if (!concretizeObject(st, a, it->first, it->second.os, wt)) {
 			bad_conc_kfuncs.insert(st.getCurrentKFunc());
-			terminateStateEarly(st, "timeout eval on conc state");
+			terminateEarly(st, "timeout eval on conc state");
 			return new_st;
 		}
 	}
@@ -921,13 +921,13 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 {
 	BranchInst	*bi = cast<BranchInst>(ki->getInst());
-	const Cell	&cond = eval(ki, 0, state);
+	ref<Expr>	cond = eval(ki, 0, state);
 	StatePair	branches;
 	bool		hasHint = false, branchHint;
 
-	if (brPredict && cond.value->getKind() != Expr::Constant) {
+	if (brPredict && cond->getKind() != Expr::Constant) {
 		hasHint = brPredict->predict(
-			BranchPredictor::StateBranch(state, ki, cond.value),
+			BranchPredictor::StateBranch(state, ki, cond),
 			branchHint);
 	}
 
@@ -938,15 +938,15 @@ void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 	}
 
 	if (	IgnoreBranchConstraints &&
-		cond.value->getKind() != Expr::Constant)
+		cond->getKind() != Expr::Constant)
 	{
 		branches = forking->forkUnconditional(state, false);
 		assert (branches.first && branches.second);
 	} else {
-		branches = fork(state, cond.value, false);
+		branches = fork(state, cond, false);
 	}
 
-	markBranchVisited(state, ki, branches, cond.value);
+	markBranchVisited(state, ki, branches, cond);
 
 	finalizeBranch(branches.first, bi, 0 /* [0] successor => true/then */);
 	finalizeBranch(branches.second, bi, 1 /* [1] successor => false/else */);
@@ -1013,7 +1013,7 @@ void Executor::instCall(ExecutionState& state, KInstruction *ki)
 	arguments.reserve(numArgs);
 
 	for (unsigned j=0; j<numArgs; ++j)
-		arguments.push_back(eval(ki, j+1, state).value);
+		arguments.push_back(eval(ki, j+1, state));
 
 	if (!f) {
 		// special case the call with a bitcast case
@@ -1021,7 +1021,7 @@ void Executor::instCall(ExecutionState& state, KInstruction *ki)
 		llvm::ConstantExpr *ce = dyn_cast<llvm::ConstantExpr>(fp);
 
 		if (isa<InlineAsm>(fp)) {
-			terminateStateOnExecError(
+			terminateOnExecError(
 				state, "inline assembly is unsupported");
 			return;
 		}
@@ -1116,8 +1116,8 @@ void Executor::instCmp(ExecutionState& state, KInstruction *ki)
 	ICmpInst::Predicate	pred;
 	VectorType*		vt;
 
-	ref<Expr> left = eval(ki, 0, state).value;
-	ref<Expr> right = eval(ki, 1, state).value;
+	ref<Expr> left = eval(ki, 0, state);
+	ref<Expr> right = eval(ki, 1, state);
 	ref<Expr> result;
 
 	pred = ii->getPredicate();
@@ -1193,7 +1193,7 @@ ref<Expr> Executor::cmpVector(
 	VCMP_OP(ICMP_SLT, Slt)
 	VCMP_OP(ICMP_SLE, Sle)
 	default:
-	terminateStateOnExecError(state, "invalid vector ICmp predicate");
+	terminateOnExecError(state, "invalid vector ICmp predicate");
 	return result;
 	}
 	ok = true;
@@ -1238,7 +1238,7 @@ ref<Expr> Executor::cmpScalar(
   case ICmpInst::ICMP_SLT: result = SltExpr::create(left, right); break;
   case ICmpInst::ICMP_SLE: result = SleExpr::create(left, right); break;
   default:
-    terminateStateOnExecError(state, "invalid scalar ICmp predicate");
+    terminateOnExecError(state, "invalid scalar ICmp predicate");
     return result;
   }
   ok = true;
@@ -1314,7 +1314,7 @@ void Executor::forkSwitch(
 	}
 
 	if (!found)
-		terminateState(state);
+		terminate(state);
 }
 
 ref<Expr> Executor::toUnique(const ExecutionState &state, ref<Expr> &e)
@@ -1323,7 +1323,7 @@ ref<Expr> Executor::toUnique(const ExecutionState &state, ref<Expr> &e)
 void Executor::instSwitch(ExecutionState& state, KInstruction *ki)
 {
 	KSwitchInstruction	*ksi(static_cast<KSwitchInstruction*>(ki));
-	ref<Expr>		cond(eval(ki, 0, state).value);
+	ref<Expr>		cond(eval(ki, 0, state));
 	TargetTy 		defaultTarget;
 	TargetsTy		targets;
 
@@ -1339,7 +1339,7 @@ void Executor::instSwitch(ExecutionState& state, KInstruction *ki)
 
 	/* may not have any targets to jump to! */
 	if (targets.empty()) {
-		terminateStateEarly(state, "bad switch");
+		terminateEarly(state, "bad switch");
 		return;
 	}
 
@@ -1355,9 +1355,9 @@ void Executor::instInsertElement(ExecutionState& state, KInstruction* ki)
 	 * 3. insertion index
 	 * returns v[idx]
 	 */
-	ref<Expr> in_v = eval(ki, 0, state).value;
-	ref<Expr> in_newelem = eval(ki, 1, state).value;
-	ref<Expr> in_idx = eval(ki, 2, state).value;
+	ref<Expr> in_v = eval(ki, 0, state);
+	ref<Expr> in_newelem = eval(ki, 1, state);
+	ref<Expr> in_idx = eval(ki, 2, state);
 
 	ConstantExpr* in_idx_ce = dynamic_cast<ConstantExpr*>(in_idx.get());
 	assert (in_idx_ce && "NON-CONSTANT INSERT ELEMENT IDX. PUKE");
@@ -1412,8 +1412,8 @@ void Executor::instExtractElement(ExecutionState& state, KInstruction* ki)
 {
 	VectorType*	vt;
 	ref<Expr>	out_val;
-	ref<Expr>	in_v(eval(ki, 0, state).value);
-	ref<Expr>	in_idx(eval(ki, 1, state).value);
+	ref<Expr>	in_v(eval(ki, 0, state));
+	ref<Expr>	in_idx(eval(ki, 1, state));
 	ConstantExpr	*in_idx_ce = dynamic_cast<ConstantExpr*>(in_idx.get());
 	assert (in_idx_ce && "NON-CONSTANT EXTRACT ELEMENT IDX. PUKE");
 	uint64_t	idx = in_idx_ce->getZExtValue();
@@ -1439,9 +1439,9 @@ void Executor::instShuffleVector(ExecutionState& state, KInstruction* ki)
 	 * 3. < perm vect >
 	 * 	Permutation vector
 	 */
-	ref<Expr> in_v_lo = eval(ki, 0, state).value;
-	ref<Expr> in_v_hi = eval(ki, 1, state).value;
-	ref<Expr> in_v_perm = eval(ki, 2, state).value;
+	ref<Expr> in_v_lo = eval(ki, 0, state);
+	ref<Expr> in_v_hi = eval(ki, 1, state);
+	ref<Expr> in_v_perm = eval(ki, 2, state);
 	ConstantExpr* in_v_perm_ce = dynamic_cast<ConstantExpr*>(in_v_perm.get());
 	assert (in_v_perm_ce != NULL && "WE HAVE NON-CONST SHUFFLES?? UGH.");
 
@@ -1481,8 +1481,8 @@ void Executor::instInsertValue(ExecutionState& state, KInstruction* ki)
 	KGEPInstruction	*kgepi = dynamic_cast<KGEPInstruction*>(ki);
 	int		lOffset, rOffset;
 	ref<Expr>	result, l(0), r(0);
-	ref<Expr>	agg = eval(ki, 0, state).value;
-	ref<Expr>	val = eval(ki, 1, state).value;
+	ref<Expr>	agg = eval(ki, 0, state);
+	ref<Expr>	val = eval(ki, 1, state);
 
 	assert (kgepi != NULL);
 	lOffset = kgepi->getOffsetBits()*8;
@@ -1555,7 +1555,7 @@ void Executor::instAlloc(ExecutionState& state, KInstruction* ki)
 	size = Expr::createPointer(elementSize);
 
 	if (ai->isArrayAllocation()) {
-		ref<Expr> count = eval(ki, 0, state).value;
+		ref<Expr> count = eval(ki, 0, state);
 		count = Expr::createCoerceToPointerType(count);
 		size = MulExpr::create(size, count);
 	}
@@ -1589,14 +1589,14 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     // generate unreachable instructions in cases where it knows the
     // program will crash. So it is effectively a SEGV or internal
     // error.
-    terminateStateOnExecError(state, "reached \"unreachable\" instruction");
+    terminateOnExecError(state, "reached \"unreachable\" instruction");
     break;
 
   case Instruction::Invoke:
   case Instruction::Call: instCall(state, ki); break;
 
   case Instruction::PHI: {
-    ref<Expr> result = eval(ki, state.getPHISlot(), state).value;
+    ref<Expr> result = eval(ki, state.getPHISlot(), state);
     state.bindLocal(ki, result);
     break;
   }
@@ -1606,24 +1606,24 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     SelectInst *SI = cast<SelectInst>(ki->getInst());
     assert(SI->getCondition() == SI->getOperand(0) &&
            "Wrong operand index!");
-    ref<Expr>	cond (eval(ki, 0, state).value);
-    ref<Expr>	tExpr(eval(ki, 1, state).value);
-    ref<Expr>	fExpr(eval(ki, 2, state).value);
+    ref<Expr>	cond (eval(ki, 0, state));
+    ref<Expr>	tExpr(eval(ki, 1, state));
+    ref<Expr>	fExpr(eval(ki, 2, state));
     ref<Expr>	result(SelectExpr::create(cond, tExpr, fExpr));
     state.bindLocal(ki, result);
     break;
   }
 
   case Instruction::VAArg:
-    terminateStateOnExecError(state, "unexpected VAArg instruction");
+    terminateOnExecError(state, "unexpected VAArg instruction");
     break;
 
   // Arithmetic / logical
 #define INST_ARITHOP(x,y)				\
   case Instruction::x : {				\
     VectorType*	vt;				\
-    ref<Expr> left = eval(ki, 0, state).value;		\
-    ref<Expr> right = eval(ki, 1, state).value;		\
+    ref<Expr> left = eval(ki, 0, state);		\
+    ref<Expr> right = eval(ki, 1, state);		\
     vt = dyn_cast<VectorType>(ki->getInst()->getOperand(0)->getType()); \
     if (vt) { 				\
 	SETUP_VOP(vt);			\
@@ -1638,8 +1638,8 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
 	case Instruction::x : {					\
 	VectorType		*vt;				\
 	ExecutionState	*ok_state, *bad_state;			\
-	ref<Expr>	left(eval(ki, 0, state).value);		\
-	ref<Expr>	right(eval(ki, 1, state).value);	\
+	ref<Expr>	left(eval(ki, 0, state));		\
+	ref<Expr>	right(eval(ki, 1, state));	\
 	bad_state = ok_state = NULL;				\
 	if (!isa<ConstantExpr>(right)) {			\
 		StatePair	sp = fork(			\
@@ -1654,7 +1654,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
 		ok_state = &state;				\
 	}							\
 	if (bad_state != NULL) {				\
-		terminateStateOnError(*bad_state, 		\
+		terminateOnError(*bad_state, 		\
 			"Tried to divide by zero!",		\
 			"div.err");				\
 	}							\
@@ -1686,14 +1686,14 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
   case Instruction::ICmp: instCmp(state, ki); break;
 
   case Instruction::Load: {
-	ref<Expr> 	base(eval(ki, 0, state).value);
+	ref<Expr> 	base(eval(ki, 0, state));
 	MMU::MemOp	mop(false, base, 0, ki);
 	mmu->exeMemOp(state, mop);
 	break;
   }
   case Instruction::Store: {
-	ref<Expr>	base(eval(ki, 1, state).value);
-	ref<Expr>	value(eval(ki, 0, state).value);
+	ref<Expr>	base(eval(ki, 1, state));
+	ref<Expr>	value(eval(ki, 0, state));
 	MMU::MemOp	mop(true, base, value, 0);
 	mmu->exeMemOp(state, mop);
 	break;
@@ -1705,7 +1705,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
   case Instruction::Trunc: {
     CastInst *ci = cast<CastInst>(i);
     ref<Expr> result = ExtractExpr::create(
-      eval(ki, 0, state).value,
+      eval(ki, 0, state),
       0,
       kmodule->getWidthForLLVMType(ci->getType()));
 
@@ -1715,7 +1715,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
   case Instruction::ZExt: {
     CastInst *ci = cast<CastInst>(i);
     ref<Expr> result = ZExtExpr::create(
-      eval(ki, 0, state).value,
+      eval(ki, 0, state),
       kmodule->getWidthForLLVMType(ci->getType()));
 
     state.bindLocal(ki, result);
@@ -1728,7 +1728,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
 
     vt_src = dyn_cast<VectorType>(ci->getSrcTy());
     vt_dst = dyn_cast<VectorType>(ci->getDestTy());
-    evaled =  eval(ki, 0, state).value;
+    evaled =  eval(ki, 0, state);
     result = (vt_src)
       	? sextVector(state, evaled, vt_src, vt_dst)
 	: MK_SEXT(evaled, kmodule->getWidthForLLVMType(ci->getType()));
@@ -1740,24 +1740,24 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
   case Instruction::IntToPtr: {
     CastInst *ci = cast<CastInst>(i);
     Expr::Width cType = kmodule->getWidthForLLVMType(ci->getType());
-    ref<Expr> arg = eval(ki, 0, state).value;
+    ref<Expr> arg = eval(ki, 0, state);
     state.bindLocal(ki, ZExtExpr::create(arg, cType));
     break;
   }
 
   case Instruction::BitCast:
-    state.bindLocal(ki, eval(ki, 0, state).value);
+    state.bindLocal(ki, eval(ki, 0, state));
     break;
 
     // Floating point arith instructions
 #define INST_FOP_ARITH(x,y)					\
   case Instruction::x: {					\
     ref<ConstantExpr> left, right;				\
-    right = toConstant(state, eval(ki, 1, state).value, "floating point");	\
-    left = toConstant(state, eval(ki, 0, state).value, "floating point");	\
+    right = toConstant(state, eval(ki, 1, state), "floating point");	\
+    left = toConstant(state, eval(ki, 0, state), "floating point");	\
     if (!fpWidthToSemantics(left->getWidth()) ||				\
         !fpWidthToSemantics(right->getWidth()))					\
-      return terminateStateOnExecError(state, "Unsupported "#x" operation");	\
+      return terminateOnExecError(state, "Unsupported "#x" operation");	\
 	\
     llvm::APFloat Res(left->getAPValue());					\
     Res.y(APFloat(right->getAPValue()), APFloat::rmNearestTiesToEven);		\
@@ -1773,10 +1773,10 @@ INST_FOP_ARITH(FRem, mod)
   case Instruction::FPTrunc: {
     FPTruncInst *fi = cast<FPTruncInst>(i);
     Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());
-    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state).value,
+    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state),
                                         "floating point");
     if (!fpWidthToSemantics(arg->getWidth()) || resultType > arg->getWidth())
-      return terminateStateOnExecError(state, "Unsupported FPTrunc operation");
+      return terminateOnExecError(state, "Unsupported FPTrunc operation");
 
     llvm::APFloat Res(arg->getAPValue());
     bool losesInfo = false;
@@ -1790,10 +1790,10 @@ INST_FOP_ARITH(FRem, mod)
   case Instruction::FPExt: {
     FPExtInst *fi = cast<FPExtInst>(i);
     Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());
-    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state).value,
+    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state),
                                         "floating point");
     if (!fpWidthToSemantics(arg->getWidth()) || arg->getWidth() > resultType)
-      return terminateStateOnExecError(state, "Unsupported FPExt operation");
+      return terminateOnExecError(state, "Unsupported FPExt operation");
 
     llvm::APFloat Res(arg->getAPValue());
     bool losesInfo = false;
@@ -1807,10 +1807,10 @@ INST_FOP_ARITH(FRem, mod)
   case Instruction::FPToUI: {
     FPToUIInst *fi = cast<FPToUIInst>(i);
     Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());
-    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state).value,
+    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state),
                                        "floating point");
     if (!fpWidthToSemantics(arg->getWidth()) || resultType > 64)
-      return terminateStateOnExecError(state, "Unsupported FPToUI operation");
+      return terminateOnExecError(state, "Unsupported FPToUI operation");
 
     llvm::APFloat Arg(arg->getAPValue());
     uint64_t value = 0;
@@ -1824,10 +1824,10 @@ INST_FOP_ARITH(FRem, mod)
   case Instruction::FPToSI: {
     FPToSIInst *fi = cast<FPToSIInst>(i);
     Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());
-    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state).value,
+    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state),
                                        "floating point");
     if (!fpWidthToSemantics(arg->getWidth()) || resultType > 64)
-      return terminateStateOnExecError(state, "Unsupported FPToSI operation");
+      return terminateOnExecError(state, "Unsupported FPToSI operation");
 
     llvm::APFloat Arg(arg->getAPValue());
     uint64_t value = 0;
@@ -1841,11 +1841,11 @@ INST_FOP_ARITH(FRem, mod)
   case Instruction::UIToFP: {
     UIToFPInst *fi = cast<UIToFPInst>(i);
     Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());
-    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state).value,
+    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state),
                                        "floating point");
     const llvm::fltSemantics *semantics = fpWidthToSemantics(resultType);
     if (!semantics)
-      return terminateStateOnExecError(state, "Unsupported UIToFP operation");
+      return terminateOnExecError(state, "Unsupported UIToFP operation");
     llvm::APFloat f(*semantics, 0);
     f.convertFromAPInt(arg->getAPValue(), false,
                        llvm::APFloat::rmNearestTiesToEven);
@@ -1857,11 +1857,11 @@ INST_FOP_ARITH(FRem, mod)
   case Instruction::SIToFP: {
     SIToFPInst *fi = cast<SIToFPInst>(i);
     Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());
-    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state).value,
+    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state),
                                        "floating point");
     const llvm::fltSemantics *semantics = fpWidthToSemantics(resultType);
     if (!semantics)
-      return terminateStateOnExecError(state, "Unsupported SIToFP operation");
+      return terminateOnExecError(state, "Unsupported SIToFP operation");
     llvm::APFloat f(*semantics, 0);
     f.convertFromAPInt(arg->getAPValue(), true,
                        llvm::APFloat::rmNearestTiesToEven);
@@ -1872,13 +1872,13 @@ INST_FOP_ARITH(FRem, mod)
 
   case Instruction::FCmp: {
     FCmpInst *fi = cast<FCmpInst>(i);
-    ref<ConstantExpr> left = toConstant(state, eval(ki, 0, state).value,
+    ref<ConstantExpr> left = toConstant(state, eval(ki, 0, state),
                                         "floating point");
-    ref<ConstantExpr> right = toConstant(state, eval(ki, 1, state).value,
+    ref<ConstantExpr> right = toConstant(state, eval(ki, 1, state),
                                          "floating point");
     if (!fpWidthToSemantics(left->getWidth()) ||
         !fpWidthToSemantics(right->getWidth()))
-      return terminateStateOnExecError(state, "Unsupported FCmp operation");
+      return terminateOnExecError(state, "Unsupported FCmp operation");
 
     APFloat LHS(left->getAPValue());
     APFloat RHS(right->getAPValue());
@@ -1897,7 +1897,7 @@ INST_FOP_ARITH(FRem, mod)
 	KGEPInstruction *kgepi = static_cast<KGEPInstruction*>(ki);
 	ref<Expr>	agg, result;
 
-	agg = eval(ki, 0, state).value;
+	agg = eval(ki, 0, state);
 	result = MK_EXTRACT(
 		agg,
 		kgepi->getOffsetBits()*8,
@@ -1918,13 +1918,13 @@ INST_FOP_ARITH(FRem, mod)
       instAlloc(state, ki);
       break;
     } else if (isFreeCall(i)) {
-      executeFree(state, eval(ki, 0, state).value);
+      executeFree(state, eval(ki, 0, state));
       break;
     }
 
     std::cerr << "OOPS! ";
     i->dump();
-    terminateStateOnExecError(state, "illegal instruction");
+    terminateOnExecError(state, "illegal instruction");
     break;
   }
 
@@ -1935,7 +1935,7 @@ INST_FOP_ARITH(FRem, mod)
 			ss << "error msg: " << Expr::errorMsg << '\n';
 		if (!Expr::errorExpr.isNull())
 			ss << "bad expr: " << Expr::errorExpr << '\n';
-		terminateStateOnError(state, ss.str(), "expr.err");
+		terminateOnError(state, ss.str(), "expr.err");
 		Expr::resetErrors();
 	}
 }
@@ -1956,7 +1956,7 @@ void Executor::killStates(ExecutionState* &state)
   std::partial_sort(
     arr.begin(), arr.begin() + toKill, arr.end(), KillOrCompactOrdering());
   for (unsigned i = 0; i < toKill; ++i) {
-    terminateStateEarly(*arr[i], "memory limit");
+    terminateEarly(*arr[i], "memory limit");
     if (state == arr[i]) state = NULL;
   }
   klee_message("Killed %u states.", toKill);
@@ -2071,9 +2071,9 @@ void Executor::run(ExecutionState &initialState)
 		ExecutionState &state = **it;
 		stepInstruction(state); // keep stats rolling
 		if (DumpStatesOnHalt)
-			terminateStateEarly(state, "execution halting");
+			terminateEarly(state, "execution halting");
 		else
-			terminateState(state);
+			terminate(state);
 	}
 	notifyCurrent(0);
 
@@ -2114,10 +2114,10 @@ void Executor::step(void)
 	}
 
 	stepStateInst(currentState);
+	prevState = currentState;
 
 	handleMemoryUtilization(currentState);
 	notifyCurrent(currentState);
-	prevState = currentState;
 }
 
 void Executor::runLoop(void)
@@ -2176,11 +2176,11 @@ std::string Executor::getAddressInfo(
 
 void Executor::yield(ExecutionState& state)
 {
-	terminateStateOnError(state, "yielding state", "yield");
+	terminateOnError(state, "yielding state", "yield");
 	// stateManager->yield(&state);
 }
 
-void Executor::terminateState(ExecutionState &state)
+void Executor::terminate(ExecutionState &state)
 {
 	if (replayOut && replayPosition!=replayOut->numObjects) {
 		klee_warning_once(
@@ -2190,16 +2190,16 @@ void Executor::terminateState(ExecutionState &state)
 
 	interpreterHandler->incPathsExplored();
 
-	if (!stateManager->isAddedState(&state)) {
-		state.pc = state.prevPC;
-		stateManager->queueRemove(&state);
+	if (stateManager->isAddedState(&state)) {
+		stateManager->dropAdded(&state);
 		return;
 	}
 
-	stateManager->dropAdded(&state);
+	state.pc = state.prevPC;
+	stateManager->queueRemove(&state);
 }
 
-void Executor::terminateStateEarly(
+void Executor::terminateEarly(
 	ExecutionState &state,
 	const Twine &message)
 {
@@ -2233,21 +2233,21 @@ void Executor::terminateStateEarly(
 	}
 
 	call_depth--;
-	terminateState(*term_st);
+	terminate(*term_st);
 }
 
 bool Executor::isInterestingTestCase(ExecutionState* st) const
 { return !OnlyOutputStatesCoveringNew || st->coveredNew; }
 
-void Executor::terminateStateOnExit(ExecutionState &state)
+void Executor::terminateOnExit(ExecutionState &state)
 {
 	if (isInterestingTestCase(&state))
 		interpreterHandler->processTestCase(state, 0, 0);
 
-	terminateState(state);
+	terminate(state);
 }
 
-void Executor::terminateStateOnError(
+void Executor::terminateOnError(
 	ExecutionState &state,
 	const llvm::Twine &messaget,
 	const char *suffix,
@@ -2263,7 +2263,7 @@ void Executor::terminateStateOnError(
 			std::make_pair(
 				state.prevPC->getInst(), message)).second;
 		if (new_err == false) {
-			terminateState(state);
+			terminate(state);
 			return;
 		}
 	}
@@ -2276,7 +2276,7 @@ void Executor::terminateStateOnError(
 
 	interpreterHandler->processTestCase(state, msg.str().c_str(), suffix);
 
-	terminateState(state);
+	terminate(state);
 }
 
 void Executor::printStateErrorMessage(
@@ -2337,7 +2337,7 @@ void Executor::resolveExact(
 	}
 
 	if (unbound) {
-		terminateStateOnError(
+		terminateOnError(
 			*unbound,
 			"memory error: invalid pointer: " + name,
 			"ptr.err",
@@ -2382,14 +2382,14 @@ ObjectState* Executor::makeSymbolicReplay(
 {
 	ObjectState *os = state.bindMemObjWriteable(mo);
 	if (replayPosition >= replayOut->numObjects) {
-		terminateStateOnError(
+		terminateOnError(
 			state, "replay count mismatch", "user.err");
 		return os;
 	}
 
 	KTestObject *obj = &replayOut->objects[replayPosition++];
 	if (obj->numBytes != mo->size) {
-		terminateStateOnError(
+		terminateOnError(
 			state, "replay size mismatch", "user.err");
 	} else {
 		for (unsigned i=0; i<mo->size; i++) {
@@ -2511,11 +2511,11 @@ void Executor::instGetElementPtr(ExecutionState& state, KInstruction *ki)
 	ref<Expr>		base;
 
 	kgepi = static_cast<KGEPInstruction*>(ki);
-	base = eval(ki, 0, state).value;
+	base = eval(ki, 0, state);
 
 	foreach (it, kgepi->indices.begin(), kgepi->indices.end()) {
 		uint64_t elementSize = it->second;
-		ref<Expr> index = eval(ki, it->first, state).value;
+		ref<Expr> index = eval(ki, it->first, state);
 
 		base = AddExpr::create(
 			base,
@@ -2651,7 +2651,7 @@ void Executor::executeAllocSymbolic(
 				ExprPPrinter::printOne(info, "  size expr", size);
 				info << "  concretization : " << example << "\n";
 				info << "  unbound example: " << tmp << "\n";
-				terminateStateOnError(
+				terminateOnError(
 					*hugeSize.second,
 					"concretized symbolic size",
 					"model.err",
@@ -2710,13 +2710,13 @@ void Executor::executeFree(
 
 		mo = it->first.first;
 		if (mo->isLocal()) {
-			terminateStateOnError(
+			terminateOnError(
 				*it->second,
 				"free of alloca",
 				"free.err",
 				getAddressInfo(*it->second, address));
 		} else if (mo->isGlobal()) {
-			terminateStateOnError(
+			terminateOnError(
 				*it->second,
 				"free of global",
 				"free.err",
@@ -2725,8 +2725,7 @@ void Executor::executeFree(
 			it->second->unbindObject(mo);
 			if (target)
 				it->second->bindLocal(
-					target,
-					Expr::createPointer(0));
+					target, Expr::createPointer(0));
 		}
 	}
 }
@@ -2772,7 +2771,7 @@ void Executor::xferIterInit(
 	ExecutionState* state,
 	KInstruction* ki)
 {
-	iter.v = eval(ki, 0, *state).value;
+	iter.v = eval(ki, 0, *state);
 	iter.ki = ki;
 	iter.free = state;
 	iter.getval_c = 0;
@@ -2795,7 +2794,7 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 		if (iter.free == NULL) return false;
 
 		if (solver->getValue(*(iter.free), iter.v, value) == false) {
-			terminateStateEarly(
+			terminateEarly(
 				*(iter.free),
 				"solver died on xferIterNext");
 			return false;
@@ -2820,7 +2819,7 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 					(void*)addr);
 			}
 
-			terminateStateOnError(
+			terminateOnError(
 				*(iter.res.first),
 				"xfer iter error: bad pointer",
 				"badjmp.err");
@@ -2846,7 +2845,7 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 	}
 
 	if (iter.badjmp_c >= MAX_BADJMP) {
-		terminateStateOnError(
+		terminateOnError(
 			*(iter.free),
 			"xfer iter erorr: too many bad jumps",
 			"badjmp.err");

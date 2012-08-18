@@ -85,19 +85,18 @@ unsigned ExeStateVex::getStackDepth(void) const
 {
 	const ObjectState	*reg_os;
 	unsigned		off;
+	ref<Expr>		stk_expr;
 	uint64_t		cur_stack;
-	unsigned		i;
 
 	off = base_guest->getCPUState()->getStackRegOff();
 	reg_os = getRegObjRO();
 	cur_stack = 0;
 
-	for (i = 0; i < 8; i++) {
-		if (reg_os->isByteConcrete(off+i) == false)
-			goto symstack;
-		cur_stack |= ((uint64_t)reg_os->read8c(off+i)) << (i*8);
-	}
+	stk_expr = read(reg_os, off, 64);
+	if (stk_expr->getKind() != Expr::Constant)
+		goto symstack;
 
+	cur_stack = cast<ConstantExpr>(stk_expr)->getZExtValue();
 	if (base_stack < cur_stack) {
 	//	std::cerr << "[ExeStateVex] base="
 	//		<< (void*)base_stack.o <<  " < "

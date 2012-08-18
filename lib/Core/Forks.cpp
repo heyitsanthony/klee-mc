@@ -284,7 +284,7 @@ bool Forks::forkFollowReplay(ExecutionState& current, struct ForkInfo& fi)
 		first = false;
 	}
 	ss << ")";
-	exe.terminateStateOnError(current, ss.str().c_str(), "branch.err");
+	exe.terminateOnError(current, ss.str().c_str(), "branch.err");
 
 	for (unsigned i = 0; i < fi.N; i++) {
 		if (fi.conditions[i].isNull())
@@ -306,7 +306,7 @@ bool Forks::forkSetupNoSeeding(ExecutionState& current, struct ForkInfo& fi)
 		current.isReplay && current.isReplayDone())
 	{
 		// Done replaying this state, so kill it (if -replay-path-only)
-		exe.terminateStateEarly(current, "replay path exhausted");
+		exe.terminateEarly(current, "replay path exhausted");
 		return false;
 	}
 
@@ -449,7 +449,7 @@ Forks::fork(
 	fi.isSeeding = exe.isStateSeeding(&current);
 
 	if (evalForks(current, fi) == false) {
-		exe.terminateStateEarly(current, "fork query timed out");
+		exe.terminateEarly(current, "fork query timed out");
 		return Executor::StateVector(N, NULL);
 	}
 
@@ -699,8 +699,7 @@ void Forks::constrainFork(
 		constraint_added = exe.addConstraint(
 			*curState, fi.conditions[condIndex]);
 		if (constraint_added == false) {
-			exe.terminateStateEarly(
-				*curState, "contradiction on branch");
+			exe.terminateEarly(*curState, "branch contradiction");
 			fi.resStates[condIndex] = NULL;
 			fi.res[condIndex] = false;
 			return;
@@ -717,7 +716,7 @@ void Forks::constrainFork(
 
 	// Kinda gross, do we even really still want this option?
 	if (MaxDepth && MaxDepth <= curState->depth) {
-		exe.terminateStateEarly(*curState, "max-depth exceeded");
+		exe.terminateEarly(*curState, "max-depth exceeded");
 		fi.resStates[condIndex] = NULL;
 		return;
 	}
