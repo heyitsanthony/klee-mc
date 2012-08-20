@@ -7,34 +7,53 @@
 namespace klee
 {
 
-class ShadowCombine
+class ShadowMix
 {
 public:
-	virtual ~ShadowCombine() {}
-	virtual uint64_t combine(uint64_t a, uint64_t b) = 0;
+	virtual ~ShadowMix() {}
+	ShadowVal mix(const ShadowVal& a, const ShadowVal& b)
+	{
+		ShadowVal	v;
+		SAVE_SHADOW
+		_sa->stopShadow();
+		v = join(a, b);
+		POP_SHADOW
+		return v;
+	}
 protected:
-	ShadowCombine(void) {}
+	virtual ShadowVal join(
+		const ShadowVal& a, const ShadowVal& b) = 0;
+	ShadowMix(void) {}
 };
 
-class ShadowCombineOr : public ShadowCombine
-{ virtual uint64_t combine(uint64_t a, uint64_t b) { return a | b; } };
+class ShadowMixOr : public ShadowMix
+{ virtual ShadowVal join(
+	const ShadowVal& a, const ShadowVal& b) { return a | b; } };
+
+class ShadowMixAnd : public ShadowMix
+{ virtual ShadowVal join(
+	const ShadowVal& a, const ShadowVal& b) { return a & b; } };
+
 
 class ShadowBuilder : public ExprBuilder
 {
 public:
 	static ExprBuilder* create(
 		ExprBuilder* default_builder,
-		ShadowCombine* sc = NULL);
-	virtual ~ShadowBuilder() { delete sc; }
+		ShadowMix* sm = NULL);
+	virtual ~ShadowBuilder() { delete sm; }
+
+	uint64_t getTaintCount(void) const { return taint_c; }
 
 	EXPR_BUILDER_DECL_ALL
 protected:
 	const ShadowType* getShadowExpr(const ref<Expr>& e) const;
-	ShadowBuilder(ExprBuilder* eb, ShadowCombine* _sc);
+	ShadowBuilder(ExprBuilder* eb, ShadowMix* _sm);
 private:
 	ShadowAlloc*	sa;
 	ExprBuilder*	eb_default;
-	ShadowCombine	*sc;
+	ShadowMix	*sm;
+	uint64_t	taint_c;
 };
 }
 

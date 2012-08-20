@@ -24,7 +24,7 @@ public:
 		{
 			ShadowAlloc	*sa = NULL;
 			sa = ShadowAlloc::get();
-			sa->startShadow(1234567);
+			sa->startShadow(MK_CONST(1234567,32));
 			ref<Expr>	s_e(state.readLocal(mop.target)->realloc());
 
 			assert (s_e->isShadowed());

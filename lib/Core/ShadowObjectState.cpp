@@ -22,7 +22,6 @@ ShadowObjectState::ShadowObjectState(const ObjectState& os)
 	tainted_bytes = sos->tainted_bytes;
 }
 
-#include <iostream>
 void ShadowObjectState::write8(unsigned offset, ref<Expr>& value)
 {
 	/* XXX: this is imprecise */
@@ -60,7 +59,7 @@ void ShadowObjectState::write(unsigned offset, const ref<Expr>& value)
 	UnboxingObjectState::write(offset, value);
 }
 
-void ShadowObjectState::taintAccesses(uint64_t v)
+void ShadowObjectState::taintAccesses(ShadowVal v)
 {
 	is_tainted = true;
 	taint_v = v;
@@ -70,9 +69,12 @@ ref<Expr> ShadowObjectState::read8(unsigned offset) const
 {
 	ref<Expr>	ret;
 
-	if (is_tainted) ShadowAlloc::get()->startShadow(taint_v);
-	ret = UnboxingObjectState::read8(offset);
-	if (is_tainted) ShadowAlloc::get()->stopShadow();
+	if (is_tainted) {
+		PUSH_SHADOW(taint_v)
+		ret = UnboxingObjectState::read8(offset);
+		POP_SHADOW
+	} else
+		ret = UnboxingObjectState::read8(offset);
 
 	return ret;
 }
@@ -81,12 +83,25 @@ ref<Expr> ShadowObjectState::read8(ref<Expr> offset) const
 {
 	ref<Expr>	ret;
 
-	if (is_tainted) ShadowAlloc::get()->startShadow(taint_v);
-	ret = UnboxingObjectState::read8(offset);
-	if (is_tainted) ShadowAlloc::get()->stopShadow();
+	if (is_tainted) {
+		PUSH_SHADOW(taint_v);
+		ret = UnboxingObjectState::read8(offset);
+		POP_SHADOW
+	} else
+		ret = UnboxingObjectState::read8(offset);
 
 	return ret;
 }
  
 bool ShadowObjectState::isByteTainted(unsigned off) const
 { return read8(off)->isShadowed(); }
+
+void ShadowObjectState::taint(unsigned offset, ShadowVal v)
+{
+	PUSH_SHADOW(v)
+	ref<Expr>	e(read8(offset));
+	/* XXX: would like to be able to do tag combining here */
+	e = e->realloc();
+	write8(offset, e);
+	POP_SHADOW
+}

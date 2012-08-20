@@ -13,15 +13,19 @@ class MemoryObject;
 class TaintMergeCombine;
 class PTree;
 class ExeStateManager;
+class TaintGroup;
 
 /* func prefix, shadow tag */
 typedef std::map<std::string,uint64_t>	tm_tags_ty;
+
+typedef uint64_t TaintID;
+typedef std::map<TaintID, TaintGroup*>	taintgrps_ty;
 
 class TaintMergeCore
 {
 public:
 	TaintMergeCore(Executor* _exe);
-	virtual ~TaintMergeCore() {}
+	virtual ~TaintMergeCore();
 	void setupInitialState(ExecutionState* es);
 	void taintMergeBegin(ExecutionState& state);
 	void taintMergeEnd(void);
@@ -31,13 +35,15 @@ private:
 	void loadTags(const std::string& fname);
 	Executor	*exe;
 	tm_tags_ty	tm_tags;
-	uint64_t	taint_id;
+	uint64_t	cur_taint_id;
+	taintgrps_ty	taint_grps;
 
 	/* state information before activating the branch mode */
 	ExecutionState	*merging_st;
 	ExeStateManager	*old_esm;
 	unsigned	merge_depth;
 	bool		merging;
+	bool		was_quench;
 };
 }
 

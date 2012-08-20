@@ -201,9 +201,7 @@ ref<Expr> Expr::createFromKind(Kind k, std::vector<CreateArg> args)
       assert(numArgs == 3 && args[0].isExpr() &&
              args[1].isExpr() && args[2].isExpr() &&
              "invalid args array for Select opcode");
-      return SelectExpr::create(args[0].expr,
-                                args[1].expr,
-                                args[2].expr);
+      return MK_SELECT(args[0].expr, args[1].expr, args[2].expr);
 
     case Concat: {
       assert(numArgs == 2 && args[0].isExpr() && args[1].isExpr() &&

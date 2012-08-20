@@ -437,7 +437,7 @@ Forks::fork(
 
 
 	fi.forkDisabled = current.forkDisabled;
-	if (	QuenchRunaways &&
+	if (	is_quench &&
 		!fi.forkDisabled &&
 		(*current.prevPC).getForkCount() > 10)
 	{
@@ -839,6 +839,7 @@ Forks::Forks(Executor& _exe)
 , preferTrueState(false)
 , preferFalseState(false)
 , lastFork(0,0)
+, is_quench(QuenchRunaways)
 {
 	condFilter = new ExprTimer<MergeArrays>(1000);
 }

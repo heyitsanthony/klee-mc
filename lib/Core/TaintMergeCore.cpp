@@ -7,8 +7,9 @@
 #include <llvm/LLVMContext.h>
 #include <llvm/Type.h>
 
+#include "Forks.h"
+#include "TaintGroup.h"
 #include "Executor.h"
-#include "PTree.h"
 #include "klee/ExecutionState.h"
 #include "klee/Internal/Module/KModule.h"
 #include "SpecialFunctionHandler.h"
@@ -18,6 +19,7 @@
 #include "ExeStateManager.h"
 #include "../Searcher/DFSSearcher.h"
 #include "TaintMergeCore.h"
+#include "TaintUpdater.h"
 #include "static/Sugar.h"
 
 using namespace klee;
@@ -62,7 +64,7 @@ bool EntryPass::isShadowedFunc(const llvm::Function& f) const
 	std::string			f_name;
 	tm_tags_ty::const_iterator	it;
 	unsigned			i;
-	
+
 	for (i = 0; f_name_raw[i] && f_name_raw[i] != '+'; i++);
 	f_name = f_name_raw.substr(0, i);
 
@@ -83,14 +85,14 @@ static struct SpecialFunctionHandler::HandlerInfo tm_hi =
 
 TaintMergeCore::TaintMergeCore(Executor* _exe)
 : exe(_exe)
-, taint_id(1)
+, cur_taint_id(1)
 , merging_st(NULL)
 , old_esm(NULL)
 , merge_depth(0)
 , merging(false)
 {
 	ExprAlloc	*ea;
-	ShadowCombine	*sc;
+	ShadowMix	*sc;
 
 	loadTags(TMergeFuncFile);
 	assert (tm_tags.size() != 0 && "No tagged functions?");
@@ -99,11 +101,17 @@ TaintMergeCore::TaintMergeCore(Executor* _exe)
 	Expr::setAllocator(new ShadowAlloc());
 	delete ea;
 
-	sc = new ShadowCombineOr();
+	sc = new ShadowMixAnd();
 	Expr::setBuilder(ShadowBuilder::create(Expr::getBuilder(), sc));
 
 	delete ObjectState::getAlloc();
 	ObjectState::setAlloc(new ObjectStateFactory<ShadowObjectState>());
+}
+
+TaintMergeCore::~TaintMergeCore()
+{
+	foreach (it, taint_grps.begin(), taint_grps.end())
+		delete it->second;
 }
 
 void TaintMergeCore::loadTags(const std::string& s)
@@ -132,7 +140,6 @@ void TaintMergeCore::setupInitialState(ExecutionState* es)
 		exe->getSFH()->addHandler(tm_hi));
 	t_merge_h->tm = this;
 	km->addFunctionPass(new EntryPass(*exe, f_enter, tm_tags));
-
 }
 
 SFH_DEF_HANDLER(TaintMerge)
@@ -157,7 +164,9 @@ void TaintMergeCore::taintMergeBegin(ExecutionState& state)
 
 	/* NOW MERGINGGGGGGGG */
 	std::cerr << "BEGIN THE MERGE!!\n";
-	ShadowAlloc::get()->startShadow(++taint_id);
+	ShadowAlloc::get()->startShadow(MK_CONST(1, 1));
+
+	std::cerr << "WOOOO: EXPRS= " << Expr::getNumExprs() << '\n';
 
 	/* swap out state information to support exhaustive search */
 	old_esm = exe->getStateManager();
@@ -170,7 +179,9 @@ void TaintMergeCore::taintMergeBegin(ExecutionState& state)
 
 	std::cerr << "COPIED?? STKSZ=" << new_st->getStackDepth() << '\n';
 	new_esm->setInitialState(new_st);
-	new_esm->setupSearcher(new DFSSearcher());
+	new_esm->setupSearcher(new TaintUpdater(
+		new DFSSearcher(),
+		merging_st->constraints));
 
 	std::cerr << "RIGGING NEW STATE MANAGER!!\n";
 	exe->setStateManager(new_esm);
@@ -179,6 +190,7 @@ void TaintMergeCore::taintMergeBegin(ExecutionState& state)
 	 * indicating completion */
 	merging = true;
 	merge_depth = GET_STACK_DEPTH(merging_st);
+	was_quench = exe->getForking()->isQuenching();
 
 	assert (ShadowAlloc::get()->isShadowing());
 }
@@ -187,7 +199,6 @@ void TaintMergeCore::step(void)
 {
 	ExeStateManager	*esm;
 	ExecutionState	*cur_es;
-	static unsigned k = 0;
 
 	if (merging == false) return;
 
@@ -196,19 +207,8 @@ void TaintMergeCore::step(void)
 	esm = exe->getStateManager();
 	cur_es = exe->getCurrentState();
 	assert (cur_es->getStackDepth() != 0);
-	k++;
-	std::cerr << cur_es->getStackDepth() << " vs " << merge_depth << '\n';
-	if (k > 10) {
-		exe->printStackTrace(*cur_es, std::cerr);
-		k = 0;
-	}
+
 	if (GET_STACK_DEPTH(cur_es) < merge_depth) {
-		std::cerr << "YIELD IT: cur_es->stk = "
-			<< GET_STACK_DEPTH(cur_es) << 
-			" vs merge=" << merge_depth << '\n';
-		std::cerr << "TRACE:\n";
-		cur_es->dumpStack(std::cerr);
-		std::cerr << "========================\n";
 		esm->forceYield(cur_es);
 		esm->commitQueue(NULL);
 	}
@@ -217,20 +217,18 @@ void TaintMergeCore::step(void)
 		taintMergeEnd();
 }
 
-
 void TaintMergeCore::taintMergeEnd(void)
 {
 	/* we expect to have a set of states which are all tainted;
 	 * the states should all be yielded in the statemanager */
 	ExeStateManager	*esm = exe->getStateManager();
-	uint64_t	total_insts = 0;
+	TaintGroup	*tg;
 
 	assert (merging_st != NULL);
 
 	ShadowAlloc::get()->stopShadow();
 	merging = false;
 
-	std::cerr << "YIELDED STATES: " << esm->numYieldedStates() << '\n';
 	/* no branches, just play the merging state as normal */
 	if (esm->numYieldedStates() == 1) {
 		/* FIXME: ideally, we'd want to use the data from
@@ -239,52 +237,31 @@ void TaintMergeCore::taintMergeEnd(void)
 		 * the scheduler interaction is dicey, so I don't know
 		 * how to do it. */
 		/* Caches will hopefully eat up the expensive parts */
-		std::cerr << "HOOOOOOOOO-HUM\n";
+		std::cerr << "[TaintMergeCore] No forks!\n";
 		goto done;
 	}
 
-	foreach (it, esm->beginYielded(), esm->endYielded()) {
-		ExecutionState	*es(*it);
+	/* merge taint information */
+	std::cerr << "[TaintMergeCore] Caught "
+		<< esm->numYieldedStates() << " states.\n";
+	tg = new TaintGroup();
+	taint_grps[cur_taint_id] = tg;
+	foreach (it, esm->beginYielded(), esm->endYielded())
+		tg->addState(*it);
 
-		std::cerr << "===================HEY!================\n";
+	std::cerr << "TOTAL-INST: " << tg->getInsts() << '\n';
 
-		foreach (it2, es->addressSpace.begin(), es->addressSpace.end()) {
-			const ObjectState	*os;
-			const ShadowObjectState	*sos;
+	/* finally, restore tainted state */
+	tg->apply(merging_st, MK_CONST(++cur_taint_id, 32));
+	merging_st->inheritControl(*(*(esm->beginYielded())));
+	std::cerr << "RET FROM MERGE\n";
 
-			os = it2->second;
-			sos = dynamic_cast<const ShadowObjectState*>(os);
-			if (sos == NULL) continue;
-			if (sos->isClean()) continue;
-			
-			std::cerr << "HEY ADDR:"
-				<< (void*)it2->first->address << "--"
-				<< (void*)(it2->first->address+sos->size)
-				<< '\n';
-			std::cerr << "TAINTED: {";
-			for (unsigned i = 0; i < sos->size; i++)
-				if (sos->isByteTainted(i))
-					std::cerr << i << " ";
-			std::cerr << "}\n";
-		}
-
-		total_insts += es->personalInsts;
-	}
-
-	std::cerr << "TOTAL-INST: " << total_insts << '\n';
-
-	/* these states need to be merged */
-	assert (0 == 1 && "STUB");
-#if 0
-	foreach (new_esm, ..., ...) {
-	}
-	new_esm->commitQueue
-	
-#endif
+	std::cerr << "WOOOO: EXPRS= " << Expr::getNumExprs() << '\n';
 done:
 	std::cerr << "DELETING DOWN: " << esm << '\n';
 	delete esm;
 	exe->setStateManager(old_esm);
 	old_esm = NULL;
 	merging_st = NULL;
+	exe->getForking()->setQuenching(was_quench);
 }

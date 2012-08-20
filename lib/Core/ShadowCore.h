@@ -11,7 +11,7 @@ class Executor;
 class ObjectState;
 class MemoryObject;
 class KInstruction;
-class ShadowCombine;
+class ShadowMix;
 
 /* func prefix, shadow tag */
 typedef std::map<std::string,uint64_t>	shadow_tags_ty;
@@ -31,7 +31,7 @@ private:
 
 	Executor		*exe;
 	shadow_tags_ty		shadow_tags;
-	ShadowCombine		*sc;
+	ShadowMix		*sc;
 	static Executor		*g_exe;
 };
 }

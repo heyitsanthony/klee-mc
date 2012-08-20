@@ -59,7 +59,7 @@ struct ArrayLT { bool operator()(const Array *a, const Array *b) const; };
 #define MK_SDIV(x,y)		SDivExpr::create(x,y)
 #define MK_UREM(x,y)		URemExpr::create(x,y)
 #define MK_SREM(x,y)		SRemExpr::create(x,y)
-#define MK_NOT(x,y)		NotExpr::create(x,y)
+#define MK_NOT(x)		NotExpr::create(x)
 #define MK_OR(x,y)		OrExpr::create(x,y)
 #define MK_AND(x,y)		AndExpr::create(x,y)
 #define MK_XOR(x,y)		XorExpr::create(x,y)
@@ -1020,6 +1020,7 @@ COMPARISON_EXPR_CLASS(Slt)
 COMPARISON_EXPR_CLASS(Sle)
 COMPARISON_EXPR_CLASS(Sgt)
 COMPARISON_EXPR_CLASS(Sge)
+
 }
 
 #include "klee/ConstantExpr.h"
@@ -1046,6 +1047,18 @@ inline bool Expr::isFalse() const {
     return CE->isFalse();
   return false;
 }
+
+inline ref<Expr> operator++(const ref<Expr>& lhs)
+{ return MK_ADD(lhs, MK_CONST(1, lhs->getWidth())); }
+inline ref<Expr> operator+(const ref<Expr>& lhs, const ref<Expr>& rhs)
+{ return MK_ADD(lhs, rhs); }
+inline ref<Expr> operator-(const ref<Expr>& lhs, const ref<Expr>& rhs)
+{ return MK_SUB(lhs, rhs); }
+inline ref<Expr> operator|(const ref<Expr>& lhs, const ref<Expr>& rhs)
+{ return MK_OR(lhs, rhs); }
+inline ref<Expr> operator&(const ref<Expr>& lhs, const ref<Expr>& rhs)
+{ return MK_AND(lhs, rhs); }
+inline ref<Expr> operator~(const ref<Expr>& lhs) { return MK_NOT(lhs); }
 
 } // End klee namespace
 

@@ -331,6 +331,8 @@ public:
 	bool isShadowing(void) const { return is_shadowing; }
 	void setShadow(uint64_t s) { is_shadowing = true; shadow_v = s; }
 	void unsetShadow(void) { is_shadowing = false; }
+
+	virtual void inheritControl(ExecutionState& es);
 private:
 	static MemoryManager* mm;
 	unsigned int num_allocs;

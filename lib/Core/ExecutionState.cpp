@@ -828,3 +828,11 @@ void ExecutionState::printFileLine(void)
 
 unsigned ExecutionState::getStackDepth(void) const
 { return stack.size(); }
+
+
+void ExecutionState::inheritControl(ExecutionState& es)
+{
+	stack = es.stack;
+	pc = es.pc;
+	prevPC = es.prevPC;
+}

@@ -30,8 +30,8 @@ using namespace llvm;
 
 Executor* ShadowCore::g_exe = NULL;
 
-SFH_HANDLER2(TaintLoad, ShadowCombine* sc)
-SFH_HANDLER2(TaintStore, ShadowCombine* sc)
+SFH_HANDLER2(TaintLoad, ShadowMix* sc)
+SFH_HANDLER2(TaintStore, ShadowMix* sc)
 
 #define TABENT(x,y) {		\
 	x,			\
@@ -59,7 +59,7 @@ ShadowCore::ShadowCore(Executor* _exe)
 	Expr::setAllocator(new ShadowAlloc());
 	delete ea;
 
-	sc = new ShadowCombineOr();
+	sc = new ShadowMixOr();
 	Expr::setBuilder(ShadowBuilder::create(Expr::getBuilder(), sc));
 
 	delete ObjectState::getAlloc();
@@ -125,26 +125,26 @@ void ShadowCore::setupInitialState(ExecutionState* es)
 
 SFH_DEF_HANDLER(TaintLoad)
 {
-	ShadowAlloc			*sa;
-	uint64_t			shadow_tag;
-	KInstIterator			kii = state.prevPC;
-	ShadowRef			old_shadow;
-	ref<Expr>			old_expr, tainted_expr;
+	ShadowAlloc	*sa;
+	ShadowVal	shadow_tag;
+	KInstIterator	kii = state.prevPC;
+	ShadowRef	old_shadow;
+	ref<Expr>	old_expr, tainted_expr;
 
 	--kii;
 	old_expr = state.readLocal(kii);
-	shadow_tag = cast<klee::ConstantExpr>(arguments[0])->getZExtValue();
+	shadow_tag = SHADOW_ARG2TAG(arguments[0]);
 
 	sa = ShadowAlloc::get();
 	old_shadow = ShadowAlloc::getExpr(old_expr);
 	if (!old_shadow.isNull()) {
-		uint64_t	old_tag;
+		ShadowVal old_tag;
 
 		old_tag = old_shadow->getShadow();
 		if (old_tag == shadow_tag)
 			return;
 
-		shadow_tag = sc->combine(shadow_tag, old_tag);
+		shadow_tag = sc->mix(shadow_tag, old_tag);
 	}
 
 	sa->startShadow(shadow_tag);
@@ -170,9 +170,9 @@ SFH_DEF_HANDLER(TaintStore)
 	ref<Expr>	base(arguments[1]);
 	ref<Expr>	value(arguments[0]);
 	ShadowRef	old_shadow(ShadowAlloc::getExpr(value));
-	uint64_t	shadow_tag;
+	ShadowVal	shadow_tag;
 
-	shadow_tag = cast<klee::ConstantExpr>(arguments[2])->getZExtValue();
+	shadow_tag = SHADOW_ARG2TAG(arguments[2]);
 
 	/* already tainted? */
 	if (!old_shadow.isNull() && old_shadow->getShadow() == shadow_tag) {
@@ -184,7 +184,7 @@ SFH_DEF_HANDLER(TaintStore)
 	if (	old_shadow.isNull() == false &&
 		old_shadow->getShadow() != shadow_tag)
 	{
-		shadow_tag = sc->combine(shadow_tag, old_shadow->getShadow());
+		shadow_tag = sc->mix(shadow_tag, old_shadow->getShadow());
 	}
 
 	sa = ShadowAlloc::get();

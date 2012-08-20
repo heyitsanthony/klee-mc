@@ -160,6 +160,7 @@ public:
 	bool isHalted(void) const { return haltExecution; }
 
 	MMU* getMMU(void) const { return mmu; }
+	void retFromNested(ExecutionState& state, KInstruction* ki);
 
 	MemoryManager	*memory;
 private:
@@ -200,10 +201,11 @@ protected:
 	virtual void runLoop();
 	void step(void);
 
+	virtual void instCall(ExecutionState& state, KInstruction* ki);
 	virtual void instRet(ExecutionState& state, KInstruction* ki);
 	virtual void instAlloc(ExecutionState& state, KInstruction* ki);
-
-	void retFromNested(ExecutionState& state, KInstruction* ki);
+	virtual void instBranchConditional(
+		ExecutionState& state, KInstruction* ki);
 
 	virtual void printStateErrorMessage(
 		ExecutionState& state,
@@ -312,7 +314,6 @@ private:
 	void instExtractElement(ExecutionState& state, KInstruction* ki);
 	void instInsertElement(ExecutionState& state, KInstruction *ki);
 	void instBranch(ExecutionState& state, KInstruction* ki);
-	void instBranchConditional(ExecutionState& state, KInstruction* ki);
 
   void markBranchVisited(
   	ExecutionState& state,
@@ -336,7 +337,6 @@ private:
 	ref<Expr> v,
 	llvm::VectorType* srcTy,
 	llvm::VectorType* dstTy);
-  void instCall(ExecutionState& state, KInstruction* ki);
   void instGetElementPtr(ExecutionState& state, KInstruction *ki);
 
   void instSwitch(ExecutionState& state, KInstruction* ki);
@@ -547,6 +547,8 @@ public:
 	void setStateManager(ExeStateManager* esm) { stateManager = esm; }
 
 	const Forks* getForking(void) const { return forking; }
+	Forks* getForking(void) { return forking; }
+
 
 	ExecutionState* getCurrentState(void) const { return currentState; }
 	bool hasState(const ExecutionState* es) const;

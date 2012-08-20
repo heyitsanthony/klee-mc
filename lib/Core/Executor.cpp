@@ -594,9 +594,10 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 
 	assert (isa<ReturnInst>(ki->getInst()) && "Expected ReturnInst");
 
-	ri = cast<ReturnInst>(ki->getInst());
 	kcaller = state.getCaller();
 	caller = kcaller ? kcaller->getInst() : 0;
+
+	ri = cast<ReturnInst>(ki->getInst());
 	isVoidReturn = (ri->getNumOperands() == 0);
 
 	assert (state.stack.size() > 1);
@@ -921,7 +922,7 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 {
 	BranchInst	*bi = cast<BranchInst>(ki->getInst());
-	ref<Expr>	cond = eval(ki, 0, state);
+	ref<Expr>	cond(eval(ki, 0, state));
 	StatePair	branches;
 	bool		hasHint = false, branchHint;
 

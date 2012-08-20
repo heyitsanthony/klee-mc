@@ -83,6 +83,8 @@ public:
 	/* WARNING: may return bogus exestates / one state / nothing */
 	Executor::StatePair getLastFork(void) const { return lastFork; }
 
+	bool isQuenching(void) const { return is_quench; }
+	void setQuenching(bool v) { is_quench = v; }
 private:
 	/* this forking code really should be refactored */
 	bool isForkingCondition(ExecutionState& current, ref<Expr> condition);
@@ -114,6 +116,7 @@ private:
 	succ_ty				hasSucc;
 	ExprVisitor			*condFilter;
 	Executor::StatePair		lastFork;
+	bool				is_quench;
 	static unsigned			quench_c;
 	static unsigned			fork_c;
 	static unsigned			fork_uniq_c;

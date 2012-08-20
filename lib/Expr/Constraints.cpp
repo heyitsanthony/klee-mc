@@ -381,3 +381,20 @@ ConstraintManager::~ConstraintManager(void)
 
 bool ConstraintManager::isValid(const Assignment& a) const
 { return a.satisfies(begin(), end()); }
+
+
+ConstraintManager ConstraintManager::operator -(
+	const ConstraintManager& other) const
+{
+	ConstraintManager	ret;
+	std::set< ref<Expr> >	lhs(constraints.begin(), constraints.end());
+	std::set< ref<Expr> >	rhs(
+		other.constraints.begin(), other.constraints.end());
+
+	foreach (it, lhs.begin(), lhs.end()) {
+		if (rhs.count(*it) == 0)
+			ret.addConstraint(*it);
+	}
+
+	return ret;
+}

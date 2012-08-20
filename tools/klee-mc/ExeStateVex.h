@@ -78,8 +78,9 @@ public:
 		std::vector<bool>& is_conc) const;
 
 	virtual uint64_t getAddrPC(void) const;
-
 	virtual unsigned getStackDepth(void) const;
+
+	virtual void inheritControl(ExecutionState& es);
 };
 
 }

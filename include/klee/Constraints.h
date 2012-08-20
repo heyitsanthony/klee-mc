@@ -79,6 +79,7 @@ public:
 	static unsigned getReplacements(void) { return simplify_c; }
 	static unsigned getTimeouts(void) { return timeout_c; }
 	static void incReplacements(void) { simplify_c++; }
+	ConstraintManager operator -(const ConstraintManager& other) const;
 private:
 	constraints_ty constraints;
 	mutable ExprTimer<ExprReplaceVisitor2>* simplifier;

@@ -4,9 +4,9 @@
 using namespace klee;
 
 
-#define MK_SHADOW1(x,y) new ShadowExpr<x, uint64_t>(shadow_v, y)
-#define MK_SHADOW2(x,y,z) new ShadowExpr<x, uint64_t>(shadow_v, y, z)
-#define MK_SHADOW3(x,y,z,w) new ShadowExpr<x, uint64_t>(shadow_v, y, z, w)
+#define MK_SHADOW1(x,y) new ShadowExpr<x, ShadowVal>(shadow_v, y)
+#define MK_SHADOW2(x,y,z) new ShadowExpr<x, ShadowVal>(shadow_v, y, z)
+#define MK_SHADOW3(x,y,z,w) new ShadowExpr<x, ShadowVal>(shadow_v, y, z, w)
 
 #define DECL_ALLOC_1(x)						\
 ref<Expr> ShadowAlloc::x(const ref<Expr>& src)			\
@@ -74,7 +74,7 @@ DECL_ALLOC_2(Sge)
 ref<Expr> ShadowAlloc::Read(const UpdateList &updates, const ref<Expr> &idx)
 {
 	if (!is_shadowing) return ExprAlloc::Read(updates, idx);
-	ref<Expr> r(new ShadowExpr<ReadExpr, uint64_t>(shadow_v, updates, idx));
+	ref<Expr> r(new ShadowExpr<ReadExpr, ShadowVal>(shadow_v, updates, idx));
 	r->computeHash();
 	return r;
 }
@@ -136,7 +136,7 @@ ShadowRef ShadowAlloc::getExprDynCast(const ref<Expr>& e)
 	case Expr::x:		\
 	return ShadowRef(	\
 		reinterpret_cast<ShadowType*>(	\
-			dynamic_cast<ShadowExpr<x##Expr,uint64_t>*>(	\
+			dynamic_cast<ShadowExpr<x##Expr, ShadowVal>*>( \
 				e.get())));
 
 	CAST_CASE(Constant)

@@ -76,13 +76,39 @@ public:
 
 
 protected:
+	virtual void instBranchConditional(
+		ExecutionState& state, KInstruction* ki)
+	{
+		ref<Expr>	cond(T::eval(ki, 0, state));
+
+		if (tmCore.isMerging()) {
+			/* XXX: what if it's a condition based on
+			 * another taint group? UGH. */
+			T::instBranchConditional(state, ki);
+			return;
+		}
+
+		if (cond->isShadowed()) {
+			std::cerr << "[TME] URk!!\n";
+			std::cerr << "EXpr = " << cond << '\n';
+			assert (0 == 1 && "XXXXXX");
+		}
+		T::instBranchConditional(state, ki);
+	}
+
 	virtual const ref<Expr> eval(
 		KInstruction *ki,
 		unsigned idx,
 		ExecutionState &st) const
 	{
-		if (tmCore.isMerging())
-			return T::eval(ki, idx, st)->realloc();
+		if (tmCore.isMerging()) {
+			ref<Expr>	e;
+			e = T::eval(ki, idx, st);
+			/* do not over shadow */
+			if (e->isShadowed() == false)
+				e = e->realloc();
+			return e;
+		}
 		return T::eval(ki, idx, st);
 	}
 private:

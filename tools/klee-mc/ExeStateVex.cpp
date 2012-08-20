@@ -111,3 +111,19 @@ symstack:
 	//std::cerr <<  "Expr=" << reg_os->read8(off+i) << "\n";
 	return 9999999;
 }
+
+
+void ExeStateVex::inheritControl(ExecutionState& es)
+{
+	ExeStateVex	*esv;
+	ObjectState	*reg_os(getRegObj());
+	unsigned	stkptr_off;
+
+	assert (base_guest->getArch() == Arch::X86_64 && "??? ARCH ???");
+
+	esv = static_cast<ExeStateVex*>(&es);
+	stkptr_off = base_guest->getCPUState()->getStackRegOff();
+	reg_os->write(stkptr_off, esv->getRegObjRO()->read(stkptr_off, 64));
+
+	ExecutionState::inheritControl(es);
+}

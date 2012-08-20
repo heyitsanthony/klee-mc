@@ -46,9 +46,23 @@ ref<Expr> OptBuilder::Concat(const ref<Expr> &l, const ref<Expr> &r)
 			ConstantExpr *rCE;
 			rCE = dyn_cast<ConstantExpr>(ce_right->getKid(0));
 			if (rCE)
-				return ConcatExpr::create(
+				return MK_CONCAT(
 					lCE->Concat(rCE),
 					ce_right->getKid(1));
+		}
+	}
+
+	if (l->getKind() == Expr::Select && r->getKind() == Expr::Select) {
+		SelectExpr	*s_l, *s_r;
+
+		s_l = cast<SelectExpr>(l);
+		s_r = cast<SelectExpr>(r);
+
+		if (s_l->cond == s_r->cond) {
+			return MK_SELECT(
+				s_l->cond,
+				MK_CONCAT(s_l->trueExpr, s_r->trueExpr),
+				MK_CONCAT(s_l->falseExpr, s_r->falseExpr));
 		}
 	}
 
@@ -479,10 +493,7 @@ ref<Expr> OptBuilder::ZExt(const ref<Expr> &e, Expr::Width w)
 	}
 #endif
 	if (kBits == 1) {
-		return SelectExpr::create(
-			e,
-			ConstantExpr::alloc(1, w),
-			ConstantExpr::alloc(0, w));
+		return MK_SELECT(e, MK_CONST(1, w), MK_CONST(0, w));
 	}
 
 	// NOTE:
@@ -546,8 +557,8 @@ ref<Expr> OptBuilder::SExt(const ref<Expr> &e, Expr::Width w)
 		{
 			return SelectExpr::create(
 				se->getKid(0),
-				SExtExpr::create(se->getKid(1), w),
-				SExtExpr::create(se->getKid(2), w));
+				MK_SEXT(se->getKid(1), w),
+				MK_SEXT(se->getKid(2), w));
 		}
 	}
 
@@ -576,13 +587,11 @@ static ref<Expr> AddExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 
 	// A + (B+c) == (A+B) + c
 	if (rk==Expr::Add && isa<ConstantExpr>(r->getKid(0)))
-		return AddExpr::create(AddExpr::create(
-			cl, r->getKid(0)), r->getKid(1));
+		return MK_ADD(MK_ADD(cl, r->getKid(0)), r->getKid(1));
 
 	// A + (B-c) == (A+B) - c
 	if (rk==Expr::Sub && isa<ConstantExpr>(r->getKid(0)))
-		return SubExpr::create(AddExpr::create(
-			cl, r->getKid(0)), r->getKid(1));
+		return MK_SUB(MK_ADD(cl, r->getKid(0)), r->getKid(1));
 
 	return AddExpr::alloc(cl, r);
 }
@@ -601,27 +610,19 @@ static ref<Expr> AddExpr_create(Expr *l, Expr *r)
 
 	// (k+a)+b = k+(a+b)
 	if (lk==Expr::Add && isa<ConstantExpr>(l->getKid(0)))
-		return AddExpr::create(
-			l->getKid(0),
-			AddExpr::create(l->getKid(1), r));
+		return MK_ADD(l->getKid(0), MK_ADD(l->getKid(1), r));
 
 	// (k-a)+b = k+(b-a)
 	if (lk==Expr::Sub && isa<ConstantExpr>(l->getKid(0)))
-		return AddExpr::create(
-			l->getKid(0),
-			SubExpr::create(r, l->getKid(1)));
+		return MK_ADD(l->getKid(0), MK_SUB(r, l->getKid(1)));
 
 	// a + (k+b) = k+(a+b)
 	if (rk==Expr::Add && isa<ConstantExpr>(r->getKid(0)))
-		return AddExpr::create(
-			r->getKid(0),
-			AddExpr::create(l, r->getKid(1)));
+		return MK_ADD(r->getKid(0), MK_ADD(l, r->getKid(1)));
 
 	// a + (k-b) = k+(a-b)
 	if (rk==Expr::Sub && isa<ConstantExpr>(r->getKid(0)))
-		return AddExpr::create(
-			r->getKid(0),
-			SubExpr::create(l, r->getKid(1)));
+		return MK_ADD(r->getKid(0), MK_SUB(l, r->getKid(1)));
 
 /* this never seems to turn up anywhere in real life? */
 #if 0
@@ -646,13 +647,11 @@ static ref<Expr> SubExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 	Expr::Kind rk = r->getKind();
 	// A - (B+c) == (A-B) - c
 	if (rk==Expr::Add && isa<ConstantExpr>(r->getKid(0)))
-		return SubExpr::create(
-			SubExpr::create(cl, r->getKid(0)), r->getKid(1));
+		return MK_SUB(MK_SUB(cl, r->getKid(0)), r->getKid(1));
 
 	// A - (B-c) == (A-B) + c
 	if (rk==Expr::Sub && isa<ConstantExpr>(r->getKid(0)))
-		return AddExpr::create(
-			SubExpr::create(cl, r->getKid(0)), r->getKid(1));
+		return MK_ADD(MK_SUB(cl, r->getKid(0)), r->getKid(1));
 
 	/* NOTE: invalid optimization:
 	 * (sub (zext x) (zext y)) != (sext (sub x y))) */
@@ -724,9 +723,7 @@ static ref<Expr> MulExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 		/* mul_c = 2^k? */
 		k = exact_log2(cl->getZExtValue());
 		if (k != -1) {
-			return ShlExpr::create(
-				r,
-				ConstantExpr::create(k, type));
+			return MK_SHL(r, MK_CONST(k, type));
 		}
 	}
 
@@ -816,9 +813,8 @@ static ref<Expr> AndExpr_createPartial(Expr *l, const ref<ConstantExpr> &cr)
 		if (	cr_w <= 64 && src_w <= 64 &&
 			cr->ZExt(src_w)->getZExtValue() == cr->getZExtValue())
 		{
-			return ZExtExpr::create(
-				AndExpr::create(
-					cr->ZExt(src_w), ze->getKid(0)),
+			return MK_ZEXT(
+				MK_AND(cr->ZExt(src_w), ze->getKid(0)),
 				ze->getWidth());
 		}
 	}
@@ -1150,10 +1146,8 @@ static ref<Expr> ShlExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 		if (const ZExtExpr* ze = dyn_cast<ZExtExpr>(l)) {
 			ref<Expr>	shifted_bits;
 
-			shifted_bits = ConcatExpr::create(
-				ze->src,
-				ConstantExpr::alloc(
-					0, ce->getZExtValue()));
+			shifted_bits = MK_CONCAT(
+				ze->src, MK_CONST(0, ce->getZExtValue()));
 
 			return ZExtExpr::create(shifted_bits, ze->getWidth());
 		}
@@ -1162,8 +1156,7 @@ static ref<Expr> ShlExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 		if (cc && (ce_val % 8 == 0)) {
 			return ShlExpr::create(
 				ZExtExpr::create(
-					ExtractExpr::create(
-						l, 0, l->getWidth() - ce_val),
+					MK_EXTRACT(l, 0, l->getWidth() - ce_val),
 					l->getWidth()),
 				ConstantExpr::create(ce_val, l->getWidth()));
 		}

@@ -8,22 +8,24 @@ using namespace klee;
 	bool		was_shadow(sa->isShadowing());	\
 	ShadowVal	old_v;				\
 	if (was_shadow) old_v = sa->getShadow();	\
-	sa->startShadow(x);
+	sa->startShadow(x);				\
+	taint_c++;
 
 #define SHADOW_END				\
 	if (!was_shadow) sa->stopShadow();	\
 	else sa->startShadow(old_v);		\
 }
 
-ExprBuilder* ShadowBuilder::create(ExprBuilder* eb, ShadowCombine* _sc)
+ExprBuilder* ShadowBuilder::create(ExprBuilder* eb, ShadowMix* _sm)
 {
-	if (_sc == NULL) _sc = new ShadowCombineOr();
-	return new TopLevelBuilder(new ShadowBuilder(eb, _sc), eb);
+	if (_sm == NULL) _sm = new ShadowMixOr();
+	return new TopLevelBuilder(new ShadowBuilder(eb, _sm), eb);
 }
 
-ShadowBuilder::ShadowBuilder(ExprBuilder* eb, ShadowCombine* _sc)
+ShadowBuilder::ShadowBuilder(ExprBuilder* eb, ShadowMix* _sm)
 : eb_default(eb)
-, sc(_sc)
+, sm(_sm)
+, taint_c(0)
 {
 	ExprAlloc	*alloc = Expr::getAllocator();
 	sa = dynamic_cast<ShadowAlloc*>(alloc);
@@ -55,7 +57,7 @@ DECL_ALLOC_1(Not)
 	if (se[0] == NULL && se[1] == NULL)	\
 		return eb_default->x(lhs, rhs);	\
 	if (se[1] && se[0])	\
-		tag = sc->combine(se[0]->getShadow(), se[1]->getShadow()); \
+		tag = sm->mix(se[0]->getShadow(), se[1]->getShadow()); \
 	else if (se[1]) tag = se[1]->getShadow();	\
 	else tag = se[0]->getShadow();		\
 	ref<Expr>	e;			\
@@ -137,13 +139,13 @@ ref<Expr> ShadowBuilder::Select(
 	if (se[0] != NULL) tag = se[0]->getShadow();
 	if (se[1] != NULL) {
 		tag = (tag_used)
-			? sc->combine(tag, se[1]->getShadow())
+			? sm->mix(tag, se[1]->getShadow())
 			: se[1]->getShadow();
 		tag_used = true;
 	}
 	if (se[2] != NULL) {
 		tag = (tag_used)
-			? sc->combine(tag, se[2]->getShadow())
+			? sm->mix(tag, se[2]->getShadow())
 			: se[2]->getShadow();
 		tag_used = true;
 	}

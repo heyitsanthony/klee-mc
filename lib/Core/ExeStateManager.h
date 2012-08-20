@@ -59,6 +59,8 @@ public:
 	ExeStateSet::const_iterator endYielded(void) const
 	{ return yieldedStates.end(); }
 
+	const ExeStateSet& getYielded(void) const { return yieldedStates; }
+
 	void dropAdded(ExecutionState* es);
 	void queueAdd(ExecutionState* es);
 	void queueSplitAdd(
