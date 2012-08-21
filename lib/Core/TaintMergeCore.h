@@ -14,6 +14,7 @@ class TaintMergeCombine;
 class PTree;
 class ExeStateManager;
 class TaintGroup;
+class TaintUpdateAction;
 
 /* func prefix, shadow tag */
 typedef std::map<std::string,uint64_t>	tm_tags_ty;
@@ -31,6 +32,7 @@ public:
 	void taintMergeEnd(void);
 	bool isMerging(void) const { return merging; }
 	void step(void);
+	void addConstraint(ExecutionState &state, ref<Expr> condition);
 private:
 	void loadTags(const std::string& fname);
 	Executor	*exe;
@@ -41,10 +43,10 @@ private:
 	/* state information before activating the branch mode */
 	ExecutionState	*merging_st;
 	ExeStateManager	*old_esm;
-	unsigned	merge_depth;
-	bool		merging;
-	bool		was_quench;
-	bool		was_dumpsel;
+	TaintUpdateAction	*tua;
+	unsigned		merge_depth;
+	bool			merging;
+	bool			was_quench;
 	static unsigned	nested_merge_c;
 	static unsigned merges_c;
 	static unsigned merge_states_c;

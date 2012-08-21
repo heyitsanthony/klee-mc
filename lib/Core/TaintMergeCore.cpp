@@ -18,8 +18,8 @@
 #include "../Expr/ShadowBuilder.h"
 #include "ExeStateManager.h"
 #include "../Searcher/DFSSearcher.h"
+#include "../Searcher/SearchUpdater.h"
 #include "TaintMergeCore.h"
-#include "TaintUpdater.h"
 #include "static/Sugar.h"
 
 using namespace klee;
@@ -62,7 +62,6 @@ public:
 };
 char EntryPass::ID;
 
-
 bool EntryPass::isShadowedFunc(const llvm::Function& f) const
 {
 	std::string			f_name_raw(exe.getPrettyName(&f));
@@ -83,6 +82,41 @@ bool EntryPass::runOnFunction(llvm::Function& f)
 
 	CallInst::Create(f_enter, MERGE_FUNCNAME, f.begin()->begin());
 	return true;
+}
+
+namespace klee
+{
+class TaintUpdateAction : public UpdateAction
+{
+public:
+	TaintUpdateAction(const ConstraintManager& cm)
+	: baseConstraints(cm) {}
+	virtual ~TaintUpdateAction() { }
+	virtual UpdateAction* copy(void) const
+	{ return new TaintUpdateAction(baseConstraints);  }
+
+	virtual void selectUpdate(ExecutionState* es)
+	{
+		computeTaint(es);
+		ShadowAlloc::get()->startShadow(lastTaint);
+	}
+
+	void computeTaint(ExecutionState* es)
+	{
+		/* recompute taint value */
+		ref<Expr>	lt;
+		ConstraintManager	cm(es->constraints - baseConstraints);
+		SAVE_SHADOW
+		_sa->stopShadow();
+		if (cm.size() == 0) lt = MK_CONST(1, 1);
+		else lt = BinaryExpr::Fold(Expr::And, cm.begin(), cm.end());
+		POP_SHADOW
+		lastTaint = ShadowAlloc::drop(lt);
+	}
+private:
+	ConstraintManager	baseConstraints;
+	ShadowVal		lastTaint;
+};
 }
 
 static struct SpecialFunctionHandler::HandlerInfo tm_hi =
@@ -187,9 +221,8 @@ void TaintMergeCore::taintMergeBegin(ExecutionState& state)
 
 	std::cerr << "COPIED?? STKSZ=" << new_st->getStackDepth() << '\n';
 	new_esm->setInitialState(new_st);
-	new_esm->setupSearcher(new TaintUpdater(
-		new DFSSearcher(),
-		merging_st->constraints));
+	tua = new TaintUpdateAction(merging_st->constraints);
+	new_esm->setupSearcher(new SearchUpdater(new DFSSearcher(), tua));
 
 	std::cerr << "RIGGING NEW STATE MANAGER!!\n";
 	exe->setStateManager(new_esm);
@@ -199,8 +232,6 @@ void TaintMergeCore::taintMergeBegin(ExecutionState& state)
 	merging = true;
 	merge_depth = GET_STACK_DEPTH(merging_st);
 	was_quench = exe->getForking()->isQuenching();
-	was_dumpsel = exe->getDumpStack();
-	exe->setDumpStack(false);
 
 	assert (ShadowAlloc::get()->isShadowing());
 }
@@ -256,8 +287,6 @@ void TaintMergeCore::taintMergeEnd(void)
 	if (forked) taint_grps[cur_taint_id] = tg;
 	foreach (it, esm->beginYielded(), esm->endYielded())
 		tg->addState(*it);
-
-	// exe->setDumpStack(was_dumpsel);
 
 	std::cerr << "TOTAL-INST: " << tg->getInsts() << '\n';
 
@@ -331,7 +360,15 @@ void TaintMergeCore::taintMergeEnd(void)
 	delete esm;
 	exe->setStateManager(old_esm);
 	old_esm = NULL;
+	tua = NULL;
 
 	merging_st = NULL;
 	exe->getForking()->setQuenching(was_quench);
+}
+
+
+void TaintMergeCore::addConstraint(ExecutionState &state, ref<Expr> condition)
+{
+	if (&state == exe->getCurrentState())
+		tua->selectUpdate(&state);
 }

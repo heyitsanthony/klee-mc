@@ -28,7 +28,6 @@ public:
 
 	virtual void runLoop(void)
 	{
-		T::prevState = NULL;
 		while ( !T::stateManager->empty() && !T::haltExecution) {
 			tmCore.step();
 			T::step();
@@ -73,7 +72,6 @@ public:
 		TRY_TAINT_TERMINATE
 		T::terminateOnError(state, msg, suf, longMsg, alwaysEmit);
 	}
-
 
 protected:
 	virtual llvm::Function* getFuncByAddr(uint64_t addr)
@@ -136,6 +134,15 @@ protected:
 		}
 
 		return e;
+	}
+
+	virtual bool addConstraint(ExecutionState &state, ref<Expr> condition)
+	{
+		bool	ok;
+		ok = T::addConstraint(state, condition);
+		if (ok && tmCore.isMerging())
+			tmCore.addConstraint(state, condition);
+		return ok;
 	}
 private:
 

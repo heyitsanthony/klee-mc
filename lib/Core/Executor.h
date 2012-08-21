@@ -262,7 +262,6 @@ protected:
 	ExeStateManager		*stateManager;
 	Forks			*forking;
 	ExecutionState		*currentState;
-	ExecutionState		*prevState;
 	SpecialFunctionHandler	*sfh;
 
 	/// Signals the executor to halt execution at the next instruction step.
@@ -560,8 +559,6 @@ public:
 	/* XXX XXX XXX get rid of me!! XXX XXX */
 	SeedMapType	dummySeedMap;
 	virtual SeedMapType& getSeedMap(void) { return dummySeedMap; }
-	void setDumpStack(bool);
-	bool getDumpStack(void) const;
 };
 
 }

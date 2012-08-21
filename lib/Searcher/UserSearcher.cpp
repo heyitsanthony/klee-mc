@@ -15,6 +15,7 @@
 #include "CovSearcher.h"
 #include "../Core/Searcher.h"
 
+#include "SearchUpdater.h"
 #include "DemotionSearcher.h"
 #include "ConcretizingSearcher.h"
 #include "SecondChanceSearcher.h"
@@ -103,6 +104,8 @@ namespace {
   cl::opt<bool> UseInterleavedCPInstCountNURS("use-interleaved-cpicnt-NURS");
   cl::opt<bool> UseInterleavedQueryCostNURS("use-interleaved-query-cost-NURS");
   cl::opt<bool> UseInterleavedCovNewNURS("use-interleaved-covnew-NURS");
+
+  cl::opt<bool> DumpSelectStack("dump-select-stack", cl::init(false));
 
   cl::opt<bool> UseSecondChance(
   	"use-second-chance",
@@ -461,6 +464,26 @@ Searcher* UserSearcher::setupMergeSearcher(
 	return searcher;
 }
 
+class StackDumpUpdater : public UpdateAction
+{
+public:
+	StackDumpUpdater(Executor& _exe) : exe(_exe) {}
+	virtual ~StackDumpUpdater() {}
+	virtual UpdateAction* copy(void) const { return new StackDumpUpdater(exe); }
+	virtual void selectUpdate(ExecutionState* es)
+	{
+		std::cerr << "StackTrace for st="
+			<< (void*)es
+			<< ". Insts=" <<es->totalInsts
+			<< ". SInsts=" << es->personalInsts
+			<< '\n';
+		exe.printStackTrace(*es, std::cerr);
+		std::cerr << "===================\n";
+	}
+private:
+	Executor	&exe;
+};
+
 Searcher* UserSearcher::setupConfigSearcher(Executor& executor)
 {
 	Searcher	*searcher;
@@ -490,6 +513,11 @@ Searcher* UserSearcher::setupConfigSearcher(Executor& executor)
 
 	if (UseConcretizingSearch == 2)
 		searcher = new ConcretizingSearcher(executor, searcher);
+
+	if (DumpSelectStack) {
+		searcher = new SearchUpdater(
+			searcher, new StackDumpUpdater(executor));
+	}
 
 	if (UseBatchingSearch)
 		searcher = new BatchingSearcher(searcher);
@@ -576,3 +604,4 @@ Searcher *UserSearcher::constructUserSearcher(Executor &executor)
 
 	return searcher;
 }
+

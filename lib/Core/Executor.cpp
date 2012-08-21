@@ -66,7 +66,6 @@ extern double	MaxSTPTime;
 #define DECL_OPTBOOL(x,y)	cl::opt<bool> x(y, cl::init(false))
 
 namespace {
-  DECL_OPTBOOL(DumpSelectStack, "dump-select-stack");
   DECL_OPTBOOL(ChkConstraints, "chk-constraints");
 
   cl::opt<bool>
@@ -2035,9 +2034,6 @@ void Executor::replayPathsIntoStates(ExecutionState& initialState)
 	}
 }
 
-void Executor::setDumpStack(bool v) { DumpSelectStack = v; }
-bool Executor::getDumpStack(void) const { return DumpSelectStack; }
-
 void Executor::run(ExecutionState &initialState)
 {
 	currentState = &initialState;
@@ -2092,16 +2088,6 @@ done:
 void Executor::step(void)
 {
 	currentState = stateManager->selectState(!onlyNonCompact);
-	if (prevState != currentState && DumpSelectStack) {
-		std::cerr << "StackTrace for st="
-			<< (void*)currentState
-			<< ". Insts=" <<currentState->totalInsts
-			<< ". SInsts=" << currentState->personalInsts
-			<< '\n';
-		printStackTrace(*currentState, std::cerr);
-		std::cerr << "===================\n";
-	}
-
 	assert (currentState != NULL &&
 		"State man not empty, but selectState is?");
 
@@ -2118,17 +2104,13 @@ void Executor::step(void)
 	}
 
 	stepStateInst(currentState);
-	prevState = currentState;
 
 	handleMemoryUtilization(currentState);
 	notifyCurrent(currentState);
 }
 
 void Executor::runLoop(void)
-{
-	prevState = NULL;
-	while (!stateManager->empty() && !haltExecution) step();
-}
+{ while (!stateManager->empty() && !haltExecution) step(); }
 
 void Executor::notifyCurrent(ExecutionState* current)
 {
