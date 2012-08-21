@@ -44,6 +44,10 @@ private:
 	unsigned	merge_depth;
 	bool		merging;
 	bool		was_quench;
+	bool		was_dumpsel;
+	static unsigned	nested_merge_c;
+	static unsigned merges_c;
+	static unsigned merge_states_c;
 };
 }
 

@@ -560,6 +560,8 @@ public:
 	/* XXX XXX XXX get rid of me!! XXX XXX */
 	SeedMapType	dummySeedMap;
 	virtual SeedMapType& getSeedMap(void) { return dummySeedMap; }
+	void setDumpStack(bool);
+	bool getDumpStack(void) const;
 };
 
 }

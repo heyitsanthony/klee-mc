@@ -2035,6 +2035,9 @@ void Executor::replayPathsIntoStates(ExecutionState& initialState)
 	}
 }
 
+void Executor::setDumpStack(bool v) { DumpSelectStack = v; }
+bool Executor::getDumpStack(void) const { return DumpSelectStack; }
+
 void Executor::run(ExecutionState &initialState)
 {
 	currentState = &initialState;

@@ -790,9 +790,8 @@ static ref<Expr> AndExpr_createPartial(Expr *l, const ref<ConstantExpr> &cr)
 			// 2^k - 1 => k bits
 			bits_set = k;
 
-			return ZExtExpr::create(
-				ExtractExpr::create(l, 0, bits_set),
-				l->getWidth());
+			return MK_ZEXT(
+				MK_EXTRACT(l, 0, bits_set), l->getWidth());
 		}
 
 	}
@@ -919,8 +918,7 @@ static ref<Expr> OrExpr_createPartial(Expr *l, const ref<ConstantExpr> &cr)
 			ce = dyn_cast<ConstantExpr>(o->getKid(0));
 			if (ce == cr)
 				return l;
-			return OrExpr::create(
-				OrExpr::create(ce, cr), l->getKid(1));
+			return MK_OR(MK_OR(ce, cr), l->getKid(1));
 		}
 	}
 
@@ -1007,8 +1005,7 @@ static ref<Expr> XorExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 		return r;
 
 	if (cl->getWidth() == Expr::Bool)
-		return EqExpr_createPartial(
-			r, ConstantExpr::create(0, Expr::Bool));
+		return EqExpr_createPartial(r, MK_CONST(0, Expr::Bool));
 
 	if (const SelectExpr *se = dyn_cast<SelectExpr>(r)) {
 		if (	se->getKid(1)->getKind() == Expr::Constant &&
@@ -1724,9 +1721,9 @@ static ref<Expr> SleExpr_createPartialL(const ref<ConstantExpr> &c_l, Expr *r)
 {
 	// (<= -1 (zext n)) => (<= -1 non-neg)
 	if (r->getKind() == Expr::ZExt) {
+		ref<Expr>		extr(MK_EXTRACT(c_l, c_l->getWidth() - 1, 1));
 		const ConstantExpr	*is_neg;
-		is_neg = dyn_cast<ConstantExpr>(
-			ExtractExpr::create(c_l, c_l->getWidth() - 1, 1));
+		is_neg = dyn_cast<ConstantExpr>(extr);
 		assert (is_neg != NULL && "Extract of const did not yield const?");
 		if (is_neg->isTrue()) {
 			return ConstantExpr::create(1, Expr::Bool);
@@ -1743,9 +1740,10 @@ static ref<Expr> SleExpr_createPartialR(Expr *l, const ref<ConstantExpr> &cr)
 {
 	// (<= (zext n) -1) => (<= non-neg -1) => false
 	if (l->getKind() == Expr::ZExt) {
+		ref<Expr>		extr(MK_EXTRACT(cr, cr->getWidth() - 1, 1));
 		const ConstantExpr	*is_neg;
-		is_neg = dyn_cast<ConstantExpr>(
-			ExtractExpr::create(cr, cr->getWidth() - 1, 1));
+
+		is_neg = dyn_cast<ConstantExpr>(extr);
 		assert (is_neg != NULL && "Extract of const did not yield const?");
 		if (is_neg->isTrue()) {
 			/* false == (non-neg lhs <= negative rhs) */

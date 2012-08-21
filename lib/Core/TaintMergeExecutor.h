@@ -76,6 +76,16 @@ public:
 
 
 protected:
+	virtual llvm::Function* getFuncByAddr(uint64_t addr)
+	{
+		llvm::Function	*f;
+		SAVE_SHADOW
+		_sa->stopShadow();
+		f = T::getFuncByAddr(addr);
+		POP_SHADOW
+		return f;
+	}
+
 	virtual void instBranchConditional(
 		ExecutionState& state, KInstruction* ki)
 	{
@@ -91,6 +101,7 @@ protected:
 		if (cond->isShadowed()) {
 			std::cerr << "[TME] URk!!\n";
 			std::cerr << "EXpr = " << cond << '\n';
+			std::cerr << ShadowAlloc::getExpr(cond)->getShadow() << '\n';
 			assert (0 == 1 && "XXXXXX");
 		}
 		T::instBranchConditional(state, ki);
@@ -101,15 +112,30 @@ protected:
 		unsigned idx,
 		ExecutionState &st) const
 	{
+		ref<Expr>	e;
+
 		if (tmCore.isMerging()) {
-			ref<Expr>	e;
 			e = T::eval(ki, idx, st);
 			/* do not over shadow */
 			if (e->isShadowed() == false)
 				e = e->realloc();
-			return e;
+		} else {
+			e = T::eval(ki, idx, st);
+			if (e->isShadowed() == true) {
+				std::cerr <<"OOOOOPS!\n";
+				T::printStackTrace(st, std::cerr);
+				std::cerr << "EXpr = " << e << '\n';
+				std::cerr << "IDX=" << idx << '\n';
+				std::cerr << ShadowAlloc::getExpr(e)->getShadow() << '\n';
+				std::cerr << "INST: ";
+				ki->getInst()->dump();
+				std::cerr << "FUNC: ";
+				ki->getInst()->getParent()->getParent()->dump();
+			}
+			assert (e->isShadowed() == false);
 		}
-		return T::eval(ki, idx, st);
+
+		return e;
 	}
 private:
 

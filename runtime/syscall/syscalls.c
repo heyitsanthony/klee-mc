@@ -150,7 +150,7 @@ static void sc_klee(void* regfile)
 	sys_klee_nr = GET_ARG0(regfile);
 	switch(sys_klee_nr) {
 	case KLEE_SYS_INDIRECT:
-		sc_ret_v(regfile, klee_indirect(GET_ARG1(regfile)));
+		sc_ret_v(regfile, klee_indirect(GET_ARG1_PTR(regfile)));
 		break;
 	case KLEE_SYS_REPORT_ERROR:
 		klee_report_error(

@@ -18,7 +18,7 @@ namespace klee {
   class Cell {
   public:
     ref<Expr> value;
-    Cell() {}
+    Cell() : value(0) {}
   };
 }
 

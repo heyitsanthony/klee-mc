@@ -30,6 +30,11 @@ using namespace llvm;
 
 SFH_HANDLER2(TaintMerge, TaintMergeCore* tm)
 
+
+unsigned TaintMergeCore::nested_merge_c = 0;
+unsigned TaintMergeCore::merges_c = 0;
+unsigned TaintMergeCore::merge_states_c = 0;
+
 namespace llvm
 {
 cl::opt<std::string> TMergeFuncFile("tmerge-func-file", cl::init("tmerge.txt"));
@@ -158,12 +163,15 @@ void TaintMergeCore::taintMergeBegin(ExecutionState& state)
 	ExecutionState	*new_st;
 
 	if (old_esm != NULL) {
-		std::cerr << "[TaintMerge] Ignorign nested merge.\n";
+		std::cerr << "[TaintMerge] Ignoring nested merge.\n";
+		nested_merge_c++;
 		return;
 	}
 
 	/* NOW MERGINGGGGGGGG */
-	std::cerr << "BEGIN THE MERGE!!\n";
+	std::cerr << "BEGIN THE MERGE ON STATE:\n";
+	exe->printStackTrace(state, std::cerr);
+
 	ShadowAlloc::get()->startShadow(MK_CONST(1, 1));
 
 	std::cerr << "WOOOO: EXPRS= " << Expr::getNumExprs() << '\n';
@@ -191,6 +199,8 @@ void TaintMergeCore::taintMergeBegin(ExecutionState& state)
 	merging = true;
 	merge_depth = GET_STACK_DEPTH(merging_st);
 	was_quench = exe->getForking()->isQuenching();
+	was_dumpsel = exe->getDumpStack();
+	exe->setDumpStack(false);
 
 	assert (ShadowAlloc::get()->isShadowing());
 }
@@ -209,6 +219,7 @@ void TaintMergeCore::step(void)
 	assert (cur_es->getStackDepth() != 0);
 
 	if (GET_STACK_DEPTH(cur_es) < merge_depth) {
+		std::cerr << "Force Yielding\n";
 		esm->forceYield(cur_es);
 		esm->commitQueue(NULL);
 	}
@@ -223,45 +234,104 @@ void TaintMergeCore::taintMergeEnd(void)
 	 * the states should all be yielded in the statemanager */
 	ExeStateManager	*esm = exe->getStateManager();
 	TaintGroup	*tg;
+	bool		forked;
 
+	assert (esm->numRunningStates() == 0);
 	assert (merging_st != NULL);
 
 	ShadowAlloc::get()->stopShadow();
 	merging = false;
 
-	/* no branches, just play the merging state as normal */
-	if (esm->numYieldedStates() == 1) {
-		/* FIXME: ideally, we'd want to use the data from
-		 * *this* state instead of from the merging_st since
-		 * it is what merging_st will eventually equal. However,
-		 * the scheduler interaction is dicey, so I don't know
-		 * how to do it. */
-		/* Caches will hopefully eat up the expensive parts */
-		std::cerr << "[TaintMergeCore] No forks!\n";
-		goto done;
-	}
+	/* no branches; no control dependencies, handled by taintgroup */
+	forked = (esm->numYieldedStates() > 1);
+
+	if (!forked) std::cerr << "[TaintMergeCore] No forks!\n";
 
 	/* merge taint information */
 	std::cerr << "[TaintMergeCore] Caught "
-		<< esm->numYieldedStates() << " states.\n";
+		<< esm->numYieldedStates()
+		<< " states.\n";
 	tg = new TaintGroup();
-	taint_grps[cur_taint_id] = tg;
+
+	if (forked) taint_grps[cur_taint_id] = tg;
 	foreach (it, esm->beginYielded(), esm->endYielded())
 		tg->addState(*it);
 
+	// exe->setDumpStack(was_dumpsel);
+
 	std::cerr << "TOTAL-INST: " << tg->getInsts() << '\n';
+
+	std::cerr << "INHERITED CONTROL\n";
+	merging_st->inheritControl(*(*(esm->beginYielded())));
+	merging_st->totalInsts += tg->getInsts();
+	std::cerr << "RET FROM MERGE\n";
 
 	/* finally, restore tainted state */
 	tg->apply(merging_st, MK_CONST(++cur_taint_id, 32));
-	merging_st->inheritControl(*(*(esm->beginYielded())));
-	std::cerr << "RET FROM MERGE\n";
 
-	std::cerr << "WOOOO: EXPRS= " << Expr::getNumExprs() << '\n';
-done:
-	std::cerr << "DELETING DOWN: " << esm << '\n';
+#if 0
+	std::cerr << "TEST0\n";
+	foreach (it,
+		merging_st->addressSpace.begin(), 
+		merging_st->addressSpace.end())
+	{
+		const ObjectState	*os(it->second);
+		for (unsigned i = 0; i < os->size; i++) {
+			if (os->read8(i)->isShadowed() == false)
+				continue;
+			std::cerr << "MO-BASE=" << (void*)it->first->address << '\n';
+			std::cerr << "ADDR=" 
+				<< (void*)(it->first->address+i) << '\n';
+			std::cerr << "[i] = " << i << '\n';
+			std::cerr << "OOPS.\n";
+			os->print();
+			assert(0 == 1);
+		}
+	}
+#endif
+
+	{
+	StackFrame	&sf(merging_st->stack[merging_st->stack.size()-1]);
+	for (unsigned i = 0; i < sf.kf->numRegisters; i++) {
+		ref<Expr>	e(0);
+		if (sf.locals[i].value.isNull()) continue;
+		e = ShadowAlloc::drop(sf.locals[i].value);
+		sf.locals[i].value = e;
+		assert (sf.locals[i].value->isShadowed() == false);
+	}
+	}
+
+#if 0
+	foreach (it,
+		merging_st->addressSpace.begin(), 
+		merging_st->addressSpace.end())
+	{
+		const ObjectState	*os(it->second);
+		for (unsigned i = 0; i < os->size; i++) {
+			if (os->read8(i)->isShadowed() == false)
+				continue;
+			std::cerr << "MO-BASE=" << (void*)it->first->address << '\n';
+			std::cerr << "ADDR=" 
+				<< (void*)(it->first->address+i) << '\n';
+			std::cerr << "[i] = " << i << '\n';
+			std::cerr << "OOPS.\n";
+			os->print();
+			assert(0 == 1);
+		}
+	}
+#endif
+
+	if (!forked) {
+		delete tg;
+	} else {
+		merges_c++;
+		merge_states_c += esm->numYieldedStates();
+	}
+
 	delete esm;
 	exe->setStateManager(old_esm);
 	old_esm = NULL;
+
 	merging_st = NULL;
 	exe->getForking()->setQuenching(was_quench);
 }
