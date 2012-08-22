@@ -4,13 +4,13 @@
 using namespace klee;
 
 
-#define MK_SHADOW1(x,y) new ShadowExpr<x, ShadowVal>(shadow_v, y)
-#define MK_SHADOW2(x,y,z) new ShadowExpr<x, ShadowVal>(shadow_v, y, z)
-#define MK_SHADOW3(x,y,z,w) new ShadowExpr<x, ShadowVal>(shadow_v, y, z, w)
+#define MK_SHADOW1(x,y) new ShadowExpr<x, ref<ShadowVal> >(shadow_v, y)
+#define MK_SHADOW2(x,y,z) new ShadowExpr<x, ref<ShadowVal> >(shadow_v, y, z)
+#define MK_SHADOW3(x,y,z,w) new ShadowExpr<x, ref<ShadowVal> >(shadow_v, y, z, w)
 
 #define DECL_ALLOC_1(x)						\
 ref<Expr> ShadowAlloc::x(const ref<Expr>& src)			\
-{	if (!is_shadowing) return ExprAlloc::x(src);		\
+{	if (!isShadowing()) return ExprAlloc::x(src);		\
 	ref<Expr> r(MK_SHADOW1(x##Expr, src));			\
 	r->computeHash();		\
 	return r;			\
@@ -22,7 +22,7 @@ DECL_ALLOC_1(Not)
 #define DECL_ALLOC_2(x)	\
 ref<Expr> ShadowAlloc::x(const ref<Expr>& lhs, const ref<Expr>& rhs)	\
 {	\
-	if (!is_shadowing) return ExprAlloc::x(lhs, rhs);		\
+	if (!isShadowing()) return ExprAlloc::x(lhs, rhs);		\
 	ref<Expr> r(MK_SHADOW2(x##Expr, lhs, rhs)); \
 	r->computeHash();		\
 	return r;			\
@@ -36,7 +36,7 @@ ref<Expr> ShadowAlloc::x(const ref<Expr>& lhs, const ref<Expr>& rhs)	\
 		Expr::errorExpr = lhs;		\
 		return lhs;			\
 	}					\
-	if (!is_shadowing) return ExprAlloc::x(lhs, rhs); \
+	if (!isShadowing()) return ExprAlloc::x(lhs, rhs); \
 	ref<Expr> r(MK_SHADOW2(x##Expr, lhs, rhs)); \
 	r->computeHash();		\
 	return r;			\
@@ -73,8 +73,10 @@ DECL_ALLOC_2(Sge)
 
 ref<Expr> ShadowAlloc::Read(const UpdateList &updates, const ref<Expr> &idx)
 {
-	if (!is_shadowing) return ExprAlloc::Read(updates, idx);
-	ref<Expr> r(new ShadowExpr<ReadExpr, ShadowVal>(shadow_v, updates, idx));
+	if (!isShadowing()) return ExprAlloc::Read(updates, idx);
+	ref<Expr> r(
+		new ShadowExpr<ReadExpr, ref<ShadowVal> >(
+			shadow_v, updates, idx));
 	r->computeHash();
 	return r;
 }
@@ -83,7 +85,7 @@ ref<Expr> ShadowAlloc::Select(
 	const ref<Expr> &c,
 	const ref<Expr> &t, const ref<Expr> &f)
 {
-	if (!is_shadowing) return ExprAlloc::Select(c, t, f);
+	if (!isShadowing()) return ExprAlloc::Select(c, t, f);
 	ref<Expr> r(MK_SHADOW3(SelectExpr, c, t, f));
 	r->computeHash();
 	return r;
@@ -91,7 +93,7 @@ ref<Expr> ShadowAlloc::Select(
 
 ref<Expr> ShadowAlloc::Extract(const ref<Expr> &e, unsigned o, Expr::Width w)
 {
-	if (!is_shadowing) return ExprAlloc::Extract(e, o, w);
+	if (!isShadowing()) return ExprAlloc::Extract(e, o, w);
 	ref<Expr> r(MK_SHADOW3(ExtractExpr, e, o, w));
 	r->computeHash();
 	return r;
@@ -99,7 +101,7 @@ ref<Expr> ShadowAlloc::Extract(const ref<Expr> &e, unsigned o, Expr::Width w)
 
 ref<Expr> ShadowAlloc::ZExt(const ref<Expr> &e, Expr::Width w)
 {
-	if (!is_shadowing) return ExprAlloc::ZExt(e, w);
+	if (!isShadowing()) return ExprAlloc::ZExt(e, w);
 	ref<Expr> r(MK_SHADOW2(ZExtExpr, e, w));
 	r->computeHash();
 	return r;
@@ -107,7 +109,7 @@ ref<Expr> ShadowAlloc::ZExt(const ref<Expr> &e, Expr::Width w)
 
 ref<Expr> ShadowAlloc::SExt(const ref<Expr> &e, Expr::Width w)
 {
-	if (!is_shadowing) return ExprAlloc::SExt(e, w);
+	if (!isShadowing()) return ExprAlloc::SExt(e, w);
 	ref<Expr> r(MK_SHADOW2(SExtExpr, e, w));
 	r->computeHash();
 	return r;
@@ -115,7 +117,7 @@ ref<Expr> ShadowAlloc::SExt(const ref<Expr> &e, Expr::Width w)
 
 ref<Expr> ShadowAlloc::Constant(const llvm::APInt &Value)
 {
-	if (!is_shadowing) return ExprAlloc::Constant(Value);
+	if (!isShadowing()) return ExprAlloc::Constant(Value);
 	ref<Expr> r(MK_SHADOW1(ConstantExpr, Value));
 	r->computeHash();
 	return r;
@@ -136,7 +138,7 @@ ShadowRef ShadowAlloc::getExprDynCast(const ref<Expr>& e)
 	case Expr::x:		\
 	return ShadowRef(	\
 		reinterpret_cast<ShadowType*>(	\
-			dynamic_cast<ShadowExpr<x##Expr, ShadowVal>*>( \
+			dynamic_cast<ShadowExpr<x##Expr, ref<ShadowVal> >*>( \
 				e.get())));
 
 	CAST_CASE(Constant)

@@ -12,12 +12,10 @@ ShadowObjectState::ShadowObjectState(const ObjectState& os)
 	sos = dynamic_cast<const ShadowObjectState*>(&os);
 	if (sos == NULL) {
 		/* should this *ever* happen? */
-		is_tainted = false;
 		tainted_bytes = 0;
 		return;
 	}
 
-	is_tainted = sos->is_tainted;
 	taint_v = sos->taint_v;
 	tainted_bytes = sos->tainted_bytes;
 }
@@ -59,17 +57,13 @@ void ShadowObjectState::write(unsigned offset, const ref<Expr>& value)
 	UnboxingObjectState::write(offset, value);
 }
 
-void ShadowObjectState::taintAccesses(ShadowVal v)
-{
-	is_tainted = true;
-	taint_v = v;
-}
+void ShadowObjectState::taintAccesses(ref<ShadowVal>& v) { taint_v = v; }
 
 ref<Expr> ShadowObjectState::read8(unsigned offset) const
 {
 	ref<Expr>	ret;
 
-	if (is_tainted) {
+	if (taint_v.isNull() == false) {
 		PUSH_SHADOW(taint_v)
 		ret = UnboxingObjectState::read8(offset);
 		POP_SHADOW
@@ -83,7 +77,7 @@ ref<Expr> ShadowObjectState::read8(ref<Expr> offset) const
 {
 	ref<Expr>	ret;
 
-	if (is_tainted) {
+	if (taint_v.isNull() == false) {
 		PUSH_SHADOW(taint_v);
 		ret = UnboxingObjectState::read8(offset);
 		POP_SHADOW
@@ -96,7 +90,7 @@ ref<Expr> ShadowObjectState::read8(ref<Expr> offset) const
 bool ShadowObjectState::isByteTainted(unsigned off) const
 { return read8(off)->isShadowed(); }
 
-void ShadowObjectState::taint(unsigned offset, ShadowVal v)
+void ShadowObjectState::taint(unsigned offset, ref<ShadowVal>& v)
 {
 	PUSH_SHADOW(v)
 	ref<Expr>	e(read8(offset));

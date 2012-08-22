@@ -6,7 +6,7 @@
 /* acts like a normal expression, but has shadow data! */
 namespace klee
 {
-#define CHK_SHADOW_V(x) assert (x->isShadowed() == false)
+#define CHK_SHADOW_V(x) assert (x->chk())
 template<class T, class V>
 class ShadowExpr : public T
 {

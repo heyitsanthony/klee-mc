@@ -2,44 +2,39 @@
 #define SHADOWALLOC_H
 
 #include "ShadowExpr.h"
+#include "ShadowVal.h"
 #include "klee/Expr.h"
 #include "ExprAlloc.h"
 #include <iostream>
-namespace klee {
-typedef ref<Expr> ShadowVal;
-#define SHADOW_ARG2TAG(x) x
-//typedef uint64_t ShadowVal;
-//#define SHADOW_ARG2TAG(x) cast<klee::ConstantExpr>(x)->getZExtValue();
 
-typedef ShadowExpr<Expr, ShadowVal> ShadowType;
+namespace klee
+{
+typedef ShadowExpr<Expr, ref<ShadowVal> > ShadowType;
 typedef ref<ShadowType> ShadowRef;
 
 #define SAVE_SHADOW	{					\
 	ShadowAlloc	*_sa = ShadowAlloc::get();		\
-	ShadowVal	_old_v;					\
-	bool		_was_shadow = _sa->isShadowing();	\
-	if (_was_shadow) _old_v = _sa->getShadow();		\
+	ref<ShadowVal>	_old_v;					\
+	_old_v = _sa->getShadow();
 
 #define PUSH_SHADOW(x)		\
 	SAVE_SHADOW		\
 	_sa->startShadow(x);
 
 #define POP_SHADOW \
-	if (!_was_shadow) _sa->stopShadow();	\
-	else _sa->startShadow(_old_v);	}
-
-
+	_sa->startShadow(_old_v);	}
 
 class ShadowAlloc : public ExprAlloc
 {
 public:
-	ShadowAlloc() : is_shadowing(false) {}
+	ShadowAlloc() {}
 	virtual ~ShadowAlloc() {}
-	void startShadow(ShadowVal v)
-	{  CHK_SHADOW_V(v); is_shadowing = true; shadow_v = v; }
-	void stopShadow(void) { is_shadowing = false; }
-	bool isShadowing(void) const { return is_shadowing; }
-	ShadowVal getShadow(void) const { return shadow_v; }
+	void startShadow(ref<ShadowVal> v)
+	{ if (!v.isNull()) v->chk(); shadow_v = v; }
+
+	void stopShadow(void) { shadow_v = NULL; }
+	bool isShadowing(void) const { return (shadow_v.isNull() == false); }
+	ref<ShadowVal> getShadow(void) const { return shadow_v; }
 
 	static ShadowRef getExprDynCast(const ref<Expr>& e);
 	static ShadowRef getExpr(const ref<Expr>& e);
@@ -65,8 +60,7 @@ public:
 	EXPR_BUILDER_DECL_ALL
 
 private:
-	bool		is_shadowing;
-	ShadowVal	shadow_v;
+	ref<ShadowVal>	shadow_v;
 };
 }
 

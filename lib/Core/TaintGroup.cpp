@@ -12,12 +12,12 @@ TaintGroup::TaintGroup(void)
 
 TaintGroup::~TaintGroup(void) {}
 
-void TaintGroup::apply(ExecutionState* st, ShadowVal v)
+void TaintGroup::apply(ExecutionState* st)
 {
 	indep_byte_c = 0, dep_byte_c = 0, full_c = 0;
 	foreach (it, taint_addr_c.begin(), taint_addr_c.end()) {
 		std::cerr << "APPLYING TO " << (void*)it->first << '\n';
-		mergeAddr(st, it->first, v);
+		mergeAddr(st, it->first);
 	}
 
 	std::cerr << "[TaintGroup] Applied. Indep bytes="
@@ -36,7 +36,7 @@ bool TaintGroup::mergeAddrIndep(
 		return false;
 
 	full_c++;
-	if (!taint_addr_v.count(taint_addr)) 
+	if (!taint_addr_v.count(taint_addr))
 		return false;
 
 	ref<Expr>	e(taint_addr_v[taint_addr]);
@@ -48,7 +48,7 @@ bool TaintGroup::mergeAddrIndep(
 	return true;
 }
 
-void TaintGroup::mergeAddr(ExecutionState* st, uint64_t taint_addr, ShadowVal v)
+void TaintGroup::mergeAddr(ExecutionState* st, uint64_t taint_addr)
 {
 	ObjectPair		op;
 	ObjectState		*os;
@@ -72,12 +72,12 @@ void TaintGroup::mergeAddr(ExecutionState* st, uint64_t taint_addr, ShadowVal v)
 
 	ref<Expr>	new_expr(getUntainted(sos->read8(off)));
 	foreach (it,
-		taint_addr_all[taint_addr].begin(), 
+		taint_addr_all[taint_addr].begin(),
 		taint_addr_all[taint_addr].end())
 	{
 		ref<Expr>	cond, t_v;
 
-		cond = getUntainted(it->second);
+		cond = getUntainted(it->second->getV());
 		t_v = getUntainted(it->first);
 
 		new_expr = MK_SELECT(cond, t_v, new_expr);
@@ -121,14 +121,17 @@ void TaintGroup::addTaintedObject(uint64_t addr, const ShadowObjectState* sos)
 
 		r = sos->read8(i);
 		ShadowRef	r_s(ShadowAlloc::getExpr(r));
-		taint_addr_all[i+addr].insert(TaintPair(r, r_s->getShadow()));
+		taint_addr_all[i+addr].insert(
+			TaintPair(
+				r,
+				cast<ShadowValExpr>(r_s->getShadow())));
 
 		/* control dependencies? */
 		if (taint_c == 0) {
 			taint_addr_v[i+addr] = r;
 		} else {
 			ref<Expr>	cur_e(sos->read8(i));
-			if (	taint_addr_v.count(i+addr) && 
+			if (	taint_addr_v.count(i+addr) &&
 				taint_addr_v[i+addr] != cur_e)
 			{
 				taint_addr_v.erase(i+addr);

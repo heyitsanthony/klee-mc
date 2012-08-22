@@ -126,19 +126,20 @@ void ShadowCore::setupInitialState(ExecutionState* es)
 SFH_DEF_HANDLER(TaintLoad)
 {
 	ShadowAlloc	*sa;
-	ShadowVal	shadow_tag;
+	ref<ShadowVal>	shadow_tag;
 	KInstIterator	kii = state.prevPC;
 	ShadowRef	old_shadow;
 	ref<Expr>	old_expr, tainted_expr;
 
 	--kii;
 	old_expr = state.readLocal(kii);
-	shadow_tag = SHADOW_ARG2TAG(arguments[0]);
+	shadow_tag = ShadowValU64::create(
+		cast<klee::ConstantExpr>(arguments[0])->getZExtValue());
 
 	sa = ShadowAlloc::get();
 	old_shadow = ShadowAlloc::getExpr(old_expr);
 	if (!old_shadow.isNull()) {
-		ShadowVal old_tag;
+		ref<ShadowVal> old_tag;
 
 		old_tag = old_shadow->getShadow();
 		if (old_tag == shadow_tag)
@@ -170,9 +171,10 @@ SFH_DEF_HANDLER(TaintStore)
 	ref<Expr>	base(arguments[1]);
 	ref<Expr>	value(arguments[0]);
 	ShadowRef	old_shadow(ShadowAlloc::getExpr(value));
-	ShadowVal	shadow_tag;
+	ref<ShadowVal>	shadow_tag;
 
-	shadow_tag = SHADOW_ARG2TAG(arguments[2]);
+	shadow_tag = ShadowValU64::create(
+		cast<klee::ConstantExpr>(arguments[2])->getZExtValue());
 
 	/* already tainted? */
 	if (!old_shadow.isNull() && old_shadow->getShadow() == shadow_tag) {
@@ -197,6 +199,8 @@ SFH_DEF_HANDLER(TaintStore)
 
 	sa->stopShadow();
 }
+
+#include "../Expr/ShadowVal.h"
 
 void ShadowCore::addConstraint(ExecutionState &state, ref<Expr>& condition)
 {

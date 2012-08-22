@@ -98,7 +98,8 @@ public:
 	virtual void selectUpdate(ExecutionState* es)
 	{
 		computeTaint(es);
-		ShadowAlloc::get()->startShadow(lastTaint);
+		ShadowAlloc::get()->startShadow(
+			ShadowValExpr::create(lastTaint));
 	}
 
 	void computeTaint(ExecutionState* es)
@@ -115,7 +116,7 @@ public:
 	}
 private:
 	ConstraintManager	baseConstraints;
-	ShadowVal		lastTaint;
+	ref<Expr>		lastTaint;
 };
 }
 
@@ -206,7 +207,7 @@ void TaintMergeCore::taintMergeBegin(ExecutionState& state)
 	std::cerr << "BEGIN THE MERGE ON STATE:\n";
 	exe->printStackTrace(state, std::cerr);
 
-	ShadowAlloc::get()->startShadow(MK_CONST(1, 1));
+	ShadowAlloc::get()->startShadow(ShadowValExpr::create(MK_CONST(1, 1)));
 
 	std::cerr << "WOOOO: EXPRS= " << Expr::getNumExprs() << '\n';
 
@@ -296,7 +297,7 @@ void TaintMergeCore::taintMergeEnd(void)
 	std::cerr << "RET FROM MERGE\n";
 
 	/* finally, restore tainted state */
-	tg->apply(merging_st, MK_CONST(++cur_taint_id, 32));
+	tg->apply(merging_st);
 
 #if 0
 	std::cerr << "TEST0\n";

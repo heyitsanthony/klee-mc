@@ -5,16 +5,12 @@
 using namespace klee;
 
 #define SHADOW_BEGIN(x) {				\
-	bool		was_shadow(sa->isShadowing());	\
-	ShadowVal	old_v;				\
-	if (was_shadow) old_v = sa->getShadow();	\
+	ref<ShadowVal>	old_v(sa->getShadow());		\
 	sa->startShadow(x);				\
 	taint_c++;
 
-#define SHADOW_END				\
-	if (!was_shadow) sa->stopShadow();	\
-	else sa->startShadow(old_v);		\
-}
+#define SHADOW_END		\
+	sa->startShadow(old_v);	}
 
 ExprBuilder* ShadowBuilder::create(ExprBuilder* eb, ShadowMix* _sm)
 {
@@ -51,7 +47,7 @@ DECL_ALLOC_1(Not)
 
 #define DECL_ALLOC_2_BODY(x)		\
 	const ShadowType	*se[2];	\
-	ShadowVal		tag;	\
+	ref<ShadowVal>		tag;	\
 	se[0] = getShadowExpr(lhs);	\
 	se[1] = getShadowExpr(rhs);	\
 	if (se[0] == NULL && se[1] == NULL)	\
@@ -128,7 +124,7 @@ ref<Expr> ShadowBuilder::Select(
 
 	const ShadowType	*se[3];
 	bool			tag_used = false;
-	ShadowVal		tag;
+	ref<ShadowVal>		tag;
 
 	se[0] = getShadowExpr(c);
 	se[1] = getShadowExpr(t);

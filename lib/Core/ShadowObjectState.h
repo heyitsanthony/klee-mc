@@ -11,20 +11,19 @@ class ShadowObjectState : public UnboxingObjectState
 friend class ObjectStateFactory<ShadowObjectState>;
 public:
 	virtual void write(unsigned offset, const ref<Expr>& value);
-	void taintAccesses(ShadowVal taint_v);
+	void taintAccesses(ref<ShadowVal>& taint_v);
 	ref<Expr> read8(unsigned offset) const;
-	void taint(unsigned offset, ShadowVal v);
+	void taint(unsigned offset, ref<ShadowVal>& v);
 
 	bool isClean(void) const { return tainted_bytes == 0; }
 	bool isByteTainted(unsigned s) const;
 
 protected:
 	ShadowObjectState(unsigned size)
-	: UnboxingObjectState(size)
-	, is_tainted(false), tainted_bytes(0) {}
+	: UnboxingObjectState(size), tainted_bytes(0) {}
 	ShadowObjectState(unsigned size, const ref<Array> &array)
 	: UnboxingObjectState(size, array)
-	, is_tainted(false) , tainted_bytes(0) {}
+	, tainted_bytes(0) {}
 
 	ShadowObjectState(const ObjectState &os);
 
@@ -34,8 +33,7 @@ protected:
 	virtual ref<Expr> read8(ref<Expr> offset) const;
 
 private:
-	bool		is_tainted;
-	ShadowVal	taint_v;
+	ref<ShadowVal>	taint_v;
 	unsigned	tainted_bytes; /* a hint */
 };
 }

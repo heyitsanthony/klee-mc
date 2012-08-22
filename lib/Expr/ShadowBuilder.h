@@ -11,9 +11,11 @@ class ShadowMix
 {
 public:
 	virtual ~ShadowMix() {}
-	ShadowVal mix(const ShadowVal& a, const ShadowVal& b)
+	ref<ShadowVal> mix(
+		const ref<ShadowVal>& a,
+		const ref<ShadowVal>& b)
 	{
-		ShadowVal	v;
+		ref<ShadowVal>	v;
 		SAVE_SHADOW
 		_sa->stopShadow();
 		v = join(a, b);
@@ -21,18 +23,19 @@ public:
 		return v;
 	}
 protected:
-	virtual ShadowVal join(
-		const ShadowVal& a, const ShadowVal& b) = 0;
+	virtual ref<ShadowVal> join(
+		const ref<ShadowVal>& a,
+		const ref<ShadowVal>& b) = 0;
 	ShadowMix(void) {}
 };
 
 class ShadowMixOr : public ShadowMix
-{ virtual ShadowVal join(
-	const ShadowVal& a, const ShadowVal& b) { return a | b; } };
+{ virtual ref<ShadowVal> join(
+	const ref<ShadowVal>& a, const ref<ShadowVal>& b) { return *a | b; } };
 
 class ShadowMixAnd : public ShadowMix
-{ virtual ShadowVal join(
-	const ShadowVal& a, const ShadowVal& b) { return a & b; } };
+{ virtual ref<ShadowVal> join(
+	const ref<ShadowVal>& a, const ref<ShadowVal>& b) { return *a & b; } };
 
 
 class ShadowBuilder : public ExprBuilder
