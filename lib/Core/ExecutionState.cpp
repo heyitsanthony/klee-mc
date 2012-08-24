@@ -71,6 +71,7 @@ ExecutionState::ExecutionState(KFunction *kf)
 , totalInsts(0)
 , concretizeCount(0)
 , personalInsts(0)
+, newInsts(0)
 , coveredNew(false)
 , isReplay(false)
 , forkDisabled(false)
@@ -93,6 +94,7 @@ ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
 , totalInsts(0)
 , concretizeCount(0)
 , personalInsts(0)
+, newInsts(0)
 , isReplay(false)
 , ptreeNode(0)
 , num_allocs(0)
@@ -146,6 +148,7 @@ ExecutionState *ExecutionState::branch(bool forReplay)
 	newState->coveredLines.clear();
 	newState->replayBrIter = newState->brChoiceSeq.end();
 	newState->personalInsts = 0;
+	newState->newInsts = 0;
 	newState->onFreshBranch = false;
 
 	return newState;
@@ -169,6 +172,7 @@ void ExecutionState::compact(ExecutionState* newState) const
 	newState->pc = pc;
 	newState->onFreshBranch = false;
 	newState->personalInsts = 0;
+	newState->newInsts = 0;
 }
 
 void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf)
@@ -735,6 +739,7 @@ ExecutionState* ExecutionState::createReplay(
 	newState->ptreeNode->markReplay();
 	newState->isReplay = true;
 	newState->personalInsts = 0;
+	newState->newInsts = 0;
 
 	return newState;
 }

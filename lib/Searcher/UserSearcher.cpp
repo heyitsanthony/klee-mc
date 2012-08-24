@@ -74,6 +74,7 @@ DECL_SEARCH_OPT(BranchIns, "brins", "BI");
 DECL_SEARCH_OPT(Uncov, "uncov", "UNC");
 DECL_SEARCH_OPT(Stack, "stack", "STK");
 DECL_SEARCH_OPT(StateInst, "stinst", "SI");
+DECL_SEARCH_OPT(NewInst, "newinst", "NI");
 
 #define SEARCH_HISTO	new RescanSearcher(new HistoPrioritizer(executor))
 DECL_SEARCH_OPT(Histo, "histo", "HS");
@@ -248,6 +249,16 @@ bool UserSearcher::userSearcherRequiresMD2U() {
 		new Weight2Prioritizer<StateInstWeight>(	\
 			new StateInstWeight(), 1.0))
 
+#if 1
+#define NEWINST_SEARCHER	\
+	new RescanSearcher(	\
+		new Weight2Prioritizer<NewInstsWeight>(	\
+			new NewInstsWeight(), 1.0))
+#else
+#define  NEWINST_SEARCHER	\
+	new WeightedRandomSearcher(executor, new NewInstsWeight())
+#endif
+
 /* Research quality */
 Searcher* UserSearcher::setupInterleavedSearcher(
 	Executor& executor, Searcher* searcher)
@@ -290,6 +301,8 @@ Searcher* UserSearcher::setupInterleavedSearcher(
 
 	PUSH_ILEAV_IF_SET(DFS, new DFSSearcher());
 	PUSH_ILEAV_IF_SET(RR, new RRSearcher());
+
+	PUSH_ILEAV_IF_SET(NewInst, NEWINST_SEARCHER);
 
 	PUSH_ILEAV_IF_SET(Trough, new RescanSearcher(
 		new Weight2Prioritizer<TroughWeight>(
@@ -476,6 +489,7 @@ public:
 			<< (void*)es
 			<< ". Insts=" <<es->totalInsts
 			<< ". SInsts=" << es->personalInsts
+			<< ". NewInsts=" << es->newInsts
 			<< '\n';
 		exe.printStackTrace(*es, std::cerr);
 		std::cerr << "===================\n";

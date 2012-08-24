@@ -337,6 +337,7 @@ void StatsTracker::stepInstUpdateFrame(ExecutionState &es)
 
 	es.pc->cover();
 	++stats::coveredInstructions;
+	es.newInsts++;
 	stats::uncoveredInstructions += (int64_t)-1;
 	assert ((int64_t)stats::uncoveredInstructions >= 0);
 }

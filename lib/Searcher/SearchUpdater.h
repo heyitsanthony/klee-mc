@@ -33,7 +33,7 @@ public:
 	ExecutionState &selectState(bool allowCompact)
 	{
 		ExecutionState	&new_es(base->selectState(allowCompact));
-		if (&new_es == lastState)  {
+		if (&new_es != lastState)  {
 			action->selectUpdate(&new_es);
 			lastState = &new_es;
 		}

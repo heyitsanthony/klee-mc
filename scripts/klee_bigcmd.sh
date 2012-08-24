@@ -12,7 +12,7 @@ echo "COMMAND = $1"
 #PRELOAD_STR=`pwd`/preload/page_malloc.so
 #PRELOAD_STR=`pwd`/preload/dumb_string.so:`pwd`/preload/dumb_file.so:`pwd`/preload/crc32.so
 #PRELOAD_STR=`pwd`/preload/string.so:`pwd`/preload/dumb_file.so:`pwd`/preload/crc32.so
-PRELOAD_STR=`pwd`/preload/dumb_file.so
+#PRELOAD_STR=`pwd`/preload/dumb_file.so
 #:`pwd`/preload/sdl.so
 TIMEOUT=${TIMEOUT:-2}
 #PRELOAD_STR=""
@@ -20,7 +20,7 @@ TIMEOUT=${TIMEOUT:-2}
 #LD_PRELOAD=preload/printf.so $1 &
 if [ ! -z "$FROM_BEGINNING" ]; then
 #	PRELOAD_STR=/home/chz/src/research/klee-open/trunk/preload/string.so
-	PRELOAD_STR=/home/chz/src/research/klee-open/trunk/preload/dumb_file.so
+#	PRELOAD_STR=/home/chz/src/research/klee-open/trunk/preload/dumb_file.so
 	VEXLLVM_PRELOAD="$PRELOAD_STR" VEXLLVM_SAVE=1 pt_run $1
 elif [ -z "$USE_LAST" ]; then
 	LD_BIND_NOW=1 LD_PRELOAD="$PRELOAD_STR" $1 &
@@ -59,9 +59,28 @@ fi
 # -use-rule-builder=true \
 
 
+#	-batch-instructions=20000
+SCHEDOPTS="-use-batching-search
+	-batch-time=5
+	-use-second-chance=true
+	-second-chance-boost=1
+	-second-chance-boost-cov=1
+	-use-pdf-interleave=true
+	-use-interleaved-MI=false
+	-use-interleaved-FTR=false
+	-use-interleaved-BI=false
+	-use-interleaved-UNC=false
+	-use-interleaved-STK=false
+	-use-interleaved-SI=true
+	-use-interleaved-CD=false
+	-use-interleaved-MXI=true
+	-use-fresh-branch-search=true"
+
+
 gdb --args klee-mc 		\
 	$EXTRA_ARGS		\
 	$REPLAYARG		\
+	$SCHEDOPTS		\
 	\
 	-hcache-fdir=`pwd`/hcache	\
 	-hcache-pending=`pwd`/hcache	\
@@ -69,8 +88,8 @@ gdb --args klee-mc 		\
 	-hcache-dir=`pwd`/hcache 	\
 	-use-hash-solver=true		\
 	\
-	-use-search-filter=false	\
-	-use-cache=false 	\
+	-use-search-filter=false \
+	-use-cache=false	\
 	-use-cex-cache=false	\
 	-deny-sys-files 	\
 	-pipe-fork-queries	\
@@ -88,23 +107,9 @@ gdb --args klee-mc 		\
 	-max-stp-time=8		\
 	-randomize-fork		\
 	-concretize-early	\
-	\
-	-use-batching-search	\
-	-batch-time=5		\
-	-use-second-chance	\
-	-second-chance-boost=1	\
-	-second-chance-boost-cov=1	\
-	-use-pdf-interleave=true	\
-	-use-interleaved-MXI=true	\
-	-use-interleaved-MI=false	\
-	-use-interleaved-FTR=false	\
-	-use-interleaved-BI=true	\
-	-use-interleaved-CD=true	\
-	-use-fresh-branch-search=true	\
-	\
 	-use-softfp		\
 	-guest-type=sshot	\
-	-write-smt		\
+	-write-smt=false	\
 	-show-syscalls		\
 	-dump-select-stack	\
 	-dump-covstats=1	\
@@ -114,6 +119,7 @@ gdb --args klee-mc 		\
 	-dump-exprstats=1	\
 	-dump-hashstats=1	\
 	-dump-querystats=1	\
+	-dump-stackstats=10	\
 	-dump-stateinststats=10	\
 	-dump-br-data=5		\
 	-dump-used-rules=used.db \
