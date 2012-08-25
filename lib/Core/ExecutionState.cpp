@@ -184,6 +184,7 @@ void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf)
 		getCurrentKFunc()->addExit(kf);
 	}
 
+	kf->incEnters();
 	stack.push_back(StackFrame(caller,kf));
 }
 
@@ -192,6 +193,7 @@ void ExecutionState::popFrame()
 	StackFrame &sf = stack.back();
 	KFunction	*last_kf = getCurrentKFunc();
 
+	if (last_kf) last_kf->incExits();
 	foreach (it, sf.allocas.begin(), sf.allocas.end())
 		unbindObject(*it);
 	stack.pop_back();
@@ -220,6 +222,7 @@ void ExecutionState::xferFrame(KFunction* kf)
 	StackFrame	&sf(stack.back());
 	foreach (it, sf.allocas.begin(), sf.allocas.end())
 		unbindObject(*it);
+	sf.kf->incExits();
 	stack.pop_back();
 
 	/* create new frame to replace old frame;
@@ -227,6 +230,7 @@ void ExecutionState::xferFrame(KFunction* kf)
 	stack.push_back(StackFrame(ki, kf));
 	StackFrame	&sf2(stack.back());
 	sf2.callPathNode = cpn;
+	kf->incEnters();
 }
 
 void ExecutionState::bindObject(const MemoryObject *mo, ObjectState *os)
@@ -365,8 +369,6 @@ void ExecutionState::dumpStack(std::ostream& os) const
     target = sf.caller;
   }
 }
-
-/**/
 
 std::ostream &klee::operator<<(std::ostream &os, const MemoryMap &mm)
 {

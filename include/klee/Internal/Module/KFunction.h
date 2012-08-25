@@ -3,6 +3,7 @@
 
 #include <set>
 #include <map>
+#include <stdint.h>
 #include <tr1/unordered_map>
 
 namespace llvm
@@ -41,7 +42,8 @@ private:
 		bbentry_ty;
 	bbentry_ty basicBlockEntry;
 	std::set<const KFunction*>	exits_seen;
-
+	uint64_t			enter_c;
+	uint64_t			exit_c;
 
 	KFunction(const KFunction&);
 	KFunction &operator=(const KFunction&);
@@ -64,6 +66,10 @@ public:
 	exit_iter_ty endExits(void) const { return exits_seen.end(); }
 	unsigned getUncov(void) const;
 
+	void incExits(void) { exit_c++; }
+	void incEnters(void) { enter_c++; }
+	uint64_t getNumExits(void) const { return exit_c; }
+	uint64_t getNumEnters(void) const { return enter_c; }
 
 	static unsigned getClock(void) { return inst_clock; }
 	unsigned getTick(void) const { return inst_tick; }

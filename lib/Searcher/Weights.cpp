@@ -364,3 +364,6 @@ double StackWeight::weigh(const ExecutionState* es) const
 
 double StateInstWeight::weigh(const ExecutionState* es) const
 { return (es->personalInsts > 0) ? 1 : 0; }
+
+double NewInstsWeight::weigh(const ExecutionState* es) const
+{ return es->newInsts; }

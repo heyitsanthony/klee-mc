@@ -57,6 +57,26 @@ DECL_WEIGHT(NewInsts, true)
 
 class Executor;
 
+class BinaryWeight : public WeightFunc
+{
+public:
+	BinaryWeight(WeightFunc* _wf, double _split_v)
+	: WeightFunc("BinWeight", true)
+	, wf(_wf)
+	, split_v(_split_v) {}
+	virtual ~BinaryWeight(void) { delete wf; }
+	virtual double weigh(const ExecutionState* es) const
+	{
+		double	v = wf->weigh(es);
+		return (v < split_v) ? 0 : 1;
+	}
+	virtual WeightFunc* copy(void) const
+	{ return new BinaryWeight(wf->copy(), split_v); }
+private:
+	WeightFunc	*wf;
+	double		split_v;
+};
+
 class TroughWeight : public WeightFunc
 {
 public:

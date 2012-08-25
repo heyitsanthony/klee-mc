@@ -11,7 +11,7 @@ LEVEL=../..
 TOOLNAME = kmc-replay
 USEDLIBS=kleeModule.a	\
 	kleaverSolver.a kleaverExpr.a \
-	kleeSupport.a kleeBasic.a kleeDSA.a
+	kleeSupport.a kleeBasic.a
 #X_LINK_COMPONENTS = all
 X_LINK_COMPONENTS = jit bitreader bitwriter ipo linker engine core
 include $(LEVEL)/Makefile.common

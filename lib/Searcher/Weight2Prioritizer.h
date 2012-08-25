@@ -11,8 +11,8 @@ template <class T>
 class Weight2Prioritizer : public Prioritizer
 {
 public:
-	Weight2Prioritizer(T* t, double _s) : w(t), scale(_s) {}
-	Weight2Prioritizer(double _s) : w(new T()), scale(_s) {}
+	Weight2Prioritizer(T* t, double _s = 1) : w(t), scale(_s) {}
+	Weight2Prioritizer(double _s = 1) : w(new T()), scale(_s) {}
 	virtual ~Weight2Prioritizer() { delete w; }
 
 	virtual Prioritizer* copy(void) const

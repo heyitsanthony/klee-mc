@@ -360,6 +360,47 @@ private:
 	bool		ignoreConcrete;
 };
 
+cl::opt<unsigned>
+DumpFuncHeat("dump-func-heat",
+	cl::desc("Dump function entry/exit counts (0=off)"),
+	cl::init(0));
+class FuncHeatTimer : public Executor::Timer
+{
+public:
+	FuncHeatTimer(const char* _fname, Executor* _exe)
+	: fname(_fname), exe(_exe) {}
+	virtual ~FuncHeatTimer() {}
+
+	void run(void)
+	{
+		const KModule	*km;
+		std::ostream	*os;
+
+		os = exe->getInterpreterHandler()->openOutputFile(fname);
+		if (os == NULL) return;
+
+		km = exe->getKModule();
+
+		foreach (it, km->kfuncsBegin(), km->kfuncsEnd()) {
+			const KFunction	*kf = *it;
+
+			if (kf->getNumEnters() == 0 && kf->getNumExits() == 0)
+				continue;
+
+			(*os)	<< exe->getPrettyName(kf->function)
+				<< ' ' << kf->getNumEnters()
+				<< ' ' << kf->getNumExits()
+				<< '\n';
+		}
+		delete os;
+	}
+private:
+	const char	*fname;
+	Executor	*exe;
+};
+
+
+
 #include "../Solver/HashSolver.h"
 cl::opt<unsigned>
 DumpHashStats("dump-hashstats",
@@ -652,6 +693,9 @@ void Executor::initTimers(void)
 		addTimer(
 			new BrDataTimer("brexprdata.txt", this, true),
 			DumpBrExprData);
+
+	if (DumpFuncHeat)
+		addTimer(new FuncHeatTimer("funcheat.txt", this), DumpFuncHeat);
 
 	if (UseGCTimer)
 		addTimer(new ExprGCTimer(this), UseGCTimer);

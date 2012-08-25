@@ -252,8 +252,8 @@ bool UserSearcher::userSearcherRequiresMD2U() {
 #if 1
 #define NEWINST_SEARCHER	\
 	new RescanSearcher(	\
-		new Weight2Prioritizer<NewInstsWeight>(	\
-			new NewInstsWeight(), 1.0))
+		new Weight2Prioritizer<BinaryWeight>(	\
+			new BinaryWeight(new NewInstsWeight(), 1.0)))
 #else
 #define  NEWINST_SEARCHER	\
 	new WeightedRandomSearcher(executor, new NewInstsWeight())
@@ -490,6 +490,7 @@ public:
 			<< ". Insts=" <<es->totalInsts
 			<< ". SInsts=" << es->personalInsts
 			<< ". NewInsts=" << es->newInsts
+			<< ". Constrs=" << es->constraints.size()
 			<< '\n';
 		exe.printStackTrace(*es, std::cerr);
 		std::cerr << "===================\n";
