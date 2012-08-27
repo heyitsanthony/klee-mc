@@ -102,11 +102,11 @@ void ExeChk::handleXfer(ExecutionState& state, KInstruction *ki)
 		saved_klee_cpustate, 
 		gs->getCPUState()->getStateSize()) != 0)
 	{
-		fprintf(stderr, "JIT STATE\n");
+		fprintf(stderr, "========JIT STATE==========\n");
 		loadCPU(saved_jit_cpustate);
 		gs->getCPUState()->print(std::cerr);
 
-		fprintf(stderr, "KLEE STATE:\n");
+		fprintf(stderr, "========KLEE STATE=========\n");
 		loadCPU(saved_klee_cpustate);
 		gs->getCPUState()->print(std::cerr);
 
@@ -138,7 +138,7 @@ void ExeChk::handleXferSyscall(ExecutionState& state, KInstruction* ki)
 			(int)sp.getArg(0));
 		reg_os = GETREGOBJ(state);
 		assert (reg_os != NULL);
-		state.write64(reg_os, 0 /* RAX */, sp.getArg(0));
+		state.write64(reg_os, gs->getCPUState()->getRetOff(), sp.getArg(0));
 		gs->setSyscallResult(sp.getArg(0));
 		exited = true;
 		return;

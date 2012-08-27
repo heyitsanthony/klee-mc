@@ -125,18 +125,18 @@ public:
 	bool isBranch = false);
 
 
-  /// Get textual information regarding a memory address.
-  std::string getAddressInfo(ExecutionState &state, ref<Expr> address) const;
+	/// Get textual info regarding a memory address.
+	std::string getAddressInfo(ExecutionState &st, ref<Expr> addr) const;
 
-  /// Return a constant value for the given expression, forcing it to
-  /// be constant in the given state by adding a constraint if
-  /// necessary. Note that this function breaks completeness and
-  /// should generally be avoided.
-  ///
-  /// \param purpose An identify string to printed in case of concretization.
-  ref<klee::ConstantExpr> toConstant(
-  	ExecutionState &state, ref<Expr> e, const char *purpose,
-	bool showLineInfo = true);
+	/// Return a constant value for the given expression, forcing it to
+	/// be constant in the given state by adding a constraint if
+	/// necessary. Note that this function breaks completeness and
+	/// should generally be avoided.
+	///
+	/// \param purpose string printed in case of concretization.
+	ref<klee::ConstantExpr> toConstant(
+		ExecutionState &state, ref<Expr> e, const char *purpose,
+		bool showLineInfo = true);
 
 	/// Bind a constant value for e to the given target. NOTE: This
 	/// function may fork state if the state has multiple seeds.

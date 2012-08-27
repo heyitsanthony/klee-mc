@@ -38,6 +38,7 @@ public:
 
 	static ShadowRef getExprDynCast(const ref<Expr>& e);
 	static ShadowRef getExpr(const ref<Expr>& e);
+	static const ref<ShadowVal> getExprShadow(const ref<Expr>& e);
 
 	static ShadowAlloc* get(void)
 	{ return static_cast<ShadowAlloc*>(Expr::getAllocator()); }

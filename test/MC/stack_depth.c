@@ -13,13 +13,13 @@ int main(int argc, char* argv[])
 	int		stack_v1, stack_v2, stack_v3;
 	strcmp_f	f = strcmp;
 
-	stack_v1 = ksys_indirect("klee_stack_depth");
+	stack_v1 = ksys_indirect0("klee_stack_depth");
 	ksys_print_expr("v1", stack_v1);
 
 	if (read(0, q, 31) != 31) return -1;
 	q[31] = 0;
 
-	stack_v2 = ksys_indirect("klee_stack_depth");
+	stack_v2 = ksys_indirect0("klee_stack_depth");
 	ksys_print_expr("v2", stack_v2);
 
 	if (stack_v1 != stack_v2)
@@ -27,7 +27,7 @@ int main(int argc, char* argv[])
 
 	n = f("abc", "abcdeffffff");
 
-	stack_v3 = ksys_indirect("klee_stack_depth");
+	stack_v3 = ksys_indirect0("klee_stack_depth");
 	ksys_print_expr("v3", stack_v3);
 
 	if (stack_v1 != stack_v3)

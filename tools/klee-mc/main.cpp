@@ -11,6 +11,7 @@
 #include "../../lib/Core/ShadowExecutor.h"
 #include "../../lib/Core/TaintMergeExecutor.h"
 #include "../../lib/Core/ConstraintSeedExecutor.h"
+#include "../../lib/Core/DDTExecutor.h"
 #include "KleeHandler.h"
 #include "UCHandler.h"
 #include "cmdargs.h"
@@ -61,6 +62,10 @@ namespace {
 		cl::desc("Use constraint seeds."),
 		cl::init(false));
 
+	cl::opt<bool> UseDDT(
+		"use-ddt",
+		cl::desc("Data dependency tainting."),
+		cl::init(false));
 
 	cl::opt<bool> UseTaint(
 		"use-taint",
@@ -417,6 +422,8 @@ bool isReplaying(void)
 		? new GDBExecutor<x>(handler) 		\
 	: (UseConstraintSeed)				\
 		? new ConstraintSeedExecutor<x>(handler)\
+	: (UseDDT)					\
+		? new DDTExecutor<x>(handler)		\
 	: (UseTaintMerge)				\
 		? new TaintMergeExecutor<x>(handler)	\
 	: (UseTaint)					\

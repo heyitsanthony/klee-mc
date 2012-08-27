@@ -1346,7 +1346,6 @@ void Executor::instSwitch(ExecutionState& state, KInstruction *ki)
 	forkSwitch(state, ki->getInst()->getParent(), defaultTarget, targets);
 }
 
-
 void Executor::instInsertElement(ExecutionState& state, KInstruction* ki)
 {
 	/* insert element has two parametres:
@@ -1773,8 +1772,7 @@ INST_FOP_ARITH(FRem, mod)
   case Instruction::FPTrunc: {
     FPTruncInst *fi = cast<FPTruncInst>(i);
     Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());
-    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state),
-                                        "floating point");
+    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state), "fp");
     if (!fpWidthToSemantics(arg->getWidth()) || resultType > arg->getWidth())
       return terminateOnExecError(state, "Unsupported FPTrunc operation");
 
@@ -1790,8 +1788,7 @@ INST_FOP_ARITH(FRem, mod)
   case Instruction::FPExt: {
     FPExtInst *fi = cast<FPExtInst>(i);
     Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());
-    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state),
-                                        "floating point");
+    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state), "fp");
     if (!fpWidthToSemantics(arg->getWidth()) || arg->getWidth() > resultType)
       return terminateOnExecError(state, "Unsupported FPExt operation");
 
@@ -1807,8 +1804,7 @@ INST_FOP_ARITH(FRem, mod)
   case Instruction::FPToUI: {
     FPToUIInst *fi = cast<FPToUIInst>(i);
     Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());
-    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state),
-                                       "floating point");
+    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state), "fp");
     if (!fpWidthToSemantics(arg->getWidth()) || resultType > 64)
       return terminateOnExecError(state, "Unsupported FPToUI operation");
 
@@ -1824,8 +1820,7 @@ INST_FOP_ARITH(FRem, mod)
   case Instruction::FPToSI: {
     FPToSIInst *fi = cast<FPToSIInst>(i);
     Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());
-    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state),
-                                       "floating point");
+    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state), "fp");
     if (!fpWidthToSemantics(arg->getWidth()) || resultType > 64)
       return terminateOnExecError(state, "Unsupported FPToSI operation");
 
@@ -1841,8 +1836,7 @@ INST_FOP_ARITH(FRem, mod)
   case Instruction::UIToFP: {
     UIToFPInst *fi = cast<UIToFPInst>(i);
     Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());
-    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state),
-                                       "floating point");
+    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state), "fp");
     const llvm::fltSemantics *semantics = fpWidthToSemantics(resultType);
     if (!semantics)
       return terminateOnExecError(state, "Unsupported UIToFP operation");
@@ -1857,8 +1851,7 @@ INST_FOP_ARITH(FRem, mod)
   case Instruction::SIToFP: {
     SIToFPInst *fi = cast<SIToFPInst>(i);
     Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());
-    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state),
-                                       "floating point");
+    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state), "fp");
     const llvm::fltSemantics *semantics = fpWidthToSemantics(resultType);
     if (!semantics)
       return terminateOnExecError(state, "Unsupported SIToFP operation");
@@ -1872,10 +1865,8 @@ INST_FOP_ARITH(FRem, mod)
 
   case Instruction::FCmp: {
     FCmpInst *fi = cast<FCmpInst>(i);
-    ref<ConstantExpr> left = toConstant(state, eval(ki, 0, state),
-                                        "floating point");
-    ref<ConstantExpr> right = toConstant(state, eval(ki, 1, state),
-                                         "floating point");
+    ref<ConstantExpr> left(toConstant(state, eval(ki, 0, state), "fp"));
+    ref<ConstantExpr> right(toConstant(state, eval(ki, 1, state), "fp"));
     if (!fpWidthToSemantics(left->getWidth()) ||
         !fpWidthToSemantics(right->getWidth()))
       return terminateOnExecError(state, "Unsupported FCmp operation");
@@ -1884,10 +1875,8 @@ INST_FOP_ARITH(FRem, mod)
     APFloat RHS(right->getAPValue());
     APFloat::cmpResult CmpRes = LHS.compare(RHS);
 
-    state.bindLocal(ki,
-      ConstantExpr::create(
-        isFPPredicateMatched(CmpRes, fi->getPredicate()),
-        Expr::Bool));
+    state.bindLocal(ki, 
+    	MK_CONST(isFPPredicateMatched(CmpRes, fi->getPredicate()), 1));
     break;
   }
 

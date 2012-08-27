@@ -26,15 +26,57 @@
 using namespace llvm;
 using namespace klee;
 
-/// \todo Almost all of the demands in this file should be replaced
-/// with terminate calls.
+namespace klee
+{
+SFH_HANDLER(Assume)
+SFH_HANDLER(AssumeEq)
+SFH_HANDLER(CheckMemoryAccess)
+SFH_HANDLER(DefineFixedObject)
+SFH_HANDLER(Exit)
+SFH_HANDLER(ForceNE)
+SFH_HANDLER(Free)
+SFH_HANDLER(GetPruneID)
+SFH_HANDLER(Prune)
+SFH_HANDLER(GetErrno)
+SFH_HANDLER(GetObjSize)
+SFH_HANDLER(GetObjNext)
+SFH_HANDLER(GetObjPrev)
+SFH_HANDLER(GetValue)
+SFH_HANDLER(IsSymbolic)
+SFH_HANDLER(IsValidAddr)
+SFH_HANDLER(MakeSymbolic)
+SFH_HANDLER(Malloc)
+SFH_HANDLER(MarkGlobal)
+SFH_HANDLER(Merge)
+SFH_HANDLER(PreferCex)
+SFH_HANDLER(PrintExpr)
+SFH_HANDLER(PrintRange)
+SFH_HANDLER(Range)
+SFH_HANDLER(ReportError)
+SFH_HANDLER(SetForking)
+SFH_HANDLER(SilentExit)
+SFH_HANDLER(StackTrace)
+SFH_HANDLER(SymRangeBytes)
+SFH_HANDLER(Warning)
+SFH_HANDLER(WarningOnce)
+SFH_HANDLER(Yield)
+SFH_HANDLER(IsShadowed)
+SFH_HANDLER(Indirect0)
+SFH_HANDLER(Indirect1)
+SFH_HANDLER(ForkEq)
+SFH_HANDLER(StackDepth)
+#define DEF_SFH_MMU(x)			\
+	SFH_HANDLER(WideStore##x)	\
+	SFH_HANDLER(WideLoad##x)
+DEF_SFH_MMU(8)
+DEF_SFH_MMU(16)
+DEF_SFH_MMU(32)
+DEF_SFH_MMU(64)
+DEF_SFH_MMU(128)
+#undef DEF_SFH_MMU
+}
 
-// FIXME: We are more or less committed to requiring an intrinsic
-// library these days. We can move some of this stuff there,
-// especially things like realloc which have complicated semantics
-// w.r.t. forking. Among other things this makes delayed query
-// dispatch easier to implement.
-SpecialFunctionHandler::HandlerInfo handlerInfo[] =
+static const SpecialFunctionHandler::HandlerInfo handlerInfo[] =
 {
 #define add(name, h, ret) {	\
 	name, 			\
@@ -79,7 +121,8 @@ SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   add("klee_prune", Prune, false),
   add("malloc", Malloc, true),
   add("klee_stack_depth", StackDepth, true),
-  add("klee_indirect", Indirect, true),
+  add("klee_indirect0", Indirect0, true),
+  add("klee_indirect1", Indirect1, true),
   add("klee_is_shadowed", IsShadowed, true),
 
 #define DEF_WIDE(x)	\
@@ -100,7 +143,6 @@ SpecialFunctionHandler::HandlerInfo handlerInfo[] =
 
 SpecialFunctionHandler::SpecialFunctionHandler(Executor* _executor)
 : executor(_executor) {}
-
 
 void SpecialFunctionHandler::prepare()
 {
@@ -193,10 +235,10 @@ bool SpecialFunctionHandler::lateBind(const llvm::Function* f)
 void SpecialFunctionHandler::handleByName(
 	ExecutionState		&state,
 	const std::string	&fname,
-	KInstruction		*target)
+	KInstruction		*target,
+	std::vector<ref<Expr> >	&args)
 {
 	Function		*f;
-	std::vector< ref<Expr> > arguments;
 
 	f = executor->getKModule()->module->getFunction(fname);
 	if (f == NULL) {
@@ -209,7 +251,12 @@ void SpecialFunctionHandler::handleByName(
 		f = (Function*)c;
 	}
 
-	handle(state, f, target, arguments);
+	if (f == NULL) {
+		executor->terminateOnExecError(state, "missing indirect call");
+		return;
+	}
+
+	handle(state, f, target, args);
 }
 
 bool SpecialFunctionHandler::handle(
@@ -348,7 +395,7 @@ static std::map<int, int> pruneMap;
 SFH_DEF_HANDLER(GetPruneID)
 {
   if (!EnablePruning) {
-    state.bindLocal(target, ConstantExpr::create(0, Expr::Int32));
+    state.bindLocal(target, MK_CONST(0, Expr::Int32));
     return;
   }
 
@@ -835,10 +882,19 @@ SFH_DEF_HANDLER(IsShadowed)
 }
 
 /* indirect call-- first parameter is function name */
-SFH_DEF_HANDLER(Indirect)
+SFH_DEF_HANDLER(Indirect0)
 {
+	std::vector<ref<Expr> >	args;
 	std::string	fname(sfh->readStringAtAddress(state, arguments[0]));
-	sfh->handleByName(state, fname, target);
+	sfh->handleByName(state, fname, target, args);
+}
+
+SFH_DEF_HANDLER(Indirect1)
+{
+	std::vector<ref<Expr> >	args;
+	std::string	fname(sfh->readStringAtAddress(state, arguments[0]));
+	args.push_back(arguments[1]);
+	sfh->handleByName(state, fname, target, args);
 }
 
 #if 0

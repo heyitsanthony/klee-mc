@@ -24,7 +24,8 @@
 #define KLEE_SYS_SYM_RANGE_BYTES	7 /* klee_sym_range_bytes */
 #define KLEE_SYS_VALID_ADDR	8	/* klee_is_valid_addr */
 #define KLEE_SYS_IS_SHADOWED	9	/* klee_is_shadowed */
-#define KLEE_SYS_INDIRECT	10	/* klee_indirect */
+#define KLEE_SYS_INDIRECT0	10	/* klee_indirect */
+#define KLEE_SYS_INDIRECT1	11
 
 #define ksys_report_error(x,y,z,w)	\
 	syscall(SYS_klee, KLEE_SYS_REPORT_ERROR, x, y, z, w)
@@ -43,7 +44,8 @@
 	syscall(SYS_klee, KLEE_SYS_SYM_RANGE_BYTES, (uint64_t)x, y)
 #define ksys_is_valid_addr(x)	syscall(SYS_klee, KLEE_SYS_VALID_ADDR, x)
 
-#define ksys_indirect(x)	syscall(SYS_klee, KLEE_SYS_INDIRECT, x)
+#define ksys_indirect0(x)	syscall(SYS_klee, KLEE_SYS_INDIRECT0, x)
+#define ksys_indirect1(x,y)	syscall(SYS_klee, KLEE_SYS_INDIRECT1, x, y)
 
 #define ksys_get_value(n)	n
 #define ksys_is_active()	(ksys_is_sym(0) != -1)
@@ -185,7 +187,8 @@ extern "C" {
   void* klee_get_obj_next(void* p);
   void* klee_get_obj_prev(void* p);
 
-  uint64_t klee_indirect(const char* s);
+  uint64_t klee_indirect0(const char* s);
+  uint64_t klee_indirect1(const char* s, uint64_t v0);
 #ifdef __cplusplus
 }
 #endif

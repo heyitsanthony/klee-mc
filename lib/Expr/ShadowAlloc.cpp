@@ -131,6 +131,15 @@ ShadowRef ShadowAlloc::getExpr(const ref<Expr>& e)
 	return ShadowRef(static_cast<ShadowType*>(e.get()));
 }
 
+const ref<ShadowVal> ShadowAlloc::getExprShadow(const ref<Expr>& e)
+{
+	ShadowRef	sr(getExpr(e));
+
+	if (sr.isNull()) return NULL;
+
+	return sr->getShadow();
+}
+
 ShadowRef ShadowAlloc::getExprDynCast(const ref<Expr>& e)
 {
 	switch (e->getKind()) {
