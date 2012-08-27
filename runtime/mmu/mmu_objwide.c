@@ -16,12 +16,12 @@
 {	\
 uint64_t obj_base = (uint64_t)klee_get_obj_prev((void*)c_64); \
 do {	uint64_t obj_sz;						\
-	if (obj_base < c_64) continue;					\
+	if (obj_base < c_64) goto next;					\
 	obj_sz = klee_get_obj_size((void*)obj_base);			\
 	if (p_64 < obj_base) break;					\
 	if ((p_64 + sizeof(y)) <= (obj_base+obj_sz)) { found_op; }	\
-	obj_base = (uint64_t)klee_get_obj_next((void*)obj_base);	\
-} while (obj_base < (c_64 + PAGE_SZ));	\
+next:	obj_base = (uint64_t)klee_get_obj_next((void*)(obj_base+1));	\
+} while (obj_base < (c_64 + PAGE_SZ) && obj_base);			\
 /* fork straddled / misaligned */	\
 c_64 = klee_fork_all(p_64);		\
 }

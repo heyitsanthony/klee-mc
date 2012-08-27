@@ -45,7 +45,7 @@ public:
 		AddressSpace& as,
 		const ref<ReadExpr>& re, const ref<ConstantExpr>& ce);
 	static void ivcStack(
-		ExecutionState::stack_ty& stk,
+		CallStack& stk,
 		const ref<ReadExpr>& re, const ref<ConstantExpr>& ce);
 
 private:
@@ -53,7 +53,6 @@ private:
 	static uint64_t ivc_stack_cells;
 
 };
-
 }
 
 #endif

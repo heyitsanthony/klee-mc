@@ -59,68 +59,49 @@ namespace {
 		cl::init(false));
 }
 
+void ExecutionState::initFields(void)
+{
+	depth = 0;
+	weight = 1;
+	queryCost = 0.;
+	instsSinceCovNew = 0;
+	lastGlobalInstCount = 0;
+	totalInsts = 0;
+	concretizeCount = 0;
+	personalInsts = 0;
+	newInsts = 0;
+	coveredNew = false;
+	isReplay = false;
+	forkDisabled = false;
+	ptreeNode = 0;
+	num_allocs = 0;
+	prev_constraint_hash = 0;
+	isCompactForm = false;
+	onFreshBranch = false;
+	is_shadowing = false;
+	canary = ES_CANARY_VALUE;
+}
+
 /** XXX XXX XXX REFACTOR PLEASEEE **/
 ExecutionState::ExecutionState(KFunction *kf)
-: depth(0)
-, weight(1)
-, pc(kf->instructions)
+: pc(kf->instructions)
 , prevPC(pc)
-, queryCost(0.)
-, instsSinceCovNew(0)
-, lastGlobalInstCount(0)
-, totalInsts(0)
-, concretizeCount(0)
-, personalInsts(0)
-, newInsts(0)
-, coveredNew(false)
-, isReplay(false)
-, forkDisabled(false)
-, ptreeNode(0)
-, num_allocs(0)
-, prev_constraint_hash(0)
-, isCompactForm(false)
-, onFreshBranch(false)
-, is_shadowing(false)
 {
-	canary = ES_CANARY_VALUE;
+	initFields();
 	pushFrame(0, kf);
 	replayBrIter = brChoiceSeq.end();
 }
 
 ExecutionState::ExecutionState(const std::vector<ref<Expr> > &assumptions)
 : constraints(assumptions)
-, queryCost(0.)
-, lastGlobalInstCount(0)
-, totalInsts(0)
-, concretizeCount(0)
-, personalInsts(0)
-, newInsts(0)
-, isReplay(false)
-, ptreeNode(0)
-, num_allocs(0)
-, prev_constraint_hash(0)
-, isCompactForm(false)
-, onFreshBranch(false)
-, is_shadowing(false)
 {
-	canary = ES_CANARY_VALUE;
+	initFields();
 	replayBrIter = brChoiceSeq.end();
 }
 
 ExecutionState::ExecutionState(void)
-: lastGlobalInstCount(0)
-, totalInsts(0)
-, concretizeCount(0)
-, coveredNew(false)
-, isReplay(false)
-, ptreeNode(0)
-, num_allocs(0)
-, prev_constraint_hash(0)
-, isCompactForm(false)
-, onFreshBranch(false)
-, is_shadowing(false)
 {
-	canary = ES_CANARY_VALUE;
+	initFields();
 	replayBrIter = brChoiceSeq.begin();
 }
 
@@ -234,9 +215,7 @@ void ExecutionState::xferFrame(KFunction* kf)
 }
 
 void ExecutionState::bindObject(const MemoryObject *mo, ObjectState *os)
-{
-	addressSpace.bindObject(mo, os);
-}
+{ addressSpace.bindObject(mo, os); }
 
 void ExecutionState::unbindObject(const MemoryObject* mo)
 {
@@ -267,28 +246,6 @@ void ExecutionState::write64(
 	}
 }
 
-bool ExecutionState::hasLocal(KInstruction *target) const
-{
-	if (stack.empty()) return false;
-
-	const StackFrame& sf(stack[stack.size() - 1]);
-
-	if (target->getDest() >= sf.kf->numRegisters) return false;
-
-	return true;
-}
-
-Cell& ExecutionState::readLocalCell(unsigned sfi, unsigned i) const
-{
-	assert(sfi < stack.size());
-	const StackFrame& sf = stack[sfi];
-
-	KFunction* kf = sf.kf;
-	assert(i < kf->numRegisters);
-
-	return sf.locals[i];
-}
-
 bool ExecutionState::addConstraint(ref<Expr> constraint)
 {
 	bool	ok;
@@ -305,24 +262,6 @@ bool ExecutionState::addConstraint(ref<Expr> constraint)
 	}
 
 	return ok;
-}
-
-Cell& ExecutionState::getLocalCell(unsigned sfi, unsigned i) const
-{
-	assert(sfi < stack.size());
-	const StackFrame& sf = stack[sfi];
-	assert(i < sf.kf->numRegisters);
-	return sf.locals[i];
-}
-
-void ExecutionState::writeLocalCell(unsigned sfi, unsigned i, ref<Expr> value)
-{
-	assert(sfi < stack.size());
-	const StackFrame& sf = stack[sfi];
-	KFunction* kf = sf.kf;
-	assert(i < kf->numRegisters);
-
-	sf.locals[i].value = value;
 }
 
 KInstIterator ExecutionState::getCaller(void) const
@@ -357,8 +296,8 @@ void ExecutionState::dumpStack(std::ostream& os) const
       os << ai->getName().str();
       // XXX should go through function
       ref<Expr> value;
-      value = getLocalCell(
-     stack.size() - idx, sf.kf->getArgRegister(index++)).value;
+      value = stack.getLocalCell(
+	     stack.size() - idx, sf.kf->getArgRegister(index++)).value;
       if (isa<ConstantExpr>(value))
         os << "=" << value;
     }
@@ -391,13 +330,10 @@ std::ostream &klee::operator<<(std::ostream &os, const MemoryMap &mm)
 
 void ExecutionState::bindArgument(
 	KFunction *kf, unsigned index, ref<Expr> value)
-{ writeLocalCell(stack.size() - 1, kf->getArgRegister(index), value); }
+{ stack.writeLocalCell(kf->getArgRegister(index), value); }
 
 void ExecutionState::bindLocal(KInstruction* target, ref<Expr> value)
-{ writeLocalCell(stack.size() - 1, target->getDest(), value); }
-
-ref<Expr> ExecutionState::readLocal(KInstruction* target) const
-{ return readLocalCell(stack.size() - 1, target->getDest()).value; }
+{ stack.writeLocalCell(target->getDest(), value); }
 
 void ExecutionState::transferToBasicBlock(BasicBlock *dst, BasicBlock *src)
 {
@@ -580,7 +516,6 @@ void ExecutionState::getConstraintLog(std::string &res) const
 	ExprPPrinter::printConstraints(info, constraints);
 	res = info.str();
 }
-
 
 bool ExecutionState::setupCallVarArgs(
 	unsigned funcArgs, std::vector<ref<Expr> >& args)
@@ -835,7 +770,6 @@ void ExecutionState::printFileLine(void)
 
 unsigned ExecutionState::getStackDepth(void) const
 { return stack.size(); }
-
 
 void ExecutionState::inheritControl(ExecutionState& es)
 {

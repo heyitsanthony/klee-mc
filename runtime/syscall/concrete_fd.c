@@ -127,6 +127,11 @@ void fd_close(int fd)
 
 int fd_is_concrete(int fd)
 {
+	/* XXX: is there ever a case where the fd is
+	 * symbolic but the underlying files are concrete? */
+	if (klee_is_symbolic(fd))
+		return 0;
+
 	if (!fd_valid(fd))
 		return 0;
 

@@ -132,7 +132,7 @@ SFH_DEF_HANDLER(TaintLoad)
 	ref<Expr>	old_expr, tainted_expr;
 
 	--kii;
-	old_expr = state.readLocal(kii);
+	old_expr = state.stack.readLocal(kii);
 	shadow_tag = ShadowValU64::create(
 		cast<klee::ConstantExpr>(arguments[0])->getZExtValue());
 

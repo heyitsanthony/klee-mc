@@ -749,7 +749,7 @@ void Executor::processTimersDumpStates(void)
     ExecutionState *es = *it;
     *os << "(" << es << ",";
     *os << "[";
-    ExecutionState::stack_ty::iterator next = es->stack.begin();
+    CallStack::iterator next = es->stack.begin();
     ++next;
     foreach (sfIt,  es->stack.begin(), es->stack.end()) {
       *os << "('" << sfIt->kf->function->getName().str() << "',";

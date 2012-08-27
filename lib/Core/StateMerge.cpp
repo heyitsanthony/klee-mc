@@ -134,8 +134,8 @@ bool ExecutionState::merge(const ExecutionState &b)
 
   for (unsigned sfi=0; sfi < stack.size(); sfi++) {
     for (unsigned i=0; i< stack[sfi].kf->numRegisters; i++) {
-      ref<Expr> &av = getLocalCell(sfi, i).value;
-      const ref<Expr> &bv = b.getLocalCell(sfi, i).value;
+      const ref<Expr> &av = stack.getLocalCell(sfi, i).value;
+      const ref<Expr> &bv = b.stack.getLocalCell(sfi, i).value;
       if (av.isNull() || bv.isNull()) {
         // if one is null then by implication (we are at same pc)
         // we cannot reuse this local, so just ignore

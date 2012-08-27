@@ -21,10 +21,8 @@ namespace {
 	UseSymMMU(
 		"use-sym-mmu",
 		llvm::cl::desc("Use MMU that forwards to interpreter."),
-		llvm::cl::init(false));
+		llvm::cl::init(true));
 };
-
-
 
 void MMU::MemOp::simplify(ExecutionState& state)
 {

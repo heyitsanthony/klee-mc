@@ -17,16 +17,18 @@ void check_fd(int fd)
 	ssize_t	br;
 
 	br = read(fd, buf, 4);
-	if (br < 4) {
-		ksys_report_error(
-			__FILE__, __LINE__,
+	if (br != 4) {
+		ksys_error(
 			"Could not read 4 bytes from /etc/group. What.",
 			"size.err");
 	}
 
+	if (ksys_is_sym(buf[0])) {
+		ksys_error("buf[0] shouldn't be symbolic", "sym.err");
+	}
+
 	if (buf[0] != 'r') {
-		ksys_report_error(
-			__FILE__, __LINE__,
+		ksys_error(
 			"Reading bogus groups file. Expected root on line 1",
 			"data.err");
 	}
@@ -34,15 +36,17 @@ void check_fd(int fd)
 	/* expect: "root:0"...*/
 	br = read(fd, buf, 2);
 	if (br != 2) {
-		ksys_report_error(
-			__FILE__, __LINE__,
+		ksys_error(
 			"Could not read 6 bytes from /etc/group. What.",
 			"size.err");
 	}
 
+	if (ksys_is_sym(buf[0])) {
+		ksys_error("buf[0] shouldn't be symbolic", "sym.err");
+	}
+
 	if (buf[0] != ':') {
-		ksys_report_error(
-			__FILE__, __LINE__,
+		ksys_error(
 			"Reading bogus groups file. Expected ':' at character 5",
 			"data.err");
 	}
@@ -57,9 +61,7 @@ int main(int argc, char* argv[])
 
 	fd  = open("/etc/group", O_RDONLY);
 	if (fd < 0) {
-		ksys_report_error(
-			__FILE__,
-			__LINE__, 
+		ksys_error(
 			"Could not open /etc/group. Concretes on?",
 			"open.err");
 		return -1;
@@ -68,10 +70,10 @@ int main(int argc, char* argv[])
 	dupfd1 = dup(fd);
 	dupfd2 = dup2(dupfd1, 1000);
 
-	if (dupfd2 != 1000)
-		ksys_report_error(
-			__FILE__,__LINE__,
-			"DUP2 DID NOT RETURN FD=1000", "dup.err");
+	if (dupfd2 != 1000) {
+		ksys_error("DUP2 DID NOT RETURN FD=1000", "dup.err");
+		return -2;
+	}
 
 	check_fd(fd);
 	check_fd(dupfd1);

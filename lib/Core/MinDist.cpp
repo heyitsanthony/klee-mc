@@ -339,7 +339,7 @@ void StatsTracker::computeReachableUncovered()
 		uint64_t currentFrameMinDist = 0;
 
 		foreach (sfIt, es->stack.begin(), es->stack.end()) {
-			ExecutionState::stack_ty::iterator next = sfIt + 1;
+			CallStack::iterator next = sfIt + 1;
 			KInstIterator kii;
 
 			sfIt->minDistToUncoveredOnReturn = currentFrameMinDist;

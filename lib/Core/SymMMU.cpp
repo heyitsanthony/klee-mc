@@ -14,7 +14,7 @@ namespace {
 	SymMMUType(
 		"sym-mmu-type",
 		llvm::cl::desc("Suffix for symbolic MMU operations."),
-		llvm::cl::init("uniqptr"));
+		llvm::cl::init("objwide" /*uniqptr */));
 };
 
 

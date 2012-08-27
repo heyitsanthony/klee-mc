@@ -19,6 +19,7 @@
 #include "../../lib/Core/ExecutionTrace.h"
 #include "klee/Internal/Module/KInstIterator.h"
 #include "../../lib/Core/Memory.h"
+#include "klee/CallStack.h"
 
 #include <map>
 #include <set>
@@ -108,15 +109,13 @@ private:
 
 public:
 	bool checkCanary(void) const { return canary == ES_CANARY_VALUE; }
-	typedef std::vector<StackFrame> stack_ty;
-	typedef stack_ty::iterator	stack_iter_ty;
-
-	unsigned		depth;
-	double			weight;
+	typedef CallStack::iterator	stack_iter_ty;
+	unsigned			depth;
+	double				weight;
 
 	// pc - pointer to current instruction stream
 	KInstIterator		pc, prevPC;
-	stack_ty		stack;
+	CallStack		stack;
 	ConstraintManager	constraints;
 	mutable double		queryCost;
 	AddressSpace		addressSpace;
@@ -274,12 +273,7 @@ public:
 
   void writeLocalCell(unsigned sfi, unsigned i, ref<Expr> value);
 
-  Cell& getLocalCell(unsigned sfi, unsigned i) const;
-  Cell& readLocalCell(unsigned sfi, unsigned i) const;
-
   void bindLocal(KInstruction *target, ref<Expr> value);
-  ref<Expr> readLocal(KInstruction* target) const;
-  bool hasLocal(KInstruction *target) const;
   void bindArgument(KFunction *kf, unsigned index, ref<Expr> value);
 
   void transferToBasicBlock(llvm::BasicBlock* dst, llvm::BasicBlock* src);
@@ -335,8 +329,10 @@ public:
 
 	virtual void inheritControl(ExecutionState& es);
 private:
-	static MemoryManager* mm;
-	unsigned int num_allocs;
+	void initFields(void);
+
+	static MemoryManager	*mm;
+	unsigned int		num_allocs;
 
 	// An ordered sequence of branches this state took thus far:
 	BranchTracker brChoiceSeq;

@@ -362,7 +362,7 @@ void ImpliedValue::ivcMem(
 }
 
 void ImpliedValue::ivcStack(
-	ExecutionState::stack_ty& stk,
+	CallStack& stk,
 	const ref<ReadExpr>& re, const ref<ConstantExpr>& ce)
 {
 	foreach (it, stk.begin(), stk.end()) {

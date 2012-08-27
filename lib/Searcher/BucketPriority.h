@@ -66,8 +66,8 @@ private:
 
 	int getStackRank(ExecutionState& st) const
 	{
-		ExecutionState::stack_ty& s(st.stack);
-		int	rank = 1;
+		CallStack	&s(st.stack);
+		int		rank = 1;
 
 		if (s.size() == 0)
 			return hitmap.find(getHitFunction(st))->second;

@@ -1,5 +1,5 @@
 // RUN: gcc %s -O0 -I../../../include/  -o %t1
-// RUN: klee-mc -pipe-solver -shadow-func-file=../bogus.txt -use-taint - ./%t1 2>%t1.err >%t1.out
+// RUN: klee-mc -use-sym-mmu=false -pipe-solver -shadow-func-file=../bogus.txt -use-taint - ./%t1 2>%t1.err >%t1.out
 // RUN: ls klee-last | not grep err
 
 #include "klee/klee.h"

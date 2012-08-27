@@ -524,12 +524,14 @@ void Executor::executeCall(
 
 	// FIXME: This is really specific to the architecture, not the pointer
 	// size. This happens to work fir x86-32 and x86-64, however.
+	//
+	/* XXX: this is broken broken with the symbolic MMU code
+	 * -- it limits memory dispatch to
+	 *  only one symbolic access per instruction */
 #define MMU_WORD_OP(x,y)	\
-	do { MMU::MemOp	mop(	\
-		true, \
-		AddExpr::create(args[0], ConstantExpr::create(x, 64)),\
-		y, NULL);\
-	mmu->exeMemOp(state, mop); } while (0)
+	do {	MMU::MemOp	mop(	\
+			true, MK_ADD(args[0], MK_CONST(x, 64)), y, NULL); \
+		mmu->exeMemOp(state, mop); } while (0)
 
 	Expr::Width WordSize = Context::get().getPointerWidth();
 	if (WordSize == Expr::Int32) {
@@ -543,10 +545,10 @@ void Executor::executeCall(
 	// make a function believe that all varargs are on stack.
 
 	// gp offset; fp_offset; overflow_arg_area; reg_save_area
-	MMU_WORD_OP(0, ConstantExpr::create(48,32));
-	MMU_WORD_OP(4, ConstantExpr::create(304,32));
+	MMU_WORD_OP(0, MK_CONST(48,32));
+	MMU_WORD_OP(4, MK_CONST(304,32));
 	MMU_WORD_OP(8, sf.varargs->getBaseExpr());
-	MMU_WORD_OP(16, ConstantExpr::create(0, 64));
+	MMU_WORD_OP(16, MK_CONST(0, 64));
 #undef MMU_WORD_OP
 	break;
 	}
@@ -680,7 +682,7 @@ const ref<Expr> Executor::eval(
 	// Determine if this is a constant or not.
 	if (vnumber < 0) return kmodule->constantTable[-vnumber - 2].value;
 
-	return state.readLocalCell(state.stack.size() - 1, vnumber).value;
+	return state.stack.getTopCell(vnumber).value;
 }
 
 void Executor::instRet(ExecutionState &state, KInstruction *ki)
@@ -889,23 +891,7 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 
 	/* 3. enumerate stack frames-- eval all expressions */
 	std::cerr << "[Exe] Concretizing StackFrames\n";
-	foreach (it, st.stackBegin(), st.stackEnd()) {
-		StackFrame	&sf(*it);
-
-		if (sf.kf == NULL)
-			continue;
-
-		/* update all registers in stack frame */
-		for (unsigned i = 0; i < sf.kf->numRegisters; i++) {
-			ref<Expr>	e;
-
-			if (sf.locals[i].value.isNull())
-				continue;
-
-			e = a.evaluate(sf.locals[i].value);
-			sf.locals[i].value = e;
-		}
-	}
+	st.stack.evaluate(a);
 
 	/* 4. drop constraints, since we lost all symbolics! */
 	st.constraints = ConstraintManager();
@@ -2222,6 +2208,8 @@ void Executor::terminateOnExit(ExecutionState &state)
 	terminate(state);
 }
 
+typedef std::pair<CallStack::insstack_ty, std::string> errmsg_ty;
+
 void Executor::terminateOnError(
 	ExecutionState &state,
 	const llvm::Twine &messaget,
@@ -2230,14 +2218,16 @@ void Executor::terminateOnError(
 	bool alwaysEmit)
 {
 	std::string message = messaget.str();
-	static std::set< std::pair<Instruction*, std::string> > emittedErrors;
+	static std::set<errmsg_ty> emittedErrors;
 
 	if (!alwaysEmit && !EmitAllErrors) {
-		bool	new_err;
-		new_err = emittedErrors.insert(
-			std::make_pair(
-				state.prevPC->getInst(), message)).second;
-		if (new_err == false) {
+		CallStack::insstack_ty	ins;
+
+		ins = state.stack.getKInstStack();
+		ins.push_back(state.prevPC);
+
+		errmsg_ty		em(ins, message);
+		if (emittedErrors.insert(em).second == false) {
 			terminate(state);
 			return;
 		}
