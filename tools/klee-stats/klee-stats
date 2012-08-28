@@ -145,6 +145,7 @@ Tfork:   Time spent forking (%)""")
     op.add_option('','--compare-by', dest='compBy',
                   help="key value on which to compare runs to the reference one (which is the first one).  E.g., --compare-by=Instrs shows how each run compares to the reference run after executing the same number of instructions as the reference run.  If a run hasn't executed as many instructions as the reference one, we simply print the statistics at the end of that run.")
     op.add_option('', '--xml', dest='printXML', action='store_true', help='Use XML format', default=False)
+    op.add_option('', '--json', dest='printJSON', action='store_true', help='Use JSON format', default=False)
     return op
 
 def getActualDirs(dirs):
@@ -164,7 +165,7 @@ def main(args):
     op = getOpts()
     opts,dirs = op.parse_args()
     if not dirs:
-        print "No directories given. Defaulting to klee-last."
+        #print "No directories given. Defaulting to klee-last."
         dirs = ["klee-last"]
 
     dirs = getActualDirs(dirs)
@@ -213,6 +214,12 @@ def main(args):
     	for dir,data in datas:
 		data[-1:].dumpXML()
 	sys.exit(0)
+
+    if opts.printJSON:
+    	for dir,data in datas:
+		data[-1:].dumpJSON()
+	sys.exit(0)
+
 
     if opts.sortBy:
         sortTable(table, labels, opts.sortBy, opts.ascending)

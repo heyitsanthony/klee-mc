@@ -46,3 +46,9 @@ class KleeStat:
 		for k in self.drec.keys():
 			print "<" + k + ">" + str(self.drec[k]) + "</" + k + ">"
 		print "</kstats>"
+
+	def dumpJSON(self):
+		print "{"
+		for k in self.drec.keys():
+			print  k + " : " + str(self.drec[k]) +  ","
+		print "}"
