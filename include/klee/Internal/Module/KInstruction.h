@@ -107,7 +107,7 @@ public:
 
 	KBrInstruction(llvm::Instruction* ins, unsigned dest)
 	: KInstruction(ins, dest)
-	, seen_expr(false)
+	, seen_expr_c(0)
 	{
 		all_kbr.push_back(this);
 		kbr_c++;
@@ -136,8 +136,9 @@ public:
 
 
 	void addExpr(const ref<Expr>& e) { expr_set.insert(e); }
-	void seenExpr(void) { seen_expr = true; }
-	bool hasSeenExpr(void) const { return seen_expr; }
+	void seenExpr(void) { seen_expr_c++; }
+	bool hasSeenExpr(void) const { return seen_expr_c != 0; }
+	unsigned getSeenExprs(void) const { return seen_expr_c; }
 
 	static kbr_list_ty::const_iterator beginBr()
 	{ return all_kbr.begin(); }
@@ -170,7 +171,7 @@ private:
 	BrType	br_false;
 	BrType	br_fork;
 
-	bool			seen_expr;
+	unsigned		seen_expr_c;
 	ExprHashSet		expr_set;
 
 	static kbr_list_ty	all_kbr;

@@ -350,6 +350,7 @@ public:
 				<< ' ' << kbr->getForkHits()
 				<< ' ' << kbr->getTrueMinInst()
 				<< ' ' << kbr->getFalseMinInst()
+				<< ' ' << kbr->getSeenExprs()
 				<< '\n';
 		}
 		delete os;
