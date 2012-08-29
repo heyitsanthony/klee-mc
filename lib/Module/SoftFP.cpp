@@ -62,6 +62,8 @@ SoftFPPass::SoftFPPass(KModule* _km)
 	assert (mod != NULL);
 
 	km->addModule(mod);
+
+	/* store all softfp functions into object's fields */
 	for (unsigned i = 0; fns[i].name != NULL; i++) {
 		KFunction	*kf;
 		kf = km->getKFunction(fns[i].name);
@@ -123,7 +125,7 @@ llvm::Function* SoftFPPass::getCastThunk(
 	v_arg0 = CastInst::CreateZExtOrBitCast(v_arg0, cast_type, "", bb);
 	if (arg1)
 		v_arg1 = CastInst::CreateZExtOrBitCast(
-			v_arg0, cast_type, "", bb);
+			v_arg1, cast_type, "", bb);
 
 	std::vector<Value*>	callargs;
 	callargs.push_back(v_arg0);
@@ -267,10 +269,11 @@ Function* SoftFPPass::getOrderedStub(
 	assert (thunk_f != NULL);
 	v_cmp = CallInst::Create(thunk_f, ArrayRef<Value*>(v_arg, 2), "", bb);
 
+	/* (!(is_nan(a) || is_nan(b)) || a OP b) */
 	v = BinaryOperator::Create(
 		BinaryOperator::Or, v_nan[0], v_nan[1], "", bb);
 	v = BinaryOperator::CreateNot(v, "", bb);
-	v = BinaryOperator::Create(BinaryOperator::Or, v, v_cmp, "", bb);
+	v = BinaryOperator::Create(BinaryOperator::And, v, v_cmp, "", bb);
 
 	ReturnInst::Create(getGlobalContext(), v, bb);
 	km->addFunctionProcessed(ret_f);
@@ -375,8 +378,6 @@ BasicBlock* SoftFPPass::setupFuncEntry(
 		*v_arg1 = NULL;
 	return bb;
 }
-
-
 
 bool SoftFPPass::replaceInst(Instruction* inst)
 {
