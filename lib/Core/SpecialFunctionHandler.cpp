@@ -533,6 +533,11 @@ SFH_DEF_HANDLER(IsValidAddr)
 	bool		ok;
 	ObjectPair	op;
 
+	if (addr->getKind() != Expr::Constant) {
+		/* keyctl triggered this one in mremap */
+		addr = sfh->executor->toConstant(state, addr, "is_valid_addr");
+	}
+
 	assert (addr->getKind() == Expr::Constant);
 	ok = state.addressSpace.resolveOne(cast<ConstantExpr>(addr), op);
 	ret = ConstantExpr::create((ok) ? 1 : 0, 32);
