@@ -35,6 +35,14 @@ public:
 		T::terminate(state);
 	}
 
+	void terminateOnError(
+		ExecutionState &state,
+		const llvm::Twine &messaget,
+		const char *suffix,
+		const llvm::Twine &info,
+		bool alwaysEmit)
+	{ T::terminateOnError(state, messaget, suffix, info, true); }
+
 	void useSeeds(const std::vector<struct KTest *> *seeds)
 	{ seedCore.useSeeds(seeds); }
 

@@ -438,8 +438,7 @@ SFH_DEF_HANDLER(ReportError)
 	std::string	message = sfh->readStringAtAddress(state, arguments[2]);
 	std::string	suffix = sfh->readStringAtAddress(state, arguments[3]);
 
-	sfh->executor->terminateOnError(
-		state, message, suffix.c_str(), "", true);
+	sfh->executor->terminateOnError(state, message, suffix.c_str(), "");
 }
 
 SFH_DEF_HANDLER(Merge) { std::cerr << "[Merge] Merging disabled\n"; /* nop */ }
