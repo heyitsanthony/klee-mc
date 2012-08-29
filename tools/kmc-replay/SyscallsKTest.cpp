@@ -194,6 +194,13 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 
 	/* extra thunks */
 	switch(xlate_sysnr) {
+	case SYS_arch_prctl: {
+		VexGuestAMD64State	*guest_cpu;
+		guest_cpu = (VexGuestAMD64State*)guest->getCPUState()->getStateData();
+		assert (guest->getArch()== Arch::X86_64);
+		guest_cpu->guest_FS_ZERO = sp.getArg(1);
+		break;
+	}
 	case SYS_recvfrom:
 		feedSyscallOp(sp);
 		if (sp.getArgPtr(4) != NULL)

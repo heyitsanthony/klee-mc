@@ -16,7 +16,6 @@ void TaintGroup::apply(ExecutionState* st)
 {
 	indep_byte_c = 0, dep_byte_c = 0, full_c = 0;
 	foreach (it, taint_addr_c.begin(), taint_addr_c.end()) {
-		std::cerr << "APPLYING TO " << (void*)it->first << '\n';
 		mergeAddr(st, it->first);
 	}
 
@@ -25,7 +24,6 @@ void TaintGroup::apply(ExecutionState* st)
 		<< ". Dep bytes=" << dep_byte_c
 		<< ". Full bytes=" << full_c << '\n';
 }
-
 
 bool TaintGroup::mergeAddrIndep(
 	uint64_t taint_addr,
