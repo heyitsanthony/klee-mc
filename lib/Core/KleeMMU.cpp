@@ -10,7 +10,6 @@
 #include "klee/Expr.h"
 #include "klee/Internal/Module/KInstruction.h"
 #include "klee/Internal/Module/KModule.h"
-#include "ConstraintSeedCore.h"
 
 using namespace llvm;
 
@@ -83,31 +82,10 @@ bool KleeMMU::memOpFast(ExecutionState& state, MemOp& mop)
 	return true;
 }
 
-void KleeMMU::analyzeOffset(ExecutionState& st, const MemOpRes& res)
-{
-	ConstraintSeedCore::logConstraint(
-		&exe,
-		SltExpr::create(
-			res.offset,
-			ConstantExpr::create(
-				-((int64_t)(OOBAperture)),
-				res.offset->getWidth())));
-
-	ConstraintSeedCore::logConstraint(
-		&exe,
-		SgtExpr::create(
-			res.offset,
-			ConstantExpr::create(
-				((int64_t)(res.os->size + OOBAperture)),
-				res.offset->getWidth())));
-}
-
 void KleeMMU::commitMOP(
 	ExecutionState& state, const MemOp& mop, const MemOpRes& res)
 {
 	if (res.offset->getKind() != Expr::Constant) {
-		if (ConstraintSeedCore::isActive())
-			analyzeOffset(state, res);
 		if (mop.isWrite) sym_w_c++;
 		else sym_r_c++;
 	}

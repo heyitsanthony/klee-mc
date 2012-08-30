@@ -345,11 +345,13 @@ public:
 
 			parent_f = kbr->getInst()->getParent()->getParent();
 			(*os)	<< exe->getPrettyName(parent_f)
-				<< ' ' << kbr->getTrueFollows()
-				<< ' ' << kbr->getFalseFollows()
+				<< ' ' << kbr->getTrueHits()
+				<< ' ' << kbr->getFalseHits()
 				<< ' ' << kbr->getForkHits()
 				<< ' ' << kbr->getTrueMinInst()
 				<< ' ' << kbr->getFalseMinInst()
+				<< ' ' << kbr->getTrueFollows()
+				<< ' ' << kbr->getFalseFollows()
 				<< ' ' << kbr->getSeenExprs()
 				<< '\n';
 		}

@@ -2,8 +2,8 @@
 #define SEEDEXECUTOR_H
 
 #include "klee/Common.h"
-#include "ExeStateManager.h"
-#include "ObjectState.h"
+#include "../Core/ExeStateManager.h"
+#include "../Core/ObjectState.h"
 #include "SeedCore.h"
 
 namespace klee

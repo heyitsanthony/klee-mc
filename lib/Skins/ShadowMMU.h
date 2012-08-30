@@ -1,7 +1,7 @@
 #ifndef SHADOWMMU_H
 #define SHADOWMMU_H
 
-#include "MMU.h"
+#include "../Core/MMU.h"
 #include "../Expr/ShadowAlloc.h"
 
 namespace klee

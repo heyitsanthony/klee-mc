@@ -1,6 +1,6 @@
 /* -*- mode: c++; c-basic-offset: 2; -*- */
 
-#include "../../lib/Core/SeedExecutor.h"
+#include "../../lib/Skins/SeedExecutor.h"
 #include "../../lib/Core/ExecutorBC.h"
 #include "klee/Common.h"
 #include "klee/ExecutionState.h"

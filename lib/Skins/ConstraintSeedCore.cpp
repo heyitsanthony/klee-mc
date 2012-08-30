@@ -5,13 +5,13 @@
 #include <sstream>
 #include "klee/Internal/ADT/LimitedStream.h"
 
-#include "StateSolver.h"
+#include "../Core/StateSolver.h"
 #include "../Expr/SMTParser.h"
 #include "../Solver/SMTPrinter.h"
 #include "klee/util/ExprUtil.h"
 #include "static/Sugar.h"
 #include "klee/ExecutionState.h"
-#include "Executor.h"
+#include "../Core/Executor.h"
 #include "ConstraintSeedCore.h"
 
 using namespace klee;
@@ -103,7 +103,7 @@ bool ConstraintSeedCore::isExprAdmissible(
 	foreach (it, exprs->begin(), exprs->end()) {
 		base_e = (base_e.isNull())
 			? *it
-			: OrExpr::create(*it, base_e);
+			: MK_OR(*it, base_e);
 	}
 
 	if (base_e.isNull())
@@ -120,7 +120,7 @@ bool ConstraintSeedCore::isExprAdmissible(
 
 	/* is the rule useless? */
 	if (!exe->getSolver()->solver->mustBeTrue(
-		Query(EqExpr::create(full_constr, base_e)), mbt))
+		Query(MK_EQ(full_constr, base_e)), mbt))
 		return false;
 
 	/* subsumed => useless */
@@ -187,9 +187,7 @@ public:
 		case Expr::SRem:
 			/* can't divide by zero! */
 			guards.push_back(
-				NeExpr::create(
-					ConstantExpr::create(0, e.getWidth()),
-					e.getKid(1)));
+				MK_NE(MK_CONST(0, e.getWidth()), e.getKid(1)));
 		}
 
 		return Action::skipChildren();
@@ -232,7 +230,7 @@ public:
 		}
 
 		return Action::changeTo(
-			ReadExpr::create(UpdateList(repl_arr, NULL), idx));
+			MK_READ(UpdateList(repl_arr, NULL), idx));
 	}
 
 	guardlist_ty::const_iterator beginGuards(void) const
@@ -263,17 +261,31 @@ ref<Expr> ConstraintSeedCore::getDisjunction(
 		}
 
 		foreach (it, ev->beginGuards(), ev->endGuards())
-			state_constr = AndExpr::create(*it, state_constr);
+			state_constr = MK_AND(*it, state_constr);
 		ev->clearGuards();
 
 		if (ret.isNull())
 			ret  = state_constr;
 		else
-			ret = OrExpr::create(state_constr, ret);
+			ret = MK_OR(state_constr, ret);
 
 	}
 
 	return ret;
+}
+
+static void checkNoRepeats(
+	const ReplaceArrays::arrmap_ty	&arrmap,
+	const ref<Expr>			&constr)
+{
+	std::vector<ref<Array> >	arrs;
+	std::set<std::string>		arrnames;
+	ExprUtil::findSymbolicObjectsRef(constr, arrs);
+	foreach (it3, arrs.begin(), arrs.end()) {
+		assert (arrnames.count((*it3)->name) == 0);
+		arrnames.insert((*it3)->name);
+		assert (arrmap.count((*it3)->name));
+	}
 }
 
 void ConstraintSeedCore::addSeedConstraints(
@@ -301,20 +313,10 @@ void ConstraintSeedCore::addSeedConstraints(
 		return;
 	}
 
-#if 1
-	std::vector<ref<Array> >	arrs;
-	std::set<std::string>		arrnames;
-	ExprUtil::findSymbolicObjectsRef(constr, arrs);
-	foreach (it3, arrs.begin(), arrs.end()) {
-		assert (arrnames.count((*it3)->name) == 0);
-		arrnames.insert((*it3)->name);
-		assert (arrmap.count((*it3)->name));
-	}
-#endif
-
+	checkNoRepeats(arrmap, constr);
 
 	if (!exe->addConstraint(state, constr)) {
-		std::cerr << "Could not add seed constraint! (keep going anyway)\n";
+		std::cerr << "Couldn't add seed constraint! (going anyway)\n";
 		std::cerr << "STATE DUMP:\n";
 		state.printConstraints(std::cerr);
 	}

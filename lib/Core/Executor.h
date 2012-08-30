@@ -21,7 +21,6 @@
 #include "klee/Internal/Module/KInstruction.h"
 #include "llvm/ADT/APFloat.h"
 #include "SeedInfo.h"
-#include "SeedCore.h"
 #include <vector>
 #include <string>
 #include <map>

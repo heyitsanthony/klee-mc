@@ -20,9 +20,9 @@
 #define DDTEXECUTOR_H
 
 #include "klee/Common.h"
-#include "MMU.h"
+#include "../Core/MMU.h"
 #include "klee/Internal/Module/KModule.h"
-#include "ExeStateManager.h"
+#include "../Core/ExeStateManager.h"
 #include "DDTCore.h"
 #include "../Expr/ShadowAlloc.h"
 

@@ -14,8 +14,8 @@
 
 #include <iostream>
 
-#include "Forks.h"
-#include "Executor.h"
+#include "../Core/Forks.h"
+#include "../Core/Executor.h"
 #include "../Searcher/OverrideSearcher.h"
 #include "klee/ExecutionState.h"
 #include "GDBCore.h"

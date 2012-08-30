@@ -1,7 +1,7 @@
 #ifndef SHADOWOBJECTSTATE_H
 #define SHADOWOBJECTSTATE_H
 
-#include "UnboxingObjectState.h"
+#include "../Core/UnboxingObjectState.h"
 #include "../Expr/ShadowAlloc.h"
 
 namespace klee

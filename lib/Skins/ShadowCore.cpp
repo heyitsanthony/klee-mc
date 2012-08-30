@@ -13,12 +13,12 @@
 #include <assert.h>
 #include "klee/ExecutionState.h"
 #include "klee/Internal/Module/KModule.h"
-#include "SpecialFunctionHandler.h"
-#include "Executor.h"
+#include "../Core/SpecialFunctionHandler.h"
+#include "../Core/Executor.h"
 #include "ShadowCore.h"
 #include "ShadowPass.h"
 
-#include "MMU.h"
+#include "../Core/MMU.h"
 
 namespace llvm
 {

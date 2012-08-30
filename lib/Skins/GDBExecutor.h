@@ -4,7 +4,7 @@
 #include "klee/ExecutionState.h"
 #include "../Searcher/UserSearcher.h"
 #include "GDBCore.h"
-#include "CoreStats.h"
+#include "../Core/CoreStats.h"
 
 namespace klee
 {

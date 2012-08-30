@@ -2,9 +2,10 @@
 #define TAINTMERGEEXECUTOR_H
 
 #include "klee/Common.h"
-#include "ExeStateManager.h"
-#include "TaintMergeCore.h"
+#include "../Core/ExeStateManager.h"
 #include "../Expr/ShadowAlloc.h"
+
+#include "TaintMergeCore.h"
 
 namespace klee
 {

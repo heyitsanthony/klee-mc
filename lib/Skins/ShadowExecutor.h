@@ -2,8 +2,8 @@
 #define SHADOWEXECUTOR_H
 
 #include "klee/Common.h"
-#include "ExeStateManager.h"
-#include "ObjectState.h"
+#include "../Core/ExeStateManager.h"
+#include "../Core/ObjectState.h"
 #include "ShadowCore.h"
 #include "ShadowMMU.h"
 

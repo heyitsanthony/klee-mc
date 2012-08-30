@@ -1,4 +1,4 @@
-#===-- lib/Makefile ----------------------------------------*- Makefile -*--===#
+#===-- lib/Skins/Makefile -----------------------------------*- Makefile -*--===#
 #
 #                     The KLEE Symbolic Virtual Machine
 #
@@ -7,8 +7,10 @@
 #
 #===------------------------------------------------------------------------===#
 
-LEVEL=..
+LEVEL=../..
 
-PARALLEL_DIRS=DSA  Basic Support Expr Solver Module Core Searcher Skins
+LIBRARYNAME=kleeSkins
+DONT_BUILD_RELINKED=1
+BUILD_ARCHIVE=1
 
 include $(LEVEL)/Makefile.common

@@ -47,6 +47,7 @@ public:
 };
 
 typedef std::vector<SeedInfo>::iterator SeedInfoIterator;
+typedef std::map<ExecutionState*, std::vector<SeedInfo> > SeedMapType;
 }
 
 #endif

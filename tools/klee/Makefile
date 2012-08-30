@@ -11,6 +11,7 @@ LEVEL=../..
 TOOLNAME = klee
 X_LINK_COMPONENTS = jit bitreader bitwriter ipo linker engine
 USEDLIBS= kleeSearcher.a		\
+	kleeSkins.a			\
 	kleeCore.a			\
 	kleeModule.a			\
 	kleaverSolver.a kleaverExpr.a	\

@@ -83,8 +83,6 @@ protected:
 		ExecutionState& state,
 		const MemOp& mop,
 		const MemOpRes& res);
-
-	void analyzeOffset(ExecutionState& st, const MemOpRes& res);
 private:
 	TLB			tlb;
 };

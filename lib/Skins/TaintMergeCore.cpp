@@ -7,16 +7,16 @@
 #include <llvm/LLVMContext.h>
 #include <llvm/Type.h>
 
-#include "Forks.h"
+#include "../Core/Forks.h"
 #include "TaintGroup.h"
-#include "Executor.h"
+#include "../Core/Executor.h"
 #include "klee/ExecutionState.h"
 #include "klee/Internal/Module/KModule.h"
-#include "SpecialFunctionHandler.h"
+#include "../Core/SpecialFunctionHandler.h"
 #include "ShadowObjectState.h"
 #include "../Expr/ShadowAlloc.h"
 #include "../Expr/ShadowBuilder.h"
-#include "ExeStateManager.h"
+#include "../Core/ExeStateManager.h"
 #include "../Searcher/DFSSearcher.h"
 #include "../Searcher/SearchUpdater.h"
 #include "TaintMergeCore.h"

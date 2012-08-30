@@ -1,7 +1,7 @@
 #ifndef SEEDCORE_H
 #define SEEDCORE_H
 
-#include "SeedInfo.h"
+#include "../Core/SeedInfo.h"
 #include <map>
 
 namespace klee
@@ -11,7 +11,6 @@ class Executor;
 class ObjectState;
 class MemoryObject;
 class KInstruction;
-typedef  std::map<ExecutionState*, std::vector<SeedInfo> > SeedMapType;
 class SeedCore
 {
 public:

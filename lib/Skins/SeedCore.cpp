@@ -7,9 +7,9 @@
 
 #include "static/Sugar.h"
 
-#include "CoreStats.h"
-#include "StateSolver.h"
-#include "Executor.h"
+#include "../Core/CoreStats.h"
+#include "../Core/StateSolver.h"
+#include "../Core/Executor.h"
 #include "SeedCore.h"
 
 namespace llvm
