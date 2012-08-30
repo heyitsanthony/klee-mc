@@ -20,8 +20,8 @@ private:
 		bool hasHash(Expr::Hash h) const;
 	private:
 		HashFile(MemFile* _mf);
-		MemFile		*mf;
-		const Expr::Hash *hashes;
+		MemFile			*mf;
+		const Expr::Hash 	*hashes;
 	};
 
 	class PendingFile 
@@ -29,7 +29,7 @@ private:
 	public:
 		static PendingFile* create(const char* fname);
 		virtual ~PendingFile();
-		bool hasHash(Expr::Hash h) const { return sat.count(h) != 0; }
+		bool hasHash(Expr::Hash h) const;
 		void add(Expr::Hash h);
 	private:
 	typedef std::tr1::unordered_set<Expr::Hash> pendingset_ty;

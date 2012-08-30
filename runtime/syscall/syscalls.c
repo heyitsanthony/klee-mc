@@ -158,6 +158,14 @@ static void sc_klee(void* regfile)
 				GET_ARG1_PTR(regfile),
 				GET_ARG2(regfile)));
 		break;
+	case KLEE_SYS_INDIRECT2:
+		sc_ret_v(regfile,
+			klee_indirect2(
+				GET_ARG1_PTR(regfile),
+				GET_ARG2(regfile),
+				GET_ARG3(regfile)));
+		break;
+
 	case KLEE_SYS_REPORT_ERROR:
 		klee_report_error(
 			(const char*)GET_ARG1_PTR(regfile),

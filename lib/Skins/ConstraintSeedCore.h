@@ -16,7 +16,7 @@ class ExprVisitor;
 class ConstraintSeedCore
 {
 public:
-	typedef std::list<ref<Expr> >			exprlist_ty;
+	typedef std::vector<ref<Expr> >			exprlist_ty;
 	typedef std::map<std::string, exprlist_ty*>	name2exprs_ty;
 
 	ConstraintSeedCore(Executor* _exe);
@@ -34,6 +34,11 @@ private:
 	ref<Expr> getDisjunction(
 		ExprVisitor*	ev,
 		const exprlist_ty* el) const;
+
+	ref<Expr> getConjunction(
+		ExprVisitor*	ev,
+		const exprlist_ty* el) const;
+
 	bool isExprAdmissible(const exprlist_ty* el, const ref<Expr>& e);
 
 	Executor	*exe;

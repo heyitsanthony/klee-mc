@@ -148,7 +148,9 @@ SFH_DEF_HANDLER(SCRegs)
 	/* 2. set everything that should be initialized */
 	for (unsigned int i=0; i < sz; i++) {
 		if (isSymRegByte(gs->getArch(), i)) {
-			assert (state_regctx_os->isByteConcrete(i) == false);
+			/* this can be overridden by
+			 * IVC and constraint seeding... */
+			// assert (state_regctx_os->isByteConcrete(i) == false);
 			continue;
 		}
 		/* copy it by expression */

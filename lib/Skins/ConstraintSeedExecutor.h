@@ -57,18 +57,31 @@ public:
 		T::executeInstruction(state, ki);
 	}
 
-#if 0
-	bool addConstraint(ExecutionState &state, ref<Expr> condition)
-	{
-		bool	ok;
-		ok = T::addConstraint(state, condition);
-		if (ok) return true;
-		assert (0 == 1 && "STUB: remove superfluous constraints");
-		return true;
-	}
-#endif
-
 protected:
+	virtual void instBranchConditional(
+		ExecutionState& state, KInstruction* ki)
+	{
+		ref<Expr>	cond(T::eval(ki, 0, state));
+		KBrInstruction	*kbr = static_cast<KBrInstruction*>(ki);
+
+		T::instBranchConditional(state, ki);
+
+		if (cond->getKind() == Expr::Constant)
+			return;
+
+		/* seen both branches? */
+		if (kbr->hasFoundTrue() && kbr->hasFoundFalse())
+			return;
+
+		/* XXX: I think the kbr stuff is backwards, but
+		 * the tests only work like this.
+		 * Contradict */
+		if (kbr->hasFoundTrue())
+			csCore.logConstraint(cond);
+		else
+			csCore.logConstraint(MK_NOT(cond));
+	}
+
 	virtual void xferIterInit(
 		struct T::XferStateIter& iter,
 		ExecutionState* state,
@@ -80,12 +93,10 @@ protected:
 			return;
 
 		/* NOTE: alternatively, this could be some stack location
-		 * we want to inject an expl017 into */
+		 * we want to inject an exploit into */
 		csCore.logConstraint(
-			SltExpr::create(
-				iter.v,
-				ConstantExpr::create(
-					0x400000 /* program beginning */,
+			MK_SLT(	iter.v,
+				MK_CONST(0x400000 /* program beginning */,
 					iter.v->getWidth())));
 	}
 

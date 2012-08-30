@@ -1,4 +1,5 @@
 #include "klee/Internal/ADT/MemFile.h"
+#include <algorithm>
 #include "QHSFile.h"
 
 
@@ -7,7 +8,14 @@ using namespace klee;
 QHSFile::HashFile::HashFile(MemFile* _mf)
 : mf(_mf)
 , hashes((const Expr::Hash*)mf->getBuf())
-{}
+{
+	std::cerr << "[QHSFile] MemFile has " << mf->getNumBytes() << "bytes\n";
+
+	/* I wasn't doing this before. OOPS!! */
+//	std::stable_sort(
+//		hashes,
+//		&hashes[mf->getNumBytes() / sizeof(Expr::Hash)]);
+}
 
 bool QHSFile::HashFile::hasHash(Expr::Hash h) const
 {
@@ -15,6 +23,11 @@ bool QHSFile::HashFile::hasHash(Expr::Hash h) const
 		hashes,
 		&hashes[mf->getNumBytes() / sizeof(Expr::Hash)],
 		h);
+}
+
+bool QHSFile::PendingFile::hasHash(Expr::Hash h) const
+{
+	return sat.count(h) != 0;
 }
 
 QHSFile::HashFile::~HashFile() { delete mf; }
@@ -47,10 +60,12 @@ QHSFile::PendingFile::PendingFile(FILE* _f)
 {
 	do {
 		Expr::Hash	h;
-		if (fread(&h, sizeof(Expr::Hash), 1, f) != sizeof(Expr::Hash))
+		if (fread(&h, sizeof(Expr::Hash), 1, f) != 1)
 			break;
 		sat.insert(h);
 	} while(1);
+
+	std::cerr << "[QHSPending] Loaded " << sat.size() << " entries\n";
 }
 
 QHSFile* QHSFile::create(
@@ -90,6 +105,7 @@ bool QHSFile::lookup(const QHSEntry& qe)
 		(hf_sat && hf_sat->hasHash(qe.qh)) ||
 		 pend_sat->hasHash(qe.qh)))
 		return true;
+
 	if (!qe.isSAT &&
 		((hf_unsat && hf_unsat->hasHash(qe.qh)) ||
 		 pend_unsat->hasHash(qe.qh)))

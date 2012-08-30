@@ -63,6 +63,7 @@ SFH_HANDLER(Yield)
 SFH_HANDLER(IsShadowed)
 SFH_HANDLER(Indirect0)
 SFH_HANDLER(Indirect1)
+SFH_HANDLER(Indirect2)
 SFH_HANDLER(ForkEq)
 SFH_HANDLER(StackDepth)
 #define DEF_SFH_MMU(x)			\
@@ -123,6 +124,7 @@ static const SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   add("klee_stack_depth", StackDepth, true),
   add("klee_indirect0", Indirect0, true),
   add("klee_indirect1", Indirect1, true),
+  add("klee_indirect2", Indirect2, true),
   add("klee_is_shadowed", IsShadowed, true),
 
 #define DEF_WIDE(x)	\
@@ -256,17 +258,18 @@ void SpecialFunctionHandler::handleByName(
 		return;
 	}
 
-	handle(state, f, target, args);
+	handle(state, f, target, args, true);
 }
 
 bool SpecialFunctionHandler::handle(
 	ExecutionState &state,
 	Function *f,
 	KInstruction *target,
-	std::vector< ref<Expr> > &arguments)
+	std::vector< ref<Expr> > &arguments,
+	bool insert_ret_vals)
 {
 	SFHandler		*h;
-	bool			hasReturnValue;
+	bool			hasReturnValue, missing_ret_val;
 	handlers_ty::iterator	it(handlers.find(f));
 
 	if (it == handlers.end()) {
@@ -280,8 +283,8 @@ bool SpecialFunctionHandler::handle(
 	h = it->second.first;
 	hasReturnValue = it->second.second;
 
-	// FIXME: Check this... add test?
-	if (!hasReturnValue && !target->getInst()->use_empty()) {
+	missing_ret_val = !hasReturnValue && !target->getInst()->use_empty();
+	if (missing_ret_val && !insert_ret_vals) {
 		executor->terminateOnExecError(
 			state,
 			"expected return value from void special function");
@@ -289,6 +292,11 @@ bool SpecialFunctionHandler::handle(
 	}
 
 	h->handle(state, target, arguments);
+
+	if (missing_ret_val && insert_ret_vals) {
+		state.bindLocal(target, MK_CONST(0, 64));
+	}
+
 	return true;
 }
 
@@ -898,6 +906,15 @@ SFH_DEF_HANDLER(Indirect1)
 	std::vector<ref<Expr> >	args;
 	std::string	fname(sfh->readStringAtAddress(state, arguments[0]));
 	args.push_back(arguments[1]);
+	sfh->handleByName(state, fname, target, args);
+}
+
+SFH_DEF_HANDLER(Indirect2)
+{
+	std::vector<ref<Expr> >	args;
+	std::string	fname(sfh->readStringAtAddress(state, arguments[0]));
+	args.push_back(arguments[1]);
+	args.push_back(arguments[2]);
 	sfh->handleByName(state, fname, target, args);
 }
 

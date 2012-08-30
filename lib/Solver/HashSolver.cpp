@@ -156,7 +156,6 @@ bool HashSolver::lookup(const Query& q, bool isSAT)
 	return false;
 }
 
-
 bool HashSolver::computeSat(const Query& q)
 {
 	cur_hash = qhash->hash(q);
@@ -300,11 +299,12 @@ HashSolver::HashSolver(Solver* s, QueryHash* in_qhash)
 , cur_q(NULL)
 {
 	if (HCacheSink == false) {
-		if (HCacheFDir.size())
+		if (HCacheFDir.size()) {
+			std::cerr << "[HashSolver] Using sink file\n";
 			qstore = QHSFile::create(
 				HCacheFDir.c_str(),
 				HCachePendingDir.c_str());
-		else
+		} else
 			qstore = QHSDir::create();
 	} else {
 		assert (HCacheFDir.size() && HCacheDir.size());

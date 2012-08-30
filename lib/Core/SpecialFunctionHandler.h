@@ -94,7 +94,8 @@ public:
 		ExecutionState	&state,
 		llvm::Function	*f,
 		KInstruction	*target,
-		std::vector< ref<Expr> > &arguments);
+		std::vector< ref<Expr> > &arguments,
+		bool insert_ret_vals = false);
 
 	void handleByName(
 		ExecutionState		&state,

@@ -26,6 +26,7 @@
 #define KLEE_SYS_IS_SHADOWED	9	/* klee_is_shadowed */
 #define KLEE_SYS_INDIRECT0	10	/* klee_indirect */
 #define KLEE_SYS_INDIRECT1	11
+#define KLEE_SYS_INDIRECT2	12
 
 #define ksys_report_error(x,y,z,w)	\
 	syscall(SYS_klee, KLEE_SYS_REPORT_ERROR, x, y, z, w)
@@ -46,6 +47,8 @@
 
 #define ksys_indirect0(x)	syscall(SYS_klee, KLEE_SYS_INDIRECT0, x)
 #define ksys_indirect1(x,y)	syscall(SYS_klee, KLEE_SYS_INDIRECT1, x, y)
+#define ksys_indirect2(x,y,z)	syscall(SYS_klee, KLEE_SYS_INDIRECT2, x, y, z)
+#define ksys_assume_eq(x,y)	ksys_indirect2("klee_assume_eq", x, y)
 
 #define ksys_get_value(n)	n
 #define ksys_is_active()	(ksys_is_sym(0) != -1)
@@ -189,6 +192,7 @@ extern "C" {
 
   uint64_t klee_indirect0(const char* s);
   uint64_t klee_indirect1(const char* s, uint64_t v0);
+  uint64_t klee_indirect2(const char* s, uint64_t v0, uint64_t v1);
 #ifdef __cplusplus
 }
 #endif

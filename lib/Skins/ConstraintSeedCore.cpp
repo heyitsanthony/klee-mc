@@ -21,7 +21,7 @@ namespace
 	llvm::cl::opt<bool>
 	ConstraintSolveSeeds(
 		"constrseed-solve",
-		llvm::cl::desc("Solve for out of bound constraints."),
+		llvm::cl::desc("Save constraints from stuck branches."),
 		llvm::cl::init(false));
 
 	llvm::cl::opt<std::string>
@@ -70,26 +70,29 @@ bool ConstraintSeedCore::loadConstraintFile(const std::string& path)
 	ref<Expr>			e;
 	expr::SMTParser			*p;
 	std::vector<ref<Array> >	arrs;
+	bool				ret = false;
 
 	p = expr::SMTParser::Parse(path);
 	if (p == NULL)
 		return false;
 
 	e = p->satQuery;
-	if (e.isNull())
-		return false;
+	if (e.isNull()) goto done;
 
 	ExprUtil::findSymbolicObjectsRef(e, arrs);
-	if (arrs.empty())
-		return false;
+	if (arrs.empty()) goto done;
 
 	/* add expression for all labels */
-	e = NotExpr::create(e);
-	std::cerr << "HI!! " << e << '\n';
+	// NOTE: e should not be 'NOTed' because the constraints passed in
+	// must be TRUE to find new branches.
+	// e = MK_NOT(e);
 	foreach (it, arrs.begin(), arrs.end())
 		addExprToLabel((*it)->name, e);
 
-	return true;
+	ret = true;
+done:
+	delete p;
+	return ret;
 }
 
 bool ConstraintSeedCore::isExprAdmissible(
@@ -110,7 +113,7 @@ bool ConstraintSeedCore::isExprAdmissible(
 		return true;
 
 	/* try adding the expressoin, check for validity */
-	full_constr = OrExpr::create(e, base_e);
+	full_constr = MK_OR(e, base_e);
 	if (!exe->getSolver()->solver->mustBeTrue(Query(full_constr), mbt))
 		return false;
 
@@ -126,7 +129,6 @@ bool ConstraintSeedCore::isExprAdmissible(
 	/* subsumed => useless */
 	if (mbt == true)
 		return false;
-
 
 	return true;
 }
@@ -244,6 +246,66 @@ private:
 	bool			goodExpr;
 };
 
+ref<Expr> ConstraintSeedCore::getConjunction(
+	ExprVisitor* evv, const exprlist_ty* exprs) const
+{
+	ReplaceArrays	*ev = dynamic_cast<ReplaceArrays*>(evv);
+	ref<Expr>	ret(NULL);
+	unsigned	expr_c;
+	unsigned	exprs_used_c;
+	int		*idxs;
+
+	expr_c = exprs->size();
+	idxs = new int[expr_c];
+
+	for (unsigned i = 0; i < expr_c; i++) idxs[i] = i;
+	for (unsigned i = 0; i < expr_c; i++) {
+		int	t, r;
+		r = rand() % expr_c;
+		t = idxs[i];
+		idxs[i] = idxs[r];
+		idxs[r] = t;
+	}
+
+	exprs_used_c = 0;
+	for (unsigned i = 0; i < expr_c /* && exprs_used_c < 3 */; i++) {
+		ref<Expr>	seed_constr((*exprs)[idxs[i]]);
+		ref<Expr>	state_constr, tmp_ret;
+		bool		mbt;
+
+		state_constr = ev->apply(seed_constr);
+		if (state_constr.isNull()) {
+			std::cerr << "[CSCore] Couldn't unify constraint\n";
+			continue;
+		}
+
+		foreach (it, ev->beginGuards(), ev->endGuards())
+			state_constr = MK_AND(*it, state_constr);
+		ev->clearGuards();
+
+		if (ret.isNull()) {
+			ret  = state_constr;
+			exprs_used_c++;
+			continue;
+		}
+
+		tmp_ret  = MK_AND(state_constr, ret);
+		if (!exe->getSolver()->solver->mayBeTrue(Query(tmp_ret), mbt))
+			break;
+
+		if (mbt == false)
+			break;
+
+		exprs_used_c++;
+		ret = tmp_ret;
+	}
+
+	delete [] idxs;
+
+	std::cerr << "[CSCore] Used " << exprs_used_c << " expressions.\n";
+	return ret;
+}
+
 ref<Expr> ConstraintSeedCore::getDisjunction(
 	ExprVisitor* evv, const exprlist_ty* exprs) const
 {
@@ -256,7 +318,7 @@ ref<Expr> ConstraintSeedCore::getDisjunction(
 
 		state_constr = ev->apply(seed_constr);
 		if (state_constr.isNull()) {
-			std::cerr << "Could not unify the seed constraint!\n";
+			std::cerr << "[CSCore] Couldn't unify constraint\n";
 			continue;
 		}
 
@@ -293,6 +355,7 @@ void ConstraintSeedCore::addSeedConstraints(
 {
 	name2exprs_ty::const_iterator	it;
 	ref<Expr>			constr(NULL);
+	bool				mbt;
 
 	it = name2exprs.find(arr->name);
 	if (it == name2exprs.end())
@@ -307,7 +370,8 @@ void ConstraintSeedCore::addSeedConstraints(
 	}
 
 	std::cerr << "===================\n";
-	constr = getDisjunction(&ra, it->second);
+//	constr = getDisjunction(&ra, it->second);
+	constr = getConjunction(&ra, it->second);
 	if (constr.isNull()) {
 		std::cerr << "NULL CONSTR??\n";
 		return;
@@ -315,18 +379,24 @@ void ConstraintSeedCore::addSeedConstraints(
 
 	checkNoRepeats(arrmap, constr);
 
+	if (!exe->getSolver()->mayBeTrue(state, constr, mbt) || !mbt) {
+		std::cerr << "[CSCore] Seed/State Contradiction.\n";
+		return;
+	}
+
 	if (!exe->addConstraint(state, constr)) {
 		std::cerr << "Couldn't add seed constraint! (going anyway)\n";
-		std::cerr << "STATE DUMP:\n";
 		state.printConstraints(std::cerr);
 	}
+
+
 	std::cerr << ">>>>>>>>>>>>LOLLLLLLL<<<<<<<<<\n" << arr->name << '\n';;
 	std::cerr << "ADDED CONSTRS: " << constr << '\n';
 	std::cerr << "===================\n";
 }
 
 #define MAX_PTR_EXPR_BYTES	(1024*100)
-static void dumpOffset(const ref<Expr>& e)
+static void dumpSeedCondition(const ref<Expr>& e)
 {
 	std::stringstream	ss;
 	ss << ConstraintSeedDir << "/off." << (void*)e->hash() << ".smt";
@@ -349,12 +419,16 @@ bool ConstraintSeedCore::logConstraint(Executor* ex, const ref<Expr> e)
 		return false;
 
 	hashes.insert(e->hash());
-	if (!ex->getSolver()->solver->mayBeTrue(Query(e), mbt))
+	if (!ex->getSolver()->solver->mayBeTrue(Query(e), mbt)) {
+		std::cerr << "[CSCore] Ignoring bad solver call.\n";
 		return false;
+	}
 
-	if (mbt == false)
+	if (mbt == false) {
+		std::cerr << "[CSCore] Ignoring tautology\n";
 		return false;
+	}
 
-	dumpOffset(e);
+	dumpSeedCondition(e);
 	return true;
 }

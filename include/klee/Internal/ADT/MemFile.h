@@ -21,7 +21,7 @@ public:
 	const void* getBuf(void) const { return cache_buf; }
 	unsigned getNumBytes(void) const { return cache_bytes; }
 
-	static MemFile* create(const char* fname)
+	static MemFile* createMode(const char* fname, int mode)
 	{
 		struct stat	s;
 		int		fd;
@@ -30,10 +30,10 @@ public:
 		if (stat(fname, &s) != 0) return NULL;
 		if (s.st_size == 0) return NULL;
 
-		fd = open(fname, O_RDONLY);
+		fd = open(fname, (mode & PROT_WRITE) ? O_RDWR : O_RDONLY);
 		if (fd == -1) return NULL;
 
-		buf = mmap(NULL, s.st_size, PROT_READ, MAP_SHARED, fd, 0);
+		buf = mmap(NULL, s.st_size, mode, MAP_SHARED, fd, 0);
 		if (buf == NULL) {
 			close(fd);
 			return NULL;
@@ -41,6 +41,13 @@ public:
 
 		return new MemFile(buf, s.st_size, fd);
 	}
+
+	static MemFile* create(const char* fname)
+	{ return createMode(fname, PROT_READ); }
+
+	static MemFile* createWr(const char* fname)
+	{ return createMode(fname, PROT_READ | PROT_WRITE); }
+
 
 protected:
 	MemFile(void* _cbuf, unsigned _cbytes, int _fd)
