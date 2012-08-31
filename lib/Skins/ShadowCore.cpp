@@ -150,7 +150,7 @@ SFH_DEF_HANDLER(TaintLoad)
 
 	sa->startShadow(shadow_tag);
 
-	tainted_expr = old_expr->realloc();
+	tainted_expr = old_expr->reallocTopLevel();
 
 	assert (ShadowAlloc::getExpr(tainted_expr).get());
 

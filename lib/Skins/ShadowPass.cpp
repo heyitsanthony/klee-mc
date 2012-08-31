@@ -120,8 +120,7 @@ bool ShadowPass::runOnFunction(llvm::Function& f)
 			was_changed = true;
 	}
 
-	if (was_changed)
-		f.dump();
+//	if (was_changed) f.dump();
 
 	return was_changed;
 }

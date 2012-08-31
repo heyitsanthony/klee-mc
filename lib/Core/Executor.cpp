@@ -284,10 +284,7 @@ bool Executor::addConstraint(ExecutionState &state, ref<Expr> condition)
 		return false;
 	}
 
-	if (ivcEnabled) {
-		doImpliedValueConcretization(
-			state, condition, MK_CONST(1, Expr::Bool));
-	}
+	doImpliedValueConcretization(state, condition, MK_CONST(1, Expr::Bool));
 
 	if (ChkConstraints) {
 		bool	mustBeTrue, ok;
@@ -2459,6 +2456,9 @@ void Executor::doImpliedValueConcretization(
 	ref<Expr> e,
 	ref<ConstantExpr> value)
 {
+	if (ivcEnabled == false)
+		return;
+
 	ImpliedValueList results;
 
 	if (DebugCheckForImpliedValues)

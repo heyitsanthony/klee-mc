@@ -2,6 +2,7 @@
 // RUN: klee-mc -pipe-solver -use-sym-mmu=true -sym-mmu-type=fork -shadow-func-file=../bogus.txt -use-taint - ./%t1 2>%t1.err >%t1.out
 // RUN: klee-mc -pipe-solver -use-sym-mmu=true -sym-mmu-type=forkall -shadow-func-file=../bogus.txt -use-taint - ./%t1 2>%t1.err >%t1.out
 // RUN: klee-mc -pipe-solver -use-sym-mmu=true -sym-mmu-type=uniqptr -shadow-func-file=../bogus.txt -use-taint - ./%t1 2>%t1.err >%t1.out
+// RUN: klee-mc -pipe-solver -use-sym-mmu=true -sym-mmu-type=objwide -shadow-func-file=../bogus.txt -use-taint - ./%t1 2>%t1.err >%t1.out
 // RUN: ls klee-last | not grep err
 
 #include "klee/klee.h"

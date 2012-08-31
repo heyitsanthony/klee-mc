@@ -62,7 +62,7 @@ ref<Expr> DDTCore::mixLeft(const ref<Expr>& lhs, const ref<Expr>& rhs)
 	}
 
 	PUSH_SHADOW(l_sv)
-	ret = lhs->realloc();
+	ret = lhs->reallocTopLevel();
 	POP_SHADOW
 
 	return ret;

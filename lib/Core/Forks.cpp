@@ -251,6 +251,21 @@ Executor::StatePair Forks::forkUnconditional(
 	return lastFork;
 }
 
+void Forks::ForkInfo::dump(std::ostream& os) const
+{
+	os << "ForkInfo: {\n";
+	for (unsigned i = 0; i < N; i++) {
+		if (conditions[i].isNull())
+			continue;
+		os << "COND[" << i << "]: "  << conditions[i] << '\n';
+	}
+
+	for (unsigned i = 0; i < res.size(); i++)
+		os << "res[" << i << "]: " << res[i] << '\n';
+
+	os << '\n';
+}
+
 bool Forks::forkFollowReplay(ExecutionState& current, struct ForkInfo& fi)
 {
 	// Replaying non-internal fork; read value from replayBranchIterator
@@ -283,13 +298,13 @@ bool Forks::forkFollowReplay(ExecutionState& current, struct ForkInfo& fi)
 		ss << i;
 		first = false;
 	}
-	ss << ")";
-	exe.terminateOnError(current, ss.str().c_str(), "branch.err");
+	ss << ")\n";
 
-	for (unsigned i = 0; i < fi.N; i++) {
-		if (fi.conditions[i].isNull())
-			continue;
-	}
+	fi.dump(ss);
+
+	Query	q(current.constraints, fi.conditions[1]);
+	ss	<< "Query hash: " << (void*)q.hash() << '\n';
+	exe.terminateOnError(current, ss.str().c_str(), "branch.err");
 
 	klee_warning("hit invalid branch in replay path mode");
 	return false;
@@ -678,6 +693,42 @@ bool Forks::hasSuccessor(const ref<Expr>& cond) const
 	return hasSucc.count(e->hash());
 }
 
+bool Forks::addConstraint(struct ForkInfo& fi, unsigned condIndex)
+{
+	ExecutionState	*curState;
+
+	curState = fi.resStates[condIndex];
+
+	if (curState->isCompact())
+		return true;
+
+	if (fi.feasibleTargets == 0)
+		return true;
+
+	if (fi.feasibleTargets > 1) {
+		if (exe.addConstraint(*curState, fi.conditions[condIndex]))
+			return true;
+
+		exe.terminateEarly(*curState, "branch contradiction");
+		fi.resStates[condIndex] = NULL;
+		fi.res[condIndex] = false;
+		return false;
+	}
+
+	assert (fi.feasibleTargets == 1);
+	if (fi.conditions[1]->getKind() == Expr::Constant)
+		return true;
+
+	/* even if we can ignore the constraint because it is
+	 * implied by the former constraints, IVC can help if
+	 * the constraint is more precise
+	 * (e.g.  3<x<5 vs x==4) */
+	ref<Expr>	cond(fi.conditions[1]);
+	if (condIndex == 0) cond = Expr::createIsZero(cond);
+
+	exe.doImpliedValueConcretization(*curState, cond, MK_CONST(1, 1));
+	return true;
+}
 
 void Forks::constrainFork(
 	ExecutionState& current,
@@ -693,18 +744,8 @@ void Forks::constrainFork(
 	assert(curState);
 
 	// Add path constraint
-	if (!curState->isCompact() && fi.feasibleTargets > 1) {
-		bool	constraint_added;
-
-		constraint_added = exe.addConstraint(
-			*curState, fi.conditions[condIndex]);
-		if (constraint_added == false) {
-			exe.terminateEarly(*curState, "branch contradiction");
-			fi.resStates[condIndex] = NULL;
-			fi.res[condIndex] = false;
-			return;
-		}
-	}
+	if (!addConstraint(fi, condIndex))
+		return;
 
 	// XXX - even if the constraint is provable one way or the other we
 	// can probably benefit by adding this constraint and allowing it to
@@ -713,6 +754,7 @@ void Forks::constrainFork(
 	// the value it has been fixed at, we should take this as a nice
 	// hint to just use the single constraint instead of all the binary
 	// search ones. If that makes sense.
+
 
 	// Kinda gross, do we even really still want this option?
 	if (MaxDepth && MaxDepth <= curState->depth) {

@@ -34,6 +34,8 @@ public:
 		, forkCompact(false)
 		{}
 
+		void dump(std::ostream& os) const;
+
 		Executor::StateVector	resStates;
 		std::vector<bool>	res;
 		ref<Expr>		*conditions;
@@ -96,6 +98,8 @@ private:
 	bool forkSetupNoSeeding(ExecutionState& current, struct ForkInfo& fi);
 	bool forkFollowReplay(ExecutionState& current, struct ForkInfo& fi);
 	void forkSetupSeeding(ExecutionState& current, struct ForkInfo& fi);
+
+	bool addConstraint(struct ForkInfo& fi, unsigned condIndex);
 
 	/* Assigns feasibility for forking condition(s) into fi.res[cond]
 	* NOTE: it is the caller's responsibility to terminate the current state

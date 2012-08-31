@@ -364,8 +364,6 @@ private:
 	ObjectState* makeSymbolicReplay(
 		ExecutionState& state, const MemoryObject* mo, ref<Expr> len);
 
-	void doImpliedValueConcretization(
-		ExecutionState &state, ref<Expr> e, ref<ConstantExpr> v);
 	bool getSatAssignment(const ExecutionState& st, Assignment& a);
 
 	void initTimers();
@@ -404,6 +402,8 @@ public:
 		llvm::Function *f,
 		std::vector< ref<Expr> > &arguments);
 
+	void doImpliedValueConcretization(
+		ExecutionState &state, ref<Expr> e, ref<ConstantExpr> v);
 
 	/// Add the given (boolean) condition as a constraint on state. This
 	/// function is a wrapper around the state's addConstraint function

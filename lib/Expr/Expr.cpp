@@ -104,6 +104,22 @@ ref<Expr> Expr::realloc(void) const
 	return r.rebuild(this);
 }
 
+ref<Expr> Expr::reallocTopLevel(void) const
+{
+	ref<Expr>	kids[4];
+
+	if (getKind() == Constant) {
+		return ConstantExpr::alloc(
+			static_cast<const ConstantExpr*>(this)->getAPValue());
+	}
+
+	assert (getNumKids() <= 4);
+	for (unsigned i = 0; i < getNumKids(); i++)
+		kids[i] = getKid(i);
+
+	return rebuild(kids);
+}
+
 static ref<Expr> getTempReadBytes(
 	const ref<Array> &array, unsigned bytes, unsigned arr_off)
 {

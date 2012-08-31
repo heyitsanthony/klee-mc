@@ -14,25 +14,31 @@ public:
 
 	virtual bool exeMemOp(ExecutionState &state, MemOp& mop)
 	{
+		ShadowAlloc	*sa = NULL;
 		bool		ok;
 
 		ok = base_mmu->exeMemOp(state, mop);
+		if (!ok) return ok;
 
-		if (	ok && 
-			mop.address->getKind() != Expr::Constant &&
-			!mop.isWrite)
-		{
-			ShadowAlloc	*sa = NULL;
-			sa = ShadowAlloc::get();
-			sa->startShadow(ShadowValExpr::create(MK_CONST(1234567,32)));
-			ref<Expr>	s_e(state.stack.readLocal(mop.target));
-			s_e = s_e->realloc();
-			assert (s_e->isShadowed());
-			state.bindLocal(mop.target, s_e);
+		if (mop.address->getKind() == Expr::Constant)
+			return ok;
 
-			assert (state.stack.readLocal(mop.target)->isShadowed());
-			sa->stopShadow();
-		}
+		if (mop.isWrite)
+			return ok;
+
+		sa = ShadowAlloc::get();
+		sa->startShadow(ShadowValExpr::create(MK_CONST(1234567,32)));
+
+		ref<Expr>	s_e(state.stack.readLocal(mop.target));
+
+		/* XXX: why can't it just be top level? */
+		// s_e = s_e->reallocTopLevel();
+		s_e = s_e->realloc();
+		assert (s_e->isShadowed());
+		state.bindLocal(mop.target, s_e);
+
+		assert (state.stack.readLocal(mop.target)->isShadowed());
+		sa->stopShadow();
 
 		return ok;
 	}

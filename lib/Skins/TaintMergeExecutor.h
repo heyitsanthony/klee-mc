@@ -117,7 +117,7 @@ protected:
 			e = T::eval(ki, idx, st);
 			/* do not over shadow */
 			if (e->isShadowed() == false)
-				e = e->realloc();
+				e = e->reallocTopLevel();
 		} else {
 			e = T::eval(ki, idx, st);
 			if (e->isShadowed() == true) {

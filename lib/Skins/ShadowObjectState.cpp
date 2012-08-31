@@ -94,8 +94,8 @@ void ShadowObjectState::taint(unsigned offset, ref<ShadowVal>& v)
 {
 	PUSH_SHADOW(v)
 	ref<Expr>	e(read8(offset));
-	/* XXX: would like to be able to do tag combining here */
-	e = e->realloc();
+	/* XXX: would like to be able to do tag mixing here */
+	e = e->reallocTopLevel();
 	write8(offset, e);
 	POP_SHADOW
 }

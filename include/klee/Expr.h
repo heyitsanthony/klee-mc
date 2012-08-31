@@ -268,6 +268,7 @@ public:
   virtual ref<Expr> rebuild(ref<Expr> kids[/* getNumKids() */]) const = 0;
 
   // reconstruct expression from bottom up
+  ref<Expr> reallocTopLevel(void) const;
   ref<Expr> rebuild(void) const;
   ref<Expr> realloc(void) const;
 
