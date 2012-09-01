@@ -29,6 +29,8 @@
 using namespace klee;
 using namespace llvm;
 
+#define GCTX	getGlobalContext()
+
 namespace {
   cl::opt<bool> InitEnv(
 	"init-env",
@@ -272,7 +274,7 @@ static llvm::Module *linkWithUclibc(llvm::Module *mainModule)
 
 static void uclibc_forceImports(llvm::Module* mainModule)
 {
-    llvm::Type *i8Ty = Type::getInt8Ty(getGlobalContext());
+    llvm::Type *i8Ty = Type::getInt8Ty(GCTX);
     mainModule->getOrInsertFunction(
       "realpath",
       PointerType::getUnqual(i8Ty),
@@ -285,13 +287,13 @@ static void uclibc_forceImports(llvm::Module* mainModule)
       NULL);
     mainModule->getOrInsertFunction(
       "__fgetc_unlocked",
-      Type::getInt32Ty(getGlobalContext()),
+      Type::getInt32Ty(GCTX),
       PointerType::getUnqual(i8Ty),
       NULL);
     mainModule->getOrInsertFunction(
       "__fputc_unlocked",
-      Type::getInt32Ty(getGlobalContext()),
-      Type::getInt32Ty(getGlobalContext()),
+      Type::getInt32Ty(GCTX),
+      Type::getInt32Ty(GCTX),
       PointerType::getUnqual(i8Ty),
       NULL);
 }
@@ -371,12 +373,12 @@ static void uclibc_setEntry(llvm::Module* mainModule)
 	fArgs.push_back(ft->getParamType(2));
 	stub = Function::Create(
 		FunctionType::get(
-			Type::getInt32Ty(getGlobalContext()), fArgs, false),
+			Type::getInt32Ty(GCTX), fArgs, false),
 			GlobalVariable::ExternalLinkage,
 			"main",
 			mainModule);
 
-	bb = BasicBlock::Create(getGlobalContext(), "entry", stub);
+	bb = BasicBlock::Create(GCTX, "entry", stub);
 
 	/* mainPtr, argc, argv, app_init, app_fini, rtld_fini, stack_end */
 	args.push_back(
@@ -391,7 +393,7 @@ static void uclibc_setEntry(llvm::Module* mainModule)
 	args.push_back(Constant::getNullValue(ft->getParamType(6)));
 	CallInst::Create(uclibcMainFn, args, "", bb);
 
-	new UnreachableInst(getGlobalContext(), bb);
+	new UnreachableInst(GCTX, bb);
 }
 
 static llvm::Module *linkWithUclibc(llvm::Module *mainModule)
@@ -401,7 +403,7 @@ static llvm::Module *linkWithUclibc(llvm::Module *mainModule)
 	// force import of __uClibc_main
 	mainModule->getOrInsertFunction(
 		"__uClibc_main",
-		FunctionType::get(Type::getVoidTy(getGlobalContext()),
+		FunctionType::get(Type::getVoidTy(GCTX),
 		std::vector<Type*>(),
 		true));
 
@@ -494,15 +496,15 @@ static int initEnv(Module *mainModule)
   assert(!baseMainFn->isVarArg() && "main has variable arguments");
 
   std::vector<Type*> mainArgs;
-  mainArgs.push_back(llvm::TypeBuilder<int,false>::get(getGlobalContext()));
-  mainArgs.push_back(llvm::TypeBuilder<char**,false>::get(getGlobalContext()));
-  mainArgs.push_back(llvm::TypeBuilder<char**,false>::get(getGlobalContext()));
+  mainArgs.push_back(llvm::TypeBuilder<int,false>::get(GCTX));
+  mainArgs.push_back(llvm::TypeBuilder<char**,false>::get(GCTX));
+  mainArgs.push_back(llvm::TypeBuilder<char**,false>::get(GCTX));
 
   // Create a new main() that has standard argc/argv to call the original main
   Function *mainFn =
-    Function::Create(FunctionType::get(baseMainFn->getReturnType(), mainArgs,
-                                       false),
-                     llvm::GlobalValue::ExternalLinkage, "main", mainModule);
+    Function::Create(
+    	FunctionType::get(baseMainFn->getReturnType(), mainArgs, false),
+	llvm::GlobalValue::ExternalLinkage, "main", mainModule);
   assert(mainFn);
 
   // set arg names
@@ -517,27 +519,23 @@ static int initEnv(Module *mainModule)
   oldArgv->setName("argv");
   oldEnvp->setName("envp");
 
-  BasicBlock *dBB = BasicBlock::Create(getGlobalContext(), "entry", mainFn);
+  BasicBlock *dBB = BasicBlock::Create(GCTX, "entry", mainFn);
 
-  AllocaInst* argcPtr =
-    new AllocaInst(oldArgc->getType(), "argcPtr", dBB);
-  AllocaInst* argvPtr =
-    new AllocaInst(oldArgv->getType(), "argvPtr", dBB);
+  AllocaInst* argcPtr = new AllocaInst(oldArgc->getType(), "argcPtr", dBB);
+  AllocaInst* argvPtr = new AllocaInst(oldArgv->getType(), "argvPtr", dBB);
 
   new StoreInst(oldArgc, argcPtr, dBB);
   new StoreInst(oldArgv, argvPtr, dBB);
 
   /* Insert void klee_init_env(int* argc, char*** argv) */
   std::vector<Type*> params;
-  params.push_back(Type::getInt32Ty(getGlobalContext()));
-  params.push_back(Type::getInt32Ty(getGlobalContext()));
+  params.push_back(Type::getInt32Ty(GCTX));
+  params.push_back(Type::getInt32Ty(GCTX));
   Function* initEnvFn =
     cast<Function>(mainModule->getOrInsertFunction(
       "klee_init_env",
-      Type::getVoidTy(getGlobalContext()),
-      argcPtr->getType(),
-      argvPtr->getType(),
-      NULL));
+      Type::getVoidTy(GCTX),
+      argcPtr->getType(), argvPtr->getType(), NULL));
 
   assert(initEnvFn);
   std::vector<Value*> args;
@@ -560,7 +558,7 @@ static int initEnv(Module *mainModule)
 
   CallInst *mainRet = CallInst::Create(baseMainFn, baseMainArgs, "", dBB);
 
-  ReturnInst::Create(getGlobalContext(), mainRet, dBB);
+  ReturnInst::Create(GCTX, mainRet, dBB);
 
   return 0;
 }
@@ -574,8 +572,8 @@ Interpreter::ModuleOptions getMainModule(Module* &mainModule)
 
 	mainModule = 0;
 	if (Buffer) {
-		//mainModule = getLazyBitcodeModule(Buffer.get(), getGlobalContext(), &ErrorMsg);
-		mainModule = ParseBitcodeFile(Buffer.get(), getGlobalContext(), &ErrorMsg);
+		//mainModule = getLazyBitcodeModule(Buffer.get(), GCTX, &ErrorMsg);
+		mainModule = ParseBitcodeFile(Buffer.get(), GCTX, &ErrorMsg);
 		if (!mainModule) Buffer.reset();
 	}
 

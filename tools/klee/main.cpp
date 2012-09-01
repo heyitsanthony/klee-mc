@@ -10,10 +10,11 @@
 #include "klee/Internal/ADT/KTest.h"
 #include "klee/Internal/ADT/TreeStream.h"
 #include "klee/Internal/ADT/TwoOStreams.h"
+#include "klee/Internal/ADT/KleeHandler.h"
+#include "klee/Internal/ADT/CmdArgs.h"
 #include "klee/Internal/System/Time.h"
 #include "static/Sugar.h"
 
-#include "KleeHandler.h"
 #include "libc.h"
 
 #include "llvm/Constants.h"
@@ -66,8 +67,7 @@ namespace {
   Environ("environ", cl::desc("Parse environ from given file (in \"env\" format)"));
 
   cl::list<std::string>
-  InputArgv(cl::ConsumeAfter,
-            cl::desc("<program arguments>..."));
+  InputArgv(cl::ConsumeAfter, cl::desc("<program arguments>..."));
 
   cl::opt<LibcType> Libc(
     "libc",
@@ -81,9 +81,7 @@ namespace {
 
 
   cl::opt<bool>
-  WithPOSIXRuntime("posix-runtime",
-		cl::desc("Link with POSIX runtime"),
-		cl::init(false));
+  WithPOSIXRuntime("posix-runtime", cl::desc("Link with POSIX runtime"));
 
   // this is a fake entry, its automagically handled
   cl::list<std::string>
@@ -115,16 +113,12 @@ namespace {
           cl::desc("Specify a directory to replay path files from"),
           cl::value_desc("path directory"));
 
-  cl::list<std::string>
-  SeedOutFile("seed-out");
+  cl::list<std::string> SeedOutFile("seed-out");
 
-  cl::list<std::string>
-  SeedOutDir("seed-out-dir");
+  cl::list<std::string> SeedOutDir("seed-out-dir");
 
-  cl::opt<bool>
-  Watchdog("watchdog",
-           cl::desc("Use a watchdog process to enforce --max-time."),
-           cl::init(0));
+  cl::opt<bool> Watchdog(
+  	"watchdog", cl::desc("Use a watchdog process to enforce --max-time."));
 }
 
 extern bool WriteTraces;
@@ -133,91 +127,62 @@ std::string g_InputFile = InputFile;
 LibcType g_Libc = Libc;
 bool g_WithPOSIXRuntime;
 
-/***/
-//===----------------------------------------------------------------------===//
-// main Driver function
-//
 #if ENABLE_STPLOG == 1
 extern "C" void STPLOG_init(const char *);
 #endif
 
-static std::string strip(std::string &in) {
-  unsigned len = in.size();
-  unsigned lead = 0, trail = len;
-  while (lead<len && isspace(in[lead]))
-    ++lead;
-  while (trail>lead && isspace(in[trail-1]))
-    --trail;
-  return in.substr(lead, trail-lead);
-}
-
-static void readArgumentsFromFile(char *file, std::vector<std::string> &results)
-{
-  std::ifstream f(file);
-  assert(f.is_open() && "unable to open input for reading arguments");
-  while (!f.eof()) {
-    std::string line;
-    std::getline(f, line);
-    line = strip(line);
-    if (!line.empty())
-      results.push_back(line);
-  }
-  f.close();
-}
-
 static void parseArguments(int argc, char **argv)
 {
-  std::vector<std::string> arguments;
+	std::vector<std::string>	args;
+	int				numArgs;
+	const char			**argArray;
 
-  for (int i=1; i<argc; i++) {
-    if (!strcmp(argv[i],"--read-args") && i+1<argc) {
-      readArgumentsFromFile(argv[++i], arguments);
-    } else {
-      arguments.push_back(argv[i]);
-    }
-  }
+	for (int i=1; i<argc; i++) {
+		if (strcmp(argv[i],"--read-args") == 0 && i+1 < argc) {
+			CmdArgs::readArgumentsFromFile(argv[++i], args);
+		} else {
+			args.push_back(argv[i]);
+		}
+	}
 
-  int numArgs = arguments.size() + 1;
-  const char **argArray = new const char*[numArgs+1];
-  argArray[0] = argv[0];
-  argArray[numArgs] = 0;
-  for (int i=1; i<numArgs; i++) {
-    argArray[i] = arguments[i-1].c_str();
-  }
+	numArgs = args.size() + 1;
+	argArray = new const char*[numArgs+1];
+	argArray[0] = argv[0];
+	argArray[numArgs] = 0;
+	for (int i=1; i < numArgs; i++)
+		argArray[i] = args[i-1].c_str();
 
-  cl::ParseCommandLineOptions(
-    numArgs, const_cast<char**>(argArray), " klee\n");
-  delete[] argArray;
+	cl::ParseCommandLineOptions(
+		numArgs,
+		const_cast<char**>(argArray),
+		" klee\n");
+
+	delete[] argArray;
 }
 
-// This is a terrible hack until we get some real modelling of the
-// system. All we do is check the undefined symbols and m and warn about
-// any "unrecognized" externals and about any obviously unsafe ones.
 static Interpreter *theInterpreter = 0;
-
 static bool interrupted = false;
 
 // Pulled out so it can be easily called from a debugger.
-extern "C"
-void halt_execution() {
-  theInterpreter->setHaltExecution(true);
-}
+extern "C" void halt_execution() { theInterpreter->setHaltExecution(true); }
+extern "C" void stop_forking() { theInterpreter->setInhibitForking(true); }
 
-extern "C"
-void stop_forking() {
-  theInterpreter->setInhibitForking(true);
-}
+static void interrupt_handle()
+{
+	if (interrupted) goto failed;
+	if (theInterpreter == NULL) goto failed;
 
-static void interrupt_handle() {
-  if (!interrupted && theInterpreter) {
-    std::cerr << "KLEE: ctrl-c detected, requesting interpreter to halt.\n";
-    halt_execution();
-    sys::SetInterruptFunction(interrupt_handle);
-  } else {
-    std::cerr << "KLEE: ctrl-c detected, exiting.\n";
-    exit(1);
-  }
-  interrupted = true;
+	std::cerr << "KLEE: ctrl-c detected, requesting interpreter to halt.\n";
+
+	halt_execution();
+	sys::SetInterruptFunction(interrupt_handle);
+
+	interrupted = true;
+  	return;
+
+failed:
+	std::cerr << "KLEE: ctrl-c detected, exiting.\n";
+	exit(1);
 }
 
 // This is a temporary hack. If the running process has access to
@@ -225,29 +190,31 @@ static void interrupt_handle() {
 // normal "nice" watchdog termination process. We try to request the
 // interpreter to halt using this mechanism as a last resort to save
 // the state data before going ahead and killing it.
-static void halt_via_gdb(int pid) {
-  char buffer[256];
-  sprintf(buffer,
-          "gdb --batch --eval-command=\"p halt_execution()\" "
-          "--eval-command=detach --pid=%d &> /dev/null",
-          pid);
-  //  fprintf(stderr, "KLEE: WATCHDOG: running: %s\n", buffer);
-  if (system(buffer)==-1)
-    perror("system");
+static void halt_via_gdb(int pid)
+{
+	char buffer[256];
+	sprintf(buffer,
+		"gdb --batch --eval-command=\"p halt_execution()\" "
+		"--eval-command=detach --pid=%d &> /dev/null",
+		pid);
+
+	//fprintf(stderr, "KLEE: WATCHDOG: running: %s\n", buffer);
+	if (system(buffer)==-1)
+		perror("system");
 }
 
 // returns the end of the string put in buf
 static char *format_tdiff(char *buf, long seconds)
 {
-  assert(seconds >= 0);
+	assert(seconds >= 0);
 
-  long minutes = seconds / 60;  seconds %= 60;
-  long hours   = minutes / 60;  minutes %= 60;
-  long days    = hours   / 24;  hours   %= 24;
+	long minutes = seconds / 60;  seconds %= 60;
+	long hours   = minutes / 60;  minutes %= 60;
+	long days    = hours   / 24;  hours   %= 24;
 
-  if (days > 0) buf += sprintf(buf, "%ld days, ", days);
-  buf += sprintf(buf, "%02ld:%02ld:%02ld", hours, minutes, seconds);
-  return buf;
+	if (days > 0) buf += sprintf(buf, "%ld days, ", days);
+	buf += sprintf(buf, "%02ld:%02ld:%02ld", hours, minutes, seconds);
+	return buf;
 }
 
 static char *format_tdiff(char *buf, double seconds) {
@@ -259,166 +226,147 @@ static char *format_tdiff(char *buf, double seconds) {
 
 static void printTimes(PrefixWriter& info, struct tms* tms, clock_t* tm, time_t* t)
 {
-  char buf[256], *pbuf;
-  bool tms_valid = true;
+	char buf[256], *pbuf;
+	bool tms_valid = true;
 
-  t[1] = time(NULL);
-  tm[1] = times(&tms[1]);
-  if (tm[1] == (clock_t) -1) {
-      perror("times");
-      tms_valid = false;
-  }
-  strftime(buf, sizeof(buf), "Finished: %Y-%m-%d %H:%M:%S\n", localtime(&t[1]));
-  info << buf;
+	t[1] = time(NULL);
+	tm[1] = times(&tms[1]);
+	if (tm[1] == (clock_t) -1) {
+		perror("times");
+		tms_valid = false;
+	}
 
-  pbuf = buf;
-  pbuf += sprintf(buf, "Elapsed: ");
-  if (tms_valid) {
-      const long clk_tck = sysconf(_SC_CLK_TCK);
-      pbuf = format_tdiff(pbuf, (tm[1] - tm[0]) / (double) clk_tck);
-      pbuf += sprintf(pbuf, " (user ");
-      pbuf = format_tdiff(pbuf, (tms[1].tms_utime - tms[0].tms_utime) / (double) clk_tck);
-      *pbuf++ = '+';
-      pbuf = format_tdiff(pbuf, (tms[1].tms_cutime - tms[0].tms_cutime) / (double) clk_tck);
-      pbuf += sprintf(pbuf, ", sys ");
-      pbuf = format_tdiff(pbuf, (tms[1].tms_stime - tms[0].tms_stime) / (double) clk_tck);
-      *pbuf++ = '+';
-      pbuf = format_tdiff(pbuf, (tms[1].tms_cstime - tms[0].tms_cstime) / (double) clk_tck);
-      pbuf += sprintf(pbuf, ")");
-  } else
-      pbuf = format_tdiff(pbuf, t[1] - t[0]);
-  strcpy(pbuf, "\n");
-  info << buf;
+	strftime(
+		buf, sizeof(buf),
+		"Finished: %Y-%m-%d %H:%M:%S\n", localtime(&t[1]));
+	info << buf;
+
+	pbuf = buf;
+	pbuf += sprintf(buf, "Elapsed: ");
+
+#define FMT_TDIFF(x,y) format_tdiff(pbuf, (x - y) / (double)clk_tck)
+	if (tms_valid) {
+		const long clk_tck = sysconf(_SC_CLK_TCK);
+		pbuf = FMT_TDIFF(tm[1], tm[0]);
+		pbuf += sprintf(pbuf, " (user ");
+		pbuf = FMT_TDIFF(tms[1].tms_utime, tms[0].tms_utime);
+		*pbuf++ = '+';
+		pbuf = FMT_TDIFF(tms[1].tms_cutime, tms[0].tms_cutime);
+		pbuf += sprintf(pbuf, ", sys ");
+		pbuf = FMT_TDIFF(tms[1].tms_stime, tms[0].tms_stime);
+		*pbuf++ = '+';
+		pbuf = FMT_TDIFF(tms[1].tms_cstime, tms[0].tms_cstime);
+		pbuf += sprintf(pbuf, ")");
+	} else
+		pbuf = format_tdiff(pbuf, t[1] - t[0]);
+
+	strcpy(pbuf, "\n");
+	info << buf;
 }
 
+#define GET_STAT(x,y)	\
+	uint64_t x = *theStatisticManager->getStatisticByName(y);
 
 static void printStats(PrefixWriter& info, KleeHandler* handler)
 {
-  uint64_t queries =
-    *theStatisticManager->getStatisticByName("Queries");
-  uint64_t queriesValid =
-    *theStatisticManager->getStatisticByName("QueriesValid");
-  uint64_t queriesInvalid =
-    *theStatisticManager->getStatisticByName("QueriesInvalid");
-  uint64_t queryCounterexamples =
-    *theStatisticManager->getStatisticByName("QueriesCEX");
-  uint64_t queryConstructs =
-    *theStatisticManager->getStatisticByName("QueriesConstructs");
-  uint64_t queryCacheHits =
-    *theStatisticManager->getStatisticByName("QueryCacheHits");
-  uint64_t queryCacheMisses =
-    *theStatisticManager->getStatisticByName("QueryCacheMisses");
-  uint64_t instructions =
-    *theStatisticManager->getStatisticByName("Instructions");
-  uint64_t forks =
-    *theStatisticManager->getStatisticByName("Forks");
+	GET_STAT(queries, "Queries")
+	GET_STAT(queriesValid, "QueriesValid")
+	GET_STAT(queriesInvalid, "QueriesInvalid")
+	GET_STAT(queryCounterexamples, "QueriesCEX")
+	GET_STAT(queriesFailed, "QueriesFailed")
+	GET_STAT(queryConstructs, "QueriesConstructs")
+	GET_STAT(queryCacheHits, "QueryCacheHits")
+	GET_STAT(queryCacheMisses, "QueryCacheMisses")
+	GET_STAT(instructions, "Instructions")
+	GET_STAT(forks, "Forks")
 
-  info << "done: total queries = " << queries << " ("
-       << "valid: " << queriesValid << ", "
-       << "invalid: " << queriesInvalid << ", "
-       << "cex: " << queryCounterexamples << ")\n";
-  if (queries)
-    info << "done: avg. constructs per query = "
-         << queryConstructs / queries << "\n";
+	info	<< "done: total queries = " << queries << " ("
+		<< "valid: " << queriesValid << ", "
+		<< "invalid: " << queriesInvalid << ", "
+		<< "failed: " << queriesFailed << ", "
+		<< "cex: " << queryCounterexamples << ")\n";
 
-  info << "done: query cache hits = " << queryCacheHits << ", "
-       << "query cache misses = " << queryCacheMisses << "\n";
+	if (queries)
+		info	<< "done: avg. constructs per query = "
+		 	<< queryConstructs / queries << "\n";
 
-  info << "done: total instructions = " << instructions << "\n";
-  info << "done: explored paths = " << 1 + forks << "\n";
-  info << "done: completed paths = " << handler->getNumPathsExplored() << "\n";
-  info << "done: generated tests = " << handler->getNumTestCases() << "\n";
+	info	<< "done: query cache hits = " << queryCacheHits << ", "
+		<< "query cache misses = " << queryCacheMisses << "\n";
+
+	info << "done: total instructions = " << instructions << "\n";
+	info << "done: explored paths = " << 1 + forks << "\n";
+	info << "done: completed paths = " << handler->getNumPathsExplored() << "\n";
+	info << "done: generated tests = " << handler->getNumTestCases() << "\n";
 }
-
-
 
 static int runWatchdog(void)
 {
-  if (MaxTime==0)  klee_error("--watchdog used without --max-time");
+	if (MaxTime==0)
+		klee_error("--watchdog used without --max-time");
 
-  int pid = fork();
-  if (pid<0) klee_error("unable to fork watchdog");
-  fprintf(stderr, "KLEE: WATCHDOG: watching %d\n", pid);
-  fflush(stderr);
+	int pid = fork();
 
-  double nextStep = util::getWallTime() + MaxTime*1.1;
-  int level = 0;
+	if (pid<0)
+		klee_error("unable to fork watchdog");
 
-  // Simple stupid code...
-  while (1) {
-    sleep(1);
-    int status, res = waitpid(pid, &status, WNOHANG);
+	fprintf(stderr, "KLEE: WATCHDOG: watching %d\n", pid);
+	fflush(stderr);
 
-    if (res < 0) {
-      if (errno==ECHILD) { // No child, no need to watch but
-                       // return error since we didn't catch
-                       // the exit.
-        fprintf(stderr, "KLEE: watchdog exiting (no child)\n");
-        return 1;
-      } else if (errno!=EINTR) {
-        perror("watchdog waitpid");
-        exit(1);
-      }
-    } else if (res==pid && WIFEXITED(status)) {
-      return WEXITSTATUS(status);
-    } else {
-      double time = util::getWallTime();
+	double nextStep = util::getWallTime() + MaxTime*1.1;
+	int level = 0;
 
-      if (time > nextStep) {
-        ++level;
+	// Simple stupid code...
+	while (1) {
+		int	status, res;
+		double	time;
 
-        if (level==1) {
-          fprintf(stderr, "KLEE: WATCHDOG: time expired, attempting halt via INT\n");
-          kill(pid, SIGINT);
-        } else if (level==2) {
-          fprintf(stderr, "KLEE: WATCHDOG: time expired, attempting halt via gdb\n");
-          halt_via_gdb(pid);
-        } else {
-          fprintf(stderr, "KLEE: WATCHDOG: kill(9)ing child (I tried to be nice)\n");
-          kill(pid, SIGKILL);
-          return 1; // what more can we do
-        }
+		sleep(1);
 
-        // Ideally this triggers a dump, which may take a while,
-        // so try and give the process extra time to clean up.
-        nextStep = util::getWallTime() + std::max(15., MaxTime*.1);
-      }
-    }
-  }
+		res = waitpid(pid, &status, WNOHANG);
+		if (res < 0) {
+			if (errno==ECHILD) {
+				// No child, no need to watch but
+				// return error since we didn't catch
+				// the exit.
+				fprintf(stderr, "KLEE: watchdog (no child)\n");
+				return 1;
+			} else if (errno!=EINTR) {
+				perror("watchdog waitpid");
+				exit(1);
+			}
+			continue;
+		}
+		
+		if (res==pid && WIFEXITED(status))
+			return WEXITSTATUS(status);
 
-  return 0;
+		time = util::getWallTime();
+		if (time < nextStep) continue;
+
+		++level;
+
+		fprintf(stderr, "KLEE: WATCHDOG: ");
+		if (level==1) {
+			fprintf(stderr, "time expired, attempting halt via INT\n");
+			kill(pid, SIGINT);
+		} else if (level==2) {
+			fprintf(stderr, "time expired, attempting halt via gdb\n");
+			halt_via_gdb(pid);
+		} else {
+			fprintf(stderr, "kill(9)ing child (I tried to be nice)\n");
+			kill(pid, SIGKILL);
+			return 1; // what more can we do
+		}
+
+		// Ideally this triggers a dump, which may take a while,
+		// so try and give the process extra time to clean up.
+		nextStep = util::getWallTime() + std::max(15., MaxTime*.1);
+	}
+
+	return 0;
 }
 
-static char** getEnvironment(void)
-{
-  char **pEnvp;
-
-  if (Environ == "") return NULL;
-
-  std::vector<std::string> items;
-  std::ifstream f(Environ.c_str());
-
-  if (!f.good())
-    klee_error("unable to open --environ file: %s", Environ.c_str());
-
-  while (!f.eof()) {
-    std::string line;
-    std::getline(f, line);
-    line = strip(line);
-    if (!line.empty())
-      items.push_back(line);
-  }
-  f.close();
-
-  pEnvp = new char *[items.size()+1];
-  unsigned i=0;
-  for (; i != items.size(); ++i) pEnvp[i] = strdup(items[i].c_str());
-  pEnvp[i] = NULL;
-
-  return pEnvp;
-}
-
-static void runReplay(Interpreter* interpreter, Function* mainFn, char** pEnvp)
+static void runReplay(Interpreter* interpreter, Function* mainFn, CmdArgs* ca)
 {
   std::vector<std::string> outFiles = ReplayOutFile;
   foreach (it, ReplayOutDir.begin(),  ReplayOutDir.end())
@@ -445,10 +393,13 @@ static void runReplay(Interpreter* interpreter, Function* mainFn, char** pEnvp)
   foreach (it, kTests.begin(), kTests.end()) {
     KTest *out = *it;
     interpreter->setReplayOut(out);
-    std::cerr << "KLEE: replaying: " << *it << " (" << kTest_numBytes(out) << " bytes)"
-               << " (" << ++i << "/" << outFiles.size() << ")\n";
+    std::cerr	<< "KLEE: replaying: " << *it
+    		<< " (" << kTest_numBytes(out) << " bytes)"
+		<< " (" << ++i << "/" << outFiles.size() << ")\n";
+
     // XXX should put envp in .ktest ?
-    interpreter->runFunctionAsMain(mainFn, out->numArgs, out->args, pEnvp);
+    interpreter->runFunctionAsMain(
+    	mainFn, out->numArgs, out->args, ca->getEnvp());
     if (interrupted) break;
   }
 
@@ -461,8 +412,9 @@ static void runReplay(Interpreter* interpreter, Function* mainFn, char** pEnvp)
 }
 
 static void runSeeds(
-	SeedExecutor<ExecutorBC>*	exe,
-	Function* mainFn, int pArgc, char** pArgv, char** pEnvp)
+	SeedExecutor<ExecutorBC> *exe,
+	Function* mainFn,
+	CmdArgs* ca)
 {
 	std::vector<KTest *>	seeds;
 
@@ -507,7 +459,8 @@ static void runSeeds(
 				RunInDir.c_str());
 		}
 	}
-	exe->runFunctionAsMain(mainFn, pArgc, pArgv, pEnvp);
+	exe->runFunctionAsMain(
+		mainFn, ca->getArgc(), ca->getArgv(), ca->getEnvp());
 
 	while (!seeds.empty()) {
 		kTest_free(seeds.back());
@@ -520,17 +473,19 @@ int main(int argc, char **argv, char **envp)
 #if ENABLE_STPLOG == 1
 	STPLOG_init("stplog.c");
 #endif
-	bool		useSeeds;
-	Module		*mainModule;
-	const Module	*finalModule;
-	KleeHandler	*handler;
-	Function	*mainFn;
-	Interpreter	*interpreter;
+	bool				useSeeds;
+	Module				*mainModule;
+	const Module			*finalModule;
+	KleeHandler			*handler;
+	CmdArgs				*ca;
+	Function			*mainFn;
+	Interpreter			*interpreter;
 	ExecutorBC			*exe_bc;
 	SeedExecutor<ExecutorBC>	*exe_seed;
 	std::vector<std::string>	pathFiles;
 	std::list<ReplayPathType>	replayPaths;
 	ReplayPathType			replayPath;
+	std::vector<std::string>	arguments;
 
 	atexit(llvm_shutdown);  // Call llvm_shutdown() on exit.
 
@@ -541,6 +496,7 @@ int main(int argc, char **argv, char **envp)
 
 	g_InputFile = InputFile;
 	g_Libc = Libc;
+
 	g_WithPOSIXRuntime = WithPOSIXRuntime;
 	useSeeds = ReplayOutDir.empty() && ReplayOutFile.empty();
 
@@ -559,35 +515,22 @@ int main(int argc, char **argv, char **envp)
 		return -1;
 	}
 
-	// FIXME: Change me to std types.
-	char **pEnvp = getEnvironment();
-	if (pEnvp == NULL) pEnvp = envp;
-
-	int pArgc = InputArgv.size() + 1;
-	char** pArgv = new char *[pArgc];
-	for (unsigned i=0; i<InputArgv.size()+1; i++) {
-		std::string &arg = (i==0 ? InputFile : InputArgv[i-1]);
-		unsigned size = arg.size() + 1;
-		char *pArg = new char[size];
-
-		std::copy(arg.begin(), arg.end(), pArg);
-		pArg[size - 1] = 0;
-
-		pArgv[i] = pArg;
-	}
-
 	if (ReplayPathDir != "")
 		KleeHandler::getPathFiles(ReplayPathDir, pathFiles);
 	if (ReplayPathFile != "")
 		pathFiles.push_back(ReplayPathFile);
 
 	foreach (it, pathFiles.begin(), pathFiles.end()) {
-	KleeHandler::loadPathFile(*it, replayPath);
-		replayPaths.push_back(replayPath);
-		replayPath.clear();
+		KleeHandler::loadPathFile(*it, replayPath);
+			replayPaths.push_back(replayPath);
+			replayPath.clear();
 	}
 
-	handler = new KleeHandler(InputFile, pArgc, pArgv);
+	arguments.push_back(InputFile);
+	arguments.insert(arguments.end(), InputArgv.begin(), InputArgv.end());
+	ca = new CmdArgs(InputFile, Environ, envp, arguments);
+
+	handler = new KleeHandler(ca);
 	if (useSeeds) {
 		exe_seed = new SeedExecutor<ExecutorBC>(handler);
 		interpreter = exe_seed;
@@ -635,22 +578,19 @@ int main(int argc, char **argv, char **envp)
 	if (!useSeeds) {
 		assert(SeedOutFile.empty());
 		assert(SeedOutDir.empty());
-		runReplay(interpreter, mainFn, pEnvp);
+		runReplay(interpreter, mainFn, ca);
 	} else {
-		runSeeds(exe_seed, mainFn, pArgc, pArgv, pEnvp);
+		runSeeds(exe_seed, mainFn, ca);
 	}
 
 	printTimes(info, tms, tm, t);
 
-	// Free all the args.
-	for (unsigned i=0; i<InputArgv.size()+1; i++)
-	delete[] pArgv[i];
-	delete[] pArgv;
-
 	delete interpreter;
 
 	printStats(info, handler);
+
 	delete handler;
+	delete ca;
 
 	return 0;
 }

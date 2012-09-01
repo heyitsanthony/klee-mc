@@ -2,6 +2,7 @@
 // RUN: %klee --libc=uclibc --posix-runtime %t1.bc --sym-streams 1 1 > %t.log
 // RUN: grep -q Success %t.log
 // RUN: gcc -g %s
+// RUN: gzip -d klee-last/test000001.ktest.gz
 // RUN: %replay ./a.out klee-last/test000001.ktest > %t2.log
 // RUN: grep -q Success %t2.log
 

@@ -4,16 +4,20 @@
 #include <iostream>
 #include <string>
 #include <list>
+#include <vector>
 
 /* this class handles environment and command line arguments */
+namespace klee
+{
 class CmdArgs
 {
 public:
 	CmdArgs(const std::string& in_binary,
 		const std::string& env_path,
 		char** in_env,
-		const std::list<std::string>& argv);
+		const std::vector<std::string>& argv);
 	virtual ~CmdArgs();
+
 	unsigned int getArgc(void) const { return argc; }
 	unsigned int getEnvc(void) const { return env_c; }
 	char** getArgv(void) const { return argv; }
@@ -23,10 +27,15 @@ public:
 
 	bool isSymbolic(void) const { return symbolic; }
 	void setSymbolic(void) { symbolic = true; }
-	void setArgs(const std::list<std::string>& ptrs);
+	void setArgs(const std::vector<std::string>& ptrs);
+
+	static std::string stripEdgeSpaces(std::string &in);
+	static void readArgumentsFromFile(
+		char *file, std::vector<std::string> &results);
+
 private:
 	char** envFromString(const std::string& e_path);
-	void loadArgv(const std::list<std::string>& argv);
+	void loadArgv(const std::vector<std::string>& argv);
 	void clearArgv(void);
 	std::string	in_bin_path;
 	unsigned int	argc;
@@ -36,5 +45,5 @@ private:
 	unsigned int	env_c;
 	bool		symbolic;
 };
-
+}
 #endif

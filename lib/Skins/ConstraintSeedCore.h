@@ -23,8 +23,7 @@ public:
 	virtual ~ConstraintSeedCore();
 	void addSeedConstraints(ExecutionState& state, const ref<Array> arr);
 
-	bool logConstraint(const ref<Expr> e) { return logConstraint(exe, e); }
-	static bool logConstraint(Executor* exe, const ref<Expr> e);
+	bool logConstraint(const ref<Expr> e);
 
 	static bool isActive(void);
 private:
@@ -41,8 +40,9 @@ private:
 
 	bool isExprAdmissible(const exprlist_ty* el, const ref<Expr>& e);
 
-	Executor	*exe;
-	name2exprs_ty	name2exprs;
+	Executor		*exe;
+	name2exprs_ty		name2exprs;
+	std::set<Expr::Hash>	hashes;
 };
 }
 

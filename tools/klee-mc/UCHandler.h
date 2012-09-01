@@ -1,19 +1,17 @@
 #ifndef UCHANDLER_H
 #define UCHANDLER_H
 
-#include "KleeHandler.h"
-
-class CmdArgs;
+#include "KleeHandlerVex.h"
 
 namespace klee
 {
 class ExecutorVex;
 
-class UCHandler : public KleeHandler
+class UCHandler : public KleeHandlerVex
 {
 public:
 	UCHandler(const CmdArgs* cmdargs, Guest* g)
-	: KleeHandler(cmdargs, g) {}
+	: KleeHandlerVex(cmdargs, g) {}
 
 	virtual ~UCHandler() {}
 protected:

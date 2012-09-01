@@ -16,4 +16,4 @@ set title 'total instructions for every state'
 set output 'stinsts.png'
 plot 'stinsts.txt' with points title 'states',\
 'broneway.txt' with points title 'branches'"
-feh stinsts.png
+#feh stinsts.png

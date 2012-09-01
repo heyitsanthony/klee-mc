@@ -1,42 +1,45 @@
 #ifndef KLEEHANDLER_H
 #define KLEEHANDLER_H
 
-#include "ExeStateVex.h"
 #include "klee/Internal/ADT/TreeStream.h"
 #include "klee/Interpreter.h"
+#include "klee/Common.h"
+#include <cerrno>
 
-class CmdArgs;
-class Guest;
+#define LOSING_IT(x)	\
+	klee_warning("unable to write " #x " file, losing it (errno=%d: %s)", \
+		errno, strerror(errno))
 
 namespace klee
 {
-class ExecutorVex;
+class CmdArgs;
 
 class KleeHandler : public InterpreterHandler
 {
 private:
-	TreeStreamWriter *m_symPathWriter;
-	std::ostream *m_infoFile;
+	TreeStreamWriter		*m_symPathWriter;
+	std::ostream			*m_infoFile;
 
-	char m_outputDirectory[1024];
-	unsigned m_testIndex;  // number of tests written so far
-	unsigned m_pathsExplored; // number of paths explored so far
+	char				m_outputDirectory[1024];
+	unsigned			m_testIndex;  // # tests written
+	unsigned			m_pathsExplored; // # paths explored
 
 	// used for writing .ktest files
-	const CmdArgs*	cmdargs;
-	Guest	*gs;
+	const CmdArgs			*cmdargs;
 public:
-	KleeHandler(const CmdArgs* cmdargs, Guest* gs);
+	KleeHandler(const CmdArgs* cmdargs);
 	virtual ~KleeHandler();
+
+	const char* getOutputDir(void) const { return m_outputDirectory; }
 
 	std::ostream &getInfoStream() const { return *m_infoFile; }
 	unsigned getNumTestCases() { return m_testIndex; }
 	unsigned getNumPathsExplored() { return m_pathsExplored; }
 	void incPathsExplored() { m_pathsExplored++; }
 
-	void setInterpreter(Interpreter *i);
+	virtual void setInterpreter(Interpreter *i);
 
-	void processTestCase(
+	virtual unsigned processTestCase(
 		const ExecutionState  &state,
 		const char *errorMessage,
 		const char *errorSuffix);
@@ -61,8 +64,6 @@ public:
 
 	static void getOutFiles(
 		std::string path, std::vector<std::string> &results);
-
-	Guest* getGuest(void) const { return gs; }
 protected:
 typedef
 	std::vector< std::pair<std::string, std::vector<unsigned char> > >
@@ -73,23 +74,20 @@ typedef
 	virtual bool getStateSymObjs(
 		const ExecutionState& state, out_objs& out);
 
-	void printErrDump(
-		const ExecutionState& state,
-		std::ostream& os) const;
+	virtual void printErrorMessage(
+		const ExecutionState  &state,
+		const char *errorMessage,
+		const char *errorSuffix,
+		unsigned id);
 
-	ExecutorVex	*m_interpreter;
+	Interpreter	*m_interpreter;
+
+	static unsigned getStopAfterNTests(void);
 private:
-
 	void setupOutputFiles(void);
 	std::string setupOutputDir(void);
 	bool scanForOutputDir(const std::string& path, std::string& theDir);
 	void dumpPCs(const ExecutionState& state, unsigned id);
-	void dumpLog(
-		const ExecutionState& state,
-		const char* name,
-		unsigned id);
-
-	bool validateTest(unsigned id);
 };
 
 }

@@ -407,9 +407,8 @@ static void dumpSeedCondition(const ref<Expr>& e)
 
 bool ConstraintSeedCore::isActive(void) { return ConstraintSolveSeeds; }
 
-bool ConstraintSeedCore::logConstraint(Executor* ex, const ref<Expr> e)
+bool ConstraintSeedCore::logConstraint(const ref<Expr> e)
 {
-	static std::set<Expr::Hash>	hashes;
 	bool				mbt;
 
 	if (!ConstraintSolveSeeds)
@@ -419,7 +418,7 @@ bool ConstraintSeedCore::logConstraint(Executor* ex, const ref<Expr> e)
 		return false;
 
 	hashes.insert(e->hash());
-	if (!ex->getSolver()->solver->mayBeTrue(Query(e), mbt)) {
+	if (!exe->getSolver()->solver->mayBeTrue(Query(e), mbt)) {
 		std::cerr << "[CSCore] Ignoring bad solver call.\n";
 		return false;
 	}

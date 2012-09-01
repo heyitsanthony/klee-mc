@@ -12,9 +12,9 @@
 #include "../../lib/Skins/TaintMergeExecutor.h"
 #include "../../lib/Skins/ConstraintSeedExecutor.h"
 #include "../../lib/Skins/DDTExecutor.h"
-#include "KleeHandler.h"
+#include "KleeHandlerVex.h"
 #include "UCHandler.h"
-#include "cmdargs.h"
+#include "klee/Internal/ADT/CmdArgs.h"
 
 #include "guest.h"
 #include "guestptimg.h"
@@ -94,8 +94,7 @@ namespace {
 		cl::init("-"));
 
 	cl::opt<std::string>
-	Environ(
-		"environ",
+	Environ("environ",
 		cl::desc("Parse environ from given file (in \"env\" format)"));
 
 	cl::list<std::string>
@@ -189,36 +188,13 @@ namespace {
 static Interpreter *theInterpreter = 0;
 static bool interrupted = false;
 
-std::string stripEdgeSpaces(std::string &in)
-{
-	unsigned len = in.size();
-	unsigned lead = 0, trail = len;
-	while (lead<len && isspace(in[lead])) ++lead;
-	while (trail>lead && isspace(in[trail-1])) --trail;
-	return in.substr(lead, trail-lead);
-}
-
-static void readArgumentsFromFile(char *file, std::vector<std::string> &results)
-{
-  std::ifstream f(file);
-  assert(f.is_open() && "unable to open input for reading arguments");
-  while (!f.eof()) {
-    std::string line;
-    std::getline(f, line);
-    line = stripEdgeSpaces(line);
-    if (!line.empty())
-      results.push_back(line);
-  }
-  f.close();
-}
-
 static void parseArguments(int argc, char **argv)
 {
   std::vector<std::string> arguments;
 
   for (int i=1; i<argc; i++) {
     if (!strcmp(argv[i],"--read-args") && i+1<argc) {
-      readArgumentsFromFile(argv[++i], arguments);
+      CmdArgs::readArgumentsFromFile(argv[++i], arguments);
     } else {
       arguments.push_back(argv[i]);
     }
@@ -262,40 +238,44 @@ void run(ExecutorVex* exe) { exe->runImage(); }
 
 void runReplay(Interpreter* interpreter)
 {
-  std::vector<KTest*> kTests;
-  std::vector<std::string> outFiles;
+	std::vector<KTest*>		kTests;
+	std::vector<std::string>	outFiles;
+	unsigned			i=0;
 
-  outFiles = ReplayOutFile;
-  foreach (it, ReplayOutDir.begin(),  ReplayOutDir.end())
-    KleeHandler::getOutFiles(*it, outFiles);
+	outFiles = ReplayOutFile;
+	foreach (it, ReplayOutDir.begin(),  ReplayOutDir.end())
+		KleeHandler::getOutFiles(*it, outFiles);
 
-  foreach (it, outFiles.begin(), outFiles.end()) {
-    KTest *out = kTest_fromFile(it->c_str());
-    if (out) {
-      kTests.push_back(out);
-    } else {
-      std::cerr << "KLEE: unable to open: " << *it << "\n";
-    }
-  }
+	foreach (it, outFiles.begin(), outFiles.end()) {
+		KTest *out = kTest_fromFile(it->c_str());
+		if (out) {
+			kTests.push_back(out);
+		} else {
+			std::cerr << "KLEE: unable to open: " << *it << "\n";
+		}
+	}
 
-  unsigned i=0;
-  foreach (it, kTests.begin(), kTests.end()) {
-    KTest *out = *it;
-    interpreter->setReplayOut(out);
-    std::cerr << "KLEE: replaying: " << *it << " ("
-    	<< kTest_numBytes(out) << " bytes)"
-        << " (" << ++i << "/" << outFiles.size() << ")\n";
-    // XXX should put envp in .ktest ?
-    run(dynamic_cast<ExecutorVex*>(interpreter));
-    if (interrupted) break;
-  }
+	foreach (it, kTests.begin(), kTests.end()) {
+		KTest *out = *it;
 
-  interpreter->setReplayOut(0);
+		interpreter->setReplayOut(out);
+		std::cerr
+			<< "KLEE: replaying: " << *it << " ("
+			<< kTest_numBytes(out) << " bytes)"
+			<< " (" << ++i << "/" << outFiles.size() << ")\n";
 
-  while (!kTests.empty()) {
-    kTest_free(kTests.back());
-    kTests.pop_back();
-  }
+		// XXX should put envp in .ktest ?
+		run(dynamic_cast<ExecutorVex*>(interpreter));
+		if (interrupted)
+			break;
+	}
+
+	interpreter->setReplayOut(0);
+
+	while (!kTests.empty()) {
+		kTest_free(kTests.back());
+		kTests.pop_back();
+	}
 }
 
 #define GET_STAT(x,y)	\
@@ -335,9 +315,9 @@ static void printStats(PrefixWriter& info, KleeHandler* handler)
 
 static CmdArgs* getCmdArgs(char** envp)
 {
-	std::list<std::string>	input_args;
-	CmdArgs			*ret;
-	const std::string	env_path(Environ);
+	std::vector<std::string>	input_args;
+	CmdArgs				*ret;
+	const std::string		env_path(Environ);
 
 	foreach (it, InputArgv.begin(), InputArgv.end())
 		input_args.push_back(*it);
@@ -386,8 +366,8 @@ Guest* getGuest(CmdArgs* cmdargs)
 		/* ugh, got to force load so replay knows how many symargs
 		 * we have */
 		if (cmdargs->isSymbolic()) {
-			std::vector<guest_ptr>	ptrs(gs->getArgvPtrs());
-			std::list<std::string>	arg_l;
+			std::vector<guest_ptr>		ptrs(gs->getArgvPtrs());
+			std::vector<std::string>	arg_l;
 
 			foreach (it, ptrs.begin(), ptrs.end()) {
 				const char	*s;
@@ -412,10 +392,8 @@ Guest* getGuest(CmdArgs* cmdargs)
 	return gs;
 }
 
-bool isReplaying(void)
-{
-	return (!ReplayOutDir.empty() || !ReplayOutFile.empty());
-}
+static bool isReplaying(void)
+{ return (!ReplayOutDir.empty() || !ReplayOutFile.empty()); }
 
 #define NEW_INTERP(x)					\
 	((UseGDB)					\
@@ -514,7 +492,7 @@ int main(int argc, char **argv, char **envp)
 	}
 
 	if (!Unconstrained) {
-		handler = new KleeHandler(cmdargs, gs);
+		handler = new KleeHandlerVex(cmdargs, gs);
 	} else {
 		handler = new UCHandler(cmdargs, gs);
 	}

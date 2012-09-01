@@ -5,7 +5,7 @@
 #include "ESVSymHook.h"
 #include "klee/Common.h"
 #include "../../lib/Core/KleeMMU.h"
-#include "KleeHandler.h"
+#include "KleeHandlerVex.h"
 #include "symbols.h"
 #include "guest.h"
 
@@ -420,7 +420,7 @@ bool ExeSymHook::canSymhook(InterpreterHandler *ie)
 	const Symbols	*syms;
 	const Symbol	*sym_malloc;
 
-	syms = dynamic_cast<KleeHandler*>(ie)->getGuest()->getSymbols();
+	syms = dynamic_cast<KleeHandlerVex*>(ie)->getGuest()->getSymbols();
 	if (syms == NULL)
 		return false;
 

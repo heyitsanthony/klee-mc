@@ -2,10 +2,10 @@
 // We're using the uclibc pruning library, so stderr is redirected to stdout
 // RUN: %klee --libc=uclibc --posix-runtime --init-env %t.bc --sym-files 0 10 --sym-stdout >%t.stdout 2>%t.log
 
-// RUN: test -f klee-last/test000001.ktest
-// RUN: test -f klee-last/test000002.ktest
-// RUN: test -f klee-last/test000003.ktest
-// RUN: test -f klee-last/test000004.ktest
+// RUN: test -f klee-last/test000001.ktest.gz
+// RUN: test -f klee-last/test000002.ktest.gz
+// RUN: test -f klee-last/test000003.ktest.gz
+// RUN: test -f klee-last/test000004.ktest.gz
 
 // RUN: grep -q "stdin is a tty" %t.stdout
 // RUN: grep -q "stdin is NOT a tty" %t.stdout

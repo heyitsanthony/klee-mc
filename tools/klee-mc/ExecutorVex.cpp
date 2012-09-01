@@ -32,7 +32,7 @@
 
 #include "RegPrioritizer.h"
 #include "SyscallPrioritizer.h"
-#include "KleeHandler.h"
+#include "KleeHandlerVex.h"
 
 using namespace klee;
 using namespace llvm;
@@ -100,7 +100,7 @@ namespace
 
 ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 : Executor(ih)
-, gs(dynamic_cast<KleeHandler*>(ih)->getGuest())
+, gs(dynamic_cast<KleeHandlerVex*>(ih)->getGuest())
 {
 	assert (kmodule == NULL && "KMod already initialized? My contract!");
 
