@@ -369,7 +369,7 @@ void ImpliedValue::ivcStack(
 		ExprReplaceVisitor	erv(re, ce);
 		StackFrame		&sf(*it);
 
-		if (sf.kf == NULL)
+		if (sf.kf == NULL || sf.isClear())
 			continue;
 
 		/* update all registers in stack frame */

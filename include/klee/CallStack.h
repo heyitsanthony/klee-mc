@@ -23,6 +23,9 @@ public:
 	{ return getTopCell(target->getDest()).value; }
 
 	insstack_ty getKInstStack(void) const;
+
+	/* returns number of variables nuked */
+	unsigned clearTail(void);
 private:
 	void writeLocalCell(unsigned sfi, unsigned i, const ref<Expr>& value);
 };

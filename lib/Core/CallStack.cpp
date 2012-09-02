@@ -23,11 +23,11 @@ const Cell& CallStack::getLocalCell(unsigned sfi, unsigned i) const
 
 void CallStack::evaluate(const Assignment& a)
 {
-	foreach (it, begin(), end()) {
+	foreach (it, rbegin(), rend()) {
 		StackFrame	&sf(*it);
 
-		if (sf.kf == NULL)
-			continue;
+		if (sf.kf == NULL || sf.isClear())
+			break;
 
 		/* update all registers in stack frame */
 		for (unsigned i = 0; i < sf.kf->numRegisters; i++) {
@@ -79,5 +79,15 @@ CallStack::insstack_ty CallStack::getKInstStack(void) const
 		ret.push_back(ki);
 	}
 
+	return ret;
+}
+
+unsigned CallStack::clearTail(void)
+{
+	unsigned ret = 0;
+	for (int i = size() - 2; i >= 0; i--) {
+		if (at(i).isClear()) break;
+		ret += at(i).kf->numRegisters;
+	}
 	return ret;
 }

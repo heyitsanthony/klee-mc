@@ -18,6 +18,7 @@
 #include "../../lib/Core/BranchTracker.h"
 #include "../../lib/Core/ExecutionTrace.h"
 #include "klee/Internal/Module/KInstIterator.h"
+#include "klee/Internal/ADT/TreeStream.h"
 #include "../../lib/Core/Memory.h"
 #include "klee/CallStack.h"
 

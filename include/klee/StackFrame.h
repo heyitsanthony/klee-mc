@@ -4,10 +4,8 @@
 #include "klee/Constraints.h"
 #include "klee/Expr.h"
 #include "klee/util/ExprUtil.h"
-#include "klee/Internal/ADT/TreeStream.h"
 #include "klee/Internal/Module/Cell.h"
 // FIXME: We do not want to be exposing these? :(
-#include "../../lib/Core/AddressSpace.h"
 #include "../../lib/Core/BranchTracker.h"
 #include "klee/Internal/Module/KInstIterator.h"
 #include "../../lib/Core/Memory.h"
@@ -59,6 +57,8 @@ public:
   ~StackFrame();
   StackFrame& operator=(const StackFrame &s);
   void addAlloca(const MemoryObject*);
+  bool clearLocals(void);
+  bool isClear(void) const { return locals == NULL; }
 };
 
 }

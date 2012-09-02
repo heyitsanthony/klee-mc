@@ -71,14 +71,12 @@ namespace {
   cl::opt<bool>
   ConcretizeEarlyTerminate(
   	"concretize-early",
-	cl::desc("Concretizeearly terminations"),
-	cl::init(false));
+	cl::desc("Concretizeearly terminations"));
 
   cl::opt<bool>
   DumpBadInitValues(
   	"dump-bad-init-values",
-	cl::desc("Dump states which fail to get initial values to console."),
-	cl::init(false));
+	cl::desc("Dump states which fail to get initial values to console."));
 
   cl::opt<bool>
   UsePID("use-pid",
@@ -145,8 +143,7 @@ namespace {
 
   cl::opt<bool>
   TrackBranchExprs(
-  	"track-br-exprs", cl::desc("Track Branching Expressions"),
-	cl::init(false));
+  	"track-br-exprs", cl::desc("Track Branching Expressions"));
 
   cl::opt<bool, true>
   ReplayInhibitedForksProxy(
@@ -162,9 +159,7 @@ namespace {
 
   cl::opt<bool>
   UseRuleBuilder(
-  	"use-rule-builder",
-	cl::desc("Machine-learned peephole expr builder"),
-  	cl::init(false));
+  	"use-rule-builder", cl::desc("Machine-learned peephole expr builder"));
 
   cl::opt<unsigned>
   SeedRNG("seed-rng", cl::desc("Seed random number generator"), cl::init(0));

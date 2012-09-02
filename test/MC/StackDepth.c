@@ -1,5 +1,5 @@
 // RUN: gcc %s -O0  -o %t1
-// RUN: klee-mc -use-stack-search -pipe-solver -max-time=30 -dump-stackstats=2 -stop-after-n-tests=100 - ./%t1 2>%t1.err >%t1.out
+// RUN: klee-mc -use-stack-search -pipe-solver -max-time=30 -dump-stackstats=2 -stop-after-n-tests=100 -dump-states-on-halt=false - ./%t1 2>%t1.err >%t1.out
 // RUN: ls klee-last | grep err
 
 

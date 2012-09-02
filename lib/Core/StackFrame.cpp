@@ -33,27 +33,32 @@ StackFrame::StackFrame(const StackFrame &s)
 , minDistToUncoveredOnReturn(s.minDistToUncoveredOnReturn)
 , varargs(s.varargs)
 {
+	if (s.locals == NULL) {
+		locals = NULL;
+		return;
+	}
+
 	locals = new Cell[s.kf->numRegisters];
 	for (unsigned i=0; i<s.kf->numRegisters; i++)
 		locals[i] = s.locals[i];
 }
 
-StackFrame::~StackFrame()
-{
-	delete[] locals; 
-}
+StackFrame::~StackFrame() { if (locals) delete[] locals; }
 
 StackFrame& StackFrame::operator=(const StackFrame &s)
 {
+	Cell* new_locals;
+
 	if (&s == this) return *this;
 
-	// Copy locals first because it might throw
-	Cell* new_locals = new Cell[s.kf->numRegisters];
-	for (unsigned i=0; i<s.kf->numRegisters; i++)
-		new_locals[i] = s.locals[i];
+	if (s.locals != NULL) {
+		new_locals = new Cell[s.kf->numRegisters];
+		for (unsigned i=0; i<s.kf->numRegisters; i++)
+			new_locals[i] = s.locals[i];
+	} else
+		new_locals = NULL;
 
-	// The rest is exception-free.
-	delete[] locals;
+	if (locals) delete[] locals;
 	locals = new_locals;
 
 	call = s.call;
@@ -67,7 +72,12 @@ StackFrame& StackFrame::operator=(const StackFrame &s)
 	return *this;
 }
 
-void StackFrame::addAlloca(const MemoryObject* mo)
+void StackFrame::addAlloca(const MemoryObject* mo) { allocas.push_back(mo); }
+
+bool StackFrame::clearLocals(void)
 {
-	allocas.push_back(mo);
+	if (locals == NULL) return false;
+	delete [] locals;
+	locals = NULL;
+	return true;
 }

@@ -1,7 +1,7 @@
 // RUN: gcc %s -O0 -o %t1
 //
 // Don't crash on run
-// RUN: klee-mc - ./%t1 2>%t1.err >%t1.out
+// RUN: klee-mc -pipe-solver - ./%t1 2>%t1.err >%t1.out
 //
 // Should have spit out a single pointer error
 // RUN: ls klee-last | grep ptr.err | wc -l | grep 1

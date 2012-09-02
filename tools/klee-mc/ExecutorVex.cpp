@@ -49,38 +49,32 @@ bool UseConcreteVFS;
 
 namespace
 {
-	cl::opt<bool> ShowSyscalls("show-syscalls", cl::init(false));
+	cl::opt<bool> ShowSyscalls("show-syscalls");
 	cl::opt<bool> SymMagic(
-		"sym-magic",
-		cl::desc("Mark 'magic' 0xa3 bytes as symbolic"),
+		"sym-magic", cl::desc("Mark 'magic' 0xa3 bytes as symbolic"));
+
+	cl::opt<bool> KeepDeadStack(
+		"keep-dead-stack",
+		cl::desc("Keep registers in dead stack frames"),
 		cl::init(false));
 
 	cl::opt<bool,true> SymRegsProxy(
 		"symregs",
 		cl::desc("Mark initial register file as symbolic"),
-		cl::location(SymRegs),
-		cl::init(false));
+		cl::location(SymRegs));
 
-	cl::opt<bool> LogRegs(
-		"logregs",
-		cl::desc("Log registers."),
-		cl::init(false));
+	cl::opt<bool> LogRegs("logregs", cl::desc("Log registers."));
 
 	cl::opt<bool,true> ConcreteVfsProxy(
 		"concrete-vfs",
 		cl::desc("Treat absolute path opens as concrete"),
-		cl::location(UseConcreteVFS),
-		cl::init(false));
+		cl::location(UseConcreteVFS));
 
-	cl::opt<bool> UseFDT(
-		"use-fdt",
-		cl::desc("Use TJ's FDT model"),
-		cl::init(false));
+	cl::opt<bool> UseFDT("use-fdt", cl::desc("Use TJ's FDT model"));
 
 	cl::opt<bool> DumpSyscallStates(
 		"dump-syscall-state",
-		cl::desc("Dump state constraints before a syscall"),
-		cl::init(false));
+		cl::desc("Dump state constraints before a syscall"));
 
 	cl::opt<bool> AllowNegativeStack (
 		"allow-negstack",
@@ -89,13 +83,10 @@ namespace
 
 	cl::opt<bool> UseSyscallPriority(
 		"use-syscall-pr",
-		cl::desc("Use number of syscalls as priority"),
-		cl::init(false));
+		cl::desc("Use number of syscalls as priority"));
 
 	cl::opt<bool> UseRegPriority(
-		"use-reg-pr",
-		cl::desc("Use number of syscalls as priority"),
-		cl::init(false));
+		"use-reg-pr", cl::desc("Use number of syscalls as priority"));
 }
 
 ExecutorVex::ExecutorVex(InterpreterHandler *ih)
@@ -277,9 +268,7 @@ void ExecutorVex::makeMagicSymbolic(ExecutionState* state)
 	exts = state->addressSpace.getMagicExtents();
 	if (exts.size() == 0) return;
 
-	std::cerr << "[klee-mc] Making "
-		<< exts.size()
-		<< "magic extents symbolic\n";
+	std::cerr << "[klee-mc] Set " << exts.size() << " extents symbolic\n";
 
 	foreach (it, exts.begin(), exts.end())
 		GET_SFH(sfh)->makeRangeSymbolic(
@@ -293,9 +282,7 @@ void ExecutorVex::makeArgsSymbolic(ExecutionState* state)
 	argv = gs->getArgvPtrs();
 	if (argv.size() == 0) return;
 
-	std::cerr << "[klee-mc] Making "
-		<< (argv.size()-1)
-		<< "arguments symbolic\n";
+	std::cerr << "[klee-mc] Set " << (argv.size()-1) << " args symbolic\n";
 
 	foreach (it, argv.begin()+1, argv.end()) {
 		guest_ptr	p = *it;
@@ -361,12 +348,13 @@ void ExecutorVex::bindMappingPage(
 #endif
 
 	for (i = 0; i < PAGE_SIZE; i++) {
-		if (data[i]) {
-			mmap_os = state->addressSpace.getWriteable(
-				mmap_mo, mmap_os_c);
-			break;
-		}
+		/* can keep zero page? */
+		if (!data[i]) continue;
+		/* can't keep zero page */
+		mmap_os = state->addressSpace.getWriteable(mmap_mo, mmap_os_c);
+		break;
 	}
+
 	for (; i < PAGE_SIZE; i++) {
 		/* bug fiend note:
 		 * valgrind will complain on this line because of the
@@ -378,14 +366,11 @@ void ExecutorVex::bindMappingPage(
 
 	if (heap_min != ~0UL && heap_max != 0) {
 		/* scanning memory is kind of stupid, but we're desperate */
+		sys_model->setModelU64(kmodule->module, "heap_begin", heap_min);
+		 /* max = start of last page */ 
 		sys_model->setModelU64(
-			kmodule->module, "heap_begin", heap_min);
-		sys_model->setModelU64(
-			kmodule->module, "heap_end",
-			heap_max + 4096 /* max = start of last page */ );
+			kmodule->module, "heap_end", heap_max + 4096);
 	}
-
-
 }
 
 void ExecutorVex::bindMapping(
@@ -460,7 +445,6 @@ void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
 	const char*  state_data = (const char*)gs->getCPUState()->getStateData();
 	for (unsigned int i=0; i < state_regctx_sz; i++)
 		state->write8(state_regctx_os, i, state_data[i]);
-
 }
 
 void ExecutorVex::run(ExecutionState &initialState)
@@ -538,9 +522,7 @@ void ExecutorVex::logXferRegisters(ExecutionState& state)
 	crumb_buf += sizeof(struct breadcrumb);
 
 	/* 1. store concrete cache */
-	memcpy(	crumb_buf,
-		gs->getCPUState()->getStateData(),
-		reg_sz);
+	memcpy(crumb_buf, gs->getCPUState()->getStateData(), reg_sz);
 	crumb_buf += reg_sz;
 
 	/* 2. store concrete mask */
@@ -641,8 +623,12 @@ void ExecutorVex::handleXferCall(ExecutionState& state, KInstruction* ki)
 
 	args.push_back(es2esv(state).getRegCtx()->getBaseExpr());
 	xferIterInit(iter, &state, ki);
-	while (xferIterNext(iter))
-		executeCall(*(iter.res.first), ki, iter.f, args);
+	while (xferIterNext(iter)) {
+		ExecutionState	*es = iter.res.first;
+		executeCall(*es, ki, iter.f, args);
+		if (KeepDeadStack == false)
+			es->stack.clearTail();
+	}
 }
 
 /**
@@ -660,14 +646,10 @@ void ExecutorVex::handleXferSyscall(
 	if (DumpSyscallStates) {
 		static int	n = 0;
 		char		prefix[32];
-		Query		q(
-			state.constraints,
-			ConstantExpr::create(1, 1));
+		Query		q(state.constraints, MK_CONST(1,1));
 
 		n++;
-		sprintf(prefix, "sc-%d.%d",
-			es2esv(state).getSyscallCount(),
-			n);
+		sprintf(prefix, "sc-%d.%d", es2esv(state).getSyscallCount(), n);
 		SMTPrinter::dump(q, prefix);
 	}
 
@@ -675,18 +657,11 @@ void ExecutorVex::handleXferSyscall(
 
 	sysnr = 0;
 	switch (gs->getArch()) {
-	case Arch::X86_64:
-		state.addressSpace.copyToBuf(
-			es2esv(state).getRegCtx(), &sysnr, 0, 8);
-		break;
-	case Arch::ARM:
-		state.addressSpace.copyToBuf(
-			es2esv(state).getRegCtx(), &sysnr, 4*7, 4);
-		break;
-	case Arch::I386:
-		state.addressSpace.copyToBuf(
-			es2esv(state).getRegCtx(), &sysnr, 0, 4);
-		break;
+#define AS_COPY(off, w)	state.addressSpace.copyToBuf(\
+		es2esv(state).getRegCtx(), &sysnr, off, w);
+	case Arch::X86_64: AS_COPY(16 /* RAX */, 8); break;
+	case Arch::ARM: AS_COPY(4*7, 4); break;
+	case Arch::I386: AS_COPY(0, 4); break;
 	default:
 		assert (0 == 1 && "ULP");
 	}
@@ -714,8 +689,7 @@ void ExecutorVex::handleXferReturn(
 
 	stack_depth = state.stack.size();
 	if (!AllowNegativeStack && stack_depth == 1) {
-		/* Call-stack is exhausted. KLEE resumes
-		 * control. */
+		/* VEX call-stack is exhausted. KLEE resumes control. */
 		terminateOnExit(state);
 		return;
 	}
@@ -729,8 +703,7 @@ void ExecutorVex::handleXferReturn(
 		new_state = iter.res.first;
 		if (stack_depth > 1) {
 			/* pop frame to represent a 'return' */
-			/* if the depth < 1, we treat a ret like a
-			 * jump because what can you do */
+			/* if the depth < 1, treat a ret like a jump */
 			new_state->popFrame();
 		}
 
@@ -760,7 +733,7 @@ void ExecutorVex::callExternalFunction(
 /* copy concrete parts into guest regs. */
 void ExecutorVex::updateGuestRegs(ExecutionState& state)
 {
-	void		*guest_regs;
+	void	*guest_regs;
 	guest_regs = gs->getCPUState()->getStateData();
 	state.addressSpace.copyToBuf(es2esv(state).getRegCtx(), guest_regs);
 }
@@ -770,8 +743,7 @@ void ExecutorVex::printStackTrace(
 	std::ostream& os) const
 {
 	unsigned idx = 0;
-	foreach (it, st.stack.rbegin(), st.stack.rend())
-	{
+	foreach (it, st.stack.rbegin(), st.stack.rend()) {
 		const StackFrame	&sf(*it);
 		Function		*f = sf.kf->function;
 		const VexSB		*vsb;
@@ -851,15 +823,14 @@ uint64_t ExecutorVex::getStateStack(ExecutionState& es) const
 		getGuest()->getCPUState()->getStackRegOff(),
 		gs->getMem()->is32Bit() ? 32 : 64);
 	stack_ce = dyn_cast<ConstantExpr>(stack_e);
-	if (stack_ce == NULL) {
-		std::cerr << "warning: COULD NOT WATCH BY STACK!!!!!!\n";
-		std::cerr << "symbolic stack pointer: ";
-		stack_e->print(std::cerr);
-		std::cerr << '\n';
-		return 0;
-	}
+	if (stack_ce != NULL)
+		return stack_ce->getZExtValue();
 
-	return stack_ce->getZExtValue();
+	std::cerr << "warning: COULD NOT WATCH BY STACK!!!!!!\n";
+	std::cerr << "symbolic stack pointer: ";
+	stack_e->print(std::cerr);
+	std::cerr << '\n';
+	return 0;
 }
 
 llvm::Function* ExecutorVex::getFuncByAddr(uint64_t addr)

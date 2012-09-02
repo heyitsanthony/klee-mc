@@ -793,44 +793,48 @@ done:
 
 void Executor::processTimers(ExecutionState *current, double maxInstTime)
 {
-  static double lastCall = 0., lastCheck = 0.;
-  double now = util::estWallTime();
+	static double lastCall = 0., lastCheck = 0.;
+	double now = util::estWallTime();
 
-  if (now - lastCheck <= kSecondsPerCheck) goto done;
+	if (now - lastCheck <= kSecondsPerCheck) goto done;
 
-  if (dumpPTree) {
-    char name[32];
-    sprintf(name, "ptree%08d.dot", (int) stats::instructions);
-    std::ostream *os = interpreterHandler->openOutputFile(name);
-    if (os) {
-      stateManager->getPTree()->dump(*os);
-      delete os;
-    }
+	if (dumpPTree) {
+		char name[32];
+		sprintf(name, "ptree%08d.dot", (int) stats::instructions);
+		std::ostream *os = interpreterHandler->openOutputFile(name);
+		if (os) {
+			stateManager->getPTree()->dump(*os);
+			delete os;
+		}
 
-    dumpPTree = 0;
-  }
+		dumpPTree = 0;
+	}
 
-  if (dumpStates) processTimersDumpStates();
+	if (dumpStates) processTimersDumpStates();
 
-  if (maxInstTime>0 && current && !stateManager->isRemovedState(current)
-      && lastCall != 0. && (now - lastCall) > maxInstTime) {
-    klee_warning("max-instruction-time exceeded: %.2fs", now - lastCall);
-    terminateEarly(*current, "max-instruction-time exceeded");
-  }
+	if (	maxInstTime > 0 && current &&
+		!stateManager->isRemovedState(current) &&
+		lastCall != 0. && (now - lastCall) > maxInstTime)
+	{
+		klee_warning(
+			"max-instruction-time exceeded: %.2fs",
+			now - lastCall);
+		terminateEarly(*current, "max-instruction-time exceeded");
+	}
 
-  if (timers.empty()) goto done;
+	if (timers.empty()) goto done;
 
-  foreach (it, timers.begin(), timers.end()) {
-    TimerInfo *ti = *it;
+	foreach (it, timers.begin(), timers.end()) {
+		TimerInfo *ti = *it;
 
-    if (now >= ti->nextFireTime) {
-      ti->timer->run();
-      ti->nextFireTime = now + ti->rate;
-    }
-  }
+		if (now < ti->nextFireTime) continue;
+
+		ti->timer->run();
+		ti->nextFireTime = now + ti->rate;
+	}
 
 done:
-  lastCall = now;
+	lastCall = now;
 }
 
 void Executor::deleteTimerInfo(TimerInfo*& p)
