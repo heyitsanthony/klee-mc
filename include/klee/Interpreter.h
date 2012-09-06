@@ -14,42 +14,40 @@
 #include <map>
 #include <set>
 #include <list>
+#include "Replay.h"
 
 struct KTest;
 
-namespace llvm {
+namespace llvm
+{
 class Function;
 class Module;
 }
 
-namespace klee {
+namespace klee
+{
 class ExecutionState;
 class Interpreter;
 class TreeStreamWriter;
 
-#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
-  typedef std::vector<std::pair<unsigned,unsigned> > ReplayPathType;
-#else
-  typedef std::vector<unsigned> ReplayPathType;
-#endif
-
-class InterpreterHandler {
+class InterpreterHandler
+{
 public:
-  InterpreterHandler() {}
-  virtual ~InterpreterHandler() {};
+	InterpreterHandler() {}
+	virtual ~InterpreterHandler() {};
 
-  virtual std::ostream &getInfoStream() const = 0;
+	virtual std::ostream &getInfoStream() const = 0;
 
-  virtual std::string getOutputFilename(const std::string &filename) = 0;
-  virtual std::ostream *openOutputFile(const std::string &filename) = 0;
+	virtual std::string getOutputFilename(const std::string &filename) = 0;
+	virtual std::ostream *openOutputFile(const std::string &filename) = 0;
 
-  virtual unsigned getNumTestCases() = 0;
-  virtual unsigned getNumPathsExplored() = 0;
-  virtual void incPathsExplored() = 0;
+	virtual unsigned getNumTestCases() const = 0;
+	virtual unsigned getNumPathsExplored() const = 0;
+	virtual void incPathsExplored() = 0;
 
-  virtual unsigned processTestCase(const ExecutionState &state,
-                               const char *err, 
-                               const char *suffix) = 0;
+	virtual unsigned processTestCase(
+		const ExecutionState &state,
+		const char *err, const char *suffix) = 0;
 };
 
 class Interpreter
@@ -71,57 +69,58 @@ public:
   };
 
 protected:
-  Interpreter() {};
+	Interpreter() {};
 
 public:
-  virtual ~Interpreter() {};
+	virtual ~Interpreter() {};
 
-  /// Register the module to be executed.  
-  ///
-  /// \return The final module after it has been optimized, checks
-  /// inserted, and modified for interpretation.
-  virtual const llvm::Module * 
-  setModule(llvm::Module *module, 
-            const ModuleOptions &opts) = 0;
+	/// Register the module to be executed.  
+	///
+	/// \return The final module after it has been optimized, checks
+	/// inserted, and modified for interpretation.
+	virtual const llvm::Module * 
+	setModule(llvm::Module *module, const ModuleOptions &opts) = 0;
 
-  // supply a tree stream writer which the interpreter will use
-  // to record the symbolic path (as a stream of '0' and '1' bytes).
-  virtual void setSymbolicPathWriter(TreeStreamWriter *tsw) = 0;
+	// supply a tree stream writer which the interpreter will use
+	// to record the symbolic path (as a stream of '0' and '1' bytes).
+	virtual void setSymbolicPathWriter(TreeStreamWriter *tsw) = 0;
 
-  // supply a test case to replay from. this can be used to drive the
-  // interpretation down a user specified path. use null to reset.
-  virtual void setReplayOut(const struct KTest *out) = 0;
+	// supply a test case to replay from. this can be used to drive the
+	// interpretation down a user specified path. use null to reset.
+	virtual void setReplayOut(const struct KTest *out) = 0;
 
-  // supply a list of branch decisions specifying which direction to
-  // take on forks. this can be used to drive the interpretation down
-  // a user specified path. use null to reset.
-  virtual void setReplayPaths(const std::list<ReplayPathType>* paths) = 0;
+	// supply a list of branch decisions specifying which direction to
+	// take on forks. this can be used to drive the interpretation down
+	// a user specified path. use null to reset.
+	virtual void setReplayPaths(const ReplayPaths* paths) = 0;
 
-  virtual void runFunctionAsMain(llvm::Function *f,
-                                 int argc,
-                                 char **argv,
-                                 char **envp) = 0;
+	virtual void runFunctionAsMain(
+		llvm::Function *f,
+		int argc,
+		char **argv,
+		char **envp) = 0;
 
-  /*** Runtime options ***/
+	/*** Runtime options ***/
+	virtual void setHaltExecution(bool value) = 0;
+	virtual void setInhibitForking(bool value) = 0;
 
-  virtual void setHaltExecution(bool value) = 0;
+	/* State accessor methods ***/
+	virtual unsigned getSymbolicPathStreamID(
+		const ExecutionState &state) = 0;
 
-  virtual void setInhibitForking(bool value) = 0;
+	virtual bool getSymbolicSolution(
+		const ExecutionState &state, 
+		std::vector< 
+		std::pair<
+			std::string,
+			std::vector<unsigned char> > >
+		&res) = 0;
 
-  /*** State accessor methods ***/
-
-  virtual unsigned getSymbolicPathStreamID(const ExecutionState &state) = 0;
-  
-  virtual bool getSymbolicSolution(const ExecutionState &state, 
-                                   std::vector< 
-                                   std::pair<std::string,
-                                   std::vector<unsigned char> > >
-                                   &res) = 0;
-
-  virtual void getCoveredLines(const ExecutionState &state,
-                               std::map<const std::string*, std::set<unsigned> > &res) = 0;
+	virtual void getCoveredLines(
+		const ExecutionState &state,
+		std::map<const std::string*, std::set<unsigned> > &res) = 0;
 };
 
-} // End klee namespace
+}
 
 #endif

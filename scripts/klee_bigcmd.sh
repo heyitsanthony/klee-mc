@@ -71,8 +71,8 @@ SCHEDOPTS="-use-batching-search
 	-use-interleaved-BI=false
 	-use-interleaved-UNC=false
 	-use-interleaved-STK=false
-	-use-interleaved-SI=true
-	-use-interleaved-CD=false
+	-use-interleaved-NI=true
+	-use-interleaved-CD=true
 	-use-interleaved-MXI=true
 	-use-fresh-branch-search=true"
 
@@ -107,7 +107,7 @@ gdb --args klee-mc 		\
 	-max-stp-time=8		\
 	-randomize-fork		\
 	-concretize-early	\
-	-use-softfp		\
+	-use-softfp=true	\
 	-guest-type=sshot	\
 	-write-smt=false	\
 	-show-syscalls		\

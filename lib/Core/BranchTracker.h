@@ -32,8 +32,8 @@ friend class iterator;
 public:
 	class Segment;
 	typedef ref<Segment> SegmentRef;
-	#include "BTSegment.h"
-	#include "BTIter.h"
+#include "BTSegment.h"
+#include "BTIter.h"
 
 	BranchTracker();
 	BranchTracker(const BranchTracker &a);

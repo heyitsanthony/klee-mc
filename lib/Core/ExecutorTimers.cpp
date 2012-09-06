@@ -188,7 +188,9 @@ protected:
 	void print(void) {
 		*os <<
 		executor->getNumStates() << ' ' <<
-		executor->getNumFullStates(); }
+		executor->getNumFullStates() << ' ' <<
+		executor->getHandler().getNumTestCases() << ' ' <<
+		executor->getHandler().getNumPathsExplored(); }
 };
 
 #include "../Expr/ExprAlloc.h"

@@ -1,5 +1,3 @@
-#include <unistd.h>
-
 #include <llvm/Support/Signals.h>
 #include <llvm/Support/CommandLine.h>
 
@@ -16,9 +14,10 @@
 #include "klee/Internal/ADT/KleeHandler.h"
 #include "klee/ExecutionState.h"
 
-#include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <dirent.h>
+
 #include <iostream>
 #include <fstream>
 
@@ -331,8 +330,7 @@ unsigned KleeHandler::processTestCase(
 	}
 
 	if (WriteSMT) {
-		Query	query(	state.constraints,
-				ConstantExpr::alloc(0, Expr::Bool));
+		Query	query(state.constraints, MK_CONST(0, Expr::Bool));
 		std::ostream	*f;
 
 		f = openTestFileGZ("smt", id);
@@ -418,8 +416,11 @@ void KleeHandler::getPathFiles(
 
 	foreach (it, contents.begin(), contents.end()) {
 		std::string f = it->str();
-		if (f.substr(f.size() - 5, f.size()) == ".path")
+		if (	(f.substr(f.size() - 5, f.size()) == ".path") ||
+			(f.substr(f.size() - 8, f.size()) == ".path.gz"))
+		{
 			results.push_back(f);
+		}
 	}
 }
 
@@ -495,6 +496,5 @@ void KleeHandler::printErrorMessage(
 	} else
 		LOSING_IT("error");
 }
-
 
 unsigned KleeHandler::getStopAfterNTests(void) { return StopAfterNTests; }

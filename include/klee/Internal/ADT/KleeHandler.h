@@ -33,8 +33,8 @@ public:
 	const char* getOutputDir(void) const { return m_outputDirectory; }
 
 	std::ostream &getInfoStream() const { return *m_infoFile; }
-	unsigned getNumTestCases() { return m_testIndex; }
-	unsigned getNumPathsExplored() { return m_pathsExplored; }
+	unsigned getNumTestCases() const { return m_testIndex; }
+	unsigned getNumPathsExplored() const { return m_pathsExplored; }
 	void incPathsExplored() { m_pathsExplored++; }
 
 	virtual void setInterpreter(Interpreter *i);
