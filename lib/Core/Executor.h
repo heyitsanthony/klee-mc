@@ -274,7 +274,7 @@ private:
   const struct KTest *replayOut;
 
   /// When non-empty a list of lists of branch decisions to be used for replay.
-  const std::list<ReplayPathType> *replayPaths;
+  const std::list<ReplayPath> *replayPaths;
 
   /// The index into the current \ref replayOut object.
   unsigned replayPosition;
@@ -494,14 +494,14 @@ public:
 	{ symPathWriter = tsw; }
 	TreeStreamWriter* getSymbolicPathWriter(void) { return symPathWriter; }
 
-	virtual void setReplayOut(const struct KTest *out)
+	virtual void setReplayKTest(const struct KTest *out)
 	{
 		assert(!replayPaths && "cannot replay both buffer and path");
 		replayOut = out;
 		replayPosition = 0;
 	}
 
-	virtual void setReplayPaths(const std::list<ReplayPathType>* paths)
+	virtual void setReplayPaths(const std::list<ReplayPath>* paths)
 	{
 		assert(!replayOut && "cannot replay both buffer and path");
 		replayPaths = paths;

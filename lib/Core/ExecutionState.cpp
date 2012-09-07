@@ -663,7 +663,7 @@ void ExecutionState::trackBranch(int condIndex, const KInstruction* ki)
 
 ExecutionState* ExecutionState::createReplay(
 	ExecutionState& initialState,
-	const ReplayPathType& replayPath)
+	const ReplayPath& replayPath)
 {
 	ExecutionState* newState;
 
@@ -687,18 +687,19 @@ bool ExecutionState::isReplayDone(void) const
 unsigned ExecutionState::stepReplay(void)
 {
 #ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
-    assert (prevPC->getInfo()->assemblyLine == (*replayBrIter).second &&
-      "branch instruction IDs do not match");
+//	Replay::checkPC(prevPC, replayBrIter);
+	assert (prevPC->getInfo()->assemblyLine == (*replayBrIter).second &&
+	      "branch instruction IDs do not match");
 #endif
     unsigned targetIndex = (*replayBrIter).first;
     ++replayBrIter;
     return targetIndex;
 }
 
-BranchInfo ExecutionState::branchLast(void) const
+ReplayNode ExecutionState::branchLast(void) const
 {
 	if (brChoiceSeq.empty())
-		return BranchInfo();
+		return ReplayNode();
 	return brChoiceSeq.back();
 }
 

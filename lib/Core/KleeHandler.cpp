@@ -11,7 +11,7 @@
 #include "klee/Internal/ADT/CmdArgs.h"
 
 #include "klee/Internal/Module/KFunction.h"
-#include "klee/Internal/ADT/KleeHandler.h"
+#include "klee/KleeHandler.h"
 #include "klee/ExecutionState.h"
 
 #include <sys/stat.h>
@@ -315,14 +315,9 @@ unsigned KleeHandler::processTestCase(
 		printErrorMessage(state, errorMessage, errorSuffix, id);
 
 	if (WritePaths) {
+
 		if (std::ostream* f = openTestFileGZ("path", id)) {
-			foreach(bit, state.branchesBegin(), state.branchesEnd()) {
-				(*f) << (*bit).first
-#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
-				<< "," << (*bit).second
-#endif
-				<< "\n";
-			}
+			Replay::writePathFile(state, *f);
 			delete f;
 		} else {
 			LOSING_IT(".path");
@@ -424,42 +419,6 @@ void KleeHandler::getPathFiles(
 	}
 }
 
-// load a .path file
-#define IFSMODE	std::ios::in | std::ios::binary
-void KleeHandler::loadPathFile(std::string name, ReplayPathType &buffer)
-{
-	std::istream	*is;
-
-	if (name.substr(name.size() - 3) == ".gz") {
-		std::string new_name = name.substr(0, name.size() - 3);
-		is = new gzifstream(name.c_str(), IFSMODE);
-	} else
-		is = new std::ifstream(name.c_str(), IFSMODE);
-
-	if (is == NULL || !is->good()) {
-		assert(0 && "unable to open path file");
-		if (is) delete is;
-		return;
-	}
-
-	while (is->good()) {
-		unsigned value;
-		*is >> value;
-		if (!is->good()) break;
-		is->get();
-#ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
-		unsigned id;
-		*is >> id;
-		is->get();
-		buffer.push_back(std::make_pair(value,id));
-#else
-		buffer.push_back(value);
-#endif
-	}
-
-	delete is;
-}
-
 void KleeHandler::getOutFiles(
 	std::string path, std::vector<std::string> &results)
 {
@@ -498,3 +457,16 @@ void KleeHandler::printErrorMessage(
 }
 
 unsigned KleeHandler::getStopAfterNTests(void) { return StopAfterNTests; }
+
+void KleeHandler::loadPathFiles(
+	const std::vector<std::string>& pathFiles,
+	std::list<ReplayPath>& replayPaths)
+{
+	ReplayPath	replayPath;
+
+	foreach (it, pathFiles.begin(), pathFiles.end()) {
+		Replay::loadPathFile(*it, replayPath);
+		replayPaths.push_back(replayPath);
+		replayPath.clear();
+	}
+}

@@ -10,7 +10,7 @@
 #include "klee/Internal/ADT/KTest.h"
 #include "klee/Internal/ADT/TreeStream.h"
 #include "klee/Internal/ADT/TwoOStreams.h"
-#include "klee/Internal/ADT/KleeHandler.h"
+#include "klee/KleeHandler.h"
 #include "klee/Internal/ADT/CmdArgs.h"
 #include "klee/Internal/System/Time.h"
 #include "static/Sugar.h"
@@ -392,7 +392,7 @@ static void runReplay(Interpreter* interpreter, Function* mainFn, CmdArgs* ca)
   unsigned i=0;
   foreach (it, kTests.begin(), kTests.end()) {
     KTest *out = *it;
-    interpreter->setReplayOut(out);
+    interpreter->setReplayKTest(out);
     std::cerr	<< "KLEE: replaying: " << *it
     		<< " (" << kTest_numBytes(out) << " bytes)"
 		<< " (" << ++i << "/" << outFiles.size() << ")\n";
@@ -403,7 +403,7 @@ static void runReplay(Interpreter* interpreter, Function* mainFn, CmdArgs* ca)
     if (interrupted) break;
   }
 
-  interpreter->setReplayOut(0);
+  interpreter->setReplayKTest(0);
 
   while (!kTests.empty()) {
     kTest_free(kTests.back());
@@ -483,8 +483,7 @@ int main(int argc, char **argv, char **envp)
 	ExecutorBC			*exe_bc;
 	SeedExecutor<ExecutorBC>	*exe_seed;
 	std::vector<std::string>	pathFiles;
-	std::list<ReplayPathType>	replayPaths;
-	ReplayPathType			replayPath;
+	std::list<ReplayPath>		replayPaths;
 	std::vector<std::string>	arguments;
 
 	atexit(llvm_shutdown);  // Call llvm_shutdown() on exit.
@@ -520,11 +519,7 @@ int main(int argc, char **argv, char **envp)
 	if (ReplayPathFile != "")
 		pathFiles.push_back(ReplayPathFile);
 
-	foreach (it, pathFiles.begin(), pathFiles.end()) {
-		KleeHandler::loadPathFile(*it, replayPath);
-			replayPaths.push_back(replayPath);
-			replayPath.clear();
-	}
+	KleeHandler::loadPathFiles(pathFiles, replayPaths);
 
 	arguments.push_back(InputFile);
 	arguments.insert(arguments.end(), InputArgv.begin(), InputArgv.end());

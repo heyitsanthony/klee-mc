@@ -25,7 +25,6 @@ class KInstruction;
 class HeapObject;
 
 /// Implements a trie data structure for tracking branch decisions
-typedef std::pair<unsigned, const KInstruction*> BranchInfo;
 class BranchTracker
 {
 friend class iterator;
@@ -51,20 +50,20 @@ public:
 	}
 
 
-	BranchInfo front() const;
-	BranchInfo back() const;
-	BranchInfo operator[](unsigned index) const;
+	ReplayNode front() const;
+	ReplayNode back() const;
+	ReplayNode operator[](unsigned index) const;
 	BranchTracker& operator=(const BranchTracker &a);
 
 	void push_back(unsigned decision, const KInstruction* ki = 0);
-	void push_back(const BranchInfo &a) { push_back(a.first, a.second); }
+	void push_back(const ReplayNode &a) { push_back(a.first, a.second); }
 
 	bool push_heap_ref(HeapObject *a);
 
 	/// insert a new series of branches; returns a reference to the new tail
 	/// NOTE: this reference should be stored somewhere
 	/// or the new branches will immediately be garbage collected.
-	SegmentRef insert(const ReplayPathType &branches);
+	SegmentRef insert(const ReplayPath &branches);
 
 	unsigned getNumSuccessors(iterator it) const;
 	iterator getSuccessor(iterator it, unsigned index) const;
@@ -77,8 +76,7 @@ private:
 	void splitSwapData(Segment &seg, unsigned index, Segment* newSeg);
 
 	SegmentRef containing(unsigned index) const;
-	typedef unsigned ReplayEntry;
-	iterator findChild(iterator it, ReplayEntry branch, bool &noChild) const;
+	iterator findChild(iterator it, ReplayNode branch, bool &noChild) const;
 
 	SegmentRef	head, tail;
 	mutable bool	needNewSegment;

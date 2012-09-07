@@ -78,28 +78,28 @@ size_t BranchTracker::size() const {
 }
 
 BranchTracker::SegmentRef
-BranchTracker::containing(unsigned index) const {
-  unsigned prefixSize = size();
-  SegmentRef it = tail;
-  for (; prefixSize - tail->size() > index;
-       it = it->parent)
-    prefixSize -= tail->size();
-  return it.get();
+BranchTracker::containing(unsigned index) const
+{
+	unsigned prefixSize = size();
+	SegmentRef it = tail;
+	for (; prefixSize - tail->size() > index; it = it->parent)
+		prefixSize -= tail->size();
+	return it.get();
 }
 
-BranchInfo BranchTracker::front() const
+ReplayNode BranchTracker::front() const
 {
 	assert(!empty());
 	return (*head)[0];
 }
 
-BranchInfo BranchTracker::back() const
+ReplayNode BranchTracker::back() const
 {
 	assert(!empty());
 	return (*tail)[tail->size()-1];
 }
 
-BranchInfo BranchTracker::operator[](unsigned index) const
+ReplayNode BranchTracker::operator[](unsigned index) const
 {
 	int		prefixSize;
 	SegmentRef 	it;
@@ -157,9 +157,10 @@ BranchTracker& BranchTracker::operator=(const BranchTracker &a)
 }
 
 BranchTracker::iterator
-BranchTracker::findChild(BranchTracker::iterator it,
-                         ReplayEntry branch,
-                         bool &noChild) const
+BranchTracker::findChild(
+	BranchTracker::iterator it,
+        ReplayNode		branch,
+        bool			&noChild) const
 {
 	bool match = false;
 	foreach (cit, it.curSeg->children.begin(), it.curSeg->children.end())
@@ -168,11 +169,10 @@ BranchTracker::findChild(BranchTracker::iterator it,
 
 		assert (!nextSeg->branches.empty());
 
-		if (	(nextSeg->isBranch[0]
-			&& (unsigned) nextSeg->branches[0] == branch)
+		if (	(nextSeg->isBranch[0] && nextSeg->branches[0] == branch.first)
 			||
-			(!nextSeg->isBranch[0]
-			&& nextSeg->nonBranches[0] == branch))
+			(!nextSeg->isBranch[0] &&
+				nextSeg->nonBranches[0] == branch.first))
 		{
 		//	assert(nextSeg->branchID[0] == nextValue.second
 		//	     && "Identical branch leads to different target");
@@ -192,14 +192,14 @@ BranchTracker::findChild(BranchTracker::iterator it,
 }
 
 BranchTracker::SegmentRef
-BranchTracker::insert(const ReplayPathType &branches)
+BranchTracker::insert(const ReplayPath &branches)
 {
 	iterator it = begin();
 	unsigned index = 0;
 	bool noChild = false;
 
 	for (; it != end() && index < branches.size(); index++) {
-		BranchInfo	value(branches[index], 0);
+		ReplayNode	value(branches[index]);
 
 		// special case of initial branch having more than one target;
 		// the root segment in the trie is empty.
@@ -253,7 +253,7 @@ BranchTracker::insert(const ReplayPathType &branches)
 	}
 
 	for (; index < branches.size(); index++) {
-		BranchInfo value(branches[index], 0 /* ??? */);
+		ReplayNode value(branches[index]);
 		push_back(value);
 	}
 
@@ -307,7 +307,6 @@ void BranchTracker::splitSwapData(Segment &seg, unsigned index, Segment* newseg)
 	// for safety, keep the heap object references in the parent
 	std::swap(newseg->heapObjects, seg.heapObjects);
 }
-
 
 void BranchTracker::splitUpdateParent(Segment& seg, Segment* newseg)
 {
@@ -366,7 +365,7 @@ bool BranchTracker::iterator::mayDeref(void) const
 	return true;
 }
 
-BranchInfo BranchTracker::iterator::operator*() const
+ReplayNode BranchTracker::iterator::operator*() const
 {
 	assert (mayDeref());
 
@@ -453,7 +452,7 @@ BranchTracker::Segment::~Segment(void)
 	seg_alloc_c--;
 }
 
-BranchInfo BranchTracker::Segment::operator[](unsigned index) const
+ReplayNode BranchTracker::Segment::operator[](unsigned index) const
 {
 	assert(index < branches.size()); // bounds check
 	const KInstruction	*ki;
@@ -465,10 +464,10 @@ BranchInfo BranchTracker::Segment::operator[](unsigned index) const
 
 		sit = nonBranches.find(index);
 		assert(sit != nonBranches.end());
-		return BranchInfo(sit->second, ki);
+		return ReplayNode(sit->second, ki);
 	}
 
-	return BranchInfo(branches[index], ki);
+	return ReplayNode(branches[index], ki);
 }
 
 

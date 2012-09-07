@@ -61,10 +61,12 @@ public:
 	virtual void printName(int level = 0) const = 0;
 	virtual bool failed(void) const { return has_failed; }
 	virtual void ackFail(void) { has_failed = false; }
-
+	static uint64_t getImpliedValids(void) { return impliedValid_c; }
 protected:
 	virtual void failQuery(void);
 	bool has_failed;
+private:
+	static uint64_t impliedValid_c;
 };
 
 }

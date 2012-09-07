@@ -38,7 +38,7 @@ private:
 	bool mayDeref(void) const;
 public:
 	bool isNull() const { return curSeg.isNull(); }
-	BranchInfo operator*() const;
+	ReplayNode operator*() const;
 	iterator operator++(int notused);
 	iterator operator++();
 	inline bool operator==(const iterator& a) const

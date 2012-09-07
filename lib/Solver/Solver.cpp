@@ -53,6 +53,8 @@ bool	UseFastCexSolver;
 bool	UseHashSolver;
 double	MaxSTPTime;
 
+uint64_t SolverImpl::impliedValid_c = 0;
+
 #if 0
 namespace llvm
 {
@@ -100,30 +102,28 @@ bool llvm::cl::parser<sockaddr_in_opt>::parse(
 }
 #endif
 namespace {
-  cl::opt<bool>
-  DebugValidateSolver("debug-validate-solver", cl::init(false));
+  cl::opt<bool> DebugValidateSolver("debug-validate-solver");
 
   cl::opt<bool>
-  UseHashCmp("use-hash-cmp",
-  	cl::desc("Compare two kinds of hashes on queries."), cl::init(false));
+  UseHashCmp("use-hash-cmp", cl::desc("Compare two hashes on queries."));
 
   cl::opt<bool>
   UseForkedSTP("use-forked-stp", cl::desc("Run STP in forked process"));
 
-  cl::opt<sockaddr_in_opt>
-  STPServer("stp-server", cl::value_desc("host:port"));
-
   cl::opt<bool>
-  UseSTPQueryPCLog("use-stp-query-pc-log", cl::init(false));
+  DoubleCheckValidity("double-check-validity",
+  	cl::desc("Check for SAT on expr and NOT-expr even if one is unsat"));
 
-  cl::opt<bool> UseSMTQueryLog("use-smt-log", cl::init(false));
+  cl::opt<sockaddr_in_opt> STPServer("stp-server", cl::value_desc("host:port"));
+
+  cl::opt<bool> UseSTPQueryPCLog("use-stp-query-pc-log");
+  cl::opt<bool> UseSMTQueryLog("use-smt-log");
 
   cl::opt<bool, true>
   ProxyUseFastCexSolver(
   	"use-fast-cex-solver",
   	cl::desc("Use the fast CEX solver, whatever that is."),
-  	cl::location(UseFastCexSolver),
-	cl::init(false));
+  	cl::location(UseFastCexSolver));
 
   cl::opt<bool, true>
   ProxyUseHashSolver(
@@ -138,12 +138,9 @@ namespace {
 	cl::location(MaxSTPTime),
         cl::init(120.0));
 
-
   cl::opt<bool>
   UseFastRangeSolver(
-	"use-fast-range-solver",
-	cl::desc("Use the fast range solver."),
-	cl::init(false));
+	"use-fast-range-solver", cl::desc("Use the fast range solver."));
 
   cl::opt<bool>
   UseCexCache("use-cex-cache",
@@ -156,67 +153,45 @@ namespace {
   cl::opt<bool>
   UseTautologyChecker(
   	"use-tautology-checker",
-	cl::init(false),
 	cl::desc("Run solver on bare formulas to find tautologies"));
 
   cl::opt<bool>
   UsePoisonCacheExpr("use-pcache-expr",
-  	cl::init(false),
 	cl::desc("Cache/Reject poisonous query hashes."));
 
   cl::opt<bool>
   UsePoisonCacheExprSHAStr("use-pcache-shastr",
-  	cl::init(false),
 	cl::desc("Cache/Reject poisonous query SHA'd strings."));
 
   cl::opt<bool>
   UsePoisonCacheRewritePtr("use-pcache-rewriteptr",
-  	cl::init(false),
 	cl::desc("Cache/Reject poisonous query with pointers rewritten."));
 
-  cl::opt<bool>
-  UseBoolector(
-  	"use-boolector", cl::init(false), cl::desc("Use boolector solver"));
+  cl::opt<bool> UseBoolector("use-boolector", cl::desc("Use boolector solver"));
+  cl::opt<bool> UseZ3("use-z3", cl::desc("Use z3 solver"));
+  cl::opt<bool> UseB15("use-b15", cl::desc("Use boolector-1.5 solver"));
+  cl::opt<bool> UseCVC3("use-cvc3", cl::desc("Use CVC3 solver (broken)"));
+  cl::opt<bool> UseYices("use-yices", cl::desc("Use Yices solver"));
 
   cl::opt<bool>
-  UseZ3("use-z3", cl::init(false), cl::desc("Use z3 solver"));
-
-  cl::opt<bool>
-  UseB15("use-b15", cl::init(false), cl::desc("Use boolector-1.5 solver"));
-
-  cl::opt<bool>
-  UseCVC3("use-cvc3",
-  	cl::init(false),
-	cl::desc("Use CVC3 solver (broken)"));
-
-  cl::opt<bool>
-  UseYices("use-yices", cl::init(false), cl::desc("Use Yices solver"));
-
-  cl::opt<bool>
-  UsePipeSolver(
-  	"pipe-solver",
-	cl::init(false),
-	cl::desc("Run solver through forked pipe."));
+  UsePipeSolver("pipe-solver", cl::desc("Run solver through forked pipe."));
 
   cl::opt<bool>
   UseIndependentSolver("use-independent-solver",
                        cl::init(true),
 		       cl::desc("Compute constraint independence"));
 
-  cl::opt<bool>
-  UseQueryPCLog("use-query-pc-log", cl::init(false));
+  cl::opt<bool> UseQueryPCLog("use-query-pc-log");
 
   cl::opt<bool>
   XChkExprBuilder(
   	"xchk-expr-builder",
-  	cl::desc("Cross check expression builder with oracle builder."),
-	cl::init(false));
+  	cl::desc("Cross check expression builder with oracle builder."));
 
   cl::opt<bool>
   EquivExprBuilder(
   	"equiv-expr-builder",
-	cl::desc("Use solver to find smaller, equivalent expressions."),
-	cl::init(false));
+	cl::desc("Use solver to find smaller, equivalent expressions."));
 }
 
 namespace klee
@@ -426,6 +401,12 @@ Solver::Validity SolverImpl::computeValidity(const Query& query)
 
 	isSat = computeSat(query);
 	if (failed()) return Solver::Unknown;
+
+	/* TODO: randomize whether we check expr or negation first */
+	if (!isSat && !DoubleCheckValidity) {
+		impliedValid_c++;
+		return Solver::False;
+	}
 
 	isNegSat = computeSat(query.negateExpr());
 	if (failed()) return Solver::Unknown;

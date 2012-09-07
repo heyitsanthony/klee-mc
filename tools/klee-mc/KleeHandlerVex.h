@@ -1,7 +1,7 @@
 #ifndef KLEEHANDLERVEX_H
 #define KLEEHANDLERVEX_H
 
-#include "klee/Internal/ADT/KleeHandler.h"
+#include "klee/KleeHandler.h"
 
 class Guest;
 

@@ -258,7 +258,7 @@ void runReplay(Interpreter* interpreter)
 	foreach (it, kTests.begin(), kTests.end()) {
 		KTest *out = *it;
 
-		interpreter->setReplayOut(out);
+		interpreter->setReplayKTest(out);
 		std::cerr
 			<< "KLEE: replaying: " << *it << " ("
 			<< kTest_numBytes(out) << " bytes)"
@@ -270,7 +270,7 @@ void runReplay(Interpreter* interpreter)
 			break;
 	}
 
-	interpreter->setReplayOut(0);
+	interpreter->setReplayKTest(0);
 
 	while (!kTests.empty()) {
 		kTest_free(kTests.back());
@@ -417,10 +417,9 @@ Interpreter* createInterpreter(KleeHandler *handler, Guest* gs)
 	return NEW_INTERP(ExecutorVex);
 }
 
-static std::list<ReplayPathType>	replayPaths;
+static std::list<ReplayPath>	replayPaths;
 void setupReplayPaths(Interpreter* interpreter)
 {
-	ReplayPathType			replayPath;
 	std::vector<std::string>	pathFiles;
 
 	if (ReplayPathDir != "")
@@ -428,11 +427,7 @@ void setupReplayPaths(Interpreter* interpreter)
 	if (ReplayPathFile != "")
 		pathFiles.push_back(ReplayPathFile);
 
-	foreach (it, pathFiles.begin(), pathFiles.end()) {
-		KleeHandler::loadPathFile(*it, replayPath);
-		replayPaths.push_back(replayPath);
-		replayPath.clear();
-	}
+	KleeHandler::loadPathFiles(pathFiles, replayPaths);
 
 	if (!replayPaths.empty()) {
 		interpreter->setReplayPaths(&replayPaths);

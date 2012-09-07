@@ -37,7 +37,7 @@ public:
 
 	inline size_t size() const { return branches.size(); }
 	inline bool empty() const { return branches.empty(); }
-	BranchInfo operator[](unsigned index) const;
+	ReplayNode operator[](unsigned index) const;
 	int compare(Segment &a) const
 	{
 		if (this < &a)

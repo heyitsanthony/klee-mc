@@ -56,14 +56,15 @@ public:
 	static void loadOutFile(
 		std::string name, std::vector<unsigned char> &buffer);
 
-	// load a .path file
-	static void loadPathFile(std::string name, ReplayPathType &buffer);
-
 	static void getPathFiles(
 		std::string path, std::vector<std::string> &results);
 
 	static void getOutFiles(
 		std::string path, std::vector<std::string> &results);
+
+	static void loadPathFiles(
+		const std::vector<std::string>& pathfiles,
+		std::list<ReplayPath>& replayPaths);
 protected:
 typedef
 	std::vector< std::pair<std::string, std::vector<unsigned char> > >

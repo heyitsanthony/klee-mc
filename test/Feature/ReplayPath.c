@@ -1,13 +1,13 @@
 // x & 1 => true
-// RUN: echo "1" > %t1.path
+// RUN: echo "1,0" > %t1.path
 // x & 2 => false
-// RUN: echo "0" >> %t1.path
+// RUN: echo "0,0" >> %t1.path
 // x & 4 => true
-// RUN: echo "1" >> %t1.path
+// RUN: echo "1,0" >> %t1.path
 // ((x & 2) != 0) => false
-// RUN: echo "0" >> %t1.path
+// RUN: echo "0,0" >> %t1.path
 // ((x & 2) == 0) => true
-// RUN: echo "1" >> %t1.path
+// RUN: echo "1,0" >> %t1.path
 // RUN: %llvmgcc %s -emit-llvm -O0 -c -o %t2.bc
 // RUN: %klee --replay-path %t1.path %t2.bc > %t3.log 2>%t4.stderr
 // RUN: echo "res: 110" > %t3.good

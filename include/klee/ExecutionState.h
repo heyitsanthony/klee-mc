@@ -172,7 +172,7 @@ public:
 
 	static ExecutionState* createReplay(
 		ExecutionState& initialState,
-		const ReplayPathType& replayPath);
+		const ReplayPath& replayPath);
 
 	ExecutionState *branch(bool forReplay = false);
 	ExecutionState *compact() const;
@@ -292,7 +292,7 @@ public:
 	BranchTracker::iterator branchesEnd(void) const
 	{ return brChoiceSeq.end(); }
 
-	BranchInfo branchLast(void) const;
+	ReplayNode branchLast(void) const;
 
 	unsigned getPHISlot(void) const { return incomingBBIndex; }
 
