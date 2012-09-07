@@ -115,16 +115,16 @@ namespace {
 		"the bytes, not necessarily making them concrete."));
 
 	cl::list<std::string>
-	ReplayOutFile(
-		"replay-out",
-		cl::desc("Specify an out file to replay"),
-		cl::value_desc("out file"));
+	ReplayKTestFile(
+		"replay-ktest",
+		cl::desc("Specify a ktest file to replay"),
+		cl::value_desc("ktest file"));
 
 	cl::list<std::string>
-	ReplayOutDir(
-		"replay-out-dir",
-		cl::desc("Specify a directory to replay .out files from"),
-		cl::value_desc("out directory"));
+	ReplayKTestDir(
+		"replay-ktest-dir",
+		cl::desc("Specify a directory to replay .ktest files from"),
+		cl::value_desc("ktest directory"));
 
 	cl::opt<std::string>
 	ReplayPathFile(
@@ -242,8 +242,8 @@ void runReplay(Interpreter* interpreter)
 	std::vector<std::string>	outFiles;
 	unsigned			i=0;
 
-	outFiles = ReplayOutFile;
-	foreach (it, ReplayOutDir.begin(),  ReplayOutDir.end())
+	outFiles = ReplayKTestFile;
+	foreach (it, ReplayKTestDir.begin(),  ReplayKTestDir.end())
 		KleeHandler::getOutFiles(*it, outFiles);
 
 	foreach (it, outFiles.begin(), outFiles.end()) {
@@ -393,7 +393,7 @@ Guest* getGuest(CmdArgs* cmdargs)
 }
 
 static bool isReplaying(void)
-{ return (!ReplayOutDir.empty() || !ReplayOutFile.empty()); }
+{ return (!ReplayKTestDir.empty() || !ReplayKTestFile.empty()); }
 
 #define NEW_INTERP(x)					\
 	((UseGDB)					\

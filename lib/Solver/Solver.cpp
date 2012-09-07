@@ -119,6 +119,8 @@ namespace {
   cl::opt<bool> UseSTPQueryPCLog("use-stp-query-pc-log");
   cl::opt<bool> UseSMTQueryLog("use-smt-log");
 
+  cl::opt<bool> UseRandomGetValue("randomize-getvalue");
+
   cl::opt<bool, true>
   ProxyUseFastCexSolver(
   	"use-fast-cex-solver",
@@ -478,7 +480,10 @@ bool Solver::getValue(const Query& query, ref<ConstantExpr> &result)
 		return true;
 	}
 
-	return getValueRandomized(query, result);
+	if (UseRandomGetValue)
+		return getValueRandomized(query, result);
+
+	return getValueDirect(query, result);
 }
 
 bool Solver::getValueDirect(const Query& query, ref<ConstantExpr> &result)
