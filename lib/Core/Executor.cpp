@@ -67,11 +67,13 @@ extern double	MaxSTPTime;
 
 namespace {
   DECL_OPTBOOL(ChkConstraints, "chk-constraints");
+  DECL_OPTBOOL(YieldUncached, "yield-uncached");
 
   cl::opt<bool>
   ConcretizeEarlyTerminate(
   	"concretize-early",
-	cl::desc("Concretizeearly terminations"));
+	cl::desc("Concretizee early terminations"),
+	cl::init(true));
 
   cl::opt<bool>
   DumpBadInitValues(
@@ -80,8 +82,7 @@ namespace {
 
   cl::opt<bool>
   UsePID("use-pid",
-	 cl::desc("Use proportional-integral-derivative state control"),
-	 cl::init(false));
+	 cl::desc("Use proportional-integral-derivative state control"));
 
   cl::opt<bool> DumpStatesOnHalt("dump-states-on-halt", cl::init(true));
 
@@ -106,10 +107,10 @@ namespace {
 	cl::init(true));
 
   cl::opt<bool>
-  EmitAllErrors("emit-all-errors",
-                cl::init(false),
-                cl::desc("Generate tests cases for all errors "
-                         "(default=one per (error,instruction) pair)"));
+  EmitAllErrors(
+  	"emit-all-errors",
+        cl::desc("Generate tests cases for all errors "
+        	"(default=one per (error,instruction) pair)"));
 
   cl::opt<double>
   MaxInstructionTime(
@@ -905,13 +906,27 @@ void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 {
 	BranchInst	*bi = cast<BranchInst>(ki->getInst());
 	ref<Expr>	cond(eval(ki, 0, state));
+	bool		isConst;
 	StatePair	branches;
 	bool		hasHint = false, branchHint;
 
-	if (brPredict && cond->getKind() != Expr::Constant) {
+	isConst = cond->getKind() == Expr::Constant;
+	if (brPredict && !isConst) {
 		hasHint = brPredict->predict(
 			BranchPredictor::StateBranch(state, ki, cond),
 			branchHint);
+	}
+
+	if (YieldUncached) {
+		bool mbt;
+		if (fastSolver->mayBeTrue(state, cond, mbt) == false) {
+			static int n = 0;
+			state.abortInstruction();
+			stateManager->yield(&state);
+			std::cerr << "PREEMPT: " << cond << '\n';
+			n++;
+			return;
+		}
 	}
 
 	if (hasHint) {
@@ -920,9 +935,7 @@ void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 		else forking->setPreferFalseState(true);
 	}
 
-	if (	IgnoreBranchConstraints &&
-		cond->getKind() != Expr::Constant)
-	{
+	if (IgnoreBranchConstraints && !isConst) {
 		branches = forking->forkUnconditional(state, false);
 		assert (branches.first && branches.second);
 	} else {
@@ -973,6 +986,7 @@ void Executor::finalizeBranch(
 	{
 		ExecutionState *newState;
 		newState = st->reconstitute(*initialStateCopy);
+		std::cerr << "REPLACING STATE: " << (void*)st << '\n';
 		replaceStateImmForked(st, newState);
 		st = newState;
 	}
@@ -1265,6 +1279,7 @@ void Executor::forkSwitch(
 				kf->instructions[entry]->getInfo()->id))
 		{
 			ExecutionState *newState;
+			std::cerr << "RECONS2\n";
 			newState = es->reconstitute(*initialStateCopy);
 			replaceStateImmForked(es, newState);
 			es = newState;
@@ -1935,7 +1950,7 @@ void Executor::stepStateInst(ExecutionState* &state)
 
 void Executor::handleMemoryUtilization(ExecutionState* &state)
 {
-	uint64_t mbs;
+	uint64_t mbs, instLimit;
 
 	if (!(MaxMemory && (stats::instructions & 0xFFFF) == 0))
 		return;
@@ -1961,19 +1976,20 @@ void Executor::handleMemoryUtilization(ExecutionState* &state)
 	if (mbs <= MaxMemory + 100)
 		return;
 
-	/* Ran memory to the roof. FLIP OUT. */
-	if 	(ReplayInhibitedForks == false ||
-		/* resort to killing states if the recent compacting
-		didn't help to reduce the memory usage */
-		stats::instructions-
-		lastMemoryLimitOperationInstructions <= 0x20000)
-	{
-		killStates(state);
-	} else {
-		stateManager->compactPressureStates(state, MaxMemory);
+	instLimit = stats::instructions - lastMemoryLimitOperationInstructions;
+	lastMemoryLimitOperationInstructions = stats::instructions;
+
+	if (ReplayInhibitedForks && instLimit > 0x20000) {
+		std::cerr << "Replay inhibited forks.. COMPACTING!!\n";
+		stateManager->compactPressureStates(MaxMemory);
+		return;
 	}
 
-	lastMemoryLimitOperationInstructions = stats::instructions;
+	/* Ran memory to the roof. 
+	 * resort to killing states if the recent compacting
+	 * didn't help to reduce the memory usage */
+	killStates(state);
+
 }
 
 unsigned Executor::getNumStates(void) const { return stateManager->size(); }
@@ -2011,7 +2027,7 @@ void Executor::run(ExecutionState &initialState)
 	if (replayPaths) {
 		replayPathsIntoStates(initialState);
 		stateManager->queueRemove(&initialState);
-		stateManager->commitQueue(0);
+		stateManager->commitQueue();
 	}
 
 	stateManager->setupSearcher(this);
@@ -2693,7 +2709,7 @@ void Executor::handleMemoryPID(ExecutionState* &state)
 
 	if (states_to_gen < 0) {
 		onlyNonCompact = false;
-		stateManager->compactStates(state, -states_to_gen);
+		stateManager->compactStates(-states_to_gen);
 	}
 }
 

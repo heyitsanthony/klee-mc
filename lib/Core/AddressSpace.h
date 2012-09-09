@@ -81,6 +81,8 @@ public:
 	const MemoryObject* resolveOneMO(uint64_t address);
 	const MemoryObject* getLastBoundHint(void) const { return last_mo; }
 
+	void clear(void);
+
 	// Find a feasible object for 'address'.
 	// Returns 'true' if feasible object is found
 	bool getFeasibleObject(

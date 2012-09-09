@@ -115,14 +115,10 @@ ExecutionState *ExecutionState::branch(bool forReplay)
 {
 	ExecutionState *newState;
 
+	assert (forReplay == false && "can't replay right");
+
 	depth++;
 	weight *= .5;
-
-	if (forReplay) {
-		newState = compact();
-		newState->coveredNew = false;
-		return newState;
-	}
 
 	newState = copy();
 	newState->coveredNew = false;
@@ -132,28 +128,24 @@ ExecutionState *ExecutionState::branch(bool forReplay)
 	newState->newInsts = 0;
 	newState->onFreshBranch = false;
 
+	if (forReplay) newState->compact();
+
 	return newState;
 }
 
-ExecutionState *ExecutionState::compact() const
+void ExecutionState::compact(void)
 {
-	ExecutionState *newState = ExeStateBuilder::create();
-	compact(newState);
-	return newState;
-}
+	addressSpace.clear();
+	concrete_constraints = ConstraintManager();
+	constraints = ConstraintManager();
+	stack.clear();
+	mallocIterations.clear();
+	memObjects.clear();
 
-void ExecutionState::compact(ExecutionState* newState) const
-{
-	newState->isCompactForm = true;
-	newState->brChoiceSeq = brChoiceSeq;
-	newState->weight = weight;
-	newState->coveredLines.clear();
-
-	// necessary for WeightedRandomSearcher?
-	newState->pc = pc;
-	newState->onFreshBranch = false;
-	newState->personalInsts = 0;
-	newState->newInsts = 0;
+	isCompactForm = true;
+	onFreshBranch = false;
+	personalInsts = 0;
+	newInsts = 0;
 }
 
 void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf)

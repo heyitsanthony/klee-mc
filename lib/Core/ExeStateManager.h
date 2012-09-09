@@ -47,7 +47,7 @@ private:
 public:
 	ExeStateManager();
 	virtual ~ExeStateManager();
-	void commitQueue(ExecutionState* current);
+	void commitQueue(ExecutionState* current = NULL);
 
 	ExeStateSet::const_iterator begin(void) const { return states.begin(); }
 	ExeStateSet::const_iterator end(void) const { return states.end(); }
@@ -81,9 +81,9 @@ public:
 		ExecutionState** root_to_be_removed = NULL);
 	ExecutionState* getReplacedState(ExecutionState* s) const;
 
-	void compactPressureStates(ExecutionState* &state, uint64_t maxMem);
-	void compactStates(ExecutionState* &state, unsigned numToCompact);
-	ExecutionState* compactState(ExecutionState* state);
+	void compactPressureStates(uint64_t maxMem);
+	void compactStates(unsigned numToCompact);
+	void compactState(ExecutionState* state);
 
 
 	bool empty(void) const { return size() == 0; }

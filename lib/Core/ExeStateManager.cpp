@@ -153,14 +153,11 @@ void ExeStateManager::yield(ExecutionState* s)
 	std::cerr << "[ExeMan] Yielding st=" << (void*)s << '\n';
 	assert (!s->isCompact() && "yielding compact state? HOW?");
 
-	compacted = compactState(s);
+	compactState(s);
 
-	/* compact state forced a replace copy,
-	 * new state is put on addedStates-- So take it away.
-	 * old state is put on removedStates-- OK. */
-	dropAddedDirect(compacted);
-
+	/* queue yielded state for removing from sched stack */
 	yieldStates.insert(compacted);
+
 	/* NOTE: states and yieldedStates are disjoint */
 }
 
@@ -276,8 +273,7 @@ ExecutionState* ExeStateManager::getReplacedState(ExecutionState* s) const
 	return NULL;
 }
 
-void ExeStateManager::compactStates(
-	ExecutionState* &state, unsigned toCompact)
+void ExeStateManager::compactStates(unsigned toCompact)
 {
 	std::vector<ExecutionState*> arr(nonCompactStateCount);
 	unsigned i = 0;
@@ -298,39 +294,23 @@ void ExeStateManager::compactStates(
 		arr.end(),
 		KillOrCompactOrdering());
 
-	for (i = 0; i < toCompact; ++i) {
-		ExecutionState* compacted;
-
-		compacted = compactState(arr[i]);
-		if (state == arr[i])
-			state = compacted;
-	}
+	for (i = 0; i < toCompact; ++i)
+		compactState(arr[i]);
 }
 
-ExecutionState* ExeStateManager::compactState(ExecutionState* s)
+void ExeStateManager::compactState(ExecutionState* s)
 {
-	ExecutionState* compacted;
-
 	assert (s->isCompact() == false);
 
-	compacted = s->compact();
-	compacted->coveredNew = false;
-	compacted->ptreeNode = s->ptreeNode;
+	s->compact();
+	nonCompactStateCount--;
 
 	std::cerr << "COMPACTING:: s=" << (void*)s << ". compact=" << (void*)
-		compacted
-		<< ((s->isReplayDone())
-		? ". NOREPLAY\n"
-		: ". INREPLAY\n");
-
-
-	replaceState(s, compacted);
-
-	return compacted;
+		s << ((s->isReplayDone()) ? ". NOREPLAY\n": ". INREPLAY\n");
+	assert (s->isCompact());
 }
 
-void ExeStateManager::compactPressureStates(
-	ExecutionState* &state, uint64_t maxMem)
+void ExeStateManager::compactPressureStates(uint64_t maxMem)
 {
 	// compact instead of killing
 	// (a rough measure)
@@ -341,7 +321,7 @@ void ExeStateManager::compactPressureStates(
 	toCompact = std::min(toCompact, (unsigned) nonCompactStateCount);
 	klee_warning("compacting %u states (over memory cap)", toCompact);
 
-	compactStates(state, toCompact);
+	compactStates(toCompact);
 }
 
 Searcher::States ExeStateManager::getStates(void) const

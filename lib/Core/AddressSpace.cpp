@@ -1035,3 +1035,11 @@ bool AddressSpace::readConcrete(
 
 	return bogus_reads;
 }
+
+void AddressSpace::clear(void)
+{
+	last_mo = NULL;
+	cowKey = -1;
+	generation = 0;
+	objects = MemoryMap();
+}

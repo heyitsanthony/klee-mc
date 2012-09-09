@@ -153,14 +153,13 @@ public:
 	void setFreshBranch(void) { onFreshBranch = true; }
 	void setOldBranch(void) { onFreshBranch = false; }
 	bool isOnFreshBranch(void) const { return onFreshBranch; }
+	void compact(void);
 protected:
 	ExecutionState();
 	ExecutionState(KFunction *kf);
 	// XXX total hack, just used to make a state so solver can
 	// use on structure
 	ExecutionState(const std::vector<ref<Expr> > &assumptions);
-	void compact(ExecutionState* es) const;
-
 public:
 	static void setMemoryManager(MemoryManager* in_mm) { mm = in_mm; }
 	ExecutionState* copy(void) const;
@@ -175,7 +174,6 @@ public:
 		const ReplayPath& replayPath);
 
 	ExecutionState *branch(bool forReplay = false);
-	ExecutionState *compact() const;
 	ExecutionState *reconstitute(ExecutionState &initialStateCopy) const;
 
 	std::string getFnAlias(std::string fn);
