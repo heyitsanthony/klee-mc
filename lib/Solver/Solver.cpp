@@ -54,6 +54,7 @@ bool	UseHashSolver;
 double	MaxSTPTime;
 
 uint64_t SolverImpl::impliedValid_c = 0;
+uint64_t Solver::getVal_c = 0;
 
 #if 0
 namespace llvm
@@ -214,30 +215,7 @@ Solver* Solver::createChainWithTimedSolver(
 	Solver			*solver;
 	TautologyChecker	*taut_checker = NULL;
 
-	if (UsePipeSolver) {
-		if (UseYices) {
-			timedSolver = new PipeSolver(new PipeYices());
-		} else if (UseCVC3) {
-			timedSolver = new PipeSolver(new PipeCVC3());
-		} else if (UseB15) {
-			timedSolver = new PipeSolver(new PipeBoolector15());
-		} else if (UseBoolector)
-			timedSolver = new PipeSolver(new PipeBoolector());
-		else if (UseZ3)
-			timedSolver = new PipeSolver(new PipeZ3());
-		else
-			timedSolver = new PipeSolver(new PipeSTP());
-	} else {
-		assert (UseB15 == false);
-		assert (UseCVC3 == false);
-		assert (UseYices == false);
-		if (UseBoolector)
-			timedSolver = new BoolectorSolver();
-		else if (UseZ3)
-			timedSolver = new Z3Solver();
-		else
-			timedSolver = new STPSolver(UseForkedSTP, STPServer);
-	}
+	if (timedSolver == NULL) timedSolver = TimedSolver::create();
 	solver = timedSolver;
 
 	if (UseSTPQueryPCLog && stpQueryPCLogPath.size())
@@ -281,9 +259,7 @@ Solver* Solver::createChainWithTimedSolver(
 	if (DebugValidateSolver) {
 		/* oracle is another QF_BV solver */
 		if (UsePipeSolver || UseBoolector || UseZ3)
-			solver = createValidatingSolver(
-				solver,
-				timedSolver);
+			solver = createValidatingSolver(solver,	timedSolver);
 				// new PipeSolver(new PipeSTP()));
 				//new STPSolver(UseForkedSTP, STPServer));
 		else
@@ -330,7 +306,7 @@ Solver* Solver::createChain(
 	std::string queryPCLogPath,
 	std::string stpQueryPCLogPath)
 {
-	TimedSolver	*timedSolver;
+	TimedSolver	*timedSolver = NULL;
 
 	return createChainWithTimedSolver(
 		queryPCLogPath,
@@ -470,9 +446,6 @@ bool Solver::mayBeTrue(const Query& query, bool &result)
 }
 
 
-bool Solver::getValueRandomized(const Query& query, ref<ConstantExpr>& result)
-{ return RandomValue::get(this, query, result); }
-
 bool Solver::getValue(const Query& query, ref<ConstantExpr> &result)
 { 
 	if (query.expr->getKind() == Expr::Constant) {
@@ -480,11 +453,15 @@ bool Solver::getValue(const Query& query, ref<ConstantExpr> &result)
 		return true;
 	}
 
+	getVal_c++;
 	if (UseRandomGetValue)
 		return getValueRandomized(query, result);
 
 	return getValueDirect(query, result);
 }
+
+bool Solver::getValueRandomized(const Query& query, ref<ConstantExpr>& result)
+{ return RandomValue::get(this, query, result); }
 
 bool Solver::getValueDirect(const Query& query, ref<ConstantExpr> &result)
 {
@@ -525,10 +502,31 @@ void Solver::printName(int level) const { impl->printName(level); }
 Solver *klee::createValidatingSolver(Solver *s, Solver *oracle)
 { return new Solver(new ValidatingSolver(s, oracle)); }
 
-Solver *klee::createDummySolver() { return new Solver(new DummySolverImpl()); }
+TimedSolver *klee::createDummySolver() { return new DummySolver(); }
 
 void SolverImpl::failQuery(void)
 {
 	++stats::queriesFailed;
 	has_failed = true;
+}
+
+TimedSolver* TimedSolver::create(void)
+{
+	if (UsePipeSolver) {
+		if (UseYices) return new PipeSolver(new PipeYices());
+		if (UseCVC3) return new PipeSolver(new PipeCVC3());
+		if (UseB15) return new PipeSolver(new PipeBoolector15());
+		if (UseBoolector) return new PipeSolver(new PipeBoolector());
+		if (UseZ3) return new PipeSolver(new PipeZ3());
+		return new PipeSolver(new PipeSTP());
+	}
+
+	assert (!UseB15 && "Native B15 not supported");
+	assert (!UseCVC3 && "Native CVC3 not supported");
+	assert (!UseYices && "Natice Yices not supported");
+
+	if (UseBoolector) return new BoolectorSolver();
+	if (UseZ3) return new Z3Solver();
+
+	return new STPSolver(UseForkedSTP, STPServer);
 }

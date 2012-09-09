@@ -257,7 +257,7 @@ protected:
 	llvm::Function		*dbgStopPointFn;
 	StatsTracker		*statsTracker;
 	TreeStreamWriter	*symPathWriter;
-	StateSolver		*solver;
+	StateSolver		*solver, *fastSolver;
 	ExeStateManager		*stateManager;
 	Forks			*forking;
 	ExecutionState		*currentState;
@@ -322,14 +322,12 @@ private:
 
   void instCmp(ExecutionState& state, KInstruction* ki);
   ref<Expr> cmpScalar(
-  	ExecutionState& state,
-  	int pred, ref<Expr> left, ref<Expr> right, bool& ok);
+  	ExecutionState& state, int pred, ref<Expr> left, ref<Expr> right);
   ref<Expr> cmpVector(
   	ExecutionState& state,
 	int pred,
 	llvm::VectorType* op_type,
-	ref<Expr> left, ref<Expr> right,
-	bool& ok);
+	ref<Expr> left, ref<Expr> right);
   ref<Expr> sextVector(
 	ExecutionState& state,
 	ref<Expr> v,

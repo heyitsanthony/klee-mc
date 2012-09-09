@@ -293,7 +293,8 @@ protected:
 		<< stats::queryTime << ' '
 		<< stats::solverTime << ' '
 		<< StateSolver::getConstQueries() << ' '
-		<< SolverImpl::getImpliedValids();
+		<< SolverImpl::getImpliedValids() << ' '
+		<< Solver::getNumGetValue();
 	}
 
 

@@ -120,13 +120,11 @@ namespace {
   cl::opt<unsigned int>
   StopAfterNInstructions(
 	"stop-after-n-instructions",
-	cl::desc("Stop execution after number of instructions (0=off)"),
-	cl::init(0));
+	cl::desc("Stop execution after number of instructions (0=off)"));
 
   cl::opt<unsigned>
   MaxMemory("max-memory",
-	cl::desc("Refuse to fork when above amount (in MB, 0=off)"),
-	cl::init(0));
+	cl::desc("Refuse to fork when above amount (in MB, 0=off)"));
 
   // use 'external storage' because also needed by tools/klee/main.cpp
   cl::opt<bool, true>
@@ -141,9 +139,9 @@ namespace {
 	cl::desc("Speculatively execute both sides of a symbolic branch."),
 	cl::init(false));
 
-  cl::opt<bool>
-  TrackBranchExprs(
-  	"track-br-exprs", cl::desc("Track Branching Expressions"));
+	cl::opt<bool>
+	TrackBranchExprs(
+		"track-br-exprs", cl::desc("Track Branching Expressions"));
 
   cl::opt<bool, true>
   ReplayInhibitedForksProxy(
@@ -161,13 +159,14 @@ namespace {
   UseRuleBuilder(
   	"use-rule-builder", cl::desc("Machine-learned peephole expr builder"));
 
-  cl::opt<unsigned>
-  SeedRNG("seed-rng", cl::desc("Seed random number generator"), cl::init(0));
+	cl::opt<unsigned>
+	SeedRNG("seed-rng", cl::desc("Seed random number generator"));
 }
 
 namespace klee { RNG theRNG; }
 
 static StateSolver* createTimerChain(double to, std::string q, std::string s);
+static StateSolver* createFastSolver(void);
 
 Executor::Executor(InterpreterHandler *ih)
 : kmodule(0)
@@ -197,10 +196,11 @@ Executor::Executor(InterpreterHandler *ih)
 		Expr::setBuilder(RuleBuilder::create(Expr::getBuilder()));
 	}
 
-	this->solver = createTimerChain(
+	solver = createTimerChain(
 		stpTimeout,
 		interpreterHandler->getOutputFilename("queries.pc"),
 		interpreterHandler->getOutputFilename("stp-queries.pc"));
+	fastSolver = createFastSolver();
 
 	ObjectState::setupZeroObjs();
 
@@ -236,7 +236,10 @@ Executor::~Executor()
 	if (mmu != NULL) delete mmu;
 	delete memory;
 	if (statsTracker) delete statsTracker;
+
+	delete fastSolver;
 	delete solver;
+
 	ExeStateBuilder::replaceBuilder(NULL);
 	delete forking;
 }
@@ -325,7 +328,7 @@ ref<klee::ConstantExpr> Executor::evalConstant(
 	}
 
 	if (isa<ConstantPointerNull>(c))
-		return Expr::createPointer(0);
+		return MK_PTR(0);
 
 	if (isa<UndefValue>(c) || isa<ConstantAggregateZero>(c))
 		return MK_CONST(0, km->getWidthForLLVMType(c->getType()));
@@ -849,6 +852,8 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 	}
 
 	if (bad_conc_kfuncs.count(st.getCurrentKFunc())) {
+		/* sometimes concretization takes forever on a certain
+		 * codesite-- hence, we don't repeat it */
 		std::cerr << "[Exe] Ignoring bad concretization kfunc\n";
 		return NULL;
 	}
@@ -1100,13 +1105,11 @@ void Executor::instCmp(ExecutionState& state, KInstruction *ki)
 
 	pred = ii->getPredicate();
 	if ((vt = dyn_cast<VectorType>(op_type))) {
-		bool ok;
-		result = cmpVector(state, pred, vt, left, right, ok);
-		if (!ok) return;
+		result = cmpVector(state, pred, vt, left, right);
+		if (result.isNull()) return;
 	} else {
-		bool ok;
-		result = cmpScalar(state, pred, left, right, ok);
-		if (!ok) return;
+		result = cmpScalar(state, pred, left, right);
+		if (result.isNull()) return;
 	}
 
 	state.bindLocal(ki, result);
@@ -1147,19 +1150,15 @@ ref<Expr> Executor::cmpVector(
 	ExecutionState& state,
 	int pred,
 	llvm::VectorType* vt,
-	ref<Expr> left, ref<Expr> right,
-	bool& ok)
+	ref<Expr> left, ref<Expr> right)
 {
 	SETUP_VOP(vt)
 
-	ok = false;
 	assert (left->getWidth() > 0);
 	assert (right->getWidth() > 0);
 
 	switch(pred) {
-#define VCMP_OP(x, y) \
-	case ICmpInst::x: V_OP_APPEND(y); break;
-
+#define VCMP_OP(x, y) case ICmpInst::x: V_OP_APPEND(y); break;
 	VCMP_OP(ICMP_EQ, Eq)
 	VCMP_OP(ICMP_NE, Ne)
 	VCMP_OP(ICMP_UGT, Ugt)
@@ -1171,10 +1170,9 @@ ref<Expr> Executor::cmpVector(
 	VCMP_OP(ICMP_SLT, Slt)
 	VCMP_OP(ICMP_SLE, Sle)
 	default:
-	terminateOnExecError(state, "invalid vector ICmp predicate");
-	return result;
+		terminateOnExecError(state, "invalid vector ICmp predicate");
+		return NULL;
 	}
-	ok = true;
 	return result;
 }
 
@@ -1188,7 +1186,7 @@ ref<Expr> Executor::sextVector(
 	for (unsigned int i = 0; i < v_elem_c; i++) {
 		ref<Expr>	cur_elem;
 		cur_elem = MK_EXTRACT(v, i*v_elem_w_src, v_elem_w_src);
-		cur_elem = SExtExpr::create(cur_elem, v_elem_w_dst);
+		cur_elem = MK_SEXT(cur_elem, v_elem_w_dst);
 		if (i == 0)
 			result = cur_elem;
 		else
@@ -1199,28 +1197,23 @@ ref<Expr> Executor::sextVector(
 }
 
 ref<Expr> Executor::cmpScalar(
-	ExecutionState& state,
-	int pred, ref<Expr> left, ref<Expr> right, bool& ok)
+	ExecutionState& state, int pred, ref<Expr> left, ref<Expr> right)
 {
-  ref<Expr> result;
-  ok = false;
-  switch(pred) {
-  case ICmpInst::ICMP_EQ: result = EqExpr::create(left, right); break;
-  case ICmpInst::ICMP_NE: result = NeExpr::create(left, right); break;
-  case ICmpInst::ICMP_UGT: result = UgtExpr::create(left, right); break;
-  case ICmpInst::ICMP_UGE: result = UgeExpr::create(left, right); break;
-  case ICmpInst::ICMP_ULT: result = UltExpr::create(left, right); break;
-  case ICmpInst::ICMP_ULE: result = UleExpr::create(left, right); break;
-  case ICmpInst::ICMP_SGT: result = SgtExpr::create(left, right); break;
-  case ICmpInst::ICMP_SGE: result = SgeExpr::create(left, right); break;
-  case ICmpInst::ICMP_SLT: result = SltExpr::create(left, right); break;
-  case ICmpInst::ICMP_SLE: result = SleExpr::create(left, right); break;
-  default:
-    terminateOnExecError(state, "invalid scalar ICmp predicate");
-    return result;
-  }
-  ok = true;
-  return result;
+	switch(pred) {
+	case ICmpInst::ICMP_EQ: return MK_EQ(left, right);
+	case ICmpInst::ICMP_NE: return MK_NE(left, right);
+	case ICmpInst::ICMP_UGT: return MK_UGT(left, right);
+	case ICmpInst::ICMP_UGE: return MK_UGE(left, right);
+	case ICmpInst::ICMP_ULT: return MK_ULT(left, right);
+	case ICmpInst::ICMP_ULE: return MK_ULE(left, right);
+	case ICmpInst::ICMP_SGT: return MK_SGT(left, right);
+	case ICmpInst::ICMP_SGE: return MK_SGE(left, right);
+	case ICmpInst::ICMP_SLT: return MK_SLT(left, right);
+	case ICmpInst::ICMP_SLE: return MK_SLE(left, right);
+	default:
+		terminateOnExecError(state, "invalid scalar ICmp predicate");
+	}
+	return NULL;
 }
 
 /* XXX: move to forks.c? */
@@ -1529,7 +1522,7 @@ void Executor::instAlloc(ExecutionState& state, KInstruction* ki)
 
 	ai = cast<AllocaInst>(i);
 	elementSize = target_data->getTypeStoreSize(ai->getAllocatedType());
-	size = Expr::createPointer(elementSize);
+	size = MK_PTR(elementSize);
 
 	if (ai->isArrayAllocation()) {
 		ref<Expr> count = eval(ki, 0, state);
@@ -1564,8 +1557,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
   case Instruction::Unreachable:
     // Note that this is not necessarily an internal bug, llvm will
     // generate unreachable instructions in cases where it knows the
-    // program will crash. So it is effectively a SEGV or internal
-    // error.
+    // program will crash. It is effectively a SEGV or internal error.
     terminateOnExecError(state, "reached \"unreachable\" instruction");
     break;
 
@@ -2339,19 +2331,18 @@ ObjectState* Executor::makeSymbolicReplay(
 {
 	ObjectState *os = state.bindMemObjWriteable(mo);
 	if (replayPosition >= replayOut->numObjects) {
-		terminateOnError(
-			state, "replay count mismatch", "user.err");
+		terminateOnError(state, "replay count mismatch", "user.err");
 		return os;
 	}
 
 	KTestObject *obj = &replayOut->objects[replayPosition++];
 	if (obj->numBytes != mo->size) {
-		terminateOnError(
-			state, "replay size mismatch", "user.err");
-	} else {
-		for (unsigned i=0; i<mo->size; i++) {
-			state.write8(os, i, obj->bytes[i]);
-		}
+		terminateOnError(state, "replay size mismatch", "user.err");
+		return os;
+	}
+
+	for (unsigned i = 0; i < mo->size; i++) {
+		state.write8(os, i, obj->bytes[i]);
 	}
 
 	return os;
@@ -2400,8 +2391,7 @@ bool Executor::getSatAssignment(const ExecutionState& st, Assignment& a)
 		const SymbolicArray		&sa(*it);
 		const std::vector<uint8_t>	*conc;
 
-		conc = sa.getConcretization();
-		if (conc)
+		if ((conc = sa.getConcretization()) != NULL)
 			a.bindFree(sa.getArray(), *conc);
 	}
 
@@ -2412,9 +2402,7 @@ bool Executor::getSatAssignment(const ExecutionState& st, Assignment& a)
 	klee_warning("can't compute initial values (invalid constraints?)!");
 	if (DumpBadInitValues)
 		ExprPPrinter::printQuery(
-			std::cerr,
-			st.constraints,
-			ConstantExpr::create(0, Expr::Bool));
+			std::cerr, st.constraints, MK_CONST(0, 1));
 
 	return false;
 }
@@ -2481,13 +2469,11 @@ void Executor::instGetElementPtr(ExecutionState& state, KInstruction *ki)
 			base,
 			MulExpr::create(
 				Expr::createCoerceToPointerType(index),
-				Expr::createPointer(elementSize)));
+				MK_PTR(elementSize)));
 	}
 
 	if (kgepi->getOffsetBits())
-		base = AddExpr::create(
-			base,
-			Expr::createPointer(kgepi->getOffsetBits()));
+		base = MK_ADD(base, MK_PTR(kgepi->getOffsetBits()));
 
 	state.bindLocal(ki, base);
 }
@@ -2504,7 +2490,7 @@ void Executor::executeAllocConst(
 
 	op = state.allocate(sz, isLocal, false, state.prevPC->getInst());
 	if (op_mo(op) == NULL) {
-		state.bindLocal(target,	Expr::createPointer(0));
+		state.bindLocal(target,	MK_PTR(0));
 		return;
 	}
 
@@ -2601,9 +2587,7 @@ void Executor::executeAllocSymbolic(
 				true);
 			if (hugeSize.first) {
 				klee_message("NOTE: found huge malloc, returing 0");
-				hugeSize.first->bindLocal(
-					target,
-					Expr::createPointer(0));
+				hugeSize.first->bindLocal(target, MK_PTR(0));
 			}
 
 			if (hugeSize.second) {
@@ -2621,13 +2605,9 @@ void Executor::executeAllocSymbolic(
 	}
 
 	// can be zero when fork fails
-	if (fixedSize.first) {
-		executeAlloc(
-			*fixedSize.first,
-			example,
-			isLocal,
-			target, zeroMemory);
-	}
+	if (fixedSize.first == NULL) return;
+
+	executeAlloc(*fixedSize.first, example, isLocal, target, zeroMemory);
 }
 
 void Executor::executeAlloc(
@@ -2655,7 +2635,7 @@ void Executor::executeFree(
 	StatePair zeroPointer = fork(state, Expr::createIsZero(address), true);
 
 	if (zeroPointer.first && target) {
-		zeroPointer.first->bindLocal(target, Expr::createPointer(0));
+		zeroPointer.first->bindLocal(target, MK_PTR(0));
 	}
 
 	if (!zeroPointer.second)
@@ -2684,8 +2664,7 @@ void Executor::executeFree(
 		} else {
 			it->second->unbindObject(mo);
 			if (target)
-				it->second->bindLocal(
-					target, Expr::createPointer(0));
+				it->second->bindLocal(target, MK_PTR(0));
 		}
 	}
 }
@@ -2841,11 +2820,22 @@ bool Executor::hasState(const ExecutionState* es) const
 	return false;
 }
 
+static StateSolver* createFastSolver(void)
+{
+	Solver		*s;
+	TimedSolver	*ts;
+
+	ts = createDummySolver();
+	s = Solver::createChainWithTimedSolver("", "", ts);
+
+	return new StateSolver(s, ts);
+}
+
 static StateSolver* createTimerChain(
 	double timeout, std::string qPath, std::string logPath)
 {
 	Solver		*s;
-	TimedSolver	*timedSolver;
+	TimedSolver	*timedSolver = NULL;
 	StateSolver	*ts;
 
 	if (timeout == 0.0)

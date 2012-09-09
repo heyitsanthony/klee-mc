@@ -36,60 +36,56 @@ struct sockaddr_in_opt
   class TimingSolver;
   class TimedSolver;
 
-  class Solver {
-    // DO NOT IMPLEMENT.
-    Solver(const Solver&);
-    void operator=(const Solver&);
+class Solver {
+	// DO NOT IMPLEMENT.
+	Solver(const Solver&);
+	void operator=(const Solver&);
 
-  public:
-    enum Validity {True = 1, False = -1, Unknown = 0 };
+public:
+	enum Validity {True = 1, False = -1, Unknown = 0 };
 
-    static const char* getValidityStr(Validity v)
-    {
-    	const char*	strs[3] = {"False", "Unknown", "True"};
-	return strs[((int)v+1)];
-    }
+	static const char* getValidityStr(Validity v)
+	{
+		const char*	strs[3] = {"False", "Unknown", "True"};
+		return strs[((int)v+1)];
+	}
 
-  public:
-    /// validity_to_str - Return the name of given Validity enum value.
-    static const char *validity_to_str(Validity v);
-    static TimingSolver* createTimerChain(
-	double timeout=0.0,
-	std::string queryPCLogPath = "",
-	std::string stpQueryPCLogPath = "");
-    static Solver* createChain(
-	std::string queryPCLogPath = "",
-	std::string stpQueryPCLogPath = "");
+public:
+	/// validity_to_str - Return the name of given Validity enum value.
+	static const char *validity_to_str(Validity v);
+	static TimingSolver* createTimerChain(
+		double timeout=0.0,
+		std::string queryPCLogPath = "",
+		std::string stpQueryPCLogPath = "");
+	static Solver* createChain(
+		std::string queryPCLogPath = "",
+		std::string stpQueryPCLogPath = "");
 
-  static Solver* createChainWithTimedSolver(
-	std::string queryPCLogPath,
-	std::string stpQueryPCLogPath,
-	TimedSolver* &timedSolver);
-  public:
-    SolverImpl *impl;
+	static Solver* createChainWithTimedSolver(
+		std::string queryPCLogPath,
+		std::string stpQueryPCLogPath,
+		TimedSolver* &timedSolver);
 
-  public:
-    Solver(SolverImpl *_impl) : impl(_impl), in_solver(false) {}
-    virtual ~Solver();
+	SolverImpl *impl;
 
-    bool inSolver(void) const { return in_solver; }
+	Solver(SolverImpl *_impl) : impl(_impl), in_solver(false) {}
+	virtual ~Solver();
 
-    /// evaluate - Determine the full validity of an expression in particular
-    /// state.
-    ////
-    /// \param [out] result - The validity of the given expression (provably
-    /// true, provably false, or neither).
-    ///
-    /// \return True on success.
-    bool evaluate(const Query&, Validity &result);
+	bool inSolver(void) const { return in_solver; }
 
-    /// mustBeTrue - Determine if the expression is provably true.
-    ///
-    /// \param [out] result - On success, true iff the expresssion is provably
-    /// false.
-    ///
-    /// \return True on success.
-    bool mustBeTrue(const Query&, bool &result);
+	/// evaluate - Determine the full validity of an expression in particular
+	/// state.
+	////
+	/// \param [out] result - The validity of the given expression (provably
+	/// true, provably false, or neither).
+	///
+	/// \return True on success.
+	bool evaluate(const Query&, Validity &result);
+
+	/// mustBeTrue - Determine if the expression is provably true.
+	/// \param [out] result - True iff the expr is provably false.
+	/// \return True on success.
+	bool mustBeTrue(const Query&, bool &result);
 
     /// mustBeFalse - Determine if the expression is provably false.
     ///
@@ -144,19 +140,19 @@ struct sockaddr_in_opt
     // they want. This also allows us to optimize the representation.
     bool getInitialValues(const Query&, Assignment& a);
 
-    /// getRange - Compute a tight range of possible values for a given
-    /// expression.
-    ///
-    /// \return - A pair with (min, max) values for the expression.
-    ///
-    /// \post(mustBeTrue(min <= e <= max) &&
-    ///       mayBeTrue(min == e) &&
-    ///       mayBeTrue(max == e))
-    //
-    // FIXME: This should go into a helper class
-    virtual bool getRange(const Query&,  std::pair< ref<Expr>, ref<Expr> >& r);
+	/// getRange - Compute a tight range of possible values for a given
+	/// expression.
+	///
+	/// \return - A pair with (min, max) values for the expression.
+	///
+	/// \post(mustBeTrue(min <= e <= max) &&
+	///       mayBeTrue(min == e) &&
+	///       mayBeTrue(max == e))
+	//
+	// FIXME: This should go into a helper class
+	virtual bool getRange(const Query&,  std::pair< ref<Expr>, ref<Expr> >& r);
 
-    // binary search for # of useful bits in query expression
+	// binary search for # of useful bits in query expression
 	bool getUsefulBits(const Query&, uint64_t& bits);
 	bool getRangeMin(const Query& q, uint64_t bits, uint64_t& min);
 	bool getRangeMax(
@@ -174,23 +170,27 @@ struct sockaddr_in_opt
 
     void printName(int level = 0) const;
     virtual bool failed(void) const;
-  private:
-    bool in_solver;
-  };
+    static uint64_t getNumGetValue(void) { return getVal_c; }
+private:
+	bool in_solver;
+	static uint64_t	getVal_c;
+};
 
-  class TimedSolver : public Solver
-  {
-  public:
+class TimedSolver : public Solver
+{
+public:
     TimedSolver(SolverImpl *_impl) : Solver(_impl) {}
     virtual ~TimedSolver(void) {}
-    /// setTimeout - Set constraint solver timeout delay to the given value; 0
-    /// is off.
+    /// setTimeout - Set constraint solver timeout delay to the given value;
+    /// 0 is off.
     virtual void setTimeout(double timeout) {}
-  };
+    static TimedSolver* create();
+};
 
   /// STPSolver - A complete solver based on STP.
-  class STPSolver : public TimedSolver {
-  public:
+class STPSolver : public TimedSolver
+{
+public:
     /// STPSolver - Construct a new STPSolver.
     ///
     /// \param useForkedSTP - Whether STP should be run in a separate process
@@ -200,7 +200,7 @@ struct sockaddr_in_opt
     /// setTimeout - Set constraint solver timeout delay to the given value; 0
     /// is off.
     virtual void setTimeout(double timeout);
-  };
+};
 
   /* *** */
 
@@ -247,10 +247,9 @@ struct sockaddr_in_opt
 
   /// createDummySolver - Create a dummy solver implementation which always
   /// fails.
-  Solver *createDummySolver();
+  TimedSolver *createDummySolver();
 
   Solver *createFastRangeSolver(Solver *complete_solver);
-
 }
 
 #endif

@@ -680,9 +680,7 @@ void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 }
 
 bool Forks::hasSuccessor(ExecutionState& st) const
-{
-	return hasSucc.count(st.prevForkCond->hash()) != 0;
-}
+{ return hasSucc.count(st.prevForkCond->hash()) != 0; }
 
 /* XXX memoize? */
 bool Forks::hasSuccessor(const ref<Expr>& cond) const

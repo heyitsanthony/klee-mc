@@ -45,6 +45,7 @@ template<class T> class ref;
 struct ArrayLT { bool operator()(const Array *a, const Array *b) const; };
 
 
+#define MK_PTR(x)		Expr::createPointer(x)
 #define MK_ZEXT(x,y)		ZExtExpr::create(x,y)
 #define MK_SEXT(x,y)		SExtExpr::create(x,y)
 #define MK_READ(x,y)		ReadExpr::create(x,y)
