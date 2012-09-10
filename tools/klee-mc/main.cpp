@@ -57,35 +57,23 @@ namespace {
 		cl::init(false));
 
 	cl::opt<bool>
-	UseConstraintSeed(
-		"use-constr-seed",
-		cl::desc("Use constraint seeds."),
-		cl::init(false));
+	UseConstraintSeed("use-constr-seed", cl::desc("Use constraint seeds."));
 
-	cl::opt<bool> UseDDT(
-		"use-ddt",
-		cl::desc("Data dependency tainting."),
-		cl::init(false));
+	cl::opt<bool> UseDDT("use-ddt", cl::desc("Data dependency tainting."));
 
 	cl::opt<bool> UseTaint(
 		"use-taint",
-		cl::desc("Taint functions or something. EXPERIMENTAL"),
-		cl::init(false));
+		cl::desc("Taint functions or something. EXPERIMENTAL"));
 
 	cl::opt<bool> UseTaintMerge(
 		"use-taint-merge",
-		cl::desc("Taint and merge specific functions."),
-		cl::init(false));
+		cl::desc("Taint and merge specific functions."));
 
 	cl::opt<bool> SymHook(
 		"use-symhooks",
-		cl::desc("Apply additional analysis by tracking library calls"),
-		cl::init(false));
+		cl::desc("Apply additional analysis by tracking library calls"));
 
-	cl::opt<bool> UseGDB(
-		"use-gdb",
-		cl::desc("Enable remote GDB monitoring"),
-		cl::init(false));
+	cl::opt<bool> UseGDB("use-gdb", cl::desc("Enable remote GDB monitoring"));
 
 	cl::opt<std::string>
 	InputFile(
@@ -166,22 +154,15 @@ namespace {
 		cl::init(0x400000));
 
 	cl::opt<bool>
-	Unconstrained(
-		"unconstrained",
-		cl::desc("Unconstrained Execution."),
-		cl::init(false));
+	Unconstrained("unconstrained", cl::desc("Unconstrained Execution."));
 
 	cl::opt<bool>
-	XChkJIT(
-		"xchkjit",
-		cl::desc("Cross check concrete / no syscall binary with JIT."),
-		cl::init(false));
+	XChkJIT("xchkjit",
+		cl::desc("Cross check concrete / no syscall binary with JIT."));
 
 	cl::opt<bool>
-	Watchdog(
-		"watchdog",
-		cl::desc("Use a watchdog thread to enforce --max-time."),
-		cl::init(false));
+	Watchdog("watchdog",
+		cl::desc("Use a watchdog thread to enforce --max-time."));
 
 }
 
@@ -216,16 +197,17 @@ static void parseArguments(int argc, char **argv)
 extern "C" void halt_execution() { theInterpreter->setHaltExecution(true); }
 extern "C" void stop_forking() { theInterpreter->setInhibitForking(true); }
 
-static void interrupt_handle() {
-  if (!interrupted && theInterpreter) {
-    std::cerr << "KLEE: ctrl-c detected, requesting interpreter to halt.\n";
-    halt_execution();
-    sys::SetInterruptFunction(interrupt_handle);
-  } else {
-    std::cerr << "KLEE: ctrl-c detected, exiting.\n";
-    exit(1);
-  }
-  interrupted = true;
+static void interrupt_handle()
+{
+	if (interrupted || !theInterpreter) {
+		std::cerr << "KLEE: ctrl-c detected, exiting.\n";
+		exit(1);
+	}
+
+	std::cerr << "KLEE: ctrl-c detected, requesting interpreter to halt.\n";
+	halt_execution();
+	sys::SetInterruptFunction(interrupt_handle);
+	interrupted = true;
 }
 
 void dumpIRSBs(void)
@@ -236,7 +218,7 @@ void dumpIRSBs(void)
 
 void run(ExecutorVex* exe) { exe->runImage(); }
 
-void runReplay(Interpreter* interpreter)
+void runReplayKTest(Interpreter* interpreter)
 {
 	std::vector<KTest*>		kTests;
 	std::vector<std::string>	outFiles;
@@ -429,9 +411,9 @@ void setupReplayPaths(Interpreter* interpreter)
 
 	KleeHandler::loadPathFiles(pathFiles, replayPaths);
 
-	if (!replayPaths.empty()) {
-		interpreter->setReplayPaths(&replayPaths);
-	}
+	if (replayPaths.empty()) return;
+
+	interpreter->setReplayPaths(&replayPaths);
 }
 
 static void* watchdog_thread(void* x)
@@ -506,11 +488,9 @@ int main(int argc, char **argv, char **envp)
 	PrefixWriter info(info2s, "KLEE: ");
 	info << "PID: " << getpid() << "\n";
 
-	//  finalModule = interpreter->setModule(mainModule, Opts);
-	//  externalsAndGlobalsCheck(finalModule);
 	setupReplayPaths(interpreter);
 	if (isReplaying()) {
-		runReplay(interpreter);
+		runReplayKTest(interpreter);
 	} else
 		run(dynamic_cast<ExecutorVex*>(interpreter));
 

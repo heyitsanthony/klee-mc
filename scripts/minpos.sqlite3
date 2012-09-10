@@ -1,0 +1,11 @@
+.echo ON
+
+SELECT pathid,MIN(minpos),name
+	FROM sb
+	INNER JOIN pathnode
+	ON sb.sbaddr=pathnode.sbaddr
+	WHERE name LIKE '%malloc%'
+	GROUP BY sb.sbaddr
+	ORDER BY minpos;
+
+.echo OFF

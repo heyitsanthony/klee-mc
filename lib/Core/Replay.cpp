@@ -55,10 +55,43 @@ void Replay::loadPathFile(const std::string& name, ReplayPath& buffer)
 }
 
 
+typedef std::map<const llvm::Function*, uint64_t> f2p_ty;
+
 void Replay::writePathFile(const ExecutionState& st, std::ostream& os)
 {
+	f2p_ty		f2ptr;
+	std::string	fstr;
+
 	foreach(bit, st.branchesBegin(), st.branchesEnd()) {
-		os	<< (*bit).first
-			<< ",0\n"; // (*bit).second
+		const KInstruction	*ki;
+		const llvm::Function	*f;
+		f2p_ty::iterator	fit;
+		uint64_t		v;
+
+		os << (*bit).first;
+
+		ki = (*bit).second;
+		if (ki == NULL)
+			continue;
+
+		/* this is klee-mc specific-- should probably support
+		 * llvm bitcode here eventually too */
+		f = ki->getFunction();
+		fit = f2ptr.find(f);
+		if (fit != f2ptr.end()) {
+			os << ',' << (void*)fit->second  << '\n';
+			continue;
+		}
+
+		fstr = f->getName().str();
+		if (fstr.substr(0, 3) != "sb_") {
+			v = 0;
+		} else {
+			v = strtoul(fstr.substr(3).c_str(), NULL, 16);
+			assert (v != 0);
+		}
+
+		f2ptr[f] = v;
+		os << ',' << ((void*)v) << '\n';
 	}
 }

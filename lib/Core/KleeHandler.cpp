@@ -315,7 +315,6 @@ unsigned KleeHandler::processTestCase(
 		printErrorMessage(state, errorMessage, errorSuffix, id);
 
 	if (WritePaths) {
-
 		if (std::ostream* f = openTestFileGZ("path", id)) {
 			Replay::writePathFile(state, *f);
 			delete f;

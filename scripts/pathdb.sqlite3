@@ -1,0 +1,27 @@
+CREATE TABLE path(
+	pathid	INTEGER PRIMARY KEY,
+	phash	VARCHAR(40))
+;
+
+CREATE TABLE sb(
+	sbaddr	INT8 PRIMARY KEY,
+	name	VARCHAR(32))
+;
+
+CREATE TABLE pathnode(
+	nid		INTEGER PRIMARY KEY,
+	pathid		INTEGER,
+	minpos		INTEGER,
+	sbaddr		INT8,
+	FOREIGN KEY(pathid) REFERENCES path(pathid),
+	FOREIGN KEY(sbaddr) REFERENCES sb(sbaddr))
+;
+
+CREATE TABLE totalpathnode(
+	pnid		INTEGER PRIMARY KEY,
+	pathid		INTEGER,
+	pos		INTEGER,
+	sbaddr		INT8,
+	FOREIGN KEY(pathid) REFERENCES path(pathid),
+	FOREIGN KEY(sbaddr) REFERENCES sb(sbaddr))
+;
