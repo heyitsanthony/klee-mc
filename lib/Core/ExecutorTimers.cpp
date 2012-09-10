@@ -782,7 +782,7 @@ void Executor::processTimersDumpStates(void)
     *os << "'weight' : " << es->weight << ", ";
     *os << "'queryCost' : " << es->queryCost << ", ";
     *os << "'coveredNew' : " << es->coveredNew << ", ";
-    *os << "'instsSinceCovNew' : " << es->instsSinceCovNew << ", ";
+    *os << "'instsSinceCovNew' : " << es->lastNewInst-es->personalInsts << ", ";
     *os << "'md2u' : " << md2u << ", ";
     *os << "'icnt' : " << icnt << ", ";
     *os << "'CPicnt' : " << cpicnt << ", ";

@@ -121,7 +121,7 @@ public:
 	mutable double		queryCost;
 	AddressSpace		addressSpace;
 	TreeOStream		symPathOS;
-	unsigned		instsSinceCovNew;
+	uint64_t		lastNewInst;
 	uint64_t		lastGlobalInstCount; // last stats::instructions
 	uint64_t		totalInsts;
 	unsigned		concretizeCount;

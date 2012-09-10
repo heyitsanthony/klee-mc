@@ -919,11 +919,15 @@ void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 
 	if (YieldUncached) {
 		bool mbt;
-		if (fastSolver->mayBeTrue(state, cond, mbt) == false) {
+
+		/* XXX: queries should be passed back to fast solver stack */
+		if (	state.newInsts == 0 &&
+			(rand() % 3) == 0 &&	/* 1/3 chance of yielding */
+			fastSolver->mayBeTrue(state, cond, mbt) == false)
+		{
 			static int n = 0;
 			state.abortInstruction();
 			stateManager->yield(&state);
-			std::cerr << "PREEMPT: " << cond << '\n';
 			n++;
 			return;
 		}
@@ -1295,7 +1299,7 @@ void Executor::forkSwitch(
 				kf->instructions[entry]->getInfo()->id))
 		{
 			es->coveredNew = true;
-			es->instsSinceCovNew = 1;
+			es->lastNewInst = state.totalInsts;
 		}
 	}
 
@@ -2022,7 +2026,7 @@ void Executor::run(ExecutionState &initialState)
 	initTimers();
 
 	initialStateCopy = (ReplayInhibitedForks) ? initialState.copy() : NULL;
-	
+
 	stateManager->setInitialState(&initialState);
 	if (replayPaths) {
 		replayPathsIntoStates(initialState);

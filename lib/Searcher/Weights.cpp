@@ -54,8 +54,8 @@ double CoveringNewWeight::weigh(const ExecutionState *es) const
 		es->stack.back().minDistToUncoveredOnReturn);
 
 	invMD2U = 1. / (md2u ? md2u : 10000);
-	invCovNew = (es->instsSinceCovNew)
-		? 1. / std::max(1, (int) es->instsSinceCovNew - 1000)
+	invCovNew = (es->lastNewInst)
+		? 1. / std::max(1, (int) es->lastNewInst - 1000)
 		: 0.;
 
 	return (invCovNew * invCovNew + invMD2U * invMD2U);

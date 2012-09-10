@@ -64,7 +64,7 @@ void ExecutionState::initFields(void)
 	depth = 0;
 	weight = 1;
 	queryCost = 0.;
-	instsSinceCovNew = 0;
+	lastNewInst = 0;
 	lastGlobalInstCount = 0;
 	totalInsts = 0;
 	concretizeCount = 0;
@@ -126,6 +126,7 @@ ExecutionState *ExecutionState::branch(bool forReplay)
 	newState->replayBrIter = newState->brChoiceSeq.end();
 	newState->personalInsts = 0;
 	newState->newInsts = 0;
+	newState->lastNewInst = 0;
 	newState->onFreshBranch = false;
 
 	if (forReplay) newState->compact();
@@ -141,6 +142,8 @@ void ExecutionState::compact(void)
 	stack.clear();
 	mallocIterations.clear();
 	memObjects.clear();
+	symbolics.clear();
+	arr2sym.clear();
 
 	isCompactForm = true;
 	onFreshBranch = false;

@@ -316,9 +316,6 @@ void StatsTracker::stepInstUpdateFrame(ExecutionState &es)
 		theStatisticManager->setContext(&sf.callPathNode->statistics);
 	}
 
-	if (es.instsSinceCovNew)
-		++es.instsSinceCovNew;
-
 	if (es.pc->isCovered())
 		return;
 
@@ -333,7 +330,7 @@ void StatsTracker::stepInstUpdateFrame(ExecutionState &es)
 
 	lastCoveredInstruction = stats::instructions+1;
 	es.coveredNew = true;
-	es.instsSinceCovNew = 1;
+	es.lastNewInst = es.totalInsts;
 
 	es.pc->cover();
 	++stats::coveredInstructions;
@@ -415,7 +412,7 @@ void StatsTracker::markBranchVisited(
 
 	if (visitedTrue && !hasTrue) {
 		visitedTrue->coveredNew = true;
-		visitedTrue->instsSinceCovNew = 1;
+		visitedTrue->lastNewInst = visitedTrue->totalInsts;
 		++stats::trueBranches;
 		if (hasFalse) {
 			++fullBranches;
@@ -428,7 +425,7 @@ void StatsTracker::markBranchVisited(
 
 	if (visitedFalse && !hasFalse) {
 		visitedFalse->coveredNew = true;
-		visitedFalse->instsSinceCovNew = 1;
+		visitedFalse->lastNewInst =  visitedFalse->totalInsts;
 		++stats::falseBranches;
 		if (hasTrue) {
 			++fullBranches;

@@ -144,8 +144,6 @@ void ExeStateManager::queueRemove(ExecutionState* s) { removedStates.insert(s); 
  * this means 's' is gauranteed to be the states list and not in addedStates */
 void ExeStateManager::yield(ExecutionState* s)
 {
-	ExecutionState	*compacted;
-
 	/* do not yield if we're low on states */
 	if (!UseYield || states.size() == 1)
 		return;
@@ -156,7 +154,7 @@ void ExeStateManager::yield(ExecutionState* s)
 	compactState(s);
 
 	/* queue yielded state for removing from sched stack */
-	yieldStates.insert(compacted);
+	yieldStates.insert(s);
 
 	/* NOTE: states and yieldedStates are disjoint */
 }
