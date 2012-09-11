@@ -64,7 +64,7 @@ function insert_all_nodes
 }
 
 if [ ! -e exe.db ]; then
-	sqlite3  exe.db <<< ".read $scriptdir/pathdb.sqlite"
+	sqlite3  exe.db <<< ".read $scriptdir/pathdb.sqlite3"
 fi
 
 for a in $pathdir/*path.gz; do
