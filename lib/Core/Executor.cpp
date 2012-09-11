@@ -68,6 +68,7 @@ extern double	MaxSTPTime;
 namespace {
   DECL_OPTBOOL(ChkConstraints, "chk-constraints");
   DECL_OPTBOOL(YieldUncached, "yield-uncached");
+  DECL_OPTBOOL(CompleteReplay, "replay-complete");
 
   cl::opt<bool>
   ConcretizeEarlyTerminate(
@@ -2011,6 +2012,13 @@ void Executor::replayPathsIntoStates(ExecutionState& initialState)
 		es = ExecutionState::createReplay(initialState, (*it));
 		stateManager->queueSplitAdd(es->ptreeNode, &initialState, es);
 	}
+
+	/* the run is only complete if we include the initial state;
+	 * for incomplete, we only care about seed paths. */
+	if (CompleteReplay == false) {
+		stateManager->queueRemove(&initialState);
+		stateManager->commitQueue();
+	}
 }
 
 void Executor::run(ExecutionState &initialState)
@@ -2028,11 +2036,8 @@ void Executor::run(ExecutionState &initialState)
 	initialStateCopy = (ReplayInhibitedForks) ? initialState.copy() : NULL;
 
 	stateManager->setInitialState(&initialState);
-	if (replayPaths) {
+	if (replayPaths)
 		replayPathsIntoStates(initialState);
-		stateManager->queueRemove(&initialState);
-		stateManager->commitQueue();
-	}
 
 	stateManager->setupSearcher(this);
 
