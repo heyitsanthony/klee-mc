@@ -63,8 +63,8 @@ function insert_all_nodes
 
 }
 
-if [ ! -e exe ]; then
-	sqlite3  exe <<< ".read $scriptdir/pathdb.sqlite"
+if [ ! -e exe.db ]; then
+	sqlite3  exe.db <<< ".read $scriptdir/pathdb.sqlite"
 fi
 
 for a in $pathdir/*path.gz; do
@@ -78,7 +78,7 @@ for a in $pathdir/*path.gz; do
 
 	phash=`sha1sum $a | cut -f1 -d' '`
 
-	sqlite3 exe <<< "
+	sqlite3 exe.db <<< "
 		INSERT INTO path (phash) VALUES ('$phash');
 		SELECT pathid FROM path WHERE phash='$phash';
 	" >pathid
@@ -86,12 +86,12 @@ for a in $pathdir/*path.gz; do
 	echo INSERT SB MAKE FILE======================
 	insert_sb  >sb.sqlite3
 	echo INSERT SB INTO SQL===================
-	sqlite3 -batch -init sb.sqlite3 exe </dev/null
+	sqlite3 -batch -init sb.sqlite3 exe.db </dev/null
 
 	echo INSERT NODES===========================
 	pathid=`cat pathid`
 	insert_nodes >nodes.sqlite3
 	echo SQL NODES========================
-	sqlite3 -batch -init nodes.sqlite3 exe </dev/null
+	sqlite3 -batch -init nodes.sqlite3 exe.db </dev/null
 	echo DONE INSERTING============================
 done
