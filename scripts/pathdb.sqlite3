@@ -25,3 +25,11 @@ CREATE TABLE totalpathnode(
 	FOREIGN KEY(pathid) REFERENCES path(pathid),
 	FOREIGN KEY(sbaddr) REFERENCES sb(sbaddr))
 ;
+
+CREATE VIEW minpaths AS
+	SELECT pathid,MIN(minpos),name
+	FROM sb
+	INNER JOIN pathnode
+	ON sb.sbaddr=pathnode.sbaddr
+	GROUP BY sb.sbaddr
+	ORDER BY minpos;
