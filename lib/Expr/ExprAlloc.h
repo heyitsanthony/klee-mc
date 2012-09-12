@@ -19,6 +19,8 @@ public:
 
 	static unsigned long getNumConstants(void) { return constantCount; }
 	virtual unsigned garbageCollect(void);
+
+	virtual void printName(std::ostream& os) const;
 private:
 	static unsigned long constantCount;
 };

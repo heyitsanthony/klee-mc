@@ -197,3 +197,11 @@ ref<Expr> ShadowBuilder::SExt(const ref<Expr> &e, Expr::Width w)
 
 ref<Expr> ShadowBuilder::Constant(const llvm::APInt &Value)
 { return eb_default->Constant(Value); }
+
+
+void ShadowBuilder::printName(std::ostream& os) const
+{
+	os << "ShadowBuilder {\n";
+	eb_default->printName(os);
+	os << "}\n";
+}

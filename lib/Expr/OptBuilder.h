@@ -86,6 +86,8 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS);
 	DECL_BIN_REF(Slt)
 	DECL_BIN_REF(Sle)
 #undef DECL_BIN_REF
+
+	virtual void printName(std::ostream& os) const;
 private:
 	ref<Expr> mergeConcatSExt(const ref<Expr>& l, const ref<Expr>& r)
 		const;

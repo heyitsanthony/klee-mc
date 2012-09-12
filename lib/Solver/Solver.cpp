@@ -283,6 +283,8 @@ Solver* Solver::createChainWithTimedSolver(
 	if (EquivExprBuilder) {
 		Expr::setBuilder(
 			createEquivBuilder(*solver, Expr::getBuilder()));
+		/* do not create a second time. */
+		EquivExprBuilder = false;
 	}
 
 	/* TODO: specify oracle builder */

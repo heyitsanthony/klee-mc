@@ -173,6 +173,7 @@ ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS) \
 
 	ref<Expr> Not(const ref<Expr> &LHS) { return Base->Not(LHS); }
 #undef DECL_BIN_REF
+	virtual void printName(std::ostream& os) const;
 };
 }
 

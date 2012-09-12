@@ -16,22 +16,17 @@ using namespace klee;
 namespace
 {
 	llvm::cl::opt<bool>
-	OnlyCheckTopLevelExpr(
-		"only-toplevel-xchk",
-		llvm::cl::init(true));
+	OnlyCheckTopLevelExpr("only-toplevel-xchk", llvm::cl::init(true));
 
 	/* I'm not totally happy with this option-- should be 
- * covered by test/oracle builder selection */
+	 * covered by test/oracle builder selection */
 	llvm::cl::opt<bool>
 	OnlyCheckRBHits(
 		"only-check-rb-hits",
-		llvm::cl::desc("only check hits in rule builder"),
-		llvm::cl::init(false));
+		llvm::cl::desc("only check hits in rule builder"));
 
 	llvm::cl::opt<bool>
-	OptimizeConstChecking(
-		"opt-const-xchk",
-		llvm::cl::init(true));
+	OptimizeConstChecking("opt-const-xchk", llvm::cl::init(true));
 
 	llvm::cl::opt<bool>
 	OptimizeEqHash("opt-ignore-eqhash", llvm::cl::init(true));
@@ -39,8 +34,7 @@ namespace
 	llvm::cl::opt<bool>
 	RandomValueCheck(
 		"opt-rvc",
-		llvm::cl::desc("Optimize exprxchk with test values (imprecise)"),
-		llvm::cl::init(false));
+		llvm::cl::desc("Optimize exprxchk with test values (imprecise)"));
 }
 
 //#define DEFAULT_XCHK_BUILDER	test_builder
@@ -56,9 +50,7 @@ public:
 	, oracle_builder(oracle)
 	, test_builder(test)
 	, in_xchker(false)
-	{
-		theXChkBuilder = this;
-	}
+	{ theXChkBuilder = this; }
 
 	virtual ~ExprXChkBuilder(void)
 	{
@@ -90,6 +82,16 @@ public:
 	{ return DEFAULT_XCHK_BUILDER->NotOptimized(Index); }
 
 	static uint64_t getQueryCount(void) { return query_c; }
+
+	void printName(std::ostream& os) const
+	{
+		os << "ExprXChk {\n";
+		os << "Oracle: ";
+		oracle_builder->printName(os);
+		os << "Test: ";
+		test_builder->printName(os);
+		os << "}\n";
+	}
 protected:
 	void xchk(
 		const ref<Expr>& oracle_expr,
@@ -119,10 +121,11 @@ protected:
 	Solver		&solver;
 	ExprBuilder	*oracle_builder, *test_builder;
 	bool		in_xchker;
-	std::queue<
-		std::pair<
-			ref<Expr> /* oracle */,
-			ref<Expr> /* test */ > > deferred_exprs;
+
+	typedef std::pair<
+		ref<Expr> /* oracle */,
+		ref<Expr> /* test */ > deferred_expr_ty;
+	std::queue<deferred_expr_ty> deferred_exprs;
 	uint64_t	last_rb_hit_c;
 
 	static uint64_t query_c;
@@ -253,6 +256,16 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS) \
 	DECL_BIN_REF(Sgt)
 	DECL_BIN_REF(Sge)
 #undef DECL_BIN_REF
+
+	void printName(std::ostream& os) const
+	{
+		os << "AllExprXChk {\n";
+		os << "Oracle: ";
+		oracle_builder->printName(os);
+		os << "Test: ";
+		test_builder->printName(os);
+		os << "}\n";
+	}
 };
 
 class TopExprXChkBuilder : public ExprXChkBuilder
@@ -398,6 +411,16 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS) \
 	DECL_BIN_REF(Sgt)
 	DECL_BIN_REF(Sge)
 #undef DECL_BIN_REF
+
+	void printName(std::ostream& os) const
+	{
+		os << "TopExprXChk {\n";
+		os << "Oracle: ";
+		oracle_builder->printName(os);
+		os << "Test: ";
+		test_builder->printName(os);
+		os << "}\n";
+	}
 };
 
 void ExprXChkBuilder::xchk(
@@ -461,7 +484,7 @@ void ExprXChkBuilder::xchk(
 
 	/* xchk all deferred expressions */
 	while (!deferred_exprs.empty()) {
-		std::pair<ref<Expr>, ref<Expr> > p(deferred_exprs.front());
+		deferred_expr_ty	p(deferred_exprs.front());
 		deferred_exprs.pop();
 		xchkWithSolver(p.first, p.second);
 	}

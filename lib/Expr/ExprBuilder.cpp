@@ -4,6 +4,7 @@
 #include "ExtraOptBuilder.h"
 #include "RuleBuilder.h"
 #include "CanonBuilder.h"
+#include "ChainedBuilder.h"
 
 using namespace klee;
 
@@ -37,4 +38,14 @@ ExprBuilder* ExprBuilder::create(BuilderKind bk)
 	}
 
 	return new CanonBuilder(Builder);
+}
+
+void ChainedEB::printName(std::ostream& os) const
+{
+	os << "ChainedBuilder {\n";
+	os << "Base: ";
+	Base->printName(os);
+	os << "Builder; ";
+	Builder->printName(os);
+	os << "}\n";
 }

@@ -116,6 +116,7 @@ private:
 
 	bool parsedTopLevel;
 	bool bad_read;
+	bool is_parsing;
 };
 
 }

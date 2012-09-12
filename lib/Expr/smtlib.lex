@@ -38,8 +38,7 @@ static int smtlibinput(std::istream& is, char* buf, int size)
 {
 	int res;
 
-	if (!is)
-		return YY_NULL;
+	if (!is) return YY_NULL;
 
 	// Set the terminator char to 0
 	buf[0] = '\0';
@@ -52,8 +51,10 @@ static int smtlibinput(std::istream& is, char* buf, int size)
 		is.clear();
 
 	res = strnlen(buf, size);
-	if(res == size)
+	if(res == size) {
 		smtliberror("Lexer bug: overfilled the buffer");
+		return YY_NULL;
+	}
 
 	return res;
 }

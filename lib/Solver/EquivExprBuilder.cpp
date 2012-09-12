@@ -14,6 +14,7 @@
 #include "../Expr/ExprRule.h"
 #include "../Expr/RuleBuilder.h"
 #include "static/Sugar.h"
+#include "../Expr/TopLevelBuilder.h"
 #include "EquivExprBuilder.h"
 
 #define MAX_EXPRFILE_BYTES	(1024*128)
@@ -37,13 +38,11 @@ namespace {
 	cl::opt<bool>
 	WriteEquivProofs(
 		"write-equiv-proofs",
-		cl::init(false),
 		cl::desc("Dump equivalence proofs to proofs directory."));
 
 	cl::opt<bool>
 	WriteEquivRules(
 		"write-equiv-rules",
-		cl::init(false),
 		cl::desc("Dump equivalence rules to proofs directory."));
 
 	cl::opt<std::string>
@@ -67,7 +66,6 @@ namespace {
 	cl::opt<bool>
 	CheckRepeatRules(
 		"check-repeat-rules",
-		cl::init(false),
 		cl::desc("Check if \"discovered\" a known rule"));
 }
 
@@ -77,8 +75,7 @@ static const uint8_t sample_seq_onoff_dat[] = {0xff, 0x0};
 
 
 EquivExprBuilder::EquivExprBuilder(Solver& s, ExprBuilder* in_eb)
-: depth(0)
-, solver(s)
+: solver(s)
 , eb(in_eb)
 , sample_seq(&sample_seq_dat[0], &sample_seq_dat[7])
 , sample_seq_onoff(&sample_seq_onoff_dat[0], &sample_seq_onoff_dat[2])
@@ -165,9 +162,7 @@ ref<Expr> EquivExprBuilder::lookupConst(const ref<Expr>& e)
 		return e;
 
 	consts.insert(v);
-	depth++;
 	consts_map[getEvalHash(e)] = v;
-	depth--;
 	return e;
 }
 
@@ -175,10 +170,6 @@ ref<Expr> EquivExprBuilder::lookup(ref<Expr>& e)
 {
 	ref<Expr>	ret;
 	unsigned	nodes;
-
-	depth--;
-	if (depth != 0)
-		return e;
 
 	if (e->getWidth() > 64) {
 		wide_c++;
@@ -203,17 +194,12 @@ ref<Expr> EquivExprBuilder::lookup(ref<Expr>& e)
 	if (lookup_memo.count(e))
 		return lookup_memo.find(e)->second;
 
-	// forcing non-zero depth ensures expr builder won't
-	// recursively call back into lookup when building
-	// intermediate expressions
-	depth++;
 	handleQueuedExprs();
 	ret = lookupByEval(e, nodes);
 	if (ret->hash() == e->hash())
 		ident_memo.insert(e->hash());
 	else if (solver.inSolver() == false)
 		lookup_memo[e] = ret;
-	depth--;
 
 	return ret;
 }
@@ -291,8 +277,7 @@ ReadUnifier::Action ReadUnifier::visitRead(const ReadExpr& re)
 		if (	ce_idx != NULL &&
 			ce_idx->getZExtValue() >= it->second->getSize())
 		{
-			return Action::changeTo(
-				ConstantExpr::create(0, re.getWidth()));
+			return Action::changeTo(MK_CONST(0, re.getWidth()));
 		}
 
 		return Action::changeTo(
@@ -312,8 +297,7 @@ ReadUnifier::Action ReadUnifier::visitRead(const ReadExpr& re)
 	ce_idx = dyn_cast<ConstantExpr>(re.index);
 	if (ce_idx != NULL) {
 		if (ce_idx->getZExtValue() >= repl_arr->getSize()) {
-			return Action::changeTo(
-				ConstantExpr::create(0, re.getWidth()));
+			return Action::changeTo(MK_CONST(0, re.getWidth()));
 		}
 	}
 
@@ -351,11 +335,9 @@ bool EquivExprBuilder::unify(
 	e_klee_w = e_klee;
 	w_diff = e_db_unified->getWidth() - e_klee->getWidth();
 	if (w_diff < 0) {
-		e_db_unified = ZExtExpr::create(
-			e_db_unified, e_klee->getWidth());
+		e_db_unified = MK_ZEXT(e_db_unified, e_klee->getWidth());
 	} else if (w_diff > 0) {
-		e_klee_w = ZExtExpr::create(
-			e_klee, e_db_unified->getWidth());
+		e_klee_w = MK_ZEXT(e_klee, e_db_unified->getWidth());
 	}
 
 	return true;
@@ -399,7 +381,7 @@ ref<Expr> EquivExprBuilder::tryEquivRewrite(
 		writeEquivRule(e_klee_w, e_db_unified);
 
 	/* return unified query from cache */
-	return ZExtExpr::create(e_db_unified, e_klee->getWidth());
+	return MK_ZEXT(e_db_unified, e_klee->getWidth());
 }
 
 void EquivExprBuilder::writeEquivRule(
@@ -491,8 +473,8 @@ ref<Expr> EquivExprBuilder::lookupByEval(ref<Expr>& e, unsigned nodes)
 	if (consts_map.count(hash)) {
 		ref<Expr>	ce;
 
-		ce = ConstantExpr::create(consts_map.find(hash)->second, 64);
-		ce = ZExtExpr::create(ce, w);
+		ce = MK_CONST(consts_map.find(hash)->second, 64);
+		ce = MK_ZEXT(ce, w);
 
 		std::cerr << "[EquivExpr] MATCHED CONST!!! "
 			<< "hits=" << hit_c
@@ -515,7 +497,7 @@ ref<Expr> EquivExprBuilder::lookupByEval(ref<Expr>& e, unsigned nodes)
 
 		a.bindFreeToZero();
 		ce = a.evaluate(e);
-		r_ce = cast<ConstantExpr>(ZExtExpr::create(ce, 64));
+		r_ce = cast<ConstantExpr>(MK_ZEXT(ce, 64));
 
 		/* constant never seen before, so we may have missed it */
 		if (consts.count(r_ce->getZExtValue()) == 0) {
@@ -660,5 +642,19 @@ uint64_t EquivExprBuilder::getEvalHash(
 }
 
 
-ExprBuilder *createEquivBuilder(Solver& solver, ExprBuilder* eb)
-{ return new EquivExprBuilder(solver, eb); }
+ExprBuilder* createEquivBuilder(Solver& solver, ExprBuilder* eb)
+{ return EquivExprBuilder::create(solver, eb); }
+
+
+ExprBuilder* EquivExprBuilder::create(Solver& s, ExprBuilder* in_eb)
+{
+	return new TopLevelBuilder(new EquivExprBuilder(s, in_eb), in_eb, false);
+}
+
+
+void EquivExprBuilder::printName(std::ostream& os) const
+{
+	os << "EquivBuilder {\n";
+	eb->printName(os);
+	os << "}\n";
+}

@@ -2,9 +2,9 @@
 
 using namespace klee;
 
-#define DECL_ALLOC_1(x)						\
-ref<Expr> TopLevelBuilder::x(const ref<Expr>& src)			\
-{	if (in_builder) return eb_recur->x(src);		\
+#define DECL_ALLOC_1(x)					\
+ref<Expr> TopLevelBuilder::x(const ref<Expr>& src)	\
+{	if (in_builder) return eb_recur->x(src);	\
 	in_builder = true;		\
 	ref<Expr> e(eb_top->x(src));	\
 	in_builder = false;		\
@@ -38,7 +38,6 @@ ref<Expr> TopLevelBuilder::x(const ref<Expr>& lhs, const ref<Expr>& rhs)	\
 	in_builder = false;			\
 	return e;				\
 }
-
 
 DECL_ALLOC_2(Concat)
 DECL_ALLOC_2(Add)
@@ -122,4 +121,12 @@ ref<Expr> TopLevelBuilder::Constant(const llvm::APInt &Value)
 	ref<Expr> r(eb_top->Constant(Value));
 	in_builder = false;
 	return r;
+}
+
+void TopLevelBuilder::printName(std::ostream& os) const
+{
+	os << "TopLevelBuilder {\n";
+	eb_top->printName(os);
+	eb_recur->printName(os);
+	os << "}\n";
 }

@@ -45,12 +45,12 @@ SMTParser::SMTParser(const std::string& _filename, ExprBuilder* _builder)
 , queryParsed(false)
 , builder(_builder)
 , parsedTopLevel(false)
+, is_parsing(false)
 {
 	is = new ifstream(fileName.c_str());
 
 	if (builder == NULL) builder = Expr::getBuilder();
 
-	// Initial empty environments
 	varEnvs.push(VarEnv());
 	fvarEnvs.push(FVarEnv());
 }
@@ -65,6 +65,7 @@ SMTParser::SMTParser(std::istream* ifs, ExprBuilder* _builder)
 , queryParsed(false)
 , builder(_builder)
 , parsedTopLevel(false)
+, is_parsing(false)
 {
 	if (builder == NULL) builder = Expr::getBuilder();
 
@@ -76,17 +77,11 @@ SMTParser::SMTParser(std::istream* ifs, ExprBuilder* _builder)
 SMTParser::~SMTParser(void)
 {
 	delete is;
+	parserTemp = NULL;
 	is = NULL;
+	assert (!is_parsing);
 }
 
-bool SMTParser::Parse(void)
-{
-	smtlib::parser	p;
-	int		rc;
-
-	parserTemp = this;
-	bad_read = false;
-	lineNum = 1;
 #if 0
 	void *buf;
 	buf = smtlib_createBuffer(smtlib_bufSize());
@@ -95,14 +90,29 @@ bool SMTParser::Parse(void)
 	smtlib_switchToBuffer(buf);
 	smtlib_flushBuffer(buf);
 #endif
+/* p.parse() */
+#if 0
+	smtlib_switchToBuffer(NULL);
+	smtlib_deleteBuffer(buf);
+#endif
+
+
+bool SMTParser::Parse(void)
+{
+	smtlib::parser	p;
+	int		rc;
+
+	assert (parserTemp == NULL);
+	parserTemp = this;
+	bad_read = false;
+	lineNum = 1;
+	is_parsing = true;
+
 	smtlibrestart(NULL);
 	smtlib_setInteractive(false);
 	rc = p.parse();
-#if 0
-	smtlib_switchToBuffer(NULL);
 
-	smtlib_deleteBuffer(buf);
-#endif
+	is_parsing = false;
 
 	return (rc == 0 && !bad_read);
 }
@@ -130,7 +140,7 @@ int SMTParser::Error(const string& msg)
 		<< SMTParser::parserTemp->lineNum << ": "
 		<< msg << "\n"
 		<< smtlibtext << '\n';
-	exit(1);
+//	exit(1);
 	return 0;
 }
 
@@ -155,8 +165,6 @@ ExprHandle SMTParser::Create##x(std::vector<ExprHandle> kids)	\
 	ExprHandle r = builder->x(kids[n_kids-2], kids[n_kids-1]);	\
 	for (int i=n_kids-3; i>=0; i--)	\
 		r = builder->x(kids[i], r);	\
-\
-	std::cerr << "CREATED "#x":\n" << r << '\n';	\
 \
 	return r;	\
 }

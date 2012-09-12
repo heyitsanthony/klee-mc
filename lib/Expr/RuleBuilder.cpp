@@ -32,14 +32,10 @@ namespace {
 	cl::opt<bool>
 	RBRecursive(
 		"rb-recursive",
-		cl::desc("Recursively call rulebuilder when applying rules"),
-		cl::init(false));
+		cl::desc("Recursively call rulebuilder when applying rules"));
 
 	cl::opt<bool>
-	RBRebuild(
-		"rb-rebuild",
-		cl::desc("Rebuild on effective rule."),
-		cl::init(false));
+	RBRebuild("rb-rebuild", cl::desc("Rebuild on effective rule."));
 
 	cl::opt<bool>
 	RBMissFilter(
@@ -62,8 +58,7 @@ namespace {
 	cl::opt<bool>
 	ApplyAllRules(
 		"try-all-rules",
-		cl::desc("Iterate through all rules until a match is found."),
-		cl::init(false));
+		cl::desc("Iterate through all rules until a match is found."));
 
 	cl::opt<bool>
 	ApplyRuleHash(
@@ -78,9 +73,8 @@ namespace {
 		cl::init(true));
 
 
-	cl::opt<bool> ShowXlate("show-xlated", cl::init(false));
-
-	cl::opt<bool> DumpRuleMiss("dump-rule-miss", cl::init(false));
+	cl::opt<bool> ShowXlate("show-xlated");
+	cl::opt<bool> DumpRuleMiss("dump-rule-miss");
 }
 
 uint64_t RuleBuilder::hit_c = 0;
@@ -650,4 +644,11 @@ bool RuleBuilder::hasRule(const char* fname)
 	}
 
 	return false;
+}
+
+void RuleBuilder::printName(std::ostream& os) const
+{
+	os << "RuleBuilder {\n";
+	eb->printName(os);
+	os << "}\n";
 }

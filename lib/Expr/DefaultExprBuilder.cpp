@@ -78,9 +78,15 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS) \
 	DECL_BIN_REF(Sgt)
 	DECL_BIN_REF(Sge)
 #undef DECL_BIN_REF
+	virtual void printName(std::ostream& os) const;
   };
 
 }
 
 ExprBuilder *klee::createDefaultExprBuilder()
 { return new DefaultExprBuilder(); }
+
+void DefaultExprBuilder::printName(std::ostream& os) const
+{
+	os << "DefaultExprBuilder\n";
+}

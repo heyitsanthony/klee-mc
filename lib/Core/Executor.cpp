@@ -202,7 +202,7 @@ Executor::Executor(InterpreterHandler *ih)
 		stpTimeout,
 		interpreterHandler->getOutputFilename("queries.pc"),
 		interpreterHandler->getOutputFilename("stp-queries.pc"));
-	fastSolver = (YieldUncached) ? NULL : createFastSolver();
+	fastSolver = (YieldUncached) ? createFastSolver() : NULL;
 
 	ObjectState::setupZeroObjs();
 

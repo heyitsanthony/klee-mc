@@ -49,6 +49,8 @@ public:
 	uint64_t getTaintCount(void) const { return taint_c; }
 
 	EXPR_BUILDER_DECL_ALL
+
+	virtual void printName(std::ostream& os) const;
 protected:
 	const ShadowType* getShadowExpr(const ref<Expr>& e) const;
 	ShadowBuilder(ExprBuilder* eb, ShadowMix* _sm);

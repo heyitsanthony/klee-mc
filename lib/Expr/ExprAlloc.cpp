@@ -235,3 +235,6 @@ ref<Expr> ExprAlloc::SExt(const ref<Expr> &e, Expr::Width w)
 	r->computeHash();
 	return r;
 }
+
+
+void ExprAlloc::printName(std::ostream& os) const { os << "ExprAlloc\n"; }

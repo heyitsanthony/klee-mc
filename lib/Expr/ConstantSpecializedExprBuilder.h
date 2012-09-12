@@ -1,6 +1,7 @@
 #ifndef CONSTSPECEXPRBUILDER_H
 #define CONSTSPECEXPRBUILDER_H
 
+#include <iostream>
 #include "klee/ExprBuilder.h"
 
 /// ConstantSpecializedExprBuilder - A base expression builder class which
@@ -133,6 +134,8 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS)	{ \
 	DECL_BIN_REF(Sge)
 
 #undef DECL_BIN_REF
+	virtual void printName(std::ostream& os) const
+	{ os << "ConstantSpecializedExprBuilder\n"; }
 };
 }
 #endif

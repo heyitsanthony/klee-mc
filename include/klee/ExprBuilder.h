@@ -10,6 +10,7 @@
 #ifndef KLEE_EXPRBUILDER_H
 #define KLEE_EXPRBUILDER_H
 
+#include <iostream>
 #include "Expr.h"
 
 #define EXPR_BUILDER_DECL_BIN_REF(x)	\
@@ -126,15 +127,14 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS) = 0;
 
 	ref<Expr> Constant(uint64_t Value, Expr::Width W)
 	{ return Constant(llvm::APInt(W, Value)); }
+
+	virtual void printName(std::ostream& os) const = 0;
 };
 
-/// createDefaultExprBuilder - Create an expression builder which does no
-/// folding.
+/// createDefaultExprBuilder - Create builder which does no folding.
 ExprBuilder *createDefaultExprBuilder(void);
 
-/// createConstantFoldingExprBuilder - Create an expression builder which
-/// folds constant expressions.
-///
+/// createConstantFoldingExprBuilder - Create builder which folds constants.
 /// Base - The base builder to use when constructing expressions.
 ExprBuilder *createConstantFoldingExprBuilder(ExprBuilder *Base);
 

@@ -178,6 +178,7 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS)	\
 
 	static RuleBuilder* create(ExprBuilder* b, const char* fname = NULL);
 
+	virtual void printName(std::ostream& os) const;
 protected:
 	RuleBuilder(ExprBuilder* base);
 private:
