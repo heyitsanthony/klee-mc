@@ -202,7 +202,7 @@ Executor::Executor(InterpreterHandler *ih)
 		stpTimeout,
 		interpreterHandler->getOutputFilename("queries.pc"),
 		interpreterHandler->getOutputFilename("stp-queries.pc"));
-	fastSolver = createFastSolver();
+	fastSolver = (YieldUncached) ? NULL : createFastSolver();
 
 	ObjectState::setupZeroObjs();
 
@@ -239,7 +239,7 @@ Executor::~Executor()
 	delete memory;
 	if (statsTracker) delete statsTracker;
 
-	delete fastSolver;
+	if (fastSolver) delete fastSolver;
 	delete solver;
 
 	ExeStateBuilder::replaceBuilder(NULL);
