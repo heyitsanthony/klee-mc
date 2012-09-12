@@ -275,7 +275,13 @@ bool Forks::forkFollowReplay(ExecutionState& current, struct ForkInfo& fi)
 	fi.wasReplayed = true;
 
 	// Verify that replay target matches current path constraints
-	assert(targetIndex <= fi.N && "replay target out of range");
+	if (targetIndex > fi.N) {
+		exe.terminateOnError(
+			current, "replay target out of range", "branch.err");
+		// assert (targetIndex <= fi.N && "replay target out of range");
+		return false;
+	}
+
 	if (fi.res[targetIndex]) {
 		// Suppress forking; constraint will be added to path
 		// after forkSetup is complete.
@@ -332,7 +338,7 @@ bool Forks::forkSetupNoSeeding(ExecutionState& current, struct ForkInfo& fi)
 
 	// Multiple branch directions are possible; check for flags that
 	// prevent us from forking here
-	assert(	!exe.getReplayOut() &&
+	assert(	!exe.getReplayKTest() &&
 		"in replay mode, only one branch can be true.");
 
 	if (fi.isInternal) return true;
@@ -484,7 +490,6 @@ Forks::fork(
 
 	makeForks(current, fi);
 	constrainForks(current, fi);
-
 
 	if (fi.forkedTargets) {
 		if (current.prevPC->getForkCount() == 0)

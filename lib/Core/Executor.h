@@ -269,43 +269,42 @@ private:
 	std::vector<TimerInfo*>	timers;
 	std::set<KFunction*>	bad_conc_kfuncs;
 
-  /// When non-null the bindings that will be used for calls to
-  /// klee_make_symbolic in order replay.
-  const struct KTest *replayOut;
+	/// When non-null the bindings that will be used for calls to
+	/// klee_make_symbolic in order replay.
+	const struct KTest *replayKTest;
 
-  /// When non-empty a list of lists of branch decisions to be used for replay.
-  const std::list<ReplayPath> *replayPaths;
+	/// The index into the current \ref replayKTest object.
+	unsigned replayPosition;
 
-  /// The index into the current \ref replayOut object.
-  unsigned replayPosition;
 
-  /// Disables forking, instead a random path is chosen. Enabled as
-  /// needed to control memory usage. \see fork()
-  bool atMemoryLimit;
+	/// When non-empty a list of lists of branch decisions for replay.
+	const std::list<ReplayPath> *replayPaths;
 
-  /// Disables forking, set by client. \see setInhibitForking()
-  bool inhibitForking;
 
-  /// Forces only non-compact states to be chosen. Initially false,
-  /// gets true when atMemoryLimit becomes true, and reset to false
-  /// when memory has dropped below a certain threshold
-  bool onlyNonCompact;
+	/// Disables forking, instead a random path is chosen. Enabled as
+	/// needed to control memory usage. \see fork()
+	bool atMemoryLimit;
 
-  ExecutionState* initialStateCopy;
+	/// Disables forking, set by client. \see setInhibitForking()
+	bool inhibitForking;
 
-  /// Whether implied-value concretization is enabled.
-  /// Currently false, it is buggy (it needs to validate its writes).
-  //  XXX I don't know what it means by validating writes. It
-  //  looks good to me, so I enable by default --AJR
-  bool ivcEnabled;
+	/// Forces only non-compact states to be chosen. Initially false,
+	/// gets true when atMemoryLimit becomes true, and reset to false
+	/// when memory has dropped below a certain threshold
+	bool onlyNonCompact;
 
-  /// Remembers the instruction count at the last memory limit operation.
-  uint64_t lastMemoryLimitOperationInstructions;
+	ExecutionState* initialStateCopy;
 
-  /// The maximum time to allow for a single stp query.
-  double stpTimeout;
+	/// Whether implied-value concretization is enabled.
+	bool ivcEnabled;
 
-  bool isDebugIntrinsic(const llvm::Function *f);
+	/// Remembers the instruction count at the last memory limit operation.
+	uint64_t lastMemoryLimitOperationInstructions;
+
+	/// The maximum time to allow for a single stp query.
+	double stpTimeout;
+
+	bool isDebugIntrinsic(const llvm::Function *f);
 
 	void instInsertValue(ExecutionState& state, KInstruction* ki);
 	void instShuffleVector(ExecutionState& state, KInstruction* ki);
@@ -494,18 +493,18 @@ public:
 
 	virtual void setReplayKTest(const struct KTest *out)
 	{
-		assert(!replayPaths && "cannot replay both buffer and path");
-		replayOut = out;
+		assert(!replayPaths && "cannot replay both ktest and path");
+		replayKTest = out;
 		replayPosition = 0;
 	}
 
 	virtual void setReplayPaths(const std::list<ReplayPath>* paths)
 	{
-		assert(!replayOut && "cannot replay both buffer and path");
+		assert(!replayKTest && "cannot replay both ktest and path");
 		replayPaths = paths;
 	}
 
-	bool isReplayOut(void) const { return (replayOut != NULL); }
+	bool isReplayKTest(void) const { return (replayKTest != NULL); }
 	bool isReplayPaths(void) const { return (replayPaths != NULL); }
 
 	/*** Runtime options ***/
@@ -536,7 +535,7 @@ public:
 	InterpreterHandler *getInterpreterHandler(void) const
 	{ return interpreterHandler; }
 
-	const struct KTest *getReplayOut(void) const { return replayOut; }
+	const struct KTest *getReplayKTest(void) const { return replayKTest; }
 	bool isAtMemoryLimit(void) const { return atMemoryLimit; }
 
 	ExeStateManager* getStateManager(void) { return stateManager; }

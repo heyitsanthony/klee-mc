@@ -180,7 +180,7 @@ Executor::Executor(InterpreterHandler *ih)
 , symPathWriter(0)
 , sfh(0)
 , haltExecution(false)
-, replayOut(0)
+, replayKTest(0)
 , replayPaths(0)
 , atMemoryLimit(false)
 , inhibitForking(false)
@@ -2152,9 +2152,9 @@ void Executor::yield(ExecutionState& state)
 
 void Executor::terminate(ExecutionState &state)
 {
-	if (replayOut && replayPosition!=replayOut->numObjects) {
+	if (replayKTest && replayPosition != replayKTest->numObjects) {
 		klee_warning_once(
-			replayOut,
+			replayKTest,
 			"replay did not consume all objects in test input.");
 	}
 
@@ -2329,7 +2329,7 @@ ObjectState* Executor::executeMakeSymbolic(
   ref<Expr> len,
   const char* arrName)
 {
-	if (!replayOut) return makeSymbolic(state, mo, len, arrName);
+	if (!replayKTest) return makeSymbolic(state, mo, len, arrName);
 	else return makeSymbolicReplay(state, mo, len);
 }
 
@@ -2355,12 +2355,12 @@ ObjectState* Executor::makeSymbolicReplay(
 	ExecutionState& state, const MemoryObject* mo, ref<Expr> len)
 {
 	ObjectState *os = state.bindMemObjWriteable(mo);
-	if (replayPosition >= replayOut->numObjects) {
+	if (replayPosition >= replayKTest->numObjects) {
 		terminateOnError(state, "replay count mismatch", "user.err");
 		return os;
 	}
 
-	KTestObject *obj = &replayOut->objects[replayPosition++];
+	KTestObject *obj = &replayKTest->objects[replayPosition++];
 	if (obj->numBytes != mo->size) {
 		terminateOnError(state, "replay size mismatch", "user.err");
 		return os;

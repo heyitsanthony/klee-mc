@@ -30,7 +30,7 @@ void Replay::loadPathFile(const std::string& name, ReplayPath& buffer)
 	}
 
 	while (is->good()) {
-		unsigned value, id;
+		uint64_t	value, id;
 
 		/* get the value */
 		*is >> value;
@@ -41,14 +41,15 @@ void Replay::loadPathFile(const std::string& name, ReplayPath& buffer)
 
 		/* get the location */
 		*is >> id;
-		assert (id == 0);
+
+		/* but for now, ignore it */
+		id = 0;
 
 		/* skip the newline */
 		is->get();
 
 		/* XXX: need to get format working right for this. */
-		id = 0;
-		buffer.push_back(ReplayNode(value,(const KInstruction*)0));
+		buffer.push_back(ReplayNode(value,(const KInstruction*)id));
 	}
 
 	delete is;
