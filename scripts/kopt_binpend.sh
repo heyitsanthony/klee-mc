@@ -21,9 +21,18 @@ function xtive_loop
 			break;
 		fi
 
-		kopt -dedup-db -rule-file="$BRULEF" $BRULEF.tmp 2>&1
+		OLDDUPS=`cat $BRULEF.dups`
+		kopt -dedup-db -rule-file="$BRULEF" $BRULEF.tmp 2>&1 | grep -i dups >$BRULEF.dups
 		mv $BRULEF.tmp $BRULEF
+
+		NEWDUPS=`cat $BRULEF.dups`
+		if [ "$NEWDUPS" == "$OLDDUPS" ]; then
+			echo "SAME DUPS!"
+			break;
+		fi
 	done
+
+	rm "$BRULEF.dups"
 }
 
 if [ -f "$PROOFDIR" ]; then

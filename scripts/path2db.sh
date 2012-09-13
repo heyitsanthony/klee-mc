@@ -78,10 +78,15 @@ for a in $pathdir/*path.gz; do
 
 	phash=`sha1sum $a | cut -f1 -d' '`
 
-	sqlite3 exe.db <<< "
-		INSERT INTO path (phash) VALUES ('$phash');
-		SELECT pathid FROM path WHERE phash='$phash';
-	" >pathid
+	sqlite3 exe.db <<< "SELECT pathid FROM path WHERE phash='$phash' LIMIT 1;" >pathid
+	if [ ! -z `cat pathid` ]; then
+		echo "PATH FOR $phash HAS BEEN SEEN"
+		continue
+	fi
+	
+
+	sqlite3 exe.db <<< "INSERT INTO path (phash) VALUES ('$phash');" >/dev/null
+	sqlite3 exe.db <<< "SELECT pathid FROM path WHERE phash='$phash' LIMIT 1;" >pathid
 	
 	echo INSERT SB MAKE FILE======================
 	insert_sb  >sb.sqlite3
