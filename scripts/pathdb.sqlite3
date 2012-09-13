@@ -27,7 +27,7 @@ CREATE TABLE totalpathnode(
 ;
 
 CREATE VIEW minpaths AS
-	SELECT pathid,MIN(minpos),name
+	SELECT pathid,MIN(minpos) as minpos, name
 	FROM sb
 	INNER JOIN pathnode
 	ON sb.sbaddr=pathnode.sbaddr

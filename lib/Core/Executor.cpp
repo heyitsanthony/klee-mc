@@ -68,7 +68,7 @@ extern double	MaxSTPTime;
 namespace {
   DECL_OPTBOOL(ChkConstraints, "chk-constraints");
   DECL_OPTBOOL(YieldUncached, "yield-uncached");
-  DECL_OPTBOOL(CompleteReplay, "replay-complete");
+  DECL_OPTBOOL(EagerReplay, "eager-replay");
 
   cl::opt<bool>
   ConcretizeEarlyTerminate(
@@ -2004,6 +2004,8 @@ unsigned Executor::getNumFullStates(void) const
 
 void Executor::replayPathsIntoStates(ExecutionState& initialState)
 {
+	std::list<ExecutionState*>	replay_states;
+
 	assert (replayPaths != NULL);
 	assert (initialState.ptreeNode != NULL);
 
@@ -2011,14 +2013,28 @@ void Executor::replayPathsIntoStates(ExecutionState& initialState)
 		ExecutionState *es;
 		es = ExecutionState::createReplay(initialState, (*it));
 		stateManager->queueSplitAdd(es->ptreeNode, &initialState, es);
+		replay_states.push_back(es);
 	}
 
-	/* the run is only complete if we include the initial state;
-	 * for incomplete, we only care about seed paths. */
-	if (CompleteReplay == false) {
-		stateManager->queueRemove(&initialState);
-		stateManager->commitQueue();
+	std::cerr << "[Executor] Got " << replay_states.size() << " replays.\n";
+
+	stateManager->queueRemove(&initialState);
+	stateManager->commitQueue();
+
+	if (!EagerReplay) return;
+
+	/* play every path eagerly */
+	std::cerr << "[Executor] Replaying paths.\n";
+	foreach (it, replay_states.begin(), replay_states.end()) {
+		ExecutionState	*es = *it;
+		do {
+			stepStateInst(es);
+		} while (!stateManager->isRemovedState(es));
+		std::cerr << "[Executor] Replay state done st=" << es << ".\n";
+		notifyCurrent(es);
 	}
+	std::cerr << "[Executor] All paths replayed. Expanded states: "
+		<< stateManager->numRunningStates() << "\n";
 }
 
 void Executor::run(ExecutionState &initialState)
@@ -2330,7 +2346,7 @@ ObjectState* Executor::executeMakeSymbolic(
   const char* arrName)
 {
 	if (!replayKTest) return makeSymbolic(state, mo, len, arrName);
-	else return makeSymbolicReplay(state, mo, len);
+	else return makeSymbolicKTest(state, mo, len);
 }
 
 ObjectState* Executor::makeSymbolic(
@@ -2351,7 +2367,7 @@ ObjectState* Executor::makeSymbolic(
 }
 
 // Create a new object state for the memory object (instead of a copy).
-ObjectState* Executor::makeSymbolicReplay(
+ObjectState* Executor::makeSymbolicKTest(
 	ExecutionState& state, const MemoryObject* mo, ref<Expr> len)
 {
 	ObjectState *os = state.bindMemObjWriteable(mo);

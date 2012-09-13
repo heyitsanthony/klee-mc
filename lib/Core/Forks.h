@@ -108,6 +108,12 @@ private:
 	bool evalForks(ExecutionState& current, struct ForkInfo& fi);
 	bool evalForkBranch(ExecutionState& current, struct ForkInfo& fi);
 
+	void trackTransitions(const ForkInfo& fi);
+	void setupForkAffinity(
+		ExecutionState& current,
+		struct ForkInfo& fi,
+		unsigned* cond_idx_map);
+
 	void makeForks(ExecutionState& current, struct ForkInfo& fi);
 	void constrainForks(ExecutionState& current, struct ForkInfo& fi);
 	void constrainFork(

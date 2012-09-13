@@ -45,9 +45,6 @@ void Replay::loadPathFile(const std::string& name, ReplayPath& buffer)
 		/* but for now, ignore it */
 		id = 0;
 
-		/* skip the newline */
-		is->get();
-
 		/* XXX: need to get format working right for this. */
 		buffer.push_back(ReplayNode(value,(const KInstruction*)id));
 	}

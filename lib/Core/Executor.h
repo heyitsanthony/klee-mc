@@ -358,7 +358,7 @@ private:
 		llvm::ConstantExpr* ce,
 		std::vector< ref<Expr> > &arguments);
 
-	ObjectState* makeSymbolicReplay(
+	ObjectState* makeSymbolicKTest(
 		ExecutionState& state, const MemoryObject* mo, ref<Expr> len);
 
 	bool getSatAssignment(const ExecutionState& st, Assignment& a);

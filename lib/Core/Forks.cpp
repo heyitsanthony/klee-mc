@@ -588,14 +588,16 @@ ExecutionState* Forks::pureFork(ExecutionState& es, bool compact)
 	return newState;
 }
 
-
-void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
+void Forks::setupForkAffinity(
+	ExecutionState& current,
+	struct ForkInfo& fi,
+	unsigned* cond_idx_map)
 {
-	ExecutionState	**curStateUsed = NULL;
-	unsigned	cond_idx_map[fi.N];
-
 	for (unsigned i = 0; i < fi.N; i++)
 		cond_idx_map[i] = i;
+
+	/* no affinity if a replay-- already set in FollowReplay */
+	if (current.isReplayDone()) return;
 
 	if (preferFalseState) {
 		/* swap true with false */
@@ -613,6 +615,15 @@ void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 			cond_idx_map[i] = swap_val;
 		}
 	}
+}
+
+
+void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
+{
+	ExecutionState	**curStateUsed = NULL;
+	unsigned	cond_idx_map[fi.N];
+
+	setupForkAffinity(current, fi, cond_idx_map);
 
 	for(unsigned int i = 0; i < fi.N; i++) {
 		ExecutionState	*newState, *baseState;
@@ -660,6 +671,11 @@ void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 	if (fi.validTargets < 2 || fi.forkDisabled)
 		return;
 
+	trackTransitions(fi);
+}
+
+void Forks::trackTransitions(const ForkInfo& fi)
+{
 	/* Track forking condition transitions */
 	for (unsigned i = 0; i < fi.N; i++) {
 		ref<Expr>	new_cond;

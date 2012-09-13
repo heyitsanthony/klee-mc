@@ -51,8 +51,7 @@ private:
 	Executor	*exe;
 	SeedMapType	seedMap;
 
-	/// When non-null a list of "seed" inputs which will be used to
-	/// drive execution.
+	/// When non-null a list of "seed" inputs used to drive execution.
 	const std::vector<struct KTest *> *usingSeeds;
 };
 }
