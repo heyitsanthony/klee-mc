@@ -33,14 +33,19 @@ void Replay::loadPathFile(const std::string& name, ReplayPath& buffer)
 		uint64_t	value, id;
 
 		/* get the value */
-		*is >> value;
-		if (!is->good()) break;
-		
+		*is >> std::dec >> value;
+		if (!is->good()) {
+			std::cerr
+				<< "[Replay] Path of size="
+				<< buffer.size() << ".\n";
+			break;
+		}
+
 		/* eat the comma */
 		is->get();
 
 		/* get the location */
-		*is >> id;
+		*is >> std::hex >> id;
 
 		/* but for now, ignore it */
 		id = 0;
@@ -51,7 +56,6 @@ void Replay::loadPathFile(const std::string& name, ReplayPath& buffer)
 
 	delete is;
 }
-
 
 typedef std::map<const llvm::Function*, uint64_t> f2p_ty;
 
@@ -69,8 +73,10 @@ void Replay::writePathFile(const ExecutionState& st, std::ostream& os)
 		os << (*bit).first;
 
 		ki = (*bit).second;
-		if (ki == NULL)
+		if (ki == NULL) {
+			os << ",0\n";
 			continue;
+		}
 
 		/* this is klee-mc specific-- should probably support
 		 * llvm bitcode here eventually too */

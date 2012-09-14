@@ -86,8 +86,12 @@ unsigned CallStack::clearTail(void)
 {
 	unsigned ret = 0;
 	for (int i = size() - 2; i >= 0; i--) {
-		if (at(i).isClear()) break;
-		ret += at(i).kf->numRegisters;
+		StackFrame	&sf(at(i));
+
+		if (sf.isClear()) break;
+
+		ret += sf.kf->numRegisters;
+		sf.clearLocals();
 	}
 	return ret;
 }

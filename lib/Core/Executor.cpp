@@ -69,6 +69,7 @@ namespace {
   DECL_OPTBOOL(ChkConstraints, "chk-constraints");
   DECL_OPTBOOL(YieldUncached, "yield-uncached");
   DECL_OPTBOOL(EagerReplay, "eager-replay");
+  DECL_OPTBOOL(CompleteReplay, "replay-complete");
 
   cl::opt<bool>
   ConcretizeEarlyTerminate(
@@ -2018,8 +2019,11 @@ void Executor::replayPathsIntoStates(ExecutionState& initialState)
 
 	std::cerr << "[Executor] Got " << replay_states.size() << " replays.\n";
 
-	stateManager->queueRemove(&initialState);
-	stateManager->commitQueue();
+	/* complete replay => will try new paths */
+	if (CompleteReplay == false) {
+		stateManager->queueRemove(&initialState);
+		stateManager->commitQueue();
+	}
 
 	if (!EagerReplay) return;
 
@@ -2030,7 +2034,10 @@ void Executor::replayPathsIntoStates(ExecutionState& initialState)
 		do {
 			stepStateInst(es);
 		} while (!stateManager->isRemovedState(es));
-		std::cerr << "[Executor] Replay state done st=" << es << ".\n";
+		std::cerr
+			<< "[Executor] Replay state done st="
+			<< es << ". Total="
+			<< stateManager->numRunningStates() << "\n";
 		notifyCurrent(es);
 	}
 	std::cerr << "[Executor] All paths replayed. Expanded states: "
@@ -2245,6 +2252,8 @@ void Executor::terminateOnError(
 	std::string message = messaget.str();
 	static std::set<errmsg_ty> emittedErrors;
 
+	/* It can be annoying to emit errors that happen with the
+	 * same trace. */
 	if (!alwaysEmit && !EmitAllErrors) {
 		CallStack::insstack_ty	ins;
 
