@@ -47,8 +47,14 @@ namespace
 	llvm::cl::opt<bool>
 	ReplayPathOnly(
 		"replay-path-only",
-		llvm::cl::desc("On replay, kill states on branch exhaustion"),
-		llvm::cl::init(false));
+		llvm::cl::desc("On replay, kill states on branch exhaustion"));
+
+	llvm::cl::opt<bool>
+	ReplaySuppressForks(
+		"replay-suppress-forks",
+		llvm::cl::desc("On replay, suppress symbolic forks."),
+		llvm::cl::init(true));
+
 
 	llvm::cl::opt<bool>
 	MaxMemoryInhibit(
@@ -269,24 +275,23 @@ void Forks::ForkInfo::dump(std::ostream& os) const
 bool Forks::forkFollowReplay(ExecutionState& current, struct ForkInfo& fi)
 {
 	// Replaying non-internal fork; read value from replayBranchIterator
-	unsigned targetIndex;
-
-	targetIndex = current.stepReplay();
 	fi.wasReplayed = true;
+	fi.replayTargetIdx = current.stepReplay();
 
 	// Verify that replay target matches current path constraints
-	if (targetIndex > fi.N) {
+	if (fi.replayTargetIdx > fi.N) {
 		exe.terminateOnError(
 			current, "replay target out of range", "branch.err");
 		// assert (targetIndex <= fi.N && "replay target out of range");
 		return false;
 	}
 
-	if (fi.res[targetIndex]) {
+	if (fi.res[fi.replayTargetIdx]) {
 		// Suppress forking; constraint will be added to path
 		// after forkSetup is complete.
-		fi.res.assign(fi.N, false);
-		fi.res[targetIndex] = true;
+		if (ReplaySuppressForks)
+			fi.res.assign(fi.N, false);
+		fi.res[fi.replayTargetIdx] = true;
 
 		return true;
 	}
@@ -294,7 +299,7 @@ bool Forks::forkFollowReplay(ExecutionState& current, struct ForkInfo& fi)
 	std::stringstream ss;
 	ss	<< "hit invalid branch in replay path mode (line="
 		<< current.prevPC->getInfo()->assemblyLine
-		<< ", prior-path target=" << targetIndex
+		<< ", prior-path target=" << fi.replayTargetIdx
 		<< ", replay targets=";
 
 	bool first = true;
@@ -469,6 +474,7 @@ Forks::fork(
 	fi.isBranch = isBranch;
 	fi.isSeeding = exe.isStateSeeding(&current);
 
+	/* find feasible forks */
 	if (evalForks(current, fi) == false) {
 		exe.terminateEarly(current, "fork query timed out");
 		return Executor::StateVector(N, NULL);
@@ -596,8 +602,12 @@ void Forks::setupForkAffinity(
 	for (unsigned i = 0; i < fi.N; i++)
 		cond_idx_map[i] = i;
 
-	/* no affinity if a replay-- already set in FollowReplay */
-	if (current.isReplayDone()) return;
+	if (!current.isReplayDone()) {
+		/* if replay, steer to expected branch */
+		cond_idx_map[0] = fi.replayTargetIdx;
+		cond_idx_map[fi.replayTargetIdx] = 0;
+		return;
+	}
 
 	if (preferFalseState) {
 		/* swap true with false */

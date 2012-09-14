@@ -88,11 +88,6 @@ namespace {
   ReadArgsFilesFake("read-args",
                     cl::desc("File to read arguments from (one arg per line)"));
 
-  cl::opt<bool>
-  ReplayKeepSymbolic("replay-keep-symbolic",
-                     cl::desc("Replay the test cases only by asserting"
-                              "the bytes, not necessarily making them concrete."));
-
   cl::list<std::string>
   ReplayKTestFile("replay-ktest",
                 cl::desc("Specify a ktest file to replay"),

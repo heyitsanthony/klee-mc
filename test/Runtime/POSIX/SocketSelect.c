@@ -2,8 +2,9 @@
 // RUN: %klee --libc=uclibc --posix-runtime %t1.bc --sym-datagrams 1 10 --sym-streams 1 10 > %t.log
 // RUN: grep -q Success %t.log
 // RUN: gcc -g %s -o SocketSelect
-// RUN: %replay ./SocketSelect klee-last/test000001.ktest > %t2.log
-// RUN: grep -q Success %t2.log
+// RUN: gzip -d klee-last/test000001.ktest.gz
+// RUN: %replay ./SocketSelect klee-last/test000001.ktest 2>%t2.err >%t2.log 
+// RUN: grep Success %t2.log
 
 #include <assert.h>
 #include <errno.h>

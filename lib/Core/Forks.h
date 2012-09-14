@@ -48,6 +48,7 @@ public:
 		bool			isBranch;
 		bool			forkDisabled;
 		bool			wasReplayed;
+		unsigned		replayTargetIdx;
 		std::vector<std::list<SeedInfo> > resSeeds;
 		bool			forkCompact;
 	};
