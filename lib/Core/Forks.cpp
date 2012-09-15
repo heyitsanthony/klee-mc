@@ -328,7 +328,7 @@ bool Forks::forkSetupNoSeeding(ExecutionState& current, struct ForkInfo& fi)
 		assert(false && "invalid state");
 	}
 
-	if (!fi.isInternal && ReplayPathOnly &&
+	if (	!fi.isInternal && ReplayPathOnly &&
 		current.isReplay && current.isReplayDone())
 	{
 		// Done replaying this state, so kill it (if -replay-path-only)
@@ -344,7 +344,7 @@ bool Forks::forkSetupNoSeeding(ExecutionState& current, struct ForkInfo& fi)
 	// Multiple branch directions are possible; check for flags that
 	// prevent us from forking here
 	assert(	!exe.getReplayKTest() &&
-		"in replay mode, only one branch can be true.");
+		"in ktest replay mode, only one branch can be true.");
 
 	if (fi.isInternal) return true;
 
@@ -602,7 +602,7 @@ void Forks::setupForkAffinity(
 	for (unsigned i = 0; i < fi.N; i++)
 		cond_idx_map[i] = i;
 
-	if (!current.isReplayDone()) {
+	if (fi.wasReplayed) {
 		/* if replay, steer to expected branch */
 		cond_idx_map[0] = fi.replayTargetIdx;
 		cond_idx_map[fi.replayTargetIdx] = 0;
