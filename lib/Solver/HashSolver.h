@@ -9,61 +9,10 @@
 #include <vector>
 #include <set>
 
+#include "QHS.h"
+
 namespace klee
 {
-class QHSEntry {
-public:
-	QHSEntry(const Query& _q, Expr::Hash _qh, bool _isSAT)
-	: q(_q), qh(_qh), isSAT(_isSAT) {}
-	~QHSEntry() {}
-
-	Query		q;
-	Expr::Hash	qh;
-	bool		isSAT;
-};
-
-/* virtual cheesey base class for storage backends */
-class QHSStore
-{
-public:
-	virtual ~QHSStore() {}
-	virtual bool lookup(const QHSEntry& qhs) = 0;
-	virtual void saveSAT(const QHSEntry& qhs) = 0;
-protected:
-	QHSStore() {}
-};
-
-class QHSSink : public QHSStore
-{
-public:
-	virtual ~QHSSink(void)
-	{
-		delete src;
-		delete dst;
-	}
-	QHSSink(QHSStore* _src, QHSStore* _dst)
-	: src(_src)
-	, dst(_dst)
-	{ assert (src && dst); }
-
-	virtual bool lookup(const QHSEntry& qhs);
-	virtual void saveSAT(const QHSEntry& qhs);
-protected:
-	QHSStore *src, *dst;
-};
-
-class QHSDir : public QHSStore
-{
-public:
-	virtual ~QHSDir(void) {}
-	static QHSDir* create();
-	virtual bool lookup(const QHSEntry& qe);
-	virtual void saveSAT(const QHSEntry& qe);
-protected:
-	QHSDir() {}
-private:
-	static void writeSAT(const QHSEntry& qe);
-};
 
 class HashSolver : public SolverImplWrapper
 {
@@ -102,7 +51,7 @@ private:
 	bool isMatch(Assignment* a) const;
 	bool computeSatMiss(const Query& q);
 
-	bool lookup(const Query& q, bool isSAT);
+	bool lookupSAT(const Query& q, bool isSAT);
 	void saveSAT(const Query& q, bool isSAT);
 
 	static void touchSAT(
@@ -110,9 +59,12 @@ private:
 		Expr::Hash	qh,
 		bool		isSAT);
 	static void touchSAT(const QHSEntry& me);
+	ref<Expr> computeValueCached(const Query& q);
 
 public:
 	virtual Solver::Validity computeValidity(const Query&);
+	ref<Expr> computeValue(const Query& query);
+
 	virtual bool computeSat(const Query&);
 	virtual bool computeInitialValues(const Query&, Assignment&);
 	
@@ -129,6 +81,9 @@ public:
 	static unsigned getStoreHits(void) { return hits; }
 	static unsigned getMisses(void) { return misses; }
 	static void commitMisses(void);
+
+	static bool isSink(void);
+	static bool isWriteSAT(void);
 };
 }
 #endif

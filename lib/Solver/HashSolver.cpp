@@ -1,7 +1,6 @@
 #include "static/Support.h"
 #include "klee/Constraints.h"
 #include "klee/Solver.h"
-#include "SMTPrinter.h"
 #include <iostream>
 #include <fstream>
 #include <sys/types.h>
@@ -9,7 +8,6 @@
 #include <assert.h>
 #include "klee/util/Assignment.h"
 #include <llvm/Support/CommandLine.h>
-#include "klee/Internal/ADT/zfstream.h"
 
 #include "HashSolver.h"
 #include "QHSFile.h"
@@ -32,6 +30,7 @@ namespace
 		"hcache-dir",
 		cl::desc("Alternative directory for hash cache."),
 		cl::init("hcache"));
+
 	cl::opt<std::string>
 	HCacheFDir(
 		"hcache-fdir",	/* sat.hcache; unsat.hcache */
@@ -47,100 +46,21 @@ namespace
 	cl::opt<bool>
 	HCacheWriteSols(
 		"hcache-write-sols",
-		cl::desc("Write solutions on eval with hcache."),
-		cl::init(false));
+		cl::desc("Write solutions on eval with hcache."));
 
 	cl::opt<bool>
 	HCacheSink(
 		"hcache-sink",
-		cl::desc("Sink directory hits into accel cache"),
-		cl::init(false));
+		cl::desc("Sink directory hits into accel cache"));
 
 	cl::opt<bool>
-	HCacheWriteSAT(
-		"hcache-write-sat",
-		cl::desc("Write entire SAT query"),
-		cl::init(false));
+	HCacheWriteSAT("hcache-write-sat", cl::desc("Write entire SAT query"));
 }
 
-bool QHSSink::lookup(const QHSEntry& qhs)
-{
-	if (dst->lookup(qhs)) return true;
+bool HashSolver::isSink(void) { return HCacheSink; }
+bool HashSolver::isWriteSAT(void) { return HCacheWriteSAT; }
 
-	if (src->lookup(qhs)) {
-		dst->saveSAT(qhs);
-		return true;
-	}
-
-	return false;
-}
-
-void QHSSink::saveSAT(const QHSEntry& qhs) { dst->saveSAT(qhs); }
-
-QHSDir* QHSDir::create(void)
-{
-	mkdir(HCacheDir.c_str(), 0770);
-	mkdir((HCacheDir + "/sat").c_str(), 0770);
-	mkdir((HCacheDir + "/unsat").c_str(), 0770);
-	return new QHSDir();
-}
-
-bool QHSDir::lookup(const QHSEntry& qhs)
-{
-	char		path[256];
-	const char	*subdir;
-	struct stat	s;
-	bool		found;
-
-	subdir = (qhs.isSAT) ? "sat" : "unsat";
-	snprintf(
-		path, 256, "%s/%s/%016lx",
-		HCacheDir.c_str(), subdir, qhs.qh);
-
-	found = stat(path, &s) == 0;
-	if (found && s.st_size == 0) {
-		/* seen this twice; better save the whole thing */
-
-		/* if we're sinking into a file cache, no need to save here */
-		if (!HCacheSink && HCacheWriteSAT)
-			writeSAT(qhs);
-	}
-
-	return found;
-}
-
-void QHSDir::saveSAT(const QHSEntry& qhs)
-{
-	const char	*subdir;
-	char		path[256];
-	FILE		*f;
-
-	/* dump to corresponding SAT directory */
-	subdir = (qhs.isSAT) ? "sat" : "unsat";
-	snprintf(
-		path, 256, "%s/%s/%016lx",
-		HCacheDir.c_str(), subdir, qhs.qh);
-	f = fopen(path, "w");
-	if (f != NULL) fclose(f);
-}
-
-void QHSDir::writeSAT(const QHSEntry& qhs)
-{
-	const char	*subdir;
-	char		path[256];
-	gzofstream	*os;
-
-	/* dump to corresponding SAT directory */
-	subdir = (qhs.isSAT) ? "sat" : "unsat";
-	snprintf(path, 256, "%s/%s/%016lx", HCacheDir.c_str(), subdir, qhs.qh);
-
-	os = new gzofstream(path, std::ios::in | std::ios::binary);
-	SMTPrinter::print(*os, qhs.q, true);
-	delete os;
-}
-
-
-bool HashSolver::lookup(const Query& q, bool isSAT)
+bool HashSolver::lookupSAT(const Query& q, bool isSAT)
 {
 	if (isSAT && sat_hashes.count(cur_hash))
 		return true;
@@ -148,7 +68,7 @@ bool HashSolver::lookup(const Query& q, bool isSAT)
 	if (!isSAT && unsat_hashes.count(cur_hash))
 		return true;
 
-	if (qstore->lookup(QHSEntry(q, cur_hash, isSAT))) {
+	if (qstore->lookupSAT(QHSEntry(q, cur_hash, isSAT))) {
 		store_hits++;
 		return true;
 	}
@@ -160,8 +80,8 @@ bool HashSolver::computeSat(const Query& q)
 {
 	cur_hash = qhash->hash(q);
 
-	if (lookup(q, true)) { hits++; return true; }
-	if (lookup(q, false)) { hits++; return false; }
+	if (lookupSAT(q, true)) { hits++; return true; }
+	if (lookupSAT(q, false)) { hits++; return false; }
 
 	misses++;
 	// std::cerr << "[HS] Hits=" << hits << ". Misses=" << misses << '\n';
@@ -217,6 +137,47 @@ bool HashSolver::isMatch(Assignment* a) const
 		return false;
 
 	return true;
+}
+
+
+ref<Expr> HashSolver::computeValueCached(const Query& q)
+{
+	ref<Expr>		ret;
+	QHSEntry		qhs(q, qhash->hash(q));
+	const ConstantExpr	*ce;
+
+	if (qstore->lookupValue(qhs) == true) {
+		/* hit in cache */
+		assert (qhs.isSAT);
+		hits++;
+		return MK_CONST(qhs.value, q.expr->getWidth());
+	}
+
+	/* miss-- call out ot lower solver */
+	misses++;
+	ret = doComputeValue(q);
+	if (ret.isNull() || failed())
+		return ret;
+
+	ce = dyn_cast<const ConstantExpr>(ret);
+	if (ce == NULL)
+		return ret;
+
+	/* store to cache */
+	qhs.isSAT = true;
+	qhs.value = ce->getZExtValue();
+	qstore->saveValue(qhs);
+
+	return ret;
+}
+
+ref<Expr> HashSolver::computeValue(const Query& query)
+{
+	/* saved entries bounded by 64-bit max */
+	if (query.expr->getWidth() > 64)
+		return doComputeValue(query);
+
+	return computeValueCached(query);
 }
 
 bool HashSolver::getCachedAssignment(const Query& q, Assignment& a_out)
@@ -305,11 +266,11 @@ HashSolver::HashSolver(Solver* s, QueryHash* in_qhash)
 				HCacheFDir.c_str(),
 				HCachePendingDir.c_str());
 		} else
-			qstore = QHSDir::create();
+			qstore = QHSDir::create(HCacheDir);
 	} else {
 		assert (HCacheFDir.size() && HCacheDir.size());
 		qstore = new QHSSink(
-			QHSDir::create(),
+			QHSDir::create(HCacheDir),
 			QHSFile::create(
 				HCacheFDir.c_str(),
 				HCachePendingDir.c_str()));
