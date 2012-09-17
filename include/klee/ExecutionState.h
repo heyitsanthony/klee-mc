@@ -327,6 +327,9 @@ public:
 	void unsetShadow(void) { is_shadowing = false; }
 
 	virtual void inheritControl(ExecutionState& es);
+
+	void printMinInstKFunc(std::ostream& os) const;
+	unsigned getNumMinInstKFuncs(void) const { return min_kf_inst.size(); }
 private:
 	void initFields(void);
 
@@ -357,6 +360,8 @@ private:
 	bool			is_shadowing;
 	uint64_t		shadow_v;
 
+	typedef std::map<const KFunction*, uint64_t>	min_kf_inst_ty;
+	min_kf_inst_ty		min_kf_inst;
 };
 
 }

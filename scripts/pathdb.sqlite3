@@ -17,6 +17,9 @@ CREATE TABLE pathnode(
 	FOREIGN KEY(sbaddr) REFERENCES sb(sbaddr))
 ;
 
+CREATE INDEX pn_sbaddr_idx on pathnode (sbaddr)
+;
+
 CREATE TABLE totalpathnode(
 	pnid		INTEGER PRIMARY KEY,
 	pathid		INTEGER,

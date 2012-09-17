@@ -55,8 +55,12 @@ namespace {
 	cl::opt<bool>
 	LogConstraints(
 		"log-constraints",
-		cl::desc("Log constraints into SMT as they are added to state."),
-		cl::init(false));
+		cl::desc("Log constraints into SMT as they are added to state."));
+
+	cl::opt<bool>
+	TrackStateFuncMinInst(
+		"track-state-mininst-kf",
+		cl::desc("Track minimum instruction state finds kfunc"));
 }
 
 void ExecutionState::initFields(void)
@@ -162,6 +166,11 @@ void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf)
 
 	kf->incEnters();
 	stack.push_back(StackFrame(caller,kf));
+
+	if (TrackStateFuncMinInst) {
+		if (min_kf_inst.find(kf) == min_kf_inst.end())
+			min_kf_inst.insert(std::make_pair(kf, totalInsts));
+	}
 }
 
 void ExecutionState::popFrame()
@@ -207,6 +216,11 @@ void ExecutionState::xferFrame(KFunction* kf)
 	StackFrame	&sf2(stack.back());
 	sf2.callPathNode = cpn;
 	kf->incEnters();
+
+	if (TrackStateFuncMinInst) {
+		if (min_kf_inst.find(kf) == min_kf_inst.end())
+			min_kf_inst.insert(std::make_pair(kf, totalInsts));
+	}
 }
 
 void ExecutionState::bindObject(const MemoryObject *mo, ObjectState *os)
@@ -772,4 +786,13 @@ void ExecutionState::inheritControl(ExecutionState& es)
 	stack = es.stack;
 	pc = es.pc;
 	prevPC = es.prevPC;
+}
+
+void ExecutionState::printMinInstKFunc(std::ostream& os) const
+{
+	foreach (it, min_kf_inst.begin(), min_kf_inst.end()) {
+		os	<< ((*it).second) << ","
+			<< ((*it).first)->function->getName().str()
+			<< '\n';
+	}
 }

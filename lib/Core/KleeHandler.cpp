@@ -327,9 +327,18 @@ unsigned KleeHandler::processTestCase(
 		Query	query(state.constraints, MK_CONST(0, Expr::Bool));
 		std::ostream	*f;
 
-		f = openTestFileGZ("smt", id);
-		SMTPrinter::print(*f, query);
-		delete f;
+		if ((f = openTestFileGZ("smt", id))) {
+			SMTPrinter::print(*f, query);
+			delete f;
+		}
+	}
+
+	if (state.getNumMinInstKFuncs()) {
+		std::ostream	*f = openTestFileGZ("mininst", id);
+		if (f) {
+			state.printMinInstKFunc(*f);
+			delete f;
+		}
 	}
 
 	if (errorMessage || WritePCs)
