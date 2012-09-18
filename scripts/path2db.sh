@@ -64,7 +64,7 @@ for a in $pathdir/*path.gz; do
 
 	echo ========PROCESSING PATH $a=============
 
-	phash=`sha1sum $a | cut -f1 -d' '`
+	phash=`zcat $a | sha1sum | cut -f1 -d' '`
 	sqlite3 exe.db <<< "SELECT pathid FROM path WHERE phash='$phash' LIMIT 1;" >pathid
 	if [ ! -z `cat pathid` ]; then
 		echo "PATH FOR $phash HAS BEEN SEEN"
