@@ -791,10 +791,12 @@ SFH_DEF_HANDLER(DefineFixedObject)
 #define MAKESYM_ARGIDX_ADDR   0
 #define MAKESYM_ARGIDX_LEN    1
 #define MAKESYM_ARGIDX_NAME   2
+/* XXX: handle with intrinsic library */
 SFH_DEF_HANDLER(MakeSymbolic)
 {
   	Executor::ExactResolutionList	rl;
 	std::string			name;
+	ref<Expr>			addr;
 
 	if (arguments.size() == 2) {
 		name = "unnamed";
@@ -804,8 +806,18 @@ SFH_DEF_HANDLER(MakeSymbolic)
 			state, arguments[MAKESYM_ARGIDX_NAME]);
 	}
 
-	sfh->executor->resolveExact(
-  		state, arguments[MAKESYM_ARGIDX_ADDR], rl, "make_symbolic");
+	addr = arguments[MAKESYM_ARGIDX_ADDR];
+	if (addr->getKind() == Expr::Constant) {
+		const ConstantExpr	*ce(cast<const ConstantExpr>(addr));
+		const MemoryObject	*mo;
+
+		mo = state.addressSpace.resolveOneMO(ce->getZExtValue());
+		const_cast<MemoryObject*>(mo)->setName(name);
+		sfh->executor->executeMakeSymbolic(state, mo);
+		return;
+	}
+
+	sfh->executor->resolveExact(state, addr, rl, "make_symbolic");
 
 	foreach (it, rl.begin(), rl.end()) {
 		MemoryObject *mo = const_cast<MemoryObject*>(it->first.first);

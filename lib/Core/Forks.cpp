@@ -328,15 +328,13 @@ bool Forks::forkSetupNoSeeding(ExecutionState& current, struct ForkInfo& fi)
 		assert(false && "invalid state");
 	}
 
-	if (	!fi.isInternal && ReplayPathOnly &&
-		current.isReplay && current.isReplayDone())
-	{
+	if (ReplayPathOnly && current.isReplay && current.isReplayDone()) {
 		// Done replaying this state, so kill it (if -replay-path-only)
 		exe.terminateEarly(current, "replay path exhausted");
 		return false;
 	}
 
-	if (!fi.isInternal && current.isReplayDone() == false)
+	if (current.isReplayDone() == false)
 		return forkFollowReplay(current, fi);
 
 	if (fi.validTargets <= 1)  return true;
@@ -658,7 +656,6 @@ void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 			continue;
 		}
 
-
 		// Do actual state forking
 		baseState = &current;
 		newState = pureFork(current, fi.forkCompact);
@@ -799,11 +796,11 @@ void Forks::constrainFork(
 			ssPath << condIndex << "\n";
 			curState->symPathOS << ssPath.str();
 		}
-
-		// only track NON-internal branches
-		if (!fi.wasReplayed)
-			curState->trackBranch(condIndex, current.prevPC);
 	}
+
+	// only track NON-internal branches
+	if (!fi.wasReplayed)
+		curState->trackBranch(condIndex, current.prevPC);
 
 	if (fi.isSeeding) {
 		(exe.getSeedMap())[curState].insert(

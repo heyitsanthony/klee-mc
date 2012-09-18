@@ -1,7 +1,7 @@
 // RUN: %llvmgcc %s -emit-llvm -g -c -o %t2.bc
 // RUN: %klee --seed-rng=11 --exit-on-error -output-istats --write-cov %t2.bc
-// RUN: grep WriteCov.c:10 klee-last/test000001.cov
-// RUN: grep WriteCov.c:12 klee-last/test000002.cov
+// RUN: grep WriteCov.c:10 klee-last/test000002.cov
+// RUN: grep WriteCov.c:12 klee-last/test000001.cov
 
 #include <assert.h>
 

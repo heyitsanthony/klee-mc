@@ -992,7 +992,6 @@ void Executor::finalizeBranch(
 	{
 		ExecutionState *newState;
 		newState = st->reconstitute(*initialStateCopy);
-		std::cerr << "REPLACING STATE: " << (void*)st << '\n';
 		replaceStateImmForked(st, newState);
 		st = newState;
 	}
@@ -1050,7 +1049,7 @@ llvm::Function* Executor::executeBitCast(
 	ExecutionState &state,
 	CallSite&		cs,
 	llvm::ConstantExpr*	ce,
-	std::vector< ref<Expr> > &arguments)
+	std::vector< ref<Expr> > &args)
 {
 	llvm::Function		*f;
 	const FunctionType	*fType, *ceType;
@@ -1069,8 +1068,7 @@ llvm::Function* Executor::executeBitCast(
 			new_ce =  dyn_cast<llvm::ConstantExpr>(ga->getAliasee());
 			if (new_ce && new_ce->getOpcode() == Instruction::BitCast)
 			{
-				return executeBitCast(
-					state, cs, new_ce, arguments);
+				return executeBitCast(state, cs, new_ce, args);
 			}
 		}
 		assert (f != NULL && "Alias not function??");
@@ -1089,7 +1087,7 @@ llvm::Function* Executor::executeBitCast(
 	// XXX this really needs thought and validation
 	unsigned i=0;
 	for (	std::vector< ref<Expr> >::iterator
-		ai = arguments.begin(), ie = arguments.end();
+		ai = args.begin(), ie = args.end();
 		ai != ie; ++ai, i++)
 	{
 		Expr::Width to, from;
@@ -1102,9 +1100,9 @@ llvm::Function* Executor::executeBitCast(
 
 		// XXX need to check other param attrs ?
 		if (cs.paramHasAttr(i+1, llvm::Attribute::SExt)) {
-			arguments[i] = SExtExpr::create(arguments[i], to);
+			args[i] = SExtExpr::create(args[i], to);
 		} else {
-			arguments[i] = ZExtExpr::create(arguments[i], to);
+			args[i] = ZExtExpr::create(args[i], to);
 		}
 	}
 

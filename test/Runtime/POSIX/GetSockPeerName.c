@@ -60,7 +60,7 @@ int main(int argc, char** argv)
         r = close(lfd);
         if (r < 0) { perror("close"); return EXIT_FAILURE; }
 
-	if (memcmp(addr, client_addr, sizeof(addr)) != 0) {
+	if (memcmp(&addr, &client_addr, sizeof(addr)) != 0) {
 		puts("different peername"); return EXIT_FAILURE;
 	}
 
