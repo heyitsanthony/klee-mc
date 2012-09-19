@@ -12,7 +12,7 @@
 #include "breadcrumb.h"
 
 #define USE_SYS_FAILURE	1
-#define FAILURE_RATE	4
+#define FAILURE_RATE	1	/* XXX: > implies incomplete model! */
 
 bool concrete_vfs = false;
 bool deny_sys_files = false;
