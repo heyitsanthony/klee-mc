@@ -107,7 +107,6 @@ static bool isSymRegByte(Arch::Arch a, int i)
 
 	if (a == Arch::I386) {
 		/* leave eax and rdx alone */
-		/* EAX = offset 0 in Vex struct */
 		if (i/4 == offsetof(VexGuestX86State, guest_EAX)/4 ||
 		    i/4 == offsetof(VexGuestX86State, guest_EDX)/4) {
 		    	return true;
@@ -163,7 +162,7 @@ SFH_DEF_HANDLER(SCRegs)
 	/* make state point to right register context on xfer */
 	static_cast<ExeStateVex&>(state).setRegCtx(cpu_mo);
 
-	state.bindLocal(target, ConstantExpr::create(cpu_mo->address, 64));
+	state.bindLocal(target, MK_CONST(cpu_mo->address, 64));
 }
 
 
@@ -233,7 +232,7 @@ SFH_DEF_HANDLER(IO)
 			path[0] == '/' && (path[1] == 'l' || path[1] == 'u'))
 		{
 			std::cerr << "DENIED '" << path << "'\n";
-			state.bindLocal(target, ConstantExpr::create(-1, 64));
+			state.bindLocal(target, MK_CONST(-1, 64));
 			break;
 		}
 
@@ -245,7 +244,7 @@ SFH_DEF_HANDLER(IO)
 		}
 
 		std::cerr << "OPENED '" << path << "'. VFD=" << vfd << '\n';
-		state.bindLocal(target, ConstantExpr::create(vfd, 64));
+		state.bindLocal(target, MK_CONST(vfd, 64));
 		break;
 	}
 	case SYS_close: {
@@ -253,12 +252,12 @@ SFH_DEF_HANDLER(IO)
 
 		vfd = arg2vfd(arguments[1]);
 		if (vfd == ~0ULL) {
-			state.bindLocal(target, ConstantExpr::create(-1, 64));
+			state.bindLocal(target, MK_CONST(-1, 64));
 			break;
 		}
 
 		sc_sfh->vfds.close(vfd);
-		state.bindLocal(target, ConstantExpr::create(0, 64));
+		state.bindLocal(target, MK_CONST(0, 64));
 		break;
 	}
 
@@ -277,12 +276,12 @@ SFH_DEF_HANDLER(IO)
 		if (	fd == -1 || buf_base == ~0ULL ||
 			count == ~0ULL || offset == -1)
 		{
-			state.bindLocal(target, ConstantExpr::create(-1, 64));
+			state.bindLocal(target, MK_CONST(-1, 64));
 			break;
 		}
 
 		ret = do_pread(state, fd, buf_base, count, offset);
-		state.bindLocal(target, ConstantExpr::create(ret, 64));
+		state.bindLocal(target, MK_CONST(ret, 64));
 		break;
 	}
 
@@ -294,13 +293,13 @@ SFH_DEF_HANDLER(IO)
 
 		fd = sc_sfh->vfds.xlateVFD(arg2vfd(arguments[1]));
 		if (fd == -1) {
-			state.bindLocal(target, ConstantExpr::create(-1, 64));
+			state.bindLocal(target, MK_CONST(-1, 64));
 			break;
 		}
 
 		rc = fstat(fd, &s);
 		if (rc == -1) {
-			state.bindLocal(target, ConstantExpr::create(-1, 64));
+			state.bindLocal(target, MK_CONST(-1, 64));
 			break;
 		}
 
@@ -311,8 +310,7 @@ SFH_DEF_HANDLER(IO)
 
 		state.bindLocal(
 			target,
-			ConstantExpr::create(
-				(bw == sizeof(struct stat)) ? 0 : -1, 64));
+			MK_CONST((bw == sizeof(struct stat)) ? 0 : -1, 64));
 		break;
 	}
 
@@ -695,6 +693,6 @@ void SyscallSFH::makeRangeSymbolic(
 	sym_os = exe_vex->executeMakeSymbolic(
 		state,
 		sym_mo,
-		ConstantExpr::create((total_sz < sz) ? total_sz : sz, 32),
+		MK_CONST((total_sz < sz) ? total_sz : sz, 32),
 		name);
 }

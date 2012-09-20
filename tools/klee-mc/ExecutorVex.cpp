@@ -34,6 +34,13 @@
 #include "SyscallPrioritizer.h"
 #include "KleeHandlerVex.h"
 
+extern "C"
+{
+#include "valgrind/libvex_guest_amd64.h"
+#include "valgrind/libvex_guest_x86.h"
+#include "valgrind/libvex_guest_arm.h"
+}
+
 using namespace klee;
 using namespace llvm;
 
@@ -169,7 +176,6 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 			kmodule,
 			interpreterHandler->getOutputFilename("assembly.ll"),
 			mod_opts.ExcludeCovFiles);
-
 }
 
 ExecutorVex::~ExecutorVex(void)
@@ -659,9 +665,12 @@ void ExecutorVex::handleXferSyscall(
 	switch (gs->getArch()) {
 #define AS_COPY(off, w)	state.addressSpace.copyToBuf(\
 		es2esv(state).getRegCtx(), &sysnr, off, w);
-	case Arch::X86_64: AS_COPY(16 /* RAX */, 8); break;
-	case Arch::ARM: AS_COPY(4*7, 4); break;
-	case Arch::I386: AS_COPY(0, 4); break;
+	case Arch::X86_64: AS_COPY(
+		offsetof(VexGuestAMD64State, guest_RAX), 8); break;
+	case Arch::ARM: AS_COPY(
+		offsetof(VexGuestARMState, guest_R7), 4); break;
+	case Arch::I386: AS_COPY(
+		offsetof(VexGuestX86State, guest_EAX), 4); break;
 	default:
 		assert (0 == 1 && "ULP");
 	}

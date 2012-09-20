@@ -256,7 +256,9 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 		break;
 
 	case SYS_read: {
-		fprintf(stderr, KREPLAY_SC "READ ret=%p\n", (void*)getRet());
+		fprintf(stderr, KREPLAY_SC "READ fd=%d. ret=%p.\n",
+			sp.getArg(0),
+			(void*)getRet());
 		if (file_recons != NULL)
 			file_recons->read(
 				sp.getArg(0), sp.getArgPtr(1), getRet());
