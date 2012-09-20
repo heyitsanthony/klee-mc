@@ -18,19 +18,22 @@ uncovfile="$2"
 
 grep "\[UNCOV\] " "$uncovfile" >uncov.dat
 
-
-function insert_sb
+function insert_all_sb
 {
 	echo ".read $scriptdir/riskyfast.sqlite3"
 	echo "BEGIN TRANSACTION;"
-	for sbaddr in `cat $sbfile`; do
+	IFS=$'\n'
+	for covline in `cat uncov.dat`; do
+		sbaddr=`echo "$covline" | cut -f1 -d'-' | cut -f2 -d' '`
 		sbaddr_lit=`printf "%lu" $sbaddr`
-		sbname=`grep " $sbaddr-" uncov.dat | head -n1 | cut -f2 -d':'`
+		sbname=`echo "$covline" | cut -f2 -d':'`
 		sbname=`echo -e -n $sbname`
 		echo -e -n "INSERT OR IGNORE INTO sb (sbaddr, name) VALUES($sbaddr_lit, '$sbname'); "
 	done
 	echo "COMMIT;"
+	unset IFS
 }
+
 
 function insert_nodes
 {
@@ -45,6 +48,21 @@ function insert_nodes
 	echo "COMMIT;"
 }
 
+function insert_nodes_fast
+{
+	echo ".read $scriptdir/riskyfast.sqlite3"
+	echo "BEGIN TRANSACTION;"
+python <<< "
+import gzip
+mi=map (lambda x : x.strip().split(','), gzip.open('$mininstfile'))
+mi = filter (lambda (x,y) : y[:3] == 'sb_', mi)
+for mi_e in mi:
+	print 'INSERT INTO pathnode (pathid, minpos, sbaddr) VALUES ($pathid, ' + mi_e[0] + ',' + str(int(mi_e[1][3:],0)) + ');'
+"
+	echo "COMMIT;"
+}
+
+
 function insert_all_nodes
 {
 	echo ".read $scriptdir/riskyfast.sqlite3"
@@ -56,6 +74,9 @@ function insert_all_nodes
 if [ ! -e exe.db ]; then
 	sqlite3  exe.db <<< ".read $scriptdir/pathdb.sqlite3"
 fi
+
+insert_all_sb >sb.sqlite3
+sqlite3 -batch -init sb.sqlite3 exe.db </dev/null
 
 for a in $pathdir/*path.gz; do
 	b=`basename $a | cut -f1 -d'.'`
@@ -78,14 +99,9 @@ for a in $pathdir/*path.gz; do
 	sqlite3 exe.db <<< "INSERT INTO path (phash) VALUES ('$phash');" >/dev/null
 	sqlite3 exe.db <<< "SELECT pathid FROM path WHERE phash='$phash' LIMIT 1;" >pathid
 	
-	echo INSERT SB MAKE FILE======================
-	insert_sb  >sb.sqlite3
-	echo INSERT SB INTO SQL===================
-	sqlite3 -batch -init sb.sqlite3 exe.db </dev/null
-
 	echo INSERT NODES===========================
 	pathid=`cat pathid`
-	insert_nodes >nodes.sqlite3
+	insert_nodes_fast >nodes.sqlite3
 	echo SQL NODES========================
 	sqlite3 -batch -init nodes.sqlite3 exe.db </dev/null
 	echo DONE INSERTING============================
