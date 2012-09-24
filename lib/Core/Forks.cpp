@@ -112,10 +112,6 @@ bool Forks::isRunawayBranch(KInstruction* ki)
 			return false;
 
 		/* XXX: FIXME. Need better scoring system. */
-		//std::cerr << "RAND FOR (" << (void*)ki->getInst() << ") fc="
-		//	<< ki->getForkCount() << ": ";
-		// ki->getInst()->dump();
-
 		mean = (fork_c+fork_uniq_c-1)/fork_uniq_c;
 		r = rand() % (1 << (1+(10*ki->getForkCount())/mean));
 		is_likely = (r != 0);
@@ -658,6 +654,7 @@ void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 
 		// Do actual state forking
 		baseState = &current;
+
 		newState = pureFork(current, fi.forkCompact);
 		fi.forkedTargets++;
 		fi.resStates[condIndex] = newState;
@@ -798,9 +795,11 @@ void Forks::constrainFork(
 		}
 	}
 
-	// only track NON-internal branches
-	if (!fi.wasReplayed)
+	// no need to track the branch since we're following a replay
+	// HOWEVER: must track branch for forked states!
+	if (!fi.wasReplayed || (fi.wasReplayed && current.isReplayDone())) {
 		curState->trackBranch(condIndex, current.prevPC);
+	}
 
 	if (fi.isSeeding) {
 		(exe.getSeedMap())[curState].insert(

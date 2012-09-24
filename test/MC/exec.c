@@ -1,5 +1,5 @@
 // RUN: gcc %s  -O0 -o %t1
-// RUN: klee-mc - ./%t1 2>%t1.err >%t1.out
+// RUN: klee-mc -pipe-solver - ./%t1 2>%t1.err >%t1.out
 //
 // RUN: ls klee-last | not grep ptr.err
 // RUN: ls klee-last | not grep sc.err

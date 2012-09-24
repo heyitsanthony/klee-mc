@@ -125,9 +125,13 @@ ExecutionState *ExecutionState::branch(bool forReplay)
 	weight *= .5;
 
 	newState = copy();
+	newState->isReplay = false;
 	newState->coveredNew = false;
 	newState->coveredLines.clear();
-	newState->replayBrIter = newState->brChoiceSeq.end();
+	/* note: this is a no-op is replayBrIter is at end of seq;
+	 * that is, it's no-op for non-replay */
+	newState->brChoiceSeq.truncatePast(newState->replayBrIter);
+	newState->replayBrIter = newState->branchesEnd();
 	newState->personalInsts = 0;
 	newState->newInsts = 0;
 	newState->lastNewInst = 0;
@@ -662,12 +666,11 @@ void ExecutionState::addSymbolic(MemoryObject* mo, Array* array)
 
 void ExecutionState::trackBranch(int condIndex, const KInstruction* ki)
 {
-	// only track NON-internal branches
-	if (replayBrIter != brChoiceSeq.end())
-		return;
+	/* do not track if still replaying */
+	if (!isReplayDone()) return;
 
 	brChoiceSeq.push_back(condIndex, ki);
-	replayBrIter = brChoiceSeq.end();
+	replayBrIter = branchesEnd();
 }
 
 ExecutionState* ExecutionState::createReplay(
@@ -690,8 +693,50 @@ ExecutionState* ExecutionState::createReplay(
 	return newState;
 }
 
+/* takes a partial path and slaps a replay on it */
+void ExecutionState::joinReplay(const ReplayPath &replayPath)
+{
+	unsigned			head_len, c;
+	ReplayPath::const_iterator	rp_it, rp_end;
+	BranchTracker::iterator		new_rpBrIt, rpBrIt;
+
+	head_len = replayHeadLength(replayPath);
+	assert (isReplayDone());
+	assert (head_len != 0 && "No head to join!");
+
+	ptreeNode->markReplay();
+	isReplay = true;
+
+	rp_it = replayPath.begin();
+	rp_end = replayPath.end();
+	for (unsigned i = 0; i < head_len && rp_it != rp_end; i++)
+		++rp_it;
+
+	assert (rp_it != rp_end);
+
+	c = 0;
+	replayBrIter = branchesEnd();
+	while (rp_it != rp_end) {
+		ReplayNode	rn(*rp_it);
+		brChoiceSeq.push_back(rn);
+		rp_it++;
+		c++;
+	}
+
+	assert (head_len <= replayHeadLength(replayPath));
+
+	brChoiceSeq.verifyPath(replayPath);
+
+	/* replay back to specific place */
+	replayBrIter = branchesBegin();
+	for (unsigned i = 0; i < head_len; i++)
+		replayBrIter++;
+
+	assert (!isReplayDone());
+}
+
 bool ExecutionState::isReplayDone(void) const
-{ return (replayBrIter == brChoiceSeq.end()); }
+{ return (replayBrIter == branchesEnd()); }
 
 unsigned ExecutionState::stepReplay(void)
 {
@@ -795,4 +840,46 @@ void ExecutionState::printMinInstKFunc(std::ostream& os) const
 			<< ((*it).first)->function->getName().str()
 			<< '\n';
 	}
+}
+
+unsigned ExecutionState::replayHeadLength(const ReplayPath& rp) const
+{
+	unsigned			node_c;
+	BranchTracker::iterator		brIt, brItEnd;
+	ReplayPath::const_iterator	rpIt, rpItEnd;
+
+	if (!isReplayDone())
+		return 0;
+
+	node_c = 0;
+
+	brIt = branchesBegin();
+	brItEnd = branchesEnd();
+	rpIt = rp.begin();
+	rpItEnd = rp.end();
+
+	while (rpIt != rpItEnd) {
+		if (brIt == brItEnd)
+			return node_c;
+
+		if ((*rpIt).first != (*brIt).first) {
+			std::cerr
+				<< "[ES=" << (void*)this
+				<< "] Mismatch: node_c = " << node_c << '\n';
+			return 0;
+		}
+
+		node_c++;
+		brIt++;
+		rpIt++;
+	}
+
+	/* ran out of replay, but state kept going, so not head  */
+	if (brIt != brItEnd) {
+		std::cerr << "[ES] OF: node_c = " << node_c << '\n';
+		return 0;
+	}
+
+	/* perfect match, hm. */
+	return node_c;
 }

@@ -123,6 +123,8 @@ public:
 	unsigned N, ref<Expr> conditions[], bool isInternal,
 	bool isBranch = false);
 
+	void exhaustState(ExecutionState* es);
+
 
 	/// Get textual info regarding a memory address.
 	std::string getAddressInfo(ExecutionState &st, ref<Expr> addr) const;
@@ -317,36 +319,36 @@ private:
 	KInstruction *ki,
 	const StatePair& branches,
 	const ref<Expr>& cond);
-  void finalizeBranch(ExecutionState* st, llvm::BranchInst* bi, int branchIdx);
+	void finalizeBranch(ExecutionState* st, llvm::BranchInst* bi, int branchIdx);
 
-  void instCmp(ExecutionState& state, KInstruction* ki);
-  ref<Expr> cmpScalar(
-  	ExecutionState& state, int pred, ref<Expr> left, ref<Expr> right);
-  ref<Expr> cmpVector(
-  	ExecutionState& state,
-	int pred,
-	llvm::VectorType* op_type,
-	ref<Expr> left, ref<Expr> right);
-  ref<Expr> sextVector(
-	ExecutionState& state,
-	ref<Expr> v,
-	llvm::VectorType* srcTy,
-	llvm::VectorType* dstTy);
-  void instGetElementPtr(ExecutionState& state, KInstruction *ki);
+	void instCmp(ExecutionState& state, KInstruction* ki);
+	ref<Expr> cmpScalar(
+		ExecutionState& state, int pred,
+		ref<Expr> left, ref<Expr> right);
+	ref<Expr> cmpVector(
+		ExecutionState& state,
+		int pred,
+		llvm::VectorType* op_type,
+		ref<Expr> left, ref<Expr> right);
+	ref<Expr> sextVector(
+		ExecutionState& state,
+		ref<Expr> v,
+		llvm::VectorType* srcTy,
+		llvm::VectorType* dstTy);
+	void instGetElementPtr(ExecutionState& state, KInstruction *ki);
 
-  void instSwitch(ExecutionState& state, KInstruction* ki);
-  void forkSwitch(
-  	ExecutionState&		state,
-	llvm::BasicBlock	*parent_bb,
-	const TargetTy&		defaultTarget,
-	const TargetsTy&	targets);
+	void instSwitch(ExecutionState& state, KInstruction* ki);
+	void forkSwitch(
+		ExecutionState&		state,
+		llvm::BasicBlock	*parent_bb,
+		const TargetTy&		defaultTarget,
+		const TargetsTy&	targets);
 
-  bool isFPPredicateMatched(
-    llvm::APFloat::cmpResult CmpRes, llvm::CmpInst::Predicate pred);
+	bool isFPPredicateMatched(
+		llvm::APFloat::cmpResult CmpRes, llvm::CmpInst::Predicate pred);
 
 	void printFileLine(ExecutionState &state, KInstruction *ki);
 
-	void replayPathsIntoStates(ExecutionState& initialState);
 	void killStates(ExecutionState* &state);
 
 	void stepInstruction(ExecutionState &state);
@@ -498,7 +500,7 @@ public:
 		replayPosition = 0;
 	}
 
-	virtual void setReplayPaths(const std::list<ReplayPath>* paths)
+	virtual void setReplayPaths(const ReplayPaths* paths)
 	{
 		assert(!replayKTest && "cannot replay both ktest and path");
 		replayPaths = paths;

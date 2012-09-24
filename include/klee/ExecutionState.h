@@ -172,6 +172,8 @@ public:
 	static ExecutionState* createReplay(
 		ExecutionState& initialState,
 		const ReplayPath& replayPath);
+	void joinReplay(const ReplayPath& replayPath);
+
 
 	ExecutionState *branch(bool forReplay = false);
 	ExecutionState *reconstitute(ExecutionState &initialStateCopy) const;
@@ -186,7 +188,11 @@ public:
 	void printConstraints(std::ostream& os) const;
 
 
-	KFunction* getCurrentKFunc(void) const { return (stack.back()).kf; }
+	KFunction* getCurrentKFunc(void) const
+	{
+		if (stack.empty()) return NULL;
+		return (stack.back()).kf;
+	}
 
 	void pushFrame(KInstIterator caller, KFunction *kf);
 	void popFrame();
@@ -330,6 +336,10 @@ public:
 
 	void printMinInstKFunc(std::ostream& os) const;
 	unsigned getNumMinInstKFuncs(void) const { return min_kf_inst.size(); }
+
+	/* number of nodes in replay head;
+	 * returns 0 if not materialization of replay path */
+	unsigned replayHeadLength(const ReplayPath& rp) const;
 private:
 	void initFields(void);
 
@@ -337,8 +347,9 @@ private:
 	unsigned int		num_allocs;
 
 	// An ordered sequence of branches this state took thus far:
-	BranchTracker brChoiceSeq;
-	// used only if isCompactForm
+	BranchTracker		brChoiceSeq;
+
+	// used for isCompactForm and replay
 	BranchTracker::iterator replayBrIter;
 
 	unsigned incomingBBIndex;

@@ -40,15 +40,8 @@ public:
 
 	bool empty() const;
 	size_t size() const;
-	iterator begin() const { return (empty()) ? end() : iterator(this); }
-	iterator end() const
-	{
-		Segment *temp = tail.get();
-		while (replayAll && !temp->children.empty())
-			temp = temp->children.front();
-		return iterator(this, temp, temp->size());
-	}
-
+	iterator begin() const;
+	iterator end() const;
 
 	ReplayNode front() const;
 	ReplayNode back() const;
@@ -68,7 +61,9 @@ public:
 	unsigned getNumSuccessors(iterator it) const;
 	iterator getSuccessor(iterator it, unsigned index) const;
 
-	void setReplayAll(bool _replayAll) { replayAll = _replayAll; }
+	void truncatePast(const iterator& it);
+
+	bool verifyPath(const ReplayPath& branches);
 private:
 	void splitSegment(Segment &segment, unsigned index);
 	void splitNonBranches(Segment& seg, unsigned index, Segment* newSeg);
@@ -80,7 +75,6 @@ private:
 
 	SegmentRef	head, tail;
 	mutable bool	needNewSegment;
-	bool		replayAll;
 };
 }
 

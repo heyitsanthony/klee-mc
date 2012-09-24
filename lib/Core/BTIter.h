@@ -43,10 +43,14 @@ public:
 	iterator operator++();
 	inline bool operator==(const iterator& a) const
 	{	if (!mayDeref()) return !a.mayDeref();
-		return (curSeg.get() == a.curSeg.get() && curIndex == a.curIndex);
+		return (curSeg.get() == a.curSeg.get()
+			&& curIndex == a.curIndex
+			&& tail.get() == a.tail.get());
 	}
-	inline bool operator!=(const iterator& a)
-	const { return !(*this == a); }
+	inline bool operator!=(const iterator& a) const { return !(*this==a); }
+	void dump(void) const;
+	void assumeTail(const iterator& it) { tail = it.tail; }
 };
+
 
 #endif

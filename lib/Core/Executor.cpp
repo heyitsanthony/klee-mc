@@ -68,8 +68,6 @@ extern double	MaxSTPTime;
 namespace {
   DECL_OPTBOOL(ChkConstraints, "chk-constraints");
   DECL_OPTBOOL(YieldUncached, "yield-uncached");
-  DECL_OPTBOOL(EagerReplay, "eager-replay");
-  DECL_OPTBOOL(CompleteReplay, "replay-complete");
 
   cl::opt<bool>
   ConcretizeEarlyTerminate(
@@ -139,8 +137,7 @@ namespace {
   cl::opt<bool>
   IgnoreBranchConstraints(
   	"ignore-branch-constraints",
-	cl::desc("Speculatively execute both sides of a symbolic branch."),
-	cl::init(false));
+	cl::desc("Speculatively execute both sides of a symbolic branch."));
 
 	cl::opt<bool>
 	TrackBranchExprs(
@@ -707,9 +704,12 @@ void Executor::markBranchVisited(
 
 	kbr = static_cast<KBrInstruction*>(ki);
 
-	if (statsTracker && state.getCurrentKFunc()->trackCoverage)
-		statsTracker->markBranchVisited(
-			kbr, branches.first, branches.second);
+	if (statsTracker && !state.stack.empty()) {
+		const KFunction	*kf = state.getCurrentKFunc();
+		if (kf && kf->trackCoverage)
+			statsTracker->markBranchVisited(
+				kbr, branches.first, branches.second);
+	}
 
 	if (isTwoWay)
 		kbr->foundFork(state.totalInsts);
@@ -1864,7 +1864,7 @@ INST_FOP_ARITH(FRem, mod)
     APFloat RHS(right->getAPValue());
     APFloat::cmpResult CmpRes = LHS.compare(RHS);
 
-    state.bindLocal(ki, 
+    state.bindLocal(ki,
     	MK_CONST(isFPPredicateMatched(CmpRes, fi->getPredicate()), 1));
     break;
   }
@@ -1989,7 +1989,7 @@ void Executor::handleMemoryUtilization(ExecutionState* &state)
 		return;
 	}
 
-	/* Ran memory to the roof. 
+	/* Ran memory to the roof.
 	 * resort to killing states if the recent compacting
 	 * didn't help to reduce the memory usage */
 	killStates(state);
@@ -2001,45 +2001,18 @@ unsigned Executor::getNumStates(void) const { return stateManager->size(); }
 unsigned Executor::getNumFullStates(void) const
 { return stateManager->getNonCompactStateCount(); }
 
-void Executor::replayPathsIntoStates(ExecutionState& initialState)
+
+void Executor::exhaustState(ExecutionState* es)
 {
-	std::list<ExecutionState*>	replay_states;
+	unsigned	test_c;
 
-	assert (replayPaths != NULL);
-	assert (initialState.ptreeNode != NULL);
-
-	foreach (it, replayPaths->begin(), replayPaths->end()) {
-		ExecutionState *es;
-		es = ExecutionState::createReplay(initialState, (*it));
-		stateManager->queueSplitAdd(es->ptreeNode, &initialState, es);
-		replay_states.push_back(es);
-	}
-
-	std::cerr << "[Executor] Got " << replay_states.size() << " replays.\n";
-
-	/* complete replay => will try new paths */
-	if (CompleteReplay == false) {
-		stateManager->queueRemove(&initialState);
-		stateManager->commitQueue();
-	}
-
-	if (!EagerReplay) return;
-
-	/* play every path eagerly */
-	std::cerr << "[Executor] Replaying paths.\n";
-	foreach (it, replay_states.begin(), replay_states.end()) {
-		ExecutionState	*es = *it;
-		do {
-			stepStateInst(es);
-		} while (!stateManager->isRemovedState(es));
-		std::cerr
-			<< "[Executor] Replay state done st="
-			<< es << ". Total="
-			<< stateManager->numRunningStates() << "\n";
-		notifyCurrent(es);
-	}
-	std::cerr << "[Executor] All paths replayed. Expanded states: "
-		<< stateManager->numRunningStates() << "\n";
+	test_c = interpreterHandler->getNumPathsExplored();
+	do {
+		stepStateInst(es);
+	} while (
+		!stateManager->isRemovedState(es) &&
+		test_c == interpreterHandler->getNumPathsExplored());
+	notifyCurrent(es);
 }
 
 void Executor::run(ExecutionState &initialState)
@@ -2058,7 +2031,8 @@ void Executor::run(ExecutionState &initialState)
 
 	stateManager->setInitialState(&initialState);
 	if (replayPaths)
-		replayPathsIntoStates(initialState);
+		Replay::replayPathsIntoStates(
+			this, &initialState, *replayPaths);
 
 	stateManager->setupSearcher(this);
 

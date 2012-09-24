@@ -8,6 +8,9 @@
 //===----------------------------------------------------------------------===//
 #include "static/Sugar.h"
 #include "BranchTracker.h"
+#include <iostream>
+
+
 
 #include <algorithm>
 #include "MemoryManager.h"
@@ -19,10 +22,10 @@ BranchTracker::BranchTracker()
 : head(new Segment())
 , tail(head)
 , needNewSegment(false)
-, replayAll(false) { }
+{}
 
 BranchTracker::BranchTracker(const BranchTracker &a)
-: head(a.head), tail(a.tail), replayAll(a.replayAll)
+: head(a.head), tail(a.tail)
 {
 	if (a.empty()) {
 		tail = head = new Segment();
@@ -68,7 +71,7 @@ bool BranchTracker::push_heap_ref(HeapObject *mo) {
 }
 
 bool BranchTracker::empty() const
-{ return (head == tail && !tail->size() && head->children.empty()); }
+{ return (head == tail && !tail->size() && tail->children.empty()); }
 
 size_t BranchTracker::size() const {
 	size_t retVal = 0;
@@ -150,7 +153,6 @@ BranchTracker& BranchTracker::operator=(const BranchTracker &a)
 {
 	head = a.head;
 	tail = a.tail;
-	replayAll = a.replayAll;
 	needNewSegment = true;
 	a.needNewSegment = true;
 	return *this;
@@ -373,6 +375,7 @@ ReplayNode BranchTracker::iterator::operator*() const
 		iterator it = *this;
 		++it;
 		assert (!it.curSeg->empty());
+
 		return *it;
 	}
 
@@ -470,4 +473,91 @@ ReplayNode BranchTracker::Segment::operator[](unsigned index) const
 	return ReplayNode(branches[index], ki);
 }
 
+void BranchTracker::truncatePast(const BranchTracker::iterator& it)
+{
+	SegmentRef	tail_trunc;
 
+	if (it == end()) return;
+
+	/* everything past the last segment in the iterator may be discarded */
+	tail = it.tail;
+
+	assert (it.curIndex <= it.curSeg->size() - 1 && "OOB IDX");
+
+	/* iterator ends on edge of tail, keep entire tail */
+	if (it.curIndex == (it.curSeg->size() - 1)) {
+		needNewSegment = true;
+		return;
+	}
+
+	/* copy tail; truncate to iterator */
+	assert (it.curSeg.isNull() == false);
+	tail_trunc = it.curSeg->truncatePast(it.curIndex);
+	if (head == tail) {
+		head = tail_trunc;
+	}
+
+	tail = tail_trunc;
+	needNewSegment = false;
+}
+
+BranchTracker::Segment* BranchTracker::Segment::truncatePast(unsigned idx)
+{
+	Segment	*ret = new Segment(*this);
+
+	assert (idx < ret->branches.size());
+
+	ret->branches.resize(idx+1);
+	ret->isBranch.resize(idx+1);
+	ret->branchSites.resize(idx+1);
+	if (ret->parent.isNull() == false)
+		ret->parent->children.push_back(ret);
+	ret->children.clear();
+
+	ret->nonBranches.erase(
+		ret->nonBranches.upper_bound(idx),
+		ret->nonBranches.end());
+
+	return ret;
+}
+
+
+BranchTracker::iterator BranchTracker::begin(void) const
+{return (empty()) ? end() : iterator(this); }
+
+BranchTracker::iterator BranchTracker::end(void) const
+{
+	Segment *temp = tail.get();
+	return iterator(this, temp, temp->size());
+}
+
+void BranchTracker::iterator::dump(void) const
+{
+	std::cerr << "curSeg = " << (void*)curSeg.get()  << '\n';
+	std::cerr << "curSegSize = " << curSeg->size() << '\n';
+	std::cerr << "tail = " << (void*)tail.get() << '\n';
+	std::cerr << "curIdx = " << curIndex << '\n';
+}
+
+
+bool BranchTracker::verifyPath(const ReplayPath& branches)
+{
+	ReplayPath::const_iterator	rp_it;
+	unsigned			c = 0;
+
+	rp_it = branches.begin();
+	foreach (it, begin(), end()) {
+		if ((*rp_it).first != (*it).first) {
+			std::cerr << "MISMATCH ON NODE: " << c << '\n';
+			std::cerr << "Head: " << (void*)head.get() << '\n';
+			std::cerr << "BrIt:\n";
+			it.dump();
+			break;
+		}
+		c++;
+		rp_it++;
+	}
+	assert (rp_it == branches.end());
+
+	return true;
+}

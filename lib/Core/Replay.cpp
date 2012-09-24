@@ -1,6 +1,10 @@
+#include <llvm/Support/CommandLine.h>
 #include <iostream>
 #include <fstream>
 #include "static/Sugar.h"
+#include "Executor.h"
+#include "ExeStateManager.h"
+#include "Forks.h"
 
 #include "klee/ExecutionState.h"
 #include "klee/Internal/Module/KInstIterator.h"
@@ -10,6 +14,11 @@
 #include "klee/Replay.h"
 
 using namespace klee;
+
+#define DECL_OPTBOOL(x,y) llvm::cl::opt<bool> x(y, llvm::cl::init(false))
+DECL_OPTBOOL(EagerReplay, "eager-replay");
+DECL_OPTBOOL(CompleteReplay, "replay-complete");
+DECL_OPTBOOL(FasterReplay, "replay-faster");
 
 // load a .path file
 #define IFSMODE	std::ios::in | std::ios::binary
@@ -64,6 +73,10 @@ void Replay::writePathFile(const ExecutionState& st, std::ostream& os)
 	f2p_ty		f2ptr;
 	std::string	fstr;
 
+	if (st.branchesBegin() == st.branchesEnd()) {
+		std::cerr << "WARNING: Replay without branches\n";
+	}
+
 	foreach(bit, st.branchesBegin(), st.branchesEnd()) {
 		const KInstruction	*ki;
 		const llvm::Function	*f;
@@ -98,4 +111,113 @@ void Replay::writePathFile(const ExecutionState& st, std::ostream& os)
 		f2ptr[f] = v;
 		os << ',' << ((void*)v) << '\n';
 	}
+}
+
+static ExecutionState* findClosestState(
+	const ReplayPath& rp, const ExeStateManager& esm)
+{
+	ExecutionState	*best_es = NULL;
+	unsigned	best_c = 0;
+
+	foreach (it, esm.begin(), esm.end()) {
+		ExecutionState		*es(*it);
+		unsigned		es_c = 0;
+
+		es_c = es->replayHeadLength(rp);
+		if (es_c > best_c) {
+			std::cerr << "[Replay] Best Count = " << es_c << ".\n";
+			best_c = es_c;
+			best_es = es;
+		}
+	}
+
+	if (best_c) {
+		std::cerr << "BEST_C = " << best_c << '\n';
+	}
+
+	return best_es;
+}
+
+void Replay::eagerReplayPathsIntoStates()
+{
+	std::list<ExecutionState*>		replay_states;
+	const std::list<ReplayPath>::iterator	it;
+
+	/* play every path */
+	std::cerr << "[Executor] Eagerly replaying paths.\n";
+	foreach (it, replayPaths.begin(), replayPaths.end()){
+		ReplayPath	rp(*it);
+		ExecutionState	*es = NULL;
+
+		if (FasterReplay)
+			es = findClosestState(rp, *esm);
+
+		if (es == NULL) {
+			std::cerr << "[Replay] Couldn't hitch partial state\n";
+			es = ExecutionState::createReplay(*initState, rp);
+			esm->queueSplitAdd(es->ptreeNode, initState, es);
+		} else {
+			std::cerr << "[Replay] Hitched a partial state\n";
+			es = exe->getForking()->pureFork(*es);
+			assert (es != NULL);
+			es->joinReplay(rp);
+		}
+
+		assert (es != NULL);
+
+		exe->exhaustState(es);
+
+		std::cerr
+			<< "[Replay] Replay state done st="
+			<< es << ". Total="
+			<< esm->numRunningStates() << "\n";
+	}
+
+
+	std::cerr << "[Replay] All paths replayed. Expanded states: "
+		<< esm->numRunningStates() << "\n";
+}
+
+void Replay::replayPathsIntoStates(
+	Executor		*exe,
+	ExecutionState		*initialState,
+	const ReplayPaths	&rps)
+{
+	Replay	rp(exe, initialState, rps);
+
+	assert (initialState->ptreeNode != NULL);
+
+	if (EagerReplay)
+		rp.eagerReplayPathsIntoStates();
+	else
+		rp.delayedReplayPathsIntoStates();
+
+	/* complete replay => will try new paths */
+	if (CompleteReplay == false) {
+		rp.incompleteReplay();
+	}
+}
+
+void Replay::incompleteReplay(void)
+{
+	esm->queueRemove(initState);
+	esm->commitQueue();
+}
+
+void Replay::delayedReplayPathsIntoStates()
+{
+	foreach (it, replayPaths.begin(), replayPaths.end()) {
+		ExecutionState *es;
+		es = ExecutionState::createReplay(*initState, (*it));
+		esm->queueSplitAdd(es->ptreeNode, initState, es);
+	}
+}
+
+Replay::Replay(Executor* _exe, ExecutionState* _initState, const ReplayPaths& rps)
+: exe(_exe)
+, initState(_initState)
+, replayPaths(rps)
+{
+	esm = exe->getStateManager();
+	assert (esm);
 }

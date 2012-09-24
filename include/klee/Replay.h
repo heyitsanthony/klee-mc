@@ -14,6 +14,8 @@ typedef std::list<ReplayPath> ReplayPaths;
 
 class KInstIterator;
 class ExecutionState;
+class Executor;
+class ExeStateManager;
 
 class Replay
 {
@@ -24,10 +26,24 @@ public:
 	// load a .path file
 	static void loadPathFile(const std::string& name, ReplayPath &buffer);
 	static void writePathFile(const ExecutionState& es, std::ostream& os);
-protected:
-	Replay() {}
 
+	static void replayPathsIntoStates(
+		Executor* exe,
+		ExecutionState* initialState,
+		const ReplayPaths& replayPaths);
+
+protected:
+	Replay(Executor* _exe, ExecutionState* _initState,
+		const ReplayPaths& _rps);
+
+	void eagerReplayPathsIntoStates();
+	void delayedReplayPathsIntoStates();
+	void incompleteReplay(void);
 private:
+	Executor		*exe;
+	ExecutionState		*initState;
+	const ReplayPaths	&replayPaths;
+	ExeStateManager		*esm;
 };
 }
 

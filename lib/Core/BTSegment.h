@@ -38,6 +38,8 @@ public:
 	inline size_t size() const { return branches.size(); }
 	inline bool empty() const { return branches.empty(); }
 	ReplayNode operator[](unsigned index) const;
+
+	/* XXX: this is likely stupid, but I'm not sure what it's used for */
 	int compare(Segment &a) const
 	{
 		if (this < &a)
@@ -46,6 +48,8 @@ public:
 			return 0;
 		return 1;
 	}
+
+	Segment* truncatePast(unsigned idx);
 private:
 	static unsigned seg_alloc_c;
 };
