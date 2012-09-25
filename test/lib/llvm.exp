@@ -1,47 +1,47 @@
 # This procedure executes one line of a test case's execution script.
 proc execOneLine { test PRS outcome lineno line } {
-  set status 0
-  set resultmsg ""
-  set retval [ catch { eval exec -keepnewline -- $line } errmsg ]
+	set status 0
+	set resultmsg ""
+	set retval [ catch { eval exec -keepnewline -- $line } errmsg ]
 
-  if { $retval == 0 } {
-  	return $resultmsg
-  }
+	if { $retval == 0 } {
+		return $resultmsg
+	}
 
-  set code [lindex $::errorCode 0]
-  set lineno [expr $lineno + 1]
-  if { $PRS != ""} {
-    set PRS " for $PRS" 
-  }
+	set code [lindex $::errorCode 0]
+	set lineno [expr $lineno + 1]
+	if { $PRS != ""} {
+		set PRS " for $PRS" 
+	}
 
-  set errmsg " at line $lineno\nwhile running: $line\n$errmsg"
-  switch "$code" {
-    CHILDSTATUS {
-      set status [lindex $::errorCode 2]
-      if { $status != 0 } {
-        set resultmsg "$test$PRS\nFailed with exit($status)$errmsg"
-      }
-    }
-    CHILDKILLED {
-      set signal [lindex $::errorCode 2]
-      set resultmsg "$test$PRS\nFailed with signal($signal)$errmsg"
-    }
-    CHILDSUSP {
-      set signal [lindex $::errorCode 2]
-      set resultmsg "$test$PRS\nFailed with suspend($signal)$errmsg"
-    }
-    POSIX {
-      set posixNum [lindex $::errorCode 1]
-      set posixMsg [lindex $::errorCode 2]
-      set resultmsg "$test$PRS\nFailed with posix($posixNum,$posixMsg)$errmsg"
-    }
-    NONE {
-    }
-    default {
-    }
-  }
+	set errmsg " at line $lineno\nwhile running: $line\n$errmsg"
+	switch "$code" {
+	CHILDSTATUS {
+		set status [lindex $::errorCode 2]
+		if { $status != 0 } {
+			set resultmsg "$test$PRS\nFailed with exit($status)$errmsg"
+		}
+	}
+	CHILDKILLED {
+		set signal [lindex $::errorCode 2]
+		set resultmsg "$test$PRS\nFailed with signal($signal)$errmsg"
+	}
+	CHILDSUSP {
+		set signal [lindex $::errorCode 2]
+		set resultmsg "$test$PRS\nFailed with suspend($signal)$errmsg"
+	}
+	POSIX {
+		set posixNum [lindex $::errorCode 1]
+		set posixMsg [lindex $::errorCode 2]
+		set resultmsg "$test$PRS\nFailed with posix($posixNum,$posixMsg)$errmsg"
+	}
+	NONE {
+	}
+	default {
+	}
+	}
 
-  return $resultmsg
+	return $resultmsg
 }
 
 # performs variable substitutions on the RUN: lines of a test cases.
@@ -189,12 +189,12 @@ proc RunLLVMTest { test } {
 			continue
 		} elseif { $firstToken == "UNSETENV" } {
 			set envVar [lindex $splitLine 1]
-			set ::env($envVar) $envArr($envVar)
+			unset ::env($envVar) 
+			#$envArr($envVar)
+			#puts $envArr($envVar)
+
 			continue
 		}
-
-
-
 
 		set resultmsg [execOneLine $test $PRNUMS $outcome $i $theLine ]
 		if { $resultmsg == "" } {
