@@ -805,9 +805,9 @@ void AddressSpace::printAddressInfo(std::ostream& info, uint64_t addr) const
 
 void AddressSpace::printObjects(std::ostream& os) const { os << objects; }
 
-unsigned AddressSpace::hash(void) const
+Expr::Hash AddressSpace::hash(void) const
 {
-	unsigned hash_ret = 0;
+	Expr::Hash hash_ret = 0;
 
 	foreach (it, objects.begin(), objects.end()) {
 		const MemoryObject	*mo = it->first;

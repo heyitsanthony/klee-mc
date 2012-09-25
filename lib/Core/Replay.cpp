@@ -138,20 +138,19 @@ static ExecutionState* findClosestState(
 	return best_es;
 }
 
-void Replay::eagerReplayPathsIntoStates()
+void Replay::fastEagerReplay(void)
 {
 	std::list<ExecutionState*>		replay_states;
 	const std::list<ReplayPath>::iterator	it;
 
+	std::cerr << "[Replay] Replaying paths FAST!\n";
+
 	/* play every path */
-	std::cerr << "[Executor] Eagerly replaying paths.\n";
 	foreach (it, replayPaths.begin(), replayPaths.end()){
 		ReplayPath	rp(*it);
 		ExecutionState	*es = NULL;
 
-		if (FasterReplay)
-			es = findClosestState(rp, *esm);
-
+		es = findClosestState(rp, *esm);
 		if (es == NULL) {
 			std::cerr << "[Replay] Couldn't hitch partial state\n";
 			es = ExecutionState::createReplay(*initState, rp);
@@ -175,6 +174,37 @@ void Replay::eagerReplayPathsIntoStates()
 
 
 	std::cerr << "[Replay] All paths replayed. Expanded states: "
+		<< esm->numRunningStates() << "\n";
+}
+
+void Replay::eagerReplayPathsIntoStates()
+{
+	std::list<ExecutionState*>      replay_states;
+
+	std::cerr << "[Replay] Eagerly replaying paths.\n";
+
+	if (FasterReplay) {
+		fastEagerReplay();
+		return;
+	}
+
+	/* create paths */
+	foreach (it, replayPaths.begin(), replayPaths.end()) {
+		ExecutionState	*es;
+		es = ExecutionState::createReplay(*initState, (*it));
+		esm->queueSplitAdd(es->ptreeNode, initState, es);
+		replay_states.push_back(es);
+	}
+
+	/* replay paths */
+	std::cerr << "[Executor] Replaying paths.\n";
+	foreach (it, replay_states.begin(), replay_states.end()) {
+		ExecutionState  *es = *it;
+		exe->exhaustState(es);
+		std::cerr << "[Executor] Replay state done st=" << es << ".\n";
+	}
+
+	std::cerr << "[Executor] All paths replayed. Expanded states: "
 		<< esm->numRunningStates() << "\n";
 }
 

@@ -105,7 +105,7 @@ public:
 		unsigned maxResolutions=0);
 
 	ref<Expr> getOOBCond(ref<Expr>& symptr) const;
-	unsigned hash(void) const;
+	Expr::Hash hash(void) const;
 	unsigned getGeneration(void) const { return generation; }
 private:
 	/// Add a binding to the address space.

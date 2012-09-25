@@ -37,6 +37,7 @@ protected:
 		const ReplayPaths& _rps);
 
 	void eagerReplayPathsIntoStates();
+	void fastEagerReplay(void);
 	void delayedReplayPathsIntoStates();
 	void incompleteReplay(void);
 private:
