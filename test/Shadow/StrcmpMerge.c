@@ -1,7 +1,7 @@
 // RUN: gcc %s -O0 -I../../../include/  -o %t1
 // RUN: klee-mc -pipe-solver -tmerge-func-file=../strcmp.txt -use-taint-merge - ./%t1 2>%t1.err >%t1.out
 // RUN: ls klee-last | not grep err
-// RUN: grep "completed paths = 2" %t1.err
+// RUN: grep "completed paths = 3" %t1.err
 #include <string.h>
 #include "klee/klee.h"
 

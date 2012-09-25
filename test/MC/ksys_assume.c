@@ -17,11 +17,15 @@
 
 int main(int argc, char* argv[])
 {
-	int		fd, i;
+	int		fd, i, br;
 	char		buf[BUF_SZ];
 
 	fd = open("hey", O_RDONLY);
-	read(fd, buf, BUF_SZ);
+
+	br = read(fd, buf, BUF_SZ);
+	if (br != BUF_SZ)
+		return 1;
+
 	if (!ksys_is_sym(buf[0])) {
 		ksys_report_error(
 			__FILE__, __LINE__,
