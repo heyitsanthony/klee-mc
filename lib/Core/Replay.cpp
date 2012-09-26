@@ -16,7 +16,6 @@
 using namespace klee;
 
 #define DECL_OPTBOOL(x,y) llvm::cl::opt<bool> x(y, llvm::cl::init(false))
-DECL_OPTBOOL(EagerReplay, "eager-replay");
 DECL_OPTBOOL(CompleteReplay, "replay-complete");
 DECL_OPTBOOL(FasterReplay, "replay-faster");
 
@@ -217,10 +216,7 @@ void Replay::replayPathsIntoStates(
 
 	assert (initialState->ptreeNode != NULL);
 
-	if (EagerReplay)
-		rp.eagerReplayPathsIntoStates();
-	else
-		rp.delayedReplayPathsIntoStates();
+	rp.eagerReplayPathsIntoStates();
 
 	/* complete replay => will try new paths */
 	if (CompleteReplay == false) {
@@ -234,6 +230,7 @@ void Replay::incompleteReplay(void)
 	esm->commitQueue();
 }
 
+/* DEPRECATED */
 void Replay::delayedReplayPathsIntoStates()
 {
 	foreach (it, replayPaths.begin(), replayPaths.end()) {

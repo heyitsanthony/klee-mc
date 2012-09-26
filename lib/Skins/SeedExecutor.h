@@ -4,6 +4,7 @@
 #include "klee/Common.h"
 #include "../Core/ExeStateManager.h"
 #include "../Core/ObjectState.h"
+#include "../Core/ForksSeeding.h"
 #include "SeedCore.h"
 
 namespace klee
@@ -50,7 +51,16 @@ public:
 	{
 		if (seedCore.isUsingSeeds()) {
 			ExecutionState	*st(T::currentState);
-			if (!seedCore.seedRun(*st)) return;
+			bool		ok;
+			Forks		*old_f;
+
+			old_f = T::forking;
+			T::forking = new ForksSeeding(*this);
+			ok = seedCore.seedRun(*st);
+			delete T::forking;
+			T::forking = old_f;
+
+			if (!ok) return;
 
 			klee_message(
 				"seeding done (%d states remain)", 
@@ -58,7 +68,6 @@ public:
 
 			if (seedCore.isOnlySeed()) return;
 
-			std::cerr << "HEY: USING ESEDS!!!\n";
 			// XXX total hack,
 			// just because I like non uniform better but want
 			// seed results to be equally weighted.

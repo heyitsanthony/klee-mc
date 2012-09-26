@@ -111,10 +111,11 @@ bool SeedCore::isOnlySeed(void) const { return OnlySeed; }
 
 bool SeedCore::seedRun(ExecutionState& initialState)
 {
-	ExecutionState *lastState = 0;
-	double lastTime, startTime = lastTime = util::estWallTime();
-	std::vector<SeedInfo> &v = seedMap[&initialState];
+	ExecutionState		*lastState = 0;
+	double			lastTime, startTime;
+	std::vector<SeedInfo>	&v(seedMap[&initialState]);
 
+	startTime = lastTime = util::estWallTime();
 	foreach (it, usingSeeds->begin(), usingSeeds->end())
 		v.push_back(SeedInfo(*it));
 

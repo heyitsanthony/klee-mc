@@ -5,7 +5,6 @@
 
 #include "klee/util/ExprVisitor.h"
 #include "klee/util/ExprTimer.h"
-#include "klee/Internal/Module/InstructionInfoTable.h"
 #include "klee/Statistics.h"
 #include "klee/Internal/ADT/RNG.h"
 #include "StatsTracker.h"
@@ -26,7 +25,7 @@
 #include "klee/Internal/ADT/LimitedStream.h"
 
 
-extern bool		ReplayInhibitedForks;
+extern bool ReplayInhibitedForks;
 namespace klee { extern RNG theRNG; }
 
 namespace
@@ -45,18 +44,6 @@ namespace
 			llvm::cl::init(0));
 
 	llvm::cl::opt<bool>
-	ReplayPathOnly(
-		"replay-path-only",
-		llvm::cl::desc("On replay, kill states on branch exhaustion"));
-
-	llvm::cl::opt<bool>
-	ReplaySuppressForks(
-		"replay-suppress-forks",
-		llvm::cl::desc("On replay, suppress symbolic forks."),
-		llvm::cl::init(true));
-
-
-	llvm::cl::opt<bool>
 	MaxMemoryInhibit(
 		"max-memory-inhibit",
 		llvm::cl::desc("Stop forking at memory cap (vs. random kill)"),
@@ -67,10 +54,6 @@ namespace
 		"max-forks",
 		llvm::cl::desc("Only fork this many times (-1=off)"),
 		llvm::cl::init(~0u));
-
-	llvm::cl::opt<bool>
-	OnlyReplaySeeds(
-		"only-replay-seeds", llvm::cl::desc("Drop seedless states."));
 
 	llvm::cl::opt<bool>
 	RandomizeFork("randomize-fork", llvm::cl::init(true));
@@ -184,8 +167,6 @@ bool Forks::isForkingCallPath(CallPathNode* cpn)
 
 bool Forks::isForkingCondition(ExecutionState& current, ref<Expr> condition)
 {
-	if (exe.isStateSeeding(&current)) return false;
-
 	if (isa<ConstantExpr>(condition)) return false;
 
 	if (	!(MaxStaticForkPct!=1. || MaxStaticSolvePct != 1. ||
@@ -203,7 +184,8 @@ bool Forks::isForkingCondition(ExecutionState& current, ref<Expr> condition)
 Executor::StatePair
 Forks::fork(ExecutionState &s, ref<Expr> cond, bool isInternal)
 {
-	ref<Expr>	conds[2];
+	Executor::StateVector	results;
+	ref<Expr>		conds[2];
 
 	// !!! is this the correct behavior?
 	if (isForkingCondition(s, cond)) {
@@ -225,8 +207,6 @@ Forks::fork(ExecutionState &s, ref<Expr> cond, bool isInternal)
 	//  conditions[0] = Expr::createIsZero(condition);
 	conds[1] = cond;
 
-	Executor::StateVector results;
-
 	results = fork(s, 2, conds, isInternal, true);
 	lastFork = std::make_pair(
 		results[1] /* first label in br => true */,
@@ -241,8 +221,8 @@ Executor::StatePair Forks::forkUnconditional(
 	ref<Expr>		conds[2];
 	Executor::StateVector	results;
 
-	conds[0] = ConstantExpr::create(1, 1);
-	conds[1] = ConstantExpr::create(1, 1);
+	conds[0] = MK_CONST(1, 1);
+	conds[1] = MK_CONST(1, 1);
 
 	/* NOTE: not marked as branch so that branch optimization is not
 	 * applied-- giving it (true, true) would result in only one branch! */
@@ -268,70 +248,12 @@ void Forks::ForkInfo::dump(std::ostream& os) const
 	os << '\n';
 }
 
-bool Forks::forkFollowReplay(ExecutionState& current, struct ForkInfo& fi)
-{
-	// Replaying non-internal fork; read value from replayBranchIterator
-	fi.wasReplayed = true;
-	fi.replayTargetIdx = current.stepReplay();
-
-	// Verify that replay target matches current path constraints
-	if (fi.replayTargetIdx > fi.N) {
-		exe.terminateOnError(
-			current, "replay target out of range", "branch.err");
-		// assert (targetIndex <= fi.N && "replay target out of range");
-		return false;
-	}
-
-	if (fi.res[fi.replayTargetIdx]) {
-		// Suppress forking; constraint will be added to path
-		// after forkSetup is complete.
-		if (ReplaySuppressForks)
-			fi.res.assign(fi.N, false);
-		fi.res[fi.replayTargetIdx] = true;
-
-		return true;
-	}
-
-	std::stringstream ss;
-	ss	<< "hit invalid branch in replay path mode (line="
-		<< current.prevPC->getInfo()->assemblyLine
-		<< ", prior-path target=" << fi.replayTargetIdx
-		<< ", replay targets=";
-
-	bool first = true;
-	for(unsigned i = 0; i < fi.N; i++) {
-		if (!fi.res[i]) continue;
-		if (!first) ss << ",";
-		ss << i;
-		first = false;
-	}
-	ss << ")\n";
-
-	fi.dump(ss);
-
-	Query	q(current.constraints, fi.conditions[1]);
-	ss	<< "Query hash: " << (void*)q.hash() << '\n';
-	exe.terminateOnError(current, ss.str().c_str(), "branch.err");
-
-	klee_warning("hit invalid branch in replay path mode");
-	return false;
-}
-
-bool Forks::forkSetupNoSeeding(ExecutionState& current, struct ForkInfo& fi)
+bool Forks::forkSetup(ExecutionState& current, struct ForkInfo& fi)
 {
 	if (!fi.isInternal && current.isCompact()) {
 		// Can't fork compact states; sanity check
 		assert(false && "invalid state");
 	}
-
-	if (ReplayPathOnly && current.isReplay && current.isReplayDone()) {
-		// Done replaying this state, so kill it (if -replay-path-only)
-		exe.terminateEarly(current, "replay path exhausted");
-		return false;
-	}
-
-	if (current.isReplayDone() == false)
-		return forkFollowReplay(current, fi);
 
 	if (fi.validTargets <= 1)  return true;
 
@@ -352,9 +274,9 @@ bool Forks::forkSetupNoSeeding(ExecutionState& current, struct ForkInfo& fi)
 	if (MaxForks!=~0u && stats::forks >= MaxForks)
 		reason = "max-forks reached";
 
-	// Skipping fork for one of above reasons; randomly pick target
-	if (!reason)
+	if (reason == NULL)
 		return true;
+
 	if (ReplayInhibitedForks) {
 		klee_warning_once(
 			reason,
@@ -364,6 +286,7 @@ bool Forks::forkSetupNoSeeding(ExecutionState& current, struct ForkInfo& fi)
 		return true;
 	}
 
+	// Skipping fork for one of above reasons; randomly pick target
 	skipAndRandomPrune(fi, reason);
 	return true;
 }
@@ -390,58 +313,6 @@ void Forks::skipAndRandomPrune(struct ForkInfo& fi, const char* reason)
 	fi.res[condIndex] = true;
 }
 
-void Forks::forkSetupSeeding(ExecutionState& current, struct ForkInfo& fi)
-{
-	SeedMapType		&seedMap(exe.getSeedMap());
-	SeedMapType::iterator	it(seedMap.find(&current));
-
-	assert (it != seedMap.end());
-
-	// Fix branch in only-replay-seed mode, if we don't have both true
-	// and false seeds.
-
-	// Assume each seed only satisfies one condition (necessarily true
-	// when conditions are mutually exclusive and their conjunction is
-	// a tautology).
-	// This partitions the seed set for the current state
-	foreach (siit, it->second.begin(), it->second.end()) {
-		unsigned i;
-		for (i = 0; i < fi.N; ++i) {
-			ref<ConstantExpr>	seedCondRes;
-			bool			ok;
-			ok = exe.getSolver()->getValue(
-				current,
-				siit->assignment.evaluate(fi.conditions[i]),
-				seedCondRes);
-			assert(ok && "FIXME: Unhandled solver failure");
-			if (seedCondRes->isTrue())
-				break;
-		}
-
-		// If we didn't find a satisfying condition, randomly pick one
-		// (the seed will be patched).
-		if (i == fi.N) i = theRNG.getInt32() % fi.N;
-
-		fi.resSeeds[i].push_back(*siit);
-	}
-
-	// Clear any valid conditions that seeding rejects
-	if ((fi.forkDisabled || OnlyReplaySeeds) && fi.validTargets > 1) {
-		fi.validTargets = 0;
-		for (unsigned i = 0; i < fi.N; i++) {
-			if (fi.resSeeds[i].empty()) fi.res[i] = false;
-			if (fi.res[i]) fi.validTargets++;
-		}
-		assert (fi.validTargets &&
-			"seed must result in at least one valid target");
-	}
-
-	// Remove seeds corresponding to current state
-	seedMap.erase(it);
-
-	// !!! it's possible for the current state to end up with no seeds. Does
-	// this matter? Old fork() used to handle it but branch() didn't.
-}
 
 // !!! for normal branch, conditions = {false,true} so that replay 0,1 reflects
 // index
@@ -453,9 +324,9 @@ Forks::fork(
         bool isInternal,
 	bool isBranch)
 {
-	ForkInfo			fi(conditions, N);
+	ForkInfo	fi(conditions, N);
 
-
+	/* limit runaway branches */
 	fi.forkDisabled = current.forkDisabled;
 	if (	is_quench &&
 		!fi.forkDisabled &&
@@ -466,7 +337,6 @@ Forks::fork(
 
 	fi.isInternal = isInternal;
 	fi.isBranch = isBranch;
-	fi.isSeeding = exe.isStateSeeding(&current);
 
 	/* find feasible forks */
 	if (evalForks(current, fi) == false) {
@@ -480,13 +350,8 @@ Forks::fork(
 	fi.feasibleTargets = fi.validTargets;
 	assert(fi.validTargets && "invalid set of fork conditions");
 
-	fi.wasReplayed = false;
-	if (fi.isSeeding) {
-		forkSetupSeeding(current, fi);
-	} else {
-		if (!forkSetupNoSeeding(current, fi))
-			return Executor::StateVector(N, NULL);
-	}
+	if (forkSetup(current, fi) == false)
+		return Executor::StateVector(N, NULL);
 
 	makeForks(current, fi);
 	constrainForks(current, fi);
@@ -524,7 +389,7 @@ bool Forks::evalForkBranch(ExecutionState& s, struct ForkInfo& fi)
 		result == Solver::Unknown);
 
 	fi.validTargets = (result == Solver::Unknown) ? 2 : 1;
-	if (fi.validTargets > 1 || fi.isSeeding) {
+	if (fi.validTargets > 1) {
 		/* branch on both true and false conditions */
 		fi.conditions[0] = Expr::createIsZero(fi.conditions[1]);
 	}
@@ -593,16 +458,6 @@ void Forks::setupForkAffinity(
 	struct ForkInfo& fi,
 	unsigned* cond_idx_map)
 {
-	for (unsigned i = 0; i < fi.N; i++)
-		cond_idx_map[i] = i;
-
-	if (fi.wasReplayed) {
-		/* if replay, steer to expected branch */
-		cond_idx_map[0] = fi.replayTargetIdx;
-		cond_idx_map[fi.replayTargetIdx] = 0;
-		return;
-	}
-
 	if (preferFalseState) {
 		/* swap true with false */
 		cond_idx_map[0] = 1;
@@ -621,11 +476,13 @@ void Forks::setupForkAffinity(
 	}
 }
 
-
 void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 {
 	ExecutionState	**curStateUsed = NULL;
 	unsigned	cond_idx_map[fi.N];
+
+	for (unsigned i = 0; i < fi.N; i++)
+		cond_idx_map[i] = i;
 
 	setupForkAffinity(current, fi, cond_idx_map);
 
@@ -669,7 +526,6 @@ void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 					current.symPathOS);
 			}
 		}
-
 	}
 
 	if (fi.validTargets < 2 || fi.forkDisabled)
@@ -753,7 +609,7 @@ bool Forks::addConstraint(struct ForkInfo& fi, unsigned condIndex)
 	return true;
 }
 
-void Forks::constrainFork(
+bool Forks::constrainFork(
 	ExecutionState& current,
 	struct ForkInfo& fi,
 	unsigned int condIndex)
@@ -761,14 +617,14 @@ void Forks::constrainFork(
 	ExecutionState* curState;
 
 	if (fi.res[condIndex] == false)
-		return;
+		return false;
 
 	curState = fi.resStates[condIndex];
 	assert(curState);
 
 	// Add path constraint
 	if (!addConstraint(fi, condIndex))
-		return;
+		return false;
 
 	// XXX - even if the constraint is provable one way or the other we
 	// can probably benefit by adding this constraint and allowing it to
@@ -783,7 +639,7 @@ void Forks::constrainFork(
 	if (MaxDepth && MaxDepth <= curState->depth) {
 		exe.terminateEarly(*curState, "max-depth exceeded");
 		fi.resStates[condIndex] = NULL;
-		return;
+		return false;
 	}
 
 	// Auxiliary bookkeeping
@@ -795,18 +651,8 @@ void Forks::constrainFork(
 		}
 	}
 
-	// no need to track the branch since we're following a replay
-	// HOWEVER: must track branch for forked states!
-	if (!fi.wasReplayed || (fi.wasReplayed && current.isReplayDone())) {
-		curState->trackBranch(condIndex, current.prevPC);
-	}
-
-	if (fi.isSeeding) {
-		(exe.getSeedMap())[curState].insert(
-			(exe.getSeedMap())[curState].end(),
-			fi.resSeeds[condIndex].begin(),
-			fi.resSeeds[condIndex].end());
-	}
+	trackBranch(*curState, condIndex);
+	return true;
 }
 
 void Forks::constrainForks(ExecutionState& current, struct ForkInfo& fi)
@@ -911,3 +757,6 @@ Forks::Forks(Executor& _exe)
 	condFilter = new ExprTimer<MergeArrays>(1000);
 }
 
+
+void Forks::trackBranch(ExecutionState& current, unsigned condIndex)
+{ current.trackBranch(condIndex, current.prevPC); }

@@ -47,7 +47,6 @@ public:
 		bool			isSeeding;
 		bool			isBranch;
 		bool			forkDisabled;
-		bool			wasReplayed;
 		unsigned		replayTargetIdx;
 		std::vector<std::list<SeedInfo> > resSeeds;
 		bool			forkCompact;
@@ -88,18 +87,26 @@ public:
 
 	bool isQuenching(void) const { return is_quench; }
 	void setQuenching(bool v) { is_quench = v; }
+
+protected:
+	virtual bool forkSetup(ExecutionState& current, struct ForkInfo& fi);
+	virtual void trackBranch(ExecutionState& current, unsigned condIdx);
+	virtual bool isForkingCondition(ExecutionState& es, ref<Expr> cond);
+	virtual bool constrainFork(
+		ExecutionState& es, struct ForkInfo& fi, unsigned int);
+	virtual bool evalForkBranch(ExecutionState& current, struct ForkInfo& fi);
+	virtual void setupForkAffinity(
+		ExecutionState& current,
+		struct ForkInfo& fi,
+		unsigned* cond_idx_map);
+
+	Executor			&exe;
 private:
 	/* this forking code really should be refactored */
-	bool isForkingCondition(ExecutionState& current, ref<Expr> condition);
 	bool isForkingCallPath(CallPathNode* cpn);
 
 
 	void skipAndRandomPrune(struct ForkInfo& fi, const char* reason);
-
-	bool forkSetupNoSeeding(ExecutionState& current, struct ForkInfo& fi);
-	bool forkFollowReplay(ExecutionState& current, struct ForkInfo& fi);
-	void forkSetupSeeding(ExecutionState& current, struct ForkInfo& fi);
-
 	bool addConstraint(struct ForkInfo& fi, unsigned condIndex);
 
 	/* Assigns feasibility for forking condition(s) into fi.res[cond]
@@ -107,32 +114,23 @@ private:
 	* on failure.
 	* */
 	bool evalForks(ExecutionState& current, struct ForkInfo& fi);
-	bool evalForkBranch(ExecutionState& current, struct ForkInfo& fi);
 
 	void trackTransitions(const ForkInfo& fi);
-	void setupForkAffinity(
-		ExecutionState& current,
-		struct ForkInfo& fi,
-		unsigned* cond_idx_map);
 
 	void makeForks(ExecutionState& current, struct ForkInfo& fi);
 	void constrainForks(ExecutionState& current, struct ForkInfo& fi);
-	void constrainFork(
-		ExecutionState& current, struct ForkInfo& fi, unsigned int);
 	bool isRunawayBranch(KInstruction* ki);
-	Executor			&exe;
-	bool				preferTrueState;
-	bool				preferFalseState;
-	condxfer_ty			condXfer;
-	succ_ty				hasSucc;
-	ExprVisitor			*condFilter;
-	Executor::StatePair		lastFork;
-	bool				is_quench;
-	static unsigned			quench_c;
-	static unsigned			fork_c;
-	static unsigned			fork_uniq_c;
+	bool			preferTrueState;
+	bool			preferFalseState;
+	condxfer_ty		condXfer;
+	succ_ty			hasSucc;
+	ExprVisitor		*condFilter;
+	Executor::StatePair	lastFork;
+	bool			is_quench;
+	static unsigned		quench_c;
+	static unsigned		fork_c;
+	static unsigned		fork_uniq_c;
 };
-
 }
 
 #endif

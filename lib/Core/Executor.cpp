@@ -37,6 +37,7 @@
 #include "klee/Internal/Module/KModule.h"
 #include "klee/Internal/System/Time.h"
 #include "klee/Internal/Support/Timer.h"
+#include "ForksPathReplay.h"
 
 #include "Executor.h"
 #include "ExeStateManager.h"
@@ -2015,24 +2016,27 @@ void Executor::exhaustState(ExecutionState* es)
 	notifyCurrent(es);
 }
 
-void Executor::run(ExecutionState &initialState)
+void Executor::run(ExecutionState &initState)
 {
-	currentState = &initialState;
+	currentState = &initState;
 
 	if (mmu == NULL) mmu = MMU::create(*this);
 
 	kmodule->bindModuleConstants(this);
 
-	// Delay init till now so that ticks don't accrue during
-	// optimization and such.
+	// Delay init till now so that ticks don't accrue during optimization
 	initTimers();
 
-	initialStateCopy = (ReplayInhibitedForks) ? initialState.copy() : NULL;
+	initialStateCopy = (ReplayInhibitedForks) ? initState.copy() : NULL;
 
-	stateManager->setInitialState(&initialState);
-	if (replayPaths)
-		Replay::replayPathsIntoStates(
-			this, &initialState, *replayPaths);
+	stateManager->setInitialState(&initState);
+	if (replayPaths) {
+		Forks	*old_forking = forking;
+		forking = new ForksPathReplay(*this);
+		Replay::replayPathsIntoStates(this, &initState, *replayPaths);
+		delete forking;
+		forking = old_forking;
+	}
 
 	stateManager->setupSearcher(this);
 
