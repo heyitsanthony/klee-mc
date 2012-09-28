@@ -89,6 +89,8 @@ namespace {
 
   cl::opt<bool> PreferCex("prefer-cex", cl::init(true));
 
+  cl::opt<bool> VerifyPath("verify-path");
+
   cl::opt<bool,true>
   DebugPrintInstructionsProxy(
   	"debug-print-instructions",
@@ -179,7 +181,6 @@ Executor::Executor(InterpreterHandler *ih)
 , symPathWriter(0)
 , sfh(0)
 , haltExecution(false)
-, replayKTest(0)
 , replayPaths(0)
 , atMemoryLimit(false)
 , inhibitForking(false)
@@ -2027,7 +2028,8 @@ void Executor::run(ExecutionState &initState)
 	// Delay init till now so that ticks don't accrue during optimization
 	initTimers();
 
-	initialStateCopy = (ReplayInhibitedForks) ? initState.copy() : NULL;
+	// if (ReplayInhibitedStates)
+	initialStateCopy = initState.copy();
 
 	stateManager->setInitialState(&initState);
 	if (replayPaths) {
@@ -2151,17 +2153,21 @@ void Executor::yield(ExecutionState& state)
 
 void Executor::terminate(ExecutionState &state)
 {
-	if (replayKTest && replayPosition != replayKTest->numObjects) {
-		klee_warning_once(
-			replayKTest,
-			"replay did not consume all objects in test input.");
-	}
-
 	interpreterHandler->incPathsExplored();
 
 	if (stateManager->isAddedState(&state)) {
 		stateManager->dropAdded(&state);
 		return;
+	}
+
+	if (VerifyPath) {
+		static bool verifying = false;
+
+		if (!verifying) {
+			verifying = true;
+			Replay::verifyPath(this, state);
+			verifying = false;
+		}
 	}
 
 	state.pc = state.prevPC;
@@ -2320,24 +2326,9 @@ void Executor::resolveExact(
 	}
 }
 
-ObjectState* Executor::executeMakeSymbolic(
-  ExecutionState &state, const MemoryObject *mo, const char* arrName)
-{ return executeMakeSymbolic(state, mo, mo->getSizeExpr(), arrName); }
-
-ObjectState* Executor::executeMakeSymbolic(
-  ExecutionState &state,
-  const MemoryObject *mo,
-  ref<Expr> len,
-  const char* arrName)
-{
-	if (!replayKTest) return makeSymbolic(state, mo, len, arrName);
-	else return makeSymbolicKTest(state, mo, len);
-}
-
 ObjectState* Executor::makeSymbolic(
 	ExecutionState& state,
 	const MemoryObject* mo,
-	ref<Expr> len,
 	const char* arrPrefix)
 {
 	ObjectState	*os;
@@ -2347,29 +2338,6 @@ ObjectState* Executor::makeSymbolic(
 	array = Array::uniqueByName(array);
 	os = state.bindMemObjWriteable(mo, array.get());
 	state.addSymbolic(const_cast<MemoryObject*>(mo) /* yuck */, array.get());
-
-	return os;
-}
-
-// Create a new object state for the memory object (instead of a copy).
-ObjectState* Executor::makeSymbolicKTest(
-	ExecutionState& state, const MemoryObject* mo, ref<Expr> len)
-{
-	ObjectState *os = state.bindMemObjWriteable(mo);
-	if (replayPosition >= replayKTest->numObjects) {
-		terminateOnError(state, "replay count mismatch", "user.err");
-		return os;
-	}
-
-	KTestObject *obj = &replayKTest->objects[replayPosition++];
-	if (obj->numBytes != mo->size) {
-		terminateOnError(state, "replay size mismatch", "user.err");
-		return os;
-	}
-
-	for (unsigned i = 0; i < mo->size; i++) {
-		state.write8(os, i, obj->bytes[i]);
-	}
 
 	return os;
 }

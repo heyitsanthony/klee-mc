@@ -225,7 +225,7 @@ void UCMMU::expandMO(
 	assert (res.first != NULL);
 
 	new_mo->setName("uc_buf");
-	new_os = exe_uc.executeMakeSymbolic(state, new_mo, "uc_buf");
+	new_os = exe_uc.makeSymbolic(state, new_mo, "uc_buf");
 
 	/* alias initial contents from smaller buffer into larger buffer */
 	/* is this the best way to do this? I'm not sure. */

@@ -5,6 +5,7 @@
 #include "Executor.h"
 #include "ExeStateManager.h"
 #include "Forks.h"
+#include "ForksPathReplay.h"
 
 #include "klee/ExecutionState.h"
 #include "klee/Internal/Module/KInstIterator.h"
@@ -247,4 +248,43 @@ Replay::Replay(Executor* _exe, ExecutionState* _initState, const ReplayPaths& rp
 {
 	esm = exe->getStateManager();
 	assert (esm);
+}
+
+bool Replay::verifyPath(Executor* exe, const ExecutionState& es)
+{
+	Forks		*old_f;
+	ForksPathReplay	*fpr;
+	ExecutionState	*replay_es, *initSt;
+	ReplayPath	rp;
+	bool		old_write;
+
+	old_f = exe->getForking();
+	old_write = exe->getInterpreterHandler()->isWriteOutput();
+	/* don't write result (XXX: or should I?) */
+	exe->getInterpreterHandler()->setWriteOutput(false);
+
+	fpr = new ForksPathReplay(*exe);
+	fpr->setForkSuppress(true);
+	exe->setForking(fpr);
+
+	/* XXX: make this suck less */
+	{
+	std::ofstream of("verify.path");
+	writePathFile(es, of);
+	}
+	loadPathFile("verify.path", rp);
+
+	initSt = exe->getInitialState();
+	replay_es = ExecutionState::createReplay(*initSt, rp);
+	exe->getStateManager()->queueSplitAdd(
+		replay_es->ptreeNode, initSt, replay_es);
+	exe->exhaustState(replay_es);
+
+	/* XXX: need some checks to make sure path succeeded */
+	assert (0 == 1 && "STUB");
+
+	exe->setForking(old_f);
+	delete fpr;
+
+	exe->getInterpreterHandler()->setWriteOutput(old_write);
 }

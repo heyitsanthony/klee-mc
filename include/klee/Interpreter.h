@@ -48,6 +48,9 @@ public:
 	virtual unsigned processTestCase(
 		const ExecutionState &state,
 		const char *err, const char *suffix) = 0;
+
+	virtual bool isWriteOutput(void) const = 0;
+	virtual void setWriteOutput(bool v) = 0;
 };
 
 class Interpreter
@@ -61,6 +64,7 @@ public:
     bool CheckDivZero;
     std::vector<std::string> ExcludeCovFiles;
 
+    /* XXX: this is stupid */
     ModuleOptions(const std::string& _LibraryDir, 
                   bool _Optimize, bool _CheckDivZero,
                   const std::vector<std::string> _ExcludeCovFiles)

@@ -813,7 +813,7 @@ SFH_DEF_HANDLER(MakeSymbolic)
 
 		mo = state.addressSpace.resolveOneMO(ce->getZExtValue());
 		const_cast<MemoryObject*>(mo)->setName(name);
-		sfh->executor->executeMakeSymbolic(state, mo);
+		sfh->executor->makeSymbolic(state, mo);
 		return;
 	}
 
@@ -846,7 +846,7 @@ SFH_DEF_HANDLER(MakeSymbolic)
 		assert(ok && "FIXME: Unhandled solver failure");
 
 		if (res) {
-			sfh->executor->executeMakeSymbolic(*s, mo);
+			sfh->executor->makeSymbolic(*s, mo);
 			continue;
 		}
  

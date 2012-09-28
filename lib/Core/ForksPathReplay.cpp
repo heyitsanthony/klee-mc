@@ -21,6 +21,12 @@ namespace llvm
 using namespace klee;
 using namespace llvm;
 
+ForksPathReplay::ForksPathReplay(Executor& _exe)
+: Forks(_exe)
+{
+	suppressForks = ReplaySuppressForks;
+}
+
 void ForksPathReplay::trackBranch(ExecutionState& current, unsigned condIndex)
 {
 	// no need to track the branch since we're following a replay
@@ -45,7 +51,7 @@ bool ForksPathReplay::forkFollowReplay(ExecutionState& es, struct ForkInfo& fi)
 	if (fi.res[fi.replayTargetIdx]) {
 		// Suppress forking; constraint will be added to path
 		// after forkSetup is complete.
-		if (ReplaySuppressForks)
+		if (suppressForks)
 			fi.res.assign(fi.N, false);
 		fi.res[fi.replayTargetIdx] = true;
 

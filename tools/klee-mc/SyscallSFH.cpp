@@ -142,7 +142,7 @@ SFH_DEF_HANDLER(SCRegs)
 
 	/* 1. make all of symbolic */
 	cpu_mo = exe_vex->allocRegCtx(&state);
-	state_regctx_os = exe_vex->executeMakeSymbolic(state, cpu_mo, "reg");
+	state_regctx_os = exe_vex->makeSymbolic(state, cpu_mo, "reg");
 
 	/* 2. set everything that should be initialized */
 	for (unsigned int i=0; i < sz; i++) {
@@ -690,9 +690,5 @@ void SyscallSFH::makeRangeSymbolic(
 	ObjectState	*sym_os;
 	sym_mo = exe_vex->memory->allocateAt(state, (uint64_t)addr, sz, 0);
 	sym_mo->setName(name);
-	sym_os = exe_vex->executeMakeSymbolic(
-		state,
-		sym_mo,
-		MK_CONST((total_sz < sz) ? total_sz : sz, 32),
-		name);
+	sym_os = exe_vex->makeSymbolic(state, sym_mo, name);
 }

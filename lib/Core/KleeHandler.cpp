@@ -55,6 +55,7 @@ KleeHandler::KleeHandler(const CmdArgs* in_args)
 , m_pathsExplored(0)
 , cmdargs(in_args)
 , m_interpreter(0)
+, writeOutput(NoOutput == false)
 {
 	std::string theDir;
 
@@ -301,7 +302,7 @@ unsigned KleeHandler::processTestCase(
 		exit(1);
 	}
 
-	if (NoOutput) return 0;
+	if (!isWriteOutput()) return 0;
 
 	success = getStateSymObjs(state, out);
 	if (!success)

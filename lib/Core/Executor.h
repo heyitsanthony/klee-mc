@@ -162,6 +162,7 @@ public:
 
 	MMU* getMMU(void) const { return mmu; }
 	void retFromNested(ExecutionState& state, KInstruction* ki);
+	ExecutionState* getInitialState(void) { return initialStateCopy; }
 
 	MemoryManager	*memory;
 private:
@@ -226,13 +227,6 @@ protected:
 	virtual void replaceStateImmForked(ExecutionState* os, ExecutionState* ns);
 
 
-	virtual ObjectState* makeSymbolic(
-		ExecutionState& state,
-		const MemoryObject* mo,
-		ref<Expr> len,
-		const char* arrPrefix = "arr");
-
-
 	virtual llvm::Function* getFuncByAddr(uint64_t addr) = 0;
 
 	virtual void callExternalFunction(
@@ -270,14 +264,6 @@ protected:
 private:
 	std::vector<TimerInfo*>	timers;
 	std::set<KFunction*>	bad_conc_kfuncs;
-
-	/// When non-null the bindings that will be used for calls to
-	/// klee_make_symbolic in order replay.
-	const struct KTest *replayKTest;
-
-	/// The index into the current \ref replayKTest object.
-	unsigned replayPosition;
-
 
 	/// When non-empty a list of lists of branch decisions for replay.
 	const std::list<ReplayPath> *replayPaths;
@@ -360,9 +346,6 @@ private:
 		llvm::ConstantExpr* ce,
 		std::vector< ref<Expr> > &arguments);
 
-	ObjectState* makeSymbolicKTest(
-		ExecutionState& state, const MemoryObject* mo, ref<Expr> len);
-
 	bool getSatAssignment(const ExecutionState& st, Assignment& a);
 
 	void initTimers();
@@ -415,15 +398,9 @@ public:
 	/* returns forked copy of symbolic state st; st is concretized */
 	ExecutionState* concretizeState(ExecutionState& st);
 
-	ObjectState* executeMakeSymbolic(
+	virtual ObjectState* makeSymbolic(
 		ExecutionState &state,
 		const MemoryObject *mo,
-		const char* arrPrefix = "arr");
-
-	ObjectState* executeMakeSymbolic(
-		ExecutionState& state,
-		const MemoryObject* mo,
-		ref<Expr> len,
 		const char* arrPrefix = "arr");
 
 	// remove state from queue and delete
@@ -494,19 +471,17 @@ public:
 	TreeStreamWriter* getSymbolicPathWriter(void) { return symPathWriter; }
 
 	virtual void setReplayKTest(const struct KTest *out)
-	{
-		assert(!replayPaths && "cannot replay both ktest and path");
-		replayKTest = out;
-		replayPosition = 0;
-	}
+	{ assert (0 == 1 && "Use KTestExecutor"); }
+	virtual const struct KTest *getReplayKTest(void) const { return NULL; } 
+	virtual bool isReplayKTest(void) const { return false; }
+
 
 	virtual void setReplayPaths(const ReplayPaths* paths)
 	{
-		assert(!replayKTest && "cannot replay both ktest and path");
+		assert(!isReplayKTest() && "cannot replay both ktest and path");
 		replayPaths = paths;
 	}
 
-	bool isReplayKTest(void) const { return (replayKTest != NULL); }
 	bool isReplayPaths(void) const { return (replayPaths != NULL); }
 
 	/*** Runtime options ***/
@@ -537,7 +512,6 @@ public:
 	InterpreterHandler *getInterpreterHandler(void) const
 	{ return interpreterHandler; }
 
-	const struct KTest *getReplayKTest(void) const { return replayKTest; }
 	bool isAtMemoryLimit(void) const { return atMemoryLimit; }
 
 	ExeStateManager* getStateManager(void) { return stateManager; }
@@ -545,7 +519,7 @@ public:
 
 	const Forks* getForking(void) const { return forking; }
 	Forks* getForking(void) { return forking; }
-
+	void setForking(Forks* f) { forking = f; }
 
 	ExecutionState* getCurrentState(void) const { return currentState; }
 	bool hasState(const ExecutionState* es) const;

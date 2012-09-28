@@ -217,7 +217,7 @@ ExeUC::UCPtrFork ExeUC::initUCPtr(
 		min_sz, false, true,
 		ptr_es->getCurrentKFunc()->function,
 		ptr_es);
-	executeMakeSymbolic(*ptr_es, new_mo, "uc_buf");
+	makeSymbolic(*ptr_es, new_mo, "uc_buf");
 
 	/* 3. force alignment */
 	setupUCAlignment(*ptr_es, idx, ptr_expr);
@@ -358,7 +358,7 @@ void ExeUC::setupUCEntry(
 		start_state);
 	lentab_mo->setName("lentab_mo");
 	assert (lentab_mo != NULL);
-	lentab_os = executeMakeSymbolic(*start_state, lentab_mo, "lentab");
+	lentab_os = makeSymbolic(*start_state, lentab_mo, "lentab");
 	lentab_arr = lentab_os->getArray();
 }
 

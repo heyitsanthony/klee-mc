@@ -12,6 +12,7 @@
 #include "../../lib/Skins/TaintMergeExecutor.h"
 #include "../../lib/Skins/ConstraintSeedExecutor.h"
 #include "../../lib/Skins/DDTExecutor.h"
+#include "../../lib/Skins/KTestExecutor.h"
 #include "KleeHandlerVex.h"
 #include "UCHandler.h"
 #include "klee/Internal/ADT/CmdArgs.h"
@@ -210,12 +211,11 @@ void dumpIRSBs(void)
 	std::cerr << "(NO DUMPING IN TEST JIT)" << std::endl;
 }
 
-void run(ExecutorVex* exe) { exe->runImage(); }
-
 void runReplayKTest(Interpreter* interpreter)
 {
 	std::vector<KTest*>		kTests;
 	std::vector<std::string>	outFiles;
+	ExecutorVex			*ev;
 	unsigned			i=0;
 
 	outFiles = ReplayKTestFile;
@@ -231,6 +231,7 @@ void runReplayKTest(Interpreter* interpreter)
 		}
 	}
 
+	ev = dynamic_cast<ExecutorVex*>(interpreter);
 	foreach (it, kTests.begin(), kTests.end()) {
 		KTest *out = *it;
 
@@ -241,8 +242,8 @@ void runReplayKTest(Interpreter* interpreter)
 			<< " (" << ++i << "/" << outFiles.size() << ")\n";
 
 		// XXX should put envp in .ktest ?
-		run(dynamic_cast<ExecutorVex*>(interpreter));
-		if (interrupted)
+		ev->runImage();
+		if (ev->isHalted())
 			break;
 	}
 
@@ -371,21 +372,32 @@ Guest* getGuest(CmdArgs* cmdargs)
 static bool isReplaying(void)
 { return (!ReplayKTestDir.empty() || !ReplayKTestFile.empty()); }
 
-#define NEW_INTERP(x)					\
-	((UseGDB)					\
-		? new GDBExecutor<x>(handler) 		\
-	: (UseConstraintSeed)				\
-		? new ConstraintSeedExecutor<x>(handler)\
-	: (UseDDT)					\
-		? new DDTExecutor<x>(handler)		\
-	: (UseTaintMerge)				\
-		? new TaintMergeExecutor<x>(handler)	\
-	: (UseTaint)					\
-		? new ShadowExecutor<x>(handler)	\
+#define NEW_INTERP(x)							\
+	((UseGDB) ? new GDBExecutor<x>(handler) 			\
+	: (UseConstraintSeed) ? new ConstraintSeedExecutor<x>(handler)	\
+	: (UseDDT) ? new DDTExecutor<x>(handler)			\
+	: (UseTaintMerge) ? new TaintMergeExecutor<x>(handler)		\
+	: (UseTaint) ? new ShadowExecutor<x>(handler)			\
 	: new x(handler))
+
+#define NEW_INTERP_KTEST(x)						\
+	((UseGDB) ? new GDBExecutor<KTestExecutor<x> >(handler) 	\
+	: (UseConstraintSeed) ?						\
+		new ConstraintSeedExecutor<KTestExecutor<x> >(handler)	\
+	: new KTestExecutor<x>(handler))
 
 Interpreter* createInterpreter(KleeHandler *handler, Guest* gs)
 {
+	if (isReplaying()) {
+		assert (!UseDDT && !UseTaintMerge && !UseTaint);
+
+		if (Unconstrained) return NEW_INTERP_KTEST(ExeUC);
+		if (SymHook) return NEW_INTERP_KTEST(ExeSymHook);
+		if (XChkJIT) return NEW_INTERP_KTEST(ExeChk);
+
+		return NEW_INTERP_KTEST(ExecutorVex);
+	}
+
 	if (Unconstrained) return NEW_INTERP(ExeUC);
 	if (SymHook) return NEW_INTERP(ExeSymHook);
 	if (XChkJIT) return NEW_INTERP(ExeChk);
@@ -486,7 +498,7 @@ int main(int argc, char **argv, char **envp)
 	if (isReplaying()) {
 		runReplayKTest(interpreter);
 	} else
-		run(dynamic_cast<ExecutorVex*>(interpreter));
+		dynamic_cast<ExecutorVex*>(interpreter)->runImage();
 
 	delete interpreter;
 	delete gs;

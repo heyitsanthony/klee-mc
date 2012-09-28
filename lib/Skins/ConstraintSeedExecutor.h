@@ -21,10 +21,9 @@ public:
 	virtual ObjectState* makeSymbolic(
 		ExecutionState& state,
 		const MemoryObject* mo,
-		ref<Expr> len,
 		const char* arrPrefix = "arr")
 	{
-		ObjectState*	os(T::makeSymbolic(state, mo, len, arrPrefix));
+		ObjectState*	os(T::makeSymbolic(state, mo, arrPrefix));
 		if (os == NULL)
 			return NULL;
 

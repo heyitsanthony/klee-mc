@@ -1,6 +1,7 @@
 /* -*- mode: c++; c-basic-offset: 2; -*- */
 
 #include "../../lib/Skins/SeedExecutor.h"
+#include "../../lib/Skins/KTestExecutor.h"
 #include "../../lib/Core/ExecutorBC.h"
 #include "klee/Common.h"
 #include "klee/ExecutionState.h"
@@ -361,7 +362,8 @@ static int runWatchdog(void)
 	return 0;
 }
 
-static void runReplay(Interpreter* interpreter, Function* mainFn, CmdArgs* ca)
+static void runReplayKTest(
+	Interpreter* interpreter, Function* mainFn, CmdArgs* ca)
 {
   std::vector<std::string> outFiles = ReplayKTestFile;
   foreach (it, ReplayKTestDir.begin(),  ReplayKTestDir.end())
@@ -475,8 +477,8 @@ int main(int argc, char **argv, char **envp)
 	CmdArgs				*ca;
 	Function			*mainFn;
 	Interpreter			*interpreter;
-	ExecutorBC			*exe_bc;
 	SeedExecutor<ExecutorBC>	*exe_seed;
+	KTestExecutor<ExecutorBC>	*exe_ktest;
 	std::vector<std::string>	pathFiles;
 	std::list<ReplayPath>		replayPaths;
 	std::vector<std::string>	arguments;
@@ -525,8 +527,8 @@ int main(int argc, char **argv, char **envp)
 		exe_seed = new SeedExecutor<ExecutorBC>(handler);
 		interpreter = exe_seed;
 	} else {
-		exe_bc = new ExecutorBC(handler);
-		interpreter = exe_bc;
+		exe_ktest = new KTestExecutor<ExecutorBC>(handler);
+		interpreter = exe_ktest;
 	}
 	theInterpreter = interpreter;
 	handler->setInterpreter(interpreter);
@@ -568,7 +570,7 @@ int main(int argc, char **argv, char **envp)
 	if (!useSeeds) {
 		assert(SeedOutFile.empty());
 		assert(SeedOutDir.empty());
-		runReplay(interpreter, mainFn, ca);
+		runReplayKTest(interpreter, mainFn, ca);
 	} else {
 		runSeeds(exe_seed, mainFn, ca);
 	}

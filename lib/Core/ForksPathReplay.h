@@ -13,9 +13,9 @@ class KInstruction;
 class ForksPathReplay : public Forks
 {
 public:
-	ForksPathReplay(Executor& _exe) : Forks(_exe) {}
+	ForksPathReplay(Executor& _exe);
 	virtual ~ForksPathReplay() {}
-
+	void setForkSuppress(bool v) { suppressForks = v; }
 protected:
 	void trackBranch(ExecutionState& current, unsigned);
 	void setupForkAffinity(
@@ -27,6 +27,8 @@ protected:
 
 private:
 	bool forkFollowReplay(ExecutionState& current, struct ForkInfo& fi);
+
+	bool suppressForks;
 };
 
 }

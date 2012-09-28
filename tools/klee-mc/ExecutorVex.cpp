@@ -432,7 +432,7 @@ void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
 	state_regctx_mo = allocRegCtx(state, f);
 	es2esv(*state).setRegCtx(state_regctx_mo);
 
-	if (SymRegs) executeMakeSymbolic(*state, state_regctx_mo, "reg");
+	if (SymRegs) makeSymbolic(*state, state_regctx_mo, "reg");
 
 	state_regctx_sz = gs->getCPUState()->getStateSize();
 

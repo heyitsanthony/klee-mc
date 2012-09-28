@@ -32,8 +32,12 @@ public:
 		ExecutionState* initialState,
 		const ReplayPaths& replayPaths);
 
+	static bool verifyPath(
+		Executor* exe,
+		const ExecutionState& es);
 protected:
-	Replay(Executor* _exe, ExecutionState* _initState,
+	Replay(	Executor* _exe,
+		ExecutionState* _initState,
 		const ReplayPaths& _rps);
 
 	void eagerReplayPathsIntoStates();

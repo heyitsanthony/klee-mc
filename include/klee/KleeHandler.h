@@ -26,9 +26,14 @@ private:
 
 	// used for writing .ktest files
 	const CmdArgs			*cmdargs;
+	bool				writeOutput;
+
 public:
 	KleeHandler(const CmdArgs* cmdargs);
 	virtual ~KleeHandler();
+
+	bool isWriteOutput(void) const { return writeOutput; }
+	void setWriteOutput(bool v) { writeOutput = v; }
 
 	const char* getOutputDir(void) const { return m_outputDirectory; }
 

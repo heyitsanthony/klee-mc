@@ -80,11 +80,10 @@ public:
 	virtual ObjectState* makeSymbolic(
 		ExecutionState& state,
 		const MemoryObject* mo,
-		ref<Expr> len,
 		const char* arrPrefix = "arr")
 	{
 		ObjectState	*os;
-		os = T::makeSymbolic(state, mo, len, arrPrefix);
+		os = T::makeSymbolic(state, mo, arrPrefix);
 		seedCore.addSymbolicToSeeds(state, mo, os->getArray());
 		return os;
 	}
