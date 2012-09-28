@@ -23,6 +23,7 @@ private:
 	char				m_outputDirectory[1024];
 	unsigned			m_testIndex;  // # tests written
 	unsigned			m_pathsExplored; // # paths explored
+	unsigned			m_errorsFound;
 
 	// used for writing .ktest files
 	const CmdArgs			*cmdargs;
@@ -40,7 +41,9 @@ public:
 	std::ostream &getInfoStream() const { return *m_infoFile; }
 	unsigned getNumTestCases() const { return m_testIndex; }
 	unsigned getNumPathsExplored() const { return m_pathsExplored; }
+	unsigned getNumErrors(void) const { return m_errorsFound; }
 	void incPathsExplored() { m_pathsExplored++; }
+	void incErrorsFound(void) { m_errorsFound++; }
 
 	virtual void setInterpreter(Interpreter *i);
 

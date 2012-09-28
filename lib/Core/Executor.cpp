@@ -2234,6 +2234,8 @@ void Executor::terminateOnError(
 	std::string message = messaget.str();
 	static std::set<errmsg_ty> emittedErrors;
 
+	interpreterHandler->incErrorsFound();
+
 	/* It can be annoying to emit errors that happen with the
 	 * same trace. */
 	if (!alwaysEmit && !EmitAllErrors) {

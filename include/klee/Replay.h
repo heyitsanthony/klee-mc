@@ -25,6 +25,8 @@ public:
 
 	// load a .path file
 	static void loadPathFile(const std::string& name, ReplayPath &buffer);
+	static void loadPathStream(std::istream& is, ReplayPath& buffer);
+
 	static void writePathFile(const ExecutionState& es, std::ostream& os);
 
 	static void replayPathsIntoStates(

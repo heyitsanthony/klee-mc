@@ -42,8 +42,10 @@ public:
 	virtual std::ostream *openOutputFile(const std::string &filename) = 0;
 
 	virtual unsigned getNumTestCases() const = 0;
+	virtual unsigned getNumErrors(void) const = 0;
 	virtual unsigned getNumPathsExplored() const = 0;
 	virtual void incPathsExplored() = 0;
+	virtual void incErrorsFound() = 0;
 
 	virtual unsigned processTestCase(
 		const ExecutionState &state,

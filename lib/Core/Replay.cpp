@@ -1,6 +1,7 @@
 #include <llvm/Support/CommandLine.h>
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include "static/Sugar.h"
 #include "Executor.h"
 #include "ExeStateManager.h"
@@ -38,12 +39,19 @@ void Replay::loadPathFile(const std::string& name, ReplayPath& buffer)
 		return;
 	}
 
-	while (is->good()) {
+	loadPathStream(*is, buffer);
+
+	delete is;
+}
+
+void Replay::loadPathStream(std::istream& is, ReplayPath& buffer)
+{
+	while (is.good()) {
 		uint64_t	value, id;
 
 		/* get the value */
-		*is >> std::dec >> value;
-		if (!is->good()) {
+		is >> std::dec >> value;
+		if (!is.good()) {
 			std::cerr
 				<< "[Replay] Path of size="
 				<< buffer.size() << ".\n";
@@ -51,10 +59,10 @@ void Replay::loadPathFile(const std::string& name, ReplayPath& buffer)
 		}
 
 		/* eat the comma */
-		is->get();
+		is.get();
 
 		/* get the location */
-		*is >> std::hex >> id;
+		is >> std::hex >> id;
 
 		/* but for now, ignore it */
 		id = 0;
@@ -62,8 +70,6 @@ void Replay::loadPathFile(const std::string& name, ReplayPath& buffer)
 		/* XXX: need to get format working right for this. */
 		buffer.push_back(ReplayNode(value,(const KInstruction*)id));
 	}
-
-	delete is;
 }
 
 typedef std::map<const llvm::Function*, uint64_t> f2p_ty;
@@ -256,35 +262,38 @@ bool Replay::verifyPath(Executor* exe, const ExecutionState& es)
 	ForksPathReplay	*fpr;
 	ExecutionState	*replay_es, *initSt;
 	ReplayPath	rp;
-	bool		old_write;
+	bool		old_write, failed_replay;
+	std::stringstream ss;
+	unsigned	old_err_c;
+	InterpreterHandler	*ih;
 
 	old_f = exe->getForking();
-	old_write = exe->getInterpreterHandler()->isWriteOutput();
+	ih = exe->getInterpreterHandler();
+	old_write = ih->isWriteOutput();
 	/* don't write result (XXX: or should I?) */
-	exe->getInterpreterHandler()->setWriteOutput(false);
+	ih->setWriteOutput(false);
 
 	fpr = new ForksPathReplay(*exe);
 	fpr->setForkSuppress(true);
 	exe->setForking(fpr);
 
-	/* XXX: make this suck less */
-	{
-	std::ofstream of("verify.path");
-	writePathFile(es, of);
-	}
-	loadPathFile("verify.path", rp);
+	writePathFile(es, ss);
+	loadPathStream(ss, rp);
 
 	initSt = exe->getInitialState();
 	replay_es = ExecutionState::createReplay(*initSt, rp);
 	exe->getStateManager()->queueSplitAdd(
 		replay_es->ptreeNode, initSt, replay_es);
+
+	old_err_c = ih->getNumErrors();
 	exe->exhaustState(replay_es);
+	failed_replay = ih->getNumErrors() != old_err_c;
 
 	/* XXX: need some checks to make sure path succeeded */
-	assert (0 == 1 && "STUB");
+	assert (!failed_replay && "REPLAY FAILED. NEED BETTER HANDLING");
 
 	exe->setForking(old_f);
 	delete fpr;
 
-	exe->getInterpreterHandler()->setWriteOutput(old_write);
+	ih->setWriteOutput(old_write);
 }
