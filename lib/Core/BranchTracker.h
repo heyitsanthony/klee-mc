@@ -64,6 +64,9 @@ public:
 	void truncatePast(const iterator& it);
 
 	bool verifyPath(const ReplayPath& branches);
+
+	void getReplayPath(ReplayPath& rp, const iterator& it) const;
+	void getReplayPath(ReplayPath& rp) const { getReplayPath(rp, end()); }
 private:
 	void splitSegment(Segment &segment, unsigned index);
 	void splitNonBranches(Segment& seg, unsigned index, Segment* newSeg);

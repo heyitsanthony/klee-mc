@@ -486,14 +486,17 @@ void BranchTracker::truncatePast(const BranchTracker::iterator& it)
 
 	/* iterator ends on edge of tail, keep entire tail */
 	if (it.curIndex == (it.curSeg->size() - 1)) {
+		std::cerr << "[BT] TRUNCATEPAST END. CURIDX=" << it.curIndex << '\n';
 		needNewSegment = true;
 		return;
 	}
 
 	/* copy tail; truncate to iterator */
+	std::cerr << "[BT] copying tail, truncating iterator\n";
 	assert (it.curSeg.isNull() == false);
 	tail_trunc = it.curSeg->truncatePast(it.curIndex);
 	if (head == tail) {
+		std::cerr << "HEAD IS TAIL!\n";
 		head = tail_trunc;
 	}
 
@@ -507,9 +510,9 @@ BranchTracker::Segment* BranchTracker::Segment::truncatePast(unsigned idx)
 
 	assert (idx < ret->branches.size());
 
-	ret->branches.resize(idx+1);
-	ret->isBranch.resize(idx+1);
-	ret->branchSites.resize(idx+1);
+	ret->branches.resize(idx);
+	ret->isBranch.resize(idx);
+	ret->branchSites.resize(idx);
 	if (ret->parent.isNull() == false)
 		ret->parent->children.push_back(ret);
 	ret->children.clear();
@@ -560,4 +563,11 @@ bool BranchTracker::verifyPath(const ReplayPath& branches)
 	assert (rp_it == branches.end());
 
 	return true;
+}
+
+void BranchTracker::getReplayPath(ReplayPath& rp, const iterator& it) const
+{
+	rp.clear();
+	foreach (it2, begin(), it)
+		rp.push_back(*it2);
 }

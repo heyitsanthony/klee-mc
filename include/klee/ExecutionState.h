@@ -137,6 +137,7 @@ public:
 
 	bool			coveredNew;
 	bool			isReplay;	/* started in replay mode? */
+	bool			isPartial;
 	ExecutionTraceManager	exeTraceMgr;	/* prints traces on exit */
 
 	bool forkDisabled;	/* Disables forking, set by user code. */
@@ -340,6 +341,7 @@ public:
 	/* number of nodes in replay head;
 	 * returns 0 if not materialization of replay path */
 	unsigned replayHeadLength(const ReplayPath& rp) const;
+
 private:
 	void initFields(void);
 

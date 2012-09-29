@@ -2213,6 +2213,7 @@ void Executor::terminateEarly(
 			term_st = sym_st;
 	}
 
+	term_st->isPartial = true;
 	if (isInterestingTestCase(term_st)) {
 		std::stringstream	ss;
 
@@ -2231,6 +2232,8 @@ bool Executor::isInterestingTestCase(ExecutionState* st) const
 
 void Executor::terminateOnExit(ExecutionState &state)
 {
+	state.isPartial = false;
+
 	if (isInterestingTestCase(&state))
 		interpreterHandler->processTestCase(state, 0, 0);
 
@@ -2249,6 +2252,7 @@ void Executor::terminateOnError(
 	std::string message = messaget.str();
 	static std::set<errmsg_ty> emittedErrors;
 
+	state.isPartial = false;
 	interpreterHandler->incErrorsFound();
 
 	/* It can be annoying to emit errors that happen with the

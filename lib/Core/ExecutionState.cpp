@@ -128,10 +128,9 @@ ExecutionState *ExecutionState::branch(bool forReplay)
 	newState->isReplay = false;
 	newState->coveredNew = false;
 	newState->coveredLines.clear();
-	/* note: this is a no-op is replayBrIter is at end of seq;
-	 * that is, it's no-op for non-replay */
-	newState->brChoiceSeq.truncatePast(newState->replayBrIter);
+	
 	newState->replayBrIter = newState->branchesEnd();
+
 	newState->personalInsts = 0;
 	newState->newInsts = 0;
 	newState->lastNewInst = 0;
@@ -670,6 +669,7 @@ void ExecutionState::trackBranch(int condIndex, const KInstruction* ki)
 	if (!isReplayDone()) return;
 
 	brChoiceSeq.push_back(condIndex, ki);
+
 	replayBrIter = branchesEnd();
 }
 

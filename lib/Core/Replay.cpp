@@ -276,6 +276,11 @@ bool Replay::verifyPath(Executor* exe, const ExecutionState& es)
 	unsigned		old_err_c;
 	InterpreterHandler	*ih;
 
+	if (es.isPartial) {
+		std::cerr << "[Replay] Ignoring partial path check.\n";
+		return true;
+	}
+
 	if (es.concretizeCount > 0) {
 		/* we should only replay up to the point of concretization,
 		 and check there are no contradictions up to that point.
