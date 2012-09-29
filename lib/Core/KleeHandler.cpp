@@ -318,7 +318,8 @@ unsigned KleeHandler::processTestCase(
 
 	if (WritePaths) {
 		const char	*fprefix;
-		fprefix = (state.concretizeCount) ? "pathpart" : "path";
+		fprefix = (state.concretizeCount || state.isPartial)
+			? "pathpart" : "path";
 		if (std::ostream* f = openTestFileGZ(fprefix, id)) {
 			Replay::writePathFile(state, *f);
 			delete f;
