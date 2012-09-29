@@ -7,6 +7,7 @@
 #include "ExeStateManager.h"
 #include "Forks.h"
 #include "ForksPathReplay.h"
+#include "ForksKTest.h"
 
 #include "klee/ExecutionState.h"
 #include "klee/Internal/Module/KInstIterator.h"
@@ -219,7 +220,12 @@ void Replay::replayPathsIntoStates(
 	ExecutionState		*initialState,
 	const ReplayPaths	&rps)
 {
+	Forks	*old_forking, *rp_forking;
 	Replay	rp(exe, initialState, rps);
+
+	old_forking = exe->getForking();
+	rp_forking = new ForksPathReplay(*exe);
+	exe->setForking(rp_forking);
 
 	assert (initialState->ptreeNode != NULL);
 
@@ -229,6 +235,9 @@ void Replay::replayPathsIntoStates(
 	if (CompleteReplay == false) {
 		rp.incompleteReplay();
 	}
+
+	exe->setForking(old_forking);
+	delete rp_forking;
 }
 
 void Replay::incompleteReplay(void)
@@ -311,4 +320,35 @@ bool Replay::verifyPath(Executor* exe, const ExecutionState& es)
 	std::cerr << "[Replay] Validated Path.\n";
 
 	return true;
+}
+
+void Replay::replayKTestsIntoStates(
+	Executor	*exe,
+	ExecutionState	*initState,
+	const std::list<KTest*> kts)
+{
+	ExeStateManager	*esm = exe->getStateManager();
+	ForksKTest	*f_ktest = new ForksKTest(*exe);
+	Forks		*old_f;
+
+	old_f = exe->getForking();
+	exe->setForking(f_ktest);
+	foreach (it, kts.begin(), kts.end()) {
+		ExecutionState	*es;
+		const KTest	*ktest(*it);
+
+		es = initState->copy();
+		esm->queueSplitAdd(es->ptreeNode, initState, es);
+		f_ktest->setKTest(ktest);
+		exe->exhaustState(es);
+
+		std::cerr
+			<< "[Replay] Replay KTest done st="
+			<< es << ". Total="
+			<< esm->numRunningStates() << "\n";
+
+	}
+
+	delete f_ktest;
+	exe->setForking(old_f);
 }

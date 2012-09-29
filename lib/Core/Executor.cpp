@@ -37,7 +37,6 @@
 #include "klee/Internal/Module/KModule.h"
 #include "klee/Internal/System/Time.h"
 #include "klee/Internal/Support/Timer.h"
-#include "ForksPathReplay.h"
 
 #include "Executor.h"
 #include "ExeStateManager.h"
@@ -2043,13 +2042,8 @@ void Executor::run(ExecutionState &initState)
 	initialStateCopy->ptreeNode->markReplay();
 	pt->splitStates(initState.ptreeNode, &initState, initialStateCopy);
 
-	if (replayPaths) {
-		Forks	*old_forking = forking;
-		forking = new ForksPathReplay(*this);
+	if (replayPaths)
 		Replay::replayPathsIntoStates(this, &initState, *replayPaths);
-		delete forking;
-		forking = old_forking;
-	}
 
 	stateManager->setupSearcher(this);
 

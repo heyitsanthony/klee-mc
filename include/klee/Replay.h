@@ -4,6 +4,7 @@
 #include <vector>
 #include <list>
 
+struct KTest;
 namespace klee
 {
 class KInstruction;
@@ -37,6 +38,11 @@ public:
 	static bool verifyPath(
 		Executor* exe,
 		const ExecutionState& es);
+
+	static void replayKTestsIntoStates(
+		Executor	*exe,
+		ExecutionState	*initialState,
+		const std::list<KTest*> kt);
 protected:
 	Replay(	Executor* _exe,
 		ExecutionState* _initState,
@@ -46,6 +52,8 @@ protected:
 	void fastEagerReplay(void);
 	void delayedReplayPathsIntoStates();
 	void incompleteReplay(void);
+
+
 private:
 	Executor		*exe;
 	ExecutionState		*initState;
