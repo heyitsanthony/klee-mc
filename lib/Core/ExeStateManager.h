@@ -105,12 +105,14 @@ public:
 	{ return nonCompactStateCount; }
 
 	const PTree* getPTree(void) const { return pathTree; }
+	PTree* getPTree(void) { return pathTree; }
 private:
 	ExecutionState* popYieldedState(void);
 	void dropAddedDirect(ExecutionState* es);
 	void removePTreeState(
 		ExecutionState* es,
 		ExecutionState** root_to_be_removed);
+	void removeRoot(ExecutionState* es);
 	PTree	*pathTree;
 };
 

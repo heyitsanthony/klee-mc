@@ -2017,8 +2017,12 @@ void Executor::exhaustState(ExecutionState* es)
 	notifyCurrent(es);
 }
 
+#include "PTree.h"
+
 void Executor::run(ExecutionState &initState)
 {
+	PTree	*pt;
+
 	currentState = &initState;
 
 	if (mmu == NULL) mmu = MMU::create(*this);
@@ -2028,10 +2032,15 @@ void Executor::run(ExecutionState &initState)
 	// Delay init till now so that ticks don't accrue during optimization
 	initTimers();
 
-	// if (ReplayInhibitedStates)
-	initialStateCopy = initState.copy();
-
 	stateManager->setInitialState(&initState);
+	pt = stateManager->getPTree();
+
+	initialStateCopy = initState.copy();
+	assert (initState.ptreeNode != NULL);
+
+	initialStateCopy->ptreeNode->markReplay();
+	pt->splitStates(initState.ptreeNode, &initState, initialStateCopy);
+
 	if (replayPaths) {
 		Forks	*old_forking = forking;
 		forking = new ForksPathReplay(*this);
@@ -2063,7 +2072,17 @@ void Executor::run(ExecutionState &initState)
 	notifyCurrent(0);
 
 done:
-	if (initialStateCopy) delete initialStateCopy;
+	if (initialStateCopy) {
+		ExecutionState	*root;
+		root = (pt->isRoot(initialStateCopy)) ? initialStateCopy : NULL;
+		if (root != NULL) {
+			pt->removeRoot(root);
+		} else {
+			pt->remove(initialStateCopy->ptreeNode);
+			delete initialStateCopy;
+		}
+		initialStateCopy = NULL;
+	}
 
 	currentState = NULL;
 	delete mmu;
@@ -2155,11 +2174,6 @@ void Executor::terminate(ExecutionState &state)
 {
 	interpreterHandler->incPathsExplored();
 
-	if (stateManager->isAddedState(&state)) {
-		stateManager->dropAdded(&state);
-		return;
-	}
-
 	if (VerifyPath) {
 		static bool verifying = false;
 
@@ -2168,6 +2182,11 @@ void Executor::terminate(ExecutionState &state)
 			Replay::verifyPath(this, state);
 			verifying = false;
 		}
+	}
+
+	if (stateManager->isAddedState(&state)) {
+		stateManager->dropAdded(&state);
+		return;
 	}
 
 	state.pc = state.prevPC;

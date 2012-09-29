@@ -208,8 +208,7 @@ void ExeStateManager::commitQueue(ExecutionState *current)
 		removePTreeState(es, &root_to_be_removed);
 	}
 
-	if (root_to_be_removed)
-		pathTree->removeRoot(this, root_to_be_removed);
+	if (root_to_be_removed) removeRoot(root_to_be_removed);
 
 	if (!addedStates.empty()) {
 		states.insert(addedStates.begin(), addedStates.end());
@@ -248,13 +247,42 @@ void ExeStateManager::replaceStateImmediate(
 	removePTreeState(old_s, root_to_be_removed);
 }
 
+
+void ExeStateManager::removeRoot(ExecutionState* es)
+{
+	ExecutionState* ns;
+
+	ns = getReplacedState(es);
+	if (ns == NULL) {
+		pathTree->removeRoot(es);
+		return;
+	}
+
+	pathTree->updateReplacement(ns, es);
+	delete es;
+}
+
 void ExeStateManager::removePTreeState(
 	ExecutionState* es,
 	ExecutionState** root_to_be_removed)
 {
-	ExecutionState	*root;
-	root = pathTree->removeState(this, es);
-	if (root != NULL) *root_to_be_removed = root;
+	ExecutionState	*ns;
+
+	if (pathTree->isRoot(es)) {
+		*root_to_be_removed = es;
+		return;
+	}
+
+	assert(es->ptreeNode->getData() == es);
+	ns = getReplacedState(es);
+
+	if (ns == NULL) {
+		pathTree->remove(es->ptreeNode);
+	} else {
+		pathTree->updateReplacement(ns, es);
+	}
+
+	delete es;
 }
 
 bool ExeStateManager::isAddedState(ExecutionState* s) const

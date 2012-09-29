@@ -20,7 +20,6 @@ namespace klee
 {
 class ExecutionState;
 class PTreeNode;
-class ExeStateManager;
 
 class PTree
 {
@@ -45,12 +44,13 @@ public:
 
 	void dump(std::ostream &os) const;
 	void dump(const std::string& n) const;
-	ExecutionState* removeState(
-		ExeStateManager* stateManager, ExecutionState* es);
-	void removeRoot(ExeStateManager* stateManager, ExecutionState* es);
+	ExecutionState* removeState(ExecutionState* es);
+	void removeRoot(ExecutionState* es);
 
 	void splitStates(PTreeNode* n, ExecutionState* a, ExecutionState* b);
+	void updateReplacement(ExecutionState* ns, ExecutionState* es);
 
+	bool isRoot(ExecutionState* es) const;
 private:
 	std::pair<PTreeNode*,PTreeNode*> split(
 		PTreeNode *n,

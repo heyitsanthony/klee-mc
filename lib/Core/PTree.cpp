@@ -49,46 +49,21 @@ PTree::split(
 	return std::make_pair(n->children[0], n->children[1]);
 }
 
-ExecutionState* PTree::removeState(
-	ExeStateManager* stateManager, ExecutionState* es)
+bool PTree::isRoot(ExecutionState* es) const { return es->ptreeNode == root; }
+
+void PTree::updateReplacement(ExecutionState* ns, ExecutionState *es)
 {
-	ExecutionState* ns;
-
-	if (es->ptreeNode == root)
-		return es;
-
-	assert(es->ptreeNode->data == es);
-
-	ns = stateManager->getReplacedState(es);
-	if (ns == NULL) {
-		remove(es->ptreeNode);
-	} else {
-		// replace the placeholder state in the process tree
-		ns->ptreeNode = es->ptreeNode;
-		ns->ptreeNode->data = ns;
-		ns->ptreeNode->update(WeightCompact, !ns->isCompact());
-	}
-
-	delete es;
-	return NULL;
-}
-
-void PTree::removeRoot(ExeStateManager* stateManager, ExecutionState* es)
-{
-	ExecutionState* ns;
-
-	ns = stateManager->getReplacedState(es);
-	if (ns == NULL) {
-		delete root->data;
-		root->data = 0;
-		return;
-	}
-
 	// replace the placeholder state in the process tree
 	ns->ptreeNode = es->ptreeNode;
 	ns->ptreeNode->data = ns;
 	ns->ptreeNode->update(WeightCompact, !ns->isCompact());
-	delete es;
+}
+
+void PTree::removeRoot(ExecutionState* es)
+{
+	assert (isRoot(es));
+	delete root->data;
+	root->data = 0;
 }
 
 void PTree::remove(PTreeNode *n)
