@@ -860,6 +860,8 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 		/* sometimes concretization takes forever on a certain
 		 * codesite-- hence, we don't repeat it */
 		std::cerr << "[Exe] Ignoring bad concretization kfunc\n";
+		/* have separate counter for "failed" concretization? */
+		st.concretizeCount++;
 		return NULL;
 	}
 
@@ -2014,7 +2016,7 @@ void Executor::exhaustState(ExecutionState* es)
 	} while (
 		!stateManager->isRemovedState(es) &&
 		test_c == interpreterHandler->getNumPathsExplored());
-	notifyCurrent(es);
+	notifyCurrent(NULL);
 }
 
 #include "PTree.h"

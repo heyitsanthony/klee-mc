@@ -258,14 +258,24 @@ Replay::Replay(Executor* _exe, ExecutionState* _initState, const ReplayPaths& rp
 
 bool Replay::verifyPath(Executor* exe, const ExecutionState& es)
 {
-	Forks		*old_f;
-	ForksPathReplay	*fpr;
-	ExecutionState	*replay_es, *initSt;
-	ReplayPath	rp;
-	bool		old_write, failed_replay;
-	std::stringstream ss;
-	unsigned	old_err_c;
+	Forks			*old_f;
+	ForksPathReplay		*fpr;
+	ExecutionState		*rp_es, *initSt;
+	ReplayPath		rp;
+	bool			old_write, failed_rp;
+	std::stringstream	 ss;
+	unsigned		old_err_c;
 	InterpreterHandler	*ih;
+
+	if (es.concretizeCount > 0) {
+		/* we should only replay up to the point of concretization,
+		 and check there are no contradictions up to that point.
+		 Anything past the concretization is unreliable since branches 
+		 which are safe-guarded by a is-const check will not be visible
+		 on subsequent runs without precise concretization replay. */
+		std::cerr << "[Replay] Ignoring concretized validation!!!\n";
+		return true;
+	}
 
 	old_f = exe->getForking();
 	ih = exe->getInterpreterHandler();
@@ -281,19 +291,24 @@ bool Replay::verifyPath(Executor* exe, const ExecutionState& es)
 	loadPathStream(ss, rp);
 
 	initSt = exe->getInitialState();
-	replay_es = ExecutionState::createReplay(*initSt, rp);
-	exe->getStateManager()->queueSplitAdd(
-		replay_es->ptreeNode, initSt, replay_es);
+	rp_es = ExecutionState::createReplay(*initSt, rp);
+	exe->getStateManager()->queueSplitAdd(rp_es->ptreeNode, initSt, rp_es);
 
 	old_err_c = ih->getNumErrors();
-	exe->exhaustState(replay_es);
-	failed_replay = ih->getNumErrors() != old_err_c;
+	exe->exhaustState(rp_es);
+	failed_rp = ih->getNumErrors() != old_err_c;
 
 	/* XXX: need some checks to make sure path succeeded */
-	assert (!failed_replay && "REPLAY FAILED. NEED BETTER HANDLING");
+	assert (!failed_rp && "REPLAY FAILED. NEED BETTER HANDLING");
+	if (failed_rp) {
+		return false;
+	}
 
 	exe->setForking(old_f);
 	delete fpr;
 
 	ih->setWriteOutput(old_write);
+	std::cerr << "[Replay] Validated Path.\n";
+
+	return true;
 }

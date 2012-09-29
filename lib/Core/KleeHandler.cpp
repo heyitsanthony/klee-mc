@@ -55,8 +55,8 @@ KleeHandler::KleeHandler(const CmdArgs* in_args)
 , m_pathsExplored(0)
 , m_errorsFound(0)
 , cmdargs(in_args)
-, m_interpreter(0)
 , writeOutput(NoOutput == false)
+, m_interpreter(0)
 {
 	std::string theDir;
 
@@ -317,7 +317,9 @@ unsigned KleeHandler::processTestCase(
 		printErrorMessage(state, errorMessage, errorSuffix, id);
 
 	if (WritePaths) {
-		if (std::ostream* f = openTestFileGZ("path", id)) {
+		const char	*fprefix;
+		fprefix = (state.concretizeCount) ? "pathpart" : "path";
+		if (std::ostream* f = openTestFileGZ(fprefix, id)) {
 			Replay::writePathFile(state, *f);
 			delete f;
 		} else {
