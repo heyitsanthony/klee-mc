@@ -58,10 +58,7 @@ public:
 	/// or the new branches will immediately be garbage collected.
 	SegmentRef insert(const ReplayPath &branches);
 
-	unsigned getNumSuccessors(iterator it) const;
-	iterator getSuccessor(iterator it, unsigned index) const;
-
-	void truncatePast(const iterator& it);
+	void truncatePast(iterator& it);
 
 	bool verifyPath(const ReplayPath& branches);
 

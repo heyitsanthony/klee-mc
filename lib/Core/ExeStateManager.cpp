@@ -273,7 +273,10 @@ void ExeStateManager::removePTreeState(
 		return;
 	}
 
-	assert(es->ptreeNode->getData() == es);
+	assert(
+		es->ptreeNode->getData() == es ||
+		es->ptreeNode->getData() == NULL);
+
 	ns = getReplacedState(es);
 
 	if (ns == NULL) {

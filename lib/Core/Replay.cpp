@@ -8,6 +8,7 @@
 #include "Forks.h"
 #include "ForksPathReplay.h"
 #include "ForksKTest.h"
+#include "CoreStats.h"
 
 #include "klee/ExecutionState.h"
 #include "klee/Internal/Module/KInstIterator.h"
@@ -167,6 +168,7 @@ void Replay::fastEagerReplay(void)
 			es = exe->getForking()->pureFork(*es);
 			assert (es != NULL);
 			es->joinReplay(rp);
+			assert (es->isReplayDone() == false);
 		}
 
 		assert (es != NULL);
@@ -275,6 +277,7 @@ bool Replay::verifyPath(Executor* exe, const ExecutionState& es)
 	std::stringstream	 ss;
 	unsigned		old_err_c;
 	InterpreterHandler	*ih;
+	uint64_t		inst_start, inst_end;
 
 	if (es.isPartial) {
 		std::cerr << "[Replay] Ignoring partial path check.\n";
@@ -309,8 +312,16 @@ bool Replay::verifyPath(Executor* exe, const ExecutionState& es)
 	exe->getStateManager()->queueSplitAdd(rp_es->ptreeNode, initSt, rp_es);
 
 	old_err_c = ih->getNumErrors();
+	inst_start = stats::instructions;
+
 	exe->exhaustState(rp_es);
+
 	failed_rp = ih->getNumErrors() != old_err_c;
+	inst_end = stats::instructions;
+
+	std::cerr << "[Replay] Exhaust insts=" << inst_end - inst_start << '\n';
+	std::cerr << "[Relay] Source insts=" << es.totalInsts << '\n';
+	assert ((inst_end - inst_start) == es.totalInsts);
 
 	/* XXX: need some checks to make sure path succeeded */
 	assert (!failed_rp && "REPLAY FAILED. NEED BETTER HANDLING");

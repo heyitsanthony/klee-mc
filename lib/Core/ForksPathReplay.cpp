@@ -33,13 +33,17 @@ void ForksPathReplay::trackBranch(ExecutionState& current, unsigned condIndex)
 	// HOWEVER: must track branch for forked states!
 	if (current.isReplayDone()) {
 		Forks::trackBranch(current, condIndex);
-	}
+	} else
+		current.stepReplay();
 }
 
 bool ForksPathReplay::forkFollowReplay(ExecutionState& es, struct ForkInfo& fi)
 {
 	// Replaying non-internal fork; read value from replayBranchIterator
-	fi.replayTargetIdx = es.stepReplay();
+	unsigned	brSeqIdx;
+
+	brSeqIdx = es.getBrSeq();
+	fi.replayTargetIdx = es.peekReplay();
 
 	// Verify that replay target matches current path constraints
 	if (fi.replayTargetIdx > fi.N) {
@@ -71,7 +75,7 @@ bool ForksPathReplay::forkFollowReplay(ExecutionState& es, struct ForkInfo& fi)
 		ss << i;
 		first = false;
 	}
-	ss << ")\n";
+	ss << ", seqIdx=" << brSeqIdx << ")\n";
 
 	fi.dump(ss);
 
@@ -90,13 +94,13 @@ bool ForksPathReplay::forkSetup(ExecutionState& current, struct ForkInfo& fi)
 		assert(false && "invalid state");
 	}
 
-	if (ReplayPathOnly && current.isReplay && current.isReplayDone()) {
+	if ((ReplayPathOnly && current.isReplay) || current.isReplayDone()) {
 		// Done replaying this state, so kill it (if -replay-path-only)
 		exe.terminateEarly(current, "replay path exhausted");
 		return false;
 	}
 
-	assert (current.isReplayDone() == false);
+	assert (!current.isReplayDone());
 	return forkFollowReplay(current, fi);
 }
 

@@ -9,30 +9,33 @@ class iterator
 {
 	friend class BranchTracker;
 public:
-	iterator() : curIndex(0) { }
+	iterator() : curSegIndex(0) { }
 	
 	iterator(const BranchTracker *tracker)
 	: curSeg(tracker->head)
 	, tail(tracker->tail)
-	, curIndex(0) { }
+	, curSegIndex(0)
+	, seqIndex(0) { }
 
 	iterator(
 		const BranchTracker *tracker,
 		SegmentRef _curSeg,
-		unsigned _curIndex = 0)
+		unsigned _curSegIndex = 0)
 	: curSeg(_curSeg)
 	, tail(tracker->tail)
-	, curIndex(_curIndex) { }
+	, curSegIndex(_curSegIndex)
+	, seqIndex(_curSegIndex) { }
 
 	~iterator() { }
 private:
 	SegmentRef	curSeg, tail;
-	unsigned	curIndex;
+	unsigned	curSegIndex, seqIndex;
 
-	iterator(SegmentRef _tail, SegmentRef _curSeg, unsigned _curIndex)
+	iterator(SegmentRef _tail, SegmentRef _curSeg, unsigned _curSegIndex)
 	: curSeg(_curSeg)
 	, tail(_tail)
-	, curIndex(_curIndex)
+	, curSegIndex(_curSegIndex)
+	, seqIndex(~0)
 	{ }
 
 	bool mayDeref(void) const;
@@ -44,12 +47,13 @@ public:
 	inline bool operator==(const iterator& a) const
 	{	if (!mayDeref()) return !a.mayDeref();
 		return (curSeg.get() == a.curSeg.get()
-			&& curIndex == a.curIndex
+			&& curSegIndex == a.curSegIndex
 			&& tail.get() == a.tail.get());
 	}
 	inline bool operator!=(const iterator& a) const { return !(*this==a); }
 	void dump(void) const;
 	void assumeTail(const iterator& it) { tail = it.tail; }
+	unsigned getSeqIdx(void) const { return seqIndex; }
 };
 
 

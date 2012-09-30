@@ -10,8 +10,6 @@
 #include "BranchTracker.h"
 #include <iostream>
 
-
-
 #include <algorithm>
 #include "MemoryManager.h"
 #include "Memory.h"
@@ -25,7 +23,8 @@ BranchTracker::BranchTracker()
 {}
 
 BranchTracker::BranchTracker(const BranchTracker &a)
-: head(a.head), tail(a.tail)
+: head(a.head)
+, tail(a.tail)
 {
 	if (a.empty()) {
 		tail = head = new Segment();
@@ -117,38 +116,6 @@ ReplayNode BranchTracker::operator[](unsigned index) const
 	return (*it)[index - prefixSize];
 }
 
-unsigned BranchTracker::getNumSuccessors(iterator it) const
-{
-	if (it.isNull())
-		return 0;
-
-	assert (it.curSeg == head || !it.curSeg->empty());
-
-	if (it == end())
-		return 0;
-
-	if (it.curIndex < it.curSeg->size())
-		return 1;
-
-	return it.curSeg->children.size();
-}
-
-BranchTracker::iterator
-BranchTracker::getSuccessor(iterator it, unsigned index) const
-{
-	assert(it.curSeg == head || !it.curSeg->empty());
-	assert (it != end() && "No successors");
-
-	if (it.curIndex < it.curSeg->size()) {
-		assert(index == 0 && "Invalid successor");
-		return ++it;
-	}
-
-	assert(index < it.curSeg->children.size() && "Invalid successor");
-	return iterator(
-		it.curSeg->children[index], it.curSeg->children[index], 0);
-}
-
 BranchTracker& BranchTracker::operator=(const BranchTracker &a)
 {
 	head = a.head;
@@ -180,7 +147,7 @@ BranchTracker::findChild(
 		//	     && "Identical branch leads to different target");
 			match = true;
 			it.curSeg = it.tail = nextSeg;
-			it.curIndex = 0;
+			it.curSegIndex = 0;
 			break;
 		}
 	}
@@ -220,7 +187,7 @@ BranchTracker::insert(const ReplayPath &branches)
 		// if we're at the end of a segment,
 		// then see which child (if any) has a
 		// matching next value
-		if (	it.curIndex == it.curSeg->size() - 1 &&
+		if (	it.curSegIndex == it.curSeg->size() - 1 &&
 			index != branches.size() - 1)
 		{
 			it = findChild(it, branches[index+1], noChild);
@@ -239,11 +206,11 @@ BranchTracker::insert(const ReplayPath &branches)
 		return it.curSeg;
 
 	if (	noChild == false &&
-		((it.curSeg == head && !it.curSeg->empty()) || it.curIndex))
+		((it.curSeg == head && !it.curSeg->empty()) || it.curSegIndex))
 	{
 		// split this segment
-		splitSegment(*it.curSeg, it.curIndex);
-		it.curIndex = 0;
+		splitSegment(*it.curSeg, it.curSegIndex);
+		it.curSegIndex = 0;
 	}
 
 	SegmentRef oldTail = tail;
@@ -358,7 +325,7 @@ bool BranchTracker::iterator::mayDeref(void) const
 	if (curSeg.isNull())
 		return false;
 
-	if (curSeg == tail && curIndex >= curSeg->size())
+	if (curSeg == tail && curSegIndex >= curSeg->size())
 		return false;
 
 	if (curSeg->empty())
@@ -371,7 +338,7 @@ ReplayNode BranchTracker::iterator::operator*() const
 {
 	assert (mayDeref());
 
-	if (curIndex == curSeg->size()) {
+	if (curSegIndex == curSeg->size()) {
 		iterator it = *this;
 		++it;
 		assert (!it.curSeg->empty());
@@ -379,7 +346,7 @@ ReplayNode BranchTracker::iterator::operator*() const
 		return *it;
 	}
 
-	return (*curSeg)[curIndex];
+	return (*curSeg)[curSegIndex];
 }
 
 BranchTracker::iterator BranchTracker::iterator::operator++(int notused)
@@ -393,43 +360,37 @@ BranchTracker::iterator BranchTracker::iterator::operator++()
 {
 	assert(!curSeg.isNull());
 
+	seqIndex++;
+
 	// common case
-	if (curIndex < curSeg->size() - 1) {
-		curIndex++;
+	if (curSegIndex < curSeg->size() - 1) {
+		curSegIndex++;
 		return *this;
 	}
 
-	// we're at the end of a segment with only one child, so just advance to the
-	// start of the next child
-	if (	curIndex == curSeg->size() - 1 &&
-		curSeg->children.size() == 1 &&
-		curSeg != tail)
-	{
-		curIndex = 0;
-		if (curSeg == tail)
-			tail = curSeg = curSeg->children[0];
-		else
-			curSeg = curSeg->children[0];
-
-		return *this;
-	}
-
-	// we're at the tail, which has either 0 or >1 children, so just advance
-	// curIndex; if 0 children, this is equivalent to end(), else fork() will
-	// handle the replay logic using getSuccessor()
+	// we're at the tail, so just advance curSegIndex;
+	// if 0 children, this is equivalent to end(),
+	// else fork() will handle the replay logic using getSuccessor()
 	if (curSeg == tail) {
-		assert(	curIndex < curSeg->size()
-			&& "BranchTracker::iterator out of bounds");
-		curIndex++;
+		assert(curSegIndex < curSeg->size() && "BranchTracker::it OOB");
+		curSegIndex++;
+		return *this;
+	}
+	assert (curSegIndex == curSeg->size()-1);
+
+	curSegIndex = 0;
+
+	// we're at the end of a segment with only one child,
+	// so just advance to the start of the next child
+	if (curSeg->children.size() == 1) {
+		curSeg = curSeg->children[0];
 		return *this;
 	}
 
 	// we're at the end of a segment other than the tail,
-	// advance to the segment that lets us reach the tail
-	curIndex = 0;
-	SegmentRef temp = tail;
-	while (temp->parent != curSeg)
-		temp = temp->parent;
+	// backtrack to advance to segment that lets us reach the tail
+	SegmentRef temp;
+	for (temp = tail; temp->parent != curSeg; temp = temp->parent);
 	curSeg = temp;
 
 	return *this;
@@ -473,30 +434,28 @@ ReplayNode BranchTracker::Segment::operator[](unsigned index) const
 	return ReplayNode(branches[index], ki);
 }
 
-void BranchTracker::truncatePast(const BranchTracker::iterator& it)
+void BranchTracker::truncatePast(BranchTracker::iterator& it)
 {
 	SegmentRef	tail_trunc;
 
 	if (it == end()) return;
+	if (it.curSegIndex == it.curSeg->size()) ++it;
 
 	/* everything past the last segment in the iterator may be discarded */
-	tail = it.tail;
+	tail = it.curSeg;
 
-	assert (it.curIndex <= it.curSeg->size() - 1 && "OOB IDX");
+	assert (it.curSegIndex <= it.curSeg->size() - 1 && "OOB IDX");
 
 	/* iterator ends on edge of tail, keep entire tail */
-	if (it.curIndex == (it.curSeg->size() - 1)) {
-		std::cerr << "[BT] TRUNCATEPAST END. CURIDX=" << it.curIndex << '\n';
+	if (it.curSegIndex == (it.curSeg->size() - 1)) {
 		needNewSegment = true;
 		return;
 	}
 
 	/* copy tail; truncate to iterator */
-	std::cerr << "[BT] copying tail, truncating iterator\n";
 	assert (it.curSeg.isNull() == false);
-	tail_trunc = it.curSeg->truncatePast(it.curIndex);
+	tail_trunc = it.curSeg->truncatePast(it.curSegIndex);
 	if (head == tail) {
-		std::cerr << "HEAD IS TAIL!\n";
 		head = tail_trunc;
 	}
 
@@ -539,7 +498,7 @@ void BranchTracker::iterator::dump(void) const
 	std::cerr << "curSeg = " << (void*)curSeg.get()  << '\n';
 	std::cerr << "curSegSize = " << curSeg->size() << '\n';
 	std::cerr << "tail = " << (void*)tail.get() << '\n';
-	std::cerr << "curIdx = " << curIndex << '\n';
+	std::cerr << "curIdx = " << curSegIndex << '\n';
 }
 
 

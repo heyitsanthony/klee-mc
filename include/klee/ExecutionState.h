@@ -290,6 +290,8 @@ public:
 
 	void printFileLine(void);
 	unsigned stepReplay(void);
+	unsigned peekReplay(void) const;
+	unsigned getBrSeq(void) const;
 
 	BranchTracker::iterator branchesBegin(void) const
 	{ return brChoiceSeq.begin(); }

@@ -129,6 +129,9 @@ ExecutionState *ExecutionState::branch(bool forReplay)
 	newState->coveredNew = false;
 	newState->coveredLines.clear();
 	
+	if (isReplay) {
+		newState->brChoiceSeq.truncatePast(newState->replayBrIter);
+	}
 	newState->replayBrIter = newState->branchesEnd();
 
 	newState->personalInsts = 0;
@@ -738,17 +741,26 @@ void ExecutionState::joinReplay(const ReplayPath &replayPath)
 bool ExecutionState::isReplayDone(void) const
 { return (replayBrIter == branchesEnd()); }
 
-unsigned ExecutionState::stepReplay(void)
+
+unsigned ExecutionState::peekReplay(void) const
 {
 #ifdef INCLUDE_INSTR_ID_IN_PATH_INFO
 //	Replay::checkPC(prevPC, replayBrIter);
 	assert (prevPC->getInfo()->assemblyLine == (*replayBrIter).second &&
 	      "branch instruction IDs do not match");
 #endif
-    unsigned targetIndex = (*replayBrIter).first;
-    ++replayBrIter;
-    return targetIndex;
+	return (*replayBrIter).first;
 }
+
+unsigned ExecutionState::stepReplay(void)
+{
+	unsigned targetIndex = peekReplay();
+	++replayBrIter;
+	return targetIndex;
+}
+
+unsigned ExecutionState::getBrSeq(void) const
+{ return replayBrIter.getSeqIdx(); }
 
 ReplayNode ExecutionState::branchLast(void) const
 {
@@ -845,39 +857,28 @@ void ExecutionState::printMinInstKFunc(std::ostream& os) const
 unsigned ExecutionState::replayHeadLength(const ReplayPath& rp) const
 {
 	unsigned			node_c;
-	BranchTracker::iterator		brIt, brItEnd;
 	ReplayPath::const_iterator	rpIt, rpItEnd;
 
-	if (!isReplayDone())
+	if (!isReplayDone()) {
+		std::cerr << "[ES] Can't claim replaying state.\n";
 		return 0;
+	}
 
 	node_c = 0;
 
-	brIt = branchesBegin();
-	brItEnd = branchesEnd();
 	rpIt = rp.begin();
 	rpItEnd = rp.end();
 
-	while (rpIt != rpItEnd) {
-		if (brIt == brItEnd)
-			return node_c;
+	if (brChoiceSeq.size() > rp.size())
+		return 0;
 
-		if ((*rpIt).first != (*brIt).first) {
-			std::cerr
-				<< "[ES=" << (void*)this
-				<< "] Mismatch: node_c = " << node_c << '\n';
+	/* must match *every* branch made by the state */
+	foreach (brIt, branchesBegin(), replayBrIter) {
+		if ((*rpIt).first != (*brIt).first)
 			return 0;
-		}
 
 		node_c++;
-		brIt++;
 		rpIt++;
-	}
-
-	/* ran out of replay, but state kept going, so not head  */
-	if (brIt != brItEnd) {
-		std::cerr << "[ES] OF: node_c = " << node_c << '\n';
-		return 0;
 	}
 
 	/* perfect match, hm. */

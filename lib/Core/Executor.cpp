@@ -758,19 +758,18 @@ void Executor::markBranchVisited(
 		std::cerr << "[Branch] XXX: MISSED FRESH BRANCH!!!\n";
 }
 
-void Executor::instBranch(ExecutionState& state, KInstruction* ki)
+void Executor::instBranch(ExecutionState& st, KInstruction* ki)
 {
 	BranchInst	*bi = cast<BranchInst>(ki->getInst());
 
 	if (bi->isUnconditional()) {
-		state.transferToBasicBlock(
-			bi->getSuccessor(0), bi->getParent());
+		st.transferToBasicBlock(bi->getSuccessor(0), bi->getParent());
 		return;
 	}
 
 	// FIXME: Find a way that we don't have this hidden dependency.
 	assert (bi->getCondition() == bi->getOperand(0) && "Wrong op index!");
-	instBranchConditional(state, ki);
+	instBranchConditional(st, ki);
 }
 
 static bool concretizeObject(
@@ -999,9 +998,7 @@ void Executor::finalizeBranch(
 		st = newState;
 	}
 
-	st->transferToBasicBlock(
-		bi->getSuccessor(branchIdx),
-		bi->getParent());
+	st->transferToBasicBlock(bi->getSuccessor(branchIdx), bi->getParent());
 }
 
 void Executor::instCall(ExecutionState& state, KInstruction *ki)
