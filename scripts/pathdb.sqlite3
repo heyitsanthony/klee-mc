@@ -1,6 +1,7 @@
 CREATE TABLE path(
 	pathid	INTEGER PRIMARY KEY,
-	phash	VARCHAR(40))
+	phash	VARCHAR(40),
+	ktesthash VARCHAR(40))
 ;
 
 CREATE TABLE sb(

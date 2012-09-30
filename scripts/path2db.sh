@@ -78,10 +78,11 @@ fi
 insert_all_sb >sb.sqlite3
 sqlite3 -batch -init sb.sqlite3 exe.db </dev/null
 
-for a in $pathdir/*path.gz; do
+for a in $pathdir/*.path.gz; do
 	b=`basename $a | cut -f1 -d'.'`
 	sbfile="$1"/$b.sb
 	mininstfile="$1"/$b.mininst.gz
+	ktestfile="$1"/$b.ktest.gz
 
 	echo ========PROCESSING PATH $a=============
 
@@ -95,8 +96,8 @@ for a in $pathdir/*path.gz; do
 	echo "GET UNIQUE BLOCKS"
 	#find all unique basic blocks 
 	zcat "$mininstfile" | cut -f2 -d',' | uniq | sort | uniq | grep "sb_" | sed "s/sb_//g" >"$sbfile"
-
-	sqlite3 exe.db <<< "INSERT INTO path (phash) VALUES ('$phash');" >/dev/null
+	ktesthash=`zcat "$ktestfile" | sha1sum | cut -f1 -d' '`
+	sqlite3 exe.db <<< "INSERT INTO path (phash, ktesthash) VALUES ('$phash', '$ktesthash');" >/dev/null
 	sqlite3 exe.db <<< "SELECT pathid FROM path WHERE phash='$phash' LIMIT 1;" >pathid
 	
 	echo INSERT NODES===========================
