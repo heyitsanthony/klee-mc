@@ -859,10 +859,8 @@ unsigned ExecutionState::replayHeadLength(const ReplayPath& rp) const
 	unsigned			node_c;
 	ReplayPath::const_iterator	rpIt, rpItEnd;
 
-	if (!isReplayDone()) {
-		std::cerr << "[ES] Can't claim replaying state.\n";
+	if (!isReplayDone())
 		return 0;
-	}
 
 	node_c = 0;
 

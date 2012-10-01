@@ -34,6 +34,10 @@ public:
 	virtual void terminate(ExecutionState &state)
 	{
 		if (replayPosition != replayKTest->numObjects) {
+			std::cerr << "[KTestExe] replayPosition = "
+					<< replayPosition << '\n';
+			std::cerr << "[KTestExe] numObjs = "
+					<< replayKTest->numObjects << '\n';
 			klee_warning_once(
 				replayKTest,
 				"replay did not consume all objects in test input.");

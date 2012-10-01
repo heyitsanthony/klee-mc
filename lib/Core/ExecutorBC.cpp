@@ -91,6 +91,7 @@ void ExecutorBC::runFunctionAsMain(
 	srand(1);
 	srandom(1);
 
+	ExecutionState::setMemoryManager(memory);
 	state = ExeStateBuilder::create(kf);
 
 	setupArgv(state, f, argc, argv, envp);

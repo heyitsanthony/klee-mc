@@ -2022,6 +2022,7 @@ void Executor::run(ExecutionState &initState)
 	PTree	*pt;
 
 	currentState = &initState;
+	haltExecution = false;
 
 	if (mmu == NULL) mmu = MMU::create(*this);
 

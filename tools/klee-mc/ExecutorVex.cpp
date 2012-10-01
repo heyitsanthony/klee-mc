@@ -99,6 +99,8 @@ namespace
 ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 : Executor(ih)
 , gs(dynamic_cast<KleeHandlerVex*>(ih)->getGuest())
+, img_init_func(0)
+, img_init_func_addr(0)
 {
 	assert (kmodule == NULL && "KMod already initialized? My contract!");
 
@@ -185,12 +187,17 @@ ExecutorVex::~ExecutorVex(void)
 	kmodule = NULL;
 }
 
-ExecutionState* ExecutorVex::setupInitialStateEntry(uint64_t entry_addr)
+llvm::Function* ExecutorVex::setupRuntimeFunctions(uint64_t entry_addr)
 {
-	ExecutionState	*state;
-	Function	*init_func;
 	KFunction	*init_kfunc;
 	bool		is_new;
+
+	if (img_init_func != NULL) {
+		assert (entry_addr == img_init_func_addr);
+		return img_init_func;
+	}
+
+	assert (entry_addr != 0);
 
 	// force deterministic initialization of memory objects
 	// XXX XXX XXX no determinism please
@@ -210,21 +217,34 @@ ExecutionState* ExecutorVex::setupInitialStateEntry(uint64_t entry_addr)
 		kmodule->addModule(*it);
 	theVexHelpers->useExternalMod(kmodule->module);
 
-	init_func = km_vex->getFuncByAddrNoKMod(entry_addr, is_new);
-	assert (init_func != NULL && "Could not get init_func. Bad decode?");
-	if (init_func == NULL) {
+	img_init_func = km_vex->getFuncByAddrNoKMod(entry_addr, is_new);
+	if (img_init_func == NULL) {
 		std::cerr << "[klee-mc] COULD NOT GET INIT_FUNC\n";
 		return NULL;
 	}
 
-	sys_model->installInitializers(init_func);
+	sys_model->installInitializers(img_init_func);
 
-	init_kfunc = kmodule->addFunction(init_func);
+	init_kfunc = kmodule->addFunction(img_init_func);
 
 	statsTracker->addKFunction(init_kfunc);
 	km_vex->bindKFuncConstants(this, init_kfunc);
 
+	img_init_func_addr = entry_addr;
+	return img_init_func;
+}
+
+
+ExecutionState* ExecutorVex::setupInitialStateEntry(uint64_t entry_addr)
+{
+	llvm::Function	*init_func;
+	ExecutionState	*state;
+
+	init_func = setupRuntimeFunctions(entry_addr);
+	assert (init_func != NULL && "Could not get init_func. Bad decode?");
+
 	state = ExeStateBuilder::create(kmodule->getKFunction(init_func));
+	assert (state != NULL);
 
 	prepState(state, init_func);
 	globals = new Globals(kmodule, state, NULL);
@@ -248,6 +268,7 @@ void ExecutorVex::runImage(void)
 {
 	ExecutionState	*start_state;
 
+	ExecutionState::setMemoryManager(memory);
 	start_state = setupInitialState();
 	if (start_state == NULL)
 		return;
@@ -395,7 +416,6 @@ void ExecutorVex::bindMapping(
 void ExecutorVex::setupProcessMemory(ExecutionState* state, Function* f)
 {
 	std::list<GuestMem::Mapping> memmap(gs->getMem()->getMaps());
-
 	foreach (it, memmap.begin(), memmap.end())
 		bindMapping(state, f, *it);
 }
@@ -516,7 +536,6 @@ void ExecutorVex::logXferRegisters(ExecutionState& state)
 	struct breadcrumb	*bc;
 
 	updateGuestRegs(state);
-	if (!LogRegs) return;
 
 	/* XXX: expensive-- lots of storage */
 	reg_sz = gs->getCPUState()->getStateSize();
@@ -547,11 +566,11 @@ void ExecutorVex::logXferRegisters(ExecutionState& state)
 /* handle transfering between VSB's */
 void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 {
-	GuestExitType		exit_type;
+	GuestExitType	exit_type;
 
-	logXferRegisters(state);
+	if (LogRegs) logXferRegisters(state);
 
-	exit_type = gs->getCPUState()->getExitType();
+	exit_type = (GuestExitType)getExitType(state);
 	markExit(state, GE_IGNORE);
 
 	switch(exit_type) {
@@ -844,3 +863,15 @@ uint64_t ExecutorVex::getStateStack(ExecutionState& es) const
 
 llvm::Function* ExecutorVex::getFuncByAddr(uint64_t addr)
 { return km_vex->getFuncByAddr(addr); }
+
+unsigned ExecutorVex::getExitType(const ExecutionState& state) const
+{
+	unsigned	exit_off;
+	ref<Expr>	e;
+
+	exit_off = gs->getCPUState()->getStateSize()-1;
+	e = state.read8(GETREGOBJRO(state), exit_off);
+	assert (e->getKind() == Expr::Constant);
+
+	return (GuestExitType)(cast<ConstantExpr>(e)->getZExtValue());
+}

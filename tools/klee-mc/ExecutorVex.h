@@ -24,8 +24,9 @@ class SysModel;
 class KModuleVex;
 
 #define es2esv(x)	static_cast<ExeStateVex&>(x)
+#define es2esvc(x)	static_cast<const ExeStateVex&>(x)
 #define GETREGOBJ(x)	es2esv(x).getRegObj()
-#define GETREGOBJRO(x)	es2esv(x).getRegObjRO()
+#define GETREGOBJRO(x)	es2esvc(x).getRegObjRO()
 
 class ExecutorVex : public Executor
 {
@@ -106,6 +107,7 @@ protected:
 	Guest		*gs;
 	KModuleVex	*km_vex;
 private:
+	unsigned getExitType(const ExecutionState& state) const;
 
 	void markExit(ExecutionState& state, uint8_t);
 
@@ -124,6 +126,7 @@ private:
 	void installFDTConfig(ExecutionState& state);
 	void makeArgsSymbolic(ExecutionState* state);
 	void makeMagicSymbolic(ExecutionState* state);
+	llvm::Function* setupRuntimeFunctions(uint64_t entry_addr);
 	void setupRegisterContext(ExecutionState* state, llvm::Function* f);
 	void setupProcessMemory(ExecutionState* state, llvm::Function* f);
 
@@ -136,6 +139,9 @@ private:
 
 	KFunction		*kf_scenter;
 	SysModel		*sys_model;
+
+	llvm::Function		*img_init_func;
+	uint64_t		img_init_func_addr;
 };
 
 }
