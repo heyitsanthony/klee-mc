@@ -86,8 +86,8 @@ void ExeChk::handleXfer(ExecutionState& state, KInstruction *ki)
 	cur_func = (state.stack.back()).kf->function;
 
 	/* 1. Finish KLEE's VSB by setting up xfer to next VSB*/
-	ExecutorVex::handleXfer(state, ki);
 	updateGuestRegs(state);
+	ExecutorVex::handleXfer(state, ki);
 	saveCPU(saved_klee_cpustate);
 
 	/* 2. Do VSB in VexExec's JITer */
