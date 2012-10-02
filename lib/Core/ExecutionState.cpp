@@ -131,6 +131,10 @@ ExecutionState *ExecutionState::branch(bool forReplay)
 	
 	if (isReplay) {
 		newState->brChoiceSeq.truncatePast(newState->replayBrIter);
+		/* I'm not happy with adjusting the old state
+		 * iterator on a truncation, but this is the only
+		 * place it's done, so it's not a problem yet. */
+		replayBrIter.reseat();
 	}
 	newState->replayBrIter = newState->branchesEnd();
 
@@ -697,6 +701,7 @@ ExecutionState* ExecutionState::createReplay(
 }
 
 /* takes a partial path and slaps a replay on it */
+/* XXX: this should use insert() */
 void ExecutionState::joinReplay(const ReplayPath &replayPath)
 {
 	unsigned			head_len, c;
@@ -728,7 +733,7 @@ void ExecutionState::joinReplay(const ReplayPath &replayPath)
 
 	assert (head_len <= replayHeadLength(replayPath));
 
-	brChoiceSeq.verifyPath(replayPath);
+	// brChoiceSeq.verifyPath(replayPath);
 
 	/* replay back to specific place */
 	replayBrIter = branchesBegin();

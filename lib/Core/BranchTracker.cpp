@@ -16,6 +16,8 @@
 
 using namespace klee;
 
+BranchTracker	BranchTracker::dummyHead;
+
 BranchTracker::BranchTracker()
 : head(new Segment())
 , tail(head)
@@ -42,6 +44,7 @@ void BranchTracker::push_back(unsigned decision, const KInstruction* ki)
 	if (needNewSegment) {
 		SegmentRef newseg = new Segment();
 		tail->children.push_back(newseg.get());
+		newseg->offset = tail->off() + tail->size();
 		newseg->parent = tail;
 		tail = newseg;
 		needNewSegment = false;
@@ -92,7 +95,7 @@ BranchTracker::containing(unsigned index) const
 ReplayNode BranchTracker::front() const
 {
 	assert(!empty());
-	return (*head)[0];
+	return (*getHead())[0];
 }
 
 ReplayNode BranchTracker::back() const
@@ -116,9 +119,16 @@ ReplayNode BranchTracker::operator[](unsigned index) const
 	return (*it)[index - prefixSize];
 }
 
+BranchTracker::SegmentRef BranchTracker::getHead(void) const
+{
+	SegmentRef	h(head);
+	while (h->parent.isNull() == false) h = h->parent;
+	return h;
+}
+
 BranchTracker& BranchTracker::operator=(const BranchTracker &a)
 {
-	head = a.head;
+	head = a.getHead();
 	tail = a.tail;
 	needNewSegment = true;
 	a.needNewSegment = true;
@@ -131,65 +141,74 @@ BranchTracker::findChild(
         ReplayNode		branch,
         bool			&noChild) const
 {
-	bool match = false;
-	foreach (cit, it.curSeg->children.begin(), it.curSeg->children.end())
-	{
-		Segment* nextSeg = *cit;
+	Segment	*childSeg = NULL;
+
+	foreach (cit, it.curSeg->children.begin(), it.curSeg->children.end()) {
+		bool	isBranchMatch, isNonBranchMatch;
+		Segment	*nextSeg = *cit;
 
 		assert (!nextSeg->branches.empty());
 
-		if (	(nextSeg->isBranch[0] && nextSeg->branches[0] == branch.first)
-			||
-			(!nextSeg->isBranch[0] &&
-				nextSeg->nonBranches[0] == branch.first))
-		{
+		isBranchMatch = nextSeg->isBranch[0] &&
+				nextSeg->branches[0] == branch.first;
+		isNonBranchMatch =	!nextSeg->isBranch[0] &&
+					nextSeg->nonBranches[0] == branch.first;
+
+		if (isBranchMatch || isNonBranchMatch) {
 		//	assert(nextSeg->branchID[0] == nextValue.second
 		//	     && "Identical branch leads to different target");
-			match = true;
-			it.curSeg = it.tail = nextSeg;
-			it.curSegIndex = 0;
+			childSeg = nextSeg;
 			break;
 		}
 	}
 
-	if (match == false) {
-		++it;
-		noChild = true;
+	if (childSeg != NULL) {
+		it.curSeg = it.tail = childSeg;
+		it.curSegIndex = 0;
+		it.seqIndex = childSeg->off();
+		noChild = false;
+		return it;
 	}
 
+	++it;
+	std::cerr << "HELLO NO CHILD!!\n";
+	noChild = true;
 	return it;
 }
 
 BranchTracker::SegmentRef
 BranchTracker::insert(const ReplayPath &branches)
 {
-	iterator it = begin();
-	unsigned index = 0;
-	bool noChild = false;
+	iterator	it = begin();
+	unsigned	index = 0;
+	bool		noChild = false, isSplit, isOnNonEmptyHead;
 
 	for (; it != end() && index < branches.size(); index++) {
+		bool		isSegEnd;
 		ReplayNode	value(branches[index]);
 
 		// special case of initial branch having more than one target;
 		// the root segment in the trie is empty.
 		// this is the only time we allow an empty segment.
 		if (index == 0 && it.curSeg->empty()) {
+			std::cerr << "FINDCHILD1\n";
 			it = findChild(it, branches[index], noChild);
 			if (noChild)
 				break;
+			std::cerr << "OK\n";
 			continue;
 		}
 
 		// we found a divergence in the branch sequences
-		if (*it != value)
+		if ((*it).first != value.first) {
+			std::cerr << "[BT] DIV AT IDX=" << index << '\n';
 			break;
+		}
 
 		// if we're at the end of a segment,
-		// then see which child (if any) has a
-		// matching next value
-		if (	it.curSegIndex == it.curSeg->size() - 1 &&
-			index != branches.size() - 1)
-		{
+		// then find child (if any) with matching next value
+		isSegEnd = it.curSegIndex == it.curSeg->size() - 1;
+		if (isSegEnd && index != branches.size() - 1) {
 			it = findChild(it, branches[index+1], noChild);
 			if (noChild) {
 				index++;
@@ -201,114 +220,136 @@ BranchTracker::insert(const ReplayPath &branches)
 		++it;
 	}
 
-	// new set of branches is a subset of an existing path
-	if (index == branches.size())
-		return it.curSeg;
-
+	// new set of branches is a precise subset of an existing path
 	if (	noChild == false &&
-		((it.curSeg == head && !it.curSeg->empty()) || it.curSegIndex))
+		index == (it.curSeg->off() + it.curSegIndex) &&
+		it.curSegIndex == it.curSeg->size())
 	{
+		/* XXX: might need new seg here */
+		return it.curSeg;
+	}
+
+	isOnNonEmptyHead = it.curSeg != getHead() && !it.curSeg->empty();
+	isSplit = noChild == false && (isOnNonEmptyHead || it.curSegIndex);
+
+	if (isSplit) {
 		// split this segment
 		splitSegment(*it.curSeg, it.curSegIndex);
-		it.curSegIndex = 0;
+		it.reseat();
 	}
 
 	SegmentRef oldTail = tail;
-	if (noChild || it.curSeg != head) {
+	if (noChild || it.curSeg != getHead()) {
 		SegmentRef newseg = new Segment();
+
 		newseg->parent = noChild ? it.curSeg : it.curSeg->parent;
 		newseg->parent->children.push_back(newseg.get());
 		tail = it.curSeg = newseg;
+		if (tail->parent.isNull() == false) {
+			tail->offset = newseg->parent->off();
+			tail->offset += newseg->parent->size();
+		}
+
+		newseg->offset = newseg->parent->off() + newseg->parent->size();
+		needNewSegment = false;
 	}
 
+	index = tail->off();
 	for (; index < branches.size(); index++) {
-		ReplayNode value(branches[index]);
-		push_back(value);
+		push_back(branches[index]);
 	}
 
+	it = end();
 	tail = oldTail;
+
 	return it.curSeg;
 }
 
 void BranchTracker::splitSegment(Segment &seg, unsigned index)
 {
+	Segment	*newseg = seg.split(index);
+
+	if (head == &seg)
+		head = newseg;
+}
+
+BranchTracker::Segment* BranchTracker::Segment::split(unsigned index)
+{
 	Segment *newseg = new Segment();
 
-	splitSwapData(seg, index, newseg);
-	splitNonBranches(seg, index, newseg);
-	splitUpdateParent(seg, newseg);
-}
-
-void BranchTracker::splitSwapData(Segment &seg, unsigned index, Segment* newseg)
-{
-	assert(index < seg.size());
-
 	// newseg gets prefix, segment get suffix
-	newseg->branches.insert(
-		newseg->branches.begin(),
-		seg.branches.begin(),
-		seg.branches.begin() + index);
-	newseg->isBranch.insert(
-		newseg->isBranch.begin(),
-		seg.isBranch.begin(),
-		seg.isBranch.begin() + index);
 
-	newseg->branchSites.insert(
-		newseg->branchSites.begin(),
-		seg.branchSites.begin(),
-		seg.branchSites.begin()+index);
+	splitSwapData(index, newseg);
+	splitNonBranches(index, newseg);
 
-	Segment::BoolVector tempBranches(
-		seg.branches.begin() + index,
-		seg.branches.end());
-	Segment::BoolVector tempIsBranch(
-		seg.isBranch.begin() + index,
-		seg.isBranch.end());
+	newseg->offset = offset;
+	offset += index;
 
-	std::swap(seg.branches, tempBranches);
-	std::swap(seg.isBranch, tempIsBranch);
-
-	Segment::BranchSites tempBranchSites(
-		seg.branchSites.begin() + index,
-		seg.branchSites.end());
-	std::swap(seg.branchSites, tempBranchSites);
-
-	// for safety, keep the heap object references in the parent
-	std::swap(newseg->heapObjects, seg.heapObjects);
-}
-
-void BranchTracker::splitUpdateParent(Segment& seg, Segment* newseg)
-{
-	newseg->parent = seg.parent;
-	seg.parent = newseg;
+	newseg->parent = parent;
+	parent = newseg;
 
 	if (newseg->parent.isNull() == false) {
 		newseg->parent->children.erase(
 			std::find(
 				newseg->parent->children.begin(),
 				newseg->parent->children.end(),
-				&seg));
+				this));
 		newseg->parent->children.push_back(newseg);
 	}
 
-	newseg->children.push_back(&seg);
+	newseg->children.push_back(this);
 
-	if (head == &seg)
-		head = newseg;
+	return newseg;
 }
 
-void BranchTracker::splitNonBranches(
-	Segment& seg, unsigned index, Segment* newseg)
+void BranchTracker::Segment::splitSwapData(unsigned index, Segment* newseg)
+{
+	assert(index < size());
+
+	newseg->branches.insert(
+		newseg->branches.begin(),
+		branches.begin(),
+		branches.begin() + index);
+	newseg->isBranch.insert(
+		newseg->isBranch.begin(),
+		isBranch.begin(),
+		isBranch.begin() + index);
+
+	newseg->branchSites.insert(
+		newseg->branchSites.begin(),
+		branchSites.begin(),
+		branchSites.begin()+index);
+
+	Segment::BoolVector tempBranches(
+		branches.begin() + index,
+		branches.end());
+	Segment::BoolVector tempIsBranch(
+		isBranch.begin() + index,
+		isBranch.end());
+
+	std::swap(branches, tempBranches);
+	std::swap(isBranch, tempIsBranch);
+
+	Segment::BranchSites tempBranchSites(
+		branchSites.begin() + index,
+		branchSites.end());
+	std::swap(branchSites, tempBranchSites);
+
+	// for safety, keep the heap object references in the parent
+	std::swap(newseg->heapObjects, heapObjects);
+}
+
+void BranchTracker::Segment::splitNonBranches(unsigned index, Segment* newseg)
 {
 	Segment::NonBranchesTy nonBranchesTemp;
 
-	for (	Segment::NonBranchesTy::iterator it = seg.nonBranches.begin(),
-		ie = seg.nonBranches.end(); it != ie; )
+	for (	Segment::NonBranchesTy::iterator it = nonBranches.begin(),
+		ie = nonBranches.end(); it != ie; )
 	{
 		if (it->first < index) {
 			newseg->nonBranches.insert(*it);
 			Segment::NonBranchesTy::iterator temp = it++;
-			seg.nonBranches.erase(temp);
+			nonBranches.erase(temp);
 			continue;
 		}
 
@@ -317,7 +358,7 @@ void BranchTracker::splitNonBranches(
 		++it;
 	}
 
-	std::swap(nonBranchesTemp, seg.nonBranches);
+	std::swap(nonBranchesTemp, nonBranches);
 }
 
 bool BranchTracker::iterator::mayDeref(void) const
@@ -356,16 +397,12 @@ BranchTracker::iterator BranchTracker::iterator::operator++(int notused)
 	return temp;
 }
 
-BranchTracker::iterator BranchTracker::iterator::operator++()
+void BranchTracker::iterator::bump(void)
 {
-	assert(!curSeg.isNull());
-
-	seqIndex++;
-
 	// common case
 	if (curSegIndex < curSeg->size() - 1) {
 		curSegIndex++;
-		return *this;
+		return;
 	}
 
 	// we're at the tail, so just advance curSegIndex;
@@ -374,7 +411,7 @@ BranchTracker::iterator BranchTracker::iterator::operator++()
 	if (curSeg == tail) {
 		assert(curSegIndex < curSeg->size() && "BranchTracker::it OOB");
 		curSegIndex++;
-		return *this;
+		return;
 	}
 	assert (curSegIndex == curSeg->size()-1);
 
@@ -384,7 +421,7 @@ BranchTracker::iterator BranchTracker::iterator::operator++()
 	// so just advance to the start of the next child
 	if (curSeg->children.size() == 1) {
 		curSeg = curSeg->children[0];
-		return *this;
+		return;
 	}
 
 	// we're at the end of a segment other than the tail,
@@ -392,7 +429,31 @@ BranchTracker::iterator BranchTracker::iterator::operator++()
 	SegmentRef temp;
 	for (temp = tail; temp->parent != curSeg; temp = temp->parent);
 	curSeg = temp;
+}
 
+void BranchTracker::iterator::reseat(void)
+{
+	if (seqIndex == curSegIndex + curSeg->off())
+		return;
+
+	/* find head */
+	while (curSeg->parent.isNull() == false)
+		curSeg = curSeg->parent;
+	curSegIndex = 0;
+
+	for (unsigned i = 0; i < seqIndex; i++)
+		bump();
+
+	assert (seqIndex == curSegIndex + curSeg->off());
+}
+
+BranchTracker::iterator BranchTracker::iterator::operator++()
+{
+	assert(!curSeg.isNull());
+
+	reseat();
+	seqIndex++;
+	bump();
 	return *this;
 }
 
@@ -400,6 +461,7 @@ unsigned BranchTracker::Segment::seg_alloc_c = 0;
 
 BranchTracker::Segment::Segment(void)
 : refCount(0)
+, offset(0)
 { ++seg_alloc_c; }
 
 BranchTracker::Segment::~Segment(void)
@@ -452,15 +514,29 @@ void BranchTracker::truncatePast(BranchTracker::iterator& it)
 		return;
 	}
 
+	ReplayPath	rp;
+	getReplayPath(rp, it);
+
+	std::cerr << "[BT] inserting at offset=" << it.seqIndex
+		<< ". Total segments: " << Segment::getNumSegments()
+		<< "\n";
+
+	tail = insert(rp);
+	for (head = tail; head->parent.isNull() == false; head = head->parent);
+
+	// assert (verifyPath(rp));
+#if 0
 	/* copy tail; truncate to iterator */
 	assert (it.curSeg.isNull() == false);
+
 	tail_trunc = it.curSeg->truncatePast(it.curSegIndex);
 	if (head == tail) {
 		head = tail_trunc;
 	}
 
 	tail = tail_trunc;
-	needNewSegment = false;
+	needNewSegment = true;
+#endif
 }
 
 BranchTracker::Segment* BranchTracker::Segment::truncatePast(unsigned idx)
@@ -495,10 +571,14 @@ BranchTracker::iterator BranchTracker::end(void) const
 
 void BranchTracker::iterator::dump(void) const
 {
+	std::cerr << "it {\n";
 	std::cerr << "curSeg = " << (void*)curSeg.get()  << '\n';
-	std::cerr << "curSegSize = " << curSeg->size() << '\n';
 	std::cerr << "tail = " << (void*)tail.get() << '\n';
-	std::cerr << "curIdx = " << curSegIndex << '\n';
+	std::cerr << "curSegOffset = " << curSeg->off() << '\n';
+	std::cerr << "curSegLen = " << curSeg->size() << '\n';
+	std::cerr << "curSegChildren = " << curSeg->children.size() << '\n';
+	std::cerr << "curSegIdx = " << curSegIndex << '\n';
+	std::cerr << "seqIdx = " << seqIndex << "}\n";
 }
 
 
@@ -507,18 +587,25 @@ bool BranchTracker::verifyPath(const ReplayPath& branches)
 	ReplayPath::const_iterator	rp_it;
 	unsigned			c = 0;
 
+	if (branches.size() != size()) {
+		std::cerr	<< "[BT] Size mismatch BT=" << size()
+				<< " vs RP=" << branches.size() << '\n';
+		return false;
+	}
+
 	rp_it = branches.begin();
 	foreach (it, begin(), end()) {
 		if ((*rp_it).first != (*it).first) {
-			std::cerr << "MISMATCH ON NODE: " << c << '\n';
+			std::cerr << "[BT] MISMATCH ON NODE: " << c << '\n';
 			std::cerr << "Head: " << (void*)head.get() << '\n';
 			std::cerr << "BrIt:\n";
 			it.dump();
-			break;
+			return false;
 		}
 		c++;
 		rp_it++;
 	}
+	std::cerr << "[BT] Checked " << c << " branches.\n";
 	assert (rp_it == branches.end());
 
 	return true;
@@ -529,4 +616,29 @@ void BranchTracker::getReplayPath(ReplayPath& rp, const iterator& it) const
 	rp.clear();
 	foreach (it2, begin(), it)
 		rp.push_back(*it2);
+}
+
+void dumpRecur(BranchTracker::SegmentRef h)
+{
+	if (h.isNull()) return;
+
+	std::cerr	<< "{\nptr:" << (void*)h.get()
+			<< "\noff: " << h->off()
+			<< "\nlen: " << h->size() << '\n';
+	if (h->size()) std::cerr << "first: " << (*h)[0].first << '\n';
+	if (h->children.size() != 0) {
+		std::cerr << "children: {\n";
+		foreach (it, h->children.begin(), h->children.end())
+			dumpRecur(*it);
+	} else {
+		std::cerr << "children : {}\n";
+	}
+	std::cerr << "}\n";
+}
+
+void BranchTracker::dump(void) const
+{
+	dumpRecur(getHead());
+	std::cerr	<< "TOTAL SEGMENT COUNT: "
+			<< Segment::getNumSegments() << '\n';
 }

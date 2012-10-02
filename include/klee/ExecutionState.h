@@ -299,6 +299,8 @@ public:
 	BranchTracker::iterator branchesEnd(void) const
 	{ return brChoiceSeq.end(); }
 
+	BranchTracker::iterator branchesCur(void) const { return replayBrIter; }
+
 	ReplayNode branchLast(void) const;
 
 	unsigned getPHISlot(void) const { return incomingBBIndex; }

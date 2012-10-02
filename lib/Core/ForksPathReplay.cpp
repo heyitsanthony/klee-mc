@@ -33,8 +33,9 @@ void ForksPathReplay::trackBranch(ExecutionState& current, unsigned condIndex)
 	// HOWEVER: must track branch for forked states!
 	if (current.isReplayDone()) {
 		Forks::trackBranch(current, condIndex);
-	} else
+	} else {
 		current.stepReplay();
+	}
 }
 
 bool ForksPathReplay::forkFollowReplay(ExecutionState& es, struct ForkInfo& fi)

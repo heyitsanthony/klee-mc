@@ -12,10 +12,10 @@ public:
 	iterator() : curSegIndex(0) { }
 	
 	iterator(const BranchTracker *tracker)
-	: curSeg(tracker->head)
+	: curSeg(tracker->getHead())
 	, tail(tracker->tail)
 	, curSegIndex(0)
-	, seqIndex(0) { }
+	, seqIndex(0) {}
 
 	iterator(
 		const BranchTracker *tracker,
@@ -24,28 +24,24 @@ public:
 	: curSeg(_curSeg)
 	, tail(tracker->tail)
 	, curSegIndex(_curSegIndex)
-	, seqIndex(_curSegIndex) { }
+	, seqIndex(curSeg->off() + curSegIndex) {}
 
 	~iterator() { }
 private:
 	SegmentRef	curSeg, tail;
 	unsigned	curSegIndex, seqIndex;
 
-	iterator(SegmentRef _tail, SegmentRef _curSeg, unsigned _curSegIndex)
-	: curSeg(_curSeg)
-	, tail(_tail)
-	, curSegIndex(_curSegIndex)
-	, seqIndex(~0)
-	{ }
-
 	bool mayDeref(void) const;
+	void bump(void);
 public:
 	bool isNull() const { return curSeg.isNull(); }
+	void reseat(void);
 	ReplayNode operator*() const;
 	iterator operator++(int notused);
 	iterator operator++();
 	inline bool operator==(const iterator& a) const
-	{	if (!mayDeref()) return !a.mayDeref();
+	{
+		if (!mayDeref()) return !a.mayDeref();
 		return (curSeg.get() == a.curSeg.get()
 			&& curSegIndex == a.curSegIndex
 			&& tail.get() == a.tail.get());

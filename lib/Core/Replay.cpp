@@ -173,6 +173,7 @@ void Replay::fastEagerReplay(void)
 
 		assert (es != NULL);
 
+		std::cerr << "[Replay] Replaying " << rp.size() << " branches.\n";
 		exe->exhaustState(es);
 
 		std::cerr

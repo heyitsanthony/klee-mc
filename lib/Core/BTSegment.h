@@ -10,6 +10,7 @@
 /// A segment is a decision sequence that forms an edge in the path tree
 class Segment
 {
+	friend class BranchTracker;
 public:
 	Segment(void);
 	~Segment(void);
@@ -50,8 +51,17 @@ public:
 	}
 
 	Segment* truncatePast(unsigned idx);
+	Segment* split(unsigned index);
+
+	unsigned off(void) const { return offset; }
+	void dump(void) const;
+	static unsigned getNumSegments(void) { return seg_alloc_c; }
 private:
+	void splitNonBranches(unsigned index, Segment* newSeg);
+	void splitSwapData(unsigned index, Segment* newSeg);
+
 	static unsigned seg_alloc_c;
+	unsigned	offset;
 };
 
 #endif

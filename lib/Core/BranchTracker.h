@@ -64,17 +64,19 @@ public:
 
 	void getReplayPath(ReplayPath& rp, const iterator& it) const;
 	void getReplayPath(ReplayPath& rp) const { getReplayPath(rp, end()); }
+
+	SegmentRef getHead(void) const;
+	void dump(void) const;
 private:
 	void splitSegment(Segment &segment, unsigned index);
-	void splitNonBranches(Segment& seg, unsigned index, Segment* newSeg);
-	void splitUpdateParent(Segment& seg, Segment* newSeg);
-	void splitSwapData(Segment &seg, unsigned index, Segment* newSeg);
 
 	SegmentRef containing(unsigned index) const;
 	iterator findChild(iterator it, ReplayNode branch, bool &noChild) const;
 
 	SegmentRef	head, tail;
 	mutable bool	needNewSegment;
+
+	static BranchTracker	dummyHead;
 };
 }
 
