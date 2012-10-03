@@ -534,8 +534,13 @@ void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 	trackTransitions(fi);
 }
 
+typedef std::map<Expr::Hash, ref<Expr> > xtion_map;
+
 void Forks::trackTransitions(const ForkInfo& fi)
 {
+	static xtion_map	eh;
+	xtion_map::iterator	x_it;
+
 	/* Track forking condition transitions */
 	for (unsigned i = 0; i < fi.N; i++) {
 		ref<Expr>	new_cond;
@@ -543,11 +548,20 @@ void Forks::trackTransitions(const ForkInfo& fi)
 
 		if (!fi.res[i]) continue;
 
-		cur_st = fi.resStates[i];
-		new_cond = condFilter->apply(fi.conditions[i]);
+		x_it = eh.find(fi.conditions[i]->hash());
+		if (x_it == eh.end()) {
+			new_cond = condFilter->apply(fi.conditions[i]);
+			x_it = eh.insert(
+				std::make_pair(
+					fi.conditions[i]->hash(),
+					new_cond)).first;
+		}
+
+		new_cond = x_it->second;
 		if (new_cond.isNull())
 			continue;
 
+		cur_st = fi.resStates[i];
 		if (cur_st->prevForkCond.isNull() == false) {
 			condXfer.insert(
 				std::make_pair(
@@ -680,7 +694,8 @@ public:
 		/* must have changed a zero inside of a divide. oops */
 		if (Expr::errors) {
 			Expr::errors = 0;
-			return ConstantExpr::create(0xff, 8);
+			std::cerr << "[MergeArrays] Fixing up ExprError\n";
+			return MK_CONST(0xff, 8);
 		}
 
 		return ret;

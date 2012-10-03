@@ -144,8 +144,9 @@ ref<ConstantExpr> ConstantExpr::FNAME(const ref<ConstantExpr> &in_rhs) \
 ref<ConstantExpr> ConstantExpr::FNAME(const ref<ConstantExpr> &in_rhs) \
 { \
 	if (in_rhs->isZero()) {	\
+		if (!Expr::errors)	\
+			std::cerr << "[Expr] 0 as RHS on restricted op\n"; \
 		Expr::errors++;	\
-		std::cerr << "[Expr] 0 as RHS on restricted op\n"; \
 		return in_rhs;	\
 	} \
 	return ConstantExpr::alloc(value.OP(in_rhs->value));	\
