@@ -235,7 +235,7 @@ ref<Expr> KleeMMU::replaceReadWithSymbolic(
 	unsigned	n;
 
 	n = MakeConcreteSymbolic;
-	if (!n || exe.isReplayKTest() || exe.isReplayPaths()) return e;
+	if (!n || exe.getReplay()) return e;
 
 	// right now, we don't replace symbolics (is there any reason too?)
 	if (!isa<ConstantExpr>(e)) return e;

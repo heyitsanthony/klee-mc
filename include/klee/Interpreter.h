@@ -95,10 +95,7 @@ public:
 	// interpretation down a user specified path. use null to reset.
 	virtual void setReplayKTest(const struct KTest *out) = 0;
 
-	// supply a list of branch decisions specifying which direction to
-	// take on forks. this can be used to drive the interpretation down
-	// a user specified path. use null to reset.
-	virtual void setReplayPaths(const ReplayPaths* paths) = 0;
+	virtual void setReplay(Replay* rp) = 0;
 
 	virtual void runFunctionAsMain(
 		llvm::Function *f,

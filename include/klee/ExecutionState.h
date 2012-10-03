@@ -305,11 +305,10 @@ public:
 
 	unsigned getPHISlot(void) const { return incomingBBIndex; }
 
-	std::vector< SymbolicArray >::const_iterator symbolicsBegin(void) const
-	{ return symbolics.begin(); }
+	typedef std::vector< SymbolicArray >::const_iterator	SymIt;
 
-	std::vector< SymbolicArray >::const_iterator symbolicsEnd(void) const
-	{ return symbolics.end(); }
+	SymIt symbolicsBegin(void) const { return symbolics.begin(); }
+	SymIt symbolicsEnd(void) const { return symbolics.end(); }
 
 	stack_iter_ty stackBegin(void) { return stack.begin(); }
 	stack_iter_ty stackEnd(void) { return stack.end(); }

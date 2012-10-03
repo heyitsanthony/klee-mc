@@ -22,44 +22,64 @@ class Replay
 {
 public:
 	virtual ~Replay() {}
-	static void checkPC(const KInstIterator& ki, const ReplayNode& rn);
+	virtual bool replay(Executor* exe, ExecutionState* initSt) = 0;
 
 	// load a .path file
 	static void loadPathFile(const std::string& name, ReplayPath &buffer);
 	static void loadPathStream(std::istream& is, ReplayPath& buffer);
-
 	static void writePathFile(const ExecutionState& es, std::ostream& os);
 
-	static void replayPathsIntoStates(
-		Executor* exe,
-		ExecutionState* initialState,
-		const ReplayPaths& replayPaths);
+	static bool isSuppressForks(void);
+	static bool verifyPath(Executor* exe, const ExecutionState& es);
 
-	static bool verifyPath(
-		Executor* exe,
-		const ExecutionState& es);
-
-	static void replayKTestsIntoStates(
-		Executor	*exe,
-		ExecutionState	*initialState,
-		const std::list<KTest*> kt);
+	static void checkPC(const KInstIterator& ki, const ReplayNode& rn);
 protected:
-	Replay(	Executor* _exe,
-		ExecutionState* _initState,
-		const ReplayPaths& _rps);
+	Replay() {}
+};
 
+class ReplayBrPaths : public Replay
+{
+public:
+	ReplayBrPaths(const ReplayPaths& paths)
+	: rps(paths) {}
+	virtual ~ReplayBrPaths() {}
+	bool replay(Executor* exe, ExecutionState* initSt);
+private:
 	void eagerReplayPathsIntoStates();
 	void fastEagerReplay(void);
 	void delayedReplayPathsIntoStates();
 	void incompleteReplay(void);
 
+	const ReplayPaths&	rps;
 
-private:
 	Executor		*exe;
 	ExecutionState		*initState;
-	const ReplayPaths	&replayPaths;
 	ExeStateManager		*esm;
+
 };
+
+class ReplayList : public Replay
+{
+public:
+	ReplayList(void) {}
+	virtual ~ReplayList();
+	void addReplay(Replay* rp) { rps.push_back(rp); }
+	bool replay(Executor* exe, ExecutionState* initSt);
+private:
+	std::vector<Replay*>	rps;
+};
+
+class ReplayKTests : public Replay
+{
+public:
+	ReplayKTests(const std::vector<KTest*>& _kts) : kts(_kts) {}
+	virtual ~ReplayKTests() {}
+
+	bool replay(Executor* exe, ExecutionState* initSt);
+private:
+	const std::vector<KTest*>& kts;
+};
+
 }
 
 #endif

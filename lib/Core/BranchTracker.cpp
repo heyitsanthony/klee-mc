@@ -191,7 +191,6 @@ BranchTracker::insert(const ReplayPath &branches)
 		// the root segment in the trie is empty.
 		// this is the only time we allow an empty segment.
 		if (index == 0 && it.curSeg->empty()) {
-			std::cerr << "FINDCHILD1\n";
 			it = findChild(it, branches[index], noChild);
 			if (noChild)
 				break;
@@ -201,7 +200,6 @@ BranchTracker::insert(const ReplayPath &branches)
 
 		// we found a divergence in the branch sequences
 		if ((*it).first != value.first) {
-			std::cerr << "[BT] DIV AT IDX=" << index << '\n';
 			break;
 		}
 

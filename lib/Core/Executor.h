@@ -50,6 +50,7 @@ extern bool DebugPrintInstructions;
 namespace klee {
 class Array;
 class Cell;
+class Replay;
 class ConstantExpr;
 class ExecutionState;
 class ExeStateManager;
@@ -265,8 +266,7 @@ private:
 	std::vector<TimerInfo*>	timers;
 	std::set<KFunction*>	bad_conc_kfuncs;
 
-	/// When non-empty a list of lists of branch decisions for replay.
-	const std::list<ReplayPath> *replayPaths;
+	Replay			*replay;
 
 
 	/// Disables forking, instead a random path is chosen. Enabled as
@@ -475,15 +475,6 @@ public:
 	virtual const struct KTest *getReplayKTest(void) const { return NULL; } 
 	virtual bool isReplayKTest(void) const { return false; }
 
-
-	virtual void setReplayPaths(const ReplayPaths* paths)
-	{
-		assert(!isReplayKTest() && "cannot replay both ktest and path");
-		replayPaths = paths;
-	}
-
-	bool isReplayPaths(void) const { return (replayPaths != NULL); }
-
 	/*** Runtime options ***/
 
 	virtual void setHaltExecution(bool v) { haltExecution = v; }
@@ -531,6 +522,9 @@ public:
 	/* XXX XXX XXX get rid of me!! XXX XXX */
 	SeedMapType	dummySeedMap;
 	virtual SeedMapType& getSeedMap(void) { return dummySeedMap; }
+
+	void setReplay(Replay* rp) { replay = rp; }
+	const Replay* getReplay(void) const { return replay; }
 };
 
 }

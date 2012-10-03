@@ -211,25 +211,29 @@ void dumpIRSBs(void)
 	std::cerr << "(NO DUMPING IN TEST JIT)" << std::endl;
 }
 
+static std::vector<KTest*>	kTests;
+
+static bool isReplayingKTest(void)
+{ return (!ReplayKTestDir.empty() || !ReplayKTestFile.empty()); }
+
+static void loadKTests(void)
+{
+	if (!isReplayingKTest()) return;
+
+	std::vector<std::string>	outDirs(
+		ReplayKTestDir.begin(),
+		ReplayKTestDir.end()),
+					outFiles(
+		ReplayKTestFile.begin(),
+		ReplayKTestFile.end());
+
+	KleeHandler::getKTests(outFiles, outDirs, kTests);
+}
+
 void runReplayKTest(Interpreter* interpreter)
 {
-	std::vector<KTest*>		kTests;
-	std::vector<std::string>	outFiles;
 	ExecutorVex			*ev;
 	unsigned			i=0;
-
-	outFiles = ReplayKTestFile;
-	foreach (it, ReplayKTestDir.begin(),  ReplayKTestDir.end())
-		KleeHandler::getOutFiles(*it, outFiles);
-
-	foreach (it, outFiles.begin(), outFiles.end()) {
-		KTest *out = kTest_fromFile(it->c_str());
-		if (out) {
-			kTests.push_back(out);
-		} else {
-			std::cerr << "KLEE: unable to open: " << *it << "\n";
-		}
-	}
 
 	ev = dynamic_cast<ExecutorVex*>(interpreter);
 	foreach (it, kTests.begin(), kTests.end()) {
@@ -239,7 +243,7 @@ void runReplayKTest(Interpreter* interpreter)
 		std::cerr
 			<< "KLEE: replaying: " << *it << " ("
 			<< kTest_numBytes(out) << " bytes)"
-			<< " (" << ++i << "/" << outFiles.size() << ")\n";
+			<< " (" << ++i << "/" << kTests.size() << ")\n";
 
 		// XXX should put envp in .ktest ?
 		ev->runImage();
@@ -248,11 +252,6 @@ void runReplayKTest(Interpreter* interpreter)
 	}
 
 	interpreter->setReplayKTest(0);
-
-	while (!kTests.empty()) {
-		kTest_free(kTests.back());
-		kTests.pop_back();
-	}
 }
 
 #define GET_STAT(x,y)	\
@@ -369,9 +368,6 @@ Guest* getGuest(CmdArgs* cmdargs)
 	return gs;
 }
 
-static bool isReplaying(void)
-{ return (!ReplayKTestDir.empty() || !ReplayKTestFile.empty()); }
-
 #define NEW_INTERP(x)							\
 	((UseGDB) ? new GDBExecutor<x>(handler) 			\
 	: (UseConstraintSeed) ? new ConstraintSeedExecutor<x>(handler)	\
@@ -388,7 +384,8 @@ static bool isReplaying(void)
 
 Interpreter* createInterpreter(KleeHandler *handler, Guest* gs)
 {
-	if (isReplaying()) {
+	if (isReplayingKTest() && Replay::isSuppressForks()) {
+		/* suppressed forks */
 		assert (!UseDDT && !UseTaintMerge && !UseTaint);
 
 		if (Unconstrained) return NEW_INTERP_KTEST(ExeUC);
@@ -419,7 +416,7 @@ void setupReplayPaths(Interpreter* interpreter)
 
 	if (replayPaths.empty()) return;
 
-	interpreter->setReplayPaths(&replayPaths);
+	interpreter->setReplay(new ReplayBrPaths(replayPaths));
 }
 
 static void* watchdog_thread(void* x)
@@ -494,11 +491,25 @@ int main(int argc, char **argv, char **envp)
 	PrefixWriter info(info2s, "KLEE: ");
 	info << "PID: " << getpid() << "\n";
 
+	loadKTests();
 	setupReplayPaths(interpreter);
-	if (isReplaying()) {
+
+	if (isReplayingKTest() && Replay::isSuppressForks()) {
+		/* directly feed concrete ktests data into states. yuck */
 		runReplayKTest(interpreter);
-	} else
+	} else {
+		/* ktests with forking */
+		if (isReplayingKTest() && !kTests.empty()) {
+			assert (replayPaths.empty() && "grr replay paths");
+			interpreter->setReplay(new ReplayKTests(kTests));
+		}
 		dynamic_cast<ExecutorVex*>(interpreter)->runImage();
+	}
+
+	while (!kTests.empty()) {
+		kTest_free(kTests.back());
+		kTests.pop_back();
+	}
 
 	delete interpreter;
 	delete gs;

@@ -119,12 +119,12 @@ public:
 	void resetBindings(void);
 	void print(std::ostream& os) const;
 
-private:
 	void addBinding(
 		const Array* a,
 		const std::vector<unsigned char>& v)
 	{ bindings.insert(std::make_pair(a, v)); }
 
+private:
 	free_bindings_ty	free_bindings;
 };
 

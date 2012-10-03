@@ -9,6 +9,7 @@
 #include "ForksPathReplay.h"
 #include "ForksKTest.h"
 #include "CoreStats.h"
+#include "PTree.h"
 
 #include "klee/ExecutionState.h"
 #include "klee/Internal/Module/KInstIterator.h"
@@ -19,9 +20,15 @@
 
 using namespace klee;
 
-#define DECL_OPTBOOL(x,y) llvm::cl::opt<bool> x(y, llvm::cl::init(false))
+#define DECL_OPTBOOL2(x,y,z) llvm::cl::opt<bool> x(y, llvm::cl::init(z))
+#define DECL_OPTBOOL(x,y) DECL_OPTBOOL2(x, y, false)
+
+DECL_OPTBOOL2(ReplaySuppressForks, "replay-suppress-forks", true);
 DECL_OPTBOOL(CompleteReplay, "replay-complete");
 DECL_OPTBOOL(FasterReplay, "replay-faster");
+
+
+bool Replay::isSuppressForks(void) { return ReplaySuppressForks; }
 
 // load a .path file
 #define IFSMODE	std::ios::in | std::ios::binary
@@ -146,7 +153,7 @@ static ExecutionState* findClosestState(
 	return best_es;
 }
 
-void Replay::fastEagerReplay(void)
+void ReplayBrPaths::fastEagerReplay(void)
 {
 	std::list<ExecutionState*>		replay_states;
 	const std::list<ReplayPath>::iterator	it;
@@ -154,7 +161,7 @@ void Replay::fastEagerReplay(void)
 	std::cerr << "[Replay] Replaying paths FAST!\n";
 
 	/* play every path */
-	foreach (it, replayPaths.begin(), replayPaths.end()){
+	foreach (it, rps.begin(), rps.end()){
 		ReplayPath	rp(*it);
 		ExecutionState	*es = NULL;
 
@@ -185,87 +192,6 @@ void Replay::fastEagerReplay(void)
 
 	std::cerr << "[Replay] All paths replayed. Expanded states: "
 		<< esm->numRunningStates() << "\n";
-}
-
-void Replay::eagerReplayPathsIntoStates()
-{
-	std::list<ExecutionState*>      replay_states;
-
-	std::cerr << "[Replay] Eagerly replaying paths.\n";
-
-	if (FasterReplay) {
-		fastEagerReplay();
-		return;
-	}
-
-	/* create paths */
-	foreach (it, replayPaths.begin(), replayPaths.end()) {
-		ExecutionState	*es;
-		es = ExecutionState::createReplay(*initState, (*it));
-		esm->queueSplitAdd(es->ptreeNode, initState, es);
-		replay_states.push_back(es);
-	}
-
-	/* replay paths */
-	std::cerr << "[Executor] Replaying paths.\n";
-	foreach (it, replay_states.begin(), replay_states.end()) {
-		ExecutionState  *es = *it;
-		exe->exhaustState(es);
-		std::cerr << "[Executor] Replay state done st=" << es << ".\n";
-	}
-
-	std::cerr << "[Executor] All paths replayed. Expanded states: "
-		<< esm->numRunningStates() << "\n";
-}
-
-void Replay::replayPathsIntoStates(
-	Executor		*exe,
-	ExecutionState		*initialState,
-	const ReplayPaths	&rps)
-{
-	Forks	*old_forking, *rp_forking;
-	Replay	rp(exe, initialState, rps);
-
-	old_forking = exe->getForking();
-	rp_forking = new ForksPathReplay(*exe);
-	exe->setForking(rp_forking);
-
-	assert (initialState->ptreeNode != NULL);
-
-	rp.eagerReplayPathsIntoStates();
-
-	/* complete replay => will try new paths */
-	if (CompleteReplay == false) {
-		rp.incompleteReplay();
-	}
-
-	exe->setForking(old_forking);
-	delete rp_forking;
-}
-
-void Replay::incompleteReplay(void)
-{
-	esm->queueRemove(initState);
-	esm->commitQueue();
-}
-
-/* DEPRECATED */
-void Replay::delayedReplayPathsIntoStates()
-{
-	foreach (it, replayPaths.begin(), replayPaths.end()) {
-		ExecutionState *es;
-		es = ExecutionState::createReplay(*initState, (*it));
-		esm->queueSplitAdd(es->ptreeNode, initState, es);
-	}
-}
-
-Replay::Replay(Executor* _exe, ExecutionState* _initState, const ReplayPaths& rps)
-: exe(_exe)
-, initState(_initState)
-, replayPaths(rps)
-{
-	esm = exe->getStateManager();
-	assert (esm);
 }
 
 bool Replay::verifyPath(Executor* exe, const ExecutionState& es)
@@ -339,10 +265,7 @@ bool Replay::verifyPath(Executor* exe, const ExecutionState& es)
 	return true;
 }
 
-void Replay::replayKTestsIntoStates(
-	Executor	*exe,
-	ExecutionState	*initState,
-	const std::list<KTest*> kts)
+bool ReplayKTests::replay(Executor* exe, ExecutionState* initSt)
 {
 	ExeStateManager	*esm = exe->getStateManager();
 	ForksKTest	*f_ktest = new ForksKTest(*exe);
@@ -354,8 +277,9 @@ void Replay::replayKTestsIntoStates(
 		ExecutionState	*es;
 		const KTest	*ktest(*it);
 
-		es = initState->copy();
-		esm->queueSplitAdd(es->ptreeNode, initState, es);
+		es = initSt->copy();
+		es->ptreeNode->markReplay();
+		esm->queueSplitAdd(es->ptreeNode, initSt, es);
 		f_ktest->setKTest(ktest);
 		exe->exhaustState(es);
 
@@ -368,4 +292,93 @@ void Replay::replayKTestsIntoStates(
 
 	delete f_ktest;
 	exe->setForking(old_f);
+
+	return true;
 }
+
+ReplayList::~ReplayList() { foreach (it, rps.begin(), rps.end()) delete (*it); }
+
+bool ReplayList::replay(Executor* exe, ExecutionState* initSt)
+{
+	foreach (it, rps.begin(), rps.end())
+		if ((*it)->replay(exe, initSt) == false)
+			return false;
+
+	return true;
+}
+
+
+bool ReplayBrPaths::replay(Executor* _exe, ExecutionState* _initState)
+{
+	Forks	*old_forking, *rp_forking;
+
+	exe = _exe;
+	initState = _initState;
+	esm = exe->getStateManager();
+	assert (esm);
+
+	old_forking = exe->getForking();
+	rp_forking = new ForksPathReplay(*exe);
+	exe->setForking(rp_forking);
+
+	assert (initState->ptreeNode != NULL);
+
+	eagerReplayPathsIntoStates();
+
+	/* complete replay => will try new paths */
+	if (CompleteReplay == false) {
+		incompleteReplay();
+	}
+
+	exe->setForking(old_forking);
+	delete rp_forking;
+}
+
+void ReplayBrPaths::incompleteReplay(void)
+{
+	esm->queueRemove(initState);
+	esm->commitQueue();
+}
+
+/* DEPRECATED */
+void ReplayBrPaths::delayedReplayPathsIntoStates()
+{
+	foreach (it, rps.begin(), rps.end()) {
+		ExecutionState *es;
+		es = ExecutionState::createReplay(*initState, (*it));
+		esm->queueSplitAdd(es->ptreeNode, initState, es);
+	}
+}
+
+void ReplayBrPaths::eagerReplayPathsIntoStates(void)
+{
+	std::list<ExecutionState*>      replay_states;
+
+	std::cerr << "[Replay] Eagerly replaying paths.\n";
+
+	if (FasterReplay) {
+		fastEagerReplay();
+		return;
+	}
+
+	/* create paths */
+	foreach (it, rps.begin(), rps.end()) {
+		ExecutionState	*es;
+		es = ExecutionState::createReplay(*initState, (*it));
+		esm->queueSplitAdd(es->ptreeNode, initState, es);
+		replay_states.push_back(es);
+	}
+
+	/* replay paths */
+	std::cerr << "[Executor] Replaying paths.\n";
+	foreach (it, replay_states.begin(), replay_states.end()) {
+		ExecutionState  *es = *it;
+		exe->exhaustState(es);
+		std::cerr << "[Executor] Replay state done st=" << es << ".\n";
+	}
+
+	std::cerr << "[Executor] All paths replayed. Expanded states: "
+		<< esm->numRunningStates() << "\n";
+}
+
+

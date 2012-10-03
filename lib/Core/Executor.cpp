@@ -180,7 +180,7 @@ Executor::Executor(InterpreterHandler *ih)
 , symPathWriter(0)
 , sfh(0)
 , haltExecution(false)
-, replayPaths(0)
+, replay(0)
 , atMemoryLimit(false)
 , inhibitForking(false)
 , onlyNonCompact(false)
@@ -230,6 +230,8 @@ Executor::~Executor()
 	if (globals) delete globals;
 
 	if (sfh != NULL) delete sfh;
+
+	if (replay != NULL) delete replay;
 
 	std::for_each(timers.begin(), timers.end(), deleteTimerInfo);
 	delete stateManager;
@@ -2040,8 +2042,8 @@ void Executor::run(ExecutionState &initState)
 	initialStateCopy->ptreeNode->markReplay();
 	pt->splitStates(initState.ptreeNode, &initState, initialStateCopy);
 
-	if (replayPaths)
-		Replay::replayPathsIntoStates(this, &initState, *replayPaths);
+	if (replay != NULL)
+		replay->replay(this, &initState);
 
 	stateManager->setupSearcher(this);
 

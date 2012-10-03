@@ -432,7 +432,28 @@ void KleeHandler::getPathFiles(
 	}
 }
 
-void KleeHandler::getOutFiles(
+
+void KleeHandler::getKTests(
+	const std::vector<std::string>& named,
+	const std::vector<std::string>& dirs,
+	std::vector<KTest*>& ktests)
+{
+	std::vector<std::string>	ktest_fnames(named);
+
+	foreach (it, dirs.begin(), dirs.end())
+		getKTestFiles(*it, ktest_fnames);
+
+	foreach (it, ktest_fnames.begin(), ktest_fnames.end()) {
+		KTest *out = kTest_fromFile(it->c_str());
+		if (out != NULL) {
+			ktests.push_back(out);
+		} else {
+			std::cerr << "KLEE: unable to open: " << *it << "\n";
+		}
+	}
+}
+
+void KleeHandler::getKTestFiles(
 	std::string path, std::vector<std::string> &results)
 {
 	llvm::sys::Path			p(path);
@@ -441,7 +462,7 @@ void KleeHandler::getOutFiles(
 
 	if (p.getDirectoryContents(contents, &error)) {
 		std::cerr
-			<< "ERROR: unable to read output directory: " << path
+			<< "ERROR: unable to read ktest directory: " << path
 			<< ": " << error << "\n";
 		exit(1);
 	}

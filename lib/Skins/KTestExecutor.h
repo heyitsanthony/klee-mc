@@ -23,7 +23,7 @@ public:
 	virtual bool isReplayKTest(void) const { return (replayKTest != NULL); }
 	virtual void setReplayKTest(const struct KTest *out)
 	{
-		assert(!T::isReplayPaths() && "cannot replay both ktest and path");
+		assert(!T::getReplay() && "cannot replay both ktest and path");
 		replayKTest = out;
 		replayPosition = 0;
 	}

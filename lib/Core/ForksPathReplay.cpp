@@ -2,16 +2,11 @@
 #include "klee/Internal/Module/InstructionInfoTable.h"
 #include "ForksPathReplay.h"
 #include "StateSolver.h"
+#include "klee/Replay.h"
 #include <sstream>
 
 namespace llvm
 {
-	llvm::cl::opt<bool>
-	ReplaySuppressForks(
-		"replay-suppress-forks",
-		llvm::cl::desc("On replay, suppress symbolic forks."),
-		llvm::cl::init(true));
-
 	llvm::cl::opt<bool>
 	ReplayPathOnly(
 		"replay-path-only",
@@ -23,9 +18,7 @@ using namespace llvm;
 
 ForksPathReplay::ForksPathReplay(Executor& _exe)
 : Forks(_exe)
-{
-	suppressForks = ReplaySuppressForks;
-}
+{ suppressForks = Replay::isSuppressForks(); }
 
 void ForksPathReplay::trackBranch(ExecutionState& current, unsigned condIndex)
 {

@@ -67,13 +67,21 @@ public:
 	static void getPathFiles(
 		std::string path, std::vector<std::string> &results);
 
-	static void getOutFiles(
-		std::string path, std::vector<std::string> &results);
+	static void getKTests(
+		const std::vector<std::string>& files,
+		const std::vector<std::string>& dirs,
+		std::vector<KTest*>& ktests);
+
 
 	static void loadPathFiles(
+
 		const std::vector<std::string>& pathfiles,
 		std::list<ReplayPath>& replayPaths);
 protected:
+	static void getKTestFiles(
+		std::string path, std::vector<std::string> &results);
+
+
 typedef
 	std::vector< std::pair<std::string, std::vector<unsigned char> > >
 	out_objs;
