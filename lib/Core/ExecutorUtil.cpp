@@ -42,47 +42,57 @@ class Globals;
   {
     llvm::Type *type = ce->getType();
 
-    ref<ConstantExpr> op1(0), op2(0), op3(0);
+    ref<ConstantExpr> op[3];
     int numOperands = ce->getNumOperands();
 
-    if (numOperands > 0) op1 = evalConstant(km, gm, ce->getOperand(0));
-    if (numOperands > 1) op2 = evalConstant(km, gm, ce->getOperand(1));
-    if (numOperands > 2) op3 = evalConstant(km, gm, ce->getOperand(2));
+    if (numOperands > 0) op[0] = evalConstant(km, gm, ce->getOperand(0));
+    if (numOperands > 1) op[1] = evalConstant(km, gm, ce->getOperand(1));
+    if (numOperands > 2) op[2] = evalConstant(km, gm, ce->getOperand(2));
 
     switch (ce->getOpcode()) {
     default :
       ce->dump();
       std::cerr << "error: unknown ConstantExpr type\n"
                 << "opcode: " << ce->getOpcode() << "\n";
+      for (unsigned i = 0; i < 3 && op[i].isNull() == false; i++) {
+      	std::cerr << "CE[" << i << "]: " << op[i] << '\n';
+      }
+
       abort();
 
+    case Instruction::ShuffleVector: {
+    	return cast<ConstantExpr>(instShuffleVectorEvaled(
+		dyn_cast<VectorType>(ce->getType()),
+		op[0], op[1], op[2]));
+    }
+
     case Instruction::Trunc:
-      return op1->Extract(0, km->getWidthForLLVMType(type));
-    case Instruction::ZExt:  return op1->ZExt(km->getWidthForLLVMType(type));
-    case Instruction::SExt:  return op1->SExt(km->getWidthForLLVMType(type));
-    case Instruction::Add:   return op1->Add(op2);
-    case Instruction::Sub:   return op1->Sub(op2);
-    case Instruction::Mul:   return op1->Mul(op2);
-    case Instruction::SDiv:  return op1->SDiv(op2);
-    case Instruction::UDiv:  return op1->UDiv(op2);
-    case Instruction::SRem:  return op1->SRem(op2);
-    case Instruction::URem:  return op1->URem(op2);
-    case Instruction::And:   return op1->And(op2);
-    case Instruction::Or:    return op1->Or(op2);
-    case Instruction::Xor:   return op1->Xor(op2);
-    case Instruction::Shl:   return op1->Shl(op2);
-    case Instruction::LShr:  return op1->LShr(op2);
-    case Instruction::AShr:  return op1->AShr(op2);
-    case Instruction::BitCast:  return op1;
+      return op[0]->Extract(0, km->getWidthForLLVMType(type));
+    case Instruction::ZExt:  return op[0]->ZExt(km->getWidthForLLVMType(type));
+    case Instruction::SExt:  return op[0]->SExt(km->getWidthForLLVMType(type));
+    case Instruction::Add:   return op[0]->Add(op[1]);
+    case Instruction::Sub:   return op[0]->Sub(op[1]);
+    case Instruction::Mul:   return op[0]->Mul(op[1]);
+    case Instruction::SDiv:  return op[0]->SDiv(op[1]);
+    case Instruction::UDiv:  return op[0]->UDiv(op[1]);
+    case Instruction::SRem:  return op[0]->SRem(op[1]);
+    case Instruction::URem:  return op[0]->URem(op[1]);
+    case Instruction::And:   return op[0]->And(op[1]);
+    case Instruction::Or:    return op[0]->Or(op[1]);
+    case Instruction::Xor:   return op[0]->Xor(op[1]);
+    case Instruction::Shl:   return op[0]->Shl(op[1]);
+    case Instruction::LShr:  return op[0]->LShr(op[1]);
+    case Instruction::AShr:  return op[0]->AShr(op[1]);
+    case Instruction::BitCast:  return op[0];
 
     case Instruction::IntToPtr:
-      return op1->ZExt(km->getWidthForLLVMType(type));
+      return op[0]->ZExt(km->getWidthForLLVMType(type));
 
     case Instruction::PtrToInt:
-      return op1->ZExt(km->getWidthForLLVMType(type));
+      return op[0]->ZExt(km->getWidthForLLVMType(type));
 
     case Instruction::GetElementPtr: {
-      ref<ConstantExpr> base = op1->ZExt(Context::get().getPointerWidth());
+      ref<ConstantExpr> base = op[0]->ZExt(Context::get().getPointerWidth());
 
       foreach (ii, gep_type_begin(ce), gep_type_end(ce)) {
         ref<ConstantExpr> addend =
@@ -118,21 +128,20 @@ class Globals;
     case Instruction::ICmp: {
       switch(ce->getPredicate()) {
       default: assert(0 && "unhandled ICmp predicate");
-      case ICmpInst::ICMP_EQ:  return op1->Eq(op2);
-      case ICmpInst::ICMP_NE:  return op1->Ne(op2);
-      case ICmpInst::ICMP_UGT: return op1->Ugt(op2);
-      case ICmpInst::ICMP_UGE: return op1->Uge(op2);
-      case ICmpInst::ICMP_ULT: return op1->Ult(op2);
-      case ICmpInst::ICMP_ULE: return op1->Ule(op2);
-      case ICmpInst::ICMP_SGT: return op1->Sgt(op2);
-      case ICmpInst::ICMP_SGE: return op1->Sge(op2);
-      case ICmpInst::ICMP_SLT: return op1->Slt(op2);
-      case ICmpInst::ICMP_SLE: return op1->Sle(op2);
+      case ICmpInst::ICMP_EQ:  return op[0]->Eq(op[1]);
+      case ICmpInst::ICMP_NE:  return op[0]->Ne(op[1]);
+      case ICmpInst::ICMP_UGT: return op[0]->Ugt(op[1]);
+      case ICmpInst::ICMP_UGE: return op[0]->Uge(op[1]);
+      case ICmpInst::ICMP_ULT: return op[0]->Ult(op[1]);
+      case ICmpInst::ICMP_ULE: return op[0]->Ule(op[1]);
+      case ICmpInst::ICMP_SGT: return op[0]->Sgt(op[1]);
+      case ICmpInst::ICMP_SGE: return op[0]->Sge(op[1]);
+      case ICmpInst::ICMP_SLT: return op[0]->Slt(op[1]);
+      case ICmpInst::ICMP_SLE: return op[0]->Sle(op[1]);
       }
     }
 
-    case Instruction::Select:
-      return op1->isTrue() ? op2 : op3;
+    case Instruction::Select: return op[0]->isTrue() ? op[1] : op[2];
 
     case Instruction::FAdd:
     case Instruction::FSub:

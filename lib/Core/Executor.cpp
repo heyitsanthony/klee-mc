@@ -54,6 +54,7 @@
 #include "Globals.h"
 #include "SpecialFunctionHandler.h"
 #include "../Expr/RuleBuilder.h"
+#include "PTree.h"
 
 using namespace llvm;
 using namespace klee;
@@ -1430,20 +1431,33 @@ void Executor::instShuffleVector(ExecutionState& state, KInstruction* ki)
 	 * 3. < perm vect >
 	 * 	Permutation vector
 	 */
-	ref<Expr> in_v_lo = eval(ki, 0, state);
-	ref<Expr> in_v_hi = eval(ki, 1, state);
-	ref<Expr> in_v_perm = eval(ki, 2, state);
+	ref<Expr> in_v_lo(eval(ki, 0, state));
+	ref<Expr> in_v_hi(eval(ki, 1, state));
+	ref<Expr> in_v_perm(eval(ki, 2, state));
+	ref<Expr> out_val;
+
+	out_val = instShuffleVectorEvaled(
+		cast<ShuffleVectorInst>(ki->getInst())->getType(),
+		in_v_lo,
+		in_v_hi,
+		in_v_perm);
+
+	state.bindLocal(ki, out_val);
+}
+
+ref<Expr> Executor::instShuffleVectorEvaled(
+	VectorType		*vt,
+	const ref<Expr>		&in_v_lo,
+	const ref<Expr>		&in_v_hi,
+	const ref<Expr>		&in_v_perm)
+{
+	/* instruction has types of vectors embedded in its operands */
+	ref<Expr>		out_val;
 	ConstantExpr* in_v_perm_ce = dynamic_cast<ConstantExpr*>(in_v_perm.get());
 	assert (in_v_perm_ce != NULL && "WE HAVE NON-CONST SHUFFLES?? UGH.");
-
-	/* instruction has types of vectors embedded in its operands */
-	ShuffleVectorInst*	si = cast<ShuffleVectorInst>(ki->getInst());
-	assert (si != NULL);
-	VectorType*	vt = si->getType();
 	unsigned int		v_elem_c = vt->getNumElements();
 	unsigned int		v_elem_sz = vt->getBitWidth() / v_elem_c;
 	unsigned int		perm_sz = in_v_perm_ce->getWidth() / v_elem_c;
-	ref<Expr>		out_val;
 
 	for (unsigned int i = 0; i < v_elem_c; i++) {
 		ref<ConstantExpr>	v_idx;
@@ -1464,8 +1478,9 @@ void Executor::instShuffleVector(ExecutionState& state, KInstruction* ki)
 		else out_val = ConcatExpr::create(out_val, ext);
 	}
 
-	state.bindLocal(ki, out_val);
+	return out_val;
 }
+
 
 void Executor::instInsertValue(ExecutionState& state, KInstruction* ki)
 {
@@ -2016,8 +2031,6 @@ void Executor::exhaustState(ExecutionState* es)
 		test_c == interpreterHandler->getNumPathsExplored());
 	notifyCurrent(NULL);
 }
-
-#include "PTree.h"
 
 void Executor::run(ExecutionState &initState)
 {

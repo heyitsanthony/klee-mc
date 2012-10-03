@@ -332,6 +332,8 @@ bool ReplayBrPaths::replay(Executor* _exe, ExecutionState* _initState)
 
 	exe->setForking(old_forking);
 	delete rp_forking;
+
+	return true;
 }
 
 void ReplayBrPaths::incompleteReplay(void)

@@ -296,6 +296,12 @@ private:
 
 	void instInsertValue(ExecutionState& state, KInstruction* ki);
 	void instShuffleVector(ExecutionState& state, KInstruction* ki);
+	static ref<Expr> instShuffleVectorEvaled(
+		llvm::VectorType	*vt,
+		const ref<Expr>		&in_v_lo,
+		const ref<Expr>		&in_v_hi,
+		const ref<Expr>		&in_v_perm);
+
 	void instExtractElement(ExecutionState& state, KInstruction* ki);
 	void instInsertElement(ExecutionState& state, KInstruction *ki);
 	void instBranch(ExecutionState& state, KInstruction* ki);
