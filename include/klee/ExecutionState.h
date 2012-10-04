@@ -293,6 +293,8 @@ public:
 	unsigned peekReplay(void) const;
 	unsigned getBrSeq(void) const;
 
+	const BranchTracker& getBrTracker(void) const { return brChoiceSeq; }
+
 	BranchTracker::iterator branchesBegin(void) const
 	{ return brChoiceSeq.begin(); }
 

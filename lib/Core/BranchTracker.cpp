@@ -616,7 +616,7 @@ void BranchTracker::getReplayPath(ReplayPath& rp, const iterator& it) const
 		rp.push_back(*it2);
 }
 
-void dumpRecur(BranchTracker::SegmentRef h)
+static void dumpRecur(BranchTracker::SegmentRef h)
 {
 	if (h.isNull()) return;
 
@@ -639,4 +639,33 @@ void BranchTracker::dump(void) const
 	dumpRecur(getHead());
 	std::cerr	<< "TOTAL SEGMENT COUNT: "
 			<< Segment::getNumSegments() << '\n';
+}
+
+static void dumpDotSeg(BranchTracker::SegmentRef head, std::ostream& os)
+{
+	for (unsigned i = 0; i < head->children.size(); i++)
+		dumpDotSeg(head->children[i], os);
+
+	if (head->children.size() == 0) {
+		os << "node [ shape = doublecircle ]; seg_";
+	} else {
+		os << "node [ shape = circle ]; seg_";
+	}
+	os << (void*)head.get() << ";";
+
+	for (unsigned i = 0; i < head->children.size(); i++) {
+		os	<< "seg_" << (void*)head.get()
+			<< " -> " << "seg_" << (void*)head->children[i]
+			<< " [ label = \"" << head->branches.size() << "\" ]\n";
+	}
+}
+
+void BranchTracker::dumpDotFile(std::ostream& os) const
+{
+	SegmentRef	h(getHead());
+
+	os << "digraph branches {\n";
+	os << "size=\"8,5\"\n";
+	dumpDotSeg(h, os);
+	os << "\n}\n";
 }

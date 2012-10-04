@@ -369,6 +369,42 @@ private:
 };
 
 cl::opt<unsigned>
+DumpBTrackerDot("dump-btracker-dot",
+	cl::desc("Dump branch tracker dot (0=off)"),
+	cl::init(0));
+
+
+class BTrackerDotTimer : public Executor::Timer
+{
+public:
+	BTrackerDotTimer(
+		const char* _fname,
+		Executor* _exe)
+	: fname(_fname)
+	, exe(_exe) {}
+	virtual ~BTrackerDotTimer() {}
+
+	void run(void)
+	{
+		ExecutionState*	es;
+		std::ostream* os;
+
+		es = exe->getCurrentState();
+		if (es == NULL) return;
+
+		os = exe->getInterpreterHandler()->openOutputFile(fname);
+		if (os == NULL) return;
+
+		es->getBrTracker().dumpDotFile(*os);
+		delete os;
+	}
+private:
+	const char	*fname;
+	Executor	*exe;
+};
+
+
+cl::opt<unsigned>
 DumpFuncHeat("dump-func-heat",
 	cl::desc("Dump function entry/exit counts (0=off)"),
 	cl::init(0));
@@ -701,6 +737,12 @@ void Executor::initTimers(void)
 		addTimer(
 			new BrDataTimer("brexprdata.txt", this, true),
 			DumpBrExprData);
+
+	if (DumpBTrackerDot)
+		addTimer(
+			new BTrackerDotTimer("btracker.dot", this),
+			DumpBTrackerDot);
+
 
 	if (DumpFuncHeat)
 		addTimer(new FuncHeatTimer("funcheat.txt", this), DumpFuncHeat);
