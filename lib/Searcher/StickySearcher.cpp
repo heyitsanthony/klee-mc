@@ -10,7 +10,7 @@ ExecutionState &StickySearcher::selectState(bool allowCompact)
 
 	if (sticky_st != NULL) return *sticky_st;
 
-	new_es = &selectState(allowCompact);
+	new_es = &base->selectState(allowCompact);
 	if (new_es->newInsts) sticky_st = new_es;
 	return *new_es;
 }
