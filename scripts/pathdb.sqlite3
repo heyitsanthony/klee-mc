@@ -36,4 +36,8 @@ CREATE VIEW minpaths AS
 	INNER JOIN pathnode
 	ON sb.sbaddr=pathnode.sbaddr
 	GROUP BY sb.sbaddr
-	ORDER BY minpos;
+	ORDER BY minpos
+;
+
+CREATE INDEX minpos_idx on pathnode (minpos)
+;

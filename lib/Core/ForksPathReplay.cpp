@@ -49,8 +49,11 @@ bool ForksPathReplay::forkFollowReplay(ExecutionState& es, struct ForkInfo& fi)
 	if (fi.res[fi.replayTargetIdx]) {
 		// Suppress forking; constraint will be added to path
 		// after forkSetup is complete.
-		if (suppressForks)
+		if (	suppressForks ||
+			es.totalInsts < Replay::getMaxSuppressInst())
+		{
 			fi.res.assign(fi.N, false);
+		}
 		fi.res[fi.replayTargetIdx] = true;
 
 		return true;

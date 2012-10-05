@@ -24,11 +24,12 @@ using namespace klee;
 #define DECL_OPTBOOL(x,y) DECL_OPTBOOL2(x, y, false)
 
 DECL_OPTBOOL2(ReplaySuppressForks, "replay-suppress-forks", true);
-DECL_OPTBOOL(CompleteReplay, "replay-complete");
 DECL_OPTBOOL(FasterReplay, "replay-faster");
 
+llvm::cl::opt<unsigned > ReplayMaxInstSuppress("replay-maxinst-suppress");
 
 bool Replay::isSuppressForks(void) { return ReplaySuppressForks; }
+unsigned Replay::getMaxSuppressInst(void) { return ReplayMaxInstSuppress; }
 
 // load a .path file
 #define IFSMODE	std::ios::in | std::ios::binary
@@ -325,10 +326,9 @@ bool ReplayBrPaths::replay(Executor* _exe, ExecutionState* _initState)
 
 	eagerReplayPathsIntoStates();
 
-	/* complete replay => will try new paths */
-	if (CompleteReplay == false) {
+	/* complete replay => will seed with initial state */
+	if (ReplayMaxInstSuppress)
 		incompleteReplay();
-	}
 
 	exe->setForking(old_forking);
 	delete rp_forking;
