@@ -32,6 +32,7 @@
 #include "IterativeDeepeningTimeSearcher.h"
 #include "PDFInterleavedSearcher.h"
 #include "PhasedSearcher.h"
+#include "StickySearcher.h"
 #include "MergingSearcher.h"
 #include "RandomPathSearcher.h"
 #include "RRSearcher.h"
@@ -97,6 +98,7 @@ namespace {
   cl::opt<bool> UseBreadthFirst("use-breadth-first");
   cl::opt<bool> UsePhasedSearch("use-phased-search");
   cl::opt<bool> UseRandomPathSearch("use-random-path");
+  cl::opt<bool> UseStickySearch("use-sticky-search");
 
   cl::opt<bool> UseInterleavedTailRS("use-interleaved-TRS");
   cl::opt<bool> UseInterleavedDFS("use-interleaved-DFS");
@@ -529,6 +531,9 @@ Searcher* UserSearcher::setupConfigSearcher(Executor& executor)
 	if (UseConcretizingSearch == 2)
 		searcher = new ConcretizingSearcher(executor, searcher);
 
+	if (UseStickySearch)
+		searcher = new StickySearcher(searcher);
+
 	if (DumpSelectStack) {
 		searcher = new SearchUpdater(
 			searcher, new StackDumpUpdater(executor));
@@ -619,4 +624,3 @@ Searcher *UserSearcher::constructUserSearcher(Executor &executor)
 
 	return searcher;
 }
-
