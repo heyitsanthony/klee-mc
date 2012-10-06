@@ -30,6 +30,7 @@ public:
 	static void writePathFile(const ExecutionState& es, std::ostream& os);
 
 	static bool isSuppressForks(void);
+	static bool isReplayOnly(void);
 	static unsigned getMaxSuppressInst(void);
 
 	static bool verifyPath(Executor* exe, const ExecutionState& es);

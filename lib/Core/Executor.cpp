@@ -2055,8 +2055,13 @@ void Executor::run(ExecutionState &initState)
 	initialStateCopy->ptreeNode->markReplay();
 	pt->splitStates(initState.ptreeNode, &initState, initialStateCopy);
 
-	if (replay != NULL)
-		replay->replay(this, &initState);
+	if (replay != NULL) replay->replay(this, &initState);
+	if (Replay::isReplayOnly()) {
+		std::cerr << "[Executor] Pure replay run complete.\n";
+		stateManager->setupSearcher(this);
+		stateManager->teardownUserSearcher();
+		goto done;
+	}
 
 	stateManager->setupSearcher(this);
 

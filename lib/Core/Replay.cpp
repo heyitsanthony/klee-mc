@@ -25,6 +25,7 @@ using namespace klee;
 
 DECL_OPTBOOL2(ReplaySuppressForks, "replay-suppress-forks", true);
 DECL_OPTBOOL(FasterReplay, "replay-faster");
+DECL_OPTBOOL(OnlyReplay, "only-replay");
 
 llvm::cl::opt<unsigned > ReplayMaxInstSuppress("replay-maxinst-suppress");
 
@@ -383,4 +384,4 @@ void ReplayBrPaths::eagerReplayPathsIntoStates(void)
 		<< esm->numRunningStates() << "\n";
 }
 
-
+bool Replay::isReplayOnly(void) { return OnlyReplay; }

@@ -5,14 +5,6 @@
 #include "klee/Replay.h"
 #include <sstream>
 
-namespace llvm
-{
-	llvm::cl::opt<bool>
-	ReplayPathOnly(
-		"replay-path-only",
-		llvm::cl::desc("On replay, kill states on branch exhaustion"));
-}
-
 using namespace klee;
 using namespace llvm;
 
@@ -91,7 +83,7 @@ bool ForksPathReplay::forkSetup(ExecutionState& current, struct ForkInfo& fi)
 		assert(false && "invalid state");
 	}
 
-	if ((ReplayPathOnly && current.isReplay) || current.isReplayDone()) {
+	if (Replay::isReplayOnly() && current.isReplayDone()) {
 		// Done replaying this state, so kill it (if -replay-path-only)
 		exe.terminateEarly(current, "replay path exhausted");
 		return false;

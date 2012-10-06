@@ -6,14 +6,6 @@
 using namespace klee;
 using namespace llvm;
 
-namespace llvm
-{
-	llvm::cl::opt<bool>
-	OnlyReplaySeeds(
-		"only-replay-seeds",
-		llvm::cl::desc("Drop seedless states."));
-}
-
 namespace klee { extern RNG theRNG; }
 
 bool ForksSeeding::forkSetup(ExecutionState& current, struct ForkInfo& fi)
@@ -55,8 +47,8 @@ bool ForksSeeding::forkSetup(ExecutionState& current, struct ForkInfo& fi)
 		fi.resSeeds[i].push_back(*siit);
 	}
 
-	// Clear any valid conditions that seeding rejects
-	if ((fi.forkDisabled || OnlyReplaySeeds) && fi.validTargets > 1) {
+	// Clear any valid conditions at seeding rejects
+	if ((fi.forkDisabled || Replay::isReplayOnly()) && fi.validTargets > 1) {
 		fi.validTargets = 0;
 		for (unsigned i = 0; i < fi.N; i++) {
 			if (fi.resSeeds[i].empty()) fi.res[i] = false;
