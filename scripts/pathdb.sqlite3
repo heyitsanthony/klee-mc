@@ -6,6 +6,7 @@ CREATE TABLE path(
 
 CREATE TABLE sb(
 	sbaddr	INT8 PRIMARY KEY,
+	sblen	INT2,
 	name	VARCHAR(32))
 ;
 

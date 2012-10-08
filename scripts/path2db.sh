@@ -28,7 +28,8 @@ function insert_all_sb
 		sbaddr_lit=`printf "%lu" $sbaddr`
 		sbname=`echo "$covline" | cut -f2 -d':'`
 		sbname=`echo -e -n $sbname`
-		echo -e -n "INSERT OR IGNORE INTO sb (sbaddr, name) VALUES($sbaddr_lit, '$sbname'); "
+		sblen=`echo "$covline" |  cut -f2 -d' '  | sed "s/-/ /" | awk '{ print $2 " " $1 }' | xargs printf "%d - %d\n" | bc` 
+		echo -e -n "INSERT OR IGNORE INTO sb (sbaddr, name, sblen) VALUES ($sbaddr_lit, '$sbname', $sblen); "
 	done
 	echo "COMMIT;"
 	unset IFS

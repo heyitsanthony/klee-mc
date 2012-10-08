@@ -708,6 +708,9 @@ void Executor::markBranchVisited(
 
 	kbr = static_cast<KBrInstruction*>(ki);
 
+	if (&state != branches.first && &state != branches.second)
+		return;
+
 	if (statsTracker && !state.stack.empty()) {
 		const KFunction	*kf = state.getCurrentKFunc();
 		if (kf && kf->trackCoverage)
