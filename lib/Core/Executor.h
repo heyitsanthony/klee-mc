@@ -332,7 +332,7 @@ private:
 	void instSwitch(ExecutionState& state, KInstruction* ki);
 	void forkSwitch(
 		ExecutionState&		state,
-		llvm::BasicBlock	*parent_bb,
+		KInstruction		*ki,
 		const TargetTy&		defaultTarget,
 		const TargetsTy&	targets);
 

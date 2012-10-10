@@ -1029,8 +1029,7 @@ void Executor::instCall(ExecutionState& state, KInstruction *ki)
 		llvm::ConstantExpr *ce = dyn_cast<llvm::ConstantExpr>(fp);
 
 		if (isa<InlineAsm>(fp)) {
-			terminateOnExecError(
-				state, "inline assembly is unsupported");
+			terminateOnExecError(state, "inline asm not supported");
 			return;
 		}
 
@@ -1130,11 +1129,11 @@ void Executor::instCmp(ExecutionState& state, KInstruction *ki)
 	pred = ii->getPredicate();
 	if ((vt = dyn_cast<VectorType>(op_type))) {
 		result = cmpVector(state, pred, vt, left, right);
-		if (result.isNull()) return;
 	} else {
 		result = cmpScalar(state, pred, left, right);
-		if (result.isNull()) return;
 	}
+
+	if (result.isNull()) return;
 
 	state.bindLocal(ki, result);
 }
@@ -1234,8 +1233,7 @@ ref<Expr> Executor::cmpScalar(
 	case ICmpInst::ICMP_SGE: return MK_SGE(left, right);
 	case ICmpInst::ICMP_SLT: return MK_SLT(left, right);
 	case ICmpInst::ICMP_SLE: return MK_SLE(left, right);
-	default:
-		terminateOnExecError(state, "invalid scalar ICmp predicate");
+	default: terminateOnExecError(state, "invalid scalar ICmp predicate");
 	}
 	return NULL;
 }
@@ -1243,11 +1241,12 @@ ref<Expr> Executor::cmpScalar(
 /* XXX: move to forks.c? */
 void Executor::forkSwitch(
 	ExecutionState& state,
-	BasicBlock*	parent_bb,
+	KInstruction* ki,
 	const TargetTy& defaultTarget,
 	const TargetsTy& targets)
 {
 	StateVector			resultStates;
+	BasicBlock			*parent_bb(ki->getInst()->getParent());
 	std::vector<ref<Expr> >		caseConds(targets.size()+1);
 	std::vector<BasicBlock*>	caseDests(targets.size()+1);
 	unsigned			index;
@@ -1289,7 +1288,6 @@ void Executor::forkSwitch(
 				kf->instructions[entry]->getInfo()->id))
 		{
 			ExecutionState *newState;
-			std::cerr << "RECONS2\n";
 			newState = es->reconstitute(*initialStateCopy);
 			replaceStateImmForked(es, newState);
 			es = newState;
@@ -1339,7 +1337,7 @@ void Executor::instSwitch(ExecutionState& state, KInstruction *ki)
 		return;
 	}
 
-	forkSwitch(state, ki->getInst()->getParent(), defaultTarget, targets);
+	forkSwitch(state, ki, defaultTarget, targets);
 }
 
 void Executor::instInsertElement(ExecutionState& state, KInstruction* ki)
@@ -1422,7 +1420,7 @@ void Executor::instExtractElement(ExecutionState& state, KInstruction* ki)
 	unsigned int	v_elem_sz = vt->getBitWidth() / v_elem_c;
 
 	assert (idx < v_elem_c && "ExtrctElement idx overflow");
-	out_val = ExtractExpr::create(in_v, idx * v_elem_sz, v_elem_sz);
+	out_val = MK_EXTRACTe(in_v, idx * v_elem_sz, v_elem_sz);
 	state.bindLocal(ki, out_val);
 }
 
@@ -2059,16 +2057,14 @@ void Executor::run(ExecutionState &initState)
 	pt->splitStates(initState.ptreeNode, &initState, initialStateCopy);
 
 	if (replay != NULL) replay->replay(this, &initState);
-	if (Replay::isReplayOnly()) {
-		std::cerr << "[Executor] Pure replay run complete.\n";
-		stateManager->setupSearcher(this);
-		stateManager->teardownUserSearcher();
-		goto done;
-	}
 
 	stateManager->setupSearcher(this);
 
-	runLoop();
+	if (Replay::isReplayOnly()) {
+		std::cerr << "[Executor] Pure replay run complete.\n";
+	} else {
+		runLoop();
+	}
 
 	stateManager->teardownUserSearcher();
 
@@ -2436,9 +2432,10 @@ bool Executor::getSatAssignment(const ExecutionState& st, Assignment& a)
 	if (ok) return true;
 
 	klee_warning("can't compute initial values (invalid constraints?)!");
-	if (DumpBadInitValues)
-		ExprPPrinter::printQuery(
-			std::cerr, st.constraints, MK_CONST(0, 1));
+	if (DumpBadInitValues) {
+		Query	q(st.constraints, MK_CONST(0, 1));
+		q.print(std::cerr);
+	}
 
 	return false;
 }

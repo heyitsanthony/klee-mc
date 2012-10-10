@@ -21,7 +21,7 @@ def main():
                 break
             idx += 1
 
-        os.execvp("llvm-gcc", ["llvm-gcc"] + sys.argv[1:] + cArgs)
+        os.execvp("clang", ["clang"] + sys.argv[1:] + cArgs)
         return 1
 
     # Otherwise, strip out arguments that llvm-ld doesn't understand. I don't
@@ -30,7 +30,7 @@ def main():
     args = sys.argv[1:]
     linkArgs = []
     for a in args:
-        if a in ('-g', '-link', '-pthread', '-emit-llvm') \
+        if a in ('-g', '-link', '-pthread', '-emit-llvm', '-std=gnu99') \
              or a.startswith('-f') \
              or a.startswith('-W') \
              or a.startswith('-O') \
