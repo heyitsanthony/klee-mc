@@ -956,15 +956,15 @@ void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 		branches = fork(state, cond, false);
 	}
 
-	markBranchVisited(state, ki, branches, cond);
-
-	finalizeBranch(branches.first, bi, 0 /* [0] successor => true/then */);
-	finalizeBranch(branches.second, bi, 1 /* [1] successor => false/else */);
-
 	if (hasHint) {
 		if (branchHint) forking->setPreferTrueState(false);
 		else forking->setPreferFalseState(false);
 	}
+
+	markBranchVisited(state, ki, branches, cond);
+
+	finalizeBranch(branches.first, bi, 0 /* [0] successor => true/then */);
+	finalizeBranch(branches.second, bi, 1 /* [1] successor => false/else */);
 
 	if (WriteTraces) {
 		bool	isTwoWay = (branches.first && branches.second);

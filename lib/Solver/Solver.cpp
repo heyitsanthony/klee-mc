@@ -294,7 +294,9 @@ Solver* Solver::createChainWithTimedSolver(
 		xchkBuilder = createConstantFoldingExprBuilder(xchkBuilder);
 		xchkBuilder = createSimplifyingExprBuilder(xchkBuilder);
 		xchkBuilder = createXChkBuilder(
-			*solver, xchkBuilder, Expr::getBuilder());
+			*solver,
+			xchkBuilder, /* oracle */
+			Expr::getBuilder() /* test */);
 
 		Expr::setBuilder(xchkBuilder);
 	}

@@ -67,7 +67,8 @@ unsigned int Assignment::getBindingBytes(void) const
 void Assignment::print(std::ostream& os) const
 {
 	foreach (it, bindingsBegin(), bindingsEnd()) {
-		os << (*it).first->name << ": ";
+		os	 << (*it).first->name << "["
+			<< (*it).second.size() << "] =\n";
 		foreach (it_v, (*it).second.begin(), (*it).second.end())
 			os << ((void*)(*it_v)) << ' ';
 		os << '\n';

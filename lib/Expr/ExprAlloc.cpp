@@ -202,6 +202,17 @@ DECL_ALLOC_2(Sge)
 ref<Expr> ExprAlloc::Read(const UpdateList &updates, const ref<Expr> &idx)
 {
 	ref<Expr> r(new ReadExpr(updates, idx));
+
+	if (idx->getKind() == Expr::Constant) {
+		const ref<ConstantExpr> idx_ce(cast<ConstantExpr>(idx));
+		if (idx_ce->getZExtValue() > updates.getRoot()->getSize()) {
+			if (!Expr::errors)
+				std::cerr << "[Expr] OOB read\n";
+			Expr::errors++;
+			return MK_CONST(0, 8);
+		}
+	}
+
 	r->computeHash();
 	return r;
 }

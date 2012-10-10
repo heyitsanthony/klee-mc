@@ -18,7 +18,7 @@ public:
 	void setForkSuppress(bool v) { suppressForks = v; }
 protected:
 	void trackBranch(ExecutionState& current, unsigned);
-	void setupForkAffinity(
+	bool setupForkAffinity(
 		ExecutionState& current,
 		struct ForkInfo& fi,
 		unsigned* cond_idx_map);

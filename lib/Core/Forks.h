@@ -95,7 +95,7 @@ protected:
 	virtual bool constrainFork(
 		ExecutionState& es, struct ForkInfo& fi, unsigned int);
 	virtual bool evalForkBranch(ExecutionState& current, struct ForkInfo& fi);
-	virtual void setupForkAffinity(
+	virtual bool setupForkAffinity(
 		ExecutionState& current,
 		struct ForkInfo& fi,
 		unsigned* cond_idx_map);
@@ -117,7 +117,7 @@ private:
 
 	void trackTransitions(const ForkInfo& fi);
 
-	void makeForks(ExecutionState& current, struct ForkInfo& fi);
+	bool makeForks(ExecutionState& current, struct ForkInfo& fi);
 	void constrainForks(ExecutionState& current, struct ForkInfo& fi);
 	bool isRunawayBranch(KInstruction* ki);
 	bool			preferTrueState;

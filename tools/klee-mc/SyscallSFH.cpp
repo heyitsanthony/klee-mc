@@ -628,6 +628,8 @@ void SyscallSFH::makeRangeSymbolic(
 	unsigned sz,
 	const char* name)
 {
+	MemoryObject	*sym_mo;
+	ObjectState	*sym_os;
 	uint64_t	cur_addr;
 	unsigned	total_sz;
 
@@ -686,8 +688,6 @@ void SyscallSFH::makeRangeSymbolic(
 	}
 
 	/* finally, allocate entire symbolic length */
-	MemoryObject	*sym_mo;
-	ObjectState	*sym_os;
 	sym_mo = exe_vex->memory->allocateAt(state, (uint64_t)addr, sz, 0);
 	sym_mo->setName(name);
 	sym_os = exe_vex->makeSymbolic(state, sym_mo, name);

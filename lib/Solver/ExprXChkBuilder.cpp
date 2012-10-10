@@ -1,8 +1,8 @@
 #include <iostream>
 #include <sstream>
 #include "../Expr/RuleBuilder.h"
+#include "../Expr/TopLevelBuilder.h"
 #include "klee/Solver.h"
-#include "klee/Constraints.h"
 #include "klee/ExprBuilder.h"
 #include "klee/util/ExprUtil.h"
 #include "klee/util/Assignment.h"
@@ -37,8 +37,10 @@ namespace
 		llvm::cl::desc("Optimize exprxchk with test values (imprecise)"));
 }
 
-//#define DEFAULT_XCHK_BUILDER	test_builder
-#define DEFAULT_XCHK_BUILDER	oracle_builder
+/* XXX: this one is just like w/ rules  */
+#define DEFAULT_XCHK_BUILDER	test_builder
+/* XXX: this one makes things OK?? */
+//#define DEFAULT_XCHK_BUILDER	oracle_builder
 
 class ExprXChkBuilder : public ExprBuilder
 {
@@ -268,161 +270,6 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS) \
 	}
 };
 
-class TopExprXChkBuilder : public ExprXChkBuilder
-{
-public:
-	TopExprXChkBuilder(Solver& s, ExprBuilder* oracle, ExprBuilder* test)
-	: ExprXChkBuilder(s, oracle, test)
-	{}
-
-	virtual ~TopExprXChkBuilder() {}
-
-	virtual ref<Expr> Read(
-		const UpdateList &Updates,
-		const ref<Expr> &Index)
-	{
-		ref<Expr>	e_test, e_oracle;
-
-		if (!in_xchker) {
-			in_xchker = true;
-			last_rb_hit_c = RuleBuilder::getHits();
-			e_test = test_builder->Read(Updates, Index);
-		} else
-			return DEFAULT_XCHK_BUILDER->Read(Updates, Index);
-
-		e_oracle = oracle_builder->Read(Updates, Index);
-		xchk(e_oracle, e_test);
-		return e_test;
-	}
-
-	virtual ref<Expr> Select(
-		const ref<Expr> &Cond,
-		const ref<Expr> &LHS,
-		const ref<Expr> &RHS)
-	{
-		ref<Expr>	e_test, e_oracle;
-		if (!in_xchker) {
-			in_xchker = true;
-			last_rb_hit_c = RuleBuilder::getHits();
-			e_test = test_builder->Select(Cond, LHS, RHS);
-		} else
-			return DEFAULT_XCHK_BUILDER->Select(Cond, LHS, RHS);
-
-		e_oracle = oracle_builder->Select(Cond, LHS, RHS);
-		xchk(e_oracle, e_test);
-		return e_test;
-	}
-
-	virtual ref<Expr> Extract(
-		const ref<Expr> &LHS, unsigned Offset, Expr::Width W)
-	{
-		ref<Expr>	e_test, e_oracle;
-		if (!in_xchker) {
-			in_xchker = true;
-			last_rb_hit_c = RuleBuilder::getHits();
-			e_test = test_builder->Extract(LHS, Offset, W);
-		} else
-			return DEFAULT_XCHK_BUILDER->Extract(LHS, Offset, W);
-		e_oracle = oracle_builder->Extract(LHS, Offset, W);
-		xchk(e_oracle, e_test);
-		return e_test;
-	}
-
-	virtual ref<Expr> ZExt(const ref<Expr> &LHS, Expr::Width W)
-	{
-		ref<Expr>	e_test, e_oracle;
-		if (!in_xchker) {
-			in_xchker = true;
-			last_rb_hit_c = RuleBuilder::getHits();
-			e_test = test_builder->ZExt(LHS, W);
-		} else
-			return DEFAULT_XCHK_BUILDER->ZExt(LHS, W);
-		e_oracle = oracle_builder->ZExt(LHS, W);
-		xchk(e_oracle, e_test);
-		return e_test;
-	}
-
-	virtual ref<Expr> SExt(const ref<Expr> &LHS, Expr::Width W)
-	{
-		ref<Expr>	e_test, e_oracle;
-		if (!in_xchker) {
-			in_xchker = true;
-			last_rb_hit_c = RuleBuilder::getHits();
-			e_test = test_builder->SExt(LHS, W);
-		} else
-			return DEFAULT_XCHK_BUILDER->SExt(LHS, W);
-		e_oracle = oracle_builder->SExt(LHS, W);
-		xchk(e_oracle, e_test);
-		return e_test;
-	}
-
-	virtual ref<Expr> Not(const ref<Expr> &L)
-	{
-		ref<Expr>	e_test, e_oracle;
-		if (!in_xchker) {
-			in_xchker = true;
-			last_rb_hit_c = RuleBuilder::getHits();
-			e_test = test_builder->Not(L);
-		} else
-			return DEFAULT_XCHK_BUILDER->Not(L);
-		e_oracle = oracle_builder->Not(L);
-		xchk(e_oracle, e_test);
-		return e_test;
-	}
-#define DECL_BIN_REF(x)	\
-virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS) \
-{								\
-	ref<Expr>	e_test, e_oracle;			\
-	if (!in_xchker) {					\
-		in_xchker = true;				\
-		last_rb_hit_c = RuleBuilder::getHits();		\
-		e_test = test_builder->x(LHS, RHS);		\
-	} else							\
-		return DEFAULT_XCHK_BUILDER->x(LHS, RHS);	\
-	e_oracle = oracle_builder->x(LHS, RHS);			\
-	xchk(e_oracle, e_test);					\
-	return e_test;						\
-}
-
-	DECL_BIN_REF(Concat)
-	DECL_BIN_REF(Add)
-	DECL_BIN_REF(Sub)
-	DECL_BIN_REF(Mul)
-	DECL_BIN_REF(UDiv)
-
-	DECL_BIN_REF(SDiv)
-	DECL_BIN_REF(URem)
-	DECL_BIN_REF(SRem)
-	DECL_BIN_REF(And)
-	DECL_BIN_REF(Or)
-	DECL_BIN_REF(Xor)
-	DECL_BIN_REF(Shl)
-	DECL_BIN_REF(LShr)
-	DECL_BIN_REF(AShr)
-	DECL_BIN_REF(Eq)
-	DECL_BIN_REF(Ne)
-	DECL_BIN_REF(Ult)
-	DECL_BIN_REF(Ule)
-
-	DECL_BIN_REF(Ugt)
-	DECL_BIN_REF(Uge)
-	DECL_BIN_REF(Slt)
-	DECL_BIN_REF(Sle)
-	DECL_BIN_REF(Sgt)
-	DECL_BIN_REF(Sge)
-#undef DECL_BIN_REF
-
-	void printName(std::ostream& os) const
-	{
-		os << "TopExprXChk {\n";
-		os << "Oracle: ";
-		oracle_builder->printName(os);
-		os << "Test: ";
-		test_builder->printName(os);
-		os << "}\n";
-	}
-};
-
 void ExprXChkBuilder::xchk(
 	const ref<Expr>& oracle_expr,
 	const ref<Expr>& test_expr)
@@ -445,9 +292,7 @@ void ExprXChkBuilder::xchk(
 		(ce_t = dyn_cast<ConstantExpr>(test_expr)))
 	{
 		if (*ce_o != *ce_t) {
-			ConstraintManager	cm;
-			Query	q(cm, EqExpr::alloc(oracle_expr, test_expr));
-
+			Query	q(EqExpr::alloc(oracle_expr, test_expr));
 			notifyBadXChk(q, oracle_expr, test_expr);
 		}
 
@@ -498,8 +343,7 @@ void ExprXChkBuilder::xchkRandomValue(
 	const ref<Expr>& test_expr)
 {
 	ref<Expr>		eval,
-				eq_expr(EqExpr::create(
-					oracle_expr, test_expr));
+				eq_expr(EqExpr::alloc(oracle_expr, test_expr));
 	Assignment		a(eq_expr);
 	const ConstantExpr	*ce;
 
@@ -510,9 +354,7 @@ void ExprXChkBuilder::xchkRandomValue(
 
 	if (ce->isZero()) {
 		/* failed */
-		ConstraintManager	cm;
-		Query			q(
-			cm, EqExpr::alloc(oracle_expr, test_expr));
+		Query		q(EqExpr::alloc(oracle_expr, test_expr));
 
 		notifyBadXChk(q, oracle_expr, test_expr);
 		return;
@@ -550,21 +392,52 @@ void ExprXChkBuilder::dumpCounterExample(
 	os << '\n';
 }
 
+static void xchkFuzzFailover(
+	const ref<Expr>& oracle_expr,
+	const ref<Expr>& test_expr)
+{
+	Assignment	a(oracle_expr), b(test_expr);
+
+	for (unsigned i = 0; i < 256; i++) {
+		ref<Expr>	a_e, b_e;
+		a.bindFreeToU8(i);
+		b.bindFreeToU8(i);
+		a_e = a.evaluate(oracle_expr);
+		b_e = b.evaluate(test_expr);
+		assert (a_e->getKind() == Expr::Constant);
+		assert (b_e->getKind() == Expr::Constant);
+
+		if (a_e->hash() != b_e->hash()) {
+			std::cerr << "[ExprXChk] Fuzz failed at i=" << i << '\n';
+			break;
+		}
+
+		a.resetBindings();
+		b.resetBindings();
+	}
+
+	std::cerr << "[ExprXChk] Fuzz is OK.\n";
+}
+
 void ExprXChkBuilder::xchkWithSolver(
 	const ref<Expr>& oracle_expr,
 	const ref<Expr>& test_expr)
 {
 	bool			ok, res;
-	ConstraintManager	cm;
-	Query			q(cm, EqExpr::alloc(oracle_expr, test_expr));
+	Query			q(EqExpr::alloc(oracle_expr, test_expr));
 
 	/* ignore if errors already detected */
 	if (Expr::errors) return;
 
 	query_c++;
+
 	ok = solver.mustBeTrue(q, res);
-	if (!ok)
+	if (!ok) {
+		static unsigned int k = 0;
+		std::cerr << "[ExprXChk] Solver failure #" << ++k << "\n";
+		xchkFuzzFailover(oracle_expr, test_expr);
 		return;
+	}
 
 	if (res != true) {
 		notifyBadXChk(q, oracle_expr, test_expr);
@@ -591,7 +464,7 @@ void ExprXChkBuilder::printBadXChk(
 	const ref<Expr>& oracle_expr,
 	const ref<Expr>& test_expr)
 {
-	os << "BAD XCHK: ";
+	os << "[ExprXChk] BAD XCHK: ";
 	q.expr->print(os);
 	os << '\n';
 
@@ -608,9 +481,10 @@ ExprBuilder *createXChkBuilder(
 	Solver& solver,
 	ExprBuilder* oracle, ExprBuilder* test)
 {
+	ExprBuilder*	ret = new AllExprXChkBuilder(solver, oracle, test);
 	if (OnlyCheckTopLevelExpr)
-		return new TopExprXChkBuilder(solver, oracle, test);
-	return new AllExprXChkBuilder(solver, oracle, test);
+		ret = new TopLevelBuilder(ret, test, false);
+	return ret;
 }
 
 void xchkExpr(const ref<Expr>& oracle, const ref<Expr>& test)

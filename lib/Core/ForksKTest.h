@@ -16,11 +16,13 @@ public:
 	virtual ~ForksKTest();
 	void setKTest(const KTest* _kt);
 protected:
-	void setupForkAffinity(
+	bool setupForkAffinity(
 		ExecutionState& current,
 		struct ForkInfo& fi,
 		unsigned* cond_idx_map);
+
 private:
+	bool updateSymbolics(ExecutionState& current);
 	const KTest	*kt;
 	Assignment	*kt_assignment;
 	std::vector<ref<Array> > arrs;

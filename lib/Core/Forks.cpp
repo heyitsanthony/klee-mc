@@ -353,7 +353,9 @@ Forks::fork(
 	if (forkSetup(current, fi) == false)
 		return Executor::StateVector(N, NULL);
 
-	makeForks(current, fi);
+	if (makeForks(current, fi) == false)
+		return Executor::StateVector(N, NULL);
+
 	constrainForks(current, fi);
 
 	if (fi.forkedTargets) {
@@ -453,7 +455,7 @@ ExecutionState* Forks::pureFork(ExecutionState& es, bool compact)
 	return newState;
 }
 
-void Forks::setupForkAffinity(
+bool Forks::setupForkAffinity(
 	ExecutionState& current,
 	struct ForkInfo& fi,
 	unsigned* cond_idx_map)
@@ -474,9 +476,11 @@ void Forks::setupForkAffinity(
 			cond_idx_map[i] = swap_val;
 		}
 	}
+
+	return true;
 }
 
-void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
+bool Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 {
 	ExecutionState	**curStateUsed = NULL;
 	unsigned	cond_idx_map[fi.N];
@@ -484,9 +488,10 @@ void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 	for (unsigned i = 0; i < fi.N; i++)
 		cond_idx_map[i] = i;
 
-	setupForkAffinity(current, fi, cond_idx_map);
+	if (setupForkAffinity(current, fi, cond_idx_map) == false)
+		return false;
 
-	for(unsigned int i = 0; i < fi.N; i++) {
+	for (unsigned int i = 0; i < fi.N; i++) {
 		ExecutionState	*newState, *baseState;
 		unsigned	condIndex;
 
@@ -528,10 +533,10 @@ void Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 		}
 	}
 
-	if (fi.validTargets < 2 || fi.forkDisabled)
-		return;
+	if (fi.validTargets >= 2 && !fi.forkDisabled)
+		trackTransitions(fi);
 
-	trackTransitions(fi);
+	return true;
 }
 
 typedef std::map<Expr::Hash, ref<Expr> > xtion_map;

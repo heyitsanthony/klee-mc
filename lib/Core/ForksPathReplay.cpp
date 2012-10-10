@@ -101,16 +101,18 @@ bool ForksPathReplay::forkSetup(ExecutionState& current, struct ForkInfo& fi)
 	return forkFollowReplay(current, fi);
 }
 
-void ForksPathReplay::setupForkAffinity(
+bool ForksPathReplay::setupForkAffinity(
 	ExecutionState& current,
 	struct ForkInfo& fi,
 	unsigned* cond_idx_map)
 {
 	if (current.isReplayDone()) {
 		Forks::setupForkAffinity(current, fi, cond_idx_map);
-		return;
+		return true;
 	}
+
 	/* steer to expected branch */
 	cond_idx_map[0] = fi.replayTargetIdx;
 	cond_idx_map[fi.replayTargetIdx] = 0;
+	return true;
 }

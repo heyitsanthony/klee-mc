@@ -6,7 +6,41 @@
 
 using namespace klee;
 
-void ForksKTest::setupForkAffinity(
+
+bool ForksKTest::updateSymbolics(ExecutionState& current)
+{
+	ExecutionState::SymIt		it(current.symbolicsBegin());
+	unsigned			i;
+
+	for (i = 0; i < arrs.size(); i++) it++;
+
+	for (; i < current.getNumSymbolics(); i++) {
+		const SymbolicArray	&sa(*it);
+		const ref<Array>	arr(sa.getArrayRef());
+		const uint8_t		*v_buf = kt->objects[i].bytes;
+		unsigned		v_len = kt->objects[i].numBytes;
+		std::vector<uint8_t>	v(v_buf, v_buf + v_len);
+
+		std::cerr << "[KTest] Adding ARR name=\""
+			<< arr->name << "\". size=" <<
+			arr->getSize() << '\n';
+		std::cerr << "[KTest] Obj size = "
+			<< kt->objects[i].numBytes << '\n';
+
+		if (arr->getSize() != kt->objects[i].numBytes) {
+			std::cerr << "[KTest] Size mismatch\n";
+			return false;
+		}
+
+		arrs.push_back(arr);
+		kt_assignment->addBinding(arr.get(), v);
+		it++;
+	}
+
+	return true;
+}
+
+bool ForksKTest::setupForkAffinity(
 	ExecutionState& current,
 	struct ForkInfo& fi,
 	unsigned* cond_idx_map)
@@ -14,19 +48,15 @@ void ForksKTest::setupForkAffinity(
 	assert (kt_assignment);
 
 	if (current.getNumSymbolics() > arrs.size()) {
-		ExecutionState::SymIt		it(current.symbolicsBegin());
-		unsigned			i;
-		for (i = 0; i < arrs.size(); i++) it++;
-		for (; i < current.getNumSymbolics(); i++) {
-			const SymbolicArray	&sa(*it);
-			const ref<Array>	arr(sa.getArrayRef());
-			const uint8_t		*v_buf = kt->objects[i].bytes;
-			unsigned		v_len = kt->objects[i].numBytes;
-			std::vector<uint8_t>	v(v_buf, v_buf + v_len);
-
-			arrs.push_back(arr);
-			kt_assignment->addBinding(arr.get(), v);
-			it++;
+		if (updateSymbolics(current) == false) {
+			/* create ktest state outside replay;
+			 * deal with later */
+			pureFork(current);
+			exe.terminateOnError(
+				current,
+				"KTest seeding failed. Bad objsize?",
+				"ktest.err");
+			return false;
 		}
 	}
 
@@ -46,8 +76,9 @@ void ForksKTest::setupForkAffinity(
 			cond_eval = fi.conditions[i];
 
 		if (cond_eval->getKind() != Expr::Constant) {
-			std::cerr << "WTFFFFFFF: " << cond_eval << '\n';
-			std::cerr << "ASSIGNMENT=\n";
+			std::cerr	<< "Non-Const Expr in KTest!?: "
+					<< cond_eval << '\n';
+			std::cerr << "BAD ASSIGNMENT=\n";
 			kt_assignment->print(std::cerr);
 		}
 
@@ -59,6 +90,8 @@ void ForksKTest::setupForkAffinity(
 			break;
 		}	
 	}
+
+	return true;
 }
 
 
@@ -74,29 +107,4 @@ void ForksKTest::setKTest(const KTest* _kt)
 	kt_assignment = new Assignment(true);
 
 	arrs.clear();
-#if 0
-	for (unsigned i = 0; i < kt->numObjects; i++) {
-		const KTestObject		*kobj(&kt->objects[i]);
-		std::vector<unsigned char>	arr_vals;
-		ref<Array>			array;
-
-		for (unsigned j = 0; j < kobj->numBytes; j++)
-			arr_vals.push_back(kobj->bytes[i]);
-
-		array = Array::create(kobj->name, kobj->numBytes);
-		array = Array::uniqueByName(array);
-
-		arrs.push_back(array);
-		vals.push_back(arr_vals);
-		byte_c += kobj->numBytes;
-	}
-
-	foreach (it, arrs.begin(), arrs.end())
-		arr.push_back((*it).get());
-
-	kt_assignment = new Assignment(arr, vals, true);
-
-	std::cerr << "[ForksTest] Loaded ktest. Bytes="
-		<< byte_c << ". Objs=" << kt->numObjects << '\n';
-#endif
 }
