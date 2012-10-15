@@ -2063,7 +2063,7 @@ void Executor::run(ExecutionState &initState)
 		std::cerr << "[Executor] Pure replay run complete.\n";
 		stateManager->setupSearcher(this);
 		stateManager->teardownUserSearcher();
-		goto done;
+		goto eraseStates;
 	}
 
 	stateManager->setupSearcher(this);
@@ -2072,6 +2072,7 @@ void Executor::run(ExecutionState &initState)
 
 	stateManager->teardownUserSearcher();
 
+eraseStates:
 	if (stateManager->empty())
 		goto done;
 

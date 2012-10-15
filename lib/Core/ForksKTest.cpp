@@ -12,6 +12,8 @@ bool ForksKTest::updateSymbolics(ExecutionState& current)
 	ExecutionState::SymIt		it(current.symbolicsBegin());
 	unsigned			i;
 
+	assert (arrs.size() < current.getNumSymbolics());
+
 	for (i = 0; i < arrs.size(); i++) it++;
 
 	for (; i < current.getNumSymbolics(); i++) {
@@ -21,10 +23,12 @@ bool ForksKTest::updateSymbolics(ExecutionState& current)
 		unsigned		v_len = kt->objects[i].numBytes;
 		std::vector<uint8_t>	v(v_buf, v_buf + v_len);
 
-		std::cerr << "[KTest] Adding ARR name=\""
-			<< arr->name << "\". size=" <<
-			arr->getSize() << '\n';
-		std::cerr << "[KTest] Obj size = "
+		std::cerr
+			<< "[KTest] Adding ARR name=\"" << arr->name
+			<< "\". size=" << arr->getSize() << '\n';
+
+		std::cerr
+			<< "[KTest] Obj Bytes = "
 			<< kt->objects[i].numBytes << '\n';
 
 		if (arr->getSize() != kt->objects[i].numBytes) {
@@ -48,6 +52,27 @@ bool ForksKTest::setupForkAffinity(
 	assert (kt_assignment);
 
 	if (current.getNumSymbolics() > arrs.size()) {
+		if (current.getNumSymbolics() > kt->numObjects) {
+			std::cerr << "[KTest] State Symbolics="
+				<< current.getNumSymbolics()
+				<< ". Last="
+				<< (*(current.symbolicsEnd()-1)).getArray()->name
+				<< '\n';
+			std::cerr	<< "[KTest] KTest Objects="
+					<< kt->numObjects
+					<< ". Last="
+					<< kt->objects[kt->numObjects-1].name
+					<< '\n';
+
+			std::cerr << "[KTest] Ran out of objects!!\n";
+			pureFork(current);
+			exe.terminateOnError(
+				current,
+				"KTest seeding failed. Ran out of objects!",
+				"ktest.err");
+			return false;
+		}
+
 		if (updateSymbolics(current) == false) {
 			/* create ktest state outside replay;
 			 * deal with later */
@@ -76,9 +101,9 @@ bool ForksKTest::setupForkAffinity(
 			cond_eval = fi.conditions[i];
 
 		if (cond_eval->getKind() != Expr::Constant) {
-			std::cerr	<< "Non-Const Expr in KTest!?: "
-					<< cond_eval << '\n';
-			std::cerr << "BAD ASSIGNMENT=\n";
+			std::cerr << "[KTest] Non-Const eval: "
+				<< cond_eval << '\n';
+			std::cerr << "[KTest] BAD ASSIGNMENT=\n";
 			kt_assignment->print(std::cerr);
 		}
 
