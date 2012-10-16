@@ -4,7 +4,7 @@
 // RUN: test -f %t.out/test000001.ktest.gz
 // RUN: not test -f %t.out/test000002.ktest.gz
 // RUN: gzip -d %t.out/test000001.ktest.gz
-// RUN: %klee --only-replay --named-seed-matching --seed-out %t.out/test000001.ktest %t.bc > %t.log
+// RUN: %klee --named-seed-matching --seed-out %t.out/test000001.ktest %t.bc > %t.log 2>%t.err
 // RUN: grep -q "a==3" %t.log
 // RUN: grep -q "b==4" %t.log
 // RUN: grep -q "c==5" %t.log

@@ -71,6 +71,7 @@ SCHEDOPTS="-use-batching-search
 	-use-interleaved-BI=false
 	-use-interleaved-UNC=false
 	-use-interleaved-STK=false
+
 	-use-interleaved-NI=true
 	-use-interleaved-CD=true
 	-use-interleaved-MXI=true
@@ -119,7 +120,6 @@ gdb --args klee-mc 		\
 	-dump-exprstats=1	\
 	-dump-hashstats=1	\
 	-dump-querystats=1	\
-	-dump-stackstats=10	\
 	-dump-stateinststats=10	\
 	-dump-br-data=5		\
 	-dump-used-rules=used.db \
