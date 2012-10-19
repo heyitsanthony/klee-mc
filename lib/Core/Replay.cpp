@@ -12,10 +12,14 @@
 #include "PTree.h"
 
 #include "klee/ExecutionState.h"
+
 #include "klee/Internal/Module/KInstIterator.h"
 #include "klee/Internal/Module/KInstruction.h"
-#include "klee/Internal/ADT/zfstream.h"
 #include "klee/Internal/Module/InstructionInfoTable.h"
+#include "klee/Internal/Module/KModule.h"
+#include "klee/Internal/Module/KFunction.h"
+
+#include "klee/Internal/ADT/zfstream.h"
 #include "klee/Replay.h"
 
 using namespace klee;
@@ -85,8 +89,12 @@ void Replay::loadPathStream(std::istream& is, ReplayPath& buffer)
 
 typedef std::map<const llvm::Function*, uint64_t> f2p_ty;
 
-void Replay::writePathFile(const ExecutionState& st, std::ostream& os)
+void Replay::writePathFile(
+	const Executor& exe,
+	const ExecutionState& st,
+	std::ostream& os)
 {
+	const KModule	*km;
 	f2p_ty		f2ptr;
 	std::string	fstr;
 
@@ -94,9 +102,10 @@ void Replay::writePathFile(const ExecutionState& st, std::ostream& os)
 		std::cerr << "WARNING: Replay without branches\n";
 	}
 
+	km = exe.getKModule();
 	foreach(bit, st.branchesBegin(), st.branchesEnd()) {
 		const KInstruction	*ki;
-		const llvm::Function	*f;
+		llvm::Function		*f;
 		f2p_ty::iterator	fit;
 		uint64_t		v;
 
@@ -116,6 +125,9 @@ void Replay::writePathFile(const ExecutionState& st, std::ostream& os)
 			os << ',' << (void*)fit->second  << '\n';
 			continue;
 		}
+
+		if (KFunction* kf = km->getKFunction(f))
+			kf->markCommitted();
 
 		fstr = f->getName().str();
 		if (fstr.substr(0, 3) != "sb_") {
@@ -233,7 +245,7 @@ bool Replay::verifyPath(Executor* exe, const ExecutionState& es)
 	fpr->setForkSuppress(true);
 	exe->setForking(fpr);
 
-	writePathFile(es, ss);
+	writePathFile(*exe, es, ss);
 	loadPathStream(ss, rp);
 
 	initSt = exe->getInitialState();

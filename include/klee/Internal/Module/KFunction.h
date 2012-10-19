@@ -36,6 +36,7 @@ public:
 	/// Whether instructions in this function should count as
 	/// "coverable" for statistics and search heuristics.
 	bool trackCoverage;
+	bool pathCommitted;	/* did we write a path out with this func? */
 
 private:
 	typedef std::tr1::unordered_map<llvm::BasicBlock*, unsigned>
@@ -73,6 +74,9 @@ public:
 
 	static unsigned getClock(void) { return inst_clock; }
 	unsigned getTick(void) const { return inst_tick; }
+
+	bool isCommitted(void) const { return pathCommitted; }
+	void markCommitted(void) { pathCommitted = true; }
 
 private:
 	static unsigned		inst_clock;

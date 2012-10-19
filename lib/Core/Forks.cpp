@@ -603,7 +603,7 @@ bool Forks::addConstraint(struct ForkInfo& fi, unsigned condIndex)
 	if (fi.feasibleTargets == 0)
 		return true;
 
-	if (fi.feasibleTargets > 1) {
+	if (fi.feasibleTargets > 1 || omit_valid_constraints == false) {
 		if (exe.addConstraint(*curState, fi.conditions[condIndex]))
 			return true;
 
@@ -773,6 +773,7 @@ Forks::Forks(Executor& _exe)
 , preferFalseState(false)
 , lastFork(0,0)
 , is_quench(QuenchRunaways)
+, omit_valid_constraints(true)
 {
 	condFilter = new ExprTimer<MergeArrays>(1000);
 }

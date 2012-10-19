@@ -249,6 +249,12 @@ protected:
 		unsigned idx,
 		ExecutionState &st) const;
 
+	virtual StateSolver* createSolverChain(
+		double timeout,
+		const std::string& qPath,
+		const std::string& logPath);
+
+
 	InterpreterHandler	*interpreterHandler;
 	llvm::TargetData	*target_data;
 	llvm::Function		*dbgStopPointFn;
@@ -383,6 +389,7 @@ public:
 
 	const InterpreterHandler& getHandler() { return *interpreterHandler; }
 	StateSolver* getSolver(void) { return solver; }
+	void setSolver(StateSolver* s) { solver = s; }
 	virtual bool isStateSeeding(ExecutionState* s) const { return false; }
 
 	void executeCallNonDecl(

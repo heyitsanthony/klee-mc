@@ -168,7 +168,7 @@ namespace {
 
 namespace klee { RNG theRNG; }
 
-static StateSolver* createTimerChain(double to, std::string q, std::string s);
+static StateSolver* createSolverChain(double to, std::string q, std::string s);
 static StateSolver* createFastSolver(void);
 
 Executor::Executor(InterpreterHandler *ih)
@@ -198,7 +198,7 @@ Executor::Executor(InterpreterHandler *ih)
 		Expr::setBuilder(RuleBuilder::create(Expr::getBuilder()));
 	}
 
-	solver = createTimerChain(
+	solver = createSolverChain(
 		stpTimeout,
 		interpreterHandler->getOutputFilename("queries.pc"),
 		interpreterHandler->getOutputFilename("stp-queries.pc"));
@@ -1420,7 +1420,7 @@ void Executor::instExtractElement(ExecutionState& state, KInstruction* ki)
 	unsigned int	v_elem_sz = vt->getBitWidth() / v_elem_c;
 
 	assert (idx < v_elem_c && "ExtrctElement idx overflow");
-	out_val = MK_EXTRACTe(in_v, idx * v_elem_sz, v_elem_sz);
+	out_val = MK_EXTRACT(in_v, idx * v_elem_sz, v_elem_sz);
 	state.bindLocal(ki, out_val);
 }
 
@@ -2872,8 +2872,10 @@ static StateSolver* createFastSolver(void)
 	return new StateSolver(s, ts);
 }
 
-static StateSolver* createTimerChain(
-	double timeout, std::string qPath, std::string logPath)
+StateSolver* Executor::createSolverChain(
+	double timeout,
+	const std::string& qPath,
+	const std::string& logPath)
 {
 	Solver		*s;
 	TimedSolver	*timedSolver = NULL;

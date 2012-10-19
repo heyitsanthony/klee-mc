@@ -29,6 +29,8 @@
 #include "klee/ExeStateBuilder.h"
 #include "klee/StackFrame.h"
 
+struct KTest;
+
 namespace klee
 {
 class Array;
@@ -347,8 +349,14 @@ public:
 	 * returns 0 if not materialization of replay path */
 	unsigned replayHeadLength(const ReplayPath& rp) const;
 
+	void setPartSeed(const KTest* ktest);
+	const Assignment* getPartAssignment(void) const
+	{ return partseed_assignment; }
+	bool isPartSeed(void) const { return partseed_assignment != NULL; }
+
 private:
 	void initFields(void);
+	void updatePartSeed(Array* array);
 
 	static MemoryManager	*mm;
 	unsigned int		num_allocs;
@@ -380,6 +388,10 @@ private:
 
 	typedef std::map<const KFunction*, uint64_t>	min_kf_inst_ty;
 	min_kf_inst_ty		min_kf_inst;
+
+	const KTest		*partseed_ktest;
+	Assignment		*partseed_assignment;
+	unsigned		partseed_idx;
 };
 
 }

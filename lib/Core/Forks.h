@@ -88,6 +88,8 @@ public:
 	bool isQuenching(void) const { return is_quench; }
 	void setQuenching(bool v) { is_quench = v; }
 
+	void setConstraintOmit(bool v) { omit_valid_constraints = v; }
+
 protected:
 	virtual bool forkSetup(ExecutionState& current, struct ForkInfo& fi);
 	virtual void trackBranch(ExecutionState& current, unsigned condIdx);
@@ -127,6 +129,7 @@ private:
 	ExprVisitor		*condFilter;
 	Executor::StatePair	lastFork;
 	bool			is_quench;
+	bool			omit_valid_constraints;
 	static unsigned		quench_c;
 	static unsigned		fork_c;
 	static unsigned		fork_uniq_c;
