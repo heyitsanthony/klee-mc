@@ -178,8 +178,7 @@ bool StateSolver::getInitialValues(const ExecutionState& state, Assignment& a)
 		return true;
 
 	WRAP_QUERY_NOSIMP(solver->getInitialValues(
-		Query(	state.constraints,
-			ConstantExpr::create(0, Expr::Bool)),
+		Query(state.constraints, MK_CONST(0, Expr::Bool)),
 		a));
 
 	return ok;
@@ -203,7 +202,7 @@ ref<Expr> StateSolver::toUnique(const ExecutionState &state, ref<Expr> &e)
 	if (!getValue(state, e, value))
 		return e;
 
-	eq_expr = EqExpr::create(e, value);
+	eq_expr = MK_EQ(e, value);
 	if (!mustBeTrue(state, eq_expr, isTrue))
 		return e;
 

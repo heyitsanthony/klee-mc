@@ -39,20 +39,23 @@ public:
 	virtual ~StateSolver() { delete solver; }
 
 	void setTimeout(double t) { timedSolver->setTimeout(t); }
-	bool evaluate(const ExecutionState&, ref<Expr>, Solver::Validity &result);
-	bool mustBeTrue(const ExecutionState&, ref<Expr>, bool &result);
-	bool mustBeFalse(const ExecutionState&, ref<Expr>, bool &result);
-	bool mayBeTrue(const ExecutionState&, ref<Expr>, bool &result);
-	bool mayBeFalse(const ExecutionState&, ref<Expr>, bool &result);
-	bool getValue(
+
+	virtual bool evaluate(
+		const ExecutionState&, ref<Expr>, Solver::Validity &result);
+	virtual bool mustBeTrue(
+		const ExecutionState&, ref<Expr>, bool &result);
+	virtual bool mustBeFalse(
+		const ExecutionState&, ref<Expr>, bool &result);
+	virtual bool mayBeTrue(
+		const ExecutionState&, ref<Expr>, bool &result);
+	virtual bool mayBeFalse(const ExecutionState&, ref<Expr>, bool &result);
+	virtual bool getValue(
 		const ExecutionState &,
 		ref<Expr> expr,
 		ref<ConstantExpr> &result);
 
-	bool getInitialValues(const ExecutionState&, Assignment&);
-
-
-	bool getRange(
+	virtual bool getInitialValues(const ExecutionState&, Assignment&);
+	virtual bool getRange(
 		const ExecutionState&,
 		ref<Expr> query,
 		std::pair< ref<Expr>, ref<Expr> >& ret);
@@ -60,7 +63,7 @@ public:
 	/// Return a unique constant value for the given expression in the
 	/// given state, if it has one (i.e. it provably only has a single
 	/// value). Otherwise return the original expression.
-	ref<Expr> toUnique(const ExecutionState &state, ref<Expr> &e);
+	virtual ref<Expr> toUnique(const ExecutionState &state, ref<Expr> &e);
 
 	static uint64_t getConstQueries(void) { return constQueries; }
 	static uint64_t getRealQueries(void);
