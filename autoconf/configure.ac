@@ -309,6 +309,68 @@ else
   AC_SUBST(STP_ROOT,$stp_root)
 fi
 
+dnl boolector
+AC_ARG_WITH(boolector,
+  AS_HELP_STRING([--with-boolector],
+    [Location of Boolector installation directory]),,)
+
+if test X$with_boolector = X ; then
+	AC_SUBST(ENABLE_BOOLECTOR_LIB,[[0]])
+else
+  boolector_root=`cd $with_boolector 2> /dev/null; pwd`
+
+  old_CPPFLAGS="$CPPFLAGS"
+  CPPFLAGS="$CPPFLAGS -I$boolector_root"
+  AC_CHECK_HEADER(boolector.h,, [AC_MSG_ERROR([Bad boolector.h header])])
+  CPPFLAGS="$old_CPPFLAGS"
+
+  AC_SUBST(ENABLE_BOOLECTOR_LIB,[[1]])
+  AC_SUBST(BOOLECTOR_ROOT,$boolector_root)
+fi
+
+dnl z3
+AC_ARG_WITH(z3,
+  AS_HELP_STRING([--with-z3],
+    [Location of Z3 installation directory]),,)
+
+if test X$with_z3 = X ; then
+	AC_SUBST(ENABLE_Z3_LIB,[[0]])
+else
+  z3_root=`cd $with_z3 2> /dev/null; pwd`
+
+  old_CPPFLAGS="$CPPFLAGS"
+  CPPFLAGS="$CPPFLAGS -I$z3_root/include"
+  AC_CHECK_HEADER(z3.h,, [AC_MSG_ERROR([Bad z3.h header])])
+  CPPFLAGS="$old_CPPFLAGS"
+
+  AC_SUBST(ENABLE_Z3_LIB,[[1]])
+  AC_SUBST(Z3_ROOT,$z3_root)
+fi
+
+dnl libvex
+AC_ARG_WITH(libvex,
+  AS_HELP_STRING([--with-libvex],
+    [Location of LIBVEX installation directory]),,)
+
+if test X$with_libvex = X ; then
+	AC_MSG_ERROR(Need path to LIBVEX)
+else
+  libvex_root=`cd $with_libvex 2> /dev/null; pwd`
+  AC_SUBST(VEXLIB_ROOT,$libvex_root)
+fi
+
+dnl vexllvm
+AC_ARG_WITH(vexllvm,
+  AS_HELP_STRING([--with-vexllvm],
+    [Location of VEXLLVM installation directory]),,)
+
+if test X$with_vexllvm = X ; then
+	AC_MSG_ERROR(Need path to VEXLLVM)
+else
+	vexllvm_root=`cd $with_vexllvm 2> /dev/null; pwd`
+	AC_SUBST(VEXLLVM_ROOT,$vexllvm_root)
+fi
+
 dnl User option to use stplog.
 
 AC_ARG_ENABLE(stplog,
@@ -364,6 +426,15 @@ AC_CONFIG_MAKEFILE(test/Makefile)
 AC_CONFIG_MAKEFILE(test/Makefile.tests)
 AC_CONFIG_MAKEFILE(tools/Makefile)
 AC_CONFIG_MAKEFILE(unittests/Makefile)
+
+if test X$LLVM_CXXFLAGS_EXTRA = X; then
+	AC_SUBST(LLVM_CXXFLAGS_EXTRA, [[]])
+fi
+
+if test X$LLVM_CFLAGS_EXTRA = X; then
+	AC_SUBST(LLVM_CFLAGS_EXTRA, [[]])
+fi
+
 
 dnl This must be last
 AC_OUTPUT

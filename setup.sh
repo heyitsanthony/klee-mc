@@ -3,8 +3,8 @@
 VEXLLVMDIR=${VEXLLVMDIR:-"/home/chz/src/vex/"}
 LLVMDIR=${LLVMDIR:-"/home/chz/src/llvm/llvm-3.1.src/"}
 STPDIR=${STPDIR:-"/home/chz/src/stp-fast/stp/"}
-BOOLECTORDIR=${BOOLECTORDIR:-"/home/chz/src/boolector/"}
-Z3DIR=${Z3DIR:-"/home/chz/src/z3/"}
+#BOOLECTORDIR=${BOOLECTORDIR:-"/home/chz/src/boolector/"}
+#Z3DIR=${Z3DIR:-"/home/chz/src/z3/"}
 UCLIBDIR=${UCLIBDIR:-"/home/chz/src/uclibc-pruning"}
 VEXLIBDIR=${VEXLIBDIR:-"/usr/lib/valgrind/"}
 
@@ -18,11 +18,12 @@ CXXFLAGS="-g -O2  $EXTRAHEADERS"		\
 		--with-libvex="$VEXLIBDIR"	\
 		--with-vexllvm="$VEXLLVMDIR"	\
 		--with-stp="$STPDIR"	\
-		--with-boolector="$BOOLECTORDIR"	\
-		--with-z3="$Z3DIR"			\
 		--enable-posix-runtime			\
 		--with-uclibc="$UCLIBDIR"		\
-		--with-runtime=Release 
+		--with-runtime=Release 			\
+		--with-boolector="$BOOLECTORDIR"	\
+		--with-z3="$Z3DIR"			\
+
 fi
 
 make -j6 REQUIRES_RTTI=1

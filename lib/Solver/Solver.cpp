@@ -529,8 +529,15 @@ TimedSolver* TimedSolver::create(void)
 	assert (!UseCVC3 && "Native CVC3 not supported");
 	assert (!UseYices && "Natice Yices not supported");
 
+#ifdef USE_BOOLECTOR_LIB
 	if (UseBoolector) return new BoolectorSolver();
+#else
+	assert (!UseBoolector && "Set configure flag --with-boolector");
+#endif
+#ifdef USE_Z3_LIB
 	if (UseZ3) return new Z3Solver();
-
+#else
+	assert (!UseZ3 && "Set configure flag --with-z3");
+#endif
 	return new STPSolver(UseForkedSTP, STPServer);
 }

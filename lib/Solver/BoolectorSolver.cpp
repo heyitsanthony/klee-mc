@@ -1,3 +1,4 @@
+#ifdef USE_BOOLECTOR_LIB
 #include <assert.h>
 #include "static/Sugar.h"
 #include "BoolectorSolver.h"
@@ -494,3 +495,4 @@ BtorExp* BoolectorSolverImpl::getOnes(unsigned w)
 	exp_set.insert(ret);
 	return ret;
 }
+#endif

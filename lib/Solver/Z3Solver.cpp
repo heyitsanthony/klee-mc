@@ -1,3 +1,4 @@
+#ifdef USE_Z3_LIB
 #include "Z3Solver.h"
 #include "static/Sugar.h"
 #include "klee/Constraints.h"
@@ -470,3 +471,4 @@ uint8_t Z3SolverImpl::getArrayValue(
 
 	return (uint8_t)ret;
 }
+#endif

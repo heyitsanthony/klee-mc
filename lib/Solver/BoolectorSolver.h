@@ -1,3 +1,4 @@
+#ifdef USE_BOOLECTOR_LIB
 #ifndef BOOLECTORSOLVERIMPL_H
 #define BOOLECTORSOLVERIMPL_H
 
@@ -58,4 +59,5 @@ private:
 
 }
 
+#endif
 #endif

@@ -1,3 +1,4 @@
+#ifdef USE_Z3_LIB
 #ifndef Z3SOLVERIMPL_H
 #define Z3SOLVERIMPL_H
 
@@ -51,4 +52,5 @@ private:
 
 }
 
+#endif
 #endif
