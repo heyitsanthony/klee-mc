@@ -97,6 +97,8 @@ namespace {
 	cl::location(DebugPrintInstructions),
         cl::desc("Print instructions during execution."),
 	cl::init(false));
+  cl::opt<bool> DebugPrintValues("debug-print-values");
+
   cl::opt<bool> DebugCheckForImpliedValues("debug-check-for-implied-values");
 
   cl::opt<bool>
@@ -408,14 +410,12 @@ void Executor::debugPrintInst(ExecutionState& state)
 	raw_os_ostream	os(std::cerr);
 	state.printFileLine();
 	std::cerr << std::setw(10) << stats::instructions << " ";
-	os << *(state.pc->getInst()) << "\n";
+	os << *(state.prevPC->getInst()) << "\n";
 }
 
 void Executor::stepInstruction(ExecutionState &state)
 {
 	assert (state.checkCanary() && "Not a valid state");
-
-	if (DebugPrintInstructions) debugPrintInst(state);
 
 	if (statsTracker) statsTracker->stepInstruction(state);
 
@@ -1370,26 +1370,26 @@ void Executor::instInsertElement(ExecutionState& state, KInstruction* ki)
 	ref<Expr>	out_val;
 	if (idx == (v_elem_c - 1)) {
 		/* replace head; tail, head */
-		out_val = ExtractExpr::create(in_v, 0, v_elem_sz*(v_elem_c-1));
-		out_val = ConcatExpr::create(in_newelem, out_val);
+		out_val = MK_EXTRACT(in_v, 0, v_elem_sz*(v_elem_c-1));
+		out_val = MK_CONCAT(in_newelem, out_val);
 	} else if (idx == 0) {
 		/* replace tail; head, tail */
 		out_val = MK_EXTRACT(in_v, v_elem_sz, v_elem_sz*(v_elem_c-1));
-		out_val = ConcatExpr::create(out_val, in_newelem);
+		out_val = MK_CONCAT(out_val, in_newelem);
 	} else {
 		/* replace mid */
-		/* (v, off, width) */
-		out_val = ExtractExpr::create(in_v, 0, v_elem_sz*idx);
+		/* tail */
+		out_val = MK_EXTRACT(in_v, 0, v_elem_sz*idx);
 
-		/* head, mid */
-		out_val = ConcatExpr::create(out_val, in_newelem);
+		/* mid, tail */
+		out_val = MK_CONCAT(in_newelem, out_val);
 
-		out_val = ConcatExpr::create(
-			out_val,
-			ExtractExpr::create(
+		out_val = MK_CONCAT(
+			MK_EXTRACT(
 				in_v,
 				(idx+1)*v_elem_sz,
-				(v_elem_c-(idx+1))*v_elem_sz) /* tail */);
+				(v_elem_c-(idx+1))*v_elem_sz) /* head */,
+			out_val);
 	}
 
 	assert (out_val->getWidth() == in_v->getWidth());
@@ -1967,6 +1967,15 @@ void Executor::stepStateInst(ExecutionState* &state)
 
 	stepInstruction(*state);
 	executeInstruction(*state, ki);
+	if (DebugPrintInstructions) {
+		debugPrintInst(*state);
+		if (DebugPrintValues && state->stack.hasLocal(ki)) {
+			ref<Expr>	e(state->stack.readLocal(ki));
+
+			if (!e.isNull() && e->getKind() == Expr::Constant)
+				std::cerr << " = " << e << '\n';
+		}
+	}
 	processTimers(state, MaxInstructionTime);
 }
 
