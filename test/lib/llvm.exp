@@ -207,8 +207,13 @@ proc RunLLVMTest { test } {
 			fail "$resultmsg"
 		}
 		set failed 1
+
+		foreach key [array names envArr ] { unset ::env($key) }
 		return
 	}
+
+
+	foreach key [array names envArr ] { unset ::env($key) }
 
 	if { $PRNUMS != "" } {
 		set PRNUMS " for $PRNUMS"
