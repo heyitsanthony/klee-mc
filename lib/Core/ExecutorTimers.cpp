@@ -884,6 +884,17 @@ done:
 	lastCall = now;
 }
 
+void Executor::flushTimers(void)
+{
+	double now = util::estWallTime();
+
+	foreach (it, timers.begin(), timers.end()) {
+		TimerInfo	*ti(*it);
+		ti->timer->run();
+		ti->nextFireTime = now + ti->rate;
+	}
+}
+
 void Executor::deleteTimerInfo(TimerInfo*& p)
 {
 	delete p;

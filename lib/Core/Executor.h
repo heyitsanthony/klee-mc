@@ -363,6 +363,7 @@ private:
 	void initTimers();
 	void processTimers(ExecutionState *current, double maxInstTime);
 	void processTimersDumpStates(void);
+	void flushTimers(void);
 
 	void getSymbolicSolutionCex(
 		const ExecutionState& state, ExecutionState& t);

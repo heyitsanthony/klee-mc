@@ -2090,6 +2090,7 @@ eraseStates:
 
 	std::cerr << "KLEE: halting execution, dumping remaining states\n";
 	haltExecution = true;
+	flushTimers();
 
 	foreach (it, stateManager->begin(), stateManager->end()) {
 		ExecutionState &state = **it;
