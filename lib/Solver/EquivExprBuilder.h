@@ -109,9 +109,6 @@ protected:
 	ref<Expr> lookup(ref<Expr>& e);
 	ref<Expr> lookupConst(const ref<Expr>& e);
 	ref<Expr> lookupByEval(ref<Expr>& e, unsigned nodes);
-	uint64_t getEvalHash(const ref<Expr>& e, bool &maybeConst);
-	uint64_t getEvalHash(const ref<Expr>& e)
-	{ bool mc; return getEvalHash(e, mc); }
 
 	ref<Expr> getParseByPath(const std::string& fname);
 
@@ -135,13 +132,6 @@ protected:
 
 	Solver				&solver;
 	ExprBuilder			*eb;	/* default builder */
-	std::vector<uint8_t>	sample_seq;
-	std::vector<uint8_t>	sample_seq_onoff;
-
-	/* 64-bit machine = 8 byte sampling => 17 = nyquist rate */
-	#define NONSEQ_COUNT	17
-	std::vector<uint8_t>	sample_nonseq_zeros[NONSEQ_COUNT];
-	std::vector<uint8_t>	sample_nonseq_fe[NONSEQ_COUNT];
 
 	uint64_t			ign_c;
 	uint64_t			const_c;

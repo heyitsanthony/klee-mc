@@ -89,7 +89,7 @@ int sc_read_sym(struct sc_pkt* sc, uint64_t len)
 #ifdef USE_SYS_FAILURE
 	if ((++fail_c.fc_read % FAILURE_RATE) == 0 &&
 	    GET_SYSRET_S(new_regs) == -1) {
-	    return 1;
+		return 1;
 	}
 #endif
 	/* limit lengths */
@@ -98,7 +98,7 @@ int sc_read_sym(struct sc_pkt* sc, uint64_t len)
 	}
 
 	make_sym_by_arg(sc->regfile, 1, len, "readbuf");
-	klee_assume(GET_SYSRET(new_regs) == len);
+	klee_assume_eq(GET_SYSRET(new_regs), len);
 	sc_ret_v(new_regs, len);
 	sc_breadcrumb_commit(sc, GET_SYSRET(new_regs));
 	return 0;

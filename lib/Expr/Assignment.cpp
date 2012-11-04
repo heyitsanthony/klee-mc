@@ -29,6 +29,8 @@ Assignment::Assignment(const ref<Expr>& e, bool _allowFreeValues)
 {
 	std::vector<const Array*> objects;
 
+	if (e->getKind() == Expr::Constant) return;
+
 	ExprUtil::findSymbolicObjects(e, objects);
 	foreach (it, objects.begin(), objects.end())
 		free_bindings.insert(*it);

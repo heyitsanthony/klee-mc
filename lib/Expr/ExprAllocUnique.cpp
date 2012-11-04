@@ -27,12 +27,14 @@ typedef std::tr1::unordered_set<ref<Expr>, hashexpr, expreq> ExprTab;
 
 static ExprTab expr_hashtab;
 
+#if 1
 ref<Expr> ExprAllocUnique::Constant(const llvm::APInt &v)
-{
+{ 
 	ref<Expr> r(new ConstantExpr(v));
 	r->computeHash();
 	return toUnique(r);
 }
+#endif
 
 #define DECL_ALLOC_1(x)				\
 ref<Expr> ExprAllocUnique::x(const ref<Expr>& src)	\

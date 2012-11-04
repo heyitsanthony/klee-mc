@@ -31,6 +31,14 @@ const char* const PipeCVC3::sat_args[] = {
 const char* const PipeCVC3::mod_args[] = {
 	"cvc3", "-lang", "smt", "-output-lang", "presentation", "+model", NULL};
 
+/* XXX BUSTED-- how do I get model data from cmdline? */
+const char* PipeCVC4::exec_cmd = "cvc4";
+const char* const PipeCVC4::sat_args[] = {
+	"cvc4", "-lang", "smt1", NULL};
+const char* const PipeCVC4::mod_args[] = {
+	"cvc4", "-lang", "smt1", "-output-lang", "presentation", "+model", NULL};
+
+
 const char* PipeYices::exec_cmd = "yices";
 const char* const PipeYices::sat_args[] = {"yices",  NULL};
 const char* const PipeYices::mod_args[] = {"yices", "-f", NULL};
@@ -223,6 +231,8 @@ bool PipeYices::parseModel(std::istream& is)
 	return true;
 }
 
+
+bool PipeCVC4::parseModel(std::istream& is) { assert (0 == 1 && "UGH"); }
 
 bool PipeCVC3::parseModel(std::istream& is)
 {

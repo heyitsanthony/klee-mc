@@ -15,6 +15,7 @@ public:
 	virtual int compare(const Expr& lhs, const Expr& rhs)
 	{ return (&lhs == &rhs) ? 0 : ((long)&lhs - (long)&rhs); }
 
+	// Handled by ExprAlloc constant caching
 	virtual ref<Expr> Constant(const llvm::APInt &Value);
 	virtual ref<Expr> NotOptimized(const ref<Expr> &Index);
 	virtual ref<Expr> Read(const UpdateList &Updates, const ref<Expr> &idx);

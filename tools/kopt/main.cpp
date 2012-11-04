@@ -109,10 +109,14 @@ DEF_OPT(BRuleRebuild, "brule-rebuild", "Rebuild brule file.");
 DEF_OPT(ExtractConstrs, "extract-constrs", "Extract rules with constraints");
 DEF_OPT(ExtractFrees, "extract-free", "Extract rules with free vars");
 DEF_OPT(AddRule, "add-rule", "Add rule to brule file.");
+DEF_OPT(NormalFormDest, "nf-dest", "Rewrite destinations to normal form.");
 }
 
 void rebuildBRules(Solver* s, const std::string& InputPath);
 extern void xtiveBRule(ExprBuilder *eb, Solver* s);
+
+
+extern void normalFormCanonicalize(Solver *solver);
 
 bool checkRule(const ExprRule* er, Solver* s, std::ostream&);
 bool getRuleCex(const ExprRule* er, Solver* s, std::ostream&);
@@ -864,7 +868,9 @@ int main(int argc, char **argv)
 		return -3;
 	}
 
-	if (CompareDBs) {
+	if (NormalFormDest) {
+		normalFormCanonicalize(s);
+	} else if (CompareDBs) {
 		compareDBs(InputFile);
 	} else if (ExtractFrees) {
 		extractFree(InputFile);

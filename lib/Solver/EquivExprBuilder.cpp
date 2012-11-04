@@ -15,6 +15,7 @@
 #include "../Expr/RuleBuilder.h"
 #include "static/Sugar.h"
 #include "../Expr/TopLevelBuilder.h"
+#include "../Expr/AssignHash.h"
 #include "EquivExprBuilder.h"
 
 #define MAX_EXPRFILE_BYTES	(1024*128)
@@ -69,16 +70,9 @@ namespace {
 		cl::desc("Check if \"discovered\" a known rule"));
 }
 
-
-static const uint8_t sample_seq_dat[] = {0xfe, 0, 0x7f, 1, 0x27, 0x2, ~0x27};
-static const uint8_t sample_seq_onoff_dat[] = {0xff, 0x0};
-
-
 EquivExprBuilder::EquivExprBuilder(Solver& s, ExprBuilder* in_eb)
 : solver(s)
 , eb(in_eb)
-, sample_seq(&sample_seq_dat[0], &sample_seq_dat[7])
-, sample_seq_onoff(&sample_seq_onoff_dat[0], &sample_seq_onoff_dat[2])
 , ign_c(0)
 , const_c(0)
 , wide_c(0)
@@ -99,20 +93,6 @@ EquivExprBuilder::EquivExprBuilder(Solver& s, ExprBuilder* in_eb)
 		mkdir(ProofsDir.c_str(), 0700);
 
 	loadBlacklist((EquivDBDir + "/blacklist.txt").c_str());
-
-	for (unsigned i = 0; i < NONSEQ_COUNT; i++) {
-		for (unsigned j = 0; j < i; j++) {
-			sample_nonseq_zeros[i].push_back(0xa5);
-		}
-		sample_nonseq_zeros[i].push_back(0);
-	}
-
-	for (unsigned i = 0; i < NONSEQ_COUNT; i++) {
-		for (unsigned j = 0; j < i; j++) {
-			sample_nonseq_fe[i].push_back(0);
-		}
-		sample_nonseq_fe[i].push_back(0xfe);
-	}
 
 	if (!EquivRuleFile.empty())
 		equiv_rule_file = new std::ofstream(
@@ -162,7 +142,7 @@ ref<Expr> EquivExprBuilder::lookupConst(const ref<Expr>& e)
 		return e;
 
 	consts.insert(v);
-	consts_map[getEvalHash(e)] = v;
+	consts_map[AssignHash::getEvalHash(e)] = v;
 	return e;
 }
 
@@ -453,7 +433,7 @@ ref<Expr> EquivExprBuilder::lookupByEval(ref<Expr>& e, unsigned nodes)
 	bool			maybeConst;
 
 	assert (nodes > 1);
-	hash = getEvalHash(e, maybeConst);
+	hash = AssignHash::getEvalHash(e, maybeConst);
 	w = e->getWidth();
 
 	if (written_hashes.count(hash) == 0)
@@ -570,87 +550,12 @@ ref<Expr> EquivExprBuilder::getParseByPath(const std::string& fname)
 	return ret;
 }
 
-class AssignHash
-{
-public:
-	AssignHash(const ref<Expr>& _e)
-	: e(_e), a(e), hash_off(1), hash(0), maybe_const(true)
-	{}
-
-	virtual ~AssignHash() {}
-	void commitAssignment()
-	{
-		uint64_t	cur_eval_hash;
-
-		cur_eval_hash = a.evaluate(e)->hash();
-		if (hash_off == 1)
-			last_eval_hash = cur_eval_hash;
-
-		/* XXX: update this to use murmur too.
-		 * I don't trust this mixing function. */
-		hash ^= (cur_eval_hash + hash_off)*(hash_off);
-		hash_off++;
-
-		if (last_eval_hash != cur_eval_hash)
-			maybe_const = false;
-
-		last_eval_hash = cur_eval_hash;
-		a.resetBindings();
-	}
-
-	Assignment& getAssignment() { return a; }
-	uint64_t getHash(void) const { return hash; }
-	bool maybeConst(void) const { return maybe_const; }
-private:
-	const ref<Expr>	&e;
-	Assignment	a;
-	unsigned	hash_off;
-	uint64_t	hash;
-	uint64_t	last_eval_hash;
-	bool		maybe_const;
-};
-
-uint64_t EquivExprBuilder::getEvalHash(
-	const ref<Expr>& e, bool& maybeConst)
-{
-	AssignHash		ah(e);
-	Assignment		&a(ah.getAssignment());
-
-	for (unsigned k = 0; k < NONSEQ_COUNT; k++) {
-		a.bindFreeToSequence(sample_nonseq_zeros[k]);
-		ah.commitAssignment();
-	}
-
-	for (unsigned k = 0; k < NONSEQ_COUNT; k++) {
-		a.bindFreeToSequence(sample_nonseq_fe[k]);
-		ah.commitAssignment();
-	}
-
-	a.bindFreeToSequence(sample_seq);
-	ah.commitAssignment();
-
-	a.bindFreeToSequence(sample_seq_onoff);
-	ah.commitAssignment();
-
-	for (unsigned k = 0; k <= 255; k++) {
-		a.bindFreeToU8((uint8_t)k);
-		ah.commitAssignment();
-	}
-
-	maybeConst = ah.maybeConst();
-	return ah.getHash();
-}
-
-
 ExprBuilder* createEquivBuilder(Solver& solver, ExprBuilder* eb)
 { return EquivExprBuilder::create(solver, eb); }
 
 
 ExprBuilder* EquivExprBuilder::create(Solver& s, ExprBuilder* in_eb)
-{
-	return new TopLevelBuilder(new EquivExprBuilder(s, in_eb), in_eb, false);
-}
-
+{ return new TopLevelBuilder(new EquivExprBuilder(s, in_eb), in_eb, false); }
 
 void EquivExprBuilder::printName(std::ostream& os) const
 {

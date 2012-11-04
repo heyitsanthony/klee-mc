@@ -71,9 +71,8 @@ DECL_PUB_PIPE_FMT(Z3)
 	bool readArrayValues(std::istream& is, const std::string& arrname);
 };
 
-class PipeCVC3 : public PipeFormat {
-DECL_PUB_PIPE_FMT(CVC3)
-};
+class PipeCVC3 : public PipeFormat { DECL_PUB_PIPE_FMT(CVC3) };
+class PipeCVC4 : public PipeFormat { DECL_PUB_PIPE_FMT(CVC4) };
 
 class PipeBoolector15 : public PipeBoolector
 {

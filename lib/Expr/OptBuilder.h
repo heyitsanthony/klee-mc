@@ -38,11 +38,7 @@ public:
 	}
 
 	ref<Expr> Ne(const ref<Expr> &l, const ref<Expr> &r)
-	{
-		return EqExpr::create(
-			ConstantExpr::create(0, Expr::Bool),
-			EqExpr::create(l, r));
-	}
+	{ return EqExpr::create(MK_CONST(0, Expr::Bool), MK_EQ(l, r)); }
 
 	ref<Expr> Ugt(const ref<Expr> &l, const ref<Expr> &r)
 	{ return UltExpr::create(r, l); }
