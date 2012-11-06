@@ -54,6 +54,7 @@ namespace llvm
 		cl::init(0));
 
 	cl::opt<bool> DumpRuleHashes("dump-rule-hashes");
+	cl::opt<std::string> ExtractByHashes("extract-hashes");
 
 	cl::opt<std::string>
 	ApplyRule(
@@ -865,6 +866,31 @@ static void dumpRuleHashes(void)
 	delete rb;
 }
 
+static void extractRuleHashes(
+	const std::string& hashFile)
+{
+	std::ofstream		os(InputFile.c_str());
+	std::ifstream		is(hashFile.c_str());
+	RuleBuilder		*rb;
+	std::set<uint64_t>	hset;
+	uint64_t		cur_hash;
+
+	assert (is.good());
+	while (is >> std::hex >> cur_hash)
+		hset.insert(cur_hash);
+
+	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
+
+	foreach (it, rb->begin(), rb->end()) {
+		const ExprRule	*er(*it);
+		if (hset.count(er->hash()) == 0)
+			continue;
+		er->printBinaryRule(os);
+	}
+
+	delete rb;
+}
+
 int main(int argc, char **argv)
 {
 	Solver		*s;
@@ -885,7 +911,9 @@ int main(int argc, char **argv)
 		return -3;
 	}
 
-	if (DumpRuleHashes) {
+	if (!ExtractByHashes.empty()) {
+		extractRuleHashes(ExtractByHashes);
+	} else if (DumpRuleHashes) {
 		dumpRuleHashes();
 	} else if (NormalFormDest) {
 		normalFormCanonicalize(s);
