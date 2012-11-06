@@ -334,8 +334,7 @@ ref<Expr> EquivExprBuilder::tryEquivRewrite(
 		return NULL;
 
 	ok = solver.mustBeTrue(
-		Query(EqExpr::create(e_klee_w, e_db_unified)),
-		must_be_true);
+		Query(MK_EQ(e_klee_w, e_db_unified)), must_be_true);
 	if (ok == false) {
 		failed_c++;
 		return NULL;
@@ -436,18 +435,15 @@ ref<Expr> EquivExprBuilder::lookupByEval(ref<Expr>& e, unsigned nodes)
 	hash = AssignHash::getEvalHash(e, maybeConst);
 	w = e->getWidth();
 
-	if (written_hashes.count(hash) == 0)
-		missedLookup(e, nodes, hash);
-
 	if (solver.inSolver()) {
 		std::cerr << "[EquivExpr] Skipping replace: In solver!\n";
 		if (QueueSolverEquiv)
 			solver_exprs.push_back(e);
-		return e;
+		goto miss;
 	}
 
 	if (ReplaceEquivExprs == false)
-		return e;
+		goto miss;
 
 	/* seen constant? */
 	if (consts_map.count(hash)) {
@@ -465,7 +461,7 @@ ref<Expr> EquivExprBuilder::lookupByEval(ref<Expr>& e, unsigned nodes)
 		if (!tryEquivRewrite(e, ce).isNull())
 			return ce;
 
-		return e;
+		goto miss;
 	}
 
 	/* all hashes were the same, so it could be const;
@@ -489,7 +485,7 @@ ref<Expr> EquivExprBuilder::lookupByEval(ref<Expr>& e, unsigned nodes)
 
 	if (blacklist.count(hash)) {
 		blacklist_c++;
-		return e;
+		goto miss;
 	}
 
 	/* for smallest matching input-hash, if any */
@@ -525,6 +521,10 @@ ref<Expr> EquivExprBuilder::lookupByEval(ref<Expr>& e, unsigned nodes)
 		if (!ret.isNull())
 			return ret;
 	}
+
+miss:
+	if (written_hashes.count(hash) == 0)
+		missedLookup(e, nodes, hash);
 
 	return e;
 }

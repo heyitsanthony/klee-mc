@@ -107,9 +107,10 @@ static void analyzeSampleHashSet(
 
 void normalFormCanonicalize(Solver *solver)
 {
-	RuleBuilder	*rb;
-	ah2expr_ty	ah2expr;
-	xlatemap_ty	xlate;
+	RuleBuilder			*rb;
+	ah2expr_ty			ah2expr;
+	xlatemap_ty			xlate;
+	std::set<const ExprRule*>	repl_set;
 
 	std::cout << "# bits exprs samplehashes\n";
 
@@ -121,6 +122,12 @@ void normalFormCanonicalize(Solver *solver)
 		analyzeSampleHashSet(solver, s, xlate);
 	}
 
+#if 0
+	std::ofstream	of(
+		rb->getDBPath().c_str(),
+		std::ios_base::out |
+		std::ios_base::app |
+		std::ios_base::binary);
 	foreach (it, rb->begin(), rb->end()) {
 		const ExprRule		*er(*it);
 		ExprRule		*new_er;
@@ -143,22 +150,17 @@ void normalFormCanonicalize(Solver *solver)
 			continue;
 		}
 
-//		new_er->printBinaryRule(of);
-		new_er->print(std::cerr);
+		repl_set.insert(er);
+		new_er->printBinaryRule(of);
 	}
+	of.close();
 
-#if 0
-	std::ofstream	of(
-		rb->getDBPath().c_str(),
-		std::ios_base::out |
-		std::ios_base::app |
-		std::ios_base::binary);
+
 	foreach (it, repl.begin(), repl.end()) {
 		const ExprRule	*er = *(it->first);
 		ExprRule	*xtive_er;
 
 	}
-	of.close();
 
 	rb->eraseDBRule(*(it->first));
 #endif
