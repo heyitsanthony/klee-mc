@@ -24,6 +24,12 @@ CXXFLAGS="-g -O2  $EXTRAHEADERS"		\
 		--with-boolector="$BOOLECTORDIR"	\
 		--with-z3="$Z3DIR"			\
 
+ret=$?
+if [ "$ret" -ne 0 ]; then
+	echo failed to config
+	exit 1
+fi
+
 fi
 
 make -j6 REQUIRES_RTTI=1
