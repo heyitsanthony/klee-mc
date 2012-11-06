@@ -53,6 +53,8 @@ namespace llvm
 		cl::location(WorkerForks),
 		cl::init(0));
 
+	cl::opt<bool> DumpRuleHashes("dump-rule-hashes");
+
 	cl::opt<std::string>
 	ApplyRule(
 		"apply-rule",
@@ -848,6 +850,21 @@ static void splitDB(std::string& prefix, int num_chunks)
 	delete [] ofs;
 }
 
+static void dumpRuleHashes(void)
+{
+	RuleBuilder*	rb;
+
+	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
+	assert (rb != NULL);
+
+	foreach (it, rb->begin(), rb->end()) {
+		const ExprRule	*er(*it);
+		std::cout << (void*)er->hash() << '\n';
+	}
+
+	delete rb;
+}
+
 int main(int argc, char **argv)
 {
 	Solver		*s;
@@ -868,7 +885,9 @@ int main(int argc, char **argv)
 		return -3;
 	}
 
-	if (NormalFormDest) {
+	if (DumpRuleHashes) {
+		dumpRuleHashes();
+	} else if (NormalFormDest) {
 		normalFormCanonicalize(s);
 	} else if (CompareDBs) {
 		compareDBs(InputFile);

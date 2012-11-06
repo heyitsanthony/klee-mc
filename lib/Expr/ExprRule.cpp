@@ -10,6 +10,7 @@ int xxx_rb;
 #include "ExprRule.h"
 #include "ExprPatternMatch.h"
 #include "ExprFlatWriter.h"
+#include "murmur3.h"
 
 using namespace klee;
 
@@ -650,4 +651,17 @@ ExprRule* ExprRule::createRule(const ref<Expr>& lhs, const ref<Expr>& rhs)
 	std::stringstream	ss;
 	printRule(ss, lhs, rhs);
 	return loadPrettyRule(ss);
+}
+
+uint64_t ExprRule::hash(void) const
+{
+	uint64_t		ret[128/(8*8)];
+	std::stringstream	ss;
+	std::string		s;
+
+	printBinaryRule(ss);
+	s = ss.str();
+
+	MurmurHash3_x64_128(s.c_str(), s.size(), 123, &ret);
+	return ret[0];
 }

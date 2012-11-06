@@ -93,6 +93,8 @@ public:
 	bool isNaive(void) const { return !hasConstraints() && !hasFree(); }
 
 	ExprRule(const ExprRule& er);
+
+	uint64_t hash(void) const;
 protected:
 	ExprRule(
 		const Pattern& _from,
