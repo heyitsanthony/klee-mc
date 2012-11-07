@@ -7,7 +7,10 @@ function xtive_loop
 {
 	BRULEF="$1"
 	loopc=0
+	LASTAPPENDED="whatever"
 	while [ 1 ]; do
+		# normal forms
+		kopt -rb-recursive=false -max-stp-time=30 -pipe-solver -nf-dest -rule-file="$BRULEF" 2>&1
 		APPENDED=`kopt -rb-recursive=false -max-stp-time=30 -pipe-solver -brule-xtive -rule-file="$BRULEF" 2>&1 | grep Append | cut -f2 -d' '`
 		if [ -z "$APPENDED" ]; then
 			break
@@ -15,6 +18,11 @@ function xtive_loop
 		if [ "$APPENDED" -eq "0" ]; then
 			break
 		fi
+		if [ "$APPENDED" -eq "$LASTAPPENDED" ]; then
+			continue
+		fi
+
+		LASTAPPENDED=$APPENDED
 
 		loopc=$(($loopc + 1))
 		if [ "$loopc" -gt 8 ]; then
@@ -26,7 +34,7 @@ function xtive_loop
 		mv $BRULEF.tmp $BRULEF
 
 		NEWDUPS=`cat $BRULEF.dups`
-		if [ "$NEWDUPS" == "$OLDDUPS" ]; then
+		if [ "$NEWDUPS" -eq "$OLDDUPS" ]; then
 			echo "SAME DUPS!"
 			break;
 		fi
