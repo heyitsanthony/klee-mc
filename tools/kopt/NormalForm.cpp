@@ -122,7 +122,6 @@ void normalFormCanonicalize(Solver *solver)
 		analyzeSampleHashSet(solver, s, xlate);
 	}
 
-#if 0
 	std::ofstream	of(
 		rb->getDBPath().c_str(),
 		std::ios_base::out |
@@ -155,15 +154,8 @@ void normalFormCanonicalize(Solver *solver)
 	}
 	of.close();
 
-
-	foreach (it, repl.begin(), repl.end()) {
-		const ExprRule	*er = *(it->first);
-		ExprRule	*xtive_er;
-
-	}
-
-	rb->eraseDBRule(*(it->first));
-#endif
+	foreach (it, repl_set.begin(), repl_set.end())
+		rb->eraseDBRule(*it);
 
 	delete rb;
 }
