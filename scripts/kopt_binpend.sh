@@ -18,11 +18,6 @@ function xtive_loop
 		if [ "$APPENDED" -eq "0" ]; then
 			break
 		fi
-		if [ "$APPENDED" -eq "$LASTAPPENDED" ]; then
-			continue
-		fi
-
-		LASTAPPENDED=$APPENDED
 
 		loopc=$(($loopc + 1))
 		if [ "$loopc" -gt 8 ]; then
@@ -38,6 +33,12 @@ function xtive_loop
 			echo "SAME DUPS!"
 			break;
 		fi
+
+		if [ "$APPENDED" -eq "$LASTAPPENDED" ]; then
+			break
+		fi
+
+		LASTAPPENDED=$APPENDED
 	done
 
 	rm "$BRULEF.dups"
