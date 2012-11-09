@@ -35,16 +35,19 @@ KnockoutRule::~KnockoutRule(void) { delete kout; }
 static bool isValidRange(
 	Solver* s,
 	const ref<Expr>& rule_eq,
-	const ref<Expr>& target,
-	const ref<Expr>& lo,
-	const ref<Expr>& hi)
+	const ref<Expr>& e_range)
 {
 	ConstraintManager	cs;
 	Query			q(cs, rule_eq);
 	bool			mustBeTrue;
 
-	std::cerr << "RANGE EXPR: " << RANGE_EXPR(target, lo, hi) << '\n';
-	cs.addConstraint(RANGE_EXPR(target, lo, hi));
+	/* if it's constant, it is always true and should be matched
+	 * with a dummy var, not a constant label! */
+	if (e_range->getKind() == Expr::Constant)
+		return false;
+
+	std::cerr << "RANGE EXPR: " << e_range << '\n';
+	cs.addConstraint(e_range);
 	if (s->mustBeTrue(q, mustBeTrue) == false)
 		return false;
 
@@ -58,25 +61,12 @@ static bool isValidRange(
 }
 
 
-ref<Expr> KnockoutRule::trySlot(
-	Solver* s, const ref<Expr>& e_from,
-	const replvar_t& rv, int i) const
+static ref<Expr> getContiguousRange(Solver* s, Query& q, uint64_t pivot)
 {
-	KnockOut			kout_partial(arr, i);
-	ref<Expr>			rule_eq, e_range, e_ko;
-	std::pair<uint64_t, uint64_t >	r;
+	std::pair<uint64_t, uint64_t >		r;
 	std::pair<ref<Expr>, ref<Expr> >	r_e;
 
-	uint64_t			pivot;
-	ConstraintManager		cs;
-	Query				q(cs, rv.first);
-
-	e_ko = kout_partial.apply(e_from);
-	pivot = rv.second->getZExtValue();
-
-	rule_eq = EqExpr::create(e_ko, er->getToExpr());
-	cs.addConstraint(rule_eq);
-
+	/* formula for query = value for slotted constant */
 	if (!s->getImpliedRange(q, pivot, r)) {
 		std::cerr << "FAILED RANGE\n";
 		return NULL;
@@ -87,18 +77,115 @@ ref<Expr> KnockoutRule::trySlot(
 		return NULL;
 	}
 
-	r_e.first = MK_CONST(r.first, rv.first->getWidth());
-	r_e.second = MK_CONST(r.second, rv.first->getWidth());
+	r_e.first = MK_CONST(r.first, q.expr->getWidth());
+	r_e.second = MK_CONST(r.second, q.expr->getWidth());
 
-	if (!isValidRange(s, rule_eq, rv.first, r_e.first, r_e.second)) {
-		std::cerr << "INVALID RANGE [" << i << "]: ["
-			<< r.first << ", " << r.second << "]\n";
+	return RANGE_EXPR(q.expr, r_e.first, r_e.second);
+}
+
+static ref<Expr> getMaskRange(Solver* s, Query& q, uint64_t pivot)
+{
+	ref<Expr>	range;
+	unsigned	w;
+	uint64_t	care_bits;	/* bits that are valid  */
+
+	w = q.expr->getWidth();
+	if (w > 64) return NULL;
+
+	if (w > 64) w = 64;
+
+	/* TODO : this is probably so slow */
+	care_bits = 0;
+	for (unsigned i = 0; i < w; i++) {
+		uint64_t		bit_mask = ((uint64_t)1) << i;
+		bool			mbt = false;
+		Query			q2(
+			q.constraints,
+			MK_EQ(	MK_AND(q.expr, MK_CONST(bit_mask, w)),
+				MK_CONST(pivot & bit_mask, w)));
+
+		if (!s->mustBeTrue(q2, mbt))
+			return NULL;
+		if (mbt) care_bits |= bit_mask;
+	}
+
+	/* exact match? wtf?? */
+	if (care_bits == (uint64_t)((1LL << w)-1)) {
+		std::cerr << "Exact match on MaskRange?!\n";
 		return NULL;
 	}
 
-	e_range = RANGE_EXPR(rv.first, r_e.first, r_e.second);
+	if (care_bits == 0)
+		return NULL;
 
+	range = MK_EQ(
+		MK_AND(MK_CONST(care_bits, w), q.expr),
+		MK_CONST(pivot & care_bits, w));
+
+	assert (range->getKind() != Expr::Constant);
+	return range;
+}
+
+static bool isConstFixed(Solver* s, Query& q, const ref<Expr>& v)
+{
+	bool	mbt;
+	Query	q2(q.constraints, MK_EQ(q.expr, v));
+	if (s->mustBeTrue(q2, mbt) == false) return false;
+	return mbt;
+}
+
+ref<Expr> KnockoutRule::trySlot(
+	Solver* s, const ref<Expr>& e_from,
+	const replvar_t& rv, int i) const
+{
+	KnockOut			kout_partial(arr, i);
+	ref<Expr>			rule_eq, e_range, e_ko;
+	uint64_t			pivot;
+	ConstraintManager		cs;
+	Query				q(cs, rv.first);
+
+	/* knock out constant we intend to slot out */
+	e_ko = kout_partial.apply(e_from);
+	pivot = rv.second->getZExtValue();
+
+	/* e_ko is a superset of e_to because of removed constant;
+	 * constrain */
+	rule_eq = MK_EQ(e_ko, er->getToExpr());
+	cs.addConstraint(rule_eq);
+
+	/* constant can't be changed? shoot. */
+	if (isConstFixed(s, q, rv.second)) {
+		std::cerr << "[KO] CONST IS FIXED\n";
+		return NULL;
+	}
+
+#if 0
+	/* XXX: THIS DOESN'T WORK BECAUSE THE CONSTANT LABELING
+	 * DOESN'T KNOW ABOUT THE OFFSETS IN THE CONSTANTS?? UGH! */
+	e_range = getMaskRange(s, q, pivot);
+	if (e_range.isNull() == false) {
+		if (isValidRange(s, rule_eq, e_range)) {
+			std::cerr << "GOT MASK RANGE: " << e_range << '\n';
+			goto done;
+		}
+		std::cerr
+			<< "INVALID RANGE [" << i << "]: "
+			<< e_range << '\n';
+	}
+#else
+	std::cerr << "MASK RANGE DISABLED BECAUSE BUSTED\n";
+#endif
+	e_range = getContiguousRange(s, q, pivot);
+	if (e_range.isNull()) return NULL;
+	if (isValidRange(s, rule_eq, e_range)) goto done;
+
+	std::cerr
+		<< "INVALID RANGE [" << i << "]: "
+		<< e_range << '\n';
+	return NULL;
+done:
 	er->print(std::cerr);
+#if 0
 	std::cerr << "\n=========GOT SLOT=============\n";
 	std::cerr << "\nIT-FIRST: " << rv.first << '\n';
 	std::cerr << "IGN-IDX: " << i << '\n';
@@ -107,13 +194,13 @@ ref<Expr> KnockoutRule::trySlot(
 	std::cerr << "ORIG-KO: " << ko << '\n';
 	std::cerr << "RANGE-EXPR " << e_range << '\n';
 	std::cerr << "\n=====================\n";
-
+#endif
 	return e_range;
 }
 
 /* start with the original expression;
  * successively knock out constants */
-bool KnockoutRule::isRangedRuleValid(
+bool KnockoutRule::findRuleRange(
 	Solver* s, int& slot, ref<Expr>& e_range) const
 {
 	ref<Expr>	e_from;
@@ -125,6 +212,7 @@ bool KnockoutRule::isRangedRuleValid(
 	std::cerr << "TRYING RANGES FOR:\n";
 	std::cerr << "FROM-EXPR={" << e_from << "}\n";
 	std::cerr << "TO-EXPR={" << er->getToExpr() << "}\n";
+
 	foreach (it, kout->begin(), kout->end()) {
 		e_range = trySlot(s, e_from, *it, i);
 
@@ -186,7 +274,7 @@ ExprRule* KnockoutRule::createFullRule(Solver* s) const
 
 	tags = getTags();
 
-	std::vector<ref<Expr> >	cs(tags.size(), ConstantExpr::create(1, 1));
+	std::vector<ref<Expr> >	cs(tags.size(), MK_CONST(1, 1));
 
 	er_ret = er->addConstraints(tags, cs);
 	return er_ret;
@@ -199,7 +287,7 @@ ExprRule* KnockoutRule::createPartialRule(Solver* s) const
 	int				slot;
 	ref<Expr>			e_range;
 
-	if (!isRangedRuleValid(s, slot, e_range))
+	if (!findRuleRange(s, slot, e_range))
 		return NULL;
 
 	tags = getTags(slot);

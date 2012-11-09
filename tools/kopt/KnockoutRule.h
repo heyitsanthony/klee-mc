@@ -33,14 +33,10 @@ private:
 
 	ref<Expr> trySlot(Solver* s, const ref<Expr>& e_from,
 		const replvar_t& rv, int i) const;
-	bool isRangedRuleValid(
+	bool findRuleRange(
 		Solver* s,
 		int& slot,
 		ref<Expr>& e_range) const;
-
-	void getRange(
-		const ref<Expr>& src,
-		ref<Expr>& lo, ref<Expr>& hi) const;
 
 	const ExprRule	*er;
 	mutable ref<Array>	arr;
