@@ -789,6 +789,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 		klee_assume(GET_SYSRET(new_regs) > 3 && GET_SYSRET(new_regs) < 4096);
 		break;
 
+	case SYS_epoll_ctl:
+		sc_ret_v(regfile, 0);
+		break;
+
 	case SYS_getsockopt:
 		klee_warning_once("phony getsockopt");
 		sc_ret_v(regfile, 0);
@@ -1001,12 +1005,20 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_socketpair:
 	case SYS_setpriority:
 	case SYS_setitimer:
+	case SYS_personality:
+	case SYS_fallocate:
+	case SYS_ioperm:
 		sc_ret_or(sc_new_regs(regfile), -1, 0);
 		break;
 
 	case SYS_getpriority:
 	case SYS_semget:
 		new_regs = sc_new_regs(regfile);
+		break;
+
+	case SYS_prlimit64:
+		/* XXX: should mark limit parameter as symbolic */
+		sc_ret_or(sc_new_regs(regfile), -1, 0);
 		break;
 
 
@@ -1131,10 +1143,12 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(regfile, 0);
 		break;
 
+	case SYS_eventfd2:	/* of COURSE there's an eventfd2 */
 	case SYS_eventfd: {
+		static int e_fd_c = 512;
 		sc_ret_or(sc_new_regs(regfile),
 			-1, /* error */
-			0x7e00 /* fake eventfd */);
+			++e_fd_c /* fake event fd */);
 		break;
 	}
 
