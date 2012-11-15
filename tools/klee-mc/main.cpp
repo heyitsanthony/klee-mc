@@ -5,6 +5,7 @@
 #include "klee/Internal/ADT/KTest.h"
 #include "klee/Statistics.h"
 #include "klee/Internal/System/Time.h"
+#include "klee/Internal/Support/Watchdog.h"
 #include "klee/Internal/ADT/TwoOStreams.h"
 #include "static/Sugar.h"
 #include "../../lib/Skins/GDBExecutor.h"
@@ -32,10 +33,6 @@
 #include <llvm/Support/ManagedStatic.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/Signals.h>
-#include <iostream>
-#include <fstream>
-#include <time.h>
-#include <pthread.h>
 
 #include <iostream>
 #include <fstream>
@@ -45,7 +42,6 @@ using namespace llvm;
 using namespace klee;
 
 bool			SymArgs;
-static pthread_t	pt_watchdog;
 extern double		MaxSTPTime;
 extern bool		WriteTraces;
 extern double		MaxTime;
@@ -156,7 +152,7 @@ namespace {
 		cl::desc("Cross check concrete / no syscall binary with JIT."));
 
 	cl::opt<bool>
-	Watchdog("watchdog",
+	UseWatchdog("watchdog",
 		cl::desc("Use a watchdog thread to enforce --max-time."));
 
 }
@@ -419,37 +415,13 @@ void setupReplayPaths(Interpreter* interpreter)
 	interpreter->setReplay(new ReplayBrPaths(replayPaths));
 }
 
-static void* watchdog_thread(void* x)
-{
-	struct timespec		ts, rem;
-	int			rc;
-	ssize_t			sz;
-
-	/* don't expect any one to try to join with watchdog  */
-	pthread_detach(pthread_self());
-
-	ts.tv_sec = MaxTime;
-	ts.tv_nsec = 0;
-	do {
-		rc = nanosleep(&ts, &rem);
-		ts = rem;
-	} while (rc == -1);
-
-	sz = write(2, "watchdog timeout\n", 17);
-
-	/* the _exit() is important because this is a signal,
-	 * otherwise we segfault! */
-	_exit(-1);
-
-	return NULL;
-}
-
 int main(int argc, char **argv, char **envp)
 {
 	KleeHandler	*handler;
 	CmdArgs		*cmdargs;
 	Guest		*gs;
 	Interpreter	*interpreter;
+	Watchdog	wd((UseWatchdog) ? MaxTime : 0);
 
 	fprintf(stderr, "[klee-mc] git-commit: " GIT_COMMIT "\n");
 	atexit(llvm_shutdown);
@@ -460,9 +432,6 @@ int main(int argc, char **argv, char **envp)
 	sys::PrintStackTraceOnErrorSignal();
 
 	sys::SetInterruptFunction(interrupt_handle);
-
-	if (Watchdog && MaxTime)
-		pthread_create(&pt_watchdog, NULL, watchdog_thread, NULL);
 
 	cmdargs = getCmdArgs(envp);
 	gs = getGuest(cmdargs);

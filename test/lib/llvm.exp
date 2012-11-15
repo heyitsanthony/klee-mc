@@ -189,6 +189,7 @@ proc RunLLVMTest { test } {
 			continue
 		} elseif { $firstToken == "UNSETENV" } {
 			set envVar [lindex $splitLine 1]
+			unset envArr($envVar)
 			unset ::env($envVar) 
 			#$envArr($envVar)
 			#puts $envArr($envVar)

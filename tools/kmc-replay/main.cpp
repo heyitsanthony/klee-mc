@@ -3,6 +3,7 @@
 #include <llvm/ExecutionEngine/JIT.h>
 #include "klee/Internal/ADT/Crumbs.h"
 #include "klee/Internal/ADT/KTestStream.h"
+#include "klee/Internal/Support/Watchdog.h"
 #include "static/Sugar.h"
 
 /* vexllvm stuff */
@@ -18,6 +19,8 @@
 #include <stdio.h>
 
 using namespace klee;
+
+#define KMC_DEFAULT_TIMEOUT	180	/* 3 minutes! */
 
 extern void dumpIRSBs(void) {}
 
@@ -144,6 +147,10 @@ int main(int argc, char* argv[])
 	unsigned	test_num;
 	const char	*dirname, *xchk_guest, *guest_path;
 	int		err;
+	Watchdog	wd(
+		getenv("KMC_TIMEOUT") != NULL
+			? atoi(getenv("KMC_TIMEOUT"))
+			: KMC_DEFAULT_TIMEOUT);
 
 	llvm::InitializeNativeTarget();
 
