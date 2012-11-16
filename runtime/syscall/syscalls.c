@@ -694,25 +694,43 @@ void* sc_enter(void* regfile, void* jmpptr)
 		new_regs = sc_new_regs(regfile);
 
 		if (GET_SYSRET(new_regs) == 0) {
-			sc_ret_v(new_regs, 0);
+			sc_ret_v_new(new_regs, 0);
 			break;
 		}
 
 		if (GET_SYSRET_S(new_regs) == -1) {
-			sc_ret_v(new_regs, -1);
+			sc_ret_v_new(new_regs, -1);
 			break;
 		}
 
-		mhdr = (void*)klee_get_value(GET_ARG1(regfile));
+		mhdr = (void*)concretize_u64(GET_ARG1(regfile));
 		klee_assume(mhdr->msg_iovlen >= 1);
+
 		make_sym(
 			(uint64_t)(mhdr->msg_iov[0].iov_base),
 			mhdr->msg_iov[0].iov_len,
 			"recvmsg_iov");
-		mhdr->msg_controllen = 0;	/* XXX update? */
 
-		klee_assume(GET_SYSRET(new_regs) == mhdr->msg_iov[0].iov_len);
-		sc_ret_v(new_regs, mhdr->msg_iov[0].iov_len);
+		if (mhdr->msg_control != NULL) {
+			make_sym(
+				(uint64_t)(mhdr->msg_control),
+				mhdr->msg_controllen,
+				"recvmsg_ctl");
+		}
+
+		if (mhdr->msg_name != NULL) {
+			make_sym(
+				(uint64_t)(mhdr->msg_name),
+				mhdr->msg_namelen,
+				"recvmsg_name");
+		}
+
+		make_sym(
+			(uint64_t)&mhdr->msg_flags,
+			sizeof(mhdr->msg_flags),
+			"recvmsg_flags");
+
+		sc_ret_v_new(new_regs, mhdr->msg_iov[0].iov_len);
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
 	}
 	break;
@@ -1039,18 +1057,34 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 
 
-	/* sys_clone is actually much simpler than clone()! */
-// from the kernel:
-// asmlinkage int sys_clone(unsigned long clone_flags, unsigned long newsp,
-// unsigned long parent_tidp, unsigned long child_tidp)
+// asmlinkage int sys_clone(
+// unsigned long clone_flags, unsigned long newsp,
+// int __user *parent_tidptr, int tls_val,
+// int __user *child_tidptr, struct pt_regs *regs)
 
 	case SYS_clone:
+		/* XXX pretty sure this is broken, but don't know how. */
+		klee_print_expr("CLONING", GET_ARG1_PTR(regfile));
 		new_regs = sc_new_regs(regfile);
-		if (GET_ARG1_PTR(regfile) == NULL)
-			break;
+		if (GET_ARG1_PTR(regfile) != NULL) {
+			klee_warning("Is clone()'s stack switching right?");
+			klee_assume_eq(GET_STACK(new_regs), GET_ARG1(regfile));
+		}
 
-		klee_warning("Is clone()'s stack switching right?");
-		klee_assume(GET_STACK(new_regs) == GET_ARG1(regfile));
+/* I have no idea what I'm doing. Ugh. */
+#if 0
+		if (GET_SYSRET(new_regs) == 0) {
+			unsigned i = 0;
+			jmpptr = GET_PTREGS_IP(GET_ARG5_PTR(regfile));
+			for (i = 0; i < 32; i++) {
+			klee_print_expr("i", i);
+			klee_print_expr("WUT[i]",
+				((uint64_t*)GET_ARG5_PTR(regfile))[i]);
+
+			}
+			klee_print_expr("CHILD CLONE TO", jmpptr);
+		}
+#endif
 		break;
 
 	case SYS_pwrite64:
