@@ -53,6 +53,7 @@ public:
 	void print(std::ostream& os) const;
 
 	ref<Expr> materialize(void) const;
+	ref<Expr> materializeUnsound(void) const;
 	ref<Expr> getFromExpr(void) const { return from.anonFlat2Expr(); }
 	ref<Expr> getToExpr(void) const	{ return to.anonFlat2Expr(); }
 
@@ -78,8 +79,8 @@ public:
 	const Pattern& getFromPattern(void) const { return from; }
 	const Pattern& getToPattern(void) const { return to; }
 
-	bool operator==(const ExprRule& er) const;
-	bool operator<(const ExprRule& er) const;
+	virtual bool operator==(const ExprRule& er) const;
+	virtual bool operator<(const ExprRule& er) const;
 	bool operator!=(const ExprRule& er) const { return !(*this == er); }
 
 	virtual ref<Array> getMaterializeArray(void) const
@@ -91,8 +92,6 @@ public:
 	bool hasConstraints(void) const { return const_constraints != NULL; }
 	bool hasFree(void) const;
 	bool isNaive(void) const { return !hasConstraints() && !hasFree(); }
-
-	ExprRule(const ExprRule& er);
 
 	uint64_t hash(void) const;
 protected:
@@ -111,7 +110,18 @@ private:
 
 	mutable unsigned	apply_hit_c, apply_fail_c;
 	unsigned int		off_hint;
+
+	ExprRule(const ExprRule& er);
 };
+
+#include <set>
+struct er_deref_lt
+{ bool operator() (const ExprRule* a, const ExprRule* b) const { return (*a < *b); } };
+
+struct er_deref_eq
+{ bool operator() (const ExprRule* a, const ExprRule* b) const { return (*a == *b); } };
+
+typedef std::set<const ExprRule*, struct er_deref_lt> ExprRuleSet;
 
 }
 

@@ -231,6 +231,7 @@ static bool checkDup(ExprBuilder* eb, Solver* s)
 		return false;
 	}
 
+	/* XXX: this should check hashes instead, I think */
 	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
 	old_expr = er->materialize();
 	old_eb = Expr::setBuilder(rb);
@@ -557,21 +558,22 @@ void dumpDB(void)
 
 static void dedupDB(void)
 {
-	std::ofstream		of(InputFile.c_str());
-	RuleBuilder		*rb;
-	std::set<ExprRule>	ers;
-	unsigned		i;
+	std::ofstream	of(InputFile.c_str());
+	RuleBuilder	*rb;
+	ExprRuleSet	ers;
+	unsigned	i;
 
+	/* fuck it. */
 	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
 	i = 0;
 	foreach (it, rb->begin(), rb->end()) {
 		const ExprRule	*er(*it);
-		if (ers.count(*er)) {
+		if (ers.count(er)) {
 			i++;
 			continue;
 		}
 		er->printBinaryRule(of);
-		ers.insert(*er);
+		ers.insert(er);
 	}
 
 	delete rb;

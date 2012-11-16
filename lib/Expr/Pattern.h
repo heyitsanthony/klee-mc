@@ -30,6 +30,7 @@ namespace klee
 typedef uint64_t flatrule_tok;
 typedef std::vector<flatrule_tok>	flatrule_ty;
 typedef std::map<unsigned, ref<Expr> > labelmap_ty;
+typedef std::map<unsigned, ref<Expr> > clabelmap_ty;
 class Pattern
 {
 public:
@@ -43,10 +44,12 @@ public:
 	bool operator <(const Pattern& p) const;
 
 	ref<Expr> anonFlat2Expr(int label_max = -1, bool strip_notopt=false) const;
+	ref<Expr> anonFlat2ConstrExpr(clabelmap_ty& cmap) const;
+	ref<Expr> anonFlat2ConstrExpr(void) const;
 
 	static ref<Array> getMaterializeArray(void);
 	static ref<Array> getFreeArray(void);
-
+	static ref<Array> getCLabelArray(void);
 
 	static ref<Expr> flat2expr(
 		const labelmap_ty&	lm,
@@ -76,6 +79,7 @@ public:
 private:
 	static ref<Array>	materialize_arr;
 	static ref<Array>	free_arr;
+	static ref<Array>	clabel_arr;
 	static unsigned free_off;
 
 };

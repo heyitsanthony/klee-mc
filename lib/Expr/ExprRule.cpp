@@ -14,6 +14,14 @@ int xxx_rb;
 
 using namespace klee;
 
+/* build fake label map for expression-- 8 bits each */
+static void expr_to_lmap(const ref<Expr>& e, labelmap_ty& lm)
+{
+	unsigned byte_c;
+	byte_c = e->getWidth() / 8;
+	for (unsigned j = 0; j < byte_c; j++)
+		lm[byte_c - (j+1)] = MK_EXTRACT(e, j*8, 8);
+}
 
 ExprRule::~ExprRule()
 { if (const_constraints != NULL) delete const_constraints; }
@@ -305,7 +313,8 @@ bool ExprRule::loadBinaryPattern(std::istream& is, Pattern& p)
 	return true;
 }
 
-ref<Expr> ExprRule::materialize(void) const
+/* unsound materialization which is underconstrained */
+ref<Expr> ExprRule::materializeUnsound(void) const
 {
 	ref<Expr>	lhs, rhs;
 
@@ -318,6 +327,39 @@ ref<Expr> ExprRule::materialize(void) const
 		return NULL;
 
 	return EqExpr::create(lhs, rhs);
+}
+
+ref<Expr> ExprRule::materialize(void) const
+{
+	ref<Expr>	lhs, rhs, e_constrs;
+	clabelmap_ty	cm;
+
+	if (const_constraints == NULL) return materializeUnsound();
+
+	/* this does not need to be slotted out */
+	rhs = getToExpr();
+	if (rhs.isNull())
+		return NULL;
+
+	/* this needs constants slotted out */
+	lhs = from.anonFlat2ConstrExpr(cm);
+	if (lhs.isNull())
+		return NULL;
+
+	/* build constraint conjunction */
+	e_constrs = MK_CONST(1, 1);
+	for (unsigned i = 0; i < const_constraints->size(); i++) {
+		ref<Expr>	cur_constr, clbl;
+		labelmap_ty	lm;
+
+		clbl = (cm.find(i))->second;
+		expr_to_lmap(clbl, lm);
+		cur_constr = (*const_constraints)[i].flat2expr(lm);
+
+		e_constrs = MK_AND(cur_constr, e_constrs);
+	}
+
+	return Expr::createImplies(e_constrs, MK_EQ(lhs, rhs));
 }
 
 ExprRule* ExprRule::loadPrettyRule(const char* fname)
@@ -613,7 +655,6 @@ bool ExprRule::checkConstants(const labelmap_ty& clm) const
 		const Pattern			*p;
 		labelmap_ty::const_iterator	it;
 		labelmap_ty			tmp_lm;
-		unsigned			byte_c;
 
 		/* all-accepting? */
 		p = &(*const_constraints)[i];
@@ -625,10 +666,7 @@ bool ExprRule::checkConstants(const labelmap_ty& clm) const
 			return false;
 		c_e = it->second;
 
-		/* build fake label map for constant-- 8 bits each */
-		byte_c = c_e->getWidth() / 8;
-		for (unsigned j = 0; j < byte_c; j++)
-			tmp_lm[byte_c - (j+1)] = ExtractExpr::create(c_e, j*8, 8);
+		expr_to_lmap(c_e, tmp_lm);
 
 		/* evaluate by filling out pattern */
 		e = p->flat2expr(tmp_lm);

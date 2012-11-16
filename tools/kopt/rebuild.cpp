@@ -66,10 +66,10 @@ static void rebuildBRulesFork(Solver* s, const std::string& Input)
 
 void rebuildBRules(Solver* s, const std::string& Input)
 {
-	std::ofstream		of(Input.c_str());
-	std::set<ExprRule>	ers;
-	RuleBuilder		*rb;
-	unsigned		i;
+	std::ofstream	of(Input.c_str());
+	ExprRuleSet	ers;
+	RuleBuilder	*rb;
+	unsigned	i;
 
 	assert (of.good() && !of.fail());
 
@@ -85,9 +85,9 @@ void rebuildBRules(Solver* s, const std::string& Input)
 			continue;
 
 		/* only emit if hasn't seen rule before */
-		if (!ers.count(*er_rebuild)) {
+		if (!ers.count(er_rebuild)) {
 			er_rebuild->printBinaryRule(of);
-			ers.insert(*er_rebuild);
+			ers.insert(er_rebuild);
 		}
 
 		delete er_rebuild;

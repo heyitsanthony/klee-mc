@@ -6,6 +6,7 @@ using namespace klee;
 
 ref<Array> Pattern::materialize_arr = NULL;
 ref<Array> Pattern::free_arr = NULL;
+ref<Array> Pattern::clabel_arr = NULL;
 unsigned Pattern::free_off = 0;
 
 /* XXX: make non-recursive? */
@@ -321,9 +322,9 @@ bool Pattern::operator ==(const Pattern& p) const
 void Pattern::getLabelMap(labelmap_ty& lm, unsigned l_max) const
 {
 	for (unsigned i = 0; i <= l_max; i++) {
-		lm[i] = ReadExpr::create(
+		lm[i] = MK_READ(
 			UpdateList(getMaterializeArray(), NULL),
-			ConstantExpr::create(i, 32));
+			MK_CONST(i, 32));
 	}
 }
 
@@ -343,6 +344,75 @@ ref<Expr> Pattern::anonFlat2Expr(int label_max, bool strip_notopt) const
 	return flat2expr(lm, rule, off, strip_notopt);
 }
 
+#include "klee/util/ExprVisitor.h"
+#include "ExprReplaceVisitor.h"
+class CollectCLabels : public ExprConstVisitor
+{
+public:
+	/* label value, width */
+	clabelmap_ty		cmap;
+protected:
+Action visitExpr(const Expr* e)
+{
+	const NotOptimizedExpr	*noe;
+	ref<Expr>		kid;
+
+	if (e->getKind() != Expr::NotOptimized)
+		return Expand;
+
+	kid = e->getKid(0);
+	if (kid->getKind() != Expr::Constant)
+		return Close;
+
+	noe = cast<NotOptimizedExpr>(e);
+	cmap.insert(std::make_pair(
+		noe->getTag(),
+		ref<Expr>(const_cast<Expr*>(e))));
+	return Close;
+}
+};
+
+ref<Expr> Pattern::anonFlat2ConstrExpr(clabelmap_ty& cm) const
+{
+	ref<Expr>	anon_expr, anon_constr_expr;
+	unsigned	clabel_byte_c;
+	CollectCLabels	clc;
+
+	anon_expr = anonFlat2Expr();
+	clc.apply(anon_expr);
+
+	if (clc.cmap.size() == 0)
+		return NULL;
+
+	anon_constr_expr = anon_expr;
+	clabel_byte_c = 0;
+
+	foreach (it, clc.cmap.begin(), clc.cmap.end()) {
+		ref<Expr>		old_repl, new_repl;
+
+		old_repl = it->second;
+		new_repl = Expr::createTempRead(
+			getCLabelArray(),
+			old_repl->getWidth(),
+			clabel_byte_c);
+		clabel_byte_c += 8*((old_repl->getWidth() + 7) / 8);
+
+		ExprReplaceVisitor	erv(old_repl, new_repl);
+
+		anon_constr_expr = erv.apply(anon_constr_expr);
+
+		cm.insert(std::make_pair(it->first, new_repl));
+	}
+
+	return anon_constr_expr;
+}
+
+ref<Expr> Pattern::anonFlat2ConstrExpr(void) const
+{
+	clabelmap_ty	cm;
+	return anonFlat2ConstrExpr(cm);
+}
+
 ref<Array> Pattern::getMaterializeArray(void)
 {
 	if (materialize_arr.isNull())
@@ -355,6 +425,13 @@ ref<Array> Pattern::getFreeArray(void)
 	if (free_arr.isNull())
 		free_arr = Array::create("freearr", 4096);
 	return free_arr;
+}
+
+ref<Array> Pattern::getCLabelArray(void)
+{
+	if (clabel_arr.isNull())
+		clabel_arr = Array::create("clblarr", 4096);
+	return clabel_arr;
 }
 
 /* so we can have a trie without counter examples making shit impossible */
