@@ -29,9 +29,13 @@ function xtive_loop
 		mv $BRULEF.tmp $BRULEF
 
 		NEWDUPS=`cat $BRULEF.dups`
-		if [ "$NEWDUPS" -eq "$OLDDUPS" ]; then
-			echo "SAME DUPS!"
-			break;
+		if [ ! -z "$NEWDUPS" ]; then
+			if [ ! -z "$OLDDUPS" ]; then
+			if [ "$NEWDUPS" == "$OLDDUPS" ]; then
+				echo "SAME DUPS!"
+				break;
+			fi
+			fi
 		fi
 
 		if [ "$APPENDED" -eq "$LASTAPPENDED" ]; then
