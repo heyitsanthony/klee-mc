@@ -424,6 +424,7 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 	OP_REPL(Sub, sub)
 	OP_REPL(Mul, mul)
 	OP_REPL(Div, div)
+	OP_REPL(Rem, rem)
 
 	case Instruction::FCmp: return replaceFCmp(inst);
 
@@ -515,7 +516,6 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 	}
 	break;
 
-	case Instruction::FRem:
 	case Instruction::FPToUI:
 	case Instruction::UIToFP:
 		inst->dump();
