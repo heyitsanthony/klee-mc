@@ -442,6 +442,11 @@ ObjectPair ExecutionState::allocate(
 	MemoryObject		*mo;
 	const ObjectState	*os;
 
+	if (size == 0) {
+		std::cerr << "[ExeState] Fixing up size=0 allocate\n";
+		size = 1;
+	}
+
 	mo = mm->allocate(size, isLocal, isGlobal, allocSite, this);
 	if (mo == NULL)
 		return ObjectPair(NULL, NULL);
