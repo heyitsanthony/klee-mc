@@ -5,7 +5,7 @@
 
 using namespace klee;
 
-TLB::TLB(void) : cur_state(0) {}
+TLB::TLB(void) : cur_sid(~0) {}
 
 bool TLB::get(ExecutionState& st, uint64_t addr, ObjectPair& out_op)
 {
@@ -34,10 +34,11 @@ void TLB::put(ExecutionState& st, ObjectPair& op)
 /* if address space changed, reset TLB */
 void TLB::useState(const ExecutionState* st)
 {
-	if (st == cur_state && cur_gen == st->addressSpace.getGeneration())
+	if (	st->getSID() == cur_sid &&
+		cur_gen == st->addressSpace.getGeneration())
 		return;
 
 	memset(&obj_cache, 0, sizeof(obj_cache));
-	cur_state = st;
+	cur_sid = st->getSID();
 	cur_gen = st->addressSpace.getGeneration();
 }

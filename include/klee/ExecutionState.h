@@ -353,6 +353,7 @@ public:
 	const Assignment* getPartAssignment(void) const
 	{ return partseed_assignment; }
 	bool isPartSeed(void) const { return partseed_assignment != NULL; }
+	uint64_t getSID(void) const { return sid; }
 
 private:
 	void initFields(void);
@@ -392,6 +393,8 @@ private:
 	const KTest		*partseed_ktest;
 	Assignment		*partseed_assignment;
 	unsigned		partseed_idx;
+
+	uint64_t		sid;
 };
 
 }

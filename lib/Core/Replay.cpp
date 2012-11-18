@@ -161,7 +161,8 @@ static ExecutionState* findClosestState(
 	}
 
 	if (best_c) {
-		std::cerr << "BEST_C = " << best_c << '\n';
+		std::cerr
+			<< "BEST_C = " << best_c << ". ES=" << best_es << '\n';
 	}
 
 	return best_es;

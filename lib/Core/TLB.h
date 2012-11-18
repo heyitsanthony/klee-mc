@@ -18,8 +18,8 @@ public:
 	void put(ExecutionState& st, ObjectPair& op);
 private:
 	void useState(const ExecutionState* st);
-	const ExecutionState	*cur_state;	/* never deference this */
-	unsigned		cur_gen;
+	uint64_t	cur_sid;
+	unsigned	cur_gen;
 	ObjectPair	obj_cache[OBJCACHE_ENTS];
 
 };

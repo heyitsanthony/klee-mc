@@ -46,6 +46,7 @@ ObjectState::ObjectState(unsigned _size)
 , size(_size)
 , readOnly(false)
 {
+	assert (size > 0);
 	memset(concreteStore, 0, size);
 	ADD_TO_LIST;
 }
@@ -62,6 +63,7 @@ ObjectState::ObjectState(unsigned _size, const ref<Array>& array)
 , size(_size)
 , readOnly(false)
 {
+	assert (size > 0);
 	memset(concreteStore, 0, size);
 	makeSymbolic();
 	ADD_TO_LIST;
@@ -80,6 +82,7 @@ ObjectState::ObjectState(const ObjectState &os)
 , readOnly(false)
 {
 	assert(!os.readOnly && "no need to copy read only object?");
+	assert (size > 0);
 
 	if (os.knownSymbolics) {
 		knownSymbolics = new ref<Expr>[size];
@@ -107,6 +110,7 @@ ObjectState::~ObjectState()
 
 	numObjStates--;
 	objs.erase(objs_it);
+	size = 0;
 }
 
 const UpdateList &ObjectState::getUpdates() const
@@ -491,9 +495,9 @@ ref<Expr> ObjectState::readConstantBytes(
 
 ref<Expr> ObjectState::read(unsigned offset, Expr::Width width) const
 {
-	// Treat bool specially, it is the only non-byte sized write we allow.
+	// Treat bool specially; the only non-byte sized write we allow.
 	if (width == Expr::Bool)
-		return ExtractExpr::create(read8(offset), 0, Expr::Bool);
+		return MK_EXTRACT(read8(offset), 0, Expr::Bool);
 
 	// Otherwise, follow the slow general case.
 	unsigned	NumBytes = width / 8;

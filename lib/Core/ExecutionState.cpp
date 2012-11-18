@@ -64,6 +64,8 @@ namespace {
 		cl::desc("Track minimum instruction state finds kfunc"));
 }
 
+static uint64_t sid_c = 0;
+
 void ExecutionState::initFields(void)
 {
 	depth = 0;
@@ -93,6 +95,7 @@ void ExecutionState::initFields(void)
 ExecutionState::ExecutionState(KFunction *kf)
 : pc(kf->instructions)
 , prevPC(pc)
+, sid(++sid_c)
 {
 	initFields();
 	pushFrame(0, kf);
@@ -129,6 +132,7 @@ ExecutionState *ExecutionState::branch(bool forReplay)
 	weight *= .5;
 
 	newState = copy();
+	newState->sid = ++sid_c;
 	newState->isReplay = false;
 	newState->coveredNew = false;
 	newState->coveredLines.clear();
