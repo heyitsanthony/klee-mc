@@ -421,7 +421,6 @@ int main(int argc, char **argv, char **envp)
 	CmdArgs		*cmdargs;
 	Guest		*gs;
 	Interpreter	*interpreter;
-	Watchdog	wd((UseWatchdog) ? MaxTime : 0);
 
 	fprintf(stderr, "[klee-mc] git-commit: " GIT_COMMIT "\n");
 	atexit(llvm_shutdown);
@@ -432,6 +431,10 @@ int main(int argc, char **argv, char **envp)
 	sys::PrintStackTraceOnErrorSignal();
 
 	sys::SetInterruptFunction(interrupt_handle);
+
+	/* important: can not declare watchdog near top because
+	 * arguments aren't initialized I guess */
+	Watchdog	wd((UseWatchdog) ? MaxTime : 0);
 
 	cmdargs = getCmdArgs(envp);
 	gs = getGuest(cmdargs);
