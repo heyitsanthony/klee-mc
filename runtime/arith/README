@@ -1,0 +1,3 @@
+This directory contains code for bitcode runtime evaluation of
+trickier arithmetic operations by reduction to more fundamental algorithms.
+It'd be cool if I could use gnu mpfr but I don't think that's possible.
