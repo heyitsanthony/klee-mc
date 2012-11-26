@@ -665,6 +665,7 @@ int klee_range(int64_t start, int64_t end, const char* name) {
   }
 }
 
+void klee_print_expr(const char* f, ...) {}
 
 void klee_report_error(const char *file, int line, 
                        const char *message, const char *suffix) {

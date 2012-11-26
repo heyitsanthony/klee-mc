@@ -56,135 +56,7 @@ extern std::string g_InputFile;
 extern LibcType g_Libc;
 extern bool g_WithPOSIXRuntime;
 
-// Symbols we explicitly support
-static const char *modelledExternals[] =
-{
-  "_ZTVN10__cxxabiv117__class_type_infoE",
-  "_ZTVN10__cxxabiv120__si_class_type_infoE",
-  "_ZTVN10__cxxabiv121__vmi_class_type_infoE",
-
-  // special functions
-  "_assert",
-  "__assert_fail",
-  "__assert_rtn",
-  "calloc",
-  "_exit",
-  "exit",
-  "free",
-  "abort",
-  "klee_abort",
-  "klee_assume",
-  "klee_check_memory_access",
-  "klee_define_fixed_object",
-  "klee_get_errno",
-  "klee_get_value",
-  "klee_get_obj_size",
-  "klee_is_symbolic",
-  "klee_make_symbolic",
-  "klee_mark_global",
-  "klee_merge",
-  "klee_prefer_cex",
-  "klee_print_expr",
-  "klee_print_range",
-  "klee_report_error",
-  "klee_set_forking",
-  "klee_silent_exit",
-  "klee_warning",
-  "klee_warning_once",
-  "klee_alias_function",
-  "klee_stack_trace",
-  "llvm.dbg.stoppoint",
-  "llvm.va_start",
-  "llvm.va_end",
-  "malloc",
-  "realloc",
-  "_ZdaPv",
-  "_ZdlPv",
-  "_Znaj",
-  "_Znwj",
-  "_Znam",
-  "_Znwm",
-};
-
-// Symbols we aren't going to warn about
-static const char *dontCareExternals[] = {
-#if 0
-  // stdio
-  "fprintf",
-  "fflush",
-  "fopen",
-  "fclose",
-  "fputs_unlocked",
-  "putchar_unlocked",
-  "vfprintf",
-  "fwrite",
-  "puts",
-  "printf",
-  "stdin",
-  "stdout",
-  "stderr",
-  "_stdio_term",
-  "__errno_location",
-  "fstat",
-#endif
-
-  // static information, pretty ok to return
-  "getegid",
-  "geteuid",
-  "getgid",
-  "getuid",
-  "getpid",
-  "gethostname",
-  "getpgrp",
-  "getppid",
-  "getpagesize",
-  "getpriority",
-  "getgroups",
-  "getdtablesize",
-  "getrlimit",
-  "getrlimit64",
-  "getcwd",
-  "getwd",
-  "gettimeofday",
-  "uname",
-
-  // fp stuff we just don't worry about yet
-  "frexp",
-  "ldexp",
-  "__isnan",
-  "__signbit",
-};
-
-// Extra symbols we aren't going to warn about with klee-libc
-static const char *dontCareKlee[] = {
-  "__ctype_b_loc",
-  "__ctype_get_mb_cur_max",
-
-  // io system calls
-  "open",
-  "write",
-  "read",
-  "close",
-};
-
-// Extra symbols we aren't going to warn about with uclibc
-static const char *dontCareUclibc[] = {
-  "__dso_handle",
-
-  // Don't warn about these since we explicitly commented them out of
-  // uclibc.
-  "printf",
-  "vprintf"
-};
-
-// Symbols we consider unsafe
-static const char *unsafeExternals[] = {
-  "fork", // oh lord
-  "exec", // heaven help us
-  "error", // calls _exit
-  "raise", // yeah
-  "kill", // mmmhmmm
-};
+#include "mod_symbols.h"
 
 #define NELEMS(array) (sizeof(array)/sizeof(array[0]))
 void externalsAndGlobalsCheck(const Module *m)
@@ -443,35 +315,37 @@ static llvm::Module *linkWithUclibc(llvm::Module *mainModule)
 
 static Module* setupLibc(Module* mainModule, Interpreter::ModuleOptions& Opts)
 {
-  switch (g_Libc) {
-  case NoLibc: /* silence compiler warning */
-    break;
+	const char *exclude_fns_f = NULL;
 
-  case KleeLibc: {
-    // FIXME: Find a reasonable solution for this.
-    llvm::sys::Path Path(Opts.LibraryDir);
-    Path.appendComponent("libklee-libc.bca");
-    mainModule = klee::linkWithLibrary(mainModule, Path.c_str());
-    assert(mainModule && "unable to link with klee-libc");
-    if(ExcludeLibcCov) {
-      llvm::sys::Path ExcludePath(Opts.LibraryDir);
-      ExcludePath.appendComponent("klee-libc-fns.txt");
-      Opts.ExcludeCovFiles.push_back(ExcludePath.c_str());
-    }
-    break;
-  }
+	switch (g_Libc) {
+	/* silence compiler warning */
+	case NoLibc: break;
 
-  case UcLibc:
-    mainModule = linkWithUclibc(mainModule);
-    if(ExcludeLibcCov) {
-      llvm::sys::Path ExcludePath(Opts.LibraryDir);
-      ExcludePath.appendComponent("uclibc-fns.txt");
-      Opts.ExcludeCovFiles.push_back(ExcludePath.c_str());
-    }
-    break;
-  }
+	case KleeLibc: {
+		// FIXME: Find a reasonable solution for this.
+		// XXX SOLUTION FOR WHAT!? --AJR
+		llvm::sys::Path Path(Opts.LibraryDir);
+		Path.appendComponent("libklee-libc.bca");
+		mainModule = klee::linkWithLibrary(mainModule, Path.c_str());
+		assert(mainModule && "unable to link with klee-libc");
+		if (ExcludeLibcCov) exclude_fns_f = "klee-libc-fns.txt";
+		break;
+	}
 
-  return mainModule;
+	case UcLibc:
+		mainModule = linkWithUclibc(mainModule);
+		if (ExcludeLibcCov) exclude_fns_f = "uclibc-fns.txt";
+		break;
+	}
+
+
+	if (exclude_fns_f != NULL) {
+		llvm::sys::Path ExcludePath(Opts.LibraryDir);
+		ExcludePath.appendComponent(exclude_fns_f);
+		Opts.ExcludeCovFiles.push_back(ExcludePath.c_str());
+	}
+
+	return mainModule;
 }
 
 
@@ -563,8 +437,34 @@ static int initEnv(Module *mainModule)
   return 0;
 }
 
+static void loadIntrinsics(Interpreter::ModuleOptions& Opts)
+{
+	if (!ExcludeLibcCov) return;
+	llvm::sys::Path ExcludePath(Opts.LibraryDir);
+	ExcludePath.appendComponent("kleeRuntimeIntrinsic-fns.txt");
+	Opts.ExcludeCovFiles.push_back(ExcludePath.c_str());
+}
 
-Interpreter::ModuleOptions getMainModule(Module* &mainModule)
+static void loadPOSIX(
+	Module* &mainModule,
+	Interpreter::ModuleOptions& Opts)
+{
+	if (!g_WithPOSIXRuntime) return;
+
+	llvm::sys::Path Path(Opts.LibraryDir);
+	Path.appendComponent("libkleeRuntimePOSIX.bca");
+	klee_message("NOTE: Using model: %s", Path.c_str());
+
+	mainModule = klee::linkWithLibrary(mainModule, Path.c_str());
+	assert(mainModule && "unable to link with simple model");
+	if (ExcludeLibcCov) {
+		llvm::sys::Path ExcludePath(Opts.LibraryDir);
+		ExcludePath.appendComponent("kleeRuntimePOSIX-fns.txt");
+		Opts.ExcludeCovFiles.push_back(ExcludePath.c_str());
+	}
+}
+
+void loadInputBitcode(Module* &mainModule)
 {
 	std::string ErrorMsg;
 	OwningPtr<MemoryBuffer> Buffer;
@@ -594,12 +494,20 @@ Interpreter::ModuleOptions getMainModule(Module* &mainModule)
 
 	// Remove '\x01' prefix sentinels before linking
 	runRemoveSentinelsPass(*mainModule);
+}
+
+Interpreter::ModuleOptions getMainModule(Module* &mainModule)
+{
+	loadInputBitcode(mainModule);
 
 	if (g_WithPOSIXRuntime) InitEnv = true;
 
 	if (InitEnv) {
 		int r = initEnv(mainModule);
-		if (r != 0) exit(r);
+		if (r != 0) {
+			std::cerr << "Failed to init_env\n";
+			exit(r);
+		}
 	}
 
 	llvm::sys::Path LibraryDir(KLEE_DIR "/" RUNTIME_CONFIGURATION "/lib");
@@ -611,25 +519,8 @@ Interpreter::ModuleOptions getMainModule(Module* &mainModule)
 
 	mainModule = setupLibc(mainModule, Opts);
 
-	if(ExcludeLibcCov) {
-		llvm::sys::Path ExcludePath(Opts.LibraryDir);
-		ExcludePath.appendComponent("kleeRuntimeIntrinsic-fns.txt");
-		Opts.ExcludeCovFiles.push_back(ExcludePath.c_str());
-	}
-
-	if (g_WithPOSIXRuntime) {
-		llvm::sys::Path Path(Opts.LibraryDir);
-		Path.appendComponent("libkleeRuntimePOSIX.bca");
-		klee_message("NOTE: Using model: %s", Path.c_str());
-
-		mainModule = klee::linkWithLibrary(mainModule, Path.c_str());
-		assert(mainModule && "unable to link with simple model");
-		if(ExcludeLibcCov) {
-			llvm::sys::Path ExcludePath(Opts.LibraryDir);
-			ExcludePath.appendComponent("kleeRuntimePOSIX-fns.txt");
-			Opts.ExcludeCovFiles.push_back(ExcludePath.c_str());
-		}
-	}
+	loadIntrinsics(Opts);
+	loadPOSIX(mainModule, Opts);
 
 	return Opts;
 }

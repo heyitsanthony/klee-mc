@@ -1,5 +1,5 @@
 // RUN: %llvmgcc %s -emit-llvm -O0 -c -o %t1.bc
-// RUN: %klee --libc=uclibc --posix-runtime %t1.bc --sym-datagrams 2 20 > %t.log
+// RUN: %klee --libc=uclibc --posix-runtime %t1.bc --sym-datagrams 2 20 >%t.log  2>%t.err
 // RUN: grep -q Success %t.log
 // RUN: gcc -g -Dklee_silent_exit=exit %s
 // RUN: %replay ./a.out klee-last/test000001.ktest > %t2.log

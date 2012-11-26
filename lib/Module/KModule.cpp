@@ -491,9 +491,11 @@ void KModule::prepare(InterpreterHandler *in_ih)
 
 	kleeMergeFn = module->getFunction("klee_merge");
 
+	setupFunctionPasses();
+
 	/* Build shadow structures */
 	foreach (it, module->begin(), module->end()) {
-		addFunctionProcessed(it);
+		addFunction(it);
 	}
 
 	if (DebugPrintEscapingFunctions && !escapingFunctions.empty()) {
@@ -504,8 +506,6 @@ void KModule::prepare(InterpreterHandler *in_ih)
 		}
 		llvm::errs() << "]\n";
 	}
-
-	setupFunctionPasses();
 }
 
 void KModule::setupFunctionPasses(void)

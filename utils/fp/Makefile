@@ -10,21 +10,34 @@ CLASSES=	fp-float-float-float		\
 		fptri-double-float-float		\
 		fptri-double-float-double		\
 
-all: $(CLASSES)
+
+BINPATHS=$(CLASSES:%=bin/%)
+
+all: $(BINPATHS)
 
 clean:
-	rm -rf fp-* fpcmp-* fptri-* fpguests*
+	rm -rf $(BINPATHS) fpguests*
 
 
 guests: fpguests.tar.gz
 
-fpguests.tar.gz: $(CLASSES)
+fpguests:
+	./make_guests.sh
+
+fpguests.tar.gz: $(BINPATHS)
 	./make_guests.sh
 	tar cvf fpguests.tar fpguests
 	gzip fpguests.tar
 
 
-fp-%:
+bin/fp-simple: fp-simple.c
+	gcc fp-simple.c -o $@
+
+bin/fp-simple2: fp-simple2.c
+	gcc fp-simple2.c -o $@
+
+
+bin/fp-%:
 	gcc -o $@-add	\
 	-DTYPE1_IN=`echo $@ | cut -f2 -d'-'`	\
 	-DTYPE2_IN=`echo $@ | cut -f3 -d'-'`	\
@@ -50,7 +63,7 @@ fp-%:
 	-DFPOP=/				\
 	fp.c
 
-fptri-%:
+bin/fptri-%:
 	gcc -o $@-add	\
 	-DTYPE1_IN=`echo $@ | cut -f2 -d'-'`	\
 	-DTYPE2_IN=`echo $@ | cut -f3 -d'-'`	\
@@ -76,7 +89,7 @@ fptri-%:
 	-DFPOP=/				\
 	fptri.c
 
-fpcmp-%:
+bin/fpcmp-%:
 	gcc -o $@-lt \
 	-DTYPE1_IN=`echo $@ | cut -f2 -d'-'`	\
 	-DTYPE2_IN=`echo $@ | cut -f3 -d'-'`	\

@@ -127,123 +127,15 @@ exe_sockaddr_t *__allocate_sockaddr(int domain, exe_sockaddr_t *a) {
 }
 
 
-int __fd_socket(unsigned long *args) {
-  static int n_calls = 0;
-  int fd;
-  exe_file_t* f;
+int __fd_socket(unsigned long *args) { return socket(args[0], args[1], args[2]); }
 
-  int domain = args[0];
-  int type = args[1];
-  /* int protocol = args[2]; */
+int __fd_bind(unsigned long *args)
+{ return bind(args[0], (const struct sockaddr*)args[1], args[2]); }
 
-  ++n_calls;
-
-  if (__exe_fs.max_failures && *__exe_fs.socket_fail == n_calls) {
-    __exe_fs.max_failures--;
-    errno = EIO;
-    return -1;
-  }
-
-  switch (domain) {
-  case PF_INET:
-  case PF_INET6:
-  case PF_PACKET:
-
-    switch (type) {
-    case SOCK_STREAM:
-      /* create a symbolic stream socket */
-      fd = __get_new_fd(&f);
-      if (fd < 0) return fd;
-      f->flags |= eSocket;
-
-      if (!__allocate_sockaddr(domain, &f->local)) {
-        __undo_get_new_fd(fd);
-        errno = ENOMEM;
-        return -1;
-      }
-
-      f->foreign = malloc(sizeof(*f->foreign));
-      if (!f->foreign) {
-        free(f->local.addr);
-        __undo_get_new_fd(fd);
-        errno = ENOMEM;
-        return -1;
-      }
-
-      if (!__allocate_sockaddr(domain, f->foreign)) {
-        free(f->foreign);
-        free(f->local.addr);
-        __undo_get_new_fd(fd);
-        errno = ENOMEM;
-        return -1;
-      }
-
-      f->dfile = &dummy_dfile;
-      f->flags |= eReadable | eWriteable;
-      /* XXX Should check access against mode / stat / possible deletion. */
-
-      f->domain = domain;
-      break;
-
-    case SOCK_DGRAM:
-    case SOCK_RAW:
-    case SOCK_PACKET:
-      /* create a symbolic datagram socket */
-      fd = __get_new_fd(&f);
-      if (fd < 0) return fd;
-      f->flags |= eSocket | eDgramSocket;
-
-      if (!__allocate_sockaddr(domain, &f->local)) {
-        __undo_get_new_fd(fd);
-        errno = ENOMEM;
-        return -1;
-      }
-
-      f->foreign = malloc(sizeof(*f->foreign));
-      if (!f->foreign) {
-        free(f->local.addr);
-        __undo_get_new_fd(fd);
-        errno = ENOMEM;
-        return -1;
-      }
-
-      if (!__allocate_sockaddr(domain, f->foreign)) {
-        free(f->foreign);
-        free(f->local.addr);
-        __undo_get_new_fd(fd);
-        errno = ENOMEM;
-        return -1;
-      }
-
-      f->dfile = &dummy_dfile;
-      f->flags |= eReadable | eWriteable;
-      /* XXX Should check access against mode / stat / possible deletion. */
-      break;
-
-    default:
-      klee_warning("unsupported socket type");
-      errno = ESOCKTNOSUPPORT;
-      return -1;
-    } /* switch (type) */
-    break;
-
-  default:
-    /* TODO: could easily be extended to delegate to the native socket call */
-    klee_warning("unsupported socket protocol");
-    errno = EPROTONOSUPPORT;
-    return -1;
-  } /* switch (domain) */
-
-  return fd;
-}
-
-
-int __fd_bind(unsigned long *args) {
+int bind(int sockfd, const struct sockaddr* addr, socklen_t addrlen)
+{
   static int n_calls = 0;
   int os_r;
-  int sockfd = args[0];
-  const struct sockaddr *addr = (const struct sockaddr *) args[1];
-  socklen_t addrlen = args[2];
 
   ++n_calls;
 
@@ -286,9 +178,9 @@ int __fd_bind(unsigned long *args) {
   else {
     /* concrete file descriptor */
 
-    args[0] = f->fd;
+    //args[0] = f->fd;
     os_r = 0 /* syscall(__NR_socketcall, SYS_BIND, args) */;
-    args[0] = sockfd;
+    // args[0] = sockfd;
     if (os_r < 0) {
       errno = klee_get_errno();
       return -1;
@@ -854,3 +746,113 @@ ssize_t __fd_attach_dgram(exe_file_t *f)
   }
   return 0;
 }
+
+int socket(int domain, int type, int protocol)
+{
+  static int n_calls = 0;
+  int fd;
+  exe_file_t* f;
+
+  ++n_calls;
+
+  if (__exe_fs.max_failures && *__exe_fs.socket_fail == n_calls) {
+    __exe_fs.max_failures--;
+    errno = EIO;
+    return -1;
+  }
+
+  switch (domain) {
+  case PF_INET:
+  case PF_INET6:
+  case PF_PACKET:
+
+    switch (type) {
+    case SOCK_STREAM:
+      /* create a symbolic stream socket */
+      fd = __get_new_fd(&f);
+      if (fd < 0) return fd;
+      f->flags |= eSocket;
+
+      if (!__allocate_sockaddr(domain, &f->local)) {
+        __undo_get_new_fd(fd);
+        errno = ENOMEM;
+        return -1;
+      }
+
+      f->foreign = malloc(sizeof(*f->foreign));
+      if (!f->foreign) {
+        free(f->local.addr);
+        __undo_get_new_fd(fd);
+        errno = ENOMEM;
+        return -1;
+      }
+
+      if (!__allocate_sockaddr(domain, f->foreign)) {
+        free(f->foreign);
+        free(f->local.addr);
+        __undo_get_new_fd(fd);
+        errno = ENOMEM;
+        return -1;
+      }
+
+      f->dfile = &dummy_dfile;
+      f->flags |= eReadable | eWriteable;
+      /* XXX Should check access against mode / stat / possible deletion. */
+
+      f->domain = domain;
+      break;
+
+    case SOCK_DGRAM:
+    case SOCK_RAW:
+    case SOCK_PACKET:
+      /* create a symbolic datagram socket */
+      fd = __get_new_fd(&f);
+      if (fd < 0) return fd;
+      f->flags |= eSocket | eDgramSocket;
+
+      if (!__allocate_sockaddr(domain, &f->local)) {
+        __undo_get_new_fd(fd);
+        errno = ENOMEM;
+        return -1;
+      }
+
+      f->foreign = malloc(sizeof(*f->foreign));
+      if (!f->foreign) {
+        free(f->local.addr);
+        __undo_get_new_fd(fd);
+        errno = ENOMEM;
+        return -1;
+      }
+
+      if (!__allocate_sockaddr(domain, f->foreign)) {
+        free(f->foreign);
+        free(f->local.addr);
+        __undo_get_new_fd(fd);
+        errno = ENOMEM;
+        return -1;
+      }
+
+      f->dfile = &dummy_dfile;
+      f->flags |= eReadable | eWriteable;
+      /* XXX Should check access against mode / stat / possible deletion. */
+      break;
+
+    default:
+      klee_warning("unsupported socket type");
+      errno = ESOCKTNOSUPPORT;
+      return -1;
+    } /* switch (type) */
+    break;
+
+  default:
+    /* TODO: could easily be extended to delegate to the native socket call */
+    klee_warning("unsupported socket protocol");
+    errno = EPROTONOSUPPORT;
+    return -1;
+  } /* switch (domain) */
+
+  return fd;
+
+}
+
+
