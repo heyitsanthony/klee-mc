@@ -52,24 +52,36 @@ public:
 		const MemoryObject* mo,
 		const char* arrPrefix = "arr")
 	{
-		ObjectState *os = state.bindMemObjWriteable(mo);
+		ObjectState	*os;
+
+		os = T::makeSymbolic(state, mo, arrPrefix);
 		if (replayPosition >= replayKTest->numObjects) {
 			T::terminateOnError(
 				state, "replay count mismatch", "user.err");
-			return os;
+			return NULL;
 		}
 
 		KTestObject *obj = &replayKTest->objects[replayPosition++];
 		if (obj->numBytes != mo->size) {
 			T::terminateOnError(
 				state, "replay size mismatch", "user.err");
-			return os;
+			return NULL;
 		}
 
-		for (unsigned i = 0; i < mo->size; i++) {
+		for (unsigned i = 0; i < mo->size; i++)
 			state.write8(os, i, obj->bytes[i]);
-		}
 
+		std::vector<const Array*> arr;
+		std::vector<std::vector<unsigned char> > v;
+
+		arr.push_back(os->getArray());
+		v.push_back(std::vector<unsigned char>(
+				obj->bytes,
+				obj->bytes + mo->size));
+
+		Assignment	a(arr, v);
+
+		state.assignSymbolics(a);
 		return os;
 	}
 

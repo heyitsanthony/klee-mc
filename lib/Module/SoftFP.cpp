@@ -1,6 +1,7 @@
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/Support/Path.h>
 #include <llvm/Support/IRBuilder.h>
+#include <llvm/Support/CommandLine.h>
 #include "klee/Internal/Module/KModule.h"
 #include "klee/Internal/Module/KFunction.h"
 #include "Passes.h"
@@ -17,6 +18,15 @@ struct func_names
 	const char*	name;
 	KFunction**	kf_loc;
 };
+
+namespace
+{
+	llvm::cl::opt<std::string>
+	SoftFPLib(
+		"softfp-lib",
+		llvm::cl::desc("Soft FPU library file."),
+		llvm::cl::init("softfloat.bc"));
+}
 
 namespace klee { extern Module* getBitcodeModule(const char* path); }
 
@@ -57,7 +67,10 @@ SoftFPPass::SoftFPPass(KModule* _km)
 		{NULL, NULL}
 	};
 
-	path.appendComponent("softfloat.bc");
+	path.appendComponent(SoftFPLib.c_str());
+	std::cerr << "[SoftFPU] Using library '" << path.c_str() << "'\n";
+
+
 	mod = getBitcodeModule(path.c_str());
 	assert (mod != NULL);
 
