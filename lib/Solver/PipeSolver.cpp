@@ -1,4 +1,5 @@
 #include "klee/SolverStats.h"
+#include "klee/Internal/ADT/LimitedStream.h"
 #include <errno.h>
 #include <string.h>
 #include <sys/select.h>
@@ -14,7 +15,7 @@
 #include "klee/SolverStats.h"
 #include "klee/TimerStatIncrementer.h"
 #include "klee/util/Assignment.h"
-#include "llvm/Support/CommandLine.h"
+#include <llvm/Support/CommandLine.h>
 #include "klee/klee.h"
 #include <iostream>
 
@@ -27,6 +28,8 @@ using namespace llvm;
 
 uint64_t PipeSolverImpl::prefork_misses = 0;
 uint64_t PipeSolverImpl::prefork_hits = 0;
+
+#define MAX_DUMP_BYTES	(1024*1024)
 
 namespace {
 	cl::opt<bool>
@@ -77,6 +80,14 @@ namespace {
 		cl::desc("exec() solver at query fini."),
 		cl::init(true));
 
+}
+
+static void dump_badquery(const Query& q, const char* prefix)
+{
+	char			fname[256];
+	sprintf(fname, "%s.%lx.smt", prefix, q.hash());
+	limited_ofstream	lofs(fname, MAX_DUMP_BYTES);
+	SMTPrinter::print(lofs, q);
 }
 
 PipeSolver::PipeSolver(PipeFormat* in_fmt)
@@ -311,7 +322,7 @@ bool PipeSolverImpl::computeInitialValues(const Query& q, Assignment& a)
 		failQuery();
 		finiChild();
 		if (!ForkQueries || DebugWriteRecvQuery) {
-			SMTPrinter::dump(q, "badwrite");
+			dump_badquery(q, "badwrite");
 		} else {
 			std::cerr << "[PipeSolver] SUPPRESSING FORKQUERY ERROR\n";
 		}
@@ -376,7 +387,7 @@ bool PipeSolverImpl::computeSat(const Query& q)
 		std::cerr << "[PipeSolver] BAD PARSE SAT\n";
 		failQuery();
 		if (!ForkQueries || DebugWriteRecvQuery)
-			SMTPrinter::dump(q, "badsat");
+			dump_badquery(q, "badsat");
 		return false;
 	}
 
@@ -401,7 +412,7 @@ bool PipeSolverImpl::writeQueryToChild(const Query& q) const
 	if (os->fail()) {
 		std::cerr << "[PipeSolver] FAILED TO COMPLETELY SEND SMT\n";
 		if (!ForkQueries)
-			SMTPrinter::dump(q, "badsend");
+			dump_badquery(q, "badsend");
 		return false;
 	}
 	os->flush();
