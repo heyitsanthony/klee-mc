@@ -189,6 +189,9 @@ bool SoftFPPass::replaceFCmp(Instruction *inst)
 	} else if (pred == FCmpInst::FCMP_OGT) {
 		GET_F(le);
 		f_flip = true;
+	} else if (pred == FCmpInst::FCMP_OGE) {
+		GET_F(lt);
+		f_flip = true;
 	}
 	/* Unordered OR cond */
 	else if (pred == FCmpInst::FCMP_UEQ) {
@@ -202,6 +205,10 @@ bool SoftFPPass::replaceFCmp(Instruction *inst)
 		ordered = false;
 	} else if (pred == FCmpInst::FCMP_UGT) {
 		GET_F(le);
+		f_flip = true;
+		ordered = false;
+	} else if (pred == FCmpInst::FCMP_UGE) {
+		GET_F(lt);
 		f_flip = true;
 		ordered = false;
 	} else {
@@ -441,6 +448,7 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 
 	case Instruction::FCmp: return replaceFCmp(inst);
 
+	case Instruction::FPToUI:
 	case Instruction::FPToSI: {
 		CallInst		*fp_call;
 		Function		*f;
@@ -466,6 +474,7 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 		return true;
 	}
 
+	case Instruction::UIToFP:
 	case Instruction::SIToFP: {
 		CallInst		*fp_call;
 		Function		*f;
@@ -529,12 +538,14 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 	}
 	break;
 
-	case Instruction::FPToUI:
-	case Instruction::UIToFP:
+	default:
+#if 0
+		std::cerr << "UNKNOWN INST: ";
 		inst->dump();
 		std::cerr << "\n=======FUNC======\n";
 		inst->getParent()->getParent()->dump();
 		assert (0 == 1 && "IMPLEMENT ME!!!!!!");
+#endif
 	break;
 	}
 

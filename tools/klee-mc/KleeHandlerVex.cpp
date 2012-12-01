@@ -192,7 +192,7 @@ bool KleeHandlerVex::validateTest(unsigned id)
 	}
 
 	if (!WIFEXITED(status)) {
-		std::cerr << "VALIDATE: DID NOT EXIT\n";
+		std::cerr << "VALIDATE: DID NOT EXIT. Code=" << status << '\n';
 		return false;
 	}
 

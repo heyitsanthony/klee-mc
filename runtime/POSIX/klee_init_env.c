@@ -80,7 +80,7 @@ static long int __str_to_int(char *s, const char *error_msg) {
 
 static int __isprint(const char c) {
 	/* Assume ASCII */
-	return (32 <= c && c <= 126);
+	return (32 <= c & c <= 126);
 }
 
 static int __getodigit(const char c) {
