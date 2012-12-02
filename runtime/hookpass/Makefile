@@ -11,7 +11,7 @@ LEVEL=../..
 
 RUNTIME_ENABLE_OPTIMIZED=1
 ENABLE_OPTIMIZED=1
-LIBRARYNAME=kleeRuntimeMMU
+LIBRARYNAME=hookpass
 BUILD_ARCHIVE=1
 BYTECODE_LIBRARY=1
 # Don't strip debug info from the module.
@@ -19,17 +19,16 @@ DEBUG_RUNTIME=0
 
 include $(LEVEL)/Makefile.common
 
-LIBBCA:=$(LibDir)/lib$(LIBRARYNAME).bca
-LIBTXT:=$(LibDir)/$(LIBRARYNAME)-fns.txt
+#LIBTXT:=$(LibDir)/$(LIBRARYNAME)-fns.txt
 #OPTFLAGS:="-disable-opt"
 # memset intrinsics have been causing some issues
 #CFLAGS=-fno-builtin -nodefaultlibs -O0 -emit-llvm
 #CXXFLAGS=-fno-builtin -nodefaultlibs -O0 -emit-llvm
 
-all :: $(LibDir)/libkleeRuntimeMMU.bc
+all ::  $(LibDir)/hookpass.bc
 
-$(LibDir)/libkleeRuntimeMMU.bc: $(LibDir)/libkleeRuntimeMMU.bca
-	mkdir -p mmu_tmp
-	cd mmu_tmp && ar x $^ && cd ..
-	llvm-link -f -o $@ mmu_tmp/*.bc
-	rm -rf mmu_tmp
+$(LibDir)/hookpass.bc: $(LibDir)/libhookpass.bca
+	mkdir -p hookpass_tmp
+	cd hookpass_tmp && ar x $^ && cd ..
+	llvm-link -f -o $@ hookpass_tmp/*.bc
+	rm -rf hookpass_tmp

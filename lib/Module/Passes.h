@@ -10,12 +10,12 @@
 #ifndef KLEE_PASSES_H
 #define KLEE_PASSES_H
 
-#include "llvm/BasicBlock.h"
-#include "llvm/Constants.h"
-#include "llvm/Instructions.h"
-#include "llvm/Module.h"
-#include "llvm/Pass.h"
-#include "llvm/CodeGen/IntrinsicLowering.h"
+#include <llvm/BasicBlock.h>
+#include <llvm/Constants.h>
+#include <llvm/Instructions.h>
+#include <llvm/Module.h>
+#include <llvm/Pass.h>
+#include <llvm/CodeGen/IntrinsicLowering.h>
 
 namespace llvm {
   class Function;

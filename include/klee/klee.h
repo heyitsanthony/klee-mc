@@ -148,6 +148,21 @@ extern "C" {
   void klee_assume(uint64_t condition);
   void klee_assume_eq(uint64_t lhs, uint64_t rhs);
 
+
+#define KLEE_ASSUME_OP_EQ	0
+#define KLEE_ASSUME_OP_NE	1
+#define KLEE_ASSUME_OP_UGT	2
+#define KLEE_ASSUME_OP_UGE	3
+#define KLEE_ASSUME_OP_ULT	4
+#define KLEE_ASSUME_OP_ULE	5
+#define KLEE_ASSUME_OP_SGT	6
+#define KLEE_ASSUME_OP_SGE	7
+#define KLEE_ASSUME_OP_SLT	8
+#define KLEE_ASSUME_OP_SLE	9
+
+#define klee_assume_gt(x,y)	klee_assume_op(x,y,KLEE_ASSUME_OP_UGT)
+  void klee_assume_op(uint64_t lhs, uint64_t rhs, uint8_t op);
+
   void klee_warning(const char *message);
   void klee_warning_once(const char *message);
   void klee_prefer_cex(void *object, uint64_t condition);

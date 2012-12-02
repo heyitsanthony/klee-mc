@@ -28,6 +28,7 @@
 #include "../lib/Core/Executor.h"
 
 #include "Passes.h"
+#include "HookPass.h"
 
 #include "llvm/GlobalVariable.h"
 #include "klee/Common.h"
@@ -45,11 +46,6 @@
 using namespace klee;
 using namespace llvm;
 
-#if 0
-namespace llvm {
-	Pass *createLowerAtomicPass();
-}
-#endif
 
 namespace {
   enum SwitchImplType {
@@ -63,20 +59,17 @@ namespace {
   cl::opt<bool>
   TruncateSourceLines(
   	"truncate-source-lines",
-        cl::desc("Truncate long lines in the output source (kcachegrind?)"),
-	cl::init(false));
+        cl::desc("Truncate long lines in the output source (kcachegrind?)"));
 
   cl::opt<bool>
   OutputSource(
   	"output-source",
-        cl::desc("Write the assembly for the final transformed source"),
-        cl::init(false));
+        cl::desc("Write the assembly for the final transformed source"));
 
   cl::opt<bool>
   OutputModule(
   	"output-module",
-	cl::desc("Write the bitcode for the final transformed module"),
-	cl::init(false));
+	cl::desc("Write the bitcode for the final transformed module"));
 
   cl::opt<SwitchImplType>
   SwitchType("switch-type", cl::desc("Select the implementation of switch"),
@@ -95,26 +88,26 @@ namespace {
 	cl::init(false));
 
   cl::opt<bool>
-  DebugPrintEscapingFunctions("debug-print-escaping-functions",
-                              cl::desc("Print functions whose address is taken."));
+  DebugPrintEscapingFunctions(
+  	"debug-print-escaping-functions",
+         cl::desc("Print functions whose address is taken."));
   cl::opt<bool>
   CountModuleCoverage(
 	"count-mod-cov",
-	cl::desc("Include module instructions in uncovered count"),
-	cl::init(false));
+	cl::desc("Include module instructions in uncovered count"));
 
   cl::opt<bool>
   UseSoftFP(
 	"use-softfp",
-	cl::desc("Use soft-floating point to convert fp to int."),
-	cl::init(false));
+	cl::desc("Use soft-floating point to convert fp to int."));
+
+  cl::opt<bool> UseHookPass("use-hookpass");
 
   cl::opt<unsigned>
   OptimizeKModule(
   	"optimize",
 	cl::desc("Optimize before execution"),
 	cl::init(0));
-
 }
 
 KModule::KModule(
@@ -128,8 +121,7 @@ KModule::KModule(
 , fpm(new FunctionPassManager(_module))
 , opts(_opts)
 , updated_funcs(0)
-{
-}
+{}
 
 KModule::~KModule()
 {
@@ -277,9 +269,8 @@ void KModule::prepareMerge(InterpreterHandler *ih)
 	}
 
 
-	foreach (it, MergeAtExit.begin(), MergeAtExit.end()) {
+	foreach (it, MergeAtExit.begin(), MergeAtExit.end())
 		addMergeExit(mergeFn, *it);
-	}
 }
 
 void KModule::addMergeExit(Function* mergeFn, const std::string& name)
@@ -521,6 +512,7 @@ void KModule::setupFunctionPasses(void)
 	fpm->add(new IntrinsicCleanerPass(this, *targetData));
 	fpm->add(new PhiCleanerPass());
 
+	if (UseHookPass) fpm->add(new HookPass(this));
 	if (UseSoftFP) fpm->add(new SoftFPPass(this));
 }
 

@@ -9,6 +9,7 @@
 #include <llvm/Module.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/LLVMContext.h>
+#include "klee/klee.h"
 #include "Memory.h"
 #include "SpecialFunctionHandler.h"
 #include "StateSolver.h"
@@ -30,6 +31,7 @@ namespace klee
 {
 SFH_HANDLER(Assume)
 SFH_HANDLER(AssumeEq)
+SFH_HANDLER(AssumeOp)
 SFH_HANDLER(CheckMemoryAccess)
 SFH_HANDLER(DefineFixedObject)
 SFH_HANDLER(Exit)
@@ -100,6 +102,7 @@ static const SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   add("free", Free, false),
   add("klee_assume", Assume, false),
   add("klee_assume_eq", AssumeEq, false),
+  add("klee_assume_op", AssumeOp, false),
   add("__klee_fork_eq", ForkEq, true),
   add("klee_check_memory_access", CheckMemoryAccess, false),
   add("klee_force_ne", ForceNE, false),
@@ -486,6 +489,61 @@ SFH_DEF_HANDLER(Assume)
 		"invalid klee_assume call (provably false)",
 		"user.err");
 }
+
+SFH_DEF_HANDLER(AssumeOp)
+{
+	ref<Expr>	e;
+	const ConstantExpr	*ce;
+	bool		mustBeTrue, mayBeTrue, ok;
+	int		op;
+
+	SFH_CHK_ARGS(3, "klee_assume_op");
+
+	ce = dyn_cast<ConstantExpr>(arguments[2]);
+	if (ce == NULL)
+		goto error;
+
+	switch (ce->getZExtValue()) {
+	case KLEE_ASSUME_OP_EQ: e = MK_EQ(arguments[0], arguments[1]); break;
+	case KLEE_ASSUME_OP_NE: e = MK_NE(arguments[0], arguments[1]); break;
+	case KLEE_ASSUME_OP_UGT: e = MK_UGT(arguments[0], arguments[1]); break;
+	case KLEE_ASSUME_OP_UGE: e = MK_UGE(arguments[0], arguments[1]); break;
+	case KLEE_ASSUME_OP_ULT: e = MK_ULT(arguments[0], arguments[1]); break;
+	case KLEE_ASSUME_OP_ULE: e = MK_ULE(arguments[0], arguments[1]); break;
+	case KLEE_ASSUME_OP_SGT: e = MK_SGT(arguments[0], arguments[1]); break;
+	case KLEE_ASSUME_OP_SGE: e = MK_SGE(arguments[0], arguments[1]); break;
+	case KLEE_ASSUME_OP_SLT: e = MK_SLT(arguments[0], arguments[1]); break;
+	case KLEE_ASSUME_OP_SLE: e = MK_SLE(arguments[0], arguments[1]); break;
+	default: goto error;
+	}
+
+	/* valid? */
+	ok = sfh->executor->getSolver()->mustBeTrue(state, e, mustBeTrue);
+	if (!ok) goto error;
+
+	/* nothing to do here? */
+	if (mustBeTrue) return;
+
+	/* satisfiable? */
+	ok = sfh->executor->getSolver()->mayBeTrue(state, e, mayBeTrue);
+	if (!ok) goto error;
+
+	if (!mayBeTrue) {
+		sfh->executor->terminateOnError(
+			state,
+			"invalid klee_assume_op call (provably false)",
+			"user.err");
+		return;
+	}
+
+	/* only add constraint if we know it's not already implied */
+	sfh->executor->addConstrOrDie(state, e);
+	return;
+
+error:
+	sfh->executor->terminateEarly(state, "assume-op failed");
+}
+
 
 SFH_DEF_HANDLER(AssumeEq)
 {
