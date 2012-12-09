@@ -36,6 +36,7 @@ public:
 	static bool isReplayOnly(void);
 	static unsigned getMaxSuppressInst(void);
 
+	static bool isCommitted(const Executor& exe, const ExecutionState& es);
 	static bool verifyPath(Executor* exe, const ExecutionState& es);
 
 	static void checkPC(const KInstIterator& ki, const ReplayNode& rn);

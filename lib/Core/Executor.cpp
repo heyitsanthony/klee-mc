@@ -69,6 +69,12 @@ extern double	MaxSTPTime;
 namespace {
   DECL_OPTBOOL(ChkConstraints, "chk-constraints");
   DECL_OPTBOOL(YieldUncached, "yield-uncached");
+  DECL_OPTBOOL(OnlyOutputStatesCoveringNew, "only-output-states-covering-new");
+  DECL_OPTBOOL(OnlyOutputStatesUncommitted, "only-output-states-uncommittted");
+  DECL_OPTBOOL(DebugPrintValues, "debug-print-values");
+  DECL_OPTBOOL(DebugCheckForImpliedValues, "debug-check-for-implied-values");
+  DECL_OPTBOOL(AllExternalWarnings, "all-external-warnings");
+  DECL_OPTBOOL(VerifyPath, "verify-path");
 
   cl::opt<bool>
   ConcretizeEarlyTerminate(
@@ -82,14 +88,10 @@ namespace {
 	cl::desc("Dump states which fail to get initial values to console."));
 
   cl::opt<bool>
-  UsePID("use-pid",
-	 cl::desc("Use proportional-integral-derivative state control"));
+  UsePID("use-pid", cl::desc("Use proportional state control"));
 
   cl::opt<bool> DumpStatesOnHalt("dump-states-on-halt", cl::init(true));
-
   cl::opt<bool> PreferCex("prefer-cex", cl::init(true));
-
-  cl::opt<bool> VerifyPath("verify-path");
 
   cl::opt<bool,true>
   DebugPrintInstructionsProxy(
@@ -97,13 +99,6 @@ namespace {
 	cl::location(DebugPrintInstructions),
         cl::desc("Print instructions during execution."),
 	cl::init(false));
-  cl::opt<bool> DebugPrintValues("debug-print-values");
-
-  cl::opt<bool> DebugCheckForImpliedValues("debug-check-for-implied-values");
-
-  cl::opt<bool>
-  OnlyOutputStatesCoveringNew(
-  	"only-output-states-covering-new", cl::init(false));
 
   cl::opt<bool>
   UseBranchHints(
@@ -154,8 +149,6 @@ namespace {
         cl::desc("Replay fork inhibited path as new state"),
 	cl::location(ReplayInhibitedForks),
 	cl::init(true));
-
-  cl::opt<bool> AllExternalWarnings("all-external-warnings");
 
   cl::opt<bool>
   UseIVC("use-ivc", cl::desc("Implied Value Concretization"), cl::init(true));
@@ -723,9 +716,8 @@ void Executor::markBranchVisited(
 
 	is_cond_const = cond->getKind() == Expr::Constant;
 	if (!is_cond_const) {
-		if (TrackBranchExprs) {
+		if (TrackBranchExprs)
 			kbr->addExpr(cond);
-		}
 		kbr->seenExpr();
 	}
 
@@ -1610,8 +1602,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
   // Special instructions
   case Instruction::Select: {
     SelectInst *SI = cast<SelectInst>(ki->getInst());
-    assert(SI->getCondition() == SI->getOperand(0) &&
-           "Wrong operand index!");
+    assert (SI->getCondition() == SI->getOperand(0) && "Wrong operand index!");
     ref<Expr>	cond (eval(ki, 0, state));
     ref<Expr>	tExpr(eval(ki, 1, state));
     ref<Expr>	fExpr(eval(ki, 2, state));
@@ -1720,7 +1711,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
   }
   case Instruction::ZExt: {
     CastInst *ci = cast<CastInst>(i);
-    ref<Expr> result = ZExtExpr::create(
+    ref<Expr> result = MK_ZEXT(
       eval(ki, 0, state),
       kmodule->getWidthForLLVMType(ci->getType()));
 
@@ -1751,9 +1742,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     break;
   }
 
-  case Instruction::BitCast:
-    state.bindLocal(ki, eval(ki, 0, state));
-    break;
+  case Instruction::BitCast: state.bindLocal(ki, eval(ki, 0, state)); break;
 
     // Floating point arith instructions
 #define INST_FOP_ARITH(x,y)					\
@@ -1776,98 +1765,88 @@ INST_FOP_ARITH(FMul, multiply)
 INST_FOP_ARITH(FDiv, divide)
 INST_FOP_ARITH(FRem, mod)
 
-  case Instruction::FPTrunc: {
-    FPTruncInst *fi = cast<FPTruncInst>(i);
-    Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());
-    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state), "fp");
-    if (!fpWidthToSemantics(arg->getWidth()) || resultType > arg->getWidth())
-      return terminateOnExecError(state, "Unsupported FPTrunc operation");
+#define FP_SETUP(T,z,x,y)	\
+    T *fi = cast<T>(i);	\
+    Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());	\
+    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state), "fp");	\
+    const llvm::fltSemantics *a_semantics = fpWidthToSemantics(arg->getWidth());\
+    const llvm::fltSemantics *r_semantics = fpWidthToSemantics(resultType);\
+    (void)resultType, (void)a_semantics, (void)r_semantics; /* maybe unused */	\
+    if (!z || x) return terminateOnExecError(state, y);
 
-    llvm::APFloat Res(arg->getAPValue());
-    bool losesInfo = false;
-    Res.convert(*fpWidthToSemantics(resultType),
-                llvm::APFloat::rmNearestTiesToEven,
-                &losesInfo);
-    state.bindLocal(ki, ConstantExpr::alloc(Res));
-    break;
+  case Instruction::FPTrunc: {
+	FP_SETUP(FPTruncInst,
+		a_semantics,
+		resultType > arg->getWidth(),
+		"Unsupported FPTrunc operation")
+
+	llvm::APFloat Res(arg->getAPValue());
+	bool lossy = false;
+	Res.convert(*r_semantics, llvm::APFloat::rmNearestTiesToEven, &lossy);
+	state.bindLocal(ki, ConstantExpr::alloc(Res));
+	break;
   }
 
   case Instruction::FPExt: {
-    FPExtInst *fi = cast<FPExtInst>(i);
-    Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());
-    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state), "fp");
-    if (!fpWidthToSemantics(arg->getWidth()) || arg->getWidth() > resultType)
-      return terminateOnExecError(state, "Unsupported FPExt operation");
+	FP_SETUP(FPExtInst,
+		a_semantics,
+		arg->getWidth() > resultType,
+		"Unsupported FPExt operation")
 
-    llvm::APFloat Res(arg->getAPValue());
-    bool losesInfo = false;
-    Res.convert(*fpWidthToSemantics(resultType),
-                llvm::APFloat::rmNearestTiesToEven,
-                &losesInfo);
-    state.bindLocal(ki, ConstantExpr::alloc(Res));
-    break;
+	llvm::APFloat Res(arg->getAPValue());
+	bool lossy = false;
+	Res.convert(*r_semantics, llvm::APFloat::rmNearestTiesToEven, &lossy);
+	state.bindLocal(ki, ConstantExpr::alloc(Res));
+	break;
   }
 
   case Instruction::FPToUI: {
-    FPToUIInst *fi = cast<FPToUIInst>(i);
-    Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());
-    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state), "fp");
-    if (!fpWidthToSemantics(arg->getWidth()) || resultType > 64)
-      return terminateOnExecError(state, "Unsupported FPToUI operation");
+	FP_SETUP(FPToUIInst,
+		a_semantics,
+		resultType > 64,
+		"Unsupported FPToUI operation")
 
-    llvm::APFloat Arg(arg->getAPValue());
-    uint64_t value = 0;
-    bool isExact = true;
-    Arg.convertToInteger(&value, resultType, false,
-                         llvm::APFloat::rmTowardZero, &isExact);
-    state.bindLocal(ki, ConstantExpr::create(value, resultType));
-    break;
+	llvm::APFloat Arg(arg->getAPValue());
+	uint64_t value = 0;
+	bool isExact = true;
+	Arg.convertToInteger(&value, resultType, false,
+			 llvm::APFloat::rmTowardZero, &isExact);
+	state.bindLocal(ki, MK_CONST(value, resultType));
+	break;
   }
 
   case Instruction::FPToSI: {
-    FPToSIInst *fi = cast<FPToSIInst>(i);
-    Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());
-    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state), "fp");
-    if (!fpWidthToSemantics(arg->getWidth()) || resultType > 64)
-      return terminateOnExecError(state, "Unsupported FPToSI operation");
+	FP_SETUP(FPToSIInst,
+		a_semantics,
+		resultType > 64,
+		"Unsupported FPToSI operation")
 
-    llvm::APFloat Arg(arg->getAPValue());
-    uint64_t value = 0;
-    bool isExact = true;
-    Arg.convertToInteger(&value, resultType, false,
-                         llvm::APFloat::rmTowardZero, &isExact);
-    state.bindLocal(ki, ConstantExpr::create(value, resultType));
-    break;
+	llvm::APFloat Arg(arg->getAPValue());
+	uint64_t value = 0;
+	bool isExact = true;
+	Arg.convertToInteger(&value, resultType, false,
+			 llvm::APFloat::rmTowardZero, &isExact);
+	state.bindLocal(ki, MK_CONST(value, resultType));
+	break;
   }
 
   case Instruction::UIToFP: {
-    UIToFPInst *fi = cast<UIToFPInst>(i);
-    Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());
-    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state), "fp");
-    const llvm::fltSemantics *semantics = fpWidthToSemantics(resultType);
-    if (!semantics)
-      return terminateOnExecError(state, "Unsupported UIToFP operation");
-    llvm::APFloat f(*semantics, 0);
-    f.convertFromAPInt(arg->getAPValue(), false,
-                       llvm::APFloat::rmNearestTiesToEven);
+  	FP_SETUP(UIToFPInst, r_semantics, false, "Unsupported UIToFP operation");
+	llvm::APFloat f(*r_semantics, 0);
+	f.convertFromAPInt(
+		arg->getAPValue(), false, APFloat::rmNearestTiesToEven);
 
-    state.bindLocal(ki, ConstantExpr::alloc(f));
-    break;
+	state.bindLocal(ki, ConstantExpr::alloc(f));
+	break;
   }
 
   case Instruction::SIToFP: {
-    SIToFPInst *fi = cast<SIToFPInst>(i);
-    Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());
-    ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state), "fp");
-    const llvm::fltSemantics *semantics = fpWidthToSemantics(resultType);
-    if (!semantics)
-      return terminateOnExecError(state, "Unsupported SIToFP operation");
-    llvm::APFloat f(*semantics, 0);
-    f.convertFromAPInt(arg->getAPValue(), true,
-                       llvm::APFloat::rmNearestTiesToEven);
-
-    state.bindLocal(ki, ConstantExpr::alloc(f));
-    break;
+  	FP_SETUP(SIToFPInst, r_semantics, false, "Unsupported SIToFP operation");
+	llvm::APFloat f(*r_semantics, 0);
+	f.convertFromAPInt(
+		arg->getAPValue(), true, APFloat::rmNearestTiesToEven);
+	state.bindLocal(ki, ConstantExpr::alloc(f));
+	break;
   }
 
   case Instruction::FCmp: {
@@ -2263,7 +2242,14 @@ void Executor::terminateEarly(
 }
 
 bool Executor::isInterestingTestCase(ExecutionState* st) const
-{ return !OnlyOutputStatesCoveringNew || st->coveredNew; }
+{
+	if (OnlyOutputStatesUncommitted)
+		return (Replay::isCommitted(*this, *st) == false);
+
+	if (OnlyOutputStatesCoveringNew) return st->coveredNew;
+
+	return true;
+}
 
 void Executor::terminateOnExit(ExecutionState &state)
 {

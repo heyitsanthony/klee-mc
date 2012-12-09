@@ -495,7 +495,6 @@ SFH_DEF_HANDLER(AssumeOp)
 	ref<Expr>	e;
 	const ConstantExpr	*ce;
 	bool		mustBeTrue, mayBeTrue, ok;
-	int		op;
 
 	SFH_CHK_ARGS(3, "klee_assume_op");
 

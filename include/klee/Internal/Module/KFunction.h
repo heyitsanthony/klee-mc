@@ -75,12 +75,15 @@ public:
 	static unsigned getClock(void) { return inst_clock; }
 	unsigned getTick(void) const { return inst_tick; }
 
-	bool isCommitted(void) const { return pathCommitted; }
-	void markCommitted(void) { pathCommitted = true; }
+	bool isCommitted(uint32_t idx = (~0 - 1)) const
+	{ return (path_commit_tick <= idx); }
 
+	void markCommitted(uint32_t idx)
+	{ if (idx > path_commit_tick) return; path_commit_tick = idx; }
 private:
 	static unsigned		inst_clock;
 	unsigned		inst_tick;
+	uint32_t		path_commit_tick;
 };
 }
 

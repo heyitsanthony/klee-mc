@@ -89,6 +89,36 @@ void Replay::loadPathStream(std::istream& is, ReplayPath& buffer)
 
 typedef std::map<const llvm::Function*, uint64_t> f2p_ty;
 
+bool Replay::isCommitted(const Executor& exe, const ExecutionState& st)
+{
+	std::set<const llvm::Function*>	seen_f;
+	const KModule	*km = exe.getKModule();
+	unsigned	br_idx = 0;
+
+	foreach(bit, st.branchesBegin(), st.branchesEnd()) {
+		const KInstruction	*ki;
+		const KFunction		*kf;
+		llvm::Function		*f;
+
+		br_idx++;
+
+		ki = (*bit).second;
+		if (ki == NULL) continue;
+
+		f = ki->getFunction();
+		if (seen_f.count(f)) continue;
+		seen_f.insert(f);
+
+		kf = km->getKFunction(f);
+		if (kf == NULL) continue;
+
+		if (kf->isCommitted(br_idx) == false)
+			return false;
+	}
+
+	return true;
+}
+
 void Replay::writePathFile(
 	const Executor& exe,
 	const ExecutionState& st,
@@ -97,12 +127,14 @@ void Replay::writePathFile(
 	const KModule	*km;
 	f2p_ty		f2ptr;
 	std::string	fstr;
+	unsigned int	br_idx;
 
 	if (st.branchesBegin() == st.branchesEnd()) {
 		std::cerr << "WARNING: Replay without branches\n";
 	}
 
 	km = exe.getKModule();
+	br_idx = 0;
 	foreach(bit, st.branchesBegin(), st.branchesEnd()) {
 		const KInstruction	*ki;
 		llvm::Function		*f;
@@ -110,6 +142,7 @@ void Replay::writePathFile(
 		uint64_t		v;
 
 		os << (*bit).first;
+		br_idx++;
 
 		ki = (*bit).second;
 		if (ki == NULL) {
@@ -127,7 +160,7 @@ void Replay::writePathFile(
 		}
 
 		if (KFunction* kf = km->getKFunction(f))
-			kf->markCommitted();
+			kf->markCommitted(br_idx);
 
 		fstr = f->getName().str();
 		if (fstr.substr(0, 3) != "sb_") {
