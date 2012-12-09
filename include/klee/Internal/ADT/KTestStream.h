@@ -3,8 +3,8 @@
 
 #include "klee/Internal/ADT/KTest.h"
 
-namespace klee {
-
+namespace klee
+{
 class KTestStream
 {
 public:
@@ -29,7 +29,6 @@ public:
 	char* feedObjData(unsigned int len = ~0U);
 protected:
 	KTestStream(KTest* kt);
-private:
 	unsigned int	idx;
 	KTest		*kt;
 };

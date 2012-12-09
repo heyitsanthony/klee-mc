@@ -42,6 +42,12 @@ cl::opt<unsigned> StopAfterNTests(
 	cl::desc("Halt execution after generating the given number of tests."),
 	cl::init(0));
 
+cl::opt<unsigned> StopAfterNErrors(
+	"stop-after-n-errors",
+	cl::desc("Halt execution after generating the given number of errors."),
+	cl::init(0));
+
+
 cl::opt<std::string> OutputDir(
 	"output-dir",
 	cl::desc("Directory to write results in (defaults to klee-out-N)"),
@@ -388,6 +394,12 @@ unsigned KleeHandler::processTestCase(
 
 	if (m_testIndex == StopAfterNTests)
 		m_interpreter->setHaltExecution(true);
+
+	if (StopAfterNErrors && m_errorsFound >= StopAfterNErrors) {
+		std::cerr << "[KLEE] Stopping after "
+			<< m_errorsFound << " errors.\n";
+		m_interpreter->setHaltExecution(true);
+	}
 
 	return id;
 }

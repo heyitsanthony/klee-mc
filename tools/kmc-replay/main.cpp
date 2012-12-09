@@ -3,6 +3,7 @@
 #include <llvm/ExecutionEngine/JIT.h>
 #include "klee/Internal/ADT/Crumbs.h"
 #include "klee/Internal/ADT/KTestStream.h"
+#include "klee/Internal/ADT/KTSFuzz.h"
 #include "klee/Internal/Support/Watchdog.h"
 #include "static/Sugar.h"
 
@@ -53,6 +54,55 @@ static void loadSymArgs(Guest* gs, KTestStream* kts)
 	}
 }
 
+static KTestStream* setupKTestStream(
+	const char* dirname,
+	unsigned test_num,
+	Guest* gs,
+	UCState* &uc_state)
+{
+	KTestStream	*kts;
+	const char	*uc_func;
+
+	uc_func = getenv("UC_FUNC");
+	uc_state = NULL;
+	if (uc_func != NULL) {
+		uc_state = UCState::init(gs, uc_func, dirname, test_num);
+		assert (uc_state != NULL);
+		kts = uc_state->allocKTest();
+	} else {
+		char	fname_ktest[256];
+		const char	*corrupt;
+
+		snprintf(
+			fname_ktest,
+			256,
+			"%s/test%06d.ktest.gz", dirname, test_num);
+		corrupt = getenv("KMC_CORRUPT_OBJ");
+		if (corrupt == NULL)
+			kts = KTestStream::create(fname_ktest);
+		else {
+			KTSFuzz		*ktsf;
+			const char	*fuzz_percent;
+
+			ktsf = KTSFuzz::create(fname_ktest);
+			fuzz_percent = getenv("KMC_CORRUPT_PERCENT");
+			ktsf->fuzzPart(
+				atoi(corrupt),
+				(fuzz_percent != NULL)
+					? atof(fuzz_percent)/100.0
+					: 0.5);
+			kts = ktsf;
+		}
+	}
+
+	assert (kts != NULL && "Expects ktest");
+	if (kts->getKTest()->symArgvs)
+		loadSymArgs(gs, kts);
+
+	return kts;
+}
+
+
 static int doReplay(
 	const char* dirname,
 	unsigned test_num,
@@ -65,7 +115,6 @@ static int doReplay(
 	Crumbs		*crumbs;
 	char		fname_crumbs[256];
 	UCState		*uc_state;
-	const char	*uc_func;
 
 	gs = Guest::load(guestdir);
 	assert (gs != NULL && "Expects a guest snapshot");
@@ -79,29 +128,12 @@ static int doReplay(
 			fname_crumbs);
 		crumbs = Crumbs::createEmpty();
 	}
+	assert (crumbs != NULL && "Expects crumbs");
 
 	re = VexExec::create<ReplayExec, Guest>(gs);
 	assert (theGenLLVM);
 
-	uc_func = getenv("UC_FUNC");
-	uc_state = NULL;
-	if (uc_func != NULL) {
-		uc_state = UCState::init(gs, uc_func, dirname, test_num);
-		assert (uc_state != NULL);
-		kts = uc_state->allocKTest();
-	} else {
-		char	fname_ktest[256];
-		snprintf(
-			fname_ktest,
-			256,
-			"%s/test%06d.ktest.gz", dirname, test_num);
-		kts = KTestStream::create(fname_ktest);
-	}
-
-	assert (crumbs != NULL && "Expects crumbs");
-	assert (kts != NULL && "Expects ktest");
-	if (kts->getKTest()->symArgvs)
-		loadSymArgs(gs, kts);
+	kts = setupKTestStream(dirname, test_num, gs, uc_state);
 
 	std::cerr << "[kmc-replay] Forcing fake vsyspage reads\n";
 	theGenLLVM->setFakeSysReads();
@@ -122,9 +154,7 @@ static int doReplay(
 		re->beginStepping();
 		while (re->stepVSB()) {
 			if (re->getNextAddr() == 0xdeadbeef) {
-				std::cerr
-					<< "[kmc-replay] UC: Exited '"
-					<< uc_func << "'.\n";
+				std::cerr << "[kmc-replay] UC: Exited.\n";
 				break;
 			}
 		}
