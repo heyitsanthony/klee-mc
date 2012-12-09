@@ -70,7 +70,7 @@ namespace {
   DECL_OPTBOOL(ChkConstraints, "chk-constraints");
   DECL_OPTBOOL(YieldUncached, "yield-uncached");
   DECL_OPTBOOL(OnlyOutputStatesCoveringNew, "only-output-states-covering-new");
-  DECL_OPTBOOL(OnlyOutputStatesUncommitted, "only-output-states-uncommittted");
+  DECL_OPTBOOL(OnlyOutputStatesUncommitted, "only-output-states-uncommitted");
   DECL_OPTBOOL(DebugPrintValues, "debug-print-values");
   DECL_OPTBOOL(DebugCheckForImpliedValues, "debug-check-for-implied-values");
   DECL_OPTBOOL(AllExternalWarnings, "all-external-warnings");
