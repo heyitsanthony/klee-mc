@@ -2184,7 +2184,7 @@ void Executor::terminate(ExecutionState &state)
 {
 	interpreterHandler->incPathsExplored();
 
-	if (VerifyPath) {
+	if (VerifyPath && !haltExecution) {
 		static bool verifying = false;
 
 		if (!verifying) {

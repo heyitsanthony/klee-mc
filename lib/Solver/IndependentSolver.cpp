@@ -6,6 +6,7 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
+#include <llvm/Support/CommandLine.h>
 
 #include "klee/Expr.h"
 #include "klee/Constraints.h"
@@ -22,6 +23,14 @@ using namespace klee;
 using namespace llvm;
 
 uint64_t IndependentSolver::indep_c = 0;
+
+namespace {
+/* this is optional because it can break path replay */
+  cl::opt<bool> RandomizeComputeValue(
+  	"randomize-independent-solver",
+	cl::desc("Randomize unconstrained values in independent solver"),
+	cl::init(false));
+}
 
 template<class T>
 class DenseSet
@@ -421,15 +430,17 @@ ref<Expr> IndependentSolver::computeValue(const Query& query)
 {
 	SETUP_CONSTRAINTS {
 		uint64_t	v;
-
-		v = rng.getInt32();
-		v <<= 32;
-		v |= rng.getInt32();
-		if (query.expr->getWidth() < 64)
-			v &= (1 << query.expr->getWidth()) - 1;
+		if (RandomizeComputeValue) {
+			v = rng.getInt32();
+			v <<= 32;
+			v |= rng.getInt32();
+			if (query.expr->getWidth() < 64)
+				v &= (1 << query.expr->getWidth()) - 1;
+		} else
+			v = query.hash();
 
 		indep_c++;
-		return ConstantExpr::create(v, query.expr->getWidth());
+		return MK_CONST(v, query.expr->getWidth());
 	}
 
 	return doComputeValue(Query(tmp, query.expr));

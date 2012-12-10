@@ -239,6 +239,16 @@ Solver* Solver::createChainWithTimedSolver(
 		solver = new Solver(
 			new PoisonCache(solver, new QHRewritePtr()));
 
+	if (UseFastCexSolver) solver = createFastCexSolver(solver);
+	if (UseFastRangeSolver) solver = createFastRangeSolver(solver);
+
+	if (UseCexCache) solver = createCexCachingSolver(solver);
+	
+	/* it's important the hash solver is called *BEFORE* the cex solver
+	 * so we can reproduce paths without getvalue wrecking things */
+
+	// if the hash solver is disabled, the cex cache should *not* be used
+	// to when generating paths
 	if (UseHashSolver)
 		solver = new Solver(
 //			new HashSolver(solver, new QHRewritePtr()));
@@ -251,9 +261,8 @@ Solver* Solver::createChainWithTimedSolver(
 				new QHDefault(),
 				new QHNormalizeArrays()));
 
-	if (UseFastCexSolver) solver = createFastCexSolver(solver);
-	if (UseFastRangeSolver) solver = createFastRangeSolver(solver);
-	if (UseCexCache) solver = createCexCachingSolver(solver);
+
+
 	if (UseCache) solver = createCachingSolver(solver);
 	if (UseIndependentSolver) solver = createIndependentSolver(solver);
 
