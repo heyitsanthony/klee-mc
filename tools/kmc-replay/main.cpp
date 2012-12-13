@@ -49,7 +49,7 @@ static void loadSymArgs(Guest* gs, KTestStream* kts)
 		const KTestObject	*kto;
 
 		kto = kts->nextObject();
-		assert (strcmp(kto->name, "argv") == 0);
+		assert (strncmp(kto->name, "argv", 4) == 0);
 		gs->getMem()->memcpy(p, kto->bytes, kto->numBytes);
 	}
 }
