@@ -21,12 +21,33 @@ protected:
 		struct ForkInfo& fi,
 		unsigned* cond_idx_map);
 
+	bool isBadOverflow(ExecutionState& current);
+	virtual bool updateSymbolics(ExecutionState& current);
+	virtual void addBinding(ref<Array>& a, std::vector<uint8_t>& v);
+	const Assignment* getCurrentAssignment(void) { return kt_assignment; }
 private:
-	bool updateSymbolics(ExecutionState& current);
 	const KTest	*kt;
 	Assignment	*kt_assignment;
 	std::vector<ref<Array> > arrs;
 
+};
+
+class ForksKTestStateLogger : public ForksKTest
+{
+public:
+	ForksKTestStateLogger(Executor& exe) : ForksKTest(exe) {}
+	virtual ~ForksKTestStateLogger();
+	ExecutionState* getNearState(const KTest* _kt);
+protected:
+	virtual bool updateSymbolics(ExecutionState& current);
+	virtual void addBinding(ref<Array>& a, std::vector<uint8_t>& v);
+private:
+	typedef std::map<const Assignment, ExecutionState*> statecache_ty;
+	typedef std::pair<unsigned, const std::string>	arrkey_ty;
+	typedef std::map<arrkey_ty, ref<Array> >	arrcache_ty;
+
+	arrcache_ty	arr_cache;
+	statecache_ty	state_cache;
 };
 }
 

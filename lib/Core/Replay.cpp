@@ -7,7 +7,6 @@
 #include "ExeStateManager.h"
 #include "Forks.h"
 #include "ForksPathReplay.h"
-#include "ForksKTest.h"
 #include "CoreStats.h"
 #include "PTree.h"
 
@@ -309,37 +308,6 @@ bool Replay::verifyPath(Executor* exe, const ExecutionState& es)
 
 	ih->setWriteOutput(old_write);
 	std::cerr << "[Replay] Validated Path.\n";
-
-	return true;
-}
-
-bool ReplayKTests::replay(Executor* exe, ExecutionState* initSt)
-{
-	ExeStateManager	*esm = exe->getStateManager();
-	ForksKTest	*f_ktest = new ForksKTest(*exe);
-	Forks		*old_f;
-
-	old_f = exe->getForking();
-	exe->setForking(f_ktest);
-	foreach (it, kts.begin(), kts.end()) {
-		ExecutionState	*es;
-		const KTest	*ktest(*it);
-
-		es = initSt->copy();
-		es->ptreeNode->markReplay();
-		esm->queueSplitAdd(es->ptreeNode, initSt, es);
-		f_ktest->setKTest(ktest);
-		exe->exhaustState(es);
-
-		std::cerr
-			<< "[Replay] Replay KTest done st="
-			<< es << ". Total="
-			<< esm->numRunningStates() << "\n";
-
-	}
-
-	delete f_ktest;
-	exe->setForking(old_f);
 
 	return true;
 }

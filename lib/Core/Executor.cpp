@@ -2465,7 +2465,7 @@ bool Executor::getSymbolicSolution(
 		v = a.getBinding(it->getArray());
 		assert (v != NULL);
 
-		res.push_back(std::make_pair(it->getMemoryObject()->name, *v));
+		res.push_back(std::make_pair(it->getArray()->name, *v));
 	}
 
 	return true;

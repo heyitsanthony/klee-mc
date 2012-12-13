@@ -6,7 +6,6 @@
 
 using namespace klee;
 
-
 bool ForksKTest::updateSymbolics(ExecutionState& current)
 {
 	ExecutionState::SymIt		it(current.symbolicsBegin());
@@ -18,7 +17,7 @@ bool ForksKTest::updateSymbolics(ExecutionState& current)
 
 	for (; i < current.getNumSymbolics(); i++) {
 		const SymbolicArray	&sa(*it);
-		const ref<Array>	arr(sa.getArrayRef());
+		ref<Array>		arr(sa.getArrayRef());
 		const uint8_t		*v_buf = kt->objects[i].bytes;
 		unsigned		v_len = kt->objects[i].numBytes;
 		std::vector<uint8_t>	v(v_buf, v_buf + v_len);
@@ -36,12 +35,57 @@ bool ForksKTest::updateSymbolics(ExecutionState& current)
 			return false;
 		}
 
-		arrs.push_back(arr);
-		kt_assignment->addBinding(arr.get(), v);
+		addBinding(arr, v);
 		it++;
 	}
 
 	return true;
+}
+
+void ForksKTest::addBinding(ref<Array>& arr, std::vector<uint8_t>& v)
+{
+	arrs.push_back(arr);
+	kt_assignment->addBinding(arr.get(), v);
+}
+
+bool ForksKTest::isBadOverflow(ExecutionState& current)
+{
+	if (current.getNumSymbolics() <= arrs.size())
+		return false;
+
+	if (current.getNumSymbolics() > kt->numObjects) {
+		std::cerr << "[KTest] State Symbolics="
+			<< current.getNumSymbolics()
+			<< ". Last="
+			<< (*(current.symbolicsEnd()-1)).getArray()->name
+			<< '\n';
+		std::cerr << "[KTest] KTest Objects="
+			<< kt->numObjects
+			<< ". Last="
+			<< kt->objects[kt->numObjects-1].name
+			<< '\n';
+
+		std::cerr << "[KTest] Ran out of objects!!\n";
+
+		pureFork(current);
+		exe.terminateOnError(
+			current,
+			"KTest seeding failed. Ran out of objects!",
+			"ktest.err");
+		return true;
+	}
+
+	if (updateSymbolics(current) == false) {
+		/* create ktest state outside replay; deal with later */
+		pureFork(current);
+		exe.terminateOnError(
+			current,
+			"KTest seeding failed. Bad objsize?",
+			"ktest.err");
+		return true;
+	}
+
+	return false;
 }
 
 bool ForksKTest::setupForkAffinity(
@@ -51,40 +95,9 @@ bool ForksKTest::setupForkAffinity(
 {
 	assert (kt_assignment);
 
-	if (current.getNumSymbolics() > arrs.size()) {
-		if (current.getNumSymbolics() > kt->numObjects) {
-			std::cerr << "[KTest] State Symbolics="
-				<< current.getNumSymbolics()
-				<< ". Last="
-				<< (*(current.symbolicsEnd()-1)).getArray()->name
-				<< '\n';
-			std::cerr	<< "[KTest] KTest Objects="
-					<< kt->numObjects
-					<< ". Last="
-					<< kt->objects[kt->numObjects-1].name
-					<< '\n';
-
-			std::cerr << "[KTest] Ran out of objects!!\n";
-			pureFork(current);
-			exe.terminateOnError(
-				current,
-				"KTest seeding failed. Ran out of objects!",
-				"ktest.err");
-			return false;
-		}
-
-		if (updateSymbolics(current) == false) {
-			/* create ktest state outside replay;
-			 * deal with later */
-			pureFork(current);
-			exe.terminateOnError(
-				current,
-				"KTest seeding failed. Bad objsize?",
-				"ktest.err");
-			return false;
-		}
-	}
-
+	if (isBadOverflow(current))
+		return false;
+	
 	/* find + steer to condition which ktest satisfies */
 	for (unsigned i = 0; i < fi.N; i++) {
 		ref<Expr>	cond_eval;
@@ -112,10 +125,11 @@ bool ForksKTest::setupForkAffinity(
 		if (cond_eval->isTrue()) {
 			cond_idx_map[0] = i;
 			cond_idx_map[i] = 0;
-			break;
+			return true;
 		}	
 	}
 
+	/* this occassionally happens with pure forks */
 	return true;
 }
 
@@ -132,4 +146,86 @@ void ForksKTest::setKTest(const KTest* _kt)
 	kt_assignment = new Assignment(true);
 
 	arrs.clear();
+}
+
+ForksKTestStateLogger::~ForksKTestStateLogger(void)
+{
+	bool	isHalted = exe.isHalted();
+
+	/* this is so we don't verify the paths for the states we're killing */
+	exe.setHaltExecution(true);
+
+	foreach (it, state_cache.begin(), state_cache.end())
+		exe.terminate(*(it->second));
+
+	exe.setHaltExecution(isHalted);
+}
+
+
+ExecutionState* ForksKTestStateLogger::getNearState(const KTest* t)
+{
+	ExecutionState	*best_es = NULL;
+	Assignment	a(true);
+
+	/* add successive objects until no more head state available */
+	for (unsigned i = 0; i < t->numObjects; i++) {
+		const uint8_t		*v_buf = t->objects[i].bytes;
+		unsigned		v_len = t->objects[i].numBytes;
+		std::vector<uint8_t>	v(v_buf, v_buf + v_len);
+		ref<Array>		arr;
+		arrcache_ty::iterator	arr_it;
+		statecache_ty::const_iterator st_it;
+
+		arr_it = arr_cache.find(arrkey_ty(
+			t->objects[i].numBytes,
+			std::string(t->objects[i].name)));
+		if (arr_it == arr_cache.end())
+			break;
+	
+		arr = arr_it->second;
+		a.addBinding(arr.get(), v);
+
+		st_it = state_cache.find(a);
+		if (st_it == state_cache.end())
+			break;
+
+		best_es = st_it->second;
+	}
+
+	if (best_es == NULL)
+		return NULL;
+
+	/* found matching head, return copy */
+	best_es = pureFork(*best_es);
+	return best_es;
+}
+
+void ForksKTestStateLogger::addBinding(ref<Array>& a, std::vector<uint8_t>& v)
+{
+	ForksKTest::addBinding(a, v);
+	arr_cache.insert(std::make_pair(arrkey_ty(a->getSize(), a->name), a));
+}
+
+bool ForksKTestStateLogger::updateSymbolics(ExecutionState& current)
+{
+	ExecutionState	*new_es;
+
+	if (ForksKTest::updateSymbolics(current) == false)
+		return false;
+
+	/* already found? */
+	if (state_cache.count(*getCurrentAssignment()) != 0)
+		return true;
+
+	new_es = pureFork(current);
+	if (new_es == NULL)
+		return true;
+
+	std::cerr << "INSERTING NEW ASSIGNMENT SZ=" << getCurrentAssignment()->getNumBindings() <<  "\n";
+	/* place state immediately before the forking instruction;
+	 * state isn't constrained until after affinities are assigned */
+	new_es->abortInstruction();
+	state_cache.insert(std::make_pair(*getCurrentAssignment(), new_es));
+
+	return true;
 }

@@ -144,7 +144,6 @@ std::vector<const Array*> Assignment::getObjectVector(void) const
 	return ret;
 }
 
-
 bool Assignment::load(
 	const std::vector<const Array*>& objects,
 	const char* path)
@@ -215,4 +214,51 @@ ref<Expr> Assignment::evaluateCostly(ref<Expr>& e, unsigned& cost) const
 	ret = v.apply(e);
 	cost = v.getCost();
 	return ret;
+}
+
+
+bool Assignment::operator==(const Assignment& a) const
+{
+	if (bindings.size() != a.bindings.size()) return false;
+
+	foreach (it, bindings.begin(), bindings.end()) {
+		const Array			*arr = it->first;
+		bindings_ty::const_iterator	it2;
+
+		it2 = a.bindings.find(arr);
+		if (it2 == a.bindings.end()) return false;
+		if (it->second != it2->second) return false;
+	}
+
+	return true;
+}
+
+bool Assignment::operator<(const Assignment& a) const
+{
+	if (bindings.size() < a.bindings.size()) return true;
+	if (a.bindings.size() > bindings.size()) return false;
+
+	foreach (it, bindings.begin(), bindings.end()) {
+		const Array			*arr = it->first;
+		bindings_ty::const_iterator	it2;
+
+		it2 = a.bindings.find(arr);
+		if (it2 == a.bindings.end())
+			return true;
+
+		if (it->second.size() < it2->second.size())
+			return true;
+
+		if (it->second.size() > it2->second.size())
+			return false;
+
+		if (it->second < it2->second)
+			return true;
+
+		if (it->second > it2->second)
+			return false;
+	}
+
+	/* (equal) */
+	return false;
 }

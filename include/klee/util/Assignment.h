@@ -26,8 +26,7 @@ public:
 		std::vector<unsigned char>,
 		Array::Compare> bindings_ty;
 
-	typedef std::set<const Array*>
-		free_bindings_ty;
+	typedef std::set<const Array*> free_bindings_ty;
 
 	bindings_ty bindings;
 
@@ -54,6 +53,9 @@ public:
 		allowFreeValues = a.allowFreeValues;
 		return *this;
 	}
+
+	bool operator<(const Assignment& a) const;
+	bool operator==(const Assignment& a) const;
 
 	Assignment(const ref<Expr>& e, bool _allowFreeValues=false);
 
