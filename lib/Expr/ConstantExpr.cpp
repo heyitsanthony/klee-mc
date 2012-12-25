@@ -91,18 +91,31 @@ ref<ConstantExpr> ConstantExpr::createSeqData(llvm::ConstantDataSequential* v)
 {
 	unsigned		bytes_per_elem, elem_c;
 	ref<ConstantExpr>	cur_v;
+	const llvm::Type	*t;
+	bool			is_int;
 
 	bytes_per_elem = v->getElementByteSize();
 	elem_c = v->getNumElements();
+	t = v->getElementType();
 
 	assert (bytes_per_elem*elem_c <= 64);
-	assert (isa<llvm::IntegerType>(v->getElementType()));
+
+	is_int = t->isIntegerTy();
+	assert (is_int || (t->isFloatTy() || t->isDoubleTy()));
 
 	for (unsigned i = 0; i < elem_c; i++) {
 		ref<ConstantExpr>	ce;
-		ce = ConstantExpr::create(
-			v->getElementAsInteger(i),
-			bytes_per_elem*8);
+
+		if (is_int) {
+			ce = MK_CONST(
+				v->getElementAsInteger(i), bytes_per_elem*8);
+		} else if (t->isFloatTy()) {
+			float	f = v->getElementAsFloat(i);
+			ce = MK_CONST(*((uint32_t*)&f), bytes_per_elem*8);
+		} else if (t->isDoubleTy()) {
+			double d = v->getElementAsDouble(i);
+			ce = MK_CONST(*((uint64_t*)&d), bytes_per_elem*8);
+		}
 
 		if (i == 0) cur_v = ce;
 		else cur_v = cur_v->Concat(ce);

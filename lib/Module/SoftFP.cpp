@@ -525,11 +525,18 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 		if (called == NULL)
 			break;
 
-		if (called->getName().str() == "sqrt") {
+		if (called->getName().str() == "sqrtf") {
 			Function	*f;
-			f = (ty_w == 32)
-				? f_fp32sqrt->function
-				: f_fp64sqrt->function;
+			assert (ty_w == 32);
+			f = f_fp32sqrt->function;
+			ReplaceInstWithInst(
+				inst,
+				CallInst::Create(
+					getCastThunk(f, ty, v0), v0));
+		} else 	if (called->getName().str() == "sqrt") {
+			Function	*f;
+			assert (ty_w == 64);
+			f = f_fp64sqrt->function;
 			ReplaceInstWithInst(
 				inst,
 				CallInst::Create(
