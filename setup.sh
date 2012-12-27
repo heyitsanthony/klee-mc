@@ -37,6 +37,10 @@ if [ ! -z "$QUICK" ]; then
 	exit
 fi
 
+pushd "$VEXLLVMDIR"
+make install-klee
+popd
+
 make mc-clean && GUEST_ARCH=arm make -j6 && GUEST_ARCH=arm make mc-std-arm
 make mc-clean && GUEST_ARCH=x86 make -j6 && GUEST_ARCH=x86 make mc-std-x86
 make mc-clean && GUEST_ARCH=amd64 make -j6 && GUEST_ARCH=amd64 make mc-std-amd64
