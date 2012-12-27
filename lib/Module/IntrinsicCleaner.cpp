@@ -22,7 +22,7 @@
 #include <llvm/Type.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
-#include <llvm/Target/TargetData.h>
+#include <llvm/DataLayout.h>
 #include "klee/Internal/Module/KModule.h"
 #include <iostream>
 #include <sstream>
@@ -54,7 +54,7 @@ void IntrinsicCleanerPass::clean_vacopy(
 	Value *dst = ii->getOperand(0);
 	Value *src = ii->getOperand(1);
 
-	unsigned WordSize = TargetData.getPointerSizeInBits() / 8;
+	unsigned WordSize = DataLayout.getPointerSizeInBits() / 8;
 
 	if (WordSize == 4) {
 		Type	*i8pp;

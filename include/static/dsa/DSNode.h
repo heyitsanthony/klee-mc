@@ -24,7 +24,7 @@ namespace llvm {
 
 template<typename BaseType>
 class DSNodeIterator;          // Data structure graph traversal iterator
-class TargetData;
+class DataLayout;
 
 //===----------------------------------------------------------------------===//
 /// DSNode - Data structure node class
@@ -169,9 +169,9 @@ public:
   void setParentGraph(DSGraph *G) { ParentGraph = G; }
 
 
-  /// getTargetData - Get the target data object used to construct this node.
+  /// getDataLayout - Get the target data object used to construct this node.
   ///
-  const TargetData &getTargetData() const;
+  const DataLayout &getDataLayout() const;
 
   /// getForwardNode - This method returns the node that this node is forwarded
   /// to, if any.

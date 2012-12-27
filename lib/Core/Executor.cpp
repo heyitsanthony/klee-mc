@@ -12,7 +12,6 @@
 #include <llvm/IntrinsicInst.h>
 #include <llvm/Module.h>
 #include <llvm/Support/CommandLine.h>
-#include <llvm/Target/TargetData.h>
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/Support/raw_ostream.h>
 
@@ -171,7 +170,7 @@ Executor::Executor(InterpreterHandler *ih)
 , mmu(0)
 , globals(0)
 , interpreterHandler(ih)
-, target_data(0)
+, data_layout(0)
 , statsTracker(0)
 , symPathWriter(0)
 , sfh(0)
@@ -338,7 +337,12 @@ ref<klee::ConstantExpr> Executor::evalConstant(
 	if (ConstantDataSequential *csq = dyn_cast<ConstantDataSequential>(c))
 		return ConstantExpr::createSeqData(csq);
 
-	// Constant{AggregateZero,Array,Struct,Vector}
+	if (ConstantArray *ca = dyn_cast<ConstantArray>(c)) {
+		if (ca->getNumOperands() == 1)
+			return evalConstant(km, gm, ca->getOperand(0));
+	}
+
+	// Constant{Array,Struct}
 	c->dump();
 	assert(0 && "invalid argument to evalConstant()");
 }
@@ -649,7 +653,7 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 
 		if (is_cs) {
 			// XXX need to check other param attrs ?
-			result = (cs.paramHasAttr(0, llvm::Attribute::SExt))
+			result = (cs.paramHasAttr(0, llvm::Attributes::SExt))
 				? MK_SEXT(result, to)
 				: MK_ZEXT(result, to);
 		}
@@ -1096,7 +1100,7 @@ llvm::Function* Executor::executeBitCast(
 		if (from == to) continue;
 
 		// XXX need to check other param attrs ?
-		if (cs.paramHasAttr(i+1, llvm::Attribute::SExt)) {
+		if (cs.paramHasAttr(i+1, llvm::Attributes::SExt)) {
 			args[i] = SExtExpr::create(args[i], to);
 		} else {
 			args[i] = ZExtExpr::create(args[i], to);
@@ -1547,10 +1551,10 @@ void Executor::instAlloc(ExecutionState& state, KInstruction* ki)
 	bool		isLocal;
 	ref<Expr>	size;
 
-	assert (!isMalloc(ki->getInst()) && "ANTHONY! FIX THIS");
+	assert (!isMallocLikeFn(ki->getInst() , NULL) && "ANTHONY! FIX THIS");
 
 	ai = cast<AllocaInst>(i);
-	elementSize = target_data->getTypeStoreSize(ai->getAllocatedType());
+	elementSize = data_layout->getTypeStoreSize(ai->getAllocatedType());
 	size = MK_PTR(elementSize);
 
 	if (ai->isArrayAllocation()) {
@@ -1889,10 +1893,10 @@ INST_FOP_ARITH(FRem, mod)
   case Instruction::ShuffleVector:  instShuffleVector(state, ki); break;
 
   default:
-    if (isMalloc(i)) {
+    if (isMallocLikeFn(i, NULL)) {
       instAlloc(state, ki);
       break;
-    } else if (isFreeCall(i)) {
+    } else if (isFreeCall(i, NULL)) {
       executeFree(state, eval(ki, 0, state));
       break;
     }

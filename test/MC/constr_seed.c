@@ -18,6 +18,8 @@ int main(int argc, char* argv[])
 	 * we want-- otherwise x is overwritten as '4' */
 	ksys_assume_eq(x, 4);
 
+	ksys_print_expr("x", x);
+
 	if (x == 4) {
 		ksys_print_expr("B", x);
 		return 0;

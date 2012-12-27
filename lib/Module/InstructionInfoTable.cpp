@@ -20,7 +20,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/FormattedStream.h"
 #include "llvm/Analysis/ValueTracking.h"
-#include "llvm/Analysis/DebugInfo.h"
+#include "llvm/DebugInfo.h"
 
 #include "static/Sugar.h"
 

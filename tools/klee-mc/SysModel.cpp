@@ -1,5 +1,4 @@
 #include <iostream>
-#include <llvm/Target/TargetData.h>
 #include <llvm/Module.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/IntrinsicInst.h>

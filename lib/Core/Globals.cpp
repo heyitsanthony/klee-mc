@@ -2,7 +2,7 @@
 #include <llvm/DerivedTypes.h>
 #include <llvm/Module.h>
 #include <llvm/Support/CommandLine.h>
-#include <llvm/Target/TargetData.h>
+#include <llvm/DataLayout.h>
 #include <assert.h>
 
 #include "klee/Common.h"
@@ -88,7 +88,7 @@ void Globals::allocGlobalVariableDecl(const GlobalVariable& gv)
 	// hack where we check the object file information.
 
 	ty = gv.getType()->getElementType();
-	size = kmodule->targetData->getTypeStoreSize(ty);
+	size = kmodule->dataLayout->getTypeStoreSize(ty);
 
 	// XXX - DWD - hardcode some things until we decide how to fix.
 #ifndef WINDOWS
@@ -143,7 +143,7 @@ void Globals::allocGlobalVariableNoDecl(const GlobalVariable& gv)
 {
 	ObjectPair	op(NULL,NULL);
 	Type *ty = gv.getType()->getElementType();
-	uint64_t size = kmodule->targetData->getTypeStoreSize(ty);
+	uint64_t size = kmodule->dataLayout->getTypeStoreSize(ty);
 
 	if (UseAsmAddresses && gv.getName()[0]=='\01') {
 		char *end;
@@ -187,7 +187,7 @@ void Globals::initializeGlobalObject(
 {
 	if (isa<ConstantAggregateZero>(c)) {
 		unsigned size;
-		size = kmodule->targetData->getTypeStoreSize(c->getType());
+		size = kmodule->dataLayout->getTypeStoreSize(c->getType());
 		assert (size + offset <= os->size);
 		for (unsigned i=0; i<size; i++) {
 			init_state->write8(os,offset+i, (uint8_t) 0);
@@ -197,7 +197,7 @@ void Globals::initializeGlobalObject(
 
 	if (ConstantArray *ca = dyn_cast<ConstantArray>(c)) {
 		unsigned elementSize;
-		elementSize = kmodule->targetData->getTypeStoreSize(
+		elementSize = kmodule->dataLayout->getTypeStoreSize(
 			ca->getType()->getElementType());
 		for (unsigned i=0, e=ca->getNumOperands(); i != e; ++i)
 			initializeGlobalObject(
@@ -229,7 +229,7 @@ void Globals::initializeGlobalObject(
 
 	if (ConstantStruct *cs = dyn_cast<ConstantStruct>(c)) {
 		const StructLayout *sl;
-		sl = kmodule->targetData->getStructLayout(
+		sl = kmodule->dataLayout->getStructLayout(
 			cast<StructType>(cs->getType()));
 		for (unsigned i=0, e=cs->getNumOperands(); i != e; ++i)
 			initializeGlobalObject(
@@ -242,7 +242,7 @@ void Globals::initializeGlobalObject(
 	if (ConstantVector *cp = dyn_cast<ConstantVector>(c)) {
 		unsigned elementSize;
 
-		elementSize = kmodule->targetData->getTypeStoreSize(
+		elementSize = kmodule->dataLayout->getTypeStoreSize(
 			cp->getType()->getElementType());
 		for (unsigned i=0, e=cp->getNumOperands(); i != e; ++i)
 			initializeGlobalObject(
@@ -259,7 +259,7 @@ void Globals::initializeGlobalObject(
 	ref<ConstantExpr> C;
 
 	C = Executor::evalConstant(kmodule, this, c);
-	StoreBits = kmodule->targetData->getTypeStoreSizeInBits(c->getType());
+	StoreBits = kmodule->dataLayout->getTypeStoreSizeInBits(c->getType());
 
 	// Extend the constant if necessary;
 	assert(StoreBits >= C->getWidth() && "Invalid store size!");

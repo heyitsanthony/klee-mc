@@ -27,6 +27,7 @@
 #define KLEE_SYS_INDIRECT0	10	/* klee_indirect */
 #define KLEE_SYS_INDIRECT1	11
 #define KLEE_SYS_INDIRECT2	12
+#define KLEE_SYS_INDIRECT3	13
 
 #define ksys_report_error(x,y,z,w)	\
 	syscall(SYS_klee, KLEE_SYS_REPORT_ERROR, x, y, z, w)
@@ -48,7 +49,9 @@
 #define ksys_indirect0(x)	syscall(SYS_klee, KLEE_SYS_INDIRECT0, x)
 #define ksys_indirect1(x,y)	syscall(SYS_klee, KLEE_SYS_INDIRECT1, x, y)
 #define ksys_indirect2(x,y,z)	syscall(SYS_klee, KLEE_SYS_INDIRECT2, x, y, z)
-#define ksys_assume_eq(x,y)	ksys_indirect2("klee_assume_eq", x, y)
+#define ksys_indirect3(x,y,z,w)	syscall(SYS_klee, KLEE_SYS_INDIRECT3, x, y, z , w)
+#define ksys_assume_eq(x,y)	ksys_indirect3(\
+	"klee_assume_op", x, y, KLEE_CMP_OP_EQ)
 
 #define ksys_get_value(n)	n
 #define ksys_is_active()	(ksys_is_sym(0) != -1)
@@ -142,25 +145,24 @@ extern "C" {
   unsigned klee_sym_range_bytes(void* ptr, unsigned max_bytes);
 
 
-  /* The following intrinsics are primarily intended for internal use
-     and may have peculiar semantics. */
-
-  void klee_assume(uint64_t condition);
-  void klee_assume_eq(uint64_t lhs, uint64_t rhs);
+	/* The following intrinsics are primarily intended for internal use
+	and may have peculiar semantics. */
+	void klee_assume(uint64_t condition);
 
 
-#define KLEE_ASSUME_OP_EQ	0
-#define KLEE_ASSUME_OP_NE	1
-#define KLEE_ASSUME_OP_UGT	2
-#define KLEE_ASSUME_OP_UGE	3
-#define KLEE_ASSUME_OP_ULT	4
-#define KLEE_ASSUME_OP_ULE	5
-#define KLEE_ASSUME_OP_SGT	6
-#define KLEE_ASSUME_OP_SGE	7
-#define KLEE_ASSUME_OP_SLT	8
-#define KLEE_ASSUME_OP_SLE	9
+#define KLEE_CMP_OP_EQ	0
+#define KLEE_CMP_OP_NE	1
+#define KLEE_CMP_OP_UGT	2
+#define KLEE_CMP_OP_UGE	3
+#define KLEE_CMP_OP_ULT	4
+#define KLEE_CMP_OP_ULE	5
+#define KLEE_CMP_OP_SGT	6
+#define KLEE_CMP_OP_SGE	7
+#define KLEE_CMP_OP_SLT	8
+#define KLEE_CMP_OP_SLE	9
 
-#define klee_assume_gt(x,y)	klee_assume_op(x,y,KLEE_ASSUME_OP_UGT)
+#define klee_assume_gt(x,y)	klee_assume_op(x,y,KLEE_CMP_OP_UGT)
+#define klee_assume_eq(lhs, rhs) klee_assume_op(lhs, rhs, KLEE_CMP_OP_EQ)
   void klee_assume_op(uint64_t lhs, uint64_t rhs, uint8_t op);
 
   void klee_warning(const char *message);

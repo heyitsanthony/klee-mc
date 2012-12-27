@@ -1,5 +1,5 @@
 #include <llvm/Support/Path.h>
-#include <llvm/Support/IRBuilder.h>
+#include <llvm/IRBuilder.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Module.h>
 #include <llvm/Pass.h>

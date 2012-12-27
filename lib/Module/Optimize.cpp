@@ -21,13 +21,13 @@
 #include "llvm/Analysis/LoopPass.h"
 #include "llvm/Analysis/Verifier.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Target/TargetData.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Support/PassNameParser.h"
 #include "llvm/Support/PluginLoader.h"
 #include <iostream>
+#include <llvm/DataLayout.h>
 using namespace llvm;
 
 #if 0
@@ -145,35 +145,29 @@ static void AddStandardCompilePasses(PassManager &PM) {
   addPass(PM, createConstantMergePass());        // Merge dup global constants
 }
 
-/// Optimize - Perform link time optimizations. This will run the scalar
-/// optimizations, any loaded plugin-optimization modules, and then the
-/// inter-procedural optimizations if applicable.
-void Optimize(Module* M) {
+static void addCleanupOptPasses(PassManager& Passes)
+{
+    addPass(Passes, createInstructionCombiningPass());
+    addPass(Passes, createCFGSimplificationPass());
+    addPass(Passes, createAggressiveDCEPass());
+    addPass(Passes, createGlobalDCEPass());
+}
 
-  // Instantiate the pass manager to organize the passes.
-  PassManager Passes;
+static void addOptPasses(PassManager& Passes)
+{
+	// Now that composite has been compiled, scan through the module,
+	// looking for a main function.  If main is defined, mark all other
+	// functions internal.
+	if (!DisableInternalize) {
+		std::vector<const char *> v;
+		v.push_back("main");
+		addPass(Passes, createInternalizePass(v));
+	}
 
-  // If we're verifying, start off with a verification pass.
-  if (VerifyEach)
-    Passes.add(createVerifierPass());
-
-  // Add an appropriate TargetData instance for this module...
-  addPass(Passes, new TargetData(M));
-
-  // DWD - Run the opt standard pass list as well.
-  AddStandardCompilePasses(Passes);
-
-  if (!DisableOptimizations) {
-    // Now that composite has been compiled, scan through the module, looking
-    // for a main function.  If main is defined, mark all other functions
-    // internal.
-    if (!DisableInternalize)
-      addPass(Passes, createInternalizePass(true));
-
-    // Propagate constants at call sites into the functions they call.  This
-    // opens opportunities for globalopt (and inlining) by substituting function
-    // pointers passed as arguments to direct uses of functions.  
-    addPass(Passes, createIPSCCPPass());
+	// Propagate constants at call sites into the functions they call. 
+	// This opens opportunities for globalopt (and inlining) by substituting
+	// function pointers passed as arguments to direct uses of functions. 
+	addPass(Passes, createIPSCCPPass());
 
     // Now that we internalized some globals, see if we can hack on them!
     addPass(Passes, createGlobalOptimizerPass());
@@ -227,7 +221,27 @@ void Optimize(Module* M) {
 
     // Now that we have optimized the program, discard unreachable functions...
     addPass(Passes, createGlobalDCEPass());
-  }
+}
+
+/// Optimize - Perform link time optimizations. This will run the scalar
+/// optimizations, any loaded plugin-optimization modules, and then the
+/// inter-procedural optimizations if applicable.
+void Optimize(Module* M)
+{
+  // Instantiate the pass manager to organize the passes.
+  PassManager Passes;
+
+  // If we're verifying, start off with a verification pass.
+  if (VerifyEach)  Passes.add(createVerifierPass());
+
+  // Add an appropriate TargetData instance for this module...
+  addPass(Passes, new DataLayout(M));
+
+  // DWD - Run the opt standard pass list as well.
+  AddStandardCompilePasses(Passes);
+
+  if (!DisableOptimizations)
+  	addOptPasses(Passes);
 
   // If the -s or -S command line options were specified, strip the symbols out
   // of the resulting program to make it smaller.  -s and -S are GNU ld options
@@ -250,16 +264,10 @@ void Optimize(Module* M) {
 
   // The user's passes may leave cruft around. Clean up after them them but
   // only if we haven't got DisableOptimizations set
-  if (!DisableOptimizations) {
-    addPass(Passes, createInstructionCombiningPass());
-    addPass(Passes, createCFGSimplificationPass());
-    addPass(Passes, createAggressiveDCEPass());
-    addPass(Passes, createGlobalDCEPass());
-  }
+  if (!DisableOptimizations) addCleanupOptPasses(Passes);
 
   // Make sure everything is still good.
-  if (!DontVerify)
-    Passes.add(createVerifierPass());
+  if (!DontVerify) Passes.add(createVerifierPass());
 
   // Run our queue of passes all at once now, efficiently.
   Passes.run(*M);

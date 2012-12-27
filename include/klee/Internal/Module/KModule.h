@@ -25,7 +25,7 @@ namespace llvm
 	class Function;
 	class Instruction;
 	class Module;
-	class TargetData;
+	class DataLayout;
 	class Value;
 	class FunctionPassManager;
 	class FunctionPass;
@@ -69,7 +69,7 @@ class KModule
 {
 public:
     llvm::Module *module;
-    llvm::TargetData *targetData;
+    llvm::DataLayout *dataLayout;
 
     // Some useful functions to know the address of
     llvm::Function *dbgStopPointFn, *kleeMergeFn;
@@ -124,6 +124,7 @@ public:
 	const std::string& getLibraryDir(void) const { return opts.LibraryDir; }
 
 	void addFunctionPass(llvm::FunctionPass* fp);
+	void dumpFuncs(std::ostream& os) const;
 private:
 	void setupFunctionPasses(void);
 	void prepareMerge(InterpreterHandler *ih);

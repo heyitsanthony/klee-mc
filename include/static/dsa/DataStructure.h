@@ -16,7 +16,7 @@
 
 #include "llvm/Pass.h"
 #include "llvm/Support/raw_os_ostream.h"
-#include "llvm/Target/TargetData.h"
+#include <llvm/DataLayout.h>
 #include "llvm/Support/CallSite.h"
 #include "llvm/ADT/EquivalenceClasses.h"
 #include "llvm/Support/raw_os_ostream.h"
@@ -46,8 +46,8 @@ public:
   typedef hash_set<const Function*>::const_iterator callee_iterator;
 
 private:
-  /// TargetData, comes in handy
-  TargetData* TD;
+  /// DataLayout, comes in handy
+  DataLayout* TD;
 
   /// Pass to get Graphs from
   DataStructures* GraphSource;
@@ -85,7 +85,7 @@ protected:
 
 
   void init(DataStructures* D, bool clone, bool printAuxCalls, bool copyGlobalAuxCalls, bool resetAux);
-  void init(TargetData* T);
+  void init(DataLayout* T);
 
   void formGlobalECs();
 
@@ -170,7 +170,7 @@ public:
 
   EquivalenceClasses<const GlobalValue*> &getGlobalECs() { return GlobalECs; }
 
-  TargetData& getTargetData() const { return *TD; }
+  DataLayout& getDataLayout() const { return *TD; }
 
   /// deleteValue/copyValue - Interfaces to update the DSGraphs in the program.
   /// These correspond to the interfaces defined in the AliasAnalysis class.
@@ -192,7 +192,7 @@ public:
   /// getAnalysisUsage - This obviously provides a data structure graph.
   ///
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
-    AU.addRequired<TargetData>();
+    AU.addRequired<DataLayout>();
     AU.setPreservesAll();
   }
 };
@@ -214,7 +214,7 @@ public:
   /// getAnalysisUsage - This obviously provides a data structure graph.
   ///
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
-    AU.addRequired<TargetData>();
+    AU.addRequired<DataLayout>();
     AU.setPreservesAll();
   }
 };
@@ -234,7 +234,7 @@ public:
   ///
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
     AU.addRequired<LocalDataStructures>();
-    AU.addPreserved<TargetData>();
+    AU.addPreserved<DataLayout>();
     AU.setPreservesCFG();
   }
 };
@@ -270,7 +270,7 @@ public:
 
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
     AU.addRequired<StdLibDataStructures>();
-    AU.addPreserved<TargetData>();
+    AU.addPreserved<DataLayout>();
     AU.setPreservesCFG();
   }
 
@@ -312,7 +312,7 @@ public:
 
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
     AU.addRequired<BUDataStructures>();
-    AU.addPreserved<TargetData>();
+    AU.addPreserved<DataLayout>();
     AU.setPreservesCFG();
   }
 
@@ -335,7 +335,7 @@ public:
 
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
     AU.addRequired<CompleteBUDataStructures>();
-    AU.addPreserved<TargetData>();
+    AU.addPreserved<DataLayout>();
     AU.setPreservesCFG();
   }
 
@@ -393,7 +393,7 @@ public:
       AU.addRequired<BUDataStructures>();
       AU.addPreserved<BUDataStructures>();
     }
-    AU.addPreserved<TargetData>();
+    AU.addPreserved<DataLayout>();
     AU.setPreservesCFG();
   }
 
@@ -438,7 +438,7 @@ public:
   virtual void releaseMemory();
 
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
-    AU.addRequired<TargetData>();
+    AU.addRequired<DataLayout>();
     AU.addRequired<StdLibDataStructures>();
     AU.setPreservesAll();
   }

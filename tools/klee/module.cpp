@@ -9,7 +9,7 @@
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/system_error.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Support/TypeBuilder.h"
+#include "llvm/TypeBuilder.h"
 #include "llvm/Support/Signals.h"
 
 #include "static/Sugar.h"
@@ -59,6 +59,41 @@ extern bool g_WithPOSIXRuntime;
 #include "mod_symbols.h"
 
 #define NELEMS(array) (sizeof(array)/sizeof(array[0]))
+
+static void checkUndefined(
+	const std::map<std::string, bool>& externals,
+	const std::set<std::string>& modelled,
+	const std::set<std::string>& dontCare,
+	const std::set<std::string>& unsafe)
+{
+	std::map<std::string, bool> foundUnsafe;
+
+	foreach (it, externals.begin(), externals.end()) {
+		const std::string &ext = it->first;
+		if (modelled.count(ext))
+			continue;
+
+		if (!WarnAllExternals && dontCare.count(ext))
+			continue;
+
+		if (unsafe.count(ext)) {
+			foundUnsafe.insert(*it);
+		} else {
+			klee_warning("undefined reference to %s: %s",
+				     it->second ? "variable" : "function",
+				     ext.c_str());
+		}
+	}
+
+
+	foreach (it, foundUnsafe.begin(), foundUnsafe.end()) {
+		const std::string &ext = it->first;
+		klee_warning("undefined reference to %s: %s (UNSAFE)!",
+			 it->second ? "variable" : "function",
+			 ext.c_str());
+	}
+}
+
 void externalsAndGlobalsCheck(const Module *m)
 {
   std::map<std::string, bool> externals;
@@ -99,40 +134,24 @@ void externalsAndGlobalsCheck(const Module *m)
     }
   }
 
-  foreach (it, m->global_begin(), m->global_end()) {
-    if (!it->isDeclaration() || it->use_empty()) continue;
-    externals.insert(std::make_pair(it->getName(), true));
-  }
+	foreach (it, m->global_begin(), m->global_end()) {
+		if (!it->isDeclaration() || it->use_empty())
+			continue;
+		externals.insert(std::make_pair(it->getName(), true));
+	}
 
-  // and remove aliases (they define the symbol after global
-  // initialization)
-  foreach (it, m->alias_begin(), m->alias_end()) {
-    std::map<std::string, bool>::iterator it2 = externals.find(it->getName());
-    if (it2 == externals.end()) continue;
-    externals.erase(it2);
-  }
+	// and remove aliases
+	// (they define the symbol after global initialization)
+	foreach (it, m->alias_begin(), m->alias_end()) {
+		std::map<std::string, bool>::iterator it2;
+		
+		it2 = externals.find(it->getName());
+		if (it2 == externals.end()) continue;
+		std::cerr << "ERASING " << it2->first << '\n';
+		externals.erase(it2);
+	}
 
-  std::map<std::string, bool> foundUnsafe;
-  foreach (it, externals.begin(), externals.end()) {
-    const std::string &ext = it->first;
-    if (!modelled.count(ext) && (WarnAllExternals ||
-        !dontCare.count(ext))) {
-      if (unsafe.count(ext)) {
-        foundUnsafe.insert(*it);
-      } else {
-        klee_warning("undefined reference to %s: %s",
-                     it->second ? "variable" : "function",
-                     ext.c_str());
-      }
-    }
-  }
-
-  foreach (it, foundUnsafe.begin(), foundUnsafe.end()) {
-    const std::string &ext = it->first;
-    klee_warning("undefined reference to %s: %s (UNSAFE)!",
-                 it->second ? "variable" : "function",
-                 ext.c_str());
-  }
+	checkUndefined(externals, modelled, dontCare, unsafe);
 }
 
 #ifndef KLEE_UCLIBC
@@ -328,6 +347,7 @@ static Module* setupLibc(Module* mainModule, Interpreter::ModuleOptions& Opts)
 		Path.appendComponent("libklee-libc.bca");
 		mainModule = klee::linkWithLibrary(mainModule, Path.c_str());
 		assert(mainModule && "unable to link with klee-libc");
+
 		if (ExcludeLibcCov) exclude_fns_f = "klee-libc-fns.txt";
 		break;
 	}

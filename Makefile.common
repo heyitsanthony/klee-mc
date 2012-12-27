@@ -46,6 +46,11 @@ endif
 
 include $(LLVM_SRC_ROOT)/Makefile.rules
 
+# THIS WAS REMOVED IN LLVM-3.2
+# NEED TO ADD DEJAGNU TEST TO SETUP
+RUNTEST=/usr/bin/runtest
+TCLSH=/usr/bin/tclsh
+
 # Needed to build runtime library using clang (gnu89 is the gcc default)
 C.Flags += -std=gnu89 $(LLVM_CFLAGS_EXTRA)
 CXX.Flags += $(LLVM_CXXFLAGS_EXTRA)

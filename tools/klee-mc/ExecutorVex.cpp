@@ -1,4 +1,4 @@
-#include <llvm/Target/TargetData.h>
+#include <llvm/DataLayout.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/Path.h>
 #include <llvm/Support/raw_os_ostream.h>
@@ -113,7 +113,7 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 	}
 
 	if (UsePrioritySearcher) {
-		Prioritizer	*pr;
+		Prioritizer	*pr = NULL;
 
 		if (UseSyscallPriority)
 			pr = new SyscallPrioritizer();
@@ -162,11 +162,11 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 	km_vex = new KModuleVex(this, mod_opts, gs);
 	kmodule = km_vex;
 
-	target_data = kmodule->targetData;
-	assert(target_data->isLittleEndian() && "BIGENDIAN??");
+	data_layout = kmodule->dataLayout;
+	assert(data_layout->isLittleEndian() && "BIGENDIAN??");
 	Context::initialize(
-		target_data->isLittleEndian(),
-		(Expr::Width) target_data->getPointerSizeInBits());
+		data_layout->isLittleEndian(),
+		(Expr::Width) data_layout->getPointerSizeInBits());
 
 	sfh = sys_model->allocSpecialFuncHandler(this);
 	sfh->prepare();

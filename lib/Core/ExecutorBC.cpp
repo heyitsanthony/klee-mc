@@ -1,6 +1,6 @@
 #include <llvm/Module.h>
 #include <llvm/LLVMContext.h>
-#include <llvm/Target/TargetData.h>
+#include <llvm/DataLayout.h>
 #include <llvm/Support/CommandLine.h>
 #include <sstream>
 
@@ -53,13 +53,12 @@ const Module* ExecutorBC::setModule(
 	assert(!kmodule && module && "can only register one module");
 
 	kmodule = new KModule(module, opts);
-
-	target_data = kmodule->targetData;
+	data_layout = kmodule->dataLayout;
 
 	// Initialize the context.
 	Context::initialize(
-		target_data->isLittleEndian(),
-		(Expr::Width) target_data->getPointerSizeInBits());
+		data_layout->isLittleEndian(),
+		(Expr::Width) data_layout->getPointerSizeInBits());
 
 	sfh = new SpecialFunctionHandler(this);
 

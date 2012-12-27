@@ -24,7 +24,7 @@
 #include "llvm/Module.h"
 #include "llvm/Support/CallSite.h"
 #include "llvm/Support/GetElementPtrTypeIterator.h"
-#include "llvm/Target/TargetData.h"
+#include "llvm/DataLayout.h"
 #include <iostream>
 #include <cassert>
 
@@ -99,7 +99,7 @@ class Globals;
           ConstantExpr::alloc(0, Context::get().getPointerWidth());
 
         if (StructType *st = dyn_cast<StructType>(*ii)) {
-          const StructLayout *sl = km->targetData->getStructLayout(st);
+          const StructLayout *sl = km->dataLayout->getStructLayout(st);
           ConstantInt *ci = cast<ConstantInt>(ii.getOperand());
 
           addend = ConstantExpr::alloc(
@@ -110,7 +110,7 @@ class Globals;
           SequentialType *seq_t = cast<SequentialType>(*ii);
           ref<ConstantExpr> index =
             evalConstant(km, gm, cast<Constant>(ii.getOperand()));
-          unsigned elementSize = km->targetData->getTypeStoreSize(
+          unsigned elementSize = km->dataLayout->getTypeStoreSize(
 	  	seq_t->getElementType());
 
           index = index->ZExt(Context::get().getPointerWidth());

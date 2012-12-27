@@ -9,7 +9,7 @@
 #include <llvm/Constants.h>
 #include <llvm/DerivedTypes.h>
 #include <llvm/Support/CallSite.h>
-#include <llvm/Target/TargetData.h>
+#include <llvm/DataLayout.h>
 #include <algorithm>
 #include <string.h>
 #include <math.h>
@@ -122,7 +122,7 @@ void KGEPInstruction::computeOffsets(
 		const ConstantInt	*ci;
 		uint64_t		addend;
 
-		sl = km->targetData->getStructLayout(st);
+		sl = km->dataLayout->getStructLayout(st);
 		ci = cast<ConstantInt>(ii.getOperand());
 		addend = sl->getElementOffset((unsigned) ci->getZExtValue());
 
@@ -134,7 +134,7 @@ void KGEPInstruction::computeOffsets(
 		Value			*operand;
 
 		st2 = cast<SequentialType>(*ii);
-		elementSize = km->targetData->getTypeStoreSize(
+		elementSize = km->dataLayout->getTypeStoreSize(
 			st2->getElementType());
 		operand = ii.getOperand();
 

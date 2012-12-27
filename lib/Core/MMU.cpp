@@ -1,4 +1,4 @@
-#include <llvm/Target/TargetData.h>
+#include <llvm/DataLayout.h>
 #include <llvm/Support/CommandLine.h>
 
 #include "Executor.h"
@@ -39,7 +39,7 @@ Expr::Width MMU::MemOp::getType(const KModule* m) const
 
 	type_cache = (isWrite
 		? value->getWidth()
-		: m->targetData->getTypeSizeInBits(
+		: m->dataLayout->getTypeSizeInBits(
 			target->getInst()->getType()));
 
 	return type_cache;

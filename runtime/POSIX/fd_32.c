@@ -59,9 +59,8 @@ int open(const char *pathname, int flags, ...) {
   return __fd_open(pathname, flags, mode);
 }
 
-off_t lseek(int fd, off_t off, int whence) {
-  return (off_t) __fd_lseek(fd, off, whence);
-}
+off_t lseek(int fd, off_t off, int whence)
+{ return (off_t) __fd_lseek(fd, off, whence); }
 
 int __xstat(int vers, const char *path, struct stat *buf) {
   struct stat64 tmp;

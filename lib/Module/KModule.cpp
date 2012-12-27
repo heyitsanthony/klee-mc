@@ -18,7 +18,7 @@
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/Support/Path.h>
-#include <llvm/Target/TargetData.h>
+#include <llvm/DataLayout.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
 
@@ -114,7 +114,7 @@ KModule::KModule(
 	Module *_module,
 	const Interpreter::ModuleOptions &_opts)
 : module(_module)
-, targetData(new TargetData(module))
+, dataLayout(new DataLayout(module))
 , kleeMergeFn(0)
 , infos(0)
 , constantTable(0)
@@ -136,7 +136,7 @@ KModule::~KModule()
 		delete (*it).second;
 	constantMap.clear();
 
-	delete targetData;
+	delete dataLayout;
 	delete module;
 }
 
@@ -210,11 +210,13 @@ static void injectStaticConstructorsAndDestructors(Module *m)
 	Function *mainFn = m->getFunction("main");
 	assert(mainFn && "unable to find main function");
 
-	if (ctors)
+	if (ctors) {
 		CallInst::Create(
 			getStubFunctionForCtorList(m, ctors, "klee.ctor_stub"),
 			"",
 			mainFn->begin()->begin());
+	}
+
 	if (dtors) {
 		Function *dtorStub;
 		dtorStub = getStubFunctionForCtorList(m, dtors, "klee.dtor_stub");
@@ -223,6 +225,12 @@ static void injectStaticConstructorsAndDestructors(Module *m)
 			CallInst::Create(dtorStub, "", it->getTerminator());
 		}
 	}
+}
+
+void KModule::dumpFuncs(std::ostream& os) const
+{
+	foreach (it, module->begin(), module->end())
+		os << it->getName().str() << '\n';
 }
 
 static void forceImport(Module *m, const char *name, Type *retType, ...)
@@ -426,7 +434,7 @@ void KModule::injectRawChecks()
 	// There was a bug in IntrinsicLowering which caches values which
 	// may eventually  deleted (via RAUW).
 	// This should now be fixed in LLVM
-	pm.add(new IntrinsicCleanerPass(this, *targetData, false));
+	pm.add(new IntrinsicCleanerPass(this, *dataLayout, false));
 	pm.run(*module);
 }
 
@@ -449,7 +457,7 @@ void KModule::passEnforceInvariants(void)
 
 	// pm.add(createLowerAtomicPass());
 
-	pm.add(new IntrinsicCleanerPass(this, *targetData));
+	pm.add(new IntrinsicCleanerPass(this, *dataLayout));
 	pm.add(new PhiCleanerPass());
 	pm.run(*module);
 }
@@ -485,9 +493,8 @@ void KModule::prepare(InterpreterHandler *in_ih)
 	setupFunctionPasses();
 
 	/* Build shadow structures */
-	foreach (it, module->begin(), module->end()) {
+	foreach (it, module->begin(), module->end())
 		addFunction(it);
-	}
 
 	if (DebugPrintEscapingFunctions && !escapingFunctions.empty()) {
 		llvm::errs() << "KLEE: escaping functions: [";
@@ -509,7 +516,7 @@ void KModule::setupFunctionPasses(void)
 
 	fpm->add(new RaiseAsmPass(module));
 	fpm->add(createLowerAtomicPass());
-	fpm->add(new IntrinsicCleanerPass(this, *targetData));
+	fpm->add(new IntrinsicCleanerPass(this, *dataLayout));
 	fpm->add(new PhiCleanerPass());
 
 	if (UseHookPass) fpm->add(new HookPass(this));
@@ -666,17 +673,17 @@ void KModule::loadIntrinsicsLib()
 		module, "memcpy", PointerType::getUnqual(i8Ty),
 		PointerType::getUnqual(i8Ty),
 		PointerType::getUnqual(i8Ty),
-		targetData->getIntPtrType(getGlobalContext()), (Type*) 0);
+		dataLayout->getIntPtrType(getGlobalContext()), (Type*) 0);
 	forceImport(
 		module, "memmove", PointerType::getUnqual(i8Ty),
 		PointerType::getUnqual(i8Ty),
 		PointerType::getUnqual(i8Ty),
-		targetData->getIntPtrType(getGlobalContext()), (Type*) 0);
+		dataLayout->getIntPtrType(getGlobalContext()), (Type*) 0);
 	forceImport(
 		module, "memset", PointerType::getUnqual(i8Ty),
 		PointerType::getUnqual(i8Ty),
 		Type::getInt32Ty(getGlobalContext()),
-		targetData->getIntPtrType(getGlobalContext()), (Type*) 0);
+		dataLayout->getIntPtrType(getGlobalContext()), (Type*) 0);
 
 	// FIXME: Missing force import for various math functions.
 
@@ -712,7 +719,6 @@ void KModule::bindModuleConstants(Executor* exe)
 	bindModuleConstTable(exe);
 }
 
-
 void KModule::bindKFuncConstants(Executor* exe, KFunction* kf)
 {
 	for (unsigned i=0; i<kf->numInstructions; ++i)
@@ -743,4 +749,4 @@ void KModule::bindModuleConstTable(Executor* exe)
 }
 
 unsigned KModule::getWidthForLLVMType(Type* type) const
-{ return targetData->getTypeSizeInBits(type); }
+{ return dataLayout->getTypeSizeInBits(type); }

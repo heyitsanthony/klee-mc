@@ -30,7 +30,6 @@ using namespace klee;
 namespace klee
 {
 SFH_HANDLER(Assume)
-SFH_HANDLER(AssumeEq)
 SFH_HANDLER(AssumeOp)
 SFH_HANDLER(CheckMemoryAccess)
 SFH_HANDLER(DefineFixedObject)
@@ -66,6 +65,7 @@ SFH_HANDLER(IsShadowed)
 SFH_HANDLER(Indirect0)
 SFH_HANDLER(Indirect1)
 SFH_HANDLER(Indirect2)
+SFH_HANDLER(Indirect3)
 SFH_HANDLER(ForkEq)
 SFH_HANDLER(StackDepth)
 #define DEF_SFH_MMU(x)			\
@@ -101,7 +101,6 @@ static const SpecialFunctionHandler::HandlerInfo handlerInfo[] =
 
   add("free", Free, false),
   add("klee_assume", Assume, false),
-  add("klee_assume_eq", AssumeEq, false),
   add("klee_assume_op", AssumeOp, false),
   add("__klee_fork_eq", ForkEq, true),
   add("klee_check_memory_access", CheckMemoryAccess, false),
@@ -128,6 +127,7 @@ static const SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   add("klee_indirect0", Indirect0, true),
   add("klee_indirect1", Indirect1, true),
   add("klee_indirect2", Indirect2, true),
+  add("klee_indirect3", Indirect3, true),
   add("klee_is_shadowed", IsShadowed, true),
 
 #define DEF_WIDE(x)	\
@@ -180,7 +180,7 @@ void SpecialFunctionHandler::prepare(HandlerInfo* hinfo, unsigned int N)
 		// Make sure NoReturn attribute is set, for optimization and
 		// coverage counting.
 		if (hi.doesNotReturn)
-			f->addFnAttr(Attribute::NoReturn);
+			f->addFnAttr(Attributes::NoReturn);
 
 		// Change to a declaration since we handle internally (simplifies
 		// module and allows deleting dead code).
@@ -490,6 +490,25 @@ SFH_DEF_HANDLER(Assume)
 		"user.err");
 }
 
+static ref<Expr> cmpop_to_expr(
+	int cmpop,
+	const ref<Expr>& e1, const ref<Expr>& e2)
+{
+	switch (cmpop) {
+	case KLEE_CMP_OP_EQ: return MK_EQ(e1, e2);
+	case KLEE_CMP_OP_NE: return MK_NE(e1, e2);
+	case KLEE_CMP_OP_UGT: return MK_UGT(e1, e2);
+	case KLEE_CMP_OP_UGE: return MK_UGE(e1, e2);
+	case KLEE_CMP_OP_ULT: return MK_ULT(e1, e2);
+	case KLEE_CMP_OP_ULE: return MK_ULE(e1, e2);
+	case KLEE_CMP_OP_SGT: return MK_SGT(e1, e2);
+	case KLEE_CMP_OP_SGE: return MK_SGE(e1, e2);
+	case KLEE_CMP_OP_SLT: return MK_SLT(e1, e2);
+	case KLEE_CMP_OP_SLE: return MK_SLE(e1, e2);
+	default: return NULL;
+	}
+}
+
 SFH_DEF_HANDLER(AssumeOp)
 {
 	ref<Expr>	e;
@@ -502,19 +521,8 @@ SFH_DEF_HANDLER(AssumeOp)
 	if (ce == NULL)
 		goto error;
 
-	switch (ce->getZExtValue()) {
-	case KLEE_ASSUME_OP_EQ: e = MK_EQ(arguments[0], arguments[1]); break;
-	case KLEE_ASSUME_OP_NE: e = MK_NE(arguments[0], arguments[1]); break;
-	case KLEE_ASSUME_OP_UGT: e = MK_UGT(arguments[0], arguments[1]); break;
-	case KLEE_ASSUME_OP_UGE: e = MK_UGE(arguments[0], arguments[1]); break;
-	case KLEE_ASSUME_OP_ULT: e = MK_ULT(arguments[0], arguments[1]); break;
-	case KLEE_ASSUME_OP_ULE: e = MK_ULE(arguments[0], arguments[1]); break;
-	case KLEE_ASSUME_OP_SGT: e = MK_SGT(arguments[0], arguments[1]); break;
-	case KLEE_ASSUME_OP_SGE: e = MK_SGE(arguments[0], arguments[1]); break;
-	case KLEE_ASSUME_OP_SLT: e = MK_SLT(arguments[0], arguments[1]); break;
-	case KLEE_ASSUME_OP_SLE: e = MK_SLE(arguments[0], arguments[1]); break;
-	default: goto error;
-	}
+	e = cmpop_to_expr(ce->getZExtValue(), arguments[0], arguments[1]);
+	if (e.isNull()) goto error;
 
 	/* valid? */
 	ok = sfh->executor->getSolver()->mustBeTrue(state, e, mustBeTrue);
@@ -541,43 +549,6 @@ SFH_DEF_HANDLER(AssumeOp)
 
 error:
 	sfh->executor->terminateEarly(state, "assume-op failed");
-}
-
-
-SFH_DEF_HANDLER(AssumeEq)
-{
-	ref<Expr>	e;
-	bool		mustBeTrue, mayBeTrue, ok;
-
-	SFH_CHK_ARGS(2, "klee_assume_eq");
-
-	e = EqExpr::create(arguments[0], arguments[1]);
-
-	/* valid? */
-	ok = sfh->executor->getSolver()->mustBeTrue(state, e, mustBeTrue);
-	if (!ok) goto error;
-
-	/* nothing to do here? */
-	if (mustBeTrue) return;
-
-	/* satisfiable? */
-	ok = sfh->executor->getSolver()->mayBeTrue(state, e, mayBeTrue);
-	if (!ok) goto error;
-
-	if (!mayBeTrue) {
-		sfh->executor->terminateOnError(
-			state,
-			"invalid klee_assume_eq call (provably false)",
-			"user.err");
-		return;
-	}
-
-	/* only add constraint if we know it's not already implied */
-	sfh->executor->addConstrOrDie(state, e);
-	return;
-
-error:
-	sfh->executor->terminateEarly(state, "assumeeq failed");
 }
 
 SFH_DEF_HANDLER(IsSymbolic)
@@ -984,6 +955,16 @@ SFH_DEF_HANDLER(Indirect2)
 	std::string	fname(sfh->readStringAtAddress(state, arguments[0]));
 	args.push_back(arguments[1]);
 	args.push_back(arguments[2]);
+	sfh->handleByName(state, fname, target, args);
+}
+
+SFH_DEF_HANDLER(Indirect3)
+{
+	std::vector<ref<Expr> >	args;
+	std::string	fname(sfh->readStringAtAddress(state, arguments[0]));
+	args.push_back(arguments[1]);
+	args.push_back(arguments[2]);
+	args.push_back(arguments[3]);
 	sfh->handleByName(state, fname, target, args);
 }
 

@@ -1,5 +1,4 @@
 #include <llvm/Support/CommandLine.h>
-#include <llvm/Target/TargetData.h>
 
 #include "static/Sugar.h"
 #include "StateSolver.h"

@@ -23,7 +23,7 @@
 #include "llvm/Support/InstIterator.h"
 #include "llvm/Support/InstVisitor.h"
 #include "llvm/Support/GetElementPtrTypeIterator.h"
-#include "llvm/Support/TypeBuilder.h"
+#include <llvm/TypeBuilder.h>
 
 using namespace llvm;
 
@@ -33,7 +33,7 @@ X("dsa-basic", "Basic Data Structure Analysis(No Analysis)");
 char BasicDataStructures::ID = 0;
 
 bool BasicDataStructures::runOnModule(Module &M) {
-  init(&getAnalysis<TargetData>());
+  init(&getAnalysis<DataLayout>());
 
   //
   // Create a void pointer type.  This is simply a pointer to an 8 bit value.
@@ -63,7 +63,7 @@ bool BasicDataStructures::runOnModule(Module &M) {
 
   for (Module::iterator F = M.begin(), E = M.end(); F != E; ++F) {
     if (!F->isDeclaration()) {
-      DSGraph* G = new DSGraph(GlobalECs, getTargetData(), GlobalsGraph);
+      DSGraph* G = new DSGraph(GlobalECs, getDataLayout(), GlobalsGraph);
       DSNode * Node = new DSNode(VoidPtrTy, G);
           
       if (!F->hasInternalLinkage())

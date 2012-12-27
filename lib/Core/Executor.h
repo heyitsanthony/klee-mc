@@ -39,7 +39,7 @@ namespace llvm {
   class Function;
   class GlobalValue;
   class Instruction;
-  class TargetData;
+  class DataLayout;
   class Twine;
   class Value;
   class VectorType;
@@ -256,7 +256,7 @@ protected:
 
 
 	InterpreterHandler	*interpreterHandler;
-	llvm::TargetData	*target_data;
+	llvm::DataLayout	*data_layout;
 	llvm::Function		*dbgStopPointFn;
 	StatsTracker		*statsTracker;
 	TreeStreamWriter	*symPathWriter;

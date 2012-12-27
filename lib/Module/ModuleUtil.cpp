@@ -44,33 +44,7 @@
 using namespace llvm;
 using namespace klee;
 
-/// Loads library archive and links to it. Also runs RemoveSentinels pass
-/// to remove \1 prefix characters in library routine names. This must be done
-/// here so that we don't have false misses between called routines and
-/// available library routines (e.g., '\x01fstatat64' in the library isn't
-/// detected by calls to 'fstatat64' in the program).
-///
-/// Unfortunately, KLEE's built-in routines for linking against bitcode archives
-/// don't allow us to load the archive and run passes prior to linking. Thus,
-/// we've duplicated some of the functionality from
-/// llvm/lib/Linker/LinkArchives.cpp here.
-Module *klee::linkWithLibrary(
-	Module *module,
-	const std::string &libraryName)
-{
-	llvm::sys::Path		libraryPath(libraryName);
-	Linker			linker("klee", module, 0/*Linker::Verbose */);
 
-	// Now link against an unmodified version of the library archive for
-	// the common case when no sentinels are found.
-	// This avoids code duplication from llvm/lib/Linker/LinkArchives.cpp.
-	bool native = false;
-	if (linker.LinkInFile(libraryPath, native)) {
-		assert(0 && "linking in library failed!");
-	}
-
-	return linker.releaseModule();
-}
 
 Function *klee::getDirectCallTarget(CallSite cs)
 {
@@ -175,3 +149,64 @@ Module* getBitcodeModule(const char* path)
 	return ret_mod;
 }
 }
+
+/// Loads library archive and links to it. Also runs RemoveSentinels pass
+/// to remove \1 prefix characters in library routine names. This must be done
+/// here so that we don't have false misses between called routines and
+/// available library routines (e.g., '\x01fstatat64' in the library isn't
+/// detected by calls to 'fstatat64' in the program).
+///
+/// Unfortunately, KLEE's built-in routines for linking against bitcode archives
+/// don't allow us to load the archive and run passes prior to linking. Thus,
+/// we've duplicated some of the functionality from
+/// llvm/lib/Linker/LinkArchives.cpp here.
+Module *klee::linkWithLibrary(
+	Module *module,
+	const std::string &libraryName)
+#if 0
+{
+	Linker			linker("klee", module,  0 /* Linker::Verbose */);
+	llvm::sys::Path		libraryPath(libraryName);
+	Archive			*a;
+	std::vector<Module*>	m;
+	std::string		err;
+
+
+	a = Archive::OpenAndLoad(libraryPath, getGlobalContext(), &err);
+	if (a == NULL) std::cerr << "Error OpenAndLoad: " << err << '\n';
+	assert (a != NULL);
+
+	if (a->getAllModules(m, &err)) {
+		std::cerr << "Could not get all modules from "
+			<< libraryName << '\n';
+		assert (0 == 1);
+	}
+	
+	foreach (it, m.begin(), m.end()) {
+		if (linker.LinkInModule(*it, &err)) {
+			std::cerr << "ERROR! " << err << '\n';
+			assert(0 == 1);
+		}
+	}
+
+	return linker.releaseModule();
+}
+
+#else
+{
+	Linker			linker("klee", module, /* 0 */ Linker::Verbose);
+	llvm::sys::Path		libraryPath(libraryName);
+	bool			err, native = false;
+
+	// link against an unmodified version of the library archive for
+	// the common case when no sentinels are found.
+	// This avoids code duplication from llvm/lib/Linker/LinkArchives.cpp.
+	err = linker.LinkInFile(libraryPath, native);
+	if (err) {
+		std::cerr << "Bad Link" << libraryName << '\n';
+		assert (0 == 1);
+	}
+
+	return linker.releaseModule();
+}
+#endif

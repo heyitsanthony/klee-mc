@@ -67,17 +67,17 @@ public:
 class IntrinsicCleanerPass : public llvm::FunctionPass
 {
   static char ID;
-  const llvm::TargetData &TargetData;
+  const llvm::DataLayout &DataLayout;
   llvm::IntrinsicLowering *IL;
   bool LowerIntrinsics;
 
   bool runOnBasicBlock(llvm::BasicBlock &b);
 public:
   IntrinsicCleanerPass(
-  	KModule* in_km, const llvm::TargetData &TD, bool LI=true)
+  	KModule* in_km, const llvm::DataLayout &DL, bool LI=true)
     : llvm::FunctionPass((ID)),
-      TargetData(TD),
-      IL(new llvm::IntrinsicLowering(TD)),
+      DataLayout(DL),
+      IL(new llvm::IntrinsicLowering(DL)),
       LowerIntrinsics(LI),
       km(in_km) {}
   ~IntrinsicCleanerPass() { delete IL; }
