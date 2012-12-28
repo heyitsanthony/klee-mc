@@ -22,6 +22,12 @@ namespace {
 		"use-sym-mmu",
 		llvm::cl::desc("Use MMU that forwards to interpreter."),
 		llvm::cl::init(true));
+
+	llvm::cl::opt<bool>
+	OnlySymMMU(
+		"use-only-sym-mmu",
+		llvm::cl::desc("Do not use concrete address fast-path."),
+		llvm::cl::init(false));
 };
 
 void MMU::MemOp::simplify(ExecutionState& state)
@@ -68,6 +74,10 @@ MMU* MMU::create(Executor& exe)
 	/* XXX should have concrete mmu be able to do this */
 	if (MakeConcreteSymbolic)
 		return new KleeMMU(exe);
+
+	if (OnlySymMMU)
+		return new SymMMU(exe);
+
 	return new DualMMU(exe);
 }
 
