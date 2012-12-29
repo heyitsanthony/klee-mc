@@ -75,9 +75,6 @@ MMU* MMU::create(Executor& exe)
 	if (MakeConcreteSymbolic)
 		return new KleeMMU(exe);
 
-	if (OnlySymMMU)
-		return new SymMMU(exe);
-
 	return new DualMMU(exe);
 }
 
