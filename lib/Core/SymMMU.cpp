@@ -72,6 +72,8 @@ void SymMMU::initModule(Executor& exe)
 		assert (kf != NULL);
 		*(le->le_kf) = kf;
 	}
+
+	std::cerr << "[SymMMU] Using '" << SymMMUType << "'\n";
 }
 
 SymMMU::SymMMU(Executor& exe)
