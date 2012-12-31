@@ -298,8 +298,6 @@ private:
 	/// The maximum time to allow for a single stp query.
 	double stpTimeout;
 
-	bool isDebugIntrinsic(const llvm::Function *f);
-
 	void instInsertValue(ExecutionState& state, KInstruction* ki);
 	void instShuffleVector(ExecutionState& state, KInstruction* ki);
 	static ref<Expr> instShuffleVectorEvaled(

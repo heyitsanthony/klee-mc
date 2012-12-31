@@ -278,15 +278,6 @@ bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b)
 			dirty = true;
 			break;
 
-//		case Intrinsic::dbg_stoppoint:
-#if 0
-		case Intrinsic::dbg_region_start:
-		case Intrinsic::dbg_region_end:
-		case Intrinsic::dbg_func_start:
-			// Remove these regardless of lower intrinsics flag.
-			// This can be removed once IntrinsicLowering is fixed to
-			// not have bad caches.
-#endif
 		default:
 			if (LowerIntrinsics)
 				IL->LowerIntrinsicCall(ii);

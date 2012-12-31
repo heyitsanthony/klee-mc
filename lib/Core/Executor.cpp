@@ -9,7 +9,6 @@
 #include <llvm/Support/CallSite.h>
 #include <llvm/Analysis/MemoryBuiltins.h>
 #include <llvm/LLVMContext.h>
-#include <llvm/IntrinsicInst.h>
 #include <llvm/Module.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/raw_os_ostream.h>
@@ -555,8 +554,7 @@ void Executor::executeCall(
 	case Intrinsic::vaend: break;
 
 	// va_copy should have been lowered.
-	// FIXME: It would be nice to check for errors in the usage of this as
-	// well.
+	// FIXME: would be nice to check for errors in usage of this as well.
 	case Intrinsic::vacopy:
 	default:
 		klee_error("unknown intrinsic: %s", f->getName().data());
@@ -567,9 +565,6 @@ void Executor::executeCall(
 		state.transferToBasicBlock(ii->getNormalDest(), i->getParent());
 	}
 }
-
-bool Executor::isDebugIntrinsic(const Function *f)
-{ return f->getIntrinsicID() == Intrinsic::dbg_declare; }
 
 static inline const llvm::fltSemantics * fpWidthToSemantics(unsigned width)
 {
@@ -1005,21 +1000,15 @@ void Executor::finalizeBranch(
 
 void Executor::instCall(ExecutionState& state, KInstruction *ki)
 {
-	CallSite cs(ki->getInst());
-	unsigned numArgs = cs.arg_size();
-	Function *f = cs.getCalledFunction();
-
-	// Skip debug intrinsics, we can't evaluate their metadata arguments.
-	if (f && isDebugIntrinsic(f)) return;
-
-	// evaluate arguments
-	std::vector< ref<Expr> > arguments;
-	arguments.reserve(numArgs);
+	CallSite			cs(ki->getInst());
+	Function			*f = cs.getCalledFunction();
+	unsigned			numArgs = cs.arg_size();
+	std::vector< ref<Expr> >	arguments(numArgs);
 
 	for (unsigned j=0; j<numArgs; ++j)
-		arguments.push_back(eval(ki, j+1, state));
+		arguments[j] = eval(ki, j+1, state);
 
-	if (!f) {
+	if (f == NULL) {
 		// special case the call with a bitcast case
 		Value *fp = cs.getCalledValue();
 		llvm::ConstantExpr *ce = dyn_cast<llvm::ConstantExpr>(fp);
@@ -1068,9 +1057,7 @@ llvm::Function* Executor::executeBitCast(
 
 			new_ce =  dyn_cast<llvm::ConstantExpr>(ga->getAliasee());
 			if (new_ce && new_ce->getOpcode() == Instruction::BitCast)
-			{
 				return executeBitCast(state, cs, new_ce, args);
-			}
 		}
 		assert (f != NULL && "Alias not function??");
 	}
@@ -1395,8 +1382,7 @@ void Executor::instInsertElement(ExecutionState& state, KInstruction* ki)
 /* NOTE: extract element instruction has two parametres:
  * 1. source vector (v)
  * 2. extraction index (idx)
- * returns v[idx]
- */
+ * returns v[idx] */
 void Executor::instExtractElement(ExecutionState& state, KInstruction* ki)
 {
 	VectorType*	vt;
@@ -1491,13 +1477,11 @@ void Executor::instInsertValue(ExecutionState& state, KInstruction* ki)
 	lOffset = kgepi->getOffsetBits()*8;
 	rOffset = kgepi->getOffsetBits()*8 + val->getWidth();
 
-	if (lOffset > 0) {
+	if (lOffset > 0)
 		l = MK_EXTRACT(agg, 0, lOffset);
-	}
 
-	if (rOffset < (int)agg->getWidth()) {
+	if (rOffset < (int)agg->getWidth())
 		r = MK_EXTRACT(agg, rOffset, agg->getWidth() - rOffset);
-	}
 
 	if (!l.isNull() && !r.isNull())
 		result = MK_CONCAT(r, MK_CONCAT(val, l));
