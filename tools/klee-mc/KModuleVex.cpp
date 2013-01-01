@@ -147,12 +147,16 @@ Function* KModuleVex::getFuncByAddr(uint64_t guest_addr)
 
 	/* do light analysis */
 	if (UseCtrlGraph) {
+		static int dump_c = 0;
 		ctrl_graph.addFunction(f, guest_ptr(guest_addr));
-		std::ostream* of;
-		of = exe->getInterpreterHandler()->openOutputFile("statics.dot");
-		if (of) {
-			ctrl_graph.dumpStatic(*of);
-			delete of;
+		dump_c = (dump_c + 1) % 512;
+		if (dump_c == 0) {
+			std::ostream* of;
+			of = exe->getInterpreterHandler()->openOutputFile("statics.dot");
+			if (of) {
+				ctrl_graph.dumpStatic(*of);
+				delete of;
+			}
 		}
 	}
 
