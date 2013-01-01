@@ -3,6 +3,8 @@ CURDATE=`date +"%s-%N"`
 FPREFIX="pending.$CURDATE"
 PROOFDIR=${1:-"proofs"}
 
+KOPT_FLAGS="-max-stp-time=30 -pipe-solver"
+
 function xtive_loop
 {
 	BRULEF="$1"
@@ -10,8 +12,8 @@ function xtive_loop
 	LASTAPPENDED="whatever"
 	while [ 1 ]; do
 		# normal forms
-		kopt -rb-recursive=false -max-stp-time=30 -pipe-solver -nf-dest -rule-file="$BRULEF" 2>&1
-		APPENDED=`kopt -rb-recursive=false -max-stp-time=30 -pipe-solver -brule-xtive -rule-file="$BRULEF" 2>&1 | grep Append | cut -f2 -d' '`
+		kopt -rb-recursive=false $KOPT_FLAGS $KOPT_HASHFLAGS -nf-dest -rule-file="$BRULEF" 2>&1
+		APPENDED=`kopt $KOPT_FLAGS $KOPT_HASHFLAGS -rb-recursive=false -brule-xtive -rule-file="$BRULEF" 2>&1 | grep Append | cut -f2 -d' '`
 		if [ -z "$APPENDED" ]; then
 			break
 		fi
@@ -56,7 +58,7 @@ if [ -f "$PROOFDIR" ]; then
 		zcat "$PROOFDIR" >"$FPREFIX".brule
 	fi
 else
-	kopt -max-stp-time=30 -pipe-solver -dump-bin -check-rule "$PROOFDIR" >$FPREFIX.brule
+	kopt $KOPT_FLAGS $KOPT_HASHFLAGS -dump-bin -check-rule "$PROOFDIR" >$FPREFIX.brule
 fi
 
 if [ -f "$SEEDBRULE" ]; then
@@ -71,7 +73,7 @@ xtive_loop "$FPREFIX.brule"
 
 kopt -pipe-solver -brule-rebuild -rule-file=$FPREFIX.brule $FPREFIX.rebuild.brule 2>/dev/null
 mv $FPREFIX.rebuild.brule $FPREFIX.brule
-kopt -max-stp-time=30 -pipe-solver -db-punchout		\
+kopt $KOPT_FLAGS $KOPT_HASHFLAGS -db-punchout		\
 	-ko-consts=16					\
 	-rule-file=$FPREFIX.brule			\
 	-unique-file=$FPREFIX.uniq.brule		\
@@ -79,6 +81,9 @@ kopt -max-stp-time=30 -pipe-solver -db-punchout		\
 	-stubborn-file=$FPREFIX.stubborn.brule		\
 	$FPREFIX.punch.brule
 xtive_loop "$FPREFIX.punch.brule"
+
+
+# do full verify
 kopt -pipe-solver -brule-rebuild -rule-file=$FPREFIX.punch.brule $FPREFIX.punch.rebuild.brule
 mv $FPREFIX.punch.rebuild.brule $FPREFIX.punch.brule
 cat $FPREFIX.{punch,uniq,unint,stubborn}.brule  >$FPREFIX.final.brule
