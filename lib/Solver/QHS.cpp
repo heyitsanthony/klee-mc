@@ -8,6 +8,14 @@
 
 using namespace klee;
 
+static const char* sat_dirs[] =
+{
+	[QHSEntry::ERR] = "poison",
+	[QHSEntry::SAT] =  "sat",
+	[QHSEntry::UNSAT] = "unsat"
+};
+
+
 bool QHSSink::lookupSAT(const QHSEntry& qhs)
 {
 	if (dst->lookupSAT(qhs)) return true;
@@ -27,12 +35,12 @@ bool QHSSink::lookupValue(QHSEntry& qhs)
 	if (dst->lookupValue(qhs))
 		return true;
 	
-	if (src->lookupValue(qhs)) {
-		dst->saveValue(qhs);
-		return true;
-	}
+	if (src->lookupValue(qhs) == false)
+		return false;
 
-	return false;
+	/* found in source, so save to sink destination */
+	dst->saveValue(qhs);
+	return true;
 }
 
 void QHSSink::saveValue(const QHSEntry& qhs) { dst->saveValue(qhs); }
@@ -42,6 +50,7 @@ QHSDir* QHSDir::create(const std::string& _dirname)
 	mkdir(_dirname.c_str(), 0770);
 	mkdir((_dirname + "/sat").c_str(), 0770);
 	mkdir((_dirname + "/unsat").c_str(), 0770);
+	mkdir((_dirname + "/poison").c_str(), 0770);
 	return new QHSDir(_dirname);
 }
 
@@ -52,10 +61,8 @@ bool QHSDir::lookupSAT(const QHSEntry& qhs)
 	struct stat	s;
 	bool		found;
 
-	subdir = (qhs.isSAT) ? "sat" : "unsat";
-	snprintf(
-		path, 256, "%s/%s/%016lx",
-		dirname.c_str(), subdir, qhs.qh);
+	subdir = sat_dirs[qhs.qr];
+	snprintf(path, 256, "%s/%s/%016lx", dirname.c_str(), subdir, qhs.qh);
 
 	found = stat(path, &s) == 0;
 	if (found && s.st_size == 0) {
@@ -75,11 +82,8 @@ void QHSDir::saveSAT(const QHSEntry& qhs)
 	char		path[256];
 	FILE		*f;
 
-	/* dump to corresponding SAT directory */
-	subdir = (qhs.isSAT) ? "sat" : "unsat";
-	snprintf(
-		path, 256, "%s/%s/%016lx",
-		dirname.c_str(), subdir, qhs.qh);
+	subdir =  sat_dirs[qhs.qr];
+	snprintf(path, 256, "%s/%s/%016lx", dirname.c_str(), subdir, qhs.qh);
 	f = fopen(path, "w");
 	if (f != NULL) fclose(f);
 }
@@ -91,7 +95,7 @@ void QHSDir::writeSAT(const QHSEntry& qhs)
 	gzofstream	*os;
 
 	/* dump to corresponding SAT directory */
-	subdir = (qhs.isSAT) ? "sat" : "unsat";
+	subdir = sat_dirs[qhs.qr];
 	snprintf(path, 256, "%s/%s/%016lx", dirname.c_str(), subdir, qhs.qh);
 
 	os = new gzofstream(path, std::ios::in | std::ios::binary);

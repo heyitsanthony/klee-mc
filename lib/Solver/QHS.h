@@ -9,15 +9,27 @@ namespace klee
 class QHSEntry
 {
 public:
+	enum QueryResult {  ERR=0, SAT=1, UNSAT=2 };
+
 	QHSEntry(
 		const Query& _q, Expr::Hash _qh,
-		bool _isSAT = false, uint64_t v=~0)
-	: q(_q), qh(_qh), isSAT(_isSAT), value(v) {}
+		QueryResult _qr, uint64_t v=~0)
+	: q(_q), qh(_qh), qr(_qr), value(v) {}
+
+	QHSEntry(
+		const Query& _q, Expr::Hash _qh,
+		bool _isSat=false, uint64_t v=~0)
+	: q(_q), qh(_qh), qr((_isSat) ? SAT : UNSAT), value(v) {}
+
 	~QHSEntry() {}
+
+	bool isSAT(void) const { return qr == SAT; }
+	bool isUnsat(void) const { return qr == UNSAT; }
+	bool isPoison(void) const { return qr == ERR; }
 
 	Query		q;
 	Expr::Hash	qh;
-	bool		isSAT;
+	QueryResult	qr;
 	uint64_t	value;
 };
 

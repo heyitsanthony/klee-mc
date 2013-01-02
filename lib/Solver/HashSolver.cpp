@@ -83,6 +83,12 @@ bool HashSolver::computeSat(const Query& q)
 	if (lookupSAT(q, true)) { hits++; return true; }
 	if (lookupSAT(q, false)) { hits++; return false; }
 
+	if (qstore->lookupSAT(QHSEntry(q, cur_hash, QHSEntry::ERR))) {
+		hits++;
+		failQuery();
+		return false;
+	}
+
 	misses++;
 	// std::cerr << "[HS] Hits=" << hits << ". Misses=" << misses << '\n';
 	return computeSatMiss(q);
@@ -93,36 +99,19 @@ bool HashSolver::computeSatMiss(const Query& q)
 	bool 		isSAT;
 
 	isSAT = doComputeSat(q);
-	if (failed()) return false;
+	if (failed()) {
+		/* poisoned hash */
+		qstore->saveSAT(QHSEntry(q, cur_hash, QHSEntry::ERR));
+		return false;
+	}
 
-	saveSAT(q, isSAT);
+	qstore->saveSAT(QHSEntry(q, cur_hash, isSAT));
 	if (isSAT)
 		sat_hashes.insert(cur_hash);
 	else
 		unsat_hashes.insert(cur_hash);
 
 	return isSAT;
-}
-
-
-void HashSolver::saveSAT(const Query& q, bool isSAT)
-{
-	qstore->saveSAT(QHSEntry(q, cur_hash, isSAT));
-	/* XXX */
-	//miss_queue.push_back(new QHSEntry(q, cur_hash, isSAT));
-	//commitMisses();
-}
-
-void HashSolver::commitMisses(void)
-{
-	assert (0 == 1 && "XXX");
-#if 0
-	foreach (it, miss_queue.begin(), miss_queue.end()) {
-		qstore->saveSAT(*(*it));
-		delete (*it);
-	}
-	miss_queue.clear();
-#endif
 }
 
 Solver::Validity HashSolver::computeValidity(const Query& q)
@@ -139,7 +128,6 @@ bool HashSolver::isMatch(Assignment* a) const
 	return true;
 }
 
-
 ref<Expr> HashSolver::computeValueCached(const Query& q)
 {
 	ref<Expr>		ret;
@@ -148,7 +136,7 @@ ref<Expr> HashSolver::computeValueCached(const Query& q)
 
 	if (qstore->lookupValue(qhs) == true) {
 		/* hit in cache */
-		assert (qhs.isSAT);
+		assert (qhs.isSAT());
 		hits++;
 		return MK_CONST(qhs.value, q.expr->getWidth());
 	}
@@ -164,7 +152,7 @@ ref<Expr> HashSolver::computeValueCached(const Query& q)
 		return ret;
 
 	/* store to cache */
-	qhs.isSAT = true;
+	qhs.qr = QHSEntry::SAT;
 	qhs.value = ce->getZExtValue();
 	qstore->saveValue(qhs);
 

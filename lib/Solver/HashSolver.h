@@ -80,7 +80,6 @@ public:
 	static unsigned getHits(void) { return hits; }
 	static unsigned getStoreHits(void) { return hits; }
 	static unsigned getMisses(void) { return misses; }
-	static void commitMisses(void);
 
 	static bool isSink(void);
 	static bool isWriteSAT(void);

@@ -70,9 +70,11 @@ protected:
 private:
 	HashFile		*hf_sat;
 	HashFile		*hf_unsat;
+	HashFile		*hf_poison;
 
 	PendingFile		*pend_sat;
 	PendingFile		*pend_unsat;
+	PendingFile		*pend_poison;
 	PendingValueFile	*pend_value;
 
 	std::vector<Expr::Hash>	queued_hashes;

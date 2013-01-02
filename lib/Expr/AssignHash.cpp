@@ -35,9 +35,17 @@ static void initSamples(void)
 	}
 }
 
+#define BINDSEQ_W(T,W)	\
+for (int k = -255; i <= 255; k++) {	\
+	T		x = k;			\
+	unsigned char*	p = (unsigned char*)&x;	\
+	std::vector<unsigned char> seq;	\
+	for (int i = 0; i < W; i++) seq.push_back(p[i]);	\
+	a.bindFreeToSequence(seq);		\
+	ah.commitAssignment();			\
+}
 
-uint64_t AssignHash::getEvalHash(
-	const ref<Expr>& e, bool& maybeConst)
+uint64_t AssignHash::getEvalHash(const ref<Expr>& e, bool& maybeConst)
 {
 	AssignHash		ah(e);
 	Assignment		&a(ah.getAssignment());
@@ -67,6 +75,15 @@ uint64_t AssignHash::getEvalHash(
 		ah.commitAssignment();
 	}
 
+#ifdef SAMPLE_HARDER
+	BINDSEQ_W(int16_t, 2)
+	BINDSEQ_W(int32_t, 3)
+	BINDSEQ_W(int32_t, 4)
+	BINDSEQ_W(int64_t, 8)
+#endif
+
 	maybeConst = ah.maybeConst();
 	return ah.getHash();
 }
+
+

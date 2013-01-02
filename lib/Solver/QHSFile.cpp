@@ -52,36 +52,45 @@ QHSFile::QHSFile(
 	snprintf(path, 256, "%s/unsat.hcache", cache_fdir);
 	hf_unsat = HashFile::create(path);
 
+	snprintf(path, 256, "%s/poison.hcache", cache_fdir);
+	hf_poison = HashFile::create(path);
+
 	snprintf(path, 256, "%s/sat.pending", _pending_fdir);
 	pend_sat = PendingFile::create(path);
 	
 	snprintf(path, 256, "%s/unsat.pending", _pending_fdir);
 	pend_unsat = PendingFile::create(path);
 
+	snprintf(path, 256, "%s/poison.pending", _pending_fdir);
+	pend_poison = PendingFile::create(path);
+
 	snprintf(path, 256, "%s/value.pending", _pending_fdir);
 	pend_value = PendingValueFile::create(path);
 
-	assert (pend_sat && pend_unsat && pend_value);
+	assert (pend_sat && pend_unsat && pend_value && pend_poison);
 }
 
 QHSFile::~QHSFile(void)
 {
 	if (hf_sat) delete hf_sat;
 	if (hf_unsat) delete hf_unsat;
+	if (hf_poison) delete hf_poison;
 }
 
 bool QHSFile::lookupSAT(const QHSEntry& qe)
 {
-	if (qe.isSAT && (
-		(hf_sat && hf_sat->hasHash(qe.qh)) ||
-		 pend_sat->hasHash(qe.qh)))
-		return true;
+	switch (qe.qr) {
+	case QHSEntry::ERR:
+		return (hf_poison && hf_sat->hasHash(qe.qh)) ||
+			pend_poison->hasHash(qe.qh);
+	
+	case QHSEntry::SAT:
+		return (hf_sat && hf_sat->hasHash(qe.qh)) ||
+			pend_sat->hasHash(qe.qh);
 
-	if (!qe.isSAT &&
-		((hf_unsat && hf_unsat->hasHash(qe.qh)) ||
-		 pend_unsat->hasHash(qe.qh)))
-	{
-		return true;
+	case QHSEntry::UNSAT:
+		return ((hf_unsat && hf_unsat->hasHash(qe.qh)) ||
+		 pend_unsat->hasHash(qe.qh));
 	}
 
 	return false;
@@ -89,25 +98,29 @@ bool QHSFile::lookupSAT(const QHSEntry& qe)
 
 void QHSFile::saveSAT(const QHSEntry& qe)
 {
-	if (qe.isSAT) pend_sat->add(qe.qh);
-	if (!qe.isSAT) pend_unsat->add(qe.qh);
+	switch (qe.qr) {
+	case QHSEntry::ERR: pend_poison->add(qe.qh); break;
+	case QHSEntry::SAT: pend_sat->add(qe.qh); break;
+	case QHSEntry::UNSAT: pend_unsat->add(qe.qh); break;
+	}
 }
 
 bool QHSFile::lookupValue(QHSEntry& qhs)
 {
 	uint64_t	v;
 
+	qhs.qr = QHSEntry::ERR;
 	if (pend_value->hasHash(qhs.qh, v) == false)
 		return false;
 
-	qhs.isSAT = true;
+	qhs.qr = QHSEntry::SAT;
 	qhs.value = v;
 	return true;
 }
 
 void QHSFile::saveValue(const QHSEntry& qhs)
 {
-	assert (qhs.isSAT);
+	assert (qhs.isSAT());
 	pend_value->add(qhs.qh, qhs.value);
 }
 
