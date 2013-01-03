@@ -36,6 +36,7 @@ private:
 	bool			q_loaded;
 	std::set<Expr::Hash>	sat_hashes;
 	std::set<Expr::Hash>	unsat_hashes;
+	std::set<Expr::Hash>	poison_hashes;
 	QHSStore		*qstore;
 
 	Assignment* loadCachedAssignment(const std::vector<const Array*>& objs);
@@ -50,6 +51,7 @@ private:
 
 	bool isMatch(Assignment* a) const;
 	bool computeSatMiss(const Query& q);
+	bool isPoisoned(const Query& q);
 
 	bool lookupSAT(const Query& q, bool isSAT);
 	void saveSAT(const Query& q, bool isSAT);

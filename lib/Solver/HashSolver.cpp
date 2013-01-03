@@ -76,6 +76,14 @@ bool HashSolver::lookupSAT(const Query& q, bool isSAT)
 	return false;
 }
 
+bool HashSolver::isPoisoned(const Query& q)
+{
+	if (poison_hashes.count(cur_hash))
+		return true;
+
+	return qstore->lookupSAT(QHSEntry(q, cur_hash, QHSEntry::ERR));
+}
+
 bool HashSolver::computeSat(const Query& q)
 {
 	cur_hash = qhash->hash(q);
@@ -83,7 +91,7 @@ bool HashSolver::computeSat(const Query& q)
 	if (lookupSAT(q, true)) { hits++; return true; }
 	if (lookupSAT(q, false)) { hits++; return false; }
 
-	if (qstore->lookupSAT(QHSEntry(q, cur_hash, QHSEntry::ERR))) {
+	if (isPoisoned(q)) {
 		hits++;
 		failQuery();
 		return false;
@@ -102,6 +110,7 @@ bool HashSolver::computeSatMiss(const Query& q)
 	if (failed()) {
 		/* poisoned hash */
 		qstore->saveSAT(QHSEntry(q, cur_hash, QHSEntry::ERR));
+		poison_hashes.insert(cur_hash);
 		return false;
 	}
 
