@@ -1303,7 +1303,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 	last_sc = sc.sys_nr;
 
-	if (sc_breadcrumb_is_newregs()) {
+	if (sc_breadcrumb_is_newregs() || klee_is_symbolic(GET_SYSRET(regfile))) {
 		/* ret value is stored in ktest regctx */
 		sc_breadcrumb_commit(&sc, 0);
 	} else {
