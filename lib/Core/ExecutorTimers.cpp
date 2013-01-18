@@ -701,6 +701,9 @@ unsigned dumpStates = 0, dumpPTree = 0;
 
 void Executor::initTimers(void)
 {
+	/* only initialize timers once */
+	if (!timers.empty()) return;
+
 	if (MaxTime)
 		addTimer(new HaltTimer(this), MaxTime);
 

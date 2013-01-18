@@ -1060,11 +1060,15 @@ SFH_DEF_HANDLER(GetObjPrev)
 		return;
 	}
 
-	MMIter	mm_it(state.addressSpace.lower_bound(req));
+	MMIter	mm_it(state.addressSpace.upper_bound(req));
 	if (mm_it == state.addressSpace.end())
 		--mm_it;
 
-	obj_addr = (*mm_it).first->address;
+	do {
+		obj_addr = (*mm_it).first->address;
+		--mm_it;
+	} while (obj_addr > req && mm_it != state.addressSpace.end());
+
 	state.bindLocal(target, MK_CONST(obj_addr, Expr::Int64));
 }
 

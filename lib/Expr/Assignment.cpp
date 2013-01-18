@@ -219,6 +219,8 @@ ref<Expr> Assignment::evaluateCostly(ref<Expr>& e, unsigned& cost) const
 
 bool Assignment::operator==(const Assignment& a) const
 {
+	if (this == &a) return true;
+
 	if (bindings.size() != a.bindings.size()) return false;
 
 	foreach (it, bindings.begin(), bindings.end()) {
@@ -235,6 +237,8 @@ bool Assignment::operator==(const Assignment& a) const
 
 bool Assignment::operator<(const Assignment& a) const
 {
+	if (this == &a) return false;
+
 	if (bindings.size() < a.bindings.size()) return true;
 	if (a.bindings.size() > bindings.size()) return false;
 

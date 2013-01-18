@@ -967,7 +967,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			break;
 		}
 
-		if (*(int*)GET_ARG2(regfile) < 4) {
+		if (*((int*)GET_ARG2(regfile)) < 4) {
 			sc_ret_v(regfile, -1);
 			break;
 		}

@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# expects absolute path
+INBCA="$1"
+
+
+tmpdir=`mktemp -d`
+
+echo ==========$INBCA
+
+pushd $tmpdir
+llvm-ar x $INBCA
+ls -lah
+popd
+
+BCNAME=`echo "$INBCA" | sed "s/\.bca/\.bc/"`
+llvm-link -f -o "$BCNAME"  $tmpdir/*.bc
+mv -f  "$BCNAME" "$2"
+rm -rf "$tmpdir"

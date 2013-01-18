@@ -2809,6 +2809,7 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 	}
 
 	if (iter.badjmp_c >= MAX_BADJMP) {
+		if (iter.free == NULL) return false;
 		terminateOnError(
 			*(iter.free),
 			"xfer iter erorr: too many bad jumps",

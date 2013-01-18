@@ -85,6 +85,10 @@ public:
 	bool replay(Executor* exe, ExecutionState* initSt);
 private:
 	bool replayFast(Executor* exe, ExecutionState* initSt);
+	void replayFast(
+		Executor* exe,
+		ExecutionState* initSt,
+		const std::vector<KTest*>& in_kts);
 	bool replaySlow(Executor* exe, ExecutionState* initSt);
 
 	const std::vector<KTest*>& kts;

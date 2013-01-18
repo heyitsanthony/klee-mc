@@ -187,6 +187,7 @@ public:
 	void unbindObject(const MemoryObject *mo);
 
 	MMIter lower_bound(uint64_t addr) const;
+	MMIter upper_bound(uint64_t addr) const;
 	MMIter end(void) const { return objects.end(); }
 	MMIter begin(void) const { return objects.begin(); }
 

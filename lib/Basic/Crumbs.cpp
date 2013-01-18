@@ -199,10 +199,10 @@ void BCSyscall::consumeOps(KTestStream* kts, Crumbs* crumbs)
 		const KTestObject* kto = kts->nextObject();
 		assert (kto);
 		br = kto->numBytes;
-		if (br != 633 && br != 345) {
+		if (br != 921 && br != 361) {
 			fprintf(stderr, "GOT %d BYTES. WHOOPS!\n", kto->numBytes);
 		}
-		assert (br == 633 || br == 345 );
+		assert (br == 921|| br == 361);
 	}
 
 	/* read in any objects written out */

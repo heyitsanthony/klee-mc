@@ -179,15 +179,35 @@ ExecutionState* ForksKTestStateLogger::getNearState(const KTest* t)
 		arr_it = arr_cache.find(arrkey_ty(
 			t->objects[i].numBytes,
 			std::string(t->objects[i].name)));
-		if (arr_it == arr_cache.end())
+		if (arr_it == arr_cache.end()) {
+			std::cerr << "[KTest] could not find arr="
+				<< t->objects[i].name << '\n';
 			break;
+		}
 	
+		/* found a matching array, add it */
 		arr = arr_it->second;
 		a.addBinding(arr.get(), v);
 
+		/* state matches for this assignment? */
 		st_it = state_cache.find(a);
-		if (st_it == state_cache.end())
+		if (st_it == state_cache.end()) {
+			std::cerr << "[KTest] could not find state on sz="
+				<< a.getNumBindings() << '\n';
+#if 0
+			std::cerr << "[KTest] our assignment: \n";
+			a.print(std::cerr);
+			std::cerr << "[KTest] equisize assignments:\n";
+			foreach (it, state_cache.begin(), state_cache.end()) {
+				if (it->first.getNumBindings() != 2)
+					continue;
+				std::cerr << "[KTest] sz=2\n";
+				it->first.print(std::cerr);
+			}
+			std::cerr << "[KTest] ======= done printing\n";
+#endif
 			break;
+		}
 
 		best_es = st_it->second;
 	}
@@ -202,8 +222,12 @@ ExecutionState* ForksKTestStateLogger::getNearState(const KTest* t)
 
 void ForksKTestStateLogger::addBinding(ref<Array>& a, std::vector<uint8_t>& v)
 {
+	arrkey_ty	ak(a->getSize(), a->name);
+	arr_cache.insert(std::make_pair(ak, a));
+
+//	ref<Array>	arr((arr_cache.find(ak))->second);
+//	ForksKTest::addBinding(arr, v);
 	ForksKTest::addBinding(a, v);
-	arr_cache.insert(std::make_pair(arrkey_ty(a->getSize(), a->name), a));
 }
 
 bool ForksKTestStateLogger::updateSymbolics(ExecutionState& current)
@@ -214,14 +238,17 @@ bool ForksKTestStateLogger::updateSymbolics(ExecutionState& current)
 		return false;
 
 	/* already found? */
-	if (state_cache.count(*getCurrentAssignment()) != 0)
+	if (state_cache.count(*getCurrentAssignment()) != 0) {
+		std::cerr << "[KTEST] Discarding state; already known.\n";
 		return true;
+	}
 
 	new_es = pureFork(current);
 	if (new_es == NULL)
 		return true;
 
-	std::cerr << "INSERTING NEW ASSIGNMENT SZ=" << getCurrentAssignment()->getNumBindings() <<  "\n";
+	std::cerr << "[KTEST] INSERTING NEW ASSIGNMENT SZ="
+		<< getCurrentAssignment()->getNumBindings() <<  "\n";
 	/* place state immediately before the forking instruction;
 	 * state isn't constrained until after affinities are assigned */
 	new_es->abortInstruction();

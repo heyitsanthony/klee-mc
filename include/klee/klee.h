@@ -162,7 +162,11 @@ extern "C" {
 #define KLEE_CMP_OP_SLE	9
 
 #define klee_assume_gt(x,y)	klee_assume_op(x,y,KLEE_CMP_OP_UGT)
+#define klee_assume_uge(x,y)	klee_assume_op(x,y,KLEE_CMP_OP_UGE)
+#define klee_assume_ule(x,y)	klee_assume_op(x,y,KLEE_CMP_OP_ULE)
+
 #define klee_assume_eq(lhs, rhs) klee_assume_op(lhs, rhs, KLEE_CMP_OP_EQ)
+#define klee_assume_ne(lhs, rhs) klee_assume_op(lhs, rhs, KLEE_CMP_OP_NE)
   void klee_assume_op(uint64_t lhs, uint64_t rhs, uint8_t op);
 
   void klee_warning(const char *message);
@@ -204,12 +208,18 @@ extern "C" {
   unsigned klee_get_obj_size(void *ptr);
 
   uint32_t klee_stack_depth(void);
+
+  /* object following object containing p */
   void* klee_get_obj_next(void* p);
+
+  /* object >= object containing p */
   void* klee_get_obj_prev(void* p);
 
   uint64_t klee_indirect0(const char* s);
   uint64_t klee_indirect1(const char* s, uint64_t v0);
   uint64_t klee_indirect2(const char* s, uint64_t v0, uint64_t v1);
+  uint64_t klee_indirect3(const char* s, uint64_t v0, uint64_t v1, uint64_t v2);
+
 #ifdef __cplusplus
 }
 #endif

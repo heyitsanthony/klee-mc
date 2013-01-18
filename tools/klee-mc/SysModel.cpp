@@ -1,8 +1,10 @@
 #include <iostream>
+#include <fstream>
 #include <llvm/Module.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/IntrinsicInst.h>
 #include <llvm/LLVMContext.h>
+#include "guestsnapshot.h"
 
 #include "../../lib/Core/Globals.h"
 #include "klee/Internal/Module/KModule.h"
@@ -45,10 +47,13 @@ static const char* guest2rtlib(const Guest* g)
 }
 
 LinuxModel::LinuxModel(Executor* e)
-: SysModel(
-	e,
-	guest2rtlib(((ExecutorVex*)e)->getGuest()))
+: SysModel(e, guest2rtlib(((ExecutorVex*)e)->getGuest()))
 {}
+
+W32Model::W32Model(Executor* e)
+: SysModel(e, "libkleeRuntimeMC-nt32.bc")
+, gs(dynamic_cast<GuestSnapshot*>(((ExecutorVex*)e)->getGuest()))
+{ assert (gs != NULL && "Expected snapshot for w32"); }
 
 
 FDTModel::FDTModel(Executor* e) : SysModel(e, "libkleeRuntimeMC-fdt.bc") {}
@@ -97,7 +102,7 @@ void FDTModel::installInitializers(Function *init_func)
 {
 	GlobalVariable	*ctors;
 	KModule		*kmodule;
-	
+
 	kmodule = exe->getKModule();
 	ctors = kmodule->module->getNamedGlobal("llvm.global_ctors");
 	std::cerr << "checking for global ctors and dtors" << std::endl;
@@ -116,7 +121,7 @@ void FDTModel::installInitializers(Function *init_func)
 
 	// TODO
 	// can't install detours because this function returns almost immediately
-	// GlobalVariable *dtors = 
+	// GlobalVariable *dtors =
 	// 	kmodule->module->getNamedGlobal("llvm.global_dtors");
 	// do them later
 	// if (dtors) {
@@ -135,37 +140,60 @@ void FDTModel::installInitializers(Function *init_func)
 
 void FDTModel::installConfig(ExecutionState& state)
 {
-	GlobalVariable	*g_utsname;
+	struct utsname	buf;
+	uname(&buf);
+	installData(state, "g_utsname", &buf, sizeof(buf));
+}
+
+void SysModel::installData(
+	ExecutionState& state,
+	const char* name,
+	const void* data,
+	unsigned int len)
+{
+	GlobalVariable	*g;
 	MemoryObject	*mo;
 	ObjectState	*os;
-	struct utsname	buf;
 
-	g_utsname = static_cast<GlobalVariable*>(
-		exe->getKModule()->module->getGlobalVariable("g_utsname"));
+	g = static_cast<GlobalVariable*>(
+		exe->getKModule()->module->getGlobalVariable(name));
+	assert (g != NULL && "Could not find install variable");
 
-	mo = exe->getGlobals()->findObject(g_utsname);
+	mo = exe->getGlobals()->findObject(g);
 	os = state.addressSpace.findWriteableObject(mo);
 
 	assert(os != NULL);
+	assert (mo->size >= len);
 
-	uname(&buf);
-	for (unsigned offset=0; offset < mo->size; offset++) {
-		state.write8(os, offset, ((unsigned char*)&buf)[offset]);
-	}
+	for (unsigned i = 0; i < len; i++)
+		state.write8(os, i, ((unsigned char*)&data)[i]);
+
 }
 
 SyscallSFH* FDTModel::allocSpecialFuncHandler(Executor* e) const
-{
-	return new FdtSFH(e);
-}
+{ return new FdtSFH(e); }
 
 SyscallSFH* LinuxModel::allocSpecialFuncHandler(Executor* e) const
-{
-	return new SyscallSFH(e);
-}
+{ return new SyscallSFH(e); }
+
+
+SyscallSFH* W32Model::allocSpecialFuncHandler(Executor* e) const
+{ return new SyscallSFH(e); }
 
 void LinuxModel::installInitializers(llvm::Function* f)
 {
 	setModelBool(exe->getKModule()->module, "concrete_vfs", UseConcreteVFS);
 	setModelBool(exe->getKModule()->module, "deny_sys_files", DenySysFiles);
+}
+
+void W32Model::installConfig(ExecutionState& state)
+{
+	char		pbi[24];
+	uint32_t	cookie;
+
+	gs->getPlatform("pbi", &pbi, 24);
+	installData(state, "plat_pbi", pbi, sizeof(pbi));
+
+	gs->getPlatform("process_cookie", &pbi, 4);
+	installData(state, "plat_cookie", &cookie, sizeof(cookie));
 }

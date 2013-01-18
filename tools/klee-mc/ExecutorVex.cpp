@@ -78,6 +78,7 @@ namespace
 		cl::location(UseConcreteVFS));
 
 	cl::opt<bool> UseFDT("use-fdt", cl::desc("Use TJ's FDT model"));
+	cl::opt<bool> UseNT("use-nt", cl::desc("Use NT model"));
 
 	cl::opt<bool> DumpSyscallStates(
 		"dump-syscall-state",
@@ -140,10 +141,9 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 	std::cerr << "[klee-mc] Forcing fake vsyspage reads\n";
 	theGenLLVM->setFakeSysReads();
 
-	if (UseFDT)
-		sys_model = new FDTModel(this);
-	else
-		sys_model = new LinuxModel(this);
+	if (UseFDT)	sys_model = new FDTModel(this);
+	else if (UseNT) sys_model = new W32Model(this);
+	else		sys_model = new LinuxModel(this);
 
 	theVexHelpers->loadUserMod(sys_model->getModelFileName());
 

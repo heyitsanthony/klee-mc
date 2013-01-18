@@ -464,6 +464,16 @@ MMIter AddressSpace::lower_bound(uint64_t addr) const
 	return objects.lower_bound(&toFind);
 }
 
+MMIter AddressSpace::upper_bound(uint64_t addr) const
+{
+	if (addr == 0) return begin();
+	if (objects.empty()) return end();
+
+	MemoryObject	toFind(addr);
+	return objects.upper_bound(&toFind);
+}
+
+
 bool AddressSpace::mustContain(
 	ExecutionState &state,
 	StateSolver* solver,

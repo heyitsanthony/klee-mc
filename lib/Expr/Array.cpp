@@ -39,6 +39,8 @@ ref<Array> Array::create(
 	ref<Array>	ret;
 	Array		*arr;
 
+	assert (_name[0] < '0' || _name[0] > '9');
+
 	/* XXX: will this leak arrays? I hope not. */
 	arr = new Array(_name, _mallocKey, constValBegin, constValEnd);
 	arr->initRef();
@@ -61,6 +63,8 @@ Array::Array(
 , constant_count(constantValues_expr.size())
 , singleValue(0)
 {
+	assert (_name[0] < '0' || _name[0] > '9');
+
 	count++;
 	hash_v = mallocKey.size;
 	chk_val = ARRAY_CHK_VAL;

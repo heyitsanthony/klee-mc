@@ -1,4 +1,4 @@
-#===-- runtime/Intrinsic/Makefile --------------------------*- Makefile -*--===#
+#===-- runtime/POSIX/Makefile ------------------------------*- Makefile -*--===#
 #
 #                     The KLEE Symbolic Virtual Machine
 #
@@ -9,24 +9,26 @@
 
 LEVEL=../..
 
-RUNTIME_ENABLE_OPTIMIZED=1
-ENABLE_OPTIMIZED=1
-LIBRARYNAME=kleeRuntimeMMU
+DISABLE_ASSERTIONS=1
+LIBRARYNAME=kleeRuntimeMC-nt32
+DONT_BUILD_RELINKED=1
 BUILD_ARCHIVE=1
 BYTECODE_LIBRARY=1
 # Don't strip debug info from the module.
-DEBUG_RUNTIME=0
+DEBUG_RUNTIME=1
+NO_PEDANTIC=1
+C.Flags += -I/usr/include/wine/windows -Wno-attributes -D__builtin_ms_va_list=__builtin_va_list
 
 include $(LEVEL)/Makefile.common
 
 LIBBCA:=$(LibDir)/lib$(LIBRARYNAME).bca
 LIBTXT:=$(LibDir)/$(LIBRARYNAME)-fns.txt
-#OPTFLAGS:="-disable-opt"
-# memset intrinsics have been causing some issues
-#CFLAGS=-fno-builtin -nodefaultlibs -O0 -emit-llvm
-#CXXFLAGS=-fno-builtin -nodefaultlibs -O0 -emit-llvm
 
-all :: $(LibDir)/libkleeRuntimeMMU.bc
+all :: $(LibDir)/lib$(LIBRARYNAME).bc
 
-$(LibDir)/libkleeRuntimeMMU.bc: $(LibDir)/libkleeRuntimeMMU.bca
+$(LibDir)/lib$(LIBRARYNAME).bc: $(LibDir)/lib$(LIBRARYNAME).bca
 	../../scripts/link-bca $^ $@
+#	mkdir -p mmu_tmp
+#	cd mmu_tmp && ar x $^ && cd ..
+#	llvm-link -f -o $@ mmu_tmp/*.bc
+#	arm -rf mmu_tmp

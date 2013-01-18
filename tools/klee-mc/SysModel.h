@@ -2,6 +2,8 @@
 
 #include <stdint.h>
 
+class GuestSnapshot;
+
 namespace llvm
 {
 class Function;
@@ -26,6 +28,11 @@ public:
 	void setModelBool(llvm::Module* m, const char* gv_name, bool bv);
 	void setModelU64(llvm::Module* m, const char* gv_name, uint64_t bv);
 
+	void installData(
+		ExecutionState& state,
+		const char* name,
+		const void* data, 
+		unsigned int len);
 protected:
 	SysModel(Executor* e, const char* in_fname)
 	: exe(e), fname(in_fname) {}
@@ -43,7 +50,18 @@ public:
 	SyscallSFH* allocSpecialFuncHandler(Executor*) const;
 	void installInitializers(llvm::Function* f);
 	void installConfig(ExecutionState& state) {}
+};
+
+class W32Model : public SysModel
+{
+public:
+	W32Model(Executor* e);
+	virtual ~W32Model(void) {}
+	SyscallSFH* allocSpecialFuncHandler(Executor*) const;
+	void installInitializers(llvm::Function* f) {}
+	void installConfig(ExecutionState& state);
 private:
+	GuestSnapshot	*gs;
 };
 
 class FDTModel : public SysModel

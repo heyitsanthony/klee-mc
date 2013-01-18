@@ -143,6 +143,10 @@ SFH_DEF_HANDLER(SCRegs)
 	/* 1. make all of symbolic */
 	cpu_mo = exe_vex->allocRegCtx(&state);
 	state_regctx_os = exe_vex->makeSymbolic(state, cpu_mo, "reg");
+	if (state_regctx_os == NULL) {
+		std::cerr << "[ExeVex] Could not mark regs symbolic\n";
+		return;
+	}
 
 	/* 2. set everything that should be initialized */
 	for (unsigned int i=0; i < sz; i++) {

@@ -91,6 +91,12 @@ klee-mc					\
 	-use-interleaved-fb=true \
 	-use-cond-search=true \
 	\
+	-hcache-fdir=`pwd`/hcache	\
+	-hcache-pending=`pwd`/hcache	\
+	-hcache-sink			\
+	-hcache-dir=`pwd`/hcache 	\
+	-use-hash-solver=true		\
+	\
 	-use-softfp		\
 	-guest-type=sshot	\
 	-write-smt		\
