@@ -138,7 +138,14 @@ void ExeStateManager::queueSplitAdd(
 }
 
 
-void ExeStateManager::queueRemove(ExecutionState* s) { removedStates.insert(s); }
+void ExeStateManager::queueRemove(ExecutionState* s)
+{
+	if (isAddedState(s)) {
+		dropAdded(s);
+		return;
+	}
+	removedStates.insert(s);
+}
 
 /* note: only a state that has already been added can call yield--
  * this means 's' is gauranteed to be the states list and not in addedStates */

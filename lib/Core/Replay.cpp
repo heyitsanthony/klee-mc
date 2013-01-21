@@ -228,6 +228,8 @@ void ReplayBrPaths::fastEagerReplay(void)
 		assert (es != NULL);
 
 		std::cerr << "[Replay] Replaying " << rp.size() << " branches.\n";
+
+		exe->notifyCurrent(NULL);
 		exe->exhaustState(es);
 
 		std::cerr
@@ -235,7 +237,6 @@ void ReplayBrPaths::fastEagerReplay(void)
 			<< es << ". Total="
 			<< esm->numRunningStates() << "\n";
 	}
-
 
 	std::cerr << "[Replay] All paths replayed. Expanded states: "
 		<< esm->numRunningStates() << "\n";
@@ -353,6 +354,7 @@ bool ReplayBrPaths::replay(Executor* _exe, ExecutionState* _initState)
 
 void ReplayBrPaths::incompleteReplay(void)
 {
+	std::cerr << "[Replay] Removing initial state for incomplete replay\n";
 	esm->queueRemove(initState);
 	esm->commitQueue();
 }
@@ -367,16 +369,9 @@ void ReplayBrPaths::delayedReplayPathsIntoStates()
 	}
 }
 
-void ReplayBrPaths::eagerReplayPathsIntoStates(void)
+void ReplayBrPaths::slowEagerReplay(void)
 {
 	std::list<ExecutionState*>      replay_states;
-
-	std::cerr << "[Replay] Eagerly replaying paths.\n";
-
-	if (FasterReplay) {
-		fastEagerReplay();
-		return;
-	}
 
 	/* create paths */
 	foreach (it, rps.begin(), rps.end()) {
@@ -396,6 +391,30 @@ void ReplayBrPaths::eagerReplayPathsIntoStates(void)
 
 	std::cerr << "[Executor] All paths replayed. Expanded states: "
 		<< esm->numRunningStates() << "\n";
+}
+
+void ReplayBrPaths::eagerReplayPathsIntoStates(void)
+{
+	std::cerr << "[Replay] Eagerly replaying paths.\n";
+
+	if (FasterReplay)
+		fastEagerReplay();
+	else
+		slowEagerReplay();
+
+	if (	Replay::isSuppressForks() == false &&
+		Replay::isReplayOnly() == false &&
+		esm->numRunningStates() == 0)
+	{
+		/* preload with initial state that we destroy at the end */
+		ExecutionState		*es_dummy = NULL;
+		ReplayPath		rp_dummy;
+
+		es_dummy = ExecutionState::createReplay(*initState, rp_dummy);
+		esm->queueSplitAdd(es_dummy->ptreeNode, initState, es_dummy);
+
+		std::cerr << "[Replay] Out of threads adding initial state..\n";
+	}
 }
 
 bool Replay::isReplayOnly(void) { return OnlyReplay; }

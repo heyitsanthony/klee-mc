@@ -54,6 +54,7 @@ public:
 private:
 	void eagerReplayPathsIntoStates();
 	void fastEagerReplay(void);
+	void slowEagerReplay(void);
 	void delayedReplayPathsIntoStates();
 	void incompleteReplay(void);
 

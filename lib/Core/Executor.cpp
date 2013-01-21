@@ -2004,8 +2004,10 @@ void Executor::exhaustState(ExecutionState* es)
 	do {
 		stepStateInst(es);
 	} while (
-		!stateManager->isRemovedState(es) &&
-		test_c == interpreterHandler->getNumPathsExplored());
+		test_c == interpreterHandler->getNumPathsExplored() &&
+		!stateManager->isRemovedState(es));
+
+	std::cerr << "[Exe] State exhausted\n";
 	notifyCurrent(NULL);
 }
 
@@ -2180,11 +2182,6 @@ void Executor::terminate(ExecutionState &state)
 			Replay::verifyPath(this, state);
 			verifying = false;
 		}
-	}
-
-	if (stateManager->isAddedState(&state)) {
-		stateManager->dropAdded(&state);
-		return;
 	}
 
 	state.pc = state.prevPC;

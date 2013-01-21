@@ -374,7 +374,12 @@ SFH_DEF_HANDLER(FreeRun)
 				<< "size mismatch on munmap "
 				<< mo->size << ">" << len_remaining
 				<< std::endl;
-			assert (0 == 1 && "BAD SIZE");
+			exe_vex->terminateOnError(
+				state,
+				"munmap error: size mismatch on munmap",
+				"munmap.err");
+			return;
+
 		}
 
 		len_remaining -= mo->size;

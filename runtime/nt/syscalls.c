@@ -64,7 +64,7 @@ static void loop_protect(struct loop_info* li)
 {
 	if (last_sc != li->sc)
 		li->consec = 0;
-	
+
 	li->total++;
 	li->consec++;
 	if (li->consec < SC_MAX_LOOP && li->total < SC_MAX_CALL)
@@ -145,26 +145,52 @@ void* sc_enter(void* regfile, void* jmpptr)
 				4,
 				"NtAcceptConnectPort.h");
 		if (GET_ARG4_PTR(regfile))
-//			LPC_SECTION_OWNER_MEMORY 
+//			LPC_SECTION_OWNER_MEMORY
 			klee_uerror("NtACP SECTION_OWNER_MEMORY", "sc.err");
 
 		if (GET_ARG5_PTR(regfile))
 			klee_uerror("NtACP SECTION_MEMORY", "sc.err");
-//			LPC_SECTION_MEMORY 
+//			LPC_SECTION_MEMORY
 		break;
 
 	DEFAULT_SC(NtCompleteConnectPort)
 
 
 	DEFAULT_HANDLE_SC(CreateEvent)
+	DEFAULT_HANDLE_SC(CreateSection)
+
 	DEFAULT_SC(NtReleaseKeyedEvent)
 	DEFAULT_HANDLE_SC(OpenSection)
 
 	WRITE_N_TO_ARG(OpenProcess, 4, 0)
 	WRITE_N_TO_ARG(QuerySystemTime, 8, 1)
-	WRITE_N_TO_ARG(OpenProcessToken, 4, 3)
+	WRITE_N_TO_ARG(OpenProcessToken, 4, 2)
 	WRITE_N_TO_ARG(OpenThreadToken, 4, 3)
 	WRITE_N_TO_ARG(DuplicateObject, 4, 3)
+
+
+	case NtQueryEvent:
+		new_regs = sc_new_regs(regfile);
+		if (GET_ARG1(regfile) != 0) {
+			klee_uerror(
+				"NtQueryEvent: unknown EVENT_INFORMATION_CLASS",
+				"sc.err");
+			break;
+		}
+
+		if (GET_ARG2_PTR(regfile) == 0) break;
+		make_sym(GET_ARG2_PTR(regfile),
+			GET_ARG3(regfile),
+			"NtQueryEvent.ei");
+
+		if (GET_ARG4_PTR(regfile) == 0) break;
+
+		make_sym(GET_ARG4_PTR(regfile), 4, "NtQueryEvent.retlen");
+		klee_assume_ule(
+			*((uint32_t*)GET_ARG4_PTR(regfile)),
+			GET_ARG3(regfile));
+
+		break;
 
 	case NtQueryPerformanceCounter:
 		new_regs = sc_new_regs(regfile);
@@ -175,28 +201,24 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 
 
-	case NtQueryInformationFile:
-		new_regs = sc_new_regs(regfile);
-		if (GET_ARG2_PTR(regfile))
-			make_sym(
-				GET_ARG2_PTR(regfile),
-				GET_ARG3(regfile),
-				"NtQueryInformationFile");
-		break;
+	WRITE_N_TO_ARG(QueryInformationFile, GET_ARG3(regfile), 2)
+
+	/* this should probably have logic to exit if handle==NtCurrentThread() */
+	DEFAULT_SC(NtTerminateThread)
 
 	case NtTerminateProcess:
 		kmc_exit(GET_ARG1(regfile));
 		break;
 
 	case NtRaiseException:
-		if (GET_ARG2(regfile) == 0) kmc_exit(0);
-		new_regs = sc_new_regs(regfile);
+		klee_warning_once("[NT] terminating on raise exception");
+		kmc_exit(GET_ARG0(regfile));
 		break;
 
 	case NtFindAtom:
 		new_regs = sc_new_regs(regfile);
-		if (GET_SYSRET(new_regs) == 0 && GET_ARG1_PTR(regfile))
-			make_sym(GET_ARG1_PTR(regfile), 2, "NtFindAtom");
+		if (GET_SYSRET(new_regs) == 0 && GET_ARG2_PTR(regfile))
+			make_sym(GET_ARG2_PTR(regfile), 2, "NtFindAtom");
 		break;
 
 	DEFAULT_SC(NtSetInformationObject);
@@ -250,7 +272,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 				GET_ARG6(regfile),
 				"NtNotifyChangeDirectoryFiles.buf");
 		}
-		break;	
+		break;
 
 
 	case NtRemoveIoCompletion:
@@ -281,12 +303,12 @@ void* sc_enter(void* regfile, void* jmpptr)
 		if (GET_ARG4_PTR(regfile))
 			make_sym(
 				GET_ARG4_PTR(regfile),
-				8, 
+				8,
 				"NtQueryDirectoryFile.io");
 		if (GET_ARG5_PTR(regfile))
 			make_sym(
 				GET_ARG5_PTR(regfile),
-				GET_ARG6(regfile), 
+				GET_ARG6(regfile),
 				"NtQueryDirectoryFile.info");
 		break;
 
@@ -295,26 +317,28 @@ void* sc_enter(void* regfile, void* jmpptr)
 		if (GET_ARG1_PTR(regfile))
 			make_sym(
 				GET_ARG1_PTR(regfile),
-				4, 
+				4,
 				"NtReplyWaitReceivePort.h");
 		if (GET_ARG3_PTR(regfile))
 			make_sym(
 				GET_ARG3_PTR(regfile),
-				0x18, 
+				0x18,
 				"NtReplyWaitReceivePort.lpc");
 	END_PROTECT_CASE
-	
+
+	WRITE_N_TO_ARG_PROTECT(ReplyWaitReplyPort , 0x18, 1)
+
 	BEGIN_PROTECT_CASE(ReplyWaitReceivePortEx)
 		new_regs = sc_new_regs(regfile);
 		if (GET_ARG1_PTR(regfile))
 			make_sym(
 				GET_ARG1_PTR(regfile),
-				4, 
+				4,
 				"NtReplyWaitReceivePortEx.h");
 		if (GET_ARG3_PTR(regfile))
 			make_sym(
 				GET_ARG3_PTR(regfile),
-				5*4 /* PORT_MESSAGE */, 
+				5*4 /* PORT_MESSAGE */,
 				"NtReplyWaitReceivePortEx.port");
 	END_PROTECT_CASE
 
@@ -322,7 +346,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		new_regs = sc_new_regs(regfile);
 		if (GET_ARG3_PTR(new_regs) == NULL) break;
 		if (GET_SYSRET(new_regs) != 0) break;
-		
+
 		make_sym(GET_ARG3_PTR(regfile),
 			GET_ARG4(regfile),
 			"NtQueryValueKey.info");
@@ -475,13 +499,15 @@ void* sc_enter(void* regfile, void* jmpptr)
 	DEFAULT_SC(NtClose)
 	DEFAULT_SC(NtClearEvent)
 
-	case NtQueryVirtualMemory: 
+	WRITE_N_TO_ARG(LockFile, 8, 4)
+
+	case NtQueryVirtualMemory:
 	//DEFAULT_SC(NtQueryVirtualMemory)
 	//UNIMPL_SC(NtQueryVirtualMemory)
 	{
 		uint32_t	*result;
 		new_regs = sc_new_regs(regfile);
-	
+
 		if (GET_ARG2(regfile) != 0) {
 			klee_print_expr("INFOCLASS", GET_ARG2(regfile));
 			klee_uerror("NtQueryVirtualMemory class???", "sc.err");
@@ -500,6 +526,24 @@ void* sc_enter(void* regfile, void* jmpptr)
 		result = GET_ARG5_PTR(regfile);
 		if (result) *result = sizeof(MEMORY_BASIC_INFORMATION);
 		klee_assume_eq(GET_SYSRET(new_regs), 0);
+		break;
+	}
+
+
+	/* this is kind of cheap since it will get confused
+	 * if the free size exceeds usable memory */
+	case NtFreeVirtualMemory: {
+		void*		base = 	GET_ARG1_PTR(regfile);
+		uint32_t	sz = *((uint32_t*)GET_ARG2(regfile));
+
+		/* TODO: handle different free types? */
+
+		new_regs = sc_new_regs(regfile);
+		base = (void*)concretize_u64((uint64_t)base);
+		sz = concretize_u64(sz);
+		kmc_free_run(base, sz);
+		*((uint32_t*)GET_ARG2_PTR(regfile)) = (sz + 4095) & ~0xfff;
+
 		break;
 	}
 
@@ -523,13 +567,44 @@ void* sc_enter(void* regfile, void* jmpptr)
 	DEFAULT_SC(NtSetValueKey)
 /* needed for IE */
 #if 0
-runtime/nt/ntapi.h:#define NtCreateSection 0x0032
-runtime/nt/ntapi.h:#define NtWriteFile 0x0112
-runtime/nt/ntapi.h:#define NtCreateSection 0x0032
-runtime/nt/ntapi.h:#define NtQueryVolumeInformationFile 0x00b3
 runtime/nt/ntapi.h:#define NtFsControlFile 0x0054
 #endif
 
+	WRITE_N_TO_ARG(UnlockFile, 8, 1)
+
+	DEFAULT_SC(NtYieldExecution)
+
+
+	case NtReadFile:
+		new_regs = sc_new_regs(regfile);
+		if (GET_ARG4_PTR(regfile))
+			make_sym(GET_ARG4_PTR(regfile), 8, "NtWriteFile.io");
+
+		if (GET_ARG5_PTR(regfile))
+			make_sym(GET_ARG5_PTR(regfile),
+				GET_ARG6(regfile),
+				"NtWriteFile.buf");
+		break;
+
+	WRITE_N_TO_ARG(WriteFile, 8, 4) /* iobuf */
+
+
+	case NtQuerySystemInformation:
+
+		new_regs = sc_new_regs(regfile);
+		if (GET_ARG1_PTR(regfile) == NULL) break;
+
+		make_sym(GET_ARG1_PTR(regfile),
+			GET_ARG2(regfile),
+			"NtQuerySystemInfromation.sysinfo");
+
+		if (GET_ARG3_PTR(regfile) == NULL) break;
+		make_sym(
+			GET_ARG3_PTR(regfile),
+			4,
+			"NtQuerySystemInformation.len");
+		klee_assume_ule(*((uint32_t*)GET_ARG3_PTR(regfile)), GET_ARG2(regfile));
+		break;
 
 	case NtDeviceIoControlFile:
 	new_regs = sc_new_regs(regfile);
@@ -537,36 +612,92 @@ runtime/nt/ntapi.h:#define NtFsControlFile 0x0054
 		make_sym(GET_ARG4_PTR(regfile), 8, "NtDeviceIoControlFile.io");
 	make_sym(
 		GET_ARGN_PTR(regfile, 8),
-		GET_ARGN(regfile, 0),
+		GET_ARGN(regfile, 9),
 		"NtDeviceIoControlFile.outbuf");
 	break;
 
+	DEFAULT_SC(NtDeleteKey)
+
+	DEFAULT_HANDLE_SC(OpenMutant)
+
+	case NtQueryVolumeInformationFile:
+	new_regs = sc_new_regs(regfile);
+	if (GET_ARG1_PTR(regfile))
+		make_sym(GET_ARG1_PTR(regfile), 8, "NtQueryVolumeInformationFile.io");
+	if (GET_ARG2_PTR(regfile))
+		make_sym(
+			GET_ARG2_PTR(regfile),
+			GET_ARG3(regfile),
+			"NtQueryVolumeInformationFile.fsinfo");
+	break;
+
+	WRITE_N_TO_ARG(RaiseHardError, 4, 5)
+
+	DEFAULT_SC(NtDeleteValueKey)
+
 	/********* win32k **************/
+	DEFAULT_SC(NtGdiStretchBlt)
+	DEFAULT_SC(NtUserOpenDesktop)
+	DEFAULT_SC(NtGdiCreateDIBitmapInternal)
+	DEFAULT_SC(NtGdiCreateRectRgn)
+	DEFAULT_SC(NtGdiSelectFont)
+	DEFAULT_SC(NtUserCheckMenuItem)
+	DEFAULT_SC(NtUserDeferWindowPos)
+	DEFAULT_SC(NtUserVkKeyScanEx)
+	DEFAULT_SC(NtUserSetMenu)
+	DEFAULT_SC(NtUserSetScrollInfo)
+	DEFAULT_SC(NtUserGetWindowDC)
+	DEFAULT_SC(NtUserGetForegroundWindow)
+	DEFAULT_SC(NtUserGetAncestor)
+	DEFAULT_SC(NtUserSetParent)
+	DEFAULT_SC(NtUserConvertMemHandle)
+	DEFAULT_SC(NtUserSetActiveWindow)
+	DEFAULT_SC(NtUserMoveWindow)
+	DEFAULT_SC(NtUserGetSystemMenu)
+	DEFAULT_SC(NtUserShowWindow)
+	DEFAULT_SC(NtGdiHfontCreate)
+	DEFAULT_SC(NtGdiExtSelectClipRgn)
+	DEFAULT_SC(NtGdiGetRandomRgn)
+	WRITE_N_TO_ARG(GdiGetAppClipBox, 16, 1)
+	DEFAULT_SC(NtUserCallHwndParamLock)
+	DEFAULT_SC(NtUserWindowFromPoint)
+	DEFAULT_SC(NtUserAlterWindowStyle)
+	DEFAULT_SC(NtUserDestroyCursor)
+	DEFAULT_SC(NtUserEmptyClipboard)
+	DEFAULT_SC(NtUserModifyUserStartupInfoFlags)
+	DEFAULT_SC(NtUserSetProp)
+	DEFAULT_SC(NtUserAssociateInputContext)
+	DEFAULT_SC(NtUserFindExistingCursorIcon)
+	DEFAULT_SC(NtUserGetImeInfoEx)
+	DEFAULT_SC(NtUserSetCapture)
+	DEFAULT_SC(NtUserGetDCEx)
+
+	/* XXX: does not write to PCLSMENUNAME, but neither does reactos */
+	DEFAULT_SC(NtUserUnregisterClass)
+	DEFAULT_SC(NtGdiCreateCompatibleDC)
+
+	VOID_SC(NtUserNotifyWinEvent)
+
 	WRITE_N_TO_ARG(UserCopyAcceleratorTable, GET_ARG2(regfile)*5, 1)
 	DEFAULT_SC(NtUserPostThreadMessage)
 	DEFAULT_SC(NtUserCallHwndLock)
 	DEFAULT_SC(NtUserGetDoubleClickTime)
 	DEFAULT_SC(NtUserSetWindowPos)
 	DEFAULT_SC(NtUserShowCaret)
+	WRITE_N_TO_ARG(UserGetCaretPos, 8, 0)
 	DEFAULT_SC(NtUserOpenClipboard)
 	DEFAULT_SC(NtGdiIntersectClipRect)
 	DEFAULT_SC(NtUserDispatchMessage)
 
 	DEFAULT_SC(NtUserFindWindowEx)
 
-	DEFAULT_SC(NtUserAssociateInputContext)
-	DEFAULT_SC(NtUserFindExistingCursorIcon)
-	DEFAULT_SC(NtUserGetImeInfoEx)
-	DEFAULT_SC(NtUserSetCapture)
+	/* short return val */
+	DEFAULT_SC(NtUserGetAsyncKeyState)
 
 	DEFAULT_SC(NtUserUpdateInputContext)
 	DEFAULT_SC(NtUserThunkedMenuItemInfo)
 	VOID_SC(NtUserDestroyMenu)
 	DEFAULT_SC(NtUserTrackPopupMenuEx)
-
-
-	DEFAULT_SC(NtGdiExtSelectClipRgn)
-	DEFAULT_SC(NtGdiGetRandomRgn)
 
 	WRITE_N_TO_ARG(GdiGetTextFaceW, GET_ARG1(regfile)*2, 2)
 	WRITE_N_TO_ARG(GdiExtGetObjectW, GET_ARG1(regfile)*2, 2)
@@ -584,12 +715,16 @@ runtime/nt/ntapi.h:#define NtFsControlFile 0x0054
 			make_sym(GET_ARG3_PTR(regfile),
 				4,
 				"NtUserCreateLocalMemHandle.pcb");
-		
+
 		}
 		break;
-	
+
 	DEFAULT_SC(NtUserSetClipboardData)
 	DEFAULT_SC(NtUserRemoveProp)
+	DEFAULT_SC(NtUserRedrawWindow)
+	DEFAULT_SC(NtUserValidateRect)
+	DEFAULT_SC(NtUserSetThreadState)
+	DEFAULT_SC(NtUserUnregisterHotKey)
 
 	case NtGdiGetTextExtent:
 		new_regs = sc_new_regs(regfile);
@@ -607,28 +742,52 @@ runtime/nt/ntapi.h:#define NtFsControlFile 0x0054
 	DEFAULT_SC(NtUserQueryInputContext)
 	DEFAULT_SC(NtUserEnableMenuItem)
 	DEFAULT_SC(NtUserKillTimer)
-	// DEFAULT_SC(NtUserSystemParametersInfo)
+
+	// XXX this one is tough
+	// NtUserSystemParametersInfo:
+
+
 	DEFAULT_SC(NtUserPostMessage)
 
 	DEFAULT_SC(NtUserWaitMessage)
 
+	// FONTSIGNATURE
+	WRITE_N_TO_ARG(GdiGetTextCharsetInfo, (4*4+4*2), 1)
+
+	DEFAULT_SC(NtUserGetProcessWindowStation)
+
+	DEFAULT_SC(NtUserShowScrollBar)
+
+
+#define MAKE_US_SYM(x)						\
+		make_sym(					\
+			(void*)((uintptr_t)y->Buffer),		\
+			x->MaximumLength, 			\
+			"Nt" #x ".str");			\
+			make_sym(&y->Length, 2, "Nt" #x ".len");\
+		klee_assume_ule(x->Length, x->MaximumLength);
+
+	case NtUserGetAtomName: {
+		struct UNICODE_STRING	*us;
+
+		new_regs = sc_new_regs(regfile);
+		us = GET_ARG1_PTR(regfile);
+		if (us == NULL) break;
+		MAKE_US_SYM(UserGetAtomName, us);
+		break;
+	}
+
+	DEFAULT_SC(NtGdiCreateSolidBrush)
+
 
 	BEGIN_PROTECT_CASE(UserGetClassName)
 		struct UNICODE_STRING	*us;
-		
+
 		new_regs = sc_new_regs(regfile);
 		us = GET_ARG2_PTR(regfile);
 		if (us == NULL) break;
+		MAKE_US_SYM(UserGetClassName, us);
 
-		make_sym(
-			(void*)((uintptr_t)us->Buffer),
-			us->MaximumLength, 
-			"NtUserGetClassName.str");
-		make_sym(
-			&us->Length, 
-			2,
-			"NtUserGetClassName.len");
-		klee_assume_ule(us->Length, us->MaximumLength);
 	END_PROTECT_CASE
 
 	DEFAULT_SC(NtUserUnhookWindowsHookEx)
@@ -643,13 +802,13 @@ runtime/nt/ntapi.h:#define NtFsControlFile 0x0054
 
 		switch (GET_ARG5(regfile)) {
 		case FNID_BROADCASTSYSTEMMESSAGE:
-			make_sym(p, W32K_BROADCASTPARM_SZ, 
+			make_sym(p, W32K_BROADCASTPARM_SZ,
 				"NtUserMessageCall.bcast");
 			break;
 		case FNID_SENDMESSAGE:
 			make_sym(p, 4, "NtUserMessageCall.sndmsg");
 			break;
-		
+
 		case FNID_SENDMESSAGEFF:
 		case FNID_SENDMESSAGEWTOOPTION:
 			make_sym(p, W32K_DOSENDMESSAGE_SZ,
@@ -699,7 +858,7 @@ runtime/nt/ntapi.h:#define NtFsControlFile 0x0054
 		break;
 
 
-	// (HWND hWnd, HACCEL hAccel, LPMSG pUnsafeMessage 
+	// (HWND hWnd, HACCEL hAccel, LPMSG pUnsafeMessage
 	DEFAULT_SC(NtUserTranslateAccelerator)
 	case NtUserBuildHwndList: {
 		unsigned len = *((uint32_t*)GET_ARG6_PTR(regfile));
