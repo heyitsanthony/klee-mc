@@ -197,7 +197,12 @@ bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor)
 		assert (!Expr::errors);
 		if (changed)
 			e = simplifyExpr(ce);
-		constraints.push_back(ce);
+
+		if (!e.isNull()) {
+			if (e->getKind() != Expr::Constant)
+				constraints.push_back(e);
+		} else
+			constraints.push_back(ce);
 
 		assert (!Expr::errors);
 		invalidateSimplifier();

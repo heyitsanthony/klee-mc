@@ -759,19 +759,18 @@ runtime/nt/ntapi.h:#define NtFsControlFile 0x0054
 	DEFAULT_SC(NtUserShowScrollBar)
 
 
-#define MAKE_US_SYM(x)						\
+#define MAKE_US_SYM(x,y)						\
 		make_sym(					\
 			(void*)((uintptr_t)y->Buffer),		\
-			x->MaximumLength, 			\
+			y->MaximumLength, 			\
 			"Nt" #x ".str");			\
 			make_sym(&y->Length, 2, "Nt" #x ".len");\
-		klee_assume_ule(x->Length, x->MaximumLength);
+		klee_assume_ule(y->Length, y->MaximumLength);
 
 	case NtUserGetAtomName: {
-		struct UNICODE_STRING	*us;
+		struct UNICODE_STRING	*us = GET_ARG1_PTR(regfile);
 
 		new_regs = sc_new_regs(regfile);
-		us = GET_ARG1_PTR(regfile);
 		if (us == NULL) break;
 		MAKE_US_SYM(UserGetAtomName, us);
 		break;
@@ -781,13 +780,11 @@ runtime/nt/ntapi.h:#define NtFsControlFile 0x0054
 
 
 	BEGIN_PROTECT_CASE(UserGetClassName)
-		struct UNICODE_STRING	*us;
+		struct UNICODE_STRING	*us = GET_ARG2_PTR(regfile);
 
 		new_regs = sc_new_regs(regfile);
-		us = GET_ARG2_PTR(regfile);
 		if (us == NULL) break;
 		MAKE_US_SYM(UserGetClassName, us);
-
 	END_PROTECT_CASE
 
 	DEFAULT_SC(NtUserUnhookWindowsHookEx)
