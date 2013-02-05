@@ -1,7 +1,5 @@
 #!/bin/bash
 
-PATHDIR="$1"
-
 if [ -f "$PATHDIR" ]; then
 	rm -rf pathdir
 	mkdir pathdir
@@ -25,23 +23,26 @@ function do_path_replay
 	#-use-rule-builder 
 	# -xchk-expr-builder	\
 	klee-mc -logregs \
-		-deny-sys-files \
-		-guest-type=sshot \
+		-deny-sys-files		\
+		$EXTRA_ARGS		\
+		-guest-type=sshot	\
 		-allow-negstack		\
 		-smt-let-arrays=true	\
-		-symargs \
+		-symargs		\
 		-pipe-solver		\
 		-pipe-fork-queries	\
 		-max-stp-time=$STPTIMEOUT	\
-		-print-new-ranges -mm-type=deterministic	\
+		-print-new-ranges		\
+		-mm-type=deterministic	\
 		-output-dir="$RUNDIR/$n"	\
 		-replay-path-only=true		\
 		-replay-path="$a" 2>"$n"_err
 	mv "$n"_err $RUNDIR/$n/err
 }
 
-if [ ! -z "$2" ]; then
-	do_path_replay "$PATHDIR"/*0$2.path.gz
+REPLAYNUM="$1"
+if [ ! -z "$REPLAYNUM" ]; then
+	do_path_replay "$PATHDIR"/*0"$REPLAYNUM".path.gz
 	exit
 fi
 

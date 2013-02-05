@@ -162,12 +162,14 @@ void* sc_enter(void* regfile, void* jmpptr)
 	DEFAULT_SC(NtReleaseKeyedEvent)
 	DEFAULT_HANDLE_SC(OpenSection)
 
+	WRITE_N_TO_ARG(OpenEvent, 4, 0)
 	WRITE_N_TO_ARG(OpenProcess, 4, 0)
 	WRITE_N_TO_ARG(QuerySystemTime, 8, 1)
 	WRITE_N_TO_ARG(OpenProcessToken, 4, 2)
 	WRITE_N_TO_ARG(OpenThreadToken, 4, 3)
 	WRITE_N_TO_ARG(DuplicateObject, 4, 3)
 
+	DEFAULT_SC(NtSetEventBoostPriority)
 
 	case NtQueryEvent:
 		new_regs = sc_new_regs(regfile);
@@ -565,10 +567,17 @@ void* sc_enter(void* regfile, void* jmpptr)
 	WRITE_N_TO_ARG(ReleaseSemaphore, 4, 2)
 
 	DEFAULT_SC(NtSetValueKey)
-/* needed for IE */
-#if 0
-runtime/nt/ntapi.h:#define NtFsControlFile 0x0054
-#endif
+	case NtFsControlFile:
+		new_regs = sc_new_regs(regfile);
+		if (GET_ARG4_PTR(regfile))
+			make_sym(GET_ARG4_PTR(regfile), 8,
+			"NtFsControlFile.io");
+
+		if (GET_ARGN_PTR(regfile, 8))
+			make_sym(GET_ARGN_PTR(regfile, 8),
+				GET_ARGN(regfile, 9),
+				"NtFsControlFile.buf");
+		break;
 
 	WRITE_N_TO_ARG(UnlockFile, 8, 1)
 
@@ -578,12 +587,12 @@ runtime/nt/ntapi.h:#define NtFsControlFile 0x0054
 	case NtReadFile:
 		new_regs = sc_new_regs(regfile);
 		if (GET_ARG4_PTR(regfile))
-			make_sym(GET_ARG4_PTR(regfile), 8, "NtWriteFile.io");
+			make_sym(GET_ARG4_PTR(regfile), 8, "NtReadFile.io");
 
 		if (GET_ARG5_PTR(regfile))
 			make_sym(GET_ARG5_PTR(regfile),
 				GET_ARG6(regfile),
-				"NtWriteFile.buf");
+				"NtReadFile.buf");
 		break;
 
 	WRITE_N_TO_ARG(WriteFile, 8, 4) /* iobuf */
@@ -633,9 +642,13 @@ runtime/nt/ntapi.h:#define NtFsControlFile 0x0054
 
 	WRITE_N_TO_ARG(RaiseHardError, 4, 5)
 
+	WRITE_N_TO_ARG(CreateSemaphore, 4, 0)
 	DEFAULT_SC(NtDeleteValueKey)
 
 	/********* win32k **************/
+	DEFAULT_SC(NtUserSetWindowsHookEx)
+	DEFAULT_SC(NtUserRegisterWindowMessage)
+	DEFAULT_SC(NtUserCreateWindowEx)
 	DEFAULT_SC(NtGdiStretchBlt)
 	DEFAULT_SC(NtUserOpenDesktop)
 	DEFAULT_SC(NtGdiCreateDIBitmapInternal)
@@ -702,7 +715,9 @@ runtime/nt/ntapi.h:#define NtFsControlFile 0x0054
 	WRITE_N_TO_ARG(GdiGetTextFaceW, GET_ARG1(regfile)*2, 2)
 	WRITE_N_TO_ARG(GdiExtGetObjectW, GET_ARG1(regfile)*2, 2)
 
+	WRITE_N_TO_ARG(UserGetKeyboardState, 256, 0)
 
+	DEFAULT_SC(NtGdiFlush)
 	DEFAULT_SC(NtGdiSetColorSpace)
 	DEFAULT_SC(NtUserCloseClipboard)
 

@@ -109,5 +109,6 @@ for a in $pathdir/*.path.gz; do
 	echo DONE INSERTING============================
 done
 
-
+# remove all .sb files
+rm -rf "$1"/*.sb
 rm uncov.dat

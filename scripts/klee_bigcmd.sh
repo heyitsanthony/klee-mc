@@ -78,7 +78,11 @@ SCHEDOPTS="-use-batching-search
 	-use-fresh-branch-search=true"
 
 
-gdb --args klee-mc 		\
+if [ -z "$APP_WRAPPER" ]; then
+APP_WRAPPER="gdb --args"
+fi
+
+$APP_WRAPPER klee-mc 		\
 	$EXTRA_ARGS		\
 	$REPLAYARG		\
 	$SCHEDOPTS		\

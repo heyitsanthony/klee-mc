@@ -4,6 +4,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <stdint.h>
 #include <map>
 
 class FileReconstructor
@@ -17,10 +18,19 @@ public:
 	void close(int vfd);
 private:
 	int getFD(int vfd);
+	int getGen(int vfd);
+	void limitSize(int vfd, uint64_t off);
 
-	typedef std::map<int,int>	vfd2fd_ty;
+	struct vfd_t {
+		int	fd;
+		int	vfd;
+		int	gen;
+	};
+
+	typedef std::map<int, struct vfd_t>	vfd2fd_ty;
 	vfd2fd_ty			vfd2fd;	/* replay fd -> open fd */
 	unsigned int			fd_generation;
+	uint64_t			max_size;
 	bool				ign_close;
 };
 
