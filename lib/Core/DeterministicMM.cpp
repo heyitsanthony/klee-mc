@@ -5,8 +5,8 @@
 using namespace klee;
 
 /** XXX update for 32-bit archs */
-#define ANON_ADDR	(((uint64_t)1) << 41)
-#define MAX_ADDR	(((uint64_t)1) << 40)
+#define ANON_ADDR	((!is32Bit()) ? (((uint64_t)1) << 41) : (((uint64_t)1) << 31))
+#define MAX_ADDR	((!is32Bit()) ? (((uint64_t)1) << 40) :  (((uint64_t)1) << 30))
 #define MIN_ADDR	0xa000000
 
 
