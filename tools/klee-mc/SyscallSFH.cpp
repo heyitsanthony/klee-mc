@@ -107,8 +107,10 @@ static bool isSymRegByte(Arch::Arch a, int i)
 
 	if (a == Arch::I386) {
 		/* leave eax and rdx alone */
-		if (i/4 == offsetof(VexGuestX86State, guest_EAX)/4 ||
-		    i/4 == offsetof(VexGuestX86State, guest_EDX)/4) {
+		if (i/4 == offsetof(VexGuestX86State, guest_EAX)/4)
+		// NOTE: some stupid shit depends on EDX being preserved. Ugh.
+		//    || i/4 == offsetof(VexGuestX86State, guest_EDX)/4)
+		{
 		    	return true;
 		}
 		return false;

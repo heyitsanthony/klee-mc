@@ -540,7 +540,7 @@ bool SyscallsKTest::copyInRegMemObj(void)
 		partial_cpu = (VexGuestX86State*)partial_reg_buf;
 		guest_cpu = (VexGuestX86State*)state_data;
 		guest_cpu->guest_EAX = partial_cpu->guest_EAX;
-		guest_cpu->guest_EDX = partial_cpu->guest_EDX;
+		// guest_cpu->guest_EDX = partial_cpu->guest_EDX;
 		goto done;
 	}
 
