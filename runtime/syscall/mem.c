@@ -58,7 +58,7 @@ static void* sc_mmap_anon(void* regfile, uint64_t len)
 	}
 
 	/* mapping has a deisred location */
-	addr = sc_mmap_addr((void*)GET_ARG0(regfile), len, GET_ARG3(regfile));
+	addr = sc_mmap_addr(GET_ARG0_PTR(regfile), len, GET_ARG3(regfile));
 	return addr;
 }
 

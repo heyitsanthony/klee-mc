@@ -30,6 +30,28 @@
 
 static int last_sc = 0;
 
+#ifdef GUEST_ARCH_AMD64
+#define TIMESPEC_SZ	sizeof(struct timespec)
+#define RUSAGE_SZ	sizeof(struct rusage)
+#define RLIMIT_SZ	sizeof(struct rlimit)
+#define TIMEVAL_SZ	sizeof(struct timeval)
+#define SYSINFO_SZ	sizeof(struct sysinfo)
+#define TMS_SZ		sizeof(struct tms)
+#define USTAT_SZ	sizeof(struct ustat)
+#define ITIMERVAL_SZ	sizeof(struct itimerval)
+#define STATFS_SZ	sizeof(struct statfs)
+#else
+#define TIMESPEC_SZ	8
+#define RUSAGE_SZ	72
+#define RLIMIT_SZ	8
+#define TIMEVAL_SZ	8
+#define SYSINFO_SZ	64
+#define TMS_SZ		16
+#define USTAT_SZ	20
+#define ITIMERVAL_SZ	16
+#define STATFS_SZ	64
+#endif
+
 // arg0, arg1, ...
 // %rdi, %rsi, %rdx, %r10, %r8 and %r9a
 
@@ -334,17 +356,17 @@ void* sc_enter(void* regfile, void* jmpptr)
 			sc_ret_v(regfile, -1);
 			break;
 		}
-		make_sym(GET_ARG1(regfile), sizeof(struct timespec), "clock_getres");
+		make_sym(GET_ARG1(regfile), TIMESPEC_SZ, "clock_getres");
 		sc_ret_or(sc_new_regs(regfile), 0, -1);
 		break;
 
 	case SYS_clock_gettime: {
-		void*	timespec = (void*)GET_ARG1(regfile);
+		void*	timespec = GET_ARG1_PTR(regfile);
 		if (timespec == NULL) {
 			sc_ret_v(regfile, -1);
 			break;
 		}
-		make_sym(GET_ARG1(regfile), sizeof(struct timespec), "timespec");
+		make_sym(GET_ARG1(regfile), TIMESPEC_SZ, "timespec");
 		sc_ret_v(regfile, 0);
 		break;
 	}
@@ -430,7 +452,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 
 	case SYS_sysinfo:
-		make_sym_by_arg(regfile, 0, sizeof(struct sysinfo), "sysinfo");
+		make_sym_by_arg(regfile, 0, SYSINFO_SZ, "sysinfo");
 		sc_ret_v(regfile, 0);
 		break;
 
@@ -564,12 +586,12 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_or(sc_new_regs(regfile), -1, 0);
 		break;
 	case SYS_getrlimit:
-		make_sym_by_arg(regfile, 1,sizeof(struct rlimit), "getrlimit");
+		make_sym_by_arg(regfile, 1, RLIMIT_SZ, "getrlimit");
 		sc_ret_v(regfile, 0);
 		break;
 	case SYS_getrusage:
 		sc_ret_v(regfile, 0);
-		make_sym_by_arg(regfile, 1, sizeof(struct rusage), "getrusage");
+		make_sym_by_arg(regfile, 1, RUSAGE_SZ, "getrusage");
 		break;
 #ifdef SYM_DENTS
 #define MAX_DENT_SZ	512
@@ -603,10 +625,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_clock_nanosleep: {
 		if (GET_ARG3(regfile) != 0) {
 			uint64_t dst_addr = concretize_u64(GET_ARG3(regfile));
-			make_sym(
-				dst_addr,
-				sizeof(struct timespec),
-				"clock_nanosleep");
+			make_sym(dst_addr, TIMESPEC_SZ,  "clock_nanosleep");
 			sc_ret_v(regfile, -1);
 			break;
 		}
@@ -617,10 +636,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_nanosleep: {
 		if (GET_ARG1(regfile) != 0) {
 			uint64_t dst_addr = concretize_u64(GET_ARG1(regfile));
-			make_sym(
-				dst_addr,
-				sizeof(struct timespec),
-				"nanosleep");
+			make_sym(dst_addr, TIMESPEC_SZ, "nanosleep");
 			sc_ret_v(regfile, -1);
 			break;
 		}
@@ -670,7 +686,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			if (sc.sys_nr != SYS_pselect6 && GET_ARG4(regfile)) {
 				make_sym(
 					GET_ARG4(regfile),
-					sizeof(struct timeval),
+					TIMEVAL_SZ,
 					"timeoutbuf");
 			}
 
@@ -684,7 +700,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 				/* timeout */
 				make_sym(
 					GET_ARG4(regfile),
-					sizeof(struct timeval),
+					TIMEVAL_SZ,
 					"timeoutbuf");
 				sc_ret_v_new(new_regs, 0);
 				break;
@@ -917,7 +933,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_new_regs(regfile);
 		make_sym(
 			klee_get_value(GET_ARG0(regfile)),
-			sizeof(struct tms),
+			TMS_SZ,
 			"times");
 	break;
 
@@ -928,11 +944,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			break;
 
 		klee_assume(GET_SYSRET(new_regs) == 0);
-		make_sym_by_arg(
-			regfile,
-			1,
-			sizeof(struct ustat),
-			"ustatbuf");
+		make_sym_by_arg(regfile, 1, USTAT_SZ, "ustatbuf");
 		break;
 
 	case SYS_setresgid:
@@ -953,7 +965,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 	case SYS_accept:
 		/* int accept(
-		 * 	int sockfd, struct sockaddr *addr,
+		 * 	int , struct sockaddr *addr,
 		 * 	socklen_t *addrlen); */
 
 	case SYS_accept4:
@@ -967,7 +979,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			break;
 		}
 
-		if (*((int*)GET_ARG2(regfile)) < 4) {
+		if (*((int*)GET_ARG2_PTR(regfile)) < 4) {
 			sc_ret_v(regfile, -1);
 			break;
 		}
@@ -1057,7 +1069,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		if (GET_ARG1_PTR(regfile) != NULL) {
 			make_sym(
 				(uint64_t)GET_ARG1_PTR(regfile),
-				sizeof(struct itimerval),
+				ITIMERVAL_SZ,
 				"itimer");
 		}
 
@@ -1263,7 +1275,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		}
 
 		klee_assume(GET_SYSRET(new_regs) == 0);
-		make_sym(GET_ARG1(regfile), sizeof(struct statfs), "statfs");
+		make_sym(GET_ARG1(regfile), STATFS_SZ, "statfs");
 
 		sc_ret_v_new(new_regs, 0);
 		break;
@@ -1285,12 +1297,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		}
 
 		new_regs = sc_new_regs(regfile);
-#if defined(GUEST_ARCH_X86) || defined(GUEST_ARCH_ARM)
-#define TIMEVAL_BYTES	8
-#else
-#define TIMEVAL_BYTES	sizeof(struct timeval)
-#endif
-		make_sym(GET_ARG0(regfile), TIMEVAL_BYTES, "timeofday");
+		make_sym(GET_ARG0(regfile), TIMEVAL_SZ, "timeofday");
 		sc_ret_or(new_regs, 0, -1);
 		break;
 
