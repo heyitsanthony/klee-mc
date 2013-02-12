@@ -136,6 +136,7 @@ void ExeSymHook::watchEnterXfer(ExecutionState& es, llvm::Function* f)
 
 	if (esh.isWatched())
 		return;
+
 	watchFunc(es, f);
 }
 
@@ -242,7 +243,7 @@ void ExeSymHook::unwatch(ESVSymHook &esh)
 	}
 
 #ifdef DEBUG_ESH
-	std::cerr << "LEAVING: " << watch_f->getNameStr() << "\n";
+	std::cerr << "LEAVING: " << watch_f->getName().str() << "\n";
 #endif
 	esh.unwatch();
 }
@@ -282,7 +283,7 @@ void ExeSymHook::watchFuncArg(
 		return;
 
 #ifdef DEBUG_ESH
-	std::cerr << "WATCHING: " << f->getNameStr() << "\n";
+	std::cerr << "WATCHING: " << f->getName().str() << "\n";
 #endif
 	esh.enterWatchedFunc(f, in_arg, stack_pos);
 }
@@ -300,9 +301,7 @@ void ExeSymHook::watchFunc(ExecutionState& es, llvm::Function* f)
 	{
 		in_arg = getCallArg(es, 1);
 	} else if (f == f_mallocs[FM_CALLOC] || f == f_mallocs[FM_CALLOC2]) {
-		in_arg = MulExpr::create(
-			getCallArg(es, 0),
-			getCallArg(es, 1));
+		in_arg = MK_MUL(getCallArg(es, 0), getCallArg(es, 1));
 	} else
 		in_arg = getCallArg(es, 0);
 
@@ -312,6 +311,10 @@ void ExeSymHook::watchFunc(ExecutionState& es, llvm::Function* f)
 		/* TODO: exercise more malloc paths here */
 		in_arg = toConstant(es, in_arg, "symbolic malloc", false);
 	}
+
+#ifdef DEBUG_ESH
+	std::cerr << "Enter Watch: " << f->getName().str() << '\n';
+#endif
 
 	watchFuncArg(es, f, in_arg);
 }
@@ -368,7 +371,7 @@ bool ExeSymHook::isWatchable(llvm::Function* f) const
 	return false;
 }
 
-ExecutionState* ExeSymHook::setupInitialState(void)
+ExecutionState* ExeSymHook::setupInitialStateEntry(uint64_t entry)
 {
 	ExecutionState	*ret;
 	ESVSymHook	*esh;
@@ -393,8 +396,10 @@ ExecutionState* ExeSymHook::setupInitialState(void)
 		{NULL, NULL},
 	};
 
+	memset(f_mallocs, 0, sizeof(f_mallocs));
+	memset(f_frees, 0, sizeof(f_frees));
 
-	ret = ExecutorVex::setupInitialState();
+	ret = ExecutorVex::setupInitialStateEntry(entry);
 	esh = dynamic_cast<ESVSymHook*>(ret);
 	assert (esh != NULL);
 

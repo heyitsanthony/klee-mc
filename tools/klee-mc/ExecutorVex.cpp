@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "KModuleVex.h"
+#include "symbols.h"
 #include "guestcpustate.h"
 #include "genllvm.h"
 #include "vexhelpers.h"
@@ -49,7 +50,7 @@ extern bool WriteTraces;
 extern bool SymArgs;
 extern bool UsePrioritySearcher;
 
-bool SymRegs;
+bool SymRegs = false;
 bool UseConcreteVFS;
 
 #define GET_SFH(x)	static_cast<SyscallSFH*>(x)
@@ -95,6 +96,10 @@ namespace
 
 	cl::opt<bool> UseRegPriority(
 		"use-reg-pr", cl::desc("Use number of syscalls as priority"));
+
+	cl::opt<std::string> RunSym(
+		"run-func",
+		cl::desc("Name of function to run"));
 }
 
 ExecutorVex::ExecutorVex(InterpreterHandler *ih)
@@ -264,24 +269,37 @@ ExecutionState* ExecutorVex::setupInitialStateEntry(uint64_t entry_addr)
 ExecutionState* ExecutorVex::setupInitialState(void)
 { return setupInitialStateEntry((uint64_t)gs->getEntryPoint()); }
 
-void ExecutorVex::runImage(void)
+void ExecutorVex::runSym(const char* xchk_fn)
 {
 	ExecutionState	*start_state;
+	const Symbols	*syms;
+	const Symbol	*sym;
+	uint64_t	base_addr;
+
+	if (!RunSym.empty()) xchk_fn = RunSym.c_str();
+
+	if (xchk_fn != NULL) {
+		syms = gs->getSymbols();
+		sym = syms->findSym(xchk_fn);
+		fprintf(stderr, "[EXEVEX] Using symbol: %s\n", xchk_fn);
+		assert (sym != NULL && "Couldn't find sym");
+	} else
+		sym = NULL;
 
 	ExecutionState::setMemoryManager(memory);
-	start_state = setupInitialState();
+	base_addr = (sym)
+		? sym->getBaseAddr()
+		: ((uint64_t)gs->getEntryPoint());
+	start_state = setupInitialStateEntry(base_addr);
 	if (start_state == NULL)
 		return;
 
 	run(*start_state);
-
 	cleanupImage();
-	std::cerr << "OK.\n";
 }
 
 void ExecutorVex::cleanupImage(void)
 {
-	// hack to clear memory objects
 	delete memory;
 	memory = MemoryManager::create();
 
@@ -369,9 +387,8 @@ void ExecutorVex::bindMappingPage(
 	unsigned i = 0;
 
 #ifdef CLUSTER_HACKS
-	if (data == (void*)0xffffffffff5fe000) {
+	if (data == (void*)0xffffffffff5fe000)
 		return;
-	}
 #endif
 
 	for (i = 0; i < PAGE_SIZE; i++) {
@@ -444,32 +461,52 @@ MemoryObject* ExecutorVex::allocRegCtx(ExecutionState* state, Function* f)
 
 void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
 {
-	MemoryObject			*state_regctx_mo;
-	ObjectState 			*state_regctx_os;
-	KFunction			*kf;
-	unsigned int			state_regctx_sz;
+	MemoryObject	*state_regctx_mo;
+	ObjectState 	*state_regctx_os;
+	KFunction	*kf;
+	unsigned int	state_regctx_sz;
+	const char	*state_data;	
 
 	state_regctx_mo = allocRegCtx(state, f);
 	es2esv(*state).setRegCtx(state_regctx_mo);
 
-	if (SymRegs) makeSymbolic(*state, state_regctx_mo, "reg");
-
-	state_regctx_sz = gs->getCPUState()->getStateSize();
+	if (SymRegs) {
+		std::cerr << "[ExeVex] Making register symbolic.\n";
+		state_regctx_os = makeSymbolic(*state, state_regctx_mo, "reg");
+	} else
+		state_regctx_os = state->bindMemObjWriteable(state_regctx_mo);
 
 	if (symPathWriter) state->symPathOS = symPathWriter->open();
 	if (statsTracker) statsTracker->framePushed(*state, 0);
 
 	kf = kmodule->getKFunction(f);
-
 	assert (f->arg_size() == 1);
 	state->bindArgument(kf, 0, state_regctx_mo->getBaseExpr());
 
-	if (SymRegs) return;
+	state_data = (const char*)gs->getCPUState()->getStateData();
 
-	state_regctx_os = state->bindMemObjWriteable(state_regctx_mo);
+	if (SymRegs) {
+		Exempts		ex(getRegExempts(gs));
 
-	const char*  state_data = (const char*)gs->getCPUState()->getStateData();
-	for (unsigned int i=0; i < state_regctx_sz; i++)
+		/* restore stack pointer into symregs */
+		foreach (it, ex.begin(), ex.end()) {
+			unsigned	off, len;
+
+			off = it->first;
+			len = it->second;
+			for (unsigned i=0; i < len; i++)
+				state->write8(
+					state_regctx_os,
+					off+i,
+					state_data[off+i]);
+		}
+
+		markExit(*state, GE_IGNORE);
+		return;
+	}
+
+	state_regctx_sz = gs->getCPUState()->getStateSize();
+	for (unsigned int i = 0; i < state_regctx_sz; i++)
 		state->write8(state_regctx_os, i, state_data[i]);
 }
 
@@ -756,7 +793,6 @@ void ExecutorVex::callExternalFunction(
 		<< function->getName().str() << "\n";
 	terminateOnError(state, "externals disallowed", "user.err");
 }
-
 
 /* copy concrete parts into guest regs. */
 void ExecutorVex::updateGuestRegs(ExecutionState& state)

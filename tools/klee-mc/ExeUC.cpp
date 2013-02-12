@@ -298,31 +298,10 @@ void ExeUC::runImage(void)
 	fprintf(stderr, "DONE FOR THE DAY\n");
 }
 
-void ExeUC::runSym(const char* xchk_fn)
+void ExeUC::run(ExecutionState &initialState)
 {
-	ExecutionState	*start_state;
-	const Symbols	*syms;
-	const Symbol	*sym;
-
-
-	fprintf(stderr, "[EXEUC] FINDING SYM: %s\n", xchk_fn);
-	syms = gs->getSymbols();
-	sym = syms->findSym(xchk_fn);
-
-	assert (sym != NULL && "Couldn't find sym");
-
-	start_state = setupInitialStateEntry(sym->getBaseAddr());
-	if (start_state == NULL)
-		return;
-
-	setupUCEntry(start_state, xchk_fn);
-
-	fprintf(stderr, "[EXEUC] RUNNING: %s\n", xchk_fn);
-
-	run(*start_state);
-
-	cleanupImage();
-	fprintf(stderr, "[EXEUC] OK.\n");
+	setupUCEntry(&initialState, cur_xchk_fn);
+	ExecutorVex::run(initialState);
 }
 
 unsigned ExeUC::getPtrBytes(void) const
@@ -332,23 +311,9 @@ void ExeUC::setupUCEntry(
 	ExecutionState* start_state,
 	const char *xchk_fn)
 {
-	ObjectState	*reg_os, *lentab_os;
-	const char*	state_data;
-	Exempts		ex(getRegExempts(gs));
+	ObjectState	*lentab_os;
 
-	/* restore stack pointer into symregs */
-	reg_os = GETREGOBJ(*start_state);
-	state_data = (const char*)gs->getCPUState()->getStateData();
-	foreach (it, ex.begin(), ex.end()) {
-		unsigned	off, len;
-
-		off = it->first;
-		len = it->second;
-		for (unsigned i=0; i < len; i++)
-			start_state->write8(reg_os, off+i, state_data[off+i]);
-	}
-
-	root_reg_arr = reg_os->getArray();
+	root_reg_arr = GETREGOBJ(*start_state)->getArray();
 
 	/* setup length table */
 	lentab_mo = memory->allocate(

@@ -32,7 +32,7 @@ protected:
 		llvm::Function *f,
 		std::vector< ref<Expr> > &arguments);
 	virtual void jumpToKFunc(ExecutionState& state, KFunction* kf);
-	virtual ExecutionState* setupInitialState(void);
+	virtual ExecutionState* setupInitialStateEntry(uint64_t entry);
   	virtual void run(ExecutionState &initialState);
 
 private:

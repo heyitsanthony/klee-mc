@@ -3,6 +3,7 @@
 
 #include "collection.h"
 #include "guest.h"
+#include "guestcpustate.h"
 #include "../../lib/Core/Executor.h"
 
 #include <iostream>
@@ -12,6 +13,34 @@ namespace llvm
 {
 class Function;
 class GlobalVariable;
+}
+
+typedef std::pair<unsigned /* off */, unsigned /* len */> Exemptent;
+typedef std::vector<Exemptent> Exempts;
+
+/* inlined so that kmc-replay will work */
+static inline Exempts getRegExempts(const Guest* gs)
+{
+	Exempts	ret;
+
+	ret.push_back(
+		Exemptent(
+			gs->getCPUState()->getStackRegOff(),
+			(gs->getMem()->is32Bit()) ? 4 : 8));
+
+	switch (gs->getArch()) {
+	case Arch::X86_64:
+		ret.push_back(Exemptent(176 /* guest_DFLAG */, 8));
+		ret.push_back(Exemptent(200 /* guest_FS_ZERO */, 8));
+		break;
+	case Arch::ARM:
+		ret.push_back(Exemptent(380 /* TPIDRURO */, 4));
+		break;
+	default:
+		assert (0 == 1 && "UNSUPPORTED ARCHITECTURE");
+	}
+
+	return ret;
 }
 
 namespace klee {
@@ -44,7 +73,8 @@ public:
 		char **argv,
 		char **envp) { assert (0 == 1 && "LOL"); }
 
-	virtual void runImage(void);
+	virtual void runImage(void) { runSym(NULL); }
+	virtual void runSym(const char* symName);
 
 	Guest* getGuest(void) { return gs; }
 	const Guest* getGuest(void) const { return gs; }
@@ -60,7 +90,7 @@ public:
 	virtual std::string getPrettyName(const llvm::Function* f) const;
 protected:
 	virtual ExecutionState* setupInitialState(void);
-	ExecutionState* setupInitialStateEntry(uint64_t entry_addr);
+	virtual ExecutionState* setupInitialStateEntry(uint64_t entry_addr);
 
 	void cleanupImage(void);
 

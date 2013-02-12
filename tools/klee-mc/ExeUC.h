@@ -81,8 +81,13 @@ private:
 
 	void finalizeBuffers(ExecutionState& es);
 
+	virtual void runSym(const char* sym_name)
+	{
+		cur_xchk_fn = sym_name;
+		ExecutorVex::runSym(sym_name);
+	}
 protected:
-	void runSym(const char* sym_name);
+	virtual void run(ExecutionState &initialState);
 
 private:
 	/* format:
@@ -106,6 +111,7 @@ private:
 	unsigned int	lentab_max;
 
 	const Array	*root_reg_arr;
+	const char	*cur_xchk_fn;
 };
 }
 
