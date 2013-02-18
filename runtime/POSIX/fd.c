@@ -132,7 +132,7 @@ static exe_disk_file_t *__get_sym_file(const char *pathname)
   if (__exe_fs.n_sym_files_used < __exe_fs.n_sym_files) {
     df = &__exe_fs.sym_files[__exe_fs.n_sym_files_used++];
 
-    if (strcmp(df->name, pathname) != 0)
+    if (__strcmp(df->name, pathname) != 0)
       klee_silent_exit(0);
 
     return df;

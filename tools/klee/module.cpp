@@ -537,8 +537,11 @@ Interpreter::ModuleOptions getMainModule(Module* &mainModule)
 		false,
 		ExcludeCovFiles);
 
+	/* XXX: the posix and intrinsic stuff *should* be loaded
+	 * after the posix code in order to link, but more test cases
+	 * are failing because base klee is shit and grad school
+	 * is fucked up. */
 	mainModule = setupLibc(mainModule, Opts);
-
 	loadIntrinsics(Opts);
 	loadPOSIX(mainModule, Opts);
 

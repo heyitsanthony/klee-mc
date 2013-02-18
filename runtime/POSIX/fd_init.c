@@ -88,13 +88,13 @@ static void __create_new_dfile(
 	assert(dfile);
 
 	for (sp=name; *sp; ++sp) file_name[sp-name] = *sp;
-	strcpy(&file_name[sp-name], "-name");
+	strcpy(&file_name[sp-name], "_name");
 
 	for (sp=name; *sp; ++sp) data_name[sp-name] = *sp;
-	strcpy(&data_name[sp-name], "-data");
+	strcpy(&data_name[sp-name], "_data");
 
 	for (sp=name; *sp; ++sp) stat_name[sp-name] = *sp;
-	strcpy(&stat_name[sp-name], "-stat");
+	strcpy(&stat_name[sp-name], "_stat");
 
 	/* Handle dfile names */
 	if (	strcmp(name, "STDIN") == 0 ||
@@ -174,7 +174,7 @@ static void __create_new_dfile(
 
     for (sp=name; *sp; ++sp)
       src_name[sp-name] = *sp;
-    strcpy(&src_name[sp-name], "-src");
+    strcpy(&src_name[sp-name], "_src");
 
     dfile->src = calloc(1, sizeof(*(dfile->src)));
     dfile->src->addrlen = sizeof(struct sockaddr_in);

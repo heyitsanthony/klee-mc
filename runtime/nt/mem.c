@@ -12,7 +12,7 @@ int nt_qvm(void* base, PMEMORY_BASIC_INFORMATION mb)
 
 	klee_fork_all(((uintptr_t)base & ~0xfff));
 
-	base_c = klee_get_value(base);
+	base_c = klee_get_value((uint64_t)base);
 	klee_assume_eq(base, base_c);
 	base = (void*)base_c;
 	
@@ -32,7 +32,7 @@ int nt_qvm(void* base, PMEMORY_BASIC_INFORMATION mb)
 
 		len = (ptrdiff_t)((char*)cur_obj - ((char*)obj+sz));
 
-		mb->BaseAddress = (char*)obj+sz;
+		mb->BaseAddress = (uint32_t)((char*)obj+sz);
 		mb->AllocationBase = 0;
 		mb->AllocationProtect = (uintptr_t)PAGE_NOACCESS;
 		mb->RegionSize = len;
@@ -50,7 +50,7 @@ int nt_qvm(void* base, PMEMORY_BASIC_INFORMATION mb)
 		sz += cur_sz;
 		cur_obj = klee_get_obj_next((char*)obj+sz);
 		cur_sz = klee_get_obj_size(cur_obj);
-	} while (((uint64_t)obj + sz) == cur_obj);
+	} while (((char*)obj + sz) == cur_obj);
 	
 	/* fill out pages going backward */
 	cur_obj = obj;
@@ -78,7 +78,6 @@ void* nt_avm(
 	uint32_t alloc_ty,	
 	uint32_t prot)
 {
-	void		*addr;
 	int		is_himem;
 
 	/* XXX: TODO HONOR 'prot' */

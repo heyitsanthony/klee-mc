@@ -31,10 +31,10 @@ namespace klee
 {
 SFH_HANDLER(Assume)
 SFH_HANDLER(AssumeOp)
+SFH_HANDLER(FeasibleOp)
 SFH_HANDLER(CheckMemoryAccess)
 SFH_HANDLER(DefineFixedObject)
 SFH_HANDLER(Exit)
-SFH_HANDLER(ForceNE)
 SFH_HANDLER(Free)
 SFH_HANDLER(GetPruneID)
 SFH_HANDLER(Prune)
@@ -68,6 +68,7 @@ SFH_HANDLER(Indirect2)
 SFH_HANDLER(Indirect3)
 SFH_HANDLER(ForkEq)
 SFH_HANDLER(StackDepth)
+SFH_HANDLER(SymCoreHash)
 #define DEF_SFH_MMU(x)			\
 	SFH_HANDLER(WideStore##x)	\
 	SFH_HANDLER(WideLoad##x)
@@ -102,9 +103,9 @@ static const SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   add("free", Free, false),
   add("klee_assume", Assume, false),
   add("klee_assume_op", AssumeOp, false),
+  add("klee_feasible_op", FeasibleOp, true),
   add("__klee_fork_eq", ForkEq, true),
   add("klee_check_memory_access", CheckMemoryAccess, false),
-  add("klee_force_ne", ForceNE, false),
   add("klee_get_value", GetValue, true),
   add("klee_define_fixed_object", DefineFixedObject, false),
   add("klee_get_errno", GetErrno, true),
@@ -128,6 +129,7 @@ static const SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   add("klee_indirect1", Indirect1, true),
   add("klee_indirect2", Indirect2, true),
   add("klee_indirect3", Indirect3, true),
+  add("klee_sym_corehash", SymCoreHash, true),
   add("klee_is_shadowed", IsShadowed, true),
 
 #define DEF_WIDE(x)	\
@@ -440,15 +442,11 @@ SFH_DEF_HANDLER(Prune)
 
 SFH_DEF_HANDLER(ReportError)
 {
+	// (file, line, message, suffix)
 	SFH_CHK_ARGS(4, "klee_report_error");
 
-	// arg[0] = file
-	// arg[1] = line
-	// arg[2] = message
-	// arg[3] = suffix
 	std::string	message = sfh->readStringAtAddress(state, arguments[2]);
 	std::string	suffix = sfh->readStringAtAddress(state, arguments[3]);
-
 	sfh->executor->terminateOnError(state, message, suffix.c_str(), "");
 }
 
@@ -518,8 +516,7 @@ SFH_DEF_HANDLER(AssumeOp)
 	SFH_CHK_ARGS(3, "klee_assume_op");
 
 	ce = dyn_cast<ConstantExpr>(arguments[2]);
-	if (ce == NULL)
-		goto error;
+	if (ce == NULL) goto error;
 
 	e = cmpop_to_expr(ce->getZExtValue(), arguments[0], arguments[1]);
 	if (e.isNull()) goto error;
@@ -550,6 +547,32 @@ SFH_DEF_HANDLER(AssumeOp)
 error:
 	sfh->executor->terminateEarly(state, "assume-op failed");
 }
+
+SFH_DEF_HANDLER(FeasibleOp)
+{
+	ref<Expr>		e;
+	const ConstantExpr	*ce;
+	bool			mayBeTrue, ok;
+
+	SFH_CHK_ARGS(3, "klee_feasible_op");
+
+	ce = dyn_cast<ConstantExpr>(arguments[2]);
+	if (ce == NULL) goto error;
+
+	e = cmpop_to_expr(ce->getZExtValue(), arguments[0], arguments[1]);
+	if (e.isNull()) goto error;
+
+	/* satisfiable? */
+	ok = sfh->executor->getSolver()->mayBeTrue(state, e, mayBeTrue);
+	if (!ok) goto error;
+
+	state.bindLocal(target, MK_CONST(mayBeTrue, 64));
+	return;
+
+error:
+	sfh->executor->terminateEarly(state, "feasible-op failed");
+}
+
 
 SFH_DEF_HANDLER(IsSymbolic)
 {
@@ -732,14 +755,14 @@ SFH_DEF_HANDLER(SymRangeBytes)
 		base_addr += os->size;
 	} while (total < max_len_v);
 
-	state.bindLocal(target, ConstantExpr::create(total, Expr::Int32));
+	state.bindLocal(target, MK_CONST(total, Expr::Int32));
 }
 
 SFH_DEF_HANDLER(GetErrno)
 {
 	// XXX should type check args
 	SFH_CHK_ARGS(0, "klee_get_errno");
-	state.bindLocal(target, ConstantExpr::create(errno, Expr::Int32));
+	state.bindLocal(target, MK_CONST(errno, Expr::Int32));
 }
 
 SFH_DEF_HANDLER(Free)
@@ -841,7 +864,7 @@ SFH_DEF_HANDLER(MakeSymbolic)
 
 		mo = state.addressSpace.resolveOneMO(ce->getZExtValue());
 		const_cast<MemoryObject*>(mo)->setName(name);
-		sfh->executor->makeSymbolic(state, mo);
+		sfh->executor->makeSymbolic(state, mo, name.c_str());
 		return;
 	}
 
@@ -874,10 +897,10 @@ SFH_DEF_HANDLER(MakeSymbolic)
 		assert(ok && "FIXME: Unhandled solver failure");
 
 		if (res) {
-			sfh->executor->makeSymbolic(*s, mo);
+			sfh->executor->makeSymbolic(*s, mo, name.c_str());
 			continue;
 		}
- 
+
 		sfh->executor->terminateOnError(
 			*s,
 			"size for klee_make_symbolic[_name] too big",
@@ -900,29 +923,6 @@ SFH_DEF_HANDLER(MarkGlobal)
 	}
 }
 
-SFH_DEF_HANDLER(ForceNE)
-{
-	ref<Expr>	lhs, rhs, cmp_expr;
-	bool		mustBeEqual, success;
-
-	SFH_CHK_ARGS(2, "klee_force_ne");
-
-	lhs = arguments[0];
-	rhs = arguments[1];
-
-	cmp_expr = NeExpr::create(lhs, rhs);
-
-	success = sfh->executor->getSolver()->mustBeFalse(
-		state, cmp_expr, mustBeEqual);
-
-	assert(success && "FIXME: Unhandled solver failure");
-	if (!mustBeEqual) {
-		sfh->executor->addConstrOrDie(state, cmp_expr);
-		return;
-	}
-
-	sfh->executor->terminate(state);
-}
 
 SFH_DEF_HANDLER(Yield) { sfh->executor->yield(state); }
 
@@ -1083,6 +1083,57 @@ SFH_DEF_HANDLER(ForkEq)
 
 	if (sp.first != NULL) sp.first->bindLocal(target, MK_CONST(1, 32));
 	if (sp.second != NULL) sp.second->bindLocal(target, MK_CONST(0, 32));
+}
+
+SFH_DEF_HANDLER(SymCoreHash)
+{
+	std::vector< ref<ReadExpr> >	reads;
+	std::set<const Array*>		arrays;
+	const Array*			arr;
+	Expr::Hash			min_hash;
+	ref<ReadExpr>			min_read;
+
+	if (arguments[0]->getKind() == Expr::Constant) {
+		sfh->executor->terminateOnError(
+			state,
+			"sym core hash argument is constant",
+			"symhash.err");
+		return;
+	}
+
+	ExprUtil::findReads(arguments[0], false, reads);
+
+	if (reads.empty()) {
+		sfh->executor->terminateOnError(
+			state,
+			"no reads found in symbolic",
+			"symhash.err");
+		return;
+	}
+
+	min_hash = reads[0]->hash();
+	min_read = reads[0];
+	foreach (it, reads.begin(), reads.end()) {
+		const ref<klee::Array>	cur_arr((*it)->getArray());
+
+		arrays.insert(cur_arr.get());
+		if (min_hash > (*it)->hash()) {
+			min_hash = (*it)->hash();
+			min_read = *it;
+		}
+	}
+
+	if (arrays.size() != 1) {
+		/* David has a lot of trouble with this,
+		 * so this will have to be revisited. */
+		sfh->executor->terminateOnError(
+			state,
+			"multiple arrays in pointer",
+			"symhash.err");
+	}
+
+	arr = *(arrays.begin());
+	state.bindLocal(target, MK_CONST(min_hash ^ arr->hash(), 64));
 }
 
 

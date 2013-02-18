@@ -36,11 +36,11 @@ int main(int argc, char* argv[])
 	for (i = 0; i < BUF_SZ/2; i++) {
 		unsigned char	c;
 
-		ksys_force_ne(c, 0x26);
-		ksys_force_ne(c, '.');
-		ksys_force_ne(c, 0x36);
-		ksys_force_ne(c, 0x64);
-		ksys_force_ne(c, 0x65);
+		ksys_assume_ne(c, 0x26);
+		ksys_assume_ne(c, '.');
+		ksys_assume_ne(c, 0x36);
+		ksys_assume_ne(c, 0x64);
+		ksys_assume_ne(c, 0x65);
 
 		ksys_assume(
 			c != 0x36 && c != 0x64 && 

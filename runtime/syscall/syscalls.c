@@ -217,7 +217,7 @@ static void sc_klee(void* regfile)
 		sc_ret_v(regfile, klee_is_symbolic(GET_ARG1(regfile)));
 		break;
 	case KLEE_SYS_NE:
-		klee_force_ne(GET_ARG1(regfile), GET_ARG2(regfile));
+		klee_assume_ne(GET_ARG1(regfile), GET_ARG2(regfile));
 		break;
 	case KLEE_SYS_PRINT_EXPR:
 		klee_print_expr(GET_ARG1_PTR(regfile), GET_ARG2(regfile));
