@@ -380,9 +380,10 @@ void ImpliedValue::ivcStack(
 				continue;
 
 			e = erv.apply(old_v);
-			if (e->hash() != old_v->hash())
-				ivc_stack_cells++;
+			if (e->hash() == old_v->hash())
+				continue;
 
+			ivc_stack_cells++;
 			sf.locals[i].value = e;
 		}
 	}

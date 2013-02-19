@@ -184,6 +184,15 @@ extern "C" {
 
   uint64_t klee_feasible_op(uint64_t lhs, uint64_t rhs, uint8_t op);
 
+#define klee_valid_ugt(x,y)	(!__klee_feasible_op(x,y, KLEE_CMP_OP_ULE))
+#define klee_valid_uge(x,y)	(!__klee_feasible_op(x,y,KLEE_CMP_OP_ULT))
+#define klee_valid_ult(x,y)	(!__klee_feasible_op(x,y,KLEE_CMP_OP_UGE))
+#define klee_valid_ule(x,y)	(!__klee_feasible_op(x,y,KLEE_CMP_OP_UGT))
+#define klee_valid_eq(x, y)	(!__klee_feasible_op(x, y, KLEE_CMP_OP_NE))
+#define klee_valid_ne(x, y)	(!__klee_feasible_op(x, y, KLEE_CMP_OP_EQ))
+
+  void* klee_malloc_fixed(uint64_t sz);
+
   void klee_warning(const char *message);
   void klee_warning_once(const char *message);
   void klee_prefer_cex(void *object, uint64_t condition);

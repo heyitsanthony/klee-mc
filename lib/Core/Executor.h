@@ -224,7 +224,6 @@ protected:
 		const llvm::Twine &info="")
 	{ terminateOnError(state, message, "exec.err", info); }
 
-	ref<ConstantExpr> getSmallSymAllocSize(ExecutionState&, ref<Expr>& sz);
 	virtual void replaceStateImmForked(ExecutionState* os, ExecutionState* ns);
 
 
@@ -366,19 +365,6 @@ private:
 	void getSymbolicSolutionCex(
 		const ExecutionState& state, ExecutionState& t);
 
-	void executeAllocSymbolic(
-		ExecutionState &state,
-		ref<Expr> size,
-		bool isLocal,
-		KInstruction *target,
-		bool zeroMemory);
-
-	void executeAllocConst(
-		ExecutionState &state,
-		uint64_t sz,
-		bool isLocal,
-		KInstruction *target,
-		bool zeroMemory);
 public:
 	Executor(InterpreterHandler *ie);
 	virtual ~Executor();
@@ -438,27 +424,12 @@ public:
 		const KModule* km, const Globals* gm, llvm::Constant *c);
 
 
-	/// Allocate and bind a new object in a particular state. NOTE: This
-	/// function may fork.
-	///
-	/// \param isLocal Flag to indicate if the object should be
-	/// automatically deallocated on function return (this also makes it
-	/// illegal to free directly).
-	///
-	/// \param target Value at which to bind the base address of the new
-	/// object.
-	///
-	/// \param reallocFrom If non-zero and the allocation succeeds,
-	/// initialize the new object from the given one and unbind it when
-	/// done (realloc semantics). The initialized bytes will be the
-	/// minimum of the size of the old and new objects, with remaining
-	/// bytes initialized as specified by zeroMemory.
-	void executeAlloc(
+	void executeAllocConst(
 		ExecutionState &state,
-		ref<Expr> size,
+		uint64_t sz,
 		bool isLocal,
 		KInstruction *target,
-		bool zeroMemory = false);
+		bool zeroMemory);
 
 	/// Free the given address with checking for errors. If target is
 	/// given it will be bound to 0 in the resulting states (this is a

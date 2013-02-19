@@ -123,7 +123,7 @@ static const SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   add("klee_warning_once", WarningOnce, false),
   add("klee_get_prune_id", GetPruneID, true),
   add("klee_prune", Prune, false),
-  add("malloc", Malloc, true),
+  add("klee_malloc_fixed", Malloc, true),
   add("klee_stack_depth", StackDepth, true),
   add("klee_indirect0", Indirect0, true),
   add("klee_indirect1", Indirect1, true),
@@ -454,9 +454,25 @@ SFH_DEF_HANDLER(Merge) { std::cerr << "[Merge] Merging disabled\n"; /* nop */ }
 
 SFH_DEF_HANDLER(Malloc)
 {
-	// XXX should type check args
 	SFH_CHK_ARGS(1, "malloc");
-	sfh->executor->executeAlloc(state, arguments[0], false, target);
+
+	uint64_t	sz;
+
+	if (arguments[0]->getKind() != Expr::Constant) {
+		sfh->executor->terminateOnError(
+			state,
+			"symbolic malloc",
+			"malloc.err");
+		return;
+	}
+
+	sz = cast<ConstantExpr>(arguments[0])->getZExtValue();
+	sfh->executor->executeAllocConst(
+		state,
+		sz,
+		false,
+		target,
+		true /* zero memory */);
 }
 
 SFH_DEF_HANDLER(Assume)

@@ -870,18 +870,15 @@ void ExecutionState::commitIVC(
 	assert (mo != NULL && "Could not find MO?");
 	os = addressSpace.findObject(mo);
 
-	// os = 0 => obj has been free'd,
-	// no need to concretize (although as in other cases we
-	// would like to concretize the outstanding
-	// reads, but we have no facility for that yet)
-	if (os == NULL) return;
+	// os = 0 => obj has been freed
+	if (os != NULL) {
+		assert(	!os->readOnly && "read only obj with static read?");
 
-	assert(	!os->readOnly && "read only object with static read?");
+		wos = addressSpace.getWriteable(mo, os);
+		assert (wos != NULL && "Could not get writable ObjectState?");
 
-	wos = addressSpace.getWriteable(mo, os);
-	assert (wos != NULL && "Could not get writable ObjectState?");
-
-	wos->writeIVC(off->getZExtValue(), ce);
+		wos->writeIVC(off->getZExtValue(), ce);
+	}
 
 	ImpliedValue::ivcStack(stack, re, ce);
 	ImpliedValue::ivcMem(addressSpace, re, ce);

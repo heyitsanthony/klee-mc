@@ -1534,6 +1534,7 @@ void Executor::instAlloc(ExecutionState& state, KInstruction* ki)
 	unsigned	elementSize;
 	bool		isLocal;
 	ref<Expr>	size;
+	uint64_t	size_c;
 
 	assert (!isMallocLikeFn(ki->getInst() , NULL) && "ANTHONY! FIX THIS");
 
@@ -1544,11 +1545,18 @@ void Executor::instAlloc(ExecutionState& state, KInstruction* ki)
 	if (ai->isArrayAllocation()) {
 		ref<Expr> count = eval(ki, 0, state);
 		count = Expr::createCoerceToPointerType(count);
-		size = MulExpr::create(size, count);
+		size = MK_MUL(size, count);
 	}
 
 	isLocal = i->getOpcode() == Instruction::Alloca;
-	executeAlloc(state, size, isLocal, ki);
+	if (size->getKind() != Expr::Constant) {
+		terminateOnExecError(state, "non-const alloca");
+		return;
+	}
+
+	size_c = cast<ConstantExpr>(size)->getZExtValue();
+
+	executeAllocConst(state, size_c, isLocal, ki, true);
 }
 
 void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
@@ -1971,7 +1979,7 @@ void Executor::handleMemoryUtilization(ExecutionState* &state)
 	atMemoryLimit = true;
 	onlyNonCompact = true;
 
-	if (mbs <= MaxMemory + 100)
+	if (mbs <= 1.1*MaxMemory)
 		return;
 
 	instLimit = stats::instructions - lastMemoryLimitOperationInstructions;
@@ -2487,9 +2495,9 @@ void Executor::instGetElementPtr(ExecutionState& state, KInstruction *ki)
 		uint64_t elementSize = it->second;
 		ref<Expr> index = eval(ki, it->first, state);
 
-		base = AddExpr::create(
+		base = MK_ADD(
 			base,
-			MulExpr::create(
+			MK_MUL(
 				Expr::createCoerceToPointerType(index),
 				MK_PTR(elementSize)));
 	}
@@ -2528,125 +2536,6 @@ void Executor::executeAllocConst(
 	}
 
 	state.bindLocal(target, op_mo(op)->getBaseExpr());
-}
-
-klee::ref<klee::ConstantExpr> Executor::getSmallSymAllocSize(
-	ExecutionState &state, ref<Expr>& size)
-{
-	Expr::Width		W;
-	ref<ConstantExpr>	example;
-	ref<ConstantExpr>	ce_128;
-	bool			ok;
-
-	ok = solver->getValue(state, size, example);
-	assert(ok && "FIXME: Unhandled solver failure");
-
-	// start with a small example
-	W = example->getWidth();
-	ce_128 = ConstantExpr::create(128, W);
-	while (example->Ugt(ce_128)->isTrue()) {
-		ref<ConstantExpr>	tmp;
-		bool			res;
-
-		tmp = example->LShr(ConstantExpr::create(1, W));
-		ok = solver->mayBeTrue(state, MK_EQ(tmp, size), res);
-		assert(ok && "FIXME: Unhandled solver failure");
-		if (!res)
-			break;
-		example = tmp;
-	}
-
-	return example;
-}
-
-void Executor::executeAllocSymbolic(
-	ExecutionState &state,
-	ref<Expr> size,
-	bool isLocal,
-	KInstruction *target,
-	bool zeroMemory)
-{
-	// XXX For now we just pick a size. Ideally we would support
-	// symbolic sizes fully but even if we don't it would be better to
-	// "smartly" pick a value, for example we could fork and pick the
-	// min and max values and perhaps some intermediate (reasonable
-	// value).
-	//
-	// It would also be nice to recognize the case when size has
-	// exactly two values and just fork (but we need to get rid of
-	// return argument first). This shows up in pcre when llvm
-	// collapses the size expression with a select.
-	//
-	ref<ConstantExpr>	example(getSmallSymAllocSize(state, size));
-	Expr::Width		W = example->getWidth();
-
-	StatePair fixedSize = fork(state, MK_EQ(example, size), true);
-
-	if (fixedSize.second) {
-		// Check for exactly two values
-		ExecutionState		*ne_state;
-		ref<ConstantExpr>	tmp;
-		bool			ok, res;
-
-		ne_state = fixedSize.second;
-		ok = solver->getValue(*ne_state, size, tmp);
-		assert(ok && "FIXME: Unhandled solver failure");
-		ok = solver->mustBeTrue(*ne_state, MK_EQ(tmp, size), res);
-		assert(ok && "FIXME: Unhandled solver failure");
-
-		if (res) {
-			executeAlloc(
-				*ne_state,
-				tmp,
-				isLocal,
-				target, zeroMemory);
-		} else {
-		// See if a *really* big value is possible. If so assume
-		// malloc will fail for it, so lets fork and return 0.
-			StatePair hugeSize = fork(
-				*ne_state,
-				MK_ULT(MK_CONST(1<<31, W), size),
-				true);
-			if (hugeSize.first) {
-				klee_message("NOTE: found huge malloc, returing 0");
-				hugeSize.first->bindLocal(target, MK_PTR(0));
-			}
-
-			if (hugeSize.second) {
-				std::ostringstream info;
-				ExprPPrinter::printOne(info, "  size expr", size);
-				info << "  concretization : " << example << "\n";
-				info << "  unbound example: " << tmp << "\n";
-				terminateOnError(
-					*hugeSize.second,
-					"concretized symbolic size",
-					"model.err",
-					info.str());
-			}
-		}
-	}
-
-	// can be zero when fork fails
-	if (fixedSize.first == NULL) return;
-
-	executeAlloc(*fixedSize.first, example, isLocal, target, zeroMemory);
-}
-
-void Executor::executeAlloc(
-	ExecutionState &state,
-	ref<Expr> size,
-	bool isLocal,
-	KInstruction *target,
-	bool zeroMemory)
-{
-	size = toUnique(state, size);
-	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(size)) {
-		executeAllocConst(
-			state, CE->getZExtValue(),
-			isLocal, target, zeroMemory);
-	} else {
-		executeAllocSymbolic(state, size, isLocal, target, zeroMemory);
-	}
 }
 
 void Executor::executeFree(

@@ -2,6 +2,33 @@
 #include <stdlib.h>
 #include <string.h>
 
+void* malloc(size_t sz)
+{
+	// volatile so that == replacement doesn't screw things up
+	volatile size_t	cur_sz;
+
+	if (!klee_is_symbolic(sz))
+		return klee_malloc_fixed(sz);
+
+	cur_sz = klee_min_value(sz);
+	if (sz == cur_sz) {
+		if (cur_sz == 0)
+			return NULL;
+		return klee_malloc_fixed(cur_sz);
+	}
+
+	if (sz >= (1ULL << 31)) {
+		klee_print_expr("NOTE: found huge malloc", sz);
+		return NULL;
+	}
+
+	cur_sz = klee_get_value(sz);
+	if (cur_sz == sz)
+		return klee_malloc_fixed(cur_sz);
+
+	klee_uerror("too many mallocs", "model.err");
+}
+
 void* calloc(size_t nmemb, size_t size)
 {
 	void	*ret;
@@ -64,54 +91,6 @@ void* _Znam(unsigned long n) { return malloc(n); }
 // operator new(unsigned long)
 void* _Znwm(unsigned long n) { return malloc(n); }
 
-#if 0
-void* klee_get_obj(void* ptr)
-{
-	uintptr_t	ptr_ui;
-	uintptr_t	min_addr, max_addr;
-
-	if (!klee_is_symbolic((uintptr_t)ptr))
-		return ptr;
-
-
-	min_addr = (uintptr_t)klee_get_obj_next(NULL);
-	max_addr = (uintptr_t)klee_get_obj_prev((void*)~0);
-	ptr_ui = (uintptr_t)ptr;
-
-	while (min_addr < max_addr) {
-		uintptr_t	mid;
-		void		*cur_obj;
-
-		min_addr = klee_fork_all(min_addr);
-		max_addr = klee_fork_all(max_addr);
-
-		klee_assert (!klee_is_symbolic(min_addr));
-		klee_assert (!klee_is_symbolic(max_addr));
-
-		klee_print_expr("new max", max_addr);
-		klee_print_expr("new min", min_addr);
-
-		mid = min_addr + (max_addr - min_addr)/2;
-		klee_print_expr("mid point", mid);
-		cur_obj = klee_get_obj_prev((void*)mid);
-
-		if (klee_fork_eq(cur_obj, ptr))
-			return cur_obj;
-
-		if (ptr_ui < mid) {
-			max_addr = (uintptr_t)mid;
-		} else if (ptr_ui > mid) {
-			min_addr = (uintptr_t)mid+1;
-		}
-	}
-
-	klee_print_expr("last max", max_addr);
-	klee_print_expr("last min", min_addr);
-
-	return NULL;
-}
-#endif
-
 void* klee_get_obj(void* ptr)
 {
 	void		*new_ptr, *new_base;
@@ -129,6 +108,5 @@ void* klee_get_obj(void* ptr)
 	if (((uintptr_t)new_base + new_sz) < (uintptr_t)new_ptr)
 		return NULL;
 
-	klee_print_expr("NEW BASE", new_base);
 	return new_base;
 }
