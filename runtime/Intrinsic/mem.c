@@ -39,6 +39,13 @@ void* calloc(size_t nmemb, size_t size)
 	return ret;
 }
 
+void free(void* f)
+{
+	uint64_t	addr = klee_fork_all(f);
+	if (addr == 0) return;
+	klee_free_fixed(addr);
+}
+
 static void realloc_obj_to(void* cur_obj_base, void* new_ptr, unsigned size)
 {
 	unsigned	obj_sz;

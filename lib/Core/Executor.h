@@ -431,15 +431,8 @@ public:
 		KInstruction *target,
 		bool zeroMemory);
 
-	/// Free the given address with checking for errors. If target is
-	/// given it will be bound to 0 in the resulting states (this is a
-	/// convenience for realloc). Note that this function can cause the
-	/// state to fork and that \ref state cannot be safely accessed
-	/// afterwards.
-	void executeFree(
-		ExecutionState &state,
-		ref<Expr> address,
-		KInstruction *target = 0);
+	// address should be constant expr
+	void executeFree(ExecutionState &state, ref<Expr> address);
 
 	ref<klee::ConstantExpr> evalConstantExpr(llvm::ConstantExpr *ce)
 	{ return evalConstantExpr(kmodule, globals, ce); }

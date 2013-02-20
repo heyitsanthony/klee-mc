@@ -100,7 +100,7 @@ static const SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   add("klee_get_obj_size", GetObjSize, true),
   add("klee_get_obj_prev", GetObjPrev, true),
 
-  add("free", Free, false),
+  add("klee_free_fixed", Free, false),
   add("klee_assume", Assume, false),
   add("klee_assume_op", AssumeOp, false),
   add("klee_feasible_op", FeasibleOp, true),
@@ -783,8 +783,16 @@ SFH_DEF_HANDLER(GetErrno)
 
 SFH_DEF_HANDLER(Free)
 {
-	// XXX should type check args
 	SFH_CHK_ARGS(1, "free");
+
+	if (arguments[0]->getKind() != Expr::Constant) {
+		sfh->executor->terminateOnError(
+			state,
+			"klee_free_fixed without constant ptr",
+			"user.err");
+		return;
+	}
+
 	sfh->executor->executeFree(state, arguments[0]);
 }
 

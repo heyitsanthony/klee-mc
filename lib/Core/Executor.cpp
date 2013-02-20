@@ -2540,45 +2540,44 @@ void Executor::executeAllocConst(
 
 void Executor::executeFree(
 	ExecutionState &state,
-	ref<Expr> address,
-	KInstruction *target)
+	ref<Expr> address)
 {
-	StatePair zeroPointer = fork(state, Expr::createIsZero(address), true);
+	const MemoryObject	*mo;
+	ObjectPair		op;
 
-	if (zeroPointer.first && target) {
-		zeroPointer.first->bindLocal(target, MK_PTR(0));
+	if (address->getKind() != Expr::Constant) {
+		terminateOnExecError(state, "non-const free address");
+		return;
 	}
 
-	if (!zeroPointer.second)
-		return;
+	state.addressSpace.resolveOne(
+		cast<ConstantExpr>(address)->getZExtValue(),
+		op);
 
-	// address != 0
-	ExactResolutionList rl;
-	resolveExact(*zeroPointer.second, address, rl, "free");
-
-	foreach (it, rl.begin(), rl.end()) {
-		const MemoryObject *mo;
-
-		mo = it->first.first;
-		if (mo->isLocal()) {
-			terminateOnError(
-				*it->second,
-				"free of alloca",
-				"free.err",
-				getAddressInfo(*it->second, address));
-		} else if (mo->isGlobal()) {
-			terminateOnError(
-				*it->second,
-				"free of global",
-				"free.err",
-				getAddressInfo(*it->second, address));
-		} else {
-			it->second->unbindObject(mo);
-			if (target)
-				it->second->bindLocal(target, MK_PTR(0));
-		}
+	mo = op_mo(op);
+	if (mo == NULL) {
+		terminateOnError(
+			state,
+			"free invalid address",
+			"free.err",
+			getAddressInfo(state, address));
+	} else if (mo->isLocal()) {
+		terminateOnError(
+			state,
+			"free of alloca",
+			"free.err",
+			getAddressInfo(state, address));
+	} else if (mo->isGlobal()) {
+		terminateOnError(
+			state,
+			"free of global",
+			"free.err",
+			getAddressInfo(state, address));
+	} else {
+		state.unbindObject(mo);
 	}
 }
+
 
 #include <malloc.h>
 void Executor::handleMemoryPID(ExecutionState* &state)

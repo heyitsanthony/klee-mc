@@ -1,7 +1,10 @@
 // RUN: %llvmgcc %s -emit-llvm -O0 -c -o %t1.bc
 // RUN: %klee %t1.bc 2>%t1.err
 // RUN: ls klee-last/ | grep .err | wc -l | grep 2
-// RUN: ls klee-last/ | grep .ptr.err | wc -l | grep 2
+//
+// RUN: ls klee-last/ | grep .ptr.err | wc -l | grep 1
+// free 0xdeadbeef
+// RUN: ls klee-last/ | grep .free.err | wc -l | grep 1
 
 #include <assert.h>
 #include <stdlib.h>

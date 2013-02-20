@@ -193,6 +193,8 @@ extern "C" {
 
   void* klee_malloc_fixed(uint64_t sz);
 
+  void klee_free_fixed(uint64_t x);
+
   void klee_warning(const char *message);
   void klee_warning_once(const char *message);
   void klee_prefer_cex(void *object, uint64_t condition);
