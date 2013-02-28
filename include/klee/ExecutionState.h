@@ -10,6 +10,7 @@
 #ifndef KLEE_EXECUTIONSTATE_H
 #define KLEE_EXECUTIONSTATE_H
 
+#include "klee/Internal/ADT/ProtoPtr.h"
 #include "klee/Constraints.h"
 #include "klee/Expr.h"
 #include "klee/util/ExprUtil.h"
@@ -17,6 +18,7 @@
 #include "../../lib/Core/AddressSpace.h"
 #include "../../lib/Core/BranchTracker.h"
 #include "../../lib/Core/ExecutionTrace.h"
+#include "../../lib/Core/Terminator.h"
 #include "klee/Internal/Module/KInstIterator.h"
 #include "klee/Internal/ADT/TreeStream.h"
 #include "../../lib/Core/Memory.h"
@@ -43,6 +45,7 @@ class PTreeNode;
 struct InstructionInfo;
 class MemoryManager;
 class KInstruction;
+class Terminator;
 
 /* Represents a memory array, its materialization, and ... */
 
@@ -147,7 +150,6 @@ public:
 	std::map<const std::string*, std::set<unsigned> > coveredLines;
 	PTreeNode *ptreeNode;
 
-
 	// for use with std::mem_fun[_ref] since they don't accept data members
 	bool isCompact() const { return isCompactForm; }
 	bool isNonCompact() const { return !isCompactForm; }
@@ -167,8 +169,7 @@ public:
 	static void setMemoryManager(MemoryManager* in_mm) { mm = in_mm; }
 	ExecutionState* copy(void) const;
 
-	virtual ExecutionState* copy(const ExecutionState* es) const
-	{ return new ExecutionState(*es); }
+	virtual ExecutionState* copy(const ExecutionState* es) const;
 
 	virtual ~ExecutionState();
 
@@ -355,6 +356,10 @@ public:
 	bool isPartSeed(void) const { return partseed_assignment != NULL; }
 	uint64_t getSID(void) const { return sid; }
 
+	bool getOnFini(void) const { return term.get() != NULL; }
+	Terminator* getFini(void) const { return term.get(); }
+	void setFini(const Terminator& t) { term = ProtoPtr<Terminator>(t); }
+
 private:
 	void initFields(void);
 	void updatePartSeed(Array* array);
@@ -395,6 +400,8 @@ private:
 	unsigned		partseed_idx;
 
 	uint64_t		sid;
+
+	ProtoPtr<Terminator>	term;
 };
 
 }

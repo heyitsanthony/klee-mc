@@ -56,14 +56,14 @@ public:
 
 		os = T::makeSymbolic(state, mo, arrPrefix);
 		if (replayPosition >= replayKTest->numObjects) {
-			T::terminateOnError(
+			TERMINATE_ERROR(this,
 				state, "replay count mismatch", "user.err");
 			return NULL;
 		}
 
 		KTestObject *obj = &replayKTest->objects[replayPosition++];
 		if (obj->numBytes != mo->size) {
-			T::terminateOnError(
+			TERMINATE_ERROR(this,
 				state, "replay size mismatch", "user.err");
 			return NULL;
 		}

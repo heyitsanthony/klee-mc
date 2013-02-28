@@ -105,6 +105,11 @@ public:
     KFunction* getKFunction(llvm::Function* f) const;
     KFunction* getKFunction(const char* name) const;
 
+	KFunction* buildListFunc(
+		const std::vector<llvm::Function*>& kfs,
+		const char* name);
+
+
     std::vector<KFunction*>::const_iterator kfuncsBegin() const
     { return functions.begin(); }
 

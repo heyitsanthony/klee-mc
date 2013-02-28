@@ -340,7 +340,7 @@ Forks::fork(
 
 	/* find feasible forks */
 	if (evalForks(current, fi) == false) {
-		exe.terminateEarly(current, "fork query timed out");
+		TERMINATE_EARLY(&exe, current, "fork query timed out");
 		return Executor::StateVector(N, NULL);
 	}
 
@@ -607,7 +607,7 @@ bool Forks::addConstraint(struct ForkInfo& fi, unsigned condIndex)
 		if (exe.addConstraint(*curState, fi.conditions[condIndex]))
 			return true;
 
-		exe.terminateEarly(*curState, "branch contradiction");
+		TERMINATE_EARLY(&exe, *curState, "branch contradiction");
 		fi.resStates[condIndex] = NULL;
 		fi.res[condIndex] = false;
 		return false;
@@ -656,7 +656,7 @@ bool Forks::constrainFork(
 
 	// Kinda gross, do we even really still want this option?
 	if (MaxDepth && MaxDepth <= curState->depth) {
-		exe.terminateEarly(*curState, "max-depth exceeded");
+		TERMINATE_EARLY(&exe, *curState, "max-depth exceeded");
 		fi.resStates[condIndex] = NULL;
 		return false;
 	}

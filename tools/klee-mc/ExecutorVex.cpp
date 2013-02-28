@@ -272,13 +272,14 @@ ExecutionState* ExecutorVex::setupInitialState(void)
 void ExecutorVex::runSym(const char* xchk_fn)
 {
 	ExecutionState	*start_state;
-	const Symbols	*syms;
 	const Symbol	*sym;
 	uint64_t	base_addr;
 
 	if (!RunSym.empty()) xchk_fn = RunSym.c_str();
 
 	if (xchk_fn != NULL) {
+		const Symbols	*syms;
+
 		syms = gs->getSymbols();
 		sym = syms->findSym(xchk_fn);
 		fprintf(stderr, "[EXEVEX] Using symbol: %s\n", xchk_fn);
@@ -631,7 +632,7 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 		return;
 	case GE_SIGSEGV:
 		std::cerr << "[VEXLLVM] Caught SigSegV. Error Exit.\n";
-		terminateOnError(
+		TERMINATE_ERROR(this,
 			state,
 			"VEX SIGSEGV error: jump to sigsegv",
 			"sigsegv.err");
@@ -639,7 +640,7 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 
 	case GE_SIGTRAP:
 		std::cerr << "[VEXLLVM] Caught SigTrap. Exiting\n";
-		terminateOnExit(state);
+		TERMINATE_EXIT(this, state);
 		return;
 	default:
 		std::cerr << "WTF: EXIT_TYPE=" << exit_type << '\n';
@@ -652,7 +653,7 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 
 	std::cerr <<  "terminating initial stack frame\nresult: ";
 	result->dump();
-	terminateOnExit(state);
+	TERMINATE_EXIT(this, state);
 }
 
 void ExecutorVex::handleXferJmp(ExecutionState& state, KInstruction* ki)
@@ -755,7 +756,7 @@ void ExecutorVex::handleXferReturn(
 	stack_depth = state.stack.size();
 	if (!AllowNegativeStack && stack_depth == 1) {
 		/* VEX call-stack is exhausted. KLEE resumes control. */
-		terminateOnExit(state);
+		TERMINATE_EXIT(this, state);
 		return;
 	}
 
@@ -791,7 +792,7 @@ void ExecutorVex::callExternalFunction(
 	std::cerr
 		<< "KLEE: ERROR: Calling non-special external function : "
 		<< function->getName().str() << "\n";
-	terminateOnError(state, "externals disallowed", "user.err");
+	TERMINATE_ERROR(this, state, "externals disallowed", "user.err");
 }
 
 /* copy concrete parts into guest regs. */

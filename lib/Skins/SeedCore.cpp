@@ -64,7 +64,7 @@ bool SeedCore::executeGetValueSeeding(
 		ok = exe->getSolver()->getValue(
 			st, siit->assignment.evaluate(e), value);
 		if (!ok) {
-			exe->terminateEarly(st, "exeGetValues timeout");
+			TERMINATE_EARLY(exe, st, "exeGetValues timeout");
 			return true;
 		}
 
@@ -171,8 +171,8 @@ bool SeedCore::seedObject(
 				si.assignment.bindings[array]);
 			values = std::vector<unsigned char>(mo->size, '\0');
 		} else if (!AllowSeedExtension) {
-			exe->terminateOnError(
-				state, "ran out of seed inputs", "seed.err");
+			TERMINATE_ERROR(exe, state,
+				"ran out of seed inputs", "seed.err");
 			return false;
 		}
 		return true;
@@ -190,7 +190,7 @@ bool SeedCore::seedObject(
 			<< " vs " << obj->name << "[" << obj->numBytes << "]"
 			<< " in test\n";
 
-		exe->terminateOnError(state, msg.str(), "user.err");
+		TERMINATE_ERROR(exe, state, msg.str(), "user.err");
 		return false;
 	}
 

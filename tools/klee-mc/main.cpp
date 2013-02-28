@@ -15,7 +15,6 @@
 #include "../../lib/Skins/DDTExecutor.h"
 #include "../../lib/Skins/KTestExecutor.h"
 #include "KleeHandlerVex.h"
-#include "UCHandler.h"
 #include "klee/Internal/ADT/CmdArgs.h"
 
 #include "guest.h"
@@ -26,7 +25,6 @@
 #include "ExecutorVex.h"
 #include "ExeSymHook.h"
 #include "ExeChk.h"
-#include "ExeUC.h"
 
 // FIXME: Ugh, this is gross. But otherwise our config.h conflicts with LLVMs.
 #include <llvm/Support/CommandLine.h>
@@ -143,9 +141,6 @@ namespace {
 		"guestfrag-base",
 		cl::desc("Base of the fragment"),
 		cl::init(0x400000));
-
-	cl::opt<bool>
-	Unconstrained("unconstrained", cl::desc("Unconstrained Execution."));
 
 	cl::opt<bool>
 	XChkJIT("xchkjit",
@@ -384,14 +379,12 @@ Interpreter* createInterpreter(KleeHandler *handler, Guest* gs)
 		/* suppressed forks */
 		assert (!UseDDT && !UseTaintMerge && !UseTaint);
 
-		if (Unconstrained) return NEW_INTERP_KTEST(ExeUC);
 		if (SymHook) return NEW_INTERP_KTEST(ExeSymHook);
 		if (XChkJIT) return NEW_INTERP_KTEST(ExeChk);
 
 		return NEW_INTERP_KTEST(ExecutorVex);
 	}
 
-	if (Unconstrained) return NEW_INTERP(ExeUC);
 	if (SymHook) return NEW_INTERP(ExeSymHook);
 	if (XChkJIT) return NEW_INTERP(ExeChk);
 
@@ -443,11 +436,7 @@ int main(int argc, char **argv, char **envp)
 		return 2;
 	}
 
-	if (!Unconstrained) {
-		handler = new KleeHandlerVex(cmdargs, gs);
-	} else {
-		handler = new UCHandler(cmdargs, gs);
-	}
+	handler = new KleeHandlerVex(cmdargs, gs);
 
 	interpreter = createInterpreter(handler, gs);
 

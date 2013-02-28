@@ -20,6 +20,7 @@
 #include "klee/Internal/Module/Cell.h"
 #include "klee/Internal/Module/KInstruction.h"
 #include "llvm/ADT/APFloat.h"
+#include "Terminator.h"
 #include "SeedInfo.h"
 #include <vector>
 #include <string>
@@ -51,6 +52,7 @@ namespace klee {
 class Array;
 class Cell;
 class Replay;
+class Terminator;
 class ConstantExpr;
 class ExecutionState;
 class ExeStateManager;
@@ -165,6 +167,8 @@ public:
 	void retFromNested(ExecutionState& state, KInstruction* ki);
 	ExecutionState* getInitialState(void) { return initialStateCopy; }
 
+	void addFiniFunction(llvm::Function* f) { fini_funcs.insert(f); }
+
 	MemoryManager	*memory;
 private:
 	class TimerInfo;
@@ -204,25 +208,14 @@ protected:
 	virtual void runLoop();
 	void step(void);
 
+	/* returns false if unable to start finalization */
+	virtual bool startFini(ExecutionState& state);
+
 	virtual void instCall(ExecutionState& state, KInstruction* ki);
 	virtual void instRet(ExecutionState& state, KInstruction* ki);
 	virtual void instAlloc(ExecutionState& state, KInstruction* ki);
 	virtual void instBranchConditional(
 		ExecutionState& state, KInstruction* ki);
-
-	virtual void printStateErrorMessage(
-		ExecutionState& state,
-		const std::string& message,
-		std::ostream& os);
-
-	// call error handler and terminate state, for execution errors
-	// (things that should not be possible, like illegal instruction or
-	// unlowered instrinsic, or are unsupported, like inline assembly)
-	void terminateOnExecError(
-		ExecutionState &state,
-		const llvm::Twine &message,
-		const llvm::Twine &info="")
-	{ terminateOnError(state, message, "exec.err", info); }
 
 	virtual void replaceStateImmForked(ExecutionState* os, ExecutionState* ns);
 
@@ -240,8 +233,6 @@ protected:
 		KInstruction *ki,
 		llvm::Function *f,
 		std::vector< ref<Expr> > &arguments);
-
-	virtual bool isInterestingTestCase(ExecutionState* st) const;
 
 	virtual const ref<Expr> eval(
 		KInstruction *ki,
@@ -268,10 +259,12 @@ protected:
 	/// Signals the executor to halt execution at the next instruction step.
 	bool haltExecution;
 private:
-	std::vector<TimerInfo*>	timers;
-	std::set<KFunction*>	bad_conc_kfuncs;
+	std::vector<TimerInfo*>		timers;
+	std::set<KFunction*>		bad_conc_kfuncs;
+	std::set<llvm::Function*>	fini_funcs;
+	KFunction			*fini_kfunc;
 
-	Replay			*replay;
+	Replay	*replay;
 
 
 	/// Disables forking, instead a random path is chosen. Enabled as
@@ -403,18 +396,27 @@ public:
 
 	// remove state from queue and delete
 	virtual void terminate(ExecutionState &state);
-	// call exit handler and terminate state
-	virtual void terminateEarly(
-		ExecutionState &state, const llvm::Twine &message);
-	// call exit handler and terminate state
-	virtual void terminateOnExit(ExecutionState &state);
-	// call error handler and terminate state
-	virtual void terminateOnError(
-		ExecutionState &state,
-		const llvm::Twine &message,
-		const char *suffix,
-		const llvm::Twine &longMessage="",
-		bool alwaysEmit = false);
+
+	// Terminate with a termination info packet. Necessary
+	// for producing test cases with information.
+	virtual void terminateWith(Terminator& term, ExecutionState& state);
+
+// exe, state, message
+#define TERMINATE_EARLY(_x,y,m)	\
+	do { TermEarly t(_x,m); (_x)->terminateWith(t, y); } while (0)
+#define TERMINATE_EXIT(_x,y) do { TermExit t(_x); (_x)->terminateWith(t, y); } while (0)
+
+// exe, message, suffix, longmsg="", always emit=false
+#define TERMINATE_ERROR_LONG(_x,s,m,suf,lm,em)	\
+	do { TermError t(_x,m,suf,lm,em); (_x)->terminateWith(t, s); } while (0)
+#define TERMINATE_ERROR(_x,s,m,suff)	\
+	do { TermError t(_x,m,suff); (_x)->terminateWith(t, s); } while (0)
+
+// call error handler and terminate state, for execution errors
+// (things that should not be possible, like illegal instruction or
+// unlowered instrinsic, or are unsupported, like inline assembly)
+#define TERMINATE_EXEC(_x, s, m)	\
+	TERMINATE_ERROR_LONG(_x, s, m, "exec.err", "", false)
 
 	// XXX should just be moved out to utility module
 	ref<klee::ConstantExpr> evalConstant(llvm::Constant *c)

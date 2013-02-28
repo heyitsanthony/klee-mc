@@ -6,6 +6,8 @@
 
 namespace klee
 {
+class Constraints;
+
 class AssignHash
 {
 public:
@@ -41,6 +43,8 @@ public:
 	static uint64_t getEvalHash(const ref<Expr>& e, bool& maybeConst);
 	static uint64_t getEvalHash(const ref<Expr>& e)
 	{ bool mc; return getEvalHash(e, mc); }
+
+	static uint64_t getConstraintHash(const ConstraintManager& c);
 
 private:
 	const ref<Expr>	&e;

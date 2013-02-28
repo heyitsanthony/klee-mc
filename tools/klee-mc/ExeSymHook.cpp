@@ -86,11 +86,11 @@ MallocMMU::MemOpRes MallocMMU::memOpResolve(
 	}
 
 	/* neither blessed nor in the heap. bad access! */
-	exe_esh.terminateOnError(
+	TERMINATE_ERROR_LONG(&exe_esh,
 		state,
 		"heap error: pointer neither blessed nor heap",
 		"heap.err",
-		exe_esh.getAddressInfo(state, address));
+		exe_esh.getAddressInfo(state, address), false);
 
 	ret.usable = false;
 	ret.op.first = NULL;
@@ -270,7 +270,7 @@ void ExeSymHook::watchFuncArg(
 		if (	in_ptr && in_ptr != zero_malloc_ptr && 
 			!esh.hasHeapPtr(in_ptr))
 		{
-			terminateOnError(
+			TERMINATE_ERROR(this,
 				esh,
 				"heap error: freeing non-malloced pointer",
 				"heapfree.err");

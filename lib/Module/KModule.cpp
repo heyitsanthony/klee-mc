@@ -750,3 +750,26 @@ void KModule::bindModuleConstTable(Executor* exe)
 
 unsigned KModule::getWidthForLLVMType(Type* type) const
 { return dataLayout->getTypeSizeInBits(type); }
+
+/* return a function which calls every func in list of nullary functions */
+KFunction* KModule::buildListFunc(
+	const std::vector<llvm::Function*>& kf,
+	const char* name)
+{
+	FunctionType	*ft;
+	BasicBlock	*bb;
+	Function	*f;
+	Type		*retType;
+
+	retType = Type::getVoidTy(getGlobalContext());
+	ft = FunctionType::get(retType, false);
+	f = Function::Create(ft, GlobalValue::ExternalLinkage, name);
+	bb = BasicBlock::Create(getGlobalContext(), "entry", f);
+
+	foreach (it, kf.begin(), kf.end())
+		CallInst::Create((*it), "", bb);
+
+	ReturnInst::Create(getGlobalContext(), bb);
+
+	return addFunction(f);
+}

@@ -1,3 +1,7 @@
+#include <algorithm>
+#include "murmur3.h"
+#include "static/Sugar.h"
+#include "klee/Constraints.h"
 #include "AssignHash.h"
 
 using namespace klee;
@@ -43,6 +47,20 @@ for (int k = -255; i <= 255; k++) {	\
 	for (int i = 0; i < W; i++) seq.push_back(p[i]);	\
 	a.bindFreeToSequence(seq);		\
 	ah.commitAssignment();			\
+}
+
+
+uint64_t AssignHash::getConstraintHash(const ConstraintManager& c)
+{
+	std::vector<uint64_t>	h;
+	uint64_t		out[2];
+
+	foreach (it, c.begin(), c.end())
+		h.push_back(getEvalHash((*it)));
+
+	std::sort(h.begin(), h.end());
+	MurmurHash3_x64_128(h.data(), h.size()*sizeof(8), 321, &out);
+	return out[0]-out[1];
 }
 
 uint64_t AssignHash::getEvalHash(const ref<Expr>& e, bool& maybeConst)

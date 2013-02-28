@@ -34,13 +34,18 @@ uint64_t klee_max_value(uint64_t expr)
 	if (!klee_feasible_ugt(expr, lower_bound))
 		return lower_bound;
 
-	while (upper_bound != lower_bound) {
+	while (upper_bound > lower_bound) {
 		uint64_t	mid = (upper_bound + lower_bound) / 2;
 
-		if (klee_feasible_ugt(expr, mid))
+		if (klee_feasible_ugt(expr, mid)) {
+			/* expr > mid implies max > mid */
+			if (lower_bound == mid+1) return mid+1;
 			lower_bound = mid + 1;
-		else
+		} else {
+			/* expr <= mid implies upper bound is mid */
+			if (upper_bound == mid) break;
 			upper_bound = mid;
+		}
 	}
 
 	return upper_bound;

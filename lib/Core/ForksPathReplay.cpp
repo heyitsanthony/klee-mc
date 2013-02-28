@@ -33,7 +33,7 @@ bool ForksPathReplay::forkFollowReplay(ExecutionState& es, struct ForkInfo& fi)
 
 	// Verify that replay target matches current path constraints
 	if (fi.replayTargetIdx > fi.N) {
-		exe.terminateOnError(es, "replay out of range", "branch.err");
+		TERMINATE_ERROR(&exe, es, "replay out of range", "branch.err");
 		// assert (targetIndex <= fi.N && "replay target out of range");
 		return false;
 	}
@@ -70,7 +70,7 @@ bool ForksPathReplay::forkFollowReplay(ExecutionState& es, struct ForkInfo& fi)
 
 	Query	q(es.constraints, fi.conditions[1]);
 	ss	<< "Query hash: " << (void*)q.hash() << '\n';
-	exe.terminateOnError(es, ss.str().c_str(), "branch.err");
+	TERMINATE_ERROR(&exe, es, ss.str().c_str(), "branch.err");
 
 	klee_warning("hit invalid branch in replay path mode");
 	return false;
@@ -85,7 +85,7 @@ bool ForksPathReplay::forkSetup(ExecutionState& current, struct ForkInfo& fi)
 
 	if (Replay::isReplayOnly() && current.isReplayDone()) {
 		// Done replaying this state, so kill it (if -replay-path-only)
-		exe.terminateEarly(current, "replay path exhausted");
+		TERMINATE_EARLY(&exe, current, "replay path exhausted");
 		return false;
 	}
 

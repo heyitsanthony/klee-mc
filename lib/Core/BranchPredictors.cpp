@@ -8,10 +8,7 @@ namespace klee { extern RNG theRNG; }
 using namespace klee;
 
 
-RandomPredictor::RandomPredictor()
-: phase_hint(0)
-, period(32)
-, period_bump(2) {}
+RandomPredictor::RandomPredictor() {}
 
 #include <iostream>
 bool RandomPredictor::predict(const StateBranch& sb, bool& hint)

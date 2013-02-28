@@ -60,8 +60,8 @@ SFH_DEF_HANDLER(SCConcreteFileSize)
 	ConstantExpr	*path_ce, *size_ce;
 	unsigned char	*buf;
 
-	path_ce = dyn_cast<ConstantExpr>(arguments[0]);
-	size_ce = dyn_cast<ConstantExpr>(arguments[1]);
+	path_ce = dyn_cast<ConstantExpr>(args[0]);
+	size_ce = dyn_cast<ConstantExpr>(args[1]);
 
 	unsigned int		len_in;
 	buf = sfh->readBytesAtAddress(
@@ -87,8 +87,8 @@ SFH_DEF_HANDLER(SCConcreteFileSnapshot)
 	unsigned int		len_in;
 
 
-	path_ce = dyn_cast<ConstantExpr>(arguments[0]);
-	size_ce = dyn_cast<ConstantExpr>(arguments[1]);
+	path_ce = dyn_cast<ConstantExpr>(args[0]);
+	size_ce = dyn_cast<ConstantExpr>(args[1]);
 	buf = sfh->readBytesAtAddress(
 		state, path_ce, size_ce->getZExtValue() + 1, len_in, -1);
 	std::string path = (char*)buf;

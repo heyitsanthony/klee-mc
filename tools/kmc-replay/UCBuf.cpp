@@ -1,19 +1,35 @@
 #include <stdlib.h>
+#include <sys/mman.h>
 #include "UCBuf.h"
 
+#define PAGE_SZ	0x1000UL
 
 UCBuf::UCBuf(
-	const std::string& in_name,
-	guest_ptr in_base_ptr,
-	unsigned in_used_len,
-	const std::vector<char>& in_init_data)
-: name(in_name)
-, base_ptr(in_base_ptr)
-, used_len(in_used_len)
-, init_data(in_init_data)
+	Guest			*_gs,
+	uint64_t		_in_pivot,
+	unsigned		_radius,
+	const std::vector<char>& _init_data)
+: gs(_gs)
+, radius(_radius)
+, init_data(_init_data)
 {
-	pt_idx = getPtIdx(name);
+	int		err;
+	guest_ptr	result;
+
+	page_c = PAGE_SZ*((_radius*2+1 + (PAGE_SZ - 1))/PAGE_SZ);
+	assert (0 ==1  && "STUB!!");
+	err = gs->getMem()->mmap(result, guest_ptr(0), _radius*2+1,
+		PROT_READ | PROT_WRITE,
+		MAP_ANONYMOUS | MAP_PRIVATE,
+		-1,
+		0);
+	assert (err == 0);
+
+	assert (0 == 1 && "STUB");
 }
 
-unsigned UCBuf::getPtIdx(const std::string& s)
-{ return atoi(s.c_str() + 7); }
+UCBuf::~UCBuf()
+{
+	gs->getMem()->munmap(ptr_seg_base, page_c * PAGE_SZ);
+}
+

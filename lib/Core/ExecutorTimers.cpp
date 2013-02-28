@@ -871,7 +871,7 @@ void Executor::processTimers(ExecutionState *current, double maxInstTime)
 		klee_warning(
 			"max-instruction-time exceeded: %.2fs",
 			now - lastCall);
-		terminateEarly(*current, "max-instruction-time exceeded");
+		TERMINATE_EARLY(this, *current, "max-inst-time exceeded");
 	}
 
 	if (timers.empty()) goto done;

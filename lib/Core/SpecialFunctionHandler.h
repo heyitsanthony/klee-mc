@@ -17,12 +17,12 @@
 namespace llvm { class Function; }
 
 #define SFH_CHK_ARGS(x,y)	\
-	assert (arguments.size()==x && "invalid number of arguments to "y)
+	assert (args.size()==x && "invalid number of args to "y)
 #define SFH_DEF_HANDLER(x)		\
 void Handler##x::handle(		\
 	ExecutionState	&state,		\
 	KInstruction	*target,	\
-	std::vector<ref<Expr> >& arguments)
+	std::vector<ref<Expr> >& args)
 
 namespace klee
 {
@@ -40,7 +40,7 @@ public:
 	virtual void handle(
 		ExecutionState &state,
 		KInstruction* target,
-		std::vector<ref<Expr> > &arguments) = 0;
+		std::vector<ref<Expr> > &args) = 0;
 	virtual ~SFHandler(void) {}
 protected:
 	SFHandler(SpecialFunctionHandler* _sfh) : sfh(_sfh) {}
@@ -94,7 +94,7 @@ public:
 		ExecutionState	&state,
 		llvm::Function	*f,
 		KInstruction	*target,
-		std::vector< ref<Expr> > &arguments,
+		std::vector< ref<Expr> > &args,
 		bool insert_ret_vals = false);
 
 	void handleByName(
@@ -134,7 +134,7 @@ public:
 	  	virtual void handle(	\
 			ExecutionState &state,	\
 			KInstruction* target,	\
-			std::vector<ref<Expr> > &arguments);	\
+			std::vector<ref<Expr> > &args);	\
 		x;	\
 	};
 

@@ -134,7 +134,7 @@ SFH_DEF_HANDLER(TaintLoad)
 	--kii;
 	old_expr = state.stack.readLocal(kii);
 	shadow_tag = ShadowValU64::create(
-		cast<klee::ConstantExpr>(arguments[0])->getZExtValue());
+		cast<klee::ConstantExpr>(args[0])->getZExtValue());
 
 	sa = ShadowAlloc::get();
 	old_shadow = ShadowAlloc::getExpr(old_expr);
@@ -168,13 +168,13 @@ SFH_DEF_HANDLER(TaintStore)
 {
 	MMU		*mmu = ShadowCore::getExe()->getMMU();
 	ShadowAlloc	*sa;
-	ref<Expr>	base(arguments[1]);
-	ref<Expr>	value(arguments[0]);
+	ref<Expr>	base(args[1]);
+	ref<Expr>	value(args[0]);
 	ShadowRef	old_shadow(ShadowAlloc::getExpr(value));
 	ref<ShadowVal>	shadow_tag;
 
 	shadow_tag = ShadowValU64::create(
-		cast<klee::ConstantExpr>(arguments[2])->getZExtValue());
+		cast<klee::ConstantExpr>(args[2])->getZExtValue());
 
 	/* already tainted? */
 	if (!old_shadow.isNull() && old_shadow->getShadow() == shadow_tag) {

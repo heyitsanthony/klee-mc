@@ -68,8 +68,7 @@ bool ForksKTest::isBadOverflow(ExecutionState& current)
 		std::cerr << "[KTest] Ran out of objects!!\n";
 
 		pureFork(current);
-		exe.terminateOnError(
-			current,
+		TERMINATE_ERROR(&exe, current,
 			"KTest seeding failed. Ran out of objects!",
 			"ktest.err");
 		return true;
@@ -78,8 +77,7 @@ bool ForksKTest::isBadOverflow(ExecutionState& current)
 	if (updateSymbolics(current) == false) {
 		/* create ktest state outside replay; deal with later */
 		pureFork(current);
-		exe.terminateOnError(
-			current,
+		TERMINATE_ERROR(&exe, current,
 			"KTest seeding failed. Bad objsize?",
 			"ktest.err");
 		return true;

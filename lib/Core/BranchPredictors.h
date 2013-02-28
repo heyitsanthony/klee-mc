@@ -67,9 +67,6 @@ public:
 	virtual ~RandomPredictor() {}
 	virtual bool predict(const StateBranch& sb, bool& hint);
 private:
-	unsigned phase_hint;
-	int	period;
-	int	period_bump;
 };
 
 class KBrPredictor: public BranchPredictor

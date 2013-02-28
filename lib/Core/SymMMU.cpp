@@ -25,10 +25,13 @@ KFunction	*SymMMU::f_store8 = NULL,
 KFunction	*SymMMU::f_load8, *SymMMU::f_load16, *SymMMU::f_load32,
 		*SymMMU::f_load64, *SymMMU::f_load128;
 
+KFunction	*SymMMU::f_cleanup = NULL;
+
 struct loadent
 {
 	const char*	le_name;
 	KFunction**	le_kf;
+	bool		le_required;
 };
 
 void SymMMU::initModule(Executor& exe)
@@ -38,17 +41,18 @@ void SymMMU::initModule(Executor& exe)
 	std::string	suffix("_" + SymMMUType);
 
 	struct loadent	loadtab[] =  {
-		{ "mmu_load_8", &f_load8},
-		{ "mmu_load_16", &f_load16},
-		{ "mmu_load_32", &f_load32},
-		{ "mmu_load_64", &f_load64},
-		{ "mmu_load_128", &f_load128},
-		{ "mmu_store_8", &f_store8},
-		{ "mmu_store_16", &f_store16},
-		{ "mmu_store_32", &f_store32},
-		{ "mmu_store_64", &f_store64},
-		{ "mmu_store_128", &f_store128},
-		{ NULL, NULL}};
+		{ "mmu_load_8", &f_load8, true},
+		{ "mmu_load_16", &f_load16, true},
+		{ "mmu_load_32", &f_load32, true},
+		{ "mmu_load_64", &f_load64, true},
+		{ "mmu_load_128", &f_load128, true},
+		{ "mmu_store_8", &f_store8, true},
+		{ "mmu_store_16", &f_store16, true},
+		{ "mmu_store_32", &f_store32, true},
+		{ "mmu_store_64", &f_store64, true},
+		{ "mmu_store_128", &f_store128, true},
+		{ "mmu_cleanup", &f_cleanup, false},
+		{ NULL, NULL, false}};
 
 	/* already loaded? */
 	if (f_store8 != NULL)
@@ -66,6 +70,8 @@ void SymMMU::initModule(Executor& exe)
 		std::string	func_name(le->le_name + suffix);
 		KFunction	*kf(km->getKFunction(func_name.c_str()));
 		if (kf == NULL) {
+			if (le->le_required == false)
+				continue;
 			std::cerr <<	"[SymMMU] Could not find: " <<
 					func_name << '\n';
 		}
@@ -74,6 +80,9 @@ void SymMMU::initModule(Executor& exe)
 	}
 
 	std::cerr << "[SymMMU] Using '" << SymMMUType << "'\n";
+
+	if (f_cleanup != NULL)
+		exe.addFiniFunction(f_cleanup->function);
 }
 
 SymMMU::SymMMU(Executor& exe)

@@ -13,6 +13,7 @@
 #include "klee/Solver.h"
 #include "../Solver/SMTPrinter.h"
 #include "../Expr/ExprReplaceVisitor.h"
+#include "Terminator.h"
 #include "MemoryManager.h"
 #include "ImpliedValue.h"
 
@@ -122,6 +123,9 @@ ExecutionState::~ExecutionState()
 	if (partseed_assignment) delete partseed_assignment;
 }
 
+ExecutionState* ExecutionState::copy(const ExecutionState* es) const
+{ return new ExecutionState(*es); }
+
 ExecutionState *ExecutionState::branch(bool forReplay)
 {
 	ExecutionState *newState;
@@ -154,6 +158,10 @@ ExecutionState *ExecutionState::branch(bool forReplay)
 	newState->partseed_ktest = NULL;
 	newState->partseed_assignment = NULL;
 
+	if (term.get()) {
+		assert (newState->term.get() != term.get());
+	}
+
 	if (forReplay) newState->compact();
 
 	return newState;
@@ -174,6 +182,8 @@ void ExecutionState::compact(void)
 	onFreshBranch = false;
 	personalInsts = 0;
 	newInsts = 0;
+
+	term = ProtoPtr<Terminator>();
 }
 
 void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf)
@@ -752,6 +762,7 @@ ExecutionState* ExecutionState::createReplay(
 {
 	ExecutionState* newState;
 
+	std::cerr << "CREATE REPLAYS\n";
 	newState = initialState.copy();
 	foreach (it, replayPath.begin(), replayPath.end()) {
 		newState->brChoiceSeq.push_back(*it);

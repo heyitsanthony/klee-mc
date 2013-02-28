@@ -13,13 +13,12 @@ class ShadowMix;
 class DDTCore
 {
 public:
-	DDTCore(Executor* exe);
+	DDTCore();
 	virtual ~DDTCore(void) {}
 	ref<Expr> mixLeft(const ref<Expr>& l, const ref<Expr>& r);
 
 	void taintFunction(llvm::Function* f);
 private:
-	Executor	*exe;
 	ShadowMix	*sm;
 };
 }

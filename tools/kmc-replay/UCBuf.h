@@ -6,29 +6,29 @@
 class UCBuf
 {
 public:
-	UCBuf(	const std::string& in_name,
-		guest_ptr base_ptr,
-		unsigned used_len,
+	UCBuf(	Guest			*gs,
+		uint64_t		in_pivot,
+		unsigned		radius,
 		const std::vector<char>& init_data);
-	virtual ~UCBuf() {}
-	const std::string& getName() const { return name; }
-	guest_ptr getBase(void) const { return base_ptr; }
-	unsigned getUsedLength(void) const { return used_len; }
-	unsigned getIdx(void) const { return pt_idx; }
 
-	static unsigned getPtIdx(const std::string& s);
+	virtual ~UCBuf();
+	unsigned getRadius(void) const { return radius; }
 
 	const char* getData(void) const { return init_data.data(); }
 	unsigned getDataLength(void) const { return init_data.size(); }
 
-	guest_ptr getAlignedBase(void) const
-	{ return guest_ptr(base_ptr.o & ~((uint64_t)0x7)); }
+
 private:
-	const std::string	name;
-	guest_ptr		base_ptr;
-	unsigned 		used_len;
+	Guest			*gs;
+
+	guest_ptr		ptr_seg_base;
+	guest_ptr		ptr_buf_pivot;
+	guest_ptr		ptr_buf_base;
+
+	unsigned 		radius;
+	unsigned		page_c;
+
 	std::vector<char>	init_data;
-	unsigned		pt_idx;
 };
 
 #endif

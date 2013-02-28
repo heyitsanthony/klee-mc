@@ -15,37 +15,29 @@ class UCState
 {
 public:
 	static UCState* init(
-		Guest* gs,
+		Guest		*gs,
 		const char	*funcname,
-		const char	*dirname,
-		unsigned	test_num);
-
-	klee::KTestStream* allocKTest(void) const;
+		klee::KTestStream	*kts);
 
 	void save(const char* fname) const;
 	virtual ~UCState();
 
 protected:
-	UCState(Guest* gs,
-		const char	*funcname,
-		const char	*dirname,
-		unsigned	test_num);
+	UCState(Guest* gs, const char *funcname, klee::KTestStream *kts);
 
 private:
 	void setupRegValues(klee::KTestStream* kts_uc);
 
-	template <typename UCTabEnt>
 	void loadUCBuffers(Guest* gs, klee::KTestStream* kts_uc);
 
 	Guest		*gs;
 	const char	*funcname;
-	const char	*dirname;
-	unsigned	test_num;
 	bool		ok;
 
-	typedef std::map<std::string, UCBuf*> ucbuf_map_ty;
 	std::set<uint64_t>	uc_pages;
-	ucbuf_map_ty		ucbufs;
+
+	typedef std::vector<UCBuf*> ucbufs_ty;
+	ucbufs_ty		ucbufs;
 };
 
 #endif

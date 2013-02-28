@@ -67,18 +67,10 @@ extern double	MaxSTPTime;
 namespace {
   DECL_OPTBOOL(ChkConstraints, "chk-constraints");
   DECL_OPTBOOL(YieldUncached, "yield-uncached");
-  DECL_OPTBOOL(OnlyOutputStatesCoveringNew, "only-output-states-covering-new");
-  DECL_OPTBOOL(OnlyOutputStatesUncommitted, "only-output-states-uncommitted");
   DECL_OPTBOOL(DebugPrintValues, "debug-print-values");
   DECL_OPTBOOL(DebugCheckForImpliedValues, "debug-check-for-implied-values");
   DECL_OPTBOOL(AllExternalWarnings, "all-external-warnings");
   DECL_OPTBOOL(VerifyPath, "verify-path");
-
-  cl::opt<bool>
-  ConcretizeEarlyTerminate(
-  	"concretize-early",
-	cl::desc("Concretizee early terminations"),
-	cl::init(true));
 
   cl::opt<bool>
   DumpBadInitValues(
@@ -104,11 +96,6 @@ namespace {
   	cl::desc("Steer current state toward uncovered branches"),
 	cl::init(true));
 
-  cl::opt<bool>
-  EmitAllErrors(
-  	"emit-all-errors",
-        cl::desc("Generate tests cases for all errors "
-        	"(default=one per (error,instruction) pair)"));
 
   cl::opt<double>
   MaxInstructionTime(
@@ -174,6 +161,7 @@ Executor::Executor(InterpreterHandler *ih)
 , symPathWriter(0)
 , sfh(0)
 , haltExecution(false)
+, fini_kfunc(0)
 , replay(0)
 , atMemoryLimit(false)
 , inhibitForking(false)
@@ -185,11 +173,9 @@ Executor::Executor(InterpreterHandler *ih)
 	std::min(MaxSTPTime,(double)MaxInstructionTime) : MaxSTPTime)
 {
 	/* rule builder should be installed before equiv checker, otherwise
-	 * we wind up wasting time searching the equivdb for rules we
-	 * already have! */
-	if (UseRuleBuilder) {
+	 * we waste time searching the equivdb for rules we already have! */
+	if (UseRuleBuilder)
 		Expr::setBuilder(RuleBuilder::create(Expr::getBuilder()));
-	}
 
 	solver = createSolverChain(
 		stpTimeout,
@@ -249,7 +235,7 @@ void Executor::addConstrOrDie(ExecutionState &state, ref<Expr> condition)
 	if (addConstraint(state, condition))
 		return;
 
-	terminateOnError(state, "Died adding constraint", "constr.err");
+	TERMINATE_ERROR(this, state, "Died adding constraint", "constr.err");
 }
 
 bool Executor::addConstraint(ExecutionState &state, ref<Expr> condition)
@@ -360,7 +346,7 @@ Executor::toConstant(
 		return CE;
 
 	if (solver->getValue(state, e, value) == false) {
-		terminateEarly(state, "toConstant query timeout");
+		TERMINATE_EARLY(this, state, "toConstant query timeout");
 		return MK_CONST(0, e->getWidth());
 	}
 
@@ -394,7 +380,7 @@ void Executor::executeGetValue(
 	if (target == NULL) return;
 
 	if (solver->getValue(state, e, value) == false) {
-		terminateEarly(state, "exeGetVal timeout");
+		TERMINATE_EARLY(this, state, "exeGetVal timeout");
 		return;
 	}
 
@@ -455,7 +441,7 @@ void Executor::executeCallNonDecl(
 	callingArgs = arguments.size();
 	funcArgs = f->arg_size();
 	if (callingArgs < funcArgs) {
-		terminateOnError(
+		TERMINATE_ERROR(this,
 			state,
 			"calling function with too few arguments",
 			"user.err");
@@ -469,7 +455,7 @@ void Executor::executeCallNonDecl(
 		}
 	} else {
 		if (!state.setupCallVarArgs(funcArgs, arguments)) {
-			terminateOnExecError(state, "out of memory (varargs)");
+			TERMINATE_EXEC(this, state, "out of memory (varargs)");
 			return;
 		}
 	}
@@ -615,8 +601,7 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 		// undeclared functions.
 		if (caller->use_empty()) return;
 
-		terminateOnExecError(
-			state, "return void when caller expected a result");
+		TERMINATE_EXEC(this, state, "return void but expected result");
 		return;
 	}
 
@@ -681,7 +666,7 @@ void Executor::instRet(ExecutionState &state, KInstruction *ki)
 	if (state.stack.size() <= 1) {
 		assert (!(state.getCaller()) &&
 			"caller set on initial stack frame");
-		terminateOnExit(state);
+		TERMINATE_EXIT(this, state);
 		return;
 	}
 
@@ -873,7 +858,7 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 	std::cerr << "[Exe] Getting assignment\n";
 	if (getSatAssignment(st, a) == false) {
 		bad_conc_kfuncs.insert(st.getCurrentKFunc());
-		terminateEarly(st, "couldn't concretize imm state");
+		TERMINATE_EARLY(this, st, "couldn't concretize imm state");
 		return new_st;
 	}
 
@@ -883,7 +868,7 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 	foreach (it, st.addressSpace.begin(), st.addressSpace.end()) {
 		if (!concretizeObject(st, a, it->first, it->second.os, wt)) {
 			bad_conc_kfuncs.insert(st.getCurrentKFunc());
-			terminateEarly(st, "timeout eval on conc state");
+			TERMINATE_EARLY(this, st, "timeout eval on conc state");
 			return new_st;
 		}
 	}
@@ -1014,7 +999,7 @@ void Executor::instCall(ExecutionState& state, KInstruction *ki)
 		llvm::ConstantExpr *ce = dyn_cast<llvm::ConstantExpr>(fp);
 
 		if (isa<InlineAsm>(fp)) {
-			terminateOnExecError(state, "inline asm not supported");
+			TERMINATE_EXEC(this, state, "inline asm not supported");
 			return;
 		}
 
@@ -1176,7 +1161,7 @@ ref<Expr> Executor::cmpVector(
 	VCMP_OP(ICMP_SLT, Slt)
 	VCMP_OP(ICMP_SLE, Sle)
 	default:
-		terminateOnExecError(state, "invalid vector ICmp predicate");
+		TERMINATE_EXEC(this, state, "invalid vector ICmp predicate");
 		return NULL;
 	}
 	return result;
@@ -1216,7 +1201,7 @@ ref<Expr> Executor::cmpScalar(
 	case ICmpInst::ICMP_SGE: return MK_SGE(left, right);
 	case ICmpInst::ICMP_SLT: return MK_SLT(left, right);
 	case ICmpInst::ICMP_SLE: return MK_SLE(left, right);
-	default: terminateOnExecError(state, "invalid scalar ICmp predicate");
+	default: TERMINATE_EXEC(this, state, "invalid scalar ICmp predicate");
 	}
 	return NULL;
 }
@@ -1316,7 +1301,7 @@ void Executor::instSwitch(ExecutionState& state, KInstruction *ki)
 
 	/* may not have any targets to jump to! */
 	if (targets.empty()) {
-		terminateEarly(state, "bad switch");
+		TERMINATE_EARLY(this, state, "bad switch");
 		return;
 	}
 
@@ -1550,7 +1535,7 @@ void Executor::instAlloc(ExecutionState& state, KInstruction* ki)
 
 	isLocal = i->getOpcode() == Instruction::Alloca;
 	if (size->getKind() != Expr::Constant) {
-		terminateOnExecError(state, "non-const alloca");
+		TERMINATE_EXEC(this, state, "non-const alloca");
 		return;
 	}
 
@@ -1583,7 +1568,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     // Note that this is not necessarily an internal bug, llvm will
     // generate unreachable instructions in cases where it knows the
     // program will crash. It is effectively a SEGV or internal error.
-    terminateOnExecError(state, "reached \"unreachable\" instruction");
+    TERMINATE_EXEC(this, state, "reached \"unreachable\" instruction");
     break;
 
   case Instruction::Invoke:
@@ -1608,7 +1593,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
   }
 
   case Instruction::VAArg:
-    terminateOnExecError(state, "unexpected VAArg instruction");
+    TERMINATE_EXEC(this, state, "unexpected VAArg instruction");
     break;
 
   // Arithmetic / logical
@@ -1647,7 +1632,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
 		ok_state = &state;				\
 	}							\
 	if (bad_state != NULL) {				\
-		terminateOnError(*bad_state, 		\
+		TERMINATE_ERROR(this, *bad_state, 		\
 			"Tried to divide by zero!",		\
 			"div.err");				\
 	}							\
@@ -1747,8 +1732,9 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     right = toConstant(state, eval(ki, 1, state), "floating point");	\
     left = toConstant(state, eval(ki, 0, state), "floating point");	\
     if (!fpWidthToSemantics(left->getWidth()) ||				\
-        !fpWidthToSemantics(right->getWidth()))					\
-      return terminateOnExecError(state, "Unsupported "#x" operation");	\
+        !fpWidthToSemantics(right->getWidth())) {				\
+      TERMINATE_EXEC(this, state, "Unsupported "#x" operation");		\
+      return; } \
 	\
     llvm::APFloat Res(left->getAPValue());					\
     Res.y(APFloat(right->getAPValue()), APFloat::rmNearestTiesToEven);		\
@@ -1768,7 +1754,7 @@ INST_FOP_ARITH(FRem, mod)
     const llvm::fltSemantics *a_semantics = fpWidthToSemantics(arg->getWidth());\
     const llvm::fltSemantics *r_semantics = fpWidthToSemantics(resultType);\
     (void)resultType, (void)a_semantics, (void)r_semantics; /* maybe unused */	\
-    if (!z || x) return terminateOnExecError(state, y);
+    if (!z || x) { TERMINATE_EXEC(this, state, y); return; }
 
   case Instruction::FPTrunc: {
 	FP_SETUP(FPTruncInst,
@@ -1850,8 +1836,10 @@ INST_FOP_ARITH(FRem, mod)
     ref<ConstantExpr> left(toConstant(state, eval(ki, 0, state), "fp"));
     ref<ConstantExpr> right(toConstant(state, eval(ki, 1, state), "fp"));
     if (!fpWidthToSemantics(left->getWidth()) ||
-        !fpWidthToSemantics(right->getWidth()))
-      return terminateOnExecError(state, "Unsupported FCmp operation");
+        !fpWidthToSemantics(right->getWidth())) {
+      TERMINATE_EXEC(this, state, "Unsupported FCmp operation");
+      return;
+    }
 
     APFloat LHS(left->getAPValue());
     APFloat RHS(right->getAPValue());
@@ -1895,7 +1883,7 @@ INST_FOP_ARITH(FRem, mod)
 
     std::cerr << "OOPS! ";
     i->dump();
-    terminateOnExecError(state, "illegal instruction");
+    TERMINATE_EXEC(this, state, "illegal instruction");
     break;
   }
 
@@ -1906,7 +1894,7 @@ INST_FOP_ARITH(FRem, mod)
 			ss << "error msg: " << Expr::errorMsg << '\n';
 		if (!Expr::errorExpr.isNull())
 			ss << "bad expr: " << Expr::errorExpr << '\n';
-		terminateOnError(state, ss.str(), "expr.err");
+		TERMINATE_ERROR(this, state, ss.str(), "expr.err");
 		Expr::resetErrors();
 	}
 }
@@ -1927,7 +1915,7 @@ void Executor::killStates(ExecutionState* &state)
   std::partial_sort(
     arr.begin(), arr.begin() + toKill, arr.end(), KillOrCompactOrdering());
   for (unsigned i = 0; i < toKill; ++i) {
-    terminateEarly(*arr[i], "memory limit");
+    TERMINATE_EARLY(this, *arr[i], "memory limit");
     if (state == arr[i]) state = NULL;
   }
   klee_message("Killed %u states.", toKill);
@@ -1986,7 +1974,7 @@ void Executor::handleMemoryUtilization(ExecutionState* &state)
 	lastMemoryLimitOperationInstructions = stats::instructions;
 
 	if (ReplayInhibitedForks && instLimit > 0x20000) {
-		std::cerr << "Replay inhibited forks.. COMPACTING!!\n";
+		std::cerr << "[Exe] Replay inhibited forks.. COMPACTING!!\n";
 		stateManager->compactPressureStates(MaxMemory);
 		return;
 	}
@@ -2042,6 +2030,20 @@ void Executor::run(ExecutionState &initState)
 	initialStateCopy->ptreeNode->markReplay();
 	pt->splitStates(initState.ptreeNode, &initState, initialStateCopy);
 
+	/* create fini func */
+	if (fini_kfunc == NULL && fini_funcs.empty() == false) {
+		std::vector<Function*> f_l(
+			fini_funcs.begin(),
+			fini_funcs.end());
+
+		f_l.push_back((Function*)kmodule->module->getOrInsertFunction(
+			"klee_resume_exit",
+			FunctionType::get(
+				Type::getVoidTy(getGlobalContext()),
+				false)));
+		fini_kfunc = kmodule->buildListFunc(f_l, "__klee_finilist_f");
+	}
+
 	if (replay != NULL) replay->replay(this, &initState);
 
 	if (Replay::isReplayOnly()) {
@@ -2073,7 +2075,7 @@ eraseStates:
 		ExecutionState &state = **it;
 		stepInstruction(state); // keep stats rolling
 		if (DumpStatesOnHalt)
-			terminateEarly(state, "execution halting");
+			TERMINATE_EARLY(this, state, "execution halting");
 		else
 			terminate(state);
 	}
@@ -2174,7 +2176,7 @@ std::string Executor::getAddressInfo(
 
 void Executor::yield(ExecutionState& state)
 {
-	terminateOnError(state, "yielding state", "yield");
+	TERMINATE_ERROR(this, state, "yielding state", "yield");
 	// stateManager->yield(&state);
 }
 
@@ -2194,133 +2196,6 @@ void Executor::terminate(ExecutionState &state)
 
 	state.pc = state.prevPC;
 	stateManager->queueRemove(&state);
-}
-
-void Executor::terminateEarly(
-	ExecutionState &state,
-	const Twine &message)
-{
-	static int	call_depth = 0;
-	ExecutionState	*term_st;
-
-	call_depth++;
-	term_st = &state;
-	std::cerr << "[Exe] TERMINATING EARLY\n";
-	if (	ConcretizeEarlyTerminate &&
-		!haltExecution &&
-		call_depth == 1 && !state.isConcrete())
-	{
-		ExecutionState	*sym_st;
-
-		/* timed out on some instruction-- back it up */
-		state.abortInstruction();
-
-		sym_st = concretizeState(state);
-		if (sym_st != NULL)
-			term_st = sym_st;
-	}
-
-	term_st->isPartial = true;
-	if (isInterestingTestCase(term_st)) {
-		std::stringstream	ss;
-
-		ss << message.str() << '\n';
-		printStackTrace(*term_st, ss);
-		interpreterHandler->processTestCase(
-			*term_st, ss.str().c_str(), "early");
-	}
-
-	call_depth--;
-	terminate(*term_st);
-}
-
-bool Executor::isInterestingTestCase(ExecutionState* st) const
-{
-	if (OnlyOutputStatesUncommitted)
-		return (Replay::isCommitted(*this, *st) == false);
-
-	if (OnlyOutputStatesCoveringNew) return st->coveredNew;
-
-	return true;
-}
-
-void Executor::terminateOnExit(ExecutionState &state)
-{
-	state.isPartial = false;
-
-	if (isInterestingTestCase(&state))
-		interpreterHandler->processTestCase(state, 0, 0);
-
-	terminate(state);
-}
-
-typedef std::pair<CallStack::insstack_ty, std::string> errmsg_ty;
-
-void Executor::terminateOnError(
-	ExecutionState &state,
-	const llvm::Twine &messaget,
-	const char *suffix,
-	const llvm::Twine &info,
-	bool alwaysEmit)
-{
-	std::string message = messaget.str();
-	static std::set<errmsg_ty> emittedErrors;
-
-	state.isPartial = false;
-	interpreterHandler->incErrorsFound();
-
-	/* It can be annoying to emit errors that happen with the
-	 * same trace. */
-	if (!alwaysEmit && !EmitAllErrors) {
-		CallStack::insstack_ty	ins;
-
-		ins = state.stack.getKInstStack();
-		ins.push_back(state.prevPC);
-
-		errmsg_ty		em(ins, message);
-		if (emittedErrors.insert(em).second == false) {
-			terminate(state);
-			return;
-		}
-	}
-
-	std::ostringstream msg;
-	printStateErrorMessage(state, message, msg);
-
-	std::string info_str = info.str();
-	if (info_str != "") msg << "Info: \n" << info_str;
-
-	interpreterHandler->processTestCase(state, msg.str().c_str(), suffix);
-
-	terminate(state);
-}
-
-void Executor::printStateErrorMessage(
-	ExecutionState& state,
-	const std::string& message,
-	std::ostream& os)
-{
-	const InstructionInfo &ii = *state.prevPC->getInfo();
-	if (ii.file != "") {
-		klee_message("ERROR: %s:%d: %s",
-			ii.file.c_str(),
-			ii.line,
-			message.c_str());
-	} else {
-		klee_message("ERROR: %s", message.c_str());
-	}
-
-	if (!EmitAllErrors)
-		klee_message("NOTE: now ignoring this error at this location");
-
-	os << "Error: " << message << "\n";
-	if (ii.file != "") {
-		os << "File: " << ii.file << "\n";
-		os << "Line: " << ii.line << "\n";
-	}
-
-	os << "Stack: \n";
-	printStackTrace(state, os);
 }
 
 void Executor::printStackTrace(const ExecutionState& st, std::ostream& os) const
@@ -2353,11 +2228,11 @@ void Executor::resolveExact(
 	}
 
 	if (unbound) {
-		terminateOnError(
+		TERMINATE_ERROR_LONG(this,
 			*unbound,
 			"memory error: invalid pointer: " + name,
 			"ptr.err",
-			getAddressInfo(*unbound, p));
+			getAddressInfo(*unbound, p), false);
 	}
 }
 
@@ -2546,7 +2421,7 @@ void Executor::executeFree(
 	ObjectPair		op;
 
 	if (address->getKind() != Expr::Constant) {
-		terminateOnExecError(state, "non-const free address");
+		TERMINATE_EXEC(this, state, "non-const free address");
 		return;
 	}
 
@@ -2556,23 +2431,23 @@ void Executor::executeFree(
 
 	mo = op_mo(op);
 	if (mo == NULL) {
-		terminateOnError(
+		TERMINATE_ERROR_LONG(this,
 			state,
 			"free invalid address",
 			"free.err",
-			getAddressInfo(state, address));
+			getAddressInfo(state, address), false);
 	} else if (mo->isLocal()) {
-		terminateOnError(
+		TERMINATE_ERROR_LONG(this,
 			state,
 			"free of alloca",
 			"free.err",
-			getAddressInfo(state, address));
+			getAddressInfo(state, address), false);
 	} else if (mo->isGlobal()) {
-		terminateOnError(
+		TERMINATE_ERROR_LONG(this,
 			state,
 			"free of global",
 			"free.err",
-			getAddressInfo(state, address));
+			getAddressInfo(state, address), false);
 	} else {
 		state.unbindObject(mo);
 	}
@@ -2643,7 +2518,7 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 		if (iter.free == NULL) return false;
 
 		if (solver->getValue(*(iter.free), iter.v, value) == false) {
-			terminateEarly(
+			TERMINATE_EARLY(this,
 				*(iter.free),
 				"solver died on xferIterNext");
 			return false;
@@ -2668,7 +2543,7 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 					(void*)addr);
 			}
 
-			terminateOnError(
+			TERMINATE_ERROR(this,
 				*(iter.res.first),
 				"xfer iter error: bad pointer",
 				"badjmp.err");
@@ -2695,7 +2570,7 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 
 	if (iter.badjmp_c >= MAX_BADJMP) {
 		if (iter.free == NULL) return false;
-		terminateOnError(
+		TERMINATE_ERROR(this,
 			*(iter.free),
 			"xfer iter erorr: too many bad jumps",
 			"badjmp.err");
@@ -2765,4 +2640,36 @@ void Executor::addModule(Module* m)
 {
 	kmodule->addModule(m);
 	globals->updateModule();
+}
+
+bool Executor::startFini(ExecutionState& state)
+{
+	if (fini_funcs.empty())
+		return false;
+
+	assert (state.getOnFini() == false);
+
+	std::vector<ref<Expr> >	no_args;
+	executeCallNonDecl(state, fini_kfunc->function, no_args);
+
+	return true;
+}
+
+void Executor::terminateWith(Terminator& term, ExecutionState& state)
+{
+	if (term.terminate(state) == false)
+		return;
+
+	if (term.isInteresting(state) == false) {
+		terminate(state);
+		return;
+	}
+
+	if (state.getOnFini() == false && startFini(state)) {
+		state.setFini(term);
+		return;
+	}
+
+	term.process(state);
+	terminate(state);
 }

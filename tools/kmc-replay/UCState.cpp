@@ -6,65 +6,80 @@
 #include <assert.h>
 #include "guestmem.h"
 #include "guestcpustate.h"
-
-#include "../klee-mc/UCTabEnt.h"
+#include "../klee-mc/Exempts.h"
+#include "../../runtime/mmu/uc.h"
 #include "UCState.h"
 #include "UCBuf.h"
 #include "symbols.h"
-
 using namespace klee;
 
-#define PAGE_SZ	0x1000UL
+typedef std::vector<std::vector<char> > ucbs_raw_ty;
+typedef std::vector<struct uce_backing*> uc_backings_ty;
+typedef std::vector<struct uc_ent > uc_ents_ty;
 
-typedef std::map<std::string, std::vector<char> > ucdata_map_ty;
-
-
-template <typename UCTabEnt>
-void UCState::loadUCBuffers(Guest* gs, KTestStream* kts_uc)
+void UCState::loadUCBuffers(Guest* gs, KTestStream* kts)
 {
-	const UCTabEnt		*uctab;
 	char			*lentab;
 	const KTestObject	*kto;
 	char			*cpu_state;
 	unsigned		cpu_len;
-	ucdata_map_ty		ucdata;
+	uc_ents_ty		uc_ents;
+	ucbs_raw_ty		uc_b_raw;
+	uc_backings_ty		uc_backings;
 
-	lentab = kts_uc->feedObjData(); // XXX need to be smarter
-	uctab = (const UCTabEnt*)lentab;
+	/* collect UC data */
+	while ((kto = kts->nextObject()) != NULL) {
+		int uce_prefix, ucb_prefix;
 
-	while ((kto = kts_uc->nextObject()) != NULL) {
-		ucdata[kto->name] = std::vector<char>(
-			kto->bytes, kto->bytes+kto->numBytes);
+		uce_prefix = strncmp("uce_", kto->name, 4);
+		ucb_prefix = strncmp("ucb_", kto->name, 4);
+
+		if (!uce_prefix && kto->numBytes == sizeof(struct uc_ent)) {
+			struct uc_ent	*uce;
+			uce = static_cast<struct uc_ent*>((void*)kto->bytes);
+			uc_ents.push_back(*uce);
+		}
+
+		if (!ucb_prefix) {
+			uc_b_raw.push_back(std::vector<char>(
+				kto->bytes, kto->bytes + kto->numBytes));
+		}
 	}
 
-	/* create UCBufs from ucdata */
-	foreach (it, ucdata.begin(), ucdata.end()) {
-		std::string	uc_name(it->first);
-		uint64_t	base_ptr;
-		unsigned	idx;
-
-		std::cerr << uc_name << '\n';
-
-		// uc_buf_n => uc_buf_n + 7 = n
-		idx = UCBuf::getPtIdx(uc_name);
-		assert (idx < (22060 / sizeof(*uctab)) &&
-			"UCBUF OUT OF BOUNDS");
-
-		assert (uctab[idx].len == it->second.size());
-
-		base_ptr = NULL;
-		if (uctab[idx].real_ptr) base_ptr = uctab[idx].real_ptr;
-		if (uctab[idx].sym_ptr) base_ptr = uctab[idx].sym_ptr;
-		assert (base_ptr &&
-			"No base pointer for ucbuf given!");
-
-		ucbufs[uc_name] = new UCBuf(
-			uc_name,
-			guest_ptr(base_ptr),
-			uctab[idx].len,
-			it->second);
+	/* load largest fitting backing for given index */
+	uc_backings.resize(uc_ents.size());
+	foreach (it, uc_b_raw.begin(), uc_b_raw.end()) {
+		struct uce_backing	*ucb;
+		ucb = static_cast<struct uce_backing*>((void*)(*it).data());
+		uc_backings[ucb->ucb_uce_n - 1] = ucb;
 	}
 
+	ucbufs.resize(uc_ents.size());
+	foreach (it, uc_ents.begin(), uc_ents.end()) {
+		struct uc_ent		uce(*it);
+		unsigned		idx;
+
+		idx = uce.uce_n - 1;
+		std::cerr << "IDX=" << idx << '\n';
+		if (uc_backings[idx] == NULL) {
+			std::cerr << "No backing on idx=" << uce.uce_n << '\n';
+			continue;
+		}
+
+		std::cerr << "RADIUS: " << uce.uce_radius << '\n';
+		std::cerr << "PIVOT: " << uce.access.a_pivot << '\n';
+
+		std::vector<char>	init_dat(
+			uc_backings[idx]->ucb_dat,
+			uc_backings[idx]->ucb_dat + 1 + uce.uce_radius*2);
+
+		ucbufs[idx] = new UCBuf(
+			gs,
+			(uint64_t)uce.access.a_pivot, uce.uce_radius, init_dat);
+	}
+
+
+#if 0
 	/* build page list */
 	foreach (it, ucbufs.begin(), ucbufs.end()) {
 		UCBuf	*ucb = it->second;
@@ -125,37 +140,27 @@ void UCState::loadUCBuffers(Guest* gs, KTestStream* kts_uc)
 	}
 
 	std::cerr << "Copied in unconstrained buffers\n";
+#endif
+	assert (0 == 1 && "STUB");
 }
 
 UCState* UCState::init(
 	Guest* gs,
 	const char	*funcname,
-	const char	*dirname,
-	unsigned	test_num)
+	KTestStream	*kts)
 {
 	/* patch up for UC */
 	UCState	*ucs;
 
 	printf("Using func: %s\n", funcname);
 
-	ucs = new UCState(gs, funcname, dirname, test_num);
+	ucs = new UCState(gs, funcname, kts);
 	if (ucs->ok) {
 		return ucs;
 	}
 
 	delete ucs;
 	return NULL;
-}
-
-/* return stripped ktest file */
-KTestStream* UCState::allocKTest(void) const
-{
-	char	fname_kts[256];
-	snprintf(
-		fname_kts,
-		256,
-		"%s/test%06d.ktest.gz", dirname, test_num);
-	return KTestStream::create(fname_kts);
 }
 
 void UCState::setupRegValues(KTestStream* kts_uc)
@@ -176,35 +181,21 @@ void UCState::setupRegValues(KTestStream* kts_uc)
 UCState::UCState(
 	Guest		*in_gs,
 	const char	*in_func,
-	const char	*in_dirname,
-	unsigned	in_test_num)
+	KTestStream	*kts)
 : gs(in_gs)
 , funcname(in_func)
-, dirname(in_dirname)
-, test_num(in_test_num)
 , ok(false)
 {
-	KTestStream	*kts_uc;
 	const Symbol	*sym;
-	char		fname_kts[256];
-
-	/* 1. setup environment */
-	snprintf(
-		fname_kts,
-		256,
-		"%s/test%06d.ucktest.gz", dirname, test_num);
-	kts_uc = KTestStream::create(fname_kts);
-
-	assert (kts_uc);
 
 	/* 1.a setup register values */
-	setupRegValues(kts_uc);
+	setupRegValues(kts);
 
 	/* 1.b resteer execution to function */
 	sym = gs->getSymbols()->findSym(funcname);
 	if (sym == NULL) {
 		std::cerr << "UC Function '" << funcname << "' not found. ULP\n";
-		delete kts_uc;
+		delete kts;
 		return;
 	}
 
@@ -219,7 +210,7 @@ UCState::UCState(
 	/* return to 'deadbeef' when done executing */
 	if (gs->getArch() == Arch::ARM) {
 		/* this is the wrong thing to do; I know */
-		((uint32_t*)gs->getCPUState()->getStateData())[14] = 0xdeadbeef;
+		((uint32_t*)gs->getCPUState()->getStateData())[16] = 0xdeadbeef;
 	} else {
 		gs->getMem()->writeNative(
 			gs->getCPUState()->getStackPtr(),
@@ -227,14 +218,10 @@ UCState::UCState(
 	}
 
 	/* 2. scan through ktest, allocate buffers */
-	if (gs->getMem()->is32Bit())
-		loadUCBuffers<UCTabEnt32>(gs, kts_uc);
-	else
-		loadUCBuffers<UCTabEnt64>(gs, kts_uc);
+	loadUCBuffers(gs, kts);
 
 	/* done setting up buffers, drop UC ktest data */
-	delete kts_uc;
-
+	delete kts;
 	ok = true;
 }
 
@@ -250,6 +237,9 @@ void UCState::save(const char* fname) const
 
 	std::cerr << "SAVING!!!!!\n";
 
+	assert (0 == 1 && "STUB");
+
+#if 0
 	/* write out buffers */
 	foreach (it, ucbufs.begin(), ucbufs.end()) {
 		UCBuf		*ucb = it->second;
@@ -279,10 +269,11 @@ void UCState::save(const char* fname) const
 
 	fprintf(f, "</ucstate>");
 	fclose(f);
+#endif
 }
 
 UCState::~UCState(void)
 {
 	foreach (it, ucbufs.begin(), ucbufs.end())
-		delete it->second;
+		delete (*it);
 }

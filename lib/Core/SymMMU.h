@@ -22,6 +22,8 @@ private:
 
 	static KFunction	*f_load8, *f_load16, *f_load32,
 				*f_load64, *f_load128;
+
+	static KFunction	*f_cleanup;
 };
 }
 

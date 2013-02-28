@@ -55,7 +55,7 @@ void KleeMMU::writeToMemRes(
 	const ref<Expr>& value)
 {
 	if (res.os->readOnly) {
-		exe.terminateOnError(
+		TERMINATE_ERROR(&exe,
 			state,
 			"memory error: object read only",
 			"readonly.err");
@@ -160,43 +160,41 @@ void KleeMMU::memOpError(ExecutionState& state, MemOp& mop)
 			return;
 	}
 
-	if (incomplete) {
-		/* Did not resolve everything we could.
-		 * Let's check for an invalid pointer.. */
-		ref<Expr>	oob_cond;
-
-		oob_cond = state.addressSpace.getOOBCond(mop.address);
-
-		Executor::StatePair branches(
-			exe.fork(*unbound, oob_cond, true));
-
-		/* ptr maps to OOB region */
-		if (branches.first) {
-			exe.terminateOnError(
-				*branches.first,
-				"memory error: out of bound pointer",
-				"ptr.err",
-				exe.getAddressInfo(*branches.first, mop.address));
-		}
-
-		/* ptr does not map to OOB region */
-		if (branches.second)
-			exe.terminateEarly(
-				*branches.second,
-				"query timed out (memOpError)");
-
-		if (!branches.first && !branches.second) {
-			klee_warning(
-				"KleeMMU query total timeout: may miss OOB ptr");
-		}
+	if (incomplete == false) {
+		TERMINATE_ERROR_LONG(&exe,
+			*unbound,
+			"memory error: out of bound pointer",
+			"ptr.err",
+			exe.getAddressInfo(*unbound, mop.address), false);
 		return;
 	}
 
-	exe.terminateOnError(
-		*unbound,
-		"memory error: out of bound pointer",
-		"ptr.err",
-		exe.getAddressInfo(*unbound, mop.address));
+	/* Did not resolve everything we could. Check for invalid pointer.. */
+	ref<Expr>	oob_cond;
+
+	oob_cond = state.addressSpace.getOOBCond(mop.address);
+
+	Executor::StatePair branches(
+		exe.fork(*unbound, oob_cond, true));
+
+	/* ptr maps to OOB region */
+	if (branches.first) {
+		TERMINATE_ERROR_LONG(&exe,
+			*branches.first,
+			"memory error: out of bound pointer",
+			"ptr.err",
+			exe.getAddressInfo(*branches.first, mop.address),
+			false);
+	}
+
+	/* ptr does not map to OOB region */
+	if (branches.second)
+		TERMINATE_EARLY(&exe,
+			*branches.second,
+			"query timed out (memOpError)");
+
+	if (!branches.first && !branches.second)
+		klee_warning("KleeMMU query total timeout: may miss OOB ptr");
 }
 
 bool KleeMMU::exeMemOp(ExecutionState &state, MemOp& mop)
@@ -397,7 +395,7 @@ KleeMMU::MemOpRes KleeMMU::memOpResolveExpr(
 		alwaysInBounds);
 	if (!ret.rc) {
 		state.pc = state.prevPC;
-		exe.terminateEarly(state, "query timed out (memOpResolve)");
+		TERMINATE_EARLY(&exe, state, "query timed out (memOpResolve)");
 		return MemOpRes::failure();
 	}
 

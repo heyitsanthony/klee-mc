@@ -2,40 +2,38 @@
 #include "klee/klee.h"
 #include "mmu_testptr.h"
 #include "mmu.h"
-
-extern void* malloc(unsigned long n);
-extern void free(void*);
-
-#define MAX_RADIUS	4096
-#define MIN_RADIUS	8
-
-struct uc_ent
-{
-	/* symbolic stuff */
-	struct {
-		void* a_min;
-		void* a_max;
-		void* a_pivot;
-	} access;
-
-	unsigned int	uce_radius;
-
-	/* physical stuff */
-	uint64_t	uce_pivot_hash;
-	void		*uce_backing;
-	unsigned int	uce_radius_phys;
-	unsigned int	uce_depth;
-};
-
-#define MAX_UCE	512
-struct uc_tab
-{
-	struct uc_ent	*uct_ents[MAX_UCE];
-	unsigned	uct_ent_c;
-};
+#include "uc.h"
 
 static struct uc_tab	uct = { .uct_ent_c = 0 };
 
+static struct uce_backing* uc_make_backing(
+	struct uc_ent* uce, unsigned int radius)
+{
+	struct uce_backing	*ret;
+	unsigned		sz;
+	unsigned		lo, hi, i, j;
+
+	sz = sizeof(struct uce_backing) + (radius*2+1);
+	ret = malloc(sz);
+
+	klee_make_symbolic(ret, sz, "ucb");
+	klee_assume_eq(uce->uce_n, ret->ucb_uce_n);
+	uce->uce_n = ret->ucb_uce_n;
+	
+	if (uce->uce_b == NULL)
+		return ret;
+
+	lo = radius - uce->uce_radius_phys;
+	hi = lo + (uce->uce_radius_phys*2);
+
+	klee_print_expr("binding symbolics",  lo);
+	for (i = lo, j = 0; i < hi; i++, j++) {
+		klee_assume_eq(ret->ucb_dat[i], uce->uce_b->ucb_dat[j]);
+		ret->ucb_dat[i] = uce->uce_b->ucb_dat[j];
+	}
+
+	return ret;
+}
 
 static struct uc_ent* uc_make(void* addr)
 {
@@ -56,8 +54,18 @@ static struct uc_ent* uc_make(void* addr)
 		}
 	}
 
-	klee_print_expr("make symbolic uce", ret);
+	uct.uct_ent_c++;
+
 	klee_make_symbolic(ret, sizeof(*ret), "uce");
+
+	/* this is necessary so that UCE's can be matched with the pivot
+	 * pointer; as it is, it uses the highest bits in the address,
+	 * which probably isn't ideal. */
+	if (klee_feasible_eq(get_uce_flag(addr), uct.uct_ent_c)) {
+		klee_assume_eq(get_uce_flag(addr), uct.uct_ent_c);
+	}
+	/* in the else case, there's a fixed address that must be
+	 * satisfied. I'm not sure what to do in the case. */
 
 	klee_assume_eq(ret->access.a_pivot, addr);
 	ret->access.a_pivot = addr;
@@ -71,12 +79,14 @@ static struct uc_ent* uc_make(void* addr)
 		return ret;
 	}
 
-	uct.uct_ent_c++;
 	ret->uce_depth = 0;
-	ret->uce_backing = malloc(MIN_RADIUS*2);
-	ret->uce_radius_phys = MIN_RADIUS;
 	klee_assume_uge(ret->uce_radius, MIN_RADIUS);
-	klee_make_symbolic(ret->uce_backing, MIN_RADIUS*2, "uce_backing");
+	klee_assume_eq(ret->uce_n, uct.uct_ent_c);
+	ret->uce_n = uct.uct_ent_c;
+
+	ret->uce_b = NULL;
+	ret->uce_radius_phys = MIN_RADIUS;
+	ret->uce_b = uc_make_backing(ret, MIN_RADIUS);
 
 	return ret;
 }
@@ -88,8 +98,12 @@ static struct uc_ent* uc_get(void* addr)
 	uint64_t	a_hash;
 
 	a_hash = klee_sym_corehash(addr);
+	if (a_hash == 0) {
+		klee_print_expr("Bad hash on addr", addr);
+		return NULL;
+	}
 
-	/* XXX: how to distinguish UC? no solver queries! */
+	/* find UC entry */
 	uce_c = 0;
 	for (i = 0; i < MAX_UCE && uce_c < uct.uct_ent_c; i++) {
 		if (uct.uct_ents[i] == NULL)
@@ -106,47 +120,49 @@ static struct uc_ent* uc_get(void* addr)
 		klee_uerror("Exceeded UC entries", "uc.maxent.err");
 
 	/* no match found, make one.. */
-	if (ret == NULL) ret = uc_make(addr);
+	if (ret == NULL) {
+		ret = uc_make(addr);
+		ret->uce_pivot_hash = a_hash; 
+	}
 
 	return ret;
 }
 
+
 static void uc_extend(struct uc_ent* uce, uint64_t min_radius)
 {
-	uint64_t	min_radius_c;
-	char		*new_backing;
-	unsigned	i, j, lo, hi;
+	uint64_t		min_radius_c;
+	struct uce_backing	*new_backing;
 
 	min_radius_c = klee_min_value(min_radius);
 	if (min_radius_c > MAX_RADIUS) {
 		klee_uerror("Max radius exceeded", "uc.max.err");
 	}
 
-	klee_print_expr("exnteind with min radius", min_radius_c);
-	klee_assume_eq(min_radius, min_radius_c);
-
-	min_radius_c = 8*((min_radius_c + 7)/8);
-
-	klee_print_expr("bounding radius", uce->uce_radius);
-	klee_assume_uge(uce->uce_radius, min_radius_c);
-
-	new_backing = malloc(min_radius_c*2);
-	klee_make_symbolic(new_backing, min_radius_c*2, "uce_backing");
-
-	lo = min_radius_c - uce->uce_radius_phys;
-	hi = lo + (uce->uce_radius_phys*2);
-
-	klee_print_expr("binding symbolics",  lo);
-	for (i = lo, j = 0; i < hi; i++, j++) {
-		klee_assume_eq(new_backing[i], ((char*)uce->uce_backing)[j]);
-		new_backing[i] = ((char*)uce->uce_backing)[j];
+	if (min_radius_c < uce->uce_radius_phys) {
+		klee_uerror("Min radius smaller than phys radius", "uc.rad.err");
 	}
 
-	free(uce->uce_backing);
-	uce->uce_radius_phys = min_radius_c;
-	uce->uce_backing = new_backing;
+	klee_print_expr("extending with min radius", min_radius_c);
 
-	klee_print_expr("done binding", min_radius_c);
+	/* XXX: this should probably fork */
+	if (min_radius == min_radius_c) {
+		klee_assume_eq(min_radius, min_radius_c);
+	} else if (min_radius < MAX_RADIUS) {
+		min_radius_c = klee_max_value(min_radius);
+		klee_assume_ule(min_radius, min_radius_c);
+	} else {
+		klee_uerror("Max radius exceeded by forking", "uc.max.err");
+	}
+
+	min_radius_c = 8*((min_radius_c + 7)/8);
+	klee_assume_uge(uce->uce_radius, min_radius_c);
+
+	new_backing = uc_make_backing(uce, min_radius_c);
+	free(uce->uce_b);
+
+	uce->uce_radius_phys = min_radius_c;
+	uce->uce_b = new_backing;
 }
 
 static uint64_t  uc_getptr(struct uc_ent* uce, void* addr, unsigned w)
@@ -165,17 +181,23 @@ static uint64_t  uc_getptr(struct uc_ent* uce, void* addr, unsigned w)
 	} else if ((base_off+w) > uce->uce_radius_phys) {
 		/* out of range; overflow */
 		if ((base_off+w) > uce->uce_radius) {
-			klee_print_expr("OF", base_off);
+			klee_print_expr("OF-base", base_off);
+			klee_print_expr("OF-end", base_off+w);
 			klee_uerror("Overflow", "uc.of.err");
 		}
+		klee_print_expr("OF-extend", base_off+w);
 		uc_extend(uce, base_off+w);
 	}
 
-	return (uint64_t)((char*)uce->uce_backing
+	return (uint64_t)(&uce->uce_b->ucb_dat[0]
 		+ uce->uce_radius_phys
 		+ base_off);
 }
 
+void mmu_cleanup_uc(void)
+{
+	klee_print_expr("hello cleanup uc", 0);
+}
 
 #define MMU_LOAD(x,y,z)		\
 y mmu_load_##x##_uc(void* addr)	\
@@ -186,7 +208,7 @@ y mmu_load_##x##_uc(void* addr)	\
 	if (uce == NULL) return mmu_load_ ##x## _ ##z (addr);	\
 	c_64 = uc_getptr(uce, addr, x/8);	\
 	p = (y*)c_64;				\
-	return klee_is_symbolic(p)		\
+	return klee_is_symbolic((uint64_t)p)	\
 		? mmu_load_ ##x## _ ##z (p)	\
 		: *p; }
 
@@ -202,7 +224,7 @@ void mmu_store_##x##_uc(void* addr, y v)	\
 	}					\
 	c_64 = uc_getptr(uce, addr, x/8);	\
 	p = (y*)c_64;				\
-	if (klee_is_symbolic(p))		\
+	if (klee_is_symbolic((uint64_t)p))	\
 		mmu_store_##x##_##z (p, v); 	\
 	else					\
 		*p = v;	}

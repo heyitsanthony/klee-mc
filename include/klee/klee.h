@@ -191,6 +191,10 @@ extern "C" {
 #define klee_valid_eq(x, y)	(!__klee_feasible_op(x, y, KLEE_CMP_OP_NE))
 #define klee_valid_ne(x, y)	(!__klee_feasible_op(x, y, KLEE_CMP_OP_EQ))
 
+/* these are provided by the intrinsic library */
+extern void* malloc(unsigned long n) __THROW;
+extern void free(void*) __THROW;
+
   void* klee_malloc_fixed(uint64_t sz);
 
   void klee_free_fixed(uint64_t x);

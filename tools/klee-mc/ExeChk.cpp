@@ -114,7 +114,7 @@ void ExeChk::handleXfer(ExecutionState& state, KInstruction *ki)
 		assert (0 == 1  && "MISMATCH OOPS!");
 	}
 
-	if (exited) terminateOnExit(state);
+	if (exited) TERMINATE_EXIT(this, state);
 
 	/* Now, restore everything to KLEE state */
 	loadCPU(saved_klee_cpustate);

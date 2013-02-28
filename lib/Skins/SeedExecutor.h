@@ -36,14 +36,6 @@ public:
 		T::terminate(state);
 	}
 
-	void terminateOnError(
-		ExecutionState &state,
-		const llvm::Twine &messaget,
-		const char *suffix,
-		const llvm::Twine &info,
-		bool alwaysEmit)
-	{ T::terminateOnError(state, messaget, suffix, info, true); }
-
 	void useSeeds(const std::vector<struct KTest *> *seeds)
 	{ seedCore.useSeeds(seeds); }
 
@@ -101,9 +93,26 @@ public:
 		return T::addConstraint(state, condition);
 	}
 
-	virtual bool isInterestingTestCase(ExecutionState* st) const
-	{ return	T::isInterestingTestCase(st) ||
-			seedCore.isInterestingTestCase(st); }
+	class SeedInteresting : public TermWrapper
+	{
+	public:
+		SeedInteresting(SeedCore& _sc, Terminator* t)
+		: TermWrapper(t), sc(_sc) {}
+		virtual ~SeedInteresting() {}
+		virtual bool isInteresting(ExecutionState& st) const
+		{ return wrap_t->isInteresting(st) ||
+			sc.isInterestingTestCase(&st); }
+		virtual Terminator* copy(void) const
+		{ return new SeedInteresting(sc, wrap_t->copy()); }
+	private:
+		SeedCore&	sc;
+	};
+
+	virtual void terminateWith(Terminator& term, ExecutionState& state)
+	{
+		SeedInteresting	si(seedCore, term.copy());
+		T::terminateWith(si, state);
+	}
 
 	virtual bool isStateSeeding(ExecutionState* s) const
 	{ return seedCore.isStateSeeding(s); }

@@ -223,14 +223,14 @@ SFH_DEF_HANDLER(IO)
 
 	SFH_CHK_ARGS(5, "kmc_io");
 
-	ce_sysnr = dyn_cast<ConstantExpr>(arguments[0]);
+	ce_sysnr = dyn_cast<ConstantExpr>(args[0]);
 	assert (ce_sysnr);
 	sysnr = ce_sysnr->getZExtValue();
 
 	switch (sysnr) {
 	case SYS_open: {
 		/* expects a path */
-		std::string path(sfh->readStringAtAddress(state, arguments[1]));
+		std::string path(sfh->readStringAtAddress(state, args[1]));
 		vfd_t	vfd;
 
 		if (	DenySysFiles &&
@@ -256,7 +256,7 @@ SFH_DEF_HANDLER(IO)
 	case SYS_close: {
 		vfd_t			vfd;
 
-		vfd = arg2vfd(arguments[1]);
+		vfd = arg2vfd(args[1]);
 		if (vfd == ~0ULL) {
 			state.bindLocal(target, MK_CONST(-1, 64));
 			break;
@@ -274,10 +274,10 @@ SFH_DEF_HANDLER(IO)
 		size_t		count;
 		off_t		offset;
 
-		fd = sc_sfh->vfds.xlateVFD(arg2vfd(arguments[1]));
-		buf_base = arg2u64(arguments[2]);
-		count = arg2u64(arguments[3]);
-		offset = arg2u64(arguments[4]);
+		fd = sc_sfh->vfds.xlateVFD(arg2vfd(args[1]));
+		buf_base = arg2u64(args[2]);
+		count = arg2u64(args[3]);
+		offset = arg2u64(args[4]);
 
 		if (	fd == -1 || buf_base == ~0ULL ||
 			count == ~0ULL || offset == -1)
@@ -297,7 +297,7 @@ SFH_DEF_HANDLER(IO)
 		int		rc;
 		unsigned int	bw;
 
-		fd = sc_sfh->vfds.xlateVFD(arg2vfd(arguments[1]));
+		fd = sc_sfh->vfds.xlateVFD(arg2vfd(args[1]));
 		if (fd == -1) {
 			state.bindLocal(target, MK_CONST(-1, 64));
 			break;
@@ -310,7 +310,7 @@ SFH_DEF_HANDLER(IO)
 		}
 
 		bw = state.addressSpace.copyOutBuf(
-			arg2u64(arguments[2]),
+			arg2u64(args[2]),
 			(const char*)&s,
 			sizeof(struct stat));
 
@@ -328,7 +328,7 @@ SFH_DEF_HANDLER(SCBad)
 	SFH_CHK_ARGS(1, "kmc_sc_bad");
 
 	ConstantExpr	*ce;
-	ce = dyn_cast<ConstantExpr>(arguments[0]);
+	ce = dyn_cast<ConstantExpr>(args[0]);
 	std::cerr << "OOPS calling kmc_sc_bad: " << ce->getZExtValue() << std::endl;
 }
 
@@ -340,10 +340,10 @@ SFH_DEF_HANDLER(FreeRun)
 	uint64_t		addr_v, addr_end, cur_addr;
 	uint64_t		len_v, len_remaining;
 
-	addr = dyn_cast<ConstantExpr>(arguments[0]);
-	len = dyn_cast<ConstantExpr>(arguments[1]);
+	addr = dyn_cast<ConstantExpr>(args[0]);
+	len = dyn_cast<ConstantExpr>(args[1]);
 	if (addr == NULL || len == NULL) {
-		exe_vex->terminateOnError(
+		TERMINATE_ERROR(exe_vex,
 			state,
 			"munmap error: non-CE exprs. Bad runtime",
 			"munmap.err");
@@ -364,7 +364,7 @@ SFH_DEF_HANDLER(FreeRun)
 
 		mo = state.addressSpace.resolveOneMO(cur_addr);
 		if (mo == NULL && len_remaining >= 4096) {
-			exe_vex->terminateOnError(
+			TERMINATE_ERROR(exe_vex,
 				state,
 				"munmap error: munmapping bad address",
 				"munmap.err");
@@ -376,7 +376,7 @@ SFH_DEF_HANDLER(FreeRun)
 				<< "size mismatch on munmap "
 				<< mo->size << ">" << len_remaining
 				<< std::endl;
-			exe_vex->terminateOnError(
+			TERMINATE_ERROR(exe_vex,
 				state,
 				"munmap error: size mismatch on munmap",
 				"munmap.err");
@@ -396,11 +396,11 @@ SFH_DEF_HANDLER(KMCExit)
 	ConstantExpr	*ce;
 	SFH_CHK_ARGS(1, "kmc_exit");
 
-	ce = dyn_cast<ConstantExpr>(arguments[0]);
+	ce = dyn_cast<ConstantExpr>(args[0]);
 	if (ce)  fprintf(stderr, "exitcode=%lu\n", ce->getZExtValue());
 	else fprintf(stderr, "exitcode=?\n");
 
-	sfh->executor->terminateOnExit(state);
+	TERMINATE_EXIT(sfh->executor, state);
 }
 
 SFH_DEF_HANDLER(MakeRangeSymbolic)
@@ -415,10 +415,10 @@ SFH_DEF_HANDLER(MakeRangeSymbolic)
 	assert (sfh != NULL);
 	assert (exe_vex != NULL);
 
-	addr = dyn_cast<ConstantExpr>(arguments[0]);
-	len = dyn_cast<ConstantExpr>(arguments[1]);
+	addr = dyn_cast<ConstantExpr>(args[0]);
+	len = dyn_cast<ConstantExpr>(args[1]);
 	if (addr == NULL || len == NULL) {
-		exe_vex->terminateOnError(
+		TERMINATE_ERROR(exe_vex,
 			state,
 			"makerangesymbolic error: Addr or len not CE exprs. Smash runtime",
 			"mrs.err");
@@ -427,7 +427,7 @@ SFH_DEF_HANDLER(MakeRangeSymbolic)
 
 	addr_v = addr->getZExtValue();
 	len_v = len->getZExtValue();
-	name_str = sfh->readStringAtAddress(state, arguments[2]);
+	name_str = sfh->readStringAtAddress(state, args[2]);
 
 	fprintf(stderr, "MAKE RANGE SYMBOLIC %s %p--%p (%d)\n",
 		name_str.c_str(),
@@ -444,11 +444,12 @@ SFH_DEF_HANDLER(Breadcrumb)
 	unsigned char		*buf;
 	unsigned int		len_in, len_expected;
 
-	len_expected_ce = dyn_cast<ConstantExpr>(arguments[1]);
+	len_expected_ce = dyn_cast<ConstantExpr>(args[1]);
 	len_expected = (unsigned int)len_expected_ce->getZExtValue();
-	buf = sfh->readBytesAtAddress(state, arguments[0], len_expected, len_in, -1);
+	buf = sfh->readBytesAtAddress(state, args[0], len_expected, len_in, -1);
 	if (buf == NULL) {
-		sfh->executor->terminateOnError(
+		TERMINATE_ERROR(
+			sfh->executor,
 			state,
 			"Breadcrumb error: Symbolic breadcrumb frame",
 			"breadcrumb.err");
@@ -460,7 +461,7 @@ SFH_DEF_HANDLER(Breadcrumb)
 		fprintf(stderr,
 			"GOT LENGTH %d. Expected %d\n", len_in, bc->bc_sz);
 		assert (0 == 1);
-		sfh->executor->terminateOnError(
+		TERMINATE_ERROR(sfh->executor,
 			state,
 			"Breadcrumb error: Bad length",
 			"breadcrumb.err");
@@ -492,10 +493,10 @@ SFH_DEF_HANDLER(AllocAligned)
 	std::string			name_str;
 	std::vector<ObjectPair>		new_op;
 
-	len = dyn_cast<ConstantExpr>(arguments[0]);
+	len = dyn_cast<ConstantExpr>(args[0]);
 	exe_vex = dynamic_cast<ExecutorVex*>(sfh->executor);
 	if (len == NULL) {
-		exe_vex->terminateOnError(
+		TERMINATE_ERROR(exe_vex,
 			state,
 			"kmc_alloc_aligned error: len not constant.",
 			"mrs.err");
@@ -503,7 +504,7 @@ SFH_DEF_HANDLER(AllocAligned)
 	}
 
 	len_v = len->getZExtValue();
-	name_str = sfh->readStringAtAddress(state, arguments[1]);
+	name_str = sfh->readStringAtAddress(state, args[1]);
 
 	/* not requesting a specific address */
 	new_op = state.allocateAlignedChopped(
@@ -663,7 +664,7 @@ void SyscallSFH::makeRangeSymbolic(
 				"couldn't find %p in user range %p-%p\n",
 				(void*)cur_addr,
 				addr, ((char*)addr)+sz);
-			executor->terminateOnError(
+			TERMINATE_ERROR(executor,
 				state,
 				"Tried to make non-allocated memory symbolic",
 				"symoob.err");

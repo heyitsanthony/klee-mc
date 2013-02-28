@@ -37,7 +37,7 @@ class DDTExecutor : public T
 {
 public:
 	DDTExecutor(InterpreterHandler* ie)
-	: T(ie), ddtCore(this) {}
+	: T(ie), ddtCore() {}
 	virtual ~DDTExecutor() {}
 
 protected:

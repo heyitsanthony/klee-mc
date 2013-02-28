@@ -62,38 +62,37 @@ static KTestStream* setupKTestStream(
 {
 	KTestStream	*kts;
 	const char	*uc_func;
+	char		fname_ktest[256];
+	const char	*corrupt;
+
+	snprintf(
+		fname_ktest,
+		256,
+		"%s/test%06d.ktest.gz", dirname, test_num);
+	corrupt = getenv("KMC_CORRUPT_OBJ");
+	if (corrupt == NULL)
+		kts = KTestStream::create(fname_ktest);
+	else {
+		KTSFuzz		*ktsf;
+		const char	*fuzz_percent;
+
+		ktsf = KTSFuzz::create(fname_ktest);
+		fuzz_percent = getenv("KMC_CORRUPT_PERCENT");
+		ktsf->fuzzPart(
+			atoi(corrupt),
+			(fuzz_percent != NULL)
+				? atof(fuzz_percent)/100.0
+				: 0.5);
+		kts = ktsf;
+	}
 
 	uc_func = getenv("UC_FUNC");
 	uc_state = NULL;
 	if (uc_func != NULL) {
-		uc_state = UCState::init(gs, uc_func, dirname, test_num);
+		uc_state = UCState::init(gs, uc_func, kts);
 		assert (uc_state != NULL);
-		kts = uc_state->allocKTest();
-	} else {
-		char	fname_ktest[256];
-		const char	*corrupt;
-
-		snprintf(
-			fname_ktest,
-			256,
-			"%s/test%06d.ktest.gz", dirname, test_num);
-		corrupt = getenv("KMC_CORRUPT_OBJ");
-		if (corrupt == NULL)
-			kts = KTestStream::create(fname_ktest);
-		else {
-			KTSFuzz		*ktsf;
-			const char	*fuzz_percent;
-
-			ktsf = KTSFuzz::create(fname_ktest);
-			fuzz_percent = getenv("KMC_CORRUPT_PERCENT");
-			ktsf->fuzzPart(
-				atoi(corrupt),
-				(fuzz_percent != NULL)
-					? atof(fuzz_percent)/100.0
-					: 0.5);
-			kts = ktsf;
-		}
 	}
+
 
 	assert (kts != NULL && "Expects ktest");
 	if (kts->getKTest()->symArgvs)
@@ -102,6 +101,26 @@ static KTestStream* setupKTestStream(
 	return kts;
 }
 
+static void run_uc(ReplayExec* re, UCState* uc_state)
+{
+	const char	*uc_save;
+
+	/* special case for UC: we're not guaranteed to exit, so we
+	 * need to hook in a special return point */
+	re->beginStepping();
+	while (re->stepVSB()) {
+		if (re->getNextAddr() == 0xdeadbeef) {
+			std::cerr << "[kmc-replay] UC: Exited.\n";
+			break;
+		}
+	}
+
+	uc_save = getenv("UC_SAVE");
+	if (uc_save != NULL)
+		uc_state->save(uc_save);
+
+	delete uc_state;
+}
 
 static int doReplay(
 	const char* dirname,
@@ -144,27 +163,10 @@ static int doReplay(
 	assert (skt != NULL && "Couldn't create ktest harness");
 	re->setSyscallsKTest(skt);
 
-	if (uc_state == NULL) {
+	if (uc_state != NULL)
+		run_uc(re, uc_state);
+	else
 		re->run();
-	} else {
-		const char	*uc_save;
-
-		/* special case for UC: we're not guaranteed to exit, so we
-		 * need to hook in a special return point */
-		re->beginStepping();
-		while (re->stepVSB()) {
-			if (re->getNextAddr() == 0xdeadbeef) {
-				std::cerr << "[kmc-replay] UC: Exited.\n";
-				break;
-			}
-		}
-
-		uc_save = getenv("UC_SAVE");
-		if (uc_save != NULL)
-			uc_state->save(uc_save);
-
-		delete uc_state;
-	}
 
 	delete re;
 	delete gs;

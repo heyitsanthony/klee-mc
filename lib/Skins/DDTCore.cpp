@@ -28,8 +28,7 @@ template<> ShadowValFSet::svcache_ty	ShadowValFSet::cache =
 	ShadowValFSet::svcache_ty();
 }
 
-DDTCore::DDTCore(Executor* _exe)
-: exe(_exe)
+DDTCore::DDTCore(void)
 {
 	ExprAlloc	*ea;
 
