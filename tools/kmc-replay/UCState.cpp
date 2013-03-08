@@ -19,10 +19,7 @@ typedef std::vector<struct uc_ent > uc_ents_ty;
 
 void UCState::loadUCBuffers(Guest* gs, KTestStream* kts)
 {
-	char			*lentab;
 	const KTestObject	*kto;
-	char			*cpu_state;
-	unsigned		cpu_len;
 	uc_ents_ty		uc_ents;
 	ucbs_raw_ty		uc_b_raw;
 	uc_backings_ty		uc_backings;
@@ -60,14 +57,13 @@ void UCState::loadUCBuffers(Guest* gs, KTestStream* kts)
 		unsigned		idx;
 
 		idx = uce.uce_n - 1;
-		std::cerr << "IDX=" << idx << '\n';
-		if (uc_backings[idx] == NULL) {
+		if (uce.uce_n == 0 || uc_backings[idx] == NULL) {
 			std::cerr << "No backing on idx=" << uce.uce_n << '\n';
 			continue;
 		}
 
-		std::cerr << "RADIUS: " << uce.uce_radius << '\n';
-		std::cerr << "PIVOT: " << uce.access.a_pivot << '\n';
+		std::cerr << "[UC] RADIUS: " << uce.uce_radius << '\n';
+		std::cerr << "[UC] PIVOT: " << uce.access.a_pivot << '\n';
 
 		std::vector<char>	init_dat(
 			uc_backings[idx]->ucb_dat,
@@ -78,70 +74,41 @@ void UCState::loadUCBuffers(Guest* gs, KTestStream* kts)
 			(uint64_t)uce.access.a_pivot, uce.uce_radius, init_dat);
 	}
 
-
+	/* link back into register state */
 #if 0
-	/* build page list */
-	foreach (it, ucbufs.begin(), ucbufs.end()) {
-		UCBuf	*ucb = it->second;
+	foreach (it, uc_ents.begin(), uc_ents.end()) {
+		struct uc_ent	uce(*it);
+		unsigned	idx, cpu_len, best_idx;
+		uint64_t	min_off;
+		uint64_t	*cpu;
 
-		uc_pages.insert(ucb->getBase().o & ~(PAGE_SZ-1));
-		uc_pages.insert(
-			(ucb->getBase().o+ucb->getUsedLength()-1) & ~(PAGE_SZ-1));
-	}
+		idx = uce.uce_n - 1;
+		if (uce.uce_n == 0 || ucbufs[idx] == NULL)
+			continue;
 
+		cpu = (uint64_t*)gs->getCPUState()->getStateData();
+		cpu_len = gs->getCPUState()->getStateSize() / sizeof(uint64_t);
+		min_off = ~((uint64_t)0);
+		best_idx = 0;
+		for (unsigned i = 0; i < cpu_len; i++) {
+			int64_t	cur_off;
 
-	/* map in ucbufs */
-	foreach (it, uc_pages.begin(), uc_pages.end()) {
-		guest_ptr	new_page, mapped_addr;
-		int		err;
-
-		new_page = guest_ptr(*it);
-		err = gs->getMem()->mmap(
-			mapped_addr,
-			new_page,
-			PAGE_SZ,
-			PROT_READ | PROT_WRITE,
-			MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
-			-1,
-			0);
-		if (mapped_addr != new_page) {
-			std::cerr << "FAILED TO MAP " << new_page << '\n';
-			assert (0 == 1 && "OOPS");
-		}
-	}
-
-	/* copy in ucbufs */
-	cpu_state = (char*)gs->getCPUState()->getStateData();
-	cpu_len = gs->getCPUState()->getStateSize();
-	foreach (it, ucbufs.begin(), ucbufs.end()) {
-		UCBuf		*ucb = it->second;
-		uint64_t	base_ptr;
-		unsigned	idx;
-
-		base_ptr = ucb->getBase().o;
-		idx = ucb->getIdx();
-
-		/* copy pointer to root area */
-		if (gs->getMem()->is32Bit()) {
-			if (idx < cpu_len / 4) {
-				memcpy(cpu_state + idx*4, &base_ptr, 4);
+			cur_off = cpu[i] - (uint64_t)uce.access.a_pivot;
+			if (cur_off < 0) cur_off = -cur_off;
+			if ((uint64_t)cur_off < min_off) {
+				min_off = cur_off;
+				best_idx = i;
+				std::cerr << "[UC] minoff=" << min_off << '\n';
 			}
-		} else if (idx < cpu_len / 8) {
-			memcpy(cpu_state + idx*8, &base_ptr, 8);
 		}
 
-		/* buffers from klee are actually 8-aligned,
-		 * so adjust copy-out to start at 8-byte boundary */
-		gs->getMem()->memcpy(
-			ucb->getAlignedBase(),
-			ucb->getData(),
-			ucb->getDataLength());
-
+		/* is this a smart fixup method? */
+		min_off = (cpu[best_idx] - (uint64_t)uce.access.a_pivot);
+		std::cerr << "[UC] Fixing up idx=" << best_idx << ". Off=" <<
+			(int64_t)min_off << '\n';
+		cpu[best_idx] = ucbufs[idx]->getPivot() + min_off;
 	}
-
-	std::cerr << "Copied in unconstrained buffers\n";
 #endif
-	assert (0 == 1 && "STUB");
 }
 
 UCState* UCState::init(
@@ -195,7 +162,6 @@ UCState::UCState(
 	sym = gs->getSymbols()->findSym(funcname);
 	if (sym == NULL) {
 		std::cerr << "UC Function '" << funcname << "' not found. ULP\n";
-		delete kts;
 		return;
 	}
 
@@ -220,8 +186,6 @@ UCState::UCState(
 	/* 2. scan through ktest, allocate buffers */
 	loadUCBuffers(gs, kts);
 
-	/* done setting up buffers, drop UC ktest data */
-	delete kts;
 	ok = true;
 }
 

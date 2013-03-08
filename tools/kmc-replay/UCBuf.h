@@ -17,7 +17,8 @@ public:
 	const char* getData(void) const { return init_data.data(); }
 	unsigned getDataLength(void) const { return init_data.size(); }
 
-
+	guest_ptr getBase(void) const { return ptr_buf_base; }
+	guest_ptr getPivot(void) const { return ptr_buf_pivot; }
 private:
 	Guest			*gs;
 

@@ -48,8 +48,8 @@ public:
 	LinuxModel(Executor* e);
 	virtual ~LinuxModel(void) {}
 	SyscallSFH* allocSpecialFuncHandler(Executor*) const;
-	void installInitializers(llvm::Function* f);
-	void installConfig(ExecutionState& state) {}
+	void installInitializers(llvm::Function* f) {}
+	void installConfig(ExecutionState& state);
 };
 
 class W32Model : public SysModel
@@ -72,6 +72,16 @@ public:
 	SyscallSFH* allocSpecialFuncHandler(Executor*) const;
 	void installInitializers(llvm::Function* f);
 	void installConfig(ExecutionState& state);
+};
+
+class NoneModel : public SysModel 
+{
+public:
+	NoneModel(Executor *e) : SysModel(e, "libkleeRuntimeMC-sysnone.bc") {}
+	virtual ~NoneModel() {}
+	virtual void installInitializers(llvm::Function* f) {}
+	virtual void installConfig(ExecutionState& state) {}
+	SyscallSFH* allocSpecialFuncHandler(Executor*) const;
 };
 }
 

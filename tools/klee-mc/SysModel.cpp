@@ -180,7 +180,7 @@ SyscallSFH* LinuxModel::allocSpecialFuncHandler(Executor* e) const
 SyscallSFH* W32Model::allocSpecialFuncHandler(Executor* e) const
 { return new SyscallSFH(e); }
 
-void LinuxModel::installInitializers(llvm::Function* f)
+void LinuxModel::installConfig(ExecutionState& es)
 {
 	setModelBool(exe->getKModule()->module, "concrete_vfs", UseConcreteVFS);
 	setModelBool(exe->getKModule()->module, "deny_sys_files", DenySysFiles);
@@ -197,3 +197,13 @@ void W32Model::installConfig(ExecutionState& state)
 	gs->getPlatform("process_cookie", &pbi, 4);
 	installData(state, "plat_cookie", &cookie, sizeof(cookie));
 }
+
+class NoneSFH : public SyscallSFH
+{
+public:
+	NoneSFH(Executor* es) : SyscallSFH(es) {}
+	virtual ~NoneSFH() {}
+};
+
+SyscallSFH* NoneModel::allocSpecialFuncHandler(Executor* e) const
+{ return new NoneSFH(e); }

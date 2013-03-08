@@ -55,7 +55,10 @@ if [ -z "$VEXLLVM_HELPER_PATH" ]; then
 else
 	cp "$BASEDIR"/lib/libkleeRuntimeMC-amd64.bc "$VEXLLVM_HELPER_PATH"/
 	cp "$BASEDIR"/lib/libkleeRuntimeMC-x86.bc "$VEXLLVM_HELPER_PATH"/
-	cp "$BASEDIR"/lib/libkleeRuntimeMC-fdt.bc "$VEXLLVM_HELPER_PATH"/
 	cp "$BASEDIR"/lib/libkleeRuntimeMC-nt32.bc "$VEXLLVM_HELPER_PATH"/
+	cp "$BASEDIR"/lib/libkleeRuntimeMC-fdt.bc "$VEXLLVM_HELPER_PATH"/
+	cp "$BASEDIR"/lib/libkleeRuntimeMC-sysnone.bc "$VEXLLVM_HELPER_PATH"/
+
+
 	cp "$VEXLLVM_HELPER_PATH"/softfloat.bc "$BASEDIR"/lib/
 fi

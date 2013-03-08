@@ -86,6 +86,8 @@ static KTestStream* setupKTestStream(
 		kts = ktsf;
 	}
 
+	assert (kts != NULL && "Expects ktest");
+
 	uc_func = getenv("UC_FUNC");
 	uc_state = NULL;
 	if (uc_func != NULL) {
@@ -94,7 +96,6 @@ static KTestStream* setupKTestStream(
 	}
 
 
-	assert (kts != NULL && "Expects ktest");
 	if (kts->getKTest()->symArgvs)
 		loadSymArgs(gs, kts);
 

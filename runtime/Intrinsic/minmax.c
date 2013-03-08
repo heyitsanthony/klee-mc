@@ -3,14 +3,30 @@
 uint64_t klee_min_value(uint64_t expr)
 {
 	uint64_t	upper_bound, lower_bound;
+	static uint64_t	last_min_value = 128;
 
 	if (klee_feasible_eq(expr, 0)) return 0;
 
 	upper_bound = klee_get_value(expr);
-	lower_bound = 0;
-
 	if (!klee_feasible_ult(expr, upper_bound))
 		return upper_bound;
+
+	lower_bound = 0;
+
+	/* upper_bound <= last_min_value invalidates
+	 * the last_min hint */
+	if (last_min_value < upper_bound) {
+		if (klee_valid_ule(last_min_value, expr)) {
+			/* last_min_value <= expr => lower bound */
+			lower_bound = last_min_value;
+			if (klee_feasible_eq(last_min_value, expr)) {
+				return lower_bound;
+			}
+		} else {
+			/* last_min_value > expr => upper bound */
+			upper_bound = last_min_value;
+		}
+	}
 
 	while (upper_bound != lower_bound) {
 		uint64_t	mid = (upper_bound + lower_bound) / 2;
@@ -21,6 +37,7 @@ uint64_t klee_min_value(uint64_t expr)
 			lower_bound = mid + 1;
 	}
 
+	last_min_value = lower_bound;
 	return lower_bound;
 }
 

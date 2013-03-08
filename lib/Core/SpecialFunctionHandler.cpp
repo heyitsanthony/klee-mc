@@ -559,7 +559,7 @@ SFH_DEF_HANDLER(AssumeOp)
 	ok = sfh->executor->getSolver()->mustBeTrue(state, e, mustBeTrue);
 	if (!ok) goto error;
 
-	/* nothing to do here? */
+	/* no need to add the assume constraint if implied by model */
 	if (mustBeTrue) return;
 
 	/* satisfiable? */
@@ -1175,9 +1175,9 @@ SFH_DEF_HANDLER(SymCoreHash)
 			state,
 			ss.str().c_str(),
 			"symhash.err");
-#endif
 		std::cerr << "Multiple arrays matched on expr=\n";
 		std::cerr << args[0] << '\n';
+#endif
 		state.bindLocal(target, MK_CONST(0, 64));
 		return;
 	}

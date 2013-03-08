@@ -104,6 +104,10 @@ int SyscallsKTest::loadSyscallEntry(SyscallParams& sp)
 		abort();
 	}
 
+	if (!bc_is_type(bcs_crumb, BC_TYPE_SC)) {
+		BCrumb	*bc = Crumbs::toBC((struct breadcrumb*)bcs_crumb);
+		bc->print(std::cerr);
+	}
 	assert (bc_is_type(bcs_crumb, BC_TYPE_SC));
 
 	if (bcs_crumb->bcs_sysnr != sys_nr) {
@@ -187,13 +191,23 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 	if (	bc_sc_is_thunk(bcs_crumb)
 		&& xlate_sysnr != SYS_recvmsg
 		&& xlate_sysnr != SYS_recvfrom
-		&& xlate_sysnr != SYS_getcwd)
+		&& xlate_sysnr != SYS_getcwd
+		&& xlate_sysnr != SYS_getsockname)
 	{
 		crumbs->skip(bcs_crumb->bcs_op_c);
 	}
 
 	/* extra thunks */
 	switch(xlate_sysnr) {
+
+	case SYS_getsockname:
+		if (getRet() == 0) {
+			feedSyscallOp(sp);
+			*((socklen_t*)sp.getArgPtr(2)) =sizeof(struct sockaddr_in);
+		} else
+			*((socklen_t*)sp.getArgPtr(2)) = 0;
+		break;
+
 	case SYS_arch_prctl: {
 		VexGuestAMD64State	*guest_cpu;
 		guest_cpu = (VexGuestAMD64State*)guest->getCPUState()->getStateData();

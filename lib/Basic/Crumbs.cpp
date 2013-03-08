@@ -261,9 +261,9 @@ void BCSyscall::print(std::ostream& os) const
 
 	os << "<xlate_nr>" << getXlateSysNr() << "</xlate_nr>\n";
 
-	os << "<flags>" << (void*)getBC()->bc_type_flags << "</flags>\n";
+	os << "<flags>" << (void*)(long)getBC()->bc_type_flags << "</flags>\n";
 	os << "<ret>" << (void*)getRet() << "</ret>\n";
-	os << "<opC>" << getBCS()->bcs_op_c << "</opC>\n";
+	os << "<opC>" << (int)getBCS()->bcs_op_c << "</opC>\n";
 	os << "<testObjs>" << getKTestObjs() << "</testObjs>\n";
 	os << "</syscall>\n";
 }

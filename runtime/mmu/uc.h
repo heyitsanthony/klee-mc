@@ -1,6 +1,8 @@
 #ifndef MMU_UC_H
 #define MMU_UC_H
 
+#include <stdint.h>
+
 #define MAX_RADIUS	4096
 #define MIN_RADIUS	8
 
@@ -8,10 +10,18 @@
 #define MAX_UCE		512
 #define MAX_UCE_BITS	9
 
+#define UC_ARENA_BEGIN	        0x10000000
+#define UC_ARENA_END	        0x20000000
+#define UC_ARENA_MASK	0xfffffffff0000000
+
 #define UCE_ADDR_SHIFT		(63 - MAX_UCE_BITS)
-#define UCE_ADDR_MASK		(((1ULL << MAX_UCE_BITS) - 1) << UCE_ADDR_SHIFT)
+#define UCE_ADDR_MASK		((1ULL << 63) | (((1ULL << MAX_UCE_BITS) - 1) << UCE_ADDR_SHIFT))
 #define set_uce_flag(x, y)	((((uint64_t)x) & ~UCE_ADDR_MASK) | (y << UCE_ADDR_SHIFT))
 #define get_uce_flag(x)		((((uint64_t)x) & UCE_ADDR_MASK) >> UCE_ADDR_SHIFT)
+#define get_uce_val(x)		((((uint64_t)x) & ~UCE_ADDR_MASK))
+
+#define UCE_END(x)	((uint64_t)((x)->access.a_pivot) + ((x)->uce_radius))
+#define UCE_BEGIN(x)	((uint64_t)((x)->access.a_pivot) - ((x)->uce_radius))
 
 struct uc_ent
 {

@@ -6,7 +6,7 @@
  * 8 bits - exp		0x7f800000	
  * 23 bits - mant	0x007fffff
  */
-#define ASSURE32(x)	klee_assume_gt(x & 0x7f800000, 0x7f800000)
+#define ASSURE32(x)	klee_assume_ugt(x & 0x7f800000, 0x7f800000)
 
 
 /* f64
@@ -14,7 +14,7 @@
  * 11 bits - exp	0x7ff00000 0000 0000
  * 52 bits - mant	0x000fffff ffff ffff
  */
-#define ASSURE64(x)	klee_assume_gt(x&0x7ff0000000000000, 0x7ff0000000000000)
+#define ASSURE64(x)	klee_assume_ugt(x&0x7ff0000000000000, 0x7ff0000000000000)
 
 #define UNOP_PRE(x,y)	\
 void __hookpre_##x(uint##y##_t f) { ASSURE##y(f); }

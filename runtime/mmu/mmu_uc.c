@@ -19,14 +19,13 @@ static struct uce_backing* uc_make_backing(
 	klee_make_symbolic(ret, sz, "ucb");
 	klee_assume_eq(uce->uce_n, ret->ucb_uce_n);
 	uce->uce_n = ret->ucb_uce_n;
-	
+
 	if (uce->uce_b == NULL)
 		return ret;
 
 	lo = radius - uce->uce_radius_phys;
 	hi = lo + (uce->uce_radius_phys*2);
 
-	klee_print_expr("binding symbolics",  lo);
 	for (i = lo, j = 0; i < hi; i++, j++) {
 		klee_assume_eq(ret->ucb_dat[i], uce->uce_b->ucb_dat[j]);
 		ret->ucb_dat[i] = uce->uce_b->ucb_dat[j];
@@ -47,25 +46,27 @@ static struct uc_ent* uc_make(void* addr)
 
 	ret = NULL;
 	for (i = 0; i < MAX_UCE; i++) {
-		if (uct.uct_ents[i] == NULL) {
-			uct.uct_ents[i] = malloc(sizeof(struct uc_ent));
-			ret = uct.uct_ents[i];
+		if (uct.uct_ents[i] == NULL)
 			break;
-		}
 	}
 
+	if (i == MAX_UCE)
+		return NULL;
+
+	uct.uct_ents[i] = malloc(sizeof(struct uc_ent));
+	ret = uct.uct_ents[i];
 	uct.uct_ent_c++;
 
 	klee_make_symbolic(ret, sizeof(*ret), "uce");
 
+#if 0
 	/* this is necessary so that UCE's can be matched with the pivot
 	 * pointer; as it is, it uses the highest bits in the address,
 	 * which probably isn't ideal. */
 	if (klee_feasible_eq(get_uce_flag(addr), uct.uct_ent_c)) {
 		klee_assume_eq(get_uce_flag(addr), uct.uct_ent_c);
 	}
-	/* in the else case, there's a fixed address that must be
-	 * satisfied. I'm not sure what to do in the case. */
+#endif
 
 	klee_assume_eq(ret->access.a_pivot, addr);
 	ret->access.a_pivot = addr;
@@ -73,20 +74,60 @@ static struct uc_ent* uc_make(void* addr)
 	klee_assume_uge(ret->access.a_max, addr);
 	klee_assume_ule(ret->access.a_min, addr);
 
+	klee_assume_eq(ret->uce_n, uct.uct_ent_c);
+	ret->uce_n = uct.uct_ent_c;
+
 	/* first try-- no entry */
 	if (ret->uce_radius == 0) {
 		klee_uerror("Dereferenced bad UC pointer", "uc.empty.err");
-		return ret;
+		return NULL;
 	}
 
 	ret->uce_depth = 0;
 	klee_assume_uge(ret->uce_radius, MIN_RADIUS);
-	klee_assume_eq(ret->uce_n, uct.uct_ent_c);
-	ret->uce_n = uct.uct_ent_c;
+	klee_assume_ule(ret->uce_radius, MAX_RADIUS);
 
 	ret->uce_b = NULL;
 	ret->uce_radius_phys = MIN_RADIUS;
 	ret->uce_b = uc_make_backing(ret, MIN_RADIUS);
+
+	return ret;
+}
+
+static struct uc_ent* uc_make_in_arena(void* addr)
+{
+	struct uc_ent	*ret;
+	uint64_t	addr_m;
+
+	/* do *one* query check to make sure we don't have
+	 * a concrete value masquerading as a symbolic value.
+	 * Basically, we check if we can bind the pivot address
+	 * to the UC arena. */
+	addr_m = ((uint64_t)addr) & UC_ARENA_MASK;
+	if (!klee_feasible_eq(addr_m, UC_ARENA_BEGIN))
+		return NULL;
+
+	/* keep inside of arena */
+	klee_assume_eq(addr_m, UC_ARENA_BEGIN);
+	ret = uc_make(addr);
+	if (ret == NULL)
+		return NULL;
+
+	if (uct.uct_ent_c > 1) {
+		if (!klee_feasible_ugt(
+			UCE_BEGIN(ret),
+			UCE_END(uct.uct_ents[uct.uct_ent_c-2])))
+		{
+			klee_print_expr("ALIASER", addr);
+			klee_uerror(
+				"Could not make sequential allocation",
+				"aliasing.err");
+		}
+		klee_assume_ugt(
+			UCE_BEGIN(ret),
+			UCE_END(uct.uct_ents[uct.uct_ent_c-2]));
+	}
+
 
 	return ret;
 }
@@ -99,6 +140,13 @@ static struct uc_ent* uc_get(void* addr)
 
 	a_hash = klee_sym_corehash(addr);
 	if (a_hash == 0) {
+		if (!klee_feasible_eq(
+			((uint64_t)addr) & UC_ARENA_BEGIN, UC_ARENA_BEGIN))
+		{
+			/* wasn't allocable anyway */
+			return NULL;
+		}
+
 		klee_print_expr("Bad hash on addr", addr);
 		return NULL;
 	}
@@ -119,11 +167,12 @@ static struct uc_ent* uc_get(void* addr)
 	if (i == MAX_UCE)
 		klee_uerror("Exceeded UC entries", "uc.maxent.err");
 
+	if (ret != NULL) return ret;
+
 	/* no match found, make one.. */
-	if (ret == NULL) {
-		ret = uc_make(addr);
+	ret = uc_make_in_arena(addr);
+	if (ret != NULL)
 		ret->uce_pivot_hash = a_hash; 
-	}
 
 	return ret;
 }
@@ -196,7 +245,28 @@ static uint64_t  uc_getptr(struct uc_ent* uce, void* addr, unsigned w)
 
 void mmu_cleanup_uc(void)
 {
-	klee_print_expr("hello cleanup uc", 0);
+	unsigned	i;
+
+	if (uct.uct_ent_c)
+		klee_assume_ugt(UCE_BEGIN(uct.uct_ents[0]), UC_ARENA_BEGIN);
+
+	for (i = 0; i < uct.uct_ent_c; i++) {
+		struct uc_ent	*uce = uct.uct_ents[i];
+		klee_assume_eq(uce->uce_radius, klee_min_value(uce->uce_radius));
+	}
+
+	for (i = 0; i < uct.uct_ent_c; i++) {
+		struct uc_ent	*uce = uct.uct_ents[i];
+
+		if (i > 1) {
+			klee_assume_ugt(
+				UCE_BEGIN(uce),
+				UCE_END(uct.uct_ents[i-1]) + 4096);
+		}
+		klee_assume_eq(
+			(uint64_t)uce->access.a_pivot,
+			klee_min_value((uint64_t)uce->access.a_pivot));
+	}
 }
 
 #define MMU_LOAD(x,y,z)		\

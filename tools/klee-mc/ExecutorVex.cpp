@@ -80,6 +80,7 @@ namespace
 
 	cl::opt<bool> UseFDT("use-fdt", cl::desc("Use TJ's FDT model"));
 	cl::opt<bool> UseNT("use-nt", cl::desc("Use NT model"));
+	cl::opt<bool> UseSysNone("use-sysnone", cl::desc("No System Calls"));
 
 	cl::opt<bool> DumpSyscallStates(
 		"dump-syscall-state",
@@ -98,8 +99,7 @@ namespace
 		"use-reg-pr", cl::desc("Use number of syscalls as priority"));
 
 	cl::opt<std::string> RunSym(
-		"run-func",
-		cl::desc("Name of function to run"));
+		"run-func", cl::desc("Name of function to run"));
 }
 
 ExecutorVex::ExecutorVex(InterpreterHandler *ih)
@@ -148,6 +148,7 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 
 	if (UseFDT)	sys_model = new FDTModel(this);
 	else if (UseNT) sys_model = new W32Model(this);
+	else if (UseSysNone) sys_model = new NoneModel(this);
 	else		sys_model = new LinuxModel(this);
 
 	theVexHelpers->loadUserMod(sys_model->getModelFileName());
@@ -229,7 +230,6 @@ llvm::Function* ExecutorVex::setupRuntimeFunctions(uint64_t entry_addr)
 	}
 
 	sys_model->installInitializers(img_init_func);
-
 	init_kfunc = kmodule->addFunction(img_init_func);
 
 	statsTracker->addKFunction(init_kfunc);
