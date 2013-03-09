@@ -20,6 +20,7 @@ public:
 		klee::KTestStream	*kts);
 
 	void save(const char* fname) const;
+	void saveCTest(const char* fname) const;
 	virtual ~UCState();
 
 protected:

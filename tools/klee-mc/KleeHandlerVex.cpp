@@ -128,7 +128,7 @@ void KleeHandlerVex::printErrDump(
 	gs->getCPUState()->print(os);
 
 	top_f = state.stack.back().kf->function;
-	os << "Func: ";
+	os << "\nFunc: ";
 	if (top_f != NULL) {
 		raw_os_ostream ros(os);
 		ros << top_f;
@@ -136,10 +136,10 @@ void KleeHandlerVex::printErrDump(
 		os << "???";
 	os << "\n";
 
-	os << "Objects:\n";
+	os << "\nObjects:\n";
 	state.addressSpace.printObjects(os);
 
-	os << "Constraints: \n";
+	os << "\n\nConstraints: \n";
 	state.constraints.print(os);
 }
 

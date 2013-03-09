@@ -1157,15 +1157,22 @@ SFH_DEF_HANDLER(SymCoreHash)
 	min_read = reads[0];
 	foreach (it, reads.begin(), reads.end()) {
 		const ref<klee::Array>	cur_arr((*it)->getArray());
+		Expr::Hash	cur_hash;
 
 		arrays.insert(cur_arr.get());
-		if (min_hash > (*it)->hash()) {
-			min_hash = (*it)->hash();
+		cur_hash = (*it)->hash();
+		if (min_hash > cur_hash) {
+			min_hash = cur_hash;
 			min_read = *it;
 		}
 	}
 
+#if 0
 	if (arrays.size() != 1) {
+#endif
+#if 1
+	if (arrays.empty()) {
+#endif
 #if 0
 		std::stringstream	ss;
 
@@ -1181,7 +1188,6 @@ SFH_DEF_HANDLER(SymCoreHash)
 		state.bindLocal(target, MK_CONST(0, 64));
 		return;
 	}
-
 	arr = *(arrays.begin());
 	state.bindLocal(target, MK_CONST(min_hash ^ arr->hash(), 64));
 }

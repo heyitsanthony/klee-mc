@@ -1,10 +1,25 @@
-/* XXX: this doesn't do anything yet */
 #include "klee/klee.h"
 #include "mmu_testptr.h"
 #include "mmu.h"
 #include "uc.h"
 
-static struct uc_tab	uct = { .uct_ent_c = 0 };
+static struct uc_tab	uct = { .uct_ent_c = 0, .uct_last_uce = 0 };
+
+#define CLEANUP_OPT
+#ifdef CLEANUP_OPT
+#define NO_CLEANUP do_cleanup = 0
+#define HAS_CLEANUP (do_cleanup != 0)
+static int do_cleanup = 1;
+#else
+#define NO_CLEANUP
+#define HAS_CLEANUP	1
+#endif
+
+#define UCE_END_PG(y) 	((UCE_END(y)+4095) & (~0xfffUL))
+#define UC_ASSUME_FOLLOWS(x, y)	klee_assume_ugt(UCE_BEGIN(x), UCE_END_PG(y))
+#define UC_MAY_FOLLOW(x,y) klee_feasible_ugt(UCE_BEGIN(x), UCE_END_PG(y))
+#define UCTAB_UCE(i)	uct.uct_ents[i].uch_uce
+#define UCTAB_IS_ALIAS(i)	((int)uct.uct_ents[i].uch_uce->uce_n != (i+1))
 
 static struct uce_backing* uc_make_backing(
 	struct uc_ent* uce, unsigned int radius)
@@ -34,39 +49,67 @@ static struct uce_backing* uc_make_backing(
 	return ret;
 }
 
-static struct uc_ent* uc_make(void* addr)
+/* induce ordering */
+static int uc_suppress_aliasing(void* addr)
+{
+	struct uc_ent	*prev, tmp;
+
+	prev = uct.uct_last_uce;
+	if (prev == NULL)
+		return 1;
+
+	tmp.access.a_pivot = addr;
+	tmp.uce_radius = MIN_RADIUS;
+
+	if (!UC_MAY_FOLLOW(&tmp, prev))
+		return 0;
+
+	UC_ASSUME_FOLLOWS(&tmp, prev);
+	return 1;
+}
+
+static struct uc_h_ent* uc_make(void* addr)
 {
 	struct uc_ent	*ret;
-	unsigned	i;
+	int		i;
 
 	if (uct.uct_ent_c == MAX_UCE) {
 		klee_uerror("Ran out of UC Entries", "uc.max.err");
 		return NULL;
 	}
 
-	ret = NULL;
-	for (i = 0; i < MAX_UCE; i++) {
-		if (uct.uct_ents[i] == NULL)
-			break;
-	}
-
+	i = uct.uct_ent_c++;
 	if (i == MAX_UCE)
 		return NULL;
 
-	uct.uct_ents[i] = malloc(sizeof(struct uc_ent));
-	ret = uct.uct_ents[i];
-	uct.uct_ent_c++;
+	klee_assert (UCTAB_UCE(i) == NULL);
+
+	if (!uc_suppress_aliasing(addr)) {
+		/* find alias */
+		int	j;
+		klee_print_expr("DETECT ALIAS", addr);
+		for (j = 0; j < i; j++) {
+			if (	!UCTAB_IS_ALIAS(j) &&
+				klee_feasible_ule(addr, UCE_END(UCTAB_UCE(j))))
+				break;
+		}
+
+		if (j == i) {
+			klee_uerror(
+				"Could not make sequential alloc or find alias",
+				"aliasing.err");
+		}
+
+		uct.uct_ents[i].uch_uce = uct.uct_ents[j].uch_uce;
+		klee_print_expr("RET ALIAS", UCTAB_UCE(i)->access.a_pivot);
+		return &uct.uct_ents[i];
+	}
+
+	ret = malloc(sizeof(struct uc_ent));
+	UCTAB_UCE(i) = ret;
+	uct.uct_last_uce = ret;
 
 	klee_make_symbolic(ret, sizeof(*ret), "uce");
-
-#if 0
-	/* this is necessary so that UCE's can be matched with the pivot
-	 * pointer; as it is, it uses the highest bits in the address,
-	 * which probably isn't ideal. */
-	if (klee_feasible_eq(get_uce_flag(addr), uct.uct_ent_c)) {
-		klee_assume_eq(get_uce_flag(addr), uct.uct_ent_c);
-	}
-#endif
 
 	klee_assume_eq(ret->access.a_pivot, addr);
 	ret->access.a_pivot = addr;
@@ -79,6 +122,7 @@ static struct uc_ent* uc_make(void* addr)
 
 	/* first try-- no entry */
 	if (ret->uce_radius == 0) {
+		NO_CLEANUP;
 		klee_uerror("Dereferenced bad UC pointer", "uc.empty.err");
 		return NULL;
 	}
@@ -91,50 +135,29 @@ static struct uc_ent* uc_make(void* addr)
 	ret->uce_radius_phys = MIN_RADIUS;
 	ret->uce_b = uc_make_backing(ret, MIN_RADIUS);
 
-	return ret;
+	return &uct.uct_ents[i];
 }
 
-static struct uc_ent* uc_make_in_arena(void* addr)
+static struct uc_h_ent* uc_make_in_arena(void* addr)
 {
-	struct uc_ent	*ret;
 	uint64_t	addr_m;
 
-	/* do *one* query check to make sure we don't have
-	 * a concrete value masquerading as a symbolic value.
-	 * Basically, we check if we can bind the pivot address
-	 * to the UC arena. */
+	/* *one* query check to make sure concrete value
+	 * is not masquerading as a symbolic. */
 	addr_m = ((uint64_t)addr) & UC_ARENA_MASK;
 	if (!klee_feasible_eq(addr_m, UC_ARENA_BEGIN))
 		return NULL;
 
+
 	/* keep inside of arena */
 	klee_assume_eq(addr_m, UC_ARENA_BEGIN);
-	ret = uc_make(addr);
-	if (ret == NULL)
-		return NULL;
 
-	if (uct.uct_ent_c > 1) {
-		if (!klee_feasible_ugt(
-			UCE_BEGIN(ret),
-			UCE_END(uct.uct_ents[uct.uct_ent_c-2])))
-		{
-			klee_print_expr("ALIASER", addr);
-			klee_uerror(
-				"Could not make sequential allocation",
-				"aliasing.err");
-		}
-		klee_assume_ugt(
-			UCE_BEGIN(ret),
-			UCE_END(uct.uct_ents[uct.uct_ent_c-2]));
-	}
-
-
-	return ret;
+	return uc_make(addr);
 }
 
 static struct uc_ent* uc_get(void* addr)
 {
-	struct uc_ent	*ret = NULL;
+	struct uc_h_ent	*uch;
 	unsigned	i, uce_c;
 	uint64_t	a_hash;
 
@@ -154,27 +177,23 @@ static struct uc_ent* uc_get(void* addr)
 	/* find UC entry */
 	uce_c = 0;
 	for (i = 0; i < MAX_UCE && uce_c < uct.uct_ent_c; i++) {
-		if (uct.uct_ents[i] == NULL)
+		if (UCTAB_UCE(i) == NULL)
 			continue;
 
 		uce_c++;
-		if (a_hash == uct.uct_ents[i]->uce_pivot_hash) {
-			ret = uct.uct_ents[i];
-			break;
-		}
+		if (a_hash == uct.uct_ents[i].uch_pivot_hash)
+			return UCTAB_UCE(i);
 	}
 
 	if (i == MAX_UCE)
 		klee_uerror("Exceeded UC entries", "uc.maxent.err");
 
-	if (ret != NULL) return ret;
-
 	/* no match found, make one.. */
-	ret = uc_make_in_arena(addr);
-	if (ret != NULL)
-		ret->uce_pivot_hash = a_hash; 
+	uch = uc_make_in_arena(addr);
+	if (uch == NULL) return NULL;
 
-	return ret;
+	uch->uch_pivot_hash = a_hash;
+	return uch->uch_uce;
 }
 
 
@@ -184,13 +203,11 @@ static void uc_extend(struct uc_ent* uce, uint64_t min_radius)
 	struct uce_backing	*new_backing;
 
 	min_radius_c = klee_min_value(min_radius);
-	if (min_radius_c > MAX_RADIUS) {
+	if (min_radius_c > MAX_RADIUS)
 		klee_uerror("Max radius exceeded", "uc.max.err");
-	}
 
-	if (min_radius_c < uce->uce_radius_phys) {
-		klee_uerror("Min radius smaller than phys radius", "uc.rad.err");
-	}
+	if (min_radius_c < uce->uce_radius_phys)
+		klee_uerror("Min radius < phys radius", "uc.rad.err");
 
 	klee_print_expr("extending with min radius", min_radius_c);
 
@@ -223,15 +240,14 @@ static uint64_t  uc_getptr(struct uc_ent* uce, void* addr, unsigned w)
 	if (base_off + uce->uce_radius_phys < 0) {
 		/* out of range; underflow */
 		if (-base_off > uce->uce_radius) {
-			klee_print_expr("UF", base_off);
+			NO_CLEANUP;
 			klee_uerror("Underflow", "uc.uf.err");
 		}
 		uc_extend(uce, -base_off);
 	} else if ((base_off+w) > uce->uce_radius_phys) {
 		/* out of range; overflow */
 		if ((base_off+w) > uce->uce_radius) {
-			klee_print_expr("OF-base", base_off);
-			klee_print_expr("OF-end", base_off+w);
+			NO_CLEANUP;
 			klee_uerror("Overflow", "uc.of.err");
 		}
 		klee_print_expr("OF-extend", base_off+w);
@@ -247,25 +263,29 @@ void mmu_cleanup_uc(void)
 {
 	unsigned	i;
 
-	if (uct.uct_ent_c)
-		klee_assume_ugt(UCE_BEGIN(uct.uct_ents[0]), UC_ARENA_BEGIN);
+	if (uct.uct_ent_c == 0 || !HAS_CLEANUP)
+		return;
 
+	klee_assume_uge(UCE_BEGIN(UCTAB_UCE(0)), UC_ARENA_BEGIN);
+
+	/* klee_min_value caches last result,
+	 * two loops might perform better */
 	for (i = 0; i < uct.uct_ent_c; i++) {
-		struct uc_ent	*uce = uct.uct_ents[i];
-		klee_assume_eq(uce->uce_radius, klee_min_value(uce->uce_radius));
+		struct uc_ent	*uce = UCTAB_UCE(i);
+		uint64_t	min_radius;
+
+		min_radius = klee_min_value(uce->uce_radius);
+		klee_assume_eq(uce->uce_radius, min_radius);
+		uce->uce_radius = min_radius;
 	}
 
 	for (i = 0; i < uct.uct_ent_c; i++) {
-		struct uc_ent	*uce = uct.uct_ents[i];
+		struct uc_ent	*uce = UCTAB_UCE(i);
+		uint64_t	min_addr;
 
-		if (i > 1) {
-			klee_assume_ugt(
-				UCE_BEGIN(uce),
-				UCE_END(uct.uct_ents[i-1]) + 4096);
-		}
-		klee_assume_eq(
-			(uint64_t)uce->access.a_pivot,
-			klee_min_value((uint64_t)uce->access.a_pivot));
+		min_addr = klee_min_value((uint64_t)uce->access.a_pivot);
+		klee_assume_eq((uint64_t)uce->access.a_pivot, min_addr);
+		uce->access.a_pivot = (void*)min_addr;
 	}
 }
 
@@ -275,7 +295,7 @@ y mmu_load_##x##_uc(void* addr)	\
 	uint64_t	c_64;	\
 	struct uc_ent	*uce;	\
 	uce = uc_get(addr);	\
-	if (uce == NULL) return mmu_load_ ##x## _ ##z (addr);	\
+	if (uce == NULL) { return mmu_load_ ##x## _ ##z (addr); } \
 	c_64 = uc_getptr(uce, addr, x/8);	\
 	p = (y*)c_64;				\
 	return klee_is_symbolic((uint64_t)p)	\

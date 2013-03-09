@@ -112,6 +112,8 @@ static void run_uc(ReplayExec* re, UCState* uc_state)
 	while (re->stepVSB()) {
 		if (re->getNextAddr() == 0xdeadbeef) {
 			std::cerr << "[kmc-replay] UC: Exited.\n";
+			if (getenv("VEXLLVM_DUMP_STATES") != 0)
+				re->getGuest()->print(std::cerr);
 			break;
 		}
 	}

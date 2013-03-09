@@ -73,42 +73,6 @@ void UCState::loadUCBuffers(Guest* gs, KTestStream* kts)
 			gs,
 			(uint64_t)uce.access.a_pivot, uce.uce_radius, init_dat);
 	}
-
-	/* link back into register state */
-#if 0
-	foreach (it, uc_ents.begin(), uc_ents.end()) {
-		struct uc_ent	uce(*it);
-		unsigned	idx, cpu_len, best_idx;
-		uint64_t	min_off;
-		uint64_t	*cpu;
-
-		idx = uce.uce_n - 1;
-		if (uce.uce_n == 0 || ucbufs[idx] == NULL)
-			continue;
-
-		cpu = (uint64_t*)gs->getCPUState()->getStateData();
-		cpu_len = gs->getCPUState()->getStateSize() / sizeof(uint64_t);
-		min_off = ~((uint64_t)0);
-		best_idx = 0;
-		for (unsigned i = 0; i < cpu_len; i++) {
-			int64_t	cur_off;
-
-			cur_off = cpu[i] - (uint64_t)uce.access.a_pivot;
-			if (cur_off < 0) cur_off = -cur_off;
-			if ((uint64_t)cur_off < min_off) {
-				min_off = cur_off;
-				best_idx = i;
-				std::cerr << "[UC] minoff=" << min_off << '\n';
-			}
-		}
-
-		/* is this a smart fixup method? */
-		min_off = (cpu[best_idx] - (uint64_t)uce.access.a_pivot);
-		std::cerr << "[UC] Fixing up idx=" << best_idx << ". Off=" <<
-			(int64_t)min_off << '\n';
-		cpu[best_idx] = ucbufs[idx]->getPivot() + min_off;
-	}
-#endif
 }
 
 UCState* UCState::init(
@@ -186,13 +150,78 @@ UCState::UCState(
 	/* 2. scan through ktest, allocate buffers */
 	loadUCBuffers(gs, kts);
 
+	saveCTest("uctest.c");
 	ok = true;
+}
+
+void UCState::saveCTest(const char* fname) const
+{
+	FILE		*f;
+	GuestCPUState	*cpu;
+
+	f = fopen(fname, "w");
+	assert (f != NULL);
+
+
+	foreach (it, ucbufs.begin(), ucbufs.end()) {
+		UCBuf	*ucb = *it;
+
+		fprintf(f, "char uc_%lx[] = {", ucb->getBase().o);
+
+		for (unsigned i = 0; i < ucb->getRadius()*2+1; i++) {
+			fprintf(f, "0x%x, ",
+				(int)(unsigned char)ucb->getData()[i]);
+		}
+		fprintf(f, "\n};\n");
+	}
+
+	fprintf(f,
+		"#include <sys/mman.h>\n"
+		"#include <stdio.h>\n"
+		"#include <string.h>\n"
+		"#include <assert.h>\n"
+		"#include <dlfcn.h>\n"
+		"typedef long (*fptr_t)(long, long, long, long, long, long);\n"
+		"int main(int argc, char* argv[])\n"
+		"{ long v; void* x; fptr_t %s;\n", funcname);
+
+	foreach (it, ucbufs.begin(), ucbufs.end()) {
+		UCBuf		*ucb(*it);
+		uint64_t	addr, page_c;
+
+		addr = ucb->getSegBase().o;
+		page_c = ucb->getNumPages();
+		fprintf(f, "x = mmap((void*)0x%lx, %ld,\n"
+		"	PROT_READ | PROT_WRITE,\n"
+		"	MAP_ANONYMOUS | MAP_FIXED | MAP_PRIVATE,\n"
+		"	-1, 0);\n"
+		"assert((long)x == 0x%lx);\n", addr, 4096*page_c, addr);
+		fprintf(f, "memcpy((void*)0x%lx, uc_%lx, %d);\n",
+			ucb->getBase().o,
+			ucb->getBase().o,
+			ucb->getRadius()*2+1);
+	}
+
+#define READ_FUNCARG(x,t) *((t*)((char*)cpu->getStateData() + cpu->getFuncArgOff(x)))
+#define READ_ARG64(x)	READ_FUNCARG(x,uint64_t)
+
+	fprintf(f,
+		"%s = dlsym(dlopen(argv[1], RTLD_GLOBAL|RTLD_LAZY), (argc == 3) ? argv[2] : \"%s\");\n"
+		"assert( %s != NULL);\n",
+		funcname, funcname, funcname);
+
+	cpu = gs->getCPUState();
+	fprintf(f, "v = %s(0x%lx, 0x%lx, 0x%lx, 0x%lx, 0x%lx, 0x%lx);\n",
+		funcname,
+		READ_ARG64(0), READ_ARG64(1), READ_ARG64(2), READ_ARG64(3),	
+		READ_ARG64(4), READ_ARG64(5));
+	fprintf(f, "printf(\"%%lx\\n\", v);\n return 0; \n}\n");
+	fclose(f);
 }
 
 void UCState::save(const char* fname) const
 {
 	FILE		*f;
-	uint64_t	ret = 0;
 
 	f = fopen(fname, "w");
 	assert (f != NULL);

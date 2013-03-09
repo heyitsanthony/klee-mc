@@ -16,6 +16,7 @@ UCBuf::UCBuf(
 {
 	int		err;
 	uint64_t	off;
+	guest_ptr	req_addr;
 
 	off = get_uce_val(_in_pivot) & 0xfff;
 	if (off != 0) {
@@ -24,27 +25,25 @@ UCBuf::UCBuf(
 	}
 
 	/* XXX: this should be more precise */
-	page_c = 1+((PAGE_SZ-1)+off+radius*2+1)/PAGE_SZ;
-	std::cerr << "PAGE_C = " << page_c << '\n';
+	page_c = ((PAGE_SZ-1)+off+radius*2+1)/PAGE_SZ;
+	std::cerr << "[UCBuf] PAGE_C = " << page_c << '\n';
 
 	/* XXX: be smarter about alignment. Want a way
 	 * to keep the same alignment but make it so accesses
 	 * left or right cause a crash */
+	req_addr = guest_ptr(_in_pivot & ~(PAGE_SZ - 1));
 	err = gs->getMem()->mmap(
 		ptr_seg_base,
-		guest_ptr(_in_pivot & ~(PAGE_SZ - 1)),
+		req_addr,
 		page_c*PAGE_SZ,
 		PROT_READ | PROT_WRITE,
 		MAP_ANONYMOUS | MAP_PRIVATE | MAP_FIXED,
 		-1,
 		0);
 	assert (err == 0);
+	assert (ptr_seg_base.o == req_addr.o);
 
-	if (radius > off) {
-		off += PAGE_SZ;
-	}
 	ptr_buf_pivot.o = ptr_seg_base + off; 
-
 	ptr_buf_base.o = ptr_buf_pivot - radius;
 
 	/* copy in data */

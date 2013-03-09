@@ -10,15 +10,18 @@
 #define MAX_UCE		512
 #define MAX_UCE_BITS	9
 
-#define UC_ARENA_BEGIN	        0x10000000
-#define UC_ARENA_END	        0x20000000
-#define UC_ARENA_MASK	0xfffffffff0000000
 
-#define UCE_ADDR_SHIFT		(63 - MAX_UCE_BITS)
-#define UCE_ADDR_MASK		((1ULL << 63) | (((1ULL << MAX_UCE_BITS) - 1) << UCE_ADDR_SHIFT))
-#define set_uce_flag(x, y)	((((uint64_t)x) & ~UCE_ADDR_MASK) | (y << UCE_ADDR_SHIFT))
-#define get_uce_flag(x)		((((uint64_t)x) & UCE_ADDR_MASK) >> UCE_ADDR_SHIFT)
-#define get_uce_val(x)		((((uint64_t)x) & ~UCE_ADDR_MASK))
+#define UC_ARENA_BEGIN_32	        0x10000000
+#define UC_ARENA_END_32		        0x20000000
+#define UC_ARENA_MASK_32	0xfffffffff0000000
+
+#define UC_ARENA_BEGIN_64		0x100000000
+#define UC_ARENA_END_64			0x200000000
+#define UC_ARENA_MASK_64	 0xffffffff00000000
+
+#define UC_ARENA_BEGIN		UC_ARENA_BEGIN_32
+#define UC_ARENA_END		UC_ARENA_END_32
+#define UC_ARENA_MASK		UC_ARENA_MASK_32
 
 #define UCE_END(x)	((uint64_t)((x)->access.a_pivot) + ((x)->uce_radius))
 #define UCE_BEGIN(x)	((uint64_t)((x)->access.a_pivot) - ((x)->uce_radius))
@@ -37,10 +40,15 @@ struct uc_ent
 	unsigned int	uce_radius;
 
 	/* physical stuff */
-	uint64_t		uce_pivot_hash;
 	struct uce_backing	*uce_b;
 	unsigned int		uce_radius_phys;
 	unsigned int		uce_depth;
+};
+
+struct uc_h_ent
+{
+	uint64_t	uch_pivot_hash;
+	struct uc_ent*	uch_uce;
 };
 
 struct uce_backing
@@ -51,8 +59,11 @@ struct uce_backing
 
 struct uc_tab
 {
-	struct uc_ent	*uct_ents[MAX_UCE];
+	struct uc_h_ent	uct_ents[MAX_UCE];
 	unsigned	uct_ent_c;
+	/* last uce added-- necessary to avoid walking
+	 * aliases from tail of entry table */
+	struct uc_ent	*uct_last_uce;
 };
 
 
