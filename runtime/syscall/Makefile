@@ -24,22 +24,29 @@ ifeq ($(GUEST_ARCH), amd64)
 C.Flags += -DGUEST_ARCH_AMD64=1
 CXX.Flags += -DGUEST_ARCH_AMD64=1
 LibName.BCA := $(LibDir)/lib$(LIBRARYNAME)-amd64.bca
+LibName.BC := $(LibDir)/lib$(LIBRARYNAME)-amd64.bc
 else ifeq ($(GUEST_ARCH), arm)
 C.Flags += -DGUEST_ARCH_ARM=1
 CXX.Flags += -DGUEST_ARCH_ARM=1
 LibName.BCA := $(LibDir)/lib$(LIBRARYNAME)-arm.bca
+LibName.BC := $(LibDir)/lib$(LIBRARYNAME)-arm.bc
 else ifeq ($(GUEST_ARCH), x86)
 C.Flags += -DGUEST_ARCH_X86=1
 CXX.Flags += -DGUEST_ARCH_X86=1
 LibName.BCA := $(LibDir)/lib$(LIBRARYNAME)-x86.bca
+LibName.BC := $(LibDir)/lib$(LIBRARYNAME)-x86.bc
 else
 $(error Unknown arch-- '$(GUEST_ARCH)')
 endif
 
 $(LibName.BCA): $(LibDir)/lib$(LIBRARYNAME).bca
-	cp $< $@
+	cp $^ $@
 	rm $^
 	touch $^
 
-all:: $(LibName.BCA)
+$(LibName.BC): $(LibName.BCA)
+	../../scripts/link-bca $^ $@
+
+
+all:: $(LibName.BCA) $(LibName.BC)
 	echo $<

@@ -18,7 +18,7 @@ UCBuf::UCBuf(
 	uint64_t	off;
 	guest_ptr	req_addr;
 
-	off = get_uce_val(_in_pivot) & 0xfff;
+	off = _in_pivot & 0xfff;
 	if (off != 0) {
 		std::cerr << "[UCBuf] OFF = " << off << '\n';
 		/* XXX: has some requried alignment */
