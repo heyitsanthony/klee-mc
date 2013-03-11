@@ -72,7 +72,7 @@ void Assignment::print(std::ostream& os) const
 		os	 << (*it).first->name << "["
 			<< (*it).second.size() << "] =\n";
 		foreach (it_v, (*it).second.begin(), (*it).second.end())
-			os << ((void*)(*it_v)) << ' ';
+			os << ((void*)(long)(*it_v)) << ' ';
 		os << '\n';
 	}
 }

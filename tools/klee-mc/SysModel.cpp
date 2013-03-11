@@ -72,6 +72,11 @@ void SysModel::setModelBool(Module* m, const char* gv_name, bool bv)
 	Type		*t;
 
 	gv = static_cast<GlobalVariable*>(m->getGlobalVariable(gv_name));
+	if (gv == NULL) {
+		std::cerr << "[SysModel] Could not find " << gv_name << '\n';
+		return;
+	}
+
 	assert (gv != NULL);
 
 	initer = gv->getInitializer();
@@ -90,8 +95,12 @@ void SysModel::setModelU64(Module* m, const char* gv_name, uint64_t bv)
 	GlobalVariable	*gv;
 
 	gv = static_cast<GlobalVariable*>(m->getGlobalVariable(gv_name));
-	assert (gv != NULL);
+	if (gv == NULL) {
+		std::cerr << "[SysModel] Could not find " << gv_name << '\n';
+		return;
+	}
 
+	assert (gv != NULL);
 	gv->setInitializer(
 		ConstantInt::get(getGlobalContext(), APInt(64, bv, false)));
 	gv->setConstant(true);

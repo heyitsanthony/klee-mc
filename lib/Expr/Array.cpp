@@ -171,7 +171,7 @@ void Array::print(std::ostream& os) const
 	if (constantValues_u8) {
 		for (unsigned i = 0; i < constant_count; i++) {
 			if ((i % 16) == 0) os << "\n[" << i << "]: ";
-			os << (void*)constantValues_u8[i] << ' ';
+			os << (void*)(long)constantValues_u8[i] << ' ';
 		}
 	} else {
 		for (unsigned i = 0; i < constant_count; i++) {
