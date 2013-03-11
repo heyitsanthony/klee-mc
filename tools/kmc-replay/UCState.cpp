@@ -162,18 +162,37 @@ void UCState::saveCTest(const char* fname) const
 	f = fopen(fname, "w");
 	assert (f != NULL);
 
-
 	foreach (it, ucbufs.begin(), ucbufs.end()) {
 		UCBuf	*ucb = *it;
 
 		fprintf(f, "char uc_%lx[] = {", ucb->getBase().o);
-
 		for (unsigned i = 0; i < ucb->getRadius()*2+1; i++) {
+			if (i % 8 == 0) fprintf(f, "\n");
 			fprintf(f, "0x%x, ",
 				(int)(unsigned char)ucb->getData()[i]);
 		}
 		fprintf(f, "\n};\n");
 	}
+	
+	fprintf(f,
+		"struct uc_desc { void *ucd_data, *ucd_base, *ucd_seg;"
+		"unsigned ucd_pgs, ucd_bytes; };\n\n");
+
+	fprintf(f, "struct uc_desc ucds[] = {\n");
+	foreach (it, ucbufs.begin(), ucbufs.end()) {
+		UCBuf	*ucb = *it;
+		fprintf(f,
+			"{.ucd_data = uc_%lx,  "
+			".ucd_base = (void*)0x%lx, "
+			".ucd_seg = (void*)0x%lx, "
+			".ucd_pgs = %u, "
+			".ucd_bytes = %u },\n",
+			ucb->getBase().o, ucb->getBase().o,
+			ucb->getSegBase().o,
+			ucb->getNumPages(),
+			ucb->getRadius()*2+1);
+	}
+	fprintf(f, "{ .ucd_data = 0 }};\n\n");
 
 	fprintf(f,
 		"#include <sys/mman.h>\n"
@@ -183,24 +202,15 @@ void UCState::saveCTest(const char* fname) const
 		"#include <dlfcn.h>\n"
 		"typedef long (*fptr_t)(long, long, long, long, long, long);\n"
 		"int main(int argc, char* argv[])\n"
-		"{ long v; void* x; fptr_t %s;\n", funcname);
+		"{ long v; void* x; fptr_t %s; struct uc_desc* ucd;\n",
+		funcname);
 
-	foreach (it, ucbufs.begin(), ucbufs.end()) {
-		UCBuf		*ucb(*it);
-		uint64_t	addr, page_c;
-
-		addr = ucb->getSegBase().o;
-		page_c = ucb->getNumPages();
-		fprintf(f, "x = mmap((void*)0x%lx, %ld,\n"
-		"	PROT_READ | PROT_WRITE,\n"
-		"	MAP_ANONYMOUS | MAP_FIXED | MAP_PRIVATE,\n"
-		"	-1, 0);\n"
-		"assert((long)x == 0x%lx);\n", addr, 4096*page_c, addr);
-		fprintf(f, "memcpy((void*)0x%lx, uc_%lx, %d);\n",
-			ucb->getBase().o,
-			ucb->getBase().o,
-			ucb->getRadius()*2+1);
-	}
+	fprintf(f,
+		"for (ucd = ucds; ucd->ucd_data; ucd++) {\n"
+		"x = mmap(ucd->ucd_seg, 4096*ucd->ucd_pgs, PROT_READ|PROT_WRITE, "
+		"MAP_ANONYMOUS|MAP_FIXED|MAP_PRIVATE, -1, 0);\n"
+		"assert (x == ucd->ucd_seg);\n"
+		"memcpy(ucd->ucd_base, ucd->ucd_data, ucd->ucd_bytes); }\n");
 
 #define READ_FUNCARG(x,t) *((t*)((char*)cpu->getStateData() + cpu->getFuncArgOff(x)))
 #define READ_ARG64(x)	READ_FUNCARG(x,uint64_t)
