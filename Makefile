@@ -83,15 +83,6 @@ $(LibDir)/libkleeRuntimeIntrinsic.bc: $(LibDir)/libkleeRuntimeIntrinsic.bca
 	llvm-link -f -o `echo $^ | sed "s/\.bca/\.bc/"` intrin_tmp-$@/*.bc
 	rm -rf intrin_tmp-$@
 
-
-mc-std-%: $(LibDir)/libkleeRuntimeMC-%.bca
-	mkdir -p mc_tmp-$@
-	cd mc_tmp-$@ && ar x $^ && cd ..
-	llvm-link -f -o `echo $^ | sed "s/\.bca/\.bc/"` mc_tmp-$@/*.bc
-	rm -rf mc_tmp-$@
-	cp  `echo $^ | sed "s/\.bca/\.bc/"` $(VEXLLVM_HELPER_PATH)
-
-
 mc-fdt: $(LibDir)/libkleeRuntimeMC-fdt.bca
 	mkdir -p mcfdt_tmp
 	cd mcfdt_tmp && ar x $(LibDir)/libkleeRuntimeMC-fdt.bca && cd ..
@@ -129,7 +120,7 @@ test-broken-optmul:
 
 mc-clean:
 	rm -rf runtime/syscall/*/*.{bc,bca,ll,d,o}
-	rm -rf $(LibDir)/libkleeRuntimeMC*-*.bc*
+#	rm -rf $(LibDir)/libkleeRuntimeMC*-*.bc*
 
 #rm -rf guest-*
 

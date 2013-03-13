@@ -41,9 +41,10 @@ pushd "$VEXLLVMDIR"
 make install-klee
 popd
 
-make mc-clean && GUEST_ARCH=arm make -j6 && GUEST_ARCH=arm make mc-std-arm
-make mc-clean && GUEST_ARCH=x86 make -j6 && GUEST_ARCH=x86 make mc-std-x86
-make mc-clean && GUEST_ARCH=amd64 make -j6 && GUEST_ARCH=amd64 make mc-std-amd64
+make mc-clean && GUEST_ARCH=arm make -j6
+make mc-clean && GUEST_ARCH=x86 make -j6
+make mc-clean && GUEST_ARCH=amd64 make -j6
+make mc-fdt
 
 BASEDIR="Release+Asserts"
 if [ ! -x $BASEDIR ]; then
@@ -52,13 +53,15 @@ fi
 
 if [ -z "$VEXLLVM_HELPER_PATH" ]; then
 	echo "Can't find vex bitcode path. Not copying libkleeRuntimeMC.bc"
-else
-	cp "$BASEDIR"/lib/libkleeRuntimeMC-amd64.bc "$VEXLLVM_HELPER_PATH"/
-	cp "$BASEDIR"/lib/libkleeRuntimeMC-x86.bc "$VEXLLVM_HELPER_PATH"/
-	cp "$BASEDIR"/lib/libkleeRuntimeMC-nt32.bc "$VEXLLVM_HELPER_PATH"/
-	cp "$BASEDIR"/lib/libkleeRuntimeMC-fdt.bc "$VEXLLVM_HELPER_PATH"/
-	cp "$BASEDIR"/lib/libkleeRuntimeMC-sysnone.bc "$VEXLLVM_HELPER_PATH"/
-
-
-	cp "$VEXLLVM_HELPER_PATH"/softfloat.bc "$BASEDIR"/lib/
+	exit 1
 fi
+
+echo "Copying runtimes..."
+for a in amd64 x86 nt32 fdt sysnone; do
+	ls -l "$BASEDIR"/lib/libkleeRuntimeMC-$a.bc
+	cp "$BASEDIR"/lib/libkleeRuntimeMC-$a.bc "$VEXLLVM_HELPER_PATH"/
+done
+
+
+cp "$VEXLLVM_HELPER_PATH"/softfloat.bc "$BASEDIR"/lib/
+

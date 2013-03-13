@@ -26,7 +26,14 @@ OPTFLAGS:="-disable-opt"
 #CFLAGS=-fno-builtin -nodefaultlibs -O0 -emit-llvm
 #CXXFLAGS=-fno-builtin -nodefaultlibs -O0 -emit-llvm
 
-all:: $(LIBTXT)
+LibName.BCA := $(LibDir)/lib$(LIBRARYNAME).bca
+LibName.BC := $(LibDir)/lib$(LIBRARYNAME).bc
+
+
+$(LibName.BC): $(LibName.BCA)
+	../../scripts/link-bca $^ $@
+
+all:: $(LIBTXT) $(LibName.BC) $(LibName.BCA)
 
 $(LIBTXT): $(LIBBCA) $(LEVEL)/scripts/llvm-list-functions
 	$(Echo) "Updating $(LIBRARYNAME) function list for $(BuildMode) build"
