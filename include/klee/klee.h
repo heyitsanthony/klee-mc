@@ -117,15 +117,9 @@ extern "C" {
   /* print the tree associated w/ a given expression. */
   void klee_print_expr(const char *msg, ...);
 
-  /* NB: this *does not* fork n times and return [0,n) in children.
-   * It makes n be symbolic and returns: caller must compare N times.
-   */
-  unsigned klee_choose(unsigned n);
-
   /* special klee assert macro. this assert should be used when path consistency
    * across platforms is desired (e.g., in tests).
-   * NB: __assert_fail is a klee "special" function
-   */
+   * NB: __assert_fail is a klee "special" function */
 # define klee_assert(expr)                                              \
   ((expr)                                                               \
    ? (void) (0)                                                         \
@@ -135,8 +129,7 @@ extern "C" {
   /* Return true if the given value is symbolic (represented by an
    * expression) in the current state. This is primarily for debugging
    * and writing tests but can also be used to enable prints in replay
-   * mode.
-   */
+   * mode. */
   unsigned klee_is_symbolic(uint64_t n);
 
   /* return true if byte at given address may be accessed */

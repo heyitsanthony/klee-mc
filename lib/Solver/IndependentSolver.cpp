@@ -170,10 +170,12 @@ bool IndependentElementSet::add(const IndependentElementSet &b)
 {
 	bool	modified = false;
 
+	/* add whole objects */
 	foreach (it, b.wholeObjects.begin(), b.wholeObjects.end()) {
 		const Array *array;
 		elements_ty::iterator it2;
 
+		/* if a partial object in this, update to whole object now */
 		it2 = elements.find(array);
 		if (it2 != elements.end()) {
 			modified = true;
@@ -182,6 +184,7 @@ bool IndependentElementSet::add(const IndependentElementSet &b)
 			continue;
 		}
 
+		/* not a partial object, add to whole object */
 		array = *it;
 		if (!wholeObjects.count(array)) {
 			modified = true;
@@ -189,6 +192,7 @@ bool IndependentElementSet::add(const IndependentElementSet &b)
 		}
 	}
 
+	/* add partial objects */
 	foreach (it, b.elements.begin(), b.elements.end()) {
 		const Array *array = it->first;
 		elements_ty::iterator it2;

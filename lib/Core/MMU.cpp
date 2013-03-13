@@ -18,6 +18,12 @@ extern unsigned MakeConcreteSymbolic;
 
 namespace {
 	llvm::cl::opt<bool>
+	UseInstMMU(
+		"use-inst-mmu",
+		llvm::cl::desc("MMU with forwarding instrumentation."),
+		llvm::cl::init(false));
+
+	llvm::cl::opt<bool>
 	UseSymMMU(
 		"use-sym-mmu",
 		llvm::cl::desc("Use MMU that forwards to interpreter."),
@@ -69,11 +75,15 @@ ref<Expr> MMU::readDebug(ExecutionState& state, uint64_t addr)
 /* TODO: make this a command line option */
 #include "DualMMU.h"
 #include "KleeMMU.h"
+#include "InstMMU.h"
 MMU* MMU::create(Executor& exe)
 {
 	/* XXX should have concrete mmu be able to do this */
 	if (MakeConcreteSymbolic)
 		return new KleeMMU(exe);
+
+	if (UseInstMMU)
+		return new InstMMU(exe);
 
 	return new DualMMU(exe);
 }

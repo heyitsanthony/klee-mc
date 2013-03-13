@@ -23,5 +23,6 @@ DEF_MMU(forkall)
 DEF_MMU(forkobj)
 DEF_MMU(objwide)
 DEF_MMU(uc)
+DEF_MMU(inst)
 
 #endif
