@@ -139,6 +139,10 @@ public:
 	};
 
 #define SFH_HANDLER(name)	SFH_HANDLER2(name,;)
+
+#define SFH_ADD_REG(x,y) HandlerReadReg::vars.insert(std::make_pair(x, y))
+typedef std::map<std::string, uint64_t>	readreg_map_ty;
+SFH_HANDLER2(ReadReg, static readreg_map_ty vars)
 }
 
 #endif

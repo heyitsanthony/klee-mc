@@ -71,6 +71,7 @@ SFH_HANDLER(Indirect3)
 SFH_HANDLER(ForkEq)
 SFH_HANDLER(StackDepth)
 SFH_HANDLER(SymCoreHash)
+
 #define DEF_SFH_MMU(x)			\
 	SFH_HANDLER(WideStore##x)	\
 	SFH_HANDLER(WideLoad##x)
@@ -103,6 +104,8 @@ static const SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   add("klee_get_obj_prev", GetObjPrev, true),
 
   add("klee_free_fixed", Free, false),
+  add("klee_malloc_fixed", Malloc, true),
+
   add("klee_assume", Assume, false),
   add("klee_assume_op", AssumeOp, false),
   addDNR("klee_resume_exit", ResumeExit),
@@ -126,8 +129,9 @@ static const SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   add("klee_warning_once", WarningOnce, false),
   add("klee_get_prune_id", GetPruneID, true),
   add("klee_prune", Prune, false),
-  add("klee_malloc_fixed", Malloc, true),
   add("klee_stack_depth", StackDepth, true),
+  add("klee_read_reg", ReadReg, true),
+
   add("klee_indirect0", Indirect0, true),
   add("klee_indirect1", Indirect1, true),
   add("klee_indirect2", Indirect2, true),
@@ -1008,6 +1012,17 @@ SFH_DEF_HANDLER(Indirect3)
 	indir_args.push_back(args[2]);
 	indir_args.push_back(args[3]);
 	sfh->handleByName(state, fname, target, indir_args);
+}
+
+readreg_map_ty HandlerReadReg::vars;
+SFH_DEF_HANDLER(ReadReg)
+{
+	std::map<std::string, uint64_t>::iterator	it;
+
+	it = vars.find(sfh->readStringAtAddress(state, args[0]));
+	if (it == vars.end()) return;
+
+	state.bindLocal(target, MK_CONST(it->second, 64));
 }
 
 #if 0

@@ -429,6 +429,11 @@ void ExecutorVex::bindMapping(
 	assert ((len % PAGE_SIZE) == 0);
 	for (unsigned int i = 0; i < len/PAGE_SIZE; i++)
 		bindMappingPage(state, f, m, i);
+
+	if (m.type == GuestMem::Mapping::STACK) {
+		SFH_ADD_REG("stack_begin", m.offset.o);
+		SFH_ADD_REG("stack_end", m.offset.o + m.length);
+	}
 }
 
 void ExecutorVex::setupProcessMemory(ExecutionState* state, Function* f)

@@ -249,6 +249,7 @@ extern void free(void*) __THROW;
   uint64_t klee_indirect3(const char* s, uint64_t v0, uint64_t v1, uint64_t v2);
 
 	uint64_t klee_sym_corehash(void* addr);
+	uint64_t klee_read_reg(const char* sp);
 
 #ifdef __cplusplus
 }
