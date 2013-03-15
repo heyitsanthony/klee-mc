@@ -1,8 +1,8 @@
 #include <llvm/Support/CommandLine.h>
-#include <llvm/Support/Path.h>
 #include "Executor.h"
 #include "klee/ExecutionState.h"
 #include "klee/Internal/Module/KModule.h"
+#include "SoftMMUHandlers.h"
 #include "SymMMU.h"
 
 using namespace klee;
@@ -17,77 +17,28 @@ namespace {
 		llvm::cl::init("objwide" /*uniqptr */));
 };
 
-
-KFunction	*SymMMU::f_store8 = NULL,
-		*SymMMU::f_store16, *SymMMU::f_store32,
-		*SymMMU::f_store64, *SymMMU::f_store128;
-
-KFunction	*SymMMU::f_load8, *SymMMU::f_load16, *SymMMU::f_load32,
-		*SymMMU::f_load64, *SymMMU::f_load128;
-
-KFunction	*SymMMU::f_cleanup = NULL;
-
-struct loadent
+void SymMMU::initModule(Executor& exe, const std::string& mmu_type)
 {
-	const char*	le_name;
-	KFunction**	le_kf;
-	bool		le_required;
-};
+	mh = new SoftMMUHandlers(exe, mmu_type);
+	assert (mh != NULL);
 
-void SymMMU::initModule(Executor& exe)
-{
-	KModule		*km(exe.getKModule());
-	llvm::Module	*mod;
-	std::string	suffix("_" + SymMMUType);
+	std::cerr << "[SymMMU] Using '" << mmu_type << "'\n";
+	if (mh->getCleanup() != NULL)
+		exe.addFiniFunction(mh->getCleanup()->function);
 
-	struct loadent	loadtab[] =  {
-		{ "mmu_load_8", &f_load8, true},
-		{ "mmu_load_16", &f_load16, true},
-		{ "mmu_load_32", &f_load32, true},
-		{ "mmu_load_64", &f_load64, true},
-		{ "mmu_load_128", &f_load128, true},
-		{ "mmu_store_8", &f_store8, true},
-		{ "mmu_store_16", &f_store16, true},
-		{ "mmu_store_32", &f_store32, true},
-		{ "mmu_store_64", &f_store64, true},
-		{ "mmu_store_128", &f_store128, true},
-		{ "mmu_cleanup", &f_cleanup, false},
-		{ NULL, NULL, false}};
-
-	/* already loaded? */
-	if (f_store8 != NULL)
-		return;
-
-	llvm::sys::Path path(km->getLibraryDir());
-
-	path.appendComponent("libkleeRuntimeMMU.bc");
-	mod = getBitcodeModule(path.c_str());
-	assert (mod != NULL);
-
-	exe.addModule(mod);
-
-	for (struct loadent* le = &loadtab[0]; le->le_name; le++) {
-		std::string	func_name(le->le_name + suffix);
-		KFunction	*kf(km->getKFunction(func_name.c_str()));
-		if (kf == NULL) {
-			if (le->le_required == false)
-				continue;
-			std::cerr <<	"[SymMMU] Could not find: " <<
-					func_name << '\n';
-		}
-		assert (kf != NULL);
-		*(le->le_kf) = kf;
-	}
-
-	std::cerr << "[SymMMU] Using '" << SymMMUType << "'\n";
-
-	if (f_cleanup != NULL)
-		exe.addFiniFunction(f_cleanup->function);
+	/* XXX: add support for init */
 }
 
 SymMMU::SymMMU(Executor& exe)
 : MMU(exe)
-{ initModule(exe); }
+{ initModule(exe, SymMMUType); }
+
+SymMMU::SymMMU(Executor& exe, const std::string& type)
+: MMU(exe)
+{ initModule(exe, type); }
+
+
+SymMMU::~SymMMU(void) { delete mh; }
 
 bool SymMMU::exeMemOp(ExecutionState &state, MemOp& mop)
 {
@@ -96,13 +47,8 @@ bool SymMMU::exeMemOp(ExecutionState &state, MemOp& mop)
 	std::vector<ref<Expr> >	args;
 
 	if (mop.isWrite) {
-		switch (w) {
-		case 8:		f = f_store8; break;
-		case 16:	f = f_store16; break;
-		case 32:	f = f_store32; break;
-		case 64:	f = f_store64; break;
-		case 128:	f = f_store128; break;
-		default:
+		f = mh->getStore(w);
+		if (f == NULL) {
 			std::cerr << "[SymMMU] BAD WIDTH! W=" << w << '\n';
 			assert (0 == 1 && "BAD WIDTH");
 		}
@@ -120,15 +66,8 @@ bool SymMMU::exeMemOp(ExecutionState &state, MemOp& mop)
 		return true;
 	}
 
-	switch(w) {
-	case 8:		f = f_load8; break;
-	case 16:	f = f_load16; break;
-	case 32:	f = f_load32; break;
-	case 64:	f = f_load64; break;
-	case 128:	f = f_load128; break;
-	default:
-		assert (0 == 1 && "BAD WIDTH");
-	}
+	f = mh->getLoad(w);
+	assert (f != NULL && "BAD WIDTH");
 
 	args.push_back(mop.address);
 	exe.executeCallNonDecl(state, f->function, args);

@@ -1,0 +1,127 @@
+#include <llvm/Support/CommandLine.h>
+#include "Executor.h"
+#include "SoftMMUHandlers.h"
+#include "ConcreteMMU.h"
+#include "klee/ExecutionState.h"
+#include "klee/Internal/Module/KModule.h"
+
+#include "SpecialFunctionHandler.h"
+#include "SoftConcreteMMU.h"
+
+using namespace klee;
+
+namespace klee { extern llvm::Module* getBitcodeModule(const char* path); }
+
+SoftConcreteMMU	*SoftConcreteMMU::singleton = NULL;
+
+namespace {
+	llvm::cl::opt<std::string>
+	SConcMMUType(
+		"sconc-mmu-type",
+		llvm::cl::desc("Suffix for concrete MMU operations."),
+		llvm::cl::init(""));
+};
+
+#define SFH_DEF_HANDLER(x)		\
+void Handler##x::handle(		\
+	ExecutionState	&state,		\
+	KInstruction	*target,	\
+	std::vector<ref<Expr> >& args)
+
+
+#define MK_HI(name, h, ret)	\
+SFH_HANDLER(h);			\
+static struct SpecialFunctionHandler::HandlerInfo Hi##h = {	\
+	name, 			\
+	&Handler##h::create,	\
+	false, ret, false };	\
+SFH_DEF_HANDLER(h)		\
+
+MK_HI("klee_enable_softmmu", EnableSoftMMU, false)
+{ state.isEnableMMU = true; }
+
+#define SETUP_ADDRSZ()	\
+	void		*addr;	\
+	uint64_t	sz;	\
+	if (	args[0]->getKind() != Expr::Constant &&	\
+		args[1]->getKind() != Expr::Constant)	\
+	{	\
+		TERMINATE_ERROR(	\
+			sfh->executor, state,	\
+			"non-constant invalidate param", "user.err");	\
+		return;	\
+	}	\
+	addr = (void*)(cast<ConstantExpr>(args[0])->getZExtValue(64));	\
+	sz = cast<ConstantExpr>(args[1])->getZExtValue(64);
+
+
+MK_HI("klee_tlb_insert", TLBInsert, false)
+{
+	SETUP_ADDRSZ();
+	SoftConcreteMMU::get()->tlbInsert(state, addr, sz);
+}
+
+MK_HI("klee_tlb_invalidate", TLBInvalidate, false)
+{
+	SETUP_ADDRSZ();
+	SoftConcreteMMU::get()->tlbInvalidate(state, addr, sz);
+}
+
+SoftConcreteMMU::SoftConcreteMMU(Executor& exe)
+: SymMMU(exe, SConcMMUType)
+{
+	assert (singleton == NULL && "double allocate of soft concrete");
+	exe.getSFH()->addHandler(HiEnableSoftMMU);
+	exe.getSFH()->addHandler(HiTLBInsert);
+	exe.getSFH()->addHandler(HiTLBInvalidate);
+	cmmu = new ConcreteMMU(exe);
+	singleton = this;
+}
+
+SoftConcreteMMU::~SoftConcreteMMU(void) { singleton = NULL; }
+
+const std::string& SoftConcreteMMU::getType(void) { return SConcMMUType; }
+
+bool SoftConcreteMMU::exeMemOp(ExecutionState &state, MemOp& mop)
+{
+	if (state.isEnableMMU == false)
+		return cmmu->exeMemOp(state, mop);
+
+	ObjectPair	op;
+	uint64_t	addr;
+
+	addr = cast<ConstantExpr>(mop.address)->getZExtValue();
+	if (utlb.get(state, addr, op)) {
+		cmmu->commitMOP(state, mop, op, addr);
+		return true;
+	}
+
+	/* slow path into the runtime */
+	state.isEnableMMU = false;
+	return SymMMU::exeMemOp(state, mop);
+}
+
+void SoftConcreteMMU::tlbInsert(
+	ExecutionState& st, const void* addr, uint64_t len)
+{
+	if (len != TLB_PAGE_SZ) {
+		std::cerr << "[SoftConcreteMMU] Bad TLB insert addr="
+			<< addr << ". len=" << len << '\n';
+		TERMINATE_ERROR(&getExe(), st, "Bad TLB insert",  "user.err");
+		return;
+	}
+
+	ObjectPair	op;
+	if (!cmmu->lookup(st, (uint64_t)addr, 1, op)) {
+		std::cerr << "[SoftConcreteMMU] Bad TLB lookup addr="
+			<< addr << ". len=" << len << '\n';
+		TERMINATE_ERROR(&getExe(), st, "Bad TLB lookup",  "user.err");
+		return;
+	}
+	
+	utlb.put(st, op);
+}
+
+void SoftConcreteMMU::tlbInvalidate(
+	ExecutionState& st, const void* addr, uint64_t len)
+{ utlb.invalidate((uint64_t)addr); }

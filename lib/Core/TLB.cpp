@@ -13,7 +13,7 @@ bool TLB::get(ExecutionState& st, uint64_t addr, ObjectPair& out_op)
 
 	useState(&st);
 
-	op = &obj_cache[(addr / 4096) % OBJCACHE_ENTS];
+	op = &obj_cache[(addr / TLB_PAGE_SZ) % TLB_OBJCACHE_ENTS];
 	if (op->first == NULL)
 		return false;
 
@@ -28,7 +28,7 @@ bool TLB::get(ExecutionState& st, uint64_t addr, ObjectPair& out_op)
 void TLB::put(ExecutionState& st, ObjectPair& op)
 {
 	useState(&st);
-	obj_cache[(op.first->address / 4096) % OBJCACHE_ENTS] = op;
+	obj_cache[(op.first->address / TLB_PAGE_SZ) % TLB_OBJCACHE_ENTS] = op;
 }
 
 /* if address space changed, reset TLB */
@@ -42,3 +42,6 @@ void TLB::useState(const ExecutionState* st)
 	cur_sid = st->getSID();
 	cur_gen = st->addressSpace.getGeneration();
 }
+
+void TLB::invalidate(uint64_t addr)
+{ obj_cache[(addr / TLB_PAGE_SZ) % TLB_OBJCACHE_ENTS].first = NULL; }

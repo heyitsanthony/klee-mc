@@ -3,6 +3,7 @@
 
 #include "Executor.h"
 #include "MMU.h"
+#include "SoftConcreteMMU.h"
 #include "klee/ExecutionState.h"
 #include "klee/Expr.h"
 #include "klee/Internal/Module/KInstruction.h"
@@ -89,3 +90,6 @@ MMU* MMU::create(Executor& exe)
 }
 
 bool MMU::isSymMMU(void) { return UseSymMMU; }
+
+bool MMU::isSoftConcreteMMU(void)
+{ return !SoftConcreteMMU::getType().empty(); }

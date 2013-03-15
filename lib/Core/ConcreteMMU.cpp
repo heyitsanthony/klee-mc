@@ -8,12 +8,12 @@ bool ConcreteMMU::exeMemOp(ExecutionState &state, MemOp& mop)
 {
 	const ConstantExpr	*ce;
 
-	ce = dyn_cast<ConstantExpr>(mop.address);
-	if (ce == NULL) {
+	if (mop.address->getKind() != Expr::Constant) {
 		/* ignore non-const addresses */
 		return false;
 	}
 
+	ce = cast<ConstantExpr>(mop.address);
 	exeConstMemOp(state, mop, ce->getZExtValue());
 	return true;
 }

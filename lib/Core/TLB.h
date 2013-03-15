@@ -3,7 +3,8 @@
 
 #include "AddressSpace.h"
 
-#define OBJCACHE_ENTS	32
+#define TLB_OBJCACHE_ENTS	128
+#define TLB_PAGE_SZ		4096
 
 namespace klee
 {
@@ -16,11 +17,12 @@ public:
 	virtual ~TLB(void) {}
 	bool get(ExecutionState& st, uint64_t addr, ObjectPair& op);
 	void put(ExecutionState& st, ObjectPair& op);
+	void invalidate(uint64_t addr);
 private:
 	void useState(const ExecutionState* st);
 	uint64_t	cur_sid;
 	unsigned	cur_gen;
-	ObjectPair	obj_cache[OBJCACHE_ENTS];
+	ObjectPair	obj_cache[TLB_OBJCACHE_ENTS];
 
 };
 }

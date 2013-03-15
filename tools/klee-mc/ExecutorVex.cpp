@@ -415,6 +415,9 @@ void ExecutorVex::bindMappingPage(
 		 /* max = start of last page */ 
 		sys_model->setModelU64(
 			kmodule->module, "heap_end", heap_max + 4096);
+
+		SFH_ADD_REG("heap_begin", heap_min);
+		SFH_ADD_REG("heap_end",  heap_max + 4096);
 	}
 }
 
@@ -533,8 +536,8 @@ void ExecutorVex::executeInstruction(
  * jump between super blocks based on ret values */
 void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
 {
-	Function		*cur_func;
-	const VexSB		*vsb;
+	Function	*cur_func;
+	const VexSB	*vsb;
 
 	/* need to trapeze between VSB's; depending on exit type,
 	 * translate VSB exits into LLVM instructions on the fly */

@@ -143,6 +143,7 @@ public:
 	bool			coveredNew;
 	bool			isReplay;	/* started in replay mode? */
 	bool			isPartial;
+	bool			isEnableMMU;
 	ExecutionTraceManager	exeTraceMgr;	/* prints traces on exit */
 
 	bool forkDisabled;	/* Disables forking, set by user code. */

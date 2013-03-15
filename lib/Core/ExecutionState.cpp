@@ -90,6 +90,7 @@ void ExecutionState::initFields(void)
 	canary = ES_CANARY_VALUE;
 	partseed_ktest = NULL;
 	partseed_assignment = NULL;
+	isEnableMMU = true;
 }
 
 /** XXX XXX XXX REFACTOR PLEASEEE **/

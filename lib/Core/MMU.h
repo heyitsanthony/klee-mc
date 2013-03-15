@@ -56,6 +56,7 @@ public:
 	Executor& getExe(void) { return exe; }
 
 	static bool isSymMMU(void);
+	static bool isSoftConcreteMMU(void);
 protected:
 	MMU(Executor& e) : exe(e) {}
 

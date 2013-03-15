@@ -7,21 +7,18 @@ namespace klee
 {
 class KModule;
 class KFunction;
-
+class SoftMMUHandlers;
 class SymMMU : public MMU
 {
 public:
+	SymMMU(Executor& exe, const std::string& type);
 	SymMMU(Executor& exe);
-	virtual ~SymMMU(void) {}
+	virtual ~SymMMU(void);
 
 	virtual bool exeMemOp(ExecutionState &state, MemOp& mop);
 private:
-	static void initModule(Executor& exe);
-	static KFunction	*f_store8, *f_store16, *f_store32,
-				*f_store64, *f_store128;
-	static KFunction	*f_load8, *f_load16, *f_load32,
-				*f_load64, *f_load128;
-	static KFunction	*f_cleanup;
+	void initModule(Executor& exe, const std::string& type);
+	SoftMMUHandlers	*mh;
 };
 }
 
