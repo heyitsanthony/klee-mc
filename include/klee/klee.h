@@ -248,12 +248,16 @@ extern void free(void*) __THROW;
   uint64_t klee_indirect2(const char* s, uint64_t v0, uint64_t v1);
   uint64_t klee_indirect3(const char* s, uint64_t v0, uint64_t v1, uint64_t v2);
 
-	uint64_t klee_sym_corehash(void* addr);
 	uint64_t klee_read_reg(const char* sp);
 
+	void klee_hook_return(uint64_t stack_idx, void* fn, uint64_t aux);
+
+	/* MMU stuff */
+	uint64_t klee_sym_corehash(void* addr);
 	void klee_tlb_invalidate(const void* addr, uint64_t len);
 	void klee_tlb_insert(const void* addr, uint64_t len);
 	void klee_enable_softmmu(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -47,6 +47,7 @@ SoftMMUHandlers::SoftMMUHandlers(
 
 		exe.addModule(mod);
 		std::cerr << "[SoftMMUHandlers] Loaded "<<path.c_str()<<'\n';
+		isLoaded = true;
 	}
 
 

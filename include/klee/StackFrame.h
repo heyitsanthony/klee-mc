@@ -28,15 +28,18 @@ class CallPathNode;
 
 struct StackFrame {
   friend class ExecutionState;
-  unsigned call;
-  KInstIterator caller;
-  KFunction *kf;
-  CallPathNode *callPathNode;
+  unsigned		call;
+  KInstIterator		caller;
+  KFunction		*kf;
+  CallPathNode		*callPathNode;
+  KFunction		*onRet;
+  ref<Expr>		onRet_expr;
 
 //private:
   Cell *locals;
 private:
   std::vector<const MemoryObject*> allocas;
+
 public:
   /// Minimum distance to an uncovered instruction once the function
   /// returns. This is not a good place for this but is used to

@@ -87,6 +87,9 @@ bool SoftConcreteMMU::exeMemOp(ExecutionState &state, MemOp& mop)
 	if (state.isEnableMMU == false)
 		return cmmu->exeMemOp(state, mop);
 
+	if (mop.address->getKind() != Expr::Constant)
+		return false;
+
 	ObjectPair	op;
 	uint64_t	addr;
 

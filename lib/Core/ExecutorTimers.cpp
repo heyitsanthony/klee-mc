@@ -349,7 +349,7 @@ public:
 				continue;
 
 			parent_f = kbr->getInst()->getParent()->getParent();
-			(*os)	<< exe->getPrettyName(parent_f)
+			(*os)	<< exe->getKModule()->getPrettyName(parent_f)
 				<< ' ' << kbr->getTrueHits()
 				<< ' ' << kbr->getFalseHits()
 				<< ' ' << kbr->getForkHits()
@@ -431,7 +431,7 @@ public:
 			if (kf->getNumEnters() == 0 && kf->getNumExits() == 0)
 				continue;
 
-			(*os)	<< exe->getPrettyName(kf->function)
+			(*os)	<< km->getPrettyName(kf->function)
 				<< ' ' << kf->getNumEnters()
 				<< ' ' << kf->getNumExits()
 				<< '\n';

@@ -61,7 +61,6 @@ public:
 
 	virtual void printStackTrace(
 		const ExecutionState& st, std::ostream& o) const;
-	virtual std::string getPrettyName(const llvm::Function* f) const;
 protected:
 	virtual ExecutionState* setupInitialState(void);
 	virtual ExecutionState* setupInitialStateEntry(uint64_t entry_addr);
@@ -69,8 +68,6 @@ protected:
 	void cleanupImage(void);
 
 	virtual llvm::Function* getFuncByAddr(uint64_t addr);
-  	virtual void executeInstruction(
-		ExecutionState &state, KInstruction *ki);
 	virtual void executeCallNonDecl(
 		ExecutionState &state,
 		KInstruction *ki,

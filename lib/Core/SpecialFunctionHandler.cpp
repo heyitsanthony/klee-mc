@@ -71,6 +71,7 @@ SFH_HANDLER(Indirect3)
 SFH_HANDLER(ForkEq)
 SFH_HANDLER(StackDepth)
 SFH_HANDLER(SymCoreHash)
+SFH_HANDLER(HookReturn)
 
 #define DEF_SFH_MMU(x)			\
 	SFH_HANDLER(WideStore##x)	\
@@ -81,6 +82,16 @@ DEF_SFH_MMU(32)
 DEF_SFH_MMU(64)
 DEF_SFH_MMU(128)
 #undef DEF_SFH_MMU
+}
+
+#define	EXPECT_CONST(fn,x,y)	\
+if ((x = dyn_cast<ConstantExpr>(args[y])) == NULL) {	\
+	TERMINATE_ERROR(	\
+		sfh->executor,	\
+		state,	\
+		fn ": expected constant argument on idx " #y,	\
+		"const.user.err");	\
+	return;	\
 }
 
 static const SpecialFunctionHandler::HandlerInfo handlerInfo[] =
@@ -131,6 +142,7 @@ static const SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   add("klee_prune", Prune, false),
   add("klee_stack_depth", StackDepth, true),
   add("klee_read_reg", ReadReg, true),
+  add("klee_hook_return", HookReturn, false),
 
   add("klee_indirect0", Indirect0, true),
   add("klee_indirect1", Indirect1, true),
@@ -305,9 +317,8 @@ bool SpecialFunctionHandler::handle(
 
 	h->handle(state, target, args);
 
-	if (missing_ret_val && insert_ret_vals) {
+	if (missing_ret_val && insert_ret_vals)
 		state.bindLocal(target, MK_CONST(0, 64));
-	}
 
 	return true;
 }
@@ -747,22 +758,12 @@ SFH_DEF_HANDLER(SymRangeBytes)
 {
 	SFH_CHK_ARGS(2, "klee_sym_range_bytes");
 
-	ref<Expr>	addr(args[0]);
-	ref<Expr>	max_len(args[1]);
 	ConstantExpr	*ce_max_len, *ce_addr;
 	unsigned	max_len_v, total;
 	uint64_t	base_addr;
 
-	ce_addr = dyn_cast<ConstantExpr>(addr);
-	ce_max_len = dyn_cast<ConstantExpr>(max_len);
-
-	if (ce_addr == NULL || ce_max_len == NULL) {
-		TERMINATE_ERROR(sfh->executor,
-			state,
-			"klee_sym_range_bytes expects constant addr and max_len",
-			"user.err");
-		return;
-	}
+	EXPECT_CONST("klee_sym_range_bytes", ce_addr, 0);
+	EXPECT_CONST("klee_sym_range_bytes", ce_max_len, 1);
 
 	total = 0;
 	base_addr = ce_addr->getZExtValue();
@@ -866,17 +867,17 @@ SFH_DEF_HANDLER(GetValue)
 SFH_DEF_HANDLER(DefineFixedObject)
 {
 	uint64_t		address, size;
+	const ConstantExpr	*addr_ce, *size_ce;
 	const ObjectState	*os;
 	MemoryObject		*mo;
 
 	SFH_CHK_ARGS(2, "klee_define_fixed_object");
-	assert(isa<ConstantExpr>(args[0]) &&
-	 "expect constant address argument to klee_define_fixed_object");
-	assert(isa<ConstantExpr>(args[1]) &&
-	 "expect constant size argument to klee_define_fixed_object");
 
-	address = cast<ConstantExpr>(args[0])->getZExtValue();
-	size = cast<ConstantExpr>(args[1])->getZExtValue();
+	EXPECT_CONST("klee_define_fixed_object",addr_ce, 0);
+	EXPECT_CONST("klee_define_fixed_object", size_ce, 1);
+
+	address = addr_ce->getZExtValue();
+	size = size_ce->getZExtValue();
 
 	os = state.allocateFixed(address, size, state.prevPC->getInst());
 	mo = const_cast<MemoryObject*>(state.addressSpace.resolveOneMO(address));
@@ -1047,14 +1048,7 @@ SFH_DEF_HANDLER(GetObjSize)
 
 	SFH_CHK_ARGS(1, "klee_get_obj_size");
 
-	ce = dyn_cast<ConstantExpr>(args[0]);
-	if (ce == NULL) {
-		TERMINATE_ERROR(sfh->executor,
-			state,
-			"symbolic passed to klee_get_obj_size",
-			"user.err");
-		return;
-	}
+	EXPECT_CONST("klee_get_obj_size", ce, 0);
 
 	mo = state.addressSpace.resolveOneMO(ce->getZExtValue());
 	state.bindLocal(target, MK_CONST(mo->size, Expr::Int32));
@@ -1068,14 +1062,7 @@ SFH_DEF_HANDLER(GetObjNext)
 
 	SFH_CHK_ARGS(1, "klee_get_obj_next");
 
-	ce = dyn_cast<ConstantExpr>(args[0]);
-	if (ce == NULL) {
-		TERMINATE_ERROR(sfh->executor,
-			state,
-			"klee_get_obj_next: expected constant argument",
-			"user.err");
-		return;
-	}
+	EXPECT_CONST("klee_get_obj_next", ce, 0);
 
 	req = ce->getZExtValue();
 	if ((req + 1) < req) {
@@ -1093,6 +1080,50 @@ SFH_DEF_HANDLER(GetObjNext)
 	state.bindLocal(target, MK_CONST(obj_addr, Expr::Int64));
 }
 
+SFH_DEF_HANDLER(HookReturn)
+{
+	Function		*f;
+	KFunction		*kf;
+	const ConstantExpr	*ce_addr, *ce_idx;
+	uint64_t		addr, idx;
+
+	/* (backtrack idx, function_addr, aux_expr) */
+	SFH_CHK_ARGS(3, "klee_hook_return");
+	
+	EXPECT_CONST("klee_hook_return", ce_idx, 0);
+	EXPECT_CONST("klee_hook_return", ce_addr, 1);
+
+	addr = ce_addr->getZExtValue();
+	f = sfh->executor->getFuncByAddr(addr);
+	if (f == NULL) {
+		f = (Function*)((void*)addr);
+	}
+	
+	idx = ce_idx->getZExtValue();
+	if (idx >= state.stack.size()) {
+		TERMINATE_ERROR(sfh->executor,
+			state,
+			"klee_hook_return: hook index out of bounds",
+			"user.err");
+		return;
+	}
+
+	kf = sfh->executor->getKModule()->getKFunction(f);
+	if (kf == NULL) {
+		TERMINATE_ERROR(sfh->executor,
+			state,
+			"klee_hook_return: given bad function",
+			"user.err");
+		return;
+	}
+
+	StackFrame	&sf(state.stack[(state.stack.size()-1) - idx]);
+
+	sf.onRet = kf;
+	sf.onRet_expr = args[2];
+}
+
+
 SFH_DEF_HANDLER(GetObjPrev)
 {
 	const ConstantExpr	*ce;
@@ -1101,15 +1132,7 @@ SFH_DEF_HANDLER(GetObjPrev)
 
 	SFH_CHK_ARGS(1, "klee_get_obj_prev");
 
-	ce = dyn_cast<ConstantExpr>(args[0]);
-	if (ce == NULL) {
-		std::cerr << "OOPS: ARG=" << args[0] << '\n';
-		TERMINATE_ERROR(sfh->executor,
-			state,
-			"klee_get_obj_prev: expected constant argument",
-			"user.err");
-		return;
-	}
+	EXPECT_CONST("klee_get_obj_prev", ce, 0);
 
 	req = ce->getZExtValue();
 	if (req == 0) {

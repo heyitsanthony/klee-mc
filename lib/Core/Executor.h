@@ -154,7 +154,6 @@ public:
 
 	virtual void printStackTrace(
 		const ExecutionState& state, std::ostream& os) const;
-	virtual std::string getPrettyName(const llvm::Function* f) const;
 
 	ExeStateSet::const_iterator beginStates(void) const;
 	ExeStateSet::const_iterator endStates(void) const;
@@ -168,6 +167,7 @@ public:
 	ExecutionState* getInitialState(void) { return initialStateCopy; }
 
 	void addFiniFunction(llvm::Function* f) { fini_funcs.insert(f); }
+	virtual llvm::Function* getFuncByAddr(uint64_t addr) = 0;
 
 	MemoryManager	*memory;
 private:
@@ -218,9 +218,6 @@ protected:
 		ExecutionState& state, KInstruction* ki);
 
 	virtual void replaceStateImmForked(ExecutionState* os, ExecutionState* ns);
-
-
-	virtual llvm::Function* getFuncByAddr(uint64_t addr) = 0;
 
 	virtual void callExternalFunction(
 		ExecutionState &state,

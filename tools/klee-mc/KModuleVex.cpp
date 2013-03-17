@@ -184,6 +184,31 @@ Function* KModuleVex::getFuncByAddr(uint64_t guest_addr)
 	return f;
 }
 
+KFunction* KModuleVex::addFunction(Function* f)
+{
+	KFunction	*kf;
+	bool		is_special;
+
+	if (f->isDeclaration()) return NULL;
+
+	is_special = (f->getName().str().find("sb_") == 0);
+	if (is_special) {
+		std::string	pretty_name;
+		const VexSB	*vsb;
+		vsb = getVSB(f);
+
+		if (vsb != NULL) {
+			pretty_name = gs->getName(vsb->getGuestAddr());
+			if (pretty_name.find("sb_") != 0)
+				setPrettyName(f, pretty_name);
+		}
+	}
+
+	kf = KModule::addFunction(f);
+	if (kf) kf->isSpecial = is_special;
+
+	return kf;
+}
 
 //struct AuxCodeEnt {
 //	uint64_t	code_base_ptr;

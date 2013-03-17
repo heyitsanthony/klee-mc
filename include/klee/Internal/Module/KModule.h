@@ -101,7 +101,7 @@ public:
     unsigned getConstantID(llvm::Constant *c, KInstruction* ki);
 
     KFunction* addUntrackedFunction(llvm::Function* f);
-    KFunction* addFunction(llvm::Function *f);
+    virtual KFunction* addFunction(llvm::Function *f);
     KFunction* getKFunction(llvm::Function* f) const;
     KFunction* getKFunction(const char* name) const;
 
@@ -130,6 +130,9 @@ public:
 
 	void addFunctionPass(llvm::FunctionPass* fp);
 	void dumpFuncs(std::ostream& os) const;
+
+	void setPrettyName(const llvm::Function* f, const std::string& s);
+	std::string getPrettyName(const llvm::Function* f) const;
 private:
 	void setupFunctionPasses(void);
 	void prepareMerge(InterpreterHandler *ih);
@@ -154,7 +157,11 @@ private:
 
 	Interpreter::ModuleOptions opts;
 
-	unsigned			updated_funcs;
+	unsigned		updated_funcs;
+	std::set<std::string>	addedModules;
+
+	typedef std::map<const llvm::Function*, std::string>	prettymap_ty;
+	prettymap_ty	prettyNames;
 };
 } // End klee namespace
 

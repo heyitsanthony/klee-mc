@@ -24,5 +24,6 @@ DEF_MMU(forkobj)
 DEF_MMU(objwide)
 DEF_MMU(uc)
 DEF_MMU(inst)
+DEF_MMU(cnulltlb)
 
 #endif

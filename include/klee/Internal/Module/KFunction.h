@@ -37,7 +37,7 @@ public:
 	/// "coverable" for statistics and search heuristics.
 	bool trackCoverage;
 	bool pathCommitted;	/* did we write a path out with this func? */
-
+	bool isSpecial;		/* uses "special" semantics on enter/exit */
 private:
 	typedef std::tr1::unordered_map<llvm::BasicBlock*, unsigned>
 		bbentry_ty;

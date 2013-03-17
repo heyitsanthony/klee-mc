@@ -387,12 +387,32 @@ void Executor::executeGetValue(
 	state.bindLocal(target, value);
 }
 
+typedef std::map<llvm::Instruction*, std::string> inststrmap_ty;
+
 void Executor::debugPrintInst(ExecutionState& state)
 {
-	raw_os_ostream	os(std::cerr);
+	static inststrmap_ty		print_cache;
+	inststrmap_ty::iterator		it;
+	llvm::Instruction		*ins;
+
 	state.printFileLine();
 	std::cerr << std::setw(10) << stats::instructions << " ";
-	os << *(state.prevPC->getInst()) << "\n";
+
+	ins = state.prevPC->getInst();
+
+	/* serializing instructions w/ LLVM is really slow as of 3.2 */
+	it = print_cache.find(ins);
+	if (it == print_cache.end()) {
+		std::stringstream	ss;
+		raw_os_ostream		os(ss);
+
+		if (print_cache.size() > 5000)
+			print_cache.clear();
+		os << *(state.prevPC->getInst());
+		it = print_cache.insert(std::make_pair(ins, ss.str())).first;
+	}
+
+	std::cerr << it->second << "\n";
 }
 
 void Executor::stepInstruction(ExecutionState &state)
@@ -567,6 +587,7 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 	ReturnInst	*ri;
 	KInstIterator	kcaller;
 	Instruction	*caller;
+	Type		*t;
 	bool		isVoidReturn;
 	ref<Expr>	result;
 
@@ -575,13 +596,57 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 	kcaller = state.getCaller();
 	caller = kcaller ? kcaller->getInst() : 0;
 
+	assert (caller != NULL);
+
 	ri = cast<ReturnInst>(ki->getInst());
 	isVoidReturn = (ri->getNumOperands() == 0);
 
 	assert (state.stack.size() > 1);
 
-	if (!isVoidReturn) {
-		result = eval(ki, 0, state);
+	t = caller->getType();
+	if (!isVoidReturn && !t->isVoidTy()) {
+		Expr::Width	from, to;
+
+		result = (eval(ki, 0, state));
+		assert (result.isNull() == false && "NO RESULT FROM EVAL");
+
+		from = result->getWidth();
+		to = kmodule->getWidthForLLVMType(t);
+
+		// may need to do coercion due to bitcasts
+		if (from != to) {
+			CallSite	cs;
+			bool		is_cs = true;
+
+			if (isa<CallInst>(caller))
+				cs = CallSite(cast<CallInst>(caller));
+			else if (isa<InvokeInst>(caller))
+				cs = CallSite(cast<InvokeInst>(caller));
+			else {
+				/* this is in case we patch an arbitrary
+				 * instruction with a function call
+				 * (e.g. load/store calling out to runtime code
+				 *  with the symbolic mmu) */
+				is_cs = false;
+			}
+
+			if (is_cs) {
+				// XXX need to check other param attrs ?
+				result = (cs.paramHasAttr(
+						0, llvm::Attributes::SExt))
+					? MK_SEXT(result, to)
+					: MK_ZEXT(result, to);
+			}
+		}
+	}
+
+	if (isVoidReturn) {
+		// Check return value has no users instead of checking
+		// the type; C defaults to returning int for undeclared funcs.
+		if (!caller->use_empty())
+			TERMINATE_EXEC(
+				this, state,
+				"return void but expected result");
 	}
 
 	state.popFrame();
@@ -595,51 +660,10 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 		++state.pc;
 	}
 
-	if (isVoidReturn) {
-		// We check that the return value has no users instead of
-		// checking the type, since C defaults to returning int for
-		// undeclared functions.
-		if (caller->use_empty()) return;
 
-		TERMINATE_EXEC(this, state, "return void but expected result");
-		return;
-	}
-
-	assert (!isVoidReturn);
-	Type *t = caller->getType();
-	if (t->isVoidTy())
-		return;
-
-	// may need to do coercion due to bitcasts
-	assert (result.isNull() == false);
-	Expr::Width from = result->getWidth();
-	Expr::Width to = kmodule->getWidthForLLVMType(t);
-
-	if (from != to) {
-		CallSite	cs;
-		bool		is_cs = true;
-
-		if (isa<CallInst>(caller))
-			cs = CallSite(cast<CallInst>(caller));
-		else if (isa<InvokeInst>(caller))
-			cs = CallSite(cast<InvokeInst>(caller));
-		else {
-			/* this is in case we patch an arbitrary
-			 * instruction with a function call
-			 * (e.g. load/store calling out to runtime code
-			 *  with the symbolic mmu) */
-			is_cs = false;
-		}
-
-		if (is_cs) {
-			// XXX need to check other param attrs ?
-			result = (cs.paramHasAttr(0, llvm::Attributes::SExt))
-				? MK_SEXT(result, to)
-				: MK_ZEXT(result, to);
-		}
-	}
-
-	state.bindLocal(kcaller, result);
+	/* this must come *after* pop-frame?? */
+	if (result.isNull() == false)
+		state.bindLocal(kcaller, result);
 }
 
 const ref<Expr> Executor::eval(
@@ -2372,8 +2396,7 @@ void Executor::instGetElementPtr(ExecutionState& state, KInstruction *ki)
 
 		base = MK_ADD(
 			base,
-			MK_MUL(
-				Expr::createCoerceToPointerType(index),
+			MK_MUL(	Expr::createCoerceToPointerType(index),
 				MK_PTR(elementSize)));
 	}
 
@@ -2481,9 +2504,6 @@ void Executor::handleMemoryPID(ExecutionState* &state)
 		stateManager->compactStates(-states_to_gen);
 	}
 }
-
-std::string Executor::getPrettyName(const llvm::Function* f) const
-{ return f->getName().str(); }
 
 ExeStateSet::const_iterator Executor::beginStates(void) const
 { return stateManager->begin(); }

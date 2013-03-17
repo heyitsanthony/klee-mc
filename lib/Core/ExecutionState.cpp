@@ -207,23 +207,26 @@ void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf)
 
 void ExecutionState::popFrame()
 {
-	StackFrame &sf = stack.back();
+	StackFrame	&sf(stack.back());
 	KFunction	*last_kf = getCurrentKFunc();
 
 	if (last_kf) last_kf->incExits();
 	foreach (it, sf.allocas.begin(), sf.allocas.end())
 		unbindObject(*it);
 	stack.pop_back();
-
+#if 0
 	if (stack.empty() == false && last_kf) {
-		// theStackXfer.insert(last_kf, getCurrentKFunc());
-		// last_kf->addExit(getCurrentKFunc());
+		theStackXfer.insert(last_kf, getCurrentKFunc());
+		last_kf->addExit(getCurrentKFunc());
 	}
+#endif
 }
 
 void ExecutionState::xferFrame(KFunction* kf)
 {
 	CallPathNode		*cpn;
+	ref<Expr>		retexpr;
+	KFunction		*retf;
 	KInstIterator		ki = getCaller();
 
 	assert (kf != NULL);
@@ -232,11 +235,12 @@ void ExecutionState::xferFrame(KFunction* kf)
 	// theStackXfer.insert(getCurrentKFunc(), kf);
 	getCurrentKFunc()->addExit(kf);
 
-	/* save, pop off old state */
-	cpn = stack.back().callPathNode;
-
-	// pop frame
 	StackFrame	&sf(stack.back());
+
+	/* save, pop off old state */
+	cpn = sf.callPathNode;
+	retf = sf.onRet;
+	retexpr = sf.onRet_expr;
 	foreach (it, sf.allocas.begin(), sf.allocas.end())
 		unbindObject(*it);
 	sf.kf->incExits();
@@ -246,7 +250,11 @@ void ExecutionState::xferFrame(KFunction* kf)
 	   new frame initialized with target function kf */
 	stack.push_back(StackFrame(ki, kf));
 	StackFrame	&sf2(stack.back());
+
 	sf2.callPathNode = cpn;
+	sf2.onRet = retf;
+	sf2.onRet_expr = retexpr;
+
 	kf->incEnters();
 
 	if (TrackStateFuncMinInst) {
@@ -324,7 +332,7 @@ void ExecutionState::dumpStack(std::ostream& os) const
   {
     const StackFrame &sf(*it);
     Function *f = sf.kf->function;
-    const InstructionInfo &ii = *target->getInfo();
+    const InstructionInfo &ii(*target->getInfo());
     os << "\t#" << idx++
         << " " << std::setw(8) << std::setfill('0') << ii.assemblyLine
         << " in " << f->getName().str() << " (";

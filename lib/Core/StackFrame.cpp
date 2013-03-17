@@ -18,6 +18,7 @@ StackFrame::StackFrame(KInstIterator _caller, KFunction *_kf)
 , caller(_caller)
 , kf(_kf)
 , callPathNode(0)
+, onRet(NULL)
 , minDistToUncoveredOnReturn(0)
 , varargs(0)
 {
@@ -29,6 +30,8 @@ StackFrame::StackFrame(const StackFrame &s)
 , caller(s.caller)
 , kf(s.kf)
 , callPathNode(s.callPathNode)
+, onRet(s.onRet)
+, onRet_expr(s.onRet_expr)
 , allocas(s.allocas)
 , minDistToUncoveredOnReturn(s.minDistToUncoveredOnReturn)
 , varargs(s.varargs)
@@ -64,6 +67,8 @@ StackFrame& StackFrame::operator=(const StackFrame &s)
 	call = s.call;
 	caller = s.caller;
 	kf = s.kf;
+	onRet = s.onRet;
+	onRet_expr = s.onRet_expr;
 	callPathNode = s.callPathNode;
 	allocas = s.allocas;
 	minDistToUncoveredOnReturn = s.minDistToUncoveredOnReturn;

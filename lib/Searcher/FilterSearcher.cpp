@@ -3,6 +3,7 @@
 #include <iostream>
 #include <fstream>
 #include "klee/Common.h"
+#include "klee/Internal/Module/KModule.h"
 #include "klee/Internal/Module/KFunction.h"
 #include "../Core/Executor.h"
 #include "static/Sugar.h"
@@ -92,7 +93,8 @@ bool FilterSearcher::isBlacklisted(ExecutionState& es) const
 			return true;
 
 		/* slow path */
-		s = exe.getPrettyName(f);
+		s = exe.getKModule()->getPrettyName(f);
+		if (s.empty()) s = f->getName().str();
 		plus_off = s.find('+');
 		if (plus_off != 0) {
 			s = s.substr(0, plus_off);

@@ -63,7 +63,7 @@ HookPass::HookPass(KModule* module)
 		} else
 			continue;
 
-		std::cerr << "ADDING " << fn_s << '\n';
+		std::cerr << "[HookPass] ADDING " << fn_s << '\n';
 	}
 
 	delete mod;
@@ -102,7 +102,8 @@ bool HookPass::hookPost(KFunction* kf, llvm::Function& f)
 
 	assert (kf->function->arg_size() == 1);
 
-	assert (f.getReturnType() == (kf->function->arg_begin())->getType());
+	assert (f.getReturnType() == (kf->function->arg_begin())->getType()
+		&& "Post return type does not match function");
 
 	foreach (it, f.begin(), f.end()) {
 		BasicBlock		*bb(it);
@@ -123,10 +124,34 @@ bool HookPass::hookPost(KFunction* kf, llvm::Function& f)
 	return changed;
 }
 
-
 bool HookPass::runOnFunction(llvm::Function& f)
 {
-	std::string		fn_s(f.getName().str());
+	std::string	s(f.getName().str());
+	size_t		n;
+
+	if (processFunc(f, s) == true)
+		return true;
+
+	s = kmod->getPrettyName(&f);
+	if (s.empty())
+		return false;
+
+	n = s.find_last_of('+');
+	if (n == std::string::npos)
+		return false;
+
+	if (s.substr(n+1) != "0x0")
+		return false;
+
+	/* maybe there's an offset suffix */
+	if (processFunc(f, s.substr(0, n)))
+		return true;
+
+	return false;
+}
+
+bool HookPass::processFunc(llvm::Function& f, const std::string& fn_s)
+{
 	fnmap_t::const_iterator	it;
 	bool			changed = false;
 
@@ -135,6 +160,10 @@ bool HookPass::runOnFunction(llvm::Function& f)
 
 	if ((it = f_post.find(fn_s)) != f_post.end())
 		changed |= hookPost(it->second, f);
+
+	if (changed) {
+		std::cerr << "[HookPass] Hooked " << fn_s << '\n';
+	}
 
 	return changed;
 }

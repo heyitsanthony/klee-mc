@@ -153,12 +153,11 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 
 	theVexHelpers->loadUserMod(sys_model->getModelFileName());
 
-	/* occasionally we want to load something elsewhere
-	 * (ARM 0x8000 code base on fogger,
-	 *  0xf..fe000 faketimer page on fogger,
-	 *  ...) --
-	 * this creates problems because normally the codegen will
-	 * update loads/stores to reflect these new addresses.
+	/* occasionally want to load something elsewhere
+	 * (ARM 0x8000 code base,
+	 *  0xf..fe000 faketimer page on fogger, ...)
+	 * problematic because the codegen normally updates
+	 * loads/stores to reflect these new addresses.
 	 * unsetting the bias should revert to unbiased behavior */
 	if (getenv("VEXLLVM_BASE_BIAS") != NULL)
 		unsetenv("VEXLLVM_BASE_BIAS");
@@ -239,7 +238,6 @@ llvm::Function* ExecutorVex::setupRuntimeFunctions(uint64_t entry_addr)
 	return img_init_func;
 }
 
-
 ExecutionState* ExecutorVex::setupInitialStateEntry(uint64_t entry_addr)
 {
 	llvm::Function	*init_func;
@@ -259,6 +257,7 @@ ExecutionState* ExecutorVex::setupInitialStateEntry(uint64_t entry_addr)
 	sfh->bind();
 	kf_scenter = kmodule->getKFunction("sc_enter");
 	assert (kf_scenter && "Could not load sc_enter from runtime library");
+	kf_scenter->isSpecial = true;
 
 	if (SymArgs) makeArgsSymbolic(state);
 	if (SymMagic) makeMagicSymbolic(state);
@@ -402,10 +401,10 @@ void ExecutorVex::bindMappingPage(
 
 	for (; i < PAGE_SIZE; i++) {
 		/* bug fiend note:
-		 * valgrind will complain on this line because of the
-		 * data[i] on the syspage. Linux keeps a syscall page at
-		 * 0xf..f600000 (vsyscall), but valgrind doesn't know this.
-		 * This is safe, but will need a workaround *eventually* */
+		 * valgrind complains line because of data[i] on the syspage.
+		 * Linux keeps a syscall page at 0xf..f600000 (vsyscall),
+		 * but valgrind doesn't know this because it traps vsyscalls.
+		 * Safe, but will need a workaround *eventually* */
 		state->write8(mmap_os, i, data[i]);
 	}
 
@@ -474,7 +473,7 @@ void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
 	ObjectState 	*state_regctx_os;
 	KFunction	*kf;
 	unsigned int	state_regctx_sz;
-	const char	*state_data;	
+	const char	*state_data;
 
 	state_regctx_mo = allocRegCtx(state, f);
 	es2esv(*state).setRegCtx(state_regctx_mo);
@@ -525,26 +524,19 @@ void ExecutorVex::run(ExecutionState &initialState)
 	Executor::run(initialState);
 }
 
-void ExecutorVex::executeInstruction(
-        ExecutionState &state,
-        KInstruction *ki)
-{
-        Executor::executeInstruction(state, ki);
-}
-
 /* need to hand roll our own instRet because we want to be able to
  * jump between super blocks based on ret values */
 void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
 {
+	KFunction	*kf;
 	Function	*cur_func;
-	const VexSB	*vsb;
 
 	/* need to trapeze between VSB's; depending on exit type,
 	 * translate VSB exits into LLVM instructions on the fly */
-	cur_func = (state.stack.back()).kf->function;
+	kf = (state.stack.back()).kf;
+	cur_func = kf->function;
 
-	vsb = km_vex->getVSB(cur_func);
-	if (vsb == NULL && cur_func != kf_scenter->function) {
+	if (!kf->isSpecial) {
 		/* no VSB => outcall to externa LLVM bitcode;
 		 * use default KLEE return handling */
 		assert (state.stack.size() > 1);
@@ -613,10 +605,27 @@ void ExecutorVex::logXferRegisters(ExecutionState& state)
 void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 {
 	GuestExitType	exit_type;
+	KFunction	*onRet;
+
+	exit_type = (GuestExitType)getExitType(state);
+
+	/* onRet support-- call hooked function on stack pop */
+	if (	exit_type == GE_RETURN &&
+		(onRet = state.stack.back().onRet) != NULL)
+	{
+		std::vector<ref<Expr> >	args;
+
+		args.push_back(state.stack.back().onRet_expr);
+
+		state.stack.back().onRet = NULL;
+		state.abortInstruction();
+
+		executeCall(state, state.pc, onRet->function, args);
+		return;
+	}
 
 	if (LogRegs) logXferRegisters(state);
 
-	exit_type = (GuestExitType)getExitType(state);
 	markExit(state, GE_IGNORE);
 
 	switch(exit_type) {
@@ -747,7 +756,7 @@ void ExecutorVex::handleXferSyscall(
 			<< ". objs=" << state.getNumSymbolics()
 			<< ". st=" << (void*)&state
 			<< ". n=" << es2esv(state).getSyscallCount() << '\n';
-		
+
 	/* arg0 = regctx, arg1 = jmpptr */
 	args.push_back(es2esv(state).getRegCtx()->getBaseExpr());
 	args.push_back(eval(ki, 0, state));
@@ -772,7 +781,7 @@ void ExecutorVex::handleXferReturn(
 
 	xferIterInit(iter, &state, ki);
 	while (xferIterNext(iter)) {
-		ExecutionState*	new_state;
+		ExecutionState	*new_state;
 
 		new_state = iter.res.first;
 		if (stack_depth > 1) {
@@ -785,8 +794,7 @@ void ExecutorVex::handleXferReturn(
 	}
 }
 
-/* this is when the llvm code has a
- * 'call' which resolves to code we can't link in directly.  */
+/* llvm code has a 'call' which resolves to code can't link in directly. */
 void ExecutorVex::callExternalFunction(
 	ExecutionState &state,
 	KInstruction *target,
@@ -823,22 +831,10 @@ void ExecutorVex::printStackTrace(
 
 		vsb = km_vex->getVSB(f);
 		os << "\t#" << idx++ << " in " << f->getName().str();
-		if (vsb != NULL) {
+		if (vsb != NULL)
 			os << " (" << gs->getName(vsb->getGuestAddr()) << ")";
-		}
 		os << "\n";
 	}
-}
-
-std::string ExecutorVex::getPrettyName(const llvm::Function* f) const
-{
-	const VexSB *vsb;
-
-	vsb = km_vex->getVSB((llvm::Function*)f);
-	if (vsb != NULL)
-		return gs->getName(vsb->getGuestAddr());
-
-	return Executor::getPrettyName(f);
 }
 
 void ExecutorVex::printStateErrorMessage(
@@ -899,8 +895,7 @@ uint64_t ExecutorVex::getStateStack(ExecutionState& es) const
 	if (stack_ce != NULL)
 		return stack_ce->getZExtValue();
 
-	std::cerr << "warning: COULD NOT WATCH BY STACK!!!!!!\n";
-	std::cerr << "symbolic stack pointer: ";
+	std::cerr << "warning: SYM STACK. symbolic stack pointer: ";
 	stack_e->print(std::cerr);
 	std::cerr << '\n';
 	return 0;

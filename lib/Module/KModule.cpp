@@ -396,11 +396,21 @@ void KModule::dumpModule(void)
 	}
 }
 
-
 void KModule::addModule(Module* in_mod)
 {
 	std::string	err;
+	std::string	mod_name;
 	bool		isLinked;
+
+	mod_name = in_mod->getModuleIdentifier();
+
+	/* insertion failed? already loaded */
+	if (addedModules.insert(mod_name).second == false) {
+		std::cerr << "[KModule] Already loaded \""<< mod_name <<"\"\n";
+		return;
+	}
+
+	std::cerr << "[KModule] Adding module \"" << mod_name << "\"\n";
 
 	isLinked = Linker::LinkModules(
 		module, in_mod, Linker::PreserveSource, &err);
@@ -772,4 +782,18 @@ KFunction* KModule::buildListFunc(
 	ReturnInst::Create(getGlobalContext(), bb);
 
 	return addFunction(f);
+}
+
+void KModule::setPrettyName(const llvm::Function* f, const std::string& s)
+{ prettyNames[f] = s; }
+
+std::string KModule::getPrettyName(const llvm::Function* f) const
+{
+	prettymap_ty::const_iterator	it;
+
+	it = prettyNames.find(f);
+	if (it == prettyNames.end())
+		return "";
+
+	return it->second;
 }
