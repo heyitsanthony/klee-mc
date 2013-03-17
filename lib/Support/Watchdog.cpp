@@ -34,7 +34,7 @@ Watchdog::Watchdog(unsigned _secs)
 : secs(_secs)
 {
 	if (secs == 0) return;
-	pthread_create(&thread, NULL, watchdog_thread, (void*)secs);
+	pthread_create(&thread, NULL, watchdog_thread, (void*)(long)secs);
 }
 
 Watchdog::~Watchdog(void)

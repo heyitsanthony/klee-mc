@@ -17,6 +17,7 @@ public:
 
 	KFunction* getStore(unsigned bits) const {
 		switch (bits) {
+		case 1:
 		case 8: return f_store[0];
 		case 16: return f_store[1];
 		case 32: return f_store[2];
@@ -27,6 +28,9 @@ public:
 
 	KFunction* getLoad(unsigned bits) const {
 		switch (bits) {
+		/* XXX: this might screw up for 1-bit ops,
+		 * but it seems to work fine now */
+		case 1:
 		case 8: return f_load[0];
 		case 16: return f_load[1];
 		case 32: return f_load[2];

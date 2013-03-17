@@ -1696,7 +1696,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
   case Instruction::Store: {
 	ref<Expr>	base(eval(ki, 1, state));
 	ref<Expr>	value(eval(ki, 0, state));
-	MMU::MemOp	mop(true, base, value, 0);
+	MMU::MemOp	mop(true, base, value, ki);
 	mmu->exeMemOp(state, mop);
 	break;
   }

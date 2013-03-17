@@ -36,6 +36,8 @@ public:
 	VexXlate* getXlate(void) const { return xlate; }
 
 	virtual void prepare(InterpreterHandler *ihandler);
+
+	virtual KFunction* addFunction(llvm::Function* f);
 private:
 	void scanFuncExits(uint64_t guest_addr, llvm::Function* f);
 	void writeCodeGraph(GenericGraph<guest_ptr>& g);

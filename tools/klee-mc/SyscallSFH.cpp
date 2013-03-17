@@ -23,7 +23,7 @@ extern bool DenySysFiles;
 
 using namespace klee;
 
-static const unsigned int NUM_HANDLERS = 8;
+static const unsigned int NUM_HANDLERS = 9;
 static SpecialFunctionHandler::HandlerInfo hInfo[NUM_HANDLERS] =
 {
 #define add(name, h, ret) {	\
@@ -41,7 +41,8 @@ static SpecialFunctionHandler::HandlerInfo hInfo[NUM_HANDLERS] =
 	addDNR("kmc_exit", KMCExit),
 	add("kmc_make_range_symbolic", MakeRangeSymbolic, false),
 	add("kmc_alloc_aligned", AllocAligned, true),
-	add("kmc_breadcrumb", Breadcrumb, false)
+	add("kmc_breadcrumb", Breadcrumb, false),
+	add("kmc_regs_get", RegsGet, true)
 #undef addDNR
 #undef add
 };
@@ -704,3 +705,6 @@ void SyscallSFH::makeRangeSymbolic(
 	sym_mo->setName(name);
 	sym_os = exe_vex->makeSymbolic(state, sym_mo, name);
 }
+
+SFH_DEF_HANDLER(RegsGet)
+{ state.bindLocal(target, es2esv(state).getRegCtx()->getBaseExpr()); }

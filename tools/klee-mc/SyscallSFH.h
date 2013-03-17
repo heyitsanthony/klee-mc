@@ -57,5 +57,6 @@ SFH_HANDLER(MakeRangeSymbolic)
 SFH_HANDLER(AllocAligned)
 SFH_HANDLER(Breadcrumb)
 SFH_HANDLER(IO)
+SFH_HANDLER(RegsGet)
 }
 #endif

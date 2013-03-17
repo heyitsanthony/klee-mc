@@ -1,4 +1,5 @@
 #include <llvm/Support/CommandLine.h>
+#include <llvm/Support/raw_os_ostream.h>
 #include "Executor.h"
 #include "klee/ExecutionState.h"
 #include "klee/Internal/Module/KModule.h"
@@ -50,6 +51,15 @@ bool SymMMU::exeMemOp(ExecutionState &state, MemOp& mop)
 		f = mh->getStore(w);
 		if (f == NULL) {
 			std::cerr << "[SymMMU] BAD WIDTH! W=" << w << '\n';
+			if (mop.target && mop.target->getInst())  {
+				llvm::raw_os_ostream os(std::cerr);
+				os << "[SymMMU] TARGET="
+					<< *(mop.target->getInst()) << '\n'
+					<< "[SymMMU] Func=\n"
+					<< *(mop.target->getInst()->
+						getParent()->getParent());
+			}
+			std::cerr << '\n';
 			assert (0 == 1 && "BAD WIDTH");
 		}
 

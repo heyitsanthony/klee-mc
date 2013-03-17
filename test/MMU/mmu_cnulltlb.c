@@ -1,8 +1,7 @@
 // RUN: gcc %s -O0 -I../../../include/  -o %t1
-// RUN: klee-mc -pipe-solver -sym-mmu-type=memcheck -sconc-mmu-type=memcheckc -use-sym-mmu -use-hookpass -hookpass-lib=libkleeRuntimeMMU.bc - ./%t1 2>%t1.err >%t1.out
+// RUN: klee-mc -pipe-solver -sym-mmu-type=objwide -sconc-mmu-type=cnulltlb -use-sym-mmu - ./%t1 2>%t1.err >%t1.out
 // RUN: ls klee-last | not grep ptr.err
-// RUN: grep "Hooked _int_malloc" %t1.err
-// RUN: ls klee-last | grep heap.err
+// RUN: ls klee-last | grep ktest.gz | wc -l | grep 2
 #include "klee/klee.h"
 #include <stdlib.h>
 #include <unistd.h>
@@ -21,4 +20,4 @@ int main(int argc, char *argv[])
 	((char*)x)[c & 0xf] = 10;
 
 	return 0;
-}
+}// RUN: gcc %s -O0 -I../../../include/  -o %t1

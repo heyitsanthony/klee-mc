@@ -252,6 +252,8 @@ extern void free(void*) __THROW;
 
 	void klee_hook_return(uint64_t stack_idx, void* fn, uint64_t aux);
 
+	void* kmc_regs_get(void);
+
 	/* MMU stuff */
 	uint64_t klee_sym_corehash(void* addr);
 	void klee_tlb_invalidate(const void* addr, uint64_t len);

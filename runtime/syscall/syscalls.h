@@ -8,6 +8,7 @@
 #ifdef GUEST_ARCH_AMD64
 #include <valgrind/libvex_guest_amd64.h>
 #define GET_SYSRET(x)	((VexGuestAMD64State*)x)->guest_RAX
+#define GET_RET(x)	((VexGuestAMD64State*)x)->guest_RAX
 #define GET_ARG0(x)	((VexGuestAMD64State*)x)->guest_RDI
 #define GET_ARG1(x)	((VexGuestAMD64State*)x)->guest_RSI
 #define GET_ARG2(x)	((VexGuestAMD64State*)x)->guest_RDX
