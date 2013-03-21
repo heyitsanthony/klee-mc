@@ -436,9 +436,9 @@ void Executor::executeCallNonDecl(
 	Function *f,
 	std::vector< ref<Expr> > &arguments)
 {
-	// FIXME: I'm not really happy about this reliance on prevPC but it is ok, I
-	// guess. This just done to avoid having to pass KInstIterator everywhere
-	// instead of the actual instruction, since we can't make a KInstIterator
+	// FIXME: Reliance on prevPC.
+	// This just done to avoid having to pass KInstIterator everywhere
+	// instead of actual instruction, since we can't make a KInstIterator
 	// from just an instruction (unlike LLVM).
 	KFunction	*kf;
 	unsigned	callingArgs, funcArgs, numFormals;
@@ -687,14 +687,13 @@ const ref<Expr> Executor::eval(
 
 void Executor::instRet(ExecutionState &state, KInstruction *ki)
 {
-	if (state.stack.size() <= 1) {
-		assert (!(state.getCaller()) &&
-			"caller set on initial stack frame");
-		TERMINATE_EXIT(this, state);
+	if (state.stack.size() > 1) {
+		retFromNested(state, ki);
 		return;
 	}
 
-	retFromNested(state, ki);
+	assert (!(state.getCaller()) && "caller set on initial stack frame");
+	TERMINATE_EXIT(this, state);
 }
 
 void Executor::markBranchVisited(
@@ -1202,10 +1201,9 @@ ref<Expr> Executor::sextVector(
 		ref<Expr>	cur_elem;
 		cur_elem = MK_EXTRACT(v, i*v_elem_w_src, v_elem_w_src);
 		cur_elem = MK_SEXT(cur_elem, v_elem_w_dst);
-		if (i == 0)
-			result = cur_elem;
-		else
-			result = ConcatExpr::create(result, cur_elem);
+		result = (i == 0)
+			? cur_elem
+			: MK_CONCAT(result, cur_elem);
 	}
 
 	return result;

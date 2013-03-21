@@ -71,6 +71,7 @@ SFH_HANDLER(Indirect3)
 SFH_HANDLER(ForkEq)
 SFH_HANDLER(StackDepth)
 SFH_HANDLER(SymCoreHash)
+SFH_HANDLER(ExprHash)
 SFH_HANDLER(HookReturn)
 
 #define DEF_SFH_MMU(x)			\
@@ -149,6 +150,7 @@ static const SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   add("klee_indirect2", Indirect2, true),
   add("klee_indirect3", Indirect3, true),
   add("klee_sym_corehash", SymCoreHash, true),
+  add("__klee_expr_hash", ExprHash, true),
   add("klee_is_shadowed", IsShadowed, true),
 
 #define DEF_WIDE(x)	\
@@ -1163,6 +1165,14 @@ SFH_DEF_HANDLER(ForkEq)
 
 	if (sp.first != NULL) sp.first->bindLocal(target, MK_CONST(1, 32));
 	if (sp.second != NULL) sp.second->bindLocal(target, MK_CONST(0, 32));
+}
+
+SFH_DEF_HANDLER(ExprHash)
+{
+	SFH_CHK_ARGS(1, "klee_expr_hash");
+
+
+	state.bindLocal(target, MK_CONST(args[0]->hash(), 64));
 }
 
 SFH_DEF_HANDLER(SymCoreHash)
