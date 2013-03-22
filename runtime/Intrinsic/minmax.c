@@ -1,5 +1,7 @@
 #include "klee/klee.h"
 
+#define AVG(a,b)         (a & b) + ((a ^ b) >> 1)
+
 uint64_t klee_min_value(uint64_t expr)
 {
 	uint64_t	upper_bound, lower_bound;
@@ -29,7 +31,7 @@ uint64_t klee_min_value(uint64_t expr)
 	}
 
 	while (upper_bound != lower_bound) {
-		uint64_t	mid = (upper_bound + lower_bound) / 2;
+		uint64_t	mid = AVG(upper_bound, lower_bound);
 
 		if (klee_feasible_ule(expr, mid))
 			upper_bound = mid;
@@ -52,7 +54,7 @@ uint64_t klee_max_value(uint64_t expr)
 		return lower_bound;
 
 	while (upper_bound > lower_bound) {
-		uint64_t	mid = (upper_bound + lower_bound) / 2;
+		uint64_t	mid = AVG(upper_bound, lower_bound);
 
 		if (klee_feasible_ugt(expr, mid)) {
 			/* expr > mid implies max > mid */

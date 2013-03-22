@@ -65,6 +65,8 @@ Function *getStubFunctionForCtorList(
 	std::string name);
 
 
+static std::set<std::string> sys_missing;
+
 void SysModel::setModelBool(Module* m, const char* gv_name, bool bv)
 {
 	GlobalVariable	*gv;
@@ -73,6 +75,8 @@ void SysModel::setModelBool(Module* m, const char* gv_name, bool bv)
 
 	gv = static_cast<GlobalVariable*>(m->getGlobalVariable(gv_name));
 	if (gv == NULL) {
+		if (sys_missing.count(gv_name)) return;
+		sys_missing.insert(gv_name);
 		std::cerr << "[SysModel] Could not find " << gv_name << '\n';
 		return;
 	}
@@ -96,6 +100,8 @@ void SysModel::setModelU64(Module* m, const char* gv_name, uint64_t bv)
 
 	gv = static_cast<GlobalVariable*>(m->getGlobalVariable(gv_name));
 	if (gv == NULL) {
+		if (sys_missing.count(gv_name)) return;
+		sys_missing.insert(gv_name);
 		std::cerr << "[SysModel] Could not find " << gv_name << '\n';
 		return;
 	}
