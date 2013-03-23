@@ -26,8 +26,9 @@ void SymMMU::initModule(Executor& exe, const std::string& mmu_type)
 	std::cerr << "[SymMMU] Using '" << mmu_type << "'\n";
 	if (mh->getCleanup() != NULL)
 		exe.addFiniFunction(mh->getCleanup()->function);
-
-	/* XXX: add support for init */
+	
+	if (mh->getInit() != NULL)
+		exe.addInitFunction(mh->getInit()->function);
 }
 
 SymMMU::SymMMU(Executor& exe)

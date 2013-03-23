@@ -167,6 +167,8 @@ public:
 	ExecutionState* getInitialState(void) { return initialStateCopy; }
 
 	void addFiniFunction(llvm::Function* f) { fini_funcs.insert(f); }
+	void addInitFunction(llvm::Function* f) { init_funcs.insert(f); }
+
 	virtual llvm::Function* getFuncByAddr(uint64_t addr) = 0;
 
 	MemoryManager	*memory;
@@ -176,7 +178,8 @@ private:
 	static void deleteTimerInfo(TimerInfo*&);
 	void handleMemoryUtilization(ExecutionState* &state);
 	void handleMemoryPID(ExecutionState* &state);
-
+	void setupFiniFuncs(void);
+	void setupInitFuncs(ExecutionState& initState);
 protected:
 	KModule		*kmodule;
 	MMU		*mmu;
@@ -257,7 +260,13 @@ protected:
 	bool haltExecution;
 private:
 	std::vector<TimerInfo*>		timers;
+
+	/* functions which caused bad concretizations */
 	std::set<KFunction*>		bad_conc_kfuncs;
+
+	std::set<llvm::Function*>	init_funcs;
+	KFunction			*init_kfunc;
+
 	std::set<llvm::Function*>	fini_funcs;
 	KFunction			*fini_kfunc;
 

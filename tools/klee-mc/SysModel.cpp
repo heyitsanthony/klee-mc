@@ -122,16 +122,13 @@ void FDTModel::installInitializers(Function *init_func)
 	ctors = kmodule->module->getNamedGlobal("llvm.global_ctors");
 	std::cerr << "checking for global ctors and dtors" << std::endl;
 	if (ctors) {
-		std::cerr << "installing ctors" << std::endl;
 		Function* ctorStub;
 
+		std::cerr << "[fdt] installing ctors" << std::endl;
 		ctorStub = getStubFunctionForCtorList(
 			kmodule->module, ctors, "klee.ctor_stub");
 		kmodule->addFunction(ctorStub);
-		CallInst::Create(
-			ctorStub,
-			"",
-			init_func->begin()->begin());
+		exe->addInitFunction(ctorStub);
 	}
 
 	// TODO

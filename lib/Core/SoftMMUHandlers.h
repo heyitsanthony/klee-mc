@@ -38,13 +38,16 @@ public:
 		case 128: return f_load[4];
 		}
 		return NULL; }
-	
+
 	KFunction *getCleanup(void) const { return f_cleanup; }
+	KFunction *getInit(void) const { return f_init; }
+
+
 private:
 	/* f[i] => 2^(i+3) width in bits */
 	KFunction *f_store[5];
 	KFunction *f_load[5];
-	KFunction *f_cleanup;
+	KFunction *f_cleanup, *f_init;
 
 	static bool isLoaded;
 };

@@ -148,7 +148,6 @@ namespace {
 
 namespace klee { RNG theRNG; }
 
-static StateSolver* createSolverChain(double to, std::string q, std::string s);
 static StateSolver* createFastSolver(void);
 
 Executor::Executor(InterpreterHandler *ih)
@@ -161,6 +160,7 @@ Executor::Executor(InterpreterHandler *ih)
 , symPathWriter(0)
 , sfh(0)
 , haltExecution(false)
+, init_kfunc(0)
 , fini_kfunc(0)
 , replay(0)
 , atMemoryLimit(false)
@@ -194,8 +194,7 @@ Executor::Executor(InterpreterHandler *ih)
 	brPredict = NULL;
 	if (UseBranchHints) {
 		ListPredictor		*lp = new ListPredictor();
-		/* unexplored condition path should have higher priority
-		 * than unexplored condition value. */
+		/* unexplored path should have priority over unexp. value. */
 		lp->add(new KBrPredictor());
 		lp->add(new CondPredictor(forking));
 		lp->add(new RandomPredictor());
@@ -437,7 +436,7 @@ void Executor::executeCallNonDecl(
 	std::vector< ref<Expr> > &arguments)
 {
 	// FIXME: Reliance on prevPC.
-	// This just done to avoid having to pass KInstIterator everywhere
+	// Done to avoid having to pass KInstIterator everywhere
 	// instead of actual instruction, since we can't make a KInstIterator
 	// from just an instruction (unlike LLVM).
 	KFunction	*kf;
@@ -455,9 +454,7 @@ void Executor::executeCallNonDecl(
 			state,
 			&state.stack[state.stack.size()-2]);
 
-	// TODO: support "byval" parameter attribute
-	// TODO: support zeroext, signext, sret attributes
-
+	// TODO: support "byval", zeroext, sext, sret attributes
 	callingArgs = arguments.size();
 	funcArgs = f->arg_size();
 	if (callingArgs < funcArgs) {
@@ -591,20 +588,26 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 	bool		isVoidReturn;
 	ref<Expr>	result;
 
-	assert (isa<ReturnInst>(ki->getInst()) && "Expected ReturnInst");
+	ri = dyn_cast<ReturnInst>(ki->getInst());
+	assert (ri != NULL && "Expected ReturnInst");
 
 	kcaller = state.getCaller();
-	caller = kcaller ? kcaller->getInst() : 0;
+	if (!kcaller) {
+		/* no caller-- return to top of function. used for initlist */
+		state.popFrame();
+		if (statsTracker) statsTracker->framePopped(state);
+		state.pc = state.getCurrentKFunc()->instructions;
+		return;
+	}
 
+	caller = kcaller->getInst();
 	assert (caller != NULL);
 
-	ri = cast<ReturnInst>(ki->getInst());
 	isVoidReturn = (ri->getNumOperands() == 0);
 
 	assert (state.stack.size() > 1);
 
-	t = caller->getType();
-	if (!isVoidReturn && !t->isVoidTy()) {
+	if (!isVoidReturn && !(t = caller->getType())->isVoidTy()) {
 		Expr::Width	from, to;
 
 		result = (eval(ki, 0, state));
@@ -623,10 +626,8 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 			else if (isa<InvokeInst>(caller))
 				cs = CallSite(cast<InvokeInst>(caller));
 			else {
-				/* this is in case we patch an arbitrary
-				 * instruction with a function call
-				 * (e.g. load/store calling out to runtime code
-				 *  with the symbolic mmu) */
+				/* in case patched an arbitrary instruction with
+				 * a function call (e.g. soft-mmu handlers) */
 				is_cs = false;
 			}
 
@@ -638,9 +639,7 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 					: MK_ZEXT(result, to);
 			}
 		}
-	}
-
-	if (isVoidReturn) {
+	} else if (isVoidReturn) {
 		// Check return value has no users instead of checking
 		// the type; C defaults to returning int for undeclared funcs.
 		if (!caller->use_empty())
@@ -659,7 +658,6 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 		state.pc = kcaller;
 		++state.pc;
 	}
-
 
 	/* this must come *after* pop-frame?? */
 	if (result.isNull() == false)
@@ -2029,6 +2027,36 @@ void Executor::exhaustState(ExecutionState* es)
 	notifyCurrent(NULL);
 }
 
+void Executor::setupInitFuncs(ExecutionState& initState)
+{
+	std::vector< ref<Expr> >	args;
+	KInstIterator			kii;
+
+	if (init_kfunc == NULL && !init_funcs.empty()) {
+		std::vector<Function*> l(init_funcs.begin(), init_funcs.end());
+		init_kfunc = kmodule->buildListFunc(l, "__klee_initlist_f");
+	}
+
+	if (init_funcs.empty()) return;
+
+	executeCall(initState, NULL, init_kfunc->function, args);
+	initState.stack.back().caller = NULL;
+}
+
+
+void Executor::setupFiniFuncs()
+{
+	if (fini_kfunc != NULL || fini_funcs.empty()) return;
+
+	std::vector<Function*> f_l(fini_funcs.begin(), fini_funcs.end());
+
+	f_l.push_back((Function*)kmodule->module->getOrInsertFunction(
+		"klee_resume_exit",
+		FunctionType::get(
+			Type::getVoidTy(getGlobalContext()), false)));
+	fini_kfunc = kmodule->buildListFunc(f_l, "__klee_finilist_f");
+}
+
 void Executor::run(ExecutionState &initState)
 {
 	PTree	*pt;
@@ -2052,19 +2080,8 @@ void Executor::run(ExecutionState &initState)
 	initialStateCopy->ptreeNode->markReplay();
 	pt->splitStates(initState.ptreeNode, &initState, initialStateCopy);
 
-	/* create fini func */
-	if (fini_kfunc == NULL && fini_funcs.empty() == false) {
-		std::vector<Function*> f_l(
-			fini_funcs.begin(),
-			fini_funcs.end());
-
-		f_l.push_back((Function*)kmodule->module->getOrInsertFunction(
-			"klee_resume_exit",
-			FunctionType::get(
-				Type::getVoidTy(getGlobalContext()),
-				false)));
-		fini_kfunc = kmodule->buildListFunc(f_l, "__klee_finilist_f");
-	}
+	setupFiniFuncs();
+	setupInitFuncs(initState);
 
 	if (replay != NULL) replay->replay(this, &initState);
 
@@ -2077,11 +2094,10 @@ void Executor::run(ExecutionState &initState)
 
 	stateManager->setupSearcher(this);
 
-	if (Replay::isReplayOnly()) {
+	if (Replay::isReplayOnly())
 		std::cerr << "[Executor] Pure replay run complete.\n";
-	} else {
+	else
 		runLoop();
-	}
 
 	stateManager->teardownUserSearcher();
 
@@ -2182,8 +2198,7 @@ std::string Executor::getAddressInfo(
 		example = value->getZExtValue();
 		info << "\texample: " << example << "\n";
 		// XXX: It turns out that getRange() is really slow
-		// Nothing really uses this information,
-		// but it grinds things to a halt when there is a memory error.
+		// so it makes finding memory errors costly for no reason.
 #if 0
 		if (solver->getRange(state, address, res) == false)
 			return info.str();
@@ -2439,16 +2454,15 @@ void Executor::executeFree(
 	ref<Expr> address)
 {
 	const MemoryObject	*mo;
+	const ConstantExpr	*ce;
 	ObjectPair		op;
 
-	if (address->getKind() != Expr::Constant) {
+	if ((ce = dyn_cast<ConstantExpr>(address)) == NULL) {
 		TERMINATE_EXEC(this, state, "non-const free address");
 		return;
 	}
 
-	state.addressSpace.resolveOne(
-		cast<ConstantExpr>(address)->getZExtValue(),
-		op);
+	state.addressSpace.resolveOne(ce->getZExtValue(), op);
 
 	mo = op_mo(op);
 	if (mo == NULL) {
