@@ -1,6 +1,4 @@
-/**
- * efficient shadow memory support
- */
+/** efficient shadow memory support */
 #ifndef SHADOW_H
 #define SHADOW_H
 
@@ -11,6 +9,7 @@
 
 /* might want to add statistic tracking on last update */
 struct shadow_page {
+	uint64_t	sp_pgnum;	/* base address */
 	uintptr_t	sp_refs;	/* forces alignment */
 	uint8_t		sp_data[];	/* PAGE_MAX_SIZE follows */
 };
@@ -23,34 +22,34 @@ struct shadow_pg_bucket
 };
 
 struct shadow_info {
-	int	si_gran;	/* number of phys bytes a unit rep */
-	int	si_bits;	/* number of bits shadowing a unit */
-	int	si_units_ppg;	
-	int	si_phys_bytes_ppg;
-	int	si_bytes_ppg;
-	int	si_alloced_pages;
+	unsigned	si_gran;	/* number of phys bytes a unit rep */
+	unsigned	si_bits;	/* number of bits shadowing a unit */
+	unsigned	si_units_ppg;
+	unsigned	si_phys_bytes_ppg;
+	unsigned	si_bytes_ppg;
+	unsigned	si_alloced_pages;
 
 	/* default data for a shadow unit */
 	/* must be at least uintptr_t in size */
-	void		*si_initial;
+	uint64_t	si_initial;
 	uintptr_t	si_mask;
 
 	struct shadow_pg_bucket	si_bucket[SHADOW_PG_BUCKETS];
 };
 
-void shadow_init(
-	struct shadow_info*, int granularity, int bits_per_unit, void* initial);
+int shadow_init(
+	struct shadow_info*, int granularity, int bits_per_unit, uint64_t initial);
 void shadow_fini(struct shadow_info* si);
-void shadow_put(struct shadow_info* si, uint64_t phys, uintptr_t l);
+void shadow_put(struct shadow_info* si, uint64_t phys, uint64_t l);
 void shadow_put_large(struct shadow_info* si, uint64_t phys, const void* ptr);
 void shadow_put_range(
-	struct shadow_info* si, uint64_t phys, 
-	int units, uintptr_t l);
+	struct shadow_info* si, uint64_t phys, uint64_t l, unsigned units);
 
 void shadow_or_range(
 	struct shadow_info* si, uint64_t phys, int units, 
-	uintptr_t l);
-uintptr_t shadow_get(struct shadow_info* si, uint64_t phys);
+	uint64_t l);
+uint64_t shadow_get(struct shadow_info* si, uint64_t phys);
+int shadow_pg_used(struct shadow_info* si, uint64_t phys);
 void shadow_get_large(struct shadow_info* si, uint64_t phys, void* ptr);
 
 #define shadow_used_bytes(x)	((x)->alloced_pages * (x)->bytes_per_page)

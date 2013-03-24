@@ -1,15 +1,16 @@
+#include "klee/klee.h"
 #include "mmu.h"
 
 #define MMU_STORE(x,y,z)		\
 void mmu_store_##x##_inst(void* addr, y v) {	\
-	if (!klee_is_symbolic(addr))	\
+	if (!klee_is_symbolic((uint64_t)addr))	\
 		*((y*)addr) = v;	\
 	else	\
 		mmu_store_##x##_##z(addr, v); }
 
 #define MMU_LOAD(x,y,z)			\
 y mmu_load_##x##_inst(void* addr) {	\
-	return (!klee_is_symbolic(addr)) \
+	return (!klee_is_symbolic((uint64_t)addr)) \
 		? *((y*)addr)		\
 		: mmu_load_##x##_##z(addr); }
 

@@ -3,7 +3,7 @@
 
 #include "AddressSpace.h"
 
-#define TLB_OBJCACHE_ENTS	128
+#define TLB_OBJCACHE_ENTS	256
 #define TLB_PAGE_SZ		4096
 
 namespace klee

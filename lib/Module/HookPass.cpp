@@ -63,7 +63,8 @@ HookPass::HookPass(KModule* module)
 		} else
 			continue;
 
-		std::cerr << "[HookPass] ADDING " << fn_s << '\n';
+		std::cerr	<< "[HookPass] ADDING " << fn_s
+				<< " (" << hooked_fn << ")\n";
 	}
 
 	delete mod;

@@ -107,8 +107,8 @@ static inline list_item* list_remove_head(list* l)
 static inline list_item* list_remove_tail(list* l)
 {
 	if(l->lst_list.li_prev != &l->lst_list){
-		list_item	*tail;
-		list_remove(l->lst_list.li_prev);
+		list_item	*tail = l->lst_list.li_prev;
+		list_remove(tail);
 		return tail;
 	}else
 		return NULL;

@@ -1,72 +1,74 @@
 #include <stddef.h>
 #include <stdio.h>
-#include <assert.h>
 #include <string.h>
+#include "klee/klee.h"
 #include "shadow.h"
-
-#if 0
 
 #define SHADOW_RECLAIM_MEM	1
 //#define SHADOW_DEBUG	1
 
-#define SHADOW_ERROR(x)		fprintf(stderr, "shadow: %s\n", x)
-
 #define PAGE_MAX_SIZE		4096
-#define phys_to_page(s, x)	(x / (s)->phys_bytes_ppg)
-#define phys_to_off(s, x)	((((x % (s)->phys_bytes_ppg)/(s)->gran)\
-					*(s)->bits)/8)
-#define phys_to_bit(s,x)	((((x % (s)->phys_bytes_ppg)/(s)->gran)\
-					*(s)->bits)%8)
+#define PTR2BUCKET(x)		((((uint64_t)(x))/PAGE_MAX_SIZE) % SHADOW_PG_BUCKETS)
+#define PTR2PGNUM(x)		((((uint64_t)(x))/PAGE_MAX_SIZE))
 
-#define si_is_tiny(s)		((s)->bits < 8)
-#define si_is_small(s)		((s)->bits >= 8 && \
-					((s)->bits <= (sizeof(uintptr_t)*8)))
-#define si_is_large(s)		((s)->bits > (sizeof(uintptr_t)*8))
+#define phys_to_off(s, x)	(((((x) % (s)->si_phys_bytes_ppg)/(s)->si_gran)\
+					*(s)->si_bits)/8)
+#define phys_to_bit(s,x)	(((((x) % (s)->si_phys_bytes_ppg)/(s)->si_gran)\
+					*(s)->si_bits)%8)
+
+#define si_is_tiny(s)		((s)->si_bits < 8)
+#define si_is_small(s)		((s)->si_bits >= 8 && \
+					((s)->si_bits <= (sizeof(uint64_t)*8)))
+#define si_is_large(s)		((s)->si_bits > (sizeof(uint64_t)*8))
 
 
-static shadow_page* shadow_new_page(struct shadow_info* si, int idx);
-static void shadow_free_page(struct shadow_info* si, int pg_idx);
-static void shadow_put_tiny(	struct shadow_info* si, shadow_page* p,
-				uint64_t phys, uintptr_t l);
-static void shadow_put_small(	struct shadow_info* si, shadow_page* p,
-				uint64_t phys, uintptr_t l);
-static uintptr_t shadow_get_tiny(	struct shadow_info* si, shadow_page* p, 
-					uint64_t phys);
-static uintptr_t shadow_get_small(	struct shadow_info* si, shadow_page* p, 
-					uint64_t phys);
-static int shadow_is_uninit(struct shadow_info* si, uintptr_t l);
+static struct shadow_page* shadow_new_page(struct shadow_info* si, uint64_t ptr);
+static void shadow_free_page(struct shadow_info* si, struct shadow_page* pg);
+static struct shadow_page* shadow_pg_get(struct shadow_info* si, uint64_t ptr);
+static void shadow_put_tiny(
+	struct shadow_info* si,
+	struct shadow_page* p,
+	uint64_t phys, uint64_t l);
+static void shadow_put_small(
+	struct shadow_info* si,
+	struct shadow_page* p,
+	uint64_t phys, uint64_t l);
+static uint64_t shadow_get_tiny(
+	struct shadow_info* si, struct shadow_page* p, uint64_t phys);
+static uint64_t shadow_get_small(
+	struct shadow_info* si, struct shadow_page* p, uint64_t phys);
+static int shadow_is_uninit(struct shadow_info* si, uint64_t l);
 
 static int bits(int n)
 {
-	int	i;
-	int	x = 0;
+	unsigned	i, x =0;
+
 	for(i = 0; i < sizeof(n) * 8; i++)
-		if(n & (1 << i))
+		if (n & (1 << i))
 			x++;
 	return x;
 }
 
 int shadow_init(
 	struct shadow_info* si,
-	int granularity, int bits_per_unit, void* initial)
+	int granularity, int bits_per_unit, uint64_t initial)
 {
-	if(bits(bits_per_unit) != 1){
-		SHADOW_ERROR("number of bits must be power of 2");
+	if (bits(bits_per_unit) != 1){
 		return 0;
-	}	
+	}
 
 	si->si_gran = granularity;
 	si->si_bits = bits_per_unit;
-	si->si_units_ppg = (PAGE_MAX_SIZE * 8) / (si->gran*si->bits);
-	si->si_phys_bytes_ppg = si->gran * si->units_ppg;
+	si->si_units_ppg = (PAGE_MAX_SIZE * 8) / (si->si_gran*si->si_bits);
+	si->si_phys_bytes_ppg = si->si_gran * si->si_units_ppg;
 
 	si->si_alloced_pages = 0;
-	si->si_bytes_ppg = (si->units_ppg * si->bits + 7)/ 8 + 	
-			sizeof(uintptr_t);
+	si->si_bytes_ppg = (si->si_units_ppg * si->si_bits + 7)/ 8 + 
+			sizeof(uint64_t);
 
 	memset(si->si_bucket, 0, sizeof(si->si_bucket));
 
-	si->si_mask = (si->si_bits == (sizeof(uintptr_t)*8))
+	si->si_mask = (si->si_bits == (sizeof(uint64_t)*8))
 		? ~0UL
 		: (1UL << si->si_bits) - 1;
 
@@ -77,7 +79,7 @@ int shadow_init(
 
 void shadow_fini(struct shadow_info* si)
 {
-	int	i, j;
+	unsigned i, j;
 
 	for (i = 0; i < SHADOW_PG_BUCKETS; i++) {
 		struct shadow_pg_bucket	*spb;
@@ -85,43 +87,43 @@ void shadow_fini(struct shadow_info* si)
 		spb = &si->si_bucket[i];
 		if (spb->spb_pgs == NULL) continue;
 
-		for (j = 0; j < spb.spb_pg_c; j++)
+		for (j = 0; j < spb->spb_pg_c; j++)
 			free(spb->spb_pgs[i]);
 
 		free(spb->spb_pgs);
 	}
 }
 
-static shadow_page* shadow_new_page(
-	struct shadow_info* si, uint64_t ptr);
+static struct shadow_page* shadow_new_page(struct shadow_info* si, uint64_t ptr)
 {
 	struct shadow_pg_bucket	*spb;
 	struct shadow_page	*pg;
-	int			i;
+	uint64_t		*pg_dat;
+	unsigned		i;
 
 	pg = malloc(sizeof(struct shadow_page) + si->si_bytes_ppg);
 	pg->sp_refs = 0;
+	pg->sp_pgnum = PTR2PGNUM(ptr);
+	pg_dat = (uint64_t*)(pg->sp_data);
 
 	/* initialize page with initial data */
-	for(i = 0; i < si->sp_bytes_ppg / sizeof(uintptr_t); i++){
-		((uintptr_t*)(&pg->pg_data))[i] = *((uintptr_t*)si->si_initial);
-	}
+	for (i = 0; i < si->si_bytes_ppg / sizeof(uint64_t); i++)
+		pg_dat[i] = si->si_initial;
 
 	spb = &si->si_bucket[PTR2BUCKET(ptr)];
 
-	/* allocate? */
+	/* allocate new bucket? */
 	if (spb->spb_pgs == NULL) {
-		assert (0 == 1 && "ARGH");
 		spb->spb_max_pg_c = 8;
+		spb->spb_pgs = calloc(spb->spb_max_pg_c, sizeof(pg));
 	}
 
-	/* extend? */
+	/* extend bucket? */
 	if (spb->spb_pg_c == spb->spb_max_pg_c) {
 		struct shadow_page	**spp;
 
 		spb->spb_max_pg_c *= 2;
-		spp = malloc(sizeof(*spp) * spb->spb_max_pg_c);
-		memset(spp, 0, sizeof(*spp) * spb->spb_max_pg_c);
+		spp = calloc(spb->spb_max_pg_c, sizeof(*spp));
 		memcpy(spp, spb->spb_pgs, sizeof(*spp) * spb->spb_pg_c);
 
 		free(spb->spb_pgs);
@@ -134,198 +136,207 @@ static shadow_page* shadow_new_page(
 	return pg;
 }
 
-void shadow_put_range(	struct shadow_info* si, uint64_t phys, int units,
-			uintptr_t l)
+void shadow_put_range(
+	struct shadow_info* si, uint64_t phys, uint64_t l,
+	unsigned units)
 {
-	/** XXX make better */
-	int	i;
-	for(i = 0; i < units; i++){
-		shadow_put(si, phys + si->gran*i, l);
-	}
+	unsigned i;
+	for(i = 0; i < units; i++) shadow_put(si, phys + si->si_gran*i, l);
 }
 
-void shadow_or_range(struct shadow_info* si, uint64_t phys, int units, 
-		uintptr_t l)
+void shadow_or_range(
+	struct shadow_info* si, uint64_t phys, int units, uint64_t l)
 {
 	int	i;
 	for(i = 0; i < units; i++){
-		uintptr_t	in;
-		in = shadow_get(si, phys + si->gran*i);
-		shadow_put(si, phys + si->gran*i, in | l);
+		uint64_t	in;
+		in = shadow_get(si, phys + si->si_gran*i);
+		shadow_put(si, phys + si->si_gran*i, in | l);
 	}
 }
 
-static void shadow_put_small(	struct shadow_info* si, shadow_page* p,
-				uint64_t phys, uintptr_t l)
+static void shadow_put_small(
+	struct shadow_info* si, struct shadow_page* sp,
+	uint64_t phys, uint64_t l)
 {
 	int		off = phys_to_off(si, phys);
-	uintptr_t	data;
+	uint64_t	data;
 
 #ifdef SHADOW_RECLAIM_MEM
-	if(memcmp(si->initial, &p->data[off], si->bits / 8) == 0)
-		p->refs++;
+	if (memcmp(&si->si_initial, &sp->sp_data[off], si->si_bits / 8) == 0)
+		sp->sp_refs++;
 #endif
-	data = *((uintptr_t*)&p->data[off]);
-	data &= ~si->mask;
-	data |= l & si->mask;
-	*((uintptr_t*)&p->data[off]) = data;
+	data = *((uint64_t*)&sp->sp_data[off]);
+	data &= ~si->si_mask;
+	data |= l & si->si_mask;
+	*((uint64_t*)&sp->sp_data[off]) = data;
 #ifdef SHADOW_RECLAIM_MEM
-	if(memcmp(si->initial, &l, si->bits / 8) == 0)
-		p->refs--;
+	if (memcmp(&si->si_initial, &l, si->si_bits / 8) == 0)
+		sp->sp_refs--;
 #endif
 }
 
-static void shadow_put_tiny(	struct shadow_info* si, 
-				shadow_page* p,
-				uint64_t phys, uintptr_t l)
+static void shadow_put_tiny(
+	struct shadow_info* si,
+	struct shadow_page* p, uint64_t phys, uint64_t l)
 {
-	int	off = phys_to_off(si, phys);
-	int	data;
-	int	old;
+	unsigned	off = phys_to_off(si, phys);
+	uint64_t	data, old;
 
-	data = p->data[off];
+	data = p->sp_data[off];
 
 #ifdef SHADOW_RECLAIM_MEM
-	old = (data & ((si->mask) << phys_to_bit(si, phys))) >> 
+	old = (data & ((si->si_mask) << phys_to_bit(si, phys))) >>
 		phys_to_bit(si, phys);
-	if(old == (*((uintptr_t*)si->initial) & si->mask))
-		p->refs++;
+	if (old == (si->si_initial & si->si_mask))
+		p->sp_refs++;
 #endif
 
-	data &= ~((si->mask) << phys_to_bit(si, phys));
-	data |= (l & si->mask) << phys_to_bit(si, phys);
-	p->data[off] = data;
+	data &= ~((si->si_mask) << phys_to_bit(si, phys));
+	data |= (l & si->si_mask) << phys_to_bit(si, phys);
+	p->sp_data[off] = data;
 
 #ifdef SHADOW_RECLAIM_MEM
-	if((l & si->mask) == (*((uintptr_t*)si->initial) & si->mask))
-		p->refs--;
+	if ((l & si->si_mask) == (si->si_initial & si->si_mask))
+		p->sp_refs--;
 #endif
 }
 
-static int shadow_is_uninit(struct shadow_info* si, uintptr_t l)
+static int shadow_is_uninit(struct shadow_info* si, uint64_t l)
 {
-	if(si_is_tiny(si)){
-		if((l & si->mask) == (*((uintptr_t*)si->initial) & si->mask))
+	if (si_is_tiny(si)){
+		if ((l & si->si_mask) == (si->si_initial & si->si_mask))
 			return 1;
-	}else if(si_is_small(si)){
-		if(memcmp(si->initial, &l, si->bits / 8) == 0)
+	}else if (si_is_small(si)){
+		if (memcmp(&si->si_initial, &l, si->si_bits / 8) == 0)
 			return 1;
 	}
 
 	return 0;
 }
 
-void shadow_put(struct shadow_info* si, uint64_t phys, uintptr_t l)
+static struct shadow_page* shadow_pg_get(struct shadow_info* si, uint64_t ptr)
 {
-	int		pg_idx;
-	shadow_page	*p;
+	struct shadow_pg_bucket	*spb;
+	unsigned		i;
+	uint64_t		pgnum;
 
-	assert(phys < ram_size);
+	pgnum = PTR2PGNUM(ptr);
+	spb = &si->si_bucket[PTR2BUCKET(ptr)];
+	for (i = 0; i < spb->spb_pg_c; i++)
+		if (spb->spb_pgs[i]->sp_pgnum == pgnum)
+			return spb->spb_pgs[i];
 
-	pg_idx = phys_to_page(si, phys);
-	p = si->pages[pg_idx];
-	if(p == NULL){
+	return NULL;
+}
+
+void shadow_put(struct shadow_info* si, uint64_t phys, uint64_t l)
+{
+	struct shadow_page	*p;
+
+	p = shadow_pg_get(si, phys);
+	if (p == NULL){
 #ifdef SHADOW_RECLAIM_MEM
 		/* keep from thrashing */
-		if(shadow_is_uninit(si, l))
+		if (shadow_is_uninit(si, l))
 			return;
 #endif
-#error fix index
-		p = shadow_new_page(si, pg_idx);
+		p = shadow_new_page(si, phys);
 	}
-	
-	if(si_is_tiny(si)){
+
+	if (si_is_tiny(si)){
 		shadow_put_tiny(si, p, phys, l);
-	}else if(si_is_small(si)){
+	}else if (si_is_small(si)){
 		shadow_put_small(si, p, phys, l);
-	}else
-		SHADOW_ERROR("expected non-large type for put");
+	}else {
+		klee_assert(0 == 1 && "expected non-large type for put");
+	}
 
 #ifdef SHADOW_DEBUG
-	assert(shadow_get(si, phys) == (l & si->mask));
+	klee_assert(shadow_get(si, phys) == (l & si->si_mask));
 #endif
 
 #ifdef SHADOW_RECLAIM_MEM
-	if(p->refs == 0)
-		shadow_free_page(si, pg_idx);
+	if (p->sp_refs == 0)
+		shadow_free_page(si, p);
 #endif
 }
 
+int shadow_pg_used(struct shadow_info* si, uint64_t phys)
+{ return shadow_pg_get(si, phys) != NULL; }
+
 void shadow_put_large(struct shadow_info* si, uint64_t phys, const void* ptr)
-{ assert(0 == 1); }
+{ klee_assert(0 == 1); }
 
 void shadow_get_large(struct shadow_info* si, uint64_t phys, void* ptr)
-{ assert(0 == 1); }
+{ klee_assert(0 == 1); }
 
-static uintptr_t shadow_get_tiny(
-	struct shadow_info* si, struct shadow_page* p, 
+static uint64_t shadow_get_tiny(
+	struct shadow_info* si, struct shadow_page* p,
 	uint64_t phys)
 {
 	int		off = phys_to_off(si, phys);
-	uintptr_t	ret;
+	uint64_t	ret;
 
-	ret = p->data[off];
+	ret = p->sp_data[off];
 	ret >>= phys_to_bit(si, phys);
-	return ret & si->mask;
+	return ret & si->si_mask;
 }
 
-static uintptr_t shadow_get_uninit(struct shadow_info* si)
-{
-	uintptr_t	ret;
-	ret = *((uintptr_t*)si->initial) & si->mask;
-	return ret;
-}
+static uint64_t shadow_get_uninit(struct shadow_info* si)
+{ return si->si_initial & si->si_mask; }
 
-static uintptr_t shadow_get_small(
+static uint64_t shadow_get_small(
 	struct shadow_info* si, struct shadow_page* p, uint64_t phys)
 {
 	int		off = phys_to_off(si, phys);
-	uintptr_t	ret;
+	uint64_t	ret;
 
-	ret = *(uintptr_t*)(&p->data[off]);
+	ret = *(uint64_t*)(&p->sp_data[off]);
 
-	return ret & si->mask;
+	return ret & si->si_mask;
 }
 
-uintptr_t shadow_get(struct shadow_info* si, uint64_t phys)
+uint64_t shadow_get(struct shadow_info* si, uint64_t phys)
 {
-	uintptr_t	ret;
-	shadow_page	*p;
+	struct shadow_page	*p;
 
-	if(phys >= ram_size)
-		fprintf(stderr, "oops! %x vs %x\n", phys, ram_size);
-	assert(phys < ram_size);
+	klee_assert(!si_is_large(si));
 
-	assert(!si_is_large(si));
+	p = shadow_pg_get(si, phys);
+	if (p == NULL)
+		return shadow_get_uninit(si);
 
-	p = si->pages[phys_to_page(si, phys)];
-	if(p == NULL){
-		ret = shadow_get_uninit(si);
-		return ret;
-	}
+	if (si_is_tiny(si))
+		return shadow_get_tiny(si, p, phys);
+	else if (si_is_small(si))
+		return shadow_get_small(si, p, phys);
 
-	if(si_is_tiny(si))
-		ret = shadow_get_tiny(si, p, phys);
-	else if(si_is_small(si))
-		ret = shadow_get_small(si, p, phys);
-	else{	
-		SHADOW_ERROR("Expected non-large shadow type");
-		ret = ~0UL;
-	}
-
-	return ret;
+	return ~0UL;
 }
 
-static void shadow_free_page(struct shadow_info* si, int pg_idx)
+static void shadow_free_page(struct shadow_info* si, struct shadow_page *p)
 {
-	shadow_page	*p;
+	struct shadow_pg_bucket	*spb;
+	unsigned	i, j;
 
-	p = si->pages[pg_idx];
-	assert(p->refs == 0);
+	spb = &(si->si_bucket[PTR2BUCKET(p->sp_pgnum * 4096)]);
+	for (i = 0; i < spb->spb_pg_c; i++) {
+		if (spb->spb_pgs[i] == p)
+			break;
+	}
 
-	qemu_free(p);
-	si->alloced_pages--;
-	si->pages[pg_idx] = NULL;
+	/* couldn't find page?? */
+	if (i == spb->spb_pg_c)
+		return;
+
+	spb->spb_pgs[i] = NULL;
+	for (j = i+1; j < spb->spb_pg_c; j++)
+		spb->spb_pgs[j-1] = spb->spb_pgs[j];
+
+	spb->spb_pg_c--;
+	si->si_alloced_pages--;
+
+	free(p);
 	return;
 }
-#endif
