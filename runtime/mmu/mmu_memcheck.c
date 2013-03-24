@@ -62,10 +62,23 @@ void post_int_free(int64_t retval)
 	free_c++;
 }
 
+void __hookpre___GI___libc_free(void* regfile)
+{
+	void	*ptr;
+
+	ptr = GET_ARG0(regfile);
+	klee_print_expr("[memcheck] freeing", (long)ptr);
+
+	/* restore header boundary */
+	shadow_put(&heap_si, (long)ptr-1, SH_FL_UNINIT);
+	klee_hook_return(1, &post_int_free, GET_ARG0(regfile));
+}
+
 void post__int_malloc(int64_t aux)
 {
 	void			*regs;
 	struct heap_ent		*he;
+	int			bound_l, bound_r;
 
 	regs = kmc_regs_get();
 
@@ -78,15 +91,23 @@ void post__int_malloc(int64_t aux)
 
 	klee_tlb_invalidate(he->he_base, 4096);
 
+	bound_l = shadow_get(&heap_si, (long)he->he_base - 1);
+	bound_r = shadow_get(&heap_si, (long)he->he_base + he->he_len);
 	shadow_put_range(&heap_si, (long)he->he_base, SH_FL_ALLOC, he->he_len);
+
+	if (bound_l == SH_FL_UNINIT)
+		shadow_put_range(
+			&heap_si, (long)he->he_base + he->he_len, SH_FL_FREE, 1);
+
+	if (bound_r == SH_FL_UNINIT)
+		shadow_put(
+			&heap_si,
+			(long)he->he_base + he->he_len,
+			SH_FL_FREE);
+
+
 	klee_print_expr("[memcheck] malloc@", (long)he->he_base);
 	klee_print_expr("[memcheck] size=", he->he_len);
-}
-
-void __hookpre___GI___libc_free(void* regfile)
-{
-	klee_print_expr("[memcheck] freeing", GET_ARG0(regfile));
-	klee_hook_return(1, &post_int_free, GET_ARG0(regfile));
 }
 
 void __hookpre___GI___libc_malloc(void* regfile)
