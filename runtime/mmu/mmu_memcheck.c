@@ -66,7 +66,7 @@ void __hookpre___GI___libc_free(void* regfile)
 {
 	void	*ptr;
 
-	ptr = GET_ARG0(regfile);
+	ptr = GET_ARG0_PTR(regfile);
 	klee_print_expr("[memcheck] freeing", (long)ptr);
 
 	/* restore header boundary */
@@ -96,8 +96,10 @@ void post__int_malloc(int64_t aux)
 	shadow_put_range(&heap_si, (long)he->he_base, SH_FL_ALLOC, he->he_len);
 
 	if (bound_l == SH_FL_UNINIT)
-		shadow_put_range(
-			&heap_si, (long)he->he_base + he->he_len, SH_FL_FREE, 1);
+		shadow_put(
+			&heap_si,
+			(long)he->he_base - 1,
+			SH_FL_FREE);
 
 	if (bound_r == SH_FL_UNINIT)
 		shadow_put(
