@@ -11,6 +11,9 @@
 
 static int malloc_c = 0;
 static int free_c = 0;
+static uint8_t in_sym_mmu = 0;
+static uint8_t in_heap = 0;
+
 
 struct heap_ent
 {
@@ -44,6 +47,8 @@ void post_int_free(int64_t retval)
 	struct heap_ent		*he;
 	void			*free_addr = (void*)retval;
 
+	in_heap--;
+
 	list_for_all(&heap_l, li) {
 		he = list_get_data(&heap_l, li);
 		if (he->he_base == free_addr) {
@@ -53,13 +58,16 @@ void post_int_free(int64_t retval)
 		he = NULL;
 	}
 
+	if (he == NULL)
+		return;
+
+	free_c++;
+
 	klee_tlb_invalidate(he->he_base, 4096);
 
 	klee_print_expr("[memcheck] freed bytes", he->he_len);
 	shadow_put_range(&heap_si, (long)he->he_base, SH_FL_FREE, he->he_len);
 	free(he);
-
-	free_c++;
 }
 
 void __hookpre___GI___libc_free(void* regfile)
@@ -71,6 +79,7 @@ void __hookpre___GI___libc_free(void* regfile)
 
 	/* restore header boundary */
 	shadow_put(&heap_si, (long)ptr-1, SH_FL_UNINIT);
+	in_heap++;
 	klee_hook_return(1, &post_int_free, GET_ARG0(regfile));
 }
 
@@ -107,15 +116,24 @@ void post__int_malloc(int64_t aux)
 			(long)he->he_base + he->he_len,
 			SH_FL_FREE);
 
+	in_heap--;
 
-	klee_print_expr("[memcheck] malloc@", (long)he->he_base);
-	klee_print_expr("[memcheck] size=", he->he_len);
+	klee_print_expr("[memcheck] malloc", (long)he->he_base);
+	klee_print_expr("[memcheck] size", he->he_len);
 }
 
 void __hookpre___GI___libc_malloc(void* regfile)
 {
+	in_heap++;
 	klee_print_expr("[memcheck] malloc enter", GET_ARG1(regfile));
 	klee_hook_return(1, &post__int_malloc, GET_ARG0(regfile));
+}
+
+void __hookpre___calloc(void* regfile)
+{
+	in_heap++;
+	klee_print_expr("[memcheck] calloc enter", GET_ARG1(regfile));
+	klee_hook_return(1, &post__int_malloc, GET_ARG0(regfile) * GET_ARG1(regfile));
 }
 
 // any reason to do cleanups?
@@ -132,7 +150,7 @@ y mmu_load_##x##_memcheckc(void* addr)		\
 {						\
 if (!shadow_pg_used(&heap_si, (uint64_t)addr))	\
 	return mmu_load_##x##_cnulltlb(addr);	\
-if ((shadow_get_range((uint64_t)addr, x/8) & SH_FL_FREE))		\
+if (!in_heap && (shadow_get_range((uint64_t)addr, x/8) & SH_FL_FREE))		\
 	klee_uerror("Loading from free const pointer", "heap.err");	\
 return mmu_load_##x##_cnull(addr); }
 
@@ -143,18 +161,16 @@ if (!shadow_pg_used(&heap_si, (uint64_t)addr)) {	\
 	mmu_store_##x##_cnulltlb(addr, v);		\
 	return;	\
 }	\
-if ((shadow_get_range((uint64_t)addr, x/8) & SH_FL_FREE))		\
+if (!in_heap && (shadow_get_range((uint64_t)addr, x/8) & SH_FL_FREE))		\
 	klee_uerror("Storing to free const pointer", "heap.err");	\
 mmu_store_##x##_cnulltlb(addr, v); }
-
-static uint8_t in_sym_mmu = 0;
 
 #define MMU_LOAD(x,y)			\
 y mmu_load_##x##_memcheck(void* addr)	\
 {					\
 if (!in_sym_mmu) {			\
 in_sym_mmu++;				\
-if ((shadow_get_range((uint64_t)addr, x/8) & SH_FL_FREE))	\
+if (!in_heap && (shadow_get_range((uint64_t)addr, x/8) & SH_FL_FREE))	\
 	klee_uerror("Loading from free sym pointer", "heap.err");	\
 in_sym_mmu--;	\
 }	\
@@ -165,7 +181,7 @@ void mmu_store_##x##_memcheck(void* addr, y v)	\
 { \
 if (!in_sym_mmu) {	\
 in_sym_mmu++;	\
-if ((shadow_get_range((uint64_t)addr, x/8) & SH_FL_FREE))	\
+if (!in_heap && (shadow_get_range((uint64_t)addr, x/8) & SH_FL_FREE))	\
 	klee_uerror("Storing to free sym pointer", "heap.err");	\
 in_sym_mmu--;	\
 }	\

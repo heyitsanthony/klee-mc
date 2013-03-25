@@ -32,9 +32,7 @@ void Handler##x::handle(		\
 #define MK_HI(name, h, ret)	\
 SFH_HANDLER(h);			\
 static struct SpecialFunctionHandler::HandlerInfo Hi##h = {	\
-	name, 			\
-	&Handler##h::create,	\
-	false, ret, false };	\
+	name, &Handler##h::create, false, ret, false };		\
 SFH_DEF_HANDLER(h)		\
 
 MK_HI("klee_enable_softmmu", EnableSoftMMU, false)
@@ -93,8 +91,12 @@ bool SoftConcreteMMU::exeMemOp(ExecutionState &state, MemOp& mop)
 	ObjectPair	op;
 	uint64_t	addr;
 
+	/* XXX: I don't like calling this range check here */
 	addr = cast<ConstantExpr>(mop.address)->getZExtValue();
-	if (utlb.get(state, addr, op)) {
+	if 	(utlb.get(state, addr, op) && 
+		mop.getType(exe.getKModule())/8 + 
+			op.first->getOffset(addr) <= op.second->size)
+	{
 		cmmu->commitMOP(state, mop, op, addr);
 		return true;
 	}
