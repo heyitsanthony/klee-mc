@@ -129,6 +129,13 @@ void __hookpre___GI___libc_malloc(void* regfile)
 	klee_hook_return(1, &post__int_malloc, GET_ARG0(regfile));
 }
 
+void __hookpre___GI___libc_realloc(void* regfile)
+{
+	in_heap++;
+	klee_print_expr("[memcheck] realloc enter", GET_ARG1(regfile));
+	klee_hook_return(1, &post__int_malloc, GET_ARG1(regfile));
+}
+
 void __hookpre___calloc(void* regfile)
 {
 	in_heap++;
