@@ -165,6 +165,14 @@ extern "C" {
 
   void klee_assume_op(uint64_t lhs, uint64_t rhs, uint8_t op);
 
+#define __klee_prefer_op(x,y,z)	klee_prefer_op(((uint64_t)x), ((uint64_t)y), z)
+#define klee_prefer_ugt(x,y)	__klee_prefer_op(x,y,KLEE_CMP_OP_UGT)
+#define klee_prefer_uge(x,y)	__klee_prefer_op(x,y,KLEE_CMP_OP_UGE)
+#define klee_prefer_ule(x,y)	__klee_prefer_op(x,y,KLEE_CMP_OP_ULE)
+#define klee_prefer_eq(x, y)	__klee_prefer_op(x, y, KLEE_CMP_OP_EQ)
+#define klee_prefer_ne(x, y)	__klee_prefer_op(x, y, KLEE_CMP_OP_NE)
+
+  uint64_t klee_prefer_op(uint64_t lhs, uint64_t rhs, uint8_t op);
 
 #define __klee_feasible_op(x,y,z)	\
 	klee_feasible_op(((uint64_t)x), ((uint64_t)y), z)

@@ -134,9 +134,6 @@ bool HookPass::runOnFunction(llvm::Function& f)
 		return true;
 
 	s = kmod->getPrettyName(&f);
-	if (s.empty())
-		return false;
-
 	n = s.find_last_of('+');
 	if (n == std::string::npos)
 		return false;

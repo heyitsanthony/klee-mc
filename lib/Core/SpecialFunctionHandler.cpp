@@ -13,6 +13,7 @@
 #include "Memory.h"
 #include "SpecialFunctionHandler.h"
 #include "StateSolver.h"
+#include "Forks.h"
 
 #include "klee/Common.h"
 #include "klee/ExecutionState.h"
@@ -33,6 +34,7 @@ namespace klee
 SFH_HANDLER(Assume)
 SFH_HANDLER(AssumeOp)
 SFH_HANDLER(FeasibleOp)
+SFH_HANDLER(PreferOp)
 SFH_HANDLER(CheckMemoryAccess)
 SFH_HANDLER(DefineFixedObject)
 SFH_HANDLER(Exit)
@@ -73,7 +75,6 @@ SFH_HANDLER(StackDepth)
 SFH_HANDLER(SymCoreHash)
 SFH_HANDLER(ExprHash)
 SFH_HANDLER(HookReturn)
-
 #define DEF_SFH_MMU(x)			\
 	SFH_HANDLER(WideStore##x)	\
 	SFH_HANDLER(WideLoad##x)
@@ -122,6 +123,7 @@ static const SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   add("klee_assume_op", AssumeOp, false),
   addDNR("klee_resume_exit", ResumeExit),
   add("klee_feasible_op", FeasibleOp, true),
+  add("klee_prefer_op", PreferOp, true),
   add("__klee_fork_eq", ForkEq, true),
   add("klee_check_memory_access", CheckMemoryAccess, false),
   add("klee_get_value", GetValue, true),
@@ -557,6 +559,38 @@ static ref<Expr> cmpop_to_expr(
 	default: return NULL;
 	}
 }
+
+/* call prefer_op when there's a state which
+ * should always be taken, regardless of branch prediction */
+SFH_DEF_HANDLER(PreferOp)
+{
+	ref<Expr>		e;
+	const ConstantExpr	*ce;
+	Forks			*f;
+	Executor::StatePair	sp;
+
+	SFH_CHK_ARGS(3, "klee_prefer_op");
+
+	ce = dyn_cast<ConstantExpr>(args[2]);
+	if (ce == NULL) goto error;
+
+	e = cmpop_to_expr(ce->getZExtValue(), args[0], args[1]);
+	if (e.isNull()) goto error;
+
+	/* huehuehuehue */
+	f = sfh->executor->getForking();
+	f->setPreferTrueState(true);
+	sp = sfh->executor->fork(state, e, true);
+	f->setPreferTrueState(false);
+
+	if (sp.first != NULL) sp.first->bindLocal(target, MK_CONST(1, 64));
+	if (sp.second != NULL) sp.second->bindLocal(target, MK_CONST(0, 64));
+
+	assert (0 == 1 && "STUB");
+error:
+	TERMINATE_EARLY(sfh->executor, state, "prefer-op failed");
+}
+
 
 SFH_DEF_HANDLER(AssumeOp)
 {

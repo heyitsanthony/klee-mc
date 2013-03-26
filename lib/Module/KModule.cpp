@@ -793,7 +793,7 @@ std::string KModule::getPrettyName(const llvm::Function* f) const
 
 	it = prettyNames.find(f);
 	if (it == prettyNames.end())
-		return "";
+		return f->getName().str();
 
 	return it->second;
 }

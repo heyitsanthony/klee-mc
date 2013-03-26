@@ -94,7 +94,6 @@ bool FilterSearcher::isBlacklisted(ExecutionState& es) const
 
 		/* slow path */
 		s = exe.getKModule()->getPrettyName(f);
-		if (s.empty()) s = f->getName().str();
 		plus_off = s.find('+');
 		if (plus_off != 0) {
 			s = s.substr(0, plus_off);

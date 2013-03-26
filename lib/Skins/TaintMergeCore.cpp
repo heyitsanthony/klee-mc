@@ -70,8 +70,6 @@ bool EntryPass::isShadowedFunc(const llvm::Function& f) const
 	unsigned			i;
 
 	f_name_raw = exe.getKModule()->getPrettyName(&f);
-	if (f_name_raw.empty()) f_name_raw = f.getName().str();
-
 	for (i = 0; f_name_raw[i] && f_name_raw[i] != '+'; i++);
 	f_name = f_name_raw.substr(0, i);
 
