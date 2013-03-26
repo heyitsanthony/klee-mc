@@ -45,6 +45,8 @@ void shadow_put_large(struct shadow_info* si, uint64_t phys, const void* ptr);
 void shadow_put_range(
 	struct shadow_info* si, uint64_t phys, uint64_t l, unsigned units);
 
+void* shadow_next_pg(struct shadow_info* si, void* last_addr);
+
 void shadow_or_range(
 	struct shadow_info* si, uint64_t phys, int units, 
 	uint64_t l);

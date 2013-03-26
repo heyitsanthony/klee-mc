@@ -93,6 +93,10 @@ void post__int_malloc(int64_t aux)
 
 	malloc_c++;
 
+	/* malloc doesn't always succeed */
+	if (!GET_RET(regs))
+		goto done;
+
 	he = malloc(sizeof(*he));
 	he->he_len = aux;
 	he->he_base = (void*)GET_RET(regs);
@@ -115,11 +119,12 @@ void post__int_malloc(int64_t aux)
 			&heap_si,
 			(long)he->he_base + he->he_len,
 			SH_FL_FREE);
-
-	in_heap--;
-
+	
 	klee_print_expr("[memcheck] malloc", (long)he->he_base);
 	klee_print_expr("[memcheck] size", he->he_len);
+
+done:
+	in_heap--;
 }
 
 void __hookpre___GI___libc_malloc(void* regfile)
@@ -142,6 +147,14 @@ void __hookpre___calloc(void* regfile)
 	klee_print_expr("[memcheck] calloc enter", GET_ARG1(regfile));
 	klee_hook_return(1, &post__int_malloc, GET_ARG0(regfile) * GET_ARG1(regfile));
 }
+
+void __hookpre___GI___libc_memalign(void* regfile)
+{
+	in_heap++;
+	klee_print_expr("[memcheck] memalign enter", GET_ARG1(regfile));
+	klee_hook_return(1, &post__int_malloc, GET_ARG1(regfile));
+}
+
 
 // any reason to do cleanups?
 // void mmu_cleanup_memcheck(void) { }

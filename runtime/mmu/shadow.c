@@ -10,6 +10,7 @@
 #define PAGE_MAX_SIZE		4096
 #define PTR2BUCKET(x)		((((uint64_t)(x))/PAGE_MAX_SIZE) % SHADOW_PG_BUCKETS)
 #define PTR2PGNUM(x)		((((uint64_t)(x))/PAGE_MAX_SIZE))
+#define PGNUM2PTR(x)		(void*)((uint64_t)(x) * PAGE_MAX_SIZE)
 
 #define phys_to_off(s, x)	(((((x) % (s)->si_phys_bytes_ppg)/(s)->si_gran)\
 					*(s)->si_bits)/8)
@@ -339,4 +340,31 @@ static void shadow_free_page(struct shadow_info* si, struct shadow_page *p)
 
 	free(p);
 	return;
+}
+
+void* shadow_next_pg(struct shadow_info* si, void* prev)
+{
+	unsigned	i;
+	unsigned	pgnum, bidx;
+
+	pgnum = PTR2PGNUM(prev);
+	bidx = PTR2BUCKET(prev);
+
+	/* search all buckets */
+	for (i = bidx; i < SHADOW_PG_BUCKETS; i++) {
+		struct shadow_pg_bucket	*spb;
+		unsigned		j;
+
+		spb = &si->si_bucket[i];
+		if (spb == NULL)
+			continue;
+
+		/* search bucket */
+		for (j = 0; j < spb->spb_pg_c; j++) {
+			if (pgnum < spb->spb_pgs[j]->sp_pgnum)
+				return PGNUM2PTR(spb->spb_pgs[j]->sp_pgnum);
+		}
+	}
+
+	return NULL;
 }
