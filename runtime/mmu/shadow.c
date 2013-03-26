@@ -4,7 +4,7 @@
 #include "klee/klee.h"
 #include "shadow.h"
 
-#define SHADOW_RECLAIM_MEM	1
+//#define SHADOW_RECLAIM_MEM	1
 //#define SHADOW_DEBUG	1
 
 #define PAGE_MAX_SIZE		4096
@@ -237,11 +237,9 @@ void shadow_put(struct shadow_info* si, uint64_t phys, uint64_t l)
 
 	p = shadow_pg_get(si, phys);
 	if (p == NULL){
-#ifdef SHADOW_RECLAIM_MEM
 		/* keep from thrashing */
 		if (shadow_is_uninit(si, l))
 			return;
-#endif
 		p = shadow_new_page(si, phys);
 	}
 

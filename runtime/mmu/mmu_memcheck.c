@@ -24,8 +24,10 @@ struct heap_ent
 
 #define HEAP_BUCKETS	512
 #define PTR_TO_IDX(x)	((((uint64_t)x) >> 4) % HEAP_BUCKETS)
+#define HEAP_ENTER	in_heap |= 1;
+#define HEAP_LEAVE	in_heap &= ~1;
 
-#define SH_FL_UNINIT	0
+#define SH_FL_UNINIT		0
 #define SH_FL_ALLOC		1
 #define SH_FL_FREE		2
 
@@ -47,7 +49,7 @@ void post_int_free(int64_t retval)
 	struct heap_ent		*he;
 	void			*free_addr = (void*)retval;
 
-	in_heap--;
+	HEAP_LEAVE
 
 	list_for_all(&heap_l, li) {
 		he = list_get_data(&heap_l, li);
@@ -74,12 +76,13 @@ void __hookpre___GI___libc_free(void* regfile)
 {
 	void	*ptr;
 
+	HEAP_ENTER
+
 	ptr = GET_ARG0_PTR(regfile);
 	klee_print_expr("[memcheck] freeing", (long)ptr);
 
 	/* restore header boundary */
 	shadow_put(&heap_si, (long)ptr-1, SH_FL_UNINIT);
-	in_heap++;
 	klee_hook_return(1, &post_int_free, GET_ARG0(regfile));
 }
 
@@ -124,33 +127,33 @@ void post__int_malloc(int64_t aux)
 	klee_print_expr("[memcheck] size", he->he_len);
 
 done:
-	in_heap--;
+	HEAP_LEAVE
 }
 
 void __hookpre___GI___libc_malloc(void* regfile)
 {
-	in_heap++;
-	klee_print_expr("[memcheck] malloc enter", GET_ARG1(regfile));
+	HEAP_ENTER
+	klee_print_expr("[memcheck] malloc enter", GET_ARG0(regfile));
 	klee_hook_return(1, &post__int_malloc, GET_ARG0(regfile));
 }
 
 void __hookpre___GI___libc_realloc(void* regfile)
 {
-	in_heap++;
+	HEAP_ENTER
 	klee_print_expr("[memcheck] realloc enter", GET_ARG1(regfile));
 	klee_hook_return(1, &post__int_malloc, GET_ARG1(regfile));
 }
 
 void __hookpre___calloc(void* regfile)
 {
-	in_heap++;
+	HEAP_ENTER
 	klee_print_expr("[memcheck] calloc enter", GET_ARG1(regfile));
 	klee_hook_return(1, &post__int_malloc, GET_ARG0(regfile) * GET_ARG1(regfile));
 }
 
 void __hookpre___GI___libc_memalign(void* regfile)
 {
-	in_heap++;
+	HEAP_ENTER
 	klee_print_expr("[memcheck] memalign enter", GET_ARG1(regfile));
 	klee_hook_return(1, &post__int_malloc, GET_ARG1(regfile));
 }

@@ -730,7 +730,9 @@ SFH_DEF_HANDLER(SetForking)
 		"user.err");
 }
 
-SFH_DEF_HANDLER(StackTrace) { state.dumpStack(std::cout); }
+SFH_DEF_HANDLER(StackTrace) // { state.dumpStack(std::cout); }
+ { sfh->executor->printStackTrace(state, std::cerr); }
+
 
 SFH_DEF_HANDLER(StackDepth)
 { state.bindLocal(target, MK_CONST(state.stack.size(), 32)); }
