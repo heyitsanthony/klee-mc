@@ -10,42 +10,70 @@
 
 static struct shadow_info	profile_si;
 
+static uint8_t in_profile = 0;
+
+#define PROF_BYTES	8
+
 #define MMU_LOAD(x,y)		\
 y mmu_load_##x##_profile(void* addr)	\
-{	shadow_put(	\
-		&profile_si, 	\
-		(long)addr,	\
-		shadow_get(&profile_si, (long)addr) + 1);	\
+{	if (! in_profile) {	\
+		in_profile++;	\
+		shadow_put(	\
+			&profile_si, 	\
+			(long)addr,	\
+			shadow_get(&profile_si, (long)addr) + 1);	\
+		in_profile--;	\
+	}	\
 	return mmu_load_##x##_objwide(addr); }
 
 #define MMU_STORE(x,y)			\
 void mmu_store_##x##_profile(void* addr, y v)	\
 {	\
-	shadow_put(	\
-		&profile_si, 	\
-		(long)addr,	\
-		shadow_get(&profile_si, (long)addr) + 1);	\
+	if (! in_profile) {	\
+		in_profile++;	\
+		shadow_put(	\
+			&profile_si, 	\
+			(long)addr,	\
+			shadow_get(&profile_si, (long)addr) + 1);	\
+		in_profile--;	\
+	}	\
 	return mmu_store_##x##_objwide(addr, v); }
 
-void mmu_init_profile(void) { shadow_init(&profile_si, 1, 32, 0); }
+void mmu_init_profile(void) { shadow_init(&profile_si, PROF_BYTES, 32, 0); }
 
-void mmu_fini_profile(void)
+void mmu_cleanup_profile(void)
 {
 	void	*cur_pg = NULL;
 	unsigned	sym_c = 0;
 
+	klee_print_expr("[Profile] Minimizing", 0);
+
 	while ((cur_pg = shadow_next_pg(&profile_si, cur_pg)) != NULL) {
 		unsigned	i;
-		for (i = 0; i < 4096; i++) {
-			uint64_t	v, m_c;
+		unsigned	lo, hi;
 
-			v = shadow_get(&profile_si, (long)cur_pg + i);
+#if 0
+		if (!shadow_used_range(&profile_si, (long)cur_pg, &lo, &hi))
+			continue;
+
+		klee_print_expr("lo", lo);
+		klee_print_expr("hi", hi);
+#else
+		lo = 0;
+		hi = 4096*4/8;
+#endif
+
+		/* divide by 4 to get unit number */
+		for (i = lo/4; i < hi/4; i++) {
+			uint64_t	v;
+
+			/* prof bytes is unit address stride */
+			v = shadow_get(&profile_si, (long)cur_pg+i*PROF_BYTES);
 			if (!klee_is_symbolic(v))
 				continue;
 
-			m_c = klee_max_value(v);
-			klee_assume_eq(v, m_c);
-			sym_c++;
+			if (klee_feasible_ugt(v, 1))
+				klee_assume_ugt(v, 1);
 		}
 	}
 

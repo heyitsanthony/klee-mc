@@ -40,6 +40,54 @@ static uint64_t shadow_get_small(
 	struct shadow_info* si, struct shadow_page* p, uint64_t phys);
 static int shadow_is_uninit(struct shadow_info* si, uint64_t l);
 
+struct  pg_bkt_t {
+	uint64_t	pb_pgnum;
+	uint64_t	pb_bidx;
+};
+
+static uint64_t	last_ptr = 0;
+static struct pg_bkt_t last_pgbkt = {0, 0};
+
+
+static void get_pgbkt(struct pg_bkt_t* pb, uint64_t ptr)
+{
+	if (klee_valid_eq(ptr, last_ptr)) {
+		pb->pb_pgnum = last_pgbkt.pb_pgnum;
+		pb->pb_bidx = last_pgbkt.pb_bidx;
+		return;
+	}
+
+	pb->pb_pgnum = PTR2PGNUM(ptr);
+	pb->pb_bidx = PTR2BUCKET(ptr);
+
+	/* this was a problem for p[x & 1] stuff */
+	if (klee_is_symbolic(pb->pb_pgnum)) {
+		uint64_t	pgnum_c = klee_get_value(pb->pb_pgnum);
+		if (klee_valid_eq(pb->pb_pgnum, pgnum_c)) {
+			klee_assume_eq(pb->pb_pgnum, pgnum_c);
+			pb->pb_pgnum = pgnum_c;
+		} else {
+			klee_print_expr("wtf pgnum", pb->pb_pgnum);
+			klee_stack_trace();
+		}
+	}
+
+	if (klee_is_symbolic(pb->pb_bidx)) {
+		uint64_t	bidx_c = klee_get_value(pb->pb_bidx);
+		if (klee_valid_eq(pb->pb_bidx, bidx_c)) {
+			klee_assume_eq(pb->pb_bidx, bidx_c);
+			pb->pb_bidx = bidx_c;
+		} else {
+			klee_print_expr("wtf bidx", pb->pb_bidx);
+			klee_stack_trace();
+		}
+	}
+
+	last_ptr = ptr;
+	last_pgbkt.pb_pgnum = pb->pb_pgnum;
+	last_pgbkt.pb_bidx = pb->pb_bidx;
+}
+
 static int bits(int n)
 {
 	unsigned	i, x =0;
@@ -100,18 +148,22 @@ static struct shadow_page* shadow_new_page(struct shadow_info* si, uint64_t ptr)
 	struct shadow_pg_bucket	*spb;
 	struct shadow_page	*pg;
 	uint64_t		*pg_dat;
+	struct pg_bkt_t		pb;
 	unsigned		i;
 
-	pg = malloc(sizeof(struct shadow_page) + si->si_bytes_ppg);
+	pg = malloc(sizeof(struct shadow_page));
+	pg->sp_data = malloc(si->si_bytes_ppg);
 	pg->sp_refs = 0;
-	pg->sp_pgnum = PTR2PGNUM(ptr);
 	pg_dat = (uint64_t*)(pg->sp_data);
 
 	/* initialize page with initial data */
 	for (i = 0; i < si->si_bytes_ppg / sizeof(uint64_t); i++)
 		pg_dat[i] = si->si_initial;
 
-	spb = &si->si_bucket[PTR2BUCKET(ptr)];
+	get_pgbkt(&pb, ptr);
+	pg->sp_pgnum = pb.pb_pgnum;
+
+	spb = &si->si_bucket[pb.pb_bidx];
 
 	/* allocate new bucket? */
 	if (spb->spb_pgs == NULL) {
@@ -182,7 +234,10 @@ static void shadow_put_tiny(
 	struct shadow_page* p, uint64_t phys, uint64_t l)
 {
 	unsigned	off = phys_to_off(si, phys);
-	uint64_t	data, old;
+	uint64_t	data;
+#ifdef SHADOW_RELCAIM_MEM
+	uint64_t	old;
+#endif
 
 	data = p->sp_data[off];
 
@@ -205,11 +260,8 @@ static void shadow_put_tiny(
 
 static int shadow_is_uninit(struct shadow_info* si, uint64_t l)
 {
-	if (si_is_tiny(si)){
+	if (si_is_tiny(si) || si_is_small(si)){
 		if ((l & si->si_mask) == (si->si_initial & si->si_mask))
-			return 1;
-	}else if (si_is_small(si)){
-		if (memcmp(&si->si_initial, &l, si->si_bits / 8) == 0)
 			return 1;
 	}
 
@@ -220,33 +272,35 @@ static struct shadow_page* shadow_pg_get(struct shadow_info* si, uint64_t ptr)
 {
 	struct shadow_pg_bucket	*spb;
 	unsigned		i;
-	uint64_t		pgnum;
+	struct pg_bkt_t		pb;
 
-	pgnum = PTR2PGNUM(ptr);
-	spb = &si->si_bucket[PTR2BUCKET(ptr)];
-	for (i = 0; i < spb->spb_pg_c; i++)
-		if (spb->spb_pgs[i]->sp_pgnum == pgnum)
+	get_pgbkt(&pb, ptr);
+	spb = &si->si_bucket[pb.pb_bidx];
+
+	for (i = 0; i < spb->spb_pg_c; i++) {
+		if (spb->spb_pgs[i]->sp_pgnum == pb.pb_pgnum)
 			return spb->spb_pgs[i];
+	}
 
 	return NULL;
 }
 
 void shadow_put(struct shadow_info* si, uint64_t phys, uint64_t l)
 {
-	struct shadow_page	*p;
+	struct shadow_page	*pg;
 
-	p = shadow_pg_get(si, phys);
-	if (p == NULL){
+	pg = shadow_pg_get(si, phys);
+	if (pg == NULL){
 		/* keep from thrashing */
 		if (shadow_is_uninit(si, l))
 			return;
-		p = shadow_new_page(si, phys);
+		pg = shadow_new_page(si, phys);
 	}
 
 	if (si_is_tiny(si)){
-		shadow_put_tiny(si, p, phys, l);
+		shadow_put_tiny(si, pg, phys, l);
 	}else if (si_is_small(si)){
-		shadow_put_small(si, p, phys, l);
+		shadow_put_small(si, pg, phys, l);
 	}else {
 		klee_assert(0 == 1 && "expected non-large type for put");
 	}
@@ -298,18 +352,18 @@ static uint64_t shadow_get_small(
 
 uint64_t shadow_get(struct shadow_info* si, uint64_t phys)
 {
-	struct shadow_page	*p;
+	struct shadow_page	*pg;
 
 	klee_assert(!si_is_large(si));
 
-	p = shadow_pg_get(si, phys);
-	if (p == NULL)
+	pg = shadow_pg_get(si, phys);
+	if (pg == NULL)
 		return shadow_get_uninit(si);
 
 	if (si_is_tiny(si))
-		return shadow_get_tiny(si, p, phys);
+		return shadow_get_tiny(si, pg, phys);
 	else if (si_is_small(si))
-		return shadow_get_small(si, p, phys);
+		return shadow_get_small(si, pg, phys);
 
 	return ~0UL;
 }
@@ -336,6 +390,7 @@ static void shadow_free_page(struct shadow_info* si, struct shadow_page *p)
 	spb->spb_pg_c--;
 	si->si_alloced_pages--;
 
+	free(p->sp_data);
 	free(p);
 	return;
 }
@@ -343,7 +398,7 @@ static void shadow_free_page(struct shadow_info* si, struct shadow_page *p)
 void* shadow_next_pg(struct shadow_info* si, void* prev)
 {
 	unsigned	i;
-	unsigned	pgnum, bidx;
+	uint64_t	pgnum, bidx;
 
 	pgnum = PTR2PGNUM(prev);
 	bidx = PTR2BUCKET(prev);
@@ -365,4 +420,29 @@ void* shadow_next_pg(struct shadow_info* si, void* prev)
 	}
 
 	return NULL;
+}
+
+/* XXX: this is stupid slow */
+int shadow_used_range(
+	struct shadow_info* si,
+	uint64_t phys,
+	unsigned* idx_first,
+	unsigned* idx_last)
+{
+	struct shadow_page	*pg;
+	unsigned		sym_idx;
+	uint64_t		v;
+
+	pg = shadow_pg_get(si, phys);
+	if (pg == NULL) return 0;
+
+	klee_make_symbolic(&sym_idx, sizeof(sym_idx), "symidx");
+
+	klee_assume_ult(sym_idx, si->si_bytes_ppg);
+	v = pg->sp_data[sym_idx];
+	klee_assume_ne(v, si->si_initial & 0xff);
+	*idx_first = klee_min_value(sym_idx);
+	*idx_last = klee_max_value(sym_idx);
+
+	return 1;
 }

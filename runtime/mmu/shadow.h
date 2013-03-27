@@ -11,7 +11,7 @@
 struct shadow_page {
 	uint64_t	sp_pgnum;	/* base address */
 	uintptr_t	sp_refs;	/* forces alignment */
-	uint8_t		sp_data[];	/* PAGE_MAX_SIZE follows */
+	uint8_t		*sp_data;	/* PAGE_MAX_SIZE follows */
 };
 
 struct shadow_pg_bucket
@@ -53,6 +53,12 @@ void shadow_or_range(
 uint64_t shadow_get(struct shadow_info* si, uint64_t phys);
 int shadow_pg_used(struct shadow_info* si, uint64_t phys);
 void shadow_get_large(struct shadow_info* si, uint64_t phys, void* ptr);
+
+int shadow_used_range(
+	struct shadow_info* si,
+	uint64_t phys,
+	unsigned* idx_first,
+	unsigned* idx_last);
 
 #define shadow_used_bytes(x)	((x)->alloced_pages * (x)->bytes_per_page)
 

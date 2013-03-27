@@ -158,6 +158,7 @@ extern "C" {
 
 #define __klee_assume_op(x,y,z)	klee_assume_op(((uint64_t)x), ((uint64_t)y), z)
 #define klee_assume_ugt(x,y)	__klee_assume_op(x,y,KLEE_CMP_OP_UGT)
+#define klee_assume_ult(x,y)	__klee_assume_op(x,y,KLEE_CMP_OP_ULT)
 #define klee_assume_uge(x,y)	__klee_assume_op(x,y,KLEE_CMP_OP_UGE)
 #define klee_assume_ule(x,y)	__klee_assume_op(x,y,KLEE_CMP_OP_ULE)
 #define klee_assume_eq(x, y)	__klee_assume_op(x, y, KLEE_CMP_OP_EQ)
