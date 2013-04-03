@@ -136,6 +136,8 @@ KModule::~KModule()
 		delete (*it).second;
 	constantMap.clear();
 
+	foreach (it, modNames.begin(), modNames.end()) delete (*it);
+
 	delete dataLayout;
 	delete module;
 }
@@ -403,14 +405,17 @@ void KModule::addModule(Module* in_mod)
 	bool		isLinked;
 
 	mod_name = in_mod->getModuleIdentifier();
-
-	/* insertion failed? already loaded */
-	if (addedModules.insert(mod_name).second == false) {
+	if (addedModules.count(mod_name)) {
 		std::cerr << "[KModule] Already loaded \""<< mod_name <<"\"\n";
 		return;
 	}
 
-	std::cerr << "[KModule] Adding module \"" << mod_name << "\"\n";
+	/* insertion failed? already loaded */
+	modNames.push_back(new std::string(mod_name));
+	std::string	*mn_ref(modNames[modNames.size()-1]);
+	addedModules.insert(*mn_ref);
+
+	std::cerr << "[KModule] Adding module \"" << *mn_ref << "\"\n";
 
 	isLinked = Linker::LinkModules(
 		module, in_mod, Linker::PreserveSource, &err);
@@ -423,7 +428,10 @@ void KModule::addModule(Module* in_mod)
 		assert (kmod_f != NULL);
 
 		kf = addFunction(kmod_f);
-		if (kf) kf->trackCoverage = CountModuleCoverage;
+		if (kf) {
+			kf->trackCoverage = CountModuleCoverage;
+			kf->setModName(*mn_ref);
+		}
 	}
 
 	dumpModule();

@@ -420,9 +420,7 @@ Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 		searcher = STACK_SEARCHER;
 	} else if (UseCovSearcher) {
 		searcher = new PrioritySearcher(
-			new CovPrioritizer(
-				executor.getKModule(),
-				*executor.getStatsTracker()),
+			new CovPrioritizer(executor.getKModule()),
 			DEFAULT_PR_SEARCHER);
 	} else if (UsePrioritySearcher) {
 		assert (prFunc != NULL);

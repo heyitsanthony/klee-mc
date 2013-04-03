@@ -3,6 +3,7 @@
 
 #include <set>
 #include <map>
+#include <string>
 #include <stdint.h>
 #include <tr1/unordered_map>
 
@@ -45,6 +46,7 @@ private:
 	std::set<const KFunction*>	exits_seen;
 	uint64_t			enter_c;
 	uint64_t			exit_c;
+	const std::string		*mod_name;
 
 	KFunction(const KFunction&);
 	KFunction &operator=(const KFunction&);
@@ -57,6 +59,10 @@ public:
 	explicit KFunction(llvm::Function*, KModule *);
 	~KFunction();
 
+	void setModName(const std::string& s) { mod_name = &s; }
+	std::string getModName(void) const
+	{ if (mod_name) return *mod_name; return std::string(""); }
+
 	unsigned getArgRegister(unsigned index) { return index; }
 	llvm::Value* getValueForRegister(unsigned reg);
 	unsigned getBasicBlockEntry(llvm::BasicBlock* bb) const
@@ -66,6 +72,8 @@ public:
 	exit_iter_ty beginExits(void) const { return exits_seen.begin(); }
 	exit_iter_ty endExits(void) const { return exits_seen.end(); }
 	unsigned getUncov(void) const;
+	unsigned getCov(void) const;
+	std::string getCovStr(void) const;
 
 	void incExits(void) { exit_c++; }
 	void incEnters(void) { enter_c++; }

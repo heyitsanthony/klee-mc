@@ -64,4 +64,4 @@ done
 
 
 cp "$VEXLLVM_HELPER_PATH"/softfloat.bc "$BASEDIR"/lib/
-
+cp "$VEXLLVM_HELPER_PATH"/softfloat-fpu.bc "$BASEDIR"/lib/

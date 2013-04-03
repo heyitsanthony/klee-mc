@@ -2102,12 +2102,13 @@ void Executor::run(ExecutionState &initState)
 	stateManager->teardownUserSearcher();
 
 eraseStates:
+	flushTimers();
+
 	if (stateManager->empty())
 		goto done;
 
 	std::cerr << "KLEE: halting execution, dumping remaining states\n";
 	haltExecution = true;
-	flushTimers();
 
 	foreach (it, stateManager->begin(), stateManager->end()) {
 		ExecutionState &state = **it;

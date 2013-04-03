@@ -49,6 +49,7 @@ KFunction::KFunction(llvm::Function *_function, KModule *km)
 , isSpecial(false)
 , enter_c(0)
 , exit_c(0)
+, mod_name(NULL)
 , path_commit_tick(~0)
 {
 	std::map<Instruction*, unsigned> regMap;
@@ -142,8 +143,33 @@ KFunction::~KFunction()
 unsigned KFunction::getUncov(void) const
 {
 	unsigned ret = 0;
+
+	/* first instruction dominates all instructions in function */
+	if (instructions[0]->isCovered() == false)
+		return numInstructions;
+
 	for (unsigned i = 0; i < numInstructions; i++)
 		if (instructions[i]->isCovered() == false)
 			ret++;
+	return ret;
+}
+
+unsigned KFunction::getCov(void) const { return numInstructions - getUncov(); }
+
+static const char tohex[] = "0123456789abcdef";
+std::string KFunction::getCovStr(void) const
+{
+	/* one character for every four bits */
+	std::string		ret("");
+	std::vector<unsigned>	v((numInstructions + 3)/4, 0);
+
+	for (unsigned i = 0; i < numInstructions; i++) {
+		v[i/4] <<= 1;
+		v[i/4] |= (instructions[i]->isCovered() ? 1 : 0);
+	}
+
+	for (unsigned i = 0; i < v.size(); i++)
+		ret += tohex[v[i]];
+
 	return ret;
 }

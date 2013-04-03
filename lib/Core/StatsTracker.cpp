@@ -349,13 +349,6 @@ void StatsTracker::stepInstruction(ExecutionState &es)
 	stepInstUpdateFrame(es);
 }
 
-bool StatsTracker::isInstCovered(KInstruction* ki) const
-{
-	return theStatisticManager->getIndexedValue(
-		stats::coveredInstructions,
-		ki->getInfo()->id);
-}
-
 ///
 
 /* Should be called _after_ the es->pushFrame() */
@@ -594,70 +587,8 @@ void StatsTracker::writeIStats(void)
   foreach (fnIt, m->begin(), m->end()) {
     if (fnIt->isDeclaration()) continue;
     foreach (bbIt, fnIt->begin(), fnIt->end()) {
-      foreach (it, bbIt->begin(), bbIt->end()) {
-        Instruction *instr = &*it;
-        const InstructionInfo &ii = km->infos->getInfo(instr);
-        unsigned index = ii.id;
-        if (ii.file!=sourceFile) {
-          if(ii.file.empty())
-            of << "fl=[klee]\n";
-          else
-            of << "fl=" << ii.file << "\n";
-          sourceFile = ii.file;
-        }
-        if (bbIt == fnIt->begin() && it == bbIt->begin()) {
-          of << "fn=" << fnIt->getName().str() << "\n";
-        }
-        of << ii.assemblyLine << " ";
-        of << ii.line << " ";
-        for (unsigned i=0; i<nStats; i++)
-          if (istatsMask&(1<<i))
-            of << sm.getIndexedValue(sm.getStatistic(i), index) << " ";
-        of << "\n";
-
-        if (!(UseCallPaths &&
-            (isa<CallInst>(instr) || isa<InvokeInst>(instr))))
-            continue;
-
-        CallSiteSummaryTable::iterator cs_it = callSiteStats.find(instr);
-        if (cs_it == callSiteStats.end()) continue;
-
-        foreach (fit, cs_it->second.begin(), cs_it->second.end()) {
-          Function *f = fit->first;
-          CallSiteInfo &csi = fit->second;
-          const InstructionInfo &fii = km->infos->getFunctionInfo(f);
-
-          if (fii.file!=sourceFile) {
-            if(fii.file.empty())
-              of << "cfl=[klee]\n";
-            else
-              of << "cfl=" << fii.file << "\n";
-          }
-          of << "cfn=" << f->getName().str() << "\n";
-          of << "calls=" << csi.count << " ";
-          of << fii.assemblyLine << " ";
-          of << fii.line << "\n";
-
-          of << ii.assemblyLine << " ";
-          of << ii.line << " ";
-          for (unsigned i=0; i<nStats; i++) {
-            if (!(istatsMask&(1<<i))) continue;
-            Statistic &s = sm.getStatistic(i);
-            uint64_t value;
-
-            // Hack, ignore things that don't make sense on
-            // call paths.
-            if (&s == &stats::uncoveredInstructions) {
-              value = 0;
-            } else {
-              value = csi.statistics.getValue(s);
-            }
-
-            of << value << " ";
-          }
-          of << "\n";
-        }
-      }
+      foreach (it, bbIt->begin(), bbIt->end())
+      	writeInstIStat(of, istatsMask, sourceFile, callSiteStats, &*it);
     }
   }
 
@@ -670,4 +601,85 @@ void StatsTracker::writeIStats(void)
     of << '\n';
 
   of.flush();
+}
+
+void StatsTracker::writeInstIStat(
+	std::ostream& of,
+	uint64_t istatsMask,
+	std::string& sourceFile,
+	CallSiteSummaryTable& callSiteStats,
+	llvm::Instruction *instr)
+{
+	StatisticManager &sm = *theStatisticManager;
+	unsigned nStats = sm.getNumStatistics();
+	const InstructionInfo	&ii(km->infos->getInfo(instr));
+	unsigned		index = ii.id;
+
+	if (ii.file!=sourceFile) {
+		if(ii.file.empty())
+			of << "fl=[klee]\n";
+		else
+			of << "fl=" << ii.file << "\n";
+		sourceFile = ii.file;
+	}
+
+	if (	instr == instr->getParent()->begin() &&
+		instr->getParent() == instr->getParent()->getParent()->begin())
+	{
+		of << "fn=" << instr->getParent()->
+			getParent()->getName().str() << "\n";
+	}
+	of << ii.assemblyLine << " ";
+	of << ii.line << " ";
+
+	for (unsigned i=0; i<nStats; i++)
+		if (istatsMask&(1<<i))
+			of << sm.getIndexedValue(
+				sm.getStatistic(i), index) << " ";
+	of << "\n";
+
+	if (	!(UseCallPaths &&
+		(isa<CallInst>(instr) || isa<InvokeInst>(instr))))
+	{
+		return;
+	}
+
+	CallSiteSummaryTable::iterator cs_it = callSiteStats.find(instr);
+	if (cs_it == callSiteStats.end())
+		return;
+
+	/* information about calls? uh? */
+	foreach (fit, cs_it->second.begin(), cs_it->second.end()) {
+		Function *f = fit->first;
+		CallSiteInfo &csi = fit->second;
+		const InstructionInfo &fii = km->infos->getFunctionInfo(f);
+
+		if (fii.file!=sourceFile) {
+			if(fii.file.empty())
+				of << "cfl=[klee]\n";
+			else
+				of << "cfl=" << fii.file << "\n";
+		}
+		of << "cfn=" << f->getName().str() << "\n";
+		of << "calls=" << csi.count << " ";
+		of << fii.assemblyLine << " ";
+		of << fii.line << "\n";
+
+		of << ii.assemblyLine << " ";
+		of << ii.line << " ";
+		for (unsigned i=0; i<nStats; i++) {
+			if (!(istatsMask&(1<<i)))
+				continue;
+			Statistic &s = sm.getStatistic(i);
+			uint64_t value;
+
+			// Hack, ignore things that don't make sense on
+			// call paths.
+			value = (&s == &stats::uncoveredInstructions)
+				? 0
+				: csi.statistics.getValue(s);
+			of << value << " ";
+		}
+		of << "\n";
+	}
 }

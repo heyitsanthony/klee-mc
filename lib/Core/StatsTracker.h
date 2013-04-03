@@ -61,6 +61,12 @@ private:
     void updateStateStatistics(uint64_t addend);
     void writeStatsLine();
     void writeIStats();
+    void writeInstIStat(
+    	std::ostream& of, uint64_t istatsMask,
+	std::string& sourceFile,
+	CallSiteSummaryTable& css,
+	llvm::Instruction *instr);
+
     const KModule *km;
     std::set<std::string> excludeNames;
 
@@ -99,7 +105,6 @@ public:
 
     void computeReachableUncovered();
 
-    bool isInstCovered(KInstruction* ki) const;
     uint64_t getLastNewInstruction(void) const
     { return lastCoveredInstruction; }
 

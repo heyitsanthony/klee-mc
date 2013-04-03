@@ -13,6 +13,7 @@
 #include "klee/Interpreter.h"
 #include "klee/Internal/Module/KFunction.h"
 #include <tr1/unordered_map>
+#include <string>
 #include <map>
 #include <set>
 #include <vector>
@@ -157,8 +158,9 @@ private:
 
 	Interpreter::ModuleOptions opts;
 
-	unsigned		updated_funcs;
-	std::set<std::string>	addedModules;
+	unsigned			updated_funcs;
+	std::set<std::string>		addedModules;
+	std::vector<std::string*>	modNames;
 
 	typedef std::map<const llvm::Function*, std::string>	prettymap_ty;
 	prettymap_ty	prettyNames;

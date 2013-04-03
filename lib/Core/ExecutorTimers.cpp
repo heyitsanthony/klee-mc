@@ -369,10 +369,68 @@ private:
 };
 
 cl::opt<unsigned>
+DumpCovData("dump-cov-data",
+	cl::desc("Dump coverage data every n seconds (0=off)"),
+	cl::init(0));
+
+class CovTimer : public Executor::Timer
+{
+public:
+	CovTimer(
+		const char* _fname,
+		Executor* _exe,
+		bool _ignoreConcrete=false)
+	: fname(_fname)
+	, exe(_exe)
+	, ignoreConcrete(_ignoreConcrete) {}
+	virtual ~CovTimer() {}
+
+	void run(void)
+	{
+		std::ostream* os;
+		KModule*	kmod;
+		StatsTracker	*st;
+
+		os = exe->getInterpreterHandler()->openOutputFile(fname);
+		if (os == NULL) return;
+
+		st = exe->getStatsTracker();
+
+		kmod = exe->getKModule();
+		foreach (it, kmod->kfuncsBegin(), kmod->kfuncsEnd()) {
+			const KFunction	*kf = *it;
+			unsigned	c;
+
+			if (!kf->trackCoverage)
+				continue;
+
+			c = kf->getCov();
+			(*os)	<< "[" << kf->getModName() << "] "
+				<< kmod->getPrettyName(kf->function)
+				<< " " << c << " / "
+				<< kf->numInstructions << " ";
+
+			if (c == 0) {
+				(*os) << '\n';
+				continue;
+			}
+
+			/* dump out hexadecimal coverage bitmap */
+			(*os) << kf->getCovStr() << '\n';
+		}
+		delete os;
+	}
+private:
+	const char	*fname;
+	Executor	*exe;
+	bool		ignoreConcrete;
+};
+
+
+cl::opt<unsigned>
 DumpBTrackerDot("dump-btracker-dot",
 	cl::desc("Dump branch tracker dot (0=off)"),
 	cl::init(0));
-
 
 class BTrackerDotTimer : public Executor::Timer
 {
@@ -736,6 +794,9 @@ void Executor::initTimers(void)
 	if (DumpStackStats)
 		addTimer(new StackStatTimer(this), DumpStackStats);
 
+	if (DumpCovData)
+		addTimer(new CovTimer("cov.txt", this), DumpCovData);
+
 	if (DumpBrData)
 		addTimer(new BrDataTimer("brdata.txt", this), DumpBrData);
 	if (DumpBrExprData)
@@ -893,6 +954,7 @@ void Executor::flushTimers(void)
 {
 	double now = util::estWallTime();
 
+	std::cerr << "[Exe] Flushing timers\n";
 	foreach (it, timers.begin(), timers.end()) {
 		TimerInfo	*ti(*it);
 		ti->timer->run();

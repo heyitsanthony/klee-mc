@@ -2,7 +2,6 @@
 #define COVSEARCHER_H
 
 #include "klee/ExecutionState.h"
-#include "../Core/StatsTracker.h"
 #include "PrioritySearcher.h"
 
 #include "klee/Internal/Module/KInstruction.h"
@@ -22,7 +21,7 @@ public:
 		KFunction	*kf;
 
 		/* super-priority */
-		if (statTracker.isInstCovered(st.pc) == false)
+		if (st.pc->isCovered() == false)
 			return 2;
 
 		f = ki->getInst()->getParent()->getParent();
@@ -38,26 +37,22 @@ public:
 		return 1;
 	}
 
-	CovPrioritizer(const KModule* _km, StatsTracker& st)
-	: statTracker(st)
-	, km(_km) {}
+	CovPrioritizer(const KModule* _km) : km(_km) {}
 
 	virtual Prioritizer* copy(void) const
-	{ return new CovPrioritizer(km, statTracker); }
+	{ return new CovPrioritizer(km); }
 
 protected:
 	bool isFuncCovered(const KFunction* kf)
 	{
 		for (unsigned i = 0; i < kf->numInstructions; i++) {
-			if (!statTracker.isInstCovered(kf->instructions[i]))
+			if (!kf->instructions[i]->isCovered())
 				return false;
 		}
 		return true;
 	}
 
-
 private:
-	StatsTracker&	statTracker;
 	const KModule*	km;
 };
 }
