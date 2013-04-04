@@ -93,7 +93,7 @@ bool SoftConcreteMMU::exeMemOp(ExecutionState &state, MemOp& mop)
 
 	/* XXX: I don't like calling this range check here */
 	addr = cast<ConstantExpr>(mop.address)->getZExtValue();
-	if 	(utlb.get(state, addr, op) && 
+	if  (	state.stlb.get(state.addressSpace.getGeneration(), addr, op) && 
 		mop.getType(exe.getKModule())/8 + 
 			op.first->getOffset(addr) <= op.second->size)
 	{
@@ -124,9 +124,9 @@ void SoftConcreteMMU::tlbInsert(
 		return;
 	}
 	
-	utlb.put(st, op);
+	st.stlb.put(st.addressSpace.getGeneration(), op);
 }
 
 void SoftConcreteMMU::tlbInvalidate(
 	ExecutionState& st, const void* addr, uint64_t len)
-{ utlb.invalidate((uint64_t)addr); }
+{ st.stlb.invalidate((uint64_t)addr); }

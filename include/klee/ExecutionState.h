@@ -16,6 +16,7 @@
 #include "klee/util/ExprUtil.h"
 #include "klee/Internal/Module/Cell.h"
 #include "../../lib/Core/AddressSpace.h"
+#include "../../lib/Core/StateTLB.h"
 #include "../../lib/Core/BranchTracker.h"
 #include "../../lib/Core/ExecutionTrace.h"
 #include "../../lib/Core/Terminator.h"
@@ -118,6 +119,7 @@ public:
 	typedef CallStack::iterator	stack_iter_ty;
 	unsigned			depth;
 	double				weight;
+	StateTLB		stlb;	/* local tlb for when mmu calls to runtime */
 
 	// pc - pointer to current instruction stream
 	KInstIterator		pc, prevPC;

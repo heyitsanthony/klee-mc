@@ -28,7 +28,7 @@ private:
 	SoftMMUHandlers	*mh;
 	static SoftConcreteMMU	*singleton;
 	ConcreteMMU		*cmmu;
-	TLB			utlb;
+	// TLB			utlb;
 };
 }
 

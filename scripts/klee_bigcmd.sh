@@ -56,6 +56,12 @@ fi
 # -write-equiv-rules
 
 # -use-interleaved-MI	\
+
+
+
+
+RULEFLAGS="-use-rule-builder -rule-file=default_rules.db -dump-used-rules=used.db"
+
 # -use-rule-builder=true \
 
 
@@ -82,10 +88,13 @@ if [ -z "$APP_WRAPPER" ]; then
 APP_WRAPPER="gdb --args"
 fi
 
+#-allow-negstack	
+
 $APP_WRAPPER klee-mc 		\
 	$EXTRA_ARGS		\
 	$REPLAYARG		\
 	$SCHEDOPTS		\
+	$RULEFLAGS		\
 	\
 	-hcache-fdir=`pwd`/hcache	\
 	-hcache-pending=`pwd`/hcache	\
@@ -102,7 +111,6 @@ $APP_WRAPPER klee-mc 		\
 	-print-new-ranges	\
 	-contig-off-resolution 	\
 	-pipe-solver		\
-	-allow-negstack		\
 	-write-paths		\
 	-max-memory=1024	\
 	-mm-type=deterministic	\
@@ -126,7 +134,6 @@ $APP_WRAPPER klee-mc 		\
 	-dump-querystats=1	\
 	-dump-stateinststats=10	\
 	-dump-br-data=5		\
-	-dump-used-rules=used.db \
 	-  2>err
 
 #	-ctrl-graph		\
