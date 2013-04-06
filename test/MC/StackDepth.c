@@ -4,6 +4,7 @@
 #include "klee/klee.h"
 
 #define STACK_WASTE	8192
+#define SYM_BYTES	512
 
 char recur(char *sym, int len, int bit)
 {
@@ -24,15 +25,15 @@ char recur(char *sym, int len, int bit)
 
 int main()
 {
-	char sym[512];
+	char sym[SYM_BYTES];
 	int	ret;
 
-	ret = read(0, sym, 512);
+	ret = read(0, sym, SYM_BYTES);
 	ksys_print_expr("GOT READ", ret);
-	if (ret != 512) {
+	if (ret != SYM_BYTES) {
 		return 1;
 	}
 
-	recur(sym, 512, 0);
+	recur(sym, SYM_BYTES, 0);
 	return 0;
 }

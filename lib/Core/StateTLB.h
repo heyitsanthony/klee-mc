@@ -3,7 +3,6 @@
 
 #include "Memory.h" 
 #include "AddressSpace.h"
-#include <string.h>
 
 #define STLB_OBJCACHE_ENTS	128
 #define STLB_PAGE_SZ		4096
@@ -13,72 +12,34 @@
 
 namespace klee
 {
+class ExecutionState;
+
 class StateTLB
 {
 public:
-	/* this is embedded in every state, so we only
-	 * want to use the memory when it is needed */
-	StateTLB(void) : obj_cache(0), cur_gen(~0) {}
-
-	StateTLB(const StateTLB& stlb)
-	: obj_cache(0)
-	, cur_gen(~0)
-	{
-		if (stlb.obj_cache == NULL || this == &stlb)
-			return;
-
-		obj_cache = new ObjectPair[STLB_OBJCACHE_ENTS];
-		cur_gen = stlb.cur_gen;
-		memcpy(	obj_cache,
-			stlb.obj_cache,
-			sizeof(ObjectPair)*STLB_OBJCACHE_ENTS);
-	}
-
-	~StateTLB(void) { if (obj_cache) delete [] obj_cache; }
-	bool get(unsigned gen, uint64_t addr, ObjectPair& out_op)
-	{
-		ObjectPair	*op;
-
-		if (obj_cache == NULL)
-			return false;
-
-		if (gen != cur_gen)
-			return false;
-
-		op = &obj_cache[STLB_ADDR2IDX(addr)];
-		if (op->first == NULL)
-			return false;
-
-		/* full boundary checks are done in the MMU. */
-		if (op->first->isInBounds(addr, 1) == false)
-			return false;
-
-		out_op = *op;
-		return true;
-	}
-
-	void put(unsigned gen, ObjectPair& op)
-	{	if (obj_cache == NULL) initObjCache();
-		if (gen != cur_gen) {
-			clearCache();
-			cur_gen = gen;
-		}
-		obj_cache[STLB_ADDR2IDX(op.first->address)] = op; }
-
-	void invalidate(uint64_t addr)
-	{	if (obj_cache == NULL) return;
-		obj_cache[STLB_ADDR2IDX(addr)].first = NULL; }
-
+	StateTLB(void);
+	StateTLB(const StateTLB& stlb);
+	~StateTLB(void);
+	bool get(ExecutionState& es, uint64_t addr, ObjectPair& out_op);
+	void put(ExecutionState& es, ObjectPair& op);
+	void invalidate(uint64_t addr);
 private:
-	void initObjCache(void)
-	{ obj_cache = new ObjectPair[STLB_OBJCACHE_ENTS];
-	  clearCache(); }
-
-	void clearCache(void)
-	{ memset(obj_cache, 0, sizeof(ObjectPair) * STLB_OBJCACHE_ENTS); }
+	void updateGen(ExecutionState& es);
+	void initObjCache(void);
+	void clearObjects(void);
+	void clearCache(void);
 
 	ObjectPair	*obj_cache;
-	unsigned	cur_gen;
+
+	/* the two-gen split is a goofy way of avoiding
+	 * misses when a new object state is allocated on write for
+	 * a COW page */
+
+	/* on increment, clear entire cache */
+	unsigned	cur_gen_mo;
+
+	/* on increment, clear cached object state pointers */
+	unsigned	cur_gen_os;
 };
 }
 

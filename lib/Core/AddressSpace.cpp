@@ -48,7 +48,8 @@ void AddressSpace::unbindObject(const MemoryObject *mo)
 		last_mo = NULL;
 
 	objects = objects.remove(mo);
-	generation++;
+	mo_generation++;
+	os_generation++;
 }
 
 const ObjectState *AddressSpace::findObject(const MemoryObject *mo) const
@@ -65,7 +66,7 @@ void AddressSpace::bindObject(const MemoryObject *mo, ObjectState *os)
 	}
 
 	objects = objects.replace(std::make_pair(mo, os));
-	generation++;
+	os_generation++;
 
 	if (mo == last_mo)
 		last_mo = NULL;
@@ -85,7 +86,7 @@ ObjectState *AddressSpace::getWriteable(
 	n = ObjectState::create(*os);
 	n->setOwner(cowKey);
 	objects = objects.replace(std::make_pair(mo, n));
-	generation++;
+	os_generation++;
 
 	return n;
 }
@@ -1050,6 +1051,7 @@ void AddressSpace::clear(void)
 {
 	last_mo = NULL;
 	cowKey = -1;
-	generation = 0;
+	os_generation = 0;
+	mo_generation = 0;
 	objects = MemoryMap();
 }

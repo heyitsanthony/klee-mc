@@ -49,7 +49,8 @@ private:
 	/**
 	 * Counts the number of modifications made to the AS since fork.
 	 * This is primarily used by the TLB to track changes. */
-	unsigned	generation;
+	unsigned	os_generation;
+	unsigned	mo_generation;
 
 	const MemoryObject* last_mo;
 
@@ -65,10 +66,16 @@ private:
 	/// \invariant forall o in objects, o->copyOnWriteOwner <= cowKey
 	MemoryMap objects;
 public:
-	AddressSpace() : cowKey(1), generation(0), last_mo(NULL) {}
+	AddressSpace()
+	: cowKey(1)
+	, os_generation(0)
+	, mo_generation(0)
+	, last_mo(NULL) {}
+
 	AddressSpace(const AddressSpace &b)
 	: cowKey(++b.cowKey)
-	, generation(0)
+	, os_generation(0)
+	, mo_generation(0)
 	, last_mo(NULL)
 	, objects(b.objects)
 	{ }
@@ -106,7 +113,8 @@ public:
 
 	ref<Expr> getOOBCond(ref<Expr>& symptr) const;
 	Expr::Hash hash(void) const;
-	unsigned getGeneration(void) const { return generation; }
+	unsigned getGeneration(void) const { return os_generation; }
+	unsigned getGenerationMO(void) const { return mo_generation; }
 private:
 	/// Add a binding to the address space.
 	void bindObject(const MemoryObject *mo, ObjectState *os);

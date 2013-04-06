@@ -91,17 +91,27 @@ bool SoftConcreteMMU::exeMemOp(ExecutionState &state, MemOp& mop)
 	ObjectPair	op;
 	uint64_t	addr;
 
-	/* XXX: I don't like calling this range check here */
 	addr = cast<ConstantExpr>(mop.address)->getZExtValue();
-	if  (	state.stlb.get(state.addressSpace.getGeneration(), addr, op) && 
-		mop.getType(exe.getKModule())/8 + 
-			op.first->getOffset(addr) <= op.second->size)
+	if (!state.stlb.get(state, addr, op))
+		goto slowpath;
+
+	/* the objectstate pointer may be NULL if there
+	 * was an address space generation update */
+	if (op.second == NULL) {
+		/* MO is still valid though.. */
+		op.second = state.addressSpace.findObject(op.first);
+	}
+
+	/* XXX: I don't like calling this range check here */
+	if ((mop.getType(exe.getKModule())/8 + op.first->getOffset(addr))
+		<= op.second->size)
 	{
 		cmmu->commitMOP(state, mop, op, addr);
 		return true;
 	}
 
 	/* slow path into the runtime */
+slowpath:
 	state.isEnableMMU = false;
 	return SymMMU::exeMemOp(state, mop);
 }
@@ -124,7 +134,7 @@ void SoftConcreteMMU::tlbInsert(
 		return;
 	}
 	
-	st.stlb.put(st.addressSpace.getGeneration(), op);
+	st.stlb.put(st, op);
 }
 
 void SoftConcreteMMU::tlbInvalidate(
