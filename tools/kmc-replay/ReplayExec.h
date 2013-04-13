@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include "vexexec.h"
 
-class SyscallsKTest;
+class Syscalls;
 
 namespace klee
 {
@@ -17,7 +17,6 @@ class ReplayExec : public VexExec
 public:
 	virtual ~ReplayExec();
 
-	void setSyscallsKTest(SyscallsKTest* in_skt);
 	void setCrumbs(klee::Crumbs* in_c);
 	ReplayExec(Guest* gs, VexXlate* vx = NULL);
 
@@ -40,7 +39,6 @@ private:
 	void		verifyOrPanic(void);
 	void		dumpRegBuf(const uint8_t*);
 
-	SyscallsKTest	*skt;		/* destroyed by superclass dtor */
 	bool		has_reglog;
 	bool		ign_reglog;
 	klee::Crumbs	*crumbs;	/* not owner */

@@ -144,7 +144,7 @@ extern "C" {
 	and may have peculiar semantics. */
 	void klee_assume(uint64_t condition);
 
-
+	void* kmc_sc_regs(void*);
 #define KLEE_CMP_OP_EQ	0
 #define KLEE_CMP_OP_NE	1
 #define KLEE_CMP_OP_UGT	2

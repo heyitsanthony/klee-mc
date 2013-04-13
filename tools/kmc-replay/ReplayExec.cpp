@@ -21,7 +21,6 @@ extern "C"
 
 ReplayExec::ReplayExec(Guest* gs, VexXlate* vx)
 : VexExec(gs, vx)
-, skt(NULL)
 , has_reglog(false)
 , ign_reglog(getenv("KMC_REPLAY_IGNLOG") != NULL)
 , crumbs(NULL)
@@ -29,17 +28,8 @@ ReplayExec::ReplayExec(Guest* gs, VexXlate* vx)
 , print_exec(getenv("KMC_DUMP_EXE") != NULL)
 { }
 
-void ReplayExec::setSyscallsKTest(SyscallsKTest* in_skt)
-{
-	delete sc;
-	skt = in_skt;
-	sc = skt;
-}
-
 unsigned ReplayExec::getCPUSize(void)
-{
-	return gs->getCPUState()->getStateSize();
-}
+{ return gs->getCPUState()->getStateSize(); }
 
 void ReplayExec::dumpRegBuf(const uint8_t* buf)
 {
@@ -56,8 +46,8 @@ void ReplayExec::doSysCall(VexSB* sb)
 	SyscallParams	sp(gs->getSyscallParams());
 	uint64_t	ret;
 
-	ret = skt->apply(sp);
-	if (skt->isExit()) {
+	ret = sc->apply(sp);
+	if (sc->isExit()) {
 		setExit(ret);
 		return;
 	}

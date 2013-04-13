@@ -22,9 +22,6 @@
 
 #include "SyscallsKTest.h"
 
-#define KREPLAY_NOTE	"[kmc-replay] "
-#define KREPLAY_SC	"[kmc-sc] "
-
 using namespace klee;
 
 extern "C"
@@ -513,19 +510,21 @@ uint64_t SyscallsKTest::getRet(void) const
 }
 
 bool SyscallsKTest::copyInRegMemObj(void)
+{ return copyInRegMemObj(guest, kts); }
+
+bool SyscallsKTest::copyInRegMemObj(Guest* gs, KTestStream* kts)
 {
 	char			*partial_reg_buf;
 	void			*state_data;
 	unsigned int		reg_sz;
 	Arch::Arch		arch;
 
-	reg_sz = guest->getCPUState()->getStateSize();
-	if ((partial_reg_buf = kts->feedObjData(reg_sz)) == NULL) {
+	reg_sz = gs->getCPUState()->getStateSize();
+	if ((partial_reg_buf = kts->feedObjData(reg_sz)) == NULL)
 		return false;
-	}
 
-	state_data = guest->getCPUState()->getStateData();
-	arch = guest->getArch();
+	state_data = gs->getCPUState()->getStateData();
+	arch = gs->getArch();
 	if (arch == Arch::X86_64) {
 		VexGuestAMD64State	*partial_cpu, *guest_cpu;
 

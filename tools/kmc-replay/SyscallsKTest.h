@@ -4,6 +4,9 @@
 #include <stdio.h>
 #include "syscall/syscalls.h"
 
+#define KREPLAY_NOTE	"[kmc-replay] "
+#define KREPLAY_SC	"[kmc-sc] "
+
 namespace klee
 {
 class Crumbs;
@@ -18,6 +21,9 @@ public:
 	static SyscallsKTest* create(Guest*, klee::KTestStream*, klee::Crumbs*);
 	virtual ~SyscallsKTest();
 	virtual uint64_t apply(SyscallParams& sp);
+
+
+	static bool copyInRegMemObj(Guest* gs, klee::KTestStream*);
 private:
 	SyscallsKTest(
 		Guest* in_g,

@@ -1,6 +1,7 @@
 #include "klee/klee.h"
 
-#define AVG(a,b)         (a & b) + ((a ^ b) >> 1)
+/* tremilux memorial AVG macro */
+#define AVG(a,b)	(((a) & (b)) + (((a) ^ (b)) >> 1))
 
 uint64_t klee_min_value(uint64_t expr)
 {

@@ -6,6 +6,7 @@
 #include "klee/Internal/ADT/KTSFuzz.h"
 #include "klee/Internal/Support/Watchdog.h"
 #include "static/Sugar.h"
+#include "SyscallsModel.h"
 
 /* vexllvm stuff */
 #include "ReplayExec.h"
@@ -88,16 +89,15 @@ static KTestStream* setupKTestStream(
 
 	assert (kts != NULL && "Expects ktest");
 
+	if (kts->getKTest()->symArgvs)
+		loadSymArgs(gs, kts);
+
 	uc_func = getenv("UC_FUNC");
 	uc_state = NULL;
 	if (uc_func != NULL) {
 		uc_state = UCState::init(gs, uc_func, kts);
 		assert (uc_state != NULL);
 	}
-
-
-	if (kts->getKTest()->symArgvs)
-		loadSymArgs(gs, kts);
 
 	return kts;
 }
@@ -125,46 +125,71 @@ static void run_uc(ReplayExec* re, UCState* uc_state)
 	delete uc_state;
 }
 
-static int doReplay(
-	const char* dirname,
-	unsigned test_num,
-	const char* guestdir = NULL)
+struct ReplayInfo
+{
+	const char	*dirname;
+	unsigned	test_num;
+	const char	*guestdir; /* = NULL */
+};
+
+Syscalls* getSyscalls(
+	Guest*	gs,
+	ReplayExec* re,
+	const struct ReplayInfo& ri,
+	UCState*	&uc_state)
+{
+	KTestStream	*kts;
+	const char	*model_lib;
+
+	kts = setupKTestStream(ri.dirname, ri.test_num, gs, uc_state);
+	model_lib = getenv("KMC_MODEL");
+
+	/* no model library given, use crumbs file */
+	if (model_lib == NULL) {
+		Crumbs		*crumbs;
+		char		fname_crumbs[256];
+
+		snprintf(	fname_crumbs, 256,
+				"%s/test%06d.crumbs.gz", 
+				ri.dirname, ri.test_num);
+		crumbs = Crumbs::create(fname_crumbs);
+		if (crumbs == NULL) {
+			fprintf(
+				stderr,
+				"[kmc] No breadcrumb file at %s. Faking it.\n",
+				fname_crumbs);
+			crumbs = Crumbs::createEmpty();
+		}
+		assert (crumbs != NULL && "Expects crumbs");
+
+		re->setCrumbs(crumbs);
+		return SyscallsKTest::create(gs, kts, crumbs);
+	}
+
+	return new SyscallsModel(model_lib, kts, gs);
+}
+
+
+static int doReplay(const struct ReplayInfo& ri)
 {
 	Guest		*gs;
 	ReplayExec	*re;
-	SyscallsKTest	*skt;
-	KTestStream	*kts;
-	Crumbs		*crumbs;
-	char		fname_crumbs[256];
+	Syscalls	*skt;
 	UCState		*uc_state;
 
-	gs = Guest::load(guestdir);
+	gs = Guest::load(ri.guestdir);
 	assert (gs != NULL && "Expects a guest snapshot");
-
-	snprintf(fname_crumbs, 256, "%s/test%06d.crumbs.gz", dirname, test_num);
-	crumbs = Crumbs::create(fname_crumbs);
-	if (crumbs == NULL) {
-		fprintf(
-			stderr,
-			"[kmc] No breadcrumb file at %s. Faking it.\n",
-			fname_crumbs);
-		crumbs = Crumbs::createEmpty();
-	}
-	assert (crumbs != NULL && "Expects crumbs");
 
 	re = VexExec::create<ReplayExec, Guest>(gs);
 	assert (theGenLLVM);
 
-	kts = setupKTestStream(dirname, test_num, gs, uc_state);
-
 	std::cerr << "[kmc-replay] Forcing fake vsyspage reads\n";
 	theGenLLVM->setFakeSysReads();
 
-	re->setCrumbs(crumbs);
+	skt = getSyscalls(gs, re, ri, uc_state);
+	assert (skt != NULL && "Couldn't create syscall harness");
 
-	skt = SyscallsKTest::create(gs, kts, crumbs);
-	assert (skt != NULL && "Couldn't create ktest harness");
-	re->setSyscallsKTest(skt);
+	re->setSyscalls(skt);
 
 	if (uc_state != NULL)
 		run_uc(re, uc_state);
@@ -179,9 +204,9 @@ static int doReplay(
 
 int main(int argc, char* argv[])
 {
-	unsigned	test_num;
-	const char	*dirname, *xchk_guest, *guest_path;
-	int		err;
+	struct ReplayInfo	ri;
+	const char		*xchk_guest;
+	int			err;
 	Watchdog	wd(
 		getenv("KMC_TIMEOUT") != NULL
 			? atoi(getenv("KMC_TIMEOUT"))
@@ -190,23 +215,25 @@ int main(int argc, char* argv[])
 	llvm::InitializeNativeTarget();
 
 	if (argc < 2) {
-		fprintf(stderr, "Usage: %s testnum [testdir [guestdir]]\n", argv[0]);
+		fprintf(stderr,
+			"Usage: %s testnum [testdir [guestdir]]\n",
+			argv[0]);
 		return -1;
 	}
 
-	test_num = atoi(argv[1]);
-	fprintf(stderr, "Replay: test #%d\n", test_num);
+	ri.test_num = atoi(argv[1]);
+	fprintf(stderr, "Replay: test #%d\n", ri.test_num);
 
-	dirname = (argc >= 3) ? argv[2] : "klee-last";
-	guest_path = (argc >= 4) ? argv[3] : NULL;
+	ri.dirname = (argc >= 3) ? argv[2] : "klee-last";
+	ri.guestdir = (argc >= 4) ? argv[3] : NULL;
 
 	xchk_guest = getenv("XCHK_GUEST");
 	if (xchk_guest != NULL) {
 		std::cerr << "XCHK WITH GUEST: " << xchk_guest << '\n';
 		setenv("KMC_REPLAY_IGNLOG", "true", 1);
-		guest_path = xchk_guest;
+		ri.guestdir = xchk_guest;
 	}
 
-	err = doReplay(dirname, test_num, guest_path);
+	err = doReplay(ri);
 	return err;
 }
