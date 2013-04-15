@@ -1,3 +1,5 @@
+import json
+
 # represents a single stat entry from run.stats
 class KleeStat:
 	def __init__(self, ln):
@@ -48,7 +50,4 @@ class KleeStat:
 		print "</kstats>"
 
 	def dumpJSON(self):
-		print "{"
-		for k in self.drec.keys():
-			print  k + " : " + str(self.drec[k]) +  ","
-		print "}"
+		print json.dumps(self.drec)
