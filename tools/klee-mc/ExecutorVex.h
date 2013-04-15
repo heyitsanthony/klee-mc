@@ -92,12 +92,6 @@ protected:
 		ExecutionState& state, KInstruction* ki);
 	virtual void jumpToKFunc(ExecutionState& state, KFunction* kf);
 
-
-	virtual void printStateErrorMessage(
-		ExecutionState& state,
-		const std::string& message,
-		std::ostream& os);
-
 	virtual void handleXfer(ExecutionState& state, KInstruction *ki);
 	void updateGuestRegs(ExecutionState& s);
 

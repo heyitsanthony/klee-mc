@@ -1,4 +1,6 @@
 #include <llvm/Support/CommandLine.h>
+#include <llvm/Support/raw_os_ostream.h>
+
 #include "klee/Internal/Module/InstructionInfoTable.h"
 #include "klee/Replay.h"
 #include "klee/Common.h"
@@ -161,6 +163,13 @@ void TermError::printStateErrorMessage(
 
 	os << "Stack: \n";
 	getExe()->printStackTrace(state, os);
+
+	if (state.prevPC && state.prevPC->getInst()) {
+		raw_os_ostream	ros(os);
+		ros << "problem PC:\n";
+		ros << *(state.prevPC->getInst());
+		ros << "\n";
+	}
 }
 
 TermError::~TermError(void) {}

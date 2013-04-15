@@ -837,27 +837,6 @@ void ExecutorVex::printStackTrace(
 	}
 }
 
-void ExecutorVex::printStateErrorMessage(
-	ExecutionState& state,
-	const std::string& message,
-	std::ostream& os)
-{
-	/* TODO: get line information for state.prevPC */
-	klee_message("ERROR: %s", message.c_str());
-
-	os << "Error: " << message << "\n";
-
-	os << "\nStack:\n";
-	printStackTrace(state, os);
-
-	if (state.prevPC && state.prevPC->getInst()) {
-		raw_os_ostream	ros(os);
-		ros << "problem PC:\n";
-		ros << *(state.prevPC->getInst());
-		ros << "\n";
-	}
-}
-
 ref<Expr> ExecutorVex::getCallArg(ExecutionState& state, unsigned int n) const
 {
 	const ObjectState	*regobj;
