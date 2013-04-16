@@ -17,6 +17,7 @@ class FileReconstructor;
 
 class SyscallsKTest : public Syscalls
 {
+friend class SyscallsKTestPT;
 public:
 	static SyscallsKTest* create(Guest*, klee::KTestStream*, klee::Crumbs*);
 	virtual ~SyscallsKTest();
@@ -24,18 +25,25 @@ public:
 
 
 	static bool copyInRegMemObj(Guest* gs, klee::KTestStream*);
-private:
+protected:
+	virtual bool copyInRegMemObj(void);
+	virtual bool copyInMemObj(uint64_t user_addr, unsigned int sz);
+	virtual void setRet(uint64_t r);
+
 	SyscallsKTest(
 		Guest* in_g,
-		klee::KTestStream* ,
+		klee::KTestStream* kts,
 		klee::Crumbs* in_crumbs);
+
+	FileReconstructor	*file_recons;
+
+	klee::KTestStream	*kts;
+	klee::Crumbs		*crumbs;	// not owner
+private:
 
 	void badCopyBail(void);
 	void feedSyscallOp(SyscallParams& sp);
 
-	bool copyInRegMemObj(void);
-	bool copyInMemObj(uint64_t user_addr, unsigned int sz);
-	void setRet(uint64_t r);
 	uint64_t getRet(void) const;
 
 	int loadSyscallEntry(SyscallParams& sp);
@@ -43,13 +51,8 @@ private:
 	void sc_stat(SyscallParams& sp);
 	void sc_mmap(SyscallParams& sp);
 
-	klee::KTestStream	*kts;
 	unsigned int		sc_retired;
-
-	klee::Crumbs		*crumbs;	// not owner
 	struct bc_syscall	*bcs_crumb;
-
-	FileReconstructor	*file_recons;
 };
 
 #endif

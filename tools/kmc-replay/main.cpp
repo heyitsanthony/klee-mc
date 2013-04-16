@@ -12,6 +12,10 @@
 #include "ReplayExec.h"
 #include "genllvm.h"
 #include "guest.h"
+#include "ptimgchk.h"
+#include "guestptimg.h"
+#include "vexexecchk.h"
+#include "ChkExec.h"
 
 /* and all the rest */
 #include "UCState.h"
@@ -102,18 +106,18 @@ static KTestStream* setupKTestStream(
 	return kts;
 }
 
-static void run_uc(ReplayExec* re, UCState* uc_state)
+static void run_uc(VexExec* ve, UCState* uc_state)
 {
 	const char	*uc_save;
 
 	/* special case for UC: we're not guaranteed to exit, so we
 	 * need to hook in a special return point */
-	re->beginStepping();
-	while (re->stepVSB()) {
-		if (re->getNextAddr() == 0xdeadbeef) {
+	ve->beginStepping();
+	while (ve->stepVSB()) {
+		if (ve->getNextAddr() == 0xdeadbeef) {
 			std::cerr << "[kmc-replay] UC: Exited.\n";
 			if (getenv("VEXLLVM_DUMP_STATES") != 0)
-				re->getGuest()->print(std::cerr);
+				ve->getGuest()->print(std::cerr);
 			break;
 		}
 	}
@@ -134,7 +138,7 @@ struct ReplayInfo
 
 Syscalls* getSyscalls(
 	Guest*	gs,
-	ReplayExec* re,
+	VexExec* ve,
 	const struct ReplayInfo& ri,
 	UCState*	&uc_state)
 {
@@ -147,6 +151,7 @@ Syscalls* getSyscalls(
 	/* no model library given, use crumbs file */
 	if (model_lib == NULL) {
 		Crumbs		*crumbs;
+		ReplayExec	*re;
 		char		fname_crumbs[256];
 
 		snprintf(	fname_crumbs, 256,
@@ -162,7 +167,10 @@ Syscalls* getSyscalls(
 		}
 		assert (crumbs != NULL && "Expects crumbs");
 
-		re->setCrumbs(crumbs);
+		re = dynamic_cast<ReplayExec*>(ve);
+		if (re != NULL)
+			re->setCrumbs(crumbs);
+
 		return SyscallsKTest::create(gs, kts, crumbs);
 	}
 
@@ -173,30 +181,38 @@ Syscalls* getSyscalls(
 static int doReplay(const struct ReplayInfo& ri)
 {
 	Guest		*gs;
-	ReplayExec	*re;
+	VexExec		*ve;
 	Syscalls	*skt;
 	UCState		*uc_state;
 
 	gs = Guest::load(ri.guestdir);
 	assert (gs != NULL && "Expects a guest snapshot");
 
-	re = VexExec::create<ReplayExec, Guest>(gs);
+	if (getenv("KMC_PTRACE") != 0) {
+		PTImgChk	*gpt;
+		gpt = GuestPTImg::create<PTImgChk>(gs);
+		assert (gpt != NULL);
+		gs = gpt;
+		ve = VexExec::create<ChkExec, PTImgChk>(gpt);
+	} else
+		ve = VexExec::create<ReplayExec, Guest>(gs);
+
 	assert (theGenLLVM);
 
 	std::cerr << "[kmc-replay] Forcing fake vsyspage reads\n";
 	theGenLLVM->setFakeSysReads();
 
-	skt = getSyscalls(gs, re, ri, uc_state);
+	skt = getSyscalls(gs, ve, ri, uc_state);
 	assert (skt != NULL && "Couldn't create syscall harness");
 
-	re->setSyscalls(skt);
+	ve->setSyscalls(skt);
 
 	if (uc_state != NULL)
-		run_uc(re, uc_state);
+		run_uc(ve, uc_state);
 	else
-		re->run();
+		ve->run();
 
-	delete re;
+	delete ve;
 	delete gs;
 
 	return 0;

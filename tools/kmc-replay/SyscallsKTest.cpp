@@ -52,11 +52,11 @@ SyscallsKTest::SyscallsKTest(
 	KTestStream* in_kts,
 	Crumbs* in_crumbs)
 : Syscalls(in_g)
-, kts(in_kts)
-, sc_retired(0)
-, crumbs(in_crumbs)
-, bcs_crumb(NULL)
 , file_recons(NULL)
+, kts(in_kts)
+, crumbs(in_crumbs)
+, sc_retired(0)
+, bcs_crumb(NULL)
 {
 	if (getenv("KMC_RECONS_FILES") != NULL)
 		file_recons = new FileReconstructor();

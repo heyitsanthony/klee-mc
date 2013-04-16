@@ -36,6 +36,7 @@ Crumbs::Crumbs(const char* fname)
 : is(NULL)
 , crumbs_processed(0)
 , peekbuf(NULL)
+, path(fname)
 {
 	/* XXX: load on demand */
 	is = getFile(fname);

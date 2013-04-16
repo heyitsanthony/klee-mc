@@ -32,8 +32,9 @@ public:
 	bool hasType(unsigned int v) const;
 	unsigned int getNumProcessed(void) const { return crumbs_processed; }
 	static void freeCrumb(struct breadcrumb* bs);
-
 	static BCrumb *toBC(struct breadcrumb* bc);
+
+	Crumbs* copy(void) const { return create(path.c_str()); }
 protected:
 	Crumbs(const char* fname);
 private:
@@ -43,6 +44,7 @@ private:
 	std::set<unsigned int>		bc_types;
 	unsigned int			crumbs_processed;
 	struct breadcrumb		*peekbuf;
+	std::string			path;
 };
 
 class BCrumb

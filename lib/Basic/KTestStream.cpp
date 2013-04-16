@@ -46,8 +46,12 @@ char* KTestStream::feedObjData(unsigned int sz)
 
 KTestStream* KTestStream::create(const char* file)
 {
-	KTest	*kt = kTest_fromFile(file);
+	KTest		*kt = kTest_fromFile(file);
+	KTestStream	*kts;
 
 	if (kt == NULL) return NULL;
-	return new KTestStream(kt);
+
+	kts = new KTestStream(kt);
+	kts->fname = file;
+	return kts;
 }
