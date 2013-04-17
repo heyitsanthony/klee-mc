@@ -7,6 +7,8 @@
 #include "klee/Internal/Support/Watchdog.h"
 #include "static/Sugar.h"
 #include "SyscallsModel.h"
+#include "guestptmem.h"
+#include "guestmemdual.h"
 
 /* vexllvm stuff */
 #include "ReplayExec.h"
@@ -181,6 +183,7 @@ Syscalls* getSyscalls(
 static int doReplay(const struct ReplayInfo& ri)
 {
 	Guest		*gs;
+	GuestMem	*old_mem, *pt_mem = NULL, *dual_mem;
 	VexExec		*ve;
 	Syscalls	*skt;
 	UCState		*uc_state;
@@ -194,6 +197,12 @@ static int doReplay(const struct ReplayInfo& ri)
 		assert (gpt != NULL);
 		gs = gpt;
 		ve = VexExec::create<ChkExec, PTImgChk>(gpt);
+
+		old_mem = gpt->getMem();
+
+		pt_mem = new GuestPTMem(gpt, gpt->getPID());
+		dual_mem = new GuestMemDual(old_mem, pt_mem);
+		gpt->setMem(pt_mem);
 	} else
 		ve = VexExec::create<ReplayExec, Guest>(gs);
 
@@ -206,6 +215,12 @@ static int doReplay(const struct ReplayInfo& ri)
 	assert (skt != NULL && "Couldn't create syscall harness");
 
 	ve->setSyscalls(skt);
+
+	if (dual_mem) {
+		delete dual_mem;
+		delete pt_mem;
+		gs->setMem(old_mem);
+	}
 
 	if (uc_state != NULL)
 		run_uc(ve, uc_state);
