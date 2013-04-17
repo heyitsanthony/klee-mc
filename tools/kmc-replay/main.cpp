@@ -202,7 +202,7 @@ static int doReplay(const struct ReplayInfo& ri)
 
 		pt_mem = new GuestPTMem(gpt, gpt->getPID());
 		dual_mem = new GuestMemDual(old_mem, pt_mem);
-		gpt->setMem(pt_mem);
+		gpt->setMem(dual_mem);
 	} else
 		ve = VexExec::create<ReplayExec, Guest>(gs);
 
