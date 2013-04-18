@@ -62,7 +62,6 @@ const KTestObject* KTestStream::nextObject(void)
 	const KTestObject	*ret;
 	ret = peekObject();
 	idx++;
-	fprintf(stderr, "[KTestStream] next obj. idx=%d\n", idx);
 	return ret;
 }
 

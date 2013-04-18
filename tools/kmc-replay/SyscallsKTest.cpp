@@ -336,8 +336,6 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 		if (len > 10) len = 10;
 
 		feedSyscallOp(sp);
-		fprintf(stderr, "ADDR=%p LEN=%d ARG0=%p. ARG1=%p\n",
-			(void*)addr, (int)len, sp.getArgPtr(0), sp.getArgPtr(1));
 
 		if (addr != sp.getArg(0)) {
 			fprintf(stderr, "LOOOOOOOOOOOOOOOOL\n");

@@ -36,6 +36,10 @@ void ChkExec::doSysCall(VexSB* vsb)
 	std::cerr << "[ChkExec] Dispatching local.\n";
 	ret = sc->apply(sp);
 	if (sc->isExit()) {
+		std::cerr << "[ChkExec] Fixups: " 
+			<< static_cast<PTImgChk*>(gs)->getNumFixups()
+			<< '\n';
+
 		setExit(ret);
 		return;
 	}
