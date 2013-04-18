@@ -34,15 +34,17 @@ bool SyscallsKTestPT::copyInRegMemObj(void)
 {
 	char			*partial_reg_buf;
 	unsigned int		reg_sz;
+	bool			ok;
 
 	reg_sz = guest->getCPUState()->getStateSize();
 	partial_reg_buf = kts->feedObjData(reg_sz);
-	if (partial_reg_buf != NULL) delete partial_reg_buf;
+	ok = partial_reg_buf != NULL;
+	if (ok) delete partial_reg_buf;
 
 	/* guest registers should already have this copied in... */
 	static_cast<PTImgChk*>(guest)->pushRegisters();
-	ret_set = true;
-	return true;
+	ret_set |= ok;
+	return ok;
 }
 
 void SyscallsKTestPT::setRet(uint64_t r)

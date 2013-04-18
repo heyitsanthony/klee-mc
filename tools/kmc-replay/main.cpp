@@ -183,7 +183,7 @@ Syscalls* getSyscalls(
 static int doReplay(const struct ReplayInfo& ri)
 {
 	Guest		*gs;
-	GuestMem	*old_mem, *pt_mem = NULL, *dual_mem;
+	GuestMem	*old_mem, *pt_mem = NULL, *dual_mem = NULL;
 	VexExec		*ve;
 	Syscalls	*skt;
 	UCState		*uc_state;
@@ -202,7 +202,7 @@ static int doReplay(const struct ReplayInfo& ri)
 
 		pt_mem = new GuestPTMem(gpt, gpt->getPID());
 		dual_mem = new GuestMemDual(old_mem, pt_mem);
-		gpt->setMem(dual_mem);
+		gs->setMem(dual_mem);
 	} else
 		ve = VexExec::create<ReplayExec, Guest>(gs);
 

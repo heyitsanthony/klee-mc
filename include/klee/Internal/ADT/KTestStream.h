@@ -11,13 +11,7 @@ public:
 	virtual ~KTestStream(void);
 	static KTestStream* create(const char* file);
 
-	const KTestObject* nextObject(void)
-	{
-		const KTestObject	*ret;
-		ret = peekObject();
-		idx++;
-		return ret;
-	}
+	const KTestObject* nextObject(void);
 
 	const KTestObject* peekObject(void) const
 	{
@@ -29,7 +23,7 @@ public:
 	char* feedObjData(unsigned int len = ~0U);
 
 	const std::string& getPath(void) const { return fname; }
-	KTestStream* copy(void) const { return create(fname.c_str()); }
+	KTestStream* copy(void) const;
 
 protected:
 	KTestStream(KTest* kt);

@@ -53,6 +53,8 @@ private:
 
 	unsigned int		sc_retired;
 	struct bc_syscall	*bcs_crumb;
+
+	uint64_t		last_brk;
 };
 
 #endif

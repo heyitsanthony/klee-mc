@@ -64,7 +64,8 @@ bool ForksPathReplay::forkFollowReplay(ExecutionState& es, struct ForkInfo& fi)
 		ss << i;
 		first = false;
 	}
-	ss << ", seqIdx=" << brSeqIdx << ")\n";
+	ss	<< ", seqIdx=" << brSeqIdx << "  / " 
+		<< es.getBrTracker().size() << ")\n";
 
 	fi.dump(ss);
 

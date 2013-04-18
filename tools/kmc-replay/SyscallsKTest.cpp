@@ -57,6 +57,7 @@ SyscallsKTest::SyscallsKTest(
 , crumbs(in_crumbs)
 , sc_retired(0)
 , bcs_crumb(NULL)
+, last_brk(0)
 {
 	if (getenv("KMC_RECONS_FILES") != NULL)
 		file_recons = new FileReconstructor();
@@ -217,9 +218,9 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 		if (sp.getArgPtr(4) != NULL)
 			feedSyscallOp(sp);
 		if (sp.getArgPtr(5) != NULL) {
-			socklen_t	*sl;
-			sl = (socklen_t*)sp.getArgPtr(5);
-			*sl = sizeof(struct sockaddr_in);
+			guest->getMem()->writeNative(
+				guest_ptr(sp.getArg(5)),
+				sizeof(struct sockaddr_in));
 		}
 		setRet(sp.getArg(2));
 		break;
@@ -229,9 +230,9 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 		break;
 
 	case SYS_brk: {
-		static uint64_t	last_brk = 0;
 		uint64_t	new_brk;
-		void		*mmap_ret;
+		int		mmap_ret;
+		guest_ptr	ret;
 
 		new_brk = getRet();
 		if (last_brk == 0) {
@@ -248,12 +249,14 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 			break;
 
 		/* extend program break */
-		mmap_ret = mmap(
-			(void*)last_brk, new_brk - last_brk,
+		mmap_ret = guest->getMem()->mmap(
+			ret,
+			guest_ptr(last_brk),
+			new_brk - last_brk,
 			PROT_READ | PROT_WRITE,
 			MAP_PRIVATE | MAP_ANONYMOUS,
 			-1, 0);
-		assert (mmap_ret == (void*)last_brk);
+		assert ((void*)ret.o == (void*)last_brk);
 		last_brk = new_brk;
 		break;
 	}

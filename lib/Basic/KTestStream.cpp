@@ -23,13 +23,13 @@ char* KTestStream::feedObjData(unsigned int sz)
 	cur_obj = nextObject();
 	if (cur_obj == NULL) {
 		/* request overflow */
-		fprintf(stderr, "KTestStream: OF\n");
+		fprintf(stderr, "[KTestStream] OF\n");
 		return NULL;
 	}
 
 	if (cur_obj->numBytes != sz) {
 		/* out of sync-- how to handle? */
-		fprintf(stderr, "KTestStream: OOSYNC: Expected: %d. Got: %d\n",
+		fprintf(stderr, "[KTestStream] OOSYNC: Expected: %d. Got: %d\n",
 			sz,
 			cur_obj->numBytes);
 
@@ -53,5 +53,23 @@ KTestStream* KTestStream::create(const char* file)
 
 	kts = new KTestStream(kt);
 	kts->fname = file;
+	return kts;
+}
+
+
+const KTestObject* KTestStream::nextObject(void)
+{
+	const KTestObject	*ret;
+	ret = peekObject();
+	idx++;
+	fprintf(stderr, "[KTestStream] next obj. idx=%d\n", idx);
+	return ret;
+}
+
+KTestStream* KTestStream::copy(void) const
+{
+	KTestStream	*kts;
+	kts = create(fname.c_str());
+	kts->idx = idx;
 	return kts;
 }
