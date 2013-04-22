@@ -17,6 +17,7 @@ protected:
 private:
 	SyscallsKTestPT		*sc_ptkt;
 	bool			print_exec;
+	unsigned		max_fixups;
 };
 
 #endif

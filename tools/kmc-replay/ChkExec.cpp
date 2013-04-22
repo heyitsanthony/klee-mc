@@ -8,10 +8,15 @@
 
 #include <iostream>
 
+#define DEFAULT_FIXUPS	1000
+
 ChkExec::ChkExec(PTImgChk* gs, VexXlate* vx)
 : VexExecChk(gs, vx = NULL)
 , sc_ptkt(NULL)
 , print_exec(getenv("KMC_DUMP_EXE") != NULL)
+, max_fixups(getenv("KMC_MAX_FIXUPS") != NULL
+	? atoi(getenv("KMC_MAX_FIXUPS"))
+	: DEFAULT_FIXUPS)
 {}
 
 ChkExec::~ChkExec() { if (sc_ptkt != NULL) delete sc_ptkt; }
@@ -23,6 +28,19 @@ guest_ptr ChkExec::doVexSB(VexSB* sb)
 			(void*)sb->getGuestAddr().o,
 			(void*)sb->getEndAddr().o,
 			gs->getName(sb->getGuestAddr()).c_str());
+	}
+
+	if (max_fixups) {
+		unsigned	f_c;
+		f_c = static_cast<PTImgChk*>(gs)->getNumFixups();
+		if (f_c > max_fixups) {
+			std::cerr
+				<< "[ChkExec] Maximum fixups ("
+				<< max_fixups
+				<< ") exceeded. Fixups="
+				<< f_c << '\n';
+			exit(1);
+		}
 	}
 
 	return VexExecChk::doVexSB(sb);
