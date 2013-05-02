@@ -13,6 +13,7 @@ using namespace klee;
 extern "C"
 {
 #include <valgrind/libvex_guest_amd64.h>
+#include <valgrind/libvex_guest_x86.h>
 }
 
 /* XXX HACK HACK HACK. See below */
@@ -207,6 +208,14 @@ done:
 
 uint8_t* ReplayExec::regChk(const struct regchk_t& rc)
 {
+	if (getGuest()->getArch() == Arch::I386) {
+		VexGuestX86State	*v = (VexGuestX86State*)rc.sym_mask;
+		/* special hack to ignore ldt and gdt pointers.
+		 * kind of stupid, but I'm on deadline for CCS */
+		v->guest_LDT = 0;
+		v->guest_GDT = 0;
+	}
+
 	for (unsigned int i = 0; i < rc.reg_sz; i++) {
 		uint8_t*	new_reg_ctx;
 
