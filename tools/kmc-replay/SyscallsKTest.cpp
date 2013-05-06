@@ -324,8 +324,15 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 	case SYS_poll: {
 		struct pollfd*	fds = (struct pollfd*)(sp.getArg(0));
 		unsigned int	nfds = sp.getArg(1);
-		for (unsigned int i = 0; i < nfds; i++)
-			fds[i].revents = fds[i].events;
+		for (unsigned int i = 0; i < nfds; i++) {
+			uint16_t	e;
+
+			e = guest->getMem()->read16(
+				guest_ptr((uintptr_t)&fds[i].events));
+			guest->getMem()->write16(
+				guest_ptr((uintptr_t)&fds[i].revents),
+				e);
+		}
 		break;
 	}
 
