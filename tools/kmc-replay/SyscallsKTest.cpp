@@ -127,11 +127,8 @@ int SyscallsKTest::loadSyscallEntry(SyscallParams& sp)
 
 	/* read in any objects written out */
 	/* note that thunked calls need to manage mem objects specially */
-	if (!bc_sc_is_thunk(bcs_crumb)) {
-		for (unsigned int i = 0; i < bcs_crumb->bcs_op_c; i++) {
-			feedSyscallOp(sp);
-		}
-	}
+	if (!bc_sc_is_thunk(bcs_crumb))
+		feedSyscallOpBCS(sp);
 
 	return bcs_crumb->bcs_xlate_sysnr;
 }
@@ -166,6 +163,13 @@ void SyscallsKTest::feedSyscallOp(SyscallParams& sp)
 		badCopyBail();
 
 	Crumbs::freeCrumb(&sop->sop_hdr);
+}
+
+
+void SyscallsKTest::feedSyscallOpBCS(SyscallParams& sp)
+{
+	for (unsigned int i = 0; i < bcs_crumb->bcs_op_c; i++)
+		feedSyscallOp(sp);
 }
 
 uint64_t SyscallsKTest::apply(SyscallParams& sp)
@@ -225,8 +229,7 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 		setRet(sp.getArg(2));
 		break;
 	case SYS_recvmsg:
-		feedSyscallOp(sp);
-		(((struct msghdr*)sp.getArg(1)))->msg_controllen = 0;
+		feedSyscallOpBCS(sp);
 		break;
 
 	case SYS_brk: {

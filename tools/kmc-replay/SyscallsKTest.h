@@ -43,6 +43,8 @@ private:
 
 	void badCopyBail(void);
 	void feedSyscallOp(SyscallParams& sp);
+	void feedSyscallOpBCS(SyscallParams& sp);
+
 
 	uint64_t getRet(void) const;
 

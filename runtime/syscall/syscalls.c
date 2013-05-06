@@ -754,6 +754,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 			sizeof(mhdr->msg_flags),
 			"recvmsg_flags");
 
+		/* TODO: controllen should be symbolic */
+
 		sc_ret_v_new(new_regs, mhdr->msg_iov[0].iov_len);
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
 	}
