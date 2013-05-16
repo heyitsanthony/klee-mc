@@ -1403,7 +1403,15 @@ void Executor::instExtractElement(ExecutionState& state, KInstruction* ki)
 	ref<Expr>	in_v(eval(ki, 0, state));
 	ref<Expr>	in_idx(eval(ki, 1, state));
 	ConstantExpr	*in_idx_ce = dynamic_cast<ConstantExpr*>(in_idx.get());
+
+	/* XXX: How to handle non-constant indexes? */
+	if (in_idx_ce == NULL) {
+		TERMINATE_EXEC(this, state, "non-const idx on extractElement");
+		klee_warning("Non-const on index for ExtractElement.");
+		return;
+	}
 	assert (in_idx_ce && "NON-CONSTANT EXTRACT ELEMENT IDX. PUKE");
+
 	uint64_t	idx = in_idx_ce->getZExtValue();
 
 	/* instruction has types of vectors embedded in its operands */
