@@ -1341,6 +1341,14 @@ void Executor::instInsertElement(ExecutionState& state, KInstruction* ki)
 	ref<Expr> in_idx = eval(ki, 2, state);
 
 	ConstantExpr* in_idx_ce = dynamic_cast<ConstantExpr*>(in_idx.get());
+
+	/* XXX: How to handle non-constant indexes? */
+	if (in_idx_ce == NULL) {
+		TERMINATE_EXEC(this, state, "non-const idx on insertElement");
+		klee_warning("Non-const on index for InsertElement.");
+		return;
+	}
+
 	assert (in_idx_ce && "NON-CONSTANT INSERT ELEMENT IDX. PUKE");
 	uint64_t idx = in_idx_ce->getZExtValue();
 
