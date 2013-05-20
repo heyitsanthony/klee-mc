@@ -32,6 +32,13 @@ fi
 
 fi
 
+repohash=`git log -1 | grep commit  | cut -f2 -d' '`
+binhash=`klee-mc 2>&1 | grep commit | cut -f2 -d':'`
+if [ "$repohash" != "$binhash" ]; then
+	rm tools/klee-mc/Release+Asserts/*.o
+fi
+
+
 make -j6 REQUIRES_RTTI=1
 if [ ! -z "$QUICK" ]; then
 	exit
