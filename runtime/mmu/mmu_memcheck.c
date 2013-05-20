@@ -24,12 +24,16 @@ struct heap_ent
 
 #define HEAP_BUCKETS	512
 #define PTR_TO_IDX(x)	((((uint64_t)x) >> 4) % HEAP_BUCKETS)
+#define HEAP_GRAN_BYTES	16	/* 16 byte granularity because of sse instructions */
+#define HEAP_FLAG_BITS	2
 #define HEAP_ENTER	in_heap |= 1;
 #define HEAP_LEAVE	in_heap &= ~1;
 
+/* two bits only!! */
 #define SH_FL_UNINIT		0
 #define SH_FL_ALLOC		1
 #define SH_FL_FREE		2
+#define SH_FL_UNDEF		3
 
 struct list		heap_l;
 struct shadow_info	heap_si;
@@ -38,7 +42,7 @@ static uint64_t shadow_get_range(uint64_t a, unsigned n)
 {
 	uint64_t	v = 0;
 	unsigned	i;
-	for (i = 0; i < n; i++)
+	for (i = 0; i < n; i += HEAP_GRAN_BYTES)
 		v |= shadow_get(&heap_si, a+i);
 	return v;
 }
@@ -111,6 +115,7 @@ void post__int_malloc(int64_t aux)
 	bound_r = shadow_get(&heap_si, (long)he->he_base + he->he_len);
 	shadow_put_range(&heap_si, (long)he->he_base, SH_FL_ALLOC, he->he_len);
 
+	/* guard boundaries */
 	if (bound_l == SH_FL_UNINIT)
 		shadow_put(
 			&heap_si,
@@ -165,7 +170,7 @@ void __hookpre___GI___libc_memalign(void* regfile)
 void mmu_init_memcheck(void)
 {
 	list_init(&heap_l, offsetof(struct heap_ent, he_li));
-	shadow_init(&heap_si, 1, 2, SH_FL_UNINIT);
+	shadow_init(&heap_si, HEAP_GRAN_BYTES, HEAP_FLAG_BITS, SH_FL_UNINIT);
 }
 
 #define MMU_LOADC(x,y)				\
