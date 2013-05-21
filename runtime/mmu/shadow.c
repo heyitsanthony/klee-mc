@@ -189,12 +189,13 @@ static struct shadow_page* shadow_new_page(struct shadow_info* si, uint64_t ptr)
 	return pg;
 }
 
-void shadow_put_range(
+void shadow_put_units_range(
 	struct shadow_info* si, uint64_t phys, uint64_t l,
 	unsigned units)
 {
 	unsigned i;
-	for(i = 0; i < units; i++) shadow_put(si, phys + si->si_gran*i, l);
+	for(i = 0; i < units; i++)
+		shadow_put(si, phys + si->si_gran*i, l);
 }
 
 void shadow_or_range(
@@ -276,6 +277,9 @@ static struct shadow_page* shadow_pg_get(struct shadow_info* si, uint64_t ptr)
 
 	get_pgbkt(&pb, ptr);
 	spb = &si->si_bucket[pb.pb_bidx];
+
+	if (spb->spb_pgs == NULL)
+		return NULL;
 
 	for (i = 0; i < spb->spb_pg_c; i++) {
 		if (spb->spb_pgs[i]->sp_pgnum == pb.pb_pgnum)

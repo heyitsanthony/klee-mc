@@ -24,16 +24,19 @@ struct heap_ent
 
 #define HEAP_BUCKETS	512
 #define PTR_TO_IDX(x)	((((uint64_t)x) >> 4) % HEAP_BUCKETS)
-#define HEAP_GRAN_BYTES	16	/* 16 byte granularity because of sse instructions */
+#define HEAP_GRAN_BYTES	16	/* 16 byte chunks because of sse instructions */
 #define HEAP_FLAG_BITS	2
 #define HEAP_ENTER	in_heap |= 1;
 #define HEAP_LEAVE	in_heap &= ~1;
+
+#define ROUND_BYTES2UNITS(x)	((((x) + HEAP_GRAN_BYTES-1)/HEAP_GRAN_BYTES))
+#define NEXT_CHUNK(x)		HEAP_GRAN_BYTES*ROUND_BYTES2UNITS(x)
 
 /* two bits only!! */
 #define SH_FL_UNINIT		0
 #define SH_FL_ALLOC		1
 #define SH_FL_FREE		2
-#define SH_FL_UNDEF		3
+#define SH_FL_UNDEF		3	/* don't use or get_range breaks */
 
 struct list		heap_l;
 struct shadow_info	heap_si;
@@ -72,7 +75,11 @@ void post_int_free(int64_t retval)
 	klee_tlb_invalidate(he->he_base, 4096);
 
 	klee_print_expr("[memcheck] freed bytes", he->he_len);
-	shadow_put_range(&heap_si, (long)he->he_base, SH_FL_FREE, he->he_len);
+	shadow_put_units_range(
+		&heap_si,
+		(long)he->he_base,
+		SH_FL_FREE,
+		ROUND_BYTES2UNITS(he->he_len));
 	free(he);
 }
 
@@ -85,7 +92,7 @@ void __hookpre___GI___libc_free(void* regfile)
 	ptr = GET_ARG0_PTR(regfile);
 	klee_print_expr("[memcheck] freeing", (long)ptr);
 
-	/* restore header boundary */
+	/* disable header boundary so free doesn't cause an error */
 	shadow_put(&heap_si, (long)ptr-1, SH_FL_UNINIT);
 	klee_hook_return(1, &post_int_free, GET_ARG0(regfile));
 }
@@ -113,7 +120,11 @@ void post__int_malloc(int64_t aux)
 
 	bound_l = shadow_get(&heap_si, (long)he->he_base - 1);
 	bound_r = shadow_get(&heap_si, (long)he->he_base + he->he_len);
-	shadow_put_range(&heap_si, (long)he->he_base, SH_FL_ALLOC, he->he_len);
+	shadow_put_units_range(
+		&heap_si,
+		(long)he->he_base,
+		SH_FL_ALLOC,
+		ROUND_BYTES2UNITS(he->he_len));
 
 	/* guard boundaries */
 	if (bound_l == SH_FL_UNINIT)
@@ -125,7 +136,7 @@ void post__int_malloc(int64_t aux)
 	if (bound_r == SH_FL_UNINIT)
 		shadow_put(
 			&heap_si,
-			(long)he->he_base + he->he_len,
+			NEXT_CHUNK((long)he->he_base + he->he_len),
 			SH_FL_FREE);
 	
 	klee_print_expr("[memcheck] malloc", (long)he->he_base);
@@ -153,7 +164,8 @@ void __hookpre___calloc(void* regfile)
 {
 	HEAP_ENTER
 	klee_print_expr("[memcheck] calloc enter", GET_ARG1(regfile));
-	klee_hook_return(1, &post__int_malloc, GET_ARG0(regfile) * GET_ARG1(regfile));
+	klee_hook_return(
+		1, &post__int_malloc, GET_ARG0(regfile) * GET_ARG1(regfile));
 }
 
 void __hookpre___GI___libc_memalign(void* regfile)
@@ -178,20 +190,24 @@ y mmu_load_##x##_memcheckc(void* addr)		\
 {						\
 if (!shadow_pg_used(&heap_si, (uint64_t)addr))	\
 	return mmu_load_##x##_cnulltlb(addr);	\
-if (!in_heap && (shadow_get_range((uint64_t)addr, x/8) & SH_FL_FREE))		\
+if (!in_heap && (shadow_get_range((uint64_t)addr, x/8) & SH_FL_FREE))	\
 	klee_uerror("Loading from free const pointer", "heap.err");	\
 return mmu_load_##x##_cnull(addr); }
 
-#define MMU_STOREC(x,y)			\
-void mmu_store_##x##_memcheckc(void* addr, y v)	\
-{	\
+
+#define MMU_STOREC(x,y)					\
+void mmu_store_##x##_memcheckc(void* addr, y v)		\
+{							\
 if (!shadow_pg_used(&heap_si, (uint64_t)addr)) {	\
 	mmu_store_##x##_cnulltlb(addr, v);		\
-	return;	\
-}	\
-if (!in_heap && (shadow_get_range((uint64_t)addr, x/8) & SH_FL_FREE))		\
+	return;						\
+}							\
+if (!in_heap && (shadow_get_range((uint64_t)addr, x/8) & SH_FL_FREE)) {	\
+	klee_print_expr("Bad store ptr", addr);				\
 	klee_uerror("Storing to free const pointer", "heap.err");	\
+}									\
 mmu_store_##x##_cnulltlb(addr, v); }
+
 
 #define MMU_LOAD(x,y)			\
 y mmu_load_##x##_memcheck(void* addr)	\

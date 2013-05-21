@@ -42,7 +42,7 @@ int shadow_init(
 void shadow_fini(struct shadow_info* si);
 void shadow_put(struct shadow_info* si, uint64_t phys, uint64_t l);
 void shadow_put_large(struct shadow_info* si, uint64_t phys, const void* ptr);
-void shadow_put_range(
+void shadow_put_units_range(
 	struct shadow_info* si, uint64_t phys, uint64_t l, unsigned units);
 
 void* shadow_next_pg(struct shadow_info* si, void* last_addr);
