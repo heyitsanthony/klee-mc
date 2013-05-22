@@ -14,7 +14,6 @@ static int free_c = 0;
 static uint8_t in_sym_mmu = 0;
 static uint8_t in_heap = 0;
 
-
 struct heap_ent
 {
 	void		*he_base;
@@ -26,8 +25,19 @@ struct heap_ent
 #define PTR_TO_IDX(x)	((((uint64_t)x) >> 4) % HEAP_BUCKETS)
 #define HEAP_GRAN_BYTES	16	/* 16 byte chunks because of sse instructions */
 #define HEAP_FLAG_BITS	2
+
+// used to track non-reentrant allocation functions which modify
+// reserved data
 #define HEAP_ENTER	in_heap |= 1;
 #define HEAP_LEAVE	in_heap &= ~1;
+
+// there's some funny business with the way malloc is optimized--
+// sometimes I see two enters followed by only one exit. It's possible that
+// there's a goto to the start of the function which is causing it to think
+// there are two calls instead of one call and a jump. Fix?
+//#define HEAP_ENTER	in_heap++;
+//#define HEAP_LEAVE	in_heap--;
+
 
 #define ROUND_BYTES2UNITS(x)	((((x) + HEAP_GRAN_BYTES-1)/HEAP_GRAN_BYTES))
 #define NEXT_CHUNK(x)		HEAP_GRAN_BYTES*ROUND_BYTES2UNITS(x)
@@ -87,14 +97,32 @@ void __hookpre___GI___libc_free(void* regfile)
 {
 	void	*ptr;
 
+	ptr = GET_ARG0_PTR(regfile);
+
+	/* ignore free(NULL)s-- nop */
+	if (ptr == NULL) 
+		return;
+
 	HEAP_ENTER
 
-	ptr = GET_ARG0_PTR(regfile);
+
 	klee_print_expr("[memcheck] freeing", (long)ptr);
 
 	/* disable header boundary so free doesn't cause an error */
 	shadow_put(&heap_si, (long)ptr-1, SH_FL_UNINIT);
 	klee_hook_return(1, &post_int_free, GET_ARG0(regfile));
+}
+
+static struct heap_ent* add_heap_ent(void* base, unsigned len)
+{
+	struct heap_ent		*he;
+
+	he = malloc(sizeof(*he));
+	he->he_len = len;
+	he->he_base = base;
+	list_add_head(&heap_l, &he->he_li);
+
+	return he;
 }
 
 void post__int_malloc(int64_t aux)
@@ -111,15 +139,19 @@ void post__int_malloc(int64_t aux)
 	if (!GET_RET(regs))
 		goto done;
 
-	he = malloc(sizeof(*he));
-	he->he_len = aux;
-	he->he_base = (void*)GET_RET(regs);
-	list_add_head(&heap_l, &he->he_li);
+	he = add_heap_ent((void*)GET_RET(regs), aux);
 
 	klee_tlb_invalidate(he->he_base, 4096);
 
 	bound_l = shadow_get(&heap_si, (long)he->he_base - 1);
-	bound_r = shadow_get(&heap_si, (long)he->he_base + he->he_len);
+	bound_r = shadow_get(&heap_si, NEXT_CHUNK((long)he->he_base + he->he_len));
+
+#if 0
+	/* TODO: scan for overlapping segments */
+	int n = shadow_get_range((long)he->he_base, he->he_len);
+	klee_print_expr("[memcheck] flag", n);
+#endif
+
 	shadow_put_units_range(
 		&heap_si,
 		(long)he->he_base,
@@ -146,23 +178,23 @@ done:
 	HEAP_LEAVE
 }
 
+/* reserved data manipulation only happens once int_malloc is called */
+void __hookpre__int_malloc(void* regfile) { HEAP_ENTER }
+
 void __hookpre___GI___libc_malloc(void* regfile)
 {
-	HEAP_ENTER
 	klee_print_expr("[memcheck] malloc enter", GET_ARG0(regfile));
 	klee_hook_return(1, &post__int_malloc, GET_ARG0(regfile));
 }
 
 void __hookpre___GI___libc_realloc(void* regfile)
 {
-	HEAP_ENTER
 	klee_print_expr("[memcheck] realloc enter", GET_ARG1(regfile));
 	klee_hook_return(1, &post__int_malloc, GET_ARG1(regfile));
 }
 
 void __hookpre___calloc(void* regfile)
 {
-	HEAP_ENTER
 	klee_print_expr("[memcheck] calloc enter", GET_ARG1(regfile));
 	klee_hook_return(
 		1, &post__int_malloc, GET_ARG0(regfile) * GET_ARG1(regfile));
@@ -170,11 +202,9 @@ void __hookpre___calloc(void* regfile)
 
 void __hookpre___GI___libc_memalign(void* regfile)
 {
-	HEAP_ENTER
 	klee_print_expr("[memcheck] memalign enter", GET_ARG1(regfile));
 	klee_hook_return(1, &post__int_malloc, GET_ARG1(regfile));
 }
-
 
 // any reason to do cleanups?
 // void mmu_cleanup_memcheck(void) { }
