@@ -21,8 +21,9 @@ struct heap_ent
 	struct list_item he_li;
 };
 
-#define HEAP_BUCKETS	512
-#define PTR_TO_IDX(x)	((((uint64_t)x) >> 4) % HEAP_BUCKETS)
+//#define HEAP_BUCKETS	512
+//#define PTR_TO_IDX(x)	((((uint64_t)x) >> 4) % HEAP_BUCKETS)
+
 #define HEAP_GRAN_BYTES	16	/* 16 byte chunks because of sse instructions */
 #define HEAP_FLAG_BITS	2
 
@@ -180,6 +181,7 @@ done:
 
 /* reserved data manipulation only happens once int_malloc is called */
 void __hookpre__int_malloc(void* regfile) { HEAP_ENTER }
+void __hookpre__int_realloc(void* regfile) { HEAP_ENTER }
 
 void __hookpre___GI___libc_malloc(void* regfile)
 {
@@ -189,12 +191,14 @@ void __hookpre___GI___libc_malloc(void* regfile)
 
 void __hookpre___GI___libc_realloc(void* regfile)
 {
+	HEAP_ENTER
 	klee_print_expr("[memcheck] realloc enter", GET_ARG1(regfile));
 	klee_hook_return(1, &post__int_malloc, GET_ARG1(regfile));
 }
 
 void __hookpre___calloc(void* regfile)
 {
+	HEAP_ENTER
 	klee_print_expr("[memcheck] calloc enter", GET_ARG1(regfile));
 	klee_hook_return(
 		1, &post__int_malloc, GET_ARG0(regfile) * GET_ARG1(regfile));
@@ -202,6 +206,7 @@ void __hookpre___calloc(void* regfile)
 
 void __hookpre___GI___libc_memalign(void* regfile)
 {
+	HEAP_ENTER
 	klee_print_expr("[memcheck] memalign enter", GET_ARG1(regfile));
 	klee_hook_return(1, &post__int_malloc, GET_ARG1(regfile));
 }

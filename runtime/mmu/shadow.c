@@ -51,6 +51,7 @@ static struct pg_bkt_t last_pgbkt = {0, 0};
 
 static void get_pgbkt(struct pg_bkt_t* pb, uint64_t ptr)
 {
+	/* cache last page bucket for temporal locality */
 	if (klee_valid_eq(ptr, last_ptr)) {
 		pb->pb_pgnum = last_pgbkt.pb_pgnum;
 		pb->pb_bidx = last_pgbkt.pb_bidx;
