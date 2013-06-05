@@ -178,7 +178,9 @@ namespace {
   cl::opt<bool> UseYices("use-yices", cl::desc("Use Yices solver"));
 
   cl::opt<bool>
-  UsePipeSolver("pipe-solver", cl::desc("Run solver through forked pipe."));
+  UsePipeSolver("pipe-solver",
+  	cl::init(true),
+  	cl::desc("Run solver through forked pipe."));
 
   cl::opt<bool>
   UseIndependentSolver("use-independent-solver",
