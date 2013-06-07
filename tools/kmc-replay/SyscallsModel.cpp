@@ -29,7 +29,7 @@ SyscallsModel::SyscallsModel(
 	KTestStream	*in_kts,
 	Guest* in_g)
 : Syscalls(in_g)
-, file_recons(NULL)
+//, file_recons(NULL)
 , m(NULL)
 , sysf(NULL)
 , kts(in_kts)
@@ -85,7 +85,10 @@ uint64_t SyscallsModel::apply(SyscallParams& sp)
 
 void SyscallsModel::restoreCtx(void) { longjmp(restore_buf, 1); }
 
+/*******************************************************************/
 /* intrinsics */
+/*******************************************************************/
+/*******************************************************************/
 extern "C" {
 /* nothing is symbolic */
 unsigned klee_is_symbolic(uint64_t n) { return 0; }
@@ -225,5 +228,4 @@ void klee_yield(void) {}
 void kmc_breadcrumb(void* bc, unsigned int len) {}
 long kmc_io(int sys_rn, long p1, long p2, long p3, long p4)
 { assert (0 == 1 && "STUB"); return 0; }
-
 }

@@ -130,12 +130,7 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 	}
 
 	/* XXX TODO: module flags */
-	llvm::sys::Path LibraryDir(KLEE_DIR "/" RUNTIME_CONFIGURATION "/lib");
-	Interpreter::ModuleOptions mod_opts(
-		LibraryDir.c_str(),
-		false, // XXX: DUMMY. REMOVE ME; OptimizeModule,
-		false,
-		std::vector<std::string>());
+	ModuleOptions mod_opts(false, false, std::vector<std::string>());
 
 	assert (gs);
 

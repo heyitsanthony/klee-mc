@@ -25,7 +25,7 @@ typedef std::tr1::unordered_map<uintptr_t /* Func*/, VexSB*> func2vsb_map;
 public:
 	KModuleVex(
 		Executor* _exe,
-		Interpreter::ModuleOptions& mod_opts,
+		ModuleOptions& mod_opts,
 		Guest* _gs);
 	virtual ~KModuleVex(void);
 

@@ -55,7 +55,7 @@ using namespace llvm;
 using namespace klee;
 
 extern void externalsAndGlobalsCheck(const Module *m);
-extern Interpreter::ModuleOptions getMainModule(Module* &m);
+extern ModuleOptions getMainModule(Module* &m);
 
 namespace {
   cl::opt<std::string>
@@ -477,7 +477,7 @@ int main(int argc, char **argv, char **envp)
 	sys::SetInterruptFunction(interrupt_handle);
 
 	// Load the bytecode...
-	Interpreter::ModuleOptions Opts = getMainModule(mainModule);
+	ModuleOptions Opts = getMainModule(mainModule);
 
 	// Get the desired main function.  klee_main initializes uClibc
 	// locale and other data and then calls main.

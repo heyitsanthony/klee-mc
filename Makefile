@@ -99,6 +99,19 @@ test-replay: test-replay-path
 test-replay-path:
 	cd tests-replay && ./replaypathtest.sh
 
+static-pkg:
+	STATIC_BUILD=1 make -j6
+	rm -rf kmc-pkg
+	mkdir -p kmc-pkg/{lib,bin,scripts}
+	cp $(BuildMode)/lib/*.bc kmc-pkg/lib
+	cp $(VEXLLVM_HELPER_PATH)/*bc kmc-pkg/lib
+	cp $(BuildMode)/bin/*static  kmc-pkg/bin
+	cp scripts/static-env kmc-pkg/scripts
+	cp ~/bin/stp-static kmc-pkg/bin/stp
+	strip kmc-pkg/bin/stp
+	tar cvf static-pkg.tar kmc-pkg
+	gzip -f static-pkg.tar
+
 .PHONY: kmc-bintests
 kmc-bintests: all
 	bintests/run_bin.sh

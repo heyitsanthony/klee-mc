@@ -112,7 +112,7 @@ namespace {
 
 KModule::KModule(
 	Module *_module,
-	const Interpreter::ModuleOptions &_opts)
+	const ModuleOptions &_opts)
 : module(_module)
 , dataLayout(new DataLayout(module))
 , kleeMergeFn(0)

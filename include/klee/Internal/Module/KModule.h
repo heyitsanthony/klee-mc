@@ -88,7 +88,7 @@ public:
     std::vector<Cell>	constantTable;
 
 public:
-    KModule(llvm::Module *_module, const Interpreter::ModuleOptions &opts);
+    KModule(llvm::Module *_module, const ModuleOptions &opts);
     virtual ~KModule();
 
     /// Initialize local data structures.
@@ -156,7 +156,7 @@ private:
 	llvm::FunctionPassManager	*fpm;
 	InterpreterHandler		*ih;
 
-	Interpreter::ModuleOptions opts;
+	ModuleOptions			opts;
 
 	unsigned			updated_funcs;
 	std::set<std::string>		addedModules;

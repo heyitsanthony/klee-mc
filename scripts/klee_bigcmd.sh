@@ -72,7 +72,7 @@ SCHEDOPTS="-use-batching-search
 	-second-chance-boost=1
 	-second-chance-boost-cov=1
 	-use-pdf-interleave=true
-	-use-interleaved-MI=false
+	-use-interleaved-MI=true
 	-use-interleaved-FTR=false
 	-use-interleaved-BI=false
 	-use-interleaved-UNC=false
@@ -90,11 +90,16 @@ fi
 
 #-allow-negstack	
 
+if [ ! -z "$USE_MMU" ]; then
+	MMUFLAGS=" -sym-mmu-type=memcheck -sconc-mmu-type=memcheckc -use-sym-mmu -use-hookpass -hookpass-lib=libkleeRuntimeMMU.bc "
+fi
+
 $APP_WRAPPER klee-mc 		\
 	$EXTRA_ARGS		\
 	$REPLAYARG		\
 	$SCHEDOPTS		\
 	$RULEFLAGS		\
+	$MMUFLAGS		\
 	\
 	-hcache-fdir=`pwd`/hcache	\
 	-hcache-pending=`pwd`/hcache	\

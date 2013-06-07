@@ -55,25 +55,27 @@ public:
 	virtual void setWriteOutput(bool v) = 0;
 };
 
-class Interpreter
+/// ModuleOptions - Module level options which can be set when
+/// registering a module with the interpreter.
+class ModuleOptions
 {
 public:
-  /// ModuleOptions - Module level options which can be set when
-  /// registering a module with the interpreter.
-  struct ModuleOptions {
-    std::string LibraryDir;
-    bool Optimize;
-    bool CheckDivZero;
-    std::vector<std::string> ExcludeCovFiles;
+	std::string LibraryDir;
+	bool Optimize;
+	bool CheckDivZero;
+	std::vector<std::string> ExcludeCovFiles;
 
-    /* XXX: this is stupid */
-    ModuleOptions(const std::string& _LibraryDir, 
-                  bool _Optimize, bool _CheckDivZero,
-                  const std::vector<std::string> _ExcludeCovFiles)
-      : LibraryDir(_LibraryDir), Optimize(_Optimize), 
-        CheckDivZero(_CheckDivZero), ExcludeCovFiles(_ExcludeCovFiles) {}
-  };
+	ModuleOptions(const std::string& _LibraryDir, 
+		  bool _Optimize, bool _CheckDivZero,
+		  const std::vector<std::string> _ExcludeCovFiles);
 
+	ModuleOptions(
+		  bool _Optimize, bool _CheckDivZero,
+		  const std::vector<std::string> _ExcludeCovFiles);
+};
+
+class Interpreter
+{
 protected:
 	Interpreter() {};
 

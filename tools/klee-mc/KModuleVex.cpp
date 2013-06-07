@@ -45,7 +45,7 @@ char RemovePCPass::ID;
 
 KModuleVex::KModuleVex(
 	Executor* _exe,
-	Interpreter::ModuleOptions& mod_opts,
+	ModuleOptions& mod_opts,
 	Guest* _gs)
 : KModule(theGenLLVM->getModule(), mod_opts)
 , exe(_exe)

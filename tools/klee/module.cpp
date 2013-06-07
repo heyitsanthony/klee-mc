@@ -332,7 +332,7 @@ static llvm::Module *linkWithUclibc(llvm::Module *mainModule)
 #endif
 
 
-static Module* setupLibc(Module* mainModule, Interpreter::ModuleOptions& Opts)
+static Module* setupLibc(Module* mainModule, ModuleOptions& Opts)
 {
 	const char *exclude_fns_f = NULL;
 
@@ -457,7 +457,7 @@ static int initEnv(Module *mainModule)
   return 0;
 }
 
-static void loadIntrinsics(Interpreter::ModuleOptions& Opts)
+static void loadIntrinsics(ModuleOptions& Opts)
 {
 	if (!ExcludeLibcCov) return;
 	llvm::sys::Path ExcludePath(Opts.LibraryDir);
@@ -465,9 +465,7 @@ static void loadIntrinsics(Interpreter::ModuleOptions& Opts)
 	Opts.ExcludeCovFiles.push_back(ExcludePath.c_str());
 }
 
-static void loadPOSIX(
-	Module* &mainModule,
-	Interpreter::ModuleOptions& Opts)
+static void loadPOSIX(Module* &mainModule, ModuleOptions& Opts)
 {
 	if (!g_WithPOSIXRuntime) return;
 
@@ -516,7 +514,7 @@ void loadInputBitcode(Module* &mainModule)
 	runRemoveSentinelsPass(*mainModule);
 }
 
-Interpreter::ModuleOptions getMainModule(Module* &mainModule)
+ModuleOptions getMainModule(Module* &mainModule)
 {
 	loadInputBitcode(mainModule);
 
@@ -530,12 +528,7 @@ Interpreter::ModuleOptions getMainModule(Module* &mainModule)
 		}
 	}
 
-	llvm::sys::Path LibraryDir(KLEE_DIR "/" RUNTIME_CONFIGURATION "/lib");
-	Interpreter::ModuleOptions Opts(
-		LibraryDir.c_str(),
-		false, /* XXX: DUMMY. REMOVE ME */
-		false,
-		ExcludeCovFiles);
+	ModuleOptions Opts(false, false, ExcludeCovFiles);
 
 	/* XXX: the posix and intrinsic stuff *should* be loaded
 	 * after the posix code in order to link, but more test cases

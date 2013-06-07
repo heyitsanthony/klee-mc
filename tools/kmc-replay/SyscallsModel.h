@@ -28,7 +28,7 @@ public:
 	void restoreCtx(void);
 private:
 	/* XXX: need this */
-	FileReconstructor	*file_recons;
+	// FileReconstructor	*file_recons;
 	llvm::Module		*m;
 	llvm::ExecutionEngine	*exe;
 	sysfunc_t		sysf;
