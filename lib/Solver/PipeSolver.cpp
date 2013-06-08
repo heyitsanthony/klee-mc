@@ -171,9 +171,12 @@ bool PipeSolverImpl::setupSolverChild(
 
 	if (LargePipes) {
 		rc = fcntl(parent2child[1], F_SETPIPE_SZ, 1024*1024);
-		assert (rc == 1024*1024 && "Could not force large pipes");
-		rc = fcntl(child2parent[1], F_SETPIPE_SZ, 1024*1024);
-		assert (rc == 1024*1024 && "Could not force large pipes");
+		rc |= fcntl(child2parent[1], F_SETPIPE_SZ, 1024*1024);
+
+		if (rc != 1024*1024) {
+			klee_warning_once(0, "Solver could not use LargePipes");
+			LargePipes = false;
+		}
 	}
 
 	child_pid = fork();
