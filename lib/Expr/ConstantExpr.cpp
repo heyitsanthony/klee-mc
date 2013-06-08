@@ -149,6 +149,13 @@ ref<ConstantExpr> ConstantExpr::SExt(Width W)
 ref<ConstantExpr> ConstantExpr::FNAME(const ref<ConstantExpr> &in_rhs) \
 { return ConstantExpr::alloc(value OP in_rhs->value); }
 
+#define DECL_CE_OP_CHK(FNAME, OP)	\
+ref<ConstantExpr> ConstantExpr::FNAME(const ref<ConstantExpr> &in_rhs) \
+{	llvm::APInt temp(value OP in_rhs->value);	\
+	return (temp == value)				\
+		? this					\
+		: ConstantExpr::alloc(temp); }
+
 #define DECL_CE_FUNCOP(FNAME, OP)	\
 ref<ConstantExpr> ConstantExpr::FNAME(const ref<ConstantExpr> &in_rhs) \
 { return ConstantExpr::alloc(value.OP(in_rhs->value)); }
@@ -173,9 +180,9 @@ ref<ConstantExpr> ConstantExpr::FNAME(const ref<ConstantExpr> &in_rhs)	\
 DECL_CE_OP(Add, +)
 DECL_CE_OP(Sub, -)
 DECL_CE_OP(Mul, *)
-DECL_CE_OP(And, &)
-DECL_CE_OP(Or, |)
-DECL_CE_OP(Xor, ^)
+DECL_CE_OP_CHK(And, &)
+DECL_CE_OP_CHK(Or, |)
+DECL_CE_OP_CHK(Xor, ^)
 DECL_CE_NONZERO_FUNCOP(UDiv, udiv)
 DECL_CE_NONZERO_FUNCOP(SDiv, sdiv)
 DECL_CE_NONZERO_FUNCOP(URem, urem)
