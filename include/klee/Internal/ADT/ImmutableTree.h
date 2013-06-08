@@ -10,6 +10,7 @@
 #ifndef __UTIL_IMMUTABLETREE_H__
 #define __UTIL_IMMUTABLETREE_H__
 
+#include <llvm/ADT/SmallVector.h>
 #include <cassert>
 #include <vector>
 
@@ -98,65 +99,28 @@ namespace klee {
     Node *remove(const key_type &k);
   };
 
-  // Should live somewhere else, this is a simple stack with maximum (dynamic)
-  // size.
-  template<typename T>
-  class FixedStack {
-    unsigned pos, max;
-    T *elts;
-
-  public:
-    FixedStack(unsigned _max) : pos(0),
-                                max(_max),
-                                elts(new T[max]) {}
-    FixedStack(const FixedStack &b) : pos(b.pos),
-                                      max(b.max),
-                                      elts(new T[b.max]) {
-      std::copy(b.elts, b.elts+pos, elts);
-    }
-    ~FixedStack() { delete[] elts; }
-
-    void push_back(const T &elt) { elts[pos++] = elt; }
-    void pop_back() { --pos; }
-    bool empty() { return pos==0; }
-    T &back() { return elts[pos-1]; }
-
-
-    FixedStack &operator=(const FixedStack &b) {
-      assert(max == b.max); 
-      pos = b.pos;
-      std::copy(b.elts, b.elts+pos, elts);
-      return *this;
-    }
-
-    bool operator==(const FixedStack &b) {
-      return (pos == b.pos &&
-              std::equal(elts, elts+pos, b.elts));
-    }
-    bool operator!=(const FixedStack &b) { return !(*this==b); }
-  };
-
   template<class K, class V, class KOV, class CMP>
   class ImmutableTree<K,V,KOV,CMP>::iterator {
     friend class ImmutableTree<K,V,KOV,CMP>;
   private:
     Node *root; // so can back up from end
-    FixedStack<Node*> stack;
+    llvm::SmallVector<Node*, 64> stack;
     
   public:
-    iterator(Node *_root, bool atBeginning) : root(_root->incref()),
-                                              stack(root->height) {
-      if (atBeginning) {
-        for (Node *n=root; !n->isTerminator(); n=n->left)
-          stack.push_back(n);
-      }
-    }
-    iterator(const iterator &i) : root(i.root->incref()),
-                                  stack(i.stack) {
-    }
-    ~iterator() {
-      root->decref();
-    }
+	iterator(Node *_root, bool atBeginning)
+	: root(_root->incref())
+	{
+		stack.reserve(root->height);
+		if (atBeginning) {
+			for (Node *n=root; !n->isTerminator(); n=n->left)
+				stack.push_back(n);
+		}
+	}
+
+	iterator(const iterator &i)
+	: root(i.root->incref()), stack(i.stack) {}
+
+	~iterator() { root->decref(); }
 
     iterator &operator=(const iterator &b) {
       b.root->incref();
@@ -176,12 +140,8 @@ namespace klee {
       return &n->value;
     }
 
-    bool operator==(const iterator &b) {
-      return stack==b.stack;
-    }
-    bool operator!=(const iterator &b) {
-      return stack!=b.stack;
-    }
+    bool operator==(const iterator &b) { return stack==b.stack; }
+    bool operator!=(const iterator &b) { return stack!=b.stack; }
     
     iterator &operator--() {
       if (stack.empty()) {
