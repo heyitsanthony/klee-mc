@@ -147,6 +147,181 @@ void make_sym_by_arg(
 	sc_breadcrumb_add_argptr(arg_num, 0, len);
 }
 
+#include <linux/net.h>
+static void do_sockcall(void* regfile, int call, unsigned long* args)
+{
+	void	*new_regs;
+
+	switch (call) {
+	case SYS_SOCKET:
+		klee_warning_once("phony socket call");
+		sc_ret_range(sc_new_regs(regfile), -1, 4096);
+		break;
+	case SYS_BIND: sc_ret_or(sc_new_regs(regfile), 0, -1); break;
+	case SYS_CONNECT: sc_ret_or(sc_new_regs(regfile), -1, 0); break;
+	case SYS_LISTEN: sc_ret_v(regfile, 0); break;
+
+	case SYS_GETSOCKNAME:
+		new_regs = sc_new_regs(regfile);
+		if (GET_SYSRET_S(new_regs) == -1)
+			break;
+
+		klee_assume(GET_SYSRET(new_regs) == 0);
+		make_sym(args[1], sizeof(struct sockaddr_in), "getsockname");
+		*((socklen_t*)args[2]) = sizeof(struct sockaddr_in);
+		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
+		break;
+
+	case SYS_GETPEERNAME:
+		new_regs = sc_new_regs(regfile);
+		if (GET_SYSRET_S(new_regs) == -1)
+			break;
+
+		klee_assume(GET_SYSRET(new_regs) == 0);
+		make_sym_by_arg(
+			regfile,
+			1,
+			klee_get_value(*((socklen_t*)args[2])),
+			"getpeeraddr");
+		break;
+
+	case SYS_SEND:
+	case SYS_RECV:
+	case SYS_SENDTO:
+		sc_ret_or(sc_new_regs(regfile), -1, args[2]);
+		break;
+
+	case SYS_RECVFROM:
+		new_regs = sc_new_regs(regfile);
+		make_sym(args[1], args[2], "recvfrom_buf");
+		if (args[4])
+			make_sym(
+				args[4],
+				sizeof(struct sockaddr_in),
+				"recvfrom_sa");
+		if (args[5] != 0) {
+			socklen_t	*sl;
+			sl = ((socklen_t*)args[5]);
+			*sl = sizeof(struct sockaddr_in);
+		}
+		sc_ret_or(new_regs, 0, args[2]);
+		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
+		break;
+
+	case SYS_SOCKETPAIR:
+	case SYS_SHUTDOWN:
+		sc_ret_or(sc_new_regs(regfile), -1, 0);
+		break;
+
+	case SYS_SETSOCKOPT:
+		sc_ret_v(regfile, 0);
+		break;
+
+	case SYS_GETSOCKOPT:
+		klee_warning_once("phony getsockopt");
+		sc_ret_v(regfile, 0);
+		break;
+
+	case SYS_SENDMSG: {
+		const struct msghdr	*mh;
+		int			total_bytes = 0;
+		unsigned 		i;
+
+		if (!args[1]) {
+			sc_ret_v(regfile, -1);
+			break;
+		}
+
+		mh = (void*)args[1];
+		for (i = 0; i < mh->msg_iovlen; i++)
+			total_bytes += mh->msg_iov[i].iov_len;
+
+		sc_ret_or(sc_new_regs(regfile), -1, total_bytes);
+		break;
+	}
+
+
+	case SYS_RECVMSG:
+	{
+		struct msghdr	*mhdr;
+
+		new_regs = sc_new_regs(regfile);
+
+		if (GET_SYSRET(new_regs) == 0) {
+			sc_ret_v_new(new_regs, 0);
+			break;
+		}
+
+		if (GET_SYSRET_S(new_regs) == -1) {
+			sc_ret_v_new(new_regs, -1);
+			break;
+		}
+
+		mhdr = (void*)concretize_u64(args[1]);
+		klee_assume(mhdr->msg_iovlen >= 1);
+
+		make_sym(
+			(uint64_t)(mhdr->msg_iov[0].iov_base),
+			mhdr->msg_iov[0].iov_len,
+			"recvmsg_iov");
+
+		if (mhdr->msg_control != NULL) {
+			make_sym(
+				(uint64_t)(mhdr->msg_control),
+				mhdr->msg_controllen,
+				"recvmsg_ctl");
+		}
+
+		if (mhdr->msg_name != NULL) {
+			make_sym(
+				(uint64_t)(mhdr->msg_name),
+				mhdr->msg_namelen,
+				"recvmsg_name");
+		}
+
+		make_sym(
+			(uint64_t)&mhdr->msg_flags,
+			sizeof(mhdr->msg_flags),
+			"recvmsg_flags");
+
+		/* TODO: controllen should be symbolic */
+
+		sc_ret_v_new(new_regs, mhdr->msg_iov[0].iov_len);
+		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
+		break;
+	}
+
+
+	case SYS_ACCEPT:
+	case SYS_ACCEPT4:
+		// int accept4(
+		// 	int sockfd, struct sockaddr *addr,
+		// 	socklen_t *addrlen, int flags);
+		//
+		// We'll be funny and mark 'addr's data as symbolic
+		if (!args[1]) {
+			sc_ret_v(regfile, fd_open_sym());
+			break;
+		}
+
+		/* addrlen */
+		if (*((int*)args[2]) < 4) {
+			sc_ret_v(regfile, -1);
+			break;
+		}
+
+		make_sym(args[1], 4, "accept4_addr");
+		sc_ret_v(regfile, fd_open_sym());
+		break;
+
+	case SYS_RECVMMSG:
+	case SYS_SENDMMSG:
+		kmc_sc_bad(call);
+		klee_uerror("Unknown SocketCall", "sc.err");
+		break;
+	}
+}
+
 static void sc_poll(void* regfile)
 {
 	struct pollfd	*fds;
@@ -288,26 +463,11 @@ void* sc_enter(void* regfile, void* jmpptr)
 			0 /* child */,
 			1001 /* child's PID, passed to parent */);
 		break;
-	case SYS_getpeername:
-		new_regs = sc_new_regs(regfile);
-		if (GET_SYSRET_S(new_regs) == -1)
-			break;
-
-		klee_assume(GET_SYSRET(new_regs) == 0);
-		make_sym_by_arg(
-			regfile,
-			1,
-			klee_get_value(*((socklen_t*)GET_ARG2_PTR(regfile))),
-			"getpeeraddr");
-
-		break;
 	case SYS_mprotect:
 		klee_warning_once("ignoring mprotect()");
 		sc_ret_v(regfile, -1);
 		break;
-	case SYS_listen:
-		sc_ret_v(regfile, 0);
-		break;
+
 	case SYS_write: {
 		static int write_c = 0;
 		loop_protect(SYS_write, &write_c, 1024);
@@ -712,80 +872,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	}
 
-	case SYS_recvmsg: {
-		struct msghdr	*mhdr;
 
-		new_regs = sc_new_regs(regfile);
-
-		if (GET_SYSRET(new_regs) == 0) {
-			sc_ret_v_new(new_regs, 0);
-			break;
-		}
-
-		if (GET_SYSRET_S(new_regs) == -1) {
-			sc_ret_v_new(new_regs, -1);
-			break;
-		}
-
-		mhdr = (void*)concretize_u64(GET_ARG1(regfile));
-		klee_assume(mhdr->msg_iovlen >= 1);
-
-		make_sym(
-			(uint64_t)(mhdr->msg_iov[0].iov_base),
-			mhdr->msg_iov[0].iov_len,
-			"recvmsg_iov");
-
-		if (mhdr->msg_control != NULL) {
-			make_sym(
-				(uint64_t)(mhdr->msg_control),
-				mhdr->msg_controllen,
-				"recvmsg_ctl");
-		}
-
-		if (mhdr->msg_name != NULL) {
-			make_sym(
-				(uint64_t)(mhdr->msg_name),
-				mhdr->msg_namelen,
-				"recvmsg_name");
-		}
-
-		make_sym(
-			(uint64_t)&mhdr->msg_flags,
-			sizeof(mhdr->msg_flags),
-			"recvmsg_flags");
-
-		/* TODO: controllen should be symbolic */
-
-		sc_ret_v_new(new_regs, mhdr->msg_iov[0].iov_len);
-		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
-	}
-	break;
-
-	case SYS_setsockopt:
-		sc_ret_v(regfile, 0);
-		break;
-	case SYS_recvfrom:
-		new_regs = sc_new_regs(regfile);
-		make_sym(GET_ARG1(regfile), GET_ARG2(regfile), "recvfrom_buf");
-		if (GET_ARG4(regfile))
-			make_sym(
-				GET_ARG4(regfile),
-				sizeof(struct sockaddr_in),
-				"recvfrom_sa");
-		if (GET_ARG5(regfile) != 0) {
-			socklen_t	*sl;
-			sl = ((socklen_t*)GET_ARG5_PTR(regfile));
-			*sl = sizeof(struct sockaddr_in);
-		}
-		sc_ret_or(new_regs, 0, GET_ARG2(regfile));
-		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
-		break;
-	case SYS_sendto:
-		sc_ret_or(sc_new_regs(regfile), -1, GET_ARG2(regfile));
-		break;
-	case SYS_bind:
-		sc_ret_or(sc_new_regs(regfile), 0, -1);
-		break;
 	case SYS_chmod:
 		klee_warning_once("phony chmod");
 		sc_ret_v(regfile, 0);
@@ -794,10 +881,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 		klee_warning_once("phony mkdir");
 		sc_ret_v(regfile, 0);
 		break;
-	case SYS_connect:
-		sc_ret_or(sc_new_regs(regfile), -1, 0);
-		break;
-
 	case SYS_timer_delete:
 		klee_warning("phony timer_delete: always ret=success.");
 		sc_ret_v(regfile, 0);
@@ -837,29 +920,20 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(regfile, 0);
 		break;
 
-	case SYS_getsockopt:
-		klee_warning_once("phony getsockopt");
-		sc_ret_v(regfile, 0);
-		break;
-
-	case SYS_getsockname:
-		new_regs = sc_new_regs(regfile);
-		if (GET_SYSRET_S(new_regs) == -1)
-			break;
-
-		klee_assume(GET_SYSRET(new_regs) == 0);
-		make_sym(GET_ARG1(regfile),
-			sizeof(struct sockaddr_in),
-			"getsockname");
-		*((socklen_t*)GET_ARG2_PTR(regfile)) = sizeof(struct sockaddr_in);
-		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
-		break;
 
 	case SYS_pipe2:
 	case SYS_pipe:
 		klee_warning_once("phony pipe");
 		sc_ret_or(sc_new_regs(regfile), -1, 0);
 		break;
+
+	case ARCH_SYS_SOCKETCALL: {
+		/* XXX assuming 32-bit arch... */
+		uint32_t	*v32 = GET_ARG1_PTR(regfile);
+		unsigned long v[] = { v32[0], v32[1], v32[2], v32[3], v32[4], v32[5] };
+		do_sockcall(regfile, GET_ARG0(regfile), v);
+		break;
+	}
 
 	case ARCH_SYS_DEFAULT_EQ0:
 		sc_ret_v(regfile, 0);
@@ -914,10 +988,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_breadcrumb_commit(&sc, GET_SYSRET(new_regs));
 		goto already_logged;
 
-	case SYS_socket:
-		klee_warning_once("phony socket call");
-		sc_ret_range(sc_new_regs(regfile), -1, 4096);
-		break;
 	case SYS_fchdir:
 	case SYS_chdir:
 		klee_warning_once("phony chdir");
@@ -965,31 +1035,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_range(new_regs, -1, 1);
 		break;
 
-	case SYS_accept:
-		/* int accept(
-		 * 	int , struct sockaddr *addr,
-		 * 	socklen_t *addrlen); */
-
-	case SYS_accept4:
-		// int accept4(
-		// 	int sockfd, struct sockaddr *addr,
-		// 	socklen_t *addrlen, int flags);
-		//
-		// We'll be funny and mark 'addr's data as symbolic
-		if (!GET_ARG1(regfile)) {
-			sc_ret_v(regfile, fd_open_sym());
-			break;
-		}
-
-		if (*((int*)GET_ARG2_PTR(regfile)) < 4) {
-			sc_ret_v(regfile, -1);
-			break;
-		}
-
-		make_sym(GET_ARG1(regfile), 4, "accept4_addr");
-		sc_ret_v(regfile, fd_open_sym());
-		break;
-
 	case SYS_sched_get_priority_min:
 		sc_ret_v(regfile, 0);
 		break;
@@ -1004,7 +1049,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 #endif
 	case SYS_clock_adjtime:
 	case SYS_chown:
-	case SYS_shutdown:
 	case SYS_inotify_init:
 	case SYS_inotify_init1:
 	case SYS_inotify_add_watch: /* XXX this should be some kind of desc */
@@ -1042,7 +1086,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_sched_setscheduler:
 	case SYS_setgroups:
 	case SYS_iopl:
-	case SYS_socketpair:
 	case SYS_setpriority:
 	case SYS_setitimer:
 	case SYS_personality:
@@ -1050,6 +1093,46 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_ioperm:
 		sc_ret_or(sc_new_regs(regfile), -1, 0);
 		break;
+
+	/* begin socket code */
+#define DECL_ARGS3 unsigned long v[]\
+	= {GET_ARG0(regfile), GET_ARG1(regfile), GET_ARG2(regfile) }
+
+	case SYS_socket: do_sockcall(regfile, SYS_SOCKET, NULL); break;
+	case SYS_bind: do_sockcall(regfile, SYS_BIND, NULL); break;
+	case SYS_connect: do_sockcall(regfile, SYS_CONNECT, NULL); break;
+	case SYS_listen: do_sockcall(regfile, SYS_LISTEN, NULL); break;
+	case SYS_getsockopt: do_sockcall(regfile, SYS_GETSOCKOPT, NULL); break;
+	case SYS_shutdown: do_sockcall(regfile, SYS_SHUTDOWN, NULL); break;
+	case SYS_socketpair: do_sockcall(regfile, SYS_SOCKETPAIR, NULL); break;
+	case SYS_setsockopt: do_sockcall(regfile, SYS_SETSOCKOPT, NULL); break;
+	case SYS_getpeername: {
+		DECL_ARGS3; do_sockcall(regfile, SYS_GETPEERNAME, v); break; }
+	case SYS_accept:
+	case SYS_accept4: {
+		DECL_ARGS3; do_sockcall(regfile, SYS_ACCEPT4, v); break; }
+	case SYS_getsockname: {
+		DECL_ARGS3; do_sockcall(regfile, SYS_GETSOCKNAME, v); break; }
+	case SYS_sendto: {
+		DECL_ARGS3; do_sockcall(regfile, SYS_SENDTO, v); break; }
+	case SYS_sendmsg: {
+		DECL_ARGS3; do_sockcall(regfile, SYS_SENDMSG, v); break; }
+	case SYS_recvmsg: {
+		DECL_ARGS3; do_sockcall(regfile, SYS_RECVMSG, v); break; }
+
+	case SYS_recvfrom: {
+		unsigned long v[] = {
+			GET_ARG0(regfile),
+			GET_ARG1(regfile),
+			GET_ARG2(regfile),
+			GET_ARG3(regfile),
+			GET_ARG4(regfile),
+			GET_ARG5(regfile) };
+		do_sockcall(regfile, SYS_RECVMSG, v);
+		break;
+	}
+
+	/***** end socket code */
 
 	case SYS_getpriority:
 	case SYS_semget:
@@ -1134,24 +1217,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
-		break;
-	}
-
-	case SYS_sendmsg: {
-		const struct msghdr	*mh;
-		int			total_bytes = 0;
-		unsigned 		i;
-
-		if (!GET_ARG1(regfile)) {
-			sc_ret_v(regfile, -1);
-			break;
-		}
-
-		mh = GET_ARG1_PTR(regfile);
-		for (i = 0; i < mh->msg_iovlen; i++)
-			total_bytes += mh->msg_iov[i].iov_len;
-
-		sc_ret_or(sc_new_regs(regfile), -1, total_bytes);
 		break;
 	}
 
