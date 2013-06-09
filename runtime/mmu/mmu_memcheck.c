@@ -94,6 +94,7 @@ void post_int_free(int64_t retval)
 	free(he);
 }
 
+
 void __hookpre___GI___libc_free(void* regfile)
 {
 	void	*ptr;
@@ -195,6 +196,18 @@ void __hookpre___GI___libc_realloc(void* regfile)
 	klee_print_expr("[memcheck] realloc enter", GET_ARG1(regfile));
 	klee_hook_return(1, &post__int_malloc, GET_ARG1(regfile));
 }
+
+void post_malloc_usable_size(int64_t v) { HEAP_LEAVE; }
+
+void __hookpre___malloc_usable_size(void* regfile)
+{
+	HEAP_ENTER
+	klee_hook_return(
+		1,
+		&post_malloc_usable_size,
+		GET_ARG0(regfile));
+}
+
 
 void __hookpre___calloc(void* regfile)
 {
