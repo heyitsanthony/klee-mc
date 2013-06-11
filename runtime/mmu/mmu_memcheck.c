@@ -239,7 +239,7 @@ y mmu_load_##x##_memcheckc(void* addr)		\
 if (!shadow_pg_used(&heap_si, (uint64_t)addr))	\
 	return mmu_load_##x##_cnulltlb(addr);	\
 if (!in_heap && (shadow_get_range((uint64_t)addr, x/8) & SH_FL_FREE))	\
-	klee_uerror("Loading from free const pointer", "heap.err");	\
+	klee_ureport("Loading from free const pointer", "heap.err");	\
 return mmu_load_##x##_cnull(addr); }
 
 
@@ -252,7 +252,7 @@ if (!shadow_pg_used(&heap_si, (uint64_t)addr)) {	\
 }							\
 if (!in_heap && (shadow_get_range((uint64_t)addr, x/8) & SH_FL_FREE)) {	\
 	klee_print_expr("Bad store ptr", addr);				\
-	klee_uerror("Storing to free const pointer", "heap.err");	\
+	klee_ureport("Storing to free const pointer", "heap.err");	\
 }									\
 mmu_store_##x##_cnulltlb(addr, v); }
 
@@ -263,7 +263,7 @@ y mmu_load_##x##_memcheck(void* addr)	\
 if (!in_sym_mmu) {			\
 in_sym_mmu++;				\
 if (!in_heap && (shadow_get_range((uint64_t)addr, x/8) & SH_FL_FREE))	\
-	klee_uerror("Loading from free sym pointer", "heap.err");	\
+	klee_ureport("Loading from free sym pointer", "heap.err");	\
 in_sym_mmu--;	\
 }	\
 return mmu_load_##x##_objwide(addr); }
@@ -274,7 +274,7 @@ void mmu_store_##x##_memcheck(void* addr, y v)	\
 if (!in_sym_mmu) {	\
 in_sym_mmu++;	\
 if (!in_heap && (shadow_get_range((uint64_t)addr, x/8) & SH_FL_FREE))	\
-	klee_uerror("Storing to free sym pointer", "heap.err");	\
+	klee_ureport("Storing to free sym pointer", "heap.err");	\
 in_sym_mmu--;	\
 }	\
 mmu_store_##x##_objwide(addr, v); }

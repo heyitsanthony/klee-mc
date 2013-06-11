@@ -58,6 +58,7 @@ SFH_HANDLER(PrintRange)
 SFH_HANDLER(Range)
 SFH_HANDLER(ResumeExit)
 SFH_HANDLER(ReportError)
+SFH_HANDLER(Report)
 SFH_HANDLER(SetForking)
 SFH_HANDLER(SilentExit)
 SFH_HANDLER(StackTrace)
@@ -110,6 +111,7 @@ static const SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   { "exit", &HandlerExit::create, true, false, true },
   addDNR("klee_silent_exit", SilentExit),
   addDNR("klee_report_error", ReportError),
+  addDNR("klee_report", Report),
 
   /* ALL EXPCET CONSTANT ARGUMENTS */
   add("klee_get_obj_next", GetObjNext, true),
@@ -488,6 +490,21 @@ SFH_DEF_HANDLER(ReportError)
 	TERMINATE_ERROR(sfh->executor, state, message, suffix);
 }
 
+SFH_DEF_HANDLER(Report)
+{
+	// (file, line, message, suffix)
+	SFH_CHK_ARGS(4, "klee_report");
+
+	ExecutionState	*report_es;
+
+	std::string	message = sfh->readStringAtAddress(state, args[2]);
+	std::string	suffix = sfh->readStringAtAddress(state, args[3]);
+
+	report_es = sfh->executor->getForking()->pureFork(state, false);
+	TERMINATE_ERROR(sfh->executor, state, message, suffix);
+}
+
+
 SFH_DEF_HANDLER(Merge) { std::cerr << "[Merge] Merging disabled\n"; /* nop */ }
 
 SFH_DEF_HANDLER(Malloc)
@@ -583,10 +600,14 @@ SFH_DEF_HANDLER(PreferOp)
 	sp = sfh->executor->fork(state, e, true);
 	f->setPreferTrueState(false);
 
+	/* XXX: something that needs to be done here is to force a
+	 * real-time state. Probably should make a real-time scheduler
+	 * built-in, since it's so important to fully execute error paths. */
+
 	if (sp.first != NULL) sp.first->bindLocal(target, MK_CONST(1, 64));
 	if (sp.second != NULL) sp.second->bindLocal(target, MK_CONST(0, 64));
 
-	assert (0 == 1 && "STUB");
+	return;
 error:
 	TERMINATE_EARLY(sfh->executor, state, "prefer-op failed");
 }
@@ -1206,7 +1227,6 @@ SFH_DEF_HANDLER(ForkEq)
 SFH_DEF_HANDLER(ExprHash)
 {
 	SFH_CHK_ARGS(1, "klee_expr_hash");
-
 
 	state.bindLocal(target, MK_CONST(args[0]->hash(), 64));
 }

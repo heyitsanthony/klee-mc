@@ -6,7 +6,8 @@
 
 void mmu_testptr(void* ptr)
 {
-	if (!mmu_testptr_invalid(ptr)) return;
+	if (!klee_prefer_true(mmu_testptr_invalid(ptr)))
+		return;
 
 	/* ACK! */
 	klee_uerror("bad memory access!", "ptr.err");

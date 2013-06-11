@@ -113,6 +113,12 @@ extern "C" {
 			 int line,
 			 const char *message,
 			 const char *suffix);
+#define klee_ureport(x, y)	klee_report(__FILE__, __LINE__, x, y)
+  void klee_report(const char *file,
+			 int line,
+			 const char *message,
+			 const char *suffix);
+
 
   /* print the tree associated w/ a given expression. */
   void klee_print_expr(const char *msg, ...);
@@ -172,6 +178,9 @@ extern "C" {
 #define klee_prefer_ule(x,y)	__klee_prefer_op(x,y,KLEE_CMP_OP_ULE)
 #define klee_prefer_eq(x, y)	__klee_prefer_op(x, y, KLEE_CMP_OP_EQ)
 #define klee_prefer_ne(x, y)	__klee_prefer_op(x, y, KLEE_CMP_OP_NE)
+#define klee_prefer_true(x)	klee_prefer_ne(x, 0)
+#define klee_prefer_false(x)	klee_prefer_eq(x, 0)
+
 
   uint64_t klee_prefer_op(uint64_t lhs, uint64_t rhs, uint8_t op);
 
