@@ -7,6 +7,7 @@
 #include <string.h>
 #include "klee/Internal/ADT/Crumbs.h"
 #include "klee/breadcrumb.h"
+#include "static/Sugar.h"
 
 using namespace klee;
 
@@ -27,20 +28,24 @@ ReplayExec::ReplayExec(Guest* gs, VexXlate* vx)
 , crumbs(NULL)
 , ignored_last(false)
 , print_exec(getenv("KMC_DUMP_EXE") != NULL)
+, chklog_c(0)
 { }
 
 unsigned ReplayExec::getCPUSize(void)
 { return gs->getCPUState()->getStateSize(); }
 
-void ReplayExec::dumpRegBuf(const uint8_t* buf)
+
+static void dumpBuf(const uint8_t* buf, unsigned len)
 {
-	unsigned cpu_sz = getCPUSize();
-	for (unsigned int i = 0; i < cpu_sz; i++) {
+	for (unsigned int i = 0; i < len; i++) {
 		if ((i % 16) == 0) fprintf(stderr, "\n%03x: ", i);
 		fprintf(stderr, "%02x ", buf[i]);
 	}
 	fprintf(stderr, "\n");
 }
+
+void ReplayExec::dumpRegBuf(const uint8_t* buf)
+{ dumpBuf(buf, getCPUSize()); }
 
 void ReplayExec::doSysCall(VexSB* sb)
 {
@@ -60,38 +65,102 @@ void ReplayExec::doSysCall(VexSB* sb)
 	verifyOrPanic();
 }
 
-void ReplayExec::verifyOrPanic(void)
+void ReplayExec::verifyOrPanic(VexSB* last_dispatched)
 {
-	uint8_t		*reg_mismatch;
+	ReplayMismatch	*m;
 	
-	if ((reg_mismatch = verifyWithRegLog()) == NULL)
+	if ((m = verifyWithLog()) == NULL)
 		return;
 
-	std::cerr << "============doVexSB Mismatch!============\n";
-	std::cerr << "Crumbs read: " << crumbs->getNumProcessed() << std::endl;
-	std::cerr << "VEXEXEC (now running): \n";
-	gs->getCPUState()->print(std::cerr);
-	std::cerr << "\nKLEE-MC (previously ran): \n";
+	/* TODO: one option here is to do a fixup and proceed as if
+	 * it were symex to make forward progress.
+	 * note, it doesn't make sense to use current state
+	 * because then the syscall log won't match up) */
+	std::cerr
+		<< "[ReplayExec] Crumbs read: "
+		<< crumbs->getNumProcessed() << std::endl;
+
+	if (last_dispatched != NULL) {
+		std::cerr
+			<< "[ReplayExec] Begin Last Dispatched Block. Base="
+			<< (void*)last_dispatched->getGuestAddr().o
+			<< '\n';
+		last_dispatched->print(std::cerr);
+		std::cerr << "[ReplayExec] End of Last Dispatched Block.\n";
+	}
+
+	m->print(std::cerr);
+	exit(-1);
+}
+
+void StackReplayMismatch::print(std::ostream& os)
+{
+	const uint8_t	*guest_stk;
+
+	guest_stk = (uint8_t*)gs->getCPUState()->getStackPtr().o;
+
+	os << "============doVexSB Stack Mismatch!============\n";
+	os << "Stack Address = " << (void*)guest_stk << '\n';
+	os << "VEXEXEC (now running): \n";
+	for (unsigned int i = 0; i < len; i++) {
+		if ((i % 16) == 0) fprintf(stderr, "\n%03x: ", i);
+		fprintf(stderr, "%02x ", guest_stk[i]);
+	}
+
+	os << "\nKLEE-MC (previously ran): \n";
+	for (unsigned int i = 0; i < len; i++) {
+		if ((i % 16) == 0) fprintf(stderr, "\n%03x: ", i);
+		fprintf(stderr, "%02x%c", sym_stk[i],
+			(sym_stk[i] != guest_stk[i]) ? '*' : ' ');
+	}
+	std::cerr << '\n';
+}
+
+void MemReplayMismatch::print(std::ostream& os)
+{
+	const uint8_t	*guest_obj = (uint8_t*)base;
+
+	os << "============Memory Mismatch!============\n";
+	os << "Memory Base Address = " << (void*)guest_obj << '\n';
+	os << "VEXEXEC (now running): \n";
+	for (unsigned int i = 0; i < len; i++) {
+		if ((i % 16) == 0) fprintf(stderr, "\n%03x: ", i);
+		fprintf(stderr, "%02x ", guest_obj[i]);
+	}
+
+	os << "\nKLEE-MC (previously ran): \n";
+	for (unsigned int i = 0; i < len; i++) {
+		if ((i % 16) == 0) fprintf(stderr, "\n%03x: ", i);
+		fprintf(stderr, "%02x%c", sym_obj[i],
+			(sym_obj[i] != guest_obj[i]) ? '*' : ' ');
+	}
+	std::cerr << '\n';
+}
+
+void RegReplayMismatch::print(std::ostream& os)
+{
+	const uint8_t	*vex_regs;
+	unsigned	cpu_len = gs->getCPUState()->getStateSize();
+
+	os << "============doVexSB Mismatch!============\n";
+	os << "VEXEXEC (now running): \n";
+	gs->getCPUState()->print(os);
+	os << "\nKLEE-MC (previously ran): \n";
 	gs->getCPUState()->print(std::cerr, reg_mismatch);
 	std::cerr << "\n";
 
-	const uint8_t	*vex_regs;
 	vex_regs = (const uint8_t*)gs->getCPUState()->getStateData();
 
-	fprintf(stderr, "VEX: ----------------\n");
-	dumpRegBuf(vex_regs);
+	os << "VEX: ----------------\n";
+	dumpBuf(vex_regs, cpu_len);
 
-	fprintf(stderr, "KLEE: ----------------\n");
-	for (unsigned int i = 0; i < getCPUSize(); i++) {
+	os << "KLEE: ----------------\n";
+	for (unsigned int i = 0; i < cpu_len; i++) {
 		if ((i % 16) == 0) fprintf(stderr, "\n%03x: ", i);
 		fprintf(stderr, "%02x%c", reg_mismatch[i],
 			(reg_mismatch[i] != vex_regs[i]) ? '*' : ' ');
 	}
-	fprintf(stderr, "\n");
-
-	delete [] reg_mismatch;
-	exit(-1);
-	assert (0 == 1);
+	os << '\n';
 }
 
 void ReplayExec::doTrap(VexSB* sb)
@@ -112,7 +181,7 @@ guest_ptr ReplayExec::doVexSB(VexSB* sb)
 	}
 
 	next_pc = VexExec::doVexSB(sb);
-	verifyOrPanic();
+	verifyOrPanic(sb);
 
 	return next_pc;
 }
@@ -128,14 +197,64 @@ void ReplayExec::setCrumbs(Crumbs* in_c)
 	}
 }
 
-uint8_t* ReplayExec::verifyWithRegLog(void)
+ReplayMismatch*	ReplayExec::doChks(struct breadcrumb* &bc)
+{
+	uint8_t				*buf;
+	std::vector<ReplayMismatch*>	m;
+	ReplayMismatch			*m0;
+	regchk_t			regchk;
+
+	regchk.reg_sz = getCPUSize();
+	assert (bc->bc_sz == regchk.reg_sz*2 + sizeof(struct breadcrumb));
+
+	regchk.guest_reg = (uint8_t*)gs->getCPUState()->getStateData();
+	buf = reinterpret_cast<uint8_t*>(bc) + sizeof(struct breadcrumb);
+	regchk.sym_reg = buf;
+	regchk.sym_mask = buf + regchk.reg_sz;
+
+	if ((m0 = regChk(regchk))) m.push_back(m0);
+
+	Crumbs::freeCrumb(bc);
+	bc = crumbs->peek();
+
+	if (bc != NULL && bc_is_type(bc, BC_TYPE_STACKLOG)) {
+		crumbs->skip();
+		regchk.reg_sz = (bc->bc_sz-sizeof(struct breadcrumb)) / 2;
+		regchk.guest_reg = (uint8_t*)gs->getCPUState()->getStackPtr().o;
+		buf = reinterpret_cast<uint8_t*>(bc)+sizeof(struct breadcrumb);
+		regchk.sym_reg = buf;
+		regchk.sym_mask = buf + regchk.reg_sz;
+		if (ignored_last == false) {
+			if ((m0 = stackChk(regchk))) m.push_back(m0);
+		}
+	}
+
+	Crumbs::freeCrumb(bc);
+	bc = crumbs->peek();
+
+	if (bc != NULL && bc_is_type(bc, BC_TYPE_MEMLOG)) {
+		uint64_t	base;
+		crumbs->skip();
+		regchk.reg_sz = (bc->bc_sz-(sizeof(struct breadcrumb)+8)) / 2;
+		base = *((uint64_t*)(bc + 1));
+		regchk.guest_reg = (uint8_t*)base;
+		buf = reinterpret_cast<uint8_t*>(bc)+sizeof(struct breadcrumb)+8;
+		regchk.sym_reg = buf;
+		regchk.sym_mask = buf + regchk.reg_sz;
+		if (ignored_last == false)
+			if ((m0 = memChk(regchk))) m.push_back(m0);
+	}
+
+
+	return MultiReplayMismatch::create(m);
+}
+
+ReplayMismatch* ReplayExec::verifyWithLog(void)
 {
 	struct breadcrumb	*bc;
-	regchk_t		regchk;
-	uint8_t			*buf;
 	guest_ptr		next_addr;
 	bool			is_next_guest_vsys, is_next_sym_vsys;
-	uint8_t			*reg_ctx = NULL;	/* bad ctx */
+	ReplayMismatch		*m = NULL;
 
 	if (!has_reglog) return NULL;
 
@@ -150,14 +269,6 @@ uint8_t* ReplayExec::verifyWithRegLog(void)
 	assert (bc_is_type(bc, BC_TYPE_VEXREG));
 	if (ign_reglog) goto done;
 
-	regchk.reg_sz = getCPUSize();
-	assert (bc->bc_sz == regchk.reg_sz*2 + sizeof(struct breadcrumb));
-
-	regchk.guest_reg = (uint8_t*)gs->getCPUState()->getStateData();
-	buf = reinterpret_cast<uint8_t*>(bc) + sizeof(struct breadcrumb);
-	regchk.sym_reg = buf;
-	regchk.sym_mask = buf + regchk.reg_sz;
-
 	/* XXX HACK HACK HACK. There's something in the syspage that changes
 	 * from process to process. Since we can't write to the syspage with
 	 * the guest snapshot's old syspage, all we can do is 'bless' the region
@@ -165,7 +276,7 @@ uint8_t* ReplayExec::verifyWithRegLog(void)
 	next_addr = gs->getCPUState()->getPC();
 	is_next_guest_vsys = is_syspage_addr(next_addr);
 	is_next_sym_vsys = is_syspage_addr(
-		guest_ptr(((VexGuestAMD64State*)regchk.sym_reg)->guest_RIP));
+		guest_ptr(((VexGuestAMD64State*)((char*)(bc+1)))->guest_RIP));
 
 	if (is_next_guest_vsys) {
 		/* Don't skip() over the klee state.
@@ -189,24 +300,23 @@ uint8_t* ReplayExec::verifyWithRegLog(void)
 			crumbs->getNumProcessed());
 		Crumbs::freeCrumb(bc);
 		skipped_vsys = true;
-		return verifyWithRegLog();
+		return verifyWithLog();
 	}
 
 
 	fprintf(stderr, "-------CHKLOG %d. LastAddr=%p (%s)------\n",
-		crumbs->getNumProcessed(),
+		++chklog_c,
 		(void*)next_addr.o,
 		gs->getName(next_addr).c_str());
 
-	reg_ctx = regChk(regchk);
-
+	m = doChks(bc);
 done:
 	Crumbs::freeCrumb(bc);
 	ignored_last = false;
-	return reg_ctx;
+	return m;
 }
 
-uint8_t* ReplayExec::regChk(const struct regchk_t& rc)
+RegReplayMismatch* ReplayExec::regChk(const struct regchk_t& rc)
 {
 	if (getGuest()->getArch() == Arch::I386) {
 		VexGuestX86State	*v = (VexGuestX86State*)rc.sym_mask;
@@ -238,8 +348,66 @@ uint8_t* ReplayExec::regChk(const struct regchk_t& rc)
 
 		new_reg_ctx = new uint8_t[rc.reg_sz];
 		memcpy(new_reg_ctx, rc.sym_reg, rc.reg_sz);
-		return new_reg_ctx;
+		return new RegReplayMismatch(gs, new_reg_ctx);
 	}
 
 	return NULL;
+}
+
+MemReplayMismatch* ReplayExec::memChk(const struct regchk_t& rc)
+{
+	for (unsigned int i = 0; i < rc.reg_sz; i++) {
+		uint8_t*	new_reg_ctx;
+
+		if (!rc.sym_mask[i]) continue;
+		if (rc.sym_reg[i] == rc.guest_reg[i]) continue;
+
+		/* mismatch */
+		fprintf(stderr, ">>>>>> Mem Mismatch on idx=0x%x\n", i);
+		fprintf(stderr, "====MASK:\n");
+		dumpBuf(rc.sym_mask, rc.reg_sz);
+
+		new_reg_ctx = new uint8_t[rc.reg_sz];
+		memcpy(new_reg_ctx, rc.sym_reg, rc.reg_sz);
+		return new MemReplayMismatch(
+			gs, rc.guest_reg, new_reg_ctx, rc.reg_sz);
+	}
+
+	return NULL;
+}
+
+StackReplayMismatch* ReplayExec::stackChk(const struct regchk_t& rc)
+{
+	for (unsigned int i = 0; i < rc.reg_sz; i++) {
+		uint8_t*	new_reg_ctx;
+
+		if (!rc.sym_mask[i]) continue;
+		if (rc.sym_reg[i] == rc.guest_reg[i]) continue;
+
+		/* mismatch */
+		fprintf(stderr, ">>>>>> Stack Mismatch on idx=0x%x\n", i);
+		fprintf(stderr, "====MASK:\n");
+		dumpBuf(rc.sym_mask, rc.reg_sz);
+
+		new_reg_ctx = new uint8_t[rc.reg_sz];
+		memcpy(new_reg_ctx, rc.sym_reg, rc.reg_sz);
+		return new StackReplayMismatch(gs, new_reg_ctx, rc.reg_sz);
+	}
+
+	return NULL;
+}
+
+MultiReplayMismatch::~MultiReplayMismatch(void)
+{ foreach (it, m.begin(), m.end()) delete (*it); }
+
+void MultiReplayMismatch::print(std::ostream& os)
+{ foreach (it, m.begin(), m.end()) (*it)->print(os); }
+
+
+ReplayMismatch* MultiReplayMismatch::create(
+	const std::vector<ReplayMismatch*>& v)
+{
+	if (v.empty()) return NULL;
+	if (v.size() == 1) return v[0];
+	return new MultiReplayMismatch(v);
 }

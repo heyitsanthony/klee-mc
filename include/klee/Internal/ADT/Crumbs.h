@@ -82,9 +82,7 @@ public:
 	void consumeOps(KTestStream* kts, Crumbs* c);
 private:
 	const struct bc_syscall* getBCS(void) const
-	{
-		return (const struct bc_syscall*)getBC();
-	}
+	{ return (const struct bc_syscall*)getBC(); }
 };
 
 class BCSysOp : public BCrumb
@@ -97,10 +95,27 @@ public:
 	unsigned int size(void) const { return getSOP()->sop_sz; }
 private:
 	const struct bc_sc_memop* getSOP(void) const
-	{
-		return (const struct bc_sc_memop*)getBC();
-	}
+	{ return (const struct bc_sc_memop*)getBC(); }
 
+};
+
+class BCMemLog : public BCrumb
+{
+/* includes base address prior to data + concrete mask */
+public:
+	BCMemLog(struct breadcrumb* b) : BCrumb(b) {}
+	virtual ~BCMemLog() {}
+	virtual void print(std::ostream& os) const;
+private:
+};
+
+class BCStackLog : public BCrumb
+{
+public:
+	BCStackLog(struct breadcrumb* b) : BCrumb(b) {}
+	virtual ~BCStackLog() {}
+	virtual void print(std::ostream& os) const;
+private:
 };
 
 }

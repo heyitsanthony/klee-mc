@@ -168,8 +168,7 @@ void ImpliedValue::getImpliedValues(
 		BinaryExpr *be = cast<BinaryExpr>(e);
 
 		if (value->isZero()) {
-			ref<ConstantExpr>	z(
-				ConstantExpr::create(0, e->getWidth()));
+			ref<ConstantExpr>	z(MK_CONST(0, e->getWidth()));
 
 			getImpliedValues(be->left, z, results);
 			getImpliedValues(be->right, z, results);
@@ -193,11 +192,12 @@ void ImpliedValue::getImpliedValues(
 	case Expr::Eq: {
 		EqExpr		*ee = cast<EqExpr>(e);
 		ConstantExpr	*CE;
+		bool		isTrue;
 
 		CE = dyn_cast<ConstantExpr>(ee->left);
-		if (value->isTrue()) {
-			if (CE != NULL)
-				getImpliedValues(ee->right, CE, results);
+		isTrue = value->isTrue();
+		if (isTrue && CE != NULL) {
+			getImpliedValues(ee->right, CE, results);
 			break;
 		}
 
@@ -210,9 +210,12 @@ void ImpliedValue::getImpliedValues(
 		// where the true and false branches are single valued
 		// and distinct.
 
-		if (CE != NULL)
-			if (CE->getWidth() == Expr::Bool)
-				getImpliedValues(ee->right, CE->Not(), results);
+		if (	isTrue == false &&
+			CE != NULL &&
+			CE->getWidth() == Expr::Bool)
+		{
+			getImpliedValues(ee->right, CE->Not(), results);
+		}
 		break;
 	}
 
@@ -260,9 +263,9 @@ ConstraintManager getBoundConstraints(
 	foreach (i, reads.begin(), reads.end()) {
 		ReadExpr *re = i->get();
 		assumption.push_back(
-			UltExpr::create(
+			MK_ULT(
 				re->index,
-				ConstantExpr::alloc(
+				MK_CONST(
 					re->updates.getRoot()->mallocKey.size,
 					32)));
 	}
@@ -298,8 +301,7 @@ void ImpliedValue::checkForImpliedValues(
 		ok = S->getValue(Query(assume, var), possible);
 		assert(ok && "FIXME: Unhandled solver failure");
 
-		ok = S->mustBeTrue(
-			Query(assume, EqExpr::create(var, possible)), res);
+		ok = S->mustBeTrue(Query(assume, MK_EQ(var, possible)), res);
 		assert(ok && "FIXME: Unhandled solver failure");
 
 		it = found.find(var);

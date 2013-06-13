@@ -126,6 +126,11 @@ private:
 	void setupProcessMemory(ExecutionState* state, llvm::Function* f);
 
 	void logXferRegisters(ExecutionState& state);
+	void logXferStack(ExecutionState& state);
+	void logXferMO(ExecutionState& state);
+	void logXferObj(
+		ExecutionState& state, const ObjectState* os, int tag,
+		unsigned off = 0);
 
 	void logSCRegs(ExecutionState& state);
 

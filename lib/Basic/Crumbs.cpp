@@ -146,8 +146,7 @@ struct breadcrumb* Crumbs::next(unsigned int bc_type)
 	return bc;
 }
 
-bool Crumbs::hasType(unsigned int v) const
-{ return (bc_types.count(v) != 0); }
+bool Crumbs::hasType(unsigned int v) const { return (bc_types.count(v) != 0); }
 
 void Crumbs::loadTypeList(std::istream& cur_is)
 {
@@ -167,17 +166,15 @@ void Crumbs::loadTypeList(std::istream& cur_is)
 
 void BCrumb::print(std::ostream& os) const { os << "BCrumb" << std::endl; }
 
-
 BCrumb* Crumbs::toBC(struct breadcrumb* bc)
 {
 	if (bc == NULL) return NULL;
 	switch (bc->bc_type) {
-	case BC_TYPE_SC:
-		return new BCSyscall(bc);
-	case BC_TYPE_VEXREG:
-		return new BCVexReg(bc);
-	case BC_TYPE_SCOP:
-		return new BCSysOp(bc);
+	case BC_TYPE_SC:	return new BCSyscall(bc);
+	case BC_TYPE_VEXREG:	return new BCVexReg(bc);
+	case BC_TYPE_SCOP:	return new BCSysOp(bc);
+	case BC_TYPE_STACKLOG:	return new BCStackLog(bc);
+	case BC_TYPE_MEMLOG:	return new BCMemLog(bc);
 //	case BC_TYPE_BOGUS:
 	default:
 		assert (0 == 1);
@@ -249,6 +246,22 @@ const char* get_sysnr_str(unsigned int n)
 //	if (n < SYSNAME_MAX)
 //		return sysname_tab[n];
 	return NULL;
+}
+
+/* XXX print data + masks? */
+void BCMemLog::print(std::ostream& os) const
+{
+	os << "<memlog>\n";
+	os << "<base>" << (void*)(*((uint64_t*)(getBC() + 1))) << "</base>\n";
+	os << "<length>" << (getBC()->bc_sz - 8) / 2  << "</length>\n";
+	os << "</memlog>\n";
+}
+
+void BCStackLog::print(std::ostream& os) const
+{
+	os << "<stacklog>\n";
+	os << "<length>" << (getBC()->bc_sz) / 2  << "</length>\n";
+	os << "</stacklog>\n";
 }
 
 void BCSyscall::print(std::ostream& os) const

@@ -14,6 +14,8 @@
 #define BC_TYPE_SC		1
 #define BC_TYPE_VEXREG		2		/* format = hdr+regdump+concrete mask */
 #define BC_TYPE_SCOP		3
+#define BC_TYPE_STACKLOG	4		/* same format as vexreg */
+#define BC_TYPE_MEMLOG		5		/* format = hdr+base+regdump+concrete mask" */
 #define BC_TYPE_USER		0xffff0000
 
 #define BC_FL_SC_NEWREGS	0x1

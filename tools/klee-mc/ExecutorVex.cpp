@@ -72,6 +72,8 @@ namespace
 		cl::location(SymRegs));
 
 	cl::opt<bool> LogRegs("logregs", cl::desc("Log registers."));
+	cl::opt<bool> LogStack("logstack", cl::desc("Log stack."));
+	cl::opt<unsigned long long> LogObject("logobj", cl::desc("Log memory object."));
 
 	cl::opt<bool,true> ConcreteVfsProxy(
 		"concrete-vfs",
@@ -406,7 +408,7 @@ void ExecutorVex::bindMappingPage(
 	if (heap_min != ~0UL && heap_max != 0) {
 		/* scanning memory is kind of stupid, but we're desperate */
 		sys_model->setModelU64(kmodule->module, "heap_begin", heap_min);
-		 /* max = start of last page */ 
+		 /* max = start of last page */
 		sys_model->setModelU64(
 			kmodule->module, "heap_end", heap_max + 4096);
 
@@ -563,38 +565,103 @@ void ExecutorVex::markExit(ExecutionState& state, uint8_t v)
 
 void ExecutorVex::logXferRegisters(ExecutionState& state)
 {
-	const ObjectState*	state_regctx_os;
-	unsigned int		reg_sz;
+	updateGuestRegs(state);
+	logXferObj(state, GETREGOBJRO(state),  BC_TYPE_VEXREG);
+}
+
+
+void ExecutorVex::logXferMO(ExecutionState& state)
+{
+	ObjectPair		op;
 	uint8_t			*crumb_buf, *crumb_base;
+	unsigned		sz;
+	struct breadcrumb	*bc;
+
+	if (state.addressSpace.resolveOne(LogObject, op) == false)
+		return;
+
+	sz = op_os(op)->size;
+	crumb_base = new uint8_t[sizeof(struct breadcrumb)+(sz*2)+8];
+	crumb_buf = crumb_base;
+	bc = reinterpret_cast<struct breadcrumb*>(crumb_base);
+
+	bc_mkhdr(bc, BC_TYPE_MEMLOG, 0, sz*2+8);
+	crumb_buf += sizeof(struct breadcrumb);
+
+	*((uint64_t*)crumb_buf) = op_mo(op)->address;
+	crumb_buf += sizeof(uint64_t);
+
+	/* 1. store concrete cache */
+	op_os(op)->readConcrete(crumb_buf, sz);
+	crumb_buf += sz;
+
+	/* 2. store concrete mask */
+	for (unsigned int i = 0; i < sz; i++)
+		crumb_buf[i] = (op_os(op)->isByteConcrete(i)) ? 0xff : 0;
+
+	es2esv(state).recordBreadcrumb(bc);
+	delete [] crumb_base;
+}
+
+void ExecutorVex::logXferStack(ExecutionState& state)
+{
+	ObjectPair		op;
+	const ObjectState	*reg_os;
+	unsigned		off;
+	ref<Expr>		stk_expr;
+	uint64_t		stack_addr;
+
+	/* do not record stack if stack pointer is symbolic */
+	reg_os = GETREGOBJRO(state);
+	off = gs->getCPUState()->getStackRegOff();
+	stk_expr = reg_os->read(off, 64);
+	if (stk_expr->getKind() != Expr::Constant)
+		return;
+
+	/* do not record stack if backing object can't be found */
+	stack_addr = cast<ConstantExpr>(stk_expr)->getZExtValue();
+	if (state.addressSpace.resolveOne(stack_addr, op) == false)
+		return;
+
+	/* log stack */
+	off = stack_addr - op_mo(op)->address;
+	logXferObj(state, op_os(op),  BC_TYPE_STACKLOG, off);
+}
+
+
+/* XXX: expensive-- lots of storage */
+void ExecutorVex::logXferObj(
+	ExecutionState& state, const ObjectState* os, int tag,
+	unsigned off)
+{
+	uint8_t			*crumb_buf, *crumb_base;
+	unsigned		sz;
 	struct breadcrumb	*bc;
 
 	updateGuestRegs(state);
 
-	/* XXX: expensive-- lots of storage */
-	reg_sz = gs->getCPUState()->getStateSize();
-	crumb_base = new uint8_t[sizeof(struct breadcrumb)+(reg_sz*2)];
+	assert (off < os->size);
+	sz = os->size - off;
+	crumb_base = new uint8_t[sizeof(struct breadcrumb)+(sz*2)];
 	crumb_buf = crumb_base;
 	bc = reinterpret_cast<struct breadcrumb*>(crumb_base);
 
-	bc_mkhdr(bc, BC_TYPE_VEXREG, 0, reg_sz*2);
+	bc_mkhdr(bc, tag, 0, sz*2);
 	crumb_buf += sizeof(struct breadcrumb);
 
 	/* 1. store concrete cache */
-	memcpy(crumb_buf, gs->getCPUState()->getStateData(), reg_sz);
-	crumb_buf += reg_sz;
+	os->readConcrete(crumb_buf, sz, off);
+	crumb_buf += sz;
 
 	/* 2. store concrete mask */
-	state_regctx_os = GETREGOBJRO(state);
-	for (unsigned int i = 0; i < reg_sz; i++) {
-		crumb_buf[i] =(state_regctx_os->isByteConcrete(i))
-			? 0xff
-			: 0;
+	for (unsigned int i = 0; i < sz; i++) {
+		crumb_buf[i] = (os->isByteConcrete(i+off)) ? 0xff : 0;
 	}
 
 	es2esv(state).recordBreadcrumb(bc);
-
 	delete [] crumb_base;
 }
+
 
 /* handle transfering between VSB's */
 void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
@@ -620,6 +687,8 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 	}
 
 	if (LogRegs) logXferRegisters(state);
+	if (LogStack) logXferStack(state);
+	if (LogObject) logXferMO(state);
 
 	markExit(state, GE_IGNORE);
 
