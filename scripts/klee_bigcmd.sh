@@ -94,7 +94,7 @@ if [ ! -z "$USE_MMU" ]; then
 	MMUFLAGS=" -sym-mmu-type=memcheck -sconc-mmu-type=memcheckc -use-sym-mmu -use-hookpass -hookpass-lib=libkleeRuntimeMMU.bc "
 fi
 
-$APP_WRAPPER klee-mc 		\
+cmd="$APP_WRAPPER klee-mc 		\
 	$EXTRA_ARGS		\
 	$REPLAYARG		\
 	$SCHEDOPTS		\
@@ -139,7 +139,10 @@ $APP_WRAPPER klee-mc 		\
 	-dump-querystats=1	\
 	-dump-stateinststats=10	\
 	-dump-br-data=5		\
-	-  2>err
+	- "
+
+echo "$cmd" >last_cmd
+$cmd 2>err
 
 #	-ctrl-graph		\
 #	-use-symhooks		\

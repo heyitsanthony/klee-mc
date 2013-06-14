@@ -1,8 +1,12 @@
-// RUN: gcc %s -O0 -o %t1
-// RUN: klee-mc -pipe-solver - ./%t1 2>%t1.err >%t1.out
+// RUN: gcc -I../../../include %s -O0 -o %t1
+// RUN: rm -rf guest-writesym guest-last
+// RUN: ../../../scripts/save_guest.sh ./%t1 guest-writesym
+// RUN: klee-mc -validate-test -pipe-solver -guest-type=sshot - 2>%t1.err >%t1.out
 // RUN: ls klee-last | not grep .err
 // RUN: ls klee-last | grep ktest | wc -l | grep 3
+// RUN: rm -rf guest-writesym guest-last
 
+#include "klee/klee.h"
 #include <unistd.h>
 
 int main(void)
@@ -13,7 +17,9 @@ int main(void)
 	if (read(0, &n, sizeof(n)) != sizeof(n))
 		return -1;
 	
-	write(1, what, n);
+	ksys_assume_ne(n, 0);
+	
+	n = write(1, what, n);
 
-	return 0;
+	return n;
 }

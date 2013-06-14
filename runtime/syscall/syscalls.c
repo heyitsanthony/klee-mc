@@ -481,12 +481,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 			if ((int64_t)GET_SYSRET(new_regs) == -1) {
 				break;
 			}
-//			sc_ret_v(new_regs, concretize_u64(GET_ARG2(regfile)));
 			sc_ret_v_new(new_regs, GET_ARG2(regfile));
 		} else
 #endif
 			sc_ret_v(regfile, GET_ARG2(regfile));
-//			sc_ret_v(regfile, concretize_u64(GET_ARG2(regfile)));
 		break;
 	}
 	case SYS_exit:
@@ -1377,8 +1375,15 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 	last_sc = sc.sys_nr;
 
-	if (sc_breadcrumb_is_newregs() || klee_is_symbolic(GET_SYSRET(regfile))) {
+	if (sc_breadcrumb_is_newregs()) {
 		/* ret value is stored in ktest regctx */
+		sc_breadcrumb_commit(&sc, 0);
+	} else if (
+		klee_is_symbolic(GET_SYSRET(regfile))
+		&& !sc_breadcrumb_is_thunk())
+	{
+		new_regs = sc_new_regs(regfile);
+		sc_ret_v_new(new_regs, GET_SYSRET(regfile));
 		sc_breadcrumb_commit(&sc, 0);
 	} else {
 		/* ret value was written concretely */

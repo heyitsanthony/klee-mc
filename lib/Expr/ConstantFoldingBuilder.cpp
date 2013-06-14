@@ -326,7 +326,7 @@ ref<Expr> ConstantFoldingBuilder::Sub(
 		if (ConstantExpr *CE = dyn_cast<ConstantExpr>(BE->left))
 			return Builder->Add(
 				CE->Neg(), Builder->Sub(LHS, BE->right));
-		// X - (Y + C) ==> -C + (X + Y)
+		// X - (Y + C) ==> -C + (X - Y)
 		if (ConstantExpr *CE = dyn_cast<ConstantExpr>(BE->right))
 			return Builder->Add(
 				CE->Neg(), Builder->Sub(LHS, BE->left));

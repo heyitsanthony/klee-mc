@@ -318,7 +318,7 @@ private:
 	void instCmp(ExecutionState& state, KInstruction* ki);
 	ref<Expr> cmpScalar(
 		ExecutionState& state, int pred,
-		ref<Expr> left, ref<Expr> right);
+		ref<Expr>& left, ref<Expr>& right);
 	ref<Expr> cmpVector(
 		ExecutionState& state,
 		int pred,

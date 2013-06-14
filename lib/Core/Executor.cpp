@@ -1208,7 +1208,7 @@ ref<Expr> Executor::sextVector(
 }
 
 ref<Expr> Executor::cmpScalar(
-	ExecutionState& state, int pred, ref<Expr> left, ref<Expr> right)
+	ExecutionState& state, int pred, ref<Expr>& left, ref<Expr>& right)
 {
 	switch(pred) {
 	case ICmpInst::ICMP_EQ: return MK_EQ(left, right);
@@ -1970,8 +1970,7 @@ void Executor::stepStateInst(ExecutionState* &state)
 		debugPrintInst(*state);
 		if (DebugPrintValues && state->stack.hasLocal(ki)) {
 			ref<Expr>	e(state->stack.readLocal(ki));
-
-			if (!e.isNull() && e->getKind() == Expr::Constant)
+			if (!e.isNull())
 				std::cerr << " = " << e << '\n';
 		}
 	}

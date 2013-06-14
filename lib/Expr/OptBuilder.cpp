@@ -288,10 +288,7 @@ ref<Expr> OptBuilder::Extract(const ref<Expr>& expr, unsigned off, Expr::Width w
 		// ( select reg4 bv0[32])
 		// => (sign_extend[63] (extract[31:31] x))
 		if (off >= active_w) {
-			return SExtExpr::create(
-				ExtractExpr::create(
-					se->src, active_w - 1, 1),
-				w);
+			return MK_SEXT(MK_EXTRACT(se->src, active_w - 1, 1), w);
 		}
 	}
 
@@ -306,7 +303,7 @@ ref<Expr> OptBuilder::Extract(const ref<Expr>& expr, unsigned off, Expr::Width w
 			unsigned	shl_bits = ce->getZExtValue();
 
 			if (max_bit < shl_bits)
-				return ConstantExpr::create(0, w);
+				return MK_CONST(0, w);
 		}
 
 		// from readelf
@@ -321,12 +318,10 @@ ref<Expr> OptBuilder::Extract(const ref<Expr>& expr, unsigned off, Expr::Width w
 			active_w = ze->src->getWidth();
 
 			/* active bytes start after extract */
-			if (active_begin >= off+w)
-				return ConstantExpr::create(0, w);
+			if (active_begin >= off+w) return MK_CONST(0, w);
 
 			/* active bytes end before start of extract */
-			if (active_begin+active_w <= off)
-				return ConstantExpr::create(0, w);
+			if (active_begin+active_w <= off) return MK_CONST(0, w);
 		}
 	}
 
@@ -420,12 +415,12 @@ ref<Expr> OptBuilder::Select(
 	if (kt == Expr::Bool) {
 		if (ConstantExpr *CE = dyn_cast<ConstantExpr>(t)) {
 			if (CE->isTrue())
-				return OrExpr::create(c, f);
-			return AndExpr::create(Expr::createIsZero(c), f);
+				return MK_OR(c, f);
+			return MK_AND(Expr::createIsZero(c), f);
 		} else if (ConstantExpr *CE = dyn_cast<ConstantExpr>(f)) {
 			if (CE->isTrue())
-				return OrExpr::create(Expr::createIsZero(c), t);
-			return AndExpr::create(c, t);
+				return MK_OR(Expr::createIsZero(c), t);
+			return MK_AND(c, t);
 		}
 	}
 
@@ -568,7 +563,9 @@ ref<Expr> OptBuilder::SExt(const ref<Expr> &e, Expr::Width w)
 static ref<Expr> AndExpr_create(Expr *l, Expr *r);
 static ref<Expr> XorExpr_create(Expr *l, Expr *r);
 
-static ref<Expr> EqExpr_createPartial(Expr *l, const ref<ConstantExpr> &cr);
+static ref<Expr> EqExpr_createPartialR(Expr *l, const ref<ConstantExpr> &cr);
+static ref<Expr> EqExpr_createPartialL(const ref<ConstantExpr> &cl, Expr *r);
+
 static ref<Expr> AndExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r);
 static ref<Expr> SubExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r);
 static ref<Expr> XorExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r);
@@ -645,7 +642,7 @@ static ref<Expr> SubExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 		return XorExpr_createPartialR(cl, r);
 
 	Expr::Kind rk = r->getKind();
-	// A - (B+c) == (A-B) - c
+	// A - (c+B) == (A-B) - c
 	if (rk==Expr::Add && isa<ConstantExpr>(r->getKid(0)))
 		return MK_SUB(MK_SUB(cl, r->getKid(0)), r->getKid(1));
 
@@ -662,41 +659,34 @@ static ref<Expr> SubExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 static ref<Expr> SubExpr_createPartial(Expr *l, const ref<ConstantExpr> &cr)
 {
 	// l - c => l + (-c)
-	return AddExpr_createPartial(
-		l,
-		ConstantExpr::alloc(0, cr->getWidth())->Sub(cr));
+	return AddExpr_createPartial(l, cr->Neg());
 }
 
 static ref<Expr> SubExpr_create(Expr *l, Expr *r)
 {
 	Expr::Width type = l->getWidth();
 
-	if (type == Expr::Bool)
-		return XorExpr_create(l, r);
+	if (type == Expr::Bool) return XorExpr_create(l, r);
 
-	if (*l == *r)
-		return ConstantExpr::alloc(0, type);
+	if (*l == *r) return MK_CONST(0, type);
 
-	Expr::Kind lk = l->getKind(), rk = r->getKind();
+	Expr::Kind	lk = l->getKind();
+	Expr::Kind	rk = r->getKind();
 
 	// (k+a)-b = k+(a-b)
 	if (lk == Expr::Add && isa<ConstantExpr>(l->getKid(0)))
-		return AddExpr::create(
-			l->getKid(0), SubExpr::create(l->getKid(1), r));
+		return MK_ADD(l->getKid(0), MK_SUB(l->getKid(1), r));
 
 	// (k-a)-b = k-(a+b)
 	if (lk == Expr::Sub && isa<ConstantExpr>(l->getKid(0)))
-		return SubExpr::create(
-			l->getKid(0), AddExpr::create(l->getKid(1), r));
+		return MK_SUB(l->getKid(0), MK_ADD(l->getKid(1), r));
 	// a - (k+b) = (a-c) - k
 	if (rk == Expr::Add && isa<ConstantExpr>(r->getKid(0)))
-		return SubExpr::create(
-			SubExpr::create(l, r->getKid(1)), r->getKid(0));
+		return MK_SUB(MK_SUB(l, r->getKid(1)), r->getKid(0));
 
 	// a - (k-b) = (a+b) - k
 	if (rk == Expr::Sub && isa<ConstantExpr>(r->getKid(0)))
-		return SubExpr::create(
-			AddExpr::create(l, r->getKid(1)), r->getKid(0));
+		return MK_SUB(MK_ADD(l, r->getKid(1)), r->getKid(0));
 
 	/* NOTE: invalid optimization:
 	 * (sub (zext x) (zext y)) != (sext (sub x y))) */
@@ -1005,16 +995,16 @@ static ref<Expr> XorExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 		return r;
 
 	if (cl->getWidth() == Expr::Bool)
-		return EqExpr_createPartial(r, MK_CONST(0, Expr::Bool));
+		return EqExpr_createPartialL(MK_CONST(0, Expr::Bool), r);
 
 	if (const SelectExpr *se = dyn_cast<SelectExpr>(r)) {
 		if (	se->getKid(1)->getKind() == Expr::Constant &&
 			se->getKid(2)->getKind() == Expr::Constant)
 		{
-			return SelectExpr::create(
+			return MK_SELECT(
 				se->getKid(0),
-				XorExpr::create(cl, se->getKid(1)),
-				XorExpr::create(cl, se->getKid(2)));
+				MK_XOR(cl, se->getKid(1)),
+				MK_XOR(cl, se->getKid(2)));
 		}
 	}
 
@@ -1385,7 +1375,7 @@ static ref<Expr> TryConstArrayOpt(
 	return res;
 }
 
-static ref<Expr> EqExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
+static ref<Expr> EqExpr_createPartialL(const ref<ConstantExpr> &cl, Expr *r)
 {
 	Expr::Width	width = cl->getWidth();
 	Expr::Kind	rk = r->getKind();
@@ -1466,9 +1456,8 @@ static ref<Expr> EqExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 		const AddExpr *ae = cast<AddExpr>(r);
 		if (isa<ConstantExpr>(ae->left)) {
 			// c0 = c1 + b => c0 - c1 = b
-			return EqExpr_createPartialR(
-				cast<ConstantExpr>(
-					SubExpr::create(cl, ae->left)),
+			return EqExpr_createPartialL(
+				cast<ConstantExpr>(MK_SUB(cl, ae->left)),
 				ae->right.get());
 		}
 	}
@@ -1510,10 +1499,9 @@ static ref<Expr> EqExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 		const SubExpr *se = cast<SubExpr>(r);
 		if (isa<ConstantExpr>(se->left)) {
 			// c0 = c1 - b => c1 - c0 = b
-			return EqExpr_createPartialR(
-				cast<ConstantExpr>(
-					SubExpr::create(se->left, cl)),
-					se->right.get());
+			return EqExpr_createPartialL(
+				cast<ConstantExpr>(MK_SUB(se->left, cl)),
+				se->right.get());
 		}
 	}
 	break;
@@ -1542,12 +1530,12 @@ static ref<Expr> EqExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 			break;
 
 		return AndExpr::create(
-			EqExpr_createPartialR(
+			EqExpr_createPartialL(
 				cl->Extract(
 					ce->getRight()->getWidth(),
 					ce->getLeft()->getWidth()),
 				ce->getLeft().get()),
-			EqExpr_createPartialR(
+			EqExpr_createPartialL(
 				cl->Extract(0, ce->getRight()->getWidth()),
 				ce->getRight().get()));
 	}
@@ -1561,7 +1549,7 @@ static ref<Expr> EqExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 			if (se->getKid(1) == cl)
 				return se->getKid(0);
 			if (se->getKid(2) == cl)
-				return NeExpr::create(
+				return MK_NE(
 					se->getKid(0),
 					ConstantExpr::alloc(
 						1, se->getKid(0)->getWidth()));
@@ -1576,8 +1564,8 @@ static ref<Expr> EqExpr_createPartialR(const ref<ConstantExpr> &cl, Expr *r)
 	return EqExpr_create(cl, r);
 }
 
-static ref<Expr> EqExpr_createPartial(Expr *l, const ref<ConstantExpr> &cr)
-{ return EqExpr_createPartialR(cr, l); }
+static ref<Expr> EqExpr_createPartialR(Expr *l, const ref<ConstantExpr> &cr)
+{ return EqExpr_createPartialL(cr, l); }
 
 static ref<Expr> UltExpr_createPartialL(const ref<ConstantExpr> &c_l, Expr *r);
 static ref<Expr> UltExpr_createPartialR(Expr *l, const ref<ConstantExpr> &cr);
@@ -1587,12 +1575,11 @@ static ref<Expr> UltExpr_createPartialL(const ref<ConstantExpr> &c_l, Expr *r)
 {
 	/* (MAX < r) => never */
 	if (c_l->isAllOnes())
-		return ConstantExpr::create(0, Expr::Bool);
+		return MK_CONST(0, Expr::Bool);
 
 	/* (0 < r) == (r != 0) */
 	if (c_l->isZero())
-		return NeExpr::create(c_l, r);
-
+		return MK_NE(c_l, r);
 
 	return UltExpr_create(c_l, r);
 }
@@ -1600,12 +1587,11 @@ static ref<Expr> UltExpr_createPartialL(const ref<ConstantExpr> &c_l, Expr *r)
 static ref<Expr> UltExpr_createPartialR(Expr *l, const ref<ConstantExpr> &cr)
 {
 	/* l < 0-- never! => always return false */
-	if (cr->isZero())
-		return ConstantExpr::create(0, Expr::Bool);
+	if (cr->isZero()) return MK_CONST(0, Expr::Bool);
 
 	/* (l < MAX) == (l != MAX) */
 	if (cr->isAllOnes())
-		return NeExpr::create(cr, l);
+		return MK_NE(cr, l);
 
 	return UltExpr_create(l, cr);
 }
@@ -1695,14 +1681,14 @@ static ref<Expr> SltExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 
 	// l && !r
 	if (l->getWidth() == Expr::Bool)
-		return AndExpr::create(l, Expr::createIsZero(r));
+		return MK_AND(l, Expr::createIsZero(r));
 
 	/* is it a negativity check? l < r = 0 */
 	if (	(ce = dyn_cast<ConstantExpr>(r)) &&
 		ce->isZero())
 	{
 		/* two's complement trick-- negative <=> top bit set */
-		return ExtractExpr::create(l, l->getWidth() - 1, 1);
+		return MK_EXTRACT(l, l->getWidth() - 1, 1);
 	}
 
 	return SltExpr::alloc(l, r);
@@ -1712,7 +1698,7 @@ static ref<Expr> SleExpr_create(const ref<Expr> &l, const ref<Expr> &r)
 {
 	// !(!l && r)
 	if (l->getWidth() == Expr::Bool)
-		return OrExpr::create(l, Expr::createIsZero(r));
+		return MK_OR(l, Expr::createIsZero(r));
 
 	return SleExpr::alloc(l, r);
 }
@@ -1725,12 +1711,16 @@ static ref<Expr> SleExpr_createPartialL(const ref<ConstantExpr> &c_l, Expr *r)
 		const ConstantExpr	*is_neg;
 		is_neg = dyn_cast<ConstantExpr>(extr);
 		assert (is_neg != NULL && "Extract of const did not yield const?");
+
 		if (is_neg->isTrue()) {
-			return ConstantExpr::create(1, Expr::Bool);
+			/* LHS is negative /\ RHS >= 0
+			 * => RHS > LHS
+			 * => LHS <= RHS == true */
+			return MK_CONST(1, Expr::Bool);
 		}
 
 		// we know it's a comparison of two positives. Ule!
-		return UleExpr::create(c_l, r);
+		return MK_ULE(c_l, r);
 	}
 
 	return SleExpr_create(c_l, r);
@@ -1745,13 +1735,17 @@ static ref<Expr> SleExpr_createPartialR(Expr *l, const ref<ConstantExpr> &cr)
 
 		is_neg = dyn_cast<ConstantExpr>(extr);
 		assert (is_neg != NULL && "Extract of const did not yield const?");
+
 		if (is_neg->isTrue()) {
-			/* false == (non-neg lhs <= negative rhs) */
-			return ConstantExpr::create(0, Expr::Bool);
+			/* RHS is negative /\ LHS >= 0
+			 * => LHS > RHS
+			 * => LHS <= RHS == false
+			 */
+			return MK_CONST(0, Expr::Bool);
 		}
 
 		// we know it's a comparison of two positives. Ule!
-		return UleExpr::create(l, cr);
+		return MK_ULE(l, cr);
 	}
 
 	return SleExpr_create(l, cr);
@@ -1776,18 +1770,18 @@ ref<Expr>  OptBuilder::_op(const ref<Expr> &l, const ref<Expr> &r) {    \
   if (ConstantExpr *cl = dyn_cast<ConstantExpr>(l)) {                  \
     if (ConstantExpr *cr = dyn_cast<ConstantExpr>(r))                  \
       return cl->_op(cr);                                              \
-    return partialR(cl, r.get());                                      \
+    return partialL(cl, r.get());                                      \
   } else if (ConstantExpr *cr = dyn_cast<ConstantExpr>(r)) {           \
-    return partialL(l.get(), cr);                                      \
+    return partialR(l.get(), cr);                                      \
   } else {                                                             \
     return _e_op ## _create(l.get(), r.get());                         \
   }                                                                    \
 }
 
 
-CMPCREATE_T(EqExpr, Eq, EqExpr, EqExpr_createPartial, EqExpr_createPartialR)
-CMPCREATE_T(SleExpr, Sle, SleExpr, SleExpr_createPartialR, SleExpr_createPartialL)
-CMPCREATE_T(UltExpr, Ult, UltExpr, UltExpr_createPartialR, UltExpr_createPartialL)
+CMPCREATE_T(EqExpr, Eq, EqExpr, EqExpr_createPartialL, EqExpr_createPartialR)
+CMPCREATE_T(SleExpr, Sle, SleExpr, SleExpr_createPartialL, SleExpr_createPartialR)
+CMPCREATE_T(UltExpr, Ult, UltExpr, UltExpr_createPartialL, UltExpr_createPartialR)
 CMPCREATE(UleExpr, Ule)
 CMPCREATE(SltExpr, Slt)
 
