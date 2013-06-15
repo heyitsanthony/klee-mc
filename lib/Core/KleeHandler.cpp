@@ -39,19 +39,19 @@ DECL_OPT(ExitOnError, "exit-on-error", "Exit if errors occur");
 
 cl::opt<unsigned> StopAfterNTests(
 	"stop-after-n-tests",
-	cl::desc("Halt execution after generating the given number of tests."),
-	cl::init(0));
+	cl::desc("Halt execution after generating the given number of tests."));
 
 cl::opt<unsigned> StopAfterNErrors(
 	"stop-after-n-errors",
-	cl::desc("Halt execution after generating the given number of errors."),
-	cl::init(0));
-
+	cl::desc("Halt execution after generating the given number of errors."));
 
 cl::opt<std::string> OutputDir(
 	"output-dir",
-	cl::desc("Directory to write results in (defaults to klee-out-N)"),
-	cl::init(""));
+	cl::desc("Directory to write results in (defaults to klee-out-N)"));
+
+cl::opt<std::string> WriteCWE(
+	"write-cwe",
+	cl::desc("Output CWE XML for errors (input is test case name)"));
 }
 
 KleeHandler::KleeHandler(const CmdArgs* in_args)
@@ -294,6 +294,42 @@ bool KleeHandler::getStateSymObjs(
 	out_objs& out)
 { return m_interpreter->getSymbolicSolution(state, out); }
 
+/* in Basic/CWE.cpp */
+namespace klee { extern int CWE_xlate(const char* s); }
+
+void KleeHandler::printCWEXML(
+	const ExecutionState &state,
+	const char* errorMessage)
+{
+	std::ostream	*f = openTestFile("xml", m_testIndex - 1);
+	int		cweID;
+
+	if (f == NULL)
+		return;
+
+	cweID = CWE_xlate(errorMessage);
+
+	(*f)	<< "<structured_message>\n"
+		<< " <message_type>found_cwe</message_type>\n"
+		<< " <test_case>" << WriteCWE << "</test_case>\n"
+		<< " <cwe_entry_id>" << cweID << "</cwe_entry_id>\n"
+		<< " <filename>?</filename>\n"
+		<< " <method>"
+		/* XXX: this is probably bad */
+		<< state.prevPC->getInst()->getParent()->getParent()->getName().str()
+		<< "</method>\n"
+		<< " <line_number>?</line_number>\n"
+		<< "</structured_message>\n";
+
+	(*f)	<< "\n<structured_message>\n"
+		<< " <message_type>controlled_exit</message_type>\n"
+		<< " <test_case>" << WriteCWE << "</test_case>\n"
+		<< "</structured_message>\n";
+
+	delete f;
+}
+
+
 /* Outputs all files (.ktest, .pc, .cov etc.) describing a test case */
 unsigned KleeHandler::processTestCase(
 	const ExecutionState &state,
@@ -321,6 +357,10 @@ unsigned KleeHandler::processTestCase(
 
 	if (errorMessage != NULL)
 		printErrorMessage(state, errorMessage, errorSuffix, id);
+
+	if (errorMessage != NULL && !WriteCWE.empty()) {
+		printCWEXML(state, errorMessage);
+	}
 
 	if (WritePaths) {
 		const char	*fprefix;

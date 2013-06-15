@@ -2620,7 +2620,7 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 		if (iter.free == NULL) return false;
 		TERMINATE_ERROR(this,
 			*(iter.free),
-			"xfer iter erorr: too many bad jumps",
+			"xfer iter error: too many bad jumps",
 			"badjmp.err");
 		iter.free = NULL;
 		return false;

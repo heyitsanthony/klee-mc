@@ -101,6 +101,9 @@ typedef
 
 	static unsigned getStopAfterNTests(void);
 private:
+	void printCWEXML(
+		const ExecutionState &state, const char* errorMessage);
+
 	void setupOutputFiles(void);
 	std::string setupOutputDir(void);
 	bool scanForOutputDir(const std::string& path, std::string& theDir);

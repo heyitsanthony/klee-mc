@@ -49,14 +49,17 @@ struct heap_ent
 #define SH_FL_FREE		2
 #define SH_FL_UNDEF		3	/* don't use or get_range breaks */
 
+#define extent_has_free(a, x)	\
+	(shadow_get_range((uint64_t)(a), (x)) & SH_FL_FREE)
+
 struct list		heap_l;
 struct shadow_info	heap_si;
 
-static uint64_t shadow_get_range(uint64_t a, unsigned n)
+static uint64_t shadow_get_range(uint64_t a, unsigned byte_c)
 {
 	uint64_t	v = 0;
 	unsigned	i;
-	for (i = 0; i < n; i += HEAP_GRAN_BYTES)
+	for (i = 0; i < byte_c; i += HEAP_GRAN_BYTES)
 		v |= shadow_get(&heap_si, a+i);
 	return v;
 }
@@ -78,8 +81,12 @@ void post_int_free(int64_t retval)
 		he = NULL;
 	}
 
-	if (he == NULL)
+	if (he == NULL) {
+		/* heap and marked free? must be double free */
+		if (extent_has_free(retval, 1)) 
+			klee_ureport("Freeing freed pointer!", "heap.err");
 		return;
+	}
 
 	free_c++;
 
@@ -238,7 +245,7 @@ y mmu_load_##x##_memcheckc(void* addr)		\
 {						\
 if (!shadow_pg_used(&heap_si, (uint64_t)addr))	\
 	return mmu_load_##x##_cnulltlb(addr);	\
-if (!in_heap && (shadow_get_range((uint64_t)addr, x/8) & SH_FL_FREE))	\
+if (!in_heap && extent_has_free(addr, x/8))	\
 	klee_ureport("Loading from free const pointer", "heap.err");	\
 return mmu_load_##x##_cnull(addr); }
 
@@ -250,7 +257,7 @@ if (!shadow_pg_used(&heap_si, (uint64_t)addr)) {	\
 	mmu_store_##x##_cnulltlb(addr, v);		\
 	return;						\
 }							\
-if (!in_heap && (shadow_get_range((uint64_t)addr, x/8) & SH_FL_FREE)) {	\
+if (!in_heap && extent_has_free(addr, x/8)) {	\
 	klee_print_expr("Bad store ptr", addr);				\
 	klee_ureport("Storing to free const pointer", "heap.err");	\
 }									\
@@ -262,7 +269,7 @@ y mmu_load_##x##_memcheck(void* addr)	\
 {					\
 if (!in_sym_mmu) {			\
 in_sym_mmu++;				\
-if (!in_heap && (shadow_get_range((uint64_t)addr, x/8) & SH_FL_FREE))	\
+if (!in_heap && extent_has_free(addr, x/8))	\
 	klee_ureport("Loading from free sym pointer", "heap.err");	\
 in_sym_mmu--;	\
 }	\
@@ -273,7 +280,7 @@ void mmu_store_##x##_memcheck(void* addr, y v)	\
 { \
 if (!in_sym_mmu) {	\
 in_sym_mmu++;	\
-if (!in_heap && (shadow_get_range((uint64_t)addr, x/8) & SH_FL_FREE))	\
+if (!in_heap && extent_has_free(addr, x/8))	\
 	klee_ureport("Storing to free sym pointer", "heap.err");	\
 in_sym_mmu--;	\
 }	\
