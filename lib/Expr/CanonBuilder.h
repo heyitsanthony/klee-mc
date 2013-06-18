@@ -23,12 +23,47 @@ virtual ref<Expr> x(const ref<Expr> &l, const ref<Expr> &r)
 
 	DECL_BIN_REF(Concat)
 	{
+	#if 0
 		/* balance concats on the right */
-		if (l->getKind() == Expr::Concat) {
+		if (l->getKind() == Expr::Concat)
 			ref<Expr>	e1(l->getKid(0));
 			ref<Expr>	e2(l->getKid(1));
 
 			return Concat(e1, Concat(e2, r));
+		}
+	#endif
+		/* give constants precedence when possible */
+
+		if (l->getKind() == Expr::Concat) {
+			/**
+			 *      C          C
+			 *     / \        / \
+			 *   C    y   => 1   C
+			 *  / \             / \
+			 * 1   x           x   y
+			 */
+			ref<Expr>	e1(l->getKid(0));
+			ref<Expr>	e2(l->getKid(1));
+
+			if (e1->getKind() == Expr::Constant)
+				return Concat(e1, Concat(e2, r));
+		}
+
+		if (	r->getKind() == Expr::Concat &&
+			l->getKind() != Expr::Constant)
+		{
+			/**
+			 *      C             C
+			 *     / \           / \
+			 *   x    C    =>   C   1
+			 *       / \       / \
+			 *      y   1     x   y
+			 */
+			ref<Expr>	e1(r->getKid(0));
+			ref<Expr>	e2(r->getKid(1));
+
+			if (e2->getKind() == Expr::Constant)
+				return Concat(Concat(l, e1), e2);
 		}
 
 		return T::Concat(l, r);
