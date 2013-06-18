@@ -8,11 +8,14 @@
 #include "klee/Internal/ADT/KTSFuzz.h"
 #include "klee/Internal/ADT/Crumbs.h"
 #include "SyscallKTestBC.h"
+#include "guestcpustate.h"
 
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+
+#define MAX_ARGS	128
 
 using namespace klee;
 extern void dumpIRSBs(void) {}
@@ -22,14 +25,14 @@ static char** loadSymArgs(KTestStream* kts)
 	char		**ret;
 	unsigned	i;
 
-	ret = (char**)malloc(128 * sizeof(char**)/* (exe, [args], NULL) */);
+	ret = (char**)malloc(MAX_ARGS * sizeof(char**)/* (exe,[args],NULL) */);
 
 	fprintf(stderr, "[kcrumb-replay] Restoring symbolic arguments\n");
 
 	ret[0] = NULL; /* program name filled in later */
 	i = 1;
 	do {
-		const KTestObject	*kto = kts->nextObject();
+		const KTestObject	*kto = kts->peekObject();
 
 		if (kto == NULL)
 			break;
@@ -39,11 +42,22 @@ static char** loadSymArgs(KTestStream* kts)
 		ret[i] = (char*)malloc(kto->numBytes+1);
 		memcpy(ret[i], kto->bytes, kto->numBytes);
 		ret[i][kto->numBytes] = '\0';
+
+		kts->nextObject();
 		i++;
 	} while(1);
 	ret[i] = NULL;
 
 	return ret;
+}
+
+
+/* add valgrind check */
+static void setup_prefix(char* args[], int arg_len)
+{
+	memmove(&args[2], &args[0], sizeof(char*)*(arg_len - 3));
+	args[0] = strdup("/usr/bin/valgrind");
+	args[1] = strdup("--suppressions=/dev/null");
 }
 
 int main(int argc, char *argv[], char* envp[])
@@ -77,9 +91,8 @@ int main(int argc, char *argv[], char* envp[])
 		args = &argv[3];
 	}
 
-	/* add valgrind check */
-	memmove(&args[1], &args[0], sizeof(char*)*126);
-	args[0] = strdup("/usr/bin/valgrind");
+	setup_prefix(args, 126);
+
 
 	ptimg = GuestPTImg::create<PTImgRemote>(
 		(argc - 3) + 1, /* ignore (self, sshot_path, test_num) */
@@ -106,9 +119,19 @@ int main(int argc, char *argv[], char* envp[])
 			bool	applied = false;
 			if (is_enter)
 				applied = sc->apply();
-			is_enter = !is_enter;
+			if (applied)
+				is_enter = true;
+			else
+				is_enter = !is_enter;
 			sig = 0; /* eat signal */
 		}
+
+#if 0
+		if (sig == SIGSEGV) {
+			ptimg->slurpRegisters(ptimg->getPID());
+			ptimg->getCPUState()->print(std::cerr);
+		}
+#endif
 
 		ok = ptrace(PTRACE_SYSCALL, pid, 0, sig);
 	}

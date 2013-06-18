@@ -76,12 +76,24 @@ bool SyscallsKTestBC::isReplayEnabled(SyscallParams& sp)
 	if (sys_nr != 2 /* open */)
 		return false;
 
+	/* display files being opened */
 	memset(str, 0, sizeof(str));
 	pt_r->getMem()->memcpy(str, guest_ptr(sp.getArg(0)), 1024);
 	std::cerr << "open: " << str << '\n';
 
+	/* NO DEFAULT SUPPRESSIONS (to mimic klee memcheck) */
+#if 1
+	if (strcmp(str, "/usr/lib64/valgrind/default.supp") == 0) {
+		pt_r->slurpRegisters(pt_r->getPID());
+		pt_r->getCPUState()->setSyscallResult(1234567);
+		pt_r->pushRegisters();
+	}
+#endif
+
+
 	if (strcmp(str, BEGIN_FILE) != 0)
 		return false;
+
 
 	seen_begin_file = true;
 	return true;
@@ -108,7 +120,7 @@ struct bc_syscall* SyscallsKTestBC::peekSyscallCrumb(void)
 			break;
 
 		/* ignore syscall crumb + operations */
-		std::cerr << "Skipping: " << bcs->bcs_op_c + 1 << '\n';
+		std::cerr << PFX "Skipping sys=" << bcs->bcs_sysnr << '\n';
 		crumbs->skip(bcs->bcs_op_c + 1);
 		Crumbs::freeCrumb(bc);
 		skipped_mem_c++;
@@ -142,7 +154,7 @@ bool SyscallsKTestBC::apply(void)
 	
 	/* match? */
 	if (bcs->bcs_sysnr != sys_nr) {
-#if 1
+#if 0
 		std::cerr
 			<< PFX "Skipping valgrind syscall sys_nr="
 			<< sys_nr
@@ -154,8 +166,18 @@ bool SyscallsKTestBC::apply(void)
 	} else {
 		replayedSyscall = true;
 		used_c++;
+
+//		std::cerr << "IN::::\n";
+//		pt_r->getCPUState()->print(std::cerr);
+
 		SyscallsKTest::apply(sp);
-		assert (0 == 1 && "RETURN POLICY?");
+
+//		std::cerr << ":::::::::::::::OUT::::\n";
+//		pt_r->getCPUState()->print(std::cerr);
+
+
+		/* apply registers */
+		pt_r->pushRegisters();
 	}
 
 	Crumbs::freeCrumb((struct breadcrumb*)bcs);
