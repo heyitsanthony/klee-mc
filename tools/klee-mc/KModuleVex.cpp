@@ -28,6 +28,11 @@ namespace
 		cl::desc("Print uncovered address ranges"),
 		cl::init(false));
 
+	cl::opt<bool> PrintLibraryName(
+		"print-library-name",
+		cl::desc("Print library name of uncovered function"),
+		cl::init(true));
+
 	cl::opt<bool> CountLibraries(
 		"count-lib-cov",
 		cl::desc("Count library coverage"),
@@ -131,8 +136,16 @@ Function* KModuleVex::loadFuncByBuffer(void* host_addr, guest_ptr guest_addr)
 			<< (void*)vsb->getGuestAddr().o
 			<< "-"
 			<< (void*)vsb->getEndAddr().o << " : "
-			<< gs->getName(vsb->getGuestAddr())
-			<< '\n';
+			<< gs->getName(vsb->getGuestAddr());
+
+		if (PrintLibraryName)
+		if (ExecutionState *es = exe->getCurrentState()) {
+			const MemoryObject	*mo;
+			mo = es->addressSpace.resolveOneMO(guest_addr.o);
+			std::cerr << " @ " << mo->name;
+		}
+
+		std::cerr << '\n';
 	}
 
 	return f;
