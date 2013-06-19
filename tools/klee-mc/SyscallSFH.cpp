@@ -215,6 +215,12 @@ static ssize_t do_pread(
 	return br;
 }
 
+static bool isSysPath(std::string& path)
+{
+	return (path.size() > 2 &&
+		path[0] == '/' && (path[1] == 'l' || path[1] == 'u'));
+}
+
 
 SFH_DEF_HANDLER(IO)
 {
@@ -234,11 +240,8 @@ SFH_DEF_HANDLER(IO)
 		std::string path(sfh->readStringAtAddress(state, args[1]));
 		vfd_t	vfd;
 
-		if (	DenySysFiles &&
-			path.size() > 2 &&
-			path[0] == '/' && (path[1] == 'l' || path[1] == 'u'))
-		{
-			std::cerr << "DENIED '" << path << "'\n";
+		if (DenySysFiles && isSysPath(path)) {
+			std::cerr << "[kmc-io] DENIED '" << path << "'\n";
 			state.bindLocal(target, MK_CONST(-1, 64));
 			break;
 		}
@@ -246,11 +249,14 @@ SFH_DEF_HANDLER(IO)
 		vfd = sc_sfh->vfds.addPath(path);
 		if (vfd != ~0ULL) {
 			int base_fd = sc_sfh->vfds.xlateVFD(vfd);
-			if (base_fd == -1)
+			if (base_fd == -1) {
+				std::cerr << "[VFD] Xlated as fd=-1\n";
 				vfd = ~0ULL;
+			}
 		}
 
-		std::cerr << "OPENED '" << path << "'. VFD=" << vfd << '\n';
+		std::cerr << "[kmc-io] OPENED '"
+			<< path << "'. VFD=" << (long)vfd << '\n';
 		state.bindLocal(target, MK_CONST(vfd, 64));
 		break;
 	}

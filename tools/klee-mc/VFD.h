@@ -4,6 +4,7 @@
 #include <map>
 #include <string>
 #include <stdint.h>
+#include <vector>
 
 typedef uint64_t vfd_t;
 
@@ -19,14 +20,18 @@ public:
 	int xlateVFD(vfd_t vfd);
 	void close(vfd_t vfd);
 private:
-	typedef std::map<std::string, vfd_t>	path2vfd_t;
-	typedef std::map<vfd_t, std::string>	vfd2path_t;
-	typedef std::map<vfd_t, int>		vfd2fd_t;
+	typedef std::map<std::string, vfd_t>		path2vfd_t;
+	typedef std::map<vfd_t, std::string>		vfd2path_t;
+	typedef std::map<vfd_t, int>			vfd2fd_t;
+	typedef std::map<int, std::vector<vfd_t> >	fd2vfd_t;
+
+	int openForVFD(vfd_t vfd, const char* path);
 
 	vfd_t		vfd_counter;
 	vfd2fd_t	vfd2fd;
 	path2vfd_t	path2vfd;
 	vfd2path_t	vfd2path;
+	fd2vfd_t	fd2vfd;
 };
 }
 

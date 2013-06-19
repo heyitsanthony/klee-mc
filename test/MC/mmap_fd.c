@@ -14,7 +14,6 @@
 int main(int argc, char* argv[])
 {
 	int	fd;
-	char	buf[64];
 	ssize_t	br;
 	void	*m;
 	char	*m_c;
@@ -47,7 +46,7 @@ int main(int argc, char* argv[])
 	}
 
 	/* expect: "root:0"...*/
-	if (buf[4] != ':') {
+	if (m_c[4] != ':') {
 		ksys_report_error(
 			__FILE__, __LINE__,
 			"Reading bogus groups file. Expected ':' at character 5",

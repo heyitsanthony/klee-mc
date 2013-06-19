@@ -16,6 +16,7 @@
 
 bool concrete_vfs = false;
 bool deny_sys_files = false;
+bool fail_missing_concrete = true;
 
 struct fail_counters
 {
@@ -165,6 +166,11 @@ static void sc_stat(struct sc_pkt* sc)
 				fd_close(fd);
 				return;
 			}
+
+			if (fd == -1 && fail_missing_concrete) {
+				sc_ret_v(sc->regfile, fd);
+				return;
+			}
 		}
 	}
 
@@ -198,6 +204,7 @@ static void sc_open(const char* path, void* regfile)
 		return;
 	}
 
+	/* concrete path? */
 	if (!file_path_has_sym(path)) {
 		if (	deny_sys_files &&
 			(path[0] == '\0' ||
@@ -217,6 +224,10 @@ static void sc_open(const char* path, void* regfile)
 			{
 				sc_ret_v(regfile, ret_fd);
 				return;
+			}
+
+			if (ret_fd == -1 && fail_missing_concrete) {
+				sc_ret_v(regfile, ret_fd);
 			}
 		}
 	}
@@ -300,6 +311,10 @@ int file_sc(struct sc_pkt* sc)
 			break;
 		}
 
+		if (fd == -1)
+			return -1;
+
+		klee_print_expr("reading sym fd", fd);
 		if (sc_read_sym(sc, len) == 0)
 			return 0;
 	}

@@ -94,6 +94,10 @@ if [ ! -z "$USE_MMU" ]; then
 	MMUFLAGS=" -sym-mmu-type=memcheck -sconc-mmu-type=memcheckc -use-sym-mmu -use-hookpass -hookpass-lib=libkleeRuntimeMMU.bc "
 fi
 
+
+#	-deny-sys-files 	\
+#
+
 cmd="$APP_WRAPPER klee-mc 		\
 	$EXTRA_ARGS		\
 	$REPLAYARG		\
@@ -110,7 +114,6 @@ cmd="$APP_WRAPPER klee-mc 		\
 	-use-search-filter=false \
 	-use-cache=false	\
 	-use-cex-cache=false	\
-	-deny-sys-files 	\
 	-pipe-fork-queries	\
 	-smt-let-arrays=true	\
 	-print-new-ranges	\

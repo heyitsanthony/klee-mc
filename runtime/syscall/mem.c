@@ -2,6 +2,7 @@
 #include <sys/mman.h>
 #include <klee/klee.h>
 #include "syscalls.h"
+#include "concrete_fd.h"
 #include "mem.h"
 
 /* klee-mc fiddles with these on init */
@@ -57,15 +58,23 @@ static void* sc_mmap_anon(void* regfile, uint64_t len)
 		return addr;
 	}
 
-	/* mapping has a deisred location */
+	/* mapping has a desired location */
 	addr = sc_mmap_addr(GET_ARG0_PTR(regfile), len, GET_ARG3(regfile));
 	return addr;
 }
 
 // return address of mmap
-static void* sc_mmap_fd(void* regfile, uint64_t len)
+static void* sc_mmap_fd(void* regfile, uint64_t len, int fd, uint64_t off)
 {
 	void		*ret_addr;
+
+	if (fd_is_concrete(fd)) {
+		ssize_t	br;
+		ret_addr = sc_mmap_anon(regfile, len);
+		if (ret_addr == MAP_FAILED) return ret_addr;
+		br = fd_pread(fd, ret_addr, len, off);
+		return ret_addr;
+	}
 
 	/* TODO, how should this be split? */
 	if (len <= 4096) {
@@ -89,14 +98,16 @@ void* sc_mmap(void* regfile, uint64_t len)
 {
 	void		*addr;
 	void		*new_regs;
+	int		fd;
 
 	new_regs = sc_new_regs(regfile);
+	fd = ((int)GET_ARG4(regfile));
 
 	if (len >= (uintptr_t)0x10000000 || (int64_t)len <= 0) {
 		addr = MAP_FAILED;
-	} else if (((int)GET_ARG4(regfile)) != -1) {
+	} else if (fd != -1) {
 		/* file descriptor mmap-- things need to be symbolic */
-		addr = sc_mmap_fd(regfile, len);
+		addr = sc_mmap_fd(regfile, len, fd, GET_ARG5(regfile));
 	} else if ((GET_ARG3(regfile) & MAP_ANONYMOUS) == 0) {
 		/* !fd && !anon => WTF */
 		addr = MAP_FAILED;

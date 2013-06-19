@@ -150,6 +150,7 @@ ssize_t fd_read(int fd, char* buf, int c)
 	c = concretize_u64(c);
 	buf = (void*)concretize_u64((uint64_t)buf);
 	br = KMC_IO_PREAD(fi->fi_vfd, buf, c, fi->fi_cursor);
+	klee_print_expr("[kmc-io] read concrete bytes", br);
 
 	if (br > 0)
 		fi->fi_cursor += br;
