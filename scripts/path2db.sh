@@ -26,7 +26,8 @@ function insert_all_sb
 	for covline in `cat uncov.dat`; do
 		sbaddr=`echo "$covline" | cut -f1 -d'-' | cut -f2 -d' '`
 		sbaddr_lit=`printf "%lu" $sbaddr`
-		sbname=`echo "$covline" | cut -f2 -d':'`
+		# 1 = UNCOV, 2 = x-y, 3 = ':', 4 = sbname
+		sbname=`echo "$covline" | cut -f4 -d' '`
 		sbname=`echo -e -n $sbname`
 		sblen=`echo "$covline" |  cut -f2 -d' '  | sed "s/-/ /" | awk '{ print $2 " " $1 }' | xargs printf "%d - %d\n" | bc` 
 		echo -e -n "INSERT OR IGNORE INTO sb (sbaddr, name, sblen) VALUES ($sbaddr_lit, '$sbname', $sblen); "
