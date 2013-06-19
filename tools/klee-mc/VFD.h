@@ -19,6 +19,7 @@ public:
 	vfd_t addPath(const std::string& path);
 	int xlateVFD(vfd_t vfd);
 	void close(vfd_t vfd);
+	std::string getPath(vfd_t vfd) const;
 private:
 	typedef std::map<std::string, vfd_t>		path2vfd_t;
 	typedef std::map<vfd_t, std::string>		vfd2path_t;

@@ -19,6 +19,7 @@ long kmc_io(int sys_nr, long p1, long p2, long p3, long p4);
 #define KMC_IO_CLOSE(x)		kmc_io(SYS_close, x, 0, 0, 0)
 #define KMC_IO_PREAD(x,y,z,w)	kmc_io(SYS_pread64, x, (long)y, z, w)
 #define KMC_IO_FSTAT(x,y)	kmc_io(SYS_fstat, x, (long)y, 0, 0)
+#define KMC_IO_MMAP(x,y,z,w)	kmc_io(SYS_mmap,(long)x,(long)y,(long)z,(long)w)
 
 /*
  * We try to pass everything through when possible.
@@ -207,3 +208,6 @@ off_t fd_lseek(int fd, off_t o, int whence)
 	/* some weirdo seek (SEEK_HOLE, SEEK_DATA) no one cares about */
 	return (off_t)-1;
 }
+
+void fd_mark(int fd, void* addr, size_t len, off_t off)
+{ KMC_IO_MMAP(addr, fd2fi(fd)->fi_vfd, len, off); }

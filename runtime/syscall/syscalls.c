@@ -464,8 +464,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 			1001 /* child's PID, passed to parent */);
 		break;
 	case SYS_mprotect:
-		klee_warning_once("ignoring mprotect()");
-		sc_ret_v(regfile, -1);
+		klee_warning_once("faking OK mprotect()");
+		sc_ret_v(regfile, 0);
 		break;
 
 	case SYS_write: {

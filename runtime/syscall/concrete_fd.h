@@ -12,5 +12,6 @@ ssize_t fd_read(int fd, char*, int c);
 ssize_t fd_pread(int fd, void* buf, size_t c, off_t off);
 int fd_stat(int fd, struct stat* s);
 off_t fd_lseek(int, off_t, int whence);
+void fd_mark(int fd, void* addr, size_t len, off_t off);
 
 #endif

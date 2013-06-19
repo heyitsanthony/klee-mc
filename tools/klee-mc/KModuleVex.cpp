@@ -3,6 +3,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <llvm/Support/CommandLine.h>
+#include <unistd.h>
 #include <assert.h>
 #include "ExecutorVex.h"
 #include "KModuleVex.h"
@@ -17,6 +18,8 @@
 
 using namespace llvm;
 using namespace klee;
+
+#define isNameUgly(x)	(((x).find("sb_") == 0) || ((x).find("0x") == 0))
 
 namespace
 {
@@ -68,7 +71,6 @@ Function* KModuleVex::getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new)
 {
 	void		*host_addr;
 	Function	*f;
-	VexSB		*vsb;
 
 	if (	guest_addr < 0x1000 ||
 		((guest_addr > 0x7fffffffffffULL) &&
@@ -84,6 +86,8 @@ Function* KModuleVex::getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new)
 	host_addr = gs->getMem()->getHostPtr(guest_ptr(guest_addr));
 
 	/* cached => already seen it */
+	/* XXX: this is broken if two states have different code mapped
+	 * to the same address. Does that happen often? */
 	f = xlate_cache->getCachedFunc(guest_ptr(guest_addr));
 	if (f != NULL) {
 		is_new = false;
@@ -91,23 +95,35 @@ Function* KModuleVex::getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new)
 	}
 
 	/* Need to load the function. First, make sure that addr is mapped. */
-	/* XXX: this is broken for code that is allocated *after* guest is
-	 * loaded and snapshot */
 	GuestMem::Mapping	m;
 	if (gs->getMem()->lookupMapping(guest_ptr(guest_addr), m) == false) {
-		return NULL;
+		f = getPrivateFuncByAddr(guest_addr);
+		if (f != NULL)
+			is_new = true;
+		return f;
 	}
 
+	f = loadFuncByBuffer(host_addr, guest_ptr(guest_addr));
+	if (f != NULL)
+		is_new = true;
+
+	return f;
+}
+
+Function* KModuleVex::loadFuncByBuffer(void* host_addr, guest_ptr guest_addr)
+{
+	VexSB		*vsb;
+	Function	*f;
+
 	/* !cached => put in cache, alert kmodule, other bookkepping */
-	f = xlate_cache->getFunc(host_addr, guest_ptr(guest_addr));
+	f = xlate_cache->getFunc(host_addr, guest_addr);
 	if (f == NULL) return NULL;
 
 	/* need to know func -> vsb to compute func's guest address */
-	vsb = xlate_cache->getCachedVSB(guest_ptr(guest_addr));
+	vsb = xlate_cache->getCachedVSB(guest_addr);
 	assert (vsb && "Dropped VSB too early?");
 	func2vsb_table.insert(std::make_pair((uint64_t)f, vsb));
 
-	is_new = true;
 	native_code_bytes += vsb->getEndAddr() - vsb->getGuestAddr();
 
 	if (PrintNewRanges) {
@@ -122,6 +138,7 @@ Function* KModuleVex::getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new)
 	return f;
 }
 
+
 const VexSB* KModuleVex::getVSB(Function* f) const
 {
 	func2vsb_map::const_iterator	it;
@@ -131,6 +148,71 @@ const VexSB* KModuleVex::getVSB(Function* f) const
 		return NULL;
 
 	return it->second;
+}
+
+Function* KModuleVex::getPrivateFuncByAddr(uint64_t guest_addr)
+{
+	uint8_t			buf[4096];
+	const ExecutionState	*ese;
+	ObjectPair		op;
+	int			br;
+
+	ese = exe->getCurrentState();
+	if (ese == NULL)
+		return NULL;
+
+	memset(buf, 0xcc, sizeof(buf));
+	br = ese->addressSpace.readConcreteSafe(buf, guest_addr, sizeof(buf));
+	if (br == 0)
+		return NULL;
+
+	/* XXX: what if br comes up short?
+	 * (e.g., code split between two pages)
+	 * XXX: need intrinsic for addressspace concrete safe copy */
+
+	/* is this a new library? if so, I'll need to be able to 
+	 * load the symbols! */
+	if (isNameUgly(gs->getName(guest_ptr(guest_addr)))) {
+		/* ugly name? maybe a library was loaded */
+		loadPrivateLibrary(guest_ptr(guest_addr));
+	}
+
+	return loadFuncByBuffer(buf, guest_ptr(guest_addr));
+}
+
+void KModuleVex::loadPrivateLibrary(guest_ptr addr)
+{
+	const ExecutionState	*ese;
+	const MemoryObject	*cur_mo, *prev_mo;
+	std::string		path;
+	static std::set<std::string> seen_paths;
+
+	ese = exe->getCurrentState();
+	cur_mo = ese->addressSpace.resolveOneMO(addr.o);
+	path = cur_mo->name;
+
+	if (seen_paths.count(path))
+		return;
+
+	seen_paths.insert(path);
+
+	/* mo path was not a path on the system */
+	if (access(cur_mo->name.c_str(), R_OK) != 0)
+		return;
+	
+	/* scan for base of mapping */
+	while (1) {
+		prev_mo = ese->addressSpace.resolveOneMO(cur_mo->address - 1);
+		if (prev_mo == NULL)
+			break;
+		if (prev_mo->name != path)
+			break;
+
+		cur_mo = prev_mo;
+	}
+
+	/* tell guest about this new library */
+	gs->addLibrarySyms(path.c_str(), guest_ptr(cur_mo->address));
 }
 
 #define LIBRARY_BASE_GUESTADDR	((uint64_t)0x10000000)
@@ -191,7 +273,7 @@ KFunction* KModuleVex::addFunction(Function* f)
 
 	if (f->isDeclaration()) return NULL;
 
-	is_special = (f->getName().str().find("sb_") == 0);
+	is_special = isNameUgly(f->getName().str());
 	if (is_special) {
 		std::string	pretty_name;
 		const VexSB	*vsb;
@@ -199,7 +281,7 @@ KFunction* KModuleVex::addFunction(Function* f)
 
 		if (vsb != NULL) {
 			pretty_name = gs->getName(vsb->getGuestAddr());
-			if (pretty_name.find("sb_") != 0)
+			if (!isNameUgly(pretty_name) != 0)
 				setPrettyName(f, pretty_name);
 		}
 	}

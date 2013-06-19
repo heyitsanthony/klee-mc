@@ -42,6 +42,10 @@ private:
 	void scanFuncExits(uint64_t guest_addr, llvm::Function* f);
 	void writeCodeGraph(GenericGraph<guest_ptr>& g);
 
+	llvm::Function* getPrivateFuncByAddr(uint64_t guest_addr);
+	void loadPrivateLibrary(guest_ptr addr);
+	llvm::Function* loadFuncByBuffer(void* host_addr, guest_ptr guest_addr);
+
 	Executor	*exe;
 	Guest		*gs;
 

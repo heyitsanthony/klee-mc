@@ -128,6 +128,8 @@ public:
 	void write(ref<Expr> offset, const ref<Expr>& value);
 	void writeConcrete(const uint8_t* addr, unsigned wr_sz);
 	void readConcrete(uint8_t* addr, unsigned rd_sz, unsigned off=0) const;
+	int readConcreteSafe(uint8_t* addr, unsigned rd_sz, unsigned off=0) const;
+
 	int cmpConcrete(uint8_t* addr, unsigned len) const
 	{ return memcmp(addr, concreteStore, len); }
 

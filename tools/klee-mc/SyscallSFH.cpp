@@ -235,6 +235,41 @@ SFH_DEF_HANDLER(IO)
 	sysnr = ce_sysnr->getZExtValue();
 
 	switch (sysnr) {
+	case SYS_mmap: {
+		MemoryObject	*mo;
+		vfd_t		vfd;
+		uint64_t	addr, len, off;
+		std::string	path;
+
+		/* (addr, fd, len, off) */
+		addr = arg2u64(args[1]);
+		vfd = arg2u64(args[2]);
+		len = arg2u64(args[3]);
+		off = arg2u64(args[4]);
+
+		/* don't mark if symbolic length */
+		if (len == ~0ULL)
+			break;
+
+		path = sc_sfh->vfds.getPath(vfd);
+		if (path.empty())
+			break;
+		
+		/* mark [addr, addr+len) with path from fd */
+		mo = NULL;
+		for (uint64_t cur_off = 0; cur_off < len; cur_off += mo->size) {
+			mo = const_cast<MemoryObject*>(
+				state.addressSpace.resolveOneMO(
+					addr+cur_off));
+			if (mo == NULL)
+				break;
+
+			mo->setName(path);
+		}
+
+		break;
+	}
+
 	case SYS_open: {
 		/* expects a path */
 		std::string path(sfh->readStringAtAddress(state, args[1]));

@@ -1,8 +1,9 @@
 // RUN: gcc %s -O0 -ldl -I../../../include/  -o %t1
-// RUN: klee-mc -pipe-solver -concrete-vfs - ./%t1 2>%t1.err >%t1.out
+// RUN: klee-mc -print-new-ranges -pipe-solver -concrete-vfs - ./%t1 2>%t1.err >%t1.out
 //
 // Should not have any errors.
 // RUN: ls klee-last | not grep err
+// RUN: grep getxattr %t1.err
 
 #include "klee/klee.h"
 #include <unistd.h>

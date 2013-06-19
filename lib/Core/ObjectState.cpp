@@ -714,6 +714,28 @@ void ObjectState::writeConcrete(const uint8_t* addr, unsigned wr_sz)
 void ObjectState::readConcrete(uint8_t* addr, unsigned rd_sz, unsigned off) const
 { memcpy(addr, concreteStore+off, rd_sz);  }
 
+
+int ObjectState::readConcreteSafe(
+	uint8_t* buf, unsigned rd_sz, unsigned off) const
+{
+	int	copy_total, copy_len;
+
+	copy_len = off;
+	if (rd_sz + off >= size) {
+		copy_len = size - off;
+	}
+
+	copy_total = 0;
+	for (int i = 0; i < copy_len; i++) {
+		if (!isByteConcrete(off+i))
+			break;
+		buf[i] = concreteStore[off+i];
+		copy_total++;
+	}
+
+	return copy_total;
+}
+
 ObjectState* ObjectState::createDemandObj(unsigned sz)
 {
 	if (sz == 4096 && UseZeroPage) {

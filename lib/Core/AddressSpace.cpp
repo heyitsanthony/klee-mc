@@ -102,7 +102,7 @@ ObjectState* AddressSpace::findWriteableObject(const MemoryObject* mo)
 	return getWriteable(mo, ros);
 }
 
-bool AddressSpace::resolveOne(uint64_t address, ObjectPair &result)
+bool AddressSpace::resolveOne(uint64_t address, ObjectPair &result) const
 {
 	const MemoryMap::value_type 	*res;
 	const MemoryObject		*mo;
@@ -126,7 +126,7 @@ bool AddressSpace::resolveOne(uint64_t address, ObjectPair &result)
 	return false;
 }
 
-const MemoryObject* AddressSpace::resolveOneMO(uint64_t address)
+const MemoryObject* AddressSpace::resolveOneMO(uint64_t address) const
 {
 	ObjectPair	result;
 	if (!resolveOne(address, result))
@@ -1045,6 +1045,36 @@ bool AddressSpace::readConcrete(
 	}
 
 	return bogus_reads;
+}
+
+int AddressSpace::readConcreteSafe(
+	uint8_t* buf, uint64_t guest_addr, unsigned len) const
+{
+	ObjectPair	op;
+	int		br = 0;
+	int		to_copy;
+
+	for (unsigned i = 0;  i < len; i += to_copy) {
+		unsigned	off, cur_len, remain;
+		int		copied;
+
+		if (resolveOne(guest_addr+i, op) == false)
+			break;
+
+		off = op_mo(op)->getOffset(guest_addr+i);
+		remain = len - br;
+		to_copy = remain;
+		if ((off + to_copy) > op_mo(op)->size)
+			to_copy = op_mo(op)->size - off;
+
+		copied = op_os(op)->readConcreteSafe(buf + i, to_copy, off);
+		br += copied;
+
+		if (copied != to_copy)
+			break;
+	}
+
+	return br;
 }
 
 void AddressSpace::clear(void)

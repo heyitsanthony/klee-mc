@@ -84,8 +84,8 @@ public:
 	/// Resolve address to an ObjectPair in result.
 	/// \return true iff an object was found.
 	bool resolveOne(const ref<ConstantExpr> &address, ObjectPair &result);
-	bool resolveOne(uint64_t address, ObjectPair& result);
-	const MemoryObject* resolveOneMO(uint64_t address);
+	bool resolveOne(uint64_t address, ObjectPair& result) const;
+	const MemoryObject* resolveOneMO(uint64_t address) const;
 	const MemoryObject* getLastBoundHint(void) const { return last_mo; }
 
 	void clear(void);
@@ -258,6 +258,11 @@ public:
 	bool readConcrete(
 		std::vector<uint8_t>& v,
 		std::vector<bool>& is_conc,
+		uint64_t addr,
+		unsigned len) const;
+
+	int readConcreteSafe(
+		uint8_t* buf,
 		uint64_t addr,
 		unsigned len) const;
 

@@ -375,8 +375,11 @@ void ExecutorVex::bindMappingPage(
 		mmap_mo->setName("heap");
 		if (addr_base > heap_max) heap_max = addr_base;
 		if (addr_base < heap_min) heap_min = addr_base;
-	}else {
-		mmap_mo->setName("guestimg");
+	} else {
+		mmap_mo->setName(
+			(m.getName().empty() == true)
+				? "guestimg"
+				: m.getName().c_str());
 	}
 
 	/* optimize for zero pages */

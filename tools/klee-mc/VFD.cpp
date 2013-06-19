@@ -41,6 +41,17 @@ int VFD::openForVFD(vfd_t vfd, const char* path)
 	return base_fd;
 }
 
+std::string VFD::getPath(vfd_t vfd) const
+{
+	vfd2path_t::const_iterator	it;
+	
+	it = vfd2path.find(vfd);
+	if (it == vfd2path.end())
+		return "";
+
+	return it->second;
+}
+
 vfd_t VFD::addPath(const std::string& path)
 {
 	path2vfd_t::const_iterator it(path2vfd.find(path));
