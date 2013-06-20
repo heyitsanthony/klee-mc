@@ -10,10 +10,10 @@
 #ifndef KLEE_PASSES_H
 #define KLEE_PASSES_H
 
-#include <llvm/BasicBlock.h>
-#include <llvm/Constants.h>
-#include <llvm/Instructions.h>
-#include <llvm/Module.h>
+#include <llvm/IR/BasicBlock.h>
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/Module.h>
 #include <llvm/Pass.h>
 #include <llvm/CodeGen/IntrinsicLowering.h>
 

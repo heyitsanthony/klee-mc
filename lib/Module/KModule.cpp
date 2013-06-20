@@ -7,18 +7,18 @@
 //
 //===----------------------------------------------------------------------===//
 #include <llvm/Linker.h>
-#include <llvm/LLVMContext.h>
+#include <llvm/IR/LLVMContext.h>
 
 #include <llvm/Bitcode/ReaderWriter.h>
-#include <llvm/Instructions.h>
-#include <llvm/Module.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/Module.h>
 #include <llvm/PassManager.h>
-#include <llvm/ValueSymbolTable.h>
+#include <llvm/IR/ValueSymbolTable.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/Support/Path.h>
-#include <llvm/DataLayout.h>
+#include <llvm/IR/DataLayout.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
 
@@ -30,7 +30,7 @@
 #include "Passes.h"
 #include "HookPass.h"
 
-#include "llvm/GlobalVariable.h"
+#include <llvm/IR/GlobalVariable.h>
 #include "klee/Common.h"
 #include "klee/Interpreter.h"
 #include "klee/Internal/Module/Cell.h"

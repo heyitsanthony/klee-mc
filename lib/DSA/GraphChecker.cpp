@@ -25,8 +25,8 @@
 
 #include "static/dsa/DataStructure.h"
 #include "static/dsa/DSGraph.h"
-#include "llvm/Support/CommandLine.h"
-#include "llvm/Value.h"
+#include <llvm/Support/CommandLine.h>
+#include <llvm/IR/Value.h>
 #include <set>
 using namespace llvm;
 

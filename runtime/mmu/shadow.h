@@ -38,7 +38,8 @@ struct shadow_info {
 };
 
 int shadow_init(
-	struct shadow_info*, int granularity, int bits_per_unit, uint64_t initial);
+	struct shadow_info*, int granularity,
+	unsigned bits_per_unit, uint64_t initial);
 void shadow_fini(struct shadow_info* si);
 void shadow_put(struct shadow_info* si, uint64_t phys, uint64_t l);
 void shadow_put_large(struct shadow_info* si, uint64_t phys, const void* ptr);

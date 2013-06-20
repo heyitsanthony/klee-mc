@@ -1,7 +1,7 @@
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
-#include <llvm/LLVMContext.h>
-#include <llvm/Instructions.h>
-#include <llvm/Constants.h>
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/Constants.h>
 #include "klee/Internal/Module/KModule.h"
 #include "static/Sugar.h"
 #include "../Core/Executor.h"

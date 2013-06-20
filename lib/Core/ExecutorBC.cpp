@@ -1,6 +1,6 @@
-#include <llvm/Module.h>
-#include <llvm/LLVMContext.h>
-#include <llvm/DataLayout.h>
+#include <llvm/IR/Module.h>
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/DataLayout.h>
 #include <llvm/Support/CommandLine.h>
 #include <sstream>
 

@@ -14,26 +14,27 @@
 
 #include "static/dsa/DataStructure.h"
 #include "static/dsa/DSGraph.h"
-#include "llvm/Constants.h"
-#include "llvm/DerivedTypes.h"
-#include "llvm/Instructions.h"
-#include "llvm/Intrinsics.h"
-#include "llvm/Support/GetElementPtrTypeIterator.h"
-#include "llvm/Support/InstVisitor.h"
-#include "llvm/DataLayout.h"
-#include "llvm/Support/CommandLine.h"
-#include "llvm/Support/Debug.h"
-#include "llvm/Support/FormattedStream.h"
-#include "llvm/Support/Timer.h"
-#include "llvm/ADT/Statistic.h"
-#include "llvm/ADT/DenseSet.h"
+
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/Intrinsics.h>
+#include <llvm/Support/GetElementPtrTypeIterator.h>
+#include <llvm/InstVisitor.h>
+#include <llvm/IR/DataLayout.h>
+#include <llvm/Support/CommandLine.h>
+#include <llvm/Support/Debug.h>
+#include <llvm/Support/FormattedStream.h>
+#include <llvm/Support/Timer.h>
+#include <llvm/ADT/Statistic.h>
+#include <llvm/ADT/DenseSet.h>
 
 #include <iostream>
 
 // FIXME: This should eventually be a FunctionPass that is automatically
 // aggregated into a Pass.
 //
-#include "llvm/Module.h"
+#include <llvm/IR/Module.h>
 
 using namespace llvm;
 

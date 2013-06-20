@@ -98,6 +98,8 @@ void post_int_free(int64_t retval)
 		(long)he->he_base,
 		SH_FL_FREE,
 		ROUND_BYTES2UNITS(he->he_len));
+	// klee_assert (extent_has_free(he->he_base, he->he_len));
+
 	free(he);
 }
 
@@ -113,7 +115,6 @@ void __hookpre___GI___libc_free(void* regfile)
 		return;
 
 	HEAP_ENTER
-
 
 	klee_print_expr("[memcheck] freeing", (long)ptr);
 
@@ -236,8 +237,10 @@ void __hookpre___GI___libc_memalign(void* regfile)
 
 void mmu_init_memcheck(void)
 {
+	HEAP_ENTER
 	list_init(&heap_l, offsetof(struct heap_ent, he_li));
 	shadow_init(&heap_si, HEAP_GRAN_BYTES, HEAP_FLAG_BITS, SH_FL_UNINIT);
+	HEAP_LEAVE
 }
 
 #define MMU_LOADC(x,y)				\
@@ -247,7 +250,7 @@ if (!shadow_pg_used(&heap_si, (uint64_t)addr))	\
 	return mmu_load_##x##_cnulltlb(addr);	\
 if (!in_heap && extent_has_free(addr, x/8))	\
 	klee_ureport("Loading from free const pointer", "heap.err");	\
-return mmu_load_##x##_cnull(addr); }
+return mmu_load_##x##_cnulltlb(addr); }
 
 
 #define MMU_STOREC(x,y)					\
@@ -258,7 +261,6 @@ if (!shadow_pg_used(&heap_si, (uint64_t)addr)) {	\
 	return;						\
 }							\
 if (!in_heap && extent_has_free(addr, x/8)) {	\
-	klee_print_expr("Bad store ptr", addr);				\
 	klee_ureport("Storing to free const pointer", "heap.err");	\
 }									\
 mmu_store_##x##_cnulltlb(addr, v); }

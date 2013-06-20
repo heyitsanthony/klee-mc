@@ -1,7 +1,7 @@
 #include <llvm/Support/Path.h>
-#include <llvm/IRBuilder.h>
+#include <llvm/IR/IRBuilder.h>
 #include <llvm/Support/CommandLine.h>
-#include <llvm/Module.h>
+#include <llvm/IR/Module.h>
 #include <llvm/Pass.h>
 #include "klee/Internal/Module/KModule.h"
 #include "klee/Internal/Module/KFunction.h"

@@ -4,7 +4,7 @@
 #define	_SLICER_UTIL_SLICERUTILS_H
 
 #include <sstream>
-#include "llvm/Value.h"
+#include <llvm/IR/Value.h>
 #include <string>
 #include <algorithm>
 #include <klee/Expr.h>

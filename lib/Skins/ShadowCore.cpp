@@ -1,9 +1,9 @@
 #include <fstream>
 #include <iostream>
 #include <llvm/Support/CommandLine.h>
-#include <llvm/Module.h>
-#include <llvm/LLVMContext.h>
-#include <llvm/Type.h>
+#include <llvm/IR/Module.h>
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Type.h>
 #include "static/Sugar.h"
 
 #include "ShadowObjectState.h"

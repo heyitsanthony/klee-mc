@@ -14,13 +14,15 @@
 
 #include "static/dsa/DataStructure.h"
 #include "static/dsa/DSGraph.h"
-#include "llvm/Analysis/Passes.h"
-#include "llvm/Module.h"
-#include "llvm/Constant.h"
-#include "llvm/Constants.h"
-#include "llvm/Type.h"
-#include "llvm/ADT/Statistic.h"
-#include "llvm/Support/Debug.h"
+
+#include <llvm/Analysis/Passes.h>
+#include <llvm/IR/Module.h>
+#include <llvm/IR/Constant.h>
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/Type.h>
+#include <llvm/ADT/Statistic.h>
+#include <llvm/Support/Debug.h>
+
 using namespace llvm;
 
 namespace {

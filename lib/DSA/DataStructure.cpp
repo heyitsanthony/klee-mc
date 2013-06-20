@@ -15,22 +15,24 @@
 #include "static/dsa/DataStructure.h"
 #include "static/dsa/DSGraph.h"
 #include "static/dsa/DSSupport.h"
-#include "llvm/Constants.h"
-#include "llvm/Function.h"
-#include "llvm/GlobalVariable.h"
-#include "llvm/Instructions.h"
-#include "llvm/DerivedTypes.h"
-#include "llvm/LLVMContext.h"
-#include "llvm/DataLayout.h"
-#include "llvm/Assembly/Writer.h"
-#include "llvm/Support/CommandLine.h"
-#include "llvm/Support/Debug.h"
-#include "llvm/ADT/DepthFirstIterator.h"
-#include "llvm/ADT/STLExtras.h"
-#include "llvm/ADT/SCCIterator.h"
-#include "llvm/ADT/Statistic.h"
-#include "llvm/Support/Timer.h"
-#include "llvm/Support/raw_ostream.h"
+
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/Function.h>
+#include <llvm/IR/GlobalVariable.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/DataLayout.h>
+#include <llvm/Assembly/Writer.h>
+#include <llvm/Support/CommandLine.h>
+#include <llvm/Support/Debug.h>
+#include <llvm/ADT/DepthFirstIterator.h>
+#include <llvm/ADT/STLExtras.h>
+#include <llvm/ADT/SCCIterator.h>
+#include <llvm/ADT/Statistic.h>
+#include <llvm/Support/Timer.h>
+#include <llvm/Support/raw_ostream.h>
+
 #include "static/dsa/HashExtras.h"
 #include "static/Sugar.h"
 

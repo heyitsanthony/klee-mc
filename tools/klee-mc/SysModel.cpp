@@ -1,9 +1,9 @@
 #include <iostream>
 #include <fstream>
-#include <llvm/Module.h>
+#include <llvm/IR/Module.h>
 #include <llvm/Support/CommandLine.h>
-#include <llvm/IntrinsicInst.h>
-#include <llvm/LLVMContext.h>
+#include <llvm/IR/IntrinsicInst.h>
+#include <llvm/IR/LLVMContext.h>
 #include "guestsnapshot.h"
 
 #include "../../lib/Core/Globals.h"

@@ -9,18 +9,18 @@
 
 #include "klee/Internal/Module/InstructionInfoTable.h"
 
-#include "llvm/Function.h"
-#include "llvm/Instructions.h"
-#include "llvm/IntrinsicInst.h"
-#include "llvm/Linker.h"
-#include "llvm/Module.h"
-#include "llvm/Assembly/AssemblyAnnotationWriter.h"
-#include "llvm/Support/CFG.h"
-#include "llvm/Support/InstIterator.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/FormattedStream.h"
-#include "llvm/Analysis/ValueTracking.h"
-#include "llvm/DebugInfo.h"
+#include <llvm/IR/Function.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/IntrinsicInst.h>
+#include <llvm/Linker.h>
+#include <llvm/IR/Module.h>
+#include <llvm/Assembly/AssemblyAnnotationWriter.h>
+#include <llvm/Support/CFG.h>
+#include <llvm/Support/InstIterator.h>
+#include <llvm/Support/raw_ostream.h>
+#include <llvm/Support/FormattedStream.h>
+#include <llvm/Analysis/ValueTracking.h>
+#include <llvm/DebugInfo.h>
 
 #include "static/Sugar.h"
 

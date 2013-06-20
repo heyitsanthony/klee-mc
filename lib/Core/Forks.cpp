@@ -1,5 +1,5 @@
 #include <llvm/Support/CommandLine.h>
-#include <llvm/Instruction.h>
+#include <llvm/IR/Instruction.h>
 #include <iostream>
 #include <sstream>
 

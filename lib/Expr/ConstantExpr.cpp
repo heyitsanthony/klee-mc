@@ -3,10 +3,10 @@
 
 #include "ExprAlloc.h"
 
-#include "llvm/ADT/APInt.h"
-#include "llvm/Constants.h"
-#include "llvm/DerivedTypes.h"
-#include "llvm/Support/CommandLine.h"
+#include <llvm/ADT/APInt.h>
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/DerivedTypes.h>
+#include <llvm/Support/CommandLine.h>
 // FIXME: We shouldn't need this once fast constant support moves into
 // Core. If we need to do arithmetic, we probably want to use APInt.
 #include "klee/Internal/Support/IntEvaluation.h"
@@ -66,17 +66,24 @@ ref<ConstantExpr> ConstantExpr::createVector(llvm::ConstantVector* v)
 
 	ref<ConstantExpr>	cur_v;
 	for (unsigned int i = 0; i < elem_count; i++) {
-		llvm::ConstantInt	*cur_ci;
-		llvm::ConstantFP	*cur_fi;
+		llvm::Value		*op;
 		llvm::APInt		api;
 
-		cur_ci = dyn_cast<llvm::ConstantInt>(v->getOperand(i));
-		cur_fi = dyn_cast<llvm::ConstantFP>(v->getOperand(i));
-		if (cur_ci != NULL) {
-			api = cur_ci->getValue();
-		} else if (cur_fi != NULL) {
-			api = cur_fi->getValueAPF().bitcastToAPInt();
+		op = v->getOperand(i);
+		if (llvm::ConstantInt* ci = dyn_cast<llvm::ConstantInt>(op)) {
+			api = ci->getValue();
+		} else if (llvm::ConstantFP* cf=dyn_cast<llvm::ConstantFP>(op)){
+			api = cf->getValueAPF().bitcastToAPInt();
+		} else if (llvm::UndefValue* cu=dyn_cast<llvm::UndefValue>(op)){
+			/* 0 will probably lead to the least confusion */
+			api = llvm::APInt(
+				cu->getType()->getPrimitiveSizeInBits(),
+				0x1);
+	//		api = llvm::APInt::getAllOnesValue(
+	//			cu->getType()->getPrimitiveSizeInBits());
+
 		} else {
+			v->getOperand(i)->dump();
 			assert (0 == 1 && "Weird type??");
 		}
 

@@ -16,9 +16,10 @@
 #define LLVM_ANALYSIS_DSGRAPH_H
 
 #include "static/dsa/DSNode.h"
-#include "llvm/ADT/EquivalenceClasses.h"
 #include "static/dsa/HashExtras.h"
-#include <llvm/DataLayout.h>
+
+#include <llvm/ADT/EquivalenceClasses.h>
+#include <llvm/IR/DataLayout.h>
 
 #include <ext/hash_map>
 #include <ext/hash_set>

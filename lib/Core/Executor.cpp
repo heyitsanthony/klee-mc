@@ -8,8 +8,8 @@
 //===----------------------------------------------------------------------===//
 #include <llvm/Support/CallSite.h>
 #include <llvm/Analysis/MemoryBuiltins.h>
-#include <llvm/LLVMContext.h>
-#include <llvm/Module.h>
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Module.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/Support/raw_ostream.h>
@@ -158,6 +158,7 @@ Executor::Executor(InterpreterHandler *ih)
 , data_layout(0)
 , statsTracker(0)
 , symPathWriter(0)
+, currentState(0)
 , sfh(0)
 , haltExecution(false)
 , init_kfunc(0)
@@ -579,6 +580,11 @@ static inline const llvm::fltSemantics * fpWidthToSemantics(unsigned width)
 	}
 }
 
+#define DECL_APF(n, c)	llvm::APFloat	n(	\
+	*fpWidthToSemantics(c->getWidth()), c->getAPValue())
+#define APF_FROM_CE(c)	llvm::APFloat	(	\
+	*fpWidthToSemantics(c->getWidth()), c->getAPValue())
+
 void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 {
 	ReturnInst	*ri;
@@ -634,7 +640,7 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 			if (is_cs) {
 				// XXX need to check other param attrs ?
 				result = (cs.paramHasAttr(
-						0, llvm::Attributes::SExt))
+						0, llvm::Attribute::SExt))
 					? MK_SEXT(result, to)
 					: MK_ZEXT(result, to);
 			}
@@ -1093,7 +1099,7 @@ llvm::Function* Executor::executeBitCast(
 		if (from == to) continue;
 
 		// XXX need to check other param attrs ?
-		if (cs.paramHasAttr(i+1, llvm::Attributes::SExt)) {
+		if (cs.paramHasAttr(i+1, llvm::Attribute::SExt)) {
 			args[i] = SExtExpr::create(args[i], to);
 		} else {
 			args[i] = ZExtExpr::create(args[i], to);
@@ -1772,8 +1778,8 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
       TERMINATE_EXEC(this, state, "Unsupported "#x" operation");		\
       return; } \
 	\
-    llvm::APFloat Res(left->getAPValue());					\
-    Res.y(APFloat(right->getAPValue()), APFloat::rmNearestTiesToEven);		\
+    DECL_APF(Res, left);	\
+    Res.y(APF_FROM_CE(right), APFloat::rmNearestTiesToEven);		\
     state.bindLocal(ki, ConstantExpr::alloc(Res.bitcastToAPInt()));		\
     break; }
 
@@ -1798,7 +1804,7 @@ INST_FOP_ARITH(FRem, mod)
 		resultType > arg->getWidth(),
 		"Unsupported FPTrunc operation")
 
-	llvm::APFloat Res(arg->getAPValue());
+	DECL_APF(Res, arg);
 	bool lossy = false;
 	Res.convert(*r_semantics, llvm::APFloat::rmNearestTiesToEven, &lossy);
 	state.bindLocal(ki, ConstantExpr::alloc(Res));
@@ -1811,7 +1817,7 @@ INST_FOP_ARITH(FRem, mod)
 		arg->getWidth() > resultType,
 		"Unsupported FPExt operation")
 
-	llvm::APFloat Res(arg->getAPValue());
+	DECL_APF(Res, arg);
 	bool lossy = false;
 	Res.convert(*r_semantics, llvm::APFloat::rmNearestTiesToEven, &lossy);
 	state.bindLocal(ki, ConstantExpr::alloc(Res));
@@ -1824,7 +1830,7 @@ INST_FOP_ARITH(FRem, mod)
 		resultType > 64,
 		"Unsupported FPToUI operation")
 
-	llvm::APFloat Arg(arg->getAPValue());
+	DECL_APF(Arg, arg);
 	uint64_t value = 0;
 	bool isExact = true;
 	Arg.convertToInteger(&value, resultType, false,
@@ -1839,7 +1845,7 @@ INST_FOP_ARITH(FRem, mod)
 		resultType > 64,
 		"Unsupported FPToSI operation")
 
-	llvm::APFloat Arg(arg->getAPValue());
+	DECL_APF(Arg, arg);
 	uint64_t value = 0;
 	bool isExact = true;
 	Arg.convertToInteger(&value, resultType, false,
@@ -1868,23 +1874,24 @@ INST_FOP_ARITH(FRem, mod)
   }
 
   case Instruction::FCmp: {
-    FCmpInst *fi = cast<FCmpInst>(i);
-    ref<ConstantExpr> left(toConstant(state, eval(ki, 0, state), "fp"));
-    ref<ConstantExpr> right(toConstant(state, eval(ki, 1, state), "fp"));
-    if (!fpWidthToSemantics(left->getWidth()) ||
-        !fpWidthToSemantics(right->getWidth())) {
-      TERMINATE_EXEC(this, state, "Unsupported FCmp operation");
-      return;
-    }
+	FCmpInst *fi = cast<FCmpInst>(i);
+	ref<ConstantExpr> left(toConstant(state, eval(ki, 0, state), "fp"));
+	ref<ConstantExpr> right(toConstant(state, eval(ki, 1, state), "fp"));
+	if (	!fpWidthToSemantics(left->getWidth()) ||
+		!fpWidthToSemantics(right->getWidth()))
+	{
+		TERMINATE_EXEC(this, state, "Unsupported FCmp operation");
+		return;
+	}
 
-    APFloat LHS(left->getAPValue());
-    APFloat RHS(right->getAPValue());
-    APFloat::cmpResult CmpRes = LHS.compare(RHS);
+	DECL_APF(LHS, left);
+	DECL_APF(RHS, right);
+	APFloat::cmpResult CmpRes = LHS.compare(RHS);
 
-    state.bindLocal(ki,
-    	MK_CONST(isFPPredicateMatched(CmpRes, fi->getPredicate()), 1));
-    break;
-  }
+	state.bindLocal(ki,
+		MK_CONST(isFPPredicateMatched(CmpRes, fi->getPredicate()), 1));
+	break;
+	}
 
   case Instruction::InsertValue: instInsertValue(state, ki); break;
 

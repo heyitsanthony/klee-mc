@@ -23,11 +23,14 @@ C.Flags += -D__NO_INLINE__
 include $(LEVEL)/Makefile.common
 
 LIBBCA:=$(LibDir)/lib$(LIBRARYNAME).bca
+LIBBC:=$(LibDir)/lib$(LIBRARYNAME).bc
 LIBTXT:=$(LibDir)/$(LIBRARYNAME)-fns.txt
 
 all:: $(LIBTXT)
 
-$(LIBTXT): $(LIBBCA) $(LEVEL)/scripts/llvm-list-functions
+$(LIBTXT): $(LIBBC) $(LIBBCA) $(LEVEL)/scripts/llvm-list-functions
 	$(Echo) "Updating $(LIBRARYNAME) function list for $(BuildMode) build"
 	$(Verb) $(LEVEL)/scripts/llvm-list-functions $(LIBBCA) > $@
 
+$(LIBBC): $(LIBBCA)
+	llvm-link $(BuildMode)/*.bc -o $@

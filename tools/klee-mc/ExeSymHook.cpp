@@ -1,6 +1,6 @@
 #include <iostream>
 #include "klee/Internal/Module/KModule.h"
-#include <llvm/Function.h>
+#include <llvm/IR/Function.h>
 #include "ExeSymHook.h"
 #include "ESVSymHook.h"
 #include "klee/Common.h"

@@ -1,10 +1,11 @@
-#include <llvm/Constants.h>
-#include <llvm/DerivedTypes.h>
-#include <llvm/Module.h>
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/Module.h>
 #include <llvm/Support/CommandLine.h>
-#include <llvm/DataLayout.h>
+#include <llvm/IR/DataLayout.h>
 #include <assert.h>
 
+#include "klee/Expr.h"
 #include "klee/Common.h"
 #include "klee/ExecutionState.h"
 #include "klee/Internal/Module/KModule.h"
@@ -17,10 +18,7 @@
 using namespace klee;
 using namespace llvm;
 
-namespace
-{
-	cl::opt<bool> UseAsmAddresses("use-asm-addresses", cl::init(false));
-}
+namespace { cl::opt<bool> UseAsmAddresses("use-asm-addresses"); }
 
 Globals::Globals(
 	const KModule* km,
@@ -36,9 +34,6 @@ Globals::Globals(
 
 	if (m->getModuleInlineAsm() != "")
 		klee_warning("executable has module level assembly (ignoring)");
-
-	assert (m->lib_begin() == m->lib_end() &&
-		"XXX do not support dependent libraries");
 
 	setupCTypes();
 	updateModule();
@@ -179,6 +174,44 @@ void Globals::allocGlobalVariableNoDecl(const GlobalVariable& gv)
 	}
 }
 
+static void writeConstDataSeq(
+	ExecutionState		*init_state,
+	ObjectState		*os,
+	ConstantDataSequential	*csq,
+	unsigned		offset)
+{
+	unsigned	bytes_per_elem;
+	unsigned	elem_c;
+	Type		*t;
+
+	bytes_per_elem = csq->getElementByteSize();
+	elem_c = csq->getNumElements();
+	assert (bytes_per_elem <= 8);
+
+	t = csq->getElementType();
+
+	for (unsigned i = 0; i < elem_c; i++) {
+		ref<klee::ConstantExpr>	ce;
+		unsigned		bits = bytes_per_elem*8;
+
+		if (t->isFloatTy()) {
+			float	f = csq->getElementAsFloat(i);
+			ce = klee::MK_CONST(*((uint32_t*)&f), bits);
+		} else if (t->isDoubleTy()) {
+			double d = csq->getElementAsDouble(i);
+			ce = klee::MK_CONST(*((uint64_t*)&d), bits);
+		} else if (t->isIntegerTy()) {
+			ce = klee::MK_CONST(csq->getElementAsInteger(i), bits);
+		} else {
+			std::cerr << "Weird type: ";
+			t->dump();
+			abort();
+		}
+
+		init_state->write(os, offset+(i*bytes_per_elem), ce);
+	}
+}
+
 
 void Globals::initializeGlobalObject(
 	ObjectState *os,
@@ -208,24 +241,9 @@ void Globals::initializeGlobalObject(
 	}
 
 	if (ConstantDataSequential *csq=dyn_cast<ConstantDataSequential>(c)) {
-		unsigned	bytes_per_elem;
-		unsigned	elem_c;
-
-		bytes_per_elem = csq->getElementByteSize();
-		elem_c = csq->getNumElements();
-		assert (bytes_per_elem <= 8);
-
-		for (unsigned i = 0; i < elem_c; i++) {
-			ref<ConstantExpr>	ce;
-			ce = ConstantExpr::create(
-				csq->getElementAsInteger(i),
-				bytes_per_elem*8);
-			init_state->write(os, offset+(i*bytes_per_elem), ce);
-		}
-
+		writeConstDataSeq(init_state, os, csq, offset);
 		return;
 	}
-
 
 	if (ConstantStruct *cs = dyn_cast<ConstantStruct>(c)) {
 		const StructLayout *sl;

@@ -1,6 +1,6 @@
-#include <llvm/Instructions.h>
-#include <llvm/Function.h>
-#include <llvm/Constants.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/Function.h>
+#include <llvm/IR/Constants.h>
 #include "static/Sugar.h"
 #include "DynGraph.h"
 

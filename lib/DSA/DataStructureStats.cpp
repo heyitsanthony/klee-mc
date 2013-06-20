@@ -14,13 +14,14 @@
 #include "static/dsa/DataStructure.h"
 #include "static/dsa/DSGraph.h"
 #include "static/Sugar.h"
-#include "llvm/Function.h"
-#include "llvm/Instructions.h"
-#include "llvm/Pass.h"
-#include "llvm/Support/InstVisitor.h"
-#include "llvm/ADT/Statistic.h"
-#include "llvm/Support/Debug.h"
-#include "llvm/Support/FormattedStream.h"
+
+#include <llvm/IR/Function.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/Pass.h>
+#include <llvm/InstVisitor.h>
+#include <llvm/ADT/Statistic.h>
+#include <llvm/Support/Debug.h>
+#include <llvm/Support/FormattedStream.h>
 
 #include <ostream>
 using namespace llvm;

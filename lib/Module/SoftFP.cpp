@@ -1,6 +1,6 @@
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/Support/Path.h>
-#include <llvm/IRBuilder.h>
+#include <llvm/IR/IRBuilder.h>
 #include <llvm/Support/CommandLine.h>
 #include "klee/Internal/Module/KModule.h"
 #include "klee/Internal/Module/KFunction.h"

@@ -1,16 +1,16 @@
 #include "klee/Common.h"
 #include "klee/Interpreter.h"
 #include "klee/Internal/Support/ModuleUtil.h"
-#include <llvm/Constants.h>
-#include "llvm/Module.h"
-#include "llvm/Instructions.h"
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/Module.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/TypeBuilder.h>
 
-#include "llvm/Bitcode/ReaderWriter.h"
-#include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/system_error.h"
-#include "llvm/Support/CommandLine.h"
-#include "llvm/TypeBuilder.h"
-#include "llvm/Support/Signals.h"
+#include <llvm/Bitcode/ReaderWriter.h>
+#include <llvm/Support/MemoryBuffer.h>
+#include <llvm/Support/system_error.h>
+#include <llvm/Support/CommandLine.h>
+#include <llvm/Support/Signals.h>
 
 #include "static/Sugar.h"
 #include "libc.h"
@@ -94,45 +94,54 @@ static void checkUndefined(
 	}
 }
 
+#define DECL_EXTERNS(x)	\
+std::set<std::string> x(x##Externals, x##Externals+NELEMS(x##Externals))
+
 void externalsAndGlobalsCheck(const Module *m)
 {
-  std::map<std::string, bool> externals;
-  std::set<std::string> modelled(modelledExternals,
-                                 modelledExternals+NELEMS(modelledExternals));
-  std::set<std::string> dontCare(dontCareExternals,
-                                 dontCareExternals+NELEMS(dontCareExternals));
-  std::set<std::string> unsafe(unsafeExternals,
-                               unsafeExternals+NELEMS(unsafeExternals));
+	std::map<std::string, bool> externals;
+	DECL_EXTERNS(modelled);
+	DECL_EXTERNS(dontCare);
+	DECL_EXTERNS(unsafe);
 
-  switch (g_Libc) {
-  case KleeLibc:
-    dontCare.insert(dontCareKlee, dontCareKlee+NELEMS(dontCareKlee));
-    break;
-  case UcLibc:
-    dontCare.insert(dontCareUclibc,
-                    dontCareUclibc+NELEMS(dontCareUclibc));
-    break;
-  case NoLibc: /* silence compiler warning */
-    break;
-  }
+	switch (g_Libc) {
+	case KleeLibc:
+		dontCare.insert(
+			dontCareKlee,
+			dontCareKlee+NELEMS(dontCareKlee));
+		break;
+	case UcLibc:
+		dontCare.insert(
+			dontCareUclibc,
+			dontCareUclibc+NELEMS(dontCareUclibc));
+		break;
+	case NoLibc: /* silence compiler warning */
+		break;
+	}
 
+	if (g_WithPOSIXRuntime) dontCare.insert("syscall");
 
-  if (g_WithPOSIXRuntime) dontCare.insert("syscall");
+	foreach (fnIt, m->begin(), m->end()) {
+		if (fnIt->isDeclaration() && !fnIt->use_empty())
+			externals.insert(
+				std::make_pair(fnIt->getName(), false));
 
-  foreach (fnIt, m->begin(), m->end()) {
-    if (fnIt->isDeclaration() && !fnIt->use_empty())
-      externals.insert(std::make_pair(fnIt->getName(), false));
-    foreach (bbIt, fnIt->begin(), fnIt->end()) {
-      foreach (it, bbIt->begin(),  bbIt->end()) {
-        const CallInst *ci = dyn_cast<CallInst>(it);
-        if (!ci) continue;
-        if (!isa<InlineAsm>(ci->getCalledValue())) continue;
-        klee_warning_once(&*fnIt,
-                          "function \"%s\" has inline asm",
-                          fnIt->getName().data());
-      }
-    }
-  }
+		foreach (bbIt, fnIt->begin(), fnIt->end()) {
+		foreach (it, bbIt->begin(),  bbIt->end()) {
+			const CallInst *ci = dyn_cast<CallInst>(it);
+
+			if (!ci) continue;
+
+			if (!isa<InlineAsm>(ci->getCalledValue()))
+				continue;
+
+			klee_warning_once(
+				&*fnIt,
+				"function \"%s\" has inline asm",
+				fnIt->getName().data());
+		}
+		}
+	}
 
 	foreach (it, m->global_begin(), m->global_end()) {
 		if (!it->isDeclaration() || it->use_empty())
@@ -165,28 +174,28 @@ static llvm::Module *linkWithUclibc(llvm::Module *mainModule)
 
 static void uclibc_forceImports(llvm::Module* mainModule)
 {
-    llvm::Type *i8Ty = Type::getInt8Ty(GCTX);
-    mainModule->getOrInsertFunction(
-      "realpath",
-      PointerType::getUnqual(i8Ty),
-      PointerType::getUnqual(i8Ty),
-      PointerType::getUnqual(i8Ty),
-      NULL);
-    mainModule->getOrInsertFunction(
-      "getutent",
-      PointerType::getUnqual(i8Ty),
-      NULL);
-    mainModule->getOrInsertFunction(
-      "__fgetc_unlocked",
-      Type::getInt32Ty(GCTX),
-      PointerType::getUnqual(i8Ty),
-      NULL);
-    mainModule->getOrInsertFunction(
-      "__fputc_unlocked",
-      Type::getInt32Ty(GCTX),
-      Type::getInt32Ty(GCTX),
-      PointerType::getUnqual(i8Ty),
-      NULL);
+	llvm::Type *i8Ty = Type::getInt8Ty(GCTX);
+	mainModule->getOrInsertFunction(
+		"realpath",
+		PointerType::getUnqual(i8Ty),
+		PointerType::getUnqual(i8Ty),
+		PointerType::getUnqual(i8Ty),
+		NULL);
+	mainModule->getOrInsertFunction(
+		"getutent",
+		PointerType::getUnqual(i8Ty),
+		NULL);
+	mainModule->getOrInsertFunction(
+		"__fgetc_unlocked",
+		Type::getInt32Ty(GCTX),
+		PointerType::getUnqual(i8Ty),
+		NULL);
+	mainModule->getOrInsertFunction(
+		"__fputc_unlocked",
+		Type::getInt32Ty(GCTX),
+		Type::getInt32Ty(GCTX),
+		PointerType::getUnqual(i8Ty),
+		NULL);
 }
 
 static void uclibc_stripPrefixes(llvm::Module* mainModule)
@@ -311,7 +320,7 @@ static llvm::Module *linkWithUclibc(llvm::Module *mainModule)
 	// naming conflict.
 	uclibc_stripPrefixes(mainModule);
 
-	mainModule = klee::linkWithLibrary(mainModule, KLEE_UCLIBC "/lib/libc.a");
+	mainModule = klee::linkWithLibrary(mainModule, KLEE_UCLIBC "/lib/libc.bc");
 	assert(mainModule && "unable to link with uclibc");
 
 	uclibc_fixups(mainModule);
@@ -344,7 +353,7 @@ static Module* setupLibc(Module* mainModule, ModuleOptions& Opts)
 		// FIXME: Find a reasonable solution for this.
 		// XXX SOLUTION FOR WHAT!? --AJR
 		llvm::sys::Path Path(Opts.LibraryDir);
-		Path.appendComponent("libklee-libc.bca");
+		Path.appendComponent("libklee-libc.bc");
 		mainModule = klee::linkWithLibrary(mainModule, Path.c_str());
 		assert(mainModule && "unable to link with klee-libc");
 
@@ -470,7 +479,7 @@ static void loadPOSIX(Module* &mainModule, ModuleOptions& Opts)
 	if (!g_WithPOSIXRuntime) return;
 
 	llvm::sys::Path Path(Opts.LibraryDir);
-	Path.appendComponent("libkleeRuntimePOSIX.bca");
+	Path.appendComponent("libkleeRuntimePOSIX.bc");
 	klee_message("NOTE: Using model: %s", Path.c_str());
 
 	mainModule = klee::linkWithLibrary(mainModule, Path.c_str());

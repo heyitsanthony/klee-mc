@@ -14,12 +14,12 @@
 #ifndef LLVM_ANALYSIS_DATA_STRUCTURE_H
 #define LLVM_ANALYSIS_DATA_STRUCTURE_H
 
-#include "llvm/Pass.h"
-#include "llvm/Support/raw_os_ostream.h"
-#include <llvm/DataLayout.h>
-#include "llvm/Support/CallSite.h"
-#include "llvm/ADT/EquivalenceClasses.h"
-#include "llvm/Support/raw_os_ostream.h"
+#include <llvm/Pass.h>
+#include <llvm/Support/raw_os_ostream.h>
+#include <llvm/Support/CallSite.h>
+#include <llvm/IR/DataLayout.h>
+#include <llvm/ADT/EquivalenceClasses.h>
+#include <llvm/Support/raw_os_ostream.h>
 
 #include "static/dsa/DSGraph.h"
 #include "static/dsa/HashExtras.h"

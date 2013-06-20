@@ -30,7 +30,7 @@
 #include "PTree.h"
 #include "Memory.h"
 
-#include <llvm/Function.h>
+#include <llvm/IR/Function.h>
 #include <llvm/Support/CommandLine.h>
 
 #include <iostream>

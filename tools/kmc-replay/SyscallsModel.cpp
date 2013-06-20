@@ -5,7 +5,7 @@
 
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/JIT.h>
-#include <llvm/Module.h>
+#include <llvm/IR/Module.h>
 
 #include "klee/Internal/ADT/KTestStream.h"
 

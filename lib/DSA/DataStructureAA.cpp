@@ -13,11 +13,12 @@
 //===----------------------------------------------------------------------===//
 
 
-#include "llvm/Constants.h"
-#include "llvm/DerivedTypes.h"
-#include "llvm/Module.h"
-#include "llvm/Analysis/AliasAnalysis.h"
-#include "llvm/Analysis/Passes.h"
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/Module.h>
+#include <llvm/Analysis/AliasAnalysis.h>
+#include <llvm/Analysis/Passes.h>
+
 #include "static/dsa/DataStructure.h"
 #include "static/dsa/DSGraph.h"
 #include "static/Sugar.h"

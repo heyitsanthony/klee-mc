@@ -15,15 +15,16 @@
 #include "static/dsa/DataStructure.h"
 #include "static/dsa/DSGraph.h"
 
-#include "llvm/Module.h"
-#include "llvm/DerivedTypes.h"
-#include "llvm/Constants.h"
-#include "llvm/Instructions.h"
-#include "llvm/Intrinsics.h"
-#include "llvm/Support/InstIterator.h"
-#include "llvm/Support/InstVisitor.h"
-#include "llvm/Support/GetElementPtrTypeIterator.h"
-#include <llvm/TypeBuilder.h>
+#include <llvm/IR/Module.h>
+#include <llvm/IR/DataLayout.h>
+#include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/Intrinsics.h>
+#include <llvm/InstVisitor.h>
+#include <llvm/Support/InstIterator.h>
+#include <llvm/Support/GetElementPtrTypeIterator.h>
+#include <llvm/IR/TypeBuilder.h>
 
 using namespace llvm;
 

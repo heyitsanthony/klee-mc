@@ -9,9 +9,9 @@
 #include "../../lib/Core/BranchTracker.h"
 #include "klee/Internal/Module/KInstIterator.h"
 #include "../../lib/Core/Memory.h"
-#include "llvm/Function.h"
+#include <llvm/IR/Function.h>
 #include "Internal/Module/KInstruction.h"
-#include "llvm/Instructions.h"
+#include <llvm/IR/Instructions.h>
 
 #include <map>
 #include <set>

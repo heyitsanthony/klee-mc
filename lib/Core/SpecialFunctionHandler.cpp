@@ -6,9 +6,9 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-#include <llvm/Module.h>
+#include <llvm/IR/Module.h>
 #include <llvm/Support/CommandLine.h>
-#include <llvm/LLVMContext.h>
+#include <llvm/IR/LLVMContext.h>
 #include "klee/klee.h"
 #include "Memory.h"
 #include "SpecialFunctionHandler.h"
@@ -28,6 +28,8 @@
 
 using namespace llvm;
 using namespace klee;
+
+extern bool DebugPrintInstructions;
 
 namespace klee
 {
@@ -63,6 +65,7 @@ SFH_HANDLER(SetForking)
 SFH_HANDLER(SilentExit)
 SFH_HANDLER(StackTrace)
 SFH_HANDLER(SymRangeBytes)
+SFH_HANDLER(Watch)
 SFH_HANDLER(Warning)
 SFH_HANDLER(WarningOnce)
 SFH_HANDLER(Yield)
@@ -141,6 +144,7 @@ static const SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   add("klee_print_range", PrintRange, false),
   add("klee_set_forking", SetForking, false),
   add("klee_stack_trace", StackTrace, false),
+  add("klee_watch", Watch, false),
   add("klee_warning", Warning, false),
   add("klee_warning_once", WarningOnce, false),
   add("klee_get_prune_id", GetPruneID, true),
@@ -207,7 +211,7 @@ void SpecialFunctionHandler::prepare(HandlerInfo* hinfo, unsigned int N)
 		// Make sure NoReturn attribute is set, for optimization and
 		// coverage counting.
 		if (hi.doesNotReturn)
-			f->addFnAttr(Attributes::NoReturn);
+			f->addFnAttr(Attribute::NoReturn);
 
 		// Change to a declaration since we handle internally (simplifies
 		// module and allows deleting dead code).
@@ -1222,6 +1226,20 @@ SFH_DEF_HANDLER(ForkEq)
 
 	if (sp.first != NULL) sp.first->bindLocal(target, MK_CONST(1, 32));
 	if (sp.second != NULL) sp.second->bindLocal(target, MK_CONST(0, 32));
+}
+
+
+SFH_DEF_HANDLER(Watch)
+{
+	SFH_CHK_ARGS(1, "klee_watch");
+
+	const ConstantExpr	*ce = dyn_cast<ConstantExpr>(args[0]);
+	assert (ce != NULL);
+
+	if (ce->getZExtValue())
+		DebugPrintInstructions = true;
+	else
+		DebugPrintInstructions = false;
 }
 
 SFH_DEF_HANDLER(ExprHash)

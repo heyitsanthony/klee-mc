@@ -89,21 +89,16 @@ static void get_pgbkt(struct pg_bkt_t* pb, uint64_t ptr)
 	last_pgbkt.pb_bidx = pb->pb_bidx;
 }
 
-static int bits(int n)
-{
-	unsigned	i, x =0;
-
-	for(i = 0; i < sizeof(n) * 8; i++)
-		if (n & (1 << i))
-			x++;
-	return x;
-}
-
 int shadow_init(
 	struct shadow_info* si,
-	int granularity, int bits_per_unit, uint64_t initial)
+	int granularity, unsigned bits_per_unit, uint64_t initial)
 {
-	if (bits(bits_per_unit) != 1){
+	/* check if power of 2 */
+	if ((bits_per_unit & (bits_per_unit-1)) != 0) {
+		/* we expect a power of 2 for now */
+		klee_print_expr(
+			"[shadow] Bad shadow_init size!!",
+			bits_per_unit);
 		return 0;
 	}
 
@@ -195,8 +190,9 @@ void shadow_put_units_range(
 	unsigned units)
 {
 	unsigned i;
-	for(i = 0; i < units; i++)
+	for(i = 0; i < units; i++) {
 		shadow_put(si, phys + si->si_gran*i, l);
+	}
 }
 
 void shadow_or_range(
@@ -297,8 +293,9 @@ void shadow_put(struct shadow_info* si, uint64_t phys, uint64_t l)
 	pg = shadow_pg_get(si, phys);
 	if (pg == NULL){
 		/* keep from thrashing */
-		if (shadow_is_uninit(si, l))
+		if (shadow_is_uninit(si, l)) {
 			return;
+		}
 		pg = shadow_new_page(si, phys);
 	}
 

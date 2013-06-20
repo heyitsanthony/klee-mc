@@ -6,8 +6,8 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-#include <llvm/LLVMContext.h>
-#include <llvm/InlineAsm.h>
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/InlineAsm.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Target/TargetLowering.h>
 #include <llvm/Target/TargetOptions.h>

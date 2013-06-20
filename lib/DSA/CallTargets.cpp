@@ -17,17 +17,19 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Module.h"
-#include "llvm/Instructions.h"
+#include <llvm/IR/Module.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/ADT/Statistic.h>
+#include <llvm/Support/Debug.h>
+#include <llvm/Support/FormattedStream.h>
+#include <llvm/IR/Constants.h>
+#include <static/Sugar.h>
+#include <ostream>
+
 #include "static/dsa/DataStructure.h"
 #include "static/dsa/DSGraph.h"
 #include "static/dsa/CallTargets.h"
-#include "llvm/ADT/Statistic.h"
-#include "llvm/Support/Debug.h"
-#include "llvm/Support/FormattedStream.h"
-#include "llvm/Constants.h"
-#include <static/Sugar.h>
-#include <ostream>
+
 using namespace llvm;
 
 namespace {

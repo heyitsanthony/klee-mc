@@ -16,9 +16,9 @@
 #define DEBUG_TYPE "dsa-cbu"
 #include "static/dsa/DataStructure.h"
 #include "static/dsa/DSGraph.h"
-#include "llvm/Module.h"
-#include "llvm/ADT/Statistic.h"
-#include "llvm/Support/Debug.h"
+#include <llvm/IR/Module.h>
+#include <llvm/ADT/Statistic.h>
+#include <llvm/Support/Debug.h>
 using namespace llvm;
 
 namespace {

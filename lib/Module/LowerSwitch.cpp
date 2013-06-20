@@ -15,8 +15,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "Passes.h"
-#include <llvm/LLVMContext.h>
-#include <llvm/Instructions.h>
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Instructions.h>
 #include <algorithm>
 #include "static/Sugar.h"
 

@@ -1,4 +1,4 @@
-#include <llvm/Function.h>
+#include <llvm/IR/Function.h>
 
 #include <iostream>
 #include <fstream>

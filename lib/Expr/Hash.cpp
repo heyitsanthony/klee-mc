@@ -3,7 +3,7 @@
 // Simple hash functions for various kinds of Exprs
 //
 ///////
-#include <llvm/Function.h>
+#include <llvm/IR/Function.h>
 #include "klee/Expr.h"
 
 using namespace klee;

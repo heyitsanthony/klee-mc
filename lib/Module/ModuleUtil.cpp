@@ -12,24 +12,26 @@
 #include "klee/Internal/Support/ModuleUtil.h"
 #include "klee/Common.h"
 
-#include "llvm/Function.h"
-#include "llvm/Instructions.h"
-#include "llvm/IntrinsicInst.h"
-#include "llvm/Linker.h"
-#include "llvm/Module.h"
-#include "llvm/PassManager.h"
-#include "llvm/Assembly/AssemblyAnnotationWriter.h"
-#include "llvm/Bitcode/Archive.h"
-#include "llvm/Support/CFG.h"
-#include "llvm/Support/CallSite.h"
-#include "llvm/Support/InstIterator.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Analysis/ValueTracking.h"
-#include "llvm/Support/Path.h"
+#include <llvm/IR/Function.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/IntrinsicInst.h>
+#include <llvm/Linker.h>
+#include <llvm/Support/SourceMgr.h>
+#include <llvm/IR/Module.h>
+#include <llvm/IRReader/IRReader.h>
+#include <llvm/PassManager.h>
+#include <llvm/Assembly/AssemblyAnnotationWriter.h>
+#include <llvm/Bitcode/Archive.h>
+#include <llvm/Support/CFG.h>
+#include <llvm/Support/CallSite.h>
+#include <llvm/Support/InstIterator.h>
+#include <llvm/Support/raw_ostream.h>
+#include <llvm/Analysis/ValueTracking.h>
+#include <llvm/Support/Path.h>
 #include <llvm/Bitcode/ReaderWriter.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/system_error.h>
-#include <llvm/LLVMContext.h>
+#include <llvm/IR/LLVMContext.h>
 
 
 #include "static/Sugar.h"
@@ -161,7 +163,7 @@ Module* getBitcodeModule(const char* path)
 /// we've duplicated some of the functionality from
 /// llvm/lib/Linker/LinkArchives.cpp here.
 Module *klee::linkWithLibrary(
-	Module *module,
+	Module *mod,
 	const std::string &libraryName)
 #if 0
 {
@@ -191,10 +193,9 @@ Module *klee::linkWithLibrary(
 
 	return linker.releaseModule();
 }
-
-#else
+#elif 0
 {
-	Linker			linker("klee", module, /* 0 */ Linker::Verbose);
+	Linker			linker(module);
 	llvm::sys::Path		libraryPath(libraryName);
 	bool			err, native = false;
 
@@ -208,5 +209,33 @@ Module *klee::linkWithLibrary(
 	}
 
 	return linker.releaseModule();
+}
+#else
+{
+	std::string		err_str;
+	llvm::SMDiagnostic	err;
+	llvm::Module		*new_mod;
+	
+	new_mod = llvm::ParseIRFile(libraryName, err, mod->getContext());
+	if (new_mod == NULL) {
+		std::cerr << "[Mod] Error parsing '" << libraryName << "'\n";
+		std::cerr << "[Mod] Parse error: " << err.getMessage().str() << '\n';
+		std::cerr << "[Mod] Parse error: " << err.getLineContents().str() << '\n';
+		return NULL;
+	}
+
+	if (llvm::Linker::LinkModules(
+		mod,
+		new_mod,
+		llvm::Linker::DestroySource,
+		&err_str))
+	{
+		std::cerr
+			<< "[Mod] Error loading '"
+			<< libraryName << "' : " << err_str << '\n';
+		return NULL;
+	}
+
+	return mod;
 }
 #endif

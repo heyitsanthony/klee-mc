@@ -17,7 +17,8 @@
 #include "static/dsa/DSSupport.h"
 #include "static/dsa/HashExtras.h"
 
-#include "llvm/Support/raw_os_ostream.h"
+#include <llvm/Support/raw_os_ostream.h>
+#include <llvm/ADT/ilist.h>
 #include <iostream>
 
 namespace llvm {

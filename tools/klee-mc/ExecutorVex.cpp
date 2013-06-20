@@ -1,4 +1,4 @@
-#include <llvm/DataLayout.h>
+#include <llvm/IR/DataLayout.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/Path.h>
 #include <llvm/Support/raw_os_ostream.h>

@@ -3,9 +3,9 @@
 
 #include <llvm/Pass.h>
 #include <llvm/Support/CommandLine.h>
-#include <llvm/Module.h>
-#include <llvm/LLVMContext.h>
-#include <llvm/Type.h>
+#include <llvm/IR/Module.h>
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Type.h>
 
 #include "../Core/Forks.h"
 #include "TaintGroup.h"
