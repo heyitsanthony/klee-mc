@@ -1055,7 +1055,7 @@ int AddressSpace::readConcreteSafe(
 	int		to_copy;
 
 	for (unsigned i = 0;  i < len; i += to_copy) {
-		unsigned	off, cur_len, remain;
+		unsigned	off, remain;
 		int		copied;
 
 		if (resolveOne(guest_addr+i, op) == false)

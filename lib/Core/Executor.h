@@ -121,6 +121,7 @@ public:
   // not hold, respectively. One of the states is necessarily the
   // current state, and one of the states may be null.
   StatePair fork(ExecutionState &current, ref<Expr> condition, bool isInternal);
+  ExecutionState* pureFork(ExecutionState& es, bool compact);
   StateVector fork(
 	ExecutionState &current,
 	unsigned N, ref<Expr> conditions[], bool isInternal,
@@ -417,6 +418,11 @@ public:
 	do { TermError t(_x,m,suf,lm,em); (_x)->terminateWith(t, s); } while (0)
 #define TERMINATE_ERROR(_x,s,m,suff)	\
 	do { TermError t(_x,m,suff); (_x)->terminateWith(t, s); } while (0)
+#define REPORT_ERROR(_x, s, m, suff) do {	\
+	/* ExecutionState	*report_es = */	\
+	_x->pureFork(s, false);			\
+	TERMINATE_ERROR(_x, s, m, suff);	\
+} while (0)
 
 // call error handler and terminate state, for execution errors
 // (things that should not be possible, like illegal instruction or

@@ -2721,3 +2721,7 @@ void Executor::terminateWith(Terminator& term, ExecutionState& state)
 	term.process(state);
 	terminate(state);
 }
+
+
+ExecutionState* Executor::pureFork(ExecutionState& es, bool compact)
+{ return forking->pureFork(es, compact); }

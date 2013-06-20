@@ -54,6 +54,7 @@ DECL_WEIGHT(Uncov, true)
 DECL_WEIGHT(Stack, true)
 DECL_WEIGHT(StateInst, true)
 DECL_WEIGHT(NewInsts, true)
+DECL_WEIGHT(UniqObj, true)
 
 class Executor;
 

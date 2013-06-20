@@ -367,3 +367,14 @@ double StateInstWeight::weigh(const ExecutionState* es) const
 
 double NewInstsWeight::weigh(const ExecutionState* es) const
 { return es->newInsts; }
+
+double UniqObjWeight::weigh(const ExecutionState* es) const
+{
+	int ret = 0;
+	foreach (it, es->addressSpace.begin(), es->addressSpace.end()) {
+		if ((*(it->second)).getRefCount() == 1)
+			ret++;
+	}
+
+	return ret;
+}

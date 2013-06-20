@@ -14,6 +14,10 @@
 #define USE_SYS_FAILURE	1
 #define FAILURE_RATE	1	/* XXX: > implies incomplete model! */
 
+long kmc_io(int sys_nr, long p1, long p2, long p3, long p4);
+#define KMC_IO_READLINK(x,y,z)	kmc_io(SYS_readlink, (long)x, (long)y, (long)z, 0)
+
+
 bool concrete_vfs = false;
 bool deny_sys_files = false;
 bool fail_missing_concrete = true;
@@ -188,9 +192,7 @@ static void sc_stat(struct sc_pkt* sc)
 		}
 	}
 
-	klee_warning_once(
-		"stat not respecting concretes as it ought to");
-
+	klee_warning_once("stat not respecting concretes as it ought to");
 	sc_stat_sym(sc);
 }
 
@@ -368,10 +370,16 @@ int file_sc(struct sc_pkt* sc)
 
 	case SYS_readlink:
 	{
-		if (concrete_vfs) {
-			klee_warning_once(
-				"readlink() should work with concretes, "
-				"but Anthony is dying.");
+		if (	concrete_vfs &&
+			!file_path_has_sym(GET_ARG0_PTR(regfile)))
+		{
+			long v;
+			v = KMC_IO_READLINK(
+				GET_ARG0(regfile),
+				GET_ARG1(regfile),
+				GET_ARG2(regfile));
+			sc_ret_v(regfile, v);
+			break;
 		}
 
 		/* keep the string short since we're pure symbolic now */

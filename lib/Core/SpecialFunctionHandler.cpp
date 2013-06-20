@@ -495,13 +495,10 @@ SFH_DEF_HANDLER(Report)
 	// (file, line, message, suffix)
 	SFH_CHK_ARGS(4, "klee_report");
 
-	ExecutionState	*report_es;
-
 	std::string	message = sfh->readStringAtAddress(state, args[2]);
 	std::string	suffix = sfh->readStringAtAddress(state, args[3]);
 
-	report_es = sfh->executor->getForking()->pureFork(state, false);
-	TERMINATE_ERROR(sfh->executor, state, message, suffix);
+	REPORT_ERROR(sfh->executor, state, message, suffix);
 }
 
 
@@ -772,8 +769,11 @@ SFH_DEF_HANDLER(WarningOnce)
   SFH_CHK_ARGS(1, "klee_warning_once");
 
   std::string msg_str = sfh->readStringAtAddress(state, args[0]);
-  klee_warning_once(0, "%s: %s", state.getCurrentKFunc()->function->getName().data(),
-                    msg_str.c_str());
+  klee_warning_once(
+  	state.pc,
+  	"%s: %s",
+	state.getCurrentKFunc()->function->getName().data(),
+        msg_str.c_str());
 }
 
 SFH_DEF_HANDLER(PrintRange)

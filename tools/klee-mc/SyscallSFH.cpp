@@ -270,6 +270,34 @@ SFH_DEF_HANDLER(IO)
 		break;
 	}
 
+	case SYS_readlink: {
+		std::string path(sfh->readStringAtAddress(state, args[1]));
+		char		rl[4096];
+		int		rl_n, out_len;
+		uint64_t	guest_addr, guest_sz;
+	
+		guest_addr = arg2u64(args[2]);
+		guest_sz = arg2u64(args[3]);
+		if (guest_addr == ~0ULL || guest_sz > 4096) {
+			state.bindLocal(target, MK_CONST(-1, 64));
+			break;
+		}
+
+
+		rl_n = readlink(path.c_str(), rl, 4095);
+		if (rl_n == -1) {
+			state.bindLocal(target, MK_CONST(-1, 64));
+			break;
+		}
+
+		out_len = guest_sz;
+		if (rl_n < out_len) out_len = rl_n;
+
+		state.addressSpace.copyOutBuf(guest_addr, rl, out_len);
+		state.bindLocal(target, MK_CONST(out_len, 64));
+		break;
+	}
+
 	case SYS_open: {
 		/* expects a path */
 		std::string path(sfh->readStringAtAddress(state, args[1]));
@@ -406,7 +434,7 @@ SFH_DEF_HANDLER(FreeRun)
 
 		mo = state.addressSpace.resolveOneMO(cur_addr);
 		if (mo == NULL && len_remaining >= 4096) {
-			TERMINATE_ERROR(exe_vex,
+			REPORT_ERROR(exe_vex,
 				state,
 				"munmap error: munmapping bad address",
 				"munmap.err");
@@ -418,7 +446,7 @@ SFH_DEF_HANDLER(FreeRun)
 				<< "size mismatch on munmap "
 				<< mo->size << ">" << len_remaining
 				<< std::endl;
-			TERMINATE_ERROR(exe_vex,
+			REPORT_ERROR(exe_vex,
 				state,
 				"munmap error: size mismatch on munmap",
 				"munmap.err");

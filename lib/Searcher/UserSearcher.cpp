@@ -76,6 +76,7 @@ DECL_SEARCH_OPT(Uncov, "uncov", "UNC");
 DECL_SEARCH_OPT(Stack, "stack", "STK");
 DECL_SEARCH_OPT(StateInst, "stinst", "SI");
 DECL_SEARCH_OPT(NewInst, "newinst", "NI");
+DECL_SEARCH_OPT(UniqObj, "uniqobj", "UO");
 
 #define SEARCH_HISTO	new RescanSearcher(new HistoPrioritizer(executor))
 DECL_SEARCH_OPT(Histo, "histo", "HS");
@@ -261,6 +262,10 @@ bool UserSearcher::userSearcherRequiresMD2U() {
 	new WeightedRandomSearcher(executor, new NewInstsWeight())
 #endif
 
+#define UNIQOBJ_SEARCHER	\
+	new RescanSearcher(new Weight2Prioritizer<UniqObjWeight>(	\
+		new UniqObjWeight(), 1.0))
+
 /* Research quality */
 Searcher* UserSearcher::setupInterleavedSearcher(
 	Executor& executor, Searcher* searcher)
@@ -305,6 +310,8 @@ Searcher* UserSearcher::setupInterleavedSearcher(
 	PUSH_ILEAV_IF_SET(RR, new RRSearcher());
 
 	PUSH_ILEAV_IF_SET(NewInst, NEWINST_SEARCHER);
+
+	PUSH_ILEAV_IF_SET(UniqObj, UNIQOBJ_SEARCHER);
 
 	PUSH_ILEAV_IF_SET(Trough, new RescanSearcher(
 		new Weight2Prioritizer<TroughWeight>(

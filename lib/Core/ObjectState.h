@@ -111,8 +111,9 @@ public:
 
 	const ref<Array> getArrayRef(void) const { return src_array; }
 	const Array* getArray(void) const { return src_array.get(); }
-	void print(unsigned int begin = 0, int end = -1) const;
+	unsigned getRefCount(void) const { return refCount; }
 
+	void print(unsigned int begin = 0, int end = -1) const;
 	unsigned hash(void) const;
 
 	static void setupZeroObjs(void);
