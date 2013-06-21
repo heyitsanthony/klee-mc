@@ -55,6 +55,8 @@ cl::opt<std::string> WriteCWE(
 	cl::desc("Output CWE XML for errors (input is test case name)"));
 }
 
+static CmdArgs	ca_dummy;
+
 KleeHandler::KleeHandler(const CmdArgs* in_args)
 : m_symPathWriter(0)
 , m_infoFile(0)
@@ -64,8 +66,11 @@ KleeHandler::KleeHandler(const CmdArgs* in_args)
 , cmdargs(in_args)
 , writeOutput(NoOutput == false)
 , m_interpreter(0)
+, tms_valid(false)
 {
 	std::string theDir;
+
+	if (cmdargs == NULL) cmdargs = &ca_dummy;
 
 	theDir = setupOutputDir();
 	std::cerr << "KLEE: output directory = \"" << theDir << "\"\n";
@@ -544,6 +549,30 @@ void KleeHandler::printErrorMessage(
 		LOSING_IT("error");
 }
 
+// returns the end of the string put in buf
+static char *format_tdiff(char *buf, long seconds)
+{
+	assert(seconds >= 0);
+
+	long minutes = seconds / 60;  seconds %= 60;
+	long hours   = minutes / 60;  minutes %= 60;
+	long days    = hours   / 24;  hours   %= 24;
+
+	if (days > 0) buf += sprintf(buf, "%ld days, ", days);
+	buf += sprintf(buf, "%02ld:%02ld:%02ld", hours, minutes, seconds);
+	return buf;
+}
+
+static char *format_tdiff(char *buf, double seconds)
+{
+    long int_seconds = static_cast<long> (seconds);
+    buf = format_tdiff(buf, int_seconds);
+    buf += sprintf(buf, ".%02d", static_cast<int> (100 * (seconds - int_seconds)));
+    return buf;
+}
+
+
+
 unsigned KleeHandler::getStopAfterNTests(void) { return StopAfterNTests; }
 
 void KleeHandler::loadPathFiles(
@@ -557,6 +586,46 @@ void KleeHandler::loadPathFiles(
 		replayPaths.push_back(replayPath);
 		replayPath.clear();
 	}
+}
+
+static void printTimes(PrefixWriter& info, struct tms* tms, clock_t* tm, time_t* t)
+{
+	char buf[256], *pbuf;
+	bool tms_valid = true;
+
+	t[1] = time(NULL);
+	tm[1] = times(&tms[1]);
+	if (tm[1] == (clock_t) -1) {
+		perror("times");
+		tms_valid = false;
+	}
+
+	strftime(
+		buf, sizeof(buf),
+		"Finished: %Y-%m-%d %H:%M:%S\n", localtime(&t[1]));
+	info << buf;
+
+	pbuf = buf;
+	pbuf += sprintf(buf, "Elapsed: ");
+
+#define FMT_TDIFF(x,y) format_tdiff(pbuf, (x - y) / (double)clk_tck)
+	if (tms_valid) {
+		const long clk_tck = sysconf(_SC_CLK_TCK);
+		pbuf = FMT_TDIFF(tm[1], tm[0]);
+		pbuf += sprintf(pbuf, " (user ");
+		pbuf = FMT_TDIFF(tms[1].tms_utime, tms[0].tms_utime);
+		*pbuf++ = '+';
+		pbuf = FMT_TDIFF(tms[1].tms_cutime, tms[0].tms_cutime);
+		pbuf += sprintf(pbuf, ", sys ");
+		pbuf = FMT_TDIFF(tms[1].tms_stime, tms[0].tms_stime);
+		*pbuf++ = '+';
+		pbuf = FMT_TDIFF(tms[1].tms_cstime, tms[0].tms_cstime);
+		pbuf += sprintf(pbuf, ")");
+	} else
+		pbuf = format_tdiff(pbuf, t[1] - t[0]);
+
+	strcpy(pbuf, "\n");
+	info << buf;
 }
 
 #define GET_STAT(x,y)  \
@@ -593,3 +662,42 @@ void KleeHandler::printStats(PrefixWriter& info)
 	info << "done: completed paths = " << getNumPathsExplored() << "\n";
 	info << "done: generated tests = " << getNumTestCases() << "\n";
 }
+
+void KleeHandler::printInfoFooter(void)
+{
+	TwoOStreams info2s(&std::cerr, m_infoFile);
+	PrefixWriter info(info2s, "KLEE: ");
+
+	printTimes(info, tms, tm, t);
+	printStats(info);
+}
+
+void KleeHandler::printInfoHeader(int argc, char* argv[])
+{
+	char buf[256];
+
+	for (int i=0; i<argc; i++) {
+		(*m_infoFile) << argv[i] << (i+1<argc ? " ":"\n");
+	}
+
+	TwoOStreams info2s(&std::cerr, m_infoFile);
+	PrefixWriter info(info2s, "KLEE: ");
+	info << "PID: " << getpid() << "\n";
+
+	t[0] = time(NULL);
+	tm[0] = times(&tms[0]);
+	if (tm[0] == (clock_t) -1) {
+		perror("times");
+		tms_valid = false;
+	}
+	strftime(
+		buf,
+		sizeof(buf),
+		"Started: %Y-%m-%d %H:%M:%S\n",
+		localtime(&t[0]));
+	info << buf;
+
+	m_infoFile->flush();
+}
+
+

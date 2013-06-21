@@ -17,6 +17,7 @@ LEVEL=..
 #
 PARALLEL_DIRS= 	\
 	kopt klee-mc kmc-replay kcrumb kcrumb-replay \
+	kleej	\
 	klee kleaver ktest-tool gen-random-bout klee-stats solverd 	\
 
 

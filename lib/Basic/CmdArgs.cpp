@@ -26,6 +26,16 @@ CmdArgs::CmdArgs(
 	loadArgv(in_argv);
 }
 
+CmdArgs::CmdArgs()
+: in_bin_path("")
+, envp_native(NULL)
+, symbolic(false)
+{
+	vector<string> in_argv;
+	envp = envFromString("");
+	loadArgv(in_argv);
+}
+
 CmdArgs::~CmdArgs(void)
 {
 	clearArgv();

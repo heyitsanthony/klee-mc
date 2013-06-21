@@ -5,6 +5,7 @@
 #include "klee/Interpreter.h"
 #include "klee/Common.h"
 #include "klee/Internal/ADT/TwoOStreams.h"
+#include <sys/times.h>
 #include <cerrno>
 
 #define LOSING_IT(x)	\
@@ -31,7 +32,7 @@ private:
 	bool				writeOutput;
 
 public:
-	KleeHandler(const CmdArgs* cmdargs);
+	KleeHandler(const CmdArgs* cmdargs = NULL);
 	virtual ~KleeHandler();
 
 	bool isWriteOutput(void) const { return writeOutput; }
@@ -78,8 +79,9 @@ public:
 		const std::vector<std::string>& pathfiles,
 		std::list<ReplayPath>& replayPaths);
 
+	void printInfoHeader(int argc, char* argv[]);
+	void printInfoFooter(void);
 
-	void printStats(PrefixWriter& info);
 protected:
 	static void getKTestFiles(
 		std::string path, std::vector<std::string> &results);
@@ -104,6 +106,7 @@ typedef
 
 	static unsigned getStopAfterNTests(void);
 private:
+	void printStats(PrefixWriter& info);
 	void printCWEXML(
 		const ExecutionState &state, const char* errorMessage);
 
@@ -111,6 +114,11 @@ private:
 	std::string setupOutputDir(void);
 	bool scanForOutputDir(const std::string& path, std::string& theDir);
 	void dumpPCs(const ExecutionState& state, unsigned id);
+
+	time_t t[2];
+	clock_t tm[2];
+	struct tms tms[2];
+	bool tms_valid;
 };
 
 }

@@ -153,7 +153,7 @@ void externalsAndGlobalsCheck(const Module *m)
 	// (they define the symbol after global initialization)
 	foreach (it, m->alias_begin(), m->alias_end()) {
 		std::map<std::string, bool>::iterator it2;
-		
+
 		it2 = externals.find(it->getName());
 		if (it2 == externals.end()) continue;
 		std::cerr << "ERASING " << it2->first << '\n';
@@ -491,41 +491,43 @@ static void loadPOSIX(Module* &mainModule, ModuleOptions& Opts)
 	}
 }
 
-void loadInputBitcode(Module* &mainModule)
+void loadInputBitcode(const std::string& ifile, Module* &mainModule)
 {
 	std::string ErrorMsg;
 	OwningPtr<MemoryBuffer> Buffer;
-	MemoryBuffer::getFileOrSTDIN(g_InputFile.c_str(), Buffer);
+	MemoryBuffer::getFileOrSTDIN(ifile.c_str(), Buffer);
 
-	mainModule = 0;
-	if (Buffer) {
-		//mainModule = getLazyBitcodeModule(Buffer.get(), GCTX, &ErrorMsg);
-		mainModule = ParseBitcodeFile(Buffer.get(), GCTX, &ErrorMsg);
-		if (!mainModule) Buffer.reset();
+	mainModule = NULL;
+	if (!Buffer) goto done;
+
+	mainModule = ParseBitcodeFile(Buffer.get(), GCTX, &ErrorMsg);
+	if (mainModule == NULL) {
+		Buffer.reset();
+		goto done;
 	}
 
-	if (mainModule) {
-		if (mainModule->MaterializeAllPermanently(&ErrorMsg)) {
-			delete mainModule;
-			mainModule = 0;
-		}
+	if (mainModule->MaterializeAllPermanently(&ErrorMsg)) {
+		delete mainModule;
+		mainModule = NULL;
+		goto done;
 	}
-
-	if (!mainModule)
-		klee_error(
-			"error loading program '%s': %s",
-			g_InputFile.c_str(),
-			ErrorMsg.c_str());
-
-	assert(mainModule && "unable to materialize");
 
 	// Remove '\x01' prefix sentinels before linking
 	runRemoveSentinelsPass(*mainModule);
+
+done:
+	if (mainModule == NULL)
+		klee_error(
+			"error loading program '%s': %s",
+			ifile.c_str(),
+			ErrorMsg.c_str());
+
+	assert(mainModule && "unable to materialize");
 }
 
 ModuleOptions getMainModule(Module* &mainModule)
 {
-	loadInputBitcode(mainModule);
+	loadInputBitcode(g_InputFile, mainModule);
 
 	if (g_WithPOSIXRuntime) InitEnv = true;
 

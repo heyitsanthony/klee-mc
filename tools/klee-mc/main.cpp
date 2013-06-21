@@ -6,7 +6,6 @@
 #include "klee/Statistics.h"
 #include "klee/Internal/System/Time.h"
 #include "klee/Internal/Support/Watchdog.h"
-#include "klee/Internal/ADT/TwoOStreams.h"
 #include "static/Sugar.h"
 #include "../../lib/Skins/GDBExecutor.h"
 #include "../../lib/Skins/ShadowExecutor.h"
@@ -404,15 +403,7 @@ int main(int argc, char **argv, char **envp)
 
 	theInterpreter = interpreter;
 	handler->setInterpreter(interpreter);
-
-	std::ostream &infoFile = handler->getInfoStream();
-	for (int i=0; i < argc; i++) {
-		infoFile << argv[i] << (i+1<argc ? " ":"\n");
-	}
-
-	TwoOStreams info2s(&std::cerr, &infoFile);
-	PrefixWriter info(info2s, "KLEE: ");
-	info << "PID: " << getpid() << "\n";
+	handler->printInfoHeader(argc, argv);
 
 	loadKTests();
 	setupReplayPaths(interpreter);
@@ -434,12 +425,11 @@ int main(int argc, char **argv, char **envp)
 		kTests.pop_back();
 	}
 
+	handler->printInfoFooter();
+
 	delete interpreter;
 	delete gs;
-
-	handler->printStats(info);
 	delete handler;
-
 	delete cmdargs;
 
 	llvm_shutdown();

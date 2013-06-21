@@ -9,8 +9,6 @@
 #include "klee/Interpreter.h"
 #include "klee/Statistics.h"
 #include "klee/Internal/ADT/KTest.h"
-#include "klee/Internal/ADT/TreeStream.h"
-#include "klee/Internal/ADT/TwoOStreams.h"
 #include "klee/KleeHandler.h"
 #include "klee/Internal/ADT/CmdArgs.h"
 #include "klee/Internal/System/Time.h"
@@ -18,16 +16,16 @@
 
 #include "libc.h"
 
-#include "llvm/IR/Constants.h"
-#include "llvm/IR/Module.h"
-#include "llvm/IR/Type.h"
-#include "llvm/IR/InstrTypes.h"
-#include "llvm/IR/Instruction.h"
-#include "llvm/IR/Instructions.h"
-#include "llvm/Support/CommandLine.h"
-#include "llvm/Support/ManagedStatic.h"
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/Module.h>
+#include <llvm/IR/Type.h>
+#include <llvm/IR/InstrTypes.h>
+#include <llvm/IR/Instruction.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/Support/CommandLine.h>
+#include <llvm/Support/ManagedStatic.h>
 
-//#include "llvm/Support/system_error.h"
+//#include <llvm/Support/system_error.h>
 
 // FIXME: Ugh, this is gross. But otherwise our config.h conflicts with LLVMs.
 #undef PACKAGE_BUGREPORT
@@ -38,18 +36,12 @@
 #include <llvm/Support/TargetSelect.h>
 #include "llvm/Support/Signals.h"
 #include <iostream>
-#include <fstream>
 #include <cerrno>
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
-#include <sys/times.h>
 #include <signal.h>
-
-#include <iostream>
 #include <iterator>
-#include <fstream>
-#include <sstream>
 
 using namespace llvm;
 using namespace klee;
@@ -199,67 +191,6 @@ static void halt_via_gdb(int pid)
 		perror("system");
 }
 
-// returns the end of the string put in buf
-static char *format_tdiff(char *buf, long seconds)
-{
-	assert(seconds >= 0);
-
-	long minutes = seconds / 60;  seconds %= 60;
-	long hours   = minutes / 60;  minutes %= 60;
-	long days    = hours   / 24;  hours   %= 24;
-
-	if (days > 0) buf += sprintf(buf, "%ld days, ", days);
-	buf += sprintf(buf, "%02ld:%02ld:%02ld", hours, minutes, seconds);
-	return buf;
-}
-
-static char *format_tdiff(char *buf, double seconds) {
-    long int_seconds = static_cast<long> (seconds);
-    buf = format_tdiff(buf, int_seconds);
-    buf += sprintf(buf, ".%02d", static_cast<int> (100 * (seconds - int_seconds)));
-    return buf;
-}
-
-static void printTimes(PrefixWriter& info, struct tms* tms, clock_t* tm, time_t* t)
-{
-	char buf[256], *pbuf;
-	bool tms_valid = true;
-
-	t[1] = time(NULL);
-	tm[1] = times(&tms[1]);
-	if (tm[1] == (clock_t) -1) {
-		perror("times");
-		tms_valid = false;
-	}
-
-	strftime(
-		buf, sizeof(buf),
-		"Finished: %Y-%m-%d %H:%M:%S\n", localtime(&t[1]));
-	info << buf;
-
-	pbuf = buf;
-	pbuf += sprintf(buf, "Elapsed: ");
-
-#define FMT_TDIFF(x,y) format_tdiff(pbuf, (x - y) / (double)clk_tck)
-	if (tms_valid) {
-		const long clk_tck = sysconf(_SC_CLK_TCK);
-		pbuf = FMT_TDIFF(tm[1], tm[0]);
-		pbuf += sprintf(pbuf, " (user ");
-		pbuf = FMT_TDIFF(tms[1].tms_utime, tms[0].tms_utime);
-		*pbuf++ = '+';
-		pbuf = FMT_TDIFF(tms[1].tms_cutime, tms[0].tms_cutime);
-		pbuf += sprintf(pbuf, ", sys ");
-		pbuf = FMT_TDIFF(tms[1].tms_stime, tms[0].tms_stime);
-		*pbuf++ = '+';
-		pbuf = FMT_TDIFF(tms[1].tms_cstime, tms[0].tms_cstime);
-		pbuf += sprintf(pbuf, ")");
-	} else
-		pbuf = format_tdiff(pbuf, t[1] - t[0]);
-
-	strcpy(pbuf, "\n");
-	info << buf;
-}
-
 static int runWatchdog(void)
 {
 	if (MaxTime==0)
@@ -297,7 +228,7 @@ static int runWatchdog(void)
 			}
 			continue;
 		}
-		
+
 		if (res==pid && WIFEXITED(status))
 			return WEXITSTATUS(status);
 
@@ -473,15 +404,7 @@ int main(int argc, char **argv, char **envp)
 	}
 	theInterpreter = interpreter;
 	handler->setInterpreter(interpreter);
-
-	std::ostream &infoFile = handler->getInfoStream();
-	for (int i=0; i<argc; i++) {
-		infoFile << argv[i] << (i+1<argc ? " ":"\n");
-	}
-
-	TwoOStreams info2s(&std::cerr, &infoFile);
-	PrefixWriter info(info2s, "KLEE: ");
-	info << "PID: " << getpid() << "\n";
+	handler->printInfoHeader(argc, argv);
 
 	finalModule = interpreter->setModule(mainModule, Opts);
 	externalsAndGlobalsCheck(finalModule);
@@ -489,24 +412,6 @@ int main(int argc, char **argv, char **envp)
 	if (!replayPaths.empty()) {
 		interpreter->setReplay(new ReplayBrPaths(replayPaths));
 	}
-
-	char buf[256];
-	time_t t[2];
-	clock_t tm[2];
-	struct tms tms[2];
-	bool tms_valid = true;
-
-	t[0] = time(NULL);
-	tm[0] = times(&tms[0]);
-	if (tm[0] == (clock_t) -1) {
-		perror("times");
-		tms_valid = false;
-	}
-	strftime(
-		buf, sizeof(buf),
-		"Started: %Y-%m-%d %H:%M:%S\n", localtime(&t[0]));
-	info << buf;
-	infoFile.flush();
 
 	if (!useSeeds) {
 		assert(SeedKTestFile.empty());
@@ -516,12 +421,9 @@ int main(int argc, char **argv, char **envp)
 		runSeeds(exe_seed, mainFn, ca);
 	}
 
-	printTimes(info, tms, tm, t);
+	handler->printInfoFooter();
 
 	delete interpreter;
-
-	handler->printStats(info);
-
 	delete handler;
 	delete ca;
 

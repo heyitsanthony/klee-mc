@@ -16,6 +16,7 @@ public:
 		const std::string& env_path,
 		char** in_env,
 		const std::vector<std::string>& argv);
+	CmdArgs();
 	virtual ~CmdArgs();
 
 	unsigned int getArgc(void) const { return argc; }
