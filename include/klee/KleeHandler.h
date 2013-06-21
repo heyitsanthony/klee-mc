@@ -4,6 +4,7 @@
 #include "klee/Internal/ADT/TreeStream.h"
 #include "klee/Interpreter.h"
 #include "klee/Common.h"
+#include "klee/Internal/ADT/TwoOStreams.h"
 #include <cerrno>
 
 #define LOSING_IT(x)	\
@@ -74,9 +75,11 @@ public:
 
 
 	static void loadPathFiles(
-
 		const std::vector<std::string>& pathfiles,
 		std::list<ReplayPath>& replayPaths);
+
+
+	void printStats(PrefixWriter& info);
 protected:
 	static void getKTestFiles(
 		std::string path, std::vector<std::string> &results);

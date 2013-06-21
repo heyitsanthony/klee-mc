@@ -9,6 +9,7 @@
 #include "../../lib/Solver/SMTPrinter.h"
 #include "static/Sugar.h"
 #include "klee/Internal/ADT/CmdArgs.h"
+#include "klee/Statistics.h"
 
 #include "klee/Internal/Module/KFunction.h"
 #include "klee/KleeHandler.h"
@@ -556,4 +557,39 @@ void KleeHandler::loadPathFiles(
 		replayPaths.push_back(replayPath);
 		replayPath.clear();
 	}
+}
+
+#define GET_STAT(x,y)  \
+	uint64_t x = *theStatisticManager->getStatisticByName(y);
+
+void KleeHandler::printStats(PrefixWriter& info)
+{
+	GET_STAT(queries, "Queries")
+	GET_STAT(queriesValid, "QueriesValid")
+	GET_STAT(queriesInvalid, "QueriesInvalid")
+	GET_STAT(queryCounterexamples, "QueriesCEX")
+	GET_STAT(queriesFailed, "QueriesFailed")
+	GET_STAT(queryConstructs, "QueriesConstructs")
+	GET_STAT(queryCacheHits, "QueryCacheHits")
+	GET_STAT(queryCacheMisses, "QueryCacheMisses")
+	GET_STAT(instructions, "Instructions")
+	GET_STAT(forks, "Forks")
+
+	info	<< "done: total queries = " << queries << " ("
+		<< "valid: " << queriesValid << ", "
+		<< "invalid: " << queriesInvalid << ", "
+		<< "failed: " << queriesFailed << ", "
+		<< "cex: " << queryCounterexamples << ")\n";
+
+	if (queries)
+		info	<< "done: avg. constructs per query = "
+		 	<< queryConstructs / queries << "\n";
+
+	info	<< "done: query cache hits = " << queryCacheHits << ", "
+		<< "query cache misses = " << queryCacheMisses << "\n";
+
+	info << "done: total instructions = " << instructions << "\n";
+	info << "done: explored paths = " << 1 + forks << "\n";
+	info << "done: completed paths = " << getNumPathsExplored() << "\n";
+	info << "done: generated tests = " << getNumTestCases() << "\n";
 }

@@ -115,9 +115,6 @@ namespace {
 		cl::desc("Specify a directory to replay path files from"),
 		cl::value_desc("path directory"));
 
-	cl::list<std::string> SeedOutFile("seed-out");
-	cl::list<std::string> SeedOutDir("seed-out-dir");
-
 	cl::opt<std::string>
 	GuestType(
 		"guest-type",
@@ -243,41 +240,6 @@ void runReplayKTest(Interpreter* interpreter)
 	}
 
 	interpreter->setReplayKTest(0);
-}
-
-#define GET_STAT(x,y)	\
-	uint64_t x = *theStatisticManager->getStatisticByName(y);
-
-static void printStats(PrefixWriter& info, KleeHandler* handler)
-{
-	GET_STAT(queries, "Queries")
-	GET_STAT(queriesValid, "QueriesValid")
-	GET_STAT(queriesInvalid, "QueriesInvalid")
-	GET_STAT(queryCounterexamples, "QueriesCEX")
-	GET_STAT(queriesFailed, "QueriesFailed")
-	GET_STAT(queryConstructs, "QueriesConstructs")
-	GET_STAT(queryCacheHits, "QueryCacheHits")
-	GET_STAT(queryCacheMisses, "QueryCacheMisses")
-	GET_STAT(instructions, "Instructions")
-	GET_STAT(forks, "Forks")
-
-	info << "done: total queries = "
-		<< queries << " ("
-		<< "valid: " << queriesValid << ", "
-		<< "invalid: " << queriesInvalid << ", "
-		<< "cex: " << queryCounterexamples << ", "
-		<< "failed: " << queriesFailed << ")\n";
-	if (queries)
-		info	<< "done: avg. constructs per query = "
-			<< queryConstructs / queries << "\n";
-
-	info	<< "done: query cache hits = " << queryCacheHits << ", "
-		<< "query cache misses = " << queryCacheMisses << "\n";
-
-	info << "done: total instructions = " << instructions << "\n";
-	info << "done: explored paths = " << 1 + forks << "\n";
-	info << "done: completed paths = " << handler->getNumPathsExplored() << "\n";
-	info << "done: generated tests = " << handler->getNumTestCases() << "\n";
 }
 
 static CmdArgs* getCmdArgs(char** envp)
@@ -475,7 +437,7 @@ int main(int argc, char **argv, char **envp)
 	delete interpreter;
 	delete gs;
 
-	printStats(info, handler);
+	handler->printStats(info);
 	delete handler;
 
 	delete cmdargs;
