@@ -9,6 +9,7 @@
 #include "guestcpustate.h"
 #include "klee/breadcrumb.h"
 #include <sys/syscall.h>
+#include <unistd.h>
 #include "static/Sugar.h"
 
 extern "C"

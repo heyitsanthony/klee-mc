@@ -14,6 +14,7 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+#include <unistd.h>
 
 #include <iostream>
 #include <fstream>

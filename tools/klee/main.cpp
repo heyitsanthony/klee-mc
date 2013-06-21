@@ -41,6 +41,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include <unistd.h>
 #include <iterator>
 
 using namespace llvm;

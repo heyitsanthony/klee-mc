@@ -10,6 +10,7 @@
 #include "klee/Constraints.h"
 #include "klee/TimerStatIncrementer.h"
 
+#include <unistd.h>
 #include <sys/time.h>
 #include <errno.h>
 #include <signal.h>
