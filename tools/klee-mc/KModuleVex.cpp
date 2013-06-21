@@ -138,8 +138,6 @@ Function* KModuleVex::loadFuncByBuffer(void* host_addr, guest_ptr guest_addr)
 			<< (void*)vsb->getEndAddr().o << " : "
 			<< gs->getName(vsb->getGuestAddr());
 
-		std::cerr << "OUR EXE: " << (void*)exe << '\n';
-
 		if (PrintLibraryName)
 		if (ExecutionState *es = exe->getCurrentState()) {
 			const MemoryObject	*mo;
