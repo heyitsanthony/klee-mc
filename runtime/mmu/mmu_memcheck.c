@@ -258,6 +258,10 @@ void mmu_init_memcheck(void)
 	HEAP_LEAVE
 }
 
+/* NOTE: it's important to NOT use cnulltlb on a
+ * used shadow page. This is because we don't want to fast
+ * path any potential accesses on a page which may have
+ * a FREE value */
 #define MMU_LOADC(x,y)				\
 y mmu_load_##x##_memcheckc(void* addr)		\
 {						\
@@ -265,7 +269,7 @@ if (!shadow_pg_used(&heap_si, (uint64_t)addr))	\
 	return mmu_load_##x##_cnulltlb(addr);	\
 if (!in_heap && extent_has_free(addr, x/8))	\
 	klee_ureport("Loading from free const pointer", "heap.err");	\
-return mmu_load_##x##_cnulltlb(addr); }
+return mmu_load_##x##_cnull(addr); }
 
 
 #define MMU_STOREC(x,y)					\
@@ -278,7 +282,7 @@ if (!shadow_pg_used(&heap_si, (uint64_t)addr)) {	\
 if (!in_heap && extent_has_free(addr, x/8)) {	\
 	klee_ureport("Storing to free const pointer", "heap.err");	\
 }									\
-mmu_store_##x##_cnulltlb(addr, v); }
+mmu_store_##x##_cnull(addr, v); }
 
 
 #define MMU_LOAD(x,y)			\

@@ -493,6 +493,7 @@ void KModule::prepare(InterpreterHandler *in_ih)
 	infos = new InstructionInfoTable(module);
 	if (OptimizeKModule) Optimize(module);
 
+
 	// Needs to happen after linking (since ctors/dtors can be modified)
 	// and optimization (since global optimization can rewrite lists).
 	injectStaticConstructorsAndDestructors(module);
@@ -725,8 +726,6 @@ void KModule::loadIntrinsicsLib()
 		std::cerr << "err: " << err << '\n';
 		exit(1);
 	}
-////	path.appendComponent("libkleeRuntimeIntrinsic.bca");
-//	module = linkWithLibrary(module, path.c_str());
 }
 
 void KModule::bindModuleConstants(Executor* exe)

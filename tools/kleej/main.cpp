@@ -1,6 +1,5 @@
 #include "../../lib/Skins/SeedExecutor.h"
 #include "../../lib/Skins/KTestExecutor.h"
-#include "../../lib/Core/ExecutorBC.h"
 #include "klee/Common.h"
 #include "klee/ExecutionState.h"
 #include "klee/Expr.h"
@@ -42,6 +41,9 @@
 #include <signal.h>
 #include <iterator>
 
+#include "ExecutorJ.h"
+#include "JnJavaName.h"
+
 using namespace llvm;
 using namespace klee;
 
@@ -53,9 +55,11 @@ extern bool	WriteTraces;
 
 
 namespace {
-
 	cl::opt<std::string>
-	InputFile(cl::desc("<input bytecode>"), cl::Positional, cl::init("-"));
+	InputFile(
+		cl::desc("<input bytecode>"),
+		cl::Positional,
+		cl::init("-"));
 
 	cl::list<std::string>
 	ReplayKTestFile("replay-ktest",
@@ -172,7 +176,10 @@ void loadInputBitcode(const std::string& ifile, Module* &mainModule)
 {
 	std::string ErrorMsg;
 	OwningPtr<MemoryBuffer> Buffer;
+
+	std::cerr << "INPUT FILE: " << ifile << '\n';
 	MemoryBuffer::getFileOrSTDIN(ifile.c_str(), Buffer);
+
 
 	mainModule = NULL;
 	if (!Buffer) goto done;
@@ -215,18 +222,12 @@ ModuleOptions getClassModule(Module* &mainModule)
 	return Opts;
 }
 
-static Function* findAndroidFunction(Module* m)
-{
-	assert (0 == 1 && "uhh");
-	return m->getFunction("main");
-}
 
 int main(int argc, char **argv, char **envp)
 {
 	Module				*mainModule;
 	const Module			*finalModule;
 	KleeHandler			*handler;
-	Function			*mainFn;
 	Interpreter			*interpreter;
 //	SeedExecutor<ExecutorBC>	*exe_seed;
 //	KTestExecutor<ExecutorBC>	*exe_ktest;
@@ -236,6 +237,8 @@ int main(int argc, char **argv, char **envp)
 
 	atexit(llvm_shutdown);
 	llvm::InitializeNativeTarget();
+	llvm::cl::ParseCommandLineOptions(argc, argv);
+
 	sys::SetInterruptFunction(interrupt_handle);
 
 	useSeeds = ReplayKTestDir.empty() && ReplayKTestFile.empty();
@@ -247,25 +250,21 @@ int main(int argc, char **argv, char **envp)
 	// Load the bytecode...
 	ModuleOptions Opts = getClassModule(mainModule);
 
-	mainFn = findAndroidFunction(mainModule);
-	if (mainFn == NULL) {
-		std::cerr << "'main' function not found in module.\n";
-		return -1;
-	}
+	handler = new KleeHandler();
+	interpreter = new ExecutorJ(handler);
+	theInterpreter = interpreter;
 
 	setupReplayPaths(interpreter);
 
 	KleeHandler::loadPathFiles(pathFiles, replayPaths);
-	handler = new KleeHandler();
 
-	theInterpreter = interpreter;
 	handler->setInterpreter(interpreter);
-
 	handler->printInfoHeader(argc, argv);
 
 	finalModule = interpreter->setModule(mainModule, Opts);
 //	externalsAndGlobalsCheck(finalModule);
 
+	std::cerr << "DO THE RUN\n";
 	if (isReplayingKTest() && Replay::isSuppressForks()) {
 		/* directly feed concrete ktests data into states. yuck */
 		runReplayKTest(interpreter);
