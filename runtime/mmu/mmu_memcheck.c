@@ -21,6 +21,13 @@ struct heap_ent
 	struct list_item he_li;
 };
 
+#define GET_HT_IDX(x)	(((uint64_t)x / 16) & 0xff)
+#define GET_HEAP_L(x)	(&heap_tab.ht_l[GET_HT_IDX(x)])
+#define HEAP_TAB_LISTS	(4096/16)
+struct heap_table { struct list	ht_l[HEAP_TAB_LISTS]; };
+
+#define REGPARAM	void* regfile
+
 //#define HEAP_BUCKETS	512
 //#define PTR_TO_IDX(x)	((((uint64_t)x) >> 4) % HEAP_BUCKETS)
 
@@ -52,7 +59,7 @@ struct heap_ent
 #define extent_has_free(a, x)	\
 	(shadow_get_range((uint64_t)(a), (x)) & SH_FL_FREE)
 
-struct list		heap_l;
+struct heap_table	heap_tab;
 struct shadow_info	heap_si;
 
 static uint64_t shadow_get_range(uint64_t a, unsigned byte_c)
@@ -66,14 +73,16 @@ static uint64_t shadow_get_range(uint64_t a, unsigned byte_c)
 
 void post_int_free(int64_t retval)
 {
+	struct list		*hl;
 	struct list_item	*li;
 	struct heap_ent		*he;
 	void			*free_addr = (void*)retval;
 
 	HEAP_LEAVE
 
-	list_for_all(&heap_l, li) {
-		he = list_get_data(&heap_l, li);
+	hl = GET_HEAP_L(free_addr);
+	list_for_all(hl, li) {
+		he = list_get_data(hl, li);
 		if (he->he_base == free_addr) {
 			list_remove(li);
 			break;
@@ -104,7 +113,7 @@ void post_int_free(int64_t retval)
 }
 
 
-void __hookpre___GI___libc_free(void* regfile)
+void __hookpre___GI___libc_free(REGPARAM)
 {
 	void	*ptr;
 
@@ -130,7 +139,7 @@ static struct heap_ent* add_heap_ent(void* base, unsigned len)
 	he = malloc(sizeof(*he));
 	he->he_len = len;
 	he->he_base = base;
-	list_add_head(&heap_l, &he->he_li);
+	list_add_head(GET_HEAP_L(base), &he->he_li);
 
 	return he;
 }
@@ -189,16 +198,16 @@ done:
 }
 
 /* reserved data manipulation only happens once int_malloc is called */
-void __hookpre__int_malloc(void* regfile) { HEAP_ENTER }
-void __hookpre__int_realloc(void* regfile) { HEAP_ENTER }
+void __hookpre__int_malloc(REGPARAM) { HEAP_ENTER }
+void __hookpre__int_realloc(REGPARAM) { HEAP_ENTER }
 
-void __hookpre___GI___libc_malloc(void* regfile)
+void __hookpre___GI___libc_malloc(REGPARAM)
 {
 	klee_print_expr("[memcheck] malloc enter", GET_ARG0(regfile));
 	klee_hook_return(1, &post__int_malloc, GET_ARG0(regfile));
 }
 
-void __hookpre___GI___libc_realloc(void* regfile)
+void __hookpre___GI___libc_realloc(REGPARAM)
 {
 	HEAP_ENTER
 	klee_print_expr("[memcheck] realloc enter", GET_ARG1(regfile));
@@ -207,7 +216,7 @@ void __hookpre___GI___libc_realloc(void* regfile)
 
 void post_malloc_usable_size(int64_t v) { HEAP_LEAVE; }
 
-void __hookpre___malloc_usable_size(void* regfile)
+void __hookpre___malloc_usable_size(REGPARAM)
 {
 	HEAP_ENTER
 	klee_hook_return(
@@ -217,7 +226,7 @@ void __hookpre___malloc_usable_size(void* regfile)
 }
 
 
-void __hookpre___calloc(void* regfile)
+void __hookpre___calloc(REGPARAM)
 {
 	HEAP_ENTER
 	klee_print_expr("[memcheck] calloc enter", GET_ARG1(regfile));
@@ -225,7 +234,7 @@ void __hookpre___calloc(void* regfile)
 		1, &post__int_malloc, GET_ARG0(regfile) * GET_ARG1(regfile));
 }
 
-void __hookpre___GI___libc_memalign(void* regfile)
+void __hookpre___GI___libc_memalign(REGPARAM)
 {
 	HEAP_ENTER
 	klee_print_expr("[memcheck] memalign enter", GET_ARG1(regfile));
@@ -238,7 +247,13 @@ void __hookpre___GI___libc_memalign(void* regfile)
 void mmu_init_memcheck(void)
 {
 	HEAP_ENTER
-	list_init(&heap_l, offsetof(struct heap_ent, he_li));
+
+	for (unsigned i = 0; i < HEAP_TAB_LISTS; i++) {
+		list_init(
+			&heap_tab.ht_l[i],
+			offsetof(struct heap_ent, he_li));
+	}
+
 	shadow_init(&heap_si, HEAP_GRAN_BYTES, HEAP_FLAG_BITS, SH_FL_UNINIT);
 	HEAP_LEAVE
 }

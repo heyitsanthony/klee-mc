@@ -74,26 +74,34 @@ HookPass::~HookPass() {}
 
 bool HookPass::hookPre(KFunction* kf, llvm::Function& f)
 {
-	Function::ArgumentListType::const_iterator	alt_it[2];
 	std::vector<Value*>	args;
 
 	/* function arguments must match */
 	assert (f.getArgumentList().size() ==
 		kf->function->getArgumentList().size());
-	alt_it[1] = kf->function->getArgumentList().begin();
-	for (	alt_it[0] = f.getArgumentList().begin();
-		alt_it[0] != f.getArgumentList().end();
-		alt_it[0]++, alt_it[1]++)
-	{
-		assert (alt_it[0]->getType() != alt_it[1]->getType());
+
+	/* this is disgusting, but necessary to pass assertion builds */
+	Instruction	*ii = &f.getEntryBlock().front();
+	unsigned	i = 0;
+	foreach (it, f.arg_begin(), f.arg_end()) {
+		Type	*f_t(f.getFunctionType()->getParamType(i)),
+			*kf_t(kf->function->getFunctionType()->getParamType(i));
+
+		if (f_t != kf_t) {
+			args.push_back(
+				CastInst::CreateZExtOrBitCast(
+					&*it,
+					kf_t,
+					"",
+					ii));
+		} else
+			args.push_back(&*it);
+
+		i++;
 	}
 
-	foreach (it, f.arg_begin(), f.arg_end())
-		args.push_back(&*it);
-
 	/* insert function into very beginning of function */
-	CallInst::Create(
-		kf->function, args, "prehook", &f.getEntryBlock().front());
+	CallInst::Create(kf->function, args, "", ii);
 	return true;
 }
 
