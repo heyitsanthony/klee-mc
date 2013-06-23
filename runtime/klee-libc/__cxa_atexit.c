@@ -35,10 +35,7 @@ int __cxa_atexit(void (*fn)(void*),
    * semantics).
    */
   if (NumAtExit == MAX_ATEXIT)
-    klee_report_error(__FILE__,
-                      __LINE__,
-                      "__cxa_atexit: no room in array!",
-                      "exec");
+    klee_uerror("__cxa_atexit: no room in array!", "exec");
   
   AtExit[NumAtExit].fn = fn;
   AtExit[NumAtExit].arg = arg;

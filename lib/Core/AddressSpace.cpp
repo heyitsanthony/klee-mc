@@ -1050,11 +1050,11 @@ bool AddressSpace::readConcrete(
 int AddressSpace::readConcreteSafe(
 	uint8_t* buf, uint64_t guest_addr, unsigned len) const
 {
-	ObjectPair	op;
 	int		br = 0;
 	int		to_copy;
 
 	for (unsigned i = 0;  i < len; i += to_copy) {
+		ObjectPair	op;
 		unsigned	off, remain;
 		int		copied;
 

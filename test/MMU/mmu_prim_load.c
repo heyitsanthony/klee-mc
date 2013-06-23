@@ -28,10 +28,10 @@ int main(int argc, char *argv[])
 	u32 = *((uint32_t*)p+2);
 	u64 = *((uint64_t*)p+3);
 
-	ksys_assume(u8 == 0);
-	ksys_assume(u16 == 0);
-	ksys_assume(u32 == 0);
-	ksys_assume(u64 == 0);
+	ksys_assume_eq(u8, 0);
+	ksys_assume_eq(u16, 0);
+	ksys_assume_eq(u32, 0);
+	ksys_assume_eq(u64, 0);
 
 	return 0;
 }

@@ -517,7 +517,7 @@ ssize_t __fd_scatter_read(exe_file_t *f, const struct iovec *iov, int iovcnt)
 
   if (__exe_fs.fd_short) {
     klee_make_symbolic(&to_read, sizeof(to_read), "to_read");
-    klee_assume(to_read <= requested);
+    klee_assume_ule(to_read, requested);
   }
   else
     to_read = requested;
@@ -1745,13 +1745,13 @@ static void *__concretize_ptr(const void *p) {
 #else
   void *pc = (void*) (uint32_t) klee_get_value((uint64_t) (uint32_t) p);
 #endif
-  klee_assume(pc == p);
+  klee_assume_eq(pc, p);
   return pc;
 }
 
 static size_t __concretize_size(size_t s) {
   size_t sc = klee_get_value(s);
-  klee_assume(sc == s);
+  klee_assume_eq(sc, s);
   return sc;
 }
 
@@ -1770,7 +1770,7 @@ static const char *__concretize_string(const char *s) {
       }
     } else {
       char cc = (char) klee_get_value(c);
-      klee_assume(cc == c);
+      klee_assume_eq(cc, c);
       *sc++ = cc;
       if (!cc) break;
     }

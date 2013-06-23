@@ -13,5 +13,5 @@
 
 void klee_div_zero_check(uint64_t z) {
   if (z == 0)
-    klee_report_error(__FILE__, __LINE__, "divide by zero", "div.err");
+    klee_uerror("divide by zero", "div.err");
 }

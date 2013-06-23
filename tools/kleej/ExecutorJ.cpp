@@ -8,6 +8,7 @@
 
 using namespace klee;
 
+#define KMJ	((KModuleJ*)(kmodule))
 
 ExecutorJ::ExecutorJ(InterpreterHandler *ie)
 : Executor(ie)
@@ -47,7 +48,28 @@ const llvm::Module* ExecutorJ::setModule(
 
 void ExecutorJ::runAndroid(void)
 {
-	assert (0 == 1 && "STUB");
+	ExecutionState	*es;
+	KFunction	*entry_kf;
+	Globals		*globals;
+
+	assert (kmodule);
+	assert (dynamic_cast<KModuleJ*>(kmodule) != NULL);
+
+	entry_kf = KMJ->getEntryFunction();
+	assert (entry_kf != NULL && "Expected entry function");
+
+	std::cerr << "[KLEEJ] Beginning execution at '"
+		<< kmodule->getPrettyName(entry_kf->function)
+		<< "'\n";
+	ExecutionState::setMemoryManager(memory);
+	es = ExeStateBuilder::create(entry_kf);
+
+	globals = new Globals(kmodule, es, NULL);
+
+	run(*es);
+
+	delete globals;
+	globals = NULL;
 }
 
 llvm::Function* ExecutorJ::getFuncByAddr(uint64_t addr)

@@ -20,8 +20,7 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
-static void __emit_error(const char *msg)
-{ klee_report_error(__FILE__, __LINE__, msg, "user.err"); }
+static void __emit_error(const char *msg) { klee_uerror(msg, "user.err"); }
 
 /* Helper function that converts a string to an integer, and
 	 terminates the program with an error message is the string is not a

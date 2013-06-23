@@ -1,5 +1,4 @@
 //PRUNECOUNT 9
-
 #include <stdio.h>
 
 int main(char** argv, int argc) {	
@@ -7,7 +6,7 @@ int main(char** argv, int argc) {
 	char a;
 
 	klee_make_symbolic(&c, sizeof(c));
-	klee_assume(c < 10);
+	klee_assume_slt(c, 10);
 
 	int i;
 	for (i = 0; i < c; i++) {

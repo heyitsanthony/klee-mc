@@ -72,25 +72,25 @@ static void* sc_new_regs(void* r)
 static void sc_ret_le0(void* regfile)
 {
 	int64_t	rax = GET_RAX(regfile);
-	klee_assume(rax <= 0);
+	klee_assume_sle(rax, 0);
 }
 
 static void sc_ret_ge0(void* regfile)
 {
 	int64_t	rax = GET_RAX(regfile);
-	klee_assume(rax >= 0);
+	klee_assume_sge(rax, 0);
 }
 
 static void sc_ret_v(void* regfile, uint64_t v1)
 {
 	GET_RAX(regfile) = v1;
-	klee_assume(GET_RAX(regfile) == v1);
+	klee_assume_eq(GET_RAX(regfile), v1);
 }
 
 static void sc_ret_or(void* regfile, uint64_t v1, uint64_t v2)
 {
 	uint64_t	rax = GET_RAX(regfile);
-	klee_assume(rax == v1 || rax == v2);
+	klee_assume_ne((rax == v1) | (rax == v2), 0);
 }
 
 /* inclusive */
@@ -102,7 +102,8 @@ static void sc_ret_range(void* regfile, int64_t lo, int64_t hi)
 		return;
 	}
 	rax = GET_RAX(regfile);
-	klee_assume(rax >= lo && rax <= hi);
+	klee_assume_sge(rax, lo);
+	klee_assume_sle(rax, hi);
 }
 
 static void* sc_mmap_addr(
@@ -168,9 +169,7 @@ static void sc_munmap(void* regfile)
 
 #define UNIMPL_SC(x)						\
 	case SYS_##x:						\
-		klee_report_error(				\
-			__FILE__, __LINE__,			\
-			"Unimplemented syscall "#x, "sc.err");	\
+		klee_uerror("Unimplemented syscall "#x, "sc.err");	\
 		break;
 #define FAKE_SC(x)							\
 	case SYS_##x:							\
@@ -187,8 +186,8 @@ void make_sym(uint64_t addr, uint64_t len, const char* name)
 {
 	klee_check_memory_access((void*)addr, 1);
 
-	klee_assume(addr == klee_get_value(addr));
-	klee_assume(len == klee_get_value(len));
+	klee_assume_eq(addr, klee_get_value(addr));
+	klee_assume_eq(len, klee_get_value(len));
 
 	kmc_make_range_symbolic(addr, len, name);
 	sc_breadcrumb_add_ptr((void*)addr, len);
@@ -202,8 +201,8 @@ void make_sym_by_arg(
 	uint64_t	addr;
 
 	addr = GET_ARG(regfile, arg_num);
-	klee_assume (addr == klee_get_value(addr));
-	klee_assume (len == klee_get_value(len));
+	klee_assume_eq(addr, klee_get_value(addr));
+	klee_assume_eq(len, klee_get_value(len));
 
 	klee_check_memory_access((void*)addr, 1);
 
@@ -240,12 +239,11 @@ static void sc_klee(void* regfile)
 			(const char*)GET_ARG1(regfile),
 			GET_ARG2(regfile),
 			(const char*)klee_get_value(GET_ARG3(regfile)),
-			(const char*)klee_get_value(GET_ARG4(regfile)));
+			(const char*)klee_get_value(GET_ARG4(regfile)),
+			NULL);
 		break;
 	default:
-		klee_report_error(
-			__FILE__,
-			__LINE__,
+		klee_uerror(
 			"Unsupported SYS_klee syscall",
 			"kleesc.err");
 		break;
@@ -273,7 +271,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		if ((intptr_t)GET_RAX(new_regs) == -1)
 			break;
 
-		klee_assume(GET_RAX(new_regs) == 0);
+		klee_assume_eq(GET_RAX(new_regs), 0);
 		make_sym_by_arg(
 			regfile,
 			1,
@@ -376,9 +374,9 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_pread64: {
 		//assumes too much?
 		size_t length = klee_get_value((size_t)GET_ARG2(regfile));
-		klee_assume(length == (size_t)GET_ARG2(regfile));
+		klee_assume_eq(length, (size_t)GET_ARG2(regfile));
 		void* buf = (void*)klee_get_value(GET_ARG1(regfile));
-		klee_assume(buf == (void*)GET_ARG1(regfile));
+		klee_assume_eq(buf, (void*)GET_ARG1(regfile));
 		new_regs = sc_new_regs(regfile);
 		sc_ret_v(new_regs,
 			fdt->alwaysGetFile((long)GET_ARG0(regfile))->pread(
@@ -389,9 +387,9 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_read: {
 		//assumes too much?
 		size_t length = klee_get_value((size_t)GET_ARG2(regfile));
-		klee_assume(length == (size_t)GET_ARG2(regfile));
+		klee_assume_eq(length, (size_t)GET_ARG2(regfile));
 		void* buf = (void*)klee_get_value(GET_ARG1(regfile));
-		klee_assume(buf == (void*)GET_ARG1(regfile));
+		klee_assume_eq(buf, (void*)GET_ARG1(regfile));
 		new_regs = sc_new_regs(regfile);
 		sc_ret_v(new_regs,
 			fdt->alwaysGetFile((long)GET_ARG0(regfile))->read(
@@ -430,7 +428,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		if ((int64_t)GET_RAX(new_regs) == -1) {
 			break;
 		}
-		klee_assume(GET_RAX(new_regs) == 0);
+		klee_assume_eq(GET_RAX(new_regs), 0);
 		sc_ret_v(new_regs, 0);
 		make_sym_by_arg(regfile, 2, sizeof(struct stat),
 			"newstatbuf");
@@ -537,7 +535,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_nanosleep: {
 		uint64_t	dst_addr = klee_get_value(GET_ARG1(regfile));
 		if (dst_addr != 0) {
-			klee_assume(GET_ARG1(regfile) == dst_addr);
+			klee_assume_eq(GET_ARG1(regfile), dst_addr);
 			make_sym(
 				dst_addr,
 				sizeof(struct timespec),
@@ -608,7 +606,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		if ((int64_t)GET_RAX(new_regs) == -1)
 			break;
 
-		klee_assume(GET_RAX(new_regs) == 0);
+		klee_assume_eq(GET_RAX(new_regs), 0);
 		make_sym(GET_ARG1(regfile),
 			sizeof(struct sockaddr_in),
 			"getsockname");
@@ -698,7 +696,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		uint64_t	addr  = klee_get_value(GET_ARG1(regfile));
 		klee_warning_once("bogus readlink");
 		new_regs = sc_new_regs(regfile);
-		klee_assume(GET_ARG2(regfile) >= 2);
+		klee_assume_uge(GET_ARG2(regfile), 2);
 		sc_ret_range(new_regs, 1, 2);
 		make_sym(addr, GET_ARG2(regfile), "readlink");
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
@@ -725,7 +723,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		if ((intptr_t)GET_RAX(new_regs) == -1)
 			break;
 
-		klee_assume(GET_RAX(new_regs) == 0);
+		klee_assume_eq(GET_RAX(new_regs), 0);
 		make_sym_by_arg(
 			regfile,
 			1,
@@ -735,11 +733,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 	default:
 		kmc_sc_bad(sys_nr);
-		klee_report_error(
-			__FILE__,
-			__LINE__,
-			"Unknown Syscall",
-			"sc.err");
+		klee_uerror("Unknown Syscall", "sc.err");
 		break;
 	}
 

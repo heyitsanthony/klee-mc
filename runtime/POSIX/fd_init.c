@@ -59,14 +59,15 @@ void __fill_blocks(exe_disk_file_t* dfile, const fill_info_t* fill_info, unsigne
     case fill_set:
       /* effectively memset(dfile->contents + p->offset, p->arg.value, p->length) */
       for (j = 0; j < p->length; j++) {
-        klee_assume((unsigned char) dfile->contents[p->offset + j] ==
-                    (unsigned char) p->arg.value);
+        klee_assume_eq(
+		(unsigned char) dfile->contents[p->offset + j],
+		(unsigned char) p->arg.value);
       }
       break;
     case fill_copy:
       /* effectively memcpy(dfile->contents + p->offset, p->arg.string, p->length) */
       for (j = 0; j < p->length; j++) {
-        klee_assume(dfile->contents[p->offset + j] == p->arg.string[j]);
+        klee_assume_eq(dfile->contents[p->offset + j], p->arg.string[j]);
       }
       break;
     default:
@@ -140,11 +141,11 @@ static void __create_new_dfile(
 	/* Important since we copy this out through getdents, and readdir
 	   will otherwise skip this entry. For same reason need to make sure
 	   it fits in low bits. */
-	klee_assume((s->st_ino & 0x7FFFFFFF) != 0);
+	klee_assume_ne((s->st_ino & 0x7FFFFFFF), 0);
 
 	/* uclibc opendir uses this as its buffer size, try to keep
 	   reasonable. */
-	klee_assume((s->st_blksize & ~0xFFFF) == 0);
+	klee_assume_eq((s->st_blksize & ~0xFFFF), 0);
 
 	klee_prefer_cex(s, !(s->st_mode & ~(S_IFMT | 0777)));
 	klee_prefer_cex(s, s->st_dev == defaults->st_dev);
@@ -170,7 +171,7 @@ static void __create_new_dfile(
   {
     struct sockaddr_storage *ss;
 
-    klee_assume((dfile->stat->st_mode & S_IFMT) == S_IFSOCK);
+    klee_assume_eq((dfile->stat->st_mode & S_IFMT), S_IFSOCK);
 
     for (sp=name; *sp; ++sp)
       src_name[sp-name] = *sp;
@@ -184,8 +185,8 @@ static void __create_new_dfile(
     /* Since the address family will be assigned later, we
        conservatively assume that the port number is non-zero for
        every address family supported. */
-    klee_assume(/* ss->ss_family != AF_INET  || */ ((struct sockaddr_in  *)ss)->sin_port  != 0);
-    klee_assume(/* ss->ss_family != AF_INET6 || */ ((struct sockaddr_in6 *)ss)->sin6_port != 0);
+    klee_assume_ne(/* ss->ss_family != AF_INET  || */ ((struct sockaddr_in  *)ss)->sin_port, 0);
+    klee_assume_ne(/* ss->ss_family != AF_INET6 || */ ((struct sockaddr_in6 *)ss)->sin6_port, 0);
     klee_prefer_cex(dfile->src->addr, dfile->src->addr->ss_family == AF_INET);
   }
 }
@@ -370,5 +371,5 @@ void klee_init_fds(
 
 	__exe_env.save_all_writes = save_all_writes_flag;
 	__exe_env.version = __sym_uint32("model_version");
-	klee_assume(__exe_env.version == 2);
+	klee_assume_eq(__exe_env.version, 2);
 }

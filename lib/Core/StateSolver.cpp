@@ -190,7 +190,8 @@ bool StateSolver::getRange(
 	std::pair< ref<Expr>, ref<Expr> >& ret)
 { return solver->getRange(Query(state.constraints, expr), ret); }
 
-ref<Expr> StateSolver::toUnique(const ExecutionState &state, ref<Expr> &e)
+ref<Expr> StateSolver::toUnique(
+	const ExecutionState &state, const ref<Expr> &e)
 {
 	ref<ConstantExpr>	value;
 	ref<Expr>		eq_expr;

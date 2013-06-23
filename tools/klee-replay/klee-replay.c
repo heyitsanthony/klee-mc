@@ -14,6 +14,7 @@
 #include "replay-util.h"
 #include "replay-fd.h"
 #include "replay-socket.h"
+#include "klee/klee.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -518,24 +519,18 @@ int klee_get_errno() {
   return errno;
 }
 
-void klee_warning(char *name) {
-  fprintf(stderr, "WARNING: %s\n", name);
-}
+void klee_warning(const char *name) { fprintf(stderr, "WARNING: %s\n", name); }
 
-void klee_warning_once(char *name) {
-  fprintf(stderr, "WARNING: %s\n", name);
-}
+void klee_warning_once(const char *name)
+{ fprintf(stderr, "WARNING: %s\n", name); }
 
-int klee_assume(uint64_t x) {
+void klee_assume(uint64_t x) {
   if (!x) {
     fprintf(stderr, "WARNING: klee_assume(0)!\n");
   }
-  return 0;
 }
 
-int klee_is_symbolic(uint64_t x) {
-  return 0;
-}
+unsigned klee_is_symbolic(uint64_t x) { return 0; }
 
 void klee_prefer_cex(void *buffer, uint64_t condition) {
   ;
@@ -638,7 +633,8 @@ void klee_make_symbolic(void *addr, size_t nbytes, const char *name) {
 }
 
 /* Redefined here so that we can check the value read. */
-int klee_range(int64_t start, int64_t end, const char* name) {
+int64_t klee_range(int64_t start, int64_t end, const char* name)
+{
   int64_t r;  
   if (start >= end) {
     fprintf(stderr, "klee_range: invalid range\n");
@@ -667,13 +663,39 @@ int klee_range(int64_t start, int64_t end, const char* name) {
 
 void klee_print_expr(const char* f, ...) {}
 
-void klee_report_error(const char *file, int line, 
-                       const char *message, const char *suffix) {
-  __emit_error(message);
-}
+__attribute__((noreturn)) void klee_report_error(
+	const char *file, int line, 
+	const char *message, const char *suffix,
+	const void* v)
+{ __emit_error(message); abort(); }
 
 void klee_mark_global(void *object) {
   ;
+}
+
+#define DECL_OP(x, y) case KLEE_CMP_OP_##x: assert (lhs y rhs); break
+#define DECL_SOP(x, y)	\
+case KLEE_CMP_OP_##x: assert (((int64_t)lhs) y ((int64_t)rhs)); break
+
+void klee_assume_op(uint64_t lhs, uint64_t rhs, uint8_t op)
+{
+	switch (op) {
+	DECL_OP(UGT, >);
+	DECL_OP(UGE, >=);
+	DECL_OP(ULT, <);
+	DECL_OP(ULE, <=);
+
+	DECL_SOP(SGT, >);
+	DECL_SOP(SGE, >=);
+	DECL_SOP(SLT, <);
+	DECL_SOP(SLE, <=);
+
+	DECL_OP(EQ, ==);
+	DECL_OP(NE, !=);
+	default:
+		assert (0 == 1 && "bad assume_op op");
+		abort();
+	}
 }
 
 /*** HELPER FUNCTIONS ***/

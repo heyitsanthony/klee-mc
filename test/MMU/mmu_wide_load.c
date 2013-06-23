@@ -27,7 +27,7 @@ int main(int argc, char *argv[])
 	memset(p, 1, 256);
 	sf = strcmp;
 	cmp = sf(p, "abcdefghijklmnopqrstuv");
-	ksys_assume(cmp != 0);
+	ksys_assume_ne(cmp, 0);
 
 	return 2;
 }

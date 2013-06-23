@@ -115,7 +115,7 @@ public:
   /// Return a unique constant value for the given expression in the
   /// given state, if it has one (i.e. it provably only has a single
   /// value). Otherwise return the original expression.
-  ref<Expr> toUnique(const ExecutionState &state, ref<Expr> &e);
+  ref<Expr> toUnique(const ExecutionState &state, const ref<Expr> &e);
 
   // Fork current and return states in which condition holds / does
   // not hold, respectively. One of the states is necessarily the

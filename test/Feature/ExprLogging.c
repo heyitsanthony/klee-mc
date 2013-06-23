@@ -4,6 +4,7 @@
 // RUN: %kleaver -print-ast %t3.log > %t4.log
 // RUN: diff %t3.log %t4.log
 
+#include "klee/klee.h"
 #include <assert.h>
 
 int constantArr[16 ] = {
@@ -16,7 +17,7 @@ int constantArr[16 ] = {
 
 int main() {
   char buf[4];
-  klee_make_symbolic(buf, sizeof buf);
+  klee_make_symbolic(buf, sizeof buf, "buf");
 
   buf[1] = 'a';
 
@@ -28,13 +29,13 @@ int main() {
   constantArr[klee_range(0, 16, "idx.2")] = buf[3];
   
   buf[klee_range(0, 4, "idx.3")] = 0;
-  klee_assume(buf[0] == 'h');
+  klee_assume_eq(buf[0], 'h');
   
   int x = *((int*) buf);
-  klee_assume(x > 2);
-  klee_assume(x == constantArr[12]);
+  klee_assume_sgt(x, 2);
+  klee_assume_eq(x, constantArr[12]);
 
-  klee_assume(y != (1 << 5));
+  klee_assume_ne(y, (1 << 5));
 
   assert(0);
 

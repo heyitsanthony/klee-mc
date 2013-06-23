@@ -94,7 +94,7 @@ long SymbolicFD::readv(const struct iovec *iov, int iovcnt) {
 long SymbolicFD::write(const void* buf, size_t sz) {
 	long result;
 	kmc_make_range_symbolic((uintptr_t)&result, sizeof(result), "SFD::write res");
-	klee_assume(result != 0);
+	klee_assume_ne(result, 0);
 	if(result >= sz) {
 		return sz;
 	} else if(result >= 0) {
@@ -208,7 +208,7 @@ long SymbolicFile::sendmsg(const struct msghdr *message, int flags) { return -EN
 long SymbolicFile::sendto(const void *buffer, size_t length, int flags, const struct sockaddr *dest_addr, socklen_t dest_len) { return -ENOTSOCK; }
 long SymbolicFile::stat(struct stat* buf) {
 	kmc_make_range_symbolic((uintptr_t)buf, sizeof(*buf), "Data::stat buf ");
-	klee_assume(buf->st_nlink > 0);
+	klee_assume_sgt(buf->st_nlink, 0);
 	buf->st_mode &= ~S_IFSOCK;
 	buf->st_mode |= S_IFREG;
 	buf->st_blocks = (buf->st_size + 4095) >> 12;
@@ -519,7 +519,7 @@ void DataFork::truncate(off_t len) {
 }
 void DataFork::stat(struct stat* buf) {
 	kmc_make_range_symbolic((uintptr_t)buf, sizeof(*buf), "Data::stat buf ");
-	klee_assume(buf->st_nlink > 0);
+	klee_assume_sgt(buf->st_nlink, 0);
 	buf->st_mode |= S_IFREG;
 	buf->st_size = size_;
 	buf->st_blocks = (size_ + 4095) >> 12;

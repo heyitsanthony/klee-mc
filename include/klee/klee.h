@@ -16,7 +16,8 @@
 #define SYS_klee		0x12345678
 #define KLEE_SYS_REPORT_ERROR	0
 #define KLEE_SYS_KMC_SYMRANGE	1	/* kmc_make_range_symbolic(addr, len, name) */
-#define KLEE_SYS_ASSUME		2	/* klee_assume(<bool expr>) */
+/* OBSOLETE / UNSAFE */
+//#define KLEE_SYS_ASSUME		2	/* klee_assume(<bool expr>) */
 #define KLEE_SYS_IS_SYM		3	/* klee_is_sym(<expr>)	*/
 #define KLEE_SYS_NE		4	/* klee_force_ne */
 #define KLEE_SYS_PRINT_EXPR	5	/* klee_print_expr */
@@ -37,7 +38,6 @@
 #define ksys_is_shadowed(x)	syscall(SYS_klee, KLEE_SYS_IS_SHADOWED, x)
 #define ksys_kmc_symrange(x,y,z)	\
 	syscall(SYS_klee, KLEE_SYS_KMC_SYMRANGE, x, y, z)
-#define ksys_assume(x)		syscall(SYS_klee, KLEE_SYS_ASSUME, x)
 #define ksys_is_sym(x)		syscall(SYS_klee, KLEE_SYS_IS_SYM, x)
 #define ksys_print_expr(x,y)	syscall(SYS_klee, KLEE_SYS_PRINT_EXPR, (uint64_t)x, y)
 #define ksys_silent_exit(x)	syscall(SYS_klee, KLEE_SYS_SILENT_EXIT, (uint64_t)x)
@@ -53,7 +53,6 @@
 	"klee_assume_op", ((uint64_t)x), ((uint64_t)y), KLEE_CMP_OP_EQ)
 #define ksys_assume_ne(x,y)	ksys_indirect3(\
 	"klee_assume_op", ((uint64_t)x), ((uint64_t)y), KLEE_CMP_OP_NE)
-
 
 #define ksys_get_value(n)	n
 #define ksys_is_active()	(ksys_is_sym(0) != -1)
@@ -107,17 +106,22 @@ extern "C" {
   /// \arg line - The line number to report in the error message.
   /// \arg message - A string to include in the error message.
   /// \arg suffix - The suffix to use for error files.
-#define klee_uerror(x, y)	klee_report_error(__FILE__, __LINE__, x, y)
+#define klee_uerror(x, y) klee_report_error(__FILE__, __LINE__, x, y, NULL)
+#define klee_uerror_details(x, y, z) klee_report_error(__FILE__, __LINE__, x, y, z)
   __attribute__((noreturn))
   void klee_report_error(const char *file,
 			 int line,
 			 const char *message,
-			 const char *suffix);
-#define klee_ureport(x, y)	klee_report(__FILE__, __LINE__, x, y)
+			 const char *suffix, const void* v);
+#define klee_ureport(x, y) klee_report(__FILE__, __LINE__, x, y, NULL)
+#define klee_ureport_details(x, y, z) klee_report(__FILE__, __LINE__, x, y, z)
+struct kreport_ent { uint64_t strp; uint64_t v; };
+#define SET_KREPORT(x,y)	(x)->v = (uint64_t)(y)
+#define MK_KREPORT(x)		{ (uint64_t)(x), 0 }
   void klee_report(const char *file,
 			 int line,
 			 const char *message,
-			 const char *suffix);
+			 const char *suffix, const void* v);
 
 
   /* print the tree associated w/ a given expression. */
@@ -163,12 +167,20 @@ extern "C" {
 #define KLEE_CMP_OP_SLE	9
 
 #define __klee_assume_op(x,y,z)	klee_assume_op(((uint64_t)x), ((uint64_t)y), z)
+#define __klee_assume_op_s(x,y,z)	klee_assume_op(((int64_t)x), ((int64_t)y), z)
 #define klee_assume_ugt(x,y)	__klee_assume_op(x,y,KLEE_CMP_OP_UGT)
 #define klee_assume_ult(x,y)	__klee_assume_op(x,y,KLEE_CMP_OP_ULT)
 #define klee_assume_uge(x,y)	__klee_assume_op(x,y,KLEE_CMP_OP_UGE)
 #define klee_assume_ule(x,y)	__klee_assume_op(x,y,KLEE_CMP_OP_ULE)
+
+#define klee_assume_sgt(x,y)	__klee_assume_op_s(x, y, KLEE_CMP_OP_SGT)
+#define klee_assume_slt(x,y)	__klee_assume_op_s(x, y, KLEE_CMP_OP_SLT)
+#define klee_assume_sge(x,y)	__klee_assume_op_s(x, y, KLEE_CMP_OP_SGE)
+#define klee_assume_sle(x,y)	__klee_assume_op_s(x, y, KLEE_CMP_OP_SLE)
+
 #define klee_assume_eq(x, y)	__klee_assume_op(x, y, KLEE_CMP_OP_EQ)
 #define klee_assume_ne(x, y)	__klee_assume_op(x, y, KLEE_CMP_OP_NE)
+
 
   void klee_assume_op(uint64_t lhs, uint64_t rhs, uint8_t op);
 

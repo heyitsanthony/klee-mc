@@ -4,13 +4,17 @@
 /* 256mb */
 #define MAX_PTR_RANGE		0x10000000
 
+static struct kreport_ent testptr_ktab[] =
+{ MK_KREPORT("address"), MK_KREPORT(NULL) };
+
 void mmu_testptr(void* ptr)
 {
 	if (!klee_prefer_true(mmu_testptr_invalid(ptr)))
 		return;
 
 	/* ACK! */
-	klee_uerror("bad memory access!", "ptr.err");
+	SET_KREPORT(&testptr_ktab[0], ptr);
+	klee_uerror_details("bad memory access!", "ptr.err", &testptr_ktab);
 }
 
 int mmu_testptr_invalid(void* ptr)

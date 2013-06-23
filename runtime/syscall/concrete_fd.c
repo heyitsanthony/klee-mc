@@ -35,7 +35,7 @@ struct fd_info
 static uint64_t concretize_u64(uint64_t x)
 {
 	uint64_t	y = klee_get_value(x);
-	klee_assume(x == y);
+	klee_assume_eq(x, y);
 	return y;
 }
 

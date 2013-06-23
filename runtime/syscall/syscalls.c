@@ -71,25 +71,32 @@ static uint64_t GET_ARG(void* x, int y)
 static void sc_ret_ge0(void* regfile)
 {
 	ARCH_SIGN_CAST rax = GET_SYSRET_S(regfile);
-	klee_assume(rax >= 0);
+	klee_assume_sge(rax, 0);
 }
 
 void sc_ret_or(void* regfile, uint64_t v1, uint64_t v2)
 {
 	ARCH_SIGN_CAST rax = GET_SYSRET(regfile);
-	klee_assume(rax == (ARCH_SIGN_CAST)v1 || rax == (ARCH_SIGN_CAST)v2);
+	int	is_v1, is_v2;
+
+	is_v1 = rax == (ARCH_SIGN_CAST)v1;
+	is_v2 = rax == (ARCH_SIGN_CAST)v2;
+	klee_assume_ne(is_v1 | is_v2, 0);
 }
 
 /* inclusive */
 void sc_ret_range(void* regfile, int64_t lo, int64_t hi)
 {
 	ARCH_SIGN_CAST rax;
+
 	if ((hi - lo) == 1) {
 		sc_ret_or(regfile, lo, hi);
 		return;
 	}
+
 	rax = GET_SYSRET_S(regfile);
-	klee_assume(rax >= (ARCH_SIGN_CAST)lo && rax <= (ARCH_SIGN_CAST)hi);
+	klee_assume_sge(rax, (ARCH_SIGN_CAST)lo);
+	klee_assume_sle(rax, (ARCH_SIGN_CAST)hi);
 }
 
 #define UNIMPL_SC(x)						\
@@ -166,7 +173,7 @@ static void do_sockcall(void* regfile, int call, unsigned long* args)
 		if (GET_SYSRET_S(new_regs) == -1)
 			break;
 
-		klee_assume(GET_SYSRET(new_regs) == 0);
+		klee_assume_eq(GET_SYSRET(new_regs), 0);
 		make_sym(args[1], sizeof(struct sockaddr_in), "getsockname");
 		*((socklen_t*)args[2]) = sizeof(struct sockaddr_in);
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
@@ -177,7 +184,7 @@ static void do_sockcall(void* regfile, int call, unsigned long* args)
 		if (GET_SYSRET_S(new_regs) == -1)
 			break;
 
-		klee_assume(GET_SYSRET(new_regs) == 0);
+		klee_assume_eq(GET_SYSRET(new_regs), 0);
 		make_sym_by_arg(
 			regfile,
 			1,
@@ -258,7 +265,7 @@ static void do_sockcall(void* regfile, int call, unsigned long* args)
 		}
 
 		mhdr = (void*)concretize_u64(args[1]);
-		klee_assume(mhdr->msg_iovlen >= 1);
+		klee_assume_uge(mhdr->msg_iovlen, 1);
 
 		make_sym(
 			(uint64_t)(mhdr->msg_iov[0].iov_base),
@@ -376,7 +383,8 @@ static void sc_klee(void* regfile)
 			(const char*)GET_ARG1_PTR(regfile),
 			GET_ARG2(regfile),
 			(const char*)klee_get_value(GET_ARG3(regfile)),
-			(const char*)klee_get_value(GET_ARG4(regfile)));
+			(const char*)klee_get_value(GET_ARG4(regfile)),
+			NULL);
 		break;
 	case KLEE_SYS_KMC_SYMRANGE:
 		make_sym(
@@ -384,9 +392,6 @@ static void sc_klee(void* regfile)
 			GET_ARG2(regfile),	/* len */
 			(const char*)GET_ARG3_PTR(regfile) /* name */);
 		sc_ret_v(regfile, 0);
-		break;
-	case KLEE_SYS_ASSUME:
-		klee_assume(GET_ARG1(regfile));
 		break;
 	case KLEE_SYS_IS_SYM:
 		sc_ret_v(regfile, klee_is_symbolic(GET_ARG1(regfile)));
@@ -638,7 +643,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		if (GET_SYSRET_S(new_regs) == -1) {
 			break;
 		}
-		klee_assume(GET_SYSRET(new_regs) == 0);
+		klee_assume_eq(GET_SYSRET(new_regs), 0);
 		sc_ret_v_new(new_regs, 0);
 		make_sym_by_arg(regfile, 2, sizeof(struct stat), "newstatbuf");
 	}
@@ -911,7 +916,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 		new_regs = sc_new_regs(regfile);
 		if (GET_SYSRET_S(new_regs) == -1)
 			break;
-		klee_assume(GET_SYSRET(new_regs) > 3 && GET_SYSRET(new_regs) < 4096);
+		klee_assume_ugt(GET_SYSRET(new_regs), 3);
+		klee_assume_ult(GET_SYSRET(new_regs), 4096);
 		break;
 
 	case SYS_epoll_ctl:
@@ -1013,7 +1019,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		if (GET_SYSRET_S(new_regs) == -1)
 			break;
 
-		klee_assume(GET_SYSRET(new_regs) == 0);
+		klee_assume_eq(GET_SYSRET(new_regs), 0);
 		make_sym_by_arg(regfile, 1, USTAT_SZ, "ustatbuf");
 		break;
 
@@ -1339,7 +1345,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			break;
 		}
 
-		klee_assume(GET_SYSRET(new_regs) == 0);
+		klee_assume_eq(GET_SYSRET(new_regs), 0);
 		make_sym(GET_ARG1(regfile), STATFS_SZ, "statfs");
 
 		sc_ret_v_new(new_regs, 0);

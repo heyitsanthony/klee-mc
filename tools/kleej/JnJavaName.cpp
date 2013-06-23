@@ -30,4 +30,4 @@ JnJavaName* JnJavaName::create(const std::string& s)
 }
 
 void JnJavaName::print(std::ostream& os) const
-{ std::cerr << path << ":" << method << " (" << info << ')'; }
+{ os << path << ":" << method << " (" << info << ')'; }

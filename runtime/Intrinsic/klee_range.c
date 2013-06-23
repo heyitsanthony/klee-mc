@@ -10,25 +10,25 @@
 #include <assert.h>
 #include <klee/klee.h>
 
-int64_t klee_range(int64_t start, int64_t end, const char* name) {
-  int64_t x;
+int64_t klee_range(int64_t start, int64_t end, const char* name)
+{
+	int64_t x;
 
-  if (start >= end)
-    klee_report_error(__FILE__, __LINE__, "invalid range", "user");
+	if (start >= end)
+		klee_uerror("invalid range", "user");
 
-  if (start+1==end) {
-    return start;
-  } else {
-    klee_make_symbolic(&x, sizeof x, name); 
+	if (start+1==end)
+		return start;
 
-    /* Make nicer constraint when simple... */
-    if (start==0) {
-      klee_assume((uint64_t) x < (uint64_t) end);
-    } else {
-      klee_assume(start <= x);
-      klee_assume(x < end);
-    }
+	klee_make_symbolic(&x, sizeof x, name); 
 
-    return x;
-  }
+	if (start==0) {
+		/* Make nicer constraint when simple... */
+		klee_assume_ult(x, end);
+	} else {
+		klee_assume_sge(x, start);	/* x >= start */
+		klee_assume_slt(x, end);	/* x < end */
+	}
+
+	return x;
 }

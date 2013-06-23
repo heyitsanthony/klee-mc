@@ -22,10 +22,10 @@ int main(int argc, char **argv) {
     klee_make_symbolic(&c, sizeof c, "c");
     klee_make_symbolic(&x, sizeof x, "a");
 
-    klee_assume(a == 3);
-    klee_assume(b == 4);
-    klee_assume(c == 5);
-    klee_assume(x == 6);
+    klee_assume_eq(a, 3);
+    klee_assume_eq(b, 4);
+    klee_assume_eq(c, 5);
+    klee_assume_eq(x, 6);
   } else {
     klee_make_symbolic(&a, sizeof a, "a");
     klee_make_symbolic(&c, sizeof c, "c");

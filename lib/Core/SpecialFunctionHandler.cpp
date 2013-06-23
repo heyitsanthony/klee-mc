@@ -33,7 +33,6 @@ extern bool DebugPrintInstructions;
 
 namespace klee
 {
-SFH_HANDLER(Assume)
 SFH_HANDLER(AssumeOp)
 SFH_HANDLER(FeasibleOp)
 SFH_HANDLER(PreferOp)
@@ -124,7 +123,6 @@ static const SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   add("klee_free_fixed", Free, false),
   add("klee_malloc_fixed", Malloc, true),
 
-  add("klee_assume", Assume, false),
   add("klee_assume_op", AssumeOp, false),
   addDNR("klee_resume_exit", ResumeExit),
   add("klee_feasible_op", FeasibleOp, true),
@@ -335,7 +333,7 @@ bool SpecialFunctionHandler::handle(
 
 unsigned char* SpecialFunctionHandler::readBytesAtAddressNoBound(
 	ExecutionState &state,
-	ref<Expr> addressExpr,
+	const ref<Expr>& addressExpr,
 	unsigned int& len,
 	int term_char)
 {
@@ -344,7 +342,7 @@ unsigned char* SpecialFunctionHandler::readBytesAtAddressNoBound(
 
 unsigned char* SpecialFunctionHandler::readBytesAtAddress(
 	ExecutionState &state,
-	ref<Expr> addressExpr,
+	const ref<Expr> &addressExpr,
 	unsigned int maxlen,
 	unsigned int& len,
 	int term_char)
@@ -403,7 +401,8 @@ unsigned char* SpecialFunctionHandler::readBytesAtAddress(
 
 // reads a concrete string from memory
 std::string SpecialFunctionHandler::readStringAtAddress(
-	ExecutionState &state, ref<Expr> addressExpr)
+	ExecutionState &state,
+	const ref<Expr>& addressExpr)
 {
 	unsigned char*	buf;
 	unsigned int	out_len;
@@ -484,23 +483,76 @@ SFH_DEF_HANDLER(Prune)
     pruneMap[prune_id]--;
 }
 
+static std::string reporttab2str(
+	SpecialFunctionHandler	*sfh,
+	ExecutionState		&es,
+	const ref<Expr>		&tab_e)
+{
+	std::stringstream	ss;
+	uint64_t		cur_ent;
+	const klee::ConstantExpr *ce = dyn_cast<klee::ConstantExpr>(tab_e);
+
+	if (ce == NULL || ce->getZExtValue() == 0)
+		return "";
+
+	/* scan the address space of the state
+	 * looking for
+	 * { u64 keystrp, u64 value }
+	 * where keystrp is a concrete pointer to a concrete string
+	 * and value may be symbolic
+	 */
+	cur_ent = ce->getZExtValue();
+	ss << "\n{\n";
+	do {
+		ObjectPair	op;
+		ref<Expr>	v;
+		std::string	s;
+		uint64_t	cur_strp;
+		unsigned	n;
+
+		if (es.addressSpace.resolveOne(cur_ent, op) == false)
+			break;
+
+		n = es.addressSpace.readConcreteSafe(
+			(uint8_t*)&cur_strp, cur_ent, 8);
+		if (n != 8 || cur_strp == 0)
+			break;
+
+		s = sfh->readStringAtAddress(es, klee::MK_CONST(cur_strp, 64));
+		if (s.empty())
+			break;
+
+		v = es.read(op_os(op), op_mo(op)->getOffset(cur_ent+8), 64);
+		ss << "{ \"" << s << "\" : \"" << v << "\" },\n";
+		cur_ent += 16;
+	} while(1);
+	ss << "}\n";
+
+	return ss.str();
+}
+
 SFH_DEF_HANDLER(ReportError)
 {
-	// (file, line, message, suffix)
-	SFH_CHK_ARGS(4, "klee_report_error");
+	// (file, line, message, suffix, table)
+	SFH_CHK_ARGS(5, "klee_report_error");
 
 	std::string	message = sfh->readStringAtAddress(state, args[2]);
 	std::string	suffix = sfh->readStringAtAddress(state, args[3]);
+
+	message += reporttab2str(sfh, state, args[4]);
+
 	TERMINATE_ERROR(sfh->executor, state, message, suffix);
 }
 
 SFH_DEF_HANDLER(Report)
 {
-	// (file, line, message, suffix)
-	SFH_CHK_ARGS(4, "klee_report");
+	// (file, line, message, suffix, tbale)
+	SFH_CHK_ARGS(5, "klee_report");
 
 	std::string	message = sfh->readStringAtAddress(state, args[2]);
 	std::string	suffix = sfh->readStringAtAddress(state, args[3]);
+
+	message += reporttab2str(sfh, state, args[4]);
 
 	REPORT_ERROR(sfh->executor, state, message, suffix);
 }
@@ -529,34 +581,6 @@ SFH_DEF_HANDLER(Malloc)
 		false,
 		target,
 		true /* zero memory */);
-}
-
-SFH_DEF_HANDLER(Assume)
-{
-	ref<Expr>	e;
-	bool		mustBeFalse, ok;
-
-	SFH_CHK_ARGS(1, "klee_assume");
-
-	e = args[0];
-	if (e->getWidth() != Expr::Bool)
-		e = MK_NE(e, MK_CONST(0, e->getWidth()));
-
-	ok = sfh->executor->getSolver()->mustBeFalse(state, e, mustBeFalse);
-	if (!ok) {
-		TERMINATE_EARLY(sfh->executor, state, "assume query failed");
-		return;
-	}
-
-	if (!mustBeFalse) {
-		sfh->executor->addConstrOrDie(state, e);
-		return;
-	}
-
-	TERMINATE_ERROR(sfh->executor,
-		state,
-		"invalid klee_assume call (provably false)",
-		"user.err");
 }
 
 static ref<Expr> cmpop_to_expr(

@@ -18,6 +18,6 @@ extern "C" {
 inline uint64_t concretize_u64(uint64_t s)
 {
   uint64_t sc = klee_get_value(s);
-  klee_assume(sc == s);
+  klee_assume_eq(sc, s);
   return sc;
 }

@@ -241,7 +241,7 @@ static void sc_open(const char* path, void* regfile)
 	}
 
 	ret_fd = fd_open_sym();
-	klee_assume(GET_SYSRET_S(new_regs) == ret_fd);
+	klee_assume_eq(GET_SYSRET_S(new_regs), ret_fd);
 	sc_ret_v(new_regs, ret_fd);
 }
 
@@ -341,7 +341,8 @@ int file_sc(struct sc_pkt* sc)
 		new_regs = sc_new_regs(regfile);
 		if (GET_SYSRET_S(new_regs) == -1)
 			break;
-		klee_assume(GET_SYSRET(new_regs) > 3 && GET_SYSRET(new_regs) < 4096);
+		klee_assume_ugt(GET_SYSRET(new_regs), 3);
+		klee_assume_ult(GET_SYSRET(new_regs), 4096);
 		break;
 
 	case SYS_readlinkat:

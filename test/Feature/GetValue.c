@@ -3,11 +3,12 @@
 
 #include <stdio.h>
 #include <assert.h>
+#include "klee/klee.h"
 
 int main() {
   int x = klee_int("x");
-  klee_assume(x > 10);
-  klee_assume(x < 20);
+  klee_assume_sgt(x, 10);
+  klee_assume_slt(x, 20);
 
   assert(!klee_is_symbolic(klee_get_value(x)));
   assert(klee_get_value(x) > 10);

@@ -266,6 +266,8 @@ public:
   read(const ObjectState* obj, unsigned offset, Expr::Width w) const
   { return obj->read(offset, w); }
 
+  /* read the symbolic value of an object
+   * (i.e., prior to any overwrites) */
   ref<Expr>
   readSymbolic(const ObjectState* obj, unsigned offset, Expr::Width w) const;
 

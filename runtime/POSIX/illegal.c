@@ -32,7 +32,7 @@ int _setjmp (struct __jmp_buf_tag __env[1]) {
 }
 
 void longjmp(jmp_buf env, int val) {
-  klee_report_error(__FILE__, __LINE__, "longjmp unsupported", "xxx.err");
+  klee_uerror("longjmp unsupported", "xxx.err");
 }
 
 /* Macro so function name from klee_warning comes out correct. */

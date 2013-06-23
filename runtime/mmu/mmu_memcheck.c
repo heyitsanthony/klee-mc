@@ -59,8 +59,20 @@ struct heap_table { struct list	ht_l[HEAP_TAB_LISTS]; };
 #define extent_has_free(a, x)	\
 	(shadow_get_range((uint64_t)(a), (x)) & SH_FL_FREE)
 
-struct heap_table	heap_tab;
-struct shadow_info	heap_si;
+static struct heap_table	heap_tab;
+static struct shadow_info	heap_si;
+
+static struct kreport_ent	kr_tab[] =
+{ MK_KREPORT("address"), MK_KREPORT(NULL) };
+
+#define HEAP_REPORT(msg, a)		\
+do {					\
+	SET_KREPORT(&kr_tab[0], a);	\
+	klee_ureport_details(msg, "heap.err", &kr_tab);	\
+} while (0)
+
+
+
 
 static uint64_t shadow_get_range(uint64_t a, unsigned byte_c)
 {
@@ -92,8 +104,8 @@ void post_int_free(int64_t retval)
 
 	if (he == NULL) {
 		/* heap and marked free? must be double free */
-		if (extent_has_free(retval, 1)) 
-			klee_ureport("Freeing freed pointer!", "heap.err");
+		if (extent_has_free(retval, 1))
+			HEAP_REPORT("Freeing freed pointer!", retval);
 		return;
 	}
 
@@ -120,7 +132,7 @@ void __hookpre___GI___libc_free(REGPARAM)
 	ptr = GET_ARG0_PTR(regfile);
 
 	/* ignore free(NULL)s-- nop */
-	if (ptr == NULL) 
+	if (ptr == NULL)
 		return;
 
 	HEAP_ENTER
@@ -189,7 +201,7 @@ void post__int_malloc(int64_t aux)
 			&heap_si,
 			NEXT_CHUNK((long)he->he_base + he->he_len),
 			SH_FL_FREE);
-	
+
 	klee_print_expr("[memcheck] malloc", (long)he->he_base);
 	klee_print_expr("[memcheck] size", he->he_len);
 
@@ -268,7 +280,7 @@ y mmu_load_##x##_memcheckc(void* addr)		\
 if (!shadow_pg_used(&heap_si, (uint64_t)addr))	\
 	return mmu_load_##x##_cnulltlb(addr);	\
 if (!in_heap && extent_has_free(addr, x/8))	\
-	klee_ureport("Loading from free const pointer", "heap.err");	\
+	HEAP_REPORT("Loading from free const pointer", addr);	\
 return mmu_load_##x##_cnull(addr); }
 
 
@@ -279,9 +291,8 @@ if (!shadow_pg_used(&heap_si, (uint64_t)addr)) {	\
 	mmu_store_##x##_cnulltlb(addr, v);		\
 	return;						\
 }							\
-if (!in_heap && extent_has_free(addr, x/8)) {	\
-	klee_ureport("Storing to free const pointer", "heap.err");	\
-}									\
+if (!in_heap && extent_has_free(addr, x/8))		\
+	HEAP_REPORT("Storing to free const pointer", addr);	\
 mmu_store_##x##_cnull(addr, v); }
 
 
@@ -291,7 +302,7 @@ y mmu_load_##x##_memcheck(void* addr)	\
 if (!in_sym_mmu) {			\
 in_sym_mmu++;				\
 if (!in_heap && extent_has_free(addr, x/8))	\
-	klee_ureport("Loading from free sym pointer", "heap.err");	\
+	HEAP_REPORT("Loading from free sym pointer", addr);	\
 in_sym_mmu--;	\
 }	\
 return mmu_load_##x##_objwide(addr); }
@@ -302,7 +313,7 @@ void mmu_store_##x##_memcheck(void* addr, y v)	\
 if (!in_sym_mmu) {	\
 in_sym_mmu++;	\
 if (!in_heap && extent_has_free(addr, x/8))	\
-	klee_ureport("Storing to free sym pointer", "heap.err");	\
+	HEAP_REPORT("Storing to free sym pointer", addr);	\
 in_sym_mmu--;	\
 }	\
 mmu_store_##x##_objwide(addr, v); }

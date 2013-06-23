@@ -131,25 +131,25 @@ static void loadKTests(void)
 
 static void runReplayKTest(Interpreter* interpreter)
 {
-	unsigned i = 0;
+	ExecutorJ	*ej;
+	unsigned	i = 0;
 
 	loadKTests();
 
+	ej = static_cast<ExecutorJ*>(interpreter);
 	foreach (it, kTests.begin(), kTests.end()) {
-		KTest *out = *it;
+		KTest		*out = *it;
 
 		interpreter->setReplayKTest(out);
 		std::cerr
 			<< "KLEE: replaying: " << *it << " ("
 			<< kTest_numBytes(out) << " bytes)"
 			<< " (" << ++i << "/" << kTests.size() << ")\n";
-		assert (0 == 1 && "STUB");
-		#if 0
+
 		// XXX should put envp in .ktest ?
-		ev->runImage();
-		if (ev->isHalted())
+		ej->runAndroid();
+		if (ej->isHalted())
 			break;
-		#endif
 	}
 
 	interpreter->setReplayKTest(0);
@@ -229,19 +229,14 @@ int main(int argc, char **argv, char **envp)
 	const Module			*finalModule;
 	KleeHandler			*handler;
 	Interpreter			*interpreter;
-//	SeedExecutor<ExecutorBC>	*exe_seed;
-//	KTestExecutor<ExecutorBC>	*exe_ktest;
 	std::vector<std::string>	pathFiles;
 	std::list<ReplayPath>		replayPaths;
-	bool				useSeeds;
 
 	atexit(llvm_shutdown);
 	llvm::InitializeNativeTarget();
 	llvm::cl::ParseCommandLineOptions(argc, argv);
 
 	sys::SetInterruptFunction(interrupt_handle);
-
-	useSeeds = ReplayKTestDir.empty() && ReplayKTestFile.empty();
 
 	/* important: can not declare watchdog near top because
 	 * arguments aren't initialized I guess */
@@ -251,7 +246,7 @@ int main(int argc, char **argv, char **envp)
 	ModuleOptions Opts = getClassModule(mainModule);
 
 	handler = new KleeHandler();
-	interpreter = new ExecutorJ(handler);
+	interpreter = new KTestExecutor<ExecutorJ>(handler);
 	theInterpreter = interpreter;
 
 	setupReplayPaths(interpreter);
@@ -264,7 +259,6 @@ int main(int argc, char **argv, char **envp)
 	finalModule = interpreter->setModule(mainModule, Opts);
 //	externalsAndGlobalsCheck(finalModule);
 
-	std::cerr << "DO THE RUN\n";
 	if (isReplayingKTest() && Replay::isSuppressForks()) {
 		/* directly feed concrete ktests data into states. yuck */
 		runReplayKTest(interpreter);
@@ -274,8 +268,7 @@ int main(int argc, char **argv, char **envp)
 			assert (replayPaths.empty() && "grr replay paths");
 			interpreter->setReplay(new ReplayKTests(kTests));
 		}
-		//dynamic_cast<ExecutorVex*>(interpreter)->runImage();
-		assert (0 == 1 && "UGH");
+		dynamic_cast<ExecutorJ*>(interpreter)->runAndroid();
 	}
 
 	while (!kTests.empty()) {

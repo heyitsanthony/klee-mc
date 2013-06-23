@@ -13,8 +13,8 @@
 int main() {
   uint64_t x;
   klee_make_symbolic(&x, sizeof x, "x");
-  klee_assume(x > X_MIN);
-  klee_assume(x <= X_MAX);
+  klee_assume_ugt(x, X_MIN);
+  klee_assume_ule(x, X_MAX);
 
   assert(!klee_is_symbolic(klee_get_value(x)));
   assert(klee_get_value(x) > X_MIN);

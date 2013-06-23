@@ -76,12 +76,13 @@ static void init_af_tab(void)
 KFunction* KModuleJ::getEntryFunction(void) const
 {
 	const JnJavaName	*ret_jjn;
-	KFunction		*ret;
+	KFunction		*ret = NULL;
 
 	init_af_tab();
 
 	foreach (it, f2jjn.begin(), f2jjn.end()) {
 		const JnJavaName	*jjn(it->second);
+
 		if (	!af_tab.count(jjn->getMethod()) ||
 			ac_ign_tab.count(jjn->getPath()))
 			continue;
@@ -91,6 +92,7 @@ KFunction* KModuleJ::getEntryFunction(void) const
 			ret_jjn->print(std::cerr);
 			std::cerr << '\n';
 			jjn->print(std::cerr);
+			std::cerr << '\n';
 			return NULL;
 		}
 
@@ -100,5 +102,3 @@ KFunction* KModuleJ::getEntryFunction(void) const
 
 	return ret;
 }
-
-

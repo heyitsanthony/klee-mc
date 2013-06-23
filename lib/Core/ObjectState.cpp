@@ -720,7 +720,7 @@ int ObjectState::readConcreteSafe(
 {
 	int	copy_total, copy_len;
 
-	copy_len = off;
+	copy_len = rd_sz;
 	if (rd_sz + off >= size) {
 		copy_len = size - off;
 	}

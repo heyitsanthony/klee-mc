@@ -42,9 +42,9 @@ int main(int argc, char* argv[])
 		ksys_assume_ne(c, 0x64);
 		ksys_assume_ne(c, 0x65);
 
-		ksys_assume(
+		ksys_assume_ne(
 			c != 0x36 && c != 0x64 && 
-			c != 0x65 && c != 0x26 && c != '.');
+			c != 0x65 && c != 0x26 && c != '.', 0);
 	}
 
 	return 0;

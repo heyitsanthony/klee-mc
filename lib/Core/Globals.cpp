@@ -342,8 +342,9 @@ void Globals::setupFuncAddrs(llvm::Module* m)
 		{
 			addr = Expr::createPointer(0);
 			std::cerr
-			<< "KLEE:ERROR: couldn't find symbol for weak linkage of "
-			   "global function: " << f->getName().str() << std::endl;
+				<< "KLEE:ERROR: "
+				"global weak function linkage of is missing? "
+				<< f->getName().str() << std::endl;
 		} else {
 			addr = Expr::createPointer((uint64_t) (void*) f);
 			legalFunctions.insert((uint64_t) (void*) f);

@@ -19,7 +19,7 @@ int main(int argc, char *argv[])
 	if (read(0, &c, sizeof(c)) != sizeof(c)) return 0;
 	p64 = (void*)c;
 	
-	ksys_assume(*p64 == 0);
+	ksys_assume_eq(*p64, 0);
 
 	return 0;
 }

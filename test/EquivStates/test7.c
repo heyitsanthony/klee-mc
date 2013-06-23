@@ -23,7 +23,7 @@ int main(char** argv, int argc) {
 
 	klee_make_symbolic(&c, sizeof(c));
 	klee_make_symbolic(&d, sizeof(c));
-	klee_assume(c < 10);
+	klee_assume_slt(c, 10);
 	
 	foo(c,d);
  

@@ -108,16 +108,18 @@ public:
 
 	/* Convenience routines */
 
-    std::string readStringAtAddress(ExecutionState &state, ref<Expr> address);
+    std::string readStringAtAddress(
+    	ExecutionState &state,
+	const ref<Expr> &address);
     unsigned char* readBytesAtAddress(
 		ExecutionState &state,
-		ref<Expr> addressExpr,
+		const ref<Expr> &addressExpr,
 		unsigned int maxlen,
 		unsigned int& len,
 		int terminator = -1);
     unsigned char* readBytesAtAddressNoBound(
 		ExecutionState &state,
-		ref<Expr> addressExpr,
+		const ref<Expr> &addressExpr,
 		unsigned int& len,
 		int terminator = -1);
 

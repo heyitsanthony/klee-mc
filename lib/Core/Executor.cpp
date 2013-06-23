@@ -1305,7 +1305,7 @@ void Executor::forkSwitch(
 		terminate(state);
 }
 
-ref<Expr> Executor::toUnique(const ExecutionState &state, ref<Expr> &e)
+ref<Expr> Executor::toUnique(const ExecutionState &state, const ref<Expr> &e)
 { return solver->toUnique(state, e); }
 
 void Executor::instSwitch(ExecutionState& state, KInstruction *ki)

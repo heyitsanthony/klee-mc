@@ -165,7 +165,7 @@ uint64_t klee_indirect3(const char* s, uint64_t v0, uint64_t v1, uint64_t v2)
 
 void klee_report_error(
 const char *file,
-int line, const char *message, const char *suffix)
+int line, const char *message, const char *suffix, const void* v)
 { assert (0 == 1 && "STUB"); }
 
 void kmc_sc_bad(unsigned int) { assert (0 == 1 && "STUB"); }
