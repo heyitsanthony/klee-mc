@@ -13,6 +13,7 @@ static int malloc_c = 0;
 static int free_c = 0;
 static uint8_t in_sym_mmu = 0;
 static uint8_t in_heap = 0;
+static uint8_t from_calloc = 0;
 
 struct heap_ent
 {
@@ -47,8 +48,11 @@ struct heap_table { struct list	ht_l[HEAP_TAB_LISTS]; };
 //#define HEAP_LEAVE	in_heap--;
 
 
-#define ROUND_BYTES2UNITS(x)	((((x) + HEAP_GRAN_BYTES-1)/HEAP_GRAN_BYTES))
-#define NEXT_CHUNK(x)		HEAP_GRAN_BYTES*ROUND_BYTES2UNITS(x)
+#define ROUND_BYTES2UNITS(a,x)	\
+	((	(((long)(a))&(HEAP_GRAN_BYTES-1)) +	\
+		(x)+HEAP_GRAN_BYTES-1)/HEAP_GRAN_BYTES)
+
+#define NEXT_CHUNK(x)		(HEAP_GRAN_BYTES*ROUND_BYTES2UNITS(0, x))
 
 /* two bits only!! */
 #define SH_FL_UNINIT		0
@@ -56,8 +60,48 @@ struct heap_table { struct list	ht_l[HEAP_TAB_LISTS]; };
 #define SH_FL_FREE		2
 #define SH_FL_UNDEF		3	/* don't use or get_range breaks */
 
-#define extent_has_free(a, x)	\
-	(shadow_get_range((uint64_t)(a), (x)) & SH_FL_FREE)
+#define SH_EX_FREE	(1 << SH_FL_FREE)
+#define SH_EX_ALLOC	(1 << SH_FL_ALLOC)
+
+#define check_mix_r(a, x, af, am)	\
+do {	\
+	uint64_t	v;	\
+\
+	v = shadow_get_range_explode((uint64_t)(a), x);	\
+	v &= (SH_EX_FREE | SH_EX_ALLOC);		\
+	if (!klee_prefer_ne(v, 0)) break;		\
+	if (v & SH_EX_FREE) {		\
+		HEAP_REPORT(af, a);			\
+	} else if (v & SH_EX_ALLOC) {	\
+		HEAP_REPORT(am, a);			\
+	}						\
+} while (0)
+
+#define check_mix_w(a, x, af)	\
+do {	\
+	uint64_t	v;	\
+\
+	v = shadow_get_range_explode((uint64_t)(a), x);	\
+	v &= (SH_EX_FREE | SH_EX_ALLOC);		\
+	if (!klee_prefer_ne(v, 0)) break;		\
+	if (v == SH_EX_FREE) {				\
+		HEAP_REPORT(af, a);			\
+	} else if (v == SH_EX_ALLOC) {			\
+		shadow_put_units_range(			\
+			&heap_si,			\
+			(long)(a),			\
+			SH_FL_UNINIT,			\
+			ROUND_BYTES2UNITS(a, x));	\
+	}						\
+} while (0)
+
+//#define USE_GUARDS
+
+#define check_r(a,x,m,n) check_mix_r(a,x, m " free " n, m " fresh " n)
+#define check_w(a,x,m,n) check_mix_w(a,x, m " free " n)
+
+#define extent_has_free(x,y)	\
+	(shadow_get_range_explode((uint64_t)x, y) & SH_EX_FREE)
 
 static struct heap_table	heap_tab;
 static struct shadow_info	heap_si;
@@ -72,40 +116,46 @@ do {					\
 } while (0)
 
 
-
-
-static uint64_t shadow_get_range(uint64_t a, unsigned byte_c)
+static uint64_t shadow_get_range_explode(uint64_t a, unsigned byte_c)
 {
 	uint64_t	v = 0;
 	unsigned	i;
 	for (i = 0; i < byte_c; i += HEAP_GRAN_BYTES)
-		v |= shadow_get(&heap_si, a+i);
+		v |= (1 << shadow_get(&heap_si, a+i));
 	return v;
 }
 
-void post_int_free(int64_t retval)
+struct heap_ent* take_he(void* addr)
 {
 	struct list		*hl;
 	struct list_item	*li;
 	struct heap_ent		*he;
-	void			*free_addr = (void*)retval;
 
-	HEAP_LEAVE
-
-	hl = GET_HEAP_L(free_addr);
+	hl = GET_HEAP_L(addr);
 	list_for_all(hl, li) {
 		he = list_get_data(hl, li);
-		if (he->he_base == free_addr) {
+		if (he->he_base == addr) {
 			list_remove(li);
 			break;
 		}
 		he = NULL;
 	}
 
+	return he;
+}
+
+void post_int_free(int64_t fa)
+{
+	struct heap_ent	*he;
+	void		*free_addr = (void*)fa;
+
+	HEAP_LEAVE
+
+	he = take_he(free_addr);
 	if (he == NULL) {
 		/* heap and marked free? must be double free */
-		if (extent_has_free(retval, 1))
-			HEAP_REPORT("Freeing freed pointer!", retval);
+		if (extent_has_free(free_addr, 1))
+			HEAP_REPORT("Freeing freed pointer!", fa);
 		return;
 	}
 
@@ -118,7 +168,7 @@ void post_int_free(int64_t retval)
 		&heap_si,
 		(long)he->he_base,
 		SH_FL_FREE,
-		ROUND_BYTES2UNITS(he->he_len));
+		ROUND_BYTES2UNITS(he->he_base, he->he_len));
 	// klee_assert (extent_has_free(he->he_base, he->he_len));
 
 	free(he);
@@ -156,11 +206,10 @@ static struct heap_ent* add_heap_ent(void* base, unsigned len)
 	return he;
 }
 
-void post__int_malloc(int64_t aux)
+struct heap_ent* post_alloc(int64_t aux)
 {
 	void			*regs;
 	struct heap_ent		*he;
-	int			bound_l, bound_r;
 
 	regs = kmc_regs_get();
 
@@ -168,28 +217,20 @@ void post__int_malloc(int64_t aux)
 
 	/* malloc doesn't always succeed */
 	if (!GET_RET(regs))
-		goto done;
+		return NULL;
 
 	he = add_heap_ent((void*)GET_RET(regs), aux);
 
 	klee_tlb_invalidate(he->he_base, 4096);
 
+	/* guard boundaries */
+	/* XXX: this is bad because; what if allocate prior to taking
+	 * snapshot and covers boundary? Bad memcheck */
+
+#if USE_GUARDS
+	int	bound_l, bound_r;
 	bound_l = shadow_get(&heap_si, (long)he->he_base - 1);
 	bound_r = shadow_get(&heap_si, NEXT_CHUNK((long)he->he_base + he->he_len));
-
-#if 0
-	/* TODO: scan for overlapping segments */
-	int n = shadow_get_range((long)he->he_base, he->he_len);
-	klee_print_expr("[memcheck] flag", n);
-#endif
-
-	shadow_put_units_range(
-		&heap_si,
-		(long)he->he_base,
-		SH_FL_ALLOC,
-		ROUND_BYTES2UNITS(he->he_len));
-
-	/* guard boundaries */
 	if (bound_l == SH_FL_UNINIT)
 		shadow_put(
 			&heap_si,
@@ -201,10 +242,106 @@ void post__int_malloc(int64_t aux)
 			&heap_si,
 			NEXT_CHUNK((long)he->he_base + he->he_len),
 			SH_FL_FREE);
+#endif
+
+#if 0
+	/* TODO: scan for overlapping segments */
+	int n = shadow_get_range((long)he->he_base, he->he_len);
+	klee_print_expr("[memcheck] flag", n);
+#endif
+	return he;
+}
+
+void post__calloc(int64_t aux)
+{
+	struct heap_ent	*he;
+
+	he = post_alloc(aux);
+	if (he == NULL) goto done;
+
+	/* do not yell about accesses.. initialized by calloc */
+	shadow_put_units_range(
+		&heap_si,
+		(long)he->he_base,
+		SH_FL_UNINIT,
+		ROUND_BYTES2UNITS(he->he_base, he->he_len));
+
+	klee_print_expr("[memcheck] calloc", (long)he->he_base);
+	klee_print_expr("[memcheck] size", he->he_len);
+done:
+	from_calloc = 0;
+	HEAP_LEAVE
+}
+
+void post__int_malloc(int64_t aux)
+{
+	struct heap_ent	*he;
+
+	he = post_alloc(aux);
+	if (he == NULL) goto done;
+
+	shadow_put_units_range(
+		&heap_si,
+		(long)he->he_base,
+		SH_FL_ALLOC,
+		ROUND_BYTES2UNITS(he->he_base, he->he_len));
 
 	klee_print_expr("[memcheck] malloc", (long)he->he_base);
 	klee_print_expr("[memcheck] size", he->he_len);
 
+done:
+	HEAP_LEAVE
+}
+
+void post__realloc(int64_t aux)
+{
+	void		*ret_addr;
+	struct heap_ent	*he;
+
+	ret_addr = (void*)(GET_RET(kmc_regs_get()));
+	if (ret_addr == NULL)
+		goto done;
+
+	he = take_he(ret_addr);
+	if (he == NULL) {
+		/* allocated something new */
+		post__calloc(aux);
+		return;
+	}
+
+	long	n = aux;
+
+	if (he->he_len < aux) {
+		void	*next = (void*)(NEXT_CHUNK((long)he->he_base+he->he_len));
+		/* expanding, mark new space as ALLOC */
+		n -= he->he_len;
+		n -= (long)next - ((long)he->he_base+he->he_len);
+		if (n > 0) {
+			shadow_put_units_range(
+				&heap_si,
+				(long)next,
+				SH_FL_ALLOC,
+				ROUND_BYTES2UNITS(next, n));
+		}
+	} else if (he->he_len > aux) {
+		void	*next = (void*)(NEXT_CHUNK((long)he->he_base+aux));
+		/* shrinking, mark old space as FREE */
+		n = (long)next - ((long)he->he_base + aux); // slack
+		n = he->he_len - n; // free bytes from start of next block
+		if (n > 0) {
+			shadow_put_units_range(
+				&heap_si,
+				(long)next,
+				SH_FL_FREE,
+				ROUND_BYTES2UNITS(next, n));
+		}
+	}
+
+	he->he_len = aux;
+	klee_print_expr("[memcheck] realloc reusing", ret_addr);
+
+	/* restore entry to heap list */
+	list_add_head(GET_HEAP_L(he->he_base), &he->he_li);
 done:
 	HEAP_LEAVE
 }
@@ -216,6 +353,7 @@ void __hookpre__int_realloc(REGPARAM) { HEAP_ENTER }
 void __hookpre___GI___libc_malloc(REGPARAM)
 {
 	klee_print_expr("[memcheck] malloc enter", GET_ARG0(regfile));
+	if (from_calloc) return;
 	klee_hook_return(1, &post__int_malloc, GET_ARG0(regfile));
 }
 
@@ -223,7 +361,8 @@ void __hookpre___GI___libc_realloc(REGPARAM)
 {
 	HEAP_ENTER
 	klee_print_expr("[memcheck] realloc enter", GET_ARG1(regfile));
-	klee_hook_return(1, &post__int_malloc, GET_ARG1(regfile));
+	from_calloc++;
+	klee_hook_return(1, &post__realloc, GET_ARG1(regfile));
 }
 
 void post_malloc_usable_size(int64_t v) { HEAP_LEAVE; }
@@ -241,9 +380,11 @@ void __hookpre___malloc_usable_size(REGPARAM)
 void __hookpre___calloc(REGPARAM)
 {
 	HEAP_ENTER
-	klee_print_expr("[memcheck] calloc enter", GET_ARG1(regfile));
+	from_calloc++;
+	klee_print_expr("[memcheck] calloc enter",
+		GET_ARG1(regfile) * GET_ARG0(regfile));
 	klee_hook_return(
-		1, &post__int_malloc, GET_ARG0(regfile) * GET_ARG1(regfile));
+		1, &post__calloc, GET_ARG0(regfile) * GET_ARG1(regfile));
 }
 
 void __hookpre___GI___libc_memalign(REGPARAM)
@@ -279,8 +420,8 @@ y mmu_load_##x##_memcheckc(void* addr)		\
 {						\
 if (!shadow_pg_used(&heap_si, (uint64_t)addr))	\
 	return mmu_load_##x##_cnulltlb(addr);	\
-if (!in_heap && extent_has_free(addr, x/8))	\
-	HEAP_REPORT("Loading from free const pointer", addr);	\
+if (!in_heap)					\
+	check_r(addr, x/8, "Loading from", "const pointer"); \
 return mmu_load_##x##_cnull(addr); }
 
 
@@ -291,8 +432,8 @@ if (!shadow_pg_used(&heap_si, (uint64_t)addr)) {	\
 	mmu_store_##x##_cnulltlb(addr, v);		\
 	return;						\
 }							\
-if (!in_heap && extent_has_free(addr, x/8))		\
-	HEAP_REPORT("Storing to free const pointer", addr);	\
+if (!in_heap)	\
+	check_w(addr, x/8, "Storing to", "const pointer");	\
 mmu_store_##x##_cnull(addr, v); }
 
 
@@ -301,8 +442,8 @@ y mmu_load_##x##_memcheck(void* addr)	\
 {					\
 if (!in_sym_mmu) {			\
 in_sym_mmu++;				\
-if (!in_heap && extent_has_free(addr, x/8))	\
-	HEAP_REPORT("Loading from free sym pointer", addr);	\
+if (!in_heap)				\
+	check_r(addr, x/8, "Loading from", "sym pointer");	\
 in_sym_mmu--;	\
 }	\
 return mmu_load_##x##_objwide(addr); }
@@ -312,8 +453,8 @@ void mmu_store_##x##_memcheck(void* addr, y v)	\
 { \
 if (!in_sym_mmu) {	\
 in_sym_mmu++;	\
-if (!in_heap && extent_has_free(addr, x/8))	\
-	HEAP_REPORT("Storing to free sym pointer", addr);	\
+if (!in_heap)	\
+	check_w(addr, x/8, "Storing to", "sym pointer");	\
 in_sym_mmu--;	\
 }	\
 mmu_store_##x##_objwide(addr, v); }

@@ -9,13 +9,10 @@
 
 int main(int argc, char *argv[])
 {
-	uint64_t	c;
-	void		*x;
-
-	if (read(0, &c, sizeof(c)) != sizeof(c)) return 0;
+	volatile char	*x;
 
 	x = malloc(16);
-	((char*)x)[(c & 0xf)+1] = 10;
+	x[0] = x[0] + 1;
 	free(x);
 
 	return 0;
