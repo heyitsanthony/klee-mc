@@ -9,6 +9,9 @@
 #include "list.h"
 #include "mmu.h"
 
+/* does consistency checks on shadow memory SLOW */
+// #define PARANOIA_DEBUG
+
 static int malloc_c = 0;
 static int free_c = 0;
 static uint8_t in_sym_mmu = 0;
@@ -65,15 +68,15 @@ struct heap_table { struct list	ht_l[HEAP_TAB_LISTS]; };
 
 #define check_mix_r(a, x, af, am)	\
 do {	\
-	uint64_t	v;	\
+	uint64_t	v;		\
 \
 	v = shadow_get_range_explode((uint64_t)(a), x);	\
 	v &= (SH_EX_FREE | SH_EX_ALLOC);		\
 	if (!klee_prefer_ne(v, 0)) break;		\
-	if (v & SH_EX_FREE) {		\
-		HEAP_REPORT(af, a);			\
-	} else if (v & SH_EX_ALLOC) {	\
-		HEAP_REPORT(am, a);			\
+	if (v & SH_EX_FREE) {				\
+		HEAP_REPORT_W(af, a, x);		\
+	} else if (v & SH_EX_ALLOC) {			\
+		HEAP_REPORT_W(am, a, x);		\
 	}						\
 } while (0)
 
@@ -85,7 +88,7 @@ do {	\
 	v &= (SH_EX_FREE | SH_EX_ALLOC);		\
 	if (!klee_prefer_ne(v, 0)) break;		\
 	if (v == SH_EX_FREE) {				\
-		HEAP_REPORT(af, a);			\
+		HEAP_REPORT_W(af, a, x);		\
 	} else if (v == SH_EX_ALLOC) {			\
 		shadow_put_units_range(			\
 			&heap_si,			\
@@ -107,11 +110,14 @@ static struct heap_table	heap_tab;
 static struct shadow_info	heap_si;
 
 static struct kreport_ent	kr_tab[] =
-{ MK_KREPORT("address"), MK_KREPORT(NULL) };
+{ MK_KREPORT("address"), MK_KREPORT("bytes"), MK_KREPORT(NULL) };
 
-#define HEAP_REPORT(msg, a)		\
+#define HEAP_REPORT(msg, a) HEAP_REPORT_W(msg, a, 0)
+
+#define HEAP_REPORT_W(msg, a, w)	\
 do {					\
 	SET_KREPORT(&kr_tab[0], a);	\
+	SET_KREPORT(&kr_tab[1], w);	\
 	klee_ureport_details(msg, "heap.err", &kr_tab);	\
 } while (0)
 
@@ -265,9 +271,10 @@ void post__calloc(int64_t aux)
 		(long)he->he_base,
 		SH_FL_UNINIT,
 		ROUND_BYTES2UNITS(he->he_base, he->he_len));
-
-	klee_print_expr("[memcheck] calloc", (long)he->he_base);
-	klee_print_expr("[memcheck] size", he->he_len);
+	
+	klee_assert (!extent_has_free(he->he_base, he->he_len));
+	klee_print_expr("[memcheck] calloced addr", (long)he->he_base);
+	klee_print_expr("[memcheck] calloced size", he->he_len);
 done:
 	from_calloc = 0;
 	HEAP_LEAVE
@@ -311,6 +318,9 @@ void post__realloc(int64_t aux)
 
 	long	n = aux;
 
+#ifdef PARANOIA_DEBUG
+	klee_assert (!extent_has_free(he->he_base, he->he_len));
+#endif
 	if (he->he_len < aux) {
 		void	*next = (void*)(NEXT_CHUNK((long)he->he_base+he->he_len));
 		/* expanding, mark new space as ALLOC */
@@ -323,11 +333,22 @@ void post__realloc(int64_t aux)
 				SH_FL_ALLOC,
 				ROUND_BYTES2UNITS(next, n));
 		}
+		klee_print_expr("[memcheck] realloc expanding", ret_addr);
+		klee_print_expr("[memcheck] new start", next);
+		klee_print_expr("[memcheck] new len", n);
+#ifdef PARANOIA_DEBUG
+		klee_assert (!extent_has_free(he->he_base, he->he_len));
+#endif
 	} else if (he->he_len > aux) {
+		/* chunk that follows last ... */
 		void	*next = (void*)(NEXT_CHUNK((long)he->he_base+aux));
 		/* shrinking, mark old space as FREE */
 		n = (long)next - ((long)he->he_base + aux); // slack
-		n = he->he_len - n; // free bytes from start of next block
+		n = he->he_len - aux - n; // free bytes from start of next block
+		klee_print_expr("[memcheck] realloc shrinking", ret_addr);
+
+		klee_print_expr("[memcheck] realloc shrinking start", next);
+		klee_print_expr("[memcheck] realloc shrinking bytes", n);
 		if (n > 0) {
 			shadow_put_units_range(
 				&heap_si,
@@ -335,10 +356,11 @@ void post__realloc(int64_t aux)
 				SH_FL_FREE,
 				ROUND_BYTES2UNITS(next, n));
 		}
+	} else {
+		klee_print_expr("[memcheck] realloc no change", ret_addr);
 	}
 
 	he->he_len = aux;
-	klee_print_expr("[memcheck] realloc reusing", ret_addr);
 
 	/* restore entry to heap list */
 	list_add_head(GET_HEAP_L(he->he_base), &he->he_li);
