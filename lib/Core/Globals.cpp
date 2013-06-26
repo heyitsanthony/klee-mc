@@ -121,8 +121,9 @@ void Globals::allocGlobalVariableDecl(const GlobalVariable& gv)
 
 	if (addr == NULL) {
 		klee_warning(
-			"ERROR: unable to get symbol(%s) while loading globals.",
+			"ERROR: unable to get symbol (%s) while loading globals.",
 			gv.getName().data());
+		gv.dump();
 		return;
 	}
 

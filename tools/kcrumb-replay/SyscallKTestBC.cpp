@@ -1,13 +1,13 @@
 #include "klee/Internal/ADT/KTestStream.h"
 #include "klee/Internal/ADT/KTSFuzz.h"
 #include "klee/Internal/ADT/Crumbs.h"
+#include <sys/syscall.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <sys/ptrace.h>
 #include <sys/user.h>
 #include <string.h>
-#include <sys/syscall.h>
 #include "guestptimg.h"
 #include "guestcpustate.h"
 
@@ -96,7 +96,7 @@ bool SyscallsKTestBC::isReplayEnabled(SyscallParams& sp)
 
 
 	seen_begin_file = true;
-	return true;
+	return false;
 }
 
 struct bc_syscall* SyscallsKTestBC::peekSyscallCrumb(void)
@@ -151,7 +151,7 @@ bool SyscallsKTestBC::apply(void)
 		epilogue_c++;
 		return false;
 	}
-	
+
 	/* match? */
 	if (bcs->bcs_sysnr != sys_nr) {
 #if 0
@@ -163,23 +163,32 @@ bool SyscallsKTestBC::apply(void)
 			<< '\n';
 #endif
 		skipped_c++;
-	} else {
-		replayedSyscall = true;
-		used_c++;
-
-//		std::cerr << "IN::::\n";
-//		pt_r->getCPUState()->print(std::cerr);
-
-		SyscallsKTest::apply(sp);
-
-//		std::cerr << ":::::::::::::::OUT::::\n";
-//		pt_r->getCPUState()->print(std::cerr);
-
-
-		/* apply registers */
-		pt_r->pushRegisters();
+		goto done;
 	}
 
+	if (sys_nr == SYS_write) {
+		/* valgrind sema writes on fd=1028 confuse us:
+		 * detect and ignore */
+		if (sp.getArg(0) == 1028) {
+			skipped_c++;
+			goto done;
+		}
+	}
+
+	replayedSyscall = true;
+	used_c++;
+
+//	std::cerr << "IN::::\n";
+//	pt_r->getCPUState()->print(std::cerr);
+
+	SyscallsKTest::apply(sp);
+
+//	std::cerr << ":::::::::::::::OUT::::\n";
+//	pt_r->getCPUState()->print(std::cerr);
+
+	/* apply registers */
+	pt_r->pushRegisters();
+done:
 	Crumbs::freeCrumb((struct breadcrumb*)bcs);
 	return replayedSyscall;
 }
@@ -193,7 +202,7 @@ SyscallsKTestBC* SyscallsKTestBC::create(
 	Crumbs		*c;
 	unsigned	cn;
 	char		fname_crumbs[256];
-	
+
 	if (!k) return NULL;
 
 	cn = snprintf(
