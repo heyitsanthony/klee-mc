@@ -2693,6 +2693,7 @@ StateSolver* Executor::createSolverChain(
 
 void Executor::addModule(Module* m)
 {
+	assert (globals != NULL && "globals never declared?");
 	kmodule->addModule(m);
 	globals->updateModule();
 }

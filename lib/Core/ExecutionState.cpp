@@ -347,7 +347,7 @@ void ExecutionState::dumpStack(std::ostream& os) const
       ref<Expr> value;
       value = stack.getLocalCell(
 	     stack.size() - idx, sf.kf->getArgRegister(index++)).value;
-      if (isa<ConstantExpr>(value))
+      if (!value.isNull() && isa<ConstantExpr>(value))
         os << "=" << value;
     }
     os << ")";

@@ -50,7 +50,6 @@ void ExecutorJ::runAndroid(void)
 {
 	ExecutionState	*es;
 	KFunction	*entry_kf;
-	Globals		*globals;
 
 	assert (kmodule);
 	assert (dynamic_cast<KModuleJ*>(kmodule) != NULL);
@@ -63,8 +62,8 @@ void ExecutorJ::runAndroid(void)
 		<< "'\n";
 	ExecutionState::setMemoryManager(memory);
 	es = ExeStateBuilder::create(entry_kf);
-
 	globals = new Globals(kmodule, es, NULL);
+	assert (globals != NULL);
 
 	run(*es);
 
