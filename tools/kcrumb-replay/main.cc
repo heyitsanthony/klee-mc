@@ -128,6 +128,7 @@ int main(int argc, char *argv[], char* envp[])
 
 #if 0
 		if (sig == SIGSEGV) {
+			std::cerr << "SIGSEGV detected. Dumping\n";
 			ptimg->slurpRegisters(ptimg->getPID());
 			ptimg->getCPUState()->print(std::cerr);
 		}

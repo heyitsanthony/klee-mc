@@ -630,7 +630,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 			break;
 		}
 
-		make_sym_by_arg(regfile, 1, GET_ARG0(regfile), "getgroups");
+		make_sym_by_arg(
+			regfile, 1,
+			sizeof(gid_t)*GET_ARG0(regfile),
+			"getgroups");
 		sc_ret_v(regfile, GET_ARG0(regfile));
 		break;
 	case SYS_sched_setaffinity:

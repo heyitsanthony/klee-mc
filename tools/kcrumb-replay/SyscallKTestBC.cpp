@@ -67,23 +67,23 @@ SyscallsKTestBC::~SyscallsKTestBC()
  * valgrind (an open() on the memcheck so) */
 bool SyscallsKTestBC::isReplayEnabled(SyscallParams& sp)
 {
-	char		str[1024];
+	std::string	str;
 	uint64_t	sys_nr = sp.getSyscall();
 
 	if (seen_begin_file)
 		return true;
 
-	if (sys_nr != 2 /* open */)
+
+	if (sys_nr != SYS_open)
 		return false;
 
 	/* display files being opened */
-	memset(str, 0, sizeof(str));
-	pt_r->getMem()->memcpy(str, guest_ptr(sp.getArg(0)), 1024);
-	std::cerr << "open: " << str << '\n';
+	str = pt_r->getMem()->readString(guest_ptr(sp.getArg(0)));
+	std::cerr << PFX "[Prologue] open: " << str << '\n';
 
 	/* NO DEFAULT SUPPRESSIONS (to mimic klee memcheck) */
 #if 1
-	if (strcmp(str, "/usr/lib64/valgrind/default.supp") == 0) {
+	if (str == "/usr/lib64/valgrind/default.supp") {
 		pt_r->slurpRegisters(pt_r->getPID());
 		pt_r->getCPUState()->setSyscallResult(1234567);
 		pt_r->pushRegisters();
@@ -91,7 +91,7 @@ bool SyscallsKTestBC::isReplayEnabled(SyscallParams& sp)
 #endif
 
 
-	if (strcmp(str, BEGIN_FILE) != 0)
+	if (str != BEGIN_FILE)
 		return false;
 
 
@@ -112,12 +112,17 @@ struct bc_syscall* SyscallsKTestBC::peekSyscallCrumb(void)
 		bcs = reinterpret_cast<struct bc_syscall*>(bc);
 		assert (bc_is_type(bcs, BC_TYPE_SC));
 
-		/* pass-through non-memory syscalls */
-		if (	bcs->bcs_sysnr != SYS_mmap &&
-			bcs->bcs_sysnr != SYS_munmap &&
-			bcs->bcs_sysnr != SYS_mremap &&
-			bcs->bcs_sysnr != SYS_brk)
+		switch (bcs->bcs_sysnr) {
+		case SYS_mmap:
+		case SYS_munmap:
+		case SYS_mremap:
+		case SYS_brk:
+		case SYS_rt_sigaction:
 			break;
+		
+		default:
+			return bcs;
+		}
 
 		/* ignore syscall crumb + operations */
 		std::cerr << PFX "Skipping sys=" << bcs->bcs_sysnr << '\n';
@@ -138,12 +143,29 @@ bool SyscallsKTestBC::apply(void)
 	uint64_t		sys_nr = sp.getSyscall();
 	struct bc_syscall	*bcs;
 	bool			replayedSyscall = false;
+	static bool		was_last_sigprocmask = false;
 
 	if (isReplayEnabled(sp) == false) {
 		skipped_c++;
 		prologue_c++;
 		return false;
 	}
+
+#if 0
+	if (sys_nr == SYS_rt_sigprocmask) {
+		was_last_sigprocmask = true;
+		skipped_c++;
+		return false;
+	}
+
+	if (!was_last_sigprocmask) {
+		skipped_c++;
+		return false;
+	}
+
+	was_last_sigprocmask = false;
+
+#endif
 
 	/* ran out of syscall crumbs; pass-through */
 	if ((bcs = peekSyscallCrumb()) == NULL) {
@@ -156,12 +178,17 @@ bool SyscallsKTestBC::apply(void)
 	if (bcs->bcs_sysnr != sys_nr) {
 #if 0
 		std::cerr
-			<< PFX "Skipping valgrind syscall sys_nr="
+			<< PFX "Using valgrind syscall sys_nr="
 			<< sys_nr
 			<< ". Expected sys call="
 			<< bcs->bcs_sysnr
 			<< '\n';
 #endif
+		if (sys_nr == SYS_open)
+			std::cerr << PFX "file name: "
+				<< pt_r->getMem()->readString(
+					guest_ptr(sp.getArg(0)))
+				<< '\n';
 		skipped_c++;
 		goto done;
 	}
@@ -173,6 +200,14 @@ bool SyscallsKTestBC::apply(void)
 			skipped_c++;
 			goto done;
 		}
+	}
+
+	if (frameshift_c != 0) {
+		frameshift_c--;
+		std::cerr << PFX "frameshifted. Remaining: "
+			<< frameshift_c << '\n';
+		skipped_c++;
+		goto done;
 	}
 
 	replayedSyscall = true;
@@ -226,3 +261,21 @@ SyscallsKTestBC* SyscallsKTestBC::create(
 
 	return new SyscallsKTestBC(gpt, k, c);
 }
+
+SyscallsKTestBC::SyscallsKTestBC(
+	PTImgRemote* g, KTestStream* _kts, Crumbs* _crumbs)
+: SyscallsKTest(g, _kts, _crumbs)
+, pt_r(g)
+, seen_begin_file(false)
+, prologue_c(0)
+, epilogue_c(0)
+, skipped_c(0)
+, syscall_c(0) 
+, skipped_mem_c(0)
+, used_c(0)
+, frameshift_c((getenv("KMC_FRAMESHIFT") != NULL)
+	? atoi(getenv("KMC_FRAMESHIFT"))
+	: 0)
+{
+}
+

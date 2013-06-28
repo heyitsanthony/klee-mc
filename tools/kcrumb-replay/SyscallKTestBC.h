@@ -25,16 +25,7 @@ public:
 	virtual bool apply(void);
 	virtual ~SyscallsKTestBC();
 protected:
-	SyscallsKTestBC(PTImgRemote* g, KTestStream* _kts, Crumbs* _crumbs)
-	: SyscallsKTest(g, _kts, _crumbs)
-	, pt_r(g)
-	, seen_begin_file(false)
-	, prologue_c(0)
-	, epilogue_c(0)
-	, skipped_c(0)
-	, syscall_c(0) 
-	, skipped_mem_c(0)
-	, used_c(0) {}
+	SyscallsKTestBC(PTImgRemote* g, KTestStream* _kts, Crumbs* _crumbs);
 
 	bool isReplayEnabled(SyscallParams& sp);
 
@@ -48,6 +39,8 @@ private:
 	unsigned	syscall_c;	/* total syscalls attempted */
 	unsigned	skipped_mem_c;	/* mem syscalls skipped in log */
 	unsigned	used_c;		/* syscalls used from log */
+
+	unsigned	frameshift_c;	/* countdown until syscalls are properly replayed */
 };
 
 }
