@@ -44,7 +44,7 @@ static int last_sc = 0;
 #define ITIMERVAL_SZ	sizeof(struct itimerval)
 #define STATFS_SZ	sizeof(struct statfs)
 #define PTRACE_REGS_SZ		sizeof (struct user_regs_struct)
-#define PTRACE_FPREGS_SZ	sizeof (struct uesr_fpregs_struct)
+#define PTRACE_FPREGS_SZ	sizeof (struct user_fpregs_struct)
 #else
 #define TIMESPEC_SZ		8
 #define RUSAGE_SZ		72
