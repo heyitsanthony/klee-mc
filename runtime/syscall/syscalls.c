@@ -1,5 +1,7 @@
 #define _LARGEFILE64_SOURCE
 
+#include <sys/ptrace.h>
+#include <sys/user.h>
 #include <sys/vfs.h>
 #include <sys/sysinfo.h>
 #include <poll.h>
@@ -30,6 +32,7 @@
 
 static int last_sc = 0;
 
+/* it'd be cool if I could auto-generate all of this */
 #ifdef GUEST_ARCH_AMD64
 #define TIMESPEC_SZ	sizeof(struct timespec)
 #define RUSAGE_SZ	sizeof(struct rusage)
@@ -40,16 +43,21 @@ static int last_sc = 0;
 #define USTAT_SZ	sizeof(struct ustat)
 #define ITIMERVAL_SZ	sizeof(struct itimerval)
 #define STATFS_SZ	sizeof(struct statfs)
+#define PTRACE_REGS_SZ		sizeof (struct user_regs_struct)
+#define PTRACE_FPREGS_SZ	sizeof (struct uesr_fpregs_struct)
 #else
-#define TIMESPEC_SZ	8
-#define RUSAGE_SZ	72
-#define RLIMIT_SZ	8
-#define TIMEVAL_SZ	8
-#define SYSINFO_SZ	64
-#define TMS_SZ		16
-#define USTAT_SZ	20
-#define ITIMERVAL_SZ	16
-#define STATFS_SZ	64
+#define TIMESPEC_SZ		8
+#define RUSAGE_SZ		72
+#define RLIMIT_SZ		8
+#define TIMEVAL_SZ		8
+#define SYSINFO_SZ		64
+#define TMS_SZ			16
+#define USTAT_SZ		20
+#define ITIMERVAL_SZ		16
+#define STATFS_SZ		64
+/* XXX: LOL NOT FOR ARM!! */
+#define PTRACE_REGS_SZ		68
+#define PTRACE_FPREGS_SZ	108
 #endif
 
 // arg0, arg1, ...
@@ -502,6 +510,31 @@ void* sc_enter(void* regfile, void* jmpptr)
 		kmc_exit(exit_code);
 	}
 	break;
+
+	case SYS_ptrace: {
+		int pt_call = GET_ARG0(regfile);
+
+		if (pt_call == PTRACE_GETREGS) {
+			make_sym_by_arg(
+				regfile,
+				3,
+				PTRACE_REGS_SZ,
+				"user_regs_struct");
+			sc_ret_v(regfile, 0);
+			break;
+		} else if (pt_call == PTRACE_GETFPREGS) {
+			make_sym_by_arg(
+				regfile,
+				3,
+				PTRACE_FPREGS_SZ,
+				"user_regs_struct");
+			sc_ret_v(regfile, 0);
+			break;
+		}
+
+		new_regs = sc_new_regs(regfile);
+		break;
+	}
 
 	case SYS_tgkill:
 		if (GET_ARG2(regfile) == SIGABRT) {
