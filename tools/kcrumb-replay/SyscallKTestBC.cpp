@@ -1,12 +1,14 @@
 #include "klee/Internal/ADT/KTestStream.h"
 #include "klee/Internal/ADT/KTSFuzz.h"
 #include "klee/Internal/ADT/Crumbs.h"
+#include <sys/mman.h>
 #include <sys/syscall.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <sys/ptrace.h>
 #include <sys/user.h>
+#include <sys/signal.h>
 #include <string.h>
 #include "guestptimg.h"
 #include "guestcpustate.h"
@@ -151,6 +153,30 @@ bool SyscallsKTestBC::apply(void)
 		return false;
 	}
 
+	if (	sys_nr == SYS_kill
+		|| sys_nr == SYS_tkill
+		|| sys_nr == SYS_tgkill) {
+		if (sp.getArg(0) == ~((uint32_t)0)) {
+			std::cerr << PFX "target calling kill on pid=-1. No thanks!\n";
+			exit(1);
+		}
+		if (sp.getArg(1) == SIGSTOP) {
+			std::cerr << PFX "target calling SIGSTOP. No thanks!\n";
+			exit(1);
+		}
+	}
+
+	/* THIS IS NECESSARY TO AVOID KILLALL5 FROM KILLING ME */
+#if 1
+	if (sys_nr == SYS_mlockall) {
+		if (sp.getArg(0) == (MCL_CURRENT|MCL_FUTURE)) {
+			std::cerr << PFX " this is probably killall5!\n";
+			exit(2);
+		}
+	}
+#endif
+
+
 #if 0
 	if (sys_nr == SYS_rt_sigprocmask) {
 		was_last_sigprocmask = true;
@@ -193,10 +219,11 @@ bool SyscallsKTestBC::apply(void)
 		goto done;
 	}
 
-	if (sys_nr == SYS_write) {
+	if (sys_nr == SYS_write || sys_nr == SYS_read) {
+		int fd = sp.getArg(0);
 		/* valgrind sema writes on fd=1028 confuse us:
 		 * detect and ignore */
-		if (sp.getArg(0) == 1028) {
+		if (fd == 1028 || fd == 1027) {
 			skipped_c++;
 			goto done;
 		}

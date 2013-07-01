@@ -62,12 +62,14 @@ function find_end
 
 function durr
 {
-fshift=10
+fshift=0
 maxnum="$minnum"
 bestshift=0
+if [ -z "$maxnum" ];  then exit 4; fi
 
 while [ 1 ]; do
 	usednum=`KMC_FRAMESHIFT="$fshift" kcrumb-replay "$SSHOTDIR" "$TESTNUM" "$EXEPATH"  2>&1  | grep "Log syscalls used"  | cut -f2 -d':'`
+	
 	if [ "$maxnum" -le "$usednum" ]; then
 		bestshift="$fshift"
 		maxnum="$usednum"

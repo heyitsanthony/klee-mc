@@ -126,6 +126,13 @@ int main(int argc, char *argv[], char* envp[])
 			sig = 0; /* eat signal */
 		}
 
+		if (sig == SIGKILL || sig == SIGSTOP) {
+			std::cerr << "{SIGKILL,SIGSTOP} detected. Dumping\n";
+			ptimg->slurpRegisters(ptimg->getPID());
+			ptimg->getCPUState()->print(std::cerr);
+			break;
+		}
+
 #if 0
 		if (sig == SIGSEGV) {
 			std::cerr << "SIGSEGV detected. Dumping\n";
