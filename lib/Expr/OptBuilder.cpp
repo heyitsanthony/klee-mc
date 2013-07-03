@@ -54,8 +54,8 @@ ref<Expr> OptBuilder::Concat(const ref<Expr> &l, const ref<Expr> &r)
 	// Right-fold constants
 	//
 	// (concat (concat x rCE2) rCE) = (concat x (concat rCE2 rCE))
-	if (ConstantExpr *rCE = dyn_cast<ConstantExpr>(l)) {
-		if (ConcatExpr *lCon = dyn_cast<ConcatExpr>(r)) {
+	if (ConstantExpr *rCE = dyn_cast<ConstantExpr>(r)) {
+		if (ConcatExpr *lCon = dyn_cast<ConcatExpr>(l)) {
 			ConstantExpr *rCE2;
 			rCE2 = dyn_cast<ConstantExpr>(lCon->getKid(1));
 			if (rCE2)

@@ -40,7 +40,11 @@ function xtive_loop
 			fi
 		fi
 
-		if [ "$APPENDED" -eq "$LASTAPPENDED" ]; then
+		if [ -z "$APPENDED" ]; then
+			if [ -z "$LASTAPPENDED" ]; then
+				break;
+			fi
+		elif [ "$APPENDED" -eq "$LASTAPPENDED" ]; then
 			break
 		fi
 
@@ -67,6 +71,12 @@ if [ -f "$SEEDBRULE" ]; then
 		cat "$SEEDBRULE" >>$FPREFIX.brule
 	fi
 fi
+
+
+# verify rules are working correctly before doing any xtive stuff
+kopt -rule-file=$FPREFIX.brule -dedup-db $FPREFIX.dd.brule
+kopt -pipe-solver -brule-rebuild -rule-file=$FPREFIX.dd.brule $FPREFIX.rebuild.brule 2>/dev/null
+cp "$FPREFIX".rebuild.brule "$FPREFIX".brule
 
 xtive_loop "$FPREFIX.brule"
 

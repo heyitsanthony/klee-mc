@@ -30,4 +30,7 @@ plot 	'kopt-histo64.out' with linespoints title '64-bit constants',\
 set terminal 'postscript' enhanced 24
 set output 'kopt-distrib.eps'
 replot
+set terminal 'postscript' enhanced 24 color
+set output 'kopt-distrib.c.eps'
+replot
 "

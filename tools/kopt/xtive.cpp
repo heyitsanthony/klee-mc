@@ -139,18 +139,21 @@ static unsigned appendNewFroms(Solver* s, RuleBuilder* rb)
 			continue;
 		}
 
+		if (br.isReduced() == false) {
+			std::cerr << "WARNING: rule is not reduced.\n";
+		}
+
 		/* careful-- we want to be monotone decreasing or
 		 * the size of the db could explode */
 		/* I think this is OK though, since sometimes the
 		 * hand optimizer will make things slightly larger.
 		 * If the DB *does* explode, maybe revisit this. */
 		if (br.isWorse()) {
-			std::cerr << "WARNING: Making rule for worse expr.\n";
-#if 1
+			std::cerr << "WARNING: Making rule with worse to-expr.\n";
 			br.dump(std::cerr);
-			continue;
-#endif
+			std::cerr << "==== Proceeding with worse-rule==\n";
 		}
+
 
 		/* create new rule to clear fuckup */
 		new_rule = ExprRule::createRule(
