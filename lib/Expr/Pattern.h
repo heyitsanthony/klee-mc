@@ -25,6 +25,8 @@
 #define OP_VAR_MK(x)		(OP_EXT_VAR | x)
 #define OP_VAR_W(x)		((x) & ~OP_EXT_VAR)
 
+#define LABEL_INVALID		(~0ULL)
+
 namespace klee
 {
 typedef uint64_t flatrule_tok;
