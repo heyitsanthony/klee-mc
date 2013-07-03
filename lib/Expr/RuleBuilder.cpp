@@ -275,8 +275,9 @@ void RuleBuilder::addRule(ExprRule* er)
 	rules_arr.push_back(er);
 	if (ApplyRuleHash)
 		addRuleHash(er);
-	if (ApplyRuleTrie)
+	if (ApplyRuleTrie) {
 		rules_trie.add(er->getFromPattern().stripConstExamples(), er);
+	}
 }
 
 bool RuleBuilder::loadRuleDir(const char* ruledir)
@@ -419,9 +420,8 @@ public:
 	 * labels. Essentially simulates DFS search. */
 	bool bumpSlot(void)
 	{
-		int i;
-		for (i = last_label_v.size() - 1; i >= 0; i--) {
-			if (last_label_v[i] == ~0ULL)
+		for (int i = last_label_v.size() - 1; i >= 0; i--) {
+			if (last_label_v[i] == LABEL_INVALID)
 				continue;
 
 			last_label_v.resize(i+1);
@@ -472,7 +472,7 @@ bool TrieRuleIterator::matchLabel(uint64_t& v, uint64_t mask)
 		target_label = last_label_v[label_depth];
 	}
 
-	if (target_label == ~0ULL) {
+	if (target_label == LABEL_INVALID) {
 		/* already know not to look for anything here */
 		label_depth++;
 		return false;
@@ -482,18 +482,19 @@ bool TrieRuleIterator::matchLabel(uint64_t& v, uint64_t mask)
 	found_label = it.tryNextMin(target_label, v);
 
 	/* mark bump replay label */
-	last_label_v[label_depth] = (found_label) ? v : ~0ULL;
-	if (last_label_v[label_depth] == ~0ULL) {
+	if (found_label == true) {
+		last_label_v[label_depth] = v;
+	} else {
 		/* failed to find label; invalidate / trunc */
+		last_label_v[label_depth] = LABEL_INVALID;
 		last_label_v.resize(label_depth+1);
 	}
 
 	label_depth++;
-
 	if (it.isFound()) {
 		found_rule = it.get();
 	}
-	
+
 	return found_label;
 }
 

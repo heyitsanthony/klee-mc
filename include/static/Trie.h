@@ -80,17 +80,17 @@ public:
 		cur_trie = handleInternal(k, v, td_list);
 
 		/* last node-- handle leaf trie (n-1) + 1 = n */
+		/* if key is a Tail, then cur_trie is null */
 		if (cur_trie != NULL) {
-			if (cur_trie->leafs == NULL) {
+			if (cur_trie->leafs == NULL)
 				cur_trie->leafs = new valmap_ty();
-				if (cur_trie->td != NULL) {
-					td_list.push_back(cur_trie->td);
-					cur_trie->td = NULL;
-				}
+
+			if (cur_trie->td != NULL) {
+				td_list.push_back(cur_trie->td);
+				cur_trie->td = NULL;
 			}
 
-			cur_trie->leafs->insert(
-				std::make_pair(k[k.size()-1], v));
+			cur_trie->leafs->insert(std::make_pair(k.back(), v));
 		}
 
 		/* finally, restore nuked tails */
@@ -231,16 +231,21 @@ public:
 	bool isFound(void) const { return found; }
 	void dump(std::ostream& os) const
 	{
+		os << "[TrieIt] depth: " << depth << '\n';
+
+		if (found) {
+			os << "[TrieIt] final_v: "
+				<< (void*)final_v << '\n';
+		}
+
 		if (t != NULL) {
-			os << "Dumping 't':\n";
+			os << "[TrieIt] 't':\n";
 			t->dump(os);
-			return;
 		}
 
 		if (t_last != NULL) {
-			os << "Dumping 't_last':\n";
+			os << "[TrieIt] 't_last':\n";
 			t_last->dump(os);
-			return;
 		}
 	}
 private:
