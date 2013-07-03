@@ -142,8 +142,13 @@ void ExprRule::printPrettyRule(std::ostream& os) const
 void ExprRule::print(std::ostream& os) const
 {
 	unsigned	i;
+	ref<Expr>	f_e(getFromExpr()), t_e(getToExpr());
 
-	printRule(os, getFromExpr(), getToExpr());
+	if (f_e.isNull() || t_e.isNull())
+		os << "???\n";
+	else
+		printRule(os, f_e, t_e);
+
 	if (const_constraints == NULL)
 		return;
 

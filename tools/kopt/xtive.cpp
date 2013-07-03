@@ -146,6 +146,10 @@ static unsigned appendNewFroms(Solver* s, RuleBuilder* rb)
 		 * If the DB *does* explode, maybe revisit this. */
 		if (br.isWorse()) {
 			std::cerr << "WARNING: Making rule for worse expr.\n";
+#if 1
+			br.dump(std::cerr);
+			continue;
+#endif
 		}
 
 		/* create new rule to clear fuckup */
