@@ -2,6 +2,7 @@
 #define SYSCALLS_H
 
 #include <valgrind/libvex_guest_x86.h>
+
 #define GET_SYSNR(x)	((VexGuestX86State*)x)->guest_EAX
 #define GET_SYSRET(x)	((VexGuestX86State*)x)->guest_EAX
 #define GET_ARGN(x,n)	((uint32_t*)((uintptr_t)(((VexGuestX86State*)x)->guest_EDX)))[n]
@@ -23,6 +24,14 @@
 #define GET_ARG5_PTR(x)	GET_ARGN_PTR(x,5)
 #define GET_ARG6_PTR(x)	GET_ARGN_PTR(x,6)
 
+// clang says 362, snapshots say 361. UGH.
+//#define ARCH_SZ		sizeof(VexGuestX86State)
+#define ARCH_SZ		361	/* UGH!!! */
+#define GET_EDX(x)	((VexGuestX86State*)x)->guest_EDX
+#define GET_ECX(x)	((VexGuestX86State*)x)->guest_ECX
+#define GET_ESP(x)	((VexGuestX86State*)x)->guest_ESP
+#define GET_SC_IP(x)	((VexGuestX86State*)x)->guest_IP_AT_SYSCALL
+#define GE_SYSCALL	5
 
 struct sc_pkt
 {

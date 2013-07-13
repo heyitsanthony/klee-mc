@@ -702,7 +702,12 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 	case GE_RETURN:
 		handleXferReturn(state, ki);
 		return;
+	case GE_INT:
 	case GE_SYSCALL:
+		/* it's important to retain the exit type for windows
+		 * so the system model can distinguish between separate
+		 * system calls */
+		markExit(state, exit_type);
 		handleXferSyscall(state, ki);
 		return;
 	case GE_EMWARN:

@@ -114,8 +114,15 @@ static void loop_protect(struct loop_info* li)
 	END_PROTECT_CASE
 
 #define UNIMPL_SC(n) case n:	\
+if (is_sym_sc)	\
+	klee_uerror(	\
+		"Unimplemented symbolically resolved syscall "#n,	\
+		"symsc.err");	\
+else	\
 	klee_uerror("Unimplemented call "#n, "sc.err");\
-	break;
+break;
+
+static int is_sym_sc;
 
 void* sc_enter(void* regfile, void* jmpptr)
 {
@@ -126,10 +133,21 @@ void* sc_enter(void* regfile, void* jmpptr)
 	sc.regfile = regfile;
 	sc.pure_sys_nr = GET_SYSNR(regfile);
 
+	if (((char*)regfile)[ARCH_SZ-1] == GE_SYSCALL) {
+		GET_EDX(regfile) += 8;
+		jmpptr = GET_SC_IP(regfile) + 2;
+	}
+
 	if (klee_is_symbolic(sc.pure_sys_nr)) {
 		klee_warning_once("Resolving symbolic syscall nr");
-		sc.pure_sys_nr = klee_fork_all(sc.pure_sys_nr);
-	}
+		klee_print_expr("Symbolic syscall", sc.pure_sys_nr);
+		klee_uerror(
+			"Symbolically resolved syscall! No way!",
+			"symsc.err");
+		is_sym_sc = 1;
+		sc.pure_sys_nr = klee_fork_all_n(sc.pure_sys_nr, 4);
+	} else
+		is_sym_sc = 0;
 
 	sc.sys_nr = sc.pure_sys_nr;
 	sc_breadcrumb_reset();
@@ -170,6 +188,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	WRITE_N_TO_ARG(DuplicateObject, 4, 3)
 
 	DEFAULT_SC(NtSetEventBoostPriority)
+	DEFAULT_SC(NtTerminateJobObject)
 
 	case NtQueryEvent:
 		new_regs = sc_new_regs(regfile);
@@ -912,7 +931,12 @@ void* sc_enter(void* regfile, void* jmpptr)
 	DEFAULT_SC(NtUserSetImeOwnerWindow)
 
 	default:
-		klee_uerror("Unimplemented syscall", "sc.err");
+		if (is_sym_sc)
+			klee_uerror(
+				"Unimplemented symbolically resolved syscall",
+				"symsc.err");
+		else
+			klee_uerror("Unimplemented syscall", "sc.err");
 	}
 
 

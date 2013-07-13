@@ -245,8 +245,10 @@ extern void free(void*) __THROW;
      constants and that the range lie within a single object. */
   void klee_check_memory_access(const void *address, size_t size);
 
-#define klee_fork_all(x)	__klee_fork_all((uint64_t)x)
-  uint64_t __klee_fork_all(uint64_t v);
+#define klee_fork_all(x)	__klee_fork_all_n((uint64_t)x, ~0)
+#define klee_fork_all_n(x, n)	__klee_fork_all_n((uint64_t)x, n)
+  uint64_t __klee_fork_all_n(uint64_t v, unsigned n);
+
 #define klee_fork_eq(x,y)	__klee_fork_eq((uint64_t)x, (uint64_t)y)
   int __klee_fork_eq(uint64_t v, uint64_t v2);
 
