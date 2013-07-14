@@ -295,6 +295,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		}
 		break;
 
+	WRITE_N_TO_ARG(NotifyChangeKey, 7, GET_ARGN(regfile, 8))
 
 	case NtRemoveIoCompletion:
 		new_regs = sc_new_regs(regfile);
@@ -507,7 +508,9 @@ void* sc_enter(void* regfile, void* jmpptr)
 	WRITE_N_TO_ARG(ReleaseMutant, 4, 1)
 	WRITE_N_TO_ARG(QueryAttributesFile, 0x24, 1)
 	WRITE_N_TO_ARG(CancelTimer, 4, 1)
-	WRITE_N_TO_ARG(SetIoCompletion, 8 /*IO_STATUS_BLOCK*/, 2)
+	WRITE_N_TO_ARG(SetIoCompletion, 8 /*IO_STATUS_BLOCK */, 2)
+	WRITE_N_TO_ARG(CancelIoFile, 8 /* IO_STATUS_BLOCK */, 1)
+	WRITE_N_TO_ARG(ResumeThread, 4, 1)
 
 	WRITE_N_TO_ARG(SetTimer, 4, 6)
 
