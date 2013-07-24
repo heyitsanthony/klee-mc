@@ -26,6 +26,18 @@ void* sc_new_regs(void* r)
 	return ret;
 }
 
+void sc_ret_v(void* regfile, uint64_t v1)
+{
+//	klee_assume_eq(GET_SYSRET_S(regfile), (ARCH_SIGN_CAST)v1);
+	GET_SYSRET(regfile) = v1;
+}
+
+void sc_ret_v_new(void* regfile, uint64_t v1)
+{
+	klee_assume_eq(GET_SYSRET(regfile), v1);
+	GET_SYSRET(regfile) = v1;
+}
+
 #define SYM_YIELD_SIZE (16*1024)
 uint64_t concretize_u64(uint64_t s)
 {
@@ -826,6 +838,32 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 	DEFAULT_SC(NtUserUnhookWindowsHookEx)
 
+#if 0
+int APIENTRY NtUserToUnicodeEx 	( 	UINT  	wVirtKey, 0
+UINT  	wScanCode, 1
+PBYTE  	pKeyStateUnsafe, 2
+LPWSTR  	pwszBuffUnsafe, 3
+INT  	cchBuff, 4
+UINT  	wFlags,
+HKL  	dwhkl 
+) 	
+#endif
+	case NtUserToUnicodeEx:
+		if (GET_ARGN_PTR(regfile, 3) == NULL) {
+			sc_ret_v(regfile, 0);
+			break;
+		}
+
+		new_regs = sc_new_regs(regfile);
+		if (GET_ARGN_PTR(regfile, 3) != NULL)
+			make_sym(
+				GET_ARGN_PTR(regfile, 3),
+				GET_ARG4(regfile),
+				"NtUserToUnicode");
+		klee_assume_ule(GET_SYSRET(new_regs),  GET_ARG4(regfile));
+		break;
+
+
 #define W32K_BROADCASTPARM_SZ	(4 + 4 + 4 + 4 + 12)
 #define W32K_DOSENDMESSAGE_SZ	(4 + 4 + 4)
 	case NtUserMessageCall: {
@@ -965,14 +1003,4 @@ void* concretize_ptr(void* s)
 	return (void*)s2;
 }
 
-void sc_ret_v(void* regfile, uint64_t v1)
-{
-//	klee_assume_eq(GET_SYSRET_S(regfile), (ARCH_SIGN_CAST)v1);
-	GET_SYSRET(regfile) = v1;
-}
 
-void sc_ret_v_new(void* regfile, uint64_t v1)
-{
-	klee_assume_eq(GET_SYSRET(regfile), v1);
-	GET_SYSRET(regfile) = v1;
-}
