@@ -45,6 +45,7 @@ static int last_sc = 0;
 #define STATFS_SZ	sizeof(struct statfs)
 #define PTRACE_REGS_SZ		sizeof (struct user_regs_struct)
 #define PTRACE_FPREGS_SZ	sizeof (struct user_fpregs_struct)
+#define SIGINFO_T_SZ		sizeof (siginfo_t)
 #else
 #define TIMESPEC_SZ		8
 #define RUSAGE_SZ		72
@@ -58,6 +59,7 @@ static int last_sc = 0;
 /* XXX: LOL NOT FOR ARM!! */
 #define PTRACE_REGS_SZ		68
 #define PTRACE_FPREGS_SZ	108
+#define SIGINFO_T_SZ		128
 #endif
 
 // arg0, arg1, ...
@@ -754,6 +756,16 @@ void* sc_enter(void* regfile, void* jmpptr)
 		goto already_logged;
 	}
 	break;
+
+	case SYS_waitid: {
+		siginfo_t	*infop;
+
+		infop = GET_ARG2_PTR(regfile);
+		new_regs = sc_new_regs(regfile);
+		if (infop != NULL)
+			make_sym((uint64_t)infop, SIGINFO_T_SZ, "waitid_siginfo");
+		break;	
+	}
 
 #ifdef SYS_waitpid
 	case SYS_waitpid: // 32-bit only

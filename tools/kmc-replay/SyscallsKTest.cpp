@@ -114,7 +114,7 @@ int SyscallsKTest::loadSyscallEntry(SyscallParams& sp)
 	if (bcs_crumb->bcs_sysnr != sys_nr) {
 		fprintf(stderr,
 			KREPLAY_NOTE
-			"Mismatched: Got sysnr=%d. Expected sysnr=%d\n",
+			"Mismatched: Got sysnr=%d. Logged sysnr=%d\n",
 			(int)sys_nr, (int)bcs_crumb->bcs_sysnr);
 	}
 
