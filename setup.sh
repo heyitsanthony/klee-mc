@@ -64,7 +64,7 @@ if [ -z "$VEXLLVM_HELPER_PATH" ]; then
 fi
 
 echo "Copying runtimes..."
-for a in amd64 x86 nt32 fdt sysnone; do
+for a in arm amd64 x86 nt32 fdt sysnone; do
 	ls -l "$BASEDIR"/lib/libkleeRuntimeMC-$a.bc
 	echo "COPYING $a to $VEXLLVM_HELPER_PATH"
 	cp "$BASEDIR"/lib/libkleeRuntimeMC-$a.bc "$VEXLLVM_HELPER_PATH"/

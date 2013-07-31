@@ -1629,7 +1629,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     ref<Expr>	cond (eval(ki, 0, state));
     ref<Expr>	tExpr(eval(ki, 1, state));
     ref<Expr>	fExpr(eval(ki, 2, state));
-    ref<Expr>	result(SelectExpr::create(cond, tExpr, fExpr));
+    ref<Expr>	result(MK_SELECT(cond, tExpr, fExpr));
     state.bindLocal(ki, result);
     break;
   }

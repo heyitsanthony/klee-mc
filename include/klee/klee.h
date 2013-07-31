@@ -150,10 +150,6 @@ struct kreport_ent { uint64_t strp; uint64_t v; };
   unsigned klee_sym_range_bytes(void* ptr, unsigned max_bytes);
 
 
-	/* The following intrinsics are primarily intended for internal use
-	and may have peculiar semantics. */
-	void klee_assume(uint64_t condition);
-
 	void* kmc_sc_regs(void*);
 #define KLEE_CMP_OP_EQ	0
 #define KLEE_CMP_OP_NE	1

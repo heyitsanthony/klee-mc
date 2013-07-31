@@ -88,3 +88,16 @@ ifeq ($(ENABLE_BOOLECTOR_LIB), 1)
   CXX.Flags += -DUSE_BOOLECTOR_LIB -I$(BOOLECTOR_ROOT)/
   SOLVERLIBS += -lboolector
 endif
+
+
+ifdef KLEE_RUNTIME_OUT
+BUILD_DIR=$(BuildMode)/lib
+all:: $(PROJ_SRC_ROOT)/$(BUILD_DIR)/$(KLEE_RUNTIME_OUT)
+
+BUILT_INC+=$(PROJ_SRC_ROOT)/$(BUILD_DIR)/$(KLEE_RUNTIME_OUT)
+$(PROJ_SRC_ROOT)/$(BUILD_DIR)/$(KLEE_RUNTIME_OUT): $(KLEE_RUNTIME_IN) $(SELF)
+	$(Echo) "Generating '$(notdir $@)'"
+	$(Verb) $(LLVMAS) -o - $(KLEE_RUNTIME_IN) | $(LLC)   -o $@ $(LLC_FLAGS)
+
+endif
+
