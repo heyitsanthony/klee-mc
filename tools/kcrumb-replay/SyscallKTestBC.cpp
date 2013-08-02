@@ -87,7 +87,7 @@ bool SyscallsKTestBC::isReplayEnabled(SyscallParams& sp)
 #if 1
 	if (str == "/usr/lib64/valgrind/default.supp") {
 		pt_r->slurpRegisters(pt_r->getPID());
-		pt_r->getCPUState()->setSyscallResult(1234567);
+		pt_r->setSyscallResult(1234567);
 		pt_r->pushRegisters();
 	}
 #endif
@@ -141,7 +141,7 @@ bool SyscallsKTestBC::apply(void)
 	syscall_c++;
 	pt_r->slurpRegisters(pt_r->getPID());
 
-	SyscallParams		sp(pt_r->getCPUState()->getSyscallParams());
+	SyscallParams		sp(pt_r->getSyscallParams());
 	uint64_t		sys_nr = sp.getSyscall();
 	struct bc_syscall	*bcs;
 	bool			replayedSyscall = false;

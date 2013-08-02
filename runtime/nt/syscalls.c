@@ -148,6 +148,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	if (((char*)regfile)[ARCH_SZ-1] == GE_SYSCALL) {
 		GET_EDX(regfile) += 8;
 		jmpptr = GET_SC_IP(regfile) + 2;
+		GET_IP(regfile) = jmpptr;
 	}
 
 	if (klee_is_symbolic(sc.pure_sys_nr)) {

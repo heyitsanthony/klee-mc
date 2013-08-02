@@ -640,6 +640,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			#ifdef GUEST_ARCH_ARM
 			#undef SIGSET_T_SZ
 			#define SIGSET_T_SZ 16
+			klee_warning_once("Narrow sigset_t so android won't crash!");
 			#endif
 			make_sym(GET_ARG2(regfile), SIGSET_T_SZ, "sigset");
 			sc_ret_v(regfile, 0);

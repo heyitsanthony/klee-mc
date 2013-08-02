@@ -19,6 +19,7 @@
 #include "FileReconstructor.h"
 #include "guestcpustate.h"
 #include "guest.h"
+#include "cpu/i386windowsabi.h"
 
 #include "SyscallsKTest.h"
 
@@ -64,6 +65,8 @@ SyscallsKTest::SyscallsKTest(
 {
 	if (getenv("KMC_RECONS_FILES") != NULL)
 		file_recons = new FileReconstructor();
+
+	is_w32 = dynamic_cast<const I386WindowsABI*>(in_g->getABI());
 }
 
 SyscallsKTest::~SyscallsKTest(void)
@@ -180,7 +183,6 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 	uint64_t	ret;
 	uint64_t	sys_nr;
 	int		xlate_sysnr;
-	ssize_t		bw;
 
 	ret = 0;
 	sys_nr = sp.getSyscall();
@@ -192,17 +194,50 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 
 	xlate_sysnr = loadSyscallEntry(sp);
 
-	/* GROSS UGLY HACK. OH WELL. */
-	if (	bc_sc_is_thunk(bcs_crumb)
-		&& xlate_sysnr != SYS_recvmsg
-		&& xlate_sysnr != SYS_recvfrom
-		&& xlate_sysnr != SYS_getcwd
-		&& xlate_sysnr != SYS_getsockname)
-	{
-		crumbs->skip(bcs_crumb->bcs_op_c);
+	/* extra thunks */
+	if (!is_w32) {
+		/* GROSS UGLY HACK. OH WELL. */
+		if (	bc_sc_is_thunk(bcs_crumb)
+			&& xlate_sysnr != SYS_recvmsg
+			&& xlate_sysnr != SYS_recvfrom
+			&& xlate_sysnr != SYS_getcwd
+			&& xlate_sysnr != SYS_getsockname)
+		{
+			crumbs->skip(bcs_crumb->bcs_op_c);
+		}
+		doLinuxThunks(sp, xlate_sysnr);
+	} else {
+		GuestCPUState	*cpu(guest->getCPUState());
+
+		if (bc_sc_is_thunk(bcs_crumb))
+			crumbs->skip(bcs_crumb->bcs_op_c);
+
+		/* HACK AHCKACHACHKAC */
+		if (cpu->getExitType() == GE_SYSCALL) {
+			cpu->setPC(guest_ptr(
+				cpu->getReg("IP_AT_SYSCALL", 32) + 2));
+			cpu->setReg("EDX", 32, cpu->getReg("EDX", 32) + 8);
+		}
 	}
 
-	/* extra thunks */
+
+	fprintf(stderr,
+		KREPLAY_NOTE "Retired: sys=%d. xsys=%d. ret=%p.\n",
+		(int)sys_nr,
+		(int)xlate_sysnr,
+		(void*)getRet());
+
+	sc_retired++;
+	Crumbs::freeCrumb(&bcs_crumb->bcs_hdr);
+	bcs_crumb = NULL;
+
+	return ret;
+}
+
+void SyscallsKTest::doLinuxThunks(SyscallParams& sp, int xlate_sysnr)
+{
+	ssize_t		bw;
+
 	switch(xlate_sysnr) {
 
 	case SYS_getsockname:
@@ -384,22 +419,10 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 		if (!bc_sc_is_thunk(bcs_crumb)) break;
 		fprintf(stderr,
 			KREPLAY_NOTE "No thunk for syscall sys=%d. xsys=%d.\n",
-			(int)sys_nr,
+			(int)sp.getSyscall(),
 			(int)xlate_sysnr);
 		assert (0 == 1 && "TRICKY SYSCALL");
 	}
-
-	fprintf(stderr,
-		KREPLAY_NOTE "Retired: sys=%d. xsys=%d. ret=%p.\n",
-		(int)sys_nr,
-		(int)xlate_sysnr,
-		(void*)getRet());
-
-	sc_retired++;
-	Crumbs::freeCrumb(&bcs_crumb->bcs_hdr);
-	bcs_crumb = NULL;
-
-	return ret;
 }
 
 void SyscallsKTest::sc_mmap(SyscallParams& sp)

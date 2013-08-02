@@ -45,6 +45,7 @@ private:
 	void feedSyscallOp(SyscallParams& sp);
 	void feedSyscallOpBCS(SyscallParams& sp);
 
+	void doLinuxThunks(SyscallParams& sp, int xlate_sysnr);
 
 	uint64_t getRet(void) const;
 
@@ -57,6 +58,8 @@ private:
 	struct bc_syscall	*bcs_crumb;
 
 	uint64_t		last_brk;
+
+	bool			is_w32; // XXX: HAck HAKCCHAKCAHCK
 };
 
 #endif

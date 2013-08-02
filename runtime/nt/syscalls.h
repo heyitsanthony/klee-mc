@@ -31,6 +31,7 @@
 #define GET_ECX(x)	((VexGuestX86State*)x)->guest_ECX
 #define GET_ESP(x)	((VexGuestX86State*)x)->guest_ESP
 #define GET_SC_IP(x)	((VexGuestX86State*)x)->guest_IP_AT_SYSCALL
+#define GET_IP(x)	((VexGuestX86State*)x)->guest_EIP
 #define GE_SYSCALL	5
 
 struct sc_pkt

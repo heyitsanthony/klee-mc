@@ -67,7 +67,7 @@ uint64_t SyscallsModel::apply(SyscallParams& sp)
 	unsigned	sys_nr;
 	void		*jmp_ptr;
 	
-	sys_nr = getGuest()->getCPUState()->getSyscallParams().getSyscall();
+	sys_nr = getGuest()->getSyscallParams().getSyscall();
 	jmp_ptr = (void*)getGuest()->getCPUState()->getPC().o;
 
 	if (sys_nr != SYS_klee)
@@ -228,4 +228,7 @@ void klee_yield(void) {}
 void kmc_breadcrumb(void* bc, unsigned int len) {}
 long kmc_io(int sys_rn, long p1, long p2, long p3, long p4)
 { assert (0 == 1 && "STUB"); return 0; }
+uint64_t __klee_fork_all_n(uint64_t v, unsigned n)
+{ return v; }
 }
+

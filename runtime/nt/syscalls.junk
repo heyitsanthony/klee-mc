@@ -1,0 +1,213 @@
+#include <grp.h>
+#include "file.h"
+#include "mem.h"
+#include "concrete_fd.h"
+#include <sys/vfs.h>
+#include <sys/sysinfo.h>
+#include <poll.h>
+#include <signal.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sys/uio.h>
+#include <sys/time.h>
+#include <sys/times.h>
+#include <sys/resource.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <limits.h>
+#include <ustat.h>
+#include <sys/syscall.h>
+
+// arg0, arg1, ...
+// %rdi, %rsi, %rdx, %r10, %r8 and %r9a
+
+static uint64_t GET_ARG(void* x, int y)
+{
+	switch (y) {
+	case 0: return GET_ARG0(x);
+	case 1: return GET_ARG1(x);
+	case 2: return GET_ARG2(x);
+	case 3: return GET_ARG3(x);
+	case 4: return GET_ARG4(x);
+	case 5: return GET_ARG5(x);
+	}
+	return -1;
+}
+
+static void sc_ret_ge0(void* regfile)
+{
+	ARCH_SIGN_CAST rax = GET_SYSRET_S(regfile);
+	klee_assume(rax >= 0);
+}
+
+void sc_ret_or(void* regfile, uint64_t v1, uint64_t v2)
+{
+	ARCH_SIGN_CAST rax = GET_SYSRET(regfile);
+	klee_assume(rax == (ARCH_SIGN_CAST)v1 || rax == (ARCH_SIGN_CAST)v2);
+}
+
+/* inclusive */
+void sc_ret_range(void* regfile, int64_t lo, int64_t hi)
+{
+	ARCH_SIGN_CAST rax;
+	if ((hi - lo) == 1) {
+		sc_ret_or(regfile, lo, hi);
+		return;
+	}
+	rax = GET_SYSRET_S(regfile);
+	klee_assume(rax >= (ARCH_SIGN_CAST)lo && rax <= (ARCH_SIGN_CAST)hi);
+}
+
+#define UNIMPL_SC(x)						\
+	case SYS_##x:						\
+		klee_uerror("Unimplemented syscall "#x, "sc.err");	\
+		break;
+#define FAKE_SC(x)							\
+	case SYS_##x:							\
+		klee_warning_once("Faking successful syscall "#x);	\
+		sc_ret_v(regfile, 0);					\
+		break;
+#define FAKE_SC_RANGE(x,y,z)						\
+	case SYS_##x:							\
+		klee_warning_once("Faking range syscall "#x);		\
+		sc_ret_range(sc_new_regs(regfile), y, z);		\
+		break;
+
+/* number of bytes in extent we'll make symbolic before yielding */
+#define SYM_YIELD_SIZE	(16*1024)
+
+void make_sym(uint64_t addr, uint64_t len, const char* name)
+{
+	klee_check_memory_access((void*)addr, 1);
+
+	addr = concretize_u64(addr);
+	if (len > SYM_YIELD_SIZE)
+		klee_yield();
+
+	if (len == 0)
+		return;
+
+	len = concretize_u64(len);
+	kmc_make_range_symbolic(addr, len, name);
+	sc_breadcrumb_add_ptr((void*)addr, len);
+}
+
+void make_sym_by_arg(
+	void	*regfile,
+	uint64_t arg_num,
+	uint64_t len, const char* name)
+{
+	uint64_t	addr;
+
+	addr = concretize_u64(GET_ARG(regfile, arg_num));
+	klee_check_memory_access((void*)addr, 1);
+
+	if (len > SYM_YIELD_SIZE)
+		klee_yield();
+
+	if (len == 0)
+		return;
+
+	len = concretize_u64(len);
+	kmc_make_range_symbolic(addr, len, name);
+	sc_breadcrumb_add_argptr(arg_num, 0, len);
+}
+
+static void sc_poll(void* regfile)
+{
+	struct pollfd	*fds;
+	uint64_t	poll_addr;
+	unsigned int	i, nfds;
+
+	poll_addr = klee_get_value(GET_ARG0(regfile));
+	fds = (struct pollfd*)poll_addr;
+	nfds = klee_get_value(GET_ARG1(regfile));
+
+	for (i = 0; i < nfds; i++) {
+		klee_check_memory_access(&fds[i], sizeof(struct pollfd));
+		fds[i].revents = klee_get_value(fds[i].events);
+	}
+
+	sc_ret_v(regfile, nfds);
+}
+
+static void sc_klee(void* regfile)
+{
+	unsigned int	sys_klee_nr;
+
+	sys_klee_nr = GET_ARG0(regfile);
+	switch(sys_klee_nr) {
+	case KLEE_SYS_INDIRECT0:
+		sc_ret_v(regfile, klee_indirect0(GET_ARG1_PTR(regfile)));
+		break;
+	case KLEE_SYS_INDIRECT1:
+		sc_ret_v(regfile,
+			klee_indirect1(
+				GET_ARG1_PTR(regfile),
+				GET_ARG2(regfile)));
+		break;
+	case KLEE_SYS_INDIRECT2:
+		sc_ret_v(regfile,
+			klee_indirect2(
+				GET_ARG1_PTR(regfile),
+				GET_ARG2(regfile),
+				GET_ARG3(regfile)));
+		break;
+	case KLEE_SYS_INDIRECT3:
+		sc_ret_v(regfile,
+			klee_indirect3(
+				GET_ARG1_PTR(regfile),
+				GET_ARG2(regfile),
+				GET_ARG3(regfile),
+				GET_ARG4(regfile)));
+		break;
+
+	case KLEE_SYS_REPORT_ERROR:
+		klee_report_error(
+			(const char*)GET_ARG1_PTR(regfile),
+			GET_ARG2(regfile),
+			(const char*)klee_get_value(GET_ARG3(regfile)),
+			(const char*)klee_get_value(GET_ARG4(regfile)));
+		break;
+	case KLEE_SYS_KMC_SYMRANGE:
+		make_sym(
+			GET_ARG1(regfile),	/* addr */
+			GET_ARG2(regfile),	/* len */
+			(const char*)GET_ARG3_PTR(regfile) /* name */);
+		sc_ret_v(regfile, 0);
+		break;
+	case KLEE_SYS_ASSUME:
+		klee_assume(GET_ARG1(regfile));
+		break;
+	case KLEE_SYS_IS_SYM:
+		sc_ret_v(regfile, klee_is_symbolic(GET_ARG1(regfile)));
+		break;
+	case KLEE_SYS_NE:
+		klee_force_ne(GET_ARG1(regfile), GET_ARG2(regfile));
+		break;
+	case KLEE_SYS_PRINT_EXPR:
+		klee_print_expr(GET_ARG1_PTR(regfile), GET_ARG2(regfile));
+		break;
+	case KLEE_SYS_SILENT_EXIT:
+		klee_silent_exit(GET_ARG1(regfile));
+		break;
+	case KLEE_SYS_SYM_RANGE_BYTES:
+		sc_ret_v(
+			regfile,
+			klee_sym_range_bytes(GET_ARG1_PTR(regfile), GET_ARG2(regfile)));
+		break;
+	case KLEE_SYS_VALID_ADDR:
+		sc_ret_v(regfile, klee_is_valid_addr(GET_ARG1_PTR(regfile)));
+		break;
+	case KLEE_SYS_IS_SHADOWED:
+		sc_ret_v(regfile, klee_is_shadowed(GET_ARG1(regfile)));
+		break;
+	default:
+		klee_uerror("Unsupported SYS_klee syscall", "kleesc.err");
+		break;
+	}
+}
+
+
