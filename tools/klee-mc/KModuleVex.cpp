@@ -142,7 +142,10 @@ Function* KModuleVex::loadFuncByBuffer(void* host_addr, guest_ptr guest_addr)
 		if (ExecutionState *es = exe->getCurrentState()) {
 			const MemoryObject	*mo;
 			mo = es->addressSpace.resolveOneMO(guest_addr.o);
-			std::cerr << " @ " << mo->name;
+			if (mo == NULL) {
+				std::cerr << " @ NoMemObj???";
+			} else
+				std::cerr << " @ " << mo->name;
 		}
 
 		std::cerr << '\n';

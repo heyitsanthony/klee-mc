@@ -18,7 +18,14 @@
 namespace llvm { class Function; }
 
 #define SFH_CHK_ARGS(x,y)	\
-	assert (args.size()==x && "invalid number of args to "y)
+	if (args.size() !=x) {	\
+		TERMINATE_ERROR(	\
+			sfh->executor,	\
+			state,		\
+			"invalid number of args to " y,	\
+			"args.err");	\
+		return;	}
+
 #define SFH_DEF_HANDLER(x)		\
 void Handler##x::handle(		\
 	ExecutionState	&state,		\

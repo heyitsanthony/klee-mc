@@ -430,16 +430,18 @@ SFH_DEF_HANDLER(FreeRun)
 	addr_end = len_v + addr_v;
 
 	cur_addr = addr_v;
-	while (cur_addr < addr_end) {
+	while (cur_addr < addr_end && len_remaining) {
 		const MemoryObject	*mo;
 
 		mo = state.addressSpace.resolveOneMO(cur_addr);
-		if (mo == NULL && len_remaining >= 4096) {
-			REPORT_ERROR(exe_vex,
-				state,
-				"munmap error: munmapping bad address",
-				"munmap.err");
-			return;
+		if (mo == NULL) {
+			if (len_remaining >= 4096) {
+				REPORT_ERROR(exe_vex,
+					state,
+					"munmap error: munmapping bad address",
+					"munmap.err");
+			}
+			break;
 		}
 
 		if (mo->size > len_remaining) {

@@ -7,6 +7,16 @@ fi
 
 echo "COMMAND = $1"
 
+if [ -e "$1" ]; then
+	USE_LAST=1
+	rm -rf g.tmp
+	mkdir g.tmp
+	tar zxvf "$1"  --directory="g.tmp" 
+	gl=`find  g.tmp -name guest-\* | head -n1`
+	rm guest-last
+	ln -s "$gl" guest-last
+fi
+
 #PRELOAD_STR=`pwd`/preload/string.so:`pwd`/preload/printf.so
 #PRELOAD_STR=`pwd`/preload/dumb_string.so:`pwd`/preload/page_malloc.so
 #PRELOAD_STR=`pwd`/preload/page_malloc.so
@@ -76,13 +86,11 @@ SCHEDOPTS="-use-batching-search
 	-use-interleaved-FTR=false
 	-use-interleaved-BI=false
 	-use-interleaved-UNC=false
-	-use-interleaved-STK=false
 
 	-use-interleaved-NI=true
 	-use-interleaved-CD=true
 	-use-interleaved-MXI=true
 	-use-fresh-branch-search=true"
-
 
 if [ -z "$APP_WRAPPER" ]; then
 APP_WRAPPER="gdb --args"

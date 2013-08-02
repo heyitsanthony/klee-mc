@@ -70,6 +70,7 @@ ref<ConstantExpr> ConstantExpr::createVector(llvm::ConstantVector* v)
 		llvm::APInt		api;
 
 		op = v->getOperand(i);
+
 		if (llvm::ConstantInt* ci = dyn_cast<llvm::ConstantInt>(op)) {
 			api = ci->getValue();
 		} else if (llvm::ConstantFP* cf=dyn_cast<llvm::ConstantFP>(op)){
@@ -81,9 +82,14 @@ ref<ConstantExpr> ConstantExpr::createVector(llvm::ConstantVector* v)
 				0x1);
 	//		api = llvm::APInt::getAllOnesValue(
 	//			cu->getType()->getPrimitiveSizeInBits());
-
 		} else {
-			v->getOperand(i)->dump();
+			std::cerr << "v: ";
+			v->dump();
+			std::cerr << "DUMPING OPERAND FOR V\n";
+			op->dump();
+			std::cerr << "TYPE::::::\n";
+			op->getType()->dump();
+			std::cerr << '\n';
 			assert (0 == 1 && "Weird type??");
 		}
 

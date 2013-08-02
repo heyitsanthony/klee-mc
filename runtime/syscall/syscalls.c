@@ -767,9 +767,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;	
 	}
 
-#ifdef SYS_waitpid
-	case SYS_waitpid: // 32-bit only
-#endif
+	case ARCH_SYS_WAITPID: // 32-bit only
 	case SYS_wait4: {
 		int *status;
 
