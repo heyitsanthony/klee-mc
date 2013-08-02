@@ -96,7 +96,6 @@ namespace {
   	cl::desc("Steer current state toward uncovered branches"),
 	cl::init(true));
 
-
   cl::opt<double>
   MaxInstructionTime(
 	"max-instruction-time",
@@ -2598,10 +2597,10 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 					(void*)addr);
 			}
 
-			TERMINATE_ERROR(this,
+			TERMINATE_ERRORV(this,
 				*(iter.res.first),
-				"xfer iter error: bad pointer",
-				"badjmp.err");
+				"xfer iter error: bad pointer", "badjmp.err",
+				"Bad Pointer: ", addr);
 			iter.badjmp_c++;
 			continue;
 		}
@@ -2625,10 +2624,10 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 
 	if (iter.badjmp_c >= MAX_BADJMP) {
 		if (iter.free == NULL) return false;
-		TERMINATE_ERROR(this,
+		TERMINATE_ERRORV(this,
 			*(iter.free),
-			"xfer iter error: too many bad jumps",
-			"badjmp.err");
+			"xfer iter error: too many bad jumps", "badjmp.err",
+			"Symbolic address: ", iter.v);
 		iter.free = NULL;
 		return false;
 	}

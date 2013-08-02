@@ -418,6 +418,11 @@ public:
 	do { TermError t(_x,m,suf,lm,em); (_x)->terminateWith(t, s); } while (0)
 #define TERMINATE_ERROR(_x,s,m,suff)	\
 	do { TermError t(_x,m,suff); (_x)->terminateWith(t, s); } while (0)
+#define TERMINATE_ERRORV(_x,s,m,suff,h,v) do {		\
+		std::stringstream	ss;	\
+		ss << h << v << '\n';	\
+		TERMINATE_ERROR_LONG(_x,s,m,suff,ss.str(),false); } while (0)
+
 #define REPORT_ERROR(_x, s, m, suff) do {	\
 	/* ExecutionState	*report_es = */	\
 	_x->pureFork(s, false);			\

@@ -46,6 +46,7 @@ static int last_sc = 0;
 #define PTRACE_REGS_SZ		sizeof (struct user_regs_struct)
 #define PTRACE_FPREGS_SZ	sizeof (struct user_fpregs_struct)
 #define SIGINFO_T_SZ		sizeof (siginfo_t)
+#define SIGSET_T_SZ		sizeof(sigset_t)
 #else
 #define TIMESPEC_SZ		8
 #define RUSAGE_SZ		72
@@ -60,6 +61,7 @@ static int last_sc = 0;
 #define PTRACE_REGS_SZ		68
 #define PTRACE_FPREGS_SZ	108
 #define SIGINFO_T_SZ		128
+#define SIGSET_T_SZ		128
 #endif
 
 // arg0, arg1, ...
@@ -634,7 +636,12 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 	case SYS_rt_sigprocmask:
 		if (GET_ARG2(regfile)) {
-			make_sym(GET_ARG2(regfile), sizeof(sigset_t), "sigset");
+			/* XXX: android hack */
+			#ifdef GUEST_ARCH_ARM
+			#undef SIGSET_T_SZ
+			#define SIGSET_T_SZ 16
+			#endif
+			make_sym(GET_ARG2(regfile), SIGSET_T_SZ, "sigset");
 			sc_ret_v(regfile, 0);
 		} else {
 			sc_ret_or(sc_new_regs(regfile), -1, 0);
