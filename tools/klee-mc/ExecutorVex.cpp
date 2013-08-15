@@ -667,6 +667,7 @@ void ExecutorVex::logXferObj(
 
 
 /* handle transfering between VSB's */
+
 void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 {
 	GuestExitType	exit_type;
@@ -680,11 +681,11 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 	{
 		std::vector<ref<Expr> >	args;
 
-		args.push_back(state.stack.back().onRet_expr);
-
 		state.stack.back().onRet = NULL;
+		state.stack.back().stackWatermark = state.getStackDepth();
 		state.abortInstruction();
 
+		args.push_back(state.stack.back().onRet_expr);
 		executeCall(state, state.pc, onRet->function, args);
 		return;
 	}
@@ -777,6 +778,7 @@ void ExecutorVex::handleXferCall(ExecutionState& state, KInstruction* ki)
 	xferIterInit(iter, &state, ki);
 	while (xferIterNext(iter)) {
 		ExecutionState	*es = iter.res.first;
+
 		executeCall(*es, ki, iter.f, args);
 		if (KeepDeadStack == false)
 			es->stack.clearTail();
@@ -904,7 +906,11 @@ void ExecutorVex::printStackTrace(
 		vsb = km_vex->getVSB(f);
 		os << "\t#" << idx++ << " in " << f->getName().str();
 		if (vsb != NULL)
-			os << " (" << gs->getName(vsb->getGuestAddr()) << ")";
+			os << " (" << gs->getName(vsb->getGuestAddr()) << ") ";
+
+//		os << ' ' << sf.stackWatermark;
+//		if (sf.onRet) os << '*';
+
 		os << "\n";
 	}
 }

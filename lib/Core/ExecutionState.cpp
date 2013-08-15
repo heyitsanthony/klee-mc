@@ -67,6 +67,11 @@ namespace {
 
 static uint64_t sid_c = 0;
 
+#define UNBIND_ALLOCAS(sf)	\
+	if (sf.allocas) {	\
+		foreach (it, sf.allocas->begin(), sf.allocas->end())	\
+			unbindObject(*it); }
+
 void ExecutionState::initFields(void)
 {
 	depth = 0;
@@ -119,7 +124,11 @@ ExecutionState::ExecutionState(void)
 
 ExecutionState::~ExecutionState()
 {
-	while (!stack.empty()) popFrame();
+	while (!stack.empty())  {
+		StackFrame	&sf(stack.back());
+		UNBIND_ALLOCAS(sf);
+		stack.pop_back();
+	}
 	canary = 0;
 	if (partseed_assignment) delete partseed_assignment;
 }
@@ -197,7 +206,9 @@ void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf)
 	}
 
 	kf->incEnters();
+
 	stack.push_back(StackFrame(caller,kf));
+	stack.back().stackWatermark = getStackDepth();
 
 	if (TrackStateFuncMinInst) {
 		if (min_kf_inst.find(kf) == min_kf_inst.end())
@@ -209,11 +220,40 @@ void ExecutionState::popFrame()
 {
 	StackFrame	&sf(stack.back());
 	KFunction	*last_kf = getCurrentKFunc();
+	unsigned	wm, last_wm(sf.stackWatermark);
+
+	wm = this->getStackDepth();
 
 	if (last_kf) last_kf->incExits();
-	foreach (it, sf.allocas.begin(), sf.allocas.end())
-		unbindObject(*it);
+	UNBIND_ALLOCAS(sf);
 	stack.pop_back();
+
+	if (last_kf && !last_kf->isSpecial)
+		return;
+
+	/* this is for longjmp-type instances where the callstack
+	 * is unwound deeper than just one function */
+	if (wm < last_wm && wm != INVALID_STACK)
+	while (stack.size() > 1) {
+		StackFrame	&cur_sf(stack.back());
+		unsigned  cur_wm = cur_sf.stackWatermark;
+		if (cur_wm == INVALID_STACK || cur_wm <= wm)
+			break;
+
+		std::cerr << cur_wm << " vs " << wm << '\n';
+		std::cerr << "POP: " << cur_sf.kf->function->getName().str() << '\n';
+		if (cur_sf.onRet) {
+			ref<Expr>	retexpr(cur_sf.onRet_expr);
+			KFunction	*retf(cur_sf.onRet);
+
+			stack.pop_back();
+			if (!stack.back().onRet) {
+				stack.back().onRet = retf;
+				stack.back().onRet_expr = retexpr;
+			}
+		} else
+			stack.pop_back();
+	}
 #if 0
 	if (stack.empty() == false && last_kf) {
 		theStackXfer.insert(last_kf, getCurrentKFunc());
@@ -228,6 +268,7 @@ void ExecutionState::xferFrame(KFunction* kf)
 	ref<Expr>		retexpr;
 	KFunction		*retf;
 	KInstIterator		ki = getCaller();
+	unsigned		wm;
 
 	assert (kf != NULL);
 	assert (stack.size() > 0);
@@ -241,8 +282,9 @@ void ExecutionState::xferFrame(KFunction* kf)
 	cpn = sf.callPathNode;
 	retf = sf.onRet;
 	retexpr = sf.onRet_expr;
-	foreach (it, sf.allocas.begin(), sf.allocas.end())
-		unbindObject(*it);
+	wm = sf.stackWatermark;
+
+	UNBIND_ALLOCAS(sf);
 	sf.kf->incExits();
 	stack.pop_back();
 
@@ -251,6 +293,7 @@ void ExecutionState::xferFrame(KFunction* kf)
 	stack.push_back(StackFrame(ki, kf));
 	StackFrame	&sf2(stack.back());
 
+	sf2.stackWatermark = wm;
 	sf2.callPathNode = cpn;
 	sf2.onRet = retf;
 	sf2.onRet_expr = retexpr;

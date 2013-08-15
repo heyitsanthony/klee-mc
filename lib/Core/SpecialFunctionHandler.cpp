@@ -15,6 +15,8 @@
 #include "StateSolver.h"
 #include "Forks.h"
 
+#include "klee/KleeHandler.h"
+
 #include "klee/Common.h"
 #include "klee/ExecutionState.h"
 
@@ -78,6 +80,10 @@ SFH_HANDLER(StackDepth)
 SFH_HANDLER(SymCoreHash)
 SFH_HANDLER(ExprHash)
 SFH_HANDLER(HookReturn)
+
+SFH_HANDLER(PartSeedBegin)
+SFH_HANDLER(PartSeedEnd)
+
 #define DEF_SFH_MMU(x)			\
 	SFH_HANDLER(WideStore##x)	\
 	SFH_HANDLER(WideLoad##x)
@@ -158,6 +164,10 @@ static const SpecialFunctionHandler::HandlerInfo handlerInfo[] =
   add("klee_sym_corehash", SymCoreHash, true),
   add("__klee_expr_hash", ExprHash, true),
   add("klee_is_shadowed", IsShadowed, true),
+
+
+  add("klee_partseed_begin", PartSeedBegin, true),
+  add("klee_partseed_end", PartSeedEnd, true),
 
 #define DEF_WIDE(x)	\
 	add("klee_wide_load_" #x, WideLoad##x, true),	\
@@ -530,6 +540,105 @@ static std::string reporttab2str(
 
 	return ss.str();
 }
+
+/* where does this actually belong? skins? */
+typedef uint64_t psid_t;
+typedef std::pair<std::string, ExecutionState*> partseed_t;
+typedef std::map<psid_t, partseed_t> psmap_t;
+static psmap_t psmap;
+
+
+SFH_DEF_HANDLER(PartSeedBegin)
+{
+	SFH_CHK_ARGS(1, "PartSeedBegin");
+
+	static psid_t psid_c = 0;
+	psid_t	cur_psid;
+	std::string	name;
+
+	name = sfh->readStringAtAddress(state, args[0]);
+	cur_psid = ++psid_c;
+	psmap[cur_psid] = partseed_t(name, state.copy());
+	state.bindLocal(target, MK_CONST(cur_psid, 64));
+
+	std::cerr << "[PS] Entering psid " << cur_psid << " with " <<
+		state.getNumSymbolics() << " objects\n";
+}
+
+typedef std::pair<std::string, unsigned> psdelta_t;
+
+SFH_DEF_HANDLER(PartSeedEnd)
+{
+	SFH_CHK_ARGS(1, "klee_partseed_end");
+	const ConstantExpr	*ce;
+	psmap_t::iterator	it;
+	unsigned		inst_delta;
+	static std::set<psdelta_t>	seen_deltas;
+
+	ce = dyn_cast<ConstantExpr>(args[0]);
+	assert (ce != NULL && "expected constant psid");
+
+	if ((it = psmap.find(ce->getZExtValue())) == psmap.end()) {
+		std::cerr << "Couldn't find psid!\n";
+		return;
+	}
+
+	/* find state difference */
+	partseed_t		ps(it->second);
+	KleeHandler::out_objs	objs;
+	unsigned		n;
+	static unsigned		ktest_c = 0;
+
+	if ((state.getNumSymbolics() - ps.second->getNumSymbolics()) <= 0) {
+		delete ps.second;
+		psmap.erase(it);
+
+	//	foreach (it2, state.symbolicsBegin(), state.symbolicsEnd()) {
+	//		std::cerr << it2->getArray()->name << '\n';
+	//	}
+		std::cerr << "[PS] No symbolic object delta (objs="
+			<< state.getNumSymbolics()
+			<< "). Ignoring\n";
+		return;
+	}
+
+
+	if (sfh->executor->getSymbolicSolution(state, objs) == false) {
+		std::cerr << "[PS] Couldn't solve.\n";
+		return;
+	}
+
+	n = 0;
+	foreach (it2, state.symbolicsBegin(), state.symbolicsEnd()) {
+		n++;
+		if (n <= ps.second->getNumSymbolics()) {
+			objs.erase(objs.begin());
+			continue;
+		}
+	}
+
+	inst_delta = state.totalInsts - ps.second->totalInsts;
+	psdelta_t	psd(ps.first, inst_delta);
+
+	if (seen_deltas.count(psd)) {
+		std::cerr << "[PS] Seen this instr count. Killing\n";
+		sfh->executor->terminate(state);
+		return;
+	}
+
+	seen_deltas.insert(psd);
+
+	static_cast<KleeHandler*>(sfh->executor->getInterpreterHandler())
+		->processSuccessfulTest(
+			(ps.first + ".ktest").c_str(),
+			inst_delta,
+			objs);
+
+	std::cerr
+		<< "[PS] Dumping test "
+		<< ps.first << " @ " << inst_delta << '\n';
+}
+
 
 SFH_DEF_HANDLER(ReportError)
 {

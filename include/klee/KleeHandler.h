@@ -82,16 +82,15 @@ public:
 	void printInfoHeader(int argc, char* argv[]);
 	void printInfoFooter(void);
 
-protected:
-	static void getKTestFiles(
-		std::string path, std::vector<std::string> &results);
-
-
 typedef
 	std::vector< std::pair<std::string, std::vector<unsigned char> > >
 	out_objs;
 	virtual void processSuccessfulTest(
 		const char* name, unsigned id, out_objs&);
+protected:
+	static void getKTestFiles(
+		std::string path, std::vector<std::string> &results);
+
 
 	virtual bool getStateSymObjs(
 		const ExecutionState& state, out_objs& out);

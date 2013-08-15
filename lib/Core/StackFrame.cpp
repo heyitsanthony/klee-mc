@@ -19,11 +19,11 @@ StackFrame::StackFrame(KInstIterator _caller, KFunction *_kf)
 , kf(_kf)
 , callPathNode(0)
 , onRet(NULL)
+, stackWatermark(0)
+, allocas(NULL)
 , minDistToUncoveredOnReturn(0)
 , varargs(0)
-{
-	locals = new Cell[kf->numRegisters];
-}
+{ locals = new Cell[kf->numRegisters]; }
 
 StackFrame::StackFrame(const StackFrame &s) 
 : call(s.call)
@@ -32,10 +32,19 @@ StackFrame::StackFrame(const StackFrame &s)
 , callPathNode(s.callPathNode)
 , onRet(s.onRet)
 , onRet_expr(s.onRet_expr)
-, allocas(s.allocas)
+, stackWatermark(s.stackWatermark)
+, allocas(NULL)
 , minDistToUncoveredOnReturn(s.minDistToUncoveredOnReturn)
 , varargs(s.varargs)
 {
+	if (this == &s)
+		return;
+
+	if (s.allocas != NULL) {
+		allocas = new allocas_ty();
+		*allocas = *s.allocas;
+	}
+
 	if (s.locals == NULL) {
 		locals = NULL;
 		return;
@@ -46,7 +55,11 @@ StackFrame::StackFrame(const StackFrame &s)
 		locals[i] = s.locals[i];
 }
 
-StackFrame::~StackFrame() { if (locals) delete[] locals; }
+StackFrame::~StackFrame()
+{
+	if (locals) delete[] locals;
+	if (allocas) delete allocas;
+}
 
 StackFrame& StackFrame::operator=(const StackFrame &s)
 {
@@ -70,14 +83,30 @@ StackFrame& StackFrame::operator=(const StackFrame &s)
 	onRet = s.onRet;
 	onRet_expr = s.onRet_expr;
 	callPathNode = s.callPathNode;
-	allocas = s.allocas;
+
+	if (allocas) {
+		delete allocas;
+		allocas = NULL;
+	}
+
+	if (s.allocas) {
+		allocas = new allocas_ty();
+		*allocas = *s.allocas;
+	}
+
+	stackWatermark = s.stackWatermark;
+
 	minDistToUncoveredOnReturn = s.minDistToUncoveredOnReturn;
 	varargs = s.varargs;
 
 	return *this;
 }
 
-void StackFrame::addAlloca(const MemoryObject* mo) { allocas.push_back(mo); }
+void StackFrame::addAlloca(const MemoryObject* mo)
+{
+	if (allocas == NULL) allocas = new allocas_ty();
+	allocas->push_back(mo);
+}
 
 bool StackFrame::clearLocals(void)
 {

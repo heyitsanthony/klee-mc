@@ -8,13 +8,18 @@ fi
 echo "COMMAND = $1"
 
 if [ -e "$1" ]; then
-	USE_LAST=1
-	rm -rf g.tmp
-	mkdir g.tmp
-	tar zxvf "$1"  --directory="g.tmp" 
-	gl=`find  g.tmp -name guest-\* | head -n1`
-	rm guest-last
-	ln -s "$gl" guest-last
+	is_gzip=`file "$1" | grep gzip`
+	if [ ! -z "$is_gzip" ]; then
+		USE_LAST=1
+		rm -rf g.tmp
+		mkdir g.tmp
+		tar zxvf "$1"  --directory="g.tmp" 
+		gl=`find  g.tmp -name guest-\* | head -n1`
+		if [ -z "$gl" ]; then
+			rm -f guest-last
+			ln -s "$gl" guest-last
+		fi
+	fi
 fi
 
 #PRELOAD_STR=`pwd`/preload/string.so:`pwd`/preload/printf.so
@@ -29,6 +34,7 @@ TIMEOUT=${TIMEOUT:-2}
 #PRELOAD_STR=/home/chz/src/research/klee-open/trunk/preload/string.so
 #LD_PRELOAD=preload/printf.so $1 &
 if [ ! -z "$FROM_BEGINNING" ]; then
+	echo taking snapshot
 #	PRELOAD_STR=/home/chz/src/research/klee-open/trunk/preload/string.so
 #	PRELOAD_STR=/home/chz/src/research/klee-open/trunk/preload/dumb_file.so
 	VEXLLVM_PRELOAD="$PRELOAD_STR" VEXLLVM_SAVE=1 pt_run $1
@@ -76,6 +82,7 @@ RULEFLAGS="-use-rule-builder -rule-file=default_rules.db -dump-used-rules=used.d
 
 
 #	-batch-instructions=20000
+#	-use-interleaved-CD=true
 SCHEDOPTS="-use-batching-search
 	-batch-time=5
 	-use-second-chance=true
@@ -86,9 +93,8 @@ SCHEDOPTS="-use-batching-search
 	-use-interleaved-FTR=false
 	-use-interleaved-BI=false
 	-use-interleaved-UNC=false
-
+	-use-interleaved-UO=true
 	-use-interleaved-NI=true
-	-use-interleaved-CD=true
 	-use-interleaved-MXI=true
 	-use-fresh-branch-search=true"
 

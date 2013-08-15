@@ -34,11 +34,12 @@ struct StackFrame {
   CallPathNode		*callPathNode;
   KFunction		*onRet;
   ref<Expr>		onRet_expr;
-
+  uint64_t		stackWatermark;
 //private:
   Cell *locals;
 private:
-  std::vector<const MemoryObject*> allocas;
+	typedef std::vector<const MemoryObject*> allocas_ty;
+	allocas_ty* allocas;
 
 public:
   /// Minimum distance to an uncovered instruction once the function
