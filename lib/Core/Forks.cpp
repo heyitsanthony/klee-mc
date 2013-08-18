@@ -340,7 +340,8 @@ Forks::fork(
 
 	/* find feasible forks */
 	if (evalForks(current, fi) == false) {
-		TERMINATE_EARLY(&exe, current, "fork query timed out");
+		if (fi.conditions != NULL)
+			TERMINATE_EARLY(&exe, current, "fork query timed out");
 		return Executor::StateVector(N, NULL);
 	}
 
@@ -603,7 +604,10 @@ bool Forks::addConstraint(struct ForkInfo& fi, unsigned condIndex)
 	if (fi.feasibleTargets == 0)
 		return true;
 
-	if (fi.feasibleTargets > 1 || omit_valid_constraints == false) {
+	if (	fi.feasibleTargets > 1 || 
+		(	omit_valid_constraints == false &&
+			!fi.conditions[condIndex].isNull()))
+	{
 		if (exe.addConstraint(*curState, fi.conditions[condIndex]))
 			return true;
 

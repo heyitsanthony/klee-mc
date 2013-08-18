@@ -240,8 +240,6 @@ void ExecutionState::popFrame()
 		if (cur_wm == INVALID_STACK || cur_wm <= wm)
 			break;
 
-		std::cerr << cur_wm << " vs " << wm << '\n';
-		std::cerr << "POP: " << cur_sf.kf->function->getName().str() << '\n';
 		if (cur_sf.onRet) {
 			ref<Expr>	retexpr(cur_sf.onRet_expr);
 			KFunction	*retf(cur_sf.onRet);

@@ -24,30 +24,6 @@ extern bool DenySysFiles;
 
 using namespace klee;
 
-static const unsigned int NUM_HANDLERS = 9;
-static SpecialFunctionHandler::HandlerInfo hInfo[NUM_HANDLERS] =
-{
-#define add(name, h, ret) {	\
-	name, 			\
-	&Handler##h::create,	\
-	false, ret, false }
-#define addDNR(name, h) {	\
-	name, 			\
-	&Handler##h::create,	\
-	true, false, false }
-	add("kmc_sc_regs", SCRegs, true),
-	add("kmc_sc_bad", SCBad, false),
-	add("kmc_io", IO, true),
-	add("kmc_free_run", FreeRun, false),
-	addDNR("kmc_exit", KMCExit),
-	add("kmc_make_range_symbolic", MakeRangeSymbolic, false),
-	add("kmc_alloc_aligned", AllocAligned, true),
-	add("kmc_breadcrumb", Breadcrumb, false),
-	add("kmc_regs_get", RegsGet, true)
-#undef addDNR
-#undef add
-};
-
 static void copyIntoObjState(
 	ExecutionState& state,
 	ObjectState* os,
@@ -72,18 +48,6 @@ SyscallSFH::SyscallSFH(Executor* e) : SpecialFunctionHandler(e)
 {
 	exe_vex = dynamic_cast<ExecutorVex*>(e);
 	assert (exe_vex && "SyscallSFH only works with ExecutorVex!");
-}
-
-void SyscallSFH::prepare(void)
-{
-	SpecialFunctionHandler::prepare();
-	SpecialFunctionHandler::prepare((HandlerInfo*)&hInfo, NUM_HANDLERS);
-}
-
-void SyscallSFH::bind(void)
-{
-	SpecialFunctionHandler::bind();
-	SpecialFunctionHandler::bind((HandlerInfo*)&hInfo, NUM_HANDLERS);
 }
 
 static bool isSymRegByte(Arch::Arch a, int i)
@@ -122,7 +86,7 @@ static bool isSymRegByte(Arch::Arch a, int i)
 	return false;
 }
 
-SFH_DEF_HANDLER(SCRegs)
+SFH_DEF_ALL(SCRegs, "kmc_sc_regs", true)
 {
 	Guest			*gs;
 	MemoryObject		*cpu_mo;
@@ -223,7 +187,7 @@ static bool isSysPath(std::string& path)
 }
 
 
-SFH_DEF_HANDLER(IO)
+SFH_DEF_ALL(IO, "kmc_io", true)
 {
 	SyscallSFH		*sc_sfh = static_cast<SyscallSFH*>(sfh);
 	const ConstantExpr	*ce_sysnr;
@@ -394,7 +358,7 @@ SFH_DEF_HANDLER(IO)
 	}
 }
 
-SFH_DEF_HANDLER(SCBad)
+SFH_DEF_ALL(SCBad, "kmc_sc_bad", false)
 {
 	SFH_CHK_ARGS(1, "kmc_sc_bad");
 
@@ -403,7 +367,7 @@ SFH_DEF_HANDLER(SCBad)
 	std::cerr << "OOPS calling kmc_sc_bad: " << ce->getZExtValue() << std::endl;
 }
 
-SFH_DEF_HANDLER(FreeRun)
+SFH_DEF_ALL(FreeRun, "kmc_free_run", false)
 {
 	SFH_CHK_ARGS(2, "kmc_free_run");
 	ExecutorVex	*exe_vex = dynamic_cast<ExecutorVex*>(sfh->executor);
@@ -464,7 +428,7 @@ SFH_DEF_HANDLER(FreeRun)
 	}
 }
 
-SFH_DEF_HANDLER(KMCExit)
+SFH_DEF_ALL_EX(KMCExit, "kmc_exit", true, false, false)
 {
 	ConstantExpr	*ce;
 	SFH_CHK_ARGS(1, "kmc_exit");
@@ -476,7 +440,7 @@ SFH_DEF_HANDLER(KMCExit)
 	TERMINATE_EXIT(sfh->executor, state);
 }
 
-SFH_DEF_HANDLER(MakeRangeSymbolic)
+SFH_DEF_ALL(MakeRangeSymbolic, "kmc_make_range_symbolic", false)
 {
 	SFH_CHK_ARGS(3, "kmc_make_range_symbolic");
 	SyscallSFH	*sc_sfh = static_cast<SyscallSFH*>(sfh);
@@ -509,7 +473,7 @@ SFH_DEF_HANDLER(MakeRangeSymbolic)
 	sc_sfh->makeRangeSymbolic(state, (void*)addr_v, len_v, name_str.c_str());
 }
 
-SFH_DEF_HANDLER(Breadcrumb)
+SFH_DEF_ALL(Breadcrumb, "kmc_breadcrumb", false)
 {
 	SFH_CHK_ARGS(2, "kmc_breadcrumb");
 	ConstantExpr		*len_expected_ce;
@@ -546,7 +510,7 @@ done:
 	delete [] buf;
 }
 
-SFH_DEF_HANDLER(AllocAligned)
+SFH_DEF_ALL(AllocAligned, "kmc_alloc_aligned", true)
 {
 	/* Arguments note:
 	 * If you want symbolics, use kmc_make_range_symbolic
@@ -778,5 +742,28 @@ void SyscallSFH::makeRangeSymbolic(
 	sym_os = exe_vex->makeSymbolic(state, sym_mo, name);
 }
 
-SFH_DEF_HANDLER(RegsGet)
+SFH_DEF_ALL(RegsGet, "kmc_regs_get", true)
 { state.bindLocal(target, es2esv(state).getRegCtx()->getBaseExpr()); }
+
+
+static const SpecialFunctionHandler::HandlerInfo *hInfo[] =
+{
+#define add(h)  &Handler##h::hinfo
+	add(AllocAligned), add(Breadcrumb), add(FreeRun), add(IO),
+	add(MakeRangeSymbolic), add(SCRegs), add(SCBad), add(RegsGet),
+	add(KMCExit)
+#undef addDNR
+#undef add
+};
+
+void SyscallSFH::prepare(void)
+{
+	SpecialFunctionHandler::prepare();
+	SpecialFunctionHandler::prepare(hInfo);
+}
+
+void SyscallSFH::bind(void)
+{
+	SpecialFunctionHandler::bind();
+	SpecialFunctionHandler::bind(hInfo);
+}

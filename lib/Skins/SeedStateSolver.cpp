@@ -66,7 +66,7 @@ bool SeedStateSolver::getRange(
 	return StateSolver::getRange(es, query, ret);
 }
 
-ref<Expr> SeedStateSolver::toUnique(const ExecutionState &es, ref<Expr> &e)
+ref<Expr> SeedStateSolver::toUnique(const ExecutionState &es, const ref<Expr> &e)
 {
 	exe.getForking()->setConstraintOmit(true);
 	return StateSolver::toUnique(es, e);

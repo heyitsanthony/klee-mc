@@ -316,7 +316,6 @@ int file_sc(struct sc_pkt* sc)
 		if (fd == -1)
 			return -1;
 
-		klee_print_expr("reading sym fd", fd);
 		if (sc_read_sym(sc, len) == 0)
 			return 0;
 	}

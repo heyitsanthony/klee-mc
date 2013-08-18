@@ -102,6 +102,11 @@ protected:
 		struct ForkInfo& fi,
 		unsigned* cond_idx_map);
 
+	/* Assigns feasibility for forking condition(s) into fi.res[cond]
+	* NOTE: it is the caller's responsibility to terminate the current state
+	* on failure. */
+	virtual bool evalForks(ExecutionState& current, struct ForkInfo& fi);
+
 	Executor			&exe;
 private:
 	/* this forking code really should be refactored */
@@ -110,12 +115,6 @@ private:
 
 	void skipAndRandomPrune(struct ForkInfo& fi, const char* reason);
 	bool addConstraint(struct ForkInfo& fi, unsigned condIndex);
-
-	/* Assigns feasibility for forking condition(s) into fi.res[cond]
-	* NOTE: it is the caller's responsibility to terminate the current state
-	* on failure.
-	* */
-	bool evalForks(ExecutionState& current, struct ForkInfo& fi);
 
 	void trackTransitions(const ForkInfo& fi);
 

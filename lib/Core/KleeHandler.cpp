@@ -246,10 +246,7 @@ std::ostream *KleeHandler::openTestFile(const std::string &suffix, unsigned id)
 	return openOutputFile(filename);
 }
 
-void KleeHandler::processSuccessfulTest(
-	const char	*name,
-	unsigned	id,
-	out_objs&	out)
+void KleeHandler::processSuccessfulTest(std::ostream* os, out_objs& out)
 {
 	KTest		b;
 	bool		ktest_ok = false;
@@ -276,12 +273,8 @@ void KleeHandler::processSuccessfulTest(
 	}
 
 	errno = 0;
-
-	std::ostream	*os = openTestFileGZ(name, id);
-	if (os != NULL) {
+	if (os != NULL)
 		ktest_ok = kTest_toStream(&b, *os);
-		delete os;
-	}
 
 	if (!ktest_ok) {
 		klee_warning(
@@ -293,6 +286,14 @@ void KleeHandler::processSuccessfulTest(
 	for (unsigned i=0; i<b.numObjects; i++)
 		delete[] b.objects[i].bytes;
 	delete[] b.objects;
+}
+
+void KleeHandler::processSuccessfulTest(
+	const char *name, unsigned id, out_objs &out)
+{
+	std::ostream	*os(openTestFileGZ(name, id));
+	processSuccessfulTest(os, out);
+	if (os != NULL)	delete os;
 }
 
 bool KleeHandler::getStateSymObjs(

@@ -85,8 +85,9 @@ public:
 typedef
 	std::vector< std::pair<std::string, std::vector<unsigned char> > >
 	out_objs;
-	virtual void processSuccessfulTest(
-		const char* name, unsigned id, out_objs&);
+	void processSuccessfulTest(const char* name, unsigned id, out_objs&);
+	virtual void processSuccessfulTest(std::ostream* os, out_objs&);
+
 protected:
 	static void getKTestFiles(
 		std::string path, std::vector<std::string> &results);

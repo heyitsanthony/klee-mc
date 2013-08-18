@@ -15,8 +15,6 @@
 #include "StateSolver.h"
 #include "Forks.h"
 
-#include "klee/KleeHandler.h"
-
 #include "klee/Common.h"
 #include "klee/ExecutionState.h"
 
@@ -33,178 +31,20 @@ using namespace klee;
 
 extern bool DebugPrintInstructions;
 
-namespace klee
-{
-SFH_HANDLER(AssumeOp)
-SFH_HANDLER(FeasibleOp)
-SFH_HANDLER(PreferOp)
-SFH_HANDLER(CheckMemoryAccess)
-SFH_HANDLER(DefineFixedObject)
-SFH_HANDLER(Exit)
-SFH_HANDLER(Free)
-SFH_HANDLER(GetPruneID)
-SFH_HANDLER(Prune)
-SFH_HANDLER(GetErrno)
-SFH_HANDLER(GetObjSize)
-SFH_HANDLER(GetObjNext)
-SFH_HANDLER(GetObjPrev)
-SFH_HANDLER(GetValue)
-SFH_HANDLER(IsSymbolic)
-SFH_HANDLER(IsValidAddr)
-SFH_HANDLER(MakeSymbolic)
-SFH_HANDLER(Malloc)
-SFH_HANDLER(MarkGlobal)
-SFH_HANDLER(Merge)
-SFH_HANDLER(PreferCex)
-SFH_HANDLER(PrintExpr)
-SFH_HANDLER(PrintRange)
-SFH_HANDLER(Range)
-SFH_HANDLER(ResumeExit)
-SFH_HANDLER(ReportError)
-SFH_HANDLER(Report)
-SFH_HANDLER(SetForking)
-SFH_HANDLER(SilentExit)
-SFH_HANDLER(StackTrace)
-SFH_HANDLER(SymRangeBytes)
-SFH_HANDLER(Watch)
-SFH_HANDLER(Warning)
-SFH_HANDLER(WarningOnce)
-SFH_HANDLER(Yield)
-SFH_HANDLER(IsShadowed)
-SFH_HANDLER(Indirect0)
-SFH_HANDLER(Indirect1)
-SFH_HANDLER(Indirect2)
-SFH_HANDLER(Indirect3)
-SFH_HANDLER(ForkEq)
-SFH_HANDLER(StackDepth)
-SFH_HANDLER(SymCoreHash)
-SFH_HANDLER(ExprHash)
-SFH_HANDLER(HookReturn)
-
-SFH_HANDLER(PartSeedBegin)
-SFH_HANDLER(PartSeedEnd)
-
-#define DEF_SFH_MMU(x)			\
-	SFH_HANDLER(WideStore##x)	\
-	SFH_HANDLER(WideLoad##x)
-DEF_SFH_MMU(8)
-DEF_SFH_MMU(16)
-DEF_SFH_MMU(32)
-DEF_SFH_MMU(64)
-DEF_SFH_MMU(128)
-#undef DEF_SFH_MMU
-}
-
-#define	EXPECT_CONST(fn,x,y)	\
-if ((x = dyn_cast<ConstantExpr>(args[y])) == NULL) {	\
-	TERMINATE_ERROR(	\
-		sfh->executor,	\
-		state,	\
-		fn ": expected constant argument on idx " #y,	\
-		"const.user.err");	\
-	return;	\
-}
-
-static const SpecialFunctionHandler::HandlerInfo handlerInfo[] =
-{
-#define add(name, h, ret) {	\
-	name, 			\
-	&Handler##h::create,	\
-	false, ret, false }
-#define addDNR(name, h) {	\
-	name, 			\
-	&Handler##h::create,	\
-	true, false, false }
-  addDNR("_exit", Exit),
-  { "exit", &HandlerExit::create, true, false, true },
-  addDNR("klee_silent_exit", SilentExit),
-  addDNR("klee_report_error", ReportError),
-  addDNR("klee_report", Report),
-
-  /* ALL EXPCET CONSTANT ARGUMENTS */
-  add("klee_get_obj_next", GetObjNext, true),
-  add("klee_get_obj_size", GetObjSize, true),
-  add("klee_get_obj_prev", GetObjPrev, true),
-
-  add("klee_free_fixed", Free, false),
-  add("klee_malloc_fixed", Malloc, true),
-
-  add("klee_assume_op", AssumeOp, false),
-  addDNR("klee_resume_exit", ResumeExit),
-  add("klee_feasible_op", FeasibleOp, true),
-  add("klee_prefer_op", PreferOp, true),
-  add("__klee_fork_eq", ForkEq, true),
-  add("klee_check_memory_access", CheckMemoryAccess, false),
-  add("klee_get_value", GetValue, true),
-  add("klee_define_fixed_object", DefineFixedObject, false),
-  add("klee_get_errno", GetErrno, true),
-  add("klee_is_symbolic", IsSymbolic, true),
-  add("klee_is_valid_addr", IsValidAddr, true),
-  add("klee_make_symbolic", MakeSymbolic, false),
-  add("klee_mark_global", MarkGlobal, false),
-  add("klee_merge", Merge, false),
-  add("klee_prefer_cex", PreferCex, false),
-  add("klee_print_expr", PrintExpr, false),
-  add("klee_print_range", PrintRange, false),
-  add("klee_set_forking", SetForking, false),
-  add("klee_stack_trace", StackTrace, false),
-  add("klee_watch", Watch, false),
-  add("klee_warning", Warning, false),
-  add("klee_warning_once", WarningOnce, false),
-  add("klee_get_prune_id", GetPruneID, true),
-  add("klee_prune", Prune, false),
-  add("klee_stack_depth", StackDepth, true),
-  add("klee_read_reg", ReadReg, true),
-  add("klee_hook_return", HookReturn, false),
-
-  add("klee_indirect0", Indirect0, true),
-  add("klee_indirect1", Indirect1, true),
-  add("klee_indirect2", Indirect2, true),
-  add("klee_indirect3", Indirect3, true),
-  add("klee_sym_corehash", SymCoreHash, true),
-  add("__klee_expr_hash", ExprHash, true),
-  add("klee_is_shadowed", IsShadowed, true),
-
-
-  add("klee_partseed_begin", PartSeedBegin, true),
-  add("klee_partseed_end", PartSeedEnd, true),
-
-#define DEF_WIDE(x)	\
-	add("klee_wide_load_" #x, WideLoad##x, true),	\
-	add("klee_wide_store_" #x, WideStore##x, false)
-  DEF_WIDE(8),
-  DEF_WIDE(16),
-  DEF_WIDE(32),
-  DEF_WIDE(64),
-  DEF_WIDE(128),
-#undef DEF_WIDE
-
-  add("klee_yield", Yield, false),
-  add("klee_sym_range_bytes", SymRangeBytes, true)
-#undef addDNR
-#undef add
-};
-
 SpecialFunctionHandler::SpecialFunctionHandler(Executor* _executor)
 : executor(_executor) {}
 
-void SpecialFunctionHandler::prepare()
+void SpecialFunctionHandler::prepare(const HandlerInfo** hinfo)
 {
-	unsigned N = sizeof(handlerInfo)/sizeof(handlerInfo[0]);
-	prepare((HandlerInfo*)(&handlerInfo), N);
+	for (unsigned i = 0; hinfo[i]; i++)
+		prepare(hinfo[i]);
 }
 
-void SpecialFunctionHandler::bind(void)
-{
-	unsigned N = sizeof(handlerInfo)/sizeof(handlerInfo[0]);
-	bind((HandlerInfo*)&handlerInfo, N);
-}
-
-void SpecialFunctionHandler::prepare(HandlerInfo* hinfo, unsigned int N)
+void SpecialFunctionHandler::prepare(const HandlerInfo* hinfo, unsigned int N)
 {
 	for (unsigned i=0; i<N; ++i) {
-		HandlerInfo &hi = hinfo[i];
-		Function *f;
+		const HandlerInfo	&hi(hinfo[i]);
+		Function		*f;
 
 		f = executor->getKModule()->module->getFunction(hi.name);
 
@@ -238,10 +78,11 @@ SpecialFunctionHandler::~SpecialFunctionHandler(void)
 }
 
 void SpecialFunctionHandler::bind(const HandlerInfo* hinfo, unsigned int N)
-{
-	for (unsigned i=0; i<N; ++i)
-		addHandler(hinfo[i]);
-}
+{ for (unsigned i=0; i<N; ++i) addHandler(hinfo[i]); }
+
+void SpecialFunctionHandler::bind(const HandlerInfo** hinfo)
+{ for (unsigned i=0; hinfo[i]; ++i) addHandler(*hinfo[i]); }
+
 
 SFHandler* SpecialFunctionHandler::addHandler(const struct HandlerInfo& hi)
 {
@@ -426,7 +267,7 @@ std::string SpecialFunctionHandler::readStringAtAddress(
 
 /****/
 
-SFH_DEF_HANDLER(ResumeExit)
+SFH_DEF_ALL_EX(ResumeExit, "klee_resume_exit", true, false, false)
 {
 	SFH_CHK_ARGS(0, "ResumeExit");
 
@@ -442,13 +283,13 @@ SFH_DEF_HANDLER(ResumeExit)
 	sfh->executor->terminate(state);
 }
 
-SFH_DEF_HANDLER(Exit)
+SFH_DEF_ALL_EX(Exit, "exit", true, false, true)
 {
 	SFH_CHK_ARGS(1, "exit");
 	TERMINATE_EXIT(sfh->executor, state);
 }
 
-SFH_DEF_HANDLER(SilentExit)
+SFH_DEF_ALL_EX(SilentExit, "klee_silent_exit", true, false, false)
 {
 	assert(args.size()==1 && "invalid number of args to exit");
 	sfh->executor->terminate(state);
@@ -458,7 +299,7 @@ cl::opt<bool> EnablePruning("enable-pruning", cl::init(true));
 
 static std::map<int, int> pruneMap;
 
-SFH_DEF_HANDLER(GetPruneID)
+SFH_DEF_ALL(GetPruneID, "klee_get_prune_id", true)
 {
   if (!EnablePruning) {
     state.bindLocal(target, MK_CONST(0, Expr::Int32));
@@ -475,7 +316,7 @@ SFH_DEF_HANDLER(GetPruneID)
   globalPruneID++;
 }
 
-SFH_DEF_HANDLER(Prune)
+SFH_DEF_ALL(Prune, "klee_prune", false)
 {
   if (!EnablePruning)
     return;
@@ -541,106 +382,7 @@ static std::string reporttab2str(
 	return ss.str();
 }
 
-/* where does this actually belong? skins? */
-typedef uint64_t psid_t;
-typedef std::pair<std::string, ExecutionState*> partseed_t;
-typedef std::map<psid_t, partseed_t> psmap_t;
-static psmap_t psmap;
-
-
-SFH_DEF_HANDLER(PartSeedBegin)
-{
-	SFH_CHK_ARGS(1, "PartSeedBegin");
-
-	static psid_t psid_c = 0;
-	psid_t	cur_psid;
-	std::string	name;
-
-	name = sfh->readStringAtAddress(state, args[0]);
-	cur_psid = ++psid_c;
-	psmap[cur_psid] = partseed_t(name, state.copy());
-	state.bindLocal(target, MK_CONST(cur_psid, 64));
-
-	std::cerr << "[PS] Entering psid " << cur_psid << " with " <<
-		state.getNumSymbolics() << " objects\n";
-}
-
-typedef std::pair<std::string, unsigned> psdelta_t;
-
-SFH_DEF_HANDLER(PartSeedEnd)
-{
-	SFH_CHK_ARGS(1, "klee_partseed_end");
-	const ConstantExpr	*ce;
-	psmap_t::iterator	it;
-	unsigned		inst_delta;
-	static std::set<psdelta_t>	seen_deltas;
-
-	ce = dyn_cast<ConstantExpr>(args[0]);
-	assert (ce != NULL && "expected constant psid");
-
-	if ((it = psmap.find(ce->getZExtValue())) == psmap.end()) {
-		std::cerr << "Couldn't find psid!\n";
-		return;
-	}
-
-	/* find state difference */
-	partseed_t		ps(it->second);
-	KleeHandler::out_objs	objs;
-	unsigned		n;
-	static unsigned		ktest_c = 0;
-
-	if ((state.getNumSymbolics() - ps.second->getNumSymbolics()) <= 0) {
-		delete ps.second;
-		psmap.erase(it);
-
-	//	foreach (it2, state.symbolicsBegin(), state.symbolicsEnd()) {
-	//		std::cerr << it2->getArray()->name << '\n';
-	//	}
-		std::cerr << "[PS] No symbolic object delta (objs="
-			<< state.getNumSymbolics()
-			<< "). Ignoring\n";
-		return;
-	}
-
-
-	if (sfh->executor->getSymbolicSolution(state, objs) == false) {
-		std::cerr << "[PS] Couldn't solve.\n";
-		return;
-	}
-
-	n = 0;
-	foreach (it2, state.symbolicsBegin(), state.symbolicsEnd()) {
-		n++;
-		if (n <= ps.second->getNumSymbolics()) {
-			objs.erase(objs.begin());
-			continue;
-		}
-	}
-
-	inst_delta = state.totalInsts - ps.second->totalInsts;
-	psdelta_t	psd(ps.first, inst_delta);
-
-	if (seen_deltas.count(psd)) {
-		std::cerr << "[PS] Seen this instr count. Killing\n";
-		sfh->executor->terminate(state);
-		return;
-	}
-
-	seen_deltas.insert(psd);
-
-	static_cast<KleeHandler*>(sfh->executor->getInterpreterHandler())
-		->processSuccessfulTest(
-			(ps.first + ".ktest").c_str(),
-			inst_delta,
-			objs);
-
-	std::cerr
-		<< "[PS] Dumping test "
-		<< ps.first << " @ " << inst_delta << '\n';
-}
-
-
-SFH_DEF_HANDLER(ReportError)
+SFH_DEF_ALL_EX(ReportError, "klee_report_error", true, false, false)
 {
 	// (file, line, message, suffix, table)
 	SFH_CHK_ARGS(5, "klee_report_error");
@@ -653,7 +395,7 @@ SFH_DEF_HANDLER(ReportError)
 	TERMINATE_ERROR(sfh->executor, state, message, suffix);
 }
 
-SFH_DEF_HANDLER(Report)
+SFH_DEF_ALL_EX(Report, "klee_report", true, false, false)
 {
 	// (file, line, message, suffix, tbale)
 	SFH_CHK_ARGS(5, "klee_report");
@@ -667,9 +409,10 @@ SFH_DEF_HANDLER(Report)
 }
 
 
-SFH_DEF_HANDLER(Merge) { std::cerr << "[Merge] Merging disabled\n"; /* nop */ }
+SFH_DEF_ALL(Merge, "klee_merge", false)
+{ std::cerr << "[Merge] Merging disabled\n"; /* nop */ }
 
-SFH_DEF_HANDLER(Malloc)
+SFH_DEF_ALL(Malloc, "klee_malloc_fixed", true)
 {
 	SFH_CHK_ARGS(1, "malloc");
 
@@ -713,7 +456,7 @@ static ref<Expr> cmpop_to_expr(
 
 /* call prefer_op when there's a state which
  * should always be taken, regardless of branch prediction */
-SFH_DEF_HANDLER(PreferOp)
+SFH_DEF_ALL(PreferOp, "klee_prefer_op", true)
 {
 	ref<Expr>		e;
 	const ConstantExpr	*ce;
@@ -747,7 +490,7 @@ error:
 }
 
 
-SFH_DEF_HANDLER(AssumeOp)
+SFH_DEF_ALL(AssumeOp, "klee_assume_op", false)
 {
 	ref<Expr>	e;
 	const ConstantExpr	*ce;
@@ -788,7 +531,7 @@ error:
 	TERMINATE_EARLY(sfh->executor, state, "assume-op failed");
 }
 
-SFH_DEF_HANDLER(FeasibleOp)
+SFH_DEF_ALL(FeasibleOp, "klee_feasible_op", true)
 {
 	ref<Expr>		e;
 	const ConstantExpr	*ce;
@@ -814,7 +557,7 @@ error:
 }
 
 
-SFH_DEF_HANDLER(IsSymbolic)
+SFH_DEF_ALL(IsSymbolic, "klee_is_symbolic", true)
 {
 	SFH_CHK_ARGS(1, "klee_is_symbolic");
 
@@ -823,7 +566,7 @@ SFH_DEF_HANDLER(IsSymbolic)
 		MK_CONST(!isa<ConstantExpr>(args[0]), Expr::Int32));
 }
 
-SFH_DEF_HANDLER(IsValidAddr)
+SFH_DEF_ALL(IsValidAddr, "klee_is_valid_addr", true)
 {
 	SFH_CHK_ARGS(1, "klee_is_valid_addr");
 	ref<Expr>	addr(args[0]);
@@ -843,7 +586,7 @@ SFH_DEF_HANDLER(IsValidAddr)
 	state.bindLocal(target, ret);
 }
 
-SFH_DEF_HANDLER(PreferCex)
+SFH_DEF_ALL(PreferCex, "klee_prefer_cex", false)
 {
 	Executor::ExactResolutionList rl;
 
@@ -861,7 +604,7 @@ SFH_DEF_HANDLER(PreferCex)
 	rl[0].first.first->cexPreferences.push_back(cond);
 }
 
-SFH_DEF_HANDLER(PrintExpr)
+SFH_DEF_ALL(PrintExpr, "klee_print_expr", false)
 {
 	SFH_CHK_ARGS(2, "klee_print_expr");
 
@@ -869,7 +612,7 @@ SFH_DEF_HANDLER(PrintExpr)
 	std::cerr << msg_str << ":" << args[1] << "\n";
 }
 
-SFH_DEF_HANDLER(SetForking)
+SFH_DEF_ALL(SetForking, "klee_set_forking", false)
 {
 	SFH_CHK_ARGS(1, "klee_set_forking");
 	ref<Expr> value = sfh->executor->toUnique(state, args[0]);
@@ -885,14 +628,14 @@ SFH_DEF_HANDLER(SetForking)
 		"user.err");
 }
 
-SFH_DEF_HANDLER(StackTrace) // { state.dumpStack(std::cout); }
- { sfh->executor->printStackTrace(state, std::cerr); }
+SFH_DEF_ALL(StackTrace, "klee_stack_trace", false)
+{ sfh->executor->printStackTrace(state, std::cerr); }
 
 
-SFH_DEF_HANDLER(StackDepth)
+SFH_DEF_ALL(StackDepth, "klee_stack_depth", true)
 { state.bindLocal(target, MK_CONST(state.stack.size(), 32)); }
 
-SFH_DEF_HANDLER(Warning)
+SFH_DEF_ALL(Warning, "klee_warning", false)
 {
 	SFH_CHK_ARGS(1, "klee_warning");
 
@@ -901,7 +644,7 @@ SFH_DEF_HANDLER(Warning)
 	       msg_str.c_str());
 }
 
-SFH_DEF_HANDLER(WarningOnce)
+SFH_DEF_ALL(WarningOnce, "klee_warning_once", false)
 {
   SFH_CHK_ARGS(1, "klee_warning_once");
 
@@ -913,7 +656,7 @@ SFH_DEF_HANDLER(WarningOnce)
         msg_str.c_str());
 }
 
-SFH_DEF_HANDLER(PrintRange)
+SFH_DEF_ALL(PrintRange, "klee_print_range", false)
 {
 	ref<ConstantExpr>	value;
 	bool			ok, res;
@@ -950,7 +693,7 @@ SFH_DEF_HANDLER(PrintRange)
 				<< p.first << ", " << p.second <<"])\n";
 }
 
-SFH_DEF_HANDLER(SymRangeBytes)
+SFH_DEF_ALL(SymRangeBytes, "klee_sym_range_bytes", true)
 {
 	SFH_CHK_ARGS(2, "klee_sym_range_bytes");
 
@@ -993,14 +736,14 @@ SFH_DEF_HANDLER(SymRangeBytes)
 	state.bindLocal(target, MK_CONST(total, Expr::Int32));
 }
 
-SFH_DEF_HANDLER(GetErrno)
+SFH_DEF_ALL(GetErrno, "klee_get_errno", true)
 {
 	// XXX should type check args
 	SFH_CHK_ARGS(0, "klee_get_errno");
 	state.bindLocal(target, MK_CONST(errno, Expr::Int32));
 }
 
-SFH_DEF_HANDLER(Free)
+SFH_DEF_ALL(Free, "klee_free_fixed", false)
 {
 	SFH_CHK_ARGS(1, "free");
 
@@ -1015,7 +758,7 @@ SFH_DEF_HANDLER(Free)
 	sfh->executor->executeFree(state, args[0]);
 }
 
-SFH_DEF_HANDLER(CheckMemoryAccess)
+SFH_DEF_ALL(CheckMemoryAccess, "klee_check_memory_access", false)
 {
 	SFH_CHK_ARGS(2, "klee_check_memory_access");
 
@@ -1054,13 +797,13 @@ SFH_DEF_HANDLER(CheckMemoryAccess)
 	}
 }
 
-SFH_DEF_HANDLER(GetValue)
+SFH_DEF_ALL(GetValue, "klee_get_value", true)
 {
 	SFH_CHK_ARGS(1, "klee_get_value");
 	sfh->executor->executeGetValue(state, args[0], target);
 }
 
-SFH_DEF_HANDLER(DefineFixedObject)
+SFH_DEF_ALL(DefineFixedObject, "klee_define_fixed_object", false)
 {
 	uint64_t		address, size;
 	const ConstantExpr	*addr_ce, *size_ce;
@@ -1086,7 +829,7 @@ SFH_DEF_HANDLER(DefineFixedObject)
 #define MAKESYM_ARGIDX_LEN    1
 #define MAKESYM_ARGIDX_NAME   2
 /* XXX: handle with intrinsic library */
-SFH_DEF_HANDLER(MakeSymbolic)
+SFH_DEF_ALL(MakeSymbolic, "klee_make_symbolic", false)
 {
   	Executor::ExactResolutionList	rl;
 	std::string			name;
@@ -1152,7 +895,7 @@ SFH_DEF_HANDLER(MakeSymbolic)
 }
 
 
-SFH_DEF_HANDLER(MarkGlobal)
+SFH_DEF_ALL(MarkGlobal, "klee_mark_global", false)
 {
 	SFH_CHK_ARGS(1, "klee_mark_global");
 
@@ -1167,9 +910,9 @@ SFH_DEF_HANDLER(MarkGlobal)
 }
 
 
-SFH_DEF_HANDLER(Yield) { sfh->executor->yield(state); }
+SFH_DEF_ALL(Yield, "klee_yield", false) { sfh->executor->yield(state); }
 
-SFH_DEF_HANDLER(IsShadowed)
+SFH_DEF_ALL(IsShadowed, "klee_is_shadowed", true)
 {
 	state.bindLocal(
 		target,
@@ -1177,14 +920,14 @@ SFH_DEF_HANDLER(IsShadowed)
 }
 
 /* indirect call-- first parameter is function name */
-SFH_DEF_HANDLER(Indirect0)
+SFH_DEF_ALL(Indirect0, "klee_indirect0", true)
 {
 	std::vector<ref<Expr> >	indir_args;
 	std::string	fname(sfh->readStringAtAddress(state, args[0]));
 	sfh->handleByName(state, fname, target, indir_args);
 }
 
-SFH_DEF_HANDLER(Indirect1)
+SFH_DEF_ALL(Indirect1, "klee_indirect1", true)
 {
 	std::vector<ref<Expr> >	indir_args;
 	std::string	fname(sfh->readStringAtAddress(state, args[0]));
@@ -1192,7 +935,7 @@ SFH_DEF_HANDLER(Indirect1)
 	sfh->handleByName(state, fname, target, indir_args);
 }
 
-SFH_DEF_HANDLER(Indirect2)
+SFH_DEF_ALL(Indirect2, "klee_indirect2", true)
 {
 	std::vector<ref<Expr> >	indir_args;
 	std::string	fname(sfh->readStringAtAddress(state, args[0]));
@@ -1201,7 +944,7 @@ SFH_DEF_HANDLER(Indirect2)
 	sfh->handleByName(state, fname, target, indir_args);
 }
 
-SFH_DEF_HANDLER(Indirect3)
+SFH_DEF_ALL(Indirect3, "klee_indirect3", true)
 {
 	std::vector<ref<Expr> >	indir_args;
 	std::string	fname(sfh->readStringAtAddress(state, args[0]));
@@ -1212,6 +955,8 @@ SFH_DEF_HANDLER(Indirect3)
 }
 
 readreg_map_ty HandlerReadReg::vars;
+const SpecialFunctionHandler::HandlerInfo HandlerReadReg::hinfo =
+{ "klee_read_reg", &HandlerReadReg::create, false, true, false};
 SFH_DEF_HANDLER(ReadReg)
 {
 	std::map<std::string, uint64_t>::iterator	it;
@@ -1237,7 +982,7 @@ SFH_DEF_HANDLER(GetObjSize)
 	}
 }
 #endif
-SFH_DEF_HANDLER(GetObjSize)
+SFH_DEF_ALL(GetObjSize, "klee_get_obj_size", true)
 {
 	const MemoryObject	*mo;
 	const ConstantExpr	*ce;
@@ -1250,7 +995,7 @@ SFH_DEF_HANDLER(GetObjSize)
 	state.bindLocal(target, MK_CONST(mo->size, Expr::Int32));
 }
 
-SFH_DEF_HANDLER(GetObjNext)
+SFH_DEF_ALL(GetObjNext, "klee_get_obj_next", true)
 {
 	const ConstantExpr	*ce;
 	uint64_t		req;
@@ -1276,7 +1021,7 @@ SFH_DEF_HANDLER(GetObjNext)
 	state.bindLocal(target, MK_CONST(obj_addr, Expr::Int64));
 }
 
-SFH_DEF_HANDLER(HookReturn)
+SFH_DEF_ALL(HookReturn, "klee_hook_return", false)
 {
 	Function		*f;
 	KFunction		*kf;
@@ -1320,7 +1065,7 @@ SFH_DEF_HANDLER(HookReturn)
 }
 
 
-SFH_DEF_HANDLER(GetObjPrev)
+SFH_DEF_ALL(GetObjPrev, "klee_get_obj_prev", true)
 {
 	const ConstantExpr	*ce;
 	uint64_t		req;
@@ -1350,7 +1095,7 @@ SFH_DEF_HANDLER(GetObjPrev)
 
 /* llvm has a habit of optimizing branches into selects; sometimes this is
  * undesirable */
-SFH_DEF_HANDLER(ForkEq)
+SFH_DEF_ALL(ForkEq, "__klee_fork_eq", true)
 {
 	SFH_CHK_ARGS(2, "klee_fork_eq");
 
@@ -1362,7 +1107,7 @@ SFH_DEF_HANDLER(ForkEq)
 }
 
 
-SFH_DEF_HANDLER(Watch)
+SFH_DEF_ALL(Watch, "klee_watch", false)
 {
 	SFH_CHK_ARGS(1, "klee_watch");
 
@@ -1375,14 +1120,13 @@ SFH_DEF_HANDLER(Watch)
 		DebugPrintInstructions = false;
 }
 
-SFH_DEF_HANDLER(ExprHash)
+SFH_DEF_ALL(ExprHash, "klee_expr_hash", true)
 {
 	SFH_CHK_ARGS(1, "klee_expr_hash");
-
 	state.bindLocal(target, MK_CONST(args[0]->hash(), 64));
 }
 
-SFH_DEF_HANDLER(SymCoreHash)
+SFH_DEF_ALL(SymCoreHash, "klee_sym_corehash", true)
 {
 	std::vector< ref<ReadExpr> >	reads;
 	std::set<const Array*>		arrays;
@@ -1471,7 +1215,7 @@ static bool getObjectFromBase(ExecutionState& state, ref<Expr>& e, ObjectPair& o
 }
 
 #define wide_load_def(x)	\
-SFH_DEF_HANDLER(WideLoad##x) 	\
+SFH_DEF_ALL(WideLoad##x, "klee_wide_load_" #x, true) 	\
 {	\
 	ObjectPair		op;	\
 	ref<Expr>		user_addr, val;	\
@@ -1492,7 +1236,7 @@ SFH_DEF_HANDLER(WideLoad##x) 	\
 }
 
 #define wide_store_def(x)	\
-SFH_DEF_HANDLER(WideStore##x)	\
+SFH_DEF_ALL(WideStore##x, "klee_wide_store_" #x, false)	\
 {	\
 	ObjectState		*os;	\
 	ObjectPair		op;	\
@@ -1525,3 +1269,74 @@ wide_op_def(16)
 wide_op_def(32)
 wide_op_def(64)
 wide_op_def(128)
+
+static SpecialFunctionHandler::HandlerInfo hi_exit =
+{ "_exit", &HandlerExit::create, true, false, false };
+
+static const SpecialFunctionHandler::HandlerInfo *handlerInfo[] =
+{
+#define add(h) &Handler##h::hinfo
+&hi_exit,
+add(Exit),
+add(SilentExit),
+add(ReportError),
+add(Report),
+add(ResumeExit),
+  /* ALL EXPCET CONSTANT ARGUMENTS */
+add(GetObjNext),
+add(GetObjSize),
+add(GetObjPrev),
+add(Free),
+add(Malloc),
+add(AssumeOp),
+add(FeasibleOp),
+add(PreferOp),
+add(ForkEq),
+add(CheckMemoryAccess),
+add(GetValue),
+add(DefineFixedObject),
+add(GetErrno),
+add(IsSymbolic),
+add(IsValidAddr),
+add(MakeSymbolic),
+add(MarkGlobal),
+add(Merge),
+add(PreferCex),
+add(PrintExpr),
+add(PrintRange),
+add(SetForking),
+add(StackTrace),
+add(Watch),
+add(Warning),
+add(WarningOnce),
+add(GetPruneID),
+add(Prune),
+add(StackDepth),
+add(ReadReg),
+add(HookReturn),
+add(Indirect0),
+add(Indirect1),
+add(Indirect2),
+add(Indirect3),
+add(SymCoreHash),
+add(ExprHash),
+add(IsShadowed),
+add(Yield),
+add(SymRangeBytes),
+#define DEF_WIDE(x)	\
+add(WideLoad##x),	\
+add(WideStore##x)
+  DEF_WIDE(8),
+  DEF_WIDE(16),
+  DEF_WIDE(32),
+  DEF_WIDE(64),
+  DEF_WIDE(128),
+#undef DEF_WIDE
+#undef add
+NULL
+};
+
+void SpecialFunctionHandler::prepare() { prepare(handlerInfo); }
+void SpecialFunctionHandler::bind(void) { bind(handlerInfo); }
+
+

@@ -1,7 +1,7 @@
 #ifndef FORKSSEEDING_H
 #define FORKSSEEDING_H
 
-#include "Forks.h"
+#include "../Core/Forks.h"
 
 namespace klee
 {

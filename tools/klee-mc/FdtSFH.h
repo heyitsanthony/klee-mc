@@ -19,12 +19,13 @@ public:
 	virtual void prepare(void);
 	virtual void bind(void);
 };
+}
 
 SFH_HANDLER(SCGetCwd)
 SFH_HANDLER(SCConcreteFileSize)
 SFH_HANDLER(SCConcreteFileSnapshot)
 // boo, why can't libcxx have a non-threaded define!
 SFH_HANDLER(DummyThread)
-}
+
 
 #endif

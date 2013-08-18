@@ -77,8 +77,9 @@ public:
 
 protected:
 	void bind(const HandlerInfo* hinfo, unsigned int N);
-	void prepare(HandlerInfo* hinfo, unsigned int N);
-
+	void bind(const HandlerInfo** hinfo);
+	void prepare(const HandlerInfo* hinfo, unsigned int N = 1);
+	void prepare(const HandlerInfo** hinfo);
 private:
 	bool lateBind(const llvm::Function *f);
 	typedef std::map<std::string, const HandlerInfo*> latebindings_ty;
@@ -134,25 +135,46 @@ public:
 
 /* Handler macros */
 #define SFH_HANDLER2(name,x) 				\
-	class Handler##name : public SFHandler {	\
-	public:	\
-		Handler##name(SpecialFunctionHandler* sfh)	\
-		: SFHandler(sfh) {}	\
-		virtual ~Handler##name() {}	\
-		static SFHandler* create(SpecialFunctionHandler* sfh) \
-		{ return new Handler##name(sfh); }	\
-	  	virtual void handle(	\
-			ExecutionState &state,	\
-			KInstruction* target,	\
-			std::vector<ref<Expr> > &args);	\
-		x;	\
-	};
+namespace klee {					\
+class Handler##name : public SFHandler {		\
+public:	\
+	Handler##name(SpecialFunctionHandler* sfh) : SFHandler(sfh) {}	\
+	virtual ~Handler##name() {}	\
+	static SFHandler* create(SpecialFunctionHandler* sfh) \
+	{ return new Handler##name(sfh); }	\
+	virtual void handle(	\
+		ExecutionState &state,	\
+		KInstruction* target,	\
+		std::vector<ref<Expr> > &args);	\
+	static const SpecialFunctionHandler::HandlerInfo hinfo;	\
+	x;	\
+};		\
+}
 
 #define SFH_HANDLER(name)	SFH_HANDLER2(name,;)
+#define SFH_DEF_ALL(name,intr_name,hasret)	\
+	SFH_DEF_ALL_EX(name,intr_name, false,hasret,false)
+#define SFH_DEF_ALL_EX(name,intr_name, dnr,hasret,dno)	\
+	SFH_HANDLER(name)			\
+	const SpecialFunctionHandler::HandlerInfo Handler##name::hinfo = \
+	{ intr_name, &Handler##name::create, dnr, hasret, dno }; \
+	SFH_DEF_HANDLER(name)
 
 #define SFH_ADD_REG(x,y) HandlerReadReg::vars.insert(std::make_pair(x, y))
-typedef std::map<std::string, uint64_t>	readreg_map_ty;
-SFH_HANDLER2(ReadReg, static readreg_map_ty vars)
+
+#define	EXPECT_CONST(fn,x,y)	\
+if ((x = dyn_cast<ConstantExpr>(args[y])) == NULL) {	\
+	TERMINATE_ERROR(	\
+		sfh->executor,	\
+		state,	\
+		fn ": expected constant argument on idx " #y,	\
+		"const.user.err");	\
+	return;	\
 }
+
+typedef std::map<std::string, uint64_t>	readreg_map_ty;
+}
+
+SFH_HANDLER2(ReadReg, static readreg_map_ty vars)
 
 #endif

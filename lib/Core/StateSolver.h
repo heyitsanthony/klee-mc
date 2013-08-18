@@ -36,7 +36,7 @@ public:
 		TimedSolver *_timedSolver,
 		bool _simplifyExprs = true);
 
-	virtual ~StateSolver() { delete solver; }
+	virtual ~StateSolver() { if (solver != NULL) delete solver; }
 
 	void setTimeout(double t) { timedSolver->setTimeout(t); }
 

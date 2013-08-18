@@ -62,6 +62,8 @@ bool	ReplayInhibitedForks = true;
 bool	DebugPrintInstructions = false;
 extern double	MaxSTPTime;
 
+namespace klee { void PartSeedSetup(Executor* exe); }
+
 #define DECL_OPTBOOL(x,y)	cl::opt<bool> x(y, cl::init(false))
 
 namespace {
@@ -237,9 +239,9 @@ void Executor::addConstrOrDie(ExecutionState &state, ref<Expr> condition)
 	TERMINATE_ERROR(this, state, "Died adding constraint", "constr.err");
 }
 
-bool Executor::addConstraint(ExecutionState &state, ref<Expr> condition)
+bool Executor::addConstraint(ExecutionState &state, ref<Expr> cond)
 {
-	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(condition)) {
+	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(cond)) {
 		assert(CE->isTrue() && "attempt to add invalid constraint");
 		return true;
 	}
@@ -247,35 +249,30 @@ bool Executor::addConstraint(ExecutionState &state, ref<Expr> condition)
 	if (ChkConstraints) {
 		bool	mayBeTrue, ok;
 
-		ok = solver->mayBeTrue(state, condition, mayBeTrue);
+		ok = solver->mayBeTrue(state, cond, mayBeTrue);
 		assert (ok);
 
 		if (!mayBeTrue) {
-			std::cerr
-				<< "[CHKCON] WHOOPS: "
-				<< condition << " is never true!\n";
+			std::cerr << "[CHK] UH0H: " << cond << " never true!\n";
 		}
 		assert (mayBeTrue);
 	}
 
-	if (!state.addConstraint(condition)) {
-		std::cerr << "[CHKCON] Failed to add constraint. Expr=\n"
-			<< condition << '\n';;
+	if (!state.addConstraint(cond)) {
+		std::cerr << "[CHK] Failed constraint. Expr=\n" << cond << '\n';
 		return false;
 	}
 
-	doImpliedValueConcretization(state, condition, MK_CONST(1, Expr::Bool));
+	doImpliedValueConcretization(state, cond, MK_CONST(1, Expr::Bool));
 
 	if (ChkConstraints) {
 		bool	mustBeTrue, ok;
 
-		ok = solver->mustBeTrue(state, condition, mustBeTrue);
+		ok = solver->mustBeTrue(state, cond, mustBeTrue);
 		assert (ok);
 
 		if (!mustBeTrue) {
-			std::cerr
-				<< "[CHKCON] WHOOPS2: "
-				<< condition << " is never true!\n";
+			std::cerr << "[CHK] UHOH: " << cond << " never true!\n";
 		}
 		assert (mustBeTrue);
 	}
@@ -648,9 +645,7 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 		// Check return value has no users instead of checking
 		// the type; C defaults to returning int for undeclared funcs.
 		if (!caller->use_empty())
-			TERMINATE_EXEC(
-				this, state,
-				"return void but expected result");
+			TERMINATE_EXEC(this, state, "void return; wants value");
 	}
 
 	state.popFrame();
@@ -931,16 +926,13 @@ void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 
 	if (YieldUncached) {
 		bool mbt;
-
 		/* XXX: queries should be passed back to fast solver stack */
 		if (	state.newInsts == 0 &&
 			(rand() % 3) == 0 &&	/* 1/3 chance of yielding */
 			fastSolver->mayBeTrue(state, cond, mbt) == false)
 		{
-			static int n = 0;
 			state.abortInstruction();
 			stateManager->yield(&state);
-			n++;
 			return;
 		}
 	}
@@ -1098,11 +1090,9 @@ llvm::Function* Executor::executeBitCast(
 		if (from == to) continue;
 
 		// XXX need to check other param attrs ?
-		if (cs.paramHasAttr(i+1, llvm::Attribute::SExt)) {
-			args[i] = SExtExpr::create(args[i], to);
-		} else {
-			args[i] = ZExtExpr::create(args[i], to);
-		}
+		args[i] = (cs.paramHasAttr(i+1, llvm::Attribute::SExt))
+			? MK_SEXT(args[i], to)
+			: MK_ZEXT(args[i], to);
 	}
 
 	return f;
@@ -1121,11 +1111,9 @@ void Executor::instCmp(ExecutionState& state, KInstruction *ki)
 	ref<Expr> result;
 
 	pred = ii->getPredicate();
-	if ((vt = dyn_cast<VectorType>(op_type))) {
-		result = cmpVector(state, pred, vt, left, right);
-	} else {
-		result = cmpScalar(state, pred, left, right);
-	}
+	result = (vt = dyn_cast<VectorType>(op_type))
+		? cmpVector(state, pred, vt, left, right)
+		: cmpScalar(state, pred, left, right);
 
 	if (result.isNull()) return;
 
@@ -1150,8 +1138,7 @@ void Executor::instCmp(ExecutionState& state, KInstruction *ki)
 		right_i = MK_EXTRACT(right, i*v_elem_w, v_elem_w); \
 		op_i = y##Expr::create(left_i, right_i);	\
 		if (i == 0) result = op_i;			\
-		else result = z;				\
-	}
+		else result = z; }
 
 #define SETUP_VOP_CAST(x,y)					\
 	ref<Expr>	result;					\
@@ -2020,9 +2007,7 @@ void Executor::handleMemoryUtilization(ExecutionState* &state)
 		return;
 	}
 
-	/* Ran memory to the roof.
-	 * resort to killing states if the recent compacting
-	 * didn't help to reduce the memory usage */
+	/* resort to killing states if compacting  didn't help memory usage */
 	killStates(state);
 
 }
@@ -2031,7 +2016,6 @@ unsigned Executor::getNumStates(void) const { return stateManager->size(); }
 
 unsigned Executor::getNumFullStates(void) const
 { return stateManager->getNonCompactStateCount(); }
-
 
 void Executor::exhaustState(ExecutionState* es)
 {
@@ -2113,6 +2097,10 @@ void Executor::run(ExecutionState &initState)
 		goto eraseStates;
 	}
 
+	PartSeedSetup(this);
+
+	/* I don't recall why I hold off on setting up the searcher
+	 * until after replay. Hm. */
 	stateManager->setupSearcher(this);
 
 	if (Replay::isReplayOnly())
@@ -2219,8 +2207,8 @@ std::string Executor::getAddressInfo(
 
 		example = value->getZExtValue();
 		info << "\texample: " << example << "\n";
-		// XXX: It turns out that getRange() is really slow
-		// so it makes finding memory errors costly for no reason.
+		// XXX: getRange() is really slow which makes print errors
+		// really slow. Not worth it!
 #if 0
 		if (solver->getRange(state, address, res) == false)
 			return info.str();
@@ -2728,7 +2716,6 @@ void Executor::terminateWith(Terminator& term, ExecutionState& state)
 	term.process(state);
 	terminate(state);
 }
-
 
 ExecutionState* Executor::pureFork(ExecutionState& es, bool compact)
 { return forking->pureFork(es, compact); }

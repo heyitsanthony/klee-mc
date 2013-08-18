@@ -4,7 +4,7 @@
 #include "klee/Common.h"
 #include "../Core/ExeStateManager.h"
 #include "../Core/ObjectState.h"
-#include "../Core/ForksSeeding.h"
+#include "ForksSeeding.h"
 #include "SeedCore.h"
 
 namespace klee

@@ -1,6 +1,6 @@
 #include <llvm/Support/CommandLine.h>
 #include "klee/Internal/ADT/RNG.h"
-#include "StateSolver.h"
+#include "../Core/StateSolver.h"
 #include "ForksSeeding.h"
 
 using namespace klee;

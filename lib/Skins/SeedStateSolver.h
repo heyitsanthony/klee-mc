@@ -41,7 +41,7 @@ public:
 		ref<Expr> query,
 		std::pair< ref<Expr>, ref<Expr> >& ret);
 
-	ref<Expr> toUnique(const ExecutionState &state, ref<Expr> &e);
+	ref<Expr> toUnique(const ExecutionState &state, const ref<Expr> &e);
 
 private:
 	Executor	&exe;
