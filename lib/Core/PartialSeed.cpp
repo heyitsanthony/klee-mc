@@ -147,6 +147,13 @@ static Forks* old_fork = NULL;
 namespace llvm { extern cl::opt<bool> ConcretizeEarlyTerminate; }
 
 
+class PSDBFunc
+{
+public:
+private:
+};
+
+
 SFH_DEF_ALL(PartSeedBeginReplay, "klee_partseed_begin", true)
 {
 	std::string		name;
@@ -178,6 +185,7 @@ SFH_DEF_ALL(PartSeedBeginReplay, "klee_partseed_begin", true)
 		d = opendir(ss.str().c_str());
 		if (d == NULL) {
 			std::cerr << "[PS] Could not open " << name << '\n';
+			state.bindLocal(target, MK_CONST(0xdeadbeef, 64));
 			return;
 		}
 
@@ -206,6 +214,7 @@ SFH_DEF_ALL(PartSeedBeginReplay, "klee_partseed_begin", true)
 	}
 
 	/* random selection */
+	/* XXX better selection policy */
 	sel_idx = it->second[rand() % it->second.size()];
 	ss << sel_idx << ".ktest.gz";
 	kt = kTest_fromFile(ss.str().c_str());
@@ -229,7 +238,8 @@ SFH_DEF_ALL(PartSeedBeginReplay, "klee_partseed_begin", true)
 
 
 	/* since I suppress, make sure that a failed replay doesn't sink path */
-	if (rand() % 2) {
+	/* XXX: dynamic adjustments-- 1/2 and 1/4 rates seem good for now */
+	if (state.newInsts || (rand() % 4) == 0) {
 		ExecutionState	*new_state;
 		new_state = sfh->executor->pureFork(state, false);
 		new_state->abortInstruction();

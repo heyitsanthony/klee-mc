@@ -77,6 +77,7 @@ DECL_SEARCH_OPT(Stack, "stack", "STK");
 DECL_SEARCH_OPT(StateInst, "stinst", "SI");
 DECL_SEARCH_OPT(NewInst, "newinst", "NI");
 DECL_SEARCH_OPT(UniqObj, "uniqobj", "UO");
+DECL_SEARCH_OPT(BranchEntropy, "brentropy", "BE");
 
 #define SEARCH_HISTO	new RescanSearcher(new HistoPrioritizer(executor))
 DECL_SEARCH_OPT(Histo, "histo", "HS");
@@ -266,6 +267,10 @@ bool UserSearcher::userSearcherRequiresMD2U() {
 	new RescanSearcher(new Weight2Prioritizer<UniqObjWeight>(	\
 		new UniqObjWeight(), 1.0))
 
+#define	BRENTROPY_SEARCHER	\
+	new RescanSearcher(new Weight2Prioritizer<BranchEntropyWeight>(	\
+		new BranchEntropyWeight(), 10000.0))
+
 /* Research quality */
 Searcher* UserSearcher::setupInterleavedSearcher(
 	Executor& executor, Searcher* searcher)
@@ -312,6 +317,8 @@ Searcher* UserSearcher::setupInterleavedSearcher(
 	PUSH_ILEAV_IF_SET(NewInst, NEWINST_SEARCHER);
 
 	PUSH_ILEAV_IF_SET(UniqObj, UNIQOBJ_SEARCHER);
+	
+	PUSH_ILEAV_IF_SET(BranchEntropy, BRENTROPY_SEARCHER);
 
 	PUSH_ILEAV_IF_SET(Trough, new RescanSearcher(
 		new Weight2Prioritizer<TroughWeight>(

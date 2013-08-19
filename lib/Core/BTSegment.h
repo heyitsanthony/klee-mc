@@ -40,13 +40,18 @@ public:
 	inline bool empty() const { return branches.empty(); }
 	ReplayNode operator[](unsigned index) const;
 
+	unsigned depth(void) const
+	{	SegmentRef	p(parent);
+		unsigned	i;
+		for (i = 0; !p.isNull(); p = p->parent) i++;
+		return i;
+	}
+
 	/* XXX: this is likely stupid, but I'm not sure what it's used for */
 	int compare(Segment &a) const
 	{
-		if (this < &a)
-			return -1;
-		if (this == &a)
-			return 0;
+		if (this < &a)	return -1;
+		if (this == &a)	return 0;
 		return 1;
 	}
 

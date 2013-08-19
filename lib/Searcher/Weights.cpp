@@ -8,6 +8,7 @@
 
 #include "../Core/CoreStats.h"
 #include "../Core/StatsTracker.h"
+#include "../Core/BranchTracker.h"
 #include "../Core/Executor.h"
 #include "../Core/Forks.h"
 #include "static/Sugar.h"
@@ -377,4 +378,85 @@ double UniqObjWeight::weigh(const ExecutionState* es) const
 	}
 
 	return ret;
+}
+
+/* key = depth, value = counts of KIs seen */
+typedef std::map<const KInstruction*, unsigned> bemapent_ty;
+typedef std::vector< bemapent_ty > bemap_ty;
+
+static void compute_bemap(
+	bemap_ty& bemap,
+	BranchTracker::SegmentRef& sr,
+	unsigned depth)
+{
+	const KInstruction	*ki;
+	for (unsigned i = 0; i < sr->children.size(); i++) {
+		BranchTracker::SegmentRef	cur_sr(sr->children[i]);
+		compute_bemap(bemap, cur_sr, depth+1);
+	}
+
+	if (bemap.size() <= depth)
+		bemap.resize(depth+1);
+
+	ki = (sr->branchSites.empty())
+		? NULL
+		: sr->branchSites.front();
+	
+	bemap[depth][ki] = bemap[depth][ki] + 1;
+//	bemap[depth][ki] = bemap[depth][ki] + sr->size() + 1;
+}
+
+double BranchEntropyWeight::weigh(const ExecutionState* es) const
+{
+	static bemap_ty			bemap;
+	static uint64_t			last_ins = 0;
+	int				depth;
+	double				entropy, last_entropy;
+	BranchTracker::SegmentRef	t(es->getBrTracker().getTail());
+
+	if (stats::instructions != last_ins) {
+		/* rebuild bemap */
+		BranchTracker::SegmentRef sr(es->getBrTracker().getHead());
+		bemap.clear();
+		compute_bemap(bemap, sr, 0);
+		last_ins = stats::instructions;
+	}
+	
+	/* compute value from bemap */
+	depth = t->depth();
+	assert (depth >= 0);
+	if (depth >= bemap.size())
+		std::cerr << "MY DEPTH: "
+			<< depth << ". bemap size=" << bemap.size() << '\n';
+
+
+	entropy = 0;
+	last_entropy = 0;
+	for (int i = depth; i > 0; i--) {
+		const KInstruction	*front_ki;
+		double			cur_entropy;
+		int			total;
+
+		total = 0;
+		front_ki = (!t->branchSites.empty())
+			? t->branchSites.front()
+			: NULL;
+		assert (bemap[i][front_ki] > 0);
+		foreach (it, bemap[i].begin(), bemap[i].end())
+			total += it->second;
+
+		t = t->parent;
+		if (bemap[i][front_ki] == 0)
+			continue;
+
+		assert (bemap[i][front_ki] != 0);
+		cur_entropy = (double)bemap[i][front_ki]/(double)total;
+		cur_entropy *= -log2(cur_entropy);
+		last_entropy = cur_entropy;
+
+		entropy += cur_entropy;
+	}
+	entropy /= (double)depth;
+//	entropy /= ((double)es->totalInsts/10000.0);
+	return entropy;
 }

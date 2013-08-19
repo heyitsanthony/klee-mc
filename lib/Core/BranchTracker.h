@@ -66,6 +66,7 @@ public:
 	void getReplayPath(ReplayPath& rp) const { getReplayPath(rp, end()); }
 
 	SegmentRef getHead(void) const;
+	SegmentRef getTail(void) const { return tail; }
 	void dump(void) const;
 
 	void dumpDotFile(std::ostream& os) const;
