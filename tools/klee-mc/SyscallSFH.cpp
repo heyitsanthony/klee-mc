@@ -725,9 +725,9 @@ void SyscallSFH::makeRangeSymbolic(
 				removeMiddle(state, mo, mo_off, taken);
 			}
 		} else {
-			taken = (take_remaining >= tail_take_bytes) ?
-					tail_take_bytes :
-					take_remaining;
+			taken = (take_remaining >= tail_take_bytes)
+				? tail_take_bytes
+				: take_remaining;
 			removeHead(state, mo, taken);
 		}
 

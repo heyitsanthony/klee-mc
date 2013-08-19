@@ -222,7 +222,7 @@ void Globals::initializeGlobalObject(
 	if (isa<ConstantAggregateZero>(c)) {
 		unsigned size;
 		size = kmodule->dataLayout->getTypeStoreSize(c->getType());
-		assert (size + offset <= os->size);
+		assert (size + offset <= os->getSize());
 		for (unsigned i=0; i<size; i++) {
 			init_state->write8(os,offset+i, (uint8_t) 0);
 		}

@@ -104,7 +104,7 @@ bool SoftConcreteMMU::exeMemOp(ExecutionState &state, MemOp& mop)
 
 	/* XXX: I don't like calling this range check here */
 	if ((mop.getType(exe.getKModule())/8 + op.first->getOffset(addr))
-		<= op.second->size)
+		<= op.second->getSize())
 	{
 		cmmu->commitMOP(state, mop, op, addr);
 		return true;

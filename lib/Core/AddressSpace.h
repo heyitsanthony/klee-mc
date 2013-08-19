@@ -194,6 +194,10 @@ public:
 	/// Remove a binding from the address space.
 	void unbindObject(const MemoryObject *mo);
 
+	/* an integrity check to make sure that object states have
+	 * sizes >= memory objects */
+	void checkObjects(void) const;
+
 	MMIter lower_bound(uint64_t addr) const;
 	MMIter upper_bound(uint64_t addr) const;
 	MMIter end(void) const { return objects.end(); }

@@ -108,7 +108,7 @@ void TaintGroup::addState(const ExecutionState *es)
 
 void TaintGroup::addTaintedObject(uint64_t addr, const ShadowObjectState* sos)
 {
-	for (unsigned i = 0; i < sos->size; i++) {
+	for (unsigned i = 0; i < sos->getSize(); i++) {
 		unsigned	taint_c;
 		ref<Expr>	r;
 

@@ -31,7 +31,7 @@ public:
 		int	sym_c;
 
 		sym_c = 0;
-		for (unsigned i = 0; i < os->size; i++)
+		for (unsigned i = 0; i < os->getSize(); i++)
 			if (!os->isByteConcrete(i))
 				sym_c++;
 		return sym_c;
@@ -70,7 +70,7 @@ public:
 		if (os == NULL)
 			return -123;
 
-		for (unsigned i = 0; i < os->size; i++) {
+		for (unsigned i = 0; i < os->getSize(); i++) {
 			const ConstantExpr	*ce;
 
 			if (!os->isByteConcrete(i))

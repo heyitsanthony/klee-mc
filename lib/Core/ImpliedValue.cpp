@@ -335,14 +335,16 @@ void ImpliedValue::ivcMem(
 	ExprReplaceVisitor	erv(re, ce);
 
 	foreach (it, as.begin(), as.end()) {
-		const ObjectState		*os;
-		ObjectState			*wos = NULL;
+		const MemoryObject	*mo;
+		const ObjectState	*os;
+		ObjectState		*wos = NULL;
 
 		os = (*it).second;
 		if (os->isConcrete())
 			continue;
 
-		for (unsigned i = 0; i < os->size; i++) {
+		mo = it->first;
+		for (unsigned i = 0; i < mo->size; i++) {
 			ref<Expr>	e, e_new;
 
 			if (os->isByteKnownSymbolic(i) == false)

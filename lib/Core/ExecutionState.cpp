@@ -186,7 +186,7 @@ void ExecutionState::compact(void)
 	mallocIterations.clear();
 	memObjects.clear();
 	symbolics.clear();
-	arr2sym.clear();
+	arr2addr.clear();
 
 	isCompactForm = true;
 	onFreshBranch = false;
@@ -763,12 +763,14 @@ void ExecutionState::addSymbolic(MemoryObject* mo, Array* array)
 	}
 #endif
 	symbolics.push_back(SymbolicArray(mo, array));
-	arr2sym[array] = mo;
+	arr2addr[array] = mo->address;
 
 	if (partseed_assignment != NULL)
 		updatePartSeed(array);
 }
 
+/* XXX: I think this was a bit of a false start--- I should remove it. 
+ * the partseed intrinsics already work quite nicely and aren't suprt complicated */
 void ExecutionState::updatePartSeed(Array *arr)
 {
 	const uint8_t		*v_buf;
@@ -913,6 +915,16 @@ ExecutionState* ExecutionState::reconstitute(
 	newState->personalInsts = 0;
 
 	return newState;
+}
+
+const MemoryObject* ExecutionState::findMemoryObject(const Array* a) const
+{
+	arr2addr_map::const_iterator	it(arr2addr.find(a));
+
+	if (it == arr2addr.end())
+		return NULL;
+
+	return addressSpace.resolveOneMO(it->second);
 }
 
 void ExecutionState::commitIVC(

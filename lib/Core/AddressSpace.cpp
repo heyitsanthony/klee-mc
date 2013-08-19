@@ -65,6 +65,7 @@ void AddressSpace::bindObject(const MemoryObject *mo, ObjectState *os)
 		os->setOwner(cowKey);
 	}
 
+	assert (os->getSize() >= mo->size);
 	objects = objects.replace(std::make_pair(mo, os));
 	os_generation++;
 
@@ -710,17 +711,20 @@ void AddressSpace::copyToExprBuf(
 {
 	const ObjectState	*os;
 
+	assert (off + len <= mo->size);
 	os = findObject(mo);
+
 	assert (os != NULL && "ObjectState not found, but expected!?");
+	assert (os->getSize() >= mo->size);
+	assert (off + len <= os->getSize());
+
 	for (unsigned int i = 0; i < len; i++) {
 		buf[i] = os->read8(off + i);
 	}
 }
 
 bool AddressSpace::copyToBuf(const MemoryObject* mo, void* buf) const
-{
-	return copyToBuf(mo, buf, (unsigned)0, (unsigned)mo->size);
-}
+{ return copyToBuf(mo, buf, (unsigned)0, (unsigned)mo->size); }
 
 bool AddressSpace::copyToBuf(
 	const MemoryObject* mo, void* buf,
@@ -1084,4 +1088,23 @@ void AddressSpace::clear(void)
 	os_generation = 0;
 	mo_generation = 0;
 	objects = MemoryMap();
+}
+
+void AddressSpace::checkObjects(void) const
+{
+	bool bad = false;
+
+	foreach (it, begin(), end()) {
+		const MemoryObject	*mo(it->first);
+		const ObjectState	*os(it->second);
+
+		if (mo->size <= os->getSize()) continue;
+
+		/* bad stuff ahead */
+		bad = true;
+		mo->print(std::cerr);
+		std::cerr << "\nOS=" << (void*)os << ". Len=" << os->getSize() << "\n";
+	}
+
+	assert (bad == false);
 }

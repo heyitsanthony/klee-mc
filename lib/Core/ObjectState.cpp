@@ -43,8 +43,8 @@ ObjectState::ObjectState(unsigned _size)
 , flushMask(0)
 , knownSymbolics(0)
 , updates(0, 0)
-, size(_size)
 , readOnly(false)
+, size(_size)
 {
 	assert (size > 0);
 	memset(concreteStore, 0, size);
@@ -60,8 +60,8 @@ ObjectState::ObjectState(unsigned _size, const ref<Array>& array)
 , flushMask(0)
 , knownSymbolics(0)
 , updates(array, 0)
-, size(_size)
 , readOnly(false)
+, size(_size)
 {
 	assert (size > 0);
 	memset(concreteStore, 0, size);
@@ -78,8 +78,8 @@ ObjectState::ObjectState(const ObjectState &os)
 , flushMask(os.flushMask ? new BitArray(*os.flushMask, os.size) : 0)
 , knownSymbolics(0)
 , updates(os.updates)
-, size(os.size)
 , readOnly(false)
+, size(os.size)
 {
 	assert(!os.readOnly && "no need to copy read only object?");
 	assert (size > 0);

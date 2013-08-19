@@ -583,7 +583,7 @@ void ExecutorVex::logXferMO(ExecutionState& state)
 	if (state.addressSpace.resolveOne(LogObject, op) == false)
 		return;
 
-	sz = op_os(op)->size;
+	sz = op_os(op)->getSize();
 	crumb_base = new uint8_t[sizeof(struct breadcrumb)+(sz*2)+8];
 	crumb_buf = crumb_base;
 	bc = reinterpret_cast<struct breadcrumb*>(crumb_base);
@@ -643,8 +643,8 @@ void ExecutorVex::logXferObj(
 
 	updateGuestRegs(state);
 
-	assert (off < os->size);
-	sz = os->size - off;
+	assert (off < os->getSize());
+	sz = os->getSize() - off;
 	crumb_base = new uint8_t[sizeof(struct breadcrumb)+(sz*2)];
 	crumb_buf = crumb_base;
 	bc = reinterpret_cast<struct breadcrumb*>(crumb_base);

@@ -60,7 +60,6 @@ private:
 	objlist_ty::iterator	objs_it;	/* obj's position in list */
 
 public:
-	unsigned	size;
 	bool		readOnly;
 
 public:
@@ -79,11 +78,13 @@ protected:
 
 	ObjectState(const ObjectState &os);
 
+	unsigned	size;
 public:
 	virtual ~ObjectState();
 
 	static unsigned getNumObjStates(void) { return numObjStates; }
 
+	unsigned getSize(void) const { return size; }
 	void setReadOnly(bool ro) { readOnly = ro; }
 
 	// make contents all concrete and zero

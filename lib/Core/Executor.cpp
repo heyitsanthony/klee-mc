@@ -801,7 +801,7 @@ static bool concretizeObject(
 		<< (void*)mo->address << "--"
 		<< (void*)(mo->address + mo->size) << "\n";
 	all_zeroes = true;
-	for (unsigned i = 0; i < os->size; i++) {
+	for (unsigned i = 0; i < os->getSize(); i++) {
 		const klee::ConstantExpr	*ce;
 		ref<klee::Expr>		e;
 		uint8_t			v;

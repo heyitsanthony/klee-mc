@@ -641,15 +641,29 @@ void BranchTracker::dump(void) const
 			<< Segment::getNumSegments() << '\n';
 }
 
+static const char *colors[12] =
+{	"black", "red", "green", "blue",
+	"yellow", "orange", "\"#0000ff\"", "\"#00ff00\"",
+	"brown", "pink", "purple", "gray" };
+
+#include <llvm/IR/Function.h>
+#include "klee/Internal/Module/KInstruction.h"
+
 static void dumpDotSeg(BranchTracker::SegmentRef head, std::ostream& os)
 {
 	for (unsigned i = 0; i < head->children.size(); i++)
 		dumpDotSeg(head->children[i], os);
 
+	std::string	color;
+	if (head->branchSites.empty() == false) {
+		color = colors[(((unsigned long)head->branchSites[0]) >> 5) % 12];
+	} else
+		color = "black";
+
 	if (head->children.size() == 0) {
-		os << "node [ shape = doublecircle ]; seg_";
+		os << "node [ shape = doublecircle, color=" << color << " ]; seg_";
 	} else {
-		os << "node [ shape = circle ]; seg_";
+		os << "node [ shape = circle, color=" << color << " ]; seg_";
 	}
 	os << (void*)head.get() << ";";
 

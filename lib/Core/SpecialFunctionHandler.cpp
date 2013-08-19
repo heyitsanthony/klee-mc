@@ -722,7 +722,7 @@ SFH_DEF_ALL(SymRangeBytes, "klee_sym_range_bytes", true)
 
 		assert (cur_mo->address <= base_addr);
 		off = base_addr - cur_mo->address;
-		for (unsigned i = off; i < os->size && total < max_len_v; i++) {
+		for (unsigned i = off; i < cur_mo->size && total < max_len_v; i++) {
 			if (os->isByteConcrete(i)) {
 				max_len_v = 0;
 				break;
@@ -730,7 +730,7 @@ SFH_DEF_ALL(SymRangeBytes, "klee_sym_range_bytes", true)
 			total++;
 		}
 
-		base_addr += os->size;
+		base_addr += cur_mo->size;
 	} while (total < max_len_v);
 
 	state.bindLocal(target, MK_CONST(total, Expr::Int32));

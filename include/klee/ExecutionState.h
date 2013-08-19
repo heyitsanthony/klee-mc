@@ -209,12 +209,7 @@ public:
 
 	void addSymbolic(MemoryObject *mo, Array *array);
 
-	const MemoryObject* findMemoryObject(const Array* a) const
-	{
-		arr2sym_map::const_iterator	it(arr2sym.find(a));
-		return (it == arr2sym.end()) ? NULL : (*it).second;
-	}
-
+	const MemoryObject* findMemoryObject(const Array* a) const;
 
 	ObjectPair allocate(
 		uint64_t size, bool isLocal, bool isGlobal,
@@ -384,8 +379,8 @@ private:
 
 	/// ordered list of symbolics: used to generate test cases.
 	std::vector< SymbolicArray > symbolics;
-	typedef std::map<const Array*, const MemoryObject*> arr2sym_map;
-	arr2sym_map	arr2sym;
+	typedef std::map<const Array*, uint64_t> arr2addr_map;
+	arr2addr_map	arr2addr;
 
 	uint64_t	prev_constraint_hash;
 
