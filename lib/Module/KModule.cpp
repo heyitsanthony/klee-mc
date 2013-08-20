@@ -136,7 +136,7 @@ KModule::~KModule()
 		delete (*it).second;
 	constantMap.clear();
 
-	foreach (it, modNames.begin(), modNames.end()) delete (*it);
+	foreach (it, modNames.begin(), modNames.end()) delete it->second;
 
 	delete dataLayout;
 	delete module;
@@ -411,8 +411,8 @@ void KModule::addModule(Module* in_mod)
 	}
 
 	/* insertion failed? already loaded */
-	modNames.push_back(new std::string(mod_name));
-	std::string	*mn_ref(modNames[modNames.size()-1]);
+	modNames[mod_name] = new std::string(mod_name);
+	std::string	*mn_ref(modNames[mod_name]);
 	addedModules.insert(*mn_ref);
 
 	std::cerr << "[KModule] Adding module \"" << *mn_ref << "\"\n";
@@ -654,7 +654,7 @@ KConstant::KConstant(llvm::Constant* _ct, unsigned _id, KInstruction* _ki)
 , ki(_ki)
 {}
 
-KFunction* KModule::getKFunction(llvm::Function* f) const
+KFunction* KModule::getKFunction(const llvm::Function* f) const
 {
 	func2kfunc_ty::const_iterator it;
 
@@ -792,15 +792,45 @@ KFunction* KModule::buildListFunc(
 }
 
 void KModule::setPrettyName(const llvm::Function* f, const std::string& s)
-{ prettyNames[f] = s; }
+{
+	const KFunction	*kf(getKFunction(f));
+	prettyNames[f] = s;
+	if (kf != NULL) prettyFuncs[s] = kf;
+}
 
 std::string KModule::getPrettyName(const llvm::Function* f) const
 {
-	prettymap_ty::const_iterator	it;
+	f2pretty_ty::const_iterator	it;
 
 	it = prettyNames.find(f);
 	if (it == prettyNames.end())
 		return f->getName().str();
 
 	return it->second;
+}
+
+const KFunction* KModule::getPrettyFunc(const char* f) const
+{
+	pretty2f_ty::const_iterator	it;
+
+	it = prettyFuncs.find(f);
+	return (it == prettyFuncs.end())
+		? NULL
+		: it->second;
+}
+
+
+void KModule::setModName(KFunction* kf, const char* mod_name)
+{
+	modname_ty::iterator	it;
+	std::string		*s;
+
+	it = modNames.find(mod_name);
+	if (it == modNames.end()) {
+		modNames[mod_name] = new std::string(mod_name);
+		it = modNames.find(mod_name);
+	}
+
+	s = it->second;
+	kf->setModName(*s);
 }

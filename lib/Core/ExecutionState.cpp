@@ -22,7 +22,6 @@
 #include "klee/Internal/Module/InstructionInfoTable.h"
 #include "klee/Internal/Module/KInstruction.h"
 #include "klee/Internal/Module/KModule.h"
-#include "klee/Internal/ADT/KTest.h"
 
 #include "klee/Expr.h"
 #include "static/Sugar.h"
@@ -93,8 +92,6 @@ void ExecutionState::initFields(void)
 	onFreshBranch = false;
 	is_shadowing = false;
 	canary = ES_CANARY_VALUE;
-	partseed_ktest = NULL;
-	partseed_assignment = NULL;
 	isEnableMMU = true;
 }
 
@@ -130,7 +127,6 @@ ExecutionState::~ExecutionState()
 		stack.pop_back();
 	}
 	canary = 0;
-	if (partseed_assignment) delete partseed_assignment;
 }
 
 ExecutionState* ExecutionState::copy(const ExecutionState* es) const
@@ -164,9 +160,6 @@ ExecutionState *ExecutionState::branch(bool forReplay)
 	newState->newInsts = 0;
 	newState->lastNewInst = 0;
 	newState->onFreshBranch = false;
-
-	newState->partseed_ktest = NULL;
-	newState->partseed_assignment = NULL;
 
 	if (term.get()) {
 		assert (newState->term.get() != term.get());
@@ -730,26 +723,6 @@ std::string ExecutionState::getArrName(const char* arrPrefix)
 	return arrPrefix + ("_" + llvm::utostr(k));
 }
 
-void ExecutionState::setPartSeed(const KTest* kt)
-{
-	if (kt == NULL) {
-		if (partseed_assignment == NULL)
-			return;
-
-		partseed_assignment = NULL;
-		partseed_idx = 0;
-		partseed_ktest = NULL;
-		return;
-	}
-
-	if (partseed_assignment != NULL)
-		delete partseed_assignment;
-
-	partseed_ktest = kt;
-	partseed_idx = 0;
-	partseed_assignment = new Assignment();
-}
-
 void ExecutionState::addSymbolic(MemoryObject* mo, Array* array)
 {
 #if 0
@@ -764,38 +737,6 @@ void ExecutionState::addSymbolic(MemoryObject* mo, Array* array)
 #endif
 	symbolics.push_back(SymbolicArray(mo, array));
 	arr2addr[array] = mo->address;
-
-	if (partseed_assignment != NULL)
-		updatePartSeed(array);
-}
-
-/* XXX: I think this was a bit of a false start--- I should remove it. 
- * the partseed intrinsics already work quite nicely and aren't suprt complicated */
-void ExecutionState::updatePartSeed(Array *arr)
-{
-	const uint8_t		*v_buf;
-	unsigned		v_len;
-
-	if (partseed_idx >= partseed_ktest->numObjects) {
-		/* partseeds exhausted-- drop everything */
-		std::cerr << "[ExeState] Partseed exhausted. Godspeed.\n";
-		setPartSeed(NULL);
-		return;
-	}
-
-	if (arr->getSize() != partseed_ktest->objects[partseed_idx].numBytes) {
-		std::cerr << "[ExeState] Partseed mismatch. Bail out\n";
-		setPartSeed(NULL);
-		return;
-	}
-
-	v_buf = partseed_ktest->objects[partseed_idx].bytes;
-	v_len = partseed_ktest->objects[partseed_idx].numBytes;
-
-	std::vector<uint8_t>	v(v_buf, v_buf + v_len);
-	partseed_assignment->addBinding(arr, v);
-
-	partseed_idx++;
 }
 
 void ExecutionState::trackBranch(int condIndex, const KInstruction* ki)
@@ -814,7 +755,6 @@ ExecutionState* ExecutionState::createReplay(
 {
 	ExecutionState* newState;
 
-	std::cerr << "CREATE REPLAYS\n";
 	newState = initialState.copy();
 	foreach (it, replayPath.begin(), replayPath.end()) {
 		newState->brChoiceSeq.push_back(*it);

@@ -103,7 +103,7 @@ public:
 
     KFunction* addUntrackedFunction(llvm::Function* f);
     virtual KFunction* addFunction(llvm::Function *f);
-    KFunction* getKFunction(llvm::Function* f) const;
+    KFunction* getKFunction(const llvm::Function* f) const;
     KFunction* getKFunction(const char* name) const;
 
 	KFunction* buildListFunc(
@@ -134,6 +134,9 @@ public:
 
 	void setPrettyName(const llvm::Function* f, const std::string& s);
 	std::string getPrettyName(const llvm::Function* f) const;
+	const KFunction* getPrettyFunc(const char* s) const;
+
+	void setModName(KFunction* kf, const char* modname);
 private:
 	void setupFunctionPasses(void);
 	void prepareMerge(InterpreterHandler *ih);
@@ -149,8 +152,8 @@ private:
 
 	// Our shadow versions of LLVM structures.
 	std::vector<KFunction*> functions;
-	typedef std::tr1::unordered_map<llvm::Function*, KFunction*>
-	func2kfunc_ty;
+	typedef std::tr1::unordered_map<const llvm::Function*, KFunction*>
+		func2kfunc_ty;
 	func2kfunc_ty functionMap;
 
 	llvm::FunctionPassManager	*fpm;
@@ -160,10 +163,13 @@ private:
 
 	unsigned			updated_funcs;
 	std::set<std::string>		addedModules;
-	std::vector<std::string*>	modNames;
+	typedef std::map<std::string, std::string*> modname_ty;
+	modname_ty	modNames;
 
-	typedef std::map<const llvm::Function*, std::string>	prettymap_ty;
-	prettymap_ty	prettyNames;
+	typedef std::map<const llvm::Function*, std::string>	f2pretty_ty;
+	typedef std::map<std::string, const KFunction*>	pretty2f_ty;
+	f2pretty_ty	prettyNames;
+	pretty2f_ty	prettyFuncs;
 };
 } // End klee namespace
 

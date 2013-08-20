@@ -4,6 +4,9 @@
 #include <dirent.h>
 #include <iostream>
 #include <sstream>
+#include "klee/Internal/ADT/Hash.h"
+#include "klee/Internal/Module/KFunction.h"
+#include "klee/Internal/Module/KModule.h"
 
 #include "klee/SolverStats.h"
 #include "StateSolver.h"
@@ -25,12 +28,35 @@ llvm::cl::opt<bool> PartSeedReplay("psdb-replay");
 using namespace klee;
 
 typedef uint64_t psid_t;
-typedef std::pair<std::string, ExecutionState*> partseed_t;
-typedef std::map<psid_t, partseed_t> psmap_t;
+typedef std::pair<std::string, ExecutionState*>		partseed_t;
+typedef std::map<psid_t, partseed_t>			psmap_t;
 typedef std::map<std::string, std::vector<unsigned> >	psdb_t;
-
 static psmap_t psmap;
 
+
+static void getPSDBLib(
+	Executor* exe,
+	const std::string& name, std::ostream& os)
+{
+	std::string		modname, h;
+	const KFunction		*kf;
+
+	kf = exe->getKModule()->getPrettyFunc(name.c_str());
+	if (kf == NULL)
+		kf = exe->getKModule()->getPrettyFunc((name + "+0x0").c_str());
+
+	if (kf != NULL) modname = kf->getModName().c_str();
+	h = Hash::SHA((const unsigned char*)modname.c_str(), modname.size());
+	os << PartSeedDB << '/' << h << '/';
+}
+
+static void getPSDBPath(
+	Executor* exe,
+	const std::string& name, std::ostream& os)
+{
+	getPSDBLib(exe, name, os);
+	os << name << '/';
+}
 
 SFH_DEF_ALL(PartSeedBeginCollect, "klee_partseed_begin", true)
 {
@@ -129,8 +155,12 @@ SFH_DEF_ALL(PartSeedEndCollect, "klee_partseed_end", false)
 	kh = static_cast<KleeHandler*>(sfh->executor->getInterpreterHandler());
 	mkdir(PartSeedDB.c_str(), 0755);
 
-	ss << PartSeedDB << "/" << ps.first << "/";
+	getPSDBLib(sfh->executor, ps.first, ss);
 	mkdir(ss.str().c_str(), 0755);
+
+	ss << ps.first << '/';
+	mkdir(ss.str().c_str(), 0755);
+
 
 	ss << inst_delta << ".ktest.gz";
 	f = new gzofstream(
@@ -154,6 +184,39 @@ private:
 };
 
 
+static bool loadPSDB(
+	psdb_t& psdb,
+	const std::string& name,
+	const std::string dirname)
+{
+	/* not found; load psdb instruction counts for 'name' */
+	DIR			*d;
+	struct dirent		*de;
+	std::vector<unsigned>	insts_c;
+
+	d = opendir(dirname.c_str());
+	if (d == NULL)
+		return false;
+
+	while ((de = readdir(d)) != NULL) {
+		unsigned	inst_c;
+
+		if (!sscanf(de->d_name, "%u.ktest.gz", &inst_c))
+			continue;
+
+		insts_c.push_back(inst_c);
+	}
+
+	closedir(d);
+
+	std::sort(insts_c.begin(), insts_c.end());
+	std::cerr << "[PS] Loaded " << insts_c.size()
+		<< " paths from " << name << '\n';
+	psdb[name] = insts_c;
+
+	return true;
+}
+
 SFH_DEF_ALL(PartSeedBeginReplay, "klee_partseed_begin", true)
 {
 	std::string		name;
@@ -172,40 +235,16 @@ SFH_DEF_ALL(PartSeedBeginReplay, "klee_partseed_begin", true)
 	}
 
 	name = sfh->readStringAtAddress(state, args[0]);
-	ss << PartSeedDB << "/" << name << "/";
-
+	getPSDBPath(sfh->executor, name, ss);
+	
 	it = psdb.find(name);
-
 	if (it == psdb.end()) {
-		/* not found; load psdb instruction counts for 'name' */
-		DIR			*d;
-		struct dirent		*de;
-		std::vector<unsigned>	insts_c;
-
-		d = opendir(ss.str().c_str());
-		if (d == NULL) {
+		if (loadPSDB(psdb, name, ss.str()) == false) {
 			std::cerr << "[PS] Could not open " << name << '\n';
 			state.bindLocal(target, MK_CONST(0xdeadbeef, 64));
 			return;
 		}
-
-		while ((de = readdir(d)) != NULL) {
-			unsigned	inst_c;
-
-			if (!sscanf(de->d_name, "%u.ktest.gz", &inst_c))
-				continue;
-
-			insts_c.push_back(inst_c);
-		}
-
-		closedir(d);
-
-		std::sort(insts_c.begin(), insts_c.end());
-		std::cerr << "[PS] Loaded " << insts_c.size()
-			<< " paths from " << name << '\n';
-		psdb[name] = insts_c;
 		it = psdb.find(name);
-		ss.clear();
 	}
 
 	if (it->second.empty()) {
@@ -224,12 +263,10 @@ SFH_DEF_ALL(PartSeedBeginReplay, "klee_partseed_begin", true)
 		return;
 	}
 
-	std::cerr << "[PS] Loaded ktest " << ss.str() << '\n';
-
-	state.bindLocal(target, MK_CONST(sel_idx, 64));
-
 	recur_depth++;
 	
+	std::cerr << "[PS] Loaded ktest " << ss.str() << '\n';
+	state.bindLocal(target, MK_CONST(sel_idx, 64));
 	fork_ktest = new ForksKTest(*sfh->executor);
 	fork_ktest->setMakeErrTests(false);
 	fork_ktest->setKTest(kt, &state);

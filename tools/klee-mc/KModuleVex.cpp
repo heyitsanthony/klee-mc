@@ -281,6 +281,13 @@ Function* KModuleVex::getFuncByAddr(uint64_t guest_addr)
 	} else
 		kf = addFunction(f);
 
+	if (const ExecutionState* ese = exe->getCurrentState()) {
+		const MemoryObject	*mo;
+		mo = ese->addressSpace.resolveOneMO(guest_addr);
+		if (!mo->name.empty())
+			setModName(kf, mo->name.c_str());
+	}
+
 	exe->getStatsTracker()->addKFunction(kf);
 	bindKFuncConstants(exe, kf);
 	bindModuleConstTable(exe);
@@ -298,16 +305,14 @@ KFunction* KModuleVex::addFunction(Function* f)
 {
 	KFunction	*kf;
 	bool		is_special;
+	std::string	pretty_name;
 
 	if (f->isDeclaration()) return NULL;
 
 	is_special = isNameUgly(f->getName().str());
 	if (is_special) {
-		std::string	pretty_name;
 		const VexSB	*vsb;
-		vsb = getVSB(f);
-
-		if (vsb != NULL) {
+		if ((vsb = getVSB(f)) != NULL) {
 			pretty_name = gs->getName(vsb->getGuestAddr());
 			if (!isNameUgly(pretty_name) != 0)
 				setPrettyName(f, pretty_name);
@@ -315,7 +320,11 @@ KFunction* KModuleVex::addFunction(Function* f)
 	}
 
 	kf = KModule::addFunction(f);
-	if (kf) kf->isSpecial = is_special;
+	if (kf) {
+		kf->isSpecial = is_special;
+		/* set pretty name again to add kf to mapping */
+		setPrettyName(f, pretty_name);
+	}
 
 	return kf;
 }

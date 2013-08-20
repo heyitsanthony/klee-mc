@@ -425,7 +425,7 @@ double BranchEntropyWeight::weigh(const ExecutionState* es) const
 	/* compute value from bemap */
 	depth = t->depth();
 	assert (depth >= 0);
-	if (depth >= bemap.size())
+	if (depth >= (int)bemap.size())
 		std::cerr << "MY DEPTH: "
 			<< depth << ". bemap size=" << bemap.size() << '\n';
 
