@@ -773,6 +773,7 @@ Forks::~Forks(void) { delete condFilter; }
 
 Forks::Forks(Executor& _exe)
 : exe(_exe)
+, suppressForks(Replay::isSuppressForks())
 , preferTrueState(false)
 , preferFalseState(false)
 , lastFork(0,0)

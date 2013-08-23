@@ -19,7 +19,6 @@ public:
 	virtual ~ForksKTest();
 	void setKTest(const KTest* _kt, const ExecutionState* es = NULL);
 	void setMakeErrTests(bool v) { make_err_tests = v; }
-	void setSuppressForks(bool v) { suppressForks = v; }
 	unsigned getCheapForks(void) const { return cheap_fork_c; }
 protected:
 	virtual bool setupForkAffinity(
@@ -41,7 +40,6 @@ private:
 	std::vector<ref<Array> > arrs;
 	unsigned	base_objs;
 	bool		make_err_tests;
-	bool		suppressForks;
 	unsigned	cheap_fork_c;
 	WallTimer	wt;
 

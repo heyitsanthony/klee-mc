@@ -403,7 +403,6 @@ static void compute_bemap(
 		: sr->branchSites.front();
 	
 	bemap[depth][ki] = bemap[depth][ki] + 1;
-//	bemap[depth][ki] = bemap[depth][ki] + sr->size() + 1;
 }
 
 double BranchEntropyWeight::weigh(const ExecutionState* es) const
@@ -425,9 +424,11 @@ double BranchEntropyWeight::weigh(const ExecutionState* es) const
 	/* compute value from bemap */
 	depth = t->depth();
 	assert (depth >= 0);
-	if (depth >= (int)bemap.size())
+	if (depth >= (int)bemap.size()) {
 		std::cerr << "MY DEPTH: "
 			<< depth << ". bemap size=" << bemap.size() << '\n';
+		return 0.0;
+	}
 
 
 	entropy = 0;
@@ -438,9 +439,13 @@ double BranchEntropyWeight::weigh(const ExecutionState* es) const
 		int			total;
 
 		total = 0;
-		front_ki = (!t->branchSites.empty())
-			? t->branchSites.front()
-			: NULL;
+		front_ki = (t->branchSites.empty())
+			? NULL
+			: t->branchSites.front();
+		if (bemap[i][front_ki] == 0) {
+			std::cerr << "WTF: " << (void*)es << '\n';
+			continue;
+		}
 		assert (bemap[i][front_ki] > 0);
 		foreach (it, bemap[i].begin(), bemap[i].end())
 			total += it->second;
@@ -457,6 +462,10 @@ double BranchEntropyWeight::weigh(const ExecutionState* es) const
 		entropy += cur_entropy;
 	}
 	entropy /= (double)depth;
+
+	/* filter out nans */
+	if (entropy != entropy) entropy = 0.0;
+
 //	entropy /= ((double)es->totalInsts/10000.0);
 	return entropy;
 }

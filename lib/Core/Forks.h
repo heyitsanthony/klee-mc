@@ -89,7 +89,8 @@ public:
 	void setQuenching(bool v) { is_quench = v; }
 
 	void setConstraintOmit(bool v) { omit_valid_constraints = v; }
-
+	void setForkSuppress(bool v) { suppressForks = v; }
+	bool getForkSuppress(void) const { return suppressForks; }
 protected:
 	virtual bool forkSetup(ExecutionState& current, struct ForkInfo& fi);
 	virtual void trackBranch(ExecutionState& current, unsigned condIdx);
@@ -107,7 +108,8 @@ protected:
 	* on failure. */
 	virtual bool evalForks(ExecutionState& current, struct ForkInfo& fi);
 
-	Executor			&exe;
+	Executor	&exe;
+	bool		suppressForks;
 private:
 	/* this forking code really should be refactored */
 	bool isForkingCallPath(CallPathNode* cpn);

@@ -62,7 +62,10 @@ bool	ReplayInhibitedForks = true;
 bool	DebugPrintInstructions = false;
 extern double	MaxSTPTime;
 
-namespace klee { void PartSeedSetup(Executor* exe); }
+namespace klee {
+void PartSeedSetup(Executor* exe);
+void PartSeedSetupDummy(Executor* exe);
+}
 
 #define DECL_OPTBOOL(x,y)	cl::opt<bool> x(y, cl::init(false))
 
@@ -2087,6 +2090,8 @@ void Executor::run(ExecutionState &initState)
 
 	setupFiniFuncs();
 	setupInitFuncs(initState);
+
+	PartSeedSetupDummy(this);
 
 	if (replay != NULL) replay->replay(this, &initState);
 

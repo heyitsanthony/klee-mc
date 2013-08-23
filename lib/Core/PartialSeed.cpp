@@ -58,6 +58,38 @@ static void getPSDBPath(
 	os << name << '/';
 }
 
+
+static int dummy_depth_c = 0;
+static bool old_fork_suppress;
+static uint64_t last_sid = 0;
+
+SFH_DEF_ALL(PartSeedBeginDummy, "klee_partseed_begin", true)
+{
+	Forks	*f(sfh->executor->getForking());
+
+	if (last_sid != state.getSID()) {
+		f->setForkSuppress(old_fork_suppress);
+		dummy_depth_c = 0;
+	}
+
+	if (dummy_depth_c == 0) {
+		old_fork_suppress = f->getForkSuppress();
+		f->setForkSuppress(true);
+		last_sid = state.getSID();
+	}
+
+	dummy_depth_c++;
+	state.bindLocal(target, MK_CONST(0xdeadbeef, 64));
+}
+
+SFH_DEF_ALL(PartSeedEndDummy, "klee_partseed_end", false)
+{
+	Forks	*f(sfh->executor->getForking());
+	dummy_depth_c--;
+	if (dummy_depth_c != 0) return;
+	f->setForkSuppress(old_fork_suppress);
+}
+
 SFH_DEF_ALL(PartSeedBeginCollect, "klee_partseed_begin", true)
 {
 	SFH_CHK_ARGS(1, "klee_partseed_begin");
@@ -270,7 +302,7 @@ SFH_DEF_ALL(PartSeedBeginReplay, "klee_partseed_begin", true)
 	fork_ktest = new ForksKTest(*sfh->executor);
 	fork_ktest->setMakeErrTests(false);
 	fork_ktest->setKTest(kt, &state);
-	fork_ktest->setSuppressForks(true);
+	fork_ktest->setForkSuppress(true);
 	fork_ktest->setConstraintOmit(false);
 
 
@@ -348,6 +380,13 @@ SFH_DEF_ALL(PartSeedEndReplay, "klee_partseed_end", false)
 
 namespace klee
 {
+void PartSeedSetupDummy(Executor* exe)
+{
+	SpecialFunctionHandler	*sfh(exe->getSFH());
+	sfh->addHandler(HandlerPartSeedBeginDummy::hinfo);
+	sfh->addHandler(HandlerPartSeedEndDummy::hinfo);
+}
+
 void PartSeedSetup(Executor* exe)
 {
 	SpecialFunctionHandler	*sfh(exe->getSFH());
