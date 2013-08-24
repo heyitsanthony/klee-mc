@@ -89,20 +89,38 @@ SCHEDOPTS="-use-batching-search
 	-second-chance-boost=1
 	-second-chance-boost-cov=1
 	-use-pdf-interleave=true
+	-use-interleaved-UO=false
+	-use-fresh-branch-search=true
 	-use-interleaved-MI=true
-	-use-interleaved-FTR=false
-	-use-interleaved-BI=false
-	-use-interleaved-UNC=false
-	-use-interleaved-UO=true
-	-use-interleaved-NI=true
 	-use-interleaved-MXI=true
-	-use-fresh-branch-search=true"
+	-use-interleaved-BE=true"
+
+#	-use-interleaved-MI=true
+#	-use-interleaved-NI=true
+#	-use-interleaved-MXI=true
+
+#	-use-interleaved-FTR=false
+#	-use-interleaved-BI=false
+#	-use-interleaved-UNC=false
+
 
 if [ -z "$APP_WRAPPER" ]; then
 APP_WRAPPER="gdb --args"
 fi
 
 #-allow-negstack	
+
+if [ ! -z "$USE_PSDB" ]; then
+	PSDBFLAGS="-use-hookpass -hookpass-lib=partseed.bc"
+fi
+
+if [ ! -z "$USE_PSDB_REPLAY" ]; then
+	PSDBFLAGS="-psdb-replay=true -use-hookpass -hookpass-lib=partseed.bc"
+fi
+
+
+if [ -z "$MMU_S" ]; then MMU_S="objwide"; fi
+MMUFLAGS="-sym-mmu-type=$MMU_S -use-sym-mmu"
 
 if [ ! -z "$USE_MMU" ]; then
 	MMUFLAGS=" -sym-mmu-type=memcheck -sconc-mmu-type=memcheckc -use-sym-mmu -use-hookpass -hookpass-lib=libkleeRuntimeMMU.bc "
@@ -112,8 +130,9 @@ fi
 #	-deny-sys-files 	\
 #
 
-cmd="$APP_WRAPPER klee-mc 		\
+cmd="$APP_WRAPPER klee-mc 	\
 	$EXTRA_ARGS		\
+	$PSDBFLAGS		\
 	$REPLAYARG		\
 	$SCHEDOPTS		\
 	$RULEFLAGS		\
