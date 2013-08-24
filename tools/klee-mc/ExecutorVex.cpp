@@ -906,7 +906,7 @@ void ExecutorVex::printStackTrace(
 		vsb = km_vex->getVSB(f);
 		os << "\t#" << idx++ << " in " << f->getName().str();
 		if (vsb != NULL)
-			os << " (" << gs->getName(vsb->getGuestAddr()) << ") ";
+			os << " (" << gs->getName(vsb->getGuestAddr()) << ')';
 
 //		os << ' ' << sf.stackWatermark;
 //		if (sf.onRet) os << '*';
