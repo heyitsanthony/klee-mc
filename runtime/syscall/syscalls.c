@@ -166,10 +166,14 @@ void make_sym_by_arg(
 	sc_breadcrumb_add_argptr(arg_num, 0, len);
 }
 
+/* for SYS_* definitions */
 #include <linux/net.h>
+
 static void do_sockcall(void* regfile, int call, unsigned long* args)
 {
 	void	*new_regs;
+
+	klee_print_expr("do_sockcall", call);
 
 	switch (call) {
 	case SYS_SOCKET:
@@ -267,17 +271,31 @@ static void do_sockcall(void* regfile, int call, unsigned long* args)
 		new_regs = sc_new_regs(regfile);
 
 		if (GET_SYSRET(new_regs) == 0) {
+			klee_print_expr("rm", 0);
 			sc_ret_v_new(new_regs, 0);
 			break;
 		}
 
+		klee_print_expr("doconcretize", args[1]);
+		mhdr = (void*)concretize_u64(args[1]);
+		klee_print_expr("concretized", args[1]);
+		if (mhdr->msg_iovlen == 0) {
+			if (mhdr->msg_controllen != 0) {
+				klee_print_expr(
+					"control messages not yet supported!",
+					mhdr->msg_controllen);
+			}
+			sc_ret_v_new(new_regs, -1);
+			break;
+
+		}
+
+		klee_print_expr("isneg", 1);
 		if (GET_SYSRET_S(new_regs) == -1) {
+			klee_print_expr("rm", -1);
 			sc_ret_v_new(new_regs, -1);
 			break;
 		}
-
-		mhdr = (void*)concretize_u64(args[1]);
-		klee_assume_uge(mhdr->msg_iovlen, 1);
 
 		make_sym(
 			(uint64_t)(mhdr->msg_iov[0].iov_base),
@@ -304,6 +322,7 @@ static void do_sockcall(void* regfile, int call, unsigned long* args)
 			"recvmsg_flags");
 
 		/* TODO: controllen should be symbolic */
+		klee_print_expr("rm", 2);
 
 		sc_ret_v_new(new_regs, mhdr->msg_iov[0].iov_len);
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
@@ -919,16 +938,13 @@ void* sc_enter(void* regfile, void* jmpptr)
 		}
 
 		/* timeout case probably isn't too interesting */
-		if (sc.sys_nr != SYS_pselect6 && GET_ARG4(regfile)) {
-			if (GET_SYSRET(new_regs) == 0) {
-				/* timeout */
-				make_sym(
-					GET_ARG4(regfile),
-					TIMEVAL_SZ,
-					"timeoutbuf");
-				sc_ret_v_new(new_regs, 0);
-				break;
-			}
+		if (	sc.sys_nr != SYS_pselect6
+			&& GET_ARG4(regfile)
+			&& GET_SYSRET(new_regs) == 0)
+		{
+			make_sym(GET_ARG4(regfile), TIMEVAL_SZ, "timeoutbuf");
+			sc_ret_v_new(new_regs, 0);
+			break;
 		}
 
 		/* error */
