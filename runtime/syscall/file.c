@@ -370,6 +370,8 @@ int file_sc(struct sc_pkt* sc)
 
 	case SYS_readlink:
 	{
+		uint32_t	sz;
+
 		if (	concrete_vfs &&
 			!file_path_has_sym(GET_ARG0_PTR(regfile)))
 		{
@@ -382,13 +384,16 @@ int file_sc(struct sc_pkt* sc)
 			break;
 		}
 
+		sz = GET_ARG2(regfile);
+		if (sz > 256) sz = 256;
+		
 		/* keep the string short since we're pure symbolic now */
 		/* In the future, use system information to satisfy this */
 		uint64_t	addr  = klee_get_value(GET_ARG1(regfile));
 		new_regs = sc_new_regs(regfile);
-		if (GET_ARG2(regfile) >= 2) {
-			sc_ret_range(new_regs, 1, 2);
-			make_sym(addr, GET_ARG2(regfile), "readlink");
+		if (sz >= 2) {
+			sc_ret_range(new_regs, 1, sz);
+			make_sym(addr, sz, "readlink");
 			// readlink()  does not append a null byte to buf.
 			// No need for this:
 			// ((char*)addr)[GET_ARG2(new_regs)] = '\0';

@@ -30,6 +30,7 @@ using namespace klee;
 typedef uint64_t psid_t;
 typedef std::pair<std::string, ExecutionState*>		partseed_t;
 typedef std::map<psid_t, partseed_t>			psmap_t;
+/* <name, list of instruction lengths */
 typedef std::map<std::string, std::vector<unsigned> >	psdb_t;
 static psmap_t psmap;
 
@@ -249,6 +250,82 @@ static bool loadPSDB(
 	return true;
 }
 
+
+#define FAILURE_WATERMARK	100
+
+typedef std::map<std::string, unsigned> failmap_ty;
+static void dispatchKTest(
+	Executor* exe,
+	ExecutionState& es,
+	KTest* kt,
+	const std::string& name)
+{
+	static failmap_ty	fm;
+	ForksKTest		*fork_ktest;
+	ExecutionState		*backup_es;
+	StateSolver		*old_ss, *new_ss;
+	bool			old_cet;
+
+	if (fm[name] > FAILURE_WATERMARK) {
+		std::cerr << "[PS] Failed " << fm[name] <<
+			" times on " << name << '\n';
+		fm[name] = 0;
+		return;
+	}
+
+	fork_ktest = new ForksKTest(*exe);
+	fork_ktest->setMakeErrTests(false);
+	fork_ktest->setKTest(kt, &es);
+	fork_ktest->setForkSuppress(true);
+	fork_ktest->setConstraintOmit(false);
+
+	backup_es = exe->pureFork(es, false);
+	backup_es->abortInstruction();
+
+	old_fork = exe->getForking();
+	exe->setForking(fork_ktest);
+	
+	old_cet = llvm::ConcretizeEarlyTerminate;
+	llvm::ConcretizeEarlyTerminate = false; 
+
+	old_ss = exe->getSolver();
+	new_ss = new KTestStateSolver(old_ss, es, kt);
+	exe->setSolver(new_ss);
+
+	WallTimer	wt;
+	int		st_c_old(exe->getNumStates());
+	unsigned	tq_c_old(stats::queriesTopLevel);
+	unsigned	rq_c_old(StateSolver::getRealQueries());
+	int		state_diff;
+
+	/* XXX: This makes the executor is reentrant. Should I be worried? */
+	exe->exhaustState(&es);
+
+	state_diff = exe->getNumStates() - st_c_old;
+	if (state_diff >= 1) {
+		/* no need for backup es, got what we needed */
+		if (!es.newInsts && (rand() % 4) != 0)
+			exe->terminate(*backup_es);
+		fm[name] = 0;
+	} else {
+		/* increase failure count */
+		fm[name] = fm[name] + 1;
+	}
+
+	std::cerr << "[PS] STATES=" << state_diff
+		<< ". Queries=" << StateSolver::getRealQueries() - rq_c_old
+		<< ". TQs=" << stats::queriesTopLevel - tq_c_old
+		<< ". CheapForks=" << fork_ktest->getCheapForks()
+		<< ". Time=" << wt.checkSecs() << "s\n";
+	std::cerr << "[PS] Done seeding.\n";
+
+	llvm::ConcretizeEarlyTerminate = old_cet;
+	exe->setForking(old_fork);
+	exe->setSolver(old_ss);
+	delete new_ss;
+	delete fork_ktest;
+}
+
 SFH_DEF_ALL(PartSeedBeginReplay, "klee_partseed_begin", true)
 {
 	std::string		name;
@@ -256,7 +333,6 @@ SFH_DEF_ALL(PartSeedBeginReplay, "klee_partseed_begin", true)
 	static psdb_t		psdb;
 	static int		recur_depth = 0;
 	unsigned		sel_idx;
-	ForksKTest		*fork_ktest;
 	KTest			*kt;
 	psdb_t::iterator	it;
 
@@ -295,66 +371,18 @@ SFH_DEF_ALL(PartSeedBeginReplay, "klee_partseed_begin", true)
 		return;
 	}
 
-	recur_depth++;
-	
 	std::cerr << "[PS] Loaded ktest " << ss.str() << '\n';
 	state.bindLocal(target, MK_CONST(sel_idx, 64));
-	fork_ktest = new ForksKTest(*sfh->executor);
-	fork_ktest->setMakeErrTests(false);
-	fork_ktest->setKTest(kt, &state);
-	fork_ktest->setForkSuppress(true);
-	fork_ktest->setConstraintOmit(false);
 
-
-	/* since I suppress, make sure that a failed replay doesn't sink path */
-	/* XXX: dynamic adjustments-- 1/2 and 1/4 rates seem good for now */
-	if (state.newInsts || (rand() % 4) == 0) {
-		ExecutionState	*new_state;
-		new_state = sfh->executor->pureFork(state, false);
-		new_state->abortInstruction();
-	}
-
-	old_fork = sfh->executor->getForking();
-	sfh->executor->setForking(fork_ktest);
-
-	StateSolver	*old_ss, *new_ss;
-	bool		old_cet;
-	
-	old_cet = llvm::ConcretizeEarlyTerminate;
-	llvm::ConcretizeEarlyTerminate = false; 
-
-	old_ss = sfh->executor->getSolver();
-	new_ss = new KTestStateSolver(old_ss, state, kt);
-	sfh->executor->setSolver(new_ss);
-
-	WallTimer	wt;
-	int		st_c_old(sfh->executor->getNumStates());
-	unsigned	tq_c_old(stats::queriesTopLevel);
-	unsigned	rq_c_old(StateSolver::getRealQueries());
-
-	/* XXX: This makes the executor is reentrant. Should I be worried? */
-	sfh->executor->exhaustState(&state);
-
-	std::cerr << "[PS] STATES=" << sfh->executor->getNumStates() - st_c_old
-		<< ". Queries=" << StateSolver::getRealQueries() - rq_c_old
-		<< ". TQs=" << stats::queriesTopLevel - tq_c_old
-		<< ". CheapForks=" << fork_ktest->getCheapForks()
-		<< ". Time=" << wt.checkSecs() << "s\n";
-	std::cerr << "[PS] Done seeding.\n";
-
-	llvm::ConcretizeEarlyTerminate = old_cet;
-	sfh->executor->setForking(old_fork);
-	sfh->executor->setSolver(old_ss);
-	delete new_ss;
-	delete fork_ktest;
-	kTest_free(kt);
-
+	recur_depth++;
+	dispatchKTest(sfh->executor, state, kt, name);
 	recur_depth--;
+
+	kTest_free(kt);
 }
 
 SFH_DEF_ALL(PartSeedEndReplay, "klee_partseed_end", false)
 {
-	ExecutionState*		fork_es;
 	const ConstantExpr*	ce;
 
 	std::cerr << "[PS] Got partseed end.\n";

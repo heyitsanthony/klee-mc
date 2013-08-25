@@ -185,7 +185,7 @@ static void do_sockcall(void* regfile, int call, unsigned long* args)
 		if (GET_SYSRET_S(new_regs) == -1)
 			break;
 
-		klee_assume_eq(GET_SYSRET(new_regs), 0);
+		sc_ret_v_new(new_regs, 0);
 		make_sym(args[1], sizeof(struct sockaddr_in), "getsockname");
 		*((socklen_t*)args[2]) = sizeof(struct sockaddr_in);
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
@@ -196,7 +196,7 @@ static void do_sockcall(void* regfile, int call, unsigned long* args)
 		if (GET_SYSRET_S(new_regs) == -1)
 			break;
 
-		klee_assume_eq(GET_SYSRET(new_regs), 0);
+		sc_ret_v_new(new_regs, 0);
 		make_sym_by_arg(
 			regfile,
 			1,
@@ -662,23 +662,28 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(regfile, 0);
 		break;
 
-	case SYS_getgroups:
+	case SYS_getgroups: {
+		unsigned	sz;
 		if (GET_ARG0_S(regfile) < 0) {
 			sc_ret_v(regfile, -1);
 			break;
 		}
 
 		if (GET_ARG0(regfile) == 0) {
-			sc_ret_v(regfile, 2);
+			sc_ret_v(regfile, 0);
 			break;
 		}
 
+		sz = GET_ARG0(regfile);
+		if (sz > 16) sz = 16;
+
 		make_sym_by_arg(
 			regfile, 1,
-			sizeof(gid_t)*GET_ARG0(regfile),
+			sizeof(gid_t)*sz,
 			"getgroups");
-		sc_ret_v(regfile, GET_ARG0(regfile));
+		sc_ret_v(regfile, sz);
 		break;
+	}
 	case SYS_sched_setaffinity:
 	case SYS_sched_getaffinity:
 		sc_ret_v(regfile, -1);

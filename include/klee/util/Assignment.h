@@ -81,6 +81,8 @@ public:
 
 	template<typename InputIterator>
 	bool satisfies(InputIterator begin, InputIterator end) const;
+	template<typename InputIterator>
+	bool refutes(InputIterator begin, InputIterator end) const;
 	bool satisfies(ref<Expr> e) const { return evaluate(e)->isTrue(); }
 
 	void save(const char* path) const;
@@ -192,5 +194,14 @@ inline bool Assignment::satisfies(InputIterator begin, InputIterator end) const
 	return true;
 }
 
+template<typename InputIterator>
+inline bool Assignment::refutes(InputIterator begin, InputIterator end) const
+{
+	AssignmentEvaluator v(this);
+	for (; begin!=end; ++begin)
+		if (v.apply(*begin)->isFalse())
+			return true;
+	return false;
+}
 }
 #endif
