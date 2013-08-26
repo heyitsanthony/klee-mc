@@ -443,7 +443,8 @@ double BranchEntropyWeight::weigh(const ExecutionState* es) const
 			? NULL
 			: t->branchSites.front();
 		if (bemap[i][front_ki] == 0) {
-			std::cerr << "WTF: " << (void*)es << '\n';
+			std::cerr <<
+				"[BE] Missing in bemap: " << (void*)es << '\n';
 			continue;
 		}
 		assert (bemap[i][front_ki] > 0);
