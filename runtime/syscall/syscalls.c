@@ -111,6 +111,18 @@ void sc_ret_range(void* regfile, int64_t lo, int64_t hi)
 	klee_assume_sle(rax, (ARCH_SIGN_CAST)hi);
 }
 
+static void loop_protect(int sc, int* ctr, int max_loop)
+{
+	*ctr = (last_sc == sc)
+		? *ctr + 1
+		: 0;
+
+	if (*ctr < max_loop)
+		return;
+
+	klee_uerror("Possible syscall infinite loop", "loop.early");
+}
+
 #define UNIMPL_SC(x)						\
 	case SYS_##x:						\
 		klee_uerror("Unimplemented syscall "#x, "sc.err");	\
@@ -214,9 +226,14 @@ static void do_sockcall(void* regfile, int call, unsigned long* args)
 		sc_ret_or(sc_new_regs(regfile), -1, args[2]);
 		break;
 
-	case SYS_RECVFROM:
+	case SYS_RECVFROM: {
+		uint64_t	len;
+
 		new_regs = sc_new_regs(regfile);
-		make_sym(args[1], args[2], "recvfrom_buf");
+		len = args[2];
+		if (args[2] > 8192) len = 8192;
+
+		make_sym(args[1], len, "recvfrom_buf");
 		if (args[4])
 			make_sym(
 				args[4],
@@ -227,9 +244,11 @@ static void do_sockcall(void* regfile, int call, unsigned long* args)
 			sl = ((socklen_t*)args[5]);
 			*sl = sizeof(struct sockaddr_in);
 		}
-		sc_ret_or(new_regs, 0, args[2]);
+		klee_print_expr("recvfrom by", len);
+		sc_ret_or(new_regs, -1, len);
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
 		break;
+	}
 
 	case SYS_SOCKETPAIR:
 	case SYS_SHUTDOWN:
@@ -270,25 +289,44 @@ static void do_sockcall(void* regfile, int call, unsigned long* args)
 
 		new_regs = sc_new_regs(regfile);
 
+		mhdr = (void*)concretize_u64(args[1]);
+		if (mhdr != NULL) {
+			make_sym(
+				(uint64_t)&mhdr->msg_flags,
+				sizeof(mhdr->msg_flags),
+				"recvmsg_flags");
+
+			if (mhdr->msg_control != NULL) {
+				make_sym(
+					(uint64_t)(mhdr->msg_control),
+					mhdr->msg_controllen,
+					"recvmsg_ctl");
+			}
+		}
+
 		if (GET_SYSRET(new_regs) == 0) {
 			klee_print_expr("rm", 0);
 			sc_ret_v_new(new_regs, 0);
 			break;
 		}
 
-		klee_print_expr("doconcretize", args[1]);
-		mhdr = (void*)concretize_u64(args[1]);
-		klee_print_expr("concretized", args[1]);
-		if (mhdr->msg_iovlen == 0) {
-			if (mhdr->msg_controllen != 0) {
-				klee_print_expr(
-					"control messages not yet supported!",
-					mhdr->msg_controllen);
-			}
+		if (mhdr == NULL) {
 			sc_ret_v_new(new_regs, -1);
 			break;
 
 		}
+
+		if (mhdr->msg_controllen != 0) {
+			klee_print_expr(
+				"control messages not yet supported!",
+				mhdr->msg_controllen);
+		}
+
+		if (mhdr->msg_iovlen == 0) {
+			sc_ret_v_new(new_regs, -1);
+			break;
+		}
+
 
 		klee_print_expr("isneg", 1);
 		if (GET_SYSRET_S(new_regs) == -1) {
@@ -302,13 +340,6 @@ static void do_sockcall(void* regfile, int call, unsigned long* args)
 			mhdr->msg_iov[0].iov_len,
 			"recvmsg_iov");
 
-		if (mhdr->msg_control != NULL) {
-			make_sym(
-				(uint64_t)(mhdr->msg_control),
-				mhdr->msg_controllen,
-				"recvmsg_ctl");
-		}
-
 		if (mhdr->msg_name != NULL) {
 			make_sym(
 				(uint64_t)(mhdr->msg_name),
@@ -316,14 +347,7 @@ static void do_sockcall(void* regfile, int call, unsigned long* args)
 				"recvmsg_name");
 		}
 
-		make_sym(
-			(uint64_t)&mhdr->msg_flags,
-			sizeof(mhdr->msg_flags),
-			"recvmsg_flags");
-
 		/* TODO: controllen should be symbolic */
-		klee_print_expr("rm", 2);
-
 		sc_ret_v_new(new_regs, mhdr->msg_iov[0].iov_len);
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
 		break;
@@ -364,18 +388,36 @@ static void sc_poll(void* regfile)
 {
 	struct pollfd	*fds;
 	uint64_t	poll_addr;
+	static int	poll_c = 0;
 	unsigned int	i, nfds;
+	void		*new_regs = sc_new_regs(regfile);
 
-	poll_addr = klee_get_value(GET_ARG0(regfile));
-	fds = (struct pollfd*)poll_addr;
-	nfds = klee_get_value(GET_ARG1(regfile));
+	loop_protect(SYS_poll, &poll_c, 16);
 
-	for (i = 0; i < nfds; i++) {
-		klee_check_memory_access(&fds[i], sizeof(struct pollfd));
-		fds[i].revents = klee_get_value(fds[i].events);
+	if (GET_SYSRET_S(new_regs) == -1) {
+		sc_ret_v_new(new_regs, -1);
+		return;
 	}
 
-	sc_ret_v(regfile, nfds);
+	if (GET_SYSRET_S(new_regs) == 0 || GET_ARG1(regfile) == 0) {
+		sc_ret_v_new(new_regs, 0);
+		return;
+	}
+
+	nfds = concretize_u64(GET_ARG1(regfile));
+
+	poll_addr = concretize_u64(GET_ARG0(regfile));
+	fds = (struct pollfd*)poll_addr;
+
+	for (i = 0; i < nfds; i++) {
+	//	klee_check_memory_access(&fds[i], sizeof(struct pollfd));
+		klee_check_memory_access(&fds[i], 1);
+	//	fds[i].revents = klee_get_value(fds[i].events);
+		make_sym((uint64_t)&fds[i].revents, sizeof(short), "revents");
+	//	fds[i].revents = fds[i].events;
+	}
+
+	sc_ret_v_new(new_regs, nfds);
 }
 
 static void sc_klee(void* regfile)
@@ -453,17 +495,6 @@ static void sc_klee(void* regfile)
 	}
 }
 
-static void loop_protect(int sc, int* ctr, int max_loop)
-{
-	*ctr = (last_sc == sc)
-		? *ctr + 1
-		: 0;
-
-	if (*ctr < max_loop)
-		return;
-
-	klee_uerror("Possible syscall infinite loop", "loop.early");
-}
 
 #include <asm/ptrace.h>
 
@@ -796,7 +827,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		new_regs = sc_new_regs(regfile);
 		if (infop != NULL)
 			make_sym((uint64_t)infop, SIGINFO_T_SZ, "waitid_siginfo");
-		break;	
+		break;
 	}
 
 	case ARCH_SYS_WAITPID: // 32-bit only
@@ -869,8 +900,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 		if (GET_ARG3(regfile) != 0) {
 			uint64_t dst_addr = concretize_u64(GET_ARG3(regfile));
 			make_sym(dst_addr, TIMESPEC_SZ,  "clock_nanosleep");
-			sc_ret_v(regfile, -1);
-			break;
 		}
 		sc_ret_or(sc_new_regs(regfile), -1, 0);
 		break;
@@ -1209,7 +1238,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			GET_ARG3(regfile),
 			GET_ARG4(regfile),
 			GET_ARG5(regfile) };
-		do_sockcall(regfile, SYS_RECVMSG, v);
+		do_sockcall(regfile, SYS_RECVFROM, v);
 		break;
 	}
 

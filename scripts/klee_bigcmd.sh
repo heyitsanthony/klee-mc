@@ -15,7 +15,7 @@ if [ -e "$1" ]; then
 		mkdir g.tmp
 		tar zxvf "$1"  --directory="g.tmp" 
 		gl=`find  g.tmp -name guest-\* | head -n1`
-		if [ -z "$gl" ]; then
+		if [ ! -z "$gl" ]; then
 			rm -f guest-last
 			ln -s "$gl" guest-last
 		fi
