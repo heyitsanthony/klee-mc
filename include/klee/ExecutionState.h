@@ -46,6 +46,8 @@ class MemoryManager;
 class KInstruction;
 class Terminator;
 
+typedef uint64_t sid_t;
+
 /* Represents a memory array, its materialization, and ... */
 
 /* basically for ref counting */
@@ -350,7 +352,7 @@ public:
 	 * returns 0 if not materialization of replay path */
 	unsigned replayHeadLength(const ReplayPath& rp) const;
 
-	uint64_t getSID(void) const { return sid; }
+	sid_t getSID(void) const { return sid; }
 
 	bool getOnFini(void) const { return term.get() != NULL; }
 	Terminator* getFini(void) const { return term.get(); }
@@ -391,8 +393,7 @@ private:
 	typedef std::map<const KFunction*, uint64_t>	min_kf_inst_ty;
 	min_kf_inst_ty		min_kf_inst;
 
-	uint64_t		sid;
-
+	sid_t			sid;
 	ProtoPtr<Terminator>	term;
 };
 

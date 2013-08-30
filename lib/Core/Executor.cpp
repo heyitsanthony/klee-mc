@@ -9,15 +9,12 @@
 #include <llvm/Support/CallSite.h>
 #include <llvm/Analysis/MemoryBuiltins.h>
 #include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Module.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/raw_os_ostream.h>
-#include <llvm/Support/raw_ostream.h>
 
 #include <cassert>
 #include <algorithm>
 #include <iomanip>
-#include <fstream>
 #include <sstream>
 #include <vector>
 #include <string>
@@ -26,14 +23,12 @@
 #include "klee/Common.h"
 #include "klee/ExeStateBuilder.h"
 #include "klee/Expr.h"
-#include "klee/util/ExprPPrinter.h"
 #include "klee/Internal/ADT/KTest.h"
 #include "klee/Internal/ADT/RNG.h"
 #include "klee/Internal/Module/Cell.h"
 #include "klee/Internal/Module/InstructionInfoTable.h"
 #include "klee/Internal/Module/KInstruction.h"
 #include "klee/Internal/Module/KModule.h"
-#include "klee/Internal/System/Time.h"
 #include "klee/Internal/Support/Timer.h"
 
 #include "Executor.h"
@@ -113,8 +108,7 @@ namespace {
 	cl::desc("Stop execution after number of instructions (0=off)"));
 
   cl::opt<unsigned>
-  MaxMemory("max-memory",
-	cl::desc("Refuse to fork when above amount (in MB, 0=off)"));
+  MaxMemory("max-memory", cl::desc("Refuse forks above cap (in MB, 0=off)"));
 
   // use 'external storage' because also needed by tools/klee/main.cpp
   cl::opt<bool, true>
@@ -129,8 +123,7 @@ namespace {
 	cl::desc("Speculatively execute both sides of a symbolic branch."));
 
 	cl::opt<bool>
-	TrackBranchExprs(
-		"track-br-exprs", cl::desc("Track Branching Expressions"));
+	TrackBranchExprs("track-br-exprs", cl::desc("Track branching exprs."));
 
   cl::opt<bool, true>
   ReplayInhibitedForksProxy(
@@ -255,9 +248,8 @@ bool Executor::addConstraint(ExecutionState &state, ref<Expr> cond)
 		ok = solver->mayBeTrue(state, cond, mayBeTrue);
 		assert (ok);
 
-		if (!mayBeTrue) {
+		if (!mayBeTrue)
 			std::cerr << "[CHK] UH0H: " << cond << " never true!\n";
-		}
 		assert (mayBeTrue);
 	}
 
@@ -274,9 +266,8 @@ bool Executor::addConstraint(ExecutionState &state, ref<Expr> cond)
 		ok = solver->mustBeTrue(state, cond, mustBeTrue);
 		assert (ok);
 
-		if (!mustBeTrue) {
+		if (!mustBeTrue)
 			std::cerr << "[CHK] UHOH: " << cond << " never true!\n";
-		}
 		assert (mustBeTrue);
 	}
 
@@ -783,7 +774,8 @@ static bool concretizeObject(
 	Assignment		&a,
 	const MemoryObject	*mo,
 	const ObjectState	*os,
-	WallTimer& wt)
+	WallTimer		&wt,
+	bool			force_const = true)
 {
 	unsigned		sym_bytes = 0;
 	ObjectState		*new_os;
@@ -809,30 +801,29 @@ static bool concretizeObject(
 		ref<klee::Expr>		e;
 		uint8_t			v;
 
-		e = os->read8(i);
-		ce = dyn_cast<klee::ConstantExpr>(e);
-		if (ce != NULL) {
-			v = ce->getZExtValue();
-		} else {
-			e = a.evaluateCostly(e);
-			if (e.isNull() || e->getKind() != Expr::Constant) {
-				delete new_os;
-				return false;
-			}
-			ce = cast<klee::ConstantExpr>(e);
-			v = ce->getZExtValue();
-			sym_bytes++;
-		}
-
 		if ((sym_bytes % 200) == 199) {
-			if (MaxSTPTime > 0 && wt.checkSecs() > 3*MaxSTPTime) {
-				delete new_os;
-				return false;
-			}
+			if (MaxSTPTime > 0 && wt.checkSecs() > 3*MaxSTPTime)
+				goto err;
 			/* bump so we don't check again */
 			sym_bytes++;
 		}
 
+		e = os->read8(i);
+		ce = dyn_cast<klee::ConstantExpr>(e);
+		if (ce == NULL) {
+			e = a.evaluateCostly(e);
+			if (e.isNull()) goto err;
+			
+			if (e->getKind() != Expr::Constant) {
+				if (force_const) goto err;
+				v = ~0;
+			} else {
+				ce = cast<klee::ConstantExpr>(e);
+				v = ce->getZExtValue();
+				sym_bytes++;
+			}
+		} else
+			v = ce->getZExtValue();
 
 		all_zeroes &= (v == 0);
 		new_os->write(i, e);
@@ -846,6 +837,10 @@ static bool concretizeObject(
 
 	st.rebindObject(mo, new_os);
 	return true;
+
+err:
+	delete new_os;
+	return false;
 }
 
 /* branches st back into scheduler,
@@ -886,15 +881,43 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 		return new_st;
 	}
 
+/* XXX: this doesn't quite work yet because we assume a 
+ * state is concretized upto a certain symbolic object */
+#define DO_PARTIAL_CONC	false
+	if (DO_PARTIAL_CONC) {
+		std::vector<const Array* >	res;
+		std::set<const Array* >		arr_set, rmv_set;
+		ref<Expr>		bad_expr(solver->getLastBadExpr());
+
+		std::cerr << "[Exe] Last Bad: " << bad_expr << '\n';
+		if (bad_expr.isNull() == false)
+			ExprUtil::findSymbolicObjects(
+				solver->getLastBadExpr(), res);
+
+		foreach (it, res.begin(), res.end()) {
+			std::cerr << "[Exe] Sym obj: " << (*it)->name << '\n';
+			arr_set.insert(*it);
+		}
+
+		foreach (it, a.bindings.begin(), a.bindings.end())
+			if (!arr_set.count(it->first))
+				rmv_set.insert(it->first);
+
+		foreach (it, rmv_set.begin(), rmv_set.end()) 
+			a.resetBinding(*it);
+	}
+
 	/* 2. enumerate all objstates-- replace sym objstates w/ concrete */
 	WallTimer	wt;
 	std::cerr << "[Exe] Concretizing objstates\n";
 	foreach (it, st.addressSpace.begin(), st.addressSpace.end()) {
-		if (!concretizeObject(st, a, it->first, it->second.os, wt)) {
-			bad_conc_kfuncs.insert(st.getCurrentKFunc());
-			TERMINATE_EARLY(this, st, "timeout eval on conc state");
-			return new_st;
-		}
+		if (concretizeObject(
+			st, a, it->first, it->second.os, wt, !DO_PARTIAL_CONC))
+			continue;
+
+		bad_conc_kfuncs.insert(st.getCurrentKFunc());
+		TERMINATE_EARLY(this, st, "timeout eval on conc state");
+		return new_st;
 	}
 
 	/* 3. enumerate stack frames-- eval all expressions */
@@ -902,7 +925,8 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 	st.stack.evaluate(a);
 
 	/* 4. drop constraints, since we lost all symbolics! */
-	st.constraints = ConstraintManager();
+	if (!DO_PARTIAL_CONC)
+		st.constraints = ConstraintManager();
 
 	/* 5. mark symbolics as concrete */
 	std::cerr << "[Exe] Set concretization\n";
@@ -1473,8 +1497,9 @@ ref<Expr> Executor::instShuffleVectorEvaled(
 			ext = MK_EXTRACT(in_v_hi, v_elem_sz*idx, v_elem_sz);
 		}
 
-		if (i == 0) out_val = ext;
-		else out_val = ConcatExpr::create(out_val, ext);
+		out_val = (i == 0)
+			? ext
+			: MK_CONCAT(out_val, ext);
 	}
 
 	return out_val;

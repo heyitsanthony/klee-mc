@@ -141,9 +141,9 @@ SFH_DEF_ALL(PartSeedEndCollect, "klee_partseed_end", false)
 
 		std::cerr << "[PS] No symbolic object delta (objs="
 			<< state.getNumSymbolics()
-			<< "). Ignoring(KILLING)\n";
+			<< "). Ignoring\n";//(KILLING)\n";
 
-		sfh->executor->terminate(state);
+	//	sfh->executor->terminate(state);
 		return;
 	}
 

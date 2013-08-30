@@ -205,6 +205,16 @@ void Assignment::resetBindings(void)
 	bindings.clear();
 }
 
+
+void Assignment::resetBinding(const Array *a)
+{
+	if (!bindings.erase(a))
+		return;
+
+	free_bindings.insert(a);
+}
+
+
 ref<Expr> Assignment::evaluateCostly(ref<Expr>& e, unsigned& cost) const
 {
 	ExprTimer<AssignmentEvaluator>	v(500000);

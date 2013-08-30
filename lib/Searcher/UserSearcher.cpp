@@ -19,6 +19,7 @@
 #include "DemotionSearcher.h"
 #include "ConcretizingSearcher.h"
 #include "SecondChanceSearcher.h"
+#include "KillCovSearcher.h"
 #include "RescanSearcher.h"
 #include "TailPriority.h"
 #include "BucketPriority.h"
@@ -116,6 +117,12 @@ namespace {
   	"use-second-chance",
 	cl::desc("Give states that find new instructions extra time."),
 	cl::init(false));
+
+  cl::opt<bool> UseKillCov(
+  	"use-killcov",
+	cl::desc("Kill forked states if no new coverage."),
+	cl::init(false));
+
 
   cl::opt<std::string>
   WeightType(
@@ -539,6 +546,9 @@ Searcher* UserSearcher::setupConfigSearcher(Executor& executor)
 
 	if (UseSecondChance)
 		searcher = new SecondChanceSearcher(searcher);
+
+	if (UseKillCov)
+		searcher = new KillCovSearcher(executor, searcher);
 
 	if (UseConcretizingSearch == 2)
 		searcher = new ConcretizingSearcher(executor, searcher);

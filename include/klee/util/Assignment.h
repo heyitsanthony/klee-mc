@@ -121,6 +121,7 @@ public:
 	unsigned int getNumBindings(void) const { return bindings.size(); }
 	unsigned int getNumFree(void) const { return free_bindings.size(); }
 	void resetBindings(void);
+	void resetBinding(const Array* a);
 	void print(std::ostream& os) const;
 
 	void addBinding(

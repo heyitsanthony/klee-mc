@@ -147,6 +147,8 @@ int UpdateList::compare(const UpdateList &b) const
 	if (getSize() > b.getSize())
 		return 1;
 
+/* XXX: 0 => super unsound but whatever */
+#if 1
 	// XXX build comparison into update, make fast
 	const UpdateNode *an=head, *bn=b.head;
 	for (; an && bn; an=an->next,bn=bn->next) {
@@ -158,6 +160,7 @@ int UpdateList::compare(const UpdateList &b) const
 	}
 
 	assert (!an && !bn);
+#endif
 	return 0;
 }
 

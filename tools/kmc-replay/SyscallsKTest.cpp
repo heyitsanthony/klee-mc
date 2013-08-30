@@ -358,20 +358,6 @@ void SyscallsKTest::doLinuxThunks(SyscallParams& sp, int xlate_sysnr)
 		if (sp.getArg(2) == SIGABRT)
 			exited = true;
 		break;
-	case SYS_poll: {
-		struct pollfd*	fds = (struct pollfd*)(sp.getArg(0));
-		unsigned int	nfds = sp.getArg(1);
-		for (unsigned int i = 0; i < nfds; i++) {
-			uint16_t	e;
-
-			e = guest->getMem()->read16(
-				guest_ptr((uintptr_t)&fds[i].events));
-			guest->getMem()->write16(
-				guest_ptr((uintptr_t)&fds[i].revents),
-				e);
-		}
-		break;
-	}
 
 	case SYS_getcwd: {
 		if (!bc_sc_is_thunk(bcs_crumb)) break;

@@ -71,6 +71,8 @@ public:
 	static uint64_t getRealQueries(void);
 
 	static void dumpTimes(std::ostream& os);
+
+	ref<Expr> getLastBadExpr(void) const { return last_bad; }
 private:
 	static uint64_t	constQueries;
 	bool updateTimes(const ExecutionState& state, double totalTime);
@@ -79,6 +81,7 @@ private:
 #define NUM_STATESOLVER_BUCKETS		45
 	static unsigned timeBuckets[NUM_STATESOLVER_BUCKETS];
 	static double timeBucketTotal[NUM_STATESOLVER_BUCKETS];
+	ref<Expr>	last_bad;
 };
 }
 

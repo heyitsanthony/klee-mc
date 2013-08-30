@@ -61,11 +61,13 @@ namespace
 	llvm::cl::opt<unsigned>
 	ForkCondIdxMod("forkcond-idx-mod", llvm::cl::init(4));
 
+	/* this is kind of useful for limiting useless test cases but
+	 * tends to drop good states */
 	llvm::cl::opt<bool>
 	QuenchRunaways(
 		"quench-runaways",
 		llvm::cl::desc("Drop states at heavily forking instructions."),
-		llvm::cl::init(true));
+		llvm::cl::init(false));
 }
 
 using namespace klee;

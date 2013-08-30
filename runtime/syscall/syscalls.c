@@ -233,18 +233,23 @@ static void do_sockcall(void* regfile, int call, unsigned long* args)
 		len = args[2];
 		if (args[2] > 8192) len = 8192;
 
+		/* argument buffer */
 		make_sym(args[1], len, "recvfrom_buf");
+
+		/* sockaddr pointer? */
 		if (args[4])
 			make_sym(
 				args[4],
 				sizeof(struct sockaddr_in),
 				"recvfrom_sa");
-		if (args[5] != 0) {
+
+		/* socklen set? */
+		if (args[5]) {
 			socklen_t	*sl;
 			sl = ((socklen_t*)args[5]);
 			*sl = sizeof(struct sockaddr_in);
 		}
-		klee_print_expr("recvfrom by", len);
+
 		sc_ret_or(new_regs, -1, len);
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
 		break;
@@ -1108,7 +1113,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	case SYS_poll:
 		sc_poll(regfile);
-		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
 		break;
 
 	case SYS_times:

@@ -36,3 +36,8 @@ DECL_HOOK(getservbyname)
 DECL_HOOK(getservbyname_r)
 DECL_HOOK(__getservbyname_r)
 DECL_HOOK(__GI_getaddrinfo)
+
+DECL_HOOK(iconv_open)
+
+DECL_HOOK(XPending)
+DECL_HOOK(poll_for_next_event)

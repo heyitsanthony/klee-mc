@@ -121,7 +121,7 @@ public:
   // not hold, respectively. One of the states is necessarily the
   // current state, and one of the states may be null.
   StatePair fork(ExecutionState &current, ref<Expr> condition, bool isInternal);
-  ExecutionState* pureFork(ExecutionState& es, bool compact);
+  ExecutionState* pureFork(ExecutionState& es, bool compact = false);
   StateVector fork(
 	ExecutionState &current,
 	unsigned N, ref<Expr> conditions[], bool isInternal,

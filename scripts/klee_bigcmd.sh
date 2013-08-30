@@ -115,7 +115,7 @@ if [ ! -z "$USE_PSDB" ]; then
 fi
 
 if [ ! -z "$USE_PSDB_REPLAY" ]; then
-	PSDBFLAGS="-psdb-replay=true -use-hookpass -hookpass-lib=partseed.bc"
+	PSDBFLAGS="-psdb-replay=true  -ktest-timeout=15 -use-hookpass -hookpass-lib=partseed.bc"
 fi
 
 

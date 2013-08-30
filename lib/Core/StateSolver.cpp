@@ -36,6 +36,7 @@ do {	\
 	ok = x;	\
 	finish = util::getWallTime();	\
 	if (!updateTimes(state, std::max(0.,finish - start))) ok = false; \
+	if (ok == false) last_bad = expr; \
 } while (0)
 
 #define WRAP_QUERY_NOSIMP(x)	\
@@ -44,6 +45,7 @@ do {	\
 	ok = x;	\
 	finish = util::getWallTime();	\
 	if (!updateTimes(state, std::max(0.,finish - start))) ok = false; \
+	if (ok == false) last_bad = NULL; \
 } while (0)
 
 
