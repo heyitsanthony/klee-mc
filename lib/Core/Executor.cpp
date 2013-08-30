@@ -2431,6 +2431,16 @@ void Executor::doImpliedValueConcretization(
 
 	ImpliedValue::getImpliedValues(e, value, results);
 
+	/* ivc for when we don't have a read expr at top level */
+	if (	e->getKind() == Expr::Eq &&
+		e->getKid(1)->getWidth() != 1 &&
+		e->getKid(1)->getKind() != Expr::Read &&
+		e->getKid(0)->getKind() == Expr::Constant)
+	{
+		ref<ConstantExpr>	ce(cast<ConstantExpr>(e->getKid(0)));
+		ImpliedValue::ivcStack(state.stack, e->getKid(1), ce);
+	}
+
 	foreach (it, results.begin(), results.end())
 		state.commitIVC(it->first, it->second);
 }

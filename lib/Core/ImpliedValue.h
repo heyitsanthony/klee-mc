@@ -46,8 +46,9 @@ public:
 		const ref<ReadExpr>& re, const ref<ConstantExpr>& ce);
 	static void ivcStack(
 		CallStack& stk,
-		const ref<ReadExpr>& re, const ref<ConstantExpr>& ce);
+		const ref<Expr>& re, const ref<ConstantExpr>& ce);
 
+	static uint64_t getStackUpdates(void) { return ivc_stack_cells; }
 private:
 	static uint64_t	ivc_mem_bytes;
 	static uint64_t ivc_stack_cells;

@@ -367,7 +367,7 @@ void ImpliedValue::ivcMem(
 
 void ImpliedValue::ivcStack(
 	CallStack& stk,
-	const ref<ReadExpr>& re, const ref<ConstantExpr>& ce)
+	const ref<Expr>& re, const ref<ConstantExpr>& ce)
 {
 	foreach (it, stk.begin(), stk.end()) {
 		ExprReplaceVisitor	erv(re, ce);
@@ -380,7 +380,7 @@ void ImpliedValue::ivcStack(
 		for (unsigned i = 0; i < sf.kf->numRegisters; i++) {
 			ref<Expr>	e, old_v(sf.locals[i].value);
 
-			if (old_v.isNull() || old_v->getKind() ==Expr::Constant)
+			if (old_v.isNull() || old_v->getKind() == Expr::Constant)
 				continue;
 
 			e = erv.apply(old_v);
