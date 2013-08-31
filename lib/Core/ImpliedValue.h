@@ -43,12 +43,13 @@ public:
 
 	static void ivcMem(
 		AddressSpace& as,
-		const ref<ReadExpr>& re, const ref<ConstantExpr>& ce);
+		const ref<Expr>& re, const ref<ConstantExpr>& ce);
 	static void ivcStack(
 		CallStack& stk,
 		const ref<Expr>& re, const ref<ConstantExpr>& ce);
 
 	static uint64_t getStackUpdates(void) { return ivc_stack_cells; }
+	static uint64_t getMemUpdates(void) { return ivc_mem_bytes; }
 private:
 	static uint64_t	ivc_mem_bytes;
 	static uint64_t ivc_stack_cells;

@@ -330,7 +330,7 @@ void ImpliedValue::checkForImpliedValues(
 
 void ImpliedValue::ivcMem(
 	AddressSpace& as,
-	const ref<ReadExpr>& re, const ref<ConstantExpr>& ce)
+	const ref<Expr>& re, const ref<ConstantExpr>& ce)
 {
 	ExprReplaceVisitor	erv(re, ce);
 

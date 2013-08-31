@@ -362,9 +362,12 @@ ref<Expr> SolverImpl::computeValue(const Query& query)
 	if (failed())
 		return NULL;
 
-	if (!hasSolution) query.print(std::cerr);
-
-	assert(hasSolution && "state has invalid constraint set");
+	if (!hasSolution) {
+		query.print(std::cerr);
+		std::cerr << "[Solver] State has invalid constraint set!\n";
+		failQuery();
+		return NULL;
+	}
 
 	// Evaluate the expression with the computed assignment.
 	return a.evaluate(query.expr);
