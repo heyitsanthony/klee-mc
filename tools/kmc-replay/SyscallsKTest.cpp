@@ -286,7 +286,7 @@ void SyscallsKTest::doLinuxThunks(SyscallParams& sp, int xlate_sysnr)
 		last_brk = last_brk & ~0xfff;
 		new_brk = 4096*((new_brk + 4095) / 4096);
 
-		if (last_brk == new_brk)
+		if (last_brk >= new_brk)
 			break;
 
 		/* extend program break */
@@ -297,6 +297,13 @@ void SyscallsKTest::doLinuxThunks(SyscallParams& sp, int xlate_sysnr)
 			PROT_READ | PROT_WRITE,
 			MAP_PRIVATE | MAP_ANONYMOUS,
 			-1, 0);
+
+		if ((void*)ret.o != (void*)last_brk)
+			std::cerr << "Brks not equal: ret.o=" <<
+				(void*)ret.o << " vs. last_brk=" <<
+				(void*)last_brk << ". new_brk =" <<
+				(void*)new_brk << '\n';
+
 		assert ((void*)ret.o == (void*)last_brk);
 		last_brk = new_brk;
 		break;
