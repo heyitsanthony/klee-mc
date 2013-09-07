@@ -146,8 +146,8 @@ void KleeHandlerVex::printErrDump(
 
 bool KleeHandlerVex::validateTest(unsigned id)
 {
-	pid_t	child_pid, ret_pid;
-	int	status;
+	pid_t		child_pid, ret_pid;
+	int		status;
 
 	child_pid = fork();
 	if (child_pid == -1) {
@@ -174,6 +174,7 @@ bool KleeHandlerVex::validateTest(unsigned id)
 		open("/dev/null", O_RDWR);
 		open("/dev/null", O_RDWR);
 		open("/dev/null", O_RDWR);
+
 		execvp("kmc-replay", (char**)argv); 
 		_exit(-1);
 	}
@@ -184,21 +185,38 @@ bool KleeHandlerVex::validateTest(unsigned id)
 		return false;
 	}
 
+	/* found a crash, treat it as a valid exit */
 	if (WIFSIGNALED(status)) {
 		int	sig = WTERMSIG(status);
 		if (sig == SIGSEGV)
 			return true;
 		if (sig == SIGFPE)
 			return true;
+
+		if (sig == SIGABRT) {
+			/* This causes false negatives because sometimes
+			 * there's an ASLR collision. Retry once to make
+			 * sure everything is OK. */
+			static int	 depth = 0;
+			bool		ret;
+
+			if (depth == 0) {
+				depth++;
+				std::cerr << "[Validate] Retrying on SIGABRT\n";
+				ret = validateTest(id);
+				depth--;
+				return ret;
+			}
+		}
 	}
 
 	if (!WIFEXITED(status)) {
-		std::cerr << "VALIDATE: DID NOT EXIT. Code=" << status << '\n';
+		std::cerr << "[Validate] DID NOT EXIT. Code=" << status << '\n';
 		return false;
 	}
 
 	if (WEXITSTATUS(status) != 0) {
-		std::cerr << "VALIDATE: BAD RETURN\n";
+		std::cerr << "[Validate] BAD RETURN\n";
 		return false;
 	}
 

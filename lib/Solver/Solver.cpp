@@ -356,8 +356,7 @@ ref<Expr> SolverImpl::computeValue(const Query& query)
 	bool		hasSolution;
 	Assignment	a(query.expr);
 
-	// Find the object used in the expression, and compute an assignment
-	// for them.
+	// Find object used in the expression and compute assignment
 	hasSolution = computeInitialValues(query.withFalse(), a);
 	if (failed())
 		return NULL;
