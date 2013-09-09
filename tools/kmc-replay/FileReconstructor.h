@@ -32,6 +32,7 @@ private:
 	unsigned int			fd_generation;
 	uint64_t			max_size;
 	bool				ign_close;
+	std::string			file_prefix;
 };
 
 #endif

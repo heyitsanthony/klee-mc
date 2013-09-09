@@ -14,6 +14,9 @@ FileReconstructor::FileReconstructor()
 	? atol(getenv("KMC_MAX_SIZE"))
 	: 0)
 , ign_close(getenv("KMC_IGN_CLOSE") != NULL)
+, file_prefix(getenv("KMC_RECONS_PREFIX") != NULL
+	? getenv("KMC_RECONS_PREFIX")
+	: "")
 {}
 
 FileReconstructor::~FileReconstructor()
@@ -42,7 +45,7 @@ int FileReconstructor::getFD(int vfd)
 	it = vfd2fd.find(vfd);
 	if (it != vfd2fd.end()) return (it->second).fd;
 
-	ss << "recons." << fd_generation;
+	ss << file_prefix << "recons." << fd_generation;
 	v.gen = fd_generation;
 	v.vfd = vfd;
 	v.fd = open(ss.str().c_str(), O_RDWR|O_CREAT, 0666);
@@ -96,7 +99,7 @@ void FileReconstructor::limitSize(int vfd, uint64_t off)
 	std::stringstream	ss;
 	gen = getGen(vfd);
 
-	ss << "recons." << gen;
+	ss << file_prefix << "recons." << gen;
 	unlink(ss.str().c_str());
 }
 
