@@ -68,7 +68,7 @@ void ReplayExec::doSysCall(VexSB* sb)
 void ReplayExec::verifyOrPanic(VexSB* last_dispatched)
 {
 	ReplayMismatch	*m;
-	
+
 	if ((m = verifyWithLog()) == NULL)
 		return;
 
@@ -203,6 +203,7 @@ ReplayMismatch*	ReplayExec::doChks(struct breadcrumb* &bc)
 	std::vector<ReplayMismatch*>	m;
 	ReplayMismatch			*m0;
 	regchk_t			regchk;
+	bool				has_stacklog, has_memlog;
 
 	regchk.reg_sz = getCPUSize();
 	assert (bc->bc_sz == regchk.reg_sz*2 + sizeof(struct breadcrumb));
@@ -212,13 +213,14 @@ ReplayMismatch*	ReplayExec::doChks(struct breadcrumb* &bc)
 	regchk.sym_reg = buf;
 	regchk.sym_mask = buf + regchk.reg_sz;
 
+
 	if ((m0 = regChk(regchk))) m.push_back(m0);
 
 	Crumbs::freeCrumb(bc);
 	bc = crumbs->peek();
 
-	if (bc != NULL && bc_is_type(bc, BC_TYPE_STACKLOG)) {
-		crumbs->skip();
+	has_stacklog = bc != NULL && bc_is_type(bc, BC_TYPE_STACKLOG);
+	if (has_stacklog) {
 		regchk.reg_sz = (bc->bc_sz-sizeof(struct breadcrumb)) / 2;
 		regchk.guest_reg = (uint8_t*)gs->getCPUState()->getStackPtr().o;
 		buf = reinterpret_cast<uint8_t*>(bc)+sizeof(struct breadcrumb);
@@ -232,7 +234,8 @@ ReplayMismatch*	ReplayExec::doChks(struct breadcrumb* &bc)
 	Crumbs::freeCrumb(bc);
 	bc = crumbs->peek();
 
-	if (bc != NULL && bc_is_type(bc, BC_TYPE_MEMLOG)) {
+	has_memlog = bc != NULL && bc_is_type(bc, BC_TYPE_MEMLOG);
+	if (has_memlog) {
 		uint64_t	base;
 		crumbs->skip();
 		regchk.reg_sz = (bc->bc_sz-(sizeof(struct breadcrumb)+8)) / 2;
@@ -267,7 +270,6 @@ ReplayMismatch* ReplayExec::verifyWithLog(void)
 	}
 
 	assert (bc_is_type(bc, BC_TYPE_VEXREG));
-	if (ign_reglog) goto done;
 
 	/* XXX HACK HACK HACK. There's something in the syspage that changes
 	 * from process to process. Since we can't write to the syspage with
@@ -304,13 +306,14 @@ ReplayMismatch* ReplayExec::verifyWithLog(void)
 	}
 
 
-	fprintf(stderr, "-------CHKLOG %d. LastAddr=%p (%s)------\n",
-		++chklog_c,
-		(void*)next_addr.o,
-		gs->getName(next_addr).c_str());
+	if (!ign_reglog)
+		fprintf(stderr, "-------CHKLOG %d. LastAddr=%p (%s)------\n",
+			++chklog_c,
+			(void*)next_addr.o,
+			gs->getName(next_addr).c_str());
 
 	m = doChks(bc);
-done:
+
 	Crumbs::freeCrumb(bc);
 	ignored_last = false;
 	return m;
@@ -318,6 +321,8 @@ done:
 
 RegReplayMismatch* ReplayExec::regChk(const struct regchk_t& rc)
 {
+	if (ign_reglog) return NULL;
+
 	if (getGuest()->getArch() == Arch::I386) {
 		VexGuestX86State	*v = (VexGuestX86State*)rc.sym_mask;
 		/* special hack to ignore ldt and gdt pointers.

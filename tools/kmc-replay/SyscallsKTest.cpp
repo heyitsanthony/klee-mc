@@ -286,8 +286,12 @@ void SyscallsKTest::doLinuxThunks(SyscallParams& sp, int xlate_sysnr)
 		last_brk = last_brk & ~0xfff;
 		new_brk = 4096*((new_brk + 4095) / 4096);
 
-		if (last_brk >= new_brk)
+		if (last_brk >= new_brk) {
+			std::cerr << "[SyscallsKTest] Warning: Old Brk "
+				<< (void*)last_brk << " >= "
+				<< (void*)new_brk << '\n';
 			break;
+		}
 
 		/* extend program break */
 		mmap_ret = guest->getMem()->mmap(

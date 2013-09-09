@@ -1022,6 +1022,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(new_regs, 0);
 		break;
 
+	case SYS_epoll_create1:
 	case SYS_epoll_create:
 		klee_warning_once("phony epoll_creat call");
 		new_regs = sc_new_regs(regfile);
