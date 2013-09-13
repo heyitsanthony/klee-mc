@@ -37,6 +37,7 @@ SoftMMUHandlers::SoftMMUHandlers(
 		{ "mmu_store_128", &f_store[4], true},
 		{ "mmu_cleanup", &f_cleanup, false},
 		{ "mmu_init", &f_init, false},
+		{ "mmu_signal", &f_signal, false},
 		{ NULL, NULL, false}};
 
 	if (!isLoaded) {

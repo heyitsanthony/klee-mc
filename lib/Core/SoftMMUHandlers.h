@@ -41,13 +41,13 @@ public:
 
 	KFunction *getCleanup(void) const { return f_cleanup; }
 	KFunction *getInit(void) const { return f_init; }
-
+	KFunction *getSignal(void) const { return f_signal; }
 
 private:
 	/* f[i] => 2^(i+3) width in bits */
 	KFunction *f_store[5];
 	KFunction *f_load[5];
-	KFunction *f_cleanup, *f_init;
+	KFunction *f_cleanup, *f_init, *f_signal;
 
 	static bool isLoaded;
 };

@@ -43,6 +43,10 @@ public:
 	// and perform the operation
 	virtual bool exeMemOp(ExecutionState &state, MemOp& mop) = 0;
 
+	// did the memory layout change?
+	virtual void signal(ExecutionState& state,
+		void* addr, uint64_t len) {}
+
 	/* small convenience function that should ONLY be used for debugging */
 	ref<Expr> readDebug(ExecutionState& state, uint64_t addr);
 

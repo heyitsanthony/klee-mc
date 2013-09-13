@@ -16,6 +16,7 @@ public:
 	virtual ~SymMMU(void);
 
 	virtual bool exeMemOp(ExecutionState &state, MemOp& mop);
+	virtual void signal(ExecutionState& state, void* addr, uint64_t len);
 private:
 	void initModule(Executor& exe, const std::string& type);
 	SoftMMUHandlers	*mh;

@@ -17,7 +17,6 @@
 #include <iomanip>
 #include <sstream>
 #include <vector>
-#include <string>
 
 #include "static/Sugar.h"
 #include "klee/Common.h"
@@ -426,12 +425,8 @@ void Executor::executeCallNonDecl(
 	Function *f,
 	std::vector< ref<Expr> > &arguments)
 {
-	// FIXME: Reliance on prevPC.
-	// Done to avoid having to pass KInstIterator everywhere
-	// instead of actual instruction, since we can't make a KInstIterator
-	// from just an instruction (unlike LLVM).
 	KFunction	*kf;
-	unsigned	callingArgs, funcArgs, numFormals;
+	unsigned	call_arg_c, func_arg_c;
 
 	assert (!f->isDeclaration() && "Expects a non-declaration function!");
 	kf = kmodule->getKFunction(f);
@@ -446,9 +441,9 @@ void Executor::executeCallNonDecl(
 			&state.stack[state.stack.size()-2]);
 
 	// TODO: support "byval", zeroext, sext, sret attributes
-	callingArgs = arguments.size();
-	funcArgs = f->arg_size();
-	if (callingArgs < funcArgs) {
+	call_arg_c = arguments.size();
+	func_arg_c = f->arg_size();
+	if (call_arg_c < func_arg_c) {
 		TERMINATE_ERROR(this,
 			state,
 			"calling function with too few arguments",
@@ -457,19 +452,18 @@ void Executor::executeCallNonDecl(
 	}
 
 	if (!f->isVarArg()) {
-		if (callingArgs > funcArgs) {
+		if (call_arg_c > func_arg_c) {
 			klee_warning_once(f, "calling %s with extra arguments.",
-			f->getName().data());
+				f->getName().data());
 		}
 	} else {
-		if (!state.setupCallVarArgs(funcArgs, arguments)) {
+		if (!state.setupCallVarArgs(func_arg_c, arguments)) {
 			TERMINATE_EXEC(this, state, "out of memory (varargs)");
 			return;
 		}
 	}
 
-	numFormals = f->arg_size();
-	for (unsigned i=0; i<numFormals; ++i)
+	for (unsigned i = 0; i < func_arg_c; ++i)
 		state.bindArgument(kf, i, arguments[i]);
 }
 
@@ -566,8 +560,7 @@ static inline const llvm::fltSemantics * fpWidthToSemantics(unsigned width)
 	case Expr::Int32:	return &llvm::APFloat::IEEEsingle;
 	case Expr::Int64:	return &llvm::APFloat::IEEEdouble;
 	case Expr::Fl80:	return &llvm::APFloat::x87DoubleExtended;
-	default:		return 0;
-	}
+	default:		return 0; }
 }
 
 #define DECL_APF(n, c)	llvm::APFloat	n(	\
@@ -715,8 +708,7 @@ void Executor::markBranchVisited(
 
 	is_cond_const = cond->getKind() == Expr::Constant;
 	if (!is_cond_const) {
-		if (TrackBranchExprs)
-			kbr->addExpr(cond);
+		if (TrackBranchExprs) kbr->addExpr(cond);
 		kbr->seenExpr();
 	}
 
@@ -726,8 +718,8 @@ void Executor::markBranchVisited(
 	/* Mark state as representing branch if path never seen before. */
 	if (branches.first != NULL) {
 		if (kbr->hasFoundTrue() == false) {
-			if (branches.first == &state)
-				got_fresh = true;
+			if (branches.first == &state) got_fresh = true;
+
 			branches.first->setFreshBranch();
 			fresh = true;
 		} else if (isTwoWay)
@@ -737,8 +729,8 @@ void Executor::markBranchVisited(
 
 	if (branches.second != NULL) {
 		if (kbr->hasFoundFalse() == false) {
-			if (branches.second == &state)
-				got_fresh = true;
+			if (branches.second == &state) got_fresh = true;
+
 			branches.second->setFreshBranch();
 			fresh = true;
 		} else if (isTwoWay)
@@ -2439,6 +2431,11 @@ void Executor::doImpliedValueConcretization(
 	{
 		ref<ConstantExpr>	ce(cast<ConstantExpr>(e->getKid(0)));
 		ImpliedValue::ivcStack(state.stack, e->getKid(1), ce);
+	//	uint64_t		n0, n1;
+	//	n0 = ImpliedValue::getMemUpdates();
+	//	ImpliedValue::ivcMem(state.addressSpace, e->getKid(1), ce);
+	//	n1 = ImpliedValue::getMemUpdates();
+	//	std::cerr << "[IVC] Mem " << n1 - n0 << '\n';
 	}
 
 	foreach (it, results.begin(), results.end())

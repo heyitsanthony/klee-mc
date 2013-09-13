@@ -86,3 +86,23 @@ bool SymMMU::exeMemOp(ExecutionState &state, MemOp& mop)
 	sym_r_c++;
 	return true;
 }
+
+void SymMMU::signal(ExecutionState& state, void* addr, uint64_t len)
+{
+	std::vector<ref<Expr> >	args;
+	KFunction		*f(mh->getSignal());
+
+	if (f == NULL) return;
+
+	args.push_back(MK_CONST((uintptr_t)addr, 64));
+	args.push_back(MK_CONST(len, 64));
+
+	/* XXX this doesn't work really right after Executor::makeSymbolic;
+	 * it returns a pointer to symbolic data which trashes the args. I think
+	 * the call is meant to go after the return result binding. Not sure.
+	 *
+	 * Right now this only works for klee-mc because I put the call in 
+	 * make_sym_range.
+	 * */
+	exe.executeCallNonDecl(state, f->function, args);
+}

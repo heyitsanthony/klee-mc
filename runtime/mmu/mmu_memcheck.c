@@ -10,7 +10,8 @@
 #include "mmu.h"
 
 /* does consistency checks on shadow memory SLOW */
-// #define PARANOIA_DEBUG
+//#define PARANOIA_DEBUG
+//#define USE_GUARDS
 
 static int malloc_c = 0;
 static int free_c = 0;
@@ -97,8 +98,6 @@ do {	\
 			ROUND_BYTES2UNITS(a, x));	\
 	}						\
 } while (0)
-
-//#define USE_GUARDS
 
 #define check_r(a,x,m,n) check_mix_r(a,x, m " free " n, m " fresh " n)
 #define check_w(a,x,m,n) check_mix_w(a,x, m " free " n)
@@ -236,7 +235,7 @@ struct heap_ent* post_alloc(int64_t aux)
 #if USE_GUARDS
 	int	bound_l, bound_r;
 	bound_l = shadow_get(&heap_si, (long)he->he_base - 1);
-	bound_r = shadow_get(&heap_si, NEXT_CHUNK((long)he->he_base + he->he_len));
+	bound_r = shadow_get(&heap_si,NEXT_CHUNK((long)he->he_base+he->he_len));
 	if (bound_l == SH_FL_UNINIT)
 		shadow_put(
 			&heap_si,
@@ -392,12 +391,8 @@ void post_malloc_usable_size(int64_t v) { HEAP_LEAVE; }
 void __hookpre___malloc_usable_size(REGPARAM)
 {
 	HEAP_ENTER
-	klee_hook_return(
-		1,
-		&post_malloc_usable_size,
-		GET_ARG0(regfile));
+	klee_hook_return(1, &post_malloc_usable_size, GET_ARG0(regfile));
 }
-
 
 void __hookpre___calloc(REGPARAM)
 {
@@ -431,6 +426,22 @@ void mmu_init_memcheck(void)
 
 	shadow_init(&heap_si, HEAP_GRAN_BYTES, HEAP_FLAG_BITS, SH_FL_UNINIT);
 	HEAP_LEAVE
+}
+
+/* memory extent was marked as symbolic */
+void mmu_signal_memcheck(void* addr, uint64_t len)
+{
+	int	not_in = (in_heap == 0);
+
+	if (not_in) HEAP_ENTER
+
+	shadow_put_units_range(
+		&heap_si,
+		(long)addr,
+		SH_FL_UNINIT,
+		ROUND_BYTES2UNITS(&heap_si, len));
+
+	if (not_in) HEAP_LEAVE
 }
 
 /* NOTE: it's important to NOT use cnulltlb on a

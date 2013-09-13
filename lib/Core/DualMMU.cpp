@@ -49,3 +49,9 @@ DualMMU* DualMMU::create(MMU* normal_mmu, MMU* slow_mmu)
 
 	return new DualMMU(exe, normal_mmu, slow_mmu);
 }
+
+void DualMMU::signal(ExecutionState& state, void* addr, uint64_t len)
+{
+	mmu_sym->signal(state, addr, len);
+	mmu_conc->signal(state, addr, len);
+}

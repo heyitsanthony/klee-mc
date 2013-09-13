@@ -2,6 +2,7 @@
 #include <sys/stat.h>
 
 #include "../../lib/Core/MemoryManager.h"
+#include "../../lib/Core/MMU.h"
 #include "klee/Expr.h"
 #include "ExecutorVex.h"
 #include "ExeStateVex.h"
@@ -471,6 +472,8 @@ SFH_DEF_ALL(MakeRangeSymbolic, "kmc_make_range_symbolic", false)
 		(void*)addr_v, (void*)(addr_v + len_v),
 		(int)len_v);
 	sc_sfh->makeRangeSymbolic(state, (void*)addr_v, len_v, name_str.c_str());
+
+	exe_vex->getMMU()->signal(state, (void*)addr_v, len_v);
 }
 
 SFH_DEF_ALL(Breadcrumb, "kmc_breadcrumb", false)

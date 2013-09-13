@@ -216,7 +216,7 @@ bool KleeHandlerVex::validateTest(unsigned id)
 	}
 
 	if (WEXITSTATUS(status) != 0) {
-		std::cerr << "[Validate] BAD RETURN\n";
+		std::cerr << "[Validate] Non-zero exit status.\n";
 		return false;
 	}
 
