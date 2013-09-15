@@ -24,9 +24,6 @@
 #define KTEST_MAGIC_SIZE 5
 #define KTEST_MAGIC "KTEST"
 
-// for compatibility reasons
-#define BOUT_MAGIC "BOUT\n"
-
 /***/
 
 static int read_uint32(std::istream& is, unsigned *value_out)
@@ -85,8 +82,7 @@ static bool kTest_checkHeader(std::istream& is)
 	if (is.fail() || is.bad())
 		return false;
 
-	if (	memcmp(header, KTEST_MAGIC, KTEST_MAGIC_SIZE) &&
-		memcmp(header, BOUT_MAGIC, KTEST_MAGIC_SIZE))
+	if (memcmp(header, KTEST_MAGIC, KTEST_MAGIC_SIZE))
 		return false;
 
 	return true;

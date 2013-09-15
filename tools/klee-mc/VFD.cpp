@@ -66,9 +66,9 @@ vfd_t VFD::addPath(const std::string& path)
 	}
 
 
-	if (openForVFD(vfd_counter+1, path.c_str()) == -1)
+	vfd = ++vfd_counter;
+	if (openForVFD(vfd, path.c_str()) == -1)
 		return -1;
-	vfd = vfd_counter++;
 
 	vfd2path[vfd] = path;
 	path2vfd[path] = vfd;

@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include "syscall/syscalls.h"
+#include "ConcreteVFS.h"
 
 #define KREPLAY_NOTE	"[kmc-replay] "
 #define KREPLAY_SC	"[kmc-sc] "
@@ -60,6 +61,7 @@ private:
 	uint64_t		last_brk;
 
 	bool			is_w32; // XXX: HAck HAKCCHAKCAHCK
+	ConcreteVFS		*concrete_vfs;
 };
 
 #endif

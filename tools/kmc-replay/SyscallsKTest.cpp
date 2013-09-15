@@ -56,16 +56,18 @@ SyscallsKTest::SyscallsKTest(
 	KTestStream* in_kts,
 	Crumbs* in_crumbs)
 : Syscalls(in_g)
-, file_recons(NULL)
+, file_recons((getenv("KMC_RECONS_FILES") != NULL)
+	? new FileReconstructor()
+	: NULL)
 , kts(in_kts)
 , crumbs(in_crumbs)
 , sc_retired(0)
 , bcs_crumb(NULL)
 , last_brk(0)
+, concrete_vfs((getenv("KMC_CONCRETE_VFS") != NULL)
+	? new ConcreteVFS()
+	: NULL)
 {
-	if (getenv("KMC_RECONS_FILES") != NULL)
-		file_recons = new FileReconstructor();
-
 	is_w32 = dynamic_cast<const I386WindowsABI*>(in_g->getABI());
 }
 
@@ -74,6 +76,7 @@ SyscallsKTest::~SyscallsKTest(void)
 	if (kts) delete kts;
 	if (bcs_crumb) delete bcs_crumb;
 	if (file_recons) delete file_recons;
+	if (concrete_vfs) delete concrete_vfs;
 }
 
 void SyscallsKTest::badCopyBail(void)
@@ -205,7 +208,12 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 		{
 			crumbs->skip(bcs_crumb->bcs_op_c);
 		}
-		doLinuxThunks(sp, xlate_sysnr);
+
+		if (	!concrete_vfs ||
+			!concrete_vfs->apply(guest, sp, xlate_sysnr))
+		{
+			doLinuxThunks(sp, xlate_sysnr);
+		}
 	} else {
 		GuestCPUState	*cpu(guest->getCPUState());
 
@@ -352,7 +360,6 @@ void SyscallsKTest::doLinuxThunks(SyscallParams& sp, int xlate_sysnr)
 			(void*)getRet());
 		break;
 
-
 	case SYS_open:
 		fprintf(stderr, KREPLAY_SC "OPEN \"%s\" ret=%p\n",
 			TMP_ARG_CSTR(0), (void*)getRet());
@@ -408,6 +415,14 @@ void SyscallsKTest::doLinuxThunks(SyscallParams& sp, int xlate_sysnr)
 	case SYS_mmap:
 		sc_mmap(sp);
 		break;
+	case SYS_execve: {
+		std::string	s;
+		s = guest->getMem()->readString(guest_ptr(sp.getArg(0)));
+		/* XXX: be more descriptive? */
+		fprintf(stderr,
+			KREPLAY_NOTE "exiting on execve(%s);\n",
+			s.c_str());
+	}
 	case SYS_exit_group:
 	case SYS_exit:
 		exited = true;
@@ -512,35 +527,7 @@ void SyscallsKTest::setRet(uint64_t r)
 }
 
 uint64_t SyscallsKTest::getRet(void) const
-{
-	Arch::Arch	arch;
-
-	const void* state_data;
-
-	state_data = guest->getCPUState()->getStateData();
-	arch = guest->getArch();
-	if (arch == Arch::X86_64) {
-		const VexGuestAMD64State *guest_cpu;
-		guest_cpu = (const VexGuestAMD64State*)state_data;
-		return guest_cpu->guest_RAX;
-	}
-
-	if (guest->getArch() == Arch::ARM) {
-		const VexGuestARMState	*guest_cpu;
-		guest_cpu = (const VexGuestARMState*)state_data;
-		return (uint64_t)guest_cpu->guest_R0;
-	}
-
-
-	if (guest->getArch() == Arch::I386) {
-		const VexGuestX86State	*guest_cpu;
-		guest_cpu = (const VexGuestX86State*)state_data;
-		return (uint64_t)guest_cpu->guest_EAX;
-	}
-
-	assert (0 == 1 && "UNK ARCH");
-	return 0;
-}
+{ return guest->getABI()->getSyscallResult(); }
 
 bool SyscallsKTest::copyInRegMemObj(void)
 { return copyInRegMemObj(guest, kts); }

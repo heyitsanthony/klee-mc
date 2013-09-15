@@ -350,6 +350,7 @@ SFH_DEF_ALL(IO, "kmc_io", true)
 			(const char*)&s,
 			sizeof(struct stat));
 
+		std::cerr << "[kmc-io] fstat fd="  << fd << "\n";
 		state.bindLocal(
 			target,
 			MK_CONST((bw == sizeof(struct stat)) ? 0 : -1, 64));
