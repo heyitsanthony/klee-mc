@@ -64,11 +64,11 @@ void BranchTracker::push_back(unsigned decision, const KInstruction* ki)
 		std::make_pair(tail->branches.size()-1, decision));
 }
 
-bool BranchTracker::push_heap_ref(HeapObject *mo) {
+bool BranchTracker::push_heap_ref(HeapObject *ho) {
   if(empty())
     return false;
 
-  tail->heapObjects.push_back(ref<HeapObject>(mo));
+  tail->heapObjects.push_back(ref<HeapObject>(ho));
   return true;
 }
 

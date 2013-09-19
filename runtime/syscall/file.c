@@ -196,6 +196,12 @@ static void sc_stat(struct sc_pkt* sc)
 	sc_stat_sym(sc);
 }
 
+static int is_sys_file(const char* path)
+{
+	return	(path[0] == '/' && (path[1] == 'u' || path[1] == 'l')) ||
+		str_contains(".so", path);
+}
+
 static void sc_open(const char* path, void* regfile)
 {
 	void		*new_regs;
@@ -208,12 +214,7 @@ static void sc_open(const char* path, void* regfile)
 
 	/* concrete path? */
 	if (!file_path_has_sym(path)) {
-		if (	deny_sys_files &&
-			(path[0] == '\0' ||
-			(path[0] == '/' &&
-			(path[1] == 'u' || path[1] == 'l')) ||
-			str_contains(".so", path)))
-		{
+		if (deny_sys_files && is_sys_file(path)) {
 			sc_ret_v(regfile, -1);
 			return;
 		}
@@ -228,8 +229,11 @@ static void sc_open(const char* path, void* regfile)
 				return;
 			}
 
-			if (ret_fd == -1 && fail_missing_concrete) {
+			if (	ret_fd == -1 && 
+				(fail_missing_concrete || is_sys_file(path)))
+			{
 				sc_ret_v(regfile, ret_fd);
+				return;
 			}
 		}
 	}
@@ -305,10 +309,18 @@ int file_sc(struct sc_pkt* sc)
 
 		if (concrete_vfs && fd_is_concrete(fd)) {
 			ssize_t	sz;
-			sz = fd_read(
-				GET_ARG0(regfile),
-				(void*)(GET_ARG1_PTR(regfile)),
-				len);
+			if (sc->sys_nr == SYS_read) {
+				sz = fd_read(
+					GET_ARG0(regfile),
+					(void*)(GET_ARG1_PTR(regfile)),
+					len);
+			} else {
+				sz = fd_pread(
+					GET_ARG0(regfile),
+					(void*)(GET_ARG1_PTR(regfile)),
+					len,
+					concretize_u64(GET_ARG3(regfile)));
+			}
 			sc_ret_v(regfile, sz);
 			break;
 		}

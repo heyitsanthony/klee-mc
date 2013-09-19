@@ -803,7 +803,7 @@ std::string KModule::getPrettyName(const llvm::Function* f) const
 	f2pretty_ty::const_iterator	it;
 
 	it = prettyNames.find(f);
-	if (it == prettyNames.end())
+	if (it == prettyNames.end() || it->second.empty())
 		return f->getName().str();
 
 	return it->second;

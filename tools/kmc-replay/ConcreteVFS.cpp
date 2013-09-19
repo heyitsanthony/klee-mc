@@ -1,4 +1,5 @@
 #include <sys/syscall.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>
@@ -13,25 +14,62 @@ bool ConcreteVFS::apply(Guest* g, const SyscallParams& sp, int xlate_nr)
 {
 	
 	switch (xlate_nr) {
+	case SYS_getcwd: {
+		g->getMem()->memcpy(guest_ptr(sp.getArg(0)), "/fake", 6);
+		break;
+	}
+
+	case SYS_lseek: {
+		int	gfd, fd;
+
+
+		gfd = sp.getArg(0);
+		if (!gfd2fd.count(gfd))
+			return false;
+
+		fd = gfd2fd[gfd];
+
+		lseek(fd, sp.getArg(1), sp.getArg(2));
+		break;
+	}
+
 	case SYS_mmap: {
-		int		fd;
+		int		fd, rc, gfd;
 		uint64_t	addr, len, off;
+		guest_ptr	g_ret;
 		std::string	path;
 
 		/* (addr, fd, len, off) */
 		addr = sp.getArg(0);
 		len = sp.getArg(1);
-		fd = sp.getArg(4);
+		gfd = sp.getArg(4);
 		off = sp.getArg(5);
 	
-		if (fd == -1)
+		if (gfd == -1 || !gfd2fd.count(gfd))
 			return false;
 
 		/* don't mark if symbolic length */
 		if (len == ~0ULL)
 			break;
 
-		assert (0 == 1 && "NEED TO COPY IN");
+		fd = gfd2fd[gfd];
+
+		rc = g->getMem()->mmap(
+			g_ret,
+			guest_ptr(g->getABI()->getSyscallResult()),
+			len,
+			sp.getArg(2),
+			((addr) ? MAP_FIXED : 0) | MAP_PRIVATE,
+			fd,
+			off);
+
+
+		std::cerr << "[kmc-io] mmap(" << (void*)addr
+			<< ", " << len << ", ..., "
+			<< gfd << ", " << off << ") = "
+			<< (void*)g_ret.o << "--" << (void*)(g_ret.o + len)
+			<< "\n";
+		assert (rc == 0);
 		break;
 	}
 
@@ -67,8 +105,10 @@ bool ConcreteVFS::apply(Guest* g, const SyscallParams& sp, int xlate_nr)
 		int		fd, gfd;
 
 		gfd = g->getABI()->getSyscallResult();
-		if (gfd == -1)
+		if (gfd == -1) {
+			std::cerr << "[vfs] gfd=-1\n";
 			return false;
+		}
 
 		path = g->getMem()->readString(guest_ptr(sp.getArg(0)));
 		fd = open(path.c_str(), O_RDONLY);
@@ -107,17 +147,16 @@ bool ConcreteVFS::apply(Guest* g, const SyscallParams& sp, int xlate_nr)
 
 		tmp_buf = new char[count];
 		br = read(fd, tmp_buf, count);
-		g->getMem()->memcpy(guest_ptr(sp.getArg(1)), tmp_buf, count);
+		g->getMem()->memcpy(guest_ptr(sp.getArg(1)), tmp_buf, br);
 		delete [] tmp_buf;
 
 		std::cerr << "[kmc-io] Read fd=" << gfd << ". br=" << br << "\n";
-
 		break;
 	}
 
 	case SYS_pread64: {
 		int		fd, gfd;
-		ssize_t		ret;
+		ssize_t		br;
 		guest_ptr	buf_base;
 		size_t		count;
 		off_t		offset;
@@ -136,10 +175,22 @@ bool ConcreteVFS::apply(Guest* g, const SyscallParams& sp, int xlate_nr)
 
 		fd = gfd2fd[gfd];
 		tmp_buf = new char[count];
-		ret = pread64(fd, tmp_buf, count, offset);
+		br = pread64(fd, tmp_buf, count, offset);
 		g->getMem()->memcpy(buf_base, tmp_buf, count);
 		delete [] tmp_buf;
 
+		std::cerr << "[kmc-io] pread fd=" << gfd << ". br=" << br << "\n";
+		break;
+	}
+
+
+	case SYS_lstat:
+	case SYS_stat: {
+		std::string	s;
+		struct stat	st;
+		s = g->getMem()->readString(guest_ptr(sp.getArg(0)));
+		stat(s.c_str(), &st);
+		g->getMem()->memcpy(guest_ptr(sp.getArg(1)), &st, sizeof(st));
 		break;
 	}
 
@@ -154,11 +205,14 @@ bool ConcreteVFS::apply(Guest* g, const SyscallParams& sp, int xlate_nr)
 		fd = gfd2fd[gfd];
 
 		rc = fstat(fd, &s);
-		if (rc == -1) return false;
+		if (rc == -1) {
+			std::cerr << "[kmc-io] fstat fd=" << gfd << ". failed\n";
+			return false;
+		}
 
 		g->getMem()->memcpy(guest_ptr(sp.getArg(1)), &s, sizeof(s));
 
-		std::cerr << "[kmc-io] fstat fd="  << fd << "\n";
+		std::cerr << "[kmc-io] fstat fd="  << gfd << ".\n";
 		break;
 
 	default:

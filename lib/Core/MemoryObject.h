@@ -32,6 +32,8 @@ private:
   friend class ref<MemoryObject>;
    unsigned refCount;
 
+   mutable ref<ConstantExpr>	base_ptr;
+
   // DO NOT IMPLEMENT
   MemoryObject(const MemoryObject &b);
   MemoryObject &operator=(const MemoryObject &b);
@@ -60,11 +62,13 @@ public:
 
   unsigned int getRefCount(void) const { return refCount; }
 
-  ref<ConstantExpr> getBaseExpr() const
-  { return ConstantExpr::create(address, Context::get().getPointerWidth()); }
+  ref<ConstantExpr> getBaseExpr(void) const
+  {	if (base_ptr.isNull())
+		base_ptr = MK_CONST(address, Context::get().getPointerWidth());
+	return base_ptr; }
 
   ref<ConstantExpr> getSizeExpr() const
-  { return ConstantExpr::create(size, Context::get().getPointerWidth()); }
+  { return MK_CONST(size, Context::get().getPointerWidth()); }
 
   ref<Expr> getOffsetExpr(ref<Expr> pointer) const
   { return SubExpr::create(pointer, getBaseExpr()); }

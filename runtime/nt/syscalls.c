@@ -591,7 +591,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		new_regs = sc_new_regs(regfile);
 		base = (void*)concretize_u64((uint64_t)base);
 		sz = concretize_u64(sz);
-		kmc_free_run(base, sz);
+		kmc_free_run((uint64_t)base, sz);
 		*((uint32_t*)GET_ARG2_PTR(regfile)) = (sz + 4095) & ~0xfff;
 
 		break;

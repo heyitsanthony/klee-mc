@@ -16,6 +16,9 @@ namespace klee {
 
   /// Context - Helper class for storing global information about a KLEE run.
   class Context {
+  private:
+    static Context	TheContext;
+
     /// Whether the target architecture is little endian or not.
     bool IsLittleEndian;
 
@@ -33,7 +36,7 @@ namespace klee {
     static void initialize(bool IsLittleEndian, Expr::Width PointerWidth);
 
     /// get - Return the global singleton instance of the Context.
-    static const Context &get();
+    static const Context &get() { return TheContext; }
 
     bool isLittleEndian() const { return IsLittleEndian; }
 

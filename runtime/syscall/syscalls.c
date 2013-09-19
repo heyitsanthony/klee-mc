@@ -1,5 +1,5 @@
 #define _LARGEFILE64_SOURCE
-
+#include <stdbool.h>
 #include <sys/ptrace.h>
 #include <sys/user.h>
 #include <sys/vfs.h>
@@ -29,7 +29,7 @@
 #include "breadcrumb.h"
 
 //#define USE_SYS_FAILURE
-
+extern bool concrete_vfs;
 static int last_sc = 0;
 
 /* it'd be cool if I could auto-generate all of this */
@@ -818,6 +818,14 @@ void* sc_enter(void* regfile, void* jmpptr)
 		}
 
 		addr = concretize_u64(GET_ARG0(regfile));
+
+		if (concrete_vfs) {
+			int	n = (len < 6) ? len : 6;
+			klee_warning_once("Fake cwd=/fake for concrete VFS.");
+			memcpy((void*)addr, "/fake", n);
+			sc_ret_v(regfile, n);
+			break;
+		}
 
 		/* use managably-sized string */
 		if (len > 10) len = 10;

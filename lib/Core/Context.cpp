@@ -19,7 +19,7 @@
 using namespace klee;
 
 static bool Initialized = false;
-static Context TheContext;
+Context Context::TheContext;
 
 void Context::initialize(bool IsLittleEndian, Expr::Width PointerWidth) {
   assert(!Initialized && "Duplicate context initialization!");
@@ -27,15 +27,8 @@ void Context::initialize(bool IsLittleEndian, Expr::Width PointerWidth) {
   Initialized = true;
 }
 
-const Context &Context::get() {
-  assert(Initialized && "Context has not been initialized!");
-  return TheContext;
-}
+ref<Expr> Expr::createCoerceToPointerType(const ref<Expr>& e)
+{ return MK_ZEXT(e, Context::get().getPointerWidth()); }
 
-ref<Expr> Expr::createCoerceToPointerType(ref<Expr> e) {
-  return ZExtExpr::create(e, Context::get().getPointerWidth());
-}
-
-ref<ConstantExpr> Expr::createPointer(uint64_t v) {
-  return ConstantExpr::create(v, Context::get().getPointerWidth());
-}
+ref<ConstantExpr> Expr::createPointer(uint64_t v)
+{  return MK_CONST(v, Context::get().getPointerWidth()); }

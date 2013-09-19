@@ -20,6 +20,7 @@ public:
 
 	struct ForkInfo
 	{
+		typedef std::vector<std::list<SeedInfo> > resseeds_ty;
 		ForkInfo(
 			ref<Expr>* in_conditions,
 			unsigned int in_N)
@@ -30,11 +31,17 @@ public:
 		, feasibleTargets(0)
 		, validTargets(0)
 		, forkedTargets(0)
-		, resSeeds(in_N)
 		, forkCompact(false)
+		, resSeeds(0)
 		{}
-
+		~ForkInfo(void) { if (resSeeds) delete resSeeds; }
 		void dump(std::ostream& os) const;
+
+		resseeds_ty& getResSeeds(void)
+		{
+			if (resSeeds == NULL) resSeeds = new resseeds_ty();
+			return *resSeeds;
+		}
 
 		Executor::StateVector	resStates;
 		std::vector<bool>	res;
@@ -48,8 +55,10 @@ public:
 		bool			isBranch;
 		bool			forkDisabled;
 		unsigned		replayTargetIdx;
-		std::vector<std::list<SeedInfo> > resSeeds;
 		bool			forkCompact;
+	private:
+		ForkInfo(const ForkInfo& fi);
+		resseeds_ty		*resSeeds;
 	};
 
 	Forks(Executor& _exe);

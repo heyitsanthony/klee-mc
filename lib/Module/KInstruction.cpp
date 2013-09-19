@@ -245,14 +245,9 @@ TargetTy KSwitchInstruction::getExprCondSwitchTargets(
 			// use run-length encoding
 			ref<Expr>	rle_bounds;
 			rle_bounds = AndExpr::create(
-				UgeExpr::create(
-					cond,
-					MK_CONST(*vit, cond->getWidth())),
-				UltExpr::create(
-					cond,
-					ConstantExpr::create(
-						*vit + runLen,
-						cond->getWidth())));
+				MK_UGE(cond, MK_CONST(*vit, cond->getWidth())),
+				MK_ULT(cond, MK_CONST(
+					*vit + runLen, cond->getWidth())));
 
 			match = OrExpr::create(match, rle_bounds);
 
@@ -265,8 +260,7 @@ TargetTy KSwitchInstruction::getExprCondSwitchTargets(
 			std::make_pair(target, match)));
 
 		// default case is the AND of all the complements
-		defCase = AndExpr::create(
-			defCase, Expr::createIsZero(match));
+		defCase = MK_AND(defCase, Expr::createIsZero(match));
 	}
 
 	// include default case
@@ -283,6 +277,14 @@ TargetTy KSwitchInstruction::getConstCondSwitchTargets(
 	ConstantInt		*ci;
 	int			index;
 	TargetTy		defaultTarget;
+	TargetsConstTy::iterator	it;
+
+	/* memoized because it's 5% runtime for concrete python. yuck */
+	it = const_defaults.find(v);
+	if (it != const_defaults.end()) {
+		targets = it->second.second;
+		return it->second.first;
+	}
 
 	targets.clear();
 
@@ -297,20 +299,16 @@ TargetTy KSwitchInstruction::getConstCondSwitchTargets(
 
 	// We need to have the same set of targets to pass to fork() in case
 	// toUnique fails/times out on replay (it's happened before...)
-	defaultTarget = TargetTy(
-		cases[0].second,
-		ConstantExpr::create(0, Expr::Bool));
+	defaultTarget = TargetTy(cases[0].second, MK_CONST(0, Expr::Bool));
 	if (index < 0)
-		defaultTarget.second = ConstantExpr::create(1, Expr::Bool);
+		defaultTarget.second = MK_CONST(1, Expr::Bool);
 
 	for (int i = 1; i < (int)cases.size(); ++i) {
 		// default to infeasible target
 		TargetsTy::iterator	it;
 		TargetTy		cur_target;
 
-		cur_target = TargetTy(
-			cases[i].second,
-			ConstantExpr::create(0, Expr::Bool));
+		cur_target = TargetTy(cases[i].second, MK_CONST(0, Expr::Bool));
 		it = targets.insert(
 			std::make_pair(
 				minTargetValues.find(cases[i].second)->second,
@@ -318,10 +316,15 @@ TargetTy KSwitchInstruction::getConstCondSwitchTargets(
 
 		// set unique target as feasible
 		if (i-1 == index) {
-			it->second.second = ConstantExpr::create(1, Expr::Bool);
+			it->second.second = MK_CONST(1, Expr::Bool);
 		}
 	}
 
+	/* rate limit */
+	if (const_defaults.size() > 256)
+		const_defaults.clear();
+
+	const_defaults[v] = std::make_pair(defaultTarget, targets);
 	return defaultTarget;
 }
 

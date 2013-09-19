@@ -44,14 +44,14 @@ bool ForksSeeding::forkSetup(ExecutionState& current, struct ForkInfo& fi)
 		// (the seed will be patched).
 		if (i == fi.N) i = theRNG.getInt32() % fi.N;
 
-		fi.resSeeds[i].push_back(*siit);
+		fi.getResSeeds()[i].push_back(*siit);
 	}
 
 	// Clear any valid conditions at seeding rejects
 	if ((fi.forkDisabled || Replay::isReplayOnly()) && fi.validTargets > 1) {
 		fi.validTargets = 0;
 		for (unsigned i = 0; i < fi.N; i++) {
-			if (fi.resSeeds[i].empty()) fi.res[i] = false;
+			if (fi.getResSeeds()[i].empty()) fi.res[i] = false;
 			if (fi.res[i]) fi.validTargets++;
 		}
 		assert (fi.validTargets &&
@@ -95,8 +95,8 @@ bool ForksSeeding::constrainFork(
 
 	(exe.getSeedMap())[curState].insert(
 		(exe.getSeedMap())[curState].end(),
-		fi.resSeeds[condIndex].begin(),
-		fi.resSeeds[condIndex].end());
+		fi.getResSeeds()[condIndex].begin(),
+		fi.getResSeeds()[condIndex].end());
 
 	return true;
 }

@@ -8,5 +8,4 @@ struct sc_pkt;
 int file_sc(struct sc_pkt* sc);
 int file_path_has_sym(const char* s);
 
-
 #endif

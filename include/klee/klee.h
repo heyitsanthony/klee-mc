@@ -290,6 +290,11 @@ extern void free(void*) __THROW;
 	void klee_tlb_insert(const void* addr, uint64_t len);
 	void klee_enable_softmmu(void);
 
+void	*kmc_alloc_aligned(uint64_t, const char* name);
+void	kmc_exit(uint64_t);
+void	kmc_free_run(uint64_t addr, uint64_t num_bytes);
+void	kmc_make_range_symbolic(uint64_t addr, uint64_t len, const char* name);
+
 #ifdef __cplusplus
 }
 #endif

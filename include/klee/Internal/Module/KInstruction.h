@@ -79,6 +79,7 @@ private:
 typedef std::pair<llvm::BasicBlock*, ref<Expr> >	TargetTy;
 typedef std::map<ref<ConstantExpr>, TargetTy >		TargetsTy;
 typedef std::map<llvm::BasicBlock*, ref<ConstantExpr> >	TargetValsTy;
+typedef std::map<uint64_t, std::pair<TargetTy, TargetsTy> > TargetsConstTy;
 typedef std::pair<ref<ConstantExpr>, llvm::BasicBlock*>	Val2TargetTy;
 
 class KSwitchInstruction : public KInstruction
@@ -97,6 +98,7 @@ private:
 	std::vector<Val2TargetTy >	cases;
 	TargetValsTy			minTargetValues; // lowest val -> BB
 	std::map<llvm::BasicBlock*, std::set<uint64_t> > caseMap;
+	TargetsConstTy			const_defaults;
 };
 
 /* potassium bromide instructoin */
