@@ -50,11 +50,10 @@ LinuxModel::LinuxModel(Executor* e)
 : SysModel(e, guest2rtlib(((ExecutorVex*)e)->getGuest()))
 {}
 
-W32Model::W32Model(Executor* e)
-: SysModel(e, "libkleeRuntimeMC-nt32.bc")
+W32Model::W32Model(Executor* e, const char* path)
+: SysModel(e, path)
 , gs(dynamic_cast<GuestSnapshot*>(((ExecutorVex*)e)->getGuest()))
 { assert (gs != NULL && "Expected snapshot for w32"); }
-
 
 FDTModel::FDTModel(Executor* e) : SysModel(e, "libkleeRuntimeMC-fdt.bc") {}
 
@@ -201,13 +200,20 @@ void LinuxModel::installConfig(ExecutionState& es)
 void W32Model::installConfig(ExecutionState& state)
 {
 	char		pbi[24];
+	uint32_t	version = 0x0105; /* default = winxp */
+	bool		ok;
 	uint32_t	cookie;
 
-	gs->getPlatform("pbi", &pbi, 24);
+	ok = gs->getPlatform("pbi", &pbi, 24);
+	assert (ok == true);
 	installData(state, "plat_pbi", pbi, sizeof(pbi));
 
-	gs->getPlatform("process_cookie", &pbi, 4);
+	ok = gs->getPlatform("process_cookie", &pbi, 4);
+	assert (ok == true);
 	installData(state, "plat_cookie", &cookie, sizeof(cookie));
+
+	gs->getPlatform("version", &version, sizeof(version));
+	installData(state, "plat_version", &version, sizeof(version));
 }
 
 class NoneSFH : public SyscallSFH

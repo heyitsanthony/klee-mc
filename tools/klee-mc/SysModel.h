@@ -55,11 +55,17 @@ public:
 class W32Model : public SysModel
 {
 public:
-	W32Model(Executor* e);
 	virtual ~W32Model(void) {}
 	SyscallSFH* allocSpecialFuncHandler(Executor*) const;
 	void installInitializers(llvm::Function* f) {}
 	void installConfig(ExecutionState& state);
+
+	static W32Model* createXP(Executor* e)
+	{ return new W32Model(e, "libkleeRuntimeMC-xp.bc"); }
+	static W32Model* createWin7(Executor* e)
+	{ return new W32Model(e, "libkleeRuntimeMC-win7.bc"); }
+protected:
+	W32Model(Executor* e, const char* path);
 private:
 	GuestSnapshot	*gs;
 };

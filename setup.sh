@@ -51,7 +51,8 @@ popd
 make mc-clean && GUEST_ARCH=arm make -j6
 make mc-clean && GUEST_ARCH=x86 make -j6
 make mc-clean && GUEST_ARCH=amd64 make -j6
-make mc-fdt
+make nt-clean && GUEST_WIN=xp make -j6
+make nt-clean && GUEST_WIN=win7 make -j6
 
 BASEDIR="Release+Asserts"
 if [ ! -x $BASEDIR ]; then
@@ -64,7 +65,7 @@ if [ -z "$VEXLLVM_HELPER_PATH" ]; then
 fi
 
 echo "Copying runtimes..."
-for a in arm amd64 x86 nt32 fdt sysnone; do
+for a in arm amd64 x86 xp win7 fdt sysnone; do
 	ls -l "$BASEDIR"/lib/libkleeRuntimeMC-$a.bc
 	echo "COPYING $a to $VEXLLVM_HELPER_PATH"
 	cp "$BASEDIR"/lib/libkleeRuntimeMC-$a.bc "$VEXLLVM_HELPER_PATH"/

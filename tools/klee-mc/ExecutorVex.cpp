@@ -20,6 +20,7 @@
 #include "KModuleVex.h"
 #include "symbols.h"
 #include "guestcpustate.h"
+#include "guestsnapshot.h"
 #include "genllvm.h"
 #include "vexhelpers.h"
 #include "vexsb.h"
@@ -81,7 +82,6 @@ namespace
 		cl::location(UseConcreteVFS));
 
 	cl::opt<bool> UseFDT("use-fdt", cl::desc("Use TJ's FDT model"));
-	cl::opt<bool> UseNT("use-nt", cl::desc("Use NT model"));
 	cl::opt<bool> UseSysNone("use-sysnone", cl::desc("No System Calls"));
 
 	cl::opt<bool> DumpSyscallStates(
@@ -107,9 +107,11 @@ namespace
 ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 : Executor(ih)
 , gs(dynamic_cast<KleeHandlerVex*>(ih)->getGuest())
+, sys_model(0)
 , img_init_func(0)
 , img_init_func_addr(0)
 {
+	GuestSnapshot*	ss = dynamic_cast<GuestSnapshot*>(gs);
 	assert (kmodule == NULL && "KMod already initialized? My contract!");
 
 	ExeStateBuilder::replaceBuilder(new ExeStateVexBuilder());
@@ -143,11 +145,18 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 	std::cerr << "[klee-mc] Forcing fake vsyspage reads\n";
 	theGenLLVM->setFakeSysReads();
 
-	if (UseFDT)	sys_model = new FDTModel(this);
-	else if (UseNT) sys_model = new W32Model(this);
-	else if (UseSysNone) sys_model = new NoneModel(this);
-	else		sys_model = new LinuxModel(this);
+	if (ss != NULL && ss->getPlatform("pbi") == true) {
+		if (ss->getPlatform("version"))
+			sys_model = W32Model::createWin7(this);
+		else
+			sys_model = W32Model::createXP(this);
+	}
 
+	if (sys_model == NULL) {
+		if (UseFDT)		sys_model = new FDTModel(this);
+		else if (UseSysNone)	sys_model = new NoneModel(this);
+		else			sys_model = new LinuxModel(this);
+	}
 	theVexHelpers->loadUserMod(sys_model->getModelFileName());
 
 	/* occasionally want to load something elsewhere

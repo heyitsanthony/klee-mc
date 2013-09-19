@@ -2,6 +2,8 @@
 #include "mem.h"
 #include "syscalls.h"
 
+extern void* concretize_ptr(void* v);
+
 int nt_qvm(void* base, PMEMORY_BASIC_INFORMATION mb)
 {
 	void		*obj, *cur_obj;

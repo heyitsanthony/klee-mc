@@ -48,8 +48,9 @@ static uint64_t concretize_u64(uint64_t x)
 static struct fd_info fd_tab[MAX_FD] =
 {
 	[0] = {.fi_flags = FD_FL_IN_USE},
-	[1] = {.fi_flags = FD_FL_IN_USE},
-	[2] = {.fi_flags = FD_FL_IN_USE}
+	/* mark stdout and stderr as concrete to avoid forking on ioctl, etc */
+	[1] = {.fi_vfd = -1, .fi_flags = FD_FL_IN_USE | FD_FL_CONCRETE},
+	[2] = {.fi_vfd = -1, .fi_flags = FD_FL_IN_USE | FD_FL_CONCRETE}
 };
 static int next_free_fd = 3;
 

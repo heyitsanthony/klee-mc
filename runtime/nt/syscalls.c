@@ -1,6 +1,15 @@
 #define _LARGEFILE64_SOURCE
+
+#ifdef GUEST_WINXP
 #include "win32k_xp.h"
-#include "ntapi.h"
+#include "ntapi.xp.h"
+#elif defined(GUEST_WIN7)
+#include "win32k_win7.h"
+#include "ntapi.win7.h"
+#else
+#error wut
+#endif
+
 #include "ntkey.h"
 #include <klee/klee.h>
 #include "fnid.h"
@@ -13,8 +22,12 @@
 static int last_sc = 0;
 
 /* PLATFORM DATA */
+/* XXX I think this should use klee registers but whatever */
 char		plat_pbi[24];
 uint32_t	plat_cookie;
+uint32_t	plat_version;
+
+#define is_xp()	((plat_version & 0xffff)== 0x0105)
 
 #include "mem.h"
 //#include <wtypes.h>
@@ -147,8 +160,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 	if (((char*)regfile)[ARCH_SZ-1] == GE_SYSCALL) {
 		GET_EDX(regfile) += 8;
-		jmpptr = GET_SC_IP(regfile) + 2;
-		GET_IP(regfile) = jmpptr;
+		jmpptr = (void*)(uintptr_t)(GET_SC_IP(regfile) + 2);
+		GET_IP(regfile) = (uint32_t)jmpptr;
 	}
 
 	if (klee_is_symbolic(sc.pure_sys_nr)) {
@@ -571,7 +584,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	 * if the free size exceeds usable memory */
 	case NtFreeVirtualMemory: {
 		void*		base = 	GET_ARG1_PTR(regfile);
-		uint32_t	sz = *((uint32_t*)GET_ARG2(regfile));
+		uint32_t	sz = *((uint32_t*)GET_ARG2_PTR(regfile));
 
 		/* TODO: handle different free types? */
 

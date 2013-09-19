@@ -19,6 +19,9 @@ export ENABLE_RTTI=1
 ifndef GUEST_ARCH
 export GUEST_ARCH=amd64
 endif
+ifndef GUEST_WIN
+export GUEST_WIN=xp
+endif
 
 include $(LEVEL)/Makefile.config
 
@@ -130,6 +133,9 @@ klee-cov:
 test-broken-optmul:
 	KMC_RNR_FLAGS="-smt-optmul -smt-brokenoptmul -smt-xchkmul  -xchk-expr-builder" ./scripts/kmc-run-n-replay "/usr/bin/unrar x a"
 
+
+nt-clean:
+	rm -rf runtime/nt/*/*.{bc,bca,ll,d,o}
 
 mc-clean:
 	rm -rf runtime/syscall/*/*.{bc,bca,ll,d,o}

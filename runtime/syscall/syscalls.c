@@ -80,11 +80,13 @@ static uint64_t GET_ARG(void* x, int y)
 	return -1;
 }
 
-static void sc_ret_ge0(void* regfile)
+static void sc_ret_ge(void* regfile, int64_t v)
 {
 	ARCH_SIGN_CAST rax = GET_SYSRET_S(regfile);
-	klee_assume_sge(rax, 0);
+	klee_assume_sge(rax, v);
 }
+
+#define sc_ret_ge0(x)	sc_ret_ge(x, 0)
 
 void sc_ret_or(void* regfile, uint64_t v1, uint64_t v2)
 {
@@ -782,10 +784,18 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(regfile, -1);
 		break;
 	case SYS_ioctl:
-		new_regs = sc_new_regs(regfile);
-		if (GET_SYSRET_S(new_regs) == -1)
+		if (fd_is_concrete(GET_ARG0(regfile))) {
+			klee_print_expr(
+				"[warning] failing ioctl on concrete fd",
+				GET_ARG0(regfile));
+			sc_ret_v(regfile, -1);
 			break;
-		sc_ret_ge0(new_regs);
+		}
+		new_regs = sc_new_regs(regfile);
+		klee_print_expr("ioctl fd", GET_ARG0(regfile));
+		klee_print_expr("ioctl arg1", GET_ARG1(regfile));
+		klee_print_expr("ioctl arg2", GET_ARG2(regfile));
+		sc_ret_ge(new_regs, -1);
 		break;
 
 	case SYS_uname:

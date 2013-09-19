@@ -229,7 +229,7 @@ void* sc_brk(void* regfile)
 	if (	new_addr != 0 &&
 		((intptr_t)new_addr-(intptr_t)heap_end) > EXCESSIVE_BRK_BYTES)
 	{
-//		klee_uerror("Excessive brk", "bigbrk.err");
+		klee_ureport("Excessive brk", "bigbrk.err");
 		/* return last seen value */
 		goto done;
 	}

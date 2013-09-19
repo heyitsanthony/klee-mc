@@ -1,12 +1,10 @@
+#ifndef WINNT_WIN32K_vista
+#define WINNT_WIN32K_vista
 #define DestroyPhysicalMonitor 0x12fb
-#define DxEngGetRedirectionBitmap 
-#define DxgStubContextCreate 
 #define DxgStubCreateSurfaceObject 0x1267
 #define DxgStubDeleteDirectDrawObject 0x12f7
 #define DxgStubEnableDirectDrawRedirection 0x12f6
-#define GreFlush 
 #define GreSelectBitmap 0x1109
-#define IsIMMEnabledSystem 
 #define NtGdiAbortDoc 0x1000
 #define NtGdiAbortPath 0x1001
 #define NtGdiAddEmbFontToDC 0x10de
@@ -23,7 +21,6 @@
 #define NtGdiBRUSHOBJ_pvAllocRbrush 0x129c
 #define NtGdiBRUSHOBJ_pvGetRbrush 0x129d
 #define NtGdiBRUSHOBJ_ulGetBrushColor 0x129b
-#define NtGdiBeginGdiRendering 
 #define NtGdiBeginPath 0x100c
 #define NtGdiBitBlt 0x100d
 #define NtGdiCLIPOBJ_bEnum 0x1295
@@ -43,7 +40,6 @@
 #define NtGdiConsoleTextOut 0x1018
 #define NtGdiConvertMetafileRect 0x1019
 #define NtGdiCreateBitmap 0x101a
-#define NtGdiCreateBitmapFromDxSurface 
 #define NtGdiCreateClientObj 0x101b
 #define NtGdiCreateColorSpace 0x101c
 #define NtGdiCreateColorTransform 0x101d
@@ -68,26 +64,6 @@
 #define NtGdiD3dContextDestroy 0x1030
 #define NtGdiD3dContextDestroyAll 0x1031
 #define NtGdiD3dDrawPrimitives2 0x1033
-#define NtGdiD3dExecute 
-#define NtGdiD3dExecuteClipped 
-#define NtGdiD3dGetState 
-#define NtGdiD3dLightSet 
-#define NtGdiD3dMaterialCreate 
-#define NtGdiD3dMaterialDestroy 
-#define NtGdiD3dMaterialGetData 
-#define NtGdiD3dMaterialSetData 
-#define NtGdiD3dMatrixCreate 
-#define NtGdiD3dMatrixDestroy 
-#define NtGdiD3dMatrixGetData 
-#define NtGdiD3dMatrixSetData 
-#define NtGdiD3dRenderPrimitive 
-#define NtGdiD3dRenderState 
-#define NtGdiD3dSceneCapture 
-#define NtGdiD3dSetViewportData 
-#define NtGdiD3dTextureCreate 
-#define NtGdiD3dTextureDestroy 
-#define NtGdiD3dTextureGetSurf 
-#define NtGdiD3dTextureSwap 
 #define NtGdiD3dValidateTextureStageState 0x1032
 #define NtGdiDDCCIGetCapabilitiesString 0x1300
 #define NtGdiDDCCIGetCapabilitiesStringLength 0x12ff
@@ -105,31 +81,24 @@
 #define NtGdiDdColorControl 0x103c
 #define NtGdiDdCreateD3DBuffer 0x103f
 #define NtGdiDdCreateDirectDrawObject 0x103d
-#define NtGdiDdCreateFullscreenSprite 
 #define NtGdiDdCreateMoComp 0x1040
 #define NtGdiDdCreateSurface 0x103e
 #define NtGdiDdCreateSurfaceEx 0x1060
 #define NtGdiDdCreateSurfaceObject 0x1041
-#define NtGdiDdDDIAcquireKeyedMutex 
 #define NtGdiDdDDICheckExclusiveOwnership 0x12f2
 #define NtGdiDdDDICheckMonitorPowerState 0x12f1
 #define NtGdiDdDDICheckOcclusion 0x12ef
-#define NtGdiDdDDICheckSharedResourceAccess 
-#define NtGdiDdDDICheckVidPnExclusiveOwnership 
 #define NtGdiDdDDICloseAdapter 0x12d7
-#define NtGdiDdDDIConfigureSharedResource 
 #define NtGdiDdDDICreateAllocation 0x12be
 #define NtGdiDdDDICreateContext 0x12c6
 #define NtGdiDdDDICreateDCFromMemory 0x12e4
 #define NtGdiDdDDICreateDevice 0x12c4
-#define NtGdiDdDDICreateKeyedMutex 
 #define NtGdiDdDDICreateOverlay 0x12dd
 #define NtGdiDdDDICreateSynchronizationObject 0x12c8
 #define NtGdiDdDDIDestroyAllocation 0x12c1
 #define NtGdiDdDDIDestroyContext 0x12c7
 #define NtGdiDdDDIDestroyDCFromMemory 0x12e5
 #define NtGdiDdDDIDestroyDevice 0x12c5
-#define NtGdiDdDDIDestroyKeyedMutex 
 #define NtGdiDdDDIDestroyOverlay 0x12e0
 #define NtGdiDdDDIDestroySynchronizationObject 0x12c9
 #define NtGdiDdDDIEscape 0x12d9
@@ -138,9 +107,7 @@
 #define NtGdiDdDDIGetDeviceState 0x12e3
 #define NtGdiDdDDIGetDisplayModeList 0x12d0
 #define NtGdiDdDDIGetMultisampleMethodList 0x12d2
-#define NtGdiDdDDIGetOverlayState 
 #define NtGdiDdDDIGetPresentHistory 0x12dc
-#define NtGdiDdDDIGetPresentQueueEvent 
 #define NtGdiDdDDIGetProcessSchedulingPriorityClass 0x12e9
 #define NtGdiDdDDIGetRuntimeData 0x12cc
 #define NtGdiDdDDIGetScanLine 0x12eb
@@ -149,16 +116,13 @@
 #define NtGdiDdDDILock 0x12ce
 #define NtGdiDdDDIOpenAdapterFromDeviceName 0x12d5
 #define NtGdiDdDDIOpenAdapterFromHdc 0x12d6
-#define NtGdiDdDDIOpenKeyedMutex 
 #define NtGdiDdDDIOpenResource 0x12c0
-#define NtGdiDdDDIOpenSynchronizationObject 
 #define NtGdiDdDDIPollDisplayChildren 0x12ed
 #define NtGdiDdDDIPresent 0x12d3
 #define NtGdiDdDDIQueryAdapterInfo 0x12cd
 #define NtGdiDdDDIQueryAllocationResidency 0x12c3
 #define NtGdiDdDDIQueryResourceInfo 0x12bf
 #define NtGdiDdDDIQueryStatistics 0x12da
-#define NtGdiDdDDIReleaseKeyedMutex 
 #define NtGdiDdDDIReleaseProcessVidPnSourceOwners 0x12ea
 #define NtGdiDdDDIRender 0x12d4
 #define NtGdiDdDDISetAllocationPriority 0x12c2
@@ -180,7 +144,6 @@
 #define NtGdiDdDeleteDirectDrawObject 0x1042
 #define NtGdiDdDeleteSurfaceObject 0x1043
 #define NtGdiDdDestroyD3DBuffer 0x1046
-#define NtGdiDdDestroyFullscreenSprite 
 #define NtGdiDdDestroyMoComp 0x1044
 #define NtGdiDdDestroySurface 0x1045
 #define NtGdiDdEndMoCompFrame 0x1047
@@ -200,10 +163,8 @@
 #define NtGdiDdGetScanLine 0x1054
 #define NtGdiDdLock 0x1055
 #define NtGdiDdLockD3D 0x1056
-#define NtGdiDdNotifyFullscreenSpriteUpdate 
 #define NtGdiDdQueryDirectDrawObject 0x1057
 #define NtGdiDdQueryMoCompStatus 0x1058
-#define NtGdiDdQueryVisRgnUniqueness 
 #define NtGdiDdReenableDirectDrawObject 0x1059
 #define NtGdiDdReleaseDC 0x105a
 #define NtGdiDdRenderMoComp 0x105b
@@ -250,7 +211,6 @@
 #define NtGdiEllipse 0x1083
 #define NtGdiEnableEudc 0x1084
 #define NtGdiEndDoc 0x1085
-#define NtGdiEndGdiRendering 
 #define NtGdiEndPage 0x1086
 #define NtGdiEndPath 0x1087
 #define NtGdiEngAlphaBlend 0x128d
@@ -286,10 +246,8 @@
 #define NtGdiEnumFontChunk 0x1088
 #define NtGdiEnumFontClose 0x1089
 #define NtGdiEnumFontOpen 0x108a
-#define NtGdiEnumFonts 
 #define NtGdiEnumObjects 0x108b
 #define NtGdiEqualRgn 0x108c
-#define NtGdiEudcEnumFaceNameLinkW 
 #define NtGdiEudcLoadUnloadLink 0x108d
 #define NtGdiExcludeClipRect 0x108e
 #define NtGdiExtCreatePen 0x108f
@@ -309,10 +267,8 @@
 #define NtGdiFONTOBJ_vGetInfo 0x12a1
 #define NtGdiFillPath 0x1096
 #define NtGdiFillRgn 0x1097
-#define NtGdiFixUpHandle 
 #define NtGdiFlattenPath 0x1098
 #define NtGdiFlush 0x1099
-#define NtGdiFlushUserBatch 
 #define NtGdiFontIsLinked 0x100a
 #define NtGdiForceUFIMapping 0x109a
 #define NtGdiFrameRgn 0x109b
@@ -347,8 +303,6 @@
 #define NtGdiGetEmbedFonts 0x10dc
 #define NtGdiGetEudcTimeStampEx 0x10b5
 #define NtGdiGetFontData 0x10b6
-#define NtGdiGetFontFileData 
-#define NtGdiGetFontFileInfo 
 #define NtGdiGetFontResourceInfoInternalW 0x10b7
 #define NtGdiGetFontUnicodeRanges 0x10df
 #define NtGdiGetGlyphIndicesW 0x10b8
@@ -389,24 +343,19 @@
 #define NtGdiGetTextMetricsW 0x10d7
 #define NtGdiGetTransform 0x10d8
 #define NtGdiGetUFI 0x10d9
-#define NtGdiGetUFIBits 
 #define NtGdiGetUFIPathname 0x10db
 #define NtGdiGetWidthTable 0x10e0
 #define NtGdiGradientFill 0x10e1
-#define NtGdiHLSurfGetInformation 
-#define NtGdiHLSurfSetInformation 
 #define NtGdiHT_Get8BPPFormatPalette 0x12b5
 #define NtGdiHT_Get8BPPMaskPalette 0x12b6
 #define NtGdiHfontCreate 0x10e2
 #define NtGdiIcmBrushInfo 0x10e3
-#define NtGdiInit 
 #define NtGdiInitSpool 0x10e5
 #define NtGdiIntersectClipRect 0x10e6
 #define NtGdiInvertRgn 0x10e7
 #define NtGdiLineTo 0x10e8
 #define NtGdiMakeFontDir 0x10e9
 #define NtGdiMakeInfoDC 0x10ea
-#define NtGdiMakeObjectXferable 
 #define NtGdiMaskBlt 0x10eb
 #define NtGdiMirrorWindowOrg 0x1120
 #define NtGdiModifyWorldTransform 0x10ec
@@ -422,7 +371,6 @@
 #define NtGdiPATHOBJ_vGetBounds 0x12ae
 #define NtGdiPatBlt 0x10f2
 #define NtGdiPathToRegion 0x10f4
-#define NtGdiPerf 
 #define NtGdiPlgBlt 0x10f5
 #define NtGdiPolyDraw 0x10f6
 #define NtGdiPolyPatBlt 0x10f3
@@ -450,11 +398,9 @@
 #define NtGdiSaveDC 0x1106
 #define NtGdiScaleViewportExtEx 0x1107
 #define NtGdiScaleWindowExtEx 0x1108
-#define NtGdiSelectBitmap 
 #define NtGdiSelectBrush 0x110a
 #define NtGdiSelectClipPath 0x110b
 #define NtGdiSelectFont 0x110c
-#define NtGdiSelectPalette 
 #define NtGdiSelectPen 0x110d
 #define NtGdiSetBitmapAttributes 0x110e
 #define NtGdiSetBitmapBits 0x110f
@@ -481,11 +427,9 @@
 #define NtGdiSetRectRgn 0x1125
 #define NtGdiSetSizeDevice 0x112a
 #define NtGdiSetSystemPaletteUse 0x1126
-#define NtGdiSetTextCharacterExtra 
 #define NtGdiSetTextJustification 0x1127
 #define NtGdiSetVirtualResolution 0x1129
 #define NtGdiSetupPublicCFONT 0x1128
-#define NtGdiSfmGetNotificationTokens 
 #define NtGdiStartDoc 0x112b
 #define NtGdiStartPage 0x112c
 #define NtGdiStretchBlt 0x112d
@@ -495,7 +439,6 @@
 #define NtGdiSwapBuffers 0x1131
 #define NtGdiTransformPoints 0x1132
 #define NtGdiTransparentBlt 0x1133
-#define NtGdiUnloadPrinterDriver 
 #define NtGdiUnmapMemFont 0x12ba
 #define NtGdiUnrealizeObject 0x1136
 #define NtGdiUpdateColors 0x1137
@@ -514,13 +457,11 @@
 #define NtUserBeginPaint 0x113e
 #define NtUserBitBltSysBmp 0x113f
 #define NtUserBlockInput 0x1140
-#define NtUserBreak 
 #define NtUserBuildHimcList 0x1141
 #define NtUserBuildHwndList 0x1142
 #define NtUserBuildNameList 0x1143
 #define NtUserBuildPropList 0x1144
 #define NtUserCalcMenuBar 0x124e
-#define NtUserCalculatePopupWindowPosition 
 #define NtUserCallHwnd 0x1145
 #define NtUserCallHwndLock 0x1146
 #define NtUserCallHwndOpt 0x1147
@@ -529,18 +470,14 @@
 #define NtUserCallMsgFilter 0x114a
 #define NtUserCallNextHookEx 0x114b
 #define NtUserCallNoParam 0x114c
-#define NtUserCallNoParamTranslate 
 #define NtUserCallOneParam 0x114d
-#define NtUserCallOneParamTranslate 
 #define NtUserCallTwoParam 0x114e
 #define NtUserChangeClipboardChain 0x114f
 #define NtUserChangeDisplaySettings 0x1150
-#define NtUserChangeWindowMessageFilterEx 
 #define NtUserCheckAccessForIntegrityLevel 0x1151
 #define NtUserCheckDesktopByThreadId 0x1152
 #define NtUserCheckImeHotKey 0x1154
 #define NtUserCheckMenuItem 0x1155
-#define NtUserCheckMenuRadioItem 
 #define NtUserCheckWindowThreadDesktop 0x1153
 #define NtUserChildWindowFromPointEx 0x1156
 #define NtUserClipCursor 0x1157
@@ -553,16 +490,13 @@
 #define NtUserCountClipboardFormats 0x115e
 #define NtUserCreateAcceleratorTable 0x115f
 #define NtUserCreateCaret 0x1160
-#define NtUserCreateDesktop 
 #define NtUserCreateDesktopEx 0x1161
 #define NtUserCreateInputContext 0x1162
 #define NtUserCreateLocalMemHandle 0x1163
 #define NtUserCreateWindowEx 0x1164
 #define NtUserCreateWindowStation 0x1165
 #define NtUserCtxDisplayIOCtl 0x126f
-#define NtUserDdeGetQualityOfService 
 #define NtUserDdeInitialize 0x1166
-#define NtUserDdeSetQualityOfService 
 #define NtUserDefSetText 0x1168
 #define NtUserDeferWindowPos 0x1167
 #define NtUserDeleteMenu 0x1169
@@ -573,8 +507,6 @@
 #define NtUserDestroyWindow 0x116e
 #define NtUserDisableThreadIme 0x116f
 #define NtUserDispatchMessage 0x1170
-#define NtUserDisplayConfigGetDeviceInfo 
-#define NtUserDisplayConfigSetDeviceInfo 
 #define NtUserDoSoundConnect 0x1171
 #define NtUserDoSoundDisconnect 0x1172
 #define NtUserDragDetect 0x1173
@@ -588,14 +520,12 @@
 #define NtUserDwmHintDxUpdate 0x1275
 #define NtUserDwmStartRedirection 0x1273
 #define NtUserDwmStopRedirection 0x1274
-#define NtUserECQueryInputLangChange 
 #define NtUserEmptyClipboard 0x117a
 #define NtUserEnableMenuItem 0x117b
 #define NtUserEnableScrollBar 0x117c
 #define NtUserEndDeferWindowPosEx 0x117d
 #define NtUserEndMenu 0x117e
 #define NtUserEndPaint 0x117f
-#define NtUserEndTouchOperation 
 #define NtUserEnumDisplayDevices 0x1180
 #define NtUserEnumDisplayMonitors 0x1181
 #define NtUserEnumDisplaySettings 0x1182
@@ -606,7 +536,6 @@
 #define NtUserFindWindowEx 0x1187
 #define NtUserFlashWindowEx 0x1188
 #define NtUserFrostCrashedWindow 0x1189
-#define NtUserFullscreenControl 
 #define NtUserGetAltTabInfo 0x118a
 #define NtUserGetAncestor 0x118b
 #define NtUserGetAppImeLevel 0x118c
@@ -615,7 +544,6 @@
 #define NtUserGetCPD 0x119c
 #define NtUserGetCaretBlinkTime 0x118f
 #define NtUserGetCaretPos 0x1190
-#define NtUserGetClassInfo 
 #define NtUserGetClassInfoEx 0x1191
 #define NtUserGetClassName 0x1192
 #define NtUserGetClipCursor 0x1198
@@ -631,20 +559,14 @@
 #define NtUserGetCursorInfo 0x119e
 #define NtUserGetDC 0x119f
 #define NtUserGetDCEx 0x11a0
-#define NtUserGetDisplayConfigBufferSizes 
 #define NtUserGetDoubleClickTime 0x11a1
 #define NtUserGetForegroundWindow 0x11a2
 #define NtUserGetGUIThreadInfo 0x11a4
-#define NtUserGetGestureConfig 
-#define NtUserGetGestureExtArgs 
-#define NtUserGetGestureInfo 
 #define NtUserGetGuiResources 0x11a3
 #define NtUserGetIconInfo 0x11a5
 #define NtUserGetIconSize 0x11a6
 #define NtUserGetImeHotKey 0x11a7
 #define NtUserGetImeInfoEx 0x11a8
-#define NtUserGetInputEvent 
-#define NtUserGetInputLocaleInfo 
 #define NtUserGetInternalWindowPos 0x11a9
 #define NtUserGetKeyNameText 0x11ad
 #define NtUserGetKeyState 0x11ae
@@ -653,8 +575,6 @@
 #define NtUserGetKeyboardState 0x11ac
 #define NtUserGetLayeredWindowAttributes 0x125c
 #define NtUserGetListBoxInfo 0x11af
-#define NtUserGetListboxString 
-#define NtUserGetMediaChangeEvents 
 #define NtUserGetMenuBarInfo 0x11b0
 #define NtUserGetMenuIndex 0x11b1
 #define NtUserGetMenuItemRect 0x11b2
@@ -671,22 +591,15 @@
 #define NtUserGetRawInputDeviceList 0x11bc
 #define NtUserGetRegisteredRawInputDevices 0x11bd
 #define NtUserGetScrollBarInfo 0x11be
-#define NtUserGetStats 
 #define NtUserGetSystemMenu 0x11bf
 #define NtUserGetThreadDesktop 0x11c0
 #define NtUserGetThreadState 0x11c1
 #define NtUserGetTitleBarInfo 0x11c2
-#define NtUserGetTopLevelWindow 
-#define NtUserGetTouchInputInfo 
 #define NtUserGetUpdateRect 0x11c4
 #define NtUserGetUpdateRgn 0x11c5
 #define NtUserGetUpdatedClipboardFormats 0x11c3
-#define NtUserGetUserStartupInfoFlags 
 #define NtUserGetWOWClass 0x11c8
-#define NtUserGetWindowCompositionAttribute 
-#define NtUserGetWindowCompositionInfo 
 #define NtUserGetWindowDC 0x11c6
-#define NtUserGetWindowDisplayAffinity 
 #define NtUserGetWindowMinimizeRect 0x1277
 #define NtUserGetWindowPlacement 0x11c7
 #define NtUserGetWindowRgnEx 0x123a
@@ -695,21 +608,15 @@
 #define NtUserHideCaret 0x11cb
 #define NtUserHiliteMenuItem 0x11cc
 #define NtUserHungWindowFromGhostWindow 0x11cd
-#define NtUserHwndQueryRedirectionInfo 
-#define NtUserHwndSetRedirectionInfo 
 #define NtUserImpersonateDdeClientWindow 0x11ce
-#define NtUserInitBrushes 
 #define NtUserInitTask 0x11d1
 #define NtUserInitialize 0x11cf
 #define NtUserInitializeClientPfnArrays 0x11d0
-#define NtUserInjectGesture 
 #define NtUserInternalGetWindowIcon 0x11d3
 #define NtUserInternalGetWindowText 0x11d2
 #define NtUserInvalidateRect 0x11d4
 #define NtUserInvalidateRgn 0x11d5
 #define NtUserIsClipboardFormatAvailable 0x11d6
-#define NtUserIsTopLevelWindow 
-#define NtUserIsTouchWindow 
 #define NtUserKillTimer 0x11d7
 #define NtUserLoadKeyboardLayoutEx 0x11d8
 #define NtUserLockWindowStation 0x11d9
@@ -718,16 +625,11 @@
 #define NtUserLogicalToPhysicalPoint 0x11dc
 #define NtUserMNDragLeave 0x11e1
 #define NtUserMNDragOver 0x11e2
-#define NtUserMagControl 
-#define NtUserMagGetContextInformation 
-#define NtUserMagSetContextInformation 
-#define NtUserManageGestureHandlerWindow 
 #define NtUserMapVirtualKeyEx 0x11dd
 #define NtUserMenuItemFromPoint 0x11de
 #define NtUserMessageCall 0x11df
 #define NtUserMinMaximize 0x11e0
 #define NtUserModifyUserStartupInfoFlags 0x11e3
-#define NtUserModifyWindowTouchCapability 
 #define NtUserMoveWindow 0x11e4
 #define NtUserNotifyIMEStatus 0x11e5
 #define NtUserNotifyProcessCreate 0x11e6
@@ -742,27 +644,22 @@
 #define NtUserPaintMonitor 0x11ee
 #define NtUserPeekMessage 0x11ef
 #define NtUserPhysicalToLogicalPoint 0x11f0
-#define NtUserPlayEventSound 
 #define NtUserPostMessage 0x11f1
 #define NtUserPostThreadMessage 0x11f2
 #define NtUserPrintWindow 0x11f3
 #define NtUserProcessConnect 0x11f4
-#define NtUserQueryDisplayConfig 
 #define NtUserQueryInformationThread 0x11f5
 #define NtUserQueryInputContext 0x11f6
 #define NtUserQuerySendMessage 0x11f7
-#define NtUserQueryUserCounters 
 #define NtUserQueryWindow 0x11f8
 #define NtUserRealChildWindowFromPoint 0x11f9
 #define NtUserRealInternalGetMessage 0x11fa
 #define NtUserRealWaitMessageEx 0x11fb
 #define NtUserRedrawWindow 0x11fc
 #define NtUserRegisterClassExWOW 0x11fd
-#define NtUserRegisterClipboardFormat 
 #define NtUserRegisterErrorReportingDialog 0x11fe
 #define NtUserRegisterHotKey 0x1200
 #define NtUserRegisterRawInputDevices 0x1201
-#define NtUserRegisterServicesProcess 
 #define NtUserRegisterSessionPort 0x1270
 #define NtUserRegisterTasklist 0x1202
 #define NtUserRegisterUserApiHook 0x11ff
@@ -781,13 +678,9 @@
 #define NtUserScrollWindowEx 0x120b
 #define NtUserSelectPalette 0x120c
 #define NtUserSendInput 0x120d
-#define NtUserSendMessageCallback 
-#define NtUserSendNotifyMessage 
-#define NtUserSendTouchInput 
 #define NtUserSetActiveWindow 0x120e
 #define NtUserSetAppImeLevel 0x120f
 #define NtUserSetCapture 0x1210
-#define NtUserSetChildWindowNoActivate 
 #define NtUserSetClassLong 0x1211
 #define NtUserSetClassWord 0x1212
 #define NtUserSetClipboardData 0x1213
@@ -796,11 +689,7 @@
 #define NtUserSetCursor 0x1216
 #define NtUserSetCursorContents 0x1217
 #define NtUserSetCursorIconData 0x1218
-#define NtUserSetDbgTag 
-#define NtUserSetDebugErrorLevel 
-#define NtUserSetDisplayConfig 
 #define NtUserSetFocus 0x1219
-#define NtUserSetGestureConfig 
 #define NtUserSetImeHotKey 0x121a
 #define NtUserSetImeInfoEx 0x121b
 #define NtUserSetImeOwnerWindow 0x121c
@@ -809,7 +698,6 @@
 #define NtUserSetInternalWindowPos 0x121f
 #define NtUserSetKeyboardState 0x1220
 #define NtUserSetLayeredWindowAttributes 0x125d
-#define NtUserSetLogonNotifyWindow 
 #define NtUserSetMenu 0x1221
 #define NtUserSetMenuContextHelpId 0x1222
 #define NtUserSetMenuDefaultItem 0x1223
@@ -820,7 +708,6 @@
 #define NtUserSetProcessDPIAware 0x1234
 #define NtUserSetProcessWindowStation 0x1227
 #define NtUserSetProp 0x1229
-#define NtUserSetRipFlags 
 #define NtUserSetScrollInfo 0x122a
 #define NtUserSetShellWindowEx 0x122b
 #define NtUserSetSysColors 0x122c
@@ -831,10 +718,7 @@
 #define NtUserSetThreadLayoutHandles 0x1231
 #define NtUserSetThreadState 0x1232
 #define NtUserSetTimer 0x1233
-#define NtUserSetUserStartupInfoFlags 
 #define NtUserSetWinEventHook 0x1240
-#define NtUserSetWindowCompositionAttribute 
-#define NtUserSetWindowDisplayAffinity 
 #define NtUserSetWindowFNID 0x1235
 #define NtUserSetWindowLong 0x1236
 #define NtUserSetWindowPlacement 0x1237
@@ -845,19 +729,9 @@
 #define NtUserSetWindowWord 0x123f
 #define NtUserSetWindowsHookAW 0x123c
 #define NtUserSetWindowsHookEx 0x123d
-#define NtUserSfmDestroyLogicalSurfaceBinding 
-#define NtUserSfmDxBindSwapChain 
-#define NtUserSfmDxGetSwapChainStats 
-#define NtUserSfmDxOpenSwapChain 
-#define NtUserSfmDxQuerySwapChainBindingStatus 
-#define NtUserSfmDxReleaseSwapChain 
-#define NtUserSfmDxReportPendingBindingsToDwm 
-#define NtUserSfmDxSetSwapChainBindingStatus 
-#define NtUserSfmDxSetSwapChainStats 
-#define NtUserSfmGetLogicalSurfaceBinding 
 #define NtUserShowCaret 0x1241
 #define NtUserShowScrollBar 0x1242
-#define NtUserShowSystemCursor 0x1304
+#define NtUserShowSystemCursor 0x1303
 #define NtUserShowWindow 0x1243
 #define NtUserShowWindowAsync 0x1244
 #define NtUserSoundSentry 0x1245
@@ -889,60 +763,11 @@
 #define NtUserValidateRect 0x1261
 #define NtUserValidateTimerCallback 0x1262
 #define NtUserVkKeyScanEx 0x1263
-#define NtUserWOWCleanup 
-#define NtUserWOWFindWindow 
 #define NtUserWaitForInputIdle 0x1264
 #define NtUserWaitForMsgAndEvent 0x1265
 #define NtUserWaitMessage 0x1266
-#define NtUserWin32PoolAllocationStats 
 #define NtUserWindowFromPhysicalPoint 0x1268
 #define NtUserWindowFromPoint 0x1269
 #define NtUserYieldTask 0x126a
-#define NtUserfnCOPYDATA 
-#define NtUserfnCOPYGLOBALDATA 
-#define NtUserfnDDEINIT 
-#define NtUserfnDWORD 
-#define NtUserfnDWORDOPTINLPMSG 
-#define NtUserfnGETTEXTLENGTHS 
-#define NtUserfnHkINDWORD 
-#define NtUserfnHkINLPCBTACTIVATESTRUCT 
-#define NtUserfnHkINLPCBTCREATESTRUCT 
-#define NtUserfnHkINLPDEBUGHOOKSTRUCT 
-#define NtUserfnHkINLPKBDLLHOOKSTRUCT 
-#define NtUserfnHkINLPMOUSEHOOKSTRUCT 
-#define NtUserfnHkINLPMSG 
-#define NtUserfnHkINLPMSLLHOOKSTRUCT 
-#define NtUserfnHkINLPRECT 
-#define NtUserfnHkOPTINLPEVENTMSG 
-#define NtUserfnINCNTOUTSTRING 
-#define NtUserfnINCNTOUTSTRINGNULL 
-#define NtUserfnINDEVICECHANGE 
-#define NtUserfnINLPCOMPAREITEMSTRUCT 
-#define NtUserfnINLPCREATESTRUCT 
-#define NtUserfnINLPDELETEITEMSTRUCT 
-#define NtUserfnINLPDRAWITEMSTRUCT 
-#define NtUserfnINLPHELPINFOSTRUCT 
-#define NtUserfnINLPHLPSTRUCT 
-#define NtUserfnINLPMDICREATESTRUCT 
-#define NtUserfnINLPWINDOWPOS 
-#define NtUserfnINOUTDRAG 
-#define NtUserfnINOUTLPMEASUREITEMSTRUCT 
-#define NtUserfnINOUTLPPOINT5 
-#define NtUserfnINOUTLPRECT 
-#define NtUserfnINOUTLPSCROLLINFO 
-#define NtUserfnINOUTLPWINDOWPOS 
-#define NtUserfnINOUTNCCALCSIZE 
-#define NtUserfnINOUTNEXTMENU 
-#define NtUserfnINOUTSTYLECHANGE 
-#define NtUserfnINPAINTCLIPBRD 
-#define NtUserfnINSIZECLIPBRD 
-#define NtUserfnINSTRING 
-#define NtUserfnINSTRINGNULL 
-#define NtUserfnOPTOUTLPDWORDOPTOUTLPDWORD 
-#define NtUserfnOUTDWORDINDWORD 
-#define NtUserfnOUTLPRECT 
-#define NtUserfnOUTSTRING 
-#define NtUserfnPOPTINLPUINT 
-#define NtUserfnPOUTLPINT 
-#define NtUserfnSENTDDEMSG 
 #define SURFACE::bUnMap 0x10e4
+#endif
