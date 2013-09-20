@@ -15,6 +15,7 @@
 #include <sys/resource.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/utsname.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <limits.h>
@@ -22,6 +23,9 @@
 #include <sys/syscall.h>
 #include <klee/klee.h>
 #include <grp.h>
+#include <asm/ldt.h>
+#include <asm/ptrace.h>
+#include "cpu/i386_macros.h"
 
 #include "file.h"
 #include "mem.h"
@@ -504,8 +508,6 @@ static void sc_klee(void* regfile)
 }
 
 
-#include <asm/ptrace.h>
-
 void* sc_enter(void* regfile, void* jmpptr)
 {
 	struct sc_pkt		sc;
@@ -813,10 +815,19 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_ge(new_regs, -1);
 		break;
 
-	case SYS_uname:
-		sc_ret_v(regfile, -1);
-		klee_warning_once("failing uname");
+	case SYS_uname: {
+		klee_warning_once("Using bogus uname");
+		struct utsname*	buf = GET_ARG0_PTR(regfile);
+		memcpy(&buf->sysname, "Linux", 6);
+		memcpy(&buf->nodename, "kleemc", 7);
+		memcpy(&buf->release, "3.9.6", 6);
+		memcpy(&buf->version, "x", 2);
+		memcpy(&buf->machine, "x86_64", 7);/* XXX */
+		sc_ret_v(regfile, 0);
+		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
 		break;
+	}
+
 	case SYS_writev:
 		sc_ret_ge0(sc_new_regs(regfile));
 		break;
@@ -879,6 +890,44 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	}
 
+	case SYS_set_thread_area: {
+#ifdef GUEST_ARCH_X86
+		struct user_desc	*ud = GET_ARG0_PTR(regfile);
+		VexGuestX86SegDescr	*vsd;
+		VexGuestX86State	*vs;
+		int			entry_num;
+
+		entry_num = ud->entry_number;
+		klee_print_expr(
+			"setting thread area for entry number",
+			entry_num);
+
+		vs = ((VexGuestX86State*)regfile);
+		vsd = (VexGuestX86SegDescr*)((void*)((vs->guest_LDT)));
+		
+		if (entry_num == -1) {
+			/* find entry num */
+			int	i;
+			for (i = 1; i < 1024; i++) {
+				if (vsd[i].LdtEnt.Bits.Pres == 0)
+					break;
+			}
+			entry_num = i;
+			klee_print_expr(
+				"alloc thread area entry number",
+				entry_num);
+			ud->entry_number = entry_num;
+		}
+
+		ud2vexseg(*ud, &vsd[entry_num].LdtEnt);
+		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
+		sc_ret_v(regfile, 0);
+#else
+		/* fail on amd64 */
+		sc_ret_v(regfile, -1);
+#endif
+		break;
+	}
 
 	case SYS_sched_getscheduler:
 		klee_warning_once("Pure symbolic on sched_getscheduler");

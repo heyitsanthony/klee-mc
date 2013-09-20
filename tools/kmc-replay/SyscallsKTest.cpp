@@ -6,9 +6,11 @@
 #include <fcntl.h>
 #include <sys/syscall.h>
 #include <sys/resource.h>
+#include <sys/utsname.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <asm/ldt.h>
 #include <stdlib.h>
 #include <unistd.h>
 
@@ -20,6 +22,7 @@
 #include "guestcpustate.h"
 #include "guest.h"
 #include "cpu/i386windowsabi.h"
+#include "cpu/i386_macros.h"
 
 #include "SyscallsKTest.h"
 
@@ -247,6 +250,58 @@ void SyscallsKTest::doLinuxThunks(SyscallParams& sp, int xlate_sysnr)
 	ssize_t		bw;
 
 	switch(xlate_sysnr) {
+	case SYS_set_thread_area: {
+		struct user_desc	ud;
+		VexGuestX86State*	regs;
+		VexGuestX86SegDescr	vs, *gvs;
+		
+		regs = (VexGuestX86State*)guest->getCPUState()->getStateData();
+		gvs = static_cast<VexGuestX86SegDescr*>(
+			((void*)((regs)->guest_LDT)));
+
+		guest->getMem()->memcpy(
+			&ud, guest_ptr(sp.getArg(0)), sizeof(ud));
+
+		if ((int)ud.entry_number == -1) {
+			int	i;
+			/* find free entry */
+			for (i = 1; i < 1024; i++) {
+				guest->getMem()->memcpy(
+					&vs,
+					guest_ptr((long)&gvs[i]),
+					sizeof(vs));
+
+				if (vs.LdtEnt.Bits.Pres == 0)
+					break;
+			}
+
+			ud.entry_number = i;
+			guest->getMem()->memcpy(
+				guest_ptr(sp.getArg(0)), &ud, sizeof(ud));
+
+			std::cerr << "[kmc] set entry_number=" << i << '\n';
+		}
+
+		ud2vexseg(ud, &vs.LdtEnt);
+
+		gvs = &gvs[ud.entry_number];
+
+		guest->getMem()->memcpy(
+			guest_ptr((uintptr_t)gvs), &vs, sizeof(vs));
+		break;
+	}
+	case SYS_uname: {
+		guest_ptr	p(sp.getArg(0));
+#define UNAME_COPY(x,y)	guest->getMem()->memcpy(	\
+	p+offsetof(struct utsname,x),y,strlen(y)+1)
+		
+		UNAME_COPY(sysname, "Linux");
+		UNAME_COPY(nodename, "kleemc");
+		UNAME_COPY(release, "3.9.6");
+		UNAME_COPY(version, "x");
+		UNAME_COPY(machine, "x86_64");
+		break;
+	}
 
 	case SYS_getsockname:
 		if (getRet() == 0) {
