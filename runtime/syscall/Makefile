@@ -20,6 +20,8 @@ NO_PEDANTIC=1
 
 include $(LEVEL)/Makefile.common
 
+C.Flags += -I$(VEXLLVM_ROOT)/src/
+
 ifeq ($(GUEST_ARCH), amd64)
 C.Flags += -DGUEST_ARCH_AMD64=1
 CXX.Flags += -DGUEST_ARCH_AMD64=1
