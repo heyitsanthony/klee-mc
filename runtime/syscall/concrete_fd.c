@@ -5,6 +5,7 @@
 #include <assert.h>
 #include <sys/types.h>
 #include <sys/syscall.h>
+#include <stdbool.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <string.h>
@@ -13,6 +14,8 @@
 
 #define FD_FL_IN_USE	1
 #define FD_FL_CONCRETE	2
+
+extern bool concrete_vfs;
 
 long kmc_io(int sys_nr, long p1, long p2, long p3, long p4);
 #define KMC_IO_OPEN(x)		kmc_io(SYS_open, (long)x, 0, 0, 0)
@@ -129,6 +132,8 @@ void fd_close(int fd)
 
 int fd_is_concrete(int fd)
 {
+	if (concrete_vfs && fd < 4) return 1;
+
 	/* XXX: is there ever a case where the fd is
 	 * symbolic but the underlying files are concrete? */
 	if (klee_is_symbolic(fd))

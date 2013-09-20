@@ -190,6 +190,8 @@ static void sc_stat(struct sc_pkt* sc)
 
 			return;
 		}
+
+		klee_print_expr("fstat missing fd", fd);
 	}
 
 	klee_warning_once("stat not respecting concretes as it ought to");

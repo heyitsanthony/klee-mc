@@ -16,6 +16,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <ustat.h>
 #include <sys/syscall.h>
@@ -663,7 +664,21 @@ void* sc_enter(void* regfile, void* jmpptr)
 		break;
 	FAKE_SC_RANGE(geteuid, 0, 1)
 	FAKE_SC_RANGE(getegid, 0, 1)
-	FAKE_SC_RANGE(fcntl, -1, 1)
+	case SYS_fcntl: {
+		int	fd = GET_ARG0(regfile);
+		int	cmd = GET_ARG1(regfile);
+		if (fd_is_concrete(fd) || fd == 3) {
+			if (cmd == F_SETFD) {
+				sc_ret_v(regfile, 0);
+				break;
+			}
+		}
+		klee_warning_once("Faking range syscall fcntl");
+		klee_print_expr("fnctl cmd", cmd);
+		klee_print_expr("fnctl fd", fd);
+		sc_ret_range(sc_new_regs(regfile), -1, 1);
+		break;
+	}
 	FAKE_SC(fadvise64)
 	FAKE_SC(rt_sigaction)
 
