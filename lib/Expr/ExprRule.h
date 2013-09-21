@@ -50,7 +50,7 @@ public:
 
 	void printBinaryRule(std::ostream& os) const;
 	void printPrettyRule(std::ostream& os) const;
-	void print(std::ostream& os) const;
+	void print(std::ostream& os, bool use_parens = false) const;
 
 	ref<Expr> materialize(void) const;
 	ref<Expr> materializeUnsound(void) const;

@@ -106,6 +106,7 @@ DEF_OPT(CheckDup, "check-dup", "Check if duplicate rule");
 DEF_OPT(DumpBinRule, "dump-bin", "Dump rule in binary format.");
 DEF_OPT(CompareDBs, "compare-db", "Compute % of input which is in rule-file");
 DEF_OPT(DumpDB, "dump-db", "Dump rule db in pretty format.");
+DEF_OPT(DumpDB2, "dump-db2", "Dump rule db in readable format.");
 DEF_OPT(DumpPattern, "dump-pat", "Dump rule db patterns");
 DEF_OPT(BRuleXtive, "brule-xtive", "Search for transitive rules in brule database");
 DEF_OPT(BRuleRebuild, "brule-rebuild", "Rebuild brule file.");
@@ -551,8 +552,9 @@ void dumpDB(void)
 	RuleBuilder	*rb;
 
 	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
-	foreach (it, rb->begin(), rb->end())
-		(*it)->print(std::cout);
+	foreach (it, rb->begin(), rb->end()) {
+		(*it)->print(std::cout, DumpDB2);
+	}
 	delete rb;
 }
 
@@ -935,7 +937,7 @@ int main(int argc, char **argv)
 		dedupDB();
 	} else if (ExtractRule != -1) {
 		extractRule(ExtractRule);
-	} else if (DumpDB) {
+	} else if (DumpDB || DumpDB2) {
 		dumpDB();
 	} else if (AddRule) {
 		addRule(eb, s);

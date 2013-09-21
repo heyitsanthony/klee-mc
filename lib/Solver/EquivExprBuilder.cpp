@@ -328,20 +328,24 @@ ref<Expr> EquivExprBuilder::tryEquivRewrite(
 	const ref<Expr>& e_db)
 {
 	ref<Expr>	e_db_unified, e_klee_w;
-	bool		ok, must_be_true;
+	bool		ok, mbt, conflicts;
 
 	if (unify(e_klee, e_db, e_klee_w, e_db_unified) == false)
 		return NULL;
 
-	ok = solver.mustBeTrue(
-		Query(MK_EQ(e_klee_w, e_db_unified)), must_be_true);
+	/* XXX: kind of a hack */
+	conflicts = SMTPrinter::hasNameConflicts();
+	SMTPrinter::setNameConflicts(true);
+	ok = solver.mustBeTrue(Query(MK_EQ(e_klee_w, e_db_unified)), mbt);
+	SMTPrinter::setNameConflicts(conflicts);
+
 	if (ok == false) {
 		failed_c++;
 		return NULL;
 	}
 
 	/* not a precise match */
-	if (must_be_true == false) {
+	if (mbt == false) {
 		miss_c++;
 		return NULL;
 	}
@@ -387,7 +391,7 @@ void EquivExprBuilder::writeEquivRuleToDir(
 	const ref<Expr>& e_klee_w, const ref<Expr>& e_db_unified)
 {
 	std::stringstream	ss;
-	Query	q(EqExpr::create(e_klee_w, e_db_unified));
+	Query	q(MK_EQ(e_klee_w, e_db_unified));
 
 	ss << ProofsDir << "/pending." << q.hash() << ".rule";
 

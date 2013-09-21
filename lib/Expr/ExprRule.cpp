@@ -139,15 +139,19 @@ void ExprRule::printPrettyRule(std::ostream& os) const
 	printRule(os, getFromExpr(), getToExpr());
 }
 
-void ExprRule::print(std::ostream& os) const
+void ExprRule::print(std::ostream& os, bool parens) const
 {
 	unsigned	i;
 	ref<Expr>	f_e(getFromExpr()), t_e(getToExpr());
 
 	if (f_e.isNull() || t_e.isNull())
 		os << "???\n";
-	else
-		printRule(os, f_e, t_e);
+	else {
+		if (parens)
+			os << f_e << "\n -> \n" << t_e << "\n\n";
+		else
+			printRule(os, f_e, t_e);
+	}
 
 	if (const_constraints == NULL)
 		return;

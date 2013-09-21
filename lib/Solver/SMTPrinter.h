@@ -29,7 +29,8 @@ public:
 	static void dumpToFile(const Query& q, const char* fname,
 		bool printConsts = true);
 
-
+	static bool hasNameConflicts(void) { return has_name_conflicts; }
+	static void setNameConflicts(bool v) { has_name_conflicts = v; }
 protected:
 	virtual Action visitExpr(const Expr *e);
 	virtual void visitExprPost(const Expr* expr);
@@ -78,6 +79,9 @@ private:
 	SMTArrays	*arr;
 
 	bool		print_const_arrays;
+
+private:
+	static bool	has_name_conflicts;
 };
 
 }

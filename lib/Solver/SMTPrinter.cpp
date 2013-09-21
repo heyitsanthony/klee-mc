@@ -17,6 +17,19 @@
 using namespace klee;
 using namespace llvm;
 
+bool SMTPrinter::has_name_conflicts = false;
+
+//#define WRAP_ARR_NAME(x)	(x)->name
+#define WRAP_ARR_NAME(x)	\
+	(SMTPrinter::hasNameConflicts() ? append_ptr(x) : x->name)
+
+static std::string append_ptr(const Array* arr)
+{
+	std::stringstream	ss;
+	ss << arr->name << "_" << (void*)arr;
+	return ss.str();
+}
+
 namespace {
 	cl::opt<bool>
 	SpecializeSimpleEquality(
@@ -509,7 +522,7 @@ bool SMTPrinter::tryPrintSimpleEqConstraint(const ref<Expr>& e) const
 
 	os << "(= bv" << ce->getZExtValue() << "[8] "
 		<< "(select "
-			<< re->updates.getRoot().get()->name <<
+			<< WRAP_ARR_NAME(re->updates.getRoot().get()) <<
 			" bv" << idx->getZExtValue() << "[32]))\n";
 	return true;
 }
@@ -700,14 +713,14 @@ const std::string& SMTPrinter::SMTArrays::getInitialArray(const Array* root)
 		sprintf(idxbuf, " bv%d[32]) bv%d[8])\n",
 			i,
 			(uint8_t)root->getValue(i)->getZExtValue(8));
-		assump_str += "(= (select " + root->name + idxbuf;
+		assump_str += "(= (select " + WRAP_ARR_NAME(root) + idxbuf;
 	}
 
 	if (root->mallocKey.size > 1) assump_str += ")\n";
 
 	a_const_decls.insert(std::make_pair(root, assump_str));
 done:
-	a_initial.insert(std::make_pair(root, root->name));
+	a_initial.insert(std::make_pair(root, WRAP_ARR_NAME(root)));
 	return a_initial[root];
 }
 
@@ -716,7 +729,7 @@ void SMTPrinter::printArrayDecls(void) const
 	/* declarations */
 	foreach (it, arr->a_initial.begin(), arr->a_initial.end()) {
 		const Array	*a = it->first;
-		os << ":extrafuns\n((" << a->name << " Array[32:8]))\n";
+		os << ":extrafuns\n((" << WRAP_ARR_NAME(a) << " Array[32:8]))\n";
 	}
 
 	/* print constant array values */
