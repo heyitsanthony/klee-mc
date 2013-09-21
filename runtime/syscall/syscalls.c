@@ -903,7 +903,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			entry_num);
 
 		vs = ((VexGuestX86State*)regfile);
-		vsd = (VexGuestX86SegDescr*)((void*)((vs->guest_LDT)));
+		vsd = (VexGuestX86SegDescr*)((void*)((vs->guest_GDT)));
 		
 		if (entry_num == -1) {
 			/* find entry num */

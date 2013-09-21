@@ -257,7 +257,7 @@ void SyscallsKTest::doLinuxThunks(SyscallParams& sp, int xlate_sysnr)
 		
 		regs = (VexGuestX86State*)guest->getCPUState()->getStateData();
 		gvs = static_cast<VexGuestX86SegDescr*>(
-			((void*)((regs)->guest_LDT)));
+			((void*)((regs)->guest_GDT)));
 
 		guest->getMem()->memcpy(
 			&ud, guest_ptr(sp.getArg(0)), sizeof(ud));
@@ -288,6 +288,9 @@ void SyscallsKTest::doLinuxThunks(SyscallParams& sp, int xlate_sysnr)
 
 		guest->getMem()->memcpy(
 			guest_ptr((uintptr_t)gvs), &vs, sizeof(vs));
+
+		guest->getMem()->memcpy(&vs,
+			guest_ptr((uintptr_t)gvs), sizeof(vs));
 		break;
 	}
 	case SYS_uname: {
