@@ -191,6 +191,7 @@ bool ConcreteVFS::apply(Guest* g, const SyscallParams& sp, int xlate_nr)
 		s = g->getMem()->readString(guest_ptr(sp.getArg(0)));
 		stat(s.c_str(), &st);
 		g->getMem()->memcpy(guest_ptr(sp.getArg(1)), &st, sizeof(st));
+		std::cerr << "[kmc-io] lstat " << s << '\n';
 		break;
 	}
 

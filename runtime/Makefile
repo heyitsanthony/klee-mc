@@ -15,7 +15,7 @@ LEVEL=..
 #
 # List all of the subdirectories that we will compile.
 #
-PARALLEL_DIRS=Intrinsic klee-libc Runtest syscall syscall-fdt mmu hookpass nt sysnone kleej partseed
+PARALLEL_DIRS=Intrinsic klee-libc Runtest syscall syscall-fdt mmu hookpass nt sysnone kleej partseed nested
 
 include $(LEVEL)/Makefile.config
 

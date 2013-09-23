@@ -33,9 +33,9 @@ public:
 	HookPass(KModule* _km);
 	virtual ~HookPass();
 	virtual bool runOnFunction(llvm::Function& f);
-
 private:
 	bool processFunc(llvm::Function& f, const std::string& fn_s);
+	void loadByPath(const std::string& passlib);
 };
 }
 #endif

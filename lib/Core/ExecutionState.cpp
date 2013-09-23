@@ -66,6 +66,8 @@ namespace {
 
 static uint64_t sid_c = 0;
 
+/* TODO TODO: There is a lot of thrashing in 'unbind'; it might make sense
+ * to keep a pool of allocas even though it's less precise */
 #define UNBIND_ALLOCAS(sf)	\
 	if (sf.allocas) {	\
 		foreach (it, sf.allocas->begin(), sf.allocas->end())	\

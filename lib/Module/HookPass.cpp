@@ -10,6 +10,7 @@
 #include "HookPass.h"
 
 #include <iostream>
+#include <fstream>
 #include <sstream>
 
 using namespace llvm;
@@ -23,7 +24,13 @@ namespace
 	HookPassLib(
 		"hookpass-lib",
 		llvm::cl::desc("Hook pass library."),
-		llvm::cl::init("hookpass.bc"));
+		llvm::cl::init(""));
+
+	llvm::cl::opt<std::string>
+	HookPassList(
+		"hookpass-list",
+		llvm::cl::desc("Line-by-line lList of hook pass libraries."),
+		llvm::cl::init(""));
 }
 
 char HookPass::ID;
@@ -32,14 +39,28 @@ HookPass::HookPass(KModule* module)
 : llvm::FunctionPass(ID)
 , kmod(module)
 {
+	assert (!HookPassLib.empty() || !HookPassList.empty());
+
+	if (!HookPassLib.empty())
+		loadByPath(HookPassLib);
+
+	if (!HookPassList.empty()) {
+		std::ifstream	ifs(HookPassList.c_str());
+		std::string	cur_lib;
+		while (ifs >> cur_lib) loadByPath(cur_lib);
+	}
+}
+
+void HookPass::loadByPath(const std::string& passlib)
+{
 	llvm::Module	*mod;
 	llvm::sys::Path	path;
 
-	if (HookPassLib[0] == '/' || HookPassLib[0] == '.') {
-		path = HookPassLib;
+	if (passlib[0] == '/' || passlib[0] == '.') {
+		path = passlib;
 	} else {
 		path = kmod->getLibraryDir();
-		path.appendComponent(HookPassLib.c_str());
+		path.appendComponent(passlib.c_str());
 	}
 	std::cerr << "[HookPass] Using library '" << path.c_str() << "'\n";
 
