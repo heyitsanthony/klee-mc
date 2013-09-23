@@ -1623,7 +1623,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
   case Instruction::Call: instCall(state, ki); break;
 
   case Instruction::PHI: {
-    ref<Expr> result = eval(ki, state.getPHISlot(), state);
+    ref<Expr> result(eval(ki, state.getPHISlot(), state));
     state.bindLocal(ki, result);
     break;
   }
@@ -1730,19 +1730,19 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     // Conversion
   case Instruction::Trunc: {
     CastInst *ci = cast<CastInst>(i);
-    ref<Expr> result = ExtractExpr::create(
+    ref<Expr> result (MK_EXTRACT(
       eval(ki, 0, state),
       0,
-      kmodule->getWidthForLLVMType(ci->getType()));
+      kmodule->getWidthForLLVMType(ci->getType())));
 
     state.bindLocal(ki, result);
     break;
   }
   case Instruction::ZExt: {
     CastInst *ci = cast<CastInst>(i);
-    ref<Expr> result = MK_ZEXT(
+    ref<Expr> result(MK_ZEXT(
       eval(ki, 0, state),
-      kmodule->getWidthForLLVMType(ci->getType()));
+      kmodule->getWidthForLLVMType(ci->getType())));
 
     state.bindLocal(ki, result);
     break;
@@ -1750,11 +1750,10 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
   case Instruction::SExt: {
     CastInst 		*ci = cast<CastInst>(i);
     VectorType		*vt_src, *vt_dst;
-    ref<Expr>		result, evaled;
+    ref<Expr>		result, evaled(eval(ki, 0, state));
 
     vt_src = dyn_cast<VectorType>(ci->getSrcTy());
     vt_dst = dyn_cast<VectorType>(ci->getDestTy());
-    evaled =  eval(ki, 0, state);
     result = (vt_src)
       	? sextVector(state, evaled, vt_src, vt_dst)
 	: MK_SEXT(evaled, kmodule->getWidthForLLVMType(ci->getType()));
@@ -1766,8 +1765,8 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
   case Instruction::IntToPtr: {
     CastInst *ci = cast<CastInst>(i);
     Expr::Width cType = kmodule->getWidthForLLVMType(ci->getType());
-    ref<Expr> arg = eval(ki, 0, state);
-    state.bindLocal(ki, ZExtExpr::create(arg, cType));
+    ref<Expr> arg(eval(ki, 0, state));
+    state.bindLocal(ki, MK_ZEXT(arg, cType));
     break;
   }
 
@@ -1805,9 +1804,7 @@ INST_FOP_ARITH(FRem, mod)
     if (!z || x) { TERMINATE_EXEC(this, state, y); return; }
 
   case Instruction::FPTrunc: {
-	FP_SETUP(FPTruncInst,
-		a_semantics,
-		resultType > arg->getWidth(),
+	FP_SETUP(FPTruncInst, a_semantics, resultType > arg->getWidth(),
 		"Unsupported FPTrunc operation")
 
 	DECL_APF(Res, arg);
@@ -1831,9 +1828,7 @@ INST_FOP_ARITH(FRem, mod)
   }
 
   case Instruction::FPToUI: {
-	FP_SETUP(FPToUIInst,
-		a_semantics,
-		resultType > 64,
+	FP_SETUP(FPToUIInst, a_semantics, resultType > 64,
 		"Unsupported FPToUI operation")
 
 	DECL_APF(Arg, arg);
@@ -1846,9 +1841,7 @@ INST_FOP_ARITH(FRem, mod)
   }
 
   case Instruction::FPToSI: {
-	FP_SETUP(FPToSIInst,
-		a_semantics,
-		resultType > 64,
+	FP_SETUP(FPToSIInst, a_semantics, resultType > 64,
 		"Unsupported FPToSI operation")
 
 	DECL_APF(Arg, arg);

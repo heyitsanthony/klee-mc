@@ -257,6 +257,7 @@ int file_sc(struct sc_pkt* sc)
 	void	*new_regs;
 
 	switch (sc->sys_nr) {
+
 	case SYS_lseek: {
 		/* XXX these are pretty wrong since they expect the
 		 * return value to be the current position of the cursor.
@@ -381,6 +382,17 @@ int file_sc(struct sc_pkt* sc)
 		}
 	}
 	break;
+
+	case SYS_access:
+		if (concrete_vfs && !file_path_has_sym(GET_ARG0_PTR(regfile))) {
+			int fd = fd_open(GET_ARG0_PTR(regfile));
+			if (fd != -1) fd_close(fd);
+			sc_ret_v(regfile, (fd == -1) ? -1 : 0);
+			break;
+
+		}
+		sc_ret_range(sc_new_regs(regfile), -1, 0);
+		break;
 
 	case SYS_readlink:
 	{

@@ -762,7 +762,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_sched_getaffinity:
 		sc_ret_v(regfile, -1);
 		break;
-	FAKE_SC_RANGE(access, -1, 0)
+
 	case SYS_newfstatat: { /* for du */
 		new_regs = sc_new_regs(regfile);
 		if (GET_SYSRET_S(new_regs) == -1) {
@@ -786,8 +786,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_open:
 	case SYS_openat:
 	case SYS_close:
-		if (!file_sc(&sc))
-			goto already_logged;
+	case SYS_access:
+		if (!file_sc(&sc)) goto already_logged;
 		break;
 
 #ifdef GUEST_ARCH_AMD64

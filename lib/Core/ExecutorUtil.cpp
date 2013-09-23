@@ -102,7 +102,7 @@ class Globals;
           const StructLayout *sl = km->dataLayout->getStructLayout(st);
           ConstantInt *ci = cast<ConstantInt>(ii.getOperand());
 
-          addend = ConstantExpr::alloc(
+          addend = MK_CONST(
 	    sl->getElementOffset(
 	      (unsigned)ci->getZExtValue()),
               Context::get().getPointerWidth());
@@ -114,7 +114,7 @@ class Globals;
 	  	seq_t->getElementType());
 
           index = index->ZExt(Context::get().getPointerWidth());
-          addend = index->Mul(ConstantExpr::alloc(
+          addend = index->Mul(MK_CONST(
 	    elementSize,
             Context::get().getPointerWidth()));
         }

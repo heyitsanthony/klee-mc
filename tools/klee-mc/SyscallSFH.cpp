@@ -401,12 +401,11 @@ SFH_DEF_ALL(FreeRun, "kmc_free_run", false)
 
 		mo = state.addressSpace.resolveOneMO(cur_addr);
 		if (mo == NULL) {
-			if (len_remaining >= 4096) {
-				REPORT_ERROR(exe_vex,
-					state,
-					"munmap error: munmapping bad address",
-					"munmap.err");
-			}
+			if (len_remaining < 4096) break;
+			REPORT_ERROR(exe_vex,
+				state,
+				"munmap warning: munmapping bad address",
+				"munmap.err");
 			break;
 		}
 
@@ -417,7 +416,7 @@ SFH_DEF_ALL(FreeRun, "kmc_free_run", false)
 				<< std::endl;
 			REPORT_ERROR(exe_vex,
 				state,
-				"munmap error: size mismatch on munmap",
+				"munmap warning: size mismatch on munmap",
 				"munmap.err");
 			return;
 

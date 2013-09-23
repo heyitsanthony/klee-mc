@@ -51,6 +51,9 @@ static void* sc_mmap_anon(void* regfile, uint64_t len)
 	else
 		len = concretize_u64(len);
 
+	/* round up */
+	if (len & 0xfff) len += 4096 - (len & 0xfff);
+
 	/* mapping may be placed anywhere */
 	if (GET_ARG0(regfile) == 0) {
 		addr = kmc_alloc_aligned(len, "mmap");
