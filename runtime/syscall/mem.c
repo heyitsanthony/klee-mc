@@ -101,10 +101,10 @@ static void* sc_mmap_fd(void* regfile, uint64_t len, int fd, uint64_t off)
 void* sc_mmap(void* regfile, uint64_t len)
 {
 	void		*addr;
-	void		*new_regs;
+	void		*new_regs = NULL;
 	int		fd;
 
-	new_regs = sc_new_regs(regfile);
+	//new_regs = sc_new_regs(regfile);
 	fd = ((int)GET_ARG4(regfile));
 
 	if (len >= (uintptr_t)0x10000000 || (int64_t)len <= 0) {
@@ -119,7 +119,8 @@ void* sc_mmap(void* regfile, uint64_t len)
 		addr = sc_mmap_anon(regfile, len);
 	}
 
-	sc_ret_v_new(new_regs, (uint64_t)addr);
+	// sc_ret_v_new(new_regs, (uint64_t)addr);
+	sc_ret_v(regfile, (uint64_t)addr);
 	return new_regs;
 }
 

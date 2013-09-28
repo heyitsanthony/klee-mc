@@ -16,7 +16,7 @@ LEVEL=..
 # List all of the subdirectories that we will compile.
 #
 PARALLEL_DIRS= 	\
-	kopt klee-mc kmc-replay kcrumb kcrumb-replay \
+	kopt klee-mc kmc-replay kcrumb kcrumb-replay klee-hw \
 	kleej	\
 	klee kleaver ktest-tool gen-random-bout klee-stats solverd 	\
 

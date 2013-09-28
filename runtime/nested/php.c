@@ -43,7 +43,7 @@ DECL_HOOK(zend_error_noreturn)
 	/* XXX: ARG0 is an error type ala E_ERROR, E_WARNING */
 	int	err_level = GET_ARG0(r);
 	klee_print_expr("[nested] php ZEND ERROR! bye", err_level);
-	if ((err_level & E_NONFATAL) != 0) {
+	if ((err_level & E_DEPRECATED) != 0) {
 		klee_ureport(GET_ARG2_PTR(r), "zend.err");
 	} else {
 		klee_uerror(GET_ARG2_PTR(r), "zend.err");

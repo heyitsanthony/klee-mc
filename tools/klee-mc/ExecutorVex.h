@@ -25,6 +25,7 @@ class ObjectState;
 class SyscallSFH;
 class SysModel;
 class KModuleVex;
+class HostAccelerator;
 
 #define es2esv(x)	static_cast<ExeStateVex&>(x)
 #define es2esvc(x)	static_cast<const ExeStateVex&>(x)
@@ -106,6 +107,8 @@ private:
 
 	void markExit(ExecutionState& state, uint8_t);
 
+	void doAccel(ExecutionState& state, KInstruction* ki);
+
 	void bindMapping(
 		ExecutionState* state,
 		llvm::Function* f,
@@ -142,6 +145,8 @@ private:
 
 	llvm::Function		*img_init_func;
 	uint64_t		img_init_func_addr;
+
+	HostAccelerator		*hw_accel;
 };
 
 }

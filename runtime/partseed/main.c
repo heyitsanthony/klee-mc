@@ -41,3 +41,6 @@ DECL_HOOK(iconv_open)
 
 DECL_HOOK(XPending)
 DECL_HOOK(poll_for_next_event)
+
+DECL_HOOK(php_mysqlnd_greet_read)
+DECL_HOOK(php_stream_fill_read_buffer)

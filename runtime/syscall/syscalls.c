@@ -421,6 +421,7 @@ static void sc_poll(void* regfile)
 	poll_addr = concretize_u64(GET_ARG0(regfile));
 	fds = (struct pollfd*)poll_addr;
 
+	/* XXX: this is killing performance in php */
 	for (i = 0; i < nfds; i++) {
 	//	klee_check_memory_access(&fds[i], sizeof(struct pollfd));
 		klee_check_memory_access(&fds[i], 1);
@@ -719,7 +720,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 			make_sym(GET_ARG2(regfile), SIGSET_T_SZ, "sigset");
 			sc_ret_v(regfile, 0);
 		} else {
-			sc_ret_or(sc_new_regs(regfile), -1, 0);
+//			sc_ret_or(sc_new_regs(regfile), -1, 0);
+			sc_ret_v(regfile, 0);
 		}
 		break;
 
@@ -1164,11 +1166,13 @@ void* sc_enter(void* regfile, void* jmpptr)
 			sc_ret_v(regfile, ~0);
 			break;
 		}
-		if (new_regs == NULL)
-			new_regs = sc_mmap(regfile, len);
+	//	if (new_regs == NULL)
+	//		new_regs = sc_mmap(regfile, len);
+		sc_mmap(regfile, len);
 
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
-		sc_breadcrumb_commit(&sc, GET_SYSRET(new_regs));
+	//	sc_breadcrumb_commit(&sc, GET_SYSRET(new_regs));
+		sc_breadcrumb_commit(&sc, GET_SYSRET(regfile));
 		goto already_logged;
 	}
 

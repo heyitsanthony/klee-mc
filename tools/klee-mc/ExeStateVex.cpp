@@ -63,6 +63,19 @@ void ExeStateVex::getGDBRegs(
 	}
 }
 
+void ExeStateVex::setAddrPC(uint64_t addr)
+{
+	ObjectState	*reg_os;
+	unsigned	off;
+
+	reg_os = getRegObj();
+	off = base_guest->getCPUState()->getPCOff();
+	reg_os->write(
+		off,
+		MK_CONST(addr,
+		(base_guest->getMem()->is32Bit() ? 32 : 64)));
+}
+
 uint64_t ExeStateVex::getAddrPC(void) const
 {
 	const ObjectState	*reg_os;

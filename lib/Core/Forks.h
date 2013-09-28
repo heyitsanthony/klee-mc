@@ -39,7 +39,7 @@ public:
 
 		resseeds_ty& getResSeeds(void)
 		{
-			if (resSeeds == NULL) resSeeds = new resseeds_ty();
+			if (resSeeds == NULL) resSeeds = new resseeds_ty(N);
 			return *resSeeds;
 		}
 

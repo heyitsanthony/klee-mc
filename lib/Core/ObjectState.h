@@ -49,6 +49,7 @@ private:
 
 	uint8_t			*concreteStore;
 	BitArray		*concreteMask;
+
 	// mutable because may need flushed during read of const
 	// XXX cleanup name of flushMask (its backwards or something) ???
 	mutable BitArray	*flushMask;
@@ -131,6 +132,7 @@ public:
 	void writeConcrete(const uint8_t* addr, unsigned wr_sz);
 	void readConcrete(uint8_t* addr, unsigned rd_sz, unsigned off=0) const;
 	int readConcreteSafe(uint8_t* addr, unsigned rd_sz, unsigned off=0) const;
+	int cmpConcrete(const uint8_t* addr, unsigned sz, unsigned off=0) const;
 
 	int cmpConcrete(uint8_t* addr, unsigned len) const
 	{ return memcmp(addr, concreteStore, len); }
@@ -138,8 +140,11 @@ public:
 	void setOwner(unsigned _new_cow) { copyOnWriteOwner = _new_cow; }
 	bool hasOwner(void) const { return copyOnWriteOwner != 0; }
 
-	bool isOwner(unsigned cowkey) const
-	{ return cowkey == copyOnWriteOwner; }
+	bool isOwner(unsigned cowkey) const { return cowkey==copyOnWriteOwner; }
+	bool revertToConcrete(void);
+	bool isRevertible(void) const;
+
+	static bool revertToConcrete(const ObjectState* os);
 protected:
 	void buildUpdates(void) const;
 

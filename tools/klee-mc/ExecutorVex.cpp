@@ -14,9 +14,11 @@
 #include "../../lib/Core/ExeStateManager.h"
 #include "../../lib/Core/MemoryManager.h"
 
+
 #include <stdio.h>
 #include <vector>
 
+#include "HostAccelerator.h"
 #include "KModuleVex.h"
 #include "symbols.h"
 #include "guestcpustate.h"
@@ -62,10 +64,13 @@ namespace
 	cl::opt<bool> SymMagic(
 		"sym-magic", cl::desc("Mark 'magic' 0xa3 bytes as symbolic"));
 
+	cl::opt<bool> HWAccel(
+		"use-hwaccel",
+		cl::desc("Use hardware acceleration on concrete state."));
+
 	cl::opt<bool> KeepDeadStack(
 		"keep-dead-stack",
-		cl::desc("Keep registers in dead stack frames"),
-		cl::init(false));
+		cl::desc("Keep registers in dead stack frames"));
 
 	cl::opt<bool,true> SymRegsProxy(
 		"symregs",
@@ -97,11 +102,10 @@ namespace
 		"use-syscall-pr",
 		cl::desc("Use number of syscalls as priority"));
 
-	cl::opt<bool> UseRegPriority(
-		"use-reg-pr", cl::desc("Use number of syscalls as priority"));
+	cl::opt<bool> UseRegPriority("use-reg-pr",
+		cl::desc("Priority by reg file"));
 
-	cl::opt<std::string> RunSym(
-		"run-func", cl::desc("Name of function to run"));
+	cl::opt<std::string> RunSym("run-func", cl::desc("Function to run."));
 }
 
 ExecutorVex::ExecutorVex(InterpreterHandler *ih)
@@ -118,17 +122,13 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 	ExeStateVex::setBaseGuest(gs);
 	ExeStateVex::setBaseStack(gs->getCPUState()->getStackPtr().o);
 
-	if (gs->getMem()->is32Bit()) {
-		MemoryManager::set32Bit();
-	}
+	if (gs->getMem()->is32Bit()) MemoryManager::set32Bit();
 
 	if (UsePrioritySearcher) {
 		Prioritizer	*pr = NULL;
 
-		if (UseSyscallPriority)
-			pr = new SyscallPrioritizer();
-		else if (UseRegPriority)
-			pr = new RegPrioritizer(*this);
+		if (UseSyscallPriority) pr = new SyscallPrioritizer();
+		else if (UseRegPriority) pr = new RegPrioritizer(*this);
 
 		UserSearcher::setPrioritizer(pr);
 	}
@@ -139,8 +139,7 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 	assert (gs);
 
 	if (!theGenLLVM) theGenLLVM = new GenLLVM(gs);
-	if (!theVexHelpers)
-		theVexHelpers = VexHelpers::create(gs->getArch());
+	if (!theVexHelpers) theVexHelpers = VexHelpers::create(gs->getArch());
 
 	std::cerr << "[klee-mc] Forcing fake vsyspage reads\n";
 	theGenLLVM->setFakeSysReads();
@@ -189,10 +188,15 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 			kmodule,
 			interpreterHandler->getOutputFilename("assembly.ll"),
 			mod_opts.ExcludeCovFiles);
+
+	hw_accel = (HWAccel && gs->getArch() == Arch::X86_64)
+		? HostAccelerator::create()
+		: NULL;
 }
 
 ExecutorVex::~ExecutorVex(void)
 {
+	if (hw_accel) delete hw_accel;
 	delete sys_model;
 	if (kmodule) delete kmodule;
 	kmodule = NULL;
@@ -558,21 +562,40 @@ void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
 		 * know to pop the stack. Otherwies, it might
 		 * look like a jump and keep stale entries on board */
 		markExit(state, GE_RETURN);
+
+		/* hardware acceleration begins at system call exit */
+		if (hw_accel != NULL) doAccel(state, ki);
 	}
 
 	handleXfer(state, ki);
 }
 
-void ExecutorVex::markExit(ExecutionState& state, uint8_t v)
+void ExecutorVex::doAccel(ExecutionState& state, KInstruction* ki)
 {
-	ObjectState		*state_regctx_os;
+	HostAccelerator::Status	s;
+	uint64_t		new_pc;
+	ref<ConstantExpr>	new_pc_e;
+	int			vnum;
 
+	new_pc_e = dyn_cast<ConstantExpr>(eval(ki, 0, state));
+	es2esv(state).setAddrPC(new_pc_e->getZExtValue());
+	s = hw_accel->run(es2esv(state));
+	if (s == HostAccelerator::HA_NONE) return;
+
+	/* rebind return address */
+	new_pc = es2esv(state).getAddrPC();
+	new_pc_e = MK_CONST(new_pc, 64);
+	state.bindLocal(ki, new_pc_e);
+
+	vnum = ki->getOperand(0);
+	assert (vnum >= 0);
+	state.stack.getTopCell(vnum).value = new_pc_e;
+}
+
+void ExecutorVex::markExit(ExecutionState& es, uint8_t v)
+{
 	gs->getCPUState()->setExitType(GE_IGNORE);
-	state_regctx_os = GETREGOBJ(state);
-	state.write8(
-		state_regctx_os,
-		gs->getCPUState()->getExitTypeOffset(),
-		v);
+	es.write8(GETREGOBJ(es), gs->getCPUState()->getExitTypeOffset(), v);
 }
 
 void ExecutorVex::logXferRegisters(ExecutionState& state)
@@ -580,7 +603,6 @@ void ExecutorVex::logXferRegisters(ExecutionState& state)
 	updateGuestRegs(state);
 	logXferObj(state, GETREGOBJRO(state),  BC_TYPE_VEXREG);
 }
-
 
 void ExecutorVex::logXferMO(ExecutionState& state)
 {
@@ -618,15 +640,13 @@ void ExecutorVex::logXferMO(ExecutionState& state)
 void ExecutorVex::logXferStack(ExecutionState& state)
 {
 	ObjectPair		op;
-	const ObjectState	*reg_os;
 	unsigned		off;
 	ref<Expr>		stk_expr;
 	uint64_t		stack_addr;
 
 	/* do not record stack if stack pointer is symbolic */
-	reg_os = GETREGOBJRO(state);
 	off = gs->getCPUState()->getStackRegOff();
-	stk_expr = reg_os->read(off, 64);
+	stk_expr = GETREGOBJRO(state)->read(off, 64);
 	if (stk_expr->getKind() != Expr::Constant)
 		return;
 
@@ -639,7 +659,6 @@ void ExecutorVex::logXferStack(ExecutionState& state)
 	off = stack_addr - op_mo(op)->address;
 	logXferObj(state, op_os(op),  BC_TYPE_STACKLOG, off);
 }
-
 
 /* XXX: expensive-- lots of storage */
 void ExecutorVex::logXferObj(
@@ -666,17 +685,14 @@ void ExecutorVex::logXferObj(
 	crumb_buf += sz;
 
 	/* 2. store concrete mask */
-	for (unsigned int i = 0; i < sz; i++) {
+	for (unsigned int i = 0; i < sz; i++)
 		crumb_buf[i] = (os->isByteConcrete(i+off)) ? 0xff : 0;
-	}
 
 	es2esv(state).recordBreadcrumb(bc);
 	delete [] crumb_base;
 }
 
-
 /* handle transfering between VSB's */
-
 void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 {
 	GuestExitType	exit_type;
@@ -714,9 +730,8 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 		return;
 	case GE_INT:
 	case GE_SYSCALL:
-		/* it's important to retain the exit type for windows
-		 * so the system model can distinguish between separate
-		 * system calls */
+		/* it's important to retain the exact exit type for windows
+		 * so the model can distinguish between system call types */
 		markExit(state, exit_type);
 		handleXferSyscall(state, ki);
 		return;
@@ -804,7 +819,6 @@ void ExecutorVex::handleXferSyscall(
 {
 	std::vector< ref<Expr> > 	args;
 	struct XferStateIter		iter;
-	uint64_t			sysnr;
 
 	if (DumpSyscallStates) {
 		static int	n = 0;
@@ -818,27 +832,24 @@ void ExecutorVex::handleXferSyscall(
 
 	es2esv(state).incSyscallCount();
 
-	sysnr = 0;
-	switch (gs->getArch()) {
-#define AS_COPY(off, w)	state.addressSpace.copyToBuf(\
-		es2esv(state).getRegCtx(), &sysnr, off, w);
-	case Arch::X86_64: AS_COPY(
-		offsetof(VexGuestAMD64State, guest_RAX), 8); break;
-	case Arch::ARM: AS_COPY(
-		offsetof(VexGuestARMState, guest_R7), 4); break;
-	case Arch::I386: AS_COPY(
-		offsetof(VexGuestX86State, guest_EAX), 4); break;
-	default:
-		assert (0 == 1 && "ULP");
-	}
+	if (ShowSyscalls) {
+		uint64_t sysnr = 0;
+		switch (gs->getArch()) {
+#define AS_COPY(x,y, w)	state.addressSpace.copyToBuf(\
+	es2esv(state).getRegCtx(), &sysnr, offsetof(x,y), w);
+		case Arch::X86_64: AS_COPY(VexGuestAMD64State, guest_RAX, 8); break;
+		case Arch::ARM: AS_COPY(VexGuestARMState, guest_R7, 4); break;
+		case Arch::I386: AS_COPY(VexGuestX86State, guest_EAX, 4); break;
+		default: assert (0 == 1 && "ULP");
+		}
 
-	if (ShowSyscalls)
 		std::cerr << "[klee-mc] before syscall "
 			<< sysnr
 			<< "(?): states=" << stateManager->size()
 			<< ". objs=" << state.getNumSymbolics()
 			<< ". st=" << (void*)&state
 			<< ". n=" << es2esv(state).getSyscallCount() << '\n';
+	}
 
 	/* arg0 = regctx, arg1 = jmpptr */
 	args.push_back(es2esv(state).getRegCtx()->getBaseExpr());
@@ -888,8 +899,7 @@ void ExecutorVex::callExternalFunction(
 	if (sfh->handle(state, function, target, arguments))
 		return;
 
-	std::cerr
-		<< "KLEE: ERROR: Calling non-special external function : "
+	std::cerr << "KLEE: ERROR: Calling non-special external function : "
 		<< function->getName().str() << "\n";
 	TERMINATE_ERROR(this, state, "externals disallowed", "user.err");
 }
@@ -924,47 +934,22 @@ void ExecutorVex::printStackTrace(
 	}
 }
 
-ref<Expr> ExecutorVex::getCallArg(ExecutionState& state, unsigned int n) const
-{
-	const ObjectState	*regobj;
+#define READ_V(s, x, y)	(s).read(x, y, gs->getMem()->is32Bit() ? 32 : 64)
 
-	regobj = GETREGOBJRO(state);
-	return state.read(
-		regobj,
-		gs->getCPUState()->getFuncArgOff(n),
-		gs->getMem()->is32Bit() ? 32 : 64);
-}
+ref<Expr> ExecutorVex::getCallArg(ExecutionState& es, unsigned int n) const
+{ return READ_V(es, GETREGOBJRO(es), gs->getCPUState()->getFuncArgOff(n)); }
 
-ref<Expr> ExecutorVex::getRetArg(ExecutionState& state) const
-{
-	const ObjectState	*regobj;
+ref<Expr> ExecutorVex::getRetArg(ExecutionState& es) const
+{ return READ_V(es, GETREGOBJRO(es), gs->getCPUState()->getRetOff()); }
 
-	regobj = GETREGOBJRO(state);
-	return state.read(
-		regobj,
-		gs->getCPUState()->getRetOff(),
-		gs->getMem()->is32Bit() ? 32 : 64);
-}
-
-uint64_t ExecutorVex::getStateStack(ExecutionState& es) const
+uint64_t ExecutorVex::getStateStack(ExecutionState& s) const
 {
 	ref<Expr>		stack_e;
 	const ConstantExpr	*stack_ce;
-	const ObjectState	*os;
 
-	os = GETREGOBJRO(es);
-	stack_e = es.read(
-		os,
-		getGuest()->getCPUState()->getStackRegOff(),
-		gs->getMem()->is32Bit() ? 32 : 64);
+	stack_e = READ_V(s,GETREGOBJRO(s),gs->getCPUState()->getStackRegOff());
 	stack_ce = dyn_cast<ConstantExpr>(stack_e);
-	if (stack_ce != NULL)
-		return stack_ce->getZExtValue();
-
-	std::cerr << "warning: SYM STACK. symbolic stack pointer: ";
-	stack_e->print(std::cerr);
-	std::cerr << '\n';
-	return 0;
+	return (stack_ce != NULL) ? stack_ce->getZExtValue() : 0;
 }
 
 llvm::Function* ExecutorVex::getFuncByAddr(uint64_t addr)

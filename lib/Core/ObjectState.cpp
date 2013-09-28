@@ -84,7 +84,11 @@ ObjectState::ObjectState(const ObjectState &os)
 	assert(!os.readOnly && "no need to copy read only object?");
 	assert (size > 0);
 
-	if (os.knownSymbolics) {
+	/* XXX: it would be wise to do this for the parent os,
+	 * but it can't be done here. */
+	revertToConcrete();
+
+	if (concreteMask != NULL && os.knownSymbolics) {
 		knownSymbolics = new ref<Expr>[size];
 		for (unsigned i=0; i<size; i++)
 			knownSymbolics[i] = os.knownSymbolics[i];
@@ -755,3 +759,47 @@ ObjectState* ObjectState::create(unsigned size, const ref<Array>& arr)
 
 ObjectState* ObjectState::create(const ObjectState& os)
 { return os_alloc->create(os); }
+
+bool ObjectState::isRevertible(void) const
+{
+	if (isConcrete()) return false;
+	return concreteMask->isones(size);
+}
+
+bool ObjectState::revertToConcrete(void)
+{
+	if (isConcrete()) return true;
+
+	assert (concreteMask != NULL);
+
+	if (concreteMask->isones(size) == false)
+		return false;
+
+	if (flushMask != NULL) {
+		delete flushMask;
+		flushMask = NULL;
+	}
+
+	if (knownSymbolics != NULL) {
+		delete [] knownSymbolics;
+		knownSymbolics = NULL;
+	}
+	
+	delete concreteMask;
+	concreteMask = NULL;
+
+	return true;
+}
+
+
+int ObjectState::cmpConcrete(
+	const uint8_t* addr, unsigned sz, unsigned off) const
+{ return memcmp(addr, concreteMask + off, sz); }
+
+
+/* lol hack */
+bool ObjectState::revertToConcrete(const ObjectState* os_c)
+{
+	ObjectState*	os(const_cast<ObjectState*>(os_c));
+	return os->revertToConcrete();
+}

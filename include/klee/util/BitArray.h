@@ -23,18 +23,31 @@ protected:
   static uint32_t length(unsigned size) { return (size+31)/32; }
 
 public:
-  BitArray(unsigned size, bool value = false) : bits(new uint32_t[length(size)]) {
-    memset(bits, value?0xFF:0, sizeof(*bits)*length(size));
-  }
-  BitArray(const BitArray &b, unsigned size) : bits(new uint32_t[length(size)]) {
-    memcpy(bits, b.bits, sizeof(*bits)*length(size));
-  }
+  BitArray(unsigned size, bool value = false)
+  : bits(new uint32_t[length(size)])
+  { memset(bits, value?0xFF:0, sizeof(*bits)*length(size)); }
+
+  BitArray(const BitArray &b, unsigned size)
+  : bits(new uint32_t[length(size)])
+  { memcpy(bits, b.bits, sizeof(*bits)*length(size)); }
+
   ~BitArray() { delete[] bits; }
 
-  bool get(unsigned idx) { return (bool) ((bits[idx/32]>>(idx&0x1F))&1); }
+  bool get(unsigned idx) const { return (bool) ((bits[idx/32]>>(idx&0x1F))&1); }
   void set(unsigned idx) { bits[idx/32] |= 1<<(idx&0x1F); }
   void unset(unsigned idx) { bits[idx/32] &= ~(1<<(idx&0x1F)); }
   void set(unsigned idx, bool value) { if (value) set(idx); else unset(idx); }
+  bool iszero(unsigned len) const {
+  	for (unsigned i = 0; i < length(len); i++)
+		if (bits[i] != 0) return false;
+	return true;
+  }
+  bool isones(unsigned len) const {
+  	for (unsigned i = 0; i < length(len); i++)
+		if (bits[i] != ~((uint32_t)0))
+			return false;
+	return true;
+  }
 };
 
 } // End klee namespace
