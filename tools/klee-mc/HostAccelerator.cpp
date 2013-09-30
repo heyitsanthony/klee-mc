@@ -17,6 +17,7 @@
 
 using namespace klee;
 
+
 #define OPCODE_SYSCALL 0x050f
 #define is_op_syscall(x)	(((x) & 0xffff) == OPCODE_SYSCALL)
 
@@ -95,7 +96,6 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 	if (regs->revertToConcrete() == false) {
 		DEBUG_HOSTACCEL(std::cerr <<
 			"[hwaccel] Failed to revert regfile.\n");
-		// regs->print();
 		bad_reg_c++;
 		return HA_NONE;
 	}

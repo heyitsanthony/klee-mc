@@ -137,6 +137,10 @@ public:
 	int cmpConcrete(uint8_t* addr, unsigned len) const
 	{ return memcmp(addr, concreteStore, len); }
 
+	const uint8_t* getConcreteBuf(void) const { return concreteStore; }
+
+	int cmpConcrete(const ObjectState& os) const;
+
 	void setOwner(unsigned _new_cow) { copyOnWriteOwner = _new_cow; }
 	bool hasOwner(void) const { return copyOnWriteOwner != 0; }
 

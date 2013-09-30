@@ -803,3 +803,14 @@ bool ObjectState::revertToConcrete(const ObjectState* os_c)
 	ObjectState*	os(const_cast<ObjectState*>(os_c));
 	return os->revertToConcrete();
 }
+
+int ObjectState::cmpConcrete(const ObjectState& os) const
+{
+	if (os.size != size) return 0;
+
+	revertToConcrete(&os);
+	revertToConcrete(this);
+
+	if (!isConcrete() || !os.isConcrete()) return 0;
+	return memcmp(concreteStore, os.concreteStore, size);
+}

@@ -38,6 +38,7 @@
 #include "SyscallPrioritizer.h"
 #include "KleeHandlerVex.h"
 
+#include "cpu/amd64cpustate.h"
 extern "C"
 {
 #include "valgrind/libvex_guest_amd64.h"
@@ -57,6 +58,11 @@ bool SymRegs = false;
 bool UseConcreteVFS;
 
 #define GET_SFH(x)	static_cast<SyscallSFH*>(x)
+#define AS_COPY2(s, z, x, y, w) (s).addressSpace.copyToBuf(\
+	es2esv((s)).getRegCtx(), z, offsetof(x,y), w)
+#define AS_COPY(x,y,w)  AS_COPY2(state, &sysnr, x, y, w)
+#define AS_COPYOUT(s, z, x, y, w) (s).addressSpace.copyOutBuf(\
+	es2esv((s)).getRegCtx()->address + offsetof(x,y), (const char*)z, w)
 
 namespace
 {
@@ -67,6 +73,11 @@ namespace
 	cl::opt<bool> HWAccel(
 		"use-hwaccel",
 		cl::desc("Use hardware acceleration on concrete state."));
+
+	cl::opt<bool> XChkHWAccel(
+		"xchk-hwaccel",
+		cl::desc("Cross-check hw accel with interpreter."));
+
 
 	cl::opt<bool> KeepDeadStack(
 		"keep-dead-stack",
@@ -114,6 +125,7 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 , sys_model(0)
 , img_init_func(0)
 , img_init_func_addr(0)
+, hw_accel_xchk_ok_c(0), hw_accel_xchk_miss_c(0), hw_accel_xchk_bad_c(0)
 {
 	GuestSnapshot*	ss = dynamic_cast<GuestSnapshot*>(gs);
 	assert (kmodule == NULL && "KMod already initialized? My contract!");
@@ -541,14 +553,10 @@ void ExecutorVex::run(ExecutionState &initialState)
  * jump between super blocks based on ret values */
 void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
 {
-	KFunction	*kf;
-	Function	*cur_func;
+	KFunction	*kf(state.stack.back().kf);
 
 	/* need to trapeze between VSB's; depending on exit type,
 	 * translate VSB exits into LLVM instructions on the fly */
-	kf = (state.stack.back()).kf;
-	cur_func = kf->function;
-
 	if (!kf->isSpecial) {
 		/* no VSB => outcall to externa LLVM bitcode;
 		 * use default KLEE return handling */
@@ -557,39 +565,129 @@ void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
 		return;
 	}
 
-	if (cur_func == kf_scenter->function) {
-		/* If leaving the sc_enter function, we need to
-		 * know to pop the stack. Otherwies, it might
-		 * look like a jump and keep stale entries on board */
+	if (kf->function == kf_scenter->function) {
+		/* If leaving the sc_enter function, need to know to pop the stack.
+		 * Otherwies, the exit will look like a jump
+		 * and keep stale entries on the callstack */
 		markExit(state, GE_RETURN);
 
 		/* hardware acceleration begins at system call exit */
-		if (hw_accel != NULL) doAccel(state, ki);
+		if (hw_accel != NULL)
+			if (!doAccel(state, ki))
+				return;
 	}
 
 	handleXfer(state, ki);
 }
 
-void ExecutorVex::doAccel(ExecutionState& state, KInstruction* ki)
+void ExecutorVex::fixupHWShadow(ExecutionState& state, ExecutionState& shadow)
+{
+	VexGuestAMD64State	*v;
+	ref<Expr>		new_pc_e;
+	uint64_t		rflags;
+	uint64_t		x_reg(~0ULL);
+	
+	/* pull in destination RIP */
+	new_pc_e = eval(shadow.prevPC, 0, shadow);
+	x_reg = (dyn_cast<ConstantExpr>(new_pc_e))->getZExtValue();
+	AS_COPYOUT(shadow, &x_reg, VexGuestAMD64State, guest_RIP, 8);
+
+	/* rflags is jiggled a bit in ptrace->vex, so replicate behavior */
+	v = (VexGuestAMD64State*)GETREGOBJ(shadow)->getConcreteBuf();
+	rflags = AMD64CPUState::getRFLAGS(*v);
+	v->guest_DFLAG = (rflags & (1 << 10)) ? -1 :1;
+	v->guest_CC_OP = 0 /* AMD64G_CC_OP_COPY */;
+	v->guest_CC_DEP1 = rflags & (0xff | (3 << 10));
+	v->guest_CC_DEP2 = 0;
+	v->guest_CC_NDEP = v->guest_CC_DEP1;
+
+	/* rcx and r11 are clobbered, so use cpu results */
+	AS_COPY2(state, &x_reg, VexGuestAMD64State, guest_RCX, 8);
+	AS_COPYOUT(shadow, &x_reg, VexGuestAMD64State, guest_RCX, 8);
+	AS_COPY2(state, &x_reg, VexGuestAMD64State, guest_R11, 8);
+	AS_COPYOUT(shadow, &x_reg, VexGuestAMD64State, guest_R11, 8);
+
+	/* shadow state is left on a GE_SYSCALL, hw accel expects GE_RETURN */
+	markExit(shadow, GE_RETURN);
+
+	/* shadow state will return *after* syscall (since it's on sc_enter);
+	 * accel returns *at* syscall (since it's abotu to call sc_enter) */
+	v->guest_RIP -= 2;
+}
+
+bool ExecutorVex::doAccel(ExecutionState& state, KInstruction* ki)
 {
 	HostAccelerator::Status	s;
-	uint64_t		new_pc;
+	bool			ret(true);
+	ExecutionState		*shadow_state(NULL);
 	ref<ConstantExpr>	new_pc_e;
 	int			vnum;
 
+	if (XChkHWAccel) shadow_state = pureFork(state);
+
+	/* compute PC from return value (hack hack hack) */
 	new_pc_e = dyn_cast<ConstantExpr>(eval(ki, 0, state));
 	es2esv(state).setAddrPC(new_pc_e->getZExtValue());
 	s = hw_accel->run(es2esv(state));
-	if (s == HostAccelerator::HA_NONE) return;
+
+	/* couldn't host accel? skip */
+	if (s == HostAccelerator::HA_NONE) goto done;
 
 	/* rebind return address */
-	new_pc = es2esv(state).getAddrPC();
-	new_pc_e = MK_CONST(new_pc, 64);
-	state.bindLocal(ki, new_pc_e);
-
+	new_pc_e = MK_CONST(es2esv(state).getAddrPC(), 64);
 	vnum = ki->getOperand(0);
 	assert (vnum >= 0);
 	state.stack.getTopCell(vnum).value = new_pc_e;
+
+	if (shadow_state == NULL) return true;
+	if (s != HostAccelerator::HA_SYSCALL) {
+		hw_accel_xchk_miss_c++;
+		goto done;
+	}
+
+	/* now run with shadow state up to syscall */
+	handleXfer(*shadow_state, ki);
+	if (!runToFunction(shadow_state, kf_scenter)) {
+		ret = false;
+		goto done;
+	}
+
+	/* ptrace syscall clobbers rcx and r11 */
+	fixupHWShadow(state, *shadow_state);
+
+	std::cerr << "[HWAccelXChk] Instructions: " <<
+		shadow_state->personalInsts << '\n';
+	foreach (it,
+		shadow_state->addressSpace.begin(),
+		shadow_state->addressSpace.end())
+	{
+		const MemoryObject	*mo(it->first);
+		const ObjectState	*os(it->second), *os2;
+
+		os2 = state.addressSpace.findObject(mo);
+		assert (os2 != NULL);
+		if (os->cmpConcrete(*os2) == 0)
+			continue;
+
+		std::cerr << "OOPS ON: " << (void*)mo->address << '\n';
+		std::cerr << "=====SHADOW===\n";
+		os->print();
+		std::cerr << "==========ACCEL=====\n";
+		os2->print();
+		std::cerr << '\n';
+		ret = false;
+		break;
+	}
+
+	if (ret) hw_accel_xchk_ok_c++;
+done:
+	if (ret == false) {
+		hw_accel_xchk_bad_c++;
+		TERMINATE_ERROR(this, state, "Bad hwaccel xchk", "hwxchk.err");
+	}
+	if (shadow_state != NULL) terminate(*shadow_state);
+
+	return ret;
 }
 
 void ExecutorVex::markExit(ExecutionState& es, uint8_t v)
@@ -835,8 +933,6 @@ void ExecutorVex::handleXferSyscall(
 	if (ShowSyscalls) {
 		uint64_t sysnr = 0;
 		switch (gs->getArch()) {
-#define AS_COPY(x,y, w)	state.addressSpace.copyToBuf(\
-	es2esv(state).getRegCtx(), &sysnr, offsetof(x,y), w);
 		case Arch::X86_64: AS_COPY(VexGuestAMD64State, guest_RAX, 8); break;
 		case Arch::ARM: AS_COPY(VexGuestARMState, guest_R7, 4); break;
 		case Arch::I386: AS_COPY(VexGuestX86State, guest_EAX, 4); break;
@@ -919,10 +1015,9 @@ void ExecutorVex::printStackTrace(
 	unsigned idx = 0;
 	foreach (it, st.stack.rbegin(), st.stack.rend()) {
 		const StackFrame	&sf(*it);
-		Function		*f = sf.kf->function;
-		const VexSB		*vsb;
+		Function		*f(sf.kf->function);
+		const VexSB		*vsb(km_vex->getVSB(f));
 
-		vsb = km_vex->getVSB(f);
 		os << "\t#" << idx++ << " in " << f->getName().str();
 		if (vsb != NULL)
 			os << " (" << gs->getName(vsb->getGuestAddr()) << ')';

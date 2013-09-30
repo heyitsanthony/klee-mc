@@ -2030,19 +2030,27 @@ unsigned Executor::getNumStates(void) const { return stateManager->size(); }
 unsigned Executor::getNumFullStates(void) const
 { return stateManager->getNonCompactStateCount(); }
 
-void Executor::exhaustState(ExecutionState* es)
+bool Executor::runToFunction(ExecutionState* es, const KFunction* kf)
 {
+	bool		found_func = false;
 	unsigned	test_c;
 
 	test_c = interpreterHandler->getNumPathsExplored();
 	do {
+		if (es->getCurrentKFunc() == kf) {
+			found_func = true;
+			break;
+		}
 		stepStateInst(es);
 	} while (
 		test_c == interpreterHandler->getNumPathsExplored() &&
 		!stateManager->isRemovedState(es));
 
-	std::cerr << "[Exe] State exhausted\n";
+	if (found_func == false)
+		std::cerr << "[Exe] State exhausted\n";
+
 	notifyCurrent(NULL);
+	return found_func;
 }
 
 void Executor::setupInitFuncs(ExecutionState& initState)

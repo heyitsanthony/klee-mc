@@ -107,7 +107,8 @@ private:
 
 	void markExit(ExecutionState& state, uint8_t);
 
-	void doAccel(ExecutionState& state, KInstruction* ki);
+	bool doAccel(ExecutionState& state, KInstruction* ki);
+	void fixupHWShadow(ExecutionState& state, ExecutionState& shadow);
 
 	void bindMapping(
 		ExecutionState* state,
@@ -147,6 +148,9 @@ private:
 	uint64_t		img_init_func_addr;
 
 	HostAccelerator		*hw_accel;
+	unsigned		hw_accel_xchk_ok_c;
+	unsigned		hw_accel_xchk_miss_c;
+	unsigned		hw_accel_xchk_bad_c;
 };
 
 }

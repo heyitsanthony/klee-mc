@@ -127,7 +127,9 @@ public:
 	unsigned N, ref<Expr> conditions[], bool isInternal,
 	bool isBranch = false);
 
-	void exhaustState(ExecutionState* es);
+	/* kf = NULL => exhaust state, return whether got function */
+	bool runToFunction(ExecutionState* es, const KFunction *kf);
+	void exhaustState(ExecutionState* es) { runToFunction(es, NULL); }
 
 
 	/// Get textual info regarding a memory address.
@@ -248,7 +250,6 @@ protected:
 
 	InterpreterHandler	*interpreterHandler;
 	llvm::DataLayout	*data_layout;
-	llvm::Function		*dbgStopPointFn;
 	StatsTracker		*statsTracker;
 	TreeStreamWriter	*symPathWriter;
 	StateSolver		*solver, *fastSolver;
