@@ -116,6 +116,7 @@ public:
 	unsigned getRefCount(void) const { return refCount; }
 
 	void print(unsigned int begin = 0, int end = -1) const;
+	void printDiff(const ObjectState& os) const;
 	unsigned hash(void) const;
 
 	static void setupZeroObjs(void);

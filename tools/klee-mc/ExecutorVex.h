@@ -32,6 +32,12 @@ class HostAccelerator;
 #define GETREGOBJ(x)	es2esv(x).getRegObj()
 #define GETREGOBJRO(x)	es2esvc(x).getRegObjRO()
 
+#define AS_COPY2(s, z, x, y, w) (s).addressSpace.copyToBuf(\
+	es2esvc((s)).getRegCtx(), z, offsetof(x,y), w)
+#define AS_COPY(x,y,w)  AS_COPY2(state, &sysnr, x, y, w)
+#define AS_COPYOUT(s, z, x, y, w) (s).addressSpace.copyOutBuf(\
+	es2esv((s)).getRegCtx()->address + offsetof(x,y), (const char*)z, w)
+
 class ExecutorVex : public Executor
 {
 public:
@@ -108,7 +114,6 @@ private:
 	void markExit(ExecutionState& state, uint8_t);
 
 	bool doAccel(ExecutionState& state, KInstruction* ki);
-	void fixupHWShadow(ExecutionState& state, ExecutionState& shadow);
 
 	void bindMapping(
 		ExecutionState* state,
@@ -148,9 +153,6 @@ private:
 	uint64_t		img_init_func_addr;
 
 	HostAccelerator		*hw_accel;
-	unsigned		hw_accel_xchk_ok_c;
-	unsigned		hw_accel_xchk_miss_c;
-	unsigned		hw_accel_xchk_bad_c;
 };
 
 }

@@ -214,7 +214,7 @@ Executor::~Executor()
 	if (brPredict) delete brPredict;
 	if (mmu != NULL) delete mmu;
 	delete memory;
-	if (statsTracker) delete statsTracker;
+	delete statsTracker;
 
 	if (fastSolver) delete fastSolver;
 	delete solver;
@@ -408,7 +408,7 @@ void Executor::stepInstruction(ExecutionState &state)
 {
 	assert (state.checkCanary() && "Not a valid state");
 
-	if (statsTracker) statsTracker->stepInstruction(state);
+	statsTracker->stepInstruction(state);
 
 	state.lastGlobalInstCount = ++stats::instructions;
 	state.totalInsts++;
@@ -435,10 +435,9 @@ void Executor::executeCallNonDecl(
 	state.pushFrame(state.prevPC, kf);
 	state.pc = kf->instructions;
 
-	if (statsTracker)
-		statsTracker->framePushed(
-			state,
-			&state.stack[state.stack.size()-2]);
+	statsTracker->framePushed(
+		state,
+		&state.stack[state.stack.size()-2]);
 
 	// TODO: support "byval", zeroext, sext, sret attributes
 	call_arg_c = arguments.size();
@@ -584,7 +583,7 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 	if (!kcaller) {
 		/* no caller-- return to top of function. used for initlist */
 		state.popFrame();
-		if (statsTracker) statsTracker->framePopped(state);
+		statsTracker->framePopped(state);
 		state.pc = state.getCurrentKFunc()->instructions;
 		return;
 	}
@@ -637,7 +636,7 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 
 	state.popFrame();
 
-	if (statsTracker) statsTracker->framePopped(state);
+	statsTracker->framePopped(state);
 
 	if (InvokeInst *ii = dyn_cast<InvokeInst>(caller)) {
 		state.transferToBasicBlock(ii->getNormalDest(), caller->getParent());
@@ -696,7 +695,7 @@ void Executor::markBranchVisited(
 	if (&state != branches.first && &state != branches.second)
 		return;
 
-	if (statsTracker && !state.stack.empty()) {
+	if (!state.stack.empty()) {
 		const KFunction	*kf = state.getCurrentKFunc();
 		if (kf && kf->trackCoverage)
 			statsTracker->markBranchVisited(

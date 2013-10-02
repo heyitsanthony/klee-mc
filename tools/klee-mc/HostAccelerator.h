@@ -21,6 +21,7 @@ public:
 	static HostAccelerator* create();
 	virtual ~HostAccelerator();
 	Status run(ExeStateVex& esv);
+	bool xchk(const ExecutionState& es_hw, ExecutionState& es_klee);
 protected:
 	HostAccelerator(void);
 	void releaseSHM(void);
@@ -30,8 +31,9 @@ private:
 		ExeStateVex& s,
 		const std::vector<ObjectPair>& objs);
 	void setupSHM(ExeStateVex& s, std::vector<ObjectPair>& objs);
-
 	void stepInstructions(pid_t child_pid);
+	void fixupHWShadow(
+		const ExecutionState& state, ExecutionState& shadow);
 
 	int			shm_id;
 	unsigned		shm_page_c;
@@ -39,8 +41,14 @@ private:
 	struct hw_map_extent	*shm_maps;
 	void			*shm_payload;
 
+	void			*vdso_base;
+
 	unsigned		bad_reg_c, partial_run_c, full_run_c;
 
+public: /* XXX sshut up warnings for now */
+	unsigned		xchk_ok_c;
+	unsigned		xchk_miss_c;
+	unsigned		xchk_bad_c;
 };
 }
 

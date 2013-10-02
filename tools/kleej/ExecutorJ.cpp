@@ -35,13 +35,11 @@ const llvm::Module* ExecutorJ::setModule(
 	kmodule->prepare(interpreterHandler);
 	sfh->bind();
 
-	if (StatsTracker::useStatistics()) {
-		statsTracker = new StatsTracker(
-			*this,
-			kmodule,
-			interpreterHandler->getOutputFilename("assembly.ll"),
-			opts.ExcludeCovFiles);
-	}
+	statsTracker = StatsTracker::create(
+		*this,
+		kmodule,
+		interpreterHandler->getOutputFilename("assembly.ll"),
+		opts.ExcludeCovFiles);
 
 	return mod;
 }

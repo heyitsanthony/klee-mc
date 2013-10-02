@@ -51,9 +51,6 @@ class StatsTracker
 
     bool updateMinDistToUncovered;
 
-public:
-    static bool useStatistics();
-
 private:
     class TimeAmountFormat;
     void trackInstTime(ExecutionState& es);
@@ -70,11 +67,19 @@ private:
     const KModule *km;
     std::set<std::string> excludeNames;
 
-public:
+protected:
     StatsTracker(Executor &_executor,
     		const KModule* km,
 		std::string _objectFilename,
                 const std::vector<std::string> &excludeCovFiles);
+
+	static bool useStatistics(void);
+public:
+	static StatsTracker* create(
+		Executor &_executor,
+		const KModule* km,
+		std::string _objectFilename,
+		const std::vector<std::string> &excludeCovFiles);
     ~StatsTracker();
 
     void addKFunction(KFunction*);

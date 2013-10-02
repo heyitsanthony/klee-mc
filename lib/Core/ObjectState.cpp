@@ -814,3 +814,19 @@ int ObjectState::cmpConcrete(const ObjectState& os) const
 	if (!isConcrete() || !os.isConcrete()) return 0;
 	return memcmp(concreteStore, os.concreteStore, size);
 }
+
+void ObjectState::printDiff(const ObjectState& os) const
+{
+	if (os.size != size) {
+		std::cerr << "[ObjDiff] size mismatch: "
+			<< size << " vs " << os.size << '\n';
+		return;
+	}
+
+	for (unsigned i = 0 ; i < size; i++) {
+		if (concreteStore[i] != os.concreteStore[i])
+			std::cerr << "[ObjDiff] Diff @" << i << ": " <<
+				(void*)(unsigned)concreteStore[i] << " vs " <<
+				(void*)(unsigned)os.concreteStore[i] << '\n';
+	}
+}

@@ -70,9 +70,9 @@ namespace
 		cl::init(1.));
 
 	cl::opt<double> IStatsWriteInterval(
-		"istats-write-interval",
-		cl::desc("Approximate number of seconds between istats writes (default: 10.0)"),
-		cl::init(10.));
+	"istats-write-interval",
+	cl::desc("Approximate number of seconds between istats writes (default: 10.0)"),
+	cl::init(10.));
 
 	// XXX I really would like to have dynamic rate control for something like this.
 	cl::opt<double>
@@ -85,47 +85,31 @@ namespace
 		cl::init(false));
 }
 
-///
-
-bool StatsTracker::useStatistics() { return OutputStats || TrackIStats; }
+StatsTracker* StatsTracker::create(
+	Executor &_executor,
+	const KModule* km,
+	std::string _objectFilename,
+	const std::vector<std::string> &excludeCovFiles)
+{	// if (useStatistics())
+	return new StatsTracker(
+		_executor, km, _objectFilename, excludeCovFiles);
+}
 
 namespace klee {
 
-class WriteIStatsTimer : public Executor::Timer
-{
-private:
-	StatsTracker *statsTracker;
-public:
-	WriteIStatsTimer(StatsTracker *_statsTracker)
-	: statsTracker(_statsTracker) {}
-	virtual ~WriteIStatsTimer() {}
-
-	void run() { statsTracker->writeIStats(); }
-};
-
-class WriteStatsTimer : public Executor::Timer
-{
-	StatsTracker *statsTracker;
-
-public:
-	WriteStatsTimer(StatsTracker *_statsTracker)
-	: statsTracker(_statsTracker) {}
-	virtual ~WriteStatsTimer() {}
-
-	void run() { statsTracker->writeStatsLine(); }
-};
-
-class UpdateReachableTimer : public Executor::Timer
-{
-private:
-	StatsTracker *statsTracker;
-
-public:
-	UpdateReachableTimer(StatsTracker *_statsTracker)
-	: statsTracker(_statsTracker) {}
-	virtual ~UpdateReachableTimer(void) {}
-	void run() { statsTracker->computeReachableUncovered(); }
-};
+bool StatsTracker::useStatistics() { return OutputStats || TrackIStats; }
+#define DECL_STATTIMER(x,y)		\
+class x##Timer : public Executor::Timer	{\
+private:				\
+	StatsTracker *statsTracker;	\
+public:	\
+	x##Timer(StatsTracker *_statsTracker)	\
+	: statsTracker(_statsTracker) {}	\
+	virtual ~x##Timer() {}	\
+	void run() { statsTracker->y(); } };
+DECL_STATTIMER(WriteIStats, writeIStats)
+DECL_STATTIMER(WriteStats, writeStatsLine)
+DECL_STATTIMER(UpdateReachable, computeReachableUncovered)
 }
 
 

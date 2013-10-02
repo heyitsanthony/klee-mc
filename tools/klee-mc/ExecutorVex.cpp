@@ -58,11 +58,6 @@ bool SymRegs = false;
 bool UseConcreteVFS;
 
 #define GET_SFH(x)	static_cast<SyscallSFH*>(x)
-#define AS_COPY2(s, z, x, y, w) (s).addressSpace.copyToBuf(\
-	es2esv((s)).getRegCtx(), z, offsetof(x,y), w)
-#define AS_COPY(x,y,w)  AS_COPY2(state, &sysnr, x, y, w)
-#define AS_COPYOUT(s, z, x, y, w) (s).addressSpace.copyOutBuf(\
-	es2esv((s)).getRegCtx()->address + offsetof(x,y), (const char*)z, w)
 
 namespace
 {
@@ -125,7 +120,6 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 , sys_model(0)
 , img_init_func(0)
 , img_init_func_addr(0)
-, hw_accel_xchk_ok_c(0), hw_accel_xchk_miss_c(0), hw_accel_xchk_bad_c(0)
 {
 	GuestSnapshot*	ss = dynamic_cast<GuestSnapshot*>(gs);
 	assert (kmodule == NULL && "KMod already initialized? My contract!");
@@ -194,12 +188,11 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 	sfh->prepare();
 	kmodule->prepare(ih);
 
-	if (StatsTracker::useStatistics())
-		statsTracker = new StatsTracker(
-			*this,
-			kmodule,
-			interpreterHandler->getOutputFilename("assembly.ll"),
-			mod_opts.ExcludeCovFiles);
+	statsTracker = StatsTracker::create(
+		*this,
+		kmodule,
+		interpreterHandler->getOutputFilename("assembly.ll"),
+		mod_opts.ExcludeCovFiles);
 
 	hw_accel = (HWAccel && gs->getArch() == Arch::X86_64)
 		? HostAccelerator::create()
@@ -324,8 +317,7 @@ void ExecutorVex::cleanupImage(void)
 {
 	delete memory;
 	memory = MemoryManager::create();
-
-	if (statsTracker) statsTracker->done();
+	statsTracker->done();
 }
 
 void ExecutorVex::makeMagicSymbolic(ExecutionState* state)
@@ -510,7 +502,7 @@ void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
 		state_regctx_os = state->bindMemObjWriteable(state_regctx_mo);
 
 	if (symPathWriter) state->symPathOS = symPathWriter->open();
-	if (statsTracker) statsTracker->framePushed(*state, 0);
+	statsTracker->framePushed(*state, 0);
 
 	kf = kmodule->getKFunction(f);
 	assert (f->arg_size() == 1);
@@ -580,41 +572,6 @@ void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
 	handleXfer(state, ki);
 }
 
-void ExecutorVex::fixupHWShadow(ExecutionState& state, ExecutionState& shadow)
-{
-	VexGuestAMD64State	*v;
-	ref<Expr>		new_pc_e;
-	uint64_t		rflags;
-	uint64_t		x_reg(~0ULL);
-	
-	/* pull in destination RIP */
-	new_pc_e = eval(shadow.prevPC, 0, shadow);
-	x_reg = (dyn_cast<ConstantExpr>(new_pc_e))->getZExtValue();
-	AS_COPYOUT(shadow, &x_reg, VexGuestAMD64State, guest_RIP, 8);
-
-	/* rflags is jiggled a bit in ptrace->vex, so replicate behavior */
-	v = (VexGuestAMD64State*)GETREGOBJ(shadow)->getConcreteBuf();
-	rflags = AMD64CPUState::getRFLAGS(*v);
-	v->guest_DFLAG = (rflags & (1 << 10)) ? -1 :1;
-	v->guest_CC_OP = 0 /* AMD64G_CC_OP_COPY */;
-	v->guest_CC_DEP1 = rflags & (0xff | (3 << 10));
-	v->guest_CC_DEP2 = 0;
-	v->guest_CC_NDEP = v->guest_CC_DEP1;
-
-	/* rcx and r11 are clobbered, so use cpu results */
-	AS_COPY2(state, &x_reg, VexGuestAMD64State, guest_RCX, 8);
-	AS_COPYOUT(shadow, &x_reg, VexGuestAMD64State, guest_RCX, 8);
-	AS_COPY2(state, &x_reg, VexGuestAMD64State, guest_R11, 8);
-	AS_COPYOUT(shadow, &x_reg, VexGuestAMD64State, guest_R11, 8);
-
-	/* shadow state is left on a GE_SYSCALL, hw accel expects GE_RETURN */
-	markExit(shadow, GE_RETURN);
-
-	/* shadow state will return *after* syscall (since it's on sc_enter);
-	 * accel returns *at* syscall (since it's abotu to call sc_enter) */
-	v->guest_RIP -= 2;
-}
-
 bool ExecutorVex::doAccel(ExecutionState& state, KInstruction* ki)
 {
 	HostAccelerator::Status	s;
@@ -622,6 +579,7 @@ bool ExecutorVex::doAccel(ExecutionState& state, KInstruction* ki)
 	ExecutionState		*shadow_state(NULL);
 	ref<ConstantExpr>	new_pc_e;
 	int			vnum;
+	uint64_t		x_reg;
 
 	if (XChkHWAccel) shadow_state = pureFork(state);
 
@@ -635,58 +593,36 @@ bool ExecutorVex::doAccel(ExecutionState& state, KInstruction* ki)
 
 	/* rebind return address */
 	new_pc_e = MK_CONST(es2esv(state).getAddrPC(), 64);
+	es2esv(state).setAddrPC(new_pc_e->getZExtValue());
 	vnum = ki->getOperand(0);
 	assert (vnum >= 0);
 	state.stack.getTopCell(vnum).value = new_pc_e;
 
 	if (shadow_state == NULL) return true;
-	if (s != HostAccelerator::HA_SYSCALL) {
-		hw_accel_xchk_miss_c++;
+	if (s != HostAccelerator::HA_SYSCALL)
 		goto done;
-	}
 
 	/* now run with shadow state up to syscall */
+	std::cerr << "[HWAccelXChk] Begin interpreter retrace\n";
 	handleXfer(*shadow_state, ki);
 	if (!runToFunction(shadow_state, kf_scenter)) {
 		ret = false;
 		goto done;
 	}
 
-	/* ptrace syscall clobbers rcx and r11 */
-	fixupHWShadow(state, *shadow_state);
+	/* pull in destination RIP */
+	new_pc_e = dyn_cast<ConstantExpr>(eval(shadow_state->prevPC, 0, *shadow_state));
+	x_reg = new_pc_e->getZExtValue();
+	/* shadow state is left on a GE_SYSCALL, hw accel expects GE_RETURN */
+	markExit(*shadow_state, GE_RETURN);
 
-	std::cerr << "[HWAccelXChk] Instructions: " <<
-		shadow_state->personalInsts << '\n';
-	foreach (it,
-		shadow_state->addressSpace.begin(),
-		shadow_state->addressSpace.end())
-	{
-		const MemoryObject	*mo(it->first);
-		const ObjectState	*os(it->second), *os2;
-
-		os2 = state.addressSpace.findObject(mo);
-		assert (os2 != NULL);
-		if (os->cmpConcrete(*os2) == 0)
-			continue;
-
-		std::cerr << "OOPS ON: " << (void*)mo->address << '\n';
-		std::cerr << "=====SHADOW===\n";
-		os->print();
-		std::cerr << "==========ACCEL=====\n";
-		os2->print();
-		std::cerr << '\n';
-		ret = false;
-		break;
-	}
-
-	if (ret) hw_accel_xchk_ok_c++;
+	AS_COPYOUT(*shadow_state, &x_reg, VexGuestAMD64State, guest_RIP, 8);
+	ret = hw_accel->xchk(state, *shadow_state);
 done:
-	if (ret == false) {
-		hw_accel_xchk_bad_c++;
-		TERMINATE_ERROR(this, state, "Bad hwaccel xchk", "hwxchk.err");
-	}
-	if (shadow_state != NULL) terminate(*shadow_state);
 
+	if (ret == false)
+		TERMINATE_ERROR(this, state, "Bad hwaccel xchk", "hwxchk.err");
+	if (shadow_state != NULL) terminate(*shadow_state);
 	return ret;
 }
 
@@ -695,7 +631,6 @@ void ExecutorVex::markExit(ExecutionState& es, uint8_t v)
 	gs->getCPUState()->setExitType(GE_IGNORE);
 	es.write8(GETREGOBJ(es), gs->getCPUState()->getExitTypeOffset(), v);
 }
-
 void ExecutorVex::logXferRegisters(ExecutionState& state)
 {
 	updateGuestRegs(state);

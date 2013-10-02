@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <asm/prctl.h>
 #include <assert.h>
 #include <unistd.h>
 #include <sys/ptrace.h>
@@ -11,9 +12,11 @@
 #include "cpu/ptimgamd64.h"
 #include "cpu/amd64cpustate.h"
 
+#include "ExecutorVex.h"
 #include "HostAccelerator.h"
 
 #define DEBUG_HOSTACCEL(x)	x
+#define PTRACE_ARCH_PRCTL	((__ptrace_request)30)
 
 using namespace klee;
 
@@ -25,9 +28,9 @@ HostAccelerator::HostAccelerator(void)
 : shm_id(-1)
 , shm_page_c(0)
 , shm_addr(NULL)
-, bad_reg_c(0)
-, partial_run_c(0)
-, full_run_c(0)
+, vdso_base(NULL)
+, bad_reg_c(0), partial_run_c(0), full_run_c(0)
+, xchk_ok_c(0), xchk_miss_c(0), xchk_bad_c(0)
 {}
 
 HostAccelerator* HostAccelerator::create(void)
@@ -52,11 +55,9 @@ void HostAccelerator::releaseSHM(void)
 {
 	if (shm_id == -1) return;
 
-	shmctl(shm_id, IPC_RMID, NULL);
 	shmdt(shm_addr);
 	shm_id = -1;
 }
-
 
 /* XXX: super busted */
 void HostAccelerator::stepInstructions(pid_t child_pid)
@@ -86,10 +87,21 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 	int			pipefd[2];
 	bool			got_sc;
 	int			rc, status, guest_sig;
+	void			*old_fs, *new_fs;
 	std::vector<ObjectPair>	objs;
 	ObjectState		*regs;
 	user_regs_struct	urs, urs_vex;
 	user_fpregs_struct	ufprs, ufprs_vex;
+
+	/* find vdso so we can unmap it later */
+	if (vdso_base == NULL) {
+		foreach (it, esv.addressSpace.begin(), esv.addressSpace.end()){
+			if (it->first->name == "[vdso]") {
+				vdso_base = (void*)it->first->address;
+				break;
+			}
+		}
+	}
 
 	/* registers must be concrete before proceeding. ugh */
 	regs = esv.getRegObj();
@@ -158,6 +170,12 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 	VexGuestAMD64State	v;
 	regs->readConcrete((uint8_t*)&v, sizeof(v));
 
+	new_fs = (void*)v.guest_FS_ZERO;
+	rc = ptrace(PTRACE_ARCH_PRCTL, child_pid, &old_fs, ARCH_GET_FS);
+	assert (rc == 0);
+	rc = ptrace(PTRACE_ARCH_PRCTL, child_pid, new_fs, ARCH_SET_FS);
+	assert (rc == 0);
+
 #if DEBUG_HOSTACCEL
 	/* state starts out just after a syscall, so verify it's there */
 	long op = ptrace(PTRACE_PEEKDATA, child_pid, v.guest_RIP - 2, NULL);
@@ -213,12 +231,15 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 #endif
 
 	/* restore old regs so child can copy into shm */
-	DEBUG_HOSTACCEL(std::cerr <<
-		"[hwaccel] old klee-hw rip=" << (void*)urs.rip << '\n');
+	//DEBUG_HOSTACCEL(std::cerr <<
+	//	"[hwaccel] old klee-hw rip=" << (void*)urs.rip << '\n');
 	urs.orig_rax = -1;
 	rc = ptrace(PTRACE_SETREGS, child_pid, NULL, &urs);
 	assert (rc == 0);
 	rc = ptrace(PTRACE_SETFPREGS, child_pid, NULL, &ufprs);
+	assert (rc == 0);
+
+	rc = ptrace(PTRACE_ARCH_PRCTL, child_pid, old_fs, ARCH_SET_FS);
 	assert (rc == 0);
 
 	DEBUG_HOSTACCEL(std::cerr <<
@@ -245,9 +266,9 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 	assert (esv.getAddrPC() == v.guest_RIP);
 
 	std::cerr << "[hwaccel] OK! " <<
-		bad_reg_c << " / " <<
-		partial_run_c << " / " <<
-		full_run_c <<
+		"bad=" << bad_reg_c << " / "
+		"part=" << partial_run_c << " / "
+		"full=" << full_run_c <<
 		". sig=" << strsignal(guest_sig) << '\n';
 
 	return (got_sc) ? HA_SYSCALL : HA_PARTIAL;
@@ -315,6 +336,12 @@ void HostAccelerator::setupSHM(ExeStateVex& esv, std::vector<ObjectPair>& objs)
 			continue;
 		}
 
+		/* inhibit vdso so kernel page is not accessed */
+		if ((void*)mo_c->address == vdso_base) {
+			std::cerr << "IGONRING VDSO=" << vdso_base << '\n';
+			continue;
+		}
+
 		/* do not map in kernel pages */
 		if (((uintptr_t)mo_c->address >> 32) == 0xffffffff) continue;
 		/* only map page-aligned object states */
@@ -355,7 +382,95 @@ void HostAccelerator::setupSHM(ExeStateVex& esv, std::vector<ObjectPair>& objs)
 
 	shm_addr = shmat(shm_id, NULL, SHM_RND);
 	assert (shm_addr != (void*)-1);
+
+	/* this is so the shm is not persistent;
+	 * otherwise it stays if the program exits without a shmdt()! */
+	shmctl(shm_id, IPC_RMID, NULL);
 	
 	shm_maps = (struct hw_map_extent*)shm_addr;
 	shm_payload = (void*)&shm_maps[objs.size()+1];
+}
+
+
+bool HostAccelerator::xchk(const ExecutionState& es_hw, ExecutionState& es_klee)
+{
+	bool	ret = true;
+
+	/* ptrace syscall clobbers rcx, r11, etc */
+	fixupHWShadow(es_hw, es_klee);
+
+	std::cerr << "[HWAccelXChk] Instructions: " <<
+		es_klee.personalInsts << '\n';
+	foreach (it, es_klee.addressSpace.begin(), es_klee.addressSpace.end())
+	{
+		const MemoryObject	*mo(it->first);
+		const ObjectState	*os(it->second), *os2;
+
+		os2 = es_hw.addressSpace.findObject(mo);
+		assert (os2 != NULL);
+		if (os->cmpConcrete(*os2) == 0)
+			continue;
+
+		std::cerr << "OOPS ON: " << (void*)mo->address << '\n';
+		std::cerr << "=====Interpreter vs Hardware====\n"; 
+		os->printDiff(*os2);
+		if (os2->getSize() == AMD64CPUState::REGFILE_BYTES) {
+			const VexGuestAMD64State	*v;
+
+#define get_amd64(x)	\
+	(const VexGuestAMD64State*)((const void*)(x)->getConcreteBuf())
+			std::cerr << "Interpreter RegDump:\n";
+			v = get_amd64(os);
+			AMD64CPUState::print(std::cerr, *v);
+			std::cerr << "Guest RegDump:\n";
+			v = get_amd64(os2);
+			AMD64CPUState::print(std::cerr, *v);
+		}
+		std::cerr << "=========================\n";
+		ret = false;
+	}
+
+	if (ret) {
+		std::cerr << "[HWAccelXChk] OK.\n";
+		xchk_ok_c++;
+	} else 
+		xchk_bad_c++;
+
+	return ret;
+}
+
+void HostAccelerator::fixupHWShadow(
+	const ExecutionState& hw, ExecutionState& shadow)
+{
+	VexGuestAMD64State	*v;
+	ref<Expr>		new_pc_e;
+	uint64_t		rflags;
+	uint64_t		x_reg(~0ULL);
+	
+	/* rflags is jiggled a bit in ptrace->vex, so replicate behavior */
+	v = (VexGuestAMD64State*)GETREGOBJ(shadow)->getConcreteBuf();
+	rflags = AMD64CPUState::getRFLAGS(*v);
+	v->guest_DFLAG = (rflags & (1 << 10)) ? -1 :1;
+	v->guest_CC_OP = 0 /* AMD64G_CC_OP_COPY */;
+	v->guest_CC_DEP1 = rflags & (0xff | (3 << 10));
+	v->guest_CC_DEP2 = 0;
+	v->guest_CC_NDEP = v->guest_CC_DEP1;
+
+	/* rcx and r11 are clobbered, so use cpu results */
+	AS_COPY2(hw, &x_reg, VexGuestAMD64State, guest_RCX, 8);
+	AS_COPYOUT(shadow, &x_reg, VexGuestAMD64State, guest_RCX, 8);
+	AS_COPY2(hw, &x_reg, VexGuestAMD64State, guest_R11, 8);
+	AS_COPYOUT(shadow, &x_reg, VexGuestAMD64State, guest_R11, 8);
+
+	/* ymm16 is intermediate value but dead by now */
+	char	ymm16[32];
+	AS_COPY2(hw, &ymm16, VexGuestAMD64State, guest_YMM16, 32);
+	AS_COPYOUT(shadow, &ymm16, VexGuestAMD64State, guest_YMM16, 32);
+
+	/* shadow state will return *after* syscall (since it's on sc_enter);
+	 * accel returns *at* syscall (since it's abotu to call sc_enter) */
+	v->guest_RIP -= 2;
+
+	/* VEX will generate EMNOTEs but not hardware! */
+	v->guest_EMNOTE = 0;
 }

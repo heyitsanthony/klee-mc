@@ -66,13 +66,11 @@ const Module* ExecutorBC::setModule(
 	kmodule->prepare(interpreterHandler);
 	sfh->bind();
 
-	if (StatsTracker::useStatistics()) {
-		statsTracker = new StatsTracker(
-			*this,
-			kmodule,
-			interpreterHandler->getOutputFilename("assembly.ll"),
-			opts.ExcludeCovFiles);
-	}
+	statsTracker = StatsTracker::create(
+		*this,
+		kmodule,
+		interpreterHandler->getOutputFilename("assembly.ll"),
+		opts.ExcludeCovFiles);
 
 	return module;
 }
@@ -106,7 +104,7 @@ void ExecutorBC::runFunctionAsMain(
 	delete memory;
 	memory = MemoryManager::create();
 
-	if (statsTracker) statsTracker->done();
+	statsTracker->done();
 }
 
 void ExecutorBC::setupArgv(
@@ -152,7 +150,7 @@ void ExecutorBC::setupArgv(
 done_ai:
 
 	if (symPathWriter) state->symPathOS = symPathWriter->open();
-	if (statsTracker) statsTracker->framePushed(*state, 0);
+	statsTracker->framePushed(*state, 0);
 
 	assert(arguments.size() == f->arg_size() && "wrong number of arguments");
 
