@@ -620,9 +620,12 @@ bool ExecutorVex::doAccel(ExecutionState& state, KInstruction* ki)
 	ret = hw_accel->xchk(state, *shadow_state);
 done:
 
-	if (ret == false)
+	if (ret == false) {
+		/* shadow state can carry on! */
 		TERMINATE_ERROR(this, state, "Bad hwaccel xchk", "hwxchk.err");
-	if (shadow_state != NULL) terminate(*shadow_state);
+	} else if (shadow_state != NULL)
+		terminate(*shadow_state);
+
 	return ret;
 }
 
