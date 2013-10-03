@@ -123,7 +123,11 @@ void HostAccelerator::killChild(void)
 	if (pipefd[1] == -1) return;
 	close(pipefd[1]);
 
-	if (child_pid != -1) kill(child_pid, SIGKILL);
+	if (child_pid != -1 && !HWAccelFresh) {
+		int status;
+		kill(child_pid, SIGKILL);
+		waitpid(child_pid, &status, 0);
+	}
 	child_pid = -1;
 	pipefd[1] = -1;
 }
@@ -303,16 +307,16 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 	assert (rc != -1);
 
 	/* bad termination? */
-	if (WIFEXITED(status)) {
+	if (WIFEXITED(status) && HWAccelFresh) {
+		/* OK */
+	} else if (!(WIFSTOPPED(status) && WSTOPSIG(status) == SIGTSTP)) {
+ 		/* expects sigtstp */
 		badexit_kleehw_c++;
-		child_pid = -1;
 		killChild();
 		return HA_CRASHED;
-	}
-
-	/* expects sigtstp */
-	if (!(WIFSTOPPED(status) && WSTOPSIG(status) == SIGTSTP)) {
+	} else {
 		badexit_kleehw_c++;
+		child_pid = -1;
 		killChild();
 		return HA_CRASHED;
 	}
@@ -384,6 +388,7 @@ void HostAccelerator::writeSHM(const std::vector<ObjectPair>& objs)
 
 	/* terminator */
 	shm_maps[objs.size()].hwm_addr = NULL;
+	shm_maps[objs.size()].hwm_prot = (HWAccelFresh) ? 1 : 0;
 }
 
 
@@ -544,6 +549,10 @@ void HostAccelerator::fixupHWShadow(
 
 	/* VEX will generate EMNOTEs but not hardware! */
 #ifdef USE_SVN
-	v->guest_EMNOTE = 0;
+	x_reg = 0;
+	AS_COPY2(hw, &x_reg, VexGuestAMD64State, guest_EMNOTE, 4);
+	v->guest_EMNOTE = x_reg;
+#else
+#warning fixup needs emnote and svn
 #endif
 }

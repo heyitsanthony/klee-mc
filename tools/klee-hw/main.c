@@ -162,6 +162,7 @@ int main(void)
 
 	pid = getpid();
 	while ((n = recv_and_run()) == 0) {
+		if (shm_maps->hwm_prot == 1) _exit(0);
 		kill(pid, SIGTSTP);
 	}
 
