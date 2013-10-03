@@ -16,9 +16,9 @@
 using namespace klee;
 using namespace llvm;
 
-WallTimer::WallTimer()
-: startTime(util::estWallTime())
-{}
+WallTimer::WallTimer() { reset(); }
+
+void WallTimer::reset(void) { startTime = util::estWallTime(); }
 
 uint64_t WallTimer::check()
 {

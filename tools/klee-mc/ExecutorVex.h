@@ -100,7 +100,6 @@ protected:
 	virtual void jumpToKFunc(ExecutionState& state, KFunction* kf);
 
 	virtual void handleXfer(ExecutionState& state, KInstruction *ki);
-	void updateGuestRegs(ExecutionState& s);
 
 	uint64_t getStateStack(ExecutionState& s) const;
 	ref<Expr> getRetArg(ExecutionState& state) const;
@@ -133,15 +132,6 @@ private:
 	llvm::Function* setupRuntimeFunctions(uint64_t entry_addr);
 	void setupRegisterContext(ExecutionState* state, llvm::Function* f);
 	void setupProcessMemory(ExecutionState* state, llvm::Function* f);
-
-	void logXferRegisters(ExecutionState& state);
-	void logXferStack(ExecutionState& state);
-	void logXferMO(ExecutionState& state);
-	void logXferObj(
-		ExecutionState& state, const ObjectState* os, int tag,
-		unsigned off = 0);
-
-	void logSCRegs(ExecutionState& state);
 
 	bool		dump_funcs;
 	bool		in_sc;

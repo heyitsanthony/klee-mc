@@ -8,14 +8,11 @@ using namespace klee;
 Guest* ExeStateVex::base_guest = NULL;
 uint64_t ExeStateVex::base_stack = 0;
 
-void ExeStateVex::recordRegisters(const void* reg, int sz)
-{
-/* XXX */
-}
 
 ExeStateVex::ExeStateVex(const ExeStateVex& src)
 : ExecutionState(src)
 , syscall_c(0)
+, last_syscall_inst(0)
 {
 	const ExeStateVex	*esv;
 	
@@ -141,4 +138,106 @@ void ExeStateVex::inheritControl(ExecutionState& es)
 	reg_os->write(stkptr_off, esv->getRegObjRO()->read(stkptr_off, 64));
 
 	ExecutionState::inheritControl(es);
+}
+
+/* copy concrete parts into guest regs. */
+void ExeStateVex::updateGuestRegs(void)
+{
+	void	*guest_regs;
+	guest_regs = base_guest->getCPUState()->getStateData();
+	addressSpace.copyToBuf(getRegCtx(), guest_regs);
+}
+
+void ExeStateVex::logXferRegisters()
+{
+	updateGuestRegs();
+	logXferObj(getRegObjRO(),  BC_TYPE_VEXREG);
+}
+
+
+/* XXX: expensive-- lots of storage */
+void ExeStateVex::logXferObj(const ObjectState* os, int tag, unsigned off)
+{
+	uint8_t			*crumb_buf, *crumb_base;
+	unsigned		sz;
+	struct breadcrumb	*bc;
+
+	updateGuestRegs();
+
+	assert (off < os->getSize());
+	sz = os->getSize() - off;
+	crumb_base = new uint8_t[sizeof(struct breadcrumb)+(sz*2)];
+	crumb_buf = crumb_base;
+	bc = reinterpret_cast<struct breadcrumb*>(crumb_base);
+
+	bc_mkhdr(bc, tag, 0, sz*2);
+	crumb_buf += sizeof(struct breadcrumb);
+
+	/* 1. store concrete cache */
+	os->readConcrete(crumb_buf, sz, off);
+	crumb_buf += sz;
+
+	/* 2. store concrete mask */
+	for (unsigned int i = 0; i < sz; i++)
+		crumb_buf[i] = (os->isByteConcrete(i+off)) ? 0xff : 0;
+
+	recordBreadcrumb(bc);
+	delete [] crumb_base;
+}
+
+void ExeStateVex::logXferMO(uint64_t log_obj_addr)
+{
+	ObjectPair		op;
+	uint8_t			*crumb_buf, *crumb_base;
+	unsigned		sz;
+	struct breadcrumb	*bc;
+
+	if (addressSpace.resolveOne(log_obj_addr, op) == false)
+		return;
+
+	sz = op_os(op)->getSize();
+	crumb_base = new uint8_t[sizeof(struct breadcrumb)+(sz*2)+8];
+	crumb_buf = crumb_base;
+	bc = reinterpret_cast<struct breadcrumb*>(crumb_base);
+
+	bc_mkhdr(bc, BC_TYPE_MEMLOG, 0, sz*2+8);
+	crumb_buf += sizeof(struct breadcrumb);
+
+	*((uint64_t*)crumb_buf) = op_mo(op)->address;
+	crumb_buf += sizeof(uint64_t);
+
+	/* 1. store concrete cache */
+	op_os(op)->readConcrete(crumb_buf, sz);
+	crumb_buf += sz;
+
+	/* 2. store concrete mask */
+	for (unsigned int i = 0; i < sz; i++)
+		crumb_buf[i] = (op_os(op)->isByteConcrete(i)) ? 0xff : 0;
+
+	recordBreadcrumb(bc);
+	delete [] crumb_base;
+}
+
+
+void ExeStateVex::logXferStack()
+{
+	ObjectPair		op;
+	unsigned		off;
+	ref<Expr>		stk_expr;
+	uint64_t		stack_addr;
+
+	/* do not record stack if stack pointer is symbolic */
+	off = base_guest->getCPUState()->getStackRegOff();
+	stk_expr = getRegObjRO()->read(off, 64);
+	if (stk_expr->getKind() != Expr::Constant)
+		return;
+
+	/* do not record stack if backing object can't be found */
+	stack_addr = cast<ConstantExpr>(stk_expr)->getZExtValue();
+	if (addressSpace.resolveOne(stack_addr, op) == false)
+		return;
+
+	/* log stack */
+	off = stack_addr - op_mo(op)->address;
+	logXferObj(op_os(op),  BC_TYPE_STACKLOG, off);
 }

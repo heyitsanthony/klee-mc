@@ -6,7 +6,7 @@
  * 1. shmid received over pipe
  * 2.
  * format: list of page extents, followed by page data
- * 
+ *
  */
 
 #include <stdio.h>
@@ -25,33 +25,37 @@
 
 #define	DEBUG(x)	0
 
-int main(void)
+static int		pid;
+static void		*shm_addr = NULL;
+static int		last_shm_id = 0;
+static uint64_t		map_hash = 0;
+static struct shm_pkt		sp;
+static struct hw_map_extent	*shm_maps;
+static uint8_t			*shm_payload;
+
+#define GET_HASH_V(x,y)	(x->hwm_bytes + ((uint64_t)x->hwm_addr >> 12)) * y
+
+static void copy_out_shm(void)
 {
-	int			br;
-	void			*shm_addr;
-	struct shm_pkt		sp;
-	struct hw_map_extent	*shm_maps;
-	uint8_t			*shm_payload;
+	int	br = 0;
 
-	if (isatty(0)) {
-		fprintf(stderr, "[klee-hw] This only works with klee-mc!\n");
-		return 2;
+	shm_maps = shm_addr;
+	while (shm_maps->hwm_addr != NULL) {
+		memcpy(shm_payload+br, shm_maps->hwm_addr, shm_maps->hwm_bytes);
+		br += shm_maps->hwm_bytes;
+		shm_maps++;
 	}
+}
 
-	/* read in shm data from pipe established by klee-mc */
-	br = read(0, &sp, sizeof(sp));
-	if (br != sizeof(struct shm_pkt)) {
-		fprintf(stderr, 
-			"[klee-hw] Got %u br bytes, expected %u\n",
-			br, (int)sizeof(struct shm_pkt));
-		return 1;
-	}
+static void load_shm(void)
+{
+	int	n = 1;
 
-	/* attach shm data */
 	shm_addr = shmat(sp.sp_shmid, NULL, SHM_RND);
 	assert (shm_addr != (void*)-1);
 
 	shm_maps = shm_addr;
+	map_hash = 0;
 	while (shm_maps->hwm_addr != NULL) {
 		void	*a, *target_a;
 		unsigned target_off;
@@ -75,9 +79,49 @@ int main(void)
 			abort();
 		}
 
+		map_hash += GET_HASH_V(shm_maps, n);
 		shm_maps++;
+		n++;
 	}
+
 	shm_payload = (void*)(shm_maps+1);
+}
+
+static int recv_and_run(void)
+{
+	int			br;
+
+	/* read in shm data from pipe established by klee-mc */
+	br = read(0, &sp, sizeof(sp));
+	if (br != sizeof(struct shm_pkt)) {
+		fprintf(stderr,
+			"[klee-hw] Got %u br bytes, expected %u\n",
+			br, (int)sizeof(struct shm_pkt));
+		return 1;
+	}
+
+	/* attach shm data */
+	if (last_shm_id == sp.sp_shmid) {
+		uint64_t	a_h = 0;
+
+		br = 1;
+		shm_maps = shm_addr;
+		while (shm_maps->hwm_addr) {
+			a_h += GET_HASH_V(shm_maps, br);
+			shm_maps++;
+			br++;
+		}
+		shm_payload = (void*)(shm_maps+1);
+
+		if (a_h != map_hash) last_shm_id = 0;
+	}
+
+	if (last_shm_id != sp.sp_shmid) {
+		if (shm_addr) shmdt(shm_addr);
+		load_shm();
+		last_shm_id = sp.sp_shmid;
+	}
+
 
 	/* copy to appropriate locations */
 	DEBUG(fprintf(stderr, "[klee-hw] COPYING IN\n"));
@@ -95,22 +139,31 @@ int main(void)
 	/* it could be faster to copy the register data
 	 * in through shm, but we don't get nice code reuse with vexllm */
 	// raise(SIGSTOP);
-	kill(getpid(), SIGTSTP);
+	kill(pid, SIGTSTP);
 
 	/* tricky part: klee-mc reloads the registers post-kill
 	 * and returns here *after* the execution of the guest code */
 	DEBUG(fprintf(stderr, "[klee-hw] PAST THE RAISE\n"));
-	
-	/* copy data back to shm */
-	shm_maps = shm_addr;
-	br = 0;
-	while (shm_maps->hwm_addr != NULL) {
-		memcpy(shm_payload+br, shm_maps->hwm_addr, shm_maps->hwm_bytes);
-		br += shm_maps->hwm_bytes;
-		shm_maps++;
-	}
+
+	copy_out_shm();
 
 	DEBUG(fprintf(stderr, "[klee-hw] Copy out done!\n"));
-	_exit(0);
 	return 0;
+}
+
+int main(void)
+{
+	int	n;
+
+	if (isatty(0)) {
+		fprintf(stderr, "[klee-hw] This only works with klee-mc!\n");
+		return 2;
+	}
+
+	pid = getpid();
+	while ((n = recv_and_run()) == 0) {
+		kill(pid, SIGTSTP);
+	}
+
+	return n;
 }

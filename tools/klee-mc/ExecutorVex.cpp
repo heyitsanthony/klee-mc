@@ -13,7 +13,7 @@
 #include "../../lib/Core/StatsTracker.h"
 #include "../../lib/Core/ExeStateManager.h"
 #include "../../lib/Core/MemoryManager.h"
-
+#include "klee/Internal/Support/Timer.h"
 
 #include <stdio.h>
 #include <vector>
@@ -563,10 +563,14 @@ void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
 		 * and keep stale entries on the callstack */
 		markExit(state, GE_RETURN);
 
+		es2esv(state).setLastSyscallInst();
+
 		/* hardware acceleration begins at system call exit */
-		if (hw_accel != NULL)
+		if (hw_accel != NULL && !state.getOnFini()) {
 			if (!doAccel(state, ki))
 				return;
+		}
+
 	}
 
 	handleXfer(state, ki);
@@ -580,6 +584,8 @@ bool ExecutorVex::doAccel(ExecutionState& state, KInstruction* ki)
 	ref<ConstantExpr>	new_pc_e;
 	int			vnum;
 	uint64_t		x_reg;
+	WallTimer		wt;
+	double			t_accel(0), t_xchk;
 
 	if (XChkHWAccel) shadow_state = pureFork(state);
 
@@ -589,7 +595,8 @@ bool ExecutorVex::doAccel(ExecutionState& state, KInstruction* ki)
 	s = hw_accel->run(es2esv(state));
 
 	/* couldn't host accel? skip */
-	if (s == HostAccelerator::HA_NONE) goto done;
+	if (	s != HostAccelerator::HA_PARTIAL &&
+		s != HostAccelerator::HA_SYSCALL) goto done;
 
 	/* rebind return address */
 	new_pc_e = MK_CONST(es2esv(state).getAddrPC(), 64);
@@ -601,6 +608,9 @@ bool ExecutorVex::doAccel(ExecutionState& state, KInstruction* ki)
 	if (shadow_state == NULL) return true;
 	if (s != HostAccelerator::HA_SYSCALL)
 		goto done;
+
+	t_accel = wt.checkSecs();
+	wt.reset();
 
 	/* now run with shadow state up to syscall */
 	std::cerr << "[HWAccelXChk] Begin interpreter retrace\n";
@@ -619,12 +629,16 @@ bool ExecutorVex::doAccel(ExecutionState& state, KInstruction* ki)
 	AS_COPYOUT(*shadow_state, &x_reg, VexGuestAMD64State, guest_RIP, 8);
 	ret = hw_accel->xchk(state, *shadow_state);
 done:
+	t_xchk = wt.checkSecs();
 
 	if (ret == false) {
 		/* shadow state can carry on! */
 		TERMINATE_ERROR(this, state, "Bad hwaccel xchk", "hwxchk.err");
 	} else if (shadow_state != NULL)
 		terminate(*shadow_state);
+
+	if (t_accel > 0.0) std::cerr <<
+		"[hwaccel] hw=" << t_accel << ". klee=" << t_xchk << '\n';
 
 	return ret;
 }
@@ -634,105 +648,13 @@ void ExecutorVex::markExit(ExecutionState& es, uint8_t v)
 	gs->getCPUState()->setExitType(GE_IGNORE);
 	es.write8(GETREGOBJ(es), gs->getCPUState()->getExitTypeOffset(), v);
 }
-void ExecutorVex::logXferRegisters(ExecutionState& state)
-{
-	updateGuestRegs(state);
-	logXferObj(state, GETREGOBJRO(state),  BC_TYPE_VEXREG);
-}
-
-void ExecutorVex::logXferMO(ExecutionState& state)
-{
-	ObjectPair		op;
-	uint8_t			*crumb_buf, *crumb_base;
-	unsigned		sz;
-	struct breadcrumb	*bc;
-
-	if (state.addressSpace.resolveOne(LogObject, op) == false)
-		return;
-
-	sz = op_os(op)->getSize();
-	crumb_base = new uint8_t[sizeof(struct breadcrumb)+(sz*2)+8];
-	crumb_buf = crumb_base;
-	bc = reinterpret_cast<struct breadcrumb*>(crumb_base);
-
-	bc_mkhdr(bc, BC_TYPE_MEMLOG, 0, sz*2+8);
-	crumb_buf += sizeof(struct breadcrumb);
-
-	*((uint64_t*)crumb_buf) = op_mo(op)->address;
-	crumb_buf += sizeof(uint64_t);
-
-	/* 1. store concrete cache */
-	op_os(op)->readConcrete(crumb_buf, sz);
-	crumb_buf += sz;
-
-	/* 2. store concrete mask */
-	for (unsigned int i = 0; i < sz; i++)
-		crumb_buf[i] = (op_os(op)->isByteConcrete(i)) ? 0xff : 0;
-
-	es2esv(state).recordBreadcrumb(bc);
-	delete [] crumb_base;
-}
-
-void ExecutorVex::logXferStack(ExecutionState& state)
-{
-	ObjectPair		op;
-	unsigned		off;
-	ref<Expr>		stk_expr;
-	uint64_t		stack_addr;
-
-	/* do not record stack if stack pointer is symbolic */
-	off = gs->getCPUState()->getStackRegOff();
-	stk_expr = GETREGOBJRO(state)->read(off, 64);
-	if (stk_expr->getKind() != Expr::Constant)
-		return;
-
-	/* do not record stack if backing object can't be found */
-	stack_addr = cast<ConstantExpr>(stk_expr)->getZExtValue();
-	if (state.addressSpace.resolveOne(stack_addr, op) == false)
-		return;
-
-	/* log stack */
-	off = stack_addr - op_mo(op)->address;
-	logXferObj(state, op_os(op),  BC_TYPE_STACKLOG, off);
-}
-
-/* XXX: expensive-- lots of storage */
-void ExecutorVex::logXferObj(
-	ExecutionState& state, const ObjectState* os, int tag,
-	unsigned off)
-{
-	uint8_t			*crumb_buf, *crumb_base;
-	unsigned		sz;
-	struct breadcrumb	*bc;
-
-	updateGuestRegs(state);
-
-	assert (off < os->getSize());
-	sz = os->getSize() - off;
-	crumb_base = new uint8_t[sizeof(struct breadcrumb)+(sz*2)];
-	crumb_buf = crumb_base;
-	bc = reinterpret_cast<struct breadcrumb*>(crumb_base);
-
-	bc_mkhdr(bc, tag, 0, sz*2);
-	crumb_buf += sizeof(struct breadcrumb);
-
-	/* 1. store concrete cache */
-	os->readConcrete(crumb_buf, sz, off);
-	crumb_buf += sz;
-
-	/* 2. store concrete mask */
-	for (unsigned int i = 0; i < sz; i++)
-		crumb_buf[i] = (os->isByteConcrete(i+off)) ? 0xff : 0;
-
-	es2esv(state).recordBreadcrumb(bc);
-	delete [] crumb_base;
-}
 
 /* handle transfering between VSB's */
 void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 {
 	GuestExitType	exit_type;
 	KFunction	*onRet;
+	ExeStateVex	*esv;
 
 	exit_type = (GuestExitType)getExitType(state);
 
@@ -751,9 +673,10 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 		return;
 	}
 
-	if (LogRegs) logXferRegisters(state);
-	if (LogStack) logXferStack(state);
-	if (LogObject) logXferMO(state);
+	esv = &es2esv(state);
+	if (LogRegs) esv->logXferRegisters();
+	if (LogStack) esv->logXferStack();
+	if (LogObject) esv->logXferMO(LogObject);
 
 	markExit(state, GE_IGNORE);
 
@@ -936,14 +859,6 @@ void ExecutorVex::callExternalFunction(
 	std::cerr << "KLEE: ERROR: Calling non-special external function : "
 		<< function->getName().str() << "\n";
 	TERMINATE_ERROR(this, state, "externals disallowed", "user.err");
-}
-
-/* copy concrete parts into guest regs. */
-void ExecutorVex::updateGuestRegs(ExecutionState& state)
-{
-	void	*guest_regs;
-	guest_regs = gs->getCPUState()->getStateData();
-	state.addressSpace.copyToBuf(es2esv(state).getRegCtx(), guest_regs);
 }
 
 void ExecutorVex::printStackTrace(

@@ -23,6 +23,7 @@ private:
 	RecordLog	bc_log;	/* list of uninterpreted breadcrumbs */
 	MemoryObject	*reg_mo;
 	unsigned int	syscall_c;
+	uint64_t	last_syscall_inst;	/* based on state's total inst */
 
 protected:
 	ExeStateVex()
@@ -50,11 +51,13 @@ public:
 
 	virtual ~ExeStateVex() {}
 
+	void setLastSyscallInst(void) { last_syscall_inst = totalInsts; }
+	uint64_t getInstSinceSyscall(void) const
+	{ return totalInsts - last_syscall_inst; }
+
 	void recordBreadcrumb(const struct breadcrumb* );
 	RecordLog::const_iterator crumbBegin(void) const { return bc_log.begin(); }
 	RecordLog::const_iterator crumbEnd(void) const { return bc_log.end(); }
-
-	void recordRegisters(const void* regs, int sz);
 
 	MemoryObject* setRegCtx(MemoryObject* mo)
 	{
@@ -82,6 +85,13 @@ public:
 	virtual unsigned getStackDepth(void) const;
 
 	virtual void inheritControl(ExecutionState& es);
+
+	void logXferRegisters();
+	void logXferStack();
+	void logXferMO(uint64_t log_obj_mo);
+	void logXferObj(const ObjectState* os, int tag, unsigned off = 0);
+
+	void updateGuestRegs();
 };
 
 }

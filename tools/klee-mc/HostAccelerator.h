@@ -16,7 +16,8 @@ public:
 	enum Status {
 		HA_NONE,
 		HA_PARTIAL,
-		HA_SYSCALL };
+		HA_SYSCALL,
+		HA_CRASHED};
 
 	static HostAccelerator* create();
 	virtual ~HostAccelerator();
@@ -35,6 +36,9 @@ private:
 	void fixupHWShadow(
 		const ExecutionState& state, ExecutionState& shadow);
 
+	void setupChild(void);
+	void killChild(void);
+
 	int			shm_id;
 	unsigned		shm_page_c;
 	void			*shm_addr;
@@ -43,7 +47,11 @@ private:
 
 	void			*vdso_base;
 
-	unsigned		bad_reg_c, partial_run_c, full_run_c;
+	unsigned		bad_reg_c, partial_run_c, full_run_c,
+				crashed_kleehw_c, badexit_kleehw_c;
+
+	int			pipefd[2];
+	int			child_pid;
 
 public: /* XXX sshut up warnings for now */
 	unsigned		xchk_ok_c;

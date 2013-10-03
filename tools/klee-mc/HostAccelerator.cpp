@@ -1,3 +1,4 @@
+#include <llvm/Support/CommandLine.h>
 #include <errno.h>
 #include <asm/prctl.h>
 #include <assert.h>
@@ -11,15 +12,21 @@
 #include "static/Sugar.h"
 #include "cpu/ptimgamd64.h"
 #include "cpu/amd64cpustate.h"
+#include "klee/Internal/Support/Timer.h"
 
 #include "ExecutorVex.h"
 #include "HostAccelerator.h"
 
-#define DEBUG_HOSTACCEL(x)	x
+#define DEBUG_HOSTACCEL(x)	0
 #define PTRACE_ARCH_PRCTL	((__ptrace_request)30)
+#define PARANOID_SAVING
 
 using namespace klee;
 
+namespace
+{
+	llvm::cl::opt<bool> HWAccelFresh("hwaccel-fresh", llvm::cl::init(true));
+}
 
 #define OPCODE_SYSCALL 0x050f
 #define is_op_syscall(x)	(((x) & 0xffff) == OPCODE_SYSCALL)
@@ -29,9 +36,12 @@ HostAccelerator::HostAccelerator(void)
 , shm_page_c(0)
 , shm_addr(NULL)
 , vdso_base(NULL)
-, bad_reg_c(0), partial_run_c(0), full_run_c(0)
+, bad_reg_c(0), partial_run_c(0), full_run_c(0), crashed_kleehw_c(0)
+, badexit_kleehw_c(0)
 , xchk_ok_c(0), xchk_miss_c(0), xchk_bad_c(0)
-{}
+{
+	pipefd[1] = -1;
+}
 
 HostAccelerator* HostAccelerator::create(void)
 {
@@ -46,15 +56,18 @@ HostAccelerator* HostAccelerator::create(void)
 	}
 #endif
 	std::cerr << "[HostAccelerator] Enabled!\n";
-	return h; 
+	return h;
 }
 
-HostAccelerator::~HostAccelerator() { releaseSHM(); }
+HostAccelerator::~HostAccelerator()
+{
+	killChild();
+	releaseSHM();
+}
 
 void HostAccelerator::releaseSHM(void)
 {
 	if (shm_id == -1) return;
-
 	shmdt(shm_addr);
 	shm_id = -1;
 }
@@ -80,12 +93,45 @@ void HostAccelerator::stepInstructions(pid_t child_pid)
 	std::cerr << "[hwaccel] Instruction count: " << c << '\n';
 }
 
+void HostAccelerator::setupChild(void)
+{
+	int	rc;
+
+	/* setup pipe to communicate shm */
+	rc = pipe(pipefd);
+	assert (rc != -1 && "could not init pipe");
+
+	std::cerr << "[hwaccel] creating new child\n";
+
+	/* start hw accel process in background */
+	child_pid = fork();
+	if (child_pid == 0) {
+		close(0);
+		dup(pipefd[0]);
+		prctl(PR_SET_PDEATHSIG, SIGKILL);
+		execlp("klee-hw", "klee-hw", NULL);
+		abort();
+	}
+	close(pipefd[0]);
+	assert (child_pid != -1 && "Could not fork() for hw accel");
+
+	std::cerr << "[hwaccel] child pid=" << child_pid << '\n';
+}
+
+void HostAccelerator::killChild(void)
+{
+	if (pipefd[1] == -1) return;
+	close(pipefd[1]);
+
+	if (child_pid != -1) kill(child_pid, SIGKILL);
+	child_pid = -1;
+	pipefd[1] = -1;
+}
+
 HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 {
-	pid_t			child_pid;
 	struct shm_pkt		shmpkt;
-	int			pipefd[2];
-	bool			got_sc;
+	bool			got_sc, ok;
 	int			rc, status, guest_sig;
 	void			*old_fs, *new_fs;
 	std::vector<ObjectPair>	objs;
@@ -112,35 +158,30 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 		return HA_NONE;
 	}
 
-	/* XXX: should have a scheme to reuse SHMs */
-	releaseSHM();
-
-	/* setup pipe to communicate shm */
-	rc = pipe(pipefd);
-	assert (rc != -1 && "could not init pipe");
-
-	/* start hw accel process in background */
-	child_pid = fork();
-	if (child_pid == 0) {
-		close(0);
-		dup(pipefd[0]);
-		prctl(PR_SET_PDEATHSIG, SIGKILL);
-		execlp("klee-hw", "klee-hw", NULL);	
-		abort();
-	}
-	close(pipefd[0]);
-	assert (child_pid != -1 && "Could not fork() for hw accel");
+	if (HWAccelFresh) killChild();
+	if (pipefd[1] == -1) setupChild();
 
 	setupSHM(esv, objs);
 	writeSHM(objs);
 
 	/* start tracing while program is sleeping on pipe */
 	rc = ptrace(PTRACE_ATTACH, child_pid, NULL, NULL);
-	assert (rc == 0);
+	if (rc != 0) {
+		killChild();
+		setupChild();
+		rc = ptrace(PTRACE_ATTACH, child_pid, NULL, NULL);
+		assert (rc == 0);
+	}
+
 	rc = waitpid(child_pid, &status, 0);
 	assert (rc != -1);
 
-	assert (WIFSTOPPED(status) && WSTOPSIG(status) == SIGSTOP);
+	/* SIGTRAP is if the execve() isn't done by the time we ptrace */
+	ok =	(WIFSTOPPED(status) && WSTOPSIG(status) == SIGSTOP) ||
+		(WIFSTOPPED(status) && WSTOPSIG(status) == SIGTRAP);
+	if (!ok) std::cerr << "wtf: " << (void*)status << '\n';
+	assert (ok);
+
 	ptrace(PTRACE_CONT, child_pid, NULL, NULL);
 
 	/* alert child with pipe */
@@ -155,24 +196,32 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 	if (!(WIFSTOPPED(status) && WSTOPSIG(status) == SIGTSTP)) {
 		std::cerr << "[hwaccel] wtf status="
 			<< (void*)((long)status) << '\n';
+
+		killChild();
+		if (WIFSTOPPED(status) && WSTOPSIG(status) == SIGSEGV)
+			crashed_kleehw_c++;
+
+		return HA_NONE;
 	}
-	assert (WIFSTOPPED(status) && WSTOPSIG(status) == SIGTSTP);
 
 	/* memory now ready for native run. save old regs, inject new regs. */
 
 	/* collect old registers */
 	rc = ptrace(PTRACE_GETREGS, child_pid, NULL, &urs);
 	assert (rc == 0);
+
+#ifdef PARANOID_SAVING
 	rc = ptrace(PTRACE_GETFPREGS, child_pid, NULL, &ufprs);
 	assert (rc == 0);
+	rc = ptrace(PTRACE_ARCH_PRCTL, child_pid, &old_fs, ARCH_GET_FS);
+	assert (rc == 0);
+#endif
 
 	/* push registers from vex state */
 	VexGuestAMD64State	v;
 	regs->readConcrete((uint8_t*)&v, sizeof(v));
 
 	new_fs = (void*)v.guest_FS_ZERO;
-	rc = ptrace(PTRACE_ARCH_PRCTL, child_pid, &old_fs, ARCH_GET_FS);
-	assert (rc == 0);
 	rc = ptrace(PTRACE_ARCH_PRCTL, child_pid, new_fs, ARCH_SET_FS);
 	assert (rc == 0);
 
@@ -231,26 +280,44 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 #endif
 
 	/* restore old regs so child can copy into shm */
-	//DEBUG_HOSTACCEL(std::cerr <<
-	//	"[hwaccel] old klee-hw rip=" << (void*)urs.rip << '\n');
 	urs.orig_rax = -1;
 	rc = ptrace(PTRACE_SETREGS, child_pid, NULL, &urs);
 	assert (rc == 0);
+
+#ifdef PARANOID_SAVING
 	rc = ptrace(PTRACE_SETFPREGS, child_pid, NULL, &ufprs);
 	assert (rc == 0);
-
 	rc = ptrace(PTRACE_ARCH_PRCTL, child_pid, old_fs, ARCH_SET_FS);
 	assert (rc == 0);
+#endif
 
 	DEBUG_HOSTACCEL(std::cerr <<
 		"[hwaccel] Wait for process to terminate.\n");
 
 	/* wait for exit; data is copied in */
-	ptrace(PTRACE_CONT, child_pid, NULL, NULL);
+	rc = ptrace(PTRACE_CONT, child_pid, NULL, NULL);
+	assert (rc == 0);
+
 	status = 0;
 	rc = waitpid(child_pid, &status, 0);
 	assert (rc != -1);
-	assert (WIFEXITED(status));
+
+	/* bad termination? */
+	if (WIFEXITED(status)) {
+		badexit_kleehw_c++;
+		child_pid = -1;
+		killChild();
+		return HA_CRASHED;
+	}
+
+	/* expects sigtstp */
+	if (!(WIFSTOPPED(status) && WSTOPSIG(status) == SIGTSTP)) {
+		badexit_kleehw_c++;
+		killChild();
+		return HA_CRASHED;
+	}
+
+	ptrace(PTRACE_DETACH, child_pid, NULL, NULL);
 
 	/* read shm back into object states */
 	readSHM(esv, objs);
@@ -267,6 +334,7 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 
 	std::cerr << "[hwaccel] OK! " <<
 		"bad=" << bad_reg_c << " / "
+		"crash=" << crashed_kleehw_c << " / "
 		"part=" << partial_run_c << " / "
 		"full=" << full_run_c <<
 		". sig=" << strsignal(guest_sig) << '\n';
@@ -323,6 +391,7 @@ void HostAccelerator::setupSHM(ExeStateVex& esv, std::vector<ObjectPair>& objs)
 {
 	unsigned	os_bytes = 0, header_bytes = 0;
 	uint64_t	next_page = 0;
+	unsigned	new_page_c;
 
 	/* collect all concrete object states and compute total space needed */
 	foreach (it, esv.addressSpace.begin(), esv.addressSpace.end()) {
@@ -337,10 +406,7 @@ void HostAccelerator::setupSHM(ExeStateVex& esv, std::vector<ObjectPair>& objs)
 		}
 
 		/* inhibit vdso so kernel page is not accessed */
-		if ((void*)mo_c->address == vdso_base) {
-			std::cerr << "IGONRING VDSO=" << vdso_base << '\n';
-			continue;
-		}
+		if ((void*)mo_c->address == vdso_base) continue;
 
 		/* do not map in kernel pages */
 		if (((uintptr_t)mo_c->address >> 32) == 0xffffffff) continue;
@@ -352,7 +418,7 @@ void HostAccelerator::setupSHM(ExeStateVex& esv, std::vector<ObjectPair>& objs)
 		if (os_c->isConcrete() == false) {
 			if (ObjectState::revertToConcrete(os_c) == false) {
 				DEBUG_HOSTACCEL(std::cerr <<
-					"[hwaccel] Skipping addr=" <<
+					"[hwaccel] Skipping symbolic addr=" <<
 					(void*)mo_c->address << '\n');
 				// os_c->print();
 				next_page = 4096*((mo_c->address + 4095)/4096);
@@ -367,13 +433,16 @@ void HostAccelerator::setupSHM(ExeStateVex& esv, std::vector<ObjectPair>& objs)
 	}
 
 	header_bytes = (objs.size()+1) * sizeof(struct hw_map_extent);
-	shm_page_c = (os_bytes + header_bytes + 4095)/4096;
+	new_page_c = (os_bytes + header_bytes + 4095)/4096;
+
+	if (new_page_c < shm_page_c) goto done;
+
+	releaseSHM();
+	shm_page_c = new_page_c;
 
 	/* build and map shm */
-
 	/* XXX: /proc/sys/kernel/shmmax is too small?
-	 * echo 134217728 >/proc/sys/kerne/shmmax
-	 */
+	 * echo 134217728 >/proc/sys/kerne/shmmax */
 	shm_id = shmget(
 		IPC_PRIVATE,
 		shm_page_c*PAGE_SIZE,
@@ -386,8 +455,10 @@ void HostAccelerator::setupSHM(ExeStateVex& esv, std::vector<ObjectPair>& objs)
 	/* this is so the shm is not persistent;
 	 * otherwise it stays if the program exits without a shmdt()! */
 	shmctl(shm_id, IPC_RMID, NULL);
-	
+
 	shm_maps = (struct hw_map_extent*)shm_addr;
+
+done:
 	shm_payload = (void*)&shm_maps[objs.size()+1];
 }
 
@@ -412,7 +483,7 @@ bool HostAccelerator::xchk(const ExecutionState& es_hw, ExecutionState& es_klee)
 			continue;
 
 		std::cerr << "OOPS ON: " << (void*)mo->address << '\n';
-		std::cerr << "=====Interpreter vs Hardware====\n"; 
+		std::cerr << "=====Interpreter vs Hardware====\n";
 		os->printDiff(*os2);
 		if (os2->getSize() == AMD64CPUState::REGFILE_BYTES) {
 			const VexGuestAMD64State	*v;
@@ -433,7 +504,7 @@ bool HostAccelerator::xchk(const ExecutionState& es_hw, ExecutionState& es_klee)
 	if (ret) {
 		std::cerr << "[HWAccelXChk] OK.\n";
 		xchk_ok_c++;
-	} else 
+	} else
 		xchk_bad_c++;
 
 	return ret;
@@ -446,7 +517,7 @@ void HostAccelerator::fixupHWShadow(
 	ref<Expr>		new_pc_e;
 	uint64_t		rflags;
 	uint64_t		x_reg(~0ULL);
-	
+
 	/* rflags is jiggled a bit in ptrace->vex, so replicate behavior */
 	v = (VexGuestAMD64State*)GETREGOBJ(shadow)->getConcreteBuf();
 	rflags = AMD64CPUState::getRFLAGS(*v);
@@ -472,5 +543,7 @@ void HostAccelerator::fixupHWShadow(
 	v->guest_RIP -= 2;
 
 	/* VEX will generate EMNOTEs but not hardware! */
+#ifdef USE_SVN
 	v->guest_EMNOTE = 0;
+#endif
 }
