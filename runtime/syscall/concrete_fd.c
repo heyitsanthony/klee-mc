@@ -57,19 +57,21 @@ static struct fd_info fd_tab[MAX_FD] =
 };
 static int next_free_fd = 3;
 
-static void find_next_free(void)
+static int find_next_free(void)
 {
 	int	k;
 	for (k = next_free_fd; k < MAX_FD; k++) {
 		if (!fi_is_used(k)) {
 			next_free_fd = k;
-			break;
+			return k;
 		}
 	}
 
 	if (k == MAX_FD) {
 		klee_uerror("Ran out of virtual fds", "fd.err");
 	}
+
+	return -1;
 }
 
 int fd_open(const char* path)
@@ -82,8 +84,7 @@ int fd_open(const char* path)
 	if (host_fd < 0)
 		return -1;
 
-	find_next_free();
-	new_fd = next_free_fd;
+	new_fd = find_next_free();
 	assert (!fi_is_used(new_fd));
 
 	fi = fd2fi(new_fd);
@@ -103,8 +104,7 @@ int fd_open_sym(void)
 	struct fd_info	*fi;
 	int		new_fd;
 
-	find_next_free();
-	new_fd = next_free_fd;
+	new_fd = find_next_free();
 	assert (!fi_is_used(new_fd));
 
 	fi = fd2fi(new_fd);
@@ -128,11 +128,13 @@ void fd_close(int fd)
 	fd2fi(fd)->fi_flags = 0;
 	if (fd < next_free_fd)
 		next_free_fd = fd;
+
+
 }
 
 int fd_is_concrete(int fd)
 {
-	if (concrete_vfs && fd < 4) return 1;
+	if (concrete_vfs && fd < 3) return 1;
 
 	/* XXX: is there ever a case where the fd is
 	 * symbolic but the underlying files are concrete? */

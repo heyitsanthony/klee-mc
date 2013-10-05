@@ -12,7 +12,7 @@ uint64_t ExeStateVex::base_stack = 0;
 ExeStateVex::ExeStateVex(const ExeStateVex& src)
 : ExecutionState(src)
 , syscall_c(0)
-, last_syscall_inst(0)
+, last_syscall_inst(src.last_syscall_inst)
 {
 	const ExeStateVex	*esv;
 	

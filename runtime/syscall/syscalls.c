@@ -195,10 +195,15 @@ static void do_sockcall(void* regfile, int call, unsigned long* args)
 	klee_print_expr("do_sockcall", call);
 
 	switch (call) {
-	case SYS_SOCKET:
-		klee_warning_once("phony socket call");
-		sc_ret_range(sc_new_regs(regfile), -1, 4096);
+	case SYS_SOCKET: {
+		static int sockfd = 3000;
+		new_regs = sc_new_regs(regfile);
+		if (klee_prefer_ne(GET_SYSRET_S(new_regs), -1))
+			sc_ret_v_new(new_regs, sockfd++);
+		else
+			sc_ret_v_new(new_regs, - 1);
 		break;
+	}
 	case SYS_BIND: sc_ret_or(sc_new_regs(regfile), 0, -1); break;
 	case SYS_CONNECT: sc_ret_or(sc_new_regs(regfile), -1, 0); break;
 	case SYS_LISTEN: sc_ret_v(regfile, 0); break;

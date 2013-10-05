@@ -101,7 +101,7 @@ void HostAccelerator::setupChild(void)
 	rc = pipe(pipefd);
 	assert (rc != -1 && "could not init pipe");
 
-	std::cerr << "[hwaccel] creating new child\n";
+	DEBUG_HOSTACCEL(std::cerr << "[hwaccel] creating new child\n");
 
 	/* start hw accel process in background */
 	child_pid = fork();
@@ -115,7 +115,7 @@ void HostAccelerator::setupChild(void)
 	close(pipefd[0]);
 	assert (child_pid != -1 && "Could not fork() for hw accel");
 
-	std::cerr << "[hwaccel] child pid=" << child_pid << '\n';
+	DEBUG_HOSTACCEL(std::cerr<<"[hwaccel] child pid="<<child_pid<<'\n');
 }
 
 void HostAccelerator::killChild(void)

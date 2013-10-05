@@ -565,12 +565,13 @@ void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
 
 		es2esv(state).setLastSyscallInst();
 
+#if 1
 		/* hardware acceleration begins at system call exit */
 		if (hw_accel != NULL && !state.getOnFini()) {
 			if (!doAccel(state, ki))
 				return;
 		}
-
+#endif
 	}
 
 	handleXfer(state, ki);
@@ -587,6 +588,9 @@ bool ExecutorVex::doAccel(ExecutionState& state, KInstruction* ki)
 	WallTimer		wt;
 	double			t_accel(0), t_xchk;
 
+	vnum = ki->getOperand(0);
+	if (vnum < 0) goto done;
+
 	if (XChkHWAccel) shadow_state = pureFork(state);
 
 	/* compute PC from return value (hack hack hack) */
@@ -601,8 +605,6 @@ bool ExecutorVex::doAccel(ExecutionState& state, KInstruction* ki)
 	/* rebind return address */
 	new_pc_e = MK_CONST(es2esv(state).getAddrPC(), 64);
 	es2esv(state).setAddrPC(new_pc_e->getZExtValue());
-	vnum = ki->getOperand(0);
-	assert (vnum >= 0);
 	state.stack.getTopCell(vnum).value = new_pc_e;
 
 	if (shadow_state == NULL) return true;
@@ -649,12 +651,16 @@ void ExecutorVex::markExit(ExecutionState& es, uint8_t v)
 	es.write8(GETREGOBJ(es), gs->getCPUState()->getExitTypeOffset(), v);
 }
 
+// KLEE MIPS = 2.7e6 * 0.1 = T_BASE
+#define HW_ACCEL_WATERMARK	400000
 /* handle transfering between VSB's */
 void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 {
 	GuestExitType	exit_type;
 	KFunction	*onRet;
 	ExeStateVex	*esv;
+
+	esv = &es2esv(state);
 
 	exit_type = (GuestExitType)getExitType(state);
 
@@ -673,7 +679,20 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 		return;
 	}
 
-	esv = &es2esv(state);
+#if 0
+	if (hw_accel)
+	if (esv->getInstSinceSyscall() > HW_ACCEL_WATERMARK)
+	if (ki->getOperand(0) >= 0) {
+		std::cerr << "TIME TO ACCELERATE!! totalInsts=" <<
+			esv->totalInsts << " vs " <<
+			esv->getInstSinceSyscall() << "\n";
+
+		esv->setLastSyscallInst();
+		if (!doAccel(state, ki))
+			return;
+	}
+#endif
+
 	if (LogRegs) esv->logXferRegisters();
 	if (LogStack) esv->logXferStack();
 	if (LogObject) esv->logXferMO(LogObject);
@@ -681,12 +700,8 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 	markExit(state, GE_IGNORE);
 
 	switch(exit_type) {
-	case GE_CALL:
-		handleXferCall(state, ki);
-		return;
-	case GE_RETURN:
-		handleXferReturn(state, ki);
-		return;
+	case GE_CALL: handleXferCall(state, ki); break;;
+	case GE_RETURN: handleXferReturn(state, ki); break;
 	case GE_INT:
 	case GE_SYSCALL:
 		/* it's important to retain the exact exit type for windows
@@ -697,12 +712,10 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 	case GE_EMWARN:
 		std::cerr << "[VEXLLVM] VEX Emulation warning!?\n";
 		handleXferJmp(state, ki);
-		return;
+		break;
 	case GE_YIELD:
 		std::cerr << "[VEXLLVM] Need to support yielding\n" ;
-	case GE_IGNORE:
-		handleXferJmp(state, ki);
-		return;
+	case GE_IGNORE: handleXferJmp(state, ki); break;
 	case GE_SIGSEGV:
 		std::cerr << "[VEXLLVM] Caught SigSegV. Error Exit.\n";
 		TERMINATE_ERROR(this,
@@ -710,23 +723,22 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 			"VEX SIGSEGV error: jump to sigsegv",
 			"sigsegv.err");
 		return;
-
 	case GE_SIGTRAP:
 		std::cerr << "[VEXLLVM] Caught SigTrap. Exiting\n";
 		TERMINATE_EXIT(this, state);
 		return;
-	default:
+	default: {
 		std::cerr << "WTF: EXIT_TYPE=" << exit_type << '\n';
+		/* XXX need better bad stack frame handling */
+		ref<Expr> result = MK_CONST(0, Expr::Bool);
+		result = eval(ki, 0, state);
+
+		std::cerr <<  "terminating initial stack frame\nresult: ";
+		result->dump();
+		TERMINATE_EXIT(this, state);
 		assert (0 == 1 && "SPECIAL EXIT TYPE");
+		return; }
 	}
-
-	/* XXX need better bad stack frame handling */
-	ref<Expr> result = MK_CONST(0, Expr::Bool);
-	result = eval(ki, 0, state);
-
-	std::cerr <<  "terminating initial stack frame\nresult: ";
-	result->dump();
-	TERMINATE_EXIT(this, state);
 }
 
 void ExecutorVex::handleXferJmp(ExecutionState& state, KInstruction* ki)

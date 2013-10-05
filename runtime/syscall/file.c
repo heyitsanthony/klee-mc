@@ -61,7 +61,7 @@ static int str_contains(const char* needle, const char* haystack)
 	len_hs = strlen(haystack);
 	len_n = strlen(needle);
 
-	for (k = 0; k < len_hs - len_n; k++) {
+	for (k = 0; k <= len_hs - len_n; k++) {
 		if (memcmp(&haystack[k], needle, len_n) == 0)
 			return 1;
 	}
@@ -171,7 +171,10 @@ static void sc_stat(struct sc_pkt* sc)
 				return;
 			}
 
-			if (fd == -1 && fail_missing_concrete) {
+			if (	fd == -1 &&
+				!str_contains(".sym", path) &&
+				fail_missing_concrete)
+			{
 				sc_ret_v(sc->regfile, fd);
 				return;
 			}
@@ -232,6 +235,7 @@ static void sc_open(const char* path, void* regfile)
 			}
 
 			if (	ret_fd == -1 && 
+				!str_contains(".sym", path) &&
 				(fail_missing_concrete || is_sys_file(path)))
 			{
 				sc_ret_v(regfile, ret_fd);
@@ -241,14 +245,14 @@ static void sc_open(const char* path, void* regfile)
 	}
 
 	new_regs = sc_new_regs(regfile);
-	if (GET_SYSRET_S(new_regs) == -1) {
-		sc_ret_v(new_regs, -1);
+	if (klee_prefer_ne(GET_SYSRET_S(new_regs), -1)) {
+		ret_fd = fd_open_sym();
+		klee_assume_eq(GET_SYSRET_S(new_regs), ret_fd);
+		sc_ret_v(new_regs, ret_fd);
 		return;
 	}
 
-	ret_fd = fd_open_sym();
-	klee_assume_eq(GET_SYSRET_S(new_regs), ret_fd);
-	sc_ret_v(new_regs, ret_fd);
+	sc_ret_v(new_regs, -1);
 }
 
 int file_sc(struct sc_pkt* sc)
@@ -339,10 +343,8 @@ int file_sc(struct sc_pkt* sc)
 	case SYS_fstat:
 	case SYS_lstat:
 	case SYS_stat:
-		if (!concrete_vfs)
-			sc_stat_sym(sc);
-		else
-			sc_stat(sc);
+		if (!concrete_vfs)	sc_stat_sym(sc);
+		else			sc_stat(sc);
 		break;
 
 	case SYS_close:
@@ -412,7 +414,7 @@ int file_sc(struct sc_pkt* sc)
 
 		sz = GET_ARG2(regfile);
 		if (sz > 256) sz = 256;
-		
+
 		/* keep the string short since we're pure symbolic now */
 		/* In the future, use system information to satisfy this */
 		uint64_t	addr  = klee_get_value(GET_ARG1(regfile));
