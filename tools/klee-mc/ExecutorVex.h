@@ -105,6 +105,8 @@ protected:
 	ref<Expr> getRetArg(ExecutionState& state) const;
 	ref<Expr> getCallArg(ExecutionState& state, unsigned int n) const;
 
+	static void setKeepDeadStack(bool);
+
 	Guest		*gs;
 	KModuleVex	*km_vex;
 private:

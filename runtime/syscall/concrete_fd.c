@@ -147,6 +147,21 @@ int fd_is_concrete(int fd)
 	return fi_is_concrete(fd);
 }
 
+int fd_dup(int fd, int fd_min)
+{
+	int	k;
+		
+	for (k = fd_min; k < MAX_FD; k++) {
+		if (!fi_is_used(k)) {
+			memcpy(fd2fi(k), fd2fi(fd), sizeof(struct fd_info));
+			break;
+		}
+	}
+
+	if (k == MAX_FD) return -1;
+	return k;
+}
+
 ssize_t fd_read(int fd, char* buf, int c)
 {
 	struct fd_info	*fi;

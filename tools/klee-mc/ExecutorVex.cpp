@@ -73,7 +73,6 @@ namespace
 		"xchk-hwaccel",
 		cl::desc("Cross-check hw accel with interpreter."));
 
-
 	cl::opt<bool> KeepDeadStack(
 		"keep-dead-stack",
 		cl::desc("Keep registers in dead stack frames"));
@@ -112,6 +111,13 @@ namespace
 		cl::desc("Priority by reg file"));
 
 	cl::opt<std::string> RunSym("run-func", cl::desc("Function to run."));
+}
+
+
+void ExecutorVex::setKeepDeadStack(bool v)
+{
+	std::cerr << "[kleevex] Overriding KeepDeadStack = " << v << '\n';
+	KeepDeadStack = v;
 }
 
 ExecutorVex::ExecutorVex(InterpreterHandler *ih)

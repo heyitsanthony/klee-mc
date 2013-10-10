@@ -37,6 +37,8 @@
 extern bool concrete_vfs;
 static int last_sc = 0;
 
+extern void proc_sc(struct sc_pkt* sc);
+
 /* it'd be cool if I could auto-generate all of this */
 #ifdef GUEST_ARCH_AMD64
 #define TIMESPEC_SZ	sizeof(struct timespec)
@@ -143,6 +145,15 @@ static void loop_protect(int sc, int* ctr, int max_loop)
 	case SYS_##x:							\
 		klee_warning_once("Faking range syscall "#x);		\
 		sc_ret_range(sc_new_regs(regfile), y, z);		\
+		break;
+
+#define FAKE_SC_OR(x,y,z)					\
+	case SYS_##x:						\
+		klee_warning_once("Faking OR syscall "#x);	\
+		new_regs = sc_new_regs(regfile);		\
+		if (GET_SYSRET(new_regs) == y)			\
+			break;					\
+		sc_ret_v_new(new_regs, z);			\
 		break;
 
 /* number of bytes in extent we'll make symbolic before yielding */
@@ -538,14 +549,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 	sc_breadcrumb_reset();
 
 	switch (sc.sys_nr) {
-	case SYS_vfork:
-	case SYS_fork:
-		new_regs = sc_new_regs(regfile);
-		sc_ret_or(
-			sc_new_regs(regfile),
-			0 /* child */,
-			1001 /* child's PID, passed to parent */);
-		break;
 	case SYS_mprotect:
 		klee_warning_once("faking OK mprotect()");
 		sc_ret_v(regfile, 0);
@@ -670,8 +673,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_setreuid:
 		sc_ret_or(sc_new_regs(regfile), -1, 0);
 		break;
-	FAKE_SC_RANGE(geteuid, 0, 1)
-	FAKE_SC_RANGE(getegid, 0, 1)
+	FAKE_SC_OR(geteuid, 0, 1)
+	FAKE_SC_OR(getegid, 0, 1)
 	case SYS_fcntl: {
 		int	fd = GET_ARG0(regfile);
 		int	cmd = GET_ARG1(regfile);
@@ -679,8 +682,12 @@ void* sc_enter(void* regfile, void* jmpptr)
 			if (cmd == F_SETFD) {
 				sc_ret_v(regfile, 0);
 				break;
+			} else if (cmd == F_DUPFD) {
+				sc_ret_v(regfile, fd_dup(fd, GET_ARG2(regfile)));
+				break;
 			}
 		}
+
 		klee_warning_once("Faking range syscall fcntl");
 		klee_print_expr("fnctl cmd", cmd);
 		klee_print_expr("fnctl fd", fd);
@@ -794,7 +801,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_openat:
 	case SYS_close:
 	case SYS_access:
-		if (!file_sc(&sc)) goto already_logged;
+		if (!file_sc(&sc)) goto skip_commit;
 		break;
 
 #ifdef GUEST_ARCH_AMD64
@@ -872,7 +879,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 		sc_ret_v(regfile, addr);
 		sc_breadcrumb_commit(&sc, addr);
-		goto already_logged;
+		goto skip_commit;
 	}
 	break;
 
@@ -1000,13 +1007,19 @@ void* sc_enter(void* regfile, void* jmpptr)
 	}
 
 	case SYS_nanosleep: {
-		if (GET_ARG1(regfile) != 0) {
-			uint64_t dst_addr = concretize_u64(GET_ARG1(regfile));
-			make_sym(dst_addr, TIMESPEC_SZ, "nanosleep");
-			sc_ret_v(regfile, -1);
-			break;
+		new_regs = sc_new_regs(regfile);
+		if (GET_SYSRET_S(new_regs) == -1) {
+			/* terminated early */
+			if (GET_ARG1(regfile) != 0) {
+				uint64_t dst_addr;
+				dst_addr = concretize_u64(GET_ARG1(regfile));
+				make_sym(dst_addr, TIMESPEC_SZ, "nanosleep");
+			}
+			sc_ret_v_new(new_regs, -1);
+		} else {
+			/* terminated on time */
+			sc_ret_v_new(new_regs, 0);
 		}
-		sc_ret_or(sc_new_regs(regfile), -1, 0);
 		break;
 	}
 
@@ -1026,6 +1039,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_or(sc_new_regs(regfile), 0, -1);
 		break;
 
+	case SYS_mbind:
 	case SYS_madvise:
 		sc_ret_v(regfile, 0);
 		break;
@@ -1178,7 +1192,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
 	//	sc_breadcrumb_commit(&sc, GET_SYSRET(new_regs));
 		sc_breadcrumb_commit(&sc, GET_SYSRET(regfile));
-		goto already_logged;
+		goto skip_commit;
 	}
 
 	case SYS_mremap:
@@ -1193,7 +1207,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		new_regs = sc_mremap(regfile);
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
 		sc_breadcrumb_commit(&sc, GET_SYSRET(new_regs));
-		goto already_logged;
+		goto skip_commit;
 
 	case SYS_fchdir:
 	case SYS_chdir:
@@ -1367,36 +1381,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v_new(new_regs, 0);
 		break;
 
-
-// asmlinkage int sys_clone(
-// unsigned long clone_flags, unsigned long newsp,
-// int __user *parent_tidptr, int tls_val,
-// int __user *child_tidptr, struct pt_regs *regs)
-
-	case SYS_clone:
-		/* XXX pretty sure this is broken, but don't know how. */
-		klee_print_expr("CLONING", GET_ARG1_PTR(regfile));
-		new_regs = sc_new_regs(regfile);
-		if (GET_ARG1_PTR(regfile) != NULL) {
-			klee_warning("Is clone()'s stack switching right?");
-			klee_assume_eq(GET_STACK(new_regs), GET_ARG1(regfile));
-		}
-
-/* I have no idea what I'm doing. Ugh. */
-#if 0
-		if (GET_SYSRET(new_regs) == 0) {
-			unsigned i = 0;
-			jmpptr = GET_PTREGS_IP(GET_ARG5_PTR(regfile));
-			for (i = 0; i < 32; i++) {
-			klee_print_expr("i", i);
-			klee_print_expr("WUT[i]",
-				((uint64_t*)GET_ARG5_PTR(regfile))[i]);
-
-			}
-			klee_print_expr("CHILD CLONE TO", jmpptr);
-		}
-#endif
-		break;
 
 	case SYS_pwrite64:
 		sc_ret_or(sc_new_regs(regfile), -1, GET_ARG2(regfile));
@@ -1574,6 +1558,14 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_or(new_regs, 0, -1);
 		break;
 
+	case SYS_set_robust_list:
+	case SYS_clone:
+	case SYS_set_tid_address:
+	case SYS_vfork:
+	case SYS_fork:
+		proc_sc(&sc);
+		break;
+
 	case ARCH_SYS_UNSUPP:
 	default:
 		kmc_sc_bad(sc.sys_nr);
@@ -1598,7 +1590,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_breadcrumb_commit(&sc, GET_SYSRET(regfile));
 	}
 
-already_logged:
+skip_commit:
 	return jmpptr;
 }
 

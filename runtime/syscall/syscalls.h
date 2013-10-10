@@ -17,6 +17,7 @@
 #define GET_ARG5(x)	((VexGuestAMD64State*)x)->guest_R9
 #define GET_STACK(x)	((VexGuestAMD64State*)x)->guest_RSP
 #define GET_SYSNR(x)	((VexGuestAMD64State*)x)->guest_RAX
+#define GET_FPRET(x)	*((double*)(&((VexGuestAMD64State*)(x))->guest_YMM0))
 #define GET_PTREGS_IP(x)	(((uint64_t*)x)[16])
 #define ARCH_SIGN_CAST	int64_t
 #elif GUEST_ARCH_ARM

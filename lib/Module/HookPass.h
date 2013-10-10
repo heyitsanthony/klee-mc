@@ -35,6 +35,7 @@ public:
 	virtual bool runOnFunction(llvm::Function& f);
 private:
 	bool processFunc(llvm::Function& f, const std::string& fn_s);
+	bool processFuncPost(llvm::Function& f, const std::string& fn_s);
 	void loadByPath(const std::string& passlib);
 };
 }

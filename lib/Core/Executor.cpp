@@ -1024,10 +1024,10 @@ void Executor::instCall(ExecutionState& state, KInstruction *ki)
 	CallSite			cs(ki->getInst());
 	Function			*f = cs.getCalledFunction();
 	unsigned			numArgs = cs.arg_size();
-	std::vector< ref<Expr> >	arguments(numArgs);
+	std::vector< ref<Expr> >	args(numArgs);
 
-	for (unsigned j=0; j<numArgs; ++j)
-		arguments[j] = eval(ki, j+1, state);
+	for (unsigned j = 0; j < numArgs; ++j)
+		args[j] = eval(ki, j+1, state);
 
 	if (f == NULL) {
 		// special case the call with a bitcast case
@@ -1040,7 +1040,7 @@ void Executor::instCall(ExecutionState& state, KInstruction *ki)
 		}
 
 		if (ce && ce->getOpcode()==Instruction::BitCast)
-			f = executeBitCast(state, cs, ce, arguments);
+			f = executeBitCast(state, cs, ce, args);
 	}
 
 	if (f == NULL) {
@@ -1048,17 +1048,17 @@ void Executor::instCall(ExecutionState& state, KInstruction *ki)
 
 		xferIterInit(iter, &state, ki);
 		while (xferIterNext(iter))
-			executeCall(*(iter.res.first), ki, iter.f, arguments);
+			executeCall(*(iter.res.first), ki, iter.f, args);
 
 		return;
 	}
 
-	executeCall(state, ki, f, arguments);
+	executeCall(state, ki, f, args);
 }
 
 llvm::Function* Executor::executeBitCast(
-	ExecutionState &state,
-	CallSite&		cs,
+	ExecutionState		&state,
+	CallSite		&cs,
 	llvm::ConstantExpr*	ce,
 	std::vector< ref<Expr> > &args)
 {
@@ -1076,7 +1076,7 @@ llvm::Function* Executor::executeBitCast(
 		if (f == NULL) {
 			llvm::ConstantExpr *new_ce;
 
-			new_ce =  dyn_cast<llvm::ConstantExpr>(ga->getAliasee());
+			new_ce = dyn_cast<llvm::ConstantExpr>(ga->getAliasee());
 			if (new_ce && new_ce->getOpcode() == Instruction::BitCast)
 				return executeBitCast(state, cs, new_ce, args);
 		}

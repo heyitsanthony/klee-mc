@@ -132,8 +132,16 @@ bool HookPass::hookPost(KFunction* kf, llvm::Function& f)
 
 	assert (kf->function->arg_size() == 1);
 
-	assert (f.getReturnType() == (kf->function->arg_begin())->getType()
-		&& "Post return type does not match function");
+	if (f.getReturnType() != (kf->function->arg_begin())->getType()) {
+		std::cerr << "HOOKEE FUNC: ";
+		f.getReturnType()->dump();
+		std::cerr << '\n';
+		std::cerr << "HOOK FUNC: ";
+		(kf->function->arg_begin())->getType()->dump();
+		std::cerr << '\n';
+		std::cerr << "Post return type does not match function\n";
+		abort();
+	}
 
 	foreach (it, f.begin(), f.end()) {
 		BasicBlock		*bb(it);
@@ -159,22 +167,40 @@ bool HookPass::runOnFunction(llvm::Function& f)
 	std::string	s(f.getName().str());
 	size_t		n;
 
+	/* try the vanilla function name */
 	if (processFunc(f, s) == true)
 		return true;
 
 	s = kmod->getPrettyName(&f);
+
+	/* expects fname+0x00, check for '+' */
 	n = s.find_last_of('+');
 	if (n == std::string::npos)
 		return false;
 
+	/* expecting '+0x0', only want first func for pre, but
+	 * anything goes for post */
 	if (s.substr(n+1) != "0x0")
-		return false;
+		return processFuncPost(f, s.substr(0, n));
 
+	
 	/* maybe there's an offset suffix */
 	if (processFunc(f, s.substr(0, n)))
 		return true;
 
 	return false;
+}
+
+bool HookPass::processFuncPost(llvm::Function& f, const std::string& fn_s)
+{
+	bool changed = false;
+	fnmap_t::const_iterator	it;
+
+	if ((it = f_post.find(fn_s)) != f_post.end())
+		changed = hookPost(it->second, f);
+
+	if (changed) std::cerr << "[HookPass] Hooked " << fn_s << '\n';
+	return changed;
 }
 
 bool HookPass::processFunc(llvm::Function& f, const std::string& fn_s)
@@ -184,13 +210,8 @@ bool HookPass::processFunc(llvm::Function& f, const std::string& fn_s)
 
 	if ((it = f_pre.find(fn_s)) != f_pre.end())
 		changed |= hookPre(it->second, f);
+	if (changed) std::cerr << "[HookPass] Hooked " << fn_s << '\n';
 
-	if ((it = f_post.find(fn_s)) != f_post.end())
-		changed |= hookPost(it->second, f);
-
-	if (changed) {
-		std::cerr << "[HookPass] Hooked " << fn_s << '\n';
-	}
-
+	changed |= processFuncPost(f, fn_s);
 	return changed;
 }

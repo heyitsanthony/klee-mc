@@ -125,6 +125,7 @@ void HostAccelerator::killChild(void)
 
 	if (child_pid != -1 && !HWAccelFresh) {
 		int status;
+		ptrace(PTRACE_DETACH, child_pid, 0, 0);
 		kill(child_pid, SIGKILL);
 		waitpid(child_pid, &status, 0);
 	}
@@ -136,7 +137,7 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 {
 	struct shm_pkt		shmpkt;
 	bool			got_sc, ok;
-	int			rc, status, guest_sig;
+	int			rc, status, last_status, guest_sig;
 	void			*old_fs, *new_fs;
 	std::vector<ObjectPair>	objs;
 	ObjectState		*regs;
@@ -171,6 +172,9 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 	/* start tracing while program is sleeping on pipe */
 	rc = ptrace(PTRACE_ATTACH, child_pid, NULL, NULL);
 	if (rc != 0) {
+		DEBUG_HOSTACCEL(std::cerr << "first attach failed\n" << '\n');
+		kill(child_pid, SIGKILL);
+		waitpid(child_pid, &status, 0);
 		killChild();
 		setupChild();
 		rc = ptrace(PTRACE_ATTACH, child_pid, NULL, NULL);
@@ -181,10 +185,18 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 	assert (rc != -1);
 
 	/* SIGTRAP is if the execve() isn't done by the time we ptrace */
-	ok =	(WIFSTOPPED(status) && WSTOPSIG(status) == SIGSTOP) ||
-		(WIFSTOPPED(status) && WSTOPSIG(status) == SIGTRAP);
-	if (!ok) std::cerr << "wtf: " << (void*)status << '\n';
-	assert (ok);
+	if (WIFSTOPPED(status) && WSTOPSIG(status) == SIGTRAP) {
+		/* send first CONT to ack SIGTRAP */
+		ptrace(PTRACE_CONT, child_pid, NULL, NULL);
+		waitpid(child_pid, &status, 0);
+		last_status = status;
+		/* next CONT is to set process running */
+	} else {
+		ok = WIFSTOPPED(status) && WSTOPSIG(status) == SIGSTOP;
+		last_status = status;
+		if (!ok) std::cerr << "wtf: " << (void*)status << '\n';
+		assert (ok);
+	}
 
 	ptrace(PTRACE_CONT, child_pid, NULL, NULL);
 
@@ -198,8 +210,13 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 	rc = waitpid(child_pid, &status, 0);
 	assert (rc != -1);
 	if (!(WIFSTOPPED(status) && WSTOPSIG(status) == SIGTSTP)) {
-		std::cerr << "[hwaccel] wtf status="
-			<< (void*)((long)status) << '\n';
+		std::cerr << "[hwaccel] Expected loaded shm SIGTSTP. "
+			"WTF status=" << (void*)((long)status) <<
+			". Last status=" << (void*)last_status << '\n';
+
+		ptrace(PTRACE_DETACH, child_pid, 0, 0);
+		kill(child_pid, SIGKILL);
+		waitpid(child_pid, &status, 0);
 
 		killChild();
 		if (WIFSTOPPED(status) && WSTOPSIG(status) == SIGSEGV)
