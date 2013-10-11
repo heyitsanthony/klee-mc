@@ -170,16 +170,18 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 	}
 	theVexHelpers->loadUserMod(sys_model->getModelFileName());
 
+	assert (kmodule == NULL);
+
 	/* occasionally want to load something elsewhere
 	 * (ARM 0x8000 code base,
 	 *  0xf..fe000 faketimer page on fogger, ...)
 	 * problematic because the codegen normally updates
 	 * loads/stores to reflect these new addresses.
 	 * unsetting the bias should revert to unbiased behavior */
-	if (getenv("VEXLLVM_BASE_BIAS") != NULL)
+	if (getenv("VEXLLVM_BASE_BIAS") != NULL) {
 		unsetenv("VEXLLVM_BASE_BIAS");
-
-	assert (kmodule == NULL);
+		theGenLLVM->setUseReloc(false);
+	}
 
 	km_vex = new KModuleVex(this, mod_opts, gs);
 	kmodule = km_vex;
@@ -377,13 +379,16 @@ void ExecutorVex::bindMappingPage(
 	const ObjectState	*mmap_os_c;
 	ObjectState		*mmap_os;
 	uint64_t		addr_base;
+	void			*buf_base;
 	uint64_t		heap_min, heap_max;
 
 	assert (m.getBytes() > pgnum*PAGE_SIZE);
 	assert ((m.getBytes() % PAGE_SIZE) == 0);
 	assert ((m.offset.o & (PAGE_SIZE-1)) == 0);
 
-	addr_base = ((uint64_t)gs->getMem()->getData(m))+(PAGE_SIZE*pgnum);
+	buf_base = (void*)(
+		((uint64_t)gs->getMem()->getData(m))+(PAGE_SIZE*pgnum));
+	addr_base = m.offset.o + PAGE_SIZE*pgnum;
 
 	mmap_os_c = state->allocateAt(addr_base, PAGE_SIZE, f->begin()->begin());
 	mmap_mo = const_cast<MemoryObject*>(
@@ -406,7 +411,7 @@ void ExecutorVex::bindMappingPage(
 	}
 
 	/* optimize for zero pages */
-	data = (const char*)addr_base;
+	data = (const char*)buf_base;
 	unsigned i = 0;
 
 #ifdef CLUSTER_HACKS
@@ -525,6 +530,7 @@ void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
 
 			off = it->first;
 			len = it->second;
+
 			for (unsigned i=0; i < len; i++)
 				state->write8(
 					state_regctx_os,

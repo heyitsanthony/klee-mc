@@ -81,8 +81,9 @@ Function* KModuleVex::getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new)
 	Function	*f;
 
 	if (	guest_addr < 0x1000 ||
-		((guest_addr > 0x7fffffffffffULL) &&
-		((guest_addr & 0xfffffffffffff000) != 0xffffffffff600000)) ||
+// XXX: this is needed to do kernel stuff
+//		((guest_addr > 0x7fffffffffffULL) &&
+//		((guest_addr & 0xfffffffffffff000) != 0xffffffffff600000)) ||
 		guest_addr == 0xffffffff)
 	{
 		/* short circuit obviously bad addresses */
@@ -106,14 +107,12 @@ Function* KModuleVex::getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new)
 	GuestMem::Mapping	m;
 	if (gs->getMem()->lookupMapping(guest_ptr(guest_addr), m) == false) {
 		f = getPrivateFuncByAddr(guest_addr);
-		if (f != NULL)
-			is_new = true;
+		if (f != NULL) is_new = true;
 		return f;
 	}
 
 	f = loadFuncByBuffer(host_addr, guest_ptr(guest_addr));
-	if (f != NULL)
-		is_new = true;
+	if (f != NULL) is_new = true;
 
 	return f;
 }
@@ -282,6 +281,7 @@ Function* KModuleVex::getFuncByAddr(uint64_t guest_addr)
 	if (const ExecutionState* ese = exe->getCurrentState()) {
 		const MemoryObject	*mo;
 		mo = ese->addressSpace.resolveOneMO(guest_addr);
+		assert (mo != NULL);
 		if (!mo->name.empty())
 			setModName(kf, mo->name.c_str());
 	}

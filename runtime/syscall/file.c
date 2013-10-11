@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <klee/klee.h>
 
+#include "struct_sz.h"
 #include "syscalls.h"
 #include "file.h"
 #include "concrete_fd.h"
@@ -121,22 +122,16 @@ static void sc_stat_sym(struct sc_pkt* sc)
 		return;
 	}
 #endif
-	sc_ret_v(new_regs, 0);
+	sc_ret_v_new(new_regs, 0);
 
-#ifdef GUEST_ARCH_AMD64
-	make_sym_by_arg(sc->regfile, 1, sizeof(struct stat), "statbuf");
-#elif GUEST_ARCH_ARM
-	make_sym_by_arg(sc->regfile, 1, 88, "statbuf");
-#elif GUEST_ARCH_X86
-	if (sc_is_32bit(sc))
-		/* 32-bit statbuf */
-		make_sym_by_arg(sc->regfile, 1, 88, "statbuf");
-	else
+#if GUEST_ARCH_X86
+	if (!sc_is_32bit(sc))
 		/* 64-bit statbuf */
-		make_sym_by_arg(sc->regfile, 1, 96, "statbuf");
-#else
-#error wtf
+		make_sym_by_arg(sc->regfile, 1, __STAT_SZ_AMD64, "statbuf");
+	else
 #endif
+	/* 32-bit statbuf */
+	make_sym_by_arg(sc->regfile, 1, STAT_SZ, "statbuf");
 }
 
 int file_path_has_sym(const char* s)
