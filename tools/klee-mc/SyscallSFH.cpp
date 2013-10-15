@@ -65,8 +65,9 @@ static bool isSymRegByte(Arch::Arch a, int i)
 	}
 
 	if (a == Arch::ARM) {
-		if (i/8 == offsetof(VexGuestARMState, guest_R0)/8) {
-			/* ignore r0 and r1 */
+		if (i/4 == offsetof(VexGuestARMState, guest_R0)/4) {
+			/* ignore r0 */
+			/* used to ignore r1 but caused problems with xstat32 */
 			return true;
 		}
 		return false;
