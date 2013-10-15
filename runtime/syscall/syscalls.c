@@ -647,6 +647,12 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_fcntl: {
 		int	fd = GET_ARG0(regfile);
 		int	cmd = GET_ARG1(regfile);
+
+		if (!concrete_vfs) {
+			sc_ret_range(sc_new_regs(regfile), -1, 1);
+			break;
+		}
+
 		if (fd_is_concrete(fd) || fd == 3) {
 			if (cmd == F_SETFD) {
 				sc_ret_v(regfile, 0);
