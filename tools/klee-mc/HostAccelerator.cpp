@@ -13,6 +13,7 @@
 #include "cpu/ptimgamd64.h"
 #include "cpu/amd64cpustate.h"
 #include "klee/Internal/Support/Timer.h"
+#include <string.h>
 
 #include "ExecutorVex.h"
 #include "HostAccelerator.h"
@@ -253,6 +254,7 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 	std::cerr << "[hwaccel] Jumping to op=" << (void*)op << '\n';
 #endif
 
+	memset(&urs_vex, 0, sizeof(urs_vex));
 	PTImgAMD64::vex2ptrace(v, urs_vex, ufprs_vex);
 	urs_vex.cs = urs.cs;
 	urs_vex.ss = urs.ss;
