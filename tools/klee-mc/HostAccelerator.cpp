@@ -195,7 +195,8 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 	} else {
 		ok = WIFSTOPPED(status) && WSTOPSIG(status) == SIGSTOP;
 		last_status = status;
-		if (!ok) std::cerr << "wtf: " << (void*)status << '\n';
+		if (!ok) std::cerr << "bad status: " <<
+				(void*)(long)status << '\n';
 		assert (ok);
 	}
 
@@ -212,8 +213,8 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 	assert (rc != -1);
 	if (!(WIFSTOPPED(status) && WSTOPSIG(status) == SIGTSTP)) {
 		std::cerr << "[hwaccel] Expected loaded shm SIGTSTP. "
-			"WTF status=" << (void*)((long)status) <<
-			". Last status=" << (void*)last_status << '\n';
+			"Weird status=" << (void*)((long)status) <<
+			". Last status=" << (void*)(long)last_status << '\n';
 
 		ptrace(PTRACE_DETACH, child_pid, 0, 0);
 		kill(child_pid, SIGKILL);

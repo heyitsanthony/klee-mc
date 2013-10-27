@@ -38,7 +38,7 @@
 using namespace llvm;
 using namespace klee;
 
-bool			SymArgs;
+bool			SymArgs, SymArgC;
 extern double		MaxSTPTime;
 extern bool		WriteTraces;
 extern double		MaxTime;
@@ -48,6 +48,12 @@ namespace {
 		"symargs",
 		cl::desc("Make argument strings symbolic"),
 		cl::location(SymArgs),
+		cl::init(false));
+
+	cl::opt<bool, true> SymArgCProxy(
+		"symargc",
+		cl::desc("Make argc symbolic"),
+		cl::location(SymArgC),
 		cl::init(false));
 
 	cl::opt<bool>
@@ -251,8 +257,7 @@ static CmdArgs* getCmdArgs(char** envp)
 		input_args.push_back(*it);
 
 	ret = new CmdArgs(InputFile, env_path, envp, input_args);
-	if (SymArgs)
-		ret->setSymbolic();
+	if (SymArgs) ret->setSymbolic();
 	return ret;
 }
 

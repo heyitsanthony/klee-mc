@@ -44,3 +44,6 @@ DECL_HOOK(poll_for_next_event)
 
 DECL_HOOK(php_mysqlnd_greet_read)
 DECL_HOOK(php_stream_fill_read_buffer)
+
+void __hookpre__XIOError(void* r)
+{ klee_silent_exit(1); }

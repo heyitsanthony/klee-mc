@@ -51,7 +51,7 @@ using namespace llvm;
 
 extern bool WriteTraces;
 
-extern bool SymArgs;
+extern bool SymArgs, SymArgC;
 extern bool UsePrioritySearcher;
 
 bool SymRegs = false;
@@ -283,6 +283,7 @@ ExecutionState* ExecutorVex::setupInitialStateEntry(uint64_t entry_addr)
 	kf_scenter->isSpecial = true;
 
 	if (SymArgs) makeArgsSymbolic(state);
+	if (SymArgC) makeArgCSymbolic(state);
 	if (SymMagic) makeMagicSymbolic(state);
 
 	return state;
@@ -341,6 +342,37 @@ void ExecutorVex::makeMagicSymbolic(ExecutionState* state)
 		GET_SFH(sfh)->makeRangeSymbolic(
 			*state, it->first, it->second, "magic");
 }
+
+void ExecutorVex::makeArgCSymbolic(ExecutionState* state)
+{
+	ObjectPair		op;
+	unsigned		argc_max;
+	Expr::Width		bits;
+	guest_ptr		argc_ptr(gs->getArgcPtr());
+	ref<Expr>		constr;
+
+	if (!argc_ptr) {
+		std::cerr << "[klee-mc] Couldn't reconstrain argc.\n";
+		return;
+	}
+
+	bits = gs->getMem()->is32Bit() ? 32 : 64;
+
+	std::cerr << "[klee-mc] Set argc symbolic\n";
+	GET_SFH(sfh)->makeRangeSymbolic(
+		*state, gs->getMem()->getHostPtr(argc_ptr), bits / 8, "argc");
+	argc_max = gs->getMem()->readNative(argc_ptr);
+
+	state->addressSpace.resolveOne(argc_ptr.o, op);
+	assert (op_mo(op) != NULL);
+	assert (op_mo(op)->address == argc_ptr.o);
+
+	constr = MK_ULE(
+		state->read(op_os(op), 0, bits), MK_CONST(argc_max, bits));
+
+	state->addConstraint(constr);
+}
+
 
 void ExecutorVex::makeArgsSymbolic(ExecutionState* state)
 {
@@ -725,8 +757,22 @@ void ExecutorVex::handleXfer(ExecutionState& state, KInstruction *ki)
 		std::cerr << "[VEXLLVM] VEX Emulation warning!?\n";
 		handleXferJmp(state, ki);
 		break;
-	case GE_YIELD:
-		std::cerr << "[VEXLLVM] Need to support yielding\n" ;
+	case GE_YIELD: {
+		static int		yield_c = 0;
+		static ExecutionState	*last_es = NULL;
+
+		if (last_es != &state) yield_c = 0;
+		yield_c++;
+
+		if (yield_c > 50) {
+			std::cerr << "[VEXLLVM] Killing Vex Yield Loop\n";
+			TERMINATE_ERROR(this,
+				state,
+				"VEX Yied Loop: too many yield calls for state",
+				"vexyield.err");
+		}
+		break;
+	}
 	case GE_IGNORE: handleXferJmp(state, ki); break;
 	case GE_SIGSEGV:
 		std::cerr << "[VEXLLVM] Caught SigSegV. Error Exit.\n";
