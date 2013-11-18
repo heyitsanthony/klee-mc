@@ -33,7 +33,12 @@ TIMEOUT=${TIMEOUT:-2}
 #PRELOAD_STR=""
 #PRELOAD_STR=/home/chz/src/research/klee-open/trunk/preload/string.so
 #LD_PRELOAD=preload/printf.so $1 &
-if [ ! -z "$FROM_BEGINNING" ]; then
+
+GUEST_FLAGS="	-guest-type=sshot"
+
+if [ ! -z "$USE_CHKPT" ]; then
+	GUEST_FLAGS="-guest-type=sseq -guest-sseq=chkpt"
+elif [ ! -z "$FROM_BEGINNING" ]; then
 	echo taking snapshot
 #	PRELOAD_STR=/home/chz/src/research/klee-open/trunk/preload/string.so
 #	PRELOAD_STR=/home/chz/src/research/klee-open/trunk/preload/dumb_file.so
@@ -66,34 +71,37 @@ fi
 #	-use-interleaved-TRS	\
 
 
-# -equiv-expr-builder
-# -replace-equiv
-# -queue-solver-equiv
-# -write-equiv-rules
-
 # -use-interleaved-MI	\
 
 
 
 
-RULEFLAGS="-use-rule-builder -rule-file=default_rules.db -dump-used-rules=used.db"
+RULEFLAGS="-use-rule-builder -rule-file=default_rules.db"
+# -equiv-rule-file=kryptonite_new.dba
+# -equiv-expr-builder
+## -replace-equiv
+# -queue-solver-equiv
+# -write-equiv-rules
+#"
 
 # -use-rule-builder=true \
 
 
 #	-batch-instructions=20000
-#	-use-interleaved-CD=true
 SCHEDOPTS="-use-batching-search
 	-batch-time=5
-	-use-second-chance=true
+	-use-second-chance=false
 	-second-chance-boost=1
 	-second-chance-boost-cov=1
 	-use-pdf-interleave=true
-	-use-interleaved-UO=false
 	-use-fresh-branch-search=true
-	-use-interleaved-MI=true
-	-use-interleaved-MXI=true
-	-use-interleaved-BE=true"
+	-use-interleaved-UO=true
+	-use-interleaved-MI=true"
+
+#	-use-interleaved-MXI=true"
+#	-use-interleaved-CD=true
+#	-use-interleaved-UO=true
+#	-use-interleaved-BE=true"
 
 #	-use-interleaved-MI=true
 #	-use-interleaved-NI=true
@@ -130,6 +138,15 @@ fi
 #	-deny-sys-files 	\
 #
 
+MAX_MEMORY="-max-memory=4096"
+HCACHE_FLAGS="
+	-hcache-fdir=`pwd`/hcache	\
+	-hcache-pending=`pwd`/hcache	\
+	-hcache-sink			\
+	-hcache-dir=`pwd`/hcache 	\
+	-use-hash-solver=true		"
+
+
 cmd="$APP_WRAPPER klee-mc 	\
 	$EXTRA_ARGS		\
 	$PSDBFLAGS		\
@@ -137,12 +154,8 @@ cmd="$APP_WRAPPER klee-mc 	\
 	$SCHEDOPTS		\
 	$RULEFLAGS		\
 	$MMUFLAGS		\
-	\
-	-hcache-fdir=`pwd`/hcache	\
-	-hcache-pending=`pwd`/hcache	\
-	-hcache-sink			\
-	-hcache-dir=`pwd`/hcache 	\
-	-use-hash-solver=true		\
+	$GUEST_FLAGS		\
+	$HCACHE_FLAGS		\
 	\
 	-use-search-filter=false \
 	-use-cache=false	\
@@ -153,17 +166,15 @@ cmd="$APP_WRAPPER klee-mc 	\
 	-contig-off-resolution 	\
 	-pipe-solver		\
 	-write-paths		\
-	-max-memory=1024	\
+	$MAX_MEMORY		\
 	-mm-type=deterministic	\
 	-equivdb-dir=/mnt/biggy/klee/equivdb \
 	-use-pid		\
 	-max-err-resolves=32	\
 	-max-stp-time=8		\
 	-randomize-fork		\
-	-concretize-early	\
+	-concretize-early=true	\
 	-use-softfp=true	\
-	-guest-type=sshot	\
-	-write-smt=false	\
 	-show-syscalls		\
 	-dump-select-stack	\
 	-dump-covstats=1	\

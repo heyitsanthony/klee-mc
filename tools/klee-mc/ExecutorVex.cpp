@@ -227,14 +227,10 @@ llvm::Function* ExecutorVex::setupRuntimeFunctions(uint64_t entry_addr)
 
 	assert (entry_addr != 0);
 
-	// force deterministic initialization of memory objects
-	// XXX XXX XXX no determinism please
-	// srand(1);
-	// srandom(1);
 	srand(time(0));
 	srandom(time(0));
 
-	// acrobatics because we have a fucking circular dependency
+	// acrobatics because there's an annoying circular dependency
 	// on the globaladdress stucture which keeps us from binding
 	// the module constant table.
 
@@ -404,7 +400,8 @@ void ExecutorVex::bindMappingPage(
 	ExecutionState* state,
 	Function* f,
 	const GuestMem::Mapping& m,
-	unsigned int pgnum)
+	unsigned int pgnum,
+	Guest* g)
 {
 	const char		*data;
 	MemoryObject		*mmap_mo;
@@ -418,8 +415,10 @@ void ExecutorVex::bindMappingPage(
 	assert ((m.getBytes() % PAGE_SIZE) == 0);
 	assert ((m.offset.o & (PAGE_SIZE-1)) == 0);
 
+	if (g == NULL) g = gs;
+
 	buf_base = (void*)(
-		((uint64_t)gs->getMem()->getData(m))+(PAGE_SIZE*pgnum));
+		((uint64_t)g->getMem()->getData(m))+(PAGE_SIZE*pgnum));
 	addr_base = m.offset.o + PAGE_SIZE*pgnum;
 
 	mmap_os_c = state->allocateAt(addr_base, PAGE_SIZE, f->begin()->begin());
@@ -533,7 +532,7 @@ void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
 	ObjectState 	*state_regctx_os;
 	KFunction	*kf;
 	unsigned int	state_regctx_sz;
-	const char	*state_data;
+	const char	*reg_data;
 
 	state_regctx_mo = allocRegCtx(state, f);
 	es2esv(*state).setRegCtx(state_regctx_mo);
@@ -551,7 +550,7 @@ void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
 	assert (f->arg_size() == 1);
 	state->bindArgument(kf, 0, state_regctx_mo->getBaseExpr());
 
-	state_data = (const char*)gs->getCPUState()->getStateData();
+	reg_data = (const char*)gs->getCPUState()->getStateData();
 
 	if (SymRegs) {
 		Exempts		ex(getRegExempts(gs));
@@ -567,7 +566,7 @@ void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
 				state->write8(
 					state_regctx_os,
 					off+i,
-					state_data[off+i]);
+					reg_data[off+i]);
 		}
 
 		markExit(*state, GE_IGNORE);
@@ -576,7 +575,7 @@ void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
 
 	state_regctx_sz = gs->getCPUState()->getStateSize();
 	for (unsigned int i = 0; i < state_regctx_sz; i++)
-		state->write8(state_regctx_os, i, state_data[i]);
+		state->write8(state_regctx_os, i, reg_data[i]);
 }
 
 void ExecutorVex::run(ExecutionState &initialState)
@@ -609,13 +608,11 @@ void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
 
 		es2esv(state).setLastSyscallInst();
 
-#if 1
 		/* hardware acceleration begins at system call exit */
 		if (hw_accel != NULL && !state.getOnFini()) {
 			if (!doAccel(state, ki))
 				return;
 		}
-#endif
 	}
 
 	handleXfer(state, ki);
@@ -625,7 +622,7 @@ bool ExecutorVex::doAccel(ExecutionState& state, KInstruction* ki)
 {
 	HostAccelerator::Status	s;
 	bool			ret(true);
-	ExecutionState		*shadow_state(NULL);
+	ExecutionState		*shadow_es(NULL);
 	ref<ConstantExpr>	new_pc_e;
 	int			vnum;
 	uint64_t		x_reg;
@@ -635,7 +632,7 @@ bool ExecutorVex::doAccel(ExecutionState& state, KInstruction* ki)
 	vnum = ki->getOperand(0);
 	if (vnum < 0) goto done;
 
-	if (XChkHWAccel) shadow_state = pureFork(state);
+	if (XChkHWAccel) shadow_es = pureFork(state);
 
 	/* compute PC from return value (hack hack hack) */
 	new_pc_e = dyn_cast<ConstantExpr>(eval(ki, 0, state));
@@ -651,7 +648,7 @@ bool ExecutorVex::doAccel(ExecutionState& state, KInstruction* ki)
 	es2esv(state).setAddrPC(new_pc_e->getZExtValue());
 	state.stack.getTopCell(vnum).value = new_pc_e;
 
-	if (shadow_state == NULL) return true;
+	if (shadow_es == NULL) return true;
 	if (s != HostAccelerator::HA_SYSCALL)
 		goto done;
 
@@ -660,28 +657,28 @@ bool ExecutorVex::doAccel(ExecutionState& state, KInstruction* ki)
 
 	/* now run with shadow state up to syscall */
 	std::cerr << "[HWAccelXChk] Begin interpreter retrace\n";
-	handleXfer(*shadow_state, ki);
-	if (!runToFunction(shadow_state, kf_scenter)) {
+	handleXfer(*shadow_es, ki);
+	if (!runToFunction(shadow_es, kf_scenter)) {
 		ret = false;
 		goto done;
 	}
 
 	/* pull in destination RIP */
-	new_pc_e = dyn_cast<ConstantExpr>(eval(shadow_state->prevPC, 0, *shadow_state));
+	new_pc_e = dyn_cast<ConstantExpr>(eval(shadow_es->prevPC, 0, *shadow_es));
 	x_reg = new_pc_e->getZExtValue();
 	/* shadow state is left on a GE_SYSCALL, hw accel expects GE_RETURN */
-	markExit(*shadow_state, GE_RETURN);
+	markExit(*shadow_es, GE_RETURN);
 
-	AS_COPYOUT(*shadow_state, &x_reg, VexGuestAMD64State, guest_RIP, 8);
-	ret = hw_accel->xchk(state, *shadow_state);
+	AS_COPYOUT(*shadow_es, &x_reg, VexGuestAMD64State, guest_RIP, 8);
+	ret = hw_accel->xchk(state, *shadow_es);
 done:
 	t_xchk = wt.checkSecs();
 
 	if (ret == false) {
 		/* shadow state can carry on! */
 		TERMINATE_ERROR(this, state, "Bad hwaccel xchk", "hwxchk.err");
-	} else if (shadow_state != NULL)
-		terminate(*shadow_state);
+	} else if (shadow_es != NULL)
+		terminate(*shadow_es);
 
 	if (t_accel > 0.0) std::cerr <<
 		"[hwaccel] hw=" << t_accel << ". klee=" << t_xchk << '\n';

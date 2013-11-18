@@ -762,9 +762,8 @@ protected:
 		}
 
 		return Action::changeTo(
-			ReadExpr::create(
-				UpdateList(repl_arr, NULL),
-				ConstantExpr::create(new_re_idx, 32)));
+			MK_READ(UpdateList(repl_arr, NULL),
+				MK_CONST(new_re_idx, 32)));
 	}
 private:
 	typedef std::map<std::string, ref<Array> > mergearr_ty;

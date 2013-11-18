@@ -135,9 +135,6 @@ public:
 	int readConcreteSafe(uint8_t* addr, unsigned rd_sz, unsigned off=0) const;
 	int cmpConcrete(const uint8_t* addr, unsigned sz, unsigned off=0) const;
 
-	int cmpConcrete(uint8_t* addr, unsigned len) const
-	{ return memcmp(addr, concreteStore, len); }
-
 	const uint8_t* getConcreteBuf(void) const { return concreteStore; }
 
 	int cmpConcrete(const ObjectState& os) const;

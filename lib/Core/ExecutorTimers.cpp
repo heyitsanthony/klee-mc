@@ -427,39 +427,35 @@ private:
 };
 
 
-cl::opt<unsigned>
-DumpBTrackerDot("dump-btracker-dot",
-	cl::desc("Dump branch tracker dot (0=off)"),
-	cl::init(0));
+#define DUMP_BR(x,y,z,s)	\
+cl::opt<unsigned> Dump##x(y, cl::desc(s), cl::init(0));	\
+class x##Timer : public Executor::Timer {	\
+public:	\
+	x##Timer(const char* _fname, Executor* _exe)	\
+	: fname(_fname), exe(_exe) {}	\
+	virtual ~x##Timer() {}	\
+	void run(void)	\
+	{	\
+		ExecutionState*	es;	\
+		std::ostream* os;	\
+\
+		es = exe->getCurrentState();	\
+		if (es == NULL) return;	\
+\
+		os = exe->getInterpreterHandler()->openOutputFile(fname);	\
+		if (os == NULL) return;	\
+\
+		es->getBrTracker().z(*os);	\
+		delete os;	\
+	}	\
+private:	\
+	const char	*fname;	\
+	Executor	*exe;	};
 
-class BTrackerDotTimer : public Executor::Timer
-{
-public:
-	BTrackerDotTimer(
-		const char* _fname,
-		Executor* _exe)
-	: fname(_fname)
-	, exe(_exe) {}
-	virtual ~BTrackerDotTimer() {}
 
-	void run(void)
-	{
-		ExecutionState*	es;
-		std::ostream* os;
-
-		es = exe->getCurrentState();
-		if (es == NULL) return;
-
-		os = exe->getInterpreterHandler()->openOutputFile(fname);
-		if (os == NULL) return;
-
-		es->getBrTracker().dumpDotFile(*os);
-		delete os;
-	}
-private:
-	const char	*fname;
-	Executor	*exe;
-};
+DUMP_BR(BTrackerDot, "dump-btracker-dot", dumpDotFile, "Dump branch dot tree")
+//DUMP_BR(BTrackerTimeSeries,
+//	"dump-btracker-tseries", dumpTimeSeriesFile, "Dump branch time series")
 
 
 cl::opt<unsigned>

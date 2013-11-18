@@ -322,6 +322,7 @@ void SyscallsKTest::doLinuxThunks(SyscallParams& sp, int xlate_sysnr)
 		break;
 	}
 	case SYS_recvfrom:
+		if (!bc_sc_is_thunk(bcs_crumb)) break;
 		feedSyscallOp(sp);
 		if (sp.getArgPtr(4) != NULL)
 			feedSyscallOp(sp);

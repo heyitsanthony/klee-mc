@@ -794,7 +794,7 @@ bool ObjectState::revertToConcrete(void)
 
 int ObjectState::cmpConcrete(
 	const uint8_t* addr, unsigned sz, unsigned off) const
-{ return memcmp(addr, concreteMask + off, sz); }
+{ return memcmp(addr, concreteStore + off, sz); }
 
 
 /* lol hack */

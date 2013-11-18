@@ -222,6 +222,9 @@ static void do_sockcall(void* regfile, int call, unsigned long* args)
 		uint64_t	len;
 
 		new_regs = sc_new_regs(regfile);
+		if (GET_SYSRET_S(new_regs) == -1)
+			break;
+
 		len = args[2];
 		if (args[2] > 8192) len = 8192;
 
@@ -242,7 +245,7 @@ static void do_sockcall(void* regfile, int call, unsigned long* args)
 			*sl = sizeof(struct sockaddr_in);
 		}
 
-		sc_ret_or(new_regs, -1, len);
+		sc_ret_v_new(new_regs, len);
 		SC_BREADCRUMB_FL_OR(BC_FL_SC_THUNK);
 		break;
 	}

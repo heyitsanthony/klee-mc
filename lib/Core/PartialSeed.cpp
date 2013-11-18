@@ -258,7 +258,8 @@ static void dispatchKTest(
 	Executor* exe,
 	ExecutionState& es,
 	KTest* kt,
-	const std::string& name)
+	const std::string& name,
+	unsigned total_tests)
 {
 	static failmap_ty	fm;
 	ForksKTest		*fork_ktest;
@@ -304,7 +305,7 @@ static void dispatchKTest(
 	state_diff = exe->getNumStates() - st_c_old;
 	if (state_diff >= 1) {
 		/* no need for backup es, got what we needed */
-		if (!es.newInsts && (rand() % 4) != 0)
+		if (!es.newInsts && (rand() % total_tests) != 0)
 			exe->terminate(*backup_es);
 		fm[name] = 0;
 	} else {
@@ -375,7 +376,7 @@ SFH_DEF_ALL(PartSeedBeginReplay, "klee_partseed_begin", true)
 	state.bindLocal(target, MK_CONST(sel_idx, 64));
 
 	recur_depth++;
-	dispatchKTest(sfh->executor, state, kt, name);
+	dispatchKTest(sfh->executor, state, kt, name, it->second.size());
 	recur_depth--;
 
 	kTest_free(kt);

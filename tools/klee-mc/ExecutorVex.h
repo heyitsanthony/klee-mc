@@ -107,6 +107,13 @@ protected:
 
 	static void setKeepDeadStack(bool);
 
+	void bindMappingPage(
+		ExecutionState* state,
+		llvm::Function* f,
+		const GuestMem::Mapping& m,
+		unsigned int pgnum,
+		Guest* g = NULL);
+
 	Guest		*gs;
 	KModuleVex	*km_vex;
 private:
@@ -120,11 +127,6 @@ private:
 		ExecutionState* state,
 		llvm::Function* f,
 		GuestMem::Mapping m);
-	void bindMappingPage(
-		ExecutionState* state,
-		llvm::Function* f,
-		const GuestMem::Mapping& m,
-		unsigned int pgnum);
 
 	void prepState(ExecutionState* state, llvm::Function*);
 	void installFDTInitializers(llvm::Function *init_func);

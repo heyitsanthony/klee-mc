@@ -1,5 +1,3 @@
-/* -*- mode: c++; c-basic-offset: 2; -*- */
-
 #include "klee/Common.h"
 #include "klee/Interpreter.h"
 #include "klee/Internal/ADT/KTest.h"
@@ -24,6 +22,7 @@
 #include "ExecutorVex.h"
 #include "ExeSymHook.h"
 #include "ExeChk.h"
+#include "ExeSnapshotSeq.h"
 
 // FIXME: Ugh, this is gross. But otherwise our config.h conflicts with LLVMs.
 #include <llvm/Support/CommandLine.h>
@@ -123,8 +122,14 @@ namespace {
 	cl::opt<std::string>
 	GuestType(
 		"guest-type",
-		cl::desc("Type of guest to use. {*ptrace, sshot, elf, frag}"),
+		cl::desc("Type of guest to use. "
+			"{*ptrace, sshot, elf, frag, sseq}"),
 		cl::init("ptrace"));
+
+	cl::opt<std::string>
+	GuestSnapshotSeqBase(
+		"guest-sseq",
+		cl::desc("Snapshot base file prefix"));
 
 	cl::opt<std::string>
 	GuestSnapshotFName(
@@ -261,7 +266,32 @@ static CmdArgs* getCmdArgs(char** envp)
 	return ret;
 }
 
-Guest* getGuest(CmdArgs* cmdargs)
+static Guest* loadSnapshotGuest(CmdArgs* cmdargs, const std::string& s)
+{
+	Guest	*gs;
+
+	fprintf(stderr, "[klee-mc] LOADING SNAPSHOT\n");
+	gs = Guest::load(s.size() == 0 ? NULL : s.c_str());
+	assert (gs && "Could not load guest snapshot");
+
+	/* force load so replay knows how many symargs we have */
+	if (cmdargs->isSymbolic()) {
+		std::vector<guest_ptr>		ptrs(gs->getArgvPtrs());
+		std::vector<std::string>	arg_l;
+
+		foreach (it, ptrs.begin(), ptrs.end()) {
+			const char	*s;
+			s =  (const char*)gs->getMem()->getHostPtr(*it);
+			arg_l.push_back(std::string(s));
+		}
+
+		cmdargs->setArgs(arg_l);
+	}
+
+	return gs;
+}
+
+static Guest* getGuest(CmdArgs* cmdargs)
 {
 	Guest	*gs = NULL;
 
@@ -289,27 +319,11 @@ Guest* getGuest(CmdArgs* cmdargs)
 
 		gs = ge;
 	} else if (GuestType == "sshot") {
-		fprintf(stderr, "[klee-mc] LOADING SNAPSHOT\n");
-		gs = Guest::load(
-			GuestSnapshotFName.size() == 0
-			?	NULL
-			:	GuestSnapshotFName.c_str());
-		assert (gs && "Could not load guest snapshot");
-
-		/* ugh, got to force load so replay knows how many symargs
-		 * we have */
-		if (cmdargs->isSymbolic()) {
-			std::vector<guest_ptr>		ptrs(gs->getArgvPtrs());
-			std::vector<std::string>	arg_l;
-
-			foreach (it, ptrs.begin(), ptrs.end()) {
-				const char	*s;
-				s =  (const char*)gs->getMem()->getHostPtr(*it);
-				arg_l.push_back(std::string(s));
-			}
-
-			cmdargs->setArgs(arg_l);
-		}
+		gs = loadSnapshotGuest(cmdargs, GuestSnapshotFName);
+	} else if (GuestType == "sseq") {
+		std::string	s(GuestSnapshotSeqBase);
+		s = s + "-0000";
+		gs = loadSnapshotGuest(cmdargs, s);
 	} else if (GuestType == "frag") {
 		GuestFragment	*gf;
 
@@ -339,7 +353,7 @@ Guest* getGuest(CmdArgs* cmdargs)
 		new ConstraintSeedExecutor<KTestExecutor<x> >(handler)	\
 	: new KTestExecutor<x>(handler))
 
-Interpreter* createInterpreter(KleeHandler *handler, Guest* gs)
+Interpreter* createInterpreter(KleeHandler *handler)
 {
 	if (isReplayingKTest() && Replay::isSuppressForks()) {
 		/* suppressed forks */
@@ -353,6 +367,11 @@ Interpreter* createInterpreter(KleeHandler *handler, Guest* gs)
 
 	if (SymHook) return NEW_INTERP(ExeSymHook);
 	if (XChkJIT) return NEW_INTERP(ExeChk);
+	if (GuestType == "sseq") {
+		ExeSnapshotSeq	*ess = NEW_INTERP(ExeSnapshotSeq);
+		ess->setBaseName(GuestSnapshotSeqBase);
+		return ess;
+	}
 
 	return NEW_INTERP(ExecutorVex);
 }
@@ -403,8 +422,7 @@ int main(int argc, char **argv, char **envp)
 	}
 
 	handler = new KleeHandlerVex(cmdargs, gs);
-
-	interpreter = createInterpreter(handler, gs);
+	interpreter = createInterpreter(handler);
 
 	theInterpreter = interpreter;
 	handler->setInterpreter(interpreter);

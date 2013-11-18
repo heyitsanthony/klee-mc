@@ -130,7 +130,7 @@ static void sc_stat_sym(struct sc_pkt* sc)
 		make_sym_by_arg(sc->regfile, 1, __STAT_SZ_AMD64, "statbuf");
 	else
 #endif
-	/* 32-bit statbuf */
+	/* default-width statbuf */
 	make_sym_by_arg(sc->regfile, 1, STAT_SZ, "statbuf");
 }
 

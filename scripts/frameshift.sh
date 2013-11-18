@@ -14,7 +14,6 @@ if [ -z "$EXEPATH" ]; then echo no exe path given; exit 5; fi
 
 
 func=`grep sb_ "$ERRFILE" | head -n1`
-
 if [ -z "$func" ]; then echo "No func found??"; exit 1; fi
 
 

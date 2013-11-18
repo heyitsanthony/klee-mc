@@ -7,7 +7,7 @@
 
 int main(int argc, char* argv[])
 {
-	/* fork calls clone, so three new states */
+	/* fork calls clone, so three new states: {0, -1, parent} */
 	if (fork() == 0) {
 		/* st1, one test case */
 		return 1;

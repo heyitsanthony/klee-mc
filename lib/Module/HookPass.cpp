@@ -98,8 +98,12 @@ bool HookPass::hookPre(KFunction* kf, llvm::Function& f)
 	std::vector<Value*>	args;
 
 	/* function arguments must match */
-	assert (f.getArgumentList().size() ==
-		kf->function->getArgumentList().size());
+	if (f.getArgumentList().size() !=
+		kf->function->getArgumentList().size()) {
+		std::cerr << "Argument length mismatch for " <<
+			f.getName().str() << '\n';
+		abort();
+	}
 
 	/* this is disgusting, but necessary to pass assertion builds */
 	Instruction	*ii = &f.getEntryBlock().front();
