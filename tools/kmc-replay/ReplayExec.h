@@ -122,6 +122,7 @@ private:
 	bool		ignored_last;
 	bool		skipped_vsys;
 	bool		print_exec;
+	bool		is_vdso_patched;
 
 	unsigned	chklog_c;	/* number of basic blocks checked */
 };

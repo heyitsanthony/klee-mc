@@ -19,7 +19,8 @@ extern "C"
 
 /* XXX HACK HACK HACK. See below */
 #define is_syspage_addr(x)	\
-	(((uintptr_t)x)>=0xffffffffff600000 && ((uintptr_t)x)<0xffffffffff601000)
+	(is_vdso_patched == false && \
+	(((uintptr_t)x)>=0xffffffffff600000 && ((uintptr_t)x)<0xffffffffff601000))
 
 ReplayExec::ReplayExec(Guest* gs, VexXlate* vx)
 : VexExec(gs, vx)
@@ -28,6 +29,7 @@ ReplayExec::ReplayExec(Guest* gs, VexXlate* vx)
 , crumbs(NULL)
 , ignored_last(false)
 , print_exec(getenv("KMC_DUMP_EXE") != NULL)
+, is_vdso_patched(getenv("KMC_PATCHED_VDSO") != NULL)
 , chklog_c(0)
 { }
 
