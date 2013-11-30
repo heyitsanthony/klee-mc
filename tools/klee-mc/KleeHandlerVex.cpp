@@ -3,6 +3,7 @@
 #include "static/Sugar.h"
 
 #include "klee/Internal/Module/KFunction.h"
+#include "klee/Internal/System/Time.h"
 #include "KleeHandlerVex.h"
 #include "ExecutorVex.h"
 #include "ExeStateVex.h"
@@ -29,9 +30,13 @@ namespace
 		llvm::cl::desc("Validate tests with concrete replay"));
 }
 
+static double base_time;
+
 KleeHandlerVex::KleeHandlerVex(const CmdArgs* cmdargs, Guest *_gs)
 : KleeHandler(cmdargs), gs(_gs)
 {
+	base_time = util::getWallTime();
+
 	if (ValidateTestCase) {
 		/* can only validate tests when the guest is a snapshot,
 		 * otherwise the values get jumbled up */
@@ -54,7 +59,8 @@ unsigned KleeHandlerVex::processTestCase(
 
 	dumpLog(state, "crumbs", id);
 
-	fprintf(stderr, "===DONE WRITING TESTID=%d (es=%p)===\n", id, &state);
+	fprintf(stderr, "===DONE WRITING TESTID=%d (es=%p) [%f]===\n",
+		id, &state, util::getWallTime() - base_time);
 	if (!ValidateTestCase)
 		return id;
 

@@ -4,6 +4,7 @@
 #include "KModuleVex.h"
 #include "static/Sugar.h"
 
+#include <llvm/Support/CommandLine.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/types.h>
@@ -12,6 +13,12 @@
 #include <iostream>
 
 using namespace klee;
+
+namespace
+{
+	llvm::cl::opt<bool> UsePrePost("use-prepost");
+};
+
 
 /* XXX: TODO TODO make sc_gap work */
 
@@ -37,25 +44,55 @@ void ExeSnapshotSeq::handleXferSyscall(
 
 void ExeSnapshotSeq::runLoop(void)
 {
-	ExecutionState	*last_es;
-
 	std::cerr << "this is where I should fork the initial state\n";
-
-	last_es = getCurrentState();
-
-	/* load all guests in sequence */
-	for (unsigned i = 1; ; i++) {
-		last_es = addSequenceGuest(last_es, i);
-		if (last_es == NULL)
-			break;
-		std::cerr << "[ExeSnapshotSeq] Loaded Guest #" << i << '\n';
-	}
 
 	ExecutorVex::runLoop();
 }
 
+void ExeSnapshotSeq::addPrePostSeq(void)
+{
+	ExecutionState	*last_es(getCurrentState());
+
+	for (unsigned i = 1; ; i++) {
+		last_es = addSequenceGuest(last_es, i, "-pre");
+		if (last_es == NULL) break;
+		std::cerr << "[ExeSnapshotSeq] PreGuest#" << i << '\n';
+
+		last_es = addSequenceGuest(last_es, i, "-post");
+		if (last_es == NULL) break;
+		std::cerr << "[ExeSnapshotSeq] PostGuest#" << i << '\n';
+
+	}
+
+
+	assert (0 == 1 && "extra analysis???");
+}
+
+void ExeSnapshotSeq::addPreSeq(void)
+{
+	ExecutionState	*last_es(getCurrentState());
+	/* load all guests in sequence */
+	for (unsigned i = 1; ; i++) {
+		last_es = addSequenceGuest(last_es, i);
+		if (last_es == NULL) break;
+		std::cerr << "[ExeSnapshotSeq] Loaded Guest #" << i << '\n';
+	}
+}
+
+void ExeSnapshotSeq::loadGuestSequence(void)
+{
+	if (UsePrePost) {
+		/* add sequence of guests before *and* after syscall */
+		addPrePostSeq();
+	} else {
+		/* add sequence of guests all before syscall */
+		addPreSeq();
+	}
+}
+
 ExecutionState* ExeSnapshotSeq::addSequenceGuest(
-	ExecutionState* last_es, unsigned i)
+	ExecutionState* last_es, unsigned i,
+	const char *suff)
 {
 	ExecutionState			*new_es;
 	Guest				*new_gs;
@@ -68,7 +105,7 @@ ExecutionState* ExeSnapshotSeq::addSequenceGuest(
 	KFunction			*kf;
 
 
-	sprintf(s, "%s-%04d", base_guest_path.c_str(), i);
+	sprintf(s, "%s-%04d%s", base_guest_path.c_str(), i, suff);
 
 	/* does snapshot directory exist? */
 	if (stat(s, &st) == -1) return NULL;

@@ -1,3 +1,5 @@
+/*TODO FIX FAILURE WATERMARKING SO IT'S BASED ON # OF PARTIAL SEEDS */
+
 #include <llvm/Support/CommandLine.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -251,7 +253,7 @@ static bool loadPSDB(
 }
 
 
-#define FAILURE_WATERMARK	100
+#define FAILURE_WATERMARK	1000
 
 typedef std::map<std::string, unsigned> failmap_ty;
 static void dispatchKTest(
@@ -261,7 +263,7 @@ static void dispatchKTest(
 	const std::string& name,
 	unsigned total_tests)
 {
-	static failmap_ty	fm;
+	static failmap_ty	fm, fm_total;
 	ForksKTest		*fork_ktest;
 	ExecutionState		*backup_es;
 	StateSolver		*old_ss, *new_ss;
@@ -311,6 +313,7 @@ static void dispatchKTest(
 	} else {
 		/* increase failure count */
 		fm[name] = fm[name] + 1;
+		fm_total[name] = fm_total[name] + 1;
 	}
 
 	std::cerr << "[PS] STATES=" << state_diff
@@ -363,7 +366,12 @@ SFH_DEF_ALL(PartSeedBeginReplay, "klee_partseed_begin", true)
 
 	/* random selection */
 	/* XXX better selection policy */
-	sel_idx = it->second[rand() % it->second.size()];
+	if (rand() % 2) {
+		sel_idx = it->second[rand() % it->second.size()];
+	} else {
+		static unsigned c = 0;
+		sel_idx = it->second[(c++) % it->second.size()];
+	}
 	ss << sel_idx << ".ktest.gz";
 	kt = kTest_fromFile(ss.str().c_str());
 	if (kt == NULL) {
