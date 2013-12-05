@@ -127,6 +127,14 @@ static KTest* kTest_fromStream(std::istream& is)
 		if (!read_uint32(is, &res->symArgvLen)) goto error_args;
 	}
 
+	if (version >= 4) {
+		if (!read_string(is, &res->imagePath)) goto error_ver4;
+		if (!read_string(is, &res->initalFunc)) goto error_ver4;
+		if (!read_uint32(is, &res->flags)) goto error_ver4;
+		if (!read_string(is, &res->runtimePath) goto error_ver4;
+		assert (0 == 1 && "STUB: UNTESTED!!!");
+	}
+
 	if (!read_uint32(is, &res->numObjects)) goto error_args;
 
 	res->objects = (KTestObject*) calloc(
@@ -154,6 +162,11 @@ error_objs:
 		if (bo->bytes) free(bo->bytes);
 	}
 	free(res->objects);
+
+error_ver4:
+	if (res->imagePath) free(res->imagePath);
+	if (res->initialFunc) free(res->initialFunc);
+	if (res->runtimePath) free(res->runtimePath);
 
 error_args:
 	assert (res->args != 0);

@@ -21,7 +21,8 @@ protected:
 		ExecutionState& state, KInstruction* ki);
 private:
 	void addPrePostSeq(void);
-	void addPreSeq(void);
+	void addPreSeq(void) { addSeq(""); }
+	void addSeq(const char* suff);
 	ExecutionState* addSequenceGuest(
 		ExecutionState* last_es,
 		unsigned i,

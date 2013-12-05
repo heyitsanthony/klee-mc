@@ -17,6 +17,8 @@ using namespace klee;
 namespace
 {
 	llvm::cl::opt<bool> UsePrePost("use-prepost");
+	llvm::cl::opt<bool> UseSSeqPre("use-sseq-pre");
+	llvm::cl::opt<bool> UseSSeqPost("use-sseq-post");
 };
 
 
@@ -29,7 +31,6 @@ ExeSnapshotSeq::ExeSnapshotSeq(InterpreterHandler *ie)
 {}
 
 ExeSnapshotSeq::~ExeSnapshotSeq(void) {}
-
 
 void ExeSnapshotSeq::setBaseName(const std::string& s)
 { base_guest_path = s; }
@@ -44,8 +45,7 @@ void ExeSnapshotSeq::handleXferSyscall(
 
 void ExeSnapshotSeq::runLoop(void)
 {
-	std::cerr << "this is where I should fork the initial state\n";
-
+	loadGuestSequence();
 	ExecutorVex::runLoop();
 }
 
@@ -54,28 +54,33 @@ void ExeSnapshotSeq::addPrePostSeq(void)
 	ExecutionState	*last_es(getCurrentState());
 
 	for (unsigned i = 1; ; i++) {
-		last_es = addSequenceGuest(last_es, i, "-pre");
+		ExecutionState	*pre_es, *post_es;
+
+		pre_es = addSequenceGuest(last_es, i, "-pre");
+		last_es = pre_es;
 		if (last_es == NULL) break;
 		std::cerr << "[ExeSnapshotSeq] PreGuest#" << i << '\n';
 
-		last_es = addSequenceGuest(last_es, i, "-post");
+		post_es = addSequenceGuest(last_es, i, "-post");
+		last_es = post_es;
 		if (last_es == NULL) break;
 		std::cerr << "[ExeSnapshotSeq] PostGuest#" << i << '\n';
 
 	}
 
-
 	assert (0 == 1 && "extra analysis???");
 }
 
-void ExeSnapshotSeq::addPreSeq(void)
+void ExeSnapshotSeq::addSeq(const char* suff)
 {
 	ExecutionState	*last_es(getCurrentState());
 	/* load all guests in sequence */
 	for (unsigned i = 1; ; i++) {
-		last_es = addSequenceGuest(last_es, i);
+		last_es = addSequenceGuest(last_es, i, suff);
 		if (last_es == NULL) break;
-		std::cerr << "[ExeSnapshotSeq] Loaded Guest #" << i << '\n';
+		std::cerr
+			<< "[ExeSnapshotSeq] Load Guest "
+			<< suff << "#" << i << '\n';
 	}
 }
 
@@ -84,6 +89,10 @@ void ExeSnapshotSeq::loadGuestSequence(void)
 	if (UsePrePost) {
 		/* add sequence of guests before *and* after syscall */
 		addPrePostSeq();
+	} else if (UseSSeqPre) {
+		addSeq("pre");
+	} else if (UseSSeqPost) {
+		addSeq("post");
 	} else {
 		/* add sequence of guests all before syscall */
 		addPreSeq();
@@ -118,11 +127,13 @@ ExecutionState* ExeSnapshotSeq::addSequenceGuest(
 	std::cerr << "loaded guest #" << i << '\n';
 
 	/* XXX: this breaks kmc-replay because it will use the wrong
-	 * base snapshot. crap! */
+	 * base snapshot. crap! extend ktest format? */
 	new_es = pureFork(*last_es);
 	maps = new_gs->getMem()->getMaps();
 	foreach (it, maps.begin(), maps.end())
 		loadUpdatedMapping(new_es, new_gs, *it);
+	/* TODO track the guest base in the state data, reflect in
+	 * the ktest writer */
 
 	state_regctx_os = GETREGOBJ(*new_es);
 	state_regctx_sz = new_gs->getCPUState()->getStateSize();
