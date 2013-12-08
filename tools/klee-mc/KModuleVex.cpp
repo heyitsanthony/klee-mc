@@ -14,6 +14,7 @@
 #include "vexfcache.h"
 
 #include "Passes.h"
+#include <sstream>
 #include <stdio.h>
 
 using namespace llvm;
@@ -80,6 +81,7 @@ Function* KModuleVex::getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new)
 	void		*host_addr;
 	Function	*f;
 
+	is_new = false;
 	if (	guest_addr < 0x1000 ||
 // XXX: this is needed to do kernel stuff
 //		((guest_addr > 0x7fffffffffffULL) &&
@@ -99,21 +101,21 @@ Function* KModuleVex::getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new)
 	 * to the same address. Does that happen often? */
 	f = xlate_cache->getCachedFunc(guest_ptr(guest_addr));
 	if (f != NULL) {
-		is_new = false;
+		/* is_new = false */
 		return f;
 	}
 
 	/* Need to load the function. First, make sure that addr is mapped. */
+	is_new = true;
+
 	GuestMem::Mapping	m;
 	if (gs->getMem()->lookupMapping(guest_ptr(guest_addr), m) == false) {
+		/* not in base mapping-- write during symex! */
 		f = getPrivateFuncByAddr(guest_addr);
-		if (f != NULL) is_new = true;
 		return f;
 	}
 
 	f = loadFuncByBuffer(host_addr, guest_ptr(guest_addr));
-	if (f != NULL) is_new = true;
-
 	return f;
 }
 
@@ -224,7 +226,7 @@ void KModuleVex::loadPrivateLibrary(guest_ptr addr)
 	/* mo path was not a path on the system */
 	if (access(cur_mo->name.c_str(), R_OK) != 0)
 		return;
-	
+
 	/* scan for base of mapping */
 	while (1) {
 		prev_mo = ese->addressSpace.resolveOneMO(cur_mo->address - 1);
@@ -244,15 +246,40 @@ void KModuleVex::loadPrivateLibrary(guest_ptr addr)
 
 Function* KModuleVex::getFuncByAddr(uint64_t guest_addr)
 {
-	KFunction	*kf;
 	Function	*f;
 	bool		is_new;
 
 	f = getFuncByAddrNoKMod(guest_addr, is_new);
-	if (f == NULL) return NULL;
-	if (!is_new) return f;
+	if (f == NULL) {
+		if (is_new) {
+			/* decode error! */
+			ExecutionState	*es;
+			if (exe && (es = exe->getCurrentState())) {
+				/* dumb hack!!! */
+				TERMINATE_ERRORV(
+					exe,
+					*es,
+					"Bad instruction decode",
+					"decode.err",
+					"Code Address: ", guest_addr);
 
-	/* do light analysis */
+			}
+		} else {
+			/* is_new = false => access error, handled normally */
+		}
+		return NULL;
+	}
+
+	if (is_new) analyzeNewFunction(guest_addr, f);
+
+	return f;
+}
+
+void KModuleVex::analyzeNewFunction(uint64_t guest_addr, Function* f)
+{
+	KFunction	*kf;
+
+	/* do light analysis on new function */
 	if (UseCtrlGraph) {
 		static int dump_c = 0;
 		ctrl_graph.addFunction(f, guest_ptr(guest_addr));
@@ -295,8 +322,6 @@ Function* KModuleVex::getFuncByAddr(uint64_t guest_addr)
 		scanFuncExits(guest_addr, f);
 		in_scan = false;
 	}
-
-	return f;
 }
 
 KFunction* KModuleVex::addFunction(Function* f)
