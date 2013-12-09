@@ -56,15 +56,18 @@ void ExeSnapshotSeq::addPrePostSeq(void)
 	for (unsigned i = 1; ; i++) {
 		ExecutionState	*pre_es, *post_es;
 
+		/* this is important so that the diffing is cheap */
 		pre_es = addSequenceGuest(last_es, i, "-pre");
 		last_es = pre_es;
 		if (last_es == NULL) break;
 		std::cerr << "[ExeSnapshotSeq] PreGuest#" << i << '\n';
+		es2esv(*pre_es).setSyscallCount(i);
 
 		post_es = addSequenceGuest(last_es, i, "-post");
 		last_es = post_es;
 		if (last_es == NULL) break;
 		std::cerr << "[ExeSnapshotSeq] PostGuest#" << i << '\n';
+		es2esv(*post_es).setSyscallCount(i);
 
 	}
 
@@ -81,6 +84,7 @@ void ExeSnapshotSeq::addSeq(const char* suff)
 		std::cerr
 			<< "[ExeSnapshotSeq] Load Guest "
 			<< suff << "#" << i << '\n';
+		es2esv(*last_es).setSyscallCount(i);
 	}
 }
 
@@ -112,7 +116,6 @@ ExecutionState* ExeSnapshotSeq::addSequenceGuest(
 	const char			*reg_data;
 	char				s[512];
 	KFunction			*kf;
-
 
 	sprintf(s, "%s-%04d%s", base_guest_path.c_str(), i, suff);
 

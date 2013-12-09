@@ -262,7 +262,6 @@ Function* KModuleVex::getFuncByAddr(uint64_t guest_addr)
 					"Bad instruction decode",
 					"decode.err",
 					"Code Address: ", guest_addr);
-
 			}
 		} else {
 			/* is_new = false => access error, handled normally */

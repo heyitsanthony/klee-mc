@@ -1030,16 +1030,27 @@ SFH_DEF_ALL(HookReturn, "klee_hook_return", false)
 
 	/* (backtrack idx, function_addr, aux_expr) */
 	SFH_CHK_ARGS(3, "klee_hook_return");
-	
+
 	EXPECT_CONST("klee_hook_return", ce_idx, 0);
 	EXPECT_CONST("klee_hook_return", ce_addr, 1);
 
 	addr = ce_addr->getZExtValue();
-	f = sfh->executor->getFuncByAddr(addr);
-	if (f == NULL) {
-		f = (Function*)((void*)addr);
+	f = (Function*)((void*)addr);
+	kf = sfh->executor->getKModule()->getKFunction(f);
+	if (kf == NULL) {
+		f = sfh->executor->getFuncByAddr(addr);
+		kf = sfh->executor->getKModule()->getKFunction(f);
 	}
-	
+
+	if (kf == NULL) {
+		TERMINATE_ERROR(sfh->executor,
+			state,
+			"klee_hook_return: given bad function",
+			"user.err");
+		return;
+	}
+
+
 	idx = ce_idx->getZExtValue();
 	if (idx >= state.stack.size()) {
 		TERMINATE_ERROR(sfh->executor,
@@ -1049,21 +1060,11 @@ SFH_DEF_ALL(HookReturn, "klee_hook_return", false)
 		return;
 	}
 
-	kf = sfh->executor->getKModule()->getKFunction(f);
-	if (kf == NULL) {
-		TERMINATE_ERROR(sfh->executor,
-			state,
-			"klee_hook_return: given bad function",
-			"user.err");
-		return;
-	}
-
 	StackFrame	&sf(state.stack[(state.stack.size()-1) - idx]);
 
 	sf.onRet = kf;
 	sf.onRet_expr = args[2];
 }
-
 
 SFH_DEF_ALL(GetObjPrev, "klee_get_obj_prev", true)
 {

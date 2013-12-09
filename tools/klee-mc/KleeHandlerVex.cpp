@@ -28,6 +28,11 @@ namespace
 	llvm::cl::opt<bool> ValidateTestCase(
 		"validate-test",
 		llvm::cl::desc("Validate tests with concrete replay"));
+
+	llvm::cl::opt<bool> DumpTestRegs(
+		"dump-test-regs",
+		llvm::cl::desc(
+			"Write out state's registers at time of exit."));
 }
 
 static double base_time;
@@ -58,6 +63,35 @@ unsigned KleeHandlerVex::processTestCase(
 	if (!id) return 0;
 
 	dumpLog(state, "crumbs", id);
+
+	if (DumpTestRegs) {
+		/* ESV::logXferReg is similar, I guess.. */
+		const MemoryObject	*mo;
+		const ObjectState	*os;
+		std::ostream		*f;
+		unsigned		sz;
+		uint8_t			*buf;
+
+		mo = es2esvc(state).getRegCtx();
+		os = GETREGOBJRO(state);
+
+		sz = mo->size;
+		buf = new uint8_t[sz*2];
+
+		os->readConcrete(buf, sz);
+		for (unsigned i = 0; i < sz; i++)
+			buf[i+sz] = (os->isByteConcrete(i)) ? 0xff : 0;
+
+		f = openTestFile("regs", id);
+		assert (f != NULL);
+		f->write(((const char*)buf), sz);
+		delete f;
+		f = openTestFile("regsmask", id);
+		f->write((const char*)(buf+sz), sz);
+		delete f;
+		delete [] buf;
+	}
+
 
 	fprintf(stderr, "===DONE WRITING TESTID=%d (es=%p) [%f]===\n",
 		id, &state, util::getWallTime() - base_time);

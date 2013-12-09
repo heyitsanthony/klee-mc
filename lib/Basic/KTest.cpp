@@ -130,6 +130,7 @@ static KTest* kTest_fromStream(std::istream& is)
 	if (version >= 4) {
 		if (!read_string(is, &res->imagePath)) goto error_ver4;
 		if (!read_string(is, &res->initialFunc)) goto error_ver4;
+		if (!read_uint32(is, &res->syscall_c)) goto error_ver4;
 		if (!read_uint32(is, &res->flags)) goto error_ver4;
 		if (!read_string(is, &res->runtimePath)) goto error_ver4;
 		assert (0 == 1 && "STUB: UNTESTED!!!");

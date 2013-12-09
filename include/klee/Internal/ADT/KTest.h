@@ -39,7 +39,9 @@ extern "C" {
 		/* snapshot path / name */
 		char		*imagePath;
 		char		*initialFunc;
+		unsigned	syscall_c;
 		unsigned	flags;
+
 		/* either a .bc file or a .txt file with
 		 * list of .bc files */
 		char		*runtimePath;

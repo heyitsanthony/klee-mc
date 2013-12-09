@@ -24,7 +24,6 @@ private:
 	MemoryObject	*reg_mo;
 	unsigned int	syscall_c;
 	uint64_t	last_syscall_inst;	/* based on state's total inst */
-
 protected:
 	ExeStateVex()
 	: reg_mo(NULL)
@@ -72,7 +71,9 @@ public:
 	const ObjectState* getRegObjRO(void) const;
 
 	void incSyscallCount(void) { syscall_c++; }
+	void setSyscallCount(unsigned n) { syscall_c = n; }
 	unsigned int getSyscallCount(void) const { return syscall_c; }
+
 	static void setBaseGuest(Guest* gs) { base_guest = gs; }
 	static void setBaseStack(uint64_t p) { base_stack = p; }
 
