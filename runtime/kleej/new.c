@@ -1,3 +1,6 @@
+#include <stdint.h>
+#include <stdlib.h>
+#if 0
 struct JavaObject* j3MultiCallNew(struct JavaCommonClass*, int, ...)
 {
 	klee_uerror("not implemented", "j3.err");
@@ -17,6 +20,7 @@ struct JavaObject* j3MultiCallNew(struct JavaCommonClass*, int, ...)
  *   call void @JnJVM_java_lang_String__0003Cinit_0003E__Ljava_lang_String_2(%JavaObject* %19, %JavaObject* %18), !dbg !5
  */
 
+#endif
 
 /* this is used for allocating class stuff */
 char* VTGcmalloc(int32_t n, char* vtable) { return malloc(n); }
