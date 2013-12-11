@@ -65,6 +65,10 @@ namespace
 	cl::opt<bool> SymMagic(
 		"sym-magic", cl::desc("Mark 'magic' 0xa3 bytes as symbolic"));
 
+	cl::opt<bool> AllowZeroArgc(
+		"allow-zero-argc",
+		cl::desc("Permit argc to be equal to zero"));
+
 	cl::opt<bool> HWAccel(
 		"use-hwaccel",
 		cl::desc("Use hardware acceleration on concrete state."));
@@ -365,8 +369,13 @@ void ExecutorVex::makeArgCSymbolic(ExecutionState* state)
 
 	constr = MK_ULE(
 		state->read(op_os(op), 0, bits), MK_CONST(argc_max, bits));
-
 	state->addConstraint(constr);
+
+	if (!AllowZeroArgc) {
+		constr = MK_UGT(
+			state->read(op_os(op), 0, bits), MK_CONST(0, bits));
+		state->addConstraint(constr);
+	}
 }
 
 
