@@ -273,6 +273,8 @@ bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b)
 			clean_vacopy(i, ii);
 			break;
 
+		case Intrinsic::lifetime_start:
+		case Intrinsic::lifetime_end:
 		case Intrinsic::dbg_declare:
 		case Intrinsic::dbg_value:
 			ii->eraseFromParent();

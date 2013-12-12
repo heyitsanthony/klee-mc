@@ -2586,10 +2586,12 @@ void Executor::xferIterInit(
 
 bool Executor::xferIterNext(struct XferStateIter& iter)
 {
+	ExecutionState		*last_cur;
 	Function		*iter_f;
 	ref<ConstantExpr>	value;
 
 	iter_f = NULL;
+	last_cur = getCurrentState();
 	while (iter.badjmp_c < MAX_BADJMP) {
 		uint64_t	addr;
 		unsigned	num_funcs = kmodule->getNumKFuncs();
@@ -2612,9 +2614,15 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 
 		addr = value->getZExtValue();
 		iter.state_c++;
+
+		/* currentstate hack for decode.err; gross, I know */
+		currentState = iter.res.first;
 		iter_f = getFuncByAddr(addr);
+		currentState = last_cur;
 
 		if (iter_f == NULL) {
+			ExecutionState	*es(iter.res.first);
+
 			if (iter.badjmp_c == 0) {
 				klee_warning_once(
 					(void*) (unsigned long) addr,
@@ -2622,8 +2630,11 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 					(void*)addr);
 			}
 
+			if (es->getOnFini()||stateManager->isRemovedState(es))
+				continue;
+
 			TERMINATE_ERRORV(this,
-				*(iter.res.first),
+				*es,
 				"xfer iter error: bad pointer", "badjmp.err",
 				"Bad Pointer: ", addr);
 			iter.badjmp_c++;
@@ -2737,8 +2748,7 @@ bool Executor::startFini(ExecutionState& state)
 
 void Executor::terminateWith(Terminator& term, ExecutionState& state)
 {
-	if (term.terminate(state) == false)
-		return;
+	if (term.terminate(state) == false) return;
 
 	if (term.isInteresting(state) == false) {
 		terminate(state);

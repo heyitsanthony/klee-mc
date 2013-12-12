@@ -3,6 +3,7 @@
 // RUN: ../../../scripts/save_guest.sh ./%t1 guest-%t1
 // RUN: klee-mc -pipe-solver -symargc -symargs - ./%t1 2 aaaaa aaaaaa aaaaa >%t1.err >%t1.out
 // RUN: ls klee-last | not grep err
+// RUN: ktest-tool klee-last/test000001.ktest.gz | grep argv
 // RUN: kmc-replay 1 2>%t1.replay.out
 // RUN: grep Exit %t1.replay.out
 // RUN: rm -rf guest-%t1

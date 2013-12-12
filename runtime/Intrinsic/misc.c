@@ -13,6 +13,8 @@ uint64_t __klee_fork_all_n(uint64_t v, unsigned n)
 
 	if (!klee_is_symbolic(v)) return v;
 
+	n--;
+	cur_v = klee_get_value(v);
 	for (i = 0; i < n && !klee_fork_eq(cur_v, v); i++)
 		cur_v = klee_get_value(v);
 

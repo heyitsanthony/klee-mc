@@ -425,6 +425,8 @@ void KModule::addModule(Module* in_mod)
 		KFunction	*kf;
 
 		kmod_f = module->getFunction(it->getName().str());
+		if (kmod_f == NULL)
+			std::cerr << "Oops: " << it->getName().str() << '\n';
 		assert (kmod_f != NULL);
 
 		kf = addFunction(kmod_f);
@@ -484,15 +486,13 @@ void KModule::prepare(InterpreterHandler *in_ih)
 {
 	ih = in_ih;
 
-	if (!MergeAtExit.empty())
-		prepareMerge(ih);
+	if (!MergeAtExit.empty()) prepareMerge(ih);
 
 	loadIntrinsicsLib();
 	injectRawChecks();
 
 	infos = new InstructionInfoTable(module);
 	if (OptimizeKModule) Optimize(module);
-
 
 	// Needs to happen after linking (since ctors/dtors can be modified)
 	// and optimization (since global optimization can rewrite lists).
@@ -687,6 +687,7 @@ void KModule::loadIntrinsicsLib()
 	// avoid creating stale uses.
 
 	llvm::Type *i8Ty = Type::getInt8Ty(getGlobalContext());
+	bool		isLinked;
 
 	forceImport(
 		module, "memcpy", PointerType::getUnqual(i8Ty),
@@ -703,25 +704,24 @@ void KModule::loadIntrinsicsLib()
 		PointerType::getUnqual(i8Ty),
 		Type::getInt32Ty(getGlobalContext()),
 		dataLayout->getIntPtrType(getGlobalContext()), (Type*) 0);
-
 	// FIXME: Missing force import for various math functions.
 
 	llvm::sys::Path path(getLibraryDir());
 
 	path.appendComponent("libkleeRuntimeIntrinsic.bc");
 	Module	*m = klee::getBitcodeModule(path.str().c_str());
-	std::string err;
-
 	assert (m != NULL);
+
+	/* make all instrinsic functions in main module prototypes */
 	foreach(it, m->begin(), m->end()) {
 		Function	*f;
 		f = module->getFunction(it->getName().str());
-		if (f == NULL)
-			continue;
+		if (f == NULL) continue;
 		f->deleteBody();
 	}
 
-	Linker::LinkModules(module, m, Linker::DestroySource, &err);
+	std::string err;
+	isLinked = Linker::LinkModules(module, m, Linker::PreserveSource, &err);
 	if (!err.empty()) {
 		std::cerr << "err: " << err << '\n';
 		exit(1);

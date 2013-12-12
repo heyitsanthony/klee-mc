@@ -1,6 +1,7 @@
 // RUN: gcc %s -O0 -o %t1
 // RUN: klee-mc -pipe-solver - ./%t1 2>%t1.err >%t1.out
 // RUN: ls klee-last | grep decode.err | wc -l | grep 1
+// RUN: ls klee-last | not grep badjmp.err
 
 #include <stdio.h>
 #include <stdlib.h>

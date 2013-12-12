@@ -286,6 +286,11 @@ void post__int_malloc(int64_t aux)
 	he = post_alloc(aux);
 	if (he == NULL) goto done;
 
+	/* there appears to be a reentrancy issue here;
+	 * force in-heap status so shadow_put does not trigger 
+	 * reentrant behavior on shadow memory */
+	HEAP_ENTER
+
 	shadow_put_units_range(
 		&heap_si,
 		(long)he->he_base,

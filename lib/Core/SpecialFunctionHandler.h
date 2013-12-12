@@ -114,6 +114,8 @@ public:
 
 	SFHandler* addHandler(const struct HandlerInfo& hi);
 
+	bool hasHandler(llvm::Function* f) const;
+
 	/* Convenience routines */
 
     std::string readStringAtAddress(

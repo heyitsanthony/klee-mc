@@ -1,0 +1,36 @@
+lua:
+	futexes should not be symbolic
+	a lot of memory used (dedup?)
+	stacks may be screwed up
+	expression visitor explosion
+perl:
+	latexdiff had a lot of SIGFPEs-- what instruction?
+python:
+	needs opt-in fake files
+	floattime() sucks
+	bzr took ages, forked on some stat thing
+php:
+	OK, moderate memory use
+	good zend.errs
+	mysql* calls explode
+	sqlite* calls explode
+	atomic counters are forking
+js:
+	uh? apps?? maybe try node.js, but that uses v8 which does SMC
+ruby:
+	ran racc needs F_GETFD
+	desperately needs pthread support
+	futexes
+	chdir?
+bash/dash:
+	pdfjam
+		needs better clone support
+		dash
+			exits after 3 tests, fails on fcntl (fixed, F_DUPFD)
+			uses too much memory
+make:
+	XXX relies on chdir
+tcl:
+	
+bochs?
+

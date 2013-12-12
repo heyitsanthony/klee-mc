@@ -26,7 +26,8 @@ void* malloc(size_t sz)
 	if (cur_sz == sz)
 		return klee_malloc_fixed(cur_sz);
 
-	klee_uerror("too many mallocs", "model.err");
+	klee_ureport("too many mallocs", "model.warning");
+	return NULL;
 }
 
 void* calloc(size_t nmemb, size_t size)

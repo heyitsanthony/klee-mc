@@ -78,11 +78,12 @@ static void checkUndefined(
 
 		if (unsafe.count(ext)) {
 			foundUnsafe.insert(*it);
-		} else {
-			klee_warning("undefined reference to %s: %s",
-				     it->second ? "variable" : "function",
-				     ext.c_str());
+			continue;
+
 		}
+		klee_warning("undefined reference to %s: %s",
+		     it->second ? "variable" : "function",
+		     ext.c_str());
 	}
 
 
@@ -91,6 +92,25 @@ static void checkUndefined(
 		klee_warning("undefined reference to %s: %s (UNSAFE)!",
 			 it->second ? "variable" : "function",
 			 ext.c_str());
+	}
+}
+
+static void checkInlineAsm(const llvm::Function *f)
+{
+	foreach (bbIt, f->begin(), f->end()) {
+		foreach (it, bbIt->begin(),  bbIt->end()) {
+			const CallInst *ci = dyn_cast<CallInst>(it);
+
+			if (!ci) continue;
+
+			if (!isa<InlineAsm>(ci->getCalledValue()))
+				continue;
+
+			klee_warning_once(
+				f,
+				"function \"%s\" has inline asm",
+				f->getName().data());
+		}
 	}
 }
 
@@ -122,25 +142,15 @@ void externalsAndGlobalsCheck(const Module *m)
 	if (g_WithPOSIXRuntime) dontCare.insert("syscall");
 
 	foreach (fnIt, m->begin(), m->end()) {
-		if (fnIt->isDeclaration() && !fnIt->use_empty())
+		/* XXX: should look at specialfunctionhandler to check
+		 * whether function is a klee intrinsic */
+		if (fnIt->isDeclaration() && !fnIt->use_empty()) {
 			externals.insert(
 				std::make_pair(fnIt->getName(), false));
-
-		foreach (bbIt, fnIt->begin(), fnIt->end()) {
-		foreach (it, bbIt->begin(),  bbIt->end()) {
-			const CallInst *ci = dyn_cast<CallInst>(it);
-
-			if (!ci) continue;
-
-			if (!isa<InlineAsm>(ci->getCalledValue()))
-				continue;
-
-			klee_warning_once(
-				&*fnIt,
-				"function \"%s\" has inline asm",
-				fnIt->getName().data());
 		}
-		}
+
+		checkInlineAsm(fnIt);
+
 	}
 
 	foreach (it, m->global_begin(), m->global_end()) {

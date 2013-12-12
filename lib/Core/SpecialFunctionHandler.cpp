@@ -182,6 +182,9 @@ bool SpecialFunctionHandler::handle(
 	return true;
 }
 
+bool SpecialFunctionHandler::hasHandler(Function* f) const
+{ return handlers.find(f) != handlers.end(); }
+
 unsigned char* SpecialFunctionHandler::readBytesAtAddressNoBound(
 	ExecutionState &state,
 	const ref<Expr>& addressExpr,

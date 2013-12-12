@@ -68,7 +68,7 @@ static void get_pgbkt(struct pg_bkt_t* pb, uint64_t ptr)
 			klee_assume_eq(pb->pb_pgnum, pgnum_c);
 			pb->pb_pgnum = pgnum_c;
 		} else {
-			klee_print_expr("wtf pgnum", pb->pb_pgnum);
+			klee_print_expr("??? pgnum", pb->pb_pgnum);
 			klee_stack_trace();
 		}
 	}
@@ -79,7 +79,7 @@ static void get_pgbkt(struct pg_bkt_t* pb, uint64_t ptr)
 			klee_assume_eq(pb->pb_bidx, bidx_c);
 			pb->pb_bidx = bidx_c;
 		} else {
-			klee_print_expr("wtf bidx", pb->pb_bidx);
+			klee_print_expr("??? bidx", pb->pb_bidx);
 			klee_stack_trace();
 		}
 	}
@@ -132,8 +132,10 @@ void shadow_fini(struct shadow_info* si)
 		spb = &si->si_bucket[i];
 		if (spb->spb_pgs == NULL) continue;
 
+		/* SMASHED BUG: this used to be free(pgs[i]),
+		 * but dogfood tests caught it! */
 		for (j = 0; j < spb->spb_pg_c; j++)
-			free(spb->spb_pgs[i]);
+			free(spb->spb_pgs[j]);
 
 		free(spb->spb_pgs);
 	}
@@ -179,7 +181,8 @@ static struct shadow_page* shadow_new_page(struct shadow_info* si, uint64_t ptr)
 		spb->spb_pgs = spp;
 	}
 
-	spb->spb_pgs[spb->spb_pg_c++] = pg;
+	spb->spb_pgs[spb->spb_pg_c] = pg;
+	spb->spb_pg_c++;
 	si->si_alloced_pages++;
 
 	return pg;
@@ -382,9 +385,9 @@ static void shadow_free_page(struct shadow_info* si, struct shadow_page *p)
 	}
 
 	/* couldn't find page?? */
-	if (i == spb->spb_pg_c)
-		return;
+	if (i == spb->spb_pg_c) return;
 
+	/* shift array down to remove page */
 	spb->spb_pgs[i] = NULL;
 	for (j = i+1; j < spb->spb_pg_c; j++)
 		spb->spb_pgs[j-1] = spb->spb_pgs[j];

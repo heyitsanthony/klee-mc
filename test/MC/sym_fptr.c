@@ -2,6 +2,7 @@
 // RUN: klee-mc -pipe-solver - ./%t1 2>%t1.err >%t1.out
 //
 // RUN: ls klee-last | grep "badjmp.err"
+// RUN: ls klee-last | not grep "decode.err"
 //
 #include <sys/types.h>
 #include <sys/stat.h>

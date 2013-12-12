@@ -7,6 +7,8 @@ snooze*
 *.smt
 guest-*
 kdump-*
+*.sum
+*.log
 *.png
 *.gnuplot
 *.x

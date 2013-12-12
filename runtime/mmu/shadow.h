@@ -4,8 +4,10 @@
 
 #include <stdint.h>
 
+/* defined elsewhere in dogfood test */
+#ifndef SHADOW_PG_BUCKETS
 #define SHADOW_PG_BUCKETS	256
-
+#endif
 
 /* might want to add statistic tracking on last update */
 struct shadow_page {
