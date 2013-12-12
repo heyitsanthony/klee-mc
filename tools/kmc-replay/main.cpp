@@ -39,10 +39,11 @@ extern KTestStream* setupUCFunc(
 	unsigned	test_num);
 
 
-static void loadSymArgs(Guest* gs, KTestStream* kts)
+static void loadSymArgv(Guest* gs, KTestStream* kts)
 {
 	/* load symbolic data into arg pointers */
 	std::vector<guest_ptr>	argv;
+	const KTestObject	*kto;
 
 	argv = gs->getArgvPtrs();
 	assert (argv.size() != 0);
@@ -51,14 +52,35 @@ static void loadSymArgs(Guest* gs, KTestStream* kts)
 		"[kmc-replay] Restoring %d symbolic arguments\n",
 		(int)(argv.size()-1));
 
+	kto = kts->peekObject();
+	if (strncmp(kto->name, "argv", 4) != 0) {
+		fprintf(stderr, "[kmc-replay] symbolic argv not found..\n");
+		return;
+	}
+
 	foreach (it, argv.begin()+1, argv.end()) {
 		guest_ptr		p(*it);
-		const KTestObject	*kto;
-
 		kto = kts->nextObject();
 		assert (strncmp(kto->name, "argv", 4) == 0);
 		gs->getMem()->memcpy(p, kto->bytes, kto->numBytes);
 	}
+}
+
+static void loadSymArgs(Guest* gs, KTestStream* kts)
+{
+	guest_ptr		argcp;
+	const KTestObject	*kto;
+
+	loadSymArgv(gs, kts);
+
+	argcp = gs->getArgcPtr();
+	if (!argcp) return;
+
+	kto = kts->peekObject();
+	if (strncmp(kto->name, "argc", 4) != 0) return;
+
+	kto = kts->nextObject();
+	gs->getMem()->writeNative(argcp, *((uintptr_t*)kto->bytes));
 }
 
 static KTestStream* setupKTestStream(
@@ -95,8 +117,7 @@ static KTestStream* setupKTestStream(
 
 	assert (kts != NULL && "Expects ktest");
 
-	if (kts->getKTest()->symArgvs)
-		loadSymArgs(gs, kts);
+	if (kts->getKTest()->symArgvs) loadSymArgs(gs, kts);
 
 	uc_func = getenv("UC_FUNC");
 	uc_state = NULL;

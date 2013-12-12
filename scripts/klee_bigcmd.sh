@@ -77,7 +77,7 @@ fi
 
 p=`dirname $0`
 if [ ! -z "$p" ]; then p="$p/"; fi
-source `"$p"defaults.sh`
+source "$p"defaults.sh
 
 cmd="$APP_WRAPPER klee-mc 	\
 	$EXTRA_ARGS		\

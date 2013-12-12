@@ -568,11 +568,7 @@ void HostAccelerator::fixupHWShadow(
 	v->guest_RIP -= 2;
 
 	/* VEX will generate EMNOTEs but not hardware! */
-#ifdef USE_SVN
 	x_reg = 0;
 	AS_COPY2(hw, &x_reg, VexGuestAMD64State, guest_EMNOTE, 4);
 	v->guest_EMNOTE = x_reg;
-#else
-#warning fixup needs emnote and svn
-#endif
 }
