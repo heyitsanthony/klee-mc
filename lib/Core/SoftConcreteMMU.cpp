@@ -41,12 +41,12 @@ MK_HI("klee_enable_softmmu", EnableSoftMMU, false)
 #define SETUP_ADDRSZ()	\
 	void		*addr;	\
 	uint64_t	sz;	\
-	if (	args[0]->getKind() != Expr::Constant &&	\
+	if (	args[0]->getKind() != Expr::Constant ||	\
 		args[1]->getKind() != Expr::Constant)	\
 	{	\
 		TERMINATE_ERROR(	\
 			sfh->executor, state,	\
-			"non-constant invalidate param", "user.err");	\
+			"non-constant invalidate param", "tlb.err");	\
 		return;	\
 	}	\
 	addr = (void*)(cast<ConstantExpr>(args[0])->getZExtValue(64));	\
