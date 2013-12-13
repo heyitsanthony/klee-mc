@@ -22,21 +22,21 @@ extern void dumpIRSBs(void) {}
 
 static char** loadSymArgs(KTestStream* kts)
 {
-	char		**ret;
-	unsigned	i;
+	char			**ret;
+	unsigned		i;
+	const KTestObject	*kto;
 
 	ret = (char**)malloc(MAX_ARGS * sizeof(char**)/* (exe,[args],NULL) */);
 
 	fprintf(stderr, "[kcrumb-replay] Restoring symbolic arguments\n");
 
+	/* load argv */
 	ret[0] = NULL; /* program name filled in later */
 	i = 1;
 	do {
-		const KTestObject	*kto = kts->peekObject();
+		kto = kts->peekObject();
 
-		if (kto == NULL)
-			break;
-		
+		if (kto == NULL) break;
 		if (strncmp(kto->name, "argv", 4) != 0)
 			break;
 		ret[i] = (char*)malloc(kto->numBytes+1);
@@ -46,7 +46,17 @@ static char** loadSymArgs(KTestStream* kts)
 		kts->nextObject();
 		i++;
 	} while(1);
+
 	ret[i] = NULL;
+
+	/* enforce argc */
+	kto = kts->peekObject();
+	if (strncmp(kto->name, "argc", 4) == 0) {
+		uint64_t v;
+		memcpy(&v, kto->bytes, sizeof(v));
+		kts->nextObject();
+		ret[v] = NULL;
+	}
 
 	return ret;
 }
