@@ -1117,6 +1117,18 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(regfile, 0);
 		break;
 
+	case SYS_epoll_wait:
+		new_regs = sc_new_regs(regfile);
+		if (GET_SYSRET(new_regs) == -1)
+			break;
+
+		klee_assume_uge(GET_SYSRET(new_regs), 0);
+		klee_assume_ule(GET_SYSRET(new_regs), GET_ARG2(regfile));
+		make_sym(
+			GET_ARG1(regfile),
+			EPOLL_EVENT_SZ * GET_ARG2(regfile),
+			"epoll_wait");
+		break;
 
 	case SYS_pipe2:
 	case SYS_pipe:

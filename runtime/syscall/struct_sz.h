@@ -1,6 +1,8 @@
 #ifndef STRUCTSZ_H
 #define STRUCTSZ_H
 
+#include <sys/epoll.h>
+
 /* it'd be cool if I could auto-generate all of this */
 #ifdef GUEST_ARCH_AMD64
 #define TIMESPEC_SZ	sizeof(struct timespec)
@@ -17,6 +19,7 @@
 #define SIGINFO_T_SZ		sizeof (siginfo_t)
 #define SIGSET_T_SZ		sizeof(sigset_t)
 #define STAT_SZ			sizeof(struct stat)
+#define EPOLL_EVENT_SZ		sizeof(struct epoll_event)
 #else
 #define TIMESPEC_SZ		8
 #define RUSAGE_SZ		72
@@ -33,6 +36,7 @@
 #define SIGINFO_T_SZ		128
 #define SIGSET_T_SZ		128
 #define STAT_SZ			88
+#define EPOLL_EVENT_SZ		16
 #endif
 
 #define __STAT_SZ_AMD64		96
