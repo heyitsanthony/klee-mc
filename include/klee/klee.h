@@ -266,11 +266,13 @@ extern void free(void*) __THROW;
   uint64_t klee_get_value(uint64_t expr);
 
 //#define klee_get_value(e)	klee_get_value_pred(1, e)
-  uint64_t klee_get_value_pred(uint64_t pred_expr, uint64_t expr);
+  uint64_t klee_get_value_pred(uint64_t expr, uint64_t pred_expr);
 
   uint64_t klee_min_value(uint64_t expr);
   uint64_t klee_max_value(uint64_t expr);
 
+  /* stores up to 'n' feasible values for 'expr' to 'buf' */
+  int klee_get_values(uint64_t expr, uint64_t* buf, unsigned n);
 
 
   /* Ensure that memory in the range [address, address+size) is
@@ -304,18 +306,19 @@ extern void free(void*) __THROW;
 
   uint32_t klee_stack_depth(void);
 
-  /* object following object containing p */
-  void* klee_get_obj_next(void* p);
+	/* object following object containing p */
+	void* klee_get_obj_next(void* p);
 
-  /* object >= object containing p */
-  void* klee_get_obj_prev(void* p);
+	/* object >= object containing p */
+	void* klee_get_obj_prev(void* p);
 
-  uint64_t klee_indirect0(const char* s);
-  uint64_t klee_indirect1(const char* s, uint64_t v0);
-  uint64_t klee_indirect2(const char* s, uint64_t v0, uint64_t v1);
-  uint64_t klee_indirect3(const char* s, uint64_t v0, uint64_t v1, uint64_t v2);
-  uint64_t klee_indirect4(const char* s,
-  	uint64_t v0, uint64_t v1, uint64_t v2, uint64_t v3);
+	uint64_t klee_indirect0(const char* s);
+	uint64_t klee_indirect1(const char* s, uint64_t v0);
+	uint64_t klee_indirect2(const char* s, uint64_t v0, uint64_t v1);
+	uint64_t klee_indirect3(const char* s,
+		uint64_t v0, uint64_t v1, uint64_t v2);
+	uint64_t klee_indirect4(const char* s,
+	uint64_t v0, uint64_t v1, uint64_t v2, uint64_t v3);
 
 
 	uint64_t klee_read_reg(const char* sp);

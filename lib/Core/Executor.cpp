@@ -362,13 +362,16 @@ Executor::toConstant(
 }
 
 void Executor::executeGetValue(
-	ExecutionState &state, ref<Expr> e, KInstruction *target)
+	ExecutionState &state,
+	ref<Expr> e,
+	KInstruction *target,
+	ref<Expr> pred)
 {
 	ref<ConstantExpr>	value;
 
 	if (target == NULL) return;
 
-	if (solver->getValue(state, e, value) == false) {
+	if (solver->getValue(state, e, value, pred) == false) {
 		TERMINATE_EARLY(this, state, "exeGetVal timeout");
 		return;
 	}

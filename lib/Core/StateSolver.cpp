@@ -151,7 +151,10 @@ bool StateSolver::mayBeFalse(
 }
 
 bool StateSolver::getValue(
-	const ExecutionState& state, ref<Expr> expr, ref<ConstantExpr> &result)
+	const ExecutionState& state,
+	ref<Expr> expr,
+	ref<ConstantExpr> &result,
+	ref<Expr> predicate)
 {
 	double	start, finish;
 	bool	ok;
@@ -165,7 +168,15 @@ bool StateSolver::getValue(
 		return true;
 	}
 
-	WRAP_QUERY(solver->getValue(Query(state.constraints, expr), result));
+	if (predicate.isNull()) {
+		Query	q(state.constraints, expr);
+		WRAP_QUERY(solver->getValue(
+			Query(state.constraints, expr), result));
+	} else {
+		ConstraintManager	cm(state.constraints);
+		cm.addConstraint(predicate);
+		WRAP_QUERY(solver->getValue(Query(cm, expr), result));
+	}
 
 	return ok;
 }

@@ -97,11 +97,12 @@ done:	return base->mustBeFalse(es, e, result);
 bool KTestStateSolver::getValue(
 	const ExecutionState &es,
 	ref<Expr> e,
-	ref<ConstantExpr> &result)
+	ref<ConstantExpr> &result,
+	ref<Expr> pred)
 {
 	if (updateArrays(es) == false) goto done;
 	e = kt_assignment->evaluate(e);
-done:	return base->getValue(es, e, result);
+done:	return base->getValue(es, e, result, pred);
 }
 
 bool KTestStateSolver::getInitialValues(

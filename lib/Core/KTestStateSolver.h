@@ -37,7 +37,8 @@ public:
 	bool getValue(
 		const ExecutionState &,
 		ref<Expr> expr,
-		ref<ConstantExpr> &result);
+		ref<ConstantExpr> &result,
+		ref<Expr> pred = 0);
 	bool getInitialValues(const ExecutionState&, Assignment&);
 	ref<Expr> toUnique(const ExecutionState &state, const ref<Expr> &e);
 private:

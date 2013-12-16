@@ -52,7 +52,8 @@ public:
 	virtual bool getValue(
 		const ExecutionState &,
 		ref<Expr> expr,
-		ref<ConstantExpr> &result);
+		ref<ConstantExpr> &result,
+		ref<Expr> predicate = 0);
 
 	virtual bool getInitialValues(const ExecutionState&, Assignment&);
 	virtual bool getRange(

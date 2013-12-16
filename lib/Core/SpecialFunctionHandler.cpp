@@ -837,6 +837,16 @@ SFH_DEF_ALL(GetValue, "klee_get_value", true)
 	sfh->executor->executeGetValue(state, args[0], target);
 }
 
+SFH_DEF_ALL(GetValuePred, "klee_get_value_pred", true)
+{
+	SFH_CHK_ARGS(2, "klee_get_value_pred");
+	ref<Expr>	p(args[1]);
+
+	if (p->getWidth() > 1) p = MK_NE(p, MK_CONST(0,p->getWidth()));
+	sfh->executor->executeGetValue(state, args[0], target, p);
+}
+
+
 SFH_DEF_ALL(DefineFixedObject, "klee_define_fixed_object", false)
 {
 	uint64_t		address, size;
@@ -1342,6 +1352,7 @@ add(PreferOp),
 add(ForkEq),
 add(CheckMemoryAccess),
 add(GetValue),
+add(GetValuePred),
 add(DefineFixedObject),
 add(GetErrno),
 add(IsSymbolic),

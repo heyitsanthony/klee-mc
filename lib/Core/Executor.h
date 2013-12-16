@@ -148,7 +148,10 @@ public:
 	/// Bind a constant value for e to the given target. NOTE: This
 	/// function may fork state if the state has multiple seeds.
 	virtual void executeGetValue(
-		ExecutionState &state, ref<Expr> e, KInstruction *target);
+		ExecutionState &state,
+		ref<Expr> e,
+		KInstruction *target,
+		ref<Expr> pred = 0);
 
 	const KModule* getKModule(void) const { return kmodule; }
 	KModule* getKModule(void) { return kmodule; }
