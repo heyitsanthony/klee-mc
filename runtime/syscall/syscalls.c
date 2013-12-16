@@ -452,6 +452,17 @@ static void sc_klee(void* regfile)
 				GET_ARG4(regfile)));
 		break;
 
+	case KLEE_SYS_INDIRECT4:
+		sc_ret_v(regfile,
+			klee_indirect4(
+				GET_ARG1_PTR(regfile),
+				GET_ARG2(regfile),
+				GET_ARG3(regfile),
+				GET_ARG4(regfile),
+				GET_ARG5(regfile)));
+		break;
+
+
 	case KLEE_SYS_REPORT_ERROR:
 		klee_report_error(
 			(const char*)GET_ARG1_PTR(regfile),
@@ -1613,6 +1624,8 @@ void sc_ret_v(void* regfile, uint64_t v1)
 
 void sc_ret_v_new(void* regfile, uint64_t v1)
 {
-	klee_assume_eq(GET_SYSRET_S(regfile), (ARCH_SIGN_CAST)v1);
+	klee_assume_eq(GET_SYSRET(regfile), v1);
+	/* I'm not sure why I had a sign cast here in the first place */
+//	klee_assume_eq(GET_SYSRET_S(regfile), (ARCH_SIGN_CAST)v1);
 	GET_SYSRET(regfile) = v1;
 }

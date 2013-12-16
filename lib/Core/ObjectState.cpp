@@ -826,7 +826,7 @@ void ObjectState::printDiff(const ObjectState& os) const
 	for (unsigned i = 0 ; i < size; i++) {
 		if (concreteStore[i] != os.concreteStore[i])
 			std::cerr << "[ObjDiff] Diff @" << i << ": " <<
-				(void*)(unsigned)concreteStore[i] << " vs " <<
-				(void*)(unsigned)os.concreteStore[i] << '\n';
+				(void*)(long)concreteStore[i] << " vs " <<
+				(void*)(long)os.concreteStore[i] << '\n';
 	}
 }

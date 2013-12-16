@@ -29,6 +29,7 @@
 #define KLEE_SYS_INDIRECT1	11
 #define KLEE_SYS_INDIRECT2	12
 #define KLEE_SYS_INDIRECT3	13
+#define KLEE_SYS_INDIRECT4	14
 
 #define ksys_report_error(x,y,z,w)	\
 	syscall(SYS_klee, KLEE_SYS_REPORT_ERROR, x, y, z, w)
@@ -49,10 +50,18 @@
 #define ksys_indirect1(x,y)	syscall(SYS_klee, KLEE_SYS_INDIRECT1, x, y)
 #define ksys_indirect2(x,y,z)	syscall(SYS_klee, KLEE_SYS_INDIRECT2, x, y, z)
 #define ksys_indirect3(x,y,z,w)	syscall(SYS_klee, KLEE_SYS_INDIRECT3, x, y, z , w)
-#define ksys_assume_eq(x,y)	ksys_indirect3(\
-	"klee_assume_op", ((uint64_t)x), ((uint64_t)y), KLEE_CMP_OP_EQ)
-#define ksys_assume_ne(x,y)	ksys_indirect3(\
-	"klee_assume_op", ((uint64_t)x), ((uint64_t)y), KLEE_CMP_OP_NE)
+#define ksys_indirect4(x,y,z,w,q)	syscall(SYS_klee, KLEE_SYS_INDIRECT4, x, y, z , w, q)
+#define ksys_assume_eq(x,y)	do {	\
+	uint64_t	pred;	\
+	pred = ksys_indirect4("__klee_mk_expr", KLEE_CMP_OP_EQ, x, y, 0); \
+	ksys_indirect1("__klee_assume", pred); } while (0)
+
+#define ksys_assume_ne(x,y)	do {	\
+	uint64_t	pred;	\
+	pred = ksys_indirect4("__klee_mk_expr", KLEE_CMP_OP_NE, x, y, 0); \
+	ksys_indirect1("__klee_assume", pred); } while (0)
+
+
 
 #define ksys_get_value(n)	n
 #define ksys_is_active()	(ksys_is_sym(0) != -1)
@@ -162,23 +171,52 @@ struct kreport_ent { uint64_t strp; uint64_t v; };
 #define KLEE_CMP_OP_SLT	8
 #define KLEE_CMP_OP_SLE	9
 
-#define __klee_assume_op(x,y,z)	klee_assume_op(((uint64_t)x), ((uint64_t)y), z)
-#define __klee_assume_op_s(x,y,z)	klee_assume_op(((int64_t)x), ((int64_t)y), z)
-#define klee_assume_ugt(x,y)	__klee_assume_op(x,y,KLEE_CMP_OP_UGT)
-#define klee_assume_ult(x,y)	__klee_assume_op(x,y,KLEE_CMP_OP_ULT)
-#define klee_assume_uge(x,y)	__klee_assume_op(x,y,KLEE_CMP_OP_UGE)
-#define klee_assume_ule(x,y)	__klee_assume_op(x,y,KLEE_CMP_OP_ULE)
+#define klee_assume_ugt(x,y)	__klee_assume(klee_mk_ugt(x,y))
+#define klee_assume_ult(x,y)	__klee_assume(klee_mk_ult(x,y))
+#define klee_assume_uge(x,y)	__klee_assume(klee_mk_uge(x,y))
+#define klee_assume_ule(x,y)	__klee_assume(klee_mk_ule(x,y))
 
-#define klee_assume_sgt(x,y)	__klee_assume_op_s(x, y, KLEE_CMP_OP_SGT)
-#define klee_assume_slt(x,y)	__klee_assume_op_s(x, y, KLEE_CMP_OP_SLT)
-#define klee_assume_sge(x,y)	__klee_assume_op_s(x, y, KLEE_CMP_OP_SGE)
-#define klee_assume_sle(x,y)	__klee_assume_op_s(x, y, KLEE_CMP_OP_SLE)
+#define klee_assume_sgt(x,y)	__klee_assume(klee_mk_sgt(x, y))
+#define klee_assume_slt(x,y)	__klee_assume(klee_mk_slt(x, y))
+#define klee_assume_sge(x,y)	__klee_assume(klee_mk_sge(x, y))
+#define klee_assume_sle(x,y)	__klee_assume(klee_mk_sle(x, y))
 
-#define klee_assume_eq(x, y)	__klee_assume_op(x, y, KLEE_CMP_OP_EQ)
-#define klee_assume_ne(x, y)	__klee_assume_op(x, y, KLEE_CMP_OP_NE)
+#define klee_assume_eq(x, y)	__klee_assume(klee_mk_eq(x, y))
+#define klee_assume_ne(x, y)	__klee_assume(klee_mk_ne(x, y))
+
+  void __klee_assume(uint64_t expr);
+
+#define KLEE_MK_OP_ITE	10
+#define KLEE_MK_OP_AND	11
+#define KLEE_MK_OP_OR	12
+#define KLEE_MK_OP_XOR	13
+#define KLEE_MK_OP_NOT	14
+
+#define klee_mk_expr_s(o,x,y,z)	__klee_mk_expr(\
+	o, (int64_t)x, (int64_t)y, (int64_t)z)
+#define klee_mk_expr(o,x,y,z)	__klee_mk_expr(\
+	o, (uint64_t)x, (uint64_t)y, (uint64_t)z)
+
+#define klee_mk_ugt(x,y)	klee_mk_expr(KLEE_CMP_OP_UGT,x,y,0)
+#define klee_mk_ult(x,y)	klee_mk_expr(KLEE_CMP_OP_ULT,x,y,0)
+#define klee_mk_uge(x,y)	klee_mk_expr(KLEE_CMP_OP_UGE, x,y,0)
+#define klee_mk_ule(x,y)	klee_mk_expr(KLEE_CMP_OP_ULE, x, y, 0)
+#define klee_mk_sgt(x,y)	klee_mk_expr_s(KLEE_CMP_OP_SGT, x, y, 0)
+#define klee_mk_slt(x,y)	klee_mk_expr_s(KLEE_CMP_OP_SLT, x, y, 0)
+#define klee_mk_sge(x,y)	klee_mk_expr_s(KLEE_CMP_OP_SGE, x, y, 0)
+#define klee_mk_sle(x,y)	klee_mk_expr_s(KLEE_CMP_OP_SLE, x, y, 0)
+#define klee_mk_eq(x, y)	klee_mk_expr(KLEE_CMP_OP_EQ, x, y, 0)
+#define klee_mk_ne(x, y)	klee_mk_expr(KLEE_CMP_OP_NE, x, y, 0)
+#define klee_mk_ite(x,y,z)	klee_mk_expr(KLEE_MK_OP_ITE, x, y, z)
+#define klee_mk_and(x,y)	klee_mk_expr(KLEE_MK_OP_AND, x, y, 0)
+#define klee_mk_or(x,y)		klee_mk_expr(KLEE_MK_OP_OR, x, y, 0)
+#define klee_mk_xor(x,y)	klee_mk_expr(KLEE_MK_OP_XOR, x, y, 0)
+#define klee_mk_not(x)		klee_mk_expr(KLEE_MK_OP_NOT, x, 0, 0)
+
+  uint64_t __klee_mk_expr(
+  	uint8_t op, uint64_t arg1, uint64_t arg2, uint64_t arg3);
 
 
-  void klee_assume_op(uint64_t lhs, uint64_t rhs, uint8_t op);
 
 #define __klee_prefer_op(x,y,z)	klee_prefer_op(((uint64_t)x), ((uint64_t)y), z)
 #define klee_prefer_ugt(x,y)	__klee_prefer_op(x,y,KLEE_CMP_OP_UGT)
@@ -192,16 +230,16 @@ struct kreport_ent { uint64_t strp; uint64_t v; };
 
   uint64_t klee_prefer_op(uint64_t lhs, uint64_t rhs, uint8_t op);
 
+  uint64_t __klee_feasible(uint64_t expr);
+
 #define __klee_feasible_op(x,y,z)	\
-	klee_feasible_op(((uint64_t)x), ((uint64_t)y), z)
+	__klee_feasible(klee_mk_expr(z, ((uint64_t)x), ((uint64_t)y), 0))
 #define klee_feasible_ugt(x,y)	__klee_feasible_op(x,y,KLEE_CMP_OP_UGT)
 #define klee_feasible_uge(x,y)	__klee_feasible_op(x,y,KLEE_CMP_OP_UGE)
 #define klee_feasible_ult(x,y)	__klee_feasible_op(x,y,KLEE_CMP_OP_ULT)
 #define klee_feasible_ule(x,y)	__klee_feasible_op(x,y,KLEE_CMP_OP_ULE)
 #define klee_feasible_eq(x, y)	__klee_feasible_op(x, y, KLEE_CMP_OP_EQ)
 #define klee_feasible_ne(x, y)	__klee_feasible_op(x, y, KLEE_CMP_OP_NE)
-
-  uint64_t klee_feasible_op(uint64_t lhs, uint64_t rhs, uint8_t op);
 
 #define klee_valid_ugt(x,y)	(!__klee_feasible_op(x,y, KLEE_CMP_OP_ULE))
 #define klee_valid_uge(x,y)	(!__klee_feasible_op(x,y,KLEE_CMP_OP_ULT))
@@ -226,6 +264,9 @@ extern void free(void*) __THROW;
   /* Return a possible constant value for the input expression. This
      allows programs to forcibly concretize values on their own. */
   uint64_t klee_get_value(uint64_t expr);
+
+//#define klee_get_value(e)	klee_get_value_pred(1, e)
+  uint64_t klee_get_value_pred(uint64_t pred_expr, uint64_t expr);
 
   uint64_t klee_min_value(uint64_t expr);
   uint64_t klee_max_value(uint64_t expr);
@@ -253,8 +294,6 @@ extern void free(void*) __THROW;
 
   void klee_stack_trace(void);
 
-  void klee_force_ne(uint64_t expr_lhs, uint64_t expr_rhs);
-
   void klee_yield(void);
 
   /* get a concrete object base from possibly symbolic pointer (forks) */
@@ -275,6 +314,9 @@ extern void free(void*) __THROW;
   uint64_t klee_indirect1(const char* s, uint64_t v0);
   uint64_t klee_indirect2(const char* s, uint64_t v0, uint64_t v1);
   uint64_t klee_indirect3(const char* s, uint64_t v0, uint64_t v1, uint64_t v2);
+  uint64_t klee_indirect4(const char* s,
+  	uint64_t v0, uint64_t v1, uint64_t v2, uint64_t v3);
+
 
 	uint64_t klee_read_reg(const char* sp);
 

@@ -524,7 +524,7 @@ void klee_warning(const char *name) { fprintf(stderr, "WARNING: %s\n", name); }
 void klee_warning_once(const char *name)
 { fprintf(stderr, "WARNING: %s\n", name); }
 
-void klee_assume(uint64_t x) {
+void __klee_assume(uint64_t x) {
   if (!x) {
     fprintf(stderr, "WARNING: klee_assume(0)!\n");
   }
@@ -697,6 +697,39 @@ void klee_assume_op(uint64_t lhs, uint64_t rhs, uint8_t op)
 		abort();
 	}
 }
+
+
+
+uint64_t __klee_mk_expr(uint8_t op, uint64_t e1, uint64_t e2, uint64_t e3)
+{
+	switch (op) {
+	case KLEE_CMP_OP_UGT: return e1 > e2;
+	case KLEE_CMP_OP_UGE: return e1 >= e2;
+	case KLEE_CMP_OP_ULT: return e1 < e2;
+	case KLEE_CMP_OP_ULE: return e1 <= e2;
+
+	case KLEE_CMP_OP_SGT: return (int64_t)e1 > (int64_t)e2;
+	case KLEE_CMP_OP_SGE: return (int64_t)e1 >= (int64_t)e2;
+	case KLEE_CMP_OP_SLT: return (int64_t)e1 < (int64_t)e2;
+	case KLEE_CMP_OP_SLE: return (int64_t)e1 <= (int64_t)e2;
+
+
+	case KLEE_CMP_OP_EQ: return e1 == e2;
+	case KLEE_CMP_OP_NE: return e1 != e2;
+
+	case KLEE_MK_OP_ITE: return (e1) ? e2 : e3;
+	case KLEE_MK_OP_AND: return e1 & e2;
+	case KLEE_MK_OP_OR: return e1 | e2;
+	case KLEE_MK_OP_XOR: return e1 ^ e2;
+	case KLEE_MK_OP_NOT: return ~e1;
+
+	default:
+		assert (0 == 1 && "bad assume_op op");
+		abort();
+	}
+
+}
+
 
 /*** HELPER FUNCTIONS ***/
 

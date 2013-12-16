@@ -31,8 +31,11 @@ using namespace klee;
 
 extern bool DebugPrintInstructions;
 
+static ref<Expr>	ce_zero64 = NULL;
+
 SpecialFunctionHandler::SpecialFunctionHandler(Executor* _executor)
-: executor(_executor) {}
+: executor(_executor)
+{ ce_zero64 = MK_CONST(0, 64); }
 
 void SpecialFunctionHandler::prepare(const HandlerInfo** hinfo)
 {
@@ -177,7 +180,7 @@ bool SpecialFunctionHandler::handle(
 	h->handle(state, target, args);
 
 	if (missing_ret_val && insert_ret_vals)
-		state.bindLocal(target, MK_CONST(0, 64));
+		state.bindLocal(target, ce_zero64);
 
 	return true;
 }
@@ -438,11 +441,11 @@ SFH_DEF_ALL(Malloc, "klee_malloc_fixed", true)
 		true /* zero memory */);
 }
 
-static ref<Expr> cmpop_to_expr(
-	int cmpop,
-	const ref<Expr>& e1, const ref<Expr>& e2)
+static ref<Expr> op_to_expr(
+	int op,
+	const ref<Expr>& e1, const ref<Expr>& e2, const ref<Expr>& e3)
 {
-	switch (cmpop) {
+	switch (op) {
 	case KLEE_CMP_OP_EQ: return MK_EQ(e1, e2);
 	case KLEE_CMP_OP_NE: return MK_NE(e1, e2);
 	case KLEE_CMP_OP_UGT: return MK_UGT(e1, e2);
@@ -453,8 +456,43 @@ static ref<Expr> cmpop_to_expr(
 	case KLEE_CMP_OP_SGE: return MK_SGE(e1, e2);
 	case KLEE_CMP_OP_SLT: return MK_SLT(e1, e2);
 	case KLEE_CMP_OP_SLE: return MK_SLE(e1, e2);
+	case KLEE_MK_OP_ITE: return MK_ITE(e1, e2, e3);
+	case KLEE_MK_OP_AND: return MK_AND(e1, e2);
+	case KLEE_MK_OP_OR: return MK_OR(e1, e2);
+	case KLEE_MK_OP_XOR: return MK_XOR(e1, e2);
+	case KLEE_MK_OP_NOT: return MK_NOT(e1);
 	default: return NULL;
 	}
+}
+
+static ref<Expr> cmpop_to_expr(
+	int cmpop,
+	const ref<Expr>& e1, const ref<Expr>& e2)
+{ return op_to_expr(cmpop, e1, e2, ce_zero64); }
+
+
+SFH_DEF_ALL(MkExpr, "__klee_mk_expr", true)
+{
+	ref<Expr>		e;
+	const ConstantExpr	*ce;
+
+	SFH_CHK_ARGS(4, "klee_mk_expr");
+
+	ce = dyn_cast<ConstantExpr>(args[0]);
+	if (ce == NULL) goto error;
+
+	e = op_to_expr(ce->getZExtValue(), args[1], args[2], args[3]);
+	if (e.isNull()) goto error;
+
+	e = state.constraints.simplifyExpr(e);
+
+	/* klee_mk_expr must always return 64-bit */
+	if (e->getWidth() != 64) e = MK_ZEXT(e, 64);
+
+	state.bindLocal(target, e);
+	return;
+error:
+	TERMINATE_EARLY(sfh->executor, state, "__klee_mk_expr failed");
 }
 
 /* call prefer_op when there's a state which
@@ -485,7 +523,7 @@ SFH_DEF_ALL(PreferOp, "klee_prefer_op", true)
 	 * built-in, since it's so important to fully execute error paths. */
 
 	if (sp.first != NULL) sp.first->bindLocal(target, MK_CONST(1, 64));
-	if (sp.second != NULL) sp.second->bindLocal(target, MK_CONST(0, 64));
+	if (sp.second != NULL) sp.second->bindLocal(target, ce_zero64);
 
 	return;
 error:
@@ -493,19 +531,19 @@ error:
 }
 
 
-SFH_DEF_ALL(AssumeOp, "klee_assume_op", false)
+SFH_DEF_ALL(Assume, "__klee_assume", false)
 {
 	ref<Expr>	e;
-	const ConstantExpr	*ce;
 	bool		mustBeTrue, mayBeTrue, ok;
 
-	SFH_CHK_ARGS(3, "klee_assume_op");
+	SFH_CHK_ARGS(1, "klee_assume");
 
-	ce = dyn_cast<ConstantExpr>(args[2]);
-	if (ce == NULL) goto error;
+	e = args[0];
 
-	e = cmpop_to_expr(ce->getZExtValue(), args[0], args[1]);
-	if (e.isNull()) goto error;
+	if (e->getWidth() > 1) {
+		/* if (e) => if ((e) != 0) */
+		e = MK_NE(e, MK_CONST(0, e->getWidth()));
+	}
 
 	/* valid? */
 	ok = sfh->executor->getSolver()->mustBeTrue(state, e, mustBeTrue);
@@ -521,7 +559,7 @@ SFH_DEF_ALL(AssumeOp, "klee_assume_op", false)
 	if (!mayBeTrue) {
 		TERMINATE_ERROR(sfh->executor,
 			state,
-			"invalid klee_assume_op call (provably false)",
+			"invalid klee_assume_op call (provably unsat)",
 			"user.err");
 		return;
 	}
@@ -531,24 +569,17 @@ SFH_DEF_ALL(AssumeOp, "klee_assume_op", false)
 	return;
 
 error:
-	TERMINATE_EARLY(sfh->executor, state, "assume-op failed");
+	TERMINATE_EARLY(sfh->executor, state, "assume failed");
 }
 
-SFH_DEF_ALL(FeasibleOp, "klee_feasible_op", true)
+SFH_DEF_ALL(Feasible, "__klee_feasible", true)
 {
 	ref<Expr>		e;
-	const ConstantExpr	*ce;
 	bool			mayBeTrue, ok;
 
-	SFH_CHK_ARGS(3, "klee_feasible_op");
+	SFH_CHK_ARGS(1, "klee_feasible");
 
-	ce = dyn_cast<ConstantExpr>(args[2]);
-	if (ce == NULL) goto error;
-
-	e = cmpop_to_expr(ce->getZExtValue(), args[0], args[1]);
-	if (e.isNull()) goto error;
-
-	/* satisfiable? */
+	e = args[0];
 	ok = sfh->executor->getSolver()->mayBeTrue(state, e, mayBeTrue);
 	if (!ok) goto error;
 
@@ -935,6 +966,7 @@ SFH_DEF_ALL(Indirect1, "klee_indirect1", true)
 	std::vector<ref<Expr> >	indir_args;
 	std::string	fname(sfh->readStringAtAddress(state, args[0]));
 	indir_args.push_back(args[1]);
+
 	sfh->handleByName(state, fname, target, indir_args);
 }
 
@@ -956,6 +988,18 @@ SFH_DEF_ALL(Indirect3, "klee_indirect3", true)
 	indir_args.push_back(args[3]);
 	sfh->handleByName(state, fname, target, indir_args);
 }
+
+SFH_DEF_ALL(Indirect4, "klee_indirect4", true)
+{
+	std::vector<ref<Expr> >	indir_args;
+	std::string	fname(sfh->readStringAtAddress(state, args[0]));
+	indir_args.push_back(args[1]);
+	indir_args.push_back(args[2]);
+	indir_args.push_back(args[3]);
+	indir_args.push_back(args[4]);
+	sfh->handleByName(state, fname, target, indir_args);
+}
+
 
 readreg_map_ty HandlerReadReg::vars;
 const SpecialFunctionHandler::HandlerInfo HandlerReadReg::hinfo =
@@ -1010,7 +1054,7 @@ SFH_DEF_ALL(GetObjNext, "klee_get_obj_next", true)
 
 	req = ce->getZExtValue();
 	if ((req + 1) < req) {
-		state.bindLocal(target, MK_CONST(0, Expr::Int64));
+		state.bindLocal(target, ce_zero64);
 		return;
 	}
 	req++;
@@ -1081,7 +1125,7 @@ SFH_DEF_ALL(GetObjPrev, "klee_get_obj_prev", true)
 
 	req = ce->getZExtValue();
 	if (req == 0) {
-		state.bindLocal(target, MK_CONST(0, Expr::Int64));
+		state.bindLocal(target, ce_zero64);
 		return;
 	}
 
@@ -1188,7 +1232,7 @@ SFH_DEF_ALL(SymCoreHash, "klee_sym_corehash", true)
 		std::cerr << "Multiple arrays matched on expr=\n";
 		std::cerr << args[0] << '\n';
 #endif
-		state.bindLocal(target, MK_CONST(0, 64));
+		state.bindLocal(target, ce_zero64);
 		return;
 	}
 	arr = *(arrays.begin());
@@ -1292,8 +1336,8 @@ add(GetObjSize),
 add(GetObjPrev),
 add(Free),
 add(Malloc),
-add(AssumeOp),
-add(FeasibleOp),
+add(Assume),
+add(Feasible),
 add(PreferOp),
 add(ForkEq),
 add(CheckMemoryAccess),
@@ -1322,11 +1366,13 @@ add(Indirect0),
 add(Indirect1),
 add(Indirect2),
 add(Indirect3),
+add(Indirect4),
 add(SymCoreHash),
 add(ExprHash),
 add(IsShadowed),
 add(Yield),
 add(SymRangeBytes),
+add(MkExpr),
 #define DEF_WIDE(x)	\
 add(WideLoad##x),	\
 add(WideStore##x)
