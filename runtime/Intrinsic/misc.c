@@ -26,7 +26,7 @@ uint64_t __klee_fork_all_n(uint64_t v, unsigned n)
 int klee_get_values(uint64_t expr, uint64_t* buf, unsigned n)
 {
 	uint64_t	pred = 1;
-	int		i;
+	unsigned	i;
 
 	for (i = 0; i < n; i++) {
 		uint64_t	c, c2;
@@ -36,9 +36,11 @@ int klee_get_values(uint64_t expr, uint64_t* buf, unsigned n)
 		buf[i] = c;
 
 		pred = klee_mk_and(pred, klee_mk_ne(expr, c));
-		if (!__klee_feasible(pred))
+		if (!__klee_feasible(pred)) {
+			i++;
 			break;
+		}
 	}
 
-	return i+1;
+	return i;
 }

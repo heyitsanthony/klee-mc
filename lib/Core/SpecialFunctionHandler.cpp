@@ -456,7 +456,12 @@ static ref<Expr> op_to_expr(
 	case KLEE_CMP_OP_SGE: return MK_SGE(e1, e2);
 	case KLEE_CMP_OP_SLT: return MK_SLT(e1, e2);
 	case KLEE_CMP_OP_SLE: return MK_SLE(e1, e2);
-	case KLEE_MK_OP_ITE: return MK_ITE(e1, e2, e3);
+	case KLEE_MK_OP_ITE:
+		return MK_ITE(
+			(e1->getWidth() == 1)
+				? e1
+				: MK_NE(e1, klee::MK_CONST(0, e1->getWidth())),
+			e2, e3);
 	case KLEE_MK_OP_AND: return MK_AND(e1, e2);
 	case KLEE_MK_OP_OR: return MK_OR(e1, e2);
 	case KLEE_MK_OP_XOR: return MK_XOR(e1, e2);
