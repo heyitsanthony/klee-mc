@@ -25,7 +25,7 @@ y mmu_load_##x##_ite(void* addr)	\
 			ret); }				\
 	/* overflow? make disjunction to bound deref */	\
 	if (n_addrs == MAX_ADDRS) {			\
-		uint64_t	disjunct = 1;		\
+		uint64_t	disjunct = 0;		\
 		for (i = 0; i < n_addrs; i++) {		\
 			disjunct = klee_mk_or(		\
 				disjunct,		\
