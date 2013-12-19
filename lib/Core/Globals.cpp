@@ -426,6 +426,7 @@ void Globals::setupGlobalData(llvm::Module* m)
 		MemoryObject		*mo;
 		const ObjectState	*os;
 		ObjectState		*wos;
+		std::string		n;
 
 		if (!i->hasInitializer()) continue;
 
@@ -435,7 +436,9 @@ void Globals::setupGlobalData(llvm::Module* m)
 		assert(os);
 
 		wos = init_state->addressSpace.getWriteable(mo, os);
-
+		n = i->getName().str();
+		if (!n.empty() && n[0] != '.')
+			mo->setName(i->getName().str());
 		initializeGlobalObject(wos, i->getInitializer(), 0);
 		// if (i->isConstant()) os->setReadOnly(true);
 	}

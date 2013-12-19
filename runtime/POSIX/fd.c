@@ -41,7 +41,6 @@ int write_n_calls = 0;
 
 void klee_warning(const char*);
 void klee_warning_once(const char*);
-int klee_get_errno(void);
 unsigned klee_get_prune_id(unsigned);
 void klee_prune(unsigned);
 
@@ -107,7 +106,8 @@ static exe_disk_file_t *__get_sym_file(const char *pathname)
     if ((df = __path_already_seen(pathname)))
       return df;
 
-    return NULL;
+/* XXX: I am not sure about this policy */
+//    return NULL;
 
 #if 0
     /* check if this is a concrete file on disk */
@@ -178,8 +178,6 @@ int access(const char *pathname, int mode) {
     return 0;
   } else {
     int r = syscall(__NR_access, __concretize_string(pathname), mode);
-    if (r == -1)
-      errno = klee_get_errno();
     return r;
   }
 }
@@ -325,17 +323,18 @@ int __fd_open(const char *pathname, int flags, mode_t mode) {
   }
 
   fd = __get_new_fd(&f);
-  if (fd < 0)
+  if (fd < 0) {
     return fd;
+  }
 
   df = __get_sym_file(pathname);
   if (df) {
-  	if (setup_sym_f(f, df, flags, mode) == -1)
+  	if (setup_sym_f(f, df, flags, mode) == -1) {
 		return -1;
+	}
   } else {
     int os_fd = syscall(__NR_open, __concretize_string(pathname), flags, mode);
     if (os_fd == -1) {
-      errno = klee_get_errno();
       return -1;
     }
     f->fd = os_fd;
@@ -401,7 +400,6 @@ int __fd_openat(int dirfd, const char *pathname, int flags, mode_t mode)  {
     int os_fd = syscall(__NR_openat, fd, __concretize_string(pathname), flags,
       mode);
     if (os_fd == -1) {
-      errno = klee_get_errno();
       return -1;
     }
     f->fd = os_fd;
@@ -471,17 +469,14 @@ int pipe(int filedes[2]) {
   int r;
 
   if ((filedes[0] = __get_new_fd(&f[0])) < 0) {
-    errno = klee_get_errno();
     return filedes[0];
   }
   if ((filedes[1] = __get_new_fd(&f[1])) < 0) {
-    errno = klee_get_errno();
     return filedes[1];
   }
 
   r = syscall(__NR_pipe, os_filedes);
   if (r < 0) {
-    errno = klee_get_errno();
     return r;
   }
 
@@ -576,7 +571,6 @@ ssize_t read(int fd, void *buf, size_t count) {
       r = syscall(__NR_pread64, f->fd, buf, count, (off64_t) f->off);
 
     if (r == -1) {
-      errno = klee_get_errno();
       return -1;
     }
 
@@ -672,7 +666,6 @@ ssize_t write(int fd, const void *buf, size_t count) {
     else r = syscall(__NR_pwrite64, f->fd, buf, count, (off64_t) f->off);
 
     if (r == -1) {
-      errno = klee_get_errno();
       return -1;
     }
 
@@ -722,7 +715,6 @@ off64_t __fd_lseek(int fd, off64_t offset, int whence) {
     }
 
     if (new_off == -1) {
-      errno = klee_get_errno();
       return -1;
     }
 
@@ -762,8 +754,6 @@ int __fd_stat(const char *path, struct stat64 *buf) {
 #else
     int r = syscall(__NR_stat64, __concretize_string(path), buf);
 #endif
-    if (r == -1)
-      errno = klee_get_errno();
     return r;
   }
 }
@@ -784,8 +774,6 @@ int __fd_statat(int dirfd, const char *path, struct stat64 *buf, int flags) {
     int r = syscall(__NR_fstatat64, dirfd, __concretize_string(path), buf,
       flags);
 #endif
-    if (r == -1)
-      errno = klee_get_errno();
     return r;
   }
 }
@@ -803,8 +791,6 @@ int __fd_lstat(const char *path, struct stat64 *buf) {
 #else
     int r = syscall(__NR_lstat64, __concretize_string(path), buf);
 #endif
-    if (r == -1)
-      errno = klee_get_errno();
     return r;
   }
 }
@@ -821,8 +807,6 @@ int chdir(const char *path) {
 
   {
     int r = syscall(__NR_chdir, __concretize_string(path));
-    if (r == -1)
-      errno = klee_get_errno();
     return r;
   }
 }
@@ -841,8 +825,6 @@ int fchdir(int fd) {
     return -1;
   } else {
     int r = syscall(__NR_fchdir, f->fd);
-    if (r == -1)
-      errno = klee_get_errno();
     return r;
   }
 }
@@ -877,8 +859,6 @@ int chmod(const char *path, mode_t mode) {
     return __df_chmod(dfile, mode);
   } else {
     int r = syscall(__NR_chmod, __concretize_string(path), mode);
-    if (r == -1)
-      errno = klee_get_errno();
     return r;
   }
 }
@@ -904,8 +884,6 @@ int fchmod(int fd, mode_t mode) {
     return __df_chmod(f->dfile, mode);
   } else {
     int r = syscall(__NR_fchmod, f->fd, mode);
-    if (r == -1)
-      errno = klee_get_errno();
     return r;
   }
 }
@@ -937,8 +915,6 @@ int fchmodat(int fd, const char *file, mode_t mode, int flag) {
     return __df_chmod(dfile, mode);
   } else {
     int r = syscall(__NR_fchmodat, fd, __concretize_string(file), mode);
-    if (r == -1)
-      errno = klee_get_errno();
     return r;
   }
 }
@@ -956,8 +932,6 @@ int chown(const char *path, uid_t owner, gid_t group) {
     return __df_chown(df, owner, group);
   } else {
     int r = syscall(__NR_chown, __concretize_string(path), owner, group);
-    if (r == -1)
-      errno = klee_get_errno();
     return r;
   }
 }
@@ -974,8 +948,6 @@ int fchown(int fd, uid_t owner, gid_t group) {
     return __df_chown(f->dfile, owner, group);
   } else {
     int r = syscall(__NR_fchown, fd, owner, group);
-    if (r == -1)
-      errno = klee_get_errno();
     return r;
   }
 }
@@ -988,8 +960,6 @@ int lchown(const char *path, uid_t owner, gid_t group) {
     return __df_chown(df, owner, group);
   } else {
     int r = syscall(__NR_chown, __concretize_string(path), owner, group);
-    if (r == -1)
-      errno = klee_get_errno();
     return r;
   }
 }
@@ -1008,8 +978,6 @@ int __fd_fstat(int fd, struct stat64 *buf) {
 #else
     int r = syscall(__NR_fstat64, f->fd, buf);
 #endif
-    if (r == -1)
-      errno = klee_get_errno();
     return r;
   }
 
@@ -1044,8 +1012,6 @@ int __fd_ftruncate(int fd, off64_t length) {
 #else
     int r = syscall(__NR_ftruncate64, f->fd, length);
 #endif
-    if (r == -1)
-      errno = klee_get_errno();
     return r;
   }
 }
@@ -1112,7 +1078,6 @@ int __fd_getdents(unsigned int fd, struct dirent64 *dirp, unsigned int count) {
       assert(s != (off64_t) -1);
       res = syscall(__NR_getdents64, f->fd, dirp, count);
       if (res == -1) {
-        errno = klee_get_errno();
       } else {
         int pos = 0;
 
@@ -1355,8 +1320,6 @@ int ioctl(int fd, unsigned long request, ...) {
     }
   } else {
     int r = syscall(__NR_ioctl, f->fd, request, buf );
-    if (r == -1)
-      errno = klee_get_errno();
     return r;
   }
 }
@@ -1418,8 +1381,6 @@ int fcntl(int fd, int cmd, ...) {
     }
   } else {
     int r = syscall(__NR_fcntl, f->fd, cmd, arg );
-    if (r == -1)
-      errno = klee_get_errno();
     return r;
   }
 }
@@ -1435,8 +1396,6 @@ int __fd_statfs(const char *path, struct statfs *buf) {
 
   {
     int r = syscall(__NR_statfs, __concretize_string(path), buf);
-    if (r == -1)
-      errno = klee_get_errno();
     return r;
   }
 }
@@ -1455,8 +1414,6 @@ int fstatfs(int fd, struct statfs *buf) {
     return -1;
   } else {
     int r = syscall(__NR_fstatfs, f->fd, buf);
-    if (r == -1)
-      errno = klee_get_errno();
     return r;
   }
 }
@@ -1471,8 +1428,6 @@ int fsync(int fd) {
     return 0;
   } else {
     int r = syscall(__NR_fsync, f->fd);
-    if (r == -1)
-      errno = klee_get_errno();
     return r;
   }
 }
@@ -1584,8 +1539,6 @@ ssize_t readlink(const char *path, char *buf, size_t bufsize) {
     }
   } else {
     int r = syscall(__NR_readlink, path, buf, bufsize);
-    if (r == -1)
-      errno = klee_get_errno();
     return r;
   }
 }
@@ -1681,7 +1634,6 @@ int select(int nfds, fd_set *read, fd_set *write,
       /* If no symbolic results, return error. Otherwise we will
          silently ignore the OS error. */
       if (!count) {
-        errno = klee_get_errno();
         return -1;
       }
     } else {
@@ -1730,7 +1682,6 @@ char *getcwd(char *buf, size_t size) {
   klee_check_memory_access(buf, size);
   r = syscall(__NR_getcwd, buf, size);
   if (r == -1) {
-    errno = klee_get_errno();
     return NULL;
   }
 

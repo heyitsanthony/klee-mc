@@ -15,8 +15,9 @@ int main(int argc, char** argv) {
   int x = read(0, 0, 0);
   assert(x == 0);
   
+  // open symbolic file
   int fd = open("A", O_RDONLY);
-  assert(fd != -1);
+  assert(fd != -1 && "could not open symbolic file 'A'");
 
   // EFAULT buf is outside your accessible address space. (man page)
   x = read(fd, 0, 1);

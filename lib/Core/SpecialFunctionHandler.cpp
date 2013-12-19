@@ -24,7 +24,6 @@
 #include "Executor.h"
 
 #include <sstream>
-#include <errno.h>
 
 using namespace llvm;
 using namespace klee;
@@ -775,12 +774,21 @@ SFH_DEF_ALL(SymRangeBytes, "klee_sym_range_bytes", true)
 	state.bindLocal(target, MK_CONST(total, Expr::Int32));
 }
 
-SFH_DEF_ALL(GetErrno, "klee_get_errno", true)
+typedef std::pair<std::string, unsigned> global_key_t;
+
+SFH_DEF_ALL(GlobalInc, "klee_global_inc", true)
 {
-	// XXX should type check args
-	SFH_CHK_ARGS(0, "klee_get_errno");
-	state.bindLocal(target, MK_CONST(errno, Expr::Int32));
+	static std::map<global_key_t, uint64_t> global_regs;
+
+	/* klee_global_inc(const char* key, subkey, inc_amount)
+	 *
+	 * ex. klee_global_inc("instr_count", GET_PC(kmc_get_regs()))
+	 * counts number of times hit instruction
+	 */
+	assert (0 == 1 && "STUB");
+
 }
+
 
 SFH_DEF_ALL(Free, "klee_free_fixed", false)
 {
@@ -1359,7 +1367,6 @@ add(CheckMemoryAccess),
 add(GetValue),
 add(GetValuePred),
 add(DefineFixedObject),
-add(GetErrno),
 add(IsSymbolic),
 add(IsValidAddr),
 add(MakeSymbolic),
@@ -1389,6 +1396,7 @@ add(IsShadowed),
 add(Yield),
 add(SymRangeBytes),
 add(MkExpr),
+add(GlobalInc),
 #define DEF_WIDE(x)	\
 add(WideLoad##x),	\
 add(WideStore##x)
@@ -1404,5 +1412,3 @@ NULL
 
 void SpecialFunctionHandler::prepare() { prepare(handlerInfo); }
 void SpecialFunctionHandler::bind(void) { bind(handlerInfo); }
-
-

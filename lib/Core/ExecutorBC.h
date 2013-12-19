@@ -38,6 +38,8 @@ private:
 		llvm::Function *f,
 		int argc, char **argv, char **envp);
 
+	void setExternalErrno(ExecutionState& es);
+
  	ExternalDispatcher *externalDispatcher;
 };
 

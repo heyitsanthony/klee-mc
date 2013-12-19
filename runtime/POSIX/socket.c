@@ -17,7 +17,6 @@
 
 void klee_warning(const char*);
 void klee_warning_once(const char*);
-int klee_get_errno(void);
 
 extern int read_n_calls;
 extern int write_n_calls;
@@ -182,7 +181,6 @@ int bind(int sockfd, const struct sockaddr* addr, socklen_t addrlen)
     os_r = 0 /* syscall(__NR_socketcall, SYS_BIND, args) */;
     // args[0] = sockfd;
     if (os_r < 0) {
-      errno = klee_get_errno();
       return -1;
     }
   }
@@ -251,7 +249,6 @@ int __fd_connect(unsigned long *args) {
 #endif
     args[0] = sockfd;
     if (os_r < 0) {
-      errno = klee_get_errno();
       return -1;
     }
   }
@@ -300,7 +297,6 @@ int __fd_listen(unsigned long *args) {
     os_r = 0 /* syscall(__NR_socketcall, SYS_LISTEN, args) */;
     args[0] = sockfd;
     if (os_r < 0) {
-      errno = klee_get_errno();
       return -1;
     }
   }
@@ -442,7 +438,6 @@ int __fd_getsockname(unsigned long *args)
 #endif
     args[0] = sockfd;
     if (os_r < 0) {
-      errno = klee_get_errno();
       return -1;
     }
   }
@@ -490,7 +485,6 @@ int __fd_getpeername(unsigned long *args)
 #endif
     args[0] = sockfd;
     if (os_r < 0) {
-      errno = klee_get_errno();
       return -1;
     }
   }
@@ -541,7 +535,6 @@ int __fd_shutdown(unsigned long *args) {
 #endif
     args[0] = sockfd;
     if (os_r == -1) {
-      errno = klee_get_errno();
       return -1;
     }
   }

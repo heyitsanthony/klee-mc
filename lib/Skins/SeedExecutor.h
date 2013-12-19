@@ -22,11 +22,11 @@ public:
 	virtual ~SeedExecutor() {}
 
 	virtual void executeGetValue(
-		ExecutionState &state, ref<Expr> e, KInstruction *target)
+		ExecutionState &state, ref<Expr> e, KInstruction *target, ref<Expr> p)
 	{
 		if (seedCore.executeGetValueSeeding(state, e, target))
 			return;
-		T::executeGetValue(state, e, target);
+		T::executeGetValue(state, e, target ,p);
 	}
 
 	virtual void terminate(ExecutionState &state)

@@ -1,6 +1,6 @@
 // RUN: gcc %s -O0 -I../../../include/  -o %t1
 
-// RUN: klee-mc -pipe-solver -emit-all-errors -sym-mmu-type=minmax -use-sym-mmu - ./%t1 2>%t1.err >%t1.out
+// RUN: klee-mc -pipe-solver -emit-all-errors -sym-mmu-type=minmaxa -use-sym-mmu - ./%t1 2>%t1.err >%t1.out
 // one error state for min and one for max
 // RUN: ls klee-last | grep ptr.err | wc -l | grep 2
 // two error states, one ok state from the read() error

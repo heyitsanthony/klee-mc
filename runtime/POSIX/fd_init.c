@@ -110,6 +110,7 @@ static void __create_new_dfile(
 		/* prefer all caps?? */
 		for (i=0; i<KLEE_MAX_PATH_LEN-1; i++)
 			klee_prefer_cex(dfile->name, __isupper(dfile->name[i]));
+
 	}
 	/* No reason not to allow files of size 0, but to support this, we
 	need to be change the way memory is allocated and freed when
@@ -167,6 +168,7 @@ static void __create_new_dfile(
 	dfile->stat = s;
 
 	dfile->src = NULL;
+
   if (is_foreign)
   {
     struct sockaddr_storage *ss;

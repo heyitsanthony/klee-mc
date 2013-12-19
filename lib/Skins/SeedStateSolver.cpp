@@ -44,10 +44,11 @@ bool SeedStateSolver::mayBeFalse(
 bool SeedStateSolver::getValue(
 	const ExecutionState &es,
 	ref<Expr> expr,
-	ref<ConstantExpr> &result)
+	ref<ConstantExpr> &result,
+	ref<Expr> pred)
 {
 	exe.getForking()->setConstraintOmit(true);
-	return StateSolver::getValue(es, expr, result);
+	return StateSolver::getValue(es, expr, result, pred);
 }
 
 bool SeedStateSolver::getInitialValues(

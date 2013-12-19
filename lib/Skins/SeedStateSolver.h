@@ -29,9 +29,10 @@ public:
 	bool mayBeTrue(const ExecutionState&, ref<Expr>, bool &result);
 	bool mayBeFalse(const ExecutionState&, ref<Expr>, bool &result);
 	bool getValue(
-		const ExecutionState &,
+		const ExecutionState &es,
 		ref<Expr> expr,
-		ref<ConstantExpr> &result);
+		ref<ConstantExpr> &result,
+		ref<Expr> predicate = 0);
 
 	bool getInitialValues(const ExecutionState&, Assignment&);
 

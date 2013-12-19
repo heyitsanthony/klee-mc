@@ -1,3 +1,7 @@
+/**
+ * MMU which dispatches large reads with ITEs up to some maximum depth.
+ */
+
 #include "klee/klee.h"
 #include "mmu_testptr.h"
 #include "mmu.h"

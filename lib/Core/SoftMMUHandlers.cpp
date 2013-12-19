@@ -58,10 +58,8 @@ SoftMMUHandlers::SoftMMUHandlers(
 		KFunction	*kf(km->getKFunction(func_name.c_str()));
 
 		*(le->le_kf) = kf;
-		if (kf != NULL) continue;
-
-		if (le->le_required == false)
-			continue;
+		if (kf != NULL)  continue;
+		if (le->le_required == false) continue;
 		std::cerr << "[SoftMMUHandlers] Not found: "<< func_name <<'\n';
 	}
 }

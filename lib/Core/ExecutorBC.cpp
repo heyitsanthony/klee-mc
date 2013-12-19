@@ -3,7 +3,9 @@
 #include <llvm/IR/DataLayout.h>
 #include <llvm/Support/CommandLine.h>
 #include <sstream>
+#include <errno.h>
 
+#include "AddressSpace.h"
 #include "static/Sugar.h"
 #include "klee/ExeStateBuilder.h"
 #include "klee/Common.h"
@@ -279,6 +281,9 @@ void ExecutorBC::callExternalFunction(
 		return;
 	}
 
+
+	setExternalErrno(state);
+
 	if (!state.addressSpace.copyInConcretes()) {
 		TERMINATE_ERROR(this,
 			state,
@@ -294,6 +299,33 @@ void ExecutorBC::callExternalFunction(
 			kmodule->getWidthForLLVMType(resultType));
 		state.bindLocal(target, e);
 	}
+}
+
+void ExecutorBC::setExternalErrno(ExecutionState& es)
+{
+	static llvm::GlobalVariable	*gv_errno = NULL;
+	static bool			gv_errno_missing = false;
+	const MemoryObject		*mo;
+	ObjectState			*os;
+	int				v;
+
+	if (gv_errno_missing) return;
+
+	v = errno;
+
+	if (gv_errno == NULL) {
+		gv_errno = kmodule->module->getGlobalVariable("errno");
+		if (gv_errno == NULL) {
+			gv_errno_missing = true;
+			return;
+		}
+	}
+
+	mo = globals->findObject(gv_errno);
+	assert (mo != NULL);
+
+	os = es.addressSpace.findWriteableObject(mo);
+	os->writeConcrete((const uint8_t*)&v, 4);
 }
 
 Function* ExecutorBC::getFuncByAddr(uint64_t addr)

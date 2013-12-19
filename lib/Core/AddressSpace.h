@@ -230,8 +230,8 @@ public:
 	unsigned off, unsigned len) const;
 
 	void copyToExprBuf(
-	const MemoryObject* mo, ref<Expr>* buf,
-	unsigned off, unsigned len) const;
+		const MemoryObject* mo, ref<Expr>* buf,
+		unsigned off, unsigned len) const;
 
 
 	/* returns number of bytes copied into address space */
