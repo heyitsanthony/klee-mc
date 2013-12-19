@@ -23,3 +23,5 @@ MMU_ACCESS(16, uint16_t, objwide)
 MMU_ACCESS(32, uint32_t, objwide)
 MMU_ACCESS(64, uint64_t, objwide)
 MMU_ACCESS(128, __uint128_t, objwide)
+
+DECL_MMUOPS_S(inst);

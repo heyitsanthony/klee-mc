@@ -88,3 +88,10 @@ MMU_ACCESS(16, uint16_t)
 MMU_ACCESS(32, uint32_t)
 MMU_ACCESS(64, uint64_t)
 MMU_ACCESS(128, __uint128_t)
+
+struct mmu_ops mmu_ops_profile = {
+	DECL_MMUOPS(profile)
+	.mo_signal = NULL,
+	.mo_cleanup = mmu_cleanup_profile,
+	.mo_init = mmu_init_profile
+};

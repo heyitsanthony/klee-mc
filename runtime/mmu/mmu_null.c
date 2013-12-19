@@ -16,3 +16,5 @@ MMU_ACCESS(16, uint16_t)
 MMU_ACCESS(32, uint32_t)
 MMU_ACCESS(64, uint64_t)
 MMU_ACCESS(128, __uint128_t)
+
+DECL_MMUOPS_S(null);

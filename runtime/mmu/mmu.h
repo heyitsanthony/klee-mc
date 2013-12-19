@@ -27,11 +27,30 @@ DEF_MMU(inst)
 DEF_MMU(cnulltlb)
 DEF_MMU(cnull)
 
+#define DECL_MMUOPS_W(name, w)	\
+	.mo_store_##w = mmu_store_##w##_##name,	\
+	.mo_load_##w = mmu_load_##w##_##name,
+#define DECL_MMUOPS(name)		\
+	.mo_next = NULL,		\
+	DECL_MMUOPS_W(name, 8)		\
+	DECL_MMUOPS_W(name, 16)		\
+	DECL_MMUOPS_W(name, 32)		\
+	DECL_MMUOPS_W(name, 64)		\
+	DECL_MMUOPS_W(name, 128)
+#define DECL_MMUOPS_ALL(name)		\
+	DECL_MMUOPS(name)		\
+	.mo_signal = NULL,		\
+	.mo_cleanup = NULL,		\
+	.mo_init = NULL
+#define DECL_MMUOPS_S(name)			\
+struct mmu_ops mmu_ops_##name = { DECL_MMUOPS_ALL(name) }
+
 struct mmu_ops
 {
-#define DECL_MMUOP(width, type)	\
-	void (*mo_store_##width)(void* addr, type v);	\
-	type (*mo_load_##width)(void* addr);
+	struct mmu_ops	*mo_next;
+#define DECL_MMUOP(w, type)	\
+	void (*mo_store_##w)(void* addr, type v);	\
+	type (*mo_load_##w)(void* addr);
 
 	DECL_MMUOP(8, uint8_t)
 	DECL_MMUOP(16, uint16_t)
@@ -41,6 +60,7 @@ struct mmu_ops
 
 	void (*mo_signal)(void* addr, uint64_t len);
 	void (*mo_cleanup)(void);
+	void (*mo_init)(void);
 };
 
 #endif

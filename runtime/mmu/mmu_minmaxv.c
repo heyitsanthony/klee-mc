@@ -76,3 +76,7 @@ void mmu_store_128_minmaxvc(void* addr, __uint128_t v)
 { mmu_store_128_cnulltlb(addr, v); }
 __uint128_t mmu_load_128_minmaxvc(void* addr)
 { return mmu_load_128_cnulltlb(addr); }
+
+
+DECL_MMUOPS_S(minmaxv);
+DECL_MMUOPS_S(minmaxvc);

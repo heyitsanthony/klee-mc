@@ -506,3 +506,9 @@ MMU_ACCESS(16, uint16_t)
 MMU_ACCESS(32, uint32_t)
 MMU_ACCESS(64, uint64_t)
 MMU_ACCESS(128, __uint128_t)
+
+struct mmu_ops mmu_ops_memcheck = {
+	DECL_MMUOPS(memcheck) 
+	.mo_signal = mmu_signal_memcheck,
+	.mo_init = mmu_init_memcheck };
+struct mmu_ops mmu_ops_memcheckc = { DECL_MMUOPS_ALL(memcheckc) };

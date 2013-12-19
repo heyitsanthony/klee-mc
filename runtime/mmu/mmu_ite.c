@@ -6,7 +6,6 @@
 #include "mmu_testptr.h"
 #include "mmu.h"
 
-
 #define MAX_ADDRS	16
 static uint64_t	addr_buf[MAX_ADDRS];
 
@@ -52,3 +51,5 @@ MMU_ACCESS(16, uint16_t)
 MMU_ACCESS(32, uint32_t)
 MMU_ACCESS(64, uint64_t)
 MMU_ACCESS(128, __uint128_t)
+
+DECL_MMUOPS_S(ite);
