@@ -18,17 +18,15 @@ public:
 
 	void tlbInsert(ExecutionState& state, const void* addr, uint64_t len);
 	void tlbInvalidate(
-		ExecutionState& state,
-		const void* addr, uint64_t len);
+		ExecutionState& state, const void* addr, uint64_t len);
 
 	static SoftConcreteMMU* get(void) { return singleton; }
 	static const std::string& getType(void);
 private:
 	void initModule(Executor& exe);
-	SoftMMUHandlers	*mh;
+	SoftMMUHandlers		*mh;
 	static SoftConcreteMMU	*singleton;
 	ConcreteMMU		*cmmu;
-	// TLB			utlb;
 };
 }
 

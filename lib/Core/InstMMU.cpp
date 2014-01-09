@@ -9,8 +9,6 @@
 using namespace klee;
 using namespace llvm;
 
-namespace klee { extern llvm::Module* getBitcodeModule(const char* path); }
-
 class InstMMUPass : public llvm::FunctionPass
 {
 	static char ID;

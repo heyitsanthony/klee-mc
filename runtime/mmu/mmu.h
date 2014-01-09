@@ -27,6 +27,9 @@ DEF_MMU(inst)
 DEF_MMU(cnulltlb)
 DEF_MMU(cnull)
 
+#define MMUOPS_S(name)	mmu_ops_##name
+#define MMUOPS_S_EXTERN(name)	extern struct mmu_ops MMUOPS_S(name)
+
 #define DECL_MMUOPS_W(name, w)	\
 	.mo_store_##w = mmu_store_##w##_##name,	\
 	.mo_load_##w = mmu_load_##w##_##name,
@@ -42,11 +45,13 @@ DEF_MMU(cnull)
 	.mo_signal = NULL,		\
 	.mo_cleanup = NULL,		\
 	.mo_init = NULL
-#define DECL_MMUOPS_S(name)			\
-struct mmu_ops mmu_ops_##name = { DECL_MMUOPS_ALL(name) }
+#define DECL_MMUOPS_S(name)		\
+struct mmu_ops MMUOPS_S(name) = { DECL_MMUOPS_ALL(name) }
 
 struct mmu_ops
 {
+	/* mo_next is first so it's easier to construct the
+	 * mmu stack in the interpreter */
 	struct mmu_ops	*mo_next;
 #define DECL_MMUOP(w, type)	\
 	void (*mo_store_##w)(void* addr, type v);	\
@@ -62,5 +67,14 @@ struct mmu_ops
 	void (*mo_cleanup)(void);
 	void (*mo_init)(void);
 };
+
+/* MMU_LOAD and MMU_STORE are defined by mmu_<handler>.c */
+#define MMU_ACCESS(x,y)	MMU_LOAD(x,y) MMU_STORE(x,y)
+#define MMU_ACCESS_ALL()		\
+	MMU_ACCESS(8, uint8_t)		\
+	MMU_ACCESS(16, uint16_t)	\
+	MMU_ACCESS(32, uint32_t)	\
+	MMU_ACCESS(64, uint64_t)	\
+	MMU_ACCESS(128, __uint128_t)
 
 #endif

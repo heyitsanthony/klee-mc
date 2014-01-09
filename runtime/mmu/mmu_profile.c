@@ -80,14 +80,7 @@ void mmu_cleanup_profile(void)
 	klee_print_expr("Profile accesses minimized", sym_c);
 }
 
-#define MMU_ACCESS(x,y)			\
-	MMU_LOAD(x,y) MMU_STORE(x,y)
-
-MMU_ACCESS(8, uint8_t)
-MMU_ACCESS(16, uint16_t)
-MMU_ACCESS(32, uint32_t)
-MMU_ACCESS(64, uint64_t)
-MMU_ACCESS(128, __uint128_t)
+MMU_ACCESS_ALL();
 
 struct mmu_ops mmu_ops_profile = {
 	DECL_MMUOPS(profile)

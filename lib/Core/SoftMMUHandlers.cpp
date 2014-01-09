@@ -1,9 +1,9 @@
 #include "SoftMMUHandlers.h"
-#include "SpecialFunctionHandler.h"
 #include "Executor.h"
 #include "klee/Internal/Module/KModule.h"
 #include <llvm/Support/Path.h>
 #include <iostream>
+#include <fstream>
 
 using namespace klee;
 namespace klee { extern llvm::Module* getBitcodeModule(const char* path); }
@@ -17,12 +17,45 @@ struct loadent
 	bool		le_required;
 };
 
-SoftMMUHandlers::SoftMMUHandlers(
-	Executor& exe,
-	const std::string& suffix)
+SoftMMUHandlers::SoftMMUHandlers(Executor& exe, const std::string& suffix)
+{
+	if (!isLoaded) {
+		llvm::sys::Path path(exe.getKModule()->getLibraryDir());
+		llvm::Module	*mod;
+
+		path.appendComponent("libkleeRuntimeMMU.bc");
+		mod = getBitcodeModule(path.c_str());
+		assert (mod != NULL);
+
+		exe.addModule(mod);
+		std::cerr << "[SoftMMUHandlers] Loaded "<<path.c_str()<<'\n';
+		isLoaded = true;
+	}
+
+	if (suffix.find('.') == std::string::npos) {
+		loadBySuffix(exe, suffix);
+	} else {
+		loadByFile(exe, suffix);
+	}
+}
+
+void SoftMMUHandlers::loadByFile(Executor& exe, const std::string& fname)
+{
+	std::vector<std::string>	suffixes;
+	std::ifstream			ifs(fname.c_str());
+	std::string			s;
+
+	while (ifs >> s) {
+		if (s.empty()) continue;
+		suffixes.push_back(s);
+	}
+
+	assert (0 == 1 && "STUB");
+}
+
+void SoftMMUHandlers::loadBySuffix(Executor& exe, const std::string& suffix)
 {
 	KModule		*km(exe.getKModule());
-	llvm::Module	*mod;
 
 	struct loadent	loadtab[] =  {
 		{ "mmu_load_8", &f_load[0], true},
@@ -40,26 +73,12 @@ SoftMMUHandlers::SoftMMUHandlers(
 		{ "mmu_signal", &f_signal, false},
 		{ NULL, NULL, false}};
 
-	if (!isLoaded) {
-		llvm::sys::Path path(km->getLibraryDir());
-
-		path.appendComponent("libkleeRuntimeMMU.bc");
-		mod = getBitcodeModule(path.c_str());
-		assert (mod != NULL);
-
-		exe.addModule(mod);
-		std::cerr << "[SoftMMUHandlers] Loaded "<<path.c_str()<<'\n';
-		isLoaded = true;
-	}
-
-
 	for (struct loadent* le = &loadtab[0]; le->le_name; le++) {
 		std::string	func_name(le->le_name + ("_" + suffix));
 		KFunction	*kf(km->getKFunction(func_name.c_str()));
 
 		*(le->le_kf) = kf;
-		if (kf != NULL)  continue;
-		if (le->le_required == false) continue;
+		if (kf != NULL || le->le_required == false) continue;
 		std::cerr << "[SoftMMUHandlers] Not found: "<< func_name <<'\n';
 	}
 }

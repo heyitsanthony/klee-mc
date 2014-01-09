@@ -319,15 +319,12 @@ void mmu_store_##x##_uc(void* addr, y v)	\
 	else					\
 		*p = v;	}
 
+#undef MMU_ACCESS
 #define MMU_ACCESS(x,y)	\
 	MMU_LOAD(x,y,objwide)	\
 	MMU_STORE(x,y,objwide)
 
-MMU_ACCESS(8, uint8_t)
-MMU_ACCESS(16, uint16_t)
-MMU_ACCESS(32, uint32_t)
-MMU_ACCESS(64, uint64_t)
-MMU_ACCESS(128, __uint128_t)
+MMU_ACCESS_ALL();
 
 struct mmu_ops mmu_ops_uc = {
 	DECL_MMUOPS(uc)

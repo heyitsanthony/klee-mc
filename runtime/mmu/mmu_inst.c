@@ -14,6 +14,7 @@ y mmu_load_##x##_inst(void* addr) {	\
 		? *((y*)addr)		\
 		: mmu_load_##x##_##z(addr); }
 
+#undef MMU_ACCESS
 #define MMU_ACCESS(x,y,z)	\
 	MMU_LOAD(x,y,z)		\
 	MMU_STORE(x,y,z)

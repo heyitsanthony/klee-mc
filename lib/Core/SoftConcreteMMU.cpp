@@ -10,8 +10,6 @@
 
 using namespace klee;
 
-namespace klee { extern llvm::Module* getBitcodeModule(const char* path); }
-
 SoftConcreteMMU	*SoftConcreteMMU::singleton = NULL;
 
 namespace {

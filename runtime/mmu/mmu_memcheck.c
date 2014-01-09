@@ -497,18 +497,15 @@ in_sym_mmu--;	\
 }	\
 mmu_store_##x##_objwide(addr, v); }
 
+#undef MMU_ACCESS
 #define MMU_ACCESS(x,y)			\
 	MMU_LOAD(x,y)	MMU_LOADC(x,y)	\
 	MMU_STORE(x,y)	MMU_STOREC(x,y)
 
-MMU_ACCESS(8, uint8_t)
-MMU_ACCESS(16, uint16_t)
-MMU_ACCESS(32, uint32_t)
-MMU_ACCESS(64, uint64_t)
-MMU_ACCESS(128, __uint128_t)
+MMU_ACCESS_ALL();
 
-struct mmu_ops mmu_ops_memcheck = {
+struct mmu_ops MMUOPS_S(memcheck) = {
 	DECL_MMUOPS(memcheck) 
 	.mo_signal = mmu_signal_memcheck,
 	.mo_init = mmu_init_memcheck };
-struct mmu_ops mmu_ops_memcheckc = { DECL_MMUOPS_ALL(memcheckc) };
+struct mmu_ops MMUOPS_S(memcheckc) = { DECL_MMUOPS_ALL(memcheckc) };
