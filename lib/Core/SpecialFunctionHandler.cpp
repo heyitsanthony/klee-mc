@@ -1191,7 +1191,7 @@ SFH_DEF_ALL(Watch, "klee_watch", false)
 		DebugPrintInstructions = false;
 }
 
-SFH_DEF_ALL(ExprHash, "klee_expr_hash", true)
+SFH_DEF_ALL(ExprHash, "__klee_expr_hash", true)
 {
 	SFH_CHK_ARGS(1, "klee_expr_hash");
 	state.bindLocal(target, MK_CONST(args[0]->hash(), 64));
