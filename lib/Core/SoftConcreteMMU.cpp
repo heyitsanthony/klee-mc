@@ -90,15 +90,13 @@ bool SoftConcreteMMU::exeMemOp(ExecutionState &state, MemOp& mop)
 	uint64_t	addr;
 
 	addr = cast<ConstantExpr>(mop.address)->getZExtValue();
-	if (!state.stlb.get(state, addr, op))
-		goto slowpath;
+	if (!state.stlb.get(state, addr, op)) goto slowpath;
 
 	/* the objectstate pointer may be NULL if there
 	 * was an address space generation update */
-	if (op.second == NULL) {
+	if (op.second == NULL)
 		/* MO is still valid though.. */
 		op.second = state.addressSpace.findObject(op.first);
-	}
 
 	/* XXX: I don't like calling this range check here */
 	if ((mop.getType(exe.getKModule())/8 + op.first->getOffset(addr))

@@ -1,5 +1,6 @@
 #include "SoftMMUHandlers.h"
 #include "Executor.h"
+#include "Globals.h"
 #include "klee/Internal/Module/KModule.h"
 #include <llvm/Support/Path.h>
 #include <iostream>
@@ -32,11 +33,10 @@ SoftMMUHandlers::SoftMMUHandlers(Executor& exe, const std::string& suffix)
 		isLoaded = true;
 	}
 
-	if (suffix.find('.') == std::string::npos) {
+	if (suffix.find('.') == std::string::npos)
 		loadBySuffix(exe, suffix);
-	} else {
+	else
 		loadByFile(exe, suffix);
-	}
 }
 
 void SoftMMUHandlers::loadByFile(Executor& exe, const std::string& fname)
@@ -45,12 +45,20 @@ void SoftMMUHandlers::loadByFile(Executor& exe, const std::string& fname)
 	std::ifstream			ifs(fname.c_str());
 	std::string			s;
 
-	while (ifs >> s) {
-		if (s.empty()) continue;
-		suffixes.push_back(s);
+	while (ifs >> s) if (!s.empty()) suffixes.push_back(s);
+	assert (!suffixes.empty());
+
+	for (unsigned i = 1; i < suffixes.size(); i++) {
+		std::string	prev("mmu_ops_" + suffixes[i-1]),
+				cur("mmu_ops_" + suffixes[i]);
+		MemoryObject	*mo(exe.getGlobals()->findObject(prev.c_str()));
+		std::cerr << "[SoftMMUHandlers] " << prev << "->" << cur << '\n';
+		assert (mo);
+		exe.getCurrentState()->addressSpace.findWriteableObject(mo)->
+			write(0, exe.getGlobals()->findAddress(cur.c_str()));
 	}
 
-	assert (0 == 1 && "STUB");
+	loadBySuffix(exe, suffixes[0]);
 }
 
 void SoftMMUHandlers::loadBySuffix(Executor& exe, const std::string& suffix)

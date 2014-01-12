@@ -29,4 +29,5 @@ LIBTXT:=$(LibDir)/$(LIBRARYNAME)-fns.txt
 all :: $(LibDir)/libkleeRuntimeMMU.bc
 
 $(LibDir)/libkleeRuntimeMMU.bc: $(LibDir)/libkleeRuntimeMMU.bca
-	../../scripts/link-bca $^ $@
+	llvm-link -f -o $@  $(BuildMode)/*.bc
+#	../../scripts/link-bca $^ $@

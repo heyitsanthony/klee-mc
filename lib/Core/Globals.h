@@ -3,7 +3,7 @@
 
 #include "klee/Expr.h"
 #include <map>
-#include <set>
+#include <tr1/unordered_set>
 
 namespace llvm
 {
@@ -41,6 +41,8 @@ public:
 	void allocGlobalVariableNoDecl(const llvm::GlobalVariable& gv);
 
 	MemoryObject* findObject(const llvm::GlobalValue* gv) const;
+	MemoryObject* findObject(const char* name) const;
+	ref<ConstantExpr> findAddress(const char* gv) const;
 	ref<ConstantExpr> findAddress(const llvm::GlobalValue* gv) const;
 
 	bool isLegalFunction(uint64_t v) const
@@ -78,7 +80,7 @@ private:
 
 	/// The set of legal function addresses, used to validate function
 	/// pointers. We use the actual Function* address as the function address.
-	mutable std::set<uint64_t> legalFunctions;
+	mutable std::tr1::unordered_set<uint64_t> legalFunctions;
 	/// Map of globals to their bound address. This also includes
 	/// globals that have no representative object (i.e. functions).
 	mutable globaladdr_map globalAddresses;

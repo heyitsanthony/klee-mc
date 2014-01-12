@@ -1,0 +1,4 @@
+constchk
+vconstchk
+rangechk
+objwide

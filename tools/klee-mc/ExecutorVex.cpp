@@ -977,7 +977,11 @@ uint64_t ExecutorVex::getStateStack(ExecutionState& s) const
 }
 
 llvm::Function* ExecutorVex::getFuncByAddr(uint64_t addr)
-{ return km_vex->getFuncByAddr(addr); }
+{
+	if (globals->isLegalFunction(addr))
+		return (llvm::Function*)addr;
+	return km_vex->getFuncByAddr(addr);
+}
 
 unsigned ExecutorVex::getExitType(const ExecutionState& state) const
 {

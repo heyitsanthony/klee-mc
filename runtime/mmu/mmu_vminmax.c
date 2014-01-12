@@ -36,24 +36,24 @@ static uint64_t	values_y[3];
 	} while (0)
 
 #define MMU_LOADC(x,y)		\
-y mmu_load_##x##_minmaxvc(void* addr)	\
+y mmu_load_##x##_vminmaxc(void* addr)	\
 {	y ret = mmu_load_##x##_cnulltlb(addr);	\
 	CHK_V_FAST(y, ret);	\
 	return ret; }
 
 #define MMU_STOREC(x,y)			\
-void mmu_store_##x##_minmaxvc(void* addr, y v)	\
+void mmu_store_##x##_vminmaxc(void* addr, y v)	\
 {	CHK_V_FAST(y, v);				\
 	return mmu_store_##x##_cnulltlb(addr, v); }
 
 #define MMU_LOAD(x,y)		\
-y mmu_load_##x##_minmaxv(void* addr)	\
+y mmu_load_##x##_vminmax(void* addr)	\
 {	y ret = mmu_load_##x##_objwide(addr);	\
 	CHK_V_FAST(y, ret);			\
 	return ret; }
 
 #define MMU_STORE(x,y)			\
-void mmu_store_##x##_minmaxv(void* addr, y v)	\
+void mmu_store_##x##_vminmax(void* addr, y v)	\
 {	CHK_V_FAST(y, v);			\
 	mmu_store_##x##_objwide(addr, v); }
 
@@ -67,16 +67,16 @@ MMU_ACCESS(16, uint16_t);
 MMU_ACCESS(32, uint32_t);
 MMU_ACCESS(64, uint64_t);
 
-void mmu_store_128_minmaxv(void* addr, __uint128_t v)
+void mmu_store_128_vminmax(void* addr, __uint128_t v)
 { mmu_store_128_objwide(addr, v); }
-__uint128_t mmu_load_128_minmaxv(void* addr)
+__uint128_t mmu_load_128_vminmax(void* addr)
 { return mmu_load_128_objwide(addr); }
 
-void mmu_store_128_minmaxvc(void* addr, __uint128_t v)
+void mmu_store_128_vminmaxc(void* addr, __uint128_t v)
 { mmu_store_128_cnulltlb(addr, v); }
-__uint128_t mmu_load_128_minmaxvc(void* addr)
+__uint128_t mmu_load_128_vminmaxc(void* addr)
 { return mmu_load_128_cnulltlb(addr); }
 
 
-DECL_MMUOPS_S(minmaxv);
-DECL_MMUOPS_S(minmaxvc);
+DECL_MMUOPS_S(vminmax);
+DECL_MMUOPS_S(vminmaxc);

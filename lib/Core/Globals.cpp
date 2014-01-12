@@ -289,6 +289,14 @@ void Globals::initializeGlobalObject(
 	init_state->write(os, offset, C);
 }
 
+MemoryObject* Globals::findObject(const char* n) const
+{
+	GlobalVariable * gv;
+	gv = static_cast<GlobalVariable*>(
+		kmodule->module->getGlobalVariable(n));
+	if (gv == NULL) return NULL;
+	return findObject(gv);
+}
 
 MemoryObject* Globals::findObject(const llvm::GlobalValue* gv) const
 {
@@ -299,6 +307,15 @@ MemoryObject* Globals::findObject(const llvm::GlobalValue* gv) const
 		return NULL;
 
 	return it->second;
+}
+
+ref<klee::ConstantExpr> Globals::findAddress(const char* n) const
+{
+	const GlobalVariable *gv;
+	gv = static_cast<GlobalVariable*>(
+		kmodule->module->getGlobalVariable(n));
+	assert (gv != NULL);
+	return findAddress(gv);
 }
 
 ref<klee::ConstantExpr> Globals::findAddress(
