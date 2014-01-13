@@ -12,8 +12,7 @@
  * straddling/misaligned concretization. This is because klee can't do symbolic
  * accesses across object state yet.
  */
-#define MMU_ITER(y,found_op)	\
-{	\
+#define MMU_ITER(y,found_op)	{	\
 uint64_t obj_base = (uint64_t)klee_get_obj_prev((void*)c_64); \
 do {	uint64_t obj_sz;						\
 	if (obj_base < c_64) goto next;					\
@@ -23,8 +22,7 @@ do {	uint64_t obj_sz;						\
 next:	obj_base = (uint64_t)klee_get_obj_next((void*)(obj_base+1));	\
 } while (obj_base < (c_64 + PAGE_SZ) && obj_base);			\
 /* fork straddled / misaligned */	\
-c_64 = klee_fork_all(p_64);		\
-}
+c_64 = klee_fork_all(p_64); }
 
 #define MMU_FIND_PAGES	\
 	uint64_t	p_64 = (uint64_t)addr, c_64;	\
@@ -35,15 +33,13 @@ c_64 = klee_fork_all(p_64);		\
 y mmu_load_##x##_objwide(void* addr) {	\
 	MMU_FIND_PAGES			\
 	MMU_ITER(y, return klee_wide_load_##x((void*)obj_base, addr));	\
-	return *((y*)c_64);		\
-}
+	return *((y*)c_64); }
 
 #define MMU_STORE(x,y)			\
 void mmu_store_##x##_objwide(void* addr, y v) {	\
 	MMU_FIND_PAGES				\
 	MMU_ITER(y, klee_wide_store_##x((void*)obj_base, addr, v); return);	\
-	*((y*)c_64) = v;	\
-}
+	*((y*)c_64) = v; }
 
 #undef MMU_ACCESS
 #define MMU_ACCESS(x,y)	\

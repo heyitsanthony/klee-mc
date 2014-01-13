@@ -77,4 +77,7 @@ struct mmu_ops
 	MMU_ACCESS(64, uint64_t)	\
 	MMU_ACCESS(128, __uint128_t)
 
+#define MMU_FWD_STORE(n,w,a,v) MMUOPS_S(n).mo_next->mo_store_##w(a, v)
+#define MMU_FWD_LOAD(n,w,a) MMUOPS_S(n).mo_next->mo_load_##w(a)
+
 #endif

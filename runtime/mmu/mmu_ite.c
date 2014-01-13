@@ -15,7 +15,6 @@ y mmu_load_##x##_ite(void* addr)	\
 	int		n_addrs, i;	\
 	mmu_testptr(addr);		\
 	n_addrs = klee_get_values((uint64_t)addr, addr_buf, MAX_ADDRS); \
-	klee_print_expr("hey", n_addrs);		\
 	ret = *((y*)(addr_buf[0]));			\
 	if (n_addrs == 1) {				\
 		/* force constraint for IVC */		\

@@ -2,9 +2,10 @@
 #include "mmu_testptr.h"
 #include "mmu.h"
 
+MMUOPS_S_EXTERN(mayhem);
+
 /**
- * the concretization priority algorithm, taken from
- * MAYHEM. (fuck em)
+ * the concretization priority algorithm, taken from MAYHEM
  */
 static void* fork_on_symbolic(void* in_ptr)
 {
@@ -37,7 +38,7 @@ y mmu_load_##x##_mayhem(void* addr)	\
 
 #define MMU_STORE(x,y)			\
 void mmu_store_##x##_mayhem(void* addr, y v)	\
-{ mmu_store_##x##_objwide(addr,v); }
+{ MMU_FWD_STORE(mayhem,x,addr,v); }
 
 MMU_ACCESS_ALL();
 DECL_MMUOPS_S(mayhem);
