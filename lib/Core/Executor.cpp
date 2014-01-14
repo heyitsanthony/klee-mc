@@ -2357,6 +2357,8 @@ bool Executor::getSatAssignment(const ExecutionState& st, Assignment& a)
 	std::vector<const Array*>	objects;
 	bool				ok;
 
+	assert (st.checkCanary());
+
 	foreach (it, st.symbolicsBegin(), st.symbolicsEnd())
 		objects.push_back(it->getArray());
 
@@ -2635,8 +2637,13 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 					(void*)addr);
 			}
 
-			if (es->getOnFini()||stateManager->isRemovedState(es))
+			if (	stateManager->isRemovedState(es) ||
+				(stateManager->isAddedState(es) == false &&
+				 stateManager->hasState(es) == false) ||
+				es->getOnFini())
 				continue;
+
+			assert (es->checkCanary());
 
 			TERMINATE_ERRORV(this,
 				*es,
@@ -2665,6 +2672,7 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 
 	if (iter.badjmp_c >= MAX_BADJMP) {
 		if (iter.free == NULL) return false;
+
 		TERMINATE_ERRORV(this,
 			*(iter.free),
 			"xfer iter error: too many bad jumps", "badjmp.err",
