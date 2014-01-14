@@ -944,10 +944,11 @@ void ExecutorVex::printStackTrace(
 	unsigned idx = 0;
 	foreach (it, st.stack.rbegin(), st.stack.rend()) {
 		const StackFrame	&sf(*it);
-		Function		*f(sf.kf->function);
-		const VexSB		*vsb(km_vex->getVSB(f));
+		Function		*f(sf.kf ? sf.kf->function : NULL);
+		const VexSB		*vsb(f ? km_vex->getVSB(f) : NULL);
 
-		os << "\t#" << idx++ << " in " << f->getName().str();
+		os	<< "\t#" << idx++ << " in "
+			<< (f ? f->getName().str() : "(nil)");
 		if (vsb != NULL)
 			os << " (" << gs->getName(vsb->getGuestAddr()) << ')';
 

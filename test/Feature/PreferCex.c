@@ -1,5 +1,5 @@
 // RUN: %llvmgcc %s -emit-llvm -O0 -c -o %t1.bc
-// RUN: %klee --exit-on-error %t1.bc
+// RUN: %klee -prefer-cex --exit-on-error %t1.bc
 // RUN: ktest-tool klee-last/test000001.ktest.gz | zgrep -F 'Hi\x00\x00'
 
 #include <assert.h>

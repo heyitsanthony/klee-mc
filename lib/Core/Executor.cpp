@@ -80,7 +80,7 @@ namespace {
   UsePID("use-pid", cl::desc("Use proportional state control"));
 
   cl::opt<bool> DumpStatesOnHalt("dump-states-on-halt", cl::init(true));
-  cl::opt<bool> PreferCex("prefer-cex", cl::init(true));
+  cl::opt<bool> PreferCex("prefer-cex", cl::init(false));
 
   cl::opt<bool,true>
   DebugPrintInstructionsProxy(
@@ -2390,14 +2390,16 @@ bool Executor::getSymbolicSolution(
 		std::pair<std::string,
 			std::vector<unsigned char> > > &res)
 {
-	ExecutionState		tmp(state);
 	Assignment		a;
 
-	if (PreferCex)
+	if (PreferCex) {
+		ExecutionState	tmp(state); /* XXX copy constructor broken */
 		getSymbolicSolutionCex(state, tmp);
-
-	if (!getSatAssignment(tmp, a))
-		return false;
+		if (!getSatAssignment(tmp, a)) return false;
+	} else {
+		if (!getSatAssignment(state, a))
+			return false;
+	}
 
 	foreach (it, state.symbolicsBegin(), state.symbolicsEnd()) {
 		const std::vector<unsigned char>	*v;
