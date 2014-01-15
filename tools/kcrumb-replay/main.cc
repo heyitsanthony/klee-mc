@@ -7,6 +7,7 @@
 #include "klee/Internal/ADT/KTestStream.h"
 #include "klee/Internal/ADT/KTSFuzz.h"
 #include "klee/Internal/ADT/Crumbs.h"
+#include "klee/Internal/Support/Watchdog.h"
 #include "SyscallKTestBC.h"
 #include "guestcpustate.h"
 
@@ -16,6 +17,7 @@
 #include <string.h>
 
 #define MAX_ARGS	128
+#define KCRUMB_DEFAULT_TIMEOUT	180	/* 3 minutes! */
 
 using namespace klee;
 extern void dumpIRSBs(void) {}
@@ -80,6 +82,10 @@ int main(int argc, char *argv[], char* envp[])
 	PTImgRemote	*ptimg;
 	SyscallsKTestBC	*sc;
 	char		**args;
+	Watchdog	wd(
+		getenv("KMC_TIMEOUT") != NULL
+			? atoi(getenv("KMC_TIMEOUT"))
+			: KCRUMB_DEFAULT_TIMEOUT);
 
 	if (argc <= 3) {
 		fprintf(stderr, "Usage: %s sshot_path test_num execfile\n",
