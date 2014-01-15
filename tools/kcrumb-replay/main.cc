@@ -109,12 +109,16 @@ int main(int argc, char *argv[], char* envp[])
 
 	setup_prefix(args, 126);
 
+	/* reading from stdin makes valgrind hang and the
+	 * executor doesn't need it anyway... */
+	close(0);
 
 	ptimg = GuestPTImg::create<PTImgRemote>(
 		(argc - 3) + 1, /* ignore (self, sshot_path, test_num) */
 		args,
 		envp);
 	pid = ptimg->getPID();
+	assert (pid != 0);
 
 	sc = SyscallsKTestBC::create(ptimg, kts, test_path, test_num);
 	status = (SIGTRAP << 8) | 0x7f; /* XXX junk */
@@ -126,11 +130,9 @@ int main(int argc, char *argv[], char* envp[])
 	while (waitpid(pid, &status, 0) == pid) {
 		int	sig;
 
-		if (!WIFSTOPPED(status))
-			break;
+		if (!WIFSTOPPED(status)) break;
 
 		sig = WSTOPSIG(status);
-
 		if (sig == SIGTRAP) {
 			bool	applied = false;
 			if (is_enter)
