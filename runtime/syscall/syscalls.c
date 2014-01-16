@@ -608,8 +608,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 			sc_ret_v(regfile, -1);
 			break;
 		}
-		make_sym(GET_ARG1(regfile), TIMESPEC_SZ, "clock_getres");
 		sc_ret_or(sc_new_regs(regfile), 0, -1);
+		make_sym_by_arg(regfile, 1, TIMESPEC_SZ, "clock_getres");
 		break;
 
 	case SYS_clock_gettime: {
@@ -618,7 +618,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			sc_ret_v(regfile, -1);
 			break;
 		}
-		make_sym(GET_ARG1(regfile), TIMESPEC_SZ, "timespec");
+		make_sym_by_arg(regfile, 1, TIMESPEC_SZ, "timespec");
 		sc_ret_v(regfile, 0);
 		break;
 	}
@@ -718,7 +718,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			#define SIGSET_T_SZ 16
 			klee_warning_once("Narrow sigset_t so android won't crash!");
 			#endif
-			make_sym(GET_ARG2(regfile), SIGSET_T_SZ, "sigset");
+			make_sym_by_arg(regfile, 2, SIGSET_T_SZ, "sigset");
 			sc_ret_v(regfile, 0);
 		} else {
 //			sc_ret_or(sc_new_regs(regfile), -1, 0);
@@ -859,7 +859,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		/* use managably-sized string */
 		if (len > 10) len = 10;
 
-		make_sym(addr, len, "cwdbuf");
+		make_sym_by_arg(regfile, 0, len, "cwdbuf");
 
 		// XXX remember to do this on the other side!!
 		((char*)addr)[len-1] = '\0';
@@ -878,7 +878,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		infop = GET_ARG2_PTR(regfile);
 		new_regs = sc_new_regs(regfile);
 		if (infop != NULL)
-			make_sym((uint64_t)infop, SIGINFO_T_SZ, "waitid_siginfo");
+			make_sym_by_arg(regfile, 2, SIGINFO_T_SZ, "waitid_siginfo");
 		break;
 	}
 
@@ -889,7 +889,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		status = GET_ARG1_PTR(regfile);
 		new_regs = sc_new_regs(regfile);
 		if (status != NULL)
-			make_sym((uint64_t)status, sizeof(int), "status");
+			make_sym_by_arg(regfile, 1, sizeof(int), "status");
 		break;
 	}
 
@@ -989,7 +989,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_clock_nanosleep: {
 		if (GET_ARG3(regfile) != 0) {
 			uint64_t dst_addr = concretize_u64(GET_ARG3(regfile));
-			make_sym(dst_addr, TIMESPEC_SZ,  "clock_nanosleep");
+			make_sym_by_arg(
+				regfile, 3, TIMESPEC_SZ,  "clock_nanosleep");
 		}
 		sc_ret_or(sc_new_regs(regfile), -1, 0);
 		break;
@@ -1002,7 +1003,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 			if (GET_ARG1(regfile) != 0) {
 				uint64_t dst_addr;
 				dst_addr = concretize_u64(GET_ARG1(regfile));
-				make_sym(dst_addr, TIMESPEC_SZ, "nanosleep");
+				make_sym_by_arg(
+					regfile, 1, TIMESPEC_SZ, "nanosleep");
 			}
 			sc_ret_v_new(new_regs, -1);
 		} else {
@@ -1020,7 +1022,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		}
 
 		/* otherwise, mark buffer as symbolic */
-		make_sym(GET_ARG0(regfile), 4, "time");
+		make_sym_by_arg(regfile, 0, 4, "time");
 		sc_ret_v(regfile, GET_ARG0(regfile));
 		break;
 
@@ -1040,23 +1042,24 @@ void* sc_enter(void* regfile, void* jmpptr)
 		/* let all through */
 		if (GET_SYSRET(new_regs) == GET_ARG0(regfile)) {
 			if (GET_ARG1(regfile))
-				make_sym(
-					GET_ARG1(regfile),
+				make_sym_by_arg(
+					regfile,
+					1,
 					sizeof(fd_set), "readfds");
 			if (GET_ARG2(regfile))
-				make_sym(
-					GET_ARG2(regfile),
+				make_sym_by_arg(
+					regfile,
+					2,
 					sizeof(fd_set), "writefds");
 			if (GET_ARG3(regfile))
-				make_sym(
-					GET_ARG3(regfile),
+				make_sym_by_arg(
+					regfile,
+					3,
 					sizeof(fd_set), "exceptfds");
 
 			if (sc.sys_nr != SYS_pselect6 && GET_ARG4(regfile)) {
-				make_sym(
-					GET_ARG4(regfile),
-					TIMEVAL_SZ,
-					"timeoutbuf");
+				make_sym_by_arg(
+					regfile, 4, TIMEVAL_SZ,	"timeoutbuf");
 			}
 
 			sc_ret_v_new(new_regs, (int)GET_ARG0(regfile));
@@ -1068,7 +1071,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			&& GET_ARG4(regfile)
 			&& GET_SYSRET(new_regs) == 0)
 		{
-			make_sym(GET_ARG4(regfile), TIMEVAL_SZ, "timeoutbuf");
+			make_sym_by_arg(regfile, 4, TIMEVAL_SZ, "timeoutbuf");
 			sc_ret_v_new(new_regs, 0);
 			break;
 		}
@@ -1135,8 +1138,9 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 		klee_assume_uge(GET_SYSRET(new_regs), 0);
 		klee_assume_ule(GET_SYSRET(new_regs), GET_ARG2(regfile));
-		make_sym(
-			GET_ARG1(regfile),
+		make_sym_by_arg(
+			regfile,
+			1,
 			EPOLL_EVENT_SZ * GET_ARG2(regfile),
 			"epoll_wait");
 		break;
@@ -1224,10 +1228,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 	case SYS_times:
 		sc_new_regs(regfile);
-		make_sym(
-			klee_get_value(GET_ARG0(regfile)),
-			TMS_SZ,
-			"times");
+		make_sym_by_arg(regfile, 0, TMS_SZ, "times");
 	break;
 
 	case SYS_ustat:
@@ -1373,10 +1374,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			break;
 
 		if (GET_ARG1_PTR(regfile) != NULL) {
-			make_sym(
-				(uint64_t)GET_ARG1_PTR(regfile),
-				ITIMERVAL_SZ,
-				"itimer");
+			make_sym_by_arg(regfile, 1, ITIMERVAL_SZ, "itimer");
 		}
 
 		sc_ret_v_new(new_regs, 0);
@@ -1449,9 +1447,9 @@ void* sc_enter(void* regfile, void* jmpptr)
 			sc_ret_v(regfile, -1);
 			break;
 		}
-		make_sym(GET_ARG0(regfile), sizeof(uid_t), "res_id");
-		make_sym(GET_ARG1(regfile), sizeof(uid_t), "res_eid");
-		make_sym(GET_ARG2(regfile), sizeof(uid_t), "res_sid");
+		make_sym_by_arg(regfile, 0, sizeof(uid_t), "res_id");
+		make_sym_by_arg(regfile, 1, sizeof(uid_t), "res_eid");
+		make_sym_by_arg(regfile, 2, sizeof(uid_t), "res_sid");
 		sc_ret_v(regfile, 0);
 		break;
 
@@ -1476,7 +1474,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		if (GET_SYSRET(new_regs) != 0)
 			break;
 
-		make_sym(GET_ARG1(regfile), 4, "capget");
+		make_sym_by_arg(regfile, 1, 4, "capget");
 		break;
 
 	case SYS_reboot:
@@ -1497,7 +1495,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		}
 
 		len = concretize_u64(GET_ARG2(regfile));
-		make_sym(GET_ARG1(regfile), len, "listxattr");
+		make_sym_by_arg(regfile, 1, len, "listxattr");
 		sc_ret_v(regfile, len);
 		break;
 	}
@@ -1514,7 +1512,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		}
 
 		len = concretize_u64(GET_ARG2_S(regfile));
-		make_sym(GET_ARG1(regfile), len, "syslog");
+		make_sym_by_arg(regfile, 1, len, "syslog");
 		sc_ret_v(regfile, len);
 		break;
 	}
@@ -1533,7 +1531,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		}
 
 		klee_assume_eq(GET_SYSRET(new_regs), 0);
-		make_sym(GET_ARG1(regfile), STATFS_SZ, "statfs");
+		make_sym_by_arg(regfile, 1, STATFS_SZ, "statfs");
 
 		sc_ret_v_new(new_regs, 0);
 		break;
@@ -1544,7 +1542,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 			sc_ret_v(regfile, -1);
 			break;
 		}
-		make_sym(GET_ARG2(regfile), GET_ARG3(regfile), "getxattr");
+		make_sym_by_arg(regfile, 2, GET_ARG3(regfile), "getxattr");
 		sc_ret_or(sc_new_regs(regfile), -1, GET_ARG3(regfile));
 		break;
 
@@ -1555,7 +1553,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		}
 
 		new_regs = sc_new_regs(regfile);
-		make_sym(GET_ARG0(regfile), TIMEVAL_SZ, "timeofday");
+		make_sym_by_arg(regfile, 0, TIMEVAL_SZ, "timeofday");
 		sc_ret_or(new_regs, 0, -1);
 		break;
 
