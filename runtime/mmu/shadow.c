@@ -7,10 +7,9 @@
 //#define SHADOW_RECLAIM_MEM	1
 //#define SHADOW_DEBUG	1
 
-#define PAGE_MAX_SIZE		4096
-#define PTR2BUCKET(x)		((((uint64_t)(x))/PAGE_MAX_SIZE) % SHADOW_PG_BUCKETS)
-#define PTR2PGNUM(x)		((((uint64_t)(x))/PAGE_MAX_SIZE))
-#define PGNUM2PTR(x)		(void*)((uint64_t)(x) * PAGE_MAX_SIZE)
+#define PTR2BUCKET(x)		((((uint64_t)(x))/SHADOW_PG_SZ) % SHADOW_PG_BUCKETS)
+#define PTR2PGNUM(x)		((((uint64_t)(x))/SHADOW_PG_SZ))
+#define PGNUM2PTR(x)		(void*)((uint64_t)(x) * SHADOW_PG_SZ)
 
 #define phys_to_off(s, x)	(((((x) % (s)->si_phys_bytes_ppg)/(s)->si_gran)\
 					*(s)->si_bits)/8)
@@ -104,7 +103,7 @@ int shadow_init(
 
 	si->si_gran = granularity;
 	si->si_bits = bits_per_unit;
-	si->si_units_ppg = (PAGE_MAX_SIZE * 8) / (si->si_gran*si->si_bits);
+	si->si_units_ppg = (SHADOW_PG_SZ * 8) / (si->si_gran*si->si_bits);
 	si->si_phys_bytes_ppg = si->si_gran * si->si_units_ppg;
 
 	si->si_alloced_pages = 0;
@@ -320,8 +319,8 @@ void shadow_put(struct shadow_info* si, uint64_t phys, uint64_t l)
 #endif
 }
 
-int shadow_pg_used(struct shadow_info* si, uint64_t phys)
-{ return shadow_pg_get(si, phys) != NULL; }
+int shadow_pg_used(struct shadow_info* si, const void* phys)
+{ return shadow_pg_get(si, (uint64_t)phys) != NULL; }
 
 void shadow_put_large(struct shadow_info* si, uint64_t phys, const void* ptr)
 { klee_assert(0 == 1); }
@@ -378,11 +377,10 @@ static void shadow_free_page(struct shadow_info* si, struct shadow_page *p)
 	struct shadow_pg_bucket	*spb;
 	unsigned	i, j;
 
-	spb = &(si->si_bucket[PTR2BUCKET(p->sp_pgnum * 4096)]);
-	for (i = 0; i < spb->spb_pg_c; i++) {
+	spb = &(si->si_bucket[PTR2BUCKET(p->sp_pgnum * SHADOW_PG_SZ)]);
+	for (i = 0; i < spb->spb_pg_c; i++)
 		if (spb->spb_pgs[i] == p)
 			break;
-	}
 
 	/* couldn't find page?? */
 	if (i == spb->spb_pg_c) return;

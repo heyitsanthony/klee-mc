@@ -80,4 +80,11 @@ struct mmu_ops
 #define MMU_FWD_STORE(n,w,a,v) MMUOPS_S(n).mo_next->mo_store_##w(a, v)
 #define MMU_FWD_LOAD(n,w,a) MMUOPS_S(n).mo_next->mo_load_##w(a)
 
+#define MMU_FWD_opt(n,f) do {	\
+	for (	struct mmu_ops* mo = MMUOPS_S(n).mo_next;	\
+		mo != NULL; mo = mo->mo_next) {			\
+		if (mo->mo_##f != NULL)	{ mo->mo_##f(); break; } }
+#define MMU_FWD_CLEANUP(n)	MMU_FWD_opt(n, cleanup)
+#define MMU_FWD_INIT(n)		MMU_FWD_opt(n, init)
+
 #endif

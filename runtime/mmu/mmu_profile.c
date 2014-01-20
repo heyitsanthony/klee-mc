@@ -24,7 +24,7 @@ y mmu_load_##x##_profile(void* addr)	\
 			shadow_get(&profile_si, (long)addr) + 1);	\
 		in_profile--;	\
 	}	\
-	return mmu_load_##x##_objwide(addr); }
+	return MMU_FWD_LOAD(profile, x, addr); }
 
 #define MMU_STORE(x,y)			\
 void mmu_store_##x##_profile(void* addr, y v)	\
@@ -37,9 +37,11 @@ void mmu_store_##x##_profile(void* addr, y v)	\
 			shadow_get(&profile_si, (long)addr) + 1);	\
 		in_profile--;	\
 	}	\
-	return mmu_store_##x##_objwide(addr, v); }
+	return MMU_FWD_STORE(profile, x, addr, v); }
 
-void mmu_init_profile(void) { shadow_init(&profile_si, PROF_BYTES, 32, 0); }
+void mmu_init_profile(void) {
+	shadow_init(&profile_si, PROF_BYTES, 32, 0);
+	MMU_FWD_INIT(profile); }
 
 void mmu_cleanup_profile(void)
 {
@@ -55,9 +57,6 @@ void mmu_cleanup_profile(void)
 #if 0
 		if (!shadow_used_range(&profile_si, (long)cur_pg, &lo, &hi))
 			continue;
-
-		klee_print_expr("lo", lo);
-		klee_print_expr("hi", hi);
 #else
 		lo = 0;
 		hi = 4096*4/8;
@@ -78,6 +77,8 @@ void mmu_cleanup_profile(void)
 	}
 
 	klee_print_expr("Profile accesses minimized", sym_c);
+
+	MMU_FWD_CLEANUP(profile);
 }
 
 MMU_ACCESS_ALL();

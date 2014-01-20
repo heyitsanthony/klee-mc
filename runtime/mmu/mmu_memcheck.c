@@ -456,7 +456,7 @@ void mmu_signal_memcheck(void* addr, uint64_t len)
 #define MMU_LOADC(x,y)				\
 y mmu_load_##x##_memcheckc(void* addr)		\
 {						\
-if (!shadow_pg_used(&heap_si, (uint64_t)addr))	\
+if (!shadow_pg_used(&heap_si, addr))		\
 	return mmu_load_##x##_cnulltlb(addr);	\
 if (!in_heap)					\
 	check_r(addr, x/8, "Loading from", "const pointer"); \
@@ -466,7 +466,7 @@ return mmu_load_##x##_cnull(addr); }
 #define MMU_STOREC(x,y)					\
 void mmu_store_##x##_memcheckc(void* addr, y v)		\
 {							\
-if (!shadow_pg_used(&heap_si, (uint64_t)addr)) {	\
+if (!shadow_pg_used(&heap_si, addr)) {			\
 	mmu_store_##x##_cnulltlb(addr, v);		\
 	return;						\
 }							\

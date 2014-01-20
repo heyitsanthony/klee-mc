@@ -9,6 +9,8 @@
 #define SHADOW_PG_BUCKETS	256
 #endif
 
+#define SHADOW_PG_SZ		4096
+
 /* might want to add statistic tracking on last update */
 struct shadow_page {
 	uint64_t	sp_pgnum;	/* base address */
@@ -54,7 +56,7 @@ void shadow_or_range(
 	struct shadow_info* si, uint64_t phys, int units, 
 	uint64_t l);
 uint64_t shadow_get(struct shadow_info* si, uint64_t phys);
-int shadow_pg_used(struct shadow_info* si, uint64_t phys);
+int shadow_pg_used(struct shadow_info* si, const void* phys);
 void shadow_get_large(struct shadow_info* si, uint64_t phys, void* ptr);
 
 int shadow_used_range(
