@@ -7,6 +7,9 @@
 #include "mmu.h"
 #include "shadow.h"
 
+MMUOPS_S_EXTERN(mask);
+MMUOPS_S_EXTERN(maskc);
+
 #warning mmu_mask is not done yet
 
 static int			mmu_mask_c = 0;
@@ -55,50 +58,36 @@ void mmu_signal_mask(void* addr, unsigned len)
 
 #define MMU_LOADC(x,y)		\
 y mmu_load_##x##_maskc(void* addr)	\
-{	if (in_mmu_mask) return MMU_FWD_LOAD(maskc, x);
-	in_mmu_mask++;
-	/* XXX */
-	in_mmu_mask--;
-}
-
-
-#define MMU_LOADC(x,y)		\
-y mmu_load_##x##_maskc(void* addr)	\
-{ if (in_mmu_mask) return MMU_FWD_LOAD(maskc, x);
-  in_mmu_mask++;
-  /* XXX */
-  in_mmu_mask--;
-}
+{	if (in_mmu_mask) return MMU_FWD_LOAD(maskc, x, addr);	\
+	in_mmu_mask++;	\
+	/* XXX */	\
+	in_mmu_mask--; }
 
 #define MMU_STOREC(x,y)			\
 void mmu_store_##x##_maskc(void* addr, y v)	\
-{ if(in_mmu_mask) return MMU_FWD_STORE(maskc, x, addr, v);
-in_mmu_mask++;
-/* XXX */
-in_mmu_mask--;
-}
+{ if(in_mmu_mask) return MMU_FWD_STORE(maskc, x, addr, v); \
+in_mmu_mask++; \
+/* XXX */ \
+in_mmu_mask--; }
 
 #define MMU_LOAD(x,y)		\
 y mmu_load_##x##_mask(void* addr)	\
-{ if (in_mmu_mask) return MMU_FWD_LOAD(mask, x);
-in_mmu_mask++;
-/* XXX */
-in_mmu_mask--;
-}
+{ if (in_mmu_mask) return MMU_FWD_LOAD(mask, x, addr); \
+in_mmu_mask++;	\
+/* XXX */	\
+in_mmu_mask--; }
 
 #define MMU_STORE(x,y)			\
 void mmu_store_##x##_mask(void* addr, y v)	\
-{ if (in_mmu_mask) return MMU_FWD_STORE(mask, x, addr, v);
-in_mmu_mask++;
-/* XXX */
-in_mmu_mask--;
-}
+{ if (in_mmu_mask) return MMU_FWD_STORE(mask, x, addr, v); \
+in_mmu_mask++;	\
+/* XXX */	\
+in_mmu_mask--; }
 
 #undef MMU_ACCESS
 #define MMU_ACCESS(x,y)			\
 	MMU_LOAD(x,y)	MMU_LOADC(x,y)	\
 	MMU_STORE(x,y)	MMU_STOREC(x,y)
-
 
 MMU_ACCESS_ALL();
 DECL_MMUOPS_S(maskc);

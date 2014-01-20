@@ -1,5 +1,5 @@
 // RUN: gcc %s -O0 -I../../../include/  -o %t1
-// RUN: klee-mc -pipe-solver -sym-mmu-type=profile -use-sym-mmu - ./%t1 2>%t1.err >%t1.out
+// RUN: klee-mc -pipe-solver -sym-mmu-type=../profilestack.txt -use-sym-mmu - ./%t1 2>%t1.err >%t1.out
 // RUN: ls klee-last | not grep ptr.err
 // RUN: grep "Minimizing" %t1.err
 // RUN: ls klee-last | grep ktest.gz | wc -l | grep 2

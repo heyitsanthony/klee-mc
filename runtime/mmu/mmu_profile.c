@@ -8,6 +8,8 @@
 #include "mmu.h"
 #include "shadow.h"
 
+MMUOPS_S_EXTERN(profile);
+
 static struct shadow_info	profile_si;
 
 static uint8_t in_profile = 0;
@@ -45,9 +47,10 @@ void mmu_init_profile(void) {
 
 void mmu_cleanup_profile(void)
 {
-	void	*cur_pg = NULL;
+	void		*cur_pg = NULL;
 	unsigned	sym_c = 0;
 
+	in_profile++;
 	klee_print_expr("[Profile] Minimizing", 0);
 
 	while ((cur_pg = shadow_next_pg(&profile_si, cur_pg)) != NULL) {
