@@ -49,8 +49,8 @@ DEF_MMU(cnull)
 struct mmu_ops MMUOPS_S(name) = { DECL_MMUOPS_ALL(name) }
 
 // need to get default forwarding working ugh.
-//void mmu_cleanup_##name(void) { MMU_FWD_CLEANUP(name); }	\
-//void mmu_init_##name(void) { MMU_FWD_INIT(name); }		\
+//void mmu_cleanup_##name(void) { MMU_FWD_CLEANUP(name); }
+//void mmu_init_##name(void) { MMU_FWD_INIT(name); }
 
 struct mmu_ops
 {

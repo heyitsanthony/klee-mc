@@ -7,79 +7,84 @@
 #include "klee/klee.h"
 #include "mmu.h"
 #include "shadow.h"
+#include "../Intrinsic/cex.h"
 
 MMUOPS_S_EXTERN(profile);
 
 static struct shadow_info	profile_si;
+static uint8_t			in_profile = 0;
+static unsigned			load_update_c = 0 , store_update_c = 0;
+static struct cex_t		profile_cex;
 
-static uint8_t in_profile = 0;
+#define PROF_BYTES	4	/* words */
 
-#define PROF_BYTES	8
+static int try_cex(uint64_t addr, uint64_t a_r, unsigned i)
+{	uint64_t ca = cex_get(&profile_cex, i);
+	if (shadow_get(&profile_si, ca)) return 0;
+	if (!cex_take(&profile_cex, a_r, i)) return 0;
+	if (klee_feasible_eq(addr, ca)) klee_assume_eq(addr, ca);
+	else klee_assume_eq(a_r, ca);
+	shadow_put(&profile_si, ca, 1);
+	return 1; }
+
+static void greedy_update(uint64_t addr)
+{	uint64_t a_r = addr & ~(PROF_BYTES-1LL);
+	if (cex_n(&profile_cex) && try_cex(addr, a_r, 0)) return;
+	int n = cex_find(&profile_cex, a_r), i;
+	for (i = 0; i < n; i++) if (try_cex(addr, a_r, i)) return;
+	/* slooow path */
+	cex_flush(&profile_cex);
+	shadow_put(&profile_si, addr, shadow_get(&profile_si, addr)+1); }
+
+#define INC_SHADOW(x,a)	\
+do {	if (in_profile) break;	\
+	x##_update_c++;		\
+	in_profile++; greedy_update((uint64_t)a); in_profile--;	\
+} while (0)
 
 #define MMU_LOAD(x,y)		\
 y mmu_load_##x##_profile(void* addr)	\
-{	if (! in_profile) {	\
-		in_profile++;	\
-		shadow_put(	\
-			&profile_si, 	\
-			(long)addr,	\
-			shadow_get(&profile_si, (long)addr) + 1);	\
-		in_profile--;	\
-	}	\
-	return MMU_FWD_LOAD(profile, x, addr); }
+{ INC_SHADOW(load, addr); return MMU_FWD_LOAD(profile, x, addr); }
 
 #define MMU_STORE(x,y)			\
 void mmu_store_##x##_profile(void* addr, y v)	\
-{	\
-	if (! in_profile) {	\
-		in_profile++;	\
-		shadow_put(	\
-			&profile_si, 	\
-			(long)addr,	\
-			shadow_get(&profile_si, (long)addr) + 1);	\
-		in_profile--;	\
-	}	\
-	return MMU_FWD_STORE(profile, x, addr, v); }
+{ INC_SHADOW(store, addr); return MMU_FWD_STORE(profile, x, addr, v); }
 
+#define UNIT_BITS	32
+#define UNIT_BYTES	(UNIT_BITS/8)
 void mmu_init_profile(void) {
-	shadow_init(&profile_si, PROF_BYTES, 32, 0);
+	cex_init(&profile_cex, 2048);
+	shadow_init(&profile_si, PROF_BYTES, UNIT_BITS, 0);
 	MMU_FWD_INIT(profile); }
 
 void mmu_cleanup_profile(void)
 {
 	void		*cur_pg = NULL;
-	unsigned	sym_c = 0;
+	unsigned	sym_c = 0, shadow_pg_c = 0;
 
 	in_profile++;
-	klee_print_expr("[Profile] Minimizing", 0);
+	klee_print_expr("[mmu_profile] Minimizing", 0);
 
 	while ((cur_pg = shadow_next_pg(&profile_si, cur_pg)) != NULL) {
 		unsigned	i;
-		unsigned	lo, hi;
-
-#if 0
-		if (!shadow_used_range(&profile_si, (long)cur_pg, &lo, &hi))
-			continue;
-#else
-		lo = 0;
-		hi = 4096*4/8;
-#endif
-
-		/* divide by 4 to get unit number */
-		for (i = lo/4; i < hi/4; i++) {
+		for (i = 0; i < 4096*PROF_BYTES/UNIT_BYTES; i++) {
 			uint64_t	v;
 
 			/* prof bytes is unit address stride */
 			v = shadow_get(&profile_si, (long)cur_pg+i*PROF_BYTES);
-			if (!klee_is_symbolic(v))
+			if (!klee_is_symbolic(v) || !klee_feasible_ugt(v,1))
 				continue;
 
-			if (klee_feasible_ugt(v, 1))
-				klee_assume_ugt(v, 1);
+			klee_assume_ugt(v, 1);
+			sym_c++;
 		}
+
+		shadow_pg_c++;
 	}
 
-	klee_print_expr("Profile accesses minimized", sym_c);
+	klee_print_expr("[mmu_profile] accesses", load_update_c+store_update_c);
+	klee_print_expr("[mmu_profile] shadow pages processed", shadow_pg_c);
+	klee_print_expr("[mmu_profile] accesses minimized", sym_c);
 
 	MMU_FWD_CLEANUP(profile);
 }
@@ -90,5 +95,4 @@ struct mmu_ops mmu_ops_profile = {
 	DECL_MMUOPS(profile)
 	.mo_signal = NULL,
 	.mo_cleanup = mmu_cleanup_profile,
-	.mo_init = mmu_init_profile
-};
+	.mo_init = mmu_init_profile };

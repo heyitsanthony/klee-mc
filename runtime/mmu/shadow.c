@@ -11,15 +11,15 @@
 #define PTR2PGNUM(x)		((((uint64_t)(x))/SHADOW_PG_SZ))
 #define PGNUM2PTR(x)		(void*)((uint64_t)(x) * SHADOW_PG_SZ)
 
-#define phys_to_off(s, x)	(((((x) % (s)->si_phys_bytes_ppg)/(s)->si_gran)\
-					*(s)->si_bits)/8)
-#define phys_to_bit(s,x)	(((((x) % (s)->si_phys_bytes_ppg)/(s)->si_gran)\
-					*(s)->si_bits)%8)
+#define phys_to_unit(s,x)	((x) / (s)->si_gran)
+#define phys_to_spg_unit(s,x)	(phys_to_unit(s,x) % (s)->si_units_ppg)
+#define phys_to_off(s,x)	(phys_to_spg_unit(s,x) * (s)->si_unit_bits)/8
+#define phys_to_bit(s,x)	((phys_to_spg_unit(s,x) * (s)->si_unit_bits)%8)
 
-#define si_is_tiny(s)		((s)->si_bits < 8)
-#define si_is_small(s)		((s)->si_bits >= 8 && \
-					((s)->si_bits <= (sizeof(uint64_t)*8)))
-#define si_is_large(s)		((s)->si_bits > (sizeof(uint64_t)*8))
+#define si_is_tiny(s)		((s)->si_unit_bits < 8)
+#define si_is_small(s)		((s)->si_unit_bits >= 8 && \
+					((s)->si_unit_bits <= (sizeof(uint64_t)*8)))
+#define si_is_large(s)		((s)->si_unit_bits > (sizeof(uint64_t)*8))
 
 
 static struct shadow_page* shadow_new_page(struct shadow_info* si, uint64_t ptr);
@@ -102,19 +102,18 @@ int shadow_init(
 	}
 
 	si->si_gran = granularity;
-	si->si_bits = bits_per_unit;
-	si->si_units_ppg = (SHADOW_PG_SZ * 8) / (si->si_gran*si->si_bits);
-	si->si_phys_bytes_ppg = si->si_gran * si->si_units_ppg;
+	si->si_unit_bits = bits_per_unit;
+	si->si_units_ppg = SHADOW_PG_SZ / si->si_gran;
 
 	si->si_alloced_pages = 0;
-	si->si_bytes_ppg = (si->si_units_ppg * si->si_bits + 7)/ 8 + 
+	si->si_bytes_ppg = (si->si_units_ppg * si->si_unit_bits + 7)/ 8 + 
 			sizeof(uint64_t);
 
 	memset(si->si_bucket, 0, sizeof(si->si_bucket));
 
-	si->si_mask = (si->si_bits == (sizeof(uint64_t)*8))
+	si->si_mask = (si->si_unit_bits == (sizeof(uint64_t)*8))
 		? ~0UL
-		: (1UL << si->si_bits) - 1;
+		: (1UL << si->si_unit_bits) - 1;
 
 	si->si_initial = initial;
 
@@ -216,7 +215,7 @@ static void shadow_put_small(
 	uint64_t	data;
 
 #ifdef SHADOW_RECLAIM_MEM
-	if (memcmp(&si->si_initial, &sp->sp_data[off], si->si_bits / 8) == 0)
+	if (memcmp(&si->si_initial, &sp->sp_data[off], si->si_unit_bits / 8) == 0)
 		sp->sp_refs++;
 #endif
 	data = *((uint64_t*)&sp->sp_data[off]);
@@ -224,7 +223,7 @@ static void shadow_put_small(
 	data |= l & si->si_mask;
 	*((uint64_t*)&sp->sp_data[off]) = data;
 #ifdef SHADOW_RECLAIM_MEM
-	if (memcmp(&si->si_initial, &l, si->si_bits / 8) == 0)
+	if (memcmp(&si->si_initial, &l, si->si_unit_bits / 8) == 0)
 		sp->sp_refs--;
 #endif
 }
@@ -346,11 +345,8 @@ static uint64_t shadow_get_uninit(struct shadow_info* si)
 static uint64_t shadow_get_small(
 	struct shadow_info* si, struct shadow_page* p, uint64_t phys)
 {
-	int		off = phys_to_off(si, phys);
-	uint64_t	ret;
-
-	ret = *(uint64_t*)(&p->sp_data[off]);
-
+	unsigned	off = phys_to_off(si, phys);
+	uint64_t	ret = *(uint64_t*)(&p->sp_data[off]);
 	return ret & si->si_mask;
 }
 
@@ -361,13 +357,10 @@ uint64_t shadow_get(struct shadow_info* si, uint64_t phys)
 	klee_assert(!si_is_large(si));
 
 	pg = shadow_pg_get(si, phys);
-	if (pg == NULL)
-		return shadow_get_uninit(si);
+	if (pg == NULL) return shadow_get_uninit(si);
 
-	if (si_is_tiny(si))
-		return shadow_get_tiny(si, pg, phys);
-	else if (si_is_small(si))
-		return shadow_get_small(si, pg, phys);
+	if (si_is_tiny(si)) return shadow_get_tiny(si, pg, phys);
+	else if (si_is_small(si)) return shadow_get_small(si, pg, phys);
 
 	return ~0UL;
 }

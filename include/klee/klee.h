@@ -230,6 +230,7 @@ struct kreport_ent { uint64_t strp; uint64_t v; };
 
   uint64_t klee_prefer_op(uint64_t lhs, uint64_t rhs, uint8_t op);
 
+#define klee_feasible(x)	__klee_feasible((uint64_t)(x))
   uint64_t __klee_feasible(uint64_t expr);
 
 #define __klee_feasible_op(x,y,z)	\

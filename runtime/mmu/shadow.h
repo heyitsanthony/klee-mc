@@ -11,7 +11,7 @@
 
 #define SHADOW_PG_SZ		4096
 
-/* might want to add statistic tracking on last update */
+/* might want to add statistic tracking on last update  (spg) */
 struct shadow_page {
 	uint64_t	sp_pgnum;	/* base address */
 	uintptr_t	sp_refs;	/* forces alignment */
@@ -26,11 +26,10 @@ struct shadow_pg_bucket
 };
 
 struct shadow_info {
-	unsigned	si_gran;	/* number of phys bytes a unit rep */
-	unsigned	si_bits;	/* number of bits shadowing a unit */
-	unsigned	si_units_ppg;
-	unsigned	si_phys_bytes_ppg;
-	unsigned	si_bytes_ppg;
+	unsigned	si_gran;	/* # phys bytes mapping to a one unit */
+	unsigned	si_unit_bits;	/* # bits shadowing a unit */
+	unsigned	si_units_ppg;	/* # units that mapping to phys page */
+	unsigned	si_bytes_ppg;	/* length of sp_data */
 	unsigned	si_alloced_pages;
 
 	/* default data for a shadow unit */
