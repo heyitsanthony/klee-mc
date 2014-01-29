@@ -12,6 +12,7 @@
 #include "klee/Internal/Support/Watchdog.h"
 #include "static/Sugar.h"
 
+#include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>

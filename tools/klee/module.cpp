@@ -362,8 +362,8 @@ static Module* setupLibc(Module* mainModule, ModuleOptions& Opts)
 	case KleeLibc: {
 		// FIXME: Find a reasonable solution for this.
 		// XXX SOLUTION FOR WHAT!? --AJR
-		llvm::sys::Path Path(Opts.LibraryDir);
-		Path.appendComponent("libklee-libc.bc");
+		std::string	Path(Opts.LibraryDir);
+		Path = Path + "/libklee-libc.bc";
 		mainModule = klee::linkWithLibrary(mainModule, Path.c_str());
 		assert(mainModule && "unable to link with klee-libc");
 
@@ -379,8 +379,8 @@ static Module* setupLibc(Module* mainModule, ModuleOptions& Opts)
 
 
 	if (exclude_fns_f != NULL) {
-		llvm::sys::Path ExcludePath(Opts.LibraryDir);
-		ExcludePath.appendComponent(exclude_fns_f);
+		std::string	ExcludePath(Opts.LibraryDir);
+		ExcludePath = ExcludePath + "/" + exclude_fns_f;
 		Opts.ExcludeCovFiles.push_back(ExcludePath.c_str());
 	}
 
@@ -479,8 +479,8 @@ static int initEnv(Module *mainModule)
 static void loadIntrinsics(ModuleOptions& Opts)
 {
 	if (!ExcludeLibcCov) return;
-	llvm::sys::Path ExcludePath(Opts.LibraryDir);
-	ExcludePath.appendComponent("kleeRuntimeIntrinsic-fns.txt");
+	std::string	ExcludePath(Opts.LibraryDir);
+	ExcludePath = ExcludePath + "/kleeRuntimeIntrinsic-fns.txt";
 	Opts.ExcludeCovFiles.push_back(ExcludePath.c_str());
 }
 
@@ -488,15 +488,15 @@ static void loadPOSIX(Module* &mainModule, ModuleOptions& Opts)
 {
 	if (!g_WithPOSIXRuntime) return;
 
-	llvm::sys::Path Path(Opts.LibraryDir);
-	Path.appendComponent("libkleeRuntimePOSIX.bc");
+	std::string Path(Opts.LibraryDir);
+	Path = Path + ("/libkleeRuntimePOSIX.bc");
 	klee_message("NOTE: Using model: %s", Path.c_str());
 
 	mainModule = klee::linkWithLibrary(mainModule, Path.c_str());
 	assert(mainModule && "unable to link with simple model");
 	if (ExcludeLibcCov) {
-		llvm::sys::Path ExcludePath(Opts.LibraryDir);
-		ExcludePath.appendComponent("kleeRuntimePOSIX-fns.txt");
+		std::string	ExcludePath(Opts.LibraryDir);
+		ExcludePath = ExcludePath + "/kleeRuntimePOSIX-fns.txt";
 		Opts.ExcludeCovFiles.push_back(ExcludePath.c_str());
 	}
 }

@@ -1,5 +1,4 @@
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
-#include <llvm/Support/Path.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/Support/CommandLine.h>
 #include "klee/Internal/Module/KModule.h"
@@ -37,7 +36,7 @@ SoftFPPass::SoftFPPass(KModule* _km)
 , km(_km)
 {
 	llvm::Module	*mod;
-	llvm::sys::Path	path(km->getLibraryDir());
+	std::string	path(km->getLibraryDir());
 
 	struct func_names	fns[] = {
 		{"float64_to_float32", &f_fptrunc},
@@ -67,7 +66,7 @@ SoftFPPass::SoftFPPass(KModule* _km)
 		{NULL, NULL}
 	};
 
-	path.appendComponent(SoftFPLib.c_str());
+	path = path + '/' + SoftFPLib;
 	std::cerr << "[SoftFPU] Using library '" << path.c_str() << "'\n";
 
 

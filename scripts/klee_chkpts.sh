@@ -2,7 +2,8 @@
 
 p=`dirname $0`
 if [ ! -z "$p" ]; then p="$p/"; fi
-source `"$p"defaults.sh`
+echo "p = $p"
+source "$p"defaults.sh
 
 
 # here we collect all the snapshot diffs

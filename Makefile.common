@@ -13,6 +13,7 @@ REQUIRES_RTTI=1
 include $(LEVEL)/Makefile.config
 
 # Include LLVM's Master Makefile config and rules.
+#
 include $(LLVM_OBJ_ROOT)/Makefile.config
 
 DISABLE_ASSERTIONS := 0
@@ -45,6 +46,7 @@ LLVMCXX := $(LLVMGXX)
 endif
 
 include $(LLVM_SRC_ROOT)/Makefile.rules
+include $(LEVEL)/Makefile.libs
 
 # THIS WAS REMOVED IN LLVM-3.2
 # NEED TO ADD DEJAGNU TEST TO SETUP

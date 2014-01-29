@@ -35,7 +35,6 @@
 #include <llvm/Support/CallSite.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/Process.h>
-#include <llvm/Support/Path.h>
 
 #include <iostream>
 #include <fstream>
@@ -155,15 +154,16 @@ StatsTracker::StatsTracker(
 , updateMinDistToUncovered(false)
 , lastCoveredInstruction(0)
 {
-	sys::Path module(objectFilename);
+	std::string	module(objectFilename);
 	km = in_km;
 
-	if (!sys::path::is_absolute(objectFilename)) {
+	if (objectFilename[0] != '/') {
+		char	cwd[PATH_MAX];
 		struct stat s;
-		sys::Path current = sys::Path::GetCurrentDirectory();
-		current.appendComponent(objectFilename);
-		if (stat(current.c_str(), &s) != -1)
-			objectFilename = current.c_str();
+		getcwd(cwd, PATH_MAX);
+		sprintf(cwd, "%s/%s", cwd, objectFilename.c_str());
+		if (stat(cwd, &s) != -1)
+			objectFilename = cwd;
 	}
 
 	foreach (fit, excludeCovFiles.begin(), excludeCovFiles.end()) {
@@ -516,7 +516,7 @@ void StatsTracker::writeIStats(void)
 
   of << "version: 1\n";
   of << "creator: klee\n";
-  of << "pid: " << sys::Process::GetCurrentUserId() << "\n";
+  of << "pid: " << getpid() << '\n';
   of << "cmd: " << m->getModuleIdentifier() << "\n\n";
   of << "\n";
 

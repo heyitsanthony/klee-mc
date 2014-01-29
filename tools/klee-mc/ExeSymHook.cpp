@@ -383,6 +383,7 @@ ExecutionState* ExeSymHook::setupInitialStateEntry(uint64_t entry)
 		{"_int_malloc", &f_mallocs[FM_INT_MALLOC]},
 		{"__GI___libc_malloc", &f_mallocs[FM_GI_LIBC_MALLOC]},
 		{"memalign", &f_mallocs[FM_MEMALIGN]},
+		{"__memalign", &f_mallocs[FM_MEMALIGN]},
 		{"__GI___libc_realloc", &f_mallocs[FM_GI_LIBC_REALLOC]},
 		{"realloc", &f_mallocs[FM_REALLOC]},
 		{"__calloc", &f_mallocs[FM_CALLOC2]},

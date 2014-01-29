@@ -260,15 +260,16 @@ unsigned kTest_numBytes(KTest *bo) {
   return res;
 }
 
-void kTest_free(KTest *bo) {
-  unsigned i;
-  for (i=0; i<bo->numArgs; i++)
-    free(bo->args[i]);
-  free(bo->args);
-  for (i=0; i<bo->numObjects; i++) {
-    free(bo->objects[i].name);
-    free(bo->objects[i].bytes);
-  }
-  free(bo->objects);
-  free(bo);
+void kTest_free(KTest *bo)
+{
+	for (unsigned i=0; i < bo->numArgs; i++) free(bo->args[i]);
+	free(bo->args);
+
+	for (unsigned i=0; i < bo->numObjects; i++) {
+		free(bo->objects[i].name);
+		free(bo->objects[i].bytes);
+	}
+
+	free(bo->objects);
+	free(bo);
 }

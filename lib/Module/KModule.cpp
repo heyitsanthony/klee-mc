@@ -17,7 +17,6 @@
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/raw_os_ostream.h>
-#include <llvm/Support/Path.h>
 #include <llvm/IR/DataLayout.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
@@ -706,10 +705,10 @@ void KModule::loadIntrinsicsLib()
 		dataLayout->getIntPtrType(getGlobalContext()), (Type*) 0);
 	// FIXME: Missing force import for various math functions.
 
-	llvm::sys::Path path(getLibraryDir());
+	std::string	path(getLibraryDir());
 
-	path.appendComponent("libkleeRuntimeIntrinsic.bc");
-	Module	*m = klee::getBitcodeModule(path.str().c_str());
+	path =  path + "/libkleeRuntimeIntrinsic.bc";
+	Module	*m = klee::getBitcodeModule(path.c_str());
 	assert (m != NULL);
 
 	/* make all instrinsic functions in main module prototypes */

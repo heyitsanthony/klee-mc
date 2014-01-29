@@ -54,13 +54,12 @@ HookPass::HookPass(KModule* module)
 void HookPass::loadByPath(const std::string& passlib)
 {
 	llvm::Module	*mod;
-	llvm::sys::Path	path;
+	std::string	path;
 
 	if (passlib[0] == '/' || passlib[0] == '.') {
 		path = passlib;
 	} else {
-		path = kmod->getLibraryDir();
-		path.appendComponent(passlib.c_str());
+		path = kmod->getLibraryDir() + '/' + passlib;
 	}
 	std::cerr << "[HookPass] Using library '" << path.c_str() << "'\n";
 

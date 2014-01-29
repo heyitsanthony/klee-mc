@@ -21,7 +21,6 @@
 #include <llvm/IRReader/IRReader.h>
 #include <llvm/PassManager.h>
 #include <llvm/Assembly/AssemblyAnnotationWriter.h>
-#include <llvm/Bitcode/Archive.h>
 #include <llvm/Support/CFG.h>
 #include <llvm/Support/CallSite.h>
 #include <llvm/Support/InstIterator.h>

@@ -1007,7 +1007,7 @@ HKL  	dwhkl
 		sc_breadcrumb_commit(&sc, GET_SYSRET(regfile));
 	}
 
-already_logged:
+//already_logged:
 	return jmpptr;
 }
 

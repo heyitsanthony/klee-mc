@@ -51,6 +51,7 @@ proc substitute { line test tmpFile } {
   global gccpath gxxpath compile_c compile_cxx link shlibext llvmlibsdir
   global llvmtoolsdir
   global klee kleaver kleereplay
+
   set path [file join $srcdir $subdir]
 
   # Substitute all Tcl variables.
@@ -169,6 +170,11 @@ proc RunLLVMTest { test } {
 	set PRNUMS $parseArr(PR)
 	set outcome $parseArr(OUTCOME)
 	set numLines [ array size lines ]
+
+	# add scripts directory to things we can run (mainly for 'not')
+	#((TCL I fucking hate you))
+	global srcroot
+	set ::env(PATH) $::env(PATH):$srcroot/scripts
 
 	if { $numLines == 0 } {
 		fail "$test: \nDoes not have a RUN line\n"

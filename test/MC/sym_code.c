@@ -23,11 +23,9 @@ int main(int argc, char* argv[])
 		4096, 
 		PROT_EXEC | PROT_WRITE | PROT_READ);
 
-	sz = read(STDIN_FILENO, &buf, 1);
-	if (sz == 0) buf = '0';
-	buf = (buf > '0') ? 0xcc : 0xf0;
+	sz = read(0, &whatever[0], 1);
+	if (sz != 1) return 1;
 
-	whatever[0] = buf;
 	f = (w_f)whatever;
 	f();
 	// TRAP EXPECTED.

@@ -10,6 +10,7 @@
 #ifndef KLEE_KMODULE_H
 #define KLEE_KMODULE_H
 
+#include <llvm/IR/LegacyPassManager.h>
 #include "klee/Interpreter.h"
 #include "klee/Internal/Module/KFunction.h"
 #include <tr1/unordered_map>
@@ -28,7 +29,6 @@ namespace llvm
 	class Module;
 	class DataLayout;
 	class Value;
-	class FunctionPassManager;
 	class FunctionPass;
 	class raw_os_ostream;
 }
@@ -156,8 +156,8 @@ private:
 		func2kfunc_ty;
 	func2kfunc_ty functionMap;
 
-	llvm::FunctionPassManager	*fpm;
-	InterpreterHandler		*ih;
+	llvm::legacy::FunctionPassManager	*fpm;
+	InterpreterHandler			*ih;
 
 	ModuleOptions			opts;
 

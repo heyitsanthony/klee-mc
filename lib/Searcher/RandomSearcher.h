@@ -1,5 +1,5 @@
 #ifndef RANDOMSEARCHER_H
-#define RANDOMSEACHER_H
+#define RANDOMSEARCHER_H
 
 #include "../Core/Searcher.h"
 

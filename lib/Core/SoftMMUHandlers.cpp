@@ -2,7 +2,6 @@
 #include "Executor.h"
 #include "Globals.h"
 #include "klee/Internal/Module/KModule.h"
-#include <llvm/Support/Path.h>
 #include <iostream>
 #include <fstream>
 
@@ -21,15 +20,15 @@ struct loadent
 SoftMMUHandlers::SoftMMUHandlers(Executor& exe, const std::string& suffix)
 {
 	if (!isLoaded) {
-		llvm::sys::Path path(exe.getKModule()->getLibraryDir());
+		std::string	path(exe.getKModule()->getLibraryDir());
 		llvm::Module	*mod;
 
-		path.appendComponent("libkleeRuntimeMMU.bc");
+		path = path + ("/libkleeRuntimeMMU.bc");
 		mod = getBitcodeModule(path.c_str());
 		assert (mod != NULL);
 
 		exe.addModule(mod);
-		std::cerr << "[SoftMMUHandlers] Loaded "<<path.c_str()<<'\n';
+		std::cerr << "[SoftMMUHandlers] Loaded "<< path <<'\n';
 		isLoaded = true;
 	}
 

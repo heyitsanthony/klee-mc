@@ -75,11 +75,11 @@ KleeHandler::KleeHandler(const CmdArgs* in_args)
 	theDir = setupOutputDir();
 	std::cerr << "KLEE: output directory = \"" << theDir << "\"\n";
 
-	sys::Path p(theDir);
-	if (!sys::path::is_absolute(p.str())) {
-		sys::Path cwd = sys::Path::GetCurrentDirectory();
-		cwd.appendComponent(theDir);
-		p = cwd;
+	std::string p(theDir);
+	if (!sys::path::is_absolute(p)) {
+		char	cwd[PATH_MAX];
+		getcwd(cwd, PATH_MAX);
+		p = cwd + ("/" + theDir);
 	}
 
 	strcpy(m_outputDirectory, p.c_str());
@@ -97,12 +97,15 @@ KleeHandler::KleeHandler(const CmdArgs* in_args)
 
 bool KleeHandler::scanForOutputDir(const std::string& p, std::string& theDir)
 {
-	llvm::sys::Path	directory(p);
+	std::string	directory(p), dirname;
 	int		err;
 
-	std::string dirname = "";
-	directory.eraseComponent();
-	if (directory.isEmpty()) directory.set(".");
+	for (int i = directory.size() - 1; i; i--)
+		if (directory[i] == '/') {
+			directory[i] = '\0';
+			break;
+		}
+	if (directory.empty()) directory = ".";
 
 	for (int i = 0; ; i++) {
 		char buf[256], tmp[64];
@@ -118,8 +121,8 @@ bool KleeHandler::scanForOutputDir(const std::string& p, std::string& theDir)
 		}
 	}
 
-	llvm::sys::Path klee_last(directory);
-	klee_last.appendComponent("klee-last");
+	std::string klee_last(directory);
+	klee_last = klee_last + "/klee-last";
 
 	err = unlink(klee_last.c_str());
 	if (err < 0 && (errno != ENOENT))
@@ -469,21 +472,35 @@ void KleeHandler::dumpPCs(const ExecutionState& state, unsigned id)
 	delete f;
 }
 
-void KleeHandler::getPathFiles(
-	std::string path, std::vector<std::string> &results)
+static void loadContents(
+	const std::string& path,
+	std::set<std::string>&	contents)
 {
-	llvm::sys::Path p(path);
-	std::set<llvm::sys::Path> contents;
-	std::string error;
+	DIR			*d;
 
-	if (p.getDirectoryContents(contents, &error)) {
-		std::cerr << "ERROR: unable to read path directory: "
-			<< path << ": " << error << "\n";
+	d = opendir(path.c_str());
+	if (d == NULL) {
+		std::cerr << "Error reading " << path << '\n';
 		exit(1);
 	}
 
+	while (struct dirent* de = readdir(d))
+		contents.insert(path + "/" + std::string(de->d_name));
+
+	closedir(d);
+}
+
+
+void KleeHandler::getPathFiles(
+	std::string path, std::vector<std::string> &results)
+{
+	std::set<std::string>	contents;
+
+	loadContents(path, contents);
+
 	foreach (it, contents.begin(), contents.end()) {
-		std::string f = it->str();
+		std::string f(*it);
+		if (f.size() < 5) continue;
 		if (	(f.substr(f.size() - 5, f.size()) == ".path") ||
 			(f.substr(f.size() - 8, f.size()) == ".path.gz"))
 		{
@@ -516,19 +533,13 @@ void KleeHandler::getKTests(
 void KleeHandler::getKTestFiles(
 	std::string path, std::vector<std::string> &results)
 {
-	llvm::sys::Path			p(path);
-	std::set<llvm::sys::Path>	contents;
-	std::string			error;
+	std::set<std::string>	contents;
 
-	if (p.getDirectoryContents(contents, &error)) {
-		std::cerr
-			<< "ERROR: unable to read ktest directory: " << path
-			<< ": " << error << "\n";
-		exit(1);
-	}
+	loadContents(path, contents);
 
 	foreach (it, contents.begin(), contents.end()) {
-		std::string f = it->str();
+		std::string f(*it);
+		if (f.size() < 6) continue;
 		if (	f.substr(f.size()-6,f.size()) == ".ktest" || 
 			f.substr(f.size()-9,f.size()) == ".ktest.gz")
 		{

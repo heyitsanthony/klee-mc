@@ -14,6 +14,8 @@
 
 using namespace klee;
 
+#define ESSTAG "[ExeSnapshotSeq] "
+
 namespace
 {
 	llvm::cl::opt<bool> UsePrePost("use-prepost");
@@ -45,6 +47,7 @@ void ExeSnapshotSeq::handleXferSyscall(
 
 void ExeSnapshotSeq::runLoop(void)
 {
+	std::cerr << ESSTAG "Loading Guests\n";
 	loadGuestSequence();
 	ExecutorVex::runLoop();
 }
@@ -60,13 +63,13 @@ void ExeSnapshotSeq::addPrePostSeq(void)
 		pre_es = addSequenceGuest(last_es, i, "-pre");
 		last_es = pre_es;
 		if (last_es == NULL) break;
-		std::cerr << "[ExeSnapshotSeq] PreGuest#" << i << '\n';
+		std::cerr << ESSTAG "PreGuest#" << i << '\n';
 		es2esv(*pre_es).setSyscallCount(i);
 
 		post_es = addSequenceGuest(last_es, i, "-post");
 		last_es = post_es;
 		if (last_es == NULL) break;
-		std::cerr << "[ExeSnapshotSeq] PostGuest#" << i << '\n';
+		std::cerr << ESSTAG "PostGuest#" << i << '\n';
 		es2esv(*post_es).setSyscallCount(i);
 
 	}
@@ -77,15 +80,16 @@ void ExeSnapshotSeq::addPrePostSeq(void)
 void ExeSnapshotSeq::addSeq(const char* suff)
 {
 	ExecutionState	*last_es(getCurrentState());
+	unsigned	i;
+	
 	/* load all guests in sequence */
-	for (unsigned i = 1; ; i++) {
+	for (i = 1; ; i++) {
 		last_es = addSequenceGuest(last_es, i, suff);
 		if (last_es == NULL) break;
-		std::cerr
-			<< "[ExeSnapshotSeq] Load Guest "
-			<< suff << "#" << i << '\n';
 		es2esv(*last_es).setSyscallCount(i);
 	}
+
+	std::cerr << ESSTAG "Added " << i-1 <<  " '" << suff << "' snapshots.\n";
 }
 
 void ExeSnapshotSeq::loadGuestSequence(void)
@@ -94,9 +98,9 @@ void ExeSnapshotSeq::loadGuestSequence(void)
 		/* add sequence of guests before *and* after syscall */
 		addPrePostSeq();
 	} else if (UseSSeqPre) {
-		addSeq("pre");
+		addSeq("-pre");
 	} else if (UseSSeqPost) {
-		addSeq("post");
+		addSeq("-post");
 	} else {
 		/* add sequence of guests all before syscall */
 		addPreSeq();
@@ -120,7 +124,10 @@ ExecutionState* ExeSnapshotSeq::addSequenceGuest(
 	sprintf(s, "%s-%04d%s", base_guest_path.c_str(), i, suff);
 
 	/* does snapshot directory exist? */
-	if (stat(s, &st) == -1) return NULL;
+	if (stat(s, &st) == -1) {
+		std::cerr << ESSTAG "missing " << s <<'\n';
+		return NULL;
+	}
 
 	/* load with an offset so no conflicts with base guest */
 	assert (getenv("VEXLLVM_BASE_BIAS") == NULL);
