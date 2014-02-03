@@ -70,6 +70,7 @@ namespace {
   DECL_OPTBOOL(DebugCheckForImpliedValues, "debug-check-for-implied-values");
   DECL_OPTBOOL(AllExternalWarnings, "all-external-warnings");
   DECL_OPTBOOL(VerifyPath, "verify-path");
+  DECL_OPTBOOL(ForceCOW, "force-cow");
 
   cl::opt<bool>
   DumpBadInitValues(
@@ -2085,6 +2086,17 @@ void Executor::setupFiniFuncs()
 	fini_kfunc = kmodule->buildListFunc(f_l, "__klee_finilist_f");
 }
 
+static void doForceCOW(ExecutionState& es)
+{
+	std::cerr << "[Executor] Forcing COW: 'Sharing' exclusive objects.\n";
+	foreach (it, es.addressSpace.begin(), es.addressSpace.end()) {
+		const MemoryObject	*mo(it->first);
+		const ObjectState	*os(es.addressSpace.findObject(mo));
+		if (os->isZeroPage() || os->readOnly) continue;
+		const_cast<ObjectState*>(os)->setOwner(~0 - 1);
+	}
+}
+
 void Executor::run(ExecutionState &initState)
 {
 	PTree	*pt;
@@ -2101,6 +2113,8 @@ void Executor::run(ExecutionState &initState)
 
 	stateManager->setInitialState(&initState);
 	pt = stateManager->getPTree();
+
+	if (ForceCOW) doForceCOW(initState);
 
 	initialStateCopy = initState.copy();
 	assert (initState.ptreeNode != NULL);
@@ -2319,6 +2333,7 @@ ObjectState* Executor::makeSymbolic(
 	array = Array::create(state.getArrName(arrPrefix), mo->mallocKey);
 	array = Array::uniqueByName(array);
 	os = state.bindMemObjWriteable(mo, array.get());
+	os->incCopyDepth();
 	state.addSymbolic(const_cast<MemoryObject*>(mo) /* yuck */, array.get());
 
 	return os;

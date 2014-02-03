@@ -27,7 +27,8 @@ private:
 		ExecutionState* last_es,
 		unsigned i,
 		const char *suff = "");
-	void loadUpdatedMapping(
+
+	unsigned loadUpdatedMapping(
 		ExecutionState* new_es,
 		Guest* new_gs,
 		GuestMem::Mapping m);

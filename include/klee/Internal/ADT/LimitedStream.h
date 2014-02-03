@@ -1,5 +1,5 @@
 #ifndef LIMITEDOFSTREAM_H
-#define LIMTIEDOFSTREAM_H
+#define LIMITEDOFSTREAM_H
 
 #include <fstream>
 #include <sstream>

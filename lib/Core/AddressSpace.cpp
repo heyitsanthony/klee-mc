@@ -81,10 +81,10 @@ ObjectState *AddressSpace::getWriteable(
 
 	assert(!os->readOnly);
 
-	if (os->isOwner(cowKey))
-		return const_cast<ObjectState*> (os);
+	if (os->isOwner(cowKey)) return const_cast<ObjectState*> (os);
 
 	n = ObjectState::create(*os);
+	assert (n->getCopyDepth());
 	n->setOwner(cowKey);
 	objects = objects.replace(std::make_pair(mo, n));
 	os_generation++;
@@ -163,8 +163,7 @@ ref<Expr> AddressSpace::getFeasibilityExpr(
 	/* address >= low->base &&
 	 * address < high->base+high->size) */
 	ref<Expr> inRange =
-	AndExpr::create(
-		MK_UGE(address, lo->getBaseExpr()),
+	MK_AND(	MK_UGE(address, lo->getBaseExpr()),
 		MK_ULT(	address,
 			MK_ADD(hi->getBaseExpr(), hi->getSizeExpr())));
 	return inRange;

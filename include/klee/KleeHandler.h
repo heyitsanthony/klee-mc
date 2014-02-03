@@ -62,10 +62,6 @@ public:
 	std::ostream *openTestFile(const std::string &suffix, unsigned id);
 	std::ostream *openTestFileGZ(const std::string &suffix, unsigned id);
 
-	// load a .out file
-	static void loadOutFile(
-		std::string name, std::vector<unsigned char> &buffer);
-
 	static void getPathFiles(
 		std::string path, std::vector<std::string> &results);
 
@@ -103,6 +99,8 @@ protected:
 		unsigned id);
 
 	Interpreter	*m_interpreter;
+
+	void writeMem(const ExecutionState& s, unsigned id);
 
 	static unsigned getStopAfterNTests(void);
 private:

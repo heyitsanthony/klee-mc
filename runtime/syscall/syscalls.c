@@ -328,7 +328,6 @@ static void do_sockcall(void* regfile, int call, unsigned long* args)
 		}
 
 
-		klee_print_expr("isneg", 1);
 		if (GET_SYSRET_S(new_regs) == -1) {
 			klee_print_expr("rm", -1);
 			sc_ret_v_new(new_regs, -1);

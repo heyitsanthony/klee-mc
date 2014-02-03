@@ -464,6 +464,7 @@ void ExecutorVex::bindMappingPage(
 		if (!data[i]) continue;
 		/* can't keep zero page */
 		mmap_os = state->addressSpace.getWriteable(mmap_mo, mmap_os_c);
+		mmap_os->resetCopyDepth();
 		break;
 	}
 
@@ -585,6 +586,8 @@ void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
 	state_regctx_sz = gs->getCPUState()->getStateSize();
 	for (unsigned int i = 0; i < state_regctx_sz; i++)
 		state->write8(state_regctx_os, i, reg_data[i]);
+
+	state_regctx_os->resetCopyDepth();
 }
 
 void ExecutorVex::run(ExecutionState &initialState)

@@ -7,6 +7,9 @@
 
 #define COW_ZERO	~((unsigned)0)
 
+/* track list of all object states */
+// #define KEEP_OBJLIST
+
 class ObjectStateAlloc
 {
 public:
@@ -39,13 +42,11 @@ private:
 	static unsigned		numObjStates;
 	static ObjectStateAlloc	*os_alloc;
 	static ObjectState	*zeroPage;
-	static objlist_ty	objs;		/* all active objects */
-
 
 	const ref<Array>	src_array;
-	// exclusively for AddressSpace
 	unsigned		copyOnWriteOwner;
 	unsigned		refCount;
+	unsigned		copyDepth;
 
 	uint8_t			*concreteStore;
 	BitArray		*concreteMask;
@@ -58,8 +59,10 @@ private:
 	// mutable because we may need flush during read of const
 	mutable UpdateList	updates;
 
+#ifdef KEEP_OBJLIST
+	static objlist_ty	objs;		/* all active objects */
 	objlist_ty::iterator	objs_it;	/* obj's position in list */
-
+#endif
 public:
 	bool		readOnly;
 
@@ -143,10 +146,15 @@ public:
 	bool hasOwner(void) const { return copyOnWriteOwner != 0; }
 
 	bool isOwner(unsigned cowkey) const { return cowkey==copyOnWriteOwner; }
+	unsigned getOwner(void) const { return copyOnWriteOwner; }
 	bool revertToConcrete(void);
 	bool isRevertible(void) const;
 
 	static bool revertToConcrete(const ObjectState* os);
+
+	unsigned getCopyDepth(void) const { return copyDepth; }
+	void incCopyDepth(void) { copyDepth++; }
+	void resetCopyDepth(void) { copyDepth = 0; }
 protected:
 	void buildUpdates(void) const;
 

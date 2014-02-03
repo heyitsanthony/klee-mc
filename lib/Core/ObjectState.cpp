@@ -25,19 +25,27 @@ namespace {
 }
 
 unsigned ObjectState::numObjStates = 0;
-ObjectState::objlist_ty	ObjectState::objs;
 ObjectState* ObjectState::zeroPage = NULL;
 ObjectStateAlloc* ObjectState::os_alloc = NULL;
 
 
+#ifdef KEEP_OBJLIST
+ObjectState::objlist_ty	ObjectState::objs;
 #define ADD_TO_LIST		\
 	do {	numObjStates++;	\
 		objs.push_front(this); objs_it = objs.begin(); } while (0)
+
+#define RMV_FROM_LIST	do {numObjStates--; objs.erase(objs_it); } while (0)
+#else
+#define ADD_TO_LIST	numObjStates++
+#define RMV_FROM_LIST	numObjStates--
+#endif
 
 ObjectState::ObjectState(unsigned _size)
 : src_array(0)
 , copyOnWriteOwner(0)
 , refCount(0)
+, copyDepth(0)
 , concreteStore(new uint8_t[_size])
 , concreteMask(0)
 , flushMask(0)
@@ -55,6 +63,7 @@ ObjectState::ObjectState(unsigned _size, const ref<Array>& array)
 : src_array(array)
 , copyOnWriteOwner(0)
 , refCount(0)
+, copyDepth(0)
 , concreteStore(new uint8_t[_size])
 , concreteMask(0)
 , flushMask(0)
@@ -73,6 +82,7 @@ ObjectState::ObjectState(const ObjectState &os)
 : src_array(os.src_array)
 , copyOnWriteOwner(0)
 , refCount(0)
+, copyDepth(os.copyDepth+1)
 , concreteStore(new uint8_t[os.size])
 , concreteMask(os.concreteMask ? new BitArray(*os.concreteMask, os.size) : 0)
 , flushMask(os.flushMask ? new BitArray(*os.flushMask, os.size) : 0)
@@ -112,17 +122,14 @@ ObjectState::~ObjectState()
 	knownSymbolics = NULL;
 	concreteStore = NULL;
 
-	numObjStates--;
-	objs.erase(objs_it);
+	RMV_FROM_LIST;
 	size = 0;
 }
 
 const UpdateList &ObjectState::getUpdates() const
 {
 	// Constant arrays are created lazily.
-	if (updates.getRoot().isNull())
-		buildUpdates();
-
+	if (updates.getRoot().isNull()) buildUpdates();
 	return updates;
 }
 
@@ -142,7 +149,7 @@ void ObjectState::buildUpdates(void) const
 
 	// Start content as zeros.
 	for (unsigned i = 0, e = size; i != e; ++i)
-		Contents[i] = ConstantExpr::create(0, Expr::Int8);
+		Contents[i] = MK_CONST(0, Expr::Int8);
 
 	// Collect writes, [0] being first, [n] being last
 	for (unsigned i = NumWrites; i != 0; un = un->next) {
@@ -432,7 +439,7 @@ void ObjectState::write8(ref<Expr> offset, ref<Expr>& value)
 	fastRangeCheckOffset(offset, &base, &size);
 	flushRangeForWrite(base, size);
 
-	updates.extend(ZExtExpr::create(offset, Expr::Int32), value);
+	updates.extend(MK_ZEXT(offset, Expr::Int32), value);
 }
 
 ref<Expr> ObjectState::read(ref<Expr> offset, Expr::Width width) const
@@ -447,7 +454,7 @@ ref<Expr> ObjectState::read(ref<Expr> offset, Expr::Width width) const
 	// Treat bool specially,
 	// it is the only non-byte sized write we allow.
 	if (width == Expr::Bool)
-		return ExtractExpr::create(read8(offset), 0, Expr::Bool);
+		return MK_EXTRACT(read8(offset), 0, Expr::Bool);
 
 	// Otherwise, follow the slow general case.
 	return readSlow(offset, width);

@@ -39,10 +39,7 @@ void ExeSnapshotSeq::setBaseName(const std::string& s)
 
 void ExeSnapshotSeq::handleXferSyscall(
 	ExecutionState& state, KInstruction* ki)
-{
-	std::cerr << "hullo\n";
-	ExecutorVex::handleXferSyscall(state, ki);
-}
+{ ExecutorVex::handleXferSyscall(state, ki); }
 
 
 void ExeSnapshotSeq::runLoop(void)
@@ -134,7 +131,6 @@ ExecutionState* ExeSnapshotSeq::addSequenceGuest(
 	setenv("VEXLLVM_BASE_BIAS", "0x8000000", 1);
 
 	new_gs = Guest::load(s);
-	std::cerr << "loaded guest #" << i << '\n';
 
 	/* XXX: this breaks kmc-replay because it will use the wrong
 	 * base snapshot. crap! extend ktest format? */
@@ -142,9 +138,11 @@ ExecutionState* ExeSnapshotSeq::addSequenceGuest(
 	maps = new_gs->getMem()->getMaps();
 	foreach (it, maps.begin(), maps.end())
 		loadUpdatedMapping(new_es, new_gs, *it);
-	/* TODO track the guest base in the state data, reflect in
-	 * the ktest writer */
 
+	/* TODO track guest base in the state data, reflect in ktest writer */
+
+
+	/* create register file */
 	state_regctx_os = GETREGOBJ(*new_es);
 	state_regctx_sz = new_gs->getCPUState()->getStateSize();
 	reg_data = (const char*)new_gs->getCPUState()->getStateData();
@@ -163,22 +161,22 @@ ExecutionState* ExeSnapshotSeq::addSequenceGuest(
 	return new_es;
 }
 
-void ExeSnapshotSeq::loadUpdatedMapping(
+unsigned ExeSnapshotSeq::loadUpdatedMapping(
 	ExecutionState* new_es,
 	Guest* new_gs,
 	GuestMem::Mapping m)
 {
-	unsigned pg_c = m.length / 4096;
+	unsigned	pg_c = (m.length + 4095) / 4096;
+	unsigned	reuse_c = 0;
 
 	for (unsigned pgnum = 0; pgnum < pg_c; pgnum++) {
 		bool		ok;
 		ObjectPair	op;
 		ObjectState	*os_w;
+		guest_ptr	base(m.offset.o + pgnum*4096);
 		const uint8_t	*pptr;
 
-		ok = new_es->addressSpace.resolveOne(
-			m.offset.o + pgnum*4096,
-			op);
+		ok = new_es->addressSpace.resolveOne(base, op);
 
 		/* this page is not present; bind mapping */
 		if (ok == false) {
@@ -187,15 +185,20 @@ void ExeSnapshotSeq::loadUpdatedMapping(
 
 		assert (op_os(op)->isConcrete());
 
-		pptr = (const uint8_t*)
-			new_gs->getMem()->getHostPtr(m.offset+(4096*pgnum));
+		pptr = (const uint8_t*)new_gs->getMem()->getHostPtr(base);
 
 		/* no difference? */
-		if (op_os(op)->cmpConcrete(pptr, 4096) == 0)
+		if (op_os(op)->cmpConcrete(pptr, 4096) == 0) {
+			reuse_c++;
+			assert (op_os(op)->getCopyDepth() == 0);
 			continue;
+		}
 
 		/* found difference, write to new obj state */
 		os_w = new_es->addressSpace.getWriteable(op);
 		os_w->writeConcrete(pptr, 4096);
+		os_w->resetCopyDepth();
 	}
+
+	return reuse_c;
 }

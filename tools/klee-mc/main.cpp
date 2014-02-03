@@ -323,6 +323,7 @@ static Guest* getGuest(CmdArgs* cmdargs)
 	} else if (GuestType == "sseq") {
 		std::string	s(GuestSnapshotSeqBase);
 		s = s + "-0000";
+		std::cerr << "[klee-mc] Loading Snapshot '" << s << "'\n";
 		gs = loadSnapshotGuest(cmdargs, s);
 	} else if (GuestType == "frag") {
 		GuestFragment	*gf;

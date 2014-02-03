@@ -36,6 +36,7 @@ DECL_OPT(WritePCs, "write-pcs", "Write .pc files for each test case");
 DECL_OPT(WriteSMT,  "write-smt", "Write .smt for each test");
 DECL_OPT(WritePaths, "write-paths", "Write .path files for each test");
 DECL_OPT(WriteSymPaths, "write-sym-paths", "Write .sym.path files for each test");
+DECL_OPT(WriteMem, "write-mem", "Write updated memory objects for each test");
 DECL_OPT(ExitOnError, "exit-on-error", "Exit if errors occur");
 
 cl::opt<unsigned> StopAfterNTests(
@@ -434,6 +435,8 @@ unsigned KleeHandler::processTestCase(
 			LOSING_IT(".cov");
 	}
 
+	if (WriteMem) writeMem(state, id);
+
 	if (WriteTraces) {
 		if (std::ostream* f = openTestFile("trace", id)) {
 			state.exeTraceMgr.printAllEvents(*f);
@@ -452,6 +455,43 @@ unsigned KleeHandler::processTestCase(
 	}
 
 	return id;
+}
+
+void KleeHandler::writeMem(const ExecutionState& state, unsigned id)
+{
+	char	dname[PATH_MAX];
+	
+	sprintf(dname, "%s/mem%06d", m_outputDirectory, id);
+	mkdir(dname, 0755);
+
+	foreach (it, state.addressSpace.begin(), state.addressSpace.end()) {
+		char			fname[PATH_MAX];
+		const MemoryObject	*mo(it->first);
+		const ObjectState	*os(state.addressSpace.findObject(mo));
+		void			*base;
+		FILE			*f;
+
+		base = (void*)mo->address;
+
+		/* ignore unmodified objects */
+		if (os->isZeroPage()) continue;
+		if (os->readOnly) continue;
+		if (!os->hasOwner()) continue;
+		if (os->getCopyDepth() == 0) continue;
+
+		sprintf(fname, "%s/%p.dat", dname, base);
+		f = fopen(fname, "wb");
+		fwrite(os->getConcreteBuf(), mo->size, 1, f);
+		fclose(f);
+
+		sprintf(fname, "%s/%p.mask", dname, base);
+		f = fopen(fname, "wb");
+		for (unsigned int i = 0; i < mo->size; i++) {
+			char	c(os->isByteConcrete(i) ? 0xff : 0);
+			fwrite(&c, 1, 1, f);
+		}
+		fclose(f);
+	}
 }
 
 void KleeHandler::dumpPCs(const ExecutionState& state, unsigned id)
