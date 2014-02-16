@@ -18,7 +18,8 @@ LEVEL=..
 PARALLEL_DIRS= 	\
 	kopt klee-mc kmc-replay kcrumb kcrumb-replay klee-hw \
 	kleej	\
-	klee kleaver ktest-tool gen-random-bout klee-stats solverd 	\
+	mk_ktest gen-random-bout ktest-tool	\
+	klee kleaver klee-stats solverd
 
 
 include $(LEVEL)/Makefile.config
