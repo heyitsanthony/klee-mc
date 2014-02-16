@@ -22,7 +22,10 @@ if [ -z "$x" ]; then exit 1; fi
 x=`ls $kleeoutdir/mem* 2>/dev/null`
 if [ -z "$x" ]; then exit 1; fi
 
-
+# goes through all different segments in postsnapshot, tries to find
+# equivalent in kleemc run; seg missing => underapprox
+function find_underapprox
+{
 for a in $ssdiff/*.cmp; do
 	seghex=`basename $a  | cut -f1 -d'.'`
 	sz=`ls -lH $ssbase/maps/$seghex | awk ' { print $5 } '`
@@ -44,3 +47,43 @@ for a in $ssdiff/*.cmp; do
 		echo Found $seghex--$segend : $found
 	fi
 done
+}
+
+# did kleemc have a side effect that the system did not?
+# this is kind of tricky since the symbolic model will do things
+# the os will not...
+# overapproximation only counts if *every* branch has a sideeffect that isn't
+# present for the actual process?
+function find_overapprox
+{
+overs=""
+for m in $kleeoutdir/mem[0-9]*; do
+	for d in $m/*dat; do
+		maddr=`basename $d  | cut -f1 -d'.' | xargs printf "%d"`
+		msz=`ls -lH $d | awk ' { print $5 } '`
+		for a in $ssdiff/*.cmp; do
+			# only interested in symlinks since they haven't been
+			# modified by the system call...
+			seghex=`basename $a  | cut -f1 -d'.'`
+			segfile="$ssbase/maps/$seghex"
+			sz=`ls -lH "$segfile" | awk ' { print $5 } '`
+			addr=`basename $a  | cut -f1 -d'.' | xargs printf "%d"`
+			segend=`expr $addr + $sz | xargs printf "0x%x"`
+
+			if [ ! -h "$segfile" ]; then continue; fi
+
+			if [ "$maddr" -lt "$addr" ]; then continue; fi
+			if [ "$maddr" -gt `expr $addr + $sz` ]; then continue; fi
+
+			overs="$overs $maddr"
+		done
+	done
+done
+if [ -z "$overs" ]; then return; fi
+lines=`echo -n $overs | sed 's/ /\n/g' | sort | uniq -c`
+n=`ls $kleeoutdir | grep "mem[0-9]" | wc -l`
+echo "$lines" | awk ' { print "Over "'"$n"'" "$0; } '
+}
+
+find_underapprox
+find_overapprox
