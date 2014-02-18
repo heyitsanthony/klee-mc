@@ -6,6 +6,8 @@ echo "p = $p"
 source "$p"defaults.sh
 
 
+mkdir -p err
+
 # here we collect all the snapshot diffs
 # TODO NEED TO BE ABLE TO DUMP OUT DIRTY MEMORY
 # TODO NEED OT BE ABLE TO DUMP OUT REGISTERS
@@ -21,5 +23,5 @@ klee-mc	-guest-type=sshot -guest-sshot=$a \
 	-force-cow		\
 	-write-mem		\
 	-write-smt -use-hookpass -hookpass-lib=sysexit.bc	\
-	- 2>klee-$n.err
+	- 2>err/klee-$n.err
 done

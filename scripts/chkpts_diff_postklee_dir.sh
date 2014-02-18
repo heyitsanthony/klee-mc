@@ -1,8 +1,8 @@
-#!/bin/bash
+#a!/bin/bash
 
 diffdir="$1"
 
-if [ -z "$diffdir" ]; then echo expected diffdir in arg1; fi
+if [ -z "$diffdir" ]; then echo expected diffdir in arg1; exit 1; fi
 
 s=`dirname $0`/chkpts_diff_postklee.sh
 for a in chkpt-*-pre; do
