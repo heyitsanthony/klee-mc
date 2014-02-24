@@ -79,9 +79,12 @@ for m in $kleeoutdir/mem[0-9]*; do
 
 			if [ ! -h "$segfile" ]; then continue; fi
 
-			if [ "$maddr" -lt "$addr" ]; then continue; fi
+			# klee end < addr?
+			if [ "$mend" -lt "$addr" ]; then continue; fi
+			# klee beginning > end?
 			if [ "$maddr" -gt $aend ]; then continue; fi
-			if [ "$mend" -le "$aend" ]; then continue; fi
+
+			# if [ "$mend" -le "$aend" ]; then continue; fi
 
 			maddrhex=`printf "%x" $maddr`
 			overs="$overs $maddrhex"
