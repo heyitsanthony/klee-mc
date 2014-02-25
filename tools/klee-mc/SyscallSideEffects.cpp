@@ -87,7 +87,41 @@ static void apply_ossfx_mmap(
 	ExecutionState& es,
 	unsigned seq_nr,
 	const char* dname)
-{ assert (0 == 1 && "STUB"); }
+{
+	FILE		*f;
+	char		path[256];
+	struct stat	s;
+	uint64_t	basep;
+	unsigned	i;
+	uint8_t		*dat;
+
+	sscanf(dname, "%lx.new", &basep);
+
+	sprintf(path, "%s/%d/%s", OSSFxDir.c_str(), seq_nr, dname);
+	f = fopen(path, "rb");
+	stat(path, &s);
+
+	for (i = 0; i < s.st_size; i += 4096)
+		es.allocateAt(basep+i*4096, 4096, NULL);
+
+	dat = new uint8_t[s.st_size];
+	fread(dat, s.st_size, 1, f);
+	fclose(f);
+
+	for (i = 0; i < s.st_size; i++)
+		if (dat[i] != '\0')
+			break;
+
+	if (i == s.st_size) {
+		/* all zeros */
+		delete [] dat;
+		return;
+	}
+
+	/* copy data in */
+	es.addressSpace.copyOutBuf(basep, (const char*)dat, s.st_size);
+	delete [] dat;
+}
 
 static bool apply_ossfx_mem(
 	Executor* exe,
@@ -156,13 +190,20 @@ static bool apply_ossfx_regs(
 	/* hurrr fixups */
 	v1 = (VexGuestAMD64State*)regs_pre;
 	v2 = (VexGuestAMD64State*)regs->getConcreteBuf();
+
+	/* clobbered by kernel; rcx = rip, r11 = rflags */
 	v1->guest_RCX = v2->guest_RCX;
+	v1->guest_R11 = v2->guest_R11;
+
 	v2->guest_RIP = v1->guest_RIP;
 	v1->guest_CC_OP = v2->guest_CC_OP;
 	v1->guest_CC_DEP1 = v2->guest_CC_DEP1;
 	v1->guest_CC_DEP2 = v2->guest_CC_DEP2;
 	v1->guest_CC_NDEP = v2->guest_CC_NDEP;
+	/****************/
 
+	std::cerr << "R11-pre: " << (void*)v1->guest_R11 << '\n';
+	std::cerr << "R11-klee: " << (void*)v2->guest_R11 << '\n';
 
 
 	/* -4 to ignore exit code and padding */
@@ -175,11 +216,8 @@ static bool apply_ossfx_regs(
 
 		for (unsigned i = 0; i < s.st_size; i++) {
 			if (regs_pre[i] != regs->getConcreteBuf()[i])
-				std::cerr << "WUT WUT WUT: " << i << '\n';
+				std::cerr << "Mismatch Index: " << i << '\n';
 		}
-
-		std::cerr << "TOTAL SIZE: " << s.st_size << '\n';
-
 		assert (0 == 1 && "DID NOT MATCH PRE REGS!");
 	}
 
