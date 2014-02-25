@@ -278,6 +278,7 @@ ExecutionState* ExecutorVex::setupInitialStateEntry(uint64_t entry_addr)
 	sys_model->installConfig(*state);
 
 	sfh->bind();
+
 	kf_scenter = kmodule->getKFunction("sc_enter");
 	assert (kf_scenter && "Could not load sc_enter from runtime library");
 	kf_scenter->isSpecial = true;

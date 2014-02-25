@@ -750,12 +750,16 @@ SFH_DEF_ALL(RegsGet, "kmc_regs_get", true)
 { state.bindLocal(target, es2esv(state).getRegCtx()->getBaseExpr()); }
 
 
+extern const struct SpecialFunctionHandler::HandlerInfo* ossfxload_hi;
+
 static const SpecialFunctionHandler::HandlerInfo *hInfo[] =
 {
 #define add(h)  &Handler##h::hinfo
 	add(AllocAligned), add(Breadcrumb), add(FreeRun), add(IO),
 	add(MakeRangeSymbolic), add(SCRegs), add(SCBad), add(RegsGet),
-	add(KMCExit)
+	add(KMCExit),
+	ossfxload_hi,
+	NULL
 #undef addDNR
 #undef add
 };

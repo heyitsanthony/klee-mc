@@ -76,6 +76,7 @@ public:
 
 	static void setBaseGuest(Guest* gs) { base_guest = gs; }
 	static void setBaseStack(uint64_t p) { base_stack = p; }
+	static Guest* getBaseGuest(void) { return base_guest; }
 
 	virtual void getGDBRegs(
 		std::vector<uint8_t>& v,

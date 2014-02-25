@@ -801,8 +801,17 @@ bool ObjectState::revertToConcrete(void)
 
 int ObjectState::cmpConcrete(
 	const uint8_t* addr, unsigned sz, unsigned off) const
-{ return memcmp(addr, concreteStore + off, sz); }
-
+{
+	if (isConcrete()) return memcmp(addr, concreteStore + off, sz);
+	for (unsigned i = 0; i < sz; i++) {
+		int	diff;
+		if (isByteConcrete(i+off)) {
+			diff = concreteStore[i+off] - addr[i];
+			if (diff) return diff;
+		}
+	}
+	return 0;
+}
 
 /* lol hack */
 bool ObjectState::revertToConcrete(const ObjectState* os_c)

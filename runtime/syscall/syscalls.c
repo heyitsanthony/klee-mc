@@ -516,6 +516,9 @@ void* sc_enter(void* regfile, void* jmpptr)
 	sc.regfile = regfile;
 	sc.pure_sys_nr = GET_SYSNR(regfile);
 
+	/* XXX: update breadcrumbs? */
+	if (kmc_ossfx_load()) return jmpptr;
+
 	if (klee_is_symbolic(sc.pure_sys_nr)) {
 		klee_warning_once("Resolving symbolic syscall nr");
 		sc.pure_sys_nr = klee_fork_all(sc.pure_sys_nr);
@@ -1240,6 +1243,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 		make_sym_by_arg(regfile, 1, USTAT_SZ, "ustatbuf");
 		break;
 
+	case SYS_sched_yield:
 	case SYS_setresgid:
 	case SYS_setresuid:
 		sc_ret_v(regfile, 0);

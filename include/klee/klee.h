@@ -341,6 +341,15 @@ void	kmc_exit(uint64_t);
 void	kmc_free_run(uint64_t addr, uint64_t num_bytes);
 void	kmc_make_range_symbolic(uint64_t addr, uint64_t len, const char* name);
 
+int	kmc_ossfx_load(/*unsigned sc_seq*/);
+#if 0
+int	kmc_ossfx_regs(unsigned sc_seq, void* buf);
+/* is this a good interface? */
+void	*kmc_ossfx_next_mem(
+	unsigned sc_seq,
+	void* buf, unsigned len, unsigned *out_len);
+#endif
+
 #ifdef __cplusplus
 }
 #endif
