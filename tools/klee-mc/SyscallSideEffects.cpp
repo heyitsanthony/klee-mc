@@ -16,7 +16,10 @@
 #include <valgrind/libvex_guest_amd64.h>
 
 namespace
-{ llvm::cl::opt<std::string> OSSFxDir("ossfx-dir"); }
+{
+	llvm::cl::opt<std::string> OSSFxDir("ossfx-dir");
+	llvm::cl::opt<bool> OSSFxExitOnDrain("ossfx-exit-on-drain");
+}
 
 using namespace klee;
 
@@ -253,9 +256,13 @@ SFH_DEF_ALL(OSSFX_Load, "kmc_ossfx_load", true)
 		return;
 	}
 
-	std::cerr << "kmc_ossfx_load: it's all over\n";
 	done_ossfx = true;
 
+	std::cerr << "kmc_ossfx_load: it's all over\n";
+	if (OSSFxExitOnDrain) {
+		TERMINATE_EXIT(sfh->executor, state);
+		return;
+	}
 fail:
 	state.bindLocal(target, MK_CONST(0, 32));
 }
