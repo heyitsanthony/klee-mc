@@ -98,6 +98,10 @@ namespace
 	cl::opt<bool> UseFDT("use-fdt", cl::desc("Use TJ's FDT model"));
 	cl::opt<bool> UseSysNone("use-sysnone", cl::desc("No System Calls"));
 
+	/* needs to be used with sysexit hookpass */
+	cl::opt<unsigned> MaxSyscalls("max-syscalls-per-state",
+		cl::desc("Total syscalls a state may make before exiting."));
+
 	cl::opt<bool> DumpSyscallStates(
 		"dump-syscall-state",
 		cl::desc("Dump state constraints before a syscall"));
@@ -172,6 +176,8 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 		else if (UseSysNone)	sys_model = new NoneModel(this);
 		else			sys_model = new LinuxModel(this);
 	}
+	SFH_ADD_REG("syscalls_max", MaxSyscalls);
+
 	theVexHelpers->loadUserMod(sys_model->getModelFileName());
 
 	assert (kmodule == NULL);
