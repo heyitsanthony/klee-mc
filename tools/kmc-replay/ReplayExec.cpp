@@ -29,7 +29,7 @@ ReplayExec::ReplayExec(Guest* gs, VexXlate* vx)
 , crumbs(NULL)
 , ignored_last(false)
 , print_exec(getenv("KMC_DUMP_EXE") != NULL)
-, is_vdso_patched(getenv("KMC_PATCHED_VDSO") != NULL)
+, is_vdso_patched(gs->isPatchedVDSO())
 , chklog_c(0)
 { }
 
