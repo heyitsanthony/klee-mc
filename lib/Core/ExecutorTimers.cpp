@@ -1,4 +1,3 @@
-//===-- ExecutorTimers.cpp ------------------------------------------------===//
 //
 //                     The KLEE Symbolic Virtual Machine
 //
@@ -454,8 +453,7 @@ private:	\
 
 
 DUMP_BR(BTrackerDot, "dump-btracker-dot", dumpDotFile, "Dump branch dot tree")
-//DUMP_BR(BTrackerTimeSeries,
-//	"dump-btracker-tseries", dumpTimeSeriesFile, "Dump branch time series")
+DUMP_BR(BTrackerPaths, "dump-btracker-paths", dumpPathsFile, "Dump branch paths")
 
 
 cl::opt<unsigned>
@@ -804,6 +802,11 @@ void Executor::initTimers(void)
 		addTimer(
 			new BTrackerDotTimer("btracker.dot", this),
 			DumpBTrackerDot);
+
+	if (DumpBTrackerPaths)
+		addTimer(
+			new BTrackerPathsTimer("btracker.path", this),
+			DumpBTrackerPaths);
 
 
 	if (DumpFuncHeat)

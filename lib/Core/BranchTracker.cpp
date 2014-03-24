@@ -683,3 +683,83 @@ void BranchTracker::dumpDotFile(std::ostream& os) const
 	dumpDotSeg(h, os);
 	os << "\n}\n";
 }
+
+typedef std::pair<
+	std::vector<int>,	/* choices */
+	BranchTracker::Segment::BranchSites	/* sites */ >	path_ty;
+
+typedef std::pair<BranchTracker::SegmentRef, path_ty> partialpath_ty;
+
+void BranchTracker::dumpPathsFile(std::ostream& os) const
+{
+	std::stack<partialpath_ty>	stk;
+
+	/* this should dump all paths in the format:
+	 *
+	 * brsite-0 brchoice-0
+	 * ....
+	 * brsite-n brchoice-n
+	 *
+	 * brsite-0 brchoice-0
+	 * ....
+	 * brsite-m brchoice-m
+	 *
+	 * ...
+	 *
+	 * non-branches are encoded as non-branch + 2
+	 */
+	stk.push(partialpath_ty(getHead(), path_ty()));
+	while (!stk.empty()) {
+		partialpath_ty	pp(stk.top());
+		SegmentRef	sr(pp.first);
+
+		stk.pop();
+
+/* unneccessary, records valid branches */
+#if 0
+		/* add branches */
+		for (unsigned i = 0; i < sr->branches.size(); i++)
+			pp.second.first.push_back(sr->branches[i]);
+		foreach (it, sr->nonBranches.begin(), sr->nonBranches.end())
+			pp.second.first[it->first] = it->second + 2;
+
+		/* add branch sites */
+		for (unsigned i = 0; i < sr->branchSites.size(); i++)
+			pp.second.second.push_back(sr->branchSites[i]);
+#endif
+/* wrong, records valid branch prior to contingent branch */
+#if 0
+		pp.second.first.push_back(sr->branches[sr->branches.size()-1]);
+		if (sr->nonBranches.count(sr->branches.size()-1))
+			pp.second.first[pp.second.first.size()-1] =
+				sr->nonBranches[sr->branches.size()-1] + 2;
+		pp.second.second.push_back(sr->branchSites[sr->branchSites.size()-1]);
+#endif
+		if (sr->nonBranches.count(0))
+			pp.second.first.push_back(sr->nonBranches[0] + 2);
+		else
+			pp.second.first.push_back(sr->branches[0]);
+		pp.second.second.push_back(sr->branchSites[0]);
+
+		if (sr->children.empty()) {
+			/* completed path. dump all entries */
+			path_ty		&pa(pp.second);
+			for (unsigned i = 0; i < pa.first.size(); i++) {
+				const KInstruction	*ki(pa.second[i]);
+				if (ki == NULL)
+					os << "???";
+				else
+					os << ki->getInst()->getParent()->
+						getParent()->getName().str();
+				os << " " << pa.first[i] << '\n';
+			}
+
+			os << '\n';
+		}
+
+		for (unsigned i = 0; i < sr->children.size(); i++) {
+			pp.first = sr->children[i];
+			stk.push(pp);
+		}
+	}
+}

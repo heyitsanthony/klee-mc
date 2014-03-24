@@ -70,6 +70,7 @@ public:
 	void dump(void) const;
 
 	void dumpDotFile(std::ostream& os) const;
+	void dumpPathsFile(std::ostream& os) const;
 private:
 	void splitSegment(Segment &segment, unsigned index);
 
