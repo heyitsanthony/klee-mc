@@ -45,11 +45,24 @@ static void do_clone(struct sc_pkt* sc)
 	if (flags & CLONE_CHILD_SETTID)
 		flags &= ~CLONE_CHILD_SETTID;
 
-	klee_assert (flags == 0 && "UNHANDLED CLONE FLAGS");
-	klee_assert (child_stack == NULL && "UNHANDLED NEW CHILD STACK");
-	klee_assert (ptid == NULL && "UNHANDLED PTID");
-
 	new_regs = sc_new_regs(sc->regfile);
+	if (flags == 0) {
+		klee_ureport("Unhandled clone flags", "clone.err");
+		klee_assume_eq(GET_SYSRET(new_regs), -1);
+		return;
+	}
+
+	if (child_stack == NULL) {
+		klee_ureport ("Unhandled new child stack", "clone.err");
+		klee_assume_eq(GET_SYSRET(new_regs), -1);
+		return;
+	}
+
+	if (ptid == NULL) {
+		klee_ureport ("Unhandled ptid", "clone.err");
+		klee_assume_eq(GET_SYSRET(new_regs), -1);
+		return;
+	}
 
 	/* failure case */
 	if (GET_SYSRET(new_regs) == -1) return;
@@ -57,6 +70,11 @@ static void do_clone(struct sc_pkt* sc)
 	/* successful parent case */
 	child_pid = free_pid++;
 	if (GET_SYSRET(new_regs) == child_pid) return;
+
+	if (regs == NULL) {
+		klee_ureport("can't jump to child's pt_regs yet", "clone.err");
+		klee_assume_eq(GET_SYSRET(new_regs), -1);
+	}
 
 	/* child case */
 	klee_assume_eq(GET_SYSRET(new_regs), 0);
@@ -76,7 +94,6 @@ static void do_clone(struct sc_pkt* sc)
 		flags &= ~CLONE_CHILD_SETTID;
 	}
 
-	klee_assert (regs == NULL && "can't jump to child's pt_regs yet"); 
 /* I have no idea what I'm doing. Ugh. */
 #if 0
 	if (GET_SYSRET(new_regs) == 0) {

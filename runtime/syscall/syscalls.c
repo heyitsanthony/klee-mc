@@ -103,7 +103,8 @@ static void loop_protect(int sc, int* ctr, int max_loop)
 
 #define UNIMPL_SC(x)						\
 	case SYS_##x:						\
-		klee_uerror("Unimplemented syscall "#x, "sc.err");	\
+		klee_ureport("Unimplemented syscall "#x, "sc.err");	\
+		sc_ret_v(regfile, -1);				\
 		break;
 #define FAKE_SC(x)							\
 	case SYS_##x:							\
