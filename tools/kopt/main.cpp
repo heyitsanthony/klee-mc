@@ -16,6 +16,7 @@
 
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/time.h>
 #include <stdio.h>
 #include <dirent.h>
 #include <unistd.h>
@@ -114,6 +115,9 @@ DEF_OPT(ExtractConstrs, "extract-constrs", "Extract rules with constraints");
 DEF_OPT(ExtractFrees, "extract-free", "Extract rules with free vars");
 DEF_OPT(AddRule, "add-rule", "Add rule to brule file.");
 DEF_OPT(NormalFormDest, "nf-dest", "Rewrite destinations to normal form.");
+DEF_OPT(IgnoreExpected, "ignore-expected", "Do not check if builds as expected.");
+DEF_OPT(PrintTimes, "print-verify-times", "Print times when verifying.");
+DEF_OPT(PrintTimesCR, "print-check-times", "Print times for each checkRule.");
 }
 
 void rebuildBRules(Solver* s, const std::string& InputPath);
@@ -314,6 +318,7 @@ bool checkRule(const ExprRule* er, Solver* s, std::ostream& os)
 	ref<Expr>	rule_expr;
 	bool		ok, mustBeTrue;
 	unsigned	to_nodes, from_nodes;
+	struct timeval	tv[2];
 
 	assert (er != NULL && "Bad rule?");
 
@@ -325,6 +330,8 @@ bool checkRule(const ExprRule* er, Solver* s, std::ostream& os)
 
 	to_nodes = ExprUtil::getNumNodes(er->getCleanToExpr());
 	from_nodes = ExprUtil::getNumNodes(er->getCleanFromExpr());
+
+	if (PrintTimesCR) gettimeofday(&tv[0], NULL);
 
 	ok = s->mustBeTrue(Query(rule_expr), mustBeTrue);
 	if (ok == false) {
@@ -353,6 +360,16 @@ bool checkRule(const ExprRule* er, Solver* s, std::ostream& os)
 	}
 
 	os << "valid rule\n";
+
+
+	if (PrintTimesCR) {
+		uint64_t	usec;
+		gettimeofday(&tv[1], NULL);
+		usec = 1000000*(tv[1].tv_sec - tv[0].tv_sec);
+		usec += tv[1].tv_usec - tv[0].tv_usec;
+		os << "checkTime: " << usec << '\n';
+	}
+
 	return true;
 }
 
@@ -673,10 +690,15 @@ static void checkDB(Solver* s)
 		i++;
 		xxx_rb = i;
 
-		if (br.builtAsExpected()) {
+		if (IgnoreExpected || br.builtAsExpected()) {
 			if (VerifyDB) {
 				if (checkRule(er, s, std::cerr) == false)
 					bad_verify_c++;
+			}
+			if (PrintTimes) {
+				static time_t base_time = 0;
+				if (!base_time) base_time = time(0);
+				std::cerr << "[Time] " << time(0) - base_time << '\n';
 			}
 			continue;
 		}
@@ -690,6 +712,9 @@ static void checkDB(Solver* s)
 		std::cerr << "EXPECTED RULE:\n";
 		er->print(std::cerr);
 		std::cerr << '\n';
+
+		std::cerr << "FROM RULE RAW:\n";
+
 
 		er = RuleBuilder::getLastRule();
 		if (er == NULL)

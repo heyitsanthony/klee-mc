@@ -242,6 +242,35 @@ void KModuleVex::loadPrivateLibrary(guest_ptr addr)
 	gs->addLibrarySyms(path.c_str(), guest_ptr(cur_mo->address));
 }
 
+/* decode error! kind of hacky */
+Function* KModuleVex::handleDecodeError(uint64_t guest_addr)
+{
+	ExecutionState	*es;
+
+	if (exe == NULL) return NULL;
+
+	es = exe->getCurrentState();
+	if (es == NULL) return NULL;
+
+	/* how to recover from decode errors:
+	 * 1. fork state indicating there was a decode error
+	 * 2. find location of undecodeable instruction
+	 * 3. create basic block up to undecodeable instruction,
+	 *    replace undecodeable instruction with HOST_EXE intrinsic
+	 *    that takes address. HOST_EXE returns next instruction pointer to
+	 *    jump to.
+	 * */ 
+
+	TERMINATE_ERRORV(
+		exe,
+		*es,
+		"Bad instruction decode",
+		"decode.err",
+		"Code Address: ", guest_addr);
+
+	return NULL;
+}
+
 #define LIBRARY_BASE_GUESTADDR	((uint64_t)0x10000000)
 
 Function* KModuleVex::getFuncByAddr(uint64_t guest_addr)
@@ -251,21 +280,12 @@ Function* KModuleVex::getFuncByAddr(uint64_t guest_addr)
 
 	f = getFuncByAddrNoKMod(guest_addr, is_new);
 	if (f == NULL) {
-		if (is_new) {
-			/* decode error! */
-			ExecutionState	*es;
-			if (exe && (es = exe->getCurrentState())) {
-				/* dumb hack!!! */
-				TERMINATE_ERRORV(
-					exe,
-					*es,
-					"Bad instruction decode",
-					"decode.err",
-					"Code Address: ", guest_addr);
-			}
-		} else {
+		if (is_new == false) {
 			/* is_new = false => access error, handled normally */
+			return NULL;
 		}
+
+		handleDecodeError(guest_addr);
 		return NULL;
 	}
 

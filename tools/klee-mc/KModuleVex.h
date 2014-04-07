@@ -42,6 +42,8 @@ private:
 	void scanFuncExits(uint64_t guest_addr, llvm::Function* f);
 	void writeCodeGraph(GenericGraph<guest_ptr>& g);
 
+	llvm::Function* handleDecodeError(uint64_t guest_addr);
+
 	void analyzeNewFunction(uint64_t guest_addr, llvm::Function* f);
 
 	llvm::Function* getPrivateFuncByAddr(uint64_t guest_addr);
