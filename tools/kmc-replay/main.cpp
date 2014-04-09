@@ -77,6 +77,8 @@ static void loadSymArgs(Guest* gs, KTestStream* kts)
 	if (!argcp) return;
 
 	kto = kts->peekObject();
+	if (kto == NULL) return;
+
 	if (strncmp(kto->name, "argc", 4) != 0) return;
 
 	kto = kts->nextObject();
