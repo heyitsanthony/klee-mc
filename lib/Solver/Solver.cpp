@@ -269,13 +269,7 @@ Solver* Solver::createChainWithTimedSolver(
 	if (UseIndependentSolver) solver = createIndependentSolver(solver);
 
 	if (DebugValidateSolver) {
-		/* oracle is another QF_BV solver */
-		if (UsePipeSolver || UseBoolector || UseZ3)
-			solver = createValidatingSolver(solver,	timedSolver);
-				// new PipeSolver(new PipeSTP()));
-				//new STPSolver(UseForkedSTP, STPServer));
-		else
-			solver = createValidatingSolver(solver, timedSolver);
+		solver = createValidatingSolver(solver, timedSolver);
 	}
 
 	if (UseQueryPCLog && queryPCLogPath.size())
@@ -518,7 +512,14 @@ bool Solver::getInitialValues(const Query& query, Assignment& a)
 void Solver::printName(int level) const { impl->printName(level); }
 
 Solver *klee::createValidatingSolver(Solver *s, Solver *oracle)
-{ return new Solver(new ValidatingSolver(s, oracle)); }
+{
+	/* oracle is another QF_BV solver; use STP solver as oracle */
+	if (UsePipeSolver || UseBoolector || UseZ3)
+		oracle = new PipeSolver(new PipeSTP());
+
+	return new Solver(new ValidatingSolver(s, oracle));
+}
+
 
 TimedSolver *klee::createDummySolver() { return new DummySolver(); }
 

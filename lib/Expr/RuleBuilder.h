@@ -91,9 +91,7 @@ public:
 	ref<Expr> Ne(const ref<Expr> &l, const ref<Expr> &r)
 	{
 		APPLY_RULE_HDR
-		eb_e = EqExpr::create(
-			ConstantExpr::create(0, Expr::Bool),
-			EqExpr::create(l, r));
+		eb_e = MK_EQ(MK_CONST(0, Expr::Bool), MK_EQ(l, r));
 		APPLY_RULE_FTR
 	}
 
