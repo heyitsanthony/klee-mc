@@ -2,8 +2,10 @@
 #include "klee/Internal/ADT/KTestStream.h"
 #include "static/Sugar.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/mman.h>
 #include <assert.h>
+
 #include "guestmem.h"
 #include "guestcpustate.h"
 #include "../klee-mc/Exempts.h"
@@ -150,10 +152,69 @@ UCState::UCState(
 	/* 2. scan through ktest, allocate buffers */
 	loadUCBuffers(gs, kts);
 
-	saveCTest("uctest.c");
+	saveCTest_driver("uctest.c");
+	if (getenv("UC_SAVEONLY") != NULL) exit(0);
+
 	ok = true;
 }
 
+void UCState::saveCTest_driver(const char* fname) const
+{
+	FILE	*f;
+	GuestCPUState	*cpu;
+
+	f = fopen(fname, "w");
+	assert (f != NULL);
+
+	fprintf(f, "#include \"uc_driver.h\"\n");
+
+	foreach (it, ucbufs.begin(), ucbufs.end()) {
+		UCBuf	*ucb = *it;
+
+		fprintf(f, "char uc_%lx[] = {", ucb->getBase().o);
+		for (unsigned i = 0; i < ucb->getRadius()*2+1; i++) {
+			if (i % 8 == 0) fprintf(f, "\n");
+			fprintf(f, "0x%x, ",
+				(int)(unsigned char)ucb->getData()[i]);
+		}
+		fprintf(f, "\n};\n");
+	}
+	
+	fprintf(f, "static struct uc_desc ucds[] = {\n");
+	foreach (it, ucbufs.begin(), ucbufs.end()) {
+		UCBuf	*ucb = *it;
+		fprintf(f,
+			"{.ucd_data = uc_%lx,  "
+			".ucd_base = (void*)0x%lx, "
+			".ucd_seg = (void*)0x%lx, "
+			".ucd_pgs = %u, "
+			".ucd_bytes = %u },\n",
+			ucb->getBase().o, ucb->getBase().o,
+			ucb->getSegBase().o,
+			ucb->getNumPages(),
+			ucb->getRadius()*2+1);
+	}
+	fprintf(f, "{ .ucd_data = 0 }};\n\n");
+
+#define READ_FUNCARG(x,t) *((t*)((char*)cpu->getStateData() + cpu->getFuncArgOff(x)))
+#define READ_ARG64(x)	READ_FUNCARG(x,uint64_t)
+	cpu = gs->getCPUState();
+
+	fprintf(f, "static struct uc_args ucas = {\n"
+		" .uca_args = { 0x%lx, 0x%lx, 0x%lx, 0x%lx, 0x%lx, 0x%lx }\n"
+		" };\n",
+		READ_ARG64(0), READ_ARG64(1), READ_ARG64(2), READ_ARG64(3),	
+		READ_ARG64(4), READ_ARG64(5));
+
+	fprintf(f,
+		"int main(int argc, char* argv[]) {\n"
+		"uc_run(argv[1], (argc==3) ? argv[2] : \"%s\", ucds, &ucas);\n"
+		" return 0; } ", funcname);
+
+	fclose(f);
+}
+
+/* XXX: how to do floating point? */
 void UCState::saveCTest(const char* fname) const
 {
 	FILE		*f;
@@ -212,20 +273,44 @@ void UCState::saveCTest(const char* fname) const
 		"assert (x == ucd->ucd_seg);\n"
 		"memcpy(ucd->ucd_base, ucd->ucd_data, ucd->ucd_bytes); }\n");
 
-#define READ_FUNCARG(x,t) *((t*)((char*)cpu->getStateData() + cpu->getFuncArgOff(x)))
-#define READ_ARG64(x)	READ_FUNCARG(x,uint64_t)
-
 	fprintf(f,
 		"%s = dlsym(dlopen(argv[1], RTLD_GLOBAL|RTLD_LAZY), (argc == 3) ? argv[2] : \"%s\");\n"
 		"assert( %s != NULL);\n",
 		funcname, funcname, funcname);
 
 	cpu = gs->getCPUState();
+
+	/* execute function */
 	fprintf(f, "v = %s(0x%lx, 0x%lx, 0x%lx, 0x%lx, 0x%lx, 0x%lx);\n",
 		funcname,
 		READ_ARG64(0), READ_ARG64(1), READ_ARG64(2), READ_ARG64(3),	
 		READ_ARG64(4), READ_ARG64(5));
+
+	/* sometimes dump buffers */
+	fprintf(f, 
+" if (getenv(\"UC_DUMPBUFS\")) { "
+" for (ucd = ucds; ucd->ucd_data; ucd++) { \n"
+"	int	i; \n"
+"	printf(\"%%p : \", ucd->ucd_data);\n"
+"	for (i = 0; i < ucd->ucd_bytes; i++)\n"
+"		printf(\"%%x \", ((unsigned char*)(ucd->ucd_data))[i]);\n"
+"	printf(\"\\n\");\n}}");
+
+
+	fprintf(f, 
+" if (getenv(\"UC_DEREFRET\") && v != 0) { "
+" int i; const unsigned char *vp = (const unsigned char*)v;\n"
+" for (i = 0; ucd->ucd_data; ucd++) { \n"
+"	int	i; \n"
+"	printf(\"%%p : \", ucd->ucd_data);\n"
+"	for (i = 0; (((uintptr_t)&v[i]) & ~0xfff) == ((uintptr_t)v); i++)\n"
+"		printf(\"%%x \", v[i]);\n"
+"	printf(\"\\n\");\n}} else ");
+
+	/* dump return value */
 	fprintf(f, "printf(\"%%lx\\n\", v);\n return 0; \n}\n");
+
+
 	fclose(f);
 }
 

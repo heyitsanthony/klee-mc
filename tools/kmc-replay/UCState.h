@@ -21,6 +21,7 @@ public:
 
 	void save(const char* fname) const;
 	void saveCTest(const char* fname) const;
+	void saveCTest_driver(const char* fname) const;
 	virtual ~UCState();
 
 protected:

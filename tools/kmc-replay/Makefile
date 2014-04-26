@@ -33,8 +33,8 @@ endif
 CFLAGS += -I$(VEXLLVM_ROOT)/src/
 CXXFLAGS += -I$(VEXLLVM_ROOT)/src/
 LDFLAGS += -Wl,-Ttext-segment=0x70000000 $(STATIC_FLAGS)
-LIBS += -lrt $(SOLVERLIBS)
 LIBS += $(VEXLLVM_ROOT)/bin/vexllvm.a $(VEXLIB_ROOT)/libvex-amd64-linux.a
 LIBS += $(shell llvm-config --libfiles $(X_LINK_COMPONENTS)) $(STATIC_LIBS)
+LIBS += -lrt $(SOLVERLIBS)
 
 #-ltcmalloc
