@@ -131,7 +131,7 @@ ref<ConstantExpr> ConstantExpr::createSeqData(llvm::ConstantDataSequential* v)
 		}
 
 		if (i == 0) cur_v = ce;
-		else cur_v = cur_v->Concat(ce);
+		else cur_v = ce->Concat(cur_v);
 	}
 
 
