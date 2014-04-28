@@ -175,9 +175,10 @@ BCrumb* Crumbs::toBC(struct breadcrumb* bc)
 	case BC_TYPE_SCOP:	return new BCSysOp(bc);
 	case BC_TYPE_STACKLOG:	return new BCStackLog(bc);
 	case BC_TYPE_MEMLOG:	return new BCMemLog(bc);
+	case BC_TYPE_ERREXIT:	return new BCErrExit(bc);
 //	case BC_TYPE_BOGUS:
 	default:
-		assert (0 == 1);
+		assert (0 == 1 && "invalid breadcrumb type");
 	}
 	return NULL;
 }
@@ -233,6 +234,14 @@ void BCSyscall::consumeOps(KTestStream* kts, Crumbs* crumbs)
 
 		delete bcr;
 	}
+}
+
+
+void BCErrExit::print(std::ostream& os) const
+{
+	os	<< "<err_exit>\n<suff>" << suff
+		<< "</suff>\n<msg>"<<msg
+		<< "</msg>\n</err_exit>\n";
 }
 
 unsigned int BCSyscall::getKTestObjs(void) const

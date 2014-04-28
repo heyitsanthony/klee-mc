@@ -2,7 +2,8 @@
 // RUN: rm -f guest-*
 // RUN: /usr/bin/env VEXLLVM_SAVE=1 pt_run ./%t1
 // RUN: klee-mc -logregs -guest-type=sshot - ./%t1 2>%t1.err >%t1.out
-// RUN: ls klee-last | not grep .err
+// RUN: ls klee-last | grep badtime.err
+// RUN: ls klee-last | grep ktest.gz | wc -l | grep 2
 // RUN: grep "exitcode=0" %t1.err
 //
 // Now, a replay test.

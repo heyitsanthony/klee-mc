@@ -1,5 +1,5 @@
 // RUN: gcc -lpthread %s -O0 -o %t1
-// RUN: klee-mc -pipe-solver - ./%t1 2>%t1.err >%t1.out
+// RUN: klee-mc -pipe-solver -stop-after-n-tests=100 - ./%t1 2>%t1.err >%t1.out
 // RUN: ls klee-last | not grep .err
 #include <assert.h>
 #include <pthread.h>

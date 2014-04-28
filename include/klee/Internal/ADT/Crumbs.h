@@ -68,6 +68,20 @@ public:
 private:
 };
 
+class BCErrExit : public BCrumb
+{
+public:
+	BCErrExit(struct breadcrumb* b)
+	: BCrumb(b)
+	, msg((const char*)bc_data(b))
+	, suff((const char*)bc_data(b) + msg.size()+1) {}
+	virtual ~BCErrExit(void) {}
+	virtual void print(std::ostream& os) const;
+private:
+	std::string	msg;
+	std::string	suff;
+};
+
 class BCSyscall: public BCrumb
 {
 public:

@@ -1,3 +1,4 @@
+#include <string.h>
 #include "ExeStateVex.h"
 #include "klee/breadcrumb.h"
 #include "guest.h"
@@ -152,6 +153,28 @@ void ExeStateVex::logXferRegisters()
 {
 	updateGuestRegs();
 	logXferObj(getRegObjRO(),  BC_TYPE_VEXREG);
+}
+
+void ExeStateVex::logError(const char* msg, const char* suff)
+{
+	uint8_t			*crumb_buf, *crumb_base;
+	unsigned		sz;
+	struct breadcrumb	*bc;
+
+	sz = strlen(msg) + strlen(suff) + 2;
+	crumb_base = new uint8_t[sizeof(struct breadcrumb)+sz];
+	crumb_buf = crumb_base;
+	bc = reinterpret_cast<struct breadcrumb*>(crumb_base);
+
+	bc_mkhdr(bc, BC_TYPE_ERREXIT, 0, sz);
+	crumb_buf += sizeof(struct breadcrumb);
+
+	strcpy((char*)crumb_buf, msg);
+	crumb_buf += strlen(msg) + 1;
+	strcpy((char*)crumb_buf, suff);
+
+	recordBreadcrumb(bc);
+	delete [] crumb_base;
 }
 
 

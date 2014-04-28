@@ -62,6 +62,13 @@ unsigned KleeHandlerVex::processTestCase(
 	id = KleeHandler::processTestCase(state, errorMessage, errorSuffix);
 	if (!id) return 0;
 
+	/* log error if one exists so replay doesn't have sclog issues */
+	if (errorMessage != NULL && errorSuffix != NULL) {
+		ExeStateVex	*esv;
+		esv = const_cast<ExeStateVex*>(
+			dynamic_cast<const ExeStateVex*>(&state));
+		esv->logError(errorMessage, errorSuffix);
+	}
 	dumpLog(state, "crumbs", id);
 
 	if (DumpTestRegs) {

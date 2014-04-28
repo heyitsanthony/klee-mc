@@ -92,6 +92,7 @@ public:
 	void logXferStack();
 	void logXferMO(uint64_t log_obj_mo);
 	void logXferObj(const ObjectState* os, int tag, unsigned off = 0);
+	void logError(const char* msg, const char *suff);
 
 	void updateGuestRegs();
 };
