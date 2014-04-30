@@ -17,7 +17,7 @@ const char* const PipeBoolector::mod_args[] = {"boolector", "-fm", NULL};
 
 const char* PipeZ3::exec_cmd = "z3";
 const char* const PipeZ3::sat_args[] = {"z3", "-smt", "-in", NULL};
-const char* const PipeZ3::mod_args[] = {"z3", "-smt", "-in", "-m", NULL};
+const char* const PipeZ3::mod_args[] = {"z3", "-smt", "-in", "-vldt", NULL};
 
 const char* PipeBoolector15::exec_cmd = "boolector-1.5";
 const char* const PipeBoolector15::sat_args[] =
