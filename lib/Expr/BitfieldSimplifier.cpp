@@ -101,6 +101,13 @@ BitfieldSimplifier::ExprBitsInfo BitfieldSimplifier::doSimplifyBits(
     BitsInfo rbits;
     rbits.ignoredBits = ignoredBits;
 
+	/* XXX: AJR, this is stupid.. */
+    if (e->getWidth() > 64) {
+    	rbits.ignoredBits = 0;
+    	rbits.knownOneBits = 0;
+	rbits.knownZeroBits = 0;
+	return std::make_pair(e, rbits); }
+
     /* Call doSimplifyBits recursively to obtain knownBits for each kid */
     unsigned numKids = e->getNumKids();
     for(unsigned i = 0; i < numKids; ++i) {
@@ -280,10 +287,9 @@ BitfieldSimplifier::ExprBitsInfo BitfieldSimplifier::doSimplifyBits(
         break;
 
     case Expr::ZExt:
-        rbits.knownOneBits = bits[0].knownOneBits;
+        rbits.knownOneBits = bits[0].knownOneBits & ~zeroMask(e->getWidth());
         // zeroMask of e is less restrictive
-        rbits.knownZeroBits = bits[0].knownZeroBits;
-
+        rbits.knownZeroBits = bits[0].knownZeroBits | zeroMask(e->getWidth());
         bits[0].ignoredBits = ignoredBits;
 
         break;
@@ -310,6 +316,10 @@ BitfieldSimplifier::ExprBitsInfo BitfieldSimplifier::doSimplifyBits(
                 /* Some of sign-dependend bits are not ignored */
                 bits[0].ignoredBits &= ~(1UL<<(kids[0]->getWidth()-1));
             }
+
+	    if (kids[0]->getWidth() > e->getWidth()) {
+        	rbits.knownZeroBits |= zeroMask(e->getWidth());
+	    }
         }
         break;
 
@@ -325,8 +335,19 @@ BitfieldSimplifier::ExprBitsInfo BitfieldSimplifier::doSimplifyBits(
         break;
     }
 
+    if (!((rbits.knownOneBits & rbits.knownZeroBits) == 0)) {
+    	std::cerr << "WTF " << e << '\n';
+	std::cerr << "WIDTH: " << e->getWidth() << '\n';
+   }
     assert((rbits.knownOneBits & rbits.knownZeroBits) == 0);
     assert((rbits.knownOneBits & zeroMask(e->getWidth())) == 0);
+    if (!((rbits.knownZeroBits & zeroMask(e->getWidth())) ==
+                zeroMask(e->getWidth()))) {
+    	std::cerr << "WTF2 " << e << '\n';
+	std::cerr << "WIDTH: " << e->getWidth() << '\n';
+	std::cerr << "rbits.kzb: " << (void*)rbits.knownZeroBits << '\n';
+	std::cerr << "zm: " << (void*)zeroMask(e->getWidth()) << '\n';
+}
     assert((rbits.knownZeroBits & zeroMask(e->getWidth())) ==
                 zeroMask(e->getWidth()));
 

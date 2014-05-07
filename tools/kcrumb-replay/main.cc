@@ -103,7 +103,8 @@ int main(int argc, char *argv[], char* envp[])
 		args = loadSymArgs(kts);
 		args[0] = argv[3];
 	} else {
-		assert (0 == 1 && "XXX WRONG");
+		assert (0 == 1 && "XXX WRONG Expected SymArgs");
+		abort();
 		args = &argv[3];
 	}
 
