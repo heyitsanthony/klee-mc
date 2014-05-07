@@ -1477,7 +1477,11 @@ ref<Expr> Executor::instShuffleVectorEvaled(
 	unsigned int		v_elem_sz = vt->getBitWidth() / v_elem_c;
 	unsigned int		perm_sz = in_v_perm_ce->getWidth() / v_elem_c;
 
+#ifdef BROKEN_OSDI
+	for (unsigned int i = 0; i < v_elem_c; i++) {
+#else
 	for (int i = v_elem_c-1; i >= 0; i--) {
+#endif
 		ref<ConstantExpr>	v_idx;
 		ref<Expr>		ext;
 		unsigned int		idx;
@@ -1492,7 +1496,11 @@ ref<Expr> Executor::instShuffleVectorEvaled(
 			ext = MK_EXTRACT(in_v_hi, v_elem_sz*idx, v_elem_sz);
 		}
 
+#ifdef BROKEN_OSDI
+		out_val = (i == 0)
+#else
 		out_val = (out_val.isNull())
+#endif
 			? ext
 			: MK_CONCAT(out_val, ext);
 	}

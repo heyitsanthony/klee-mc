@@ -131,7 +131,11 @@ ref<ConstantExpr> ConstantExpr::createSeqData(llvm::ConstantDataSequential* v)
 		}
 
 		if (i == 0) cur_v = ce;
+#ifdef BROKEN_OSDI
+		else cur_v = cur_v->Concat(ce);
+#else
 		else cur_v = ce->Concat(cur_v);
+#endif
 	}
 
 

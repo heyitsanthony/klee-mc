@@ -21,10 +21,12 @@ void mmu_testptr(void* ptr)
 {
 	if (!klee_prefer_true(mmu_testptr_invalid(ptr))) return;
 
+#ifndef BROKEN_OSDI
 	if (klee_feasible_ult(ptr, 0x1000))
 		klee_assume_ult(ptr, 0x10000);
 	else if (klee_feasible_ugt(ptr, 0x7fffffffffff))
 		klee_assume_ugt(ptr, 0x7fffffffffff);
+#endif
 	/* still possible that pointer will resolve to valid range... oops? */
 
 	SET_KREPORT(&testptr_ktab[0], ptr);
