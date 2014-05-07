@@ -34,11 +34,24 @@
 #include "concrete_fd.h"
 #include "breadcrumb.h"
 
+#define SYM_DENTS
 //#define USE_SYS_FAILURE
 extern bool concrete_vfs;
 static int last_sc = 0;
 
 extern void proc_sc(struct sc_pkt* sc);
+
+static struct kreport_ent badbuf_ktab[2] = 
+{	MK_KREPORT("address"),
+	MK_KREPORT(NULL)
+};
+
+void sc_report_badbuf(const char* v, const void* p)
+{
+	SET_KREPORT(&badbuf_ktab[0], p);
+	klee_ureport_details(v, "scbuf.err", &badbuf_ktab);
+}
+
 
 // arg0, arg1, ...
 // %rdi, %rsi, %rdx, %r10, %r8 and %r9a
@@ -190,6 +203,13 @@ static void do_sockcall(void* regfile, int call, unsigned long* args)
 	case SYS_LISTEN: sc_ret_v(regfile, 0); break;
 
 	case SYS_GETSOCKNAME:
+		if (	!klee_is_symbolic(args[1]) && 
+			!klee_is_valid_addr((void*)args[1]))
+		{
+			sc_ret_v(regfile, -1);
+			break;
+		}
+
 		new_regs = sc_new_regs(regfile);
 		if (GET_SYSRET_S(new_regs) == -1)
 			break;
@@ -960,7 +980,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(regfile, 0);
 		make_sym_by_arg(regfile, 1, RUSAGE_SZ, "getrusage");
 		break;
-#ifdef SYM_DENTS
 #define MAX_DENT_SZ	512
 	case SYS_getdents64:
 	case SYS_getdents: {
@@ -975,15 +994,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 		make_sym_by_arg(regfile, 1, num_bytes, "getdents");
 		break;
 	}
-#else
-	case SYS_getdents64:
-	case SYS_getdents: {
-		new_regs = sc_new_regs(regfile);
-		sc_ret_or(new_regs, 0, -1);
-		break;
-	}
-	break;
-#endif
 	FAKE_SC(fchmod)
 	FAKE_SC(fchown)
 	FAKE_SC(lchown)
@@ -991,7 +1001,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 	case SYS_clock_nanosleep: {
 		if (GET_ARG3(regfile) != 0) {
-			uint64_t dst_addr = concretize_u64(GET_ARG3(regfile));
+			// uint64_t dst_addr = concretize_u64(GET_ARG3(regfile));
 			make_sym_by_arg(
 				regfile, 3, TIMESPEC_SZ,  "clock_nanosleep");
 		}
@@ -1136,7 +1146,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 	case SYS_epoll_wait:
 		new_regs = sc_new_regs(regfile);
-		if (GET_SYSRET(new_regs) == -1)
+		if (GET_SYSRET_S(new_regs) == -1)
 			break;
 
 		klee_assume_uge(GET_SYSRET(new_regs), 0);
@@ -1416,6 +1426,12 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_execve: {
 		int 	i;
 		char	**argv;
+
+		if (GET_ARG0_PTR(regfile) == NULL) {
+			klee_ureport("execve NULL filename", "scbuf.err");
+			sc_ret_v(regfile, -1);
+			break;
+		}
 
 		new_regs = sc_new_regs(regfile);
 		sc_ret_or(new_regs, -1, 0);

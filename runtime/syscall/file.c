@@ -212,6 +212,12 @@ static void sc_open(const char* path, void* regfile)
 		return;
 	}
 
+	if (!klee_is_symbolic(path) && !klee_is_valid_addr(path)) {
+		sc_report_badbuf("Bad open path", path);
+		sc_ret_v(regfile, -1);
+		return;
+	}
+
 	/* concrete path? */
 	if (!file_path_has_sym(path)) {
 		if (deny_sys_files && is_sys_file(path)) {
@@ -308,18 +314,26 @@ int file_sc(struct sc_pkt* sc)
 	{
 		int		fd = GET_ARG0(regfile);
 		uint64_t	len = concretize_u64(GET_ARG2(regfile));
+		void		*readp = (void*)GET_ARG1_PTR(regfile);
+
+		if (readp == NULL) {
+			klee_ureport("NULL read buf", "scbuf.err");
+			return -1;
+		}
+
+		if (!klee_is_symbolic(readp) && !klee_is_valid_addr(readp)) {
+			sc_report_badbuf("Bad read buf", readp);
+			return -1;
+		}
 
 		if (concrete_vfs && fd_is_concrete(fd)) {
 			ssize_t	sz;
 			if (sc->sys_nr == SYS_read) {
-				sz = fd_read(
-					GET_ARG0(regfile),
-					(void*)(GET_ARG1_PTR(regfile)),
-					len);
+				sz = fd_read(GET_ARG0(regfile), readp, len);
 			} else {
 				sz = fd_pread(
 					GET_ARG0(regfile),
-					(void*)(GET_ARG1_PTR(regfile)),
+					readp,
 					len,
 					concretize_u64(GET_ARG3(regfile)));
 			}
@@ -327,11 +341,8 @@ int file_sc(struct sc_pkt* sc)
 			break;
 		}
 
-		if (fd == -1)
-			return -1;
-
-		if (sc_read_sym(sc, len) == 0)
-			return 0;
+		if (fd == -1) return -1;
+		if (sc_read_sym(sc, len) == 0) return 0;
 	}
 	break;
 

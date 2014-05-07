@@ -65,7 +65,7 @@ static void do_clone(struct sc_pkt* sc)
 	}
 
 	/* failure case */
-	if (GET_SYSRET(new_regs) == -1) return;
+	if (GET_SYSRET_S(new_regs) == -1) return;
 
 	/* successful parent case */
 	child_pid = free_pid++;
