@@ -72,9 +72,7 @@ static void loadSymArgs(Guest* gs, KTestStream* kts)
 	const KTestObject	*kto;
 
 	loadSymArgv(gs, kts);
-
 	argcp = gs->getArgcPtr();
-	if (!argcp) return;
 
 	kto = kts->peekObject();
 	if (kto == NULL) return;
@@ -82,7 +80,11 @@ static void loadSymArgs(Guest* gs, KTestStream* kts)
 	if (strncmp(kto->name, "argc", 4) != 0) return;
 
 	kto = kts->nextObject();
-	gs->getMem()->writeNative(argcp, *((uintptr_t*)kto->bytes));
+	if (argcp) {
+		gs->getMem()->writeNative(argcp, *((uintptr_t*)kto->bytes));
+	} else {
+		std::cerr << "[kmc-replay] argc obj but no argc ptr. uhoh!\n";
+	}
 }
 
 static KTestStream* setupKTestStream(
