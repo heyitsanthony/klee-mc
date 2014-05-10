@@ -71,7 +71,8 @@ public:
 		SimplifyingBuilder,
 		HandOptBuilder,
 		ExtraOptsBuilder,
-		RuleBuilder
+		RuleBuilder,
+		BitSimplifier
 	};
 
 	static ExprBuilder* create(BuilderKind);

@@ -92,6 +92,8 @@ namespace llvm
 			"Hand-optimized builder."),
 			clEnumValN(ExprBuilder::ExtraOptsBuilder, "extraopt",
 			"Extra Hand-optimized builder."),
+			clEnumValN(ExprBuilder::BitSimplifier, "s2e",
+			"S2E bitfield simplifier."),
 			clEnumValEnd));
 
 DEF_OPT(BenchRB, "benchmark-rb", "Benchmark rule builder with random queries");
@@ -355,7 +357,12 @@ bool checkRule(const ExprRule* er, Solver* s, std::ostream& os)
 	}
 
 	if (mustBeTrue == false) {
+		std::stringstream	ss;
+
 		os << "invalid rule\n";
+		ss << "invalid." << (void*)er->hash() << ".rule";
+		std::ofstream		ofs(ss.str().c_str());
+		er->printBinaryRule(ofs);
 		return false;
 	}
 

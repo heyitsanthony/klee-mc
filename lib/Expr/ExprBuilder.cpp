@@ -5,6 +5,7 @@
 #include "RuleBuilder.h"
 #include "CanonBuilder.h"
 #include "ChainedBuilder.h"
+#include "BitfieldSimplifierBuilder.h"
 
 using namespace klee;
 
@@ -29,15 +30,21 @@ ExprBuilder* ExprBuilder::create(BuilderKind bk)
 		delete Builder;
 		Builder = new ExtraOptBuilder();
 		break;
+	case BitSimplifier:
+		Builder = new BitfieldSimplifierBuilder(Builder);
+		break;
+
 	case RuleBuilder:
-		return RuleBuilder::create(new CanonBuilder(Builder));
+//		return RuleBuilder::create(new CanonBuilder(Builder));
+		return RuleBuilder::create(Builder);
 	default:
 		std::cerr << "Unknown BuilderKind.\n";
 		assert (0 == 1);
 		break;
 	}
 
-	return new CanonBuilder(Builder);
+//	return new CanonBuilder(Builder);
+	return Builder;
 }
 
 void ChainedEB::printName(std::ostream& os) const

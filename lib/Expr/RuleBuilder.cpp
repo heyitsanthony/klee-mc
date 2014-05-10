@@ -118,7 +118,8 @@ RuleBuilder::~RuleBuilder()
 
 RuleBuilder* RuleBuilder::create(ExprBuilder* b, const char *fname)
 {
-	RuleBuilder	*rb = new Canonizer<RuleBuilder>(b);
+//	RuleBuilder	*rb = new Canonizer<RuleBuilder>(b);
+	RuleBuilder	*rb = new RuleBuilder(b);
 
 	if (fname != NULL) {
 		if (rb->loadRuleDB(fname) == false) {
@@ -521,9 +522,12 @@ ref<Expr> RuleBuilder::tryTrieRules(const ref<Expr>& in)
 
 ref<Expr> RuleBuilder::tryAllRules(const ref<Expr>& in)
 {
+	std::cerr << "TRYING ALL RULES for " << in << "\n";
 	foreach (it, rules_arr.begin(), rules_arr.end()) {
 		ExprRule	*er = *it;
 		ref<Expr>	new_expr;
+
+//		std::cerr << "hash: " << (void*)er->hash() << '\n';
 
 		new_expr = er->apply(in);
 		if (!new_expr.isNull()) {

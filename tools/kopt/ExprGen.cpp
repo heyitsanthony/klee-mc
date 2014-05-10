@@ -46,22 +46,20 @@ ref<Expr> ExprGen::genExpr(
 			UpdateList ul(arr.get(), 0);
 			cur_expr = ReadExpr::create(
 				UpdateList(arr.get(), 0),
-				ZExtExpr::create(
-					ZExtExpr::create(cur_expr, 8),
-					32));
+				MK_ZEXT(MK_ZEXT(cur_expr, 8), 32));
 			break;
 		}
 
 		case Expr::Select: {
 			ref<Expr>	ce, cond;
 			/* XXX randomize */
-			ce = ConstantExpr::create(1, 1);
-			ce = ZExtExpr::create(ce, cur_expr->getWidth());
-			cond = EqExpr::create(ce, cur_expr);
-			cur_expr = SelectExpr::create(
+			ce = MK_CONST(1, 1);
+			ce = MK_ZEXT(ce, cur_expr->getWidth());
+			cond = MK_EQ(ce, cur_expr);
+			cur_expr = MK_SELECT(
 				cond,
 				cur_expr,
-				XorExpr::create(ce, cur_expr));
+				MK_XOR(ce, cur_expr));
 			break;
 		}
 
@@ -73,7 +71,7 @@ ref<Expr> ExprGen::genExpr(
 			assert (w > 0);
 			w -= rng.getInt32() % w;
 
-			cur_expr = ExtractExpr::create(cur_expr, off, w);
+			cur_expr = MK_EXTRACT(cur_expr, off, w);
 			break;
 		}
 
@@ -83,8 +81,14 @@ ref<Expr> ExprGen::genExpr(
 
 		case Expr::ZExt:
 		case Expr::SExt: {
+			unsigned	w;
+			w = (rng.getInt32() % 64)+1;
+			if (w <= cur_expr->getWidth()) {
+				cur_expr = MK_EXTRACT(cur_expr, 0, w);
+				break;
+			}
 			v.push_back(Expr::CreateArg(cur_expr));
-			v.push_back(Expr::CreateArg((rng.getInt32() % 64)+1));
+			v.push_back(Expr::CreateArg(w));
 			cur_expr = Expr::createFromKind(kind, v);
 			break;
 		}
@@ -92,7 +96,7 @@ ref<Expr> ExprGen::genExpr(
 		case Expr::Concat:
 			/* so that expr doesn't get huge width */
 			if (cur_expr->getWidth() > 64)
-				cur_expr = ZExtExpr::create(cur_expr, 32);
+				cur_expr = MK_EXTRACT(cur_expr, 0, 32);
 
 		case Expr::UDiv:
 		case Expr::SDiv:
@@ -100,11 +104,10 @@ ref<Expr> ExprGen::genExpr(
 		case Expr::SRem:
 			/* protect from 0's */
 			cur_expr = SelectExpr::create(
-				EqExpr::create(
+				MK_EQ(
 					cur_expr,
-					ConstantExpr::create(
-						0, cur_expr->getWidth())),
-				ConstantExpr::create(1, cur_expr->getWidth()),
+					MK_CONST(0, cur_expr->getWidth())),
+				MK_CONST(1, cur_expr->getWidth()),
 				cur_expr);
 		case Expr::Add:
 		case Expr::Sub:
@@ -131,16 +134,15 @@ ref<Expr> ExprGen::genExpr(
 			n = rng.getInt32();
 			if (n == ~((unsigned int)0) || n == 0) n = 2;
 
-			ce = ConstantExpr::create(n, 32);
-			ce = ZExtExpr::create(ce, cur_expr->getWidth());
+			ce = MK_CONST(n, 32);
+			ce = MK_ZEXT(ce, cur_expr->getWidth());
 			if (rng.getInt32() % 2)
 				ce = NotExpr::create(ce);
 
 			/* don't upset sdiv / udiv */
 			/* TODO: do a (select (= 0 expr) 1 expr) for div/rem */
 			if (ce->isZero()) {
-				ce = ConstantExpr::create(1, 32);
-				ce = ZExtExpr::create(ce, cur_expr->getWidth());
+				ce = MK_CONST(1, cur_expr->getWidth());
 			}
 
 			if (rng.getInt32() % 2) {

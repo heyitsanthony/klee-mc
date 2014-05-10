@@ -29,10 +29,7 @@ namespace {
 
 double Benchmarker::benchExpr(ref<Expr>& e)
 {
-	Query		q(
-			EqExpr::create(
-				ConstantExpr::create(0, e->getWidth()),
-				e));
+	Query		q(MK_EQ(MK_CONST(0, e->getWidth()), e));
 	double		dat[NUM_BENCH_ITER];
 	double		total_time, avg_time;
 	unsigned	min_time_idx, max_time_idx;
@@ -153,8 +150,7 @@ bool Benchmarker::genTestExprs(
 	db->getDuals(gen_from, gen_to);
 
 	if (ParanoidBenchmark && s->mustBeTrue(
-		Query(EqExpr::create(gen_from, gen_to)),
-		mustBeTrue) && !mustBeTrue)
+		Query(MK_EQ(gen_from, gen_to)), mustBeTrue) && !mustBeTrue)
 	{
 		std::cerr << "[BENCHMARK] !!! SAME OPS. NOT EQUAL !!!?!\n";
 		std::cerr << "GEN-FROM: " << gen_from << '\n';
@@ -202,8 +198,7 @@ Benchmarker::DualBuilder* Benchmarker::getRuleDual(const ExprRule* er)
 
 	base_from = er->getFromExpr();
 	if (ParanoidBenchmark && s->mustBeTrue(
-		Query(EqExpr::create(base_from, base_to)),
-		mustBeTrue) && !mustBeTrue)
+		Query(MK_EQ(base_from, base_to)), mustBeTrue) && !mustBeTrue)
 	{
 		std::cerr << "[BENCHMARK] !!! BASES NOT EQUAL !!!?!\n";
 		return NULL;
