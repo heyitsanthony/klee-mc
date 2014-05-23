@@ -35,6 +35,26 @@ static void processCrumbs(KTestStream* kts, Crumbs* crumbs)
 	}
 }
 
+static void skipArgs(KTestStream* kts)
+{
+	const KTestObject	*kto;
+
+	if (!kts->getKTest()->symArgvs) return;
+
+	/* skip argv */
+	do {
+		kto = kts->peekObject();
+		if (kto == NULL || strncmp(kto->name, "argv", 4))
+			break;
+		kts->nextObject();
+	} while (1);
+
+	/* skip argc */
+	kto = kts->peekObject();
+	if (kto == NULL || strncmp(kto->name, "argc", 4)) return;
+	kts->nextObject();
+}
+
 int main(int argc, char* argv[])
 {
 	Crumbs		*crumbs = NULL;
@@ -64,17 +84,7 @@ int main(int argc, char* argv[])
 	}
 
 	/* ignore argv objects, if any */
-	if (kts->getKTest()->symArgvs) {
-		do {
-			const KTestObject	*kto;
-
-			kto = kts->peekObject();
-			if (kto == NULL || strcmp(kto->name, "argv"))
-				break;
-			kts->nextObject();
-		} while (1);
-	}
-
+	skipArgs(kts);
 
 	crumbs = Crumbs::create(fname_crumbs);
 	if (crumbs == NULL) {
