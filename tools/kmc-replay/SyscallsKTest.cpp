@@ -306,13 +306,22 @@ void SyscallsKTest::doLinuxThunks(SyscallParams& sp, int xlate_sysnr)
 		break;
 	}
 
-	case SYS_getsockname:
+	case SYS_getsockname: {
+		socklen_t	v;
 		if (getRet() == 0) {
 			feedSyscallOp(sp);
-			*((socklen_t*)sp.getArgPtr(2)) =sizeof(struct sockaddr_in);
-		} else
-			*((socklen_t*)sp.getArgPtr(2)) = 0;
+			v = sizeof(struct sockaddr_in);
+		} else {
+			v = 0;
+		}
+#ifndef BROKEN_OSDI
+		guest->getMem()->memcpy(
+			guest_ptr(sp.getArg(2)), &v, sizeof(v));
+#else
+		*((socklen_t*)sp.getArgPtr(2)) = v;
+#endif
 		break;
+	}
 
 	case SYS_arch_prctl: {
 		VexGuestAMD64State	*guest_cpu;
