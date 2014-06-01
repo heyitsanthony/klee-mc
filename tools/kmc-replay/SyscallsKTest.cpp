@@ -117,6 +117,8 @@ int SyscallsKTest::loadSyscallEntry(SyscallParams& sp)
 	if (!bc_is_type(bcs_crumb, BC_TYPE_SC)) {
 		BCrumb	*bc = Crumbs::toBC((struct breadcrumb*)bcs_crumb);
 		bc->print(std::cerr);
+		if (bc_is_type(bcs_crumb, BC_TYPE_ERREXIT))
+			exit(0);
 	}
 	assert (bc_is_type(bcs_crumb, BC_TYPE_SC));
 

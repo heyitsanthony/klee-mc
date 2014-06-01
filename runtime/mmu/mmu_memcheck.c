@@ -21,9 +21,10 @@ static uint8_t from_calloc = 0;
 
 struct heap_ent
 {
-	void		*he_base;
-	unsigned	 he_len;
-	struct list_item he_li;
+	void			*he_base;
+	unsigned		he_len;
+	unsigned		he_req_len; /* requested length <= he_len */
+	struct list_item	he_li;
 };
 
 #define GET_HT_IDX(x)	(((uint64_t)x / 16) & 0xff)
@@ -36,8 +37,12 @@ struct heap_table { struct list	ht_l[HEAP_TAB_LISTS]; };
 //#define HEAP_BUCKETS	512
 //#define PTR_TO_IDX(x)	((((uint64_t)x) >> 4) % HEAP_BUCKETS)
 
-#define HEAP_GRAN_BYTES	16	/* 16 byte chunks because of sse instructions */
-#define HEAP_FLAG_BITS	2
+#define ALLOC_LEN_ROUNDING	16 /* 16 byte chunks because of sse instructions */
+
+/* NOTE: >1 byte granularity is TOO conservative. Won't catch obvious bugs like:
+ * x = malloc(n); memset(x+1,0,n-1); f(x[0]) */
+#define HEAP_GRAN_BYTES		1
+#define HEAP_FLAG_BITS		2
 
 // used to track non-reentrant allocation functions which modify
 // reserved data
@@ -204,7 +209,12 @@ static struct heap_ent* add_heap_ent(void* base, unsigned len)
 	struct heap_ent		*he;
 
 	he = malloc(sizeof(*he));
-	he->he_len = len;
+	if ((len & (ALLOC_LEN_ROUNDING-1)) != 0) {
+		he->he_len = ((len+(ALLOC_LEN_ROUNDING-1))/ALLOC_LEN_ROUNDING);
+		he->he_len *= ALLOC_LEN_ROUNDING;
+	} else
+		he->he_len = len;
+	he->he_req_len = len;
 	he->he_base = base;
 	list_add_head(GET_HEAP_L(base), &he->he_li);
 

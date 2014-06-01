@@ -321,8 +321,11 @@ extern void free(void*) __THROW;
 	uint64_t klee_indirect4(const char* s,
 	uint64_t v0, uint64_t v1, uint64_t v2, uint64_t v3);
 
+	uint32_t klee_constr_count(void);
 
 	uint64_t klee_read_reg(const char* sp);
+
+	int klee_is_readonly(const void* addr);
 
 	void klee_hook_return(uint64_t stack_idx, void* fn, uint64_t aux);
 

@@ -81,14 +81,13 @@ namespace {
   UsePID("use-pid", cl::desc("Use proportional state control"));
 
   cl::opt<bool> DumpStatesOnHalt("dump-states-on-halt", cl::init(true));
-  cl::opt<bool> PreferCex("prefer-cex", cl::init(false));
+  DECL_OPTBOOL(PreferCex, "prefer-cex");
 
   cl::opt<bool,true>
   DebugPrintInstructionsProxy(
   	"debug-print-instructions",
 	cl::location(DebugPrintInstructions),
-        cl::desc("Print instructions during execution."),
-	cl::init(false));
+        cl::desc("Print instructions during execution."));
 
   cl::opt<bool>
   UseBranchHints(

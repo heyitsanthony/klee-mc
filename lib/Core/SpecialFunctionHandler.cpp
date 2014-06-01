@@ -1191,6 +1191,15 @@ SFH_DEF_ALL(Watch, "klee_watch", false)
 		DebugPrintInstructions = false;
 }
 
+
+SFH_DEF_ALL(ConstrCount, "klee_constr_count", true)
+{
+	state.bindLocal(
+		target,
+		MK_CONST(state.constraints.size(), Expr::Int32));
+}
+
+
 SFH_DEF_ALL(ExprHash, "__klee_expr_hash", true)
 {
 	SFH_CHK_ARGS(1, "klee_expr_hash");
@@ -1261,7 +1270,6 @@ SFH_DEF_ALL(SymCoreHash, "klee_sym_corehash", true)
 	arr = *(arrays.begin());
 	state.bindLocal(target, MK_CONST(min_hash ^ arr->hash(), 64));
 }
-
 
 static bool getObjectFromBase(ExecutionState& state, ref<Expr>& e, ObjectPair& op)
 {
@@ -1397,6 +1405,7 @@ add(Yield),
 add(SymRangeBytes),
 add(MkExpr),
 add(GlobalInc),
+add(ConstrCount),
 #define DEF_WIDE(x)	\
 add(WideLoad##x),	\
 add(WideStore##x)

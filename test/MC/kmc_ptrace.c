@@ -1,7 +1,7 @@
 // RUN: gcc %s -I../../../include/ -O0 -o %t1
 // RUN: rm -f guest-*
 // RUN: /usr/bin/env VEXLLVM_SAVE=1 pt_run ./%t1
-// RUN: klee-mc -guest-type=sshot - ./%t1 2>%t1.err >%t1.out
+// RUN: klee-mc -guest-type=sshot -stop-after-n-tests=100 - ./%t1 2>%t1.err >%t1.out
 // RUN: ls klee-last | not grep .err
 // RUN: grep "exitcode=0" %t1.err
 //

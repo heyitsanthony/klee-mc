@@ -57,8 +57,8 @@ void SyscallsKTestPT::setRet(uint64_t r)
 
 uint64_t SyscallsKTestPT::apply(SyscallParams& sp)
 {
-	uint64_t	ret;
-	GuestMem	*old_mem;
+	uint64_t		ret;
+	GuestMem		*old_mem;
 
 	ret_set = false;
 

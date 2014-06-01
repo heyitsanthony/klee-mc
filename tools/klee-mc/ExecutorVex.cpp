@@ -2,6 +2,7 @@
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/Path.h>
 #include <llvm/Support/raw_os_ostream.h>
+#include <sys/mman.h>
 #include "klee/Config/config.h"
 #include "klee/breadcrumb.h"
 
@@ -483,6 +484,10 @@ void ExecutorVex::bindMappingPage(
 		 * Safe, but will need a workaround *eventually* */
 		state->write8(mmap_os, i, data[i]);
 	}
+
+	/* mark read-only pages as read-only */
+	if ((m.getCurProt() & PROT_WRITE) == 0)
+		mmap_os->setReadOnly(true);
 
 	if (heap_min != ~0UL && heap_max != 0) {
 		/* scanning memory is kind of stupid, but we're desperate */

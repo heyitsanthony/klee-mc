@@ -8,7 +8,7 @@
 //
 // Now, a replay test.
 // RUN: kmc-replay 1 >%t1.replay.out 2>%t1.replay.err
-// RUN: grep xitcode %t1.replay.err
+// RUN: egrep "(badtime|xitcode)" %t1.replay.err
 #include <sys/time.h>
 #include <stdio.h>
 #include <klee/klee.h>
