@@ -90,6 +90,7 @@ public:
 
 	unsigned getSize(void) const { return size; }
 	void setReadOnly(bool ro) { readOnly = ro; }
+	bool isReadOnly(void) const { return readOnly; }
 
 	// make contents all concrete and zero
 	void initializeToZero();

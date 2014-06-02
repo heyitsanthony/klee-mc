@@ -1177,6 +1177,30 @@ SFH_DEF_ALL(ForkEq, "__klee_fork_eq", true)
 	if (sp.second != NULL) sp.second->bindLocal(target, MK_CONST(0, 32));
 }
 
+SFH_DEF_ALL(IsReadOnly, "klee_is_readonly", true)
+{
+	const MemoryObject	*mo;
+	const ObjectState	*os;
+	const ConstantExpr	*ce;
+
+	SFH_CHK_ARGS(1, "klee_is_readonly");
+	EXPECT_CONST("klee_is_readonly", ce, 0);
+
+	mo = state.addressSpace.resolveOneMO(ce->getZExtValue());
+	if (mo == NULL) {
+		state.bindLocal(target, MK_CONST(-1, Expr::Int32));
+		return;
+	}
+
+	os = state.addressSpace.findObject(mo);
+	if (os->isReadOnly()) {
+		state.bindLocal(target, MK_CONST(1, Expr::Int32));
+		return;
+	}
+
+	state.bindLocal(target, MK_CONST(0, Expr::Int32));
+}
+
 
 SFH_DEF_ALL(Watch, "klee_watch", false)
 {
@@ -1406,6 +1430,7 @@ add(SymRangeBytes),
 add(MkExpr),
 add(GlobalInc),
 add(ConstrCount),
+add(IsReadOnly),
 #define DEF_WIDE(x)	\
 add(WideLoad##x),	\
 add(WideStore##x)
