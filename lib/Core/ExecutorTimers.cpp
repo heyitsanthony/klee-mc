@@ -344,6 +344,12 @@ public:
 			const KBrInstruction	*kbr = *it;
 			llvm::Function		*parent_f;
 
+			/* only dump branches that have been executed */
+			if (	kbr->getTrueHits() == 0 &&
+				kbr->getFalseHits() == 0 &&
+				kbr->getForkHits() == 0)
+				continue;
+
 			if (ignoreConcrete && !kbr->hasSeenExpr())
 				continue;
 

@@ -33,12 +33,6 @@ namespace {
 		cl::desc("Maximum number of states to fork on MemErr"),
 		cl::init(0));
 
-	cl::opt<unsigned>
-	OOBAperture(
-		"oob-aperture",
-		cl::desc("Radius of acceptable OOB expressions."),
-		cl::init(32*1024));
-
 	cl::opt<unsigned, true>
 	MakeConcreteSymbolicProxy(
 		"make-concrete-symbolic",
