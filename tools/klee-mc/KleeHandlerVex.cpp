@@ -29,6 +29,11 @@ namespace
 		"validate-test",
 		llvm::cl::desc("Validate tests with concrete replay"));
 
+	llvm::cl::opt<bool> DumpEarlyErr(
+		"dump-early-err",
+		llvm::cl::desc("Dump early error info"));
+
+
 	llvm::cl::opt<bool> DumpTestRegs(
 		"dump-test-regs",
 		llvm::cl::desc(
@@ -156,6 +161,9 @@ void KleeHandlerVex::printErrorMessage(
 	unsigned id)
 {
 	KleeHandler::printErrorMessage(state, errorMessage, errorSuffix, id);
+
+	/* don't errdump for early */
+	if (!DumpEarlyErr && strcmp(errorSuffix, "early") == 0) return;
 
 	if (std::ostream* f = openTestFileGZ("errdump", id)) {
 		printErrDump(state, *f);
