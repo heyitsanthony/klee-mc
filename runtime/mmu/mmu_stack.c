@@ -28,8 +28,6 @@ static void* find_ret_addr(void* addr)
 
 	/* most recent point on the stack */
 	stk_top = (void*)klee_min_value((uint64_t)addr);
-	if (klee_valid_eq(addr, stk_top))
-		return stk_top;
 
 	/* least recent point on the stack */
 	stk_bottom  = (void*)klee_max_value((uint64_t)addr);
@@ -44,6 +42,7 @@ static void* find_ret_addr(void* addr)
 		cur_addr = (uint64_t*)((char*)stk_bottom - i);
 		v = *cur_addr;
 
+		/* (v & (1 << 63) == 0) | (v <= 0x400000)) */
 		not_code_cond =
 			klee_mk_or(
 				klee_mk_ne(v & (1UL << 63), 0),
