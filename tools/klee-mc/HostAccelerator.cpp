@@ -18,7 +18,8 @@
 #include "ExecutorVex.h"
 #include "HostAccelerator.h"
 
-#define DEBUG_HOSTACCEL(x)	0
+//#define DEBUG_HOSTACCEL(x)	x
+#define DEBUG_HOSTACCEL(x)
 #define PTRACE_ARCH_PRCTL	((__ptrace_request)30)
 #define PARANOID_SAVING
 
@@ -107,9 +108,14 @@ void HostAccelerator::setupChild(void)
 	/* start hw accel process in background */
 	child_pid = fork();
 	if (child_pid == 0) {
-		close(0);
+		close(0); /* no stdin */
 		dup(pipefd[0]);
 		prctl(PR_SET_PDEATHSIG, SIGKILL);
+
+		/* this is probably slower than it needs to be... */
+		ptrace(PTRACE_TRACEME, 0, 0, 0);
+		raise(SIGSTOP);
+
 		execlp("klee-hw", "klee-hw", NULL);
 		abort();
 	}
@@ -146,6 +152,7 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 	user_fpregs_struct	ufprs, ufprs_vex;
 
 	/* find vdso so we can unmap it later */
+	/* TODO: no longer need to do this post KLEE-VDSO */
 	if (vdso_base == NULL) {
 		foreach (it, esv.addressSpace.begin(), esv.addressSpace.end()){
 			if (it->first->name == "[vdso]") {
@@ -171,9 +178,13 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 	writeSHM(objs);
 
 	/* start tracing while program is sleeping on pipe */
+	/* XXX: we don't start tracing on pipe-- we start tracing
+	 * on exec now */
+#if 0
 	rc = ptrace(PTRACE_ATTACH, child_pid, NULL, NULL);
 	if (rc != 0) {
-		DEBUG_HOSTACCEL(std::cerr << "first attach failed\n" << '\n');
+		DEBUG_HOSTACCEL(std::cerr
+			<< "[hwaccel] first attach failed\n" << '\n');
 		kill(child_pid, SIGKILL);
 		waitpid(child_pid, &status, 0);
 		killChild();
@@ -181,13 +192,19 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 		rc = ptrace(PTRACE_ATTACH, child_pid, NULL, NULL);
 		assert (rc == 0);
 	}
-
+#endif
 	rc = waitpid(child_pid, &status, 0);
 	assert (rc != -1);
+
+	DEBUG_HOSTACCEL(
+		std::cerr << "[hwaccel] first childpid status="
+		<< (void*)(long)status  << '\n');
 
 	/* SIGTRAP is if the execve() isn't done by the time we ptrace */
 	if (WIFSTOPPED(status) && WSTOPSIG(status) == SIGTRAP) {
 		/* send first CONT to ack SIGTRAP */
+		DEBUG_HOSTACCEL(std::cerr
+			<< "[hwaccel] ack SIGTRAP\n" << '\n');
 		ptrace(PTRACE_CONT, child_pid, NULL, NULL);
 		waitpid(child_pid, &status, 0);
 		last_status = status;
@@ -195,8 +212,14 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 	} else {
 		ok = WIFSTOPPED(status) && WSTOPSIG(status) == SIGSTOP;
 		last_status = status;
-		if (!ok) std::cerr << "bad status: " <<
+		if (!ok) std::cerr << "[hwaccel] bad status: " <<
 				(void*)(long)status << '\n';
+		assert (ok);
+		ptrace(PTRACE_CONT, child_pid, NULL, NULL);
+		rc = waitpid(child_pid, &status, 0);
+		assert (rc != -1);
+		ok = WIFSTOPPED(status) && WSTOPSIG(status) == SIGTRAP;
+		last_status = status;
 		assert (ok);
 	}
 

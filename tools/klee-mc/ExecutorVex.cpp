@@ -641,6 +641,7 @@ void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
 		if (hw_accel != NULL && !state.getOnFini()) {
 			double	solver_min_time;
 			solver_min_time = HWAccelPct*statsTracker->elapsed();
+			solver_min_time *= 1e6;
 			if (stats::solverTime < solver_min_time) {
 				if (!doAccel(state, ki))
 					return;

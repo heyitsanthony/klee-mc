@@ -23,7 +23,8 @@
 
 #include "hw_accel.h"
 
-#define	DEBUG(x)	0
+// #define	DEBUG(x)	x
+#define	DEBUG(x)
 
 static int		pid;
 static void		*shm_addr = NULL;
@@ -160,6 +161,7 @@ int main(void)
 		return 2;
 	}
 
+	DEBUG(fprintf(stderr, "[klee-hw] Initializing.\n"));
 	pid = getpid();
 	while ((n = recv_and_run()) == 0) {
 		if (shm_maps->hwm_prot == 1) _exit(0);
