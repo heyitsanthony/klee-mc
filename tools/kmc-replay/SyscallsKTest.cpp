@@ -227,8 +227,11 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 	xlate_sysnr = loadSyscallEntry(sp);
 
 	/* extra thunks */
-	if (bcs_crumb != NULL) {
-	if (!is_w32) {
+	if (bcs_crumb == NULL) {
+		assert (fail_past_log == true);
+		if (sys_nr == SYS_exit || sys_nr == SYS_exit_group)
+			exited = true;
+	} else if (!is_w32) {
 		/* GROSS UGLY HACK. OH WELL. */
 		if (	bc_sc_is_thunk(bcs_crumb)
 			&& xlate_sysnr != SYS_recvmsg
@@ -256,7 +259,6 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 				cpu->getReg("IP_AT_SYSCALL", 32) + 2));
 			cpu->setReg("EDX", 32, cpu->getReg("EDX", 32) + 8);
 		}
-	}
 	}
 
 
