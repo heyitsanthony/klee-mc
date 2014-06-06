@@ -51,6 +51,7 @@ private:
 	uint64_t getRet(void) const;
 
 	int loadSyscallEntry(SyscallParams& sp);
+	void advanceSyscallEntry(SyscallParams& sp);
 
 	void sc_stat(SyscallParams& sp);
 	void sc_mmap(SyscallParams& sp);
@@ -62,6 +63,8 @@ private:
 
 	bool			is_w32; // XXX: HAck HAKCCHAKCAHCK
 	ConcreteVFS		*concrete_vfs;
+
+	bool			fail_past_log;
 };
 
 #endif

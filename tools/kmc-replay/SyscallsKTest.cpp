@@ -70,6 +70,7 @@ SyscallsKTest::SyscallsKTest(
 , concrete_vfs((getenv("KMC_CONCRETE_VFS") != NULL)
 	? new ConcreteVFS()
 	: NULL)
+, fail_past_log(getenv("KMC_EXHAUST_FAIL") != NULL)
 {
 	is_w32 = dynamic_cast<const I386WindowsABI*>(in_g->getABI());
 }
@@ -94,13 +95,15 @@ void SyscallsKTest::badCopyBail(void)
 	abort();
 }
 
-int SyscallsKTest::loadSyscallEntry(SyscallParams& sp)
+void SyscallsKTest::advanceSyscallEntry(SyscallParams& sp)
 {
 	uint64_t sys_nr = sp.getSyscall();
 
 	assert (bcs_crumb == NULL && "Last crumb should be freed before load");
 	bcs_crumb = reinterpret_cast<struct bc_syscall*>(crumbs->next());
-	if (!bcs_crumb) {
+	if (bcs_crumb == NULL) {
+		if (fail_past_log == true) return;
+
 		fprintf(stderr,
 			KREPLAY_NOTE
 			"Could not read sclog entry #%d. Out of entries.\n"
@@ -117,8 +120,14 @@ int SyscallsKTest::loadSyscallEntry(SyscallParams& sp)
 	if (!bc_is_type(bcs_crumb, BC_TYPE_SC)) {
 		BCrumb	*bc = Crumbs::toBC((struct breadcrumb*)bcs_crumb);
 		bc->print(std::cerr);
-		if (bc_is_type(bcs_crumb, BC_TYPE_ERREXIT))
+		if (bc_is_type(bcs_crumb, BC_TYPE_ERREXIT)) {
+			if (fail_past_log == true) {
+				Crumbs::freeCrumb(&bcs_crumb->bcs_hdr);
+				bcs_crumb = NULL;
+				return;
+			}
 			exit(0);
+		}
 	}
 	assert (bc_is_type(bcs_crumb, BC_TYPE_SC));
 
@@ -130,6 +139,21 @@ int SyscallsKTest::loadSyscallEntry(SyscallParams& sp)
 	}
 
 	assert (bcs_crumb->bcs_sysnr == sys_nr && "sysnr mismatch with log");
+}
+
+int SyscallsKTest::loadSyscallEntry(SyscallParams& sp)
+{
+	advanceSyscallEntry(sp);
+
+	if (bcs_crumb == NULL) {
+		assert (fail_past_log == true);
+		fprintf(stderr,
+			KREPLAY_NOTE
+			"Fallback. Got sysnr=%d. Failing.\n",
+			(int)sp.getSyscall());
+		setRet(~0); /* fail request */
+		return ~0;
+	}
 
 	/* setup new register context */
 	if (bc_sc_is_newregs(bcs_crumb)) {
@@ -203,6 +227,7 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 	xlate_sysnr = loadSyscallEntry(sp);
 
 	/* extra thunks */
+	if (bcs_crumb != NULL) {
 	if (!is_w32) {
 		/* GROSS UGLY HACK. OH WELL. */
 		if (	bc_sc_is_thunk(bcs_crumb)
@@ -232,6 +257,7 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 			cpu->setReg("EDX", 32, cpu->getReg("EDX", 32) + 8);
 		}
 	}
+	}
 
 
 	fprintf(stderr,
@@ -241,7 +267,7 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 		(void*)getRet());
 
 	sc_retired++;
-	Crumbs::freeCrumb(&bcs_crumb->bcs_hdr);
+	if (bcs_crumb != NULL) Crumbs::freeCrumb(&bcs_crumb->bcs_hdr);
 	bcs_crumb = NULL;
 
 	return ret;
