@@ -1,6 +1,6 @@
 // RUN: gcc %s -O0 -I../../../include/  -o %t1
 // RUN: klee-mc  -pipe-solver -use-sym-mmu -sym-mmu-type=../mmustack_stack.txt - ./%t1  2>%t1.err >%t1.out
-// RUN: ls klee-last | not grep err$
+// RUN: ls klee-last | grep decode.err$
 // RUN: ls klee-last | grep warning
 
 #include "klee/klee.h"

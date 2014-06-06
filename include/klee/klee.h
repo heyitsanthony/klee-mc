@@ -273,7 +273,8 @@ extern void free(void*) __THROW;
   uint64_t klee_max_value(uint64_t expr);
 
   /* stores up to 'n' feasible values for 'expr' to 'buf' */
-  int klee_get_values(uint64_t expr, uint64_t* buf, unsigned n);
+#define klee_get_values(e,b,n) klee_get_values_pred(e,b,n,1)
+  int klee_get_values_pred(uint64_t expr, uint64_t* buf, unsigned n, uint64_t pred);
 
 
   /* Ensure that memory in the range [address, address+size) is

@@ -1188,7 +1188,8 @@ SFH_DEF_ALL(IsReadOnly, "klee_is_readonly", true)
 
 	mo = state.addressSpace.resolveOneMO(ce->getZExtValue());
 	if (mo == NULL) {
-		state.bindLocal(target, MK_CONST(-1, Expr::Int32));
+		state.bindLocal(
+			target, MK_CONST(((uint32_t)~0), Expr::Int32));
 		return;
 	}
 
