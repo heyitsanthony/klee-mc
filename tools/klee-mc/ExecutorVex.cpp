@@ -12,6 +12,7 @@
 #include "../../lib/Searcher/PrioritySearcher.h"
 #include "../../lib/Searcher/UserSearcher.h"
 #include "../../lib/Core/StatsTracker.h"
+#include "../../lib/Core/CoreStats.h"
 #include "../../lib/Core/ExeStateManager.h"
 #include "../../lib/Core/MemoryManager.h"
 #include "klee/Internal/Support/Timer.h"
@@ -73,6 +74,10 @@ namespace
 	cl::opt<bool> HWAccel(
 		"use-hwaccel",
 		cl::desc("Use hardware acceleration on concrete state."));
+	cl::opt<double> HWAccelPct(
+		"use-hwaccel-pct",
+		cl::desc("Hardware accelerate on SolverTime < Pct*WallTime"),
+		cl::init(1.1) /* always */); 
 
 	cl::opt<bool> XChkHWAccel(
 		"xchk-hwaccel",
@@ -634,8 +639,12 @@ void ExecutorVex::instRet(ExecutionState &state, KInstruction *ki)
 
 		/* hardware acceleration begins at system call exit */
 		if (hw_accel != NULL && !state.getOnFini()) {
-			if (!doAccel(state, ki))
-				return;
+			double	solver_min_time;
+			solver_min_time = HWAccelPct*statsTracker->elapsed();
+			if (stats::solverTime < solver_min_time) {
+				if (!doAccel(state, ki))
+					return;
+			}
 		}
 	}
 
