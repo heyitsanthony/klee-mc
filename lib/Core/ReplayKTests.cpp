@@ -3,6 +3,9 @@
 #include "Executor.h"
 #include "ExeStateManager.h"
 #include "PTree.h"
+#include "CoreStats.h"
+#include "CostKillerStateSolver.h"
+#include "klee/SolverStats.h"
 #include "static/Sugar.h"
 #include <algorithm>
 
@@ -16,19 +19,30 @@ namespace
 		llvm::cl::init(true));
 }
 
+/* each replay state may use up to 10 seconds */
+#define MAX_SOLVER_SECONDS	10.0
+
 bool ReplayKTests::replay(Executor* exe, ExecutionState* initSt)
 {
 	Forks		*old_f;
+	StateSolver	*old_ss = exe->getSolver(), *new_ss;
 	bool		ret;
 
 	std::cerr << "[KTest] Replaying " << kts.size() << " ktests.\n";
 
 	old_f = exe->getForking();
+
+	/* timeout expensive replayed states */
+	new_ss = new CostKillerStateSolver(old_ss, MAX_SOLVER_SECONDS);
+	exe->setSolver(new_ss);
+
 	ret = (FasterReplay)
 		? replayFast(exe, initSt)
 		: replaySlow(exe, initSt);
 	exe->setForking(old_f);
 
+	exe->setSolver(old_ss);
+	delete new_ss;
 	std::cerr << "[KTest] All replays complete.\n";
 
 	return ret;
@@ -90,11 +104,13 @@ void ReplayKTests::replayFast(
 {
 	ExeStateManager		*esm = exe->getStateManager();
 	ForksKTestStateLogger	*f_ktest;
+	unsigned int		i = 0;
 
 	f_ktest = (ForksKTestStateLogger*)exe->getForking();
 	foreach (it, in_kts.begin(), in_kts.end()) {
 		ExecutionState	*es;
 		const KTest	*ktest(*it);
+		unsigned	old_qc = stats::queries;
 
 		es = f_ktest->getNearState(ktest);
 		if (es == NULL) {
@@ -113,9 +129,10 @@ void ReplayKTests::replayFast(
 		exe->exhaustState(es);
 
 		std::cerr
-			<< "[Replay] Replay KTest done st="
-			<< es << ". Total="
-			<< esm->numRunningStates() << "\n";
+			<< "[Replay] Replay KTest done st=" << es
+			<< ". OutcallQueries=" << stats::queries - old_qc
+			<< ". Total=" << esm->numRunningStates()
+			<< ". (" << ++i << " / " << in_kts.size() << ")\n";
 	}
 }
 

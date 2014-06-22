@@ -2134,7 +2134,11 @@ void Executor::run(ExecutionState &initState)
 
 	PartSeedSetupDummy(this);
 
-	if (replay != NULL) replay->replay(this, &initState);
+	if (replay != NULL) {
+		std::cerr << "[Executor] Beginning Replay\n";
+		replay->replay(this, &initState);
+		std::cerr << "[Executor] Finished Replay\n";
+	}
 
 	if (Replay::isReplayOnly()) {
 		std::cerr << "[Executor] Pure replay run complete.\n";
