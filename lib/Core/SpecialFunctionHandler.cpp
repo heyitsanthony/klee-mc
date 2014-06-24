@@ -583,7 +583,12 @@ SFH_DEF_ALL(Feasible, "__klee_feasible", true)
 
 	SFH_CHK_ARGS(1, "klee_feasible");
 
+	/* mayBeTrue, etc expect boolean exprs, so
+	 * convert to bool if necessary */
 	e = args[0];
+	if (e->getWidth() != 1)
+		e = MK_NE(e, MK_CONST(0, e->getWidth()));
+
 	ok = sfh->executor->getSolver()->mayBeTrue(state, e, mayBeTrue);
 	if (!ok) goto error;
 
