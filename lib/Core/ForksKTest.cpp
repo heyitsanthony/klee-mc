@@ -309,9 +309,9 @@ bool ForksKTest::evalForks(ExecutionState& current, struct ForkInfo& fi)
 		return Forks::evalForks(current, fi);
 
 	if (KTestTimeout && wt.checkSecs() > KTestTimeout) {
-		std::cerr << "[KTest] Time out "<<exe.getCurrentState()<<'\n';
-		exe.printStackTrace(*exe.getCurrentState(), std::cerr);
-		exe.terminate(*exe.getCurrentState());
+		std::cerr << "[KTest] Time out "<< &current <<'\n';
+		exe.printStackTrace(current, std::cerr);
+		exe.terminate(current);
 		fi.conditions = NULL;
 		return false;
 	}
@@ -333,9 +333,9 @@ bool ForksKTest::evalForks(ExecutionState& current, struct ForkInfo& fi)
 		kh = static_cast<KleeHandler*>(exe.getInterpreterHandler());
 		if (base_objs) {
 			std::cerr << "[KTest] Terminating "
-				<<  exe.getCurrentState() << '\n';
-			exe.printStackTrace(*exe.getCurrentState(), std::cerr);
-			exe.terminate(*exe.getCurrentState());
+				<<  &current << '\n';
+			exe.printStackTrace(current, std::cerr);
+			exe.terminate(current);
 		} else
 			kh->incPathsExplored();
 		fi.res.assign(fi.N, false);
