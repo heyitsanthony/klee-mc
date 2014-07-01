@@ -71,6 +71,7 @@ namespace {
   DECL_OPTBOOL(AllExternalWarnings, "all-external-warnings");
   DECL_OPTBOOL(VerifyPath, "verify-path");
   DECL_OPTBOOL(ForceCOW, "force-cow");
+  DECL_OPTBOOL(DoPartialConcretize, "do-partial-conc");
 
   cl::opt<bool>
   DumpBadInitValues(
@@ -839,10 +840,12 @@ err:
 
 /* branches st back into scheduler,
  * overwrites st with concrete data */
-ExecutionState* Executor::concretizeState(ExecutionState& st)
+ExecutionState* Executor::concretizeState(
+	ExecutionState& st, ref<Expr> bad_expr)
 {
 	ExecutionState	*new_st;
 	Assignment	a;
+	bool		do_partial;
 
 	if (st.isConcrete()) {
 		std::cerr << "[Exe] Ignoring totally concretized state\n";
@@ -875,21 +878,18 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 		return new_st;
 	}
 
-/* XXX: this doesn't quite work yet because we assume a 
- * state is concretized upto a certain symbolic object */
-#define DO_PARTIAL_CONC	false
-	if (DO_PARTIAL_CONC) {
+	/* XXX: this doesn't quite work yet because we assume a 
+	 * state is concretized upto a certain symbolic object */
+	do_partial = DoPartialConcretize && !bad_expr.isNull();
+	if (do_partial) {
 		std::vector<const Array* >	res;
 		std::set<const Array* >		arr_set, rmv_set;
-		ref<Expr>		bad_expr(solver->getLastBadExpr());
 
-		std::cerr << "[Exe] Last Bad: " << bad_expr << '\n';
-		if (bad_expr.isNull() == false)
-			ExprUtil::findSymbolicObjects(
-				solver->getLastBadExpr(), res);
+		ExprUtil::findSymbolicObjects(bad_expr, res);
 
 		foreach (it, res.begin(), res.end()) {
-			std::cerr << "[Exe] Sym obj: " << (*it)->name << '\n';
+			std::cerr << "[Exe] Partial sym obj: "
+				<< (*it)->name << '\n';
 			arr_set.insert(*it);
 		}
 
@@ -897,8 +897,15 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 			if (!arr_set.count(it->first))
 				rmv_set.insert(it->first);
 
-		foreach (it, rmv_set.begin(), rmv_set.end()) 
+		foreach (it, rmv_set.begin(), rmv_set.end()) {
 			a.resetBinding(*it);
+		}
+
+		if (rmv_set.size() == 0) {
+			std::cerr << "[Exe] No remove set. Full concretize\n";
+			do_partial = false;
+		} else
+			a.allowFreeValues = true;
 	}
 
 	/* 2. enumerate all objstates-- replace sym objstates w/ concrete */
@@ -906,7 +913,7 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 	std::cerr << "[Exe] Concretizing objstates\n";
 	foreach (it, st.addressSpace.begin(), st.addressSpace.end()) {
 		if (concretizeObject(
-			st, a, it->first, it->second.os, wt, !DO_PARTIAL_CONC))
+			st, a, it->first, it->second.os, wt, !do_partial))
 			continue;
 
 		bad_conc_kfuncs.insert(st.getCurrentKFunc());
@@ -918,11 +925,7 @@ ExecutionState* Executor::concretizeState(ExecutionState& st)
 	std::cerr << "[Exe] Concretizing StackFrames\n";
 	st.stack.evaluate(a);
 
-	/* 4. drop constraints, since we lost all symbolics! */
-	if (!DO_PARTIAL_CONC)
-		st.constraints = ConstraintManager();
-
-	/* 5. mark symbolics as concrete */
+	/* 4. mark symbolics as concrete */
 	std::cerr << "[Exe] Set concretization\n";
 	st.assignSymbolics(a);
 
@@ -2093,6 +2096,7 @@ void Executor::setupFiniFuncs()
 	fini_kfunc = kmodule->buildListFunc(f_l, "__klee_finilist_f");
 }
 
+/* I don't remember why I wanted this feature */
 static void doForceCOW(ExecutionState& es)
 {
 	std::cerr << "[Executor] Forcing COW: 'Sharing' exclusive objects.\n";

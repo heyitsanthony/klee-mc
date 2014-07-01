@@ -163,9 +163,8 @@ ExecutionState *ExecutionState::branch(bool forReplay)
 	newState->lastNewInst = 0;
 	newState->onFreshBranch = false;
 
-	if (term.get()) {
-		assert (newState->term.get() != term.get());
-	}
+	/* don't reuse terminator */
+	assert (!term.get() || newState->term.get() != term.get());
 
 	if (forReplay) newState->compact();
 
@@ -175,7 +174,6 @@ ExecutionState *ExecutionState::branch(bool forReplay)
 void ExecutionState::compact(void)
 {
 	addressSpace.clear();
-	concrete_constraints = ConstraintManager();
 	constraints = ConstraintManager();
 	stack.clear();
 	mallocIterations.clear();
@@ -679,6 +677,8 @@ bool ExecutionState::isConcrete(void) const
 
 void ExecutionState::assignSymbolics(const Assignment& a)
 {
+	unsigned	sym_c = 0;
+
 	foreach (it, symbolics.begin(), symbolics.end()) {
 		SymbolicArray			&sa = *it;
 		const std::vector<uint8_t>	*v;
@@ -696,17 +696,20 @@ void ExecutionState::assignSymbolics(const Assignment& a)
 			continue;
 
 		v = a.getBinding(sa.getArray());
-		if (v == NULL)
+		if (v == NULL) {
+			sym_c++;
 			continue;
+		}
 
 		sa.setConcretization(*v);
 	}
 
-
-	foreach (it, constraints.begin(), constraints.end())
-		concrete_constraints.addConstraint(*it);
-
-	constraints = ConstraintManager();
+	if (sym_c == 0) {
+		/* totally concrete */
+		constraints = ConstraintManager();
+	} else {
+		constraints.apply(a);
+	}
 }
 
 /* kind of stupid-- probably shouldn't loop like this */

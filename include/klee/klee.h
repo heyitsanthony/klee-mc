@@ -62,7 +62,6 @@
 	ksys_indirect1("__klee_assume", pred); } while (0)
 
 
-
 #define ksys_get_value(n)	n
 #define ksys_is_active()	(ksys_is_sym(0) != -1)
 
@@ -339,6 +338,8 @@ extern void free(void*) __THROW;
 	void klee_tlb_invalidate(const void* addr, uint64_t len);
 	void klee_tlb_insert(const void* addr, uint64_t len);
 	void klee_enable_softmmu(void);
+
+void klee_concretize_state(uint64_t pred /* optional, set to 0 */);
 
 void	*kmc_alloc_aligned(uint64_t, const char* name);
 void	kmc_exit(uint64_t);

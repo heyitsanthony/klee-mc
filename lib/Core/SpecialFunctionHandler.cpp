@@ -1222,6 +1222,25 @@ SFH_DEF_ALL(Watch, "klee_watch", false)
 }
 
 
+
+SFH_DEF_ALL(ConcretizeState, "klee_concretize_state", false)
+{
+	SFH_CHK_ARGS(1, "klee_concretize_state");
+
+	ref<Expr>		e(args[0]);
+	const ConstantExpr	*ce;
+	ExecutionState		*es;
+
+	ce = dyn_cast<ConstantExpr>(e);
+	if (ce && ce->getZExtValue() != 0) {
+		/* bad input; silent nop */
+		return;
+	}
+
+	es = sfh->executor->concretizeState(state, (ce == NULL) ? e : NULL);
+	if (es != NULL) sfh->executor->terminate(*es);
+}
+
 SFH_DEF_ALL(ConstrCount, "klee_constr_count", true)
 {
 	state.bindLocal(
@@ -1437,6 +1456,7 @@ add(MkExpr),
 add(GlobalInc),
 add(ConstrCount),
 add(IsReadOnly),
+add(ConcretizeState),
 #define DEF_WIDE(x)	\
 add(WideLoad##x),	\
 add(WideStore##x)

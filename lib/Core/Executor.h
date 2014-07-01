@@ -398,7 +398,9 @@ public:
 
 
 	/* returns forked copy of symbolic state st; st is concretized */
-	ExecutionState* concretizeState(ExecutionState& st);
+	ExecutionState* concretizeState(
+		ExecutionState& st,
+		ref<Expr> bad_expr = NULL);
 
 	virtual ObjectState* makeSymbolic(
 		ExecutionState &state,

@@ -385,7 +385,6 @@ private:
 	bool	onFreshBranch;
 
 	unsigned		canary;
-	ConstraintManager	concrete_constraints;
 
 	bool			is_shadowing;
 	uint64_t		shadow_v;

@@ -9,17 +9,9 @@
 
 int main(int argc, char *argv[])
 {
-	void		*p;
-	uint32_t	buf[3];
-	uint16_t	c;
+	uint32_t	buf[4];
 
-	memset(buf, 0, sizeof(buf));
-
-	/* test 1 */
-	if (read(0, &c, 2) != 2) return 0;
-
-	buf[c & 0xf] = 213;
-	
+	read(0, buf, sizeof(buf)*2);
 
 	/* test 2 */
 	return 3;

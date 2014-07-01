@@ -387,6 +387,45 @@ ConstraintManager::~ConstraintManager(void)
 bool ConstraintManager::isValid(const Assignment& a) const
 { return a.satisfies(begin(), end()); }
 
+bool ConstraintManager::apply(const Assignment& a)
+{
+	constraints_ty	new_constrs;
+	bool		updated = false;
+
+	foreach (it, constraints.begin(), constraints.end()) {
+		ref<Expr>	old_e(*it);
+		ref<Expr>	e(a.evaluate(old_e));
+
+		if (e->hash() == old_e->hash()) {
+			new_constrs.push_back(old_e);
+			continue;
+		}
+
+		updated = true;
+
+		/* constraint subsumed? */
+		if (e->getKind() == Expr::Constant) {
+			const ConstantExpr *ce = dyn_cast<ConstantExpr>(e);
+			if (ce->isFalse())
+				return false;
+			continue;
+		}
+
+		/* save updated constraint */
+		new_constrs.push_back(e);
+	}
+
+	/* it worked, but nothing happened */
+	if (!updated) return true;
+
+	/* write back new constraint set */
+	invalidateSimplifier();
+	constraints.clear();
+	foreach (it, new_constrs.begin(), new_constrs.end())
+		addConstraint(*it);
+
+	return true;
+}
 
 ConstraintManager ConstraintManager::operator -(
 	const ConstraintManager& other) const

@@ -6,6 +6,7 @@
 #include "klee/Common.h"
 #include "Executor.h"
 #include "Terminator.h"
+#include "StateSolver.h"
 
 #include <sstream>
 
@@ -107,7 +108,8 @@ bool TermEarly::terminate(ExecutionState &state)
 		/* timed out on some instruction-- back it up */
 		state.abortInstruction();
 
-		sym_st = getExe()->concretizeState(state);
+		sym_st = getExe()->concretizeState(
+			state, getExe()->getSolver()->getLastBadExpr());
 		if (sym_st != NULL) {
 			term_st = sym_st;
 		}

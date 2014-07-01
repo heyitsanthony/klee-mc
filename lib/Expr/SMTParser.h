@@ -27,8 +27,6 @@ namespace expr {
 class SMTParser : public klee::expr::Parser
 {
 private:
-	void *buf;
-
 	typedef std::map<const std::string, ExprHandle> VarEnv;
 	typedef std::map<const std::string, ExprHandle> FVarEnv;
 	std::stack<VarEnv> varEnvs;
