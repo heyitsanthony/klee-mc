@@ -185,10 +185,6 @@ public:
 	ExecutionState *branch(bool forReplay = false);
 	ExecutionState *reconstitute(ExecutionState &initialStateCopy) const;
 
-	std::string getFnAlias(std::string fn);
-	void addFnAlias(std::string old_fn, std::string new_fn);
-	void removeFnAlias(std::string fn);
-
 	KInstIterator getCaller(void) const;
 	void dumpStack(std::ostream &os) const;
 

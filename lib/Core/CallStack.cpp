@@ -95,3 +95,12 @@ unsigned CallStack::clearTail(void)
 	}
 	return ret;
 }
+
+#include "../Expr/murmur3.h"
+uint64_t CallStack::hash(void) const
+{
+	uint64_t out[2];
+	MurmurHash3_x64_128(
+		data(), size()*sizeof(KInstruction*), 0x07012014, &out);
+	return out[0];
+}

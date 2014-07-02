@@ -129,10 +129,8 @@ int ForksKTest::findCondIndex(const struct ForkInfo& fi, bool& non_const)
 		} else
 			cond_eval = fi.conditions[i];
 
-		if (cond_eval->getKind() != Expr::Constant) {
-			std::cerr << "[KTest] Non-Const eval!!\n";
+		if (cond_eval->getKind() != Expr::Constant)
 			non_const = true;
-		}
 
 		if (cond_eval->isTrue())
 			return i;

@@ -6,7 +6,7 @@
 static int __in_##x = 0;\
 static void post_##x(void* x)\
 {\
-klee_print_expr("stop tracking", x);\
+/*klee_print_expr("stop tracking", x);*/\
 klee_partseed_end((psid_t)x);\
 __in_##x = 0;\
 }	\
@@ -14,7 +14,7 @@ void __hookpre_##x(void* r) {\
 	psid_t	psid = klee_partseed_begin(#x);\
 	__in_##x++;\
 	if (__in_##x != 1) return;\
-	klee_print_expr("tracking "#x, psid);	\
+/*	klee_print_expr("tracking "#x, psid);*/	\
 	klee_hook_return(1, &post_##x, psid);\
 }
 

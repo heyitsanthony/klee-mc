@@ -26,6 +26,8 @@ public:
 
 	/* returns number of variables nuked */
 	unsigned clearTail(void);
+
+	uint64_t hash(void) const;
 private:
 	void writeLocalCell(unsigned sfi, unsigned i, const ref<Expr>& value);
 };

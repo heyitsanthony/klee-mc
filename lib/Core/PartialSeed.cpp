@@ -253,9 +253,61 @@ static bool loadPSDB(
 }
 
 
-#define FAILURE_WATERMARK	1000
+#define FAILURE_WATERMARK	100
+#define FAILURE_STK_WATERMARK	10
 
 typedef std::map<std::string, unsigned> failmap_ty;
+typedef std::map<uint64_t, unsigned> fm2_ty;
+
+static failmap_ty	fm, fm_total;
+static fm2_ty		fm2, fm2_total;
+
+
+static bool failure_chk(
+	const ExecutionState& es,
+	const std::string& name)
+{
+	if (fm[name] > FAILURE_WATERMARK) {
+		std::cerr << "[PS] Failed " << fm[name] <<
+			" times on " << name << '\n';
+		fm[name] = 0;
+		return true;
+	}
+
+
+	return false;
+}
+
+/* return true if backup es should proceed without psdb */
+static bool failure_update(
+	const ExecutionState& es,
+	const std::string& name,
+	bool replay_failed)
+{
+	uint64_t	stack_hash = es.stack.hash();
+
+	if (replay_failed == false) {
+		fm[name] = 0;
+		fm2[stack_hash] = 0;
+		return false;
+	}
+
+	/* increase failure count */
+	fm[name] = fm[name] + 1;
+	fm_total[name] = fm_total[name] + 1;
+	fm2_total[stack_hash] = fm2_total[stack_hash] + 1;
+
+	if (fm2[stack_hash] > FAILURE_STK_WATERMARK) {
+		std::cerr << "[PS] Failed " << fm2[stack_hash] <<
+			" times on stack for " << name << '\n';
+		fm2[stack_hash] = 0;
+		return true;
+	}
+
+	fm2[stack_hash] = fm2[stack_hash] + 1;
+	return false;
+}
+
 static void dispatchKTest(
 	Executor* exe,
 	ExecutionState& es,
@@ -263,18 +315,13 @@ static void dispatchKTest(
 	const std::string& name,
 	unsigned total_tests)
 {
-	static failmap_ty	fm, fm_total;
 	ForksKTest		*fork_ktest;
 	ExecutionState		*backup_es;
 	StateSolver		*old_ss, *new_ss;
-	bool			old_cet;
+	bool			old_cet, failed;
 
-	if (fm[name] > FAILURE_WATERMARK) {
-		std::cerr << "[PS] Failed " << fm[name] <<
-			" times on " << name << '\n';
-		fm[name] = 0;
+	if (failure_chk(es, name))
 		return;
-	}
 
 	fork_ktest = new ForksKTest(*exe);
 	fork_ktest->setMakeErrTests(false);
@@ -283,7 +330,6 @@ static void dispatchKTest(
 	fork_ktest->setConstraintOmit(false);
 
 	backup_es = exe->pureFork(es, false);
-	backup_es->abortInstruction();
 
 	old_fork = exe->getForking();
 	exe->setForking(fork_ktest);
@@ -299,25 +345,25 @@ static void dispatchKTest(
 	int		st_c_old(exe->getNumStates());
 	unsigned	tq_c_old(stats::queriesTopLevel);
 	unsigned	rq_c_old(StateSolver::getRealQueries());
-	int		state_diff;
 
 	/* XXX: This makes the executor is reentrant. Should I be worried? */
 	exe->exhaustState(&es);
 
-	state_diff = exe->getNumStates() - st_c_old;
-	if (state_diff >= 1) {
+	failed = (exe->getNumStates() - st_c_old) < 1;
+	if (!failed) {
 		/* no need for backup es, got what we needed */
 		if (!es.newInsts && (rand() % total_tests) != 0)
 			exe->terminate(*backup_es);
-		fm[name] = 0;
-	} else {
-		/* increase failure count */
-		fm[name] = fm[name] + 1;
-		fm_total[name] = fm_total[name] + 1;
 	}
 
-	std::cerr << "[PS] STATES=" << state_diff
-		<< ". Queries=" << StateSolver::getRealQueries() - rq_c_old
+	/* if failed and should try again, backup should start before
+	 * call to partseed begin */
+	if (!failure_update(es, name, failed) && failed) {
+		backup_es->abortInstruction();
+	}
+
+	std::cerr << "[PS] "
+		<< "Queries=" << StateSolver::getRealQueries() - rq_c_old
 		<< ". TQs=" << stats::queriesTopLevel - tq_c_old
 		<< ". CheapForks=" << fork_ktest->getCheapForks()
 		<< ". Time=" << wt.checkSecs() << "s\n";
