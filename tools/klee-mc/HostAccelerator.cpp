@@ -311,6 +311,15 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 	rc = ptrace(PTRACE_GETFPREGS, child_pid, NULL, &ufprs_vex);
 	assert (rc == 0);
 
+	/* XXX: I've observed that ever so occasionally, the system
+	 * returns '0' here */
+	if (urs_vex.rip < 1000) {
+		std::cerr << "[hwaccel] Bogus RIP? " << urs_vex.rip << '\n';
+		badexit_kleehw_c++;
+		killChild();
+		return HA_CRASHED;
+	}
+
 	if (got_sc) {
 		/* if on SC, rip is set to *after* syscall, so back up */
 		urs_vex.rax = urs_vex.orig_rax;
@@ -379,13 +388,14 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 
 	assert (esv.getAddrPC() == v.guest_RIP);
 
+#if 0
 	std::cerr << "[hwaccel] OK! " <<
 		"bad=" << bad_reg_c << " / "
 		"crash=" << crashed_kleehw_c << " / "
 		"part=" << partial_run_c << " / "
 		"full=" << full_run_c <<
 		". sig=" << strsignal(guest_sig) << '\n';
-
+#endif
 	return (got_sc) ? HA_SYSCALL : HA_PARTIAL;
 }
 
