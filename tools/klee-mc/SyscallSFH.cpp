@@ -1,6 +1,8 @@
 #include <llvm/Support/CommandLine.h>
 #include <sys/stat.h>
 
+#include "klee/Internal/Module/KFunction.h"
+#include "klee/Internal/Module/KModule.h"
 #include "../../lib/Core/MemoryManager.h"
 #include "../../lib/Core/MMU.h"
 #include "klee/Expr.h"
@@ -749,6 +751,26 @@ void SyscallSFH::makeRangeSymbolic(
 SFH_DEF_ALL(RegsGet, "kmc_regs_get", true)
 { state.bindLocal(target, es2esv(state).getRegCtx()->getBaseExpr()); }
 
+/* expected to be called at the beginning of a function */
+/* stack and PC alraedy updated, just need to jump */
+/* XXX: x86-64 only */
+SFH_DEF_ALL(KMCSkipFunc, "__kmc_skip_func", false)
+{
+	ExecutorVex	*exe_vex = dynamic_cast<ExecutorVex*>(sfh->executor);
+	llvm::Function	*f;
+	KFunction	*kf;
+	uint64_t	new_pc;
+
+	new_pc = es2esv(state).getAddrPC();
+	f = exe_vex->getFuncByAddr(new_pc);
+	kf = exe_vex->getKModule()->getKFunction(f);
+
+	/* pop frames until VEX frame */
+	while (!state.getCurrentKFunc()->isSpecial)
+		state.popFrame();
+
+	exe_vex->jumpToKFunc(state, kf);
+}
 
 extern const struct SpecialFunctionHandler::HandlerInfo* ossfxload_hi;
 
@@ -758,6 +780,7 @@ static const SpecialFunctionHandler::HandlerInfo *hInfo[] =
 	add(AllocAligned), add(Breadcrumb), add(FreeRun), add(IO),
 	add(MakeRangeSymbolic), add(SCRegs), add(SCBad), add(RegsGet),
 	add(KMCExit),
+	add(KMCSkipFunc),
 	ossfxload_hi,
 	NULL
 #undef addDNR

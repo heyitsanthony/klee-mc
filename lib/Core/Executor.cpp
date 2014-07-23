@@ -158,8 +158,6 @@ Executor::Executor(InterpreterHandler *ih)
 , currentState(0)
 , sfh(0)
 , haltExecution(false)
-, init_kfunc(0)
-, fini_kfunc(0)
 , replay(0)
 , atMemoryLimit(false)
 , inhibitForking(false)
@@ -2069,31 +2067,13 @@ bool Executor::runToFunction(ExecutionState* es, const KFunction* kf)
 void Executor::setupInitFuncs(ExecutionState& initState)
 {
 	std::vector< ref<Expr> >	args;
-	KInstIterator			kii;
+	KFunction			*kf;
 
-	if (init_kfunc == NULL && !init_funcs.empty()) {
-		std::vector<Function*> l(init_funcs.begin(), init_funcs.end());
-		init_kfunc = kmodule->buildListFunc(l, "__klee_initlist_f");
-	}
+	kmodule->setupInitFuncs();
+	if ((kf = kmodule->getInitFunc()) == NULL) return;
 
-	if (init_funcs.empty()) return;
-
-	executeCall(initState, NULL, init_kfunc->function, args);
+	executeCall(initState, NULL, kf->function, args);
 	initState.stack.back().caller = NULL;
-}
-
-
-void Executor::setupFiniFuncs()
-{
-	if (fini_kfunc != NULL || fini_funcs.empty()) return;
-
-	std::vector<Function*> f_l(fini_funcs.begin(), fini_funcs.end());
-
-	f_l.push_back((Function*)kmodule->module->getOrInsertFunction(
-		"klee_resume_exit",
-		FunctionType::get(
-			Type::getVoidTy(getGlobalContext()), false)));
-	fini_kfunc = kmodule->buildListFunc(f_l, "__klee_finilist_f");
 }
 
 /* I don't remember why I wanted this feature */
@@ -2133,7 +2113,7 @@ void Executor::run(ExecutionState &initState)
 	initialStateCopy->ptreeNode->markReplay();
 	pt->splitStates(initState.ptreeNode, &initState, initialStateCopy);
 
-	setupFiniFuncs();
+	kmodule->setupFiniFuncs();
 	setupInitFuncs(initState);
 
 	PartSeedSetupDummy(this);
@@ -2416,6 +2396,7 @@ bool Executor::getSatAssignment(const ExecutionState& st, Assignment& a)
 	return false;
 }
 
+/* used for solution to state */
 bool Executor::getSymbolicSolution(
 	const ExecutionState &state,
 	std::vector<
@@ -2435,6 +2416,9 @@ bool Executor::getSymbolicSolution(
 
 	foreach (it, state.symbolicsBegin(), state.symbolicsEnd()) {
 		const std::vector<unsigned char>	*v;
+
+		/* ignore virtual symbolics used in lazy evaluation */
+		if (it->isVirtual()) continue;
 
 		v = a.getBinding(it->getArray());
 		assert (v != NULL);
@@ -2778,8 +2762,9 @@ void Executor::addModule(Module* m)
 
 bool Executor::startFini(ExecutionState& state)
 {
-	if (fini_funcs.empty())
-		return false;
+	KFunction	*fini_kfunc = kmodule->getFiniFunc();
+
+	if (fini_kfunc == NULL) return false;
 
 	assert (state.getOnFini() == false);
 
@@ -2809,3 +2794,8 @@ void Executor::terminateWith(Terminator& term, ExecutionState& state)
 
 ExecutionState* Executor::pureFork(ExecutionState& es, bool compact)
 { return forking->pureFork(es, compact); }
+
+void Executor::addFiniFunction(llvm::Function* f)
+{ kmodule->addFiniFunction(f); }
+void Executor::addInitFunction(llvm::Function* f)
+{ kmodule->addInitFunction(f); }

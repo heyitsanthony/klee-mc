@@ -968,3 +968,14 @@ unsigned ExecutionState::replayHeadLength(const ReplayPath& rp) const
 	/* perfect match, hm. */
 	return node_c;
 }
+
+void ExecutionState::markSymbolicVirtual(const Array* a)
+{
+	foreach (it, symbolics.begin(), symbolics.end()) {
+		SymbolicArray	&sa(*it);
+		if (sa.getArray() == a) {
+			sa.setVirtual();
+			break;	
+		}
+	}
+}

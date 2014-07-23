@@ -149,9 +149,11 @@ void klee_assume_op(uint64_t x, uint64_t y, uint8_t op)
 void klee_print_expr(const char* msg, ...)
 { fprintf(stderr, "print expr %s\n", msg); }
 
-unsigned klee_sym_range_bytes(void* ptr, unsigned max_bytes) { return 0; }
+unsigned klee_sym_range_bytes(const void* ptr, unsigned max_bytes) { return 0; }
 
-unsigned klee_is_valid_addr(void* ptr) { assert (0 == 1 && "STUB"); return 0; }
+unsigned klee_is_valid_addr(const void* ptr)
+{ assert (0 == 1 && "STUB"); return 0; }
+
 int klee_is_shadowed(uint64_t v) { assert (0 == 1 && "STUB"); return 0; }
 
 uint64_t klee_indirect0(const char* s) { assert (0 == 1 && "STUB"); return 0; }

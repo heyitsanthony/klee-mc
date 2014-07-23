@@ -956,6 +956,39 @@ SFH_DEF_ALL(MakeSymbolic, "klee_make_symbolic", false)
 	}
 }
 
+SFH_DEF_ALL(MakeVSymbolic, "klee_make_vsym", false)
+{
+	std::string		name;
+	ref<Expr>		addr;
+	const ConstantExpr	*ce;
+	const MemoryObject	*mo;
+	ObjectState		*os;
+
+	if (args.size() == 2) {
+		name = "unnamed";
+	} else {
+		SFH_CHK_ARGS(3, "klee_make_symbolic");
+		name = sfh->readStringAtAddress(
+			state, args[MAKESYM_ARGIDX_NAME]);
+	}
+
+	addr = args[MAKESYM_ARGIDX_ADDR];
+	if (addr->getKind() != Expr::Constant) {
+		TERMINATE_ERROR(sfh->executor,
+			state,
+			"expected constant address for make_vsym",
+			"user.err");
+		return;
+	}
+
+	ce = cast<const ConstantExpr>(addr);
+	mo = state.addressSpace.resolveOneMO(ce->getZExtValue());
+	const_cast<MemoryObject*>(mo)->setName(name);
+
+	os = sfh->executor->makeSymbolic(state, mo, name.c_str());
+	state.markSymbolicVirtual(os->getArray());
+}
+
 
 SFH_DEF_ALL(MarkGlobal, "klee_mark_global", false)
 {
@@ -1457,6 +1490,7 @@ add(GlobalInc),
 add(ConstrCount),
 add(IsReadOnly),
 add(ConcretizeState),
+add(MakeVSymbolic),
 #define DEF_WIDE(x)	\
 add(WideLoad##x),	\
 add(WideStore##x)

@@ -69,7 +69,7 @@ void HookPass::loadByPath(const std::string& passlib)
 	kmod->addModule(mod);
 
 	foreach (it, mod->begin(), mod->end()) {
-		const Function	*f(it);
+		Function	*f(it);
 		std::string	fn_s(f->getName().str());
 		const char	*hooked_fn, *fn_c;
 
@@ -80,6 +80,14 @@ void HookPass::loadByPath(const std::string& passlib)
 		} else if (!strncmp(fn_c, "__hookpost_", sizeof("__hookpost"))) {
 			hooked_fn = fn_c + sizeof("__hookpost");
 			f_post[hooked_fn] = kmod->getKFunction(fn_c);
+		} else if (!strncmp(fn_c, "__hookinit_", sizeof("__hookinit"))) {
+			hooked_fn = "init";
+			f = kmod->getKFunction(fn_c)->function;
+			kmod->addInitFunction(f);
+		} else if (!strncmp(fn_c, "__hookfini_", sizeof("__hookfini"))) {
+			hooked_fn = "fini";
+			f = kmod->getKFunction(fn_c)->function;
+			kmod->addFiniFunction(f);
 		} else
 			continue;
 
