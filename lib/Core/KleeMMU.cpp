@@ -4,6 +4,7 @@
 #include "StateSolver.h"
 #include "Executor.h"
 #include "KleeMMU.h"
+#include "SymAddrSpace.h"
 #include "klee/SolverStats.h"
 #include "klee/ExecutionState.h"
 #include "klee/Expr.h"
@@ -138,7 +139,7 @@ void KleeMMU::memOpError(ExecutionState& state, MemOp& mop)
 	type = mop.getType(exe.getKModule());
 	bytes = Expr::getMinBytesForWidth(type);
 
-	incomplete = state.addressSpace.resolve(
+	incomplete = SymAddrSpace::resolve(
 		state, exe.getSolver(), mop.address, rl, MaxResolves);
 
 	// XXX there is some query wasteage here. who cares?
@@ -166,7 +167,7 @@ void KleeMMU::memOpError(ExecutionState& state, MemOp& mop)
 	/* Did not resolve everything we could. Check for invalid pointer.. */
 	ref<Expr>	oob_cond;
 
-	oob_cond = state.addressSpace.getOOBCond(mop.address);
+	oob_cond = SymAddrSpace::getOOBCond(state.addressSpace, mop.address);
 
 	Executor::StatePair branches(
 		exe.fork(*unbound, oob_cond, true));
@@ -354,14 +355,14 @@ KleeMMU::MemOpRes KleeMMU::memOpResolveExpr(
 	bytes = Expr::getMinBytesForWidth(type);
 	ret.usable = false;
 
-	ret.rc = state.addressSpace.getFeasibleObject(
+	ret.rc = SymAddrSpace::getFeasibleObject(
 		state, exe.getSolver(), addr, ret.op);
 	if (!ret.rc) {
 		/* solver failed in GFO, force addr to be concrete */
 		addr = exe.toConstant(state, addr, "resolveOne failure");
 		ret.op.first = NULL;
 		ret.rc = state.addressSpace.resolveOne(
-			cast<ConstantExpr>(addr), ret.op);
+			cast<ConstantExpr>(addr)->getZExtValue(), ret.op);
 		if (!ret.rc)
 			return MemOpRes::failure();
 	}

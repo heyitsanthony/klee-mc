@@ -11,6 +11,7 @@
 #include <llvm/IR/LLVMContext.h>
 #include "klee/klee.h"
 #include "Memory.h"
+#include "SymAddrSpace.h"
 #include "SpecialFunctionHandler.h"
 #include "StateSolver.h"
 #include "Forks.h"
@@ -214,7 +215,7 @@ unsigned char* SpecialFunctionHandler::readBytesAtAddress(
 	address = cast<ConstantExpr>(addressExpr);
 
 	assert (address.get() && "Expected constant address");
-	if (!state.addressSpace.resolveOne(address, op)) {
+	if (!state.addressSpace.resolveOne(address->getZExtValue(), op)) {
 		klee_warning("hit multi-res on reading 'concrete' string");
 		return NULL;
 	}
@@ -623,7 +624,8 @@ SFH_DEF_ALL(IsValidAddr, "klee_is_valid_addr", true)
 	}
 
 	assert (addr->getKind() == Expr::Constant);
-	ok = state.addressSpace.resolveOne(cast<ConstantExpr>(addr), op);
+	ok = state.addressSpace.resolveOne(
+		cast<ConstantExpr>(addr)->getZExtValue(), op);
 	ret = ConstantExpr::create((ok) ? 1 : 0, 32);
 
 	state.bindLocal(target, ret);
@@ -826,7 +828,8 @@ SFH_DEF_ALL(CheckMemoryAccess, "klee_check_memory_access", false)
 
 	ObjectPair op;
 
-	if (!state.addressSpace.resolveOne(cast<ConstantExpr>(address), op)) {
+	if (!state.addressSpace.resolveOne(
+		cast<ConstantExpr>(address)->getZExtValue(), op)) {
 		TERMINATE_ERROR_LONG(sfh->executor,
 			state,
 			"check_memory_access: memory error",

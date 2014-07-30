@@ -33,6 +33,7 @@
 #include "Executor.h"
 #include "ExeStateManager.h"
 
+#include "SymAddrSpace.h"
 #include "Context.h"
 #include "CoreStats.h"
 #include "ImpliedValue.h"
@@ -2290,13 +2291,14 @@ void Executor::resolveExact(
 {
 	// XXX we may want to be capping this?
 	ResolutionList rl;
-	state.addressSpace.resolve(state, solver, p, rl);
+
+	SymAddrSpace::resolve(state, solver, p, rl);
 
 	ExecutionState *unbound = &state;
 	foreach (it, rl.begin(), rl.end()) {
 		ref<Expr> inBounds;
 
-		inBounds = EqExpr::create(p, it->first->getBaseExpr());
+		inBounds = MK_EQ(p, it->first->getBaseExpr());
 
 		StatePair branches = fork(*unbound, inBounds, true);
 
