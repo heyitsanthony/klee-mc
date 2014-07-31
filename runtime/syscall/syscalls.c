@@ -1588,7 +1588,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case ARCH_SYS_UNSUPP:
 	default:
 		kmc_sc_bad(sc.sys_nr);
-		klee_uerror("Unknown Syscall", "sc.err");
+		klee_ureport("Unknown Syscall", "sc.err");
+		sc_ret_v(regfile, -1);
 		break;
 	}
 
