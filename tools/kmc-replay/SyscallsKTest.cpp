@@ -427,6 +427,15 @@ void SyscallsKTest::doLinuxThunks(SyscallParams& sp, int xlate_sysnr)
 		fprintf(stderr, KREPLAY_SC "SEEK TO OFF=%p\n", (void*)sp.getArg(1));
 		break;
 
+	case SYS_pread64:
+		if (file_recons != NULL)
+			file_recons->pread(
+				sp.getArg(0), sp.getArgPtr(1),
+				sp.getArg(2), sp.getArg(3));
+		fprintf(stderr, KREPLAY_SC "PREAD \"%s\" ret=%p\n",
+			TMP_ARG_CSTR(0), (void*)getRet());
+		break;
+
 	case SYS_read: {
 		fprintf(stderr, KREPLAY_SC "READ fd=%d. ret=%p.\n",
 			(int)sp.getArg(0),

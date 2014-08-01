@@ -13,6 +13,7 @@ public:
 	FileReconstructor();
 	virtual ~FileReconstructor();
 
+	void pread(int vfd, void* buf, size_t count, off_t off);
 	void read(int vfd, void* buf, size_t count);
 	void seek(int vfd, off_t offset, int whence);
 	void close(int vfd);
