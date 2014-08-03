@@ -23,6 +23,7 @@
 #include "guest.h"
 #include "cpu/i386windowsabi.h"
 #include "cpu/i386_macros.h"
+#include "syscall/syscallnamer.h"
 
 #include "SyscallsKTest.h"
 
@@ -134,8 +135,10 @@ void SyscallsKTest::advanceSyscallEntry(SyscallParams& sp)
 	if (bcs_crumb->bcs_sysnr != sys_nr) {
 		fprintf(stderr,
 			KREPLAY_NOTE
-			"Mismatched: Got sysnr=%d. Logged sysnr=%d\n",
-			(int)sys_nr, (int)bcs_crumb->bcs_sysnr);
+			"Mismatched: Got sysnr=%d (%s). Logged sysnr=%d\n",
+			(int)sys_nr,
+			SyscallNamer::xlate(guest, sys_nr),
+			(int)bcs_crumb->bcs_sysnr);
 	}
 
 	assert (bcs_crumb->bcs_sysnr == sys_nr && "sysnr mismatch with log");
@@ -149,8 +152,9 @@ int SyscallsKTest::loadSyscallEntry(SyscallParams& sp)
 		assert (fail_past_log == true);
 		fprintf(stderr,
 			KREPLAY_NOTE
-			"Fallback. Got sysnr=%d. Failing.\n",
-			(int)sp.getSyscall());
+			"Fallback. Got sysnr=%d (%s). Failing.\n",
+			(int)sp.getSyscall(),
+			SyscallNamer::xlate(guest, sp));
 		setRet(~0); /* fail request */
 		return ~0;
 	}
@@ -220,7 +224,9 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 	sys_nr = sp.getSyscall();
 
 	if (sys_nr != SYS_klee)
-		fprintf(stderr, KREPLAY_NOTE"Applying: sys=%d\n", (int)sys_nr);
+		fprintf(stderr, KREPLAY_NOTE"Applying: sys=%d (%s)\n",
+			(int)sys_nr,
+			SyscallNamer::xlate(guest, sys_nr));
 	else
 		fprintf(stderr, KREPLAY_NOTE"Applying: sys=SYS_klee\n");
 
@@ -263,8 +269,9 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 
 
 	fprintf(stderr,
-		KREPLAY_NOTE "Retired: sys=%d. xsys=%d. ret=%p.\n",
+		KREPLAY_NOTE "Retired: sys=%d (%s). xsys=%d. ret=%p.\n",
 		(int)sys_nr,
+		SyscallNamer::xlate(guest, sys_nr),
 		(int)xlate_sysnr,
 		(void*)getRet());
 
@@ -537,8 +544,10 @@ void SyscallsKTest::doLinuxThunks(SyscallParams& sp, int xlate_sysnr)
 	default:
 		if (!bc_sc_is_thunk(bcs_crumb)) break;
 		fprintf(stderr,
-			KREPLAY_NOTE "No thunk for syscall sys=%d. xsys=%d.\n",
+			KREPLAY_NOTE
+			"No thunk for syscall sys=%d (%s). xsys=%d.\n",
 			(int)sp.getSyscall(),
+			SyscallNamer::xlate(guest, sp),
 			(int)xlate_sysnr);
 		assert (0 == 1 && "TRICKY SYSCALL");
 	}
