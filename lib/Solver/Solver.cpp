@@ -137,9 +137,9 @@ namespace {
 
   cl::opt<double,true>
   MaxSTPTimeProxy("max-stp-time",
-	cl::desc("Maximum time for a single query (default=120s)"),
+	cl::desc("Maximum time for a single query (default=5s)"),
 	cl::location(MaxSTPTime),
-        cl::init(120.0));
+        cl::init(5.0));
 
   cl::opt<bool>
   UseFastRangeSolver(
