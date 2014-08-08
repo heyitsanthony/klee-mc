@@ -19,7 +19,6 @@ void virtsym_add(vsym_clo_f f, uint64_t ret, void* dat)
 /* do all virtsym closures */
 void __hookfini_virtsym(void)
 {
-	klee_print_expr("DOING VIRTSYM", vs);
 	while (vs) {
 		vs->vs_f(vs->vs_ret, vs->vs_aux);
 		vs = vs->vs_next;
