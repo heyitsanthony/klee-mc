@@ -1,7 +1,7 @@
 // RUN: gcc %s -O0 -o %t1
 // RUN: rm -rf guest-vsymsym
 // RUN: ../../../scripts/save_guest.sh ./%t1 guest-vsymsym
-// RUN: klee-mc -use-hookpass -guest-type=sshot -hookpass-lib=libvirtsyms.bc - ./%t1 2>%t1.err >%t1.out
+// RUN: klee-mc -use-hookpass -guest-sshot=guest-vsymsym -guest-type=sshot -hookpass-lib=libvirtsyms.bc - ./%t1 2>%t1.err >%t1.out
 // RUN: ls klee-last | not grep .err
 // RUN: ls klee-last | grep ktest | wc -l | grep 5
 // RUN: ../../../scripts/get_all_returns.sh >%t1-rets 
