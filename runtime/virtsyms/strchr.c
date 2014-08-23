@@ -18,6 +18,7 @@ struct strchr_clo
 {
 	const char	*s;
 	uint8_t		c;
+	unsigned	i;
 };
 
 static void strchr_enter(void* r)
@@ -44,13 +45,17 @@ static void strchr_enter(void* r)
 
 	/* set value to symbolic */
 	klee_make_vsym(&ret, sizeof(ret), "vstrchr");
-	klee_assume_ule(ret, i);
-	GET_SYSRET(r) = ret;
+	klee_assume_ule(ret, i+1);
+	GET_SYSRET(r) = klee_mk_ite(
+		klee_mk_eq(ret, i+1),
+		0,
+		s+ret);
 
 	/* XXX: this should copy the whole string */
 	clo_dat = malloc(sizeof(*clo_dat));
 	clo_dat->s = s;
 	clo_dat->c = (uint8_t)GET_ARG1(r);
+	clo_dat->i = i;
 	virtsym_add(strchr_fini, ret, clo_dat);
 
 	/* no need to evaluate, skip */
@@ -65,6 +70,17 @@ static void strchr_fini(uint64_t _r, void* aux)
 	unsigned		i = 0;
 
 	klee_print_expr("hi fini", s);
+
+	if (_r == clo->i+1) {
+		i = 0;
+		while(klee_valid_ne(s[i], 0)) {
+			if (!klee_feasible_ne(s[i], c)) klee_silent_exit(1);
+			klee_assume_ne(s[i], c);
+			i++;
+		}
+		klee_assume_eq(s[i], 0);
+		return;
+	}
 
 	while(klee_feasible_ne(s[i], 0)) {
 		if (klee_feasible_eq(_r, i) && klee_feasible_eq(s[i], c)) {
