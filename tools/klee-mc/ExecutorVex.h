@@ -68,13 +68,17 @@ public:
 
 	virtual void printStackTrace(
 		const ExecutionState& st, std::ostream& o) const;
+
+	/* necessary for kmc_skip_func */
+	virtual void jumpToKFunc(ExecutionState& state, KFunction* kf);
+	virtual llvm::Function* getFuncByAddr(uint64_t addr);
+
 protected:
 	virtual ExecutionState* setupInitialState(void);
 	virtual ExecutionState* setupInitialStateEntry(uint64_t entry_addr);
 
 	void cleanupImage(void);
 
-	virtual llvm::Function* getFuncByAddr(uint64_t addr);
 	virtual void executeCallNonDecl(
 		ExecutionState &state,
 		KInstruction *ki,
@@ -97,7 +101,6 @@ protected:
 		ExecutionState& state, KInstruction* ki);
 	virtual void handleXferReturn(
 		ExecutionState& state, KInstruction* ki);
-	virtual void jumpToKFunc(ExecutionState& state, KFunction* kf);
 
 	virtual void handleXfer(ExecutionState& state, KInstruction *ki);
 

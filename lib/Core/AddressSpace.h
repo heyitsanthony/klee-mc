@@ -43,6 +43,7 @@ class AddressSpace
 {
 	friend class ExecutionState;
 	friend class ObjectState;
+	friend class SymAddrSpace;
 private:
 	/// Epoch counter used to control ownership of objects.
 	mutable unsigned cowKey;
@@ -79,39 +80,17 @@ public:
 	, last_mo(NULL)
 	, objects(b.objects)
 	{ }
-	~AddressSpace() {}
+
+	virtual ~AddressSpace() {}
 
 	/// Resolve address to an ObjectPair in result.
 	/// \return true iff an object was found.
-	bool resolveOne(const ref<ConstantExpr> &address, ObjectPair &result);
 	bool resolveOne(uint64_t address, ObjectPair& result) const;
 	const MemoryObject* resolveOneMO(uint64_t address) const;
 	const MemoryObject* getLastBoundHint(void) const { return last_mo; }
 
 	void clear(void);
 
-	// Find a feasible object for 'address'.
-	// Returns 'true' if feasible object is found
-	bool getFeasibleObject(
-		ExecutionState &state,
-		StateSolver *solver,
-		ref<Expr> address,
-		ObjectPair &result);
-
-	/// Resolve address to a list of ObjectPairs it can point to. If
-	/// maxResolutions is non-zero then no more than that many pairs
-	/// will be returned.
-	///
-	/// \return true iff the resolution is incomplete (maxResolutions
-	/// is non-zero and the search terminated early, or a query timed out).
-	bool resolve(
-		ExecutionState &state,
-		StateSolver *solver,
-		ref<Expr> address,
-		ResolutionList &rl,
-		unsigned maxResolutions=0);
-
-	ref<Expr> getOOBCond(ref<Expr>& symptr) const;
 	Expr::Hash hash(void) const;
 	unsigned getGeneration(void) const { return os_generation; }
 	unsigned getGenerationMO(void) const { return mo_generation; }
@@ -136,59 +115,7 @@ private:
 		const MemoryObject* hi,
 		bool& ok);
 
-	bool mustContain(
-		ExecutionState &state,
-		StateSolver* solver,
-		ref<Expr> address,
-		const MemoryObject* mo,
-		bool& ok)
-	{ return mustContain(state, solver, address, mo, mo, ok); }
-
-	bool mustContain(
-		ExecutionState &state,
-		StateSolver* solver,
-		ref<Expr> address,
-		const MemoryObject* lo,
-		const MemoryObject* hi,
-		bool& ok);
-
-
-	bool isFeasible(
-		ExecutionState &state,
-		StateSolver* solver,
-		ref<Expr> address,
-		const MemoryObject* mo,
-		bool& ok)
-	{ return isFeasibleRange(state, solver, address, mo, mo, ok); }
-
 	MMIter getMidPoint(MMIter& begin, MMIter& end);
-
-	ref<Expr> getFeasibilityExpr(
-		ref<Expr> address,
-		const MemoryObject* lo,
-		const MemoryObject* hi) const;
-
-	bool binsearchRange(
-		ExecutionState& state,
-		ref<Expr>	p,
-		StateSolver *solver,
-		std::stack<std::pair<MMIter, MMIter> >& tryRanges,
-		unsigned int maxResolutions,
-		ResolutionList& rl);
-
-	bool binsearchFeasible(
-		ExecutionState& state,
-		StateSolver* solver,
-		ref<Expr>& addr,
-		uint64_t upper_addr, ObjectPair& res);
-
-
-	bool contigOffsetSearchRange(
-		ExecutionState& state,
-		ref<Expr>	p,
-		StateSolver *solver,
-		ResolutionList& rl,
-		bool& bad_addr);
 
 public:
 	/// Remove a binding from the address space.

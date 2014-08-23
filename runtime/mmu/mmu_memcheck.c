@@ -13,19 +13,25 @@
 //#define PARANOIA_DEBUG
 //#define USE_GUARDS
 
-static int malloc_c = 0;
-static int free_c = 0;
+/* this is so out-of-bounds strcmps don't cause trouble */
+#define OK_SLACK(he) do {				\
+	int x = ROUND_BYTES2UNITS(			\
+		he->he_base + he->he_req_len,		\
+		he->he_len - he->he_req_len);		\
+	if (x <= 0) break;				\
+	shadow_put_units_range(&heap_si,		\
+		(long)he->he_base + he->he_req_len, SH_FL_UNINIT, x);\
+} while (0)
+
 static uint8_t in_sym_mmu = 0;
 static uint8_t in_heap = 0;
 static uint8_t from_calloc = 0;
 
-struct heap_ent
-{
+struct heap_ent {
 	void			*he_base;
 	unsigned		he_len;
 	unsigned		he_req_len; /* requested length <= he_len */
-	struct list_item	he_li;
-};
+	struct list_item	he_li; };
 
 #define GET_HT_IDX(x)	(((uint64_t)x / 16) & 0xff)
 #define GET_HEAP_L(x)	(&heap_tab.ht_l[GET_HT_IDX(x)])
@@ -73,23 +79,17 @@ struct heap_table { struct list	ht_l[HEAP_TAB_LISTS]; };
 #define SH_EX_ALLOC	(1 << SH_FL_ALLOC)
 
 #define check_mix_r(a, x, af, am)	\
-do {	\
-	uint64_t	v;		\
-\
+do {	uint64_t	v;		\
 	v = shadow_get_range_explode((uint64_t)(a), x);	\
 	v &= (SH_EX_FREE | SH_EX_ALLOC);		\
 	if (!klee_prefer_ne(v, 0)) break;		\
-	if (v & SH_EX_FREE) {				\
-		HEAP_REPORT_W(af, a, x);		\
-	} else if (v & SH_EX_ALLOC) {			\
-		HEAP_REPORT_W(am, a, x);		\
-	}						\
+	if (v & SH_EX_FREE) HEAP_REPORT_W(af, a, x);		\
+	else if (v & SH_EX_ALLOC) HEAP_REPORT_W(am, a, x);	\
 } while (0)
 
 #define check_mix_w(a, x, af)	\
 do {	\
 	uint64_t	v;	\
-\
 	v = shadow_get_range_explode((uint64_t)(a), x);	\
 	v &= (SH_EX_FREE | SH_EX_ALLOC);		\
 	if (!klee_prefer_ne(v, 0)) break;		\
@@ -100,8 +100,7 @@ do {	\
 			&heap_si,			\
 			(long)(a),			\
 			SH_FL_UNINIT,			\
-			ROUND_BYTES2UNITS(a, x));	\
-	}						\
+			ROUND_BYTES2UNITS(a, x)); }	\
 } while (0)
 
 #define check_r(a,x,m,n) check_mix_r(a,x, m " free " n, m " fresh " n)
@@ -119,8 +118,7 @@ static struct kreport_ent	kr_tab[] =
 #define HEAP_REPORT(msg, a) HEAP_REPORT_W(msg, a, 0)
 
 #define HEAP_REPORT_W(msg, a, w)	\
-do {					\
-	SET_KREPORT(&kr_tab[0], a);	\
+do {	SET_KREPORT(&kr_tab[0], a);	\
 	SET_KREPORT(&kr_tab[1], w);	\
 	klee_ureport_details(msg, "heap.err", &kr_tab);	\
 } while (0)
@@ -169,8 +167,6 @@ void post_int_free(int64_t fa)
 		return;
 	}
 
-	free_c++;
-
 	klee_tlb_invalidate(he->he_base, 4096);
 
 	klee_print_expr("[memcheck] freed bytes", he->he_len);
@@ -184,7 +180,6 @@ void post_int_free(int64_t fa)
 	free(he);
 }
 
-
 void __hookpre___GI___libc_free(REGPARAM)
 {
 	void	*ptr;
@@ -192,8 +187,7 @@ void __hookpre___GI___libc_free(REGPARAM)
 	ptr = GET_ARG0_PTR(regfile);
 
 	/* ignore free(NULL)s-- nop */
-	if (ptr == NULL)
-		return;
+	if (ptr == NULL) return;
 
 	HEAP_ENTER
 
@@ -228,11 +222,8 @@ struct heap_ent* post_alloc(int64_t aux)
 
 	regs = kmc_regs_get();
 
-	malloc_c++;
-
 	/* malloc doesn't always succeed */
-	if (!GET_RET(regs))
-		return NULL;
+	if (!GET_RET(regs)) return NULL;
 
 	he = add_heap_ent((void*)GET_RET(regs), aux);
 
@@ -280,6 +271,7 @@ void post__calloc(int64_t aux)
 		(long)he->he_base,
 		SH_FL_UNINIT,
 		ROUND_BYTES2UNITS(he->he_base, he->he_len));
+	OK_SLACK(he);
 	
 	klee_assert (!extent_has_free(he->he_base, he->he_len));
 	klee_print_expr("[memcheck] calloced addr", (long)he->he_base);
@@ -306,9 +298,10 @@ void post__int_malloc(int64_t aux)
 		(long)he->he_base,
 		SH_FL_ALLOC,
 		ROUND_BYTES2UNITS(he->he_base, he->he_len));
+	OK_SLACK(he);
 
 	klee_print_expr("[memcheck] malloc", (long)he->he_base);
-	klee_print_expr("[memcheck] size", he->he_len);
+	klee_print_expr("[memcheck] size", he->he_req_len);
 
 done:
 	HEAP_LEAVE
@@ -478,8 +471,7 @@ void mmu_store_##x##_memcheckc(void* addr, y v)		\
 {							\
 if (!shadow_pg_used(&heap_si, addr)) {			\
 	mmu_store_##x##_cnulltlb(addr, v);		\
-	return;						\
-}							\
+	return; }					\
 if (!in_heap)	\
 	check_w(addr, x/8, "Storing to", "const pointer");	\
 mmu_store_##x##_cnull(addr, v); }
@@ -492,8 +484,7 @@ if (!in_sym_mmu) {			\
 in_sym_mmu++;				\
 if (!in_heap)				\
 	check_r(addr, x/8, "Loading from", "sym pointer");	\
-in_sym_mmu--;	\
-}	\
+in_sym_mmu--;	}			\
 return mmu_load_##x##_objwide(addr); }
 
 #define MMU_STORE(x,y)			\

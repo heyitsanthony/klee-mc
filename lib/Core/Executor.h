@@ -172,8 +172,8 @@ public:
 	void retFromNested(ExecutionState& state, KInstruction* ki);
 	ExecutionState* getInitialState(void) { return initialStateCopy; }
 
-	void addFiniFunction(llvm::Function* f) { fini_funcs.insert(f); }
-	void addInitFunction(llvm::Function* f) { init_funcs.insert(f); }
+	void addFiniFunction(llvm::Function* f);
+	void addInitFunction(llvm::Function* f);
 
 	virtual llvm::Function* getFuncByAddr(uint64_t addr) = 0;
 
@@ -184,7 +184,6 @@ private:
 	static void deleteTimerInfo(TimerInfo*&);
 	void handleMemoryUtilization(ExecutionState* &state);
 	void handleMemoryPID(ExecutionState* &state);
-	void setupFiniFuncs(void);
 	void setupInitFuncs(ExecutionState& initState);
 protected:
 	KModule		*kmodule;
@@ -269,14 +268,7 @@ private:
 	/* functions which caused bad concretizations */
 	std::set<KFunction*>		bad_conc_kfuncs;
 
-	std::set<llvm::Function*>	init_funcs;
-	KFunction			*init_kfunc;
-
-	std::set<llvm::Function*>	fini_funcs;
-	KFunction			*fini_kfunc;
-
 	Replay	*replay;
-
 
 	/// Disables forking, instead a random path is chosen. Enabled as
 	/// needed to control memory usage. \see fork()

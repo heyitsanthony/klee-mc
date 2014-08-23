@@ -120,6 +120,8 @@ KModule::KModule(
 , fpm(new FunctionPassManager(_module))
 , opts(_opts)
 , updated_funcs(0)
+, init_kfunc(0)
+, fini_kfunc(0)
 {}
 
 KModule::~KModule()
@@ -511,8 +513,14 @@ void KModule::prepare(InterpreterHandler *in_ih)
 	setupFunctionPasses();
 
 	/* Build shadow structures */
-	foreach (it, module->begin(), module->end())
+	foreach (it, module->begin(), module->end()) {
+		llvm::Function	*f = it;
+		/* what can happen here is it will overwrite a function
+		 * that we expect to already be processed. no good! */
+		if (getKFunction(f->getName().str().c_str()) != NULL)
+			continue;
 		addFunction(it);
+	}
 
 	if (DebugPrintEscapingFunctions && !escapingFunctions.empty()) {
 		llvm::errs() << "KLEE: escaping functions: [";
@@ -832,4 +840,30 @@ void KModule::setModName(KFunction* kf, const char* mod_name)
 
 	s = it->second;
 	kf->setModName(*s);
+}
+
+void KModule::setupInitFuncs(void)
+{
+	KInstIterator			kii;
+
+	if (init_kfunc != NULL) return;
+	if (init_funcs.empty()) return;
+
+	std::vector<Function*> l(init_funcs.begin(), init_funcs.end());
+	init_kfunc = buildListFunc(l, "__klee_initlist_f");
+}
+
+void KModule::setupFiniFuncs(void)
+{
+	if (fini_kfunc != NULL || fini_funcs.empty()) return;
+
+	std::vector<Function*> f_l(fini_funcs.begin(), fini_funcs.end());
+
+	f_l.push_back((Function*)module->getOrInsertFunction(
+		"klee_resume_exit",
+		FunctionType::get(
+			Type::getVoidTy(getGlobalContext()), false)));
+
+
+	fini_kfunc = buildListFunc(f_l, "__klee_finilist_f");
 }

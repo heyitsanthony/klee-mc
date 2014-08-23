@@ -78,7 +78,7 @@ static void sc_ret_ge(void* regfile, int64_t v)
 
 #define sc_ret_ge0(x)	sc_ret_ge(x, 0)
 
-void sc_ret_or(void* regfile, uint64_t v1, uint64_t v2)
+void sc_ret_or(void* regfile, ARCH_CAST v1, ARCH_CAST v2)
 {
 	ARCH_SIGN_CAST rax = GET_SYSRET(regfile);
 	int	is_v1, is_v2;
@@ -1592,7 +1592,8 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case ARCH_SYS_UNSUPP:
 	default:
 		kmc_sc_bad(sc.sys_nr);
-		klee_uerror("Unknown Syscall", "sc.err");
+		klee_ureport("Unknown Syscall", "sc.err");
+		sc_ret_v(regfile, -1);
 		break;
 	}
 
@@ -1644,7 +1645,7 @@ void sc_ret_v(void* regfile, uint64_t v1)
 	GET_SYSRET(regfile) = v1;
 }
 
-void sc_ret_v_new(void* regfile, uint64_t v1)
+void sc_ret_v_new(void* regfile, ARCH_CAST v1)
 {
 	klee_assume_eq(GET_SYSRET(regfile), v1);
 	/* I'm not sure why I had a sign cast here in the first place */

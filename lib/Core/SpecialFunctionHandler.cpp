@@ -11,6 +11,7 @@
 #include <llvm/IR/LLVMContext.h>
 #include "klee/klee.h"
 #include "Memory.h"
+#include "SymAddrSpace.h"
 #include "SpecialFunctionHandler.h"
 #include "StateSolver.h"
 #include "Forks.h"
@@ -214,7 +215,7 @@ unsigned char* SpecialFunctionHandler::readBytesAtAddress(
 	address = cast<ConstantExpr>(addressExpr);
 
 	assert (address.get() && "Expected constant address");
-	if (!state.addressSpace.resolveOne(address, op)) {
+	if (!state.addressSpace.resolveOne(address->getZExtValue(), op)) {
 		klee_warning("hit multi-res on reading 'concrete' string");
 		return NULL;
 	}
@@ -623,7 +624,8 @@ SFH_DEF_ALL(IsValidAddr, "klee_is_valid_addr", true)
 	}
 
 	assert (addr->getKind() == Expr::Constant);
-	ok = state.addressSpace.resolveOne(cast<ConstantExpr>(addr), op);
+	ok = state.addressSpace.resolveOne(
+		cast<ConstantExpr>(addr)->getZExtValue(), op);
 	ret = ConstantExpr::create((ok) ? 1 : 0, 32);
 
 	state.bindLocal(target, ret);
@@ -826,7 +828,8 @@ SFH_DEF_ALL(CheckMemoryAccess, "klee_check_memory_access", false)
 
 	ObjectPair op;
 
-	if (!state.addressSpace.resolveOne(cast<ConstantExpr>(address), op)) {
+	if (!state.addressSpace.resolveOne(
+		cast<ConstantExpr>(address)->getZExtValue(), op)) {
 		TERMINATE_ERROR_LONG(sfh->executor,
 			state,
 			"check_memory_access: memory error",
@@ -954,6 +957,39 @@ SFH_DEF_ALL(MakeSymbolic, "klee_make_symbolic", false)
 			"size for klee_make_symbolic[_name] too big",
 			"user.err");
 	}
+}
+
+SFH_DEF_ALL(MakeVSymbolic, "klee_make_vsym", false)
+{
+	std::string		name;
+	ref<Expr>		addr;
+	const ConstantExpr	*ce;
+	const MemoryObject	*mo;
+	ObjectState		*os;
+
+	if (args.size() == 2) {
+		name = "unnamed";
+	} else {
+		SFH_CHK_ARGS(3, "klee_make_symbolic");
+		name = sfh->readStringAtAddress(
+			state, args[MAKESYM_ARGIDX_NAME]);
+	}
+
+	addr = args[MAKESYM_ARGIDX_ADDR];
+	if (addr->getKind() != Expr::Constant) {
+		TERMINATE_ERROR(sfh->executor,
+			state,
+			"expected constant address for make_vsym",
+			"user.err");
+		return;
+	}
+
+	ce = cast<const ConstantExpr>(addr);
+	mo = state.addressSpace.resolveOneMO(ce->getZExtValue());
+	const_cast<MemoryObject*>(mo)->setName(name);
+
+	os = sfh->executor->makeSymbolic(state, mo, name.c_str());
+	state.markSymbolicVirtual(os->getArray());
 }
 
 
@@ -1457,6 +1493,7 @@ add(GlobalInc),
 add(ConstrCount),
 add(IsReadOnly),
 add(ConcretizeState),
+add(MakeVSymbolic),
 #define DEF_WIDE(x)	\
 add(WideLoad##x),	\
 add(WideStore##x)

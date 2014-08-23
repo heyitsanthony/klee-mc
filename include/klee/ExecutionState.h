@@ -68,7 +68,8 @@ class SymbolicArray
 {
 public:
 	SymbolicArray(MemoryObject* in_mo, Array* in_array)
-	: mo(in_mo), array(in_array), concretization(0) {}
+	: mo(in_mo), array(in_array), concretization(0), is_virt(false) {}
+
 	virtual ~SymbolicArray() {}
 	bool operator ==(const SymbolicArray& sa) const
 	{
@@ -90,10 +91,14 @@ public:
 		assert (concretization.isNull());
 		concretization = new ConcreteArray(v);
 	}
+
+	void setVirtual(void) { is_virt = true; }
+	bool isVirtual(void) const { return is_virt; }
 private:
 	ref<MemoryObject>	mo;
 	ref<Array>		array;
 	ref<ConcreteArray>	concretization;
+	bool			is_virt;
 };
 
 std::ostream &operator<<(std::ostream &os, const MemoryMap &mm);
@@ -320,6 +325,7 @@ public:
 	bool isConcrete(void) const;
 
 	void assignSymbolics(const Assignment& a);
+	void markSymbolicVirtual(const Array* a);
 
 	void abortInstruction(void);
 

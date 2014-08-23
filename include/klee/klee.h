@@ -86,6 +86,7 @@ extern "C" {
   /// \arg name - An optional name, used for identifying the object in messages,
   /// output files, etc.
   void klee_make_symbolic(void *addr, size_t nbytes, const char *name);
+  void klee_make_vsym(void *addr, size_t nbytes, const char *name);
 
   /// klee_range - Construct a symbolic value in the signed interval
   /// [begin,end).
@@ -151,11 +152,11 @@ struct kreport_ent { uint64_t strp; uint64_t v; };
   unsigned klee_is_symbolic(uint64_t n);
 
   /* return true if byte at given address may be accessed */
-  unsigned klee_is_valid_addr(void* p);
+  unsigned klee_is_valid_addr(const void* p);
 
   /* returns number of bytes starting at 'ptr' that are symbolic */
   /* max_bytes is the numebr of bytes to check before terminating early */
-  unsigned klee_sym_range_bytes(void* ptr, unsigned max_bytes);
+  unsigned klee_sym_range_bytes(const void* ptr, unsigned max_bytes);
 
 
 	void* kmc_sc_regs(void*);
@@ -170,6 +171,42 @@ struct kreport_ent { uint64_t strp; uint64_t v; };
 #define KLEE_CMP_OP_SLT	8
 #define KLEE_CMP_OP_SLE	9
 
+#if 0
+#ifndef __cplusplus
+#define BAD_ASSUMES_V
+#else
+#define BAD_ASSUMES
+#endif
+#endif
+
+#ifdef BAD_ASSUMES_V
+#define klee_assume_ugt(x,y)	__klee_assume(((volatile)((x) > (y))))
+#define klee_assume_ult(x,y)	__klee_assume(((volatile)((x) < (y))))
+#define klee_assume_uge(x,y)	__klee_assume(((volatile)((x) >= (y))))
+#define klee_assume_ule(x,y)	__klee_assume(((volatile)((x) <= (y))))
+
+#define klee_assume_sgt(x,y)	__klee_assume(((volatile)((x) > (y))))
+#define klee_assume_slt(x,y)	__klee_assume(((volatile)((x) < (y))))
+#define klee_assume_sge(x,y)	__klee_assume(((volatile)((x) >= (y))))
+#define klee_assume_sle(x,y)	__klee_assume(((volatile)((x) <= (y))))
+
+#define klee_assume_eq(x,y)	__klee_assume(((volatile)((x) == (y))))
+#define klee_assume_ne(x,y)	__klee_assume(((volatile)((x) != (y))))
+#else
+#ifdef BAD_ASSUMES
+#define klee_assume_ugt(x,y)	__klee_assume((x) > (y))
+#define klee_assume_ult(x,y)	__klee_assume((x) < (y))
+#define klee_assume_uge(x,y)	__klee_assume((x) >= (y))
+#define klee_assume_ule(x,y)	__klee_assume((x) <= (y))
+
+#define klee_assume_sgt(x,y)	__klee_assume((x) > (y))
+#define klee_assume_slt(x,y)	__klee_assume((x) < (y))
+#define klee_assume_sge(x,y)	__klee_assume((x) >= (y))
+#define klee_assume_sle(x,y)	__klee_assume((x) <= (y))
+
+#define klee_assume_eq(x,y)	__klee_assume((x) == (y))
+#define klee_assume_ne(x,y)	__klee_assume((x) != (y))
+#else
 #define klee_assume_ugt(x,y)	__klee_assume(klee_mk_ugt(x,y))
 #define klee_assume_ult(x,y)	__klee_assume(klee_mk_ult(x,y))
 #define klee_assume_uge(x,y)	__klee_assume(klee_mk_uge(x,y))
@@ -182,7 +219,8 @@ struct kreport_ent { uint64_t strp; uint64_t v; };
 
 #define klee_assume_eq(x, y)	__klee_assume(klee_mk_eq(x, y))
 #define klee_assume_ne(x, y)	__klee_assume(klee_mk_ne(x, y))
-
+#endif
+#endif
   void __klee_assume(uint64_t expr);
 
 #define KLEE_MK_OP_ITE	10
@@ -330,6 +368,8 @@ extern void free(void*) __THROW;
 	void klee_hook_return(uint64_t stack_idx, void* fn, uint64_t aux);
 
 	void* kmc_regs_get(void);
+	void kmc_skip_func(void);
+	void __kmc_skip_func(void); // do not call this one
 
 	/* MMU stuff */
 	uint64_t klee_sym_corehash(void* addr);

@@ -57,6 +57,25 @@ int FileReconstructor::getFD(int vfd)
 	return v.fd;
 }
 
+
+void FileReconstructor::pread(int vfd, void* buf, size_t count, off_t off)
+{
+	int	fd;
+
+	if (count == ~((size_t)0)) return;
+
+	if (count == 0xffffffff || off >= 0xffffffff) {
+		/* 32-bit error read */
+		return;
+	}
+
+	assert (count < 1024*1024*16 && "Huge read??");
+
+	fd = getFD(vfd);
+	pwrite(fd, buf, count, off);
+	limitSize(vfd, off+count);
+}
+
 void FileReconstructor::read(int vfd, void* buf, size_t count)
 {
 	char	*tmp_buf;
@@ -82,8 +101,10 @@ void FileReconstructor::read(int vfd, void* buf, size_t count)
 	tmp_buf = new char[count];
 	memset(tmp_buf, 0, count);
 
+	/* read data currently present */
 	cur_off = lseek(fd, 0, SEEK_CUR);
 	::read(fd, tmp_buf, count);
+	/* OR back into buffer (should be flag?) */
 	for (unsigned i = 0; i < count; i++)
 		tmp_buf[i] |= ((const char*)buf)[i];
 
