@@ -46,7 +46,7 @@ static void strtoll_enter(void* r)
 	if (!klee_is_symbolic(s[0])) return;
 
 	/* TODO: support more bases */
-	if (GET_ARG2(r) != 10) {
+	if (GET_ARG2(r) != 10 && GET_ARG2(r) != 0) {
 		klee_print_expr("unsupported base", GET_ARG2(r));
 		return;
 	}

@@ -38,6 +38,7 @@
 //#define USE_SYS_FAILURE
 extern bool concrete_vfs;
 static int last_sc = 0;
+static unsigned sc_c = 0;
 
 extern void proc_sc(struct sc_pkt* sc);
 
@@ -527,11 +528,14 @@ static void sc_klee(void* regfile)
 	}
 }
 
+unsigned sc_count(void) { return sc_c; }
 
 void* sc_enter(void* regfile, void* jmpptr)
 {
 	struct sc_pkt		sc;
 	void			*new_regs = NULL;
+
+	sc_c++;
 
 	sc_clear(&sc);
 	sc.regfile = regfile;

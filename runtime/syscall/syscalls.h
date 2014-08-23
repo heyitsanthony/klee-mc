@@ -108,6 +108,8 @@ void make_sym(uint64_t addr, uint64_t len, const char* name);
 
 void sc_report_badbuf(const char* v, const void* p);
 
+unsigned sc_count(void);
+
 /* ... */
 void* kmc_sc_regs(void*);
 void kmc_sc_bad(unsigned int);
