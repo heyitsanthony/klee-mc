@@ -353,10 +353,20 @@ int file_sc(struct sc_pkt* sc)
 		else			sc_stat(sc);
 		break;
 
-	case SYS_close:
+	/* some binaries expect a -1; is this a good way to do it? */
+	case SYS_close: {
+		static unsigned last_sc_c = 0;
+		static unsigned c = 0;
+
+		c = (last_sc_c+1 == sc_count()) ? c + 1 : 0;
+		last_sc_c = sc_count();
+
 		fd_close(GET_ARG0(regfile));
-		sc_ret_v(regfile, 0);
+
+		if (c > 512) sc_new_regs(regfile);
+		else sc_ret_v(regfile, 0);
 		break;
+	}
 
 	case SYS_creat:
 		klee_warning_once("phony creat call");
