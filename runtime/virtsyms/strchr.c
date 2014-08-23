@@ -70,6 +70,9 @@ static void strchr_fini(uint64_t _r, void* aux)
 	unsigned		i = 0;
 
 	klee_print_expr("hi fini", s);
+	klee_assume_eq(_r, klee_get_value(_r));
+
+	_r = _r - (uint64_t)clo->s;
 
 	if (_r == clo->i+1) {
 		i = 0;
