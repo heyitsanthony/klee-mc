@@ -49,6 +49,11 @@ DumpStateStats("dump-statestats",
         cl::desc("Dump state stats every n seconds (0=off)"),
         cl::init(0));
 
+cl::opt<double>
+MaxTimeNoProgress("max-time-no-progress",
+        cl::desc("Halt after specified seconds after making no progress"), 
+        cl::init(0));
+
 
 class HaltTimer : public Executor::Timer
 {
@@ -64,6 +69,28 @@ public:
 private:
 	Executor *executor;
 };
+
+class HaltNoProgressTimer : public Executor::Timer
+{
+Executor *executor;
+public:
+	HaltNoProgressTimer(Executor *_executor)
+	: executor(_executor), numCovInstrs(0) {}
+
+	~HaltNoProgressTimer() {}
+
+	void run() {
+		if (numCovInstrs < stats::coveredInstructions) {
+			numCovInstrs = stats::coveredInstructions;
+			return;
+		}
+		std::cerr << "KLEE: Halting-- no progress!\n";
+		executor->setHaltExecution(true); }
+private:
+	unsigned numCovInstrs;
+};
+
+
 
 #include "../Expr/ExprAlloc.h"
 cl::opt<unsigned>
@@ -766,6 +793,9 @@ void Executor::initTimers(void)
 
 	if (MaxTime)
 		addTimer(new HaltTimer(this), MaxTime);
+
+	if (MaxTimeNoProgress)
+  		addTimer(new HaltNoProgressTimer(this), MaxTimeNoProgress);
 
 	if (DumpRuleBuilderStats)
 		addTimer(new RuleBuilderStatTimer(this), DumpRuleBuilderStats);
