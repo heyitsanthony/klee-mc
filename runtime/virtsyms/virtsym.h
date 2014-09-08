@@ -14,5 +14,6 @@ struct vsym_clo
 
 
 void virtsym_add(vsym_clo_f f, uint64_t ret, void* dat);
+char* virtsym_safe_strcopy(const char* s);
 
 #endif

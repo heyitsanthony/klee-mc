@@ -16,7 +16,7 @@ HOOK_FUNC(__strchr_sse42, strchr_enter);
 
 struct strchr_clo
 {
-	const char	*s;
+	const char	*s, *s_orig;
 	uint8_t		c;
 	unsigned	i;
 };
@@ -54,7 +54,8 @@ static void strchr_enter(void* r)
 
 	/* XXX: this should copy the whole string */
 	clo_dat = malloc(sizeof(*clo_dat));
-	clo_dat->s = s;
+	clo_dat->s = virtsym_safe_strcopy(s);
+	clo_dat->s_orig = s;
 	clo_dat->c = (uint8_t)GET_ARG1(r);
 	clo_dat->i = i;
 	virtsym_add(strchr_fini, ret, clo_dat);
@@ -63,22 +64,26 @@ static void strchr_enter(void* r)
 	kmc_skip_func();
 }
 
+/* this forces a value for the index-- is this wise? could miss tests */
 static void strchr_fini(uint64_t _r, void* aux)
 {
 	struct strchr_clo	*clo = aux;
 	const char		*s = clo->s;
 	uint8_t			c = clo->c;
+	uint64_t		r = klee_get_value(_r);
 	unsigned		i = 0;
 
-	klee_print_expr("hi fini", s);
-	klee_assume_eq(_r, klee_get_value(_r));
+	klee_assume_eq(_r, r);
+	_r = _r - (uint64_t)clo->s_orig;
 
-	_r = _r - (uint64_t)clo->s;
-
-	if (_r == clo->i+1) {
+	/* does _r exceed bounds? */
+	if (_r >= clo->i+1) {
 		i = 0;
 		while(klee_valid_ne(s[i], 0)) {
-			if (!klee_feasible_ne(s[i], c)) klee_silent_exit(1);
+			if (!klee_feasible_ne(s[i], c)) {
+				klee_print_expr("failing OOB r", _r);
+				klee_silent_exit(1);
+			}
 			klee_assume_ne(s[i], c);
 			i++;
 		}
@@ -92,14 +97,14 @@ static void strchr_fini(uint64_t _r, void* aux)
 			klee_assume_eq(s[i], c);
 			break;
 		}
-		klee_assume_ne(s[i], 0);
 		i++;
 		if (!klee_is_valid_addr(&s[i])) {
-			klee_print_expr("oops", &s[i]);
+			klee_print_expr("failing bad addr", &s[i]);
 			klee_silent_exit(0);
 		}
 	}
 
-	if (!klee_valid_eq(s[i], c) || !klee_valid_eq(_r, i))
+	if (!klee_valid_eq(s[i], c) || !klee_valid_eq(_r, i)) {
 		klee_silent_exit(0);
+	}
 }

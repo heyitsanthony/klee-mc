@@ -22,28 +22,6 @@ struct strcmp_clo
 	const char* s_copy[2];
 };
 
-/* XXX: this can be smarter in a few ways... */
-static char* safe_copy(const char* s)
-{
-	char*	ret;
-	int	i, j;
-
-	for (i = 0; !klee_is_symbolic(s[i]) && s[i] != '\0'; i++);
-
-	if (klee_is_symbolic(s[i])) {
-		i = 127;
-	} else if (s[i] != '\0') {
-		/* ruhroh -- huge string */
-		klee_assert(s[i] == '\0');
-	}
-
-	ret = malloc(i+1); /* XXX be smarter */
-	for (j = 0; j <= i && klee_is_valid_addr(&s[j]); j++)
-		ret[j] = s[j];
-
-	return ret;
-}
-
 static void strcmp_enter(void* r)
 {	
 	struct strcmp_clo	clo, *ret_clo;
@@ -88,10 +66,9 @@ static void strcmp_enter(void* r)
 	/* XXX: this should copy the whole string */
 	ret_clo = malloc(sizeof(clo));
 	memcpy(ret_clo, &clo, sizeof(clo));
-	ret_clo->s_copy[0] = safe_copy(clo.s[0]);
-	ret_clo->s_copy[1] = safe_copy(clo.s[1]);
+	ret_clo->s_copy[0] = virtsym_safe_strcopy(clo.s[0]);
+	ret_clo->s_copy[1] = virtsym_safe_strcopy(clo.s[1]);
 
-	klee_print_expr("making ret clo", 123);
 	virtsym_add(strcmp_fini2, ret, ret_clo);
 
 	/* no need to evaluate, skip */

@@ -17,6 +17,7 @@ HOOK_FUNC(__strlen_sse42, strlen_enter);
 static void strlen_enter(void* r)
 {
 	const char	*s;
+	const char	*s_copy;
 	uint64_t	ret;
 	void		*clo_dat;
 	unsigned	i;
@@ -42,9 +43,9 @@ static void strlen_enter(void* r)
 	klee_assume_ule(ret, i);
 	GET_SYSRET(r) = ret;
 
-	/* XXX: this should copy the whole string */
-	clo_dat = malloc(sizeof(s));
-	memcpy(clo_dat, &s, sizeof(s));
+	s_copy = virtsym_safe_strcopy(s);
+	clo_dat = malloc(sizeof(s_copy));
+	memcpy(clo_dat, &s_copy, sizeof(s_copy));
 	virtsym_add(strlen_fini, ret, clo_dat);
 
 	/* no need to evaluate, skip */
@@ -55,8 +56,6 @@ static void strlen_fini(uint64_t _r, void* aux)
 {
 	const char	*s = ((char**)aux)[0];
 	unsigned	i = 0;
-
-	klee_print_expr("hi fini", s);
 
 	while(klee_feasible_ne(s[i], 0)) {
 		if (klee_feasible_eq(_r, i) && klee_feasible_eq(s[i], 0)) {

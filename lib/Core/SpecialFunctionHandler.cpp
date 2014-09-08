@@ -594,7 +594,15 @@ SFH_DEF_ALL(Assume, "__klee_assume", false)
 	if (!ok) goto error;
 
 	/* no need to add the assume constraint if implied by model */
-	if (mustBeTrue) return;
+	if (mustBeTrue) {
+		/* TODO: can be smarter here-- if valid
+		 * 	1. add to constraint set if it reduces total constrs (TODO)
+		 * 	2. IVC always (DONE)
+		 */
+		sfh->executor->doImpliedValueConcretization(
+			state, e, MK_CONST(1, Expr::Bool));
+		return;
+	}
 
 	/* satisfiable? */
 	ok = sfh->executor->getSolver()->mayBeTrue(state, e, mayBeTrue);
