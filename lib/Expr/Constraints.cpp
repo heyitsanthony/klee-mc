@@ -218,11 +218,6 @@ void ConstraintManager::invalidateSimplifier(void) const
 	simplifier = NULL;
 }
 
-void ConstraintManager::simplifyForValidConstraint(ref<Expr> e)
-{
-	assert (0 == 1 && "STUB");
-}
-
 #define TRUE_EXPR	ConstantExpr::alloc(1, Expr::Bool)
 #define FALSE_EXPR	ConstantExpr::alloc(0, Expr::Bool)
 

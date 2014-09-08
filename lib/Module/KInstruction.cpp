@@ -35,7 +35,7 @@ KInstruction::KInstruction(Instruction* in_inst, unsigned in_dest)
 , info(0)
 , fork_c(0)
 , dest(in_dest)
-, covered(false)
+, cover_sid(~0UL)
 {
 	if (isCall()) {
 		/* [0] = getCalledValue() */

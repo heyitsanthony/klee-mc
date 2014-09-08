@@ -113,6 +113,13 @@ public:
 		std::vector< ref<Expr> >& args);
 
 	SFHandler* addHandler(const struct HandlerInfo& hi);
+	void addHandler(SFHandler* sfh, const char* name, bool hasRet);
+
+	/* assumes function present.
+	 * this is for eliding functions; returns old handler. */
+	SFHandler* setFixedHandler(
+		const char* name,
+		unsigned expr_w, uint64_t v);
 
 	bool hasHandler(llvm::Function* f) const;
 
@@ -180,3 +187,4 @@ typedef std::map<std::string, uint64_t>	readreg_map_ty;
 SFH_HANDLER2(ReadReg, static readreg_map_ty vars)
 
 #endif
+

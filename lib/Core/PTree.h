@@ -21,6 +21,8 @@ namespace klee
 class ExecutionState;
 class PTreeNode;
 
+/* A tree that tracks probabilities; not too great */
+
 class PTree
 {
 	typedef ExecutionState* data_type;

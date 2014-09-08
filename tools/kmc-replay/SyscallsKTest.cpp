@@ -120,6 +120,9 @@ void SyscallsKTest::advanceSyscallEntry(SyscallParams& sp)
 
 	if (!bc_is_type(bcs_crumb, BC_TYPE_SC)) {
 		BCrumb	*bc = Crumbs::toBC((struct breadcrumb*)bcs_crumb);
+		fprintf(stderr,
+			KREPLAY_NOTE
+			"klee exited on error by now but not the JIT?\n");
 		bc->print(std::cerr);
 		if (bc_is_type(bcs_crumb, BC_TYPE_ERREXIT)) {
 			if (fail_past_log == true) {

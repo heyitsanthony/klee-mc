@@ -63,7 +63,11 @@ public:
 			// XXX total hack,
 			// just because I like non uniform better but want
 			// seed results to be equally weighted.
-			T::stateManager->setWeights(1.0);
+			foreach (it,
+				T::stateManager->begin(),
+				T::stateManager->end()) {
+				(*it)->weight = 1;
+			}
 		}
 
 		T::runLoop();

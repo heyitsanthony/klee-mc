@@ -27,6 +27,8 @@ class ConstraintManager
 {
 public:
 	typedef std::vector< ref<Expr> > constraints_ty;
+	typedef std::map<const Array*, constraints_ty> arrconstrs_ty;
+
 	typedef constraints_ty::iterator iterator;
 	typedef constraints_ty::const_iterator const_iterator;
 	typedef std::vector< ref<Expr> >::const_iterator constraint_iterator;
@@ -54,10 +56,6 @@ public:
 		invalidateSimplifier();
 		return *this;
 	}
-
-	// given a constraint which is known to be valid, attempt to
-	// simplify the existing constraint set
-	void simplifyForValidConstraint(ref<Expr> e);
 
 	ref<Expr> simplifyExpr(ref<Expr> e) const;
 

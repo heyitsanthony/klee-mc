@@ -3,8 +3,8 @@
 // RUN: ../../../scripts/save_guest.sh ./%t1 guest-vsymsym
 // RUN: klee-mc -use-hookpass -guest-sshot=guest-vsymsym -guest-type=sshot -hookpass-lib=libvirtsyms.bc - ./%t1 2>%t1.err >%t1.out
 // RUN: ls klee-last | not grep .err
-// RUN: ls klee-last | grep ktest | wc -l | grep 5
 // RUN: ../../../scripts/get_all_returns.sh >%t1-rets 
+// RUN: ls klee-last | grep ktest | wc -l | grep 5
 // RUN: grep 0xffffff %t1-rets
 // RUN: grep 0x2 %t1-rets
 // RUN: grep 0x7 %t1-rets

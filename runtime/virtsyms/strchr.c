@@ -44,7 +44,8 @@ static void strchr_enter(void* r)
 	// if (!klee_is_valid_addr(&s[i]))
 
 	/* set value to symbolic */
-	klee_make_vsym(&ret, sizeof(ret), "vstrchr");
+	if (!klee_make_vsym(&ret, sizeof(ret), "vstrchr")) return;
+
 	klee_assume_ule(ret, i+1);
 	GET_SYSRET(r) = klee_mk_ite(
 		klee_mk_eq(ret, i+1),

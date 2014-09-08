@@ -86,7 +86,9 @@ extern "C" {
   /// \arg name - An optional name, used for identifying the object in messages,
   /// output files, etc.
   void klee_make_symbolic(void *addr, size_t nbytes, const char *name);
-  void klee_make_vsym(void *addr, size_t nbytes, const char *name);
+
+  /* returns nonzero if successful */
+  uint32_t klee_make_vsym(void *addr, size_t nbytes, const char *name);
 
   /// klee_range - Construct a symbolic value in the signed interval
   /// [begin,end).
@@ -334,6 +336,7 @@ extern void free(void*) __THROW;
   void klee_set_forking(unsigned enable);
 
   void klee_stack_trace(void);
+  void klee_constr_dump(uint64_t v);
 
   void klee_yield(void);
 

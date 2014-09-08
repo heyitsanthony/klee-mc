@@ -71,3 +71,35 @@ uint64_t klee_max_value(uint64_t expr)
 	return upper_bound;
 }
 
+#if 0
+uint64_t klee_min_value_small(uint64_t expr)
+{
+	uint64_t	upper_bound = klee_get_value(expr);
+	unsigned	probe_i = 1;
+
+	while (1) {
+		if (!klee_feasible_ugt(expr, upper_bound+(probe_i << 1))
+			break;
+		probe_i++;
+	}
+	
+	return klee_min_value_ub(expr, upper_bound+(probe_i << 1));
+}
+
+uint64_t klee_max_value_small(uint64_t expr)
+{
+	uint64_t	lower_bound = klee_get_value(expr);
+	unsigned	probe_i = 1;
+
+	while (1) {
+		uint64_t	v = (probe_i << 1);
+		if (v > upper_bound) { lower_bound = 0; break; } 
+		if (!klee_feasible_lgt(expr, lower_bound-v))
+			break;
+		probe_i++;
+	}
+	
+	return klee_min_value_lb(expr, lower_bound-(probe_i << 1));
+
+}
+#endif

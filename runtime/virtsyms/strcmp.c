@@ -14,22 +14,51 @@ HOOK_FUNC(__GI_strcmp, strcmp_enter);
 HOOK_FUNC(__GI___strcmp_ssse3, strcmp_enter);
 HOOK_FUNC(__strcmp_sse42, strcmp_enter);
 
-static void strcmp_enter(void* r)
+struct strcmp_clo
 {
-	const char	*s[2];
-	int		is_sym[2];
-	uint64_t	ret;
-	void		*clo_dat;
+	/* orig pointers */
+	const char* s[2];
+	/* copied buffers */
+	const char* s_copy[2];
+};
 
-	s[0] = (const char*)GET_ARG0(r);
-	s[1] = (const char*)GET_ARG1(r);
+/* XXX: this can be smarter in a few ways... */
+static char* safe_copy(const char* s)
+{
+	char*	ret;
+	int	i, j;
+
+	for (i = 0; !klee_is_symbolic(s[i]) && s[i] != '\0'; i++);
+
+	if (klee_is_symbolic(s[i])) {
+		i = 127;
+	} else if (s[i] != '\0') {
+		/* ruhroh -- huge string */
+		klee_assert(s[i] == '\0');
+	}
+
+	ret = malloc(i+1); /* XXX be smarter */
+	for (j = 0; j <= i && klee_is_valid_addr(&s[j]); j++)
+		ret[j] = s[j];
+
+	return ret;
+}
+
+static void strcmp_enter(void* r)
+{	
+	struct strcmp_clo	clo, *ret_clo;
+	int			is_sym[2];
+	uint64_t		ret;
+
+	clo.s[0] = (const char*)GET_ARG0(r);
+	clo.s[1] = (const char*)GET_ARG1(r);
 
 	/* 1. check pointers, common to crash in strcmp */
-	if (!klee_is_valid_addr(s[0]) || !klee_is_valid_addr(s[1])) 
+	if (!klee_is_valid_addr(clo.s[0]) || !klee_is_valid_addr(clo.s[1])) 
 		return;
 
-	is_sym[0] = klee_is_symbolic(*s[0]);
-	is_sym[1] = klee_is_symbolic(*s[1]);
+	is_sym[0] = klee_is_symbolic(*clo.s[0]);
+	is_sym[1] = klee_is_symbolic(*clo.s[1]);
 
 	/* both are concrete; ignore */
 	if (!is_sym[0] && !is_sym[1])
@@ -37,29 +66,33 @@ static void strcmp_enter(void* r)
 
 	if (is_sym[0] != is_sym[1]) {
 		/* one is concrete. should I bother checking better? */
-		if (	!klee_feasible_eq(*s[0], *s[1]) ||
-			!klee_feasible_ne(*s[0], *s[1]))
+		if (	!klee_feasible_eq(*clo.s[0], *clo.s[1]) ||
+			!klee_feasible_ne(*clo.s[0], *clo.s[1]))
 			return;
 	} else {
 		/* both are symbolic */
 
 		/* some constraint? */
-		if (	!klee_feasible_eq(*s[0], *s[1]) ||
-			!klee_feasible_ne(*s[0], *s[1]))
+		if (	!klee_feasible_eq(*clo.s[0], *clo.s[1]) ||
+			!klee_feasible_ne(*clo.s[0], *clo.s[1]))
 			return;
 
 	}
 
+
 	/* set value to symbolic */
-	klee_make_vsym(&ret, sizeof(ret), "vstrcmp");
+	if (!klee_make_vsym(&ret, sizeof(ret), "vstrcmp")) return;
+
 	GET_SYSRET(r) = ret;
 
-	klee_print_expr("hullo......", ret);
-
 	/* XXX: this should copy the whole string */
-	clo_dat = malloc(sizeof(s));
-	memcpy(clo_dat, s, sizeof(s));
-	virtsym_add(strcmp_fini2, ret, clo_dat);
+	ret_clo = malloc(sizeof(clo));
+	memcpy(ret_clo, &clo, sizeof(clo));
+	ret_clo->s_copy[0] = safe_copy(clo.s[0]);
+	ret_clo->s_copy[1] = safe_copy(clo.s[1]);
+
+	klee_print_expr("making ret clo", 123);
+	virtsym_add(strcmp_fini2, ret, ret_clo);
 
 	/* no need to evaluate, skip */
 	kmc_skip_func();
@@ -106,11 +139,14 @@ static int is_conc_nul(const char* s)
 
 static void strcmp_fini2(uint64_t _r, void* aux)
 {
+	struct strcmp_clo *clo = aux;
 	const char	*s[2];
-	int64_t		r = _r;
+	int64_t		r = (int)klee_get_value((int)_r);
 
-	s[0] = ((char**)aux)[0];
-	s[1] = ((char**)aux)[1];
+	klee_assume_eq(r, _r);
+
+	s[0] = clo->s_copy[0];
+	s[1] = clo->s_copy[1];
 
 	int i = 0;
 	/* skip prefix */
@@ -122,6 +158,7 @@ static void strcmp_fini2(uint64_t _r, void* aux)
 
 	klee_print_expr("prefix skipped", i);
 
+	/* strings equal? */
 	if (r == 0) {
 		while(klee_feasible_eq(*s[0], *s[1])) {
 			if (is_conc_nul(s[0])) break;
@@ -131,8 +168,17 @@ static void strcmp_fini2(uint64_t _r, void* aux)
 			s[1]++;
 		}
 
-		if (*s[0] || *s[1] || klee_valid_ne(s[0], s[1]))
+		if (	klee_valid_ne(*s[0], 0) ||
+			klee_valid_ne(*s[1], 0) ||
+			klee_valid_ne(*s[0], *s[1]))
+		{
+			klee_print_expr("bad eq check s[0]", *s[0]);
+			klee_print_expr("bad eq check s[1]", *s[1]);
 			klee_silent_exit(0);
+		}
+
+		klee_assume_eq(*s[0], 0);
+		klee_assume_eq(*s[1], 0);
 
 		return;
 	}
@@ -145,15 +191,16 @@ static void strcmp_fini2(uint64_t _r, void* aux)
 		klee_assume_slt(r, 0);
 	}
 
-	while (klee_feasible_eq(*s[0], *s[1]) && s[0] != 0) {
-		if (klee_feasible_ult(s[0], s[1]))
+	while (klee_feasible_eq(*s[0], *s[1]) && !klee_valid_eq(*s[0], 0)) {
+		if (klee_feasible_ult(*s[0], *s[1]))
 			break;
 		s[0]++;
 		s[1]++;
 	}
 
-	if (!klee_feasible_ult(s[0], s[1]))
+	if (!klee_feasible_ult(*s[0], *s[1]))
 		klee_silent_exit(0);
 
-	klee_assume_ult(s[0], s[1]);
+	klee_print_expr("got one...", r);
+	klee_assume_ult(*s[0], *s[1]);
 }

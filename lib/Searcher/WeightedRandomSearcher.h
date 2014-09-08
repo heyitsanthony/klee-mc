@@ -56,6 +56,7 @@ DECL_WEIGHT(StateInst, true)
 DECL_WEIGHT(NewInsts, true)
 DECL_WEIGHT(UniqObj, true)
 DECL_WEIGHT(BranchEntropy, true)
+DECL_WEIGHT(UnemittedCoverage, true)
 
 class Executor;
 

@@ -107,6 +107,45 @@ SFHandler* SpecialFunctionHandler::addHandler(const struct HandlerInfo& hi)
 	return new_h;
 }
 
+
+void SpecialFunctionHandler::addHandler(
+	SFHandler* sfh, const char* name, bool hasRet)
+{
+	SFHandler	*old_h;
+	Function	*f;
+
+	f = executor->getKModule()->module->getFunction(name);
+	if (f == NULL) return;
+	if ((old_h = handlers[f].first) != NULL) delete old_h;
+
+	handlers[f] = std::make_pair(sfh, hasRet);
+}
+
+SFH_HANDLER2(ReturnFixed, unsigned ret_w; uint64_t v;)
+SFH_DEF_HANDLER(ReturnFixed)
+{	if (ret_w == 0) return;
+	state.bindLocal(target, MK_CONST(v, ret_w)); }
+
+SFHandler* SpecialFunctionHandler::setFixedHandler(
+	const char* name, unsigned expr_w, uint64_t v)
+{
+	SFHandler		*old_h;
+	HandlerReturnFixed	*new_h;
+	Function		*f;
+
+	f = executor->getKModule()->module->getFunction(name);
+	if (f == NULL) return NULL;
+	if ((old_h = handlers[f].first) == NULL) return NULL;
+
+	new_h = new HandlerReturnFixed(this);
+	new_h->ret_w = expr_w;
+	new_h->v = v;
+
+	handlers[f] = std::make_pair(new_h, (expr_w != 0));
+
+	return old_h;
+}
+
 bool SpecialFunctionHandler::lateBind(const llvm::Function* f)
 {
 	latebindings_ty::iterator it(lateBindings.find(f->getName().str()));
@@ -677,6 +716,13 @@ SFH_DEF_ALL(StackTrace, "klee_stack_trace", false)
 { sfh->executor->printStackTrace(state, std::cerr); }
 
 
+SFH_DEF_ALL(ConstrDump, "klee_constr_dump", false)
+{
+	/* TODO: only dump constraints relevant to arg1 */
+	state.constraints.print(std::cerr);	
+}
+
+
 SFH_DEF_ALL(StackDepth, "klee_stack_depth", true)
 { state.bindLocal(target, MK_CONST(state.stack.size(), 32)); }
 
@@ -959,7 +1005,7 @@ SFH_DEF_ALL(MakeSymbolic, "klee_make_symbolic", false)
 	}
 }
 
-SFH_DEF_ALL(MakeVSymbolic, "klee_make_vsym", false)
+SFH_DEF_ALL(MakeVSymbolic, "klee_make_vsym", true)
 {
 	std::string		name;
 	ref<Expr>		addr;
@@ -990,8 +1036,8 @@ SFH_DEF_ALL(MakeVSymbolic, "klee_make_vsym", false)
 
 	os = sfh->executor->makeSymbolic(state, mo, name.c_str());
 	state.markSymbolicVirtual(os->getArray());
+	state.bindLocal(target, MK_CONST(1, Expr::Int32));
 }
-
 
 SFH_DEF_ALL(MarkGlobal, "klee_mark_global", false)
 {
@@ -1494,6 +1540,7 @@ add(ConstrCount),
 add(IsReadOnly),
 add(ConcretizeState),
 add(MakeVSymbolic),
+add(ConstrDump),
 #define DEF_WIDE(x)	\
 add(WideLoad##x),	\
 add(WideStore##x)

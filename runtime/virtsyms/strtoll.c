@@ -58,7 +58,8 @@ static void strtoll_enter(void* r)
 	klee_print_expr("all enumerated", i);
 
 	/* set value to symbolic */
-	klee_make_vsym(&ret, sizeof(ret), "vstrtoll");
+	if (!klee_make_vsym(&ret, sizeof(ret), "vstrtoll")) return;
+
 	GET_SYSRET(r) = ret;
 
 	/* XXX: this should copy the whole string */

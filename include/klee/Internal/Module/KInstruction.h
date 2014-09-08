@@ -47,15 +47,15 @@ public:
 	void setInfo(const InstructionInfo* inf) { info = inf; }
 	const InstructionInfo* getInfo(void) const { return info; }
 
-	bool isCovered(void) const { return covered; }
-	void cover(void) { covered = true; }
+	bool isCovered(void) const { return cover_sid != ~0UL; }
+	void cover(uint64_t sid) { cover_sid= sid; }
 
 	llvm::Function* getFunction(void) const;
 
 	unsigned getForkCount(void) const { return fork_c; }
 	void forked(void) { fork_c++; }
 protected:
-	KInstruction() : covered(false) {}
+	KInstruction() : cover_sid(~0UL) {}
 	KInstruction(llvm::Instruction* inst, unsigned dest);
 
 private:
@@ -73,7 +73,7 @@ private:
 
 	/// Destination register index.
 	unsigned		dest;
-	bool			covered;
+	uint64_t		cover_sid;
 };
 
 typedef std::pair<llvm::BasicBlock*, ref<Expr> >	TargetTy;

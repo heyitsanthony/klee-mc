@@ -341,6 +341,15 @@ void KleeHandler::printCWEXML(
 }
 
 
+#if 0
+void KleeHandler::updateTestCoverage(const ExecutionState& es)
+{
+	/* scan kfuncs that have uncovered instructions;
+	 * if ... */
+	assert (0 == 1 && "STUB");
+}
+#endif
+
 /* Outputs all files (.ktest, .pc, .cov etc.) describing a test case */
 unsigned KleeHandler::processTestCase(
 	const ExecutionState &state,
@@ -357,6 +366,9 @@ unsigned KleeHandler::processTestCase(
 	}
 
 	if (!isWriteOutput()) return 0;
+
+	/* TODO: scan path to figure out what was covered... */
+	// updateTestCoverage(state);
 
 	success = getStateSymObjs(state, out);
 	if (!success)

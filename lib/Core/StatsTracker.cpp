@@ -316,7 +316,7 @@ void StatsTracker::stepInstUpdateFrame(ExecutionState &es)
 	es.coveredNew = true;
 	es.lastNewInst = es.totalInsts;
 
-	es.pc->cover();
+	es.pc->cover(es.getSID());
 	++stats::coveredInstructions;
 	es.newInsts++;
 	stats::uncoveredInstructions += (int64_t)-1;

@@ -7,15 +7,16 @@
 #include "CostKillerStateSolver.h"
 #include "klee/SolverStats.h"
 #include "static/Sugar.h"
+#include "SpecialFunctionHandler.h"
 #include <algorithm>
 
 using namespace klee;
 
 extern llvm::cl::opt<bool> FasterReplay;
 namespace
-{
-	llvm::cl::opt<bool>
+{	llvm::cl::opt<bool>
 		ReplayKTestSort("replay-ktest-sort",
+		llvm::cl::desc("Sort by prefix to reduce redundant states"),
 		llvm::cl::init(true));
 }
 
@@ -26,9 +27,12 @@ bool ReplayKTests::replay(Executor* exe, ExecutionState* initSt)
 {
 	Forks		*old_f;
 	StateSolver	*old_ss = exe->getSolver(), *new_ss;
+	SFHandler	*old_sfh;
 	bool		ret;
 
 	std::cerr << "[KTest] Replaying " << kts.size() << " ktests.\n";
+
+	old_sfh = exe->getSFH()->setFixedHandler("klee_make_vsym", 32, 0);
 
 	old_f = exe->getForking();
 
@@ -43,8 +47,10 @@ bool ReplayKTests::replay(Executor* exe, ExecutionState* initSt)
 
 	exe->setSolver(old_ss);
 	delete new_ss;
-	std::cerr << "[KTest] All replays complete.\n";
 
+	exe->getSFH()->addHandler(old_sfh, "klee_make_vsym", true);
+
+	std::cerr << "[KTest] All replays complete.\n";
 	return ret;
 }
 

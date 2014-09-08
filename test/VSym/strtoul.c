@@ -4,7 +4,7 @@
 // RUN: klee-mc -use-hookpass -guest-sshot=guest-vstrtoul -guest-type=sshot -hookpass-lib=libvirtsyms.bc - ./%t1 2>%t1.err >%t1.out
 // RUN: ../../../scripts/get_all_returns.sh >%t1-rets 
 // RUN: ls klee-last | not grep .err
-// RUN: ls klee-last | grep ktest | wc -l | grep 5
+// RUN: ls klee-last | grep ktest | wc -l | grep 4
 // RUN: not grep 0xffffff %t1-rets
 // RUN: grep 0x7 %t1-rets
 // RUN: grep 0x2 %t1-rets
@@ -34,5 +34,6 @@ int main(int argc, char* argv[])
 	if (x == 1) return 3; /* do not make, covered by x < 10 */
 	if (x == ~0) return 4;
 
+	/* final test */
 	return 7;
 }
