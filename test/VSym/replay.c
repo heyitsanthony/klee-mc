@@ -12,9 +12,15 @@
 // RUN: grep 0x1 %t1-rets
 // RUN: ls klee-last | grep ktest | wc -l | grep 5
 // now make sure replay works...
-// RUN: klee-mc -guest-sshot=guest-testreplay -guest-type=sshot -replay-ktest-dir=klee-testreplays -stop-after-n-tests=6 - 2>%t1.replay.err
+// RUN: klee-mc -guest-sshot=guest-testreplay -only-replay -replay-suppress-forks=false  -guest-type=sshot -replay-ktest-dir=klee-testreplays -dump-states-on-halt=false - 2>%t1.replay.err
 // RUN: ls klee-last | not grep .err
-// RUN: ls klee-last | wc -l | grep 6
+// RUN: ls klee-last |  grep ktest | wc -l | grep 5
+// RUN: ../../../scripts/get_all_returns.sh >%t1-rets 
+// RUN: grep 0xffffff %t1-rets
+// RUN: grep 0x2 %t1-rets
+// RUN: grep 0x7 %t1-rets
+// RUN: grep 0x1 %t1-rets
+
 
 #include <stdio.h>
 #include <string.h>
