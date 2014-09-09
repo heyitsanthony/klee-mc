@@ -379,11 +379,11 @@ ref<Expr> OptBuilder::Read(const UpdateList &ul, const ref<Expr>& index)
 	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(index)) {
 		if (CE->getZExtValue() >= ul.getRoot()->mallocKey.size) {
 			Expr::errors++;
-			std::cerr << "[Expr] Replaing OOB read with 0.\n";
+			std::cerr << "[Expr] Replacing OOB read with 0.\n";
 			std::cerr << "[Expr] mallocKey.size="
 				<< ul.getRoot()->mallocKey.size << '\n';
 			std::cerr << "[Expr] CE=" <<  *CE << '\n';
-			return ConstantExpr::create(0, 32);
+			return MK_CONST(0, 8);
 		}
 	}
 

@@ -36,7 +36,7 @@ DECL_HOOK(getservbyname)
 DECL_HOOK(getservbyname_r)
 DECL_HOOK(__getservbyname_r)
 DECL_HOOK(__GI_getaddrinfo)
-
+DECL_HOOK(__res_vinit)
 DECL_HOOK(__readdir64)
 
 DECL_HOOK(iconv_open)
