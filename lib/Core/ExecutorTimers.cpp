@@ -919,7 +919,6 @@ void Executor::processTimersDumpStates(void)
     md2u = computeMinDistToUncovered(es->pc, sf.minDistToUncoveredOnReturn);
     icnt = theStatisticManager->getIndexedValue(
     	stats::instructions, es->pc->getInfo()->id);
-    cpicnt = sf.callPathNode->statistics.getValue(stats::instructions);
     *os << "{";
     *os << "'depth' : " << es->depth << ", ";
     *os << "'weight' : " << es->weight << ", ";
@@ -928,7 +927,6 @@ void Executor::processTimersDumpStates(void)
     *os << "'instsSinceCovNew' : " << es->lastNewInst-es->personalInsts << ", ";
     *os << "'md2u' : " << md2u << ", ";
     *os << "'icnt' : " << icnt << ", ";
-    *os << "'CPicnt' : " << cpicnt << ", ";
     *os << "}";
     *os << ")\n";
   }

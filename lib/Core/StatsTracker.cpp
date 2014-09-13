@@ -76,12 +76,6 @@ namespace
 	// XXX I really would like to have dynamic rate control for something like this.
 	cl::opt<double>
 	UncoveredUpdateInterval("uncovered-update-interval", cl::init(30.));
-
-	cl::opt<bool> UseCallPaths(
-		"use-call-paths",
-		cl::desc(
-		"Enable calltree tracking for instruction level statistics"),
-		cl::init(false));
 }
 
 StatsTracker* StatsTracker::create(
@@ -295,11 +289,6 @@ void StatsTracker::stepInstUpdateFrame(ExecutionState &es)
 
 
 	theStatisticManager->setIndex(ii.id);
-	if (UseCallPaths) {
-		assert (sf.callPathNode != NULL);
-		theStatisticManager->setContext(&sf.callPathNode->statistics);
-	}
-
 	if (es.pc->isCovered())
 		return;
 
@@ -341,20 +330,6 @@ void StatsTracker::framePushed(ExecutionState &es, StackFrame *parentFrame)
 	if (!TrackIStats) return;
 
 	StackFrame &sf = es.stack.back();
-
-	if (UseCallPaths) {
-		CallPathNode *parent;
-		CallPathNode *cp;
-
-		parent = parentFrame ? parentFrame->callPathNode : NULL;
-		cp = callPathManager.getCallPath(
-			parent,
-			sf.caller ? sf.caller->getInst() : NULL,
-			sf.kf->function);
-
-		sf.callPathNode = cp;
-		cp->count++;
-	}
 
 	if (updateMinDistToUncovered) {
 		uint64_t minDistAtRA = 0;
@@ -495,12 +470,6 @@ void StatsTracker::updateStateStatistics(uint64_t addend)
 
 		theStatisticManager->incrementIndexedValue(
 			stats::states, ii.id, addend);
-
-		if (!UseCallPaths) continue;
-		if (state.stack.empty()) continue;
-
-		state.stack.back().callPathNode->statistics.incrementValue(
-			stats::states, addend);
 	}
 }
 
@@ -563,8 +532,6 @@ void StatsTracker::writeIStats(void)
   std::string sourceFile = "";
 
   CallSiteSummaryTable callSiteStats;
-  if (UseCallPaths)
-    callPathManager.getSummaryStatistics(callSiteStats);
 
   of << "ob=" << objectFilename << "\n";
 
@@ -621,49 +588,4 @@ void StatsTracker::writeInstIStat(
 			of << sm.getIndexedValue(
 				sm.getStatistic(i), index) << " ";
 	of << "\n";
-
-	if (	!(UseCallPaths &&
-		(isa<CallInst>(instr) || isa<InvokeInst>(instr))))
-	{
-		return;
-	}
-
-	CallSiteSummaryTable::iterator cs_it = callSiteStats.find(instr);
-	if (cs_it == callSiteStats.end())
-		return;
-
-	/* information about calls? uh? */
-	foreach (fit, cs_it->second.begin(), cs_it->second.end()) {
-		Function *f = fit->first;
-		CallSiteInfo &csi = fit->second;
-		const InstructionInfo &fii = km->infos->getFunctionInfo(f);
-
-		if (fii.file!=sourceFile) {
-			if(fii.file.empty())
-				of << "cfl=[klee]\n";
-			else
-				of << "cfl=" << fii.file << "\n";
-		}
-		of << "cfn=" << f->getName().str() << "\n";
-		of << "calls=" << csi.count << " ";
-		of << fii.assemblyLine << " ";
-		of << fii.line << "\n";
-
-		of << ii.assemblyLine << " ";
-		of << ii.line << " ";
-		for (unsigned i=0; i<nStats; i++) {
-			if (!(istatsMask&(1<<i)))
-				continue;
-			Statistic &s = sm.getStatistic(i);
-			uint64_t value;
-
-			// Hack, ignore things that don't make sense on
-			// call paths.
-			value = (&s == &stats::uncoveredInstructions)
-				? 0
-				: csi.statistics.getValue(s);
-			of << value << " ";
-		}
-		of << "\n";
-	}
 }

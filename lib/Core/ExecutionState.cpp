@@ -255,7 +255,6 @@ void ExecutionState::popFrame()
 
 void ExecutionState::xferFrame(KFunction* kf)
 {
-	CallPathNode		*cpn;
 	ref<Expr>		retexpr;
 	KFunction		*retf;
 	KInstIterator		ki = getCaller();
@@ -270,7 +269,6 @@ void ExecutionState::xferFrame(KFunction* kf)
 	StackFrame	&sf(stack.back());
 
 	/* save, pop off old state */
-	cpn = sf.callPathNode;
 	retf = sf.onRet;
 	retexpr = sf.onRet_expr;
 	wm = sf.stackWatermark;
@@ -285,7 +283,6 @@ void ExecutionState::xferFrame(KFunction* kf)
 	StackFrame	&sf2(stack.back());
 
 	sf2.stackWatermark = wm;
-	sf2.callPathNode = cpn;
 	sf2.onRet = retf;
 	sf2.onRet_expr = retexpr;
 

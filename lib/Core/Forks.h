@@ -8,7 +8,6 @@
 namespace klee
 {
 class ExecutionState;
-class CallPathNode;
 class ExprVisitor;
 class KInstruction;
 
@@ -120,10 +119,6 @@ protected:
 	Executor	&exe;
 	bool		suppressForks;
 private:
-	/* this forking code really should be refactored */
-	bool isForkingCallPath(CallPathNode* cpn);
-
-
 	void skipAndRandomPrune(struct ForkInfo& fi, const char* reason);
 	bool addConstraint(struct ForkInfo& fi, unsigned condIndex);
 

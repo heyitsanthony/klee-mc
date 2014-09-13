@@ -24,14 +24,12 @@ class Cell;
 class MemoryObject;
 class KFunction;
 class KInstIterator;
-class CallPathNode;
 
 struct StackFrame {
   friend class ExecutionState;
   unsigned		call;
   KInstIterator		caller;
   KFunction		*kf;
-  CallPathNode		*callPathNode;
   KFunction		*onRet;
   ref<Expr>		onRet_expr;
   uint64_t		stackWatermark;

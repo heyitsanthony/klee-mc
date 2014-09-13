@@ -36,7 +36,6 @@ namespace klee
 {
 class Array;
 class Assignment;
-class CallPathNode;
 class Cell;
 class KFunction;
 class MemoryObject;

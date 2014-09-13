@@ -10,8 +10,6 @@
 #ifndef KLEE_STATSTRACKER_H
 #define KLEE_STATSTRACKER_H
 
-#include "CallPathManager.h"
-
 #include <iostream>
 #include <set>
 #include <list>
@@ -47,7 +45,6 @@ class StatsTracker
     unsigned numBranches;
     unsigned fullBranches, partialBranches;
 
-    CallPathManager callPathManager;
 
     bool updateMinDistToUncovered;
 

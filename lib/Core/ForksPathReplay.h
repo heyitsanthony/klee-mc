@@ -6,7 +6,6 @@
 namespace klee
 {
 class ExecutionState;
-class CallPathNode;
 class ExprVisitor;
 class KInstruction;
 

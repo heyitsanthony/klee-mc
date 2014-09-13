@@ -100,9 +100,3 @@ bool ForksSeeding::constrainFork(
 
 	return true;
 }
-
-bool ForksSeeding::isForkingCondition(ExecutionState& current, ref<Expr> cond)
-{
-	assert (exe.isStateSeeding(&current));
-	return false;
-}

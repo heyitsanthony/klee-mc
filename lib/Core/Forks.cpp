@@ -13,7 +13,6 @@
 #include "klee/TimerStatIncrementer.h"
 #include "static/Sugar.h"
 
-#include "CallPathManager.h"
 #include "StateSolver.h"
 
 #include "PTree.h"
@@ -127,83 +126,11 @@ bool Forks::isRunawayBranch(KInstruction* ki)
 	return true;
 }
 
-/* TODO: understand this */
-bool Forks::isForkingCallPath(CallPathNode* cpn)
-{
-	StatisticManager &sm = *theStatisticManager;
-	if (	MaxStaticForkPct<1. &&
-		sm.getIndexedValue(
-			stats::forks, sm.getIndex()) >
-				stats::forks*MaxStaticForkPct)
-	{
-		return true;
-	}
-
-	if (	MaxStaticSolvePct<1 &&
-		sm.getIndexedValue(
-			stats::solverTime, sm.getIndex()) >
-				stats::solverTime*MaxStaticSolvePct)
-	{
-		return true;
-	}
-
-	/* next conditions require cpn anyway.. */
-	if (cpn == NULL) return false;
-
-	if (MaxStaticCPForkPct<1. &&
-		cpn->statistics.getValue(stats::forks) >
-			stats::forks*MaxStaticCPForkPct)
-	{
-		return true;
-	}
-
-	if (MaxStaticCPForkPct<1. &&
-		(cpn->statistics.getValue(stats::solverTime) >
-			stats::solverTime*MaxStaticCPSolvePct))
-	{
-		return true;
-	}
-
-	return false;
-}
-
-bool Forks::isForkingCondition(ExecutionState& current, ref<Expr> condition)
-{
-	if (isa<ConstantExpr>(condition)) return false;
-
-	if (	!(MaxStaticForkPct!=1. || MaxStaticSolvePct != 1. ||
-		MaxStaticCPForkPct!=1. || MaxStaticCPSolvePct != 1.))
-	{
-		return false;
-	}
-
-	if (exe.getStatsTracker()->elapsed() > 60.) return false;
-
-	return true;
-}
-
-
 Executor::StatePair
 Forks::fork(ExecutionState &s, ref<Expr> cond, bool isInternal)
 {
 	Executor::StateVector	results;
 	ref<Expr>		conds[2];
-
-	// !!! is this the correct behavior?
-	if (isForkingCondition(s, cond)) {
-		CallPathNode		*cpn;
-		bool			ok;
-		ref<ConstantExpr>	value;
-
-		cpn = s.stack.back().callPathNode;
-		if (isForkingCallPath(cpn)) {
-			ok = exe.getSolver()->getValue(s, cond, value);
-			assert(ok && "FIXME: Unhandled solver failure");
-
-			exe.addConstrOrDie(s, EqExpr::create(value, cond));
-			cond = value;
-		}
-	}
 
 	// set in forkSetupNoSeeding, if possible
 	//  conditions[0] = Expr::createIsZero(condition);

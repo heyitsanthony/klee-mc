@@ -17,7 +17,6 @@ StackFrame::StackFrame(KInstIterator _caller, KFunction *_kf)
 : call(_kf->callcount++)
 , caller(_caller)
 , kf(_kf)
-, callPathNode(0)
 , onRet(NULL)
 , stackWatermark(0)
 , allocas(NULL)
@@ -29,7 +28,6 @@ StackFrame::StackFrame(const StackFrame &s)
 : call(s.call)
 , caller(s.caller)
 , kf(s.kf)
-, callPathNode(s.callPathNode)
 , onRet(s.onRet)
 , onRet_expr(s.onRet_expr)
 , stackWatermark(s.stackWatermark)
@@ -82,7 +80,6 @@ StackFrame& StackFrame::operator=(const StackFrame &s)
 	kf = s.kf;
 	onRet = s.onRet;
 	onRet_expr = s.onRet_expr;
-	callPathNode = s.callPathNode;
 
 	if (allocas) {
 		delete allocas;
