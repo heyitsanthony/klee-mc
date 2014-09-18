@@ -17,8 +17,6 @@ protected:
 		ExecutionState& current,
 		struct ForkInfo& fi,
 		unsigned int condIndex);
-	
-	bool isForkingCondition(ExecutionState& current, ref<Expr> cond);
 private:
 };
 }

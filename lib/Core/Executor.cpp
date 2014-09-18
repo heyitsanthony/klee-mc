@@ -29,6 +29,7 @@
 #include "klee/Internal/Module/KInstruction.h"
 #include "klee/Internal/Module/KModule.h"
 #include "klee/Internal/Support/Timer.h"
+#include "klee/Statistics.h"
 
 #include "Executor.h"
 #include "ExeStateManager.h"

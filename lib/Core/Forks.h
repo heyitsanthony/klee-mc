@@ -102,7 +102,6 @@ public:
 protected:
 	virtual bool forkSetup(ExecutionState& current, struct ForkInfo& fi);
 	virtual void trackBranch(ExecutionState& current, unsigned condIdx);
-	virtual bool isForkingCondition(ExecutionState& es, ref<Expr> cond);
 	virtual bool constrainFork(
 		ExecutionState& es, struct ForkInfo& fi, unsigned int);
 	virtual bool evalForkBranch(ExecutionState& current, struct ForkInfo& fi);

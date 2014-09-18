@@ -19,6 +19,7 @@
 #include "klee/Internal/Module/KInstruction.h"
 #include "klee/Internal/Module/KModule.h"
 #include "klee/Internal/System/Time.h"
+#include "klee/Statistics.h"
 
 #include "llvm/IR/Function.h"
 #include "llvm/Support/CommandLine.h"

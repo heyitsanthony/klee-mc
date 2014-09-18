@@ -20,9 +20,10 @@ SCHEDOPTS="-use-batching-search
 	-use-pdf-interleave=true
 	-use-fresh-branch-search=true
 	-use-interleaved-MI=true
-	-use-interleaved-MXI=true"
+	-use-interleaved-MXI=true
+	-use-interleaved-CD=true
+	"
 #	-use-interleaved-RS=true
-#	-use-interleaved-CD=true
 
 #	-use-interleaved-UO=true
 #	-use-interleaved-BE=true"

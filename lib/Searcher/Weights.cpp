@@ -33,6 +33,7 @@ double StateInstCountWeight::weigh(const ExecutionState* es) const
 
 double CPInstCountWeight::weigh(const ExecutionState *es) const
 {
+#if 0
 	const StackFrame	 &sf(es->stack.back());
 	uint64_t		count;
 
@@ -40,6 +41,9 @@ double CPInstCountWeight::weigh(const ExecutionState *es) const
 		stats::instructions);
 	double inv = 1. / std::max((uint64_t) 1, count);
 	return inv;
+#endif
+	assert (0 == 1 && "STUB");
+	return 0;
 }
 
 double QueryCostWeight::weigh(const ExecutionState *es) const

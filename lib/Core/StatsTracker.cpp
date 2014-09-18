@@ -531,15 +531,13 @@ void StatsTracker::writeIStats(void)
 
   std::string sourceFile = "";
 
-  CallSiteSummaryTable callSiteStats;
-
   of << "ob=" << objectFilename << "\n";
 
   foreach (fnIt, m->begin(), m->end()) {
     if (fnIt->isDeclaration()) continue;
     foreach (bbIt, fnIt->begin(), fnIt->end()) {
       foreach (it, bbIt->begin(), bbIt->end())
-      	writeInstIStat(of, istatsMask, sourceFile, callSiteStats, &*it);
+      	writeInstIStat(of, istatsMask, sourceFile, &*it);
     }
   }
 
@@ -558,7 +556,6 @@ void StatsTracker::writeInstIStat(
 	std::ostream& of,
 	uint64_t istatsMask,
 	std::string& sourceFile,
-	CallSiteSummaryTable& callSiteStats,
 	llvm::Instruction *instr)
 {
 	StatisticManager &sm = *theStatisticManager;

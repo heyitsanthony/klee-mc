@@ -10,9 +10,11 @@
 #ifndef KLEE_STATSTRACKER_H
 #define KLEE_STATSTRACKER_H
 
+#include <stdint.h>
 #include <iostream>
 #include <set>
 #include <list>
+#include <vector>
 
 namespace llvm {
   class BranchInst;
@@ -58,7 +60,6 @@ private:
     void writeInstIStat(
     	std::ostream& of, uint64_t istatsMask,
 	std::string& sourceFile,
-	CallSiteSummaryTable& css,
 	llvm::Instruction *instr);
 
     const KModule *km;
