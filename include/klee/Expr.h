@@ -513,7 +513,6 @@ public:
 
 	int compare(const UpdateNode &b) const;
 	Expr::Hash hash() const { return hashValue; }
-
 private:
 	UpdateNode()
 	: refCount(0), stpArray(0) , btorArray(0), z3Array(0) {}
@@ -543,6 +542,8 @@ public:
 	void extend(const ref<Expr> &index, const ref<Expr> &value);
 
 	int compare(const UpdateList &b) const;
+	bool operator ==(const UpdateList& ul) const { return compare(ul)==0; }
+
 	Expr::Hash hash() const
 	{
 		if (hashValue) return hashValue;

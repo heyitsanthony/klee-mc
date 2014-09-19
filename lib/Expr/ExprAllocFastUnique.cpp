@@ -1,4 +1,4 @@
-#include <tr1/unordered_set>
+#include <tr1/unordered_map>
 #include <assert.h>
 #include "klee/Expr.h"
 #include "ExprAllocFastUnique.h"
@@ -33,14 +33,14 @@ typedef std::tr1::unordered_map<
 	ref<Expr> >	exmap_ext_t;
 
 typedef std::tr1::unordered_map<
-	std::pair<ref<Expr>, std::pair< Expr::Width, Expr::Width >,
+	std::pair<ref<Expr>, std::pair< Expr::Width, Expr::Width > >,
 	ref<Expr> >	exmap_extr_t;
 
 typedef std::tr1::unordered_map<ref<Expr>, ref<Expr> >	exmap_unop_t;
 
 typedef std::tr1::unordered_map<
 	std::pair<ref<Expr>, std::pair<
-		ref<Expr>, ref<Expr>>,
+		ref<Expr>, ref<Expr> > >,
 	ref<Expr> >	exmap_triop_t;
 
 
@@ -52,7 +52,7 @@ static exmap_ext_t	exmap_ZExt;
 static exmap_ext_t	exmap_SExt;
 static exmap_unop_t	exmap_Not;
 
-#define DECL_BIN_MAP(x)	static exmap_binop_t exmap_##x
+#define DECL_BIN_MAP(x)	static exmap_binop_t exmap_##x;
 DECL_BIN_MAP(Concat)
 DECL_BIN_MAP(Add)
 DECL_BIN_MAP(Sub)
@@ -95,7 +95,7 @@ DECL_ALLOC_1(Not)
 #define DECL_ALLOC_2(x)	\
 ref<Expr> ExprAllocFastUnique::x(const ref<Expr>& lhs, const ref<Expr>& rhs) \
 {	std::pair<ref<Expr>, ref<Expr> >	key(lhs, rhs);	\
-	GET_OR_MK(x)(lhs,rhs);
+	GET_OR_MK(x)(lhs,rhs);			\
 	r->computeHash();			\
 	exmap_##x[key] = r;			\
 	return r;				\
@@ -132,7 +132,7 @@ ref<Expr> ExprAllocFastUnique::Read(const UpdateList &updates, const ref<Expr> &
 	std::pair<const UpdateList&, const ref<Expr> > key(updates, idx);
 	GET_OR_MK(Read)(updates,idx);
 	r->computeHash();
-	exmap_read[key] = r;
+	exmap_Read[key] = r;
 	return r;
 }
 
@@ -140,7 +140,7 @@ ref<Expr> ExprAllocFastUnique::Select(
 	const ref<Expr> &c,
 	const ref<Expr> &t, const ref<Expr> &f)
 {
-	std::pair<ref<Expr>, std::pair<ref<Expr>, ref<Expr> > key(
+	std::pair<ref<Expr>, std::pair<ref<Expr>, ref<Expr> > > key(
 		c, std::make_pair(t, f));
 	GET_OR_MK(Select)(c, t, f);
 	r->computeHash();
