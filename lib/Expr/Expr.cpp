@@ -18,6 +18,7 @@
 
 #include "klee/util/ExprPPrinter.h"
 #include "ExprAllocUnique.h"
+#include "ExprAllocFastUnique.h"
 
 #include <iostream>
 
@@ -54,6 +55,7 @@ private:
 
 ExprFactory	theExprFactory;
 static bool	UseExprConsPtr = false;
+static bool	UseExprFastConsPtr = false;
 ExprBuilder*	Expr::theExprBuilder = NULL;
 ExprAlloc*	Expr::theExprAllocator = NULL;
 ref<Expr>	Expr::errorExpr = NULL;
@@ -68,7 +70,9 @@ bool ArrayLT::operator()(const Array *a, const Array *b) const
 ExprFactory::ExprFactory(void)
 {
 	Expr::setBuilder(ExprBuilder::create(ExprBuilder::ExtraOptsBuilder));
-	if (UseExprConsPtr) {
+	if (UseExprFastConsPtr) {
+		Expr::setAllocator(new ExprAllocFastUnique());
+	} else if (UseExprConsPtr) {
 		Expr::setAllocator(new ExprAllocUnique());
 	} else {
 		Expr::setAllocator(new ExprAlloc());
