@@ -20,28 +20,57 @@ r = new x##Expr
 /* OP, expr */
 /* reads: expr, UL */
 
+struct hashexpr_read
+{ unsigned operator()(
+	const std::pair<const UpdateList&, const ref<Expr> >& v) const
+	{ return v.first.hash() ^ v.second->hash(); } };
 typedef std::tr1::unordered_map<
 	std::pair<const UpdateList&, const ref<Expr> >,
-	ref<Expr> >	exmap_read_t;
+	ref<Expr>,
+	hashexpr_read>	exmap_read_t;
+
+struct hashexpr_bin
+{ unsigned operator()(
+	const std::pair<ref<Expr>, ref<Expr> >& v) const
+	{ return v.first->hash() - v.second->hash(); } };
 
 typedef std::tr1::unordered_map<
 	std::pair<ref<Expr>, ref<Expr> >,
-	ref<Expr> >	exmap_binop_t;
+	ref<Expr>,
+	hashexpr_bin>	exmap_binop_t;
 
+struct hashexpr_ext
+{ unsigned operator()(
+	const std::pair<ref<Expr>, Expr::Width >& v) const
+	{ return v.first->hash() ^ v.second; } };
 typedef std::tr1::unordered_map<
 	std::pair<ref<Expr>, Expr::Width >,
-	ref<Expr> >	exmap_ext_t;
+	ref<Expr>,
+	hashexpr_ext>	exmap_ext_t;
+
+struct hashexpr_extr
+{ unsigned operator()(
+	const std::pair<ref<Expr>, std::pair< Expr::Width, Expr::Width > >& v)
+	const 
+	{ return v.first->hash() ^ ((v.second.first << 8) | v.second.second); } };
 
 typedef std::tr1::unordered_map<
 	std::pair<ref<Expr>, std::pair< Expr::Width, Expr::Width > >,
-	ref<Expr> >	exmap_extr_t;
+	ref<Expr>,
+	hashexpr_extr>	exmap_extr_t;
 
-typedef std::tr1::unordered_map<ref<Expr>, ref<Expr> >	exmap_unop_t;
+typedef std::tr1::unordered_map<ref<Expr>, ref<Expr>, hashexpr > exmap_unop_t;
 
+struct hashexpr_triop
+{ unsigned operator()(
+	const std::pair<ref<Expr>, std::pair<ref<Expr>, ref<Expr> > >& v)
+	const 
+	{ return v.first->hash() ^
+		(v.second.second->hash() - v.second.first->hash()); } };
 typedef std::tr1::unordered_map<
-	std::pair<ref<Expr>, std::pair<
-		ref<Expr>, ref<Expr> > >,
-	ref<Expr> >	exmap_triop_t;
+	std::pair<ref<Expr>, std::pair<ref<Expr>, ref<Expr> > >,
+	ref<Expr>,
+	hashexpr_triop>	exmap_triop_t;
 
 
 static exmap_unop_t	exmap_NotOptimized;
