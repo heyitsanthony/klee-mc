@@ -151,7 +151,7 @@ static void strcmp_fini2(uint64_t _r, void* aux)
 		{
 			klee_print_expr("bad eq check s[0]", *s[0]);
 			klee_print_expr("bad eq check s[1]", *s[1]);
-			klee_silent_exit(0);
+			virtsym_prune(VS_PRNID_STRCMP);
 		}
 
 		klee_assume_eq(*s[0], 0);
@@ -176,7 +176,7 @@ static void strcmp_fini2(uint64_t _r, void* aux)
 	}
 
 	if (!klee_feasible_ult(*s[0], *s[1]))
-		klee_silent_exit(0);
+		virtsym_prune(VS_PRNID_STRCMP);
 
 	klee_print_expr("got one...", r);
 	klee_assume_ult(*s[0], *s[1]);

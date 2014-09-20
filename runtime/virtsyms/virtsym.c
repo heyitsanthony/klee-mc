@@ -37,7 +37,23 @@ char* virtsym_safe_strcopy(const char* s)
 
 	return ret;
 }
+void* virtsym_safe_memcopy(const void* m, unsigned len)
+{
+	void	*ret;
+	int	i;
 
+	/* concretize because we're dum */
+	klee_assume_eq(m, klee_get_value(m));
+	klee_assume_eq(len, klee_max_value(len));
+
+	/* XXX: in the future this should use the to-be-written
+	 * klee_copy_cow instrinsic so there's no space/copying overhead */
+	ret = malloc(len);
+	for (i = 0; i < len; i++)
+		((char*)ret)[i] = ((const char*)m)[i];
+
+	return ret;
+}
 
 
 /* do all virtsym closures */
@@ -47,4 +63,10 @@ void __hookfini_virtsym(void)
 		vs->vs_f(vs->vs_ret, vs->vs_aux);
 		vs = vs->vs_next;
 	}
+}
+
+void virtsym_prune(int n)
+{
+	klee_print_expr("vsym pruning", n);
+	klee_silent_exit(0);
 }

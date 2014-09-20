@@ -67,10 +67,10 @@ static void strlen_fini(uint64_t _r, void* aux)
 		i++;
 		if (!klee_is_valid_addr(&s[i])) {
 			klee_print_expr("oops", &s[i]);
-			klee_silent_exit(0);
+			virtsym_prune(VS_PRNID_STRLEN);
 		}
 	}
 
 	if (!klee_valid_eq(s[i], 0) || !klee_valid_eq(_r, i))
-		klee_silent_exit(0);
+		virtsym_prune(VS_PRNID_STRLEN);
 }

@@ -82,7 +82,7 @@ static void strchr_fini(uint64_t _r, void* aux)
 		while(klee_valid_ne(s[i], 0)) {
 			if (!klee_feasible_ne(s[i], c)) {
 				klee_print_expr("failing OOB r", _r);
-				klee_silent_exit(1);
+				virtsym_priune(VS_PRNID_STRCHR);
 			}
 			klee_assume_ne(s[i], c);
 			i++;
@@ -100,11 +100,11 @@ static void strchr_fini(uint64_t _r, void* aux)
 		i++;
 		if (!klee_is_valid_addr(&s[i])) {
 			klee_print_expr("failing bad addr", &s[i]);
-			klee_silent_exit(0);
+			virtsym_priune(VS_PRNID_STRCHR);
 		}
 	}
 
 	if (!klee_valid_eq(s[i], c) || !klee_valid_eq(_r, i)) {
-		klee_silent_exit(0);
+		virtsym_priune(VS_PRNID_STRCHR);
 	}
 }

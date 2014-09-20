@@ -124,9 +124,9 @@ static void strtoll_fini(uint64_t _r, void* aux)
 		klee_assume_eq(s[i], buf[i]);
 
 	/* didn't feasibily match expected string? */
-	if (buf[i]) klee_silent_exit(1);
+	if (buf[i]) virtsym_prune(VS_PRNID_STRTOLL);
 
 	/* force non-numeric follow up */
 	pred = klee_mk_or(klee_mk_ult(s[i], '0'), klee_mk_ugt(s[i], '9'));
-	if (!klee_feasible(pred)) klee_silent_exit(2);
+	if (!klee_feasible(pred)) virtsym_prune(VS_PRNID_STRTOLL);
 }
