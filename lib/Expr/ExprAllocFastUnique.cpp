@@ -214,10 +214,66 @@ ref<Expr> ExprAllocFastUnique::SExt(const ref<Expr> &e, Expr::Width w)
 
 ExprAllocFastUnique::ExprAllocFastUnique() { }
 
+#define GC_KIND(x)	\
+	std::vector<typeof(exmap_#x.begin()->first)> rmv_keys_#x; \
+	foreach (it, exmap_#x.begin(), exmap_#x.end()) {	\
+		ref<Expr>	e(it->second);			\
+		if (e.getRefCount() > 2) continue;		\
+		rmv_keys_#x.push_back(it->first); }		\
+	foreach (it, rmv_keys.begin(), rmv_keys.end()) {	\
+		exmap_#x.erase(*it);				\
+	}							\
+	ret += rmv_keys_#x.size();				\
+	rmv_keys_#x.clear();					\
+	
 unsigned ExprAllocFastUnique::garbageCollect(void)
 {
 	unsigned ret = 0;
-	assert (0 == 1 && "GC OUR STUFF");
+
+	/* first, GC all non-const kinds */
+
+	GC_KIND(NotOptimized);
+	GC_KIND(Read);
+	GC_KIND(Select);
+	GC_KIND(Extract);
+	GC_KIND(ZExt);
+	GC_KIND(SExt);
+	GC_KIND(Not);
+
+	GC_KIND(Concat)
+	GC_KIND(Add)
+	GC_KIND(Sub)
+	GC_KIND(Mul)
+	GC_KIND(UDiv)
+
+	GC_KIND(SDiv)
+	GC_KIND(URem)
+	GC_KIND(SRem)
+	GC_KIND(And)
+	GC_KIND(Or)
+	GC_KIND(Xor)
+	GC_KIND(Shl)
+	GC_KIND(LShr)
+	GC_KIND(AShr)
+	GC_KIND(Eq)
+	GC_KIND(Ne)
+	GC_KIND(Ult)
+	GC_KIND(Ule)
+
+	GC_KIND(Ugt)
+	GC_KIND(Uge)
+	GC_KIND(Slt)
+	GC_KIND(Sle)
+	GC_KIND(Sgt)
+	GC_KIND(Sge)
+
+	/* note that this is NOT a fixed point--
+	 * some expressions may be keys for larger expressions in that
+	 * removing a larger expression drops the ref count and more
+	 * expressions can be GC'd-- I doubt repeating the operation until
+	 * fixed point is worth it since this is pricey. */
+
+	/* GC constants */
 	ret += ExprAlloc::garbageCollect();
 	return ret;
 }

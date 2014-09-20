@@ -105,9 +105,7 @@ ExprAlloc::~ExprAlloc() {}
 unsigned ExprAlloc::garbageCollect(void)
 {
 	std::vector<ConstantExpr*>	to_rmv;
-	unsigned buckets[5];
-
-	memset(buckets, 0, sizeof(buckets));
+	unsigned			n;
 
 	foreach (it, const_hashtab.begin(), const_hashtab.end()) {
 		ref<Expr>	e(it->second);
@@ -118,10 +116,9 @@ unsigned ExprAlloc::garbageCollect(void)
 		/* Two refs => hash table and 'e' => garbage */
 		if (e.getRefCount() == 2)
 			to_rmv.push_back(cast<ConstantExpr>(e));
-
-		buckets[e.getRefCount()]++;
 	}
 
+	n = to_rmv.size();
 	foreach (it, to_rmv.begin(), to_rmv.end()) {
 		APInt	v((*it)->getAPValue());
 		const_hashtab.erase(v);
@@ -129,13 +126,7 @@ unsigned ExprAlloc::garbageCollect(void)
 
 	constantCount -= to_rmv.size();
 
-	for (unsigned i = 0; i < 5; i++)
-		std::cerr
-			<< "[ExprGC] EXPR_REFS["
-			<< i << "] = "
-			<< buckets[i] << '\n';
-
-	return 0;
+	return n;
 }
 
 #define DECL_ALLOC_1(x)				\
