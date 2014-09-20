@@ -10,9 +10,9 @@ struct hashexpr
 
 
 #define GET_OR_MK(x)		\
-ref<Expr> r(exmap_##x[key]);	\
-if (!r.isNull()) return r;	\
-r = new x##Expr
+typeof(exmap_##x.begin()) it(exmap_##x.find(key)); \
+if (it != exmap_##x.end()) return it->second;	\
+ref<Expr> r = new x##Expr
 
 /* OP, expr, expr */
 /* OP, expr, w */
@@ -156,12 +156,18 @@ DECL_ALLOC_2(Sle)
 DECL_ALLOC_2(Sgt)
 DECL_ALLOC_2(Sge)
 
-ref<Expr> ExprAllocFastUnique::Read(const UpdateList &updates, const ref<Expr> &idx)
+ref<Expr> ExprAllocFastUnique::Read(
+	const UpdateList &updates, const ref<Expr> &idx)
 {
 	std::pair<const UpdateList&, const ref<Expr> > key(updates, idx);
+	ReadExpr*	re;
 	GET_OR_MK(Read)(updates,idx);
 	r->computeHash();
-	exmap_Read[key] = r;
+	re = cast<ReadExpr>(r);
+	/* reference must match what is stored in hash table to avoid 
+	 * dealloc of updatelist elsewhere */
+	std::pair<const UpdateList&, const ref<Expr> > key2(re->updates, idx);
+	exmap_Read[key2] = r;
 	return r;
 }
 
