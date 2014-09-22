@@ -1,6 +1,7 @@
 #include <tr1/unordered_map>
 #include <assert.h>
 #include "klee/Expr.h"
+#include "static/Sugar.h"
 #include "ExprAllocFastUnique.h"
 
 using namespace klee;
@@ -22,10 +23,10 @@ ref<Expr> r = new x##Expr
 
 struct hashexpr_read
 { unsigned operator()(
-	const std::pair<const UpdateList&, const ref<Expr> >& v) const
+	const std::pair<UpdateList&, ref<Expr> >& v) const
 	{ return v.first.hash() ^ v.second->hash(); } };
 typedef std::tr1::unordered_map<
-	std::pair<const UpdateList&, const ref<Expr> >,
+	std::pair<UpdateList&, ref<Expr> >,
 	ref<Expr>,
 	hashexpr_read>	exmap_read_t;
 
@@ -159,14 +160,16 @@ DECL_ALLOC_2(Sge)
 ref<Expr> ExprAllocFastUnique::Read(
 	const UpdateList &updates, const ref<Expr> &idx)
 {
-	std::pair<const UpdateList&, const ref<Expr> > key(updates, idx);
+	std::pair<UpdateList&, ref<Expr> > key(
+		const_cast<UpdateList&>(updates), idx);
 	ReadExpr*	re;
 	GET_OR_MK(Read)(updates,idx);
 	r->computeHash();
 	re = cast<ReadExpr>(r);
 	/* reference must match what is stored in hash table to avoid 
 	 * dealloc of updatelist elsewhere */
-	std::pair<const UpdateList&, const ref<Expr> > key2(re->updates, idx);
+	std::pair<UpdateList&, ref<Expr> > key2(
+		const_cast<UpdateList&>(re->updates), idx);
 	exmap_Read[key2] = r;
 	return r;
 }
@@ -214,17 +217,23 @@ ref<Expr> ExprAllocFastUnique::SExt(const ref<Expr> &e, Expr::Width w)
 
 ExprAllocFastUnique::ExprAllocFastUnique() { }
 
+//	std::vector<remove_const<typeof(exmap_##x.begin()->first)> >
+//	rmv_keys_##x; 
+
 #define GC_KIND(x)	\
-	std::vector<typeof(exmap_#x.begin()->first)> rmv_keys_#x; \
-	foreach (it, exmap_#x.begin(), exmap_#x.end()) {	\
+do {		\
+	std::vector<unconst_key_T(exmap_##x)> rmv_keys_##x; \
+	foreach (it, exmap_##x.begin(), exmap_##x.end()) {	\
 		ref<Expr>	e(it->second);			\
 		if (e.getRefCount() > 2) continue;		\
-		rmv_keys_#x.push_back(it->first); }		\
-	foreach (it, rmv_keys.begin(), rmv_keys.end()) {	\
-		exmap_#x.erase(*it);				\
+		unconst_key_T(exmap_##x) k(it->first);		\
+		rmv_keys_##x.push_back(k);			\
+	}	\
+	foreach (it, rmv_keys_##x.begin(), rmv_keys_##x.end()) {\
+		exmap_##x.erase(*it);				\
 	}							\
-	ret += rmv_keys_#x.size();				\
-	rmv_keys_#x.clear();					\
+	ret += rmv_keys_##x.size();				\
+} while (0)
 	
 unsigned ExprAllocFastUnique::garbageCollect(void)
 {
@@ -233,39 +242,59 @@ unsigned ExprAllocFastUnique::garbageCollect(void)
 	/* first, GC all non-const kinds */
 
 	GC_KIND(NotOptimized);
-	GC_KIND(Read);
+
+	/* Read needs a special one since it's UpdateList& ruins lives */
+	{
+	std::vector<std::pair<UpdateList*, ref<Expr> > > rmv_keys_Read;
+	foreach (it, exmap_Read.begin(), exmap_Read.end()) {
+		ref<Expr>	e(it->second);
+		if (e.getRefCount() > 2) continue;
+		std::pair<UpdateList*, ref<Expr> >	k;
+		k.first = &it->first.first;
+		k.second = it->first.second;
+		rmv_keys_Read.push_back(k);
+	}
+	foreach (it, rmv_keys_Read.begin(), rmv_keys_Read.end()) {
+		std::pair<UpdateList&, ref<Expr> > k(*(it)->first, it->second);
+		exmap_Read.erase(k);
+	}
+	ret += rmv_keys_Read.size();
+	rmv_keys_Read.clear();
+	}
+
+
 	GC_KIND(Select);
 	GC_KIND(Extract);
 	GC_KIND(ZExt);
 	GC_KIND(SExt);
 	GC_KIND(Not);
 
-	GC_KIND(Concat)
-	GC_KIND(Add)
-	GC_KIND(Sub)
-	GC_KIND(Mul)
-	GC_KIND(UDiv)
+	GC_KIND(Concat);
+	GC_KIND(Add);
+	GC_KIND(Sub);
+	GC_KIND(Mul);
+	GC_KIND(UDiv);
 
-	GC_KIND(SDiv)
-	GC_KIND(URem)
-	GC_KIND(SRem)
-	GC_KIND(And)
-	GC_KIND(Or)
-	GC_KIND(Xor)
-	GC_KIND(Shl)
-	GC_KIND(LShr)
-	GC_KIND(AShr)
-	GC_KIND(Eq)
-	GC_KIND(Ne)
-	GC_KIND(Ult)
-	GC_KIND(Ule)
+	GC_KIND(SDiv);
+	GC_KIND(URem);
+	GC_KIND(SRem);
+	GC_KIND(And);
+	GC_KIND(Or);
+	GC_KIND(Xor);
+	GC_KIND(Shl);
+	GC_KIND(LShr);
+	GC_KIND(AShr);
+	GC_KIND(Eq);
+	GC_KIND(Ne);
+	GC_KIND(Ult);
+	GC_KIND(Ule);
 
-	GC_KIND(Ugt)
-	GC_KIND(Uge)
-	GC_KIND(Slt)
-	GC_KIND(Sle)
-	GC_KIND(Sgt)
-	GC_KIND(Sge)
+	GC_KIND(Ugt);
+	GC_KIND(Uge);
+	GC_KIND(Slt);
+	GC_KIND(Sle);
+	GC_KIND(Sgt);
+	GC_KIND(Sge);
 
 	/* note that this is NOT a fixed point--
 	 * some expressions may be keys for larger expressions in that

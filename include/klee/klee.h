@@ -152,6 +152,7 @@ struct kreport_ent { uint64_t strp; uint64_t v; };
    * and writing tests but can also be used to enable prints in replay
    * mode. */
   unsigned klee_is_symbolic(uint64_t n);
+#define klee_is_symbolic_addr(x) klee_is_symbolic((uint64_t)(x))
 
   /* return true if byte at given address may be accessed */
   unsigned klee_is_valid_addr(const void* p);

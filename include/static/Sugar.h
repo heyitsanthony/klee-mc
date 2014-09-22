@@ -20,6 +20,12 @@
 	  for(typeof(_b) _i = _b, _i ## end = _e; _i != _i ## end;  _i = _b)
 
 
+/* one day we'll have C++11 and have std::remove_const */
+template< class T > struct remove_const          { typedef T type; };
+template< class T > struct remove_const<const T> { typedef T type; };
+
+#define unconst_key_T(x)	remove_const<typeof(x.begin()->first)>::type
+
 struct ltstr
 {
     bool operator()(const char* str1, const char* str2) const

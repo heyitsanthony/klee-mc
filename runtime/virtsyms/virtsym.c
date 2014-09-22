@@ -37,13 +37,14 @@ char* virtsym_safe_strcopy(const char* s)
 
 	return ret;
 }
+
 void* virtsym_safe_memcopy(const void* m, unsigned len)
 {
 	void	*ret;
 	int	i;
 
 	/* concretize because we're dum */
-	klee_assume_eq(m, klee_get_value(m));
+	klee_assume_eq((uint64_t)m, klee_get_value((uint64_t)m));
 	klee_assume_eq(len, klee_max_value(len));
 
 	/* XXX: in the future this should use the to-be-written

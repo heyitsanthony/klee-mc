@@ -37,13 +37,11 @@ static void memcmp_enter(void* r)
 	if (!klee_is_valid_addr(clo.p[1])) return;
 
 	/* ignore concretes */
-	if (	!klee_is_symbolic(clo.p[0]) &&
-		!klee_is_symbolic(clo.p[1])) return;
+	if (	!klee_is_symbolic_addr(clo.p[0]) &&
+		!klee_is_symbolic_addr(clo.p[1])) return;
 
 	/* set value to symbolic */
 	if (!klee_make_vsym(&ret, sizeof(ret), "vmemcmp")) return;
-
-	clo.ret = ret;
 
 	/* return {-1,0,1} */
 	klee_assume_sge(ret, -1);
