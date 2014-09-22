@@ -55,7 +55,7 @@ private:
 
 ExprFactory	theExprFactory;
 static bool	UseExprConsPtr = false;
-static bool	UseExprFastConsPtr = false;
+static bool	UseExprFastConsPtr = true;
 ExprBuilder*	Expr::theExprBuilder = NULL;
 ExprAlloc*	Expr::theExprAllocator = NULL;
 ref<Expr>	Expr::errorExpr = NULL;

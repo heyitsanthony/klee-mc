@@ -113,11 +113,11 @@ DECL_BIN_MAP(Sge)
 
 #define DECL_ALLOC_1(x)				\
 ref<Expr> ExprAllocFastUnique::x(const ref<Expr>& src)	\
-{	ref<Expr> e(exmap_##x[src]);	\
-	if (!e.isNull()) return e;	\
-	e = new x##Expr(src);		\
-	e->computeHash();		\
-	return e; }
+{	ref<Expr>	key(src);	\
+	GET_OR_MK(x)(src);		\
+	r->computeHash();		\
+	exmap_##x[key] = r;		\
+	return r; }
 
 DECL_ALLOC_1(NotOptimized)
 DECL_ALLOC_1(Not)
@@ -302,7 +302,11 @@ unsigned ExprAllocFastUnique::garbageCollect(void)
 	 * expressions can be GC'd-- I doubt repeating the operation until
 	 * fixed point is worth it since this is pricey. */
 
+	std::cerr << "[ExprAllocFastUnique] Non-const freed " << ret << '\n';
+
 	/* GC constants */
 	ret += ExprAlloc::garbageCollect();
+
+	std::cerr << "[ExprAllocFastUnique] Total freed " << ret << '\n';
 	return ret;
 }
