@@ -12,6 +12,7 @@ static void memchr_fini(uint64_t _r, void* aux);
 
 HOOK_FUNC(__GI_memchr, memchr_enter);
 HOOK_FUNC(memchr, memchr_enter);
+HOOK_FUNC(__memchr, memchr_enter);
 HOOK_FUNC(__memchr_sse4_1, memchr_enter);
 HOOK_FUNC(__memchr_sse2, memchr_enter);
 HOOK_FUNC(__rawmemchr_sse2, memchr_enter);
@@ -48,7 +49,10 @@ static void memchr_enter(void* r)
 	if (i == clo.len) return;
 
 	/* set value to symbolic */
-	if (!klee_make_vsym(&ret, sizeof(ret), "vmemchr")) return;
+	if (!klee_make_vsym(&ret, sizeof(ret), "vmemchr")) {
+		virtsym_disabled();
+		return;
+	}
 
 	klee_assume_uge(ret, i); // ret >= i
 	klee_assume_ule(ret, clo.len); // ret <= len

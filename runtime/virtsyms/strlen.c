@@ -38,7 +38,10 @@ static void strlen_enter(void* r)
 	// if (!klee_is_valid_addr(&s[i]))
 
 	/* set value to symbolic */
-	if (!klee_make_vsym(&ret, sizeof(ret), "vstrlen")) return;
+	if (!klee_make_vsym(&ret, sizeof(ret), "vstrlen")) {
+		virtsym_disabled();
+		return;
+	}
 
 	klee_assume_ule(ret, i);
 	GET_SYSRET(r) = ret;

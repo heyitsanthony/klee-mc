@@ -41,7 +41,10 @@ static void memcmp_enter(void* r)
 		!klee_is_symbolic_addr(clo.p[1])) return;
 
 	/* set value to symbolic */
-	if (!klee_make_vsym(&ret, sizeof(ret), "vmemcmp")) return;
+	if (!klee_make_vsym(&ret, sizeof(ret), "vmemcmp")) {
+		virtsym_disabled();
+		return;
+	}
 
 	/* return {-1,0,1} */
 	klee_assume_sge(ret, -1);

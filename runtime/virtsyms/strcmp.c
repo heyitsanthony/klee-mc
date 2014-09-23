@@ -59,7 +59,10 @@ static void strcmp_enter(void* r)
 
 
 	/* set value to symbolic */
-	if (!klee_make_vsym(&ret, sizeof(ret), "vstrcmp")) return;
+	if (!klee_make_vsym(&ret, sizeof(ret), "vstrcmp")) {
+		virtsym_disabled();
+		return;
+	}
 
 	GET_SYSRET(r) = ret;
 

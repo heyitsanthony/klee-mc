@@ -26,4 +26,9 @@ char* virtsym_safe_strcopy(const char* s);
 void* virtsym_safe_memcopy(const void* m, unsigned len);
 void virtsym_prune(pruneid_t);
 
+/* in the future, this might do something smart like install a post hook
+ * so that nothing forks so there's no state pollution */
+#define virtsym_disabled() do { } while (0)
+// void virtsym_disabled(void);
+
 #endif
