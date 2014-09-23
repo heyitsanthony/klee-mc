@@ -59,6 +59,8 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS);
 #undef DECL_BIN_REF
 private:
 	ref<Expr> toFastUnique(ref<Expr>& e);
+	static unsigned long expr_miss_c;
+	static unsigned long expr_hit_c;
 };
 }
 

@@ -61,11 +61,15 @@ void initSmallValTab(void)
 
 static bool tab_ok = false;
 unsigned long ExprAlloc::constantCount = 0;
+unsigned long ExprAlloc::const_miss_c = 0;
+unsigned long ExprAlloc::const_hit_c = 0;
 
 ref<Expr> ExprAlloc::Constant(const APInt &v)
 {
 	ConstantExprTab::iterator	it;
 	uint64_t			v_64;
+
+	const_hit_c++;
 
 	/* wired constants-- [-255,255] */
 	/* XXX: get hit rates; include powers of 2? */
@@ -91,6 +95,9 @@ ref<Expr> ExprAlloc::Constant(const APInt &v)
 	it = const_hashtab.find(v);
 	if (it != const_hashtab.end())
 		return it->second;
+
+	const_hit_c--;
+	const_miss_c++;
 
 	ref<ConstantExpr> r(new ConstantExpr(v));
 	r->computeHash();

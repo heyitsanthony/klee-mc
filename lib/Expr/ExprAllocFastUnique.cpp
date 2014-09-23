@@ -12,7 +12,8 @@ struct hashexpr
 
 #define GET_OR_MK(x)		\
 typeof(exmap_##x.begin()) it(exmap_##x.find(key)); \
-if (it != exmap_##x.end()) return it->second;	\
+if (it != exmap_##x.end()) { expr_hit_c++; return it->second; }	\
+expr_miss_c++;	\
 ref<Expr> r = new x##Expr
 
 /* OP, expr, expr */
@@ -20,6 +21,9 @@ ref<Expr> r = new x##Expr
 /* OP, expr, w, off */
 /* OP, expr */
 /* reads: expr, UL */
+
+unsigned long ExprAllocFastUnique::expr_miss_c = 0;
+unsigned long ExprAllocFastUnique::expr_hit_c = 0;
 
 struct hashexpr_read
 { unsigned operator()(
@@ -307,6 +311,14 @@ unsigned ExprAllocFastUnique::garbageCollect(void)
 	/* GC constants */
 	ret += ExprAlloc::garbageCollect();
 
-	std::cerr << "[ExprAllocFastUnique] Total freed " << ret << '\n';
+	std::cerr << "[ExprAllocFastUnique] Total freed " << ret << '\n';\
+
+	std::cerr << "[ExprAllocFastUnique] Expr Hits " << expr_hit_c
+		<< " ; Misses " << expr_miss_c  << '\n';
+
+	std::cerr << "[ExprAllocFastUnique] Const Hits " << const_hit_c
+		<< " ; Misses " << const_miss_c  << '\n';
+
+
 	return ret;
 }

@@ -21,7 +21,9 @@ public:
 	virtual unsigned garbageCollect(void);
 
 	virtual void printName(std::ostream& os) const;
-private:
+protected:
+	static unsigned long const_hit_c;
+	static unsigned long const_miss_c;
 	static unsigned long constantCount;
 };
 }
