@@ -1309,7 +1309,10 @@ void* sc_enter(void* regfile, void* jmpptr)
 	case SYS_unlinkat:
 	case SYS_sethostname:
 	case SYS_setdomainname:
+	case SYS_swapoff:
+	case SYS_swapon:
 	case SYS_ftruncate:
+	case SYS_truncate:
 	case SYS_chroot:
 	case SYS_fchmodat:
 	case SYS_fchownat:

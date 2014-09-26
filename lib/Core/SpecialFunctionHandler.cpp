@@ -673,7 +673,7 @@ SFH_DEF_ALL(IsValidAddr, "klee_is_valid_addr", true)
 	assert (addr->getKind() == Expr::Constant);
 	ok = state.addressSpace.resolveOne(
 		cast<ConstantExpr>(addr)->getZExtValue(), op);
-	ret = ConstantExpr::create((ok) ? 1 : 0, 32);
+	ret = MK_CONST((ok) ? 1 : 0, 32);
 
 	state.bindLocal(target, ret);
 }

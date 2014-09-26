@@ -1,5 +1,5 @@
 constchk
 vconstchk
 rangechk
-stack
+stack2s
 objwide

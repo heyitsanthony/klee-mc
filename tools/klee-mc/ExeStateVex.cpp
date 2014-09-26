@@ -120,7 +120,7 @@ unsigned ExeStateVex::getStackDepth(void) const
 	return base_stack - cur_stack;
 
 symstack:
-	std::cerr << "[ExeStateVex] Symbolic stackptr?\n";
+	//std::cerr << "[ExeStateVex] Symbolic stackptr?\n";
 	//std::cerr <<  "Expr=" << reg_os->read8(off+i) << "\n";
 	return INVALID_STACK;
 }
