@@ -48,6 +48,21 @@ static void chk_touch_prior_ptr(void* addr, unsigned w, uint64_t write_v)
 
 	cur_stk_ptr = GET_STACK(kmc_regs_get());
 
+	if (klee_is_symbolic((uint64_t)addr)) {
+		int i;
+		pred = 0;
+		for (i = 0; i < depth; i++) {
+			v = (uint64_t)ret_addr_locs[depth];
+			pred = klee_mk_or(
+				pred,
+				klee_mk_and(
+					klee_mk_ult((uint64_t)addr-w, v),
+					klee_mk_uge((uint64_t)addr+w, v)));
+		}
+
+		if (!__klee_feasible(pred)) return;
+	}
+
 	while (depth >= 0) {
 		v = (uint64_t)ret_addr_locs[depth];
 
