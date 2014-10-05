@@ -5,12 +5,13 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/TypeBuilder.h>
+#include <llvm/IRReader/IRReader.h>
 
 #include <llvm/Bitcode/ReaderWriter.h>
 #include <llvm/Support/MemoryBuffer.h>
-#include <llvm/Support/system_error.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/Signals.h>
+#include <llvm/Support/SourceMgr.h>
 
 #include "static/Sugar.h"
 #include "libc.h"
@@ -503,20 +504,18 @@ static void loadPOSIX(Module* &mainModule, ModuleOptions& Opts)
 
 void loadInputBitcode(const std::string& ifile, Module* &mainModule)
 {
-	std::string ErrorMsg;
-	OwningPtr<MemoryBuffer> Buffer;
-	MemoryBuffer::getFileOrSTDIN(ifile.c_str(), Buffer);
+	SMDiagnostic	diag;
+	auto Buffer(MemoryBuffer::getFileOrSTDIN(ifile.c_str()));
 
 	mainModule = NULL;
 	if (!Buffer) goto done;
 
-	mainModule = ParseBitcodeFile(Buffer.get(), GCTX, &ErrorMsg);
+	mainModule = llvm::ParseIR(Buffer.get().get(), diag, GCTX);
 	if (mainModule == NULL) {
-		Buffer.reset();
 		goto done;
 	}
 
-	if (mainModule->MaterializeAllPermanently(&ErrorMsg)) {
+	if (mainModule->materializeAllPermanently()) {
 		delete mainModule;
 		mainModule = NULL;
 		goto done;
@@ -526,11 +525,12 @@ void loadInputBitcode(const std::string& ifile, Module* &mainModule)
 	runRemoveSentinelsPass(*mainModule);
 
 done:
-	if (mainModule == NULL)
+	if (mainModule == NULL) {
+		std::string	s(diag.getMessage());
 		klee_error(
 			"error loading program '%s': %s",
-			ifile.c_str(),
-			ErrorMsg.c_str());
+			ifile.c_str(), s.c_str());
+	}
 
 	assert(mainModule && "unable to materialize");
 }

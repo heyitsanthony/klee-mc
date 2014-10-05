@@ -38,7 +38,8 @@ static void memchr_enter(void* r)
 	clo.len = GET_ARG2(r);
 
 	/* 1. check pointers, common to crash in memchr */
-	if (!klee_is_valid_addr(clo.p)) return;
+	if (!klee_is_valid_addr(klee_get_value(s)))
+		return;
 
 	/* ignore concrete prefixes */
 	for (i = 0; i < clo.len; i++) {

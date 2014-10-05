@@ -21,10 +21,9 @@
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Intrinsics.h>
-#include <llvm/InstVisitor.h>
-#include <llvm/Support/InstIterator.h>
-#include <llvm/Support/GetElementPtrTypeIterator.h>
 #include <llvm/IR/TypeBuilder.h>
+#include <llvm/IR/InstIterator.h>
+#include "static/Sugar.h"
 
 using namespace llvm;
 
@@ -44,8 +43,7 @@ bool BasicDataStructures::runOnModule(Module &M) {
 
   DSNode * GVNodeInternal = new DSNode(VoidPtrTy, GlobalsGraph);
   DSNode * GVNodeExternal = new DSNode(VoidPtrTy, GlobalsGraph);
-  for (Module::global_iterator I = M.global_begin(), E = M.global_end();
-       I != E; ++I) {
+  foreach (I, M.global_begin(),M.global_end()) {
     if (I->isDeclaration()) {
       GlobalsGraph->getNodeForValue(&*I).mergeWith(GVNodeExternal);
     } else {
@@ -78,7 +76,7 @@ bool BasicDataStructures::runOnModule(Module &M) {
         }
       }
 
-      for (inst_iterator I = inst_begin(F), E = inst_end(F); I != E; ++I) {
+      foreach (I, inst_begin(F), inst_end(F)) {
         G->getNodeForValue(&*I).mergeWith(Node);
       }
 

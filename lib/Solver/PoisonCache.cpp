@@ -43,7 +43,7 @@ void PoisonCache::sigpoison_save(void)
 	snprintf(
 		path,
 		128,
-		"%s/"POISON_DEFAULT_PATH".%s",
+		"%s/" POISON_DEFAULT_PATH ".%s",
 		(PCacheDir.size()) ? PCacheDir.c_str() : ".",
 		g_pc->phash->getName());
 	bw = write(STDERR_FILENO, "saving ", 7);
@@ -122,7 +122,7 @@ PoisonCache::PoisonCache(Solver* s, QueryHash* in_phash)
 	snprintf(
 		path,
 		128,
-		"%s/"POISON_DEFAULT_PATH".%s",
+		"%s/" POISON_DEFAULT_PATH ".%s",
 		(PCacheDir.size()) ? PCacheDir.c_str() : ".",
 		g_pc->phash->getName());
 

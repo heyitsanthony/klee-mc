@@ -5,7 +5,7 @@
 #include "klee/Internal/Module/KInstruction.h"
 #include "klee/Internal/Module/InstructionInfoTable.h"
 
-#include <llvm/Support/CallSite.h>
+#include <llvm/IR/CallSite.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Module.h>
 

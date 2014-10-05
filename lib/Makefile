@@ -9,6 +9,6 @@
 
 LEVEL=..
 
-PARALLEL_DIRS=DSA  Basic Support Expr Solver Module Core Searcher Skins
+PARALLEL_DIRS=Basic Support Expr Solver Module Core Searcher Skins
 
 include $(LEVEL)/Makefile.common

@@ -5,7 +5,6 @@
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/ManagedStatic.h>
 #include <llvm/Support/Signals.h>
-#include <llvm/Support/system_error.h>
 
 #include "../../lib/Expr/SMTParser.h"
 #include "../../lib/Expr/ExprRule.h"

@@ -57,7 +57,9 @@ static int read_string(std::istream& is, char **value_out)
 
 static int write_uint32(std::ostream& os, unsigned value)
 {
-	unsigned char data[4] = { value>>24, value>>16, value>> 8, value>> 0};
+	uint8_t data[4] = {
+		(uint8_t)(value>>24), (uint8_t)(value>>16),
+		(uint8_t)(value>> 8), (uint8_t)(value>> 0)};
 	os.write((char*)data, 4);
 	return !os.bad();
 }

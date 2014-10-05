@@ -11,7 +11,7 @@ struct hashexpr
 
 
 #define GET_OR_MK(x)		\
-typeof(exmap_##x.begin()) it(exmap_##x.find(key)); \
+decltype(exmap_##x.begin()) it(exmap_##x.find(key)); \
 if (it != exmap_##x.end()) { expr_hit_c++; return it->second; }	\
 expr_miss_c++;	\
 ref<Expr> r = new x##Expr
@@ -221,7 +221,7 @@ ref<Expr> ExprAllocFastUnique::SExt(const ref<Expr> &e, Expr::Width w)
 
 ExprAllocFastUnique::ExprAllocFastUnique() { }
 
-//	std::vector<remove_const<typeof(exmap_##x.begin()->first)> >
+//	std::vector<remove_const<decltype(exmap_##x.begin()->first)> >
 //	rmv_keys_##x; 
 
 #define GC_KIND(x)	\

@@ -1,6 +1,6 @@
 #include <llvm/IR/Function.h>
 #include <llvm/PassManager.h>
-#include <llvm/Linker.h>
+#include <llvm/Linker/Linker.h>
 #include "KModuleJ.h"
 #include "JnJavaName.h"
 #include "JnIntrinsicPass.h"
@@ -212,7 +212,7 @@ void KModuleJ::dedupMod(Module *m) const
 			m_gv->isExternallyInitialized())
 			continue;
 
-		std::vector<User*>	u(m_gv->use_begin(), m_gv->use_end());
+		std::vector<Use*>	u(m_gv->use_begin(), m_gv->use_end());
 		foreach (it2, u.begin(), u.end()) {
 			(*it2)->replaceUsesOfWith(m_gv, gv);
 		}

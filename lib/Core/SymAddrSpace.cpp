@@ -362,7 +362,7 @@ bool SymAddrSpace::resolve(
 	--end;
 
 	// Explicit stack to avoid recursion
-	std::stack < std::pair<typeof (oi), typeof (oi)> > tryRanges;
+	std::stack < std::pair<decltype (oi), decltype (oi)> > tryRanges;
 
 	// Search [begin, first object < example] if range is not empty
 	if (lt != es.addressSpace.objects.begin())

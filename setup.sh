@@ -1,7 +1,7 @@
 #!/bin/bash
 
 VEXLLVMDIR=${VEXLLVMDIR:-"/home/chz/src/vex/"}
-LLVMDIR=${LLVMDIR:-"/home/chz/src/llvm/llvm-3.4/"}
+LLVMDIR=${LLVMDIR:-"/home/chz/src/llvm/llvm-3.5.0.src/"}
 STPDIR=${STPDIR:-"/home/chz/src/stp-fast/stp/"}
 #BOOLECTORDIR=${BOOLECTORDIR:-"/home/chz/src/boolector/"}
 #Z3DIR=${Z3DIR:-"/home/chz/src/z3/"}
@@ -35,7 +35,7 @@ fi
 repohash=`git log -1 | grep commit  | cut -f2 -d' '`
 binhash=`klee-mc 2>&1 | grep commit | cut -f2 -d':' | xargs echo`
 if [ "$repohash" != "$binhash" ]; then
-	rm tools/klee-mc/Release+Asserts/*.o
+	rm tools/klee-mc/{Release,Release+Asserts}/*.o
 fi
 
 

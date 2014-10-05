@@ -25,8 +25,6 @@
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/ManagedStatic.h>
 
-//#include <llvm/Support/system_error.h>
-
 // FIXME: Ugh, this is gross. But otherwise our config.h conflicts with LLVMs.
 #undef PACKAGE_BUGREPORT
 #undef PACKAGE_NAME

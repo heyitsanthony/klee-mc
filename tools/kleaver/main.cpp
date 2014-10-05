@@ -15,14 +15,13 @@
 #include "klee/util/Assignment.h"
 #include <unistd.h>
 
-#include <llvm/ADT/OwningPtr.h>
 #include <llvm/ADT/StringExtras.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/ManagedStatic.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/Signals.h>
-#include <llvm/Support/system_error.h>
+#include <llvm/IRReader/IRReader.h>
 
 using namespace llvm;
 using namespace klee;
@@ -326,11 +325,9 @@ int main(int argc, char **argv)
 	llvm::sys::PrintStackTraceOnErrorSignal();
 	llvm::cl::ParseCommandLineOptions(argc, argv);
 
-	std::string ErrorStr;
-	OwningPtr<MemoryBuffer> MB;
-	MemoryBuffer::getFileOrSTDIN(InputFile.c_str(), MB);
-	if (!MB) {
-		std::cerr << argv[0] << ": error: " << ErrorStr << "\n";
+	auto mb(MemoryBuffer::getFileOrSTDIN(InputFile.c_str()));
+	if (!mb) {
+		std::cerr << argv[0] << ": error\n";
 		return 1;
 	}
 
@@ -338,18 +335,18 @@ int main(int argc, char **argv)
 
 	switch (ToolAction) {
 	case PrintTokens:
-		PrintInputTokens(MB.get());
+		PrintInputTokens(mb.get().get());
 		break;
 	case PrintAST:
 		success = PrintInputAST(
 			InputFile=="-" ? "<stdin>" : InputFile.c_str(),
-			MB.get(),
+			mb.get().get(),
 			Builder);
 		break;
 	case Evaluate:
 		success = EvaluateInputAST(
 			InputFile=="-" ? "<stdin>" : InputFile.c_str(),
-			MB.get(),
+			mb.get().get(),
 			Builder);
 		break;
 	default:
@@ -357,7 +354,7 @@ int main(int argc, char **argv)
 	}
 
 	delete Builder;
-	MB.reset();
+	mb->reset();
 
 	llvm::llvm_shutdown();
 	return success ? 0 : 1;

@@ -12,15 +12,15 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
-#include <llvm/Linker.h>
+//#include <llvm/Linker.h>
 #include <llvm/IR/Module.h>
-#include <llvm/Assembly/AssemblyAnnotationWriter.h>
-#include <llvm/Support/CFG.h>
-#include <llvm/Support/InstIterator.h>
+#include <llvm/IR/AssemblyAnnotationWriter.h>
+#include <llvm/IR/CFG.h>
+#include <llvm/IR/InstIterator.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/Analysis/ValueTracking.h>
-#include <llvm/DebugInfo.h>
+#include <llvm/IR/DebugInfo.h>
 
 #include "static/Sugar.h"
 

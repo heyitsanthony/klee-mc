@@ -16,7 +16,7 @@
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/ExecutionEngine/JIT.h>
 #include <llvm/ExecutionEngine/GenericValue.h>
-#include <llvm/Support/CallSite.h>
+#include <llvm/IR/CallSite.h>
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/TargetSelect.h>

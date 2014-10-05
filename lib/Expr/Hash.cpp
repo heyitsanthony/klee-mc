@@ -36,7 +36,7 @@ Expr::Hash BindExpr::computeHash(void)
 {
 	uint64_t dat[3] = {
 		let_expr->skeleton(),
-		getKind(),
+		(uint64_t)getKind(),
 		let_expr->hash() };
 	skeletonHash = hashImpl(&dat, 16, 0);
 	hashValue = hashImpl(&dat[1], 16, 0);
@@ -47,7 +47,7 @@ Expr::Hash CastExpr::computeHash(void)
 {
 	uint64_t dat[4] = {
 		src->skeleton(),
-		getWidth(), getKind(),
+		getWidth(), (uint64_t)getKind(),
 		src->hash()};
 	skeletonHash = hashImpl(&dat, 3*8, 0);
 	hashValue = hashImpl(&dat[1], 3*8, 0);
@@ -111,7 +111,7 @@ unsigned MallocKey::hash(void) const
 			alloc_v = alloc_v*33+s_f[i];
 	}
 
-	uint32_t dat[2] = {alloc_v, iteration};
+	uint32_t dat[2] = {(uint32_t)alloc_v, iteration};
 	hash_v = Expr::hashImpl(&dat, sizeof(dat), 0);
 	return hash_v;
 }

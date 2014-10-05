@@ -6,7 +6,7 @@
 
 using namespace klee;
 
-static const uint8_t samp_seq_dat[] = {0xfe, 0, 0x7f, 1, 0x27, 0x2, ~0x27};
+static const uint8_t samp_seq_dat[] = {0xfe, 0, 0x7f, 1, 0x27, 0x2, (uint8_t)~0x27};
 static const uint8_t samp_seq_onoff_dat[] = {0xff, 0x0};
 
 static std::vector<uint8_t>	sample_seq;

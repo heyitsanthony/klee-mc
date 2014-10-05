@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DerivedTypes.h>
-#include <llvm/Support/CallSite.h>
+#include <llvm/IR/CallSite.h>
 #include <llvm/IR/DataLayout.h>
 #include <algorithm>
 #include <string.h>

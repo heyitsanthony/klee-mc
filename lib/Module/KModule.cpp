@@ -6,7 +6,7 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-#include <llvm/Linker.h>
+#include <llvm/Linker/Linker.h>
 #include <llvm/IR/LLVMContext.h>
 
 #include <llvm/Bitcode/ReaderWriter.h>

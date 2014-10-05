@@ -21,7 +21,6 @@
 #include <llvm/IR/Instructions.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Bitcode/ReaderWriter.h>
-#include <llvm/Support/system_error.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/ManagedStatic.h>
 

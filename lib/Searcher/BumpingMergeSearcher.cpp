@@ -1,5 +1,5 @@
 #include <llvm/IR/Instructions.h>
-#include <llvm/Support/CallSite.h>
+#include <llvm/IR/CallSite.h>
 #include "klee/ExecutionState.h"
 #include "klee/Internal/Module/KModule.h"
 

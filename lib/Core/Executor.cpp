@@ -6,7 +6,7 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-#include <llvm/Support/CallSite.h>
+#include <llvm/IR/CallSite.h>
 #include <llvm/Analysis/MemoryBuiltins.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/Support/CommandLine.h>
