@@ -15,8 +15,10 @@ HOOK_FUNC(memchr, memchr_enter);
 HOOK_FUNC(__memchr, memchr_enter);
 HOOK_FUNC(__memchr_sse4_1, memchr_enter);
 HOOK_FUNC(__memchr_sse2, memchr_enter);
-HOOK_FUNC(__rawmemchr_sse2, memchr_enter);
-HOOK_FUNC(__rawmemchr_sse42, memchr_enter);
+
+/* XXX: rawmemchr does not have a 'count'. how to fix? */
+//HOOK_FUNC(__rawmemchr_sse2, memchr_enter);
+//HOOK_FUNC(__rawmemchr_sse42, memchr_enter);
 
 struct memchr_clo
 {
