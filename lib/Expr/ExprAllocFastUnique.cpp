@@ -243,11 +243,6 @@ unsigned ExprAllocFastUnique::garbageCollect(void)
 {
 	unsigned ret = 0;
 
-	foreach (it, exmap_Read.begin(), exmap_Read.end()) {
-		assert ((it->first).first.canary == 0xc001d00d);
-	}
-
-
 	/* first, GC all non-const kinds */
 
 	GC_KIND(NotOptimized);
@@ -328,11 +323,6 @@ unsigned ExprAllocFastUnique::garbageCollect(void)
 
 	std::cerr << "[ExprAllocFastUnique] Const Hits " << const_hit_c
 		<< " ; Misses " << const_miss_c  << '\n';
-
-	foreach (it, exmap_Read.begin(), exmap_Read.end()) {
-		assert ((it->first).first.canary == 0xc001d00d);
-	}
-
 
 	return ret;
 }
