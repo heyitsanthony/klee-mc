@@ -93,6 +93,11 @@ class PipeYices : public PipeFormat
 DECL_PUB_PIPE_FMT(Yices)
 };
 
+class PipeYices2 : public PipeFormat
+{
+DECL_PUB_PIPE_FMT(Yices2)
+};
+
 }
 
 #endif

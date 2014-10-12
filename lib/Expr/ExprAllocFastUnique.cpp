@@ -30,8 +30,8 @@ struct hashexpr_read
 	const std::pair<UpdateList&, ref<Expr> >& v) const
 	{ return v.first.hash() ^ v.second->hash(); } };
 typedef std::tr1::unordered_map<
-	std::pair<UpdateList&, ref<Expr> >,
-	ref<Expr>,
+	std::pair<UpdateList& /* array */, ref<Expr> /* index */>,
+	ref<Expr> /* read expression */,
 	hashexpr_read>	exmap_read_t;
 
 struct hashexpr_bin
@@ -243,6 +243,11 @@ unsigned ExprAllocFastUnique::garbageCollect(void)
 {
 	unsigned ret = 0;
 
+	foreach (it, exmap_Read.begin(), exmap_Read.end()) {
+		assert ((it->first).first.canary == 0xc001d00d);
+	}
+
+
 	/* first, GC all non-const kinds */
 
 	GC_KIND(NotOptimized);
@@ -250,6 +255,9 @@ unsigned ExprAllocFastUnique::garbageCollect(void)
 	/* Read needs a special one since it's UpdateList& ruins lives */
 	{
 	std::vector<std::pair<UpdateList*, ref<Expr> > > rmv_keys_Read;
+	/* keep the read expressions around until all the removals are done;
+	 * otherwise map tries to reference dangling UpdateLists */
+	std::vector<ref<Expr> > rmv_read_exprs;
 	foreach (it, exmap_Read.begin(), exmap_Read.end()) {
 		ref<Expr>	e(it->second);
 		if (e.getRefCount() > 2) continue;
@@ -257,6 +265,7 @@ unsigned ExprAllocFastUnique::garbageCollect(void)
 		k.first = &it->first.first;
 		k.second = it->first.second;
 		rmv_keys_Read.push_back(k);
+		rmv_read_exprs.push_back(it->second);
 	}
 	foreach (it, rmv_keys_Read.begin(), rmv_keys_Read.end()) {
 		std::pair<UpdateList&, ref<Expr> > k(*(it)->first, it->second);
@@ -264,6 +273,7 @@ unsigned ExprAllocFastUnique::garbageCollect(void)
 	}
 	ret += rmv_keys_Read.size();
 	rmv_keys_Read.clear();
+	rmv_read_exprs.clear();
 	}
 
 
@@ -318,6 +328,10 @@ unsigned ExprAllocFastUnique::garbageCollect(void)
 
 	std::cerr << "[ExprAllocFastUnique] Const Hits " << const_hit_c
 		<< " ; Misses " << const_miss_c  << '\n';
+
+	foreach (it, exmap_Read.begin(), exmap_Read.end()) {
+		assert ((it->first).first.canary == 0xc001d00d);
+	}
 
 
 	return ret;

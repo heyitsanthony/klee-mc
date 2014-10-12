@@ -446,6 +446,8 @@ void ExecutorVex::bindMappingPage(
 	mmap_os_c = state->allocateAt(addr_base, PAGE_SIZE, f->begin()->begin());
 	mmap_mo = const_cast<MemoryObject*>(
 		state->addressSpace.resolveOneMO(addr_base));
+	assert (mmap_os_c->getSize() == PAGE_SIZE);
+	assert (mmap_mo->size == PAGE_SIZE);
 
 	heap_min = ~0UL;
 	heap_max = 0;
