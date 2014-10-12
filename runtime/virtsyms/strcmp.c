@@ -171,6 +171,7 @@ static void strcmp_fini2(uint64_t _r, void* aux)
 		klee_assume_slt(r, 0);
 	}
 
+	/* keep going while equal and not end of string */
 	while (klee_feasible_eq(*s[0], *s[1]) && !klee_valid_eq(*s[0], 0)) {
 		if (klee_feasible_ult(*s[0], *s[1]))
 			break;

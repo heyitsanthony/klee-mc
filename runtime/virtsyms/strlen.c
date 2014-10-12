@@ -61,7 +61,12 @@ static void strlen_fini(uint64_t _r, void* aux)
 	unsigned	i = 0;
 
 	while(klee_feasible_ne(s[i], 0)) {
-		if (klee_feasible_eq(_r, i) && klee_feasible_eq(s[i], 0)) {
+		/* note it's necessary to test feasibility of *both*
+		 * predicates at once because feasible(a) /\ feasible(b)
+		 * does not imply feasible(a /\ b)! */
+		if (__klee_feasible(klee_mk_and(
+			klee_mk_eq(_r, i), klee_mk_eq(s[i], 0))))
+		{
 			klee_assume_eq(_r, i);
 			klee_assume_eq(s[i], 0);
 			break;

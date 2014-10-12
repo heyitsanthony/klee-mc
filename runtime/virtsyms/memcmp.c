@@ -103,6 +103,7 @@ static void memcmp_fini(uint64_t _r, void* aux)
 			klee_assume_ult(
 				((const uint8_t*)clo->p[0])[i],
 				((const uint8_t*)clo->p[1])[i]);
+			break;
 		}
 
 		klee_assume_eq(
