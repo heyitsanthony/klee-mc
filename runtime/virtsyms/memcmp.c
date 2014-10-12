@@ -92,12 +92,7 @@ static void memcmp_fini(uint64_t _r, void* aux)
 
 	/* generate buffer all equal up to some byte p[0][i] < p[1][i] */
 	for (i = 0; i < clo->len; i++) {
-		if (klee_valid_ugt(
-			((const uint8_t*)clo->p[0])[i],
-			((const uint8_t*)clo->p[1])[i]))
-			virtsym_prune(VS_PRNID_MEMCMP);
-
-		if (klee_valid_ult(
+		if (klee_feasible_ult(
 			((const uint8_t*)clo->p[0])[i],
 			((const uint8_t*)clo->p[1])[i])) {
 			klee_assume_ult(
@@ -105,6 +100,11 @@ static void memcmp_fini(uint64_t _r, void* aux)
 				((const uint8_t*)clo->p[1])[i]);
 			break;
 		}
+
+		if (klee_valid_ugt(
+			((const uint8_t*)clo->p[0])[i],
+			((const uint8_t*)clo->p[1])[i]))
+			virtsym_prune(VS_PRNID_MEMCMP);
 
 		klee_assume_eq(
 			((const uint8_t*)clo->p[0])[i],
