@@ -176,6 +176,7 @@ namespace {
   cl::opt<bool> UseCVC3("use-cvc3", cl::desc("Use CVC3 solver (broken)"));
   cl::opt<bool> UseCVC4("use-cvc4", cl::desc("Use CVC4 solver"));
   cl::opt<bool> UseYices("use-yices", cl::desc("Use Yices solver"));
+  cl::opt<bool> UseYices2("use-yices2", cl::desc("Use Yices2 solver"));
 
   cl::opt<bool>
   UsePipeSolver("pipe-solver",
@@ -533,6 +534,7 @@ TimedSolver* TimedSolver::create(void)
 {
 	if (UsePipeSolver) {
 		if (UseYices) return new PipeSolver(new PipeYices());
+		if (UseYices2) return new PipeSolver(new PipeYices2());
 		if (UseCVC3) return new PipeSolver(new PipeCVC3());
 		if (UseCVC4) return new PipeSolver(new PipeCVC4());
 		if (UseB15) return new PipeSolver(new PipeBoolector15());

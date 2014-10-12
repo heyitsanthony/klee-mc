@@ -43,6 +43,12 @@ const char* PipeYices::exec_cmd = "yices";
 const char* const PipeYices::sat_args[] = {"yices",  NULL};
 const char* const PipeYices::mod_args[] = {"yices", "-f", NULL};
 
+
+const char* PipeYices2::exec_cmd = "yices_smt";
+const char* const PipeYices2::sat_args[] = {"yices_smt",  NULL};
+const char* const PipeYices2::mod_args[] = {"yices_smt", "--show-model", NULL};
+
+
 void PipeFormat::readArray(
 	const Array* a,
 	std::vector<unsigned char>& ret) const
@@ -409,3 +415,71 @@ bool PipeZ3::readArrayValues(std::istream& is, const std::string& arrname)
 
 	return true;
 }
+
+
+bool PipeYices2::parseModel(std::istream& is)
+{
+	char		line[512];
+	bool		got_sat;
+
+	arrays.clear();
+	defaults.clear();
+
+	got_sat = parseSAT(is);
+	if (!got_sat) {
+		return false;
+	}
+
+	/* 
+	 * FORMAT:
+	 * sat
+	 *
+	 * MODEL
+	 * (function readbuf4
+	 *  (type (-> (bitvector 32) (bitvector 8)))
+	 *  (= (readbuf4 0b00000000000000000000000000000111) 0b10000000)
+	 *  (default 0b00000000))
+	 *  ----
+	 */
+	if (!(is >> line)) goto oops;
+	if (strcmp(line, "MODEL")) goto oops;
+	if (!is.getline(line, 512)) goto oops;
+
+	while (1) {
+		char arrname[128];
+		if (!is.getline(line, 512)) goto oops;
+
+		if (sscanf(line, "(function %s", arrname) != 1) {
+			if (strcmp("----", line))
+				goto oops;
+			break;
+		}
+		if (!is.getline(line, 512)) goto oops;
+		if (strcmp(" (type (-> (bitvector 32) (bitvector 8)))", line))
+			goto oops;
+		while (1) {
+			char arrname2[128], off_bitstr[64], val_bitstr[64];
+			if (!is.getline(line, 512))
+				goto oops;
+			if (sscanf(line, " (= (%s 0b%[01]) 0b%[01])",
+				arrname2, off_bitstr, val_bitstr) == 3)
+			{
+				uint32_t off = bitstr2val(off_bitstr);
+				uint8_t val = bitstr2val(val_bitstr);
+				addArrayByte(arrname, off, val);
+				continue;
+			}
+			if (!sscanf(line, " (default 0b%[01]))", val_bitstr))
+				goto oops;
+
+			defaults[arrname] = bitstr2val(val_bitstr);
+			break;
+		}
+	}
+
+	return true;
+oops:
+	fprintf(stderr, "BADD LINE %s\n", line);
+	return false;
+}
+
