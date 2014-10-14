@@ -18,6 +18,8 @@ BCCompile.CXX = $(LLVMCXX) $(CPP.Flags) $(CXX.Flags) $(CXXFLAGS) $(CPPFLAGS) \
 
 ObjectsBC := $(BaseNameSources:%=$(ObjDir)/%.bc)
 
+OPTFLAGS += -std-compile-opts
+
 ############## BC BUILD RULES
 ##################################3
 ifndef DISABLE_AUTO_DEPENDENCIES
@@ -107,11 +109,11 @@ endif
 ifdef DEBUG_RUNTIME
 $(ObjectsBC): $(ObjDir)/%.bc: $(ObjDir)/%.ll $(LOPT)
 	$(Echo) "Compiling $*.ll to $*.bc for $(BuildMode) build (bytecode)"
-	$(Verb) $(LOPT) $< -std-compile-opts -o $@
+	$(Verb) $(LOPT) $< $(OPTFLAGS) -o $@
 else
 $(ObjectsBC): $(ObjDir)/%.bc: $(ObjDir)/%.ll $(LOPT)
 	$(Echo) "Compiling $*.ll to $*.bc for $(BuildMode) build (bytecode)"
-	$(Verb) $(LOPT) $< -std-compile-opts -strip-debug -o $@
+	$(Verb) $(LOPT) $< $(OPTFLAGS) -strip-debug -o $@
 endif
 ###########################################################
 ########################3###########3
