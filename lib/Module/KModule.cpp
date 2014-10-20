@@ -180,7 +180,7 @@ Function *getStubFunctionForCtorList(
 	for (unsigned i=0; i<arr->getNumOperands(); i++) {
 		ConstantStruct *cs = cast<ConstantStruct>(arr->getOperand(i));
 
-		assert(	cs->getNumOperands()==2 &&
+		assert(	cs->getNumOperands() >= 2 &&
 			"unexpected elem in ctor init list");
 
 		Constant *fp = cs->getOperand(1);
