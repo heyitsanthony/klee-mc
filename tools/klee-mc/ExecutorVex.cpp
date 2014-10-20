@@ -474,6 +474,7 @@ void ExecutorVex::bindMappingPage(
 		return;
 #endif
 
+	mmap_os = nullptr;
 	for (i = 0; i < PAGE_SIZE; i++) {
 		/* can keep zero page? */
 		if (!data[i]) continue;
@@ -493,7 +494,7 @@ void ExecutorVex::bindMappingPage(
 	}
 
 	/* mark read-only pages as read-only */
-	if ((m.getCurProt() & PROT_WRITE) == 0)
+	if (mmap_os && (m.getCurProt() & PROT_WRITE) == 0)
 		mmap_os->setReadOnly(true);
 
 	if (heap_min != ~0UL && heap_max != 0) {
