@@ -41,23 +41,18 @@ static void chk_touch_prior_ptr(void* addr, unsigned w, uint64_t write_v)
 	uint64_t pred, v, cur_stk_ptr;
 	int depth = klee_stack_depth();
 
-	 /* it should be more than this, but I don't have a good
-	  * way to measure the depth of the MMU stack */
-	depth -= 2;
-	if (depth < 0) return;
-
 	cur_stk_ptr = GET_STACK(kmc_regs_get());
 
 	if (klee_is_symbolic((uint64_t)addr)) {
 		int i;
 		pred = 0;
 		for (i = 0; i < depth; i++) {
-			v = (uint64_t)ret_addr_locs[depth];
+			v = (uint64_t)ret_addr_locs[i];
 			pred = klee_mk_or(
 				pred,
 				klee_mk_and(
-					klee_mk_ult((uint64_t)addr-w, v),
-					klee_mk_uge((uint64_t)addr+w, v)));
+					klee_mk_ugt((uint64_t)addr, v-w),
+					klee_mk_ult((uint64_t)addr, v+8)));
 		}
 
 		if (!__klee_feasible(pred)) return;
