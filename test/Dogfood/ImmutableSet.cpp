@@ -1,4 +1,4 @@
-// RUN: %llvmgxx -I../../../include -g -DMAX_ELEMENTS=4 -fno-exceptions -emit-llvm -c -o %t1.bc %s
+// RUN: %llvmgxx -std=c++11 -I../../../include -g -DMAX_ELEMENTS=4 -fno-exceptions -emit-llvm -c -o %t1.bc %s
 // RUN: %klee --libc=klee --max-forks=200 --no-output --exit-on-error --optimize=3 --disable-inlining --use-non-uniform-random-search --use-cex-cache --replay-inhibited-forks=false %t1.bc
 
 #define __STDC_CONSTANT_MACROS
