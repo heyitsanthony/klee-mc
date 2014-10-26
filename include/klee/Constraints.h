@@ -12,6 +12,7 @@
 
 #include "klee/Expr.h"
 #include "klee/util/ExprTimer.h"
+#include "klee/IndependentElementSet.h"
 
 // FIXME: Currently we use ConstraintManager for two things: to pass
 // sets of constraints around, and to optimize constraints. We should
@@ -27,11 +28,13 @@ class ConstraintManager
 {
 public:
 	typedef std::vector< ref<Expr> > constraints_ty;
-	typedef std::map<const Array*, constraints_ty> arrconstrs_ty;
+	// maps 1:1 to constraints_ty
+	typedef std::vector< ref<ReadSet> > readsets_t;
 
 	typedef constraints_ty::iterator iterator;
 	typedef constraints_ty::const_iterator const_iterator;
 	typedef std::vector< ref<Expr> >::const_iterator constraint_iterator;
+
 
 
 	ConstraintManager() : simplifier(NULL) {}
@@ -67,6 +70,12 @@ public:
 	constraint_iterator end() const { return constraints.end(); }
 	size_t size() const { return constraints.size(); }
 
+	/* this interface forces an array, but doing it with iterators
+	 * means changing constraitns_ty to include readsets which 
+	 * bakes readsets into the implementation more than I'd like */
+	ref<ReadSet> getReadset(unsigned i) const { return readsets[i]; }
+	ref<Expr> getConstraint(unsigned i) const { return constraints[i]; }
+
 	bool operator==(const ConstraintManager &other) const
 	{ return constraints == other.constraints; }
 
@@ -81,8 +90,10 @@ public:
 	static unsigned getTimeouts(void) { return timeout_c; }
 	static void incReplacements(void) { simplify_c++; }
 	ConstraintManager operator -(const ConstraintManager& other) const;
+
 private:
 	constraints_ty constraints;
+	readsets_t readsets;
 	mutable ExprTimer<ExprReplaceVisitor2>* simplifier;
 
 	// returns true iff the constraints were modified

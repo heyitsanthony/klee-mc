@@ -171,16 +171,18 @@ ExprVisitor::Action ExprReplaceVisitor2::visitRead(const ReadExpr &re)
 
 bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor)
 {
-	ConstraintManager::constraints_ty old;
+	constraints_ty old_c;
+	readsets_t old_rs;
 	bool changed = false;
 
-	constraints.swap(old);
+	constraints.swap(old_c);
+	readsets.swap(old_rs);
 	invalidateSimplifier();
 
 	assert (!Expr::errors);
 
-	foreach (it, old.begin(), old.end()) {
-		ref<Expr> &ce = *it;
+	for (unsigned i = 0; i < old_c.size(); i++) {
+		ref<Expr> &ce = old_c[i];
 		ref<Expr> e = visitor.apply(ce);
 
 		/* ulp. */
@@ -199,10 +201,17 @@ bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor)
 			e = simplifyExpr(ce);
 
 		if (!e.isNull()) {
-			if (e->getKind() != Expr::Constant)
+			/* use new expression */
+			if (e->getKind() != Expr::Constant) {
 				constraints.push_back(e);
-		} else
+				readsets.push_back(
+					ref<ReadSet>(ReadSet::get(e)));
+			}
+		} else {
+			/* use old expression */
 			constraints.push_back(ce);
+			readsets.push_back(old_rs[i]);
+		}
 
 		assert (!Expr::errors);
 		invalidateSimplifier();
@@ -339,12 +348,14 @@ bool ConstraintManager::addConstraintInternal(ref<Expr> e)
 			rewriteConstraints(visitor);
 		}
 		constraints.push_back(e);
+		readsets.push_back(ReadSet::get(e));
 		invalidateSimplifier();
 		return true;
 	}
 
 	default:
 		constraints.push_back(e);
+		readsets.push_back(ReadSet::get(e));
 		invalidateSimplifier();
 		return true;
 	}
@@ -387,9 +398,8 @@ bool ConstraintManager::apply(const Assignment& a)
 	constraints_ty	new_constrs;
 	bool		updated = false;
 
-	foreach (it, constraints.begin(), constraints.end()) {
-		ref<Expr>	old_e(*it);
-		ref<Expr>	e(a.evaluate(old_e));
+	for (auto& old_e : constraints) {
+		ref<Expr> e(a.evaluate(old_e));
 
 		if (e->hash() == old_e->hash()) {
 			new_constrs.push_back(old_e);
@@ -416,8 +426,8 @@ bool ConstraintManager::apply(const Assignment& a)
 	/* write back new constraint set */
 	invalidateSimplifier();
 	constraints.clear();
-	foreach (it, new_constrs.begin(), new_constrs.end())
-		addConstraint(*it);
+	readsets.clear();
+	for (auto& e : new_constrs) addConstraint(e);
 
 	return true;
 }
@@ -430,9 +440,9 @@ ConstraintManager ConstraintManager::operator -(
 	std::set< ref<Expr> >	rhs(
 		other.constraints.begin(), other.constraints.end());
 
-	foreach (it, lhs.begin(), lhs.end()) {
-		if (rhs.count(*it) == 0)
-			ret.addConstraint(*it);
+	for (auto& e : lhs) {
+		if (rhs.count(e) == 0)
+			ret.addConstraint(e);
 	}
 
 	return ret;
