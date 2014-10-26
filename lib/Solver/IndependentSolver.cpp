@@ -261,28 +261,33 @@ static IndependentElementSet getIndependentConstraints(
 {
 	IndependentElementSet	eltsClosure(query.expr);
 	worklist_ty		worklist;
+	std::vector<bool>	worklistDone; // because all the copying is expensive
 
-	foreach (it, query.constraints.begin(), query.constraints.end())
+	foreach (it, query.constraints.begin(), query.constraints.end()) {
 		worklist.push_back(
 			std::make_pair(*it, IndependentElementSet(*it)));
+		worklistDone.push_back(false);
+	}
 
-	// XXX This should be more efficient
-	// (in terms of low level copy stuff).
+	// XXX Copies here were really inefficient. Used to maintain
 	bool done = false;
 	while (done == false) {
 		worklist_ty	newWorklist;
 
 		done = true;
-		foreach (it, worklist.begin(), worklist.end()) {
-			if (it->second.intersects(eltsClosure)) {
-				if (eltsClosure.add(it->second))
-					done = false;
-				result.push_back(it->first);
-			} else {
-				newWorklist.push_back(*it);
-			}
+		for (unsigned i = 0; i < worklist.size(); i++) {
+			if (worklistDone[i])
+				continue;
+
+			// evaluate in next work set
+			if (!worklist[i].second.intersects(eltsClosure))
+				continue;
+
+			// not considered for next work set
+			worklistDone[i] = true;
+			done = !(eltsClosure.add(worklist[i].second));
+			result.push_back(worklist[i].first);
 		}
-		worklist.swap(newWorklist);
 	}
 
 	return eltsClosure;
