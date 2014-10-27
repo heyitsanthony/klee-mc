@@ -42,12 +42,11 @@ public:
 
 	// create from constraints with no optimization
 	explicit
-	ConstraintManager(const std::vector< ref<Expr> > &_constraints)
-	: constraints(_constraints)
-	, simplifier(NULL) {}
+	ConstraintManager(const std::vector< ref<Expr> > &_constraints);
 
 	ConstraintManager(const ConstraintManager &cs)
 	: constraints(cs.constraints)
+	, readsets(cs.readsets)
 	, simplifier(NULL) {}
 
 	ConstraintManager& operator=(const ConstraintManager &cs)
@@ -56,6 +55,7 @@ public:
 			return *this;
 
 		constraints = cs.constraints;
+		readsets = cs.readsets;
 		invalidateSimplifier();
 		return *this;
 	}

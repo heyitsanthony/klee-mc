@@ -182,14 +182,14 @@ bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor)
 	assert (!Expr::errors);
 
 	for (unsigned i = 0; i < old_c.size(); i++) {
-		ref<Expr> &ce = old_c[i];
-		ref<Expr> e = visitor.apply(ce);
+		ref<Expr> &constr_e = old_c[i];
+		ref<Expr> e = visitor.apply(constr_e);
 
 		/* ulp. */
 		if (Expr::errors)
 			break;
 
-		if (!e.isNull() && e != ce) {
+		if (!e.isNull() && e != constr_e) {
 			// enable further reductions
 			addConstraintInternal(e);
 			changed = true;
@@ -198,24 +198,24 @@ bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor)
 
 		assert (!Expr::errors);
 		if (changed)
-			e = simplifyExpr(ce);
+			e = simplifyExpr(constr_e);
 
 		if (!e.isNull()) {
 			/* use new expression */
 			if (e->getKind() != Expr::Constant) {
 				constraints.push_back(e);
-				readsets.push_back(
-					ref<ReadSet>(ReadSet::get(e)));
+				readsets.push_back(ReadSet::get(e));
 			}
 		} else {
 			/* use old expression */
-			constraints.push_back(ce);
+			constraints.push_back(constr_e);
 			readsets.push_back(old_rs[i]);
 		}
 
 		assert (!Expr::errors);
 		invalidateSimplifier();
 	}
+
 
 	return changed;
 }
@@ -314,6 +314,7 @@ ref<Expr> ConstraintManager::simplifyExpr(ref<Expr> e) const
 bool ConstraintManager::addConstraintInternal(ref<Expr> e)
 {
 	assert (!Expr::errors);
+
 	// rewrite any known equalities, return false if
 	// we find ourselves with a contradiction. This means that
 	// the constraint we're adding can't happen!
@@ -330,14 +331,14 @@ bool ConstraintManager::addConstraintInternal(ref<Expr> e)
 
 		if (!cast<ConstantExpr>(e)->isTrue())
 			return false;
-		return true;
+		break;
 
 	// split to enable finer grained independence and other optimizations
 	case Expr::And: {
 		BinaryExpr *be = cast<BinaryExpr>(e);
 		if (!addConstraintInternal(be->left)) return false;
 		if (!addConstraintInternal(be->right)) return false;
-		return true;
+		break;
 	}
 
 	case Expr::Eq: {
@@ -350,14 +351,14 @@ bool ConstraintManager::addConstraintInternal(ref<Expr> e)
 		constraints.push_back(e);
 		readsets.push_back(ReadSet::get(e));
 		invalidateSimplifier();
-		return true;
+		break;
 	}
 
 	default:
 		constraints.push_back(e);
 		readsets.push_back(ReadSet::get(e));
 		invalidateSimplifier();
-		return true;
+		break;
 	}
 
 	return true;
@@ -370,7 +371,10 @@ bool ConstraintManager::addConstraint(ref<Expr> e)
 	e = simplifyExpr(e);
 	assert(!Expr::errors);
 
+	assert (readsets.size() == constraints.size());
 	added = addConstraintInternal(e);
+	assert (readsets.size() == constraints.size());
+
 	if (Expr::errors) {
 		Expr::resetErrors();
 		return false;
@@ -446,4 +450,13 @@ ConstraintManager ConstraintManager::operator -(
 	}
 
 	return ret;
+}
+
+ConstraintManager::ConstraintManager(const std::vector< ref<Expr> > &_constraints)
+	: constraints(_constraints)
+	, simplifier(NULL)
+{
+	for (unsigned i = 0; i < constraints.size(); i++) {
+		readsets.push_back(ReadSet::get(constraints[i]));
+	}
 }
