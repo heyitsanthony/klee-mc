@@ -141,7 +141,7 @@ void IndependentElementSet::addRead(ref<ReadExpr>& re)
 		return;
 
 	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(re->index)) {
-		DenseSet<unsigned> &dis = elements[array];
+		DenseSet<unsigned> &dis(elements[array]);
 		dis.add((unsigned) CE->getZExtValue(32));
 	} else {
 		elements_ty::iterator it2 = elements.find(array);
@@ -158,7 +158,7 @@ inline std::ostream &operator<<(
 
 
 typedef std::vector<
-	std::pair<ref<Expr>, IndependentElementSet> > worklist_ty;
+	std::pair<ref<Expr>, IndependentElementSet*> > worklist_ty;
 
 IndependentElementSet IndependentElementSet::getIndependentConstraints(
 	const Query& query,
@@ -174,7 +174,7 @@ IndependentElementSet IndependentElementSet::getIndependentConstraints(
 		worklist.push_back(
 			std::make_pair(
 				e,
-				IndependentElementSet(
+				new IndependentElementSet(
 					e, query.constraints.getReadset(i))));
 		worklistDone.push_back(false);
 	}
@@ -190,12 +190,12 @@ IndependentElementSet IndependentElementSet::getIndependentConstraints(
 				continue;
 
 			// evaluate in next work set
-			if (!worklist[i].second.intersects(eltsClosure))
+			if (!worklist[i].second->intersects(eltsClosure))
 				continue;
 
 			// not considered for next work set
 			worklistDone[i] = true;
-			done = !(eltsClosure.add(worklist[i].second));
+			done = !(eltsClosure.add(*worklist[i].second));
 			result.push_back(i);
 		}
 	}
@@ -206,6 +206,8 @@ IndependentElementSet IndependentElementSet::getIndependentConstraints(
 		constrs.push_back(query.constraints.getConstraint(result[i]));
 		rs.push_back(query.constraints.getReadset(result[i]));
 	}
+	for (auto& wl : worklist ) delete wl.second;
+
 	cs = ConstraintManager(constrs, rs);
 
 	return eltsClosure;

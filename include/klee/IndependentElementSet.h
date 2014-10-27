@@ -54,8 +54,8 @@ public:
 	}
 
 	bool intersects(const DenseSet &b) {
-		foreach (it, s.begin(), s.end()) {
-			if (b.s.count(*it))
+		for (auto& s_e : s) {
+			if (b.s.count(s_e))
 				return true;
 		}
 		return false;
@@ -64,13 +64,13 @@ public:
 	void print(std::ostream &os) const {
 		bool first = true;
 		os << "{";
-		foreach (it, s.begin(), s.end()) {
+		for (auto& s_e : s) {
 			if (first) {
 				first = false;
 			} else {
 				os << ",";
 			}
-			os << *it;
+			os << s_e;
 		}
 		os << "}";
 	}
