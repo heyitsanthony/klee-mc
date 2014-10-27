@@ -162,11 +162,12 @@ typedef std::vector<
 
 IndependentElementSet IndependentElementSet::getIndependentConstraints(
 	const Query& query,
-	std::vector< ref<Expr> > &result)
+	ConstraintManager&  cs)
 {
 	IndependentElementSet	eltsClosure(query.expr);
 	worklist_ty		worklist;
 	std::vector<bool>	worklistDone; // because all the copying is expensive
+	std::vector<int>	result;
 
 	for (unsigned i = 0; i < query.constraints.size(); i++) {
 		ref<Expr> e(query.constraints.getConstraint(i));
@@ -195,9 +196,17 @@ IndependentElementSet IndependentElementSet::getIndependentConstraints(
 			// not considered for next work set
 			worklistDone[i] = true;
 			done = !(eltsClosure.add(worklist[i].second));
-			result.push_back(worklist[i].first);
+			result.push_back(i);
 		}
 	}
+
+	ConstraintManager::constraints_t	constrs;
+	ConstraintManager::readsets_t		rs;
+	for (unsigned i = 0; i < result.size(); i++) {
+		constrs.push_back(query.constraints.getConstraint(result[i]));
+		rs.push_back(query.constraints.getReadset(result[i]));
+	}
+	cs = ConstraintManager(constrs, rs);
 
 	return eltsClosure;
 }

@@ -7,6 +7,7 @@
 namespace klee
 {
 
+class ConstraintManager;
 class Query;
 
 class ReadSet : public std::set<ref<ReadExpr> >
@@ -105,7 +106,7 @@ public:
 
 	static IndependentElementSet getIndependentConstraints(
 		const Query& query,
-		std::vector< ref<Expr> >& result);
+		ConstraintManager& cs);
 
 private:
 	void addRead(ref<ReadExpr>& re);

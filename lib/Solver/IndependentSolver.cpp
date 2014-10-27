@@ -46,12 +46,11 @@ namespace {
 #endif
 
 #define SETUP_CONSTRAINTS			\
-	std::vector< ref<Expr> > required;	\
+	ConstraintManager	cs;		\
 	IndependentElementSet eltsClosure;	\
 	eltsClosure = IndependentElementSet::getIndependentConstraints(	\
-		query, required);	\
-	ConstraintManager tmp(required);	\
-	if (isUnconstrained(tmp, query))
+		query, cs);			\
+	if (isUnconstrained(cs, query))
 
 static bool isFreeRead(const ref<Expr>& e)
 {
@@ -165,13 +164,13 @@ static bool isUnconstrained(
 Solver::Validity IndependentSolver::computeValidity(const Query& query)
 {
 	SETUP_CONSTRAINTS { indep_c++; return Solver::Unknown; }
-	return doComputeValidity(Query(tmp, query.expr));
+	return doComputeValidity(Query(cs, query.expr));
 }
 
 bool IndependentSolver::computeSat(const Query& query)
 {
 	SETUP_CONSTRAINTS { indep_c++; return true; }
-	return doComputeSat(Query(tmp, query.expr));
+	return doComputeSat(Query(cs, query.expr));
 }
 
 ref<Expr> IndependentSolver::computeValue(const Query& query)
@@ -191,7 +190,7 @@ ref<Expr> IndependentSolver::computeValue(const Query& query)
 		return MK_CONST(v, query.expr->getWidth());
 	}
 
-	return doComputeValue(Query(tmp, query.expr));
+	return doComputeValue(Query(cs, query.expr));
 }
 
 Solver *klee::createIndependentSolver(Solver *s)

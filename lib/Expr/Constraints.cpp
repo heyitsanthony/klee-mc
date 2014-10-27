@@ -171,7 +171,7 @@ ExprVisitor::Action ExprReplaceVisitor2::visitRead(const ReadExpr &re)
 
 bool ConstraintManager::rewriteConstraints(ExprVisitor &visitor)
 {
-	constraints_ty old_c;
+	constraints_t old_c;
 	readsets_t old_rs;
 	bool changed = false;
 
@@ -399,7 +399,7 @@ bool ConstraintManager::isValid(const Assignment& a) const
 
 bool ConstraintManager::apply(const Assignment& a)
 {
-	constraints_ty	new_constrs;
+	constraints_t	new_constrs;
 	bool		updated = false;
 
 	for (auto& old_e : constraints) {
@@ -452,11 +452,19 @@ ConstraintManager ConstraintManager::operator -(
 	return ret;
 }
 
-ConstraintManager::ConstraintManager(const std::vector< ref<Expr> > &_constraints)
-	: constraints(_constraints)
-	, simplifier(NULL)
+ConstraintManager::ConstraintManager(const constraints_t &_constraints)
+: constraints(_constraints)
+, simplifier(NULL)
 {
 	for (unsigned i = 0; i < constraints.size(); i++) {
 		readsets.push_back(ReadSet::get(constraints[i]));
 	}
 }
+
+ConstraintManager::ConstraintManager(
+	const constraints_t &_constraints,
+	const readsets_t &_readsets)
+: constraints(_constraints)
+, readsets(_readsets)
+, simplifier(NULL)
+{}

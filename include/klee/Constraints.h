@@ -27,12 +27,12 @@ class Assignment;
 class ConstraintManager
 {
 public:
-	typedef std::vector< ref<Expr> > constraints_ty;
-	// maps 1:1 to constraints_ty
+	typedef std::vector< ref<Expr> > constraints_t;
+	// maps 1:1 to constraints_t
 	typedef std::vector< ref<ReadSet> > readsets_t;
 
-	typedef constraints_ty::iterator iterator;
-	typedef constraints_ty::const_iterator const_iterator;
+	typedef constraints_t::iterator iterator;
+	typedef constraints_t::const_iterator const_iterator;
 	typedef std::vector< ref<Expr> >::const_iterator constraint_iterator;
 
 
@@ -43,6 +43,11 @@ public:
 	// create from constraints with no optimization
 	explicit
 	ConstraintManager(const std::vector< ref<Expr> > &_constraints);
+
+	ConstraintManager(
+		const constraints_t &_constraints,
+		const readsets_t &readsets);
+
 
 	ConstraintManager(const ConstraintManager &cs)
 	: constraints(cs.constraints)
@@ -92,7 +97,7 @@ public:
 	ConstraintManager operator -(const ConstraintManager& other) const;
 
 private:
-	constraints_ty constraints;
+	constraints_t constraints;
 	readsets_t readsets;
 	mutable ExprTimer<ExprReplaceVisitor2>* simplifier;
 
