@@ -98,7 +98,9 @@ static void memchr_fini(uint64_t _r, void* aux)
 
 	/* exists in string? */
 	for (i = 0; i < clo->len; i++) {
-		if (klee_feasible_eq(s[i], clo->c) && klee_feasible_eq(_r, i)) {
+		if (__klee_feasible(klee_mk_and(
+			klee_mk_eq(s[i], clo->c), klee_mk_eq(_r, i))))
+		{
 			klee_assume_eq(_r, i);
 			klee_assume_eq(s[i], clo->c);
 			return;

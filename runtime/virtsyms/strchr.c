@@ -37,6 +37,8 @@ static int strchr_internal(void* r, uint64_t* ret, unsigned* len)
 	/* ignore concretes */
 	if (!klee_is_symbolic(s[0])) return 0;
 
+	/* skip past every byte that is possibly not 0
+	 * NOTE: this is a hint; no solver call for symbolics */
 	i = 0;
 	while (	klee_is_valid_addr(&s[i]) &&
 		(klee_is_symbolic(s[i]) || s[i] != '\0')) i++;
@@ -119,8 +121,10 @@ static void strchr_fini(uint64_t _r, void* aux)
 		return;
 	}
 
-	while(klee_feasible_ne(s[i], 0)) {
-		if (klee_feasible_eq(_r, i) && klee_feasible_eq(s[i], c)) {
+	while (klee_feasible_ne(s[i], 0)) {
+		if (__klee_feasible(klee_mk_and(
+			klee_mk_eq(_r, i), klee_feasible_eq(s[i], c))))
+		{
 			klee_assume_eq(_r, i);
 			klee_assume_eq(s[i], c);
 			break;
