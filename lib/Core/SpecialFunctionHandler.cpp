@@ -609,10 +609,11 @@ SFH_DEF_ALL(Assume, "__klee_assume", false)
 	if (!ok) goto error;
 
 	if (!mayBeTrue) {
-		TERMINATE_ERROR(sfh->executor,
+		TERMINATE_ERRORV(sfh->executor,
 			state,
 			"invalid klee_assume_op call (provably unsat)",
-			"user.err");
+			"user.err",
+			"Unsat expression: ", e);
 		return;
 	}
 

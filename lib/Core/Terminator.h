@@ -1,6 +1,17 @@
 #ifndef TERMINATOR_H
 #define TERMINATOR_H
 
+// these classes control the way a function is terminated
+// Why would you want to do this?
+// 	* Terminate in Exit case
+// 		maybe fork some stuff?
+// 	* Terminate in Early case
+// 		concretize?
+//
+// What sort of messages, etc. When to emit errors, etc.
+// This is important for the klee_resume_exit call. 
+//
+
 namespace klee
 {
 class Executor;
@@ -10,8 +21,13 @@ class Terminator
 {
 public:
 	virtual ~Terminator(void) {}
+	// state has already been processed and is about to be
+	// deleted. Last chance to play with the state; possibly
+	// forks off new states.
 	virtual bool terminate(ExecutionState& es) = 0;
+	// process into a test case
 	virtual void process(ExecutionState& es) = 0;
+	// whether state is worth processing into a test case
 	virtual bool isInteresting(ExecutionState& es) const;
 	virtual Terminator* copy(void) const = 0;
 	Executor* getExe(void) const { return exe; }

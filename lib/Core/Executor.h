@@ -19,7 +19,8 @@
 #include "klee/Interpreter.h"
 #include "klee/Internal/Module/Cell.h"
 #include "klee/Internal/Module/KInstruction.h"
-#include "llvm/ADT/APFloat.h"
+#include "klee/Internal/ADT/LimitedStream.h"
+#include <llvm/ADT/APFloat.h>
 #include "Terminator.h"
 #include "SeedInfo.h"
 #include <vector>
@@ -411,14 +412,14 @@ public:
 	do { TermEarly t(_x,m); (_x)->terminateWith(t, y); } while (0)
 #define TERMINATE_EXIT(_x,y) do { TermExit t(_x); (_x)->terminateWith(t, y); } while (0)
 
-// exe, message, suffix, longmsg="", always emit=false
+// exe, state, message, suffix, longmsg="", always emit=false
 #define TERMINATE_ERROR_LONG(_x,s,m,suf,lm,em)	\
 	do { TermError t(_x,m,suf,lm,em); (_x)->terminateWith(t, s); } while (0)
 #define TERMINATE_ERROR(_x,s,m,suff)	\
 	do { TermError t(_x,m,suff); (_x)->terminateWith(t, s); } while (0)
 #define TERMINATE_ERRORV(_x,s,m,suff,h,v) do {		\
-		std::stringstream	ss;	\
-		ss << h << v << '\n';	\
+		limited_sstream	ss(16*1024);		\
+		ss << h << v << '\n';			\
 		TERMINATE_ERROR_LONG(_x,s,m,suff,ss.str(),false); } while (0)
 
 #define REPORT_ERROR(_x, s, m, suff) do {	\

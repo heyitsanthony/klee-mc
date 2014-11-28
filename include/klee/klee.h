@@ -306,7 +306,7 @@ extern void free(void*) __THROW;
      allows programs to forcibly concretize values on their own. */
   uint64_t klee_get_value(uint64_t expr);
 
-//#define klee_get_value(e)	klee_get_value_pred(1, e)
+//#define klee_get_value(e)	klee_get_value_pred(e, 1)
   uint64_t klee_get_value_pred(uint64_t expr, uint64_t pred_expr);
 
   uint64_t klee_min_value(uint64_t expr);

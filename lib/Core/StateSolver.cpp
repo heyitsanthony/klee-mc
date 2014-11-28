@@ -9,6 +9,8 @@
 
 #include "StateSolver.h"
 
+#include <llvm/Support/CommandLine.h>
+
 #include "klee/ExecutionState.h"
 #include "klee/Solver.h"
 #include "klee/Statistics.h"
@@ -27,6 +29,10 @@ unsigned StateSolver::timeBuckets[NUM_STATESOLVER_BUCKETS];
 double StateSolver::timeBucketTotal[NUM_STATESOLVER_BUCKETS];
 
 extern double MaxSTPTime;
+
+namespace {
+llvm::cl::opt<bool> ChkGetValue("chk-getvalue", cl::init(false));
+}
 
 #define WRAP_QUERY(x)	\
 do {	\
@@ -176,6 +182,16 @@ bool StateSolver::getValue(
 		ConstraintManager	cm(state.constraints);
 		cm.addConstraint(predicate);
 		WRAP_QUERY(solver->getValue(Query(cm, expr), result));
+	}
+
+	if (	ChkGetValue &&
+		(predicate.isNull() || predicate->getKind()==Expr::Constant))
+	{
+		bool mbt = false;
+		if (mayBeTrue(state, MK_EQ(result, expr), mbt) && !mbt) {
+			std::cerr << "GOT VALUE, BUT EQ FAILED??\n";
+			assert (mbt);
+		}
 	}
 
 	return ok;
