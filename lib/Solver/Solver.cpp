@@ -56,52 +56,6 @@ double	MaxSTPTime;
 uint64_t SolverImpl::impliedValid_c = 0;
 uint64_t Solver::getVal_c = 0;
 
-#if 0
-namespace llvm
-{
-namespace cl
-{
-template <>
-class parser<sockaddr_in_opt> : public basic_parser<sockaddr_in_opt> {
-public:
-bool parse(Option&, const std::string&, const std::string&, sockaddr_in_opt &);
-virtual const char *getValueName() const { return "sockaddr_in"; }
-};
-}
-}
-
-bool llvm::cl::parser<sockaddr_in_opt>::parse(
-	llvm::cl::Option &O,
-	const std::string& ArgName,
-	const std::string &Arg,
-	sockaddr_in_opt &Val)
-{
-  // find the separator
-  std::string::size_type p = Arg.rfind(':');
-  if (p == std::string::npos)
-    return O.error("'" + Arg + "' not in format <host>:<port>");
-
-  // read the port number
-  unsigned short port;
-  if (std::sscanf(Arg.c_str() + p + 1, "%hu", &port) < 1)
-    return O.error("'" + Arg.substr(p + 1) + "' invalid port number");
-
-  // resolve server name
-  std::string host = Arg.substr(0, p);
-  struct hostent* h = gethostbyname(host.c_str());
-  if (!h)
-    return O.error("cannot resolve '" + host + "' (" + hstrerror(h_errno) + ")");
-
-  // prepare the return value
-  Val.str = Arg;
-  std::memset(&Val.sin, 0, sizeof(Val.sin));
-  Val.sin.sin_family = AF_INET;
-  Val.sin.sin_port = htons(port);
-  Val.sin.sin_addr = *(struct in_addr*)h->h_addr;
-
-  return false;
-}
-#endif
 namespace {
   cl::opt<bool> DebugValidateSolver("debug-validate-solver");
 
@@ -357,8 +311,7 @@ ref<Expr> SolverImpl::computeValue(const Query& query)
 		return NULL;
 
 	if (!hasSolution) {
-		query.print(std::cerr);
-		std::cerr << "[Solver] State has invalid constraint set!\n";
+		std::cerr << "[Solver] Query has invalid assumptions!?\n";
 		failQuery();
 		return NULL;
 	}
@@ -460,7 +413,7 @@ bool Solver::mayBeTrue(const Query& query, bool &result)
 
 
 bool Solver::getValue(const Query& query, ref<ConstantExpr> &result)
-{ 
+{
 	if (query.expr->getKind() == Expr::Constant) {
 		result = dyn_cast<ConstantExpr>(query.expr);
 		return true;

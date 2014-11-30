@@ -16,19 +16,20 @@ public:
 
 	virtual ~IndependentSolver() {}
 
-	bool computeSat(const Query&);
-	Solver::Validity computeValidity(const Query&);
-	ref<Expr> computeValue(const Query&);
-	bool computeInitialValues(const Query& query, Assignment& a)
+	bool computeSat(const Query&) override;
+	Solver::Validity computeValidity(const Query&) override;
+	ref<Expr> computeValue(const Query&) override;
+	bool computeInitialValues(const Query& query, Assignment& a) override
 	{ return doComputeInitialValues(query, a); }
 
-	void printName(int level = 0) const
+	void printName(int level = 0) const override
 	{
 		klee_message("%*s""IndependentSolver containing:", 2*level, "");
 		wrappedSolver->printName(level + 1);
 	}
 
 	static uint64_t getIndependentCount(void) { return indep_c; }
+	static Query getIndependentQuery(const Query& q, ConstraintManager& cs);
 private:
 	static uint64_t	indep_c;
 

@@ -18,6 +18,8 @@
 #include "klee/util/Assignment.h"
 
 #include "CoreStats.h"
+#include "../Solver/SMTPrinter.h"
+#include "../Solver/IndependentSolver.h"
 #include "klee/SolverStats.h"
 #include <string.h>
 
@@ -156,6 +158,31 @@ bool StateSolver::mayBeFalse(
 	return true;
 }
 
+static void chk_getvalue(
+	StateSolver *ss,
+	const ExecutionState& state,
+	ref<Expr>& expr, ref<ConstantExpr>& result)
+{
+	ConstraintManager cm;
+	ref<Expr>	cond(MK_EQ(result, expr));
+	bool		mbt = false;
+
+	if (!ss->mayBeTrue(state, cond, mbt) || mbt) {
+		// query failed or query is satisfiable
+		return;
+	}
+
+	ss->solver->printName();
+	std::cerr << "getValue is unSAT?\nexpr: " << expr << ".\nresult: "
+		<< result << '\n';
+	SMTPrinter::dump(Query(state.constraints, cond), "eqchk-fail");
+
+	IndependentSolver::getIndependentQuery(Query(state.constraints, cond), cm);
+	SMTPrinter::dump(Query(cm, cond), "eqchk-fail-indep");
+
+	assert (mbt);
+}
+
 bool StateSolver::getValue(
 	const ExecutionState& state,
 	ref<Expr> expr,
@@ -184,14 +211,11 @@ bool StateSolver::getValue(
 		WRAP_QUERY(solver->getValue(Query(cm, expr), result));
 	}
 
-	if (	ChkGetValue &&
+	if (	ok &&
+		ChkGetValue &&
 		(predicate.isNull() || predicate->getKind()==Expr::Constant))
 	{
-		bool mbt = false;
-		if (mayBeTrue(state, MK_EQ(result, expr), mbt) && !mbt) {
-			std::cerr << "GOT VALUE, BUT EQ FAILED??\n";
-			assert (mbt);
-		}
+		chk_getvalue(this, state, expr, result);
 	}
 
 	return ok;
@@ -247,7 +271,7 @@ void StateSolver::dumpTimes(std::ostream& os)
 	double	timeLowest = STATESOLVER_LOWEST_TIME;
 	os << "# LT-TIME NUM-QUERIES TOTAL-TIME\n";
 	for (unsigned i = 0; i < NUM_STATESOLVER_BUCKETS; i++) {
-		os	<< timeLowest << ' ' 
+		os	<< timeLowest << ' '
 			<< timeBuckets[i] << ' '
 			<< timeBucketTotal[i] << '\n';
 		timeLowest *= STATESOLVER_TIME_INTERVAL;

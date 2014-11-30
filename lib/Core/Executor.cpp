@@ -48,6 +48,7 @@
 #include "Globals.h"
 #include "SpecialFunctionHandler.h"
 #include "../Expr/RuleBuilder.h"
+#include "../Solver/SMTPrinter.h"
 #include "PTree.h"
 
 using namespace llvm;
@@ -246,11 +247,16 @@ bool Executor::addConstraint(ExecutionState &state, ref<Expr> cond)
 		bool	mayBeTrue, ok;
 
 		ok = solver->mayBeTrue(state, cond, mayBeTrue);
-		assert (ok);
-
-		if (!mayBeTrue)
-			std::cerr << "[CHK] UH0H: " << cond << " never true!\n";
-		assert (mayBeTrue);
+		if (!ok) {
+			std::cerr << "[CHK] UH0H: feasibility check on "
+				<< cond << " failed?!\n";
+			SMTPrinter::dump(Query(
+				state.constraints, cond), "prechk-timeout");
+		} else if (!mayBeTrue) {
+			std::cerr << "[CHK] UH0H: assumption violation:"
+				<< cond << "\n";
+			assert (mayBeTrue);
+		}
 	}
 
 	if (!state.addConstraint(cond)) {
@@ -264,11 +270,16 @@ bool Executor::addConstraint(ExecutionState &state, ref<Expr> cond)
 		bool	mustBeTrue, ok;
 
 		ok = solver->mustBeTrue(state, cond, mustBeTrue);
-		assert (ok);
-
-		if (!mustBeTrue)
-			std::cerr << "[CHK] UHOH: " << cond << " never true!\n";
-		assert (mustBeTrue);
+		if (!ok) {
+			std::cerr << "[CHK] UH0H: validity check on "
+				<< cond << " failed?!\n";
+			SMTPrinter::dump(Query(
+				state.constraints, cond), "postchk-timeout");
+		} else if (!mustBeTrue) {
+			std::cerr << "[CHK] UHOH: "
+				<< cond << " assumed but still contingent!\n";
+			assert (mustBeTrue);
+		}
 	}
 
 	return true;

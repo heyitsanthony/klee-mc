@@ -161,6 +161,14 @@ static bool isUnconstrained(
 	return false;
 }
 
+Query IndependentSolver::getIndependentQuery(
+	const Query& query, ConstraintManager& cs_)
+{
+	SETUP_CONSTRAINTS { return Query(query.expr); }
+	cs_ = cs;
+	return Query(cs_, query.expr);
+}
+
 Solver::Validity IndependentSolver::computeValidity(const Query& query)
 {
 	SETUP_CONSTRAINTS { indep_c++; return Solver::Unknown; }
