@@ -9,9 +9,15 @@ namespace klee
 {
 class Array;
 
+struct PipeArray
+{
+	PipeArray(unsigned char def = 0x00) : default_v(def) {}
+	unsigned char			default_v;
+	std::map<unsigned /* idx */, unsigned char> dat;
+};
 
-typedef std::map<std::string, std::vector<unsigned char> > PipeArrayMap;
-typedef std::map<std::string, unsigned char > PipeArrayDefaults;
+
+typedef std::map<std::string, PipeArray> PipeArrayMap;
 
 class PipeFormat
 {
@@ -36,10 +42,9 @@ protected:
 	void setName(const char* in_name) { name = in_name; }
 	bool parseSAT(const char* s);
 	void addArrayByte(const char* arrNamme, unsigned int off, unsigned char v);
-	unsigned char	getDefaultVal(const Array* a) const;
+	void setDefaultByte(const char* arrName, unsigned char v);
 	bool		is_sat;
 	PipeArrayMap		arrays;
-	PipeArrayDefaults	defaults;
 private:
 	const char*	name;
 };

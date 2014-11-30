@@ -56,6 +56,19 @@ do {	\
 	if (ok == false) last_bad = NULL; \
 } while (0)
 
+// includes fast path, to avoid timer and OS overhead
+#define SETUP_QUERY			\
+	double	start, finish;		\
+	bool	ok;			\
+	++stats::queriesTopLevel;	\
+	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(expr))
+
+#define SETUP_TRUTH_QUERY	\
+	SETUP_QUERY {		\
+		result = CE->isTrue() ? true : false;	\
+		constQueries++;	\
+		return true; }	\
+
 
 StateSolver::StateSolver(
 	Solver *_solver,
@@ -96,13 +109,7 @@ bool StateSolver::evaluate(
 	ref<Expr> expr,
 	Solver::Validity &result)
 {
-	double	start, finish;
-	bool	ok;
-
-	++stats::queriesTopLevel;
-
-	// Fast path, to avoid timer and OS overhead.
-	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(expr)) {
+	SETUP_QUERY {
 		result = CE->isTrue() ? Solver::True : Solver::False;
 		constQueries++;
 		return true;
@@ -116,21 +123,8 @@ bool StateSolver::evaluate(
 bool StateSolver::mustBeTrue(
 	const ExecutionState& state, ref<Expr> expr, bool &result)
 {
-	double	start, finish;
-	bool	ok;
-
-	++stats::queriesTopLevel;
-
-	// Fast path, to avoid timer and OS overhead.
-	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(expr)) {
-		result = CE->isTrue() ? true : false;
-		constQueries++;
-		return true;
-	}
-
-
+	SETUP_TRUTH_QUERY
 	WRAP_QUERY(solver->mustBeTrue(Query(state.constraints, expr), result));
-
 	return ok;
 }
 
@@ -141,11 +135,9 @@ bool StateSolver::mustBeFalse(
 bool StateSolver::mayBeTrue(
 	const ExecutionState& state, ref<Expr> expr, bool &result)
 {
-	bool res;
-	if (mustBeFalse(state, expr, res) == false)
-		return false;
-	result = !res;
-	return true;
+	SETUP_TRUTH_QUERY
+	WRAP_QUERY(solver->mayBeTrue(Query(state.constraints, expr), result));
+	return ok;
 }
 
 bool StateSolver::mayBeFalse(
@@ -167,14 +159,17 @@ static void chk_getvalue(
 	ref<Expr>	cond(MK_EQ(result, expr));
 	bool		mbt = false;
 
+	std::cerr << "[StateSolver] Checking GetValue equality...\n";
 	if (!ss->mayBeTrue(state, cond, mbt) || mbt) {
 		// query failed or query is satisfiable
+		std::cerr << "[StateSolver] Equality OK\n";
 		return;
 	}
+	std::cerr << "[StateSolver] Dumping queries.\n";
 
 	ss->solver->printName();
-	std::cerr << "getValue is unSAT?\nexpr: " << expr << ".\nresult: "
-		<< result << '\n';
+	std::cerr << "[StateSolver] getValue is unSAT?\nexpr: "
+		<< expr << ".\nresult: " << result << '\n';
 	SMTPrinter::dump(Query(state.constraints, cond), "eqchk-fail");
 
 	IndependentSolver::getIndependentQuery(Query(state.constraints, cond), cm);
@@ -189,13 +184,7 @@ bool StateSolver::getValue(
 	ref<ConstantExpr> &result,
 	ref<Expr> predicate)
 {
-	double	start, finish;
-	bool	ok;
-
-	++stats::queriesTopLevel;
-
-	// Fast path, to avoid timer and OS overhead.
-	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(expr)) {
+	SETUP_QUERY {
 		result = CE;
 		constQueries++;
 		return true;
@@ -215,7 +204,9 @@ bool StateSolver::getValue(
 		ChkGetValue &&
 		(predicate.isNull() || predicate->getKind()==Expr::Constant))
 	{
+		std::cerr  << "[StateSolver] Got value " << result << '\n';
 		chk_getvalue(this, state, expr, result);
+		std::cerr  << "[StateSolver] Value OK!\n";
 	}
 
 	return ok;
