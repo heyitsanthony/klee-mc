@@ -65,8 +65,8 @@ void PipeFormat::readArray(
 
 	assert (a->mallocKey.size < 0x10000000 && "Array too large");
 
+	ret.clear();
 	if (it == arrays.end()) {
-		ret.clear();
 		ret.resize(a->mallocKey.size, default_val);
 	} else {
 		default_val = it->second.default_v;
