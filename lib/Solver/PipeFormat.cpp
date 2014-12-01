@@ -72,7 +72,12 @@ void PipeFormat::readArray(
 		default_val = it->second.default_v;
 		ret.resize(a->mallocKey.size, default_val);
 		foreach (it2, it->second.dat.begin(), it->second.dat.end()) {
-			assert (it2->first < a->mallocKey.size);
+			if (it2->first >= a->mallocKey.size) {
+				std::cerr << "[PipeFormat] Warning. idx:"
+					<< it2->first << " >= " << "arr_sz: "
+					<< a->mallocKey.size << ". Ignoring.\n";
+				continue;
+			}
 			ret[it2->first] = it2->second;
 		}
 	}
@@ -448,7 +453,7 @@ bool PipeYices2::parseModel(std::istream& is)
 
 	return true;
 oops:
-	fprintf(stderr, "[yices2] BAD LINE '%s'\n", line);
+	std::cerr << "[yices2] BAD LINE '" << line << "'\n";
 	return false;
 }
 
