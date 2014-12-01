@@ -36,7 +36,7 @@ int main(int argc, char* argv[])
 	/* should not happen */
 	if (x == (s+34)) return -1;
 
-	/* 1 test */
+	/* 1 test: could not find 'a' in string */
 	if (x == NULL) return 2;
 
 	if ((intptr_t)x < (intptr_t)s) return 5;

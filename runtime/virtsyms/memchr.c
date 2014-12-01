@@ -40,7 +40,7 @@ static void memchr_enter(void* r)
 	clo.len = GET_ARG2(r);
 
 	/* 1. check pointers, common to crash in memchr */
-	if (!klee_is_valid_addr(klee_get_value(s)))
+	if (!klee_is_valid_addr((void*)klee_get_value((uintptr_t)s)))
 		return;
 
 	/* ignore concrete prefixes */
@@ -79,7 +79,7 @@ static void memchr_fini(uint64_t _r, void* aux)
 	const char	*s = clo->p;
 	unsigned int	i;
 
-	/* does not exist in string? */
+	/* possibly does not exist in string? */
 	if (klee_feasible_eq(_r, clo->len)) {
 		for (i = 0; i < clo->len; i++) {
 			/* 'c' must exist in s? */
@@ -98,15 +98,26 @@ static void memchr_fini(uint64_t _r, void* aux)
 
 	/* exists in string? */
 	for (i = 0; i < clo->len; i++) {
-		if (__klee_feasible(klee_mk_and(
-			klee_mk_eq(s[i], clo->c), klee_mk_eq(_r, i))))
-		{
-			klee_assume_eq(_r, i);
-			klee_assume_eq(s[i], clo->c);
+		uint64_t has_char_cond = klee_mk_and(
+			klee_mk_eq(s[i], clo->c), klee_mk_eq(_r, i));
+		if (__klee_feasible(has_char_cond)) {
+			__klee_assume(has_char_cond);
 			return;
 		}
-		if (klee_valid_eq(s[i], clo->c) && !klee_feasible_eq(_r, i))
-			virtsym_prune(VS_PRNID_MEMCHR);
+
+		if (klee_valid_eq(s[i], clo->c)) {
+			if (!klee_feasible_ne(_r, i)) {
+				virtsym_prune(VS_PRNID_MEMCHR);
+			}
+			klee_assume_ne(_r, i);
+			// check again because there may be a constraint
+			// _r != i => s[i] == clo->c
+			// adding _r != i makes s[i] == clo->c valid
+			if (klee_valid_eq(s[i], clo->c)) {
+				virtsym_prune(VS_PRNID_MEMCHR);
+			}
+		}
+
 		klee_assume_ne(s[i], clo->c);
 	}
 

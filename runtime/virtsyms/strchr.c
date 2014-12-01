@@ -100,33 +100,40 @@ static void strchr_fini(uint64_t _r, void* aux)
 	struct strchr_clo	*clo = aux;
 	const char		*s = clo->s;
 	uint8_t			c = clo->c;
-	uint64_t		r = klee_get_value(_r);
 	unsigned		i = 0;
 
-	klee_assume_eq(_r, r);
-	_r = _r - (uint64_t)clo->s_orig;
-
-	/* does _r exceed bounds? */
-	if (_r >= clo->i+1) {
-		i = 0;
-		while(klee_valid_ne(s[i], 0)) {
-			if (!klee_feasible_ne(s[i], c)) {
-				klee_print_expr("failing OOB r", _r);
-				virtsym_prune(VS_PRNID_STRCHR);
+	/* does range exceed bounds? try to fill out up to index [r] */
+	if (_r == clo->i+1) {
+		while (i < _r) {
+			/* string doesn't have 'c' and string hasn't ended? */
+			uint64_t has_more_chars = klee_mk_and(
+				klee_mk_ne(s[i], 0), klee_mk_ne(s[i], c));
+			if (!__klee_feasible(has_more_chars)) {
+				/* string doesn't match 'r'; must bail out */
+				break;
 			}
-			klee_assume_ne(s[i], c);
+			__klee_assume(has_more_chars);
 			i++;
 		}
+
+		if (i+1 != _r || !klee_feasible_eq(s[i], 0)) {
+			klee_print_expr("failing OOB r", _r);
+			virtsym_prune(VS_PRNID_STRCHR);
+		}
+
+		/* index should be to the 'nul' byte */
 		klee_assume_eq(s[i], 0);
 		return;
 	}
 
+	// _r > clo->i+1 should never happen
+	klee_assume_ult(_r, clo->i+1);
+
 	while (klee_feasible_ne(s[i], 0)) {
-		if (__klee_feasible(klee_mk_and(
-			klee_mk_eq(_r, i), klee_feasible_eq(s[i], c))))
-		{
-			klee_assume_eq(_r, i);
-			klee_assume_eq(s[i], c);
+		uint64_t match_cond = klee_mk_and(
+			klee_mk_eq(_r, i), klee_mk_eq(s[i], c));
+		if (__klee_feasible(match_cond)) {
+			__klee_assume(match_cond);
 			break;
 		}
 		i++;
@@ -137,6 +144,7 @@ static void strchr_fini(uint64_t _r, void* aux)
 	}
 
 	if (!klee_valid_eq(s[i], c) || !klee_valid_eq(_r, i)) {
+		klee_print_expr("Can't complete string?", i);
 		virtsym_prune(VS_PRNID_STRCHR);
 	}
 }
