@@ -304,6 +304,7 @@ extern void free(void*) __THROW;
 
   /* Return a possible constant value for the input expression. This
      allows programs to forcibly concretize values on their own. */
+#define klee_get_ptr(p)		(void*)klee_get_value((uintptr_t)p)
   uint64_t klee_get_value(uint64_t expr);
 
 //#define klee_get_value(e)	klee_get_value_pred(e, 1)

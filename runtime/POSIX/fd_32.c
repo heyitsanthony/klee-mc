@@ -159,7 +159,7 @@ int __getdents(unsigned int fd, struct dirent *dirp, unsigned int count)
 
 /* Forward to 64 versions (uclibc expects versions w/o asm specifier) */
 
-int open64(const char *pathname, int flags, ...) __attribute__((weak));
+__attribute__((weak)) int open64(const char *pathname, int flags, ...);
 int open64(const char *pathname, int flags, ...) {
   mode_t mode = 0;
 
@@ -179,17 +179,14 @@ off64_t lseek64(int fd, off64_t off, int whence) {
   return __fd_lseek(fd, off, whence);
 }
 
-int stat64(const char *path, struct stat64 *buf) __attribute__((weak));
 int stat64(const char *path, struct stat64 *buf) {
   return __fd_stat(path, buf);
 }
 
-int lstat64(const char *path, struct stat64 *buf) __attribute__((weak));
 int lstat64(const char *path, struct stat64 *buf) {
   return __fd_lstat(path, buf);
 }
 
-int fstat64(int fd, struct stat64 *buf) __attribute__((weak));
 int fstat64(int fd, struct stat64 *buf) {
   return __fd_fstat(fd, buf);
 }

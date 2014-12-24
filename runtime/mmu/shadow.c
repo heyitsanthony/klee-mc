@@ -23,7 +23,7 @@
 
 
 static struct shadow_page* shadow_new_page(struct shadow_info* si, uint64_t ptr);
-static void shadow_free_page(struct shadow_info* si, struct shadow_page* pg);
+//static void shadow_free_page(struct shadow_info* si, struct shadow_page* pg);
 static struct shadow_page* shadow_pg_get(struct shadow_info* si, uint64_t ptr);
 static void shadow_put_tiny(
 	struct shadow_info* si,
@@ -365,6 +365,7 @@ uint64_t shadow_get(struct shadow_info* si, uint64_t phys)
 	return ~0UL;
 }
 
+#if 0
 static void shadow_free_page(struct shadow_info* si, struct shadow_page *p)
 {
 	struct shadow_pg_bucket	*spb;
@@ -390,6 +391,7 @@ static void shadow_free_page(struct shadow_info* si, struct shadow_page *p)
 	free(p);
 	return;
 }
+#endif
 
 void* shadow_next_pg(struct shadow_info* si, void* prev)
 {

@@ -30,5 +30,5 @@ void mmu_testptr(void* ptr)
 	/* still possible that pointer will resolve to valid range... oops? */
 
 	SET_KREPORT(&testptr_ktab[0], ptr);
-	SET_KREPORT(&testptr_ktab[1], klee_get_value(ptr));
+	SET_KREPORT(&testptr_ktab[1], klee_get_ptr(ptr));
 	klee_uerror_details("bad memory access!", "ptr.err", &testptr_ktab); }

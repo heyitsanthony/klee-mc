@@ -31,7 +31,7 @@ struct fail_counters
 } fail_c;
 
 /* XXX, yeah these are stupid. */
-#warning fix strlen so we dont reimplement
+//#warning fix strlen so we dont reimplement
 static int strlen(const char* x)
 {
 	int	k = 0;
@@ -212,7 +212,7 @@ static void sc_open(const char* path, void* regfile)
 		return;
 	}
 
-	if (!klee_is_symbolic(path) && !klee_is_valid_addr(path)) {
+	if (!klee_is_symbolic_addr(path) && !klee_is_valid_addr(path)) {
 		sc_report_badbuf("Bad open path", path);
 		sc_ret_v(regfile, -1);
 		return;
@@ -321,7 +321,7 @@ int file_sc(struct sc_pkt* sc)
 			return -1;
 		}
 
-		if (!klee_is_symbolic(readp) && !klee_is_valid_addr(readp)) {
+		if (!klee_is_symbolic_addr(readp) && !klee_is_valid_addr(readp)) {
 			sc_report_badbuf("Bad read buf", readp);
 			return -1;
 		}

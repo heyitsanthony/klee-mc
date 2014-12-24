@@ -1,4 +1,5 @@
 #define _LARGEFILE64_SOURCE
+#include <string.h>
 #include <stdbool.h>
 #include <sys/ptrace.h>
 #include <sys/user.h>
@@ -25,6 +26,7 @@
 #include <grp.h>
 #include <asm/ldt.h>
 #include <asm/ptrace.h>
+#include <string.h>
 #include "cpu/i386_macros.h"
 
 #include "struct_sz.h"

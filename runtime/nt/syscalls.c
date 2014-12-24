@@ -1,5 +1,7 @@
 #define _LARGEFILE64_SOURCE
 
+#include <string.h>
+
 #ifdef GUEST_WINXP
 #include "win32k_xp.h"
 #include "ntapi.xp.h"

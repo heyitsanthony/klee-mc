@@ -7,6 +7,8 @@
 #include "mmu_testptr.h"
 #include "mmu.h"
 
+#if 0
+
 
 struct sym_write
 {
@@ -24,8 +26,6 @@ void write_scrubber(void)
 {
 
 }
-
-
 
 static void* find_matched_writes(
 	struct sym_write* sw_start,
@@ -73,3 +73,5 @@ void mmu_store_##x##_symlog(void* addr, y v)	\
 
 MMU_ACCESS_ALL();
 DECL_MMUOPS_S(symlog);
+
+#endif

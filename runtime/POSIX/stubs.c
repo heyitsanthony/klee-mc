@@ -73,72 +73,61 @@ void sync(void) {
 extern int __fgetc_unlocked(FILE *f);
 extern int __fputc_unlocked(int c, FILE *f);
 
-int _IO_getc(FILE *f) __attribute__((weak));
 int _IO_getc(FILE *f) {
   return __fgetc_unlocked(f);
 }
 
-int _IO_putc(int c, FILE *f) __attribute__((weak));
 int _IO_putc(int c, FILE *f) {
   return __fputc_unlocked(c, f);
 }
 
-int mkdir(const char *pathname, mode_t mode) __attribute__((weak));
 int mkdir(const char *pathname, mode_t mode) {
   klee_warning("ignoring (EIO)");
   errno = EIO;
   return -1;
 }
 
-int mkfifo(const char *pathname, mode_t mode) __attribute__((weak));
 int mkfifo(const char *pathname, mode_t mode) {
   klee_warning("ignoring (EIO)");
   errno = EIO;
   return -1;
 }
 
-int mknod(const char *pathname, mode_t mode, dev_t dev) __attribute__((weak));
 int mknod(const char *pathname, mode_t mode, dev_t dev) {
   klee_warning("ignoring (EIO)");
   errno = EIO;
   return -1;
 }
 
-int pipe(int filedes[2]) __attribute__((weak));
 int pipe(int filedes[2]) {
   klee_warning("ignoring (ENFILE)");
   errno = ENFILE;
   return -1;
 }
 
-int link(const char *oldpath, const char *newpath) __attribute__((weak));
 int link(const char *oldpath, const char *newpath) {
   klee_warning("ignoring (EPERM)");
   errno = EPERM;
   return -1;  
 }
 
-int symlink(const char *oldpath, const char *newpath) __attribute__((weak));
 int symlink(const char *oldpath, const char *newpath) {
   klee_warning("ignoring (EPERM)");
   errno = EPERM;
   return -1;  
 }
 
-int rename(const char *oldpath, const char *newpath) __attribute__((weak));
 int rename(const char *oldpath, const char *newpath) {
   klee_warning("ignoring (EPERM)");
   errno = EPERM;
   return -1;  
 }
 
-int nanosleep(const struct timespec *req, struct timespec *rem) __attribute__((weak));
 int nanosleep(const struct timespec *req, struct timespec *rem) {
   return 0;
 }
 
 /* XXX why can't I call this internally? */
-int clock_gettime(clockid_t clk_id, struct timespec *res) __attribute__((weak));
 int clock_gettime(clockid_t clk_id, struct timespec *res) {
   /* Fake */
   struct timeval tv;
@@ -148,7 +137,6 @@ int clock_gettime(clockid_t clk_id, struct timespec *res) {
   return 0;
 }
 
-int clock_settime(clockid_t clk_id, const struct timespec *res) __attribute__((weak));
 int clock_settime(clockid_t clk_id, const struct timespec *res) {
   klee_warning("ignoring (EPERM)");
   errno = EPERM;
@@ -172,57 +160,47 @@ clock_t times(struct tms *buf) {
   return 0;
 }
 
-struct utmpx *getutxent(void) __attribute__((weak));
 struct utmpx *getutxent(void) {
   return (struct utmpx*) getutent();
 }
 
-void setutxent(void) __attribute__((weak));
 void setutxent(void) {
   setutent();
 }
 
-void endutxent(void) __attribute__((weak));
 void endutxent(void) {
   endutent();
 }
 
-int utmpxname(const char *file) __attribute__((weak));
 int utmpxname(const char *file) {
   utmpname(file);
   return 0;
 }
 
-int euidaccess(const char *pathname, int mode) __attribute__((weak));
 int euidaccess(const char *pathname, int mode) {
   return access(pathname, mode);
 }
 
-int eaccess(const char *pathname, int mode) __attribute__((weak));
 int eaccess(const char *pathname, int mode) {
   return euidaccess(pathname, mode);
 }
 
-int group_member (gid_t __gid) __attribute__((weak));
 int group_member (gid_t __gid) {
   return ((__gid == getgid ()) || (__gid == getegid ()));
 }
 
-int utime(const char *filename, const struct utimbuf *buf) __attribute__((weak));
 int utime(const char *filename, const struct utimbuf *buf) {
   klee_warning("ignoring (EPERM)");
   errno = EPERM;
   return -1;
 }
 
-int utimes(const char *filename, const struct timeval times[2]) __attribute__((weak));
 int utimes(const char *filename, const struct timeval times[2]) {
   klee_warning("ignoring (EPERM)");
   errno = EPERM;
   return -1;
 }
 
-int futimes(int fd, const struct timeval times[2]) __attribute__((weak));
 int futimes(int fd, const struct timeval times[2]) {
   klee_warning("ignoring (EBADF)");
   errno = EBADF;
@@ -233,17 +211,14 @@ int strverscmp (__const char *__s1, __const char *__s2) {
   return strcmp(__s1, __s2); /* XXX no doubt this is bad */
 }
 
-unsigned int gnu_dev_major(unsigned long long int __dev) __attribute__((weak));
 unsigned int gnu_dev_major(unsigned long long int __dev) {
   return ((__dev >> 8) & 0xfff) | ((unsigned int) (__dev >> 32) & ~0xfff);
 }
 
-unsigned int gnu_dev_minor(unsigned long long int __dev) __attribute__((weak));
 unsigned int gnu_dev_minor(unsigned long long int __dev) {
   return (__dev & 0xff) | ((unsigned int) (__dev >> 12) & ~0xff);
 }
 
-unsigned long long int gnu_dev_makedev(unsigned int __major, unsigned int __minor) __attribute__((weak));
 unsigned long long int gnu_dev_makedev(unsigned int __major, unsigned int __minor) {
   return ((__minor & 0xff) | ((__major & 0xfff) << 8)
 	  | (((unsigned long long int) (__minor & ~0xff)) << 12)

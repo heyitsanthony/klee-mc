@@ -4,7 +4,8 @@
 #include "klee/klee.h"
 #include <sched.h>
 
-static int *set_child_tid = NULL, *clear_child_tid = NULL;
+//static int *set_child_tid = NULL, *clear_child_tid = NULL;
+static int *clear_child_tid = NULL;
 static struct robust_list_head** rlh;
 static size_t			rlh_len;
 static int			free_pid = 1000;
@@ -69,7 +70,7 @@ static void do_clone(struct sc_pkt* sc)
 
 	/* successful parent case */
 	child_pid = free_pid++;
-	if (GET_SYSRET(new_regs) == child_pid) return;
+	if (GET_SYSRET(new_regs) == (ULong)child_pid) return;
 
 	if (regs == NULL) {
 		klee_ureport("can't jump to child's pt_regs yet", "clone.err");
@@ -119,7 +120,8 @@ void proc_sc(struct sc_pkt* sc)
 		break;
 
 	case SYS_set_robust_list:
-		rlh = GET_ARG0(sc->regfile);
+		rlh = (struct robust_list_head**)(void*)(uintptr_t)
+			GET_ARG0(sc->regfile);
 		rlh_len = GET_ARG1(sc->regfile);
 		sc_ret_v(sc->regfile, 0);
 		break;

@@ -1,5 +1,5 @@
 /**
- * masks all side effects from execution;
+ * hides/masks all side effects from execution;
  * restores program memory when unmasked
  *
  */
@@ -10,7 +10,8 @@
 MMUOPS_S_EXTERN(mask);
 MMUOPS_S_EXTERN(maskc);
 
-#warning mmu_mask is not done yet
+#if 0
+//#warning mmu_mask is not done yet
 
 static int			mmu_mask_c = 0;
 static int			in_mmu_mask = 0;
@@ -92,3 +93,4 @@ in_mmu_mask--; }
 MMU_ACCESS_ALL();
 DECL_MMUOPS_S(maskc);
 DECL_MMUOPS_S(mask);
+#endif

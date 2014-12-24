@@ -1,7 +1,7 @@
 #include  <stdio.h>
-extern void* malloc(unsigned);
+extern void* malloc(size_t);
 extern char* strcpy(char *dest, const char* src);
-extern unsigned strlen(const char* s);
+extern size_t strlen(const char* s);
 
 
 char* __strdup(const char* s)

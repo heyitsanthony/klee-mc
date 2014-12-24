@@ -70,7 +70,7 @@ void __fill_blocks(exe_disk_file_t* dfile, const fill_info_t* fill_info, unsigne
         klee_assume_eq(dfile->contents[p->offset + j], p->arg.string[j]);
       }
       break;
-    default:
+//    default:
       assert(0 && "unknown fill method");
     }
   }
