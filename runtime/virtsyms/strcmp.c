@@ -19,7 +19,7 @@ struct strcmp_clo
 	/* orig pointers */
 	const char* s[2];
 	/* copied buffers */
-	const char* s_copy[2];
+	struct virt_str	*vs[2];
 };
 
 static void strcmp_enter(void* r)
@@ -57,11 +57,17 @@ static void strcmp_enter(void* r)
 
 	}
 
+	if ((clo.vs[0] = virtsym_safe_strcopy(clo.s[0])) == NULL) {
+		goto no_s0;
+	}
+
+	if ((clo.vs[1] = virtsym_safe_strcopy(clo.s[1])) == NULL) {
+		goto no_s1;
+	}
 
 	/* set value to symbolic */
 	if (!klee_make_vsym(&ret, sizeof(ret), "vstrcmp")) {
-		virtsym_disabled();
-		return;
+		goto disabled;
 	}
 
 	GET_SYSRET(r) = ret;
@@ -69,13 +75,19 @@ static void strcmp_enter(void* r)
 	/* XXX: this should copy the whole string */
 	ret_clo = malloc(sizeof(clo));
 	memcpy(ret_clo, &clo, sizeof(clo));
-	ret_clo->s_copy[0] = virtsym_safe_strcopy(clo.s[0]);
-	ret_clo->s_copy[1] = virtsym_safe_strcopy(clo.s[1]);
 
 	virtsym_add(strcmp_fini2, ret, ret_clo);
 
 	/* no need to evaluate, skip */
 	kmc_skip_func();
+	return;
+disabled:
+	virtsym_disabled();
+	virtsym_str_free(clo.vs[1]);
+no_s1:
+	virtsym_str_free(clo.vs[0]);
+no_s0:
+	return;
 }
 
 
@@ -125,8 +137,8 @@ static void strcmp_fini2(uint64_t _r, void* aux)
 
 	klee_assume_eq(r, _r);
 
-	s[0] = clo->s_copy[0];
-	s[1] = clo->s_copy[1];
+	s[0] = clo->vs[0]->vs_str;
+	s[1] = clo->vs[1]->vs_str;
 
 	int i = 0;
 	/* skip prefix */

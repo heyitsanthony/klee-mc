@@ -18,16 +18,17 @@ HOOK_FUNC(__strchrnul, strchrnul_enter);
 
 struct strchr_clo
 {
-	const char	*s, *s_orig;
+	const char	*s_orig;
+	struct virt_str	*vs;
 	uint8_t		c;
-	unsigned	i;
+//	unsigned	i; virt_first_sym_idx
 };
 
 static int strchr_internal(void* r, uint64_t* ret, unsigned* len)
 {
 	const char		*s;
 	struct strchr_clo	*clo_dat;
-	unsigned		i;
+	struct virt_str		*vs;
 
 	s = (const char*)GET_ARG0(r);
 
@@ -37,28 +38,25 @@ static int strchr_internal(void* r, uint64_t* ret, unsigned* len)
 	/* ignore concretes */
 	if (!klee_is_symbolic(s[0])) return 0;
 
-	/* skip past every byte that is possibly not 0
-	 * NOTE: this is a hint; no solver call for symbolics */
-	i = 0;
-	while (	klee_is_valid_addr(&s[i]) &&
-		(klee_is_symbolic(s[i]) || s[i] != '\0')) i++;
-
 	// XXX: generate a state that causes an overflow here
-	// if (!klee_is_valid_addr(&s[i]))
+	if ((vs = virtsym_safe_strcopy(s)) == NULL) return 0;
 
 	/* set value to symbolic */
-	if (!klee_make_vsym(ret, sizeof(*ret), "vstrchr")) return 0;
+	if (!klee_make_vsym(ret, sizeof(*ret), "vstrchr")) {
+		virtsym_str_free(vs);
+		virtsym_disabled();
+		return 0;
+	}
 
-	klee_assume_ule(*ret, i+1);
+	*len = vs->vs_len_max;
+	klee_assume_ule(*ret, vs->vs_len_max+1);
 
 	/* XXX: this should copy the whole string */
 	clo_dat = malloc(sizeof(*clo_dat));
-	clo_dat->s = virtsym_safe_strcopy(s);
+	clo_dat->vs = vs;
 	clo_dat->s_orig = s;
 	clo_dat->c = (uint8_t)GET_ARG1(r);
-	clo_dat->i = i;
 	virtsym_add(strchr_fini, *ret, clo_dat);
-	*len = i;
 
 	return 1;
 }
@@ -98,12 +96,12 @@ static void strchrnul_enter(void* r)
 static void strchr_fini(uint64_t _r, void* aux)
 {
 	struct strchr_clo	*clo = aux;
-	const char		*s = clo->s;
+	const char		*s = clo->vs->vs_str;
 	uint8_t			c = clo->c;
 	unsigned		i = 0;
 
 	/* does range exceed bounds? try to fill out up to index [r] */
-	if (_r == clo->i+1) {
+	if (_r == clo->vs->vs_len_max+1) {
 		while (i < _r) {
 			/* string doesn't have 'c' and string hasn't ended? */
 			uint64_t has_more_chars = klee_mk_and(
@@ -127,7 +125,7 @@ static void strchr_fini(uint64_t _r, void* aux)
 	}
 
 	// _r > clo->i+1 should never happen
-	klee_assume_ult(_r, clo->i+1);
+	klee_assume_ult(_r, clo->vs->vs_len_max+1);
 
 	while (klee_feasible_ne(s[i], 0)) {
 		uint64_t match_cond = klee_mk_and(

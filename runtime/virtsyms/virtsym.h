@@ -20,9 +20,17 @@ struct vsym_clo
 	struct vsym_clo	*vs_next;
 };
 
+struct virt_str
+{
+	char		*vs_str;
+	unsigned	vs_first_sym_idx; // must have some symbolic!
+	unsigned	vs_len_min, vs_len_max; // lengths of stream
+	char		*vs_str_min, *vs_str_max; // pointers into vs_str
+};
 
 void virtsym_add(vsym_clo_f f, uint64_t ret, void* dat);
-char* virtsym_safe_strcopy(const char* s);
+struct virt_str* virtsym_safe_strcopy(const char* s);
+void virtsym_str_free(struct virt_str*);
 void* virtsym_safe_memcopy(const void* m, unsigned len);
 void virtsym_prune(pruneid_t);
 

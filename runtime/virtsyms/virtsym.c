@@ -1,5 +1,6 @@
 #include "klee/klee.h"
 #include "virtsym.h"
+#include <string.h>
 
 struct vsym_clo*	vs = NULL;
 
@@ -16,36 +17,65 @@ void virtsym_add(vsym_clo_f f, uint64_t ret, void* dat)
 	vs = cur_vs;
 }
 
-/* XXX: this can be smarter in a few ways... */
-char* virtsym_safe_strcopy(const char* s)
+void virtsym_str_free(struct virt_str *vs)
 {
-	char*	ret;
-	int	i, j;
+	free(vs->vs_str);
+	free(vs);
+}
 
-	for (i = 0; !klee_is_symbolic(s[i]) && s[i] != '\0'; i++);
+struct virt_str* virtsym_safe_strcopy(const char* s)
+{
+	struct virt_str	vs, *ret;
+	unsigned	i, j;
 
-	if (klee_is_symbolic(s[i])) {
-		i = 127;
-	} else if (s[i] != '\0') {
-		/* ruhroh -- huge string */
-		klee_assert(s[i] == '\0');
+	if (!klee_is_valid_addr(s)) {
+		return NULL;
 	}
 
-	ret = malloc(i+1); /* XXX be smarter */
-	for (j = 0; j <= i && klee_is_valid_addr(&s[j]); j++)
-		ret[j] = s[j];
+	klee_assert(!klee_is_symbolic_addr(s) && "Smarter way to do this?");
 
+	for (i = 0;
+		klee_is_valid_addr(&s[i]) &&
+		!klee_is_symbolic(s[i]) &&
+		s[i] != '\0'; i++);
+
+	if (!klee_is_valid_addr(&s[i]) || !klee_is_symbolic(s[i])) {
+		/* total concrete string; do nothing */
+		klee_assert(s[i] == '\0');
+		return NULL;
+	}
+
+	vs.vs_len_min = i;
+	vs.vs_first_sym_idx = i;
+	klee_assert(klee_is_symbolic(s[vs.vs_first_sym_idx]));
+
+	for (i = vs.vs_len_min; klee_is_valid_addr(&s[i]); i++) {
+		if (!klee_is_symbolic(s[i]) && s[i] == '\0')
+			break;
+	}
+	vs.vs_len_max = i; 
+
+	vs.vs_str = malloc(vs.vs_len_max+1);
+	for (j = 0; j < vs.vs_len_max; j++)
+		vs.vs_str[j] = s[j];
+
+	// don't crash in handler!
+	vs.vs_str[vs.vs_len_max] = '\0';
+
+	ret = malloc(sizeof(vs));
+	memcpy(ret, &vs, sizeof(vs));
 	return ret;
 }
 
 void* virtsym_safe_memcopy(const void* m, unsigned len)
 {
 	void	*ret;
-	int	i;
+	unsigned i;
 
-	/* concretize because we're dum */
+	/* concretize because we're dum  (XXX smarter way to do this?) */
 	klee_assume_eq((uint64_t)m, klee_get_value((uint64_t)m));
 	klee_assume_eq(len, klee_max_value(len));
+	if (!klee_is_valid_addr(m)) return NULL;
 
 	/* XXX: in the future this should use the to-be-written
 	 * klee_copy_cow instrinsic so there's no space/copying overhead */

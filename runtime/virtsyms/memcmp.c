@@ -33,12 +33,12 @@ static void memcmp_enter(void* r)
 	clo.len = GET_ARG2(r);
 
 	/* 1. check pointers */
-	if (!klee_is_valid_addr(klee_get_value(clo.p[0]))) return;
-	if (!klee_is_valid_addr(klee_get_value(clo.p[1]))) return;
+	if (!klee_is_valid_addr(klee_get_ptr(clo.p[0]))) return;
+	if (!klee_is_valid_addr(klee_get_ptr(clo.p[1]))) return;
 
-	/* ignore concretes */
-	if (	!klee_is_symbolic_addr(clo.p[0]) &&
-		!klee_is_symbolic_addr(clo.p[1])) return;
+	/* 2. make sure not symbolic pointers */
+	if (klee_is_symbolic_addr(clo.p[0]) || klee_is_symbolic_addr(clo.p[1]))
+		return;
 
 	/* set value to symbolic */
 	if (!klee_make_vsym(&ret, sizeof(ret), "vmemcmp")) {

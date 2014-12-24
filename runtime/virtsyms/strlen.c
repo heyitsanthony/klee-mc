@@ -17,39 +17,27 @@ HOOK_FUNC(__strlen_sse42, strlen_enter);
 static void strlen_enter(void* r)
 {
 	const char	*s;
-	const char	*s_copy;
+	struct virt_str	*vs;
 	uint64_t	ret;
-	void		*clo_dat;
-	unsigned	i;
 
 	s = (const char*)GET_ARG0(r);
 
 	/* 1. check pointers, common to crash in strlen */
 	if (!klee_is_valid_addr(s)) return;
 
-	/* ignore concretes */
-	if (!klee_is_symbolic(s[0])) return;
-
-	i = 0;
-	while (	klee_is_valid_addr(&s[i]) &&
-		(klee_is_symbolic(s[i]) || s[i] != '\0')) i++;
-
-	// XXX: generate a state that causes an overflow here
-	// if (!klee_is_valid_addr(&s[i]))
+	if ((vs = virtsym_safe_strcopy(s)) == NULL)
+		return;
 
 	/* set value to symbolic */
 	if (!klee_make_vsym(&ret, sizeof(ret), "vstrlen")) {
+		virtsym_str_free(vs);
 		virtsym_disabled();
 		return;
 	}
 
-	klee_assume_ule(ret, i);
+	klee_assume_ule(ret, vs->vs_len_max);
 	GET_SYSRET(r) = ret;
-
-	s_copy = virtsym_safe_strcopy(s);
-	clo_dat = malloc(sizeof(s_copy));
-	memcpy(clo_dat, &s_copy, sizeof(s_copy));
-	virtsym_add(strlen_fini, ret, clo_dat);
+	virtsym_add(strlen_fini, ret, vs);
 
 	/* no need to evaluate, skip */
 	kmc_skip_func();
@@ -60,15 +48,14 @@ static void strlen_fini(uint64_t _r, void* aux)
 	const char	*s = ((char**)aux)[0];
 	unsigned	i = 0;
 
-	while(klee_feasible_ne(s[i], 0)) {
+	while (klee_feasible_ne(s[i], 0)) {
+		uint64_t can_finish_cond = klee_mk_and(
+			klee_mk_eq(_r, i), klee_mk_eq(s[i], 0));
 		/* note it's necessary to test feasibility of *both*
 		 * predicates at once because feasible(a) /\ feasible(b)
 		 * does not imply feasible(a /\ b)! */
-		if (__klee_feasible(klee_mk_and(
-			klee_mk_eq(_r, i), klee_mk_eq(s[i], 0))))
-		{
-			klee_assume_eq(_r, i);
-			klee_assume_eq(s[i], 0);
+		if (__klee_feasible(can_finish_cond)) {
+			__klee_assume(can_finish_cond);
 			break;
 		}
 		klee_assume_ne(s[i], 0);
