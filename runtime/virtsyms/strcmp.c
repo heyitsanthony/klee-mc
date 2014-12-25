@@ -38,16 +38,12 @@ static void strcmp_enter(void* r)
 	is_sym[0] = klee_is_symbolic(*clo.s[0]);
 	is_sym[1] = klee_is_symbolic(*clo.s[1]);
 
-	/* both are concrete; ignore */
-	if (!is_sym[0] && !is_sym[1])
-		return;
-
 	if (is_sym[0] != is_sym[1]) {
 		/* one is concrete. should I bother checking better? */
 		if (	!klee_feasible_eq(*clo.s[0], *clo.s[1]) ||
 			!klee_feasible_ne(*clo.s[0], *clo.s[1]))
 			return;
-	} else {
+	} else if (!is_sym[0]) {
 		/* both are symbolic */
 
 		/* some constraint? */
@@ -57,19 +53,16 @@ static void strcmp_enter(void* r)
 
 	}
 
-	if ((clo.vs[0] = virtsym_safe_strcopy(clo.s[0])) == NULL) {
+	if ((clo.vs[0] = virtsym_safe_strcopy_conc(clo.s[0])) == NULL)
 		goto no_s0;
-	}
-
-	if ((clo.vs[1] = virtsym_safe_strcopy(clo.s[1])) == NULL) {
+	if ((clo.vs[1] = virtsym_safe_strcopy_conc(clo.s[1])) == NULL)
 		goto no_s1;
-	}
+	if (vs_is_conc(clo.vs[0]) && vs_is_conc(clo.vs[1]))
+		goto vs_concrete;
+	if (!klee_make_vsym(&ret, sizeof(ret), "vstrcmp"))
+		goto disabled;
 
 	/* set value to symbolic */
-	if (!klee_make_vsym(&ret, sizeof(ret), "vstrcmp")) {
-		goto disabled;
-	}
-
 	GET_SYSRET(r) = ret;
 
 	/* XXX: this should copy the whole string */
@@ -83,6 +76,7 @@ static void strcmp_enter(void* r)
 	return;
 disabled:
 	virtsym_disabled();
+vs_concrete:
 	virtsym_str_free(clo.vs[1]);
 no_s1:
 	virtsym_str_free(clo.vs[0]);

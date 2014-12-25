@@ -23,7 +23,7 @@ void virtsym_str_free(struct virt_str *vs)
 	free(vs);
 }
 
-struct virt_str* virtsym_safe_strcopy(const char* s)
+struct virt_str* virtsym_safe_strcopy_all(const char* s, int copy_concrete)
 {
 	struct virt_str	vs, *ret;
 	char		*s_c;
@@ -44,9 +44,23 @@ struct virt_str* virtsym_safe_strcopy(const char* s)
 		s[i] != '\0'; i++);
 
 	if (!klee_is_valid_addr(&s[i]) || !klee_is_symbolic(s[i])) {
-		/* total concrete string; do nothing */
-		klee_assert(s[i] == '\0');
-		return NULL;
+		/* total concrete string */
+		klee_assert(!klee_is_valid_addr(&s[i]) || s[i] == '\0');
+		if (!copy_concrete) {
+			return NULL;
+		}
+
+		vs.vs_len_min = i;
+		vs.vs_first_sym_idx = ~0U;
+		vs.vs_len_max = i; 
+		vs.vs_str = malloc(vs.vs_len_max+1);
+		for (j = 0; j < vs.vs_len_max; j++) vs.vs_str[j] = s[j];
+		// don't crash in handler!
+		vs.vs_str[vs.vs_len_max] = '\0';
+
+		ret = malloc(sizeof(vs));
+		memcpy(ret, &vs, sizeof(vs));
+		return ret;
 	}
 
 	vs.vs_len_min = i;
@@ -94,10 +108,13 @@ void* virtsym_safe_memcopy(const void* m, unsigned len)
 /* do all virtsym closures */
 void __hookfini_virtsym(void)
 {
+	unsigned i = 0;
 	while (vs) {
 		vs->vs_f(vs->vs_ret, vs->vs_aux);
 		vs = vs->vs_next;
+		i++;
 	}
+	klee_print_expr("vsym complete", i);
 }
 
 void virtsym_prune(int n)

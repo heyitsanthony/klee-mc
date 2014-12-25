@@ -18,6 +18,7 @@ void __hookpre_##x(void* r) {\
 	klee_hook_return(1, &post_##x, psid);\
 }
 
+DECL_HOOK(__GI___backtrace)
 DECL_HOOK(fgets)
 DECL_HOOK(__tzfile_read)
 //DECL_HOOK(getpwuid)
@@ -29,6 +30,7 @@ DECL_HOOK(__GI___nss_database_lookup)
 DECL_HOOK(__GI___nss_group_lookup2)
 DECL_HOOK(__GI___nss_group_lookup)
 //DECL_HOOK(__GI___sysconf)
+DECL_HOOK(__syslog_chk)
 DECL_HOOK(__GI___getmntent_r)
 DECL_HOOK(_nc_setupterm)
 //DECL_HOOK(__GI_fgets_unlocked)

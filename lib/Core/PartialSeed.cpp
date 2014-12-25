@@ -159,6 +159,17 @@ SFH_DEF_ALL(PartSeedEndCollect, "klee_partseed_end", false)
 		return;
 	}
 
+	/* XXX: this is garbage with vsyms because fini has to run
+	 * first before anything can be done with the solution set.
+	 *
+	 * I think the right logic here is to kill the state
+	 * with a special Terminator that will
+	 * 	1) run the full fini list
+	 * 	2) dump out the ktest file in the place we want it.
+	 *
+	 * Too much?
+	 * */
+
 	/* find solution to partial seed objcets */
 	if (sfh->executor->getSymbolicSolution(state, objs) == false) {
 		std::cerr << "[PS] Couldn't solve.\n";
@@ -474,6 +485,7 @@ void PartSeedSetup(Executor* exe)
 {
 	SpecialFunctionHandler	*sfh(exe->getSFH());
 	if (PartSeedReplay) {
+		std::cerr << "[PS] Replay mode enabled.\n";
 		sfh->addHandler(HandlerPartSeedBeginReplay::hinfo);
 		sfh->addHandler(HandlerPartSeedEndReplay::hinfo);
 	} else {

@@ -20,6 +20,7 @@ struct vsym_clo
 	struct vsym_clo	*vs_next;
 };
 
+#define vs_is_conc(x)	((x)->vs_first_sym_idx == ~0U)
 struct virt_str
 {
 	char		*vs_str;
@@ -29,7 +30,9 @@ struct virt_str
 };
 
 void virtsym_add(vsym_clo_f f, uint64_t ret, void* dat);
-struct virt_str* virtsym_safe_strcopy(const char* s);
+#define virtsym_safe_strcopy(s) virtsym_safe_strcopy_all(s,0)
+#define virtsym_safe_strcopy_conc(s) virtsym_safe_strcopy_all(s,1)
+struct virt_str* virtsym_safe_strcopy_all(const char* s, int copy_conc);
 void virtsym_str_free(struct virt_str*);
 void* virtsym_safe_memcopy(const void* m, unsigned len);
 void virtsym_prune(pruneid_t);
