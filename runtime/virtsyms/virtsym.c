@@ -26,12 +26,16 @@ void virtsym_str_free(struct virt_str *vs)
 struct virt_str* virtsym_safe_strcopy(const char* s)
 {
 	struct virt_str	vs, *ret;
+	char		*s_c;
 	unsigned	i, j;
 
 	if (!klee_is_valid_addr(s)) {
 		return NULL;
 	}
 
+	s_c = klee_get_ptr(s);
+	klee_assume_eq(s, s_c);
+	s = s_c;
 	klee_assert(!klee_is_symbolic_addr(s) && "Smarter way to do this?");
 
 	for (i = 0;
