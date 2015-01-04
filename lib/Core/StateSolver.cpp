@@ -101,7 +101,7 @@ bool StateSolver::updateTimes(const ExecutionState& state, double totalTime)
 		timeLowest *= STATESOLVER_TIME_INTERVAL;
 	}
 
-	return totalTime < MaxSTPTime;
+	return MaxSTPTime == 0.0 || (totalTime < MaxSTPTime);
 }
 
 bool StateSolver::evaluate(

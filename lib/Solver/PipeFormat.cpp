@@ -16,12 +16,12 @@ using namespace klee;
 #define IOMON_ARGS(x) x
 #define IOMON_EXEC(x) x
 #endif
-#define DECL_ARGS(x) const char* const x[] =
+#define DECL_ARGS(x) const char* x[] =
 
 
 const char* PipeSTP::exec_cmd = IOMON_EXEC("stp");
 DECL_ARGS(PipeSTP::sat_args) {IOMON_ARGS("stp"), "--SMTLIB1", NULL};
-DECL_ARGS(PipeSTP::mod_args) {IOMON_ARGS("stp"), "--SMTLIB1",  "-p", NULL};
+DECL_ARGS(PipeSTP::mod_args) {IOMON_ARGS("stp"), "-p", "--SMTLIB1", NULL};
 
 const char* PipeBoolector::exec_cmd = IOMON_EXEC("boolector");
 DECL_ARGS(PipeBoolector::sat_args) {IOMON_ARGS("boolector"), NULL};
@@ -421,21 +421,49 @@ bool PipeYices2::parseModel(std::istream& is)
 	if (!is.getline(line, 512)) goto oops;
 
 	while (1) {
-		char arrname[128];
+		char arrname[128], arrname2[128];
 		if (!is.getline(line, 512)) goto oops;
 
+		if (sscanf(line, "(= %s %s", arrname, arrname2) == 2) {
+			assert(*arrname2 != '\0');
+			arrname2[strlen(arrname2)-1] = '\0';
+			if (arrays.count(arrname)) {
+				if (arrays.count(arrname2)) {
+					std::cerr << "[yices2] unexpected arr2: "
+						<< arrname2 << '\n';
+					goto oops;
+				}
+				arrays[arrname2] = arrays[arrname];
+			} else {
+				if (!arrays.count(arrname2)) {
+					std::cerr << "[yices2] expected arr2: "
+						<< arrname2 << '\n';
+					goto oops;
+				}
+				arrays[arrname] = arrays[arrname2];
+			}
+			continue;
+		}
+
 		if (sscanf(line, "(function %s", arrname) != 1) {
-			if (strcmp("----", line))
-				goto oops;
+			if (strcmp("----", line)) goto oops;
 			break;
 		}
-		if (!is.getline(line, 512)) goto oops;
-		if (strcmp(" (type (-> (bitvector 32) (bitvector 8)))", line))
+
+		if (!is.getline(line, 512)) {
+			std::cerr << "[yices2] Missed type\n";
 			goto oops;
+		}
+		if (strcmp(" (type (-> (bitvector 32) (bitvector 8)))", line)) {
+			std::cerr << "[yices2] Expected type\n";
+			goto oops;
+		}
 		while (1) {
 			char arrname2[128], off_bitstr[64], val_bitstr[64];
-			if (!is.getline(line, 512))
+			if (!is.getline(line, 512)) {
+				std::cerr << "[yices2] Expected = expr\n";
 				goto oops;
+			}
 			if (sscanf(line, " (= (%s 0b%[01]) 0b%[01])",
 				arrname2, off_bitstr, val_bitstr) == 3)
 			{
@@ -444,8 +472,10 @@ bool PipeYices2::parseModel(std::istream& is)
 				addArrayByte(arrname, off, val);
 				continue;
 			}
-			if (!sscanf(line, " (default 0b%[01]))", val_bitstr))
+			if (!sscanf(line, " (default 0b%[01]))", val_bitstr)) {
+				std::cerr << "[yices2] Expected = default value\n";
 				goto oops;
+			}
 			setDefaultByte(arrname, bitstr2val(val_bitstr));
 			break;
 		}
@@ -454,6 +484,9 @@ bool PipeYices2::parseModel(std::istream& is)
 	return true;
 oops:
 	std::cerr << "[yices2] BAD LINE '" << line << "'\n";
+	for (unsigned i = 0; i < 10 && is.getline(line, 512); i++) {
+		std::cerr << "[yices2] NEXT LINE '" << line << "'\n'";
+	}
 	return false;
 }
 

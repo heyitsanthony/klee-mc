@@ -68,23 +68,15 @@ bool IndependentElementSet::add(const IndependentElementSet &b)
 
 	/* add whole objects */
 	foreach (it, b.wholeObjects.begin(), b.wholeObjects.end()) {
-		const Array *array;
-		elements_ty::iterator it2;
+		const Array *array(*it);
 
 		/* if a partial object in this, update to whole object now */
-		it2 = elements.find(array);
-		if (it2 != elements.end()) {
-			modified = true;
-			elements.erase(it2);
-			wholeObjects.insert(array);
-			continue;
-		}
-
-		/* not a partial object, add to whole object */
-		array = *it;
-		if (!wholeObjects.count(array)) {
+		if (elements.erase(array)) {
 			modified = true;
 			wholeObjects.insert(array);
+		} else if (wholeObjects.insert(array).second) {
+			 /* not a partial object, add to whole object */
+			modified = true;
 		}
 	}
 
@@ -141,12 +133,12 @@ void IndependentElementSet::addRead(ref<ReadExpr>& re)
 		return;
 
 	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(re->index)) {
+		// concrete index => continue precise read set
 		DenseSet<unsigned> &dis(elements[array]);
 		dis.add((unsigned) CE->getZExtValue(32));
 	} else {
-		elements_ty::iterator it2 = elements.find(array);
-		if (it2!=elements.end())
-			elements.erase(it2);
+		// symbolic index => all of array may bepossible
+		elements.erase(array);
 		wholeObjects.insert(array);
 	}
 }

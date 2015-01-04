@@ -1,6 +1,18 @@
 #include "klee/klee.h"
 #include "mmu.h"
 
+// According to scripts/err/early.sh on testbeds, this causes approximately
+// 20% of ALL early tests to timeout. The validity calls turn out to be
+// quite expensive and timeout.
+//
+// It's not clear to me whether there's a huge performance win, but I doubt it.
+// Rules should soak up tautologies and context-dependent validity should be rare.
+//
+// To ensure this doesn't ruin the symbolic execution, in the future there needs
+// to be a way to at least avoid erroring-out on solver timeouts for speculative
+// policies like these...
+//
+
 
 MMUOPS_S_EXTERN(vconstchk);
 MMUOPS_S_EXTERN(vconstchkc);

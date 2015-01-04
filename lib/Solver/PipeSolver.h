@@ -19,6 +19,8 @@ public:
 	virtual void setTimeout(double in_timeout);
 };
 
+class PipeSolverSession;
+
 /* Pipes query to a SMT compatible printer. */
 class PipeSolverImpl : public SolverImpl
 {
@@ -39,25 +41,10 @@ public:
 
 	void setTimeout(double in_timeout) { timeout = in_timeout; }
 private:
-	bool setupSolverChild(const char* exec_fname, char* const argv[]);
-	bool setupCachedSolver(char* const argv[]);
-	void finiChild(void);
-	void stopChild(void);
-	std::istream* writeRecvQuery(const Query& q);
-	bool writeQuery(const Query& q) const;
-	bool writeQueryToChild(const Query& q) const;
-	bool waitOnSolver(const Query& q) const;
-
+	PipeSolverSession* setupCachedSolver(const char** argv);
 	PipeFormat	*fmt;
-	int		fd_child_stdin;
-	int		fd_child_stdout;
-	pid_t		parent_pid;
-	pid_t		child_pid;
-	__gnu_cxx::stdio_filebuf<char> *stdout_buf;
-
+	std::map<const char**, PipeSolverSession*> cached_sessions;
 	double		timeout;
-
-	const char** cached_argv;
 	static uint64_t	prefork_misses;
 	static uint64_t prefork_hits;
 };

@@ -877,7 +877,7 @@ ExecutionState* Executor::concretizeState(
 
 	/* Sweet new state. Now, make the immediate state concrete */
 	std::cerr
-		<< "[Exe] st=" << (void*)&st
+		<< "[Exe] Beginning to concretize. st=" << (void*)&st
 		<< ". Concretized=" << st.concretizeCount << '\n';
 	st.concretizeCount++;
 

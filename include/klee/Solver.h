@@ -181,8 +181,21 @@ class TimedSolver : public Solver
 public:
     TimedSolver(SolverImpl *_impl) : Solver(_impl) {}
     virtual ~TimedSolver(void) {}
-    /// setTimeout - Set constraint solver timeout delay to the given value;
-    /// 0 is off.
+
+    /// Set constraint solver timeout delay to the given value. 0 is off.
+    // At the moment the system only uses one timeout
+    // at a time. However, it may have multiple TimedSolvers. This is especially
+    // problematic for the validating debugger where you may have
+    // 	 validate
+    //  /       \
+    // T0       T1
+    // in which case only the 'canonical' timed solver ever has its timeout set.
+    // Not really sure how to best address this--
+    // a) make validating solver timedsolver?
+    // b) make the timeout static?
+    // c) set maxtime only at initialization?
+    //
+    // went with c) since simplest fix for the time being
     virtual void setTimeout(double timeout) {}
     static TimedSolver* create();
 };

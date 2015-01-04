@@ -175,6 +175,7 @@ Solver* Solver::createChainWithTimedSolver(
 
 	if (timedSolver == NULL) timedSolver = TimedSolver::create();
 	solver = timedSolver;
+	timedSolver->setTimeout(MaxSTPTime);
 
 	if (UseSTPQueryPCLog && stpQueryPCLogPath.size())
 		solver = createPCLoggingSolver(solver, stpQueryPCLogPath);
@@ -261,8 +262,6 @@ Solver* Solver::createChainWithTimedSolver(
 
 		Expr::setBuilder(xchkBuilder);
 	}
-
-	timedSolver->setTimeout(MaxSTPTime);
 
 	return solver;
 }
@@ -468,8 +467,11 @@ void Solver::printName(int level) const { impl->printName(level); }
 Solver *klee::createValidatingSolver(Solver *s, Solver *oracle)
 {
 	/* oracle is another QF_BV solver; use STP solver as oracle */
-	if (UsePipeSolver || UseBoolector || UseZ3)
-		oracle = new PipeSolver(new PipeSTP());
+	if (UsePipeSolver || UseBoolector || UseZ3) {
+		TimedSolver *ps(new PipeSolver(new PipeSTP()));
+		ps->setTimeout(MaxSTPTime);
+		oracle = ps;
+	}
 
 	return new Solver(new ValidatingSolver(s, oracle));
 }

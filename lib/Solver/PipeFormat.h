@@ -30,8 +30,8 @@ public:
 	virtual ~PipeFormat() {}
 
 	virtual const char* getExec(void) const = 0;
-	virtual const char* const* getArgvModel(void) const = 0;
-	virtual const char* const* getArgvSAT(void) const = 0;
+	virtual const char** getArgvModel(void) const = 0;
+	virtual const char** getArgvSAT(void) const = 0;
 
 	virtual bool parseSAT(std::istream& is);
 	virtual bool parseModel(std::istream& is) = 0;
@@ -54,13 +54,13 @@ public:	\
 	Pipe##x(void) : PipeFormat(#x) {}	\
 	virtual ~Pipe##x() {}	\
 	virtual const char* getExec(void) const { return exec_cmd; } \
-	virtual const char* const* getArgvSAT(void) const { return sat_args; } \
-	virtual const char* const* getArgvModel(void) const { return mod_args; } \
+	virtual const char** getArgvSAT(void) const { return sat_args; } \
+	virtual const char** getArgvModel(void) const { return mod_args; } \
 	virtual bool parseModel(std::istream& is);\
 private:	\
 	static const char* exec_cmd;	\
-	static const char* const sat_args[];	\
-	static const char* const mod_args[];
+	static const char* sat_args[];	\
+	static const char* mod_args[];
 
 
 class PipeSTP : public PipeFormat {
@@ -85,12 +85,12 @@ public:
 	PipeBoolector15(void)  { setName("Boolector15"); }
 	virtual ~PipeBoolector15() {}
 	virtual const char* getExec(void) const { return exec_cmd; }
-	virtual const char* const* getArgvSAT(void) const { return sat_args; }
-	virtual const char* const* getArgvModel(void) const { return mod_args; }
+	virtual const char** getArgvSAT(void) const { return sat_args; }
+	virtual const char** getArgvModel(void) const { return mod_args; }
 private:
 	static const char* exec_cmd;
-	static const char* const sat_args[];
-	static const char* const mod_args[];
+	static const char* sat_args[];
+	static const char* mod_args[];
 };
 
 class PipeYices : public PipeFormat

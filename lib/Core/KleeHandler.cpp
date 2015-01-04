@@ -591,7 +591,7 @@ void KleeHandler::getKTestFiles(
 
 	foreach (it, contents.begin(), contents.end()) {
 		std::string f(*it);
-		if (f.size() < 6) continue;
+		if (f.size() < 9) continue;
 		if (	f.substr(f.size()-6,f.size()) == ".ktest" || 
 			f.substr(f.size()-9,f.size()) == ".ktest.gz")
 		{

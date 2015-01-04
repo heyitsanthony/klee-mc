@@ -18,6 +18,7 @@ void __hookpre_##x(void* r) {\
 	klee_hook_return(1, &post_##x, psid);\
 }
 
+DECL_HOOK(__GI___vsyslog_chk)
 DECL_HOOK(__GI___backtrace)
 DECL_HOOK(fgets)
 DECL_HOOK(__tzfile_read)
