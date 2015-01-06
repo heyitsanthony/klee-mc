@@ -11,7 +11,7 @@ class ValidatingSolver : public SolverImpl
 private:
   Solver *solver, *oracle;
   void checkIVSolution(const Query& query, Assignment& a);
-
+  void satMismatch(const Query& q);
 public:
   ValidatingSolver(Solver *_solver, Solver *_oracle)
     : solver(_solver), oracle(_oracle) {}

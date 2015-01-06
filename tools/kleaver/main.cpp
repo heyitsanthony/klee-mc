@@ -3,6 +3,7 @@
 #include "expr/Lexer.h"
 #include "expr/Parser.h"
 #include "../../lib/Expr/SMTParser.h"
+#include "../../lib/Solver/SMTPrinter.h"
 
 #include "static/Sugar.h"
 #include "klee/Constraints.h"
@@ -171,20 +172,20 @@ static bool PrintInputAST(
 
 static void doQuery(Solver* S, QueryCommand* QC)
 {
+	ConstraintManager cm(QC->Constraints);
+	Query	q(cm, QC->Query);
+
 	assert("FIXME: Support counterexample query commands!");
 
 	if (QC->Values.empty() && QC->Objects.empty()) {
-		bool result;
-		bool query_ok;
-		Query	q(ConstraintManager(QC->Constraints), QC->Query);
-//		q.print(std::cerr);
+		bool	mbt;
 
-		query_ok = S->mustBeTrue(
-			Query(	ConstraintManager(QC->Constraints),
-				QC->Query),
-			result);
-		if (query_ok)	std::cout << (result ? "VALID" : "INVALID");
-		else		std::cout << "FAIL";
+		SMTPrinter::print(std::cerr, q);
+
+		if (S->mustBeTrue(q, mbt))
+			std::cout << (mbt ? "VALID" : "INVALID");
+		else
+			std::cout << "FAIL";
 
 		std::cout << "\n";
 		return;
@@ -213,36 +214,23 @@ static void doQuery(Solver* S, QueryCommand* QC)
 		return;
 	}
 
-	bool		query_ok;
+	SMTPrinter::dump(q, "kleaver");
+
 	Assignment	a(QC->Objects);
-
-	query_ok = S->getInitialValues(
-		Query(	ConstraintManager(QC->Constraints),
-			QC->Query),
-		a);
-
-	if (query_ok) {
-		std::cout << "INVALID\n";
-		unsigned int i, e;
-
-		i = 0;
-		e = a.getNumBindings();
-		foreach (it, a.bindingsBegin(), a.bindingsEnd()) {
-			const std::vector<unsigned char> &values(it->second);
-			const Array *arr(it->first);
-
-			std::cout	<< "\tArray " << i++ << ":\t"
-					<< arr->name << "[";
-			for (unsigned j = 0; j != arr->mallocKey.size; ++j) {
-				std::cout << (unsigned) values[j];
-				if (j + 1 != arr->mallocKey.size)
-					std::cout << ", ";
-			}
-			std::cout << "]";
-			if (i + 1 != e) std::cout << "\n";
-		}
+	if (S->getInitialValues(q, a)) {
+		std::cout << "SAT\n";
+		a.print(std::cout);
 	} else {
-		std::cout << "FAIL";
+		bool	mbf, mbt;
+		if (!S->mustBeFalse(q, mbf) || !S->mustBeTrue(q, mbt)) {
+			std::cout << "FAIL";
+		} else {
+			std::cout << ((mbf)
+				? "UNSAT"
+				: "SAT but no assignment?!?!");
+			std::cout << "\nmbf: " << mbf << ". mbt: " << mbt;
+			std::cerr << '\n' << q.expr;
+		}
 	}
 
 	std::cout << "\n";

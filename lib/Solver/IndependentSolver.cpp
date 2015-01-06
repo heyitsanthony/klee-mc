@@ -31,25 +31,38 @@ namespace {
 	cl::init(false));
 }
 
-#if 0
-    std::set< ref<Expr> > reqset(result.begin(), result.end());
-    std::cerr << "--\n";
-    std::cerr << "Q: " << query.expr << "\n";
-    std::cerr << "\telts: " << IndependentElementSet(query.expr) << "\n";
-    int i = 0;
-  foreach (it, query.constraints.begin(), query.constraints.end()) {
-      std::cerr << "C" << i++ << ": " << *it;
-      std::cerr << " " << (reqset.count(*it) ? "(required)" : "(independent)") << "\n";
-      std::cerr << "\telts: " << IndependentElementSet(*it) << "\n";
-    }
-    std::cerr << "elts closure: " << eltsClosure << "\n";
-#endif
-
-#define SETUP_CONSTRAINTS			\
+#define SETUP_CONSTRAINTS_			\
 	ConstraintManager	cs;		\
 	IndependentElementSet eltsClosure;	\
 	eltsClosure = IndependentElementSet::getIndependentConstraints(	\
 		query, cs);			\
+	ConstraintManager cs2;
+
+//#define PARANOIA
+#ifdef PARANOIA
+#define	SETUP_PARANOIA						\
+	Query q2(cs2, Expr::createImplies(			\
+			cs.getConjunction(),			\
+			query.constraints.getConjunction()));	\
+	Query q3(cs2, Expr::createImplies(			\
+			query.constraints.getConjunction(),	\
+			cs.getConjunction()));			\
+	if (cs.size() != query.constraints.size()) 		\
+		std::cerr << cs.size() << "<"			\
+			<< query.constraints.size() << '\n';	\
+	assert (doComputeValidity(q2) != Solver::False);	\
+	assert (doComputeValidity(q3) == Solver::True);
+#else
+#define SETUP_PARANOIA	;
+#endif
+
+#define SETUP_CONSTRAINTS			\
+	SETUP_CONSTRAINTS_			\
+	SETUP_PARANOIA				\
+	if (isUnconstrained(cs, query))
+
+#define SETUP_CONSTRAINTS_STATIC		\
+	SETUP_CONSTRAINTS_			\
 	if (isUnconstrained(cs, query))
 
 static bool isFreeRead(const ref<Expr>& e)
@@ -164,7 +177,7 @@ static bool isUnconstrained(
 Query IndependentSolver::getIndependentQuery(
 	const Query& query, ConstraintManager& cs_)
 {
-	SETUP_CONSTRAINTS { return Query(query.expr); }
+	SETUP_CONSTRAINTS_STATIC { return Query(query.expr); }
 	cs_ = cs;
 	return Query(cs_, query.expr);
 }

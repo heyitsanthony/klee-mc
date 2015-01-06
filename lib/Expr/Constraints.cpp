@@ -467,4 +467,19 @@ ConstraintManager::ConstraintManager(
 : constraints(_constraints)
 , readsets(_readsets)
 , simplifier(NULL)
-{}
+{
+#if 0
+	for (int i = 0; i < constraints.size(); i++) {
+		assert (readsets[i] == ReadSet::get(constraints[i]));
+	}
+#endif
+}
+
+ref<Expr> ConstraintManager::getConjunction(void) const
+{
+	ref<Expr> e(MK_CONST(1, 1));
+	foreach (it, constraints.begin(), constraints.end()) {
+		e = MK_AND(e, *it);
+	}
+	return e;
+}

@@ -265,11 +265,12 @@ void Expr::printWidth(std::ostream &os, Width width)
 	}
 }
 
+// a => b equiv to ~a \/ b
 ref<Expr> Expr::createImplies(ref<Expr> hyp, ref<Expr> conc)
-{ return OrExpr::create(Expr::createIsZero(hyp), conc); }
+{ return MK_OR(MK_NOT(hyp), conc); }
 
 ref<Expr> Expr::createIsZero(ref<Expr> e)
-{ return EqExpr::create(e, ConstantExpr::create(0, e->getWidth())); }
+{ return MK_EQ(e, MK_CONST(0, e->getWidth())); }
 
 void Expr::print(std::ostream &os) const
 {

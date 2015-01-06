@@ -554,4 +554,3 @@ PipeSolverImpl::~PipeSolverImpl(void)
 	cached_sessions.clear();
 	delete fmt;
 }
-

@@ -80,6 +80,7 @@ public:
 	 * bakes readsets into the implementation more than I'd like */
 	ref<ReadSet> getReadset(unsigned i) const { return readsets[i]; }
 	ref<Expr> getConstraint(unsigned i) const { return constraints[i]; }
+	ref<Expr> getConjunction(void) const;
 
 	bool operator==(const ConstraintManager &other) const
 	{ return constraints == other.constraints; }
@@ -95,7 +96,6 @@ public:
 	static unsigned getTimeouts(void) { return timeout_c; }
 	static void incReplacements(void) { simplify_c++; }
 	ConstraintManager operator -(const ConstraintManager& other) const;
-
 private:
 	constraints_t constraints;
 	readsets_t readsets;

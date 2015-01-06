@@ -18,7 +18,7 @@ void IndependentElementSet::print(std::ostream& os) const
 			os << ", ";
 		}
 
-		os << "MO" << array->name;
+		os << "MO " << array->name;
 	}
 
 	foreach (it, elements.begin(), elements.end()) {
@@ -26,32 +26,25 @@ void IndependentElementSet::print(std::ostream& os) const
 		const DenseSet<unsigned> &dis = it->second;
 
 		if (first) {
-		first = false;
+			first = false;
 		} else {
-		os << ", ";
+			os << ", ";
 		}
 
-		os << "MO" << array->name << " : " << dis;
+		os << "MO " << array->name << " : " << dis;
 	}
 	os << "}";
 }
 
-// more efficient when this is the smaller set
-bool IndependentElementSet::intersects(const IndependentElementSet &b)
+bool IndependentElementSet::elem_intersect(const IndependentElementSet& b) const
 {
-	foreach (it, wholeObjects.begin(), wholeObjects.end()) {
-		const Array *array = *it;
-		if (	b.wholeObjects.count(array) ||
-			b.elements.find(array) != b.elements.end())
-			return true;
-	}
-
 	foreach (it, elements.begin(), elements.end()) {
 		const Array *array = it->first;
 		elements_ty::const_iterator it2;
 
 		if (b.wholeObjects.count(array))
 			return true;
+
 		it2 = b.elements.find(array);
 		if (it2 != b.elements.end()) {
 			if (it->second.intersects(it2->second))
@@ -61,6 +54,19 @@ bool IndependentElementSet::intersects(const IndependentElementSet &b)
 
 	return false;
 }
+
+bool IndependentElementSet::obj_intersect(const IndependentElementSet& b) const
+{
+	foreach (it, wholeObjects.begin(), wholeObjects.end()) {
+		if (b.wholeObjects.count(*it) || b.elements.count(*it))
+			return true;
+	}
+
+	return false;
+}
+
+bool IndependentElementSet::intersects(const IndependentElementSet &b) const
+{ return obj_intersect(b) ? true : elem_intersect(b); }
 
 bool IndependentElementSet::add(const IndependentElementSet &b)
 {
@@ -112,10 +118,7 @@ IndependentElementSet::IndependentElementSet(ref<Expr> e)
 }
 
 IndependentElementSet::IndependentElementSet(ref<Expr> e, ref<ReadSet> rs)
-{
-	for (auto r : *rs)
-		addRead(r);
-}
+{ for (auto r : *rs) addRead(r); }
 
 
 void IndependentElementSet::addRead(ref<ReadExpr>& re)
@@ -149,8 +152,7 @@ inline std::ostream &operator<<(
 { ies.print(os); return os; }
 
 
-typedef std::vector<
-	std::pair<ref<Expr>, IndependentElementSet*> > worklist_ty;
+typedef std::vector<IndependentElementSet*> worklist_ty;
 
 IndependentElementSet IndependentElementSet::getIndependentConstraints(
 	const Query& query,
@@ -159,47 +161,62 @@ IndependentElementSet IndependentElementSet::getIndependentConstraints(
 	IndependentElementSet	eltsClosure(query.expr);
 	worklist_ty		worklist;
 	std::vector<bool>	worklistDone; // because all the copying is expensive
-	std::vector<int>	result;
+	std::vector<int>	result; // indexes of dependent constraints
 
+	// build an independent element set for each constraint
 	for (unsigned i = 0; i < query.constraints.size(); i++) {
-		ref<Expr> e(query.constraints.getConstraint(i));
-		worklist.push_back(
-			std::make_pair(
-				e,
-				new IndependentElementSet(
-					e, query.constraints.getReadset(i))));
+		ref<Expr>	e(query.constraints.getConstraint(i));
+		ref<ReadSet>	rs(query.constraints.getReadset(i));
+		worklist.push_back(new IndependentElementSet(e, rs));
 		worklistDone.push_back(false);
 	}
 
 	// Copies here were really inefficient. Still kind of pricey.
 	bool done = false;
 	while (done == false) {
-		worklist_ty	newWorklist;
-
 		done = true;
+
+		/* does constraint readset intersect with the completion
+		 * for the q.expr completion? */
 		for (unsigned i = 0; i < worklist.size(); i++) {
+			bool added_more;
 			if (worklistDone[i])
 				continue;
 
 			// evaluate in next work set
-			if (!worklist[i].second->intersects(eltsClosure))
+			if (!worklist[i]->intersects(eltsClosure)) {
 				continue;
+			}
 
 			// not considered for next work set
 			worklistDone[i] = true;
-			done = !(eltsClosure.add(*worklist[i].second));
 			result.push_back(i);
+
+			// if the closure set changed, will need to reprocess
+			added_more = !(eltsClosure.add(*worklist[i]));
+		#if 0
+			if (!added_more) {
+				std::cerr << "couldn't amend with: ";
+				worklist[i]->print(std::cerr);
+				std::cerr << '\n';
+			} else {
+				std::cerr << "amend with: ";
+				worklist[i]->print(std::cerr);
+				std::cerr << '\n';
+			}
+		#endif
+			done = done && !added_more;
 		}
 	}
+	for (auto& wl : worklist ) delete wl;
 
+	/* store q.expr's dependent constraints to a constraint manager */
 	ConstraintManager::constraints_t	constrs;
 	ConstraintManager::readsets_t		rs;
 	for (unsigned i = 0; i < result.size(); i++) {
 		constrs.push_back(query.constraints.getConstraint(result[i]));
 		rs.push_back(query.constraints.getReadset(result[i]));
 	}
-	for (auto& wl : worklist ) delete wl.second;
-
 	cs = ConstraintManager(constrs, rs);
 
 	return eltsClosure;

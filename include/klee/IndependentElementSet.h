@@ -20,10 +20,22 @@ public:
 		ref<ReadSet> rs(new ReadSet());
 		std::vector< ref<ReadExpr> > reads;
 		ExprUtil::findReads(e, /* visitUpdates= */ true, reads);
-		for (auto r : reads)
-			rs->insert(r);
+		for (auto r : reads) rs->insert(r);
 		return rs;
 	}
+
+	int compare(ReadSet& rs) const
+	{
+		if (rs.size() != size()) return rs.size() - size();
+		foreach (it, rs.begin(), rs.end()) {
+			if (!count(*it))
+				return 1;
+		}
+		return 0;
+	}
+
+	void print(std::ostream& os) const
+	{ foreach (it, begin(), end()) os << *it << '\n'; }
 protected:
 	ReadSet() : refCount(0) {}
 protected:
@@ -53,7 +65,7 @@ public:
 		return modified;
 	}
 
-	bool intersects(const DenseSet &b) {
+	bool intersects(const DenseSet &b) const {
 		for (auto& s_e : s) {
 			if (b.s.count(s_e))
 				return true;
@@ -99,7 +111,7 @@ public:
 	}
 
 	void print(std::ostream &os) const;
-	bool intersects(const IndependentElementSet &b); 
+	bool intersects(const IndependentElementSet &b) const; 
 
 	// returns true iff set is changed by addition
 	bool add(const IndependentElementSet &b);
@@ -110,6 +122,8 @@ public:
 
 private:
 	void addRead(ref<ReadExpr>& re);
+	bool elem_intersect(const IndependentElementSet& b) const;
+	bool obj_intersect(const IndependentElementSet& b) const;
 
 	typedef std::map<const Array*, DenseSet<unsigned> > elements_ty;
 	elements_ty			elements;

@@ -6,9 +6,20 @@
 
 using namespace klee;
 
+#define CHK_ASSUMPTIONS					\
+	ConstraintManager	cm;			\
+	bool			okConstrs;		\
+	okConstrs = oracle->impl->computeSat(		\
+		Query(cm, query.constraints.getConjunction()));	\
+	if (oracle->impl->failed()) goto failed;	\
+	assert (okConstrs && "Bad assumptions");
+
+
 bool ValidatingSolver::computeSat(const Query& query)
 {
 	bool	isSatOracle, isSatSolver;
+
+	CHK_ASSUMPTIONS;
 
 	isSatSolver = solver->impl->computeSat(query);
 	if (solver->impl->failed()) goto failed;
@@ -16,8 +27,8 @@ bool ValidatingSolver::computeSat(const Query& query)
 	isSatOracle = oracle->impl->computeSat(query);
 	if (oracle->impl->failed()) goto failed;
 
-	assert(	isSatSolver == isSatOracle &&
-		"computeSat mismatch");
+	if (isSatSolver != isSatOracle) SMTPrinter::dump(query, "computesat");
+	assert(	isSatSolver == isSatOracle && "computeSat mismatch");
 
 	return isSatSolver;
 
@@ -37,6 +48,8 @@ Solver::Validity ValidatingSolver::computeValidity(const Query &query)
 {
 	Solver::Validity	oracleValidity, solverValidity;
 
+	CHK_ASSUMPTIONS;
+
 	solverValidity = solver->impl->computeValidity(query);
 	if (solver->impl->failed()) goto failed;
 
@@ -49,8 +62,7 @@ Solver::Validity ValidatingSolver::computeValidity(const Query &query)
 			<< "oracle = "
 			<< Solver::getValidityStr(oracleValidity) << " vs "
 			<< Solver::getValidityStr(solverValidity) << " = solver.\n";
-		query.print(std::cerr);
-		SMTPrinter::dump(query, "satmismatch");
+		SMTPrinter::dump(query, "validity");
 		std::cerr << "oracle:\n";
 		oracle->printName();
 		std::cerr << "test:\n";
@@ -71,20 +83,34 @@ failed:
 ref<Expr> ValidatingSolver::computeValue(const Query& query)
 {
 	bool		isSat;
-	ref<Expr>	ret;
+	ref<Expr>	ret, ret2;
+
+	CHK_ASSUMPTIONS;
 
 	ret = solver->impl->computeValue(query);
 	if (solver->impl->failed()) goto failed;
 
-	// We don't want to compare, but just make sure this is a legal
-	// solution.
-	isSat = oracle->impl->computeSat(
-		query.withExpr(EqExpr::create(query.expr, ret)));
+	// don't want to compare; just make sure this is a legal solution.
+	isSat = oracle->impl->computeSat(query.withExpr(MK_EQ(query.expr, ret)));
 	if (oracle->impl->failed()) goto failed;
 
-	assert(isSat && "bad solver: solver says SAT, oracle says unSAT");
-	return ret;
+#define TWO_WAY_VALUE_CHK
+#ifdef TWO_WAY_VALUE_CHK
+	ret2 = oracle->impl->computeValue(query);
+	if (oracle->impl->failed()) {
+		oracle->impl->ackFail();
+		goto ok;
+	}
 
+	isSat = solver->impl->computeSat(query.withExpr(MK_EQ(query.expr, ret)));
+	if (solver->impl->failed()) {
+		isSat = true;
+		solver->impl->ackFail();
+	}
+#endif
+ok:
+	if (!isSat) satMismatch(query);
+	return ret;
 failed:
 	failQuery();
 	return ret;
@@ -95,6 +121,7 @@ bool ValidatingSolver::computeInitialValues(
 {
 	bool	hasSolution;
 
+	CHK_ASSUMPTIONS;
 
 	hasSolution = solver->impl->computeInitialValues(query, a);
 	if (solver->impl->failed()) goto failed;
@@ -105,9 +132,7 @@ bool ValidatingSolver::computeInitialValues(
 		bool	isSat;
 		isSat = oracle->impl->computeSat(query);
 		if (oracle->impl->failed()) goto failed;
-
-		assert(	!isSat &&
-			"bad solver: solver says unsat, oracle says sat");
+		if (!isSat) satMismatch(query);
 	}
 
 	return hasSolution;
@@ -130,12 +155,10 @@ void ValidatingSolver::checkIVSolution(const Query& query, Assignment &a)
 		for (unsigned j=0; j < array->mallocKey.size; j++) {
 			unsigned char v = values[j];
 
-			bindings.push_back(
-			EqExpr::create(
-				ReadExpr::create(
-					UpdateList(ARR2REF(array), 0),
-					ConstantExpr::alloc(j, Expr::Int32)),
-				ConstantExpr::alloc(v, Expr::Int8)));
+			bindings.push_back(MK_EQ(
+				MK_READ(UpdateList(ARR2REF(array), 0),
+					MK_CONST(j, Expr::Int32)),
+				MK_CONST(v, Expr::Int8)));
 		}
 	}
 
@@ -144,7 +167,7 @@ void ValidatingSolver::checkIVSolution(const Query& query, Assignment &a)
 
 	constraints = Expr::createIsZero(query.expr);
 	foreach (it, query.constraints.begin(), query.constraints.end())
-		constraints = AndExpr::create(constraints, *it);
+		constraints = MK_AND(constraints, *it);
 
 	isSat = oracle->impl->computeSat(Query(tmp, constraints));
 	if (oracle->impl->failed()) {
@@ -154,12 +177,13 @@ void ValidatingSolver::checkIVSolution(const Query& query, Assignment &a)
 
 	/* validity has no bearing on solution, so don't check it */
 	/* however, we do expect the query set to be satisfiable... */
-	if (!isSat) {
-		std::cerr << "Solver says yes. Oracle says no. Query:\n";
-		query.print(std::cerr);
-		SMTPrinter::dump(query, "satmismatch");
-	}
+	if (!isSat) satMismatch(query);
+}
 
-	assert(	isSat &&
-		"bad solver: solver says sat, oracle says unsat!");
+void ValidatingSolver::satMismatch(const Query& query)
+{
+	std::cerr << "Solver says yes. Oracle says no. Query "
+		<< (void*)query.hash() << "\n";
+	SMTPrinter::dump(query, "satmismatch");
+	assert(false && "bad solver: solver says SAT, oracle says unSAT");
 }

@@ -123,11 +123,17 @@ Decl* SMTParser::ParseTopLevelDecl()
 		return NULL;
 
 	parsedTopLevel = true;
+
+	std::vector<const Array*>	arrs;
+
+	foreach(it , arrmap.begin(), arrmap.end())
+		arrs.push_back((it->second).get());
+
 	return new QueryCommand(
 		assumptions,
 		builder->Not(satQuery),
 		std::vector<ExprHandle>(),
-		std::vector<const Array*>());
+		arrs);
 }
 
 extern char* smtlibtext;
