@@ -48,7 +48,7 @@ static void memcmp_enter(void* r)
 
 	/* return {-1,0,1} */
 	klee_assume_sge(ret, -1);
-	klee_assume_ule(ret, 1);
+	klee_assume_sle(ret, 1);
 	GET_SYSRET(r) = ret;
 
 	clo.p[0] = virtsym_safe_memcopy(clo.p[0], clo.len);
@@ -61,21 +61,21 @@ static void memcmp_enter(void* r)
 	kmc_skip_func();
 }
 
-static void memcmp_fini(uint64_t _r, void* aux)
+static void memcmp_fini(uint64_t r, void* aux)
 {
+	int64_t			_r = (int64_t)r;
 	struct memcmp_clo	*clo = (struct memcmp_clo*)aux;
-	int64_t			r = klee_get_value(_r);
 	unsigned		i;
 
-	klee_assume_eq(r, _r);
-
-	if (r == 0) {
+	if (_r == 0) {
 		/* generate equal bufs */
 		for (i = 0; i < clo->len; i++) {
 			if (!klee_feasible_eq(
 				((const char*)clo->p[0])[i],
-				((const char*)clo->p[1])[i]))
+				((const char*)clo->p[1])[i])) {
+				klee_print_expr("urghrgh", 1);
 				virtsym_prune(VS_PRNID_MEMCMP);
+			}
 			klee_assume_eq(
 				((const char*)clo->p[0])[i],
 				((const char*)clo->p[1])[i]);
@@ -84,10 +84,13 @@ static void memcmp_fini(uint64_t _r, void* aux)
 	}
 
 	/* swap; only bother with p[0] < p[1] case */
-	if (r == 1) {
+	if (_r > 0) {
 		const void*	tmp = clo->p[0];
 		clo->p[0] = clo->p[1];
 		clo->p[1] = tmp;
+		klee_assume_sgt(_r, 0);
+	} else {
+		klee_assume_slt(_r, 0);
 	}
 
 	/* generate buffer all equal up to some byte p[0][i] < p[1][i] */
@@ -98,14 +101,18 @@ static void memcmp_fini(uint64_t _r, void* aux)
 			klee_assume_ult(
 				((const uint8_t*)clo->p[0])[i],
 				((const uint8_t*)clo->p[1])[i]);
-			break;
+			return;
 		}
 
 		if (klee_valid_ugt(
 			((const uint8_t*)clo->p[0])[i],
-			((const uint8_t*)clo->p[1])[i]))
+			((const uint8_t*)clo->p[1])[i])) {
+			klee_print_expr("urghrgh", 999);
 			virtsym_prune(VS_PRNID_MEMCMP);
+		}
 
+		/* it's actually >= at this point, but we only want ret value
+		 * with <, which means must use == */
 		klee_assume_eq(
 			((const uint8_t*)clo->p[0])[i],
 			((const uint8_t*)clo->p[1])[i]);
