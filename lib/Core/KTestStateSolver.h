@@ -22,7 +22,6 @@ public:
 	virtual ~KTestStateSolver();
 
 	bool mustBeTrue(const ExecutionState& es, ref<Expr> e, bool &result);
-
 	bool mustBeFalse(const ExecutionState& es, ref<Expr> e, bool &result);
 
 	bool getRange(
@@ -30,6 +29,8 @@ public:
 		ref<Expr> query,
 		std::pair< ref<Expr>, ref<Expr> >& ret)
 	{ return base->getRange(es, query, ret); }
+
+	Solver *getSolver(void) override { return base->getSolver(); }
 
 	bool evaluate(const ExecutionState&, ref<Expr>, Solver::Validity &result);
 	bool mayBeTrue(const ExecutionState&, ref<Expr>, bool &result);

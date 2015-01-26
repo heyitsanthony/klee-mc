@@ -21,7 +21,6 @@ struct strchr_clo
 	const char	*s_orig;
 	struct virt_str	*vs;
 	uint8_t		c;
-//	unsigned	i; virt_first_sym_idx
 };
 
 static int strchr_internal(void* r, uint64_t* ret, unsigned* len)
@@ -35,10 +34,7 @@ static int strchr_internal(void* r, uint64_t* ret, unsigned* len)
 	/* 1. check pointers, common to crash in strchr */
 	if (!klee_is_valid_addr(s)) return 0;
 
-	/* ignore concretes */
-	if (!klee_is_symbolic(s[0])) return 0;
-
-	// XXX: generate a state that causes an overflow here
+	// 2. can not confirm good symbolic string
 	if ((vs = virtsym_safe_strcopy(s)) == NULL) return 0;
 
 	/* set value to symbolic */

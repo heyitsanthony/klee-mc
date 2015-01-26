@@ -10,27 +10,24 @@ KTestStateSolver::KTestStateSolver(
 	StateSolver* _base,
 	ExecutionState& es_base,
 	const KTest* _kt)
-: StateSolver(_base->solver, _base->timedSolver, _base->simplifyExprs)
+: StateSolver(_base->getSolver(), _base->getTimedSolver(), _base->simplifyExprs)
 , base(_base)
 , kt(_kt)
 {
-	solver = NULL;
+	solver = NULL; // avoid double-free
 	
 	kt_assignment = new Assignment(true);
 
 	/* augment with base state's arrays */
-	foreach (it, es_base.symbolicsBegin(), es_base.symbolicsEnd())
-		arrs.push_back(it->getArrayRef());
+	for (auto &sym : es_base.getSymbolics())
+		arrs.push_back(sym.getArrayRef());
 
 	base_objs = arrs.size();
-	assert (es_base.getNumSymbolics() == base_objs);
+	assert (es_base.getSymbolics().size() == base_objs);
 }
 
 
-KTestStateSolver::~KTestStateSolver()
-{
-	delete kt_assignment;
-}
+KTestStateSolver::~KTestStateSolver() { delete kt_assignment; }
 
 bool KTestStateSolver::evaluate(
 	const ExecutionState& es,
@@ -123,17 +120,17 @@ done:	return base->toUnique(es, e);
 
 bool KTestStateSolver::updateArrays(const ExecutionState& es)
 {
-	ExecutionState::SymIt		it(es.symbolicsBegin());
-	unsigned			i;
+	auto		it(es.getSymbolics().begin());
+	unsigned	i;
 
-	if (arrs.size() == es.getNumSymbolics())
+	if (arrs.size() == es.getSymbolics().size())
 		return true;
 
-	assert (arrs.size() < es.getNumSymbolics());
+	assert (arrs.size() < es.getSymbolics().size());
 
 	for (i = 0; i < arrs.size(); i++) it++;
 
-	for (; i < es.getNumSymbolics(); i++) {
+	for (; i < es.getSymbolics().size(); i++) {
 		const SymbolicArray	&sa(*it);
 		unsigned		oi = i - base_objs;
 		ref<Array>		arr(sa.getArrayRef());
@@ -152,4 +149,3 @@ bool KTestStateSolver::updateArrays(const ExecutionState& es)
 
 	return true;
 }
-

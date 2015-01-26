@@ -4,7 +4,11 @@
 #include "klee/ExecutionState.h"
 #include "StateSolver.h"
 
-#define CKSS_CHK(es) if (es.queryCost > maxTime) return false;
+#define CKSS_CHK(es)			\
+if (es.queryCost > maxTime) {	\
+	std::cerr << "[CostKiller] "	\
+		<< es.queryCost << " > " << maxTime << '\n';	\
+	return false; }
 
 namespace klee
 {
@@ -16,9 +20,11 @@ class CostKillerStateSolver : public StateSolver
 {
 public:
 	CostKillerStateSolver(StateSolver* _base, double _maxTime)
-	: StateSolver(NULL, NULL)
-	, base(_base), maxTime(_maxTime) { solver = NULL; }
+	: StateSolver(_base->getSolver(), _base->getTimedSolver())
+	, base(_base), maxTime(_maxTime) { solver = nullptr; }
 	virtual ~CostKillerStateSolver() {}
+
+	Solver *getSolver(void) override { return base->getSolver(); }
 
 	bool mustBeTrue(const ExecutionState& es, ref<Expr> e, bool &result)
 	{	CKSS_CHK(es);

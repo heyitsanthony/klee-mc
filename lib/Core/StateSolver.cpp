@@ -29,6 +29,7 @@ using namespace llvm;
 uint64_t StateSolver::constQueries = 0;
 unsigned StateSolver::timeBuckets[NUM_STATESOLVER_BUCKETS];
 double StateSolver::timeBucketTotal[NUM_STATESOLVER_BUCKETS];
+#define TAG "[StateSolver] "
 
 extern double MaxSTPTime;
 
@@ -70,14 +71,12 @@ do {	\
 		return true; }	\
 
 
-StateSolver::StateSolver(
-	Solver *_solver,
-	TimedSolver *_timedSolver,
-	bool _simplifyExprs)
+StateSolver::StateSolver(Solver *_solver, TimedSolver *_timedSolver, bool _simplifyExprs)
 : solver(_solver)
 , timedSolver(_timedSolver)
 , simplifyExprs(_simplifyExprs)
 {
+	assert (solver != nullptr && "state solver without a solver??");
 	memset(timeBuckets, 0, sizeof(timeBuckets));
 	memset(timeBucketTotal, 0, sizeof(timeBucketTotal));
 }
@@ -157,23 +156,33 @@ static void chk_getvalue(
 {
 	ConstraintManager cm;
 	ref<Expr>	cond(MK_EQ(result, expr));
-	bool		mbt = false;
+	bool		mbt = false, ok;
 
-	std::cerr << "[StateSolver] Checking GetValue equality...\n";
-	if (!ss->mayBeTrue(state, cond, mbt) || mbt) {
+	std::cerr << TAG"Checking GetValue equality...\n";
+	if ((ok = ss->mayBeTrue(state, cond, mbt)) && mbt) {
 		// query failed or query is satisfiable
-		std::cerr << "[StateSolver] Equality OK\n";
+		std::cerr << TAG"Equality OK\n";
 		return;
 	}
-	std::cerr << "[StateSolver] Dumping queries.\n";
 
-	ss->solver->printName();
-	std::cerr << "[StateSolver] getValue is unSAT?\nexpr: "
-		<< expr << ".\nresult: " << result << '\n';
+	if (!ok) {
+		std::cerr << TAG"GetValue check failed to complete...\n";
+	}
+
+	std::cerr << TAG"Dumping queries.\n";
+
+	ss->getSolver()->printName();
 	SMTPrinter::dump(Query(state.constraints, cond), "eqchk-fail");
 
 	IndependentSolver::getIndependentQuery(Query(state.constraints, cond), cm);
 	SMTPrinter::dump(Query(cm, cond), "eqchk-fail-indep");
+
+	if (!ok) {
+		std::cerr << TAG"try one more time\n";
+		ok = ss->mayBeTrue(state, cond, mbt);
+		assert (!ok);
+		return;
+	}
 
 	assert (mbt);
 }
@@ -204,9 +213,9 @@ bool StateSolver::getValue(
 		ChkGetValue &&
 		(predicate.isNull() || predicate->getKind()==Expr::Constant))
 	{
-		std::cerr  << "[StateSolver] Got value " << result << '\n';
+		std::cerr  << TAG"Got value " << result << '\n';
 		chk_getvalue(this, state, expr, result);
-		std::cerr  << "[StateSolver] Value OK!\n";
+		std::cerr  << TAG"Value OK!\n";
 	}
 
 	return ok;

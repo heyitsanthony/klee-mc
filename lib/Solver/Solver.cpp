@@ -407,6 +407,8 @@ bool Solver::mayBeTrue(const Query& query, bool &result)
 	result = impl->computeSat(query);
 	in_solver = false;
 
+	if (failed()) std::cerr << "[Solver] mbt failed\n";
+
 	return (failed() == false);
 }
 

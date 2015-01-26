@@ -312,15 +312,12 @@ public:
 
 	unsigned getPHISlot(void) const { return incomingBBIndex; }
 
-	typedef std::vector< SymbolicArray >::const_iterator	SymIt;
+	typedef std::vector<SymbolicArray> syms_t;
 
-	SymIt symbolicsBegin(void) const { return symbolics.begin(); }
-	SymIt symbolicsEnd(void) const { return symbolics.end(); }
-
+	const syms_t& getSymbolics(void) const { return symbolics; }
 	stack_iter_ty stackBegin(void) { return stack.begin(); }
 	stack_iter_ty stackEnd(void) { return stack.end(); }
 
-	unsigned int getNumSymbolics(void) const { return symbolics.size(); }
 	bool isConcrete(void) const;
 
 	void assignSymbolics(const Assignment& a);

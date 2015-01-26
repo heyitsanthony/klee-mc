@@ -23,9 +23,10 @@ class Solver;
 /// tracking the statistics that we care about.
 class StateSolver
 {
-public:
+protected:
 	Solver		*solver;
 	TimedSolver	*timedSolver;
+public:
 	bool		simplifyExprs;
 
 	/// \param _simplifyExprs - Whether expressions should be
@@ -36,9 +37,11 @@ public:
 		TimedSolver *_timedSolver,
 		bool _simplifyExprs = true);
 
-	virtual ~StateSolver() { if (solver != NULL) delete solver; }
+	virtual ~StateSolver() { delete solver; solver = nullptr; }
 
 	void setTimeout(double t) { timedSolver->setTimeout(t); }
+	virtual Solver *getSolver(void) { return solver; }
+	virtual TimedSolver *getTimedSolver(void) { return timedSolver; }
 
 	virtual bool evaluate(
 		const ExecutionState&, ref<Expr>, Solver::Validity &result);

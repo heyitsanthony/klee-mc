@@ -244,18 +244,19 @@ bool Executor::addConstraint(ExecutionState &state, ref<Expr> cond)
 	}
 
 	if (ChkConstraints) {
-		bool	mayBeTrue, ok;
+		bool	mayBeTrue;
+		WallTimer wt;
 
-		ok = solver->mayBeTrue(state, cond, mayBeTrue);
-		if (!ok) {
+		if (solver->mayBeTrue(state, cond, mayBeTrue) == false) {
 			std::cerr << "[CHK] UH0H: feasibility check on "
-				<< cond << " failed?!\n";
+				<< cond << " failed.\n";
 			SMTPrinter::dump(Query(
-				state.constraints, cond), "prechk-timeout");
+				state.constraints, cond), "prechk");
+			assert (wt.checkSecs() >= MaxSTPTime && "no timeout");
 		} else if (!mayBeTrue) {
 			std::cerr << "[CHK] UH0H: assumption violation:"
 				<< cond << "\n";
-			assert (mayBeTrue);
+			abort();
 		}
 	}
 
@@ -267,18 +268,19 @@ bool Executor::addConstraint(ExecutionState &state, ref<Expr> cond)
 	doImpliedValueConcretization(state, cond, MK_CONST(1, Expr::Bool));
 
 	if (ChkConstraints) {
-		bool	mustBeTrue, ok;
+		bool		mustBeTrue;
+		WallTimer	wt;
 
-		ok = solver->mustBeTrue(state, cond, mustBeTrue);
-		if (!ok) {
+		if (solver->mustBeTrue(state, cond, mustBeTrue) == false) {
 			std::cerr << "[CHK] UH0H: validity check on "
-				<< cond << " failed?!\n";
+				<< cond << " failed.\n";
 			SMTPrinter::dump(Query(
-				state.constraints, cond), "postchk-timeout");
+				state.constraints, cond), "postchk");
+			assert (wt.checkSecs() >= MaxSTPTime && "no timeout");
 		} else if (!mustBeTrue) {
 			std::cerr << "[CHK] UHOH: "
 				<< cond << " assumed but still contingent!\n";
-			assert (mustBeTrue);
+			abort();
 		}
 	}
 
@@ -2357,14 +2359,13 @@ unsigned Executor::getSymbolicPathStreamID(const ExecutionState &state)
 void Executor::getSymbolicSolutionCex(
 	const ExecutionState& state, ExecutionState& tmp)
 {
-	foreach (sym_it, state.symbolicsBegin(), state.symbolicsEnd()) {
+	for (auto &sym : state.getSymbolics()) {
 		const MemoryObject				*mo;
 		std::vector< ref<Expr> >::const_iterator	pi, pie;
 
-		mo = sym_it->getMemoryObject();
+		mo = sym.getMemoryObject();
 		pi = mo->cexPreferences.begin();
 		pie = mo->cexPreferences.end();
-
 		for (; pi != pie; ++pi) {
 			bool		mustBeTrue, ok;
 			ref<Expr>	cond(Expr::createIsZero(*pi));
@@ -2383,18 +2384,15 @@ bool Executor::getSatAssignment(const ExecutionState& st, Assignment& a)
 
 	assert (st.checkCanary());
 
-	foreach (it, st.symbolicsBegin(), st.symbolicsEnd())
-		objects.push_back(it->getArray());
+	for (auto &sym : st.getSymbolics()) objects.push_back(sym.getArray());
 
 	a = Assignment(objects);
 
 	/* second pass to bind early concretizations */
-	foreach (it, st.symbolicsBegin(), st.symbolicsEnd()) {
-		const SymbolicArray		&sa(*it);
+	for (auto &sym : st.getSymbolics()) {
 		const std::vector<uint8_t>	*conc;
-
-		if ((conc = sa.getConcretization()) != NULL)
-			a.bindFree(sa.getArray(), *conc);
+		if ((conc = sym.getConcretization()) != NULL)
+			a.bindFree(sym.getArray(), *conc);
 	}
 
 
@@ -2402,6 +2400,16 @@ bool Executor::getSatAssignment(const ExecutionState& st, Assignment& a)
 	if (ok) return true;
 
 	klee_warning("can't compute initial values (invalid constraints?)!");
+
+	bool mbt = false;
+	ok = solver->mayBeTrue(st, st.constraints.getConjunction(), mbt);
+	if (!ok) {
+		std::cerr << "Couldn't compute satisfiability\n";
+	} else {
+		assert (mbt);
+	}
+
+
 	if (DumpBadInitValues) {
 		Query	q(st.constraints, MK_CONST(0, 1));
 		q.print(std::cerr);
@@ -2428,16 +2436,15 @@ bool Executor::getSymbolicSolution(
 			return false;
 	}
 
-	foreach (it, state.symbolicsBegin(), state.symbolicsEnd()) {
+	for (auto &sym : state.getSymbolics()) {
 		const std::vector<unsigned char>	*v;
 
 		/* ignore virtual symbolics used in lazy evaluation */
-		if (it->isVirtual()) continue;
+		if (sym.isVirtual()) continue;
 
-		v = a.getBinding(it->getArray());
-		assert (v != NULL);
-
-		res.push_back(std::make_pair(it->getArray()->name, *v));
+		v = a.getBinding(sym.getArray());
+		assert (v);
+		res.push_back(std::make_pair(sym.getArray()->name, *v));
 	}
 
 	return true;
@@ -2454,7 +2461,8 @@ void Executor::doImpliedValueConcretization(
 	ImpliedValueList results;
 
 	if (DebugCheckForImpliedValues)
-		ImpliedValue::checkForImpliedValues(solver->solver, e, value);
+		ImpliedValue::checkForImpliedValues(
+			solver->getSolver(), e, value);
 
 	ImpliedValue::getImpliedValues(e, value, results);
 
@@ -2473,8 +2481,7 @@ void Executor::doImpliedValueConcretization(
 	//	std::cerr << "[IVC] Mem " << n1 - n0 << '\n';
 	}
 
-	foreach (it, results.begin(), results.end())
-		state.commitIVC(it->first, it->second);
+	for (auto &r : results) state.commitIVC(r.first, r.second);
 }
 
 void Executor::instGetElementPtr(ExecutionState& state, KInstruction *ki)
@@ -2485,10 +2492,9 @@ void Executor::instGetElementPtr(ExecutionState& state, KInstruction *ki)
 	kgepi = static_cast<KGEPInstruction*>(ki);
 	base = eval(ki, 0, state);
 
-	foreach (it, kgepi->indices.begin(), kgepi->indices.end()) {
-		uint64_t elementSize = it->second;
-		ref<Expr> index = eval(ki, it->first, state);
-
+	for (auto &i : kgepi->indices) {
+		uint64_t elementSize = i.second;
+		ref<Expr> index = eval(ki, i.first, state);
 		base = MK_ADD(
 			base,
 			MK_MUL(	Expr::createCoerceToPointerType(index),
@@ -2633,11 +2639,15 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 
 		if (iter.free == NULL) return false;
 
+		{
+		WallTimer wt;
 		if (solver->getValue(*(iter.free), iter.v, value) == false) {
+			std::cerr << "===DYING ON NEXT secs=" <<  wt.checkSecs() << "\n";
 			TERMINATE_EARLY(this,
 				*(iter.free),
 				"solver died on xferIterNext");
 			return false;
+		}
 		}
 
 		iter.getval_c++;
@@ -2673,6 +2683,8 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 
 			assert (es->checkCanary());
 
+
+			std::cerr << "BAD POINTERS\n";
 			TERMINATE_ERRORV(this,
 				*es,
 				"xfer iter error: bad pointer", "badjmp.err",
@@ -2700,6 +2712,9 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 
 	if (iter.badjmp_c >= MAX_BADJMP) {
 		if (iter.free == NULL) return false;
+
+
+		std::cerr << "TOO MANY BAD POINTERS\n";
 
 		TERMINATE_ERRORV(this,
 			*(iter.free),
@@ -2762,8 +2777,7 @@ StateSolver* Executor::createSolverChain(
 
 	s = Solver::createChainWithTimedSolver(qPath, logPath, timedSolver);
 	ts = new StateSolver(s, timedSolver);
-	timedSolver->setTimeout(timeout);
-
+	ts->setTimeout(timeout);
 	return ts;
 }
 

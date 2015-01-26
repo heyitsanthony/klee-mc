@@ -18,10 +18,12 @@ namespace
 		ReplayKTestSort("replay-ktest-sort",
 		llvm::cl::desc("Sort by prefix to reduce redundant states"),
 		llvm::cl::init(true));
+	llvm::cl::opt<double>
+		MaxSolverSeconds("max-ckiller-time",
+		llvm::cl::desc(
+			"Maximum number of query seconds to replay each ktest"),
+		llvm::cl::init(10.0));
 }
-
-/* each replay state may use up to 10 seconds */
-#define MAX_SOLVER_SECONDS	10.0
 
 bool ReplayKTests::replay(Executor* exe, ExecutionState* initSt)
 {
@@ -37,7 +39,7 @@ bool ReplayKTests::replay(Executor* exe, ExecutionState* initSt)
 	old_f = exe->getForking();
 
 	/* timeout expensive replayed states */
-	new_ss = new CostKillerStateSolver(old_ss, MAX_SOLVER_SECONDS);
+	new_ss = new CostKillerStateSolver(old_ss, MaxSolverSeconds);
 	exe->setSolver(new_ss);
 
 	ret = (FasterReplay)
@@ -113,12 +115,10 @@ void ReplayKTests::replayFast(
 	unsigned int		i = 0;
 
 	f_ktest = (ForksKTestStateLogger*)exe->getForking();
-	foreach (it, in_kts.begin(), in_kts.end()) {
-		ExecutionState	*es;
-		const KTest	*ktest(*it);
+	for (auto &ktest : in_kts) {
+		ExecutionState	*es(f_ktest->getNearState(ktest));
 		unsigned	old_qc = stats::queries;
 
-		es = f_ktest->getNearState(ktest);
 		if (es == NULL) {
 			std::cerr << "[ReplayKTest] No near state.\n";
 			es = initSt->copy();
@@ -127,7 +127,7 @@ void ReplayKTests::replayFast(
 		} else {
 			std::cerr
 				<< "[ReplayKTest] Got near state with "
-				<< es->getNumSymbolics()
+				<< es->getSymbolics().size()
 				<< " objects.\n";
 		}
 

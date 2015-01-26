@@ -107,7 +107,7 @@ SFH_DEF_ALL(PartSeedBeginCollect, "klee_partseed_begin", true)
 	state.bindLocal(target, MK_CONST(cur_psid, 64));
 
 	std::cerr << "[PS] Entering psid " << cur_psid << " with " <<
-		state.getNumSymbolics() << " objects\n";
+		state.getSymbolics().size() << " objects\n";
 }
 
 typedef std::pair<std::string, unsigned> psdelta_t;
@@ -135,14 +135,14 @@ SFH_DEF_ALL(PartSeedEndCollect, "klee_partseed_end", false)
 	partseed_t		ps(it->second);
 
 	/* new symbolics? */
-	if ((state.getNumSymbolics() - ps.second->getNumSymbolics()) <= 0) {
+	if ((state.getSymbolics().size() - ps.second->getSymbolics().size()) <= 0) {
 		/* this is a poisoning policy-- if there are no new symbolics
 		 * then it depends on inputs and won't cache well. */
 		delete ps.second;
 		psmap.erase(it);
 
 		std::cerr << "[PS] No symbolic object delta (objs="
-			<< state.getNumSymbolics()
+			<< state.getSymbolics().size()
 			<< "). Ignoring\n";//(KILLING)\n";
 
 	//	sfh->executor->terminate(state);
@@ -178,9 +178,9 @@ SFH_DEF_ALL(PartSeedEndCollect, "klee_partseed_end", false)
 
 	/* erase # objects at start of partseed; they are irrelevant */
 	n = 0;
-	foreach (it2, state.symbolicsBegin(), state.symbolicsEnd()) {
+	for (unsigned i = 0; i < state.getSymbolics().size(); i++) {
 		n++;
-		if (n <= ps.second->getNumSymbolics()) {
+		if (n <= ps.second->getSymbolics().size()) {
 			objs.erase(objs.begin());
 			continue;
 		}

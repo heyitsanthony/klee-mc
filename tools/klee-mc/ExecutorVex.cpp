@@ -907,7 +907,7 @@ void ExecutorVex::handleXferSyscall(
 		std::cerr << "[klee-mc] before syscall "
 			<< sysnr
 			<< "(?): states=" << stateManager->size()
-			<< ". objs=" << state.getNumSymbolics()
+			<< ". objs=" << state.getSymbolics().size()
 			<< ". st=" << (void*)&state
 			<< ". n=" << es2esv(state).getSyscallCount() << '\n';
 	}

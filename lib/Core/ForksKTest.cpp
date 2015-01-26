@@ -13,14 +13,14 @@ llvm::cl::opt<unsigned> KTestTimeout("ktest-timeout");
 
 bool ForksKTest::updateSymbolics(ExecutionState& current)
 {
-	ExecutionState::SymIt		it(current.symbolicsBegin());
-	unsigned			i;
+	auto		it(current.getSymbolics().begin());
+	unsigned	i;
 
-	assert (arrs.size() < current.getNumSymbolics());
+	assert (arrs.size() < current.getSymbolics().size());
 
 	for (i = 0; i < arrs.size(); i++) it++;
 
-	for (; i < current.getNumSymbolics(); i++) {
+	for (; i < current.getSymbolics().size(); i++) {
 		const SymbolicArray	&sa(*it);
 		unsigned		oi = i - base_objs;
 		ref<Array>		arr(sa.getArrayRef());
@@ -53,14 +53,14 @@ void ForksKTest::addBinding(ref<Array>& arr, std::vector<uint8_t>& v)
 
 bool ForksKTest::isBadOverflow(ExecutionState& current)
 {
-	if (current.getNumSymbolics() <= arrs.size())
+	if (current.getSymbolics().size() <= arrs.size())
 		return false;
 
-	if (current.getNumSymbolics() > kt->numObjects + base_objs) {
+	if (current.getSymbolics().size() > kt->numObjects + base_objs) {
 		std::cerr << "[KTest] State Symbolics="
-			<< current.getNumSymbolics()
+			<< current.getSymbolics().size()
 			<< ". Last="
-			<< (*(current.symbolicsEnd()-1)).getArray()->name
+			<< (*(current.getSymbolics().end()-1)).getArray()->name
 			<< '\n';
 		std::cerr << "[KTest] KTest Objects="
 			<< kt->numObjects
@@ -180,11 +180,11 @@ void ForksKTest::setKTest(const KTest* _kt, const ExecutionState* es_base)
 		return;
 
 	/* augment with base state's arrays */
-	foreach (it, es_base->symbolicsBegin(), es_base->symbolicsEnd())
-		arrs.push_back(it->getArrayRef());
+	for (auto &sym : es_base->getSymbolics())
+		arrs.push_back(sym.getArrayRef());
 
 	base_objs = arrs.size();
-	assert (es_base->getNumSymbolics() == base_objs);
+	assert (es_base->getSymbolics().size() == base_objs);
 }
 
 ForksKTestStateLogger::~ForksKTestStateLogger(void)

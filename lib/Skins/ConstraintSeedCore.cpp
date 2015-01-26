@@ -114,7 +114,7 @@ bool ConstraintSeedCore::isExprAdmissible(
 
 	/* try adding the expressoin, check for validity */
 	full_constr = MK_OR(e, base_e);
-	if (!exe->getSolver()->solver->mustBeTrue(Query(full_constr), mbt))
+	if (!exe->getSolver()->getSolver()->mustBeTrue(Query(full_constr), mbt))
 		return false;
 
 	/* valid; oops */
@@ -122,7 +122,7 @@ bool ConstraintSeedCore::isExprAdmissible(
 		return false;
 
 	/* is the rule useless? */
-	if (!exe->getSolver()->solver->mustBeTrue(
+	if (!exe->getSolver()->getSolver()->mustBeTrue(
 		Query(MK_EQ(full_constr, base_e)), mbt))
 		return false;
 
@@ -290,7 +290,8 @@ ref<Expr> ConstraintSeedCore::getConjunction(
 		}
 
 		tmp_ret  = MK_AND(state_constr, ret);
-		if (!exe->getSolver()->solver->mayBeTrue(Query(tmp_ret), mbt))
+		if (!exe->getSolver()->getSolver()->mayBeTrue(
+			Query(tmp_ret), mbt))
 			break;
 
 		if (mbt == false)
@@ -364,8 +365,8 @@ void ConstraintSeedCore::addSeedConstraints(
 	ReplaceArrays::arrmap_ty	arrmap;
 	ReplaceArrays			ra(arrmap);
 
-	foreach (it2, state.symbolicsBegin(), state.symbolicsEnd()) {
-		const ref<Array>	arr(it2->getArrayRef());
+	for (auto &sym : state.getSymbolics()) {
+		const ref<Array>	arr(sym.getArrayRef());
 		arrmap.insert(std::make_pair(arr->name, arr));
 	}
 
@@ -418,7 +419,7 @@ bool ConstraintSeedCore::logConstraint(const ref<Expr> e)
 		return false;
 
 	hashes.insert(e->hash());
-	if (!exe->getSolver()->solver->mayBeTrue(Query(e), mbt)) {
+	if (!exe->getSolver()->getSolver()->mayBeTrue(Query(e), mbt)) {
 		std::cerr << "[CSCore] Ignoring bad solver call.\n";
 		return false;
 	}

@@ -9,23 +9,37 @@ using namespace klee;
 #define CHK_ASSUMPTIONS					\
 	ConstraintManager	cm;			\
 	bool			okConstrs;		\
+	assert (!oracle->impl->failed() && !solver->impl->failed()); \
 	okConstrs = oracle->impl->computeSat(		\
 		Query(cm, query.constraints.getConjunction()));	\
-	if (oracle->impl->failed()) goto failed;	\
-	assert (okConstrs && "Bad assumptions");
+	if (oracle->impl->failed()) {				\
+		oracle->impl->ackFail();			\
+		okConstrs = true; } 				\
+	assert (okConstrs && "Bad assumptions");		\
+	assert (!oracle->impl->failed() && !solver->impl->failed());
 
+
+#define TAG "[ValidatingSolver] "
 
 bool ValidatingSolver::computeSat(const Query& query)
 {
 	bool	isSatOracle, isSatSolver;
+	bool	okSolver, okOracle;
 
 	CHK_ASSUMPTIONS;
 
 	isSatSolver = solver->impl->computeSat(query);
-	if (solver->impl->failed()) goto failed;
+	okSolver = !solver->impl->failed();
+	if (!okSolver) std::cerr << TAG"solver failed\n";
 
+	assert (!oracle->impl->failed());
 	isSatOracle = oracle->impl->computeSat(query);
-	if (oracle->impl->failed()) goto failed;
+	okOracle = !oracle->impl->failed();
+	if (!okOracle) std::cerr << TAG"oracle failed\n";
+
+	if (!okOracle && !okSolver) goto failed;
+	if (!okOracle) { oracle->impl->ackFail(); return isSatSolver; }
+	if (!okSolver) { solver->impl->ackFail(); return isSatOracle; }
 
 	if (isSatSolver != isSatOracle) SMTPrinter::dump(query, "computesat");
 	assert(	isSatSolver == isSatOracle && "computeSat mismatch");
@@ -33,6 +47,7 @@ bool ValidatingSolver::computeSat(const Query& query)
 	return isSatSolver;
 
 failed:
+	std::cerr << TAG"full failure\n";
 	failQuery();
 	return false;
 }

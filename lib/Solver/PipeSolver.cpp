@@ -34,6 +34,7 @@ static void query_writer_alarm(int x) { _exit(1); }
 static void parent_query_writer_alarm(int x) { }
 
 #define MAX_DUMP_BYTES	(1024*1024)
+#define TAG "[PipeSolver] "
 
 namespace {
 	cl::opt<bool>
@@ -169,9 +170,9 @@ bool PipeSolverSession::getModel(const Query& q, PipeFormat* fmt, double to)
 		if (!ForkQueries || DebugWriteRecvQuery) {
 			dump_badquery(q, "badwrite");
 		} else {
-			std::cerr << "[PipeSolver] SUPPRESSING FORKQUERY ERROR\n";
+			std::cerr << TAG"SUPPRESSING FORKQUERY ERROR\n";
 		}
-		std::cerr << "[PipeSolver] FAILED TO WRITERECVQUERY ("
+		std::cerr << TAG"FAILED TO WRITERECVQUERY ("
 			<< (void*)q.hash() << ")\n";
 		stop();
 		return false;
@@ -282,7 +283,7 @@ bool PipeSolverSession::writeQueryToChild(const Query& q)
 	SMTPrinter::print(*os, q);
 	ok = !os->fail();
 	if (!ok) {
-		std::cerr << "[PipeSolver] FAILED TO COMPLETELY SEND SMT\n";
+		std::cerr << TAG"FAILED TO COMPLETELY SEND SMT\n";
 		if (!ForkQueries)
 			dump_badquery(q, "badsend");
 	} else {
@@ -469,14 +470,14 @@ bool PipeSolverImpl::computeInitialValues(const Query& q, Assignment& a)
 	if (!(pss = setupCachedSolver(fmt->getArgvModel()))) {
 		failQuery();
 		SMTPrinter::dump(q, "badsetup");
-		std::cerr << "[PipeSolver] FAILED TO SETUP FCHILD CIV\n";
+		std::cerr << TAG"FAILED TO SETUP FCHILD CIV\n";
 		return false;
 	}
 
 	parse_ok = pss->getModel(q, fmt, timeout);
 	delete pss;
 	if (parse_ok == false) {
-		std::cerr << "[PipeSolver] BAD PARSE computeInitialValues ("
+		std::cerr << TAG"BAD PARSE computeInitialValues ("
 			<< (void*)q.hash() << ")\n";
 		SMTPrinter::dump(q, "badparse");
 		failQuery();
@@ -503,7 +504,7 @@ bool PipeSolverImpl::computeSat(const Query& q)
 	PipeSolverSession	*pss;
 
 	if (!(pss = setupCachedSolver(fmt->getArgvSAT()))) {
-		std::cerr << "[PipeSolver] FAILED COMPUTE SAT QUERY SETUP\n";
+		std::cerr << TAG"FAILED COMPUTE SAT QUERY SETUP\n";
 		failQuery();
 		return false;
 	}
@@ -511,8 +512,7 @@ bool PipeSolverImpl::computeSat(const Query& q)
 	parse_ok = pss->getSAT(q, fmt, timeout);
 	delete pss;
 	if (!parse_ok) {
-		std::cerr << "[PipeSolver] BAD PARSE SAT ("
-			<< (void*)q.hash() << ")\n";
+		std::cerr << TAG"BAD PARSE SAT (" << (void*)q.hash() << ")\n";
 		failQuery();
 		if (!ForkQueries || DebugWriteRecvQuery)
 			dump_badquery(q, "badsat");

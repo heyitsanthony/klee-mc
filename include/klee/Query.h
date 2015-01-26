@@ -23,8 +23,7 @@ public:
 	Query withExpr(ref<Expr> _expr) const { return Query(constraints, _expr); }
 
 	/// withFalse - Return a copy of the query with a false expression.
-	Query withFalse() const
-	{ return Query(constraints, ConstantExpr::alloc(0, Expr::Bool)); }
+	Query withFalse() const { return Query(constraints, MK_CONST(0, Expr::Bool)); }
 
 	/// negateExpr - Return a copy of the query with the expression negated.
 	Query negateExpr() const { return withExpr(Expr::createIsZero(expr)); }

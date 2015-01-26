@@ -281,10 +281,11 @@ void ImpliedValue::checkForImpliedValues(
 	foundmap_ty		found;
 	ImpliedValueList	results;
 
+	assert (S != NULL && "expected solver");
+
 	getImpliedValues(e, value, results);
 
 	getFoundMap(results, found);
-
 
 	ExprUtil::findReads(e, false, reads);
 	readset_ty readsSet(reads.begin(), reads.end());
