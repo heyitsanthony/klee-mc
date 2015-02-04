@@ -93,6 +93,9 @@ mc-fdt: $(LibDir)/libkleeRuntimeMC-fdt.bca
 	rm -rf mcfdt_tmp
 	cp $(LibDir)/libkleeRuntimeMC-fdt.bc $(VEXLLVM_HELPER_PATH)
 
+scan-build:
+	mkdir -p scan-out
+	scan-build --use-cc="$(LLVMCC)" --use-c++="$(LLVMCXX)" -o `pwd`/scan-out make all
 
 test-all: test test-replay
 
