@@ -171,7 +171,6 @@ Expr::Hash UpdateList::computeHash() const
 	if (root.isNull())
 		return ~0;
 
-	res = 0;
 	if (root->mallocKey.allocSite) {
 		res = root->mallocKey.hash();
 	} else {

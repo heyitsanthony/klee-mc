@@ -2405,10 +2405,9 @@ bool Executor::getSatAssignment(const ExecutionState& st, Assignment& a)
 	ok = solver->mayBeTrue(st, st.constraints.getConjunction(), mbt);
 	if (!ok) {
 		std::cerr << "Couldn't compute satisfiability\n";
-	} else {
-		assert (mbt);
+	} else if (!mbt) {
+		std::cerr << "[Exe] INVALID constraints for getInitialValues\n";
 	}
-
 
 	if (DumpBadInitValues) {
 		Query	q(st.constraints, MK_CONST(0, 1));
@@ -2583,14 +2582,11 @@ void Executor::handleMemoryPID(ExecutionState* &state)
 	#define K_P	0.6
 	#define K_D	0.1	/* damping factor-- damp changes in errors */
 	#define K_I	0.0001  /* systematic error-- negative while ramping  */
-	unsigned	nonCompact_c;
 	int		states_to_gen;
 	int64_t		err;
 	uint64_t	mbs;
 	static int64_t	err_sum = -(int64_t)MaxMemory;
 	static int64_t	last_err = 0;
-
-	nonCompact_c = stateManager->getNonCompactStateCount();
 
 	mbs = mallinfo().uordblks/(1024*1024);
 	err = MaxMemory - mbs;

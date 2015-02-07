@@ -28,6 +28,8 @@ bool ForksSeeding::forkSetup(ExecutionState& current, struct ForkInfo& fi)
 	// This partitions the seed set for the current state
 	foreach (siit, it->second.begin(), it->second.end()) {
 		unsigned i;
+
+		assert (fi.N);
 		for (i = 0; i < fi.N; ++i) {
 			ref<ConstantExpr>	seedCondRes;
 			bool			ok;

@@ -75,7 +75,7 @@ static void setup_prefix(char* args[], int arg_len)
 int main(int argc, char *argv[], char* envp[])
 {
 	const char	*sshot_path, *test_path;
-	int		ok, status;
+	int		status;
 	int		test_num;
 	pid_t		pid;
 	KTestStream	*kts;
@@ -128,6 +128,7 @@ int main(int argc, char *argv[], char* envp[])
 
 	/* we are left at the entrance to a system call... */
 	bool	is_enter = true;
+	int	ok = 0;
 	while (waitpid(pid, &status, 0) == pid) {
 		int	sig;
 
@@ -152,6 +153,10 @@ int main(int argc, char *argv[], char* envp[])
 			break;
 		}
 
+		if (ok != 0) {
+			std::cerr << "ptrace SYSCALL failed but process OK?\n";
+			break;
+		}
 #if 0
 		if (sig == SIGSEGV) {
 			std::cerr << "SIGSEGV detected. Dumping\n";

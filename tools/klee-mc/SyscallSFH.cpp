@@ -215,6 +215,7 @@ SFH_DEF_ALL(IO, "kmc_io", true)
 		vfd = arg2u64(args[2]);
 		len = arg2u64(args[3]);
 		off = arg2u64(args[4]);
+		(void)off; // XXX: unused until support for mmaped files
 
 		/* don't mark if symbolic length */
 		if (len == ~0ULL)
@@ -746,6 +747,7 @@ void SyscallSFH::makeRangeSymbolic(
 	sym_mo = exe_vex->memory->allocateAt(state, (uint64_t)addr, sz, 0);
 	sym_mo->setName(name);
 	sym_os = exe_vex->makeSymbolic(state, sym_mo, name);
+	assert (sym_os);
 }
 
 SFH_DEF_ALL(RegsGet, "kmc_regs_get", true)

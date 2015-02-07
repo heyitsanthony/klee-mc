@@ -269,7 +269,9 @@ static void setup_dgrams(
 	unsigned k;
 
 	__exe_fs.n_sym_dgrams = n_dgrams;
-	__exe_fs.sym_dgrams = malloc(sizeof(*__exe_fs.sym_dgrams) * n_dgrams);
+	__exe_fs.sym_dgrams = n_dgrams
+		? malloc(sizeof(*__exe_fs.sym_dgrams) * n_dgrams)
+		: 0;
 	__exe_fs.n_sym_dgrams_used = 0;
 
 	if (n_dgrams && !__exe_fs.sym_dgrams)

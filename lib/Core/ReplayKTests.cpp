@@ -1,3 +1,12 @@
+//
+// Loads KTests then steers the forking according to the KTest values.
+//
+// The reason for not plugging the ktest values directly in is that this
+// is used for seeding, so it's important to know when states can fork off
+// the replay.
+//
+// XXX: Make more efficient with partial KTest solver.
+//
 #include <llvm/Support/CommandLine.h>
 #include "ForksKTest.h"
 #include "Executor.h"

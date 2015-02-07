@@ -113,7 +113,7 @@ static bool isFreeRead(const ref<Expr>& e)
 
 static bool isFreeExpr(const ref<Expr> e)
 {
-	bool	is_lhs_free, is_rhs_free;
+	bool	is_lhs_free = false, is_rhs_free = false;
 
 	if (	e->getKind() == Expr::Eq &&
 		e->getKid(0)->isZero() &&

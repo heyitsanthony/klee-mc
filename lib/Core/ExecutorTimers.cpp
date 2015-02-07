@@ -422,12 +422,9 @@ public:
 	{
 		std::ostream* os;
 		KModule*	kmod;
-		StatsTracker	*st;
 
 		os = exe->getInterpreterHandler()->openOutputFile(fname);
 		if (os == NULL) return;
-
-		st = exe->getStatsTracker();
 
 		kmod = exe->getKModule();
 		foreach (it, kmod->kfuncsBegin(), kmod->kfuncsEnd()) {

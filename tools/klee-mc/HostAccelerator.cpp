@@ -144,7 +144,7 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 {
 	struct shm_pkt		shmpkt;
 	bool			got_sc, ok;
-	int			rc, status, last_status, guest_sig;
+	int			rc, status, last_status;
 	void			*old_fs, *new_fs;
 	std::vector<ObjectPair>	objs;
 	ObjectState		*regs;
@@ -211,7 +211,6 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 		/* next CONT is to set process running */
 	} else {
 		ok = WIFSTOPPED(status) && WSTOPSIG(status) == SIGSTOP;
-		last_status = status;
 		if (!ok) std::cerr << "[hwaccel] bad status: " <<
 				(void*)(long)status << '\n';
 		assert (ok);
@@ -293,16 +292,16 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 	stepInstructions(child_pid);
 #else
 	rc = ptrace(PTRACE_SYSCALL, child_pid, NULL, NULL);
+	assert (rc == 0);
 
 	/* wait for run to terminate in SIGSEGV (symex) or SIGTRAP (syscall) */
 	rc = waitpid(child_pid, &status, 0);
 	assert (rc != -1);
 	got_sc = (WSTOPSIG(status) == SIGTRAP);
 
-	guest_sig = WSTOPSIG(status);
 	DEBUG_HOSTACCEL(std::cerr <<
 		"[hwaccel] Guest ran the code. Returned=" <<
-		strsignal(guest_sig) << '\n');
+		strsignal(WSTOPSIG(status)) << '\n');
 
 #endif
 	/* load new regs into vex state */

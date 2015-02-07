@@ -198,7 +198,7 @@ bool parseResult(const std::string& stpOutput, std::vector<char>& response) {
       return false;
     }
     validity = p;
-    p = skip_validity(validity);
+    skip_validity(validity);
   }
 
   // done parsing; time to assemble the response packet

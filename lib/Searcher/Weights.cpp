@@ -218,24 +218,26 @@ double FrontierTroughWeight::weigh(const ExecutionState* es) const
 double BranchWeight::weigh(const ExecutionState* es) const
 {
 	unsigned	br_c, st_c;
-	unsigned	br_prev_c, br_next_c;
-	double		bias;
 
 	loadIns();
 
 	br_c = getBrCount(es->totalInsts);
 	st_c = getStCount(es->totalInsts);
-	br_prev_c = getBrCount(
-		(es->totalInsts > n_width)
+
+	if (st_c == 0) return 0;
+
+#if 0
+	double		bias;
+	unsigned	br_prev_c, br_next_c;
+	br_prev_c = getBrCount((es->totalInsts > n_width)
 		? es->totalInsts - n_width
 		: 0);
 	br_next_c = getBrCount(es->totalInsts + n_width);
-
-	if (st_c == 0) return 0;
 	if (br_prev_c == 0) br_prev_c = 1;
 	if (br_next_c == 0) br_next_c = 1;
 
 	bias = 1.0 - (double)(es->totalInsts % n_width) / (double)n_width;
+#endif
 //	return  bias*((double)br_c) / ((double)st_c*br_prev_c*br_next_c);
 //	return  ((double)br_c) / ((double)st_c*br_prev_c*br_next_c);
 	return  ((double)br_c) / ((double)st_c);
@@ -414,7 +416,7 @@ double BranchEntropyWeight::weigh(const ExecutionState* es) const
 	static bemap_ty			bemap;
 	static uint64_t			last_ins = 0;
 	int				depth;
-	double				entropy, last_entropy;
+	double				entropy;
 	BranchTracker::SegmentRef	t(es->getBrTracker().getTail());
 
 	if (stats::instructions != last_ins) {
@@ -436,7 +438,6 @@ double BranchEntropyWeight::weigh(const ExecutionState* es) const
 
 
 	entropy = 0;
-	last_entropy = 0;
 	for (int i = depth; i > 0; i--) {
 		const KInstruction	*front_ki;
 		double			cur_entropy;
@@ -462,8 +463,6 @@ double BranchEntropyWeight::weigh(const ExecutionState* es) const
 		assert (bemap[i][front_ki] != 0);
 		cur_entropy = (double)bemap[i][front_ki]/(double)total;
 		cur_entropy *= -log2(cur_entropy);
-		last_entropy = cur_entropy;
-
 		entropy += cur_entropy;
 	}
 	entropy /= (double)depth;

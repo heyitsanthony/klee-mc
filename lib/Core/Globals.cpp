@@ -322,7 +322,7 @@ ref<klee::ConstantExpr> Globals::findAddress(
 	const llvm::GlobalValue* gv) const
 {
 	globaladdr_map::const_iterator it(globalAddresses.find(gv));
-	Function	*f;
+	Function	*f = NULL;
 
 	if (it != globalAddresses.end()) return it->second;
 

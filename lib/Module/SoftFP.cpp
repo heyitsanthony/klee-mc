@@ -157,11 +157,9 @@ bool SoftFPPass::replaceFCmp(Instruction *inst)
 	CmpInst::Predicate pred;
 	unsigned	ty_w;
 	Value		*v, *v0, *arg[2];
-	Type		*ty;
 	Function	*f;
 	bool		f_flip, ordered;
 
-	ty = inst->getType();
 	v0 = (inst->getNumOperands() > 0) ? inst->getOperand(0) : NULL;
 	ty_w = v0->getType()->getPrimitiveSizeInBits();
 

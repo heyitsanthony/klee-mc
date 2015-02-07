@@ -108,6 +108,7 @@ void* kmc_sc_regs(void* r)
 
 	old_reg = intr_model->getGuest()->getCPUState()->copyOutStateData();
 	new_reg = (uint8_t*)intr_model->getGuest()->getCPUState()->getStateData();
+	delete [] old_reg;
 
 	SyscallsKTest::copyInRegMemObj(
 		intr_model->getGuest(),

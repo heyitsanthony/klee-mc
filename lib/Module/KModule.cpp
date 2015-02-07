@@ -327,7 +327,7 @@ void KModule::addMergeExit(Function* mergeFn, const std::string& name)
 	}
 }
 
-void KModule::outputTruncSource(
+bool KModule::outputTruncSource(
 	std::ostream* os, llvm::raw_os_ostream* ros) const
 {
 	std::string			string;
@@ -339,7 +339,7 @@ void KModule::outputTruncSource(
 	rss.flush();
 	position = string.c_str();
 
-	for (;;) {
+	for (; !truncated; ) {
 		const char *end = index(position, '\n');
 		unsigned count;
 		if (!end) {
@@ -358,6 +358,8 @@ void KModule::outputTruncSource(
 
 		position = end+1;
 	}
+
+	return truncated;
 }
 
 void KModule::outputSource(InterpreterHandler* ih)
@@ -438,7 +440,7 @@ void KModule::addModule(Module* in_mod)
 	}
 
 	dumpModule();
-//	assert (isLinked);
+	if (!isLinked) std::cerr << "[KModule] Is not linked?\n";
 }
 
 // Inject checks prior to optimization... we also perform the
@@ -566,11 +568,9 @@ KFunction* KModule::addUntrackedFunction(llvm::Function* f)
 KFunction* KModule::addFunction(Function* f)
 {
 	bool		changed;
-	unsigned	old_sz;
 
 	if (f->isDeclaration()) return NULL;
 
-	old_sz = f->size();
 	changed = fpm->run(*f);
 	if (changed) updated_funcs++;
 
@@ -733,6 +733,7 @@ void KModule::loadIntrinsicsLib()
 		std::cerr << "err: " << err << '\n';
 		exit(1);
 	}
+	if (!isLinked) std::cerr << "IsLinked for intrinsics is false??\n";
 }
 
 void KModule::bindModuleConstants(Executor* exe)

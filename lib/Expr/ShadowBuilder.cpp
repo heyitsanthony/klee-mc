@@ -143,7 +143,6 @@ ref<Expr> ShadowBuilder::Select(
 		tag = (tag_used)
 			? sm->mix(tag, se[2]->getShadow())
 			: se[2]->getShadow();
-		tag_used = true;
 	}
 
 	ref<Expr> e;

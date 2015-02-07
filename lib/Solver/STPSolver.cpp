@@ -514,9 +514,7 @@ static bool recvall(int fd, void* vp, size_t sz, bool timeout, timeval& tExpire)
 
     ssize_t n = recv(fd, cp, nl, 0);
     if (n < 0) {
-      if (errno == EINTR)
-        n = 0;
-      else {
+      if (errno != EINTR) {
         klee_warning("error receiving response: %s", strerror(errno));
         return false;
       }

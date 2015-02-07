@@ -52,6 +52,7 @@ SFH_DEF_HANDLER(SCGetCwd)
 	//TODO: write something?
 	char buf[PATH_MAX], *ret;
 	ret = getcwd(buf, PATH_MAX);
+	(void)ret;
 	assert (0 == 1 && "TODO");
 }
 

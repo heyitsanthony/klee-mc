@@ -2354,10 +2354,8 @@ bool FastRangeSolver::computeInitialValues(const Query& query, Assignment& a)
 {
 	RangeSimplifier	rs;
 	bool		hasSolution, satisfies, guess, success;
-	unsigned	in_bindings;
 
 	numQueries++;
-	in_bindings = a.getNumBindings();
 
 	success = rs.run(query, hasSolution);
 	if (!success) {

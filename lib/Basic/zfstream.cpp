@@ -165,7 +165,7 @@ gzfilebuf::open_mode(std::ios_base::openmode mode,
   if (strlen(c_mode) == 0)
     return false;
   if (testb)
-    strcat(c_mode, "b");
+    strncat(c_mode, "b", 3);
   return true;
 }
 

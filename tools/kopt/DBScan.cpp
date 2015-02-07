@@ -108,20 +108,17 @@ void DBScan::histo(void)
 
 	loadKnockoutRulesFromBuilder();
 
-	foreach (it, kc_map.begin(), kc_map.end()) {
-		const KnockoutRule	*kr;
-		unsigned		rule_c;
-
-		kr = it->second->front();
-		rule_c = it->second->size();
+	for (auto &p : kc_map) {
+		unsigned rule_c = p.second->size();
 		ko_c[rule_c] = ko_c[rule_c] + 1;
 	}
 
 	std::cout << "# RULES-IN-CLASS | TOTAL-CLASS-RULES" << '\n';
 	unsigned total = 0;
-	foreach (it, ko_c.begin(), ko_c.end()) {
-		total += it->first * it->second;
-	}
+
+	assert (!ko_c.empty());
+	for (auto &p : ko_c)
+		total += p.first * p.second;
 
 	unsigned cur_total = 0;
 	foreach (it, ko_c.begin(), ko_c.end()) {

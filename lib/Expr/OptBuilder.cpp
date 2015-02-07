@@ -283,15 +283,14 @@ ref<Expr> OptBuilder::Extract(const ref<Expr>& expr, unsigned off, Expr::Width w
 
 	if (expr->getKind() == Expr::SExt) {
 		const SExtExpr* se = cast<SExtExpr>(expr);
-		Expr::Width		active_w, sext_w;
+		Expr::Width		active_w;
 
 		active_w = se->src->getWidth();
 		if (off+w <= active_w) {
-			return ExtractExpr::create(se->getKid(0), off, w);
+			return MK_EXTRACT(se->getKid(0), off, w);
 		}
 
 		assert (se->getWidth() >= active_w);
-		sext_w = se->getWidth() - active_w;
 
 		// from ntfsfix
 		// extract[63:32] ( sign_extend[32]
@@ -938,7 +937,6 @@ static ref<Expr> OrExpr_factorZExt(Expr* l, Expr* r)
 	// => zext[56] (bvor x y)
 	const ZExtExpr		*ze[2];
 	ref<Expr>		e[2];
-	const ConcatExpr	*cat;
 
 	ze[0] = dyn_cast<ZExtExpr>(l);
 	if (ze[0] == NULL)
@@ -966,18 +964,14 @@ static ref<Expr> OrExpr_factorZExt(Expr* l, Expr* r)
 	if (e[1]->getKind() != Expr::Concat)
 		return NULL;
 
-	cat = static_cast<const ConcatExpr*>(e[1].get());
-
-
 	/* ze[0]->src (concat a (y-bits))	*/
 	/* ze[1]->src = ((spare bits) y)	*/
 	/* want to try to swap in x's high part into y's high part */
 	if (	e[1]->getKid(1)->isZero() &&
 		e[0]->getWidth() == e[1]->getKid(1)->getWidth())
 	{
-		return ZExtExpr::create(
-			ConcatExpr::create(e[1]->getKid(0), e[0]),
-			ze[0]->getWidth());
+		return MK_ZEXT(
+			MK_CONCAT(e[1]->getKid(0), e[0]), ze[0]->getWidth());
 	}
 
 	return NULL;

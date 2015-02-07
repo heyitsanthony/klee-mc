@@ -77,7 +77,7 @@ char* get_string(pid_t child, unsigned* addr) {
   }  
   r[n++] = u;
 
-  char* str = malloc(WORD_SIZE * n);
+  char* str = calloc(n, WORD_SIZE);
   strcpy(str, (char*) r);
   return str;
 }

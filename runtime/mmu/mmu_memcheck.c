@@ -137,7 +137,7 @@ struct heap_ent* take_he(void* addr)
 {
 	struct list		*hl;
 	struct list_item	*li;
-	struct heap_ent		*he;
+	struct heap_ent		*he = NULL;
 
 	hl = GET_HEAP_L(addr);
 	list_for_all(hl, li) {

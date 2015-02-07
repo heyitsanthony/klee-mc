@@ -47,10 +47,14 @@ void PoisonCache::sigpoison_save(void)
 		(PCacheDir.size()) ? PCacheDir.c_str() : ".",
 		g_pc->phash->getName());
 	bw = write(STDERR_FILENO, "saving ", 7);
+	assert (bw > 0);
 	bw = write(STDERR_FILENO, path, strlen(path));
+	assert (bw > 0);
 	bw = write(STDERR_FILENO, "\n", 1);
+	assert (bw > 0);
 	fd = open(path, O_WRONLY | O_APPEND | O_CREAT, 0600);
 	bw = write(fd, &g_pc->hash_last, sizeof(g_pc->hash_last));
+	assert (bw > 0);
 	close(fd);
 }
 
@@ -113,11 +117,13 @@ PoisonCache::PoisonCache(Solver* s, QueryHash* in_phash)
 	err = sigaction(SIGSEGV, &sa, NULL);
 	assert (err == 0 && "Wanted SIGSEGV sigaction!");
 	err = sigaction(SIGABRT, &sa, NULL);
+	assert (err == 0 && "Wanted SIGABRT sigaction!");
 
 	stk.ss_sp = altstack;
 	stk.ss_flags = 0;
 	stk.ss_size = SIGSTKSZ;
 	err = sigaltstack(&stk, NULL);
+	assert (err == 0);
 
 	snprintf(
 		path,

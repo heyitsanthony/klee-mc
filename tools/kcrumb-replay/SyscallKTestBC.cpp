@@ -270,6 +270,7 @@ SyscallsKTestBC* SyscallsKTestBC::create(
 	cn = snprintf(
 		fname_crumbs, 256, "%s/test%06d.crumbs.gz", 
 		test_path, test_num);
+	assert(cn < 256);
 
 	c = Crumbs::create(fname_crumbs);
 	if (c == NULL) {

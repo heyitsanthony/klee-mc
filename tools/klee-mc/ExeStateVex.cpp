@@ -103,7 +103,6 @@ unsigned ExeStateVex::getStackDepth(void) const
 	w = (base_guest->getMem()->is32Bit()) ? 32 : 64;
 
 	reg_os = getRegObjRO();
-	cur_stack = 0;
 
 	stk_expr = read(reg_os, off, w);
 	if (stk_expr->getKind() != Expr::Constant)

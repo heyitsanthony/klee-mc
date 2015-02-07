@@ -192,7 +192,7 @@ bool CachingSolver::computeSat(const Query& query)
 	} else {
 		cachedResult = IncompleteSolver::MayBeTrue;
 	}
-	cacheInsert(query, IncompleteSolver::MayBeTrue);
+	cacheInsert(query, cachedResult);
 
 	return true;
 }

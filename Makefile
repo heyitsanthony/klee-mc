@@ -95,7 +95,10 @@ mc-fdt: $(LibDir)/libkleeRuntimeMC-fdt.bca
 
 scan-build:
 	mkdir -p scan-out
-	scan-build --use-cc="$(LLVMCC)" --use-c++="$(LLVMCXX)" -o `pwd`/scan-out make all
+	scan-build --use-cc="$(LLVMCC)" --use-c++="$(LLVMCXX)" \
+		`clang -cc1 -analyzer-checker-help | awk ' { print "-enable-checker="$1 } ' | grep '\.' | grep -v debug ` \
+		-o `pwd`/scan-out make -j7 all
+
 
 test-all: test test-replay
 

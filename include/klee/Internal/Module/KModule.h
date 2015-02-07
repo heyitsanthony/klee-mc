@@ -157,7 +157,8 @@ private:
 	void dumpModule(void);
 	void outputFunction(const KFunction* kf);
 
-	void outputTruncSource(std::ostream* os, llvm::raw_os_ostream* ros) const;
+	bool outputTruncSource(
+		std::ostream* os, llvm::raw_os_ostream* ros) const;
 
 	// Our shadow versions of LLVM structures.
 	std::vector<KFunction*> functions;

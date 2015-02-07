@@ -80,10 +80,8 @@ void ExeChk::runImage(void)
 /* lots of shuffling data ahead */
 void ExeChk::handleXfer(ExecutionState& state, KInstruction *ki)
 {
-	bool			ok_step;
-
-	Function	*cur_func;
-	cur_func = (state.stack.back()).kf->function;
+	bool		ok_step;
+	Function	*cur_func = (state.stack.back()).kf->function;
 
 	/* 1. Finish KLEE's VSB by setting up xfer to next VSB*/
 	es2esv(state).updateGuestRegs();
@@ -115,6 +113,8 @@ void ExeChk::handleXfer(ExecutionState& state, KInstruction *ki)
 	}
 
 	if (exited) TERMINATE_EXIT(this, state);
+
+	assert ((ok_step || exited) && "vex_exe failed but not exiting!?\n");
 
 	/* Now, restore everything to KLEE state */
 	loadCPU(saved_klee_cpustate);

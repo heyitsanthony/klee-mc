@@ -20,7 +20,6 @@
 #include "elfimg.h"
 #include "guestelf.h"
 #include "ExecutorVex.h"
-#include "ExeSymHook.h"
 #include "ExeChk.h"
 #include "ExeSnapshotSeq.h"
 
@@ -67,10 +66,6 @@ namespace {
 	cl::opt<bool> UseTaintMerge(
 		"use-taint-merge",
 		cl::desc("Taint and merge specific functions."));
-
-	cl::opt<bool> SymHook(
-		"use-symhooks",
-		cl::desc("Apply additional analysis by tracking library calls"));
 
 	cl::opt<bool> UseGDB("use-gdb", cl::desc("Enable remote GDB monitoring"));
 
@@ -360,13 +355,10 @@ Interpreter* createInterpreter(KleeHandler *handler)
 		/* suppressed forks */
 		assert (!UseDDT && !UseTaintMerge && !UseTaint);
 
-		if (SymHook) return NEW_INTERP_KTEST(ExeSymHook);
 		if (XChkJIT) return NEW_INTERP_KTEST(ExeChk);
-
 		return NEW_INTERP_KTEST(ExecutorVex);
 	}
 
-	if (SymHook) return NEW_INTERP(ExeSymHook);
 	if (XChkJIT) return NEW_INTERP(ExeChk);
 	if (GuestType == "sseq") {
 		ExeSnapshotSeq	*ess = NEW_INTERP(ExeSnapshotSeq);

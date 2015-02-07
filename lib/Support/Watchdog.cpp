@@ -1,6 +1,8 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <time.h>
+#include <assert.h>
+
 #include "klee/Internal/Support/Watchdog.h"
 
 using namespace klee;
@@ -22,6 +24,7 @@ static void* watchdog_thread(void* secs)
 	} while (rc == -1);
 
 	sz = write(2, "watchdog timeout\n", 17);
+	assert (sz == 17);
 
 	/* the _exit() is important because this is a signal,
 	 * otherwise we segfault! */

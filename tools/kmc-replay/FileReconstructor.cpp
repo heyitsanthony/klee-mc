@@ -133,11 +133,7 @@ void FileReconstructor::limitSize(int vfd, uint64_t off)
 
 void FileReconstructor::seek(int vfd, off_t offset, int whence)
 {
-	uint64_t	off;
-	int		fd;
-
-	fd = getFD(vfd);
-	off = lseek(getFD(vfd), offset, whence);
+	uint64_t	off = lseek(getFD(vfd), offset, whence);
 	limitSize(vfd, off);
 }
 

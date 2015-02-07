@@ -173,13 +173,9 @@ void PrioritySearcher::removeState(ExecutionState* es)
 {
 	statemap_ty::iterator	sm_it(state_backmap.find(es));
 	Searcher		*prs;
-	int			pr;
 
 	assert (sm_it != state_backmap.end());
-
-	pr = sm_it->second;
 	prs = getPrSearcher(sm_it->second);
-
 	prs->removeState(es);
 	state_backmap.erase(sm_it);
 

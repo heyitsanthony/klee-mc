@@ -450,12 +450,15 @@ PipeSolverSession* PipeSolverSession::create(
 		/* fill up buffer so it immediately blocks */
 		flags = fcntl(parent2child[1], F_GETFL);
 		rc = fcntl(parent2child[1], F_SETFL, flags | O_NONBLOCK);
+		assert (rc == 0);
+
 		errno = 0;
 		do {
 			sz = write(parent2child[1], "a", 1024);
 		} while (sz == 1024);
 
 		rc = fcntl(parent2child[1], F_SETFL, flags);
+		assert (rc == 0);
 	}
 
 	return new PipeSolverSession(parent2child[1], child2parent[0], child_pid);

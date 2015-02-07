@@ -939,6 +939,7 @@ SFH_DEF_ALL(DefineFixedObject, "klee_define_fixed_object", false)
 	size = size_ce->getZExtValue();
 
 	os = state.allocateFixed(address, size, state.prevPC->getInst());
+	assert (os);
 	mo = const_cast<MemoryObject*>(state.addressSpace.resolveOneMO(address));
 	assert (mo);
 

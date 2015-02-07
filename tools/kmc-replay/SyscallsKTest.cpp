@@ -424,6 +424,7 @@ void SyscallsKTest::doLinuxThunks(SyscallParams& sp, int xlate_sysnr)
 				(void*)last_brk << ". new_brk =" <<
 				(void*)new_brk << '\n';
 
+		assert (mmap_ret == 0 && "guest mmap failed");
 		assert ((void*)ret.o == (void*)last_brk);
 		last_brk = new_brk;
 		break;
@@ -486,6 +487,10 @@ void SyscallsKTest::doLinuxThunks(SyscallParams& sp, int xlate_sysnr)
 			KREPLAY_SC "WRITING %d bytes to fd=%d :\"\n",
 			(int)sp.getArg(2), (int)sp.getArg(0));
 		bw = write(STDERR_FILENO, sp.getArgPtr(1), sp.getArg(2));
+		if (bw != sp.getArg(2)) {
+			fprintf(stderr, "Couldn't write %u bytes. Got %ld\n",
+				sp.getArg(2), bw);
+		}
 		fprintf(stderr, "\n" KREPLAY_SC "\".\n");
 
 		break;
