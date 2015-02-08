@@ -38,6 +38,7 @@ struct virt_str* virtsym_safe_strcopy_all(const char* s, int copy_concrete)
 	s = s_c;
 	klee_assert(!klee_is_symbolic_addr(s) && "Smarter way to do this?");
 
+	/* skip over concrete prefix */
 	for (i = 0;
 		klee_is_valid_addr(&s[i]) &&
 		!klee_is_symbolic(s[i]) &&

@@ -40,7 +40,7 @@ static void push_obj(KTest *kts, char *fname)
 
 int main(int argc, char *argv[])
 {
-	KTest		kts;
+	KTest		*kts_;
 	int		arg_c;
 	char		**argv_out;
 	std::ostream	*os;
@@ -52,6 +52,9 @@ int main(int argc, char *argv[])
 		std::cerr << "Prefix command line argument files with argv!\n";
 		return 1;
 	}
+
+	kts_ = (KTest*)malloc(sizeof(KTest));
+	KTest &kts = *kts_;
 
 	kts.numObjects = 0;
 	kts.objects = (KTestObject *)malloc((argc - 1) * sizeof *kts.objects);
@@ -65,13 +68,13 @@ int main(int argc, char *argv[])
 		arg_c++;
 	}
 	
-	argv_out = (char**)malloc((arg_c+1)*sizeof(char*));
+	argv_out = (char**)calloc(arg_c+1, sizeof(char*));
 	argv_out[0] = strdup("exe");
 	for (int i = 1; i < arg_c; i++) argv_out[i] = (char*)kts.objects[i-1].bytes;
 	argv_out[arg_c] = NULL;
 
 	kts.numArgs = arg_c;
-	kts.args = argv;
+	kts.args = argv_out;
 	kts.symArgvs = arg_c;
 	kts.symArgvLen = 0;
 
@@ -84,6 +87,7 @@ int main(int argc, char *argv[])
 
 	if (!kTest_toStream(&kts, *os)) abort();
 	delete os;
-
+	
+	kTest_free(kts_);
 	return 0;
 }

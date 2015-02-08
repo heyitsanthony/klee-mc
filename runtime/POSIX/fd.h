@@ -22,7 +22,7 @@
 #define KLEE_MAX_PATH_LEN 75
 
 typedef struct {
-  struct sockaddr_storage *addr;
+  struct sockaddr_in *addr;
   socklen_t addrlen;
 } exe_sockaddr_t;
 

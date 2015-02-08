@@ -48,7 +48,10 @@ using namespace klee::expr;
 #undef __GNUC_MINOR__
 
 /* stuff that lives in smtlib.lex */
-int smtliberror(const char *s) { return SMTParser::parserTemp->Error(s); }
+int smtliberror0(const char *s, void *sem_type, void *loc) 
+{ return SMTParser::parserTemp->Error(s); }
+int smtliberror(const char *s) 
+{ return smtliberror0(s, 0, 0); }
 
 #define YYMAXDEPTH 10485760
 

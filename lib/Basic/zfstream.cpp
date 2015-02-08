@@ -59,7 +59,8 @@ gzfilebuf::open(const char *name,
     return NULL;
 
   // Build mode string for gzopen and check it [27.8.1.3.2]
-  char char_mode[6] = "\0\0\0\0\0";
+  char char_mode[6];
+  memset(char_mode, 0, sizeof(char_mode));
   if (!this->open_mode(mode, char_mode))
     return NULL;
 
@@ -162,10 +163,12 @@ gzfilebuf::open_mode(std::ios_base::openmode mode,
 //    strcpy(c_mode, "w+");
 
   // Mode string should be empty for invalid combination of flags
-  if (strlen(c_mode) == 0)
+  if (*c_mode == '\0')
     return false;
-  if (testb)
-    strncat(c_mode, "b", 3);
+  if (testb) {
+    c_mode[1] = 'b';
+    c_mode[2] = '\0';
+  }
   return true;
 }
 

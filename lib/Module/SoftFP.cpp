@@ -160,7 +160,8 @@ bool SoftFPPass::replaceFCmp(Instruction *inst)
 	Function	*f;
 	bool		f_flip, ordered;
 
-	v0 = (inst->getNumOperands() > 0) ? inst->getOperand(0) : NULL;
+	assert (inst->getNumOperands() > 0);
+	v0 = inst->getOperand(0);
 	ty_w = v0->getType()->getPrimitiveSizeInBits();
 
 	assert (ty_w == 32 || ty_w == 64);
@@ -402,14 +403,15 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 	Type			*ty;
 	Value			*v0;
 
-	v0 = (inst->getNumOperands() > 0) ? inst->getOperand(0) : NULL;
+	v0 = (inst->getNumOperands() > 0) ? inst->getOperand(0) : nullptr;
 	ty = inst->getType();
 	switch (inst->getOpcode()) {
 	case Instruction::FPExt: {
 		CallInst		*fpext_call;
 
-		assert (ty->getPrimitiveSizeInBits() == 64 &&
-			v0->getType()->getPrimitiveSizeInBits() == 32);
+		assert(ty->getPrimitiveSizeInBits() == 64);
+		assert(v0);
+		assert(v0->getType()->getPrimitiveSizeInBits() == 32);
 
 		fpext_call = CallInst::Create(
 			getCastThunk(f_fpext->function, ty, v0), v0);
@@ -427,7 +429,7 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 		Function		*f;	\
 		Value			*args[] = {v0, inst->getOperand(1)};	\
 		unsigned		ty_w;	\
-\
+		assert (ty);				\
 		ty_w  = ty->getPrimitiveSizeInBits();	\
 		assert(ty_w == 32 || ty_w == 64);	\
 		f = (ty_w == 32) ? f_fp32##y->function : f_fp64##y->function;	\
@@ -450,6 +452,9 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 		CallInst		*fp_call;
 		Function		*f;
 		unsigned		ty_w, v_w;
+
+		assert (ty);
+		assert (v0);
 
 		ty_w  = ty->getPrimitiveSizeInBits();
 		v_w = v0->getType()->getPrimitiveSizeInBits();
@@ -477,6 +482,9 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 		Function		*f;
 		unsigned		ty_w, v_w;
 
+		assert (ty);
+		assert (v0);
+
 		ty_w  = ty->getPrimitiveSizeInBits();
 		v_w = v0->getType()->getPrimitiveSizeInBits();
 		assert ((ty_w == 32 || ty_w == 64) &&
@@ -502,10 +510,13 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 		Function		*f;
 		unsigned		ty_w, v_w;
 
-		std::cerr << "[FP] worry about rounding modes more\n";
 		ty_w  = ty->getPrimitiveSizeInBits();
+		assert (ty_w == 32);
+		assert (v0);
+
+		std::cerr << "[FP] worry about rounding modes more\n";
 		v_w = v0->getType()->getPrimitiveSizeInBits();
-		assert (ty_w == 32 &&  v_w == 64);
+		assert (v_w == 64);
 
 		f = f_fptrunc->function;
 		fp_call = CallInst::Create(getCastThunk(f, ty, v0), v0);
@@ -514,6 +525,7 @@ bool SoftFPPass::replaceInst(Instruction* inst)
 	}
 
 	case Instruction::Call: {
+		assert (v0);
 		unsigned	ty_w = v0->getType()->getPrimitiveSizeInBits();
 		CallInst	*ci = static_cast<CallInst*>(inst);
 		Function	*called;

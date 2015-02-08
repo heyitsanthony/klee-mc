@@ -32,7 +32,8 @@ using namespace klee::expr;
 extern int smtlib_inputLine;
 extern char *smtlibtext;
 
-extern int smtliberror (const char *msg);
+extern int smtliberror0(const char *s, void *sem_type, void *loc);
+extern int smtliberror(const char *s);
 
 static int smtlibinput(std::istream& is, char* buf, int size)
 {
@@ -262,6 +263,6 @@ IDCHAR  ({LETTER}|{DIGIT}|{OPCHAR})
 
 <<EOF>>         { return smtlib::parser::token::EOF_TOK; }
 
-. { smtliberror("Illegal input character."); }
+. { smtliberror0("Illegal input character.", yylval, yylloc); }
 %%
 

@@ -234,7 +234,7 @@ protected:
 		llvm::Function *function,
 		std::vector< ref<Expr> > &arguments) = 0;
 
-	virtual void executeCall(
+	void executeCall(
 		ExecutionState &state,
 		KInstruction *ki,
 		llvm::Function *f,

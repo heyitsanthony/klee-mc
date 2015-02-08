@@ -23,14 +23,16 @@ struct vsym_clo
 #define vs_is_conc(x)	((x)->vs_first_sym_idx == ~0U)
 struct virt_str
 {
-	char		*vs_str;
+	char		*vs_str; // buffer containing string's contents
 	unsigned	vs_first_sym_idx; // must have some symbolic!
 	unsigned	vs_len_min, vs_len_max; // lengths of stream
 	char		*vs_str_min, *vs_str_max; // pointers into vs_str
 };
 
 void virtsym_add(vsym_clo_f f, uint64_t ret, void* dat);
+// copy only if string has symbolic characters
 #define virtsym_safe_strcopy(s) virtsym_safe_strcopy_all(s,0)
+// copy if string regardless of content, if possible
 #define virtsym_safe_strcopy_conc(s) virtsym_safe_strcopy_all(s,1)
 struct virt_str* virtsym_safe_strcopy_all(const char* s, int copy_conc);
 void virtsym_str_free(struct virt_str*);

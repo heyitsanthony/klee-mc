@@ -171,7 +171,7 @@ static void __create_new_dfile(
 
   if (is_foreign)
   {
-    struct sockaddr_storage *ss;
+    struct sockaddr_in *ss;
 
     klee_assume_eq((dfile->stat->st_mode & S_IFMT), S_IFSOCK);
 
@@ -189,7 +189,7 @@ static void __create_new_dfile(
        every address family supported. */
     klee_assume_ne(/* ss->ss_family != AF_INET  || */ ((struct sockaddr_in  *)ss)->sin_port, 0);
     klee_assume_ne(/* ss->ss_family != AF_INET6 || */ ((struct sockaddr_in6 *)ss)->sin6_port, 0);
-    klee_prefer_cex(dfile->src->addr, dfile->src->addr->ss_family == AF_INET);
+    klee_prefer_cex(dfile->src->addr, dfile->src->addr->sin_family == AF_INET);
   }
 }
 

@@ -77,9 +77,10 @@ char* get_string(pid_t child, unsigned* addr) {
   }  
   r[n++] = u;
 
-  char* str = calloc(n, WORD_SIZE);
-  strcpy(str, (char*) r);
-  return str;
+  void* str = calloc(n, WORD_SIZE);
+  memcpy(str, r, n * WORD_SIZE);
+  ((char*)str)[(n*WORD_SIZE)-1] = '\0';
+  return (char*)str;
 }
 
 // XXX: Does these ptrace calls work on 64-bit systems?

@@ -17,45 +17,37 @@ HOOK_FUNC(__GI_strtoul, strtoll_enter);
 
 struct strtoll_clo
 {
-	const char	*nptr;
+	const char	*s;
+	struct virt_str	*str;
 	int		base;
-	unsigned	len;
-
-
-	const char	*endptr;	/* symbolic data */
 };
 
 static void strtoll_enter(void* r)
 {
-	const char		*s;
+	const char		**endptr;
+	struct strtoll_clo	clo_dat, *clo;
 	uint64_t		ret;
-	struct strtoll_clo	*clo_dat;
-	char			**endptr;
-	unsigned		i;
 
-
-	s = (const char*)GET_ARG0(r);
-	endptr = (char**)GET_ARG1(r);
-
-	klee_print_expr("hello strtoll", s);
-
-	/* 1. check pointers, common to crash in strtoll */
-	if (!klee_is_valid_addr(s)) return;
-
-	/* ignore concretes */
-	if (!klee_is_symbolic(s[0])) return;
+	endptr = (const char**)GET_ARG1(r);
+	if (endptr) {
+		klee_print_expr("strtoll endptr unsupported", endptr);
+		return;
+	}
 
 	/* TODO: support more bases */
+	clo_dat.base = GET_ARG2(r); 
 	if (GET_ARG2(r) != 10 && GET_ARG2(r) != 0) {
 		klee_print_expr("unsupported base", GET_ARG2(r));
 		return;
 	}
 
-	i = 0;
-	while (	klee_is_valid_addr(&s[i]) &&
-		(klee_is_symbolic(s[i]) || s[i] != '\0')) i++;
+	/* check pointers, common to crash in strtoll */
+	clo_dat.s = (const char*)GET_ARG0(r);
+	if (!klee_is_valid_addr(clo_dat.s)) return;
 
-	klee_print_expr("all enumerated", i);
+	if ((clo_dat.str = virtsym_safe_strcopy_conc(clo_dat.s)) == NULL) {
+		return;
+	}
 
 	/* set value to symbolic */
 	if (!klee_make_vsym(&ret, sizeof(ret), "vstrtoll")) {
@@ -66,17 +58,15 @@ static void strtoll_enter(void* r)
 	GET_SYSRET(r) = ret;
 
 	/* XXX: this should copy the whole string */
-	clo_dat = malloc(sizeof(*clo_dat));
-	clo_dat->nptr = s;
-	clo_dat->base = GET_ARG2(r);
-	if (endptr != NULL) *endptr = (char*)&s[i];
-	clo_dat->len = i;
-	virtsym_add(strtoll_fini, ret, clo_dat);
+	clo = malloc(sizeof(*clo));
+	memcpy(clo, &clo_dat, sizeof(*clo));
+	virtsym_add(strtoll_fini, ret, clo);
 
 	/* no need to evaluate, skip */
 	kmc_skip_func();
 }
 
+/* I recall something like this being a msft question */
 static void strtoll_itoa(char* buf, uint64_t v)
 {
 	int	i, j;
@@ -89,11 +79,11 @@ static void strtoll_itoa(char* buf, uint64_t v)
 	}
 
 	/* write number out backwards */
-	for (i = 0; v; i++) {
-		buf[i] = '0' + (v % 10);
+	i = 0;
+	do {
+		buf[i++] = '0' + (v % 10);
 		v /= 10;
-		i++;
-	}
+	} while (v);
 	buf[i] = '\0';
 
 	/* reverse */
@@ -101,6 +91,8 @@ static void strtoll_itoa(char* buf, uint64_t v)
 		char	c = buf[j];
 		buf[j] = buf[(i-1)-j];
 		buf[(i-1)-j] = c;
+		klee_print_expr("HEY", c);
+		klee_assert (klee_is_symbolic(c) || c != '\0');
 	}
 }
 
@@ -118,7 +110,7 @@ static void strtoll_fini(uint64_t _r, void* aux)
 	klee_assume_eq(r, _r);
 
 	clo = aux;
-	s = clo->nptr;
+	s = clo->str->vs_str;
 
 	/* write string into 'buf'; itoa. assume base=10 */
 	strtoll_itoa(buf, r);

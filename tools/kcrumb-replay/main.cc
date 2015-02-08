@@ -28,7 +28,7 @@ static char** loadSymArgs(KTestStream* kts)
 	unsigned		i;
 	const KTestObject	*kto;
 
-	ret = (char**)malloc(MAX_ARGS * sizeof(char**)/* (exe,[args],NULL) */);
+	ret = (char**)calloc(MAX_ARGS, sizeof(char*)/* (exe,[args],NULL) */);
 
 	fprintf(stderr, "[kcrumb-replay] Restoring symbolic arguments\n");
 
@@ -94,6 +94,10 @@ int main(int argc, char *argv[], char* envp[])
 	}
 
 	sshot_path = argv[1];
+	assert ((strchr(sshot_path, '/')
+			? strcmp(strchr(sshot_path, '/')+1, "guest-last")
+			: strcmp(sshot_path, "guest-last")) == 0
+		&& "NON-DEFAULT SSHOT PATH NOT SUPPORTED");
 	test_num = atoi(argv[2]);
 	test_path = getenv("KMC_TEST_PATH");
 	if (test_path == NULL) test_path = "klee-last";

@@ -998,7 +998,7 @@ HKL  	dwhkl
 	}
 
 
-
+	klee_assert (!new_regs || sc_breadcrumb_is_newregs());
 	last_sc = sc.sys_nr;
 
 	if (sc_breadcrumb_is_newregs() || klee_is_symbolic(GET_SYSRET(regfile))) {

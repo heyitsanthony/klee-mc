@@ -509,6 +509,8 @@ void Executor::executeCall(
 		}
 	}
 
+	assert (ki);
+
 	switch(f->getIntrinsicID()) {
 	// state may be destroyed by this call, cannot touch
 	case Intrinsic::not_intrinsic:

@@ -1020,8 +1020,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 		if (GET_SYSRET_S(new_regs) == -1) {
 			/* terminated early */
 			if (GET_ARG1(regfile) != 0) {
-				uint64_t dst_addr;
-				dst_addr = concretize_u64(GET_ARG1(regfile));
 				make_sym_by_arg(
 					regfile, 1, TIMESPEC_SZ, "nanosleep");
 			}
@@ -1188,7 +1186,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 
 	case SYS_brk: {
-		new_regs = sc_brk(regfile);
+		sc_brk(regfile);
 		break;
 	}
 	case SYS_munmap:
@@ -1603,6 +1601,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 	}
 
 	last_sc = sc.sys_nr;
+	klee_assert (!new_regs || sc_breadcrumb_is_newregs());
 
 	if (sc_breadcrumb_is_newregs()) {
 		/* ret value is stored in ktest regctx */

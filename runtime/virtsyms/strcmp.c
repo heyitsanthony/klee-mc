@@ -83,39 +83,6 @@ no_s1:
 no_s0:
 	return;
 }
-
-
-#if 0
-static void strcmp_fini(uint64_t _r, void* aux)
-{
-	const char	*s[2];
-	int64_t		r = _r;
-
-	s[0] = ((char**)aux)[0];
-	s[1] = ((char**)aux)[1];
-
-	/* XXX: problem. forks too much. FUFKCKCK */
-
-	/* kind of lazy, could do better... */
-	while((*s[0]) == (*s[1]) && s[0] != 0) {
-		s[0]++;
-		s[1]++;
-	}
-
-	/* bind */
-	if (r == 0) {
-		if (*s[0] != *s[1])
-			klee_silent_exit(0);
-	} else if (r < 0) {
-		if (*s[0] >= *s[1])
-			klee_silent_exit(0);
-	} else {
-		if (*s[0] <= *s[1])
-			klee_silent_exit(0);
-	}
-}
-#endif
-
 static int is_conc_nul(const char* s)
 {
 	char c = *s;

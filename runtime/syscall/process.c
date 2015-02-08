@@ -25,7 +25,7 @@ static void do_clone(struct sc_pkt* sc)
 	void	*ctid = GET_ARG3_PTR(sc->regfile);
 	void	*regs = GET_ARG4_PTR(sc->regfile);
 	int	child_pid;
-	int	exit_sig;
+	// int	exit_sig;
 
 	klee_print_expr("DOING CLONE!!!", 123);
 	klee_print_expr("CLONE ARG0", GET_ARG0(sc->regfile));
@@ -35,7 +35,7 @@ static void do_clone(struct sc_pkt* sc)
 	klee_print_expr("CLONE ARG4", GET_ARG4(sc->regfile));
 
 	flags = orig_flags;
-	exit_sig = flags & CSIGNAL;
+	// exit_sig = flags & CSIGNAL;
 	flags &= ~CSIGNAL;
 
 	if (flags & CLONE_CHILD_CLEARTID) {
@@ -94,6 +94,8 @@ static void do_clone(struct sc_pkt* sc)
 		}
 		flags &= ~CLONE_CHILD_SETTID;
 	}
+
+	(void)flags; //  now what?
 
 /* I have no idea what I'm doing. Ugh. */
 #if 0

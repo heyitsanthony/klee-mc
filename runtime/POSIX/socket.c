@@ -78,7 +78,7 @@ int __socketcall(int type, unsigned long *args) {
 #define HAS_ADDR(a) (assert((a)->addr), PORT((a)->addr) != 0)
 
 #define ADDR_COMPATIBLE(addr, addrlen, a) \
-    ((addrlen) == (a)->addrlen && (addr)->sa_family == (a)->addr->ss_family)
+    ((addrlen) == (a)->addrlen && (addr)->sa_family == (a)->addr->sin_family)
 
 
 /* Just to set dfile as a non-NULL value for symbolic datagram sockets */
@@ -103,9 +103,10 @@ exe_sockaddr_t *__allocate_sockaddr(int domain, exe_sockaddr_t *a) {
   assert(a);
   switch (domain) {
 #define SET_SOCKADDR(a, type, family) do { \
-    (a)->addr = calloc(1, sizeof(type)); \
+    assert(sizeof(struct sockaddr_in) >= sizeof(type)); \
+    (a)->addr = malloc(sizeof(struct sockaddr_in)); \
     if (!(a)->addr) return NULL; \
-    (a)->addr->ss_family = AF_INET; \
+    (a)->addr->sin_family = AF_INET; \
     (a)->addrlen = sizeof(type); \
     return (a); \
 } while (0)
@@ -372,7 +373,7 @@ int __fd_accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
 
   /* Adjust the source address to the local address */
   connf->dfile->src->addrlen         = connf->local.addrlen;
-  connf->dfile->src->addr->ss_family = connf->local.addr->ss_family;
+  connf->dfile->src->addr->sin_family = connf->local.addr->sin_family;
 
   /* For TCP, foreign simply points to dfile->src */
   connf->foreign = connf->dfile->src;

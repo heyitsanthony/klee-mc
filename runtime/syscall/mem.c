@@ -76,6 +76,7 @@ static void* sc_mmap_fd(void* regfile, uint64_t len, int fd, uint64_t off)
 		ret_addr = sc_mmap_anon(regfile, len);
 		if (ret_addr == MAP_FAILED) return ret_addr;
 		br = fd_pread(fd, ret_addr, len, off);
+		klee_assert(br > 0);
 		fd_mark(fd, ret_addr, len, off);
 		return ret_addr;
 	}

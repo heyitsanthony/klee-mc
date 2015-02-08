@@ -109,6 +109,7 @@ BitfieldSimplifier::ExprBitsInfo BitfieldSimplifier::doSimplifyBits(
 	return std::make_pair(e, rbits); }
 
     /* Call doSimplifyBits recursively to obtain knownBits for each kid */
+    memset(oldIgnoredBits, 0, sizeof(oldIgnoredBits));
     unsigned numKids = e->getNumKids();
     for(unsigned i = 0; i < numKids; ++i) {
         /* By setting ignoredBits to zero we disable any ignoredBits-related

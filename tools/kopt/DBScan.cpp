@@ -115,10 +115,9 @@ void DBScan::histo(void)
 
 	std::cout << "# RULES-IN-CLASS | TOTAL-CLASS-RULES" << '\n';
 	unsigned total = 0;
-
-	assert (!ko_c.empty());
 	for (auto &p : ko_c)
 		total += p.first * p.second;
+	assert (total && "No rules given?");
 
 	unsigned cur_total = 0;
 	foreach (it, ko_c.begin(), ko_c.end()) {

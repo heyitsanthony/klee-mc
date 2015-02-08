@@ -259,7 +259,7 @@ static void sc_open(const char* path, void* regfile)
 int file_sc(struct sc_pkt* sc)
 {
 	void	*regfile = sc->regfile;
-	void	*new_regs;
+	void	*new_regs = NULL;
 
 	switch (sc->sys_nr) {
 
@@ -449,6 +449,7 @@ int file_sc(struct sc_pkt* sc)
 	}
 	break;
 	}
+	klee_assert (!new_regs || sc_breadcrumb_is_newregs());
 
 	return 1;
 }
