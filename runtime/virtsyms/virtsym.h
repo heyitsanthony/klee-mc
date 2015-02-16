@@ -42,6 +42,13 @@ void virtsym_prune(pruneid_t);
 /* in the future, this might do something smart like install a post hook
  * so that nothing forks so there's no state pollution */
 #define virtsym_disabled() do { } while (0)
+#define DECL_VIRTSYM_FAKE(f) static void fake_##f(void* c)	\
+	{ virtsym_add(f, GET_RET(kmc_regs_get()), c); }
+#define virtsym_fake_n(f, dat, n) do {		\
+	klee_print_expr("faking func " #f , 123);	\
+	klee_hook_return(n, fake_##f, (uint64_t)(dat)); } while (0)
+#define virtsym_fake(f, dat) virtsym_fake_n(f, dat, 1)
+
 // void virtsym_disabled(void);
 
 #endif

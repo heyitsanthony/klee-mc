@@ -8,6 +8,7 @@
 static void strchr_enter(void* r);
 static void strchrnul_enter(void* r);
 static void strchr_fini(uint64_t _r, void* aux);
+DECL_VIRTSYM_FAKE(strchr_fini)
 
 #define HOOK_FUNC(x,y) void __hookpre_##x(void* r) { y(r); }
 
@@ -30,30 +31,22 @@ static int strchr_internal(void* r, uint64_t* ret, unsigned* len)
 	struct virt_str		*vs;
 
 	s = (const char*)GET_ARG0(r);
-
-	/* 1. check pointers, common to crash in strchr */
-	if (!klee_is_valid_addr(s)) return 0;
-
-	// 2. can not confirm good symbolic string
 	if ((vs = virtsym_safe_strcopy(s)) == NULL) return 0;
+
+	clo_dat = malloc(sizeof(*clo_dat));
+	clo_dat->vs = vs;
+	clo_dat->s_orig = s;
+	clo_dat->c = (uint8_t)GET_ARG1(r);
 
 	/* set value to symbolic */
 	if (!klee_make_vsym(ret, sizeof(*ret), "vstrchr")) {
-		virtsym_str_free(vs);
-		virtsym_disabled();
+		virtsym_fake_n(strchr_fini, clo_dat, 2);
 		return 0;
 	}
 
 	*len = vs->vs_len_max;
 	klee_assume_ule(*ret, vs->vs_len_max+1);
-
-	/* XXX: this should copy the whole string */
-	clo_dat = malloc(sizeof(*clo_dat));
-	clo_dat->vs = vs;
-	clo_dat->s_orig = s;
-	clo_dat->c = (uint8_t)GET_ARG1(r);
 	virtsym_add(strchr_fini, *ret, clo_dat);
-
 	return 1;
 }
 
@@ -63,10 +56,8 @@ static void strchr_enter(void* r)
 	unsigned	i;
 	const char	*s = (const char*)GET_ARG0(r);
 
-	if (!strchr_internal(r, &ret, &i)) {
-		virtsym_disabled();
+	if (!strchr_internal(r, &ret, &i))
 		return;
-	}
 
 	GET_SYSRET(r) = klee_mk_ite(klee_mk_eq(ret, i+1), 0, s+ret);
 	kmc_skip_func();
@@ -78,15 +69,12 @@ static void strchrnul_enter(void* r)
 	unsigned	i;
 	const char	*s = (const char*)GET_ARG0(r);
 
-	if (!strchr_internal(r, &ret, &i)) {
-		virtsym_disabled();
+	if (!strchr_internal(r, &ret, &i))
 		return;
-	}
 
 	GET_SYSRET(r) = klee_mk_ite(klee_mk_eq(ret, i+1), s+i, s+ret);
 	kmc_skip_func();
 }
-
 
 /* this forces a value for the index-- is this wise? could miss tests */
 static void strchr_fini(uint64_t _r, void* aux)

@@ -25,7 +25,7 @@ void virtsym_str_free(struct virt_str *vs)
 
 struct virt_str* virtsym_safe_strcopy_all(const char* s, int copy_concrete)
 {
-	struct virt_str	vs, *ret;
+	struct virt_str	vs;
 	char		*s_c;
 	unsigned	i, j;
 
@@ -59,9 +59,7 @@ struct virt_str* virtsym_safe_strcopy_all(const char* s, int copy_concrete)
 		// don't crash in handler!
 		vs.vs_str[vs.vs_len_max] = '\0';
 
-		ret = malloc(sizeof(vs));
-		memcpy(ret, &vs, sizeof(vs));
-		return ret;
+		return memcpy(malloc(sizeof(vs)), &vs, sizeof(vs));
 	}
 
 	vs.vs_len_min = i;
@@ -81,9 +79,7 @@ struct virt_str* virtsym_safe_strcopy_all(const char* s, int copy_concrete)
 	// don't crash in handler!
 	vs.vs_str[vs.vs_len_max] = '\0';
 
-	ret = malloc(sizeof(vs));
-	memcpy(ret, &vs, sizeof(vs));
-	return ret;
+	return memcpy(malloc(sizeof(vs)), &vs, sizeof(vs));
 }
 
 void* virtsym_safe_memcopy(const void* m, unsigned len)

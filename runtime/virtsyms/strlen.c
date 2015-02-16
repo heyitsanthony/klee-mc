@@ -7,6 +7,7 @@
 
 static void strlen_enter(void* r);
 static void strlen_fini(uint64_t _r, void* aux);
+DECL_VIRTSYM_FAKE(strlen_fini)
 
 #define HOOK_FUNC(x,y) void __hookpre_##x(void* r) { y(r); }
 
@@ -21,26 +22,20 @@ static void strlen_enter(void* r)
 	uint64_t	ret;
 
 	s = (const char*)GET_ARG0(r);
-
-	/* 1. check pointers, common to crash in strlen */
-	if (!klee_is_valid_addr(s)) return;
-
-	if ((vs = virtsym_safe_strcopy(s)) == NULL)
-		return;
-
-	/* set value to symbolic */
-	if (!klee_make_vsym(&ret, sizeof(ret), "vstrlen")) {
-		virtsym_str_free(vs);
-		virtsym_disabled();
+	if ((vs = virtsym_safe_strcopy(s)) == NULL) {
 		return;
 	}
 
-	klee_assume_ule(ret, vs->vs_len_max);
-	GET_SYSRET(r) = ret;
-	virtsym_add(strlen_fini, ret, vs);
-
-	/* no need to evaluate, skip */
-	kmc_skip_func();
+	/* set value to symbolic */
+	if (klee_make_vsym(&ret, sizeof(ret), "vstrlen")) {
+		klee_assume_ule(ret, vs->vs_len_max);
+		GET_SYSRET(r) = ret;
+		virtsym_add(strlen_fini, ret, vs);
+		/* no need to evaluate, skip */
+		kmc_skip_func();
+	} else {
+		virtsym_fake(strlen_fini, vs);
+	}
 }
 
 static void strlen_fini(uint64_t _r, void* aux)

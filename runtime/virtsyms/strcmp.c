@@ -4,12 +4,11 @@
 #include <string.h>
 #include "../syscall/syscalls.h"
 
-
 static void strcmp_enter(void* r);
 static void strcmp_fini2(uint64_t _r, void* aux);
+DECL_VIRTSYM_FAKE(strcmp_fini2)
 
 #define HOOK_FUNC(x,y) void __hookpre_##x(void* r) { y(r); }
-
 HOOK_FUNC(__GI_strcmp, strcmp_enter);
 HOOK_FUNC(__GI___strcmp_ssse3, strcmp_enter);
 HOOK_FUNC(__strcmp_sse42, strcmp_enter);
@@ -25,16 +24,18 @@ struct strcmp_clo
 static void strcmp_enter(void* r)
 {	
 	struct strcmp_clo	clo, *ret_clo;
-	int			is_sym[2];
 	uint64_t		ret;
 
 	clo.s[0] = (const char*)GET_ARG0(r);
 	clo.s[1] = (const char*)GET_ARG1(r);
 
 	/* 1. check pointers, common to crash in strcmp */
-	if (!klee_is_valid_addr(clo.s[0]) || !klee_is_valid_addr(clo.s[1])) 
+	if (!klee_is_valid_addr(clo.s[0]) || !klee_is_valid_addr(clo.s[1])) {
 		return;
+	}
 
+#if 0
+	int			is_sym[2];
 	is_sym[0] = klee_is_symbolic(*clo.s[0]);
 	is_sym[1] = klee_is_symbolic(*clo.s[1]);
 
@@ -46,12 +47,13 @@ static void strcmp_enter(void* r)
 	} else if (!is_sym[0]) {
 		/* both are symbolic */
 
-		/* some constraint? */
+		/* first char is constrained-- ignore strcmp */
 		if (	!klee_feasible_eq(*clo.s[0], *clo.s[1]) ||
 			!klee_feasible_ne(*clo.s[0], *clo.s[1]))
 			return;
 
 	}
+#endif
 
 	if ((clo.vs[0] = virtsym_safe_strcopy_conc(clo.s[0])) == NULL)
 		goto no_s0;
@@ -59,23 +61,22 @@ static void strcmp_enter(void* r)
 		goto no_s1;
 	if (vs_is_conc(clo.vs[0]) && vs_is_conc(clo.vs[1]))
 		goto vs_concrete;
-	if (!klee_make_vsym(&ret, sizeof(ret), "vstrcmp"))
-		goto disabled;
-
-	/* set value to symbolic */
-	GET_SYSRET(r) = ret;
 
 	/* XXX: this should copy the whole string */
 	ret_clo = malloc(sizeof(clo));
 	memcpy(ret_clo, &clo, sizeof(clo));
 
-	virtsym_add(strcmp_fini2, ret, ret_clo);
-
-	/* no need to evaluate, skip */
-	kmc_skip_func();
+	if (!klee_make_vsym(&ret, sizeof(ret), "vstrcmp")) {
+		virtsym_fake(strcmp_fini2, ret_clo);
+	} else {
+		/* set value to symbolic */
+		GET_SYSRET(r) = ret;
+		virtsym_add(strcmp_fini2, ret, ret_clo);
+		/* no need to evaluate, skip */
+		kmc_skip_func();
+	}
 	return;
-disabled:
-	virtsym_disabled();
+
 vs_concrete:
 	virtsym_str_free(clo.vs[1]);
 no_s1:
@@ -83,6 +84,7 @@ no_s1:
 no_s0:
 	return;
 }
+
 static int is_conc_nul(const char* s)
 {
 	char c = *s;
