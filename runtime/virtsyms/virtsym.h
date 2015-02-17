@@ -28,6 +28,12 @@ struct virt_str
 	unsigned	vs_len_min, vs_len_max; // lengths of stream
 	char		*vs_str_min, *vs_str_max; // pointers into vs_str
 };
+#define virtstr_dump(vs)						\
+	klee_print_expr("VS->VS_LEN_MAX", vs->vs_len_max);		\
+	klee_print_expr("VS->VS_LEN_MIN", vs->vs_len_min);		\
+	klee_print_expr("VS->VS_FIRST_SYM_IDX", vs->vs_first_sym_idx);	\
+
+
 
 void virtsym_add(vsym_clo_f f, uint64_t ret, void* dat);
 // copy only if string has symbolic characters
@@ -50,5 +56,5 @@ void virtsym_prune(pruneid_t);
 #define virtsym_fake(f, dat) virtsym_fake_n(f, dat, 1)
 
 // void virtsym_disabled(void);
-
+//
 #endif

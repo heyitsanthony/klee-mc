@@ -29,32 +29,6 @@ static void strcmp_enter(void* r)
 	clo.s[0] = (const char*)GET_ARG0(r);
 	clo.s[1] = (const char*)GET_ARG1(r);
 
-	/* 1. check pointers, common to crash in strcmp */
-	if (!klee_is_valid_addr(clo.s[0]) || !klee_is_valid_addr(clo.s[1])) {
-		return;
-	}
-
-#if 0
-	int			is_sym[2];
-	is_sym[0] = klee_is_symbolic(*clo.s[0]);
-	is_sym[1] = klee_is_symbolic(*clo.s[1]);
-
-	if (is_sym[0] != is_sym[1]) {
-		/* one is concrete. should I bother checking better? */
-		if (	!klee_feasible_eq(*clo.s[0], *clo.s[1]) ||
-			!klee_feasible_ne(*clo.s[0], *clo.s[1]))
-			return;
-	} else if (!is_sym[0]) {
-		/* both are symbolic */
-
-		/* first char is constrained-- ignore strcmp */
-		if (	!klee_feasible_eq(*clo.s[0], *clo.s[1]) ||
-			!klee_feasible_ne(*clo.s[0], *clo.s[1]))
-			return;
-
-	}
-#endif
-
 	if ((clo.vs[0] = virtsym_safe_strcopy_conc(clo.s[0])) == NULL)
 		goto no_s0;
 	if ((clo.vs[1] = virtsym_safe_strcopy_conc(clo.s[1])) == NULL)

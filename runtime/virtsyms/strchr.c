@@ -26,12 +26,13 @@ struct strchr_clo
 
 static int strchr_internal(void* r, uint64_t* ret, unsigned* len)
 {
-	const char		*s;
+	const char		*s = (const char*)GET_ARG0(r);
 	struct strchr_clo	*clo_dat;
 	struct virt_str		*vs;
 
-	s = (const char*)GET_ARG0(r);
-	if ((vs = virtsym_safe_strcopy(s)) == NULL) return 0;
+	if ((vs = virtsym_safe_strcopy(s)) == NULL) {
+		return 0;
+	}
 
 	clo_dat = malloc(sizeof(*clo_dat));
 	clo_dat->vs = vs;

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VEXLLVM_SAVE=1 pt_run "$1"
+VEXLLVM_SAVE=1 pt_run "$1" aaaaaaaaa aaaaaaaaa aaaaaaaaa
 
 if [ -z "$2" ]; then
 	exit 0
