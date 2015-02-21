@@ -123,7 +123,6 @@ do {	SET_KREPORT(&kr_tab[0], a);	\
 	klee_ureport_details(msg, "heap.err", &kr_tab);	\
 } while (0)
 
-
 static uint64_t shadow_get_range_explode(uint64_t a, unsigned byte_c)
 {
 	uint64_t	v = 0;
@@ -192,6 +191,9 @@ void __hookpre___GI___libc_free(REGPARAM)
 	HEAP_ENTER
 
 	klee_print_expr("[memcheck] freeing", (long)ptr);
+	if (shadow_get(&heap_si, (long)ptr) == SH_FL_FREE) {
+		klee_uerror("Called free on unallocated memory", "heap.err");	
+	}
 
 	/* disable header boundary so free doesn't cause an error */
 	shadow_put(&heap_si, (long)ptr-1, SH_FL_UNINIT);
