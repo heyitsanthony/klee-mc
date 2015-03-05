@@ -1,0 +1,19 @@
+Things that are needed for a new windows VM.
+
+
+1. fresh windows install
+	1.a. bugchk username
+	1.b. no password (who cares)
+2. install cygwin with sshd
+	2.a. cygwin ssh-host-gen? some script (DO NOT USE SPLIT SERVER)
+	2.b. reboot
+	2.c. ssh localhost to make sure it works
+	2.d. ~/.ssh/authorized_keys (cat bugchk.pub)
+DONE
+3. update syscall tables in runtime
+4. support new vm in ~/repos/win-vm
+5. qcow2 image + booted savevm snapshot
+6. make sure snapshot program works with vm (update if not) XXX BROKEN!!
+7. add support to bc.net worker scripts
+	7.a. snapshotting
+	7.b. klee flags (-use-nt=...)
