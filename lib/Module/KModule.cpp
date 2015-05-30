@@ -113,11 +113,9 @@ KModule::KModule(
 	Module *_module,
 	const ModuleOptions &_opts)
 : module(_module)
-, dataLayout(new DataLayout(module))
+, dataLayout(std::make_unique<DataLayout>(module.get()))
 , kleeMergeFn(0)
-, infos(0)
-, constantTable(0)
-, fpm(new FunctionPassManager(_module))
+, fpm(std::make_unique<FunctionPassManager>(module.get()))
 , opts(_opts)
 , updated_funcs(0)
 , init_kfunc(0)
@@ -126,21 +124,13 @@ KModule::KModule(
 
 KModule::~KModule()
 {
-	delete infos;
+	infos = nullptr;
+	fpm = nullptr;
 
-	delete fpm;
-
-	foreach (it, functions.begin(), functions.end())
-		delete *it;
-
-	foreach (it, constantMap.begin(), constantMap.end())
-		delete (*it).second;
+	for (auto &f : functions) delete f;
+	for (auto &cm : constantMap) delete cm.second;
 	constantMap.clear();
-
-	foreach (it, modNames.begin(), modNames.end()) delete it->second;
-
-	delete dataLayout;
-	delete module;
+	for (auto &mn : modNames) delete mn.second;
 }
 
 /***/
@@ -276,12 +266,11 @@ void KModule::prepareMerge(InterpreterHandler *ih)
 			Ty,
 			GlobalVariable::ExternalLinkage,
 			"klee_merge",
-			module);
+			module.get());
 	}
 
 
-	foreach (it, MergeAtExit.begin(), MergeAtExit.end())
-		addMergeExit(mergeFn, *it);
+	for (auto &ex : MergeAtExit) addMergeExit(mergeFn, ex);
 }
 
 void KModule::addMergeExit(Function* mergeFn, const std::string& name)
@@ -395,7 +384,7 @@ void KModule::dumpModule(void)
 	if (OutputModule) {
 		std::ostream *f = ih->openOutputFile("final.bc");
 		llvm::raw_os_ostream* rfs = new llvm::raw_os_ostream(*f);
-		WriteBitcodeToFile(module, *rfs);
+		WriteBitcodeToFile(module.get(), *rfs);
 		delete rfs;
 		delete f;
 	}
@@ -403,7 +392,6 @@ void KModule::dumpModule(void)
 
 void KModule::addModule(Module* in_mod)
 {
-	std::string	err;
 	std::string	mod_name;
 	bool		isLinked;
 
@@ -421,15 +409,19 @@ void KModule::addModule(Module* in_mod)
 	std::cerr << "[KModule] Adding module \"" << *mn_ref << "\"\n";
 
 	isLinked = Linker::LinkModules(
-		module, in_mod, Linker::PreserveSource, &err);
+		module.get(),
+		in_mod,
+		[] (const DiagnosticInfo& di) {
+			std::cerr << "OOPS. Couldn't link module.\n";
+		});
 
-	foreach (it, in_mod->begin(), in_mod->end()) {
+	for (auto &f : *in_mod) {
 		Function	*kmod_f;
 		KFunction	*kf;
 
-		kmod_f = module->getFunction(it->getName().str());
+		kmod_f = module->getFunction(f.getName().str());
 		if (kmod_f == NULL)
-			std::cerr << "Oops: " << it->getName().str() << '\n';
+			std::cerr << "Oops: " << f.getName().str() << '\n';
 		assert (kmod_f != NULL);
 
 		kf = addFunction(kmod_f);
@@ -450,7 +442,7 @@ void KModule::addModule(Module* in_mod)
 void KModule::injectRawChecks()
 {
 	PassManager pm;
-	pm.add(new RaiseAsmPass(module));
+	pm.add(new RaiseAsmPass(module.get()));
 
 	// pm.add(createLowerAtomicPass());
 
@@ -494,12 +486,12 @@ void KModule::prepare(InterpreterHandler *in_ih)
 	loadIntrinsicsLib();
 	injectRawChecks();
 
-	infos = new InstructionInfoTable(module);
-	if (OptimizeKModule) Optimize(module);
+	infos = std::make_unique<InstructionInfoTable>(*module);
+	if (OptimizeKModule) Optimize(module.get());
 
 	// Needs to happen after linking (since ctors/dtors can be modified)
 	// and optimization (since global optimization can rewrite lists).
-	injectStaticConstructorsAndDestructors(module);
+	injectStaticConstructorsAndDestructors(module.get());
 
 	passEnforceInvariants();
 
@@ -542,7 +534,7 @@ void KModule::setupFunctionPasses(void)
 		pmb.populateFunctionPassManager(*fpm);
 	}
 
-	fpm->add(new RaiseAsmPass(module));
+	fpm->add(new RaiseAsmPass(module.get()));
 	fpm->add(createLowerAtomicPass());
 	fpm->add(new IntrinsicCleanerPass(this, *dataLayout));
 	fpm->add(new PhiCleanerPass());
@@ -682,8 +674,6 @@ KFunction* KModule::getKFunction(const char* fname) const
 }
 
 
-namespace klee { extern Module* getBitcodeModule(const char* s); }
-
 void KModule::loadIntrinsicsLib()
 {
 	// Force importing functions required by intrinsic lowering. Kind of
@@ -697,17 +687,17 @@ void KModule::loadIntrinsicsLib()
 	bool		isLinked;
 
 	forceImport(
-		module, "memcpy", PointerType::getUnqual(i8Ty),
+		module.get(), "memcpy", PointerType::getUnqual(i8Ty),
 		PointerType::getUnqual(i8Ty),
 		PointerType::getUnqual(i8Ty),
 		dataLayout->getIntPtrType(getGlobalContext()), (Type*) 0);
 	forceImport(
-		module, "memmove", PointerType::getUnqual(i8Ty),
+		module.get(), "memmove", PointerType::getUnqual(i8Ty),
 		PointerType::getUnqual(i8Ty),
 		PointerType::getUnqual(i8Ty),
 		dataLayout->getIntPtrType(getGlobalContext()), (Type*) 0);
 	forceImport(
-		module, "memset", PointerType::getUnqual(i8Ty),
+		module.get(), "memset", PointerType::getUnqual(i8Ty),
 		PointerType::getUnqual(i8Ty),
 		Type::getInt32Ty(getGlobalContext()),
 		dataLayout->getIntPtrType(getGlobalContext()), (Type*) 0);
@@ -716,23 +706,22 @@ void KModule::loadIntrinsicsLib()
 	std::string	path(getLibraryDir());
 
 	path =  path + "/libkleeRuntimeIntrinsic.bc";
-	Module	*m = klee::getBitcodeModule(path.c_str());
+	auto m = klee::getBitcodeModule(path.c_str());
 	assert (m != NULL);
 
 	/* make all instrinsic functions in main module prototypes */
-	foreach(it, m->begin(), m->end()) {
+	for (auto &m_f : *m) {
 		Function	*f;
-		f = module->getFunction(it->getName().str());
-		if (f == NULL) continue;
+		if ((f = module->getFunction(m_f.getName().str())) == nullptr)
+			continue;
 		f->deleteBody();
 	}
 
-	std::string err;
-	isLinked = Linker::LinkModules(module, m, Linker::PreserveSource, &err);
-	if (!err.empty()) {
-		std::cerr << "err: " << err << '\n';
-		exit(1);
-	}
+	isLinked = Linker::LinkModules(
+		module.get(),
+		m.get(),
+		[] (const DiagnosticInfo&) {
+			std::cerr << "Oops Linking.\n"; abort(); });
 	if (!isLinked) std::cerr << "IsLinked for intrinsics is false??\n";
 }
 

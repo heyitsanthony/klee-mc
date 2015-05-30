@@ -18,7 +18,7 @@ BCCompile.CXX = $(LLVMCXX) $(CPP.Flags) $(CXX.Flags) $(CXXFLAGS) $(CPPFLAGS) \
 
 ObjectsBC := $(BaseNameSources:%=$(ObjDir)/%.bc)
 
-OPTFLAGS += -std-compile-opts
+OPTFLAGS +=  -std-link-opts
 
 ############## BC BUILD RULES
 ##################################3

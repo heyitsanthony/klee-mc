@@ -10,8 +10,8 @@
 
 #define DEFAULT_FIXUPS	1000
 
-ChkExec::ChkExec(PTImgChk* gs, VexXlate* vx)
-: VexExecChk(gs, vx = NULL)
+ChkExec::ChkExec(PTImgChk* gs, std::shared_ptr<VexXlate> vx)
+: VexExecChk(gs, vx)
 , sc_ptkt(NULL)
 , print_exec(getenv("KMC_DUMP_EXE") != NULL)
 , max_fixups(getenv("KMC_MAX_FIXUPS") != NULL

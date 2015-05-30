@@ -21,7 +21,7 @@ USEDLIBS=kleeModule.a	\
 	kleaverSolver.a kleaverExpr.a \
 	kleeSupport.a kleeBasic.a
 #X_LINK_COMPONENTS = all
-X_LINK_COMPONENTS = jit bitreader bitwriter ipo linker engine core irreader
+X_LINK_COMPONENTS = mcjit bitreader bitwriter ipo linker engine core irreader
 include $(LEVEL)/Makefile.common
 
 ifdef STATIC_BUILD

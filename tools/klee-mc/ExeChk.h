@@ -25,14 +25,14 @@ private:
 	void loadCPU(const void*);
 	void setJITGen(void);
 	void setKLEEGen(void);
-	VexExec		*vex_exe;
+	std::unique_ptr<VexExec> vex_exe;
 
 	/* we have to do a lot of state swapping to get this to work */
-	GenLLVM		*klee_genllvm;
-	VexHelpers	*klee_vexhelpers;
+	std::unique_ptr<GenLLVM>	klee_genllvm;
+	std::unique_ptr<VexHelpers>	klee_vexhelpers;
 
-	GenLLVM		*jit_genllvm;
-	VexHelpers	*jit_vexhelpers;
+	std::unique_ptr<GenLLVM>	jit_genllvm;
+	std::unique_ptr<VexHelpers>	jit_vexhelpers;
 
 	char		*saved_klee_cpustate;
 	char		*saved_jit_cpustate;

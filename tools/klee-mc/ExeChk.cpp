@@ -12,6 +12,8 @@
 
 #include <iostream>
 
+#include "genllvm.h"
+
 #include "ExeStateVex.h"
 #include "KModuleVex.h"
 #include "ExeChk.h"
@@ -26,19 +28,17 @@ ExeChk::ExeChk(InterpreterHandler *ie)
 	/* This is a really silly hack to get two genllvm's running
 	 * at once. Fortunately the code doesn't change much, so 
 	 * we can get away with it. */
-	klee_genllvm = theGenLLVM;
-	klee_vexhelpers = theVexHelpers;
+	klee_genllvm = std::move(theGenLLVM);
+	klee_vexhelpers = std::move(theVexHelpers);
 	assert (klee_genllvm);
 	assert (klee_vexhelpers);
 
-	theGenLLVM = NULL;
-	theVexHelpers = NULL;
+	vex_exe = std::unique_ptr<VexExec>(
+		VexExec::create<VexExec, Guest>(gs, km_vex->getXlate()));
+	assert (vex_exe != nullptr);
 
-	vex_exe = VexExec::create<VexExec, Guest>(gs, km_vex->getXlate());
-	assert (vex_exe != NULL);
-
-	jit_genllvm = theGenLLVM;
-	jit_vexhelpers = theVexHelpers;
+	jit_genllvm = std::move(theGenLLVM);
+	jit_vexhelpers = std::move(theVexHelpers);
 
 	saved_klee_cpustate = new char[gs->getCPUState()->getStateSize()];
 	saved_jit_cpustate = new char[gs->getCPUState()->getStateSize()];
@@ -48,7 +48,6 @@ ExeChk::~ExeChk()
 {
 	delete [] saved_klee_cpustate;
 	delete [] saved_jit_cpustate;
-	delete vex_exe;
 }
 
 void ExeChk::saveCPU(void* s)
@@ -156,12 +155,12 @@ void ExeChk::handleXferSyscall(ExecutionState& state, KInstruction* ki)
 
 void ExeChk::setJITGen(void)
 {
-	theGenLLVM = jit_genllvm;
-	theVexHelpers = jit_vexhelpers;
+	theGenLLVM.swap(jit_genllvm);
+	theVexHelpers.swap(jit_vexhelpers);
 }
 
 void ExeChk::setKLEEGen(void)
 {
-	theGenLLVM = klee_genllvm;
-	theVexHelpers = klee_vexhelpers;
+	theGenLLVM.swap(klee_genllvm);
+	theVexHelpers.swap(klee_vexhelpers);
 }

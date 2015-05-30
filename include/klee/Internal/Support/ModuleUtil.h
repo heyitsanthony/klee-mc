@@ -10,6 +10,7 @@
 #ifndef KLEE_TRANSFORM_UTIL_H
 #define KLEE_TRANSFORM_UTIL_H
 
+#include <memory>
 #include <string>
 
 namespace llvm {
@@ -22,8 +23,8 @@ namespace llvm {
 namespace klee {
  
   /// Link a module with a specified bitcode archive.
-  llvm::Module *linkWithLibrary(llvm::Module *module, 
-                                const std::string &libraryName);
+  void linkWithLibrary(llvm::Module& module, 
+                       const std::string &libraryName);
 
   /// Return the Function* target of a Call or Invoke instruction, or
   /// null if it cannot be determined (should be only for indirect
@@ -39,6 +40,7 @@ namespace klee {
   /// Remove '\x01' prefix sentinels from all function names in module
   void runRemoveSentinelsPass(llvm::Module &module);
 
+  std::unique_ptr<llvm::Module> getBitcodeModule(const char* path);
 }
 
 #endif

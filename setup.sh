@@ -1,7 +1,7 @@
 #!/bin/bash
 
 VEXLLVMDIR=${VEXLLVMDIR:-"/home/chz/src/vex/"}
-LLVMDIR=${LLVMDIR:-"/home/chz/src/llvm/llvm-3.5.0.src/"}
+LLVMDIR=${LLVMDIR:-"/home/chz/src/llvm/llvm-3.6.0.src/"}
 STPDIR=${STPDIR:-"/home/chz/src/stp-fast/stp/"}
 #BOOLECTORDIR=${BOOLECTORDIR:-"/home/chz/src/boolector/"}
 #Z3DIR=${Z3DIR:-"/home/chz/src/z3/"}
@@ -12,7 +12,7 @@ if [ -z "$QUICK" ]; then
 LLVM_CFLAGS_EXTRA="$EXTRAHEADERS"			\
 LLVM_CXXFLAGS_EXTRA="$EXTRAHEADERS"			\
 CFLAGS="-g -O3 -I${STPDIR}/include $EXTRAHEADERS"	\
-CXXFLAGS="-g -O2  $EXTRAHEADERS"		\
+CXXFLAGS="-g -O2 -std=c++14  $EXTRAHEADERS"		\
 	./configure				\
 		--with-llvm="$LLVMDIR"		\
 		--with-libvex="$VEXLIBDIR"	\

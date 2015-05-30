@@ -10,10 +10,10 @@
 #ifndef KLEE_KMODULE_H
 #define KLEE_KMODULE_H
 
-#include <llvm/IR/LegacyPassManager.h>
 #include "klee/Interpreter.h"
 #include "klee/Internal/Module/KFunction.h"
 #include <tr1/unordered_map>
+#include <memory>
 #include <string>
 #include <map>
 #include <set>
@@ -31,6 +31,9 @@ namespace llvm
 	class Value;
 	class FunctionPass;
 	class raw_os_ostream;
+	namespace legacy {
+		class FunctionPassManager;
+	}
 }
 
 namespace klee
@@ -69,8 +72,8 @@ class PhiCleanerPass;
 class KModule
 {
 public:
-    llvm::Module *module;
-    llvm::DataLayout *dataLayout;
+	std::shared_ptr<llvm::Module> module;
+	std::unique_ptr<llvm::DataLayout> dataLayout;
 
     // Some useful functions to know the address of
     llvm::Function *dbgStopPointFn, *kleeMergeFn;
@@ -79,7 +82,7 @@ public:
     // XXX change to KFunction
     std::set<llvm::Function*> escapingFunctions;
 
-    InstructionInfoTable *infos;
+    std::unique_ptr<InstructionInfoTable> infos;
 
     std::vector<llvm::Constant*> constants;
     std::map<llvm::Constant*, KConstant*> constantMap;
@@ -166,7 +169,7 @@ private:
 		func2kfunc_ty;
 	func2kfunc_ty functionMap;
 
-	llvm::legacy::FunctionPassManager	*fpm;
+	std::unique_ptr<llvm::legacy::FunctionPassManager> fpm;
 	InterpreterHandler			*ih;
 
 	ModuleOptions			opts;

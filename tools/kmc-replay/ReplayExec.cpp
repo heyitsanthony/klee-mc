@@ -22,7 +22,7 @@ extern "C"
 	(is_vdso_patched == false && \
 	(((uintptr_t)x)>=0xffffffffff600000 && ((uintptr_t)x)<0xffffffffff601000))
 
-ReplayExec::ReplayExec(Guest* gs, VexXlate* vx)
+ReplayExec::ReplayExec(Guest* gs, std::shared_ptr<VexXlate> vx)
 : VexExec(gs, vx)
 , has_reglog(false)
 , ign_reglog(getenv("KMC_REPLAY_IGNLOG") != NULL)

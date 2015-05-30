@@ -8,13 +8,13 @@
 //===----------------------------------------------------------------------===//
 
 #include "ExternalDispatcher.h"
-
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DerivedTypes.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/LLVMContext.h>
-#include <llvm/ExecutionEngine/JIT.h>
+#include <llvm/ExecutionEngine/MCJIT.h>
+#include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #include <llvm/ExecutionEngine/GenericValue.h>
 #include <llvm/IR/CallSite.h>
 #include <llvm/Support/DynamicLibrary.h>
@@ -36,68 +36,161 @@ static void sigsegv_handler(int signal, siginfo_t *info, void *context)
 { longjmp(escapeCallJmpBuf, 1); }
 }
 
-void *ExternalDispatcher::resolveSymbol(const std::string &name) const
+namespace klee
 {
-  assert(executionEngine);
+class DispatcherMem : public llvm::SectionMemoryManager
+{
+public:
+	DispatcherMem(void) {}
+	virtual ~DispatcherMem() {}
 
-  const char *str = name.c_str();
+	DispatcherMem(const DispatcherMem&) = delete;
+	void operator=(const DispatcherMem&) = delete;
 
-  // We use this to validate that function names can be resolved so we
-  // need to match how the JIT does it. Unfortunately we can't
-  // directly access the JIT resolution function
-  // JIT::getPointerToNamedFunction so we emulate the important points.
+	std::unique_ptr<SectionMemoryManager> createProxy(void);
 
-  if (str[0] == 1) // asm specifier, skipped
-    ++str;
+	void* getPointerToNamedFunction(const std::string &name, bool abort_on_fail)
+		override;
 
-  void *addr = sys::DynamicLibrary::SearchForAddressOfSymbol(str);
-  if (addr)
-    return addr;
+	uint64_t getSymbolAddress(const std::string& n) override {
+		uint64_t addr;
+		addr = SectionMemoryManager::getSymbolAddress(n);
+		if (addr) return addr;
+		return 0; //(uint64_t)jit_engine.getPointerToNamedFunction(n);
+	}
+private:
+};
 
-  // If it has an asm specifier and starts with an underscore we retry
-  // without the underscore. I (DWD) don't know why.
-  if (name[0] == 1 && str[0]=='_') {
-    ++str;
-    addr = sys::DynamicLibrary::SearchForAddressOfSymbol(str);
-  }
+void* DispatcherMem::getPointerToNamedFunction(
+	const std::string &name,
+	bool abort_on_fail)
+{
+	const char *str = name.c_str();
 
-  return addr;
+	// We use this to validate that function names can be resolved so we
+	// need to match how the JIT does it. Unfortunately we can't
+	// directly access the JIT resolution function
+	// JIT::getPointerToNamedFunction so we emulate the important points.
+
+	if (str[0] == 1) // asm specifier, skipped
+		++str;
+
+	void *addr = sys::DynamicLibrary::SearchForAddressOfSymbol(str);
+	if (addr) return addr;
+
+	// If it has an asm specifier and starts with an underscore we retry
+	// without the underscore. I (DWD) don't know why.
+	if (name[0] == 1 && str[0]=='_') {
+		++str;
+		addr = sys::DynamicLibrary::SearchForAddressOfSymbol(str);
+	}
+
+	if (!addr && abort_on_fail) abort();
+
+	return addr;
+}
+}
+
+// since SMM is destroyed with each exe engine, have a sacrificial class
+// that only passes method calls to the shared DispatcherMem object
+class DispatcherMemProxy : public SectionMemoryManager
+{
+public:
+	DispatcherMemProxy(SectionMemoryManager& in_smm) : smm(in_smm) {}
+
+	DispatcherMemProxy(const DispatcherMemProxy&) = delete;
+	void operator=(const DispatcherMemProxy&) = delete;
+
+	void* getPointerToNamedFunction(const std::string &name, bool abort_on_fail)
+		override
+	{ return smm.getPointerToNamedFunction(name, abort_on_fail); }
+
+	uint64_t getSymbolAddress(const std::string& n) override
+	{ return smm.getSymbolAddress(n); }
+
+	uint8_t *allocateCodeSection(
+		uintptr_t Size, unsigned Alignment, unsigned SectionID,
+		StringRef SectionName) override
+
+	{
+		return smm.allocateCodeSection(
+			Size, Alignment, SectionID, SectionName);
+	}
+
+	uint8_t *allocateDataSection(
+		uintptr_t Size, unsigned Alignment,
+		unsigned SectionID, StringRef SectionName,
+		bool isReadOnly) override
+	{
+		return smm.allocateDataSection(
+			Size, Alignment, SectionID, SectionName, isReadOnly);
+	}
+
+	void reserveAllocationSpace(
+		uintptr_t CodeSize, uintptr_t DataSizeRO,
+		uintptr_t DataSizeRW) override
+	{
+		smm.reserveAllocationSpace(CodeSize, DataSizeRO, DataSizeRW);
+	}
+
+private:
+	SectionMemoryManager	&smm;
+};
+
+// compiler can't figure out DispatcherMemProxy <: SectionMemoryManager
+std::unique_ptr<SectionMemoryManager> DispatcherMem::createProxy(void)
+{
+	return std::make_unique<DispatcherMemProxy>(*this);
+}
+
+
+void* ExternalDispatcher::resolveSymbol(const std::string& name) const
+{
+	return (void*)(smm->getSymbolAddress(name));
 }
 
 ExternalDispatcher::ExternalDispatcher()
+	: smm(std::make_unique<DispatcherMem>())
 {
-  dispatchModule = new Module("ExternalDispatcher", getGlobalContext());
+	dispatchModule = std::make_unique<Module>(
+			"ExternalDispatcher",
+			getGlobalContext());
 
-  std::string error;
-  executionEngine = ExecutionEngine::createJIT(dispatchModule, &error);
-  if (!executionEngine) {
-    std::cerr << "unable to make jit: " << error << "\n";
-    abort();
-  }
+	std::string	error;
+	executionEngine = std::unique_ptr<ExecutionEngine>(
+		EngineBuilder(std::move(dispatchModule))
+			.setErrorStr(&error)
+			.setEngineKind(EngineKind::JIT)
+			.setMCJITMemoryManager(smm->createProxy())
+			.create());
 
-  // If we have a native target, initialize it to ensure it is linked in and
-  // usable by the JIT.
-  llvm::InitializeNativeTarget();
+	if (!executionEngine) {
+		std::cerr << "unable to make jit: " << error << "\n";
+		abort();
+	}
 
-  // from ExecutionEngine::create
-  if (executionEngine) {
-    // Make sure we can resolve symbols in the program as well. The zero arg
-    // to the function tells DynamicLibrary to load the program, not a library.
-    sys::DynamicLibrary::LoadLibraryPermanently(0);
-  }
+	// If we have a native target, initialize it to ensure it is linked in and
+	// usable by the JIT.
+	llvm::InitializeNativeTarget();
+
+	// from ExecutionEngine::create
+	if (executionEngine) {
+		// Make sure we can resolve symbols in the program as well.
+		// The zero arg to the function tells DynamicLibrary to load
+		// the program, not a library.
+		sys::DynamicLibrary::LoadLibraryPermanently(0);
+	}
 
 #ifdef WINDOWS
-  preboundFunctions["getpid"] = (void*) (long) getpid;
-  preboundFunctions["putchar"] = (void*) (long) putchar;
-  preboundFunctions["printf"] = (void*) (long) printf;
-  preboundFunctions["fprintf"] = (void*) (long) fprintf;
-  preboundFunctions["sprintf"] = (void*) (long) sprintf;
+	preboundFunctions["getpid"] = (void*) (long) getpid;
+	preboundFunctions["putchar"] = (void*) (long) putchar;
+	preboundFunctions["printf"] = (void*) (long) printf;
+	preboundFunctions["fprintf"] = (void*) (long) fprintf;
+	preboundFunctions["sprintf"] = (void*) (long) sprintf;
 #endif
 }
 
-ExternalDispatcher::~ExternalDispatcher() {
-  delete executionEngine;
-}
+ExternalDispatcher::~ExternalDispatcher() {}
 
 llvm::Function* ExternalDispatcher::findDispatcher(
 	llvm::Function* f, llvm::Instruction *i)
@@ -127,12 +220,6 @@ llvm::Function* ExternalDispatcher::findDispatcher(
 
 	if (dispatcher == NULL)
 		return NULL;
-
-	// Force the JIT execution engine to go ahead and build the function.
-	// This ensures that any errors or assertions in the compilation
-	// process will trigger crashes instead of being caught as aborts in
-	// the external function.
-	executionEngine->recompileAndRelinkFunction(dispatcher);
 
 	return dispatcher;
 }
@@ -196,7 +283,7 @@ Function *ExternalDispatcher::createDispatcher(Function *target, Instruction *in
 			Type::getVoidTy(getGlobalContext()), nullary, false),
 			GlobalVariable::ExternalLinkage,
 			"",
-			dispatchModule);
+			dispatchModule.get());
 
 
 	BasicBlock *dBB = BasicBlock::Create(getGlobalContext(), "entry", dispatcher);

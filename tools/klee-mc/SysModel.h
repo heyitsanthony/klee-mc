@@ -25,8 +25,8 @@ public:
 	virtual void installConfig(ExecutionState& state) = 0;
 	virtual SyscallSFH* allocSpecialFuncHandler(Executor*) const = 0;
 
-	void setModelBool(llvm::Module* m, const char* gv_name, bool bv);
-	void setModelU64(llvm::Module* m, const char* gv_name, uint64_t bv);
+	void setModelBool(llvm::Module& m, const char* gv_name, bool bv);
+	void setModelU64(llvm::Module& m, const char* gv_name, uint64_t bv);
 
 	void installData(
 		ExecutionState& state,

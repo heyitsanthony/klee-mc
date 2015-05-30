@@ -1,6 +1,7 @@
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/Support/CommandLine.h>
+#include "klee/Internal/Support/ModuleUtil.h"
 #include "klee/Internal/Module/KModule.h"
 #include "klee/Internal/Module/KFunction.h"
 #include "Passes.h"
@@ -27,15 +28,12 @@ namespace
 		llvm::cl::init("softfloat-fpu.bc"));
 }
 
-namespace klee { extern Module* getBitcodeModule(const char* path); }
-
 char SoftFPPass::ID;
 
 SoftFPPass::SoftFPPass(KModule* _km)
 : llvm::FunctionPass(ID)
 , km(_km)
 {
-	llvm::Module	*mod;
 	std::string	path(km->getLibraryDir());
 
 	struct func_names	fns[] = {
@@ -70,10 +68,10 @@ SoftFPPass::SoftFPPass(KModule* _km)
 	std::cerr << "[SoftFPU] Using library '" << path.c_str() << "'\n";
 
 
-	mod = getBitcodeModule(path.c_str());
+	std::unique_ptr<Module> mod(getBitcodeModule(path.c_str()));
 	assert (mod != NULL);
 
-	km->addModule(mod);
+	km->addModule(mod.get());
 
 	/* store all softfp functions into object's fields */
 	for (unsigned i = 0; fns[i].name != NULL; i++) {
@@ -82,8 +80,6 @@ SoftFPPass::SoftFPPass(KModule* _km)
 		assert (kf != NULL);
 		*(fns[i].kf_loc) = kf;
 	}
-
-	delete mod;
 }
 
 bool SoftFPPass::runOnFunction(llvm::Function &F)
@@ -380,7 +376,7 @@ BasicBlock* SoftFPPass::setupFuncEntry(
 		ft,
 		GlobalValue::ExternalLinkage,
 		newname,
-		km->module);
+		km->module.get());
 	bb = BasicBlock::Create(getGlobalContext(), "entry", ret_f);
 
 	ait = ret_f->getArgumentList().begin();

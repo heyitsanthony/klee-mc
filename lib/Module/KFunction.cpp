@@ -30,7 +30,7 @@ static int getOperandNum(
 	if (Argument *a = dyn_cast<Argument>(v))
 		return a->getArgNo();
 
-	if (isa<BasicBlock>(v) || isa<InlineAsm>(v) || isa<MDNode>(v))
+	if (isa<BasicBlock>(v) || isa<InlineAsm>(v)) // || isa<MDNode>(v))
 		return -1;
 
 	assert(isa<Constant>(v));

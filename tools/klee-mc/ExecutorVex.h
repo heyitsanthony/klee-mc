@@ -1,7 +1,7 @@
 #ifndef KLEE_EXECUTOR_VEX_H
 #define KLEE_EXECUTOR_VEX_H
 
-#include "collection.h"
+#include "Sugar.h"
 #include "guest.h"
 #include "guestcpustate.h"
 #include "../../lib/Core/Executor.h"

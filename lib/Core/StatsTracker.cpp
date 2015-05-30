@@ -475,7 +475,7 @@ void StatsTracker::updateStateStatistics(uint64_t addend)
 
 void StatsTracker::writeIStats(void)
 {
-  Module *m = km->module;
+  Module *m = km->module.get();
   uint64_t istatsMask = 0;
   std::ostream &of = *istatsFile;
 

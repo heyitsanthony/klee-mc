@@ -33,7 +33,7 @@ public:
 	llvm::Function* getFuncByAddr(uint64_t guest_addr);
 	const VexSB* getVSB(llvm::Function* f) const;
 
-	VexXlate* getXlate(void) const { return xlate; }
+	std::shared_ptr<VexXlate> getXlate(void) const { return xlate; }
 
 	virtual void prepare(InterpreterHandler *ihandler);
 
@@ -54,8 +54,8 @@ private:
 	Guest		*gs;
 
 	func2vsb_map	func2vsb_table;
-	VexFCache	*xlate_cache;
-	VexXlate	*xlate;
+	std::unique_ptr<VexFCache>	xlate_cache;
+	std::shared_ptr<VexXlate>	xlate;
 
 	DynGraph	ctrl_graph;
 

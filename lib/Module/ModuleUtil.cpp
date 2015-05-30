@@ -113,20 +113,13 @@ void klee::runRemoveSentinelsPass(Module &module)
 }
 
 namespace klee {
-Module* getBitcodeModule(const char* path);
-Module* getBitcodeModule(const char* path)
+std::unique_ptr<Module> getBitcodeModule(const char* path)
 {
-	Module			*ret_mod;
+	std::unique_ptr<Module>	ret_mod;
 	SMDiagnostic		diag;
-	auto			Buffer(MemoryBuffer::getFile(path));
 
-	if (!Buffer) {
-		std::cerr <<  "Bad membuffer on " << path << std::endl;
-		assert (Buffer && "Couldn't get mem buffer");
-	}
-
-	ret_mod = llvm::ParseIR(Buffer.get().get(), diag, getGlobalContext());
-	if (ret_mod == NULL) {
+	ret_mod = llvm::parseIRFile(path, diag, getGlobalContext());
+	if (ret_mod == nullptr) {
 		std::string	s(diag.getMessage());
 		std::cerr
 			<< "Error Parsing Bitcode File '"
@@ -159,9 +152,8 @@ Module* getBitcodeModule(const char* path)
 /// don't allow us to load the archive and run passes prior to linking. Thus,
 /// we've duplicated some of the functionality from
 /// llvm/lib/Linker/LinkArchives.cpp here.
-Module *klee::linkWithLibrary(
-	Module *mod,
-	const std::string &libraryName)
+void klee::linkWithLibrary(
+	Module &mod, const std::string &libraryName)
 #if 0
 {
 	Linker			linker("klee", module,  0 /* Linker::Verbose */);
@@ -209,30 +201,20 @@ Module *klee::linkWithLibrary(
 }
 #else
 {
-	std::string		err_str;
-	llvm::SMDiagnostic	err;
-	llvm::Module		*new_mod;
+	SMDiagnostic		diag;
 	
-	new_mod = llvm::ParseIRFile(libraryName, err, mod->getContext());
+	auto new_mod = llvm::parseIRFile(libraryName, diag, mod.getContext());
 	if (new_mod == NULL) {
 		std::cerr << "[Mod] Error parsing '" << libraryName << "'\n";
-		std::cerr << "[Mod] Parse error: " << err.getMessage().str() << '\n';
-		std::cerr << "[Mod] Parse error: " << err.getLineContents().str() << '\n';
-		return NULL;
+		std::cerr << "[Mod] Parse error: " << diag.getMessage().str() << '\n';
+		return;
 	}
 
 	if (llvm::Linker::LinkModules(
-		mod,
-		new_mod,
-		llvm::Linker::DestroySource,
-		&err_str))
+		&mod, new_mod.get(), [] (const DiagnosticInfo &di) {}))
 	{
-		std::cerr
-			<< "[Mod] Error loading '"
-			<< libraryName << "' : " << err_str << '\n';
-		return NULL;
+		std::cerr << "[Mod] Error loading '" << libraryName << '\n';
+		return;
 	}
-
-	return mod;
 }
 #endif

@@ -10,6 +10,7 @@
 #include <llvm/IR/InlineAsm.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Target/TargetLowering.h>
+#include <llvm/Target/TargetSubtargetInfo.h>
 #include <llvm/Target/TargetOptions.h>
 #include <llvm/Support/Host.h>
 #include <llvm/Support/TargetRegistry.h>
@@ -42,7 +43,7 @@ RaiseAsmPass::RaiseAsmPass(llvm::Module* module)
 		return;
 	}
 	TM = NativeTarget->createTargetMachine(HostTriple, "", "", to);
-	TLI = TM->getTargetLowering();
+	TLI = TM->getSubtargetImpl()->getTargetLowering();
 }
 
 RaiseAsmPass::~RaiseAsmPass(void) { if (TM) delete TM; }

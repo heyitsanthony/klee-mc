@@ -173,7 +173,7 @@ void TaintMergeCore::setupInitialState(ExecutionState* es)
 	HandlerTaintMerge	*t_merge_h;
 
 	km = exe->getKModule();
-	m = km->module;
+	m = km->module.get();
 	f_ty = FunctionType::get(Type::getVoidTy(getGlobalContext()), false);
 	f_enter = m->getOrInsertFunction(MERGE_FUNCNAME, f_ty);
 

@@ -235,7 +235,7 @@ void Optimize(Module* M)
   if (VerifyEach)  Passes.add(createVerifierPass());
 
   // Add an appropriate TargetData instance for this module...
-  addPass(Passes, new DataLayoutPass(M));
+  // addPass(Passes, new DataLayoutPass(M));
 
   // DWD - Run the opt standard pass list as well.
   AddStandardCompilePasses(Passes);

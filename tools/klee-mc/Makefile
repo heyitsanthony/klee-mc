@@ -18,7 +18,7 @@ STATIC_FLAGS=-Wl,-no-export-dynamic -static -v
 STATIC_LIBS=-ldl -lpthread -lrt -lcrypto -lz
 endif
 
-X_LINK_COMPONENTS = jit bitreader bitwriter ipo linker engine core irreader
+X_LINK_COMPONENTS = mcjit bitreader bitwriter ipo linker engine core irreader
 USEDLIBS=kleeSearcher.a \
 	kleeSkins.a \
 	kleeCore.a kleeModule.a	\

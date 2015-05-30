@@ -29,10 +29,9 @@ public:
 private:
 	/* XXX: need this */
 	// FileReconstructor	*file_recons;
-	llvm::Module		*m;
-	llvm::ExecutionEngine	*exe;
+	std::unique_ptr<llvm::ExecutionEngine> exe;
 	sysfunc_t		sysf;
-	klee::KTestStream	*kts;
+klee::KTestStream	*kts;
 
 	jmp_buf			restore_buf;
 };

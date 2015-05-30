@@ -55,7 +55,7 @@ const Module* ExecutorBC::setModule(
 	assert(!kmodule && module && "can only register one module");
 
 	kmodule = new KModule(module, opts);
-	data_layout = kmodule->dataLayout;
+	data_layout = kmodule->dataLayout.get();
 
 	// Initialize the context.
 	Context::initialize(

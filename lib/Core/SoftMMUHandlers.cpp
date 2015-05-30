@@ -2,11 +2,12 @@
 #include "Executor.h"
 #include "Globals.h"
 #include "klee/Internal/Module/KModule.h"
+#include <llvm/IR/Module.h>
+#include "klee/Internal/Support/ModuleUtil.h"
 #include <iostream>
 #include <fstream>
 
 using namespace klee;
-namespace klee { extern llvm::Module* getBitcodeModule(const char* path); }
 
 bool SoftMMUHandlers::isLoaded = false;
 
@@ -21,13 +22,12 @@ SoftMMUHandlers::SoftMMUHandlers(Executor& exe, const std::string& suffix)
 {
 	if (!isLoaded) {
 		std::string	path(exe.getKModule()->getLibraryDir());
-		llvm::Module	*mod;
 
 		path = path + ("/libkleeRuntimeMMU.bc");
-		mod = getBitcodeModule(path.c_str());
+		auto mod = getBitcodeModule(path.c_str());
 		assert (mod != NULL);
 
-		exe.addModule(mod);
+		exe.addModule(mod.get());
 		std::cerr << "[SoftMMUHandlers] Loaded "<< path <<'\n';
 		isLoaded = true;
 	}

@@ -7,7 +7,7 @@
 class ChkExec : public VexExecChk
 {
 public:
-	ChkExec(PTImgChk* gs, VexXlate* vx = NULL);
+	ChkExec(PTImgChk* gs, std::shared_ptr<VexXlate> vx = nullptr);
 	virtual ~ChkExec();
 	virtual void setSyscalls(Syscalls* in_sc);
 	virtual guest_ptr doVexSB(VexSB* sb);

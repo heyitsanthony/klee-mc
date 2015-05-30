@@ -46,7 +46,7 @@ using namespace llvm;
 using namespace klee;
 
 extern void externalsAndGlobalsCheck(const Module *m);
-extern ModuleOptions getMainModule(Module* &m);
+extern ModuleOptions getMainModule(std::unique_ptr<Module> &m);
 
 namespace {
   cl::opt<std::string>
@@ -342,7 +342,7 @@ int main(int argc, char **argv, char **envp)
 	STPLOG_init("stplog.c");
 #endif
 	bool				useSeeds;
-	Module				*mainModule;
+	std::unique_ptr<Module>		mainModule;
 	const Module			*finalModule;
 	KleeHandler			*handler;
 	CmdArgs				*ca;
@@ -405,7 +405,7 @@ int main(int argc, char **argv, char **envp)
 	handler->setInterpreter(interpreter);
 	handler->printInfoHeader(argc, argv);
 
-	finalModule = interpreter->setModule(mainModule, Opts);
+	finalModule = interpreter->setModule(mainModule.get(), Opts);
 	externalsAndGlobalsCheck(finalModule);
 
 	if (!replayPaths.empty()) {

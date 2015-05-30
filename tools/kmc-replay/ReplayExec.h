@@ -89,7 +89,7 @@ public:
 	virtual ~ReplayExec();
 
 	void setCrumbs(klee::Crumbs* in_c);
-	ReplayExec(Guest* gs, VexXlate* vx = NULL);
+	ReplayExec(Guest* gs, std::shared_ptr<VexXlate> vx = nullptr);
 
 protected:
 	virtual guest_ptr doVexSB(VexSB* sb);

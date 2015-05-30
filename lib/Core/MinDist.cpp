@@ -206,24 +206,24 @@ bool StatsTracker::computePathsInit(std::vector<Instruction*>& instructions)
 
 void StatsTracker::computeReachableUncoveredInit(void)
 {
-	Module *m = km->module;
+	Module *m = km->module.get();
 
 	assert (init);
 	init = false;
 
-	foreach (fnIt, m->begin(), m->end())
-		computeCallTargets(fnIt);
+	for (auto &fn : *m) computeCallTargets(&fn);
 
 	// Compute function callers as reflexion of callTargets.
-	foreach (it, callTargets.begin(), callTargets.end())
-		foreach (fit, it->second.begin(), it->second.end())
-			functionCallers[*fit].push_back(it->first);
+	for (auto &tgt : callTargets) {
+		for (auto &f : tgt.second) {
+			functionCallers[f].push_back(tgt.first);
+		}
+	}
 
 	// Initialize minDistToReturn to shortest paths through
 	// functions. 0 is unreachable.
 	std::vector<Instruction *> instructions;
-	foreach (fnIt, m->begin(), m->end())
-		initMinDistToReturn(fnIt, instructions);
+	for (auto &fn : *m) initMinDistToReturn(&fn, instructions);
 
 	std::reverse(instructions.begin(), instructions.end());
 
@@ -306,7 +306,7 @@ bool StatsTracker::computePaths(std::vector<llvm::Instruction*>& insts)
 
 void StatsTracker::computeReachableUncovered()
 {
-	Module *m = km->module;
+	Module *m = km->module.get();
 	const InstructionInfoTable &infos = *km->infos;
 	StatisticManager &sm = *theStatisticManager;
 
@@ -314,12 +314,12 @@ void StatsTracker::computeReachableUncovered()
 
 	// compute minDistToUncovered, 0 is unreachable
 	std::vector<Instruction *> instructions;
-	foreach (fnIt, m->begin(), m->end())
+	for (auto &fn : *m) 
 	// Not sure if I should bother to preorder here.
-	foreach (bbIt, fnIt->begin(), fnIt->end())
-	foreach (it, bbIt->begin(), bbIt->end()) {
-		unsigned id = infos.getInfo(it).id;
-		instructions.push_back(&*it);
+	for (auto &bb : fn) 
+	for (auto &ii : bb) {
+		unsigned id = infos.getInfo(&ii).id;
+		instructions.push_back(&ii);
 		sm.setIndexedValue(
 			stats::minDistToUncovered,
 			id,

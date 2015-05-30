@@ -164,7 +164,7 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 
 	assert (gs);
 
-	if (!theGenLLVM) theGenLLVM = new GenLLVM(gs);
+	if (!theGenLLVM) theGenLLVM = std::make_unique<GenLLVM>(*gs);
 	if (!theVexHelpers) theVexHelpers = VexHelpers::create(gs->getArch());
 
 	std::cerr << "[klee-mc] Forcing fake vsyspage reads\n";
@@ -202,7 +202,7 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 	km_vex = new KModuleVex(this, mod_opts, gs);
 	kmodule = km_vex;
 
-	data_layout = kmodule->dataLayout;
+	data_layout = kmodule->dataLayout.get();
 	assert(data_layout->isLittleEndian() && "BIGENDIAN??");
 	Context::initialize(
 		data_layout->isLittleEndian(),
@@ -253,8 +253,8 @@ llvm::Function* ExecutorVex::setupRuntimeFunctions(uint64_t entry_addr)
 	/* add modules before initializing globals so that everything
 	 * will link in properly */
 	std::list<Module*> l = theVexHelpers->getModules();
-	foreach (it, l.begin(), l.end())
-		kmodule->addModule(*it);
+	for (auto &m : l) kmodule->addModule(m);
+
 	theVexHelpers->useExternalMod(kmodule->module);
 
 	img_init_func = km_vex->getFuncByAddrNoKMod(entry_addr, is_new);
@@ -351,9 +351,9 @@ void ExecutorVex::makeMagicSymbolic(ExecutionState* state)
 
 	std::cerr << "[klee-mc] Set " << exts.size() << " extents symbolic\n";
 
-	foreach (it, exts.begin(), exts.end())
+	for (auto &ext : exts)
 		GET_SFH(sfh)->makeRangeSymbolic(
-			*state, it->first, it->second, "magic");
+			*state, ext.first, ext.second, "magic");
 }
 
 void ExecutorVex::makeArgCSymbolic(ExecutionState* state)
@@ -499,10 +499,11 @@ void ExecutorVex::bindMappingPage(
 
 	if (heap_min != ~0UL && heap_max != 0) {
 		/* scanning memory is kind of stupid, but we're desperate */
-		sys_model->setModelU64(kmodule->module, "heap_begin", heap_min);
+		sys_model->setModelU64(
+			*(kmodule->module), "heap_begin", heap_min);
 		 /* max = start of last page */
 		sys_model->setModelU64(
-			kmodule->module, "heap_end", heap_max + 4096);
+			*(kmodule->module), "heap_end", heap_max + 4096);
 
 		SFH_ADD_REG("heap_begin", heap_min);
 		SFH_ADD_REG("heap_end",  heap_max + 4096);
@@ -530,8 +531,7 @@ void ExecutorVex::bindMapping(
 void ExecutorVex::setupProcessMemory(ExecutionState* state, Function* f)
 {
 	std::list<GuestMem::Mapping> memmap(gs->getMem()->getMaps());
-	foreach (it, memmap.begin(), memmap.end())
-		bindMapping(state, f, *it);
+	for (auto &m : memmap) bindMapping(state, f, m);
 }
 
 MemoryObject* ExecutorVex::allocRegCtx(ExecutionState* state, Function* f)
@@ -586,11 +586,11 @@ void ExecutorVex::setupRegisterContext(ExecutionState* state, Function* f)
 		Exempts		ex(getRegExempts(gs));
 
 		/* restore stack pointer into symregs */
-		foreach (it, ex.begin(), ex.end()) {
+		for (auto &off_len : ex) {
 			unsigned	off, len;
 
-			off = it->first;
-			len = it->second;
+			off = off_len.first;
+			len = off_len.second;
 
 			for (unsigned i=0; i < len; i++)
 				state->write8(

@@ -66,13 +66,13 @@ Function *getStubFunctionForCtorList(
 
 static std::set<std::string> sys_missing;
 
-void SysModel::setModelBool(Module* m, const char* gv_name, bool bv)
+void SysModel::setModelBool(Module& m, const char* gv_name, bool bv)
 {
 	GlobalVariable	*gv;
 	Constant	*initer;
 	Type		*t;
 
-	gv = static_cast<GlobalVariable*>(m->getGlobalVariable(gv_name));
+	gv = static_cast<GlobalVariable*>(m.getGlobalVariable(gv_name));
 	if (gv == NULL) {
 		if (sys_missing.count(gv_name)) return;
 		sys_missing.insert(gv_name);
@@ -93,11 +93,11 @@ void SysModel::setModelBool(Module* m, const char* gv_name, bool bv)
 	gv->setConstant(true);
 }
 
-void SysModel::setModelU64(Module* m, const char* gv_name, uint64_t bv)
+void SysModel::setModelU64(Module& m, const char* gv_name, uint64_t bv)
 {
 	GlobalVariable	*gv;
 
-	gv = static_cast<GlobalVariable*>(m->getGlobalVariable(gv_name));
+	gv = static_cast<GlobalVariable*>(m.getGlobalVariable(gv_name));
 	if (gv == NULL) {
 		if (sys_missing.count(gv_name)) return;
 		sys_missing.insert(gv_name);
@@ -125,7 +125,7 @@ void FDTModel::installInitializers(Function *init_func)
 
 		std::cerr << "[fdt] installing ctors" << std::endl;
 		ctorStub = getStubFunctionForCtorList(
-			kmodule->module, ctors, "klee.ctor_stub");
+			kmodule->module.get(), ctors, "klee.ctor_stub");
 		kmodule->addFunction(ctorStub);
 		exe->addInitFunction(ctorStub);
 	}
@@ -146,7 +146,7 @@ void FDTModel::installInitializers(Function *init_func)
 	// 		CallInst::Create(dtorStub, "", it->getTerminator());
 	// 	}
 	// }
-	setModelBool(kmodule->module, "concrete_vfs", UseConcreteVFS);
+	setModelBool(*(kmodule->module), "concrete_vfs", UseConcreteVFS);
 }
 
 void FDTModel::installConfig(ExecutionState& state)
@@ -193,8 +193,9 @@ SyscallSFH* W32Model::allocSpecialFuncHandler(Executor* e) const
 
 void LinuxModel::installConfig(ExecutionState& es)
 {
-	setModelBool(exe->getKModule()->module, "concrete_vfs", UseConcreteVFS);
-	setModelBool(exe->getKModule()->module, "deny_sys_files", DenySysFiles);
+	auto& m = *(exe->getKModule()->module);
+	setModelBool(m, "concrete_vfs", UseConcreteVFS);
+	setModelBool(m, "deny_sys_files", DenySysFiles);
 }
 
 void W32Model::installConfig(ExecutionState& state)

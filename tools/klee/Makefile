@@ -9,7 +9,7 @@
 
 LEVEL=../..
 TOOLNAME = klee
-X_LINK_COMPONENTS = jit bitreader bitwriter ipo linker engine irreader
+X_LINK_COMPONENTS = mcjit bitreader bitwriter ipo linker engine irreader
 USEDLIBS= kleeSearcher.a		\
 	kleeSkins.a			\
 	kleeCore.a			\

@@ -4,7 +4,7 @@
  */
 
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
-#include <llvm/ExecutionEngine/JIT.h>
+#include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/IR/Module.h>
 
 #include "klee/Internal/ADT/KTestStream.h"
@@ -30,19 +30,18 @@ SyscallsModel::SyscallsModel(
 	Guest* in_g)
 : Syscalls(in_g)
 //, file_recons(NULL)
-, m(NULL)
 , sysf(NULL)
 , kts(in_kts)
 {
-	m = VexHelpers::loadModFromPath(model_file);
+	auto m = VexHelpers::loadModFromPath(model_file);
 	assert (m != NULL && "Expected model bitcode");
 
-	EngineBuilder	eb(m);
+	EngineBuilder	eb(std::move(m));
 	Function	*llvm_f;
 	std::string	err_str;
 
 	eb.setErrorStr(&err_str);
-	exe = eb.create();
+	exe = std::unique_ptr<ExecutionEngine>(eb.create());
 	if (!exe)
 		std::cerr << "Exe Engine Error: " << err_str << '\n';
 	assert (exe && "Could not make exe engine");
@@ -57,8 +56,6 @@ SyscallsModel::SyscallsModel(
 
 SyscallsModel::~SyscallsModel(void)
 {
-//	delete m;
-	delete exe;
 	delete kts;
 }
 

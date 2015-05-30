@@ -69,7 +69,7 @@ private:
 		llvm::Function* fnIt);
 
 public:
-	InstructionInfoTable(llvm::Module *m);
+	InstructionInfoTable(llvm::Module& m);
 	~InstructionInfoTable();
 
 	unsigned getMaxID() const;

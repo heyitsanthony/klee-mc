@@ -66,15 +66,11 @@ KModuleVex::KModuleVex(
 , native_code_bytes(0)
 , in_scan(false)
 {
-	xlate = new VexXlate(gs->getArch());
-	xlate_cache = new VexFCache(xlate);
+	xlate = std::make_shared<VexXlate>(gs->getArch());
+	xlate_cache = std::make_unique<VexFCache>(xlate);
 }
 
-KModuleVex::~KModuleVex(void)
-{
-	delete xlate_cache;
-	delete xlate;
-}
+KModuleVex::~KModuleVex(void) {}
 
 Function* KModuleVex::getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new)
 {

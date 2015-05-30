@@ -331,7 +331,7 @@ static llvm::Module *linkWithUclibc(llvm::Module *mainModule)
 	// naming conflict.
 	uclibc_stripPrefixes(mainModule);
 
-	mainModule = klee::linkWithLibrary(mainModule, KLEE_UCLIBC "/lib/libc.bc");
+	klee::linkWithLibrary(*mainModule, KLEE_UCLIBC "/lib/libc.bc");
 	assert(mainModule && "unable to link with uclibc");
 
 	uclibc_fixups(mainModule);
@@ -365,7 +365,7 @@ static Module* setupLibc(Module* mainModule, ModuleOptions& Opts)
 		// XXX SOLUTION FOR WHAT!? --AJR
 		std::string	Path(Opts.LibraryDir);
 		Path = Path + "/libklee-libc.bc";
-		mainModule = klee::linkWithLibrary(mainModule, Path.c_str());
+		klee::linkWithLibrary(*mainModule, Path.c_str());
 		assert(mainModule && "unable to link with klee-libc");
 
 		if (ExcludeLibcCov) exclude_fns_f = "klee-libc-fns.txt";
@@ -389,7 +389,7 @@ static Module* setupLibc(Module* mainModule, ModuleOptions& Opts)
 }
 
 
-static int initEnv(Module *mainModule)
+static int initEnv(Module &mainModule)
 {
   /*
     nArgcP = alloc oldArgc->getType()
@@ -403,7 +403,7 @@ static int initEnv(Module *mainModule)
     oldArgv->replaceAllUsesWith(nArgv)
   */
 
-  Function *baseMainFn = mainModule->getFunction("main");
+  Function *baseMainFn = mainModule.getFunction("main");
   assert(baseMainFn);
   baseMainFn->setName("__base_main");
 
@@ -418,7 +418,7 @@ static int initEnv(Module *mainModule)
   Function *mainFn =
     Function::Create(
     	FunctionType::get(baseMainFn->getReturnType(), mainArgs, false),
-	llvm::GlobalValue::ExternalLinkage, "main", mainModule);
+	llvm::GlobalValue::ExternalLinkage, "main", &mainModule);
   assert(mainFn);
 
   // set arg names
@@ -446,7 +446,7 @@ static int initEnv(Module *mainModule)
   params.push_back(Type::getInt32Ty(GCTX));
   params.push_back(Type::getInt32Ty(GCTX));
   Function* initEnvFn =
-    cast<Function>(mainModule->getOrInsertFunction(
+    cast<Function>(mainModule.getOrInsertFunction(
       "klee_init_env",
       Type::getVoidTy(GCTX),
       argcPtr->getType(), argvPtr->getType(), NULL));
@@ -485,7 +485,8 @@ static void loadIntrinsics(ModuleOptions& Opts)
 	Opts.ExcludeCovFiles.push_back(ExcludePath.c_str());
 }
 
-static void loadPOSIX(Module* &mainModule, ModuleOptions& Opts)
+static void loadPOSIX(
+	std::unique_ptr<Module> &mainModule, ModuleOptions& Opts)
 {
 	if (!g_WithPOSIXRuntime) return;
 
@@ -493,7 +494,7 @@ static void loadPOSIX(Module* &mainModule, ModuleOptions& Opts)
 	Path = Path + ("/libkleeRuntimePOSIX.bc");
 	klee_message("NOTE: Using model: %s", Path.c_str());
 
-	mainModule = klee::linkWithLibrary(mainModule, Path.c_str());
+	klee::linkWithLibrary(*mainModule, Path.c_str());
 	assert(mainModule && "unable to link with simple model");
 	if (ExcludeLibcCov) {
 		std::string	ExcludePath(Opts.LibraryDir);
@@ -502,47 +503,43 @@ static void loadPOSIX(Module* &mainModule, ModuleOptions& Opts)
 	}
 }
 
-void loadInputBitcode(const std::string& ifile, Module* &mainModule)
+std::unique_ptr<Module> loadInputBitcode(const std::string& ifile)
 {
 	SMDiagnostic	diag;
-	auto Buffer(MemoryBuffer::getFileOrSTDIN(ifile.c_str()));
 
-	mainModule = NULL;
-	if (!Buffer) goto done;
-
-	mainModule = llvm::ParseIR(Buffer.get().get(), diag, GCTX);
-	if (mainModule == NULL) {
+	auto m = llvm::parseIRFile(ifile, diag, GCTX);
+	if (m == NULL) {
 		goto done;
 	}
 
-	if (mainModule->materializeAllPermanently()) {
-		delete mainModule;
-		mainModule = NULL;
+	if (m->materializeAllPermanently()) {
+		m = nullptr;
 		goto done;
 	}
 
 	// Remove '\x01' prefix sentinels before linking
-	runRemoveSentinelsPass(*mainModule);
+	runRemoveSentinelsPass(*m);
 
 done:
-	if (mainModule == NULL) {
+	if (m == nullptr) {
 		std::string	s(diag.getMessage());
 		klee_error(
 			"error loading program '%s': %s",
 			ifile.c_str(), s.c_str());
 	}
 
-	assert(mainModule && "unable to materialize");
+	assert(m && "unable to materialize");
+	return m;
 }
 
-ModuleOptions getMainModule(Module* &mainModule)
+ModuleOptions getMainModule(std::unique_ptr<Module>& mainModule)
 {
-	loadInputBitcode(g_InputFile, mainModule);
+	mainModule = loadInputBitcode(g_InputFile);
 
 	if (g_WithPOSIXRuntime) InitEnv = true;
 
 	if (InitEnv) {
-		int r = initEnv(mainModule);
+		int r = initEnv(*mainModule);
 		if (r != 0) {
 			std::cerr << "Failed to init_env\n";
 			exit(r);
@@ -555,7 +552,7 @@ ModuleOptions getMainModule(Module* &mainModule)
 	 * after the posix code in order to link, but more test cases
 	 * are failing because base klee is shit and grad school
 	 * is fucked up. */
-	mainModule = setupLibc(mainModule, Opts);
+	setupLibc(mainModule.get(), Opts);
 	loadIntrinsics(Opts);
 	loadPOSIX(mainModule, Opts);
 

@@ -42,18 +42,17 @@ public:
 };
 
 static void buildInstructionToLineMap(
-	Module *m,
+	Module &m,
 	std::map<const Instruction*, unsigned> &out)
 {
 	unsigned count = 1;
-	foreach (mit, m->begin(), m->end()) {
-		foreach (fit, mit->begin(), mit->end()) {
-			foreach (bit, fit->begin(),fit->end()) {
-				Instruction * i = &*bit;
-				out.insert(std::make_pair(i,count));
-				++count;
-			}
-		}
+	for (auto &fn : m) {
+	for (auto &bb : fn) {
+	for (auto &ii : bb) {
+		out.insert(std::make_pair(&ii, count));
+		++count;
+	}
+	}
 	}
 }
 
@@ -90,7 +89,7 @@ bool InstructionInfoTable::getInstructionDebugInfo(
 
 
 /* XXX VOMIT VOMIT PUKE */
-InstructionInfoTable::InstructionInfoTable(Module *m)
+InstructionInfoTable::InstructionInfoTable(Module& m)
 : dummyString("")
 , dummyInfo(0, dummyString, 0, 0)
 {
@@ -98,9 +97,7 @@ InstructionInfoTable::InstructionInfoTable(Module *m)
 	unsigned id = 0;
 
 	buildInstructionToLineMap(m, lineTable);
-	foreach (fnIt, m->begin(), m->end()) {
-		addFunction(lineTable, id, fnIt);
-	}
+	for (auto &fn : m) addFunction(lineTable, id, &fn);
 }
 
 void InstructionInfoTable::addFunction(

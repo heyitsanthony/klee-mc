@@ -28,11 +28,7 @@ Globals::Globals(
 , init_state(in_st)
 , ed(in_ed)
 {
-	Module *m;
-
-	m = kmodule->module;
-
-	if (m->getModuleInlineAsm() != "")
+	if (kmodule->module->getModuleInlineAsm() != "")
 		klee_warning("executable has module level assembly (ignoring)");
 
 	setupCTypes();
@@ -41,7 +37,7 @@ Globals::Globals(
 
 void Globals::updateModule(void)
 {
-	Module	*m = kmodule->module;
+	Module	*m = kmodule->module.get();
 
 	setupFuncAddrs(m);
 	setupGlobalObjects(m);
