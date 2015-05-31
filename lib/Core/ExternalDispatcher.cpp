@@ -227,7 +227,9 @@ llvm::Function* ExternalDispatcher::findDispatchThunk(
 	}
 #endif
 
-	dispatch_thunk = createDispatcherThunk(f, i);
+	if(!(dispatch_thunk = createDispatcherThunk(f, i))) 
+		return nullptr;
+
 	dispatchers.insert(std::make_pair(i, dispatch_thunk));
 
 	return dispatch_thunk;
@@ -238,7 +240,9 @@ bool ExternalDispatcher::executeCall(Function *f, Instruction *i, uint64_t *args
 	llvm::Function		*thunk;
 	dispatch_jit_fptr_t	fptr;
 	
-	thunk = findDispatchThunk(f, i);
+	if (!(thunk = findDispatchThunk(f, i))) {
+		return false;
+	}
 
 	// already jitted?
 	auto it = dispatches_jitted.find(thunk);
@@ -297,10 +301,20 @@ bool ExternalDispatcher::runProtectedCall(dispatch_jit_fptr_t f, uint64_t *args)
 Function *ExternalDispatcher::createDispatcherThunk(
 	Function *target, Instruction *inst)
 {
-	CallSite cs;
+	void		*sym_addr;
+	CallSite	cs;
 
-	if (!resolveSymbol(target->getName()))
+
+	std::cerr << "target0: " << target->getName().str() << '\n';
+	sym_addr = resolveSymbol(target->getName());
+	if (!sym_addr) {
+		std::cerr << "[ExternalDispatcher] couldn't resolve '"
+			  << target->getName().str() << "'\n";
 		return 0;
+	}
+	
+	std::cerr << "target: " << target->getName().str() << '\n';
+	std::cerr << "HI SYM ADDR: " << sym_addr << '\n';
 
 	if (!dispatchModule) {
 		dispatchModule = std::make_unique<Module>(
