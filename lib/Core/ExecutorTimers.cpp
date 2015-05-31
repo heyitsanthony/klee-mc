@@ -428,7 +428,7 @@ public:
 
 		kmod = exe->getKModule();
 		foreach (it, kmod->kfuncsBegin(), kmod->kfuncsEnd()) {
-			const KFunction	*kf = *it;
+			const KFunction	*kf = it->get();
 			unsigned	c;
 
 			if (!kf->trackCoverage)
@@ -509,7 +509,7 @@ public:
 		km = exe->getKModule();
 
 		foreach (it, km->kfuncsBegin(), km->kfuncsEnd()) {
-			const KFunction	*kf = *it;
+			const KFunction	*kf = it->get();
 
 			if (kf->getNumEnters() == 0 && kf->getNumExits() == 0)
 				continue;

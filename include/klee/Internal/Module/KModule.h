@@ -17,7 +17,7 @@
 #include <string>
 #include <map>
 #include <set>
-#include <vector>
+#include "static/Sugar.h"
 
 namespace llvm
 {
@@ -85,7 +85,7 @@ public:
     std::unique_ptr<InstructionInfoTable> infos;
 
     std::vector<llvm::Constant*> constants;
-    std::map<llvm::Constant*, KConstant*> constantMap;
+    std::map<llvm::Constant*, std::unique_ptr<KConstant>> constantMap;
     KConstant* getKConstant(llvm::Constant *c);
 
     std::vector<Cell>	constantTable;
@@ -113,12 +113,11 @@ public:
 		const std::vector<llvm::Function*>& kfs,
 		const char* name);
 
-
-    std::vector<KFunction*>::const_iterator kfuncsBegin() const
+    ptr_vec_t<KFunction>::const_iterator kfuncsBegin() const
     { return functions.begin(); }
-
-    std::vector<KFunction*>::const_iterator kfuncsEnd() const
+    ptr_vec_t<KFunction>::const_iterator kfuncsEnd() const
     { return functions.end(); }
+
     unsigned getNumKFuncs(void) const { return functions.size(); }
 
     unsigned getWidthForLLVMType(llvm::Type* type) const;
@@ -144,6 +143,7 @@ public:
 	/* init/fini handling */
 	void addFiniFunction(llvm::Function* f) { fini_funcs.insert(f); }
 	void addInitFunction(llvm::Function* f) { init_funcs.insert(f); }
+
 	KFunction* getFiniFunc(void) const { return fini_kfunc; }
 	KFunction* getInitFunc(void) const { return init_kfunc; }
 	void setupFiniFuncs(void);
@@ -164,7 +164,7 @@ private:
 		std::ostream* os, llvm::raw_os_ostream* ros) const;
 
 	// Our shadow versions of LLVM structures.
-	std::vector<KFunction*> functions;
+	ptr_vec_t<KFunction>	functions;
 	typedef std::tr1::unordered_map<const llvm::Function*, KFunction*>
 		func2kfunc_ty;
 	func2kfunc_ty functionMap;

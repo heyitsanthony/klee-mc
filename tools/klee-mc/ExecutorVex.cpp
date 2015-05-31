@@ -225,6 +225,13 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 
 ExecutorVex::~ExecutorVex(void)
 {
+	// will be freed by KModule which has wrapped it as shared_ptr (ugh)
+	if (theGenLLVM) theGenLLVM->takeModule().release();
+
+	// otherwise will try to delete modules after llvm cleanup runs
+	theGenLLVM = nullptr;
+	theVexHelpers = nullptr;
+
 	if (hw_accel) delete hw_accel;
 	delete sys_model;
 	if (kmodule) delete kmodule;

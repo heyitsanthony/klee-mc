@@ -25,7 +25,7 @@ namespace {
 }
 
 unsigned ObjectState::numObjStates = 0;
-ObjectState* ObjectState::zeroPage = NULL;
+std::unique_ptr<ObjectState> ObjectState::zero_page;
 ObjectStateAlloc* ObjectState::os_alloc = NULL;
 
 
@@ -46,16 +46,13 @@ ObjectState::ObjectState(unsigned _size)
 , copyOnWriteOwner(0)
 , refCount(0)
 , copyDepth(0)
-, concreteStore(new uint8_t[_size])
-, concreteMask(0)
-, flushMask(0)
-, knownSymbolics(0)
+, concreteStore(std::make_unique<uint8_t[]>(_size))
 , updates(0, 0)
 , readOnly(false)
 , size(_size)
 {
 	assert (size > 0);
-	memset(concreteStore, 0, size);
+	memset(concreteStore.get(), 0, size);
 	ADD_TO_LIST;
 }
 
@@ -64,16 +61,13 @@ ObjectState::ObjectState(unsigned _size, const ref<Array>& array)
 , copyOnWriteOwner(0)
 , refCount(0)
 , copyDepth(0)
-, concreteStore(new uint8_t[_size])
-, concreteMask(0)
-, flushMask(0)
-, knownSymbolics(0)
+, concreteStore(std::make_unique<uint8_t[]>(_size))
 , updates(array, 0)
 , readOnly(false)
 , size(_size)
 {
 	assert (size > 0);
-	memset(concreteStore, 0, size);
+	memset(concreteStore.get(), 0, size);
 	makeSymbolic();
 	ADD_TO_LIST;
 }
@@ -83,10 +77,13 @@ ObjectState::ObjectState(const ObjectState &os)
 , copyOnWriteOwner(0)
 , refCount(0)
 , copyDepth(os.copyDepth+1)
-, concreteStore(new uint8_t[os.size])
-, concreteMask(os.concreteMask ? new BitArray(*os.concreteMask, os.size) : 0)
-, flushMask(os.flushMask ? new BitArray(*os.flushMask, os.size) : 0)
-, knownSymbolics(0)
+, concreteStore(std::make_unique<uint8_t[]>(os.size))
+, concreteMask(os.concreteMask
+	? std::make_unique<BitArray>(*os.concreteMask, os.size)
+	: nullptr)
+, flushMask(os.flushMask
+	? std::make_unique<BitArray>(*os.flushMask, os.size)
+	: nullptr)
 , updates(os.updates)
 , readOnly(false)
 , size(os.size)
@@ -99,29 +96,20 @@ ObjectState::ObjectState(const ObjectState &os)
 	revertToConcrete();
 
 	if (concreteMask != NULL && os.knownSymbolics) {
-		knownSymbolics = new ref<Expr>[size];
+		knownSymbolics = std::make_unique<ref<Expr>[]>(size);
 		for (unsigned i=0; i<size; i++)
 			knownSymbolics[i] = os.knownSymbolics[i];
 	}
 
-	memcpy(concreteStore, os.concreteStore, size*sizeof(*concreteStore));
+	memcpy(	concreteStore.get(),
+		os.concreteStore.get(),
+		size * sizeof(concreteStore[0]));
 	ADD_TO_LIST;
 }
 
 ObjectState::~ObjectState()
 {
-	assert (!isZeroPage());
-
-	if (concreteMask) delete concreteMask;
-	if (flushMask) delete flushMask;
-	if (knownSymbolics) delete[] knownSymbolics;
-	if (concreteStore) delete[] concreteStore;
-
-	concreteMask = NULL;
-	flushMask = NULL;
-	knownSymbolics = NULL;
-	concreteStore = NULL;
-
+	assert (!isZeroPage() || (size && this == zero_page.get()));
 	RMV_FROM_LIST;
 	size = 0;
 }
@@ -192,12 +180,9 @@ void ObjectState::buildUpdates(void) const
 
 void ObjectState::makeConcrete()
 {
-	if (concreteMask) delete concreteMask;
-	if (flushMask) delete flushMask;
-	if (knownSymbolics) delete [] knownSymbolics;
-	concreteMask = NULL;
-	flushMask = NULL;
-	knownSymbolics = NULL;
+	concreteMask = nullptr;
+	flushMask = nullptr;
+	knownSymbolics = nullptr;
 }
 
 void ObjectState::markRangeSymbolic(unsigned offset, unsigned len)
@@ -229,7 +214,7 @@ void ObjectState::makeSymbolic(void)
 void ObjectState::initializeToZero()
 {
 	makeConcrete();
-	memset(concreteStore, 0, size);
+	memset(concreteStore.get(), 0, size);
 }
 
 void ObjectState::initializeToRandom()
@@ -259,7 +244,7 @@ void ObjectState::fastRangeCheckOffset(
 void ObjectState::flushRangeForRead(
 	unsigned rangeBase, unsigned rangeSize) const
 {
-	if (!flushMask) flushMask = new BitArray(size, true);
+	if (!flushMask) flushMask = std::make_unique<BitArray>(size, true);
 
 	for (unsigned offset=rangeBase; offset<rangeBase+rangeSize; offset++) {
 		if (isByteFlushed(offset)) continue;
@@ -303,7 +288,7 @@ void ObjectState::flushRangeForWrite(
 	unsigned rangeBase, unsigned rangeSize)
 {
 	if (!flushMask)
-		flushMask = new BitArray(size, true);
+		flushMask = std::make_unique<BitArray>(size, true);
 
 	for (unsigned offset=rangeBase; offset<rangeBase+rangeSize; offset++) {
 		if (!isByteFlushed(offset)) {
@@ -338,7 +323,7 @@ void ObjectState::markByteConcrete(unsigned offset)
 void ObjectState::markByteSymbolic(unsigned offset)
 {
 	if (concreteMask == NULL)
-		concreteMask = new BitArray(size, true);
+		concreteMask = std::make_unique<BitArray>(size, true);
 	concreteMask->unset(offset);
 }
 
@@ -351,7 +336,7 @@ void ObjectState::markByteUnflushed(unsigned offset)
 void ObjectState::markByteFlushed(unsigned offset)
 {
 	if (flushMask == NULL) {
-		flushMask = new BitArray(size, false);
+		flushMask = std::make_unique<BitArray>(size, false);
 	} else {
 		flushMask->unset(offset);
 	}
@@ -369,7 +354,7 @@ void ObjectState::setKnownSymbolic(
 	if (value == NULL)
 		return;
 
-	knownSymbolics = new ref<Expr>[size];
+	knownSymbolics = std::make_unique<ref<Expr>[]>(size);
 	knownSymbolics[offset] = value;
 }
 
@@ -699,12 +684,13 @@ unsigned ObjectState::hash(void) const
 /* TODO: support more sizes */
 void ObjectState::setupZeroObjs(void)
 {
-	if (zeroPage != NULL) return;
+	if (zero_page) return;
+
 	os_alloc = new ObjectStateFactory<UnboxingObjectState>();
-	zeroPage = new ObjectState(4096);
-	zeroPage->copyOnWriteOwner = COW_ZERO;
-	zeroPage->initializeToZero();
-	zeroPage->refCount = 1;
+	zero_page = std::unique_ptr<ObjectState>(new ObjectState(4096));
+	zero_page->copyOnWriteOwner = COW_ZERO;
+	zero_page->initializeToZero();
+	zero_page->refCount = 1;
 }
 
 /* XXX: nothing yet-- not enough concrete-only states to justify */
@@ -720,10 +706,10 @@ void ObjectState::garbageCollect(void)
 }
 
 void ObjectState::writeConcrete(const uint8_t* addr, unsigned wr_sz)
-{ memcpy(concreteStore, addr, wr_sz); }
+{ memcpy(concreteStore.get(), addr, wr_sz); }
 
 void ObjectState::readConcrete(uint8_t* addr, unsigned rd_sz, unsigned off) const
-{ memcpy(addr, concreteStore+off, rd_sz);  }
+{ memcpy(addr, concreteStore.get() + off, rd_sz);  }
 
 
 int ObjectState::readConcreteSafe(
@@ -750,10 +736,10 @@ int ObjectState::readConcreteSafe(
 ObjectState* ObjectState::createDemandObj(unsigned sz)
 {
 	if (sz == 4096 && UseZeroPage) {
-		assert (zeroPage->isZeroPage());
-		assert (zeroPage->isConcrete());
-		zeroPage->refCount++;
-		return zeroPage;
+		assert (zero_page->isZeroPage());
+		assert (zero_page->isConcrete());
+		zero_page->refCount++;
+		return zero_page.get();
 	}
 	return ObjectState::create(sz);
 }
@@ -777,23 +763,14 @@ bool ObjectState::revertToConcrete(void)
 {
 	if (isConcrete()) return true;
 
-	assert (concreteMask != NULL);
+	assert (concreteMask != nullptr);
 
 	if (concreteMask->isones(size) == false)
 		return false;
 
-	if (flushMask != NULL) {
-		delete flushMask;
-		flushMask = NULL;
-	}
-
-	if (knownSymbolics != NULL) {
-		delete [] knownSymbolics;
-		knownSymbolics = NULL;
-	}
-	
-	delete concreteMask;
-	concreteMask = NULL;
+	flushMask = nullptr;
+	knownSymbolics = nullptr;
+	concreteMask = nullptr;
 
 	return true;
 }
@@ -802,7 +779,9 @@ bool ObjectState::revertToConcrete(void)
 int ObjectState::cmpConcrete(
 	const uint8_t* addr, unsigned sz, unsigned off) const
 {
-	if (isConcrete()) return memcmp(addr, concreteStore + off, sz);
+	if (isConcrete())
+		return memcmp(addr, concreteStore.get() + off, sz);
+
 	for (unsigned i = 0; i < sz; i++) {
 		int	diff;
 		if (isByteConcrete(i+off)) {
@@ -828,7 +807,7 @@ int ObjectState::cmpConcrete(const ObjectState& os) const
 	revertToConcrete(this);
 
 	if (!isConcrete() || !os.isConcrete()) return 0;
-	return memcmp(concreteStore, os.concreteStore, size);
+	return memcmp(concreteStore.get(), os.concreteStore.get(), size);
 }
 
 void ObjectState::printDiff(const ObjectState& os) const

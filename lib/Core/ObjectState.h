@@ -41,20 +41,21 @@ private:
 	typedef std::list<const ObjectState*> objlist_ty;
 	static unsigned		numObjStates;
 	static ObjectStateAlloc	*os_alloc;
-	static ObjectState	*zeroPage;
+	static std::unique_ptr<ObjectState>	zero_page;
 
 	const ref<Array>	src_array;
 	unsigned		copyOnWriteOwner;
 	unsigned		refCount;
 	unsigned		copyDepth;
 
-	uint8_t			*concreteStore;
-	BitArray		*concreteMask;
+	std::unique_ptr<uint8_t[]> 	concreteStore;
+	std::unique_ptr<BitArray>	concreteMask;
 
 	// mutable because may need flushed during read of const
 	// XXX cleanup name of flushMask (its backwards or something) ???
-	mutable BitArray	*flushMask;
-	ref<Expr>		*knownSymbolics;
+	mutable std::unique_ptr<BitArray> flushMask;
+
+	std::unique_ptr<ref<Expr>[]>	knownSymbolics;
 
 	// mutable because we may need flush during read of const
 	mutable UpdateList	updates;
@@ -139,7 +140,7 @@ public:
 	int readConcreteSafe(uint8_t* addr, unsigned rd_sz, unsigned off=0) const;
 	int cmpConcrete(const uint8_t* addr, unsigned sz, unsigned off=0) const;
 
-	const uint8_t* getConcreteBuf(void) const { return concreteStore; }
+	const uint8_t* getConcreteBuf(void) const { return concreteStore.get(); }
 
 	int cmpConcrete(const ObjectState& os) const;
 

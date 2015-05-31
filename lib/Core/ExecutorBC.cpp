@@ -36,14 +36,14 @@ namespace {
 
 ExecutorBC::ExecutorBC(InterpreterHandler *ie)
 : Executor(ie)
-, externalDispatcher(new ExternalDispatcher())
+, externalDispatcher(std::make_unique<ExternalDispatcher>())
 {
 	assert (kmodule == NULL);
 }
 
 ExecutorBC::~ExecutorBC(void)
 {
-	if (externalDispatcher)  delete externalDispatcher;
+	externalDispatcher = nullptr;
 	if (kmodule) delete kmodule;
 }
 
@@ -95,7 +95,7 @@ void ExecutorBC::runFunctionAsMain(
 
 	setupArgv(state, f, argc, argv, envp);
 
-	globals = new Globals(kmodule, state, externalDispatcher);
+	globals = new Globals(kmodule, state, externalDispatcher.get());
 
 	run(*state);
 

@@ -23,24 +23,35 @@ namespace llvm {
 	class Module;
 }
 
+
 namespace klee {
 class DispatcherMem;
 class ExternalDispatcher
 {
 private:
-	typedef std::map<const llvm::Instruction*,llvm::Function*>
+	typedef void(*dispatch_jit_fptr_t)(void);
+	typedef std::map<const llvm::Instruction*, llvm::Function*>
 		dispatchers_ty;
+	typedef std::map<llvm::Function*,dispatch_jit_fptr_t>
+		dispatches_jitted_t;
+
 	dispatchers_ty dispatchers;
+	dispatches_jitted_t dispatches_jitted;
 	
 	std::unique_ptr<llvm::Module> dispatchModule;
-	std::unique_ptr<llvm::ExecutionEngine> executionEngine;
-
+	std::unique_ptr<llvm::ExecutionEngine> exeEngine;
 	std::map<std::string, void*> preboundFunctions;
     
-	llvm::Function *createDispatcher(llvm::Function *f, llvm::Instruction *i);
-	llvm::Function *findDispatcher(llvm::Function* f, llvm::Instruction *i);
-	bool runProtectedCall(llvm::Function *f, uint64_t *args);
-    
+	llvm::Function *createDispatcherThunk(
+		llvm::Function *f, llvm::Instruction *i);
+
+	llvm::Function *findDispatchThunk(
+		llvm::Function* f, llvm::Instruction *i);
+
+	bool runProtectedCall(dispatch_jit_fptr_t f, uint64_t *args);
+ 
+ 	void buildExeEngine(void);
+
 	std::unique_ptr<DispatcherMem>	smm;
 public:
 	ExternalDispatcher();

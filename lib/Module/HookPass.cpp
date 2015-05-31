@@ -5,6 +5,7 @@
 #include <llvm/Pass.h>
 #include "klee/Internal/Module/KModule.h"
 #include "klee/Internal/Module/KFunction.h"
+#include "klee/Internal/Support/ModuleUtil.h"
 #include "static/Sugar.h"
 
 #include "HookPass.h"
@@ -15,8 +16,6 @@
 
 using namespace llvm;
 using namespace klee;
-
-namespace klee { extern Module* getBitcodeModule(const char* path); }
 
 namespace
 {
@@ -47,7 +46,6 @@ HookPass::HookPass(KModule* module)
 
 void HookPass::loadByPath(const std::string& passlib)
 {
-	llvm::Module	*mod;
 	std::string	path;
 
 	if (passlib[0] == '/' || passlib[0] == '.') {
@@ -57,10 +55,10 @@ void HookPass::loadByPath(const std::string& passlib)
 	}
 	std::cerr << "[HookPass] Using library '" << path.c_str() << "'\n";
 
-	mod = getBitcodeModule(path.c_str());
+	auto mod = getBitcodeModule(path.c_str());
 	assert (mod != NULL);
 
-	kmod->addModule(mod);
+	kmod->addModule(mod.get());
 
 	foreach (it, mod->begin(), mod->end()) {
 		Function	*f(it);
@@ -89,7 +87,7 @@ void HookPass::loadByPath(const std::string& passlib)
 				<< " (" << hooked_fn << ")\n";
 	}
 
-	delete mod;
+	mod.release(); // used by other stuff?? XXX
 }
 
 HookPass::~HookPass() {}

@@ -176,7 +176,7 @@ StatsTracker::StatsTracker(
 	}
 
 	foreach (it, km->kfuncsBegin(), km->kfuncsEnd())
-		addKFunction(*it);
+		addKFunction(it->get());
 
 	if (OutputStats) {
 		statsFile = executor.interpreterHandler->openOutputFile(

@@ -20,6 +20,7 @@
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/TargetSelect.h>
+#include <set>
 #include <setjmp.h>
 #include <signal.h>
 #include <iostream>
@@ -58,6 +59,7 @@ public:
 		if (addr) return addr;
 		return 0; //(uint64_t)jit_engine.getPointerToNamedFunction(n);
 	}
+
 private:
 };
 
@@ -133,6 +135,17 @@ public:
 		smm.reserveAllocationSpace(CodeSize, DataSizeRO, DataSizeRW);
 	}
 
+	bool finalizeMemory (std::string *ErrMsg=nullptr) override {
+		return smm.finalizeMemory(ErrMsg);
+	}
+
+	// nooooo
+	void deregisterEHFrames(
+		uint8_t *addr, uint64_t loadaddr, size_t size) override
+	{
+		return;
+	}
+
 private:
 	SectionMemoryManager	&smm;
 };
@@ -149,37 +162,38 @@ void* ExternalDispatcher::resolveSymbol(const std::string& name) const
 	return (void*)(smm->getSymbolAddress(name));
 }
 
-ExternalDispatcher::ExternalDispatcher()
-	: smm(std::make_unique<DispatcherMem>())
-{
-	dispatchModule = std::make_unique<Module>(
-			"ExternalDispatcher",
-			getGlobalContext());
 
-	std::string	error;
-	executionEngine = std::unique_ptr<ExecutionEngine>(
+void ExternalDispatcher::buildExeEngine(void)
+{
+	std::string		error;
+
+	exeEngine = std::unique_ptr<ExecutionEngine>(
 		EngineBuilder(std::move(dispatchModule))
 			.setErrorStr(&error)
 			.setEngineKind(EngineKind::JIT)
 			.setMCJITMemoryManager(smm->createProxy())
 			.create());
-
-	if (!executionEngine) {
+	if (!exeEngine) {
 		std::cerr << "unable to make jit: " << error << "\n";
 		abort();
 	}
 
+	exeEngine->finalizeObject();
+}
+
+ExternalDispatcher::ExternalDispatcher()
+	: smm(std::make_unique<DispatcherMem>())
+{
 	// If we have a native target, initialize it to ensure it is linked in and
 	// usable by the JIT.
 	llvm::InitializeNativeTarget();
+	llvm::InitializeNativeTargetAsmParser();
+	llvm::InitializeNativeTargetAsmPrinter();
 
-	// from ExecutionEngine::create
-	if (executionEngine) {
-		// Make sure we can resolve symbols in the program as well.
-		// The zero arg to the function tells DynamicLibrary to load
-		// the program, not a library.
-		sys::DynamicLibrary::LoadLibraryPermanently(0);
-	}
+	// Make sure we can resolve symbols in the program as well.
+	// The zero arg to the function tells DynamicLibrary to load
+	// the program, not a library.
+	sys::DynamicLibrary::LoadLibraryPermanently(0);
 
 #ifdef WINDOWS
 	preboundFunctions["getpid"] = (void*) (long) getpid;
@@ -192,52 +206,69 @@ ExternalDispatcher::ExternalDispatcher()
 
 ExternalDispatcher::~ExternalDispatcher() {}
 
-llvm::Function* ExternalDispatcher::findDispatcher(
-	llvm::Function* f, llvm::Instruction *i)
+llvm::Function* ExternalDispatcher::findDispatchThunk(
+	llvm::Function* f,
+	llvm::Instruction *i)
 {
-	dispatchers_ty::iterator	it;
-	llvm::Function			*dispatcher;
+	llvm::Function	*dispatch_thunk;
 
-	it = dispatchers.find(i);
+	auto it = dispatchers.find(i);
 	if (it != dispatchers.end())
 		return it->second;
 
 #ifdef WINDOWS
-	std::map<std::string, void*>::iterator it2;
-
-	it2 = preboundFunctions.find(f->getName());
+	auto it2 = preboundFunctions.find(f->getName());
 	if (it2 != preboundFunctions.end()) {
 		// only bind once
 		if (it2->second) {
-			executionEngine->addGlobalMapping(f, it2->second);
+			exeEngine->addGlobalMapping(f, it2->second);
 			it2->second = 0;
 		}
 	}
 #endif
 
-	dispatcher = createDispatcher(f,i);
-	dispatchers.insert(std::make_pair(i, dispatcher));
+	dispatch_thunk = createDispatcherThunk(f, i);
+	dispatchers.insert(std::make_pair(i, dispatch_thunk));
 
-	if (dispatcher == NULL)
-		return NULL;
-
-	return dispatcher;
+	return dispatch_thunk;
 }
 
 bool ExternalDispatcher::executeCall(Function *f, Instruction *i, uint64_t *args)
-{ return runProtectedCall(findDispatcher(f, i), args); }
+{
+	llvm::Function		*thunk;
+	dispatch_jit_fptr_t	fptr;
+	
+	thunk = findDispatchThunk(f, i);
+
+	// already jitted?
+	auto it = dispatches_jitted.find(thunk);
+	if (it != dispatches_jitted.end()) {
+		return runProtectedCall(it->second, args);
+	}
+
+
+	if (dispatchModule) buildExeEngine();
+
+	fptr = (dispatch_jit_fptr_t)exeEngine->getPointerToFunction(thunk);
+	if (!fptr) {
+		std::cerr << "Couldn't JIT thunk\n";
+		return false;
+	}
+	dispatches_jitted[thunk] = fptr;
+
+	return runProtectedCall(fptr, args);
+}
 
 // FIXME: This is not reentrant.
 static uint64_t *gTheArgsP;
 
-bool ExternalDispatcher::runProtectedCall(Function *f, uint64_t *args)
+bool ExternalDispatcher::runProtectedCall(dispatch_jit_fptr_t f, uint64_t *args)
 {
 	struct sigaction segvAction, segvActionOld;
 	bool res;
 
 	if (!f) return false;
 
-	std::vector<GenericValue> gvArgs;
 	gTheArgsP = args;
 
 	segvAction.sa_handler = 0;
@@ -249,7 +280,7 @@ bool ExternalDispatcher::runProtectedCall(Function *f, uint64_t *args)
 	if (setjmp(escapeCallJmpBuf)) {
 		res = false;
 	} else {
-		executionEngine->runFunction(f, gvArgs);
+		f();
 		res = true;
 	}
 
@@ -263,11 +294,19 @@ bool ExternalDispatcher::runProtectedCall(Function *f, uint64_t *args)
 // the special cases that the JIT knows how to directly call. If this is not
 // done, then the jit will end up generating a nullary stub just to call our
 // stub, for every single function call.
-Function *ExternalDispatcher::createDispatcher(Function *target, Instruction *inst)
+Function *ExternalDispatcher::createDispatcherThunk(
+	Function *target, Instruction *inst)
 {
 	CallSite cs;
 
-	if (!resolveSymbol(target->getName())) return 0;
+	if (!resolveSymbol(target->getName()))
+		return 0;
+
+	if (!dispatchModule) {
+		dispatchModule = std::make_unique<Module>(
+				"ExternalDispatcher",
+				getGlobalContext());
+	}
 
 	if (inst->getOpcode()==Instruction::Call) {
 		cs = CallSite(cast<CallInst>(inst));

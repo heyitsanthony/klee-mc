@@ -40,7 +40,7 @@ private:
 
 	void setExternalErrno(ExecutionState& es);
 
- 	ExternalDispatcher *externalDispatcher;
+ 	std::unique_ptr<ExternalDispatcher> externalDispatcher;
 };
 
 }

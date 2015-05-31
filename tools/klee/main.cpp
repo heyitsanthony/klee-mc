@@ -405,7 +405,7 @@ int main(int argc, char **argv, char **envp)
 	handler->setInterpreter(interpreter);
 	handler->printInfoHeader(argc, argv);
 
-	finalModule = interpreter->setModule(mainModule.get(), Opts);
+	finalModule = interpreter->setModule(mainModule.release(), Opts);
 	externalsAndGlobalsCheck(finalModule);
 
 	if (!replayPaths.empty()) {

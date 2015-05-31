@@ -126,9 +126,7 @@ KModule::~KModule()
 {
 	infos = nullptr;
 	fpm = nullptr;
-
-	for (auto &f : functions) delete f;
-	for (auto &cm : constantMap) delete cm.second;
+	functions.clear();
 	constantMap.clear();
 	for (auto &mn : modNames) delete mn.second;
 }
@@ -222,8 +220,7 @@ static void injectStaticConstructorsAndDestructors(Module *m)
 
 void KModule::dumpFuncs(std::ostream& os) const
 {
-	foreach (it, module->begin(), module->end())
-		os << it->getName().str() << '\n';
+	for (auto &f : *module) os << f.getName().str() << '\n';
 }
 
 static void forceImport(Module *m, const char *name, Type *retType, ...)
@@ -393,7 +390,7 @@ void KModule::dumpModule(void)
 void KModule::addModule(Module* in_mod)
 {
 	std::string	mod_name;
-	bool		isLinked;
+	bool		isLinkErr;
 
 	mod_name = in_mod->getModuleIdentifier();
 	if (addedModules.count(mod_name)) {
@@ -408,12 +405,13 @@ void KModule::addModule(Module* in_mod)
 
 	std::cerr << "[KModule] Adding module \"" << *mn_ref << "\"\n";
 
-	isLinked = Linker::LinkModules(
+	isLinkErr = Linker::LinkModules(
 		module.get(),
 		in_mod,
 		[] (const DiagnosticInfo& di) {
 			std::cerr << "OOPS. Couldn't link module.\n";
 		});
+
 
 	for (auto &f : *in_mod) {
 		Function	*kmod_f;
@@ -432,7 +430,7 @@ void KModule::addModule(Module* in_mod)
 	}
 
 	dumpModule();
-	if (!isLinked) std::cerr << "[KModule] Is not linked?\n";
+	if (isLinkErr) std::cerr << "[KModule] Had some link error?\n";
 }
 
 // Inject checks prior to optimization... we also perform the
@@ -507,20 +505,18 @@ void KModule::prepare(InterpreterHandler *in_ih)
 	setupFunctionPasses();
 
 	/* Build shadow structures */
-	foreach (it, module->begin(), module->end()) {
-		llvm::Function	*f = it;
+	for (auto &f : *module) {
 		/* what can happen here is it will overwrite a function
 		 * that we expect to already be processed. no good! */
-		if (getKFunction(f->getName().str().c_str()) != NULL)
+		if (getKFunction(f.getName().str().c_str()) != NULL)
 			continue;
-		addFunction(it);
+		addFunction(&f);
 	}
 
 	if (DebugPrintEscapingFunctions && !escapingFunctions.empty()) {
 		llvm::errs() << "KLEE: escaping functions: [";
-		foreach (it, escapingFunctions.begin(), escapingFunctions.end())
-		{
-			llvm::errs() << (*it)->getName() << ", ";
+		for (auto &f : escapingFunctions){
+			llvm::errs() << f->getName() << ", ";
 		}
 		llvm::errs() << "]\n";
 	}
@@ -574,12 +570,8 @@ KFunction* KModule::addFunction(Function* f)
 
 static void appendFunction(std::ofstream& os, const Function* f)
 {
-	llvm::raw_os_ostream	*ros;
-
-	ros = new llvm::raw_os_ostream(os);
+	auto ros = std::make_unique<llvm::raw_os_ostream>(os);
 	*ros << *f;
-
-	delete ros;
 }
 
 void KModule::outputFunction(const KFunction *kf)
@@ -602,13 +594,13 @@ KFunction* KModule::addFunctionProcessed(Function* f)
 
 	if (f->isDeclaration()) return NULL;
 
-	kf = new KFunction(f, this);
+	functions.push_back(std::make_unique<KFunction>(f, this));
+	kf = functions.back().get();
 	for (unsigned i=0; i < kf->numInstructions; ++i) {
 		KInstruction *ki = kf->instructions[i];
 		ki->setInfo(&infos->getInfo(ki->getInst()));
 	}
 
-	functions.push_back(kf);
 	functionMap.insert(std::make_pair(f, kf));
 	/* Compute various interesting properties */
 	if (functionEscapes(kf->function))
@@ -629,9 +621,10 @@ KFunction* KModule::addFunctionProcessed(Function* f)
 
 KConstant* KModule::getKConstant(Constant *c)
 {
-	std::map<llvm::Constant*, KConstant*>::iterator it = constantMap.find(c);
-	if (it == constantMap.end()) return NULL;
-	return it->second;
+	auto it = constantMap.find(c);
+	return (it == constantMap.end())
+		? nullptr
+		: it->second.get();
 }
 
 unsigned KModule::getConstantID(Constant *c, KInstruction* ki)
@@ -641,8 +634,9 @@ unsigned KModule::getConstantID(Constant *c, KInstruction* ki)
 	if (kc) return kc->id;
 
 	unsigned id = constants.size();
-	kc = new KConstant(c, id, ki);
-	constantMap.insert(std::make_pair(c, kc));
+	constantMap.insert(
+		std::make_pair(	c,
+				std::make_unique<KConstant>(c, id, ki)));
 	constants.push_back(c);
 	return id;
 }
@@ -655,12 +649,10 @@ KConstant::KConstant(llvm::Constant* _ct, unsigned _id, KInstruction* _ki)
 
 KFunction* KModule::getKFunction(const llvm::Function* f) const
 {
-	func2kfunc_ty::const_iterator it;
-
-	it = functionMap.find(f);
-	if (it == functionMap.end()) return NULL;
-
-	return it->second;
+	auto it = functionMap.find(f);
+	return (it == functionMap.end())
+		? NULL
+		: it->second;
 }
 
 KFunction* KModule::getKFunction(const char* fname) const
@@ -684,7 +676,7 @@ void KModule::loadIntrinsicsLib()
 	// avoid creating stale uses.
 
 	llvm::Type *i8Ty = Type::getInt8Ty(getGlobalContext());
-	bool		isLinked;
+	bool		isLinkErr;
 
 	forceImport(
 		module.get(), "memcpy", PointerType::getUnqual(i8Ty),
@@ -717,18 +709,18 @@ void KModule::loadIntrinsicsLib()
 		f->deleteBody();
 	}
 
-	isLinked = Linker::LinkModules(
+	isLinkErr = Linker::LinkModules(
 		module.get(),
 		m.get(),
 		[] (const DiagnosticInfo&) {
 			std::cerr << "Oops Linking.\n"; abort(); });
-	if (!isLinked) std::cerr << "IsLinked for intrinsics is false??\n";
+	if (isLinkErr) std::cerr << "IsLinkedErr for intrinsics??\n";
 }
 
 void KModule::bindModuleConstants(Executor* exe)
 {
 	foreach (it, kfuncsBegin(), kfuncsEnd())
-		bindKFuncConstants(exe, *it);
+		bindKFuncConstants(exe, it->get());
 
 	bindModuleConstTable(exe);
 }
@@ -780,8 +772,7 @@ KFunction* KModule::buildListFunc(
 	f = Function::Create(ft, GlobalValue::ExternalLinkage, name);
 	bb = BasicBlock::Create(getGlobalContext(), "entry", f);
 
-	foreach (it, kf.begin(), kf.end())
-		CallInst::Create((*it), "", bb);
+	for (auto &f : kf) CallInst::Create(f, "", bb);
 
 	ReturnInst::Create(getGlobalContext(), bb);
 

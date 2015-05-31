@@ -19,12 +19,7 @@
 #define forall_drain(_i, _b, _e)	\
 	  for(auto _i = _b, _i ## end = _e; _i != _i ## end;  _i = _b)
 
-
-/* one day we'll have C++11 and have std::remove_const */
-template< class T > struct remove_const          { typedef T type; };
-template< class T > struct remove_const<const T> { typedef T type; };
-
-#define unconst_key_T(x)	remove_const<decltype(x.begin()->first)>::type
+#define unconst_key_T(x)	std::remove_const<decltype(x.begin()->first)>::type
 
 struct ltstr
 {
@@ -34,6 +29,12 @@ struct ltstr
     }
 };
 
+
+#include <vector>
+#include <list>
+#include <memory>
+template<typename T> using ptr_vec_t = std::vector<std::unique_ptr<T>>;
+template<typename T> using ptr_list_t = std::list<std::unique_ptr<T>>;
 
 #endif /* __SUGAR__ */
 
