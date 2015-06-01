@@ -287,22 +287,19 @@ void Globals::initializeGlobalObject(
 
 MemoryObject* Globals::findObject(const char* n) const
 {
-	GlobalVariable * gv;
-	gv = static_cast<GlobalVariable*>(
+	auto gv = static_cast<GlobalVariable*>(
 		kmodule->module->getGlobalVariable(n));
-	if (gv == NULL) return NULL;
-	return findObject(gv);
+	return (gv == NULL)
+		? NULL
+		: findObject(gv);
 }
 
 MemoryObject* Globals::findObject(const llvm::GlobalValue* gv) const
 {
-	globalobj_map::const_iterator	it;
-
-	it = globalObjects.find(gv);
-	if (it == globalObjects.end())
-		return NULL;
-
-	return it->second;
+	auto it = globalObjects.find(gv);
+	return (it == globalObjects.end())
+		? NULL
+		: it->second;
 }
 
 ref<klee::ConstantExpr> Globals::findAddress(const char* n) const
@@ -317,14 +314,14 @@ ref<klee::ConstantExpr> Globals::findAddress(const char* n) const
 ref<klee::ConstantExpr> Globals::findAddress(
 	const llvm::GlobalValue* gv) const
 {
-	globaladdr_map::const_iterator it(globalAddresses.find(gv));
+	auto		it(globalAddresses.find(gv));
 	Function	*f = NULL;
 
 	if (it != globalAddresses.end()) return it->second;
 
 	/* this is stupid, but it shouldn't happen often */
-	foreach (it, kmodule->module->begin(), kmodule->module->end()) {
-		f = it;
+	for (auto & ff: *(kmodule->module), *(kmodule->module)) {
+		f = &ff;
 		if (f == gv) break;
 		f = NULL;
 	}
@@ -344,27 +341,26 @@ ref<klee::ConstantExpr> Globals::findAddress(
 // since reading/writing via a function pointer is unsupported anyway.
 void Globals::setupFuncAddrs(llvm::Module* m)
 {
-	foreach (i, m->begin(), m->end()) {
-		Function		*f = i;
+	for (auto &f : *m) {
 		ref<ConstantExpr>	addr(0);
 
 		// If the symbol has external weak linkage then it is implicitly
 		// not defined in this module; if it isn't resolvable then it
 		// should be null.
-		if (	f->hasExternalWeakLinkage() &&
-			(ed == NULL || !ed->resolveSymbol(f->getName().str())))
+		if (	f.hasExternalWeakLinkage() &&
+			(ed == NULL || !ed->resolveSymbol(f.getName().str())))
 		{
 			addr = Expr::createPointer(0);
 			std::cerr
 				<< "KLEE:ERROR: "
 				"global weak function linkage of is missing? "
-				<< f->getName().str() << std::endl;
+				<< f.getName().str() << std::endl;
 		} else {
-			addr = Expr::createPointer((uint64_t) (void*) f);
-			legalFunctions.insert((uint64_t) (void*) f);
+			addr = Expr::createPointer((uint64_t) (void*) &f);
+			legalFunctions.insert((uint64_t) (void*) &f);
 		}
 
-		globalAddresses.insert(std::make_pair(f, addr));
+		globalAddresses.insert(std::make_pair(&f, addr));
 	}
 }
 

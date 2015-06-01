@@ -48,11 +48,8 @@ public:
 	bool isLegalFunction(uint64_t v) const
 	{ return (legalFunctions.count(v) != 0); }
 
-	globaladdr_map::const_iterator beginAddrs(void) const
-	{ return globalAddresses.begin(); }
-
-	globaladdr_map::const_iterator endAddrs(void) const
-	{ return globalAddresses.end(); }
+	auto beginAddrs(void) const { return globalAddresses.begin(); }
+	auto endAddrs(void) const { return globalAddresses.end(); }
 
 	void updateModule(void);
 private:
@@ -72,7 +69,9 @@ private:
 		bool isReadOnly);
 
 	void initializeGlobalObject(
-		ObjectState *os, llvm::Constant *c, unsigned offset);
+		ObjectState *os,
+		llvm::Constant *c,
+		unsigned offset);
 
 	const KModule			*kmodule;
 	ExecutionState			*init_state;

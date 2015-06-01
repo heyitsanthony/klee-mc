@@ -153,7 +153,6 @@ static StateSolver* createFastSolver(void);
 Executor::Executor(InterpreterHandler *ih)
 : kmodule(0)
 , mmu(0)
-, globals(0)
 , interpreterHandler(ih)
 , data_layout(0)
 , statsTracker(0)
@@ -205,7 +204,7 @@ Executor::Executor(InterpreterHandler *ih)
 
 Executor::~Executor()
 {
-	if (globals) delete globals;
+	globals = nullptr;
 
 	if (sfh != NULL) delete sfh;
 
@@ -1341,7 +1340,7 @@ void Executor::instSwitch(ExecutionState& state, KInstruction *ki)
 	TargetsTy		targets;
 
 	cond = toUnique(state, cond);
-	ksi->orderTargets(kmodule, globals);
+	ksi->orderTargets(kmodule, globals.get());
 
 	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(cond)) {
 		defaultTarget = ksi->getConstCondSwitchTargets(

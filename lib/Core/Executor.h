@@ -187,10 +187,10 @@ private:
 	void handleMemoryPID(ExecutionState* &state);
 	void setupInitFuncs(ExecutionState& initState);
 protected:
-	KModule		*kmodule;
-	MMU		*mmu;
-	Globals		*globals;
-	BranchPredictor	*brPredict;
+	KModule				*kmodule;
+	MMU				*mmu;
+	std::unique_ptr<Globals>	globals;
+	BranchPredictor			*brPredict;
 
 	struct XferStateIter
 	{
@@ -436,7 +436,7 @@ public:
 
 	// XXX should just be moved out to utility module
 	ref<klee::ConstantExpr> evalConstant(llvm::Constant *c)
-	{ return evalConstant(kmodule, globals, c); }
+	{ return evalConstant(kmodule, globals.get(), c); }
 
 	static ref<klee::ConstantExpr> evalConstant(
 		const KModule* km, const Globals* gm, llvm::Constant *c);
@@ -453,7 +453,7 @@ public:
 	void executeFree(ExecutionState &state, ref<Expr> address);
 
 	ref<klee::ConstantExpr> evalConstantExpr(llvm::ConstantExpr *ce)
-	{ return evalConstantExpr(kmodule, globals, ce); }
+	{ return evalConstantExpr(kmodule, globals.get(), ce); }
 
 	static ref<klee::ConstantExpr> evalConstantExpr(
 		const KModule* km,
@@ -510,7 +510,7 @@ public:
 	bool hasState(const ExecutionState* es) const;
 
  	void addTimer(Timer *timer, double rate);
-	const Globals* getGlobals(void) const { return globals; }
+	const Globals* getGlobals(void) const { return globals.get(); }
 	StatsTracker* getStatsTracker(void) { return statsTracker; }
 
 	/* XXX XXX XXX get rid of me!! XXX XXX */

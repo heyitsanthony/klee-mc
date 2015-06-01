@@ -292,7 +292,7 @@ ExecutionState* ExecutorVex::setupInitialStateEntry(uint64_t entry_addr)
 	assert (state != NULL);
 
 	prepState(state, init_func);
-	globals = new Globals(kmodule, state, NULL);
+	globals = std::make_unique<Globals>(kmodule, state, nullptr);
 
 	sys_model->installConfig(*state);
 

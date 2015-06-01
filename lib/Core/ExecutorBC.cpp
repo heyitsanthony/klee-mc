@@ -95,12 +95,12 @@ void ExecutorBC::runFunctionAsMain(
 
 	setupArgv(state, f, argc, argv, envp);
 
-	globals = new Globals(kmodule, state, externalDispatcher.get());
+	globals = std::make_unique<Globals>(
+		kmodule, state, externalDispatcher.get());
 
 	run(*state);
 
-	delete globals;
-	globals = NULL;
+	globals = nullptr;
 
 	// hack to clear memory objects
 	delete memory;
