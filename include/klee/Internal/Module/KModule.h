@@ -141,8 +141,8 @@ public:
 	void setModName(KFunction* kf, const char* modname);
 
 	/* init/fini handling */
-	void addFiniFunction(llvm::Function* f) { fini_funcs.insert(f); }
-	void addInitFunction(llvm::Function* f) { init_funcs.insert(f); }
+	void addFiniFunction(KFunction* kf) { fini_funcs.insert(kf); }
+	void addInitFunction(KFunction* kf) { init_funcs.insert(kf); }
 
 	KFunction* getFiniFunc(void) const { return fini_kfunc; }
 	KFunction* getInitFunc(void) const { return init_kfunc; }
@@ -184,11 +184,11 @@ private:
 	f2pretty_ty	prettyNames;
 	pretty2f_ty	prettyFuncs;
 
-	std::set<llvm::Function*>	init_funcs;
-	KFunction			*init_kfunc;
+	std::set<KFunction*>	init_funcs;
+	KFunction		*init_kfunc;
 
-	std::set<llvm::Function*>	fini_funcs;
-	KFunction			*fini_kfunc;
+	std::set<KFunction*>	fini_funcs;
+	KFunction		*fini_kfunc;
 };
 } // End klee namespace
 

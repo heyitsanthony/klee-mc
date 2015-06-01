@@ -412,7 +412,6 @@ void KModule::addModule(Module* in_mod)
 			std::cerr << "OOPS. Couldn't link module.\n";
 		});
 
-
 	for (auto &f : *in_mod) {
 		Function	*kmod_f;
 		KFunction	*kf;
@@ -769,7 +768,7 @@ KFunction* KModule::buildListFunc(
 
 	retType = Type::getVoidTy(getGlobalContext());
 	ft = FunctionType::get(retType, false);
-	f = Function::Create(ft, GlobalValue::ExternalLinkage, name);
+	f = Function::Create(ft, GlobalValue::ExternalLinkage, name, module.get());
 	bb = BasicBlock::Create(getGlobalContext(), "entry", f);
 
 	for (auto &f : kf) CallInst::Create(f, "", bb);
@@ -799,9 +798,7 @@ std::string KModule::getPrettyName(const llvm::Function* f) const
 
 const KFunction* KModule::getPrettyFunc(const char* f) const
 {
-	pretty2f_ty::const_iterator	it;
-
-	it = prettyFuncs.find(f);
+	auto it = prettyFuncs.find(f);
 	return (it == prettyFuncs.end())
 		? NULL
 		: it->second;
@@ -830,7 +827,8 @@ void KModule::setupInitFuncs(void)
 	if (init_kfunc != NULL) return;
 	if (init_funcs.empty()) return;
 
-	std::vector<Function*> l(init_funcs.begin(), init_funcs.end());
+	std::vector<Function*> l;
+	for (auto &kf : init_funcs) l.push_back(kf->function);
 	init_kfunc = buildListFunc(l, "__klee_initlist_f");
 }
 
@@ -838,13 +836,14 @@ void KModule::setupFiniFuncs(void)
 {
 	if (fini_kfunc != NULL || fini_funcs.empty()) return;
 
-	std::vector<Function*> f_l(fini_funcs.begin(), fini_funcs.end());
+	std::vector<Function*> l;
+	for (auto &kf : init_funcs) l.push_back(kf->function);
 
-	f_l.push_back((Function*)module->getOrInsertFunction(
+	l.push_back((Function*)module->getOrInsertFunction(
 		"klee_resume_exit",
 		FunctionType::get(
 			Type::getVoidTy(getGlobalContext()), false)));
 
 
-	fini_kfunc = buildListFunc(f_l, "__klee_finilist_f");
+	fini_kfunc = buildListFunc(l, "__klee_finilist_f");
 }

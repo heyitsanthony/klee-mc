@@ -60,9 +60,8 @@ void HookPass::loadByPath(const std::string& passlib)
 
 	kmod->addModule(mod.get());
 
-	foreach (it, mod->begin(), mod->end()) {
-		Function	*f(it);
-		std::string	fn_s(f->getName().str());
+	for (auto &f : *mod) {
+		std::string	fn_s(f.getName().str());
 		const char	*hooked_fn, *fn_c;
 
 		fn_c = fn_s.c_str();
@@ -74,20 +73,16 @@ void HookPass::loadByPath(const std::string& passlib)
 			f_post[hooked_fn] = kmod->getKFunction(fn_c);
 		} else if (!strncmp(fn_c, "__hookinit_", sizeof("__hookinit"))) {
 			hooked_fn = "init";
-			f = kmod->getKFunction(fn_c)->function;
-			kmod->addInitFunction(f);
+			kmod->addInitFunction(kmod->getKFunction(fn_c));
 		} else if (!strncmp(fn_c, "__hookfini_", sizeof("__hookfini"))) {
 			hooked_fn = "fini";
-			f = kmod->getKFunction(fn_c)->function;
-			kmod->addFiniFunction(f);
+			kmod->addFiniFunction(kmod->getKFunction(fn_c));
 		} else
 			continue;
 
 		std::cerr	<< "[HookPass] ADDING " << fn_s
 				<< " (" << hooked_fn << ")\n";
 	}
-
-	mod.release(); // used by other stuff?? XXX
 }
 
 HookPass::~HookPass() {}

@@ -2822,6 +2822,6 @@ ExecutionState* Executor::pureFork(ExecutionState& es, bool compact)
 { return forking->pureFork(es, compact); }
 
 void Executor::addFiniFunction(llvm::Function* f)
-{ kmodule->addFiniFunction(f); }
+{ kmodule->addFiniFunction(kmodule->getKFunction(f)); }
 void Executor::addInitFunction(llvm::Function* f)
-{ kmodule->addInitFunction(f); }
+{ kmodule->addInitFunction(kmodule->getKFunction(f)); }
