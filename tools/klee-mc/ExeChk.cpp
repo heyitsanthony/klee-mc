@@ -26,7 +26,7 @@ ExeChk::ExeChk(InterpreterHandler *ie)
 , exited(false)
 {
 	/* This is a really silly hack to get two genllvm's running
-	 * at once. Fortunately the code doesn't change much, so 
+	 * at once. Fortunately the code doesn't change much, so
 	 * we can get away with it. */
 	klee_genllvm = std::move(theGenLLVM);
 	klee_vexhelpers = std::move(theVexHelpers);
@@ -39,21 +39,21 @@ ExeChk::ExeChk(InterpreterHandler *ie)
 
 	jit_genllvm = std::move(theGenLLVM);
 	jit_vexhelpers = std::move(theVexHelpers);
+	assert(jit_genllvm);
+	assert(jit_vexhelpers);
 
-	saved_klee_cpustate = new char[gs->getCPUState()->getStateSize()];
-	saved_jit_cpustate = new char[gs->getCPUState()->getStateSize()];
+	saved_klee_cpustate = std::make_unique<char[]>(
+		gs->getCPUState()->getStateSize());
+	saved_jit_cpustate = std::make_unique<char[]>(
+		gs->getCPUState()->getStateSize());
 }
 
-ExeChk::~ExeChk()
-{
-	delete [] saved_klee_cpustate;
-	delete [] saved_jit_cpustate;
-}
+ExeChk::~ExeChk() {}
 
 void ExeChk::saveCPU(void* s)
 {
-	memcpy(	s, 
-		gs->getCPUState()->getStateData(), 
+	memcpy(	s,
+		gs->getCPUState()->getStateData(),
 		gs->getCPUState()->getStateSize());
 }
 
@@ -66,8 +66,14 @@ void ExeChk::loadCPU(const void* s)
 
 void ExeChk::runImage(void)
 {
-	saveCPU(saved_jit_cpustate);
-	setJITGen();
+	assert(jit_genllvm);
+	assert(klee_genllvm);
+	assert(!theGenLLVM);
+
+	saveCPU(saved_jit_cpustate.get());
+	theGenLLVM.swap(jit_genllvm);
+	theVexHelpers.swap(jit_vexhelpers);
+
 	vex_exe->beginStepping();
 
 	setKLEEGen();
@@ -85,26 +91,26 @@ void ExeChk::handleXfer(ExecutionState& state, KInstruction *ki)
 	/* 1. Finish KLEE's VSB by setting up xfer to next VSB*/
 	es2esv(state).updateGuestRegs();
 	ExecutorVex::handleXfer(state, ki);
-	saveCPU(saved_klee_cpustate);
+	saveCPU(saved_klee_cpustate.get());
 
 	/* 2. Do VSB in VexExec's JITer */
 	setJITGen();
-	loadCPU(saved_jit_cpustate);
+	loadCPU(saved_jit_cpustate.get());
 	ok_step = vex_exe->stepVSB();
-	saveCPU(saved_jit_cpustate);
+	saveCPU(saved_jit_cpustate.get());
 
 	/* Cross-check. Both should be in same state */
 	if (memcmp(
-		saved_jit_cpustate,
-		saved_klee_cpustate, 
+		saved_jit_cpustate.get(),
+		saved_klee_cpustate.get(),
 		gs->getCPUState()->getStateSize()) != 0)
 	{
 		fprintf(stderr, "========JIT STATE==========\n");
-		loadCPU(saved_jit_cpustate);
+		loadCPU(saved_jit_cpustate.get());
 		gs->getCPUState()->print(std::cerr);
 
 		fprintf(stderr, "========KLEE STATE=========\n");
-		loadCPU(saved_klee_cpustate);
+		loadCPU(saved_klee_cpustate.get());
 		gs->getCPUState()->print(std::cerr);
 
 		cur_func->dump();
@@ -116,11 +122,11 @@ void ExeChk::handleXfer(ExecutionState& state, KInstruction *ki)
 	assert ((ok_step || exited) && "vex_exe failed but not exiting!?\n");
 
 	/* Now, restore everything to KLEE state */
-	loadCPU(saved_klee_cpustate);
+	loadCPU(saved_klee_cpustate.get());
 	setKLEEGen();
 }
 
-/* catch syscalls so that we don't make things symbolic-- 
+/* catch syscalls so that we don't make things symbolic--
  * that would ruin the cross checking! */
 void ExeChk::handleXferSyscall(ExecutionState& state, KInstruction* ki)
 {
@@ -132,7 +138,7 @@ void ExeChk::handleXferSyscall(ExecutionState& state, KInstruction* ki)
 	case SYS_exit:
 	case SYS_exit_group: {
 		ObjectState	*reg_os;
-		fprintf(stderr, "EXITING ON sys_nr=%d. exitcode=%d\n", 
+		fprintf(stderr, "EXITING ON sys_nr=%d. exitcode=%d\n",
 			sys_nr,
 			(int)sp.getArg(0));
 		reg_os = GETREGOBJ(state);
@@ -144,7 +150,7 @@ void ExeChk::handleXferSyscall(ExecutionState& state, KInstruction* ki)
 	}
 	default:
 		fprintf(stderr, "BAD SYSCALL 0x%x\n", sys_nr);
-		fprintf(stderr, 
+		fprintf(stderr,
 			"ExeChk is concrete; exit syscalls only!\n");
 		gs->print(std::cerr);
 		assert (0 == 1);
@@ -155,12 +161,28 @@ void ExeChk::handleXferSyscall(ExecutionState& state, KInstruction* ki)
 
 void ExeChk::setJITGen(void)
 {
-	theGenLLVM.swap(jit_genllvm);
-	theVexHelpers.swap(jit_vexhelpers);
+	assert (jit_genllvm);
+	assert (theGenLLVM);
+
+	theGenLLVM.swap(klee_genllvm);
+	theVexHelpers.swap(klee_vexhelpers);
+
+	theGenLLVM = std::move(jit_genllvm);
+	theVexHelpers = std::move(jit_vexhelpers);
+
+	assert (theGenLLVM);
 }
 
 void ExeChk::setKLEEGen(void)
 {
-	theGenLLVM.swap(klee_genllvm);
-	theVexHelpers.swap(klee_vexhelpers);
+	assert (klee_genllvm);
+	assert (theGenLLVM);
+
+	theGenLLVM.swap(jit_genllvm);
+	theVexHelpers.swap(jit_vexhelpers);
+
+	theGenLLVM = std::move(klee_genllvm);
+	theVexHelpers = std::move(klee_vexhelpers);
+
+	assert (theGenLLVM);
 }

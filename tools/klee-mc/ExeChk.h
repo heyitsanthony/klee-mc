@@ -34,8 +34,8 @@ private:
 	std::unique_ptr<GenLLVM>	jit_genllvm;
 	std::unique_ptr<VexHelpers>	jit_vexhelpers;
 
-	char		*saved_klee_cpustate;
-	char		*saved_jit_cpustate;
+	std::unique_ptr<char[]>	saved_klee_cpustate;
+	std::unique_ptr<char[]>	saved_jit_cpustate;
 	bool		exited;
 };
 
