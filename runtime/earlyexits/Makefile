@@ -18,15 +18,10 @@ BYTECODE_LIBRARY=1
 DEBUG_RUNTIME=0
 
 LIBBCA:=$(LibDir)/lib$(LIBRARYNAME).bca
-#LIBTXT:=$(LibDir)/$(LIBRARYNAME)-fns.txt
 
 include $(LEVEL)/Makefile.common
 
+all ::  $(LibDir)/$(LIBRARYNAME).bc
 
-$(LibName.BC): $(LibName.BCA)
-	../../scripts/link-bca $^ $@
-
-all:: $(LibName.BC) $(LibName.BCA)
-
-$(LibName.BC): $(LibName.BCA)
-	../../scripts/link-bca $^ $@
+$(LibDir)/$(LIBRARYNAME).bc: $(LibDir)/lib$(LIBRARYNAME).bca
+	llvm-link -f -o $@  $(BuildMode)/*.bc

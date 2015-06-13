@@ -17,3 +17,9 @@ void __hookpre___GI___assert_fail(void* regs)
 
 
 void __hookpre___GI_exit(void* regs) { exit(GET_ARG0(regs)); }
+
+void __hookpre___stack_chk_fail(void* regs)
+{ klee_uerror("???", "stackchk.err"); }
+
+void __hookpre___fortify_fail(void* regs)
+{ klee_uerror("???", "fortify.err"); }

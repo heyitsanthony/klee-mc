@@ -4,13 +4,14 @@
 // RUN: ./%t1 2>&1 | grep Oops
 //
 // KLEE should detect the smash.
-// RUN: klee-mc - ./%t1 2>%t1.err >%t1.out
+// RUN: klee-mc -use-hookpass -hookpass-lib=earlyexits.bc - ./%t1 2>%t1.err >%t1.out
 //
 // If we're running stack smashed code, it'll be reported as ignored.
 // RUN: ls klee-last | not grep smash_ignored.err
 // 
 // If we catch the stack smash, we're should report it.
-// RUN: ls klee-last | grep smash.err
+// (in this case, fortify stuff)
+// RUN: ls klee-last | grep stackchk.err
 #include <unistd.h>
 #include <stdio.h>
 #include <klee/klee.h>	/* for SYS_klee */
@@ -21,7 +22,7 @@ static void smashed(void)
 		__FILE__, __LINE__,
 		"Stack illegally smashed!!!",
 		"smash_ignored.err");
-	fprintf(stderr, "Oops. Stack Smashed.\n");
+	puts("Oops. Stack Smashed.\n");
 	_exit(-1);
 }
 

@@ -34,7 +34,7 @@ HookPass::HookPass(KModule* module)
 {
 	assert (!HookPassLib.empty());
 
-	if (HookPassLib.substr(HookPassLib.size()-4) == ".txt") { 
+	if (HookPassLib.substr(HookPassLib.size()-4) == ".txt") {
 		std::ifstream	ifs(HookPassLib.c_str());
 		std::string	cur_lib;
 		while (ifs >> cur_lib)
@@ -94,9 +94,11 @@ bool HookPass::hookPre(KFunction* kf, llvm::Function& f)
 	/* function arguments must match */
 	if (f.getArgumentList().size() !=
 		kf->function->getArgumentList().size()) {
-		std::cerr << "Argument length mismatch for " <<
-			f.getName().str() << '\n';
-		abort();
+		std::cerr	<< "[HookPass] Argument length mismatch for "
+				<< f.getName().str() << ". Expected: "
+				<< f.getArgumentList().size()  << " vs Got: "
+				<< kf->function->getArgumentList().size() << '\n';
+		return false;
 	}
 
 	/* this is disgusting, but necessary to pass assertion builds */
