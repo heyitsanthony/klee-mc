@@ -91,7 +91,7 @@ static KTestStream* setupKTestStream(
 	const char* dirname,
 	unsigned test_num,
 	Guest* gs,
-	UCState* &uc_state)
+	std::unique_ptr<UCState> &uc_state)
 {
 	KTestStream	*kts;
 	const char	*uc_func;
@@ -124,16 +124,16 @@ static KTestStream* setupKTestStream(
 	if (kts->getKTest()->symArgvs) loadSymArgs(gs, kts);
 
 	uc_func = getenv("UC_FUNC");
-	uc_state = NULL;
+	uc_state = nullptr;
 	if (uc_func != NULL) {
-		uc_state = UCState::init(gs, uc_func, kts);
+		uc_state = std::unique_ptr<UCState>(UCState::init(gs, uc_func, kts));
 		assert (uc_state != NULL);
 	}
 
 	return kts;
 }
 
-static void run_uc(VexExec* ve, UCState* uc_state)
+static void run_uc(VexExec* ve, std::unique_ptr<UCState> uc_state)
 {
 	const char	*uc_save;
 
@@ -149,11 +149,8 @@ static void run_uc(VexExec* ve, UCState* uc_state)
 		}
 	}
 
-	uc_save = getenv("UC_SAVE");
-	if (uc_save != NULL)
+	if ((uc_save = getenv("UC_SAVE")) != nullptr)
 		uc_state->save(uc_save);
-
-	delete uc_state;
 }
 
 struct ReplayInfo
@@ -167,7 +164,7 @@ Syscalls* getSyscalls(
 	Guest*	gs,
 	VexExec* ve,
 	const struct ReplayInfo& ri,
-	UCState*	&uc_state)
+	std::unique_ptr<UCState> &uc_state)
 {
 	KTestStream	*kts;
 	const char	*model_lib;
@@ -210,8 +207,7 @@ static int doReplay(const struct ReplayInfo& ri)
 	Guest		*gs;
 	GuestMem	*old_mem, *pt_mem = NULL, *dual_mem = NULL;
 	VexExec		*ve;
-	Syscalls	*skt;
-	UCState		*uc_state;
+	std::unique_ptr<UCState> uc_state;
 
 	gs = Guest::load(ri.guestdir);
 	assert (gs != NULL && "Expects a guest snapshot");
@@ -236,10 +232,9 @@ static int doReplay(const struct ReplayInfo& ri)
 	std::cerr << "[kmc-replay] Forcing fake vsyspage reads\n";
 	theGenLLVM->setFakeSysReads();
 
-	skt = getSyscalls(gs, ve, ri, uc_state);
-	assert (skt != NULL && "Couldn't create syscall harness");
-
-	ve->setSyscalls(skt);
+	auto skt = std::unique_ptr<Syscalls>(getSyscalls(gs, ve, ri, uc_state));
+	assert (skt && "Couldn't create syscall harness");
+	ve->setSyscalls(std::move(skt));
 
 	if (dual_mem) {
 		delete dual_mem;
@@ -247,8 +242,8 @@ static int doReplay(const struct ReplayInfo& ri)
 		gs->setMem(old_mem);
 	}
 
-	if (uc_state != NULL)
-		run_uc(ve, uc_state);
+	if (uc_state != nullptr)
+		run_uc(ve, std::move(uc_state));
 	else
 		ve->run();
 
