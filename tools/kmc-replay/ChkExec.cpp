@@ -12,14 +12,11 @@
 
 ChkExec::ChkExec(PTImgChk* gs, std::shared_ptr<VexXlate> vx)
 : VexExecChk(gs, vx)
-, sc_ptkt(NULL)
 , print_exec(getenv("KMC_DUMP_EXE") != NULL)
 , max_fixups(getenv("KMC_MAX_FIXUPS") != NULL
 	? atoi(getenv("KMC_MAX_FIXUPS"))
 	: DEFAULT_FIXUPS)
 {}
-
-ChkExec::~ChkExec() { if (sc_ptkt != NULL) delete sc_ptkt; }
 
 guest_ptr ChkExec::doVexSB(VexSB* sb)
 {
@@ -79,16 +76,16 @@ void ChkExec::doSysCall(VexSB* vsb)
 }
 
 
-void ChkExec::setSyscalls(Syscalls* in_sc)
+void ChkExec::setSyscalls(std::unique_ptr<Syscalls> in_sc)
 {
 	/* make duplicate syscall handler for replaying into
 	 * ptraced process */
-	SyscallsKTest	*sc_kt = dynamic_cast<SyscallsKTest*>(in_sc);
+	SyscallsKTest	*sc_kt = dynamic_cast<SyscallsKTest*>(in_sc.get());
 
 	if (sc_kt == NULL)
 		goto done;
 
-	sc_ptkt = new SyscallsKTestPT(sc_kt);
+	sc_ptkt = std::make_unique<SyscallsKTestPT>(sc_kt);
 done:
-	VexExecChk::setSyscalls(in_sc);
+	VexExecChk::setSyscalls(std::move(in_sc));
 }
