@@ -109,8 +109,7 @@ ExecutionState* ExeSnapshotSeq::addSequenceGuest(
 	const char *suff)
 {
 	ExecutionState			*new_es;
-	Guest				*new_gs;
-	std::list<GuestMem::Mapping>	maps;
+	std::unique_ptr<Guest>		new_gs;
 	struct stat			st;
 	unsigned			state_regctx_sz;
 	ObjectState			*state_regctx_os;
@@ -135,9 +134,9 @@ ExecutionState* ExeSnapshotSeq::addSequenceGuest(
 	/* XXX: this breaks kmc-replay because it will use the wrong
 	 * base snapshot. crap! extend ktest format? */
 	new_es = pureFork(*last_es);
-	maps = new_gs->getMem()->getMaps();
-	foreach (it, maps.begin(), maps.end())
-		loadUpdatedMapping(new_es, new_gs, *it);
+	for (auto& m : new_gs->getMem()->getMaps()) {
+		loadUpdatedMapping(new_es, new_gs.get(), m);
+	}
 
 	/* TODO track guest base in the state data, reflect in ktest writer */
 
@@ -155,7 +154,7 @@ ExecutionState* ExeSnapshotSeq::addSequenceGuest(
 	new_es->prevPC = new_es->pc;
 
 
-	delete new_gs;
+	new_gs = nullptr;
 	unsetenv("VEXLLVM_BASE_BIAS");
 
 	return new_es;

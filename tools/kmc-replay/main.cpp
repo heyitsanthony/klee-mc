@@ -204,35 +204,34 @@ Syscalls* getSyscalls(
 
 static int doReplay(const struct ReplayInfo& ri)
 {
-	Guest		*gs;
 	GuestMem	*old_mem, *pt_mem = NULL, *dual_mem = NULL;
 	VexExec		*ve;
 	std::unique_ptr<UCState> uc_state;
 
-	gs = Guest::load(ri.guestdir);
+	auto gs = Guest::load(ri.guestdir);
 	assert (gs != NULL && "Expects a guest snapshot");
 
 	if (getenv("KMC_PTRACE") != 0) {
 		PTImgChk	*gpt;
-		gpt = GuestPTImg::create<PTImgChk>(gs);
+		gpt = GuestPTImg::create<PTImgChk>(gs.release());
 		assert (gpt != NULL);
-		gs = gpt;
 		ve = VexExec::create<ChkExec, PTImgChk>(gpt);
 
 		old_mem = gpt->getMem();
 
 		pt_mem = new GuestPTMem(gpt, gpt->getPID());
 		dual_mem = new GuestMemDual(old_mem, pt_mem);
+		gs.reset(gpt);
 		gs->setMem(dual_mem);
 	} else
-		ve = VexExec::create<ReplayExec, Guest>(gs);
+		ve = VexExec::create<ReplayExec, Guest>(gs.get());
 
 	assert (theGenLLVM);
 
 	std::cerr << "[kmc-replay] Forcing fake vsyspage reads\n";
 	theGenLLVM->setFakeSysReads();
 
-	auto skt = std::unique_ptr<Syscalls>(getSyscalls(gs, ve, ri, uc_state));
+	auto skt = std::unique_ptr<Syscalls>(getSyscalls(gs.get(), ve, ri, uc_state));
 	assert (skt && "Couldn't create syscall harness");
 	ve->setSyscalls(std::move(skt));
 
@@ -248,7 +247,6 @@ static int doReplay(const struct ReplayInfo& ri)
 		ve->run();
 
 	delete ve;
-	delete gs;
 
 	return 0;
 }

@@ -263,10 +263,8 @@ static CmdArgs* getCmdArgs(char** envp)
 
 static Guest* loadSnapshotGuest(CmdArgs* cmdargs, const std::string& s)
 {
-	Guest	*gs;
-
 	fprintf(stderr, "[klee-mc] LOADING SNAPSHOT\n");
-	gs = Guest::load(s.size() == 0 ? NULL : s.c_str());
+	auto gs = Guest::load(s.size() == 0 ? NULL : s.c_str());
 	assert (gs && "Could not load guest snapshot");
 
 	/* force load so replay knows how many symargs we have */
@@ -283,7 +281,7 @@ static Guest* loadSnapshotGuest(CmdArgs* cmdargs, const std::string& s)
 		cmdargs->setArgs(arg_l);
 	}
 
-	return gs;
+	return gs.release();
 }
 
 static Guest* getGuest(CmdArgs* cmdargs)
