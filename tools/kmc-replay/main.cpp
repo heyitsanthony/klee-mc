@@ -221,26 +221,42 @@ static int doInterpreterReplay(const ReplayInfo& ri)
 	argv.push_back("-mm-type=deterministic");
 	argv.push_back("-show-syscalls");
 	argv.push_back("-clobber-output");
+	argv.push_back("-deny-sys-files"); // XXX I need a better way to pass this
 
 	/* setup the test inputs (guests, test files, etc) */
 	char dtemp[32];
-	strcpy(dtemp, "/tmp/kmcXXXXXX");
+	strcpy(dtemp, "/tmp/kmc-XXXXXX");
 	auto dname = mkdtemp(dtemp);
 	argv.push_back(std::string("-output-dir=") + dname);
 
 	argv.push_back("-replay-ktest=" + ri.getKTestPath());
 	argv.push_back(std::string("-guest-sshot=") + ri.guestdir);
 
+	/* look at ktest to see if symargs/symsargc are expected */
+	auto kts = KTestStream::create(ri.getKTestPath().c_str());
+	std::set<std::string> vars;
+	while (auto kto = kts->peekObject()) {
+		vars.insert(kto->name);
+		kts->nextObject();
+	}
+	delete kts;
+	if (vars.count("argv_1")) argv.push_back("-symargs");
+	if (vars.count("argc_1")) argv.push_back("-symargc");
+
 	/* user-defined args */
 	std::stringstream	ss;
 	std::string		arg;
-	ss << getenv("KLEE_INTERP");
+	ss << getenv("KMC_INTERP");
 	while (ss >> arg) argv.push_back(arg);
 
 	/* convert to argv[] for execvp() */
 	std::vector<const char*> argv_p;
 	for (auto &arg : argv) argv_p.push_back(arg.c_str());
 	argv_p.push_back(nullptr);
+
+	std::cerr << "[kmc-replay] Now running";
+	for (auto &arg : argv) std::cerr << ' ' << arg;
+	std::cerr << '\n';
 
 	execvp(argv_p[0], (char *const *)argv_p.data());
 
