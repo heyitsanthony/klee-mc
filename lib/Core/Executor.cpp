@@ -56,7 +56,7 @@ using namespace klee;
 
 bool	WriteTraces = false;
 bool	ReplayInhibitedForks = true;
-bool	DebugPrintInstructions = false;
+uint32_t DebugPrintInstructions = 0;
 extern double	MaxSTPTime;
 
 namespace klee {
@@ -87,7 +87,7 @@ namespace {
   cl::opt<bool> DumpStatesOnHalt("dump-states-on-halt", cl::init(true));
   DECL_OPTBOOL(PreferCex, "prefer-cex");
 
-  cl::opt<bool,true>
+  cl::opt<unsigned, true>
   DebugPrintInstructionsProxy(
   	"debug-print-instructions",
 	cl::location(DebugPrintInstructions),
@@ -1999,7 +1999,9 @@ void Executor::stepStateInst(ExecutionState* &state)
 
 	stepInstruction(*state);
 	executeInstruction(*state, ki);
-	if (DebugPrintInstructions) {
+	if (DebugPrintInstructions &&
+	    DebugPrintInstructions < state->totalInsts)
+	{
 		debugPrintInst(*state);
 		if (DebugPrintValues && state->stack.hasLocal(ki)) {
 			ref<Expr>	e(state->stack.readLocal(ki));

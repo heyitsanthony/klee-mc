@@ -29,7 +29,7 @@
 using namespace llvm;
 using namespace klee;
 
-extern bool DebugPrintInstructions;
+extern uint32_t DebugPrintInstructions;
 
 static ref<Expr>	ce_zero64 = NULL;
 
@@ -1303,16 +1303,10 @@ SFH_DEF_ALL(IsReadOnly, "klee_is_readonly", true)
 SFH_DEF_ALL(Watch, "klee_watch", false)
 {
 	SFH_CHK_ARGS(1, "klee_watch");
-
 	const ConstantExpr	*ce = dyn_cast<ConstantExpr>(args[0]);
 	assert (ce != NULL);
-
-	if (ce->getZExtValue())
-		DebugPrintInstructions = true;
-	else
-		DebugPrintInstructions = false;
+	DebugPrintInstructions = (ce->getZExtValue()) ? 1 : 0;
 }
-
 
 
 SFH_DEF_ALL(ConcretizeState, "klee_concretize_state", false)

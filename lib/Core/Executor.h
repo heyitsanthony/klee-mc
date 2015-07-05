@@ -47,7 +47,7 @@ namespace llvm {
   class VectorType;
 }
 
-extern bool DebugPrintInstructions;
+extern uint32_t DebugPrintInstructions;
 
 namespace klee {
 class Array;
