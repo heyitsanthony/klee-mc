@@ -23,8 +23,10 @@
 #include "UCState.h"
 #include "SyscallsKTest.h"
 
+#include <sstream>
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 
 using namespace klee;
 
@@ -38,6 +40,21 @@ extern KTestStream* setupUCFunc(
 	const char	*dirname,
 	unsigned	test_num);
 
+struct ReplayInfo
+{
+	const char	*dirname;
+	unsigned	test_num;
+	const char	*guestdir; /* = NULL */
+
+	std::string getKTestPath(void) const {
+		char		fname_ktest[256];
+		snprintf(
+			fname_ktest,
+			256,
+			"%s/test%06d.ktest.gz", dirname, test_num);
+		return fname_ktest;
+	}
+};
 
 static void loadSymArgv(Guest* gs, KTestStream* kts)
 {
@@ -88,28 +105,23 @@ static void loadSymArgs(Guest* gs, KTestStream* kts)
 }
 
 static KTestStream* setupKTestStream(
-	const char* dirname,
-	unsigned test_num,
+	const ReplayInfo& ri,
 	Guest* gs,
 	std::unique_ptr<UCState> &uc_state)
 {
 	KTestStream	*kts;
 	const char	*uc_func;
-	char		fname_ktest[256];
 	const char	*corrupt;
+	auto		fname_ktest(ri.getKTestPath());
 
-	snprintf(
-		fname_ktest,
-		256,
-		"%s/test%06d.ktest.gz", dirname, test_num);
 	corrupt = getenv("KMC_CORRUPT_OBJ");
 	if (corrupt == NULL)
-		kts = KTestStream::create(fname_ktest);
+		kts = KTestStream::create(fname_ktest.c_str());
 	else {
 		KTSFuzz		*ktsf;
 		const char	*fuzz_percent;
 
-		ktsf = KTSFuzz::create(fname_ktest);
+		ktsf = KTSFuzz::create(fname_ktest.c_str());
 		fuzz_percent = getenv("KMC_CORRUPT_PERCENT");
 		ktsf->fuzzPart(
 			atoi(corrupt),
@@ -153,13 +165,6 @@ static void run_uc(VexExec* ve, std::unique_ptr<UCState> uc_state)
 		uc_state->save(uc_save);
 }
 
-struct ReplayInfo
-{
-	const char	*dirname;
-	unsigned	test_num;
-	const char	*guestdir; /* = NULL */
-};
-
 Syscalls* getSyscalls(
 	Guest*	gs,
 	VexExec* ve,
@@ -169,7 +174,7 @@ Syscalls* getSyscalls(
 	KTestStream	*kts;
 	const char	*model_lib;
 
-	kts = setupKTestStream(ri.dirname, ri.test_num, gs, uc_state);
+	kts = setupKTestStream(ri, gs, uc_state);
 	model_lib = getenv("KMC_MODEL");
 
 	/* no model library given, use crumbs file */
@@ -202,7 +207,48 @@ Syscalls* getSyscalls(
 }
 
 
-static int doReplay(const struct ReplayInfo& ri)
+// Small wrapper to fork off klee-mc so it behaves like kmc-replay (sort of)
+// the main idea is to launch klee-mc but don't mess with any of the files
+// so it's easier to debug.
+static int doInterpreterReplay(const ReplayInfo& ri)
+{
+	/* build arg list */
+	std::vector<std::string>	argv;
+
+	/* fixed args */
+	argv.push_back("klee-mc");
+	argv.push_back("-guest-type=sshot");
+	argv.push_back("-mm-type=deterministic");
+	argv.push_back("-show-syscalls");
+	argv.push_back("-clobber-output");
+
+	/* setup the test inputs (guests, test files, etc) */
+	char dtemp[32];
+	strcpy(dtemp, "/tmp/kmcXXXXXX");
+	auto dname = mkdtemp(dtemp);
+	argv.push_back(std::string("-output-dir=") + dname);
+
+	argv.push_back("-replay-ktest=" + ri.getKTestPath());
+	argv.push_back(std::string("-guest-sshot=") + ri.guestdir);
+
+	/* user-defined args */
+	std::stringstream	ss;
+	std::string		arg;
+	ss << getenv("KLEE_INTERP");
+	while (ss >> arg) argv.push_back(arg);
+
+	/* convert to argv[] for execvp() */
+	std::vector<const char*> argv_p;
+	for (auto &arg : argv) argv_p.push_back(arg.c_str());
+	argv_p.push_back(nullptr);
+
+	execvp(argv_p[0], (char *const *)argv_p.data());
+
+	std::cerr << "ERROR: Failed to execvp() klee-mc.\n";
+	exit(2);
+}
+
+static int doJITReplay(const struct ReplayInfo& ri)
 {
 	GuestMem	*old_mem, *pt_mem = NULL, *dual_mem = NULL;
 	VexExec		*ve;
@@ -274,7 +320,7 @@ int main(int argc, char* argv[])
 	fprintf(stderr, "Replay: test #%d\n", ri.test_num);
 
 	ri.dirname = (argc >= 3) ? argv[2] : "klee-last";
-	ri.guestdir = (argc >= 4) ? argv[3] : NULL;
+	ri.guestdir = (argc >= 4) ? argv[3] : "guest-last";
 
 	xchk_guest = getenv("XCHK_GUEST");
 	if (xchk_guest != NULL) {
@@ -283,6 +329,10 @@ int main(int argc, char* argv[])
 		ri.guestdir = xchk_guest;
 	}
 
-	err = doReplay(ri);
+	if (getenv("KMC_INTERP")) {
+		err = doInterpreterReplay(ri);
+	} else {
+		err = doJITReplay(ri);
+	}
 	return err;
 }
