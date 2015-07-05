@@ -19,48 +19,53 @@ class CmdArgs;
 class KleeHandler : public InterpreterHandler
 {
 private:
-	TreeStreamWriter		*m_symPathWriter;
-	std::ostream			*m_infoFile;
+	std::unique_ptr<TreeStreamWriter> m_symPathWriter;
+	std::unique_ptr<std::ostream>	m_infoFile;
 
-	char				m_outputDirectory[1024];
-	unsigned			m_testIndex;  // # tests written
-	unsigned			m_pathsExplored; // # paths explored
-	unsigned			m_errorsFound;
+	char		m_outputDirectory[1024];
+	unsigned	m_testIndex;  // # tests written
+	unsigned	m_pathsExplored; // # paths explored
+	unsigned	m_errorsFound;
 
 	// used for writing .ktest files
 	const CmdArgs			*cmdargs;
-	bool				writeOutput;
 
 public:
 	KleeHandler(const CmdArgs* cmdargs = NULL);
 	virtual ~KleeHandler();
 
-	bool isWriteOutput(void) const { return writeOutput; }
-	void setWriteOutput(bool v) { writeOutput = v; }
+	std::ostream &getInfoStream() const override { return *m_infoFile; }
+
+	std::string getOutputFilename(const std::string &filename) override;
+	std::unique_ptr<std::ostream>
+		openOutputFile(const std::string &filename) override;
+
+	unsigned getNumTestCases() const override { return m_testIndex; }
+	unsigned getNumPathsExplored() const override {return m_pathsExplored;}
+	unsigned getNumErrors(void) const override { return m_errorsFound; }
+	void incPathsExplored() override { m_pathsExplored++; }
+	void incErrorsFound(void) override { m_errorsFound++; }
+
+	unsigned processTestCase(
+		const ExecutionState  &state,
+		const char *errorMessage,
+		const char *errorSuffix) override;
+
+
 
 	const char* getOutputDir(void) const { return m_outputDirectory; }
 
-	std::ostream &getInfoStream() const { return *m_infoFile; }
-	unsigned getNumTestCases() const { return m_testIndex; }
-	unsigned getNumPathsExplored() const { return m_pathsExplored; }
-	unsigned getNumErrors(void) const { return m_errorsFound; }
-	void incPathsExplored() { m_pathsExplored++; }
-	void incErrorsFound(void) { m_errorsFound++; }
 
 	virtual void setInterpreter(Interpreter *i);
 
-	virtual unsigned processTestCase(
-		const ExecutionState  &state,
-		const char *errorMessage,
-		const char *errorSuffix);
-
-	std::string getOutputFilename(const std::string &filename);
-	std::ostream *openOutputFile(const std::string &filename);
-	std::ostream *openOutputFileGZ(const std::string &filename);
+	std::unique_ptr<std::ostream>
+		openOutputFileGZ(const std::string &filename);
 
 	std::string getTestFilename(const std::string &suffix, unsigned id);
-	std::ostream *openTestFile(const std::string &suffix, unsigned id);
-	std::ostream *openTestFileGZ(const std::string &suffix, unsigned id);
+	std::unique_ptr<std::ostream> openTestFile(
+		const std::string &suffix, unsigned id);
+	std::unique_ptr<std::ostream> openTestFileGZ(
+		const std::string &suffix, unsigned id);
 
 	static void getPathFiles(
 		std::string path, std::vector<std::string> &results);
@@ -69,7 +74,6 @@ public:
 		const std::vector<std::string>& files,
 		const std::vector<std::string>& dirs,
 		std::vector<KTest*>& ktests);
-
 
 	static void loadPathFiles(
 		const std::vector<std::string>& pathfiles,

@@ -38,6 +38,7 @@ DECL_OPT(WritePaths, "write-paths", "Write .path files for each test");
 DECL_OPT(WriteSymPaths, "write-sym-paths", "Write .sym.path files for each test");
 DECL_OPT(WriteMem, "write-mem", "Write updated memory objects for each test");
 DECL_OPT(ExitOnError, "exit-on-error", "Exit if errors occur");
+DECL_OPT(ClobberOutput, "clobber-output", "Continue if output directory already exists");
 
 cl::opt<unsigned> StopAfterNTests(
 	"stop-after-n-tests",
@@ -59,18 +60,16 @@ cl::opt<std::string> WriteCWE(
 static CmdArgs	ca_dummy;
 
 KleeHandler::KleeHandler(const CmdArgs* in_args)
-: m_symPathWriter(0)
-, m_infoFile(0)
-, m_testIndex(0)
+: m_testIndex(0)
 , m_pathsExplored(0)
 , m_errorsFound(0)
 , cmdargs(in_args)
-, writeOutput(NoOutput == false)
 , m_interpreter(0)
 , tms_valid(false)
 {
 	std::string theDir;
 
+	setWriteOutput(NoOutput == false);
 	if (cmdargs == NULL) cmdargs = &ca_dummy;
 
 	theDir = setupOutputDir();
@@ -85,7 +84,17 @@ KleeHandler::KleeHandler(const CmdArgs* in_args)
 
 	strcpy(m_outputDirectory, p.c_str());
 
-	if (mkdir(m_outputDirectory, 0775) < 0) {
+	if (ClobberOutput) {
+		struct stat s;
+		int	err = stat(m_outputDirectory, &s);
+		if (err != 0 || !S_ISDIR(s.st_mode)) {
+			std::cerr
+			<< "KLEE: ERROR: Unable to use output directory: \""
+			<< m_outputDirectory 
+			<< "\". Can't continue\n";
+			exit(1);
+		}
+	} else if (mkdir(m_outputDirectory, 0775) < 0) {
 		std::cerr <<
 			"KLEE: ERROR: Unable to make output directory: \"" <<
 			m_outputDirectory  <<
@@ -158,13 +167,13 @@ void KleeHandler::setupOutputFiles(void)
 	klee_message_file = fopen(fname, "w");
 	assert(klee_message_file);
 
-	m_infoFile = openOutputFile("info");
+	m_infoFile =openOutputFile("info");
 }
 
 KleeHandler::~KleeHandler()
 {
-	if (m_symPathWriter) delete m_symPathWriter;
-	delete m_infoFile;
+	m_symPathWriter = nullptr;
+	m_infoFile = nullptr;
 
 	fclose(klee_message_file);
 	fclose(klee_warning_file);
@@ -176,9 +185,10 @@ void KleeHandler::setInterpreter(Interpreter *i)
 
 	if (!WriteSymPaths) return;
 
-	m_symPathWriter = new TreeStreamWriter(getOutputFilename("symPaths.ts"));
+	auto output_fname = getOutputFilename("symPaths.ts");
+	m_symPathWriter = std::make_unique<TreeStreamWriter>(output_fname);
 	assert(m_symPathWriter->good());
-	m_interpreter->setSymbolicPathWriter(m_symPathWriter);
+	m_interpreter->setSymbolicPathWriter(m_symPathWriter.get());
 }
 
 std::string KleeHandler::getOutputFilename(const std::string &filename)
@@ -188,13 +198,14 @@ std::string KleeHandler::getOutputFilename(const std::string &filename)
 	return outfile;
 }
 
-static std::ostream* file_check(std::ostream* os, const std::string& fname)
+static std::unique_ptr<std::ostream> file_check(
+	std::ostream* os, const std::string& fname)
 {
 	if (os == NULL) {
 		klee_error(
 			"error opening file \"%s\" (out of memory)",
 			fname.c_str());
-		return NULL;
+		return nullptr;
 	}
 
 	if (!os->good()) {
@@ -203,24 +214,25 @@ static std::ostream* file_check(std::ostream* os, const std::string& fname)
 			"descriptors: try to increase the max open file "
 			"descriptors by using ulimit.", fname.c_str());
 		delete os;
-		return NULL;
+		return nullptr;
 	}
 
-	return os;
+	return std::unique_ptr<std::ostream>(os);
 }
 
 #define IO_OUT_MODE	std::ios::out | std::ios::trunc | std::ios::binary
 
-std::ostream *KleeHandler::openOutputFileGZ(const std::string &filename)
+std::unique_ptr<std::ostream> KleeHandler::openOutputFileGZ(
+	const std::string &filename)
 {
 	std::ios::openmode io_mode = IO_OUT_MODE;
 	std::string path = getOutputFilename(filename);
 	std::ostream* f = new gzofstream(path.c_str(), io_mode);
-
 	return file_check(f, filename);
 }
 
-std::ostream *KleeHandler::openOutputFile(const std::string &filename)
+std::unique_ptr<std::ostream> KleeHandler::openOutputFile(
+	const std::string &filename)
 {
 	std::ios::openmode io_mode = IO_OUT_MODE;
 	std::string path = getOutputFilename(filename);
@@ -235,7 +247,7 @@ std::string KleeHandler::getTestFilename(const std::string &suffix, unsigned id)
 	return getOutputFilename(filename);
 }
 
-std::ostream *KleeHandler::openTestFileGZ(
+std::unique_ptr<std::ostream> KleeHandler::openTestFileGZ(
 	const std::string &suffix, unsigned id)
 {
 	char filename[1024];
@@ -243,7 +255,8 @@ std::ostream *KleeHandler::openTestFileGZ(
 	return openOutputFileGZ(filename);
 }
 
-std::ostream *KleeHandler::openTestFile(const std::string &suffix, unsigned id)
+std::unique_ptr<std::ostream> KleeHandler::openTestFile(
+	const std::string &suffix, unsigned id)
 {
 	char filename[1024];
 	sprintf(filename, "test%06d.%s", id, suffix.c_str());
@@ -295,9 +308,7 @@ void KleeHandler::processSuccessfulTest(std::ostream* os, out_objs& out)
 void KleeHandler::processSuccessfulTest(
 	const char *name, unsigned id, out_objs &out)
 {
-	std::ostream	*os(openTestFileGZ(name, id));
-	processSuccessfulTest(os, out);
-	if (os != NULL)	delete os;
+	processSuccessfulTest(openTestFileGZ(name, id).get(), out);
 }
 
 bool KleeHandler::getStateSymObjs(
@@ -312,7 +323,7 @@ void KleeHandler::printCWEXML(
 	const ExecutionState &state,
 	const char* errorMessage)
 {
-	std::ostream	*f = openTestFile("xml", m_testIndex - 1);
+	auto		f = openTestFile("xml", m_testIndex - 1);
 	int		cweID;
 
 	if (f == NULL)
@@ -336,8 +347,6 @@ void KleeHandler::printCWEXML(
 		<< " <message_type>controlled_exit</message_type>\n"
 		<< " <test_case>" << WriteCWE << "</test_case>\n"
 		<< "</structured_message>\n";
-
-	delete f;
 }
 
 
@@ -389,10 +398,10 @@ unsigned KleeHandler::processTestCase(
 		const char	*fprefix;
 		fprefix = (state.concretizeCount || state.isPartial)
 			? "pathpart" : "path";
-		if (std::ostream* f = openTestFileGZ(fprefix, id)) {
+		auto f = openTestFileGZ(fprefix, id);
+		if (f) {
 			Replay::writePathFile(
 				(const Executor&)*m_interpreter, state, *f);
-			delete f;
 		} else {
 			LOSING_IT(".path");
 		}
@@ -400,20 +409,13 @@ unsigned KleeHandler::processTestCase(
 
 	if (WriteSMT) {
 		Query	query(state.constraints, MK_CONST(0, Expr::Bool));
-		std::ostream	*f;
-
-		if ((f = openTestFileGZ("smt", id))) {
-			SMTPrinter::print(*f, query);
-			delete f;
-		}
+		auto f = openTestFileGZ("smt", id);
+		if (f) SMTPrinter::print(*f, query);
 	}
 
 	if (state.getNumMinInstKFuncs()) {
-		std::ostream	*f = openTestFileGZ("mininst", id);
-		if (f) {
-			state.printMinInstKFunc(*f);
-			delete f;
-		}
+		auto f = openTestFileGZ("mininst", id);
+		if (f) state.printMinInstKFunc(*f);
 	}
 
 	if (errorMessage || WritePCs)
@@ -425,11 +427,11 @@ unsigned KleeHandler::processTestCase(
 		m_symPathWriter->readStream(
 			m_interpreter->getSymbolicPathStreamID(state),
 			symbolicBranches);
-		if (std::ostream* f = openTestFile("sym.path", id)) {
+		auto f = openTestFile("sym.path", id);
+		if (f) {
 			std::copy(
 				symbolicBranches.begin(), symbolicBranches.end(),
 				std::ostream_iterator<unsigned char>(*f, "\n"));
-			delete f;
 		} else
 			LOSING_IT(".sym.path");
 	}
@@ -437,12 +439,12 @@ unsigned KleeHandler::processTestCase(
 	if (WriteCov) {
 		std::map<const std::string*, std::set<unsigned> > cov;
 		m_interpreter->getCoveredLines(state, cov);
-		if (std::ostream* f = openTestFile("cov", id)) {
+		auto f = openTestFile("cov", id);
+		if (f) {
 			foreach (it, cov.begin(), cov.end()) {
 			foreach (it2, it->second.begin(), it->second.end())
 				*f << *it->first << ":" << *it2 << "\n";
 			}
-			delete f;
 		} else
 			LOSING_IT(".cov");
 	}
@@ -450,10 +452,10 @@ unsigned KleeHandler::processTestCase(
 	if (WriteMem) writeMem(state, id);
 
 	if (WriteTraces) {
-		if (std::ostream* f = openTestFile("trace", id)) {
+		auto f = openTestFile("trace", id);
+		if (f)
 			state.exeTraceMgr.printAllEvents(*f);
-			delete f;
-		} else
+		else
 			LOSING_IT(".trace");
 	}
 
@@ -509,19 +511,16 @@ void KleeHandler::writeMem(const ExecutionState& state, unsigned id)
 void KleeHandler::dumpPCs(const ExecutionState& state, unsigned id)
 {
 	std::string constraints;
-	std::ostream* f;
 
 	state.getConstraintLog(constraints);
-	f = openTestFileGZ("pc", id);
+	auto f = openTestFileGZ("pc", id);
 	if (f == NULL) {
 		klee_warning(
 			"unable to write .pc file, losing it (errno=%d: %s)",
 			errno, strerror(errno));
 		return;
 	}
-
 	*f << constraints;
-	delete f;
 }
 
 static void loadContents(
@@ -606,10 +605,10 @@ void KleeHandler::printErrorMessage(
 	const char* errorSuffix,
 	unsigned id)
 {
-	if (std::ostream* f = openTestFile(errorSuffix, id)) {
+	auto f = openTestFile(errorSuffix, id);
+	if (f)
 		*f << errorMessage;
-		delete f;
-	} else
+	else
 		LOSING_IT("error");
 }
 
@@ -729,7 +728,7 @@ void KleeHandler::printStats(PrefixWriter& info)
 
 void KleeHandler::printInfoFooter(void)
 {
-	TwoOStreams info2s(&std::cerr, m_infoFile);
+	TwoOStreams info2s(&std::cerr, m_infoFile.get());
 	PrefixWriter info(info2s, "KLEE: ");
 
 	printTimes(info, tms, tm, t);
@@ -744,7 +743,7 @@ void KleeHandler::printInfoHeader(int argc, char* argv[])
 		(*m_infoFile) << argv[i] << (i+1<argc ? " ":"\n");
 	}
 
-	TwoOStreams info2s(&std::cerr, m_infoFile);
+	TwoOStreams info2s(&std::cerr, m_infoFile.get());
 	PrefixWriter info(info2s, "KLEE: ");
 	info << "PID: " << getpid() << "\n";
 

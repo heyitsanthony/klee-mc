@@ -141,14 +141,13 @@ private:
 class StatTimer : public Executor::Timer
 {
 public:
-	virtual ~StatTimer() { if (os) delete os;}
-
 protected:
 	StatTimer(Executor *_executor, const char* fname)
 	: executor(_executor)
 	, n(0)
-	{ os = executor->getInterpreterHandler()->openOutputFile(fname);
-	  base_time = util::estWallTime();
+	{
+		os = executor->getInterpreterHandler()->openOutputFile(fname);
+		base_time = util::estWallTime();
 	}
 
 	void run()
@@ -166,7 +165,7 @@ protected:
 
 	double		base_time;
 	Executor	*executor;
-	std::ostream 	*os;
+	std::unique_ptr<std::ostream> os;
 	unsigned	n;
 };
 
@@ -326,12 +325,9 @@ protected:
 
 
 	void printTimes(void) {
-		std::ostream*	f;
-
-		f = executor->getInterpreterHandler()->openOutputFile("qtimes.txt");
+		auto f = executor->getInterpreterHandler()->openOutputFile("qtimes.txt");
 		if (f == NULL) return;
 		StateSolver::dumpTimes(*f);
-		delete f;
 	}
 // stats::queriesTopLevel
 };
@@ -360,9 +356,7 @@ public:
 
 	void run(void)
 	{
-		std::ostream* os;
-
-		os = exe->getInterpreterHandler()->openOutputFile(fname);
+		auto os = exe->getInterpreterHandler()->openOutputFile(fname);
 		if (os == NULL) return;
 
 		foreach (it,
@@ -393,7 +387,6 @@ public:
 				<< ' ' << kbr->getSeenExprs()
 				<< '\n';
 		}
-		delete os;
 	}
 private:
 	const char	*fname;
@@ -420,10 +413,9 @@ public:
 
 	void run(void)
 	{
-		std::ostream* os;
 		KModule*	kmod;
 
-		os = exe->getInterpreterHandler()->openOutputFile(fname);
+		auto os = exe->getInterpreterHandler()->openOutputFile(fname);
 		if (os == NULL) return;
 
 		kmod = exe->getKModule();
@@ -448,7 +440,6 @@ public:
 			/* dump out hexadecimal coverage bitmap */
 			(*os) << kf->getCovStr() << '\n';
 		}
-		delete os;
 	}
 private:
 	const char	*fname;
@@ -467,16 +458,14 @@ public:	\
 	void run(void)	\
 	{	\
 		ExecutionState*	es;	\
-		std::ostream* os;	\
 \
 		es = exe->getCurrentState();	\
 		if (es == NULL) return;	\
 \
-		os = exe->getInterpreterHandler()->openOutputFile(fname);	\
+		auto os = exe->getInterpreterHandler()->openOutputFile(fname);	\
 		if (os == NULL) return;	\
 \
 		es->getBrTracker().z(*os);	\
-		delete os;	\
 	}	\
 private:	\
 	const char	*fname;	\
@@ -501,9 +490,8 @@ public:
 	void run(void)
 	{
 		const KModule	*km;
-		std::ostream	*os;
 
-		os = exe->getInterpreterHandler()->openOutputFile(fname);
+		auto os = exe->getInterpreterHandler()->openOutputFile(fname);
 		if (os == NULL) return;
 
 		km = exe->getKModule();
@@ -519,7 +507,6 @@ public:
 				<< ' ' << kf->getNumExits()
 				<< '\n';
 		}
-		delete os;
 	}
 private:
 	const char	*fname;
@@ -624,9 +611,7 @@ public:
 
 	void run(void)
 	{
-		std::ostream* os;
-
-		os = exe->getInterpreterHandler()->openOutputFile(
+		auto os = exe->getInterpreterHandler()->openOutputFile(
 			"fconds.txt");
 		if (os == NULL) return;
 
@@ -643,7 +628,6 @@ public:
 			(*os) << '"'<< from << "\" -> \"" << to << "\";\n";
 		}
 		(*os) << "\n}\n";
-		delete os;
 	}
 private:
 	Executor* exe;
@@ -703,9 +687,7 @@ void PC##x::run(std::istream& is, std::ostream& os)	\
 
 DECL_PIPECMD(BacktraceStates)
 {
-	std::ostream* of;
-
-	of = exe->getInterpreterHandler()->openOutputFile("tr.txt");
+	auto of = exe->getInterpreterHandler()->openOutputFile("tr.txt");
 	if (of == NULL) {
 		os << "[Backtrace] Couldn't open tr.txt!\n";
 		return;
@@ -714,8 +696,6 @@ DECL_PIPECMD(BacktraceStates)
 	foreach (it, exe->beginStates(), exe->endStates()) {
 		exe->printStackTrace(*(*it), *of);
 	}
-
-	delete of;
 }
 
 class UserCommandTimer : public Executor::Timer
@@ -890,8 +870,7 @@ void Executor::addTimer(Timer *timer, double rate)
 
 void Executor::processTimersDumpStates(void)
 {
-  std::ostream *os = interpreterHandler->openOutputFile("states.txt");
-
+  auto os = interpreterHandler->openOutputFile("states.txt");
   if (!os) goto done;
 
   foreach (it,  stateManager->begin(), stateManager->end()) {
@@ -929,8 +908,6 @@ void Executor::processTimersDumpStates(void)
     *os << ")\n";
   }
 
-  delete os;
-
 done:
   dumpStates = 0;
 }
@@ -945,12 +922,8 @@ void Executor::processTimers(ExecutionState *current, double maxInstTime)
 	if (dumpPTree) {
 		char name[32];
 		sprintf(name, "ptree%08d.dot", (int) stats::instructions);
-		std::ostream *os = interpreterHandler->openOutputFile(name);
-		if (os) {
-			stateManager->getPTree()->dump(*os);
-			delete os;
-		}
-
+		auto os = interpreterHandler->openOutputFile(name);
+		if (os) stateManager->getPTree()->dump(*os);
 		dumpPTree = 0;
 	}
 

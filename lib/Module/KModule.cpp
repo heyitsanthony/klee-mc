@@ -350,10 +350,9 @@ bool KModule::outputTruncSource(
 
 void KModule::outputSource(InterpreterHandler* ih)
 {
-	std::ostream		*os;
 	llvm::raw_os_ostream	*ros;
 
-	os = ih->openOutputFile("assembly.ll");
+	auto os = ih->openOutputFile("assembly.ll");
 	assert(os && os->good() && "unable to open source output");
 
 
@@ -362,12 +361,11 @@ void KModule::outputSource(InterpreterHandler* ih)
 	// We have an option for this in case the user wants a .ll they
 	// to work with kcachegrind
 	if (TruncateSourceLines)
-		outputTruncSource(os, ros);
+		outputTruncSource(os.get(), ros);
 	else
 		*ros << *module;
 
 	delete ros;
-	delete os;
 }
 
 void KModule::dumpModule(void)
@@ -379,11 +377,10 @@ void KModule::dumpModule(void)
 		outputSource(ih);
 
 	if (OutputModule) {
-		std::ostream *f = ih->openOutputFile("final.bc");
+		auto f = ih->openOutputFile("final.bc");
 		llvm::raw_os_ostream* rfs = new llvm::raw_os_ostream(*f);
 		WriteBitcodeToFile(module.get(), *rfs);
 		delete rfs;
-		delete f;
 	}
 }
 
@@ -575,16 +572,14 @@ static void appendFunction(std::ofstream& os, const Function* f)
 
 void KModule::outputFunction(const KFunction *kf)
 {
-	std::ostream		*os;
 	llvm::raw_os_ostream	*ros;
 
-	os = ih->openOutputFile((kf->function->getName().str() + ".ll"));
+	auto os = ih->openOutputFile((kf->function->getName().str() + ".ll"));
 	assert(os && os->good() && "unable to open source output");
 
 	ros = new llvm::raw_os_ostream(*os);
 	*ros << *kf->function;
 	delete ros;
-	delete os;
 }
 
 KFunction* KModule::addFunctionProcessed(Function* f)

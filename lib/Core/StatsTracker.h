@@ -15,6 +15,7 @@
 #include <set>
 #include <list>
 #include <vector>
+#include <memory>
 
 namespace llvm {
   class BranchInst;
@@ -41,7 +42,8 @@ class StatsTracker
     Executor &executor;
     std::string objectFilename;
 
-    std::ostream *statsFile, *istatsFile;
+	std::unique_ptr<std::ostream>	statsFile,
+					istatsFile;
     double startWallTime;
 
     unsigned numBranches;
@@ -78,7 +80,6 @@ public:
 		const KModule* km,
 		std::string _objectFilename,
 		const std::vector<std::string> &excludeCovFiles);
-    ~StatsTracker();
 
     void addKFunction(KFunction*);
 

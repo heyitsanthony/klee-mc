@@ -300,12 +300,8 @@ void KModuleVex::analyzeNewFunction(uint64_t guest_addr, Function* f)
 		ctrl_graph.addFunction(f, guest_ptr(guest_addr));
 		dump_c = (dump_c + 1) % 512;
 		if (dump_c == 0) {
-			std::ostream* of;
-			of = exe->getInterpreterHandler()->openOutputFile("statics.dot");
-			if (of) {
-				ctrl_graph.dumpStatic(*of);
-				delete of;
-			}
+			auto of = exe->getInterpreterHandler()->openOutputFile("statics.dot");
+			if (of) ctrl_graph.dumpStatic(*of);
 		}
 	}
 

@@ -61,8 +61,8 @@ unsigned KleeHandlerVex::processTestCase(
 	const char *errorMessage,
 	const char *errorSuffix)
 {
-	std::ostream	*f;
-	unsigned	id;
+	std::unique_ptr<std::ostream>	f;
+	unsigned			id;
 
 	id = KleeHandler::processTestCase(state, errorMessage, errorSuffix);
 	if (!id) return 0;
@@ -80,28 +80,24 @@ unsigned KleeHandlerVex::processTestCase(
 		/* ESV::logXferReg is similar, I guess.. */
 		const MemoryObject	*mo;
 		const ObjectState	*os;
-		std::ostream		*f;
 		unsigned		sz;
-		uint8_t			*buf;
+		std::vector<uint8_t>	buf;
 
 		mo = es2esvc(state).getRegCtx();
 		os = GETREGOBJRO(state);
 
 		sz = mo->size;
-		buf = new uint8_t[sz*2];
+		buf.resize(sz * 2);
 
-		os->readConcrete(buf, sz);
+		os->readConcrete(buf.data(), sz);
 		for (unsigned i = 0; i < sz; i++)
 			buf[i+sz] = (os->isByteConcrete(i)) ? 0xff : 0;
 
 		f = openTestFile("regs", id);
 		assert (f != NULL);
-		f->write(((const char*)buf), sz);
-		delete f;
+		f->write(((const char*)buf.data()), sz);
 		f = openTestFile("regsmask", id);
-		f->write((const char*)(buf+sz), sz);
-		delete f;
-		delete [] buf;
+		f->write((const char*)(buf.data()+sz), sz);
 	}
 
 
@@ -122,7 +118,6 @@ unsigned KleeHandlerVex::processTestCase(
 	else
 		(*f) << "FAIL #" << id << '\n';
 
-	delete f;
 	return id;
 }
 
@@ -131,7 +126,6 @@ void KleeHandlerVex::dumpLog(
 {
 	const ExeStateVex		*esv;
 	RecordLog::const_iterator	begin, end;
-	std::ostream			*f;
 
 	esv = dynamic_cast<const ExeStateVex*>(&state);
 	assert (esv != NULL);
@@ -140,7 +134,7 @@ void KleeHandlerVex::dumpLog(
 	end = esv->crumbEnd();
 	if (begin == end) return;
 
-	f = openTestFileGZ(name, id);
+	auto f = openTestFileGZ(name, id);
 	if (f == NULL) return;
 
 	foreach (it, begin, end) {
@@ -149,8 +143,6 @@ void KleeHandlerVex::dumpLog(
 			r.begin(), r.end(),
 			std::ostream_iterator<unsigned char>(*f));
 	}
-
-	delete f;
 }
 
 
@@ -165,9 +157,8 @@ void KleeHandlerVex::printErrorMessage(
 	/* don't errdump for early */
 	if (!DumpEarlyErr && strcmp(errorSuffix, "early") == 0) return;
 
-	if (std::ostream* f = openTestFileGZ("errdump", id)) {
+	if (auto f = openTestFileGZ("errdump", id)) {
 		printErrDump(state, *f);
-		delete f;
 	} else
 		LOSING_IT("errdump");
 }

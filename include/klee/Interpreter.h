@@ -12,6 +12,7 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <memory>
 #include <set>
 #include <list>
 #include "Replay.h"
@@ -34,12 +35,13 @@ class InterpreterHandler
 {
 public:
 	InterpreterHandler() {}
-	virtual ~InterpreterHandler() {};
+	virtual ~InterpreterHandler() {}
 
 	virtual std::ostream &getInfoStream() const = 0;
 
 	virtual std::string getOutputFilename(const std::string &filename) = 0;
-	virtual std::ostream *openOutputFile(const std::string &filename) = 0;
+	virtual std::unique_ptr<std::ostream> openOutputFile(
+		const std::string &filename) = 0;
 
 	virtual unsigned getNumTestCases() const = 0;
 	virtual unsigned getNumErrors(void) const = 0;
@@ -51,8 +53,11 @@ public:
 		const ExecutionState &state,
 		const char *err, const char *suffix) = 0;
 
-	virtual bool isWriteOutput(void) const = 0;
-	virtual void setWriteOutput(bool v) = 0;
+	virtual bool isWriteOutput(void) const { return writeOutput; }
+	virtual void setWriteOutput(bool v) { writeOutput = v; }
+
+private:
+	bool writeOutput;
 };
 
 /// ModuleOptions - Module level options which can be set when

@@ -139,8 +139,6 @@ StatsTracker::StatsTracker(
 	const std::vector<std::string> &excludeCovFiles)
 : executor(_executor)
 , objectFilename(_objectFilename)
-, statsFile(0)
-, istatsFile(0)
 , startWallTime(util::estWallTime())
 , numBranches(0)
 , fullBranches(0)
@@ -160,10 +158,10 @@ StatsTracker::StatsTracker(
 			objectFilename = cwd;
 	}
 
-	foreach (fit, excludeCovFiles.begin(), excludeCovFiles.end()) {
-		std::ifstream ifs(fit->c_str());
+	for (auto &f_s : excludeCovFiles) {
+		std::ifstream ifs(f_s.c_str());
 		if (!ifs.good())
-		klee_error("file not found: %s", fit->c_str());
+			klee_error("file not found: %s", f_s.c_str());
 
 		std::string line;
 		while (!ifs.eof()) {
@@ -208,12 +206,6 @@ void StatsTracker::setUpdateMinDist(void)
 	executor.addTimer(
 		new UpdateReachableTimer(this),
 		UncoveredUpdateInterval);
-}
-
-StatsTracker::~StatsTracker()
-{
-	if (statsFile) delete statsFile;
-	if (istatsFile) delete istatsFile;
 }
 
 void StatsTracker::done()
@@ -460,14 +452,9 @@ void StatsTracker::writeStatsLine()
 
 void StatsTracker::updateStateStatistics(uint64_t addend)
 {
-	foreach (
-	it,
-	executor.stateManager->begin(),
-	executor.stateManager->end())
-	{
-		ExecutionState &state = **it;
+	for (auto &st_p : *executor.stateManager) {
+		ExecutionState &state = *st_p;
 		const InstructionInfo &ii = *state.pc->getInfo();
-
 		theStatisticManager->incrementIndexedValue(
 			stats::states, ii.id, addend);
 	}
