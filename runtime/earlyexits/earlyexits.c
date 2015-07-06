@@ -23,3 +23,7 @@ void __hookpre___stack_chk_fail(void* regs)
 
 void __hookpre___fortify_fail(void* regs)
 { klee_uerror("???", "fortify.err"); }
+
+// called on double-free, at least
+void __hookpre_malloc_printerr(void* regs)
+{ klee_uerror((const char*)GET_ARG1(regs), "malloc.err"); }
