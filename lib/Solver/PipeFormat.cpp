@@ -24,18 +24,20 @@ DECL_ARGS(PipeSTP::sat_args) {IOMON_ARGS("stp"), "--SMTLIB1", NULL};
 DECL_ARGS(PipeSTP::mod_args) {IOMON_ARGS("stp"), "-p", "--SMTLIB1", NULL};
 
 const char* PipeBoolector::exec_cmd = IOMON_EXEC("boolector");
-DECL_ARGS(PipeBoolector::sat_args) {IOMON_ARGS("boolector"), NULL};
-DECL_ARGS(PipeBoolector::mod_args) {IOMON_ARGS("boolector"), "-fm", NULL};
+DECL_ARGS(PipeBoolector::sat_args) {
+	IOMON_ARGS("boolector"),
+	"--smt1", "-es=0", "-uc=1", "-ls=0", NULL};
+DECL_ARGS(PipeBoolector::mod_args) {
+	IOMON_ARGS("boolector"),
+	"--smt1", "-es=0",
+	// "-uc=1", conflicts with model generation
+	"-ls=0",
+	"-m",
+	NULL};
 
 const char* PipeZ3::exec_cmd = IOMON_EXEC("z3");
 DECL_ARGS(PipeZ3::sat_args) {IOMON_ARGS("z3"), "-smt", "-in", NULL};
 DECL_ARGS(PipeZ3::mod_args) {IOMON_ARGS("z3"), "-smt", "-in", "-vldt", NULL};
-
-const char* PipeBoolector15::exec_cmd = IOMON_EXEC("boolector-1.5");
-DECL_ARGS(PipeBoolector15::sat_args) 
-	{IOMON_ARGS("boolector-1.5"), "--smt1", NULL};
-DECL_ARGS(PipeBoolector15::mod_args)
-	{IOMON_ARGS("boolector-1.5"), "--smt1", "-fm", NULL};
 
 const char* PipeCVC3::exec_cmd = IOMON_EXEC("cvc3");
 DECL_ARGS(PipeCVC3::sat_args) {	IOMON_ARGS("cvc3"), "-lang", "smt", NULL};
@@ -281,17 +283,18 @@ bool PipeBoolector::parseModel(std::istream& is)
 	if (!parseSAT(line)) return false;
 	if (!is_sat) return true;
 
-	// const_arr1[00000000000000000000000000000110] 00000100
+	// OLD: const_arr1[00000000000000000000000000000110] 00000100
+	// 2.0.7: 2[00000000000000000000000000000110] 00000100 const_arr1
 	while (is.getline(line, 512)) {
 		char		arrname[128];
 		char		idx_bits[128];
 		char		val_bits[128];
 		size_t		sz;
-		uint64_t	idx, val;
+		uint64_t	idx, val, d;
 
-		sz = sscanf(line, "%[^[][%[01]] %[01]",
-			arrname, idx_bits, val_bits);
-		assert (sz == 3);
+		sz = sscanf(line, "%lu[%[01]] %[01] %s",
+			&d, idx_bits, val_bits, arrname);
+		assert (sz == 4);
 
 		idx = bitstr2val(idx_bits);
 		val = bitstr2val(val_bits);

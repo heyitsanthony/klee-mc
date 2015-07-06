@@ -126,7 +126,6 @@ namespace {
 
   cl::opt<bool> UseBoolector("use-boolector", cl::desc("Use boolector solver"));
   cl::opt<bool> UseZ3("use-z3", cl::desc("Use z3 solver"));
-  cl::opt<bool> UseB15("use-b15", cl::desc("Use boolector-1.5 solver"));
   cl::opt<bool> UseCVC3("use-cvc3", cl::desc("Use CVC3 solver (broken)"));
   cl::opt<bool> UseCVC4("use-cvc4", cl::desc("Use CVC4 solver"));
   cl::opt<bool> UseYices("use-yices", cl::desc("Use Yices solver"));
@@ -494,13 +493,11 @@ TimedSolver* TimedSolver::create(void)
 		if (UseYices2) return new PipeSolver(new PipeYices2());
 		if (UseCVC3) return new PipeSolver(new PipeCVC3());
 		if (UseCVC4) return new PipeSolver(new PipeCVC4());
-		if (UseB15) return new PipeSolver(new PipeBoolector15());
 		if (UseBoolector) return new PipeSolver(new PipeBoolector());
 		if (UseZ3) return new PipeSolver(new PipeZ3());
 		return new PipeSolver(new PipeSTP());
 	}
 
-	assert (!UseB15 && "Native B15 not supported");
 	assert (!UseCVC3 && "Native CVC3 not supported");
 	assert (!UseCVC4 && "Native CVC4 not supported");
 	assert (!UseYices && "Natice Yices not supported");
