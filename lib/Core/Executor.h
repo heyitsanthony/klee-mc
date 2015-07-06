@@ -322,11 +322,12 @@ private:
 		int pred,
 		llvm::VectorType* op_type,
 		ref<Expr> left, ref<Expr> right);
-	ref<Expr> sextVector(
+	ref<Expr> extVector(
 		ExecutionState& state,
 		ref<Expr> v,
 		llvm::VectorType* srcTy,
-		llvm::VectorType* dstTy);
+		llvm::VectorType* dstTy,
+		bool is_zext);
 	void instGetElementPtr(ExecutionState& state, KInstruction *ki);
 
 	void instSwitch(ExecutionState& state, KInstruction* ki);

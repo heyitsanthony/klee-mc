@@ -1218,17 +1218,20 @@ ref<Expr> Executor::cmpVector(
 	return result;
 }
 
-ref<Expr> Executor::sextVector(
+ref<Expr> Executor::extVector(
 	ExecutionState& state,
 	ref<Expr> v,
 	VectorType* srcTy,
-	VectorType* dstTy)
+	VectorType* dstTy,
+	bool is_zext)
 {
 	SETUP_VOP_CAST(srcTy, dstTy);
 	for (unsigned int i = 0; i < v_elem_c; i++) {
 		ref<Expr>	cur_elem;
 		cur_elem = MK_EXTRACT(v, i*v_elem_w_src, v_elem_w_src);
-		cur_elem = MK_SEXT(cur_elem, v_elem_w_dst);
+		cur_elem = (is_zext)
+			? MK_ZEXT(cur_elem, v_elem_w_dst)
+			: MK_SEXT(cur_elem, v_elem_w_dst);
 		result = (i == 0)
 			? cur_elem
 			: MK_CONCAT(result, cur_elem);
@@ -1765,27 +1768,23 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     state.bindLocal(ki, result);
     break;
   }
-  case Instruction::ZExt: {
-    CastInst *ci = cast<CastInst>(i);
-    ref<Expr> result(MK_ZEXT(
-      eval(ki, 0, state),
-      kmodule->getWidthForLLVMType(ci->getType())));
-
-    state.bindLocal(ki, result);
-    break;
-  }
+  case Instruction::ZExt:
   case Instruction::SExt: {
-    CastInst 		*ci = cast<CastInst>(i);
-    VectorType		*vt_src, *vt_dst;
-    ref<Expr>		result, evaled(eval(ki, 0, state));
+	bool is_zext = i->getOpcode() == Instruction::ZExt;
+	CastInst 		*ci = cast<CastInst>(i);
+	ref<Expr>		result, evaled(eval(ki, 0, state));
 
-    vt_src = dyn_cast<VectorType>(ci->getSrcTy());
-    vt_dst = dyn_cast<VectorType>(ci->getDestTy());
-    result = (vt_src)
-      	? sextVector(state, evaled, vt_src, vt_dst)
-	: MK_SEXT(evaled, kmodule->getWidthForLLVMType(ci->getType()));
-    state.bindLocal(ki, result);
-    break;
+	auto vt_src = dyn_cast<VectorType>(ci->getSrcTy());
+	auto vt_dst = dyn_cast<VectorType>(ci->getDestTy());
+	result = (vt_src)
+		? extVector(state, evaled, vt_src, vt_dst, is_zext)
+		: ((is_zext)
+			? MK_ZEXT(evaled,
+				kmodule->getWidthForLLVMType(ci->getType()))
+			: MK_SEXT(evaled,
+				kmodule->getWidthForLLVMType(ci->getType())));
+	state.bindLocal(ki, result);
+	break;
   }
 
   case Instruction::PtrToInt:
