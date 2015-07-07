@@ -24,6 +24,9 @@
 #include "SyscallsKTest.h"
 
 #include <sstream>
+
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -55,6 +58,14 @@ struct ReplayInfo
 		return fname_ktest;
 	}
 };
+
+static const char* get_kmc_interp(void)
+{
+	const char	*s;
+	if ((s = getenv("KMC_INTERP_CONC"))) return s;
+	if ((s = getenv("KMC_INTERP_SYM"))) return s;
+	return nullptr;
+}
 
 static void loadSymArgv(Guest* gs, KTestStream* kts)
 {
@@ -230,6 +241,17 @@ static int doInterpreterReplay(const ReplayInfo& ri)
 	argv.push_back(std::string("-output-dir=") + dname);
 
 	argv.push_back("-replay-ktest=" + ri.getKTestPath());
+	if (getenv("KMC_INTERP_SYM")) {
+		// replay using arguments..
+		argv.push_back("-only-replay");
+		argv.push_back("-replay-suppress-forks=false");
+		argv.push_back("-dump-states-on-halt=false");
+		argv.push_back("-use-rule-builder");
+		argv.push_back("-rule-file=used.db");
+		argv.push_back("-use-cache=false");
+		argv.push_back("-use-cex-cache=false");
+	}
+
 	argv.push_back(std::string("-guest-sshot=") + ri.guestdir);
 
 	/* look at ktest to see if symargs/symsargc are expected */
@@ -243,10 +265,19 @@ static int doInterpreterReplay(const ReplayInfo& ri)
 	if (vars.count("argv_1")) argv.push_back("-symargs");
 	if (vars.count("argc_1")) argv.push_back("-symargc");
 
+	/* use hcaches if found */
+	struct stat s;
+	if (stat("hcache", &s) == 0) {
+		argv.push_back("-hcache-dir=hcache");
+		argv.push_back("-hcache-fdir=hcache");
+		argv.push_back("-hcache-pending=hcache");
+		argv.push_back("-use-hash-solver");
+	}
+
 	/* user-defined args */
 	std::stringstream	ss;
 	std::string		arg;
-	ss << getenv("KMC_INTERP");
+	ss << get_kmc_interp();
 	while (ss >> arg) argv.push_back(arg);
 
 	/* convert to argv[] for execvp() */
@@ -345,7 +376,7 @@ int main(int argc, char* argv[])
 		ri.guestdir = xchk_guest;
 	}
 
-	if (getenv("KMC_INTERP")) {
+	if (get_kmc_interp()) {
 		err = doInterpreterReplay(ri);
 	} else {
 		err = doJITReplay(ri);
