@@ -15,32 +15,38 @@ class Crumbs;
 class ReplayMismatch
 {
 public:
-	virtual void print(std::ostream& os) = 0;
+	virtual void print(std::ostream& os) const = 0;
 	virtual ~ReplayMismatch() {}
-	Guest* getGuest(void) const { return gs; }
+	Guest& getGuest(void) const { return gs; }
 protected:
-	ReplayMismatch(Guest *_gs) : gs(_gs) {}
-	Guest	*gs;
+	ReplayMismatch(Guest &_gs) : gs(_gs) {}
+	Guest	&gs;
 };
 
 class MultiReplayMismatch : public ReplayMismatch
 {
 public:
 	static ReplayMismatch* create(const std::vector<ReplayMismatch*>& v);
-	virtual void print(std::ostream& os);
-	virtual ~MultiReplayMismatch();
+	virtual void print(std::ostream& os) const {
+		for (auto &rm : m) rm->print(os);
+	}
+
 protected:
 	MultiReplayMismatch(const std::vector<ReplayMismatch*>& _m)
-	: ReplayMismatch(_m[0]->getGuest())
-	, m(_m) {}
+		: ReplayMismatch(_m[0]->getGuest())
+	{
+		for (auto rm : _m) {
+			m.push_back(std::unique_ptr<ReplayMismatch>(rm));
+		}
+	}
 private:
-	std::vector<ReplayMismatch*>	m;
+	std::vector<std::unique_ptr<ReplayMismatch>>	m;
 };
 
 class MemReplayMismatch : public ReplayMismatch
 {
 public:
-	MemReplayMismatch(Guest* _gs,
+	MemReplayMismatch(Guest& _gs,
 		void*	_base,
 		uint8_t* _sym_obj,
 		unsigned _len)
@@ -48,8 +54,9 @@ public:
 	, base(_base)
 	, sym_obj(_sym_obj)
 	, len(_len) {}
+
 	virtual ~MemReplayMismatch() { delete [] sym_obj; }
-	virtual void print(std::ostream& os);
+	virtual void print(std::ostream& os) const;
 private:
 	void		*base;
 	uint8_t		*sym_obj;
@@ -59,12 +66,12 @@ private:
 class StackReplayMismatch : public ReplayMismatch
 {
 public:
-	StackReplayMismatch(Guest* _gs, uint8_t* _sym_stk, unsigned _len)
+	StackReplayMismatch(Guest& _gs, uint8_t* _sym_stk, unsigned _len)
 	: ReplayMismatch(_gs)
 	, sym_stk(_sym_stk)
 	, len(_len) {}
 	virtual ~StackReplayMismatch() { delete [] sym_stk; }
-	virtual void print(std::ostream& os);
+	virtual void print(std::ostream& os) const;
 private:
 	uint8_t		*sym_stk;
 	unsigned	len;
@@ -73,12 +80,12 @@ private:
 class RegReplayMismatch : public ReplayMismatch
 {
 public:
-	RegReplayMismatch(Guest* _gs, uint8_t* reg_m)
+	RegReplayMismatch(Guest& _gs, uint8_t* reg_m)
 	: ReplayMismatch(_gs)
 	, reg_mismatch(reg_m) { assert (reg_m != NULL); }
 
 	virtual ~RegReplayMismatch(void) { delete [] reg_mismatch; }
-	virtual void print(std::ostream& os);
+	virtual void print(std::ostream& os) const;
 private:
 	uint8_t	*reg_mismatch;
 };

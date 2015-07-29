@@ -95,11 +95,11 @@ void ReplayExec::verifyOrPanic(VexSB* last_dispatched)
 	exit(-1);
 }
 
-void StackReplayMismatch::print(std::ostream& os)
+void StackReplayMismatch::print(std::ostream& os) const
 {
 	const uint8_t	*guest_stk;
 
-	guest_stk = (uint8_t*)gs->getCPUState()->getStackPtr().o;
+	guest_stk = (uint8_t*)gs.getCPUState()->getStackPtr().o;
 
 	os << "============doVexSB Stack Mismatch!============\n";
 	os << "Stack Address = " << (void*)guest_stk << '\n';
@@ -118,7 +118,7 @@ void StackReplayMismatch::print(std::ostream& os)
 	std::cerr << '\n';
 }
 
-void MemReplayMismatch::print(std::ostream& os)
+void MemReplayMismatch::print(std::ostream& os) const
 {
 	const uint8_t	*guest_obj = (uint8_t*)base;
 
@@ -139,19 +139,19 @@ void MemReplayMismatch::print(std::ostream& os)
 	std::cerr << '\n';
 }
 
-void RegReplayMismatch::print(std::ostream& os)
+ void RegReplayMismatch::print(std::ostream& os) const
 {
 	const uint8_t	*vex_regs;
-	unsigned	cpu_len = gs->getCPUState()->getStateSize();
+	unsigned	cpu_len = gs.getCPUState()->getStateSize();
 
 	os << "============doVexSB Mismatch!============\n";
 	os << "VEXEXEC (now running): \n";
-	gs->getCPUState()->print(os);
+	gs.getCPUState()->print(os);
 	os << "\nKLEE-MC (previously ran): \n";
-	gs->getCPUState()->print(std::cerr, reg_mismatch);
+	gs.getCPUState()->print(std::cerr, reg_mismatch);
 	std::cerr << "\n";
 
-	vex_regs = (const uint8_t*)gs->getCPUState()->getStateData();
+	vex_regs = (const uint8_t*)gs.getCPUState()->getStateData();
 
 	os << "VEX: ----------------\n";
 	dumpBuf(vex_regs, cpu_len);
@@ -355,7 +355,7 @@ RegReplayMismatch* ReplayExec::regChk(const struct regchk_t& rc)
 
 		new_reg_ctx = new uint8_t[rc.reg_sz];
 		memcpy(new_reg_ctx, rc.sym_reg, rc.reg_sz);
-		return new RegReplayMismatch(gs, new_reg_ctx);
+		return new RegReplayMismatch(*gs, new_reg_ctx);
 	}
 
 	return NULL;
@@ -377,7 +377,7 @@ MemReplayMismatch* ReplayExec::memChk(const struct regchk_t& rc)
 		new_reg_ctx = new uint8_t[rc.reg_sz];
 		memcpy(new_reg_ctx, rc.sym_reg, rc.reg_sz);
 		return new MemReplayMismatch(
-			gs, rc.guest_reg, new_reg_ctx, rc.reg_sz);
+			*gs, rc.guest_reg, new_reg_ctx, rc.reg_sz);
 	}
 
 	return NULL;
@@ -398,18 +398,11 @@ StackReplayMismatch* ReplayExec::stackChk(const struct regchk_t& rc)
 
 		new_reg_ctx = new uint8_t[rc.reg_sz];
 		memcpy(new_reg_ctx, rc.sym_reg, rc.reg_sz);
-		return new StackReplayMismatch(gs, new_reg_ctx, rc.reg_sz);
+		return new StackReplayMismatch(*gs, new_reg_ctx, rc.reg_sz);
 	}
 
 	return NULL;
 }
-
-MultiReplayMismatch::~MultiReplayMismatch(void)
-{ foreach (it, m.begin(), m.end()) delete (*it); }
-
-void MultiReplayMismatch::print(std::ostream& os)
-{ foreach (it, m.begin(), m.end()) (*it)->print(os); }
-
 
 ReplayMismatch* MultiReplayMismatch::create(
 	const std::vector<ReplayMismatch*>& v)
