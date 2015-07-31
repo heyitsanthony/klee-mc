@@ -27,7 +27,7 @@ class MultiReplayMismatch : public ReplayMismatch
 {
 public:
 	static ReplayMismatch* create(const std::vector<ReplayMismatch*>& v);
-	virtual void print(std::ostream& os) const {
+	void print(std::ostream& os) const override {
 		for (auto &rm : m) rm->print(os);
 	}
 
@@ -56,7 +56,7 @@ public:
 	, len(_len) {}
 
 	virtual ~MemReplayMismatch() { delete [] sym_obj; }
-	virtual void print(std::ostream& os) const;
+	void print(std::ostream& os) const override;
 private:
 	void		*base;
 	uint8_t		*sym_obj;
@@ -71,7 +71,7 @@ public:
 	, sym_stk(_sym_stk)
 	, len(_len) {}
 	virtual ~StackReplayMismatch() { delete [] sym_stk; }
-	virtual void print(std::ostream& os) const;
+	void print(std::ostream& os) const override;
 private:
 	uint8_t		*sym_stk;
 	unsigned	len;
@@ -85,7 +85,7 @@ public:
 	, reg_mismatch(reg_m) { assert (reg_m != NULL); }
 
 	virtual ~RegReplayMismatch(void) { delete [] reg_mismatch; }
-	virtual void print(std::ostream& os) const;
+	void print(std::ostream& os) const override;
 private:
 	uint8_t	*reg_mismatch;
 };
@@ -99,9 +99,9 @@ public:
 	ReplayExec(Guest* gs, std::shared_ptr<VexXlate> vx = nullptr);
 
 protected:
-	virtual guest_ptr doVexSB(VexSB* sb);
-	virtual void doTrap(VexSB* sb);
-	virtual void doSysCall(VexSB* sb);
+	guest_ptr doVexSB(VexSB* sb) override;
+	void doTrap(VexSB* sb) override;
+	void doSysCall(VexSB* sb) override;
 
 private:
 	struct regchk_t {

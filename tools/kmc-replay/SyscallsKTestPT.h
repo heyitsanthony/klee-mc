@@ -10,10 +10,10 @@ class SyscallsKTestPT : public SyscallsKTest
 public:
 	virtual ~SyscallsKTestPT(void);
 	SyscallsKTestPT(const SyscallsKTest* sckt);
-	virtual uint64_t apply(SyscallParams& sp);
+	uint64_t apply(SyscallParams& sp) override;
 protected:
-	virtual bool copyInRegMemObj(void);
-	virtual void setRet(uint64_t r);
+	bool copyInRegMemObj(void) override;
+	void setRet(uint64_t r) override;
 
 private:
 	bool			ret_set;

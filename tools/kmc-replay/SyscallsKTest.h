@@ -22,7 +22,7 @@ friend class SyscallsKTestPT;
 public:
 	static SyscallsKTest* create(Guest*, klee::KTestStream*, klee::Crumbs*);
 	virtual ~SyscallsKTest();
-	virtual uint64_t apply(SyscallParams& sp);
+	uint64_t apply(SyscallParams& sp) override;
 
 
 	static bool copyInRegMemObj(Guest* gs, klee::KTestStream*);

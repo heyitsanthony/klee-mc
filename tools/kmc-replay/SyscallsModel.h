@@ -21,7 +21,7 @@ public:
 		const char* model_file,
 		klee::KTestStream* kts, Guest* in_g);
 	virtual ~SyscallsModel();
-	virtual uint64_t apply(SyscallParams& sp);
+	uint64_t apply(SyscallParams& sp) override;
 
 	Guest* getGuest(void) const { return guest; }
 	klee::KTestStream* getKTestStream(void) const { return kts; }
