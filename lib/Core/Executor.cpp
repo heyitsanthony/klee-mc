@@ -1166,17 +1166,14 @@ void Executor::instCmp(ExecutionState& state, KInstruction *ki)
 	v_elem_w = (x)->getBitWidth() / v_elem_c;
 
 /* FIXME: cheaper way to do this (e.g. left == right => spit out constant expr?) */
-#define V_OP_APPEND(y)		V_OP(y, ConcatExpr::create(result, op_i))
-#define V_OP_PREPEND(y)		V_OP(y, ConcatExpr::create(op_i, result))
-#define V_OP(y,z)						\
+#define V_OP(y)							\
 	for (unsigned int i = 0; i < v_elem_c; i++) {		\
 		ref<Expr>	left_i, right_i;		\
 		ref<Expr>	op_i;				\
 		left_i = MK_EXTRACT(left, i*v_elem_w, v_elem_w);\
 		right_i = MK_EXTRACT(right, i*v_elem_w, v_elem_w); \
 		op_i = y##Expr::create(left_i, right_i);	\
-		if (i == 0) result = op_i;			\
-		else result = z; }
+		result = (i == 0) ? op_i : MK_CONCAT(op_i, result); }
 
 #define SETUP_VOP_CAST(x,y)					\
 	ref<Expr>	result;					\
@@ -1200,7 +1197,7 @@ ref<Expr> Executor::cmpVector(
 	assert (right->getWidth() > 0);
 
 	switch(pred) {
-#define VCMP_OP(x, y) case ICmpInst::x: V_OP_APPEND(y); break;
+#define VCMP_OP(x, y) case ICmpInst::x: V_OP(y); break;
 	VCMP_OP(ICMP_EQ, Eq)
 	VCMP_OP(ICMP_NE, Ne)
 	VCMP_OP(ICMP_UGT, Ugt)
@@ -1234,7 +1231,7 @@ ref<Expr> Executor::extVector(
 			: MK_SEXT(cur_elem, v_elem_w_dst);
 		result = (i == 0)
 			? cur_elem
-			: MK_CONCAT(result, cur_elem);
+			: MK_CONCAT(cur_elem, result);
 	}
 
 	return result;
@@ -1683,7 +1680,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
     vt = dyn_cast<VectorType>(ki->getInst()->getOperand(0)->getType()); \
     if (vt) { 				\
 	SETUP_VOP(vt);			\
-	V_OP_PREPEND(x);		\
+	V_OP(x);			\
 	state.bindLocal(ki, result);	\
 	break;				\
     }					\
@@ -1718,7 +1715,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
 	vt = dyn_cast<VectorType>(ki->getInst()->getOperand(0)->getType()); \
 	if (vt) { 						\
 		SETUP_VOP(vt);					\
-		V_OP_PREPEND(x);				\
+		V_OP(x);					\
 		ok_state->bindLocal(ki, result);		\
 		break;						\
 	}							\
