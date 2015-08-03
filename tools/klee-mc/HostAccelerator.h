@@ -31,7 +31,7 @@ private:
 	void readSHM(
 		ExeStateVex& s,
 		const std::vector<ObjectPair>& objs);
-	void setupSHM(ExeStateVex& s, std::vector<ObjectPair>& objs);
+	bool setupSHM(ExeStateVex& s, std::vector<ObjectPair>& objs);
 	void stepInstructions(pid_t child_pid);
 	void fixupHWShadow(
 		const ExecutionState& state, ExecutionState& shadow);
@@ -47,8 +47,12 @@ private:
 
 	void			*vdso_base;
 
-	unsigned		bad_reg_c, partial_run_c, full_run_c,
-				crashed_kleehw_c, badexit_kleehw_c;
+	unsigned		bad_reg_c,
+				partial_run_c,
+				full_run_c,
+				crashed_kleehw_c,
+				badexit_kleehw_c,
+				bad_shmget_c;
 
 	int			pipefd[2];
 	int			child_pid;

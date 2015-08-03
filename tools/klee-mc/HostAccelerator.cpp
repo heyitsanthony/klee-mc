@@ -40,6 +40,7 @@ HostAccelerator::HostAccelerator(void)
 , vdso_base(NULL)
 , bad_reg_c(0), partial_run_c(0), full_run_c(0), crashed_kleehw_c(0)
 , badexit_kleehw_c(0)
+, bad_shmget_c(0)
 , xchk_ok_c(0), xchk_miss_c(0), xchk_bad_c(0)
 {
 	pipefd[1] = -1;
@@ -70,8 +71,15 @@ HostAccelerator::~HostAccelerator()
 void HostAccelerator::releaseSHM(void)
 {
 	if (shm_id == -1) return;
-	shmdt(shm_addr);
+	int err = shmdt(shm_addr);
+	if (err != 0) {
+		std::cerr << "[HostAccelerator] ReleaseSHM failed: "
+			  << strerror(errno) << '\n';
+	}
+
 	shm_id = -1;
+	shm_page_c = 0;
+	shm_addr = nullptr;
 }
 
 /* XXX: super busted */
@@ -154,9 +162,9 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 	/* find vdso so we can unmap it later */
 	/* TODO: no longer need to do this post KLEE-VDSO */
 	if (vdso_base == NULL) {
-		foreach (it, esv.addressSpace.begin(), esv.addressSpace.end()){
-			if (it->first->name == "[vdso]") {
-				vdso_base = (void*)it->first->address;
+		for (auto &p : esv.addressSpace){
+			if (p.first->name == "[vdso]") {
+				vdso_base = (void*)p.first->address;
 				break;
 			}
 		}
@@ -174,7 +182,12 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 	if (HWAccelFresh) killChild();
 	if (pipefd[1] == -1) setupChild();
 
-	setupSHM(esv, objs);
+	if (setupSHM(esv, objs) == false) {
+		DEBUG_HOSTACCEL(std::cerr <<
+			"[hwaccel] Failed to allocate SHM.\n");
+		bad_shmget_c++;
+		return HA_NONE;
+	}
 	writeSHM(objs);
 
 	/* start tracing while program is sleeping on pipe */
@@ -444,16 +457,16 @@ void HostAccelerator::writeSHM(const std::vector<ObjectPair>& objs)
 }
 
 
-void HostAccelerator::setupSHM(ExeStateVex& esv, std::vector<ObjectPair>& objs)
+bool HostAccelerator::setupSHM(ExeStateVex& esv, std::vector<ObjectPair>& objs)
 {
 	unsigned	os_bytes = 0, header_bytes = 0;
 	uint64_t	next_page = 0;
 	unsigned	new_page_c;
 
 	/* collect all concrete object states and compute total space needed */
-	foreach (it, esv.addressSpace.begin(), esv.addressSpace.end()) {
-		const MemoryObject	*mo_c(it->first);
-		const ObjectState	*os_c(it->second);
+	for (auto &p : esv.addressSpace) {
+		const MemoryObject	*mo_c(p.first);
+		const ObjectState	*os_c(p.second);
 
 		if (mo_c->address < next_page) {
 			DEBUG_HOSTACCEL(std::cerr <<
@@ -495,17 +508,19 @@ void HostAccelerator::setupSHM(ExeStateVex& esv, std::vector<ObjectPair>& objs)
 	if (new_page_c < shm_page_c) goto done;
 
 	releaseSHM();
-	shm_page_c = new_page_c;
 
 	/* build and map shm */
 	/* XXX: /proc/sys/kernel/shmmax is too small?
 	 * echo 134217728 >/proc/sys/kerne/shmmax */
 	shm_id = shmget(
 		IPC_PRIVATE,
-		shm_page_c*PAGE_SIZE,
+		new_page_c * PAGE_SIZE,
 		IPC_CREAT | IPC_EXCL | SHM_R | SHM_W);
-	assert (shm_id != -1);
+	if (shm_id == -1) {
+		return false;
+	}
 
+	shm_page_c = new_page_c;
 	shm_addr = shmat(shm_id, NULL, SHM_RND);
 	assert (shm_addr != (void*)-1);
 
@@ -517,6 +532,7 @@ void HostAccelerator::setupSHM(ExeStateVex& esv, std::vector<ObjectPair>& objs)
 
 done:
 	shm_payload = (void*)&shm_maps[objs.size()+1];
+	return true;
 }
 
 
@@ -529,10 +545,9 @@ bool HostAccelerator::xchk(const ExecutionState& es_hw, ExecutionState& es_klee)
 
 	std::cerr << "[HWAccelXChk] Instructions: " <<
 		es_klee.personalInsts << '\n';
-	foreach (it, es_klee.addressSpace.begin(), es_klee.addressSpace.end())
-	{
-		const MemoryObject	*mo(it->first);
-		const ObjectState	*os(it->second), *os2;
+	for (auto &p : es_klee.addressSpace) {
+		const MemoryObject	*mo(p.first);
+		const ObjectState	*os(p.second), *os2;
 
 		os2 = es_hw.addressSpace.findObject(mo);
 		assert (os2 != NULL);
