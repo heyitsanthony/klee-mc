@@ -10,6 +10,14 @@ uint64_t	heap_begin;
 uint64_t	 heap_end;
 static void	*last_brk = 0;
 
+static void map_fixed_addr(void* addr, unsigned page_c)
+{
+	unsigned i;
+	// klee_print_expr("non-highmem define fixed addr", addr);
+	for (i = 0; i < page_c; i++) {
+		klee_define_fixed_object((char*)addr+(i*4096), 4096);
+	}
+}
 
 /* IMPORTANT: this will just *allocate* some data,
  * if you want symbolic, do it after calling this */
@@ -20,11 +28,8 @@ static void* sc_mmap_addr(void* addr, uint64_t len, int flags)
 	is_himem = (((intptr_t)addr & ~0x7fffffffffffULL) != 0);
 	if (!is_himem) {
 		/* not highmem, use if we've got it.. */
-		unsigned	i;
 		addr = concretize_ptr(addr);
-		// klee_print_expr("non-highmem define fixed addr", addr);
-		for (i = 0; i < (len+4095)/4096; i++)
-			klee_define_fixed_object((char*)addr+(i*4096), 4096);
+		map_fixed_addr(addr, (len + 4095) / 4096);
 		return addr;
 	}
 
@@ -252,6 +257,12 @@ void* sc_brk(void* regfile)
 		new_space = new_addr - heap_end;
 		if (new_space < 0) {
 			/* we can satisfy this request-- enough space */
+			last_brk = (void*)new_addr;
+		} else {
+			/* allocate more space for heap end */
+			unsigned	new_pgs = (new_space + 4095) / 4096;
+			map_fixed_addr((void*)heap_end, new_pgs);
+			heap_end += new_pgs * 4096;
 			last_brk = (void*)new_addr;
 		}
 	}
