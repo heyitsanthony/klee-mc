@@ -13,13 +13,12 @@ class SymMMU : public MMU
 public:
 	SymMMU(Executor& exe, const std::string& type);
 	SymMMU(Executor& exe);
-	virtual ~SymMMU(void);
 
-	virtual bool exeMemOp(ExecutionState &state, MemOp& mop);
-	virtual void signal(ExecutionState& state, void* addr, uint64_t len);
+	bool exeMemOp(ExecutionState &state, MemOp& mop) override;
+	void signal(ExecutionState& state, void* addr, uint64_t len) override;
 private:
 	void initModule(Executor& exe, const std::string& type);
-	SoftMMUHandlers	*mh;
+	std::unique_ptr<SoftMMUHandlers>	mh;
 };
 }
 

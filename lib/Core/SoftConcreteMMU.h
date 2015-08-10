@@ -14,7 +14,7 @@ public:
 	SoftConcreteMMU(Executor& exe);
 	virtual ~SoftConcreteMMU(void);
 
-	virtual bool exeMemOp(ExecutionState &state, MemOp& mop);
+	bool exeMemOp(ExecutionState &state, MemOp& mop) override;
 
 	void tlbInsert(ExecutionState& state, const void* addr, uint64_t len);
 	void tlbInvalidate(
@@ -24,7 +24,6 @@ public:
 	static const std::string& getType(void);
 private:
 	void initModule(Executor& exe);
-	SoftMMUHandlers		*mh;
 	static SoftConcreteMMU	*singleton;
 	ConcreteMMU		*cmmu;
 };

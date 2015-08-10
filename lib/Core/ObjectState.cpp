@@ -473,7 +473,11 @@ ref<Expr> ObjectState::readConstantBytes(
 {
 	uint64_t	ret = 0;
 
+	assert (offset + NumBytes <= size);
+
+	/* confirm all bytes in read are concrete */
 	if (!isConcrete()) {
+		/* page isn't concrete; scan read bytes. */
 		for (unsigned i = 0; i != NumBytes; ++i) {
 			if (!isByteConcrete(offset+i)) {
 				return NULL;

@@ -4,16 +4,16 @@
 
 using namespace klee;
 
+#define MOP_BYTES	Expr::getMinBytesForWidth(mop.getType(exe.getKModule()))
+
 bool ConcreteMMU::exeMemOp(ExecutionState &state, MemOp& mop)
 {
-	const ConstantExpr	*ce;
-
 	if (mop.address->getKind() != Expr::Constant) {
 		/* ignore non-const addresses */
 		return false;
 	}
 
-	ce = cast<ConstantExpr>(mop.address);
+	auto ce = cast<ConstantExpr>(mop.address);
 	exeConstMemOp(state, mop, ce->getZExtValue());
 	return true;
 }
@@ -23,18 +23,15 @@ void ConcreteMMU::exeConstMemOp(
 	MemOp		&mop,
 	uint64_t	addr)
 {
-	Expr::Width	type;
-	unsigned	byte_c;
 	ObjectPair	op;
+	unsigned	byte_c = MOP_BYTES;
 
-	type = mop.getType(exe.getKModule());
-	if (lookup(state, addr, type, op)) {
+	if (lookup(state, addr, byte_c, op)) {
 		/* fast, full-width path */
 		commitMOP(state, mop, op, addr);
 		return;
 	}
 
-	byte_c = Expr::getMinBytesForWidth(type);
 	if (byte_c != 1) {
 		if (mop.isWrite) {
 			if (slowPathWrite(state, mop, addr))
@@ -58,21 +55,16 @@ bool ConcreteMMU::slowPathRead(
 	MemOp		&mop,
 	uint64_t	addr)
 {
-	Expr::Width	type;
-	unsigned	byte_c;
+	unsigned	byte_c = MOP_BYTES;
 	ref<Expr>	r_val;
 
-	type = mop.getType(exe.getKModule());
-	byte_c = Expr::getMinBytesForWidth(type);
 	for (unsigned i = 0; i < byte_c; i++, addr++) {
 		ObjectPair	op;
-		uint64_t	off;
 
-		if (lookup(state, addr, 8, op) == false)
+		if (lookup(state, addr, 1, op) == false)
 			return false;
 
-		off = op.first->getOffset(addr);
-		ref<Expr> r(state.read(op.second, off, 8));
+		auto r(state.read(op.second, op.first->getOffset(addr), 8));
 		if (r_val.isNull()) r_val = r;
 		else r_val = MK_CONCAT(r, r_val);
 	}
@@ -86,22 +78,13 @@ bool ConcreteMMU::slowPathWrite(
 	MemOp		&mop,
 	uint64_t	addr)
 {
-	Expr::Width	type;
-	unsigned	byte_c;
+	unsigned	byte_c = MOP_BYTES;
 
-	type = mop.getType(exe.getKModule());
-	byte_c = Expr::getMinBytesForWidth(type);
 	for (unsigned i = 0; i < byte_c; i++, addr++) {
-		ObjectState 	*wos;
 		ObjectPair	op;
-		uint64_t	off;
 
-		if (lookup(state, addr, 8, op) == false)
+		if (lookup(state, addr, 1, op) == false)
 			return false;
-
-		off = op.first->getOffset(addr);
-
-		ref<Expr>	byte_val(MK_EXTRACT(mop.value, 8*i, 8));
 
 		if (op.second->readOnly) {
 			TERMINATE_ERROR(&exe, state,
@@ -110,9 +93,11 @@ bool ConcreteMMU::slowPathWrite(
 			return false;
 		}
 
-		wos = state.addressSpace.getWriteable(op);
-		state.write(wos, off, byte_val);
+		state.write(	state.addressSpace.getWriteable(op),
+				op.first->getOffset(addr),
+				MK_EXTRACT(mop.value, 8 * i, 8));
 	}
+
 	return true;
 }
 
@@ -123,16 +108,14 @@ void ConcreteMMU::commitMOP(
 	ObjectPair	&op,
 	uint64_t	addr)
 {
-	ObjectState 	*wos;
-	uint64_t	off;
-	Expr::Width	type;
-
-	off = op.first->getOffset(addr);
-	type = mop.getType(exe.getKModule());
+	uint64_t	off = op.first->getOffset(addr);
 
 	if (mop.isWrite == false) {
-		ref<Expr> r(state.read(op.second, off, type));
-		state.bindLocal(mop.target, r);
+		state.bindLocal(mop.target,
+				state.read(
+					op.second,
+					off,
+					mop.getType(exe.getKModule())));
 		return;
 	}
 	
@@ -143,23 +126,19 @@ void ConcreteMMU::commitMOP(
 		return;
 	}
 
-	wos = state.addressSpace.getWriteable(op);
-	state.write(wos, off, mop.value);
+	state.write(state.addressSpace.getWriteable(op), off, mop.value);
 }
 
 bool ConcreteMMU::lookup(
 	ExecutionState& state,
 	uint64_t addr,
-	unsigned type,
+	unsigned byte_c,
 	ObjectPair& op)
 {
-	unsigned	bytes;
 	bool		tlb_hit, in_bounds;
 
-	bytes = Expr::getMinBytesForWidth(type);
-
 	tlb_hit = tlb.get(state, addr, op);
-	if (tlb_hit && op.first->isInBounds(addr, bytes))
+	if (tlb_hit && op.first->isInBounds(addr, byte_c))
 		return true;
 
 	if (state.addressSpace.resolveOne(addr, op) == false) {
@@ -168,7 +147,7 @@ bool ConcreteMMU::lookup(
 	}
 	tlb.put(state, op);
 
-	in_bounds = op.first->isInBounds(addr, bytes);
+	in_bounds = op.first->isInBounds(addr, byte_c);
 	if (in_bounds == false) {
 		/* not in bounds */
 		return false;

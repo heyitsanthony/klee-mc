@@ -18,7 +18,7 @@ namespace {
 
 void SymMMU::initModule(Executor& exe, const std::string& mmu_type)
 {
-	mh = new SoftMMUHandlers(exe, mmu_type);
+	mh = std::make_unique<SoftMMUHandlers>(exe, mmu_type);
 	assert (mh != NULL);
 
 	std::cerr << "[SymMMU] Using '" << mmu_type << "'\n";
@@ -34,8 +34,6 @@ SymMMU::SymMMU(Executor& exe, const std::string& type)
 : MMU(exe)
 { initModule(exe, type); }
 
-
-SymMMU::~SymMMU(void) { delete mh; }
 
 bool SymMMU::exeMemOp(ExecutionState &state, MemOp& mop)
 {

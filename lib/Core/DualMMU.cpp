@@ -9,9 +9,9 @@ using namespace klee;
 DualMMU::DualMMU(Executor& exe)
 : MMU(exe)
 , mmu_conc(
-	MMU::isSoftConcreteMMU()
-	? (MMU*)new SoftConcreteMMU(exe)
-	: (MMU*)new ConcreteMMU(exe))
+	(MMU::isSoftConcreteMMU()
+		? (MMU*)new SoftConcreteMMU(exe)
+		: (MMU*)new ConcreteMMU(exe)))
 , mmu_sym((MMU::isSymMMU())
 	? (MMU*)new SymMMU(exe)
 	: (MMU*)new KleeMMU(exe))
@@ -22,12 +22,6 @@ DualMMU::DualMMU(Executor& exe, MMU* mmu_first, MMU* mmu_second)
 , mmu_conc(mmu_first)
 , mmu_sym(mmu_second) {}
 
-
-DualMMU::~DualMMU(void)
-{
-	delete mmu_sym;
-	delete mmu_conc;
-}
 
 bool DualMMU::exeMemOp(ExecutionState &state, MemOp& mop)
 {
@@ -43,7 +37,9 @@ DualMMU* DualMMU::create(MMU* normal_mmu, MMU* slow_mmu)
 
 	if (dmmu != NULL) {
 		/* keep fast path on top */
-		dmmu->mmu_sym = new DualMMU(exe, slow_mmu, dmmu->mmu_sym);
+		auto old_mmu = dmmu->mmu_sym.release();
+		auto new_mmu = new DualMMU(exe, slow_mmu, old_mmu);
+		dmmu->mmu_sym = std::unique_ptr<MMU>(new_mmu);
 		return dmmu;
 	}
 

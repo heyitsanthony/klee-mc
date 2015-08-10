@@ -10,17 +10,15 @@ class DualMMU : public MMU
 public:
 	DualMMU(Executor& exe);
 
-	virtual ~DualMMU(void);
-
 	static DualMMU* create(MMU* normal_mmu, MMU* slow_mmu);
 
-	virtual bool exeMemOp(ExecutionState &state, MemOp& mop);
-	virtual void signal(ExecutionState& state, void* addr, uint64_t len);
+	bool exeMemOp(ExecutionState &state, MemOp& mop) override;
+	void signal(ExecutionState& state, void* addr, uint64_t len) override;
 protected:
 	DualMMU(Executor& exe, MMU* fast_path, MMU* slow_path);
 private:
-	MMU	*mmu_conc;
-	MMU	*mmu_sym;
+	std::unique_ptr<MMU>	mmu_conc;
+	std::unique_ptr<MMU>	mmu_sym;
 };
 }
 

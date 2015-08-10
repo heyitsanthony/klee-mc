@@ -14,7 +14,7 @@ public:
 
 	// do address resolution / object binding / out of bounds checking
 	// and perform the operation
-	virtual bool exeMemOp(ExecutionState &state, MemOp& mop);
+	bool exeMemOp(ExecutionState &state, MemOp& mop) override;
 
 	void commitMOP(
 		ExecutionState	&state,
@@ -25,7 +25,7 @@ public:
 	bool lookup(
 		ExecutionState& state,
 		uint64_t addr,
-		unsigned type,
+		unsigned byte_c,
 		ObjectPair& op);
 
 private:
