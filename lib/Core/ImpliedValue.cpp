@@ -230,15 +230,13 @@ static void getFoundMap(
 	const ImpliedValueList	&results,
 	foundmap_ty		&found)
 {
-	foreach (i, results.begin(), results.end()) {
-		foundmap_ty::iterator it;
-
-		it = found.find(i->first);
+	for (const auto &result : results) {
+		auto it = found.find(result.first);
 		if (it != found.end()) {
-			assert(it->second == i->second &&
+			assert(it->second == result.second &&
 				"Invalid ImpliedValue!");
 		} else {
-			found.insert(std::make_pair(i->first, i->second));
+			found.insert(result);
 		}
 	}
 }
@@ -260,8 +258,8 @@ ConstraintManager getBoundConstraints(
 	// invalid counterexamples because STP will happily make out of
 	// bounds indices which will not get picked up. this is of utmost
 	// importance if we are being backed by the CexCachingSolver.
-	foreach (i, reads.begin(), reads.end()) {
-		ReadExpr *re = i->get();
+	for (const auto &r : reads) {
+		ReadExpr *re = r.get();
 		assumption.push_back(
 			MK_ULT(
 				re->index,
@@ -293,9 +291,7 @@ void ImpliedValue::checkForImpliedValues(
 
 	ConstraintManager assume(getBoundConstraints(e, value, reads));
 
-	foreach (i, reads.begin(), reads.end()) {
-		std::map<ref<ReadExpr>, ref<ConstantExpr> >::iterator it;
-		ref<ReadExpr>		var = *i;
+	for (const auto &var : reads) {
 		ref<ConstantExpr>	possible;
 		bool			ok, res;
 
@@ -305,7 +301,7 @@ void ImpliedValue::checkForImpliedValues(
 		ok = S->mustBeTrue(Query(assume, MK_EQ(var, possible)), res);
 		assert(ok && "FIXME: Unhandled solver failure");
 
-		it = found.find(var);
+		auto it = found.find(var);
 		if (res) {
 			if (it != found.end()) {
 				assert(	possible == it->second &&
@@ -322,7 +318,7 @@ void ImpliedValue::checkForImpliedValues(
 					<< "\t\t implies "
 					<< var << " == " << binding
 					<< " (error)\n";
-			assert(0);
+			abort();
 		}
 	}
 
@@ -335,29 +331,24 @@ void ImpliedValue::ivcMem(
 {
 	ExprReplaceVisitor	erv(re, ce);
 
-	foreach (it, as.begin(), as.end()) {
-		const MemoryObject	*mo;
-		const ObjectState	*os;
+	for (const auto &op : as) {
+		const ObjectState	*os = op.second;
 		ObjectState		*wos = NULL;
 
-		os = (*it).second;
 		if (os->isConcrete())
 			continue;
 
-		mo = it->first;
-		for (unsigned i = 0; i < mo->size; i++) {
-			ref<Expr>	e, e_new;
-
+		for (unsigned i = 0; i < os->getSize(); i++) {
 			if (os->isByteKnownSymbolic(i) == false)
 				continue;
 
-			e = os->read8(i);
-			e_new = erv.apply(e);
+			auto e = os->read8(i);
+			auto e_new = erv.apply(e);
 			if (e->hash() == e_new->hash())
 				continue;
 
 			if (wos == NULL) {
-				wos = as.getWriteable((*it));
+				wos = as.getWriteable(op);
 				os = wos;
 			}
 			wos->write(i, e_new);
@@ -370,9 +361,8 @@ void ImpliedValue::ivcStack(
 	CallStack& stk,
 	const ref<Expr>& re, const ref<ConstantExpr>& ce)
 {
-	foreach (it, stk.begin(), stk.end()) {
+	for (auto &sf : stk) {
 		ExprReplaceVisitor	erv(re, ce);
-		StackFrame		&sf(*it);
 
 		if (sf.kf == NULL || sf.isClear())
 			continue;
