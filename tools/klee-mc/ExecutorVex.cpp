@@ -544,16 +544,14 @@ void ExecutorVex::setupProcessMemory(ExecutionState* state, Function* f)
 MemoryObject* ExecutorVex::allocRegCtx(ExecutionState* state, Function* f)
 {
 	MemoryObject	*mo;
-	unsigned int	state_regctx_sz;
 	static unsigned id = 0;
 
-	state_regctx_sz = gs->getCPUState()->getStateSize();
 
 	if (f == NULL) f = state->getCurrentKFunc()->function;
 	assert (f != NULL);
 
 	mo = memory->allocate(
-		state_regctx_sz,
+		gs->getCPUState()->getStateSize(),
 		false, true,
 		f->begin()->begin(),
 		state);
@@ -1021,11 +1019,10 @@ llvm::Function* ExecutorVex::getFuncByAddr(uint64_t addr)
 
 unsigned ExecutorVex::getExitType(const ExecutionState& state) const
 {
-	unsigned	exit_off;
 	ref<Expr>	e;
 
-	exit_off = gs->getCPUState()->getStateSize()-1;
-	e = state.read8(GETREGOBJRO(state), exit_off);
+	e = state.read8(GETREGOBJRO(state),
+			gs->getCPUState()->getExitTypeOffset());
 	assert (e->getKind() == Expr::Constant);
 
 	return (GuestExitType)(cast<ConstantExpr>(e)->getZExtValue());
