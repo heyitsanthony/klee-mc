@@ -58,15 +58,12 @@ void ImpliedValue::getImpliedValues(
 
 	case Expr::Select: {
 		// not much to do, could improve with range analysis
-		SelectExpr *se = cast<SelectExpr>(e);
-		ConstantExpr	*TrueCE, *FalseCE;
+		SelectExpr		*se = cast<SelectExpr>(e);
+		ref<ConstantExpr>	TrueCE, FalseCE;
 
 		TrueCE = dyn_cast<ConstantExpr>(se->trueExpr);
-		if (TrueCE == NULL)
-			break;
-
 		FalseCE = dyn_cast<ConstantExpr>(se->falseExpr);
-		if (FalseCE == NULL)
+		if (TrueCE.isNull() || FalseCE.isNull())
 			break;
 
 		if (TrueCE == FalseCE)
@@ -168,14 +165,15 @@ void ImpliedValue::getImpliedValues(
 		BinaryExpr *be = cast<BinaryExpr>(e);
 
 		if (value->isZero()) {
-			ref<ConstantExpr>	z(MK_CONST(0, e->getWidth()));
-
-			getImpliedValues(be->left, z, results);
-			getImpliedValues(be->right, z, results);
+			// (x | y) == 0 => x == y == 0
+			getImpliedValues(be->left, value, results);
+			getImpliedValues(be->right, value, results);
 			break;
 		}
 
 		// FIXME: Can do more?
+		// Could do byte-level analysis (bit-level won't yield much)
+		// byte0 | byte1 == 0 => byte0 == byte1 == 0
 		break;
 	}
 	case Expr::Xor: {
@@ -190,13 +188,16 @@ void ImpliedValue::getImpliedValues(
 		value = value->Not();
 		/* fallthru */
 	case Expr::Eq: {
-		EqExpr		*ee = cast<EqExpr>(e);
-		ConstantExpr	*CE;
+		const auto	ee = cast<EqExpr>(e);
+		const auto	CE = dyn_cast<ConstantExpr>(ee->left);
 		bool		isTrue;
 
-		CE = dyn_cast<ConstantExpr>(ee->left);
+		if (CE == nullptr) {
+			break;
+		}
+
 		isTrue = value->isTrue();
-		if (isTrue && CE != NULL) {
+		if (isTrue) {
 			getImpliedValues(ee->right, CE, results);
 			break;
 		}
@@ -209,13 +210,12 @@ void ImpliedValue::getImpliedValues(
 		// booleans, is as the result of a select expression
 		// where the true and false branches are single valued
 		// and distinct.
-
-		if (	isTrue == false &&
-			CE != NULL &&
-			CE->getWidth() == Expr::Bool)
-		{
+		assert(!isTrue);
+		if (CE->getWidth() == Expr::Bool) {
 			getImpliedValues(ee->right, CE->Not(), results);
+			break;
 		}
+
 		break;
 	}
 
