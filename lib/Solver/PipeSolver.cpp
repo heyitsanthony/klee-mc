@@ -288,7 +288,9 @@ bool PipeSolverSession::writeQueryToChild(const Query& q)
 			dump_badquery(q, "badsend");
 	} else {
 		ok = os->flush();
-		assert (ok);
+		if (!ok) {
+			std::cerr << TAG"FAILED TO FLUSH SMT (watchdog?)\n";
+		}
 	}
 	delete os;
 
