@@ -12,7 +12,7 @@ class ForksKTest : public Forks
 {
 public:
 	ForksKTest(Executor& exe)
-	: Forks(exe), kt(0), kt_assignment(0)
+	: Forks(exe), kt(0)
 	, make_err_tests(true)
 	, cheap_fork_c(0) {}
 
@@ -31,12 +31,14 @@ protected:
 	bool isBadOverflow(ExecutionState& current);
 	virtual bool updateSymbolics(ExecutionState& current);
 	virtual void addBinding(ref<Array>& a, std::vector<uint8_t>& v);
-	const Assignment* getCurrentAssignment(void) { return kt_assignment; }
+	const Assignment* getCurrentAssignment(void) const {
+		return kt_assignment.get();
+	}
 
 	int findCondIndex(const struct ForkInfo& fi, bool& non_const);
 private:
 	const KTest	*kt;
-	Assignment	*kt_assignment;
+	std::unique_ptr<Assignment> kt_assignment;
 	std::vector<ref<Array> > arrs;
 	unsigned	base_objs;
 	bool		make_err_tests;

@@ -1274,13 +1274,13 @@ void Executor::forkSwitch(
 	caseDests[0] = defaultTarget.first;
 	caseConds[0] = defaultTarget.second;
 	index = 1;
-	foreach (mit, targets.begin(), targets.end()) {
-		caseDests[index] = (*mit).second.first;
-		caseConds[index] = (*mit).second.second;
+	for (const auto &mit : targets) {
+		caseDests[index] = mit.second.first;
+		caseConds[index] = mit.second.second;
 		index++;
 	}
 
-	resultStates = fork(state, caseConds.size(), caseConds.data(), false);
+	resultStates = fork(state, caseConds, false);
 	assert(resultStates.size() == caseConds.size());
 
 	found = false;
@@ -2731,9 +2731,10 @@ Executor::StatePair Executor::fork(
 
 Executor::StateVector Executor::fork(
 	ExecutionState &current,
-	unsigned N, ref<Expr> conditions[], bool isInternal,
+	std::vector<ref<Expr>> conditions,
+	bool isInternal,
 	bool isBranch)
-{ return forking->fork(current, N, conditions, isInternal, isBranch); }
+{ return forking->fork(current, conditions, isInternal, isBranch); }
 
 bool Executor::hasState(const ExecutionState* es) const
 {

@@ -26,16 +26,16 @@ bool ForksSeeding::forkSetup(ExecutionState& current, struct ForkInfo& fi)
 	// when conditions are mutually exclusive and their conjunction is
 	// a tautology).
 	// This partitions the seed set for the current state
-	foreach (siit, it->second.begin(), it->second.end()) {
+	for (auto const &seed : it->second) {
 		unsigned i;
 
-		assert (fi.N);
-		for (i = 0; i < fi.N; ++i) {
+		assert (fi.size());
+		for (i = 0; i < fi.size(); ++i) {
 			ref<ConstantExpr>	seedCondRes;
 			bool			ok;
 			ok = exe.getSolver()->getValue(
 				current,
-				siit->assignment.evaluate(fi.conditions[i]),
+				seed.assignment.evaluate(fi.conditions[i]),
 				seedCondRes);
 			assert(ok && "FIXME: Unhandled solver failure");
 			if (seedCondRes->isTrue())
@@ -44,15 +44,15 @@ bool ForksSeeding::forkSetup(ExecutionState& current, struct ForkInfo& fi)
 
 		// If we didn't find a satisfying condition, randomly pick one
 		// (the seed will be patched).
-		if (i == fi.N) i = theRNG.getInt32() % fi.N;
+		if (i == fi.size()) i = theRNG.getInt32() % fi.size();
 
-		fi.getResSeeds()[i].push_back(*siit);
+		fi.getResSeeds()[i].push_back(seed);
 	}
 
 	// Clear any valid conditions at seeding rejects
 	if ((fi.forkDisabled || Replay::isReplayOnly()) && fi.validTargets > 1) {
 		fi.validTargets = 0;
-		for (unsigned i = 0; i < fi.N; i++) {
+		for (unsigned i = 0; i < fi.size(); i++) {
 			if (fi.getResSeeds()[i].empty()) fi.res[i] = false;
 			if (fi.res[i]) fi.validTargets++;
 		}

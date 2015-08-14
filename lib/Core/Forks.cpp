@@ -130,13 +130,13 @@ Executor::StatePair
 Forks::fork(ExecutionState &s, ref<Expr> cond, bool isInternal)
 {
 	Executor::StateVector	results;
-	ref<Expr>		conds[2];
+	std::vector<ref<Expr>>	conds(2);
 
 	// set in forkSetupNoSeeding, if possible
 	//  conditions[0] = Expr::createIsZero(condition);
 	conds[1] = cond;
 
-	results = fork(s, 2, conds, isInternal, true);
+	results = fork(s, conds, isInternal, true);
 	lastFork = std::make_pair(
 		results[1] /* first label in br => true */,
 		results[0] /* second label in br => false */);
@@ -147,7 +147,7 @@ Forks::fork(ExecutionState &s, ref<Expr> cond, bool isInternal)
 Executor::StatePair Forks::forkUnconditional(
 	ExecutionState &s, bool isInternal)
 {
-	ref<Expr>		conds[2];
+	std::vector<ref<Expr>>	conds(2);
 	Executor::StateVector	results;
 
 	conds[0] = MK_CONST(1, 1);
@@ -155,7 +155,7 @@ Executor::StatePair Forks::forkUnconditional(
 
 	/* NOTE: not marked as branch so that branch optimization is not
 	 * applied-- giving it (true, true) would result in only one branch! */
-	results = fork(s, 2, conds, isInternal, false);
+	results = fork(s, conds, isInternal, false);
 	lastFork = std::make_pair(
 		results[1] /* first label in br => true */,
 		results[0] /* second label in br => false */);
@@ -165,7 +165,7 @@ Executor::StatePair Forks::forkUnconditional(
 void Forks::ForkInfo::dump(std::ostream& os) const
 {
 	os << "ForkInfo: {\n";
-	for (unsigned i = 0; i < N; i++) {
+	for (unsigned i = 0; i < size(); i++) {
 		if (conditions[i].isNull())
 			continue;
 		os << "COND[" << i << "]: "  << conditions[i] << '\n';
@@ -231,14 +231,14 @@ void Forks::skipAndRandomPrune(struct ForkInfo& fi, const char* reason)
 		reason);
 
 	randIndex = (theRNG.getInt32() % fi.validTargets) + 1;
-	for (condIndex = 0; condIndex < fi.N; condIndex++) {
+	for (condIndex = 0; condIndex < fi.size(); condIndex++) {
 		if (fi.res[condIndex]) randIndex--;
 		if (!randIndex) break;
 	}
 
-	assert(condIndex < fi.N);
+	assert(condIndex < fi.size());
 	fi.validTargets = 1;
-	fi.res.assign(fi.N, false);
+	fi.res.assign(fi.size(), false);
 	fi.res[condIndex] = true;
 }
 
@@ -248,12 +248,11 @@ void Forks::skipAndRandomPrune(struct ForkInfo& fi, const char* reason)
 Executor::StateVector
 Forks::fork(
 	ExecutionState &current,
-        unsigned N,
-	ref<Expr> conditions[],
+	const std::vector<ref<Expr>> &conditions,
         bool isInternal,
 	bool isBranch)
 {
-	ForkInfo	fi(conditions, N);
+	ForkInfo	fi(conditions);
 
 	/* limit runaway branches */
 	fi.forkDisabled = current.forkDisabled;
@@ -269,9 +268,9 @@ Forks::fork(
 
 	/* find feasible forks */
 	if (evalForks(current, fi) == false) {
-		if (fi.conditions != NULL)
+		if (fi.size())
 			TERMINATE_EARLY(&exe, current, "fork query timed out");
-		return Executor::StateVector(N, NULL);
+		return Executor::StateVector(fi.size(), NULL);
 	}
 
 	// need a copy telling us whether or not we need to add
@@ -281,10 +280,10 @@ Forks::fork(
 	assert(fi.validTargets && "invalid set of fork conditions");
 
 	if (forkSetup(current, fi) == false)
-		return Executor::StateVector(N, NULL);
+		return Executor::StateVector(fi.size(), NULL);
 
 	if (makeForks(current, fi) == false)
-		return Executor::StateVector(N, NULL);
+		return Executor::StateVector(fi.size(), NULL);
 
 	constrainForks(current, fi);
 
@@ -321,7 +320,7 @@ bool Forks::evalForkBranch(ExecutionState& s, struct ForkInfo& fi)
 		result == Solver::Unknown);
 
 	fi.validTargets = (result == Solver::Unknown) ? 2 : 1;
-	if (fi.validTargets > 1) {
+	if (fi.validTargets > 1 && fi.conditions[0].isNull()) {
 		/* branch on both true and false conditions */
 		fi.conditions[0] = Expr::createIsZero(fi.conditions[1]);
 	}
@@ -338,7 +337,7 @@ bool Forks::evalForks(ExecutionState& current, struct ForkInfo& fi)
 
 	assert (fi.isBranch == false);
 
-	for (unsigned int condIndex = 0; condIndex < fi.N; condIndex++) {
+	for (unsigned int condIndex = 0; condIndex < fi.size(); condIndex++) {
 		ConstantExpr	*CE;
 		bool		result;
 
@@ -397,10 +396,10 @@ bool Forks::setupForkAffinity(
 	} else if (preferTrueState) {
 		/* nothing-- default prefers true */
 	} else if (RandomizeFork) {
-		for (unsigned i = 0; i < fi.N; i++) {
+		for (unsigned i = 0; i < fi.size(); i++) {
 			unsigned	swap_idx, swap_val;
 
-			swap_idx = theRNG.getInt32() % fi.N;
+			swap_idx = theRNG.getInt32() % fi.size();
 			swap_val = cond_idx_map[swap_idx];
 			cond_idx_map[swap_idx] = cond_idx_map[i];
 			cond_idx_map[i] = swap_val;
@@ -413,15 +412,15 @@ bool Forks::setupForkAffinity(
 bool Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 {
 	ExecutionState	**curStateUsed = NULL;
-	unsigned	cond_idx_map[fi.N];
+	unsigned	cond_idx_map[fi.size()];
 
-	for (unsigned i = 0; i < fi.N; i++)
+	for (unsigned i = 0; i < fi.size(); i++)
 		cond_idx_map[i] = i;
 
 	if (setupForkAffinity(current, fi, cond_idx_map) == false)
 		return false;
 
-	for (unsigned int i = 0; i < fi.N; i++) {
+	for (unsigned int i = 0; i < fi.size(); i++) {
 		ExecutionState	*newState, *baseState;
 		unsigned	condIndex;
 
@@ -474,16 +473,15 @@ typedef std::map<Expr::Hash, ref<Expr> > xtion_map;
 void Forks::trackTransitions(const ForkInfo& fi)
 {
 	static xtion_map	eh;
-	xtion_map::iterator	x_it;
 
 	/* Track forking condition transitions */
-	for (unsigned i = 0; i < fi.N; i++) {
+	for (unsigned i = 0; i < fi.size(); i++) {
 		ref<Expr>	new_cond;
 		ExecutionState	*cur_st;
 
 		if (!fi.res[i]) continue;
 
-		x_it = eh.find(fi.conditions[i]->hash());
+		auto x_it = eh.find(fi.conditions[i]->hash());
 		if (x_it == eh.end()) {
 			new_cond = condFilter->apply(fi.conditions[i]);
 			x_it = eh.insert(
@@ -530,9 +528,11 @@ bool Forks::addConstraint(struct ForkInfo& fi, unsigned condIndex)
 	if (curState->isCompact())
 		return true;
 
+	// nothing to fork
 	if (fi.feasibleTargets == 0)
 		return true;
 
+	// must fork
 	if (	fi.feasibleTargets > 1 || 
 		(	omit_valid_constraints == false &&
 			!fi.conditions[condIndex].isNull()))
@@ -554,8 +554,16 @@ bool Forks::addConstraint(struct ForkInfo& fi, unsigned condIndex)
 	 * implied by the former constraints, IVC can help if
 	 * the constraint is more precise
 	 * (e.g.  3<x<5 vs x==4) */
-	ref<Expr>	cond(fi.conditions[1]);
-	if (condIndex == 0) cond = Expr::createIsZero(cond);
+
+	ref<Expr>	cond(fi.conditions[condIndex]);
+	if (	cond.isNull() &&
+		condIndex == 0 &&
+		!fi.conditions[1].isNull())
+	{
+		// XXX WTF??
+		cond = Expr::createIsZero(fi.conditions[1]);
+	}
+	assert(!cond.isNull());
 
 	exe.doImpliedValueConcretization(*curState, cond, MK_CONST(1, 1));
 	return true;
@@ -611,7 +619,7 @@ void Forks::constrainForks(ExecutionState& current, struct ForkInfo& fi)
 {
 	// Loop for bookkeeping
 	// (loops must be separate since states are forked from each other)
-	for (unsigned int condIndex = 0; condIndex < fi.N; condIndex++) {
+	for (unsigned int condIndex = 0; condIndex < fi.size(); condIndex++) {
 		constrainFork(current, fi, condIndex);
 	}
 }
@@ -697,7 +705,7 @@ private:
 	mergearr_ty	merge_arrs;
 };
 
-Forks::~Forks(void) { delete condFilter; }
+Forks::~Forks(void) { }
 
 Forks::Forks(Executor& _exe)
 : exe(_exe)
@@ -708,7 +716,7 @@ Forks::Forks(Executor& _exe)
 , is_quench(QuenchRunaways)
 , omit_valid_constraints(true)
 {
-	condFilter = new ExprTimer<MergeArrays>(1000);
+	condFilter = std::make_unique<ExprTimer<MergeArrays>>(1000);
 }
 
 

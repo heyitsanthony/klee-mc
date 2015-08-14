@@ -115,7 +115,7 @@ int ForksKTest::findCondIndex(const struct ForkInfo& fi, bool& non_const)
 	non_const = false;
 
 	/* find + steer to condition which ktest satisfies */
-	for (unsigned i = 0; i < fi.N; i++) {
+	for (unsigned i = 0; i < fi.size(); i++) {
 		ref<Expr>	cond_eval;
 
 		if (fi.res[i] == false)
@@ -162,7 +162,7 @@ bool ForksKTest::setupForkAffinity(
 	return true;
 }
 
-ForksKTest::~ForksKTest() { if (kt_assignment) delete kt_assignment; }
+ForksKTest::~ForksKTest() { }
 
 void ForksKTest::setKTest(const KTest* _kt, const ExecutionState* es_base)
 {
@@ -170,8 +170,7 @@ void ForksKTest::setKTest(const KTest* _kt, const ExecutionState* es_base)
 	std::vector<const Array*>			arr;
 
 	kt = _kt;
-	if (kt_assignment) delete kt_assignment;
-	kt_assignment = new Assignment(true);
+	kt_assignment = std::make_unique<Assignment>(true);
 
 	arrs.clear();
 	base_objs = 0;
@@ -303,26 +302,26 @@ bool ForksKTest::evalForks(ExecutionState& current, struct ForkInfo& fi)
 
 	fi.forkDisabled = true;
 
-	if (!suppressForks || !fi.conditions || isBadOverflow(current))
+	if (!suppressForks || !fi.size() || isBadOverflow(current))
 		return Forks::evalForks(current, fi);
 
 	if (KTestTimeout && wt.checkSecs() > KTestTimeout) {
 		std::cerr << "[KTest] Time out "<< &current <<'\n';
 		exe.printStackTrace(current, std::cerr);
 		exe.terminate(current);
-		fi.conditions = NULL;
+		fi.conditions.clear();
 		return false;
 	}
 
 	setConstraintOmit(false);
 
 	/* assume all conds are feasible so findCondIndex checks everything */
-	fi.res.assign(true, fi.N);
+	fi.res.assign(true, fi.size());
 	if (fi.conditions[0].isNull())
 		fi.conditions[0] = Expr::createIsZero(fi.conditions[1]);
 	i = findCondIndex(fi, non_const);
 	/* drop assumptions */
-	fi.res.assign(false, fi.N);
+	fi.res.assign(false, fi.size());
 
 	/* KILL ALL PATHS */
 	if (non_const == true) {
@@ -336,21 +335,21 @@ bool ForksKTest::evalForks(ExecutionState& current, struct ForkInfo& fi)
 			exe.terminate(current);
 		} else
 			kh->incPathsExplored();
-		fi.res.assign(fi.N, false);
-		fi.conditions = NULL;
+		fi.res.assign(fi.size(), false);
+		fi.conditions.clear();
 		return false;
 	}
 
 	if (i >= 0 && !fi.conditions[i].isNull()) {
 		cheap_fork_c++;
-		fi.res.assign(fi.N, false);
+		fi.res.assign(fi.size(), false);
 		fi.replayTargetIdx = i;
 		fi.res[i] = true;
 		fi.validTargets = 1;
 
 		// Suppress forking; constraint will be added to path
 		// after forkSetup is complete.
-		for (unsigned j = 0; j < fi.N; j++)
+		for (unsigned j = 0; j < fi.size(); j++)
 			if (j != fi.replayTargetIdx)
 				fi.conditions[j] = MK_CONST(0,1);
 

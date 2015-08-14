@@ -32,7 +32,7 @@ bool ForksPathReplay::forkFollowReplay(ExecutionState& es, struct ForkInfo& fi)
 	fi.replayTargetIdx = es.peekReplay();
 
 	// Verify that replay target matches current path constraints
-	if (fi.replayTargetIdx > fi.N) {
+	if (fi.replayTargetIdx > fi.size()) {
 		TERMINATE_ERROR(&exe, es, "replay out of range", "branch.err");
 		// assert (targetIndex <= fi.N && "replay target out of range");
 		return false;
@@ -44,7 +44,7 @@ bool ForksPathReplay::forkFollowReplay(ExecutionState& es, struct ForkInfo& fi)
 		if (	suppressForks ||
 			es.totalInsts < Replay::getMaxSuppressInst())
 		{
-			fi.res.assign(fi.N, false);
+			fi.res.assign(fi.size(), false);
 		}
 		fi.res[fi.replayTargetIdx] = true;
 
@@ -58,7 +58,7 @@ bool ForksPathReplay::forkFollowReplay(ExecutionState& es, struct ForkInfo& fi)
 		<< ", replay targets=";
 
 	bool first = true;
-	for(unsigned i = 0; i < fi.N; i++) {
+	for(unsigned i = 0; i < fi.size(); i++) {
 		if (!fi.res[i]) continue;
 		if (!first) ss << ",";
 		ss << i;

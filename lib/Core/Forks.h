@@ -20,32 +20,29 @@ public:
 	struct ForkInfo
 	{
 		typedef std::vector<std::list<SeedInfo> > resseeds_ty;
-		ForkInfo(
-			ref<Expr>* in_conditions,
-			unsigned int in_N)
-		: resStates(in_N, NULL)
-		, res(in_N, false)
-		, conditions(in_conditions)
-		, N(in_N)
-		, feasibleTargets(0)
-		, validTargets(0)
-		, forkedTargets(0)
-		, forkCompact(false)
-		, resSeeds(0)
-		{}
-		~ForkInfo(void) { if (resSeeds) delete resSeeds; }
-		void dump(std::ostream& os) const;
 
-		resseeds_ty& getResSeeds(void)
-		{
-			if (resSeeds == NULL) resSeeds = new resseeds_ty(N);
+		ForkInfo(const std::vector<ref<Expr>>& in_conditions)
+			: resStates(in_conditions.size(), NULL)
+			, res(in_conditions.size(), false)
+			, conditions(in_conditions)
+			, feasibleTargets(0)
+			, validTargets(0)
+			, forkedTargets(0)
+			, forkCompact(false)
+		{}
+		~ForkInfo(void) {}
+		void dump(std::ostream& os) const;
+		unsigned size(void) const { return conditions.size(); }
+
+		resseeds_ty& getResSeeds(void) {
+			if (resSeeds) return *resSeeds;
+			resSeeds = std::make_unique<resseeds_ty>(size());
 			return *resSeeds;
 		}
 
 		Executor::StateVector	resStates;
 		std::vector<bool>	res;
-		ref<Expr>		*conditions;
-		unsigned int		N;
+		std::vector<ref<Expr>>	conditions;
 		unsigned int		feasibleTargets;
 		unsigned int		validTargets;
 		unsigned		forkedTargets;
@@ -57,7 +54,7 @@ public:
 		bool			forkCompact;
 	private:
 		ForkInfo(const ForkInfo& fi);
-		resseeds_ty		*resSeeds;
+		std::unique_ptr<resseeds_ty> resSeeds;
 	};
 
 	Forks(Executor& _exe);
@@ -65,7 +62,8 @@ public:
 
 	Executor::StateVector fork(
 		ExecutionState &current,
-		unsigned N, ref<Expr> conditions[], bool isInternal,
+		const std::vector<ref<Expr>> &conditions,
+		bool isInternal,
 		bool isBranch = false);
 	Executor::StatePair fork(
 		ExecutionState &current,
@@ -130,7 +128,7 @@ private:
 	bool			preferFalseState;
 	condxfer_ty		condXfer;
 	succ_ty			hasSucc;
-	ExprVisitor		*condFilter;
+	std::unique_ptr<ExprVisitor> condFilter;
 	Executor::StatePair	lastFork;
 	bool			is_quench;
 	bool			omit_valid_constraints;

@@ -125,7 +125,8 @@ public:
   ExecutionState* pureFork(ExecutionState& es, bool compact = false);
   StateVector fork(
 	ExecutionState &current,
-	unsigned N, ref<Expr> conditions[], bool isInternal,
+	std::vector<ref<Expr>> conditions,
+	bool isInternal,
 	bool isBranch = false);
 
 	/* kf = NULL => exhaust state, return whether got function */

@@ -74,18 +74,18 @@ bool SeedCore::executeGetValueSeeding(
 	Executor::StateVector		branches;
 	std::vector< ref<Expr> >	conditions;
 
-	foreach (vit, values.begin(), values.end())
-		conditions.push_back(EqExpr::create(e, *vit));
+	for (const auto &vit : values)
+		conditions.push_back(MK_EQ(e, vit));
 
-	branches = exe->fork(st, conditions.size(), conditions.data(), true);
+	branches = exe->fork(st, conditions, true);
 	if (target == NULL)
 		return true;
 
 	Executor::StateVector::iterator	bit(branches.begin());
-	foreach (vit, values.begin(), values.end()) {
+	for (const auto &vit : values) {
 		ExecutionState	*es(*bit);
 		++bit;
-		if (es) es->bindLocal(target, *vit);
+		if (es) es->bindLocal(target, vit);
 	}
 
 	return true;
