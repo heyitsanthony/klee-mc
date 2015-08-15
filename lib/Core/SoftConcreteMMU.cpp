@@ -99,7 +99,7 @@ bool SoftConcreteMMU::exeMemOp(ExecutionState &state, MemOp& mop)
 		op.second = state.addressSpace.findObject(op.first);
 
 	/* XXX: I don't like calling this range check here */
-	if ((mop.getType(exe.getKModule())/8 + op.first->getOffset(addr))
+	if ((mop.getType(exe.getKModule()) + op.first->getOffset(addr))
 		<= op.second->getSize())
 	{
 		cmmu->commitMOP(state, mop, op, addr);
