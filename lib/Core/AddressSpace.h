@@ -75,8 +75,8 @@ public:
 
 	AddressSpace(const AddressSpace &b)
 	: cowKey(++b.cowKey)
-	, os_generation(0)
-	, mo_generation(0)
+	, os_generation(b.os_generation)
+	, mo_generation(b.mo_generation)
 	, last_mo(NULL)
 	, objects(b.objects)
 	{ }
