@@ -32,14 +32,23 @@ uint64_t ImpliedValue::ivc_stack_cells = 0;
 
 // XXX we really want to do some sort of canonicalization of exprs
 // globally so that cases below become simpler
+// XXX this recursive mess can be converted to use one of the nice
+// expr crawlers that won't blow up at large depths.
 void ImpliedValue::getImpliedValues(
 	ref<Expr> e,
-	ref<ConstantExpr> value,
+	const ref<ConstantExpr> value,
 	ImpliedValueList &results)
 {
 	switch (e->getKind()) {
 	case Expr::Constant:
-		assert(	value == cast<ConstantExpr>(e) &&
+		if(e != value) {
+		std::cerr << "num results ivc: " << results.size() << '\n';
+		for (const auto &res : results) {
+			std::cerr << res.first << "==" << res.second << '\n';
+		}
+		std::cerr << "value: " << value << " vs " << e << '\n';
+		}
+		assert(	e == value &&
 			"error in implied value calculation");
 		break;
 

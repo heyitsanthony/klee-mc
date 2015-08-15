@@ -36,7 +36,7 @@ class ImpliedValue
 public:
 	static void getImpliedValues(
 		ref<Expr> e,
-		ref<ConstantExpr> cvalue,
+		const ref<ConstantExpr> cvalue,
 		ImpliedValueList &result);
 	static void checkForImpliedValues(
 		Solver *S, ref<Expr> e, ref<ConstantExpr> cvalue);
