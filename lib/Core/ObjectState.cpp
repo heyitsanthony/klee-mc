@@ -111,7 +111,6 @@ ObjectState::~ObjectState()
 {
 	assert (!isZeroPage() || (size && this == zero_page.get()));
 	RMV_FROM_LIST;
-	size = 0;
 }
 
 const UpdateList &ObjectState::getUpdates() const
@@ -478,16 +477,17 @@ ref<Expr> ObjectState::readConstantBytes(
 	/* confirm all bytes in read are concrete */
 	if (!isConcrete()) {
 		/* page isn't concrete; scan read bytes. */
-		for (unsigned i = 0; i != NumBytes; ++i) {
-			if (!isByteConcrete(offset+i)) {
+		for (unsigned i = 0; i < NumBytes; i++) {
+			if (!isByteConcrete(offset + i)) {
 				return NULL;
 			}
 		}
 	}
 
-	for (unsigned i = 0; i != NumBytes; ++i) {
+	assert (concreteStore);
+	for (unsigned i = 0; i < NumBytes; i++) {
 		ret <<= 8;
-		ret |= read8c(offset+(NumBytes-1-i));
+		ret |= read8c(offset + ((NumBytes - 1) - i));
 	}
 
 	return MK_CONST(ret, NumBytes*8);

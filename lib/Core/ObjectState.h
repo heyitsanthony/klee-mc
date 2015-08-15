@@ -83,7 +83,7 @@ protected:
 
 	ObjectState(const ObjectState &os);
 
-	unsigned	size;
+	const unsigned	size;
 public:
 	virtual ~ObjectState();
 
