@@ -72,6 +72,17 @@ KModuleVex::KModuleVex(
 
 KModuleVex::~KModuleVex(void) {}
 
+static bool is_private_code(Executor& exe, uint64_t guest_addr)
+{
+	auto es = exe.getCurrentState();
+	if (!es) return false;
+	auto mo = es->addressSpace.resolveOneMO(guest_addr);
+	if (!mo) return true; // code that's gonna crash
+	auto os = es->addressSpace.findObject(mo);
+	assert(os);
+	return os->getOwner() > 1;
+}
+
 Function* KModuleVex::getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new)
 {
 	void		*host_addr;
@@ -101,12 +112,11 @@ Function* KModuleVex::getFuncByAddrNoKMod(uint64_t guest_addr, bool& is_new)
 		return f;
 	}
 
-	/* Need to load the function. First, make sure that addr is mapped. */
+	/* Need to load the function. First, make sure that addr is mapped
+	 * into initial state */
 	is_new = true;
 
-	GuestMem::Mapping	m;
-	if (gs->getMem()->lookupMapping(guest_ptr(guest_addr), m) == false) {
-		/* not in base mapping-- write during symex! */
+	if (is_private_code(*exe, guest_addr)) {
 		f = getPrivateFuncByAddr(guest_addr);
 		return f;
 	}
@@ -378,8 +388,8 @@ void KModuleVex::writeCodeGraph(GenericGraph<guest_ptr>& g)
 	std::vector<unsigned char>			outdat;
 	std::vector<std::pair<guest_ptr, unsigned> >	auxdat;
 
-	foreach (it, g.nodes.begin(), g.nodes.end()) {
-		guest_ptr	p = (*it)->value;
+	for (const auto &node : g.nodes) {
+		guest_ptr	p = node->value;
 		const VexSB	*vsb;
 		llvm::Function	*func;
 		guest_ptr	base;
@@ -457,17 +467,17 @@ void KModuleVex::scanFuncExits(uint64_t guest_addr, Function* f)
 			continue;
 
 		l = DynGraph::getStaticReturnAddresses(cur_f);
-		foreach (it, l.begin(), l.end()) {
+		for (const auto &loc: l) {
 			Function	*next_f;
 
-			g.addEdge(guest_ptr(fa.first), *it);
+			g.addEdge(guest_ptr(fa.first), loc);
 
-			if (scanned_addrs.count(*it))
+			if (scanned_addrs.count(loc))
 				continue;
 
-			scanned_addrs.insert(*it);
-			next_f = getFuncByAddr((*it).o);
-			f_stack.push(std::make_pair(*it, next_f));
+			scanned_addrs.insert(loc);
+			next_f = getFuncByAddr(loc.o);
+			f_stack.push(std::make_pair(loc, next_f));
 		}
 	}
 
