@@ -24,7 +24,6 @@ using namespace klee::expr;
 
 const char *Token::getKindName() const {
   switch (kind) {
-  default:
   case Unknown:    return "Unknown";
   case Arrow:      return "Arrow";
   case At:         return "At";

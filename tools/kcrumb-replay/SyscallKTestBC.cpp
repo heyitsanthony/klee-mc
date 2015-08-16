@@ -145,7 +145,6 @@ bool SyscallsKTestBC::apply(void)
 	uint64_t		sys_nr = sp.getSyscall();
 	struct bc_syscall	*bcs;
 	bool			replayedSyscall = false;
-	static bool		was_last_sigprocmask = false;
 
 	if (isReplayEnabled(sp) == false) {
 		skipped_c++;
@@ -178,6 +177,7 @@ bool SyscallsKTestBC::apply(void)
 
 
 #if 0
+	static bool was_last_sigprocmask = false;
 	if (sys_nr == SYS_rt_sigprocmask) {
 		was_last_sigprocmask = true;
 		skipped_c++;

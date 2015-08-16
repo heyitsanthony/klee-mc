@@ -223,7 +223,7 @@ bool parseResult(const std::string& stpOutput, std::vector<char>& response) {
   CexItem* cex = reinterpret_cast<CexItem*>(pktHeader + 1);
   for (list<CexItem>::iterator i = listCex.begin(); i != listCex.end(); ++i, ++cex) {
     if (verbose_level >= 2) {
-      fprintf(stdout, "Cex item: (id=%u, offset=%u, value=%hu)\n", 
+      fprintf(stdout, "Cex item: (id=%u, offset=%u, value=%x)\n", 
 	      i->id, i->offset, i->value);
     }
     *cex = *i;

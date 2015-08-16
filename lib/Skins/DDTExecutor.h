@@ -41,8 +41,8 @@ public:
 	virtual ~DDTExecutor() {}
 
 protected:
-	virtual void executeInstruction(ExecutionState &state, KInstruction *ki)
-	{
+	void executeInstruction(ExecutionState &state,
+				KInstruction *ki) override {
 		unsigned	op;
 
 		op = ki->getInst()->getOpcode();
@@ -64,15 +64,16 @@ protected:
 			T::executeInstruction(state, ki);
 	}
 
-	virtual void executeGetValue(
-		ExecutionState &state, ref<Expr> e, KInstruction *target)
-	{
+	void executeGetValue(	ExecutionState &state,
+				ref<Expr> e,
+				KInstruction *target,
+				ref<Expr> pred) override {
 		assert (e->isShadowed() == false);
+		assert(pred.isNull());
 		T::executeGetValue(state, e, target);
 	}
 
-	virtual llvm::Function* getFuncByAddr(uint64_t addr)
-	{
+	llvm::Function* getFuncByAddr(uint64_t addr) override {
 		unsigned	kf_c = T::kmodule->getNumKFuncs();
 		llvm::Function	*f;
 

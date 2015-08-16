@@ -79,14 +79,13 @@ vfd_t VFD::addPath(const std::string& path)
 void VFD::close(vfd_t vfd)
 {
 	vfd2fd_t::iterator	it;
-	int			dead_fd;
 
 	it = vfd2fd.find(vfd);
 	if (it == vfd2fd.end())
 		return;
 
 #if 0
-	dead_fd = it->second;
+	int dead_fd = it->second;
 	close(dead_fd);
 
 	std::cerr << "[VFD] Closed fd=" << dead_fd << '\n';

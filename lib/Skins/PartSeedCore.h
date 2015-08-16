@@ -15,7 +15,6 @@ public:
 
 	void terminate(ExecutionState& state);
 private:
-	Executor&	exe;
 };
 }
 

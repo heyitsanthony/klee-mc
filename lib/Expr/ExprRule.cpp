@@ -479,7 +479,6 @@ private:
 	const ExprRule			*er;
 	const flatrule_ty		&from_rule;
 	flatrule_ty::const_iterator	it;
-	bool				verified;
 };
 
 ref<Expr> ExprRule::apply(const ref<Expr>& e) const

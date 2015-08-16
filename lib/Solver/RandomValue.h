@@ -18,7 +18,7 @@ public:
 	static bool get(Solver* s, const Query& q, ref<ConstantExpr>& result);
 	bool getValue(Solver* s, const Query& q, ref<ConstantExpr>& result);
 protected:
-	RandomValue(Expr::Hash eh) : query_hash(eh) {}
+	RandomValue(Expr::Hash eh) {}
 
 
 	ref<ConstantExpr> extend(Solver* s, const Query& q);
@@ -26,7 +26,6 @@ protected:
 private:
 	typedef std::map<Expr::Hash, RandomValue*> rvmap_ty;
 	static rvmap_ty rvmap;
-	Expr::Hash			query_hash;
 	ref<ConstantExpr>		min_res, max_res;
 	std::vector<ref<ConstantExpr> >	seen;
 };

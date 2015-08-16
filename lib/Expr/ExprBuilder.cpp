@@ -37,10 +37,12 @@ ExprBuilder* ExprBuilder::create(BuilderKind bk)
 	case RuleBuilder:
 //		return RuleBuilder::create(new CanonBuilder(Builder));
 		return RuleBuilder::create(Builder);
+#if 0
 	default:
 		std::cerr << "Unknown BuilderKind.\n";
 		assert (0 == 1);
 		break;
+#endif
 	}
 
 //	return new CanonBuilder(Builder);

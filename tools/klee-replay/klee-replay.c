@@ -343,7 +343,7 @@ static void run_monitored(char *executable, int argc, char **argv) {
             ptrace(PTRACE_GETREGS, pid, 0, &regs);
             long prev_inst = ptrace(PTRACE_PEEKTEXT, pid, KLEE_IP(regs), NULL);
             ptrace(PTRACE_POKETEXT, pid, KLEE_IP(regs), 0xFEEB);
-            fprintf(stderr, "KLEE-REPLAY: wrote inf loop at: %lx (prev: %#08lx)\n", KLEE_IP(regs), prev_inst);
+            fprintf(stderr, "KLEE-REPLAY: wrote inf loop at: %llx (prev: %#08lx)\n", KLEE_IP(regs), prev_inst);
             fprintf(stderr, "KLEE-REPLAY: detaching\n");
             long res = ptrace(PTRACE_DETACH, pid, 0, 0);
             if (res < 0) {

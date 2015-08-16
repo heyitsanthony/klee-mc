@@ -169,8 +169,7 @@ static void initVC(VC& vc)
 }
 
 STPSolverImpl::STPSolverImpl(STPSolver *_solver, bool _useForkedSTP)
-: solver(_solver)
-, timeout(0.0)
+: timeout(0.0)
 , useForkedSTP(_useForkedSTP)
 {
 	initVC(vc);

@@ -101,7 +101,7 @@ UseGCTimer("gc-timer",
 class ExprGCTimer : public Executor::Timer
 {
 public:
-	ExprGCTimer(Executor *_executor) : executor(_executor) {}
+	ExprGCTimer(Executor *_executor) {}
 	virtual ~ExprGCTimer() {}
 
 	void run()
@@ -114,7 +114,6 @@ public:
 		ObjectState::garbageCollect();
 	}
 private:
-	Executor *executor;
 };
 
 #include "ObjectState.h"
@@ -125,7 +124,7 @@ UseObjScanTimer("objscan-timer",
 class ExprObjScanTimer : public Executor::Timer
 {
 public:
-	ExprObjScanTimer(Executor *_executor) : executor(_executor) {}
+	ExprObjScanTimer(Executor *_executor)  {}
 	virtual ~ExprObjScanTimer() {}
 
 	void run()
@@ -135,7 +134,6 @@ public:
 	//	assert (0 ==1  && "STUB");
 	}
 private:
-	Executor *executor;
 };
 
 class StatTimer : public Executor::Timer
@@ -417,6 +415,8 @@ public:
 
 		auto os = exe->getInterpreterHandler()->openOutputFile(fname);
 		if (os == NULL) return;
+
+		assert(!ignoreConcrete && "STUB STUB STUB");
 
 		kmod = exe->getKModule();
 		foreach (it, kmod->kfuncsBegin(), kmod->kfuncsEnd()) {
@@ -891,7 +891,7 @@ void Executor::processTimersDumpStates(void)
     *os << "], ";
 
     StackFrame &sf = es->stack.back();
-    uint64_t md2u, icnt, cpicnt;
+    uint64_t md2u, icnt;
 
     md2u = computeMinDistToUncovered(es->pc, sf.minDistToUncoveredOnReturn);
     icnt = theStatisticManager->getIndexedValue(

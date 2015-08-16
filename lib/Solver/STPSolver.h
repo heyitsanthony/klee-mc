@@ -12,7 +12,6 @@ class ExprHandle;
 class STPSolverImpl : public SolverImpl {
 private:
   /// The solver we are part of, for access to public information.
-  STPSolver *solver;
   bool doForkedComputeInitialValues(
   	Assignment& a,
 	ExprHandle& stp_e,

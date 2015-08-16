@@ -51,7 +51,6 @@ private:
 	ExeStateSet	scheduled;
 	ExeStateSet	blacklisted;
 	Searcher	*searcher_base;
-	uint64_t	last_uncovered;
 	Executor	&exe;
 	const char*	filter_fname;
 };

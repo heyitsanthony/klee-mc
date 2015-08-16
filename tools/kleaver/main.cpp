@@ -337,8 +337,10 @@ int main(int argc, char **argv)
 			mb.get().get(),
 			Builder);
 		break;
+#if 0
 	default:
 		std::cerr << argv[0] << ": error: Unknown program action!\n";
+#endif
 	}
 
 	delete Builder;

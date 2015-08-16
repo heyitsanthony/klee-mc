@@ -5,7 +5,6 @@
 using namespace klee;
 
 PartSeedCore::PartSeedCore(Executor& _exe)
-: exe(_exe)
 {
 	assert (0 == 1 && "STUB STUB STUB");
 	// km->addFunctionPass(new PartSeedPass(exe));

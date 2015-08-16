@@ -45,7 +45,6 @@ private:
 	{ return getIntrinsic(IID, Ty0); }
 
 	bool runOnInstruction(llvm::Instruction *I);
-	llvm::Module* module_;
 public:
 	RaiseAsmPass(llvm::Module* module);
 	virtual ~RaiseAsmPass();

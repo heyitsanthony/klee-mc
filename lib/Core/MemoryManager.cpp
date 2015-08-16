@@ -118,7 +118,6 @@ MemoryManager* MemoryManager::create(void)
 		return new DeterministicMM();
 	case MM_HEAP:
 		return new HeapMM();
-	default:
-		return NULL;
 	}
+	return NULL;
 }

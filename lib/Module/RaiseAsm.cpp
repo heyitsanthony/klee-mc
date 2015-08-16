@@ -27,7 +27,6 @@ char RaiseAsmPass::ID = 0;
 RaiseAsmPass::RaiseAsmPass(llvm::Module* module)
 : llvm::FunctionPass(ID)
 , TM(NULL)
-, module_(module)
 {
 	std::string	Err;
 	std::string	HostTriple = llvm::sys::getDefaultTargetTriple();

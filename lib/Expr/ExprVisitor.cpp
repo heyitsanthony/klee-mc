@@ -57,10 +57,9 @@ ref<Expr> ExprVisitor::visit(const ref<Expr> &e)
 		break;
 	case Action::SkipChildren: res = e; break;
 	case Action::ChangeTo: res = a.argument; break;
-	default:
-		assert(0 && "invalid kind");
 	}
 
+	assert (!res.isNull());
 	if (use_hashcons && !isa<ConstantExpr>(e))
 		visited.insert(std::make_pair(e, res));
 

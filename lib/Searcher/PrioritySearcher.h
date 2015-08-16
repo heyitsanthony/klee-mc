@@ -93,7 +93,6 @@ private:
 	typedef std::map<int, prsearcher_ty>	prmap_ty;
 	typedef std::map<ExecutionState*, int>	statemap_ty;
 
-	PrCmp	cmp;
 	statemap_ty	state_backmap;
 	prmap_ty	priorities;
 	unsigned int	state_c;

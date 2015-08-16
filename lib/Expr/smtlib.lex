@@ -64,6 +64,9 @@ static int smtlibinput(std::istream& is, char* buf, int size)
 #define YY_INPUT(buf,result,max_size) \
   result = smtlibinput(*SMTParser::parserTemp->is, buf, max_size);
 
+// yyinput is unused; declare this so compiler doesn't complain
+#define YY_NO_INPUT
+
 int smtlib_bufSize() { return YY_BUF_SIZE; }
 YY_BUFFER_STATE smtlib_buf_state() { return YY_CURRENT_BUFFER; }
 

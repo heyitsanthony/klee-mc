@@ -83,6 +83,7 @@ static ref<Expr> getContiguousRange(Solver* s, Query& q, uint64_t pivot)
 	return RANGE_EXPR(q.expr, r_e.first, r_e.second);
 }
 
+#if 0
 static ref<Expr> getMaskRange(Solver* s, Query& q, uint64_t pivot)
 {
 	ref<Expr>	range;
@@ -125,6 +126,7 @@ static ref<Expr> getMaskRange(Solver* s, Query& q, uint64_t pivot)
 	assert (range->getKind() != Expr::Constant);
 	return range;
 }
+#endif
 
 static bool isConstFixed(Solver* s, Query& q, const ref<Expr>& v)
 {
