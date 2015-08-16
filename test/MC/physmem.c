@@ -1,6 +1,6 @@
 // RUN: gcc %s -O0 -o %t1
 // RUN: ../../../scripts/save_guest.sh ./%t1 guest-physmem
-// RUN: klee-mc -branch-hint=false -max-stp-time=5 -dump-states-on-halt=false -stop-after-n-tests=2 -use-softfp -validate-test -guest-type=sshot -max-time=120 -watchdog -  2>%t1.err >%t1.out
+// RUN: klee-mc -print-new-ranges -max-stp-time=5 -dump-states-on-halt=false -stop-after-n-tests=2 -use-softfp -validate-test -guest-type=sshot -use-batching-search -batch-time=5 -use-fresh-branch-search search -max-time=120 -watchdog -  2>%t1.err >%t1.out
 // RUN: rm -rf guest-physmem
 // RUN: find -L klee-last -name *validate | xargs cat | not grep FAIL
 
