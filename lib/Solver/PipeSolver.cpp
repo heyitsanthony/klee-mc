@@ -482,7 +482,6 @@ bool PipeSolverImpl::computeInitialValues(const Query& q, Assignment& a)
 			<< (void*)q.hash() << ")\n";
 		SMTPrinter::dump(q, "badparse");
 		failQuery();
-		abort();
 		return false;
 	}
 
