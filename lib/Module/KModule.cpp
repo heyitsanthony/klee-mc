@@ -832,7 +832,7 @@ void KModule::setupFiniFuncs(void)
 	if (fini_kfunc != NULL || fini_funcs.empty()) return;
 
 	std::vector<Function*> l;
-	for (auto &kf : init_funcs) l.push_back(kf->function);
+	for (auto &kf : fini_funcs) l.push_back(kf->function);
 
 	l.push_back((Function*)module->getOrInsertFunction(
 		"klee_resume_exit",
