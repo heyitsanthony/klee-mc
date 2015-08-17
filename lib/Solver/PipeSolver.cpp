@@ -127,7 +127,6 @@ protected:
 	PipeSolverSession(int child_stdin, int child_stdout, int cpid)
 	: fd_child_stdin(child_stdin), fd_child_stdout(child_stdout)
 	, child_pid(cpid)
-	, stdout_buf(nullptr)
 	{}
 	bool writeQuery(const Query& q);
 	bool writeQueryToChild(const Query& q);
@@ -138,7 +137,7 @@ private:
 	int		fd_child_stdin;
 	int		fd_child_stdout;
 	pid_t		child_pid;
-	__gnu_cxx::stdio_filebuf<char> *stdout_buf;
+	std::unique_ptr<__gnu_cxx::stdio_filebuf<char>> stdout_buf;
 	double		timeout;
 };
 }
@@ -321,18 +320,15 @@ std::istream* PipeSolverSession::writeRecvQuery(const Query& q)
 	if (waitOnSolver(q) == false) return nullptr;
 
 	/* read response, if any */
-	stdout_buf = new __gnu_cxx::stdio_filebuf<char>(
+	stdout_buf = std::make_unique<__gnu_cxx::stdio_filebuf<char>>(
 		fd_child_stdout, std::ios::in);
-	return new std::istream(stdout_buf);
+	return new std::istream(stdout_buf.get());
 }
 
 void PipeSolverSession::stop(void)
 {
 	// XXX why do I need ot track this-- why not tracked by istream?
-	if (stdout_buf) {
-		delete stdout_buf;
-		stdout_buf = NULL;
-	}
+	stdout_buf = nullptr;
 
 	if (fd_child_stdin != -1) close(fd_child_stdin);
 	if (fd_child_stdout != -1) close(fd_child_stdout);
@@ -486,6 +482,7 @@ bool PipeSolverImpl::computeInitialValues(const Query& q, Assignment& a)
 			<< (void*)q.hash() << ")\n";
 		SMTPrinter::dump(q, "badparse");
 		failQuery();
+		abort();
 		return false;
 	}
 
