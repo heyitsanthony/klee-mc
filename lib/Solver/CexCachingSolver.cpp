@@ -88,7 +88,7 @@ private:
 	}
 
 	bool getAssignment(const Query& query, Assignment *&result);
-	Assignment* addToTable(Assignment* binding);
+	Assignment* addToTable(std::unique_ptr<Assignment> binding);
 
 	MapOfSets<ref<Expr>, Assignment*>	cache;
 
@@ -159,8 +159,7 @@ bool CexCachingSolver::searchForAssignment(Key &key, Assignment *&result)
 	if (CexCacheTryAll) {
 		// Otherwise, iterate through the set of current assignments 
 		// to see if one of them satisfies the query.
-		foreach (it, assignTab.begin(), assignTab.end()) {
-			Assignment *a = *it;
+		for (const auto &a : assignTab) {
 			if (a->satisfies(key.begin(), key.end())) {
 				// cache result for deterministic reconstitution
 				result = a;
@@ -209,29 +208,27 @@ void CexCachingSolver::evictRandom(void)
 	std::vector<std::pair<Key, Assignment*> >	expr_sets;
 
 	/* collect assignments to trash */
-	foreach (it, assignTab.begin(), assignTab.end()) {
+	for (const auto &a : assignTab) {
 		/* 50% chance of being thrown in bit-bin */
 		if (rng.getBool())
-			as_to_del.insert(*it);
+			as_to_del.insert(a);
 	}
 
 	/* save non-matching references from ref=>Assignment cache */
-	foreach (it, cache.begin(), cache.end()) {
-		Assignment	*cur_a = (*it).second;
-
+	for (const auto &cp : cache ) {
+		Assignment	*cur_a = cp.second;
 		if (!as_to_del.count(cur_a))
-			expr_sets.push_back(*it);
+			expr_sets.push_back(cp);
 	}
 
 	/* clear, rebuild */
 	cache.clear();
-	foreach (it, expr_sets.begin(), expr_sets.end())
-		cache.insert((*it).first, (*it).second);
+	for (const auto &ep : expr_sets)
+		cache.insert(ep.first, ep.second);
 	expr_sets.clear();
 
 	/* delete all */
-	foreach (it, as_to_del.begin(), as_to_del.end()) {
-		Assignment	*a(*it);
+	for (const auto &a : as_to_del) {
 		unsigned int	a_bytes;
 
 		a_bytes = a->getBindingBytes();
@@ -247,10 +244,12 @@ void CexCachingSolver::evictRandom(void)
 		<< evicted_bytes << '\n';
 }
 
-Assignment* CexCachingSolver::addToTable(Assignment* binding)
+Assignment* CexCachingSolver::addToTable(std::unique_ptr<Assignment> binding)
 {
 	std::pair<assignTab_ty::iterator, bool>	res;
 	unsigned int	new_bytes = 0;
+
+	assert(binding);
 
 	if ((	assignTab_bytes + MAX_BINDING_BYTES) > MAX_CACHED_BYTES ||
 		assignTab.size() > 2000)
@@ -259,16 +258,18 @@ Assignment* CexCachingSolver::addToTable(Assignment* binding)
 		evictRandom();
 	}
 
-	res = assignTab.insert(binding);
+	res = assignTab.insert(binding.get());
 	if (res.second == true) {
-		if (!new_bytes) new_bytes = binding->getBindingBytes();
+		if (!new_bytes)
+			new_bytes = binding->getBindingBytes();
 		assignTab_bytes += new_bytes;
-		return binding;
+
+		binding.release();
+		return *res.first;
 	}
 
 	/* binding already exists */
-	assert (binding != *res.first);
-	delete binding;
+	assert (binding.get() != *res.first);
 
 	g_cexcache_sz = assignTab.size();
 	return *res.first;
@@ -277,20 +278,20 @@ Assignment* CexCachingSolver::addToTable(Assignment* binding)
 Assignment* CexCachingSolver::createBinding(const Query& query, Key& key)
 {
 	std::vector<const Array*>	objects;
+	std::unique_ptr<Assignment>	new_binding;
 	Assignment			*binding;
 	bool				hasSolution;
 
 	ExprUtil::findSymbolicObjects(key.begin(), key.end(), objects);
-	binding = new Assignment(objects);
+	new_binding = std::make_unique<Assignment>(objects);
 
-	hasSolution = doComputeInitialValues(query, *binding);
+	hasSolution = doComputeInitialValues(query, *new_binding);
 	if (failed() || !hasSolution) {
-		delete binding;
 		return NULL;
 	}
 
 	// Memoize the result.
-	binding = addToTable(binding);
+	binding = addToTable(std::move(new_binding));
 
 	if (DebugCexCacheCheckBinding) {
 		assert (binding->satisfies(key.begin(), key.end()));
