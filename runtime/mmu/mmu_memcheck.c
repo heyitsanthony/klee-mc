@@ -438,6 +438,23 @@ void mmu_init_memcheck(void)
 	HEAP_LEAVE
 }
 
+void mmu_cleanup_memcheck(void)
+{
+	/* this is called on path terminate-- remaining blocks are leaked */
+	for (unsigned i = 0; i < HEAP_TAB_LISTS; i++) {
+		struct list	*l = &heap_tab.ht_l[i];
+
+		if (!list_is_empty(l)) {
+			struct heap_ent	*he;
+			he = list_get_data(l, list_peek_head(l));
+			HEAP_REPORT_W(	"Leaked heap memory",
+					he->he_base,
+					he->he_len);
+			return;
+		}
+	}
+}
+
 /* memory extent was marked as symbolic */
 void mmu_signal_memcheck(void* addr, uint64_t len)
 {
@@ -509,6 +526,9 @@ MMU_ACCESS_ALL();
 
 struct mmu_ops MMUOPS_S(memcheck) = {
 	DECL_MMUOPS(memcheck) 
+	.mo_init = mmu_init_memcheck,
+	.mo_cleanup = mmu_cleanup_memcheck,
 	.mo_signal = mmu_signal_memcheck,
-	.mo_init = mmu_init_memcheck };
+};
+
 struct mmu_ops MMUOPS_S(memcheckc) = { DECL_MMUOPS_ALL(memcheckc) };
