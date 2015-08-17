@@ -7,5 +7,7 @@
 int main(void)
 {
 	void	*x = malloc(10);
-	return malloc_usable_size(x);
+	int	u = malloc_usable_size(x);
+	free(x);
+	return u;
 }

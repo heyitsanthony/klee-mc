@@ -10,7 +10,11 @@
 int main(int argc, char *argv[])
 {
 	void		*x;
+	char		c = 0;
 	x = malloc(16);
-	if (read(0, x, 16) != 16) return 0;
-	return ((char*)x)[15];
+	if (read(0, x, 16) != 16) goto done;
+	c = ((char*)x)[15];
+done:
+	free(x);
+	return c;
 }
