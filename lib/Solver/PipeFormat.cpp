@@ -403,9 +403,11 @@ bool PipeYices2::parseModel(std::istream& is)
 	arrays.clear();
 
 	got_sat = parseSAT(is);
-	if (!got_sat) {
-		return false;
+	if (!got_sat || !is_sat) {
+		return got_sat;
 	}
+
+	assert (got_sat && is_sat);
 
 	/* 
 	 * FORMAT:

@@ -485,15 +485,17 @@ bool PipeSolverImpl::computeInitialValues(const Query& q, Assignment& a)
 		return false;
 	}
 
-	forall_drain (it, a.freeBegin(), a.freeEnd()) {
-		std::vector<unsigned char>	v;
-		fmt->readArray(*it, v);
-		a.bindFree(*it, v);
-	}
-
 	is_sat = fmt->isSAT();
 	if (is_sat) ++stats::queriesValid;
 	else ++stats::queriesInvalid;
+
+	if (is_sat) {
+		forall_drain (it, a.freeBegin(), a.freeEnd()) {
+			std::vector<unsigned char>	v;
+			fmt->readArray(*it, v);
+			a.bindFree(*it, v);
+		}
+	}
 
 	return is_sat;
 }
