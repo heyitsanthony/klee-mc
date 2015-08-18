@@ -21,7 +21,7 @@ public:
 	// XXX gross, should be on demand?
 	static bool userSearcherRequiresMD2U();
 	static bool userSearcherRequiresBranchSequences();
-	static Searcher *constructUserSearcher(Executor &executor);
+	static std::unique_ptr<Searcher> constructUserSearcher(Executor &exe);
 
 	static void setPrioritizer(Prioritizer* p) { prFunc = p; }
 	static void setOverride(void) { useOverride = true; }

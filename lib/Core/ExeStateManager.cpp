@@ -1,7 +1,6 @@
 #include "Executor.h"
 #include "ExeStateManager.h"
 #include "Searcher.h"
-#include "../Searcher/UserSearcher.h"
 #include "MemUsage.h"
 #include "klee/Common.h"
 #include "static/Sugar.h"
@@ -19,35 +18,26 @@ namespace { cl::opt<bool> UseYield("use-yield", cl::init(true)); }
 
 ExeStateManager::ExeStateManager()
 : nonCompactStateCount(0)
-, searcher(NULL)
-, pathTree(NULL)
 {}
 
 ExeStateManager::~ExeStateManager()
 {
-	if (searcher && pathTree) {
-		/* flush all pending states */
-		commitQueue(NULL);
+	if (!searcher || !pathTree) return;
 
-		/* wake up all yielding */
-		while (!yieldedStates.empty()) {
-			popYieldedState();
-			commitQueue(NULL);
-		}
+	/* flush all pending states */
+	commitQueue(NULL);
 
-		/* queue erase all states */
-		foreach (it, states.begin(), states.end())
-			queueRemove(*it);
-
-		/* flush all pending states (erase all) */
+	/* wake up all yielding */
+	while (!yieldedStates.empty()) {
+		popYieldedState();
 		commitQueue(NULL);
 	}
 
-	if (searcher != NULL) delete searcher;
-	if (pathTree != NULL) delete pathTree;
+	/* queue erase all states */
+	for (auto &es : states)  queueRemove(es);
 
-	searcher = NULL;
-	pathTree = NULL;
+	/* flush all pending states (erase all) */
+	commitQueue(NULL);
 }
 
 ExecutionState* ExeStateManager::popYieldedState(void)
@@ -88,29 +78,24 @@ ExecutionState* ExeStateManager::selectState(bool allowCompact)
 	return ret;
 }
 
-void ExeStateManager::setupSearcher(Executor* exe)
-{ setupSearcher(UserSearcher::constructUserSearcher(*exe)); }
-
-void ExeStateManager::setupSearcher(Searcher* s)
+void ExeStateManager::setupSearcher(std::unique_ptr<Searcher> s)
 {
 	assert (!searcher && "Searcher already inited");
-	searcher = s;
+	searcher = std::move(s);
 	searcher->update(NULL, Searcher::States(states));
 }
 
 void ExeStateManager::teardownUserSearcher(void)
 {
 	assert (searcher);
-	delete searcher;
-	searcher = NULL;
+	searcher = nullptr;
 }
 
 void ExeStateManager::setInitialState(ExecutionState* initialState)
 {
 	assert (empty());
 
-	if (pathTree != NULL) delete pathTree;
-	pathTree = new PTree(initialState);
+	pathTree = std::make_unique<PTree>(initialState);
 
 	initialState->ptreeNode = pathTree->root;
 
@@ -120,13 +105,14 @@ void ExeStateManager::setInitialState(ExecutionState* initialState)
 
 void ExeStateManager::setWeights(double weight)
 {
-	foreach (it, states.begin(), states.end())
-		(*it)->weight = weight;
+	for (auto &es : states) es->weight = weight;
 }
 
-void ExeStateManager::queueAdd(ExecutionState* es) {
-assert (es->checkCanary());
-addedStates.insert(es); }
+void ExeStateManager::queueAdd(ExecutionState* es)
+{
+	assert (es->checkCanary());
+	addedStates.insert(es);
+}
 
 void ExeStateManager::queueSplitAdd(
 	PTreeNode	*ptn,
@@ -201,12 +187,10 @@ void ExeStateManager::commitQueue(ExecutionState *current)
 	if (searcher != NULL)
 		searcher->update(current, getStates());
 
-	foreach (it, removedStates.begin(), removedStates.end()) {
-		ExecutionState *es = *it;
-
-		ExeStateSet::iterator it2 = states.find(es);
-		assert (it2 != states.end());
-		states.erase(it2);
+	for (auto es : removedStates) {
+		auto it = states.find(es);
+		assert (it != states.end());
+		states.erase(it);
 
 		if (!es->isCompact())
 			--nonCompactStateCount;
@@ -314,10 +298,10 @@ void ExeStateManager::compactStates(unsigned toCompact)
 	std::vector<ExecutionState*> arr(nonCompactStateCount);
 	unsigned i = 0;
 
-	foreach (si, states.begin(), states.end()) {
-		if ((*si)->isCompact())
+	for (auto es : states) {
+		if (es->isCompact())
 			continue;
-		arr[i++] = *si;
+		arr[i++] = es;
 	}
 
 	if (toCompact > nonCompactStateCount) {

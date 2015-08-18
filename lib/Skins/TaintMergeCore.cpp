@@ -224,7 +224,8 @@ void TaintMergeCore::taintMergeBegin(ExecutionState& state)
 	std::cerr << "COPIED?? STKSZ=" << new_st->getStackDepth() << '\n';
 	new_esm->setInitialState(new_st);
 	tua = new TaintUpdateAction(merging_st->constraints);
-	new_esm->setupSearcher(new SearchUpdater(new DFSSearcher(), tua));
+	new_esm->setupSearcher(
+		std::make_unique<SearchUpdater>(new DFSSearcher(), tua));
 
 	std::cerr << "RIGGING NEW STATE MANAGER!!\n";
 	exe->setStateManager(new_esm);

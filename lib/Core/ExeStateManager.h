@@ -41,7 +41,7 @@ private:
 	/* all yielded states */
 	ExeStateSet yieldedStates;
 
-	Searcher *searcher;
+	std::unique_ptr<Searcher> searcher;
 
 	Searcher::States getStates(void) const;
 public:
@@ -98,14 +98,13 @@ public:
 	ExecutionState* selectState(bool allowCompact);
 
 	void teardownUserSearcher(void);
-	void setupSearcher(Executor* exe);
-	void setupSearcher(Searcher* s);
+	void setupSearcher(std::unique_ptr<Searcher> s);
 
 	unsigned int getNonCompactStateCount(void) const
 	{ return nonCompactStateCount; }
 
-	const PTree* getPTree(void) const { return pathTree; }
-	PTree* getPTree(void) { return pathTree; }
+	const PTree* getPTree(void) const { return pathTree.get(); }
+	PTree* getPTree(void) { return pathTree.get(); }
 private:
 	ExecutionState* popYieldedState(void);
 	void dropAddedDirect(ExecutionState* es);
@@ -113,7 +112,8 @@ private:
 		ExecutionState* es,
 		ExecutionState** root_to_be_removed);
 	void removeRoot(ExecutionState* es);
-	PTree	*pathTree;
+
+	std::unique_ptr<PTree>	pathTree;
 };
 
 struct KillOrCompactOrdering

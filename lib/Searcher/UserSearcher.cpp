@@ -622,19 +622,19 @@ static Searcher* getTunedSearch(Executor& executor)
 	return searcher;
 }
 
-Searcher *UserSearcher::constructUserSearcher(Executor &executor)
+std::unique_ptr<Searcher> UserSearcher::constructUserSearcher(Executor &exe)
 {
 	Searcher *searcher;
 
 	if (UseTunedSearch) {
-		searcher = getTunedSearch(executor);
+		searcher = getTunedSearch(exe);
 	} else
-		searcher = setupConfigSearcher(executor);
+		searcher = setupConfigSearcher(exe);
 
 	if (useOverride)
 		searcher = new OverrideSearcher(searcher);
 
-	std::ostream &os = executor.getHandler().getInfoStream();
+	std::ostream &os = exe.getHandler().getInfoStream();
 
 	os << "BEGIN searcher description\n";
 	searcher->printName(os);
@@ -642,7 +642,7 @@ Searcher *UserSearcher::constructUserSearcher(Executor &executor)
 	os.flush();
 
 	if (userSearcherRequiresMD2U())
-		executor.getStatsTracker()->setUpdateMinDist();
+		exe.getStatsTracker()->setUpdateMinDist();
 
-	return searcher;
+	return std::unique_ptr<Searcher>(searcher);
 }

@@ -34,6 +34,8 @@
 #include "Executor.h"
 #include "ExeStateManager.h"
 
+#include "../Searcher/UserSearcher.h"
+
 #include "SymAddrSpace.h"
 #include "Context.h"
 #include "CoreStats.h"
@@ -2140,7 +2142,8 @@ void Executor::run(ExecutionState &initState)
 
 	if (Replay::isReplayOnly()) {
 		std::cerr << "[Executor] Pure replay run complete.\n";
-		stateManager->setupSearcher(this);
+		stateManager->setupSearcher(
+			UserSearcher::constructUserSearcher(*this));
 		stateManager->teardownUserSearcher();
 		goto eraseStates;
 	}
@@ -2149,7 +2152,7 @@ void Executor::run(ExecutionState &initState)
 
 	/* I don't recall why I hold off on setting up the searcher
 	 * until after replay. Hm. */
-	stateManager->setupSearcher(this);
+	stateManager->setupSearcher(UserSearcher::constructUserSearcher(*this));
 
 	if (Replay::isReplayOnly())
 		std::cerr << "[Executor] Pure replay run complete.\n";
