@@ -184,7 +184,8 @@ StatsTracker::StatsTracker(
 		writeStatsLine();
 
 		executor.addTimer(
-			new WriteStatsTimer(this), StatsWriteInterval);
+			std::make_unique<WriteStatsTimer>(this),
+			StatsWriteInterval);
 	}
 
 	if (OutputIStats) {
@@ -192,7 +193,8 @@ StatsTracker::StatsTracker(
 			"run.istats");
 		assert(istatsFile && "unable to open istats file");
 		executor.addTimer(
-			new WriteIStatsTimer(this), IStatsWriteInterval);
+			std::make_unique<WriteIStatsTimer>(this),
+			IStatsWriteInterval);
 	}
 }
 
@@ -204,7 +206,7 @@ void StatsTracker::setUpdateMinDist(void)
 
 	computeReachableUncovered();
 	executor.addTimer(
-		new UpdateReachableTimer(this),
+		std::make_unique<UpdateReachableTimer>(this),
 		UncoveredUpdateInterval);
 }
 

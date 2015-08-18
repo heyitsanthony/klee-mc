@@ -88,10 +88,33 @@ friend class StatsTracker;
 public:
 	class Timer {
 	public:
-		Timer();
-		virtual ~Timer();
+		Timer() {}
+		virtual ~Timer() {}
 		virtual void run() = 0;
 	};
+
+	class TimerInfo {
+	public:
+		TimerInfo(std::unique_ptr<Timer> _timer, double _rate);
+		bool mayFire(double now) const { return now > nextFireTime; }
+		bool fire(double now) {
+			if (mayFire(now)) {
+				forceFire(now);
+				return true;
+			}
+			return false;
+		}
+
+		void forceFire(double now) {
+			timer->run();
+			nextFireTime = rate + now;
+		}
+	private:
+		std::unique_ptr<Timer> timer;
+		const double rate;  /// Approximate delay per timer firing.
+		double nextFireTime; /// Wall time for next firing.
+	};
+
 
 	typedef std::pair<ExecutionState*,ExecutionState*> StatePair;
 	typedef std::vector<ExecutionState*> StateVector;
@@ -181,12 +204,10 @@ public:
 
 	MemoryManager	*memory;
 private:
-	class TimerInfo;
-
-	static void deleteTimerInfo(TimerInfo*&);
 	void handleMemoryUtilization(ExecutionState* &state);
 	void handleMemoryPID(ExecutionState* &state);
 	void setupInitFuncs(ExecutionState& initState);
+
 protected:
 	KModule				*kmodule;
 	MMU				*mmu;
@@ -265,7 +286,7 @@ protected:
 	/// Signals the executor to halt execution at the next instruction step.
 	bool haltExecution;
 private:
-	std::vector<TimerInfo*>		timers;
+	std::vector<std::unique_ptr<TimerInfo>>	timers;
 
 	/* functions which caused bad concretizations */
 	std::set<KFunction*>		bad_conc_kfuncs;
@@ -511,7 +532,7 @@ public:
 	ExecutionState* getCurrentState(void) const { return currentState; }
 	bool hasState(const ExecutionState* es) const;
 
- 	void addTimer(Timer *timer, double rate);
+	void addTimer(std::unique_ptr<Timer> timer, double rate);
 	const Globals* getGlobals(void) const { return globals.get(); }
 	StatsTracker* getStatsTracker(void) { return statsTracker; }
 

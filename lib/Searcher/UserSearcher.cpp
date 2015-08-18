@@ -638,7 +638,7 @@ std::unique_ptr<Searcher> UserSearcher::constructUserSearcher(Executor &exe)
 
 	os << "BEGIN searcher description\n";
 	searcher->printName(os);
-	os << "END searcher description\n";
+	os << "\nEND searcher description\n";
 	os.flush();
 
 	if (userSearcherRequiresMD2U())

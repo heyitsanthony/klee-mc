@@ -70,7 +70,7 @@ GDBCore::GDBCore(Executor* _exe, unsigned _port)
 
 	ctrlc_gc = this;
 	signal(SIGINT, handle_ctrlc);
-	exe->addTimer(new GDBTimer(this), 1.0);
+	exe->addTimer(std::make_unique<GDBTimer>(this), 1.0);
 }
 
 GDBCore::~GDBCore(void)

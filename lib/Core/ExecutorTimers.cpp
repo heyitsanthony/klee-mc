@@ -60,10 +60,8 @@ class HaltTimer : public Executor::Timer
 {
 public:
 	HaltTimer(Executor *_executor) : executor(_executor) {}
-	virtual ~HaltTimer() {}
 
-	void run()
-	{
+	void run() override {
 		std::cerr << "KLEE: HaltTimer invoked\n";
 		executor->setHaltExecution(true);
 	}
@@ -78,15 +76,14 @@ public:
 	HaltNoProgressTimer(Executor *_executor)
 	: executor(_executor), numCovInstrs(0) {}
 
-	~HaltNoProgressTimer() {}
-
-	void run() {
+	void run() override {
 		if (numCovInstrs < stats::coveredInstructions) {
 			numCovInstrs = stats::coveredInstructions;
 			return;
 		}
 		std::cerr << "KLEE: Halting-- no progress!\n";
-		executor->setHaltExecution(true); }
+		executor->setHaltExecution(true);
+	}
 private:
 	unsigned numCovInstrs;
 };
@@ -125,10 +122,8 @@ class ExprObjScanTimer : public Executor::Timer
 {
 public:
 	ExprObjScanTimer(Executor *_executor)  {}
-	virtual ~ExprObjScanTimer() {}
 
-	void run()
-	{
+	void run() override {
 		std::cerr << "KLEE: ExprObjScan invoked\n";
 	//	Array::garbageCollect();
 	//	assert (0 ==1  && "STUB");
@@ -148,8 +143,7 @@ protected:
 		base_time = util::estWallTime();
 	}
 
-	void run()
-	{
+	void run() override {
 		if (!os) return;
 
 		double cur_time = util::estWallTime();
@@ -175,8 +169,7 @@ protected:
 	PyStatTimer(Executor *_exe, const char* fname)
 	: StatTimer(_exe, fname) {}
 
-	void run(void)
-	{
+	void run(void) override {
 		if (!os) return;
 		double cur_time = util::estWallTime();
 		*os << '[';
@@ -350,10 +343,8 @@ public:
 	: fname(_fname)
 	, exe(_exe)
 	, ignoreConcrete(_ignoreConcrete) {}
-	virtual ~BrDataTimer() {}
 
-	void run(void)
-	{
+	void run(void) override {
 		auto os = exe->getInterpreterHandler()->openOutputFile(fname);
 		if (os == NULL) return;
 
@@ -407,10 +398,8 @@ public:
 	: fname(_fname)
 	, exe(_exe)
 	, ignoreConcrete(_ignoreConcrete) {}
-	virtual ~CovTimer() {}
 
-	void run(void)
-	{
+	void run(void) override {
 		KModule*	kmod;
 
 		auto os = exe->getInterpreterHandler()->openOutputFile(fname);
@@ -454,9 +443,7 @@ class x##Timer : public Executor::Timer {	\
 public:	\
 	x##Timer(const char* _fname, Executor* _exe)	\
 	: fname(_fname), exe(_exe) {}	\
-	virtual ~x##Timer() {}	\
-	void run(void)	\
-	{	\
+	void run(void) override {	\
 		ExecutionState*	es;	\
 \
 		es = exe->getCurrentState();	\
@@ -485,10 +472,8 @@ class FuncHeatTimer : public Executor::Timer
 public:
 	FuncHeatTimer(const char* _fname, Executor* _exe)
 	: fname(_fname), exe(_exe) {}
-	virtual ~FuncHeatTimer() {}
 
-	void run(void)
-	{
+	void run(void) override {
 		const KModule	*km;
 
 		auto os = exe->getInterpreterHandler()->openOutputFile(fname);
@@ -609,8 +594,7 @@ public:
 		return ret;
 	}
 
-	void run(void)
-	{
+	void run(void) override {
 		auto os = exe->getInterpreterHandler()->openOutputFile(
 			"fconds.txt");
 		if (os == NULL) return;
@@ -679,8 +663,7 @@ protected:
 class PC##x : public UserCommand {	\
 public:					\
 	PC##x(Executor* _exe) : UserCommand(_exe) {}		\
-	virtual ~PC##x () {}					\
-	virtual void run(std::istream &is, std::ostream& os);	\
+	void run(std::istream &is, std::ostream& os) override;	\
 };					\
 void PC##x::run(std::istream& is, std::ostream& os)	\
 
@@ -707,11 +690,12 @@ public:
 	}
 	virtual ~UserCommandTimer()
 	{
-		foreach (it, cmds.begin(), cmds.end())
-			delete it->second;
+		for (auto &p : cmds) delete p.second;
 		close(fd);
 	}
-	void run(void);
+
+	void run(void) override;
+
 private:
 	typedef std::map<std::string, UserCommand*> cmds_ty;
 	UserCommand* get(const char* buf)
@@ -770,111 +754,100 @@ void Executor::initTimers(void)
 	inited++;
 
 	if (MaxTime)
-		addTimer(new HaltTimer(this), MaxTime);
+		addTimer(std::make_unique<HaltTimer>(this), MaxTime);
 
 	if (MaxTimeNoProgress)
-  		addTimer(new HaltNoProgressTimer(this), MaxTimeNoProgress);
+		addTimer(	std::make_unique<HaltNoProgressTimer>(this),
+				MaxTimeNoProgress);
 
 	if (DumpRuleBuilderStats)
-		addTimer(new RuleBuilderStatTimer(this), DumpRuleBuilderStats);
+		addTimer(	std::make_unique<RuleBuilderStatTimer>(this),
+				DumpRuleBuilderStats);
 
 	if (DumpMemStats)
-		addTimer(new MemStatTimer(this), DumpMemStats);
+		addTimer(	std::make_unique<MemStatTimer>(this),
+				DumpMemStats);
 
 	if (DumpStateStats)
-		addTimer(new StateStatTimer(this), DumpStateStats);
+		addTimer(	std::make_unique<StateStatTimer>(this),
+				DumpStateStats);
 
 	if (DumpExprStats)
-		addTimer(new ExprStatTimer(this), DumpExprStats);
+		addTimer(std::make_unique<ExprStatTimer>(this), DumpExprStats);
 
 	if (DumpCacheStats)
-		addTimer(new CacheStatTimer(this), DumpCacheStats);
+		addTimer(std::make_unique<CacheStatTimer>(this), DumpCacheStats);
 
 	if (DumpHashStats)
-		addTimer(new HashStatTimer(this), DumpHashStats);
+		addTimer(std::make_unique<HashStatTimer>(this), DumpHashStats);
 
 	if (DumpCovStats)
-		addTimer(new CovStatTimer(this), DumpCovStats);
+		addTimer(std::make_unique<CovStatTimer>(this), DumpCovStats);
 
 	if (DumpQueryStats)
-		addTimer(new QueryStatTimer(this), DumpQueryStats);
+		addTimer(std::make_unique<QueryStatTimer>(this), DumpQueryStats);
 
 	if (DumpStackStats)
-		addTimer(new StackStatTimer(this), DumpStackStats);
+		addTimer(std::make_unique<StackStatTimer>(this), DumpStackStats);
 
 	if (DumpCovData)
-		addTimer(new CovTimer("cov.txt", this), DumpCovData);
+		addTimer(std::make_unique<CovTimer>("cov.txt", this),
+			 DumpCovData);
 
 	if (DumpBrData)
-		addTimer(new BrDataTimer("brdata.txt", this), DumpBrData);
+		addTimer(std::make_unique<BrDataTimer>("brdata.txt", this),
+			 DumpBrData);
 	if (DumpBrExprData)
-		addTimer(
-			new BrDataTimer("brexprdata.txt", this, true),
-			DumpBrExprData);
+		addTimer(std::make_unique<BrDataTimer>("brexprdata.txt", this, true),
+			 DumpBrExprData);
 
 	if (DumpBTrackerDot)
-		addTimer(
-			new BTrackerDotTimer("btracker.dot", this),
-			DumpBTrackerDot);
+		addTimer(std::make_unique<BTrackerDotTimer>("btracker.dot", this),
+			 DumpBTrackerDot);
 
 	if (DumpBTrackerPaths)
-		addTimer(
-			new BTrackerPathsTimer("btracker.path", this),
-			DumpBTrackerPaths);
-
+		addTimer(std::make_unique<BTrackerPathsTimer>("btracker.path", this),
+			 DumpBTrackerPaths);
 
 	if (DumpFuncHeat)
-		addTimer(new FuncHeatTimer("funcheat.txt", this), DumpFuncHeat);
+		addTimer(std::make_unique<FuncHeatTimer>("funcheat.txt", this),
+			 DumpFuncHeat);
 
 	if (UseGCTimer)
-		addTimer(new ExprGCTimer(this), UseGCTimer);
+		addTimer(std::make_unique<ExprGCTimer>(this),
+			 UseGCTimer);
 
 	if (UseObjScanTimer)
-		addTimer(new ExprObjScanTimer(this), UseObjScanTimer);
+		addTimer(std::make_unique<ExprObjScanTimer>(this),
+			 UseObjScanTimer);
 
 
 	if (DumpStateInstStats)
-		addTimer(new StateInstStatTimer(this), DumpStateInstStats);
+		addTimer(std::make_unique<StateInstStatTimer>(this),
+			 DumpStateInstStats);
 
 	if (UseCmdUser)
-		addTimer(new UserCommandTimer(this), 2);
+		addTimer(std::make_unique<UserCommandTimer>(this), 2);
 
 	if (DumpForkCondGraph)
-		addTimer(new ForkCondTimer(this), DumpForkCondGraph);
+		addTimer(std::make_unique<ForkCondTimer>(this),
+			 DumpForkCondGraph);
 }
 
 ///
 
-Executor::Timer::Timer() {}
-Executor::Timer::~Timer() {}
 
-class Executor::TimerInfo {
-public:
-  Timer *timer;
-
-  /// Approximate delay per timer firing.
-  double rate;
-  /// Wall time for next firing.
-  double nextFireTime;
-
-public:
-  TimerInfo(Timer *_timer, double _rate)
-    : timer(_timer),
-      rate(_rate),
-      nextFireTime(util::estWallTime() + rate) {}
-  ~TimerInfo() { delete timer; }
-};
-
-void Executor::addTimer(Timer *timer, double rate)
-{ timers.push_back(new TimerInfo(timer, rate)); }
+void Executor::addTimer(std::unique_ptr<Timer> timer, double rate) {
+	std::cerr << "GOT RATE: " << rate << '\n';
+	timers.push_back(std::make_unique<TimerInfo>(std::move(timer), rate));
+}
 
 void Executor::processTimersDumpStates(void)
 {
   auto os = interpreterHandler->openOutputFile("states.txt");
   if (!os) goto done;
 
-  foreach (it,  stateManager->begin(), stateManager->end()) {
-    ExecutionState *es = *it;
+  for (auto es : *stateManager) {
     *os << "(" << es << ",";
     *os << "[";
     CallStack::iterator next = es->stack.begin();
@@ -912,6 +885,13 @@ done:
   dumpStates = 0;
 }
 
+Executor::TimerInfo::TimerInfo(std::unique_ptr<Timer> _timer, double _rate)
+	: timer(std::move(_timer))
+	,  rate(_rate)
+	,  nextFireTime(util::estWallTime() + rate)
+{}
+
+
 void Executor::processTimers(ExecutionState *current, double maxInstTime)
 {
 	static double lastCall = 0., lastCheck = 0.;
@@ -939,16 +919,7 @@ void Executor::processTimers(ExecutionState *current, double maxInstTime)
 		TERMINATE_EARLY(this, *current, "max-inst-time exceeded");
 	}
 
-	if (timers.empty()) goto done;
-
-	foreach (it, timers.begin(), timers.end()) {
-		TimerInfo *ti = *it;
-
-		if (now < ti->nextFireTime) continue;
-
-		ti->timer->run();
-		ti->nextFireTime = now + ti->rate;
-	}
+	for (auto &ti : timers) ti->fire(now);
 
 done:
 	lastCall = now;
@@ -957,17 +928,6 @@ done:
 void Executor::flushTimers(void)
 {
 	double now = util::estWallTime();
-
 	std::cerr << "[Exe] Flushing timers\n";
-	foreach (it, timers.begin(), timers.end()) {
-		TimerInfo	*ti(*it);
-		ti->timer->run();
-		ti->nextFireTime = now + ti->rate;
-	}
-}
-
-void Executor::deleteTimerInfo(TimerInfo*& p)
-{
-	delete p;
-	p = 0;
+	for (auto &ti : timers) ti->forceFire(now);
 }

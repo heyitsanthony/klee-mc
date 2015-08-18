@@ -212,7 +212,7 @@ Executor::~Executor()
 
 	if (replay != NULL) delete replay;
 
-	std::for_each(timers.begin(), timers.end(), deleteTimerInfo);
+	timers.clear();
 	delete stateManager;
 	if (brPredict) delete brPredict;
 	if (mmu != NULL) delete mmu;
