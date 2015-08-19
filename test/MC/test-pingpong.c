@@ -2,13 +2,13 @@
 // RUN: rm -rf guest-tpp klee-out-tpp-ktest/  klee-out-tpp-paths/  klee-out-tpp-replay/
 // RUN: ../../../scripts/save_guest.sh ./%t1 guest-tpp
 // GET KTESTS
-// RUN: klee-mc -use-cex-cache=false -pipe-solver -guest-type=sshot -guest-sshot=guest-tpp -use-sym-mmu -sym-mmu-type=forkall -verify-path -output-dir=klee-out-tpp-ktest - ./%t1 2>%t1.err >%t1.out
+// RUN: klee-mc -use-cex-cache=false -pipe-solver -guest-type=sshot -guest-sshot=guest-tpp -use-sym-mmu -sym-mmu-type=forkall -verify-path -output-dir=klee-out-tpp-ktest - ./%t1 2>%t1.0.err >%t1.0.out
 // RUN: ls klee-out-tpp-ktest | not grep "ptr.err"
 // RUN: ls klee-out-tpp-ktest | grep ktest
 //
-// RUN: klee-mc -use-cex-cache=false -pipe-solver -only-replay -write-paths -guest-type=sshot -replay-suppress-forks=false -dump-states-on-halt=false -replay-ktest-dir=klee-out-tpp-ktest -verify-path -guest-sshot=guest-tpp -use-sym-mmu -sym-mmu-type=forkall -output-dir=klee-out-tpp-paths - ./%t1 2>%t1.err >%t1.out
+// RUN: klee-mc -use-cex-cache=false -pipe-solver -only-replay -write-paths -guest-type=sshot -replay-suppress-forks=false -dump-states-on-halt=false -replay-ktest-dir=klee-out-tpp-ktest -verify-path -guest-sshot=guest-tpp -use-sym-mmu -sym-mmu-type=forkall -output-dir=klee-out-tpp-paths - ./%t1 2>%t1.1.err >%t1.1.out
 //
-// RUN: klee-mc -use-cex-cache=false -pipe-solver -only-replay -guest-type=sshot -replay-suppress-forks=false -dump-states-on-halt=false -replay-path-dir=klee-out-tpp-paths -verify-path -guest-sshot=guest-tpp -use-sym-mmu -sym-mmu-type=forkall -output-dir=klee-out-tpp-replay ./%t1 2>%t1.err >%t1.out
+// RUN: klee-mc -use-cex-cache=false -pipe-solver -only-replay -guest-type=sshot -replay-suppress-forks=false -dump-states-on-halt=false -replay-path-dir=klee-out-tpp-paths -verify-path -guest-sshot=guest-tpp -use-sym-mmu -sym-mmu-type=forkall -output-dir=klee-out-tpp-replay ./%t1 2>%t1.2.err >%t1.2.out
 // RUN: rm -rf guest-replay klee-out-tpp-ktest klee-out-tpp-paths klee-out-tpp-replay
 
 #include <unistd.h>
