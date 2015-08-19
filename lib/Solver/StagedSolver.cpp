@@ -10,12 +10,6 @@ StagedIncompleteSolverImpl::StagedIncompleteSolverImpl(
 , secondary(_secondary)
 {}
 
-StagedIncompleteSolverImpl::~StagedIncompleteSolverImpl()
-{
-	delete primary;
-	delete secondary;
-}
-
 bool StagedIncompleteSolverImpl::computeSat(const Query& query)
 {
 	IncompleteSolver::PartialValidity trueResult;
@@ -104,12 +98,6 @@ StagedSolverImpl::StagedSolverImpl(
 , secondary(_secondary)
 , validityBySat(_vs)
 {}
-
-StagedSolverImpl::~StagedSolverImpl()
-{
-	delete primary;
-	delete secondary;
-}
 
 bool StagedSolverImpl::computeSat(const Query& query)
 {

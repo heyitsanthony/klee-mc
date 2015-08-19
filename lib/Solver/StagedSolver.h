@@ -12,19 +12,19 @@ namespace klee
 class StagedIncompleteSolverImpl : public SolverImpl
 {
 private:
-	IncompleteSolver	*primary;
-	Solver			*secondary;
+	std::unique_ptr<IncompleteSolver>	primary;
+	std::unique_ptr<Solver>			secondary;
 
 public:
 	StagedIncompleteSolverImpl(IncompleteSolver *_primary, Solver *_secondary);
-	virtual ~StagedIncompleteSolverImpl();
+	virtual ~StagedIncompleteSolverImpl() = default;
 
-	bool computeSat(const Query&);
-	Solver::Validity computeValidity(const Query&);
-	ref<Expr> computeValue(const Query&);
-	bool computeInitialValues(const Query&, Assignment&);
+	bool computeSat(const Query&) override;
+	Solver::Validity computeValidity(const Query&) override;
+	ref<Expr> computeValue(const Query&) override;
+	bool computeInitialValues(const Query&, Assignment&) override;
 
-	void printName(int level = 0) const {
+	void printName(int level = 0) const override {
 		klee_message("%*s" "StagedIncompleteSolverImpl containing:", 
 			2*level, "");
 		primary->printName(level + 1);
@@ -36,24 +36,24 @@ public:
 class StagedSolverImpl : public SolverImpl
 {
 private:
-	Solver	*primary;
-	Solver	*secondary;
+	std::unique_ptr<Solver>	primary;
+	std::unique_ptr<Solver>	secondary;
 	bool	validityBySat;
 protected:
-	virtual void failQuery(void);
+	void failQuery(void) override;
 public:
 	StagedSolverImpl(
 		Solver *_primary,
 		Solver *_secondary,
 		bool validity_with_sat=false);
-	virtual ~StagedSolverImpl();
+	virtual ~StagedSolverImpl() = default;
 
-	bool computeSat(const Query&);
-	Solver::Validity computeValidity(const Query&);
-	ref<Expr> computeValue(const Query&);
-	bool computeInitialValues(const Query&, Assignment&);
+	bool computeSat(const Query&) override;
+	Solver::Validity computeValidity(const Query&) override;
+	ref<Expr> computeValue(const Query&) override;
+	bool computeInitialValues(const Query&, Assignment&) override;
 
-	void printName(int level = 0) const {
+	void printName(int level = 0) const override {
 		klee_message("%*s" "StagedSolverImpl containing:", 2*level, "");
 		primary->printName(level + 1);
 		secondary->printName(level + 1);
