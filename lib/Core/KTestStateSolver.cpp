@@ -14,7 +14,7 @@ KTestStateSolver::KTestStateSolver(
 , base(_base)
 , kt(_kt)
 {
-	solver = NULL; // avoid double-free
+	solver.release(); // avoid double-free
 	
 	kt_assignment = new Assignment(true);
 

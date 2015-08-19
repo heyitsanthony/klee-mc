@@ -20,11 +20,11 @@ class CostKillerStateSolver : public StateSolver
 {
 public:
 	CostKillerStateSolver(StateSolver* _base, double _maxTime)
-		: StateSolver(_base->getSolver()
-		, _base->getTimedSolver())
+		: StateSolver(	_base->getSolver(),
+				_base->getTimedSolver())
 		, base(_base), maxTime(_maxTime)
 	{
-		solver = nullptr;
+		solver.release(); // avoid double-free
 	}
 	virtual ~CostKillerStateSolver() {}
 
