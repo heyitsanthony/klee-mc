@@ -19,10 +19,10 @@ StackFrame::StackFrame(KInstIterator _caller, KFunction *_kf)
 , kf(_kf)
 , onRet(NULL)
 , stackWatermark(0)
-, allocas(NULL)
+, locals(std::make_unique<Cell[]>(kf->numRegisters))
 , minDistToUncoveredOnReturn(0)
 , varargs(0)
-{ locals = new Cell[kf->numRegisters]; }
+{}
 
 StackFrame::StackFrame(const StackFrame &s) 
 : call(s.call)
@@ -31,32 +31,21 @@ StackFrame::StackFrame(const StackFrame &s)
 , onRet(s.onRet)
 , onRet_expr(s.onRet_expr)
 , stackWatermark(s.stackWatermark)
-, allocas(NULL)
 , minDistToUncoveredOnReturn(s.minDistToUncoveredOnReturn)
 , varargs(s.varargs)
 {
 	if (this == &s)
 		return;
 
-	if (s.allocas != NULL) {
-		allocas = new allocas_ty();
-		*allocas = *s.allocas;
+	if (s.allocas) {
+		allocas = std::make_unique<allocas_ty>(*s.allocas);
 	}
 
-	if (s.locals == NULL) {
-		locals = NULL;
-		return;
+	if (s.locals) {
+		locals = std::make_unique<Cell[]>(s.kf->numRegisters);
+		for (unsigned i = 0; i < s.kf->numRegisters; i++)
+			locals[i] = s.locals[i];
 	}
-
-	locals = new Cell[s.kf->numRegisters];
-	for (unsigned i=0; i<s.kf->numRegisters; i++)
-		locals[i] = s.locals[i];
-}
-
-StackFrame::~StackFrame()
-{
-	if (locals) delete[] locals;
-	if (allocas) delete allocas;
 }
 
 StackFrame& StackFrame::operator=(const StackFrame &s)
@@ -72,8 +61,7 @@ StackFrame& StackFrame::operator=(const StackFrame &s)
 	} else
 		new_locals = NULL;
 
-	if (locals) delete[] locals;
-	locals = new_locals;
+	locals.reset(new_locals);
 
 	call = s.call;
 	caller = s.caller;
@@ -81,14 +69,10 @@ StackFrame& StackFrame::operator=(const StackFrame &s)
 	onRet = s.onRet;
 	onRet_expr = s.onRet_expr;
 
-	if (allocas) {
-		delete allocas;
-		allocas = NULL;
-	}
+	if (allocas) allocas.reset();
 
 	if (s.allocas) {
-		allocas = new allocas_ty();
-		*allocas = *s.allocas;
+		allocas = std::make_unique<allocas_ty>(*s.allocas);
 	}
 
 	stackWatermark = s.stackWatermark;
@@ -101,14 +85,13 @@ StackFrame& StackFrame::operator=(const StackFrame &s)
 
 void StackFrame::addAlloca(const MemoryObject* mo)
 {
-	if (allocas == NULL) allocas = new allocas_ty();
+	if (!allocas) allocas = std::make_unique<allocas_ty>();
 	allocas->push_back(mo);
 }
 
 bool StackFrame::clearLocals(void)
 {
-	if (locals == NULL) return false;
-	delete [] locals;
-	locals = NULL;
+	if (!locals) return false;
+	locals.reset();
 	return true;
 }

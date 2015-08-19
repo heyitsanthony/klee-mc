@@ -33,11 +33,10 @@ struct StackFrame {
   KFunction		*onRet;
   ref<Expr>		onRet_expr;
   uint64_t		stackWatermark;
-//private:
-  Cell *locals;
+	std::unique_ptr<Cell[]> locals;
 private:
 	typedef std::vector<const MemoryObject*> allocas_ty;
-	allocas_ty* allocas;
+	std::unique_ptr<allocas_ty> allocas;
 
 public:
   /// Minimum distance to an uncovered instruction once the function
@@ -56,7 +55,6 @@ public:
 
   StackFrame(KInstIterator caller, KFunction *kf);
   StackFrame(const StackFrame &s);
-  ~StackFrame();
   StackFrame& operator=(const StackFrame &s);
   void addAlloca(const MemoryObject*);
   bool clearLocals(void);
