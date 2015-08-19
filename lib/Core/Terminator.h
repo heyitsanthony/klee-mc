@@ -20,7 +20,7 @@ class ExecutionState;
 class Terminator
 {
 public:
-	virtual ~Terminator(void) {}
+	virtual ~Terminator(void) = default;
 	// state has already been processed and is about to be
 	// deleted. Last chance to play with the state; possibly
 	// forks off new states.
@@ -43,7 +43,7 @@ public:
 	TermEarly(Executor* exe, const std::string& _msg)
 	: Terminator(exe)
 	, message(_msg) {}
-	virtual ~TermEarly(void) {}
+	virtual ~TermEarly(void) = default;
 
 	virtual void process(ExecutionState& state);
 	virtual bool terminate(ExecutionState& state);
@@ -60,28 +60,28 @@ public:
 	TermWrapper(Terminator* t)
 	: Terminator(t->getExe())
 	, wrap_t(t) {}
+	virtual ~TermWrapper(void) = default;
 
-	virtual ~TermWrapper(void);
-	virtual Terminator* copy(void) const = 0;
-	virtual void process(ExecutionState& state)
+	Terminator* copy(void) const override = 0;
+	void process(ExecutionState& state) override
 	{ wrap_t->process(state); }
-	virtual bool terminate(ExecutionState& state)
+	bool terminate(ExecutionState& state) override
 	{ return wrap_t->terminate(state); }
-	virtual bool isInteresting(ExecutionState& es) const
+	bool isInteresting(ExecutionState& es) const override
 	{ return wrap_t->isInteresting(es); }
 protected:
-	Terminator	*wrap_t;
+	std::unique_ptr<Terminator> wrap_t;
 };
 
 class TermExit : public Terminator
 {
 public:
 	TermExit(Executor* exe) : Terminator(exe) {}
-	virtual ~TermExit(void) {}
+	virtual ~TermExit(void) = default;
 
-	virtual void process(ExecutionState& state);
-	virtual bool terminate(ExecutionState& state);
-	virtual Terminator* copy(void) const { return new TermExit(getExe()); }
+	void process(ExecutionState& state) override;
+	bool terminate(ExecutionState& state) override;
+	Terminator* copy(void) const override { return new TermExit(getExe()); }
 };
 
 class TermError : public Terminator
@@ -99,12 +99,12 @@ public:
 	, info(_info)
 	, alwaysEmit(_alwaysEmit)
 	{}
-	virtual ~TermError(void);
+	virtual ~TermError(void) = default;
 
-	virtual void process(ExecutionState& state);
-	virtual bool terminate(ExecutionState& state);
-	virtual bool isInteresting(ExecutionState& es) const;
-	virtual Terminator* copy(void) const 
+	void process(ExecutionState& state) override;
+	bool terminate(ExecutionState& state) override;
+	bool isInteresting(ExecutionState& es) const override;
+	Terminator* copy(void) const override
 	{ return new TermError(getExe(), messaget, suffix, info, alwaysEmit); }
 private:
 	void printStateErrorMessage(

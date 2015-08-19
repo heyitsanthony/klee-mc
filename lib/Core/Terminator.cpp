@@ -173,6 +173,3 @@ void TermError::printStateErrorMessage(
 		ros << "\n";
 	}
 }
-
-TermError::~TermError(void) {}
-TermWrapper::~TermWrapper(void) { delete wrap_t; }
