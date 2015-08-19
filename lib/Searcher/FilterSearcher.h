@@ -15,7 +15,7 @@ public:
 		Executor& exe,
 		Searcher* _searcher_base,
 		const char* filter_name = "filtered_funcs.txt");
-	virtual ~FilterSearcher(void) { delete searcher_base; }
+	virtual ~FilterSearcher(void) = default;
 
 	virtual Searcher* createEmpty(void) const
 	{ return new FilterSearcher(
@@ -38,7 +38,7 @@ public:
 
 protected:
 	virtual bool isBlacklisted(ExecutionState& es) const;
-	Searcher* getSearcherBase(void) const { return searcher_base; }
+	Searcher* getSearcherBase(void) const { return searcher_base.get(); }
 	Executor& getExe(void) const { return exe; }
 private:
 	bool recheckListing(ExecutionState* current);
@@ -50,7 +50,7 @@ private:
 
 	ExeStateSet	scheduled;
 	ExeStateSet	blacklisted;
-	Searcher	*searcher_base;
+	usearcher_t 	searcher_base;
 	Executor	&exe;
 	const char*	filter_fname;
 };

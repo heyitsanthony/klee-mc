@@ -13,7 +13,7 @@ public:
 		     unsigned _instructionBudget);
 	BatchingSearcher(Searcher *baseSearcher);
 
-	virtual ~BatchingSearcher();
+	virtual ~BatchingSearcher() = default;
 
 	virtual Searcher* createEmpty(void) const
 	{ return new BatchingSearcher(
@@ -43,10 +43,10 @@ private:
 	void handleTimeout(void);
 	void adjustAdaptiveTime(void);
 
-	Searcher		*baseSearcher;
-	double			timeBudget;
-	double			timeBudget_base;
-	unsigned		instructionBudget;
+	usearcher_t	baseSearcher;
+	double		timeBudget;
+	double		timeBudget_base;
+	unsigned	instructionBudget;
 
 	ExecutionState		*lastState;
 	double			lastStartTime;

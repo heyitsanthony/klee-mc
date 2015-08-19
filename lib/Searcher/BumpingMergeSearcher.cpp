@@ -78,5 +78,3 @@ BumpMergingSearcher::BumpMergingSearcher(
 , baseSearcher(_baseSearcher)
 , mergeFunction(executor.getKModule()->kleeMergeFn)
 {}
-
-BumpMergingSearcher::~BumpMergingSearcher() { delete baseSearcher; }

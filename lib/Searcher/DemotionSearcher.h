@@ -10,7 +10,7 @@ class DemotionSearcher : public Searcher
 public:
 	ExecutionState &selectState(bool allowCompact);
 	DemotionSearcher(Searcher* _searcher_base, unsigned max_repeats = 10);
-	virtual ~DemotionSearcher(void) { delete searcher_base; }
+	virtual ~DemotionSearcher(void) = default;
 
 	virtual Searcher* createEmpty(void) const
 	{ return new DemotionSearcher(searcher_base->createEmpty()); }
@@ -32,7 +32,7 @@ private:
 
 	ExeStateSet	scheduled;
 	ExeStateSet	demoted;
-	Searcher	*searcher_base;
+	usearcher_t 	searcher_base;
 	ExecutionState	*last_current;
 	unsigned	repeat_c;
 	unsigned	max_repeats;

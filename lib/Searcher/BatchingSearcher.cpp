@@ -62,8 +62,6 @@ BatchingSearcher::BatchingSearcher(Searcher *_baseSearcher)
 : SETUP_BATCHING(_baseSearcher, BatchTime, BatchInstructions)
 {}
 
-BatchingSearcher::~BatchingSearcher() { delete baseSearcher; }
-
 uint64_t BatchingSearcher::getElapsedInstructions(void) const
 { return (stats::instructions - lastStartInstructions); }
 

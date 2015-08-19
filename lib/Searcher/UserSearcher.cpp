@@ -645,7 +645,7 @@ static Searcher* getTunedSearch(Executor& executor)
 	return searcher;
 }
 
-std::unique_ptr<Searcher> UserSearcher::constructUserSearcher(Executor &exe)
+usearcher_t UserSearcher::constructUserSearcher(Executor &exe)
 {
 	Searcher *searcher;
 
@@ -667,5 +667,5 @@ std::unique_ptr<Searcher> UserSearcher::constructUserSearcher(Executor &exe)
 	if (userSearcherRequiresMD2U())
 		exe.getStatsTracker()->setUpdateMinDist();
 
-	return std::unique_ptr<Searcher>(searcher);
+	return usearcher_t(searcher);
 }

@@ -20,7 +20,7 @@ public:
 	, last_cov(0)
 	, concretized(false) {}
 
-	virtual ~ConcretizingSearcher(void) { delete searcher_base; }
+	virtual ~ConcretizingSearcher(void) = default;
 
 	virtual Searcher* createEmpty(void) const
 	{ return new ConcretizingSearcher(exe, searcher_base->createEmpty()); }
@@ -37,11 +37,11 @@ public:
 	}
 
 private:
-	Searcher		*searcher_base;
-	Executor		&exe;
-	ExecutionState		*last_es;
-	uint64_t		last_cov;
-	bool			concretized;
+	usearcher_t	 searcher_base;
+	Executor	&exe;
+	ExecutionState	*last_es;
+	uint64_t	last_cov;
+	bool		concretized;
 
 };
 

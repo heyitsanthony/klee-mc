@@ -10,7 +10,7 @@ namespace klee
   {
     ExecutorBC &executor;
     std::map<llvm::Instruction*, ExecutionState*> statesAtMerge;
-    Searcher *baseSearcher;
+    std::unique_ptr<Searcher> baseSearcher;
     llvm::Function *mergeFunction;
 
   private:
@@ -18,7 +18,7 @@ namespace klee
 
   public:
     BumpMergingSearcher(ExecutorBC &executor, Searcher *baseSearcher);
-    virtual ~BumpMergingSearcher();
+    virtual ~BumpMergingSearcher() = default;
     virtual Searcher* createEmpty(void) const
    { return new BumpMergingSearcher(executor, baseSearcher->createEmpty()); }
 

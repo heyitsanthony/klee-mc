@@ -27,16 +27,7 @@ EpochSearcher::EpochSearcher(
 , epoch_state_c(0)
 , exe(_exe)
 {
-	epochs.push_back(
-		new Epoch(searcher_base->createEmpty()));
-}
-
-EpochSearcher::~EpochSearcher(void)
-{
-	foreach (it, epochs.begin(), epochs.end())
-		delete (*it);
-	delete searcher_base;
-	delete global_pool;
+	epochs.emplace_back(searcher_base->createEmpty());
 }
 
 
@@ -51,7 +42,7 @@ ExecutionState* EpochSearcher::selectPool(bool allowCompact)
 		return es;
 
 	/* insert into epochs */
-	epochs.back()->add(es);
+	epochs.back().add(es);
 	es2epoch.insert(std::make_pair(es, epochs.size()-1));
 
 	return es;
@@ -61,12 +52,12 @@ ExecutionState* EpochSearcher::selectEpoch(bool allowCompact)
 {
 	unsigned	e_idx = theRNG.getInt31() % epochs.size();
 
-	if (epochs[e_idx]->getSearcher()->empty()) {
+	if (epochs[e_idx].getSearcher()->empty()) {
 		std::cerr << "[Epoch] Empty epoch. Pull from pool.\n";
 		return selectPool(allowCompact);
 	}
 
-	return &epochs[e_idx]->getSearcher()->selectState(allowCompact);
+	return &(epochs[e_idx].getSearcher()->selectState(allowCompact));
 }
 
 ExecutionState& EpochSearcher::selectState(bool allowCompact)
@@ -144,15 +135,9 @@ void EpochSearcher::update(ExecutionState *current, States s)
 	global_pool->update(current, s);
 
 	epoch_state_c = 0;
-	foreach (it, epochs.begin(), epochs.end()) {
-		Epoch		*e;
-		unsigned	e_states;
-
-		e = *it;
-		e->update(current, s);
-
-		e_states = e->getNumStates();
-		epoch_state_c += e_states;
+	for (auto &e : epochs) {
+		e.update(current, s);
+		epoch_state_c += e.getNumStates();
 	}
 
 	pool_period = (epoch_state_c/2)+1;

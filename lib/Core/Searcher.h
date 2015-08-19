@@ -13,9 +13,9 @@
 #include <vector>
 #include <set>
 #include <map>
-#include <list>
 #include <ostream>
 #include <stdint.h>
+#include <memory>
 
 namespace klee
 {
@@ -75,6 +75,8 @@ public:
 		update(current, States(States::emptySet, tmp));
 	}
 };
+
+typedef std::unique_ptr<Searcher> usearcher_t;
 }
 
 #endif

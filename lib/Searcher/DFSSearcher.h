@@ -1,6 +1,7 @@
 #ifndef DFSSEARCHER_H
 #define DFSSEARCHER_H
 
+#include <list>
 #include "../Core/Searcher.h"
 
 namespace klee
