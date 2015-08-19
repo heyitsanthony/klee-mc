@@ -97,19 +97,16 @@ bool operator()(const KTest* k1, const KTest* k2)
 
 bool ReplayKTests::replayFast(Executor* exe, ExecutionState* initSt)
 {
-	ForksKTestStateLogger	*f_ktest = new ForksKTestStateLogger(*exe);
+	auto f_ktest = std::make_unique<ForksKTestStateLogger>(*exe);
 
-	exe->setForking(f_ktest);
+	exe->setForking(f_ktest.get());
 
 	if (ReplayKTestSort) {
-		std::vector<KTest*>	kts_s;
-		kts_s = kts;
+		std::vector<KTest*>	kts_s(kts);
 		std::sort (kts_s.begin(), kts_s.end(), kts_sort());
 		replayFast(exe, initSt, kts_s);
 	} else
 		replayFast(exe, initSt, kts);
-
-	delete f_ktest;
 
 	return true;
 }
@@ -154,12 +151,11 @@ void ReplayKTests::replayFast(
 bool ReplayKTests::replaySlow(Executor* exe, ExecutionState* initSt)
 {
 	ExeStateManager	*esm = exe->getStateManager();
-	ForksKTest	*f_ktest = new ForksKTest(*exe);
+	auto f_ktest = std::make_unique<ForksKTest>(*exe);
 
-	exe->setForking(f_ktest);
-	foreach (it, kts.begin(), kts.end()) {
+	exe->setForking(f_ktest.get());
+	for (auto const ktest : kts) {
 		ExecutionState	*es;
-		const KTest	*ktest(*it);
 
 		es = initSt->copy();
 		es->ptreeNode->markReplay();
@@ -173,8 +169,6 @@ bool ReplayKTests::replaySlow(Executor* exe, ExecutionState* initSt)
 			<< esm->numRunningStates() << "\n";
 
 	}
-
-	delete f_ktest;
 
 	return true;
 }
