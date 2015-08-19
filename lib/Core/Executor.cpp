@@ -185,9 +185,9 @@ Executor::Executor(InterpreterHandler *ih)
 
 	ObjectState::setupZeroObjs();
 
-	memory = MemoryManager::create();
+	memory.reset(MemoryManager::create());
 	stateManager = new ExeStateManager();
-	ExecutionState::setMemoryManager(memory);
+	ExecutionState::setMemoryManager(memory.get());
 	ExeStateBuilder::replaceBuilder(new BaseExeStateBuilder());
 	forking = new Forks(*this);
 
@@ -216,7 +216,6 @@ Executor::~Executor()
 	delete stateManager;
 	if (brPredict) delete brPredict;
 	if (mmu != NULL) delete mmu;
-	delete memory;
 	delete statsTracker;
 
 	if (fastSolver) delete fastSolver;

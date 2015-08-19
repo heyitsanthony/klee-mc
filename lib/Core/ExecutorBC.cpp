@@ -90,7 +90,7 @@ void ExecutorBC::runFunctionAsMain(
 	srand(1);
 	srandom(1);
 
-	ExecutionState::setMemoryManager(memory);
+	ExecutionState::setMemoryManager(memory.get());
 	state = ExeStateBuilder::create(kf);
 
 	setupArgv(state, f, argc, argv, envp);
@@ -102,9 +102,7 @@ void ExecutorBC::runFunctionAsMain(
 
 	globals = nullptr;
 
-	// hack to clear memory objects
-	delete memory;
-	memory = MemoryManager::create();
+	memory.reset(MemoryManager::create());
 
 	statsTracker->done();
 }

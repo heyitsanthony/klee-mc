@@ -60,7 +60,6 @@ public:
 	Guest* getGuest(void) { return gs; }
 	const Guest* getGuest(void) const { return gs; }
 
-	MemoryManager* getMM(void) { return memory; }
 	MemoryObject* allocRegCtx(ExecutionState* state, llvm::Function* f = 0);
 
 	void setRegCtx(ExecutionState& state, MemoryObject* mo);

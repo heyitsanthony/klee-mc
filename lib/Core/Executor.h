@@ -202,7 +202,7 @@ public:
 
 	virtual llvm::Function* getFuncByAddr(uint64_t addr) = 0;
 
-	MemoryManager	*memory;
+	std::unique_ptr<MemoryManager>	memory;
 private:
 	void handleMemoryUtilization(ExecutionState* &state);
 	void handleMemoryPID(ExecutionState* &state);

@@ -330,7 +330,7 @@ void ExecutorVex::runSym(const char* xchk_fn)
 	} else
 		sym = NULL;
 
-	ExecutionState::setMemoryManager(memory);
+	ExecutionState::setMemoryManager(memory.get());
 	base_addr = (sym)
 		? sym->getBaseAddr()
 		: ((uint64_t)gs->getEntryPoint());
@@ -344,8 +344,7 @@ void ExecutorVex::runSym(const char* xchk_fn)
 
 void ExecutorVex::cleanupImage(void)
 {
-	delete memory;
-	memory = MemoryManager::create();
+	memory.reset(MemoryManager::create());
 	statsTracker->done();
 }
 
