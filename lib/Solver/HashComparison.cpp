@@ -36,19 +36,13 @@ namespace {
 	if (!in_solver) { in_solver = true; dumpQueryHash(q); in_solver = false; }
 
 HashComparison::HashComparison(Solver* s, QueryHash* h1, QueryHash* h2)
-: SolverImplWrapper(s)
-, in_solver(false)
-, qh1(h1), qh2(h2)
+	: SolverImplWrapper(s)
+	, in_solver(false)
+	, qh1(h1)
+	, qh2(h2)
+	, of(std::make_unique<std::ofstream>(HashComparisonFile.c_str()))
 {
 	assert (HashComparisonFile.size());
-	of = new std::ofstream(HashComparisonFile.c_str());
-}
-
-HashComparison::~HashComparison()
-{
-	delete of;
-	delete qh1;
-	delete qh2;
 }
 
 bool HashComparison::computeSat(const Query& q)
