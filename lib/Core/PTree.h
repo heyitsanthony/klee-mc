@@ -21,6 +21,8 @@ namespace klee
 class ExecutionState;
 class PTreeNode;
 
+
+typedef std::shared_ptr<PTreeNode> shared_ptnode;
 /* A tree that tracks probabilities; not too great */
 
 class PTree
@@ -37,25 +39,27 @@ public:
 	      FirstVarWeight = WeightCompact
 	};
 
-	PTreeNode *root;
+	shared_ptnode	root;
 
 	PTree(const data_type &_root);
+	PTree(const PTree& pt) = delete;
 	~PTree();
 
-	void remove(PTreeNode *n);
+	void remove(shared_ptnode& n);
 
 	void dump(std::ostream &os) const;
 	void dump(const std::string& n) const;
 	ExecutionState* removeState(ExecutionState* es);
 	void removeRoot(ExecutionState* es);
-
-	void splitStates(PTreeNode* n, ExecutionState* a, ExecutionState* b);
+	void splitStates(	shared_ptnode& n,
+				ExecutionState* a,
+				ExecutionState* b);
 	void updateReplacement(ExecutionState* ns, ExecutionState* es);
 
 	bool isRoot(ExecutionState* es) const;
 private:
-	std::pair<PTreeNode*,PTreeNode*> split(
-		PTreeNode *n,
+	std::pair<shared_ptnode, shared_ptnode> split(
+		shared_ptnode& n,
 		const data_type &leftData,
 		const data_type &rightData);
 };
@@ -64,25 +68,30 @@ class PTreeNode
 {
 	friend class PTree;
 public:
-	llvm::SmallVector<PTreeNode*, 2>	children;
+	llvm::SmallVector<shared_ptnode, 2>	children;
 	llvm::SmallVector<std::vector<bool>, 2>	sums;
 
 	void update(PTree::Weights index, bool sum);
 	double getProbability() const;
 
-	PTreeNode(PTreeNode *_parent, ExecutionState *_data)
-	: parent(_parent), data(_data) { }
-	~PTreeNode() { }
+	PTreeNode(shared_ptnode _parent, ExecutionState *_data)
+		: parent(_parent)
+		, data(_data)
+	{}
 
-	PTreeNode* getParent(void) const { return parent; }
+	PTreeNode(const PTreeNode& ptn) = delete;
+	~PTreeNode() = default;
+
+	PTreeNode* getParent(void) const { return parent.get(); }
 	ExecutionState* getData(void) const { return data; }
 	void markReplay(void) { data = 0; }
 private:
 	void propagateSumsUp();
 
-	PTreeNode	*parent;
+	shared_ptnode	parent;
 	ExecutionState	*data;
 };
+
 }
 
 #endif

@@ -21,7 +21,7 @@
 using namespace klee;
 
 PTree::PTree(const data_type &_root)
-: root(new PTreeNode(0, _root))
+: root(std::make_shared<PTreeNode>(nullptr, _root))
 {}
 
 PTree::~PTree()
@@ -29,20 +29,18 @@ PTree::~PTree()
 	assert(root);
 	assert(!root->data);
 	assert(root->children.empty());
-
-	delete root;
 }
 
-std::pair<PTreeNode*, PTreeNode*>
+std::pair<shared_ptnode, shared_ptnode>
 PTree::split(
-	PTreeNode *n,
+	shared_ptnode &n,
 	const data_type &leftData,
 	const data_type &rightData)
 {
 	assert(n && n->children.empty());
 	n->children.resize(2);
-	n->children[0] = new PTreeNode(n, leftData);
-	n->children[1] = new PTreeNode(n, rightData);
+	n->children[0] = std::make_shared<PTreeNode>(n, leftData);
+	n->children[1] = std::make_shared<PTreeNode>(n, rightData);
 	n->sums.assign(
 		n->children.size(),
 		std::vector<bool>(NumWeights, true));
@@ -63,15 +61,15 @@ void PTree::removeRoot(ExecutionState* es)
 {
 	assert (isRoot(es));
 	delete root->data;
-	root->data = 0;
+	root->data = nullptr;
 }
 
-void PTree::remove(PTreeNode *n)
+void PTree::remove(shared_ptnode& n)
 {
 	assert(n->children.empty() && "Cannot remove interior node");
 
 	while (n->parent && n->children.empty()) {
-		PTreeNode *p = n->parent;
+		auto p = n->parent;
 		bool found = false;
 
 		assert(p != NULL);
@@ -90,12 +88,12 @@ void PTree::remove(PTreeNode *n)
 
 		// collapse away nodes with a single child
 		if (p->children.size() != 1) {
-			delete n;
+			// n may vanish here
 			n = p;
 			continue;
 		}
 
-		if (PTreeNode *p2 = p->parent) {
+		if (auto p2 = p->parent) {
 			found = false;
 			for (unsigned i = 0; i < p2->children.size(); i++) {
 				if (p != p2->children[i])
@@ -106,7 +104,7 @@ void PTree::remove(PTreeNode *n)
 				p->children[0]->parent = p2;
 				p2->sums[i] = p->sums[0];
 
-				delete p;
+				// p is orphaned, so replacement deletes it
 				p = p2;
 
 				break;
@@ -116,29 +114,30 @@ void PTree::remove(PTreeNode *n)
 		} else {
 			// 'p' is the root node
 			root = p->children[0];
-			root->parent = NULL;
-			delete p;
+			root->parent = nullptr;
+			p->children.clear();
+			// p is orphaned, so replacement deletes it
 			p = root;
 		}
 
-		delete n;
+		// n may vanish here
 		n = p;
 	}
 
+	assert (n);
 	n->propagateSumsUp();
 }
 
 void PTreeNode::update(PTree::Weights index, bool sum)
 {
-	PTreeNode	*p;
+	PTreeNode	*p = parent.get();
 	unsigned	i;
 
-	p = parent;
 	if (p == NULL)
 		return;
 
 	for (i = 0; i < p->children.size(); i++)
-		if (p->children[i] == this)
+		if (p->children[i].get() == this)
 			break;
 
 	assert(i < p->children.size() && "Orphaned node detected");
@@ -186,9 +185,9 @@ void PTree::dump(std::ostream &os) const
 		"width=.1,height=.1,fontname=\"Terminus\"]\n";
 	os << "\tedge [arrowsize=.3]\n";
 
-	stack.push_back(root);
+	stack.push_back(root.get());
 	while (!stack.empty()) {
-		PTreeNode *n = stack.back();
+		auto n = stack.back();
 		stack.pop_back();
 		os << "\tn" << n << " [label=\"\"";
 		if (n->data)
@@ -196,7 +195,7 @@ void PTree::dump(std::ostream &os) const
 		os << "];\n";
 		for (unsigned i = 0; i < n->children.size(); i++) {
 			os << "\tn" << n << " -> n" << n->children[i] << ";\n";
-			stack.push_back(n->children[i]);
+			stack.push_back(n->children[i].get());
 		}
 	}
 
@@ -204,10 +203,10 @@ void PTree::dump(std::ostream &os) const
 	delete pp;
 }
 
-void PTree::splitStates(PTreeNode* n, ExecutionState* a, ExecutionState* b)
+void PTree::splitStates(shared_ptnode& n, ExecutionState* a, ExecutionState* b)
 {
 	assert(!n->data);
-	std::pair<PTreeNode*, PTreeNode*> res = split(n, a, b);
+	auto res = split(n, a, b);
 
 	a->ptreeNode = res.first;
 	a->ptreeNode->update(PTree::WeightCompact, !a->isCompact());
@@ -221,10 +220,10 @@ void PTreeNode::propagateSumsUp(void)
 {
 	PTreeNode *n = this;
 
-	while (PTreeNode* p = n->parent) {
+	while (auto p = n->parent.get()) {
 		unsigned i;
 		for (i = 0; i < p->children.size(); i++)
-			if (n == p->children[i])
+			if (n == p->children[i].get())
 				break;
 		assert(i < p->children.size() && "Orphaned node detected");
 
@@ -255,7 +254,7 @@ double PTreeNode::getProbability() const
 
 	while (n->parent != NULL) {
 		p /= (double) n->parent->children.size();
-		n = n->parent;
+		n = n->parent.get();
 	}
 
 	return p;

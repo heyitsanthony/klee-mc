@@ -155,7 +155,7 @@ public:
 	bool forkDisabled;	/* Disables forking, set by user code. */
 
 	std::map<const std::string*, std::set<unsigned> > coveredLines;
-	PTreeNode *ptreeNode;
+	std::shared_ptr<PTreeNode> ptreeNode;
 
 	// for use with std::mem_fun[_ref] since they don't accept data members
 	bool isCompact() const { return isCompactForm; }

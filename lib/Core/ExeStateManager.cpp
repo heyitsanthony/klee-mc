@@ -115,7 +115,7 @@ void ExeStateManager::queueAdd(ExecutionState* es)
 }
 
 void ExeStateManager::queueSplitAdd(
-	PTreeNode	*ptn,
+	shared_ptnode	&ptn,
 	ExecutionState	*initialState,
 	ExecutionState	*newState)
 {

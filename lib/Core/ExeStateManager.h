@@ -4,12 +4,12 @@
 #ifndef EXESTATEMANAGER_H
 #define EXESTATEMANAGER_H
 #include "klee/ExecutionState.h"
+#include "PTree.h"
 #include "Searcher.h"
 
 namespace klee
 {
 class Searcher;
-class PTree;
 
 typedef std::map<ExecutionState*, ExecutionState*> ExeStateReplaceMap;
 
@@ -64,7 +64,7 @@ public:
 	void dropAdded(ExecutionState* es);
 	void queueAdd(ExecutionState* es);
 	void queueSplitAdd(
-		PTreeNode	*ptn,
+		shared_ptnode	&ptn,
 		ExecutionState	*initialState,
 		ExecutionState	*newState);
 

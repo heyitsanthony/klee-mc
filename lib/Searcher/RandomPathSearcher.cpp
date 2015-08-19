@@ -24,9 +24,8 @@ RandomPathSearcher::RandomPathSearcher(Executor &_executor)
 ExecutionState &RandomPathSearcher::selectState(bool allowCompact)
 {
 	unsigned	flips=0, bits=0;
-	PTreeNode	*n;
 	
-	n = executor.getStateManager()->getPTree()->root;
+	auto n = executor.getStateManager()->getPTree()->root;
 	while (n->getData() == NULL) {
 		unsigned numEnabledChildren = 0, enabledIndex = 0;
 
@@ -90,8 +89,7 @@ void RandomPathSearcher::update(ExecutionState *current, const States s)
 {
 	std::set<ExecutionState*>	inflight;
 
-	foreach (it, s.getAdded().begin(), s.getAdded().end()) {
-		ExecutionState *es = *it;
+	for (auto es : s.getAdded()) {
 		if (es->ptreeNode->getData() != es) {
 			/* Node is probably replacing another node which
 			 * is in the remove list. Ignore it. */
@@ -101,8 +99,8 @@ void RandomPathSearcher::update(ExecutionState *current, const States s)
 		es->ptreeNode->update(PTree::WeightRunnable, true);
 	}
 
-	foreach (it, s.getRemoved().begin(), s.getRemoved().end()) {
-		ExecutionState *es = *it, *es_data;
+	for (auto es : s.getRemoved()) {
+		ExecutionState	*es_data;
 
 		if (es->ptreeNode == NULL)
 			continue;
