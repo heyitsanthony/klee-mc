@@ -18,7 +18,7 @@ class HashSolver : public SolverImplWrapper
 {
 public:
 	HashSolver(Solver* s, QueryHash* phash);
-	virtual ~HashSolver();
+	virtual ~HashSolver() = default;
 
 private:
 	static unsigned	hits;
@@ -28,7 +28,8 @@ private:
 	typedef std::vector< QHSEntry* > missqueue_ty;
 
 	static missqueue_ty	miss_queue;
-	QueryHash		*qhash;
+	std::unique_ptr<QueryHash>	qhash;
+
 	/* some stupid optimizations so we don't have to recompute 
 	 * hashes all the time */
 	const Query		*cur_q;
@@ -37,7 +38,7 @@ private:
 	std::set<Expr::Hash>	sat_hashes;
 	std::set<Expr::Hash>	unsat_hashes;
 	std::set<Expr::Hash>	poison_hashes;
-	QHSStore		*qstore;
+	std::unique_ptr<QHSStore>	qstore;
 
 	Assignment* loadCachedAssignment(const std::vector<const Array*>& objs);
 
@@ -49,7 +50,7 @@ private:
 	std::string getHashPathUnSAT(void) const;
 	std::string getHashPathSolution(void) const;
 
-	bool isMatch(Assignment* a) const;
+	bool isMatch(const Assignment& a) const;
 	bool computeSatMiss(const Query& q);
 	bool isPoisoned(const Query& q);
 

@@ -126,12 +126,12 @@ bool HashSolver::computeSatMiss(const Query& q)
 Solver::Validity HashSolver::computeValidity(const Query& q)
 { return doComputeValiditySplit(q); }
 
-bool HashSolver::isMatch(Assignment* a) const
+bool HashSolver::isMatch(const Assignment& a) const
 {
-	if (a->satisfies(cur_q->expr) == false)
+	if (a.satisfies(cur_q->expr) == false)
 		return false;
 
-	if (cur_q->constraints.isValid(*a) == false)
+	if (cur_q->constraints.isValid(a) == false)
 		return false;
 
 	return true;
@@ -179,23 +179,16 @@ ref<Expr> HashSolver::computeValue(const Query& query)
 
 bool HashSolver::getCachedAssignment(const Query& q, Assignment& a_out)
 {
-	Assignment	*a;
-
 	cur_q = &q;
 	cur_hash = qhash->hash(q);
 	q_loaded = false;
 
-	a = loadCachedAssignment(a_out.getObjectVector());
-	if (a == NULL) return false;
-
-	if (isMatch(a) == false) goto err;
+	auto a = std::unique_ptr<Assignment>(
+		loadCachedAssignment(a_out.getObjectVector()));
+	if (!a || !isMatch(*a)) return false;
 
 	a_out = *a;
-	delete a;
 	return true;
-err:
-	delete a;
-	return false;
 }
 
 void HashSolver::saveCachedAssignment(const Assignment& a)
@@ -259,27 +252,21 @@ HashSolver::HashSolver(Solver* s, QueryHash* in_qhash)
 	if (HCacheSink == false) {
 		if (HCacheFDir.size()) {
 			std::cerr << "[HashSolver] Using sink file\n";
-			qstore = QHSFile::create(
+			qstore.reset(QHSFile::create(
 				HCacheFDir.c_str(),
-				HCachePendingDir.c_str());
+				HCachePendingDir.c_str()));
 		} else
-			qstore = QHSDir::create(HCacheDir);
+			qstore.reset(QHSDir::create(HCacheDir));
 	} else {
 		assert (HCacheFDir.size() && HCacheDir.size());
-		qstore = new QHSSink(
+		qstore.reset(new QHSSink(
 			QHSDir::create(HCacheDir),
 			QHSFile::create(
 				HCacheFDir.c_str(),
-				HCachePendingDir.c_str()));
+				HCachePendingDir.c_str())));
 	}
 
 	assert (qstore != NULL);
 	assert (qhash);
 	mkdir((HCacheDir + "/solution").c_str(), 0770);
-}
-
-HashSolver::~HashSolver()
-{
-	delete qstore;
-	delete qhash;
 }
