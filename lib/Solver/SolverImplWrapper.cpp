@@ -2,8 +2,6 @@
 
 using namespace klee;
 
-SolverImplWrapper::~SolverImplWrapper() { delete wrappedSolver; }
-
 bool SolverImplWrapper::doComputeSat(const Query& query)
 {
 	bool isSat;
