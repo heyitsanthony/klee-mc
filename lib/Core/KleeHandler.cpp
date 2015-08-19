@@ -112,7 +112,7 @@ bool KleeHandler::scanForOutputDir(const std::string& p, std::string& theDir)
 
 	for (int i = directory.size() - 1; i; i--)
 		if (directory[i] == '/') {
-			directory[i] = '\0';
+			directory = directory.substr(0, i);
 			break;
 		}
 	if (directory.empty()) directory = ".";
