@@ -1,4 +1,3 @@
-#include "klee/Internal/ADT/MemFile.h"
 #include <algorithm>
 #include "QHSFile.h"
 
@@ -25,13 +24,10 @@ bool QHSFile::HashFile::hasHash(Expr::Hash h) const
 		h);
 }
 
-QHSFile::HashFile::~HashFile() { delete mf; }
-
 QHSFile::HashFile* QHSFile::HashFile::create(const char* fname)
 {
 	MemFile	*mf = MemFile::create(fname);
-	if (mf == NULL) return NULL;
-	return new HashFile(mf);
+	return (mf) ? new HashFile(mf) : nullptr;
 }
 
 QHSFile* QHSFile::create(
@@ -47,13 +43,13 @@ QHSFile::QHSFile(
 	char	path[256];
 
 	snprintf(path, 256, "%s/sat.hcache", cache_fdir);
-	hf_sat = HashFile::create(path);
+	hf_sat.reset(HashFile::create(path));
 
 	snprintf(path, 256, "%s/unsat.hcache", cache_fdir);
-	hf_unsat = HashFile::create(path);
+	hf_unsat.reset(HashFile::create(path));
 
 	snprintf(path, 256, "%s/poison.hcache", cache_fdir);
-	hf_poison = HashFile::create(path);
+	hf_poison.reset(HashFile::create(path));
 
 	snprintf(path, 256, "%s/sat.pending", _pending_fdir);
 	pend_sat = PendingFile::create(path);
@@ -68,13 +64,6 @@ QHSFile::QHSFile(
 	pend_value = PendingValueFile::create(path);
 
 	assert (pend_sat && pend_unsat && pend_value && pend_poison);
-}
-
-QHSFile::~QHSFile(void)
-{
-	if (hf_sat) delete hf_sat;
-	if (hf_unsat) delete hf_unsat;
-	if (hf_poison) delete hf_poison;
 }
 
 bool QHSFile::lookupSAT(const QHSEntry& qe)

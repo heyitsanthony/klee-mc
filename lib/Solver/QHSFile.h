@@ -1,6 +1,7 @@
 #ifndef QHSFILE_H
 #define QHSFILE_H
 
+#include "klee/Internal/ADT/MemFile.h"
 #include <tr1/unordered_set>
 #include <tr1/unordered_map>
 #include <stdio.h>
@@ -17,12 +18,12 @@ private:
 	{
 	public:
 		static HashFile* create(const char* fname);
-		virtual ~HashFile();
+		virtual ~HashFile() = default;
 		bool hasHash(Expr::Hash h) const;
 	private:
 		HashFile(MemFile* _mf);
-		MemFile			*mf;
-		const Expr::Hash 	*hashes;
+		std::unique_ptr<MemFile>	mf;
+		const Expr::Hash 		*hashes;
 	};
 
 	class PendingFile 
@@ -54,7 +55,7 @@ private:
 	};
 
 public:
-	virtual ~QHSFile(void);
+	virtual ~QHSFile(void) = default;
 	static QHSFile* create(
 		const char* cache_fdir,
 		const char* pending_fdir);
@@ -68,9 +69,9 @@ protected:
 		const char* cache_fdir,
 		const char* pending_fname);
 private:
-	HashFile		*hf_sat;
-	HashFile		*hf_unsat;
-	HashFile		*hf_poison;
+	std::unique_ptr<HashFile>	hf_sat;
+	std::unique_ptr<HashFile> 	hf_unsat;
+	std::unique_ptr<HashFile>	hf_poison;
 
 	PendingFile		*pend_sat;
 	PendingFile		*pend_unsat;

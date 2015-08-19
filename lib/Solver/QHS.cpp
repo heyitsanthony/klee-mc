@@ -92,13 +92,12 @@ void QHSDir::writeSAT(const QHSEntry& qhs)
 {
 	const char	*subdir;
 	char		path[256];
-	gzofstream	*os;
+	std::unique_ptr<gzofstream> os;
 
 	/* dump to corresponding SAT directory */
 	subdir = sat_dirs[qhs.qr];
 	snprintf(path, 256, "%s/%s/%016lx", dirname.c_str(), subdir, qhs.qh);
 
-	os = new gzofstream(path, std::ios::in | std::ios::binary);
+	os = std::make_unique<gzofstream>(path, std::ios::in|std::ios::binary);
 	SMTPrinter::print(*os, qhs.q, true);
-	delete os;
 }

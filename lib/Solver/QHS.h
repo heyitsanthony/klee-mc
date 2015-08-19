@@ -21,7 +21,7 @@ public:
 		bool _isSat=false, uint64_t v=~0)
 	: q(_q), qh(_qh), qr((_isSat) ? SAT : UNSAT), value(v) {}
 
-	~QHSEntry() {}
+	~QHSEntry() = default;
 
 	bool isSAT(void) const { return qr == SAT; }
 	bool isUnsat(void) const { return qr == UNSAT; }
@@ -36,7 +36,7 @@ public:
 class QHSStore
 {
 public:
-	virtual ~QHSStore() {}
+	virtual ~QHSStore() = default;
 	virtual bool lookupSAT(const QHSEntry& qhs) = 0;
 	virtual void saveSAT(const QHSEntry& qhs) = 0;
 	virtual bool lookupValue(QHSEntry& qhs) { return false; }
@@ -48,32 +48,29 @@ protected:
 class QHSSink : public QHSStore
 {
 public:
-	virtual ~QHSSink(void)
-	{
-		delete src;
-		delete dst;
-	}
 	QHSSink(QHSStore* _src, QHSStore* _dst)
 	: src(_src)
 	, dst(_dst)
 	{ assert (src && dst); }
 
-	virtual bool lookupSAT(const QHSEntry& qhs);
-	virtual void saveSAT(const QHSEntry& qhs);
+	virtual ~QHSSink(void) = default;
 
-	virtual bool lookupValue(QHSEntry& qhs);
-	virtual void saveValue(const QHSEntry& qhs);
+	bool lookupSAT(const QHSEntry& qhs) override;
+	void saveSAT(const QHSEntry& qhs) override;
+
+	bool lookupValue(QHSEntry& qhs) override;
+	void saveValue(const QHSEntry& qhs) override;
 protected:
-	QHSStore *src, *dst;
+	std::unique_ptr<QHSStore>	src, dst;
 };
 
 class QHSDir : public QHSStore
 {
 public:
-	virtual ~QHSDir(void) {}
+	virtual ~QHSDir(void) = default;
 	static QHSDir* create(const std::string& dn);
-	virtual bool lookupSAT(const QHSEntry& qe);
-	virtual void saveSAT(const QHSEntry& qe);
+	bool lookupSAT(const QHSEntry& qe) override;
+	void saveSAT(const QHSEntry& qe) override;
 protected:
 	QHSDir(const std::string& _dirname) : dirname(_dirname) {}
 private:
