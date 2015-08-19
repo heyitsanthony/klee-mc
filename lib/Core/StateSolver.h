@@ -24,8 +24,8 @@ class Solver;
 class StateSolver
 {
 protected:
-	Solver		*solver;
-	TimedSolver	*timedSolver;
+	std::unique_ptr<Solver>		solver;
+	TimedSolver			*timedSolver; // kept for setTimeout
 public:
 	bool		simplifyExprs;
 
@@ -37,10 +37,10 @@ public:
 		TimedSolver *_timedSolver,
 		bool _simplifyExprs = true);
 
-	virtual ~StateSolver() { delete solver; solver = nullptr; }
+	virtual ~StateSolver() = default;
 
 	void setTimeout(double t) { timedSolver->setTimeout(t); }
-	virtual Solver *getSolver(void) { return solver; }
+	virtual Solver *getSolver(void) { return solver.get(); }
 	virtual TimedSolver *getTimedSolver(void) { return timedSolver; }
 
 	virtual bool evaluate(
