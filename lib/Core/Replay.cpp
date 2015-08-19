@@ -39,23 +39,20 @@ unsigned Replay::getMaxSuppressInst(void) { return ReplayMaxInstSuppress; }
 #define IFSMODE	std::ios::in | std::ios::binary
 void Replay::loadPathFile(const std::string& name, ReplayPath& buffer)
 {
-	std::istream	*is;
+	std::unique_ptr<std::istream>	is;
 
 	if (name.substr(name.size() - 3) == ".gz") {
 		std::string new_name = name.substr(0, name.size() - 3);
-		is = new gzifstream(name.c_str(), IFSMODE);
+		is = std::make_unique<gzifstream>(name.c_str(), IFSMODE);
 	} else
-		is = new std::ifstream(name.c_str(), IFSMODE);
+		is = std::make_unique<std::ifstream>(name.c_str(), IFSMODE);
 
 	if (is == NULL || !is->good()) {
 		assert(0 && "unable to open path file");
-		if (is) delete is;
 		return;
 	}
 
 	loadPathStream(*is, buffer);
-
-	delete is;
 }
 
 void Replay::loadPathStream(std::istream& is, ReplayPath& buffer)
@@ -203,13 +200,11 @@ static ExecutionState* findClosestState(
 void ReplayBrPaths::fastEagerReplay(void)
 {
 	std::list<ExecutionState*>		replay_states;
-	const std::list<ReplayPath>::iterator	it;
 
 	std::cerr << "[Replay] Replaying paths FAST!\n";
 
 	/* play every path */
-	foreach (it, rps.begin(), rps.end()){
-		ReplayPath	rp(*it);
+	for (const auto& rp : rps) {
 		ExecutionState	*es = NULL;
 
 		es = findClosestState(rp, *esm);
@@ -245,7 +240,6 @@ void ReplayBrPaths::fastEagerReplay(void)
 bool Replay::verifyPath(Executor* exe, const ExecutionState& es)
 {
 	Forks			*old_f;
-	ForksPathReplay		*fpr;
 	ExecutionState		*rp_es, *initSt;
 	ReplayPath		rp;
 	bool			old_write, failed_rp;
@@ -275,9 +269,9 @@ bool Replay::verifyPath(Executor* exe, const ExecutionState& es)
 	/* don't write result (XXX: or should I?) */
 	ih->setWriteOutput(false);
 
-	fpr = new ForksPathReplay(*exe);
+	auto fpr = std::make_unique<ForksPathReplay>(*exe);
 	fpr->setForkSuppress(true);
-	exe->setForking(fpr);
+	exe->setForking(fpr.get());
 
 	writePathFile(*exe, es, ss);
 	loadPathStream(ss, rp);
@@ -298,14 +292,13 @@ bool Replay::verifyPath(Executor* exe, const ExecutionState& es)
 	std::cerr << "[Relay] Source insts=" << es.totalInsts << '\n';
 	assert ((inst_end - inst_start) == es.totalInsts);
 
+	exe->setForking(old_f);
+
 	/* XXX: need some checks to make sure path succeeded */
 	assert (!failed_rp && "REPLAY FAILED. NEED BETTER HANDLING");
 	if (failed_rp) {
 		return false;
 	}
-
-	exe->setForking(old_f);
-	delete fpr;
 
 	ih->setWriteOutput(old_write);
 	std::cerr << "[Replay] Validated Path.\n";
@@ -313,12 +306,12 @@ bool Replay::verifyPath(Executor* exe, const ExecutionState& es)
 	return true;
 }
 
-ReplayList::~ReplayList() { foreach (it, rps.begin(), rps.end()) delete (*it); }
+ReplayList::~ReplayList() { for (auto rp : rps)  delete rp; }
 
 bool ReplayList::replay(Executor* exe, ExecutionState* initSt)
 {
-	foreach (it, rps.begin(), rps.end())
-		if ((*it)->replay(exe, initSt) == false)
+	for (auto rp : rps)
+		if (rp->replay(exe, initSt) == false)
 			return false;
 
 	return true;
@@ -327,7 +320,7 @@ bool ReplayList::replay(Executor* exe, ExecutionState* initSt)
 
 bool ReplayBrPaths::replay(Executor* _exe, ExecutionState* _initState)
 {
-	Forks	*old_forking, *rp_forking;
+	Forks	*old_forking;
 
 	exe = _exe;
 	initState = _initState;
@@ -335,8 +328,8 @@ bool ReplayBrPaths::replay(Executor* _exe, ExecutionState* _initState)
 	assert (esm);
 
 	old_forking = exe->getForking();
-	rp_forking = new ForksPathReplay(*exe);
-	exe->setForking(rp_forking);
+	auto rp_forking = std::make_unique<ForksPathReplay>(*exe);
+	exe->setForking(rp_forking.get());
 
 	assert (initState->ptreeNode != NULL);
 
@@ -347,8 +340,6 @@ bool ReplayBrPaths::replay(Executor* _exe, ExecutionState* _initState)
 		incompleteReplay();
 
 	exe->setForking(old_forking);
-	delete rp_forking;
-
 	return true;
 }
 
