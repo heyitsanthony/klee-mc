@@ -387,7 +387,6 @@ void setupReplayPaths(Interpreter* interpreter)
 int main(int argc, char **argv, char **envp)
 {
 	KleeHandler	*handler;
-	CmdArgs		*cmdargs;
 	Guest		*gs;
 	Interpreter	*interpreter;
 
@@ -405,14 +404,14 @@ int main(int argc, char **argv, char **envp)
 	 * arguments aren't initialized I guess */
 	Watchdog	wd((UseWatchdog) ? MaxTime : 0);
 
-	cmdargs = getCmdArgs(envp);
-	gs = getGuest(cmdargs);
+	std::unique_ptr<CmdArgs> cmdargs(getCmdArgs(envp));
+	gs = getGuest(cmdargs.get());
 	if (gs == NULL) {
 		fprintf(stderr, "[klee-mc] Could not get guest.\n");
 		return 2;
 	}
 
-	handler = new KleeHandlerVex(cmdargs, gs);
+	handler = new KleeHandlerVex(cmdargs.get(), gs);
 	interpreter = createInterpreter(handler);
 
 	theInterpreter = interpreter;
@@ -444,7 +443,6 @@ int main(int argc, char **argv, char **envp)
 	delete interpreter;
 	delete gs;
 	delete handler;
-	delete cmdargs;
 
 	llvm_shutdown();
 
