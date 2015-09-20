@@ -169,7 +169,8 @@ public:	\
 	{ intr_name, &Handler##name::create, dnr, hasret, dno }; \
 	SFH_DEF_HANDLER(name)
 
-#define SFH_ADD_REG(x,y) HandlerReadReg::vars.insert(std::make_pair(x, y))
+#define SFH_ADD_REG(x,y) \
+	HandlerReadReg::vars.insert(std::make_pair(x, ((uint64_t)(y))))
 
 #define	EXPECT_CONST(fn,x,y)	\
 if ((x = dyn_cast<ConstantExpr>(args[y])) == NULL) {	\

@@ -12,11 +12,12 @@
 #include <llvm/Bitcode/ReaderWriter.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Module.h>
-#include <llvm/PassManager.h>
 #include <llvm/IR/ValueSymbolTable.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/raw_os_ostream.h>
+#include <llvm/IR/LegacyPassManager.h>
+#include <llvm/IR/PassManager.h>
 #include <llvm/IR/DataLayout.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/IPO/PassManagerBuilder.h>
@@ -44,7 +45,7 @@
 
 using namespace klee;
 using namespace llvm;
-
+using namespace llvm::legacy;
 
 namespace {
   enum SwitchImplType {
@@ -115,7 +116,7 @@ KModule::KModule(
 : module(_module)
 , dataLayout(std::make_unique<DataLayout>(module.get()))
 , kleeMergeFn(0)
-, fpm(std::make_unique<FunctionPassManager>(module.get()))
+, fpm(std::make_unique<llvm::legacy::FunctionPassManager>(module.get()))
 , opts(_opts)
 , updated_funcs(0)
 , init_kfunc(0)
@@ -435,7 +436,7 @@ void KModule::addModule(Module* in_mod)
 // module.
 void KModule::injectRawChecks()
 {
-	PassManager pm;
+	llvm::legacy::PassManager pm;
 	pm.add(new RaiseAsmPass(module.get()));
 
 	// pm.add(createLowerAtomicPass());
@@ -454,7 +455,7 @@ void KModule::injectRawChecks()
 // directly I think?
 void KModule::passEnforceInvariants(void)
 {
-	PassManager pm;
+	llvm::legacy::PassManager pm;
 
 	pm.add(createCFGSimplificationPass());
 	switch(SwitchType) {

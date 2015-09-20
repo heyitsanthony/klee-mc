@@ -19,7 +19,7 @@
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IRReader/IRReader.h>
-#include <llvm/PassManager.h>
+#include <llvm/IR/LegacyPassManager.h>
 //#include <llvm/Assembly/AssemblyAnnotationWriter.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/CallSite.h>
@@ -47,30 +47,25 @@ using namespace klee;
 
 
 
-Function *klee::getDirectCallTarget(CallSite cs)
+Function *klee::getDirectCallTarget(Value *v)
 {
-  llvm::ConstantExpr *ce;
-  Value *v;
+	Function	*f = nullptr;
 
+	if ((f = dyn_cast<Function>(v))) return f;
 
-  v = cs.getCalledValue();
-  if (Function *f = dyn_cast<Function>(v)) {
-    return f;
-  }
+	auto ce = dyn_cast<llvm::ConstantExpr>(v);
+	if (!ce) return nullptr;
 
-  ce = dyn_cast<llvm::ConstantExpr>(v);
+	if (	(ce->getOpcode() == Instruction::BitCast) &&
+		(f = dyn_cast<Function>(ce->getOperand(0))))
+	{
+		return f;
+	}
 
-  if (ce) {
-    if (ce->getOpcode()==Instruction::BitCast)
-      if (Function *f = dyn_cast<Function>(ce->getOperand(0)))
-        return f;
-
-    // NOTE: This assert may fire, it isn't necessarily a problem and
-    // can be disabled, I just wanted to know when and if it happened.
-    assert(0 && "FIXME: Unresolved direct target for a constant expression.");
-  }
-
-  return 0;
+	// NOTE: This assert may fire, it isn't necessarily a problem and
+	// can be disabled, I just wanted to know when and if it happened.
+	assert(0 && "FIXME: Unresolved direct target for a constant expression.");
+	return nullptr;
 }
 
 static bool valueIsOnlyCalled(const Value *v)
@@ -107,7 +102,7 @@ bool klee::functionEscapes(const Function *f) { return !valueIsOnlyCalled(f); }
 
 void klee::runRemoveSentinelsPass(Module &module)
 {
-	llvm::PassManager pm;
+	llvm::legacy::PassManager pm;
 	pm.add(new RemoveSentinelsPass());
 	pm.run(module);
 }

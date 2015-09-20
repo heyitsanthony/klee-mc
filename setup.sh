@@ -1,7 +1,8 @@
 #!/bin/bash
 
 VEXLLVMDIR=${VEXLLVMDIR:-"/home/chz/src/vex/"}
-LLVMDIR=${LLVMDIR:-"/home/chz/src/llvm/llvm-3.6.0.src/"}
+LLVMSRCDIR=${LLVMDIR:-"/home/chz/src/llvm/llvm-3.7.0.src/"}
+LLVMOBJDIR=${LLVMDIR:-"/home/chz/src/llvm/llvm-3.7.0-build/"}
 STPDIR=${STPDIR:-"/home/chz/src/stp-fast/stp/"}
 #BOOLECTORDIR=${BOOLECTORDIR:-"/home/chz/src/boolector/"}
 #Z3DIR=${Z3DIR:-"/home/chz/src/z3/"}
@@ -13,11 +14,12 @@ LLVM_CFLAGS_EXTRA="$EXTRAHEADERS"			\
 LLVM_CXXFLAGS_EXTRA="$EXTRAHEADERS"			\
 CFLAGS="-g -O3 -I${STPDIR}/include $EXTRAHEADERS"	\
 CXXFLAGS="-g -O2 -std=c++14  $EXTRAHEADERS"		\
-	./configure				\
-		--with-llvm="$LLVMDIR"		\
-		--with-libvex="$VEXLIBDIR"	\
-		--with-vexllvm="$VEXLLVMDIR"	\
-		--with-stp="$STPDIR"	\
+	./configure					\
+		--with-llvmsrc="$LLVMSRCDIR"		\
+		--with-llvmobj="$LLVMOBJDIR"		\
+		--with-libvex="$VEXLIBDIR"		\
+		--with-vexllvm="$VEXLLVMDIR"		\
+		--with-stp="$STPDIR"			\
 		--enable-posix-runtime			\
 		--with-uclibc="$UCLIBDIR"		\
 		--with-runtime=Release 			\

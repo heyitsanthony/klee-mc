@@ -20,6 +20,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/Pass.h>
 #include <llvm/IR/Type.h>
+#include <llvm/Target/TargetMachine.h>
 #include <llvm/Transforms/Scalar.h>
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/IR/DataLayout.h>
@@ -86,13 +87,13 @@ void IntrinsicCleanerPass::clean_vacopy(
 		new StoreInst(val, pDst, ii);
 
 		off = ConstantInt::get(Type::getInt64Ty(getGlobalContext()), 1);
-		pDst = GetElementPtrInst::Create(pDst, off, std::string(), ii);
-		pSrc = GetElementPtrInst::Create(pSrc, off, std::string(), ii);
+		pDst = GetElementPtrInst::Create(nullptr, pDst, off, std::string(), ii);
+		pSrc = GetElementPtrInst::Create(nullptr, pSrc, off, std::string(), ii);
 		val = new LoadInst(pSrc, std::string(), ii);
 		new StoreInst(val, pDst, ii);
 
-		pDst = GetElementPtrInst::Create(pDst, off, std::string(), ii);
-		pSrc = GetElementPtrInst::Create(pSrc, off, std::string(), ii);
+		pDst = GetElementPtrInst::Create(nullptr, pDst, off, std::string(), ii);
+		pSrc = GetElementPtrInst::Create(nullptr, pSrc, off, std::string(), ii);
 		val = new LoadInst(pSrc, std::string(), ii);
 		new StoreInst(val, pDst, ii);
 	}
@@ -291,5 +292,5 @@ bool IntrinsicCleanerPass::runOnBasicBlock(BasicBlock &b)
 
 	return dirty;
 }
-
 }
+

@@ -42,5 +42,5 @@ LDFLAGS += -Wl,-Ttext-segment=0x50000000 $(STATIC_FLAGS)
 LIBS += $(SOLVERLIBS)
 LIBS += -lrt
 LIBS += $(VEXLLVM_ROOT)/bin/vexllvm.a $(VEXLIB_ROOT)/libvex-amd64-linux.a
-LIBS += $(shell llvm-config --libfiles $(X_LINK_COMPONENTS)) $(STATIC_LIBS)
+LIBS += $(STATIC_LIBS)
 #-ltcmalloc

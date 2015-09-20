@@ -58,7 +58,7 @@ class InstructionInfoTable
 
 private:
 	bool getInstructionDebugInfo(
-		const llvm::Instruction *I,
+		const llvm::Instruction &I,
 		const std::string *&File,
 		unsigned &Line);
 

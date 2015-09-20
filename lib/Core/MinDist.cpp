@@ -90,12 +90,13 @@ void StatsTracker::computeCallTargets(Function* fnIt)
 			continue;
 
 		CallSite cs(it);
-		if (isa<InlineAsm>(cs.getCalledValue())) {
+		Value	*v = cs.getCalledValue();
+		if (isa<InlineAsm>(v)) {
 			// We can never call through here so assume no targets
 			// (which should be correct anyhow).
 			callTargets.insert(
 				std::make_pair(it, std::vector<Function*>()));
-		} else if (Function *target = getDirectCallTarget(cs)) {
+		} else if (Function *target = getDirectCallTarget(v)) {
 			callTargets[it].push_back(target);
 		} else {
 			callTargets[it] =

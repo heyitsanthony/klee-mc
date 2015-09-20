@@ -1,5 +1,6 @@
 #include <llvm/Support/Signals.h>
 #include <llvm/Support/CommandLine.h>
+#include <llvm/Support/Path.h>
 
 #include "klee/Common.h"
 #include "klee/Internal/ADT/KTest.h"

@@ -23,7 +23,6 @@ ifeq ($(ENABLE_STPLOG), 1)
 endif
 
 LIBS += $(SOLVERLIBS) -lrt
-LIBS += $(shell llvm-config --libfiles $(X_LINK_COMPONENTS))
 # XXX this is kind of a stupid hack to get linking to work after
 # splitting out the searcher code
 ObjectsO += $(LibDir)/libkleeCore.a

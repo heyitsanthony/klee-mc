@@ -41,9 +41,6 @@ private:
 	const llvm::TargetLowering *TLI;
 	llvm::TargetMachine	*TM;
 
-	llvm::Function *getIntrinsic(unsigned IID, llvm::Type *Ty0)
-	{ return getIntrinsic(IID, Ty0); }
-
 	bool runOnInstruction(llvm::Instruction *I);
 public:
 	RaiseAsmPass(llvm::Module* module);

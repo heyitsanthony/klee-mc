@@ -120,12 +120,17 @@ static bool instructionIsCoverable(Instruction *i)
 	if (it==bb->begin())
 		return true;
 
-	Instruction *prev = --it;
-	if (!(isa<CallInst>(prev) || isa<InvokeInst>(prev))) {
-		return true;
+	Instruction	*prev = --it;
+	Value		*call_value = nullptr;
+	if (isa<CallInst>(prev)) {
+		call_value = ((CallInst*)prev)->getCalledValue();
+	} else if(isa<InvokeInst>(prev)) {
+		call_value = ((InvokeInst*)prev)->getCalledValue();
+	} else {
+		return false;
 	}
 
-	Function *target = getDirectCallTarget(prev);
+	Function *target = getDirectCallTarget(call_value);
 	if (target && target->doesNotReturn())
 		return false;
 

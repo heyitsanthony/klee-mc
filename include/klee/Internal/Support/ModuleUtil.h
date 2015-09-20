@@ -17,7 +17,7 @@ namespace llvm {
   class Function;
   class Instruction;
   class Module;
-  class CallSite;
+  class Value;
 }
 
 namespace klee {
@@ -30,7 +30,7 @@ namespace klee {
   /// null if it cannot be determined (should be only for indirect
   /// calls, although complicated constant expressions might be
   /// another possibility).
-  llvm::Function *getDirectCallTarget(llvm::CallSite);
+  llvm::Function *getDirectCallTarget(llvm::Value *v);
 
   /// Return true iff the given Function value is used in something
   /// other than a direct call (or a constant expression that

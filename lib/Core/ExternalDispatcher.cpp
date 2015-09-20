@@ -371,6 +371,7 @@ Function *ExternalDispatcher::createDispatcherThunk(
 		Instruction *argI64p;
 		
 		argI64p = GetElementPtrInst::Create(
+			nullptr,
 			argI64s,
 			ConstantInt::get(
 				Type::getInt32Ty(getGlobalContext()),

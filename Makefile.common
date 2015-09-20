@@ -105,3 +105,7 @@ $(PROJ_SRC_ROOT)/$(BUILD_DIR)/$(KLEE_RUNTIME_OUT): $(KLEE_RUNTIME_IN) $(SELF)
 
 endif
 
+
+ifdef X_LINK_COMPONENTS
+LIBS += $(shell llvm-config --libs $(X_LINK_COMPONENTS))
+endif

@@ -17,7 +17,7 @@
 
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Verifier.h>
-#include <llvm/PassManager.h>
+#include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Analysis/Passes.h>
 #include <llvm/Analysis/LoopPass.h>
 #include <llvm/Support/CommandLine.h>
@@ -70,7 +70,7 @@ static cl::alias A1("S", cl::desc("Alias for --strip-debug"),
 
 // A utility function that adds a pass to the pass manager but will also add
 // a verifier pass after if we're supposed to verify.
-static inline void addPass(PassManager &PM, Pass *P)
+static inline void addPass(llvm::legacy::PassManager &PM, Pass *P)
 {
   assert (P != NULL);
   // Add the pass to the pass manager...
@@ -84,7 +84,7 @@ static inline void addPass(PassManager &PM, Pass *P)
 namespace llvm {
 
 
-static void AddStandardCompilePasses(PassManager &PM) {
+static void AddStandardCompilePasses(llvm::legacy::PassManager &PM) {
   PM.add(createVerifierPass());                  // Verify that input is correct
 
   // If the -strip-debug command line option was specified, do it.
@@ -145,7 +145,7 @@ static void AddStandardCompilePasses(PassManager &PM) {
   addPass(PM, createConstantMergePass());        // Merge dup global constants
 }
 
-static void addCleanupOptPasses(PassManager& Passes)
+static void addCleanupOptPasses(llvm::legacy::PassManager& Passes)
 {
     addPass(Passes, createInstructionCombiningPass());
     addPass(Passes, createCFGSimplificationPass());
@@ -153,7 +153,7 @@ static void addCleanupOptPasses(PassManager& Passes)
     addPass(Passes, createGlobalDCEPass());
 }
 
-static void addOptPasses(PassManager& Passes)
+static void addOptPasses(llvm::legacy::PassManager& Passes)
 {
 	// Now that composite has been compiled, scan through the module,
 	// looking for a main function.  If main is defined, mark all other
@@ -229,7 +229,7 @@ static void addOptPasses(PassManager& Passes)
 void Optimize(Module* M)
 {
   // Instantiate the pass manager to organize the passes.
-  PassManager Passes;
+  llvm::legacy::PassManager Passes;
 
   // If we're verifying, start off with a verification pass.
   if (VerifyEach)  Passes.add(createVerifierPass());

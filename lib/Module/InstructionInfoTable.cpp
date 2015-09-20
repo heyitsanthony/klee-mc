@@ -56,34 +56,30 @@ static void buildInstructionToLineMap(
 	}
 }
 
-static std::string getDSPIPath(DILocation Loc)
+static std::string getPath(const std::string& dir, const std::string& file)
 {
-	std::string dir = Loc.getDirectory();
-	std::string file = Loc.getFilename();
 	if (dir.empty()) {
 		return file;
 	} else if (*dir.rbegin() == '/') {
 		return dir + file;
-	} else {
-		return dir + "/" + file;
 	}
+	return dir + "/" + file;
 }
 
 bool InstructionInfoTable::getInstructionDebugInfo(
-	const llvm::Instruction *I,
+	const llvm::Instruction &I,
 	const std::string *&File,
 	unsigned &Line)
 {
-	MDNode *N;
+	const DebugLoc	&dl(I.getDebugLoc());
 
-	if (!(N = I->getMetadata("dbg"))) {
-		return false;
-	}
+	if (!dl) return false;
+	Line = dl.getLine();
 
-	DILocation	Loc(N);
-	std::string	s(getDSPIPath(Loc));
-	File = internString(getDSPIPath(Loc));
-	Line = Loc.getLineNumber();
+	auto scope = cast<DIScope>(dl.getScope());
+	File = internString(getPath(	scope->getDirectory(),
+					scope->getFilename()));
+
 	return true;
 }
 
@@ -115,7 +111,7 @@ void InstructionInfoTable::addFunction(
 	// following the CFG, but it is not clear that it ever matters in
 	// practice.
 	foreach (it, inst_begin(fnIt), inst_end(fnIt)) {
-		if (getInstructionDebugInfo(&*it, initialFile, initialLine))
+		if (getInstructionDebugInfo(*it, initialFile, initialLine))
 			break;
 	}
 
@@ -149,14 +145,12 @@ void InstructionInfoTable::addFunction(
 			foreach (it, bb->begin(), bb->end()) {
 				Instruction *instr = it;
 				unsigned assemblyLine = 0;
-				std::map<const Instruction*, unsigned>::const_iterator
-					ltit;
 
-				ltit =  lineTable.find(instr);
+				auto ltit =  lineTable.find(instr);
 				if (ltit != lineTable.end())
 					assemblyLine = ltit->second;
 
-				getInstructionDebugInfo(instr, file, line);
+				getInstructionDebugInfo(*instr, file, line);
 				infos.insert(
 					std::make_pair(
 						instr,

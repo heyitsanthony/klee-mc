@@ -42,7 +42,7 @@ RaiseAsmPass::RaiseAsmPass(llvm::Module* module)
 		return;
 	}
 	TM = NativeTarget->createTargetMachine(HostTriple, "", "", to);
-	TLI = TM->getSubtargetImpl()->getTargetLowering();
+	TLI = TM->getSubtargetImpl(*(module->begin()))->getTargetLowering();
 }
 
 RaiseAsmPass::~RaiseAsmPass(void) { if (TM) delete TM; }

@@ -17,4 +17,3 @@ X_LINK_COMPONENTS = support core
 include $(LEVEL)/Makefile.common
 
 LIBS += $(SOLVERLIBS)
-LIBS += $(shell llvm-config --libfiles $(X_LINK_COMPONENTS))
