@@ -93,7 +93,8 @@ do {	\
 	v = shadow_get_range_explode((uint64_t)(a), x);	\
 	v &= (SH_EX_FREE | SH_EX_ALLOC);		\
 	if (!klee_prefer_ne(v, 0)) break;		\
-	if (v == SH_EX_FREE) {				\
+	if (v & SH_EX_FREE) {				\
+		/* wrote to free region! */		\
 		HEAP_REPORT_W(af, a, x);		\
 	} else if (v == SH_EX_ALLOC) {			\
 		shadow_put_units_range(			\
@@ -136,19 +137,17 @@ struct heap_ent* take_he(void* addr)
 {
 	struct list		*hl;
 	struct list_item	*li;
-	struct heap_ent		*he = NULL;
 
 	hl = GET_HEAP_L(addr);
 	list_for_all(hl, li) {
-		he = list_get_data(hl, li);
+		struct heap_ent *he = list_get_data(hl, li);
 		if (he->he_base == addr) {
 			list_remove(li);
-			break;
+			return he;
 		}
-		he = NULL;
 	}
 
-	return he;
+	return NULL;
 }
 
 void post_int_free(int64_t fa)
@@ -160,9 +159,16 @@ void post_int_free(int64_t fa)
 
 	he = take_he(free_addr);
 	if (he == NULL) {
-		/* heap and marked free? must be double free */
-		if (extent_has_free(free_addr, 1))
+		unsigned fl = shadow_get_range_explode(fa, 1);
+		klee_print_expr("couldn't find it...", fl);
+		if (fl & SH_EX_FREE) {
+			/* heap and marked free? must be double free */
 			HEAP_REPORT("Freeing freed pointer!", fa);
+		}
+		if (fl & SH_EX_ALLOC) {
+			/* heap and marked alloc? bad unalloc */
+			HEAP_REPORT("Freeing non-base alloced pointer!", fa);
+		}
 		return;
 	}
 
