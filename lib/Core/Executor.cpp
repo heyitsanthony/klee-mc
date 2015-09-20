@@ -157,7 +157,6 @@ Executor::Executor(InterpreterHandler *ih)
 , mmu(0)
 , interpreterHandler(ih)
 , data_layout(0)
-, statsTracker(0)
 , symPathWriter(0)
 , currentState(0)
 , sfh(0)
@@ -191,14 +190,13 @@ Executor::Executor(InterpreterHandler *ih)
 	ExeStateBuilder::replaceBuilder(new BaseExeStateBuilder());
 	forking = new Forks(*this);
 
-	brPredict = NULL;
 	if (UseBranchHints) {
 		ListPredictor		*lp = new ListPredictor();
 		/* unexplored path should have priority over unexp. value. */
 		lp->add(new KBrPredictor());
 		lp->add(new CondPredictor(forking));
 		lp->add(new RandomPredictor());
-		brPredict = lp;
+		brPredict = std::unique_ptr<BranchPredictor>(lp);
 	}
 
 	if (SeedRNG) theRNG.seed(SeedRNG);
@@ -208,17 +206,14 @@ Executor::~Executor()
 {
 	globals = nullptr;
 
-	if (sfh != NULL) delete sfh;
-
-	if (replay != NULL) delete replay;
+	delete sfh;
+	delete replay;
 
 	timers.clear();
 	delete stateManager;
-	if (brPredict) delete brPredict;
-	if (mmu != NULL) delete mmu;
-	delete statsTracker;
+	delete mmu;
 
-	if (fastSolver) delete fastSolver;
+	delete fastSolver;
 	delete solver;
 
 	ExeStateBuilder::replaceBuilder(NULL);

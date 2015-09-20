@@ -6,18 +6,14 @@
 namespace klee
 {
 class Executor;
-class KFunction;
 class SoftMMUHandlers;
-
 class InstMMU : public KleeMMU
 {
 public:
 	InstMMU(Executor& exe);
-	virtual ~InstMMU(void);
 private:
-	SoftMMUHandlers	*mh;
+	std::unique_ptr<SoftMMUHandlers> mh;
 };
-
 }
 
 #endif

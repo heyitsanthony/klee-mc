@@ -40,6 +40,7 @@ public:
 	static bool verifyPath(Executor* exe, const ExecutionState& es);
 
 	static void checkPC(const KInstIterator& ki, const ReplayNode& rn);
+
 protected:
 	Replay() {}
 };
@@ -49,8 +50,8 @@ class ReplayBrPaths : public Replay
 public:
 	ReplayBrPaths(const ReplayPaths& paths)
 	: rps(paths) {}
-	virtual ~ReplayBrPaths() {}
-	bool replay(Executor* exe, ExecutionState* initSt);
+	bool replay(Executor* exe, ExecutionState* initSt) override;
+
 private:
 	void eagerReplayPathsIntoStates();
 	void fastEagerReplay(void);
@@ -63,7 +64,6 @@ private:
 	Executor		*exe;
 	ExecutionState		*initState;
 	ExeStateManager		*esm;
-
 };
 
 class ReplayList : public Replay
@@ -72,7 +72,7 @@ public:
 	ReplayList(void) {}
 	virtual ~ReplayList();
 	void addReplay(Replay* rp) { rps.push_back(rp); }
-	bool replay(Executor* exe, ExecutionState* initSt);
+	bool replay(Executor* exe, ExecutionState* initSt) override;
 private:
 	std::vector<Replay*>	rps;
 };
@@ -81,9 +81,8 @@ class ReplayKTests : public Replay
 {
 public:
 	ReplayKTests(const std::vector<KTest*>& _kts) : kts(_kts) {}
-	virtual ~ReplayKTests() {}
+	bool replay(Executor* exe, ExecutionState* initSt) override;
 
-	bool replay(Executor* exe, ExecutionState* initSt);
 private:
 	bool replayFast(Executor* exe, ExecutionState* initSt);
 	void replayFast(

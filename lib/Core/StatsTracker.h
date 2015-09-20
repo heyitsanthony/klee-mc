@@ -75,7 +75,7 @@ protected:
 
 	static bool useStatistics(void);
 public:
-	static StatsTracker* create(
+	static std::unique_ptr<StatsTracker> create(
 		Executor &_executor,
 		const KModule* km,
 		std::string _objectFilename,

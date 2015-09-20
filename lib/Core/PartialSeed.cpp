@@ -194,7 +194,6 @@ SFH_DEF_ALL(PartSeedEndCollect, "klee_partseed_end", false)
 
 	/* save data */
 	KleeHandler		*kh;
-	std::ostream		*f;
 	std::stringstream	ss;
 
 	/* XXX: smarter way to do this? hashes? */
@@ -209,13 +208,10 @@ SFH_DEF_ALL(PartSeedEndCollect, "klee_partseed_end", false)
 
 
 	ss << inst_delta << ".ktest.gz";
-	f = new gzofstream(
+	auto f = std::make_unique<gzofstream>(
 		ss.str().c_str(),
 		std::ios::out | std::ios::trunc | std::ios::binary);
-	if (f != NULL) {
-		kh->processSuccessfulTest(f, objs);
-		delete f;
-	}
+	if (f) kh->processSuccessfulTest(f.get(), objs);
 }
 
 

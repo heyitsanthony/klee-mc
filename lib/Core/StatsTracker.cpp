@@ -78,14 +78,14 @@ namespace
 	UncoveredUpdateInterval("uncovered-update-interval", cl::init(30.));
 }
 
-StatsTracker* StatsTracker::create(
+std::unique_ptr<StatsTracker> StatsTracker::create(
 	Executor &_executor,
 	const KModule* km,
 	std::string _objectFilename,
 	const std::vector<std::string> &excludeCovFiles)
 {	// if (useStatistics())
-	return new StatsTracker(
-		_executor, km, _objectFilename, excludeCovFiles);
+	return std::unique_ptr<StatsTracker>(new StatsTracker(
+		_executor, km, _objectFilename, excludeCovFiles));
 }
 
 namespace klee {

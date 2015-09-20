@@ -212,7 +212,7 @@ protected:
 	KModule				*kmodule;
 	MMU				*mmu;
 	std::unique_ptr<Globals>	globals;
-	BranchPredictor			*brPredict;
+	std::unique_ptr<BranchPredictor> brPredict;
 
 	struct XferStateIter
 	{
@@ -275,7 +275,7 @@ protected:
 
 	InterpreterHandler	*interpreterHandler;
 	llvm::DataLayout	*data_layout;
-	StatsTracker		*statsTracker;
+	std::unique_ptr<StatsTracker> statsTracker;
 	TreeStreamWriter	*symPathWriter;
 	StateSolver		*solver, *fastSolver;
 	ExeStateManager		*stateManager;
@@ -483,37 +483,37 @@ public:
 		const Globals* gm,
 		llvm::ConstantExpr *ce);
 
-	virtual void setSymbolicPathWriter(TreeStreamWriter *tsw)
+	void setSymbolicPathWriter(TreeStreamWriter *tsw) override
 	{ symPathWriter = tsw; }
 	TreeStreamWriter* getSymbolicPathWriter(void) { return symPathWriter; }
 
-	virtual void setReplayKTest(const struct KTest *out)
+	void setReplayKTest(const struct KTest *out) override
 	{ assert (0 == 1 && "Use KTestExecutor"); }
 	virtual const struct KTest *getReplayKTest(void) const { return NULL; } 
 	virtual bool isReplayKTest(void) const { return false; }
 
 	/*** Runtime options ***/
 
-	virtual void setHaltExecution(bool v) { haltExecution = v; }
-	virtual void setInhibitForking(bool v) { inhibitForking = v; }
+	void setHaltExecution(bool v) override { haltExecution = v; }
+	void setInhibitForking(bool v) override { inhibitForking = v; }
 	bool getInhibitForking(void) const { return inhibitForking; }
 
 	/*** State accessor methods ***/
+	unsigned getSymbolicPathStreamID(const ExecutionState &state) override;
 
-	virtual unsigned getSymbolicPathStreamID(const ExecutionState &state);
-
-	virtual bool getSymbolicSolution(
+	bool getSymbolicSolution(
 		const ExecutionState &state,
 		std::vector<
 			std::pair<std::string,
-			std::vector<unsigned char> > > &res);
+			std::vector<unsigned char> > > &res) override;
 
-	virtual void getCoveredLines(
+	void getCoveredLines(
 		const ExecutionState &state,
-		std::map<const std::string*, std::set<unsigned> > &res)
+		std::map<const std::string*, std::set<unsigned> > &res) override
 	{ res = state.coveredLines; }
 
-	StatsTracker* getStatsTracker(void) const { return statsTracker; }
+	StatsTracker* getStatsTracker(void) const { return statsTracker.get(); }
+	StatsTracker* getStatsTracker(void) { return statsTracker.get(); }
 
 	void yield(ExecutionState& state);
 
@@ -534,13 +534,12 @@ public:
 
 	void addTimer(std::unique_ptr<Timer> timer, double rate);
 	const Globals* getGlobals(void) const { return globals.get(); }
-	StatsTracker* getStatsTracker(void) { return statsTracker; }
 
 	/* XXX XXX XXX get rid of me!! XXX XXX */
 	SeedMapType	dummySeedMap;
 	virtual SeedMapType& getSeedMap(void) { return dummySeedMap; }
 
-	void setReplay(Replay* rp) { replay = rp; }
+	void setReplay(Replay* rp) override { replay = rp; }
 	const Replay* getReplay(void) const { return replay; }
 };
 

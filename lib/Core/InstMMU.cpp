@@ -13,11 +13,10 @@ class InstMMUPass : public llvm::FunctionPass
 {
 	static char ID;
 public:
-	virtual bool runOnFunction(llvm::Function &F);
+	bool runOnFunction(llvm::Function &F) override;
 	InstMMUPass(const SoftMMUHandlers* _mh)
 	: llvm::FunctionPass(ID)
 	, mh(_mh) {}
-	virtual ~InstMMUPass() {}
 private:
 	bool replaceInst(Instruction *inst);
 	const SoftMMUHandlers	*mh;
@@ -28,10 +27,8 @@ bool InstMMUPass::runOnFunction(llvm::Function &F)
 {
 	bool	changed = false;
 
-	foreach (bit, F.begin(), F.end()) {
-		for (	BasicBlock::iterator i = bit->begin(), ie = bit->end();
-			i != ie;)
-		{
+	for (auto &bb : F) {
+		for (auto i = bb.begin(), ie = bb.end(); i != ie;) {
 			Instruction	*inst = &*i;
 			i++;
 			changed |= replaceInst(inst);
@@ -96,17 +93,12 @@ bool InstMMUPass::replaceInst(Instruction *inst)
 InstMMU::InstMMU(Executor& exe)
 : KleeMMU(exe)
 {
-	mh = new SoftMMUHandlers(exe, "inst");
+	mh = std::make_unique<SoftMMUHandlers>(exe, "inst");
 
 	std::cerr << "[InstMMU] Online\n";
 
 	if (mh->getCleanup() != NULL)
 		exe.addFiniFunction(mh->getCleanup()->function);
 
-	exe.getKModule()->addFunctionPass(new InstMMUPass(mh));
+	exe.getKModule()->addFunctionPass(new InstMMUPass(mh.get()));
 }
-
-
-InstMMU::~InstMMU(void) { delete mh; }
-
-
