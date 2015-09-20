@@ -902,19 +902,17 @@ ExecutionState* Executor::concretizeState(
 
 		ExprUtil::findSymbolicObjects(bad_expr, res);
 
-		foreach (it, res.begin(), res.end()) {
+		for (auto arr : res) {
 			std::cerr << "[Exe] Partial sym obj: "
-				<< (*it)->name << '\n';
-			arr_set.insert(*it);
+				  << arr->name << '\n';
+			arr_set.insert(arr);
 		}
 
-		foreach (it, a.bindings.begin(), a.bindings.end())
-			if (!arr_set.count(it->first))
-				rmv_set.insert(it->first);
+		for (auto &binding : a.bindings)
+			if (!arr_set.count(binding.first))
+				rmv_set.insert(binding.first);
 
-		foreach (it, rmv_set.begin(), rmv_set.end()) {
-			a.resetBinding(*it);
-		}
+		for (auto arr : rmv_set) a.resetBinding(arr);
 
 		if (rmv_set.size() == 0) {
 			std::cerr << "[Exe] No remove set. Full concretize\n";
@@ -926,9 +924,9 @@ ExecutionState* Executor::concretizeState(
 	/* 2. enumerate all objstates-- replace sym objstates w/ concrete */
 	WallTimer	wt;
 	std::cerr << "[Exe] Concretizing objstates\n";
-	foreach (it, st.addressSpace.begin(), st.addressSpace.end()) {
+	for (auto &mop : st.addressSpace) {
 		if (concretizeObject(
-			st, a, it->first, it->second.os, wt, !do_partial))
+			st, a, mop.first, mop.second.os, wt, !do_partial))
 			continue;
 
 		bad_conc_kfuncs.insert(st.getCurrentKFunc());
@@ -2095,9 +2093,8 @@ void Executor::setupInitFuncs(ExecutionState& initState)
 static void doForceCOW(ExecutionState& es)
 {
 	std::cerr << "[Executor] Forcing COW: 'Sharing' exclusive objects.\n";
-	foreach (it, es.addressSpace.begin(), es.addressSpace.end()) {
-		const MemoryObject	*mo(it->first);
-		const ObjectState	*os(es.addressSpace.findObject(mo));
+	for (auto &mop : es.addressSpace) {
+		const ObjectState *os(es.addressSpace.findObject(mop.first));
 		if (os->isZeroPage() || os->readOnly) continue;
 		const_cast<ObjectState*>(os)->setOwner(~0 - 1);
 	}
@@ -2169,8 +2166,8 @@ eraseStates:
 	std::cerr << "KLEE: halting execution, dumping remaining states\n";
 	haltExecution = true;
 
-	foreach (it, stateManager->begin(), stateManager->end()) {
-		ExecutionState &state = **it;
+	for (auto sp : *stateManager) {
+		ExecutionState &state = *sp;
 		stepInstruction(state); // keep stats rolling
 		if (DumpStatesOnHalt)
 			TERMINATE_EARLY(this, state, "execution halting");
@@ -2310,15 +2307,15 @@ void Executor::resolveExact(
 	SymAddrSpace::resolve(state, solver, p, rl);
 
 	ExecutionState *unbound = &state;
-	foreach (it, rl.begin(), rl.end()) {
+	for (auto &res : rl) {
 		ref<Expr> inBounds;
 
-		inBounds = MK_EQ(p, it->first->getBaseExpr());
+		inBounds = MK_EQ(p, res.first->getBaseExpr());
 
 		StatePair branches = fork(*unbound, inBounds, true);
 
 		if (branches.first)
-			results.push_back(std::make_pair(*it, branches.first));
+			results.push_back(std::make_pair(res, branches.first));
 
 		unbound = branches.second;
 		if (!unbound) // Fork failure
@@ -2743,8 +2740,8 @@ bool Executor::hasState(const ExecutionState* es) const
 	if (getCurrentState() == es)
 		return true;
 
-	foreach (it, beginStates(), endStates())
-		if ((*it) == es)
+	for (auto cur_es : *stateManager)
+		if (cur_es == es)
 			return true;
 
 	return false;
