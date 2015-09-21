@@ -228,18 +228,17 @@ double Benchmarker::benchRule(const ExprRule* er)
 
 void Benchmarker::benchRules(void)
 {
-	RuleBuilder	*rb;
 	unsigned	i = 0;
 
-	rb = RuleBuilder::create(ExprBuilder::create(bk));
-	foreach (it, rb->begin(), rb->end()) {
+	auto rb = RuleBuilder::create(ExprBuilder::create(bk));
+	for (const auto er : *rb) {
 		double rel_err;
 
 		std::cerr << "Benchmarking rule #" << ++i << '\n';
-		rel_err = benchRule(*it);
+		rel_err = benchRule(er);
 		if (rel_err > 0.05) {
 			std::cerr << "Retrying benchmark #" << i << "\n";
-			benchRule(*it);
+			benchRule(er);
 		}
 	}
 
@@ -248,12 +247,10 @@ void Benchmarker::benchRules(void)
 
 void Benchmarker::benchRuleBuilder(ExprBuilder *eb)
 {
-	RuleBuilder	*rb;
 	unsigned	i = 0;
 
-	rb = RuleBuilder::create(ExprBuilder::create(bk));
-	foreach (it, rb->begin(), rb->end()) {
-		const ExprRule	*er(*it);
+	auto rb = RuleBuilder::create(ExprBuilder::create(bk));
+	for (const auto er : *rb) {
 		ref<Array>	arr(er->getMaterializeArray());
 		ref<Expr>	from_e(er->getFromExpr());
 		DualEB		deb(arr, from_e, rb, eb);

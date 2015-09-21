@@ -76,11 +76,11 @@ void rebuildBRules(Solver* s, const std::string& Input)
 	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
 
 	i = 0;
-	foreach (it, rb->begin(), rb->end()) {
+	for (const auto er : *rb) {
 		ExprRule*	er_rebuild;
 
 		std::cerr << "[" << ++i << "]: ";
-		er_rebuild = rebuildBRule(s, *it, of);
+		er_rebuild = rebuildBRule(s, er, of);
 		if (er_rebuild == NULL)
 			continue;
 

@@ -28,12 +28,12 @@ void KnockoutClass::addRule(const KnockoutRule* kr)
 		return;
 
 	er_e = kr->getExprRule()->getFromExpr();
-	foreach (it, tags.begin(), tags.end()) {
+	for (const auto &tag : tags) {
 		ref<Expr>	e;
-		e = ExprGetTag::getExpr(er_e, *it, true, true);
+		e = ExprGetTag::getExpr(er_e, tag, true, true);
 		assert (e.isNull() == false);
 		assert (e->getKind() == Expr::Constant);
-		tagvals[*it].insert(cast<ConstantExpr>(e)->getZExtValue());
+		tagvals[tag].insert(cast<ConstantExpr>(e)->getZExtValue());
 	}
 }
 

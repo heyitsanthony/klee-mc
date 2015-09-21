@@ -21,8 +21,7 @@ static void collectHashes(RuleBuilder* rb, ah2expr_ty& ah2expr)
 	std::set<ref<Expr> >	e_bucket[128];
 	std::set<uint64_t>	ah_bucket[128];
 
-	foreach (it, rb->begin(), rb->end()) {
-		const ExprRule		*er(*it);
+	for (const auto er : *rb) {
 		ref<Expr>		to_e;
 		unsigned		w;
 		uint64_t		ah;
@@ -64,9 +63,8 @@ static void analyzeSampleHashSet(
 		return;
 
 	std::cout << "============SIZE: " << s.size() << '\n';
-	foreach (it2, s.begin(), s.end()) {
+	for (const auto &cur : s) {
 		unsigned	cur_n;
-		ref<Expr>	cur(*it2);
 
 		if (smallest.isNull()) {
 			smallest = cur;
@@ -87,8 +85,7 @@ static void analyzeSampleHashSet(
 	}
 	std::cout << "SMALLEST: " << smallest << '\n';
 
-	foreach (it2, s.begin(), s.end()) {
-		ref<Expr>	cur(*it2);
+	for (const auto &cur : s) {
 		bool		mbt;
 
 		if (smallest == cur)
@@ -117,8 +114,8 @@ void normalFormCanonicalize(Solver *solver)
 	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
 	collectHashes(rb, ah2expr);
 
-	foreach (it, ah2expr.begin(), ah2expr.end()) {
-		const std::set<ref<Expr> > &s(it->second);
+	for (const auto &p : ah2expr) {
+		const std::set<ref<Expr> > &s(p.second);
 		analyzeSampleHashSet(solver, s, xlate);
 	}
 
@@ -127,8 +124,7 @@ void normalFormCanonicalize(Solver *solver)
 		std::ios_base::out |
 		std::ios_base::app |
 		std::ios_base::binary);
-	foreach (it, rb->begin(), rb->end()) {
-		const ExprRule		*er(*it);
+	for (const auto er : *rb) {
 		ExprRule		*new_er;
 		ref<Expr>		to_e(er->getToExpr());
 		xlatemap_ty::iterator	xit;
@@ -154,8 +150,8 @@ void normalFormCanonicalize(Solver *solver)
 	}
 	of.close();
 
-	foreach (it, repl_set.begin(), repl_set.end())
-		rb->eraseDBRule(*it);
+	for (const auto repl : repl_set)
+		rb->eraseDBRule(repl);
 
 	delete rb;
 }

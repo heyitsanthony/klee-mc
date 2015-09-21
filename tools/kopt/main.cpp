@@ -557,14 +557,12 @@ static void dumpRule(Solver* s)
 
 void dumpPattern(void)
 {
-	RuleBuilder	*rb;
-
-	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
-	foreach (it, rb->begin(), rb->end()) {
+	auto rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
+	for (const auto er : *rb) {
 		std::cout << "FROM: ";
-		(*it)->getFromPattern().dump(std::cout);
+		er->getFromPattern().dump(std::cout);
 		std::cout << "TO: ";
-		(*it)->getToPattern().dump(std::cout);
+		er->getToPattern().dump(std::cout);
 		std::cout << "=======================\n";
 	}
 	delete rb;
@@ -572,11 +570,9 @@ void dumpPattern(void)
 
 void dumpDB(void)
 {
-	RuleBuilder	*rb;
-
-	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
-	foreach (it, rb->begin(), rb->end()) {
-		(*it)->print(std::cout, DumpDB2);
+	auto rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
+	for (const auto er : *rb) {
+		er->print(std::cout, DumpDB2);
 	}
 	delete rb;
 }
@@ -584,15 +580,13 @@ void dumpDB(void)
 static void dedupDB(void)
 {
 	std::ofstream	of(InputFile.c_str());
-	RuleBuilder	*rb;
 	ExprRuleSet	ers;
 	unsigned	i;
 
 	/* fuck it. */
-	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
+	auto rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
 	i = 0;
-	foreach (it, rb->begin(), rb->end()) {
-		const ExprRule	*er(*it);
+	for(const auto er : *rb) {
 		if (ers.count(er)) {
 			i++;
 			continue;
@@ -600,7 +594,6 @@ static void dedupDB(void)
 		er->printBinaryRule(of);
 		ers.insert(er);
 	}
-
 	delete rb;
 
 	std::cout << "Dups found: " << i << '\n';
@@ -609,14 +602,13 @@ static void dedupDB(void)
 static void eraseShadowRules(Solver* s)
 {
 	ExprBuilder			*init_eb;
-	RuleBuilder			*rb;
 	std::set<const ExprRule*>	del_rules;
 
-	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
+	auto rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
 	init_eb = Expr::getBuilder();
 
-	foreach (it, rb->begin(), rb->end()) {
-		const ExprRule	*er(*it), *last_er;
+	for (const auto er : *rb) {
+		const ExprRule	*last_er;
 		BuiltRule	br(init_eb, rb, er);
 
 		last_er = RuleBuilder::getLastRule();
@@ -676,11 +668,10 @@ extern int xxx_rb;
 static void checkDB(Solver* s)
 {
 	ExprBuilder	*init_eb;
-	RuleBuilder	*rb;
 	unsigned	i;
 	unsigned	unexpected_from_c, better_from_c, bad_verify_c;
 
-	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
+	auto rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
 	init_eb = Expr::getBuilder();
 
 	i = 0;
@@ -688,17 +679,17 @@ static void checkDB(Solver* s)
 	better_from_c = 0;
 	bad_verify_c = 0;
 
-	foreach (it, rb->begin(), rb->end()) {
-		const ExprRule	*er(*it);
+	for (const auto cur_er : *rb) {
+		const ExprRule	*er = nullptr;
 		bool		bad;
-		BuiltRule	br(init_eb, rb, er);
+		BuiltRule	br(init_eb, rb, cur_er);
 
 		i++;
 		xxx_rb = i;
 
 		if (IgnoreExpected || br.builtAsExpected()) {
 			if (VerifyDB) {
-				if (checkRule(er, s, std::cerr) == false)
+				if (checkRule(cur_er, s, std::cerr) == false)
 					bad_verify_c++;
 			}
 			if (PrintTimes) {
@@ -716,7 +707,7 @@ static void checkDB(Solver* s)
 		if (br.isBetter()) better_from_c++;
 
 		std::cerr << "EXPECTED RULE:\n";
-		er->print(std::cerr);
+		cur_er->print(std::cerr);
 		std::cerr << '\n';
 
 		std::cerr << "FROM RULE RAW:\n";
@@ -773,10 +764,9 @@ static void checkDB(Solver* s)
 static void extractRule(unsigned rule_num)
 {
 	std::ofstream	of(InputFile.c_str());
-	RuleBuilder	*rb;
 	unsigned	i;
 
-	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
+	auto rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
 	if (rb->size() < rule_num) {
 		std::cerr << "Could not extract rule #" << rule_num
 			<< " from total of " << rb->size() << "rules.\n";
@@ -785,9 +775,7 @@ static void extractRule(unsigned rule_num)
 	}
 
 	i = 0;
-	foreach (it, rb->begin(), rb->end()) {
-		const ExprRule	*er(*it);
-
+	for (const auto er : *rb) {
 		if (i == rule_num) {
 			er->printBinaryRule(of);
 			break;
@@ -801,32 +789,26 @@ static void extractRule(unsigned rule_num)
 static void extractConstrs(const std::string& fname)
 {
 	std::ofstream	of(fname.c_str());
-	RuleBuilder	*rb;
 
-	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
-	foreach (it, rb->begin(), rb->end()) {
-		const ExprRule	*er(*it);
+	auto rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
+	for (const auto er : *rb) {
 		if (!er->hasConstraints())
 			continue;
 		er->printBinaryRule(of);
 	}
-
 	delete rb;
 }
 
 static void extractFree(const std::string& fname)
 {
 	std::ofstream	of(fname.c_str());
-	RuleBuilder	*rb;
 
-	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
-	foreach (it, rb->begin(), rb->end()) {
-		const ExprRule	*er(*it);
+	auto rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
+	for (const auto er : *rb) {
 		if (!er->hasFree())
 			continue;
 		er->printBinaryRule(of);
 	}
-
 	delete rb;
 }
 
@@ -834,16 +816,15 @@ static void extractFree(const std::string& fname)
  * rule-file database */
 static void compareDBs(const std::string& fname)
 {
-	RuleBuilder	*rb_db, *rb_in;
 	unsigned	matches = 0;
 
-	rb_db = RuleBuilder::create(ExprBuilder::create(BuilderKind));
-	rb_in = RuleBuilder::create(
+	auto rb_db = RuleBuilder::create(ExprBuilder::create(BuilderKind));
+	auto rb_in = RuleBuilder::create(
 		ExprBuilder::create(BuilderKind),
 		fname.c_str());
 
-	foreach (it, rb_in->begin(), rb_in->end()) {
-		if (rb_db->hasExprRule(*it))
+	for (const auto er : *rb_in) {
+		if (rb_db->hasExprRule(er))
 			matches++;
 	}
 
@@ -871,11 +852,8 @@ static void splitDB(std::string& prefix, int num_chunks)
 	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
 	rules_per_chunk = (rb->size()+num_chunks-1) / num_chunks;
 	rule_c = 0;
-	foreach (it, rb->begin(), rb->end()) {
-		const ExprRule	*er(*it);
-		unsigned	chunk_num;
-
-		chunk_num = rule_c / rules_per_chunk;
+	for (const auto er : *rb) {
+		unsigned chunk_num = rule_c / rules_per_chunk;
 		er->printBinaryRule(*ofs[chunk_num]);
 		rule_c++;
 	}
@@ -888,15 +866,11 @@ static void splitDB(std::string& prefix, int num_chunks)
 
 static void dumpRuleHashes(void)
 {
-	RuleBuilder*	rb;
-
-	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
+	auto rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
 	assert (rb != NULL);
 
-	foreach (it, rb->begin(), rb->end()) {
-		const ExprRule	*er(*it);
+	for (const auto er : *rb)
 		std::cout << (void*)er->hash() << '\n';
-	}
 
 	delete rb;
 }
@@ -906,7 +880,6 @@ static void extractRuleHashes(
 {
 	std::ofstream		os(InputFile.c_str());
 	std::ifstream		is(hashFile.c_str());
-	RuleBuilder		*rb;
 	std::set<uint64_t>	hset;
 	uint64_t		cur_hash;
 
@@ -914,10 +887,8 @@ static void extractRuleHashes(
 	while (is >> std::hex >> cur_hash)
 		hset.insert(cur_hash);
 
-	rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
-
-	foreach (it, rb->begin(), rb->end()) {
-		const ExprRule	*er(*it);
+	auto rb = RuleBuilder::create(ExprBuilder::create(BuilderKind));
+	for (const auto er : *rb) {
 		if (hset.count(er->hash()) == 0)
 			continue;
 		er->printBinaryRule(os);

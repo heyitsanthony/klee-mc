@@ -47,14 +47,12 @@ DBScan::DBScan(Solver* _s)
 DBScan::~DBScan()
 {
 	if (kc_map.size()) {
-		foreach (it, kc_map.begin(), kc_map.end())
-			delete it->second;
+		for (auto p : kc_map) delete p.second;
 		kc_map.clear();
 	}
 
 	if (kr_list.size()) {
-		foreach (it, kr_list.begin(), kr_list.end())
-			delete (*it);
+		for (auto kr : kr_list) delete kr;
 		kr_list.clear();
 	}
 
@@ -95,8 +93,7 @@ void DBScan::loadKnockoutRulesFromBuilder()
 {
 	assert (kc_map.size() == 0 && "Already loaded KO rules");
 		
-	foreach (it, rb->begin(), rb->end())
-		addRule(*it);
+	for (auto er : *rb) addRule(er);
 
 	std::cerr << "[KO] Uninteresting: " << uninteresting.size() << '\n';
 }
@@ -116,15 +113,13 @@ void DBScan::histo(void)
 
 	std::cout << "# RULES-IN-CLASS | TOTAL-CLASS-RULES" << '\n';
 	unsigned total = 0;
-	for (auto &p : ko_c)
-		total += p.first * p.second;
+	for (auto p : ko_c) total += p.first * p.second;
 	assert (total && "No rules given?");
 
 	unsigned cur_total = 0;
-	foreach (it, ko_c.begin(), ko_c.end()) {
-		cur_total += it->first * it->second;
-		std::cout << it->first << ' ' << 
-			(100*cur_total)/total << '\n';
+	for (auto p : ko_c) {
+		cur_total += p.first * p.second;
+		std::cout << p.first << ' ' << (100*cur_total)/total << '\n';
 	}
 }
 
@@ -138,12 +133,10 @@ void DBScan::punchout(std::ostream& os)
 	loadKnockoutRulesFromBuilder();
 
 	rule_match_c = 0;
-	foreach (it, kc_map.begin(), kc_map.end()) {
-		const KnockoutClass	*kc;
+	for (auto p : kc_map) {
+		const KnockoutClass	*kc = p.second;
 		ExprRule		*new_rule;
 		const ExprRule		*old_rule_example;
-
-		kc = it->second;
 
 		/* don't try generalizing unique rules */
 		old_rule_example = kc->front()->getExprRule();
@@ -155,9 +148,8 @@ void DBScan::punchout(std::ostream& os)
 		new_rule = kc->createRule(s);
 		if (new_rule == NULL) {
 			/* could not generalize; save all rules */
-			foreach (it2, kc->begin(), kc->end()) {
-				const ExprRule	*er;
-				er = (*it2)->getExprRule();
+			for (const auto rule_class : *kc) {
+				auto er = rule_class->getExprRule();
 				stubborn_rules.push_back(er);
 			}
 			continue;
@@ -176,8 +168,8 @@ void DBScan::punchout(std::ostream& os)
 	std::cerr << "TOTAL RULES MATCHED: " << rule_match_c << '\n';
 
 	/* free created rules */
-	foreach (it, valid_kos.begin(), valid_kos.end())
-		delete it->second;
+	for (auto p : valid_kos) delete p.second;
+	valid_kos.clear();
 
 	saveRules(UniqueFile, unique_rules);
 	saveRules(UninterestingFile, uninteresting);
@@ -191,6 +183,6 @@ void DBScan::saveRules(
 		return;
 
 	std::ofstream	ofs(fname.c_str());
-	foreach (it, ers.begin(), ers.end())
-		(*it)->printBinaryRule(ofs);
+	for (auto er : ers)
+		er->printBinaryRule(ofs);
 }

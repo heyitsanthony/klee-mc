@@ -38,9 +38,8 @@ static ref<Expr> fixupDisjointLabels(
 	 * Must be nonsense. Replace with 0. */
 	ref<Expr>	v(to_expr);
 
-	foreach (it, disjoined.begin(), disjoined.end()) {
-		ExprReplaceVisitor	erv(*it, ConstantExpr::create(0, 8));
-		v = erv.apply(v);
+	for (auto re : disjoined) {
+		v = ExprReplaceVisitor(re, MK_CONST(0, 8)).apply(v);
 	}
 
 	return v;
@@ -60,18 +59,12 @@ static ref<Expr> getLabelErrorExpr(const ExprRule* er)
 	ExprUtil::findReads(from_expr, false, from_reads);
 	ExprUtil::findReads(to_expr, false, to_reads);
 
-	foreach (it, from_reads.begin(), from_reads.end())
-		from_set.insert(*it);
-
-	foreach (it, to_reads.begin(), to_reads.end())
-		to_set.insert(*it);
-
-	foreach (it, to_set.begin(), to_set.end()) {
-		if (from_set.count(*it))
+	for (auto re : from_reads) from_set.insert(re);
+	for (auto re : to_reads) to_set.insert(re);
+	for (auto re : to_set)  {
+		if (from_set.count(re))
 			continue;
-
-		disjoined.insert(*it);
-
+		disjoined.insert(re);
 	}
 
 	if (disjoined.empty())
@@ -124,8 +117,7 @@ static unsigned appendNewFroms(Solver* s, RuleBuilder* rb)
 
 	init_eb = Expr::getBuilder();
 	new_rule_c = 0;
-	foreach (it, rb->begin(), rb->end()) {
-		const ExprRule	*er(*it);
+	for (const auto er : *rb) {
 		BuiltRule	br(init_eb, rb, er);
 		ExprRule	*new_rule;
 
@@ -187,8 +179,7 @@ static void findReplacementsInFrom(
 
 	init_eb = Expr::getBuilder();
 	foreach (it, rb->begin(), rb->end()) {
-		const ExprRule	*er(*it);
-		BuiltRule	br(init_eb, rb, er);
+		BuiltRule	br(init_eb, rb, *it);
 
 		i++;
 
@@ -271,11 +262,11 @@ void appendReplacements(
 		std::ios_base::out |
 		std::ios_base::app |
 		std::ios_base::binary);
-	foreach (it, repl.begin(), repl.end()) {
-		const ExprRule	*er = *(it->first);
+	for (const auto p : repl) {
+		const ExprRule	*er = *(p.first);
 		ExprRule	*xtive_er;
 
-		xtive_er = ExprRule::changeDest(er, it->second);
+		xtive_er = ExprRule::changeDest(er, p.second);
 		if (xtive_er == NULL)
 			continue;
 
@@ -329,13 +320,13 @@ void xtiveBRule(ExprBuilder *eb, Solver* s)
 	// erase all superseded rules (ignoring ones that weren't valid)
 	std::cout << "Superseding replacements. bad_repl="
 		<< bad_repl.size() << '\n';
-	foreach (it, replacements.begin(), replacements.end()) {
-		const ExprRule	*er = *(it->first);
+	for (const auto p : replacements) {
+		const ExprRule	*er = *(p.first);
 		if (bad_repl.count(er)) {
 			/* failed to replace parent rule, do not erase! */
 			continue;
 		}
-		rb->eraseDBRule(*(it->first));
+		rb->eraseDBRule(er);
 	}
 
 	delete rb;

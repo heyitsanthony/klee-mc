@@ -17,17 +17,14 @@ using namespace klee;
 KnockoutRule::KnockoutRule(const ExprRule* _er, ref<Array>& ko_arr)
 : er(_er)
 , arr(ko_arr)
+, kout(std::make_unique<KnockOut>(arr))
 {
-	ref<Expr>	e;
-
-	e = er->getFromExpr();
-	kout = new KnockOut(arr);
-	ko = kout->apply(e);
+	ko = kout->apply(er->getFromExpr());
 	if (kout->getArrOff() == 0)
 		ko = NULL;
 }
 
-KnockoutRule::~KnockoutRule(void) { delete kout; }
+KnockoutRule::~KnockoutRule(void) {}
 
 #define RANGE_EXPR(target, lo, hi)	\
 	MK_AND(MK_ULE(lo, target), MK_ULE(target, hi))
@@ -215,8 +212,8 @@ bool KnockoutRule::findRuleRange(
 	std::cerr << "FROM-EXPR={" << e_from << "}\n";
 	std::cerr << "TO-EXPR={" << er->getToExpr() << "}\n";
 
-	foreach (it, kout->begin(), kout->end()) {
-		e_range = trySlot(s, e_from, *it, i);
+	for (const auto ko : *kout) {
+		e_range = trySlot(s, e_from, ko, i);
 
 		if (!e_range.isNull()) {
 			slot = i;

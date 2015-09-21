@@ -38,10 +38,10 @@ private:
 		int& slot,
 		ref<Expr>& e_range) const;
 
-	const ExprRule	*er;
-	mutable ref<Array>	arr;
-	ref<Expr>	ko;
-	KnockOut	*kout;
+	const ExprRule			*er;
+	mutable ref<Array>		arr;
+	ref<Expr>			ko;
+	std::unique_ptr<KnockOut>	kout;
 };
 }
 
