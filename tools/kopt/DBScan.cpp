@@ -73,6 +73,7 @@ void DBScan::addRule(const ExprRule* er)
 	if (kr->knockedOut() == false) {
 		/* nothing changed-- not interesting */
 		uninteresting.push_back(er);
+		delete kr;
 		return;
 	}
 
