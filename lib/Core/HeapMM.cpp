@@ -181,17 +181,16 @@ MemoryObject* HeapMM::insertHeapObj(
 	cur_mo = new MemoryObject(heapObj->address, size, mk);
 
 	// if not replaying state, add reference to heap object
-	if (state->isReplay || state->isReplayDone())
+	if (state && (state->isReplay || state->isReplayDone()))
 		anonymous |= !state->pushHeapRef(heapObj);
-
-	// add reference to memory object
-	state->memObjects.push_back(ref<MemoryObject>(cur_mo));
 
 	// heap object anonymously allocated;
 	// keep references to such objects so
 	// they're freed on exit. These include globals, etc.
 	if (anonymous)
 		anonHeapObjs.push_back(ref<HeapObject>(heapObj));
+	else
+		state->memObjects.push_back(ref<MemoryObject>(cur_mo));
 
 	objects.insert(cur_mo);
 
