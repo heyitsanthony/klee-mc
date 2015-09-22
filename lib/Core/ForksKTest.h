@@ -20,13 +20,14 @@ public:
 	void setKTest(const KTest* _kt, const ExecutionState* es = NULL);
 	void setMakeErrTests(bool v) { make_err_tests = v; }
 	unsigned getCheapForks(void) const { return cheap_fork_c; }
-protected:
-	virtual bool setupForkAffinity(
-		ExecutionState& current,
-		struct ForkInfo& fi,
-		unsigned* cond_idx_map);
 
-	virtual bool evalForks(ExecutionState& current, struct ForkInfo& fi);
+protected:
+	bool setupForkAffinity(
+		ExecutionState& current,
+		const struct ForkInfo& fi,
+		unsigned* cond_idx_map) override;
+
+	bool evalForks(ExecutionState& current, struct ForkInfo& fi) override;
 
 	bool isBadOverflow(ExecutionState& current);
 	virtual bool updateSymbolics(ExecutionState& current);
@@ -36,6 +37,7 @@ protected:
 	}
 
 	int findCondIndex(const struct ForkInfo& fi, bool& non_const);
+
 private:
 	const KTest	*kt;
 	std::unique_ptr<Assignment> kt_assignment;

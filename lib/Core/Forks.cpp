@@ -386,7 +386,7 @@ ExecutionState* Forks::pureFork(ExecutionState& es, bool compact)
 
 bool Forks::setupForkAffinity(
 	ExecutionState& current,
-	struct ForkInfo& fi,
+	const struct ForkInfo& fi,
 	unsigned* cond_idx_map)
 {
 	if (preferFalseState) {

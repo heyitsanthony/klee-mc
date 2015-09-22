@@ -104,7 +104,7 @@ bool ForksPathReplay::forkSetup(ExecutionState& current, struct ForkInfo& fi)
 
 bool ForksPathReplay::setupForkAffinity(
 	ExecutionState& current,
-	struct ForkInfo& fi,
+	const struct ForkInfo& fi,
 	unsigned* cond_idx_map)
 {
 	if (current.isReplayDone()) {

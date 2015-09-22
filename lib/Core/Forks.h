@@ -105,7 +105,7 @@ protected:
 	virtual bool evalForkBranch(ExecutionState& current, struct ForkInfo& fi);
 	virtual bool setupForkAffinity(
 		ExecutionState& current,
-		struct ForkInfo& fi,
+		const struct ForkInfo& fi,
 		unsigned* cond_idx_map);
 
 	/* Assigns feasibility for forking condition(s) into fi.res[cond]

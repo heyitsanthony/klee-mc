@@ -15,13 +15,13 @@ public:
 	ForksPathReplay(Executor& _exe);
 	virtual ~ForksPathReplay() {}
 protected:
-	void trackBranch(ExecutionState& current, unsigned);
+	void trackBranch(ExecutionState& current, unsigned) override;
 	bool setupForkAffinity(
 		ExecutionState& current,
-		struct ForkInfo& fi,
-		unsigned* cond_idx_map);
+		const struct ForkInfo& fi,
+		unsigned* cond_idx_map) override;
 
-	bool forkSetup(ExecutionState& current, struct ForkInfo& fi);
+	bool forkSetup(ExecutionState& current, struct ForkInfo& fi) override;
 
 private:
 	bool forkFollowReplay(ExecutionState& current, struct ForkInfo& fi);

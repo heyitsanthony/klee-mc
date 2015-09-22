@@ -142,7 +142,7 @@ int ForksKTest::findCondIndex(const struct ForkInfo& fi, bool& non_const)
 
 bool ForksKTest::setupForkAffinity(
 	ExecutionState& current,
-	struct ForkInfo& fi,
+	const struct ForkInfo& fi,
 	unsigned* cond_idx_map)
 {
 	bool	non_const;
