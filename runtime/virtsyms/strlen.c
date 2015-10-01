@@ -4,7 +4,6 @@
 #include <string.h>
 #include "../syscall/syscalls.h"
 
-
 static void strlen_enter(void* r);
 static void strlen_fini(uint64_t _r, void* aux);
 DECL_VIRTSYM_FAKE(strlen_fini)
@@ -23,6 +22,14 @@ static void strlen_enter(void* r)
 
 	s = (const char*)GET_ARG0(r);
 	if ((vs = virtsym_safe_strcopy(s)) == NULL) {
+		return;
+	}
+
+	// already been done?
+	if (virtsym_already(strlen_fini, (vsym_check_f)virtsym_str_eq, vs, &ret)) {
+		virtsym_str_free(vs);
+		GET_SYSRET(r) = ret;
+		kmc_skip_func();
 		return;
 	}
 

@@ -15,4 +15,5 @@
 // RUN: not grep 0x9 %t1-rets
 // RUN: ls klee-last | grep ktest | wc -l | grep 5
 
+#define USE_2X
 #include "strchr_.h"

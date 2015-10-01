@@ -24,6 +24,14 @@ struct strchr_clo
 	uint8_t		c;
 };
 
+static int strchr_check(const struct strchr_clo* cur,
+			const struct strchr_clo* old)
+{
+	return	(klee_expr_hash(cur->c) == klee_expr_hash(old->c)) &&
+		virtsym_str_eq(cur->vs, old->vs) &&
+		(klee_expr_hash(cur->s_orig) == klee_expr_hash(old->s_orig));
+}
+
 static int strchr_internal(void* r, uint64_t* ret, unsigned* len)
 {
 	const char		*s = (const char*)GET_ARG0(r);
@@ -38,6 +46,15 @@ static int strchr_internal(void* r, uint64_t* ret, unsigned* len)
 	clo_dat->vs = vs;
 	clo_dat->s_orig = s;
 	clo_dat->c = (uint8_t)GET_ARG1(r);
+
+	if (virtsym_already(	strchr_fini,
+				(vsym_check_f)strchr_check, clo_dat, ret))
+	{
+		*len = vs->vs_len_max;
+		virtsym_str_free(vs);
+		free(clo_dat);
+		return 1;
+	}
 
 	/* set value to symbolic */
 	if (!klee_make_vsym(ret, sizeof(*ret), "vstrchr")) {

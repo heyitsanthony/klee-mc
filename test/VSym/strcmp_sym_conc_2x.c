@@ -9,4 +9,5 @@
 // RUN: grep 0x2 %t1-rets
 // RUN: grep 0x7 %t1-rets
 
+#define USE_2X
 #include "strcmp_sym_conc_.h"

@@ -21,6 +21,15 @@ struct strcmp_clo
 	struct virt_str	*vs[2];
 };
 
+static int strcmp_check(const struct strcmp_clo* cur,
+			const struct strcmp_clo* old)
+{
+	return	klee_expr_hash(cur->s[0]) == klee_expr_hash(old->s[0]) &&
+		klee_expr_hash(cur->s[1]) == klee_expr_hash(old->s[1]) &&
+		virtsym_str_eq(cur->vs[0], old->vs[0]) &&
+		virtsym_str_eq(cur->vs[1], old->vs[1]);
+}
+
 static void strcmp_enter(void* r)
 {	
 	struct strcmp_clo	clo, *ret_clo;
@@ -36,7 +45,17 @@ static void strcmp_enter(void* r)
 	if (vs_is_conc(clo.vs[0]) && vs_is_conc(clo.vs[1]))
 		goto vs_concrete;
 
-	/* XXX: this should copy the whole string */
+	// already been done?
+	if (virtsym_already(	strcmp_fini2,
+				(vsym_check_f)strcmp_check, &clo, &ret))
+	{
+		virtsym_str_free(clo.vs[0]);
+		virtsym_str_free(clo.vs[1]);
+		GET_SYSRET(r) = ret;
+		kmc_skip_func();
+		return;
+	}
+
 	ret_clo = malloc(sizeof(clo));
 	memcpy(ret_clo, &clo, sizeof(clo));
 

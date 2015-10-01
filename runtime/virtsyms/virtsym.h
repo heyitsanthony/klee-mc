@@ -1,7 +1,10 @@
 #ifndef VIRTSYM_H
 #define VIRTSYM_H
 
+#include "virtstr.h"
+
 typedef void(*vsym_clo_f)(uint64_t r, void* aux);
+typedef int(*vsym_check_f)(const void* cur, const void* old);
 
 typedef int pruneid_t;
 #define VS_PRNID_STRCHR		1
@@ -20,28 +23,8 @@ struct vsym_clo
 	struct vsym_clo	*vs_next;
 };
 
-#define vs_is_conc(x)	((x)->vs_first_sym_idx == ~0U)
-struct virt_str
-{
-	char		*vs_str; // buffer containing string's contents
-	unsigned	vs_first_sym_idx; // must have some symbolic!
-	unsigned	vs_len_min, vs_len_max; // lengths of stream
-	char		*vs_str_min, *vs_str_max; // pointers into vs_str
-};
-#define virtstr_dump(vs)						\
-	klee_print_expr("VS->VS_LEN_MAX", vs->vs_len_max);		\
-	klee_print_expr("VS->VS_LEN_MIN", vs->vs_len_min);		\
-	klee_print_expr("VS->VS_FIRST_SYM_IDX", vs->vs_first_sym_idx);	\
-
-
-
+int virtsym_already(vsym_clo_f, vsym_check_f, const void* aux, uint64_t* ret);
 void virtsym_add(vsym_clo_f f, uint64_t ret, void* dat);
-// copy only if string has symbolic characters
-#define virtsym_safe_strcopy(s) virtsym_safe_strcopy_all(s,0)
-// copy if string regardless of content, if possible
-#define virtsym_safe_strcopy_conc(s) virtsym_safe_strcopy_all(s,1)
-struct virt_str* virtsym_safe_strcopy_all(const char* s, int copy_conc);
-void virtsym_str_free(struct virt_str*);
 void* virtsym_safe_memcopy(const void* m, unsigned len);
 void virtsym_prune(pruneid_t);
 

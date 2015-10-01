@@ -1,6 +1,6 @@
 #include "klee/klee.h"
-#include "virtsym.h"
 #include <string.h>
+#include "virtsym.h"
 
 struct vsym_clo*	vs = NULL;
 
@@ -15,71 +15,6 @@ void virtsym_add(vsym_clo_f f, uint64_t ret, void* dat)
 	cur_vs->vs_aux = dat;
 
 	vs = cur_vs;
-}
-
-void virtsym_str_free(struct virt_str *vs)
-{
-	free(vs->vs_str);
-	free(vs);
-}
-
-struct virt_str* virtsym_safe_strcopy_all(const char* s, int copy_concrete)
-{
-	struct virt_str	vs;
-	char		*s_c;
-	unsigned	i, j;
-
-	if (!klee_is_valid_addr(s)) {
-		return NULL;
-	}
-
-	s_c = klee_get_ptr(s);
-	klee_assume_eq(s, s_c);
-	s = s_c;
-	klee_assert(!klee_is_symbolic_addr(s) && "Smarter way to do this?");
-
-	/* skip over concrete prefix */
-	for (i = 0;
-		klee_is_valid_addr(&s[i]) &&
-		!klee_is_symbolic(s[i]) &&
-		s[i] != '\0'; i++);
-
-	if (!klee_is_valid_addr(&s[i]) || !klee_is_symbolic(s[i])) {
-		/* total concrete string */
-		klee_assert(!klee_is_valid_addr(&s[i]) || s[i] == '\0');
-		if (!copy_concrete) {
-			return NULL;
-		}
-
-		vs.vs_len_min = i;
-		vs.vs_first_sym_idx = ~0U;
-		vs.vs_len_max = i; 
-		vs.vs_str = malloc(vs.vs_len_max+1);
-		for (j = 0; j < vs.vs_len_max; j++) vs.vs_str[j] = s[j];
-		// don't crash in handler!
-		vs.vs_str[vs.vs_len_max] = '\0';
-
-		return memcpy(malloc(sizeof(vs)), &vs, sizeof(vs));
-	}
-
-	vs.vs_len_min = i;
-	vs.vs_first_sym_idx = i;
-	klee_assert(klee_is_symbolic(s[vs.vs_first_sym_idx]));
-
-	for (i = vs.vs_len_min; klee_is_valid_addr(&s[i]); i++) {
-		if (!klee_is_symbolic(s[i]) && s[i] == '\0')
-			break;
-	}
-	vs.vs_len_max = i; 
-
-	vs.vs_str = malloc(vs.vs_len_max+1);
-	for (j = 0; j < vs.vs_len_max; j++)
-		vs.vs_str[j] = s[j];
-
-	// don't crash in handler!
-	vs.vs_str[vs.vs_len_max] = '\0';
-
-	return memcpy(malloc(sizeof(vs)), &vs, sizeof(vs));
 }
 
 void* virtsym_safe_memcopy(const void* m, unsigned len)
@@ -101,6 +36,22 @@ void* virtsym_safe_memcopy(const void* m, unsigned len)
 	return ret;
 }
 
+int virtsym_already(	vsym_clo_f clo_f, vsym_check_f chk_f,
+			const void *aux, uint64_t *ret)
+{
+	struct vsym_clo	*cur_vs = vs;
+	while (cur_vs) {
+		if (vs->vs_f == clo_f) {
+			if (chk_f(aux, vs->vs_aux)) {
+				*ret = vs->vs_ret;
+				return 1;
+			}
+		}
+		cur_vs = cur_vs->vs_next;
+	}
+
+	return 0;
+}
 
 /* do all virtsym closures */
 void __hookfini_virtsym(void)

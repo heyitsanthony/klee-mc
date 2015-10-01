@@ -14,6 +14,7 @@ HOOK_FUNC(__GI____strtoll_l_internal, strtoll_enter);
 HOOK_FUNC(__GI___strtoll_internal, strtoll_enter);
 HOOK_FUNC(__GI_strtoll, strtoll_enter);
 HOOK_FUNC(__GI_strtoul, strtoll_enter);
+HOOK_FUNC(__strtoul, strtoll_enter);
 
 struct strtoll_clo
 {
