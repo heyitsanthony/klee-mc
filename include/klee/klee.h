@@ -289,6 +289,8 @@ struct kreport_ent { uint64_t strp; uint64_t v; };
 #define klee_valid_eq(x, y)	(!__klee_feasible_op(x, y, KLEE_CMP_OP_NE))
 #define klee_valid_ne(x, y)	(!__klee_feasible_op(x, y, KLEE_CMP_OP_EQ))
 
+#define klee_valid(x)		klee_valid_ne(((uint64_t)(x)), 0)
+
 /* these are provided by the intrinsic library */
 extern void* malloc(unsigned long n) __THROW;
 extern void free(void*) __THROW;

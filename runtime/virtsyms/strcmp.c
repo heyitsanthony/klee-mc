@@ -34,6 +34,7 @@ static void strcmp_enter(void* r)
 {	
 	struct strcmp_clo	clo, *ret_clo;
 	uint64_t		ret;
+	unsigned		i;
 
 	clo.s[0] = (const char*)GET_ARG0(r);
 	clo.s[1] = (const char*)GET_ARG1(r);
@@ -44,6 +45,20 @@ static void strcmp_enter(void* r)
 		goto no_s1;
 	if (vs_is_conc(clo.vs[0]) && vs_is_conc(clo.vs[1]))
 		goto vs_concrete;
+
+	// test concrete prefixes in case strcmp value is concrete
+	for (	i = 0;	i < clo.vs[0]->vs_first_sym_idx &&
+			i < clo.vs[1]->vs_first_sym_idx;
+		i++)
+	{
+
+		int diff = clo.vs[0]->vs_str[i] - clo.vs[1]->vs_str[i];
+		if (diff != 0) {
+			GET_SYSRET(r) = (diff < 0) ? -1 : 1;
+			kmc_skip_func();
+			return;
+		}
+	}
 
 	// already been done?
 	if (virtsym_already(	strcmp_fini2,
@@ -116,10 +131,14 @@ static void strcmp_fini2(uint64_t _r, void* aux)
 			s[1]++;
 		}
 
-		if (	klee_valid_ne(*s[0], 0) ||
-			klee_valid_ne(*s[1], 0) ||
-			klee_valid_ne(*s[0], *s[1]))
-		{
+		uint64_t cant_terminate_cond =
+			klee_mk_or(
+				klee_mk_ne(*s[0], 0),
+			klee_mk_or(
+				klee_mk_ne(*s[1], 0),
+				klee_mk_ne(*s[0], *s[1])));
+
+		if (klee_valid(cant_terminate_cond)) {
 			klee_print_expr("bad eq check s[0]", *s[0]);
 			klee_print_expr("bad eq check s[1]", *s[1]);
 			virtsym_prune(VS_PRNID_STRCMP);
