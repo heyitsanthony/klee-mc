@@ -8,7 +8,7 @@
 static void strchr_enter(void* r);
 static void strchrnul_enter(void* r);
 static void strchr_fini(uint64_t _r, void* aux);
-DECL_VIRTSYM_FAKE(strchr_fini)
+static void fake_strchr_fini(void *c);
 
 #define HOOK_FUNC(x,y) void __hookpre_##x(void* r) { y(r); }
 
@@ -30,6 +30,23 @@ static int strchr_check(const struct strchr_clo* cur,
 	return	(klee_expr_hash(cur->c) == klee_expr_hash(old->c)) &&
 		virtsym_str_eq(cur->vs, old->vs) &&
 		(klee_expr_hash(cur->s_orig) == klee_expr_hash(old->s_orig));
+}
+
+static void fake_strchr_fini(void *c)
+{
+	struct strchr_clo	*clo = c;
+	uint64_t		ret = GET_RET(kmc_regs_get());
+
+	if (ret == 0) {
+		// strchrnul
+		ret = 0;
+	} else if (ret == (uint64_t)(clo->s_orig + clo->vs->vs_len_max)) {
+		// strchr
+		ret = clo->vs->vs_len_max + 1;
+	} else {
+		ret = ret - (uint64_t)clo->s_orig;
+	}
+	virtsym_add(strchr_fini, ret, c);
 }
 
 static int strchr_internal(void* r, uint64_t* ret, unsigned* len)
