@@ -36,6 +36,7 @@ static void strlen_enter(void* r)
 	/* set value to symbolic */
 	if (klee_make_vsym(&ret, sizeof(ret), "vstrlen")) {
 		klee_assume_ule(ret, vs->vs_len_max);
+		klee_assume_uge(ret, vs->vs_first_sym_idx);
 		GET_SYSRET(r) = ret;
 		virtsym_add(strlen_fini, ret, vs);
 		/* no need to evaluate, skip */
@@ -45,20 +46,21 @@ static void strlen_enter(void* r)
 	}
 }
 
+#define CAN_FINISH  klee_mk_and(klee_mk_eq(_r, i), klee_mk_eq(s[i], 0))
+
 static void strlen_fini(uint64_t _r, void* aux)
 {
 	const char	*s = ((char**)aux)[0];
 	unsigned	i = 0;
 
 	while (klee_feasible_ne(s[i], 0)) {
-		uint64_t can_finish_cond = klee_mk_and(
-			klee_mk_eq(_r, i), klee_mk_eq(s[i], 0));
+		uint64_t can_finish_cond = CAN_FINISH;
 		/* note it's necessary to test feasibility of *both*
 		 * predicates at once because feasible(a) /\ feasible(b)
 		 * does not imply feasible(a /\ b)! */
 		if (__klee_feasible(can_finish_cond)) {
 			__klee_assume(can_finish_cond);
-			break;
+			return;
 		}
 		klee_assume_ne(s[i], 0);
 		i++;
@@ -68,6 +70,9 @@ static void strlen_fini(uint64_t _r, void* aux)
 		}
 	}
 
-	if (!klee_valid_eq(s[i], 0) || !klee_valid_eq(_r, i))
+	if (!__klee_feasible(CAN_FINISH)) {
 		virtsym_prune(VS_PRNID_STRLEN);
+	} else {
+		__klee_assume(CAN_FINISH);
+	}
 }
