@@ -73,6 +73,19 @@ static int strchr_internal(void* r, uint64_t* ret, unsigned* len)
 		return 1;
 	}
 
+	// check prefix
+	if (!klee_is_symbolic(clo_dat->c)) {
+		unsigned i;
+		for (i = 0; i < vs->vs_first_sym_idx; i++) {
+			if (vs->vs_str[i] == clo_dat->c) {
+				*len = i;
+				virtsym_str_free(vs);
+				free(clo_dat);
+				return 1;
+			}
+		}
+	}
+
 	/* set value to symbolic */
 	if (!klee_make_vsym(ret, sizeof(*ret), "vstrchr")) {
 		virtsym_fake_n(strchr_fini, clo_dat, 2);
