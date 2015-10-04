@@ -27,6 +27,7 @@ static void strlen_enter(void* r)
 
 	// already been done?
 	if (virtsym_already(strlen_fini, (vsym_check_f)virtsym_str_eq, vs, &ret)) {
+		klee_print_expr("vsym strlen already", s);
 		virtsym_str_free(vs);
 		GET_SYSRET(r) = ret;
 		kmc_skip_func();
@@ -34,23 +35,25 @@ static void strlen_enter(void* r)
 	}
 
 	/* set value to symbolic */
-	if (klee_make_vsym(&ret, sizeof(ret), "vstrlen")) {
-		klee_assume_ule(ret, vs->vs_len_max);
-		klee_assume_uge(ret, vs->vs_first_sym_idx);
-		GET_SYSRET(r) = ret;
-		virtsym_add(strlen_fini, ret, vs);
-		/* no need to evaluate, skip */
-		kmc_skip_func();
-	} else {
+	if (!klee_make_vsym(&ret, sizeof(ret), "vstrlen")) {
 		virtsym_fake(strlen_fini, vs);
+		return;
 	}
+
+	/* can fake w/ vsym */
+	klee_assume_ule(ret, vs->vs_len_max);
+	klee_assume_uge(ret, vs->vs_first_sym_idx);
+	GET_SYSRET(r) = ret;
+	virtsym_add(strlen_fini, ret, vs);
+	kmc_skip_func();
+
 }
 
 #define CAN_FINISH  klee_mk_and(klee_mk_eq(_r, i), klee_mk_eq(s[i], 0))
 
 static void strlen_fini(uint64_t _r, void* aux)
 {
-	const char	*s = ((char**)aux)[0];
+	const char	*s = ((struct virt_str*)aux)->vs_str;
 	unsigned	i = 0;
 
 	while (klee_feasible_ne(s[i], 0)) {

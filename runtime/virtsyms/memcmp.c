@@ -71,6 +71,7 @@ static void memcmp_enter(void* r)
 
 	/* no need to evaluate, skip */
 	kmc_skip_func();
+	return;
 
 free_1:
 	virtsym_mem_free(clo.vm[1]);

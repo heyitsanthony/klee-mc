@@ -55,6 +55,8 @@ static void strcmp_enter(void* r)
 		int diff = clo.vs[0]->vs_str[i] - clo.vs[1]->vs_str[i];
 		if (diff != 0) {
 			GET_SYSRET(r) = (diff < 0) ? -1 : 1;
+			virtsym_str_free(clo.vs[1]);
+			virtsym_str_free(clo.vs[0]);
 			kmc_skip_func();
 			return;
 		}
