@@ -17,25 +17,6 @@ void virtsym_add(vsym_clo_f f, uint64_t ret, void* dat)
 	vs = cur_vs;
 }
 
-void* virtsym_safe_memcopy(const void* m, unsigned len)
-{
-	void	*ret;
-	unsigned i;
-
-	/* concretize because we're dum  (XXX smarter way to do this?) */
-	klee_assume_eq((uint64_t)m, klee_get_value((uint64_t)m));
-	klee_assume_eq(len, klee_max_value(len));
-	if (!klee_is_valid_addr(m)) return NULL;
-
-	/* XXX: in the future this should use the to-be-written
-	 * klee_copy_cow instrinsic so there's no space/copying overhead */
-	ret = malloc(len);
-	for (i = 0; i < len; i++)
-		((char*)ret)[i] = ((const char*)m)[i];
-
-	return ret;
-}
-
 int virtsym_already(	vsym_clo_f clo_f, vsym_check_f chk_f,
 			const void *aux, uint64_t *ret)
 {

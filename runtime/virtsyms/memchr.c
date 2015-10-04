@@ -22,49 +22,49 @@ HOOK_FUNC(__memchr_sse2, memchr_enter);
 
 struct memchr_clo
 {
-	const void	*p;
-	unsigned	len;
-	uint8_t		c;
+	struct virt_mem		*vm;
+	const char		*s_orig;	// original ptr
+	uint8_t			c;
+	unsigned		len;
 };
 
 static void memchr_enter(void* r)
 {
 	uint64_t		ret;
 	struct memchr_clo	clo, *clo_ret;
-	const char		*s;
-	unsigned		i;
 
-	clo.p = (const char*)GET_ARG0(r);
-	s = clo.p;
+	clo.s_orig = (const char*)GET_ARG0(r);
 	clo.c = (uint8_t)GET_ARG1(r);
 	clo.len = GET_ARG2(r);
 
-	/* 1. check pointers, common to crash in memchr */
-	if (!klee_is_valid_addr((void*)klee_get_value((uintptr_t)s)))
+	if ((clo.vm = virtsym_safe_memcopy(clo.s_orig, clo.len)) == NULL)
 		return;
 
 	/* ignore concrete prefixes */
-	for (i = 0; i < clo.len; i++) {
-		if (klee_is_symbolic(s[i])) break;
-		if (klee_feasible_eq(s[i], clo.c))
-			return;
+	if (!klee_is_symbolic(clo.c)) {
+		unsigned	i;
+		for (i = 0; i < clo.vm->vm_first_sym_idx; i++) {
+			if (clo.vm->vm_buf[i] == clo.c) {
+				virtsym_mem_free(clo.vm);
+				return;
+			}
+		}
 	}
-	if (i == clo.len) return;
 
 	/* set value to symbolic */
 	if (!klee_make_vsym(&ret, sizeof(ret), "vmemchr")) {
+		virtsym_mem_free(clo.vm);
 		virtsym_disabled();
 		return;
 	}
 
-	klee_assume_uge(ret, i); // ret >= i
-	klee_assume_ule(ret, clo.len); // ret <= len
+	klee_assume_uge(ret, clo.vm->vm_first_sym_idx);
+	klee_assume_ule(ret, clo.vm->vm_len_max);
 	GET_SYSRET(r) = klee_mk_ite(
-		klee_mk_eq(ret, clo.len),
+		klee_mk_eq(ret, clo.vm->vm_len_max),
 		0,
-		s + ret);
-		
-	clo.p = virtsym_safe_memcopy(clo.p, clo.len);
+		clo.s_orig + ret);
+
 	clo_ret = malloc(sizeof(clo));
 	memcpy(clo_ret, &clo, sizeof(clo));
 	virtsym_add(memchr_fini, ret, clo_ret);
@@ -76,7 +76,7 @@ static void memchr_enter(void* r)
 static void memchr_fini(uint64_t _r, void* aux)
 {
 	const struct memchr_clo	*clo = aux;
-	const char	*s = clo->p;
+	const char	*s = (const char*)clo->vm->vm_buf;
 	unsigned int	i;
 
 	/* possibly does not exist in string? */

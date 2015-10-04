@@ -2,6 +2,7 @@
 #define VIRTSYM_H
 
 #include "virtstr.h"
+#include "virtmem.h"
 
 typedef void(*vsym_clo_f)(uint64_t r, void* aux);
 typedef int(*vsym_check_f)(const void* cur, const void* old);
@@ -25,7 +26,6 @@ struct vsym_clo
 
 int virtsym_already(vsym_clo_f, vsym_check_f, const void* aux, uint64_t* ret);
 void virtsym_add(vsym_clo_f f, uint64_t ret, void* dat);
-void* virtsym_safe_memcopy(const void* m, unsigned len);
 void virtsym_prune(pruneid_t);
 
 /* in the future, this might do something smart like install a post hook

@@ -17,8 +17,9 @@ HOOK_FUNC(__memcmp_sse2, memcmp_enter);
 
 struct memcmp_clo
 {
-	const void	*p[2];
-	unsigned	len;
+	struct virt_mem		*vm[2];
+	const void		*p[2];
+	unsigned		len;
 };
 
 /* XXX: could be smarter about symbolic sizes to make it easier to
@@ -27,23 +28,34 @@ static void memcmp_enter(void* r)
 {
 	uint64_t		ret;
 	struct memcmp_clo	clo, *clo_ret;
+	unsigned		i;
 
 	clo.p[0] = (const void*)GET_ARG0(r);
 	clo.p[1] = (const void*)GET_ARG1(r);
 	clo.len = GET_ARG2(r);
 
-	/* 1. make sure not symbolic pointers */
-	if (klee_is_symbolic_addr(clo.p[0]) || klee_is_symbolic_addr(clo.p[1]))
-		return;
+	clo.vm[0] = virtsym_safe_memcopy_conc(clo.p[0], clo.len);
+	if (!clo.vm[0]) return;
 
-	/* 2. check pointers */
-	if (!klee_is_valid_addr(clo.p[0])) return;
-	if (!klee_is_valid_addr(clo.p[1])) return;
+	clo.vm[1] = virtsym_safe_memcopy_conc(clo.p[1], clo.len);
+	if (!clo.vm[1]) goto free_0;
 
-	/* set value to symbolic */
+	// both buffers are concrete; don't bother with vsym
+	if (vm_is_conc(clo.vm[0]) && vm_is_conc(clo.vm[1]))
+		goto free_1;
+
+	// test prefix
+	for (	i = 0;	i < clo.vm[0]->vm_first_sym_idx &&
+			i < clo.vm[1]->vm_first_sym_idx;
+		i++)
+	{
+		if (clo.vm[0]->vm_buf[i] != clo.vm[1]->vm_buf[i])
+			goto free_1;
+	}
+
 	if (!klee_make_vsym(&ret, sizeof(ret), "vmemcmp")) {
 		virtsym_disabled();
-		return;
+		goto free_1;
 	}
 
 	/* return {-1,0,1} */
@@ -51,14 +63,19 @@ static void memcmp_enter(void* r)
 	klee_assume_sle(ret, 1);
 	GET_SYSRET(r) = ret;
 
-	clo.p[0] = virtsym_safe_memcopy(clo.p[0], clo.len);
-	clo.p[1] = virtsym_safe_memcopy(clo.p[1], clo.len);
+	clo.p[0] = clo.vm[0]->vm_buf;
+	clo.p[1] = clo.vm[1]->vm_buf;
 	clo_ret = malloc(sizeof(clo));
 	memcpy(clo_ret, &clo, sizeof(clo));
 	virtsym_add(memcmp_fini, ret, clo_ret);
 
 	/* no need to evaluate, skip */
 	kmc_skip_func();
+
+free_1:
+	virtsym_mem_free(clo.vm[1]);
+free_0:
+	virtsym_mem_free(clo.vm[0]);
 }
 
 static void memcmp_fini(uint64_t r, void* aux)
