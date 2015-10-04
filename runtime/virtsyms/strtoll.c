@@ -42,11 +42,9 @@ static void strtoll_enter(void* r)
 		return;
 	}
 
-	/* check pointers, common to crash in strtoll */
 	clo_dat.s = (const char*)GET_ARG0(r);
-	if (!klee_is_valid_addr(clo_dat.s)) return;
-
-	if ((clo_dat.str = virtsym_safe_strcopy_conc(clo_dat.s)) == NULL) {
+	if ((clo_dat.str = virtsym_safe_strcopy(clo_dat.s)) == NULL) {
+		// concrete or had a crashy string
 		return;
 	}
 
@@ -58,7 +56,6 @@ static void strtoll_enter(void* r)
 
 	GET_SYSRET(r) = ret;
 
-	/* XXX: this should copy the whole string */
 	clo = malloc(sizeof(*clo));
 	memcpy(clo, &clo_dat, sizeof(*clo));
 	virtsym_add(strtoll_fini, ret, clo);
