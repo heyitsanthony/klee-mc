@@ -8,6 +8,8 @@ static void strlen_enter(void* r);
 static void strlen_fini(uint64_t _r, void* aux);
 DECL_VIRTSYM_FAKE(strlen_fini)
 
+#define STRLEN_MERGE_DEPTH	32
+
 #define HOOK_FUNC(x,y) void __hookpre_##x(void* r) { y(r); }
 
 HOOK_FUNC(__GI_strlen, strlen_enter);
@@ -49,33 +51,49 @@ static void strlen_enter(void* r)
 
 }
 
-#define CAN_FINISH  klee_mk_and(klee_mk_eq(_r, i), klee_mk_eq(s[i], 0))
-
+// p_{-1} = true
+// p_k = p_{k-1} && s[k] != 0
+// q_{-1} = false
+// q_k = q_{k-1} || (r == (k-1) && p_{k-1} && s[k] == 0)
 static void strlen_fini(uint64_t _r, void* aux)
 {
-	const char	*s = ((struct virt_str*)aux)->vs_str;
-	unsigned	i = 0;
+	struct virt_str	*vs = (struct virt_str*)aux;
+	const char	*s = vs->vs_str;
+	unsigned	i = vs->vs_first_sym_idx;
+	uint64_t	p_k_prev = 1;
+	uint64_t	q_k_prev = 0;
+	unsigned	solutions = 0;
 
-	while (klee_feasible_ne(s[i], 0)) {
-		uint64_t can_finish_cond = CAN_FINISH;
-		/* note it's necessary to test feasibility of *both*
-		 * predicates at once because feasible(a) /\ feasible(b)
-		 * does not imply feasible(a /\ b)! */
-		if (__klee_feasible(can_finish_cond)) {
-			__klee_assume(can_finish_cond);
-			return;
-		}
-		klee_assume_ne(s[i], 0);
-		i++;
+	do {
+		uint64_t	q_k;
+		uint64_t	p_k;
+
 		if (!klee_is_valid_addr(&s[i])) {
-			klee_print_expr("oops", &s[i]);
-			virtsym_prune(VS_PRNID_STRLEN);
+			klee_print_expr("strlen oops", &s[i]);
+			break;
 		}
+
+		q_k = klee_mk_and(
+			klee_mk_eq(_r, i),
+			klee_mk_and(p_k_prev, klee_mk_eq(s[i], 0)));
+		if (__klee_feasible(q_k)) {
+			solutions++;
+			q_k_prev = klee_mk_or(q_k_prev, q_k);
+		}
+
+		p_k = klee_mk_and(p_k_prev, klee_mk_ne(s[i], 0));
+		if (!__klee_feasible(p_k)) {
+			break;
+		}
+		p_k_prev = p_k;
+
+		i++;
+	} while (solutions < STRLEN_MERGE_DEPTH);
+
+	if (solutions == 0) {
+		virtsym_prune(VS_PRNID_STRLEN);
+		return;
 	}
 
-	if (!__klee_feasible(CAN_FINISH)) {
-		virtsym_prune(VS_PRNID_STRLEN);
-	} else {
-		__klee_assume(CAN_FINISH);
-	}
+	__klee_assume(q_k_prev);
 }
