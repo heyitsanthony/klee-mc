@@ -108,7 +108,6 @@ namespace {
   	"watchdog", cl::desc("Use a watchdog process to enforce --max-time."));
 }
 
-extern bool WriteTraces;
 extern cl::opt<double> MaxTime;
 std::string g_InputFile = InputFile;
 LibcType g_Libc = Libc;

@@ -26,8 +26,6 @@
 using namespace llvm;
 using namespace klee;
 
-extern bool WriteTraces;
-
 #define DECL_OPT(x,y,z)	cl::opt<bool> x(y,cl::desc(z))
 
 namespace {
@@ -451,14 +449,6 @@ unsigned KleeHandler::processTestCase(
 	}
 
 	if (WriteMem) writeMem(state, id);
-
-	if (WriteTraces) {
-		auto f = openTestFile("trace", id);
-		if (f)
-			state.exeTraceMgr.printAllEvents(*f);
-		else
-			LOSING_IT(".trace");
-	}
 
 	if (m_testIndex == StopAfterNTests)
 		m_interpreter->setHaltExecution(true);

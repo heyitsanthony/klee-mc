@@ -56,7 +56,6 @@
 using namespace llvm;
 using namespace klee;
 
-bool	WriteTraces = false;
 bool	ReplayInhibitedForks = true;
 uint32_t DebugPrintInstructions = 0;
 extern double	MaxSTPTime;
@@ -114,13 +113,6 @@ namespace {
 
   cl::opt<unsigned>
   MaxMemory("max-memory", cl::desc("Refuse forks above cap (in MB, 0=off)"));
-
-  // use 'external storage' because also needed by tools/klee/main.cpp
-  cl::opt<bool, true>
-  WriteTracesProxy("write-traces",
-	cl::desc("Write .trace file for each terminated state"),
-	cl::location(WriteTraces),
-	cl::init(false));
 
   cl::opt<bool>
   IgnoreBranchConstraints(
@@ -488,10 +480,6 @@ void Executor::executeCall(
 	Function	*f2 = NULL;
 
 	assert (f);
-
-	if (WriteTraces)
-		state.exeTraceMgr.addEvent(
-			new FunctionCallTraceEvent(state, ki, f->getName()));
 
 	if (	!f->isDeclaration() ||
 		(f2 = kmodule->module->getFunction(f->getName().str())))
@@ -988,15 +976,6 @@ void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 
 	finalizeBranch(branches.first, bi, 0 /* [0] successor => true/then */);
 	finalizeBranch(branches.second, bi, 1 /* [1] successor => false/else */);
-
-	if (WriteTraces) {
-		bool	isTwoWay = (branches.first && branches.second);
-#define WRBR(x,y) \
-if(x) x->exeTraceMgr.addEvent(new BranchTraceEvent(state, ki, y, isTwoWay))
-		WRBR(branches.first, true);
-		WRBR(branches.second, false);
-#undef WRBR
-	}
 }
 
 void Executor::finalizeBranch(
@@ -1621,10 +1600,6 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
 
    // Control flow
   case Instruction::Ret:
-	if (WriteTraces) {
-		state.exeTraceMgr.addEvent(
-			new FunctionReturnTraceEvent(state, ki));
-	}
 	instRet(state, ki);
 	break;
 

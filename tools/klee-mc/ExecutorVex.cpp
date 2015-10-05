@@ -51,8 +51,6 @@ extern "C"
 using namespace klee;
 using namespace llvm;
 
-extern bool WriteTraces;
-
 extern bool SymArgs, SymArgC;
 extern bool UsePrioritySearcher;
 

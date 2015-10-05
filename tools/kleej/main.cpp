@@ -50,9 +50,6 @@ using namespace klee;
 #define GCTX	getGlobalContext()
 
 extern double	MaxTime;
-extern bool	WriteTraces;
-
-
 
 namespace {
 	cl::opt<std::string>

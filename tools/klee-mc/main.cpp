@@ -38,7 +38,6 @@ using namespace klee;
 
 bool			SymArgs, SymArgC;
 extern double		MaxSTPTime;
-extern bool		WriteTraces;
 extern double		MaxTime;
 
 namespace {

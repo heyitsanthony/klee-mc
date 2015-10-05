@@ -18,7 +18,6 @@
 #include "../../lib/Core/AddressSpace.h"
 #include "../../lib/Core/StateTLB.h"
 #include "../../lib/Core/BranchTracker.h"
-#include "../../lib/Core/ExecutionTrace.h"
 #include "../../lib/Core/Terminator.h"
 #include "klee/Internal/Module/KInstIterator.h"
 #include "klee/Internal/ADT/TreeStream.h"
@@ -150,7 +149,6 @@ public:
 	bool			isReplay;	/* started in replay mode? */
 	bool			isPartial;
 	bool			isEnableMMU;
-	ExecutionTraceManager	exeTraceMgr;	/* prints traces on exit */
 
 	bool forkDisabled;	/* Disables forking, set by user code. */
 
