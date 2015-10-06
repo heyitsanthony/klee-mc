@@ -214,6 +214,7 @@ void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf)
 	stack.push_back(StackFrame(caller,kf));
 	stack.back().stackWatermark = getStackDepth();
 
+	covset.insert(kf);
 	if (TrackStateFuncMinInst) {
 		if (min_kf_inst.find(kf) == min_kf_inst.end())
 			min_kf_inst.insert(std::make_pair(kf, totalInsts));
@@ -299,6 +300,7 @@ void ExecutionState::xferFrame(KFunction* kf)
 
 	kf->incEnters();
 
+	covset.insert(kf);
 	if (TrackStateFuncMinInst) {
 		if (min_kf_inst.find(kf) == min_kf_inst.end())
 			min_kf_inst.insert(std::make_pair(kf, totalInsts));

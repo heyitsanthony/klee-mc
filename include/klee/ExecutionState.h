@@ -22,6 +22,7 @@
 #include "klee/Internal/Module/KInstIterator.h"
 #include "klee/Internal/ADT/TreeStream.h"
 #include "../../lib/Core/Memory.h"
+#include "../../lib/Core/CovSet.h"
 #include "klee/CallStack.h"
 
 #include <map>
@@ -154,6 +155,7 @@ public:
 
 	std::map<const std::string*, std::set<unsigned> > coveredLines;
 	std::shared_ptr<PTreeNode> ptreeNode;
+	CovSet	covset;
 
 	// for use with std::mem_fun[_ref] since they don't accept data members
 	bool isCompact() const { return isCompactForm; }

@@ -31,6 +31,7 @@ using namespace klee;
 namespace {
 DECL_OPT(NoOutput, "no-output", "Don't generate test files");
 DECL_OPT(WriteCov, "write-cov", "Write coverage info for each test");
+DECL_OPT(WriteNewCov, "write-new-cov", "Only write tests that cover new code.");
 DECL_OPT(WritePCs, "write-pcs", "Write .pc files for each test case");
 DECL_OPT(WriteSMT,  "write-smt", "Write .smt for each test");
 DECL_OPT(WritePaths, "write-paths", "Write .path files for each test");
@@ -349,15 +350,6 @@ void KleeHandler::printCWEXML(
 }
 
 
-#if 0
-void KleeHandler::updateTestCoverage(const ExecutionState& es)
-{
-	/* scan kfuncs that have uncovered instructions;
-	 * if ... */
-	assert (0 == 1 && "STUB");
-}
-#endif
-
 /* Outputs all files (.ktest, .pc, .cov etc.) describing a test case */
 unsigned KleeHandler::processTestCase(
 	const ExecutionState &state,
@@ -366,6 +358,7 @@ unsigned KleeHandler::processTestCase(
 {
 	unsigned	id;
 	out_objs	out;
+	bool		is_committed;
 	bool		success;
 
 	if (errorMessage && ExitOnError) {
@@ -375,8 +368,13 @@ unsigned KleeHandler::processTestCase(
 
 	if (!isWriteOutput()) return 0;
 
-	/* TODO: scan path to figure out what was covered... */
-	// updateTestCoverage(state);
+	is_committed = state.covset.isCommitted();
+	if (WriteNewCov && is_committed && !errorMessage) {
+		std::cerr	<< "[KleeHandler] Ignoring covered test. es="
+				<< (void*)&state << ". Size: "
+				<< state.covset.getCovered().size() << "\n";
+		return 0;
+	}
 
 	success = getStateSymObjs(state, out);
 	if (!success)
@@ -384,7 +382,12 @@ unsigned KleeHandler::processTestCase(
 
 	id = ++m_testIndex;
 
-	if (success) processSuccessfulTest("ktest", id, out);
+	if (success) {
+		if (!is_committed) {
+			state.covset.commit();
+		}
+		processSuccessfulTest("ktest", id, out);
+	}
 
 	if (errorMessage != NULL)
 		printErrorMessage(state, errorMessage, errorSuffix, id);
