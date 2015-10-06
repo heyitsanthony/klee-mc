@@ -274,20 +274,23 @@ void StatsTracker::trackInstTime(ExecutionState& es)
 
 void StatsTracker::stepInstUpdateFrame(ExecutionState &es)
 {
-	if (es.stack.empty())
+	if (es.pc->isCovered() || es.stack.empty())
 		return;
 
 	const StackFrame	&sf(es.stack.back());
-	const InstructionInfo	&ii(*es.pc->getInfo());
+	if (!sf.kf->trackCoverage) {
+		// mark as covered to avoid evaluating all this again
+		es.pc->cover(es.getSID());
+		return;
+	}
 
+	const InstructionInfo	&ii(*es.pc->getInfo());
+	Instruction		*inst = es.pc->getInst();
 
 	theStatisticManager->setIndex(ii.id);
-	if (es.pc->isCovered())
+	if (!instructionIsCoverable(inst)) {
 		return;
-
-	Instruction *inst = es.pc->getInst();
-	if (!sf.kf->trackCoverage || !instructionIsCoverable(inst))
-		return;
+	}
 
 	// Checking for actual stoppoints avoids inconsistencies due
 	// to line number propogation.
