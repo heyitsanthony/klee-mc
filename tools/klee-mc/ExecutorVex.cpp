@@ -711,6 +711,7 @@ bool ExecutorVex::doAccel(ExecutionState& state, KInstruction* ki)
 	markExit(*shadow_es, GE_RETURN);
 
 	AS_COPYOUT(*shadow_es, &x_reg, VexGuestAMD64State, guest_RIP, 8);
+	shadow_es->clearAllocaCache();
 	ret = hw_accel->xchk(state, *shadow_es);
 done:
 	t_xchk = wt.checkSecs();

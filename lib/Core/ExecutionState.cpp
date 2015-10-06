@@ -66,21 +66,18 @@ namespace {
 
 static uint64_t sid_c = 0;
 
-#define ALLOCA_CACHE_SZ	16
+#define ALLOCA_CACHE_SZ	32
 
 /* There is a lot of thrashing in 'unbind'. Keep a pool */
 // XXX: randomize evictions?
 #define UNBIND_ALLOCAS(sf)						\
 if (sf.allocas) {							\
-	unsigned alloca_c = sf.allocas->size();				\
-	if (alloca_c < ALLOCA_CACHE_SZ) {				\
-	while ((alloca_victims.size() + alloca_c) > ALLOCA_CACHE_SZ) {	\
-		const MemoryObject *mo = *alloca_victims.begin();	\
-		alloca_victims.erase(mo);				\
-		unbindObject(mo);					\
+	for (auto aa_mo : *sf.allocas)					\
+		alloca_victims.push_front(aa_mo);			\
+	while (alloca_victims.size() > ALLOCA_CACHE_SZ) {		\
+		unbindObject(alloca_victims.back());			\
+		alloca_victims.pop_back();				\
 	}								\
-	}								\
-	for (auto aa_mo : *sf.allocas) alloca_victims.insert(aa_mo);	\
 }
 
 void ExecutionState::initFields(void)
@@ -513,14 +510,11 @@ ObjectPair ExecutionState::allocate(
 
 	// use victim cache
 	if (isLocal) {
-		for (auto m : alloca_victims) {
-			if (m->size == size) {
-				mo = m;
-				break;
-			}
-		}
-		if (mo != nullptr) {
-			alloca_victims.erase(mo);
+		auto it = alloca_victims.begin();
+		for(; it != alloca_victims.end() && (*it)->size != size; it++);
+		if (it != alloca_victims.end()) {
+			mo = *it;
+			alloca_victims.erase(it);
 			stack.back().addAlloca(mo);
 			return ObjectPair(
 				mo, addressSpace.findWriteableObject(mo));

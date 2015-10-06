@@ -356,6 +356,15 @@ public:
 	Terminator* getFini(void) const { return term.get(); }
 	void setFini(const Terminator& t) { term = ProtoPtr<Terminator>(t); }
 
+	// Two states may execute differently, but have same memory contents
+	// once finished. If the executions uses allocas differently, they'll
+	// have different address spaces because of caching and fail to xchk.
+	// So, clean up caching before xchk with this.
+	void clearAllocaCache(void) {
+		for (auto mo : alloca_victims) unbindObject(mo);
+		alloca_victims.clear();
+	}
+
 private:
 	void initFields(void);
 	void updatePartSeed(Array* array);
@@ -393,7 +402,7 @@ private:
 	sid_t			sid;
 	ProtoPtr<Terminator>	term;
 
-	std::set<const MemoryObject*>	alloca_victims;
+	std::deque<const MemoryObject*>	alloca_victims;
 };
 
 }
