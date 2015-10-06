@@ -331,13 +331,6 @@ void StatsTracker::framePushed(ExecutionState &es, StackFrame *parentFrame)
 	}
 }
 
-/* Should be called _after_ the es->popFrame() */
-void StatsTracker::framePopped(ExecutionState &es)
-{
-	// XXX remove me?
-}
-
-
 void StatsTracker::markBranchVisited(
 	KBrInstruction	*kbr,
 	ExecutionState	*visitedTrue,

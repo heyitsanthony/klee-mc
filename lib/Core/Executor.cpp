@@ -597,7 +597,6 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 	if (!kcaller) {
 		/* no caller-- return to top of function. used for initlist */
 		state.popFrame();
-		statsTracker->framePopped(state);
 		state.pc = state.getCurrentKFunc()->instructions;
 		return;
 	}
@@ -649,8 +648,6 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 	}
 
 	state.popFrame();
-
-	statsTracker->framePopped(state);
 
 	if (InvokeInst *ii = dyn_cast<InvokeInst>(caller)) {
 		state.transferToBasicBlock(ii->getNormalDest(), caller->getParent());
