@@ -392,6 +392,8 @@ private:
 
 	sid_t			sid;
 	ProtoPtr<Terminator>	term;
+
+	std::set<const MemoryObject*>	alloca_victims;
 };
 
 }

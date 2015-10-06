@@ -66,12 +66,22 @@ namespace {
 
 static uint64_t sid_c = 0;
 
-/* TODO TODO: There is a lot of thrashing in 'unbind'; it might make sense
- * to keep a pool of allocas even though it's less precise */
-#define UNBIND_ALLOCAS(sf)	\
-	if (sf.allocas) {	\
-		foreach (it, sf.allocas->begin(), sf.allocas->end())	\
-			unbindObject(*it); }
+#define ALLOCA_CACHE_SZ	16
+
+/* There is a lot of thrashing in 'unbind'. Keep a pool */
+// XXX: randomize evictions?
+#define UNBIND_ALLOCAS(sf)						\
+if (sf.allocas) {							\
+	unsigned alloca_c = sf.allocas->size();				\
+	if (alloca_c < ALLOCA_CACHE_SZ) {				\
+	while ((alloca_victims.size() + alloca_c) > ALLOCA_CACHE_SZ) {	\
+		const MemoryObject *mo = *alloca_victims.begin();	\
+		alloca_victims.erase(mo);				\
+		unbindObject(mo);					\
+	}								\
+	}								\
+	for (auto aa_mo : *sf.allocas) alloca_victims.insert(aa_mo);	\
+}
 
 void ExecutionState::initFields(void)
 {
@@ -125,7 +135,10 @@ ExecutionState::~ExecutionState()
 {
 	while (!stack.empty())  {
 		StackFrame	&sf(stack.back());
-		UNBIND_ALLOCAS(sf);
+		if (sf.allocas) {
+			for (auto mo : *sf.allocas)
+				unbindObject(mo);
+		}
 		stack.pop_back();
 	}
 	canary = 0;
@@ -180,6 +193,7 @@ void ExecutionState::compact(void)
 	memObjects.clear();
 	symbolics.clear();
 	arr2addr.clear();
+	alloca_victims.clear();
 
 	isCompactForm = true;
 	onFreshBranch = false;
@@ -489,12 +503,28 @@ ObjectPair ExecutionState::allocate(
 	uint64_t size, bool isLocal, bool isGlobal,
 	const llvm::Value *allocSite)
 {
-	MemoryObject		*mo;
+	const MemoryObject	*mo = nullptr;
 	const ObjectState	*os;
 
 	if (size == 0) {
 		std::cerr << "[ExeState] Fixing up size=0 allocate\n";
 		size = 1;
+	}
+
+	// use victim cache
+	if (isLocal) {
+		for (auto m : alloca_victims) {
+			if (m->size == size) {
+				mo = m;
+				break;
+			}
+		}
+		if (mo != nullptr) {
+			alloca_victims.erase(mo);
+			stack.back().addAlloca(mo);
+			return ObjectPair(
+				mo, addressSpace.findWriteableObject(mo));
+		}
 	}
 
 	mo = mm->allocate(size, isLocal, isGlobal, allocSite, this);
