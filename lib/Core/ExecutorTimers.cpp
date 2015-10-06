@@ -921,6 +921,8 @@ void Executor::processTimers(ExecutionState *current, double maxInstTime)
 
 	for (auto &ti : timers) ti->fire(now);
 
+	lastCheck = now;
+
 done:
 	lastCall = now;
 }
