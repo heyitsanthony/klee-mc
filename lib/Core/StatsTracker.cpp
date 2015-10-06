@@ -58,10 +58,6 @@ namespace
 		"output-istats",
 		cl::desc("Write instruction level statistics (in callgrind format)"),
 		cl::init(false));
-	cl::opt<bool> TrackIStats(
-		"track-istats",
-		cl::desc("Track instruction level statistics"),
-		cl::init(true));
 
 	cl::opt<double> StatsWriteInterval(
 		"stats-write-interval",
@@ -90,7 +86,7 @@ std::unique_ptr<StatsTracker> StatsTracker::create(
 
 namespace klee {
 
-bool StatsTracker::useStatistics() { return OutputStats || TrackIStats; }
+bool StatsTracker::useStatistics() { return OutputStats || true /* TrackIStats */; }
 #define DECL_STATTIMER(x,y)		\
 class x##Timer : public Executor::Timer	{\
 private:				\
@@ -234,20 +230,18 @@ void StatsTracker::addKFunction(KFunction* kf)
 	}
 
 	for (unsigned i=0; i<kf->numInstructions; ++i) {
-		KInstruction *ki = kf->instructions[i];
+		KInstruction	*ki = kf->instructions[i];
+		unsigned	id = ki->getInfo()->id;
 
-		if (TrackIStats) {
-			unsigned id = ki->getInfo()->id;
-			theStatisticManager->setIndex(id);
-		}
+		if (!kf->trackCoverage) continue;
 
-		if (kf->trackCoverage) {
-			if (instructionIsCoverable(ki->getInst()))
-				++stats::uncoveredInstructions;
-			if (BranchInst *bi = dyn_cast<BranchInst>(ki->getInst()))
-				if (!bi->isUnconditional())
-					numBranches++;
-		}
+		theStatisticManager->setIndex(id);
+
+		if (instructionIsCoverable(ki->getInst()))
+			++stats::uncoveredInstructions;
+		if (BranchInst *bi = dyn_cast<BranchInst>(ki->getInst()))
+			if (!bi->isUnconditional())
+				numBranches++;
 	}
 
 	if (!init) {
@@ -313,8 +307,6 @@ void StatsTracker::stepInstUpdateFrame(ExecutionState &es)
 
 void StatsTracker::stepInstruction(ExecutionState &es)
 {
-	if (!TrackIStats) return;
-
 	if (TrackInstructionTime)
 		trackInstTime(es);
 
@@ -326,8 +318,6 @@ void StatsTracker::stepInstruction(ExecutionState &es)
 /* Should be called _after_ the es->pushFrame() */
 void StatsTracker::framePushed(ExecutionState &es, StackFrame *parentFrame)
 {
-	if (!TrackIStats) return;
-
 	StackFrame &sf = es.stack.back();
 
 	if (updateMinDistToUncovered) {
@@ -354,9 +344,6 @@ void StatsTracker::markBranchVisited(
 	ExecutionState	*visitedFalse)
 {
 	uint64_t hasTrue, hasFalse;
-
-	if (!TrackIStats)
-		return;
 
 	hasTrue = kbr->hasFoundTrue();
 	hasFalse = kbr->hasFoundFalse();
