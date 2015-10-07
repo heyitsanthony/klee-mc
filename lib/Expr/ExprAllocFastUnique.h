@@ -12,24 +12,24 @@ public:
 	ExprAllocFastUnique();
 	virtual ~ExprAllocFastUnique() {}
 
-	virtual unsigned garbageCollect(void);
+	unsigned garbageCollect(void) override;
 
-	virtual int compare(const Expr& lhs, const Expr& rhs)
+	int compare(const Expr& lhs, const Expr& rhs) override
 	{ return (&lhs == &rhs) ? 0 : ((long)&lhs - (long)&rhs); }
 
-	virtual ref<Expr> NotOptimized(const ref<Expr> &Index);
-	virtual ref<Expr> Read(const UpdateList &Updates, const ref<Expr> &idx);
-	virtual ref<Expr> Select(
+	ref<Expr> NotOptimized(const ref<Expr> &Index) override;
+	ref<Expr> Read(const UpdateList &Updates, const ref<Expr> &idx) override;
+	ref<Expr> Select(
 		const ref<Expr> &Cond,
-		const ref<Expr> &LHS, const ref<Expr> &RHS);
-	virtual ref<Expr> Extract(
-		const ref<Expr> &LHS, unsigned Offset, Expr::Width W);
-	virtual ref<Expr> ZExt(const ref<Expr> &LHS, Expr::Width W);
-	virtual ref<Expr> SExt(const ref<Expr> &LHS, Expr::Width W);
+		const ref<Expr> &LHS, const ref<Expr> &RHS) override;
+	ref<Expr> Extract(
+		const ref<Expr> &LHS, unsigned Offset, Expr::Width W) override;
+	ref<Expr> ZExt(const ref<Expr> &LHS, Expr::Width W) override;
+	ref<Expr> SExt(const ref<Expr> &LHS, Expr::Width W) override;
 
-	virtual ref<Expr> Not(const ref<Expr> &LHS);
+	ref<Expr> Not(const ref<Expr> &LHS) override;
 #define DECL_BIN_REF(x)	\
-virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS);
+ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS) override;
 	DECL_BIN_REF(Concat)
 	DECL_BIN_REF(Add)
 	DECL_BIN_REF(Sub)

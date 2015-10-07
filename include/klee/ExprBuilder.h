@@ -14,21 +14,23 @@
 #include "Expr.h"
 
 #define EXPR_BUILDER_DECL_BIN_REF(x)	\
-virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS);
+	ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS) override;
 
 #define EXPR_BUILDER_DECL_ALL	\
-	virtual ref<Expr> Constant(const llvm::APInt &Value);	\
-	virtual ref<Expr> NotOptimized(const ref<Expr> &Index);	\
-	virtual ref<Expr> Read(const UpdateList &Updates, const ref<Expr> &idx); \
-	virtual ref<Expr> Select(	\
+	ref<Expr> Constant(const llvm::APInt &Value) override;		\
+	ref<Expr> NotOptimized(const ref<Expr> &Index) override;	\
+	ref<Expr> Read(	const UpdateList &Updates,	\
+			const ref<Expr> &idx) override; \
+	ref<Expr> Select(	\
 		const ref<Expr> &Cond,	\
-		const ref<Expr> &LHS, const ref<Expr> &RHS);	\
-	virtual ref<Expr> Extract(	\
-		const ref<Expr> &LHS, unsigned Offset, Expr::Width W);	\
-	virtual ref<Expr> ZExt(const ref<Expr> &LHS, Expr::Width W);	\
-	virtual ref<Expr> SExt(const ref<Expr> &LHS, Expr::Width W);	\
+		const ref<Expr> &LHS, const ref<Expr> &RHS) override;	\
+	ref<Expr> Extract(					\
+		const ref<Expr> &LHS,				\
+		unsigned Offset, Expr::Width W) override;	\
+	ref<Expr> ZExt(const ref<Expr> &LHS, Expr::Width W) override;	\
+	ref<Expr> SExt(const ref<Expr> &LHS, Expr::Width W) override;	\
 \
-	virtual ref<Expr> Not(const ref<Expr> &LHS);	\
+	ref<Expr> Not(const ref<Expr> &LHS) override;	\
 	EXPR_BUILDER_DECL_BIN_REF(Concat)	\
 	EXPR_BUILDER_DECL_BIN_REF(Add)	\
 	EXPR_BUILDER_DECL_BIN_REF(Sub)	\

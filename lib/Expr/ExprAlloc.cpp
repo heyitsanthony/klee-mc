@@ -1,4 +1,4 @@
-#include <tr1/unordered_map>
+#include <unordered_map>
 #include <llvm/ADT/Hashing.h>
 #include <iostream>
 #include "static/Sugar.h"
@@ -22,7 +22,7 @@ bool operator()(const APInt& a, const APInt& b) const
 };
 
 /* important to use an unordered_map instead of a map so we get O(1) access. */
-typedef std::tr1::unordered_map<
+typedef std::unordered_map<
 	APInt,
 	ref<ConstantExpr>,
 	hashapint,
@@ -66,8 +66,7 @@ unsigned long ExprAlloc::const_hit_c = 0;
 
 ref<Expr> ExprAlloc::Constant(const APInt &v)
 {
-	ConstantExprTab::iterator	it;
-	uint64_t			v_64;
+	uint64_t v_64;
 
 	const_hit_c++;
 
@@ -92,16 +91,15 @@ ref<Expr> ExprAlloc::Constant(const APInt &v)
 		}
 	}
 
-	it = const_hashtab.find(v);
+	auto it = const_hashtab.find(v);
 	if (it != const_hashtab.end())
 		return it->second;
 
 	const_hit_c--;
 	const_miss_c++;
 
-	ref<ConstantExpr> r(new ConstantExpr(v));
+	auto r = const_hashtab.emplace(v, new ConstantExpr(v)).first->second;
 	r->computeHash();
-	const_hashtab.insert(std::make_pair(v, r));
 	constantCount++;
 
 	return r;
@@ -114,8 +112,8 @@ unsigned ExprAlloc::garbageCollect(void)
 	std::vector<ConstantExpr*>	to_rmv;
 	unsigned			n;
 
-	foreach (it, const_hashtab.begin(), const_hashtab.end()) {
-		ref<Expr>	e(it->second);
+	for (const auto &p : const_hashtab) {
+		ref<Expr>	e(p.second);
 
 		if (e.getRefCount() > 4)
 			continue;
@@ -126,9 +124,8 @@ unsigned ExprAlloc::garbageCollect(void)
 	}
 
 	n = to_rmv.size();
-	foreach (it, to_rmv.begin(), to_rmv.end()) {
-		APInt	v((*it)->getAPValue());
-		const_hashtab.erase(v);
+	for (const auto ce : to_rmv) {
+		const_hashtab.erase(ce->getAPValue());
 	}
 
 	constantCount -= to_rmv.size();

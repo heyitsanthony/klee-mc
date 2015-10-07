@@ -30,12 +30,14 @@ protected:
 };
 
 class ShadowMixOr : public ShadowMix
-{ virtual ref<ShadowVal> join(
-	const ref<ShadowVal>& a, const ref<ShadowVal>& b) { return *a | b; } };
+{ ref<ShadowVal> join(
+	const ref<ShadowVal>& a, const ref<ShadowVal>& b) override {
+		return *a | b; } };
 
 class ShadowMixAnd : public ShadowMix
 { virtual ref<ShadowVal> join(
-	const ref<ShadowVal>& a, const ref<ShadowVal>& b) { return *a & b; } };
+	const ref<ShadowVal>& a, const ref<ShadowVal>& b) override {
+		return *a & b; } };
 
 
 class ShadowBuilder : public ExprBuilder
@@ -50,7 +52,7 @@ public:
 
 	EXPR_BUILDER_DECL_ALL
 
-	virtual void printName(std::ostream& os) const;
+	void printName(std::ostream& os) const override;
 protected:
 	const ShadowType* getShadowExpr(const ref<Expr>& e) const;
 	ShadowBuilder(ExprBuilder* eb, ShadowMix* _sm);

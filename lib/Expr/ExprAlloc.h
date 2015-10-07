@@ -20,7 +20,7 @@ public:
 	static unsigned long getNumConstants(void) { return constantCount; }
 	virtual unsigned garbageCollect(void);
 
-	virtual void printName(std::ostream& os) const;
+	void printName(std::ostream& os) const override;
 protected:
 	static unsigned long const_hit_c;
 	static unsigned long const_miss_c;

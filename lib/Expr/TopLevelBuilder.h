@@ -16,14 +16,13 @@ public:
 		assert (top != recur);
 	}
 
-	virtual ~TopLevelBuilder()
-	{ delete eb_top; if (owns_recur) delete eb_recur; }
+	virtual ~TopLevelBuilder() { if (owns_recur) delete eb_recur; }
 
 	EXPR_BUILDER_DECL_ALL
 
-	virtual void printName(std::ostream& os) const;
+	void printName(std::ostream& os) const override;
 private:
-	ExprBuilder	*eb_top;
+	std::unique_ptr<ExprBuilder>	eb_top;
 	ExprBuilder	*eb_recur;
 	bool		in_builder;
 	bool		owns_recur;

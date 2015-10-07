@@ -1,4 +1,4 @@
-#include <tr1/unordered_map>
+#include <unordered_map>
 #include <assert.h>
 #include "klee/Expr.h"
 #include "static/Sugar.h"
@@ -11,7 +11,7 @@ struct hashexpr
 
 
 #define GET_OR_MK(x)		\
-decltype(exmap_##x.begin()) it(exmap_##x.find(key)); \
+auto it(exmap_##x.find(key));	\
 if (it != exmap_##x.end()) { expr_hit_c++; return it->second; }	\
 expr_miss_c++;	\
 ref<Expr> r = new x##Expr
@@ -29,7 +29,7 @@ struct hashexpr_read
 { unsigned operator()(
 	const std::pair<UpdateList&, ref<Expr> >& v) const
 	{ return v.first.hash() ^ v.second->hash(); } };
-typedef std::tr1::unordered_map<
+typedef std::unordered_map<
 	std::pair<UpdateList& /* array */, ref<Expr> /* index */>,
 	ref<Expr> /* read expression */,
 	hashexpr_read>	exmap_read_t;
@@ -39,7 +39,7 @@ struct hashexpr_bin
 	const std::pair<ref<Expr>, ref<Expr> >& v) const
 	{ return v.first->hash() - v.second->hash(); } };
 
-typedef std::tr1::unordered_map<
+typedef std::unordered_map<
 	std::pair<ref<Expr>, ref<Expr> >,
 	ref<Expr>,
 	hashexpr_bin>	exmap_binop_t;
@@ -48,7 +48,7 @@ struct hashexpr_ext
 { unsigned operator()(
 	const std::pair<ref<Expr>, Expr::Width >& v) const
 	{ return v.first->hash() ^ v.second; } };
-typedef std::tr1::unordered_map<
+typedef std::unordered_map<
 	std::pair<ref<Expr>, Expr::Width >,
 	ref<Expr>,
 	hashexpr_ext>	exmap_ext_t;
@@ -59,12 +59,12 @@ struct hashexpr_extr
 	const 
 	{ return v.first->hash() ^ ((v.second.first << 8) | v.second.second); } };
 
-typedef std::tr1::unordered_map<
+typedef std::unordered_map<
 	std::pair<ref<Expr>, std::pair< Expr::Width, Expr::Width > >,
 	ref<Expr>,
 	hashexpr_extr>	exmap_extr_t;
 
-typedef std::tr1::unordered_map<ref<Expr>, ref<Expr>, hashexpr > exmap_unop_t;
+typedef std::unordered_map<ref<Expr>, ref<Expr>, hashexpr > exmap_unop_t;
 
 struct hashexpr_triop
 { unsigned operator()(
@@ -72,7 +72,7 @@ struct hashexpr_triop
 	const 
 	{ return v.first->hash() ^
 		(v.second.second->hash() - v.second.first->hash()); } };
-typedef std::tr1::unordered_map<
+typedef std::unordered_map<
 	std::pair<ref<Expr>, std::pair<ref<Expr>, ref<Expr> > >,
 	ref<Expr>,
 	hashexpr_triop>	exmap_triop_t;
@@ -120,7 +120,7 @@ ref<Expr> ExprAllocFastUnique::x(const ref<Expr>& src)	\
 {	ref<Expr>	key(src);	\
 	GET_OR_MK(x)(src);		\
 	r->computeHash();		\
-	exmap_##x[key] = r;		\
+	exmap_##x.emplace(key, r);	\
 	return r; }
 
 DECL_ALLOC_1(NotOptimized)
@@ -131,7 +131,7 @@ ref<Expr> ExprAllocFastUnique::x(const ref<Expr>& lhs, const ref<Expr>& rhs) \
 {	std::pair<ref<Expr>, ref<Expr> >	key(lhs, rhs);	\
 	GET_OR_MK(x)(lhs,rhs);			\
 	r->computeHash();			\
-	exmap_##x[key] = r;			\
+	exmap_##x.emplace(key, r);		\
 	return r;				\
 }
 DECL_ALLOC_2(Concat)
@@ -171,10 +171,10 @@ ref<Expr> ExprAllocFastUnique::Read(
 	r->computeHash();
 	re = cast<ReadExpr>(r);
 	/* reference must match what is stored in hash table to avoid 
-	 * dealloc of updatelist elsewhere */
-	std::pair<UpdateList&, ref<Expr> > key2(
-		const_cast<UpdateList&>(re->updates), idx);
-	exmap_Read[key2] = r;
+	 * dealloc of updatelist elsewhere, so can't use 'key' */
+	exmap_Read.insert(
+		{{const_cast<UpdateList&>(re->updates), idx},
+		r});
 	return r;
 }
 
@@ -186,7 +186,7 @@ ref<Expr> ExprAllocFastUnique::Select(
 		c, std::make_pair(t, f));
 	GET_OR_MK(Select)(c, t, f);
 	r->computeHash();
-	exmap_Select[key] = r;
+	exmap_Select.emplace(key, r);
 	return r;
 }
 
@@ -197,7 +197,7 @@ ref<Expr> ExprAllocFastUnique::Extract(
 		e, std::make_pair(o, w));
 	GET_OR_MK(Extract)(e, o, w);
 	r->computeHash();
-	exmap_Extract[key] = r;
+	exmap_Extract.emplace(key, r);
 	return r;
 }
 
@@ -206,7 +206,7 @@ ref<Expr> ExprAllocFastUnique::ZExt(const ref<Expr> &e, Expr::Width w)
 	std::pair<ref<Expr>, unsigned> key(e, w);
 	GET_OR_MK(ZExt)(e,w);
 	r->computeHash();
-	exmap_ZExt[key] = r;
+	exmap_ZExt.emplace(key, r);
 	return r;
 }
 
@@ -215,7 +215,7 @@ ref<Expr> ExprAllocFastUnique::SExt(const ref<Expr> &e, Expr::Width w)
 	std::pair<ref<Expr>, unsigned> key(e, w);
 	GET_OR_MK(SExt)(e,w);
 	r->computeHash();
-	exmap_SExt[key] = r;
+	exmap_SExt.emplace(key, r);
 	return r;
 }
 
@@ -227,14 +227,13 @@ ExprAllocFastUnique::ExprAllocFastUnique() { }
 #define GC_KIND(x)	\
 do {		\
 	std::vector<unconst_key_T(exmap_##x)> rmv_keys_##x; \
-	foreach (it, exmap_##x.begin(), exmap_##x.end()) {	\
-		ref<Expr>	e(it->second);			\
+	for (const auto& p :  exmap_##x) {			\
+		ref<Expr>	e(p.second);			\
 		if (e.getRefCount() > 2) continue;		\
-		unconst_key_T(exmap_##x) k(it->first);		\
-		rmv_keys_##x.push_back(k);			\
-	}	\
-	foreach (it, rmv_keys_##x.begin(), rmv_keys_##x.end()) {\
-		exmap_##x.erase(*it);				\
+		rmv_keys_##x.emplace_back(p.first);		\
+	}							\
+	for (const auto& e : rmv_keys_##x) {			\
+		exmap_##x.erase(e);				\
 	}							\
 	ret += rmv_keys_##x.size();				\
 } while (0)
@@ -253,17 +252,14 @@ unsigned ExprAllocFastUnique::garbageCollect(void)
 	/* keep the read expressions around until all the removals are done;
 	 * otherwise map tries to reference dangling UpdateLists */
 	std::vector<ref<Expr> > rmv_read_exprs;
-	foreach (it, exmap_Read.begin(), exmap_Read.end()) {
-		ref<Expr>	e(it->second);
+	for (const auto& p : exmap_Read) {
+		ref<Expr>	e(p.second);
 		if (e.getRefCount() > 2) continue;
-		std::pair<UpdateList*, ref<Expr> >	k;
-		k.first = &it->first.first;
-		k.second = it->first.second;
-		rmv_keys_Read.push_back(k);
-		rmv_read_exprs.push_back(it->second);
+		rmv_keys_Read.emplace_back(&p.first.first, p.first.second);
+		rmv_read_exprs.push_back(e);
 	}
-	foreach (it, rmv_keys_Read.begin(), rmv_keys_Read.end()) {
-		std::pair<UpdateList&, ref<Expr> > k(*(it)->first, it->second);
+	for (const auto& p : rmv_keys_Read) {
+		std::pair<UpdateList&, ref<Expr> > k(*(p.first), p.second);
 		exmap_Read.erase(k);
 	}
 	ret += rmv_keys_Read.size();
