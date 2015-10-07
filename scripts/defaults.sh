@@ -14,15 +14,16 @@ RULEFLAGS="-use-rule-builder -rule-file=default_rules.db"
 #	-batch-instructions=20000
 SCHEDOPTS="-use-batching-search
 	-batch-time=5
-	-use-second-chance=false
+	-use-second-chance=true
 	-second-chance-boost=1
 	-second-chance-boost-cov=1
 	-use-pdf-interleave=true
 	-use-fresh-branch-search=true
-	-use-interleaved-MI=true
-	-use-interleaved-MXI=true
-	-use-interleaved-CD=true
+	-use-interleaved-UCCOV=true
+	-use-interleaved-COVSETSZ=true
 	"
+
+#	-use-interleaved-CD=true
 #	-use-interleaved-RS=true
 
 #	-use-interleaved-UO=true
