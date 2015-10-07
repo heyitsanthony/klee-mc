@@ -59,8 +59,8 @@ public:
 	virtual ~ForksKTestStateLogger();
 	ExecutionState* getNearState(const KTest* _kt);
 protected:
-	virtual bool updateSymbolics(ExecutionState& current);
-	virtual void addBinding(ref<Array>& a, std::vector<uint8_t>& v);
+	bool updateSymbolics(ExecutionState& current) override;
+	void addBinding(ref<Array>& a, std::vector<uint8_t>& v) override;
 private:
 	typedef std::map<const Assignment, ExecutionState*> statecache_ty;
 	typedef std::pair<unsigned, const std::string>	arrkey_ty;

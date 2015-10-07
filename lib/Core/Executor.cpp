@@ -2117,10 +2117,7 @@ void Executor::run(ExecutionState &initState)
 	 * until after replay. Hm. */
 	stateManager->setupSearcher(UserSearcher::constructUserSearcher(*this));
 
-	if (Replay::isReplayOnly())
-		std::cerr << "[Executor] Pure replay run complete.\n";
-	else
-		runLoop();
+	runLoop();
 
 	stateManager->teardownUserSearcher();
 

@@ -300,7 +300,7 @@ bool ForksKTest::evalForks(ExecutionState& current, struct ForkInfo& fi)
 	bool	non_const;
 	int	i;
 
-	fi.forkDisabled = true;
+	fi.forkDisabled = suppressForks;
 
 	if (!suppressForks || !fi.size() || isBadOverflow(current))
 		return Forks::evalForks(current, fi);
