@@ -37,6 +37,7 @@
 #include "MergingSearcher.h"
 #include "RandomPathSearcher.h"
 #include "RRSearcher.h"
+#include "RRPrSearcher.h"
 #include "RandomSearcher.h"
 #include "WeightedRandomSearcher.h"
 #include "XChkSearcher.h"
@@ -73,6 +74,8 @@ DECL_SEARCH_OPT(Trough, "trough", "TR");
 DECL_SEARCH_OPT(FrontierTrough, "ftrough", "FTR");
 DECL_SEARCH_OPT(CondSucc, "cond", "CD");
 DECL_SEARCH_OPT(BranchIns, "brins", "BI");
+DECL_SEARCH_OPT(UncommittedCov, "uccov", "UCCOV");
+DECL_SEARCH_OPT(CovSetSize, "covsetsz", "COVSETSZ");
 DECL_SEARCH_OPT(Uncov, "uncov", "UNC");
 DECL_SEARCH_OPT(Stack, "stack", "STK");
 DECL_SEARCH_OPT(StateInst, "stinst", "SI");
@@ -227,13 +230,29 @@ bool UserSearcher::userSearcherRequiresMD2U() {
 #define TAIL_RESCAN_SEARCHER	\
 	new RescanSearcher(new Weight2Prioritizer<TailWeight>(1.0))
 
+#define UNCOMMITTEDCOV_SEARCHER					\
+new RRPrSearcher(						\
+	new Weight2Prioritizer<UncommittedCoverageWeight>(	\
+		new UncommittedCoverageWeight(),		\
+		1.0))
+
+#define COVSETSIZE_SEARCHER					\
+new RRPrSearcher(						\
+	new Weight2Prioritizer<CovSetSizeWeight>(		\
+		new CovSetSizeWeight(),	1.0))
+
 #define FRESH_BRANCH_SEARCHER	\
 	new PrioritySearcher(	\
 			new Weight2Prioritizer<FreshBranchWeight>(1),	\
-			new RescanSearcher(	\
-				new Weight2Prioritizer<	\
-					StateInstCountWeight>(-1.0)),	\
+			COVSETSIZE_SEARCHER,				\
 			100)
+
+#if 0
+new RescanSearcher(	\
+	new Weight2Prioritizer<	\
+	StateInstCountWeight>(-1.0)),	\
+
+#endif
 
 //#define BRANCHINS_SEARCHER	\
 //	new RescanSearcher(	\
@@ -290,6 +309,10 @@ Searcher* UserSearcher::setupInterleavedSearcher(
 	PUSH_ILEAV_IF_SET(Histo, SEARCH_HISTO);
 
 	PUSH_ILEAV_IF_SET(BranchIns, BRANCHINS_SEARCHER);
+
+	PUSH_ILEAV_IF_SET(UncommittedCov, UNCOMMITTEDCOV_SEARCHER);
+
+	PUSH_ILEAV_IF_SET(CovSetSize, COVSETSIZE_SEARCHER);
 
 	PUSH_ILEAV_IF_SET(Uncov, UNCOV_SEARCHER);
 

@@ -473,3 +473,10 @@ double BranchEntropyWeight::weigh(const ExecutionState* es) const
 //	entropy /= ((double)es->totalInsts/10000.0);
 	return entropy;
 }
+
+
+double UncommittedCoverageWeight::weigh(const ExecutionState* es) const
+{ return es->covset.numUncommitted(); }
+
+double CovSetSizeWeight::weigh(const ExecutionState* es) const
+{ return es->covset.getCovered().size(); }
