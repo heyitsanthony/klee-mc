@@ -11,17 +11,16 @@ class BitfieldSimplifierBuilder : public ExprBuilder, BitfieldSimplifier
 {
 public:
 	BitfieldSimplifierBuilder(ExprBuilder* _eb) : eb(_eb) {}
-	virtual ~BitfieldSimplifierBuilder() { delete eb; } 
-	void printName(std::ostream& os) const {
+	void printName(std::ostream& os) const override {
 		os << "BitfieldSimplifier(";
 		eb->printName(os);
 		os << ")";
 	}
-EXPR_BUILDER_DECL_ALL
+	EXPR_BUILDER_DECL_ALL
 protected:
 	BitfieldSimplifierBuilder(void) {}
 private:
-	ExprBuilder	*eb;
+	std::unique_ptr<ExprBuilder>	eb;
 };
 
 }
