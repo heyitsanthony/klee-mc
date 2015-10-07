@@ -275,3 +275,29 @@ void kTest_free(KTest *bo)
 	free(bo->objects);
 	free(bo);
 }
+
+bool operator<(const KTest& k1, const KTest& k2)
+{
+	int		diff;
+	unsigned	min_v;
+
+	min_v = (k2.numObjects > k1.numObjects)
+		? k1.numObjects
+		: k2.numObjects;
+
+	for (unsigned i = 0; i < min_v; i++) {
+		const KTestObject	&k1_obj = k1.objects[i],
+					&k2_obj = k2.objects[i];
+		diff = strcmp(k1_obj.name, k2_obj.name);
+		if (diff) return (diff < 0);
+		diff = k2_obj.numBytes - k1_obj.numBytes;
+		if (diff) return (diff < 0);
+		diff = memcmp(k1_obj.bytes, k2_obj.bytes, k1_obj.numBytes);
+		if (diff) return (diff < 0);
+	}
+
+	if ((diff = (k2.numObjects - k1.numObjects)) != 0)
+		return (diff > 0);
+
+	return false;
+}

@@ -72,6 +72,9 @@ extern "C" {
 #ifdef __cplusplus
 }
 
+// comparison on prefixes
+bool operator<(const KTest& lhs, const KTest& rhs);
+
 #include <iostream>
 int kTest_toStream(KTest* bo, std::ostream& os);
 #endif

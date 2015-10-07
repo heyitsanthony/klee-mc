@@ -67,33 +67,6 @@ bool ReplayKTests::replay(Executor* exe, ExecutionState* initSt)
 
 #include "klee/Internal/ADT/KTest.h"
 
-struct kts_sort {
-bool operator()(const KTest* k1, const KTest* k2)
-{
-	int		diff;
-	unsigned	min_v;
-
-	min_v = (k2->numObjects > k1->numObjects)
-		? k1->numObjects
-		: k2->numObjects;
-
-	for (unsigned i = 0; i < min_v; i++) {
-		diff = strcmp(k1->objects[i].name, k2->objects[i].name);
-		if (diff) return (diff < 0);
-		diff = k2->objects[i].numBytes - k1->objects[i].numBytes;
-		if (diff) return (diff < 0);
-		diff = memcmp(
-			k1->objects[i].bytes,
-			k2->objects[i].bytes,
-			k1->objects[i].numBytes);
-		if (diff) return (diff < 0);
-	}
-
-//	if ((diff = (k2->numObjects - k1->numObjects)) != 0)
-//		return (diff > 0);
-
-	return false;
-}};
 
 bool ReplayKTests::replayFast(Executor* exe, ExecutionState* initSt)
 {
@@ -103,7 +76,8 @@ bool ReplayKTests::replayFast(Executor* exe, ExecutionState* initSt)
 
 	if (ReplayKTestSort) {
 		std::vector<KTest*>	kts_s(kts);
-		std::sort (kts_s.begin(), kts_s.end(), kts_sort());
+		std::sort(kts_s.begin(), kts_s.end(),
+			[] (auto x, auto y) { return *x < *y; } );
 		replayFast(exe, initSt, kts_s);
 	} else
 		replayFast(exe, initSt, kts);
