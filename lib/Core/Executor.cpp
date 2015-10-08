@@ -75,7 +75,9 @@ namespace {
   DECL_OPTBOOL(AllExternalWarnings, "all-external-warnings");
   DECL_OPTBOOL(VerifyPath, "verify-path");
   DECL_OPTBOOL(ForceCOW, "force-cow");
-  DECL_OPTBOOL(DoPartialConcretize, "do-partial-conc");
+
+  cl::opt<unsigned>
+  DoPartialConcretize("do-partial-conc", cl::init(0));
 
   cl::opt<bool>
   DumpBadInitValues(
@@ -873,32 +875,45 @@ ExecutionState* Executor::concretizeState(
 		return new_st;
 	}
 
-	/* XXX: this doesn't quite work yet because we assume a 
-	 * state is concretized upto a certain symbolic object */
-	do_partial = DoPartialConcretize && !bad_expr.isNull();
+	do_partial = (DoPartialConcretize != 0) && !bad_expr.isNull();
 	if (do_partial) {
 		std::vector<const Array* >	res;
-		std::set<const Array* >		arr_set, rmv_set;
+		std::set<const Array* >		arr_set, conc_set, rmv_set;
 
 		ExprUtil::findSymbolicObjects(bad_expr, res);
 
-		for (auto arr : res) {
-			std::cerr << "[Exe] Partial sym obj: "
-				  << arr->name << '\n';
-			arr_set.insert(arr);
+		// these are the troublesome arrays
+		for (auto arr : res) arr_set.insert(arr);
+
+		for (auto &binding : a.bindings) {
+			if (arr_set.count(binding.first))
+				conc_set.insert(binding.first);
+			else
+				rmv_set.insert(binding.first);
 		}
 
-		for (auto &binding : a.bindings)
-			if (!arr_set.count(binding.first))
-				rmv_set.insert(binding.first);
+		while (conc_set.size() > DoPartialConcretize) {
+			auto it = conc_set.begin();
+			rmv_set.insert(*it);
+			conc_set.erase(it);
+		}
+
+		for (auto arr : conc_set) {
+			std::cerr << "[Exe] Partially concretizing object: "
+				  << arr->name << '\n';
+		}
 
 		for (auto arr : rmv_set) a.resetBinding(arr);
 
-		if (rmv_set.size() == 0) {
+		if (rmv_set.empty()) {
 			std::cerr << "[Exe] No remove set. Full concretize\n";
 			do_partial = false;
-		} else
+		} else {
+			std::cerr << "[Exe] Partially concretizing on "
+				  << conc_set.size() << " objects out of "
+				  << arr_set.size() << " in expression.\n";
 			a.allowFreeValues = true;
+		}
 	}
 
 	/* 2. enumerate all objstates-- replace sym objstates w/ concrete */
@@ -2766,6 +2781,9 @@ void Executor::terminateWith(Terminator& term, ExecutionState& state)
 	if (term.terminate(state) == false) return;
 
 	if (term.isInteresting(state) == false) {
+		std::cerr	<< "[Executor] Uninteresting state. SID="
+				<< state.getSID() << ". Uncommitted="
+				<< state.covset.numUncommitted() << '\n';
 		terminate(state);
 		return;
 	}
