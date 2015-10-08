@@ -42,8 +42,10 @@ bool Terminator::isInteresting(ExecutionState& st) const
 	if (EmitOnlyFirstNewCov && st.coveredNew == 0)
 		return false;
 
-	if (EmitOnlyCovSetUncommitted && st.covset.isCommitted())
+	if (EmitOnlyCovSetUncommitted && st.covset.isCommitted()) {
+		std::cerr << "[Term] State's coverage already committed.\n";
 		return false;
+	}
 
 	return true;
 }
@@ -57,21 +59,52 @@ bool TermExit::terminate(ExecutionState& state)
 void TermExit::process(ExecutionState& state)
 { getExe()->getInterpreterHandler()->processTestCase(state, 0, 0); }
 
-typedef std::pair<CallStack::insstack_ty, std::string> errmsg_ty;
-std::set<errmsg_ty> emittedErrors;
+
+std::set<TermError::errmsg_ty> TermError::emittedErrors;
+
+TermError::TermError(
+	Executor* _exe,
+	const ExecutionState &state,
+	const std::string &_msgt,
+	const std::string& _suffix,
+	const std::string &_info,
+	bool _alwaysEmit)
+: Terminator(_exe)
+, messaget(_msgt)
+, suffix(_suffix)
+, info(_info)
+, alwaysEmit(_alwaysEmit)
+, ins(state.stack.getKInstStack())
+{
+	ins.push_back(state.prevPC);
+}
+
+TermError::TermError(const TermError& te)
+: Terminator(te.getExe())
+, messaget(te.messaget)
+, suffix(te.suffix)
+, info(te.info)
+, alwaysEmit(te.alwaysEmit)
+, ins(te.ins)
+{
+}
+
 bool TermError::isInteresting(ExecutionState& state) const
 {
-	CallStack::insstack_ty	ins;
-
 	/* It can be annoying to emit errors with the same trace. */
 	if (alwaysEmit || EmitAllErrors)
 		return true;
 
-	ins = state.stack.getKInstStack();
-	ins.push_back(state.prevPC);
-
-	if (emittedErrors.emplace(ins, messaget).second == false)
+	if (emittedErrors.count({ins, messaget})) {
+		std::cerr << "[Term] Error " << messaget << " already found.\n";
 		return false;
+	}
+	// Can't insert to emittedErrors here because the Fini functions
+	// could terminate the state and the error will never be emitted.
+	//
+	// On the other hand, I don't think the stack trace after Fini
+	// will match what's used here, so the check is useless for doing
+	// more fini stuff.
 
 	return true;
 }
@@ -89,6 +122,12 @@ void TermError::process(ExecutionState& state)
 	printStateErrorMessage(state, messaget, msg);
 
 	if (info != "") msg << "Info: \n" << info;
+
+	if (emittedErrors.emplace(ins, messaget).second == false) {
+		std::cerr << "[Term] Emplaced error " << messaget << "\n";
+	} else {
+		std::cerr << "[Term] Error already exists " << messaget << "\n";
+	}
 
 	getExe()->getInterpreterHandler()->processTestCase(
 		state, msg.str().c_str(), suffix.c_str());
@@ -116,6 +155,8 @@ bool TermEarly::terminate(ExecutionState &state)
 		sym_st = getExe()->concretizeState(
 			state, getExe()->getSolver()->getLastBadExpr());
 		if (sym_st != NULL) {
+			/* destroy the old symbolic state that can't make
+			 * any progress... */
 			term_st = sym_st;
 		}
 	}
@@ -128,9 +169,10 @@ bool TermEarly::terminate(ExecutionState &state)
 	if (term_st == &state)
 		return true;
 
-	/* nothing. */
-	if (isInteresting(*term_st))
+	if (isInteresting(*term_st)) {
+		std::cerr << "[Term] Processing bad symbolic state.\n";
 		process(*term_st);
+	}
 
 	getExe()->terminate(*term_st);
 	return false;

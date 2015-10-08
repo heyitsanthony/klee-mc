@@ -1,6 +1,8 @@
 #ifndef TERMINATOR_H
 #define TERMINATOR_H
 
+#include "klee/CallStack.h"
+
 // these classes control the way a function is terminated
 // Why would you want to do this?
 // 	* Terminate in Exit case
@@ -90,23 +92,21 @@ class TermError : public Terminator
 public:
 	TermError(
 		Executor* _exe,
+		const ExecutionState &es,
 		const std::string &_msgt,
 		const std::string& _suffix,
 		const std::string &_info = "",
-		bool _alwaysEmit = false)
-	: Terminator(_exe)
-	, messaget(_msgt)
-	, suffix(_suffix)
-	, info(_info)
-	, alwaysEmit(_alwaysEmit)
-	{}
+		bool _alwaysEmit = false);
 	virtual ~TermError(void) = default;
 
 	void process(ExecutionState& state) override;
 	bool terminate(ExecutionState& state) override;
 	bool isInteresting(ExecutionState& es) const override;
-	Terminator* copy(void) const override
-	{ return new TermError(getExe(), messaget, suffix, info, alwaysEmit); }
+	Terminator* copy(void) const override { return new TermError(*this); }
+
+protected:
+	TermError(const TermError& te);
+
 private:
 	void printStateErrorMessage(
 		ExecutionState& state,
@@ -117,6 +117,10 @@ private:
 	const std::string	suffix;
 	const std::string	info;
 	bool			alwaysEmit;
+	CallStack::insstack_ty	ins;
+
+	typedef std::pair<CallStack::insstack_ty, std::string> errmsg_ty;
+	static std::set<errmsg_ty> emittedErrors;
 };
 };
 
