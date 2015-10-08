@@ -1,5 +1,5 @@
 // RUN: %llvmgcc %s -emit-llvm -O0 -c -o %t1.bc
-// RUN: %klee -do-partial-conc %t1.bc 2>%t1.out.err
+// RUN: %klee -do-partial-conc=1 %t1.bc 2>%t1.out.err
 // RUN: ls klee-last | not grep assert.err
 
 #include <assert.h>

@@ -16,8 +16,9 @@ using namespace llvm;
 namespace llvm
 {
 #define DECL_OPTBOOL(x,y)	cl::opt<bool> x(y, cl::init(false))
-  DECL_OPTBOOL(OnlyOutputStatesCoveringNew, "only-output-states-covering-new");
-  DECL_OPTBOOL(OnlyOutputStatesUncommitted, "only-output-states-uncommitted");
+  DECL_OPTBOOL(EmitOnlyFirstNewCov, "emit-only-first-newcov");
+  DECL_OPTBOOL(EmitOnlyBrUncommitted, "emit-only-bruncommitted");
+  DECL_OPTBOOL(EmitOnlyCovSetUncommitted, "emit-only-covset-uncommitted");
   DECL_OPTBOOL(EmitEarly, "emit-early");
 
   cl::opt<bool>
@@ -35,10 +36,14 @@ namespace llvm
 
 bool Terminator::isInteresting(ExecutionState& st) const
 {
-	if (OnlyOutputStatesUncommitted)
-		return (Replay::isCommitted(*exe, st) == false);
+	if (EmitOnlyBrUncommitted && !Replay::isCommitted(*exe, st))
+		return false;
 
-	if (OnlyOutputStatesCoveringNew) return st.coveredNew;
+	if (EmitOnlyFirstNewCov && st.coveredNew == 0)
+		return false;
+
+	if (EmitOnlyCovSetUncommitted && st.covset.isCommitted())
+		return false;
 
 	return true;
 }
@@ -65,8 +70,7 @@ bool TermError::isInteresting(ExecutionState& state) const
 	ins = state.stack.getKInstStack();
 	ins.push_back(state.prevPC);
 
-	errmsg_ty		em(ins, messaget);
-	if (emittedErrors.insert(em).second == false)
+	if (emittedErrors.emplace(ins, messaget).second == false)
 		return false;
 
 	return true;

@@ -31,7 +31,6 @@ using namespace klee;
 namespace {
 DECL_OPT(NoOutput, "no-output", "Don't generate test files");
 DECL_OPT(WriteCov, "write-cov", "Write coverage info for each test");
-DECL_OPT(WriteNewCov, "write-new-cov", "Only write tests that cover new code.");
 DECL_OPT(WritePCs, "write-pcs", "Write .pc files for each test case");
 DECL_OPT(WriteSMT,  "write-smt", "Write .smt for each test");
 DECL_OPT(WritePaths, "write-paths", "Write .path files for each test");
@@ -358,7 +357,6 @@ unsigned KleeHandler::processTestCase(
 {
 	unsigned	id;
 	out_objs	out;
-	bool		is_committed;
 	bool		success;
 
 	if (errorMessage && ExitOnError) {
@@ -368,14 +366,6 @@ unsigned KleeHandler::processTestCase(
 
 	if (!isWriteOutput()) return 0;
 
-	is_committed = state.covset.isCommitted();
-	if (WriteNewCov && is_committed && !errorMessage) {
-		std::cerr	<< "[KleeHandler] Ignoring covered test. es="
-				<< (void*)&state << ". Size: "
-				<< state.covset.getCovered().size() << "\n";
-		return 0;
-	}
-
 	success = getStateSymObjs(state, out);
 	if (!success)
 		klee_warning("unable to get symbolic solution, losing test");
@@ -383,9 +373,8 @@ unsigned KleeHandler::processTestCase(
 	id = ++m_testIndex;
 
 	if (success) {
-		if (!is_committed) {
+		if (!state.covset.isCommitted())
 			state.covset.commit();
-		}
 		processSuccessfulTest("ktest", id, out);
 	}
 
