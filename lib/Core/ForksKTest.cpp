@@ -300,7 +300,9 @@ bool ForksKTest::evalForks(ExecutionState& current, struct ForkInfo& fi)
 	bool	non_const;
 	int	i;
 
-	fi.forkDisabled = suppressForks;
+	fi.forkDisabled = suppressForks ||
+		(	current.covset.isShared() == false &&
+			current.covset.isCommitted() == false);
 
 	if (!suppressForks || !fi.size() || isBadOverflow(current))
 		return Forks::evalForks(current, fi);
