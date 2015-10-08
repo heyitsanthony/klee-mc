@@ -10,12 +10,20 @@ using namespace klee;
 std::map<unsigned /* size*/, 
 	std::set<std::shared_ptr<CovSet::covset_t>>> CovSet::all_sets;
 
+unsigned CovSet::commit_epoch = 0;
+
 CovSet::CovSet()
 	: covered(std::make_shared<covset_t>())
+	, committed_c(0)
+	, uncommitted_c(0)
+	, local_epoch(0)
 {
 }
 
 CovSet::CovSet(const CovSet& cs)
+	: committed_c(cs.committed_c)
+	, uncommitted_c(cs.uncommitted_c)
+	, local_epoch(cs.local_epoch)
 {
 	cs.flushPending();
 	covered = cs.covered;
@@ -28,6 +36,7 @@ void CovSet::insert(const KFunction* kf)
 		return;
 	}
 
+	// amortize set lookup with flushPending
 	pending.push_back(kf);
 	if (pending.size() > COVSET_WATERMARK)
 		flushPending();
@@ -37,22 +46,36 @@ void CovSet::commit(void) const
 {
 	flushPending();
 	for (auto kf : *covered) {
-		if (kf->pathCommitted) continue;
 		const_cast<KFunction*>(kf)->pathCommitted = true;
 	}
+	committed_c = covered->size();
+	uncommitted_c = 0;
+
+	local_epoch = ++commit_epoch;
 }
 
 unsigned CovSet::numUncommitted(void) const
 {
-	unsigned uncommitted = 0;
-
 	flushPending();
-	for (auto kf : *covered) {
-		if (kf->pathCommitted == false)
-			uncommitted++;
+
+	if (	(committed_c + uncommitted_c) == covered->size() &&
+		local_epoch == commit_epoch)
+	{
+		// if nothing new has been committed and nothing new
+		// has been added, can reuse cached uncommitted count
+		return uncommitted_c;
 	}
 
-	return uncommitted;
+	uncommitted_c = 0;
+	for (auto kf : *covered) {
+		if (kf->pathCommitted == false)
+			uncommitted_c++;
+	}
+
+	committed_c = covered->size() - uncommitted_c;
+	local_epoch = commit_epoch;
+
+	return uncommitted_c;
 }
 
 void CovSet::flushPending(void) const

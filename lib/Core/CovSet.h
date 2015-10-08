@@ -28,6 +28,11 @@ public:
 		return *covered;
 	}
 
+	bool isShared() const {
+		flushPending();
+		return covered.use_count() > 2;
+	}
+
 	bool isCommitted() const { return numUncommitted() == 0; }
 	unsigned numUncommitted(void) const;
 	void commit(void) const;
@@ -38,9 +43,14 @@ private:
 
 	mutable std::shared_ptr<covset_t>		covered;
 	mutable std::vector<const KFunction*>		pending;
+	mutable unsigned				committed_c;
+	mutable unsigned				uncommitted_c;
+	mutable unsigned				local_epoch;
+
 	// used for global caching
 	static std::map<unsigned /* size*/, 
 			std::set<std::shared_ptr<covset_t>>> all_sets;
+	static unsigned commit_epoch;
 };
 
 }
