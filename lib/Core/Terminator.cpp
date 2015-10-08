@@ -18,6 +18,7 @@ namespace llvm
 #define DECL_OPTBOOL(x,y)	cl::opt<bool> x(y, cl::init(false))
   DECL_OPTBOOL(OnlyOutputStatesCoveringNew, "only-output-states-covering-new");
   DECL_OPTBOOL(OnlyOutputStatesUncommitted, "only-output-states-uncommitted");
+  DECL_OPTBOOL(EmitEarly, "emit-early");
 
   cl::opt<bool>
   ConcretizeEarlyTerminate(
@@ -124,7 +125,9 @@ bool TermEarly::terminate(ExecutionState &state)
 		return true;
 
 	/* nothing. */
-	process(*term_st);
+	if (isInteresting(*term_st))
+		process(*term_st);
+
 	getExe()->terminate(*term_st);
 	return false;
 }
@@ -137,6 +140,13 @@ void TermEarly::process(ExecutionState& state)
 	getExe()->printStackTrace(state, ss);
 	getExe()->getInterpreterHandler()->processTestCase(
 		state, ss.str().c_str(), "early");
+}
+
+bool TermEarly::isInteresting(ExecutionState& st) const
+{
+	return (EmitEarly)
+		? Terminator::isInteresting(st)
+		: false;
 }
 
 void TermError::printStateErrorMessage(

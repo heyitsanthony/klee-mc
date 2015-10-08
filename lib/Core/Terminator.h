@@ -45,9 +45,10 @@ public:
 	, message(_msg) {}
 	virtual ~TermEarly(void) = default;
 
-	virtual void process(ExecutionState& state);
-	virtual bool terminate(ExecutionState& state);
-	virtual Terminator* copy(void) const
+	void process(ExecutionState& state) override;
+	bool terminate(ExecutionState& state) override;
+	bool isInteresting(ExecutionState& es) const override;
+	Terminator* copy(void) const override
 	{ return new TermEarly(getExe(), message); }
 
 private:
