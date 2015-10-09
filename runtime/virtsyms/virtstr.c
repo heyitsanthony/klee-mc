@@ -34,6 +34,12 @@ struct virt_str* virtsym_safe_strcopy_all(const char* s, int copy_concrete)
 	char		*s_c;
 	unsigned	i, j;
 
+	if (klee_is_symbolic_addr(s)) {
+		// I'm seeing code that does strlen(s + strlen(s)). Concretizing
+		// here ruins everything, it seems.
+		return NULL;
+	}
+
 	if (!klee_is_valid_addr(s)) {
 		return NULL;
 	}
@@ -58,7 +64,7 @@ struct virt_str* virtsym_safe_strcopy_all(const char* s, int copy_concrete)
 
 		vs.vs_len_min = i;
 		vs.vs_first_sym_idx = ~0U;
-		vs.vs_len_max = i; 
+		vs.vs_len_max = i;
 		vs.vs_str = malloc(vs.vs_len_max+1);
 		for (j = 0; j < vs.vs_len_max; j++) vs.vs_str[j] = s[j];
 		// don't crash in handler!
@@ -71,11 +77,13 @@ struct virt_str* virtsym_safe_strcopy_all(const char* s, int copy_concrete)
 	vs.vs_first_sym_idx = i;
 	klee_assert(klee_is_symbolic(s[vs.vs_first_sym_idx]));
 
+	vs.vs_len_max = vs.vs_len_min;
 	for (i = vs.vs_len_min; klee_is_valid_addr(&s[i]); i++) {
-		if (!klee_is_symbolic(s[i]) && s[i] == '\0')
+		vs.vs_len_max = i;
+		if (!klee_is_symbolic(s[i]) && s[i] == '\0') {
 			break;
+		}
 	}
-	vs.vs_len_max = i; 
 
 	vs.vs_str = malloc(vs.vs_len_max+1);
 	for (j = 0; j < vs.vs_len_max; j++)

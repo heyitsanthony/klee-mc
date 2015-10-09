@@ -48,8 +48,10 @@ static void strlen_enter(void* r)
 	GET_SYSRET(r) = ret;
 	virtsym_add(strlen_fini, ret, vs);
 	kmc_skip_func();
-
 }
+
+//#define DEBUG_PRINT(x,y)	klee_print_expr(x,y)
+#define DEBUG_PRINT(x,y)
 
 // p_{-1} = true
 // p_k = p_{k-1} && s[k] != 0
@@ -60,16 +62,22 @@ static void strlen_fini(uint64_t _r, void* aux)
 	struct virt_str	*vs = (struct virt_str*)aux;
 	const char	*s = vs->vs_str;
 	unsigned	i = vs->vs_first_sym_idx;
-	uint64_t	p_k_prev = 1;
+	uint64_t	p_k_prev = ~0;
 	uint64_t	q_k_prev = 0;
 	unsigned	solutions = 0;
+
+	if (!klee_is_symbolic(_r) && !klee_feasible_eq(s[_r], 0)) {
+		DEBUG_PRINT("vstrlen const prune r", _r);
+		virtsym_prune(VS_PRNID_STRLEN);
+		return;
+	}
 
 	do {
 		uint64_t	q_k;
 		uint64_t	p_k;
 
 		if (!klee_is_valid_addr(&s[i])) {
-			klee_print_expr("strlen oops", &s[i]);
+			klee_print_expr("vstrlen oops", &s[i]);
 			break;
 		}
 
@@ -78,11 +86,17 @@ static void strlen_fini(uint64_t _r, void* aux)
 			klee_mk_and(p_k_prev, klee_mk_eq(s[i], 0)));
 		if (__klee_feasible(q_k)) {
 			solutions++;
+			DEBUG_PRINT("vstrlen feasible", i);
+			DEBUG_PRINT("vstrlen feasible s[i]", s[i]);
 			q_k_prev = klee_mk_or(q_k_prev, q_k);
+		} else {
+			DEBUG_PRINT("vstrlen infeasible", i);
+			DEBUG_PRINT("vstrlen infeasible s[i]", s[i]);
 		}
 
 		p_k = klee_mk_and(p_k_prev, klee_mk_ne(s[i], 0));
 		if (!__klee_feasible(p_k)) {
+			DEBUG_PRINT("vstrlen infeasible p_k", i);
 			break;
 		}
 		p_k_prev = p_k;
@@ -91,9 +105,11 @@ static void strlen_fini(uint64_t _r, void* aux)
 	} while (solutions < STRLEN_MERGE_DEPTH);
 
 	if (solutions == 0) {
+		DEBUG_PRINT("vstrlen prune r", _r);
 		virtsym_prune(VS_PRNID_STRLEN);
 		return;
 	}
 
+	DEBUG_PRINT("vstrlen solution count", solutions);
 	__klee_assume(q_k_prev);
 }
