@@ -752,85 +752,34 @@ void Executor::initTimers(void)
 	if (OOMTimer::getMaxMemory())
 		addTimer(std::make_unique<OOMTimer>(*this), 1.0);
 
-	if (MaxTime)
-		addTimer(std::make_unique<HaltTimer>(this), MaxTime);
+	EXE_ADD_TIMER(HaltTimer, MaxTime);
+	EXE_ADD_TIMER(HaltNoProgressTimer, MaxTimeNoProgress);
+	EXE_ADD_TIMER(RuleBuilderStatTimer, DumpRuleBuilderStats)
+	EXE_ADD_TIMER(MemStatTimer, DumpMemStats)
+	EXE_ADD_TIMER(StateStatTimer, DumpStateStats)
+	EXE_ADD_TIMER(ExprStatTimer, DumpExprStats)
+	EXE_ADD_TIMER(CacheStatTimer, DumpCacheStats)
+	EXE_ADD_TIMER(HashStatTimer, DumpHashStats)
+	EXE_ADD_TIMER(CovStatTimer, DumpCovStats)
+	EXE_ADD_TIMER(QueryStatTimer, DumpQueryStats)
+	EXE_ADD_TIMER(StackStatTimer, DumpStackStats)
+	EXE_ADD_TIMER(ExprGCTimer, UseGCTimer)
+	EXE_ADD_TIMER(ExprObjScanTimer, UseObjScanTimer)
+	EXE_ADD_TIMER(StateInstStatTimer, DumpStateInstStats)
+	EXE_ADD_TIMER(ForkCondTimer, DumpForkCondGraph)
 
-	if (MaxTimeNoProgress)
-		addTimer(	std::make_unique<HaltNoProgressTimer>(this),
-				MaxTimeNoProgress);
+	EXE_ADD_TIMER2(CovTimer, DumpCovData, "cov.txt");
+	EXE_ADD_TIMER2(BrDataTimer, DumpBrData, "brdata.txt");
 
-	if (DumpRuleBuilderStats)
-		addTimer(	std::make_unique<RuleBuilderStatTimer>(this),
-				DumpRuleBuilderStats);
+	EXE_ADD_TIMER2(BTrackerDotTimer, DumpBTrackerDot, "btracker.dot");
+	EXE_ADD_TIMER2(BTrackerPathsTimer, DumpBTrackerPaths, "btracker.path");
+	EXE_ADD_TIMER2(FuncHeatTimer, DumpFuncHeat, "funcheat.txt");
 
-	if (DumpMemStats)
-		addTimer(	std::make_unique<MemStatTimer>(this),
-				DumpMemStats);
+	if (UseCmdUser) EXE_ADD_TIMER(UserCommandTimer, 2);
 
-	if (DumpStateStats)
-		addTimer(	std::make_unique<StateStatTimer>(this),
-				DumpStateStats);
-
-	if (DumpExprStats)
-		addTimer(std::make_unique<ExprStatTimer>(this), DumpExprStats);
-
-	if (DumpCacheStats)
-		addTimer(std::make_unique<CacheStatTimer>(this), DumpCacheStats);
-
-	if (DumpHashStats)
-		addTimer(std::make_unique<HashStatTimer>(this), DumpHashStats);
-
-	if (DumpCovStats)
-		addTimer(std::make_unique<CovStatTimer>(this), DumpCovStats);
-
-	if (DumpQueryStats)
-		addTimer(std::make_unique<QueryStatTimer>(this), DumpQueryStats);
-
-	if (DumpStackStats)
-		addTimer(std::make_unique<StackStatTimer>(this), DumpStackStats);
-
-	if (DumpCovData)
-		addTimer(std::make_unique<CovTimer>("cov.txt", this),
-			 DumpCovData);
-
-	if (DumpBrData)
-		addTimer(std::make_unique<BrDataTimer>("brdata.txt", this),
-			 DumpBrData);
 	if (DumpBrExprData)
 		addTimer(std::make_unique<BrDataTimer>("brexprdata.txt", this, true),
 			 DumpBrExprData);
-
-	if (DumpBTrackerDot)
-		addTimer(std::make_unique<BTrackerDotTimer>("btracker.dot", this),
-			 DumpBTrackerDot);
-
-	if (DumpBTrackerPaths)
-		addTimer(std::make_unique<BTrackerPathsTimer>("btracker.path", this),
-			 DumpBTrackerPaths);
-
-	if (DumpFuncHeat)
-		addTimer(std::make_unique<FuncHeatTimer>("funcheat.txt", this),
-			 DumpFuncHeat);
-
-	if (UseGCTimer)
-		addTimer(std::make_unique<ExprGCTimer>(this),
-			 UseGCTimer);
-
-	if (UseObjScanTimer)
-		addTimer(std::make_unique<ExprObjScanTimer>(this),
-			 UseObjScanTimer);
-
-
-	if (DumpStateInstStats)
-		addTimer(std::make_unique<StateInstStatTimer>(this),
-			 DumpStateInstStats);
-
-	if (UseCmdUser)
-		addTimer(std::make_unique<UserCommandTimer>(this), 2);
-
-	if (DumpForkCondGraph)
-		addTimer(std::make_unique<ForkCondTimer>(this),
-			 DumpForkCondGraph);
 }
 
 ///

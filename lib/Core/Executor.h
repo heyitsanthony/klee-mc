@@ -514,7 +514,11 @@ public:
 	ExecutionState* getCurrentState(void) const { return currentState; }
 	bool hasState(const ExecutionState* es) const;
 
+#define EXE_ADD_TIMER(x, y) if (y) { addTimer(std::make_unique<x>(this), y); }
+#define EXE_ADD_TIMER2(x, y, z) \
+	if (y) { addTimer(std::make_unique<x>(z, this), y); }
 	void addTimer(std::unique_ptr<Timer> timer, double rate);
+
 	const Globals* getGlobals(void) const { return globals.get(); }
 
 	/* XXX XXX XXX get rid of me!! XXX XXX */
