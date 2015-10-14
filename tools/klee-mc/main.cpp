@@ -426,7 +426,7 @@ int main(int argc, char **argv, char **envp)
 		/* ktests with forking */
 		if (isReplayingKTest() && !kTests.empty()) {
 			assert (replayPaths.empty() && "grr replay paths");
-			interpreter->setReplay(new ReplayKTests(kTests));
+			interpreter->setReplay(ReplayKTests::create(kTests));
 		}
 		dynamic_cast<ExecutorVex*>(interpreter)->runImage();
 	}

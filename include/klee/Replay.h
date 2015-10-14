@@ -80,20 +80,49 @@ private:
 class ReplayKTests : public Replay
 {
 public:
-	ReplayKTests(const std::vector<KTest*>& _kts) : kts(_kts) {}
+	typedef const std::vector<KTest*> ktest_list_t;
+
+	static ReplayKTests* create(const ktest_list_t& _kts);
 	bool replay(Executor* exe, ExecutionState* initSt) override;
 
-private:
-	bool replayFast(Executor* exe, ExecutionState* initSt);
-	void replayFast(
-		Executor* exe,
-		ExecutionState* initSt,
-		const std::vector<KTest*>& in_kts);
-	bool replaySlow(Executor* exe, ExecutionState* initSt);
+protected:
+	ReplayKTests(const ktest_list_t& _kts) : kts(_kts) {}
+	virtual ExecutionState* replayKTest(
+		Executor& exe, ExecutionState&, const KTest* kt) = 0;
+	virtual bool replayKTests(Executor&, ExecutionState&);
 
-	const std::vector<KTest*>& kts;
+	const ktest_list_t kts;
+};
+
+class ReplayKTestsFast : public ReplayKTests
+{
+public:
+	ReplayKTestsFast(const ktest_list_t& _kts)
+		: ReplayKTests(_kts)
+		, near_c(0)
+	{}
+
+protected:
+	ExecutionState* replayKTest(
+		Executor& exe, ExecutionState&, const KTest* kt) override;
+	bool replayKTests(Executor&, ExecutionState&) override;
+
+	unsigned near_c;
+};
+
+class ReplayKTestsSlow : public ReplayKTests
+{
+public:
+	ReplayKTestsSlow(const ktest_list_t& _kts)
+		: ReplayKTests(_kts)
+	{}
+
+protected:
+	ExecutionState* replayKTest(
+		Executor& exe, ExecutionState&, const KTest* kt) override;
+	bool replayKTests(Executor&, ExecutionState&) override;
+
 };
 
 }
-
 #endif
