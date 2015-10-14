@@ -3,6 +3,15 @@
 
 #include "static/Sugar.h"
 #include "klee/util/ExprUtil.h"
+#include <unordered_set>
+#include <unordered_map>
+
+namespace std {
+template <> struct hash<klee::ref<klee::ReadExpr>>
+{
+size_t operator()(const klee::ref<klee::ReadExpr>& x) const { return x->hash(); }
+};
+}
 
 namespace klee
 {
@@ -10,7 +19,7 @@ namespace klee
 class ConstraintManager;
 class Query;
 
-class ReadSet : public std::set<ref<ReadExpr> >
+class ReadSet : public std::unordered_set<ref<ReadExpr> >
 {
 public:
 	friend class ref<ReadSet>;
@@ -24,18 +33,18 @@ public:
 		return rs;
 	}
 
-	int compare(ReadSet& rs) const
+	int compare(const ReadSet& rs) const
 	{
 		if (rs.size() != size()) return rs.size() - size();
-		foreach (it, rs.begin(), rs.end()) {
-			if (!count(*it))
+		for (const auto& re : rs) {
+			if (!count(re))
 				return 1;
 		}
 		return 0;
 	}
 
 	void print(std::ostream& os) const
-	{ foreach (it, begin(), end()) os << *it << '\n'; }
+	{ for (const auto &re : *this) os << re << '\n'; }
 protected:
 	ReadSet() : refCount(0) {}
 protected:
@@ -45,7 +54,7 @@ protected:
 template<class T>
 class DenseSet
 {
-	typedef std::set<T> set_ty;
+	typedef std::unordered_set<T> set_ty;
 	set_ty s;
 public:
 	DenseSet() {}
@@ -125,9 +134,10 @@ private:
 	bool elem_intersect(const IndependentElementSet& b) const;
 	bool obj_intersect(const IndependentElementSet& b) const;
 
-	typedef std::map<const Array*, DenseSet<unsigned> > elements_ty;
-	elements_ty			elements;
-	std::set<const Array*>		wholeObjects;
+	typedef std::unordered_map<const Array*, DenseSet<unsigned> >
+		elements_ty;
+	elements_ty				elements;
+	std::unordered_set<const Array*>	wholeObjects;
 };
 
 }
