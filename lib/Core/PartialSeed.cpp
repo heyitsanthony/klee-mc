@@ -426,7 +426,7 @@ SFH_DEF_ALL(PartSeedBeginReplay, "klee_partseed_begin", true)
 		sel_idx = it->second[(c++) % it->second.size()];
 	}
 	ss << sel_idx << ".ktest.gz";
-	kt = kTest_fromFile(ss.str().c_str());
+	kt = KTest::create(ss.str().c_str());
 	if (kt == NULL) {
 		std::cerr << "[PS] Could not open ktest " << ss.str() << '\n';
 		state.bindLocal(target, MK_CONST(0xdeadbeef, 64));
@@ -440,7 +440,7 @@ SFH_DEF_ALL(PartSeedBeginReplay, "klee_partseed_begin", true)
 	dispatchKTest(sfh->executor, state, kt, name, it->second.size());
 	recur_depth--;
 
-	kTest_free(kt);
+	delete kt;
 }
 
 SFH_DEF_ALL(PartSeedEndReplay, "klee_partseed_end", false)

@@ -13,7 +13,7 @@ KTestStream::KTestStream(KTest* in_kt)
 , kt(in_kt)
 { assert (kt != NULL); }
 
-KTestStream::~KTestStream(void) { kTest_free(kt); }
+KTestStream::~KTestStream(void) { delete kt; }
 
 char* KTestStream::feedObjData(unsigned int sz)
 {
@@ -47,7 +47,7 @@ char* KTestStream::feedObjData(unsigned int sz)
 
 KTestStream* KTestStream::create(const char* file)
 {
-	KTest		*kt = kTest_fromFile(file);
+	KTest		*kt = KTest::create(file);
 	KTestStream	*kts;
 
 	if (kt == NULL) return NULL;

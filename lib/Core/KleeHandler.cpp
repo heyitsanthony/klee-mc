@@ -280,17 +280,26 @@ void KleeHandler::processSuccessfulTest(std::ostream* os, out_objs& out)
 
 	assert (b.objects);
 	for (unsigned i=0; i<b.numObjects; i++) {
-		KTestObject *o = &b.objects[i];
-		o->name = const_cast<char*>(out[i].first.c_str());
+		KTestObject	*o = &b.objects[i];
+		unsigned	name_len = out[i].first.size();
+
+		o->name = new char[name_len + 1];
+		memcpy(o->name, out[i].first.c_str(), name_len + 1);
+
 		o->numBytes = out[i].second.size();
 		o->bytes = new unsigned char[o->numBytes];
 		assert(o->bytes);
+
 		std::copy(out[i].second.begin(), out[i].second.end(), o->bytes);
 	}
 
 	errno = 0;
 	if (os != NULL)
-		ktest_ok = kTest_toStream(&b, *os);
+		ktest_ok = b.toStream(*os);
+
+	// since reusing from CmdArgs
+	b.numArgs = 0;
+	b.args = nullptr;
 
 	if (!ktest_ok) {
 		klee_warning(
@@ -298,10 +307,6 @@ void KleeHandler::processSuccessfulTest(std::ostream* os, out_objs& out)
 		errno,
 		strerror(errno));
 	}
-
-	for (unsigned i=0; i<b.numObjects; i++)
-		delete[] b.objects[i].bytes;
-	delete[] b.objects;
 }
 
 void KleeHandler::processSuccessfulTest(
@@ -457,7 +462,7 @@ unsigned KleeHandler::processTestCase(
 void KleeHandler::writeMem(const ExecutionState& state, unsigned id)
 {
 	char	dname[PATH_MAX];
-	
+
 	sprintf(dname, "%s/mem%06d", m_outputDirectory, id);
 	mkdir(dname, 0755);
 
@@ -555,7 +560,7 @@ void KleeHandler::getKTests(
 		getKTestFiles(*it, ktest_fnames);
 
 	foreach (it, ktest_fnames.begin(), ktest_fnames.end()) {
-		KTest *out = kTest_fromFile(it->c_str());
+		KTest *out = KTest::create(it->c_str());
 		if (out != NULL) {
 			ktests.push_back(out);
 		} else {

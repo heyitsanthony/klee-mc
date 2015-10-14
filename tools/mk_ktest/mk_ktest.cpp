@@ -28,9 +28,10 @@ static void push_obj(KTest *kts, char *fname)
 		abort();
 	}
 
-	o->name = obj_name;
+	o->name = new char[strlen(obj_name) + 1];
+	strcpy(o->name, obj_name);
 	o->numBytes = s.st_size;
-	o->bytes = (unsigned char *)malloc(o->numBytes);
+	o->bytes = new unsigned char[o->numBytes];
 
 	f = fopen(fname, "rb");
 	fread(o->bytes, o->numBytes, 1, f);
@@ -40,7 +41,6 @@ static void push_obj(KTest *kts, char *fname)
 
 int main(int argc, char *argv[])
 {
-	KTest		*kts_;
 	int		arg_c;
 	char		**argv_out;
 	std::ostream	*os;
@@ -53,11 +53,10 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	kts_ = (KTest*)malloc(sizeof(KTest));
-	KTest &kts = *kts_;
+	KTest	kts;
 
 	kts.numObjects = 0;
-	kts.objects = (KTestObject *)malloc((argc - 1) * sizeof *kts.objects);
+	kts.objects = new KTestObject[argc - 1];
 	for (int i = 1; i < argc; i++)
 		push_obj(&kts, argv[i]);
 
@@ -68,7 +67,7 @@ int main(int argc, char *argv[])
 		arg_c++;
 	}
 	
-	argv_out = (char**)calloc(arg_c+1, sizeof(char*));
+	argv_out = new char*[arg_c+1];
 	argv_out[0] = strdup("exe");
 	for (int i = 1; i < arg_c; i++) argv_out[i] = (char*)kts.objects[i-1].bytes;
 	argv_out[arg_c] = NULL;
@@ -85,9 +84,8 @@ int main(int argc, char *argv[])
 		out_fname,
 		std::ios::out | std::ios::trunc | std::ios::binary);
 
-	if (!kTest_toStream(&kts, *os)) abort();
+	if (!kts.toStream(*os)) abort();
 	delete os;
 	
-	kTest_free(kts_);
 	return 0;
 }

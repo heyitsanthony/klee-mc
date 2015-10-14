@@ -43,7 +43,7 @@ void KTSFuzz::fuzzPart(unsigned obj_n, double percent)
 
 KTSFuzz* KTSFuzz::create(const char* file)
 {
-	KTest	*kt = kTest_fromFile(file);
+	KTest	*kt = KTest::create(file);
 	if (kt == NULL) return NULL;
 	return new KTSFuzz(kt);
 }

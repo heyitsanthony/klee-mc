@@ -192,7 +192,7 @@ void runReplayKTest(Interpreter* interpreter)
 		interpreter->setReplayKTest(out);
 		std::cerr
 			<< "KLEE: replaying: " << *it << " ("
-			<< kTest_numBytes(out) << " bytes)"
+			<< out->numBytes() << " bytes)"
 			<< " (" << ++i << "/" << kTests.size() << ")\n";
 
 		// XXX should put envp in .ktest ?
@@ -380,7 +380,7 @@ int main(int argc, char **argv, char **envp)
 	}
 
 	while (!kTests.empty()) {
-		kTest_free(kTests.back());
+		delete kTests.back();
 		kTests.pop_back();
 	}
 

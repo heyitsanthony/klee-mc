@@ -252,7 +252,7 @@ static void runReplayKTest(
     KTest *out = *it;
     interpreter->setReplayKTest(out);
     std::cerr	<< "KLEE: replaying: " << *it
-    		<< " (" << kTest_numBytes(out) << " bytes)"
+		<< " (" << out->numBytes() << " bytes)"
 		<< " (" << ++i << "/" << kTests.size() << ")\n";
 
     // XXX should put envp in .ktest ?
@@ -264,7 +264,7 @@ static void runReplayKTest(
   interpreter->setReplayKTest(0);
 
   while (!kTests.empty()) {
-    kTest_free(kTests.back());
+    delete kTests.back();
     kTests.pop_back();
   }
 }
@@ -301,7 +301,7 @@ static void runSeeds(
 		mainFn, ca->getArgc(), ca->getArgv(), ca->getEnvp());
 
 	while (!seeds.empty()) {
-		kTest_free(seeds.back());
+		delete seeds.back();
 		seeds.pop_back();
 	}
 }
