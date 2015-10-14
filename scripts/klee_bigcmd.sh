@@ -105,7 +105,7 @@ cmd="$APP_WRAPPER klee-mc 	\
 	-concretize-early=true	\
 	-use-softfp=true	\
 	-show-syscalls		\
-	-write-new-cov		\
+	-emit-only-covset-uncommitted \
 	- "
 
 echo "$cmd" >last_cmd
