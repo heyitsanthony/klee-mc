@@ -80,26 +80,6 @@ namespace {
   ReadArgsFilesFake("read-args",
                     cl::desc("File to read arguments from (one arg per line)"));
 
-  cl::list<std::string>
-  ReplayKTestFile("replay-ktest",
-                cl::desc("Specify a ktest file to replay"),
-                cl::value_desc("ktest file"));
-
-  cl::list<std::string>
-  ReplayKTestDir("replay-ktest-dir",
-	       cl::desc("Specify a directory for replaying .ktest files"),
-	       cl::value_desc("ktestdirectory"));
-
-  cl::opt<std::string>
-  ReplayPathFile("replay-path",
-                 cl::desc("Specify a path file to replay"),
-                 cl::value_desc("path file"));
-
-  cl::opt<std::string>
-  ReplayPathDir("replay-path-dir",
-          cl::desc("Specify a directory to replay path files from"),
-          cl::value_desc("path directory"));
-
   cl::list<std::string> SeedKTestFile("seed-out");
 
   cl::list<std::string> SeedKTestDir("seed-out-dir");
@@ -258,15 +238,7 @@ static int runWatchdog(void)
 static void runReplayKTest(
 	Interpreter* interpreter, Function* mainFn, CmdArgs* ca)
 {
-	std::vector<KTest*>		kTests;
-	std::vector<std::string>	outDirs(
-		ReplayKTestDir.begin(),
-		ReplayKTestDir.end()),
-					outFiles(
-		ReplayKTestFile.begin(),
-		ReplayKTestFile.end());
-
-	KleeHandler::getKTests(outFiles, outFiles, kTests);
+	auto kTests = Replay::loadKTests();
 
   if (RunInDir != "") {
     int res = chdir(RunInDir.c_str());
@@ -281,7 +253,7 @@ static void runReplayKTest(
     interpreter->setReplayKTest(out);
     std::cerr	<< "KLEE: replaying: " << *it
     		<< " (" << kTest_numBytes(out) << " bytes)"
-		<< " (" << ++i << "/" << outFiles.size() << ")\n";
+		<< " (" << ++i << "/" << kTests.size() << ")\n";
 
     // XXX should put envp in .ktest ?
     interpreter->runFunctionAsMain(
@@ -348,7 +320,6 @@ int main(int argc, char **argv, char **envp)
 	Interpreter			*interpreter;
 	SeedExecutor<ExecutorBC>	*exe_seed;
 	KTestExecutor<ExecutorBC>	*exe_ktest;
-	std::vector<std::string>	pathFiles;
 	std::list<ReplayPath>		replayPaths;
 	std::vector<std::string>	arguments;
 
@@ -363,7 +334,7 @@ int main(int argc, char **argv, char **envp)
 	g_Libc = Libc;
 
 	g_WithPOSIXRuntime = WithPOSIXRuntime;
-	useSeeds = ReplayKTestDir.empty() && ReplayKTestFile.empty();
+	useSeeds = !Replay::isReplayingKTest();
 
 	if (Watchdog) return runWatchdog();
 
@@ -380,12 +351,7 @@ int main(int argc, char **argv, char **envp)
 		return -1;
 	}
 
-	if (ReplayPathDir != "")
-		KleeHandler::getPathFiles(ReplayPathDir, pathFiles);
-	if (ReplayPathFile != "")
-		pathFiles.push_back(ReplayPathFile);
-
-	KleeHandler::loadPathFiles(pathFiles, replayPaths);
+	replayPaths = Replay::loadReplayPaths();
 
 	arguments.push_back(InputFile);
 	arguments.insert(arguments.end(), InputArgv.begin(), InputArgv.end());

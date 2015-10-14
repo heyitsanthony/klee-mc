@@ -58,26 +58,6 @@ namespace {
 		cl::Positional,
 		cl::init("-"));
 
-	cl::list<std::string>
-	ReplayKTestFile("replay-ktest",
-		cl::desc("Specify a ktest file to replay"),
-		cl::value_desc("ktest file"));
-
-	cl::list<std::string>
-	ReplayKTestDir("replay-ktest-dir",
-	       cl::desc("Specify a directory for replaying .ktest files"),
-	       cl::value_desc("ktestdirectory"));
-
-	cl::opt<std::string>
-	ReplayPathFile("replay-path",
-		 cl::desc("Specify a path file to replay"),
-		 cl::value_desc("path file"));
-
-	cl::opt<std::string>
-	ReplayPathDir("replay-path-dir",
-		cl::desc("Specify a directory to replay path files from"),
-		cl::value_desc("path directory"));
-
 	cl::opt<bool> UseWatchdog(
 		"watchdog",
 		cl::desc("Use a watchdog process to enforce --max-time."));
@@ -108,29 +88,10 @@ failed:
 
 static std::vector<KTest*>	kTests;
 
-static bool isReplayingKTest(void)
-{ return (!ReplayKTestDir.empty() || !ReplayKTestFile.empty()); }
-
-static void loadKTests(void)
-{
-	if (!isReplayingKTest()) return;
-
-	std::vector<std::string>	outDirs(
-		ReplayKTestDir.begin(),
-		ReplayKTestDir.end()),
-					outFiles(
-		ReplayKTestFile.begin(),
-		ReplayKTestFile.end());
-
-	KleeHandler::getKTests(outFiles, outDirs, kTests);
-}
-
 static void runReplayKTest(Interpreter* interpreter)
 {
 	ExecutorJ	*ej;
 	unsigned	i = 0;
-
-	loadKTests();
 
 	ej = static_cast<ExecutorJ*>(interpreter);
 	foreach (it, kTests.begin(), kTests.end()) {
@@ -149,23 +110,6 @@ static void runReplayKTest(Interpreter* interpreter)
 	}
 
 	interpreter->setReplayKTest(0);
-}
-
-static std::list<ReplayPath>	replayPaths;
-void setupReplayPaths(Interpreter* interpreter)
-{
-	std::vector<std::string>	pathFiles;
-
-	if (ReplayPathDir != "")
-		KleeHandler::getPathFiles(ReplayPathDir, pathFiles);
-	if (ReplayPathFile != "")
-		pathFiles.push_back(ReplayPathFile);
-
-	KleeHandler::loadPathFiles(pathFiles, replayPaths);
-
-	if (replayPaths.empty()) return;
-
-	interpreter->setReplay(new ReplayBrPaths(replayPaths));
 }
 
 void loadInputBitcode(const std::string& ifile, Module* &mainModule)
@@ -225,7 +169,6 @@ int main(int argc, char **argv, char **envp)
 	const Module			*finalModule;
 	KleeHandler			*handler;
 	Interpreter			*interpreter;
-	std::vector<std::string>	pathFiles;
 	std::list<ReplayPath>		replayPaths;
 
 	atexit(llvm_shutdown);
@@ -245,9 +188,12 @@ int main(int argc, char **argv, char **envp)
 	interpreter = new KTestExecutor<ExecutorJ>(handler);
 	theInterpreter = interpreter;
 
-	setupReplayPaths(interpreter);
+	if (Replay::isReplayingKTest())
+		kTests = Replay::loadKTests();
 
-	KleeHandler::loadPathFiles(pathFiles, replayPaths);
+	replayPaths = Replay::loadReplayPaths();
+	if (!replayPaths.empty())
+		interpreter->setReplay(new ReplayBrPaths(replayPaths));
 
 	handler->setInterpreter(interpreter);
 	handler->printInfoHeader(argc, argv);

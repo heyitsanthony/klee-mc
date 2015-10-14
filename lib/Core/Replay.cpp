@@ -9,6 +9,7 @@
 #include "ForksPathReplay.h"
 #include "CoreStats.h"
 #include "PTree.h"
+#include "klee/KleeHandler.h"
 
 #include "klee/ExecutionState.h"
 
@@ -32,7 +33,38 @@ DECL_OPTBOOL(OnlyReplay, "only-replay");
 
 llvm::cl::opt<unsigned > ReplayMaxInstSuppress("replay-maxinst-suppress");
 
+llvm::cl::opt<std::string>
+ReplayPathFile(
+	"replay-path",
+	llvm::cl::desc("Specify a path file to replay"),
+	llvm::cl::value_desc("path file"));
+
+llvm::cl::opt<std::string>
+ReplayPathDir(
+	"replay-path-dir",
+	llvm::cl::desc("Specify a directory to replay path files from"),
+	llvm::cl::value_desc("path directory"));
+
+
 bool Replay::isSuppressForks(void) { return ReplaySuppressForks; }
+bool Replay::isReplayOnly(void) { return OnlyReplay; }
+bool Replay::isFasterReplay(void) { return FasterReplay; }
+
+std::list<ReplayPath> Replay::loadReplayPaths(void)
+{
+	std::list<ReplayPath>		ret;
+	std::vector<std::string>	pathFiles;
+
+	if (ReplayPathDir != "")
+		KleeHandler::getPathFiles(ReplayPathDir, pathFiles);
+	if (ReplayPathFile != "")
+		pathFiles.push_back(ReplayPathFile);
+
+	KleeHandler::loadPathFiles(pathFiles, ret);
+
+	return ret;
+}
+
 unsigned Replay::getMaxSuppressInst(void) { return ReplayMaxInstSuppress; }
 
 // load a .path file
@@ -388,7 +420,7 @@ void ReplayBrPaths::eagerReplayPathsIntoStates(void)
 {
 	std::cerr << "[Replay] Eagerly replaying paths.\n";
 
-	if (FasterReplay)
+	if (Replay::isFasterReplay())
 		fastEagerReplay();
 	else
 		slowEagerReplay();
@@ -407,5 +439,3 @@ void ReplayBrPaths::eagerReplayPathsIntoStates(void)
 		std::cerr << "[Replay] Out of threads adding initial state..\n";
 	}
 }
-
-bool Replay::isReplayOnly(void) { return OnlyReplay; }

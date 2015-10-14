@@ -89,30 +89,6 @@ namespace {
 		"read-args",
 		cl::desc("File to read arguments from (one arg per line)"));
 
-	cl::list<std::string>
-	ReplayKTestFile(
-		"replay-ktest",
-		cl::desc("Specify a ktest file to replay"),
-		cl::value_desc("ktest file"));
-
-	cl::list<std::string>
-	ReplayKTestDir(
-		"replay-ktest-dir",
-		cl::desc("Specify a directory to replay .ktest files from"),
-		cl::value_desc("ktest directory"));
-
-	cl::opt<std::string>
-	ReplayPathFile(
-		"replay-path",
-		cl::desc("Specify a path file to replay"),
-		cl::value_desc("path file"));
-
-	cl::opt<std::string>
-	ReplayPathDir(
-		"replay-path-dir",
-		cl::desc("Specify a directory to replay path files from"),
-		cl::value_desc("path directory"));
-
 	cl::opt<std::string>
 	GuestType(
 		"guest-type",
@@ -203,23 +179,6 @@ void dumpIRSBs(void)
 }
 
 static std::vector<KTest*>	kTests;
-
-static bool isReplayingKTest(void)
-{ return (!ReplayKTestDir.empty() || !ReplayKTestFile.empty()); }
-
-static void loadKTests(void)
-{
-	if (!isReplayingKTest()) return;
-
-	std::vector<std::string>	outDirs(
-		ReplayKTestDir.begin(),
-		ReplayKTestDir.end()),
-					outFiles(
-		ReplayKTestFile.begin(),
-		ReplayKTestFile.end());
-
-	KleeHandler::getKTests(outFiles, outDirs, kTests);
-}
 
 void runReplayKTest(Interpreter* interpreter)
 {
@@ -347,7 +306,7 @@ static Guest* getGuest(CmdArgs* cmdargs)
 
 Interpreter* createInterpreter(KleeHandler *handler)
 {
-	if (isReplayingKTest() && Replay::isSuppressForks()) {
+	if (Replay::isReplayingKTest() && Replay::isSuppressForks()) {
 		/* suppressed forks */
 		assert (!UseDDT && !UseTaintMerge && !UseTaint);
 
@@ -366,21 +325,6 @@ Interpreter* createInterpreter(KleeHandler *handler)
 }
 
 static std::list<ReplayPath>	replayPaths;
-void setupReplayPaths(Interpreter* interpreter)
-{
-	std::vector<std::string>	pathFiles;
-
-	if (ReplayPathDir != "")
-		KleeHandler::getPathFiles(ReplayPathDir, pathFiles);
-	if (ReplayPathFile != "")
-		pathFiles.push_back(ReplayPathFile);
-
-	KleeHandler::loadPathFiles(pathFiles, replayPaths);
-
-	if (replayPaths.empty()) return;
-
-	interpreter->setReplay(new ReplayBrPaths(replayPaths));
-}
 
 int main(int argc, char **argv, char **envp)
 {
@@ -416,15 +360,19 @@ int main(int argc, char **argv, char **envp)
 	handler->setInterpreter(interpreter);
 	handler->printInfoHeader(argc, argv);
 
-	loadKTests();
-	setupReplayPaths(interpreter);
+	if (Replay::isReplayingKTest())
+		kTests = Replay::loadKTests();
 
-	if (isReplayingKTest() && Replay::isSuppressForks()) {
+	replayPaths = Replay::loadReplayPaths();
+	if (!replayPaths.empty())
+		interpreter->setReplay(new ReplayBrPaths(replayPaths));
+
+	if (Replay::isReplayingKTest() && Replay::isSuppressForks()) {
 		/* directly feed concrete ktests data into states. yuck */
 		runReplayKTest(interpreter);
 	} else {
 		/* ktests with forking */
-		if (isReplayingKTest() && !kTests.empty()) {
+		if (Replay::isReplayingKTest() && !kTests.empty()) {
 			assert (replayPaths.empty() && "grr replay paths");
 			interpreter->setReplay(ReplayKTests::create(kTests));
 		}

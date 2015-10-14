@@ -34,7 +34,13 @@ public:
 
 	static bool isSuppressForks(void);
 	static bool isReplayOnly(void);
+	static bool isFasterReplay(void);
+	static bool isReplayingKTest(void);
 	static unsigned getMaxSuppressInst(void);
+
+	static std::vector<KTest*> loadKTests(void);
+	static std::list<ReplayPath> loadReplayPaths(void);
+
 
 	static bool isCommitted(const Executor& exe, const ExecutionState& es);
 	static bool verifyPath(Executor* exe, const ExecutionState& es);

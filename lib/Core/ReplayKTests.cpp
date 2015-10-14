@@ -18,22 +18,55 @@
 #include "static/Sugar.h"
 #include "SpecialFunctionHandler.h"
 #include "klee/Internal/ADT/KTest.h"
+#include "klee/KleeHandler.h"
 #include <algorithm>
 
 using namespace klee;
 
-extern llvm::cl::opt<bool> FasterReplay;
-namespace
-{	llvm::cl::opt<bool>
-		ReplayKTestSort("replay-ktest-sort",
+llvm::cl::opt<bool>
+	ReplayKTestSort("replay-ktest-sort",
 		llvm::cl::desc("Sort by prefix to reduce redundant states"),
 		llvm::cl::init(true));
-	llvm::cl::opt<double>
-		MaxSolverSeconds("max-ckiller-time",
-		llvm::cl::desc(
-			"Maximum number of query seconds to replay each ktest"),
-		llvm::cl::init(10.0));
+llvm::cl::opt<double>
+	MaxSolverSeconds("max-ckiller-time",
+	llvm::cl::desc(
+		"Maximum number of query seconds to replay each ktest"),
+	llvm::cl::init(10.0));
+
+llvm::cl::list<std::string>
+	ReplayKTestFile(
+		"replay-ktest",
+		llvm::cl::desc("Specify a ktest file to replay"),
+		llvm::cl::value_desc("ktest file"));
+
+llvm::cl::list<std::string>
+	ReplayKTestDir(
+		"replay-ktest-dir",
+		llvm::cl::desc("Specify a directory to replay .ktest files from"),
+		llvm::cl::value_desc("ktest directory"));
+
+bool Replay::isReplayingKTest(void) {
+	return !ReplayKTestDir.empty() || !ReplayKTestFile.empty();
 }
+
+std::vector<KTest*> Replay::loadKTests(void)
+{
+	std::vector<KTest*>	ret;
+
+	assert (Replay::isReplayingKTest());
+
+	std::vector<std::string>	outDirs(
+		ReplayKTestDir.begin(),
+		ReplayKTestDir.end()),
+					outFiles(
+		ReplayKTestFile.begin(),
+		ReplayKTestFile.end());
+
+	KleeHandler::getKTests(outFiles, outDirs, ret);
+	return ret;
+}
+
+
 
 ReplayKTests* ReplayKTests::create(const std::vector<KTest*>& _kts)
 {
@@ -43,7 +76,7 @@ ReplayKTests* ReplayKTests::create(const std::vector<KTest*>& _kts)
 			[] (auto x, auto y) { return *x < *y; } );
 	}
 
-	if (FasterReplay)
+	if (Replay::isFasterReplay())
 		return new ReplayKTestsFast(kts_s);
 
 	return new ReplayKTestsSlow(kts_s);
