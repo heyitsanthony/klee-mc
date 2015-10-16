@@ -3,8 +3,6 @@
 #include <iostream>
 #include <sstream>
 
-#include "klee/util/ExprVisitor.h"
-#include "klee/util/ExprTimer.h"
 #include "klee/Statistics.h"
 #include "klee/Internal/ADT/RNG.h"
 #include "StatsTracker.h"
@@ -57,9 +55,6 @@ namespace
 	llvm::cl::opt<bool>
 	RandomizeFork("randomize-fork", llvm::cl::init(true));
 
-	llvm::cl::opt<unsigned>
-	ForkCondIdxMod("forkcond-idx-mod", llvm::cl::init(4));
-
 	/* this is kind of useful for limiting useless test cases but
 	 * tends to drop good states */
 	llvm::cl::opt<bool>
@@ -74,7 +69,7 @@ using namespace klee;
 unsigned Forks::quench_c = 0;
 unsigned Forks::fork_c = 0;
 unsigned Forks::fork_uniq_c = 0;
-
+Forks::xfer_f_t Forks::transition_f = [] (const auto& fi) {};
 
 #define RUNAWAY_REFRESH	32
 bool Forks::isRunawayBranch(KInstruction* ki)
@@ -126,10 +121,10 @@ bool Forks::isRunawayBranch(KInstruction* ki)
 	return true;
 }
 
-Executor::StatePair
+StatePair
 Forks::fork(ExecutionState &s, ref<Expr> cond, bool isInternal)
 {
-	Executor::StateVector	results;
+	StateVector	results;
 	std::vector<ref<Expr>>	conds(2);
 
 	// set in forkSetupNoSeeding, if possible
@@ -144,11 +139,11 @@ Forks::fork(ExecutionState &s, ref<Expr> cond, bool isInternal)
 	return lastFork;
 }
 
-Executor::StatePair Forks::forkUnconditional(
+StatePair Forks::forkUnconditional(
 	ExecutionState &s, bool isInternal)
 {
 	std::vector<ref<Expr>>	conds(2);
-	Executor::StateVector	results;
+	StateVector	results;
 
 	conds[0] = MK_CONST(1, 1);
 	conds[1] = MK_CONST(1, 1);
@@ -162,7 +157,7 @@ Executor::StatePair Forks::forkUnconditional(
 	return lastFork;
 }
 
-void Forks::ForkInfo::dump(std::ostream& os) const
+void ForkInfo::dump(std::ostream& os) const
 {
 	os << "ForkInfo: {\n";
 	for (unsigned i = 0; i < size(); i++) {
@@ -243,7 +238,7 @@ void Forks::skipAndRandomPrune(struct ForkInfo& fi, const char* reason)
 
 // !!! for normal branch, conditions = {false,true} so that replay 0,1 reflects
 // index
-Executor::StateVector
+StateVector
 Forks::fork(
 	ExecutionState &current,
 	const std::vector<ref<Expr>> &conditions,
@@ -268,7 +263,7 @@ Forks::fork(
 	if (evalForks(current, fi) == false) {
 		if (fi.size())
 			TERMINATE_EARLY(&exe, current, "fork query timed out");
-		return Executor::StateVector(fi.size(), NULL);
+		return StateVector(fi.size(), NULL);
 	}
 
 	// need a copy telling us whether or not we need to add
@@ -278,10 +273,10 @@ Forks::fork(
 	assert(fi.validTargets && "invalid set of fork conditions");
 
 	if (forkSetup(current, fi) == false)
-		return Executor::StateVector(fi.size(), NULL);
+		return StateVector(fi.size(), NULL);
 
 	if (makeForks(current, fi) == false)
-		return Executor::StateVector(fi.size(), NULL);
+		return StateVector(fi.size(), NULL);
 
 	constrainForks(current, fi);
 
@@ -461,60 +456,9 @@ bool Forks::makeForks(ExecutionState& current, struct ForkInfo& fi)
 	}
 
 	if (fi.validTargets >= 2 && !fi.forkDisabled)
-		trackTransitions(fi);
+		transition_f(fi);
 
 	return true;
-}
-
-typedef std::map<Expr::Hash, ref<Expr> > xtion_map;
-
-void Forks::trackTransitions(const ForkInfo& fi)
-{
-	static xtion_map	eh;
-
-	/* Track forking condition transitions */
-	for (unsigned i = 0; i < fi.size(); i++) {
-		ref<Expr>	new_cond;
-		ExecutionState	*cur_st;
-
-		if (!fi.res[i]) continue;
-
-		auto x_it = eh.find(fi.conditions[i]->hash());
-		if (x_it == eh.end()) {
-			new_cond = condFilter->apply(fi.conditions[i]);
-			x_it = eh.insert(
-				std::make_pair(
-					fi.conditions[i]->hash(),
-					new_cond)).first;
-		}
-
-		new_cond = x_it->second;
-		if (new_cond.isNull())
-			continue;
-
-		cur_st = fi.resStates[i];
-		if (cur_st->prevForkCond.isNull() == false) {
-			condXfer.insert(
-				std::make_pair(
-					cur_st->prevForkCond,
-					new_cond));
-			hasSucc.insert(cur_st->prevForkCond->hash());
-		}
-
-		cur_st->prevForkCond = new_cond;
-	}
-}
-
-bool Forks::hasSuccessor(ExecutionState& st) const
-{ return hasSucc.count(st.prevForkCond->hash()) != 0; }
-
-/* XXX memoize? */
-bool Forks::hasSuccessor(const ref<Expr>& cond) const
-{
-	ref<Expr>	e(condFilter->apply(cond));
-	if (e.isNull())
-		return true;
-	return hasSucc.count(e->hash());
 }
 
 bool Forks::addConstraint(struct ForkInfo& fi, unsigned condIndex)
@@ -622,87 +566,6 @@ void Forks::constrainForks(ExecutionState& current, struct ForkInfo& fi)
 	}
 }
 
-class MergeArrays : public ExprVisitor
-{
-public:
-	MergeArrays(void) : ExprVisitor(false, true) { use_hashcons = false; }
-	virtual ~MergeArrays(void) {}
-
-	virtual ref<Expr> apply(const ref<Expr>& e)
-	{
-		ref<Expr>	ret;
-		assert (!Expr::errors);
-
-		ret = ExprVisitor::apply(e);
-
-		/* must have changed a zero inside of a divide. oops */
-		if (Expr::errors) {
-			Expr::errors = 0;
-			std::cerr << "[MergeArrays] Fixing up ExprError\n";
-			return MK_CONST(0xff, 8);
-		}
-
-		return ret;
-	}
-protected:
-	virtual Action visitConstant(const ConstantExpr& ce)
-	{
-		if (ce.getWidth() > 64)
-			return Action::skipChildren();
-
-		return Action::changeTo(
-			ConstantExpr::create(
-				ce.getZExtValue() & 0x800000000000001f,
-				ce.getWidth()));
-	}
-
-	virtual Action visitRead(const ReadExpr& r)
-	{
-		mergearr_ty::iterator	it;
-		ref<Array>		arr = r.getArray();
-		ref<Array>		repl_arr;
-		std::string		merge_name;
-		const ConstantExpr	*ce_re_idx;
-		unsigned		num_run, new_re_idx;
-
-		for (num_run = 0; arr->name[num_run]; num_run++) {
-			if (	arr->name[num_run] >= '0' &&
-				arr->name[num_run] <= '9')
-			{
-				break;
-			}
-		}
-
-		if (num_run == arr->name.size())
-			return Action::skipChildren();
-
-		merge_name = arr->name.substr(0, num_run);
-		it = merge_arrs.find(merge_name);
-		if (it != merge_arrs.end()) {
-			repl_arr = it->second;
-		} else {
-			repl_arr = Array::create(merge_name, 1024);
-			merge_arrs.insert(std::make_pair(merge_name, repl_arr));
-		}
-
-		new_re_idx = 0;
-		ce_re_idx = dyn_cast<ConstantExpr>(r.index);
-		if (ce_re_idx != NULL) {
-			/* XXX: this loses information about structures
-			 * since fields will alias but it is good for strings
-			 * since it catches all idxmod-graphs */
-			new_re_idx = ce_re_idx->getZExtValue() % ForkCondIdxMod;
-		}
-
-		return Action::changeTo(
-			MK_READ(UpdateList(repl_arr, NULL),
-				MK_CONST(new_re_idx, 32)));
-	}
-private:
-	typedef std::map<std::string, ref<Array> > mergearr_ty;
-	mergearr_ty	merge_arrs;
-};
-
 Forks::~Forks(void) { }
 
 Forks::Forks(Executor& _exe)
@@ -714,9 +577,7 @@ Forks::Forks(Executor& _exe)
 , is_quench(QuenchRunaways)
 , omit_valid_constraints(true)
 {
-	condFilter = std::make_unique<ExprTimer<MergeArrays>>(1000);
 }
-
 
 void Forks::trackBranch(ExecutionState& current, unsigned condIndex)
 { current.trackBranch(condIndex, current.prevPC); }

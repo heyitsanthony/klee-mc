@@ -556,6 +556,7 @@ private:
 	unsigned	s_min, s_max, s_total, s_avg, n;
 };
 
+#include "ForkHistory.h"
 cl::opt<unsigned>
 DumpForkCondGraph("dump-forkcondgraph",
 	cl::desc("Dump fork condition graph (0=off)"),
@@ -600,15 +601,9 @@ public:
 		if (os == NULL) return;
 
 		(*os) << "digraph {\n";
-		foreach (it,
-			exe->getForking()->beginConds(),
-			exe->getForking()->endConds())
-		{
-			std::string		from, to;
-
-			from = cutoffExpr(it->first);
-			to = cutoffExpr(it->second);
-
+		for (const auto &p : exe->getForkHistory().conds()) {
+			std::string 	from = cutoffExpr(p.first),
+					to = cutoffExpr(p.second);
 			(*os) << '"'<< from << "\" -> \"" << to << "\";\n";
 		}
 		(*os) << "\n}\n";

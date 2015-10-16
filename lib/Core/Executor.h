@@ -23,6 +23,7 @@
 #include <llvm/ADT/APFloat.h>
 #include "Terminator.h"
 #include "SeedInfo.h"
+#include "ForkHistory.h"
 #include <vector>
 #include <string>
 #include <map>
@@ -116,8 +117,6 @@ public:
 	};
 
 
-	typedef std::pair<ExecutionState*,ExecutionState*> StatePair;
-	typedef std::vector<ExecutionState*> StateVector;
 	typedef std::vector<
 	std::pair<
 		std::pair<const MemoryObject*, const ObjectState*>,
@@ -280,6 +279,7 @@ protected:
 	StateSolver		*solver, *fastSolver;
 	ExeStateManager		*stateManager;
 	Forks			*forking;
+	ForkHistory		forkHistory;
 	ExecutionState		*currentState;
 	SpecialFunctionHandler	*sfh;
 
@@ -514,6 +514,7 @@ public:
 	const Forks* getForking(void) const { return forking; }
 	Forks* getForking(void) { return forking; }
 	void setForking(Forks* f) { forking = f; }
+	const ForkHistory& getForkHistory() const { return forkHistory; }
 
 	ExecutionState* getCurrentState(void) const { return currentState; }
 	bool hasState(const ExecutionState* es) const;

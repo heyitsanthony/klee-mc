@@ -114,14 +114,15 @@ private:
 	std::vector<BranchPredictor*> bps;
 };
 
+class ForkHistory;
 class CondPredictor : public BranchPredictor
 {
 public:
-	CondPredictor(const Forks* _f) : f(_f)  {}
+	CondPredictor(const ForkHistory& _f) : f(_f)  {}
 	virtual ~CondPredictor() {}
 	virtual bool predict(const StateBranch& sb, bool& hint);
 private:
-	const Forks*	f;
+	const ForkHistory& f;
 };
 }
 #endif

@@ -405,6 +405,8 @@ private:
 	std::deque<const MemoryObject*>	alloca_victims;
 };
 
+typedef std::pair<ExecutionState*,ExecutionState*> StatePair;
+typedef std::vector<ExecutionState*> StateVector;
 }
 
 #endif

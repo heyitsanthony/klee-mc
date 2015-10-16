@@ -546,7 +546,7 @@ SFH_DEF_ALL(PreferOp, "klee_prefer_op", true)
 	ref<Expr>		e;
 	const ConstantExpr	*ce;
 	Forks			*f;
-	Executor::StatePair	sp;
+	StatePair	sp;
 
 	SFH_CHK_ARGS(3, "klee_prefer_op");
 
@@ -1268,7 +1268,7 @@ SFH_DEF_ALL(ForkEq, "__klee_fork_eq", true)
 	SFH_CHK_ARGS(2, "klee_fork_eq");
 
 	ref<Expr>		cond(MK_EQ(args[0], args[1]));
-	Executor::StatePair	sp(sfh->executor->fork(state, cond, true));
+	StatePair	sp(sfh->executor->fork(state, cond, true));
 
 	if (sp.first != NULL) sp.first->bindLocal(target, MK_CONST(1, 32));
 	if (sp.second != NULL) sp.second->bindLocal(target, MK_CONST(0, 32));

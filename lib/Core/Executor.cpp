@@ -186,9 +186,12 @@ Executor::Executor(InterpreterHandler *ih)
 		ListPredictor		*lp = new ListPredictor();
 		/* unexplored path should have priority over unexp. value. */
 		lp->add(new KBrPredictor());
-		lp->add(new CondPredictor(forking));
+		lp->add(new CondPredictor(forkHistory));
 		lp->add(new RandomPredictor());
 		brPredict = std::unique_ptr<BranchPredictor>(lp);
+		Forks::setTransitions(
+			[this] (const ForkInfo& fi) {
+				forkHistory.trackTransition(fi); });
 	}
 
 	if (SeedRNG) theRNG.seed(SeedRNG);
@@ -2698,11 +2701,11 @@ bool Executor::xferIterNext(struct XferStateIter& iter)
 	return true;
 }
 
-Executor::StatePair Executor::fork(
+StatePair Executor::fork(
 	ExecutionState &current, ref<Expr> condition, bool isInternal)
 { return forking->fork(current, condition, isInternal); }
 
-Executor::StateVector Executor::fork(
+StateVector Executor::fork(
 	ExecutionState &current,
 	std::vector<ref<Expr>> conditions,
 	bool isInternal,

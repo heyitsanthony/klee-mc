@@ -674,7 +674,7 @@ void GDBCore::overrideThread(ExecutionState* es)
 
 bool GDBPkt::checkSignal(const char* sigstr)
 {
-	Executor::StatePair	sp;
+	StatePair	sp;
 	int			elems;
 	unsigned		sig;
 
@@ -724,7 +724,7 @@ bool GDBPkt::checkSignal(const char* sigstr)
 
 void GDBCore::handleForkBranch(void)
 {
-	Executor::StatePair	sp;
+	StatePair	sp;
 
 	sp = exe->getForking()->getLastFork();
 

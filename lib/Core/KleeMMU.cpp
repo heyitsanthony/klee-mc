@@ -112,7 +112,7 @@ ExecutionState* KleeMMU::getUnboundAddressState(
 	res.os = res.op.second;
 	inBoundPtr = res.mo->getBoundsCheckPointer(mop.address, bytes);
 
-	Executor::StatePair branches(exe.fork(*unbound, inBoundPtr, true));
+	StatePair branches(exe.fork(*unbound, inBoundPtr, true));
 	unbound = NULL;	/* pointer now invalid */
 
 	bound = branches.first;
@@ -169,7 +169,7 @@ void KleeMMU::memOpError(ExecutionState& state, MemOp& mop)
 
 	oob_cond = SymAddrSpace::getOOBCond(state.addressSpace, mop.address);
 
-	Executor::StatePair branches(
+	StatePair branches(
 		exe.fork(*unbound, oob_cond, true));
 
 	/* ptr maps to OOB region */

@@ -126,15 +126,15 @@ bool RotatingPredictor::predict(const StateBranch& sb, bool& hint)
 	return bps[(tick++ / period) % bps.size()]->predict(sb, hint);
 }
 
-#include "Forks.h"
+#include "ForkHistory.h"
 bool CondPredictor::predict(const StateBranch& sb, bool& hint)
 {
 	/* XXX need to distinguish between forking conditions and
 	 * conditions that have never been seen in the past */
 	bool	has_true, has_false;
 
-	has_true = f->hasSuccessor(sb.cond);
-	has_false = f->hasSuccessor(Expr::createIsZero(sb.cond));
+	has_true = f.hasSuccessor(sb.cond);
+	has_false = f.hasSuccessor(Expr::createIsZero(sb.cond));
 
 	if (!has_false && !has_true) {
 		return false;

@@ -71,7 +71,7 @@ double CondSuccWeight::weigh(const ExecutionState* es) const
 	if (es->prevForkCond.isNull())
 		return 2;
 
-	if (!exe->getForking()->hasSuccessor(es->prevForkCond))
+	if (!exe->getForkHistory().hasSuccessor(es->prevForkCond))
 		return 1;
 
 	return 0;
