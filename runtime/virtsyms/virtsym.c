@@ -3,6 +3,8 @@
 #include "virtsym.h"
 
 struct vsym_clo*	vs = NULL;
+//#define DEBUG_VIRTSYM(x,y)	klee_print_expr(x,y)
+#define DEBUG_VIRTSYM(x,y)	do { } while (0)
 
 void virtsym_add(vsym_clo_f f, uint64_t ret, void* dat)
 {
@@ -15,6 +17,7 @@ void virtsym_add(vsym_clo_f f, uint64_t ret, void* dat)
 	cur_vs->vs_aux = dat;
 
 	vs = cur_vs;
+	DEBUG_VIRTSYM("vsym added", (uint64_t)vs);
 }
 
 int virtsym_already(	vsym_clo_f clo_f, vsym_check_f chk_f,
@@ -39,6 +42,7 @@ void __hookfini_virtsym(void)
 {
 	unsigned i = 0;
 	while (vs) {
+		DEBUG_VIRTSYM("evaluting vsym", (uint64_t)vs);
 		vs->vs_f(vs->vs_ret, vs->vs_aux);
 		vs = vs->vs_next;
 		i++;
