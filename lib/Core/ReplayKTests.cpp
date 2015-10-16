@@ -84,7 +84,7 @@ ReplayKTests* ReplayKTests::create(const std::vector<KTest*>& _kts)
 
 bool ReplayKTests::replay(Executor* exe, ExecutionState* initSt)
 {
-	auto		old_f = exe->getForking();
+	Forks		*old_f = exe->getForking(), *new_f;
 	StateSolver	*old_ss = exe->getSolver(), *new_ss;
 	SFHandler	*old_sfh;
 	bool		ret;
@@ -95,12 +95,15 @@ bool ReplayKTests::replay(Executor* exe, ExecutionState* initSt)
 
 	/* timeout expensive replayed states */
 	new_ss = new CostKillerStateSolver(old_ss, MaxSolverSeconds);
+	new_f = createForking(*exe);
 	exe->setSolver(new_ss);
+	exe->setForking(new_f);
 
 	ret = replayKTests(*exe, *initSt);
 
 	exe->setForking(old_f);
 	exe->setSolver(old_ss);
+	delete new_f;
 	delete new_ss;
 
 	exe->getSFH()->addHandler(old_sfh, "klee_make_vsym", true);
@@ -125,11 +128,8 @@ bool ReplayKTests::replayKTests(Executor& exe, ExecutionState& initSt)
 	return true;
 }
 
-bool ReplayKTestsFast::replayKTests(Executor& exe, ExecutionState& initSt)
-{
-	auto f_ktest = std::make_unique<ForksKTestStateLogger>(exe);
-	exe.setForking(f_ktest.get());
-	return ReplayKTests::replayKTests(exe, initSt);
+Forks* ReplayKTestsFast::createForking(Executor& exe) const {
+	return new ForksKTestStateLogger(exe);
 }
 
 ExecutionState* ReplayKTestsFast::replayKTest(
@@ -159,11 +159,8 @@ ExecutionState* ReplayKTestsFast::replayKTest(
 	return es;
 }
 
-bool ReplayKTestsSlow::replayKTests(Executor& exe, ExecutionState& initSt)
-{
-	auto f_ktest = std::make_unique<ForksKTest>(exe);
-	exe.setForking(f_ktest.get());
-	return ReplayKTests::replayKTests(exe, initSt);
+Forks* ReplayKTestsSlow::createForking(Executor& exe) const {
+	return new ForksKTest(exe);
 }
 
 ExecutionState* ReplayKTestsSlow::replayKTest(

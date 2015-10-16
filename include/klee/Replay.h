@@ -17,6 +17,7 @@ class KInstIterator;
 class ExecutionState;
 class Executor;
 class ExeStateManager;
+class Forks;
 
 class Replay
 {
@@ -96,6 +97,7 @@ protected:
 	virtual ExecutionState* replayKTest(
 		Executor& exe, ExecutionState&, const KTest* kt) = 0;
 	virtual bool replayKTests(Executor&, ExecutionState&);
+	virtual Forks* createForking(Executor&) const = 0;
 
 	const ktest_list_t kts;
 };
@@ -111,7 +113,7 @@ public:
 protected:
 	ExecutionState* replayKTest(
 		Executor& exe, ExecutionState&, const KTest* kt) override;
-	bool replayKTests(Executor&, ExecutionState&) override;
+	Forks* createForking(Executor&) const override;
 
 	unsigned near_c;
 };
@@ -126,7 +128,7 @@ public:
 protected:
 	ExecutionState* replayKTest(
 		Executor& exe, ExecutionState&, const KTest* kt) override;
-	bool replayKTests(Executor&, ExecutionState&) override;
+	Forks* createForking(Executor&) const override;
 
 };
 
