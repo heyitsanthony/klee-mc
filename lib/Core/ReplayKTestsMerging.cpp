@@ -1,6 +1,10 @@
 #include <llvm/Support/CommandLine.h>
+#include <sstream>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include "klee/Internal/ADT/KTest.h"
 #include "ReplayKTestsMerging.h"
+#include "Forks.h"
 #include "Executor.h"
 
 using namespace klee;
@@ -29,6 +33,7 @@ ExecutionState* ReplayKTestsMerging::replayKTest(
 
 void ReplayKTestsMerging::buildReps(void)
 {
+	// XXX: if two tests cover the same set, won't have uniqs!
 	CovSet::covset_t	uniqs, dups;
 
 	for (auto p : ktest_cov) {
@@ -56,13 +61,24 @@ void ReplayKTestsMerging::buildReps(void)
 // Object indexes. (x,y) = (x.numObjects, y.numObjects) => no match
 typedef std::pair<unsigned, unsigned>	ktest_match_t;
 
+// steps through ktest's objects until it finds the first match
+// with target (e.g., can skip over argc, argv)
 static ktest_match_t getShortestMatch(const KTest& ktest, const KTest& target)
 {
-	for (unsigned i = 0; i < ktest.numObjects; i++) {
-		unsigned	j = 0;
+	unsigned	i;
+
+	// ignore matching prefixes
+	for (i = 0; i < ktest.numObjects && i < target.numObjects; i++) {
+		if (ktest.objects[i] != target.objects[i])
+			break;
+	}
+
+
+	for (; i < ktest.numObjects; i++) {
 		const auto	&obj1 = ktest.objects[i];
 
-		for (j = 0; j < target.numObjects; j++) {
+		// go until match next match is found
+		for (unsigned j = 0; j < target.numObjects; j++) {
 			const auto &obj2 = target.objects[j];
 
 			// must match on name
@@ -90,14 +106,30 @@ KTest* ReplayKTestsMerging::mutate(const KTest* ktest)
 {
 	// XXX: how to choose best mutation?
 	// first attempt: match argv's and argc with *any*
-	for (unsigned i = 0; i < ktest->numObjects; i++) {
-		// find first matching object
-		for (auto in_kts : kts) {
-			if (ktest == in_kts) continue;
-
-		}
+	
+	std::map<ktest_match_t, const KTest*>	matches;
+	for (auto cur_ktest : kts) {
+		if (ktest == cur_ktest) continue;
+		auto	m = getShortestMatch(*ktest, *cur_ktest);
+		matches[m] = cur_ktest;
+		std::cerr << m.first << "/" << m.second << '\n';
 	}
-	abort();
+
+	if (matches.empty())
+		return nullptr;
+
+	auto p = *(matches.begin());
+	if (p.first.first == ktest->numObjects) {
+		// no suitable matches?
+		return nullptr;
+	}
+
+	// now do the actual mutation
+	std::cerr << "MUTATING WITH: " << p.first.first << "--" << p.first.second << '\n';
+	auto ret = new KTest(*ktest);
+	ret->newPrefix(*p.second, p.first.first, p.first.second);
+	std::cerr << "NEW PREFIX DONE\n";
+	return ret;
 }
 
 bool ReplayKTestsMerging::tryMutant(
@@ -107,8 +139,11 @@ bool ReplayKTestsMerging::tryMutant(
 	const KTest* mutant)
 {
 	// XXX how to get around inevitable ktest errors?
-	auto	es = ReplayKTestsFast::replayKTest(exe, initSt, mutant);
+	auto	es = replayKTest(exe, initSt, mutant);
 	if (!es) return false;
+
+	assert (ktest_reps.count(ktest_orig));
+	assert (ktest_cov.count(mutant));
 
 	const auto& rep = ktest_reps.find(ktest_orig)->second;
 	const auto& cs = ktest_cov.find(mutant)->second;
@@ -122,28 +157,49 @@ bool ReplayKTestsMerging::tryMutant(
 
 bool ReplayKTestsMerging::replayKTests(Executor& exe, ExecutionState& initSt)
 {
+	std::cerr << "[Merging] Replaying seed KTests.\n";
 	if (!ReplayKTestsFast::replayKTests(exe, initSt))
 		return false;
 	
+	std::cerr << "[Merging] Mutating KTests.\n";
+
 	// collected all ktest coverage info; find supporting set
 	buildReps();
 
-	// XXX: need to inhibit forking
+	std::vector<const KTest*>		out_ktests;
+	std::vector<std::unique_ptr<KTest>>	good_mutants;
+
+	exe.getForking()->setForkSuppress(false);
 	for (auto p : ktest_reps) {
-		KTest	*mutant = mutate(p.first);
+		auto mutant = std::unique_ptr<KTest>(mutate(p.first));
 
 		if (!mutant)
 			continue;
 
-		if (!tryMutant(exe, initSt, p.first, mutant)) {
-			kTest_free(mutant);
+		if (!tryMutant(exe, initSt, p.first, mutant.get())) {
+			out_ktests.push_back(p.first);
+			std::cerr << "BAD MUTANT!!\n";
 			continue;
 		}
 
-		abort();
+		out_ktests.push_back(mutant.get());
+		good_mutants.push_back(std::move(mutant));
 	}
-	// XXX: re-enable forking
+	exe.getForking()->setForkSuppress(true);
 
-	abort();
+	std::cerr
+		<< "[Merging] Completed mutations. Successful merges:"
+		<< good_mutants.size() << "\n";
+
+	// write out new ktest set
+	mkdir(KTestMergeDir.c_str(), 0750);
+	for (unsigned i = 0; i < out_ktests.size(); i++) {
+		std::stringstream ss;
+		ss << KTestMergeDir << "/" << i << ".ktest.gz";
+		auto fname = ss.str();
+		out_ktests[i]->toFile(fname.c_str());
+	}
+	good_mutants.clear();
+
 	return true;
 }
