@@ -297,9 +297,6 @@ private:
 	/// needed to control memory usage. \see fork()
 	bool atMemoryLimit;
 
-	/// Disables forking, set by client. \see setInhibitForking()
-	bool inhibitForking;
-
 	ExecutionState* initialStateCopy;
 
 	/// Whether implied-value concretization is enabled.
@@ -488,10 +485,7 @@ public:
 	virtual bool isReplayKTest(void) const { return false; }
 
 	/*** Runtime options ***/
-
 	void setHaltExecution(bool v) override { haltExecution = v; }
-	void setInhibitForking(bool v) override { inhibitForking = v; }
-	bool getInhibitForking(void) const { return inhibitForking; }
 
 	/*** State accessor methods ***/
 	unsigned getSymbolicPathStreamID(const ExecutionState &state) override;

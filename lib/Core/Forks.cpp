@@ -198,8 +198,6 @@ bool Forks::forkSetup(ExecutionState& current, struct ForkInfo& fi)
 		reason = "memory cap exceeded";
 //	if (current.forkDisabled)
 //		reason = "fork disabled on current path";
-	if (exe.getInhibitForking())
-		reason = "fork disabled globally";
 	if (MaxForks!=~0u && stats::forks >= MaxForks)
 		reason = "max-forks reached";
 

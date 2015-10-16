@@ -182,7 +182,6 @@ static void parseArguments(int argc, char **argv)
 
 // Pulled out so it can be easily called from a debugger.
 extern "C" void halt_execution() { theInterpreter->setHaltExecution(true); }
-extern "C" void stop_forking() { theInterpreter->setInhibitForking(true); }
 
 static void interrupt_handle()
 {

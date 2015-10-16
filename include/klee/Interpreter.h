@@ -112,7 +112,6 @@ public:
 
 	/*** Runtime options ***/
 	virtual void setHaltExecution(bool value) = 0;
-	virtual void setInhibitForking(bool value) = 0;
 
 	/* State accessor methods ***/
 	virtual unsigned getSymbolicPathStreamID(
