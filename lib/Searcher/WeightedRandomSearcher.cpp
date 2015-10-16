@@ -83,11 +83,9 @@ void WeightedRandomSearcher::update(ExecutionState *current, const States s)
 		pdf->remove(*it);
 
 	reweigh_c++;
-	if (reweigh_c == 16) {
+	if (reweigh_c == 16 && current) {
 		for (unsigned i = 0; i < 100; i++) {
-			ExecutionState	*es;
-
-			es = pdf->choose(theRNG.getDoubleL(), false);
+			auto es = pdf->choose(theRNG.getDoubleL(), false);
 			pdf->update(es, getWeight(es));
 		}
 
