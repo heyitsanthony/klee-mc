@@ -224,8 +224,8 @@ void ReplayBrPaths::fastEagerReplay(void)
 
 		std::cerr << "[Replay] Replaying " << rp.size() << " branches.\n";
 
-		exe->notifyCurrent(NULL);
 		exe->exhaustState(es);
+		exe->commitQueue();
 
 		std::cerr
 			<< "[Replay] Replay state done st="

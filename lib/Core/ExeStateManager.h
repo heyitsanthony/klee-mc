@@ -43,6 +43,11 @@ private:
 
 	std::unique_ptr<Searcher> searcher;
 
+	/// Forces only non-compact states to be chosen. Initially false,
+	/// gets true when atMemoryLimit becomes true, and reset to false
+	/// when memory has dropped below a certain threshold
+	bool onlyNonCompact;
+
 	Searcher::States getStates(void) const;
 public:
 	ExeStateManager();
@@ -95,7 +100,7 @@ public:
 	unsigned numRemovedStates(void) const { return removedStates.size(); }
 	bool isRemovedState(ExecutionState* s) const;
 	bool isAddedState(ExecutionState* s) const;
-	ExecutionState* selectState(bool allowCompact);
+	ExecutionState* selectState(void);
 
 	void teardownUserSearcher(void);
 	void setupSearcher(std::unique_ptr<Searcher> s);

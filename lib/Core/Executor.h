@@ -190,7 +190,7 @@ public:
 	ExeStateSet::const_iterator endStates(void) const;
 
 	virtual void stepStateInst(ExecutionState* &state);
-	void notifyCurrent(ExecutionState *current);
+	void commitQueue(ExecutionState *current = nullptr);
 	bool isHalted(void) const { return haltExecution; }
 
 	MMU* getMMU(void) const { return mmu; }
@@ -299,11 +299,6 @@ private:
 
 	/// Disables forking, set by client. \see setInhibitForking()
 	bool inhibitForking;
-
-	/// Forces only non-compact states to be chosen. Initially false,
-	/// gets true when atMemoryLimit becomes true, and reset to false
-	/// when memory has dropped below a certain threshold
-	bool onlyNonCompact;
 
 	ExecutionState* initialStateCopy;
 

@@ -18,11 +18,12 @@ namespace { cl::opt<bool> UseYield("use-yield", cl::init(true)); }
 
 ExeStateManager::ExeStateManager()
 : nonCompactStateCount(0)
+, onlyNonCompact(false)
 {}
 
 ExeStateManager::~ExeStateManager()
 {
-	if (!searcher || !pathTree) return;
+	if (!searcher && !pathTree) return;
 
 	/* flush all pending states */
 	commitQueue(NULL);
@@ -58,9 +59,10 @@ ExecutionState* ExeStateManager::popYieldedState(void)
 	return es;
 }
 
-ExecutionState* ExeStateManager::selectState(bool allowCompact)
+ExecutionState* ExeStateManager::selectState(void)
 {
 	ExecutionState* ret;
+	bool		allowCompact = !onlyNonCompact;
 
 	assert (!empty());
 
@@ -215,6 +217,9 @@ void ExeStateManager::commitQueue(ExecutionState *current)
 
 	removedStates.clear();
 	replacedStates.clear();
+
+	if (getNonCompactStateCount() == 0 && !empty())
+		onlyNonCompact = false;
 }
 
 void ExeStateManager::replaceState(ExecutionState* old_s, ExecutionState* new_s)
@@ -316,6 +321,8 @@ void ExeStateManager::compactStates(unsigned toCompact)
 
 	for (i = 0; i < toCompact; ++i)
 		compactState(arr[i]);
+
+	onlyNonCompact = false;
 }
 
 void ExeStateManager::compactState(ExecutionState* s)
@@ -342,6 +349,8 @@ void ExeStateManager::compactPressureStates(uint64_t maxMem)
 	klee_warning("compacting %u states (over memory cap)", toCompact);
 
 	compactStates(toCompact);
+
+	onlyNonCompact = true;
 }
 
 Searcher::States ExeStateManager::getStates(void) const

@@ -158,7 +158,6 @@ Executor::Executor(InterpreterHandler *ih)
 , replay(0)
 , atMemoryLimit(false)
 , inhibitForking(false)
-, onlyNonCompact(false)
 , initialStateCopy(0)
 , ivcEnabled(UseIVC)
 , lastMemoryLimitOperationInstructions(0)
@@ -2012,7 +2011,6 @@ void Executor::handleMemoryUtilization(ExecutionState* &state)
 
 	/*  (mbs > MaxMemory) */
 	atMemoryLimit = true;
-	onlyNonCompact = true;
 
 	if (mbs <= 1.1*MaxMemory)
 		return;
@@ -2041,6 +2039,10 @@ bool Executor::runToFunction(ExecutionState* es, const KFunction* kf)
 	bool		found_func = false;
 	unsigned	test_c;
 
+	// Don't notify after the state is exhausted because
+	// caller may want to inspect the completed state.
+	commitQueue();
+
 	test_c = interpreterHandler->getNumPathsExplored();
 	do {
 		if (es->getCurrentKFunc() == kf) {
@@ -2055,7 +2057,6 @@ bool Executor::runToFunction(ExecutionState* es, const KFunction* kf)
 	if (found_func == false)
 		std::cerr << "[Exe] State exhausted\n";
 
-	notifyCurrent(NULL);
 	return found_func;
 }
 
@@ -2153,7 +2154,8 @@ eraseStates:
 		else
 			terminate(state);
 	}
-	notifyCurrent(0);
+
+	commitQueue();
 
 done:
 	if (initialStateCopy) {
@@ -2175,7 +2177,7 @@ done:
 
 void Executor::step(void)
 {
-	currentState = stateManager->selectState(!onlyNonCompact);
+	currentState = stateManager->selectState();
 	assert (currentState != NULL &&
 		"State man not empty, but selectState is?");
 
@@ -2187,28 +2189,23 @@ void Executor::step(void)
 		newSt = currentState->reconstitute(*initialStateCopy);
 		stateManager->replaceState(currentState, newSt);
 
-		notifyCurrent(currentState);
+		commitQueue(currentState);
 		currentState = newSt;
 	}
 
 	stepStateInst(currentState);
 
 	handleMemoryUtilization(currentState);
-	notifyCurrent(currentState);
+	commitQueue(currentState);
+}
+
+void Executor::commitQueue(ExecutionState *current)
+{
+	stateManager->commitQueue(current);
 }
 
 void Executor::runLoop(void)
 { while (!stateManager->empty() && !haltExecution) step(); }
-
-void Executor::notifyCurrent(ExecutionState* current)
-{
-	stateManager->commitQueue(current);
-	if (	stateManager->getNonCompactStateCount() == 0
-		&& !stateManager->empty())
-	{
-		onlyNonCompact = false;
-	}
-}
 
 std::string Executor::getAddressInfo(
 	ExecutionState &state,
@@ -2573,7 +2570,6 @@ void Executor::handleMemoryPID(ExecutionState* &state)
 	last_err = err;
 
 	if (states_to_gen < 0) {
-		onlyNonCompact = false;
 		stateManager->compactStates(-states_to_gen);
 	}
 }

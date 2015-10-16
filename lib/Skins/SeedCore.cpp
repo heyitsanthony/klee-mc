@@ -102,7 +102,7 @@ void SeedCore::stepSeedInst(ExecutionState* &lastState)
 	ExecutionState *state = lastState;
 
 	exe->stepStateInst(state);
-	exe->notifyCurrent(state);
+	exe->commitQueue(state);
 }
 
 bool SeedCore::isOnlySeed(void) const { return OnlySeed; }
