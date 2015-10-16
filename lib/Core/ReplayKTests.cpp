@@ -19,6 +19,7 @@
 #include "SpecialFunctionHandler.h"
 #include "klee/Internal/ADT/KTest.h"
 #include "klee/KleeHandler.h"
+#include "ReplayKTestsMerging.h"
 #include <algorithm>
 
 using namespace klee;
@@ -75,6 +76,9 @@ ReplayKTests* ReplayKTests::create(const std::vector<KTest*>& _kts)
 		std::sort(kts_s.begin(), kts_s.end(),
 			[] (auto x, auto y) { return *x < *y; } );
 	}
+
+	if (ReplayKTestsMerging::isReplayMerging())
+		return new ReplayKTestsMerging(kts_s);
 
 	if (Replay::isFasterReplay())
 		return new ReplayKTestsFast(kts_s);
