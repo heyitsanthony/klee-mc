@@ -305,9 +305,6 @@ private:
 	/// Remembers the instruction count at the last memory limit operation.
 	uint64_t lastMemoryLimitOperationInstructions;
 
-	/// The maximum time to allow for a single stp query.
-	double stpTimeout;
-
 	void instInsertValue(ExecutionState& state, KInstruction* ki);
 	void instShuffleVector(ExecutionState& state, KInstruction* ki);
 	static ref<Expr> instShuffleVectorEvaled(

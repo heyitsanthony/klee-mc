@@ -160,8 +160,6 @@ Executor::Executor(InterpreterHandler *ih)
 , initialStateCopy(0)
 , ivcEnabled(UseIVC)
 , lastMemoryLimitOperationInstructions(0)
-, stpTimeout(MaxInstructionTime ?
-	std::min(MaxSTPTime,(double)MaxInstructionTime) : MaxSTPTime)
 {
 	/* rule builder should be installed before equiv checker, otherwise
 	 * we waste time searching the equivdb for rules we already have! */
@@ -169,7 +167,9 @@ Executor::Executor(InterpreterHandler *ih)
 		Expr::setBuilder(RuleBuilder::create(Expr::getBuilder()));
 
 	solver = createSolverChain(
-		stpTimeout,
+		MaxInstructionTime
+			? std::min(MaxSTPTime, (double)MaxInstructionTime)
+			: MaxSTPTime,
 		interpreterHandler->getOutputFilename("queries.pc"),
 		interpreterHandler->getOutputFilename("stp-queries.pc"));
 	fastSolver = (YieldUncached) ? createFastSolver() : NULL;
