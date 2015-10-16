@@ -6,7 +6,7 @@
 #include "klee/SolverStats.h"
 #include "SolverImplWrapper.h"
 #include "IncompleteSolver.h"
-#include <tr1/unordered_map>
+#include <unordered_map>
 #include "static/Sugar.h"
 
 namespace klee
@@ -54,7 +54,7 @@ private:
 	}
 	};
 
-	typedef std::tr1::unordered_map<
+	typedef std::unordered_map<
 		CacheEntry, 
 		IncompleteSolver::PartialValidity, 
 		CacheEntryHash> cache_map;

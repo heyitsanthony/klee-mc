@@ -1,4 +1,4 @@
-#include <tr1/unordered_set>
+#include <unordered_set>
 #include <assert.h>
 #include "klee/Expr.h"
 #include "ExprAllocUnique.h"
@@ -23,7 +23,7 @@ bool operator()(const ref<Expr>& a, const ref<Expr>& b) const
 };
 
 /* important to use an unordered_map instead of a map so we get O(1) access. */
-typedef std::tr1::unordered_set<ref<Expr>, hashexpr, expreq> ExprTab;
+typedef std::unordered_set<ref<Expr>, hashexpr, expreq> ExprTab;
 
 static ExprTab expr_hashtab;
 

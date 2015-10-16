@@ -5,7 +5,7 @@
 #include <map>
 #include <string>
 #include <stdint.h>
-#include <tr1/unordered_map>
+#include <unordered_map>
 
 namespace llvm
 {
@@ -40,7 +40,7 @@ public:
 	bool pathCommitted;	/* did we write a path out with this func? */
 	bool isSpecial;		/* uses "special" semantics on enter/exit */
 private:
-	typedef std::tr1::unordered_map<llvm::BasicBlock*, unsigned>
+	typedef std::unordered_map<llvm::BasicBlock*, unsigned>
 		bbentry_ty;
 	bbentry_ty basicBlockEntry;
 	std::set<const KFunction*>	exits_seen;

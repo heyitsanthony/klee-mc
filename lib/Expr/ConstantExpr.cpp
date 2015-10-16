@@ -12,7 +12,6 @@
 #include "klee/Internal/Support/IntEvaluation.h"
 
 #include "klee/util/ExprPPrinter.h"
-#include <tr1/unordered_map>
 
 #include <iostream>
 #include <sstream>

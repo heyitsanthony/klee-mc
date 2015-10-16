@@ -1,7 +1,7 @@
 #ifndef KLEE_XCHKSEARCHER_H
 #define KLEE_XCHKSEARCHER_H
 
-#include <tr1/unordered_map>
+#include <unordered_map>
 #include "../Core/Searcher.h"
 
 namespace klee
@@ -28,7 +28,7 @@ protected:
 	};
 private:
 	void xchk(ExecutionState* s);
-	typedef std::tr1::unordered_map<ExecutionState*, UnschedInfo>
+	typedef std::unordered_map<ExecutionState*, UnschedInfo>
 		as_hashes_ty;
 	ExecutionState	*last_selected;
 	as_hashes_ty	as_hashes;

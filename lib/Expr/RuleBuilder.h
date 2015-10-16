@@ -1,8 +1,8 @@
 #ifndef RULEBUILDER_H
 #define RULEBUILDER_H
 
-#include <tr1/unordered_set>
-#include <tr1/unordered_map>
+#include <unordered_set>
+#include <unordered_map>
 #include <list>
 #include "static/Trie.h"
 #include "klee/ExprBuilder.h"
@@ -17,7 +17,7 @@ public:
 	typedef Trie<uint64_t, ExprRule*>	ruletrie_ty;
 
 	typedef std::list<const ExprRule*>	rtlist_ty;
-	typedef std::tr1::unordered_map<
+	typedef std::unordered_map<
 		Expr::Hash, rtlist_ty*>		ruletab_ty;
 
 	typedef std::vector<ExprRule*>		rulearr_ty;
@@ -220,7 +220,7 @@ private:
 	static const ExprRule	*last_er;
 
 	static std::set<const ExprRule*>	rules_used;
-	std::tr1::unordered_set<Expr::Hash>	miss_filter;
+	std::unordered_set<Expr::Hash>	miss_filter;
 	std::ofstream		*rule_ofs;
 
 };

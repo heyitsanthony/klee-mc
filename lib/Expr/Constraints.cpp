@@ -13,6 +13,7 @@
 #include "klee/util/Assignment.h"
 #include "klee/util/ExprPPrinter.h"
 #include "klee/util/ExprVisitor.h"
+#include "klee/util/ExprHashMap.h"
 #include "static/Sugar.h"
 #include "ExprReplaceVisitor.h"
 
@@ -46,8 +47,7 @@ namespace klee
 class ExprReplaceVisitor2 : public ExprVisitor
 {
 public:
-//	typedef std::tr1::unordered_map< ref<Expr>, ref<Expr> > replmap_ty;
-	typedef std::map< ref<Expr>, ref<Expr> > replmap_ty;
+	typedef ExprHashMap<ref<Expr>> replmap_ty;
 	ExprReplaceVisitor2(void) : ExprVisitor(true)
 	{ }
 

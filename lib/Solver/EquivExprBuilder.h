@@ -4,8 +4,8 @@
 #include "klee/Solver.h"
 #include "klee/ExprBuilder.h"
 #include "klee/util/ExprHashMap.h"
-#include <tr1/unordered_map>
-#include <tr1/unordered_set>
+#include <unordered_map>
+#include <unordered_set>
 
 
 #define EE_MIN_NODES	2
@@ -136,14 +136,14 @@ protected:
 	uint64_t			ign_c;
 	uint64_t			const_c;
 	uint64_t			wide_c;
-	typedef std::tr1::unordered_set<uint64_t> constset_ty;
-	typedef std::tr1::unordered_map<uint64_t, uint64_t> constmap_ty;
+	typedef std::unordered_set<uint64_t> constset_ty;
+	typedef std::unordered_map<uint64_t, uint64_t> constmap_ty;
 	constmap_ty			consts_map;
 	constset_ty			consts;
 
-	typedef std::tr1::unordered_set<uint64_t> blacklist_ty;
-	typedef std::tr1::unordered_set<uint64_t> writtenhashes_ty;
-	typedef std::tr1::unordered_set<Expr::Hash> identmemo_ty;
+	typedef std::unordered_set<uint64_t> blacklist_ty;
+	typedef std::unordered_set<uint64_t> writtenhashes_ty;
+	typedef std::unordered_set<Expr::Hash> identmemo_ty;
 	typedef std::map<std::string, ref<Expr> > db_parse_cache_ty;
 
 	blacklist_ty			blacklist;

@@ -3,7 +3,7 @@
 
 #include "klee/Expr.h"
 #include <map>
-#include <tr1/unordered_set>
+#include <unordered_set>
 
 namespace llvm
 {
@@ -79,7 +79,7 @@ private:
 
 	/// The set of legal function addresses, used to validate function
 	/// pointers. We use the actual Function* address as the function address.
-	mutable std::tr1::unordered_set<uint64_t> legalFunctions;
+	mutable std::unordered_set<uint64_t> legalFunctions;
 	/// Map of globals to their bound address. This also includes
 	/// globals that have no representative object (i.e. functions).
 	mutable globaladdr_map globalAddresses;

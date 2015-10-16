@@ -12,7 +12,7 @@
 
 #include "klee/Interpreter.h"
 #include "klee/Internal/Module/KFunction.h"
-#include <tr1/unordered_map>
+#include <unordered_map>
 #include <memory>
 #include <string>
 #include <map>
@@ -165,7 +165,7 @@ private:
 
 	// Our shadow versions of LLVM structures.
 	ptr_vec_t<KFunction>	functions;
-	typedef std::tr1::unordered_map<const llvm::Function*, KFunction*>
+	typedef std::unordered_map<const llvm::Function*, KFunction*>
 		func2kfunc_ty;
 	func2kfunc_ty functionMap;
 

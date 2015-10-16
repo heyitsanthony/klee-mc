@@ -2,8 +2,8 @@
 #define QHSFILE_H
 
 #include "klee/Internal/ADT/MemFile.h"
-#include <tr1/unordered_set>
-#include <tr1/unordered_map>
+#include <unordered_set>
+#include <unordered_map>
 #include <stdio.h>
 
 #include "HashSolver.h"
@@ -34,7 +34,7 @@ private:
 		bool hasHash(Expr::Hash h) const;
 		void add(Expr::Hash h);
 	private:
-	typedef std::tr1::unordered_set<Expr::Hash> pendingset_ty;
+	typedef std::unordered_set<Expr::Hash> pendingset_ty;
 		PendingFile(FILE* _f);
 		FILE		*f;
 		pendingset_ty	sat;
@@ -48,7 +48,7 @@ private:
 		bool hasHash(Expr::Hash h, uint64_t& found_v) const;
 		void add(Expr::Hash h, uint64_t v);
 	private:
-		typedef std::tr1::unordered_map<Expr::Hash, uint64_t> pvmap_ty;
+		typedef std::unordered_map<Expr::Hash, uint64_t> pvmap_ty;
 		PendingValueFile(FILE* _f);
 		FILE		*f;
 		pvmap_ty	values;

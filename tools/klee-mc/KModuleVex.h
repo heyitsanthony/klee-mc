@@ -3,7 +3,7 @@
 
 #include "DynGraph.h"
 #include "klee/Internal/Module/KModule.h"
-#include <tr1/unordered_map>
+#include <unordered_map>
 
 class VexXlate;
 class VexSB;
@@ -20,7 +20,7 @@ namespace klee
 class Executor;
 class KModuleVex : public KModule
 {
-typedef std::tr1::unordered_map<uintptr_t /* Func*/, VexSB*> func2vsb_map;
+typedef std::unordered_map<uintptr_t /* Func*/, VexSB*> func2vsb_map;
 
 public:
 	KModuleVex(
