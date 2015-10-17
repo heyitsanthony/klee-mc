@@ -32,3 +32,7 @@ void __hookpre___GI___fortify_fail(void* regs)
 // called on double-free, at least
 void __hookpre_malloc_printerr(void* regs)
 { klee_uerror((const char*)GET_ARG1(regs), "malloc.err"); }
+
+// string, file, line, func
+void __hookpre___malloc_assert(void* regs)
+{ klee_uerror((const char*)GET_ARG0(regs), "malloc.err"); }
