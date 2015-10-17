@@ -48,6 +48,25 @@ StackFrame::StackFrame(const StackFrame &s)
 	}
 }
 
+StackFrame::StackFrame(StackFrame &&s) { (*this) = std::move(s); }
+
+StackFrame& StackFrame::operator=(StackFrame &&s)
+{
+	if (&s == this) return *this;
+
+	call = s.call;
+	caller = s.caller;
+	kf = s.kf;
+	onRet = s.onRet;
+	onRet_expr = s.onRet_expr;
+	stackWatermark = s.stackWatermark;
+	locals = std::move(s.locals);
+	allocas = std::move(s.allocas);
+	minDistToUncoveredOnReturn = s.minDistToUncoveredOnReturn;
+	varargs = s.varargs;
+	return *this;
+}
+
 StackFrame& StackFrame::operator=(const StackFrame &s)
 {
 	Cell* new_locals;

@@ -211,7 +211,7 @@ void ExecutionState::pushFrame(KInstIterator caller, KFunction *kf)
 
 	kf->incEnters();
 
-	stack.push_back(StackFrame(caller,kf));
+	stack.emplace_back(caller, kf);
 	stack.back().stackWatermark = getStackDepth();
 
 	covset.insert(kf);
@@ -291,7 +291,7 @@ void ExecutionState::xferFrame(KFunction* kf)
 
 	/* create new frame to replace old frame;
 	   new frame initialized with target function kf */
-	stack.push_back(StackFrame(ki, kf));
+	stack.emplace_back(ki, kf);
 	StackFrame	&sf2(stack.back());
 
 	sf2.stackWatermark = wm;

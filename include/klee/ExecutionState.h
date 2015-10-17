@@ -120,7 +120,6 @@ private:
 
 public:
 	bool checkCanary(void) const { return canary == ES_CANARY_VALUE; }
-	typedef CallStack::iterator	stack_iter_ty;
 	unsigned			depth;
 	double				weight;
 	StateTLB		stlb;	/* local tlb for when mmu calls to runtime */
@@ -316,8 +315,6 @@ public:
 	typedef std::vector<SymbolicArray> syms_t;
 
 	const syms_t& getSymbolics(void) const { return symbolics; }
-	stack_iter_ty stackBegin(void) { return stack.begin(); }
-	stack_iter_ty stackEnd(void) { return stack.end(); }
 
 	bool isConcrete(void) const;
 

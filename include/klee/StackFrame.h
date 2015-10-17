@@ -55,7 +55,9 @@ public:
 
   StackFrame(KInstIterator caller, KFunction *kf);
   StackFrame(const StackFrame &s);
+  StackFrame(StackFrame && s);
   StackFrame& operator=(const StackFrame &s);
+  StackFrame& operator=(StackFrame &&);
   void addAlloca(const MemoryObject*);
   bool clearLocals(void);
   bool isClear(void) const { return locals == NULL; }
