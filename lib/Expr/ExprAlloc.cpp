@@ -91,14 +91,14 @@ ref<Expr> ExprAlloc::Constant(const APInt &v)
 		}
 	}
 
-	auto it = const_hashtab.find(v);
-	if (it != const_hashtab.end())
-		return it->second;
+
+	auto	&r = const_hashtab[v];
+	if (!r.isNull())
+		return r;
 
 	const_hit_c--;
 	const_miss_c++;
-
-	auto r = const_hashtab.emplace(v, new ConstantExpr(v)).first->second;
+	r = new ConstantExpr(v);
 	r->computeHash();
 	constantCount++;
 
@@ -114,9 +114,6 @@ unsigned ExprAlloc::garbageCollect(void)
 
 	for (const auto &p : const_hashtab) {
 		ref<Expr>	e(p.second);
-
-		if (e.getRefCount() > 4)
-			continue;
 
 		/* Two refs => hash table and 'e' => garbage */
 		if (e.getRefCount() == 2)

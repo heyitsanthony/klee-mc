@@ -10,11 +10,18 @@ struct hashexpr
 { unsigned operator()(const ref<Expr>& a) const { return a->hash(); } };
 
 
-#define GET_OR_MK(x)		\
+#define GET_OR_MK_SLOW(x)	\
 auto it(exmap_##x.find(key));	\
 if (it != exmap_##x.end()) { expr_hit_c++; return it->second; }	\
 expr_miss_c++;	\
 ref<Expr> r = new x##Expr
+
+#define GET_OR_MK(x)				\
+auto &r = exmap_##x[key];			\
+if (!r.isNull()) { expr_hit_c++; return r; }	\
+expr_miss_c++;					\
+r = new x##Expr
+
 
 /* OP, expr, expr */
 /* OP, expr, w */
@@ -120,7 +127,6 @@ ref<Expr> ExprAllocFastUnique::x(const ref<Expr>& src)	\
 {	ref<Expr>	key(src);	\
 	GET_OR_MK(x)(src);		\
 	r->computeHash();		\
-	exmap_##x.emplace(key, r);	\
 	return r; }
 
 DECL_ALLOC_1(NotOptimized)
@@ -131,7 +137,6 @@ ref<Expr> ExprAllocFastUnique::x(const ref<Expr>& lhs, const ref<Expr>& rhs) \
 {	std::pair<ref<Expr>, ref<Expr> >	key(lhs, rhs);	\
 	GET_OR_MK(x)(lhs,rhs);			\
 	r->computeHash();			\
-	exmap_##x.emplace(key, r);		\
 	return r;				\
 }
 DECL_ALLOC_2(Concat)
@@ -167,7 +172,7 @@ ref<Expr> ExprAllocFastUnique::Read(
 	std::pair<UpdateList&, ref<Expr> > key(
 		const_cast<UpdateList&>(updates), idx);
 	ReadExpr*	re;
-	GET_OR_MK(Read)(updates,idx);
+	GET_OR_MK_SLOW(Read)(updates,idx);
 	r->computeHash();
 	re = cast<ReadExpr>(r);
 	/* reference must match what is stored in hash table to avoid 
@@ -186,7 +191,6 @@ ref<Expr> ExprAllocFastUnique::Select(
 		c, std::make_pair(t, f));
 	GET_OR_MK(Select)(c, t, f);
 	r->computeHash();
-	exmap_Select.emplace(key, r);
 	return r;
 }
 
@@ -197,7 +201,6 @@ ref<Expr> ExprAllocFastUnique::Extract(
 		e, std::make_pair(o, w));
 	GET_OR_MK(Extract)(e, o, w);
 	r->computeHash();
-	exmap_Extract.emplace(key, r);
 	return r;
 }
 
@@ -206,7 +209,6 @@ ref<Expr> ExprAllocFastUnique::ZExt(const ref<Expr> &e, Expr::Width w)
 	std::pair<ref<Expr>, unsigned> key(e, w);
 	GET_OR_MK(ZExt)(e,w);
 	r->computeHash();
-	exmap_ZExt.emplace(key, r);
 	return r;
 }
 
@@ -215,7 +217,6 @@ ref<Expr> ExprAllocFastUnique::SExt(const ref<Expr> &e, Expr::Width w)
 	std::pair<ref<Expr>, unsigned> key(e, w);
 	GET_OR_MK(SExt)(e,w);
 	r->computeHash();
-	exmap_SExt.emplace(key, r);
 	return r;
 }
 
