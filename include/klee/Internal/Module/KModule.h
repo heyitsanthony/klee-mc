@@ -85,7 +85,7 @@ public:
     std::unique_ptr<InstructionInfoTable> infos;
 
     std::vector<llvm::Constant*> constants;
-    std::map<llvm::Constant*, std::unique_ptr<KConstant>> constantMap;
+    std::unordered_map<llvm::Constant*, std::unique_ptr<KConstant>> constantMap;
     KConstant* getKConstant(llvm::Constant *c);
 
     std::vector<Cell>	constantTable;
@@ -179,10 +179,12 @@ private:
 	typedef std::map<std::string, std::string*> modname_ty;
 	modname_ty	modNames;
 
-	typedef std::map<const llvm::Function*, std::string>	f2pretty_ty;
-	typedef std::map<std::string, const KFunction*>	pretty2f_ty;
-	f2pretty_ty	prettyNames;
-	pretty2f_ty	prettyFuncs;
+	typedef std::unordered_map<const llvm::Function*, std::string>
+		f2pretty_t;
+	typedef std::unordered_map<std::string, const KFunction*>
+		pretty2f_t;
+	f2pretty_t	prettyNames;
+	pretty2f_t	prettyFuncs;
 
 	std::set<KFunction*>	init_funcs;
 	KFunction		*init_kfunc;
