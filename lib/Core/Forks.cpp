@@ -7,6 +7,7 @@
 #include "klee/Internal/ADT/RNG.h"
 #include "StatsTracker.h"
 #include "CoreStats.h"
+#include "OOMTimer.h"
 
 #include "klee/TimerStatIncrementer.h"
 #include "static/Sugar.h"
@@ -22,7 +23,6 @@
 #include "klee/Internal/ADT/LimitedStream.h"
 
 
-extern bool ReplayInhibitedForks;
 namespace klee { extern RNG theRNG; }
 
 namespace
@@ -44,6 +44,12 @@ namespace
 	MaxMemoryInhibit(
 		"max-memory-inhibit",
 		llvm::cl::desc("Stop forking at memory cap (vs. random kill)"),
+		llvm::cl::init(true));
+
+	llvm::cl::opt<bool>
+	ReplayInhibitedForks(
+		"replay-inhibited-forks",
+		llvm::cl::desc("Replay fork inhibited path as new state"),
 		llvm::cl::init(true));
 
 	llvm::cl::opt<unsigned>
@@ -189,7 +195,7 @@ bool Forks::forkSetup(ExecutionState& current, struct ForkInfo& fi)
 	if (fi.isInternal) return true;
 
 	const char* reason = 0;
-	if (MaxMemoryInhibit && exe.isAtMemoryLimit())
+	if (MaxMemoryInhibit && OOMTimer::isAtMemoryLimit())
 		reason = "memory cap exceeded";
 //	if (current.forkDisabled)
 //		reason = "fork disabled on current path";
@@ -581,3 +587,5 @@ Forks::Forks(Executor& _exe)
 
 void Forks::trackBranch(ExecutionState& current, unsigned condIndex)
 { current.trackBranch(condIndex, current.prevPC); }
+
+bool Forks::isReplayInhibitedForks(void) { return ReplayInhibitedForks; }

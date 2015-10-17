@@ -203,8 +203,6 @@ public:
 
 	std::unique_ptr<MemoryManager>	memory;
 private:
-	void handleMemoryUtilization(ExecutionState* &state);
-	void handleMemoryPID(ExecutionState* &state);
 	void setupInitFuncs(ExecutionState& initState);
 
 protected:
@@ -295,15 +293,11 @@ private:
 
 	/// Disables forking, instead a random path is chosen. Enabled as
 	/// needed to control memory usage. \see fork()
-	bool atMemoryLimit;
 
 	ExecutionState* initialStateCopy;
 
 	/// Whether implied-value concretization is enabled.
 	bool ivcEnabled;
-
-	/// Remembers the instruction count at the last memory limit operation.
-	uint64_t lastMemoryLimitOperationInstructions;
 
 	void instInsertValue(ExecutionState& state, KInstruction* ki);
 	void instShuffleVector(ExecutionState& state, KInstruction* ki);
@@ -352,8 +346,6 @@ private:
 		llvm::APFloat::cmpResult CmpRes, llvm::CmpInst::Predicate pred);
 
 	void printFileLine(ExecutionState &state, KInstruction *ki);
-
-	void killStates(ExecutionState* &state);
 
 	void stepInstruction(ExecutionState &state);
 	void removeRoot(ExecutionState* es);
@@ -505,8 +497,6 @@ public:
 
 	InterpreterHandler *getInterpreterHandler(void) const
 	{ return interpreterHandler; }
-
-	bool isAtMemoryLimit(void) const { return atMemoryLimit; }
 
 	ExeStateManager* getStateManager(void) { return stateManager; }
 	void setStateManager(ExeStateManager* esm) { stateManager = esm; }

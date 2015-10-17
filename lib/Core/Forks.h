@@ -89,6 +89,8 @@ public:
 	void setForkSuppress(bool v) { suppressForks = v; }
 	bool getForkSuppress(void) const { return suppressForks; }
 
+	static bool isReplayInhibitedForks(void);
+
 	static void setTransitions(xfer_f_t f) { transition_f = f; }
 	static xfer_f_t getTransitions(void) { return transition_f; }
 protected:

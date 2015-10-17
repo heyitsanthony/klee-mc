@@ -12,6 +12,7 @@
 #include "StateSolver.h"
 #include "PTree.h"
 #include "StatsTracker.h"
+#include "OOMTimer.h"
 #include "static/Sugar.h"
 
 #include "klee/Common.h"
@@ -747,6 +748,9 @@ void Executor::initTimers(void)
 	/* only initialize timers once */
 	if (inited /*!timers.empty() */) return;
 	inited++;
+
+	if (OOMTimer::getMaxMemory())
+		addTimer(std::make_unique<OOMTimer>(*this), 1.0);
 
 	if (MaxTime)
 		addTimer(std::make_unique<HaltTimer>(this), MaxTime);

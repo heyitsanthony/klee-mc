@@ -43,7 +43,6 @@
 #include "MemoryManager.h"
 #include "Forks.h"
 #include "StateSolver.h"
-#include "MemUsage.h"
 #include "MMU.h"
 #include "BranchPredictors.h"
 #include "StatsTracker.h"
@@ -56,7 +55,6 @@
 using namespace llvm;
 using namespace klee;
 
-bool	ReplayInhibitedForks = true;
 uint32_t DebugPrintInstructions = 0;
 extern double	MaxSTPTime;
 
@@ -84,9 +82,6 @@ namespace {
   	"dump-bad-init-values",
 	cl::desc("Dump states which fail to get initial values to console."));
 
-  cl::opt<bool>
-  UsePID("use-pid", cl::desc("Use proportional state control"));
-
   cl::opt<bool> DumpStatesOnHalt("dump-states-on-halt", cl::init(true));
   DECL_OPTBOOL(PreferCex, "prefer-cex");
 
@@ -113,9 +108,6 @@ namespace {
 	"stop-after-n-instructions",
 	cl::desc("Stop execution after number of instructions (0=off)"));
 
-  cl::opt<unsigned>
-  MaxMemory("max-memory", cl::desc("Refuse forks above cap (in MB, 0=off)"));
-
   cl::opt<bool>
   IgnoreBranchConstraints(
   	"ignore-branch-constraints",
@@ -123,13 +115,6 @@ namespace {
 
 	cl::opt<bool>
 	TrackBranchExprs("track-br-exprs", cl::desc("Track branching exprs."));
-
-  cl::opt<bool, true>
-  ReplayInhibitedForksProxy(
-  	"replay-inhibited-forks",
-        cl::desc("Replay fork inhibited path as new state"),
-	cl::location(ReplayInhibitedForks),
-	cl::init(true));
 
   cl::opt<bool>
   UseIVC("use-ivc", cl::desc("Implied Value Concretization"), cl::init(true));
@@ -156,10 +141,8 @@ Executor::Executor(InterpreterHandler *ih)
 , sfh(0)
 , haltExecution(false)
 , replay(0)
-, atMemoryLimit(false)
 , initialStateCopy(0)
 , ivcEnabled(UseIVC)
-, lastMemoryLimitOperationInstructions(0)
 {
 	/* rule builder should be installed before equiv checker, otherwise
 	 * we waste time searching the equivdb for rules we already have! */
@@ -1946,28 +1929,6 @@ INST_FOP_ARITH(FRem, mod)
 	}
 }
 
-// guess at how many to kill
-void Executor::killStates(ExecutionState* &state)
-{
-  uint64_t numStates = stateManager->size();
-  uint64_t mbs = getMemUsageMB();
-  unsigned toKill = std::max((uint64_t)1, numStates - (numStates*MaxMemory)/mbs);
-  assert (mbs > MaxMemory);
-
-  klee_warning("killing %u states (over mem). Total: %ld.", toKill, numStates);
-
-  std::vector<ExecutionState*> arr(stateManager->begin(), stateManager->end());
-
-  // use priority ordering for selecting which states to kill
-  std::partial_sort(
-    arr.begin(), arr.begin() + toKill, arr.end(), KillOrCompactOrdering());
-  for (unsigned i = 0; i < toKill; ++i) {
-    TERMINATE_EARLY(this, *arr[i], "memory limit");
-    if (state == arr[i]) state = NULL;
-  }
-  klee_message("Killed %u states.", toKill);
-}
-
 void Executor::stepStateInst(ExecutionState* &state)
 {
 	assert (state->checkCanary() && "Not a valid state");
@@ -1988,46 +1949,6 @@ void Executor::stepStateInst(ExecutionState* &state)
 		}
 	}
 	processTimers(state, MaxInstructionTime);
-}
-
-void Executor::handleMemoryUtilization(ExecutionState* &state)
-{
-	uint64_t mbs, instLimit;
-
-	if (!MaxMemory || (stats::instructions & 0xFFFF) != 0)
-		return;
-
-	// Avoid calling GetMallocUsage() often; it is O(elts on freelist).
-	if (UsePID) {
-		handleMemoryPID(state);
-		return;
-	}
-
-	mbs = getMemUsageMB();
-	if (mbs < 0.9*MaxMemory) {
-		atMemoryLimit = false;
-		return;
-	}
-
-	if (mbs <= MaxMemory) return;
-
-	/*  (mbs > MaxMemory) */
-	atMemoryLimit = true;
-
-	if (mbs <= 1.1*MaxMemory)
-		return;
-
-	instLimit = stats::instructions - lastMemoryLimitOperationInstructions;
-	lastMemoryLimitOperationInstructions = stats::instructions;
-
-	if (ReplayInhibitedForks && instLimit > 0x20000) {
-		std::cerr << "[Exe] Replay inhibited forks.. COMPACTING!!\n";
-		stateManager->compactPressureStates(MaxMemory);
-		return;
-	}
-
-	/* resort to killing states if compacting  didn't help memory usage */
-	killStates(state);
 }
 
 unsigned Executor::getNumStates(void) const { return stateManager->size(); }
@@ -2197,8 +2118,6 @@ void Executor::step(void)
 	}
 
 	stepStateInst(currentState);
-
-	handleMemoryUtilization(currentState);
 	commitQueue(currentState);
 }
 
@@ -2549,31 +2468,6 @@ void Executor::executeFree(
 			getAddressInfo(state, address), false);
 	} else {
 		state.unbindObject(mo);
-	}
-}
-
-
-#include <malloc.h>
-void Executor::handleMemoryPID(ExecutionState* &state)
-{
-	#define K_P	0.6
-	#define K_D	0.1	/* damping factor-- damp changes in errors */
-	#define K_I	0.0001  /* systematic error-- negative while ramping  */
-	int		states_to_gen;
-	int64_t		err;
-	uint64_t	mbs;
-	static int64_t	err_sum = -(int64_t)MaxMemory;
-	static int64_t	last_err = 0;
-
-	mbs = mallinfo().uordblks/(1024*1024);
-	err = MaxMemory - mbs;
-
-	states_to_gen = K_P*err + K_D*(err - last_err) + K_I*(err_sum);
-	err_sum += err;
-	last_err = err;
-
-	if (states_to_gen < 0) {
-		stateManager->compactStates(-states_to_gen);
 	}
 }
 
