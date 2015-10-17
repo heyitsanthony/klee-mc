@@ -245,8 +245,9 @@ public:
 	const ObjectState *bindStackMemObj(
 		const MemoryObject *mo, const Array *array = 0);
 
-
-	bool setupCallVarArgs(unsigned funcArgs, std::vector<ref<Expr> >& args);
+	bool setupCallVarArgs(
+		unsigned funcArgs,
+		const std::vector<ref<Expr>>& args);
 
 	bool addConstraint(ref<Expr> constraint);
 	bool merge(const ExecutionState &b);

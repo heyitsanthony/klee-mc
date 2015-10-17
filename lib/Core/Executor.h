@@ -386,10 +386,10 @@ public:
 	void setSolver(StateSolver* s) { solver = s; }
 	virtual bool isStateSeeding(ExecutionState* s) const { return false; }
 
-	void executeCallNonDecl(
-		ExecutionState &state,
-		llvm::Function *f,
-		std::vector< ref<Expr> > &arguments);
+	void executeCallKFunc(
+		ExecutionState	&state,
+		KFunction	&kf,
+		const std::vector< ref<Expr> > &arguments);
 
 	void doImpliedValueConcretization(
 		ExecutionState &state, ref<Expr> e, ref<ConstantExpr> v);

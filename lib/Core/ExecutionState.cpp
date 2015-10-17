@@ -629,7 +629,7 @@ void ExecutionState::getConstraintLog(std::string &res) const
 }
 
 bool ExecutionState::setupCallVarArgs(
-	unsigned funcArgs, std::vector<ref<Expr> >& args)
+	unsigned funcArgs, const std::vector<ref<Expr> >& args)
 {
 	ObjectPair	op;
 	ObjectState	*os;

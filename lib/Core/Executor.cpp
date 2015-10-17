@@ -427,20 +427,16 @@ void Executor::stepInstruction(ExecutionState &state)
 		haltExecution = true;
 }
 
-void Executor::executeCallNonDecl(
-	ExecutionState &state,
-	Function *f,
-	std::vector< ref<Expr> > &arguments)
+void Executor::executeCallKFunc(
+	ExecutionState	&state,
+	KFunction	&kf,
+	const std::vector< ref<Expr> > &arguments)
 {
-	KFunction	*kf;
+	const auto	f = kf.function;
 	unsigned	call_arg_c, func_arg_c;
 
-	assert (!f->isDeclaration() && "Expects a non-declaration function!");
-	kf = kmodule->getKFunction(f);
-	assert (kf != NULL && "Executing non-shadowed function");
-
-	state.pushFrame(state.prevPC, kf);
-	state.pc = kf->instructions;
+	state.pushFrame(state.prevPC, &kf);
+	state.pc = kf.instructions;
 
 	statsTracker->framePushed(
 		state,
@@ -470,7 +466,7 @@ void Executor::executeCallNonDecl(
 	}
 
 	for (unsigned i = 0; i < func_arg_c; ++i)
-		state.bindArgument(kf, i, arguments[i]);
+		state.bindArgument(&kf, i, arguments[i]);
 }
 
 
@@ -480,19 +476,11 @@ void Executor::executeCall(
 	Function *f,
 	std::vector< ref<Expr> > &args)
 {
-	Function	*f2 = NULL;
-
 	assert (f);
-
-	if (	!f->isDeclaration() ||
-		(f2 = kmodule->module->getFunction(f->getName().str())))
-	{
-		/* this is so that vexllvm linked modules work */
-		if (f2 == NULL) f2 = f;
-		if (!f2->isDeclaration()) {
-			executeCallNonDecl(state, f2, args);
-			return;
-		}
+	auto kf = kmodule->getKFunction(f);
+	if (kf != nullptr) {
+		executeCallKFunc(state, *kf, args);
+		return;
 	}
 
 	assert (ki);
@@ -1994,11 +1982,11 @@ void Executor::handleMemoryUtilization(ExecutionState* &state)
 {
 	uint64_t mbs, instLimit;
 
-	if (!(MaxMemory && (stats::instructions & 0xFFFF) == 0))
+	if (!MaxMemory || (stats::instructions & 0xFFFF) != 0)
 		return;
 
 	// Avoid calling GetMallocUsage() often; it is O(elts on freelist).
-	if (UsePID && MaxMemory) {
+	if (UsePID) {
 		handleMemoryPID(state);
 		return;
 	}
@@ -2028,7 +2016,6 @@ void Executor::handleMemoryUtilization(ExecutionState* &state)
 
 	/* resort to killing states if compacting  didn't help memory usage */
 	killStates(state);
-
 }
 
 unsigned Executor::getNumStates(void) const { return stateManager->size(); }
@@ -2769,7 +2756,7 @@ bool Executor::startFini(ExecutionState& state)
 	assert (state.getOnFini() == false);
 
 	std::vector<ref<Expr> >	no_args;
-	executeCallNonDecl(state, fini_kfunc->function, no_args);
+	executeCallKFunc(state, *fini_kfunc, no_args);
 
 	return true;
 }

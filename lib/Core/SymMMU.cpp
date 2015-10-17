@@ -37,13 +37,13 @@ SymMMU::SymMMU(Executor& exe, const std::string& type)
 
 bool SymMMU::exeMemOp(ExecutionState &state, MemOp& mop)
 {
-	KFunction		*f;
+	KFunction		*kf;
 	Expr::Width		w(mop.getType(exe.getKModule()));
 	std::vector<ref<Expr> >	args;
 
 	if (mop.isWrite) {
-		f = mh->getStore(w);
-		if (f == NULL) {
+		kf = mh->getStore(w);
+		if (kf == NULL) {
 			if (mop.target && mop.target->getInst())  {
 				llvm::raw_os_ostream os(std::cerr);
 				os << "[SymMMU] TARGET="
@@ -62,17 +62,17 @@ bool SymMMU::exeMemOp(ExecutionState &state, MemOp& mop)
 			args.push_back(MK_EXTRACT(mop.value, 64, 64));
 		} else
 			args.push_back(mop.value);
-		exe.executeCallNonDecl(state, f->function, args);
+		exe.executeCallKFunc(state, *kf, args);
 
 		sym_w_c++;
 		return true;
 	}
 
-	f = mh->getLoad(w);
-	assert (f != NULL && "BAD WIDTH");
+	kf = mh->getLoad(w);
+	assert (kf != NULL && "BAD WIDTH");
 
 	args.push_back(mop.address);
-	exe.executeCallNonDecl(state, f->function, args);
+	exe.executeCallKFunc(state, *kf, args);
 
 	sym_r_c++;
 	return true;
@@ -81,9 +81,9 @@ bool SymMMU::exeMemOp(ExecutionState &state, MemOp& mop)
 void SymMMU::signal(ExecutionState& state, void* addr, uint64_t len)
 {
 	std::vector<ref<Expr> >	args;
-	KFunction		*f(mh->getSignal());
+	KFunction		*kf(mh->getSignal());
 
-	if (f == NULL) return;
+	if (kf == NULL) return;
 
 	args.push_back(MK_CONST((uintptr_t)addr, 64));
 	args.push_back(MK_CONST(len, 64));
@@ -94,5 +94,5 @@ void SymMMU::signal(ExecutionState& state, void* addr, uint64_t len)
 	 *
 	 * Right now this only works for klee-mc because I put the call in 
 	 * make_sym_range. */
-	exe.executeCallNonDecl(state, f->function, args);
+	exe.executeCallKFunc(state, *kf, args);
 }

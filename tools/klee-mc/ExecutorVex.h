@@ -46,13 +46,14 @@ public:
 
 	const llvm::Module * setModule(
 		llvm::Module *module,
-		const ModuleOptions &opts) { assert (0 == 1 && "BUSTED"); }
+		const ModuleOptions &opts) override {
+		assert (0 == 1 && "BUSTED"); }
 
 	void runFunctionAsMain(
 		llvm::Function *f,
 		int argc,
 		char **argv,
-		char **envp) { assert (0 == 1 && "LOL"); }
+		char **envp) override { assert (0 == 1 && "LOL"); }
 
 	virtual void runImage(void) { runSym(NULL); }
 	virtual void runSym(const char* symName);
@@ -65,12 +66,12 @@ public:
 	void setRegCtx(ExecutionState& state, MemoryObject* mo);
 	void dumpSCRegs(const std::string& fname);
 
-	virtual void printStackTrace(
-		const ExecutionState& st, std::ostream& o) const;
+	void printStackTrace(
+		const ExecutionState& st, std::ostream& o) const override;
 
 	/* necessary for kmc_skip_func */
 	virtual void jumpToKFunc(ExecutionState& state, KFunction* kf);
-	virtual llvm::Function* getFuncByAddr(uint64_t addr);
+	llvm::Function* getFuncByAddr(uint64_t addr) override;
 
 protected:
 	virtual ExecutionState* setupInitialState(void);
@@ -78,19 +79,14 @@ protected:
 
 	void cleanupImage(void);
 
-	virtual void executeCallNonDecl(
-		ExecutionState &state,
-		KInstruction *ki,
-		llvm::Function *f,
-		std::vector< ref<Expr> > &arguments) { assert (0 == 1 && "STUB"); }
-	virtual void instRet(ExecutionState &state, KInstruction *ki);
-  	virtual void run(ExecutionState &initialState);
+	void instRet(ExecutionState &state, KInstruction *ki) override;
+	void run(ExecutionState &initialState) override;
 
-	virtual void callExternalFunction(
+	void callExternalFunction(
 		ExecutionState &state,
 		KInstruction *target,
 		llvm::Function *function,
-		std::vector< ref<Expr> > &arguments);
+		std::vector< ref<Expr> > &arguments) override;
 
 	virtual void handleXferSyscall(
 		ExecutionState& state, KInstruction* ki);
