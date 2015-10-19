@@ -12,6 +12,13 @@ struct hashapint
 {unsigned operator()(const llvm::APInt& a) const
 {return hash_value(a);}};
 
+struct hashpair
+{
+std::hash<uint64_t>	h64;
+unsigned operator()(const std::pair<uint8_t, uint64_t>& a) const
+{return (((unsigned)a.first) << 8) ^ h64(a.second) ;}};
+
+
 struct apinteq
 {
 bool operator()(const APInt& a, const APInt& b) const
@@ -26,9 +33,16 @@ typedef std::unordered_map<
 	APInt,
 	ref<ConstantExpr>,
 	hashapint,
-	apinteq> ConstantExprTab;
+	apinteq> BigConstantExprTab;
 
-ConstantExprTab			const_hashtab;
+typedef std::unordered_map<
+	std::pair<uint8_t, uint64_t>,
+	ref<ConstantExpr>,
+	hashpair> SmallConstantExprTab;
+
+
+BigConstantExprTab		const_big_hashtab;
+SmallConstantExprTab		const_small_hashtab;
 static ref<ConstantExpr>	ce_smallval_tab_1[2];
 static ref<ConstantExpr>	ce_smallval_tab_8[256];
 static ref<ConstantExpr>	ce_smallval_tab_16[256*2];
@@ -64,35 +78,59 @@ unsigned long ExprAlloc::constantCount = 0;
 unsigned long ExprAlloc::const_miss_c = 0;
 unsigned long ExprAlloc::const_hit_c = 0;
 
-ref<Expr> ExprAlloc::Constant(const APInt &v)
-{
-	uint64_t v_64;
 
-	const_hit_c++;
+ref<Expr> ExprAlloc::Constant(uint64_t v, unsigned w)
+{
+	uint64_t	v_off;
+
+	if (w > 64) {
+		return ExprAlloc::Constant(APInt(w, v));
+	}
 
 	/* wired constants-- [-255,255] */
-	/* XXX: get hit rates; include powers of 2? */
-	if (v.getBitWidth() <= 64 &&
-	   (v_64 = (v.getLimitedValue()+256)) < 2*256)
-	{
+	v_off = v + 256;
+	if (v_off < 2*256) {
 		if (tab_ok == false) {
 			initSmallValTab();
 			constantCount = 2+256+3*(2*256);
 			tab_ok = true;
 		}
 
-		switch (v.getBitWidth()) {
-		case 1: return ce_smallval_tab_1[v_64-256];
-		case 8: return ce_smallval_tab_8[v_64-256];
-		case 16: return ce_smallval_tab_16[v_64];
-		case 32: return ce_smallval_tab_32[v_64];
-		case 64: return ce_smallval_tab_64[v_64];
+		switch (w) {
+		case 1: return ce_smallval_tab_1[v_off-256];
+		case 8: return ce_smallval_tab_8[v_off-256];
+		case 16: return ce_smallval_tab_16[v_off];
+		case 32: return ce_smallval_tab_32[v_off];
+		case 64: return ce_smallval_tab_64[v_off];
 		default: break;
 		}
 	}
 
+	auto	&r = const_small_hashtab[std::make_pair(w, v)];
 
-	auto	&r = const_hashtab[v];
+	if (!r.isNull())
+		return r;
+
+	const_hit_c--;
+	const_miss_c++;
+
+	r = new ConstantExpr(llvm::APInt(w, v));
+	r->computeHash();
+	constantCount++;
+
+	return r;
+}
+
+ref<Expr> ExprAlloc::Constant(const APInt &v)
+{
+	const_hit_c++;
+
+	if (v.getBitWidth() <= 64) {
+		return ExprAlloc::Constant(
+			v.getLimitedValue(), v.getBitWidth());
+	}
+
+	auto	&r = const_big_hashtab[v];
 	if (!r.isNull())
 		return r;
 
@@ -110,9 +148,9 @@ ExprAlloc::~ExprAlloc() {}
 unsigned ExprAlloc::garbageCollect(void)
 {
 	std::vector<ConstantExpr*>	to_rmv;
-	unsigned			n;
+	unsigned			n = 0;
 
-	for (const auto &p : const_hashtab) {
+	for (const auto &p : const_big_hashtab) {
 		ref<Expr>	e(p.second);
 
 		/* Two refs => hash table and 'e' => garbage */
@@ -120,13 +158,27 @@ unsigned ExprAlloc::garbageCollect(void)
 			to_rmv.push_back(cast<ConstantExpr>(e));
 	}
 
-	n = to_rmv.size();
+	n += to_rmv.size();
 	for (const auto ce : to_rmv) {
-		const_hashtab.erase(ce->getAPValue());
+		const_big_hashtab.erase(ce->getAPValue());
 	}
 
-	constantCount -= to_rmv.size();
+	to_rmv.clear();
+	for (const auto &p : const_small_hashtab) {
+		ref<Expr>	e(p.second);
+		/* Two refs => hash table and 'e' => garbage */
+		if (e.getRefCount() == 2)
+			to_rmv.push_back(cast<ConstantExpr>(e));
+	}
 
+	n += to_rmv.size();
+	for (const auto ce : to_rmv) {
+		const_small_hashtab.erase(
+			std::make_pair(	ce->getWidth(),
+					ce->getAPValue().getLimitedValue()));
+	}
+
+	constantCount -= n;
 	return n;
 }
 

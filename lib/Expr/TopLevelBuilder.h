@@ -18,6 +18,7 @@ public:
 
 	virtual ~TopLevelBuilder() { if (owns_recur) delete eb_recur; }
 
+	ref<Expr> Constant(uint64_t v, unsigned w) override;
 	EXPR_BUILDER_DECL_ALL
 
 	void printName(std::ostream& os) const override;

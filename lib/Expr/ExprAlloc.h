@@ -15,6 +15,7 @@ public:
 	virtual int compare(const Expr& lhs, const Expr& rhs)
 	{ return lhs.compareDeep(rhs); }
 
+	ref<Expr> Constant(uint64_t v, unsigned w) override;
 	EXPR_BUILDER_DECL_ALL
 
 	static unsigned long getNumConstants(void) { return constantCount; }

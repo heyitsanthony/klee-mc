@@ -56,6 +56,9 @@ void ConstantExpr::toString(std::string &Res) const
 ref<ConstantExpr> ConstantExpr::alloc(const llvm::APInt &v)
 { return cast<ConstantExpr>(theExprAllocator->Constant(v)); }
 
+ref<ConstantExpr> ConstantExpr::alloc(uint64_t v, Width w)
+{ return cast<ConstantExpr>(theExprAllocator->Constant(v, w)); }
+
 /* N.B. vector is stored *backwards* (i.e. v[0] => cur_v[w - 1]) */
 ref<ConstantExpr> ConstantExpr::createVector(llvm::ConstantVector* v)
 {

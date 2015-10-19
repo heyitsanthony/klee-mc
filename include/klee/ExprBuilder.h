@@ -83,6 +83,9 @@ public:
 
 	// Expressions
 	virtual ref<Expr> Constant(const llvm::APInt &Value) = 0;
+	virtual ref<Expr> Constant(uint64_t v, unsigned w) {
+		return Constant(llvm::APInt(w, v));
+	}
 	virtual ref<Expr> NotOptimized(const ref<Expr> &Index) = 0;
 	virtual ref<Expr> Read(const UpdateList &Updates,
 			   const ref<Expr> &Index) = 0;
@@ -127,9 +130,6 @@ virtual ref<Expr> x(const ref<Expr> &LHS, const ref<Expr> &RHS) = 0;
 	// Utility functions
 	ref<Expr> False() { return ConstantExpr::create(0, Expr::Bool); }
 	ref<Expr> True() { return ConstantExpr::create(1, Expr::Bool); }
-
-	ref<Expr> Constant(uint64_t Value, Expr::Width W)
-	{ return Constant(llvm::APInt(W, Value)); }
 
 	virtual void printName(std::ostream& os) const = 0;
 };

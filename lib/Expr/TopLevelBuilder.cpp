@@ -114,6 +114,15 @@ ref<Expr> TopLevelBuilder::SExt(const ref<Expr> &e, Expr::Width w)
 	return r;
 }
 
+ref<Expr> TopLevelBuilder::Constant(uint64_t v, unsigned w)
+{
+	if (in_builder) return eb_recur->Constant(v, w);
+	in_builder = true;
+	ref<Expr> r(eb_top->Constant(v, w));
+	in_builder = false;
+	return r;
+}
+
 ref<Expr> TopLevelBuilder::Constant(const llvm::APInt &Value)
 {
 	if (in_builder) return eb_recur->Constant(Value);

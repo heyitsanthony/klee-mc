@@ -96,8 +96,7 @@ public:
   static ref<ConstantExpr> alloc(const llvm::APFloat &f)
   { return alloc(f.bitcastToAPInt()); }
 
-  static ref<ConstantExpr> alloc(uint64_t v, Width w)
-  { return alloc(llvm::APInt(w, v)); }
+  static ref<ConstantExpr> alloc(uint64_t v, Width w);
   
   static ref<ConstantExpr> create(uint64_t v, Width w) {
     assert(v == bits64::truncateToNBits(v, w) &&
