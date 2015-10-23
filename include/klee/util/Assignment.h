@@ -168,12 +168,6 @@ inline ref<Expr> Assignment::evaluate(
 	return ConstantExpr::alloc(0, Expr::Int8);
 }
 
-inline ref<Expr> Assignment::evaluate(ref<Expr> e) const
-{
-	AssignmentEvaluator v(this);
-	return v.apply(e);
-}
-
 inline ref<Expr> Assignment::evaluate(ref<Expr> e, bool &wasZeroDiv)
 {
 	AssignmentEvaluator	v(this);

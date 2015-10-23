@@ -881,10 +881,20 @@ ExecutionState* Executor::concretizeState(
 				rmv_set.insert(binding.first);
 		}
 
-		while (conc_set.size() > DoPartialConcretize) {
-			auto it = conc_set.begin();
-			rmv_set.insert(*it);
-			conc_set.erase(it);
+		if (conc_set.size() > DoPartialConcretize) {
+			std::vector<const Array*>	v;
+			for (auto arr : conc_set) v.push_back(arr);
+			for (unsigned i = 0; i < v.size(); i++) {
+				int swp_idx = theRNG.getInt32() % v.size();
+				auto tmp = v[i];
+				v[i] = v[swp_idx];
+				v[swp_idx] = tmp;
+			}
+			for (unsigned i = 0; i < v.size(); i++)
+			while (conc_set.size() > DoPartialConcretize) {
+				rmv_set.insert(v[i]);
+				conc_set.erase(v[i]);
+			}
 		}
 
 		for (auto arr : conc_set) {

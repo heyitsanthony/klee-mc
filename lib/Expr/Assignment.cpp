@@ -226,6 +226,10 @@ ref<Expr> Assignment::evaluateCostly(ref<Expr>& e, unsigned& cost) const
 	return ret;
 }
 
+ref<Expr> Assignment::evaluate(ref<Expr> e) const
+{
+	return AssignmentEvaluator(this).apply(e);
+}
 
 bool Assignment::operator==(const Assignment& a) const
 {

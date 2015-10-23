@@ -129,14 +129,10 @@ const UpdateList &ObjectState::getUpdates() const
 void ObjectState::buildUpdates(void) const
 {
 	unsigned NumWrites = updates.head ? updates.head->getSize() : 0;
-	std::vector< std::pair< ref<Expr>, ref<Expr> > > Writes(NumWrites);
-	const UpdateNode	*un = updates.head;
-
-	std::vector< ref<ConstantExpr> > Contents(size);
-
-	// Start content as zeros.
-	for (unsigned i = 0, e = size; i != e; ++i)
-		Contents[i] = MK_CONST(0, Expr::Int8);
+	std::vector<std::pair<ref<Expr>, ref<Expr>>> Writes(NumWrites);
+	const UpdateNode		*un = updates.head;
+	std::vector<ref<ConstantExpr>>	Contents(size, MK_CONST(0, 8));
+	std::map<unsigned, ref<Expr>>	concWrites;
 
 	// Collect writes, [0] being first, [n] being last
 	for (unsigned i = NumWrites; i != 0; un = un->next) {
@@ -147,20 +143,20 @@ void ObjectState::buildUpdates(void) const
 	// Pull off as many concrete writes as we can.
 	unsigned Begin = 0, End = Writes.size();
 	for (; Begin != End; ++Begin) {
-		// Push concrete writes into the constant array.
-		ConstantExpr *Index, *Value;
-
-		Index = dyn_cast<ConstantExpr>(Writes[Begin].first);
-		if (!Index) break;
-
-		Value = dyn_cast<ConstantExpr>(Writes[Begin].second);
-		if (!Value) break;
-
-		Contents[Index->getZExtValue()] = Value;
+		auto idx = dyn_cast<ConstantExpr>(Writes[Begin].first);
+		if (!idx) break;
+		concWrites[idx->getZExtValue()] = Writes[Begin].second;
 	}
 
-	// There is no good reason to create multiple ones.
-	// Start a new update list.
+	// Push concrete writes into the constant array.
+	for (const auto &p : concWrites) {
+		auto ce = dyn_cast<ConstantExpr>(p.second);
+		if (!ce) continue;
+		Contents[p.first] = ce;
+	}
+
+	// There is no good reason to create multiple ones;
+	// start a new update list.
 	static unsigned id = 0;
 	ref<Array>	array;
 
@@ -173,8 +169,15 @@ void ObjectState::buildUpdates(void) const
 	updates = UpdateList(array, 0);
 
 	// Apply the remaining (non-constant) writes.
-	for (; Begin != End; ++Begin)
+	for (const auto &p : concWrites) {
+		if (dyn_cast<ConstantExpr>(p.second))
+			continue;
+		updates.extend(MK_CONST(p.first, 32), p.second);
+	}
+
+	for (; Begin != End; ++Begin) {
 		updates.extend(Writes[Begin].first, Writes[Begin].second);
+	}
 }
 
 void ObjectState::makeConcrete()

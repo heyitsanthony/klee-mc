@@ -21,6 +21,8 @@ private:
 
 protected:
 	Action evalRead(const UpdateList &ul, unsigned index);
+	Action evalUpdateList(const ReadExpr &re);
+
 	Action visitRead(const ReadExpr &re);
 	Action visitExpr(const Expr &e);
 

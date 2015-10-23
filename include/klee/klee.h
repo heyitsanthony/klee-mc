@@ -367,6 +367,8 @@ extern void free(void*) __THROW;
 	uint64_t v0, uint64_t v1, uint64_t v2, uint64_t v3);
 
 	uint32_t klee_constr_count(void);
+	// number of unique arrays referenced in expression
+	uint32_t klee_arr_count(uint64_t expr);
 
 	uint64_t klee_read_reg(const char* sp);
 

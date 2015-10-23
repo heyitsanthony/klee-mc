@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "klee/util/ExprEvaluator.h"
+#include <iostream>
 
 using namespace klee;
 
@@ -38,38 +39,27 @@ ExprVisitor::Action ExprEvaluator::evalRead(
 	return Action::changeTo(getInitialValue(ul.getRoot(), index));
 }
 
-ExprVisitor::Action ExprEvaluator::visitExpr(const Expr &e)
+ExprVisitor::Action ExprEvaluator::evalUpdateList(const ReadExpr &re)
 {
-#if 0
-	// Evaluate all constant expressions here,
-	// in case they weren't folded in construction.
-	//
-	// Don't do this for reads, we want them to go to
-	// the normal rewrite path.
-	unsigned	N = e.getNumKids();
+	UpdateList	new_ul(re.updates.getRoot(), 0);
+	bool		changed = false;
 
-	if (!N || isa<ReadExpr>(e))
-		return Action::doChildren();
+	for (auto un = re.updates.head; un; un = un->next) {
+		auto idx = visit(un->index);
+		auto v = visit(un->value);
 
-	/* this only matters if we have an inadequate constant folder
-	 * such as with the default builder. I don't think this
-	 * should be on every path. --AJR */
-
-	for (unsigned i = 0; i != N; ++i)
-		if (e.getKidConst(i)->getKind() != Expr::Constant)
-			return Action::doChildren();
-
-	std::cerr << "HEY: " << e << '\n';
-	assert (0 == 1 && "SHOULD HAVE FOLDED!!");
-
-	ref<Expr> Kids[3];
-	assert(N < 3);
-	for (unsigned i = 0; i != N; ++i) {
-		Kids[i] = e.getKid(i);
+		changed |= idx != un->index || v != un->value;
+		new_ul.extend(idx, v);
 	}
 
-	return Action::changeTo(e.rebuild(Kids));
-#endif
+	if (!changed)
+		return Action::doChildren();
+
+	return Action::changeTo(MK_READ(new_ul, visit(re.index)));
+}
+
+ExprVisitor::Action ExprEvaluator::visitExpr(const Expr &e)
+{
 	return Action::doChildren();
 }
 
@@ -77,8 +67,11 @@ ExprVisitor::Action ExprEvaluator::visitRead(const ReadExpr &re)
 {
 	ref<Expr> v(visit(re.index));
 
-	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(v))
+	if (ConstantExpr *CE = dyn_cast<ConstantExpr>(v)) {
 		return evalRead(re.updates, CE->getZExtValue());
+	} else if (re.updates.head) {
+		return evalUpdateList(re);
+	}
 
 	return Action::doChildren();
 }

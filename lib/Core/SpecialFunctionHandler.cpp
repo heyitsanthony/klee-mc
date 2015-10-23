@@ -1334,6 +1334,15 @@ SFH_DEF_ALL(ConstrCount, "klee_constr_count", true)
 		MK_CONST(state.constraints.size(), Expr::Int32));
 }
 
+SFH_DEF_ALL(ArrCount, "klee_arr_count", true)
+{
+	SFH_CHK_ARGS(1, "klee_arr_count");
+	std::vector<const Array*> res;
+	ExprUtil::findSymbolicObjects(args[0], res);
+	state.bindLocal(
+		target,
+		MK_CONST(res.size(), Expr::Int32));
+}
 
 SFH_DEF_ALL(ExprHash, "__klee_expr_hash", true)
 {
@@ -1545,6 +1554,7 @@ add(IsReadOnly),
 add(ConcretizeState),
 add(MakeVSymbolic),
 add(ConstrDump),
+add(ArrCount),
 #define DEF_WIDE(x)	\
 add(WideLoad##x),	\
 add(WideStore##x)
