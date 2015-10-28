@@ -890,8 +890,10 @@ ExecutionState* Executor::concretizeState(
 				v[i] = v[swp_idx];
 				v[swp_idx] = tmp;
 			}
-			for (unsigned i = 0; i < v.size(); i++)
-			while (conc_set.size() > DoPartialConcretize) {
+
+			for (unsigned i = 0;	i < v.size() &&
+						conc_set.size() > DoPartialConcretize; i++)
+			{ 
 				rmv_set.insert(v[i]);
 				conc_set.erase(v[i]);
 			}
