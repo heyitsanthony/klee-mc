@@ -8,16 +8,16 @@ namespace klee
 class PhasedSearcher : public Searcher
 {
 public:
-	virtual Searcher* createEmpty(void) const
-	{ return new PhasedSearcher(); }
-
-	ExecutionState *selectState(bool allowCompact);
 	PhasedSearcher() : state_c(0), cur_phase(0) {}
-	virtual ~PhasedSearcher() {}
 
-	void update(ExecutionState *current, States s);
-	bool empty() const { return state_c == 0; }
-	void printName(std::ostream &os) const { os << "PhasedSearcher\n"; }
+	Searcher* createEmpty(void) const override {
+		return new PhasedSearcher();
+	}
+	ExecutionState *selectState(bool allowCompact) override;
+	void update(ExecutionState *current, States s) override;
+	void printName(std::ostream &os) const override {
+		os << "PhasedSearcher\n";
+	}
 
 private:
 	void updateCurrent(ExecutionState* current);

@@ -117,6 +117,3 @@ void RandomPathSearcher::update(ExecutionState *current, const States s)
 		es->ptreeNode->update(PTree::WeightRunnable, false);
 	}
 }
-
-bool RandomPathSearcher::empty(void) const
-{ return executor.getStateManager()->empty(); }

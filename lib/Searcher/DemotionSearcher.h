@@ -8,20 +8,15 @@ namespace klee {
 class DemotionSearcher : public Searcher
 {
 public:
-	ExecutionState *selectState(bool allowCompact);
 	DemotionSearcher(Searcher* _searcher_base, unsigned max_repeats = 10);
-	virtual ~DemotionSearcher(void) = default;
 
-	virtual Searcher* createEmpty(void) const
+	Searcher* createEmpty(void) const override
 	{ return new DemotionSearcher(searcher_base->createEmpty()); }
 
-	void update(ExecutionState *current, States s);
+	ExecutionState *selectState(bool allowCompact) override;
+	void update(ExecutionState *current, States s) override;
 
-	bool empty(void) const
-	{ return (scheduled.size() + demoted.size()) == 0; }
-
-	void printName(std::ostream &os) const
-	{
+	void printName(std::ostream &os) const override {
 		os << "<DemotionSearcher>\n";
 		searcher_base->printName(os);
 		os << "</DemotionSearcher>\n";

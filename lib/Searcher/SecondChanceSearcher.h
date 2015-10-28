@@ -8,18 +8,17 @@ namespace klee {
 class SecondChanceSearcher : public Searcher
 {
 public:
-	ExecutionState* selectState(bool allowCompact);
 	SecondChanceSearcher(Searcher* _searcher_base);
 	virtual ~SecondChanceSearcher(void) { delete searcher_base; }
 
-	virtual Searcher* createEmpty(void) const
-	{ return new SecondChanceSearcher(searcher_base->createEmpty()); }
+	Searcher* createEmpty(void) const override {
+		return new SecondChanceSearcher(searcher_base->createEmpty());
+	}
 
-	void update(ExecutionState *current, States s);
+	ExecutionState* selectState(bool allowCompact)  override;
+	void update(ExecutionState *current, States s) override;
 
-	bool empty(void) const { return searcher_base->empty(); }
-
-	void printName(std::ostream &os) const
+	void printName(std::ostream &os) const override
 	{
 		os << "<SecondChanceSearcher>\n";
 		searcher_base->printName(os);

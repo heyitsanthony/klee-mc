@@ -35,19 +35,17 @@ public:
 	explicit PDFInterleavedSearcher(const std::vector<Searcher*> &_searchers);
 	virtual ~PDFInterleavedSearcher();
 
-	virtual Searcher* createEmpty(void) const;
+	Searcher* createEmpty(void) const override;
 
-	ExecutionState *selectState(bool allowCompact);
-	void update(ExecutionState *current, const States s);
-	bool empty() const { return searchers[0].searcher->empty(); }
-	void setBaseTickets(unsigned idx, unsigned tickets);
-	void printName(std::ostream &os) const
-	{
+	ExecutionState *selectState(bool allowCompact) override;
+	void update(ExecutionState *current, const States s) override;
+	void printName(std::ostream &os) const override {
 		os << "<PDFInterleavedSearcher>\n";
-		foreach (it, searchers.begin(), searchers.end())
-			(*it).searcher->printName(os);
+		for (auto s : searchers) s.searcher->printName(os);
 		os << "</PDFInterleavedSearcher>\n";
 	}
+
+	void setBaseTickets(unsigned idx, unsigned tickets);
 };
 }
 

@@ -8,17 +8,17 @@ namespace klee
 {
 class BFSSearcher : public Searcher
 {
+public:
+	Searcher* createEmpty(void) const override {
+		return new BFSSearcher();
+	}
+	ExecutionState* selectState(bool allowCompact) override;
+	void update(ExecutionState *current, States s) override;
+	void printName(std::ostream &os) const override {
+		os << "BFSSearcher\n";
+	}
 private:
 	std::deque<ExecutionState*> states;
-
-public:
-	ExecutionState* selectState(bool allowCompact);
-	virtual ~BFSSearcher() {}
-
-	virtual Searcher* createEmpty(void) const { return new BFSSearcher(); }
-	void update(ExecutionState *current, States s);
-	bool empty() const { return states.empty(); }
-	void printName(std::ostream &os) const { os << "BFSSearcher\n"; }
 };
 }
 

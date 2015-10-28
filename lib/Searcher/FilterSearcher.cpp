@@ -55,14 +55,12 @@ ExecutionState* FilterSearcher::selectState(bool allowCompact)
 	ExecutionState	*es = nullptr;
 
 	do {
-		if (searcher_base->empty()) {
+		es = searcher_base->selectState(allowCompact);
+		if (es == nullptr) {
 			recoverBlacklisted();
 			es = searcher_base->selectState(allowCompact);
 			break;
 		}
-
-		es = searcher_base->selectState(allowCompact);
-		if (!es) break;
 
 		/* another scheduler may have run this andv>
 		 * suddenly blacklisted it! */
@@ -196,8 +194,4 @@ void FilterSearcher::update(ExecutionState *current, States s)
 	/* if current state is blacklisted, remove it */
 	if (current != NULL && !s.getRemoved().count(current))
 		recheckListing(current);
-
-	/* pull a state from the black list if nothing left to schedule */
-	if (searcher_base->empty())
-		recoverBlacklisted();
 }

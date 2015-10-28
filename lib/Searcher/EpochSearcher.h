@@ -7,22 +7,20 @@ namespace klee {
 class EpochSearcher : public Searcher
 {
 public:
-	ExecutionState *selectState(bool allowCompact);
 	EpochSearcher(
 		Executor& _exe,
 		Searcher* _searcher_base,
 		Searcher* global_pool);
-	virtual ~EpochSearcher(void) = default;
 
-	virtual Searcher* createEmpty(void) const
+	Searcher* createEmpty(void) const override
 	{ return new EpochSearcher(
 		exe,
 		searcher_base->createEmpty(),
 		global_pool->createEmpty()); }
-	void update(ExecutionState *current, States s);
-	bool empty(void) const { return global_pool->empty(); }
-	void printName(std::ostream &os) const
-	{
+
+	ExecutionState *selectState(bool allowCompact) override;
+	void update(ExecutionState *current, States s) override;
+	void printName(std::ostream &os) const override {
 		os << "<EpochSearcher>\n";
 		os << "<Base>";
 		searcher_base->printName(os);
@@ -32,6 +30,7 @@ public:
 		os << "</Pool>\n";
 		os << "</EpochSearcher>\n";
 	}
+
 private:
 	ExecutionState* selectPool(bool allowCompact);
 	ExecutionState* selectEpoch(bool allowCompact);

@@ -27,11 +27,11 @@ public:
 
 	virtual ~SearchUpdater() { delete base; delete action; }
 
-	virtual Searcher* createEmpty(void) const
-	{ return new SearchUpdater(base->createEmpty(), action); }
+	Searcher* createEmpty(void) const override {
+		return new SearchUpdater(base->createEmpty(), action);
+	}
 
-	ExecutionState* selectState(bool allowCompact)
-	{
+	ExecutionState* selectState(bool allowCompact) override  {
 		ExecutionState	*new_es = base->selectState(allowCompact);
 		if (new_es != lastState)  {
 			action->selectUpdate(new_es);
@@ -40,11 +40,11 @@ public:
 		return new_es;
 	}
 
-	void update(ExecutionState *current, States s)
-	{ base->update(current, s); }
-	bool empty() const { return base->empty(); }
+	void update(ExecutionState *current, States s) override {
+		base->update(current, s);
+	}
 
-	void printName(std::ostream &os) const {
+	void printName(std::ostream &os) const override {
 		os << "<SearchUpdater>";
 		base->printName(os);
 		os << "</SearchUpdater>\n";

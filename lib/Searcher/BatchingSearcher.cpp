@@ -76,13 +76,14 @@ ExecutionState* BatchingSearcher::selectState(bool allowCompact)
 	if (lastState != NULL && !select_new_state)
 		return lastState;
 
-	if (baseSearcher->empty()) {
+	lastState = baseSearcher->selectState(allowCompact);
+	if (!lastState) {
 		baseSearcher->update(
 			NULL, States(addedStates, States::emptySet));
 		addedStates.clear();
+		lastState = baseSearcher->selectState(allowCompact);
 	}
 
-	lastState = baseSearcher->selectState(allowCompact);
 	if (!lastState)
 		return nullptr;
 
@@ -177,11 +178,4 @@ void BatchingSearcher::update(ExecutionState *current, const States s)
 
 	if (select_new_state || s.getRemoved().count(lastState))
 		lastState = NULL;
-}
-
-bool BatchingSearcher::empty() const
-{
-	if (addedStates.size())
-		return false;
-	return baseSearcher->empty();
 }

@@ -6,19 +6,20 @@
 
 namespace klee
 {
-  class DFSSearcher : public Searcher
-  {
-    std::list<ExecutionState*> states;
-
-  public:
-    ExecutionState *selectState(bool allowCompact);
-    virtual ~DFSSearcher() {}
-
-    virtual Searcher* createEmpty(void) const { return new DFSSearcher(); }
-    void update(ExecutionState *current, States s);
-    bool empty() const { return states.empty(); }
-    void printName(std::ostream &os) const { os << "DFSSearcher\n"; }
-  };
+class DFSSearcher : public Searcher
+{
+public:
+	Searcher* createEmpty(void) const override {
+		return new DFSSearcher();
+	}
+	ExecutionState *selectState(bool allowCompact) override;
+	void update(ExecutionState *current, States s) override;
+	void printName(std::ostream &os) const override {
+		os << "DFSSearcher\n";
+	}
+private:
+	std::list<ExecutionState*> states;
+};
 }
 
 

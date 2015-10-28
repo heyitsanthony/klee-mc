@@ -10,16 +10,15 @@ class RRSearcher : public Searcher
 	std::list<ExecutionState*>		states;
 	std::list<ExecutionState*>::iterator cur_state;
 public:
-	virtual Searcher* createEmpty(void) const
-	{ return new RRSearcher(); }
-
-	ExecutionState* selectState(bool allowCompact);
 	RRSearcher() : cur_state(states.end()) {}
 	virtual ~RRSearcher() {}
 
-	void update(ExecutionState *current, const States s);
-	bool empty() const { return states.empty(); }
-	void printName(std::ostream &os) const { os << "RRSearcher\n"; }
+	Searcher* createEmpty(void) const override {
+		return new RRSearcher();
+	}
+	ExecutionState* selectState(bool allowCompact)  override;
+	void update(ExecutionState *current, const States s) override;
+	void printName(std::ostream &os) const override { os << "RRSearcher\n"; }
 };
 }
 

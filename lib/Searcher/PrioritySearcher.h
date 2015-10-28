@@ -48,21 +48,19 @@ private:
 class PrioritySearcher : public Searcher
 {
 public:
-	ExecutionState *selectState(bool allowCompact);
 	virtual ~PrioritySearcher(void)
 	{
 		delete prFunc;
 		delete searcher_base;
 	}
 
-	virtual Searcher* createEmpty(void) const
+	Searcher* createEmpty(void) const override
 	{ return new PrioritySearcher(
 		prFunc->copy(), searcher_base->createEmpty()); }
+	ExecutionState *selectState(bool allowCompact) override;
+	void update(ExecutionState *current, States s) override;
 
-	void update(ExecutionState *current, States s);
-	bool empty(void) const { return state_c == 0; }
-	void printName(std::ostream &os) const
-	{
+	void printName(std::ostream &os) const override {
 		os << "<PrioritySearcher pr=\"";
 		prFunc->printName(os);
 		os << "\">\n";

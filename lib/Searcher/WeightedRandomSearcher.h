@@ -166,14 +166,12 @@ private:
 public:
 	WeightedRandomSearcher(Executor &executor, WeightFunc* wf);
 	virtual ~WeightedRandomSearcher();
-	virtual Searcher* createEmpty(void) const
+	Searcher* createEmpty(void) const override
 	{ return new WeightedRandomSearcher(executor, weigh_func->copy()); }
 
-	ExecutionState *selectState(bool allowCompact);
-	void update(ExecutionState *current, const States s);
-	bool empty() const;
-	void printName(std::ostream &os) const
-	{
+	ExecutionState *selectState(bool allowCompact) override;
+	void update(ExecutionState *current, const States s) override;
+	void printName(std::ostream &os) const override {
 		os	<< "WeightedRandomSearcher::"
 			<< weigh_func->getName() << "\n";
 	}

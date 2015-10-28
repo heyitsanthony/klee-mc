@@ -8,19 +8,16 @@ namespace klee {
 class KillCovSearcher : public Searcher
 {
 public:
-	ExecutionState *selectState(bool allowCompact);
 	KillCovSearcher(Executor& exe, Searcher* _searcher_base);
 	virtual ~KillCovSearcher(void) { delete searcher_base; }
 
-	virtual Searcher* createEmpty(void) const
+	Searcher* createEmpty(void) const override
 	{ return new KillCovSearcher(exe, searcher_base->createEmpty()); }
 
-	void update(ExecutionState *current, States s);
+	ExecutionState *selectState(bool allowCompact) override;
+	void update(ExecutionState *current, States s) override;
 
-	bool empty(void) const { return searcher_base->empty(); }
-
-	void printName(std::ostream &os) const
-	{
+	void printName(std::ostream &os) const override {
 		os << "<KillCovSearcher>\n";
 		searcher_base->printName(os);
 		os << "</KillCovSearcher>\n";

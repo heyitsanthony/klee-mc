@@ -18,8 +18,6 @@ ExecutionState *DemotionSearcher::selectState(bool allowCompact)
 {
 	ExecutionState	*es;
 
-	assert (searcher_base->empty() == false);
-
 	es = searcher_base->selectState(allowCompact);
 
 	/* new state? */
@@ -29,6 +27,8 @@ ExecutionState *DemotionSearcher::selectState(bool allowCompact)
 		last_current = es;
 		return es;
 	}
+
+	if (es == nullptr) return es;
 
 	/* repeat state... */
 	std::cerr << "[Demote] STATE REPEATING: REPEAT_C=" << repeat_c << '\n';
@@ -101,7 +101,7 @@ void DemotionSearcher::update(ExecutionState *current, States s)
 	searcher_base->update(current, States(s.getAdded(), rmvSet));
 
 	/* pull a state from the black list if nothing left to schedule */
-	if (searcher_base->empty()) {
+	if (!last_current) {
 		recoverDemoted();
 	}
 }

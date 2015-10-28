@@ -19,13 +19,12 @@ namespace klee
   public:
     MergingSearcher(ExecutorBC &executor, Searcher *baseSearcher);
     virtual ~MergingSearcher();
-    virtual Searcher* createEmpty(void) const
+    Searcher* createEmpty(void) const override
     { return new MergingSearcher(executor, baseSearcher->createEmpty()); }
 
-    ExecutionState *selectState(bool allowCompact);
-    void update(ExecutionState *current, const States s);
-    bool empty() const { return baseSearcher->empty() && statesAtMerge.empty(); }
-    void printName(std::ostream &os) const { os << "MergingSearcher\n"; }
+    ExecutionState *selectState(bool allowCompact) override;
+    void update(ExecutionState *current, const States s) override;
+    void printName(std::ostream &os) const override { os << "MergingSearcher\n"; }
   };
 }
 

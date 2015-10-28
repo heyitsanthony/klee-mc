@@ -37,9 +37,9 @@ Instruction *MergingSearcher::getMergePoint(ExecutionState &es)
 
 ExecutionState *MergingSearcher::selectState(bool allowCompact)
 {
-	while (!baseSearcher->empty()) {
-		auto es = baseSearcher->selectState(allowCompact);
+	ExecutionState	*es;
 
+	while ((es = baseSearcher->selectState(allowCompact))) {
 		assert (es->checkCanary());
 
 		if (getMergePoint(*es) == NULL)
@@ -85,7 +85,6 @@ ExecutionState *MergingSearcher::selectState(bool allowCompact)
 			statesAtMerge.erase(base);
 			//++base->pc; ??? AJR
 			baseSearcher->addState(base);
-			assert (baseSearcher->empty() == false);
 		}
 	}
 

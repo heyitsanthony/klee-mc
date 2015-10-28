@@ -10,17 +10,20 @@ namespace klee
 class XChkSearcher : public Searcher
 {
 public:
-	ExecutionState* selectState(bool allowCompact);
 	XChkSearcher(Searcher* in_base);
 	virtual ~XChkSearcher();
-	virtual Searcher* createEmpty(void) const
-	{ return new XChkSearcher(base->createEmpty()); }
 
+	Searcher* createEmpty(void) const override {
+		return new XChkSearcher(base->createEmpty());
+	}
+
+	ExecutionState* selectState(bool allowCompact) override;
+	void update(ExecutionState *current, States s) override;
+	void printName(std::ostream &os) const override{
+		os << "XChkSearcher\n";
+	}
 
 	void updateHash(ExecutionState* s, unsigned hash=0);
-	void update(ExecutionState *current, States s);
-	bool empty() const { return base->empty(); }
-	void printName(std::ostream &os) const { os << "XChkSearcher\n"; }
 protected:
 	struct UnschedInfo {
 		std::string	as_dump;

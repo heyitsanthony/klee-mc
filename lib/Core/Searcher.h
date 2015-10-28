@@ -35,8 +35,6 @@ public:
 
 		States(const std::set<ExecutionState*>& a);
 
-		virtual ~States() {}
-
 		const std::set<ExecutionState*>& getAdded(void) const
 		{ return addedStates; }
 
@@ -54,8 +52,6 @@ public:
 	virtual Searcher* createEmpty(void) const = 0;
 	virtual ExecutionState* selectState(bool allowCompact) = 0;
 	virtual void update(ExecutionState *current, const States s) = 0;
-	virtual bool empty() const = 0;
-
 	// prints name of searcher as a klee_message()
 	// TODO: could probably make prettier or more flexible
 	virtual void printName(std::ostream &os) const

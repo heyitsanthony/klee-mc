@@ -10,25 +10,20 @@ class Executor;
 class FilterSearcher : public Searcher
 {
 public:
-	ExecutionState *selectState(bool allowCompact);
 	FilterSearcher(
 		Executor& exe,
 		Searcher* _searcher_base,
 		const char* filter_name = "filtered_funcs.txt");
-	virtual ~FilterSearcher(void) = default;
 
-	virtual Searcher* createEmpty(void) const
-	{ return new FilterSearcher(
-		exe,
-		searcher_base->createEmpty()); }
+	Searcher* createEmpty(void) const override {
+		return new FilterSearcher(
+			exe,
+			searcher_base->createEmpty()); }
 
-	void update(ExecutionState *current, States s);
+	ExecutionState *selectState(bool allowCompact) override;
+	void update(ExecutionState *current, States s) override;
 
-	bool empty(void) const
-	{ return (scheduled.size() + blacklisted.size()) == 0; }
-
-	virtual void printName(std::ostream &os) const
-	{
+	void printName(std::ostream &os) const override {
 		os << "<FilterSearcher>\n";
 		searcher_base->printName(os);
 		os << "</FilterSearcher>\n";
@@ -40,6 +35,7 @@ protected:
 	virtual bool isBlacklisted(ExecutionState& es) const;
 	Searcher* getSearcherBase(void) const { return searcher_base.get(); }
 	Executor& getExe(void) const { return exe; }
+
 private:
 	bool recheckListing(ExecutionState* current);
 	void recoverBlacklisted(void);
@@ -68,23 +64,22 @@ public:
 				<< filter_name << '\n';
 	}
 
-	virtual ~WhitelistFilterSearcher() {}
+	Searcher* createEmpty(void) const override {
+		return new WhitelistFilterSearcher(
+			getExe(),
+			getSearcherBase()->createEmpty(),
+			getFilterFileName()); }
 
-	virtual Searcher* createEmpty(void) const
-	{ return new WhitelistFilterSearcher(
-		getExe(),
-		getSearcherBase()->createEmpty(),
-		getFilterFileName()); }
-
-	virtual void printName(std::ostream &os) const
-	{
+	void printName(std::ostream &os) const override	{
 		os << "<WhitelistFilterSearcher>\n";
 		getSearcherBase()->printName(os);
 		os << "</WhitelistFilterSearcher>\n";
 	}
+
 protected:
-	virtual bool isBlacklisted(ExecutionState& es) const
-	{ return !FilterSearcher::isBlacklisted(es); }
+	bool isBlacklisted(ExecutionState& es) const override {
+		return !FilterSearcher::isBlacklisted(es);
+	}
 };
 }
 

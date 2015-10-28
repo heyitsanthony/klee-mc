@@ -12,7 +12,6 @@ namespace klee
 
 class BucketPrioritizer : public Prioritizer
 {
-private:
 public:
 	BucketPrioritizer() {}
 	virtual ~BucketPrioritizer() {}

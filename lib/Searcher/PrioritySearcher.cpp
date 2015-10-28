@@ -188,7 +188,7 @@ void PrioritySearcher::clearDeadPriorities(void)
 		prsearcher_ty	prs;
 
 		prs = pr_heap.top();
-		if (!prs.second->empty())
+		if (prs.second->selectState(true))
 			break;
 
 		pr_heap.pop();

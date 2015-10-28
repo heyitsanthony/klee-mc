@@ -19,7 +19,17 @@ IterativeDeepeningTimeSearcher::~IterativeDeepeningTimeSearcher()
 
 ExecutionState *IterativeDeepeningTimeSearcher::selectState(bool allowCompact)
 {
+	auto es = baseSearcher->selectState(allowCompact);
+
 	startTime = util::estWallTime();
+	if (es) return es;
+
+	time *= 2;
+	std::cerr << "KLEE: increasing time budget to: " << time << "\n";
+	baseSearcher->update(
+		NULL, States(pausedStates, States::emptySet));
+	pausedStates.clear();
+
 	return baseSearcher->selectState(allowCompact);
 }
 
@@ -46,13 +56,5 @@ void IterativeDeepeningTimeSearcher::update(
 	if (current && !s.getRemoved().count(current) && elapsed > time) {
 		pausedStates.insert(current);
 		baseSearcher->removeState(current);
-	}
-
-	if (baseSearcher->empty()) {
-		time *= 2;
-		std::cerr << "KLEE: increasing time budget to: " << time << "\n";
-		baseSearcher->update(
-			NULL, States(pausedStates, States::emptySet));
-		pausedStates.clear();
 	}
 }

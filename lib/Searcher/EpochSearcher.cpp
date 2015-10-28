@@ -48,13 +48,14 @@ ExecutionState* EpochSearcher::selectPool(bool allowCompact)
 ExecutionState* EpochSearcher::selectEpoch(bool allowCompact)
 {
 	unsigned	e_idx = theRNG.getInt31() % epochs.size();
-
-	if (epochs[e_idx].getSearcher()->empty()) {
-		std::cerr << "[Epoch] Empty epoch. Pull from pool.\n";
-		return selectPool(allowCompact);
+	ExecutionState	*es;
+	
+	es = epochs[e_idx].getSearcher()->selectState(allowCompact);
+	if (es) {
+		return es;
 	}
-
-	return epochs[e_idx].getSearcher()->selectState(allowCompact);
+	std::cerr << "[Epoch] Empty epoch. Pull from pool.\n";
+	return selectPool(allowCompact);
 }
 
 ExecutionState* EpochSearcher::selectState(bool allowCompact)

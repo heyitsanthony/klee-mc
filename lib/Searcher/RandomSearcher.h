@@ -11,14 +11,15 @@ class RandomSearcher : public Searcher
 	std::vector<ExecutionState*> statesNonCompact;
 
 public:
-	virtual ~RandomSearcher() {}
-	virtual Searcher* createEmpty(void) const
-	{ return new RandomSearcher(); }
+	Searcher* createEmpty(void) const override {
+		return new RandomSearcher();
+	}
 
-	ExecutionState* selectState(bool allowCompact);
-	void update(ExecutionState *current, const States s);
-	bool empty() const { return states.empty(); }
-	void printName(std::ostream &os) const { os << "RandomSearcher\n"; }
+	ExecutionState* selectState(bool allowCompact) override;
+	void update(ExecutionState *current, const States s) override;
+	void printName(std::ostream &os) const override {
+		os << "RandomSearcher\n";
+	}
 };
 }
 

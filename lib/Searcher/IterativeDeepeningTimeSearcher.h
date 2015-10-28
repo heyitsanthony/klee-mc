@@ -14,17 +14,14 @@ class IterativeDeepeningTimeSearcher : public Searcher
 public:
 	IterativeDeepeningTimeSearcher(Searcher *baseSearcher);
 	virtual ~IterativeDeepeningTimeSearcher();
-	virtual Searcher* createEmpty(void) const
+
+	Searcher* createEmpty(void) const override
 	{ return new IterativeDeepeningTimeSearcher(
 		baseSearcher->createEmpty()); }
 
-	ExecutionState *selectState(bool allowCompact);
-	void update(ExecutionState *current, const States s);
-	bool empty() const
-	{ return baseSearcher->empty() && pausedStates.empty(); }
-
-	void printName(std::ostream &os) const
-	{
+	ExecutionState *selectState(bool allowCompact) override;
+	void update(ExecutionState *current, const States s) override;
+	void printName(std::ostream &os) const override {
 		os << "IterativeDeepeningTimeSearcher\n";
 	}
 };

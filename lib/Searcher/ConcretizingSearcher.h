@@ -9,8 +9,6 @@ namespace klee
 class ConcretizingSearcher : public Searcher
 {
 public:
-	ExecutionState* selectState(bool allowCompact);
-
 	ConcretizingSearcher(
 		Executor& _exe,
 		Searcher* _searcher_base)
@@ -20,16 +18,12 @@ public:
 	, last_cov(0)
 	, concretized(false) {}
 
-	virtual ~ConcretizingSearcher(void) = default;
-
-	virtual Searcher* createEmpty(void) const
+	Searcher* createEmpty(void) const override
 	{ return new ConcretizingSearcher(exe, searcher_base->createEmpty()); }
 
-	void update(ExecutionState *current, States s);
-
-	bool empty(void) const { return searcher_base->empty(); }
-
-	virtual void printName(std::ostream &os) const
+	ExecutionState* selectState(bool allowCompact) override;
+	void update(ExecutionState *current, States s) override;
+	void printName(std::ostream &os) const override
 	{
 		os << "<ConcretizingSearcher>\n";
 		searcher_base->printName(os);

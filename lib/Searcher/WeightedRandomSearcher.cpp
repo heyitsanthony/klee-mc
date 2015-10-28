@@ -34,7 +34,7 @@ WeightedRandomSearcher::~WeightedRandomSearcher()
 
 ExecutionState* WeightedRandomSearcher::selectState(bool allowCompact)
 {
-	if (empty()) return nullptr;
+	if (pdf->empty()) return nullptr;
 
 	auto es = pdf->choose(theRNG.getDoubleL(), allowCompact);
 	pdf->update(es, getWeight(es));
@@ -92,5 +92,3 @@ void WeightedRandomSearcher::update(ExecutionState *current, const States s)
 		reweigh_c = 0;
 	}
 }
-
-bool WeightedRandomSearcher::empty() const { return pdf->empty(); }

@@ -70,8 +70,6 @@ ExecutionState* KillCovSearcher::selectState(bool allowCompact)
 {
 	ExecutionState	*new_st;
 
-	assert (searcher_base->empty() == false);
-
 	found_instructions |= (
 		last_ins_total < totalIns() || 
 		last_ins_cov < stats::coveredInstructions);
@@ -80,6 +78,8 @@ ExecutionState* KillCovSearcher::selectState(bool allowCompact)
 
 	/* find new state */
 	new_st = searcher_base->selectState(allowCompact);
+	if (new_st == nullptr)
+		return nullptr;
 
 	/* new state? */
 	if (new_st != last_current) {

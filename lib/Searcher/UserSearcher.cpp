@@ -501,14 +501,6 @@ Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 	return searcher;
 }
 
-Searcher* UserSearcher::setupMergeSearcher(
-	Executor& executor, Searcher* searcher)
-{
-	assert(!UseMerge);
-	return new MergingSearcher(
-			static_cast<ExecutorBC&>(executor), searcher);
-}
-
 class StackDumpUpdater : public UpdateAction
 {
 public:
@@ -575,7 +567,9 @@ Searcher* UserSearcher::setupConfigSearcher(Executor& executor)
 	if (UseBatchingSearch)
 		searcher = new BatchingSearcher(searcher);
 
-	searcher = setupMergeSearcher(executor, searcher);
+	if (UseMerge)
+		searcher = new MergingSearcher(
+			static_cast<ExecutorBC&>(executor), searcher);
 
 	if (UseIterativeDeepeningTimeSearch)
 		searcher = new IterativeDeepeningTimeSearcher(searcher);

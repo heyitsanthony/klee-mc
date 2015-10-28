@@ -13,20 +13,17 @@ public:
 		     unsigned _instructionBudget);
 	BatchingSearcher(Searcher *baseSearcher);
 
-	virtual ~BatchingSearcher() = default;
-
-	virtual Searcher* createEmpty(void) const
+	Searcher* createEmpty(void) const override
 	{ return new BatchingSearcher(
 		baseSearcher->createEmpty(),
 		timeBudget,
 		instructionBudget); }
 
 
-	ExecutionState *selectState(bool allowCompact);
-	void update(ExecutionState *current, States s);
-	bool empty() const;
+	ExecutionState *selectState(bool allowCompact) override;
+	void update(ExecutionState *current, States s) override;
 
-	void printName(std::ostream &os) const {
+	void printName(std::ostream &os) const  override {
 		os << "<BatchingSearcher> timeBudget: "
 		<< timeBudget
 		<< ", instructionBudget: " << instructionBudget

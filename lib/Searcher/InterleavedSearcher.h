@@ -5,33 +5,30 @@
 
 namespace klee
 {
-  class InterleavedSearcher : public Searcher
-  {
-    typedef std::vector<Searcher*> searchers_ty;
+class InterleavedSearcher : public Searcher
+{
+	typedef std::vector<Searcher*> searchers_ty;
 
-    searchers_ty searchers;
-    unsigned index;
-    
-  public:
-    explicit InterleavedSearcher(const searchers_ty &_searchers);
-    virtual ~InterleavedSearcher();
+	searchers_ty searchers;
+	unsigned index;
 
-    virtual Searcher* createEmpty(void) const;
+public:
+	explicit InterleavedSearcher(const searchers_ty &_searchers);
+	virtual ~InterleavedSearcher();
 
-    ExecutionState *selectState(bool allowCompact);
-    void update(ExecutionState *current, const States s);
-    bool empty() const { return searchers[0]->empty(); }
-    void printName(std::ostream &os) const
-    {
-      os << "<InterleavedSearcher> containing "
-         << searchers.size() << " searchers:\n";
-      for (searchers_ty::const_iterator
-        it = searchers.begin(), ie = searchers.end();
-        it != ie; ++it)
-        (*it)->printName(os);
-      os << "</InterleavedSearcher>\n";
-    }
-  };
+	Searcher* createEmpty(void) const override;
+	ExecutionState *selectState(bool allowCompact) override;
+	void update(ExecutionState *current, const States s) override;
+
+	void printName(std::ostream &os) const override {
+		os << "<InterleavedSearcher> containing "
+		<< searchers.size() << " searchers:\n";
+		for (auto s : searchers) {
+			s->printName(os);
+			os << "</InterleavedSearcher>\n";
+		}
+	}
+};
 }
 
 #endif
