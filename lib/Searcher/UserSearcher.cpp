@@ -229,7 +229,8 @@ bool UserSearcher::userSearcherRequiresMD2U() {
 new RRPrSearcher(						\
 	new Weight2Prioritizer<UncommittedCoverageWeight>(	\
 		new UncommittedCoverageWeight(),		\
-		1.0))
+		1.0),						\
+	0)
 
 #define COVSETSIZE_SEARCHER					\
 new RRPrSearcher(						\
@@ -237,10 +238,7 @@ new RRPrSearcher(						\
 		new CovSetSizeWeight(),	1.0))
 
 #define FRESH_BRANCH_SEARCHER	\
-	new PrioritySearcher(	\
-			new Weight2Prioritizer<FreshBranchWeight>(1),	\
-			COVSETSIZE_SEARCHER,				\
-			100)
+	new RRPrSearcher(new Weight2Prioritizer<FreshBranchWeight>(1), 0)
 
 #if 0
 new RescanSearcher(	\
@@ -292,6 +290,12 @@ new RescanSearcher(	\
 	new RescanSearcher(new Weight2Prioritizer<BranchEntropyWeight>(	\
 		new BranchEntropyWeight(), 10000.0))
 
+#define CONDSUCC_SEARCHER	\
+	new RRPrSearcher(	\
+		new Weight2Prioritizer<CondSuccWeight>(	\
+			new CondSuccWeight(&executor),	\
+		0))
+
 /* Research quality */
 Searcher* UserSearcher::setupInterleavedSearcher(
 	Executor& executor, Searcher* searcher)
@@ -313,12 +317,7 @@ Searcher* UserSearcher::setupInterleavedSearcher(
 
 	PUSH_ILEAV_IF_SET(StateInst, STINST_SEARCHER);
 
-	PUSH_ILEAV_IF_SET(
-		CondSucc,
-		new RescanSearcher(
-			new Weight2Prioritizer<CondSuccWeight>(
-				new CondSuccWeight(&executor),
-			1.0)));
+	PUSH_ILEAV_IF_SET(CondSucc, CONDSUCC_SEARCHER);
 
 	PUSH_ILEAV_IF_SET(Stack, STACK_SEARCHER);
 
@@ -429,10 +428,7 @@ Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 	} else if (UseUncovSearch) {
 		searcher = UNCOV_SEARCHER;
 	} else if (UseCondSuccSearch) {
-		searcher = new RescanSearcher(
-			new Weight2Prioritizer<CondSuccWeight>(
-				new CondSuccWeight(&executor),
-				1.0));
+		searcher = CONDSUCC_SEARCHER;
 	} else if (UseStateInstSearch) {
 		searcher = STINST_SEARCHER;
 	} else if (UseHistoSearch) {

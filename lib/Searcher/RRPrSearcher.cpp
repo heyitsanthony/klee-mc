@@ -14,12 +14,17 @@ ExecutionState *RRPrSearcher::selectState(bool allowCompact)
 	for (auto es : states) {
 		if (allowCompact || !es->isCompact()) {
 			int	es_pr = pr->getPriority(*es);
-			auto	&v = prs[es_pr];
-			v.push_back(es);
+			if (es_pr > cut_off) {
+				auto	&v = prs[es_pr];
+				v.push_back(es);
+			}
 		}
 	}
 	
-	
+	if (prs.empty()) {
+		return nullptr;
+	}
+
 	// find priority following last_pr
 	auto it = prs.upper_bound(last_pr);
 	if (it == prs.end()) {

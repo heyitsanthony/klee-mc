@@ -9,14 +9,15 @@ namespace klee
 class RRPrSearcher : public Searcher
 {
 public:
-	RRPrSearcher(Prioritizer* pr_)
+	RRPrSearcher(Prioritizer* pr_, int cut_off_ = INT_MIN)
 		: pr(pr_)
 		, last_pr(0)
+		, cut_off(cut_off_)
 	{}
 	virtual ~RRPrSearcher() {}
 
 	Searcher* createEmpty(void) const override {
-		return new RRPrSearcher(pr->copy());
+		return new RRPrSearcher(pr->copy(), cut_off);
 	}
 
 	ExecutionState *selectState(bool allowCompact) override;
@@ -30,6 +31,7 @@ public:
 private:
 	Prioritizer	*pr;
 	int		last_pr;
+	int		cut_off;
 	std::set<ExecutionState*> states;
 };
 }
