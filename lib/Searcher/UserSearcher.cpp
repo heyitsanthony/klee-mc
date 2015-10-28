@@ -87,12 +87,6 @@ DECL_SEARCH_OPT(Histo, "histo", "HS");
 
 namespace {
   cl::opt<bool>
-  UseTunedSearch(
-  	"use-tunedstack-search",
-	cl::desc("Ignore all scheduler options. Use tuned stack."),
-	cl::init(false));
-
-  cl::opt<bool>
   UseFilterSearch(
   	"use-search-filter",
 	cl::desc("Filter out unwanted functions from dispatch"),
@@ -573,64 +567,11 @@ Searcher* UserSearcher::setupConfigSearcher(Executor& executor)
 	return searcher;
 }
 
-static Searcher* getTunedSearch(Executor& executor)
-{
-	Searcher		*searcher;
-	std::vector<Searcher *>	s;
-	PDFInterleavedSearcher*	p;
-
-	/* alive states */
-	s.push_back(
-//searcher = 
-	new PrioritySearcher(
-			new Weight2Prioritizer<FreshBranchWeight>(1),
-			new RandomSearcher(),
-			100));
-	s.push_back(
-//			new RescanSearcher(
-//				new Weight2Prioritizer<
-//					ConstraintWeight>(-1.0)));
-//			new RescanSearcher(
-//				new Weight2Prioritizer<MarkovPathWeight>(100)));
-		new RescanSearcher(
-			new Weight2Prioritizer<
-				StateInstCountWeight>(-1.0)));
-//		s.push_back(
-//			new RescanSearcher(
-//				new Weight2Prioritizer<
-//					StateInstCountWeight>(1.0)));
-
-	searcher = new PDFInterleavedSearcher(s);
-	s.clear();
-	searcher = new EpochSearcher(
-		executor, new RRSearcher(), searcher);
-
-	/* filter away dying states */
-	s.push_back(new FilterSearcher(
-		executor, searcher, "dying_filter.txt"));
-
-	/* dead states-- eagerly run dying */
-	s.push_back(new WhitelistFilterSearcher(
-		executor, new DFSSearcher(), "dying_filter.txt"));
-
-	p = new PDFInterleavedSearcher(s);
-	// 4x as many base tickets for alive side
-	p->setBaseTickets(0 /* alive idx */, 4);
-	searcher = p;
-	searcher = new SecondChanceSearcher(searcher);
-	searcher = new BatchingSearcher(searcher);
-
-	return searcher;
-}
-
 usearcher_t UserSearcher::constructUserSearcher(Executor &exe)
 {
 	Searcher *searcher;
 
-	if (UseTunedSearch) {
-		searcher = getTunedSearch(exe);
-	} else
-		searcher = setupConfigSearcher(exe);
+	searcher = setupConfigSearcher(exe);
 
 	if (useOverride)
 		searcher = new OverrideSearcher(searcher);
