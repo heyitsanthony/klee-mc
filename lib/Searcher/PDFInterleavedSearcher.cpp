@@ -113,7 +113,18 @@ ExecutionState* PDFInterleavedSearcher::selectState(bool allowCompact)
 	}
 
 	es = searchers[cur_searcher_idx].searcher->selectState(allowCompact);
-	if (!es) return nullptr;
+	if (!es) {
+	for (unsigned k = 0; k < searchers.size(); k++) {
+		cur_searcher_idx++;
+		cur_searcher_idx %= searchers.size();
+		es = searchers[cur_searcher_idx].searcher->selectState(allowCompact);
+		if (es) break;
+	}
+	}
+
+	if (!es) {
+		return nullptr;
+	}
 
 	std::cerr
 		<< "PDF: CHOOSING: IDX=" << cur_searcher_idx

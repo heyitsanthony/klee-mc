@@ -19,7 +19,12 @@ ExecutionState *InterleavedSearcher::selectState(bool allowCompact)
 {
 	Searcher *s = searchers[--index];
 	if (index == 0) index = searchers.size();
-	return s->selectState(allowCompact);
+	auto es = s->selectState(allowCompact);
+	for (unsigned k = 0; !es && k < searchers.size(); k++) {
+		s = searchers[(index + k) % searchers.size()];
+		es = s->selectState(allowCompact);
+	}
+	return es;
 }
 
 void InterleavedSearcher::update(ExecutionState *current, const States s)
