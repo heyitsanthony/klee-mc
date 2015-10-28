@@ -225,7 +225,7 @@ bool UserSearcher::userSearcherRequiresMD2U() {
 		new Weight2Prioritizer<UncommittedCoverageWeight>(	\
 			new UncommittedCoverageWeight(),		\
 			1.0),						\
-	0)
+		0)
 
 #define COVSETSIZE_SEARCHER					\
 	new RRPrSearcher(					\
@@ -268,7 +268,8 @@ bool UserSearcher::userSearcherRequiresMD2U() {
 	new RRPrSearcher(	\
 		new Weight2Prioritizer<CondSuccWeight>(	\
 			new CondSuccWeight(&executor),	\
-		0))
+			1.0),				\
+		0)
 
 /* Research quality */
 Searcher* UserSearcher::setupInterleavedSearcher(
