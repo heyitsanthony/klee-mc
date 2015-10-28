@@ -24,6 +24,7 @@
 #include "TailPriority.h"
 #include "BucketPriority.h"
 #include "BatchingSearcher.h"
+#include "CompleteSearcher.h"
 #include "EpochSearcher.h"
 #include "BFSSearcher.h"
 #include "DFSSearcher.h"
@@ -534,7 +535,10 @@ Searcher* UserSearcher::setupConfigSearcher(Executor& executor)
 	}
 
 	if (UseBatchingSearch)
-		searcher = new BatchingSearcher(searcher);
+		searcher = new BatchingSearcher(
+			new CompleteSearcher(
+				searcher,
+				new RRSearcher()));
 
 	if (UseMerge)
 		searcher = new MergingSearcher(
