@@ -408,6 +408,9 @@ static const char* stat_labels[] =
 	"ForkTime",
 	"ResolveTime",
 	"Forks",
+	"NumArrays",
+	"NumExprs",
+	"NumConstantExprs",
 };
 
 void StatsTracker::writeStatsLine()
@@ -425,7 +428,7 @@ void StatsTracker::writeStatsLine()
 	WRITE_LABEL(getMemUsageKB())
 	WRITE_LABEL(stats::queries)
 	WRITE_LABEL(stats::queryConstructs)
-	WRITE_LABEL(0 /* NumObjects */)
+	WRITE_LABEL(ObjectState::getNumObjStates())
 	WRITE_LABEL(TimeAmountFormat(elapsed()))
 	WRITE_LABEL(stats::coveredInstructions)
 	WRITE_LABEL(stats::uncoveredInstructions)
@@ -435,7 +438,9 @@ void StatsTracker::writeStatsLine()
 	WRITE_LABEL(TimeAmountFormat(stats::forkTime / 1.0e6))
 	WRITE_LABEL(TimeAmountFormat(stats::resolveTime / 1.0e6))
 	WRITE_LABEL(stats::forks)
-
+	WRITE_LABEL(Array::getNumArrays())
+	WRITE_LABEL(Expr::getNumExprs())
+	WRITE_LABEL(ConstantExpr::getNumConstantExprs())
 	*statsFile << "}\n";
 	statsFile->flush();
 }

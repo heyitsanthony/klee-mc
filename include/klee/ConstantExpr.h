@@ -37,10 +37,13 @@ public:
 
 private:
   llvm::APInt value;
+  static unsigned constexpr_count;
 
 public:
-  ConstantExpr(const llvm::APInt &v) : value(v) {}
-  virtual ~ConstantExpr() {}
+  ConstantExpr(const llvm::APInt &v) : value(v) { constexpr_count++; }
+  virtual ~ConstantExpr() {constexpr_count--; }
+
+  static unsigned getNumConstantExprs(void) { return constexpr_count; }
   
   Width getWidth() const { return value.getBitWidth(); }
   Kind getKind() const { return Constant; }

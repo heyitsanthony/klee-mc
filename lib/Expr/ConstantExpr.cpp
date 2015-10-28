@@ -18,6 +18,8 @@
 
 using namespace klee;
 
+unsigned ConstantExpr::constexpr_count = 0;
+
 ref<Expr> ConstantExpr::fromMemory(void *address, Width width) {
   switch (width) {
   default: assert(0 && "invalid type");
