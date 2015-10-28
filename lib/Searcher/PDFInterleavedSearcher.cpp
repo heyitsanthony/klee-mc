@@ -17,29 +17,23 @@ PDFInterleavedSearcher::PDFInterleavedSearcher(
 , last_ins(0)
 , selects_since_new_ins(0)
 {
-	foreach (it, _searchers.begin(), _searchers.end())
-		searchers.push_back(TicketSearcher(*it));
+	for (auto s : _searchers)
+		searchers.emplace_back(s);
 	ticket_c = searchers.size();
-}
-
-PDFInterleavedSearcher::~PDFInterleavedSearcher()
-{
-	foreach (it, searchers.begin(), searchers.end())
-		delete (*it).searcher;
 }
 
 void PDFInterleavedSearcher::update(ExecutionState *current, const States s)
 {
-	foreach(it, searchers.begin(), searchers.end())
-		(*it).searcher->update(current, s);
+	for (auto& ts : searchers)
+		ts.searcher->update(current, s);
 }
 
 Searcher* PDFInterleavedSearcher::createEmpty(void) const
 {
 	std::vector<Searcher*>	new_s;
 
-	foreach (it, searchers.begin(), searchers.end())
-		new_s.push_back((*it).searcher->createEmpty());
+	for (const auto& s : searchers)
+		new_s.push_back(s.searcher->createEmpty());
 
 	return new PDFInterleavedSearcher(new_s);
 }

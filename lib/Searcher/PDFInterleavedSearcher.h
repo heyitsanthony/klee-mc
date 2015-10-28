@@ -19,7 +19,7 @@ public:
 
 	unsigned	tickets_base;
 	unsigned	tickets;
-	Searcher	*searcher;
+	usearcher_t	searcher;
 };
 	typedef std::vector<TicketSearcher>	searchers_ty;
 
@@ -33,7 +33,6 @@ public:
 
 public:
 	explicit PDFInterleavedSearcher(const std::vector<Searcher*> &_searchers);
-	virtual ~PDFInterleavedSearcher();
 
 	Searcher* createEmpty(void) const override;
 
@@ -41,7 +40,7 @@ public:
 	void update(ExecutionState *current, const States s) override;
 	void printName(std::ostream &os) const override {
 		os << "<PDFInterleavedSearcher>\n";
-		for (auto s : searchers) s.searcher->printName(os);
+		for (const auto& s : searchers) s.searcher->printName(os);
 		os << "</PDFInterleavedSearcher>\n";
 	}
 

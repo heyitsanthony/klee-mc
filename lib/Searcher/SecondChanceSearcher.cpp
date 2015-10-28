@@ -18,14 +18,6 @@ namespace
 		llvm::cl::init(1));
 }
 
-SecondChanceSearcher::SecondChanceSearcher(Searcher* _searcher_base)
-: searcher_base(_searcher_base)
-, last_current(0)
-, remaining_quanta(0)
-, last_ins_total(0)
-, last_ins_cov(0)
-{}
-
 static uint64_t totalIns(void)
 { return stats::coveredInstructions + stats::uncoveredInstructions; }
 
