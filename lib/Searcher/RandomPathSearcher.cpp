@@ -21,7 +21,7 @@ RandomPathSearcher::RandomPathSearcher(Executor &_executor)
 : executor(_executor) {}
 
 /* XXX: I don't understand this code. --AJR */
-ExecutionState &RandomPathSearcher::selectState(bool allowCompact)
+ExecutionState* RandomPathSearcher::selectState(bool allowCompact)
 {
 	unsigned	flips=0, bits=0;
 	
@@ -82,7 +82,7 @@ ExecutionState &RandomPathSearcher::selectState(bool allowCompact)
 		assert(n && "RandomPathSearcher hit unexpected dead end");
 	}
 
-	return *n->getData();
+	return n->getData();
 }
 
 void RandomPathSearcher::update(ExecutionState *current, const States s)

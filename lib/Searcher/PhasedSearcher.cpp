@@ -6,9 +6,9 @@
 
 using namespace klee;
 
-ExecutionState& PhasedSearcher::selectState(bool allowCompact)
+ExecutionState* PhasedSearcher::selectState(bool allowCompact)
 {
-	ExecutionState	*ret;
+	ExecutionState	*ret = nullptr;
 
 	do {
 		cur_phase++;
@@ -26,7 +26,7 @@ ExecutionState& PhasedSearcher::selectState(bool allowCompact)
 		break;
 	} while (1);
 
-	return *ret;
+	return ret;
 }
 
 void PhasedSearcher::update(ExecutionState *current, States s)

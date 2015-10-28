@@ -9,7 +9,7 @@ namespace klee
 class RescanSearcher : public Searcher
 {
 public:
-	ExecutionState& selectState(bool allowCompact);
+	ExecutionState* selectState(bool allowCompact);
 	RescanSearcher(Prioritizer* _pr) : pr(_pr), state_c(0) {}
 	virtual ~RescanSearcher(void) { delete pr; }
 	void update(ExecutionState *current, States s);

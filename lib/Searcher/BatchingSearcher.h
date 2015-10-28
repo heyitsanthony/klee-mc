@@ -22,7 +22,7 @@ public:
 		instructionBudget); }
 
 
-	ExecutionState &selectState(bool allowCompact);
+	ExecutionState *selectState(bool allowCompact);
 	void update(ExecutionState *current, States s);
 	bool empty() const;
 

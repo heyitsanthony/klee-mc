@@ -71,10 +71,10 @@ uint64_t BatchingSearcher::getElapsedQueries(void) const
 double BatchingSearcher::getElapsedTime(void) const
 { return util::estWallTime() - lastStartTime; }
 
-ExecutionState &BatchingSearcher::selectState(bool allowCompact)
+ExecutionState* BatchingSearcher::selectState(bool allowCompact)
 {
 	if (lastState != NULL && !select_new_state)
-		return *lastState;
+		return lastState;
 
 	if (baseSearcher->empty()) {
 		baseSearcher->update(
@@ -82,14 +82,16 @@ ExecutionState &BatchingSearcher::selectState(bool allowCompact)
 		addedStates.clear();
 	}
 
-	lastState = &baseSearcher->selectState(allowCompact);
+	lastState = baseSearcher->selectState(allowCompact);
+	if (!lastState)
+		return nullptr;
 
 	lastStartTime = util::estWallTime();
 	lastStartInstructions = stats::instructions;
 	lastStartQueries = stats::queriesTopLevel;
 	select_new_state = false;
 
-	return *lastState;
+	return lastState;
 }
 
 void BatchingSearcher::adjustAdaptiveTime(void)

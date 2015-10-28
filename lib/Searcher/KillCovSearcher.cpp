@@ -66,7 +66,7 @@ void KillCovSearcher::killForked(ExecutionState* new_st)
 	}
 }
 
-ExecutionState& KillCovSearcher::selectState(bool allowCompact)
+ExecutionState* KillCovSearcher::selectState(bool allowCompact)
 {
 	ExecutionState	*new_st;
 
@@ -79,7 +79,7 @@ ExecutionState& KillCovSearcher::selectState(bool allowCompact)
 	updateInsCounts();
 
 	/* find new state */
-	new_st = &searcher_base->selectState(allowCompact);
+	new_st = searcher_base->selectState(allowCompact);
 
 	/* new state? */
 	if (new_st != last_current) {
@@ -105,7 +105,7 @@ ExecutionState& KillCovSearcher::selectState(bool allowCompact)
 	updateInsCounts();
 
 	last_current = new_st;
-	return *last_current;
+	return last_current;
 }
 
 void KillCovSearcher::updateInsCounts(void)

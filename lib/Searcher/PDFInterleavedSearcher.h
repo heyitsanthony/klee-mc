@@ -37,7 +37,7 @@ public:
 
 	virtual Searcher* createEmpty(void) const;
 
-	ExecutionState &selectState(bool allowCompact);
+	ExecutionState *selectState(bool allowCompact);
 	void update(ExecutionState *current, const States s);
 	bool empty() const { return searchers[0].searcher->empty(); }
 	void setBaseTickets(unsigned idx, unsigned tickets);
@@ -47,7 +47,7 @@ public:
 		foreach (it, searchers.begin(), searchers.end())
 			(*it).searcher->printName(os);
 		os << "</PDFInterleavedSearcher>\n";
-	};
+	}
 };
 }
 

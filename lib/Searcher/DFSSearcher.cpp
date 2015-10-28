@@ -4,7 +4,7 @@
 
 using namespace klee;
 
-ExecutionState &DFSSearcher::selectState(bool allowCompact)
+ExecutionState* DFSSearcher::selectState(bool allowCompact)
 {
 	foreach (i, states.rbegin(), states.rend()) {
 		ExecutionState* es = *i;
@@ -12,11 +12,11 @@ ExecutionState &DFSSearcher::selectState(bool allowCompact)
 		if (!allowCompact && es->isCompact())
 			continue;
 
-		return *es;
+		return es;
 	}
 
 	// no non-compact [if !allowCompact]) states remain
-	return *states.back();
+	return states.empty() ? nullptr : states.back();
 }
 
 void DFSSearcher::update(ExecutionState *current, const States s)
@@ -54,5 +54,3 @@ void DFSSearcher::update(ExecutionState *current, const States s)
 		}
 	}
 }
-
-

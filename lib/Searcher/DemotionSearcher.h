@@ -8,7 +8,7 @@ namespace klee {
 class DemotionSearcher : public Searcher
 {
 public:
-	ExecutionState &selectState(bool allowCompact);
+	ExecutionState *selectState(bool allowCompact);
 	DemotionSearcher(Searcher* _searcher_base, unsigned max_repeats = 10);
 	virtual ~DemotionSearcher(void) = default;
 

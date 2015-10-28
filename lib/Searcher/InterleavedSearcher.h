@@ -18,7 +18,7 @@ namespace klee
 
     virtual Searcher* createEmpty(void) const;
 
-    ExecutionState &selectState(bool allowCompact);
+    ExecutionState *selectState(bool allowCompact);
     void update(ExecutionState *current, const States s);
     bool empty() const { return searchers[0]->empty(); }
     void printName(std::ostream &os) const

@@ -14,20 +14,20 @@ DemotionSearcher::DemotionSearcher(
 , last_ins_uncov(0)
 {}
 
-ExecutionState& DemotionSearcher::selectState(bool allowCompact)
+ExecutionState *DemotionSearcher::selectState(bool allowCompact)
 {
 	ExecutionState	*es;
 
 	assert (searcher_base->empty() == false);
 
-	es = &searcher_base->selectState(allowCompact);
+	es = searcher_base->selectState(allowCompact);
 
 	/* new state? */
 	if (es != last_current) {
 		repeat_c = 0;
 		last_ins_uncov = stats::uncoveredInstructions;
 		last_current = es;
-		return *es;
+		return es;
 	}
 
 	/* repeat state... */
@@ -38,13 +38,13 @@ ExecutionState& DemotionSearcher::selectState(bool allowCompact)
 		 * and we should reset its repeat penalty */
 		repeat_c = 0;
 		last_ins_uncov = stats::uncoveredInstructions;
-		return *es;
+		return es;
 	}
 
 	/* incur penalty */
 	repeat_c++;
 	if (repeat_c <= max_repeats)
-		return *es;
+		return es;
 
 	/* exceeded repeat count, revoke! */
 	repeat_c = 0;

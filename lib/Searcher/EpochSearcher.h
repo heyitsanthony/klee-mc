@@ -7,7 +7,7 @@ namespace klee {
 class EpochSearcher : public Searcher
 {
 public:
-	ExecutionState &selectState(bool allowCompact);
+	ExecutionState *selectState(bool allowCompact);
 	EpochSearcher(
 		Executor& _exe,
 		Searcher* _searcher_base,

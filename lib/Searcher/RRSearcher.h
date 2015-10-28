@@ -13,7 +13,7 @@ public:
 	virtual Searcher* createEmpty(void) const
 	{ return new RRSearcher(); }
 
-	ExecutionState &selectState(bool allowCompact);
+	ExecutionState* selectState(bool allowCompact);
 	RRSearcher() : cur_state(states.end()) {}
 	virtual ~RRSearcher() {}
 

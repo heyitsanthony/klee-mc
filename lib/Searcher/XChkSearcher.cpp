@@ -73,16 +73,21 @@ void XChkSearcher::xchk(ExecutionState* s)
 		<< "\n";
 }
 
-ExecutionState& XChkSearcher::selectState(bool allowCompact)
+ExecutionState* XChkSearcher::selectState(bool allowCompact)
 {
-	ExecutionState			&res(base->selectState(allowCompact));
+	ExecutionState *res = base->selectState(allowCompact);
 
-	if (&res == last_selected)
+	if (!res) {
+		last_selected = nullptr;
+		return nullptr;
+	}
+
+	if (res == last_selected)
 		return res;
 
-	xchk(&res);
-	last_selected = &res;
+	xchk(res);
 
+	last_selected = res;
 	return res;
 }
 

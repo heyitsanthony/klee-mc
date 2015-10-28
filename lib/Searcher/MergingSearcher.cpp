@@ -35,18 +35,18 @@ Instruction *MergingSearcher::getMergePoint(ExecutionState &es)
 	return 0;
 }
 
-ExecutionState &MergingSearcher::selectState(bool allowCompact)
+ExecutionState *MergingSearcher::selectState(bool allowCompact)
 {
 	while (!baseSearcher->empty()) {
-		ExecutionState &es = baseSearcher->selectState(allowCompact);
+		auto es = baseSearcher->selectState(allowCompact);
 
-		assert (es.checkCanary());
+		assert (es->checkCanary());
 
-		if (getMergePoint(es) == NULL)
+		if (getMergePoint(*es) == NULL)
 			return es;
 
-		baseSearcher->removeState(&es, &es);
-		statesAtMerge.insert(&es);
+		baseSearcher->removeState(es, es);
+		statesAtMerge.insert(es);
 	}
 
 	// build map of merge point -> state list

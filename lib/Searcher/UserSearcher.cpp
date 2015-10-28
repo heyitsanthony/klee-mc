@@ -24,7 +24,6 @@
 #include "TailPriority.h"
 #include "BucketPriority.h"
 #include "BatchingSearcher.h"
-#include "BumpingMergeSearcher.h"
 #include "EpochSearcher.h"
 #include "BFSSearcher.h"
 #include "DFSSearcher.h"
@@ -147,10 +146,6 @@ namespace {
   cl::opt<bool>
   UseMerge("use-merge",
            cl::desc("Enable support for klee_merge() (experimental)"));
-
-  cl::opt<bool>
-  UseBumpMerge("use-bump-merge",
-           cl::desc("Enable support for klee_merge() (extra experimental)"));
 
   cl::opt<bool>
   UseIterativeDeepeningTimeSearch("use-iterative-deepening-time-search",
@@ -509,16 +504,9 @@ Searcher* UserSearcher::setupBaseSearcher(Executor& executor)
 Searcher* UserSearcher::setupMergeSearcher(
 	Executor& executor, Searcher* searcher)
 {
-	if (UseMerge) {
-		assert(!UseBumpMerge);
-		searcher = new MergingSearcher(
+	assert(!UseMerge);
+	return new MergingSearcher(
 			static_cast<ExecutorBC&>(executor), searcher);
-	} else if (UseBumpMerge) {
-		searcher = new BumpMergingSearcher(
-			static_cast<ExecutorBC&>(executor), searcher);
-	}
-
-	return searcher;
 }
 
 class StackDumpUpdater : public UpdateAction

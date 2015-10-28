@@ -4,10 +4,10 @@
 
 using namespace klee;
 
-ExecutionState &BFSSearcher::selectState(bool allowCompact)
+ExecutionState* BFSSearcher::selectState(bool allowCompact)
 {
 	foreach (it, states.begin(), states.end()) {
-		ExecutionState* es = *it;
+		auto es = *it;
 		if (!allowCompact && es->isCompact())
 			continue;
 
@@ -15,11 +15,11 @@ ExecutionState &BFSSearcher::selectState(bool allowCompact)
 		// equiv to pop_front, in the absence of compact states
 		states.erase(it);
 		states.push_back(es);
-		return *es;
+		return es;
 	}
 
 	// no non-compact [if !allowCompact]) states remain
-	return *states.front();
+	return states.empty() ? nullptr : states.front();
 }
 
 void BFSSearcher::update(ExecutionState *current, const States s)

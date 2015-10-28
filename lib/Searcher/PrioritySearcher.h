@@ -48,7 +48,7 @@ private:
 class PrioritySearcher : public Searcher
 {
 public:
-	ExecutionState &selectState(bool allowCompact);
+	ExecutionState *selectState(bool allowCompact);
 	virtual ~PrioritySearcher(void)
 	{
 		delete prFunc;

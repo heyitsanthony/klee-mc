@@ -9,8 +9,7 @@ class StickySearcher : public Searcher
 {
 public:
 	StickySearcher(Searcher* _base) : base(_base), sticky_st(NULL) {}
-	ExecutionState &selectState(bool allowCompact);
-	virtual ~StickySearcher() {}
+	ExecutionState *selectState(bool allowCompact);
 	virtual Searcher* createEmpty(void) const
 	{ return new StickySearcher(base->createEmpty()); }
 	void update(ExecutionState *current, States s);

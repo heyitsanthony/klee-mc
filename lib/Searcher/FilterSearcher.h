@@ -10,7 +10,7 @@ class Executor;
 class FilterSearcher : public Searcher
 {
 public:
-	ExecutionState &selectState(bool allowCompact);
+	ExecutionState *selectState(bool allowCompact);
 	FilterSearcher(
 		Executor& exe,
 		Searcher* _searcher_base,

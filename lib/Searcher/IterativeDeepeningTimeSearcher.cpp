@@ -17,11 +17,10 @@ IterativeDeepeningTimeSearcher::~IterativeDeepeningTimeSearcher()
 	delete baseSearcher;
 }
 
-ExecutionState &IterativeDeepeningTimeSearcher::selectState(bool allowCompact)
+ExecutionState *IterativeDeepeningTimeSearcher::selectState(bool allowCompact)
 {
-	ExecutionState &res = baseSearcher->selectState(allowCompact);
 	startTime = util::estWallTime();
-	return res;
+	return baseSearcher->selectState(allowCompact);
 }
 
 void IterativeDeepeningTimeSearcher::update(

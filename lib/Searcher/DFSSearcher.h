@@ -11,7 +11,7 @@ namespace klee
     std::list<ExecutionState*> states;
 
   public:
-    ExecutionState &selectState(bool allowCompact);
+    ExecutionState *selectState(bool allowCompact);
     virtual ~DFSSearcher() {}
 
     virtual Searcher* createEmpty(void) const { return new DFSSearcher(); }

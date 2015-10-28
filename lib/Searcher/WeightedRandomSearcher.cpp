@@ -32,17 +32,17 @@ WeightedRandomSearcher::~WeightedRandomSearcher()
 	delete weigh_func;
 }
 
-ExecutionState &WeightedRandomSearcher::selectState(bool allowCompact)
+ExecutionState* WeightedRandomSearcher::selectState(bool allowCompact)
 {
-	ExecutionState	*es;
+	if (empty()) return nullptr;
 
-	es = pdf->choose(theRNG.getDoubleL(), allowCompact);
+	auto es = pdf->choose(theRNG.getDoubleL(), allowCompact);
 	pdf->update(es, getWeight(es));
 	es = pdf->choose(theRNG.getDoubleL(), allowCompact);
 
 	// double w = weigh_func->weigh(es);
 	pdf->update(es, getWeight(es));
-	return *es;
+	return es;
 }
 
 double WeightedRandomSearcher::getWeight(ExecutionState *es)

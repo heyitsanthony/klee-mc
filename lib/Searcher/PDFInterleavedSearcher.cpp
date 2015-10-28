@@ -59,7 +59,7 @@ void PDFInterleavedSearcher::setBaseTickets(unsigned idx, unsigned tickets)
 	}
 }
 
-ExecutionState& PDFInterleavedSearcher::selectState(bool allowCompact)
+ExecutionState* PDFInterleavedSearcher::selectState(bool allowCompact)
 {
 	ExecutionState	*es;
 	TicketSearcher	*ts;
@@ -112,7 +112,9 @@ ExecutionState& PDFInterleavedSearcher::selectState(bool allowCompact)
 		}
 	}
 
-	es = &searchers[cur_searcher_idx].searcher->selectState(allowCompact);
+	es = searchers[cur_searcher_idx].searcher->selectState(allowCompact);
+	if (!es) return nullptr;
+
 	std::cerr
 		<< "PDF: CHOOSING: IDX=" << cur_searcher_idx
 		<< ". ST=" << es
@@ -121,5 +123,5 @@ ExecutionState& PDFInterleavedSearcher::selectState(bool allowCompact)
 		<< ". NAME=";
 	searchers[cur_searcher_idx].searcher->printName(std::cerr);
 	std::cerr << '\n';
-	return *es;
+	return es;
 }

@@ -18,7 +18,7 @@ public:
 	{ return new IterativeDeepeningTimeSearcher(
 		baseSearcher->createEmpty()); }
 
-	ExecutionState &selectState(bool allowCompact);
+	ExecutionState *selectState(bool allowCompact);
 	void update(ExecutionState *current, const States s);
 	bool empty() const
 	{ return baseSearcher->empty() && pausedStates.empty(); }

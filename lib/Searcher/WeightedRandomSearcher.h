@@ -169,7 +169,7 @@ public:
 	virtual Searcher* createEmpty(void) const
 	{ return new WeightedRandomSearcher(executor, weigh_func->copy()); }
 
-	ExecutionState &selectState(bool allowCompact);
+	ExecutionState *selectState(bool allowCompact);
 	void update(ExecutionState *current, const States s);
 	bool empty() const;
 	void printName(std::ostream &os) const

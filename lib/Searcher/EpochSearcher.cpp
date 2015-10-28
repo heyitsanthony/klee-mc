@@ -33,9 +33,7 @@ EpochSearcher::EpochSearcher(
 
 ExecutionState* EpochSearcher::selectPool(bool allowCompact)
 {
-	ExecutionState	*es;
-
-	es = &global_pool->selectState(allowCompact);
+	auto es = global_pool->selectState(allowCompact);
 
 	/* already have it in an epoch; the global pool has excellent taste */
 	if (es2epoch.find(es) != es2epoch.end())
@@ -44,7 +42,6 @@ ExecutionState* EpochSearcher::selectPool(bool allowCompact)
 	/* insert into epochs */
 	epochs.back().add(es);
 	es2epoch.insert(std::make_pair(es, epochs.size()-1));
-
 	return es;
 }
 
@@ -57,10 +54,10 @@ ExecutionState* EpochSearcher::selectEpoch(bool allowCompact)
 		return selectPool(allowCompact);
 	}
 
-	return &(epochs[e_idx].getSearcher()->selectState(allowCompact));
+	return epochs[e_idx].getSearcher()->selectState(allowCompact);
 }
 
-ExecutionState& EpochSearcher::selectState(bool allowCompact)
+ExecutionState* EpochSearcher::selectState(bool allowCompact)
 {
 	ExecutionState	*next_state;
 
@@ -75,7 +72,7 @@ ExecutionState& EpochSearcher::selectState(bool allowCompact)
 		/* select from pool */
 		pool_countdown = pool_period;
 		std::cerr << "[Epoch] SELECT FROM GLOBAL POOL\n";
-		return *selectPool(allowCompact);
+		return selectPool(allowCompact);
 	}
 
 	/* select from epochs */
@@ -95,7 +92,7 @@ ExecutionState& EpochSearcher::selectState(bool allowCompact)
 		con_backoff = (con_backoff+1) % pool_period;
 	}
 
-	return *next_state;
+	return next_state;
 }
 
 

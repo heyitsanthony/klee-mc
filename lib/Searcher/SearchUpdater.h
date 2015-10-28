@@ -30,12 +30,12 @@ public:
 	virtual Searcher* createEmpty(void) const
 	{ return new SearchUpdater(base->createEmpty(), action); }
 
-	ExecutionState &selectState(bool allowCompact)
+	ExecutionState* selectState(bool allowCompact)
 	{
-		ExecutionState	&new_es(base->selectState(allowCompact));
-		if (&new_es != lastState)  {
-			action->selectUpdate(&new_es);
-			lastState = &new_es;
+		ExecutionState	*new_es = base->selectState(allowCompact);
+		if (new_es != lastState)  {
+			action->selectUpdate(new_es);
+			lastState = new_es;
 		}
 		return new_es;
 	}

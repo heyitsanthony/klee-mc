@@ -7,13 +7,15 @@ using namespace klee;
 
 namespace klee { extern RNG theRNG; }
 
-ExecutionState &RandomSearcher::selectState(bool allowCompact)
+ExecutionState* RandomSearcher::selectState(bool allowCompact)
 {
 	std::vector<ExecutionState*>& statePool = allowCompact
 		? states
 		: statesNonCompact;
 
-	return *statePool[theRNG.getInt32() % statePool.size()];
+	if (statePool.empty()) return nullptr;
+
+	return statePool[theRNG.getInt32() % statePool.size()];
 }
 
 void RandomSearcher::update(ExecutionState *current, const States s)

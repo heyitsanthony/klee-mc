@@ -69,7 +69,8 @@ ExecutionState* ExeStateManager::selectState(void)
 	/* only yielded states left? well.. pop one */
 	if (states.empty()) popYieldedState();
 
-	ret = &searcher->selectState(allowCompact);
+	ret = searcher->selectState(allowCompact);
+	assert (ret && "should choose *something*");
 
 	if (ret->checkCanary() == false) {
 		std::cerr << "BAD CANARY ON ST=" << (void*)ret << '\n';

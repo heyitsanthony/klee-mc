@@ -18,7 +18,7 @@ public:
 	Searcher* createEmpty(void) const override
 	{ return new RRPrSearcher(pr->copy()); }
 
-	ExecutionState &selectState(bool allowCompact) override;
+	ExecutionState *selectState(bool allowCompact) override;
 	void update(ExecutionState *current, const States s) override;
 	bool empty() const override { return states.empty(); }
 	void printName(std::ostream &os) const override {

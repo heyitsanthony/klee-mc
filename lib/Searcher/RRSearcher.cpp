@@ -9,19 +9,23 @@
 using namespace klee;
 using namespace llvm;
 
-ExecutionState &RRSearcher::selectState(bool allowCompact)
+ExecutionState* RRSearcher::selectState(bool allowCompact)
 {
 	while (cur_state != states.end()) {
 		ExecutionState* es = *cur_state;
 		cur_state++;
 		if (!allowCompact && es->isCompact()) continue;
-		return *es;
+		return es;
 	}
 
 	cur_state = states.begin();
 
+	if (states.empty()) {
+		return nullptr;
+	}
+
 	// no non-compact [if !allowCompact]) states remain
-	return *states.back();
+	return states.back();
 }
 
 void RRSearcher::update(ExecutionState *current, const States s)

@@ -6,21 +6,16 @@
 using namespace klee;
 namespace klee { extern RNG theRNG; }
 
-ExecutionState& RescanSearcher::selectState(bool allowCompact)
+ExecutionState* RescanSearcher::selectState(bool allowCompact)
 {
-	ExecutionState			*es;
 	std::vector<ExecutionState*>	matches;
-	int				max_pr;
+	int				max_pr = -99999;
 
 	assert (state_c > 0);
 
 	pr->latch();
-	es = states.front();
-	max_pr = pr->getPriority(*es);
-	foreach (it, states.begin(), states.end()) {
-		ExecutionState	*cur_es = *it;
-		int		cur_pr = pr->getPriority(*cur_es);
-
+	for (auto cur_es : states) {
+		int cur_pr = pr->getPriority(*cur_es);
 		if (cur_pr > max_pr) {
 			max_pr = cur_pr;
 			matches.clear();
@@ -32,9 +27,9 @@ ExecutionState& RescanSearcher::selectState(bool allowCompact)
 
 	pr->unlatch();
 
-	es = matches[theRNG.getInt32() % matches.size()];
-
-	return *es;
+	return matches.empty()
+		? nullptr
+		: matches[theRNG.getInt32() % matches.size()];
 }
 
 void RescanSearcher::update(ExecutionState *current, States s)

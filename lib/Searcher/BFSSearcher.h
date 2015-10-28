@@ -12,7 +12,7 @@ private:
 	std::deque<ExecutionState*> states;
 
 public:
-	ExecutionState &selectState(bool allowCompact);
+	ExecutionState* selectState(bool allowCompact);
 	virtual ~BFSSearcher() {}
 
 	virtual Searcher* createEmpty(void) const { return new BFSSearcher(); }

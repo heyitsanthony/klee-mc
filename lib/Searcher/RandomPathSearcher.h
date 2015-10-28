@@ -16,7 +16,7 @@ public:
 	virtual Searcher* createEmpty(void) const
 	{ return new RandomPathSearcher(executor); }
 
-	ExecutionState &selectState(bool allowCompact);
+	ExecutionState* selectState(bool allowCompact);
 	void update(ExecutionState *current, const States s);
 	bool empty() const;
 	void printName(std::ostream &os) const { os << "RandomPathSearcher\n"; }

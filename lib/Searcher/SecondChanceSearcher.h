@@ -8,7 +8,7 @@ namespace klee {
 class SecondChanceSearcher : public Searcher
 {
 public:
-	ExecutionState &selectState(bool allowCompact);
+	ExecutionState* selectState(bool allowCompact);
 	SecondChanceSearcher(Searcher* _searcher_base);
 	virtual ~SecondChanceSearcher(void) { delete searcher_base; }
 

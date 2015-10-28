@@ -26,7 +26,7 @@ void ConcretizingSearcher::update(ExecutionState *current, States s)
 		last_es = current;
 }
 
-ExecutionState& ConcretizingSearcher::selectState(bool allowCompact)
+ExecutionState* ConcretizingSearcher::selectState(bool allowCompact)
 {
 	if (last_es && last_cov < TOTAL_INS) {
 		last_cov = TOTAL_INS;
@@ -40,10 +40,10 @@ ExecutionState& ConcretizingSearcher::selectState(bool allowCompact)
 
 	if (concretized && last_es != NULL) {
 		concretized = false;
-		return *last_es;
+		return last_es;
 	}
 
 	concretized = false;
-	last_es = &searcher_base->selectState(allowCompact);
-	return *last_es;
+	last_es = searcher_base->selectState(allowCompact);
+	return last_es;
 }

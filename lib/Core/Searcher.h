@@ -52,7 +52,7 @@ public:
 	virtual ~Searcher();
 
 	virtual Searcher* createEmpty(void) const = 0;
-	virtual ExecutionState &selectState(bool allowCompact) = 0;
+	virtual ExecutionState* selectState(bool allowCompact) = 0;
 	virtual void update(ExecutionState *current, const States s) = 0;
 	virtual bool empty() const = 0;
 

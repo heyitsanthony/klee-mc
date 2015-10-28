@@ -22,7 +22,7 @@ namespace klee
     virtual Searcher* createEmpty(void) const
     { return new MergingSearcher(executor, baseSearcher->createEmpty()); }
 
-    ExecutionState &selectState(bool allowCompact);
+    ExecutionState *selectState(bool allowCompact);
     void update(ExecutionState *current, const States s);
     bool empty() const { return baseSearcher->empty() && statesAtMerge.empty(); }
     void printName(std::ostream &os) const { os << "MergingSearcher\n"; }

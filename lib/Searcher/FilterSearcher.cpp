@@ -50,24 +50,25 @@ FilterSearcher::FilterSearcher(
 		blacklist_strs.insert(default_filters[i]);
 }
 
-ExecutionState& FilterSearcher::selectState(bool allowCompact)
+ExecutionState* FilterSearcher::selectState(bool allowCompact)
 {
-	ExecutionState	*es;
+	ExecutionState	*es = nullptr;
 
 	do {
 		if (searcher_base->empty()) {
 			recoverBlacklisted();
-			es = &searcher_base->selectState(allowCompact);
+			es = searcher_base->selectState(allowCompact);
 			break;
 		}
 
-		es = &searcher_base->selectState(allowCompact);
+		es = searcher_base->selectState(allowCompact);
+		if (!es) break;
 
 		/* another scheduler may have run this andv>
 		 * suddenly blacklisted it! */
 	} while (recheckListing(es));
 
-	return *es;
+	return es;
 }
 
 bool FilterSearcher::isBlacklisted(ExecutionState& es) const

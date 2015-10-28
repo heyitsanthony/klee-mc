@@ -10,7 +10,7 @@ namespace klee
 class XChkSearcher : public Searcher
 {
 public:
-	ExecutionState &selectState(bool allowCompact);
+	ExecutionState* selectState(bool allowCompact);
 	XChkSearcher(Searcher* in_base);
 	virtual ~XChkSearcher();
 	virtual Searcher* createEmpty(void) const

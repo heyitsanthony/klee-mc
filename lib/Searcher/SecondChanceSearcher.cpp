@@ -29,10 +29,8 @@ SecondChanceSearcher::SecondChanceSearcher(Searcher* _searcher_base)
 static uint64_t totalIns(void)
 { return stats::coveredInstructions + stats::uncoveredInstructions; }
 
-ExecutionState& SecondChanceSearcher::selectState(bool allowCompact)
+ExecutionState* SecondChanceSearcher::selectState(bool allowCompact)
 {
-	assert (searcher_base->empty() == false);
-
 	if (last_current != NULL) {
 		if (last_ins_total < totalIns())
 			remaining_quanta += SecondChanceBoost;
@@ -46,16 +44,16 @@ ExecutionState& SecondChanceSearcher::selectState(bool allowCompact)
 				<< (void*)last_current
 				<< ". QUANTA=" << remaining_quanta << '\n';
 			updateInsCounts();
-			return *last_current;
+			return last_current;
 		}
 	}
 
 	/* find new state */
 	remaining_quanta = 0;
-	last_current = &searcher_base->selectState(allowCompact);
+	last_current = searcher_base->selectState(allowCompact);
 	updateInsCounts();
 
-	return *last_current;
+	return last_current;
 }
 
 void SecondChanceSearcher::updateInsCounts(void)

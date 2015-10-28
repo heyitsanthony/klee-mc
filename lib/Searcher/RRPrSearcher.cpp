@@ -6,7 +6,7 @@
 
 using namespace klee;
 
-ExecutionState &RRPrSearcher::selectState(bool allowCompact)
+ExecutionState *RRPrSearcher::selectState(bool allowCompact)
 {
 	std::map<int, std::vector<ExecutionState*>>	prs;
 
@@ -29,11 +29,11 @@ ExecutionState &RRPrSearcher::selectState(bool allowCompact)
 	// remember last priority
 	last_pr = it->first;
 	const auto &v = it->second;
-	assert (v.empty() == false);
+	if (v.empty()) return nullptr;
 
 	std::cerr << "[RRPrSearcher] SELECTING: PR: " << last_pr
 		<< " (" << v.size() << " in class)\n";
-	return *(v[0]);
+	return v[0];
 }
 
 void RRPrSearcher::update(ExecutionState *current, const States s)

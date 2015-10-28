@@ -26,7 +26,7 @@ PrioritySearcher::PrioritySearcher(
 {}
 
 
-ExecutionState& PrioritySearcher::selectState(bool allowCompact)
+ExecutionState* PrioritySearcher::selectState(bool allowCompact)
 {
 	prsearcher_ty	prs;
 	ExecutionState*	next;
@@ -39,16 +39,15 @@ ExecutionState& PrioritySearcher::selectState(bool allowCompact)
 		int	curPr;
 		int	heap_pr;
 
-
 		prs = pr_heap.top();
 		heap_pr = prs.first;
 
-		if (prs.second->empty()) {
+		next = prs.second->selectState(allowCompact);
+		if (!next) {
 			clearDeadPriorities();
 			continue;
 		}
 
-		next = &prs.second->selectState(allowCompact);
 		prFunc->latch();
 		curPr = prFunc->getPriority(*next);
 		prFunc->unlatch();
@@ -86,7 +85,7 @@ ExecutionState& PrioritySearcher::selectState(bool allowCompact)
 	prFunc->getPriority(*next);
 	demote(next, prs.first - 1);
 
-	return *next;
+	return next;
 }
 
 void PrioritySearcher::demote(ExecutionState* es, int new_pr)

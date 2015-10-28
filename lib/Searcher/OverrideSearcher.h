@@ -9,7 +9,7 @@ namespace klee
 class OverrideSearcher : public Searcher
 {
 public:
-	ExecutionState &selectState(bool allowCompact);
+	ExecutionState *selectState(bool allowCompact);
 
 	OverrideSearcher(Searcher* _searcher_base)
 	: searcher_base(_searcher_base) {}

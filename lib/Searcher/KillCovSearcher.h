@@ -8,7 +8,7 @@ namespace klee {
 class KillCovSearcher : public Searcher
 {
 public:
-	ExecutionState &selectState(bool allowCompact);
+	ExecutionState *selectState(bool allowCompact);
 	KillCovSearcher(Executor& exe, Searcher* _searcher_base);
 	virtual ~KillCovSearcher(void) { delete searcher_base; }
 

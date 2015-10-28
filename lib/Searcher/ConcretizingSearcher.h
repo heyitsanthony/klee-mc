@@ -9,7 +9,7 @@ namespace klee
 class ConcretizingSearcher : public Searcher
 {
 public:
-	ExecutionState &selectState(bool allowCompact);
+	ExecutionState* selectState(bool allowCompact);
 
 	ConcretizingSearcher(
 		Executor& _exe,
