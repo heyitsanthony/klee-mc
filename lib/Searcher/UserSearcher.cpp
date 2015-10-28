@@ -219,44 +219,23 @@ bool UserSearcher::userSearcherRequiresMD2U() {
 #define TAIL_RESCAN_SEARCHER	\
 	new RescanSearcher(new Weight2Prioritizer<TailWeight>(1.0))
 
-#define UNCOMMITTEDCOV_SEARCHER					\
-new RRPrSearcher(						\
-	new Weight2Prioritizer<UncommittedCoverageWeight>(	\
-		new UncommittedCoverageWeight(),		\
-		1.0),						\
+#define UNCOMMITTEDCOV_SEARCHER						\
+	new RRPrSearcher(						\
+		new Weight2Prioritizer<UncommittedCoverageWeight>(	\
+			new UncommittedCoverageWeight(),		\
+			1.0),						\
 	0)
 
 #define COVSETSIZE_SEARCHER					\
-new RRPrSearcher(						\
-	new Weight2Prioritizer<CovSetSizeWeight>(		\
-		new CovSetSizeWeight(),	1.0))
-
+	new RRPrSearcher(					\
+		new Weight2Prioritizer<CovSetSizeWeight>(	\
+			new CovSetSizeWeight(),	1.0))
 #define FRESH_BRANCH_SEARCHER	\
 	new RRPrSearcher(new Weight2Prioritizer<FreshBranchWeight>(1), 0)
-
-#if 0
-new RescanSearcher(	\
-	new Weight2Prioritizer<	\
-	StateInstCountWeight>(-1.0)),	\
-
-#endif
-
-//#define BRANCHINS_SEARCHER	\
-//	new RescanSearcher(	\
-//		new Weight2Prioritizer<BranchWeight>(	\
-//			new BranchWeight(&executor), 1000.0)) \
-//
 #define BRANCHINS_SEARCHER	\
 	new WeightedRandomSearcher(executor, new BranchWeight(&executor))
-//#define UNCOV_SEARCHER	\
-//	new RescanSearcher(	\
-//		new Weight2Prioritizer<UncovWeight>(	\
-//				new UncovWeight(), 10000.0))
 #define UNCOV_SEARCHER	\
 	new WeightedRandomSearcher(executor, new UncovWeight())
-
-
-//	new WeightedRandomSearcher(executor, new StackWeight())
 #define STACK_SEARCHER	\
 	new RescanSearcher(	\
 		new Weight2Prioritizer<StackWeight>(	\
