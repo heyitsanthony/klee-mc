@@ -2115,9 +2115,11 @@ void Executor::run(ExecutionState &initState)
 	PartSeedSetupDummy(this);
 
 	if (replay != NULL) {
+		WallTimer	wt;
 		std::cerr << "[Executor] Beginning Replay\n";
 		replay->replay(this, &initState);
-		std::cerr << "[Executor] Finished Replay\n";
+		std::cerr << "[Executor] Finished Replay. Seconds: "
+			<< wt.checkSecs() << "\n";
 	}
 
 	if (Replay::isReplayOnly()) {
