@@ -49,11 +49,6 @@ namespace
 		cl::desc("Enable tracking of time for individual instructions"),
 		cl::init(false));
 
-	cl::opt<bool> OutputStats(
-		"output-stats",
-		cl::desc("Write running stats trace file"),
-		cl::init(true));
-
 	cl::opt<bool> OutputIStats(
 		"output-istats",
 		cl::desc("Write instruction level statistics (in callgrind format)"),
@@ -86,7 +81,7 @@ std::unique_ptr<StatsTracker> StatsTracker::create(
 
 namespace klee {
 
-bool StatsTracker::useStatistics() { return OutputStats || true /* TrackIStats */; }
+bool StatsTracker::useStatistics() { return true /* TrackIStats */ || StatsWriteInterval; }
 #define DECL_STATTIMER(x,y)		\
 class x##Timer : public Executor::Timer	{\
 private:				\
@@ -177,7 +172,7 @@ StatsTracker::StatsTracker(
 	foreach (it, km->kfuncsBegin(), km->kfuncsEnd())
 		addKFunction(it->get());
 
-	if (OutputStats) {
+	if (StatsWriteInterval) {
 		statsFile = executor.interpreterHandler->openOutputFile(
 			"run.stats");
 
