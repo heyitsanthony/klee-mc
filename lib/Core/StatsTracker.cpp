@@ -139,6 +139,7 @@ StatsTracker::StatsTracker(
 , numBranches(0)
 , fullBranches(0)
 , partialBranches(0)
+, dynBranches(0)
 , updateMinDistToUncovered(false)
 , lastCoveredInstruction(0)
 {
@@ -334,10 +335,8 @@ void StatsTracker::markBranchVisited(
 	ExecutionState	*visitedTrue,
 	ExecutionState	*visitedFalse)
 {
-	uint64_t hasTrue, hasFalse;
-
-	hasTrue = kbr->hasFoundTrue();
-	hasFalse = kbr->hasFoundFalse();
+	bool hasTrue = kbr->hasFoundTrue();
+	bool hasFalse = kbr->hasFoundFalse();
 
 	if (visitedTrue && !hasTrue) {
 		visitedTrue->coveredNew = true;
@@ -362,6 +361,8 @@ void StatsTracker::markBranchVisited(
 		} else
 			++partialBranches;
 	}
+
+	dynBranches++;
 }
 
 class StatsTracker::TimeAmountFormat
@@ -387,6 +388,7 @@ static const char* stat_labels[] =
 	"FullBranches",
 	"PartialBranches",
 	"NumBranches",
+	"DynBranches", // dispatched if/else branches
 	"UserTime",
 	"NumStates",
 	"NumStatesNC",
@@ -417,6 +419,7 @@ void StatsTracker::writeStatsLine()
 	WRITE_LABEL(fullBranches)
 	WRITE_LABEL(partialBranches)
 	WRITE_LABEL(numBranches)
+	WRITE_LABEL(dynBranches)
 	WRITE_LABEL(TimeAmountFormat(util::getUserTime()))
 	WRITE_LABEL(executor.stateManager->size())
 	WRITE_LABEL(executor.stateManager->getNonCompactStateCount())

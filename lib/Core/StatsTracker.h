@@ -48,6 +48,7 @@ class StatsTracker
 
     unsigned numBranches;
     unsigned fullBranches, partialBranches;
+    unsigned dynBranches;
 
 
     bool updateMinDistToUncovered;
