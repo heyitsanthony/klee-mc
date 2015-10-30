@@ -1598,10 +1598,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
   case Instruction::Alloca: instAlloc(state, ki); break;
 
    // Control flow
-  case Instruction::Ret:
-	instRet(state, ki);
-	break;
-
+  case Instruction::Ret: instRet(state, ki); break;
   case Instruction::Br: instBranch(state, ki); break;
   case Instruction::Switch: instSwitch(state, ki); break;
   case Instruction::Unreachable:
@@ -1929,21 +1926,21 @@ INST_FOP_ARITH(FRem, mod)
 	}
 }
 
-void Executor::stepStateInst(ExecutionState* &state)
+void Executor::stepStateInst(ExecutionState& state)
 {
-	assert (state->checkCanary() && "Not a valid state");
+	assert (state.checkCanary() && "Not a valid state");
 
-	KInstruction *ki = state->pc;
+	KInstruction *ki = state.pc;
 	assert(ki);
 
-	stepInstruction(*state);
-	executeInstruction(*state, ki);
+	stepInstruction(state);
+	executeInstruction(state, ki);
 	if (DebugPrintInstructions &&
-	    DebugPrintInstructions < state->totalInsts)
+	    DebugPrintInstructions < state.totalInsts)
 	{
-		debugPrintInst(*state);
-		if (DebugPrintValues && state->stack.hasLocal(ki)) {
-			ref<Expr>	e(state->stack.readLocal(ki));
+		debugPrintInst(state);
+		if (DebugPrintValues && state.stack.hasLocal(ki)) {
+			ref<Expr>	e(state.stack.readLocal(ki));
 			if (!e.isNull())
 				std::cerr << " = " << e << '\n';
 		}
@@ -1971,7 +1968,7 @@ bool Executor::runToFunction(ExecutionState* es, const KFunction* kf)
 			found_func = true;
 			break;
 		}
-		stepStateInst(es);
+		stepStateInst(*es);
 	} while (
 		test_c == interpreterHandler->getNumPathsExplored() &&
 		!stateManager->isRemovedState(es));
@@ -2117,7 +2114,7 @@ void Executor::step(void)
 		currentState = newSt;
 	}
 
-	stepStateInst(currentState);
+	stepStateInst(*currentState);
 	commitQueue(currentState);
 }
 

@@ -891,7 +891,7 @@ Executor::TimerInfo::TimerInfo(std::unique_ptr<Timer> _timer, double _rate)
 {}
 
 
-void Executor::processTimers(ExecutionState *current, double maxInstTime)
+void Executor::processTimers(ExecutionState& current, double maxInstTime)
 {
 	static double lastCall = 0., lastCheck = 0.;
 	double now = util::estWallTime();
@@ -908,14 +908,14 @@ void Executor::processTimers(ExecutionState *current, double maxInstTime)
 
 	if (dumpStates) processTimersDumpStates();
 
-	if (	maxInstTime > 0 && current &&
-		!stateManager->isRemovedState(current) &&
+	if (	maxInstTime > 0 &&
+		!stateManager->isRemovedState(&current) &&
 		lastCall != 0. && (now - lastCall) > maxInstTime)
 	{
 		klee_warning(
 			"max-instruction-time exceeded: %.2fs",
 			now - lastCall);
-		TERMINATE_EARLY(this, *current, "max-inst-time exceeded");
+		TERMINATE_EARLY(this, current, "max-inst-time exceeded");
 	}
 
 	for (auto &ti : timers) ti->fire(now);

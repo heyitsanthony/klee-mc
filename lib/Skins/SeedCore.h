@@ -30,7 +30,6 @@ public:
 		const MemoryObject* mo,
 		const  Array* array);
 	bool seedRun(ExecutionState& initialState);
-	void stepSeedInst(ExecutionState* &lastState);
 	void useSeeds(const std::vector<struct KTest *> *s) { usingSeeds = s; }
 	bool isUsingSeeds(void) const { return usingSeeds != NULL; }
 	void checkAddConstraintSeeds(ExecutionState& state, ref<Expr> &cond);

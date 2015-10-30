@@ -89,20 +89,6 @@ bool SeedCore::executeGetValueSeeding(
 	return true;
 }
 
-void SeedCore::stepSeedInst(ExecutionState* &lastState)
-{
-	SeedMapType::iterator	it;
-
-	it = seedMap.upper_bound(lastState);
-	if (it == seedMap.end()) it = seedMap.begin();
-	lastState = it->first;
-
-	ExecutionState *state = lastState;
-
-	exe->stepStateInst(state);
-	exe->commitQueue(state);
-}
-
 bool SeedCore::isOnlySeed(void) const { return OnlySeed; }
 
 #define SEED_CHECK_INTERVAL_INSTS	1000
@@ -119,9 +105,14 @@ bool SeedCore::seedRun(ExecutionState& initialState)
 
 	int lastNumSeeds = usingSeeds->size()+10;
 	while (!seedMap.empty() && !exe->isHalted()) {
-		double time;
+		double	time;
+		auto	it = seedMap.upper_bound(lastState);
 
-		stepSeedInst(lastState);
+		if (it == seedMap.end()) it = seedMap.begin();
+		lastState = it->first;
+
+		exe->stepStateInst(*lastState);
+		exe->commitQueue(lastState);
 
 		/* every 1000 instructions, check timeouts, seed counts */
 		if ((stats::instructions % SEED_CHECK_INTERVAL_INSTS) != 0)

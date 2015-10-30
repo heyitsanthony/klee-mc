@@ -23,15 +23,13 @@ public:
 
 	virtual ~GDBExecutor() {}
 
-	virtual void run(ExecutionState &initialState)
-	{
+	void run(ExecutionState &initialState) override  {
 		T::currentState = &initialState;
 		processCommands();
 		T::run(initialState);
 	}
 
-	virtual void stepStateInst(ExecutionState* &state)
-	{
+	void stepStateInst(ExecutionState& state) override {
 		uint64_t	last_fork_c;
 
 		last_fork_c = stats::forks;
@@ -49,11 +47,11 @@ public:
 			uint64_t	cur_pc;
 
 			if (last_pc == 0) {
-				last_pc = state->getAddrPC();
+				last_pc = state.getAddrPC();
 				return;
 			}
 
-			cur_pc = state->getAddrPC();
+			cur_pc = state.getAddrPC();
 			if (last_pc == cur_pc)
 				return;
 
@@ -65,7 +63,6 @@ public:
 		processCommands();
 	}
 
-protected:
 private:
 	void processCommands(void)
 	{

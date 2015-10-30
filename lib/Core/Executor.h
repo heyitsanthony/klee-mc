@@ -188,7 +188,7 @@ public:
 	ExeStateSet::const_iterator beginStates(void) const;
 	ExeStateSet::const_iterator endStates(void) const;
 
-	virtual void stepStateInst(ExecutionState* &state);
+	virtual void stepStateInst(ExecutionState& state);
 	void commitQueue(ExecutionState *current = nullptr);
 	bool isHalted(void) const { return haltExecution; }
 
@@ -359,7 +359,7 @@ private:
 	bool getSatAssignment(const ExecutionState& st, Assignment& a);
 
 	void initTimers();
-	void processTimers(ExecutionState *current, double maxInstTime);
+	void processTimers(ExecutionState& current, double maxInstTime);
 	void processTimersDumpStates(void);
 	void flushTimers(void);
 
