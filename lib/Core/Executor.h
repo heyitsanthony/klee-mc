@@ -310,6 +310,11 @@ private:
 	void instExtractElement(ExecutionState& state, KInstruction* ki);
 	void instInsertElement(ExecutionState& state, KInstruction *ki);
 	void instBranch(ExecutionState& state, KInstruction* ki);
+	StatePair instBranchCondForking(
+		ExecutionState& state,
+		KInstruction *ki,
+		ref<Expr> cond);
+
 
   void markBranchVisited(
   	ExecutionState& state,

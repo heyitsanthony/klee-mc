@@ -925,16 +925,15 @@ ExecutionState* Executor::concretizeState(
 	return new_st;
 }
 
-void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
+StatePair Executor::instBranchCondForking(
+	ExecutionState& state,
+	KInstruction* ki,
+	ref<Expr> cond)
 {
-	BranchInst	*bi = cast<BranchInst>(ki->getInst());
-	ref<Expr>	cond(eval(ki, 0, state));
-	bool		isConst;
 	StatePair	branches;
 	bool		hasHint = false, branchHint;
 
-	isConst = cond->getKind() == Expr::Constant;
-	if (brPredict && !isConst) {
+	if (brPredict) {
 		hasHint = brPredict->predict(
 			BranchPredictor::StateBranch(state, ki, cond),
 			branchHint);
@@ -949,7 +948,7 @@ void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 		{
 			state.abortInstruction();
 			stateManager->yield(&state);
-			return;
+			return StatePair(nullptr, nullptr);
 		}
 	}
 
@@ -959,7 +958,7 @@ void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 		else forking->setPreferFalseState(true);
 	}
 
-	if (IgnoreBranchConstraints && !isConst) {
+	if (IgnoreBranchConstraints) {
 		branches = forking->forkUnconditional(state, false);
 		assert (branches.first && branches.second);
 	} else {
@@ -971,8 +970,24 @@ void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 		else forking->setPreferFalseState(false);
 	}
 
-	markBranchVisited(state, ki, branches, cond);
+	return branches;
+}
 
+void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
+{
+	BranchInst	*bi = cast<BranchInst>(ki->getInst());
+	ref<Expr>	cond(eval(ki, 0, state));
+	StatePair	branches;
+
+	if (cond->getKind() == Expr::Constant) {
+		bool isZero = cast<ConstantExpr>(cond)->isZero();
+		branches.first = (isZero) ? nullptr : &state;
+		branches.second = (isZero) ? &state : nullptr;
+	} else {
+		branches = instBranchCondForking(state, ki, cond);
+	}
+
+	markBranchVisited(state, ki, branches, cond);
 	finalizeBranch(branches.first, bi, 0 /* [0] successor => true/then */);
 	finalizeBranch(branches.second, bi, 1 /* [1] successor => false/else */);
 }
