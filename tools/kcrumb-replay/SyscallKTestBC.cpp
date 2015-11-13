@@ -86,9 +86,9 @@ bool SyscallsKTestBC::isReplayEnabled(SyscallParams& sp)
 	/* NO DEFAULT SUPPRESSIONS (to mimic klee memcheck) */
 #if 1
 	if (str == "/usr/lib64/valgrind/default.supp") {
-		pt_r->slurpRegisters(pt_r->getPID());
+		pt_r->slurpRegisters(pt_r->getPTArch()->getPID());
 		pt_r->setSyscallResult(1234567);
-		pt_r->pushRegisters();
+		pt_r->getPTShadow()->pushRegisters();
 	}
 #endif
 
@@ -139,7 +139,7 @@ struct bc_syscall* SyscallsKTestBC::peekSyscallCrumb(void)
 bool SyscallsKTestBC::apply(void)
 {
 	syscall_c++;
-	pt_r->slurpRegisters(pt_r->getPID());
+	pt_r->slurpRegisters(pt_r->getPTArch()->getPID());
 
 	SyscallParams		sp(pt_r->getSyscallParams());
 	uint64_t		sys_nr = sp.getSyscall();
@@ -249,7 +249,7 @@ bool SyscallsKTestBC::apply(void)
 //	pt_r->getCPUState()->print(std::cerr);
 
 	/* apply registers */
-	pt_r->pushRegisters();
+	pt_r->getPTShadow()->pushRegisters();
 done:
 	Crumbs::freeCrumb((struct breadcrumb*)bcs);
 	return replayedSyscall;

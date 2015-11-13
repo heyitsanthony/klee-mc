@@ -1,7 +1,7 @@
 #include "ReplayExec.h"
 #include "SyscallsKTest.h"
 #include "guest.h"
-#include "guestcpustate.h"
+#include "vexcpustate.h"
 #include "vexsb.h"
 #include <stdlib.h>
 #include <string.h>
@@ -60,7 +60,7 @@ void ReplayExec::doSysCall(VexSB* sb)
 		return;
 	}
 
-	gs->getCPUState()->setExitType(GE_RETURN);
+	static_cast<VexCPUState*>(gs->getCPUState())->setExitType(GE_RETURN);
 
 	if (has_reglog)
 		fprintf(stderr, "VERIFY AFTER SYSCALL\n");

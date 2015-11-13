@@ -1,6 +1,6 @@
 #include "ChkExec.h"
 #include "guest.h"
-#include "guestcpustate.h"
+#include "vexcpustate.h"
 #include "vexsb.h"
 #include <stdlib.h>
 #include "syscall/syscalls.h"
@@ -58,7 +58,7 @@ void ChkExec::doSysCall(VexSB* vsb)
 		setExit(ret);
 		return;
 	}
-	gs->getCPUState()->setExitType(GE_RETURN);
+	static_cast<VexCPUState*>(gs->getCPUState())->setExitType(GE_RETURN);
 
 	std::cerr << "[ChkExec] Dispatching remote.\n";
 	sc_ptkt->apply(sp);

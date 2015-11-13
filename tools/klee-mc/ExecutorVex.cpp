@@ -23,7 +23,7 @@
 #include "HostAccelerator.h"
 #include "KModuleVex.h"
 #include "symbols.h"
-#include "guestcpustate.h"
+#include "vexcpustate.h"
 #include "guestsnapshot.h"
 #include "genllvm.h"
 #include "vexhelpers.h"
@@ -141,6 +141,8 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 {
 	GuestSnapshot*	ss = dynamic_cast<GuestSnapshot*>(gs);
 	assert (kmodule == NULL && "KMod already initialized? My contract!");
+
+	assert (dynamic_cast<VexCPUState*>(gs->getCPUState()));
 
 	ExeStateBuilder::replaceBuilder(new ExeStateVexBuilder());
 	ExeStateVex::setBaseGuest(gs);
@@ -728,8 +730,9 @@ done:
 
 void ExecutorVex::markExit(ExecutionState& es, uint8_t v)
 {
-	gs->getCPUState()->setExitType(GE_IGNORE);
-	es.write8(GETREGOBJ(es), gs->getCPUState()->getExitTypeOffset(), v);
+	auto cpu = static_cast<VexCPUState*>(gs->getCPUState());
+	cpu->setExitType(GE_IGNORE);
+	es.write8(GETREGOBJ(es), cpu->getExitTypeOffset(), v);
 }
 
 // KLEE MIPS = 2.7e6 * 0.1 = T_BASE
@@ -1018,9 +1021,9 @@ llvm::Function* ExecutorVex::getFuncByAddr(uint64_t addr)
 unsigned ExecutorVex::getExitType(const ExecutionState& state) const
 {
 	ref<Expr>	e;
+	auto		cpu = static_cast<VexCPUState*>(gs->getCPUState());
 
-	e = state.read8(GETREGOBJRO(state),
-			gs->getCPUState()->getExitTypeOffset());
+	e = state.read8(GETREGOBJRO(state), cpu->getExitTypeOffset());
 	assert (e->getKind() == Expr::Constant);
 
 	return (GuestExitType)(cast<ConstantExpr>(e)->getZExtValue());

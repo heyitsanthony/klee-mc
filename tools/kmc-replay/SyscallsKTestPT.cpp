@@ -21,7 +21,7 @@ SyscallsKTestPT::SyscallsKTestPT(const SyscallsKTest* sc_kt)
 	pt_g = dynamic_cast<PTImgChk*>(guest);
 	assert (pt_g != NULL);
 
-	pt_mem = new GuestPTMem(pt_g, pt_g->getPID());
+	pt_mem = new GuestPTMem(pt_g, pt_g->getPTArch()->getPID());
 }
 
 SyscallsKTestPT::~SyscallsKTestPT(void)
@@ -42,7 +42,7 @@ bool SyscallsKTestPT::copyInRegMemObj(void)
 	if (ok) delete partial_reg_buf;
 
 	/* guest registers should already have this copied in... */
-	static_cast<PTImgChk*>(guest)->pushRegisters();
+	static_cast<PTImgChk*>(guest)->getPTShadow()->pushRegisters();
 	ret_set |= ok;
 	return ok;
 }
@@ -50,7 +50,7 @@ bool SyscallsKTestPT::copyInRegMemObj(void)
 void SyscallsKTestPT::setRet(uint64_t r)
 {
 	if (!ret_set)
-		static_cast<PTImgChk*>(guest)->pushRegisters();
+		static_cast<PTImgChk*>(guest)->getPTShadow()->pushRegisters();
 	ret_set = true;
 }
 

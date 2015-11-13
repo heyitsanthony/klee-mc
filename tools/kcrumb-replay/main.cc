@@ -9,7 +9,7 @@
 #include "klee/Internal/ADT/Crumbs.h"
 #include "klee/Internal/Support/Watchdog.h"
 #include "SyscallKTestBC.h"
-#include "guestcpustate.h"
+#include "vexcpustate.h"
 
 #include <unistd.h>
 #include <stdlib.h>
@@ -118,11 +118,13 @@ int main(int argc, char *argv[], char* envp[])
 	 * executor doesn't need it anyway... */
 	close(0);
 
+	VexCPUState::registerCPUs();
+
 	ptimg = GuestPTImg::create<PTImgRemote>(
 		(argc - 3) + 1, /* ignore (self, sshot_path, test_num) */
 		args,
 		envp);
-	pid = ptimg->getPID();
+	pid = ptimg->getPTArch()->getPID();
 	assert (pid != 0);
 
 	sc = SyscallsKTestBC::create(ptimg, kts, test_path, test_num);
@@ -152,7 +154,7 @@ int main(int argc, char *argv[], char* envp[])
 
 		if (sig == SIGKILL || sig == SIGSTOP) {
 			std::cerr << "{SIGKILL,SIGSTOP} detected. Dumping\n";
-			ptimg->slurpRegisters(ptimg->getPID());
+			ptimg->slurpRegisters(ptimg->getPTArch()->getPID());
 			ptimg->getCPUState()->print(std::cerr);
 			break;
 		}

@@ -19,6 +19,7 @@
 #include "guestfragment.h"
 #include "elfimg.h"
 #include "guestelf.h"
+#include "vexcpustate.h"
 #include "ExecutorVex.h"
 #include "ExeChk.h"
 #include "ExeSnapshotSeq.h"
@@ -244,6 +245,8 @@ static Guest* loadSnapshotGuest(CmdArgs* cmdargs, const std::string& s)
 static Guest* getGuest(CmdArgs* cmdargs)
 {
 	Guest	*gs = NULL;
+
+	VexCPUState::registerCPUs();
 
 	if (GuestType == "ptrace") {
 		gs = GuestPTImg::create<GuestPTImg>(

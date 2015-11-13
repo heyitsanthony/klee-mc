@@ -10,7 +10,7 @@
 #include <sys/wait.h>
 #include "ExeStateVex.h"
 #include "static/Sugar.h"
-#include "cpu/ptimgamd64.h"
+#include "cpu/ptshadowamd64.h"
 #include "cpu/amd64cpustate.h"
 #include "klee/Internal/Support/Timer.h"
 #include <string.h>
@@ -291,7 +291,7 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 #endif
 
 	memset(&urs_vex, 0, sizeof(urs_vex));
-	PTImgAMD64::vex2ptrace(v, urs_vex, ufprs_vex);
+	PTShadowAMD64::vex2ptrace(v, urs_vex, ufprs_vex);
 	urs_vex.cs = urs.cs;
 	urs_vex.ss = urs.ss;
 
@@ -392,7 +392,7 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 
 	/* important to do this *after* reading the SHM so we don't copy
 	 * in the old register file. Yuck! */
-	PTImgAMD64::ptrace2vex(urs_vex, ufprs_vex, v);
+	PTShadowAMD64::ptrace2vex(urs_vex, ufprs_vex, v);
 	regs->writeConcrete((const uint8_t*)&v, sizeof(v));
 
 	DEBUG_HOSTACCEL(std::cerr <<

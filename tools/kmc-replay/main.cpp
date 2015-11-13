@@ -9,6 +9,7 @@
 #include "SyscallsModel.h"
 #include "guestptmem.h"
 #include "guestmemdual.h"
+#include "vexcpustate.h"
 
 /* vexllvm stuff */
 #include "ReplayExec.h"
@@ -312,7 +313,7 @@ static int doJITReplay(const struct ReplayInfo& ri)
 
 		old_mem = gpt->getMem();
 
-		pt_mem = new GuestPTMem(gpt, gpt->getPID());
+		pt_mem = new GuestPTMem(gpt, gpt->getPTArch()->getPID());
 		dual_mem = new GuestMemDual(old_mem, pt_mem);
 		gs.reset(gpt);
 		gs->setMem(dual_mem);
@@ -375,6 +376,8 @@ int main(int argc, char* argv[])
 		setenv("KMC_REPLAY_IGNLOG", "true", 1);
 		ri.guestdir = xchk_guest;
 	}
+
+	VexCPUState::registerCPUs();
 
 	if (get_kmc_interp()) {
 		err = doInterpreterReplay(ri);

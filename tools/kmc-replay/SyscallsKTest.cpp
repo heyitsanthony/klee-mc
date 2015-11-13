@@ -19,7 +19,7 @@
 #include "klee/Internal/ADT/KTestStream.h"
 #include "klee/Internal/ADT/Crumbs.h"
 #include "FileReconstructor.h"
-#include "guestcpustate.h"
+#include "vexcpustate.h"
 #include "guest.h"
 #include "cpu/i386windowsabi.h"
 #include "cpu/i386_macros.h"
@@ -257,7 +257,7 @@ uint64_t SyscallsKTest::apply(SyscallParams& sp)
 			doLinuxThunks(sp, xlate_sysnr);
 		}
 	} else {
-		GuestCPUState	*cpu(guest->getCPUState());
+		auto cpu = static_cast<VexCPUState*>(guest->getCPUState());
 
 		if (bc_sc_is_thunk(bcs_crumb))
 			crumbs->skip(bcs_crumb->bcs_op_c);
