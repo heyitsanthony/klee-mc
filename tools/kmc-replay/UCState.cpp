@@ -125,7 +125,7 @@ UCState::UCState(
 	setupRegValues(kts);
 
 	/* 1.b resteer execution to function */
-	sym = gs->getSymbols()->findSym(funcname);
+	sym = gs->getSymbols().findSym(funcname);
 	if (sym == NULL) {
 		std::cerr << "UC Function '" << funcname << "' not found. ULP\n";
 		return;

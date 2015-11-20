@@ -194,8 +194,8 @@ ExecutorVex::ExecutorVex(InterpreterHandler *ih)
 	 * problematic because the codegen normally updates
 	 * loads/stores to reflect these new addresses.
 	 * unsetting the bias should revert to unbiased behavior */
-	if (getenv("VEXLLVM_BASE_BIAS") != NULL) {
-		unsetenv("VEXLLVM_BASE_BIAS");
+	if (getenv("GUEST_BASE_BIAS") != NULL) {
+		unsetenv("GUEST_BASE_BIAS");
 		theGenLLVM->setUseReloc(false);
 	}
 
@@ -321,10 +321,7 @@ void ExecutorVex::runSym(const char* xchk_fn)
 	if (!RunSym.empty()) xchk_fn = RunSym.c_str();
 
 	if (xchk_fn != NULL) {
-		const Symbols	*syms;
-
-		syms = gs->getSymbols();
-		sym = syms->findSym(xchk_fn);
+		sym = gs->getSymbols().findSym(xchk_fn);
 		fprintf(stderr, "[EXEVEX] Using symbol: %s\n", xchk_fn);
 		assert (sym != NULL && "Couldn't find sym");
 	} else

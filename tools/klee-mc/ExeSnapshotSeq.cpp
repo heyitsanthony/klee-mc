@@ -126,8 +126,8 @@ ExecutionState* ExeSnapshotSeq::addSequenceGuest(
 	}
 
 	/* load with an offset so no conflicts with base guest */
-	assert (getenv("VEXLLVM_BASE_BIAS") == NULL);
-	setenv("VEXLLVM_BASE_BIAS", "0x8000000", 1);
+	assert (getenv("GUEST_BASE_BIAS") == NULL);
+	setenv("GUEST_BASE_BIAS", "0x8000000", 1);
 
 	new_gs = Guest::load(s);
 
@@ -155,7 +155,7 @@ ExecutionState* ExeSnapshotSeq::addSequenceGuest(
 
 
 	new_gs = nullptr;
-	unsetenv("VEXLLVM_BASE_BIAS");
+	unsetenv("GUEST_BASE_BIAS");
 
 	return new_es;
 }

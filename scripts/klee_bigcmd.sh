@@ -42,7 +42,7 @@ elif [ ! -z "$FROM_BEGINNING" ]; then
 	echo taking snapshot
 #	PRELOAD_STR=/home/chz/src/research/klee-open/trunk/preload/string.so
 #	PRELOAD_STR=/home/chz/src/research/klee-open/trunk/preload/dumb_file.so
-	VEXLLVM_PRELOAD="$PRELOAD_STR" VEXLLVM_SAVE=1 pt_run $1
+	GUEST_PRELOAD="$PRELOAD_STR" VEXLLVM_SAVE=1 pt_run $1
 elif [ -z "$USE_LAST" ]; then
 	LD_BIND_NOW=1 LD_PRELOAD="$PRELOAD_STR" $1 &
 	childpid=$!

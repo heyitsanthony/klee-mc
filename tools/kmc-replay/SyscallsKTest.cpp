@@ -21,7 +21,7 @@
 #include "FileReconstructor.h"
 #include "vexcpustate.h"
 #include "guest.h"
-#include "cpu/i386windowsabi.h"
+#include "abi/i386windowsabi.h"
 #include "cpu/i386_macros.h"
 #include "syscall/syscallnamer.h"
 

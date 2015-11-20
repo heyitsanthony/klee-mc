@@ -14,7 +14,7 @@ fi
 
 if [ -z "$GDB_SCAN_BLOCKED" ]; then
 	VEXLLVM_SAVE=1		\
-	VEXLLVM_NOSYSCALL=1 	\
+	GUEST_NOSYSCALL=1 	\
 	VEXLLVM_ATTACH=$attach_pid pt_run none
 else
 	echo "SAVING BLOCKED SNAPSHOT."

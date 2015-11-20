@@ -20,7 +20,7 @@ SCHEDOPTS="-use-batching-search
 
 RULEFLAGS="-use-rule-builder -rule-file=default_rules.db"
 
-	VEXLLVM_BASE_BIAS=0x100000000 klee-mc	\
+	GUEST_BASE_BIAS=0x100000000 klee-mc	\
 		$RULEFLAGS			\
 		$SCHEDOPTS			\
 		-pipe-solver			\
