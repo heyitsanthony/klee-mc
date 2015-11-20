@@ -109,3 +109,6 @@ endif
 ifdef X_LINK_COMPONENTS
 LIBS += $(shell llvm-config --libs $(X_LINK_COMPONENTS))
 endif
+
+VEXLLVM_CFLAGS := -I$(VEXLLVM_ROOT)/src/ -I$(VEXLLVM_ROOT)/guestlib/src
+VEXLLVM_LIBS := $(VEXLLVM_ROOT)/bin/vexllvm.a $(VEXLIB_ROOT)/libvex-amd64-linux.a $(VEXLLVM_ROOT)/guestlib/bin/guestlib.a

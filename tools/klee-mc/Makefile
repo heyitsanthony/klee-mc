@@ -34,13 +34,13 @@ bleh=-Wl,-export-dynamic
 CFLAGS := $(filter-out $(bleh),$(CFLAGS))
 CXXFLAGS := $(filter-out $(bleh),$(CXXFLAGS))
 
-CFLAGS += -I$(VEXLLVM_ROOT)/src/
+CFLAGS += $(VEXLLVM_CFLAGS)
 #ACK; OCAML HAS HUGE BSS-- we have to link a bit higher up
-CXXFLAGS += -I$(VEXLLVM_ROOT)/src/ -DGIT_COMMIT=\"$(shell git log | head -n1 | cut -f2 -d' ')\"
+CXXFLAGS += $(VEXLLVM_CFLAGS) -DGIT_COMMIT=\"$(shell git log | head -n1 | cut -f2 -d' ')\"
 RDYNAMIC=
 LDFLAGS += -Wl,-Ttext-segment=0x50000000 $(STATIC_FLAGS)
 LIBS += $(SOLVERLIBS)
 LIBS += -lrt
-LIBS += $(VEXLLVM_ROOT)/bin/vexllvm.a $(VEXLIB_ROOT)/libvex-amd64-linux.a
+LIBS += $(VEXLLVM_LIBS)
 LIBS += $(STATIC_LIBS)
 #-ltcmalloc

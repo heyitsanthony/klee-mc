@@ -30,11 +30,11 @@ CFLAGS := $(filter-out $(bleh),$(CFLAGS))
 CXXFLAGS := $(filter-out $(bleh),$(CXXFLAGS))
 endif
 
-CFLAGS += -I$(VEXLLVM_ROOT)/src/
-CXXFLAGS += -I$(VEXLLVM_ROOT)/src/
+CFLAGS += $(VEXLLVM_CFLAGS)
+CXXFLAGS += $(VEXLLVM_CFLAGS)
 RDYNAMIC=
 LDFLAGS += -Wl,-Ttext-segment=0x70000000 $(STATIC_FLAGS)
-LIBS += $(VEXLLVM_ROOT)/bin/vexllvm.a $(VEXLIB_ROOT)/libvex-amd64-linux.a
+LIBS += $(VEXLLVM_LIBS)
 LIBS += -lrt $(SOLVERLIBS)
 
 #-ltcmalloc

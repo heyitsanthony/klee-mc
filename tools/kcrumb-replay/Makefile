@@ -17,7 +17,7 @@ USEDLIBS = kleeModule.a	\
 include $(LEVEL)/Makefile.common
 
 #X_LINK_COMPONENTS = jit bitreader bitwriter ipo linker engine core
-CFLAGS += -I$(VEXLLVM_ROOT)/src/
-CXXFLAGS += -I$(VEXLLVM_ROOT)/src/
+CFLAGS += $(VEXLLVM_CFLAGS)
+CXXFLAGS += $(VEXLLVM_CFLAGS)
 LIBS += -lrt $(SOLVERLIBS)
-LIBS += $(VEXLLVM_ROOT)/bin/vexllvm.a $(VEXLIB_ROOT)/libvex-amd64-linux.a
+LIBS += $(VEXLLVM_LIBS)
