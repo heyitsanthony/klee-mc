@@ -41,6 +41,11 @@
 extern bool concrete_vfs;
 static int last_sc = 0;
 static unsigned sc_c = 0;
+static stack_t cur_sigstack = {
+	.ss_sp = (void*)0xdeadbeef,
+	.ss_flags = 0,
+	.ss_size = 0
+};
 
 extern void proc_sc(struct sc_pkt* sc);
 
@@ -858,7 +863,14 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_ge0(sc_new_regs(regfile));
 		break;
 
-	FAKE_SC_RANGE(sigaltstack, -1, 0);
+	case SYS_sigaltstack:
+		klee_warning_once("assuming sigaltstack succeeds");
+		const stack_t	*ss = GET_ARG0_PTR(regfile);
+		stack_t		*oss = GET_ARG1_PTR(regfile);
+		if (oss) memcpy(oss, &cur_sigstack, sizeof(stack_t));
+		memcpy(&cur_sigstack, ss, sizeof(stack_t));
+		sc_ret_v(regfile, 0);
+		break;
 
 	case SYS_getcwd: {
 		uint64_t addr = GET_ARG0(regfile);
