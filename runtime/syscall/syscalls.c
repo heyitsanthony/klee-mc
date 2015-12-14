@@ -741,12 +741,6 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 	case SYS_rt_sigprocmask:
 		if (GET_ARG2(regfile)) {
-			/* XXX: android hack */
-			#ifdef GUEST_ARCH_ARM
-			#undef SIGSET_T_SZ
-			#define SIGSET_T_SZ 16
-			klee_warning_once("Narrow sigset_t so android won't crash!");
-			#endif
 			make_sym_by_arg(regfile, 2, SIGSET_T_SZ, "sigset");
 			sc_ret_v(regfile, 0);
 		} else {
