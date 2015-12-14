@@ -128,8 +128,6 @@ void fd_close(int fd)
 	fd2fi(fd)->fi_flags = 0;
 	if (fd < next_free_fd)
 		next_free_fd = fd;
-
-
 }
 
 int fd_is_concrete(int fd)
@@ -160,6 +158,22 @@ int fd_dup(int fd, int fd_min)
 
 	if (k == MAX_FD) return -1;
 	return k;
+}
+
+int fd_dup2(int oldfd, int newfd)
+{
+	if (!fi_is_used(oldfd)) {
+		klee_print_expr("[fd] tried to dup2 on closed fd", oldfd);
+		klee_ureport("dup2 on closed fd", "dup2.warn");
+		return -1;
+	}
+
+	if (oldfd == newfd) {
+		return oldfd;
+	}
+
+	fd_close(newfd);
+	return fd_dup(oldfd, newfd);
 }
 
 ssize_t fd_read(int fd, char* buf, int c)

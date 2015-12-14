@@ -970,11 +970,21 @@ void* sc_enter(void* regfile, void* jmpptr)
 		sc_ret_v(regfile, 0);
 		break;
 	case SYS_dup:
-	case SYS_dup2:
-	case SYS_dup3:
-		klee_warning_once("dup is hyper-broken");
-		sc_ret_ge0(sc_new_regs(regfile));
+		sc_ret_v(regfile, fd_dup(GET_ARG0(regfile), 0));
 		break;
+	case SYS_dup2:
+		sc_ret_v(regfile, fd_dup2(GET_ARG0(regfile), GET_ARG1(regfile)));
+		break;
+	case SYS_dup3: {
+		int oldfd = GET_ARG0(regfile), newfd = GET_ARG1(regfile);
+		if (newfd == oldfd) {
+			/* EINVAL */
+			sc_ret_v(regfile, -1);
+			break;
+		}
+		sc_ret_v(regfile, fd_dup2(oldfd, newfd));
+		break;
+	}
 	case SYS_setrlimit:
 		sc_ret_or(sc_new_regs(regfile), -1, 0);
 		break;
