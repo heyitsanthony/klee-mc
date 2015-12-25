@@ -1,8 +1,11 @@
 #include "klee/ExecutionState.h"
 #include "klee/Internal/Module/KModule.h"
+#include "klee/Internal/ADT/RNG.h"
 #include "RRPrSearcher.h"
 
 #include "static/Sugar.h"
+
+namespace klee { extern RNG theRNG; }
 
 using namespace klee;
 
@@ -42,7 +45,7 @@ ExecutionState *RRPrSearcher::selectState(bool allowCompact)
 	std::cerr << "[RRPrSearcher] SELECTING: PR: " << last_pr
 		<< " (" << v.size() << " in class; "
 		<< dropped_c <<" below cutoff)\n";
-	return v[0];
+	return v[theRNG.getInt32() % v.size()];
 }
 
 void RRPrSearcher::update(ExecutionState *current, const States s)
