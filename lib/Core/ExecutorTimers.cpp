@@ -60,22 +60,21 @@ MaxTimeNoProgress("max-time-no-progress",
 class HaltTimer : public Executor::Timer
 {
 public:
-	HaltTimer(Executor *_executor) : executor(_executor) {}
+	HaltTimer(Executor &_exe) : exe(_exe) {}
 
 	void run() override {
 		std::cerr << "KLEE: HaltTimer invoked\n";
-		executor->setHaltExecution(true);
+		exe.setHaltExecution(true);
 	}
 private:
-	Executor *executor;
+	Executor &exe;
 };
 
 class HaltNoProgressTimer : public Executor::Timer
 {
-Executor *executor;
 public:
-	HaltNoProgressTimer(Executor *_executor)
-	: executor(_executor), numCovInstrs(0) {}
+	HaltNoProgressTimer(Executor &_exe)
+	: exe(_exe), numCovInstrs(0) {}
 
 	void run() override {
 		if (numCovInstrs < stats::coveredInstructions) {
@@ -83,9 +82,10 @@ public:
 			return;
 		}
 		std::cerr << "KLEE: Halting-- no progress!\n";
-		executor->setHaltExecution(true);
+		exe.setHaltExecution(true);
 	}
 private:
+	Executor &exe;
 	unsigned numCovInstrs;
 };
 
@@ -99,7 +99,7 @@ UseGCTimer("gc-timer",
 class ExprGCTimer : public Executor::Timer
 {
 public:
-	ExprGCTimer(Executor *_executor) {}
+	ExprGCTimer(Executor &_exe) {}
 	virtual ~ExprGCTimer() {}
 
 	void run()
@@ -122,7 +122,7 @@ UseObjScanTimer("objscan-timer",
 class ExprObjScanTimer : public Executor::Timer
 {
 public:
-	ExprObjScanTimer(Executor *_executor)  {}
+	ExprObjScanTimer(Executor &_exe)  {}
 
 	void run() override {
 		std::cerr << "KLEE: ExprObjScan invoked\n";
@@ -136,11 +136,11 @@ class StatTimer : public Executor::Timer
 {
 public:
 protected:
-	StatTimer(Executor *_executor, const char* fname)
-	: executor(_executor)
+	StatTimer(Executor &_exe, const char* fname)
+	: exe(_exe)
 	, n(0)
 	{
-		os = executor->getInterpreterHandler()->openOutputFile(fname);
+		os = exe.getInterpreterHandler()->openOutputFile(fname);
 		base_time = util::estWallTime();
 	}
 
@@ -157,7 +157,7 @@ protected:
 	virtual void print(void) = 0;
 
 	double		base_time;
-	Executor	*executor;
+	Executor	&exe;
 	std::unique_ptr<std::ostream> os;
 	unsigned	n;
 };
@@ -167,7 +167,7 @@ class PyStatTimer : public StatTimer
 public:
 	virtual ~PyStatTimer() {}
 protected:
-	PyStatTimer(Executor *_exe, const char* fname)
+	PyStatTimer(Executor &_exe, const char* fname)
 	: StatTimer(_exe, fname) {}
 
 	void run(void) override {
@@ -191,7 +191,7 @@ DumpMemStats("dump-memstats",
 class MemStatTimer : public StatTimer
 {
 public:
-	MemStatTimer(Executor *_exe) : StatTimer(_exe, "mem.txt") {}
+	MemStatTimer(Executor &_exe) : StatTimer(_exe, "mem.txt") {}
 protected:
 	void print(void) { *os << ObjectState::getNumObjStates() <<
 		' ' << getMemUsageMB() <<
@@ -201,14 +201,14 @@ protected:
 class StateStatTimer : public StatTimer
 {
 public:
-	StateStatTimer(Executor *_exe) : StatTimer(_exe, "state.txt") {}
+	StateStatTimer(Executor &_exe) : StatTimer(_exe, "state.txt") {}
 protected:
 	void print(void) {
 		*os <<
-		executor->getNumStates() << ' ' <<
-		executor->getNumFullStates() << ' ' <<
-		executor->getHandler().getNumTestCases() << ' ' <<
-		executor->getHandler().getNumPathsExplored(); }
+		exe.getNumStates() << ' ' <<
+		exe.getNumFullStates() << ' ' <<
+		exe.getHandler().getNumTestCases() << ' ' <<
+		exe.getHandler().getNumPathsExplored(); }
 };
 
 #include "../Expr/ExprAlloc.h"
@@ -219,7 +219,7 @@ DumpExprStats("dump-exprstats",
 class ExprStatTimer : public StatTimer
 {
 public:
-	ExprStatTimer(Executor *_exe) : StatTimer(_exe, "expr.txt") {}
+	ExprStatTimer(Executor &_exe) : StatTimer(_exe, "expr.txt") {}
 protected:
 	void print(void) { *os
 		<< Expr::getNumExprs() << ' '
@@ -239,7 +239,7 @@ DumpCacheStats("dump-cachestats",
 class CacheStatTimer : public StatTimer
 {
 public:
-	CacheStatTimer(Executor *_exe) : StatTimer(_exe, "cache.txt") {}
+	CacheStatTimer(Executor &_exe) : StatTimer(_exe, "cache.txt") {}
 protected:
 	void print(void) { *os
 		<< g_cachingsolver_sz << ' '
@@ -256,7 +256,7 @@ DumpCovStats("dump-covstats",
 class CovStatTimer : public StatTimer
 {
 public:
-	CovStatTimer(Executor *_exe) : StatTimer(_exe, "cov.txt") {}
+	CovStatTimer(Executor &_exe) : StatTimer(_exe, "cov.txt") {}
 protected:
 	void print(void) { *os
 		<< stats::coveredInstructions << ' '
@@ -273,7 +273,7 @@ DumpRuleBuilderStats("dump-rbstats",
 class RuleBuilderStatTimer : public StatTimer
 {
 public:
-	RuleBuilderStatTimer(Executor *_exe) : StatTimer(_exe, "rb.txt") {}
+	RuleBuilderStatTimer(Executor &_exe) : StatTimer(_exe, "rb.txt") {}
 protected:
 	void print(void) { *os
 		<< RuleBuilder::getHits() << ' '
@@ -298,7 +298,7 @@ DumpQueryStats("dump-querystats",
 class QueryStatTimer : public StatTimer
 {
 public:
-	QueryStatTimer(Executor *_exe) : StatTimer(_exe, "query.txt") {}
+	QueryStatTimer(Executor &_exe) : StatTimer(_exe, "query.txt") {}
 protected:
 	void print(void)
 	{
@@ -317,7 +317,7 @@ protected:
 
 
 	void printTimes(void) {
-		auto f = executor->getInterpreterHandler()->openOutputFile("qtimes.txt");
+		auto f = exe.getInterpreterHandler()->openOutputFile("qtimes.txt");
 		if (f == NULL) return;
 		StateSolver::dumpTimes(*f);
 	}
@@ -339,14 +339,14 @@ class BrDataTimer : public Executor::Timer
 public:
 	BrDataTimer(
 		const char* _fname,
-		Executor* _exe,
+		Executor &_exe,
 		bool _ignoreConcrete=false)
 	: fname(_fname)
 	, exe(_exe)
 	, ignoreConcrete(_ignoreConcrete) {}
 
 	void run(void) override {
-		auto os = exe->getInterpreterHandler()->openOutputFile(fname);
+		auto os = exe.getInterpreterHandler()->openOutputFile(fname);
 		if (os == NULL) return;
 
 		foreach (it,
@@ -366,7 +366,7 @@ public:
 				continue;
 
 			parent_f = kbr->getInst()->getParent()->getParent();
-			(*os)	<< exe->getKModule()->getPrettyName(parent_f)
+			(*os)	<< exe.getKModule()->getPrettyName(parent_f)
 				<< ' ' << kbr->getTrueHits()
 				<< ' ' << kbr->getFalseHits()
 				<< ' ' << kbr->getForkHits()
@@ -380,7 +380,7 @@ public:
 	}
 private:
 	const char	*fname;
-	Executor	*exe;
+	Executor	&exe;
 	bool		ignoreConcrete;
 };
 
@@ -394,7 +394,7 @@ class CovTimer : public Executor::Timer
 public:
 	CovTimer(
 		const char* _fname,
-		Executor* _exe,
+		Executor &_exe,
 		bool _ignoreConcrete=false)
 	: fname(_fname)
 	, exe(_exe)
@@ -403,12 +403,12 @@ public:
 	void run(void) override {
 		KModule*	kmod;
 
-		auto os = exe->getInterpreterHandler()->openOutputFile(fname);
+		auto os = exe.getInterpreterHandler()->openOutputFile(fname);
 		if (os == NULL) return;
 
 		assert(!ignoreConcrete && "STUB STUB STUB");
 
-		kmod = exe->getKModule();
+		kmod = exe.getKModule();
 		foreach (it, kmod->kfuncsBegin(), kmod->kfuncsEnd()) {
 			const KFunction	*kf = it->get();
 			unsigned	c;
@@ -433,7 +433,7 @@ public:
 	}
 private:
 	const char	*fname;
-	Executor	*exe;
+	Executor	&exe;
 	bool		ignoreConcrete;
 };
 
@@ -442,22 +442,22 @@ private:
 cl::opt<unsigned> Dump##x(y, cl::desc(s), cl::init(0));	\
 class x##Timer : public Executor::Timer {	\
 public:	\
-	x##Timer(const char* _fname, Executor* _exe)	\
+	x##Timer(const char* _fname, Executor &_exe)	\
 	: fname(_fname), exe(_exe) {}	\
 	void run(void) override {	\
 		ExecutionState*	es;	\
 \
-		es = exe->getCurrentState();	\
+		es = exe.getCurrentState();	\
 		if (es == NULL) return;	\
 \
-		auto os = exe->getInterpreterHandler()->openOutputFile(fname);	\
+		auto os = exe.getInterpreterHandler()->openOutputFile(fname);	\
 		if (os == NULL) return;	\
 \
 		es->getBrTracker().z(*os);	\
 	}	\
 private:	\
 	const char	*fname;	\
-	Executor	*exe;	};
+	Executor	&exe;	};
 
 
 DUMP_BR(BTrackerDot, "dump-btracker-dot", dumpDotFile, "Dump branch dot tree")
@@ -471,16 +471,16 @@ DumpFuncHeat("dump-func-heat",
 class FuncHeatTimer : public Executor::Timer
 {
 public:
-	FuncHeatTimer(const char* _fname, Executor* _exe)
+	FuncHeatTimer(const char* _fname, Executor &_exe)
 	: fname(_fname), exe(_exe) {}
 
 	void run(void) override {
 		const KModule	*km;
 
-		auto os = exe->getInterpreterHandler()->openOutputFile(fname);
+		auto os = exe.getInterpreterHandler()->openOutputFile(fname);
 		if (os == NULL) return;
 
-		km = exe->getKModule();
+		km = exe.getKModule();
 
 		foreach (it, km->kfuncsBegin(), km->kfuncsEnd()) {
 			const KFunction	*kf = it->get();
@@ -496,7 +496,7 @@ public:
 	}
 private:
 	const char	*fname;
-	Executor	*exe;
+	Executor	&exe;
 };
 
 
@@ -509,7 +509,7 @@ DumpHashStats("dump-hashstats",
 class HashStatTimer : public StatTimer
 {
 public:
-	HashStatTimer(Executor *_exe) : StatTimer(_exe, "hashstats.txt") {}
+	HashStatTimer(Executor &_exe) : StatTimer(_exe, "hashstats.txt") {}
 protected:
 	void print(void) { *os
 		<< HashSolver::getHits() << ' '
@@ -524,7 +524,7 @@ DumpStackStats("dump-stackstats",
 class StackStatTimer : public StatTimer
 {
 public:
-	StackStatTimer(Executor *_exe)
+	StackStatTimer(Executor& _exe)
 	: StatTimer(_exe, "stackstats.txt") {}
 protected:
 	void print(void)
@@ -539,7 +539,7 @@ protected:
 		s_max = 0;
 		s_total = 0;
 		n = 0;
-		foreach (it, executor->beginStates(), executor->endStates()) {
+		foreach (it, exe.beginStates(), exe.endStates()) {
 			const ExecutionState	*es;
 			unsigned		cur_depth;
 
@@ -566,7 +566,7 @@ DumpForkCondGraph("dump-forkcondgraph",
 class ForkCondTimer : public Executor::Timer
 {
 public:
-	ForkCondTimer(Executor* _exe) : exe(_exe) {}
+	ForkCondTimer(Executor &_exe) : exe(_exe) {}
 	virtual ~ForkCondTimer() {}
 
 	std::string cutoffExpr(const ref<Expr>& e)
@@ -597,12 +597,12 @@ public:
 	}
 
 	void run(void) override {
-		auto os = exe->getInterpreterHandler()->openOutputFile(
+		auto os = exe.getInterpreterHandler()->openOutputFile(
 			"fconds.txt");
 		if (os == NULL) return;
 
 		(*os) << "digraph {\n";
-		for (const auto &p : exe->getForkHistory().conds()) {
+		for (const auto &p : exe.getForkHistory().conds()) {
 			std::string 	from = cutoffExpr(p.first),
 					to = cutoffExpr(p.second);
 			(*os) << '"'<< from << "\" -> \"" << to << "\";\n";
@@ -610,7 +610,7 @@ public:
 		(*os) << "\n}\n";
 	}
 private:
-	Executor* exe;
+	Executor &exe;
 };
 
 
@@ -621,13 +621,13 @@ DumpStateInstStats("dump-stateinststats",
 class StateInstStatTimer : public PyStatTimer
 {
 public:
-	StateInstStatTimer(Executor *_exe) : PyStatTimer(_exe, "sinst.txt") {}
+	StateInstStatTimer(Executor &_exe) : PyStatTimer(_exe, "sinst.txt") {}
 protected:
 	void print(void)
 	{
 		std::map<unsigned, unsigned>	inst_buckets;
 
-		foreach (it, executor->beginStates(), executor->endStates()) {
+		foreach (it, exe.beginStates(), exe.endStates()) {
 			const ExecutionState*	es = *it;
 			unsigned		old_c, b_idx;
 
@@ -648,17 +648,17 @@ protected:
 class UserCommand
 {
 public:
-	UserCommand(Executor *_exe) : exe(_exe) {}
+	UserCommand(Executor &_exe) : exe(_exe) {}
 	virtual ~UserCommand() {}
 	virtual void run(std::istream& is, std::ostream& os) = 0;
 protected:
-	Executor	*exe;
+	Executor	&exe;
 };
 
 #define DECL_PIPECMD(x)			\
 class PC##x : public UserCommand {	\
 public:					\
-	PC##x(Executor* _exe) : UserCommand(_exe) {}		\
+	PC##x(Executor& _exe) : UserCommand(_exe) {}		\
 	void run(std::istream &is, std::ostream& os) override;	\
 };					\
 void PC##x::run(std::istream& is, std::ostream& os)	\
@@ -666,21 +666,21 @@ void PC##x::run(std::istream& is, std::ostream& os)	\
 
 DECL_PIPECMD(BacktraceStates)
 {
-	auto of = exe->getInterpreterHandler()->openOutputFile("tr.txt");
+	auto of = exe.getInterpreterHandler()->openOutputFile("tr.txt");
 	if (of == NULL) {
 		os << "[Backtrace] Couldn't open tr.txt!\n";
 		return;
 	}
 
-	foreach (it, exe->beginStates(), exe->endStates()) {
-		exe->printStackTrace(*(*it), *of);
+	foreach (it, exe.beginStates(), exe.endStates()) {
+		exe.printStackTrace(*(*it), *of);
 	}
 }
 
 class UserCommandTimer : public Executor::Timer
 {
 public:
-	UserCommandTimer(Executor *_exe) : exe(_exe), fd(-1)
+	UserCommandTimer(Executor &_exe) : exe(_exe), fd(-1)
 	{
 		cmds["backtrace"] = new PCBacktraceStates(exe);
 	}
@@ -702,7 +702,7 @@ private:
 		return it->second;
 	}
 
-	Executor	*exe;
+	Executor	&exe;
 	int		fd;
 	cmds_ty		cmds;
 };
@@ -778,7 +778,7 @@ void Executor::initTimers(void)
 	if (UseCmdUser) EXE_ADD_TIMER(UserCommandTimer, 2);
 
 	if (DumpBrExprData)
-		addTimer(std::make_unique<BrDataTimer>("brexprdata.txt", this, true),
+		addTimer(std::make_unique<BrDataTimer>("brexprdata.txt", *this, true),
 			 DumpBrExprData);
 }
 
