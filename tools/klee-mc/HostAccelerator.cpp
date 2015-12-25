@@ -558,16 +558,13 @@ bool HostAccelerator::xchk(const ExecutionState& es_hw, ExecutionState& es_klee)
 		std::cerr << "=====Interpreter vs Hardware====\n";
 		os->printDiff(*os2);
 		if (os2->getSize() == AMD64CPUState::REGFILE_BYTES) {
-			const VexGuestAMD64State	*v;
-
 #define get_amd64(x)	\
 	(const VexGuestAMD64State*)((const void*)(x)->getConcreteBuf())
+			AMD64CPUState	cpu;
 			std::cerr << "Interpreter RegDump:\n";
-			v = get_amd64(os);
-			AMD64CPUState::print(std::cerr, *v);
+			cpu.print(std::cerr, get_amd64(os));
 			std::cerr << "Guest RegDump:\n";
-			v = get_amd64(os2);
-			AMD64CPUState::print(std::cerr, *v);
+			cpu.print(std::cerr, get_amd64(os2));
 		}
 		std::cerr << "=========================\n";
 		ret = false;
