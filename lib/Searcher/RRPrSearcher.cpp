@@ -9,6 +9,7 @@ using namespace klee;
 ExecutionState *RRPrSearcher::selectState(bool allowCompact)
 {
 	std::map<int, std::vector<ExecutionState*>>	prs;
+	unsigned dropped_c = 0;
 
 	// compute all priorities
 	for (auto es : states) {
@@ -17,6 +18,8 @@ ExecutionState *RRPrSearcher::selectState(bool allowCompact)
 			if (es_pr > cut_off) {
 				auto	&v = prs[es_pr];
 				v.push_back(es);
+			} else {
+				dropped_c++;
 			}
 		}
 	}
@@ -37,7 +40,8 @@ ExecutionState *RRPrSearcher::selectState(bool allowCompact)
 	if (v.empty()) return nullptr;
 
 	std::cerr << "[RRPrSearcher] SELECTING: PR: " << last_pr
-		<< " (" << v.size() << " in class)\n";
+		<< " (" << v.size() << " in class; "
+		<< dropped_c <<" below cutoff)\n";
 	return v[0];
 }
 
