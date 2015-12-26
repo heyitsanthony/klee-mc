@@ -734,13 +734,93 @@ void UserCommandTimer::run(void)
 	unlink("cmdklee");
 }
 
+
+
+cl::opt<unsigned>
+DumpPTreeTimer(
+	"dump-ptree-timer",
+        cl::desc("Periodically dump ptree information"));
+class PTreeTimer : public Executor::Timer
+{
+public:
+	PTreeTimer(Executor &_exe) : exe(_exe) {}
+
+	void run()
+	{
+		char name[32];
+		sprintf(name, "ptree%08d.dot", (int) stats::instructions);
+		auto ih = exe.getInterpreterHandler();
+		auto os = ih->openOutputFile(name);
+		if (os) exe.getStateManager()->getPTree()->dump(*os);
+	}
+private:
+	Executor	&exe;
+};
+
+cl::opt<unsigned>
+DumpStatesTimer(
+	"dump-states-timer",
+        cl::desc("Periodically dump state information"));
+class StatesTimer : public Executor::Timer
+{
+public:
+	StatesTimer(Executor &_exe) : exe(_exe) {}
+
+	void run()
+	{
+		auto ih = exe.getInterpreterHandler();
+		auto os = ih->openOutputFile("states.txt");
+		if (!os) return;
+		for (auto es : *exe.getStateManager()) {
+			dumpState(*os, es);
+		}
+	}
+
+private:
+	void dumpState(std::ostream& os, const ExecutionState* es) {
+		os << "(" << es << ",";
+		os << "[";
+		auto next = es->stack.begin();
+		++next;
+		for (const auto &sf : es->stack) {
+			os << "('" << sf.kf->function->getName().str() << "',";
+			if (next == es->stack.end()) {
+				os << es->prevPC->getInfo()->line << "), ";
+			} else {
+				os << next->caller->getInfo()->line << "), ";
+				++next;
+			}
+		}
+		os << "], ";
+
+		const StackFrame &sf = es->stack.back();
+		uint64_t md2u, icnt;
+
+		md2u = computeMinDistToUncovered(
+			es->pc,
+			sf.minDistToUncoveredOnReturn);
+		icnt = theStatisticManager->getIndexedValue(
+			stats::instructions,
+			es->pc->getInfo()->id);
+		os << "{";
+		os << "'depth' : " << es->depth << ", ";
+		os << "'weight' : " << es->weight << ", ";
+		os << "'queryCost' : " << es->queryCost << ", ";
+		os << "'coveredNew' : " << es->coveredNew << ", ";
+		os << "'instsSinceCovNew' : " <<
+			es->lastNewInst-es->personalInsts << ", ";
+		os << "'md2u' : " << md2u << ", ";
+		os << "'icnt' : " << icnt << ", ";
+		os << "}";
+		os << ")\n";
+	}
+
+	Executor	&exe;
+};
+
 ///
 
 static const double kSecondsPerCheck = 0.25;
-
-// XXX hack
-extern "C" unsigned dumpStates, dumpPTree;
-unsigned dumpStates = 0, dumpPTree = 0;
 
 void Executor::initTimers(void)
 {
@@ -767,6 +847,8 @@ void Executor::initTimers(void)
 	EXE_ADD_TIMER(ExprObjScanTimer, UseObjScanTimer)
 	EXE_ADD_TIMER(StateInstStatTimer, DumpStateInstStats)
 	EXE_ADD_TIMER(ForkCondTimer, DumpForkCondGraph)
+	EXE_ADD_TIMER(StatesTimer, DumpStatesTimer)
+	EXE_ADD_TIMER(PTreeTimer, DumpPTreeTimer)
 
 	EXE_ADD_TIMER2(CovTimer, DumpCovData, "cov.txt");
 	EXE_ADD_TIMER2(BrDataTimer, DumpBrData, "brdata.txt");
@@ -788,49 +870,6 @@ void Executor::initTimers(void)
 void Executor::addTimer(std::unique_ptr<Timer> timer, double rate) {
 	std::cerr << "GOT RATE: " << rate << '\n';
 	timers.push_back(std::make_unique<TimerInfo>(std::move(timer), rate));
-}
-
-void Executor::processTimersDumpStates(void)
-{
-  auto os = interpreterHandler->openOutputFile("states.txt");
-  if (!os) goto done;
-
-  for (auto es : *stateManager) {
-    *os << "(" << es << ",";
-    *os << "[";
-    CallStack::iterator next = es->stack.begin();
-    ++next;
-    foreach (sfIt,  es->stack.begin(), es->stack.end()) {
-      *os << "('" << sfIt->kf->function->getName().str() << "',";
-      if (next == es->stack.end()) {
-        *os << es->prevPC->getInfo()->line << "), ";
-      } else {
-        *os << next->caller->getInfo()->line << "), ";
-        ++next;
-      }
-    }
-    *os << "], ";
-
-    StackFrame &sf = es->stack.back();
-    uint64_t md2u, icnt;
-
-    md2u = computeMinDistToUncovered(es->pc, sf.minDistToUncoveredOnReturn);
-    icnt = theStatisticManager->getIndexedValue(
-    	stats::instructions, es->pc->getInfo()->id);
-    *os << "{";
-    *os << "'depth' : " << es->depth << ", ";
-    *os << "'weight' : " << es->weight << ", ";
-    *os << "'queryCost' : " << es->queryCost << ", ";
-    *os << "'coveredNew' : " << es->coveredNew << ", ";
-    *os << "'instsSinceCovNew' : " << es->lastNewInst-es->personalInsts << ", ";
-    *os << "'md2u' : " << md2u << ", ";
-    *os << "'icnt' : " << icnt << ", ";
-    *os << "}";
-    *os << ")\n";
-  }
-
-done:
-  dumpStates = 0;
 }
 
 Executor::TimerInfo::TimerInfo(std::unique_ptr<Timer> _timer, double _rate)
@@ -858,23 +897,12 @@ void Executor::TimerInfo::forceFire(double now)
 	nextFireTime = realRate + after;
 }
 
-
 void Executor::processTimers(ExecutionState& current, double maxInstTime)
 {
 	static double lastCall = 0., lastCheck = 0.;
 	double now = util::estWallTime();
 
 	if (now - lastCheck <= kSecondsPerCheck) goto done;
-
-	if (dumpPTree) {
-		char name[32];
-		sprintf(name, "ptree%08d.dot", (int) stats::instructions);
-		auto os = interpreterHandler->openOutputFile(name);
-		if (os) stateManager->getPTree()->dump(*os);
-		dumpPTree = 0;
-	}
-
-	if (dumpStates) processTimersDumpStates();
 
 	if (	maxInstTime > 0 &&
 		!stateManager->isRemovedState(&current) &&
