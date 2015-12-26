@@ -835,9 +835,28 @@ done:
 
 Executor::TimerInfo::TimerInfo(std::unique_ptr<Timer> _timer, double _rate)
 	: timer(std::move(_timer))
-	,  rate(_rate)
-	,  nextFireTime(util::estWallTime() + rate)
+	, rate(_rate)
+	, realRate(_rate)
+	, nextFireTime(util::estWallTime() + rate)
 {}
+
+void Executor::TimerInfo::forceFire(double now)
+{
+	double after;
+	timer->run();
+	after = util::estWallTime();
+	// adaptive rates for slower timers
+	if ((after - now) > realRate) {
+		std::cerr	<< "[ExeTimer] backing off from "
+				<< realRate << " (base " << rate << ")\n";
+		realRate += rate;
+	} else if (realRate > rate) {
+		realRate -= 0.5 * rate;
+	} else {
+		realRate = rate;
+	}
+	nextFireTime = realRate + after;
+}
 
 
 void Executor::processTimers(ExecutionState& current, double maxInstTime)

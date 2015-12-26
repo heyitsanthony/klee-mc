@@ -106,13 +106,11 @@ public:
 			return false;
 		}
 
-		void forceFire(double now) {
-			timer->run();
-			nextFireTime = rate + now;
-		}
+		void forceFire(double now);
 	private:
 		std::unique_ptr<Timer> timer;
-		const double rate;  /// Approximate delay per timer firing.
+		const double rate;  /// Approximate delay per timer firing.a
+		double realRate; // rate after doing backoff
 		double nextFireTime; /// Wall time for next firing.
 	};
 
