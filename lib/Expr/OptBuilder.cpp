@@ -425,12 +425,21 @@ ref<Expr> OptBuilder::Select(
 
 	// c ? t : f  <=> (c and t) or (not c and f)
 	if (kt == Expr::Bool) {
-		if (ConstantExpr *CE = dyn_cast<ConstantExpr>(t)) {
-			if (CE->isTrue())
+		auto t_ce = dyn_cast<ConstantExpr>(t);
+		auto f_ce = dyn_cast<ConstantExpr>(f);
+
+		// ite x true false => x (smt printer has to do this a lot)
+		if (t_ce && f_ce && t_ce->isTrue() && f_ce->isZero())
+			return c;
+
+		if (t_ce) {
+			if (t_ce->isTrue())
 				return MK_OR(c, f);
 			return MK_AND(Expr::createIsZero(c), f);
-		} else if (ConstantExpr *CE = dyn_cast<ConstantExpr>(f)) {
-			if (CE->isTrue())
+		}
+
+		if (f_ce) {
+			if (f_ce->isTrue())
 				return MK_OR(Expr::createIsZero(c), t);
 			return MK_AND(c, t);
 		}
