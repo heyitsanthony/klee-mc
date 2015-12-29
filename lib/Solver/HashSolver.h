@@ -7,7 +7,7 @@
 
 #include <string>
 #include <vector>
-#include <set>
+#include <unordered_set>
 
 #include "QHS.h"
 
@@ -35,9 +35,9 @@ private:
 	const Query		*cur_q;
 	Expr::Hash		cur_hash;
 	bool			q_loaded;
-	std::set<Expr::Hash>	sat_hashes;
-	std::set<Expr::Hash>	unsat_hashes;
-	std::set<Expr::Hash>	poison_hashes;
+	std::unordered_set<Expr::Hash>	sat_hashes;
+	std::unordered_set<Expr::Hash>	unsat_hashes;
+	std::unordered_set<Expr::Hash>	poison_hashes;
 	std::unique_ptr<QHSStore>	qstore;
 
 	Assignment* loadCachedAssignment(const std::vector<const Array*>& objs);
