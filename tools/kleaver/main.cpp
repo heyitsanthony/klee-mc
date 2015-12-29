@@ -72,6 +72,9 @@ namespace {
               clEnumValN(ExprBuilder::SimplifyingBuilder,
 	      	"simplify",
 		"Fold constants and simplify expressions."),
+              clEnumValN(ExprBuilder::HandOptBuilder,
+	      	"opt",
+		"Hand-optimized builder."),
               clEnumValEnd));
 
   cl::opt<bool>
@@ -218,7 +221,14 @@ static void doQuery(Solver* S, QueryCommand* QC)
 
 	Assignment	a(QC->Objects);
 	if (S->getInitialValues(q, a)) {
-		std::cout << "SAT\n";
+		bool mbt;
+		std::cout << "SAT";
+		if (S->mustBeTrue(q, mbt)) {
+			std::cout << ((mbt)
+				? " (Valid)"
+				: " (Contingent)");
+		}
+		std::cout << '\n';
 		a.print(std::cout);
 	} else {
 		bool	mbf, mbt;
