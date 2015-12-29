@@ -3,8 +3,11 @@
 #include "ValidatingSolver.h"
 #include "klee/util/Assignment.h"
 #include "SMTPrinter.h"
+#include "IndependentSolver.h"
 
 using namespace klee;
+
+#define TAG "[ValidatingSolver] "
 
 #define CHK_ASSUMPTIONS					\
 	ConstraintManager	cm;			\
@@ -13,13 +16,11 @@ using namespace klee;
 	okConstrs = oracle->impl->computeSat(		\
 		Query(cm, query.constraints.getConjunction()));	\
 	if (oracle->impl->failed()) {				\
+		std::cerr << TAG << "couldn't validate assumptions.\n"; \
 		oracle->impl->ackFail();			\
 		okConstrs = true; } 				\
 	assert (okConstrs && "Bad assumptions");		\
 	assert (!oracle->impl->failed() && !solver->impl->failed());
-
-
-#define TAG "[ValidatingSolver] "
 
 bool ValidatingSolver::computeSat(const Query& query)
 {
@@ -59,6 +60,43 @@ void ValidatingSolver::failQuery(void)
 	SolverImpl::failQuery();
 }
 
+static void dumpIndep(const Query& query)
+{
+	auto cs = query.constraints;
+	auto q = IndependentSolver::getIndependentQuery(query, cs);
+	SMTPrinter::dump(q, "validity.indep");
+}
+
+
+void ValidatingSolver::retryValidity(
+	const Query &query,
+	Solver::Validity oracleValidity,
+	Solver::Validity solverValidity)
+{
+	auto retryOracle = oracle->impl->computeValidity(query);
+	if (retryOracle != oracleValidity) {
+		std::cerr
+			<< "Oracle retry mismatch: expected " << oracleValidity
+			<< " got " << retryOracle << '\n';
+	}
+
+	auto retrySolver = solver->impl->computeValidity(query);
+	if (retrySolver != solverValidity) {
+		std::cerr
+			<< "Solver retry mismatch: expected " << solverValidity
+			<< " got " << retrySolver << '\n';
+	}
+
+	bool	s_mbf = false, o_mbf = false, ok;
+	ok = solver->mayBeFalse(query, s_mbf);
+	assert(ok);
+	ok = oracle->mayBeFalse(query, o_mbf);
+	assert(ok);
+	std::cerr << "oracle mbf=" << o_mbf << ". solver mbf=" << s_mbf << '\n';
+	std::cerr << "query hash: " << (void*)query.hash() << '\n';
+	std::cerr << "query neg hash: " << (void*)query.negateExpr().hash() << '\n';
+}
+
 Solver::Validity ValidatingSolver::computeValidity(const Query &query)
 {
 	Solver::Validity	oracleValidity, solverValidity;
@@ -83,7 +121,14 @@ Solver::Validity ValidatingSolver::computeValidity(const Query &query)
 		std::cerr << "test:\n";
 		solver->printName();
 		std::cerr << '\n';
+
+		// independent solver changes the query structure too so a bug
+		// may be there (easier to analyze smt dump if not, regardless)
+		dumpIndep(query);
+
+		retryValidity(query, oracleValidity, solverValidity);
 	}
+
 
 	assert ((oracleValidity == solverValidity) &&
 		"bad solver:  mismatched validity");
