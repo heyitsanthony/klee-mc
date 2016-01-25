@@ -75,8 +75,13 @@ public:
 	}
 
 	bool intersects(const DenseSet &b) const {
-		for (auto& s_e : s) {
-			if (b.s.count(s_e))
+		auto s1 = this, s2 = &b;
+		if (s1->s.size() > s2->s.size()) {
+			s1 = &b;
+			s2 = this;
+		}
+		for (const auto& s_e : s1->s) {
+			if (s2->s.count(s_e))
 				return true;
 		}
 		return false;

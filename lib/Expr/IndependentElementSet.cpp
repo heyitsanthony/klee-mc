@@ -9,28 +9,23 @@ void IndependentElementSet::print(std::ostream& os) const
 {
 	os << "{";
 	bool first = true;
-	foreach (it, wholeObjects.begin(), wholeObjects.end()) {
-		const Array *array = *it;
-
+	for (auto array : wholeObjects) {
 		if (first) {
 			first = false;
 		} else {
 			os << ", ";
 		}
-
 		os << "MO " << array->name;
 	}
 
-	foreach (it, elements.begin(), elements.end()) {
-		const Array *array = it->first;
-		const DenseSet<unsigned> &dis = it->second;
-
+	for (const auto &p : elements) {
+		const Array *array = p.first;
+		const DenseSet<unsigned> &dis = p.second;
 		if (first) {
 			first = false;
 		} else {
 			os << ", ";
 		}
-
 		os << "MO " << array->name << " : " << dis;
 	}
 	os << "}";
@@ -38,44 +33,39 @@ void IndependentElementSet::print(std::ostream& os) const
 
 bool IndependentElementSet::elem_intersect(const IndependentElementSet& b) const
 {
-	foreach (it, elements.begin(), elements.end()) {
-		const Array *array = it->first;
-		elements_ty::const_iterator it2;
+	for (const auto &p : elements) {
+		const Array *array = p.first;
 
 		if (b.wholeObjects.count(array))
 			return true;
 
-		it2 = b.elements.find(array);
+		auto it2 = b.elements.find(array);
 		if (it2 != b.elements.end()) {
-			if (it->second.intersects(it2->second))
+			if (p.second.intersects(it2->second))
 				return true;
 		}
 	}
-
 	return false;
 }
 
 bool IndependentElementSet::obj_intersect(const IndependentElementSet& b) const
 {
-	foreach (it, wholeObjects.begin(), wholeObjects.end()) {
-		if (b.wholeObjects.count(*it) || b.elements.count(*it))
+	for (auto arr : wholeObjects) {
+		if (b.wholeObjects.count(arr) || b.elements.count(arr))
 			return true;
 	}
-
 	return false;
 }
 
 bool IndependentElementSet::intersects(const IndependentElementSet &b) const
-{ return obj_intersect(b) ? true : elem_intersect(b); }
+{ return obj_intersect(b) || elem_intersect(b); }
 
 bool IndependentElementSet::add(const IndependentElementSet &b)
 {
 	bool	modified = false;
 
 	/* add whole objects */
-	foreach (it, b.wholeObjects.begin(), b.wholeObjects.end()) {
-		const Array *array(*it);
-
+	for (auto array : b.wholeObjects) {
 		/* if a partial object in this, update to whole object now */
 		if (elements.erase(array)) {
 			modified = true;
@@ -87,22 +77,20 @@ bool IndependentElementSet::add(const IndependentElementSet &b)
 	}
 
 	/* add partial objects */
-	foreach (it, b.elements.begin(), b.elements.end()) {
-		const Array *array = it->first;
-		elements_ty::iterator it2;
+	for (const auto &p : b.elements) {
+		const Array *array = p.first;
 
 		if (wholeObjects.count(array))
 			continue;
 
-		it2 = elements.find(array);
-		if (it2==elements.end()) {
+		auto it2 = elements.find(array);
+		if (it2 == elements.end()) {
 			modified = true;
-			elements.insert(*it);
+			elements.insert(p);
 			continue;
 		}
 
-		if (it2->second.add(it->second))
-			modified = true;
+		modified |= it2->second.add(p.second);
 	}
 
 	return modified;
@@ -167,6 +155,7 @@ IndependentElementSet IndependentElementSet::getIndependentConstraints(
 	for (unsigned i = 0; i < query.constraints.size(); i++) {
 		ref<Expr>	e(query.constraints.getConstraint(i));
 		ref<ReadSet>	rs(query.constraints.getReadset(i));
+
 		worklist.push_back(new IndependentElementSet(e, rs));
 		worklistDone.push_back(false);
 	}
@@ -174,6 +163,7 @@ IndependentElementSet IndependentElementSet::getIndependentConstraints(
 	// Copies here were really inefficient. Still kind of pricey.
 	bool done = false;
 	while (done == false) {
+		// set to false if anything added in this round
 		done = true;
 
 		/* does constraint readset intersect with the completion
@@ -183,7 +173,7 @@ IndependentElementSet IndependentElementSet::getIndependentConstraints(
 			if (worklistDone[i])
 				continue;
 
-			// evaluate in next work set
+			// evaluate in next work set; may pick up more elements
 			if (!worklist[i]->intersects(eltsClosure)) {
 				continue;
 			}
@@ -193,18 +183,7 @@ IndependentElementSet IndependentElementSet::getIndependentConstraints(
 			result.push_back(i);
 
 			// if the closure set changed, will need to reprocess
-			added_more = !(eltsClosure.add(*worklist[i]));
-		#if 0
-			if (!added_more) {
-				std::cerr << "couldn't amend with: ";
-				worklist[i]->print(std::cerr);
-				std::cerr << '\n';
-			} else {
-				std::cerr << "amend with: ";
-				worklist[i]->print(std::cerr);
-				std::cerr << '\n';
-			}
-		#endif
+			added_more = eltsClosure.add(*worklist[i]);
 			done = done && !added_more;
 		}
 	}

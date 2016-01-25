@@ -217,8 +217,6 @@ static void doQuery(Solver* S, QueryCommand* QC)
 		return;
 	}
 
-	SMTPrinter::dump(q, "kleaver");
-
 	Assignment	a(QC->Objects);
 	if (S->getInitialValues(q, a)) {
 		bool mbt;
@@ -231,15 +229,19 @@ static void doQuery(Solver* S, QueryCommand* QC)
 		std::cout << '\n';
 		a.print(std::cout);
 	} else {
-		bool	mbf, mbt;
-		if (!S->mustBeFalse(q, mbf) || !S->mustBeTrue(q, mbt)) {
+		bool	mbf = false, mbt = false;
+		auto	negq = Query(q.negateExpr());
+		if (!S->mayBeFalse(negq, mbf) || !S->mayBeTrue(negq, mbt)) {
 			std::cout << "FAIL";
 		} else {
-			std::cout << ((mbf)
-				? "UNSAT"
-				: "SAT but no assignment?!?!");
-			std::cout << "\nmbf: " << mbf << ". mbt: " << mbt;
-			std::cerr << '\n' << q.expr;
+			if (mbt) {
+				std::cout << "SAT but no assignment?!?!";
+			} else if (mbf) {
+				std::cout << "UNSAT";
+			} else {
+				std::cout << "\nmbf: " << mbf << ". mbt: " << mbt;
+			}
+			std::cout << '\n';
 		}
 	}
 

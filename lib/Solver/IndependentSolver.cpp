@@ -170,7 +170,6 @@ static bool isUnconstrained(
 	if (isFreeExpr(query.expr))
 		return true;
 
-//	std::cerr << "MISSED UNCONSTRAINED: " << query.expr << '\n';
 	return false;
 }
 
