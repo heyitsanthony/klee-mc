@@ -40,9 +40,9 @@ public:
 	bool pathCommitted;	/* did we write a path out with this func? */
 	bool isSpecial;		/* uses "special" semantics on enter/exit */
 private:
-	typedef std::unordered_map<llvm::BasicBlock*, unsigned>
-		bbentry_ty;
-	bbentry_ty basicBlockEntry;
+	typedef std::unordered_map<const llvm::BasicBlock*, unsigned>
+		bbentry_t;
+	bbentry_t basicBlockEntry;
 	std::set<const KFunction*>	exits_seen;
 	uint64_t			enter_c;
 	uint64_t			exit_c;
@@ -52,8 +52,8 @@ private:
 	KFunction &operator=(const KFunction&);
 	void addInstruction(
 		KModule* km,
-		llvm::Instruction* inst,
-		const std::map<llvm::Instruction*, unsigned>& registerMap,
+		const llvm::Instruction* inst,
+		const std::unordered_map<const llvm::Instruction*, unsigned>& registerMap,
 		unsigned int ins_num);
 public:
 	explicit KFunction(llvm::Function*, KModule *);
@@ -64,8 +64,8 @@ public:
 	{ if (mod_name) return *mod_name; return std::string(""); }
 
 	unsigned getArgRegister(unsigned index) { return index; }
-	llvm::Value* getValueForRegister(unsigned reg);
-	unsigned getBasicBlockEntry(llvm::BasicBlock* bb) const
+	const llvm::Value* getValueForRegister(unsigned reg) const;
+	unsigned getBasicBlockEntry(const llvm::BasicBlock* bb) const
 	{ return basicBlockEntry.find(bb)->second; }
 
 	void addExit(const KFunction* ex) { exits_seen.insert(ex); }

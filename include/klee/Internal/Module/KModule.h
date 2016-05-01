@@ -99,7 +99,7 @@ public:
     // FIXME: ihandler should not be here
     virtual void prepare(InterpreterHandler *ihandler);
     // link mod with object's module
-    void addModule(llvm::Module* mod);
+    void addModule(std::unique_ptr<llvm::Module> mod);
 
     /// Return an id for the given constant, creating a new one if necessary.
     unsigned getConstantID(llvm::Constant *c, KInstruction* ki);

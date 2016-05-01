@@ -18,12 +18,15 @@ STATIC_FLAGS=-Wl,-no-export-dynamic -static -v
 STATIC_LIBS=-ldl -lpthread -lrt -lcrypto -lz
 endif
 
-X_LINK_COMPONENTS = mcjit bitreader bitwriter ipo linker engine core irreader
-USEDLIBS=kleeSearcher.a \
+X_LINK_COMPONENTS = mcjit bitreader bitwriter ipo linker engine core irreader mc analysis support
+USEDLIBS=kleeModule.a	\
+	kleeSearcher.a \
 	kleeSkins.a \
-	kleeCore.a kleeModule.a	\
-	kleaverSolver.a kleaverExpr.a \
-	kleeSupport.a kleeBasic.a
+	kleeCore.a \
+	kleaverSolver.a \
+	kleaverExpr.a \
+	kleeSupport.a \
+	kleeBasic.a
 include $(LEVEL)/Makefile.common
 
 ifeq ($(ENABLE_STPLOG), 1)

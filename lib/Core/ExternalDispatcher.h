@@ -11,6 +11,7 @@
 #define KLEE_EXTERNALDISPATCHER_H
 
 #include <map>
+#include <unordered_map>
 #include <string>
 #include <stdint.h>
 #include <memory>
@@ -30,7 +31,7 @@ class ExternalDispatcher
 {
 private:
 	typedef void(*dispatch_jit_fptr_t)(void);
-	typedef std::map<const llvm::Instruction*, llvm::Function*>
+	typedef std::unordered_map<const llvm::Instruction*, llvm::Function*>
 		dispatchers_ty;
 	typedef std::map<llvm::Function*,dispatch_jit_fptr_t>
 		dispatches_jitted_t;
@@ -43,10 +44,11 @@ private:
 	std::map<std::string, void*> preboundFunctions;
     
 	llvm::Function *createDispatcherThunk(
-		llvm::Function *f, llvm::Instruction *i);
+		llvm::Function *f, const llvm::Instruction *i);
 
 	llvm::Function *findDispatchThunk(
-		llvm::Function* f, llvm::Instruction *i);
+		llvm::Function* f,
+		const llvm::Instruction *i);
 
 	bool runProtectedCall(dispatch_jit_fptr_t f, uint64_t *args);
  
@@ -63,7 +65,7 @@ public:
 	 * into args[0].
 	 */
 	bool executeCall(	llvm::Function *function,
-				llvm::Instruction *i,
+				const llvm::Instruction *i,
 				uint64_t *args);
 
 	void* resolveSymbol(const std::string& name) const;

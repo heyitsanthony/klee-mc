@@ -73,7 +73,7 @@ ifeq ($(ENABLE_TCMALLOC),1)
   LD.Flags += -ltcmalloc
 endif
 
-LD.Flags += -lz  -lcrypto -lssl -fopenmp
+LD.Flags += -lz  -lcrypto -lssl
 
 ifeq ($(ENABLE_INSTRUCTION_ID),1)
   CXXFLAGS += -DINCLUDE_INSTR_ID_IN_PATH_INFO

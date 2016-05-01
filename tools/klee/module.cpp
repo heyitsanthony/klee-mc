@@ -96,11 +96,11 @@ static void checkUndefined(
 	}
 }
 
-static void checkInlineAsm(const llvm::Function *f)
+static void checkInlineAsm(const llvm::Function& f)
 {
-	foreach (bbIt, f->begin(), f->end()) {
-		foreach (it, bbIt->begin(),  bbIt->end()) {
-			const CallInst *ci = dyn_cast<CallInst>(it);
+	for (const auto &bb : f) {
+		for (const auto& ins : bb) {
+			const CallInst *ci = dyn_cast<const CallInst>(&ins);
 
 			if (!ci) continue;
 
@@ -108,9 +108,9 @@ static void checkInlineAsm(const llvm::Function *f)
 				continue;
 
 			klee_warning_once(
-				f,
+				&f,
 				"function \"%s\" has inline asm",
-				f->getName().data());
+				f.getName().data());
 		}
 	}
 }
@@ -142,16 +142,13 @@ void externalsAndGlobalsCheck(const Module *m)
 
 	if (g_WithPOSIXRuntime) dontCare.insert("syscall");
 
-	foreach (fnIt, m->begin(), m->end()) {
+	for (const auto &fn : *m) {
 		/* XXX: should look at specialfunctionhandler to check
 		 * whether function is a klee intrinsic */
-		if (fnIt->isDeclaration() && !fnIt->use_empty()) {
-			externals.insert(
-				std::make_pair(fnIt->getName(), false));
+		if (fn.isDeclaration() && !fn.use_empty()) {
+			externals.emplace(fn.getName(), false);
 		}
-
-		checkInlineAsm(fnIt);
-
+		checkInlineAsm(fn);
 	}
 
 	foreach (it, m->global_begin(), m->global_end()) {
@@ -209,25 +206,24 @@ static void uclibc_forceImports(llvm::Module* mainModule)
 		NULL);
 }
 
-static void uclibc_stripPrefixes(llvm::Module* mainModule)
+static void uclibc_stripPrefixes(llvm::Module& mainModule)
 {
-  foreach (fi, mainModule->begin(), mainModule->end()) {
-    Function *f = fi;
-    const std::string &name = f->getName();
-    unsigned size = name.size();
+	for (auto& fn : mainModule) {
+		const std::string &name = fn.getName();
+		unsigned size = name.size();
 
-    if (name[0] !='\01') continue;
-    if (name[size-2] !='6' || name[size-1] !='4') continue;
-    std::string unprefixed = name.substr(1);
+		if (name[0] !='\01') continue;
+		if (name[size-2] !='6' || name[size-1] !='4') continue;
+		std::string unprefixed = name.substr(1);
 
-    // See if the unprefixed version exists.
-    if (Function *f2 = mainModule->getFunction(unprefixed)) {
-       f->replaceAllUsesWith(f2);
-       f->eraseFromParent();
-    } else {
-      f->setName(unprefixed);
-    }
-  }
+		// See if the unprefixed version exists.
+		if (Function *f2 = mainModule.getFunction(unprefixed)) {
+			fn.replaceAllUsesWith(f2);
+			fn.eraseFromParent();
+		} else {
+			fn.setName(unprefixed);
+		}
+	}
 }
 
 static void fixup_func(llvm::Module* m, const char *dest, const char *src)
@@ -296,8 +292,8 @@ static void uclibc_setEntry(llvm::Module* mainModule)
 		llvm::ConstantExpr::getBitCast(
 			userMainFn,
 			ft->getParamType(0)));
-	args.push_back(stub->arg_begin());
-	args.push_back(++stub->arg_begin());
+	args.push_back(&(*stub->arg_begin()));
+	args.push_back(&(*(++stub->arg_begin())));
 	args.push_back(Constant::getNullValue(ft->getParamType(3)));
 	args.push_back(Constant::getNullValue(ft->getParamType(4)));
 	args.push_back(Constant::getNullValue(ft->getParamType(5)));
@@ -329,7 +325,7 @@ static llvm::Module *linkWithUclibc(llvm::Module *mainModule)
 	// linked. In the off chance that both prefixed and unprefixed
 	// versions are present in the module, make sure we don't create a
 	// naming conflict.
-	uclibc_stripPrefixes(mainModule);
+	uclibc_stripPrefixes(*mainModule);
 
 	klee::linkWithLibrary(*mainModule, KLEE_UCLIBC "/lib/libc.bc");
 	assert(mainModule && "unable to link with uclibc");
@@ -512,7 +508,7 @@ std::unique_ptr<Module> loadInputBitcode(const std::string& ifile)
 		goto done;
 	}
 
-	if (m->materializeAllPermanently()) {
+	if (m->materializeAll()) {
 		m = nullptr;
 		goto done;
 	}

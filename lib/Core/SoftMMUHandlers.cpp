@@ -24,10 +24,11 @@ SoftMMUHandlers::SoftMMUHandlers(Executor& exe, const std::string& suffix)
 		std::string	path(exe.getKModule()->getLibraryDir());
 
 		path = path + ("/libkleeRuntimeMMU.bc");
+
 		auto mod = getBitcodeModule(path.c_str());
 		assert (mod != NULL);
+		exe.addModule(std::move(mod));
 
-		exe.addModule(mod.get());
 		std::cerr << "[SoftMMUHandlers] Loaded "<< path <<'\n';
 		isLoaded = true;
 	}

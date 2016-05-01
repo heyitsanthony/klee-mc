@@ -18,23 +18,23 @@ bool ShadowPass::runOnBasicBlockStores(llvm::BasicBlock& bi, uint64_t tag)
 	unsigned tainted_ins_c = 0;
 
 	foreach_manual(iit, bi.begin(), bi.end()) {
-		Instruction	*ii = iit;
+		Instruction &ii = *iit;
 
 		++iit;
-		if (ii->getOpcode() != Instruction::Store)
+		if (ii.getOpcode() != Instruction::Store)
 			continue;
 
 		CallInst *new_call;
 		std::vector<Value*>	args;
 
-		args.push_back(ii->getOperand(0));
-		args.push_back(ii->getOperand(1));
+		args.push_back(ii.getOperand(0));
+		args.push_back(ii.getOperand(1));
 		args.push_back(
 			ConstantInt::get(
 				IntegerType::get(getGlobalContext(), 64),
 				tag));
 		new_call = CallInst::Create(f_store, args);
-		ReplaceInstWithInst(ii, new_call);
+		ReplaceInstWithInst(&ii, new_call);
 		tainted_ins_c++;
 	}
 
@@ -44,11 +44,11 @@ bool ShadowPass::runOnBasicBlockStores(llvm::BasicBlock& bi, uint64_t tag)
 /* instrument all loads to taint data */
 bool ShadowPass::runOnBasicBlockLoads(llvm::BasicBlock& bi, uint64_t tag)
 {
-	Instruction	*last_load = NULL;
-	unsigned	tainted_ins_c = 0;
+	const Instruction	*last_load = NULL;
+	unsigned		tainted_ins_c = 0;
 
 	foreach_manual (iit, bi.begin(), bi.end()) {
-		Instruction	*ii = iit;
+		Instruction &ii = *iit;
 
 		++iit;
 
@@ -61,14 +61,14 @@ bool ShadowPass::runOnBasicBlockLoads(llvm::BasicBlock& bi, uint64_t tag)
 				ConstantInt::get(
 					IntegerType::get(getGlobalContext(), 64),
 					tag));
-			new_call = CallInst::Create(f_load, args, "", ii);
+			new_call = CallInst::Create(f_load, args, "", &ii);
 			assert (new_call && "couldn't instrument post load");
 			last_load = NULL;
 			tainted_ins_c++;
 		}
 
-		if (ii->getOpcode() == Instruction::Load)
-			last_load = ii;
+		if (ii.	getOpcode() == Instruction::Load)
+			last_load = &ii;
 	}
 
 	return (tainted_ins_c != 0);

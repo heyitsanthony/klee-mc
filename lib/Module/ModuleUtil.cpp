@@ -123,7 +123,7 @@ std::unique_ptr<Module> getBitcodeModule(const char* path)
 	
 	assert (ret_mod && "Couldn't parse bitcode mod");
 
-	auto err = ret_mod->materializeAllPermanently();
+	auto err = ret_mod->materializeAll();
 	if (err) {
 		std::cerr << "Materialize failed..." << std::endl;
 		assert (0 == 1 && "BAD MOD");
@@ -205,9 +205,7 @@ void klee::linkWithLibrary(
 		return;
 	}
 
-	if (llvm::Linker::LinkModules(
-		&mod, new_mod.get(), [] (const DiagnosticInfo &di) {}))
-	{
+	if (llvm::Linker::linkModules(mod, std::move(new_mod))) {
 		std::cerr << "[Mod] Error loading '" << libraryName << '\n';
 		return;
 	}

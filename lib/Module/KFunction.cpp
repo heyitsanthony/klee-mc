@@ -20,7 +20,7 @@ unsigned KFunction::inst_clock = 0;
 
 static int getOperandNum(
 	Value *v,
-        const std::map<Instruction*, unsigned> &regMap,
+        const std::unordered_map<const Instruction*, unsigned> &regMap,
         KModule *km,
         KInstruction *ki)
 {
@@ -53,17 +53,16 @@ KFunction::KFunction(llvm::Function *_function, KModule *km)
 , mod_name(NULL)
 , path_commit_tick(~0)
 {
-	std::map<Instruction*, unsigned> regMap;
+	std::unordered_map<const Instruction*, unsigned> regMap;
 	unsigned arg_c = 0;
 	unsigned rnum = numArgs;
 	unsigned ins_num = 0;
 
 	inst_tick = inst_clock++;
 
-	foreach (bbit, function->begin(), function->end()) {
-		BasicBlock *bb = bbit;
-		basicBlockEntry[bb] = numInstructions;
-		numInstructions += bb->size();
+	for (const auto &bb : *function) {
+		basicBlockEntry.emplace(&bb, numInstructions);
+		numInstructions += bb.size();
 	}
 
 	arguments = new Value*[numArgs];
@@ -73,9 +72,9 @@ KFunction::KFunction(llvm::Function *_function, KModule *km)
 	}
 
 	// The first arg_size() registers are reserved for formals.
-	foreach (bbit, function->begin(), function->end()) {
-		foreach (it, bbit->begin(), bbit->end()) {
-			regMap[it] = rnum++;
+	for (const auto &bb : *function) {
+		for (const auto &inst : bb) {
+			regMap[&inst] = rnum++;
 		}
 	}
 	numRegisters = rnum;
@@ -83,9 +82,9 @@ KFunction::KFunction(llvm::Function *_function, KModule *km)
 	// build shadow instructions */
 	instructions = new KInstruction*[numInstructions+1];
 	instructions[numInstructions] = NULL;
-	foreach (bbit, function->begin(), function->end()) {
-		foreach(it, bbit->begin(), bbit->end()) {
-			addInstruction(km, it, regMap, ins_num);
+	for (const auto &bb : *function) {
+		for (const auto &inst : bb) {
+			addInstruction(km, &inst, regMap, ins_num);
 			ins_num++;
 		}
 	}
@@ -93,8 +92,8 @@ KFunction::KFunction(llvm::Function *_function, KModule *km)
 
 void KFunction::addInstruction(
 	KModule	*km,
-	llvm::Instruction* inst,
-	const std::map<llvm::Instruction*, unsigned>& regMap,
+	const llvm::Instruction* inst,
+	const std::unordered_map<const llvm::Instruction*, unsigned>& regMap,
 	unsigned int ins_num)
 {
 	KInstruction	*ki;
@@ -106,7 +105,7 @@ void KFunction::addInstruction(
 	numArgs = ki->getNumArgs();
 
 	if (ki->isCall()) {
-		CallSite	cs(inst);
+		const CallSite	cs(const_cast<llvm::Instruction*>(inst));
 
 		ki->setOperand(
 			0, getOperandNum(cs.getCalledValue(), regMap, km, ki));
@@ -124,7 +123,7 @@ void KFunction::addInstruction(
 	}
 }
 
-llvm::Value* KFunction::getValueForRegister(unsigned reg)
+const llvm::Value* KFunction::getValueForRegister(unsigned reg) const
 {
 	if (reg < numArgs)
 		return arguments[reg];

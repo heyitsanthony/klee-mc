@@ -21,8 +21,8 @@ public:
 	/* pr_k > pr_j => pr_k scheduled first */
 	virtual int getPriority(ExecutionState& st)
 	{
-		llvm::Function	*f;
-		uint64_t	hits;
+		const llvm::Function	*f;
+		uint64_t		hits;
 
 		f = getHitFunction(st);
 		hits = hitmap[f];
@@ -53,7 +53,7 @@ public:
 		return -hits;
 	}
 private:
-	llvm::Function* getHitFunction(ExecutionState& st) const
+	const llvm::Function* getHitFunction(ExecutionState& st) const
 	{
 		// necessary so that we don't absorb helper functions
 		// from vexllvm-- improper bucketing!
@@ -97,7 +97,7 @@ private:
 	virtual void printName(std::ostream &os) const { os << "Bucket"; }
 
 protected:
-	typedef std::map<llvm::Function*, uint64_t> hitmap_ty;
+	typedef std::unordered_map<const llvm::Function*, uint64_t> hitmap_ty;
 	hitmap_ty	hitmap;
 };
 }

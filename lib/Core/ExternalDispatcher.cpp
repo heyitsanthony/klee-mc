@@ -129,10 +129,14 @@ public:
 	}
 
 	void reserveAllocationSpace(
-		uintptr_t CodeSize, uintptr_t DataSizeRO,
-		uintptr_t DataSizeRW) override
+		uintptr_t CodeSize, uint32_t CodeAlign,
+		uintptr_t RODataSize, uint32_t RODataAlign,
+		uintptr_t RWDataSize, uint32_t RWDataAlign) override
 	{
-		smm.reserveAllocationSpace(CodeSize, DataSizeRO, DataSizeRW);
+		smm.reserveAllocationSpace(
+			CodeSize, CodeAlign,
+			RODataSize, RODataAlign,
+			RWDataSize, RWDataAlign);
 	}
 
 	bool finalizeMemory (std::string *ErrMsg=nullptr) override {
@@ -208,7 +212,7 @@ ExternalDispatcher::~ExternalDispatcher() {}
 
 llvm::Function* ExternalDispatcher::findDispatchThunk(
 	llvm::Function* f,
-	llvm::Instruction *i)
+	const llvm::Instruction *i)
 {
 	llvm::Function	*dispatch_thunk;
 
@@ -230,12 +234,12 @@ llvm::Function* ExternalDispatcher::findDispatchThunk(
 	if(!(dispatch_thunk = createDispatcherThunk(f, i))) 
 		return nullptr;
 
-	dispatchers.insert(std::make_pair(i, dispatch_thunk));
+	dispatchers.emplace(i, dispatch_thunk);
 
 	return dispatch_thunk;
 }
 
-bool ExternalDispatcher::executeCall(Function *f, Instruction *i, uint64_t *args)
+bool ExternalDispatcher::executeCall(Function *f, const Instruction *i, uint64_t *args)
 {
 	llvm::Function		*thunk;
 	dispatch_jit_fptr_t	fptr;
@@ -299,13 +303,12 @@ bool ExternalDispatcher::runProtectedCall(dispatch_jit_fptr_t f, uint64_t *args)
 // done, then the jit will end up generating a nullary stub just to call our
 // stub, for every single function call.
 Function *ExternalDispatcher::createDispatcherThunk(
-	Function *target, Instruction *inst)
+	Function *target, const Instruction *inst)
 {
 	void		*sym_addr;
 	CallSite	cs;
 
 
-	std::cerr << "target0: " << target->getName().str() << '\n';
 	sym_addr = resolveSymbol(target->getName());
 	if (!sym_addr) {
 		std::cerr << "[ExternalDispatcher] couldn't resolve '"
@@ -313,9 +316,6 @@ Function *ExternalDispatcher::createDispatcherThunk(
 		return 0;
 	}
 	
-	std::cerr << "target: " << target->getName().str() << '\n';
-	std::cerr << "HI SYM ADDR: " << sym_addr << '\n';
-
 	if (!dispatchModule) {
 		dispatchModule = std::make_unique<Module>(
 				"ExternalDispatcher",
@@ -323,9 +323,9 @@ Function *ExternalDispatcher::createDispatcherThunk(
 	}
 
 	if (inst->getOpcode()==Instruction::Call) {
-		cs = CallSite(cast<CallInst>(inst));
+		cs = CallSite(const_cast<CallInst*>(cast<CallInst>(inst)));
 	} else {
-		cs = CallSite(cast<InvokeInst>(inst));
+		cs = CallSite(const_cast<InvokeInst*>(cast<InvokeInst>(inst)));
 	}
 
 	std::vector<Value*> args(cs.arg_size());

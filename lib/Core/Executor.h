@@ -178,7 +178,7 @@ public:
 	const KModule* getKModule(void) const { return kmodule; }
 	KModule* getKModule(void) { return kmodule; }
 	SpecialFunctionHandler* getSFH(void) { return sfh; }
-	void addModule(llvm::Module* m);
+	void addModule(std::unique_ptr<llvm::Module> m);
 
 	virtual void printStackTrace(
 		const ExecutionState& state, std::ostream& os) const;
@@ -314,12 +314,15 @@ private:
 		ref<Expr> cond);
 
 
-  void markBranchVisited(
-  	ExecutionState& state,
-	KInstruction *ki,
-	const StatePair& branches,
-	const ref<Expr>& cond);
-	void finalizeBranch(ExecutionState* st, llvm::BranchInst* bi, int branchIdx);
+	void markBranchVisited(
+		ExecutionState& state,
+		KInstruction *ki,
+		const StatePair& branches,
+		const ref<Expr>& cond);
+	void finalizeBranch(
+		ExecutionState* st,
+		const llvm::BranchInst* bi,
+		int branchIdx);
 
 	void instCmp(ExecutionState& state, KInstruction* ki);
 	ref<Expr> cmpScalar(
@@ -441,11 +444,11 @@ public:
 	TERMINATE_ERROR_LONG(_x, s, m, "exec.err", "", false)
 
 	// XXX should just be moved out to utility module
-	ref<klee::ConstantExpr> evalConstant(llvm::Constant *c)
+	ref<klee::ConstantExpr> evalConstant(const llvm::Constant* c)
 	{ return evalConstant(kmodule, globals.get(), c); }
 
 	static ref<klee::ConstantExpr> evalConstant(
-		const KModule* km, const Globals* gm, llvm::Constant *c);
+		const KModule* km, const Globals* gm, const llvm::Constant* c);
 
 
 	void executeAllocConst(
@@ -458,13 +461,13 @@ public:
 	// address should be constant expr
 	void executeFree(ExecutionState &state, ref<Expr> address);
 
-	ref<klee::ConstantExpr> evalConstantExpr(llvm::ConstantExpr *ce)
+	ref<klee::ConstantExpr> evalConstantExpr(const llvm::ConstantExpr& ce)
 	{ return evalConstantExpr(kmodule, globals.get(), ce); }
 
 	static ref<klee::ConstantExpr> evalConstantExpr(
 		const KModule* km,
 		const Globals* gm,
-		llvm::ConstantExpr *ce);
+		const llvm::ConstantExpr& ce);
 
 	void setSymbolicPathWriter(TreeStreamWriter *tsw) override
 	{ symPathWriter = tsw; }

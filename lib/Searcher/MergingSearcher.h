@@ -14,7 +14,7 @@ namespace klee
     llvm::Function *mergeFunction;
 
   private:
-    llvm::Instruction *getMergePoint(ExecutionState &es);
+    const llvm::Instruction *getMergePoint(const ExecutionState &es);
 
   public:
     MergingSearcher(ExecutorBC &executor, Searcher *baseSearcher);

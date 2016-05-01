@@ -367,7 +367,7 @@ void SyscallsKTest::doLinuxThunks(SyscallParams& sp, int xlate_sysnr)
 		VexGuestAMD64State	*guest_cpu;
 		guest_cpu = (VexGuestAMD64State*)guest->getCPUState()->getStateData();
 		assert (guest->getArch()== Arch::X86_64);
-		guest_cpu->guest_FS_ZERO = sp.getArg(1);
+		guest_cpu->guest_FS_CONST = sp.getArg(1);
 		break;
 	}
 	case SYS_recvfrom:

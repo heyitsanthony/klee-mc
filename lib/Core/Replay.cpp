@@ -126,7 +126,7 @@ bool Replay::isCommitted(const Executor& exe, const ExecutionState& st)
 	foreach(bit, st.branchesBegin(), st.branchesEnd()) {
 		const KInstruction	*ki;
 		const KFunction		*kf;
-		llvm::Function		*f;
+		const llvm::Function	*f;
 
 		br_idx++;
 
@@ -165,7 +165,7 @@ void Replay::writePathFile(
 	br_idx = 0;
 	foreach(bit, st.branchesBegin(), st.branchesEnd()) {
 		const KInstruction	*ki;
-		llvm::Function		*f;
+		const llvm::Function	*f;
 		f2p_ty::iterator	fit;
 		uint64_t		v;
 

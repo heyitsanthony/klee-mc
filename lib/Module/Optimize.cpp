@@ -19,6 +19,7 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/Analysis/Passes.h>
+#include <llvm/Analysis/GlobalsModRef.h>
 #include <llvm/Analysis/LoopPass.h>
 #include <llvm/Support/CommandLine.h>
 #include <llvm/Target/TargetMachine.h>
@@ -202,8 +203,9 @@ static void addOptPasses(llvm::legacy::PassManager& Passes)
     addPass(Passes, createScalarReplAggregatesPass()); // Break up allocas
 
     // Run a few AA driven optimizations here and now, to cleanup the code.
-    addPass(Passes, createFunctionAttrsPass());      // Add nocapture
-    addPass(Passes, createGlobalsModRefPass());      // IP alias analysis
+    addPass(Passes, createPostOrderFunctionAttrsPass());      // Add nocapture
+    addPass(Passes, createReversePostOrderFunctionAttrsPass()); // Add nocapture
+    addPass(Passes, createGlobalsAAWrapperPass());      // IP alias analysis
 
     addPass(Passes, createLICMPass());               // Hoist loop invariants
     addPass(Passes, createGVNPass());                // Remove redundancies

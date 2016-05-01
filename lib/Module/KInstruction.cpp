@@ -30,7 +30,7 @@ unsigned			KBrInstruction::kbr_c = 0;
 
 KInstruction::~KInstruction() { delete[] operands; }
 
-KInstruction::KInstruction(Instruction* in_inst, unsigned in_dest)
+KInstruction::KInstruction(const Instruction* in_inst, unsigned in_dest)
 : inst(in_inst)
 , info(0)
 , fork_c(0)
@@ -52,7 +52,7 @@ KInstruction::KInstruction(Instruction* in_inst, unsigned in_dest)
 unsigned KInstruction::getNumArgs(void) const
 {
 	if (isCall()) {
-		CallSite	cs(inst);
+		CallSite	cs(const_cast<llvm::Instruction*>(inst));
 		return cs.arg_size();
 	}
 
@@ -64,7 +64,7 @@ bool KInstruction::isCall(void) const
 
 
 KInstruction* KInstruction::create(
-	KModule* km, llvm::Instruction* inst, unsigned dest)
+	KModule* km, const llvm::Instruction* inst, unsigned dest)
 {
 	switch(inst->getOpcode()) {
 	case Instruction::GetElementPtr:
@@ -82,20 +82,20 @@ KInstruction* KInstruction::create(
 
 KGEPInstruction::KGEPInstruction(
 	KModule* km,
-	llvm::Instruction* inst, unsigned dest)
+	const llvm::Instruction* inst, unsigned dest)
 : KInstruction(inst, dest)
 , offset(KGEP_OFF_UNINIT)
 {}
 
 void KGEPInstruction::resolveConstants(const KModule* km, const Globals* g)
 {
-	if (GetElementPtrInst *gepi = dyn_cast<GetElementPtrInst>(getInst())) {
+	if (const auto gepi = dyn_cast<GetElementPtrInst>(getInst())) {
 		computeOffsets(km, g, gep_type_begin(gepi), gep_type_end(gepi));
-	} else if (InsertValueInst *ivi = dyn_cast<InsertValueInst>(getInst())) {
+	} else if (const auto ivi = dyn_cast<InsertValueInst>(getInst())) {
 		computeOffsets(km, g, iv_type_begin(ivi), iv_type_end(ivi));
 		assert(	indices.empty() &&
 			"InsertValue constant offset expected");
-	} else if (ExtractValueInst *evi = dyn_cast<ExtractValueInst>(getInst())) {
+	} else if (const auto evi = dyn_cast<ExtractValueInst>(getInst())) {
 		computeOffsets(km, g, ev_type_begin(evi), ev_type_end(evi));
 		assert(	indices.empty() &&
 			"ExtractValue constant offset expected");
@@ -168,8 +168,8 @@ void KGEPInstruction::computeOffsets(
 /* deterministically order basic blocks by lowest value */
 void KSwitchInstruction::orderTargets(const KModule* km, const Globals* g)
 {
-	SwitchInst	*si(cast<SwitchInst>(getInst()));
-	unsigned	i;
+	const SwitchInst	*si(cast<const SwitchInst>(getInst()));
+	unsigned		i;
 
 	/* already ordered targets! */
 	if (cases.size())
@@ -184,7 +184,7 @@ void KSwitchInstruction::orderTargets(const KModule* km, const Globals* g)
 
 	foreach (it, si->case_begin(), si->case_end()) {
 		ref<ConstantExpr>	value;
-		BasicBlock		*target;
+		const BasicBlock	*target;
 		TargetValsTy::iterator	it2;
 
 		i = it.getCaseIndex();
@@ -216,10 +216,10 @@ TargetTy KSwitchInstruction::getExprCondSwitchTargets(
 	defCase = ConstantExpr::create(1, Expr::Bool);
 
 	// generate conditions for each block
-	foreach (cit, caseMap.begin(), caseMap.end()) {
-		BasicBlock *target = cit->first;
-		std::set<uint64_t> &values = cit->second;
-		ref<Expr> match = ConstantExpr::create(0, Expr::Bool);
+	for (auto& cit : caseMap) {
+		const BasicBlock *target = cit.first;
+		std::set<uint64_t> &values = cit.second;
+		ref<Expr> match = MK_CONST(0, Expr::Bool);
 
 		// try run-length encoding long sequences of consecutive
 		// switch values that map to the same BasicBlock
@@ -237,27 +237,28 @@ TargetTy KSwitchInstruction::getExprCondSwitchTargets(
 				match = MK_OR(
 					match,
 					MK_EQ(	cond,
-						MK_CONST(*vit,
-						cond->getWidth())));
+						MK_CONST(*vit, cond->getWidth()))
+				);
 				continue;
 			}
 
 			// use run-length encoding
 			ref<Expr>	rle_bounds;
-			rle_bounds = AndExpr::create(
+			rle_bounds = MK_AND(
 				MK_UGE(cond, MK_CONST(*vit, cond->getWidth())),
 				MK_ULT(cond, MK_CONST(
 					*vit + runLen, cond->getWidth())));
 
-			match = OrExpr::create(match, rle_bounds);
+			match = MK_OR(match, rle_bounds);
 
 			vit = vit2;
 			--vit;
 		}
 
-		targets.insert(std::make_pair(
+		targets.emplace(
 			(minTargetValues.find(target))->second,
-			std::make_pair(target, match)));
+			std::make_pair(target, match)
+		);
 
 		// default case is the AND of all the complements
 		defCase = MK_AND(defCase, Expr::createIsZero(match));
@@ -272,9 +273,9 @@ TargetTy KSwitchInstruction::getExprCondSwitchTargets(
 TargetTy KSwitchInstruction::getConstCondSwitchTargets(
 	uint64_t v, TargetsTy &targets)
 {
-	SwitchInst		*si;
+	const SwitchInst	*si;
 	llvm::IntegerType	*Ty;
-	ConstantInt		*ci;
+	const ConstantInt	*ci;
 	int			index;
 	TargetTy		defaultTarget;
 	TargetsConstTy::iterator	it;
@@ -292,7 +293,7 @@ TargetTy KSwitchInstruction::getConstCondSwitchTargets(
 	Ty = cast<IntegerType>(si->getCondition()->getType());
 	ci = ConstantInt::get(Ty, v);
 
-	SwitchInst::CaseIt	cit(si->findCaseValue(ci));
+	const auto cit = si->findCaseValue(ci);
 	index = (cit == si->case_end())
 		? -1
 		: cit.getCaseIndex();
@@ -358,8 +359,8 @@ double KBrInstruction::getForkStdDev(void)
 	i = 0;
 	forks = 0;
 	forks_sq = 0;
-	foreach (it, all_kbr.begin(), all_kbr.end()) {
-		unsigned	hits((*it)->getForkHits());
+	for (const auto &kbr : all_kbr) {
+		unsigned	hits(kbr->getForkHits());
 		if (!hits) continue;
 		forks += hits;
 		forks_sq += hits*hits;
@@ -394,5 +395,5 @@ double KBrInstruction::getForkMedian(void)
 	return forks_v[forks_v.size()/2];
 }
 
-Function* KInstruction::getFunction(void) const
+const Function* KInstruction::getFunction(void) const
 { return inst->getParent()->getParent(); }

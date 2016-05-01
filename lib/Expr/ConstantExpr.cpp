@@ -51,10 +51,6 @@ void ConstantExpr::toMemory(void *address) {
   }
 }
 
-void ConstantExpr::toString(std::string &Res) const
-{ Res = value.toString(10, false); }
-
-
 ref<ConstantExpr> ConstantExpr::alloc(const llvm::APInt &v)
 { return cast<ConstantExpr>(theExprAllocator->Constant(v)); }
 
@@ -62,7 +58,7 @@ ref<ConstantExpr> ConstantExpr::alloc(uint64_t v, Width w)
 { return cast<ConstantExpr>(theExprAllocator->Constant(v, w)); }
 
 /* N.B. vector is stored *backwards* (i.e. v[0] => cur_v[w - 1]) */
-ref<ConstantExpr> ConstantExpr::createVector(llvm::ConstantVector* v)
+ref<ConstantExpr> ConstantExpr::createVector(const llvm::ConstantVector* v)
 {
 	unsigned int	elem_count;
 
@@ -104,7 +100,7 @@ ref<ConstantExpr> ConstantExpr::createVector(llvm::ConstantVector* v)
 	return cur_v;
 }
 
-ref<ConstantExpr> ConstantExpr::createSeqData(llvm::ConstantDataSequential* v)
+ref<ConstantExpr> ConstantExpr::createSeqData(const llvm::ConstantDataSequential* v)
 {
 	unsigned		bytes_per_elem, elem_c;
 	ref<ConstantExpr>	cur_v;

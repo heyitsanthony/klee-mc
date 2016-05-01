@@ -823,7 +823,7 @@ void* sc_enter(void* regfile, void* jmpptr)
 
 #ifdef GUEST_ARCH_AMD64
 	case SYS_arch_prctl:
-		((VexGuestAMD64State*)regfile)->guest_FS_ZERO = GET_ARG1(regfile);
+		((VexGuestAMD64State*)regfile)->guest_FS_CONST = GET_ARG1(regfile);
 		sc_ret_v(regfile, 0);
 		break;
 #endif

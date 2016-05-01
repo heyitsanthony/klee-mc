@@ -39,18 +39,20 @@ struct SwitchCaseCmp {
 };
 
 bool LowerSwitchPass::runOnFunction(Function &F) {
-  bool changed = false;
+	  bool changed = false;
 
-  for (Function::iterator I = F.begin(), E = F.end(); I != E; ) {
-    BasicBlock *cur = I++; // Advance over block so we don't traverse new blocks
+	for (Function::iterator I = F.begin(), E = F.end(); I != E; ) {
+		const BasicBlock &cur = *I;
 
-    if (SwitchInst *SI = dyn_cast<SwitchInst>(cur->getTerminator())) {
-      changed = true;
-      processSwitchInst(SI);
-    }
-  }
+		I++; // Advance over block so we don't traverse new blocks
 
-  return changed;
+		if (const auto SI = dyn_cast<SwitchInst>(cur.getTerminator())) {
+			changed = true;
+			processSwitchInst(const_cast<SwitchInst*>(SI));
+		}
+	}
+
+	return changed;
 }
 
 // switchConvert - Convert the switch statement into a linear scan
@@ -65,7 +67,7 @@ void LowerSwitchPass::switchConvert(CaseItr begin, CaseItr end,
   // iterate through all the cases, creating a new BasicBlock for each
   for (CaseItr it = begin; it < end; ++it) {
     BasicBlock *newBlock = BasicBlock::Create(getGlobalContext(), "NodeBlock");
-    Function::iterator FI = origBlock;
+    Function::iterator FI = F->begin();
     F->getBasicBlockList().insert(++FI, newBlock);
     
     ICmpInst *cmpInst = 
@@ -105,7 +107,17 @@ void LowerSwitchPass::processSwitchInst(SwitchInst *SI)
 	// if-then statements go to this and the PHI nodes are happy.
 	newDefault = BasicBlock::Create(getGlobalContext(), "newDefault");
 
-	F->getBasicBlockList().insert(defaultBlock, newDefault);
+	auto& bbs = F->getBasicBlockList();
+	bool inserted = false;
+	foreach (it, bbs.begin(), bbs.end()) {
+		if (&(*it) == defaultBlock) {
+			F->getBasicBlockList().insert(it, newDefault);
+			inserted = true;
+			break;
+		}
+	}
+	assert (inserted && "couldn't find basic block in function");
+
 	BranchInst::Create(defaultBlock, newDefault);
 
 	// If there is an entry in any PHI nodes for the default edge, make sure

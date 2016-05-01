@@ -70,8 +70,7 @@ SoftFPPass::SoftFPPass(KModule* _km)
 
 	std::unique_ptr<Module> mod(getBitcodeModule(path.c_str()));
 	assert (mod != NULL);
-
-	km->addModule(mod.get());
+	km->addModule(std::move(mod));
 
 	/* store all softfp functions into object's fields */
 	for (unsigned i = 0; fns[i].name != NULL; i++) {

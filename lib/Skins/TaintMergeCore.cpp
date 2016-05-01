@@ -81,7 +81,7 @@ bool EntryPass::runOnFunction(llvm::Function& f)
 	if (!isShadowedFunc(f))
 		return false;
 
-	CallInst::Create(f_enter, MERGE_FUNCNAME, f.begin()->begin());
+	CallInst::Create(f_enter, MERGE_FUNCNAME, &(*(f.begin()->begin())));
 	return true;
 }
 

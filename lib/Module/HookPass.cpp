@@ -58,10 +58,14 @@ void HookPass::loadByPath(const std::string& passlib)
 	auto mod = getBitcodeModule(path.c_str());
 	assert (mod != NULL);
 
-	kmod->addModule(mod.get());
+	std::set<std::string> fns;
+	for (const auto &f : *mod) {
+		fns.insert(f.getName().str());
+	}
 
-	for (auto &f : *mod) {
-		std::string	fn_s(f.getName().str());
+	kmod->addModule(std::move(mod));
+
+	for (const auto &fn_s : fns) {
 		const char	*hooked_fn, *fn_c;
 
 		fn_c = fn_s.c_str();

@@ -20,27 +20,28 @@
 #include "static/Sugar.h"
 
 #include <map>
+#include <unordered_map>
 
 using namespace klee;
 using namespace llvm;
 
-typedef std::map<Instruction*, std::vector<Function*> > calltargets_ty;
+typedef std::unordered_map<const Instruction*, std::vector<Function*> > calltargets_ty;
 
 static calltargets_ty callTargets;
-static std::map<Function*, std::vector<Instruction*> > functionCallers;
-static std::map<Function*, unsigned> functionShortestPath;
+static std::map<Function*, std::vector<const Instruction*> > functionCallers;
+static std::unordered_map<const Function*, unsigned> functionShortestPath;
 
-static std::vector<Instruction*> getSuccs(Instruction *i)
+static std::vector<const Instruction*> getSuccs(const Instruction *i)
 {
-	BasicBlock			*bb;
-	std::vector<Instruction*>	res;
+	std::vector<const Instruction*>	res;
 
-	bb = i->getParent();
+	auto bb = i->getParent();
 	if (i==bb->getTerminator()) {
 		foreach (it, succ_begin(bb), succ_end(bb))
-			res.push_back(it->begin());
+			res.push_back(&(*(it->begin())));
 	} else {
-		res.push_back(++BasicBlock::iterator(i));
+		auto it = ++BasicBlock::const_iterator(i);
+		res.push_back(&(*it));
 	}
 
 	return res;
@@ -66,7 +67,6 @@ uint64_t klee::computeMinDistToUncovered(
 	distToReturn = sm.getIndexedValue(
 		stats::minDistToReturn, ki->getInfo()->id);
 
-
 	// return unreachable, best is local
 	if (distToReturn==0) return minDistLocal;
 
@@ -84,22 +84,20 @@ bool StatsTracker::init = true;
 void StatsTracker::computeCallTargets(Function* fnIt)
 {
 	foreach (bbIt, fnIt->begin(), fnIt->end()) {
-	foreach (it, bbIt->begin(), bbIt->end()) {
-
-		if (!isa<CallInst>(it) && !isa<InvokeInst>(it))
+	for (const auto& inst : *bbIt) {
+		if (!isa<CallInst>(&inst) && !isa<InvokeInst>(&inst))
 			continue;
 
-		CallSite cs(it);
+		CallSite cs(const_cast<Instruction*>(&inst));
 		Value	*v = cs.getCalledValue();
 		if (isa<InlineAsm>(v)) {
 			// We can never call through here so assume no targets
 			// (which should be correct anyhow).
-			callTargets.insert(
-				std::make_pair(it, std::vector<Function*>()));
+			callTargets.emplace(&inst, std::vector<Function*>());
 		} else if (Function *target = getDirectCallTarget(v)) {
-			callTargets[it].push_back(target);
+			callTargets[&inst].push_back(target);
 		} else {
-			callTargets[it] =
+			callTargets[&inst] =
 			  std::vector<Function*>(
 			  	km->escapingFunctions.begin(),
 				km->escapingFunctions.end());
@@ -110,7 +108,7 @@ void StatsTracker::computeCallTargets(Function* fnIt)
 
 void StatsTracker::initMinDistToReturn(
 	Function* fnIt,
-	std::vector<Instruction* >& instructions)
+	std::vector<const Instruction* >& instructions)
 {
 	const InstructionInfoTable &infos = *km->infos;
 	StatisticManager &sm = *theStatisticManager;
@@ -128,25 +126,24 @@ void StatsTracker::initMinDistToReturn(
 
 	// Not sure if I should bother to preorder here. XXX I should.
 	foreach (bbIt, fnIt->begin(), fnIt->end()) {
-	foreach (it, bbIt->begin(), bbIt->end()) {
-		instructions.push_back(it);
-		unsigned id = infos.getInfo(it).id;
+	for (const auto &inst : *bbIt) {
+		instructions.push_back(&inst);
+		unsigned id = infos.getInfo(&inst).id;
 		sm.setIndexedValue(
 			stats::minDistToReturn,
 			id,
-			isa<ReturnInst>(it) /*  || isa<UnwindInst>(it) */);
+			isa<const ReturnInst>(&inst) /*  || isa<UnwindInst>(it) */);
 	}
 	}
 }
 
-bool StatsTracker::computePathsInit(std::vector<Instruction*>& instructions)
+bool StatsTracker::computePathsInit(std::vector<const Instruction*>& instructions)
 {
 	const InstructionInfoTable	&infos(*km->infos);
 	StatisticManager		&sm(*theStatisticManager);
 	bool				changed = false;
 
-	foreach (it, instructions.begin(), instructions.end()) {
-		Instruction *inst = *it;
+	for (auto inst : instructions) {
 		unsigned bestThrough = 0;
 
 		if (isa<CallInst>(inst) || isa<InvokeInst>(inst)) {
@@ -172,16 +169,16 @@ bool StatsTracker::computePathsInit(std::vector<Instruction*>& instructions)
 		unsigned id;
 		uint64_t best, cur;
 
-		id = infos.getInfo(*it).id;
+		id = infos.getInfo(inst).id;
 		cur = best = sm.getIndexedValue(stats::minDistToReturn, id);
-		std::vector<Instruction*> succs = getSuccs(*it);
+		auto succs = getSuccs(inst);
 
-		foreach (it2, succs.begin(), succs.end()) {
+		for (auto inst : succs) {
 			uint64_t dist, val;
 
 			dist = sm.getIndexedValue(
 				stats::minDistToReturn,
-				infos.getInfo(*it2).id);
+				infos.getInfo(inst).id);
 
 			if (!dist) continue;
 
@@ -197,8 +194,8 @@ bool StatsTracker::computePathsInit(std::vector<Instruction*>& instructions)
 		changed = true;
 
 		// Update shortest path if this is the entry point.
-		Function *f = inst->getParent()->getParent();
-		if (inst==f->begin()->begin())
+		const Function *f = inst->getParent()->getParent();
+		if (inst == &(*f->begin()->begin()))
 			functionShortestPath[f] = best;
 	}
 
@@ -223,7 +220,7 @@ void StatsTracker::computeReachableUncoveredInit(void)
 
 	// Initialize minDistToReturn to shortest paths through
 	// functions. 0 is unreachable.
-	std::vector<Instruction *> instructions;
+	std::vector<const Instruction *> instructions;
 	for (auto &fn : *m) initMinDistToReturn(&fn, instructions);
 
 	std::reverse(instructions.begin(), instructions.end());
@@ -231,14 +228,13 @@ void StatsTracker::computeReachableUncoveredInit(void)
 	while (computePaths(instructions));
 }
 
-bool StatsTracker::computePaths(std::vector<llvm::Instruction*>& insts)
+bool StatsTracker::computePaths(std::vector<const llvm::Instruction*>& insts)
 {
 	const InstructionInfoTable	&infos(*km->infos);
 	StatisticManager		&sm(*theStatisticManager);
 	bool				changed = false;
 
-	foreach (it, insts.begin(), insts.end()) {
-		Instruction *inst = *it;
+	for (auto inst : insts) {
 		uint64_t best, cur;
 		unsigned bestThrough = 0;
 
@@ -278,13 +274,12 @@ bool StatsTracker::computePaths(std::vector<llvm::Instruction*>& insts)
 		}
 
 		if (bestThrough) {
-			std::vector<Instruction*> succs = getSuccs(inst);
-			foreach (it2, succs.begin(), succs.end()) {
+			for (auto succInst : getSuccs(inst)) {
 				uint64_t dist;
 
 				dist = sm.getIndexedValue(
 					stats::minDistToUncovered,
-					infos.getInfo(*it2).id);
+					infos.getInfo(succInst).id);
 				if (dist) {
 					uint64_t val = bestThrough + dist;
 					if (best==0 || val<best)
@@ -314,7 +309,7 @@ void StatsTracker::computeReachableUncovered()
 	if (init) computeReachableUncoveredInit();
 
 	// compute minDistToUncovered, 0 is unreachable
-	std::vector<Instruction *> instructions;
+	std::vector<const Instruction *> instructions;
 	for (auto &fn : *m) 
 	// Not sure if I should bother to preorder here.
 	for (auto &bb : fn) 
@@ -331,12 +326,7 @@ void StatsTracker::computeReachableUncovered()
 
 	while (computePaths(instructions));
 
-	foreach (
-		it,
-		executor.stateManager->begin(),
-		executor.stateManager->end())
-	{
-		ExecutionState *es = *it;
+	for (const auto es : *executor.stateManager) {
 		uint64_t currentFrameMinDist = 0;
 
 		foreach (sfIt, es->stack.begin(), es->stack.end()) {

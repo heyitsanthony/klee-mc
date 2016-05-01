@@ -35,10 +35,10 @@ class KInstruction
 {
 public:
 	virtual ~KInstruction();
-	llvm::Instruction* getInst(void) const { return inst; }
+	const llvm::Instruction* getInst(void) const { return inst; }
 	static KInstruction* create(
 		KModule* km,
-		llvm::Instruction* inst, unsigned dest);
+		const llvm::Instruction* inst, unsigned dest);
 	unsigned getNumArgs(void) const;
 	bool isCall(void) const;
 	void setOperand(unsigned op_num, int n) { operands[op_num] = n; }
@@ -50,16 +50,16 @@ public:
 	bool isCovered(void) const { return cover_sid != ~0UL; }
 	void cover(uint64_t sid) { cover_sid= sid; }
 
-	llvm::Function* getFunction(void) const;
+	const llvm::Function* getFunction(void) const;
 
 	unsigned getForkCount(void) const { return fork_c; }
 	void forked(void) { fork_c++; }
 protected:
 	KInstruction() : cover_sid(~0UL) {}
-	KInstruction(llvm::Instruction* inst, unsigned dest);
+	KInstruction(const llvm::Instruction* inst, unsigned dest);
 
 private:
-	llvm::Instruction	*inst;
+	const llvm::Instruction	*inst;
 	const InstructionInfo	*info;
 
 	/* number of forks on this instruction */
@@ -76,16 +76,16 @@ private:
 	uint64_t		cover_sid;
 };
 
-typedef std::pair<llvm::BasicBlock*, ref<Expr> >	TargetTy;
+typedef std::pair<const llvm::BasicBlock*, ref<Expr> >	TargetTy;
 typedef std::map<ref<ConstantExpr>, TargetTy >		TargetsTy;
-typedef std::map<llvm::BasicBlock*, ref<ConstantExpr> >	TargetValsTy;
+typedef std::unordered_map<const llvm::BasicBlock*, ref<ConstantExpr> >	TargetValsTy;
 typedef std::map<uint64_t, std::pair<TargetTy, TargetsTy> > TargetsConstTy;
-typedef std::pair<ref<ConstantExpr>, llvm::BasicBlock*>	Val2TargetTy;
+typedef std::pair<ref<ConstantExpr>, const llvm::BasicBlock*>	Val2TargetTy;
 
 class KSwitchInstruction : public KInstruction
 {
 public:
-	KSwitchInstruction(llvm::Instruction* ins, unsigned dest)
+	KSwitchInstruction(const llvm::Instruction* ins, unsigned dest)
 	: KInstruction(ins, dest)
 	{}
 	virtual ~KSwitchInstruction() {}
@@ -97,7 +97,7 @@ public:
 private:
 	std::vector<Val2TargetTy >	cases;
 	TargetValsTy			minTargetValues; // lowest val -> BB
-	std::map<llvm::BasicBlock*, std::set<uint64_t> > caseMap;
+	std::unordered_map<const llvm::BasicBlock*, std::set<uint64_t> > caseMap;
 	TargetsConstTy			const_defaults;
 };
 
@@ -107,7 +107,7 @@ class KBrInstruction : public KInstruction
 public:
 	typedef std::list<KBrInstruction*> kbr_list_ty;
 
-	KBrInstruction(llvm::Instruction* ins, unsigned dest)
+	KBrInstruction(const llvm::Instruction* ins, unsigned dest)
 	: KInstruction(ins, dest)
 	, seen_expr_c(0)
 	{
@@ -185,7 +185,7 @@ class KGEPInstruction : public KInstruction
 {
 public:
 	KGEPInstruction(
-		KModule* km, llvm::Instruction* inst, unsigned dest);
+		KModule* km, const llvm::Instruction* inst, unsigned dest);
 
 	virtual ~KGEPInstruction() {}
 	/// indices - The list of variable sized adjustments to add to the pointer

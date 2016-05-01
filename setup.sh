@@ -1,8 +1,8 @@
 #!/bin/bash
 
 VEXLLVMDIR=${VEXLLVMDIR:-"/home/chz/src/vex/"}
-LLVMSRCDIR=${LLVMSRCDIR:-"/home/chz/src/llvm/llvm-3.7.0.src/"}
-LLVMOBJDIR=${LLVMOBJDIR:-"/home/chz/src/llvm/llvm-3.7.0-build/"}
+LLVMSRCDIR=${LLVMSRCDIR:-"/home/chz/src/llvm/llvm-3.8.0.src/"}
+LLVMOBJDIR=${LLVMOBJDIR:-"/home/chz/src/llvm/llvm-3.8.0-build/"}
 STPDIR=${STPDIR:-"/home/chz/src/stp-fast/stp/"}
 #BOOLECTORDIR=${BOOLECTORDIR:-"/home/chz/src/boolector/"}
 #Z3DIR=${Z3DIR:-"/home/chz/src/z3/"}

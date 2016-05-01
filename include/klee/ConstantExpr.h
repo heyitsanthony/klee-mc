@@ -72,9 +72,6 @@ public:
   uint64_t getLimitedValue(uint64_t Limit = ~0ULL) const
   { return value.getLimitedValue(Limit); }
 
-  /// toString - Return the constant value as a decimal string.
-  void toString(std::string &Res) const;
- 
   int compareContents(const Expr &b) const { 
     const ConstantExpr &cb = static_cast<const ConstantExpr&>(b);
     if (getWidth() != cb.getWidth()) 
@@ -107,8 +104,8 @@ public:
     return alloc(v, w);
   }
 
-  static ref<ConstantExpr> createVector(llvm::ConstantVector* v);
-  static ref<ConstantExpr> createSeqData(llvm::ConstantDataSequential* v);
+  static ref<ConstantExpr> createVector(const llvm::ConstantVector* v);
+  static ref<ConstantExpr> createSeqData(const llvm::ConstantDataSequential* v);
 
   static bool classof(const Expr *E) { return E->getKind() == Expr::Constant; }
   static bool classof(const ConstantExpr *) { return true; }

@@ -18,10 +18,10 @@ public:
 	: T(ie), csCore(this) {}
 	virtual ~ConstraintSeedExecutor() {}
 
-	virtual ObjectState* makeSymbolic(
+	ObjectState* makeSymbolic(
 		ExecutionState& state,
 		const MemoryObject* mo,
-		const char* arrPrefix = "arr")
+		const char* arrPrefix = "arr") override
 	{
 		ObjectState*	os(T::makeSymbolic(state, mo, arrPrefix));
 		if (os == NULL)
@@ -31,10 +31,10 @@ public:
 		return os;
 	}
 
-	virtual void executeInstruction(
-		ExecutionState &state, KInstruction *ki)
+	void executeInstruction(
+		ExecutionState &state, KInstruction *ki) override
 	{
-		llvm::Instruction *i = ki->getInst();
+		const llvm::Instruction *i = ki->getInst();
 
 		/* XXX: this is not ideal; I'd prefer to instrument the
 		 * code with a special instruction which will give me the
@@ -57,8 +57,8 @@ public:
 	}
 
 protected:
-	virtual void instBranchConditional(
-		ExecutionState& state, KInstruction* ki)
+	void instBranchConditional(
+		ExecutionState& state, KInstruction* ki) override
 	{
 		ref<Expr>	cond(T::eval(ki, 0, state));
 		KBrInstruction	*kbr = static_cast<KBrInstruction*>(ki);
@@ -81,10 +81,10 @@ protected:
 			csCore.logConstraint(MK_NOT(cond));
 	}
 
-	virtual void xferIterInit(
+	void xferIterInit(
 		struct T::XferStateIter& iter,
 		ExecutionState* state,
-		KInstruction* ki)
+		KInstruction* ki) override
 	{
 		T::xferIterInit(iter, state, ki);
 

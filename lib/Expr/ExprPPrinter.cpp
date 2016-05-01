@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "klee/util/ExprPPrinter.h"
-
+#include <llvm/ADT/SmallString.h>
 #include "klee/Constraints.h"
 
 #include "llvm/Support/CommandLine.h"
@@ -394,9 +394,11 @@ public:
 	if (e->getWidth() <= 64) {
 		PC << e->getZExtValue();
 	} else {
-		std::string S;
-		e->toString(S);
-		PC << S;
+		llvm::SmallString<32>	s;
+		e->getAPValue().toString(s, 10, false);
+		PC << s.c_str();
+		//PC << e->getAPValue().toString(10, false);
+		// e->getAPValue().print(PC.os, false);
 	}
 
 	if (printWidth)

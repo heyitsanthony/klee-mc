@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "Executor.h"
-
+#include "Globals.h"
 #include "Context.h"
 
 #include "static/Sugar.h"
@@ -31,28 +31,26 @@ using namespace klee;
 using namespace llvm;
 
 namespace klee {
-class Globals;
 
-  ref<klee::ConstantExpr>
-  Executor::evalConstantExpr(
+ref<klee::ConstantExpr> Executor::evalConstantExpr(
 	const KModule* km,
 	const Globals* gm,
-	llvm::ConstantExpr *ce)
-  {
-    llvm::Type *type = ce->getType();
+	const llvm::ConstantExpr& ce)
+{
+    llvm::Type *type = ce.getType();
 
     ref<ConstantExpr> op[3];
-    int numOperands = ce->getNumOperands();
+    int numOperands = ce.getNumOperands();
 
-    if (numOperands > 0) op[0] = evalConstant(km, gm, ce->getOperand(0));
-    if (numOperands > 1) op[1] = evalConstant(km, gm, ce->getOperand(1));
-    if (numOperands > 2) op[2] = evalConstant(km, gm, ce->getOperand(2));
+    if (numOperands > 0) op[0] = evalConstant(km, gm, ce.getOperand(0));
+    if (numOperands > 1) op[1] = evalConstant(km, gm, ce.getOperand(1));
+    if (numOperands > 2) op[2] = evalConstant(km, gm, ce.getOperand(2));
 
-    switch (ce->getOpcode()) {
+    switch (ce.getOpcode()) {
     default :
-      ce->dump();
+      ce.dump();
       std::cerr << "error: unknown ConstantExpr type\n"
-                << "opcode: " << ce->getOpcode() << "\n";
+                << "opcode: " << ce.getOpcode() << "\n";
       for (unsigned i = 0; i < 3 && op[i].isNull() == false; i++) {
       	std::cerr << "CE[" << i << "]: " << op[i] << '\n';
       }
@@ -61,7 +59,7 @@ class Globals;
 
     case Instruction::ShuffleVector: {
     	return cast<ConstantExpr>(instShuffleVectorEvaled(
-		dyn_cast<VectorType>(ce->getType()),
+		dyn_cast<VectorType>(ce.getType()),
 		op[0], op[1], op[2]));
     }
 
@@ -125,7 +123,7 @@ class Globals;
     }
 
     case Instruction::ICmp: {
-      switch(ce->getPredicate()) {
+      switch(ce.getPredicate()) {
       default: assert(0 && "unhandled ICmp predicate");
       case ICmpInst::ICMP_EQ:  return op[0]->Eq(op[1]);
       case ICmpInst::ICMP_NE:  return op[0]->Ne(op[1]);
@@ -156,6 +154,53 @@ class Globals;
     case Instruction::FCmp:
       assert(0 && "floating point ConstantExprs unsupported");
     }
-  }
+}
 
+ref<klee::ConstantExpr> Executor::evalConstant(
+	const KModule* km, const Globals* gm, const Constant *c)
+{
+	if (auto ce = dyn_cast<llvm::ConstantExpr>(c))
+		return evalConstantExpr(km, gm, *ce);
+
+	if (auto ci = dyn_cast<ConstantInt>(c))
+		return ConstantExpr::alloc(ci->getValue());
+
+	if (auto cf = dyn_cast<ConstantFP>(c))
+		return ConstantExpr::alloc(cf->getValueAPF().bitcastToAPInt());
+
+	if (auto gv = dyn_cast<GlobalValue>(c)) {
+		assert (gm != NULL);
+		ref<klee::ConstantExpr>	ce(gm->findAddress(gv));
+
+		if (ce.isNull()) {
+			std::cerr << "Bad global, no cookies.\n";
+			std::cerr << "GV = " << (void*)gv << '\n';
+			gv->dump();
+		}
+
+		assert (!ce.isNull() && "No global address!");
+		return ce;
+	}
+
+	if (isa<ConstantPointerNull>(c))
+		return MK_PTR(0);
+
+	if (isa<UndefValue>(c) || isa<ConstantAggregateZero>(c))
+		return MK_CONST(0, km->getWidthForLLVMType(c->getType()));
+
+	if (isa<ConstantVector>(c))
+		return ConstantExpr::createVector(cast<ConstantVector>(c));
+
+	if (auto csq = dyn_cast<ConstantDataSequential>(c))
+		return ConstantExpr::createSeqData(csq);
+
+	if (auto ca = dyn_cast<ConstantArray>(c)) {
+		if (ca->getNumOperands() == 1)
+			return evalConstant(km, gm, ca->getOperand(0));
+	}
+
+	// Constant{Array,Struct}
+	c->dump();
+	assert(0 && "invalid argument to evalConstant()");
+}
 }

@@ -415,23 +415,24 @@ void Globals::setupGlobalObjects(llvm::Module* m)
 void Globals::setupAliases(llvm::Module* m)
 {
 	// link aliases to their definitions (if bound)
-	foreach (i, m->alias_begin(), m->alias_end()) {
+	foreach (it, m->alias_begin(), m->alias_end()) {
+		auto i = &(*it);
 		// Map the alias to its aliasee's address.
 		// This works because we have addresses for everything,
 		// even undefined functions.
 		if (globalAddresses.count(i))
 			continue;
-		globalAddresses.insert(
-			std::make_pair(i,
-				Executor::evalConstant(
-					kmodule, this, i->getAliasee())));
+		globalAddresses.emplace(
+			i, Executor::evalConstant(
+				kmodule, this, i->getAliasee()));
 	}
 }
 
 void Globals::setupGlobalData(llvm::Module* m)
 {
 	// once all objects are allocated, do the actual initialization
-	foreach (i, m->global_begin(), m->global_end()) {
+	foreach (it, m->global_begin(), m->global_end()) {
+		auto 			i = &(*it);
 		MemoryObject		*mo;
 		const ObjectState	*os;
 		ObjectState		*wos;

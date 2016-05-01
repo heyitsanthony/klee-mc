@@ -133,7 +133,7 @@ void ExecutorBC::setupArgv(
 		argvMO = memory->allocate(
 			(argc+1+envc+1+1) * NumPtrBytes, 
 			false, true,
-			f->begin()->begin(), state);
+			&(*f->begin()->begin()), state);
 
 		arguments.push_back(argvMO->getBaseExpr());
 
@@ -141,8 +141,7 @@ void ExecutorBC::setupArgv(
 
 		uint64_t envp_start;
 		envp_start = argvMO->address + (argc+1)*NumPtrBytes;
-		arguments.push_back(
-			Expr::createPointer(envp_start));
+		arguments.push_back(Expr::createPointer(envp_start));
 		if (++ai!=ae)
 			klee_error("invalid main function (expect 0-3 arguments)");
 	}

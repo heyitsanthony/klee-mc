@@ -354,7 +354,7 @@ public:
 			KBrInstruction::endBr())
 		{
 			const KBrInstruction	*kbr = *it;
-			llvm::Function		*parent_f;
+			const llvm::Function	*parent_f;
 
 			/* only dump branches that have been executed */
 			if (	kbr->getTrueHits() == 0 &&

@@ -428,7 +428,7 @@ void ExecutionState::bindArgument(
 void ExecutionState::bindLocal(KInstruction* target, ref<Expr> value)
 { stack.writeLocalCell(target->getDest(), value); }
 
-void ExecutionState::transferToBasicBlock(BasicBlock *dst, BasicBlock *src)
+void ExecutionState::transferToBasicBlock(const BasicBlock *dst, const BasicBlock *src)
 {
 	// Note that in general phi nodes can reuse phi values from the same
 	// block but the incoming value is the eval() result *before* the
@@ -451,7 +451,7 @@ void ExecutionState::transferToBasicBlock(BasicBlock *dst, BasicBlock *src)
 	pc = &kf->instructions[entry];
 
 	if (pc->getInst()->getOpcode() == Instruction::PHI) {
-		PHINode *phi = static_cast<PHINode*>(pc->getInst());
+		auto phi = static_cast<const PHINode*>(pc->getInst());
 		incomingBBIndex = phi->getBasicBlockIndex(src);
 	}
 }

@@ -28,6 +28,7 @@ RaiseAsmPass::RaiseAsmPass(llvm::Module* module)
 : llvm::FunctionPass(ID)
 , TM(NULL)
 {
+#if 0
 	std::string	Err;
 	std::string	HostTriple = llvm::sys::getDefaultTargetTriple();
 	const Target	*NativeTarget;
@@ -42,6 +43,25 @@ RaiseAsmPass::RaiseAsmPass(llvm::Module* module)
 		return;
 	}
 	TM = NativeTarget->createTargetMachine(HostTriple, "", "", to);
+	TLI = TM->getSubtargetImpl(*(module->begin()))->getTargetLowering();
+#endif
+	std::string	err;
+	const Target	*NativeTarget;
+	Triple		foundTriple;
+	TargetOptions	to;
+
+	NativeTarget = TargetRegistry::lookupTarget(
+		llvm::sys::getHostCPUName(),
+		foundTriple,
+		err);
+	if (NativeTarget == NULL) {
+		llvm::errs()
+			<< "Warning: unable to select native target: "
+			<< err << "\n";
+		TLI = 0;
+		return;
+	}
+	TM = NativeTarget->createTargetMachine(foundTriple.str(), "", "", to);
 	TLI = TM->getSubtargetImpl(*(module->begin()))->getTargetLowering();
 }
 
@@ -93,13 +113,11 @@ bool RaiseAsmPass::runOnInstruction(Instruction *I)
 bool RaiseAsmPass::runOnFunction(Function& F)
 {
 	bool changed = false;
-	foreach (bi, F.begin(), F.end()) {
-		for (	BasicBlock::iterator ii = bi->begin(), ie = bi->end();
-			ii != ie;)
-		{
-			Instruction *i = ii;
+	for (auto& bb : F) {
+		for (auto ii = bb.begin(), ie = bb.end(); ii != ie;) {
+			Instruction &i = const_cast<Instruction&>(*ii);
 			++ii;
-			changed |= runOnInstruction(i);
+			changed |= runOnInstruction(&i);
 		}
 	}
 	return changed;

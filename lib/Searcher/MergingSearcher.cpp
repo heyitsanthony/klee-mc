@@ -19,16 +19,16 @@ MergingSearcher::MergingSearcher(ExecutorBC &_executor, Searcher *_baseSearcher)
 MergingSearcher::~MergingSearcher()
 { delete baseSearcher; }
 
-Instruction *MergingSearcher::getMergePoint(ExecutionState &es)
+const Instruction *MergingSearcher::getMergePoint(const ExecutionState &es)
 {
 	if (!mergeFunction) return 0;
 
-	Instruction *i = es.pc->getInst();
+	const Instruction *i = es.pc->getInst();
 
 	if (i->getOpcode() != Instruction::Call)
 		return 0;
 
-	CallSite cs(cast<CallInst > (i));
+	CallSite cs(const_cast<CallInst*>(cast<const CallInst>(i)));
 	if (mergeFunction == cs.getCalledFunction())
 		return i;
 
@@ -42,7 +42,7 @@ ExecutionState *MergingSearcher::selectState(bool allowCompact)
 	while ((es = baseSearcher->selectState(allowCompact))) {
 		assert (es->checkCanary());
 
-		if (getMergePoint(*es) == NULL)
+		if (getMergePoint(*es) == nullptr)
 			return es;
 
 		baseSearcher->removeState(es, es);
@@ -50,16 +50,14 @@ ExecutionState *MergingSearcher::selectState(bool allowCompact)
 	}
 
 	// build map of merge point -> state list
-	std::map<Instruction*, std::vector<ExecutionState*> > merges;
-	foreach (it, statesAtMerge.begin(), statesAtMerge.end()) {
-		ExecutionState *es = *it;
+	std::map<const Instruction*, std::vector<ExecutionState*> > merges;
+	for (auto es : statesAtMerge) {
 		merges[getMergePoint(*es)].push_back(es);
 	}
 
-	foreach (it, merges.begin(), merges.end()) {
-
+	for (const auto& p : merges) {
 		// merge states
-		ExeStateSet toMerge(it->second.begin(), it->second.end());
+		ExeStateSet toMerge(p.second.begin(), p.second.end());
 		while (!toMerge.empty()) {
 			ExeStateSet	toErase;
 			ExecutionState	*base;
@@ -67,17 +65,15 @@ ExecutionState *MergingSearcher::selectState(bool allowCompact)
 			base = *toMerge.begin();
 			toMerge.erase(toMerge.begin());
 
-			foreach (it, toMerge.begin(), toMerge.end()) {
-				ExecutionState *mergeWith = *it;
-
+			for (auto mergeWith : toMerge) {
 				if (base->merge(*mergeWith))
 					toErase.insert(mergeWith);
 			}
 
-			foreach (ers_it, toErase.begin(), toErase.end()) {
-				ExeStateSet::iterator it2 = toMerge.find(*ers_it);
+			for (auto ers : toErase) {
+				ExeStateSet::iterator it2 = toMerge.find(ers);
 				assert(it2 != toMerge.end());
-				executor.terminate(**ers_it);
+				executor.terminate(*ers);
 				toMerge.erase(it2);
 			}
 

@@ -10,8 +10,7 @@ bool OutcallMCPass::runOnBasicBlock(llvm::BasicBlock& bi)
 	unsigned	update_c = 0;
 
 	foreach_manual (iit, bi.begin(), bi.end()) {
-		Instruction	*ii = iit;
-		CallInst	*ci;
+		const Instruction	*ii = &(*iit);
 		Function	*f;
 		std::string	fname;
 		++iit;
@@ -19,8 +18,8 @@ bool OutcallMCPass::runOnBasicBlock(llvm::BasicBlock& bi)
 		if (ii->getOpcode() != Instruction::Call)
 			continue;
 
-		ci = dyn_cast<CallInst>(ii);
-		CallSite	cs(ci);
+		auto ci = dyn_cast<const CallInst>(ii);
+		CallSite	cs(const_cast<CallInst*>(ci));
 
 		/* function already linked? */
 		f = cs.getCalledFunction();
@@ -59,16 +58,16 @@ bool RemovePCPass::runOnBasicBlock(llvm::BasicBlock& bi)
 	Instruction	*last_pc_store = NULL;
 
 	foreach_manual (iit, bi.begin(), bi.end()) {
-		Instruction	*ii = iit;
+		Instruction	&ii = *iit;
 
 		++iit;
 
-		if (ii->getOpcode() != Instruction::Store)
+		if (ii.getOpcode() != Instruction::Store)
 			continue;
 
 		/* XXX: get working on other archs */
 		if (strncmp(
-			ii->getOperand(1)->getName().str().c_str(),
+			ii.getOperand(1)->getName().str().c_str(),
 			"RIP", 3))
 		{
 			continue;
@@ -76,12 +75,12 @@ bool RemovePCPass::runOnBasicBlock(llvm::BasicBlock& bi)
 
 		/* if this instruction covers prior store inst to PC,
 		 * prior instruction can safely be removed */
-		if (last_pc_store != NULL) {
+		if (last_pc_store != nullptr) {
 			last_pc_store->eraseFromParent();
 			update_c++;
 		}
 
-		last_pc_store = ii;
+		last_pc_store = &ii;
 	}
 
 	return (update_c != 0);

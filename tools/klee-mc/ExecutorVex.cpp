@@ -259,8 +259,10 @@ llvm::Function* ExecutorVex::setupRuntimeFunctions(uint64_t entry_addr)
 
 	/* add modules before initializing globals so that everything
 	 * will link in properly */
-	std::list<Module*> l = theVexHelpers->getModules();
-	for (auto &m : l) kmodule->addModule(m);
+	std::list<std::unique_ptr<Module>> l = theVexHelpers->takeModules();
+	for (auto &m : l) {
+		kmodule->addModule(std::move(m));
+	}
 
 	theVexHelpers->useExternalMod(kmodule->module);
 
@@ -446,7 +448,7 @@ void ExecutorVex::bindMappingPage(
 		((uint64_t)g->getMem()->getData(m))+(PAGE_SIZE*pgnum));
 	addr_base = m.offset.o + PAGE_SIZE*pgnum;
 
-	mmap_os_c = state->allocateAt(addr_base, PAGE_SIZE, f->begin()->begin());
+	mmap_os_c = state->allocateAt(addr_base, PAGE_SIZE, &(*f->begin()->begin()));
 	mmap_mo = const_cast<MemoryObject*>(
 		state->addressSpace.resolveOneMO(addr_base));
 	assert (mmap_os_c->getSize() == PAGE_SIZE);
@@ -549,7 +551,7 @@ MemoryObject* ExecutorVex::allocRegCtx(ExecutionState* state, Function* f)
 	mo = memory->allocate(
 		gs->getCPUState()->getStateSize(),
 		false, true,
-		f->begin()->begin(),
+		&(*f->begin()->begin()),
 		state);
 	mo->setName("regctx"+llvm::utostr(++id));
 	assert (mo != NULL);

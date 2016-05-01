@@ -116,9 +116,9 @@ private:
     void computeCallTargets(llvm::Function* f);
     void initMinDistToReturn(
 	llvm::Function* fnIt,
-	std::vector<llvm::Instruction* >& instructions);
-    bool computePathsInit(std::vector<llvm::Instruction*>& insts);
-    bool computePaths(std::vector<llvm::Instruction*>& insts);
+	std::vector<const llvm::Instruction* >& instructions);
+    bool computePathsInit(std::vector<const llvm::Instruction*>& insts);
+    bool computePaths(std::vector<const llvm::Instruction*>& insts);
     static bool init;
     uint64_t lastCoveredInstruction;
 };

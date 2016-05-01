@@ -56,7 +56,7 @@ double Benchmarker::benchExpr(ref<Expr>& e)
 
 	dat[min_time_idx] = 0;
 	dat[max_time_idx] = 0;
-
+	total_time = 0.0;
 	for (unsigned i = 0; i < NUM_BENCH_ITER; i++)
 		total_time += dat[i];
 

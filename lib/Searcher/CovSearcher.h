@@ -16,9 +16,9 @@ public:
 	/* pr_k > pr_j => pr_k scheduled first */
 	virtual int getPriority(ExecutionState& st)
 	{
-		KInstruction	*ki = st.pc;
-		llvm::Function	*f;
-		KFunction	*kf;
+		KInstruction		*ki = st.pc;
+		const llvm::Function	*f;
+		KFunction		*kf;
 
 		/* super-priority */
 		if (st.pc->isCovered() == false)
@@ -43,8 +43,7 @@ public:
 	{ return new CovPrioritizer(km); }
 
 protected:
-	bool isFuncCovered(const KFunction* kf)
-	{
+	bool isFuncCovered(const KFunction* kf) const {
 		for (unsigned i = 0; i < kf->numInstructions; i++) {
 			if (!kf->instructions[i]->isCovered())
 				return false;

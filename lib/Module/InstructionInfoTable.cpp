@@ -104,7 +104,7 @@ void InstructionInfoTable::addFunction(
 	const std::string *initialFile = &dummyString;
 	unsigned initialLine = 0;
 
-	typedef std::map<BasicBlock*, std::pair<const std::string*,unsigned> >
+	typedef std::map<const BasicBlock*, std::pair<const std::string*,unsigned> >
 		sourceinfo_ty;
 
 	// It may be better to look for the closest stoppoint to the entry
@@ -116,24 +116,18 @@ void InstructionInfoTable::addFunction(
 	}
 
 	sourceinfo_ty sourceInfo;
-	foreach (bbIt, fnIt->begin(), fnIt->end()) {
+	for (const auto &bbIt : *fnIt) {
 		std::pair<sourceinfo_ty::iterator, bool>	res;
 
-		res = sourceInfo.insert(
-			std::make_pair(
-				bbIt,
-				std::make_pair(
-					initialFile,
-					initialLine)));
-
+		res = sourceInfo.emplace(&bbIt, std::make_pair(initialFile, initialLine));
 		if (!res.second)
 			continue;
 
-		std::vector<BasicBlock*> worklist;
-		worklist.push_back(bbIt);
+		std::vector<const BasicBlock*> worklist;
+		worklist.emplace_back(&bbIt);
 
 		do {
-			BasicBlock *bb = worklist.back();
+			auto bb = worklist.back();
 			worklist.pop_back();
 
 			sourceinfo_ty::iterator si = sourceInfo.find(bb);
@@ -143,20 +137,17 @@ void InstructionInfoTable::addFunction(
 			unsigned line = si->second.second;
 
 			foreach (it, bb->begin(), bb->end()) {
-				Instruction *instr = it;
+				const Instruction& instr = *it;
 				unsigned assemblyLine = 0;
 
-				auto ltit =  lineTable.find(instr);
+				auto ltit =  lineTable.find(&instr);
 				if (ltit != lineTable.end())
 					assemblyLine = ltit->second;
 
-				getInstructionDebugInfo(*instr, file, line);
-				infos.insert(
-					std::make_pair(
-						instr,
-						InstructionInfo(
-							id++, *file, line,
-							assemblyLine)));
+				getInstructionDebugInfo(instr, file, line);
+				infos.emplace(
+					&instr,
+					InstructionInfo(id++, *file, line, assemblyLine));
 			}
 
 			foreach (it, succ_begin(bb), succ_end(bb)) {
@@ -195,8 +186,7 @@ unsigned InstructionInfoTable::getMaxID() const { return infos.size(); }
 const InstructionInfo &
 InstructionInfoTable::getInfo(const Instruction *inst) const
 {
-	std::map<const llvm::Instruction*, InstructionInfo>::const_iterator it;
-	it = infos.find(inst);
+	auto it = infos.find(inst);
 	return (it == infos.end()) ? dummyInfo : it->second;
 }
 
@@ -206,5 +196,5 @@ InstructionInfoTable::getFunctionInfo(const Function *f) const
 	if (f->isDeclaration()) {
 		return dummyInfo;
 	}
-	return getInfo(f->begin()->begin());
+	return getInfo(&(*(f->begin()->begin())));
 }

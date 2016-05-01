@@ -287,7 +287,7 @@ public:
   void bindLocal(KInstruction *target, ref<Expr> value);
   void bindArgument(KFunction *kf, unsigned index, ref<Expr> value);
 
-  void transferToBasicBlock(llvm::BasicBlock* dst, llvm::BasicBlock* src);
+  void transferToBasicBlock(const llvm::BasicBlock* dst, const llvm::BasicBlock* src);
   void trackBranch(int condIndex, const KInstruction* ki);
   bool isReplayDone(void) const;
   bool pushHeapRef(HeapObject* heapObj)

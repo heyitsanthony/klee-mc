@@ -206,7 +206,7 @@ static void injectStaticConstructorsAndDestructors(Module *m)
 		CallInst::Create(
 			getStubFunctionForCtorList(m, ctors, "klee.ctor_stub"),
 			"",
-			mainFn->begin()->begin());
+			&(*mainFn->begin()->begin()));
 	}
 
 	if (dtors) {
@@ -295,22 +295,22 @@ void KModule::addMergeExit(Function* mergeFn, const std::string& name)
 	ReturnInst::Create(getGlobalContext(), result, exit);
 
 	llvm::errs() << "KLEE: adding klee_merge at exit of: " << name << "\n";
-	foreach (bbit, f->begin(), f->end()) {
+	for (auto &bb : *f) {
 		Instruction *i;
 
-		if (&*bbit == exit)
+		if (&bb == exit)
 			continue;
 
-		i = bbit->getTerminator();
+		i = bb.getTerminator();
 
 		if (i->getOpcode() != Instruction::Ret)
 			continue;
 
 		if (result) {
-			result->addIncoming(i->getOperand(0), bbit);
+			result->addIncoming(i->getOperand(0), &bb);
 		}
 		i->eraseFromParent();
-		BranchInst::Create(exit, bbit);
+		BranchInst::Create(exit, &bb);
 	}
 }
 
@@ -385,7 +385,7 @@ void KModule::dumpModule(void)
 	}
 }
 
-void KModule::addModule(Module* in_mod)
+void KModule::addModule(std::unique_ptr<Module> in_mod)
 {
 	std::string	mod_name;
 	bool		isLinkErr;
@@ -403,20 +403,20 @@ void KModule::addModule(Module* in_mod)
 
 	std::cerr << "[KModule] Adding module \"" << *mn_ref << "\"\n";
 
-	isLinkErr = Linker::LinkModules(
-		module.get(),
-		in_mod,
-		[] (const DiagnosticInfo& di) {
-			std::cerr << "OOPS. Couldn't link module.\n";
-		});
+	std::set<std::string> fns;
+	for (const auto &f : *in_mod) {
+		fns.insert(f.getName().str());
+	}
 
-	for (auto &f : *in_mod) {
+	isLinkErr = Linker::linkModules(*module, std::move(in_mod));
+
+	for (const auto &fn : fns) {
 		Function	*kmod_f;
 		KFunction	*kf;
 
-		kmod_f = module->getFunction(f.getName().str());
+		kmod_f = module->getFunction(fn);
 		if (kmod_f == NULL)
-			std::cerr << "Oops: " << f.getName().str() << '\n';
+			std::cerr << "Oops: " << fn << '\n';
 		assert (kmod_f != NULL);
 
 		kf = addFunction(kmod_f);
@@ -704,11 +704,7 @@ void KModule::loadIntrinsicsLib()
 		f->deleteBody();
 	}
 
-	isLinkErr = Linker::LinkModules(
-		module.get(),
-		m.get(),
-		[] (const DiagnosticInfo&) {
-			std::cerr << "Oops Linking.\n"; abort(); });
+	isLinkErr = Linker::linkModules(*module, std::move(m));
 	if (isLinkErr) std::cerr << "IsLinkedErr for intrinsics??\n";
 }
 

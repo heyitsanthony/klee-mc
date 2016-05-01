@@ -279,7 +279,7 @@ HostAccelerator::Status HostAccelerator::run(ExeStateVex& esv)
 	VexGuestAMD64State	v;
 	regs->readConcrete((uint8_t*)&v, sizeof(v));
 
-	new_fs = (void*)v.guest_FS_ZERO;
+	new_fs = (void*)v.guest_FS_CONST;
 	rc = ptrace(PTRACE_ARCH_PRCTL, child_pid, new_fs, ARCH_SET_FS);
 	assert (rc == 0);
 

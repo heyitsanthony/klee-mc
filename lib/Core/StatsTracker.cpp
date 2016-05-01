@@ -101,18 +101,18 @@ DECL_STATTIMER(UpdateReachable, computeReachableUncovered)
 /// uncoverable. Currently the case is an unreachable instruction
 /// following a noreturn call; the instruction is really only there to
 /// satisfy LLVM's termination requirement.
-static bool instructionIsCoverable(Instruction *i)
+static bool instructionIsCoverable(const Instruction *i)
 {
 	if (i->getOpcode() != Instruction::Unreachable)
 		return true;
 
-	BasicBlock *bb = i->getParent();
-	BasicBlock::iterator it(i);
+	const BasicBlock *bb = i->getParent();
+	BasicBlock::const_iterator it(i);
 	if (it==bb->begin())
 		return true;
 
-	Instruction	*prev = --it;
-	Value		*call_value = nullptr;
+	const Instruction	*prev = &(*(--it));
+	Value			*call_value = nullptr;
 	if (isa<CallInst>(prev)) {
 		call_value = ((CallInst*)prev)->getCalledValue();
 	} else if(isa<InvokeInst>(prev)) {
@@ -235,14 +235,14 @@ void StatsTracker::addKFunction(KFunction* kf)
 
 		if (instructionIsCoverable(ki->getInst()))
 			++stats::uncoveredInstructions;
-		if (BranchInst *bi = dyn_cast<BranchInst>(ki->getInst()))
+		if (auto bi = dyn_cast<const BranchInst>(ki->getInst()))
 			if (!bi->isUnconditional())
 				numBranches++;
 	}
 
 	if (!init) {
 		/* hack to get dynamic adding kfuncs. Slightly wrong. */
-		std::vector<Instruction*>	iv;
+		std::vector<const Instruction*>	iv;
 		computeCallTargets(kf->function);
 		initMinDistToReturn(kf->function, iv);
 	}
@@ -281,7 +281,7 @@ void StatsTracker::stepInstUpdateFrame(ExecutionState &es)
 	}
 
 	const InstructionInfo	&ii(*es.pc->getInfo());
-	Instruction		*inst = es.pc->getInst();
+	const Instruction	*inst = es.pc->getInst();
 
 	theStatisticManager->setIndex(ii.id);
 	if (!instructionIsCoverable(inst)) {

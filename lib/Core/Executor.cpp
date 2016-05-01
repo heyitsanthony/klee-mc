@@ -32,6 +32,7 @@
 #include "klee/Statistics.h"
 
 #include "Executor.h"
+#include "Globals.h"
 #include "ExeStateManager.h"
 
 #include "../Searcher/UserSearcher.h"
@@ -46,7 +47,6 @@
 #include "MMU.h"
 #include "BranchPredictors.h"
 #include "StatsTracker.h"
-#include "Globals.h"
 #include "SpecialFunctionHandler.h"
 #include "../Expr/RuleBuilder.h"
 #include "../Solver/SMTPrinter.h"
@@ -260,54 +260,6 @@ bool Executor::addConstraint(ExecutionState &state, ref<Expr> cond)
 	return true;
 }
 
-ref<klee::ConstantExpr> Executor::evalConstant(
-	const KModule* km, const Globals* gm, Constant *c)
-{
-	if (llvm::ConstantExpr *ce = dyn_cast<llvm::ConstantExpr>(c))
-		return evalConstantExpr(km, gm, ce);
-
-	if (const ConstantInt *ci = dyn_cast<ConstantInt>(c))
-		return ConstantExpr::alloc(ci->getValue());
-
-	if (const ConstantFP *cf = dyn_cast<ConstantFP>(c))
-		return ConstantExpr::alloc(cf->getValueAPF().bitcastToAPInt());
-
-	if (const GlobalValue *gv = dyn_cast<GlobalValue>(c)) {
-		assert (gm != NULL);
-		ref<klee::ConstantExpr>	ce(gm->findAddress(gv));
-
-		if (ce.isNull()) {
-			std::cerr << "Bad global, no cookies.\n";
-			std::cerr << "GV = " << (void*)gv << '\n';
-			gv->dump();
-		}
-
-		assert (!ce.isNull() && "No global address!");
-		return ce;
-	}
-
-	if (isa<ConstantPointerNull>(c))
-		return MK_PTR(0);
-
-	if (isa<UndefValue>(c) || isa<ConstantAggregateZero>(c))
-		return MK_CONST(0, km->getWidthForLLVMType(c->getType()));
-
-	if (isa<ConstantVector>(c))
-		return ConstantExpr::createVector(cast<ConstantVector>(c));
-
-	if (ConstantDataSequential *csq = dyn_cast<ConstantDataSequential>(c))
-		return ConstantExpr::createSeqData(csq);
-
-	if (ConstantArray *ca = dyn_cast<ConstantArray>(c)) {
-		if (ca->getNumOperands() == 1)
-			return evalConstant(km, gm, ca->getOperand(0));
-	}
-
-	// Constant{Array,Struct}
-	c->dump();
-	assert(0 && "invalid argument to evalConstant()");
-}
-
 /* Concretize the given expression, and return a possible constant value.
    'reason' is documentation stating the reason for concretization. */
 ref<klee::ConstantExpr>
@@ -366,21 +318,19 @@ void Executor::executeGetValue(
 	state.bindLocal(target, value);
 }
 
-typedef std::map<llvm::Instruction*, std::string> inststrmap_ty;
+typedef std::unordered_map<const llvm::Instruction*, std::string> inststrmap_ty;
 
 void Executor::debugPrintInst(ExecutionState& state)
 {
 	static inststrmap_ty		print_cache;
-	inststrmap_ty::iterator		it;
-	llvm::Instruction		*ins;
 
 	state.printFileLine();
 	std::cerr << std::setw(10) << stats::instructions << " ";
 
-	ins = state.prevPC->getInst();
+	auto ins = state.prevPC->getInst();
 
 	/* serializing instructions w/ LLVM is really slow as of 3.2 */
-	it = print_cache.find(ins);
+	auto it = print_cache.find(ins);
 	if (it == print_cache.end()) {
 		std::stringstream	ss;
 		raw_os_ostream		os(ss);
@@ -523,8 +473,8 @@ void Executor::executeCall(
 		klee_error("unknown intrinsic: %s", f->getName().data());
 	}
 
-	Instruction	*i(ki->getInst());
-	if (InvokeInst *ii = dyn_cast<InvokeInst>(i)) {
+	auto i = ki->getInst();
+	if (auto ii = dyn_cast<const InvokeInst>(i)) {
 		state.transferToBasicBlock(ii->getNormalDest(), i->getParent());
 	}
 }
@@ -545,14 +495,13 @@ static inline const llvm::fltSemantics * fpWidthToSemantics(unsigned width)
 
 void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 {
-	ReturnInst	*ri;
-	KInstIterator	kcaller;
-	Instruction	*caller;
+	const Instruction	*caller;
+	KInstIterator		kcaller;
 	Type		*t;
 	bool		isVoidReturn;
 	ref<Expr>	result;
 
-	ri = dyn_cast<ReturnInst>(ki->getInst());
+	auto ri = dyn_cast<const ReturnInst>(ki->getInst());
 	assert (ri != NULL && "Expected ReturnInst");
 
 	kcaller = state.getCaller();
@@ -585,9 +534,13 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 			bool		is_cs = true;
 
 			if (isa<CallInst>(caller))
-				cs = CallSite(cast<CallInst>(caller));
+				cs = CallSite(
+					const_cast<CallInst*>(
+						cast<CallInst>(caller)));
 			else if (isa<InvokeInst>(caller))
-				cs = CallSite(cast<InvokeInst>(caller));
+				cs = CallSite(
+					const_cast<InvokeInst*>(
+						cast<InvokeInst>(caller)));
 			else {
 				/* in case patched an arbitrary instruction with
 				 * a function call (e.g. soft-mmu handlers) */
@@ -611,7 +564,7 @@ void Executor::retFromNested(ExecutionState &state, KInstruction *ki)
 
 	state.popFrame();
 
-	if (InvokeInst *ii = dyn_cast<InvokeInst>(caller)) {
+	if (auto ii = dyn_cast<InvokeInst>(caller)) {
 		state.transferToBasicBlock(ii->getNormalDest(), caller->getParent());
 	} else {
 		state.pc = kcaller;
@@ -721,8 +674,7 @@ void Executor::markBranchVisited(
 
 void Executor::instBranch(ExecutionState& st, KInstruction* ki)
 {
-	BranchInst	*bi = cast<BranchInst>(ki->getInst());
-
+	auto bi = cast<const BranchInst>(ki->getInst());
 	if (bi->isUnconditional()) {
 		st.transferToBasicBlock(bi->getSuccessor(0), bi->getParent());
 		return;
@@ -975,7 +927,7 @@ StatePair Executor::instBranchCondForking(
 
 void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 {
-	BranchInst	*bi = cast<BranchInst>(ki->getInst());
+	auto		bi = cast<BranchInst>(ki->getInst());
 	ref<Expr>	cond(eval(ki, 0, state));
 	StatePair	branches;
 
@@ -993,9 +945,9 @@ void Executor::instBranchConditional(ExecutionState& state, KInstruction* ki)
 }
 
 void Executor::finalizeBranch(
-	ExecutionState* st,
-	BranchInst*	bi,
-	int branchIdx)
+	ExecutionState*		st,
+	const BranchInst*	bi,
+	int			branchIdx)
 {
   	KFunction	*kf;
 
@@ -1025,7 +977,7 @@ void Executor::finalizeBranch(
 
 void Executor::instCall(ExecutionState& state, KInstruction *ki)
 {
-	CallSite			cs(ki->getInst());
+	CallSite			cs(const_cast<Instruction*>(ki->getInst()));
 	Function			*f = cs.getCalledFunction();
 	unsigned			numArgs = cs.arg_size();
 	std::vector< ref<Expr> >	args(numArgs);
@@ -1122,7 +1074,7 @@ llvm::Function* Executor::executeBitCast(
 
 void Executor::instCmp(ExecutionState& state, KInstruction *ki)
 {
-	CmpInst*		ci = cast<CmpInst>(ki->getInst());
+	auto			ci = const_cast<CmpInst*>(cast<CmpInst>(ki->getInst()));
 	Type*			op_type = ci->getOperand(1)->getType();
 	ICmpInst*		ii = cast<ICmpInst>(ci);
 	ICmpInst::Predicate	pred;
@@ -1248,9 +1200,9 @@ void Executor::forkSwitch(
 	const TargetsTy& targets)
 {
 	StateVector			resultStates;
-	BasicBlock			*parent_bb(ki->getInst()->getParent());
+	const BasicBlock		*parent_bb(ki->getInst()->getParent());
 	std::vector<ref<Expr> >		caseConds(targets.size()+1);
-	std::vector<BasicBlock*>	caseDests(targets.size()+1);
+	std::vector<const BasicBlock*>	caseDests(targets.size()+1);
 	unsigned			index;
 	bool				found;
 
@@ -1269,10 +1221,10 @@ void Executor::forkSwitch(
 
 	found = false;
 	for(index = 0; index < resultStates.size(); index++) {
-		ExecutionState	*es;
-		BasicBlock	*destBlock;
-		KFunction	*kf;
-		unsigned	entry;
+		ExecutionState		*es;
+		const BasicBlock	*destBlock;
+		KFunction		*kf;
+		unsigned		entry;
 
 		es = resultStates[index];
 		if (!es) continue;
@@ -1367,7 +1319,7 @@ void Executor::instInsertElement(ExecutionState& state, KInstruction* ki)
 	uint64_t idx = in_idx_ce->getZExtValue();
 
 	/* instruction has types of vectors embedded in its operands */
-	InsertElementInst*	iei = cast<InsertElementInst>(ki->getInst());
+	const InsertElementInst* iei = cast<const InsertElementInst>(ki->getInst());
 	assert (iei != NULL);
 
 	VectorType*	vt;
@@ -1429,7 +1381,7 @@ void Executor::instExtractElement(ExecutionState& state, KInstruction* ki)
 	uint64_t	idx = in_idx_ce->getZExtValue();
 
 	/* instruction has types of vectors embedded in its operands */
-	ExtractElementInst*	eei = cast<ExtractElementInst>(ki->getInst());
+	auto eei = cast<const ExtractElementInst>(ki->getInst());
 	assert (eei != NULL);
 
 	vt = dyn_cast<VectorType>(eei->getOperand(0)->getType());
@@ -1573,8 +1525,7 @@ bool Executor::isFPPredicateMatched(
 
 void Executor::instAlloc(ExecutionState& state, KInstruction* ki)
 {
-	AllocaInst	*ai;
-	Instruction	*i = ki->getInst();
+	const Instruction	*i = ki->getInst();
 	unsigned	elementSize;
 	bool		isLocal;
 	ref<Expr>	size;
@@ -1582,7 +1533,7 @@ void Executor::instAlloc(ExecutionState& state, KInstruction* ki)
 
 	assert (!isMallocLikeFn(ki->getInst() , NULL) && "ANTHONY! FIX THIS");
 
-	ai = cast<AllocaInst>(i);
+	auto ai = cast<const AllocaInst>(i);
 	elementSize = data_layout->getTypeStoreSize(ai->getAllocatedType());
 	size = MK_PTR(elementSize);
 
@@ -1605,7 +1556,7 @@ void Executor::instAlloc(ExecutionState& state, KInstruction* ki)
 
 void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
 {
-  Instruction *i = ki->getInst();
+  const Instruction *i = ki->getInst();
 
   switch (i->getOpcode()) {
 
@@ -1634,7 +1585,7 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
 
   // Special instructions
   case Instruction::Select: {
-    SelectInst *SI = cast<SelectInst>(ki->getInst());
+    auto SI = cast<const SelectInst>(ki->getInst());
     assert (SI->getCondition() == SI->getOperand(0) && "Wrong operand index!");
     ref<Expr>	cond (eval(ki, 0, state));
     ref<Expr>	tExpr(eval(ki, 1, state));
@@ -1733,20 +1684,19 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
 
     // Conversion
   case Instruction::Trunc: {
-    CastInst *ci = cast<CastInst>(i);
     ref<Expr> result (MK_EXTRACT(
       eval(ki, 0, state),
       0,
-      kmodule->getWidthForLLVMType(ci->getType())));
+      kmodule->getWidthForLLVMType(cast<const CastInst>(i)->getType())));
 
     state.bindLocal(ki, result);
     break;
   }
   case Instruction::ZExt:
   case Instruction::SExt: {
-	bool is_zext = i->getOpcode() == Instruction::ZExt;
-	CastInst 		*ci = cast<CastInst>(i);
-	ref<Expr>		result, evaled(eval(ki, 0, state));
+	bool	is_zext = i->getOpcode() == Instruction::ZExt;
+	auto	ci = cast<const CastInst>(i);
+	ref<Expr> result, evaled(eval(ki, 0, state));
 
 	auto vt_src = dyn_cast<VectorType>(ci->getSrcTy());
 	auto vt_dst = dyn_cast<VectorType>(ci->getDestTy());
@@ -1763,8 +1713,8 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
 
   case Instruction::PtrToInt:
   case Instruction::IntToPtr: {
-    CastInst *ci = cast<CastInst>(i);
-    Expr::Width cType = kmodule->getWidthForLLVMType(ci->getType());
+    auto t = cast<const CastInst>(i)->getType();
+    Expr::Width cType = kmodule->getWidthForLLVMType(t);
     ref<Expr> arg(eval(ki, 0, state));
     state.bindLocal(ki, MK_ZEXT(arg, cType));
     break;
@@ -1772,9 +1722,8 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
 
   case Instruction::BitCast: state.bindLocal(ki, eval(ki, 0, state)); break;
 
-    // Floating point arith instructions
-#define INST_FOP_ARITH(x,y)					\
-  case Instruction::x: {					\
+// Floating point arith instructions
+#define SETUP_INST_FOP_ARITH(x)				\
     ref<ConstantExpr> left, right;				\
     right = toConstant(state, eval(ki, 1, state), "floating point");	\
     left = toConstant(state, eval(ki, 0, state), "floating point");	\
@@ -1783,7 +1732,12 @@ void Executor::executeInstruction(ExecutionState &state, KInstruction *ki)
       TERMINATE_EXEC(this, state, "Unsupported "#x" operation");		\
       return; } \
 	\
-    DECL_APF(Res, left);	\
+    DECL_APF(Res, left);
+
+
+#define INST_FOP_ARITH(x,y)					\
+  case Instruction::x: {					\
+    SETUP_INST_FOP_ARITH(x)					\
     Res.y(APF_FROM_CE(right), APFloat::rmNearestTiesToEven);		\
     state.bindLocal(ki, ConstantExpr::alloc(Res.bitcastToAPInt()));		\
     break; }
@@ -1792,10 +1746,16 @@ INST_FOP_ARITH(FAdd, add)
 INST_FOP_ARITH(FSub, subtract)
 INST_FOP_ARITH(FMul, multiply)
 INST_FOP_ARITH(FDiv, divide)
-INST_FOP_ARITH(FRem, mod)
+   case Instruction::FRem: {
+    SETUP_INST_FOP_ARITH(FRem);
+    Res.mod(APF_FROM_CE(right));
+    state.bindLocal(ki, ConstantExpr::alloc(Res.bitcastToAPInt()));	
+    break;
+   }
+
 
 #define FP_SETUP(T,z,x,y)	\
-    T *fi = cast<T>(i);	\
+    auto fi = cast<T>(i);	\
     Expr::Width resultType = kmodule->getWidthForLLVMType(fi->getType());	\
     ref<ConstantExpr> arg = toConstant(state, eval(ki, 0, state), "fp");	\
     const llvm::fltSemantics *a_semantics = fpWidthToSemantics(arg->getWidth());\
@@ -1873,7 +1833,7 @@ INST_FOP_ARITH(FRem, mod)
   }
 
   case Instruction::FCmp: {
-	FCmpInst *fi = cast<FCmpInst>(i);
+	auto fi = cast<const FCmpInst>(i);
 	ref<ConstantExpr> left(toConstant(state, eval(ki, 0, state), "fp"));
 	ref<ConstantExpr> right(toConstant(state, eval(ki, 1, state), "fp"));
 	if (	!fpWidthToSemantics(left->getWidth()) ||
@@ -2660,10 +2620,10 @@ StateSolver* Executor::createSolverChain(
 	return ts;
 }
 
-void Executor::addModule(Module* m)
+void Executor::addModule(std::unique_ptr<Module> m)
 {
 	assert (globals != NULL && "globals never declared?");
-	kmodule->addModule(m);
+	kmodule->addModule(std::move(m));
 	globals->updateModule();
 }
 
