@@ -24,34 +24,19 @@ using namespace klee;
 
 char RaiseAsmPass::ID = 0;
 
+#include <iostream>
+
 RaiseAsmPass::RaiseAsmPass(llvm::Module* module)
 : llvm::FunctionPass(ID)
 , TM(NULL)
 {
-#if 0
-	std::string	Err;
-	std::string	HostTriple = llvm::sys::getDefaultTargetTriple();
-	const Target	*NativeTarget;
-	TargetOptions	to;
-
-	NativeTarget = TargetRegistry::lookupTarget(HostTriple, Err);
-	if (NativeTarget == NULL) {
-		llvm::errs()
-			<< "Warning: unable to select native target: "
-			<< Err << "\n";
-		TLI = 0;
-		return;
-	}
-	TM = NativeTarget->createTargetMachine(HostTriple, "", "", to);
-	TLI = TM->getSubtargetImpl(*(module->begin()))->getTargetLowering();
-#endif
 	std::string	err;
 	const Target	*NativeTarget;
 	Triple		foundTriple;
 	TargetOptions	to;
 
 	NativeTarget = TargetRegistry::lookupTarget(
-		llvm::sys::getHostCPUName(),
+		"x86-64",
 		foundTriple,
 		err);
 	if (NativeTarget == NULL) {
