@@ -404,8 +404,18 @@ void KModule::addModule(std::unique_ptr<Module> in_mod)
 	std::cerr << "[KModule] Adding module \"" << *mn_ref << "\"\n";
 
 	std::set<std::string> fns;
-	for (const auto &f : *in_mod) {
-		fns.insert(f.getName().str());
+	unsigned int i = 0;
+	for (auto &f : *in_mod) {
+		auto fn = f.getName().str();
+		if (fn.empty()) {
+			// internal functions with no name-- call them SOMETHING
+			std::stringstream ss;
+			assert (f.hasInternalLinkage());
+			ss << "__" << mod_name << "_int_" << i++;
+			fn = ss.str();
+			f.setName(fn);
+		}
+		fns.insert(fn);
 	}
 
 	isLinkErr = Linker::linkModules(*module, std::move(in_mod));
@@ -414,10 +424,9 @@ void KModule::addModule(std::unique_ptr<Module> in_mod)
 		Function	*kmod_f;
 		KFunction	*kf;
 
-		kmod_f = module->getFunction(fn);
-		if (kmod_f == NULL)
-			std::cerr << "Oops: " << fn << '\n';
-		assert (kmod_f != NULL);
+		if ((kmod_f = module->getFunction(fn)) == nullptr)
+			std::cerr << "Oops: \"" << fn << "\"\n";
+		assert (kmod_f != nullptr);
 
 		kf = addFunction(kmod_f);
 		if (kf) {
