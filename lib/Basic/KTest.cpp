@@ -298,7 +298,7 @@ KTestObject& KTestObject::operator=(const KTestObject& kto)
 {
 	if (this == &kto) return *this;
 
-	delete [] name;
+	free(name);
 	name = nullptr;
 
 	delete [] bytes;
@@ -318,7 +318,7 @@ KTestObject& KTestObject::operator=(const KTestObject& kto)
 
 KTestObject::~KTestObject()
 {
-	delete [] name;
+	free(name);
 	delete [] bytes;
 }
 
