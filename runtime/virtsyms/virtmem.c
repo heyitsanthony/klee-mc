@@ -43,12 +43,18 @@ struct virt_mem* virtsym_safe_memcopy_all(
 
 	vm = malloc(sizeof(struct virt_mem));
 	vm->vm_first_sym_idx = i;
-	vm->vm_buf = malloc(len);
-	for (i = 0; i < len; i++) {
-		vm->vm_buf[i] = ((const uint8_t*)buf8)[i];
+	if (len > 0) {
+		vm->vm_buf = malloc(len);
+		for (i = 0; i < len; i++) {
+			vm->vm_buf[i] = ((const uint8_t*)buf8)[i];
+		}
+		vm->vm_len_min = i;
+		vm->vm_len_max = len;
+	} else {
+		vm->vm_buf = NULL;
+		vm->vm_len_min = 0;
+		vm->vm_len_max = 0;
 	}
-	vm->vm_len_min = i;
-	vm->vm_len_max = len;
 
 	return vm;
 }
