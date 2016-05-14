@@ -57,7 +57,6 @@ ref<ConstantExpr> ConstantExpr::alloc(const llvm::APInt &v)
 ref<ConstantExpr> ConstantExpr::alloc(uint64_t v, Width w)
 { return cast<ConstantExpr>(theExprAllocator->Constant(v, w)); }
 
-/* N.B. vector is stored *backwards* (i.e. v[0] => cur_v[w - 1]) */
 ref<ConstantExpr> ConstantExpr::createVector(const llvm::ConstantVector* v)
 {
 	unsigned int	elem_count;
@@ -77,6 +76,7 @@ ref<ConstantExpr> ConstantExpr::createVector(const llvm::ConstantVector* v)
 			api = cf->getValueAPF().bitcastToAPInt();
 		} else if (llvm::UndefValue* cu=dyn_cast<llvm::UndefValue>(op)){
 			/* 0 will probably lead to the least confusion */
+			/* 1 so that it can be used in shuffle vector */
 			api = llvm::APInt(
 				cu->getType()->getPrimitiveSizeInBits(),
 				0x1);
@@ -93,8 +93,9 @@ ref<ConstantExpr> ConstantExpr::createVector(const llvm::ConstantVector* v)
 			assert (0 == 1 && "Weird type??");
 		}
 
-		if (i == 0) cur_v = alloc(api);
-		else cur_v = cur_v->Concat(alloc(api));
+		cur_v = ref<ConstantExpr>((i == 0)
+			? alloc(api)
+			: dyn_cast<ConstantExpr>(MK_CONCAT(alloc(api), cur_v)));
 	}
 
 	return cur_v;
