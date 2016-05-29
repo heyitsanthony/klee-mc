@@ -28,7 +28,7 @@ Globals::Globals(
 , init_state(in_st)
 , ed(in_ed)
 {
-	if (kmodule->module->getModuleInlineAsm() != "")
+	if (kmodule->module.getModuleInlineAsm() != "")
 		klee_warning("executable has module level assembly (ignoring)");
 
 	setupCTypes();
@@ -37,7 +37,7 @@ Globals::Globals(
 
 void Globals::updateModule(void)
 {
-	Module	*m = kmodule->module.get();
+	Module	*m = &kmodule->module;
 
 	setupFuncAddrs(m);
 	setupGlobalObjects(m);
@@ -288,7 +288,7 @@ void Globals::initializeGlobalObject(
 MemoryObject* Globals::findObject(const char* n) const
 {
 	auto gv = static_cast<GlobalVariable*>(
-		kmodule->module->getGlobalVariable(n));
+		kmodule->module.getGlobalVariable(n));
 	return (gv == NULL)
 		? NULL
 		: findObject(gv);
@@ -306,7 +306,7 @@ ref<klee::ConstantExpr> Globals::findAddress(const char* n) const
 {
 	const GlobalVariable *gv;
 	gv = static_cast<GlobalVariable*>(
-		kmodule->module->getGlobalVariable(n));
+		kmodule->module.getGlobalVariable(n));
 	assert (gv != NULL);
 	return findAddress(gv);
 }
@@ -320,7 +320,7 @@ ref<klee::ConstantExpr> Globals::findAddress(
 	if (it != globalAddresses.end()) return it->second;
 
 	/* this is stupid, but it shouldn't happen often */
-	for (auto & ff: *(kmodule->module), *(kmodule->module)) {
+	for (auto & ff: kmodule->module, kmodule->module) {
 		f = &ff;
 		if (f == gv) break;
 		f = NULL;

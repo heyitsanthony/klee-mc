@@ -111,12 +111,12 @@ namespace {
 }
 
 KModule::KModule(
-	Module *_module,
+	Module &_module,
 	const ModuleOptions &_opts)
 : module(_module)
-, dataLayout(std::make_unique<DataLayout>(module.get()))
+, dataLayout(std::make_unique<DataLayout>(&module))
 , kleeMergeFn(0)
-, fpm(std::make_unique<llvm::legacy::FunctionPassManager>(module.get()))
+, fpm(std::make_unique<llvm::legacy::FunctionPassManager>(&module))
 , opts(_opts)
 , updated_funcs(0)
 , init_kfunc(0)
@@ -221,7 +221,7 @@ static void injectStaticConstructorsAndDestructors(Module *m)
 
 void KModule::dumpFuncs(std::ostream& os) const
 {
-	for (auto &f : *module) os << f.getName().str() << '\n';
+	for (auto &f : module) os << f.getName().str() << '\n';
 }
 
 static void forceImport(Module *m, const char *name, Type *retType, ...)
@@ -254,7 +254,7 @@ void KModule::prepareMerge(InterpreterHandler *ih)
 {
 	Function *mergeFn;
 
-	mergeFn = module->getFunction("klee_merge");
+	mergeFn = module.getFunction("klee_merge");
 	if (!mergeFn) {
 		llvm::FunctionType *Ty;
 		Ty = FunctionType::get(
@@ -264,7 +264,7 @@ void KModule::prepareMerge(InterpreterHandler *ih)
 			Ty,
 			GlobalVariable::ExternalLinkage,
 			"klee_merge",
-			module.get());
+			&module);
 	}
 
 
@@ -277,7 +277,7 @@ void KModule::addMergeExit(Function* mergeFn, const std::string& name)
 	BasicBlock	*exit;
 	PHINode		*result;
 
-	f = module->getFunction(name);
+	f = module.getFunction(name);
 	if (!f) {
 		klee_error("can't insert merge-at-exit for: %s (can't find)",
 		name.c_str());
@@ -322,7 +322,7 @@ bool KModule::outputTruncSource(
 	bool				truncated = false;
 	const char			*position;
 
-	rss << *module;
+	rss << module;
 	rss.flush();
 	position = string.c_str();
 
@@ -364,7 +364,7 @@ void KModule::outputSource(InterpreterHandler* ih)
 	if (TruncateSourceLines)
 		outputTruncSource(os.get(), ros);
 	else
-		*ros << *module;
+		*ros << module;
 
 	delete ros;
 }
@@ -380,7 +380,7 @@ void KModule::dumpModule(void)
 	if (OutputModule) {
 		auto f = ih->openOutputFile("final.bc");
 		llvm::raw_os_ostream* rfs = new llvm::raw_os_ostream(*f);
-		WriteBitcodeToFile(module.get(), *rfs);
+		WriteBitcodeToFile(&module, *rfs);
 		delete rfs;
 	}
 }
@@ -418,13 +418,13 @@ void KModule::addModule(std::unique_ptr<Module> in_mod)
 		fns.insert(fn);
 	}
 
-	isLinkErr = Linker::linkModules(*module, std::move(in_mod));
+	isLinkErr = Linker::linkModules(module, std::move(in_mod));
 
 	for (const auto &fn : fns) {
 		Function	*kmod_f;
 		KFunction	*kf;
 
-		if ((kmod_f = module->getFunction(fn)) == nullptr)
+		if ((kmod_f = module.getFunction(fn)) == nullptr)
 			std::cerr << "Oops: \"" << fn << "\"\n";
 		assert (kmod_f != nullptr);
 
@@ -446,7 +446,7 @@ void KModule::addModule(std::unique_ptr<Module> in_mod)
 void KModule::injectRawChecks()
 {
 	llvm::legacy::PassManager pm;
-	pm.add(new RaiseAsmPass(module.get()));
+	pm.add(new RaiseAsmPass(&module));
 
 	// pm.add(createLowerAtomicPass());
 
@@ -454,7 +454,7 @@ void KModule::injectRawChecks()
 	// may eventually  deleted (via RAUW).
 	// This should now be fixed in LLVM
 	pm.add(new IntrinsicCleanerPass(this, *dataLayout, false));
-	pm.run(*module);
+	pm.run(module);
 }
 
 // Finally, run the passes that maintain invariants we expect during
@@ -478,7 +478,7 @@ void KModule::passEnforceInvariants(void)
 
 	pm.add(new IntrinsicCleanerPass(this, *dataLayout));
 	pm.add(new PhiCleanerPass());
-	pm.run(*module);
+	pm.run(module);
 }
 
 void KModule::prepare(InterpreterHandler *in_ih)
@@ -490,28 +490,28 @@ void KModule::prepare(InterpreterHandler *in_ih)
 	loadIntrinsicsLib();
 	injectRawChecks();
 
-	infos = std::make_unique<InstructionInfoTable>(*module);
-	if (OptimizeKModule) Optimize(module.get());
+	infos = std::make_unique<InstructionInfoTable>(module);
+	if (OptimizeKModule) Optimize(&module);
 
 	// Needs to happen after linking (since ctors/dtors can be modified)
 	// and optimization (since global optimization can rewrite lists).
-	injectStaticConstructorsAndDestructors(module.get());
+	injectStaticConstructorsAndDestructors(&module);
 
 	passEnforceInvariants();
 
 	// For cleanliness see if we can discard any of the functions we
 	// forced to import during loadIntrinsicsLib.
 	// We used to remove forced functions here. Not any more-- we load
-	//  f = module->getFunction("memcpy");
+	//  f = module.getFunction("memcpy");
 	//  if (f && f->use_empty()) f->eraseFromParent();
 	dumpModule();
 
-	kleeMergeFn = module->getFunction("klee_merge");
+	kleeMergeFn = module.getFunction("klee_merge");
 
 	setupFunctionPasses();
 
 	/* Build shadow structures */
-	for (auto &f : *module) {
+	for (auto &f : module) {
 		/* what can happen here is it will overwrite a function
 		 * that we expect to already be processed. no good! */
 		if (getKFunction(f.getName().str().c_str()) != NULL)
@@ -536,7 +536,7 @@ void KModule::setupFunctionPasses(void)
 		pmb.populateFunctionPassManager(*fpm);
 	}
 
-	fpm->add(new RaiseAsmPass(module.get()));
+	fpm->add(new RaiseAsmPass(&module));
 	fpm->add(createLowerAtomicPass());
 	fpm->add(new IntrinsicCleanerPass(this, *dataLayout));
 	fpm->add(new PhiCleanerPass());
@@ -663,7 +663,7 @@ KFunction* KModule::getKFunction(const char* fname) const
 {
 	Function	*f;
 
-	f = module->getFunction(fname);
+	f = module.getFunction(fname);
 	if (f == NULL) return NULL;
 
 	return getKFunction(f);
@@ -683,17 +683,17 @@ void KModule::loadIntrinsicsLib()
 	bool		isLinkErr;
 
 	forceImport(
-		module.get(), "memcpy", PointerType::getUnqual(i8Ty),
+		&module, "memcpy", PointerType::getUnqual(i8Ty),
 		PointerType::getUnqual(i8Ty),
 		PointerType::getUnqual(i8Ty),
 		dataLayout->getIntPtrType(getGlobalContext()), (Type*) 0);
 	forceImport(
-		module.get(), "memmove", PointerType::getUnqual(i8Ty),
+		&module, "memmove", PointerType::getUnqual(i8Ty),
 		PointerType::getUnqual(i8Ty),
 		PointerType::getUnqual(i8Ty),
 		dataLayout->getIntPtrType(getGlobalContext()), (Type*) 0);
 	forceImport(
-		module.get(), "memset", PointerType::getUnqual(i8Ty),
+		&module, "memset", PointerType::getUnqual(i8Ty),
 		PointerType::getUnqual(i8Ty),
 		Type::getInt32Ty(getGlobalContext()),
 		dataLayout->getIntPtrType(getGlobalContext()), (Type*) 0);
@@ -708,12 +708,12 @@ void KModule::loadIntrinsicsLib()
 	/* make all instrinsic functions in main module prototypes */
 	for (auto &m_f : *m) {
 		Function	*f;
-		if ((f = module->getFunction(m_f.getName().str())) == nullptr)
+		if ((f = module.getFunction(m_f.getName().str())) == nullptr)
 			continue;
 		f->deleteBody();
 	}
 
-	isLinkErr = Linker::linkModules(*module, std::move(m));
+	isLinkErr = Linker::linkModules(module, std::move(m));
 	if (isLinkErr) std::cerr << "IsLinkedErr for intrinsics??\n";
 }
 
@@ -769,7 +769,7 @@ KFunction* KModule::buildListFunc(
 
 	retType = Type::getVoidTy(getGlobalContext());
 	ft = FunctionType::get(retType, false);
-	f = Function::Create(ft, GlobalValue::ExternalLinkage, name, module.get());
+	f = Function::Create(ft, GlobalValue::ExternalLinkage, name, &module);
 	bb = BasicBlock::Create(getGlobalContext(), "entry", f);
 
 	for (auto &f : kf) CallInst::Create(f, "", bb);
@@ -838,7 +838,7 @@ void KModule::setupFiniFuncs(void)
 	std::vector<Function*> l;
 	for (auto &kf : fini_funcs) l.push_back(kf->function);
 
-	l.push_back((Function*)module->getOrInsertFunction(
+	l.push_back((Function*)module.getOrInsertFunction(
 		"klee_resume_exit",
 		FunctionType::get(
 			Type::getVoidTy(getGlobalContext()), false)));

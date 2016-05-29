@@ -90,7 +90,7 @@ void ShadowCore::setupInitialState(ExecutionState* es)
 	std::vector<Type *>	argTypes;
 
 	km = exe->getKModule();
-	m = km->module.get();
+	m = &km->module;
 	sfh = exe->getSFH();
 
 	argTypes.push_back(IntegerType::get(getGlobalContext(), 32));

@@ -204,12 +204,12 @@ bool StatsTracker::computePathsInit(std::vector<const Instruction*>& instruction
 
 void StatsTracker::computeReachableUncoveredInit(void)
 {
-	Module *m = km->module.get();
+	Module &m = km->module;
 
 	assert (init);
 	init = false;
 
-	for (auto &fn : *m) computeCallTargets(&fn);
+	for (auto &fn : m) computeCallTargets(&fn);
 
 	// Compute function callers as reflexion of callTargets.
 	for (auto &tgt : callTargets) {
@@ -221,7 +221,7 @@ void StatsTracker::computeReachableUncoveredInit(void)
 	// Initialize minDistToReturn to shortest paths through
 	// functions. 0 is unreachable.
 	std::vector<const Instruction *> instructions;
-	for (auto &fn : *m) initMinDistToReturn(&fn, instructions);
+	for (auto &fn : m) initMinDistToReturn(&fn, instructions);
 
 	std::reverse(instructions.begin(), instructions.end());
 
@@ -302,7 +302,7 @@ bool StatsTracker::computePaths(std::vector<const llvm::Instruction*>& insts)
 
 void StatsTracker::computeReachableUncovered()
 {
-	Module *m = km->module.get();
+	Module &m = km->module;
 	const InstructionInfoTable &infos = *km->infos;
 	StatisticManager &sm = *theStatisticManager;
 
@@ -310,7 +310,7 @@ void StatsTracker::computeReachableUncovered()
 
 	// compute minDistToUncovered, 0 is unreachable
 	std::vector<const Instruction *> instructions;
-	for (auto &fn : *m) 
+	for (auto &fn : m) 
 	// Not sure if I should bother to preorder here.
 	for (auto &bb : fn) 
 	for (auto &ii : bb) {

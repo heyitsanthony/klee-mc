@@ -455,7 +455,7 @@ void StatsTracker::updateStateStatistics(uint64_t addend)
 
 void StatsTracker::writeIStats(void)
 {
-  Module *m = km->module.get();
+  Module &m = km->module;
   uint64_t istatsMask = 0;
   std::ostream &of = *istatsFile;
 
@@ -466,7 +466,7 @@ void StatsTracker::writeIStats(void)
   of << "version: 1\n";
   of << "creator: klee\n";
   of << "pid: " << getpid() << '\n';
-  of << "cmd: " << m->getModuleIdentifier() << "\n\n";
+  of << "cmd: " << m.getModuleIdentifier() << "\n\n";
   of << "\n";
 
   StatisticManager &sm = *theStatisticManager;
@@ -513,7 +513,7 @@ void StatsTracker::writeIStats(void)
 
   of << "ob=" << objectFilename << "\n";
 
-  foreach (fnIt, m->begin(), m->end()) {
+  foreach (fnIt, m.begin(), m.end()) {
     if (fnIt->isDeclaration()) continue;
     foreach (bbIt, fnIt->begin(), fnIt->end()) {
       foreach (it, bbIt->begin(), bbIt->end())

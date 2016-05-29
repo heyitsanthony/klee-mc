@@ -49,7 +49,7 @@ void SpecialFunctionHandler::prepare(const HandlerInfo* hinfo, unsigned int N)
 		const HandlerInfo	&hi(hinfo[i]);
 		Function		*f;
 
-		f = executor->getKModule()->module->getFunction(hi.name);
+		f = executor->getKModule()->module.getFunction(hi.name);
 
 		// Can't create function if it doesn't exist;
 		// queue for late binding in case it turns up later.
@@ -92,7 +92,7 @@ SFHandler* SpecialFunctionHandler::addHandler(const struct HandlerInfo& hi)
 	SFHandler		*old_h, *new_h;
 	Function		*f;
 
-	f = executor->getKModule()->module->getFunction(hi.name);
+	f = executor->getKModule()->module.getFunction(hi.name);
 	if (f == NULL) return NULL;
 
 	if (hi.doNotOverride && !f->isDeclaration())
@@ -114,7 +114,7 @@ void SpecialFunctionHandler::addHandler(
 	SFHandler	*old_h;
 	Function	*f;
 
-	f = executor->getKModule()->module->getFunction(name);
+	f = executor->getKModule()->module.getFunction(name);
 	if (f == NULL) return;
 	if ((old_h = handlers[f].first) != NULL) delete old_h;
 
@@ -133,7 +133,7 @@ SFHandler* SpecialFunctionHandler::setFixedHandler(
 	HandlerReturnFixed	*new_h;
 	Function		*f;
 
-	f = executor->getKModule()->module->getFunction(name);
+	f = executor->getKModule()->module.getFunction(name);
 	if (f == NULL) return NULL;
 	if ((old_h = handlers[f].first) == NULL) return NULL;
 
@@ -167,10 +167,10 @@ void SpecialFunctionHandler::handleByName(
 {
 	Function		*f;
 
-	f = executor->getKModule()->module->getFunction(fname);
+	f = executor->getKModule()->module.getFunction(fname);
 	if (f == NULL) {
 		Constant	*c;
-		c = executor->getKModule()->module->getOrInsertFunction(
+		c = executor->getKModule()->module.getOrInsertFunction(
 			fname,
 			FunctionType::get(
 				IntegerType::get(getGlobalContext(), 64),

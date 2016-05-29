@@ -118,7 +118,7 @@ llvm::Function* SoftFPPass::getCastThunk(
 	namestream << "__stub_" << f->getName().str();
 	newname = namestream.str();
 
-	ret_f = km->module->getFunction(newname);
+	ret_f = km->module.getFunction(newname);
 	if (ret_f != NULL) return ret_f;
 
 	bb = setupFuncEntry(newname, retType, arg0, arg1, &v_arg0, &v_arg1);
@@ -251,7 +251,7 @@ Function* SoftFPPass::getOrderedStub(
 	namestream << "__stub_O_" << f->getName().str();
 	newname = namestream.str();
 
-	ret_f = km->module->getFunction(newname);
+	ret_f = km->module.getFunction(newname);
 	if (ret_f != NULL) return ret_f;
 
 	ret_type = IntegerType::get(getGlobalContext(), 1);
@@ -310,7 +310,7 @@ Function* SoftFPPass::getUnorderedStub(
 	namestream << "__stub_UO_" << f->getName().str();
 	newname = namestream.str();
 
-	ret_f = km->module->getFunction(newname);
+	ret_f = km->module.getFunction(newname);
 	if (ret_f != NULL) return ret_f;
 
 	ret_type = IntegerType::get(getGlobalContext(), 1);
@@ -375,7 +375,7 @@ BasicBlock* SoftFPPass::setupFuncEntry(
 		ft,
 		GlobalValue::ExternalLinkage,
 		newname,
-		km->module.get());
+		&km->module);
 	bb = BasicBlock::Create(getGlobalContext(), "entry", ret_f);
 
 	ait = ret_f->getArgumentList().begin();

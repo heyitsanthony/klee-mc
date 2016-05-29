@@ -72,7 +72,7 @@ class PhiCleanerPass;
 class KModule
 {
 public:
-	std::shared_ptr<llvm::Module> module;
+	llvm::Module& module;
 	std::unique_ptr<llvm::DataLayout> dataLayout;
 
     // Some useful functions to know the address of
@@ -91,7 +91,7 @@ public:
     std::vector<Cell>	constantTable;
 
 public:
-    KModule(llvm::Module *_module, const ModuleOptions &opts);
+    KModule(llvm::Module &_module, const ModuleOptions &opts);
     virtual ~KModule();
 
     /// Initialize local data structures.

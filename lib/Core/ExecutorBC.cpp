@@ -54,7 +54,7 @@ const Module* ExecutorBC::setModule(
 	// XXX gross
 	assert(!kmodule && module && "can only register one module");
 
-	kmodule = new KModule(module, opts);
+	kmodule = new KModule(*module, opts);
 	data_layout = kmodule->dataLayout.get();
 
 	// Initialize the context.
@@ -311,7 +311,7 @@ void ExecutorBC::setExternalErrno(ExecutionState& es)
 	v = errno;
 
 	if (gv_errno == NULL) {
-		gv_errno = kmodule->module->getGlobalVariable("errno");
+		gv_errno = kmodule->module.getGlobalVariable("errno");
 		if (gv_errno == NULL) {
 			gv_errno_missing = true;
 			return;

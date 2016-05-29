@@ -264,7 +264,7 @@ llvm::Function* ExecutorVex::setupRuntimeFunctions(uint64_t entry_addr)
 		kmodule->addModule(std::move(m));
 	}
 
-	theVexHelpers->useExternalMod(kmodule->module);
+	theVexHelpers->useExternalMod(&kmodule->module);
 
 	img_init_func = km_vex->getFuncByAddrNoKMod(entry_addr, is_new);
 	if (img_init_func == NULL) {
@@ -505,10 +505,10 @@ void ExecutorVex::bindMappingPage(
 	if (heap_min != ~0UL && heap_max != 0) {
 		/* scanning memory is kind of stupid, but we're desperate */
 		sys_model->setModelU64(
-			*(kmodule->module), "heap_begin", heap_min);
+			kmodule->module, "heap_begin", heap_min);
 		 /* max = start of last page */
 		sys_model->setModelU64(
-			*(kmodule->module), "heap_end", heap_max + 4096);
+			kmodule->module, "heap_end", heap_max + 4096);
 
 		SFH_ADD_REG("heap_begin", heap_min);
 		SFH_ADD_REG("heap_end",  heap_max + 4096);

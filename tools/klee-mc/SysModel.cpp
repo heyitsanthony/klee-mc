@@ -118,14 +118,14 @@ void FDTModel::installInitializers(Function *init_func)
 	KModule		*kmodule;
 
 	kmodule = exe->getKModule();
-	ctors = kmodule->module->getNamedGlobal("llvm.global_ctors");
+	ctors = kmodule->module.getNamedGlobal("llvm.global_ctors");
 	std::cerr << "checking for global ctors and dtors" << std::endl;
 	if (ctors) {
 		Function* ctorStub;
 
 		std::cerr << "[fdt] installing ctors" << std::endl;
 		ctorStub = getStubFunctionForCtorList(
-			kmodule->module.get(), ctors, "klee.ctor_stub");
+			&kmodule->module, ctors, "klee.ctor_stub");
 		kmodule->addFunction(ctorStub);
 		exe->addInitFunction(ctorStub);
 	}
@@ -133,7 +133,7 @@ void FDTModel::installInitializers(Function *init_func)
 	// TODO
 	// can't install detours because this function returns almost immediately
 	// GlobalVariable *dtors =
-	// 	kmodule->module->getNamedGlobal("llvm.global_dtors");
+	// 	kmodule->module.getNamedGlobal("llvm.global_dtors");
 	// do them later
 	// if (dtors) {
 	// 	std::cerr << "installing dtors" << std::endl;
@@ -146,7 +146,7 @@ void FDTModel::installInitializers(Function *init_func)
 	// 		CallInst::Create(dtorStub, "", it->getTerminator());
 	// 	}
 	// }
-	setModelBool(*(kmodule->module), "concrete_vfs", UseConcreteVFS);
+	setModelBool(kmodule->module, "concrete_vfs", UseConcreteVFS);
 }
 
 void FDTModel::installConfig(ExecutionState& state)
@@ -167,7 +167,7 @@ void SysModel::installData(
 	ObjectState	*os;
 
 	g = static_cast<GlobalVariable*>(
-		exe->getKModule()->module->getGlobalVariable(name));
+		exe->getKModule()->module.getGlobalVariable(name));
 	assert (g != NULL && "Could not find install variable");
 
 	mo = exe->getGlobals()->findObject(g);
@@ -193,7 +193,7 @@ SyscallSFH* W32Model::allocSpecialFuncHandler(Executor* e) const
 
 void LinuxModel::installConfig(ExecutionState& es)
 {
-	auto& m = *(exe->getKModule()->module);
+	auto& m = exe->getKModule()->module;
 	setModelBool(m, "concrete_vfs", UseConcreteVFS);
 	setModelBool(m, "deny_sys_files", DenySysFiles);
 }
